@@ -1,0 +1,2 @@
+# cloud-game-config-get
+

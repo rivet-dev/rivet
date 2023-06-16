@@ -1,0 +1,25 @@
+[package]
+name = "cloud-namespace-create"
+version = "0.0.1"
+edition = "2018"
+authors = ["Rivet Gaming, LLC <developer@rivet.gg>"]
+license = "Apache-2.0"
+
+[dependencies]
+rivet-operation = { path = "../../../../../lib/operation/core" }
+chirp-client = { path = "../../../../../lib/chirp/client" }
+prost = "0.10"
+
+game-namespace-get = { path = "../../../game/ops/namespace-get" }
+game-get = { path = "../../../game/ops/get" }
+cdn-namespace-create = { path = "../../../cdn/ops/namespace-create" }
+mm-config-namespace-create = { path = "../../../mm-config/ops/namespace-create" }
+kv-config-namespace-create = { path = "../../../kv-config/ops/namespace-create" }
+identity-config-namespace-create = { path = "../../../identity-config/ops/namespace-create" }
+
+[dependencies.sqlx]
+version = "0.6"
+default-features = false
+
+[dev-dependencies]
+chirp-worker = { path = "../../../../../lib/chirp/worker" }

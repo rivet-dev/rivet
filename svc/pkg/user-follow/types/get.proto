@@ -1,0 +1,25 @@
+syntax = "proto3";
+
+package rivet.backend.pkg.user_follow.get;
+
+import "proto/common.proto";
+
+message Request {
+	message Query {
+		rivet.common.Uuid follower_user_id = 1;
+		rivet.common.Uuid following_user_id = 2;
+	}
+
+	repeated Query queries = 1;
+}
+
+message Response {
+	message Follow {
+		rivet.common.Uuid follower_user_id = 1;
+		rivet.common.Uuid following_user_id = 2;
+		int64 create_ts = 3;
+		bool is_mutual = 4;
+	}
+
+	repeated Follow follows = 1;
+}

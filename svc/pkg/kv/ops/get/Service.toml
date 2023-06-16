@@ -1,0 +1,7 @@
+[service]
+name = "kv-get"
+
+[runtime]
+kind = "rust"
+
+[operation]

@@ -1,0 +1,14 @@
+syntax = "proto3";
+
+package rivet.backend.pkg.team_dev.msg.status_update_complete;
+
+import "proto/common.proto";
+
+/// name = "msg-team-dev-status-update-complete"
+/// parameters = [
+/// 	{ name = "stripe_customer_id" },
+/// ]
+message Message {
+	string stripe_customer_id = 1;
+	rivet.common.Uuid team_id = 2;
+}

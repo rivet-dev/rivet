@@ -1,0 +1,42 @@
+[package]
+name = "bolt-core"
+version = "0.1.0"
+authors = ["Rivet Gaming, LLC <developer@rivet.gg>"]
+edition = "2018"
+license = "Apache-2.0"
+
+[dependencies]
+anyhow = "1.0"
+async-trait = "0.1"
+bolt-config = { path = "../config" }
+types = { path = "../../types/core" }
+chrono = "0.4"
+duct = "0.13"
+futures-util = "0.3"
+heck = "0.3"
+indicatif = "0.16"
+indoc = "1.0"
+ipnet = { version = "2.7", features = ["serde"] }
+lazy_static = "1.4"
+maplit = "1.0"
+portpicker = "0.1"
+prost = "0.10"
+regex = "1.5"
+reqwest = { version = "0.11", features = ["json"] }
+rivet-util = { path = "../../util/core" }
+s3-util = { path = "../../s3-util" }
+serde = { version ="1.0", features = ["derive"] }
+serde_json = "1.0"
+tempfile = "3.2"
+thiserror = "1.0"
+tokio = { version = "1.21", features = ["full"] }
+toml = "0.7"
+toml_edit = "0.19"
+url = "2.3"
+urlencoding = "2.1"
+uuid = { version = "1", features = ["v4"] }
+wildmatch = "2.1"
+derive_builder = "0.12"
+rivet-term = { git = "https://github.com/rivet-gg/rivet-term.git", rev = "7cf60c225f00eb40d212cec673f09ac47d13d295" }
+rand = "0.8"
+

@@ -1,0 +1,7 @@
+[service]
+name = "push-notification-worker"
+
+[runtime]
+kind = "rust"
+
+[consumer]

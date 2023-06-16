@@ -1,0 +1,37 @@
+syntax = "proto3";
+
+package rivet.backend.pkg.mm.msg.lobby_find_fail;
+
+import "proto/common.proto";
+
+enum ErrorCode {
+	UNKNOWN = 0;
+
+	STALE_MESSAGE = 1;
+
+	TOO_MANY_PLAYERS_FROM_SOURCE = 101;
+
+	LOBBY_STOPPED = 201;
+	LOBBY_CLOSED = 202;
+	LOBBY_NOT_FOUND = 203;
+	NO_AVAILABLE_LOBBIES = 204;
+	LOBBY_FULL = 205;
+	LOBBY_COUNT_OVER_MAX = 206;
+	REGION_NOT_ENABLED = 207;
+	LOBBY_STOPPED_PREMATURELY = 208;
+
+	DEV_TEAM_INVALID_STATUS = 301;
+}
+
+/// name = "msg-mm-lobby-find-fail"
+/// deduplicate = true
+/// parameters = [
+/// 	{ name = "namespace_id" },
+/// 	{ name = "query_id" },
+/// ]
+message Message {
+	rivet.common.Uuid namespace_id = 1;
+	rivet.common.Uuid query_id = 2;
+	ErrorCode error_code = 3;
+}
+

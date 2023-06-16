@@ -1,0 +1,30 @@
+syntax = "proto3";
+
+package rivet.backend.pkg.nomad_log.read;
+
+import "google/protobuf/empty.proto";
+import "proto/backend/nomad_log.proto";
+import "proto/common.proto";
+
+message Request {
+	message TimestampQuery {
+		int64 ts = 1;
+		uint32 idx = 2;
+	}
+
+	string alloc = 1;
+	string task = 2;
+	rivet.backend.nomad_log.StreamType stream_type = 3;
+	int64 count = 4;
+
+	oneof query {
+		google.protobuf.Empty all = 101;
+		TimestampQuery before_ts = 102;
+		TimestampQuery after_ts = 103;
+	}
+}
+
+message Response {
+	repeated rivet.backend.nomad_log.LogEntry entries = 1;
+}
+

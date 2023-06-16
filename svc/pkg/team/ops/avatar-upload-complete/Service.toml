@@ -1,0 +1,7 @@
+[service]
+name = "team-avatar-upload-complete"
+
+[runtime]
+kind = "rust"
+
+[operation]

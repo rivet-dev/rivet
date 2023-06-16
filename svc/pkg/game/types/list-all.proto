@@ -1,0 +1,13 @@
+syntax = "proto3";
+
+package rivet.backend.pkg.game.list_all;
+
+import "proto/common.proto";
+
+message Request {
+
+}
+
+message Response {
+	 repeated rivet.common.Uuid game_ids = 1;
+}

@@ -1,0 +1,53 @@
+[package]
+name = "api-route"
+version = "0.0.1"
+authors = ["Rivet Gaming, LLC <developer@rivet.gg>"]
+edition = "2018"
+license = "Apache-2.0"
+
+[dependencies]
+rivet-convert = { path = "../../../lib/convert" }
+api-helper = { path = "../../../lib/api-helper/build" }
+async_once = "0.2"
+async-trait = "0.1"
+chirp-client = { path = "../../../lib/chirp/client" }
+rivet-operation = { path = "../../../lib/operation/core" }
+chrono = "0.4"
+http = "0.2"
+hyper = { version = "0.14", features = ["server", "http1", "stream", "tcp"] }
+lazy_static = "1.4"
+prost = "0.10"
+rivet-cache = { path = "../../../lib/cache/build" }
+rivet-claims = { path = "../../../lib/claims" }
+rivet-health-checks = { path = "../../../lib/health-checks" }
+rivet-pools = { path = "../../../lib/pools" }
+s3-util = { path = "../../../lib/s3-util" }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+thiserror = "1.0"
+tokio = { version = "1.21" }
+toml = "0.5"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", default-features = false, features = ["fmt", "json", "ansi"] }
+url = "2.2.2"
+util-cdn = { package = "rivet-util-cdn", path = "../../pkg/cdn/util" }
+util-job = { package = "rivet-util-job", path = "../../pkg/job/util" }
+uuid = { version = "1", features = ["v4"] }
+
+region-resolve = { path = "../../pkg/region/ops/resolve" }
+
+[dev-dependencies]
+rivet-connection = { path = "../../../lib/connection" }
+rivet-route = { path = "../../../lib/smithy-output/api-route/rust" }
+base64 = "0.13"
+reqwest = "0.11"
+
+cdn-namespace-domain-create = { path = "../../pkg/cdn/ops/namespace-domain-create" }
+cdn-namespace-auth-user-update = { path = "../../pkg/cdn/ops/namespace-auth-user-update" }
+faker-game = { path = "../../pkg/faker/ops/game" }
+faker-cdn-site = { path = "../../pkg/faker/ops/cdn-site" }
+faker-game-namespace = { path = "../../pkg/faker/ops/game-namespace" }
+faker-job-run = { path = "../../pkg/faker/ops/job-run" }
+faker-game-version = { path = "../../pkg/faker/ops/game-version" }
+faker-region = { path = "../../pkg/faker/ops/region" }
+game-get = { path = "../../pkg/game/ops/get" }

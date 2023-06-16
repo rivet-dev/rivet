@@ -1,0 +1,11 @@
+[service]
+name = "nomad-log-follower"
+essential = true
+priority = 20
+
+[runtime]
+kind = "rust"
+
+[headless]
+singleton = true
+

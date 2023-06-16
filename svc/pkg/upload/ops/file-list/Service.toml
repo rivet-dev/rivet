@@ -1,0 +1,7 @@
+[service]
+name = "upload-file-list"
+
+[runtime]
+kind = "rust"
+
+[operation]

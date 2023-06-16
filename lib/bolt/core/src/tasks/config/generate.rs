@@ -1,0 +1,529 @@
+use anyhow::*;
+use duct::cmd;
+use rand::{distributions::Alphanumeric, Rng};
+use std::{
+	future::Future,
+	path::{Path, PathBuf},
+};
+use tokio::fs;
+use tokio::task::block_in_place;
+use toml_edit::value;
+
+use crate::{config::service::RuntimeKind, context::ProjectContextData};
+
+/// Comment attached to the head of the namespace config.
+const NS_CONFIG_COMMENT: &str = r#"# Documentation: doc/bolt/config/NAMESPACE.md
+# Schema: lib/bolt/config/src/ns.rs
+
+"#;
+
+/// Helper for generating configs.
+struct ConfigGenerator {
+	term: rivet_term::console::Term,
+
+	#[allow(unused)]
+	ns_id: String,
+
+	ns_path: PathBuf,
+	ns: toml_edit::Document,
+
+	secrets_path: PathBuf,
+	secrets: toml_edit::Document,
+
+	/// If true, this is a new config. If false, this is editing an existing
+	/// config.
+	is_new: bool,
+}
+
+impl ConfigGenerator {
+	async fn new(
+		term: rivet_term::console::Term,
+		project_path: &Path,
+		ns_id: impl ToString,
+	) -> Result<Self> {
+		let ns_id = ns_id.to_string();
+
+		// Load namespace config
+		let ns_path = project_path
+			.join("namespaces")
+			.join(format!("{ns_id}.toml"));
+		let (ns, is_new) = if ns_path.exists() {
+			let ns_str = fs::read_to_string(&ns_path).await?;
+			(ns_str.parse::<toml_edit::Document>()?, false)
+		} else {
+			(toml_edit::Document::new(), true)
+		};
+
+		// Load secrets config
+		let secrets_path = project_path.join("secrets").join(format!("{ns_id}.toml"));
+		let secrets = if secrets_path.exists() {
+			let secrets_str = fs::read_to_string(&secrets_path).await?;
+			secrets_str.parse::<toml_edit::Document>()?
+		} else {
+			toml_edit::Document::new()
+		};
+
+		Ok(Self {
+			term,
+			ns_id,
+			ns_path,
+			ns,
+			secrets_path,
+			secrets,
+			is_new,
+		})
+	}
+
+	// Writes the config to the respective files.
+	async fn write(&mut self) -> Result<()> {
+		// Prepend comment
+		let mut ns_str = self.ns.to_string();
+		if self.is_new {
+			ns_str = format!("{NS_CONFIG_COMMENT}{ns_str}");
+		}
+
+		// Write configs
+		fs::write(&self.ns_path, ns_str.as_bytes()).await?;
+		fs::write(&self.secrets_path, self.secrets.to_string().as_bytes()).await?;
+
+		Ok(())
+	}
+
+	/// Inserts a config value if does not exist.
+	async fn generate_config<Fut>(
+		&mut self,
+		path: &[&str],
+		value_fn: impl FnOnce() -> Fut,
+	) -> Result<()>
+	where
+		Fut: Future<Output = Result<toml_edit::Item>>,
+	{
+		// Check if item already exists
+		if !value_exists(self.ns.as_item(), path) {
+			let value = value_fn().await?;
+			write_value(self.ns.as_item_mut(), path, value);
+		}
+
+		Ok(())
+	}
+
+	/// Prompts user for config value if does not exist.
+	async fn prompt_config(&mut self, message: &str, docs: &str, path: &[&str]) -> Result<()> {
+		// Check if item already exists
+		if !value_exists(self.ns.as_item(), path) {
+			let x = rivet_term::prompt::PromptBuilder::default()
+				.message(message)
+				.docs_url(docs)
+				.build()?
+				.string(&self.term)
+				.await?;
+			write_value(self.ns.as_item_mut(), path, value(x));
+		}
+
+		Ok(())
+	}
+
+	/// Inserts a secret value if does not exist.
+	async fn generate_secret<Fut>(
+		&mut self,
+		path: &[&str],
+		value_fn: impl FnOnce() -> Fut,
+	) -> Result<()>
+	where
+		Fut: Future<Output = Result<toml_edit::Item>>,
+	{
+		// Check if item already exists
+		if !value_exists(self.secrets.as_item(), path) {
+			let value = value_fn().await?;
+			write_value(self.secrets.as_item_mut(), path, value);
+		}
+
+		Ok(())
+	}
+
+	/// Prompts user for config value if does not exist.
+	async fn prompt_secret(&mut self, message: &str, docs: &str, path: &[&str]) -> Result<()> {
+		self.prompt_secret_multiple(message, docs, &[path]).await
+	}
+
+	/// Prompts user for multiple config values if does not exist. Useful when
+	/// there's multiple secrets that are OK being set to the same value for the
+	/// default config.
+	async fn prompt_secret_multiple(
+		&mut self,
+		message: &str,
+		docs: &str,
+		paths: &[&[&str]],
+	) -> Result<()> {
+		// Check if item already exists
+		if !paths
+			.iter()
+			.all(|x| value_exists(self.secrets.as_item(), x))
+		{
+			let x = rivet_term::prompt::PromptBuilder::default()
+				.message(message)
+				.docs_url(docs)
+				.build()?
+				.string_secure(&self.term)
+				.await?;
+			for path in paths {
+				write_value(self.secrets.as_item_mut(), path, value(&x));
+			}
+		}
+
+		Ok(())
+	}
+}
+
+/// Generates a new config & secrets based on user input.
+pub async fn generate(project_path: &Path, ns_id: &str) -> Result<()> {
+	let term = rivet_term::terminal();
+
+	let mut generator = ConfigGenerator::new(term, &project_path, ns_id).await?;
+
+	// MARK: Deploy
+	if generator.ns.get("deploy").is_none() || generator.ns["deploy"].get("cluster").is_none() {
+		generator
+			.generate_config(&["deploy", "local", "public_ip"], || async {
+				let public_ip = fetch_public_ip().await?;
+				Ok(value(public_ip).into())
+			})
+			.await?;
+	}
+
+	// MARK: Linode
+	generator
+		.prompt_secret(
+			"Linode Token",
+			"doc/bolt/config/LINODE.md",
+			&["linode", "terraform", "token"],
+		)
+		.await?;
+
+	// MARK: Pools
+	if generator.ns.get("pools").is_none() {
+		let mut pools = toml_edit::ArrayOfTables::new();
+
+		for name_id in ["lnd-sfo", "lnd-fra"] {
+			let mut job = toml_edit::Table::new();
+			job["pool"] = value("job");
+			job["version"] = value("01");
+			job["region"] = value(name_id);
+			job["count"] = value(1);
+			job["size"] = value("g6-standard-1");
+			job["netnum"] = value(1);
+			pools.push(job);
+
+			let mut ing_job = toml_edit::Table::new();
+			ing_job["pool"] = value("ing-job");
+			ing_job["region"] = value(name_id);
+			ing_job["count"] = value(1);
+			ing_job["size"] = value("g6-standard-1");
+			ing_job["netnum"] = value(2);
+			pools.push(ing_job);
+		}
+
+		generator.ns["pools"] = toml_edit::Item::ArrayOfTables(pools);
+	}
+
+	// MARK: Cloudflare
+	generator
+		.prompt_config(
+			"Cloudflare Account ID",
+			"doc/bolt/config/CLOUDFLARE.md",
+			&["dns", "cloudflare", "account_id"],
+		)
+		.await?;
+	generator
+		.prompt_config(
+			"Cloudflare Zone (Root)",
+			"doc/bolt/config/CLOUDFLARE.md",
+			&["dns", "cloudflare", "zones", "root"],
+		)
+		.await?;
+	generator
+		.prompt_config(
+			"Cloudflare Zone (Game)",
+			"doc/bolt/config/CLOUDFLARE.md",
+			&["dns", "cloudflare", "zones", "game"],
+		)
+		.await?;
+	generator
+		.prompt_config(
+			"Cloudflare Zone, (Job)",
+			"doc/bolt/config/CLOUDFLARE.md",
+			&["dns", "cloudflare", "zones", "job"],
+		)
+		.await?;
+	generator
+		.prompt_secret_multiple(
+			"Cloudflare Auth Token",
+			"doc/bolt/config/CLOUDFLARE.md",
+			&[
+				// Permissions:
+				// - Zone > DNS > Edit
+				//
+				// Zone Resources:
+				// - rivet.run
+				&["cloudflare", "persistent", "auth_token"],
+				// Permissions:
+				// - Account > Cloudflare Tunnel > Edit (if using access)
+				// - Account > Access: Apps and Policies > Edit (if using access)
+				// - Account > Worker Scripts > Edit
+				// - Zone > Workers Routes > Edit
+				// - Zone > SSL and Certificates > Edit
+				// - Zone > DNS > Edit
+				//
+				// Zone Resources:
+				// - rivet.gg
+				// - rivet.game
+				// - rivet.run
+				&["cloudflare", "terraform", "auth_token"],
+			],
+		)
+		.await?;
+
+	// MARK: S3
+	if generator.ns.get("s3").is_none() {
+		generator.ns["s3"] = {
+			let mut x = toml_edit::Table::new();
+			x.set_implicit(true);
+			x["minio"] = toml_edit::table();
+			toml_edit::Item::Table(x)
+		};
+	}
+
+	// MARK: SendGrid
+	if generator.ns.get("email").is_none() {
+		generator.ns["email"] = {
+			let mut x = toml_edit::Table::new();
+			x.set_implicit(true);
+			x["sendgrid"] = toml_edit::table();
+			toml_edit::Item::Table(x)
+		};
+	}
+	if generator
+		.ns
+		.get("email")
+		.and_then(|x| x.get("sendgrid"))
+		.is_some()
+	{
+		generator
+			.prompt_secret(
+				"SendGrid Key",
+				"doc/bolt/config/SENDGRID.md",
+				&["sendgrid", "key"],
+			)
+			.await?;
+	}
+
+	// MARK: SSH
+	generator
+		.generate_secret(&["ssh", "salt_minion", "private_key_openssh"], || async {
+			let key = generate_private_key_openssh().await?;
+			Ok(value(key))
+		})
+		.await?;
+
+	// MARK: JWT
+	if generator.secrets.get("jwt").is_none() {
+		let mut table = toml_edit::Table::new();
+		table.set_implicit(true);
+		generator.secrets["jwt"] = toml_edit::Item::Table(table);
+	}
+	if generator.secrets["jwt"].get("key").is_none() {
+		let key = generate_jwt_key().await?;
+
+		let mut table = toml_edit::table();
+		table["public_pem"] = value(key.public_pem);
+		table["private_pem"] = value(key.private_pem);
+		generator.secrets["jwt"]["key"] = table;
+	}
+
+	// MARK: Rivet
+	generator
+		.generate_secret(&["rivet", "api_admin", "token"], || async {
+			Ok(value(generate_password(32)))
+		})
+		.await?;
+	generator
+		.generate_secret(&["rivet", "api_route", "token"], || async {
+			Ok(value(generate_password(32)))
+		})
+		.await?;
+	generator
+		.generate_secret(&["rivet", "api_status", "token"], || async {
+			Ok(value(generate_password(32)))
+		})
+		.await?;
+
+	// MARK: ClickHouse
+	for user in ["bolt", "chirp", "grafana"] {
+		generator
+			.generate_secret(&["clickhouse", "users", user, "password"], || async {
+				Ok(value(generate_password(32)))
+			})
+			.await?;
+	}
+
+	// MARK: Minio
+	if generator.ns["s3"].get("minio").is_some() {
+		generator
+			.generate_secret(&["minio", "users", "root", "password"], || async {
+				Ok(value(generate_password(32)))
+			})
+			.await?;
+	}
+
+	// HACK: Write config and create new context so we can generate remaining
+	// secrets that depend on service configurations
+	generator.write().await?;
+	let ctx = ProjectContextData::new(Some(ns_id.to_string())).await;
+
+	// MARK: Redis
+	for svc in ctx.all_services().await {
+		if !matches!(svc.config().runtime, RuntimeKind::Redis { .. }) {
+			continue;
+		}
+
+		generator
+			.generate_secret(&["redis", &svc.name(), "username"], || async {
+				Ok(value("default"))
+			})
+			.await?;
+	}
+
+	// Write configs again with new secrets
+	generator.write().await?;
+
+	eprintln!();
+	rivet_term::status::success(
+		"Generated config",
+		&format!("namespaces/{ns_id}.toml & secrets/{ns_id}.toml"),
+	);
+
+	Ok(())
+}
+
+/// Checks if a value exists at a path in a TOML item.
+fn value_exists(mut item: &toml_edit::Item, path: &[&str]) -> bool {
+	for key in path {
+		if let Some(x) = item.get(key).filter(|x| !x.is_none()) {
+			item = x;
+		} else {
+			return false;
+		}
+	}
+
+	true
+}
+
+/// Writes a value to a path in a TOML item.
+fn write_value(item: &mut toml_edit::Item, path: &[&str], value: toml_edit::Item) {
+	if path.is_empty() {
+		panic!("empty path");
+	} else if path.len() == 1 {
+		item[path[0]] = value;
+	} else {
+		let key = path[0];
+		let sub_path = &path[1..];
+		if let Some(x) = item.get_mut(key).filter(|x| !x.is_none()) {
+			write_value(x, sub_path, value);
+		} else {
+			let mut table = toml_edit::Table::new();
+			table.set_implicit(true);
+
+			item[key] = toml_edit::Item::Table(table);
+			write_value(&mut item[key], sub_path, value);
+		}
+	}
+}
+
+/// Returns the public IP of this machine.
+async fn fetch_public_ip() -> Result<String> {
+	let response = reqwest::get("https://ipinfo.io/ip").await?.text().await?;
+	Ok(response.trim().to_string())
+}
+
+/// Generates an OpenSSH key and returns the private key.
+async fn generate_private_key_openssh() -> Result<String> {
+	block_in_place(|| {
+		let tmp_dir = tempfile::TempDir::new()?;
+		let key_path = tmp_dir.path().join("key");
+
+		cmd!(
+			"ssh-keygen",
+			"-f",
+			&key_path,
+			"-t",
+			"ecdsa",
+			"-b",
+			"521",
+			"-N",
+			""
+		)
+		.stdout_null()
+		.run()?;
+
+		let key = std::fs::read_to_string(&key_path)?;
+
+		Ok(key)
+	})
+}
+
+struct JwtKey {
+	private_pem: String,
+	public_pem: String,
+}
+
+/// Generates a JWT key pair.
+async fn generate_jwt_key() -> Result<JwtKey> {
+	block_in_place(|| {
+		let tmp_dir = tempfile::TempDir::new()?;
+
+		let private_pem_path = tmp_dir.path().join("private.pem");
+		let public_pem_path = tmp_dir.path().join("public.pem");
+
+		cmd!(
+			"openssl",
+			"genpkey",
+			"-algorithm",
+			"ed25519",
+			"-outform",
+			"PEM",
+			"-out",
+			&private_pem_path
+		)
+		.stdout_null()
+		.run()?;
+
+		cmd!(
+			"openssl",
+			"pkey",
+			"-in",
+			&private_pem_path,
+			"-pubout",
+			"-out",
+			&public_pem_path
+		)
+		.stdout_null()
+		.run()?;
+
+		let private_pem = std::fs::read_to_string(&private_pem_path)?;
+		let public_pem = std::fs::read_to_string(&public_pem_path)?;
+
+		Ok(JwtKey {
+			private_pem,
+			public_pem,
+		})
+	})
+}
+
+/// Generates a random string for a secret.
+fn generate_password(length: usize) -> String {
+	rand::thread_rng()
+		.sample_iter(&Alphanumeric)
+		.take(length)
+		.map(char::from)
+		.collect()
+}

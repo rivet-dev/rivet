@@ -1,0 +1,10 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/fern-api/fern/main/fern.schema.json
+
+service:
+  auth: true
+  url: Job
+  base-path: /runs/cleanup
+  endpoints:
+    cleanup:
+      path: ""
+      method: POST

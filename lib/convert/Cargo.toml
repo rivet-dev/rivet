@@ -1,0 +1,61 @@
+[package]
+name = "rivet-convert"
+version = "0.1.0"
+edition = "2018"
+authors = ["Rivet Gaming, LLC <developer@rivet.gg>"]
+license = "Apache-2.0"
+
+[dependencies]
+chirp-client = { path = "../chirp/client" }
+rivet-operation = { path = "../operation/core" }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+chrono = "0.4"
+types = { path = "../types/core" }
+util-mm = { package = "rivet-util-mm", path = "../../svc/pkg/mm/util" }
+
+cdn-namespace-get = { path = "../../svc/pkg/cdn/ops/namespace-get" }
+chat-last-read-ts-get = { path = "../../svc/pkg/chat/ops/last-read-ts-get" }
+chat-thread-get-for-topic = { path = "../../svc/pkg/chat-thread/ops/get-for-topic" }
+chat-thread-unread-count = { path = "../../svc/pkg/chat-thread/ops/unread-count" }
+game-get = { path = "../../svc/pkg/game/ops/get" }
+game-namespace-get = { path = "../../svc/pkg/game/ops/namespace-get" }
+game-resolve-namespace-id = { path = "../../svc/pkg/game/ops/resolve-namespace-id" }
+game-token-development-validate = { path = "../../svc/pkg/game/ops/token-development-validate" }
+game-user-get = { path = "../../svc/pkg/game-user/ops/get" }
+game-user-link-get = { path = "../../svc/pkg/game-user/ops/link-get" }
+game-validate = { path = "../../svc/pkg/game/ops/validate" }
+game-namespace-list = { path = "../../svc/pkg/game/ops/namespace-list" }
+game-version-validate = { path = "../../svc/pkg/game/ops/version-validate" }
+job-run-metrics-log = { path = "../../svc/pkg/job-run/ops/metrics-log" }
+kv-list = { path = "../../svc/pkg/kv/ops/list" }
+mm-lobby-player-count = { path = "../../svc/pkg/mm/ops/lobby-player-count" }
+mm-lobby-runtime-aggregate = { path = "../../svc/pkg/mm/ops/lobby-runtime-aggregate" }
+party-get = { path = "../../svc/pkg/party/ops/get" }
+party-invite-get = { path = "../../svc/pkg/party/ops/invite-get" }
+party-member-get = { path = "../../svc/pkg/party/ops/member-get" }
+party-member-list = { path = "../../svc/pkg/party/ops/member-list" }
+party-publicity-for-user = { path = "../../svc/pkg/party/ops/publicity-for-user" }
+region-get = { path = "../../svc/pkg/region/ops/get" }
+region-resolve = { path = "../../svc/pkg/region/ops/resolve" }
+team-dev-get = { path = "../../svc/pkg/team-dev/ops/get" }
+team-get = { path = "../../svc/pkg/team/ops/get" }
+team-member-count = { path = "../../svc/pkg/team/ops/member-count" }
+team-profile-validate = { path = "../../svc/pkg/team/ops/profile-validate" }
+team-validate = { path = "../../svc/pkg/team/ops/validate" }
+user-follow-count = { path = "../../svc/pkg/user-follow/ops/count" }
+user-follow-get = { path = "../../svc/pkg/user-follow/ops/get" }
+user-get = { path = "../../svc/pkg/user/ops/get" }
+user-identity-get = { path = "../../svc/pkg/user-identity/ops/get" }
+user-presence-get = { path = "../../svc/pkg/user-presence/ops/get" }
+user-team-list = { path = "../../svc/pkg/user/ops/team-list" }
+
+rivet-api = { path = "../../gen/openapi/internal/rust" }
+rivet-auth-server = { path = "../../lib/smithy-output/api-auth/rust-server" }
+rivet-chat-server = { path = "../../lib/smithy-output/api-chat/rust-server" }
+rivet-cloud-server = { path = "../../lib/smithy-output/api-cloud/rust-server" }
+rivet-group-server = { path = "../../lib/smithy-output/api-group/rust-server" }
+rivet-kv-server = { path = "../../lib/smithy-output/api-kv/rust-server" }
+rivet-matchmaker-server = { path = "../../lib/smithy-output/api-matchmaker/rust-server" }
+rivet-party-server = { path = "../../lib/smithy-output/api-party/rust-server" }
+rivet-portal-server = { path = "../../lib/smithy-output/api-portal/rust-server" }

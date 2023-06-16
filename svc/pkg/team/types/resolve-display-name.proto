@@ -1,0 +1,18 @@
+syntax = "proto3";
+
+package rivet.backend.pkg.team.resolve_display_name;
+
+import "proto/common.proto";
+
+message Request {
+	repeated string display_names = 1;
+}
+
+message Response {
+	message Team {
+		string display_name = 1;
+		rivet.common.Uuid team_id = 2;
+	}
+
+	repeated Team teams = 1;
+}

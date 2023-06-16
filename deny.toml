@@ -1,0 +1,46 @@
+[advisories]
+ignore = [
+	# chrono depends on time 0.1, which is not patched
+    "RUSTSEC-2020-0071",
+]
+
+[licenses]
+default = "deny"
+unlicensed = "deny"
+copyleft = "deny"
+allow = [
+	"Apache-2.0",
+	"BSD-3-Clause",
+	"ISC",
+	"MIT",
+	"MPL-2.0",
+	"CC0-1.0",
+]
+
+# We use the same config to scan multiple projects
+unused-allowed-license = "allow"
+
+[[licenses.exceptions]]
+name = "unicode-ident"
+allow = ["Unicode-DFS-2016"]
+
+[[licenses.exceptions]]
+name = "ring"
+allow = ["OpenSSL"]
+
+[[licenses.exceptions]]
+name = "portpicker"
+allow = ["Unlicense"]
+
+# See https://github.com/EmbarkStudios/buildkite-jobify/blob/a1b953b03f3330e499b1af47cc2dc38bd777da7c/deny.toml#LL27C1-L38C1
+[[licenses.clarify]]
+name = "ring"
+expression = "ISC AND MIT AND OpenSSL"
+license-files = [{ path = "LICENSE", hash = 0xbd0eed23 }]
+
+# The OpenAPI generator is licensed as an Unlicense, so we can't relicense
+# under MIT.
+[[licenses.exceptions]]
+name = "rivet-api"
+allow = ["Unlicense"]
+

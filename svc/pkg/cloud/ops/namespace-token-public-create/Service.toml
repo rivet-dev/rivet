@@ -1,0 +1,7 @@
+[service]
+name = "cloud-namespace-token-public-create"
+
+[runtime]
+kind = "rust"
+
+[operation]

@@ -1,0 +1,7 @@
+[service]
+name = "team-invite-worker"
+
+[runtime]
+kind = "rust"
+
+[consumer]

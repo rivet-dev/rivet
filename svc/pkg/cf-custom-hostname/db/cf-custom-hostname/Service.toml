@@ -1,0 +1,7 @@
+[service]
+name = "db-cf-custom-hostname"
+
+[runtime]
+kind = "crdb"
+
+[database]

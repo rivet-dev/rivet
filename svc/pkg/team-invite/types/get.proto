@@ -1,0 +1,22 @@
+syntax = "proto3";
+
+package rivet.backend.pkg.team_invite.get;
+
+import "proto/common.proto";
+
+message Request {
+    repeated string codes = 1;
+}
+
+message Response {
+    message Invite {
+        string code = 1;
+        rivet.common.Uuid team_id = 2;
+        int64 create_ts = 3;
+        optional int64 expire_ts = 4;
+        optional int64 use_count = 5;
+        optional int64 revoke_ts = 6;
+    }
+
+    repeated Invite invites = 1;
+}

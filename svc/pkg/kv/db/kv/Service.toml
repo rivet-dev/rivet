@@ -1,0 +1,7 @@
+[service]
+name = "db-kv"
+
+[runtime]
+kind = "crdb"
+
+[database]

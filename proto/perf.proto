@@ -1,0 +1,38 @@
+syntax = "proto3";
+
+package rivet.perf;
+
+import "proto/common.proto";
+
+message Span {
+	string label = 1;
+	int64 start_ts = 2;  // In nanoseconds relative to beginning of request
+	optional int64 finish_ts = 3;  // In nanoseconds relative to beginning of request
+
+	optional rivet.common.Uuid req_id = 4;  // Indicates that this is an rpc span. Regular spans do not have a req_id
+}
+
+message Mark {
+	reserved 5;
+
+	string label = 1;
+	int64 ts = 2;  // In nanoseconds relative to beginning of request
+
+	// If these are not null, then this data can be used to associate with
+	// events across other services.
+	//
+	// `req_id` will not always point to an RPC or consuemr handler event,
+	// since all messages are given a request ID no matter if there is a
+	// consumer associated with the message.
+	optional rivet.common.Uuid ray_id = 3;
+	optional rivet.common.Uuid req_id = 4;
+}
+
+message SvcPerf {
+	string svc_name = 1;
+	int64 ts = 2;  // Timestamp of request in milliseconds
+	int64 duration = 3;  // Duration of request in nanoseconds
+	rivet.common.Uuid req_id = 4;
+	repeated Span spans = 5;
+	repeated Mark marks = 6;
+}

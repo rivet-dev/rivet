@@ -1,0 +1,22 @@
+syntax = "proto3";
+
+package rivet.backend.pkg.team.member_relationship_get;
+
+import "proto/common.proto";
+
+message Request {
+    message User {
+        rivet.common.Uuid this_user_id = 1;
+        rivet.common.Uuid other_user_id = 2;
+    }
+
+    repeated User users = 1;
+}
+
+message Response {
+    message User {
+        repeated rivet.common.Uuid shared_team_ids = 1;
+    }
+
+    repeated User users = 1;
+}

@@ -1,0 +1,19 @@
+syntax = "proto3";
+
+package rivet.backend.pkg.ip.info;
+
+import "proto/common.proto";
+import "proto/backend/net.proto";
+
+enum Provider {
+	IP_INFO_IO = 0;
+}
+
+message Request {
+	string ip = 1;
+	Provider provider = 2;
+}
+
+message Response {
+	backend.net.IpInfo ip_info = 1;
+}

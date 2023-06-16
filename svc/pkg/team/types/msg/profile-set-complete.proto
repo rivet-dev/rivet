@@ -1,0 +1,13 @@
+syntax = "proto3";
+
+package rivet.backend.pkg.team.msg.profile_set_complete;
+
+import "proto/common.proto";
+import "proto/backend/team.proto";
+
+/// name = "msg-team-profile-set-complete"
+/// parameters = [
+/// 	{ name = "team_id" },
+/// ]
+message Message {
+}

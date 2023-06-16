@@ -1,0 +1,7 @@
+[service]
+name = "identity-config-version-get"
+
+[runtime]
+kind = "rust"
+
+[operation]

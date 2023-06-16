@@ -1,0 +1,18 @@
+syntax = "proto3";
+
+package rivet.backend.pkg.kv.msg.directory_update;
+
+import "proto/common.proto";
+
+/// name = "msg-kv-directory-update"
+/// tail-ttl = 60
+/// parameters = [
+/// 	{ name = "namespace_id" },
+/// 	{ name = "key" },
+/// ]
+message Message {
+    rivet.common.Uuid namespace_id = 1;
+    repeated string key = 2;
+    optional string value = 3; // JSON
+}
+

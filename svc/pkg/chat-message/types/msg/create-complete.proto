@@ -1,0 +1,21 @@
+syntax = "proto3";
+
+package rivet.backend.pkg.chat_message.msg.create_complete;
+
+import "proto/common.proto";
+import "proto/backend/chat.proto";
+
+/// name = "msg-chat-message-create-complete"
+/// parameters = [
+/// 	{ name = "thread_id" },
+/// 	{ name = "chat_message_id" },
+/// ]
+message Message {
+	rivet.common.Uuid thread_id = 1;
+	rivet.common.Uuid chat_message_id = 2;
+	rivet.backend.chat.Message chat_message = 3;
+	// NOTE: `participant_user_ids` is set by `chat-message-create` to reduce the number of calls
+	// to `chat-thread-participant-list`
+	repeated rivet.common.Uuid participant_user_ids = 4;
+}
+

@@ -1,0 +1,7 @@
+[service]
+name = "user-follow-worker"
+
+[runtime]
+kind = "rust"
+
+[consumer]

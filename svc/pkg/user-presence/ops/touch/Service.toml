@@ -1,0 +1,7 @@
+[service]
+name = "user-presence-touch"
+
+[runtime]
+kind = "rust"
+
+[operation]

@@ -1,0 +1,12 @@
+{%- for cert_id in traefik.tls_certs %}
+[[tls.certificates]]
+	certFile = "/etc/traefik/tls/{{ cert_id }}_cert.pem"
+	keyFile = "/etc/traefik/tls/{{ cert_id }}_key.pem"
+{%- endfor %}
+
+{%- if traefik.tls_client_cert %}
+[tls.options.default.clientAuth]
+	caFiles = ["/etc/traefik/tls/traefik_client.crt"]
+	clientAuthType = "RequireAndVerifyClientCert"
+{%- endif %}
+

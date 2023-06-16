@@ -1,0 +1,17 @@
+syntax = "proto3";
+
+package rivet.backend.pkg.cf_custom_hostname.msg.create_complete;
+
+import "proto/common.proto";
+
+/// name = "msg-cf-custom-hostname-create-complete"
+/// parameters = [
+/// 	{ name = "namespace_id" },
+/// 	{ name = "hostname" },
+/// ]
+message Message {
+    rivet.common.Uuid namespace_id = 1;
+	string hostname = 2;
+    rivet.common.Uuid identifier = 3;
+}
+

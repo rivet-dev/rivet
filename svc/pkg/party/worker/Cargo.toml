@@ -1,0 +1,33 @@
+[package]
+name = "party-worker"
+version = "0.0.1"
+edition = "2018"
+authors = ["Rivet Gaming, LLC <developer@rivet.gg>"]
+license = "Apache-2.0"
+
+[dependencies]
+chirp-client = { path = "../../../../lib/chirp/client" }
+chirp-worker = { path = "../../../../lib/chirp/worker" }
+lazy_static = "1.4.0"
+redis-util = { path = "../../../../lib/redis-util" }
+rivet-health-checks = { path = "../../../../lib/health-checks" }
+rivet-metrics = { path = "../../../../lib/metrics" }
+rivet-runtime = { path = "../../../../lib/runtime" }
+serde = { version = "1.0", features = ["derive"] }
+util-party = { package = "rivet-util-party", path = "../../party/util" }
+
+chat-message-create-with-topic = { path = "../../chat-message/ops/create-with-topic" }
+mm-player-get = { path = "../../mm/ops/player-get" }
+party-invite-list = { path = "../ops/invite-list" }
+party-member-get = { path = "../ops/member-get" }
+party-member-list = { path = "../ops/member-list" }
+token-create = { path = "../../token/ops/create" }
+
+[dev-dependencies]
+chirp-worker = { path = "../../../../lib/chirp/worker" }
+
+faker-mm-lobby = { path = "../../faker/ops/mm-lobby" }
+faker-mm-player = { path = "../../faker/ops/mm-player" }
+party-get = { path = "../../party/ops/get" }
+party-member-get = { path = "../../party/ops/member-get" }
+party-member-list = { path = "../../party/ops/member-list" }

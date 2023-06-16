@@ -1,0 +1,15 @@
+syntax = "proto3";
+
+package rivet.backend.pkg.party.msg.member_state_resolve;
+
+import "proto/common.proto";
+
+/// name = "msg-party-member-state-resolve"
+/// parameters = [
+/// 	{ name = "party_id" },
+/// 	{ name = "user_id" },
+/// ]
+message Message {
+	rivet.common.Uuid party_id = 1;
+	rivet.common.Uuid user_id = 2;
+}

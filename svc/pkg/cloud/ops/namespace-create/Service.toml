@@ -1,0 +1,7 @@
+[service]
+name = "cloud-namespace-create"
+
+[runtime]
+kind = "rust"
+
+[operation]

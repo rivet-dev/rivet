@@ -1,0 +1,29 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/fern-api/fern/main/fern.schema.json
+
+imports:
+  commons: ../../common.yml
+
+types:
+  Config:
+    docs: Identity configuration for a given version.
+    properties:
+      display_names: optional<list<string>>
+      avatars: optional<list<uuid>>
+
+      custom_display_names:
+        docs: >-
+          **Deprecated**
+        type: optional<list<CustomDisplayName>>
+      custom_avatars:
+        docs: >-
+          **Deprecated**
+        type: optional<list<CustomAvatar>>
+
+  CustomDisplayName:
+    properties:
+      display_name: string
+
+  CustomAvatar:
+    properties:
+      upload_id:
+        type: uuid

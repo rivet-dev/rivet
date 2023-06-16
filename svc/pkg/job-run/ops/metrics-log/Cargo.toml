@@ -1,0 +1,21 @@
+[package]
+name = "job-run-metrics-log"
+version = "0.0.1"
+edition = "2018"
+authors = ["Rivet Gaming, LLC <developer@rivet.gg>"]
+license = "Apache-2.0"
+
+[dependencies]
+rivet-operation = { path = "../../../../../lib/operation/core" }
+chirp-client = { path = "../../../../../lib/chirp/client" }
+prost = "0.10"
+
+serde = { version = "1.0", features = ["derive"] }
+serde_urlencoded = "0.7.0"
+reqwest = "0.11"
+
+[dev-dependencies]
+chirp-worker = { path = "../../../../../lib/chirp/worker" }
+
+faker-job-run = { path = "../../../faker/ops/job-run" }
+job-run-get = { path = "../get" }

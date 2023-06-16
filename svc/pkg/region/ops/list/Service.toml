@@ -1,0 +1,7 @@
+[service]
+name = "region-list"
+
+[runtime]
+kind = "rust"
+
+[operation]

@@ -1,0 +1,22 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/fern-api/fern/main/fern.schema.json
+
+imports:
+  cloudCommons: ../cloud/common.yml
+
+service:
+  auth: true
+  base-path: /auth
+  url: Cloud
+  audiences:
+    - public
+  endpoints:
+    inspect:
+      path: /inspect
+      method: GET
+      docs: Returns information about the current authenticated agent.
+      response: InspectResponse
+
+types:
+  InspectResponse:
+    properties:
+      agent: cloudCommons.AuthAgent

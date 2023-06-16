@@ -1,0 +1,48 @@
+services {
+	id = "clickhouse-http"
+	name = "clickhouse"
+	tags = ["clickhouse", "http"]
+
+	port = 8123
+	checks = [
+		{
+			name = "Reachable on 8123"
+			tcp = "{{nebula_ipv4}}:8123"
+			interval = "10s"
+			timeout  = "1s"
+		}
+	]
+}
+
+services {
+	id = "clickhouse-tcp"
+	name = "clickhouse"
+	tags = ["clickhouse", "tcp"]
+
+	port = 9000
+	checks = [
+		{
+			name = "Reachable on 9000"
+			tcp = "{{nebula_ipv4}}:9000"
+			interval = "10s"
+			timeout  = "1s"
+		}
+	]
+}
+
+services {
+	id = "clickhouse-postgres"
+	name = "clickhouse"
+	tags = ["clickhouse", "postgres"]
+
+	port = 9005
+}
+
+services {
+	id = "clickhouse-prometheus"
+	name = "clickhouse"
+	tags = ["clickhouse", "prometheus"]
+
+	port = 9363
+}
+

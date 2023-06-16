@@ -1,0 +1,24 @@
+[package]
+name = "job-run-get"
+version = "0.0.1"
+edition = "2018"
+authors = ["Rivet Gaming, LLC <developer@rivet.gg>"]
+license = "Apache-2.0"
+
+[dependencies]
+rivet-operation = { path = "../../../../../lib/operation/core" }
+chirp-client = { path = "../../../../../lib/chirp/client" }
+chrono = "0.4"
+prost = "0.10"
+nomad-client = "0.0.9"
+util-job = { package = "rivet-util-job", path = "../../../job/util" }
+
+[dependencies.sqlx]
+version = "0.6"
+default-features = false
+
+[dev-dependencies]
+chirp-worker = { path = "../../../../../lib/chirp/worker" }
+
+faker-job-run = { path = "../../../faker/ops/job-run" }
+nomad-util = { path = "../../../../../lib/nomad-util" }

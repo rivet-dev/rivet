@@ -1,0 +1,7 @@
+[service]
+name = "user-follow-relationship-get"
+
+[runtime]
+kind = "rust"
+
+[operation]

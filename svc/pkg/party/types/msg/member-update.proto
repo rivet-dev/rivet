@@ -1,0 +1,15 @@
+syntax = "proto3";
+
+package rivet.backend.pkg.party.msg.member_update;
+
+import "proto/common.proto";
+
+/// name = "msg-party-member-update"
+/// tail-ttl = 60
+/// parameters = [
+/// 	{ name = "user_id" },
+/// ]
+message Message {
+	rivet.common.Uuid user_id = 1;
+}
+

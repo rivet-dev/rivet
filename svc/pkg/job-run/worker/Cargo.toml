@@ -1,0 +1,42 @@
+[package]
+name = "job-run-worker"
+version = "0.0.1"
+edition = "2018"
+authors = ["Rivet Gaming, LLC <developer@rivet.gg>"]
+license = "Apache-2.0"
+
+[dependencies]
+chirp-client = { path = "../../../../lib/chirp/client" }
+chirp-worker = { path = "../../../../lib/chirp/worker" }
+chrono = "0.4"
+cjson = "0.1"
+hex = "0.4"
+lazy_static = "1.4.0"
+nomad-client = "0.0.9"
+nomad-util = { path = "../../../../lib/nomad-util" }
+rand = "0.8"
+reqwest = "0.11"
+rivet-health-checks = { path = "../../../../lib/health-checks" }
+rivet-metrics = { path = "../../../../lib/metrics" }
+rivet-runtime = { path = "../../../../lib/runtime" }
+serde = { version = "1.0", features = ["derive"] }
+sha2 = "0.10"
+util-job = { package = "rivet-util-job", path = "../../job/util" }
+
+region-get = { path = "../../region/ops/get" }
+token-create = { path = "../../token/ops/create" }
+
+[dependencies.sqlx]
+version = "0.6"
+default-features = false
+
+[dev-dependencies]
+chirp-worker = { path = "../../../../lib/chirp/worker" }
+rustls = "0.20"
+webpki = "0.22"
+webpki-roots = "0.22"
+
+faker-job-run = { path = "../../faker/ops/job-run" }
+faker-job-template = { path = "../../faker/ops/job-template" }
+faker-region = { path = "../../faker/ops/region" }
+job-run-get = { path = "../../job-run/ops/get" }

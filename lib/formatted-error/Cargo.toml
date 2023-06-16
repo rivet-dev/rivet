@@ -1,0 +1,18 @@
+[package]
+name = "formatted-error"
+version = "0.1.0"
+authors = ["Rivet Gaming, LLC <developer@rivet.gg>"]
+edition = "2018"
+license = "Apache-2.0"
+
+[dependencies]
+hashbrown = "0.12.1"
+lazy_static = "1.4"
+http = "0.2"
+
+[build-dependencies]
+hashbrown = "0.12.1"
+http = "0.2"
+indoc = "1.0"
+serde = { version = "1.0", features = ["derive"] }
+gray_matter = "0.2.2"

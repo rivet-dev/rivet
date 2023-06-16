@@ -1,0 +1,7 @@
+[service]
+name = "mm-config-lobby-group-resolve-name-id"
+
+[runtime]
+kind = "rust"
+
+[operation]

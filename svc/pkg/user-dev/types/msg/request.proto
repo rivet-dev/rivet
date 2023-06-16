@@ -1,0 +1,19 @@
+syntax = "proto3";
+
+package rivet.backend.pkg.user_dev.msg.request;
+
+import "proto/common.proto";
+
+/// name = "msg-user-dev-request"
+/// parameters = [
+/// 	{ name = "user_id" },
+/// ]
+message Message {
+	rivet.common.Uuid user_id = 1;
+
+	string name = 2;
+	optional string company_name = 3;
+	string company_size = 4;
+	string preferred_tools = 5;
+	string goals = 6;
+}

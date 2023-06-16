@@ -1,0 +1,15 @@
+syntax = "proto3";
+
+package rivet.backend.pkg.captcha.hcaptcha_verify;
+
+import "proto/common.proto";
+
+message Request {
+	string client_response = 1;
+	string site_key = 2;
+	string remote_address = 3;
+}
+
+message Response {
+	bool success = 1;
+}

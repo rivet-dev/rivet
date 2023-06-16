@@ -1,0 +1,49 @@
+[package]
+name = "api-helper"
+version = "0.1.0"
+authors = ["Rivet Gaming, LLC <developer@rivet.gg>"]
+edition = "2018"
+license = "Apache-2.0"
+
+[features]
+default = ["macros"]
+macros = []
+
+[dependencies]
+api-helper-macros = { path = "../macros" }
+async-trait = "0.1"
+chirp-client = { path = "../../chirp/client" }
+chrono = "0.4"
+formatted-error = { path = "../../formatted-error" }
+futures-util = "0.3"
+global-error = { path = "../../global-error" }
+headers = "0.3.5"
+http = "0.2"
+hyper = { version = "0.14", features = ["server", "http1", "tcp"] }
+lazy_static = "1.4"
+prost = "0.10"
+regex = "1.4"
+rivet-api = { path = "../../../gen/openapi/internal/rust" }
+rivet-cache = { path = "../../cache/build" }
+rivet-claims = { path = "../../claims" }
+rivet-connection = { path = "../../connection" }
+rivet-health-checks = { path = "../../health-checks" }
+rivet-metrics = { path = "../../metrics" }
+rivet-operation = { path = "../../operation/core" }
+rivet-pools = { path = "../../pools" }
+rivet-runtime = { path = "../../runtime" }
+rivet-util = { path = "../../util/core" }
+serde = { version = "1.0", features = ["derive"] }
+serde_array_query = { git = "https://github.com/rivet-gg/serde_array_query.git", rev = "b9f8bfad77aea6f01dccc6cb77146b8c5daecaa3" }
+serde_json = "1.0"
+thiserror = "1.0"
+tokio = { version = "1.21" }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", default-features = false, features = ["fmt", "json", "ansi"] }
+types = { path = "../../types/core" }
+url = "2.2.2"
+uuid = { version = "1", features = ["v4"] }
+
+[dev-dependencies]
+chirp-worker = { path = "../../chirp/worker" }
+reqwest = { version = "0.11", features = ["json"] }

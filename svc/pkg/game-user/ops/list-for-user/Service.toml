@@ -1,0 +1,7 @@
+[service]
+name = "game-user-list-for-user"
+
+[runtime]
+kind = "rust"
+
+[operation]

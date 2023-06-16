@@ -1,0 +1,28 @@
+[package]
+name = "cf-worker"
+version = "0.0.1"
+edition = "2018"
+authors = ["Rivet Gaming, LLC <developer@rivet.gg>"]
+license = "Apache-2.0"
+
+[dependencies]
+chirp-client = { path = "../../../../lib/chirp/client" }
+chirp-worker = { path = "../../../../lib/chirp/worker" }
+reqwest = "0.11"
+rivet-health-checks = { path = "../../../../lib/health-checks" }
+rivet-metrics = { path = "../../../../lib/metrics" }
+rivet-runtime = { path = "../../../../lib/runtime" }
+serde = { version = "1.0", features = ["derive"] }
+
+cf-custom-hostname-list-for-namespace-id = { path = "../ops/list-for-namespace-id" }
+cf-custom-hostname-resolve-hostname = { path = "../ops/resolve-hostname" }
+game-get = { path = "../../game/ops/get" }
+game-namespace-list = { path = "../../game/ops/namespace-list" }
+game-resolve-namespace-id = { path = "../../game/ops/resolve-namespace-id" }
+team-dev-game-list = { path = "../../team-dev/ops/game-list" }
+
+[dev-dependencies]
+chirp-worker = { path = "../../../../lib/chirp/worker" }
+
+faker-game = { path = "../../faker/ops/game" }
+cf-custom-hostname-get = { path = "../ops/get" }

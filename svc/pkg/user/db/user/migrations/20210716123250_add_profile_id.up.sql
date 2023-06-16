@@ -1,0 +1,1 @@
+ALTER TABLE users ADD COLUMN profile_id STRING;

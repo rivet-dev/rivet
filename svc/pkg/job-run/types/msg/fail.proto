@@ -1,0 +1,23 @@
+syntax = "proto3";
+
+package rivet.backend.pkg.job_run.msg.fail;
+
+import "proto/common.proto";
+
+enum ErrorCode {
+	UNKNOWN = 0;
+	STALE_MESSAGE = 1;
+
+	NOMAD_EVAL_PLAN_FAILED = 101;
+	NOMAD_DISPATCH_FAILED = 102;
+}
+
+/// name = "msg-job-run-fail"
+/// parameters = [
+/// 	{ name = "run_id" },
+/// ]
+message Message {
+	rivet.common.Uuid run_id = 1;
+	ErrorCode error_code = 2;
+}
+

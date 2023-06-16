@@ -1,0 +1,32 @@
+syntax = "proto3";
+
+package rivet.backend.pkg.party.msg.member_create;
+
+import "proto/common.proto";
+import "proto/backend/net.proto";
+
+/// name = "msg-party-member-create"
+/// tail-ttl = 75
+/// parameters = [
+/// 	{ name = "party_id" },
+/// 	{ name = "user_id" },
+/// ]
+message Message {
+	message StateMatchmakerReady {
+
+	}
+
+	message StateMatchmakerLobby {
+		rivet.common.Uuid player_id = 1;
+		string player_token = 2;
+	}
+
+	rivet.common.Uuid party_id = 1;
+	rivet.common.Uuid user_id = 2;
+	optional rivet.backend.net.ClientInfo client = 3;
+
+	oneof initial_state {
+		StateMatchmakerReady matchmaker_ready = 101;
+		StateMatchmakerLobby matchmaker_lobby = 102;
+	};
+}

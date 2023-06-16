@@ -1,0 +1,7 @@
+[service]
+name = "job-run-metrics-log"
+
+[runtime]
+kind = "rust"
+
+[operation]

@@ -1,0 +1,20 @@
+[package]
+name = "kv-worker"
+version = "0.0.1"
+edition = "2018"
+authors = ["Rivet Gaming, LLC <developer@rivet.gg>"]
+license = "Apache-2.0"
+
+[dependencies]
+chirp-worker = { path = "../../../../lib/chirp/worker" }
+chirp-client = { path = "../../../../lib/chirp/client" }
+rivet-health-checks = { path = "../../../../lib/health-checks" }
+rivet-metrics = { path = "../../../../lib/metrics" }
+rivet-runtime = { path = "../../../../lib/runtime" }
+chrono = "0.4"
+util-kv = { package = "rivet-util-kv", path = "../../kv/util" }
+
+[dev-dependencies]
+chirp-worker = { path = "../../../../lib/chirp/worker" }
+
+kv-get = { path = "../ops/get" }

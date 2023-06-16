@@ -1,0 +1,10 @@
+[service]
+name = "redis-cache"
+
+[runtime]
+kind = "redis"
+index = 2
+persistent = false
+
+[cache]
+

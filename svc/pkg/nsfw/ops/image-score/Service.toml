@@ -1,0 +1,7 @@
+[service]
+name = "nsfw-image-score"
+
+[runtime]
+kind = "rust"
+
+[operation]

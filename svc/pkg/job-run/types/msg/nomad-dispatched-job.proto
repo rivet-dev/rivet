@@ -1,0 +1,16 @@
+syntax = "proto3";
+
+package rivet.backend.pkg.job_run.msg.nomad_dispatched_job;
+
+import "proto/common.proto";
+
+/// name = "msg-job-run-nomad-dispatched-job"
+/// parameters = [
+/// 	{ name = "run_id" },
+/// 	{ name = "dispatched_job_id" },
+/// ]
+message Message {
+	rivet.common.Uuid run_id = 1;
+	string dispatched_job_id = 2;
+}
+

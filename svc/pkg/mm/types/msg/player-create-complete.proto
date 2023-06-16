@@ -1,0 +1,16 @@
+syntax = "proto3";
+
+package rivet.backend.pkg.mm.msg.player_create_complete;
+
+import "proto/common.proto";
+
+/// name = "msg-mm-player-create-complete"
+/// parameters = [
+/// 	{ name = "lobby_id" },
+/// 	{ name = "player_id" },
+/// ]
+message Message {
+	rivet.common.Uuid lobby_id = 1;
+	rivet.common.Uuid player_id = 2;
+}
+

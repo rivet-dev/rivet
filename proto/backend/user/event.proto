@@ -1,0 +1,55 @@
+syntax = "proto3";
+
+package rivet.backend.user.event;
+
+import "proto/common.proto";
+import "proto/backend/user.proto";
+import "proto/backend/chat.proto";
+
+message Event {
+	oneof kind {
+		ChatMessage chat_message = 1;
+		ChatRead chat_read = 2;
+		PartyUpdate party_update = 3;
+		UserUpdate user_update = 5;
+		MatchmakerLobbyJoin matchmaker_lobby_join = 4;
+		PresenceUpdate presence_update = 6;
+		TeamMemberRemove team_member_remove = 7;
+	}
+}
+
+message ChatMessage {
+	rivet.backend.chat.Message chat_message = 1;
+}
+
+message ChatRead {
+	rivet.common.Uuid thread_id = 1;
+	int64 read_ts = 2;
+}
+
+message PartyUpdate {
+
+}
+
+message UserUpdate {
+	
+}
+
+message MatchmakerLobbyJoin {
+	rivet.common.Uuid namespace_id = 1;
+	rivet.common.Uuid query_id = 2;
+	rivet.common.Uuid lobby_id = 3;
+	rivet.common.Uuid player_id = 4;
+	string player_token = 5;
+}
+
+message PresenceUpdate {
+	oneof kind {
+		backend.user.Status status = 1;
+		backend.user.Presence.GameActivity game_activity = 2;
+	}
+}
+
+message TeamMemberRemove {
+	rivet.common.Uuid team_id = 1;
+}

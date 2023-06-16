@@ -1,0 +1,7 @@
+[service]
+name = "team-user-ban-list"
+
+[runtime]
+kind = "rust"
+
+[operation]

@@ -1,0 +1,18 @@
+syntax = "proto3";
+
+package rivet.backend.pkg.mm_config.lobby_group_get;
+
+import "proto/common.proto";
+
+message Request {
+	repeated rivet.common.Uuid lobby_group_ids = 2;
+}
+
+message Response {
+	message LobbyGroup {
+		rivet.common.Uuid lobby_group_id = 1;
+		string name_id = 2;
+	}
+
+	repeated LobbyGroup lobby_groups = 1;
+}

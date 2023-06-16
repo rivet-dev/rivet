@@ -1,0 +1,4 @@
+{%- if 'consul-client' in grains['roles'] or 'consul-server' in grains['roles'] %}
+server=/consul/127.0.0.1#8600
+{%- endif %}
+

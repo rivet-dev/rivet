@@ -1,0 +1,8 @@
+[package]
+name = "rivet-util-kv"
+version = "0.1.0"
+edition = "2021"
+authors = ["Rivet Gaming, LLC <developer@rivet.gg>"]
+license = "Apache-2.0"
+
+[dependencies]

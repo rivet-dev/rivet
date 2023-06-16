@@ -1,0 +1,7 @@
+[service]
+name = "cf-turnstile-verify"
+
+[runtime]
+kind = "rust"
+
+[operation]

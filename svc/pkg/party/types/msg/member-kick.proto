@@ -1,0 +1,16 @@
+syntax = "proto3";
+
+package rivet.backend.pkg.party.msg.member_kick;
+
+import "proto/common.proto";
+
+/// name = "msg-party-member-kick"
+/// parameters = [
+/// 	{ name = "party_id" },
+/// 	{ name = "user_id" },
+/// ]
+message Message {
+	rivet.common.Uuid party_id = 1;
+	rivet.common.Uuid kick_user_id = 2;
+}
+

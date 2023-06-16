@@ -1,0 +1,17 @@
+syntax = "proto3";
+
+package rivet.backend.pkg.team.msg.profile_set;
+
+import "proto/common.proto";
+import "proto/backend/team.proto";
+
+/// name = "msg-team-profile-set"
+/// parameters = [
+/// 	{ name = "team_id" },
+/// ]
+message Message {
+	rivet.common.Uuid team_id = 1;
+	optional string display_name = 2;
+	optional string bio = 3;
+	optional rivet.backend.team.Publicity publicity = 4;
+}

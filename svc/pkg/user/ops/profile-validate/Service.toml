@@ -1,0 +1,7 @@
+[service]
+name = "user-profile-validate"
+
+[runtime]
+kind = "rust"
+
+[operation]

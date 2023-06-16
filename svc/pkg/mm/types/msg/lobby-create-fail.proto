@@ -1,0 +1,23 @@
+syntax = "proto3";
+
+package rivet.backend.pkg.mm.msg.lobby_create_fail;
+
+import "proto/common.proto";
+import "proto/chirp.proto";
+
+enum ErrorCode {
+	UNKNOWN = 0;
+	LOBBY_COUNT_OVER_MAX = 1;
+	REGION_NOT_ENABLED = 2;
+	STALE_MESSAGE = 3;
+}
+
+/// name = "msg-mm-lobby-create-fail"
+/// parameters = [
+/// 	{ name = "lobby_id" },
+/// ]
+message Message {
+	rivet.common.Uuid lobby_id = 1;
+	ErrorCode error_code = 2;
+}
+

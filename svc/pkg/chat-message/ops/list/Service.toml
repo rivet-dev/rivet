@@ -1,0 +1,7 @@
+[service]
+name = "chat-message-list"
+
+[runtime]
+kind = "rust"
+
+[operation]

@@ -1,0 +1,39 @@
+syntax = "proto3";
+
+package rivet.backend.cloud;
+
+import "proto/common.proto";
+import "proto/backend/matchmaker.proto";
+import "proto/backend/cdn.proto";
+import "proto/backend/kv.proto";
+import "proto/backend/identity.proto";
+
+message Game {
+	rivet.common.Uuid game_id = 1;
+}
+
+message GameNamespace {
+	rivet.common.Uuid namespace_id = 1;
+	optional NamespaceConfig config = 2;  // Nullable if not fetched
+}
+
+message NamespaceConfig {
+	optional rivet.backend.cdn.NamespaceConfig cdn = 101;
+	optional rivet.backend.matchmaker.NamespaceConfig matchmaker = 102;
+	optional rivet.backend.kv.NamespaceConfig kv = 103;
+	optional rivet.backend.identity.NamespaceConfig identity = 104;
+}
+
+message GameVersion {
+	rivet.common.Uuid version_id = 1;
+	optional VersionConfig config = 2;  // Nullable if not fetched
+}
+
+// Represents how a game version will be published. This is a data type that will be used
+// before the version is actually inserted in to the database.
+message VersionConfig {
+	optional rivet.backend.cdn.VersionConfig cdn = 101;
+	optional rivet.backend.matchmaker.VersionConfig matchmaker = 102;
+	optional rivet.backend.kv.VersionConfig kv = 103;
+	optional rivet.backend.identity.VersionConfig identity = 104;
+}

@@ -1,0 +1,19 @@
+syntax = "proto3";
+
+package rivet.backend.pkg.identity_config.namespace_get;
+
+import "proto/common.proto";
+import "proto/backend/identity.proto";
+
+message Request {
+	repeated rivet.common.Uuid namespace_ids = 1;
+}
+
+message Response {
+	message Namespace {
+		rivet.common.Uuid namespace_id = 1;
+		rivet.backend.identity.NamespaceConfig config = 2;
+	}
+
+	repeated Namespace namespaces = 1;
+}

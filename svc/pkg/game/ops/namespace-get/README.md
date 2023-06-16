@@ -1,0 +1,2 @@
+# game-namespace-get
+

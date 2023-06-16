@@ -1,0 +1,14 @@
+syntax = "proto3";
+
+package rivet.backend.pkg.team_invite.msg.create_complete;
+
+import "proto/common.proto";
+
+/// name = "msg-team-invite-create-complete"
+/// parameters = [
+/// 	{ name = "team_id" },
+/// ]
+message Message {
+	string code = 1;
+}
+

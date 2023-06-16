@@ -1,0 +1,7 @@
+[service]
+name = "db-upload"
+
+[runtime]
+kind = "crdb"
+
+[database]

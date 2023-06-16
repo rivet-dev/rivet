@@ -1,0 +1,8 @@
+[service]
+name = "job-run-worker"
+
+[runtime]
+kind = "rust"
+
+[consumer]
+

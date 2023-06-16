@@ -1,0 +1,188 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/fern-api/fern/main/fern.schema.json
+
+imports:
+  commons: ../common.yml
+  groupCommons: ../group/common.yml
+
+types:
+  Handle:
+    properties:
+      game_id: uuid
+      name_id: commons.Identifier
+      display_name: commons.DisplayName
+      logo_url:
+        docs: The URL of this game's logo image.
+        type: optional<string>
+      banner_url:
+        docs: The URL of this game's banner image.
+        type: optional<string>
+
+  Summary:
+    properties:
+      game_id: uuid
+      name_id: commons.Identifier
+      display_name: commons.DisplayName
+      logo_url:
+        docs: The URL of this game's logo image.
+        type: optional<string>
+      banner_url:
+        docs: The URL of this game's banner image.
+        type: optional<string>
+      url: string
+      developer: groupCommons.Handle
+
+  Profile:
+    docs: A game profile.
+    properties:
+      game_id:
+        type: uuid
+      name_id:
+        docs: >-
+          A human readable short identifier used to references resources.
+          Different than a `rivet.common#Uuid` because this is intended to be
+          human readable.
+          Different than `rivet.common#DisplayName` because this should not
+          include special
+          characters and be short.
+        type: string
+      display_name:
+        docs: Represent a resource's readable display name.
+        type: string
+      logo_url:
+        docs: The URL of this game's logo image.
+        type: optional<string>
+      banner_url:
+        docs: The URL of this game's banner image.
+        type: optional<string>
+      url:
+        docs: The URL to this game's website.
+        type: string
+      developer: groupCommons.Summary
+      tags:
+        docs: A list of game tags.
+        type: list<string>
+      description:
+        docs: A description of the given game.
+        type: string
+      platforms:
+        docs: A list of platform links.
+        type: list<PlatformLink>
+      recommended_groups:
+        docs: A list of group summaries.
+        type: list<groupCommons.Summary>
+      identity_leaderboard_categories:
+        docs: A list of game leaderboard categories.
+        type: list<LeaderboardCategory>
+      group_leaderboard_categories:
+        docs: A list of game leaderboard categories.
+        type: list<LeaderboardCategory>
+
+  PlatformLink:
+    docs: A platform link denoting a supported platform.
+    properties:
+      display_name:
+        docs: Represent a resource's readable display name.
+        type: string
+      url:
+        docs: The URL to the given game's method of distribution on this platform.
+        type: string
+
+  LeaderboardCategory:
+    docs: A game leaderboard category.
+    properties:
+      display_name:
+        docs: Represent a resource's readable display name.
+        type: string
+
+  StatSummary:
+    docs: A game statistic summary.
+    properties:
+      game: Handle
+      stats: list<Stat>
+
+  Stat:
+    docs: A game statistic.
+    properties:
+      config: StatConfig
+      overall_value:
+        type: double
+        docs: A single overall value of the given statistic.
+  # Stat
+  # ExpandedStatSummary
+  # ExpandedStat
+  # Rating
+
+  StatConfig:
+    docs: A game statistic config.
+    properties:
+      record_id: uuid
+      icon_id: uuid
+      format: StatFormatMethod
+      aggregation: StatAggregationMethod
+      sorting: StatSortingMethod
+      priority: integer
+      display_name: commons.DisplayName
+      postfix_singular:
+        docs:
+          "A string appended to the end of a singular game statistic's value.
+          Example: 1 **dollar**."
+        type: optional<string>
+      postfix_plural:
+        docs:
+          "A string appended to the end of a game statistic's value that is not
+          exactly 1. Example: 45 **dollars**."
+        type: optional<string>
+      prefix_singular:
+        docs:
+          "A string appended to the beginning of a singular game statistic's value.
+          Example: **value** 1."
+        type: optional<string>
+      prefix_plural:
+        docs:
+          "A string prepended to the beginning of a game statistic's value that is
+          not exactly 1. Example: **values** 45."
+        type: optional<string>
+
+  StatFormatMethod:
+    docs: A value denoting the format method of a game statistic.
+    enum:
+      - value: integer
+        docs: An integer with no decimals (1,234).
+      - value: float_1
+        docs: A float with 1 decimal (1,234.5).
+      - value: float_2
+        docs: A float with 2 decimals (1,234.56).
+      - value: float_3
+        docs: A float with 3 decimals (1,234.567).
+      - value: duration_minute
+        docs: A duration with minute precision (1d 2h 45m).
+      - value: duration_second
+        docs: A duration with second precision (1d 2h 45m 21s).
+      - value: duration_hundredth_second
+        docs: >
+          A duration with hundredth-second precision (1d 2h 45m 21.46s). It is
+          important to notice that this custom format is not a standard way to
+          define Enums in OpenAPI and it will be not understood by the majority
+          of tools that parse OpenAPI files. It is important to check with the
+          tools or libraries that you are using to make sure they support this
+          custom format.
+
+  StatAggregationMethod:
+    docs: A value denoting the aggregation method of a game statistic.
+    enum:
+      - value: sum
+        docs: Summation aggregation.
+      - value: average
+        docs: Average aggregation.
+      - value: min
+        docs: Minimum value aggregation.
+      - value: max
+        docs: Maximum value aggregation.
+
+  StatSortingMethod:
+    docs: A value denoting the sorting method of a game statistic.
+    enum:
+      - value: desc
+        docs: Descending sorting.
+      - value: asc
+        docs: Ascending sorting.

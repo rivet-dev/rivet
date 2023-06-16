@@ -1,0 +1,19 @@
+syntax = "proto3";
+
+package rivet.backend.pkg.user.msg.mm_lobby_join;
+
+import "proto/common.proto";
+
+/// name = "msg-user-mm-lobby-join"
+/// parameters = [
+/// 	{ name = "user_id" },
+/// 	{ name = "lobby_id" },
+/// ]
+message Message {
+	rivet.common.Uuid user_id = 1;
+	rivet.common.Uuid namespace_id = 2;
+	rivet.common.Uuid query_id = 3;
+	rivet.common.Uuid lobby_id = 4;
+	rivet.common.Uuid player_id = 5;
+	string player_token = 6;
+}

@@ -1,0 +1,16 @@
+syntax = "proto3";
+
+package rivet.backend.pkg.job_run.msg.cleanup;
+
+import "proto/common.proto";
+
+/// name = "msg-job-run-cleanup"
+/// deduplicate = true
+/// parameters = [
+/// 	{ name = "run_id" },
+/// ]
+message Message {
+	rivet.common.Uuid run_id = 1;
+	bool skip_init_consume = 2;
+}
+

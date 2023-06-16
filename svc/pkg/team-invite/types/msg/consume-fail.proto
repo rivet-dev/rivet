@@ -1,0 +1,29 @@
+syntax = "proto3";
+
+package rivet.backend.pkg.team_invite.msg.consume_fail;
+
+import "proto/common.proto";
+
+enum ErrorCode {
+	UNKNOWN = 0;
+	INVITE_CODE_INVALID = 1;
+	INVITE_EXPIRED = 2;
+	INVITE_REVOKED = 3;
+	INVITE_ALREADY_USED = 4;
+	USER_ALREADY_TEAM_MEMBER = 5;
+	TEAM_FULL = 6;
+	USER_BANNED = 7;
+}
+
+/// name = "msg-team-invite-consume-fail"
+/// parameters = [
+/// 	{ name = "code" },
+/// 	{ name = "user_id" },
+/// ]
+message Message {
+	rivet.common.Uuid user_id = 1;
+	string code = 2;
+	optional rivet.common.Uuid team_id = 3;
+	ErrorCode error_code = 4;
+}
+

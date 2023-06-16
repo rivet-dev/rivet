@@ -1,0 +1,7 @@
+[service]
+name = "db-email-verification"
+
+[runtime]
+kind = "crdb"
+
+[database]

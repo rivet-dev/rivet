@@ -1,0 +1,19 @@
+syntax = "proto3";
+
+package rivet.backend.pkg.faker.cdn_site;
+
+import "proto/common.proto";
+
+message Request {
+	rivet.common.Uuid game_id = 1;
+}
+
+message Response {
+	rivet.common.Uuid site_id = 1;
+
+
+	string index_html = 101;
+	string hello_index_html = 102;
+	string hello_test_html = 103;
+	string hello_world_txt = 104;
+}

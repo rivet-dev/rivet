@@ -1,0 +1,18 @@
+syntax = "proto3";
+
+package rivet.backend.pkg.team.member_count;
+
+import "proto/common.proto";
+
+message Request {
+	repeated rivet.common.Uuid team_ids = 1;
+}
+
+message Response {
+	message Team {
+		rivet.common.Uuid team_id = 1;
+		uint32 member_count = 2;
+	}
+
+	repeated Team teams = 1;
+}

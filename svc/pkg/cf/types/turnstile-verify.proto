@@ -1,0 +1,15 @@
+syntax = "proto3";
+
+package rivet.backend.pkg.cf.turnstile_verify;
+
+import "proto/common.proto";
+
+message Request {
+	string client_response = 1;
+	string remote_address = 2;
+	string secret_key = 3;
+}
+
+message Response {
+	bool success = 1;
+}

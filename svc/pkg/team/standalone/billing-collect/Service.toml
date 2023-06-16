@@ -1,0 +1,9 @@
+[service]
+name = "team-billing-collect"
+regions = ["lnd-atl"]
+
+[runtime]
+kind = "rust"
+
+[periodic]
+cron = "0 0 * * *"

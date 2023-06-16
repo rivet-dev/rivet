@@ -1,0 +1,23 @@
+[package]
+name = "party-publicity-for-user"
+version = "0.0.1"
+edition = "2018"
+authors = ["Rivet Gaming, LLC <developer@rivet.gg>"]
+license = "Apache-2.0"
+
+[dependencies]
+rivet-operation = { path = "../../../../../lib/operation/core" }
+chirp-client = { path = "../../../../../lib/chirp/client" }
+prost = "0.10"
+
+party-get = { path = "../get" }
+party-member-list = { path = "../member-list" }
+user-follow-relationship-get = { path = "../../../user-follow/ops/relationship-get" }
+team-member-relationship-get = { path = "../../../team/ops/member-relationship-get" }
+
+[dev-dependencies]
+chirp-worker = { path = "../../../../../lib/chirp/worker" }
+
+faker-team = { path = "../../../faker/ops/team" }
+faker-user = { path = "../../../faker/ops/user" }
+user-follow-toggle = { path = "../../../user-follow/ops/toggle" }

@@ -1,0 +1,78 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/fern-api/fern/main/fern.schema.json
+
+imports:
+  commons: ../../common.yml
+  localCommons: common.yml
+
+types:
+  GameMode:
+    docs: A game mode.
+    properties:
+      regions:
+        type: optional<map<string, GameModeRegion>>
+      max_players:
+        type: optional<integer>
+      max_players_direct:
+        type: optional<integer>
+      max_players_party:
+        type: optional<integer>
+      docker:
+        type: optional<GameModeRuntimeDocker>
+
+      # Region overrides
+      tier:
+        type: optional<string>
+      idle_lobbies:
+        type: optional<GameModeIdleLobbiesConfig>
+
+  GameModeRegion:
+    docs: A game mode region.
+    properties:
+      tier:
+        type: optional<string>
+      idle_lobbies:
+        type: optional<GameModeIdleLobbiesConfig>
+
+  GameModeRuntimeDocker:
+    docs: A game mode runtime running through Docker.
+    properties:
+      dockerfile:
+        docs: Client-side configuration
+        type: optional<string>
+      image:
+        docs: Client-side configuration
+        type: optional<string>
+      image_id: optional<uuid>
+      args: optional<list<string>>
+      env: optional<map<string, string>>
+      network_mode: optional<localCommons.NetworkMode>
+      ports: optional<map<string, GameModeRuntimeDockerPort>>
+
+  GameModeRuntimeDockerPort:
+    docs: A docker port.
+    properties:
+      port:
+        docs: The port number to connect to.
+        type: optional<integer>
+      port_range: optional<localCommons.PortRange>
+      protocol: optional<localCommons.PortProtocol>
+      proxy:
+        docs: How this port should be proxied. Defaults to 'game-guard`.
+        type: optional<localCommons.ProxyKind>
+
+      # Client-side configuration
+      dev_port:
+        docs: Client-side configuration
+        type: optional<integer>
+      dev_port_range:
+        docs: Client-side configuration
+        type: optional<localCommons.PortRange>
+      dev_protocol:
+        docs: Client-side configuration
+        type: optional<localCommons.PortProtocol>
+
+  GameModeIdleLobbiesConfig:
+    docs: Configuration for how many idle lobbies a game version should have.
+    properties:
+      min: integer
+      max: integer

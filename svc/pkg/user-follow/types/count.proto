@@ -1,0 +1,25 @@
+syntax = "proto3";
+
+package rivet.backend.pkg.user_follow.count;
+
+import "proto/common.proto";
+
+message Request {
+	enum Kind {
+		FOLLOWER = 0;
+		FOLLOWING = 1;
+		MUTUAL = 2;
+	}
+
+	Kind kind = 1;  // Represents the type of user ID that you're passing in to the request
+	repeated rivet.common.Uuid user_ids = 2;
+}
+
+message Response {
+	message Follows {
+		rivet.common.Uuid user_id = 1;  // Either follower or following depending on the request kind
+		int64 count = 2;
+	}
+
+	repeated Follows follows = 1;
+}

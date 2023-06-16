@@ -1,0 +1,28 @@
+[Unit]
+Description=ClickHouse Server
+Requires=network-online.target
+# NOTE: that After/Wants=time-sync.target is not enough, you need to ensure
+# that the time was adjusted already, if you use systemd-timesyncd you are
+# safe, but if you use ntp or some other daemon, you should configure it
+# additionaly.
+After=time-sync.target network-online.target
+Wants=time-sync.target
+
+[Service]
+Type=notify
+# Switching off watchdog is very important for sd_notify to work correctly.
+Environment=CLICKHOUSE_WATCHDOG_ENABLE=0
+User=clickhouse
+Group=clickhouse
+Restart=always
+RestartSec=30
+RuntimeDirectory=clickhouse-server
+ExecStart=/var/rivet-nix/result/clickhouse/bin/clickhouse server --config=/etc/clickhouse-server/config.xml --pid-file=/run/clickhouse-server/clickhouse-server.pid
+LimitCORE=infinity
+LimitNOFILE=500000
+CapabilityBoundingSet=CAP_NET_ADMIN CAP_IPC_LOCK CAP_SYS_NICE CAP_NET_BIND_SERVICE
+
+[Install]
+# ClickHouse should not start from the rescue shell (rescue.target).
+WantedBy=multi-user.target
+

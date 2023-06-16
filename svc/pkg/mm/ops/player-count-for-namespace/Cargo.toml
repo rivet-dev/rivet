@@ -1,0 +1,21 @@
+[package]
+name = "mm-player-count-for-namespace"
+version = "0.0.1"
+edition = "2018"
+authors = ["Rivet Gaming, LLC <developer@rivet.gg>"]
+license = "Apache-2.0"
+
+[dependencies]
+chirp-client = { path = "../../../../../lib/chirp/client" }
+rivet-operation = { path = "../../../../../lib/operation/core" }
+prost = "0.10"
+util-mm = { package = "rivet-util-mm", path = "../../util" }
+
+[dependencies.sqlx]
+version = "0.6"
+default-features = false
+
+[dev-dependencies]
+chirp-worker = { path = "../../../../../lib/chirp/worker" }
+
+faker-mm-lobby = { path = "../../../faker/ops/mm-lobby" }

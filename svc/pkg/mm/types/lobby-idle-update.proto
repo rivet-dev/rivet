@@ -1,0 +1,14 @@
+syntax = "proto3";
+
+package rivet.backend.pkg.mm.lobby_idle_update;
+
+import "proto/common.proto";
+
+message Request {
+	rivet.common.Uuid region_id = 1;
+	rivet.common.Uuid namespace_id = 2;
+}
+
+message Response {
+
+}

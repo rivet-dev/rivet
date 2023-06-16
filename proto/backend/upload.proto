@@ -1,0 +1,38 @@
+syntax = "proto3";
+
+package rivet.backend.upload;
+
+import "proto/common.proto";
+
+message Upload {
+	reserved 5;
+
+	string bucket = 6;
+	rivet.common.Uuid upload_id = 1;
+	int64 create_ts = 2;
+	uint64 content_length = 3;
+	optional int64 complete_ts = 4;
+	optional int64 deleted_ts = 7;
+	optional rivet.common.Uuid user_id = 8;
+}
+
+message UploadFile {
+	reserved 5, 6;
+
+	rivet.common.Uuid upload_id = 1;
+	string path = 2;
+	optional string mime = 3;
+	uint64 content_length = 4;
+}
+
+message PrepareFile {
+	string path = 1;
+	optional string mime = 2;
+	uint64 content_length = 3;
+	optional float nsfw_score_threshold = 4;
+}
+
+message PresignedUploadRequest {
+	string path = 1;
+	string url = 2;
+}

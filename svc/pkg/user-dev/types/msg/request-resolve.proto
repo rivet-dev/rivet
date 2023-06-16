@@ -1,0 +1,14 @@
+syntax = "proto3";
+
+package rivet.backend.pkg.user_dev.msg.request_resolve;
+
+import "proto/common.proto";
+
+/// name = "msg-user-dev-request-resolve"
+/// parameters = [
+/// 	{ name = "user_id" },
+/// ]
+message Message {
+	rivet.common.Uuid user_id = 1;
+	bool resolution = 2;
+}

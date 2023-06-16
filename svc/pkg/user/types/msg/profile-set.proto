@@ -1,0 +1,16 @@
+syntax = "proto3";
+
+package rivet.backend.pkg.user.msg.profile_set;
+
+import "proto/common.proto";
+
+/// name = "msg-user-profile-set"
+/// parameters = [
+/// 	{ name = "user_id" },
+/// ]
+message Message {
+	rivet.common.Uuid user_id = 1;
+	optional string display_name = 2;
+	optional uint32 account_number = 3;
+	optional string bio = 4;
+}

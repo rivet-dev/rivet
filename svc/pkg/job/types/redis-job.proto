@@ -1,0 +1,21 @@
+syntax = "proto3";
+
+package rivet.backend.pkg.job.redis_job;
+
+import "proto/common.proto";
+import "proto/backend/job.proto";
+
+message RunProxiedPorts {
+	message ProxiedPort {
+		string ip = 1;
+		uint32 source = 2;
+		optional string target_nomad_port_label = 8;
+		uint32 ingress_port = 4;
+		repeated string ingress_hostnames = 5;
+		rivet.backend.job.ProxyProtocol proxy_protocol = 6;
+		rivet.backend.job.SslDomainMode ssl_domain_mode = 7;
+	}
+
+	rivet.common.Uuid run_id = 1;
+	repeated ProxiedPort proxied_ports = 2;
+}

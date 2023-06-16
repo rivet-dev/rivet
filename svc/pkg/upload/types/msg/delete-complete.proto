@@ -1,0 +1,14 @@
+syntax = "proto3";
+
+package rivet.backend.pkg.upload.msg.delete_complete;
+
+import "proto/common.proto";
+
+/// name = "msg-upload-delete-complete"
+/// parameters = [
+/// 	{ name = "request_id" },
+/// ]
+message Message {
+	rivet.common.Uuid request_id = 1;
+	repeated rivet.common.Uuid upload_ids = 2;
+}

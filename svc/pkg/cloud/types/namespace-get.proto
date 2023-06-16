@@ -1,0 +1,14 @@
+syntax = "proto3";
+
+package rivet.backend.pkg.cloud.namespace_get;
+
+import "proto/common.proto";
+import "proto/backend/cloud.proto";
+
+message Request {
+	repeated rivet.common.Uuid namespace_ids = 1;
+}
+
+message Response {
+	repeated rivet.backend.cloud.GameNamespace namespaces = 1;
+}

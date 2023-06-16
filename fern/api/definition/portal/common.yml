@@ -1,0 +1,14 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/fern-api/fern/main/fern.schema.json
+
+types:
+  NotificationRegisterService:
+    properties:
+      firebase: optional<NotificationRegisterFirebaseService>
+
+  NotificationRegisterFirebaseService:
+    properties:
+      access_key: string
+
+  NotificationUnregisterService:
+    enum:
+      - firebase

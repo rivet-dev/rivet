@@ -1,0 +1,34 @@
+# See https://www.cockroachlabs.com/docs/stable/deploy-cockroachdb-on-premises-insecure.html?filters=systemd
+
+[Unit]
+Description=CockroachDB
+Requires=network.target
+
+[Service]
+Type=notify
+User=cockroach
+Group=cockroach
+WorkingDirectory=/var/lib/cockroach
+{%- if 'local' in pillar['rivet']['deploy'] %}
+ExecStart=/usr/local/bin/cockroach start-single-node \
+{%- else %}
+ExecStart=/usr/local/bin/cockroach start \
+	--join={{join_node_ips|join(',')}} \
+{%- endif %}
+	--insecure \
+	--sql-addr={{nebula_ipv4}}:26257 \
+	--listen-addr={{nebula_ipv4}}:26258 \
+	--http-addr={{nebula_ipv4}}:26300 \
+	--cluster-name={{cluster_name}} \
+	--locality=region={{region}} \
+	--advertise-sql-addr={{nebula_ipv4}}:26257 \
+	--advertise-addr={{nebula_ipv4}}:26258 \
+	--cache=.25 \
+	--max-sql-memory=.25
+TimeoutStopSec=60
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=default.target
+

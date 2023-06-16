@@ -1,0 +1,23 @@
+[package]
+name = "upload-prepare"
+version = "0.0.1"
+edition = "2018"
+authors = ["Rivet Gaming, LLC <developer@rivet.gg>"]
+license = "Apache-2.0"
+
+[dependencies]
+chirp-client = { path = "../../../../../lib/chirp/client" }
+rivet-operation = { path = "../../../../../lib/operation/core" }
+chrono = "0.4"
+prost = "0.10"
+s3-util = { path = "../../../../../lib/s3-util" }
+
+[dependencies.sqlx]
+version = "0.6"
+default-features = false
+
+[dev-dependencies]
+chirp-worker = { path = "../../../../../lib/chirp/worker" }
+reqwest = "0.11"
+
+upload-get = { path = "../get" }

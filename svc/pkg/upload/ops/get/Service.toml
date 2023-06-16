@@ -1,0 +1,7 @@
+[service]
+name = "upload-get"
+
+[runtime]
+kind = "rust"
+
+[operation]

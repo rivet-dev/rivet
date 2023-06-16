@@ -1,0 +1,21 @@
+syntax = "proto3";
+
+package rivet.backend.pkg.kv.list;
+
+import "proto/common.proto";
+
+message Request {
+    rivet.common.Uuid namespace_id = 1;
+    string directory = 2;
+    bool with_values = 3;
+	optional uint64 limit = 4;
+}
+
+message Response {
+    message Entry {
+        string key = 1;
+        optional bytes value = 2;
+    }
+
+    repeated Entry entries = 1;
+}

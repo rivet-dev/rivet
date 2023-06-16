@@ -1,0 +1,14 @@
+syntax = "proto3";
+
+package rivet.backend.pkg.upload.complete;
+
+import "proto/common.proto";
+
+message Request {
+	rivet.common.Uuid upload_id = 1;
+	optional string bucket = 2;
+}
+
+message Response {
+
+}

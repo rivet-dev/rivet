@@ -1,0 +1,2 @@
+# faker-game-namespace
+

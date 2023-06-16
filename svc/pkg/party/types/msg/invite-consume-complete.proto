@@ -1,0 +1,15 @@
+syntax = "proto3";
+
+package rivet.backend.pkg.party.msg.invite_consume_complete;
+
+import "proto/common.proto";
+
+/// name = "msg-party-invite-consume-complete"
+/// parameters = [
+/// 	{ name = "query_id" },
+/// ]
+message Message {
+	rivet.common.Uuid query_id = 1;
+	rivet.common.Uuid party_id = 2;
+}
+

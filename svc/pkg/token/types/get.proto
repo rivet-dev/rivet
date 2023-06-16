@@ -1,0 +1,27 @@
+syntax = "proto3";
+
+package rivet.backend.pkg.token.get;
+
+import "proto/common.proto";
+
+message Token {
+	rivet.common.Uuid jti = 1;
+	optional int64 exp = 2;
+	int64 iat = 3;
+
+	// Metadata
+	optional rivet.common.Uuid refresh_jti = 101;
+	rivet.common.Uuid session_id = 102;
+	string issuer = 103;
+	optional string user_agent = 104;
+	optional string remote_address = 105;
+	optional int64 revoke_ts = 106;
+}
+
+message Request {
+	repeated rivet.common.Uuid jtis = 1;
+}
+
+message Response {
+	repeated Token tokens = 1;
+}

@@ -1,0 +1,656 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/fern-api/fern/main/fern.schema.json
+
+imports:
+  commons: ../common.yml
+  gameCommons: ../game/common.yml
+  version: version/__package__.yml
+  matchmakerCommons: version/matchmaker/common.yml
+
+types:
+  SvcPerf:
+    docs: A service performance summary.
+    properties:
+      svc_name:
+        docs: The name of the service.
+        type: string
+      ts:
+        docs: RFC3339 timestamp.
+        type: datetime
+      duration:
+        docs: Unsigned 64 bit integer.
+        type: long
+      req_id:
+        type: optional<uuid>
+      spans:
+        docs: A list of performance spans.
+        type: list<LogsPerfSpan>
+      marks:
+        docs: A list of performance marks.
+        type: list<LogsPerfMark>
+
+  LogsPerfSpan:
+    docs: A performance span.
+    properties:
+      label:
+        docs: The label given to this performance span.
+        type: string
+      start_ts:
+        docs: RFC3339 timestamp.
+        type: datetime
+      finish_ts:
+        docs: RFC3339 timestamp.
+        type: optional<datetime>
+      req_id:
+        type: optional<uuid>
+
+  LogsPerfMark:
+    docs: A performance mark.
+    properties:
+      label:
+        docs: The label given to this performance mark.
+        type: string
+      ts:
+        docs: RFC3339 timestamp.
+        type: datetime
+      ray_id:
+        type: optional<uuid>
+      req_id:
+        type: optional<uuid>
+
+  LobbySummaryAnalytics:
+    docs: Analytical information about a lobby.
+    properties:
+      lobby_id:
+        type: uuid
+      lobby_group_id:
+        type: uuid
+      lobby_group_name_id:
+        docs: >-
+          A human readable short identifier used to references resources.
+          Different than a `rivet.common#Uuid` because this is intended to be
+          human readable.
+          Different than `rivet.common#DisplayName` because this should not
+          include special
+          characters and be short.
+        type: string
+      region_id:
+        type: uuid
+      create_ts:
+        docs: RFC3339 timestamp.
+        type: datetime
+      is_ready:
+        docs: Whether or not this lobby is ready.
+        type: boolean
+      is_idle:
+        docs: Whether or not this lobby is idle.
+        type: boolean
+      is_closed:
+        docs: Whether or not this lobby is in a closed state.
+        type: boolean
+      is_outdated:
+        docs: Whether or not this lobby is outdated.
+        type: boolean
+      max_players_normal:
+        docs: Unsigned 32 bit integer.
+        type: integer
+      max_players_direct:
+        docs: Unsigned 32 bit integer.
+        type: integer
+      max_players_party:
+        docs: Unsigned 32 bit integer.
+        type: integer
+      total_player_count:
+        docs: Unsigned 32 bit integer.
+        type: integer
+      registered_player_count:
+        docs: Unsigned 32 bit integer.
+        type: integer
+
+  LogsLobbySummary:
+    docs: A logs summary for a lobby.
+    properties:
+      lobby_id:
+        type: uuid
+      namespace_id:
+        type: uuid
+      lobby_group_name_id:
+        docs: >-
+          A human readable short identifier used to references resources.
+          Different than a `rivet.common#Uuid` because this is intended to be
+          human readable.
+          Different than `rivet.common#DisplayName` because this should not
+          include special
+          characters and be short.
+        type: string
+      region_id:
+        type: uuid
+      create_ts:
+        docs: RFC3339 timestamp.
+        type: datetime
+      start_ts:
+        docs: RFC3339 timestamp.
+        type: optional<datetime>
+      ready_ts:
+        docs: RFC3339 timestamp.
+        type: optional<datetime>
+      status: LogsLobbyStatus
+
+  LogsLobbyStatus:
+    docs: A union representing the state of a lobby.
+    properties:
+      running: commons.EmptyObject
+      stopped: optional<LogsLobbyStatusStopped>
+
+  LogsLobbyStatusStopped:
+    docs: The status of a stopped lobby.
+    properties:
+      stop_ts: datetime
+      failed:
+        type: boolean
+        docs: Whether or not the lobby failed or stopped successfully.
+      exit_code:
+        type: integer
+        docs: The exit code returned by the lobby's main process when stopped.
+
+  SvcMetrics:
+    docs: Metrics relating to a job service.
+    properties:
+      job:
+        docs: The job name.
+        type: string
+      cpu:
+        docs: CPU metrics.
+        type: list<double>
+      memory:
+        docs: Memory metrics.
+        type: list<double>
+      memory_max:
+        docs: Peak memory metrics.
+        type: list<double>
+      allocated_memory:
+        docs: Total allocated memory (MB).
+        type: optional<double>
+
+  UploadPrepareFile:
+    docs: A file being prepared to upload.
+    properties:
+      path:
+        docs: The path/filename of the file.
+        type: string
+      content_type:
+        docs: The MIME type of the file.
+        type: optional<string>
+      content_length:
+        docs: Unsigned 64 bit integer.
+        type: long
+
+  AuthAgent:
+    docs: The current authenticated agent.
+    properties:
+      identity: optional<AuthAgentIdentity>
+      game_cloud: optional<AuthAgentGameCloud>
+
+  AuthAgentIdentity:
+    docs: The current authenticated identity.
+    properties:
+      identity_id: uuid
+
+  AuthAgentGameCloud:
+    docs: The current authenticated game cloud.
+    properties:
+      game_id: uuid
+
+  CustomAvatarSummary:
+    docs: A custom avatar summary.
+    properties:
+      upload_id:
+        type: uuid
+      display_name:
+        docs: Represent a resource's readable display name.
+        type: string
+      create_ts:
+        docs: RFC3339 timestamp.
+        type: datetime
+      url:
+        docs: >-
+          The URL of this custom avatar image. Only present if upload is
+          complete.
+        type: optional<string>
+      content_length:
+        docs: Unsigned 64 bit integer.
+        type: long
+      complete:
+        docs: Whether or not this custom avatar has completely been uploaded.
+        type: boolean
+
+  BuildSummary:
+    docs: A build summary.
+    properties:
+      build_id:
+        type: uuid
+      upload_id:
+        type: uuid
+      display_name:
+        docs: Represent a resource's readable display name.
+        type: string
+      create_ts:
+        docs: RFC3339 timestamp.
+        type: datetime
+      content_length:
+        docs: Unsigned 64 bit integer.
+        type: long
+      complete:
+        docs: Whether or not this build has completely been uploaded.
+        type: boolean
+
+  CdnSiteSummary:
+    docs: A CDN site summary.
+    properties:
+      site_id:
+        type: uuid
+      upload_id:
+        type: uuid
+      display_name:
+        docs: Represent a resource's readable display name.
+        type: string
+      create_ts:
+        docs: RFC3339 timestamp.
+        type: datetime
+      content_length:
+        docs: Unsigned 64 bit integer.
+        type: long
+      complete:
+        docs: Whether or not this site has completely been uploaded.
+        type: boolean
+
+  GameFull:
+    docs: A full game.
+    properties:
+      game_id:
+        type: uuid
+      create_ts:
+        docs: RFC3339 timestamp.
+        type: datetime
+      name_id:
+        docs: >-
+          A human readable short identifier used to references resources.
+          Different than a `rivet.common#Uuid` because this is intended to be
+          human readable.
+          Different than `rivet.common#DisplayName` because this should not
+          include special
+          characters and be short.
+        type: string
+      display_name:
+        docs: Represent a resource's readable display name.
+        type: string
+      developer_group_id:
+        type: uuid
+      total_player_count:
+        docs: Unsigned 32 bit integer.
+        type: integer
+      logo_url:
+        docs: The URL of this game's logo image.
+        type: optional<string>
+      banner_url:
+        docs: The URL of this game's banner image.
+        type: optional<string>
+      namespaces:
+        docs: A list of namespace summaries.
+        type: list<NamespaceSummary>
+      versions:
+        docs: A list of version summaries.
+        type: list<version.Summary>
+      available_regions:
+        docs: A list of region summaries.
+        type: list<RegionSummary>
+
+  NamespaceSummary:
+    docs: A namespace summary.
+    properties:
+      namespace_id:
+        type: uuid
+      create_ts:
+        docs: RFC3339 timestamp.
+        type: datetime
+      display_name:
+        docs: Represent a resource's readable display name.
+        type: string
+      version_id:
+        type: uuid
+      name_id:
+        docs: >-
+          A human readable short identifier used to references resources.
+          Different than a `rivet.common#Uuid` because this is intended to be
+          human readable.
+          Different than `rivet.common#DisplayName` because this should not
+          include special
+          characters and be short.
+        type: string
+
+  RegionSummary:
+    docs: A region summary.
+    properties:
+      region_id:
+        type: uuid
+      region_name_id:
+        docs: >-
+          A human readable short identifier used to references resources.
+          Different than a `rivet.common#Uuid` because this is intended to be
+          human readable.
+          Different than `rivet.common#DisplayName` because this should not
+          include special
+          characters and be short.
+        type: string
+      provider:
+        docs: The server provider of this region.
+        type: string
+      universal_region:
+        docs: A universal number given to this region.
+        type: double
+      provider_display_name:
+        docs: Represent a resource's readable display name.
+        type: string
+      region_display_name:
+        docs: Represent a resource's readable display name.
+        type: string
+
+  GroupBillingSummary:
+    docs: A group billing summary.
+    properties:
+      games:
+        docs: A list of multiple game lobby expenses.
+        type: list<GameLobbyExpenses>
+      balance:
+        docs: A group's available balance.
+        type: double
+
+  GameLobbyExpenses:
+    docs: Game lobby expenses.
+    properties:
+      game: gameCommons.Handle
+      namespaces:
+        docs: A list of namespace summaries.
+        type: list<NamespaceSummary>
+      expenses:
+        docs: A list of multiple region tier expenses.
+        type: list<RegionTierExpenses>
+
+  RegionTierExpenses:
+    docs: Region tier expenses.
+    properties:
+      namespace_id:
+        type: uuid
+      region_id:
+        type: uuid
+      tier_name_id:
+        docs: >-
+          A human readable short identifier used to references resources.
+          Different than a `rivet.common#Uuid` because this is intended to be
+          human readable.
+          Different than `rivet.common#DisplayName` because this should not
+          include special
+          characters and be short.
+        type: string
+      lobby_group_name_id:
+        docs: >-
+          A human readable short identifier used to references resources.
+          Different than a `rivet.common#Uuid` because this is intended to be
+          human readable.
+          Different than `rivet.common#DisplayName` because this should not
+          include special
+          characters and be short.
+        type: string
+      uptime:
+        docs: How long a region tier has been active (in milliseconds).
+        type: double
+      expenses:
+        docs: >-
+          Amount of expenses for this region tier (in hundred-thousandths USD,
+          100,000 = $1.00).
+        type: double
+
+  GroupBankSource:
+    properties:
+      account_number:
+        docs: The bank account number of this group's bank source.
+        type: string
+      routing_number:
+        docs: The bank routing number of this group's bank source.
+        type: string
+
+  GroupBillingInvoice:
+    docs: A group's billing invoice.
+    properties:
+      csv_url:
+        docs: A URL to this invoice's CSV breakdown.
+        type: string
+      pdf_url:
+        docs: A URL to this invoice's PDF document.
+        type: string
+      period_start_ts:
+        docs: RFC3339 timestamp.
+        type: datetime
+      period_end_ts:
+        docs: RFC3339 timestamp.
+        type: datetime
+
+  GroupBillingPayment:
+    docs: A group's billing payment.
+    properties:
+      amount:
+        docs: Payment amount (in hundreths USD, 100 = $1.00).
+        type: double
+      description:
+        docs: A description of this payment.
+        type: optional<string>
+      from_invoice:
+        docs: Whether or not this payment is from an invoice.
+        type: boolean
+      created_ts:
+        docs: RFC3339 timestamp.
+        type: datetime
+      status: GroupBillingStatus
+
+  GroupBillingStatus:
+    docs: A value denoting the status of a billing transfer.
+    enum:
+      - succeeded
+      - processing
+      - refunded
+
+  GroupBillingTransfer:
+    docs: A group's billing transfer.
+    properties:
+      amount:
+        docs: Payment amount (in hundreths USD, 100 = $1.00).
+        type: long
+      description:
+        docs: A description of this transfer.
+        type: optional<string>
+      created_ts:
+        docs: RFC3339 timestamp.
+        type: datetime
+      status: GroupBillingStatus
+
+  RegionTier:
+    docs: A region server tier.
+    properties:
+      tier_name_id:
+        docs: >-
+          A human readable short identifier used to references resources.
+          Different than a `rivet.common#Uuid` because this is intended to be
+          human readable.
+          Different than `rivet.common#DisplayName` because this should not
+          include special
+          characters and be short.
+        type: string
+      rivet_cores_numerator:
+        docs: >-
+          Together with the denominator, denotes the portion of the CPU a given
+          server uses.
+        type: integer
+      rivet_cores_denominator:
+        docs: >-
+          Together with the numerator, denotes the portion of the CPU a given
+          server uses.
+        type: integer
+      cpu:
+        docs: CPU frequency (MHz).
+        type: integer
+      memory:
+        docs: Allocated memory (MB).
+        type: integer
+      disk:
+        docs: Allocated disk space (MB).
+        type: integer
+      bandwidth:
+        docs: Internet bandwidth (MB).
+        type: integer
+      price_per_second:
+        docs: >-
+          Price billed for every second this server is running (in quadrillionth
+          USD, 1,000,000,000,000 = $1.00).
+        type: integer
+
+  NamespaceFull:
+    docs: A full namespace.
+    properties:
+      namespace_id:
+        type: uuid
+      create_ts:
+        docs: RFC3339 timestamp.
+        type: datetime
+      display_name:
+        docs: Represent a resource's readable display name.
+        type: string
+      version_id:
+        type: uuid
+      name_id:
+        docs: >-
+          A human readable short identifier used to references resources.
+          Different than a `rivet.common#Uuid` because this is intended to be
+          human readable.
+          Different than `rivet.common#DisplayName` because this should not
+          include special
+          characters and be short.
+        type: string
+      config: NamespaceConfig
+
+  NamespaceConfig:
+    docs: Cloud configuration for a given namespace.
+    properties:
+      cdn: CdnNamespaceConfig
+      matchmaker: MatchmakerNamespaceConfig
+      kv: KvNamespaceConfig
+      identity: IdentityNamespaceConfig
+
+  CdnNamespaceConfig:
+    docs: CDN configuration for a given namespace.
+    properties:
+      enable_domain_public_auth:
+        docs: >-
+          Whether or not to allow users to connect to the given namespace via
+          domain name.
+        type: boolean
+      domains:
+        docs: A list of CDN domains for a given namespace.
+        type: list<CdnNamespaceDomain>
+      auth_type: CdnAuthType
+      auth_user_list:
+        docs: A list of CDN authenticated users for a given namespace.
+        type: list<CdnNamespaceAuthUser>
+
+  MatchmakerNamespaceConfig:
+    docs: Matchmaker configuration for a given namespace.
+    properties:
+      lobby_count_max:
+        docs: Unsigned 32 bit integer.
+        type: integer
+      max_players_per_client:
+        docs: Unsigned 32 bit integer.
+        type: integer
+      max_players_per_client_vpn:
+        docs: Unsigned 32 bit integer.
+        type: integer
+      max_players_per_client_proxy:
+        docs: Unsigned 32 bit integer.
+        type: integer
+      max_players_per_client_tor:
+        docs: Unsigned 32 bit integer.
+        type: integer
+      max_players_per_client_hosting:
+        docs: Unsigned 32 bit integer.
+        type: integer
+
+  KvNamespaceConfig:
+    docs: KV configuration for a given namespace.
+    properties: {}
+
+  IdentityNamespaceConfig:
+    docs: Identity configuration for a given namespace.
+    properties: {}
+
+  CdnAuthType:
+    docs: >-
+      A value denoting what type of authentication to use for a game namespace's
+      CDN.
+    enum:
+      - none
+      - basic
+
+  CdnNamespaceDomain:
+    docs: A CDN domain for a given namespace.
+    properties:
+      domain:
+        docs: A valid domain name (no protocol).
+        type: string
+      create_ts:
+        docs: RFC3339 timestamp.
+        type: datetime
+      verification_status: CdnNamespaceDomainVerificationStatus
+      verification_method: CdnNamespaceDomainVerificationMethod
+      verification_errors: list<string>
+
+  CdnNamespaceDomainVerificationMethod:
+    docs: A union representing the verification method used for this CDN domain.
+    properties:
+      invalid: optional<commons.EmptyObject>
+      http: optional<CdnNamespaceDomainVerificationMethodHttp>
+
+  CdnNamespaceDomainVerificationMethodHttp:
+    properties:
+      cname_record: string
+
+  CdnNamespaceDomainVerificationStatus:
+    docs: A value denoting the status of a CDN domain's verification status.
+    enum:
+      - active
+      - pending
+      - failed
+
+  CdnNamespaceAuthUser:
+    docs: An authenticated CDN user for a given namespace.
+    properties:
+      user:
+        docs: A user name.
+        type: string
+
+  MatchmakerDevelopmentPort:
+    docs: A port configuration used to create development tokens.
+    properties:
+      port: optional<integer>
+      port_range: optional<matchmakerCommons.PortRange>
+      protocol: matchmakerCommons.PortProtocol
+
+  NamespaceVersion:
+    docs: A previously deployed namespace version.
+    properties:
+      namespace_id:
+        docs: A universally unique identifier.
+        type: string
+      version_id:
+        docs: A universally unique identifier.
+        type: string
+      deploy_ts:
+        docs: RFC3339 timestamp.
+        type: datetime

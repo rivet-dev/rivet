@@ -1,0 +1,14 @@
+syntax = "proto3";
+
+package rivet.backend.pkg.cloud.game_config_get;
+
+import "proto/common.proto";
+import "proto/backend/cloud.proto";
+
+message Request {
+	repeated rivet.common.Uuid game_ids = 1;
+}
+
+message Response {
+	repeated rivet.backend.cloud.Game game_configs = 1;
+}

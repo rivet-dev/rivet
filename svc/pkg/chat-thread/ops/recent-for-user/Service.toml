@@ -1,0 +1,7 @@
+[service]
+name = "chat-thread-recent-for-user"
+
+[runtime]
+kind = "rust"
+
+[operation]

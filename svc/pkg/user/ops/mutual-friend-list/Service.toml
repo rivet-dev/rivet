@@ -1,0 +1,7 @@
+[service]
+name = "user-mutual-friend-list"
+
+[runtime]
+kind = "rust"
+
+[operation]

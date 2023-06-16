@@ -1,0 +1,57 @@
+default-group: local
+groups:
+  external:
+    audiences:
+      - public
+    generators:
+      - name: fernapi/fern-typescript-sdk
+        version: 0.5.6
+        config:
+          namespaceExport: Rivet
+          bundle: true
+        output:
+          location: npm
+          package-name: "@rivet-gg/api"
+          token: ${FERN_NPM_TOKEN}
+        github:
+          repository: rivet-gg/rivet-node
+      - name: fernapi/fern-java-sdk
+        version: 0.1.0
+        output:
+          location: maven
+          coordinate: gg.rivet:api
+          username: ${RIVET_MAVEN_USERNAME}
+          password: ${RIVET_MAVEN_PASSWORD}
+        github:
+          repository: rivet-gg/rivet-java
+      - name: fernapi/fern-openapi
+        version: 0.0.22
+        github:
+          repository: rivet-gg/rivet-openapi
+  internal:
+    generators:
+      - name: fernapi/fern-typescript-sdk
+        version: 0.5.6
+        config:
+          namespaceExport: Rivet
+          allowCustomFetcher: true
+        output:
+          location: npm
+          package-name: "@rivet-fern/api"
+          url: npm.buildwithfern.com
+  local_external:
+    audiences:
+      - public
+    generators:
+      - name: fernapi/fern-openapi
+        version: 0.0.22
+        output:
+          location: local-file-system
+          path: ../../gen/openapi/external/spec
+  local_internal:
+    generators:
+      - name: fernapi/fern-openapi
+        version: 0.0.22
+        output:
+          location: local-file-system
+          path: ../../gen/openapi/internal/spec

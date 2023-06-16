@@ -1,0 +1,8 @@
+[service]
+name = "mm-lobby-get"
+
+[runtime]
+kind = "rust"
+
+[operation]
+

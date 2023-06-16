@@ -1,0 +1,15 @@
+syntax = "proto3";
+
+package rivet.backend.pkg.mm.lobby_get;
+
+import "proto/common.proto";
+import "proto/backend/matchmaker.proto";
+
+message Request {
+	repeated rivet.common.Uuid lobby_ids = 1;
+	bool include_stopped = 2;
+}
+
+message Response {
+	repeated rivet.backend.matchmaker.Lobby lobbies = 1;
+}

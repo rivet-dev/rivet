@@ -1,0 +1,29 @@
+[package]
+name = "mm-lobby-runtime-aggregate"
+version = "0.0.1"
+edition = "2018"
+authors = ["Rivet Gaming, LLC <developer@rivet.gg>"]
+license = "Apache-2.0"
+
+[dependencies]
+rivet-operation = { path = "../../../../../lib/operation/core" }
+chirp-client = { path = "../../../../../lib/chirp/client" }
+chrono = "0.4"
+prost = "0.10"
+util-mm = { package = "rivet-util-mm", path = "../../util" }
+
+mm-config-lobby-group-resolve-version = { path = "../../../mm-config/ops/lobby-group-resolve-version" }
+mm-config-version-get = { path = "../../../mm-config/ops/version-get" }
+
+[dependencies.sqlx]
+version = "0.6"
+default-features = false
+
+[dev-dependencies]
+chirp-worker = { path = "../../../../../lib/chirp/worker" }
+
+faker-game = { path = "../../../faker/ops/game" }
+faker-game-version = { path = "../../../faker/ops/game-version" }
+faker-mm-lobby = { path = "../../../faker/ops/mm-lobby" }
+faker-mm-lobby-row = { path = "../../../faker/ops/mm-lobby-row" }
+faker-region = { path = "../../../faker/ops/region" }

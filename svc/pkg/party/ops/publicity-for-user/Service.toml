@@ -1,0 +1,7 @@
+[service]
+name = "party-publicity-for-user"
+
+[runtime]
+kind = "rust"
+
+[operation]

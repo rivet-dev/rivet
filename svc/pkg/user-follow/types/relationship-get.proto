@@ -1,0 +1,29 @@
+syntax = "proto3";
+
+package rivet.backend.pkg.user_follow.relationship_get;
+
+import "proto/common.proto";
+
+message Request {
+    message User {
+        rivet.common.Uuid this_user_id = 1;
+        rivet.common.Uuid other_user_id = 2;
+    }
+
+    repeated User users = 1;
+}
+
+message Response {
+    message User {
+        // Both users follow each other.
+        bool is_mutual = 1;
+
+        // This user is following the other user.
+        bool is_following = 2;
+
+        // The other user is a follower of this user.
+        bool is_follower = 3;
+    }
+
+    repeated User users = 1;
+}

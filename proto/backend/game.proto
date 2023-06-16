@@ -1,0 +1,39 @@
+syntax = "proto3";
+
+package rivet.backend.game;
+
+import "proto/common.proto";
+
+message Game {
+	rivet.common.Uuid game_id = 1;
+	int64 create_ts = 2;
+	string name_id = 3;
+	string display_name = 4;
+	string url = 5;
+	rivet.common.Uuid developer_team_id = 6;
+	string description = 7;
+	repeated string tags = 8;
+	optional rivet.common.Uuid logo_upload_id = 9;
+	optional string logo_file_name = 10;
+	optional rivet.common.Uuid banner_upload_id = 11;
+	optional string banner_file_name = 12;
+
+	optional string plan_code = 13;
+	optional rivet.common.Uuid subscription_id = 14;
+}
+
+message Version {
+	rivet.common.Uuid version_id = 1;
+	rivet.common.Uuid game_id = 2;
+	int64 create_ts = 3;
+	string display_name = 4;
+}
+
+message Namespace {
+	rivet.common.Uuid namespace_id = 1;
+	rivet.common.Uuid game_id = 2;
+	int64 create_ts = 3;
+	string display_name = 4;
+	rivet.common.Uuid version_id = 5;
+	string name_id = 6;
+}

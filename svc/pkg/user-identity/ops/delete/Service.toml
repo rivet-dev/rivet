@@ -1,0 +1,7 @@
+[service]
+name = "user-identity-delete"
+
+[runtime]
+kind = "rust"
+
+[operation]

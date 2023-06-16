@@ -1,0 +1,262 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/fern-api/fern/main/fern.schema.json
+
+imports:
+  chatCommons: ../chat/common.yml
+  commons: ../common.yml
+  gameCommons: ../game/common.yml
+  groupCommons: ../group/common.yml
+  identityCommons: ../identity/common.yml
+  matchmakerCommons: ../matchmaker/common.yml
+  partyCommons: ../party/common.yml
+
+types:
+  GlobalEvent:
+    docs: An event relevant to the current identity.
+    properties:
+      ts: datetime
+      kind: GlobalEventKind
+      notification: optional<GlobalEventNotification>
+
+  GlobalEventKind:
+    properties:
+      chat_message: optional<GlobalEventChatMessage>
+      chat_read: optional<GlobalEventChatRead>
+      party_update: optional<GlobalEventPartyUpdate>
+      identity_update: optional<GlobalEventIdentityUpdate>
+      matchmaker_lobby_join: optional<GlobalEventMatchmakerLobbyJoin>
+      chat_thread_remove: optional<GlobalEventChatThreadRemove>
+
+  GlobalEventNotification:
+    docs: |
+      Notifications represent information that should be presented to the user
+      immediately.
+      At the moment, only chat message events have associated notifications.
+      # Display
+      Notifications should be displayed in an unobtrusive manner throughout the
+      entire game. Notifications should disappear after a few seconds if not
+      interacted with.
+      # Interactions
+      If your platform supports it, notifications should be able to be clicked or
+      tapped in order to open the relevant context for the event.
+      For a simple implementation of notification interactions, open `url` in a
+      web browser to present the relevant context. For example, a chat message
+      notification will open the thread the chat message was sent in.
+      For advanced implementations that implement a custom chat UI, use
+      `GlobalEvent.kind` to determine what action to take when the notification is interacted with. 
+      For example, if the global event kind is `GlobalEventChatMessage`, then open
+      the chat UI for the given thread.
+    properties:
+      title: string
+      description: string
+      thumbnail_url:
+        docs: URL to an image thumbnail that should be shown for this notification.
+        type: string
+      url:
+        docs: Rivet Hub URL that holds the relevant context for this notification.
+        type: string
+
+  GlobalEventChatMessage:
+    properties:
+      thread: chatCommons.Thread
+
+  GlobalEventChatRead:
+    properties:
+      thread_id: uuid
+      read_ts: datetime
+
+  GlobalEventPartyUpdate:
+    properties:
+      party: optional<partyCommons.Summary>
+
+  GlobalEventIdentityUpdate:
+    properties:
+      identity: identityCommons.Profile
+
+  GlobalEventMatchmakerLobbyJoin:
+    properties:
+      lobby: matchmakerCommons.JoinLobby
+      ports: map<string, matchmakerCommons.JoinPort>
+      player: matchmakerCommons.JoinPlayer
+
+  GlobalEventChatThreadRemove:
+    docs: >
+      Received any time the current identity is no longer able to access
+      the  given thread. This can happen if the identity leaves a group or
+      party.
+    properties:
+      thread_id: uuid
+
+  UpdateGameActivity:
+    docs:
+      Information about the identity's current game. This is information that
+      all other identities can see about what the current identity is doing.
+    properties:
+      message:
+        type: optional<string>
+        docs: A short message about the current game activity.
+      public_metadata:
+        type: optional<unknown>
+        docs: JSON data seen by anyone.
+      mutual_metadata:
+        type: optional<unknown>
+        docs: JSON data seen only by the given identity and their mutual followers.
+
+  Handle:
+    docs: An identity handle.
+    properties:
+      identity_id: uuid
+      display_name: commons.DisplayName
+      account_number: commons.AccountNumber
+      avatar_url:
+        type: string
+        docs: The URL of this identity's avatar image.
+      presence: optional<Presence>
+      party: optional<partyCommons.Handle>
+      is_registered:
+        type: boolean
+        docs: Whether or not this identity is registered with a linked account.
+      external: ExternalLinks
+
+  Summary:
+    docs: An identity summary.
+    properties:
+      identity_id: uuid
+      display_name: commons.DisplayName
+      account_number: commons.AccountNumber
+      avatar_url:
+        type: string
+        docs: The URL of this identity's avatar image.
+      presence: optional<Presence>
+      party: optional<partyCommons.Handle>
+      is_registered:
+        type: boolean
+        docs: Whether or not this identity is registered with a linked account.
+      external: ExternalLinks
+      following:
+        type: boolean
+        docs: Whether or not the requestee's identity is following this identity.
+      is_following_me:
+        type: boolean
+        docs:
+          Whether or not this identity is both followng and is followed by the
+          requestee's identity.
+      is_mutual_following: boolean
+
+  Profile:
+    docs: An identity profile.
+    properties:
+      identity_id: uuid
+      display_name: commons.DisplayName
+      account_number: commons.AccountNumber
+      avatar_url:
+        docs: The URL of this identity's avatar image.
+        type: string
+      presence: optional<Presence>
+      party:
+        docs: Whether or not this identity is registered with a linked account.
+        type: optional<partyCommons.Summary>
+      is_registered:
+        docs: Whether or not this identity is registered with a linked account.
+        type: boolean
+      external: ExternalLinks
+      is_admin:
+        docs: Whether or not this identity is an admin.
+        type: boolean
+      is_game_linked:
+        docs: Whether or not this game user has been linked through the Rivet dashboard.
+        type: optional<boolean>
+      dev_state:
+        docs: |
+          **Deprecated**
+        type: optional<DevState>
+      follower_count: long
+      following_count: long
+      following:
+        docs: Whether or not the requestee's identity is following this identity.
+        type: boolean
+      is_following_me:
+        docs:
+          Whether or not this identity is both followng and is followed by the
+          requestee's identity.
+        type: boolean
+      is_mutual_following: boolean
+      join_ts: datetime
+      bio: commons.Bio
+      linked_accounts: list<LinkedAccount>
+      groups: list<Group>
+      games: list<gameCommons.StatSummary>
+      awaiting_deletion:
+        docs: |
+          Whether or not this identity is awaiting account deletion. Only visible to when the requestee is
+          this identity.
+        type: optional<boolean>
+
+  ExternalLinks:
+    docs: External links for an identity.
+    properties:
+      profile:
+        type: string
+        docs: A link to this identity's profile page.
+      settings:
+        type: optional<string>
+        docs: A link to the Rivet settings page.
+      chat:
+        type: optional<string>
+        docs: A link to a chat page with the given identity.
+
+  Presence:
+    docs: Information about the identity's current status, party, and active game.
+    properties:
+      update_ts: datetime
+      status: Status
+      game_activity: optional<GameActivity>
+
+  Status:
+    docs: The current status of an identity. This helps players understand if
+      another player is currently playing or has their game in the background.
+    enum:
+      - online
+      - away
+      - offline
+
+  GameActivity:
+    docs: The game an identity is currently participating in.
+    properties:
+      game: gameCommons.Handle
+      message:
+        type: string
+        docs: A short activity message about the current game activity.
+      public_metadata:
+        type: optional<unknown>
+        docs: JSON data seen by anyone.
+      mutual_metadata:
+        type: optional<unknown>
+        docs: JSON data seen only by the given identity and their mutual followers.
+
+  Group:
+    docs: A group that the given identity.
+    properties:
+      group: groupCommons.Handle
+
+  LinkedAccount:
+    docs: A union representing an identity's linked accounts.
+    properties:
+      email: optional<EmailLinkedAccount>
+
+  EmailLinkedAccount:
+    docs: An identity's linked email.
+    properties:
+      email: commons.Email
+
+  DevState:
+    docs: The state of the given identity's developer status.
+    enum:
+      - inactive
+      - pending
+      - accepted
+
+  GameLinkStatus:
+    enum:
+      - incomplete
+      - complete
+      - cancelled

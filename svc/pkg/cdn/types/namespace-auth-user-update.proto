@@ -1,0 +1,15 @@
+syntax = "proto3";
+
+package rivet.backend.pkg.cdn.namespace_auth_user_update;
+
+import "proto/common.proto";
+
+message Request {
+	rivet.common.Uuid namespace_id = 1;
+	string user = 2;
+	string password = 3;
+}
+
+message Response {
+
+}

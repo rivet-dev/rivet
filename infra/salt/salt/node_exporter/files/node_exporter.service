@@ -1,0 +1,15 @@
+[Unit]
+Description=Node Exporter
+Requires=network-online.target
+After=network-online.target
+
+[Service]
+User=node_exporter
+Group=node_exporter
+Type=simple
+ExecStart=/usr/bin/node_exporter --collector.cgroups --collector.network_route --collector.systemd
+Restart=always
+RestartSec=2
+
+[Install]
+WantedBy=multi-user.target

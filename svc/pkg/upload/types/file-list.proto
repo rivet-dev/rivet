@@ -1,0 +1,14 @@
+syntax = "proto3";
+
+package rivet.backend.pkg.upload.file_list;
+
+import "proto/common.proto";
+import "proto/backend/upload.proto";
+
+message Request {
+	repeated rivet.common.Uuid upload_ids = 1;
+}
+
+message Response {
+	repeated rivet.backend.upload.UploadFile files = 1;
+}

@@ -1,0 +1,17 @@
+syntax = "proto3";
+
+package rivet.backend.pkg.party.msg.leader_set;
+
+import "proto/common.proto";
+
+/// name = "msg-party-leader-set"
+/// parameters = [
+/// 	{ name = "party_id" },
+/// ]
+message Message {
+	rivet.common.Uuid party_id = 1;
+
+	// If null, this will decide a new leader automatically.
+	optional rivet.common.Uuid leader_user_id = 2;
+}
+

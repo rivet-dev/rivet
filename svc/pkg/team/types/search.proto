@@ -1,0 +1,17 @@
+syntax = "proto3";
+
+package rivet.backend.pkg.team.search;
+
+import "proto/common.proto";
+import "proto/backend/team.proto";
+
+message Request {
+	string query = 1;
+	uint32 limit = 2;
+	optional int64 anchor = 3;
+}
+
+message Response {
+	repeated rivet.common.Uuid team_ids = 1;
+	optional int64 anchor = 2;
+}

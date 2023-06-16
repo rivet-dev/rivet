@@ -1,0 +1,53 @@
+syntax = "proto3";
+
+package rivet.backend.pkg.faker.game_version;
+
+import "proto/common.proto";
+import "proto/backend/cloud.proto";
+import "proto/backend/cdn.proto";
+import "proto/backend/matchmaker.proto";
+import "proto/backend/kv.proto";
+import "proto/backend/identity.proto";
+import "proto/backend/captcha.proto";
+
+message Request {
+	message OverrideCdnConfig {
+		optional rivet.backend.cdn.VersionConfig config = 1;
+	}
+
+	message OverrideMatchmakerConfig {
+		optional rivet.backend.matchmaker.VersionConfig config = 1;
+	}
+
+	message OverrideKvConfig {
+		optional rivet.backend.kv.VersionConfig config = 1;
+	}
+
+	message OverrideIdentityConfig {
+		optional rivet.backend.identity.VersionConfig config = 1;
+	}
+
+	message OverrideLobbyGroups {
+		repeated rivet.backend.matchmaker.LobbyGroup lobby_groups = 1;
+	}
+
+	message OverrideCaptcha {
+		optional rivet.backend.captcha.CaptchaConfig captcha_config = 1;
+	}
+
+	rivet.common.Uuid game_id = 1;
+
+	optional rivet.backend.cloud.VersionConfig override_config = 101;
+	optional OverrideCdnConfig override_cdn_config = 104;
+	optional OverrideMatchmakerConfig override_mm_config = 102;
+	optional OverrideKvConfig override_kv_config = 106;
+	optional OverrideIdentityConfig override_identity_config = 107;
+	optional OverrideLobbyGroups override_lobby_groups = 103;
+	optional OverrideCaptcha override_captcha = 105;
+}
+
+message Response {
+	rivet.common.Uuid version_id = 1;
+	rivet.backend.matchmaker.VersionConfig mm_config = 2;
+	rivet.backend.matchmaker.VersionConfigMeta mm_config_meta = 3;
+}

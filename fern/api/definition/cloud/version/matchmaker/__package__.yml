@@ -1,0 +1,49 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/fern-api/fern/main/fern.schema.json
+
+imports:
+  commons: ../../common.yml
+  localCommons: common.yml
+  lobbyGroup: lobby_group.yml
+  gameMode: game_mode.yml
+
+types:
+  Config:
+    docs: Matchmaker configuration for a given version.
+    properties:
+      game_modes:
+        docs: A list of game modes.
+        type: optional<map<string, gameMode.GameMode>>
+
+      captcha:
+        type: optional<localCommons.Captcha>
+
+      # Client-side configuration
+      dev_hostname:
+        docs: Client-side configuration
+        type: optional<string>
+
+      # Game mode overrides
+      regions:
+        type: optional<map<string, gameMode.GameModeRegion>>
+      max_players:
+        type: optional<integer>
+      max_players_direct:
+        type: optional<integer>
+      max_players_party:
+        type: optional<integer>
+      docker:
+        type: optional<gameMode.GameModeRuntimeDocker>
+
+      # Region overrides
+      tier:
+        type: optional<string>
+      idle_lobbies:
+        type: optional<gameMode.GameModeIdleLobbiesConfig>
+
+      # Deprecated
+      lobby_groups:
+        docs: >-
+          **Deprecated: use `game_modes` instead**
+
+          A list of game modes.
+        type: optional<list<lobbyGroup.LobbyGroup>>

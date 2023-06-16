@@ -1,0 +1,12 @@
+[workspace]
+members = [
+	"cli",
+	"config",
+	"core",
+]
+
+# Speed up proc macros.
+#
+# https://endler.dev/2020/rust-compile-times/#avoid-procedural-macro-crates
+[profile.dev.build-override]
+opt-level = 3

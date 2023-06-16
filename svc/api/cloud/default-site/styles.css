@@ -1,0 +1,64 @@
+html, body {
+    margin: 0;
+    padding: 0;
+    background: #151515;
+    color: white;
+    font-family: "Open Sans", sans-serif;
+}
+
+h1 {
+    font-size: 50px;
+    letter-spacing: 0.2em;
+    margin-bottom: 30px;
+}
+
+h2 {
+    margin-top: 10px;
+}
+
+h1, h2, h3 {
+    font-weight: bold;
+    text-transform: uppercase;
+}
+
+a {
+    color: white;
+}
+
+a:hover {
+    color: #c9c9c9;
+}
+
+a:active {
+    color: #8b8b8b;
+}
+
+#page {
+    position: fixed;
+    width: 600px;
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%, -50%);
+    text-align: center;
+}
+
+#logoMain {
+    display: block;
+    margin-left: auto;
+    margin-right: auto;
+    margin-top: 4em
+}
+
+#footer {
+    position: fixed;
+    left: 50%;
+    bottom: 25px;
+    transform: translateX(-50%);
+
+    font-size: 14px;
+    text-align: center;
+}
+
+#frog {
+    margin-bottom: 10px;
+}

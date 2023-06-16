@@ -1,0 +1,11 @@
+[service]
+name = "nomad-log-worker"
+
+[runtime]
+kind = "rust"
+
+[consumer]
+
+[secrets]
+"clickhouse/users/chirp/password" = {}
+

@@ -1,0 +1,14 @@
+syntax = "proto3";
+
+package rivet.backend.pkg.region.get;
+
+import "proto/common.proto";
+import "proto/backend/region.proto";
+
+message Request {
+	repeated rivet.common.Uuid region_ids = 1;
+}
+
+message Response {
+	repeated rivet.backend.region.Region regions = 1;
+}

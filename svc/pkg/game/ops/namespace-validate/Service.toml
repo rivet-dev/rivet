@@ -1,0 +1,7 @@
+[service]
+name = "game-namespace-validate"
+
+[runtime]
+kind = "rust"
+
+[operation]

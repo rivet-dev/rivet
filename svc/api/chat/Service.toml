@@ -1,0 +1,12 @@
+[service]
+name = "api-chat"
+
+[runtime]
+kind = "rust"
+
+[api]
+
+[[api.router.mounts]]
+path = "/v1"
+subdomain = "chat.api"
+

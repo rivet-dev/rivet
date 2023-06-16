@@ -1,0 +1,16 @@
+syntax = "proto3";
+
+package rivet.backend.pkg.cf_custom_hostname.msg.status_set;
+
+import "proto/common.proto";
+import "proto/backend/cf.proto";
+
+/// name = "msg-cf-custom-hostname-status-set"
+/// parameters = [
+/// 	{ name = "identifier" },
+/// ]
+message Message {
+	rivet.common.Uuid identifier = 1;
+	rivet.backend.cf.CustomHostname.Status status = 2;
+}
+

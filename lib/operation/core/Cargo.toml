@@ -1,0 +1,28 @@
+[package]
+name = "rivet-operation"
+version = "0.1.0"
+edition = "2018"
+authors = ["Rivet Gaming, LLC <developer@rivet.gg>"]
+license = "Apache-2.0"
+
+[dependencies]
+async-trait = "0.1"
+chirp-client = { path = "../../chirp/client" }
+chirp-metrics = { path = "../../chirp/metrics" }
+chirp-perf = { path = "../../chirp/perf" }
+formatted-error = { path = "../../formatted-error" }
+futures-util = "0.3"
+global-error = { path = "../../global-error" }
+indoc = "1.0"
+prost = "0.10"
+prost-types = "0.10"
+rivet-cache = { path = "../../cache/build" }
+rivet-connection = { path = "../../connection" }
+rivet-operation-macros = { path = "../macros" }
+rivet-pools = { path = "../../pools" }
+rivet-util = { path = "../../util/core" }
+serde_json = "1.0"
+thiserror = "1.0"
+tokio = { version = "1.21", features = ["full", "tracing"] }
+tracing = "0.1"
+types = { path = "../../types/core" }

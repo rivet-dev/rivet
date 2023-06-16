@@ -1,0 +1,42 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/fern-api/fern/main/fern.schema.json
+
+imports:
+  commons: ../common.yml
+  cdn: cdn/__package__.yml
+  matchmaker: matchmaker/__package__.yml
+  kv: kv/__package__.yml
+  identity: identity/__pacakge__.yml
+
+types:
+  Config:
+    docs: Cloud configuration for a given version.
+    properties:
+      cdn: optional<cdn.Config>
+      matchmaker: optional<matchmaker.Config>
+      kv: optional<kv.Config>
+      identity: optional<identity.Config>
+
+  Full:
+    docs: A full version.
+    properties:
+      version_id:
+        type: uuid
+      create_ts:
+        docs: RFC3339 timestamp.
+        type: datetime
+      display_name:
+        docs: Represent a resource's readable display name.
+        type: string
+      config: Config
+
+  Summary:
+    docs: A version summary.
+    properties:
+      version_id:
+        type: uuid
+      create_ts:
+        docs: RFC3339 timestamp.
+        type: datetime
+      display_name:
+        docs: Represent a resource's readable display name.
+        type: string

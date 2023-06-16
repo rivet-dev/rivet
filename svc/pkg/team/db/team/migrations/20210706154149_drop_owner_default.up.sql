@@ -1,0 +1,1 @@
+ALTER TABLE teams ALTER COLUMN owner_user_id DROP DEFAULT;

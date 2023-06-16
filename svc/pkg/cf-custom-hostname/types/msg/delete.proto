@@ -1,0 +1,16 @@
+syntax = "proto3";
+
+package rivet.backend.pkg.cf_custom_hostname.msg.delete;
+
+import "proto/common.proto";
+
+/// name = "msg-cf-custom-hostname-delete"
+/// parameters = [
+/// 	{ name = "namespace_id" },
+/// 	{ name = "hostname" },
+/// ]
+message Message {
+	rivet.common.Uuid namespace_id = 1;
+	string hostname = 2;
+}
+

@@ -1,0 +1,33 @@
+[package]
+name = "rivet-util"
+version = "0.1.0"
+authors = ["Rivet Gaming, LLC <developer@rivet.gg>"]
+edition = "2018"
+license = "Apache-2.0"
+
+[features]
+default = ["macros"]
+macros = []
+serde = []
+
+[dependencies]
+bcrypt = "0.13.0"
+chrono = "0.4"
+formatted-error = { path = "../../formatted-error", optional = true }
+futures-util = "0.3"
+global-error = { path = "../../global-error" }
+lazy_static = "1.4"
+rand = "0.8"
+regex = "1.4"
+rivet-util-env = { path = "../env" }
+rivet-util-macros = { path = "../macros" }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+thiserror = "1.0"
+tokio = { version = "1.21", default-features = false, features = ["time", "sync", "fs", "parking_lot", "test-util", "macros"] }
+types = { path = "../../types/core" }
+uuid = { version = "1", features = ["v4", "serde"] }
+
+aws-smithy-client = "^0.41.0"
+aws-smithy-types = "^0.41.0"
+

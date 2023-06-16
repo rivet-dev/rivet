@@ -1,0 +1,7 @@
+[service]
+name = "team-dev-halt"
+
+[runtime]
+kind = "rust"
+
+[operation]

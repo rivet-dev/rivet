@@ -1,0 +1,19 @@
+syntax = "proto3";
+
+package rivet.backend.pkg.perf.log_get;
+
+import "proto/common.proto";
+import "proto/perf.proto";
+
+message Request {
+    repeated rivet.common.Uuid ray_ids = 1;
+}
+
+message Response {
+	message Ray {
+		rivet.common.Uuid ray_id = 1;
+		repeated rivet.perf.SvcPerf perf_lists = 2;
+	}
+
+	repeated Ray rays = 1;
+}

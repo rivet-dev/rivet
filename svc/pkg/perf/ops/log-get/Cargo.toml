@@ -1,0 +1,14 @@
+[package]
+name = "perf-log-get"
+version = "0.0.1"
+edition = "2018"
+authors = ["Rivet Gaming, LLC <developer@rivet.gg>"]
+license = "Apache-2.0"
+
+[dependencies]
+chirp-client = { path = "../../../../../lib/chirp/client" }
+rivet-operation = { path = "../../../../../lib/operation/core" }
+prost = "0.10"
+
+[dev-dependencies]
+chirp-worker = { path = "../../../../../lib/chirp/worker" }

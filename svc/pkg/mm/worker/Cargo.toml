@@ -1,0 +1,63 @@
+[package]
+name = "mm-worker"
+version = "0.0.1"
+edition = "2018"
+authors = ["Rivet Gaming, LLC <developer@rivet.gg>"]
+license = "Apache-2.0"
+
+[dependencies]
+chirp-client = { path = "../../../../lib/chirp/client" }
+chirp-worker = { path = "../../../../lib/chirp/worker" }
+chrono = "0.4"
+csv = "1.1"
+lazy_static = "1.4.0"
+nomad-client = "0.0.9"
+nomad-util = { path = "../../../../lib/nomad-util" }
+redis-util = { path = "../../../../lib/redis-util" }
+reqwest = "0.11"
+rivet-health-checks = { path = "../../../../lib/health-checks" }
+rivet-metrics = { path = "../../../../lib/metrics" }
+rivet-runtime = { path = "../../../../lib/runtime" }
+s3-util = { path = "../../../../lib/s3-util" }
+serde = { version = "1.0", features = ["derive"] }
+util-job = { package = "rivet-util-job", path = "../../job/util" }
+util-mm = { package = "rivet-util-mm", path = "../../mm/util" }
+http = "0.2"
+
+build-get = { path = "../../build/ops/get" }
+game-get = { path = "../../game/ops/get" }
+game-namespace-get = { path = "../../game/ops/namespace-get" }
+game-version-get = { path = "../../game/ops/version-get" }
+job-run-get = { path = "../../job-run/ops/get" }
+mm-config-lobby-group-resolve-version = { path = "../../mm-config/ops/lobby-group-resolve-version" }
+mm-config-namespace-get = { path = "../../mm-config/ops/namespace-get" }
+mm-config-version-get = { path = "../../mm-config/ops/version-get" }
+mm-lobby-find-fail = { path = "../ops/lobby-find-fail" }
+mm-lobby-find-lobby-query-list = { path = "../ops/lobby-find-lobby-query-list" }
+mm-lobby-find-try-complete = { path = "../ops/lobby-find-try-complete" }
+mm-lobby-idle-update = { path = "../ops/lobby-idle-update" }
+region-get = { path = "../../region/ops/get" }
+team-dev-get = { path = "../../team-dev/ops/get" }
+tier-list = { path = "../../tier/ops/list" }
+token-create = { path = "../../token/ops/create" }
+upload-complete = { path = "../../upload/ops/complete" }
+upload-get = { path = "../../upload/ops/get" }
+upload-prepare = { path = "../../upload/ops/prepare" }
+
+[dependencies.sqlx]
+version = "0.6"
+default-features = false
+
+[dev-dependencies]
+chirp-worker = { path = "../../../../lib/chirp/worker" }
+
+faker-build = { path = "../../faker/ops/build" }
+faker-game = { path = "../../faker/ops/game" }
+faker-game-version = { path = "../../faker/ops/game-version" }
+faker-mm-lobby = { path = "../../faker/ops/mm-lobby" }
+faker-region = { path = "../../faker/ops/region" }
+game-namespace-version-set = { path = "../../game/ops/namespace-version-set" }
+mm-config-namespace-config-set = { path = "../../mm-config/ops/namespace-config-set" }
+mm-config-version-get = { path = "../../mm-config/ops/version-get" }
+mm-lobby-player-count = { path = "../ops/lobby-player-count" }
+mm-lobby-get = { path = "../ops/lobby-get" }

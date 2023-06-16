@@ -1,0 +1,7 @@
+[service]
+name = "kv-config-version-get"
+
+[runtime]
+kind = "rust"
+
+[operation]

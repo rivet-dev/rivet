@@ -1,0 +1,382 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/fern-api/fern/main/fern.schema.json
+
+imports:
+  commons: ../../../common.yml
+  localCommons: ../../common.yml
+  cloudCommons: ../../../cloud/common.yml
+  versionMatchmakerLobbyGroup: ../../version/matchmaker/lobby_group.yml
+
+service:
+  auth: true
+  url: Cloud
+  audiences:
+    - public
+  base-path: ""
+  endpoints:
+    createGameNamespace:
+      path: /games/{game_id}/namespaces
+      method: POST
+      docs: Creates a new namespace for the given game.
+      path-parameters:
+        game_id:
+          type: uuid
+      request:
+        body: CreateGameNamespaceRequest
+      response: CreateGameNamespaceResponse
+
+    validateGameNamespace:
+      path: /games/{game_id}/namespaces/validate
+      method: POST
+      docs: Validates information used to create a new game namespace.
+      path-parameters:
+        game_id:
+          type: uuid
+      request:
+        body: ValidateGameNamespaceRequest
+      response: ValidateGameNamespaceResponse
+
+    getGameNamespaceById:
+      path: /games/{game_id}/namespaces/{namespace_id}
+      method: GET
+      docs: Gets a game namespace by namespace ID.
+      path-parameters:
+        game_id:
+          type: uuid
+        namespace_id:
+          type: uuid
+      response: GetGameNamespaceByIdResponse
+
+    updateNamespaceCdnAuthUser:
+      path: /games/{game_id}/namespaces/{namespace_id}/auth-user
+      method: POST
+      docs: Adds an authenticated user to the given game namespace.
+      path-parameters:
+        game_id:
+          type: uuid
+        namespace_id:
+          type: uuid
+      request:
+        body: UpdateNamespaceCdnAuthUserRequest
+
+    removeNamespaceCdnAuthUser:
+      path: /games/{game_id}/namespaces/{namespace_id}/auth-user/{user}
+      method: DELETE
+      docs: Removes an authenticated user from the given game namespace.
+      path-parameters:
+        game_id:
+          type: uuid
+        namespace_id:
+          type: uuid
+        user:
+          docs: A user name.
+          type: string
+
+    setNamespaceCdnAuthType:
+      path: /games/{game_id}/namespaces/{namespace_id}/cdn-auth
+      method: PUT
+      docs: Updates the CDN authentication type of the given game namesapce.
+      path-parameters:
+        game_id:
+          type: uuid
+        namespace_id:
+          type: uuid
+      request:
+        body: SetNamespaceCdnAuthTypeRequest
+
+    toggleNamespaceDomainPublicAuth:
+      path: /games/{game_id}/namespaces/{namespace_id}/domain-public-auth
+      method: PUT
+      docs: >-
+        Toggles whether or not to allow authentication based on domain for the
+        given game namesapce.
+      path-parameters:
+        game_id:
+          type: uuid
+        namespace_id:
+          type: uuid
+      request:
+        body: ToggleNamespaceDomainPublicAuthRequest
+
+    addNamespaceDomain:
+      path: /games/{game_id}/namespaces/{namespace_id}/domains
+      method: POST
+      docs: Adds a domain to the given game namespace.
+      path-parameters:
+        game_id:
+          type: uuid
+        namespace_id:
+          type: uuid
+      request:
+        body: AddNamespaceDomainRequest
+
+    removeNamespaceDomain:
+      path: /games/{game_id}/namespaces/{namespace_id}/domains/{domain}
+      method: DELETE
+      docs: Removes a domain from the given game namespace.
+      path-parameters:
+        game_id:
+          type: uuid
+        namespace_id:
+          type: uuid
+        domain:
+          docs: A valid domain name (no protocol).
+          type: string
+
+    updateGameNamespaceMatchmakerConfig:
+      path: /games/{game_id}/namespaces/{namespace_id}/mm-config
+      method: POST
+      docs: Updates matchmaker config for the given game namespace.
+      path-parameters:
+        game_id:
+          type: uuid
+        namespace_id:
+          type: uuid
+      request:
+        body: UpdateGameNamespaceMatchmakerConfigRequest
+
+    GetGameNamespaceVersionHistoryList:
+      path: /games/{game_id}/namespaces/{namespace_id}/version-history
+      method: GET
+      docs: Gets the version history for a given namespace.
+      path-parameters:
+        game_id:
+          docs: A universally unique identifier.
+          type: string
+        namespace_id:
+          docs: A universally unique identifier.
+          type: string
+      request:
+        name: GetGameNamespaceVersionHistoryRequest
+        query-parameters:
+          anchor:
+            type: optional<string>
+            docs: How many items to offset the search by.
+          limit:
+            type: optional<integer>
+            docs: Amount of items to return. Must be between 1 and 32 inclusive.
+      response: GetGameNamespaceVersionHistoryResponse
+
+    validateGameNamespaceMatchmakerConfig:
+      path: /games/{game_id}/namespaces/{namespace_id}/mm-config/validate
+      method: POST
+      docs: >-
+        Validates information used to update a game namespace's matchmaker
+        config.
+      path-parameters:
+        game_id:
+          type: uuid
+        namespace_id:
+          type: uuid
+      request:
+        body: ValidateGameNamespaceMatchmakerConfigRequest
+      response: ValidateGameNamespaceMatchmakerConfigResponse
+
+    createGameNamespaceTokenDevelopment:
+      path: /games/{game_id}/namespaces/{namespace_id}/tokens/development
+      method: POST
+      docs: Creates a development token for the given namespace.
+      path-parameters:
+        game_id:
+          type: uuid
+        namespace_id:
+          type: uuid
+      request:
+        body: CreateGameNamespaceTokenDevelopmentRequest
+      response: CreateGameNamespaceTokenDevelopmentResponse
+
+    validateGameNamespaceTokenDevelopment:
+      path: /games/{game_id}/namespaces/{namespace_id}/tokens/development/validate
+      method: POST
+      docs: >-
+        Validates information used to create a new game namespace development
+        token.
+      path-parameters:
+        game_id:
+          type: uuid
+        namespace_id:
+          type: uuid
+      request:
+        body: ValidateGameNamespaceTokenDevelopmentRequest
+      response: ValidateGameNamespaceTokenDevelopmentResponse
+
+    createGameNamespaceTokenPublic:
+      path: /games/{game_id}/namespaces/{namespace_id}/tokens/public
+      method: POST
+      docs: Creates a public token for the given namespace.
+      path-parameters:
+        game_id:
+          type: uuid
+        namespace_id:
+          type: uuid
+      response: CreateGameNamespaceTokenPublicResponse
+
+    updateGameNamespaceVersion:
+      path: /games/{game_id}/namespaces/{namespace_id}/version
+      method: PUT
+      docs: Updates the version of a game namespace.
+      path-parameters:
+        game_id:
+          type: uuid
+        namespace_id:
+          type: uuid
+      request:
+        body: UpdateGameNamespaceVersionRequest
+
+types:
+  InspectResponse:
+    properties:
+      agent: cloudCommons.AuthAgent
+
+  CreateGameNamespaceRequest:
+    properties:
+      display_name:
+        docs: Represent a resource's readable display name.
+        type: string
+      version_id:
+        type: uuid
+      name_id:
+        docs: >-
+          A human readable short identifier used to references resources.
+          Different than a `rivet.common#Uuid` because this is intended to be
+          human readable.
+          Different than `rivet.common#DisplayName` because this should not
+          include special
+          characters and be short.
+        type: string
+
+  CreateGameNamespaceResponse:
+    properties:
+      namespace_id:
+        type: uuid
+
+  ValidateGameNamespaceRequest:
+    properties:
+      display_name:
+        docs: Represent a resource's readable display name.
+        type: string
+      name_id:
+        docs: >-
+          A human readable short identifier used to references resources.
+          Different than a `rivet.common#Uuid` because this is intended to be
+          human readable.
+          Different than `rivet.common#DisplayName` because this should not
+          include special
+          characters and be short.
+        type: string
+
+  ValidateGameNamespaceResponse:
+    properties:
+      errors:
+        docs: A list of validation errors.
+        type: list<commons.ValidationError>
+
+  GetGameNamespaceByIdResponse:
+    properties:
+      namespace: cloudCommons.NamespaceFull
+
+  UpdateNamespaceCdnAuthUserRequest:
+    properties:
+      user:
+        docs: A user name.
+        type: string
+      password:
+        docs: >-
+          A bcrypt encrypted password. An error is returned if the given string
+          is not properly encrypted.
+        type: string
+
+  SetNamespaceCdnAuthTypeRequest:
+    properties:
+      auth_type: cloudCommons.CdnAuthType
+
+  ToggleNamespaceDomainPublicAuthRequest:
+    properties:
+      enabled:
+        docs: Whether or not to enable authentication based on domain.
+        type: boolean
+
+  AddNamespaceDomainRequest:
+    properties:
+      domain:
+        docs: A valid domain name (no protocol).
+        type: string
+
+  UpdateGameNamespaceMatchmakerConfigRequest:
+    properties:
+      lobby_count_max:
+        docs: Unsigned 32 bit integer.
+        type: integer
+      max_players:
+        docs: Unsigned 32 bit integer.
+        type: integer
+
+  GetGameNamespaceVersionHistoryResponse:
+    properties:
+      versions:
+        docs: A list of previously deployed namespace versions.
+        type: list<cloudCommons.NamespaceVersion>
+
+  ValidateGameNamespaceMatchmakerConfigRequest:
+    properties:
+      lobby_count_max:
+        docs: Unsigned 32 bit integer.
+        type: integer
+      max_players:
+        docs: Unsigned 32 bit integer.
+        type: integer
+
+  ValidateGameNamespaceMatchmakerConfigResponse:
+    properties:
+      errors:
+        docs: A list of validation errors.
+        type: list<commons.ValidationError>
+
+  CreateGameNamespaceTokenDevelopmentRequest:
+    properties:
+      hostname:
+        docs: The hostname used for the token.
+        type: string
+      ports:
+        type: optional<map<string, localCommons.MatchmakerDevelopmentPort>>
+      lobby_ports:
+        docs: >-
+          **Deprecated**
+
+          A list of docker ports.
+        type: optional<list<versionMatchmakerLobbyGroup.LobbyGroupRuntimeDockerPort>>
+
+  CreateGameNamespaceTokenDevelopmentResponse:
+    properties:
+      token:
+        docs: |-
+          A JSON Web Token.
+          Slightly modified to include a description prefix and use Protobufs of
+          JSON.
+        type: string
+
+  ValidateGameNamespaceTokenDevelopmentRequest:
+    properties:
+      hostname: string
+      lobby_ports:
+        docs: A list of docker ports.
+        type: list<versionMatchmakerLobbyGroup.LobbyGroupRuntimeDockerPort>
+
+  ValidateGameNamespaceTokenDevelopmentResponse:
+    properties:
+      errors:
+        docs: A list of validation errors.
+        type: list<commons.ValidationError>
+
+  CreateGameNamespaceTokenPublicResponse:
+    properties:
+      token:
+        docs: |-
+          A JSON Web Token.
+          Slightly modified to include a description prefix and use Protobufs of
+          JSON.
+        type: string
+
+  UpdateGameNamespaceVersionRequest:
+    properties:
+      version_id:
+        type: uuid

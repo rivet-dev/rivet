@@ -1,0 +1,7 @@
+[service]
+name = "game-banner-upload-complete"
+
+[runtime]
+kind = "rust"
+
+[operation]

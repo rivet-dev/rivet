@@ -1,0 +1,23 @@
+syntax = "proto3";
+
+package rivet.backend.pkg.cf_custom_hostname.msg.create_fail;
+
+import "proto/common.proto";
+
+enum ErrorCode {
+	UNKNOWN = 0;
+	ALREADY_EXISTS = 1;
+	TOO_MANY_PENDING_HOSTNAMES = 2;
+}
+
+/// name = "msg-cf-custom-hostname-create-fail"
+/// parameters = [
+/// 	{ name = "namespace_id" },
+/// 	{ name = "hostname" },
+/// ]
+message Message {
+	rivet.common.Uuid namespace_id = 1;
+	string hostname = 2;
+	ErrorCode error_code = 3;
+}
+

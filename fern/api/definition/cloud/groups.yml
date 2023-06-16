@@ -1,0 +1,42 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/fern-api/fern/main/fern.schema.json
+
+imports:
+  commons: ../common.yml
+  cloudCommons: ../cloud/common.yml
+
+service:
+  auth: true
+  base-path: /groups
+  url: Cloud
+  audiences:
+    - public
+  endpoints:
+    validate:
+      path: /validate
+      method: POST
+      docs: Validates information used to create a new group.
+      request:
+        body: ValidateGroupRequest
+      response: ValidateGroupResponse
+
+    convertGroup:
+      path: /{group_id}/convert
+      method: POST
+      docs: Converts the given group into a developer group.
+      path-parameters:
+        group_id:
+          type: uuid
+
+types:
+  ValidateGroupRequest:
+    properties:
+      display_name:
+        docs: Represent a resource's readable display name.
+        type: string
+
+  ValidateGroupResponse:
+    properties:
+      errors:
+        docs: A list of validation errors.
+        type: list<commons.ValidationError>
+

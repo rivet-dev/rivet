@@ -1,0 +1,5 @@
+syntax = "proto3";
+
+package rivet.backend.pkg.chat_message.edit;
+
+import "proto/common.proto";

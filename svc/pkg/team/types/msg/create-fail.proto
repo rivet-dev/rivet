@@ -1,0 +1,21 @@
+syntax = "proto3";
+
+package rivet.backend.pkg.team.msg.create_fail;
+
+import "proto/common.proto";
+
+enum ErrorCode {
+	UNKNOWN = 0;
+
+	VALIDATION_FAILED = 101;
+}
+
+/// name = "msg-team-create-fail"
+/// parameters = [
+/// 	{ name = "team_id" },
+/// ]
+message Message {
+	rivet.common.Uuid team_id = 1;
+	ErrorCode error_code = 2;
+}
+

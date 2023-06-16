@@ -1,0 +1,7 @@
+[service]
+name = "chat-thread-participant-list"
+
+[runtime]
+kind = "rust"
+
+[operation]

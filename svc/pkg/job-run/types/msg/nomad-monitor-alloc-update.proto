@@ -1,0 +1,14 @@
+syntax = "proto3";
+
+package rivet.backend.pkg.job_run.msg.nomad_monitor_alloc_update;
+
+import "proto/common.proto";
+
+/// name = "msg-job-run-nomad-monitor-alloc-update"
+/// parameters = [
+/// 	{ name = "dispatched_job_id" },
+/// ]
+message Message {
+	string dispatched_job_id = 1;
+	string payload_json = 2;
+}

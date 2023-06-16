@@ -1,0 +1,13 @@
+syntax = "proto3";
+
+package rivet.backend.pkg.mm.lobby_find_lobby_query_list;
+
+import "proto/common.proto";
+
+message Request {
+	rivet.common.Uuid lobby_id = 1;
+}
+
+message Response {
+	repeated rivet.common.Uuid query_ids = 1;
+}

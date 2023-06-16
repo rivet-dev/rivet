@@ -1,0 +1,7 @@
+[service]
+name = "db-team-invite"
+
+[runtime]
+kind = "crdb"
+
+[database]

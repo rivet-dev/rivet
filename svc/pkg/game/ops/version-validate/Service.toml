@@ -1,0 +1,7 @@
+[service]
+name = "game-version-validate"
+
+[runtime]
+kind = "rust"
+
+[operation]

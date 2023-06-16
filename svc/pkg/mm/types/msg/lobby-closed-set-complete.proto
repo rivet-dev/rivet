@@ -1,0 +1,14 @@
+syntax = "proto3";
+
+package rivet.backend.pkg.mm.msg.lobby_closed_set_complete;
+
+import "proto/common.proto";
+
+/// name = "msg-mm-lobby-closed-set-complete"
+/// parameters = [
+/// 	{ name = "lobby_id" },
+/// ]
+message Message {
+	rivet.common.Uuid lobby_id = 1;
+}
+

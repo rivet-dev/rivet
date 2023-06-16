@@ -1,0 +1,7 @@
+[service]
+name = "game-logo-upload-complete"
+
+[runtime]
+kind = "rust"
+
+[operation]

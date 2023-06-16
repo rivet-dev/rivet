@@ -1,0 +1,10 @@
+[service]
+name = "redis-user-presence"
+
+[runtime]
+kind = "redis"
+index = 6
+persistent = true
+
+[cache]
+

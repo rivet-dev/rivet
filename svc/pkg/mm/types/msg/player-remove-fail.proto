@@ -1,0 +1,22 @@
+syntax = "proto3";
+
+package rivet.backend.pkg.mm.msg.player_remove_fail;
+
+import "proto/common.proto";
+
+enum ErrorCode {
+	UNKNOWN = 0;
+	// Deprecated. This is now an internal error.
+	DEPRECATED_PLAYER_NOT_FOUND = 1 [deprecated=true];
+	PLAYER_IN_DIFFERENT_LOBBY = 2;
+}
+
+/// name = "msg-mm-player-remove-fail"
+/// parameters = [
+/// 	{ name = "player_id" },
+/// ]
+message Message {
+	rivet.common.Uuid player_id = 1;
+	ErrorCode error_code = 2;
+}
+

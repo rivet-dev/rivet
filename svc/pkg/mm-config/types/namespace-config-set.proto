@@ -1,0 +1,19 @@
+syntax = "proto3";
+
+package rivet.backend.pkg.mm_config.namespace_config_set;
+
+import "proto/common.proto";
+
+message Request {
+	rivet.common.Uuid namespace_id = 1;
+	uint32 lobby_count_max = 2;
+	uint32 max_players_per_client = 3;
+	uint32 max_players_per_client_vpn = 4;
+	uint32 max_players_per_client_proxy = 5;
+	uint32 max_players_per_client_tor = 6;
+	uint32 max_players_per_client_hosting = 7;
+}
+
+message Response {
+
+}

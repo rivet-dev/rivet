@@ -1,0 +1,7 @@
+[service]
+name = "db-token"
+
+[runtime]
+kind = "crdb"
+
+[database]

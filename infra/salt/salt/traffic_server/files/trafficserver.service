@@ -1,0 +1,16 @@
+[Unit]
+Description=Apache Traffic Server
+After=network-online.target
+
+[Service]
+Type=simple
+User=trafficserver
+Group=trafficserver
+EnvironmentFile=-/etc/default/trafficserver
+PIDFile=/run/trafficserver/manager.lock
+ExecStart=/var/rivet-nix/result/traffic_server/bin/traffic_manager $TM_DAEMON_ARGS
+ExecReload=/var/rivet-nix/result/traffic_server/bin/traffic_manager config reload
+
+[Install]
+WantedBy=multi-user.target
+

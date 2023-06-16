@@ -1,0 +1,56 @@
+syntax = "proto3";
+
+package rivet.backend.region;
+
+import "proto/common.proto";
+
+message Region {
+	reserved 13;
+
+	rivet.common.Uuid region_id = 1;
+	bool enabled = 14;
+	string nomad_region = 2;
+	string nomad_datacenter = 3;
+	string provider = 4;
+	string provider_region = 5;
+	rivet.common.Uuid cdn_region_id = 12;
+	UniversalRegion universal_region = 6;
+	string provider_display_name = 7;
+	string region_display_name = 8;
+	string name_id = 9;
+	double latitude = 10;
+	double longitude = 11;
+}
+
+enum UniversalRegion {
+	UNKNOWN = 0;
+
+	LOCAL = 1;
+
+	AMSTERDAM = 2;
+	ATLANTA = 13;
+	BANGALORE = 3;
+	DALLAS = 12;
+	FRANKFURT = 4;
+	LONDON = 5;
+	MUMBAI = 10;
+	NEWARK = 16;
+	NEW_YORK_CITY = 6;
+	SAN_FRANCISCO = 7;
+	SINGAPORE = 8;
+	SYDNEY = 11;
+	TOKYO = 15;
+	TORONTO = 9;
+	WASHINGTON_DC = 17;
+}
+
+message Tier {
+	string tier_name_id = 1;
+	uint32 rivet_cores_numerator = 2;
+	uint32 rivet_cores_denominator = 3;
+	uint64 cpu = 4; // MHz
+	uint64 memory = 5; // In MB
+	uint64 memory_max = 9; // In MB
+	uint64 disk = 6; // In MB
+	uint64 bandwidth = 7; // In MB
+}

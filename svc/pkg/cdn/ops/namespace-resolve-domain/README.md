@@ -1,0 +1,2 @@
+# cdn-namespace-resolve-domain
+

@@ -1,0 +1,24 @@
+[package]
+name = "mm-config-version-prepare"
+version = "0.0.1"
+edition = "2018"
+authors = ["Rivet Gaming, LLC <developer@rivet.gg>"]
+license = "Apache-2.0"
+
+[dependencies]
+rivet-operation = { path = "../../../../../lib/operation/core" }
+chirp-client = { path = "../../../../../lib/chirp/client" }
+prost = "0.10"
+
+build-get = { path = "../../../build/ops/get" }
+upload-get = { path = "../../../upload/ops/get" }
+region-get = { path = "../../../region/ops/get" }
+tier-list = { path = "../../../tier/ops/list" }
+
+[dev-dependencies]
+chirp-worker = { path = "../../../../../lib/chirp/worker" }
+util-mm = { package = "rivet-util-mm", path = "../../../mm/util" }
+
+faker-build = { path = "../../../faker/ops/build" }
+faker-game = { path = "../../../faker/ops/game" }
+faker-region = { path = "../../../faker/ops/region" }

@@ -1,0 +1,17 @@
+syntax = "proto3";
+
+package rivet.backend.pkg.team.msg.member_kick;
+
+import "proto/common.proto";
+
+/// name = "msg-team-member-kick"
+/// parameters = [
+/// 	{ name = "team_id" },
+/// 	{ name = "user_id" },
+/// ]
+message Message {
+	rivet.common.Uuid team_id = 1;
+	rivet.common.Uuid user_id = 2;
+	rivet.common.Uuid kicker_user_id = 3;
+}
+

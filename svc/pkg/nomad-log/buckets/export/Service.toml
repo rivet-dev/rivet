@@ -1,0 +1,8 @@
+[service]
+name = "bucket-nomad-log-export"
+
+[runtime]
+kind = "s3"
+upload_policy = "none"
+
+[database]

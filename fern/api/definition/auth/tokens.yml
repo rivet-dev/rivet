@@ -1,0 +1,38 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/fern-api/fern/main/fern.schema.json
+
+service:
+  auth: true
+  url: Auth
+  base-path: /tokens/identity
+  endpoints:
+    refreshIdentityToken:
+      path: ""
+      method: POST
+      docs: Refreshes the current identity's token and sets authentication headers.
+      request:
+        body: RefreshIdentityTokenRequest
+      response: RefreshIdentityTokenResponse
+
+types:
+  RefreshIdentityTokenRequest:
+    properties:
+      logout:
+        docs: >-
+          When `true`, the current identity for the provided cookie will be
+          logged
+          out and a new identity will be returned.
+        type: optional<boolean>
+
+  RefreshIdentityTokenResponse:
+    properties:
+      token:
+        docs: |-
+          A JSON Web Token.
+          Slightly modified to include a description prefix and use Protobufs of
+          JSON.
+        type: string
+      exp:
+        docs: Token expiration time (in milliseconds).
+        type: string
+      identity_id:
+        type: uuid

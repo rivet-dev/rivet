@@ -1,0 +1,9 @@
+[service]
+name = "job-gc"
+
+[runtime]
+kind = "rust"
+
+[headless]
+singleton = true
+

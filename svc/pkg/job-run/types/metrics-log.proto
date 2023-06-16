@@ -1,0 +1,33 @@
+syntax = "proto3";
+
+package rivet.backend.pkg.job_run.metrics_log;
+
+import "proto/common.proto";
+
+message Request {
+	reserved 4;
+
+	message Metric {
+		// Nomad job ID
+		string job = 1;
+		string task = 2;
+	}
+
+	int64 start = 1;  // ms
+	int64 end = 2;  // ms
+	int64 step = 3;  // ms
+	repeated Metric metrics = 5;
+}
+
+message Response {
+	message Metrics {
+		// Nomad job ID
+		string job = 1;
+		repeated float cpu = 2;  // % CPU
+		repeated uint64 memory = 3;  // Bytes
+		repeated uint64 memory_max = 4;  // Bytes, this is the memory high watermark
+		uint64 allocated_memory = 5;  // Bytes
+	}
+
+	repeated Metrics metrics = 1;
+}

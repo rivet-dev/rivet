@@ -1,0 +1,22 @@
+syntax = "proto3";
+
+package rivet.backend.pkg.faker.build;
+
+import "proto/common.proto";
+import "google/protobuf/empty.proto";
+
+enum Image {
+	HANG_INDEFINITELY = 0;
+	MM_LOBBY_AUTO_READY = 1;
+	FAIL_IMMEDIATELY = 2;
+}
+
+message Request {
+	optional rivet.common.Uuid game_id = 1;
+	Image image = 2;
+	optional string fs_path = 3;
+}
+
+message Response {
+	optional rivet.common.Uuid build_id = 1;
+}

@@ -1,0 +1,7 @@
+[service]
+name = "cf-custom-hostname-get"
+
+[runtime]
+kind = "rust"
+
+[operation]

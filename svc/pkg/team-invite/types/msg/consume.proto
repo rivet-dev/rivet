@@ -1,0 +1,16 @@
+syntax = "proto3";
+
+package rivet.backend.pkg.team_invite.msg.consume;
+
+import "proto/common.proto";
+
+/// name = "msg-team-invite-consume"
+/// parameters = [
+/// 	{ name = "code" },
+/// 	{ name = "user_id" },
+/// ]
+message Message {
+	rivet.common.Uuid user_id = 1;
+	string code = 2;
+}
+

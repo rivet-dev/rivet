@@ -1,0 +1,15 @@
+syntax = "proto3";
+
+package rivet.backend.net;
+
+message ClientInfo {
+	optional string user_agent = 1;
+	optional string remote_address = 2;
+}
+
+message IpInfo {
+	string ip = 1;
+	double latitude = 2;
+	double longitude = 3;
+}
+

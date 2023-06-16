@@ -1,0 +1,54 @@
+[package]
+name = "api-chat"
+version = "0.0.1"
+edition = "2018"
+authors = ["Rivet Gaming, LLC <developer@rivet.gg>"]
+license = "Apache-2.0"
+
+[dependencies]
+rivet-convert = { path = "../../../lib/convert" }
+api-helper = { path = "../../../lib/api-helper/build" }
+async-trait = "0.1"
+chirp-client = { path = "../../../lib/chirp/client" }
+rivet-operation = { path = "../../../lib/operation/core" }
+chrono = "0.4"
+futures-util = "0.3"
+http = "0.2"
+hyper = { version = "0.14", features = ["server", "http1", "stream", "tcp"] }
+lazy_static = "1.4"
+prost = "0.10"
+rivet-cache = { path = "../../../lib/cache/build" }
+rivet-chat-server = { path = "../../../lib/smithy-output/api-chat/rust-server" }
+rivet-claims = { path = "../../../lib/claims" }
+rivet-health-checks = { path = "../../../lib/health-checks" }
+rivet-pools = { path = "../../../lib/pools" }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+thiserror = "1.0"
+tokio = { version = "1.21" }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", default-features = false, features = ["fmt", "json", "ansi"] }
+url = "2.2.2"
+util-chat = { package = "rivet-util-chat", path = "../../pkg/chat/util" }
+uuid = { version = "1", features = ["v4"] }
+
+chat-thread-participant-list = { path = "../../pkg/chat-thread/ops/participant-list" }
+user-get = { path = "../../pkg/user/ops/get" }
+token-revoke = { path = "../../pkg/token/ops/revoke" }
+game-user-get = { path = "../../pkg/game-user/ops/get" }
+party-invite-get = { path = "../../pkg/party/ops/invite-get" }
+game-resolve-namespace-id = { path = "../../pkg/game/ops/resolve-namespace-id" }
+game-get = { path = "../../pkg/game/ops/get" }
+party-get = { path = "../../pkg/party/ops/get" }
+chat-thread-get = { path = "../../pkg/chat-thread/ops/get" }
+chat-message-validate = { path = "../../pkg/chat-message/ops/validate" }
+chat-thread-get-or-create-for-topic = { path = "../../pkg/chat-thread/ops/get-or-create-for-topic" }
+chat-message-list = { path = "../../pkg/chat-message/ops/list" }
+user-thread-typing-status-set = { path = "../../pkg/user/ops/thread-typing-status-set" }
+chat-thread-get-for-topic = { path = "../../pkg/chat-thread/ops/get-for-topic" }
+party-member-get = { path = "../../pkg/party/ops/member-get" }
+
+[dev-dependencies]
+rand = "0.8"
+rivet-chat = { path = "../../../lib/smithy-output/api-chat/rust" }
+rivet-connection = { path = "../../../lib/connection" }

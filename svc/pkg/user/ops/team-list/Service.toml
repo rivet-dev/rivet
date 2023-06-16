@@ -1,0 +1,7 @@
+[service]
+name = "user-team-list"
+
+[runtime]
+kind = "rust"
+
+[operation]

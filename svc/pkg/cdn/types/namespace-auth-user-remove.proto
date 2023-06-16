@@ -1,0 +1,14 @@
+syntax = "proto3";
+
+package rivet.backend.pkg.cdn.namespace_auth_user_remove;
+
+import "proto/common.proto";
+
+message Request {
+	rivet.common.Uuid namespace_id = 1;
+	string user = 2;
+}
+
+message Response {
+
+}

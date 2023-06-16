@@ -1,0 +1,10 @@
+[service]
+name = "nomad-log-read"
+
+[runtime]
+kind = "rust"
+
+[operation]
+
+[secrets]
+"clickhouse/users/chirp/password" = {}

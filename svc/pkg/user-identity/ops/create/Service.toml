@@ -1,0 +1,7 @@
+[service]
+name = "user-identity-create"
+
+[runtime]
+kind = "rust"
+
+[operation]

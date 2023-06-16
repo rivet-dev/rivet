@@ -1,0 +1,19 @@
+syntax = "proto3";
+
+package rivet.backend.billing;
+
+import "proto/common.proto";
+
+message GameLobbyMetrics {
+	rivet.common.Uuid game_id = 1;
+	repeated RegionTierMetrics metrics = 2;
+}
+
+message RegionTierMetrics {
+	rivet.common.Uuid namespace_id = 6;
+	rivet.common.Uuid region_id = 1;
+	string tier_name_id = 2;
+	string lobby_group_name_id = 5;
+	int64 uptime = 4; // in seconds
+}
+

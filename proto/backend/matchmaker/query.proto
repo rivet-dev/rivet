@@ -1,0 +1,26 @@
+syntax = "proto3";
+
+package rivet.backend.matchmaker.query;
+
+import "proto/common.proto";
+
+enum JoinKind {
+	NORMAL = 0;
+	PARTY = 1;
+}
+
+message Direct {
+	rivet.common.Uuid lobby_id = 1;
+}
+
+message LobbyGroup {
+	repeated rivet.common.Uuid lobby_group_ids = 1;
+	repeated rivet.common.Uuid region_ids = 2;
+	AutoCreate auto_create = 3;
+}
+
+message AutoCreate {
+	rivet.common.Uuid lobby_group_id = 1;
+	rivet.common.Uuid region_id = 2;
+}
+

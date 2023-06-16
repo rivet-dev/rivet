@@ -1,0 +1,27 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/fern-api/fern/main/fern.schema.json
+
+imports:
+  localCommons: common.yml
+
+service:
+  auth: true
+  base-path: /rays
+  url: Cloud
+  audiences:
+    - public
+  endpoints:
+    getRayPerfLogs:
+      path: /{ray_id}/perf
+      method: GET
+      docs: Returns performance information about a Rivet Ray.
+      path-parameters:
+        ray_id:
+          type: uuid
+      response: GetRayPerfLogsResponse
+
+types:
+  GetRayPerfLogsResponse:
+    properties:
+      perf_lists:
+        docs: A list of service performance summaries.
+        type: list<localCommons.SvcPerf>

@@ -1,0 +1,24 @@
+syntax = "proto3";
+
+package rivet.backend.pkg.kv.get;
+
+import "proto/common.proto";
+
+message Request {
+    message Key {
+        rivet.common.Uuid namespace_id = 1;
+        string key = 2;
+    }
+
+    repeated Key keys = 1;
+}
+
+message Response {
+    message Key {
+        rivet.common.Uuid namespace_id = 1;
+        string key = 2;
+        bytes value = 3; // JSON
+    }
+
+    repeated Key values = 2;
+}

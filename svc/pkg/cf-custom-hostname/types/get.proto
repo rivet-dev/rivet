@@ -1,0 +1,14 @@
+syntax = "proto3";
+
+package rivet.backend.pkg.cf_custom_hostname.get;
+
+import "proto/common.proto";
+import "proto/backend/cf.proto";
+
+message Request {
+    repeated rivet.common.Uuid identifiers = 1;
+}
+
+message Response {
+    repeated rivet.backend.cf.CustomHostname custom_hostnames = 1;
+}

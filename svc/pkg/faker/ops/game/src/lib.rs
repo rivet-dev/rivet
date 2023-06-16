@@ -1,0 +1,63 @@
+use proto::backend::pkg::*;
+use rivet_operation::prelude::*;
+
+#[operation(name = "faker-game")]
+async fn handle(
+	ctx: OperationContext<faker::game::Request>,
+) -> GlobalResult<faker::game::Response> {
+	let dev_team_id = if let Some(dev_team_id) = &ctx.dev_team_id {
+		*dev_team_id
+	} else {
+		let team_create_res = op!([ctx] faker_team {
+			is_dev: true,
+			..Default::default()
+		})
+		.await?;
+		*internal_unwrap!(team_create_res.team_id)
+	};
+
+	let game_create_res = op!([ctx] game_create {
+		name_id: util::faker::ident(),
+		display_name: util::faker::display_name(),
+		url: format!("https://{}.io", util::faker::ident()),
+		developer_team_id: Some(dev_team_id),
+		description: "test".to_owned(),
+		tags: vec![util::faker::ident(), util::faker::ident(), util::faker::ident()],
+	})
+	.await?;
+
+	op!([ctx] cloud_game_config_create {
+		game_id: game_create_res.game_id,
+	})
+	.await?;
+
+	let mut namespace_ids = Vec::<common::Uuid>::new();
+	let mut version_ids = Vec::<common::Uuid>::new();
+	if !ctx.skip_namespaces_and_versions {
+		let version_create_res = op!([ctx] faker_game_version {
+			game_id: game_create_res.game_id,
+			..Default::default()
+		})
+		.await?;
+		let version_id = internal_unwrap!(version_create_res.version_id).as_uuid();
+		version_ids.push(version_id.into());
+
+		let namespace_name_ids = vec!["prod".to_owned(), "staging".to_owned()];
+		for name_id in &namespace_name_ids {
+			let ns_create_res = op!([ctx] faker_game_namespace {
+				game_id: game_create_res.game_id,
+				version_id: version_create_res.version_id,
+				override_name_id: name_id.clone(),
+				..Default::default()
+			})
+			.await?;
+			namespace_ids.push(*internal_unwrap!(ns_create_res.namespace_id));
+		}
+	}
+
+	Ok(faker::game::Response {
+		game_id: game_create_res.game_id,
+		namespace_ids,
+		version_ids,
+	})
+}

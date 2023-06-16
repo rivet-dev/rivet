@@ -1,0 +1,7 @@
+[service]
+name = "custom-user-avatar-list-for-game"
+
+[runtime]
+kind = "rust"
+
+[operation]

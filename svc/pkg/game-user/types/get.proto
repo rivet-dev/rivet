@@ -1,0 +1,23 @@
+syntax = "proto3";
+
+package rivet.backend.pkg.game_user.get;
+
+import "proto/common.proto";
+
+message Request {
+	repeated rivet.common.Uuid game_user_ids = 1;
+}
+
+message Response {
+	message GameUser {
+		rivet.common.Uuid game_user_id = 1;
+		rivet.common.Uuid namespace_id = 2;
+		rivet.common.Uuid user_id = 3;
+		rivet.common.Uuid token_session_id = 4;
+		int64 create_ts = 5;
+		optional rivet.common.Uuid link_id = 6;
+		optional int64 deleted_ts = 7;
+	}
+
+	repeated GameUser game_users = 1;
+}

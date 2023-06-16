@@ -1,0 +1,7 @@
+[service]
+name = "game-namespace-version-history-list"
+
+[runtime]
+kind = "rust"
+
+[operation]

@@ -1,0 +1,132 @@
+syntax = "proto3";
+
+package rivet.claims;
+
+import "proto/common.proto";
+import "proto/backend/matchmaker.proto";
+
+message Entitlement {
+	// Can issue a new token for a given session.
+	message Refresh {
+		rivet.common.Uuid session_id = 1;
+	}
+
+	// Can mutate a user with the given ID.
+	message User {
+		rivet.common.Uuid user_id = 1;
+	}
+
+	// Can access public methods to a given game's namespace.
+	//
+	// Issued in the development dashboard.
+	message GameNamespacePublic {
+		rivet.common.Uuid namespace_id = 1;
+	}
+
+	// Can mutate a matchmaker lobby with a given ID.
+	//
+	// Issued when starting a new lobby and passed to the process through the env.
+	message MatchmakerLobby {
+		rivet.common.Uuid lobby_id = 1;
+	}
+
+	// Can mutate a matchmaker player with a given ID.
+	//
+	// Issued during a seek request. This gets passed to the lobby server which in turn passes it
+	// to the matchmaking API.
+	message MatchmakerPlayer {
+		rivet.common.Uuid player_id = 1;
+	}
+
+	// Can manage a job's run.
+	//
+	// Issued while running a job and passed as a parameter to the job sidecars.
+	message JobRun {
+		rivet.common.Uuid run_id = 1;
+	}
+
+	// Manage a game's cloud status.
+	message GameCloud {
+		rivet.common.Uuid game_id = 1;
+	}
+
+	// Development token that mocks server responses for local development.
+	message GameNamespaceDevelopment {
+		reserved 2;
+		rivet.common.Uuid namespace_id = 1;
+		string hostname = 3;
+		repeated rivet.backend.matchmaker.LobbyRuntime.Port lobby_ports = 4;
+	}
+
+	// A token issued for a player from a development environment.
+	//
+	// This has no correlated player entry in the database; this is used purely to identify
+	// players in development and validate the token mechanisms work from development environments.
+	//
+	// Issued during a seek request when using a development namespace development token. This
+	// will be used to mock matchmaker requests.
+	message MatchmakerDevelopmentPlayer {
+		rivet.common.Uuid namespace_id = 1;
+
+		// This UUID does not point to an actual player row. This only enables the game 
+		// server to keep track of players internally.
+		rivet.common.Uuid player_id = 2;
+	}
+
+	// Token created when a user connects to a game and generates a guest user.
+	message GameUser {
+		rivet.common.Uuid game_user_id = 1;
+	}
+
+	// Token used by the user to link their game rivet account to their rivet account.
+	message GameUserLink {
+		rivet.common.Uuid link_id = 1;
+	}
+
+	// Token used to upload files to an upload.
+	message UploadFile {
+		rivet.common.Uuid upload_id = 1;
+		string path = 2;
+		uint64 content_length = 3;
+	}
+
+	// Token used to join a party.
+	message PartyInvite {
+		rivet.common.Uuid invite_id = 1;
+	}
+
+	// Token to link a CLI to a given token.
+	message CloudDeviceLink {
+		rivet.common.Uuid device_link_id = 1;
+	}
+
+	// Token used to bypass various safety measures such as rate limiting.
+	message Bypass {
+
+	}
+
+	oneof kind {
+		Refresh refresh = 1;
+		User user = 2;
+		GameNamespacePublic game_namespace_public = 3;
+		MatchmakerLobby matchmaker_lobby = 4;
+		MatchmakerPlayer matchmaker_player = 5;
+		JobRun job_run = 6;
+		GameCloud game_cloud = 7;
+		GameNamespaceDevelopment game_namespace_development = 8;
+		MatchmakerDevelopmentPlayer matchmaker_development_player = 9;
+		GameUser game_user = 10;
+		GameUserLink game_user_link = 11;
+		UploadFile upload_file = 12;
+		PartyInvite party_invite = 13;
+		CloudDeviceLink cloud_device_link = 14;
+		Bypass bypass = 15;
+	}
+}
+
+message Claims {
+	optional int64 exp = 1;
+	int64 iat = 2;
+	rivet.common.Uuid jti = 3;
+	repeated Entitlement entitlements = 4;
+}

@@ -1,0 +1,202 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/fern-api/fern/main/fern.schema.json
+
+imports:
+  commons: ../common.yml
+  gameCommons: ../game/common.yml
+  identityCommons: ../identity/common.yml
+
+types:
+  CreatePublicityConfig:
+    docs: |-
+      Publicity configuration for creating a party.
+      Null values will default
+    properties:
+      public: optional<PublicityLevel>
+      mutual_followers: optional<PublicityLevel>
+      groups: optional<PublicityLevel>
+
+  CreateInviteConfig:
+    docs: Configuration for creating a party invite.
+    properties:
+      alias:
+        docs: >-
+          An alias used to join a given party.
+          This alias must be unique for all invites for your game.
+          Pass this alias to `rivet.api.party.common#CreatedInvite$alias` to
+          consume
+          the invite.
+        type: optional<string>
+
+  CreatedInvite:
+    docs: Output from a created invite.
+    properties:
+      alias:
+        docs: >-
+          An alias used to join a given party.
+          This alias must be unique for all invites for your game.
+          Pass this alias to `rivet.api.party.common#CreatedInvite$alias` to
+          consume
+          the invite.
+        type: optional<string>
+      token:
+        docs: |-
+          A JSON Web Token.
+          Slightly modified to include a description prefix and use Protobufs of
+          JSON.
+        type: string
+
+  JoinInvite:
+    docs: Represents methods of joining a party.
+    properties:
+      party_id: optional<uuid>
+      token: optional<commons.JWT>
+      alias: optional<string>
+
+  Summary:
+    properties:
+      party_id: uuid
+      create_ts: datetime
+      activity: Activity
+      external: ExternalLinks
+      publicity: Publicity
+      party_size: integer
+      members: list<MemberSummary>
+      thread_id: uuid
+
+  Handle:
+    properties:
+      party_id: uuid
+      create_ts: datetime
+      activity: Activity
+      external: ExternalLinks
+
+  Activity:
+    docs: A union representing the activity of a given party.
+    properties:
+      idle:
+        docs: A party activity denoting that the party is idle.
+        type: optional<commons.EmptyObject>
+      matchmaker_finding_lobby: optional<ActivityMatchmakerFindingLobby>
+      matchmaker_lobby: optional<ActivityMatchmakerLobby>
+
+  ActivityMatchmakerFindingLobby:
+    docs: A party activity denoting that the party is currently searching for a
+      lobby.
+    properties:
+      game: gameCommons.Handle
+
+  ActivityMatchmakerLobby:
+    docs: A party activity denoting that the party is currently in a lobby.
+    properties:
+      lobby: MatchmakerLobby
+      game: gameCommons.Handle
+
+  ExternalLinks:
+    docs: External links for a party.
+    properties:
+      chat:
+        type: string
+        docs: A link to the given party's chat thread.
+
+  MatchmakerLobby:
+    docs: A party lobby.
+    properties:
+      lobby_id: uuid
+
+  Publicity:
+    properties:
+      public: PublicityLevel
+      mutual_followers: PublicityLevel
+      groups: PublicityLevel
+
+  PublicityLevel:
+    enum:
+      - none
+      - view
+      - join
+
+  MemberSummary:
+    properties:
+      identity: identityCommons.Handle
+      is_leader:
+        type: boolean
+        docs: Whether or not this party member is the leader of the given party.
+      join_ts: datetime
+      state: MemberState
+
+  MemberState:
+    properties:
+      inactive:
+        docs: A party member state denoting that the member is inactive.
+        type: optional<commons.EmptyObject>
+      matchmaker_ready:
+        docs:
+          A party member state denoting that the member is currently waiting to
+          start matchmaking.
+        type: optional<commons.EmptyObject>
+      matchmaker_finding_lobby:
+        docs:
+          A party member state denoting that the member is currently searching for a
+          lobby.
+        type: optional<commons.EmptyObject>
+      matchmaker_lobby: optional<MemberStateMatchmakerLobby>
+
+  MemberStateMatchmakerLobby:
+    docs: A party member state denoting that the member is in a lobby.
+    properties:
+      player_id: uuid
+
+  Profile:
+    properties:
+      party_id:
+        type: uuid
+      create_ts:
+        docs: RFC3339 timestamp.
+        type: datetime
+      activity: Activity
+      external: ExternalLinks
+      publicity: Publicity
+      party_size:
+        docs: Unsigned 32 bit integer.
+        type: optional<integer>
+      members:
+        docs: A list of party members.
+        type: list<MemberSummary>
+      thread_id:
+        type: uuid
+      invites:
+        docs: A list of party invites.
+        type: list<Invite>
+
+  Invite:
+    docs: A party invite.
+    properties:
+      invite_id:
+        type: uuid
+      create_ts:
+        docs: RFC3339 timestamp.
+        type: datetime
+      token:
+        docs: |-
+          A JSON Web Token.
+          Slightly modified to include a description prefix and use Protobufs of
+          JSON.
+        type: string
+      alias: optional<InviteAlias>
+      external: InviteExternalLinks
+
+  InviteAlias:
+    docs: An alias used to join a given party.
+    properties:
+      namespace_id:
+        type: uuid
+      alias:
+        docs: The alias used to join a given party.
+        type: string
+
+  InviteExternalLinks:
+    docs: Extenral links for a party invite.
+    properties:
+      invite:
+        docs: The invite link used to join this party from an external site.
+        type: string

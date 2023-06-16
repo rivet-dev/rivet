@@ -1,0 +1,47 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/fern-api/fern/main/fern.schema.json
+
+imports:
+  commons: ../../common.yml
+
+types:
+  Config:
+    docs: CDN configuration for a given version.
+    properties:
+      build_command:
+        docs: Client-side configuration
+        type: optional<string>
+      build_output:
+        docs: Client-side configuration
+        type: optional<string>
+      site_id:
+        type: optional<uuid>
+      routes:
+        docs: Multiple CDN version routes.
+        type: optional<list<Route>>
+
+  Route:
+    properties:
+      glob: string
+      priority:
+        docs: Unsigned 32 bit integer.
+        type: integer
+      middlewares:
+        docs: Multiple CDN version middleware.
+        type: list<Middleware>
+
+  Middleware:
+    properties:
+      kind: MiddlewareKind
+
+  MiddlewareKind:
+    properties:
+      custom_headers: optional<CustomHeadersMiddleware>
+
+  CustomHeadersMiddleware:
+    properties:
+      headers: list<Header>
+
+  Header:
+    properties:
+      name: string
+      value: string

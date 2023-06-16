@@ -1,0 +1,19 @@
+syntax = "proto3";
+
+package rivet.backend.pkg.game.namespace_resolve_url;
+
+import "proto/common.proto";
+
+message Request {
+	string url = 1;
+
+}
+
+message Response {
+	message Resolution {
+		rivet.common.Uuid game_id = 1;
+		rivet.common.Uuid namespace_id = 2;
+	}
+
+	optional Resolution resolution = 1;
+}

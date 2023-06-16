@@ -1,0 +1,24 @@
+syntax = "proto3";
+
+package rivet.backend.pkg.party.msg.member_create_fail;
+
+import "proto/common.proto";
+
+enum ErrorCode {
+	UNKNOWN = 0;
+	PARTY_DOES_NOT_EXIST = 1;
+	PARTY_FULL = 2;
+	ALREADY_IN_PARTY = 3;
+}
+
+/// name = "msg-party-member-create-fail"
+/// parameters = [
+/// 	{ name = "party_id" },
+/// 	{ name = "user_id" },
+/// ]
+message Message {
+	rivet.common.Uuid party_id = 1;
+	rivet.common.Uuid user_id = 2;
+	ErrorCode error_code = 3;
+}
+

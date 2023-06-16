@@ -1,0 +1,10 @@
+[service]
+name = "analytics-worker"
+
+[runtime]
+kind = "rust"
+
+[consumer]
+
+[secrets]
+"clickhouse/users/chirp/password" = {}

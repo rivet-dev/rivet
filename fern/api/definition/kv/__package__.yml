@@ -1,0 +1,136 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/fern-api/fern/main/fern.schema.json
+
+imports:
+  commons: ../common.yml
+  localCommons: common.yml
+
+service:
+  auth: true
+  url: KV
+  base-path: /entries
+  endpoints:
+    get:
+      path: ""
+      method: GET
+      audiences:
+        - public
+      docs: Returns a specific key-value entry by key.
+      request:
+        name: GetOperationRequest
+        query-parameters:
+          key: localCommons.Key
+          watch_index:
+            docs: A query parameter denoting the requests watch index.
+            type: optional<string>
+          namespace_id:
+            type: optional<uuid>
+      response: GetResponse
+
+    put:
+      path: ""
+      method: PUT
+      audiences:
+        - public
+      docs: Puts (sets or overwrites) a key-value entry by key.
+      request:
+        body: PutRequest
+
+    delete:
+      path: ""
+      method: DELETE
+      audiences:
+        - public
+      docs: Deletes a key-value entry by key.
+      request:
+        name: DeleteOperationRequest
+        query-parameters:
+          key: localCommons.Key
+          namespace_id:
+            type: optional<uuid>
+
+    list:
+      path: "/list"
+      method: GET
+      docs: Lists all keys in a directory.
+      request:
+        name: ListOperationRequest
+        query-parameters:
+          directory: localCommons.Directory
+          namespace_id: uuid
+      response: ListResponse
+
+    getBatch:
+      path: /batch
+      method: GET
+      audiences:
+        - public
+      docs: Gets multiple key-value entries by key(s).
+      request:
+        name: GetBatchRequest
+        query-parameters:
+          keys:
+            type: localCommons.Key
+            allow-multiple: true
+          watch_index:
+            docs: A query parameter denoting the requests watch index.
+            type: optional<string>
+          namespace_id:
+            type: optional<uuid>
+      response: GetBatchResponse
+
+    putBatch:
+      path: /batch
+      method: PUT
+      audiences:
+        - public
+      docs: Puts (sets or overwrites) multiple key-value entries by key(s).
+      request:
+        body: PutBatchRequest
+
+    deleteBatch:
+      path: /batch
+      method: DELETE
+      audiences:
+        - public
+      docs: Deletes multiple key-value entries by key(s).
+      request:
+        name: DeleteBatchRequest
+        query-parameters:
+          keys:
+            type: localCommons.Key
+            allow-multiple: true
+          namespace_id:
+            type: optional<uuid>
+
+types:
+  GetResponse:
+    properties:
+      value: localCommons.Value
+      deleted:
+        docs: >-
+          Whether or not the entry has been deleted. Only set when watching this
+          endpoint.
+        type: optional<boolean>
+      watch: commons.WatchResponse
+
+  PutRequest:
+    properties:
+      namespace_id:
+        type: optional<uuid>
+      key: localCommons.Key
+      value: localCommons.Value
+
+  ListResponse:
+    properties:
+      entries: list<localCommons.Entry>
+
+  GetBatchResponse:
+    properties:
+      entries: list<localCommons.Entry>
+      watch: commons.WatchResponse
+
+  PutBatchRequest:
+    properties:
+      namespace_id:
+        type: optional<uuid>
+      entries: list<localCommons.PutEntry>

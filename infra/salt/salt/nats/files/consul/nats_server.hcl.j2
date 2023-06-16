@@ -1,0 +1,63 @@
+services {
+	id = "nats-server-client"
+	name = "nats-server"
+	tags = ["nats", "client"]
+
+	port = 4222
+	checks = [
+		{
+			name = "Reachable on 4222"
+			tcp = "{{nebula_ipv4}}:4222"
+			interval = "10s"
+			timeout  = "1s"
+		}
+	]
+}
+
+services {
+	id = "nats-server-cluster"
+	name = "nats-server"
+	tags = ["nats", "cluster"]
+
+	port = 6222
+	checks = [
+		{
+			name = "Reachable on 6222"
+			tcp = "{{nebula_ipv4}}:6222"
+			interval = "10s"
+			timeout  = "1s"
+		}
+	]
+}
+
+services {
+	id = "nats-server-http"
+	name = "nats-server"
+	tags = ["nats", "http"]
+
+	port = 8222
+	checks = [
+		{
+			name = "Reachable on 8222"
+			tcp = "{{nebula_ipv4}}:8222"
+			interval = "10s"
+			timeout  = "1s"
+		}
+	]
+}
+
+services {
+	id = "nats-exporter"
+	name = "nats-exporter"
+	tags = ["http"]
+
+	port = 7777
+	checks = [
+		{
+			name = "Reachable on 7777"
+			tcp = "{{nebula_ipv4}}:7777"
+			interval = "10s"
+			timeout  = "1s"
+		}
+	]
+}

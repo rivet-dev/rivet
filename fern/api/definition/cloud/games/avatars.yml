@@ -1,0 +1,66 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/fern-api/fern/main/fern.schema.json
+
+imports:
+  uploadCommons: ../../upload/common.yml
+  cloudCommons: ../common.yml
+
+service:
+  auth: true
+  base-path: /games/{game_id}
+  url: Cloud
+  audiences:
+    - public
+  path-parameters:
+    game_id:
+      type: uuid
+  endpoints:
+    listGameCustomAvatars:
+      path: /avatars
+      method: GET
+      docs: Lists custom avatars for the given game.
+      response: ListGameCustomAvatarsResponse
+
+    prepareCustomAvatarUpload:
+      path: /prepare
+      method: POST
+      docs: |-
+        Prepares a custom avatar image upload.
+        Complete upload with `rivet.api.cloud#CompleteCustomAvatarUpload`.
+      request:
+        body: PrepareCustomAvatarUploadRequest
+      response: PrepareCustomAvatarUploadResponse
+
+    completeCustomAvatarUpload:
+      path: /avatar-upload/{upload_id}/complete
+      method: POST
+      docs: >-
+        Completes a custom avatar image upload. Must be called after the file
+        upload process completes.
+      path-parameters:
+        upload_id:
+          type: uuid
+
+types:
+  ListGameCustomAvatarsResponse:
+    properties:
+      custom_avatars:
+        docs: A list of custom avatar summaries.
+        type: list<cloudCommons.CustomAvatarSummary>
+
+  PrepareCustomAvatarUploadRequest:
+    properties:
+      path:
+        docs: The path/filename of the custom avatar.
+        type: string
+      mime:
+        docs: The MIME type of the custom avatar.
+        type: optional<string>
+      content_length:
+        docs: Unsigned 64 bit integer.
+        type: optional<long>
+
+  PrepareCustomAvatarUploadResponse:
+    properties:
+      upload_id:
+        type: uuid
+      presigned_request: uploadCommons.PresignedRequest

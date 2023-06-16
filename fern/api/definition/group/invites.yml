@@ -1,0 +1,74 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/fern-api/fern/main/fern.schema.json
+
+imports:
+  groupCommons: ../group/common.yml
+
+service:
+  auth: true
+  url: Group
+  audiences:
+    - public
+  base-path: ""
+  endpoints:
+    getInvite:
+      path: /invites/{group_invite_code}
+      method: GET
+      docs: >-
+        Inspects a group invite returning information about the team that
+        created it.
+      path-parameters:
+        group_invite_code:
+          docs: Provided by `rivet.api.group#CreateInviteResponse$code`.
+          type: string
+      response: GetInviteResponse
+
+    consumeInvite:
+      path: /invites/{group_invite_code}/consume
+      method: POST
+      docs: Consumes a group invite to join a group.
+      path-parameters:
+        group_invite_code:
+          docs: Provided by `rivet.api.group#CreateInviteResponse$code`.
+          type: string
+      response: ConsumeInviteResponse
+
+    createInvite:
+      path: /groups/{group_id}/invites
+      method: POST
+      docs: >-
+        Creates a group invite. Can be shared with other identities to let them
+        join
+        this group.
+      path-parameters:
+        group_id:
+          type: uuid
+      request:
+        body: CreateInviteRequest
+      response: CreateInviteResponse
+
+types:
+  GetInviteResponse:
+    properties:
+      group: groupCommons.Handle
+
+  ConsumeInviteResponse:
+    properties:
+      group_id:
+        type: optional<uuid>
+
+  CreateInviteRequest:
+    properties:
+      ttl:
+        docs: How long until the group invite expires (in milliseconds).
+        type: optional<double>
+      use_count:
+        docs: How many times the group invite can be used.
+        type: optional<double>
+
+  CreateInviteResponse:
+    properties:
+      code:
+        docs: >-
+          The code that will be passed to `rivet.api.group#ConsumeInvite`
+          to join a group.
+        type: string

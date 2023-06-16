@@ -1,0 +1,14 @@
+syntax = "proto3";
+
+package rivet.backend.pkg.cdn.msg.ns_config_update;
+
+import "proto/common.proto";
+
+/// name = "msg-cdn-ns-config-update"
+/// parameters = [
+/// 	{ name = "namespace_id" },
+/// ]
+message Message {
+	rivet.common.Uuid namespace_id = 1;
+}
+

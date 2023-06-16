@@ -1,0 +1,13 @@
+syntax = "proto3";
+
+package rivet.backend.pkg.team.msg.member_kick_complete;
+
+import "proto/common.proto";
+
+/// name = "msg-team-member-kick-complete"
+/// parameters = [
+/// 	{ name = "team_id" },
+/// 	{ name = "user_id" },
+/// ]
+message Message {
+}

@@ -1,0 +1,10 @@
+[service]
+name = "user-search-user-gc"
+regions = ["lnd-atl"]
+
+[runtime]
+kind = "rust"
+
+[periodic]
+cron = "0 0 * * *"
+

@@ -1,0 +1,15 @@
+<HTML>
+<HEAD>
+<TITLE>Unsupported Protocol</TITLE>
+</HEAD>
+
+<BODY BGCOLOR="white" FGCOLOR="black">
+<H1>Unsupported Protocol</H1>
+<HR>
+
+<FONT FACE="Helvetica,Arial"><B>
+Description: Can't perform your request for the document because
+the protocol scheme is unknown.
+</B></FONT>
+<HR>
+</BODY>

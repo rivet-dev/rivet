@@ -1,0 +1,21 @@
+syntax = "proto3";
+
+package rivet.backend.pkg.team.msg.join_request_create;
+
+import "proto/common.proto";
+
+/// Invitation that was used to create this team member.
+message Invitation {
+	string code = 1;
+}
+
+/// name = "msg-team-join-request-create"
+/// parameters = [
+/// 	{ name = "team_id" },
+/// 	{ name = "user_id" },
+/// ]
+message Message {
+	rivet.common.Uuid team_id = 1;
+	rivet.common.Uuid user_id = 2;
+	optional Invitation invitation = 3;
+}

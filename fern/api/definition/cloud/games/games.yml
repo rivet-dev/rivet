@@ -1,0 +1,230 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/fern-api/fern/main/fern.schema.json
+
+imports:
+  commons: ../../common.yml
+  uploadCommons: ../../upload/common.yml
+  groupCommons: ../../group/common.yml
+  cloudCommons: ../../cloud/common.yml
+
+service:
+  auth: true
+  base-path: /games
+  url: Cloud
+  audiences:
+    - public
+  endpoints:
+    getGames:
+      path: ""
+      method: GET
+      docs: >-
+        Returns a list of games in which the current identity is a group member
+        of its development team.
+      request:
+        name: GetGamesRequest
+        query-parameters:
+          watch_index:
+            docs: A query parameter denoting the requests watch index.
+            type: optional<string>
+      response: GetGamesResponse
+
+    createGame:
+      path: ""
+      method: POST
+      docs: Creates a new game.
+      request: CreateGameRequest
+      response: CreateGameResponse
+
+    validateGame:
+      path: /validate
+      method: POST
+      docs: Validates information used to create a new game.
+      request: ValidateGameRequest
+      response: ValidateGameResponse
+
+    getGameById:
+      path: /{game_id}
+      method: GET
+      docs: Returns a game by its game id.
+      path-parameters:
+        game_id:
+          type: uuid
+      request:
+        name: GetGameByIdRequest
+        query-parameters:
+          watch_index:
+            docs: A query parameter denoting the requests watch index.
+            type: optional<string>
+      response: GetGameByIdResponse
+
+    gameBannerUploadPrepare:
+      path: /{game_id}/banner-upload/prepare
+      method: POST
+      docs: Prepares a game banner image upload.
+      path-parameters:
+        game_id:
+          type: uuid
+      request:
+        body: GameBannerUploadPrepareRequest
+      response: GameBannerUploadPrepareResponse
+
+    gameBannerUploadComplete:
+      path: /{game_id}/banner-upload/{upload_id}/complete
+      method: POST
+      docs: >-
+        Completes an game banner image upload. Must be called after the file
+        upload process completes.
+      path-parameters:
+        game_id:
+          type: uuid
+        upload_id:
+          type: uuid
+
+    gameLogoUploadPrepare:
+      path: /{game_id}/logo-upload/prepare
+      method: POST
+      docs: Prepares a game logo image upload.
+      path-parameters:
+        game_id:
+          type: uuid
+      request:
+        body: GameLogoUploadPrepareRequest
+      response: GameLogoUploadPrepareResponse
+
+    gameLogoUploadComplete:
+      path: /{game_id}/logo-upload/{upload_id}/complete
+      method: POST
+      docs: >-
+        Completes a game logo image upload. Must be called after the file upload
+        process completes.
+      path-parameters:
+        game_id:
+          type: uuid
+        upload_id:
+          type: uuid
+
+types:
+  GetGamesResponse:
+    properties:
+      games:
+        docs: A list of game summaries.
+        type: list<GameSummary>
+      groups:
+        docs: A list of group summaries.
+        type: list<groupCommons.Handle>
+      watch: commons.WatchResponse
+
+  CreateGameRequest:
+    properties:
+      name_id:
+        docs: >-
+          A human readable short identifier used to references resources.
+          Different than a `rivet.common#Uuid` because this is intended to be
+          human readable.
+          Different than `rivet.common#DisplayName` because this should not
+          include special
+          characters and be short.
+        type: string
+      display_name:
+        docs: Represent a resource's readable display name.
+        type: string
+      developer_group_id:
+        type: uuid
+
+  CreateGameResponse:
+    properties:
+      game_id:
+        type: uuid
+
+  ValidateGameRequest:
+    properties:
+      display_name:
+        docs: Represent a resource's readable display name.
+        type: string
+      name_id:
+        docs: >-
+          A human readable short identifier used to references resources.
+          Different than a `rivet.common#Uuid` because this is intended to be
+          human readable.
+          Different than `rivet.common#DisplayName` because this should not
+          include special
+          characters and be short.
+        type: string
+
+  ValidateGameResponse:
+    properties:
+      errors:
+        docs: A list of validation errors.
+        type: list<commons.ValidationError>
+
+  GetGameByIdResponse:
+    properties:
+      game: cloudCommons.GameFull
+      watch: commons.WatchResponse
+
+  GameBannerUploadPrepareRequest:
+    properties:
+      path:
+        docs: The path/filename of the game banner.
+        type: string
+      mime:
+        docs: The MIME type of the game banner.
+        type: optional<string>
+      content_length:
+        docs: Unsigned 64 bit integer.
+        type: optional<long>
+
+  GameBannerUploadPrepareResponse:
+    properties:
+      upload_id:
+        type: uuid
+      presigned_request: uploadCommons.PresignedRequest
+
+  GameLogoUploadPrepareRequest:
+    properties:
+      path:
+        docs: The path/filename of the game logo.
+        type: string
+      mime:
+        docs: The MIME type of the game logo.
+        type: optional<string>
+      content_length:
+        docs: Unsigned 64 bit integer.
+        type: long
+
+  GameLogoUploadPrepareResponse:
+    properties:
+      upload_id:
+        type: uuid
+      presigned_request: uploadCommons.PresignedRequest
+
+  GameSummary:
+    docs: A game summary.
+    properties:
+      game_id:
+        type: uuid
+      create_ts:
+        docs: RFC3339 timestamp.
+        type: datetime
+      name_id:
+        docs: >-
+          A human readable short identifier used to references resources.
+          Different than a `rivet.common#Uuid` because this is intended to be
+          human readable.
+          Different than `rivet.common#DisplayName` because this should not
+          include special
+          characters and be short.
+        type: string
+      display_name:
+        docs: Represent a resource's readable display name.
+        type: string
+      developer_group_id:
+        type: uuid
+      total_player_count:
+        docs: Unsigned 32 bit integer.
+        type: optional<integer>
+      logo_url:
+        docs: The URL of this game's logo image.
+        type: optional<string>
+      banner_url:
+        docs: The URL of this game's banner image.
+        type: optional<string>

@@ -1,0 +1,38 @@
+syntax = "proto3";
+
+package rivet.backend.pkg.analytics.msg.event_create;
+
+import "proto/common.proto";
+
+/// name = "msg-analytics-event-create"
+/// parameters = []
+message Message {
+	repeated Event events = 1;
+}
+
+message Event {
+	reserved 5, 6, 7, 8;
+
+	// Override the timestamp the event was emitted at.
+	optional int64 ts = 9;
+
+	// Name of the event.
+	//
+	// This is formatted in dot syntax. For example, a matchmaker event would
+	// be `mm.player-create`.
+	string name = 1;
+
+	// User ID that dispatched this event.
+	//
+	// Deprecated: Use raw JSON property "user_id".
+	optional rivet.common.Uuid user_id = 2 [deprecated = true];
+
+	// Namespace ID of the game this event is associated with.
+	//
+	// Deprecated: Use raw JSON property "namespace_id".
+	optional rivet.common.Uuid namespace_id = 3 [deprecated = true];
+
+	// Properties to associate with the event.
+	optional string properties_json = 4;
+}
+

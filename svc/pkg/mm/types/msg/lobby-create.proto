@@ -1,0 +1,40 @@
+syntax = "proto3";
+
+package rivet.backend.pkg.mm.msg.lobby_create;
+
+import "proto/common.proto";
+
+/// name = "msg-mm-lobby-create"
+/// parameters = [
+/// 	{ name = "lobby_id" },
+/// ]
+message Message {
+	reserved 5;
+
+	rivet.common.Uuid lobby_id = 1;
+
+	// The namespace this lobby is created in.
+	rivet.common.Uuid namespace_id = 2;
+
+	// The lobby group to create this lobby from.
+	//
+	// The version ID correlated with this lobby
+	// group may be different than the version ID
+	// associated with the namespace in the rare case
+	// of a race condition with a lobby seek occurring
+	// at the same time as a new namespace version is
+	// set.
+	rivet.common.Uuid lobby_group_id = 3;
+
+	// The region to create the lobby in.
+	//
+	// This must be present in the lobby group's confic.
+	rivet.common.Uuid region_id = 4;
+
+	// Ray ID of the API request that created this lobby.
+	optional rivet.common.Uuid create_ray_id = 6;
+
+	// If a lobby row was preemptively inserted for this lobby.
+	bool preemptively_created = 7;
+}
+

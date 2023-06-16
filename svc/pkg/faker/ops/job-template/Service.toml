@@ -1,0 +1,8 @@
+[service]
+name = "faker-job-template"
+test-only = true
+
+[runtime]
+kind = "rust"
+
+[operation]

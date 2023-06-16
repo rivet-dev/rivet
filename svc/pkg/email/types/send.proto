@@ -1,0 +1,36 @@
+syntax = "proto3";
+
+package rivet.backend.pkg.email.send;
+
+import "proto/common.proto";
+
+message Address {
+	string email = 1;
+	string name = 2;
+}
+
+message Message {
+	repeated Address to_addresses = 2;
+	repeated Address cc_addresses = 3;
+	repeated Address bcc_addresses = 4;
+	string dynamic_template_data = 5;
+}
+
+message Attachment {
+	bytes content = 1;
+	string mime = 2;
+	string filename = 3;
+	optional string disposition = 4;
+	optional string content_id = 5;
+}
+
+message Request {
+	Address from_address = 1;
+	string template_id = 2;
+	repeated Message messages = 3;
+	repeated Attachment attachments = 4;
+}
+
+message Response {
+
+}

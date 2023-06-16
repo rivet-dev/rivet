@@ -1,0 +1,23 @@
+services {
+	name = "nebula"
+	tags = [
+		"nebula",
+		"prometheus",
+		{%- if 'nebula-lighthouse' in grains['roles'] %}
+		"lighthouse",
+		{% else %}
+		"client",
+		{%- endif %}
+	]
+
+	port = 4280
+	checks = [
+		{
+			name = "Reachable on 4280"
+			tcp = "{{grains['nebula']['ipv4']}}:4280"
+			interval = "10s"
+			timeout  = "1s"
+		}
+	]
+}
+

@@ -1,0 +1,8 @@
+[service]
+name = "bucket-game-banner"
+
+[runtime]
+kind = "s3"
+upload_policy = "upload"
+
+[database]

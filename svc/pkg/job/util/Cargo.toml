@@ -1,0 +1,9 @@
+[package]
+name = "rivet-util-job"
+version = "0.1.0"
+edition = "2021"
+authors = ["Rivet Gaming, LLC <developer@rivet.gg>"]
+license = "Apache-2.0"
+
+[dependencies]
+uuid = { version = "1", features = ["v4", "serde"] }

@@ -1,0 +1,12 @@
+# See https://github.com/bevyengine/bevy/blob/3a2a68852c0a1298c0678a47adc59adebe259a6f/.cargo/config_fast_builds
+
+# We can't use LLD because it's not stable.
+
+[build]
+# Speeds up compilation by using shared artifacts between libraries. We
+# don't use a Cargo workspace since that causes issues with Cargo chef.
+target-dir = "./target"
+
+# Used for Tokio Console. See https://github.com/tokio-rs/console#using-it
+rustflags = ["--cfg", "tokio_unstable"]
+

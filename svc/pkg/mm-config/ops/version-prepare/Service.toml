@@ -1,0 +1,7 @@
+[service]
+name = "mm-config-version-prepare"
+
+[runtime]
+kind = "rust"
+
+[operation]

@@ -1,0 +1,7 @@
+[service]
+name = "build-list-for-game"
+
+[runtime]
+kind = "rust"
+
+[operation]

@@ -1,0 +1,8 @@
+[service]
+name = "user-presence-worker"
+
+[runtime]
+kind = "rust"
+
+[consumer]
+

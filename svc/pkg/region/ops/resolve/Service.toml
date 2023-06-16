@@ -1,0 +1,7 @@
+[service]
+name = "region-resolve"
+
+[runtime]
+kind = "rust"
+
+[operation]

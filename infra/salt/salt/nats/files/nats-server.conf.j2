@@ -1,0 +1,44 @@
+# MARK: Basic
+listen: "{{nebula_ipv4}}:4222"
+http: "{{nebula_ipv4}}:8222"
+client_advertise: "{{nebula_ipv4}}:4222"
+server_name: "{{name}}"
+
+# Increase max payload for services that don't split up large RPC messages at
+# the moment
+max_payload: 32MB
+
+# MARK: Auth
+accounts: {
+	SYS: {
+		users: [
+			# TODO: Switch to TLS keys
+			{ user: admin, password: "password" }
+		]
+	}
+	RIVET: {
+		users: [
+			# TODO: Switch to TLS keys
+			{ user: chirp, password: "password" }
+			{ user: terraform, password: "password" }
+			{ user: bolt, password: "password" }
+		]
+	}
+}
+
+system_account: SYS
+
+# MARK: Server
+cluster {
+	name: "{{cluster_name}}"
+	listen: "{{nebula_ipv4}}:6222"
+	advertise: "{{nebula_ipv4}}:6222"
+	connect_retries: 3600
+
+	routes = [
+		{%- for server, addr in salt['mine.get']('roles:nats-server', 'nebula_ipv4', tgt_type='grain', exclude_minion=True) | dictsort() %}
+		"nats-route://{{addr}}:6222",  # {{ server }}
+		{%- endfor %}
+	]
+}
+

@@ -1,0 +1,14 @@
+syntax = "proto3";
+
+package rivet.backend.pkg.user_presence.msg.arrive;
+
+import "proto/common.proto";
+
+/// name = "msg-user-presence-arrive"
+/// parameters = [
+/// 	{ name = "user_id" },
+/// ]
+message Message {
+	rivet.common.Uuid user_id = 1;
+	bool silent = 2;
+}

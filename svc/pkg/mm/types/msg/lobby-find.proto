@@ -1,0 +1,39 @@
+syntax = "proto3";
+
+package rivet.backend.pkg.mm.msg.lobby_find;
+
+import "proto/common.proto";
+import "proto/backend/net.proto";
+import "proto/backend/matchmaker/query.proto";
+
+message Player {
+	rivet.common.Uuid player_id = 1;
+	rivet.common.Uuid token_session_id = 2;
+	optional rivet.backend.net.ClientInfo client_info = 3;
+}
+
+/// name = "msg-mm-lobby-find"
+/// parameters = [
+/// 	{ name = "namespace_id" },
+/// 	{ name = "query_id" },
+/// ]
+message Message {
+	// Game namespace to find a lobby in.
+	rivet.common.Uuid namespace_id = 1;
+
+	// Unique ID for this query.
+	rivet.common.Uuid query_id = 2;
+
+	// How the player is joining this lobby. This affects the max player count
+	// to use.
+	rivet.backend.matchmaker.query.JoinKind join_kind = 3;
+
+	// Players to create.
+	repeated Player players = 4;
+
+	oneof query {
+		rivet.backend.matchmaker.query.Direct direct = 101;
+		rivet.backend.matchmaker.query.LobbyGroup lobby_group = 102;
+	};
+}
+

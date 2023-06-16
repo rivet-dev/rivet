@@ -1,0 +1,1 @@
+ALTER TABLE dev_teams DROP COLUMN paid_balance;

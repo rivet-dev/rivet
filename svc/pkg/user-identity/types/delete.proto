@@ -1,0 +1,13 @@
+syntax = "proto3";
+
+package rivet.backend.pkg.user_identity.delete;
+
+import "proto/common.proto";
+
+message Request {
+	repeated rivet.common.Uuid user_ids = 1;
+}
+
+message Response {
+
+}

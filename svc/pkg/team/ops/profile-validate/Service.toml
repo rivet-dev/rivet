@@ -1,0 +1,7 @@
+[service]
+name = "team-profile-validate"
+
+[runtime]
+kind = "rust"
+
+[operation]

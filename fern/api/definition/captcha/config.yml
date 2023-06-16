@@ -1,0 +1,18 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/fern-api/fern/main/fern.schema.json
+
+types:
+  Config:
+    docs: Methods to verify a captcha
+    properties:
+      hcaptcha: optional<ConfigHcaptcha>
+      turnstile: optional<ConfigTurnstile>
+
+  ConfigHcaptcha:
+    docs: Captcha configuration.
+    properties:
+      client_response: string
+
+  ConfigTurnstile:
+    docs: Captcha configuration.
+    properties:
+      client_response: string

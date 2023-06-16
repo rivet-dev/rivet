@@ -1,0 +1,7 @@
+[service]
+name = "mm-lobby-history"
+
+[runtime]
+kind = "rust"
+
+[operation]

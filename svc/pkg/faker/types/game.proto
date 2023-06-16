@@ -1,0 +1,23 @@
+syntax = "proto3";
+
+package rivet.backend.pkg.faker.game;
+
+import "proto/common.proto";
+
+message Request {
+	// Will not create the default namespaces and versions.
+	bool skip_namespaces_and_versions = 1;
+
+
+	// The default team ID to set as the game's dev team.
+	optional rivet.common.Uuid dev_team_id = 2;
+}
+
+message Response {
+	rivet.common.Uuid game_id = 1;
+
+	// The first namespace will always be prod.
+	repeated rivet.common.Uuid namespace_ids = 2;
+
+	repeated rivet.common.Uuid version_ids = 3;
+}

@@ -1,0 +1,18 @@
+[package]
+name = "faker-job-run"
+version = "0.0.1"
+edition = "2018"
+authors = ["Rivet Gaming, LLC <developer@rivet.gg>"]
+license = "Apache-2.0"
+
+[dependencies]
+rivet-operation = { path = "../../../../../lib/operation/core" }
+chirp-client = { path = "../../../../../lib/chirp/client" }
+prost = "0.10"
+
+faker-job-template = { path = "../job-template" }
+faker-region = { path = "../region" }
+job-run-get = { path = "../../../job-run/ops/get" }
+
+[dev-dependencies]
+chirp-worker = { path = "../../../../../lib/chirp/worker" }

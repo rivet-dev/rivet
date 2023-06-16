@@ -1,0 +1,18 @@
+syntax = "proto3";
+
+package rivet.backend.pkg.user_notification_auth.unregister;
+
+import "proto/common.proto";
+
+message Request {
+    enum Service {
+        FIREBASE = 0;
+    }
+
+    rivet.common.Uuid user_id = 1;
+    Service service = 2;
+}
+
+message Response {
+
+}

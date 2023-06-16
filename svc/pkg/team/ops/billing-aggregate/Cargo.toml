@@ -1,0 +1,26 @@
+[package]
+name = "team-billing-aggregate"
+version = "0.0.1"
+edition = "2018"
+authors = ["Rivet Gaming, LLC <developer@rivet.gg>"]
+license = "Apache-2.0"
+
+[dependencies]
+rivet-operation = { path = "../../../../../lib/operation/core" }
+chirp-client = { path = "../../../../../lib/chirp/client" }
+prost = "0.10"
+
+game-namespace-list = { path = "../../../game/ops/namespace-list" }
+game-resolve-namespace-id = { path = "../../../game/ops/resolve-namespace-id" }
+mm-lobby-runtime-aggregate = { path = "../../../mm/ops/lobby-runtime-aggregate" }
+region-list = { path = "../../../region/ops/list" }
+team-dev-game-list = { path = "../../../team-dev/ops/game-list" }
+
+[dev-dependencies]
+chirp-worker = { path = "../../../../../lib/chirp/worker" }
+
+faker-game = { path = "../../../faker/ops/game" }
+faker-region = { path = "../../../faker/ops/region" }
+faker-mm-lobby-row = { path = "../../../faker/ops/mm-lobby-row" }
+game-get = { path = "../../../game/ops/get" }
+mm-config-version-get = { path = "../../../mm-config/ops/version-get" }

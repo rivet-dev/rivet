@@ -1,0 +1,13 @@
+syntax = "proto3";
+
+package rivet.backend.pkg.cloud.game_token_create;
+
+import "proto/common.proto";
+
+message Request {
+	rivet.common.Uuid game_id = 1;
+}
+
+message Response {
+	string token = 1;
+}

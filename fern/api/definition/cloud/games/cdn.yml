@@ -1,0 +1,52 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/fern-api/fern/main/fern.schema.json
+
+imports:
+  uploadCommons: ../../upload/common.yml
+  cloudCommons: ../../cloud/common.yml
+
+service:
+  auth: true
+  base-path: /games/{game_id}/cdn/sites
+  url: Cloud
+  audiences:
+    - public
+  path-parameters:
+    game_id:
+      type: uuid
+  endpoints:
+    listGameCdnSites:
+      path: ""
+      method: GET
+      docs: Lists CDN sites for a game.
+      response: ListGameCdnSitesResponse
+
+    createGameCdnSite:
+      path: ""
+      method: POST
+      docs: Creates a new CDN site for the given game.
+      request: CreateGameCdnSiteRequest
+      response: CreateGameCdnSiteResponse
+
+types:
+  ListGameCdnSitesResponse:
+    properties:
+      sites:
+        docs: A list of CDN site summaries.
+        type: list<cloudCommons.CdnSiteSummary>
+
+  CreateGameCdnSiteRequest:
+    properties:
+      display_name:
+        docs: Represent a resource's readable display name.
+        type: string
+      files:
+        docs: A list of files preparing to upload.
+        type: list<uploadCommons.PrepareFile>
+
+  CreateGameCdnSiteResponse:
+    properties:
+      site_id:
+        type: uuid
+      upload_id:
+        type: uuid
+      presigned_requests: list<uploadCommons.PresignedRequest>

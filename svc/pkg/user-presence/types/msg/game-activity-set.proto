@@ -1,0 +1,15 @@
+syntax = "proto3";
+
+package rivet.backend.pkg.user_presence.msg.game_activity_set;
+
+import "proto/common.proto";
+import "proto/backend/user.proto";
+
+/// name = "msg-user-game-activity-set"
+/// parameters = [
+/// 	{ name = "user_id" },
+/// ]
+message Message {
+	rivet.common.Uuid user_id = 1;
+	optional rivet.backend.user.Presence.GameActivity game_activity = 2;
+}

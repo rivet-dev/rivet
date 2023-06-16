@@ -1,0 +1,16 @@
+[package]
+name = "faker-user"
+version = "0.0.1"
+edition = "2018"
+authors = ["Rivet Gaming, LLC <developer@rivet.gg>"]
+license = "Apache-2.0"
+
+[dependencies]
+chirp-client = { path = "../../../../../lib/chirp/client" }
+prost = "0.10"
+rivet-operation = { path = "../../../../../lib/operation/core" }
+
+[dev-dependencies]
+chirp-worker = { path = "../../../../../lib/chirp/worker" }
+
+user-get = { path = "../../../user/ops/get" }

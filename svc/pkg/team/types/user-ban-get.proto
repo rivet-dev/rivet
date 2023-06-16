@@ -1,0 +1,24 @@
+syntax = "proto3";
+
+package rivet.backend.pkg.team.user_ban_get;
+
+import "proto/common.proto";
+
+message Request {
+    message Member {
+        rivet.common.Uuid team_id = 1;
+        rivet.common.Uuid user_id = 2;
+    }
+
+	repeated Member members = 1;
+}
+
+message Response {
+	message BannedUser {
+        rivet.common.Uuid team_id = 1;
+        rivet.common.Uuid user_id = 2;
+        int64 ban_ts = 3;
+    }
+
+	repeated BannedUser banned_users = 1;
+}

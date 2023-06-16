@@ -1,0 +1,37 @@
+<?xml version="1.0"?>
+<clickhouse>
+    <profiles>
+        <default>
+            <max_memory_usage>10000000000</max_memory_usage>
+            <load_balancing>random</load_balancing>
+        </default>
+
+        <readonly>
+            <readonly>1</readonly>
+        </readonly>
+    </profiles>
+
+    <quotas>
+        <default>
+        </default>
+    </quotas>
+
+    <users>
+        <default remove="remove">
+        </default>
+
+        <bolt>
+			<password>{{ pillar['clickhouse']['users']['bolt']['password'] }}</password>
+        </bolt>
+
+        <chirp>
+			<password>{{ pillar['clickhouse']['users']['chirp']['password'] }}</password>
+        </chirp>
+
+        <grafana>
+			<password>{{ pillar['clickhouse']['users']['grafana']['password'] }}</password>
+            <profile>readonly</profile>
+        </grafana>
+    </users>
+</clickhouse>
+

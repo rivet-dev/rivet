@@ -1,0 +1,32 @@
+[package]
+name = "game-user-worker"
+version = "0.0.1"
+edition = "2018"
+authors = ["Rivet Gaming, LLC <developer@rivet.gg>"]
+license = "Apache-2.0"
+
+[dependencies]
+chirp-client = { path = "../../../../lib/chirp/client" }
+chirp-worker = { path = "../../../../lib/chirp/worker" }
+chrono = "0.4"
+rivet-health-checks = { path = "../../../../lib/health-checks" }
+rivet-metrics = { path = "../../../../lib/metrics" }
+rivet-runtime = { path = "../../../../lib/runtime" }
+util-game-user = { package = "rivet-util-game-user", path = "../util" }
+
+token-create = { path = "../../token/ops/create" }
+token-exchange = { path = "../../token/ops/exchange" }
+token-revoke = { path = "../../token/ops/revoke" }
+
+[dependencies.sqlx]
+version = "0.6"
+default-features = false
+
+[dev-dependencies]
+chirp-worker = { path = "../../../../lib/chirp/worker" }
+rivet-claims = { path = "../../../../lib/claims" }
+
+game-user-create = { path = "../ops/create" }
+game-user-get = { path = "../ops/get" }
+game-user-link-create = { path = "../ops/link-create" }
+game-user-link-get = { path = "../ops/link-get" }

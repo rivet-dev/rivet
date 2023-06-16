@@ -1,0 +1,16 @@
+syntax = "proto3";
+
+package rivet.backend.pkg.team.msg.create;
+
+import "proto/common.proto";
+
+/// name = "msg-team-create"
+/// parameters = [
+/// 	{ name = "team_id" },
+/// ]
+message Message {
+	rivet.common.Uuid team_id = 1;
+	string display_name = 2;
+	rivet.common.Uuid owner_user_id = 3;
+}
+

@@ -1,0 +1,7 @@
+[service]
+name = "mm-player-get"
+
+[runtime]
+kind = "rust"
+
+[operation]

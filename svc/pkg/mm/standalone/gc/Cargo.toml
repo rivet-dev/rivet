@@ -1,0 +1,44 @@
+[package]
+name = "mm-gc"
+version = "0.0.1"
+edition = "2018"
+authors = ["Rivet Gaming, LLC <developer@rivet.gg>"]
+license = "Apache-2.0"
+
+[dependencies]
+lazy_static = "1.4"
+chirp-client = { path = "../../../../../lib/chirp/client" }
+rivet-operation = { path = "../../../../../lib/operation/core" }
+futures-util = "0.3"
+indoc = "1.0"
+prost = "0.10"
+rivet-connection = { path = "../../../../../lib/connection" }
+rivet-health-checks = { path = "../../../../../lib/health-checks" }
+rivet-metrics = { path = "../../../../../lib/metrics" }
+rivet-pools = { path = "../../../../../lib/pools" }
+rivet-runtime = { path = "../../../../../lib/runtime" }
+tokio = { version = "1.21", features = ["full"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", default-features = false, features = ["fmt", "json", "ansi"] }
+util-mm = { package = "rivet-util-mm", path = "../../util" }
+
+region-list = { path = "../../../region/ops/list" }
+
+[dependencies.sqlx]
+version = "0.6"
+default-features = false
+features = [
+	"runtime-tokio-native-tls",
+	"postgres",
+	"uuid",
+	"json",
+	"tls",
+	"macros",
+]
+
+[dev-dependencies]
+chirp-worker = { path = "../../../../../lib/chirp/worker" }
+chrono = "0.4"
+
+faker-mm-lobby = { path = "../../../faker/ops/mm-lobby" }
+mm-lobby-get = { path = "../../ops/lobby-get" }

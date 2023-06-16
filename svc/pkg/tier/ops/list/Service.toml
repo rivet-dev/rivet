@@ -1,0 +1,7 @@
+[service]
+name = "tier-list"
+
+[runtime]
+kind = "rust"
+
+[operation]

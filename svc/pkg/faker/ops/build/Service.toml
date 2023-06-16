@@ -1,0 +1,8 @@
+[service]
+name = "faker-build"
+test-only = true
+
+[runtime]
+kind = "rust"
+
+[operation]

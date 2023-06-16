@@ -1,0 +1,123 @@
+[package]
+name = "api-cloud"
+version = "0.0.1"
+authors = ["Rivet Gaming, LLC <developer@rivet.gg>"]
+edition = "2018"
+license = "Apache-2.0"
+
+[dependencies]
+rivet-convert = { path = "../../../lib/convert" }
+api-helper = { path = "../../../lib/api-helper/build" }
+async-trait = "0.1"
+base64 = "0.13"
+bytes = "1.0"
+chirp-client = { path = "../../../lib/chirp/client" }
+rivet-operation = { path = "../../../lib/operation/core" }
+chrono = "0.4"
+futures-util = "0.3"
+http = "0.2"
+hyper = { version = "0.14", features = ["server", "http1", "stream", "tcp"] }
+lazy_static = "1.4"
+prost = "0.10"
+reqwest = "0.11"
+rivet-api = { path = "../../../gen/openapi/internal/rust" }
+rivet-cache = { path = "../../../lib/cache/build" }
+rivet-claims = { path = "../../../lib/claims" }
+rivet-cloud-server = { path = "../../../lib/smithy-output/api-cloud/rust-server" }
+rivet-health-checks = { path = "../../../lib/health-checks" }
+rivet-pools = { path = "../../../lib/pools" }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+thiserror = "1.0"
+tokio = { version = "1.21" }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", default-features = false, features = ["fmt", "json", "ansi"] }
+url = "2.2.2"
+util-job = { package = "rivet-util-job", path = "../../pkg/job/util" }
+util-mm = { package = "rivet-util-mm", path = "../../pkg/mm/util" }
+util-nsfw = { package = "rivet-util-nsfw", path = "../../pkg/nsfw/util" }
+uuid = { version = "1", features = ["v4"] }
+
+build-create = { path = "../../pkg/build/ops/create" }
+build-get = { path = "../../pkg/build/ops/get" }
+build-list-for-game = { path = "../../pkg/build/ops/list-for-game" }
+cdn-namespace-auth-user-remove = { path = "../../pkg/cdn/ops/namespace-auth-user-remove" }
+cdn-namespace-auth-user-update = { path = "../../pkg/cdn/ops/namespace-auth-user-update" }
+cdn-namespace-domain-create = { path = "../../pkg/cdn/ops/namespace-domain-create" }
+cdn-namespace-domain-remove = { path = "../../pkg/cdn/ops/namespace-domain-remove" }
+cdn-ns-auth-type-set = { path = "../../pkg/cdn/ops/ns-auth-type-set" }
+cdn-ns-enable-domain-public-auth-set = { path = "../../pkg/cdn/ops/ns-enable-domain-public-auth-set" }
+cdn-site-create = { path = "../../pkg/cdn/ops/site-create" }
+cdn-site-get = { path = "../../pkg/cdn/ops/site-get" }
+cdn-site-list-for-game = { path = "../../pkg/cdn/ops/site-list-for-game" }
+cf-custom-hostname-list-for-namespace-id = { path = "../../pkg/cf-custom-hostname/ops/list-for-namespace-id" }
+cloud-device-link-create = { path = "../../pkg/cloud/ops/device-link-create" }
+cloud-game-config-create = { path = "../../pkg/cloud/ops/game-config-create" }
+cloud-game-config-get = { path = "../../pkg/cloud/ops/game-config-get" }
+cloud-game-token-create = { path = "../../pkg/cloud/ops/game-token-create" }
+cloud-namespace-create = { path = "../../pkg/cloud/ops/namespace-create" }
+cloud-namespace-get = { path = "../../pkg/cloud/ops/namespace-get" }
+cloud-namespace-token-development-create = { path = "../../pkg/cloud/ops/namespace-token-development-create" }
+cloud-namespace-token-public-create = { path = "../../pkg/cloud/ops/namespace-token-public-create" }
+cloud-version-get = { path = "../../pkg/cloud/ops/version-get" }
+cloud-version-publish = { path = "../../pkg/cloud/ops/version-publish" }
+custom-user-avatar-list-for-game = { path = "../../pkg/custom-user-avatar/ops/list-for-game" }
+custom-user-avatar-upload-complete = { path = "../../pkg/custom-user-avatar/ops/upload-complete" }
+game-banner-upload-complete = { path = "../../pkg/game/ops/banner-upload-complete" }
+game-create = { path = "../../pkg/game/ops/create" }
+game-get = { path = "../../pkg/game/ops/get" }
+game-logo-upload-complete = { path = "../../pkg/game/ops/logo-upload-complete" }
+game-namespace-create = { path = "../../pkg/game/ops/namespace-create" }
+game-namespace-get = { path = "../../pkg/game/ops/namespace-get" }
+game-namespace-list = { path = "../../pkg/game/ops/namespace-list" }
+game-namespace-validate = { path = "../../pkg/game/ops/namespace-validate" }
+game-namespace-version-history-list = { path = "../../pkg/game/ops/namespace-version-history-list" }
+game-namespace-version-set = { path = "../../pkg/game/ops/namespace-version-set" }
+game-resolve-namespace-id = { path = "../../pkg/game/ops/resolve-namespace-id" }
+game-token-development-validate = { path = "../../pkg/game/ops/token-development-validate" }
+game-validate = { path = "../../pkg/game/ops/validate" }
+game-version-get = { path = "../../pkg/game/ops/version-get" }
+game-version-list = { path = "../../pkg/game/ops/version-list" }
+game-version-validate = { path = "../../pkg/game/ops/version-validate" }
+job-run-get = { path = "../../pkg/job-run/ops/get" }
+job-run-metrics-log = { path = "../../pkg/job-run/ops/metrics-log" }
+mm-config-lobby-group-get = { path = "../../pkg/mm-config/ops/lobby-group-get" }
+mm-config-lobby-group-resolve-version = { path = "../../pkg/mm-config/ops/lobby-group-resolve-version" }
+mm-config-namespace-config-set = { path = "../../pkg/mm-config/ops/namespace-config-set" }
+mm-config-namespace-config-validate = { path = "../../pkg/mm-config/ops/namespace-config-validate" }
+mm-config-version-get = { path = "../../pkg/mm-config/ops/version-get" }
+mm-lobby-get = { path = "../../pkg/mm/ops/lobby-get" }
+mm-lobby-history = { path = "../../pkg/mm/ops/lobby-history" }
+mm-lobby-list-for-namespace = { path = "../../pkg/mm/ops/lobby-list-for-namespace" }
+mm-lobby-player-count = { path = "../../pkg/mm/ops/lobby-player-count" }
+mm-lobby-runtime-aggregate = { path = "../../pkg/mm/ops/lobby-runtime-aggregate" }
+mm-player-count-for-namespace = { path = "../../pkg/mm/ops/player-count-for-namespace" }
+nomad-log-read = { path = "../../pkg/nomad-log/ops/read" }
+perf-log-get = { path = "../../pkg/perf/ops/log-get" }
+region-get = { path = "../../pkg/region/ops/get" }
+region-list = { path = "../../pkg/region/ops/list" }
+team-dev-game-list = { path = "../../pkg/team-dev/ops/game-list" }
+team-dev-get = { path = "../../pkg/team-dev/ops/get" }
+team-get = { path = "../../pkg/team/ops/get" }
+team-member-count = { path = "../../pkg/team/ops/member-count" }
+team-validate = { path = "../../pkg/team/ops/validate" }
+tier-list = { path = "../../pkg/tier/ops/list" }
+token-revoke = { path = "../../pkg/token/ops/revoke" }
+upload-complete = { path = "../../pkg/upload/ops/complete" }
+upload-file-list = { path = "../../pkg/upload/ops/file-list" }
+upload-get = { path = "../../pkg/upload/ops/get" }
+upload-prepare = { path = "../../pkg/upload/ops/prepare" }
+user-get = { path = "../../pkg/user/ops/get" }
+user-identity-get = { path = "../../pkg/user-identity/ops/get" }
+user-team-list = { path = "../../pkg/user/ops/team-list" }
+
+[dev-dependencies]
+rand = "0.8"
+rivet-cloud = { path = "../../../lib/smithy-output/api-cloud/rust" }
+rivet-connection = { path = "../../../lib/connection" }
+s3-util = { path = "../../../lib/s3-util" }
+
+faker-region = { path = "../../pkg/faker/ops/region" }
+faker-team = { path = "../../pkg/faker/ops/team" }
+token-create = { path = "../../pkg/token/ops/create" }
+user-identity-create = { path = "../../pkg/user-identity/ops/create" }

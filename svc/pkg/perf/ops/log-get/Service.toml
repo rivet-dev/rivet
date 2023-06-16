@@ -1,0 +1,7 @@
+[service]
+name = "perf-log-get"
+
+[runtime]
+kind = "rust"
+
+[operation]

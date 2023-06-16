@@ -1,0 +1,7 @@
+[service]
+name = "cdn-version-prepare"
+
+[runtime]
+kind = "rust"
+
+[operation]

@@ -1,0 +1,15 @@
+syntax = "proto3";
+
+package rivet.backend.pkg.mm.player_get;
+
+import "proto/common.proto";
+import "proto/backend/matchmaker.proto";
+
+message Request {
+	repeated rivet.common.Uuid player_ids = 1;
+}
+
+message Response {
+	repeated rivet.backend.matchmaker.Player players = 1;
+}
+

@@ -1,0 +1,74 @@
+[package]
+name = "api-party"
+version = "0.0.1"
+edition = "2018"
+authors = ["Rivet Gaming, LLC <developer@rivet.gg>"]
+license = "Apache-2.0"
+
+[dependencies]
+rivet-convert = { path = "../../../lib/convert" }
+api-helper = { path = "../../../lib/api-helper/build" }
+async-trait = "0.1"
+chirp-client = { path = "../../../lib/chirp/client" }
+rivet-operation = { path = "../../../lib/operation/core" }
+chrono = "0.4"
+futures-util = "0.3"
+http = "0.2"
+hyper = { version = "0.14", features = ["server", "http1", "stream", "tcp"] }
+lazy_static = "1.4"
+prost = "0.10"
+rivet-cache = { path = "../../../lib/cache/build" }
+rivet-claims = { path = "../../../lib/claims" }
+rivet-health-checks = { path = "../../../lib/health-checks" }
+rivet-party-server = { path = "../../../lib/smithy-output/api-party/rust-server" }
+rivet-pools = { path = "../../../lib/pools" }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+thiserror = "1.0"
+tokio = { version = "1.21" }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", default-features = false, features = ["fmt", "json", "ansi"] }
+url = "2.2.2"
+uuid = { version = "1", features = ["v4"] }
+
+captcha-request = { path = "../../pkg/captcha/ops/request" }
+captcha-verify = { path = "../../pkg/captcha/ops/verify" }
+chat-message-create-with-topic = { path = "../../pkg/chat-message/ops/create-with-topic" }
+chat-thread-get-for-topic = { path = "../../pkg/chat-thread/ops/get-for-topic" }
+game-get = { path = "../../pkg/game/ops/get" }
+game-namespace-get = { path = "../../pkg/game/ops/namespace-get" }
+game-resolve-namespace-id = { path = "../../pkg/game/ops/resolve-namespace-id" }
+game-user-get = { path = "../../pkg/game-user/ops/get" }
+captcha-hcaptcha-config-get = { path = "../../pkg/captcha/ops/hcaptcha-config-get" }
+mm-config-version-get = { path = "../../pkg/mm-config/ops/version-get" }
+mm-player-get = { path = "../../pkg/mm/ops/player-get" }
+party-get = { path = "../../pkg/party/ops/get" }
+party-invite-alias-lookup = { path = "../../pkg/party/ops/invite-alias-lookup" }
+party-invite-get = { path = "../../pkg/party/ops/invite-get" }
+party-invite-list = { path = "../../pkg/party/ops/invite-list" }
+party-member-get = { path = "../../pkg/party/ops/member-get" }
+party-member-list = { path = "../../pkg/party/ops/member-list" }
+party-publicity-for-user = { path = "../../pkg/party/ops/publicity-for-user" }
+region-recommend = { path = "../../pkg/region/ops/recommend" }
+region-resolve = { path = "../../pkg/region/ops/resolve" }
+token-revoke = { path = "../../pkg/token/ops/revoke" }
+user-get = { path = "../../pkg/user/ops/get" }
+user-presence-touch = { path = "../../pkg/user-presence/ops/touch" }
+
+[dev-dependencies]
+rivet-connection = { path = "../../../lib/connection" }
+rivet-party = { path = "../../../lib/smithy-output/api-party/rust" }
+regex = "1.4"
+rand = "0.8"
+util-mm = { package = "rivet-util-mm", path = "../../pkg/mm/util" }
+
+faker-build = { path = "../../pkg/faker/ops/build" }
+faker-game = { path = "../../pkg/faker/ops/game" }
+faker-game-namespace = { path = "../../pkg/faker/ops/game-namespace" }
+faker-game-version = { path = "../../pkg/faker/ops/game-version" }
+faker-mm-lobby = { path = "../../pkg/faker/ops/mm-lobby" }
+faker-region = { path = "../../pkg/faker/ops/region" }
+faker-user = { path = "../../pkg/faker/ops/user" }
+game-user-create = { path = "../../pkg/game-user/ops/create" }
+region-get = { path = "../../pkg/region/ops/get" }
+token-create = { path = "../../pkg/token/ops/create" }

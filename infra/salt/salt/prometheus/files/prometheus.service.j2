@@ -1,0 +1,22 @@
+[Unit]
+Description=Prometheus
+Requires=network-online.target
+After=network-online.target
+
+[Service]
+User=prometheus
+Group=prometheus
+Type=simple
+ExecStart=/usr/bin/prometheus \
+	--config.file=/etc/prometheus.yaml \
+	--storage.tsdb.path=/mnt/prometheus \
+	--storage.tsdb.retention.time={{retention_time}} \
+	--storage.tsdb.retention.size={{retention_size}} \
+	--web.listen-address={{ nebula_ipv4 }}:9090 \
+	--web.enable-admin-api
+ExecReload=/bin/kill -HUP $MAINPID
+Restart=always
+RestartSec=2
+
+[Install]
+WantedBy=multi-user.target

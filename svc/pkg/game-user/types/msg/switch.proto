@@ -1,0 +1,16 @@
+syntax = "proto3";
+
+package rivet.backend.pkg.game_user.msg.switch;
+
+import "proto/common.proto";
+
+/// name = "msg-game-user-switch"
+/// tail-ttl = 300
+/// parameters = [
+/// 	{ name = "old_game_user_id" },
+/// 	{ name = "new_game_user_id" },
+/// ]
+message Message {
+	rivet.common.Uuid old_game_user_id = 1;
+	rivet.common.Uuid new_game_user_id = 2;
+}

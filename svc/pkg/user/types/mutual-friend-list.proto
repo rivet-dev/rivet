@@ -1,0 +1,22 @@
+syntax = "proto3";
+
+package rivet.backend.pkg.user.mutual_friend_list;
+
+import "proto/common.proto";
+
+message Request {
+	rivet.common.Uuid user_a_id = 1;
+	rivet.common.Uuid user_b_id = 2;
+	uint32 limit = 3;
+	optional int64 anchor = 4;
+}
+
+message Response {
+	message MutualFriend {
+		rivet.common.Uuid user_id = 1;
+		int64 create_ts = 2;
+	}
+
+	repeated MutualFriend mutual_friends = 1;
+	optional int64 anchor = 3;
+}

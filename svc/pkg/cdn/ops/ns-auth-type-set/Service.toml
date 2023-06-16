@@ -1,0 +1,7 @@
+[service]
+name = "cdn-ns-auth-type-set"
+
+[runtime]
+kind = "rust"
+
+[operation]

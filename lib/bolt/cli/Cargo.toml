@@ -1,0 +1,16 @@
+[package]
+name = "bolt"
+version = "0.1.0"
+edition = "2021"
+authors = ["Rivet Gaming, LLC <developer@rivet.gg>"]
+license = "Apache-2.0"
+
+[dependencies]
+anyhow = "1.0"
+bolt-core = { path = "../core" }
+chrono = "0.4"
+clap = { version = "4.3", features = ["derive", "env"] }
+duct = "0.13"
+serde_json = "1.0"
+tempfile = "3.2"
+tokio = { version = "1.21", features = ["full"] }

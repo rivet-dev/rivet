@@ -1,0 +1,13 @@
+syntax = "proto3";
+
+package rivet.backend.pkg.game_user.recommend;
+
+import "proto/common.proto";
+
+message Request {
+	uint32 count = 1;
+}
+
+message Response {
+	repeated rivet.common.Uuid game_user_ids = 1;
+}

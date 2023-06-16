@@ -1,0 +1,20 @@
+syntax = "proto3";
+
+package rivet.backend.pkg.user.profile_validate;
+
+import "proto/common.proto";
+
+message Request {
+	rivet.common.Uuid user_id = 1;
+	optional string display_name = 2;
+	optional uint32 account_number = 3;
+	optional string bio = 4;
+}
+
+message Response {
+	message Error {
+		repeated string path = 1;
+	}
+
+	repeated Error errors = 1;
+}

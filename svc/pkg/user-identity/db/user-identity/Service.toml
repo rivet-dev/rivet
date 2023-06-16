@@ -1,0 +1,7 @@
+[service]
+name = "db-user-identity"
+
+[runtime]
+kind = "crdb"
+
+[database]

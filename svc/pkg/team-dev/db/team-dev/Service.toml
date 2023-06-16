@@ -1,0 +1,7 @@
+[service]
+name = "db-team-dev"
+
+[runtime]
+kind = "crdb"
+
+[database]

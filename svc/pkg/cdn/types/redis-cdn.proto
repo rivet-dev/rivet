@@ -1,0 +1,19 @@
+syntax = "proto3";
+
+package rivet.backend.pkg.cdn.redis_cdn;
+
+import "proto/common.proto";
+import "proto/backend/cdn.proto";
+
+message NamespaceCdnConfig {
+	reserved 5;
+
+	rivet.common.Uuid namespace_id = 1;
+	string game_name_id = 2;
+	string namespace_name_id = 3;
+	repeated rivet.backend.cdn.NamespaceConfig.Domain domains = 4;
+	optional rivet.common.Uuid upload_id = 6;
+	rivet.backend.cdn.NamespaceConfig.AuthType auth_type = 7;
+	repeated rivet.backend.cdn.NamespaceConfig.AuthUser auth_user_list = 8;
+	repeated rivet.backend.cdn.Route routes = 9;
+}

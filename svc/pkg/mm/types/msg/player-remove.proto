@@ -1,0 +1,19 @@
+syntax = "proto3";
+
+package rivet.backend.pkg.mm.msg.player_remove;
+
+import "proto/common.proto";
+
+/// name = "msg-mm-player-remove"
+/// deduplicate = true
+/// parameters = [
+/// 	{ name = "player_id" },
+/// ]
+message Message {
+	rivet.common.Uuid player_id = 1;
+	optional rivet.common.Uuid lobby_id = 3;
+
+	// If this player destroy is coming from a lobby destroy.
+	bool from_lobby_destroy = 2;
+}
+

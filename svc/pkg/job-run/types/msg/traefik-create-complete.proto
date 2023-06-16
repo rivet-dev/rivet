@@ -1,0 +1,15 @@
+syntax = "proto3";
+
+package rivet.backend.pkg.job_run.msg.traefik_create_complete;
+
+import "proto/common.proto";
+
+/// name = "msg-job-run-traefik-create-complete"
+/// deduplicate = true
+/// parameters = [
+/// 	{ name = "run_id" },
+/// ]
+message Message {
+
+}
+

@@ -1,0 +1,19 @@
+[package]
+name = "faker-team"
+version = "0.0.1"
+edition = "2018"
+authors = ["Rivet Gaming, LLC <developer@rivet.gg>"]
+license = "Apache-2.0"
+
+[dependencies]
+rivet-operation = { path = "../../../../../lib/operation/core" }
+chirp-client = { path = "../../../../../lib/chirp/client" }
+prost = "0.10"
+
+team-dev-get = { path = "../../../team-dev/ops/get" }
+faker-user = { path = "../user" }
+
+[dev-dependencies]
+chirp-worker = { path = "../../../../../lib/chirp/worker" }
+
+team-get = { path = "../../../team/ops/get" }

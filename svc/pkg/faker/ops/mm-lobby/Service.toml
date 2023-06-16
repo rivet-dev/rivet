@@ -1,0 +1,8 @@
+[service]
+name = "faker-mm-lobby"
+test-only = true
+
+[runtime]
+kind = "rust"
+
+[operation]

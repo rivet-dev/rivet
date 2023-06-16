@@ -1,0 +1,19 @@
+[package]
+name = "faker-game-namespace"
+version = "0.0.1"
+edition = "2018"
+authors = ["Rivet Gaming, LLC <developer@rivet.gg>"]
+license = "Apache-2.0"
+
+[dependencies]
+rivet-operation = { path = "../../../../../lib/operation/core" }
+chirp-client = { path = "../../../../../lib/chirp/client" }
+prost = "0.10"
+
+cloud-namespace-create = { path = "../../../cloud/ops/namespace-create" }
+game-namespace-create = { path = "../../../game/ops/namespace-create" }
+
+[dev-dependencies]
+chirp-worker = { path = "../../../../../lib/chirp/worker" }
+
+faker-game = { path = "../game" }

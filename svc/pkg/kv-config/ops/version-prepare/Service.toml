@@ -1,0 +1,7 @@
+[service]
+name = "kv-config-version-prepare"
+
+[runtime]
+kind = "rust"
+
+[operation]

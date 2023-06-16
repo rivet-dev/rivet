@@ -1,0 +1,13 @@
+syntax = "proto3";
+
+package rivet.backend.pkg.cloud.namespace_token_public_create;
+
+import "proto/common.proto";
+
+message Request {
+	rivet.common.Uuid namespace_id = 1;
+}
+
+message Response {
+	string token = 1;
+}

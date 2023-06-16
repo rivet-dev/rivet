@@ -1,0 +1,14 @@
+syntax = "proto3";
+
+package rivet.backend.pkg.party.invite_alias_lookup;
+
+import "proto/common.proto";
+
+message Request {
+	rivet.common.Uuid namespace_id = 1;
+	string alias = 2;
+}
+
+message Response {
+	optional rivet.common.Uuid invite_id = 1;
+}

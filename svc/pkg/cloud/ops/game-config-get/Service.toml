@@ -1,0 +1,7 @@
+[service]
+name = "cloud-game-config-get"
+
+[runtime]
+kind = "rust"
+
+[operation]

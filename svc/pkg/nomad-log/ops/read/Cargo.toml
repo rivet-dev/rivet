@@ -1,0 +1,17 @@
+[package]
+name = "nomad-log-read"
+version = "0.0.1"
+edition = "2018"
+authors = ["Rivet Gaming, LLC <developer@rivet.gg>"]
+license = "Apache-2.0"
+
+[dependencies]
+chirp-client = { path = "../../../../../lib/chirp/client" }
+chrono = "0.4"
+clickhouse = { version = "0.11.2", features = ["wa-37420", "uuid"] }
+prost = "0.10"
+rivet-operation = { path = "../../../../../lib/operation/core" }
+serde = { version = "1.0", features = ["derive"] }
+
+[dev-dependencies]
+chirp-worker = { path = "../../../../../lib/chirp/worker" }

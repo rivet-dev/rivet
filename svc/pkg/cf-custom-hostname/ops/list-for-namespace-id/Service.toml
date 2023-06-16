@@ -1,0 +1,7 @@
+[service]
+name = "cf-custom-hostname-list-for-namespace-id"
+
+[runtime]
+kind = "rust"
+
+[operation]

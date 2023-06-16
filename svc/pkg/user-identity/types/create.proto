@@ -1,0 +1,15 @@
+syntax = "proto3";
+
+package rivet.backend.pkg.user_identity.create;
+
+import "proto/common.proto";
+import "proto/backend/user_identity.proto";
+
+message Request {
+	rivet.common.Uuid user_id = 1;
+	rivet.backend.user_identity.Identity identity = 2;
+}
+
+message Response {
+
+}

@@ -1,0 +1,27 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/fern-api/fern/main/fern.schema.json
+
+service:
+  auth: true
+  base-path: ""
+  url: Cloud
+  audiences:
+    - public
+  endpoints:
+    createCloudToken:
+      path: /games/{game_id}/tokens/cloud
+      method: POST
+      docs: Creates a new game cloud token.
+      path-parameters:
+        game_id:
+          type: uuid
+      response: CreateCloudTokenResponse
+
+types:
+  CreateCloudTokenResponse:
+    properties:
+      token:
+        docs: |-
+          A JSON Web Token.
+          Slightly modified to include a description prefix and use Protobufs of
+          JSON.
+        type: string

@@ -1,0 +1,18 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/fern-api/fern/main/fern.schema.json
+
+types:
+  CompleteStatus:
+    docs: Represents the state of an external account linking process.
+    enum:
+      - value: switch_identity
+        docs: The linking process succeeded and will now switch identities.
+      - value: linked_account_added
+        docs: The linking process succeeded and the new account is now added.
+      - value: already_complete
+        docs: The current linking process has already completed.
+      - value: expired
+        docs: The current linking process has expired.
+      - value: too_many_attempts
+        docs: The current linking process has been tried too many times.
+      - value: incorrect
+        docs: The code given to the current linking process is incorrect.

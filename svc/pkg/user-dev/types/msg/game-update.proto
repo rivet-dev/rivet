@@ -1,0 +1,15 @@
+syntax = "proto3";
+
+package rivet.backend.pkg.user_dev.msg.game_update;
+
+import "proto/common.proto";
+
+/// name = "msg-user-dev-game-update"
+/// tail-ttl = 300
+/// parameters = [
+/// 	{ name = "user_id" },
+/// ]
+message Message {
+	rivet.common.Uuid user_id = 1;
+	rivet.common.Uuid game_id = 2;
+}

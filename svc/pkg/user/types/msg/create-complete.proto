@@ -1,0 +1,13 @@
+syntax = "proto3";
+
+package rivet.backend.pkg.user.msg.create_complete;
+
+import "proto/common.proto";
+
+/// name = "msg-user-create-complete"
+/// parameters = [
+/// 	{ name = "user_id" },
+/// ]
+message Message {
+	rivet.common.Uuid user_id = 1;
+}

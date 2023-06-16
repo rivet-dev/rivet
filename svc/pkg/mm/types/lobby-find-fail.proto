@@ -1,0 +1,28 @@
+syntax = "proto3";
+
+package rivet.backend.pkg.mm.lobby_find_fail;
+
+import "proto/common.proto";
+import "svc/pkg/mm/types/msg/lobby-find-fail.proto";
+
+message ForceFailContext {
+	rivet.common.Uuid namespace_id = 1;
+}
+
+message Request {
+	reserved 3;
+
+	repeated rivet.common.Uuid query_ids = 1;
+	rivet.backend.pkg.mm.msg.lobby_find_fail.ErrorCode error_code = 2;
+
+	/// If provided, the query was never inserted in to the database and should
+	/// fail without touching the database.
+	///
+	/// This is useful for errors that are caught before the lobby is
+	// / written to the database.
+	optional ForceFailContext force_fail = 4;
+}
+
+message Response {
+
+}

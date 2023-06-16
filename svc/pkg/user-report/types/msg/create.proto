@@ -1,0 +1,16 @@
+syntax = "proto3";
+
+package rivet.backend.pkg.user_report.msg.create;
+
+import "proto/common.proto";
+
+/// name = "msg-user-report-create"
+/// parameters = [
+/// 	{ name = "subject_user_id" },
+/// ]
+message Message {
+	rivet.common.Uuid reporter_user_id = 1;
+	rivet.common.Uuid subject_user_id = 2;
+	optional rivet.common.Uuid namespace_id = 3;
+	optional string reason = 4;
+}

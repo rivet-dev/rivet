@@ -1,0 +1,89 @@
+syntax = "proto3";
+
+package rivet.backend.job;
+
+import "proto/common.proto";
+
+message Template {
+	rivet.common.Uuid template_id = 1;
+	int64 create_ts = 2;
+	repeated TemplateLocalization localizations = 3;
+}
+
+message TemplateLocalization {
+	rivet.common.Uuid region_id = 2;
+	string nomad_job_id = 3;
+}
+
+message Run {
+	reserved 5, 9, 11;
+
+	rivet.common.Uuid run_id = 1;
+	rivet.common.Uuid region_id = 2;
+	int64 create_ts = 3;
+	repeated Network networks = 12;
+	repeated Port ports = 4;
+	RunMeta run_meta = 6;
+	repeated ProxiedPort proxied_ports = 7;
+	optional int64 start_ts = 13;
+	optional int64 stop_ts = 8;
+	optional int64 cleanup_ts = 10;
+}
+
+message RunMeta {
+	message Nomad {
+		optional string dispatched_job_id = 1;
+		optional string alloc_id = 2;
+		optional string node_id = 3;
+		optional bool failed = 4;
+		optional uint32 exit_code = 5;
+	}
+
+	oneof kind {
+		Nomad nomad = 1;
+	}
+}
+
+message Network {
+	string mode = 1;
+	string ip = 2;
+}
+
+message Port {
+	string label = 1;
+	uint32 source = 2;
+	uint32 target = 3;
+	string ip = 4;
+}
+
+message ProxiedPort {
+	reserved 1;
+
+	optional string target_nomad_port_label = 6;
+
+	// The ingress port to listen for on the load balancer.
+	uint32 ingress_port = 2;
+
+	// List of hosts that will route to this port on the ingress
+	// cluster.
+	repeated string ingress_hostnames = 3;
+
+	ProxyProtocol proxy_protocol = 4;
+
+	SslDomainMode ssl_domain_mode = 5;
+}
+
+// Protocol that this proxied port uses.
+enum ProxyProtocol {
+	HTTP = 0;
+	HTTPS = 1;
+	TCP = 2;
+	TCP_TLS = 3;
+	UDP = 4;
+}
+
+// Determines which domains should be included in the SSL certificate.
+enum SslDomainMode {
+	EXACT = 0;
+	PARENT_WILDCARD = 1;
+}

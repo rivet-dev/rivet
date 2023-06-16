@@ -1,0 +1,7 @@
+[service]
+name = "chat-last-read-ts-get"
+
+[runtime]
+kind = "rust"
+
+[operation]

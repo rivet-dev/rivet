@@ -1,0 +1,7 @@
+[service]
+name = "ip-info"
+
+[runtime]
+kind = "rust"
+
+[operation]

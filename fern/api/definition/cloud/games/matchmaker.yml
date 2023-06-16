@@ -1,0 +1,105 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/fern-api/fern/main/fern.schema.json
+
+imports:
+  commons: ../../common.yml
+
+service:
+  auth: true
+  base-path: /games/{game_id}/matchmaker/lobbies
+  url: Cloud
+  audiences:
+    - public
+  path-parameters:
+    game_id:
+      type: uuid
+  endpoints:
+    exportMatchmakerLobbyHistory:
+      path: /export-history
+      method: POST
+      docs: Exports lobby history over a given query time span.
+      request:
+        body: ExportMatchmakerLobbyHistoryRequest
+      response: ExportMatchmakerLobbyHistoryResponse
+
+    deleteMatchmakerLobby:
+      path: /{lobby_id}
+      method: DELETE
+      docs: Deletes a matchmaker lobby, stopping it immediately.
+      path-parameters:
+        lobby_id:
+          type: uuid
+      response: DeleteMatchmakerLobbyResponse
+
+    getLobbyLogs:
+      path: /{lobby_id}/logs
+      method: GET
+      docs: Returns the logs for a given lobby.
+      path-parameters:
+        lobby_id:
+          type: uuid
+      request:
+        name: GetLobbyLogsRequest
+        query-parameters:
+          stream: LogStream
+          watch_index:
+            docs: A query parameter denoting the requests watch index.
+            type: optional<string>
+      response: GetLobbyLogsResponse
+
+    exportLobbyLogs:
+      path: /{lobby_id}/logs/export
+      method: POST
+      docs: Generates a download URL for logs.
+      path-parameters:
+        lobby_id:
+          type: uuid
+      request:
+        body: ExportLobbyLogsRequest
+      response: ExportLobbyLogsResponse
+
+types:
+  ExportMatchmakerLobbyHistoryRequest:
+    properties:
+      query_start:
+        docs: Unsigned 64 bit integer.
+        type: optional<long>
+      query_end:
+        docs: Unsigned 64 bit integer.
+        type: optional<long>
+
+  ExportMatchmakerLobbyHistoryResponse:
+    properties:
+      url:
+        docs: The URL to a CSV file for the given lobby history.
+        type: string
+
+  DeleteMatchmakerLobbyResponse:
+    properties:
+      did_remove:
+        docs: Whether or not the lobby was successfully stopped.
+        type: optional<boolean>
+
+  GetLobbyLogsResponse:
+    properties:
+      lines:
+        docs: Sorted old to new.
+        type: list<string>
+      timestamps:
+        docs: Sorted old to new.
+        type: list<string>
+      watch: commons.WatchResponse
+
+  ExportLobbyLogsRequest:
+    properties:
+      stream: LogStream
+
+  ExportLobbyLogsResponse:
+    properties:
+      url:
+        docs: The URL to a CSV file for the given lobby history.
+        type: string
+
+  LogStream:
+    enum:
+      - std_out
+      - std_err

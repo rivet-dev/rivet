@@ -1,0 +1,15 @@
+syntax = "proto3";
+
+package rivet.backend.pkg.profanity.check;
+
+import "proto/common.proto";
+
+message Request {
+	repeated string strings = 1;
+	bool censor = 2;
+}
+
+message Response {
+	repeated bool results = 1;
+	repeated string censored_results = 2;
+}

@@ -1,0 +1,42 @@
+[package]
+name = "rivet-pools"
+version = "0.1.0"
+edition = "2021"
+authors = ["Rivet Gaming, LLC <developer@rivet.gg>"]
+license = "Apache-2.0"
+
+[dependencies]
+async-nats = "0.29"
+funty = "=1.1.0"  # Fixes issue with sqlx dependency, see https://github.com/bitvecto-rs/bitvec/issues/105#issuecomment-778570981
+global-error = { path = "../global-error" }
+lazy_static = "1.4"
+rand = "0.8"
+rivet-metrics = { path = "../metrics" }
+thiserror = "1.0"
+tokio = { version = "1.21", features = ["tracing"] }
+tokio-util = "0.6"
+tracing = "0.1"
+
+[dependencies.sqlx]
+version = "0.6"
+default-features = false
+features = [
+	"runtime-tokio-native-tls",
+	"postgres",
+	"macros",
+	"uuid",
+	"json",
+	"tls",
+]
+
+[dependencies.redis]
+version = "0.21"
+default-features = false
+features = [
+	"aio",
+	"tokio-comp",
+	"tokio-native-tls-comp",
+	"connection-manager",
+	"script",
+	"streams",
+]

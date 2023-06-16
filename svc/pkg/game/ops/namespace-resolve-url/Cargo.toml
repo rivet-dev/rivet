@@ -1,0 +1,26 @@
+[package]
+name = "game-namespace-resolve-url"
+version = "0.0.1"
+edition = "2018"
+authors = ["Rivet Gaming, LLC <developer@rivet.gg>"]
+license = "Apache-2.0"
+
+[dependencies]
+rivet-operation = { path = "../../../../../lib/operation/core" }
+chirp-client = { path = "../../../../../lib/chirp/client" }
+prost = "0.10"
+url = "2.2"
+
+game-resolve-name-id = { path = "../resolve-name-id" }
+cdn-namespace-resolve-domain = { path = "../../../cdn/ops/namespace-resolve-domain" }
+game-namespace-get = { path = "../namespace-get" }
+game-namespace-resolve-name-id = { path = "../namespace-resolve-name-id" }
+
+[dev-dependencies]
+chirp-worker = { path = "../../../../../lib/chirp/worker" }
+
+cdn-namespace-domain-create = { path = "../../../cdn/ops/namespace-domain-create" }
+faker-game = { path = "../../../faker/ops/game" }
+game-get = { path = "../get" }
+game-namespace-get = { path = "../namespace-get" }
+game-namespace-list = { path = "../namespace-list" }

@@ -1,0 +1,24 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/fern-api/fern/main/fern.schema.json
+
+imports:
+  cloudCommons: ../cloud/common.yml
+
+service:
+  auth: true
+  base-path: /region-tiers
+  url: Cloud
+  audiences:
+    - public
+  endpoints:
+    getRegionTiers:
+      path: ""
+      method: GET
+      docs: Returns all available region tiers.
+      response: GetRegionTiersResponse
+
+types:
+  GetRegionTiersResponse:
+    properties:
+      tiers:
+        docs: A list of region server tiers.
+        type: list<cloudCommons.RegionTier>

@@ -1,0 +1,7 @@
+[service]
+name = "cdn-namespace-domain-remove"
+
+[runtime]
+kind = "rust"
+
+[operation]

@@ -1,0 +1,40 @@
+scrape_configs:
+  # Nomad job metrics
+  - job_name: 'nomad_job'
+    metrics_path: '/v1/metrics'
+    params:
+      format: ['prometheus']
+    static_configs:
+      # Leaders
+      {%- for server, addr in salt['mine.get']('rivet:pool_id:leader', 'nebula_ipv4', tgt_type='grain') | dictsort() %}
+      - targets:
+          - "{{addr}}:4646"
+        labels:
+          node: '{{server}}'
+      {%- endfor %}
+
+      # Clients
+      {%- for server, addr in salt['mine.get']('rivet:pool_id:job', 'nebula_ipv4', tgt_type='grain') | dictsort() %}
+      - targets:
+          - "{{addr}}:4646"
+        labels:
+          node: '{{server}}'
+      {%- endfor %}
+    metric_relabel_configs:
+      # Drop metrics that we don't need to track
+      - source_labels: [__name__]
+        regex: "nomad_client_uptime|nomad_client_allocs_memory_allocated|nomad_client_allocs_cpu_total_percent|nomad_client_allocs_memory_usage|nomad_client_allocs_memory_max_usage|nomad_client_allocated_cpu|nomad_client_unallocated_cpu|nomad_client_allocated_memory|nomad_client_unallocated_memory|nomad_client_allocated_disk|nomad_client_unallocated_disk|nomad_nomad_job_status_.*|nomad_nomad_job_summary_.*"
+        action: keep
+      # Drop unneeded labels
+      - regex: namespace
+        action: labeldrop
+      # Remove high cardinality dispatch IDs
+      - source_labels: [dispatch_id]
+        target_label: dispatch_id
+        replacement: ""
+      # Strip high cardinality unique IDs from job IDs
+      - source_labels: [job]
+        regex: '(.*)/dispatch-.*'
+        target_label: job
+        replacement: '$1'
+

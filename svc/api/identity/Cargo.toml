@@ -1,0 +1,89 @@
+[package]
+name = "api-identity"
+version = "0.0.1"
+edition = "2018"
+authors = ["Rivet Gaming, LLC <developer@rivet.gg>"]
+license = "Apache-2.0"
+
+[dependencies]
+rivet-convert = { path = "../../../lib/convert" }
+api-helper = { path = "../../../lib/api-helper/build" }
+async-trait = "0.1"
+chirp-client = { path = "../../../lib/chirp/client" }
+rivet-operation = { path = "../../../lib/operation/core" }
+futures-util = "0.3"
+http = "0.2"
+hyper = { version = "0.14", features = ["server", "http1", "stream", "tcp"] }
+lazy_static = "1.4"
+prost = "0.10"
+rivet-api = { path = "../../../gen/openapi/internal/rust" }
+rivet-cache = { path = "../../../lib/cache/build" }
+rivet-claims = { path = "../../../lib/claims" }
+rivet-health-checks = { path = "../../../lib/health-checks" }
+rivet-pools = { path = "../../../lib/pools" }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+thiserror = "1.0"
+tokio = { version = "1.21" }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", default-features = false, features = ["fmt", "json", "ansi"] }
+url = "2.2.2"
+util-game-user = { package = "rivet-util-game-user", path = "../../pkg/game-user/util" }
+util-mm = { package = "rivet-util-mm", path = "../../pkg/mm/util" }
+util-nsfw = { package = "rivet-util-nsfw", path = "../../pkg/nsfw/util" }
+uuid = { version = "1", features = ["v4"] }
+
+cdn-namespace-get = { path = "../../pkg/cdn/ops/namespace-get" }
+chat-thread-get = { path = "../../pkg/chat-thread/ops/get" }
+chat-thread-get-for-topic = { path = "../../pkg/chat-thread/ops/get-for-topic" }
+chat-thread-recent-for-user = { path = "../../pkg/chat-thread/ops/recent-for-user" }
+game-get = { path = "../../pkg/game/ops/get" }
+game-namespace-get = { path = "../../pkg/game/ops/namespace-get" }
+game-namespace-resolve-url = { path = "../../pkg/game/ops/namespace-resolve-url" }
+game-resolve-namespace-id = { path = "../../pkg/game/ops/resolve-namespace-id" }
+game-user-create = { path = "../../pkg/game-user/ops/create" }
+game-user-get = { path = "../../pkg/game-user/ops/get" }
+game-user-link-create = { path = "../../pkg/game-user/ops/link-create" }
+game-user-link-get = { path = "../../pkg/game-user/ops/link-get" }
+game-user-recent-session-list = { path = "../../pkg/game-user/ops/recent-session-list" }
+game-user-recommend = { path = "../../pkg/game-user/ops/recommend" }
+identity-config-version-get = { path = "../../pkg/identity-config/ops/version-get" }
+job-run-get = { path = "../../pkg/job-run/ops/get" }
+mm-config-lobby-group-resolve-version = { path = "../../pkg/mm-config/ops/lobby-group-resolve-version" }
+mm-config-version-get = { path = "../../pkg/mm-config/ops/version-get" }
+mm-lobby-get = { path = "../../pkg/mm/ops/lobby-get" }
+party-get = { path = "../../pkg/party/ops/get" }
+party-member-get = { path = "../../pkg/party/ops/member-get" }
+region-get = { path = "../../pkg/region/ops/get" }
+team-recommend = { path = "../../pkg/team/ops/recommend" }
+token-create = { path = "../../pkg/token/ops/create" }
+token-get = { path = "../../pkg/token/ops/get" }
+token-revoke = { path = "../../pkg/token/ops/revoke" }
+upload-prepare = { path = "../../pkg/upload/ops/prepare" }
+user-avatar-upload-complete = { path = "../../pkg/user/ops/avatar-upload-complete" }
+user-follow-list = { path = "../../pkg/user-follow/ops/list" }
+user-follow-request-list = { path = "../../pkg/user-follow/ops/request-list" }
+user-follow-toggle = { path = "../../pkg/user-follow/ops/toggle" }
+user-get = { path = "../../pkg/user/ops/get" }
+user-identity-get = { path = "../../pkg/user-identity/ops/get" }
+user-mutual-friend-list = { path = "../../pkg/user/ops/mutual-friend-list" }
+user-pending-delete-toggle = { path = "../../pkg/user/ops/pending-delete-toggle" }
+user-presence-touch = { path = "../../pkg/user-presence/ops/touch" }
+user-profile-validate = { path = "../../pkg/user/ops/profile-validate" }
+user-search = { path = "../../pkg/user/ops/search" }
+
+[dev-dependencies]
+rivet-connection = { path = "../../../lib/connection" }
+rivet-identity = { path = "../../../lib/smithy-output/api-identity/rust" }
+util-mm = { package = "rivet-util-mm", path = "../../pkg/mm/util" }
+regex = "1.4"
+rand = "0.8"
+
+cdn-namespace-domain-create = { path = "../../pkg/cdn/ops/namespace-domain-create" }
+cloud-namespace-token-development-create = { path = "../../pkg/cloud/ops/namespace-token-development-create" }
+faker-build = { path = "../../pkg/faker/ops/build" }
+faker-game = { path = "../../pkg/faker/ops/game" }
+faker-game-namespace = { path = "../../pkg/faker/ops/game-namespace" }
+faker-game-version = { path = "../../pkg/faker/ops/game-version" }
+faker-region = { path = "../../pkg/faker/ops/region" }
+faker-user = { path = "../../pkg/faker/ops/user" }

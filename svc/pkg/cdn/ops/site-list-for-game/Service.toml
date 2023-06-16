@@ -1,0 +1,7 @@
+[service]
+name = "cdn-site-list-for-game"
+
+[runtime]
+kind = "rust"
+
+[operation]

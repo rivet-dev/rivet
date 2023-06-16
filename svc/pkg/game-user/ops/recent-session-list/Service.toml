@@ -1,0 +1,7 @@
+[service]
+name = "game-user-recent-session-list"
+
+[runtime]
+kind = "rust"
+
+[operation]

@@ -1,0 +1,71 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/fern-api/fern/main/fern.schema.json
+
+imports:
+  captchaConfig: ../../captcha/config.yml
+
+service:
+  auth: true
+  url: Party
+  audiences:
+    - public
+  base-path: /parties/self
+  endpoints:
+    findLobbyForParty:
+      path: /activity/matchmaker/lobbies/find
+      method: POST
+      docs: >-
+        Attempts to make the current identity's party find a lobby based on the
+        given criteria.
+        If succeeds, all party members will receive a
+        `GlobalEventMatchmakerLobbyJoin` event with all the information required
+        to
+        join the lobby.
+        This request will use the party player count configured for the lobby
+        group.
+        See `FindLobby`.
+      request: FindMatchmakerLobbyForPartyRequest
+
+    joinLobbyForParty:
+      path: /activity/matchmaker/lobbies/join
+      method: POST
+      docs: >-
+        Attempts to make the current identity's party join a specific matchmaker
+        lobby.
+        This request will use the party player count configured for the lobby
+        group.
+        If succeeds, all party members will receive a
+        `GlobalEventMatchmakerLobbyJoin` event with all the information required
+        to
+        join the lobby.
+        Identity must be the party leader.
+        See `JoinLobby`.
+      request:
+        body: JoinMatchmakerLobbyForPartyRequest
+
+    requestPlayer:
+      path: /members/self/matchmaker/request-player
+      method: POST
+
+types:
+  FindMatchmakerLobbyForPartyRequest:
+    properties:
+      game_modes:
+        docs: Game modes to match lobbies against.
+        type: list<string>
+      regions:
+        docs: |-
+          Regions to match lobbies against. If not specified, the optimal region
+          will be determined and will attempt to find lobbies in that region.
+        type: optional<list<string>>
+      prevent_auto_create_lobby:
+        docs: |-
+          Prevents a new lobby from being created when finding a lobby. If no
+          lobby is found, `MATCHMAKER_LOBBY_NOT_FOUND` will be returned.
+        type: optional<boolean>
+      captcha: optional<captchaConfig.Config>
+
+  JoinMatchmakerLobbyForPartyRequest:
+    properties:
+      lobby_id:
+        type: uuid
+      captcha: optional<captchaConfig.Config>

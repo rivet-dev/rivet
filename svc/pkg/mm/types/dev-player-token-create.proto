@@ -1,0 +1,14 @@
+syntax = "proto3";
+
+package rivet.backend.pkg.mm.dev_player_token_create;
+
+import "proto/common.proto";
+
+message Request {
+	rivet.common.Uuid namespace_id = 1;
+	rivet.common.Uuid player_id = 2;
+}
+
+message Response {
+	string player_jwt = 1;
+}

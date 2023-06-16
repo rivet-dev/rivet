@@ -1,0 +1,25 @@
+[package]
+name = "team-dev-worker"
+version = "0.0.1"
+edition = "2018"
+authors = ["Rivet Gaming, LLC <developer@rivet.gg>"]
+license = "Apache-2.0"
+
+[dependencies]
+chirp-worker = { path = "../../../../lib/chirp/worker" }
+chirp-client = { path = "../../../../lib/chirp/client" }
+chrono = "0.4"
+serde = { version = "1.0", features = ["derive"] }
+rivet-health-checks = { path = "../../../../lib/health-checks" }
+rivet-metrics = { path = "../../../../lib/metrics" }
+rivet-runtime = { path = "../../../../lib/runtime" }
+
+team-dev-get = { path = "../ops/get" }
+team-dev-halt = { path = "../ops/halt" }
+team-get = { path = "../../team/ops/get" }
+user-identity-get = { path = "../../user-identity/ops/get" }
+
+[dev-dependencies]
+chirp-worker = { path = "../../../../lib/chirp/worker" }
+
+faker-team = { path = "../../faker/ops/team" }

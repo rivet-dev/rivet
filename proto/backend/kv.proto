@@ -1,0 +1,24 @@
+syntax = "proto3";
+
+package rivet.backend.kv;
+
+import "proto/common.proto";
+
+// MARK: Game Namespace Config
+message NamespaceConfig {
+}
+
+// MARK: Game Version Config
+message VersionConfig {
+	
+}
+
+// MARK: Game Version Config Context
+message VersionConfigCtx {
+
+}
+
+// MARK: Game Version Config Meta
+message VersionConfigMeta {
+
+}

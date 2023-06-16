@@ -1,0 +1,7 @@
+[service]
+name = "mm-lobby-player-count"
+
+[runtime]
+kind = "rust"
+
+[operation]

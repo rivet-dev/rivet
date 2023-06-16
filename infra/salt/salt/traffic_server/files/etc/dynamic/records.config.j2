@@ -1,0 +1,19 @@
+# MARK: Entrypoint
+LOCAL proxy.local.incoming_ip_to_bind STRING {{nebula_ipv4}}
+CONFIG proxy.config.http.server_ports STRING 9300 9300:ipv6
+
+# MARK: HTTP cache
+# Make all content cachable no matter the header
+CONFIG proxy.config.http.cache.required_headers INT 0
+# Disable cache revalidation
+CONFIG proxy.config.http.cache.when_to_revalidate INT 3
+
+# MARK: DNS
+# Enable TCP fallback for DNS
+CONFIG proxy.config.dns.connection_mode INT 1
+
+# Disable plugin reloading
+#
+# See https://lists.apache.org/thread/5w5qyxm6fpwz5bl1jldk7no1p6roy4lg
+CONFIG proxy.config.plugin.dynamic_reload_mode INT 0
+

@@ -1,0 +1,7 @@
+[service]
+name = "team-join-request-list"
+
+[runtime]
+kind = "rust"
+
+[operation]

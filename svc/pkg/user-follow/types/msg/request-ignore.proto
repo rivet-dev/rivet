@@ -1,0 +1,15 @@
+syntax = "proto3";
+
+package rivet.backend.pkg.user_follow.msg.request_ignore;
+
+import "proto/common.proto";
+
+/// name = "msg-user-follow-request-ignore"
+/// parameters = [
+/// 	{ name = "follower_id" },
+/// 	{ name = "following_id" },
+/// ]
+message Message {
+	rivet.common.Uuid follower_user_id = 1;
+	rivet.common.Uuid following_user_id = 2;
+}

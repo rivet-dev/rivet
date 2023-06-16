@@ -1,0 +1,7 @@
+[service]
+name = "cdn-namespace-get"
+
+[runtime]
+kind = "rust"
+
+[operation]

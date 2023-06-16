@@ -1,0 +1,17 @@
+syntax = "proto3";
+
+package rivet.backend.pkg.game_user.create;
+
+import "proto/common.proto";
+
+message Request {
+	rivet.common.Uuid namespace_id = 1;
+	rivet.common.Uuid user_id = 2;
+}
+
+message Response {
+	string token = 1;
+	rivet.common.Uuid token_session_id = 3;
+	rivet.common.Uuid game_user_id = 4;
+	rivet.common.Uuid user_id = 5;
+}

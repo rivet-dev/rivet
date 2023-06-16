@@ -1,0 +1,13 @@
+syntax = "proto3";
+
+package rivet.backend.pkg.token.revoke;
+
+import "proto/common.proto";
+
+message Request {
+	repeated rivet.common.Uuid jtis = 1;
+}
+
+message Response {
+
+}

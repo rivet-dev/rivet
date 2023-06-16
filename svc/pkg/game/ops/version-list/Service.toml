@@ -1,0 +1,7 @@
+[service]
+name = "game-version-list"
+
+[runtime]
+kind = "rust"
+
+[operation]

@@ -1,0 +1,10 @@
+[service]
+name = "api-portal"
+
+[runtime]
+kind = "rust"
+
+[[api.router.mounts]]
+path = "/v1"
+subdomain = "portal.api"
+

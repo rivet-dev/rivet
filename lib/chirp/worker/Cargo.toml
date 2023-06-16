@@ -1,0 +1,59 @@
+[package]
+name = "chirp-worker"
+version = "0.1.5"
+authors = ["Rivet Gaming, LLC <developer@rivet.gg>"]
+edition = "2018"
+license = "Apache-2.0"
+description = "Server manager for running a Chirp worker."
+
+[features]
+default = ["attributes"]
+attributes = ["chirp-worker-attributes", "tracing-subscriber"]
+
+[dependencies]
+async-trait = "0.1"
+chirp-client = { path = "../client" }
+global-error = { path = "../../global-error" }
+chirp-metrics = { path = "../metrics" }
+chirp-perf = { path = "../perf" }
+chirp-worker-attributes = { path = "../worker-attributes", optional = true }
+futures-util = "0.3"
+formatted-error = { path = "../../formatted-error" }
+indoc = "1.0"
+lazy_static = "1.4"
+prost = "0.10"
+rand = "0.8"
+rivet-cache = { path = "../../cache/build" }
+rivet-connection = { path = "../../connection" }
+rivet-metrics = { path = "../../metrics" }
+rivet-operation = { path = "../../operation/core" }
+rivet-pools = { path = "../../pools" }
+rivet-runtime = { path = "../../runtime" }
+rivet-util = { path = "../../util/core" }
+serde_json = "1.0"
+thiserror = "1.0"
+tokio = { version = "1.21", features = ["full", "tracing"] }
+tracing = "0.1"
+types = { path = "../../types/core" }
+tracing-subscriber = { version = "0.3", optional = true, default-features = false, features = ["fmt", "json", "ansi"] }  # Used with attribute
+
+[dependencies.uuid]
+version = "1.1"
+features = ["v4", "serde"]
+
+[dependencies.redis]
+version = "0.21"
+default-features = false
+features = [
+	"aio",
+	"tokio-comp",
+	"tokio-native-tls-comp",
+	"connection-manager",
+	"script",
+	"streams",
+]
+
+[dev-dependencies]
+testcontainers = "0.12"
+rivet-test-images = { path = "../../test-images" }
+

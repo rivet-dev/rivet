@@ -1,0 +1,15 @@
+syntax = "proto3";
+
+package rivet.backend.pkg.identity_config.version_prepare;
+
+import "proto/common.proto";
+import "proto/backend/identity.proto";
+
+message Request {
+	rivet.backend.identity.VersionConfig config = 1;
+	rivet.common.Uuid game_id = 2;
+}
+
+message Response {
+	rivet.backend.identity.VersionConfigCtx config_ctx = 1;
+}

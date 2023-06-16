@@ -1,0 +1,11 @@
+[service]
+name = "api-cloud"
+
+[runtime]
+kind = "rust"
+
+[api]
+
+[[api.router.mounts]]
+path = "/v1"
+subdomain = "cloud.api"

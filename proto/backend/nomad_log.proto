@@ -1,0 +1,23 @@
+syntax = "proto3";
+
+package rivet.backend.nomad_log;
+
+import "proto/common.proto";
+
+enum StreamType {
+	STD_OUT = 0;
+	STD_ERR = 1;
+}
+
+message LogEntry {
+	// Timestamp the log was received.
+	int64 ts = 1;
+
+	// Index of the log. Used to preserve order beyond the accurace of
+	// millisecond timestamps.
+	uint32 idx = 2;
+
+	// Message that was logged.
+	bytes message = 3;
+}
+

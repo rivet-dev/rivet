@@ -1,0 +1,7 @@
+[service]
+name = "cdn-worker"
+
+[runtime]
+kind = "rust"
+
+[consumer]

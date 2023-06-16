@@ -1,0 +1,13 @@
+syntax = "proto3";
+
+package rivet.backend.pkg.debug.email_res;
+
+import "proto/common.proto";
+
+message Request {
+	rivet.common.Uuid verification_id = 1;
+}
+
+message Response {
+	string code = 1;
+}

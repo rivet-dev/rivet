@@ -1,0 +1,7 @@
+[service]
+name = "kv-worker"
+
+[runtime]
+kind = "rust"
+
+[consumer]

@@ -1,0 +1,15 @@
+syntax = "proto3";
+
+package rivet.backend.pkg.mm_config.version_prepare;
+
+import "proto/common.proto";
+import "proto/backend/matchmaker.proto";
+
+message Request {
+	rivet.backend.matchmaker.VersionConfig config = 1;
+	rivet.common.Uuid game_id = 2;
+}
+
+message Response {
+	rivet.backend.matchmaker.VersionConfigCtx config_ctx = 1;
+}

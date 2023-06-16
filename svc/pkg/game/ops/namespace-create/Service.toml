@@ -1,0 +1,7 @@
+[service]
+name = "game-namespace-create"
+
+[runtime]
+kind = "rust"
+
+[operation]

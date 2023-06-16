@@ -1,0 +1,16 @@
+syntax = "proto3";
+
+package rivet.backend.pkg.cloud.msg.device_link_complete;
+
+import "proto/common.proto";
+
+/// name = "msg-cloud-device-link-complete"
+/// tail-ttl = 3600
+/// parameters = [
+/// 	{ name = "device_link_id" },
+/// ]
+message Message {
+	rivet.common.Uuid device_link_id = 1;
+	rivet.common.Uuid game_id = 2;
+}
+

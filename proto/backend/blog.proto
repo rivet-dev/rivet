@@ -1,0 +1,11 @@
+syntax = "proto3";
+
+package rivet.backend.blog;
+
+message Post {
+	string title = 1;
+	string url = 2;
+	string image_url = 3;
+	string author = 4;
+	repeated string categories = 5;
+}

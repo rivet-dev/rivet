@@ -1,0 +1,6 @@
+MINIO_ROOT_USER=root
+MINIO_ROOT_PASSWORD={{ pillar['minio']['users']['root']['password'] }}
+
+MINIO_OPTS="--address=:9200 --console-address=:9201"
+MINIO_VOLUMES="/var/lib/minio"
+

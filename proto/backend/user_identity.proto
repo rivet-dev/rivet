@@ -1,0 +1,13 @@
+syntax = "proto3";
+
+package rivet.backend.user_identity;
+
+message Identity {
+	message Email {
+		string email = 1;
+	}
+
+	oneof kind {
+		Email email = 1;
+	}
+}

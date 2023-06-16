@@ -1,0 +1,19 @@
+syntax = "proto3";
+
+package rivet.backend.pkg.chat_thread.msg.update;
+
+import "proto/common.proto";
+import "proto/backend/chat.proto";
+
+/// name = "msg-chat-thread-update"
+/// tail-ttl = 300
+/// history = true
+/// parameters = [
+/// 	{ name = "thread_id" },
+/// ]
+message Message {
+	oneof kind {
+		rivet.backend.chat.Message chat_message = 1;
+		rivet.backend.chat.TypingStatus typing_status = 2;
+	}
+}

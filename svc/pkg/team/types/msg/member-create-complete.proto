@@ -1,0 +1,16 @@
+syntax = "proto3";
+
+package rivet.backend.pkg.team.msg.member_create_complete;
+
+import "proto/common.proto";
+
+/// name = "msg-team-member-create-complete"
+/// tail-ttl = 300
+/// parameters = [
+/// 	{ name = "team_id" },
+/// 	{ name = "user_id", wildcard = true },
+/// ]
+message Message {
+	rivet.common.Uuid team_id = 1;
+	rivet.common.Uuid user_id = 2;
+}

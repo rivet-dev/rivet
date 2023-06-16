@@ -1,0 +1,17 @@
+syntax = "proto3";
+
+package rivet.backend.pkg.user.search;
+
+import "proto/common.proto";
+
+
+message Request {
+	string query = 1;
+	uint32 limit = 2;
+	optional int64 anchor = 3;
+}
+
+message Response {
+	repeated rivet.common.Uuid user_ids = 1;
+	optional int64 anchor = 2;
+}

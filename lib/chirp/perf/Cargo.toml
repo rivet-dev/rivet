@@ -1,0 +1,29 @@
+[package]
+name = "chirp-perf"
+version = "0.1.0"
+edition = "2018"
+authors = ["Rivet Gaming, LLC <developer@rivet.gg>"]
+license = "Apache-2.0"
+
+[dependencies]
+lazy_static = "1.4"
+prost = "0.10"
+types = { path = "../../types/core" }
+rivet-metrics = { path = "../../metrics" }
+rivet-pools = { path = "../../pools" }
+thiserror = "1.0"
+tokio = { version = "1.21", features = ["full", "tracing"] }
+tracing = "0.1"
+
+[dependencies.uuid]
+version = "1.1"
+features = ["v4", "serde"]
+
+[dependencies.redis]
+version = "0.21"
+default-features = false
+features = [
+	"aio",
+	"tokio-comp",
+	"tokio-native-tls-comp",
+]

@@ -1,0 +1,24 @@
+syntax = "proto3";
+
+package rivet.backend.pkg.job_run.msg.alloc_planned;
+
+import "proto/common.proto";
+
+/// name = "msg-job-run-alloc-planned"
+/// deduplicate = true
+/// parameters = [
+/// 	{ name = "run_id" },
+/// ]
+message Message {
+	message Nomad {
+		string alloc_id = 1;
+		string node_id = 2;
+	}
+
+	rivet.common.Uuid run_id = 1;
+
+	oneof run_meta {
+		Nomad nomad = 101;
+	}
+}
+

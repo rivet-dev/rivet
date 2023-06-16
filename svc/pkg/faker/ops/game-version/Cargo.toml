@@ -1,0 +1,23 @@
+[package]
+name = "faker-game-version"
+version = "0.0.1"
+edition = "2018"
+authors = ["Rivet Gaming, LLC <developer@rivet.gg>"]
+license = "Apache-2.0"
+
+[dependencies]
+rivet-operation = { path = "../../../../../lib/operation/core" }
+chirp-client = { path = "../../../../../lib/chirp/client" }
+prost = "0.10"
+util-mm = { package = "rivet-util-mm", path = "../../../mm/util" }
+
+faker-build = { path = "../build" }
+faker-cdn-site = { path = "../cdn-site" }
+region-list = { path = "../../../region/ops/list" }
+cloud-version-publish = { path = "../../../cloud/ops/version-publish" }
+mm-config-version-get = { path = "../../../mm-config/ops/version-get" }
+
+[dev-dependencies]
+chirp-worker = { path = "../../../../../lib/chirp/worker" }
+
+faker-game = { path = "../game" }

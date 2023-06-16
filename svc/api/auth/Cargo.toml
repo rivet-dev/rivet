@@ -1,0 +1,51 @@
+[package]
+name = "api-auth"
+version = "0.0.1"
+edition = "2018"
+authors = ["Rivet Gaming, LLC <developer@rivet.gg>"]
+license = "Apache-2.0"
+
+[dependencies]
+rivet-convert = { path = "../../../lib/convert" }
+api-helper = { path = "../../../lib/api-helper/build" }
+async-trait = "0.1"
+chirp-client = { path = "../../../lib/chirp/client" }
+rivet-operation = { path = "../../../lib/operation/core" }
+chrono = "0.4"
+http = "0.2"
+hyper = { version = "0.14", features = ["server", "http1", "stream", "tcp"] }
+lazy_static = "1.4"
+prost = "0.10"
+rivet-auth-server = { path = "../../../lib/smithy-output/api-auth/rust-server" }
+rivet-cache = { path = "../../../lib/cache/build" }
+rivet-claims = { path = "../../../lib/claims" }
+rivet-health-checks = { path = "../../../lib/health-checks" }
+rivet-pools = { path = "../../../lib/pools" }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+thiserror = "1.0"
+tokio = { version = "1.21" }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", default-features = false, features = ["fmt", "json", "ansi"] }
+url = "2.2.2"
+uuid = { version = "1", features = ["v4"] }
+
+user-get = { path = "../../pkg/user/ops/get" }
+token-revoke = { path = "../../pkg/token/ops/revoke" }
+captcha-verify = { path = "../../pkg/captcha/ops/verify" }
+email-verification-create = { path = "../../pkg/email-verification/ops/create" }
+email-verification-complete = { path = "../../pkg/email-verification/ops/complete" }
+user-resolve-email = { path = "../../pkg/user/ops/resolve-email" }
+user-token-create = { path = "../../pkg/user/ops/token-create" }
+user-identity-create = { path = "../../pkg/user-identity/ops/create" }
+token-create = { path = "../../pkg/token/ops/create" }
+user-presence-touch = { path = "../../pkg/user-presence/ops/touch" }
+
+[dev-dependencies]
+rivet-auth = { path = "../../../lib/smithy-output/api-auth/rust" }
+rivet-connection = { path = "../../../lib/connection" }
+
+faker-user = { path = "../../pkg/faker/ops/user" }
+user-token-create = { path = "../../pkg/user/ops/token-create" }
+debug-email-res = { path = "../../pkg/debug/ops/email-res" }
+user-identity-get = { path = "../../pkg/user-identity/ops/get" }

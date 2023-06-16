@@ -1,0 +1,15 @@
+syntax = "proto3";
+
+package rivet.backend.pkg.mm.lobby_history_export;
+
+import "proto/common.proto";
+
+message Request {
+	repeated rivet.common.Uuid namespace_ids = 1;
+	int64 query_start = 2;
+	int64 query_end = 3;
+}
+
+message Response {
+	rivet.common.Uuid upload_id = 1;
+}

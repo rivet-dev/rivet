@@ -1,0 +1,112 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/fern-api/fern/main/fern.schema.json
+
+errors:
+  InternalError:
+    docs: An error caused by internal server problems.
+    status-code: 500
+    type: ErrorBody
+
+  RateLimitError:
+    docs: |
+      An error thrown when the requestee has hit a rate limit. You are sending
+      too many requests too quickly.
+    status-code: 429
+    type: ErrorBody
+
+  ForbiddenError:
+    docs: |
+      An error thrown when the requestee requests a resource they do not have
+      access to.
+    status-code: 403
+    type: ErrorBody
+
+  UnauthorizedError:
+    docs: An error thrown when the requestee is not authenticated.
+    status-code: 408
+    type: ErrorBody
+
+  NotFoundError:
+    docs: An error thrown when the requestee requests a non existent resource.
+    status-code: 404
+    type: ErrorBody
+
+  BadRequestError:
+    docs: |
+      An error thrown when the requestee has sent an invalid or
+      malformed request.
+    status-code: 400
+    type: ErrorBody
+
+types:
+  Identifier:
+    type: string
+    docs:
+      A human readable short identifier used to references resources. Different
+      than a `uuid` because this is intended to be human readable. Different
+      than `DisplayName` because this should not include special characters and
+      be short.
+
+  Bio:
+    type: string
+    docs: Follows regex ^(?:[^\n\r]+\n?|\n){1,5}$
+
+  Email:
+    type: string
+    docs: A valid email address
+
+  JWT:
+    type: string
+    docs: Documentation at https://jwt.io/
+
+  WatchQuery:
+    type: optional<string>
+    docs: A query parameter denoting the requests watch index.
+
+  WatchResponse:
+    docs: Provided by watchable endpoints used in blocking loops.
+    properties:
+      index:
+        type: string
+        docs: |
+          Index indicating the version of the data responded.
+          Pass this to `WatchQuery` to block and wait for the next response.
+
+  DisplayName: string
+
+  AccountNumber: integer
+
+  Timestamp:
+    type: string
+    docs: RFC3339 timestamp
+
+  GlobalEventNotification:
+    properties:
+      title: string
+      description: string
+      thumbnail_url: string
+      url: string
+
+  GlobalEventChatThreadRemove:
+    properties:
+      thread_id: uuid
+
+  ValidationError:
+    docs: An error given by failed content validation.
+    properties:
+      path:
+        type: list<string>
+        docs: A list of strings denoting the origin of a validation error.
+
+  EmptyObject:
+    properties: {}
+
+  ErrorMetadata:
+    docs: Unstructured metadata relating to an error. Must be manually parsed.
+    type: unknown
+
+  ErrorBody:
+    properties:
+      code: string
+      message: string
+      documentation: optional<string>
+      metadata: optional<ErrorMetadata>

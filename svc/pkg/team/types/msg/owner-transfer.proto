@@ -1,0 +1,15 @@
+syntax = "proto3";
+
+package rivet.backend.pkg.team.msg.owner_transfer;
+
+import "proto/common.proto";
+
+/// name = "msg-team-owner-transfer"
+/// parameters = [
+/// 	{ name = "team_id" },
+/// ]
+message Message {
+	rivet.common.Uuid team_id = 1;
+	rivet.common.Uuid new_owner_user_id = 2;
+}
+

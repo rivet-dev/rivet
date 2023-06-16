@@ -1,0 +1,43 @@
+syntax = "proto3";
+
+package rivet.backend.user;
+
+import "proto/common.proto";
+
+message User {
+	reserved 5, 9;
+
+	rivet.common.Uuid user_id = 1;
+	string display_name = 2;
+	uint32 account_number = 3;
+	string avatar_id = 4;
+	optional rivet.common.Uuid profile_upload_id = 10;
+	optional string profile_file_name = 11;
+	int64 join_ts = 6;
+	string bio = 7;
+	bool is_admin = 8;
+	optional int64 delete_request_ts = 12;
+	optional int64 delete_complete_ts = 13;
+}
+
+message Presence {
+	reserved 3;  // Party
+
+	message GameActivity {
+		rivet.common.Uuid game_id = 1;
+		string message = 2;
+		optional string public_metadata = 3;
+		optional string friend_metadata = 4;
+	}
+
+	int64 update_ts = 1;
+	Status status = 2;
+	optional GameActivity game_activity = 5;
+}
+
+enum Status {
+	OFFLINE = 0;
+	ONLINE = 1;
+	AWAY = 2;
+}
+

@@ -1,0 +1,14 @@
+syntax = "proto3";
+
+package rivet.backend.pkg.party.invite_get;
+
+import "proto/common.proto";
+import "proto/backend/party.proto";
+
+message Request {
+	repeated rivet.common.Uuid invite_ids = 1;
+}
+
+message Response {
+	repeated rivet.backend.party.Invite invites = 1;
+}

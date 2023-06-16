@@ -1,0 +1,10 @@
+[package]
+name = "chirp-metrics"
+version = "0.1.0"
+edition = "2018"
+authors = ["Rivet Gaming, LLC <developer@rivet.gg>"]
+license = "Apache-2.0"
+
+[dependencies]
+rivet-metrics = { path = "../../metrics" }
+lazy_static = "1.4"

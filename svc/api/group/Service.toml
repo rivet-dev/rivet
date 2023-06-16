@@ -1,0 +1,12 @@
+[service]
+name = "api-group"
+
+[runtime]
+kind = "rust"
+
+[api]
+
+[[api.router.mounts]]
+path = "/v1"
+subdomain = "group.api"
+

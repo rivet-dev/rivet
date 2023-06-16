@@ -1,0 +1,10 @@
+[service]
+name = "captcha-hcaptcha-verify"
+
+[runtime]
+kind = "rust"
+
+[operation]
+
+[secrets]
+"hcaptcha/secret" = { optional = true }

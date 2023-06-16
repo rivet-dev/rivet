@@ -1,0 +1,17 @@
+syntax = "proto3";
+
+package rivet.backend.pkg.chat.msg.last_read_ts_update;
+
+import "proto/common.proto";
+
+/// name = "msg-chat-last-read-ts-update"
+/// parameters = [
+/// 	{ name = "user_id" },
+/// 	{ name = "thread_id" },
+/// ]
+message Message {
+	rivet.common.Uuid user_id = 1;
+	rivet.common.Uuid thread_id = 2;
+	int64 read_ts = 3;
+}
+

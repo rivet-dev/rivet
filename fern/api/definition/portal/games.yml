@@ -1,0 +1,57 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/fern-api/fern/main/fern.schema.json
+
+imports:
+  commons: ../common.yml
+  gameCommons: ../game/common.yml
+
+service:
+  auth: true
+  url: Portal
+  base-path: /games
+  endpoints:
+    # getSuggestedGames:
+    #   path: ""
+    #   method: GET
+    #   docs: Returns a list of games on the arcade page.
+    #   request:
+    #     name: GetSuggestedGamesRequest
+    #     query-parameters:
+    #       watch_index:
+    #         docs: A query parameter denoting the requests watch index.
+    #         type: optional<string>
+    #   response: GetSuggestedGamesResponse
+
+    getGameProfile:
+      path: /{game_name_id}/profile
+      method: GET
+      docs: Returns a game profile.
+      path-parameters:
+        game_name_id:
+          docs: >-
+            A human readable short identifier used to references resources.
+            Different than a `rivet.common#Uuid` because this is intended to be
+            human readable.
+            Different than `rivet.common#DisplayName` because this should not
+            include special
+            characters and be short.
+          type: string
+      request:
+        name: GetGameProfileRequest
+        query-parameters:
+          watch_index:
+            docs: A query parameter denoting the requests watch index.
+            type: optional<string>
+      response: GetGameProfileResponse
+
+types:
+  GetSuggestedGamesResponse:
+    properties:
+      games:
+        docs: A list of game summaries.
+        type: list<gameCommons.Summary>
+      watch: commons.WatchResponse
+
+  GetGameProfileResponse:
+    properties:
+      game: gameCommons.Profile
+      watch: commons.WatchResponse

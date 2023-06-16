@@ -1,0 +1,29 @@
+# See https://developer.hashicorp.com/consul/tutorials/production-deploy/deployment-guide#configure-the-consul-process
+
+[Unit]
+Description=Consul
+Requires=network-online.target
+After=network-online.target
+ConditionDirectoryNotEmpty=/etc/consul.d/
+
+[Service]
+# Use `exec` if running a single node cluster and `notify` in a multinode
+# cluster. Read more about the `Type` setting here:
+#
+# https://learn.hashicorp.com/tutorials/consul/deployment-guide#configure-systemd
+#
+# However, we use `exec` instead of `notify` since we bootstrap the cluster
+# after Consul has booted.
+Type=exec
+User=consul
+Group=consul
+ExecStart=/usr/bin/consul agent -config-dir=/etc/consul.d/
+ExecReload=/bin/kill --signal HUP $MAINPID
+KillMode=process
+KillSignal=SIGTERM
+LimitNOFILE=65536
+Restart=always
+RestartSec=2
+
+[Install]
+WantedBy=multi-user.target

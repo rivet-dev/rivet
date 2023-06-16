@@ -1,0 +1,16 @@
+<HTML>
+<HEAD>
+<TITLE>Not In Cache</TITLE>
+</HEAD>
+
+<BODY BGCOLOR="white" FGCOLOR="black">
+<H1>Not In Cache</H1>
+<HR>
+
+<FONT FACE="Helvetica,Arial"><B>
+Description: Your request mandated that the document come from cache, but
+the document is not present in cache.  As requested, the transaction
+is being terminated.
+</B></FONT>
+<HR>
+</BODY>

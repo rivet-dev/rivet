@@ -1,0 +1,7 @@
+[service]
+name = "game-token-development-validate"
+
+[runtime]
+kind = "rust"
+
+[operation]

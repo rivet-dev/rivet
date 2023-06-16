@@ -1,0 +1,7 @@
+[service]
+name = "kv-config-namespace-get"
+
+[runtime]
+kind = "rust"
+
+[operation]

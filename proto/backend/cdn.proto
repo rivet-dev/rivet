@@ -1,0 +1,66 @@
+syntax = "proto3";
+
+package rivet.backend.cdn;
+
+import "proto/common.proto";
+
+// MARK: Game Namespace Config
+message NamespaceConfig {
+	message Domain {
+		string domain = 1;
+		int64 create_ts = 2;
+	}
+
+	enum AuthType {
+		NONE = 0;
+		BASIC = 1;
+	}
+
+	message AuthUser {
+		string user = 1;
+		string password = 2;
+	}
+
+	bool enable_domain_public_auth = 1;
+	repeated Domain domains = 2;
+	AuthType auth_type = 3;
+	repeated AuthUser auth_user_list = 4;
+}
+
+// MARK: Game Version Config
+message VersionConfig {	
+	rivet.common.Uuid site_id = 1;
+	repeated Route routes = 2;
+}
+
+message Route {
+	rivet.common.Glob glob = 1;
+	int32 priority = 2;
+
+	repeated Middleware middlewares = 3;
+}
+
+message Middleware {
+	oneof kind {
+		CustomHeadersMiddleware custom_headers = 1;
+	}
+}
+
+message CustomHeadersMiddleware {
+	message Header {
+		string name = 1;
+		string value = 2;
+	}
+	
+	repeated Header headers = 3;
+}
+
+// MARK: Game Version Config Context
+message VersionConfigCtx {
+
+}
+
+// MARK: Game Version Config Meta
+message VersionConfigMeta {
+
+}

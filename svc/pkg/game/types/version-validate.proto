@@ -1,0 +1,20 @@
+syntax = "proto3";
+
+package rivet.backend.pkg.game.version_validate;
+
+import "proto/common.proto";
+import "proto/backend/cloud.proto";
+
+message Request {
+	rivet.common.Uuid game_id = 1;
+	string display_name = 2;
+	rivet.backend.cloud.VersionConfig config = 3;
+}
+
+message Response {
+	message Error {
+		repeated string path = 1;
+	}
+
+	repeated Error errors = 1;
+}

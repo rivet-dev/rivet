@@ -1,0 +1,117 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/fern-api/fern/main/fern.schema.json
+
+imports:
+  commons: ../common.yml
+  identityCommons: ../identity/common.yml
+
+types:
+  Summary:
+    properties:
+      group_id: uuid
+      display_name: commons.DisplayName
+      avatar_url:
+        type: optional<string>
+        docs: The URL of this group's avatar image.
+      external: ExternalLinks
+      is_developer:
+        type: boolean
+        docs: Whether or not this group is a developer.
+      bio: commons.Bio
+      is_current_identity_member:
+        docs: Whether or not the current identity is a member of this group.
+        type: boolean
+      publicity: Publicity
+      member_count: integer
+      owner_identity_id:
+        type: uuid
+
+  Publicity:
+    docs: The current publicity value for the given group.
+    enum:
+      - open
+      - closed
+
+  Handle:
+    docs: A group handle.
+    properties:
+      group_id: uuid
+      display_name: commons.DisplayName
+      avatar_url:
+        docs: The URL of this group's avatar image
+        type: optional<string>
+      external: ExternalLinks
+      is_developer:
+        docs: Whether or not this group is a developer group.
+        type: optional<boolean>
+
+  ExternalLinks:
+    docs: External links for this group.
+    properties:
+      profile:
+        type: string
+        docs: A link to this group's profile page.
+      chat:
+        type: string
+        docs: A link to this group's chat page.
+
+  JoinRequest:
+    docs: A group join request.
+    properties:
+      identity: identityCommons.Handle
+      ts:
+        docs: RFC3339 timestamp.
+        type: datetime
+
+  Member:
+    docs: A group member.
+    properties:
+      identity: identityCommons.Handle
+
+  Profile:
+    docs: A list of group profiles.
+    properties:
+      group_id:
+        type: uuid
+      display_name:
+        docs: Represent a resource's readable display name.
+        type: string
+      avatar_url:
+        docs: The URL of this group's avatar image.
+        type: optional<string>
+      external: ExternalLinks
+      is_developer:
+        docs: Whether or not this group is a developer.
+        type: optional<boolean>
+      bio:
+        docs: Detailed information about a profile.
+        type: string
+      is_current_identity_member:
+        docs: Whether or not the current identity is a member of this group.
+        type: optional<boolean>
+      publicity: Publicity
+      member_count:
+        docs: Unsigned 32 bit integer.
+        type: optional<integer>
+      members:
+        docs: A list of group members.
+        type: list<Member>
+      join_requests:
+        docs: A list of group join requests.
+        type: list<JoinRequest>
+      is_current_identity_requesting_join:
+        docs: >-
+          Whether or not the current identity is currently requesting to join
+          this group.
+        type: optional<boolean>
+      owner_identity_id:
+        type: uuid
+      thread_id:
+        type: optional<uuid>
+
+  BannedIdentity:
+    docs: A banned identity.
+    properties:
+      identity: identityCommons.Handle
+      ban_ts:
+        docs: RFC3339 timestamp.
+        type: datetime

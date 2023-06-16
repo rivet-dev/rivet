@@ -1,0 +1,7 @@
+[service]
+name = "team-invite-get"
+
+[runtime]
+kind = "rust"
+
+[operation]

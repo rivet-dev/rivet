@@ -1,0 +1,1 @@
+ALTER TABLE dev_teams ADD COLUMN paid_balance INT DEFAULT 0;

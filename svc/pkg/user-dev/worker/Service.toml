@@ -1,0 +1,7 @@
+[service]
+name = "user-dev-worker"
+
+[runtime]
+kind = "rust"
+
+[consumer]

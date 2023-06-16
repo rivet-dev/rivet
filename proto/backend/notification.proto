@@ -1,0 +1,7 @@
+syntax = "proto3";
+
+package rivet.backend.notification;
+
+enum NotificationService {
+    FIREBASE = 0;
+}

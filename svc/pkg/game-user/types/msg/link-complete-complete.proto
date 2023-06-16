@@ -1,0 +1,18 @@
+syntax = "proto3";
+
+package rivet.backend.pkg.game_user.msg.link_complete_complete;
+
+import "proto/common.proto";
+
+/// name = "msg-game-user-link-complete-complete"
+/// tail-ttl = 300
+/// parameters = [
+/// 	{ name = "link_id" },
+/// ]
+message Message {
+	rivet.common.Uuid user_id = 1;
+	rivet.common.Uuid link_id = 2;
+	// Not present when the game link was cancelled
+	optional string game_user_token = 3;
+}
+

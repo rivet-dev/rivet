@@ -1,0 +1,20 @@
+syntax = "proto3";
+
+package rivet.backend.pkg.cf_custom_hostname.list_for_namespace_id;
+
+import "proto/common.proto";
+
+message Request {
+    repeated rivet.common.Uuid namespace_ids = 1;
+    // Only returns pending hostnames
+    bool pending_only = 2;
+}
+
+message Response {
+    message Namespace {
+        rivet.common.Uuid namespace_id = 1;
+        repeated rivet.common.Uuid identifiers = 2;
+    }
+
+    repeated Namespace namespaces = 1;
+}

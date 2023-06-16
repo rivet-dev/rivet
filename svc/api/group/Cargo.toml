@@ -1,0 +1,68 @@
+[package]
+name = "api-group"
+version = "0.0.1"
+edition = "2018"
+authors = ["Rivet Gaming, LLC <developer@rivet.gg>"]
+license = "Apache-2.0"
+
+[dependencies]
+rivet-convert = { path = "../../../lib/convert" }
+api-helper = { path = "../../../lib/api-helper/build" }
+async-trait = "0.1"
+chirp-client = { path = "../../../lib/chirp/client" }
+rivet-operation = { path = "../../../lib/operation/core" }
+chrono = "0.4"
+futures-util = "0.3"
+http = "0.2"
+hyper = { version = "0.14", features = ["server", "http1", "stream", "tcp"] }
+lazy_static = "1.4"
+prost = "0.10"
+rivet-cache = { path = "../../../lib/cache/build" }
+rivet-claims = { path = "../../../lib/claims" }
+rivet-group-server = { path = "../../../lib/smithy-output/api-group/rust-server" }
+rivet-health-checks = { path = "../../../lib/health-checks" }
+rivet-pools = { path = "../../../lib/pools" }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+thiserror = "1.0"
+tokio = { version = "1.21" }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", default-features = false, features = ["fmt", "json", "ansi"] }
+url = "2.2.2"
+util-nsfw = { package = "rivet-util-nsfw", path = "../../pkg/nsfw/util" }
+uuid = { version = "1", features = ["v4"] }
+
+chat-thread-get-for-topic = { path = "../../pkg/chat-thread/ops/get-for-topic" }
+game-get = { path = "../../pkg/game/ops/get" }
+game-resolve-namespace-id = { path = "../../pkg/game/ops/resolve-namespace-id" }
+party-get = { path = "../../pkg/party/ops/get" }
+party-member-get = { path = "../../pkg/party/ops/member-get" }
+party-member-list = { path = "../../pkg/party/ops/member-list" }
+party-publicity-for-user = { path = "../../pkg/party/ops/publicity-for-user" }
+team-avatar-upload-complete = { path = "../../pkg/team/ops/avatar-upload-complete" }
+team-dev-get = { path = "../../pkg/team-dev/ops/get" }
+team-get = { path = "../../pkg/team/ops/get" }
+team-invite-get = { path = "../../pkg/team-invite/ops/get" }
+team-join-request-list = { path = "../../pkg/team/ops/join-request-list" }
+team-member-count = { path = "../../pkg/team/ops/member-count" }
+team-member-list = { path = "../../pkg/team/ops/member-list" }
+team-profile-validate = { path = "../../pkg/team/ops/profile-validate" }
+team-recommend = { path = "../../pkg/team/ops/recommend" }
+team-search = { path = "../../pkg/team/ops/search" }
+team-user-ban-get = { path = "../../pkg/team/ops/user-ban-get" }
+team-user-ban-list = { path = "../../pkg/team/ops/user-ban-list" }
+token-revoke = { path = "../../pkg/token/ops/revoke" }
+upload-prepare = { path = "../../pkg/upload/ops/prepare" }
+user-follow-get = { path = "../../pkg/user-follow/ops/get" }
+user-get = { path = "../../pkg/user/ops/get" }
+user-identity-get = { path = "../../pkg/user-identity/ops/get" }
+user-presence-get = { path = "../../pkg/user-presence/ops/get" }
+user-team-list = { path = "../../pkg/user/ops/team-list" }
+
+[dev-dependencies]
+rivet-connection = { path = "../../../lib/connection" }
+rivet-group = { path = "../../../lib/smithy-output/api-group/rust" }
+rand = "0.8"
+
+faker-user = { path = "../../pkg/faker/ops/user" }
+user-token-create = { path = "../../pkg/user/ops/token-create" }

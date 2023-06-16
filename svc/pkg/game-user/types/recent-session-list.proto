@@ -1,0 +1,23 @@
+syntax = "proto3";
+
+package rivet.backend.pkg.game_user.recent_session_list;
+
+import "proto/common.proto";
+
+message Request {
+	repeated rivet.common.Uuid user_ids = 1;
+}
+
+message Response {
+	message User {
+		rivet.common.Uuid user_id = 1;
+		repeated Session sessions = 2;
+	}
+
+	message Session {
+		rivet.common.Uuid namespace_id = 1;
+		int64 start_ts = 2;
+	}
+
+	repeated User users = 1;
+}

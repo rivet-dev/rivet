@@ -1,0 +1,30 @@
+[package]
+name = "email-verification-create"
+version = "0.0.1"
+edition = "2018"
+authors = ["Rivet Gaming, LLC <developer@rivet.gg>"]
+license = "Apache-2.0"
+
+[dependencies]
+chirp-client = { path = "../../../../../lib/chirp/client" }
+rivet-operation = { path = "../../../../../lib/operation/core" }
+chrono = "0.4"
+email-address-parser = "1.0.1"
+prost = "0.10"
+rand = "0.8"
+serde_json = "1.0"
+
+email-send = { path = "../../../email/ops/send" }
+game-get = { path = "../../../game/ops/get" }
+
+[dependencies.sqlx]
+version = "0.6"
+default-features = false
+
+[dev-dependencies]
+chirp-worker = { path = "../../../../../lib/chirp/worker" }
+reqwest = "0.11"
+
+faker-game = { path = "../../../faker/ops/game" }
+game-logo-upload-complete = { path = "../../../game/ops/logo-upload-complete" }
+upload-prepare = { path = "../../../upload/ops/prepare" }

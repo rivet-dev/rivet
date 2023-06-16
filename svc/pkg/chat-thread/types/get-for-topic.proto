@@ -1,0 +1,14 @@
+syntax = "proto3";
+
+package rivet.backend.pkg.chat_thread.get_for_topic;
+
+import "proto/common.proto";
+import "proto/backend/chat.proto";
+
+message Request {
+    repeated rivet.backend.chat.Topic topics = 1;
+}
+
+message Response {
+	repeated rivet.backend.chat.Thread threads = 1;
+}

@@ -1,0 +1,7 @@
+[service]
+name = "team-validate"
+
+[runtime]
+kind = "rust"
+
+[operation]

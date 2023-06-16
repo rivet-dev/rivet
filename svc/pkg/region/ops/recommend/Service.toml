@@ -1,0 +1,7 @@
+[service]
+name = "region-recommend"
+
+[runtime]
+kind = "rust"
+
+[operation]

@@ -1,0 +1,7 @@
+[service]
+name = "cloud-namespace-token-development-create"
+
+[runtime]
+kind = "rust"
+
+[operation]

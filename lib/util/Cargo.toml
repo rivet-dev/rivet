@@ -1,0 +1,8 @@
+[workspace]
+members = [
+	"core",
+	"env",
+	"macros",
+	"search",
+]
+

@@ -1,0 +1,15 @@
+syntax = "proto3";
+
+package rivet.backend.pkg.faker.region;
+
+import "proto/common.proto";
+import "proto/backend/region.proto";
+
+message Request {
+
+}
+
+message Response {
+	rivet.common.Uuid region_id = 1;
+	rivet.backend.region.Region region = 2;
+}

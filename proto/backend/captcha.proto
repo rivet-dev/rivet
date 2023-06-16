@@ -1,0 +1,59 @@
+syntax = "proto3";
+
+package rivet.backend.captcha;
+
+enum CaptchaProvider {
+	UNKNOWN = 0;
+
+	HCAPTCHA = 1;
+	TURNSTILE = 2;
+}
+
+message CaptchaConfig {
+	message Hcaptcha {
+		enum Level {
+			EASY = 0;
+			MODERATE = 1;
+			DIFFICULT = 2;
+			ALWAYS_ON = 3;
+		}
+
+		Level level = 1;
+	}
+
+	message Turnstile {
+		message Domain {
+			string domain = 1;
+			string secret_key = 2;
+		}
+
+		repeated Domain domains = 1;
+	}
+
+	// How many times a user can bypass the captcha before being prompted
+	// again. Set to 0 to always check the captcha.
+	uint32 requests_before_reverify = 1;
+
+	// Maximum time to allow the last user's captcha verification to be valid
+	// before making them check again.
+	int64 verification_ttl = 2;
+
+	optional Hcaptcha hcaptcha = 101;
+	optional Turnstile turnstile = 102;
+}
+
+message CaptchaClientResponse {
+	message Hcaptcha {
+		string client_response = 1;
+	}
+
+	message Turnstile {
+		string client_response = 1;
+	}
+
+	// Verification method to use.
+	oneof kind {
+		Hcaptcha hcaptcha = 101;
+		Turnstile turnstile = 102;
+	}
+}

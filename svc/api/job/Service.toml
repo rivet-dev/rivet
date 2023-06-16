@@ -1,0 +1,11 @@
+[service]
+name = "api-job"
+essential = true
+
+[runtime]
+kind = "rust"
+
+[[api.router.mounts]]
+path = "/v1"
+subdomain = "job.api"
+

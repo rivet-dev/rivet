@@ -1,0 +1,15 @@
+syntax = "proto3";
+
+package rivet.backend.pkg.user_follow.toggle;
+
+import "proto/common.proto";
+
+message Request {
+	rivet.common.Uuid follower_user_id = 1;
+	rivet.common.Uuid following_user_id = 2;
+	bool active = 3;
+}
+
+message Response {
+
+}

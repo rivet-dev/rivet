@@ -1,0 +1,63 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/fern-api/fern/main/fern.schema.json
+
+imports:
+  commons: ../../common.yml
+  lobbyGroup: lobby_group.yml
+
+types:
+  PortRange:
+    docs: Range of ports that can be connected to.
+    properties:
+      min:
+        docs: Unsigned 32 bit integer.
+        type: integer
+      max:
+        docs: Unsigned 32 bit integer.
+        type: integer
+
+  PortProtocol:
+    docs: A port protocol.
+    enum:
+      - http
+      - https
+      - tcp
+      - tcp_tls
+      - udp
+
+  ProxyKind:
+    enum:
+      - none
+      - game_guard
+
+  Captcha:
+    docs: Matchmaker captcha configuration.
+    properties:
+      requests_before_reverify:
+        docs: >-
+          Denotes how many requests a connection can make before it is required
+          to reverify a captcha.
+        type: integer
+      verification_ttl:
+        docs: >-
+          Denotes how long a connection can continue to reconnect without having
+          to reverify a captcha (in milliseconds).
+        type: long
+      hcaptcha: optional<CaptchaHcaptcha>
+
+  CaptchaHcaptcha:
+    docs: hCpatcha configuration.
+    properties:
+      level: CaptchaHcaptchaLevel
+
+  CaptchaHcaptchaLevel:
+    docs: How hard a captcha should be.
+    enum:
+      - easy
+      - moderate
+      - difficult
+      - always_on
+
+  NetworkMode:
+    enum:
+      - bridge
+      - host

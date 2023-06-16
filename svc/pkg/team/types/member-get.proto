@@ -1,0 +1,24 @@
+syntax = "proto3";
+
+package rivet.backend.pkg.team.member_get;
+
+import "proto/common.proto";
+
+message Request {
+	message TeamMember {
+		rivet.common.Uuid team_id = 1;
+		rivet.common.Uuid user_id = 2;
+	}
+
+	repeated TeamMember members = 1;
+}
+
+message Response {
+	message TeamMember {
+		rivet.common.Uuid team_id = 1;
+		rivet.common.Uuid user_id = 2;
+		int64 join_ts = 3;
+	}
+
+	repeated TeamMember members = 1;
+}

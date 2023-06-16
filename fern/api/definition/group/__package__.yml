@@ -1,0 +1,356 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/fern-api/fern/main/fern.schema.json
+
+imports:
+  commons: ../common.yml
+  uploadCommons: ../upload/common.yml
+  groupCommons: ../group/common.yml
+
+service:
+  auth: true
+  url: Group
+  audiences:
+    - public
+  base-path: /groups
+  endpoints:
+    listSuggested:
+      path: ""
+      method: GET
+      docs: Returns a list of suggested groups.
+      request:
+        name: ListSuggestedRequest
+        query-parameters:
+          watch_index:
+            docs: A query parameter denoting the requests watch index.
+            type: optional<string>
+      response: ListSuggestedResponse
+
+    create:
+      path: ""
+      method: POST
+      docs: Creates a new group.
+      request:
+        body: CreateRequest
+      response: CreateResponse
+
+    prepareAvatarUpload:
+      path: /avatar-upload/prepare
+      method: POST
+      docs: |-
+        Prepares an avatar image upload.
+        Complete upload with `rivet.api.group#CompleteAvatarUpload`.
+      request:
+        body: PrepareAvatarUploadRequest
+      response: PrepareAvatarUploadResponse
+
+    validateProfile:
+      path: /profile/validate
+      method: POST
+      docs: >-
+        Validate contents of group profile.
+        Use to provide immediate feedback on profile changes before committing
+        them.
+      request:
+        body: ValidateProfileRequest
+      response: ValidateProfileResponse
+
+    search:
+      path: /search
+      method: GET
+      docs: Fuzzy search for groups.
+      request:
+        name: SearchRequest
+        query-parameters:
+          query:
+            docs: The query to match group display names against.
+            type: string
+          anchor: optional<string>
+          limit:
+            docs: Unsigned 32 bit integer.
+            type: optional<double>
+      response: SearchResponse
+
+    completeAvatarUpload:
+      path: /{group_id}/avatar-upload/{upload_id}/complete
+      method: POST
+      docs: |-
+        Completes an avatar image upload. Must be called after the file upload
+        process completes.
+        Call `rivet.api.group#PrepareAvatarUpload` first.
+      path-parameters:
+        group_id:
+          type: uuid
+        upload_id:
+          type: uuid
+
+    getBans:
+      path: /{group_id}/bans
+      method: GET
+      docs: Returns a group's bans. Must have valid permissions to view.
+      path-parameters:
+        group_id:
+          type: uuid
+      request:
+        name: GetBansRequest
+        query-parameters:
+          anchor:
+            docs: >-
+              The pagination anchor. Set to the returned anchor of this endpoint
+              to receive the next set of items.
+            type: optional<string>
+          count:
+            docs: Amount of bans to return.
+            type: optional<double>
+          watch_index:
+            docs: A query parameter denoting the requests watch index.
+            type: optional<string>
+      response: GetBansResponse
+
+    banIdentity:
+      path: /{group_id}/bans/{identity_id}
+      method: POST
+      docs: >-
+        Bans an identity from a group. Must be the owner of the group to perform
+        this action. The banned identity
+        will no longer be able to create a join request or use a group invite.
+      path-parameters:
+        group_id:
+          type: uuid
+        identity_id:
+          type: uuid
+
+    unbanIdentity:
+      path: /{group_id}/bans/{identity_id}
+      method: DELETE
+      docs: >-
+        Unbans an identity from a group. Must be the owner of the group to
+        perform this action.
+      path-parameters:
+        group_id:
+          type: uuid
+        identity_id:
+          type: uuid
+
+    getJoinRequests:
+      path: /{group_id}/join-requests
+      method: GET
+      docs: Returns a group's join requests. Must have valid permissions to view.
+      path-parameters:
+        group_id:
+          type: uuid
+      request:
+        name: GetJoinRequestsRequest
+        query-parameters:
+          anchor:
+            docs: >-
+              The pagination anchor. Set to the returned anchor of this endpoint
+              to receive the next set of items.
+            type: optional<string>
+          count:
+            docs: Amount of join requests to return.
+            type: optional<double>
+          watch_index:
+            docs: A query parameter denoting the requests watch index.
+            type: optional<string>
+      response: GetJoinRequestsResponse
+
+    kickMember:
+      path: /{group_id}/kick/{identity_id}
+      method: POST
+      docs: >-
+        Kicks an identity from a group. Must be the owner of the group to
+        perform this action.
+      path-parameters:
+        group_id:
+          type: uuid
+        identity_id:
+          type: uuid
+
+    leave:
+      path: /{group_id}/leave
+      method: POST
+      docs: Leaves a group.
+      path-parameters:
+        group_id:
+          type: uuid
+
+    getMembers:
+      path: /{group_id}/members
+      method: GET
+      docs: Returns a group's members.
+      path-parameters:
+        group_id:
+          type: uuid
+      request:
+        name: GetMembersRequest
+        query-parameters:
+          anchor:
+            docs: >-
+              The pagination anchor. Set to the returned anchor of this endpoint
+              to receive the next set of items.
+            type: optional<string>
+          count:
+            docs: Amount of members to return.
+            type: optional<double>
+          watch_index:
+            docs: A query parameter denoting the requests watch index.
+            type: optional<string>
+      response: GetMembersResponse
+
+    getProfile:
+      path: /{group_id}/profile
+      method: GET
+      docs: Returns a group profile.
+      path-parameters:
+        group_id:
+          type: uuid
+      request:
+        name: GetProfileRequest
+        query-parameters:
+          watch_index:
+            docs: A query parameter denoting the requests watch index.
+            type: optional<string>
+      response: GetProfileResponse
+
+    updateProfile:
+      path: /{group_id}/profile
+      method: POST
+      path-parameters:
+        group_id:
+          type: uuid
+      request:
+        body: UpdateProfileRequest
+
+    getSummary:
+      path: /{group_id}/summary
+      method: GET
+      path-parameters:
+        group_id:
+          type: uuid
+      response: GetSummaryResponse
+
+    transferOwnership:
+      path: /{group_id}/transfer-owner
+      method: POST
+      docs: Transfers ownership of a group to another identity.
+      path-parameters:
+        group_id:
+          type: uuid
+      request:
+        body: TransferOwnershipRequest
+
+types:
+  ListSuggestedResponse:
+    properties:
+      groups:
+        docs: A list of group summaries.
+        type: list<groupCommons.Summary>
+      watch: commons.WatchResponse
+
+  CreateRequest:
+    properties:
+      display_name:
+        docs: Represent a resource's readable display name.
+        type: string
+
+  CreateResponse:
+    properties:
+      group_id:
+        type: uuid
+
+  PrepareAvatarUploadRequest:
+    properties:
+      path:
+        docs: The path/filename of the group avatar.
+        type: string
+      mime:
+        docs: The MIME type of the group avatar.
+        type: optional<string>
+      content_length:
+        docs: Unsigned 64 bit integer.
+        type: long
+
+  PrepareAvatarUploadResponse:
+    properties:
+      upload_id:
+        type: uuid
+      presigned_request: uploadCommons.PresignedRequest
+
+  ValidateProfileRequest:
+    properties:
+      display_name:
+        docs: Represent a resource's readable display name.
+        type: optional<string>
+      bio:
+        docs: Detailed information about a profile.
+        type: optional<string>
+      publicity: optional<groupCommons.Publicity>
+
+  ValidateProfileResponse:
+    properties:
+      errors:
+        docs: A list of validation errors.
+        type: list<commons.ValidationError>
+
+  SearchResponse:
+    properties:
+      groups:
+        docs: A list of group handles.
+        type: list<groupCommons.Handle>
+      anchor: optional<string>
+
+  GetBansResponse:
+    properties:
+      banned_identities:
+        docs: A list of banned group members.
+        type: list<groupCommons.BannedIdentity>
+      anchor:
+        docs: The pagination anchor.
+        type: optional<string>
+      watch: commons.WatchResponse
+
+  GetJoinRequestsResponse:
+    properties:
+      join_requests:
+        docs: A list of group join requests.
+        type: list<groupCommons.JoinRequest>
+      anchor:
+        docs: The pagination anchor.
+        type: optional<string>
+      watch: commons.WatchResponse
+
+  GetMembersResponse:
+    properties:
+      members:
+        docs: A list of group members.
+        type: list<groupCommons.Member>
+      anchor:
+        docs: The pagination anchor.
+        type: optional<string>
+      watch: commons.WatchResponse
+
+  GetProfileResponse:
+    properties:
+      group: groupCommons.Profile
+      watch: commons.WatchResponse
+
+  UpdateProfileRequest:
+    properties:
+      display_name:
+        docs: Represent a resource's readable display name.
+        type: optional<string>
+      bio:
+        docs: Detailed information about a profile.
+        type: optional<string>
+      publicity: optional<groupCommons.Publicity>
+
+  GetSummaryResponse:
+    properties:
+      group: groupCommons.Summary
+
+  TransferOwnershipRequest:
+    properties:
+      new_owner_identity_id:
+        docs: |-
+          Identity to transfer the group to.
+          Must be a member of the group.
+        type: string

@@ -1,0 +1,22 @@
+[package]
+name = "game-version-validate"
+version = "0.0.1"
+edition = "2018"
+authors = ["Rivet Gaming, LLC <developer@rivet.gg>"]
+license = "Apache-2.0"
+
+[dependencies]
+chirp-client = { path = "../../../../../lib/chirp/client" }
+rivet-operation = { path = "../../../../../lib/operation/core" }
+prost = "0.10"
+util-mm = { package = "rivet-util-mm", path = "../../../mm/util" }
+
+game-version-get = { path = "../version-get" }
+game-version-list = { path = "../version-list" }
+region-get = { path = "../../../region/ops/get" }
+tier-list = { path = "../../../tier/ops/list" }
+
+[dev-dependencies]
+chirp-worker = { path = "../../../../../lib/chirp/worker" }
+
+faker-game = { path = "../../../faker/ops/game" }

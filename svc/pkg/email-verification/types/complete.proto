@@ -1,0 +1,23 @@
+syntax = "proto3";
+
+package rivet.backend.pkg.email_verification.complete;
+
+import "proto/common.proto";
+
+message Request {
+	rivet.common.Uuid verification_id = 1;
+	string code = 2;
+}
+
+message Response {
+	enum Status {
+		CORRECT = 0;
+		ALREADY_COMPLETE = 1;
+		EXPIRED = 2;
+		TOO_MANY_ATTEMPTS = 3;
+		INCORRECT = 4;
+	}
+
+	Status status = 1;
+	string email = 2;
+}

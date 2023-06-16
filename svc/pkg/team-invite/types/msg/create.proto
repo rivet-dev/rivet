@@ -1,0 +1,16 @@
+syntax = "proto3";
+
+package rivet.backend.pkg.team_invite.msg.create;
+
+import "proto/common.proto";
+
+/// name = "msg-team-invite-create"
+/// parameters = [
+/// 	{ name = "team_id" },
+/// ]
+message Message {
+	rivet.common.Uuid team_id = 1;
+	optional int64 ttl = 2;
+	optional uint64 max_use_count = 3;
+}
+

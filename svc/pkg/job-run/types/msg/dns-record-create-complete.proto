@@ -1,0 +1,15 @@
+syntax = "proto3";
+
+package rivet.backend.pkg.job_run.msg.dns_record_create_complete;
+
+import "proto/common.proto";
+
+/// name = "msg-job-run-dns-record-create-complete"
+/// deduplicate = true
+/// parameters = [
+/// 	{ name = "run_id" },
+/// ]
+message Message {
+
+}
+

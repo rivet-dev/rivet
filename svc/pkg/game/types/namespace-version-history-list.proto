@@ -1,0 +1,25 @@
+syntax = "proto3";
+
+package rivet.backend.pkg.game.namespace_version_history_list;
+
+import "proto/common.proto";
+
+message Request {
+	repeated rivet.common.Uuid namespace_ids = 1;
+	optional int64 anchor = 2;
+	uint32 limit = 3;
+}
+
+message Response {
+	message Namespace {
+		rivet.common.Uuid namespace_id = 1;
+		repeated Version versions = 2;
+	}
+
+	message Version {
+		rivet.common.Uuid version_id = 1;
+		int64 deploy_ts = 2;
+	}
+
+	repeated Namespace namespaces = 1;
+}

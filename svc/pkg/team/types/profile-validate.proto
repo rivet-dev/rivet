@@ -1,0 +1,18 @@
+syntax = "proto3";
+
+package rivet.backend.pkg.team.profile_validate;
+
+import "proto/common.proto";
+
+message Request {
+	optional string display_name = 1;
+	optional string bio = 2;
+}
+
+message Response {
+	message Error {
+		repeated string path = 1;
+	}
+
+	repeated Error errors = 1;
+}

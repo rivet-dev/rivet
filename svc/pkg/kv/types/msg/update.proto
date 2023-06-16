@@ -1,0 +1,19 @@
+syntax = "proto3";
+
+package rivet.backend.pkg.kv.msg.update;
+
+import "proto/common.proto";
+
+/// name = "msg-kv-update"
+/// tail-ttl = 75
+/// history = true
+/// parameters = [
+/// 	{ name = "namespace_id" },
+/// 	{ name = "key" },
+/// ]
+message Message {
+    rivet.common.Uuid namespace_id = 1;
+    string key = 2;
+    optional bytes value = 3; // JSON
+}
+

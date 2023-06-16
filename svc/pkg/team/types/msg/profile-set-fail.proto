@@ -1,0 +1,21 @@
+syntax = "proto3";
+
+package rivet.backend.pkg.team.msg.profile_set_fail;
+
+import "proto/common.proto";
+
+enum ErrorCode {
+	Unknown = 0;
+
+	ValidationFailed = 101;
+}
+
+/// name = "msg-team-profile-set-fail"
+/// parameters = [
+/// 	{ name = "team_id" },
+/// ]
+message Message {
+	rivet.common.Uuid team_id = 1;
+	ErrorCode error_code = 2;
+}
+

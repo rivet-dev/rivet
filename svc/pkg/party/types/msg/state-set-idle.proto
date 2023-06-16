@@ -1,0 +1,14 @@
+syntax = "proto3";
+
+package rivet.backend.pkg.party.msg.state_set_idle;
+
+import "proto/common.proto";
+
+/// name = "msg-party-state-set-idle"
+/// parameters = [
+/// 	{ name = "party_id" },
+/// ]
+message Message {
+	rivet.common.Uuid party_id = 1;
+}
+

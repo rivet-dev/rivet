@@ -1,0 +1,102 @@
+syntax = "proto3";
+
+package rivet.chirp;
+
+import "proto/common.proto";
+
+message Message {
+	reserved 1;
+	rivet.common.Uuid req_id = 4;
+	rivet.common.Uuid ray_id = 2;
+	repeated string parameters = 7;
+	int64 ts = 5;
+	repeated TraceEntry trace = 6;
+	
+	bytes body = 3;
+}
+
+message Request {
+	rivet.common.Uuid req_id = 1;
+	rivet.common.Uuid ray_id = 2;
+	int64 ts = 6;
+	repeated TraceEntry trace = 7;
+	bytes body = 3;
+	optional RequestDebug debug = 4;
+
+	// Suppresses both the request and reply of this requeset in the logs.
+	//
+	// This is useful for very verbose requests and for requests with sensitive data.
+	bool dont_log_body = 5;
+}
+
+message TraceEntry {
+	string svc_name = 1;
+	rivet.common.Uuid req_id = 2;
+	int64 ts = 3;
+	RunContext run_context = 4;
+}
+
+enum RunContext {
+	SERVICE = 0;
+	TEST = 1;
+}
+
+message RequestDebug {
+	/// If this request is coming from a test.
+	bool test = 2;
+
+	/// Overrides the request timestamp. Useful for testing services that
+	/// perform time-dependent operations.
+	int64 override_ts = 1;
+}
+
+message Response {
+	message Ack {
+
+	}
+
+	message Ok {
+		bytes body = 1;
+	}
+
+	message Err {
+		message Internal {
+			string ty = 1;
+			string message = 2;
+			string debug = 3;
+			ErrorCode code = 4;
+		}
+
+		message BadRequest {
+			string code = 1;
+			map<string, string> context = 2;
+			optional string metadata = 3; // JSON
+		}
+
+		oneof kind {
+			Internal internal = 1;
+			BadRequest bad_request = 2;
+		}
+	}
+
+	oneof kind {
+		Ack ack = 3;
+		Ok ok = 1;
+		Err err = 2;
+	}
+}
+
+enum ErrorCode {
+	reserved 1002;
+	UNKNOWN = 0;
+
+	INTERNAL = 1001;
+	RECURSIVE_REQUEST = 1003;
+	TIMED_OUT = 1004;
+}
+
+message DebugServiceError {
+	string svc_name = 1;
+	Response.Err error = 2;
+}
+

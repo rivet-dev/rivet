@@ -1,0 +1,1 @@
+ALTER TABLE teams ADD CONSTRAINT display_name_unique UNIQUE (display_name);

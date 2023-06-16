@@ -1,0 +1,7 @@
+[service]
+name = "identity-config-namespace-create"
+
+[runtime]
+kind = "rust"
+
+[operation]

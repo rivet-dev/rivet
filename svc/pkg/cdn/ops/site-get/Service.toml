@@ -1,0 +1,7 @@
+[service]
+name = "cdn-site-get"
+
+[runtime]
+kind = "rust"
+
+[operation]

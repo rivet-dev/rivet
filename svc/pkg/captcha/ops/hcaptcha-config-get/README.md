@@ -1,0 +1,1 @@
+# captcha-hcaptcha-config-get

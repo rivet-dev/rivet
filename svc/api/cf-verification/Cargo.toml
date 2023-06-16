@@ -1,0 +1,39 @@
+[package]
+name = "api-cf-verification"
+version = "0.0.1"
+authors = ["Rivet Gaming, LLC <developer@rivet.gg>"]
+edition = "2018"
+license = "Apache-2.0"
+
+[dependencies]
+api-helper = { path = "../../../lib/api-helper/build" }
+async-trait = "0.1"
+bytes = "1.0.1"
+chirp-client = { path = "../../../lib/chirp/client" }
+rivet-operation = { path = "../../../lib/operation/core" }
+chrono = "0.4"
+http = "0.2"
+hyper = { version = "0.14", features = ["server", "http1", "tcp"] }
+lazy_static = "1.4"
+prost = "0.10"
+rivet-cache = { path = "../../../lib/cache/build" }
+rivet-cf-verification-server = { path = "../../../lib/smithy-output/api-cf-verification/rust-server" }
+rivet-claims = { path = "../../../lib/claims" }
+rivet-health-checks = { path = "../../../lib/health-checks" }
+rivet-pools = { path = "../../../lib/pools" }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+thiserror = "1.0"
+tokio = { version = "1.21" }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", default-features = false, features = ["fmt", "json", "ansi"] }
+url = "2.2.2"
+uuid = { version = "1", features = ["v4"] }
+
+cf-custom-hostname-get = { path = "../../pkg/cf-custom-hostname/ops/get" }
+
+[dev-dependencies]
+rivet-cf-verification = { path = "../../../lib/smithy-output/api-cf-verification/rust" }
+rivet-connection = { path = "../../../lib/connection" }
+
+faker-game = { path = "../../pkg/faker/ops/game" }

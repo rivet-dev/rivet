@@ -1,0 +1,9 @@
+[service]
+name = "playground"
+regions = ["lnd-atl"]
+
+[runtime]
+kind = "rust"
+
+[oneshot]
+

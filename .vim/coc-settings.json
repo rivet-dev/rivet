@@ -1,0 +1,7 @@
+{
+    "protoc": {
+        "options": [
+            "-I=proto/proto"
+        ]
+    }
+}

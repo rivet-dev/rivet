@@ -1,0 +1,14 @@
+syntax = "proto3";
+
+package rivet.backend.pkg.region.list;
+
+import "proto/common.proto";
+
+message Request {
+	// Regions can no longer be disabled.
+	bool include_disabled = 1 [deprecated=true];
+}
+
+message Response {
+	repeated rivet.common.Uuid region_ids = 1;
+}

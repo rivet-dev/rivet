@@ -1,0 +1,11 @@
+syntax = "proto3";
+
+package rivet.backend.pkg.token.exchange;
+
+import "proto/common.proto";
+
+message Request {
+	rivet.common.Uuid jti = 1;
+}
+
+message Response { }

@@ -1,0 +1,86 @@
+services {
+	name = "traffic-server"
+	tags = [
+		"traffic-server",
+		"proxy",
+
+		{% for prefix in ["traefik-ing-px", "traefik-local"] %}
+		"{{prefix}}.enable=true",
+
+		# MARK: middlewares.ats-cors
+		"{{prefix}}.http.middlewares.ats-cors.headers.accessControlAllowMethods=GET, OPTIONS",
+		"{{prefix}}.http.middlewares.ats-cors.headers.accessControlAllowOriginList=https://{{domain['base']}}",
+		"{{prefix}}.http.middlewares.ats-cors.headers.accessControlMaxAge=300",
+
+		# MARK: middlewares.ats-cors-game
+		"{{prefix}}.http.middlewares.ats-cors-game.headers.accessControlAllowMethods=GET, OPTIONS",
+		"{{prefix}}.http.middlewares.ats-cors-game.headers.accessControlAllowOriginList=*",
+		"{{prefix}}.http.middlewares.ats-cors-game.headers.accessControlMaxAge=300",
+
+		# MARK: middlewares.ats-cdn
+		"{{prefix}}.http.middlewares.ats-cdn.chain.middlewares=ats-cdn-retry, ats-cdn-compress, ats-cdn-cache-control",
+
+		# MARK: middlewares.ats-cdn-lfs
+		# Used for large file delivery. We disable compression because Traefik
+		# is CPU-bound when sending large files. We disable cache control since
+		# the files are big.
+		"{{prefix}}.http.middlewares.ats-cdn-lfs.chain.middlewares=ats-cdn-retry",
+
+		# MARK: middlewares.ats-cdn-retry
+		"{{prefix}}.http.middlewares.ats-cdn-retry.retry.attempts=4",
+		"{{prefix}}.http.middlewares.ats-cdn-retry.retry.initialInterval=1s",
+
+		# MARK: middlewares.ats-cdn-compress
+		"{{prefix}}.http.middlewares.ats-cdn-compress.compress=true",
+
+		# MARK: middlewares.ats-cdn-cache-control
+		# TODO: Do we need this if we're proxying ATS -> Traefik -> Cloudflare?
+		"{{prefix}}.http.middlewares.ats-cdn-compress.compress=true",
+
+		# MARK: middlewares.ats-cdn-cache-control
+		# See https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Cache-Control#caching_static_assets
+		# and https://imagekit.io/blog/ultimate-guide-to-http-caching-for-static-assets/
+		"{{prefix}}.http.middlewares.ats-cdn-cache-control.headers.customResponseHeaders.Cache-Control=public, max-age=604800, immutable",
+
+		# MARK: routers.ats-build
+		# "{{prefix}}.http.routers.ats-build.entryPoints=lb-443",
+		# "{{prefix}}.http.routers.ats-build.rule=Host(`cdn.{{domain['base']}}`) && PathPrefix(`/build/`)",
+		# "{{prefix}}.http.routers.ats-build.middlewares=ats-build-auth, ats-build-path, ats-cdn-lfs",
+		# "{{prefix}}.http.routers.ats-build.tls=true",
+
+		# MARK: middlewares.ats-build-auth
+		# TODO: Add more secure per-game authentication with https://doc.traefik.io/traefik/middlewares/http/forwardauth/
+		# "{{prefix}}.http.middlewares.ats-build-auth.basicAuth.users=job_run_image:$apr1$0peMM8t1$/ST0ckxxbp4AY.SUzkk4E1",
+		# Without this, we'll receive a `SignatureDoesNotMatch` error
+		# "{{prefix}}.http.middlewares.ats-build-auth.basicAuth.removeHeader=true",
+
+		# MARK: middlewares.ats-build-path
+		# "{{prefix}}.http.middlewares.ats-build-path.replacePathRegex.regex=^/build/(.*)",
+		# "{{prefix}}.http.middlewares.ats-build-path.replacePathRegex.replacement=/s3-cache/{{namespace}}-bucket-build/${1}",
+
+		{% for bucket in ["job-log", "team-billing", "lobby-history-export", "nomad-log-export"] %}
+		# MARK: http.routers-{{bucket}}
+		"{{prefix}}.http.routers.ats-{{bucket}}.entryPoints=lb-443",
+		"{{prefix}}.http.routers.ats-{{bucket}}.rule=Host(`cdn.{{domain['base']}}`) && PathPrefix(`/{{bucket}}/`)",
+		"{{prefix}}.http.routers.ats-{{bucket}}.middlewares=ats-{{bucket}}-path, ats-cors, ats-cdn",
+		"{{prefix}}.http.routers.ats-{{bucket}}.tls=true",
+
+		# MARK: middlewares.ats-{{bucket}}-path
+		"{{prefix}}.http.middlewares.ats-{{bucket}}-path.replacePathRegex.regex=^/{{bucket}}/(.*)",
+		"{{prefix}}.http.middlewares.ats-{{bucket}}-path.replacePathRegex.replacement=/s3-cache/{{namespace}}-bucket-{{bucket}}/${1}",
+		{% endfor %}
+
+		{% endfor %}
+	]
+
+	port = 9300
+	checks = [
+		{
+			name = "Reachable on 9300"
+			tcp = "{{nebula_ipv4}}:9300"
+			interval = "10s"
+			timeout  = "1s"
+		}
+	]
+}
+

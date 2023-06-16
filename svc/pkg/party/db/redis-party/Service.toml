@@ -1,0 +1,10 @@
+[service]
+name = "redis-party"
+
+[runtime]
+kind = "redis"
+index = 5
+persistent = true
+
+[cache]
+

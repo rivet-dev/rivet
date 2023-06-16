@@ -1,0 +1,14 @@
+syntax = "proto3";
+
+package rivet.backend.pkg.job_run.msg.eval_complete;
+
+import "proto/common.proto";
+
+/// name = "msg-job-run-eval-complete"
+/// parameters = [
+/// 	{ name = "run_id" },
+/// ]
+message Message {
+	rivet.common.Uuid run_id = 1;
+}
+

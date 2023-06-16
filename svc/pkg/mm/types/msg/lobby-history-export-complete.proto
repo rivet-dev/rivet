@@ -1,0 +1,14 @@
+syntax = "proto3";
+
+package rivet.backend.pkg.mm.msg.lobby_history_export_complete;
+
+import "proto/common.proto";
+
+/// name = "msg-mm-lobby-history-export-complete"
+/// parameters = [
+/// 	{ name = "request_id" },
+/// ]
+message Message {
+	rivet.common.Uuid upload_id = 1;
+}
+

@@ -1,0 +1,7 @@
+[service]
+name = "debug-email-res"
+
+[runtime]
+kind = "rust"
+
+[operation]

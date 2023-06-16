@@ -1,0 +1,15 @@
+syntax = "proto3";
+
+package rivet.backend.pkg.user.msg.mutual_follow_create;
+
+import "proto/common.proto";
+
+/// name = "msg-user-mutual-follow-create"
+/// tail-ttl = 300
+/// parameters = [
+/// 	{ name = "user_id" },
+/// ]
+message Message {
+	rivet.common.Uuid user_a_id = 1;
+	rivet.common.Uuid user_b_id = 2;
+}

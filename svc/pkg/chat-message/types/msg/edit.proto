@@ -1,0 +1,15 @@
+syntax = "proto3";
+
+package rivet.backend.pkg.chat_message.msg.edit;
+
+import "proto/common.proto";
+import "proto/backend/chat.proto";
+
+/// name = "msg-chat-message-edit"
+/// parameters = [
+/// 	{ name = "chat_message_id" },
+/// ]
+message Message {
+	rivet.common.Uuid chat_message_id = 1;
+	rivet.backend.chat.MessageBody body = 2;
+}

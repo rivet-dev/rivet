@@ -1,0 +1,51 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/fern-api/fern/main/fern.schema.json
+
+imports:
+  commons: ../../common.yml
+
+service:
+  auth: false
+  url: Cloud
+  base-path: /devices/links
+  endpoints:
+    prepare:
+      path: ""
+      audiences:
+        - public
+      method: "POST"
+      response: PrepareDeviceLinkResponse
+
+    get:
+      path: ""
+      audiences:
+        - public
+      method: "GET"
+      request:
+        name: GetDeviceLinkRequest
+        query-parameters:
+          device_link_token: commons.JWT
+          watch_index: commons.WatchQuery
+      response: GetDeviceLinkResponse
+
+    complete:
+      path: "/complete"
+      method: "POST"
+      request:
+        body: CompleteDeviceLinkRequest
+
+types:
+  PrepareDeviceLinkResponse:
+    properties:
+      device_link_id: uuid
+      device_link_token: string
+      device_link_url: string
+
+  GetDeviceLinkResponse:
+    properties:
+      cloud_token: optional<string>
+      watch: commons.WatchResponse
+
+  CompleteDeviceLinkRequest:
+    properties:
+      device_link_token: commons.JWT
+      game_id: uuid

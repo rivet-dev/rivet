@@ -1,0 +1,85 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/fern-api/fern/main/fern.schema.json
+
+imports:
+  commons: ../common.yml
+  localCommons: common.yml
+
+service:
+  auth: true
+  url: Matchmaker
+  base-path: /players
+  audiences:
+    - public
+  endpoints:
+    connected:
+      path: /connected
+      method: POST
+      docs: |
+        Validates the player token is valid and has not already been consumed then
+        marks the player as connected.
+        # Player Tokens and Reserved Slots
+        Player tokens reserve a spot in the lobby until they expire. This allows for
+        precise matchmaking up to exactly the lobby's player limit, which is
+        important for games with small lobbies and a high influx of players.
+        By calling this endpoint with the player token, the player's spot is marked
+        as connected and will not expire. If this endpoint is never called, the
+        player's token will expire and this spot will be filled by another player.
+        # Anti-Botting
+        Player tokens are only issued by caling `lobbies.join`, calling `lobbies.find`, or
+        from the `GlobalEventMatchmakerLobbyJoin` event.
+        These endpoints have anti-botting measures (i.e. enforcing max player
+        limits, captchas, and detecting bots), so valid player tokens provide some
+        confidence that the player is not a bot.
+        Therefore, it's important to make sure the token is valid by waiting for
+        this endpoint to return OK before allowing the connected socket to do
+        anything else. If this endpoint returns an error, the socket should be
+        disconnected immediately.
+        # How to Transmit the Player Token
+        The client is responsible for acquiring the player token by caling
+        `lobbies.join`, calling `lobbies.find`, or from the `GlobalEventMatchmakerLobbyJoin`
+        event.  Beyond that, it's up to the developer how the player token is
+        transmitted to the lobby.
+        If using WebSockets, the player token can be transmitted as a query
+        parameter.
+        Otherwise, the player token will likely be automatically sent by the client
+        once the socket opens. As mentioned above, nothing else should happen until
+        the player token is validated.
+      request:
+        name: PlayerConnectedRequest
+        body:
+          properties:
+            player_token: string
+
+    disconnected:
+      path: /disconnected
+      method: POST
+      docs: >-
+        Marks a player as disconnected.
+        # Ghost Players
+        If players are not marked as disconnected, lobbies will result with "ghost players" that the matchmaker thinks exist but are no longer connected to the lobby.
+      request:
+        name: PlayerDisconnectedRequest
+        body:
+          properties:
+            player_token: string
+
+    getStatistics:
+      docs: Gives matchmaker statistics about the players in game.
+      path: /statistics
+      method: GET
+      response: GetStatisticsResponse
+
+types:
+  GetStatisticsResponse:
+    properties:
+      player_count: long
+      game_modes: map<commons.Identifier, GameModeStatistics>
+
+  GameModeStatistics:
+    properties:
+      player_count: long
+      regions: map<commons.Identifier, RegionStatistics>
+
+  RegionStatistics:
+    properties:
+      player_count: long

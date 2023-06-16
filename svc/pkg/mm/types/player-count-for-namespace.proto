@@ -1,0 +1,18 @@
+syntax = "proto3";
+
+package rivet.backend.pkg.mm.player_count_for_namespace;
+
+import "proto/common.proto";
+
+message Request {
+	repeated rivet.common.Uuid namespace_ids = 1;
+}
+
+message Response {
+	message Namespace {
+		rivet.common.Uuid namespace_id = 1;
+		uint32 player_count = 2;
+	}
+
+	repeated Namespace namespaces = 1;
+}

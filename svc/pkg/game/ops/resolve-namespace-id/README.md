@@ -1,0 +1,1 @@
+# game-resolve-namespace-id

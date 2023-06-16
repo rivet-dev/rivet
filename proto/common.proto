@@ -1,0 +1,21 @@
+syntax = "proto3";
+
+package rivet.common;
+
+import "google/protobuf/empty.proto";
+
+message Uuid {
+	bytes uuid = 1;
+}
+
+message Glob {
+	message Token {
+		oneof kind {
+			string char = 1;
+			google.protobuf.Empty any_sequence = 2;
+			google.protobuf.Empty any_recursive_sequence = 3;
+		}
+	}
+
+	repeated Token tokens = 1;
+}

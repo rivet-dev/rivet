@@ -1,0 +1,22 @@
+syntax = "proto3";
+
+package rivet.backend.pkg.build.create;
+
+import "proto/common.proto";
+import "proto/backend/upload.proto";
+
+message Request {
+	rivet.common.Uuid game_id = 1;
+	string display_name = 2;
+	optional string image_tag = 4;
+	optional rivet.backend.upload.PrepareFile image_file = 3;
+
+	// If provided, will look up the pre-uploaded upload ID for a given kind.
+	optional string default_build_kind = 5;
+}
+
+message Response {
+	rivet.common.Uuid build_id = 1;
+	rivet.common.Uuid upload_id = 2;
+	optional rivet.backend.upload.PresignedUploadRequest image_presigned_request = 3;
+}

@@ -1,0 +1,7 @@
+[service]
+name = "build-get"
+
+[runtime]
+kind = "rust"
+
+[operation]

@@ -1,0 +1,7 @@
+[service]
+name = "chat-worker"
+
+[runtime]
+kind = "rust"
+
+[consumer]

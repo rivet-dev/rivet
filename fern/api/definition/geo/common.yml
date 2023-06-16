@@ -1,0 +1,14 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/fern-api/fern/main/fern.schema.json
+
+types:
+  Coord:
+    docs: Geographical coordinates for a location on Planet Earth.
+    properties:
+      latitude: double
+      longitude: double
+
+  Distance:
+    docs: Distance available in multiple units.
+    properties:
+      kilometers: double
+      miles: double

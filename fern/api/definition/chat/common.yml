@@ -1,0 +1,184 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/fern-api/fern/main/fern.schema.json
+
+imports:
+  commons: ../common.yml
+  localCommons: common.yml
+  groupCommons: ../group/common.yml
+  partyCommons: ../party/common.yml
+  identityCommons: ../identity/common.yml
+
+types:
+  SendTopic:
+    docs: Topic to send a chat message to.
+    properties:
+      thread_id: optional<uuid>
+      group_id: optional<uuid>
+      party_id: optional<uuid>
+      identity_id: optional<uuid>
+
+  SendMessageBody:
+    docs: Data to send in a chat message.
+    properties:
+      text: optional<SendMessageBodyText>
+      party_invite: optional<SendMessageBodyPartyInvite>
+
+  SendMessageBodyText:
+    docs: The text in the text message.
+    properties:
+      body: string
+
+  SendMessageBodyPartyInvite:
+    properties:
+      token: commons.JWT
+
+  QueryDirection:
+    enum:
+      - value: before
+        docs: Query messages send before given timestamp.
+      - value: after
+        docs: Query messages after given timestamp.
+      - value: before_and_after
+        docs: Query messages before and after the given timestamp. This will return at most `count * 2` messages.
+
+  Thread:
+    docs: A chat thread
+    properties:
+      thread_id: uuid
+      create_ts: datetime
+      topic: Topic
+      tail_message: optional<Message>
+      last_read_ts: datetime
+      unread_count: long
+      external: ThreadExternalLinks
+
+  Message:
+    properties:
+      chat_message_id: uuid
+      thread_id: uuid
+      send_ts: datetime
+      body: MessageBody
+
+  MessageBody:
+    docs: Represents types of chat message bodies.
+    properties:
+      text: optional<MessageBodyText>
+      chat_create: optional<MessageBodyChatCreate>
+      deleted: optional<MessageBodyDeleted>
+      identity_follow: optional<MessageBodyIdentityFollow>
+      group_join: optional<MessageBodyGroupJoin>
+      group_leave: optional<MessageBodyGroupLeave>
+      group_member_kick: optional<MessageBodyGroupMemberKick>
+      party_invite: optional<MessageBodyPartyInvite>
+      party_join_request: optional<MessageBodyPartyJoinRequest>
+      party_join: optional<MessageBodyPartyJoin>
+      party_leave: optional<MessageBodyPartyLeave>
+      party_activity_change: optional<MessageBodyPartyActivityChange>
+
+  MessageBodyText:
+    properties:
+      sender: identityCommons.Handle
+      body: string
+
+  MessageBodyChatCreate:
+    properties: {}
+
+  MessageBodyDeleted:
+    properties:
+      sender: identityCommons.Handle
+
+  MessageBodyIdentityFollow:
+    properties: {}
+
+  MessageBodyGroupJoin:
+    properties:
+      identity: identityCommons.Handle
+
+  MessageBodyGroupLeave:
+    properties:
+      identity: identityCommons.Handle
+
+  MessageBodyGroupMemberKick:
+    properties:
+      identity: identityCommons.Handle
+
+  MessageBodyPartyInvite:
+    properties:
+      sender: identityCommons.Handle
+      party: optional<partyCommons.Handle>
+      invite_token: optional<commons.JWT>
+
+  MessageBodyPartyJoinRequest:
+    properties:
+      sender: identityCommons.Handle
+
+  MessageBodyPartyJoin:
+    properties:
+      identity: identityCommons.Handle
+
+  MessageBodyPartyLeave:
+    properties:
+      identity: identityCommons.Handle
+
+  MessageBodyPartyActivityChange:
+    properties:
+      activity: partyCommons.Activity
+
+  Topic:
+    docs: Represents the topic of the given chat thread.
+    properties:
+      group: optional<TopicGroup>
+      party: optional<TopicParty>
+      direct: optional<TopicDirect>
+
+  TopicGroup:
+    properties:
+      group: groupCommons.Handle
+
+  TopicParty:
+    properties:
+      party: partyCommons.Handle
+
+  TopicDirect:
+    properties:
+      identity_a: identityCommons.Handle
+      identity_b: identityCommons.Handle
+
+  SimpleTopic:
+    docs: |
+      Represents a topic of the given chat thread without the associated handles
+      for the topic.
+    properties:
+      group: optional<SimpleTopicGroup>
+      party: optional<SimpleTopicParty>
+      direct: optional<SimpleTopicDirect>
+
+  SimpleTopicGroup:
+    properties:
+      group: uuid
+
+  SimpleTopicParty:
+    properties:
+      party: uuid
+
+  SimpleTopicDirect:
+    properties:
+      identity_a: uuid
+      identity_b: uuid
+
+  ThreadExternalLinks:
+    properties:
+      chat: string
+
+  TypingStatus:
+    properties:
+      idle:
+        docs: Not typing
+        type: optional<commons.EmptyObject>
+      typing:
+        docs: Typing
+        type: optional<commons.EmptyObject>
+
+  IdentityTypingStatus:
+    properties:
+      identity: identityCommons.Handle
+      status: TypingStatus

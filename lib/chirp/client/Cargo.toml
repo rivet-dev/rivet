@@ -1,0 +1,34 @@
+[package]
+name = "chirp-client"
+version = "0.1.0"
+authors = ["Rivet Gaming, LLC <developer@rivet.gg>"]
+edition = "2018"
+license = "Apache-2.0"
+
+[dependencies]
+chirp-perf = { path = "../perf" }
+chirp-types = { path = "../types" }
+chrono = "0.4"
+futures-util = "0.3"
+global-error = { path = "../../global-error" }
+lazy_static = "1.4"
+prost = "0.10"
+rand = "0.8"
+rivet-metrics = { path = "../../metrics" }
+rivet-pools = { path = "../../pools" }
+rivet-util = { path = "../../util/core" }
+serde = { version = "1.0", features = ["derive"] }
+thiserror = "1.0"
+tokio = { version = "1.21", features = ["full"] }
+tokio-util = "0.6"
+tracing = "0.1"
+types = { path = "../../types/core" }
+urlencoding = "2.1"
+uuid = { version = "1", features = ["v4"] }
+
+[dev-dependencies]
+tracing-subscriber = { version = "0.3", default-features = false, features = ["fmt", "ansi"] }
+
+testcontainers = "0.12"
+rivet-test-images = { path = "../../test-images" }
+

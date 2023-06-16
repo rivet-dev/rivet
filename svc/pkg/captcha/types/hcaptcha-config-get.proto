@@ -1,0 +1,14 @@
+syntax = "proto3";
+
+package rivet.backend.pkg.captcha.hcaptcha_config_get;
+
+import "proto/common.proto";
+import "proto/backend/captcha.proto";
+
+message Request {
+    rivet.backend.captcha.CaptchaConfig.Hcaptcha config = 1;
+}
+
+message Response {
+    string site_key = 1;
+}

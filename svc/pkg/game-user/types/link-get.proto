@@ -1,0 +1,33 @@
+syntax = "proto3";
+
+package rivet.backend.pkg.game_user.link_get;
+
+import "proto/common.proto";
+
+message Request {
+	repeated rivet.common.Uuid link_ids = 1;
+}
+
+message Response {
+	enum GameUserLinkStatus {
+		COMPLETE = 0;
+		INCOMPLETE = 1;
+		CANCELLED = 2;
+	}
+
+	message GameUserLink {
+		rivet.common.Uuid link_id = 2;
+		rivet.common.Uuid namespace_id = 7;
+		rivet.common.Uuid token_session_id = 3;
+		rivet.common.Uuid current_game_user_id = 8;
+		optional rivet.common.Uuid new_game_user_id = 1;
+		optional string new_game_user_token = 10;
+		int64 create_ts = 5;
+		optional int64 complete_ts = 9;
+		optional int64 cancelled_ts = 11;
+		GameUserLinkStatus status = 6;
+
+	}
+
+	repeated GameUserLink game_user_links = 1;
+}

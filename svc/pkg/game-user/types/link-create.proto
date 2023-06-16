@@ -1,0 +1,15 @@
+syntax = "proto3";
+
+package rivet.backend.pkg.game_user.link_create;
+
+import "proto/common.proto";
+
+message Request {
+	rivet.common.Uuid game_user_id = 1;
+}
+
+message Response {
+	rivet.common.Uuid link_id = 1;
+	string user_link_token = 2;
+	rivet.common.Uuid token_session_id = 3;
+}

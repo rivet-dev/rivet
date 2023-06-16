@@ -1,0 +1,7 @@
+[service]
+name = "cloud-version-publish"
+
+[runtime]
+kind = "rust"
+
+[operation]

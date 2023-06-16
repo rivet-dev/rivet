@@ -1,0 +1,95 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/fern-api/fern/main/fern.schema.json
+
+imports:
+  commons: ../common.yml
+  identityCommons: ../identity/common.yml
+  gameCommons: ../game/common.yml
+
+service:
+  auth: true
+  url: Identity
+  base-path: /game-links
+  endpoints:
+    prepare:
+      docs: |
+        Begins the process for linking an identity with the Rivet Hub.
+        # Importance of Linking Identities
+        When an identity is created via `rivet.api.identity#SetupIdentity`, the identity is temporary
+        and is not shared with other games the user plays.
+        In order to make the identity permanent and synchronize the identity with
+        other games, the identity must be linked with the hub.
+        # Linking Process
+        The linking process works by opening `identity_link_url` in a browser then polling
+        `rivet.api.identity#GetGameLink` to wait for it to complete.
+        This is designed to be as flexible as possible so `identity_link_url` can be opened
+        on any device. For example, when playing a console game, the user can scan a
+        QR code for `identity_link_url` to authenticate on their phone.
+      path: ""
+      method: POST
+      audiences:
+        - public
+      response: PrepareGameLinkResponse
+
+    get:
+      docs: Returns the current status of a linking process. Once `status` is
+        `complete`, the identity's profile should be fetched again since they
+        may have switched accounts.
+      path: ""
+      method: GET
+      audiences:
+        - public
+      request:
+        name: GetGameLinkRequest
+        query-parameters:
+          identity_link_token: commons.JWT
+          watch_index: commons.WatchQuery
+      response: GetGameLinkResponse
+
+    complete:
+      docs: Completes a game link process and returns whether or not the link is
+        valid.
+      path: "/complete"
+      method: POST
+      request:
+        body: CompleteGameLinkRequest
+
+    cancel:
+      docs: Cancels a game link. It can no longer be used to link after cancellation.
+      path: /cancel
+      method: POST
+      request:
+        body: CancelGameLinkRequest
+
+types:
+  PrepareGameLinkResponse:
+    properties:
+      identity_link_token:
+        type: string
+        docs: Pass this to `GetGameLink` to get the linking status. Valid for 15
+          minutes.
+      identity_link_url:
+        type: string
+      expire_ts:
+        type: datetime
+
+  GetGameLinkResponse:
+    properties:
+      status: identityCommons.GameLinkStatus
+      game: gameCommons.Handle
+      current_identity: identityCommons.Handle
+      new_identity: optional<GetGameLinkNewIdentity>
+      watch: commons.WatchResponse
+
+  GetGameLinkNewIdentity:
+    properties:
+      identity_token: commons.JWT
+      identity_token_expire_ts: datetime
+      identity: identityCommons.Profile
+
+  CompleteGameLinkRequest:
+    properties:
+      identity_link_token: commons.JWT
+
+  CancelGameLinkRequest:
+    properties:
+      identity_link_token: commons.JWT

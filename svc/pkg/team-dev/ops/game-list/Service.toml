@@ -1,0 +1,7 @@
+[service]
+name = "team-dev-game-list"
+
+[runtime]
+kind = "rust"
+
+[operation]

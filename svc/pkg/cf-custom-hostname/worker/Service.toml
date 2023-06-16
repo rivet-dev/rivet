@@ -1,0 +1,8 @@
+[service]
+name = "cf-worker"
+
+[runtime]
+kind = "rust"
+
+[consumer]
+

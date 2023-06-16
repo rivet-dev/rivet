@@ -1,0 +1,46 @@
+name: fern
+
+on: [push]
+
+jobs:
+  fern-check:
+    runs-on: ubuntu-20.04
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v3
+
+      - name: Install Fern
+        run: npm install -g fern-api
+
+      - name: Check Fern API is valid
+        run: fern check
+
+      - name: Verify generated code is up to date
+        env:
+          FERN_TOKEN: ${{ secrets.FERN_TOKEN }}
+        run: |
+          ./scripts/fern/generate_local.sh
+          ./scripts/openapi/gen_spec_compat.sh
+          ./scripts/openapi/gen_rust.sh
+          git --no-pager diff --exit-code
+
+  fern-release:
+    needs: fern-check
+    if: github.event_name == 'push' && contains(github.ref, 'refs/tags/')
+    runs-on: ubuntu-20.04
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v3
+
+      - name: Setup node
+        uses: actions/setup-node@v3
+
+      - name: Install Fern
+        run: npm install -g fern-api
+
+      - name: Release SDKs
+        env:
+          FERN_TOKEN: ${{ secrets.FERN_TOKEN }}
+          FERN_NPM_TOKEN: ${{ secrets.FERN_NPM_TOKEN }}
+        run: |
+          fern generate --group external --version ${{ github.ref_name }} --log-level debug

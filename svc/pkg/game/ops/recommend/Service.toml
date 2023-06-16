@@ -1,0 +1,7 @@
+[service]
+name = "game-recommend"
+
+[runtime]
+kind = "rust"
+
+[operation]

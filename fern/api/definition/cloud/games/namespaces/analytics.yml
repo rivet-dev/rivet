@@ -1,0 +1,30 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/fern-api/fern/main/fern.schema.json
+
+imports:
+  localCommons: ../../common.yml
+
+service:
+  auth: true
+  url: Cloud
+  audiences:
+    - public
+  base-path: /games/{game_id}/namespaces/{namespace_id}/analytics
+  path-parameters:
+    game_id:
+      type: uuid
+
+    namespace_id:
+      type: uuid
+  endpoints:
+    getAnalyticsMatchmakerLive:
+      path: /matchmaker/live
+      method: GET
+      docs: Returns live information about all active lobbies for a given namespace.
+      response: GetAnalyticsMatchmakerLiveResponse
+
+types:
+  GetAnalyticsMatchmakerLiveResponse:
+    properties:
+      lobbies:
+        docs: A list of analytics lobby summaries.
+        type: list<localCommons.LobbySummaryAnalytics>

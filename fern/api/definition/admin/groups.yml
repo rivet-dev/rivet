@@ -1,0 +1,16 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/fern-api/fern/main/fern.schema.json
+
+imports:
+  gameCommons: ../game/common.yml
+
+service:
+  auth: true
+  url: Admin
+  base-path: /groups
+  endpoints:
+    convertDeveloper:
+      path: /{group_id}/developer
+      method: POST
+      path-parameters:
+        group_id: uuid
+

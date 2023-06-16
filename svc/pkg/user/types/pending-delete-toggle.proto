@@ -1,0 +1,14 @@
+syntax = "proto3";
+
+package rivet.backend.pkg.user.pending_delete_toggle;
+
+import "proto/common.proto";
+
+message Request {
+	rivet.common.Uuid user_id = 1;
+	bool active = 2;
+}
+
+message Response {
+
+}

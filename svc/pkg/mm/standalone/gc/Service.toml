@@ -1,0 +1,10 @@
+[service]
+name = "mm-gc"
+regions = ["lnd-atl"]
+
+[runtime]
+kind = "rust"
+
+[headless]
+singleton = true
+

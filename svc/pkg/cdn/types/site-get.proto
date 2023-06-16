@@ -1,0 +1,21 @@
+syntax = "proto3";
+
+package rivet.backend.pkg.cdn.site_get;
+
+import "proto/common.proto";
+
+message Request {
+	repeated rivet.common.Uuid site_ids = 1;
+}
+
+message Response {
+	message Site {
+		rivet.common.Uuid site_id = 1;
+		rivet.common.Uuid game_id = 2;
+		rivet.common.Uuid upload_id = 3;
+		string display_name = 4;
+		int64 create_ts = 5;
+	}
+
+	repeated Site sites = 1;
+}

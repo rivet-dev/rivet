@@ -1,0 +1,7 @@
+[service]
+name = "mm-lobby-find-try-complete"
+
+[runtime]
+kind = "rust"
+
+[operation]

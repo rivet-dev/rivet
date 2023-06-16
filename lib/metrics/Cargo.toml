@@ -1,0 +1,13 @@
+[package]
+name = "rivet-metrics"
+version = "0.1.0"
+edition = "2021"
+authors = ["Rivet Gaming, LLC <developer@rivet.gg>"]
+license = "Apache-2.0"
+
+[dependencies]
+hyper = { version = "0.14", features = ["server", "http1", "tcp"] }
+lazy_static = "1.4"
+prometheus = "0.13"
+tracing = "0.1"
+

@@ -1,0 +1,12 @@
+[service]
+name = "api-admin"
+
+[runtime]
+kind = "rust"
+
+[[api.router.mounts]]
+path = "/v1"
+subdomain = "admin.api"
+
+[secrets]
+"rivet/api_admin/token" = {}

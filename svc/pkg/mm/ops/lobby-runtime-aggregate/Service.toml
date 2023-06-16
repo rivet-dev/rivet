@@ -1,0 +1,8 @@
+[service]
+name = "mm-lobby-runtime-aggregate"
+
+[runtime]
+kind = "rust"
+
+[operation]
+

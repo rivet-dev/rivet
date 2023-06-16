@@ -1,0 +1,7 @@
+[service]
+name = "identity-config-version-publish"
+
+[runtime]
+kind = "rust"
+
+[operation]

@@ -1,0 +1,21 @@
+syntax = "proto3";
+
+package rivet.backend.pkg.team.msg.join_request_create_fail;
+
+import "proto/common.proto";
+
+enum ErrorCode {
+	REQUEST_ALREADY_EXISTS = 0;
+}
+
+/// name = "msg-team-join-request-create-fail"
+/// parameters = [
+/// 	{ name = "team_id" },
+/// 	{ name = "user_id" },
+/// ]
+message Message {
+	rivet.common.Uuid team_id = 1;
+	rivet.common.Uuid user_id = 2;
+	ErrorCode error_code = 3;
+}
+

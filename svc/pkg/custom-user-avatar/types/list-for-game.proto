@@ -1,0 +1,17 @@
+syntax = "proto3";
+
+package rivet.backend.pkg.custom_user_avatar.list_for_game;
+
+import "proto/common.proto";
+
+message Request {
+	rivet.common.Uuid game_id = 1;
+}
+
+message Response {
+	message CustomAvatar {
+		rivet.common.Uuid upload_id = 1;
+	}
+
+	repeated CustomAvatar custom_avatars = 1;
+}

@@ -1,0 +1,71 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/fern-api/fern/main/fern.schema.json
+
+imports:
+  cloudCommons: ../../cloud/common.yml
+  commons: ../../common.yml
+  version: ../version/__package__.yml
+
+service:
+  auth: true
+  base-path: /games/{game_id}/versions
+  url: Cloud
+  audiences:
+    - public
+  path-parameters:
+    game_id:
+      type: uuid
+  endpoints:
+    createGameVersion:
+      path: ""
+      method: POST
+      docs: Creates a new game version.
+      request:
+        body: CreateGameVersionRequest
+      response: CreateGameVersionResponse
+
+    validateGameVersion:
+      path: /validate
+      method: POST
+      docs: Validates information used to create a new game version.
+      request:
+        body: ValidateGameVersionRequest
+      response: ValidateGameVersionResponse
+
+    getGameVersionById:
+      path: /{version_id}
+      method: GET
+      docs: Returns a game version by its version ID.
+      path-parameters:
+        version_id:
+          type: uuid
+      response: GetGameVersionByIdResponse
+
+types:
+  CreateGameVersionRequest:
+    properties:
+      display_name:
+        docs: Represent a resource's readable display name.
+        type: string
+      config: version.Config
+
+  CreateGameVersionResponse:
+    properties:
+      version_id:
+        type: uuid
+
+  ValidateGameVersionRequest:
+    properties:
+      display_name:
+        docs: Represent a resource's readable display name.
+        type: string
+      config: version.Config
+
+  ValidateGameVersionResponse:
+    properties:
+      errors:
+        docs: A list of validation errors.
+        type: list<commons.ValidationError>
+
+  GetGameVersionByIdResponse:
+    properties:
+      version: version.Full

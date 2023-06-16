@@ -1,0 +1,2 @@
+DROP INDEX users_display_name_display_name_len_account_number_idx;
+

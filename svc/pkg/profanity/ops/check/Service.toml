@@ -1,0 +1,7 @@
+[service]
+name = "profanity-check"
+
+[runtime]
+kind = "rust"
+
+[operation]

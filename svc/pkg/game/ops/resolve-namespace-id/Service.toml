@@ -1,0 +1,7 @@
+[service]
+name = "game-resolve-namespace-id"
+
+[runtime]
+kind = "rust"
+
+[operation]

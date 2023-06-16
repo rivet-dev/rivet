@@ -1,0 +1,15 @@
+syntax = "proto3";
+
+package rivet.backend.pkg.faker.team;
+
+import "proto/common.proto";
+
+message Request {
+	rivet.common.Uuid team_id = 2;
+	bool is_dev = 1;
+}
+
+message Response {
+	rivet.common.Uuid team_id = 1;
+	repeated rivet.common.Uuid member_user_ids = 2;
+}

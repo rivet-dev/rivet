@@ -1,0 +1,7 @@
+server = true
+bootstrap_expect = {{ pillar['consul']['leader_count'] }}
+
+ui_config {
+	enabled = true
+}
+

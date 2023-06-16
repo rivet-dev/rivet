@@ -1,0 +1,33 @@
+syntax = "proto3";
+
+package rivet.backend.identity;
+
+import "proto/common.proto";
+
+// MARK: Game Namespace Config
+message NamespaceConfig {
+}
+
+// MARK: Game Version Config
+message VersionConfig {
+    repeated CustomDisplayName custom_display_names = 1;
+	repeated CustomAvatar custom_avatars = 2;
+}
+
+message CustomDisplayName {
+    string display_name = 1;
+}
+
+message CustomAvatar {
+    rivet.common.Uuid upload_id = 1;
+}
+
+// MARK: Game Version Config Context
+message VersionConfigCtx {
+
+}
+
+// MARK: Game Version Config Meta
+message VersionConfigMeta {
+
+}

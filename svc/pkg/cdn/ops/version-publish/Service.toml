@@ -1,0 +1,7 @@
+[service]
+name = "cdn-version-publish"
+
+[runtime]
+kind = "rust"
+
+[operation]

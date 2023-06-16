@@ -1,0 +1,31 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/fern-api/fern/main/fern.schema.json
+
+service:
+  auth: true
+  url: Group
+  audiences:
+    - public
+  base-path: /groups/{group_id}/join-request
+  path-parameters:
+    group_id:
+      type: uuid
+  endpoints:
+    createJoinRequest:
+      path: ""
+      method: POST
+      docs: Requests to join a group.
+
+    resolveJoinRequest:
+      path: /{identity_id}
+      method: POST
+      docs: Resolves a join request for a given group.
+      path-parameters:
+        identity_id:
+          type: uuid
+      request:
+        body: ResolveJoinRequestRequest
+
+types:
+  ResolveJoinRequestRequest:
+    properties:
+      resolution: optional<boolean>

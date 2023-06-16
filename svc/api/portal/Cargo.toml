@@ -1,0 +1,52 @@
+[package]
+name = "api-portal"
+version = "0.0.1"
+authors = ["Rivet Gaming, LLC <developer@rivet.gg>"]
+edition = "2018"
+license = "Apache-2.0"
+
+[dependencies]
+rivet-convert = { path = "../../../lib/convert" }
+api-helper = { path = "../../../lib/api-helper/build" }
+async-trait = "0.1"
+chirp-client = { path = "../../../lib/chirp/client" }
+rivet-operation = { path = "../../../lib/operation/core" }
+chrono = "0.4"
+futures-util = "0.3"
+http = "0.2"
+hyper = { version = "0.14", features = ["server", "http1", "stream", "tcp"] }
+lazy_static = "1.4"
+prost = "0.10"
+rand = { version = "0.8", features = ["small_rng"] }
+rivet-cache = { path = "../../../lib/cache/build" }
+rivet-claims = { path = "../../../lib/claims" }
+rivet-health-checks = { path = "../../../lib/health-checks" }
+rivet-pools = { path = "../../../lib/pools" }
+rivet-portal-server = { path = "../../../lib/smithy-output/api-portal/rust-server" }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+thiserror = "1.0"
+tokio = { version = "1.21" }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", default-features = false, features = ["fmt", "json", "ansi"] }
+url = "2.2.2"
+uuid = { version = "1", features = ["v4"] }
+
+game-get = { path = "../../pkg/game/ops/get" }
+game-resolve-name-id = { path = "../../pkg/game/ops/resolve-name-id" }
+team-dev-get = { path = "../../pkg/team-dev/ops/get" }
+team-get = { path = "../../pkg/team/ops/get" }
+team-member-count = { path = "../../pkg/team/ops/member-count" }
+token-revoke = { path = "../../pkg/token/ops/revoke" }
+user-get = { path = "../../pkg/user/ops/get" }
+user-notification-auth-register = { path = "../../pkg/user-notification-auth/ops/register" }
+user-notification-auth-unregister = { path = "../../pkg/user-notification-auth/ops/unregister" }
+user-team-list = { path = "../../pkg/user/ops/team-list" }
+
+[dev-dependencies]
+rivet-connection = { path = "../../../lib/connection" }
+rivet-portal = { path = "../../../lib/smithy-output/api-portal/rust" }
+regex = "1.4"
+
+faker-user = { path = "../../pkg/faker/ops/user" }
+user-token-create = { path = "../../pkg/user/ops/token-create" }

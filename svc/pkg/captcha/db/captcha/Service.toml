@@ -1,0 +1,7 @@
+[service]
+name = "db-captcha"
+
+[runtime]
+kind = "crdb"
+
+[database]

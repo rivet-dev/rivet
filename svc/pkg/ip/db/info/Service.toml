@@ -1,0 +1,7 @@
+[service]
+name = "db-ip-info"
+
+[runtime]
+kind = "crdb"
+
+[database]

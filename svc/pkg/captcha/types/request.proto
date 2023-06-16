@@ -1,0 +1,18 @@
+syntax = "proto3";
+
+package rivet.backend.pkg.captcha.request;
+
+import "proto/common.proto";
+import "proto/backend/captcha.proto";
+
+message Request {
+	map<string, string> topic = 1;
+	string remote_address = 2;
+	rivet.backend.captcha.CaptchaConfig captcha_config = 3;
+	optional rivet.common.Uuid user_id = 4;
+	optional rivet.common.Uuid namespace_id = 5;
+}
+
+message Response {
+	bool needs_verification = 1;
+}

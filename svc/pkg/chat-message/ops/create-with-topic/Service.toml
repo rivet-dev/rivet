@@ -1,0 +1,7 @@
+[service]
+name = "chat-message-create-with-topic"
+
+[runtime]
+kind = "rust"
+
+[operation]

@@ -1,0 +1,33 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/fern-api/fern/main/fern.schema.json
+
+imports:
+  commons: ../common.yml
+  partyCommons: ../party/common.yml
+  identityCommons: ../identity/common.yml
+  groupCommons: ../group/common.yml
+  gameCommons: ../game/common.yml
+
+service:
+  auth: true
+  url: Identity
+  base-path: /activities
+  endpoints:
+    list:
+      docs: Returns an overview of all players currently online or in game.
+      path: ""
+      method: GET
+      request:
+        name: ListActivitiesRequest
+        query-parameters:
+          watch_index: commons.WatchQuery
+      response: ListActivitiesResponse
+
+types:
+  ListActivitiesResponse:
+    properties:
+      identities: list<identityCommons.Handle>
+      games: list<gameCommons.Summary>
+      parties: list<partyCommons.Summary>
+      suggested_groups: list<groupCommons.Summary>
+      suggested_players: list<identityCommons.Handle>
+      watch: commons.WatchResponse

@@ -1,0 +1,7 @@
+[service]
+name = "game-user-link-get"
+
+[runtime]
+kind = "rust"
+
+[operation]

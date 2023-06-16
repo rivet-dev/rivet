@@ -1,0 +1,8 @@
+[service]
+name = "faker-user"
+test-only = true
+
+[runtime]
+kind = "rust"
+
+[operation]

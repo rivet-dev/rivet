@@ -1,0 +1,19 @@
+syntax = "proto3";
+
+package rivet.backend.pkg.region.resolve;
+
+import "proto/common.proto";
+import "proto/backend/region.proto";
+
+message Request {
+	repeated string name_ids = 1;
+}
+
+message Response {
+	message Region {
+		rivet.common.Uuid region_id = 1;
+		string name_id = 2;
+	}
+
+	repeated Region regions = 1;
+}

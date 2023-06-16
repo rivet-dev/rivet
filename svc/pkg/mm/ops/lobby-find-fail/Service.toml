@@ -1,0 +1,7 @@
+[service]
+name = "mm-lobby-find-fail"
+
+[runtime]
+kind = "rust"
+
+[operation]

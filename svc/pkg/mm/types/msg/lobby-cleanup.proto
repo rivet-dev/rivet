@@ -1,0 +1,15 @@
+syntax = "proto3";
+
+package rivet.backend.pkg.mm.msg.lobby_cleanup;
+
+import "proto/common.proto";
+
+/// name = "msg-mm-lobby-cleanup"
+/// deduplicate = true
+/// parameters = [
+/// 	{ name = "lobby_id" },
+/// ]
+message Message {
+	rivet.common.Uuid lobby_id = 1;
+}
+

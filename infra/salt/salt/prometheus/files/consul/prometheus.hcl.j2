@@ -1,0 +1,15 @@
+services {
+	name = "{{service_name}}"
+	tags = ["prometheus", "http"]
+
+	port = 9090
+	checks = [
+		{
+			name = "/-/healthy"
+			http = "http://{{nebula_ipv4}}:9090/-/healthy"
+			interval = "10s"
+			timeout  = "2s"
+		}
+	]
+}
+

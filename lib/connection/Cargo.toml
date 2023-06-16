@@ -1,0 +1,15 @@
+[package]
+name = "rivet-connection"
+version = "0.1.0"
+edition = "2018"
+authors = ["Rivet Gaming, LLC <developer@rivet.gg>"]
+license = "Apache-2.0"
+
+[dependencies]
+chirp-client = { path = "../chirp/client" }
+chirp-perf = { path = "../chirp/perf" }
+global-error = { path = "../global-error" }
+rivet-cache = { path = "../cache/build" }
+rivet-pools = { path = "../pools" }
+rivet-util = { path = "../util/core" }
+tracing = "0.1"

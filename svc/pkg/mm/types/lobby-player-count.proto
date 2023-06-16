@@ -1,0 +1,19 @@
+syntax = "proto3";
+
+package rivet.backend.pkg.mm.lobby_player_count;
+
+import "proto/common.proto";
+
+message Request {
+	repeated rivet.common.Uuid lobby_ids = 1;
+}
+
+message Response {
+	message Lobby {
+		rivet.common.Uuid lobby_id = 1;
+		uint32 total_player_count = 2;
+		uint32 registered_player_count = 3;
+	}
+
+	repeated Lobby lobbies = 1;
+}

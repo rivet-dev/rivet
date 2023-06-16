@@ -1,0 +1,7 @@
+[service]
+name = "db-build"
+
+[runtime]
+kind = "crdb"
+
+[database]

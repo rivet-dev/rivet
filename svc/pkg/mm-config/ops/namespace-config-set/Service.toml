@@ -1,0 +1,7 @@
+[service]
+name = "mm-config-namespace-config-set"
+
+[runtime]
+kind = "rust"
+
+[operation]

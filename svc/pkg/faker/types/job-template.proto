@@ -1,0 +1,49 @@
+syntax = "proto3";
+
+package rivet.backend.pkg.faker.job_template;
+
+import "proto/common.proto";
+
+message Request {
+	message EchoServer {
+
+	}
+
+	message EchoServerTcp {
+
+	}
+
+	message EchoServerUdp {
+
+	}
+
+	message Log {
+		string stdout = 1;
+		string stderr = 2;
+	}
+
+	message Counter {
+		uint32 interval_ms = 1;
+	}
+
+	message Exit {
+		uint32 sleep_ms = 1;
+		uint32 exit_code = 2;
+	}
+
+	oneof kind {
+		EchoServer echo_server = 1;
+		EchoServer echo_server_tcp = 5;
+		EchoServer echo_server_udp = 6;
+		Log log = 2;
+		Exit exit = 3;
+		Counter counter = 4;
+	};
+
+	optional uint32 cpu = 101;
+	optional uint32 memory_mb = 102;
+}
+
+message Response {
+	string job_spec_json = 1;
+}

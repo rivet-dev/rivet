@@ -1,0 +1,7 @@
+[service]
+name = "db-mm-config"
+
+[runtime]
+kind = "crdb"
+
+[database]

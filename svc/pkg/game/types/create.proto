@@ -1,0 +1,19 @@
+syntax = "proto3";
+
+package rivet.backend.pkg.game.create;
+
+import "proto/common.proto";
+
+message Request {
+	string name_id = 1;
+	string display_name = 2;
+	string url = 3;
+	repeated string tags = 4;
+	string description = 5;
+	rivet.common.Uuid developer_team_id = 6;
+	optional rivet.common.Uuid creator_user_id = 7;
+}
+
+message Response {
+	rivet.common.Uuid game_id = 1;
+}

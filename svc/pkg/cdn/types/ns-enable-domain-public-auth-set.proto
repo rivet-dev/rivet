@@ -1,0 +1,14 @@
+syntax = "proto3";
+
+package rivet.backend.pkg.cdn.ns_enable_domain_public_auth_set;
+
+import "proto/common.proto";
+
+message Request {
+    rivet.common.Uuid namespace_id = 1;
+    bool enable_domain_public_auth = 2;
+}
+
+message Response {
+
+}

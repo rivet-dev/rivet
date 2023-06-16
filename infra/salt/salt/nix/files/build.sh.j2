@@ -1,0 +1,13 @@
+#!/bin/sh
+set -euf
+
+mkdir -p "/var/rivet-nix/result"
+
+{% for dep in pillar['nix']['dependencies'] %}
+echo
+echo '> Building {{dep}}'
+out="$(/root/.nix-profile/bin/nix-build "/var/rivet-nix/source/{{dep}}/default.nix")"
+rm -f "/var/rivet-nix/result/{{dep}}"
+ln -s "$out" "/var/rivet-nix/result/{{dep}}"
+{% endfor %}
+

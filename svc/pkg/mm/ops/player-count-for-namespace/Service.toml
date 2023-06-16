@@ -1,0 +1,7 @@
+[service]
+name = "mm-player-count-for-namespace"
+
+[runtime]
+kind = "rust"
+
+[operation]

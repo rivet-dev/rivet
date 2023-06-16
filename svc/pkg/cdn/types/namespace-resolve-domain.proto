@@ -1,0 +1,18 @@
+syntax = "proto3";
+
+package rivet.backend.pkg.cdn.namespace_resolve_domain;
+
+import "proto/common.proto";
+
+message Request {
+	repeated string domains = 1;
+}
+
+message Response {
+	message GameNamespace {
+		rivet.common.Uuid namespace_id = 1;
+		string domain = 2;
+	}
+
+	repeated GameNamespace namespaces = 1;
+}

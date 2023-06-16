@@ -1,0 +1,110 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/fern-api/fern/main/fern.schema.json
+
+imports:
+  commons: ../../common.yml
+  localCommons: common.yml
+
+types:
+  LobbyGroup:
+    docs: A game mode.
+    properties:
+      name_id:
+        docs: >-
+          **Deprecated: use GameMode instead**
+
+          A human readable short identifier used to references resources.
+          Different than a `rivet.common#Uuid` because this is intended to be
+          human readable.
+          Different than `rivet.common#DisplayName` because this should not
+          include special
+          characters and be short.
+        type: string
+      regions:
+        docs: A list of game mode regions.
+        type: list<LobbyGroupRegion>
+      max_players_normal:
+        docs: Unsigned 32 bit integer.
+        type: integer
+      max_players_direct:
+        docs: Unsigned 32 bit integer.
+        type: integer
+      max_players_party:
+        docs: Unsigned 32 bit integer.
+        type: integer
+      runtime: LobbyGroupRuntime
+
+  LobbyGroupRuntime:
+    docs: >-
+      **Deprecated: use GameMode instead**
+
+      A union representing the runtime a game mode runs on.
+    properties:
+      docker: optional<LobbyGroupRuntimeDocker>
+
+  LobbyGroupRegion:
+    docs: >-
+      **Deprecated: use GameMode instead**
+
+      A game mode region.
+    properties:
+      region_id:
+        type: uuid
+      tier_name_id:
+        docs: >-
+          A human readable short identifier used to references resources.
+          Different than a `rivet.common#Uuid` because this is intended to be
+          human readable.
+          Different than `rivet.common#DisplayName` because this should not
+          include special
+          characters and be short.
+        type: string
+      idle_lobbies: optional<LobbyGroupIdleLobbiesConfig>
+
+  LobbyGroupRuntimeDocker:
+    docs: >-
+      **Deprecated: use GameMode instead**
+
+      A game mode runtime running through Docker.
+    properties:
+      build_id: optional<uuid>
+      args: list<string>
+      env_vars: list<LobbyGroupRuntimeDockerEnvVar>
+      network_mode: optional<localCommons.NetworkMode>
+      ports: list<LobbyGroupRuntimeDockerPort>
+
+  LobbyGroupRuntimeDockerEnvVar:
+    docs: >-
+      **Deprecated: use GameMode instead**
+
+      A docker environment variable.
+    properties:
+      key: string
+      value: string
+
+  LobbyGroupRuntimeDockerPort:
+    docs: >-
+      **Deprecated: use GameMode instead**
+
+      A docker port.
+    properties:
+      label:
+        docs: The label of this docker port.
+        type: string
+      target_port:
+        docs: The port number to connect to.
+        type: optional<integer>
+      port_range: optional<localCommons.PortRange>
+      proxy_protocol: localCommons.PortProtocol
+
+  LobbyGroupIdleLobbiesConfig:
+    docs: >-
+      **Deprecated: use GameMode instead**
+
+      Configuration for how many idle lobbies a game version should have.
+    properties:
+      min_idle_lobbies:
+        docs: Unsigned 32 bit integer.
+        type: integer
+      max_idle_lobbies:
+        docs: Unsigned 32 bit integer.
+        type: integer

@@ -1,0 +1,16 @@
+syntax = "proto3";
+
+package rivet.backend.pkg.mm_config.version_publish;
+
+import "proto/common.proto";
+import "proto/backend/matchmaker.proto";
+
+message Request {
+	rivet.common.Uuid version_id = 1;
+	rivet.backend.matchmaker.VersionConfig config = 2;
+	rivet.backend.matchmaker.VersionConfigCtx config_ctx = 3;
+}
+
+message Response {
+
+}

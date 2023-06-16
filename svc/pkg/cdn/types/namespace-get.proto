@@ -1,0 +1,19 @@
+syntax = "proto3";
+
+package rivet.backend.pkg.cdn.namespace_get;
+
+import "proto/common.proto";
+import "proto/backend/cdn.proto";
+
+message Request {
+	repeated rivet.common.Uuid namespace_ids = 1;
+}
+
+message Response {
+	message Namespace {
+		rivet.common.Uuid namespace_id = 1;
+		rivet.backend.cdn.NamespaceConfig config = 2;
+	}
+
+	repeated Namespace namespaces = 1;
+}

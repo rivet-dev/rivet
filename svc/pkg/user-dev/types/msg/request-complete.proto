@@ -1,0 +1,12 @@
+syntax = "proto3";
+
+package rivet.backend.pkg.user_dev.msg.request_complete;
+
+import "proto/common.proto";
+
+/// name = "msg-user-dev-request-complete"
+/// parameters = [
+/// 	{ name = "user_id" },
+/// ]
+message Message {
+}

@@ -1,0 +1,7 @@
+[service]
+name = "game-version-create"
+
+[runtime]
+kind = "rust"
+
+[operation]

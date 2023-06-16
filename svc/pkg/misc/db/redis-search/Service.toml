@@ -1,0 +1,10 @@
+[service]
+name = "redis-search"
+
+[runtime]
+kind = "redis"
+index = 7
+persistent = true
+
+[cache]
+

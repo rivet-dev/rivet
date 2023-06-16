@@ -1,0 +1,15 @@
+syntax = "proto3";
+
+package rivet.backend.pkg.nomad_log.msg.export_complete;
+
+import "proto/common.proto";
+
+/// name = "msg-nomad-log-export-complete"
+/// parameters = [
+/// 	{ name = "request_id" },
+/// ]
+message Message {
+	rivet.common.Uuid request_id = 1;
+	rivet.common.Uuid upload_id = 2;
+}
+

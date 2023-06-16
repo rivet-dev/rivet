@@ -1,0 +1,23 @@
+syntax = "proto3";
+
+package rivet.backend.pkg.user_presence.msg.update;
+
+import "proto/common.proto";
+import "proto/backend/user.proto";
+
+/// name = "msg-user-presence-update"
+/// tail-ttl = 300
+/// parameters = [
+/// 	{ name = "user_id" },
+/// ]
+message Message {
+	reserved 2;
+	rivet.common.Uuid user_id = 1;
+	int64 update_ts = 3;
+
+	// NOTE: Will be unset when clearing game activity
+	oneof kind {
+		backend.user.Status status = 4;
+		backend.user.Presence.GameActivity game_activity = 5;
+	}
+}

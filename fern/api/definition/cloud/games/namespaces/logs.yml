@@ -1,0 +1,68 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/fern-api/fern/main/fern.schema.json
+
+imports:
+  localCommons: ../../common.yml
+
+service:
+  auth: true
+  url: Cloud
+  audiences:
+    - public
+  base-path: /games/{game_id}/namespaces/{namespace_id}
+  path-parameters:
+    game_id:
+      type: uuid
+
+    namespace_id:
+      type: uuid
+  endpoints:
+    listNamespaceLobbies:
+      path: /logs/lobbies
+      method: GET
+      docs: Returns a list of lobbies for the given game namespace.
+      request:
+        name: ListNamespaceLobbiesRequest
+        query-parameters:
+          before_create_ts:
+            docs: Returns lobbies created before this timestamp.
+            type: optional<datetime>
+      response: ListNamespaceLobbiesResponse
+
+    getNamespaceLobby:
+      path: /logs/lobbies/{lobby_id}
+      method: GET
+      docs: Returns a lobby from the given game namespace.
+      path-parameters:
+        lobby_id:
+          type: uuid
+      response: GetNamespaceLobbyResponse
+
+types:
+  ListNamespaceLobbiesResponse:
+    properties:
+      lobbies:
+        docs: A list of lobby log summaries.
+        type: list<localCommons.LogsLobbySummary>
+
+  GetNamespaceLobbyResponse:
+    properties:
+      lobby: localCommons.LogsLobbySummary
+      metrics: optional<localCommons.SvcMetrics>
+      stdout_presigned_urls:
+        docs: >-
+          **Deprecated**
+
+          A list of URLs.
+        type: list<string>
+      stderr_presigned_urls:
+        docs: >-
+          **Deprecated**
+
+          A list of URLs.
+        type: list<string>
+      perf_lists:
+        docs: >-
+          **Deprecated**
+
+          A list of service performance summaries.
+        type: list<localCommons.SvcPerf>

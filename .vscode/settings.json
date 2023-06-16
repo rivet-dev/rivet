@@ -1,0 +1,30 @@
+{
+	"protoc": {
+		"options": ["-I=proto/proto"]
+	},
+	"[rust]": {
+		"editor.formatOnSave": true,
+		"editor.tabSize": 4
+	},
+	"[proto3]": {
+		"editor.insertSpaces": true,
+		"editor.tabSize": 4
+	},
+	"[typescript]": {
+		"editor.formatOnSave": true
+	},
+	"files.exclude": {
+		"**/.git": true,
+		"**/.cargo": true,
+		"**/.vim": true,
+		"**/.svn": true,
+		"**/.hg": true,
+		"**/CVS": true,
+		"**/.DS_Store": true,
+		"**/gen": true
+	},
+	"files.watcherExclude": {
+		"**/target/**": true
+	},
+	"python.formatting.provider": "black"
+}

@@ -1,0 +1,7 @@
+[service]
+name = "game-resolve-name-id"
+
+[runtime]
+kind = "rust"
+
+[operation]

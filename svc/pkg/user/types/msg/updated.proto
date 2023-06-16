@@ -1,0 +1,16 @@
+syntax = "proto3";
+
+package rivet.backend.pkg.user.msg.updated;
+
+import "proto/common.proto";
+import "proto/backend/user/update.proto";
+
+/// name = "msg-user-updated"
+/// tail-ttl = 300
+/// parameters = [
+/// 	{ name = "user_id" },
+/// ]
+message Message {
+	rivet.common.Uuid user_id = 1;
+	rivet.backend.user.update.Update update = 2;
+}

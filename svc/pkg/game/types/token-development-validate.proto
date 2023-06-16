@@ -1,0 +1,19 @@
+syntax = "proto3";
+
+package rivet.backend.pkg.game.token_development_validate;
+
+import "proto/common.proto";
+import "proto/backend/matchmaker.proto";
+
+message Request {
+	string hostname = 1;
+	repeated rivet.backend.matchmaker.LobbyRuntime.Port lobby_ports = 2;
+}
+
+message Response {
+    message Error {
+		repeated string path = 1;
+	}
+
+	repeated Error errors = 1;
+}

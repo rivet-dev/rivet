@@ -1,0 +1,7 @@
+[service]
+name = "user-follow-request-list"
+
+[runtime]
+kind = "rust"
+
+[operation]
