@@ -40,10 +40,10 @@ async fn handle(
 				.ok_or(Error::ExtractRegexCapture)?
 				.as_str();
 
-			let digit_count = number_raw.len();
+			let digit_count = number_raw.len() as u32;
 			let number = number_raw.parse::<u16>()?; // Must be unsigned so we don't parse a negative sign
 
-			let shift = 10i64.pow(4u32 - digit_count as u32);
+			let shift = 10i64.pow(4u32 - digit_count);
 			let lower = (number as i64) * shift;
 			let upper = lower + shift;
 
