@@ -1,3 +1,3 @@
 # Namespace Config
 
-TODO
+See `lib/bolt/config/src/ns.rs` for the specification & documentation.
