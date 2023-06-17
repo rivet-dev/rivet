@@ -9,8 +9,8 @@
 <p align="center">
   <img alt="GitHub" src="https://img.shields.io/github/license/rivet-gg/rivet?style=flat-square">
   <a href='http://makeapullrequest.com'><img alt='PRs Welcome' src='https://img.shields.io/badge/PRs-welcome-brightgreen.svg?style=flat-square'/></a>
-  <img alt="GitHub commit activity" src="https://img.shields.io/github/commit-activity/m/rivet/rivet?style=flat-square"/>
-  <img alt="GitHub closed issues" src="https://img.shields.io/github/issues-closed/rivet/rivet?style=flat-square"/>
+  <img alt="GitHub commit activity" src="https://img.shields.io/github/commit-activity/m/rivet-gg/rivet?style=flat-square"/>
+  <img alt="GitHub closed issues" src="https://img.shields.io/github/issues-closed/rivet-gg/rivet?style=flat-square"/>
 </p>
 
 <p align="center">
