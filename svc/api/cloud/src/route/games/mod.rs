@@ -4,13 +4,11 @@ use api_helper::{
 	anchor::{WatchIndexQuery, WatchResponse},
 	ctx::Ctx,
 };
-use futures_util::FutureExt;
 use proto::backend::{self, pkg::*};
 use rivet_claims::ClaimsDecode;
 use rivet_cloud_server::models;
 use rivet_convert::{ApiInto, ApiTryFrom, ApiTryInto};
 use rivet_operation::prelude::*;
-use serde::Deserialize;
 
 use crate::{auth::Auth, convert, fetch};
 
@@ -472,11 +470,12 @@ pub async fn prepare_logo_upload(
 
 	let user_id = ctx.auth().claims()?.as_user().ok().map(|x| x.user_id);
 
-	internal_assert!(body.content_length >= 0, "upload invalid");
-	internal_assert!(
-		body.content_length < MAX_LOGO_UPLOAD_SIZE,
-		"upload too large"
+	assert_with!(
+		body.content_length >= 0,
+		CLOUD_INVALID_CONFIG,
+		error = "`content_length` out of bounds"
 	);
+	assert_with!(body.content_length < MAX_LOGO_UPLOAD_SIZE, UPLOAD_TOO_LARGE);
 
 	let ext = if body.path.ends_with(".png") {
 		"png"
@@ -493,7 +492,7 @@ pub async fn prepare_logo_upload(
 			backend::upload::PrepareFile {
 				path: format!("logo.{ext}"),
 				mime: Some(format!("image/{ext}")),
-				content_length: body.content_length as u64,
+				content_length: body.content_length.try_into()?,
 				nsfw_score_threshold: Some(util_nsfw::score_thresholds::GAME_LOGO),
 				..Default::default()
 			},
@@ -539,10 +538,14 @@ pub async fn prepare_banner_upload(
 
 	let user_id = ctx.auth().claims()?.as_user().ok().map(|x| x.user_id);
 
-	internal_assert!(body.content_length >= 0, "upload invalid");
-	internal_assert!(
+	assert_with!(
+		body.content_length >= 0,
+		CLOUD_INVALID_CONFIG,
+		error = "`content_length` out of bounds"
+	);
+	assert_with!(
 		body.content_length < MAX_BANNER_UPLOAD_SIZE,
-		"upload too large"
+		UPLOAD_TOO_LARGE
 	);
 
 	let ext = if body.path.ends_with(".png") {
@@ -560,7 +563,7 @@ pub async fn prepare_banner_upload(
 			backend::upload::PrepareFile {
 				path: format!("banner.{ext}"),
 				mime: Some(format!("image/{ext}")),
-				content_length: body.content_length as u64,
+				content_length: body.content_length.try_into()?,
 				nsfw_score_threshold: Some(util_nsfw::score_thresholds::GAME_BANNER),
 				..Default::default()
 			},

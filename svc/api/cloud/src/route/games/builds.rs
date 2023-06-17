@@ -50,7 +50,9 @@ pub async fn get_builds(
 				upload_id: internal_unwrap!(build.upload_id).as_uuid().to_string(),
 				display_name: build.display_name.clone(),
 				create_ts: util::timestamp::to_chrono(build.create_ts)?,
-				content_length: upload.map_or(0, |upload| upload.content_length) as i64,
+				content_length: upload
+					.map_or(0, |upload| upload.content_length)
+					.try_into()?,
 				complete: upload.map_or(true, |upload| upload.complete_ts.is_some()),
 			})
 		})

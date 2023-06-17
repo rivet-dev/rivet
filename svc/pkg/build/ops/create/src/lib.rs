@@ -45,9 +45,9 @@ async fn handle(
 			);
 			internal_assert!(util::check::docker_ident(tag_tag), "invalid image tag tag");
 
-			internal_assert!(
-				image_file.content_length <= MAX_UPLOAD_SIZE,
-				"upload too large"
+			assert_with!(
+				image_file.content_length < MAX_UPLOAD_SIZE,
+				UPLOAD_TOO_LARGE
 			);
 
 			// Check if build is unique

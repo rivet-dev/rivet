@@ -95,10 +95,14 @@ pub async fn prepare_avatar_upload(
 
 	let user_id = ctx.auth().claims()?.as_user().ok().map(|x| x.user_id);
 
-	internal_assert!(body.content_length >= 0, "upload invalid");
-	internal_assert!(
+	assert_with!(
+		body.content_length >= 0,
+		CLOUD_INVALID_CONFIG,
+		error = "`content_length` out of bounds"
+	);
+	assert_with!(
 		body.content_length < MAX_AVATAR_UPLOAD_SIZE,
-		"upload too large"
+		UPLOAD_TOO_LARGE
 	);
 
 	let ext = if body.path.ends_with(".png") {
@@ -116,7 +120,7 @@ pub async fn prepare_avatar_upload(
 			backend::upload::PrepareFile {
 				path: format!("image.{ext}"),
 				mime: Some(format!("image/{ext}")),
-				content_length: body.content_length as u64,
+				content_length: body.content_length.try_into()?,
 				nsfw_score_threshold: Some(util_nsfw::score_thresholds::USER_AVATAR),
 				..Default::default()
 			},
