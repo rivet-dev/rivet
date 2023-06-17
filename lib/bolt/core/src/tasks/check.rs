@@ -158,7 +158,7 @@ async fn check_svcs(
 				.arg("clippy::wildcard_imports")
 				.arg("-A")
 				.arg("clippy::module_name_repetitions")
-				.arg("-A")
+				.arg("-W")
 				.arg("clippy::cast_possible_truncation")
 				.arg("-A")
 				.arg("clippy::missing_errors_doc")

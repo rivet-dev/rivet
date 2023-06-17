@@ -100,13 +100,23 @@ impl ApiTryFrom<perf::SvcPerf> for models::SvcPerf {
 
 impl ApiTryFrom<job_run::metrics_log::response::Metrics> for models::SvcMetrics {
 	type Error = GlobalError;
-	
-	fn try_from(value: job_run::metrics_log::response::Metrics) -> GlobalResult<models::SvcMetrics> {
+
+	fn try_from(
+		value: job_run::metrics_log::response::Metrics,
+	) -> GlobalResult<models::SvcMetrics> {
 		Ok(models::SvcMetrics {
 			job: value.job,
 			cpu: value.cpu,
-			memory: value.memory.into_iter().map(|v| v.try_into()).collect::<Result<Vec<_>, _>>()?,
-			memory_max: value.memory_max.into_iter().map(|v| v.try_into()).collect::<Result<Vec<_>, _>>()?,
+			memory: value
+				.memory
+				.into_iter()
+				.map(|v| v.try_into())
+				.collect::<Result<Vec<_>, _>>()?,
+			memory_max: value
+				.memory_max
+				.into_iter()
+				.map(|v| v.try_into())
+				.collect::<Result<Vec<_>, _>>()?,
 			allocated_memory: value.allocated_memory.try_into()?,
 		})
 	}
@@ -145,7 +155,11 @@ impl ApiTryFrom<models::UploadPrepareFile> for backend::upload::PrepareFile {
 	type Error = GlobalError;
 
 	fn try_from(value: models::UploadPrepareFile) -> GlobalResult<Self> {
-		assert_with!(value.content_length >= 0, MATCHMAKER_INVALID_VERSION_CONFIG, error = "`file.content_length` out of bounds");
+		assert_with!(
+			value.content_length >= 0,
+			MATCHMAKER_INVALID_VERSION_CONFIG,
+			error = "`file.content_length` out of bounds"
+		);
 
 		Ok(backend::upload::PrepareFile {
 			path: value.path,
@@ -223,7 +237,7 @@ mod openapi {
 
 impl ApiTryFrom<backend::region::Tier> for models::RegionTier {
 	type Error = GlobalError;
-	
+
 	fn try_from(value: backend::region::Tier) -> GlobalResult<models::RegionTier> {
 		Ok(models::RegionTier {
 			tier_name_id: value.tier_name_id.to_owned(),

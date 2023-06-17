@@ -34,76 +34,100 @@ pub fn game_mode_to_proto(
 		.unwrap_or(max_players_normal);
 
 	// TODO: Make this return a 400 error instead
-	assert_with!(max_players_normal >= 0, MATCHMAKER_INVALID_VERSION_CONFIG, error = "`max_players` out of bounds");
-	assert_with!(max_players_direct >= 0, MATCHMAKER_INVALID_VERSION_CONFIG, error = "`max_players_direct` out of bounds");
-	assert_with!(max_players_party >= 0, MATCHMAKER_INVALID_VERSION_CONFIG, error = "`max_players_party` out of bounds");
+	assert_with!(
+		max_players_normal >= 0,
+		MATCHMAKER_INVALID_VERSION_CONFIG,
+		error = "`max_players` out of bounds"
+	);
+	assert_with!(
+		max_players_direct >= 0,
+		MATCHMAKER_INVALID_VERSION_CONFIG,
+		error = "`max_players_direct` out of bounds"
+	);
+	assert_with!(
+		max_players_party >= 0,
+		MATCHMAKER_INVALID_VERSION_CONFIG,
+		error = "`max_players_party` out of bounds"
+	);
 
 	// Derive runtime
-	let runtime = if let Some(either_runtime) = game_mode.docker.as_ref().or(matchmaker.docker.as_ref()) {
-		let args = either_runtime.args.clone().unwrap_or_default();
+	let runtime =
+		if let Some(either_runtime) = game_mode.docker.as_ref().or(matchmaker.docker.as_ref()) {
+			let args = either_runtime.args.clone().unwrap_or_default();
 
-		let mut env_vars = HashMap::<String, String>::new();
-		if let Some(env) = matchmaker.docker.as_ref().and_then(|x| x.env.clone()) {
-			env_vars.extend(env);
-		}
-		if let Some(env) = game_mode.docker.as_ref().and_then(|x| x.env.clone()) {
-			env_vars.extend(env);
-		}
+			let mut env_vars = HashMap::<String, String>::new();
+			if let Some(env) = matchmaker.docker.as_ref().and_then(|x| x.env.clone()) {
+				env_vars.extend(env);
+			}
+			if let Some(env) = game_mode.docker.as_ref().and_then(|x| x.env.clone()) {
+				env_vars.extend(env);
+			}
 
-		let network_mode = either_runtime.network_mode
-			.unwrap_or(models::CloudVersionMatchmakerNetworkMode::Bridge);
+			let network_mode = either_runtime
+				.network_mode
+				.unwrap_or(models::CloudVersionMatchmakerNetworkMode::Bridge);
 
-		let ports = either_runtime.ports.clone().unwrap_or_default();
+			let ports = either_runtime.ports.clone().unwrap_or_default();
 
-		Some(backend::matchmaker::LobbyRuntime {
-			runtime: Some(backend::matchmaker::lobby_runtime::Runtime::Docker(
-				backend::matchmaker::lobby_runtime::Docker {
-					build_id: either_runtime.image_id.map(Into::into),
-					args,
-					env_vars: env_vars
-						.into_iter()
-						.map(|(key, value)| backend::matchmaker::lobby_runtime::EnvVar {
-							key,
-							value,
-						})
-						.collect(),
-					network_mode:
-						ApiInto::<backend::matchmaker::lobby_runtime::NetworkMode>::api_into(
-							network_mode,
-						) as i32,
-					ports: ports
-						.into_iter()
-						.map(|(label, value)| {
-							let proxy_protocol = value
-								.protocol
-								.unwrap_or(models::CloudVersionMatchmakerPortProtocol::Https);
-							let proxy_kind = value
-								.proxy
-								.unwrap_or(models::CloudVersionMatchmakerProxyKind::GameGuard);
-
-							GlobalResult::Ok(backend::matchmaker::lobby_runtime::Port {
-								label,
-								target_port: value.port.map(|x| {
-									assert_with!(x >= 0, MATCHMAKER_INVALID_VERSION_CONFIG, error = "`port` out of bounds");
-
-									Ok(x.try_into()?)
-								}).transpose()?,
-								port_range: value.port_range.map(|x| (*x).try_into()).transpose()?,
-								proxy_protocol: ApiInto::<
-									backend::matchmaker::lobby_runtime::ProxyProtocol,
-								>::api_into(proxy_protocol) as i32,
-								proxy_kind: ApiInto::<
-									backend::matchmaker::lobby_runtime::ProxyKind,
-								>::api_into(proxy_kind) as i32,
+			Some(backend::matchmaker::LobbyRuntime {
+				runtime: Some(backend::matchmaker::lobby_runtime::Runtime::Docker(
+					backend::matchmaker::lobby_runtime::Docker {
+						build_id: either_runtime.image_id.map(Into::into),
+						args,
+						env_vars: env_vars
+							.into_iter()
+							.map(|(key, value)| backend::matchmaker::lobby_runtime::EnvVar {
+								key,
+								value,
 							})
-						})
-						.collect::<GlobalResult<_>>()?,
-				},
-			)),
-		})
-	} else {
-		None
-	};
+							.collect(),
+						network_mode:
+							ApiInto::<backend::matchmaker::lobby_runtime::NetworkMode>::api_into(
+								network_mode,
+							) as i32,
+						ports: ports
+							.into_iter()
+							.map(|(label, value)| {
+								let proxy_protocol = value
+									.protocol
+									.unwrap_or(models::CloudVersionMatchmakerPortProtocol::Https);
+								let proxy_kind = value
+									.proxy
+									.unwrap_or(models::CloudVersionMatchmakerProxyKind::GameGuard);
+
+								GlobalResult::Ok(backend::matchmaker::lobby_runtime::Port {
+									label,
+									target_port: value
+										.port
+										.map(|x| {
+											assert_with!(
+												x >= 0,
+												MATCHMAKER_INVALID_VERSION_CONFIG,
+												error = "`port` out of bounds"
+											);
+
+											Ok(x.try_into()?)
+										})
+										.transpose()?,
+									port_range: value
+										.port_range
+										.map(|x| (*x).try_into())
+										.transpose()?,
+									proxy_protocol: ApiInto::<
+										backend::matchmaker::lobby_runtime::ProxyProtocol,
+									>::api_into(proxy_protocol) as i32,
+									proxy_kind: ApiInto::<
+										backend::matchmaker::lobby_runtime::ProxyKind,
+									>::api_into(proxy_kind) as i32,
+								})
+							})
+							.collect::<GlobalResult<_>>()?,
+					},
+				)),
+			})
+		} else {
+			None
+		};
 
 	Ok(backend::matchmaker::LobbyGroup {
 		name_id,
@@ -290,9 +314,17 @@ impl ApiTryFrom<models::CloudVersionMatchmakerGameModeIdleLobbiesConfig>
 	fn try_from(
 		value: models::CloudVersionMatchmakerGameModeIdleLobbiesConfig,
 	) -> GlobalResult<Self> {
-		assert_with!(value.min >= 0, MATCHMAKER_INVALID_VERSION_CONFIG, error = "`idle_lobbies.min` out of bounds");
-		assert_with!(value.max >= 0, MATCHMAKER_INVALID_VERSION_CONFIG, error = "`idle_lobbies.max` out of bounds");
-	
+		assert_with!(
+			value.min >= 0,
+			MATCHMAKER_INVALID_VERSION_CONFIG,
+			error = "`idle_lobbies.min` out of bounds"
+		);
+		assert_with!(
+			value.max >= 0,
+			MATCHMAKER_INVALID_VERSION_CONFIG,
+			error = "`idle_lobbies.max` out of bounds"
+		);
+
 		Ok(backend::matchmaker::lobby_group::IdleLobbies {
 			min_idle_lobbies: value.min.try_into()?,
 			max_idle_lobbies: value.max.try_into()?,
