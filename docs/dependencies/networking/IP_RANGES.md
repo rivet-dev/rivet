@@ -1,3 +1,7 @@
+# IP Ranges
+
+See `lib/bolt/core/src/dep/terraform/net.rs`
+
 ## VLAN (Class B)
 
 Allowed range:

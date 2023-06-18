@@ -8,5 +8,5 @@
 
 ## When idle lobbies are removed
 
--   `mm-lobby-find` (on player creat)
+-   `mm-lobby-find` (on player create)
 -   `mm-player-remove` if lobby is empty

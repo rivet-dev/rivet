@@ -1,6 +1,8 @@
-# Proto Timestamps
+# Timestamp
 
-Proto timestamps were originally stored as `uint64` but changed to `int64` to allow for storage of negative timestamps.
+## Storing as `sint64`
+
+Proto timestamps were originally stored as `uint64` but changed to `int64` to allow for storage of negative timestamps (i.e. for birthdays before 1970).
 
 All new timestamps should use the type `sint64` due to its increased efficiency in comparison to `int64`.
 

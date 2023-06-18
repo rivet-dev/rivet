@@ -1,7 +1,6 @@
 # Hub Authentication
 
-There are two important tokens for user auth:
-
+There are two important tokens for user authentication in the hub.
 
 **Refresh token**
 

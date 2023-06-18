@@ -1,6 +1,6 @@
 # Uploads
 
-## Flow
+## Procedure
 
 1. Call `upload-prepare`
 1. Send presigned link to client

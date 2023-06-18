@@ -2,8 +2,6 @@
 
 ## Key boundaries
 
-**Needs Citation**
-
 Redis operations are parallelized in a cluster, so design keys around minimizing the frequency of their use/how often they get locked.
 
 Consider how many keys will be locked for each operation and design them like you would design a `RwLock`. Similarly, if running a Lua script on the database, you should only use the keys passed in to the script.

@@ -1,4 +1,4 @@
-# Job Build Hosting
+# Docker Image Delivery
 
 ## Configuration
 
@@ -12,7 +12,7 @@ While it's nice to have shared base layers _in theory_, containers rarely share 
 
 Additionally, storing Docker images as layers requires running our own Docker registry. This is an extra point of failure, complexity, performant foot-guns, and cost compared to a simpler architecture with just Apache Traffic Server & S3.
 
-## Implementation with pull-through cache
+## Implementation
 
 See `svc/pkg/mm/worker/src/workers/lobby_create/mod.rs` for details
 
@@ -34,19 +34,13 @@ Job run builds are hosted behind Apache Traffic Server within the data-center as
 1. Nomad unpacks the TAR
 1. The container starts
 
-## Future Plans
+## Why don't we gzip Docker images?
 
-We can't dynamically update firewalls to include the autoscaling job servers on
-all of our VPS providers, so this is the best option available to securely host
-Docker images.
+Two things are incredibly important:
 
-In the future, we'll have a custom plugin for whitelisting incoming IPs in
-addition to HTTP authentication in order to validate job server.
+-   Lobby startup performance
+-   Disk space on nodes
 
-Additionally, we'll eventually choose the optimal regions to run ATS in so we're
-not over-paying for block storage for ATS caching.
+Storing images as gzipped files requires them to be extracted when loaded. This means that you need to wait for the file to be extracted (which may be a long time for large images) and will take double the disk space to load the image.
 
-## Why not Consul Connect
-
-We can't use Consul Connect to authenticate this since game nodes have extreamly
-limited resources and can't run a Consul Connect instance.
+We use gzip in transit, so it doesn't make a significant difference.

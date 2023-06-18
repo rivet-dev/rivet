@@ -1,5 +1,7 @@
 # ing-job Sizing Methodology
 
+ing-jobs favor fewer, more powerful servers (i.e. faster) as opposed to more, less powerful servers (i.e. higher fault tolerance).
+
 ## Vulnerabilities
 
 ### OOM crashes
