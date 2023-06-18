@@ -11973,10 +11973,16 @@ components:
           format: uuid
         image_presigned_request:
           $ref: '#/components/schemas/UploadPresignedRequest'
+          description: '**Deprecated: use image_presigned_requests instead**'
+        image_presigned_requests:
+          type: array
+          items:
+            $ref: '#/components/schemas/UploadPresignedRequest'
       required:
         - build_id
         - upload_id
         - image_presigned_request
+        - image_presigned_requests
     CloudGamesListGameCdnSitesResponse:
       type: object
       properties:
