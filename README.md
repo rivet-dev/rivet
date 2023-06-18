@@ -84,4 +84,4 @@ Below is a simplified architecture diagram of a Rivet cluster.
 
 **Writing services**
 
--   [Error Handling](/doc/ERROR_HANDLING.md)
+-   [Error Handling](/doc/chirp/ERROR_HANDLING.md)

@@ -1,17 +1,28 @@
 # Error Handling
 
-## RPC: Validate then run
+## Error registry
 
-Errors shown to the client should be done through a validation step.
+All recoverable errors are configured in `error-registry/`.
 
-If a service returns a bad request, that should be treated as an internal error to the user since the program did not validate their input correctly.
+See the [frontmatter](https://jekyllrb.com/docs/front-matter/) config at `lib/formatted-error/build.rs`.
 
-## Consumers: Do or die
+These get auto-generated to https://docs.rivet.gg/.
 
-Consumers will be retried until they succeed without an error. Therefore, errors
-should only be returned if retrying at a later date will work.
+## Service types
 
-If an error does need to be handled explicitly by another service, publish a
-separate message for dispatching error events (i.e. a consumer of
-`msg-yak-shake` will produce on error `msg-yak-shave-fail`).
+### Operations: Throw errors normally
+
+Throw errors using the macros defined in `lib/global-error/src/macros.rs`.
+
+`err_code!` should be used for any potential user error. This throws errors from the error registry.
+
+`internal_panic!` and `internal_assert!` should be used like a safe alternative to the `panic!` and `assert!` macro.
+
+### Consumers: Do or die
+
+Consumers will be retried until they succeed without an error. Therefore, errors should only be returned if retrying at a later date will work.
+
+If an error does need to be handled explicitly by another service, publish a separate message for dispatching error events (i.e. a consumer of `msg-yak-shake` will produce on error `msg-yak-shave-fail`).
+
+It's common for consumers to have a separate validation service, e.g. `game-version-create` has a separate `game-version-validate` service.
 

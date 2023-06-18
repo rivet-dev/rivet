@@ -20,7 +20,7 @@ This made it clear that we need a self-hosted solution for dealing with security
 	- NATS
 - Allows for configuring access rules between nodes
 
-## Other alternatives considered
+## Alternatives
 
 ### Cloudflare Access
 
@@ -72,7 +72,7 @@ Runs on top of WireGuard, so inherits the same pain points.
 
 Company is still too young.
 
-## Nebula Shortcomings
+## Shortcomings
 
 ### No support for SSO
 

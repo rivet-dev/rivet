@@ -16,11 +16,11 @@ You can reach the Nomad dashboard at `https://nomad.my-namespace.gameinc.io`.
 
 In the HashiCorp Nomad C2M challenge, they [switched to the spread scheduler](https://www.hashicorp.com/c2m) to increase performance.
 
-### Autoscaling
+**Autoscaling**
 
 Rivet needs to be able to shut down nodes as game servers come and go. Rivet will not shut down running games, so we cannot scale down a node with a game server already on it. Therefore, we need bin packing to ensure that any server that can be made free will be made free, while spread schedulers will optimize to have a job on each server.
 
-### Jobs that use 100% machine resources
+**Jobs that use 100% machine resources**
 
 Rivet does not use the spread scheduler because there are some jobs that require all of the CPUs and will not be able to schedule if there is a smaller job running on each node with spread.
 
