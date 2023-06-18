@@ -1,5 +1,7 @@
 # Debugging Matchmaker
+
 ## Monitor
+
 ```
 bolt monitor
 ```
@@ -25,5 +27,5 @@ nats sub 'JOB_RUN.>' | grep -a 'Received on'
 ```
 
 ## Look at `RVT-RAY-ID` response header
-Copy the ray ID from the find response and past it in to https://rivet.gg/admin.
 
+Copy the ray ID from the find response and past it in to https://rivet.gg/admin.

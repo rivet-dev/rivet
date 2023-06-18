@@ -11,8 +11,7 @@ When requesting a Docker build, it goes through these steps:
 1. Nomad makes HTTP request for the artifact
 1. Unproxied Traefik instance with HTTP authentication
 
-We use an unproxied Traefik proxy in each region with an ATS 
-
+We use an unproxied Traefik proxy in each region with an ATS
 
 ## Future Plans
 
@@ -26,9 +25,7 @@ addition to HTTP authentication in order to validate job server.
 Additionally, we'll eventually choose the optimal regions to run ATS in so we're
 not over-paying for block storage for ATS caching.
 
-
 ## Why not Consul Connect
 
 We can't use Consul Connect to authenticate this since game nodes have extreamly
 limited resources and can't run a Consul Connect instance.
-

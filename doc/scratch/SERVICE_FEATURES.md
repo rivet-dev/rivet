@@ -13,4 +13,3 @@ always included as a dependency of another job.
 
 At the moment, we run everything under the `platform` feature since providing
 region failover for all `job-run` regions is very expensive.
-

@@ -19,4 +19,3 @@ e.g. to deploy to all NATS servers, we'd run the following:
 ```bash
 bin/salt/apply 'G@roles:nats-server'
 ```
-

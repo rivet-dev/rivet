@@ -13,5 +13,3 @@ All internal traffic running through Rivet uses Nebula.
 Nebula is specifically helpful for securing traffic across multiple dataceners and clouds. Because Rivet is built to run across as many types of environments as possible, Nebula provides a consistent way of addressing our nodes.
 
 We also use it to define firewall rules between our pools to mitigate the impact of a server with malicious code running on it.
-
-

@@ -9,4 +9,3 @@
 
 1. If developing in a cluster or the failed minion is on a different machine, SSH in to the Minion with `bolt ssh name {my minion}`
 2. Run `journalctl -u salt-minion -n 1000`
-

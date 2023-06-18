@@ -14,10 +14,10 @@ SQL is an oldie but a godie.
 
 ## Requirements
 
-- Easy to operate
-- ACID-compliant-ish (distributed SQL databases often aren't truely ACID compliant)
-- Schemas & contraints
-- Secondary indexes
+-   Easy to operate
+-   ACID-compliant-ish (distributed SQL databases often aren't truely ACID compliant)
+-   Schemas & contraints
+-   Secondary indexes
 
 ## Alternatives
 
@@ -31,7 +31,7 @@ In hindsight, it woudl have been a good idea to stick with Postgres instead of b
 
 While CockroachDB supports common features like JSON, full-text search, and spatial indexes, there are numerous Postgres extensions that will never exists within CockroachDB. For example, we could have used the TimescaleDB extension instead of ClickHouse for our time series workloads. If we chose to support ML workloads, pgvector woudl be a click away, but instead we would have to adopt a new database.
 
-**Scaling***
+**Scaling\***
 
 "It doesn't scale" is a common refrain for Postgres critics. Because CockroachDB is a distributed database, it will scale much better that Postgres does. However, a startup that has to scale to that size will also have the means to hire a team of engineers to handle that migration. Velocity is much more important at an early stage, so choosing immature technologies tends to not be a good idea. Luckily, CockroachDB has been preditable and reliable thus far.
 
@@ -61,6 +61,6 @@ CockroachDB supports handling data locality natively while Postgres requires run
 
 ## Shortcomings
 
-- Managed by a for-profit corporation which could go under or change the license (e.g. ElasticCache)
-- Lack of Postgres-like extensions
-- Lack of UDF
+-   Managed by a for-profit corporation which could go under or change the license (e.g. ElasticCache)
+-   Lack of Postgres-like extensions
+-   Lack of UDF

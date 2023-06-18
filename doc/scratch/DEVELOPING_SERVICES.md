@@ -6,7 +6,7 @@
 
 1. Navigate to the explore section of the [Grafana dashboard](https://rivetgg.grafana.net/explore).
 1. Change the data source to `rivet-loki`.
-1. Flip the toggle from *Builder* to *Code*.
+1. Flip the toggle from _Builder_ to _Code_.
 1. Type: `{ns="my-namespace"}` and press enter
 1. You'll see the logs from all of the services in the cluster
 
@@ -38,7 +38,7 @@ To query all logs for a specific ray, query:
 
 ### Live logs
 
-Click the *Live* button in the top right. This will show the logs in real time.
+Click the _Live_ button in the top right. This will show the logs in real time.
 
 ## Checking for hard crashes
 
@@ -49,4 +49,3 @@ To check for a crash, either check on the job status on the Nomad dashboard or r
 ```bash
 bin/nomad/cmd status rivet-my-service
 ```
-

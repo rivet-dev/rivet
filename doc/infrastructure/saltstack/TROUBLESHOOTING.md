@@ -18,7 +18,6 @@ root       25275  0.0  0.1   6240  2176 pts/0    S+   02:51   0:00 grep salt-min
 
 Try a few things to figure this out:
 
-* Run `pstree -p my-pid` on the `salt-minion` process to see what subcommand is being ran
-* Read the `salt-minion` logs with `journalctl -u salt-minion`
-* Try applying specific SLS files with `salt apply 'my-minion' --sls my_file`
-
+-   Run `pstree -p my-pid` on the `salt-minion` process to see what subcommand is being ran
+-   Read the `salt-minion` logs with `journalctl -u salt-minion`
+-   Try applying specific SLS files with `salt apply 'my-minion' --sls my_file`

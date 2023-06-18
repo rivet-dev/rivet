@@ -15,4 +15,3 @@ All commands relating to Rivet need to be ran in a Nix shell. When you run `nix-
 Nix is used to build dependencies in production instead of using apt or another system package manager to install them.
 
 Because Nix supports aggressive caching, we can use the same Nix configs to download cached prebuilt binaries.
-

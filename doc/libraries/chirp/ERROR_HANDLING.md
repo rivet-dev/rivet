@@ -25,4 +25,3 @@ Consumers will be retried until they succeed without an error. Therefore, errors
 If an error does need to be handled explicitly by another service, publish a separate message for dispatching error events (i.e. a consumer of `msg-yak-shake` will produce on error `msg-yak-shave-fail`).
 
 It's common for consumers to have a separate validation service, e.g. `game-version-create` has a separate `game-version-validate` service.
-

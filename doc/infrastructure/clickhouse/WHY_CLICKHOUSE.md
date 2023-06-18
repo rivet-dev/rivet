@@ -6,16 +6,16 @@ Rivet has a series of OLAP use cases, such as analytics, log aggregation, and mo
 
 ## Requirements
 
-- Self hostable
-- Easy to operate
-- Realtime aggregates
-- Cost effective
-- Turnkey aggregation to avoid the TCO of a stream/batch processing framework
+-   Self hostable
+-   Easy to operate
+-   Realtime aggregates
+-   Cost effective
+-   Turnkey aggregation to avoid the TCO of a stream/batch processing framework
 
 ### Nice to haves
 
-- Tiered storage
-- Maintain a similar workflow to CockroachDB
+-   Tiered storage
+-   Maintain a similar workflow to CockroachDB
 
 ## Alternatives
 
@@ -70,7 +70,6 @@ ClickHouse also allows us to use the same migration tools (`go-migrate`) for bot
 > TODO
 
 ### Firebolt
-
 
 ### Google BigQuery & Snowflake & Amazon Redshift
 

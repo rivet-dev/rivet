@@ -6,19 +6,19 @@ Rivet has a lot of realtime workloads that require complex operations over small
 
 For example:
 
-- Matchmaking
-- Parties
-- User presence
-- Caching
+-   Matchmaking
+-   Parties
+-   User presence
+-   Caching
 
 ## Requirements
 
-- In memory
-- Support UDF
-- Failover support
-- Sharding support
-- Strongly consistent
-- High performance
+-   In memory
+-   Support UDF
+-   Failover support
+-   Sharding support
+-   Strongly consistent
+-   High performance
 
 ## Alternatives
 

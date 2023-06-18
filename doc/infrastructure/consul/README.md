@@ -13,4 +13,3 @@ We use Consul to monitor the health of our services, use DNS to reach our servic
 ## Dashboard
 
 You can reach the Consul dashboard at `https://consul.my-namespace.gameinc.io`.
-

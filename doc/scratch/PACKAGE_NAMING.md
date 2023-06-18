@@ -7,4 +7,3 @@ Many packages have different names internally than in APIs. We do this because w
 | Internal | API |
 | User | Identity |
 | Lobby group | Game mode |
-

@@ -21,4 +21,3 @@ If a client does disconnect, the Nomad server will assume the job is still runni
 ## Job shutdowns
 
 We give a 60 second `kill_timeout` to jobs before sending a 137. See `svc/mm-config-version-prepare/src/main.rs`.
-

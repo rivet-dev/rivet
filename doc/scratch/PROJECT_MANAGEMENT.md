@@ -1,17 +1,17 @@
 ## What does good project management look like
 
-- Improve prioritization of issues
-- Reduce beurocracy through better organization
-- Maximize velocity
-- Minimize "issue grinding"
-- Issues should enable focusing on work, not complicate it
-- Aligning goals of the team
+-   Improve prioritization of issues
+-   Reduce beurocracy through better organization
+-   Maximize velocity
+-   Minimize "issue grinding"
+-   Issues should enable focusing on work, not complicate it
+-   Aligning goals of the team
 
 ## Why issues
 
-- Working with issues will never be perfect
-- Issues should help you work better, not get in the way of doing real work
-- Good communication through issues reduces beurocracy and useless meetings
+-   Working with issues will never be perfect
+-   Issues should help you work better, not get in the way of doing real work
+-   Good communication through issues reduces beurocracy and useless meetings
 
 ## KPIs
 
@@ -19,9 +19,9 @@ TODO
 
 ## Writing projects
 
-- Why
-- What
-- How
+-   Why
+-   What
+-   How
 
 https://linear.app/method/introduction#write-project-specs
 
@@ -43,10 +43,10 @@ Large PRs stray from the main branch which is the "source of truth"
 
 ## Project scope & grouping issues
 
-- Aim for 1-3 week projects
-- Scope by the bullet point you want in the changelog
-    - e.g. image uploads or even more vague pushes like improved stability
-- Don't scope by "block of time"
+-   Aim for 1-3 week projects
+-   Scope by the bullet point you want in the changelog
+    -   e.g. image uploads or even more vague pushes like improved stability
+-   Don't scope by "block of time"
 
 ## Working on tickets not in projects
 
@@ -73,17 +73,17 @@ Organize teams around the type of work they will work on. Sometimes this is spec
 
 Backend:
 
-- Local cluster
-- Staging
-- Prod
+-   Local cluster
+-   Staging
+-   Prod
 
 Frontend:
 
-- Pages
+-   Pages
 
 Both:
 
-- ?
+-   ?
 
 TODO: How do we maintain quick iteration speeds? Do we rank "risk" of issues?
 
@@ -94,18 +94,19 @@ https://medium.com/linear-app/startups-write-changelogs-c6a1d2ff4820
 ## How to choose what to prioritize
 
 Three options:
-- Bug fixes
-- Enhancements
-- Underlying technical coolness
+
+-   Bug fixes
+-   Enhancements
+-   Underlying technical coolness
 
 TODO
 
 ## Choosing what to work on
 
-- When choosing to work on something, always make sure the answer is yes to this: is this the highest leverage/impact thing I can work on to push our KPIs or get closer to reaching a given milestone?
-- Talk to your users to will be affected
-- Always remember why you're building something
-- It's OK for project scopes to shift
+-   When choosing to work on something, always make sure the answer is yes to this: is this the highest leverage/impact thing I can work on to push our KPIs or get closer to reaching a given milestone?
+-   Talk to your users to will be affected
+-   Always remember why you're building something
+-   It's OK for project scopes to shift
 
 ## Blocking issues
 
@@ -123,8 +124,8 @@ TODO
 
 Each issue needs at least two categories:
 
-- Enhancement, bug, research
-- Product vertical
+-   Enhancement, bug, research
+-   Product vertical
 
 Attach the company that has expressed interest in an issue.
 
@@ -132,11 +133,13 @@ To publish to GitHub, attach the `Public` tag
 
 ## Triage
 
+## Good first issue
+
 ## Conversations
 
-- Limit discussion on tickets to discussion about the ticket
-- Link to relevant slack messages & threads in tickets whenever possible
-- Remember that discussions on Linear are mirrored to GitHub
+-   Limit discussion on tickets to discussion about the ticket
+-   Link to relevant slack messages & threads in tickets whenever possible
+-   Remember that discussions on Linear are mirrored to GitHub
 
 ## Handling conflicting opinions in design
 
@@ -144,9 +147,9 @@ To publish to GitHub, attach the `Public` tag
 
 Don't worry about your competitors until you've found PMF
 
-Similar companies are helpful to 
+Similar companies are helpful to
 
 ## GitHub workflow
 
-- Create branch
-- TODO
+-   Create branch
+-   TODO

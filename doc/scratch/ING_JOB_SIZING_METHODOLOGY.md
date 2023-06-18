@@ -17,12 +17,12 @@ Since this doesn't actually crash servers, this approach favors many smaller nod
 ## Why use larger nodes
 
 ### Benefits
-- Attackers focus their resources on one node at a time
-- Larger nodes take more resources to take down
-- When distributing connections at random, there's more buffer to account for an imbalance as compared to smaller nodes
+
+-   Attackers focus their resources on one node at a time
+-   Larger nodes take more resources to take down
+-   When distributing connections at random, there's more buffer to account for an imbalance as compared to smaller nodes
 
 ### Detriments
 
-- This is at the expense of having a larger impact if the node is successfully crashed or has to be migrated
-- It's easier to saturate the network for a single load balancer
-
+-   This is at the expense of having a larger impact if the node is successfully crashed or has to be migrated
+-   It's easier to saturate the network for a single load balancer

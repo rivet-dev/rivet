@@ -9,4 +9,3 @@
 1. `bin/tf/apply nomad`
 1. `bin/migrate/up`
 1. `bolt up`
-

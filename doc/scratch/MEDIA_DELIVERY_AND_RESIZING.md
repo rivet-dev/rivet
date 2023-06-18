@@ -14,7 +14,7 @@ Complete: Browser -> upload-complete
 
 ### Fetching
 
-Media is resized on demand when the client fetches it. 
+Media is resized on demand when the client fetches it.
 
 ```
 Browser -> Cloudflare -> Traefik -> Imagor (resizes) -> ATS (caches) -> Backblaze (storage)
@@ -36,4 +36,3 @@ Treafik is configured to expose a pre-defined set of filter that get applied to
 the image and Treafik will automatically prefix the URL with the correct
 filter. This way, attackers can't define their own filters and we have a
 limited number of images we're responsible for resizing.
-

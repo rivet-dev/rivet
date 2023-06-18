@@ -5,8 +5,8 @@
 ### Prerequisites
 
 -   Debian 11 (Ubuntu untested)
-    - Accessible from public IP
-    - [Firewalls](./doc/DEV_FIREWALLS.md)
+    -   Accessible from public IP
+    -   [Firewalls](./doc/DEV_FIREWALLS.md)
 -   [Nix package manager](https://nixos.org/download.html) (needed to setup dev environment)
     -   TLDR: `sh <(curl -L https://nixos.org/nix/install) --daemon`
 -   [Git](https://git-scm.com/) & [Git LFS](https://git-lfs.com/) (needed to clone source code)
@@ -34,7 +34,6 @@ bolt init prod
 This is going to prompt you for configuration parameters to set up a namespace called `prod`, then create the required infrastructure.
 
 Run this command any time you update to a new version of Rivet.
-
 
 > **Tip**
 >

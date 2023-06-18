@@ -8,8 +8,8 @@ Chirp is the system used to communicate between Rivet services. It's built on to
 
 **TLDR**
 
-- Operations don't mutate databases and can fail. Think of them similar HTTP `GET` requests.
-- Workers make changes to databases and cannot fail. Think of them similar to HTTP `POST`/`PUT`/`DELETE` requests.
+-   Operations don't mutate databases and can fail. Think of them similar HTTP `GET` requests.
+-   Workers make changes to databases and cannot fail. Think of them similar to HTTP `POST`/`PUT`/`DELETE` requests.
 
 ### Operations
 
@@ -49,8 +49,8 @@ See the [error handling guide](/docs/chirp/ERROR_HANDLING.md) for more details.
 
 Workers are used for two main use cases:
 
-- Performing operations that have permanent side effects (e.g. writing to a database, making destructive API calls)
-- Consuming & responding to events (e.g. executing code when a user follows another user)
+-   Performing operations that have permanent side effects (e.g. writing to a database, making destructive API calls)
+-   Consuming & responding to events (e.g. executing code when a user follows another user)
 
 **Writing workers**
 
@@ -67,12 +67,12 @@ Most workflows inside of Rivet are performed using a [choreography](https://sola
 
 This has many benefits, among which are:
 
-- **Interoperability & extensibility** Workers can hook in to events from other parts of the code to add additional functionality, without modifying other services. For example:
-    - The Rivet matchmaker is built on top of the abstract job event system without the job package knowing anything about the matchmaker.
-    - The Rivet party system hooks in to the matchmaker event lifecycle to provide extra functionality without modifying the matchmaker at all.
-- **Resilience** A lot of things can cause services to fail, like database failures, buggy deploys, and unexpected panics. Choreographed systems can recover from failures because they are stateless. As opposed to orchestration with a master server, which can crash and cause systems to fail.
-- **Real-time by default** Since every step of a process is triggered by an event, systems are able to display real time results easily by hooking in to events from API services.
-- **Simplicity** Event-based architectures has purely functional consumers with a clear input, output, and explicit list of messages it can publish. This makes it easy to determine what a service can do and how it can fail.
+-   **Interoperability & extensibility** Workers can hook in to events from other parts of the code to add additional functionality, without modifying other services. For example:
+    -   The Rivet matchmaker is built on top of the abstract job event system without the job package knowing anything about the matchmaker.
+    -   The Rivet party system hooks in to the matchmaker event lifecycle to provide extra functionality without modifying the matchmaker at all.
+-   **Resilience** A lot of things can cause services to fail, like database failures, buggy deploys, and unexpected panics. Choreographed systems can recover from failures because they are stateless. As opposed to orchestration with a master server, which can crash and cause systems to fail.
+-   **Real-time by default** Since every step of a process is triggered by an event, systems are able to display real time results easily by hooking in to events from API services.
+-   **Simplicity** Event-based architectures has purely functional consumers with a clear input, output, and explicit list of messages it can publish. This makes it easy to determine what a service can do and how it can fail.
 
 **Queuing**
 
@@ -80,7 +80,7 @@ Workers are processed in a queue. This makes them suitable for expensive and lon
 
 **Error handling**
 
-Workers cannot return errors. If a worker throws an error, then the worker will be retried with exponential back off until it succeeds. 
+Workers cannot return errors. If a worker throws an error, then the worker will be retried with exponential back off until it succeeds.
 
 If you want to return an error from a worker, you need to create an error message type for the worker (e.g. `svc/pkg/team/types/msg/create-fail.proto`) and explicitly handle errors. Internal errors like database errors should not be caught, since workers should retry these types of requests.
 

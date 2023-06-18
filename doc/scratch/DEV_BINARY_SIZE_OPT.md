@@ -67,7 +67,7 @@ See https://github.com/johnthagen/min-sized-rust
 We're opting for `panic=abort strip opt=z` combined with bzip. This is the best
 balance of performance and size.
 
-Adding `opt=z` seems to also *improve* incremental build performance which is
+Adding `opt=z` seems to also _improve_ incremental build performance which is
 unexpected. This hasn't been measured with larger changes.
 
 ### Sacrifices
@@ -76,4 +76,3 @@ unexpected. This hasn't been measured with larger changes.
 -   `opt=z`: Likely impacts performance
 -   `strip`: No helpful symbols for debugging where crashes happen
     -   Later: investigate [alternative strip settings](https://doc.rust-lang.org/cargo/reference/profiles.html#strip)
-

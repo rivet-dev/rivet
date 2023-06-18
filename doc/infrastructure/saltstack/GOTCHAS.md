@@ -11,4 +11,3 @@ curl $URL | sha512sum
 ```
 
 Copy the output without the extra dash.
-

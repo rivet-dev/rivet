@@ -11,4 +11,3 @@ We use CockroachDB for all data that makes sense to be stored in an SQL database
 ## Dashboard
 
 You can reach the Cockroach dashboard at `https://cockroach-http.my-namespace.gameinc.io`.
-

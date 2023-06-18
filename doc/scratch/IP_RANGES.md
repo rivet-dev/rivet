@@ -43,4 +43,3 @@ Pool netmask: 24 (see above)
 Allows for 1,048,576 game server nodes
 
 We'll build an IP address allocator for each node that gets created
-
