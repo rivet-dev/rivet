@@ -45,4 +45,4 @@ Run this command any time you update to a new version of Rivet.
 
 ### Next steps
 
-Read more about [working with Bolt](./bolt/README.md).
+Read more about [working with Bolt](/docs/libraries/bolt/README.md).
