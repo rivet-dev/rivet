@@ -3,11 +3,11 @@
 ## Apply Terraform configurations
 
 ```bash
-./bin/tf/apply {plan_name}
+bolt tf apply {plan_name}
 ```
 
-e.g. to apply our infrastructure:
+e.g. to apply our `pools` plan:
 
 ```bash
-bin/tf/apply infra
+bolt tf apply pools
 ```
