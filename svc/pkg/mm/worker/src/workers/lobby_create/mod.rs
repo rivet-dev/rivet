@@ -730,7 +730,7 @@ async fn resolve_image_artifact_url(
 			// TODO: Auto-generate password for this & encode in to infra/salt/salt/traffic_server/files/consul/traffic_server.hcl.j2
 			// See tf/svc/traefik/main.tf
 			// let http_auth = "job_run_image:XXXX";
-			let http_auth = todo!("need to auto-generate password");
+			let http_auth: String = todo!("need to auto-generate password");
 
 			// TODO: Unproxied storage endpoint was removed. Replace with Nebula address. We can't
 			// use Consul to resolve this though, since Consul is not installed on the edge nodes.
