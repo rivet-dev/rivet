@@ -27,53 +27,6 @@ https://linear.app/method/introduction#write-project-specs
 
 Scope issues to be as small as possible
 
-## How changes are made
-
-1. Create a ticket for absolutely any change
-2. Create a branch named after the ticket (see "copy git branch name" in Linear)
-3. Create a PR
-    - Make sure to link any other issues by [adding `Fixes ABC-123`](https://linear.app/docs/github#link-prs)
-4. Push your changes
-5. Request review
-6. PR gets merged
-7. See _Deploy process_ for how code gets sent to production
-
-## Pull requests
-
-### Pull request goals
-
-Aim for:
-
-- **Small as possible** Break down your projects in to tiny steps and make a PR for each step
-- **48h time-to-PR** Aim to create a pull request within 48h of creating a new branch
-- **Minimize related issues** If you find yourself linking more than 3 issues to a single PR, it's probably too big
-
-Following these goals will lead to:
-
-- **Better conversation** Having less code changes provides the opportunity to hold more pointed discussions about the proposed changes
-- **Lower chance of missing bugs** Big PRs make it really hard to spot bugs
-- **Lower chance of conflict** The longer a branch is deviated from `main`, the higher probability that someone will build on code that you're changing. This is often more complicated to resolve than just a merge conflict.
-
-### Incomplete functionality & feature flagging
-
-It's OK if your PR doesn't actually expose new functionality or exposes incomplete functionality. What matters it that we're making well planned, small changes.
-
-If your feature is a work in progress, put it behind a feature flag by adding a configuration variable in `lib/bolt/config/src/ns.rs`.
-
-### Never create PR without a related issue.
-
-We use Linear internally to track issues, so each PR must be attached to an issue.
-
-### PR dependencies
-
-If you're waiting for a PR to get merged, you can create another fork & PR that depends on the original PR.
-
-Just mention the following in the PR body:
-
-```
-Depends on #42
-```
-
 ## Project scope & grouping issues
 
 -   **1-3 week projects** Keep projects small and approachable
@@ -105,35 +58,6 @@ The following should give a good idea of the scale:
 - **8 point** A 1-2 day task, often will require subtasks
 - **16 points** This should rarely be used and should be broken down in to smaller tasks if possible.
 
-## Refactoring
-
-In an ideal world, systems are designed well and tested thoroughly before merging. But life happens, and refactoring is a reality we have to deal with.
-
-### Hard parts of refactoring
-
-- Merge conflicts with other team members
-- Re-educating team members
-- Breaking changes
-
-### Tips for refactoring
-
-- **Automation** If making changes that will affect other team members, try writing a script to perform the refactor in case new code gets written by other members that needs to be refactored
-- **Documentation** Write a document on what changed in the refactor and mention team members
-
-## Changelog
-
-Keep CHANGELOG.md up to date. This will be used to publish our weekly updates.
-
-
-**Why not use tickets & PRs as a changelog?**
-
-Tickets and PRs are great internally for people who know the Rivet codebase inside and out. Changelogs are where these changes are communicated clearly to the public who doesn't contribute to Rivet.
-
-**Resources**
-
-- [Startups Write Changelogs](https://medium.com/linear-app/startups-write-changelogs-c6a1d2ff4820) elaborates on some of the motivation behind changelogs
-- [Keep a changelog](https://keepachangelog.com/en/1.0.0/) is used as our changelog specification
-
 ## Organizing teams
 
 Organize teams around the type of work they will work on. Sometimes this is specific to the product, but it's often broader than a specific product. Teams may overlap sometimes.
@@ -152,20 +76,6 @@ For example: the services team works on the matchmaker and the social team works
 If the party team gets stuck, ask questions to the services team, don't expect them to do work for you.
 
 Sometimes, code is specialized enough that not everyone is equip to work on it, but this happens the minority of the time.
-
-## Deploy process
-
-When merging code:
-
-1. Pull request gets merged
-2. Code gets deployed to `staging` & issues convert to _Validating_
-
-When publishing to production:
-
-1. All _Validating_ issues are manually validated on staging
-2. Publish deploy
-3. Check all _Validating_ issues again and set to _Complete_
-    - If there is a problem, complete the issue and create a new issue
 
 ## How to choose what to prioritize
 
