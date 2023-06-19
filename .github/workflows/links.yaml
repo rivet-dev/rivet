@@ -1,4 +1,4 @@
-name: Links
+name: link-checker
 
 on: [push, pull_request]
   
