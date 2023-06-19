@@ -126,10 +126,10 @@ async fn empty(ctx: TestCtx) {
 
 #[worker_test]
 async fn multipart(ctx: TestCtx) {
-	// assert!(
-	// 	CHUNK_SIZE <= util::file_size::mebibytes(10),
-	// 	"this test will generate 3 very large strings, are you sure you want to run it?"
-	// );
+	assert!(
+		CHUNK_SIZE <= util::file_size::mebibytes(10),
+		"this test will generate 3 very large strings, are you sure you want to run it?"
+	);
 
 	// Create random parts
 	let mut parts = (0..3)
