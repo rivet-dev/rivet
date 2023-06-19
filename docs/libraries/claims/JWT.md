@@ -2,7 +2,7 @@
 
 Rivet uses JWT for managing authentication.
 
-See [token-create](svc/token-create/src/main.rs) and ![auth.rs](svc/api-auth/src/route/auth.rs) for more details.
+See [token-create](/svc/token-create/src/main.rs) and ![auth.rs](/svc/api-auth/src/route/auth.rs) for more details.
 
 ## Entitlements
 
