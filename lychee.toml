@@ -6,8 +6,8 @@ exclude_path = [
 ]
 exclude = [
     # Bot prevention times out
-    '.*\.twitter\.com\.*',
+    '.*twitter\.com.*',
     # Repo not public yet
-    '.*\.github\.com/rivet-gg/hub\.*',
+    '.*github\.com/rivet-gg/hub.*',
 ]
 exclude_all_private = true
