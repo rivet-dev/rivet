@@ -1,1 +1,8 @@
 exclude_path = ["gen/"]
+exclude = [
+    # Bot prevention times out
+    '.*\.twitter.com\.*',
+    # Repo not public yet
+    '.*\.github.com/rivet-gg/hub\.*',
+]
+exclude_all_private = true
