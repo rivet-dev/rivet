@@ -14,19 +14,18 @@ pub enum LogStream {
 }
 
 pub async fn logs(ctx: &ProjectContext, service_name: &str, opts: &LogsOpts) -> Result<()> {
-	let primary_region = ctx.primary_region();
+	let primary_region = ctx.primary_region_or_local();
 
 	let mut cmd = Command::new("nomad");
-	cmd.arg("alloc")
-		.arg("logs")
-		.arg("-job")
-		.arg(format!("rivet-{}:{}", service_name, primary_region));
+	cmd.arg("alloc").arg("logs");
 	if opts.follow {
 		cmd.arg("-f");
 	}
 	if matches!(opts.stream, LogStream::StdErr) {
 		cmd.arg("-stderr");
 	}
+	cmd.arg("-job")
+		.arg(format!("rivet-{}:{}", service_name, primary_region));
 
 	cmd.exec().await
 }
