@@ -69,3 +69,6 @@ Below is a simplified architecture diagram of a Rivet cluster.
 
 - [Software Bill of Materials](/docs/infrastructure/SBOM.md)
 
+**About**
+
+- [Notable missing features](/docs/about/MISSING_FEATURES.md)
