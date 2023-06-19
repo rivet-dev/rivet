@@ -41,7 +41,7 @@
 
 ### Self-hosting
 
-See the [setup guide](/docs/getting_started/DEVELOPING_LOCALLY.md) to develop & deploy Rivet yourself.
+See the [setup guide](/docs/getting_started/DEVELOPMENT.md) to develop & deploy Rivet yourself.
 
 ## 📐 Architecture
 
@@ -58,7 +58,7 @@ Below is a simplified architecture diagram of a Rivet cluster.
 **Getting Started**
 
 - [Project Structure](/docs/getting_started/PROJECT_STRUCTURE.md)
-- [Developing Locally](/docs/getting_started/DEVELOPING_LOCALLY.md)
+- [Developing on Rivet](/docs/getting_started/DEVELOPMENT.md)
 - [Error Handling](/docs/libraries/chirp/ERROR_HANDLING.md)
 
 **Philosophy**

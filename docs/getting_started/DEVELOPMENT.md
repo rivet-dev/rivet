@@ -1,4 +1,4 @@
-# Developing Locally
+# Developing
 
 **The following should be installed in a dedicated VM for Rivet.**
 
@@ -6,7 +6,7 @@
 
 -   Debian 11 (other Linux distros untested)
     -   Accessible from public IP
-    -   Recommended: [Firewalls](/docs/getting_started/DEVELOPING_LOCALLY_FIREWALLS.md)
+    -   Recommended: [Firewalls](/docs/getting_started/DEVELOPMENT_FIREWALLS.md)
 -   [Cloudflare website](https://developers.cloudflare.com/fundamentals/get-started/setup/add-site/) (free)
 -   [Linode account](https://login.linode.com/signup) (more providers coming soon)
 
@@ -63,6 +63,27 @@ Run this command any time you update to a new version of Rivet.
 > **Tip**
 >
 > You can create multiple namespaces with different configs. The active namespace is set in the `Bolt.local.toml` file. We use the name `dev` as a safe default.
+
+## Step 5: Boot the Rivet Hub
+
+1. Clone the [Rivet Hub](https://github.com/rivet-gg/hub) with 
+2. Set `BASE_URL=https://{your base domain}` in the Hub's `.env`
+3. Start the hub
+
+## Step 6: Create a group
+
+1. Open the hub (defaults to running at http://localhost:5080)
+2. Register your account
+3. Create a new group
+
+## Step 7: Convert the group to a developer group
+
+1. Copy the ID of your group from the URL
+    - For example: `https://hub.rivet.gg/groups/d1f2e0b7-4c0d-48e1-8fae-309b98002b9f` would be `d1f2e0b7-4c0d-48e1-8fae-309b98002b9f`
+2. Run `bolt admin team-dev create <GROUP_ID>`
+    - Replace `<GROUP_ID>` with the ID you just copied
+
+You should now see a `Developer` tab in the hub.
 
 ## Next steps
 
