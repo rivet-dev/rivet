@@ -10,6 +10,21 @@ const CHUNK_SIZE: u64 = util::file_size::mebibytes(100);
 const MAX_UPLOAD_SIZE: u64 = util::file_size::gigabytes(10);
 const MAX_MULTIPART_UPLOAD_SIZE: u64 = util::file_size::gigabytes(100);
 
+struct PrepareResult {
+	multipart: Option<MultipartUpdate>,
+	fut: std::pin::Pin<
+		Box<
+			dyn std::future::Future<Output = GlobalResult<backend::upload::PresignedUploadRequest>>
+				+ Send,
+		>,
+	>,
+}
+
+struct MultipartUpdate {
+	path: String,
+	multipart_upload_id: String,
+}
+
 #[operation(name = "upload-prepare")]
 async fn handle(
 	ctx: OperationContext<upload::prepare::Request>,
@@ -55,7 +70,6 @@ async fn handle(
 
 	// Prepare columns for files
 	let upload_id = Uuid::new_v4();
-	let upload_ids = ctx.files.iter().map(|_| upload_id).collect::<Vec<_>>();
 	let paths = ctx
 		.files
 		.iter()
@@ -110,26 +124,60 @@ async fn handle(
 	.await?;
 
 	// Create iterators to be joined later
-	let presigned_requests_init = futures_util::stream::iter(ctx.files.iter().cloned())
-		.map(move |file| {
-			let s3_client = s3_client_external.clone();
+	let (presigned_requests_init, multipart_updates) =
+		futures_util::stream::iter(ctx.files.iter().cloned())
+			.map(move |file| {
+				let s3_client = s3_client_external.clone();
 
-			if file.multipart {
-				handle_multipart_upload(s3_client, upload_id, file).boxed()
-			} else {
-				handle_upload(s3_client, upload_id, file).boxed()
-			}
-		})
-		.buffer_unordered(16)
-		.try_collect::<Vec<_>>()
-		.await?;
-
-	// Flatten iterators that were created earlier and execute
-	let presigned_requests =
-		futures_util::stream::iter(presigned_requests_init.into_iter().flatten())
+				if file.multipart {
+					handle_multipart_upload(s3_client, upload_id, file).boxed()
+				} else {
+					handle_upload(s3_client, upload_id, file).boxed()
+				}
+			})
 			.buffer_unordered(16)
 			.try_collect::<Vec<_>>()
-			.await?;
+			.await?
+			.into_iter()
+			.flatten()
+			.map(|res| (res.fut, res.multipart))
+			.unzip::<_, _, Vec<_>, Vec<_>>();
+
+	// Split columns for query
+	let (multipart_paths, multipart_upload_ids) = multipart_updates
+		.into_iter()
+		.flatten()
+		.map(|mp| (mp.path, mp.multipart_upload_id))
+		.unzip::<_, _, Vec<_>, Vec<_>>();
+
+	let (presigned_requests, _) = tokio::try_join!(
+		// Create presigned requests
+		futures_util::stream::iter(presigned_requests_init)
+			.buffer_unordered(16)
+			.try_collect::<Vec<_>>(),
+		// Set multipart upload ids
+		async {
+			sqlx::query(indoc!(
+				"
+				UPDATE upload_files
+				SET multipart_upload_id = v.multipart_upload_id
+				FROM (
+					SELECT unnest($2) AS path,
+						   unnest($3) AS multipart_upload_id
+				) AS v
+				WHERE
+					upload_files.upload_id = $1 AND
+					upload_files.path = v.path
+				"
+			))
+			.bind(upload_id)
+			.bind(multipart_paths)
+			.bind(multipart_upload_ids)
+			.execute(&crdb)
+			.await
+			.map_err(Into::<GlobalError>::into)
+		},
+	)?;
 
 	msg!([ctx] analytics::msg::event_create() {
 		events: vec![
@@ -159,18 +207,8 @@ async fn handle_upload(
 	s3_client: s3_util::Client,
 	upload_id: Uuid,
 	file: backend::upload::PrepareFile,
-) -> GlobalResult<
-	Vec<
-		std::pin::Pin<
-			Box<
-				dyn std::future::Future<
-						Output = GlobalResult<backend::upload::PresignedUploadRequest>,
-					> + Send,
-			>,
-		>,
-	>,
-> {
-	Ok(vec![async move {
+) -> GlobalResult<Vec<PrepareResult>> {
+	let fut = async move {
 		// Sign an upload request
 		let mut put_obj_builder = s3_client
 			.put_object()
@@ -194,24 +232,19 @@ async fn handle_upload(
 			part_number: 0,
 		})
 	}
-	.boxed()])
+	.boxed();
+
+	Ok(vec![PrepareResult {
+		multipart: None,
+		fut,
+	}])
 }
 
 async fn handle_multipart_upload(
 	s3_client: s3_util::Client,
 	upload_id: Uuid,
 	file: backend::upload::PrepareFile,
-) -> GlobalResult<
-	Vec<
-		std::pin::Pin<
-			Box<
-				dyn std::future::Future<
-						Output = GlobalResult<backend::upload::PresignedUploadRequest>,
-					> + Send,
-			>,
-		>,
-	>,
-> {
+) -> GlobalResult<Vec<PrepareResult>> {
 	// NOTE: https://docs.aws.amazon.com/AmazonS3/latest/API/API_CompleteMultipartUpload.html. See error
 	// code `EntityTooSmall`
 	assert_with!(
@@ -239,9 +272,10 @@ async fn handle_multipart_upload(
 		.map(|part_number| {
 			let s3_client = s3_client.clone();
 			let file = file.clone();
-			let multipart_upload_id = multipart_upload_id.clone();
+			let multipart_upload_id2 = multipart_upload_id.clone();
+			let path = file.path.clone();
 
-			async move {
+			let fut = async move {
 				// Sign an upload request
 				let upload_part_builder = s3_client
 					.upload_part()
@@ -250,7 +284,7 @@ async fn handle_multipart_upload(
 					.content_length(
 						(file.content_length - part_number * CHUNK_SIZE).min(CHUNK_SIZE) as i64,
 					)
-					.upload_id(multipart_upload_id)
+					.upload_id(multipart_upload_id2)
 					.part_number(part_number as i32);
 
 				let presigned_upload_req = upload_part_builder
@@ -267,7 +301,15 @@ async fn handle_multipart_upload(
 					part_number: part_number as u32,
 				})
 			}
-			.boxed()
+			.boxed();
+
+			PrepareResult {
+				multipart: Some(MultipartUpdate {
+					path,
+					multipart_upload_id: multipart_upload_id.clone(),
+				}),
+				fut,
+			}
 		})
 		.collect::<Vec<_>>())
 }

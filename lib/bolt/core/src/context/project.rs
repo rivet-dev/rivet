@@ -530,7 +530,7 @@ impl ProjectContextData {
 
 		match self.ns().s3.provider {
 			config::ns::S3Provider::Minio {} => Ok(S3Credentials {
-				access_key_id: "root".into(),
+				access_key_id: "admin".into(),
 				access_key_secret: self
 					.read_secret(&["minio", "users", "root", "password"])
 					.await?,
