@@ -1,6 +1,6 @@
 ---
 name: Bug report
-description: Report something wrong with Rivet
+about: Report something wrong with Rivet
 labels: bug
 ---
 

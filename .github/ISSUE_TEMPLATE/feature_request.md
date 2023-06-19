@@ -1,6 +1,6 @@
 ---
 name: Feature proposal
-description: Propose a feature
+about: Propose a feature
 labels: enhancement
 ---
 
