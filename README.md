@@ -47,7 +47,7 @@ See the [setup guide](/docs/getting_started/DEVELOPING_LOCALLY.md) to develop & 
 
 Below is a simplified architecture diagram of a Rivet cluster.
 
-![Architecture](./media/simplified_architecture.png)
+![Architecture](/media/simplified_architecture.png)
 
 ## 📖 Documentation Overview
 
@@ -58,8 +58,14 @@ Below is a simplified architecture diagram of a Rivet cluster.
 **Getting Started**
 
 - [Project Structure](/docs/getting_started/PROJECT_STRUCTURE.md)
-- [Developing Locally](docs/getting_started/DEVELOPING_LOCALLY.md)
+- [Developing Locally](/docs/getting_started/DEVELOPING_LOCALLY.md)
+- [Error Handling](/docs/libraries/chirp/ERROR_HANDLING.md)
+
+**Philosophy**
+
+- [Why open source](/docs/philosophy/WHY_OPEN_SOURCE.md)
 
 **Architecture**
 
 - [Software Bill of Materials](/docs/infrastructure/SBOM.md)
+
