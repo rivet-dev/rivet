@@ -183,8 +183,8 @@ async fn handle(
 		events: vec![
 			analytics::msg::event_create::Event {
 				name: "upload.prepare".into(),
-				user_id: ctx.user_id,
 				properties_json: Some(serde_json::to_string(&json!({
+					"user_id": user_id,
 					"upload_id": upload_id,
 					"bucket": ctx.bucket,
 					"files": ctx.files.len(),
