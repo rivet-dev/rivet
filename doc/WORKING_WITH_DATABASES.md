@@ -1,4 +1,0 @@
-# Working with Databases
-
-TODO
-
