@@ -2,7 +2,7 @@
 
 ## Motivation
 
-Rivet is built to run across multiple clouds and on self-hosted instances with completely different networking configurqations. Managing security of routing traffic between them became a [mess of firewall rules without any isolation between them](https://github.com/rivet-gg/backend/blob/nathan/saltstack/tf/infra/firewall_pools.tf).
+Rivet is built to run across multiple clouds and on self-hosted instances with completely different networking configurations. Managing security of routing traffic between them became a mess of firewall rules without any isolation between them.
 
 This was fine to start, since everything runs in a VLAN and we could just cross our fingers that there was no malicious code running inside our network. However, once we moved our job nodes outside of our VLAN for security reasons and tried to expose the minimal internal servers publicly (i.e. Nomad RPC for connecting nodes), we started exposing surface area for attacks and DoS publicly to the internet for some of our most essential services. We could _try_ to manage a massive list of IP whitelists to these ports, but this won't scale and is very error prone.
 
