@@ -14,9 +14,9 @@ labels: bug
 
 ## Description
 
-_Describe the problem._
+<!-- Describe the problem. -->
 
-_Include screenshots of related to frontend._
+<!-- Include screenshots of related to frontend. -->
 
 ## Steps to reproduce
 
@@ -26,6 +26,6 @@ _Include screenshots of related to frontend._
 
 ## Workarounds
 
-_If applicable, include ways to work around the problem._
+<!-- If applicable, include ways to work around the problem. -->
 
 ## More information

@@ -5,14 +5,14 @@ labels: enhancement
 
 ## Description
 
-_Please describe the problem._
+<!-- Please describe the problem. -->
 
-_Include screenshots of related to frontend._
+<!-- Include screenshots of related to frontend. -->
 
 ## Alternatives solutions
 
-_Include other solutions you've considered to the problem._
+<!-- Include other solutions you've considered to the problem. -->
 
 ## Prior art
 
-_If applicable, include examples similar to what you are requesting in other software._
+<!-- If applicable, include examples similar to what you are requesting in other software. -->
