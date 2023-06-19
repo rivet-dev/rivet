@@ -9,7 +9,3 @@ For example, our Cockroach database is reachable at `sql.cockroach.service.consu
 ## What do we use Consul for?
 
 We use Consul to monitor the health of our services, use DNS to reach our services, manage service tags that Traefik reads, and provide Prometheus with all the services to monitor.
-
-## Dashboard
-
-You can reach the Consul dashboard at `https://consul.my-namespace.gameinc.io`.

@@ -8,10 +8,6 @@ Nomad is a piece of software that lets us run jobs (e.g. Docker containers, CRON
 
 We use Nomad to run our Rivet services (see `svc/`), any 3rd party services that don't require a persistent volume or IP (see `tf/nomad/`), and all of the Rivet Serverless Lobbies for our customers (see `svc/job-run-create/`).
 
-## Dashboard
-
-You can reach the Nomad dashboard at `https://nomad.my-namespace.gameinc.io`.
-
 ## Why bin pack and not spread?
 
 In the HashiCorp Nomad C2M challenge, they [switched to the spread scheduler](https://www.hashicorp.com/c2m) to increase performance.
