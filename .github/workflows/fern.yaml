@@ -24,6 +24,27 @@ jobs:
           ./scripts/openapi/gen_rust.sh
           git --no-pager diff --exit-code
 
+  fern-release-internal:
+    needs: fern-check
+    runs-on: ubuntu-20.04
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v3
+
+      - name: Setup node
+        uses: actions/setup-node@v3
+
+      - name: Install Fern
+        run: npm install -g fern-api
+
+      - name: Release SDKs
+        env:
+          FERN_TOKEN: ${{ secrets.FERN_TOKEN }}
+          FERN_NPM_TOKEN: ${{ secrets.FERN_NPM_TOKEN }}
+        run: |
+          git_hash=$(git rev-parse --short "$GITHUB_SHA")
+          fern generate --group internal --version "$git_hash" --log-level debug
+
   fern-release:
     needs: fern-check
     if: github.event_name == 'push' && contains(github.ref, 'refs/tags/')

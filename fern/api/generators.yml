@@ -37,8 +37,8 @@ groups:
           allowCustomFetcher: true
         output:
           location: npm
-          package-name: "@rivet-fern/api"
-          url: npm.buildwithfern.com
+          package-name: "@rivet-gg/api"
+          token: ${FERN_NPM_TOKEN}
   local_external:
     audiences:
       - public
