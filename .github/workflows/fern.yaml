@@ -24,6 +24,7 @@ jobs:
           ./scripts/openapi/gen_rust.sh
           git --no-pager diff --exit-code
 
+  # Release internal version to Git to be installed on the hub
   fern-release-internal:
     needs: fern-check
     runs-on: ubuntu-20.04
@@ -42,8 +43,9 @@ jobs:
           FERN_TOKEN: ${{ secrets.FERN_TOKEN }}
           FERN_NPM_TOKEN: ${{ secrets.FERN_NPM_TOKEN }}
         run: |
+          # Use version 0.0.1 because we use the Git hash instead
           git_hash=$(git rev-parse --short "$GITHUB_SHA")
-          fern generate --group internal --version "$git_hash" --log-level debug
+          fern generate --group internal --version "0.0.1-${git_hash}" --log-level debug
 
   fern-release:
     needs: fern-check

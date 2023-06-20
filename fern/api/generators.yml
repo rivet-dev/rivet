@@ -35,6 +35,10 @@ groups:
         config:
           namespaceExport: Rivet
           allowCustomFetcher: true
+        output:
+          location: npm
+          package-name: "@rivet-gg/api-internal"
+          token: ${FERN_NPM_TOKEN}
         github:
           repository: rivet-gg/rivet-node-internal
   local_external:
