@@ -1,0 +1,13 @@
+syntax = "proto3";
+
+package rivet.backend.pkg.{{snake pkg}}.msg.{{snake name}};
+
+import "proto/common.proto";
+
+/// name = "msg-{{}}-create"
+/// parameters = [
+/// 	{ name = "user_id" },
+/// ]
+message Message {
+
+}

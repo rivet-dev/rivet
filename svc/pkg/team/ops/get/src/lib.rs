@@ -17,7 +17,7 @@ struct Team {
 #[operation(name = "team-get")]
 async fn handle(
 	ctx: OperationContext<team::get::Request>,
-) -> Result<team::get::Response, GlobalError> {
+) -> GlobalResult<team::get::Response> {
 	let team_ids = ctx
 		.team_ids
 		.iter()
@@ -100,6 +100,6 @@ async fn handle(
 					publicity: team.publicity.try_into()?,
 				})
 			})
-			.collect::<Result<Vec<_>, GlobalError>>()?,
+			.collect::<GlobalResult<Vec<_>>>()?,
 	})
 }

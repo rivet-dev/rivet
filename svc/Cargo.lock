@@ -167,6 +167,33 @@ dependencies = [
 ]
 
 [[package]]
+name = "api-bald"
+version = "0.0.1"
+dependencies = [
+ "api-helper",
+ "chirp-client",
+ "chrono",
+ "http",
+ "hyper",
+ "rivet-api",
+ "rivet-cache",
+ "rivet-claims",
+ "rivet-connection",
+ "rivet-health-checks",
+ "rivet-operation",
+ "rivet-pools",
+ "s3-util",
+ "serde",
+ "serde_json",
+ "tokio",
+ "tracing",
+ "tracing-futures",
+ "tracing-subscriber",
+ "url",
+ "uuid",
+]
+
+[[package]]
 name = "api-cf-verification"
 version = "0.0.1"
 dependencies = [

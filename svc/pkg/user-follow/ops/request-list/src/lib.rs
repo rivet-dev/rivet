@@ -11,7 +11,7 @@ struct Follow {
 #[operation(name = "user-follow-request-list")]
 async fn handle(
 	ctx: OperationContext<user_follow::request_list::Request>,
-) -> Result<user_follow::request_list::Response, GlobalError> {
+) -> GlobalResult<user_follow::request_list::Response> {
 	let user_ids = ctx
 		.user_ids
 		.iter()

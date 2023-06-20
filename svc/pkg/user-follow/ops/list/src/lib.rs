@@ -28,7 +28,7 @@ impl Follow {
 #[operation(name = "user-follow-list")]
 async fn handle(
 	ctx: OperationContext<user_follow::list::Request>,
-) -> Result<user_follow::list::Response, GlobalError> {
+) -> GlobalResult<user_follow::list::Response> {
 	let user_ids = ctx
 		.user_ids
 		.iter()

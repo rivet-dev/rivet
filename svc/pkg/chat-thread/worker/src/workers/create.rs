@@ -5,7 +5,7 @@ use serde_json::json;
 #[worker(name = "chat-thread-create")]
 async fn worker(
 	ctx: OperationContext<chat_thread::msg::create::Message>,
-) -> Result<(), GlobalError> {
+) -> GlobalResult<()> {
 	let crdb = ctx.crdb("db-chat").await?;
 
 	let request_id = internal_unwrap!(ctx.request_id).as_uuid();

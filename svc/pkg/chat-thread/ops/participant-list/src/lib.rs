@@ -12,7 +12,7 @@ enum Error {
 #[operation(name = "chat-thread-participant-list")]
 async fn handle(
 	ctx: OperationContext<chat_thread::participant_list::Request>,
-) -> Result<chat_thread::participant_list::Response, GlobalError> {
+) -> GlobalResult<chat_thread::participant_list::Response> {
 	let thread_ids = ctx
 		.thread_ids
 		.iter()
@@ -108,7 +108,7 @@ async fn handle(
 					}
 				};
 
-			Result::<_, GlobalError>::Ok(chat_thread::participant_list::response::Thread {
+				GlobalResult::Ok(chat_thread::participant_list::response::Thread {
 				thread_id: thread.thread_id,
 				participants,
 			})

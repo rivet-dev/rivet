@@ -20,7 +20,7 @@ struct Game {
 #[operation(name = "game-get")]
 async fn handle(
 	ctx: OperationContext<game::get::Request>,
-) -> Result<game::get::Response, GlobalError> {
+) -> GlobalResult<game::get::Response> {
 	let game_ids = ctx
 		.game_ids
 		.iter()

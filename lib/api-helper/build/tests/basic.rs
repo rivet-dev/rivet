@@ -27,7 +27,7 @@ pub struct Auth {
 }
 
 impl ApiAuth for Auth {
-	fn new(api_token: &str) -> Result<Auth, GlobalError> {
+	fn new(api_token: &str) -> GlobalResult<Auth> {
 		Ok(Auth {
 			claims: Some(api_token.to_owned()),
 		})
