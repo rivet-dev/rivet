@@ -3,6 +3,7 @@ use std::fmt::Display;
 use crate::{config, context::ProjectContext, dep::cloudflare};
 
 pub mod api;
+pub mod cli;
 pub mod gen;
 pub mod job_schema;
 

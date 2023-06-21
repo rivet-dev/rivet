@@ -68,11 +68,11 @@ impl TestCleanupManager {
 }
 
 pub async fn test_all(
-	ctx: &ProjectContext,
-	test_only: bool,
-	test_name: Option<&str>,
-	force_build: bool,
-	skip_generate: bool,
+	_ctx: &ProjectContext,
+	_test_only: bool,
+	_test_name: Option<&str>,
+	_force_build: bool,
+	_skip_generate: bool,
 ) -> Result<()> {
 	// TODO: Update this to work like test_service
 	unimplemented!("TODO: update test_all to work like test_service")
