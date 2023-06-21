@@ -1,2 +1,1 @@
 # mm-config-version-get
-

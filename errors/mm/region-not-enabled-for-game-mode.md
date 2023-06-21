@@ -9,4 +9,3 @@ http_status = 400
 The region is not enabled for the game mode.
 
 Check that the provided region is enabled for the game mode in the game mode configuration on the Rivet dashboard.
-

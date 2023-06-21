@@ -1,2 +1,1 @@
 # chat-message-body-validate
-

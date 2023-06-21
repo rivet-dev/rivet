@@ -6,16 +6,16 @@ Rivet needs a caching forward proxy for many internal components.
 
 ## Requirements
 
-- Self-hostable
-- High performance
-- Pull-through cache
-- Serve cold requests while caching at the same time
-    - Instead of downloading the file to the cache then serving, effectively doubling the download time
+-   Self-hostable
+-   High performance
+-   Pull-through cache
+-   Serve cold requests while caching at the same time
+    -   Instead of downloading the file to the cache then serving, effectively doubling the download time
 
 ### Nice to haves
 
-- Cache hierarchy for sharded hashes
-    - Consul's [hash based routing](https://developer.hashicorp.com/consul/docs/connect/config-entries/service-resolver#hashpolicies) can be used if not supported natively
+-   Cache hierarchy for sharded hashes
+    -   Consul's [hash based routing](https://developer.hashicorp.com/consul/docs/connect/config-entries/service-resolver#hashpolicies) can be used if not supported natively
 
 ## Alternatives
 
@@ -47,10 +47,10 @@ The requests going straight to S3 will be very expensive, we'll be billed per re
 
 ## Shortcomings
 
-- Traffic Server often fails in non-obvious ways without logging, you need to know what you're doing before using it
-- While we don't need to Dockerize it at the moment, Traffic Server has a slew of bugs inside of Docker
-- Development is sluggish
+-   Traffic Server often fails in non-obvious ways without logging, you need to know what you're doing before using it
+-   While we don't need to Dockerize it at the moment, Traffic Server has a slew of bugs inside of Docker
+-   Development is sluggish
 
 ## Related links
 
-- [Hacker News](https://news.ycombinator.com/item?id=10983331)
+-   [Hacker News](https://news.ycombinator.com/item?id=10983331)

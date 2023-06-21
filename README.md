@@ -17,17 +17,16 @@
   <a href="https://rivet.gg/">Home</a> - <a href="https://docs.rivet.gg/">Docs</a> - <a href="https://twitter.com/rivet_gg">Twitter</a> - <a href="https://discord.gg/BG2vqsJczH">Discord</a>
 </p>
 
-
 ## 👾 Features
 
-- Everything is accessible from an easy to use [GUI, CLI, or API](https://docs.rivet.gg/general/gui-cli-api)
-- [Serverless Lobbies](https://docs.rivet.gg/serverless-lobbies/introduction) for auto-scaling game lobbies
-- [Flexible matchmaker](https://docs.rivet.gg/matchmaker/introduction) for placing players in lobbies with no wait times
-- [CDN](https://docs.rivet.gg/cdn/introduction) for hosting assets and webpages with a custom domain or provided rivet.game subdomain
-- [Game Guard](https://docs.rivet.gg/serverless-lobbies/concepts/game-guard) for DDoS mitigation and managed WebSocket SSL, TCP+TLS, and UDP
-- Streamlined DevOps for teams
-- Unified logging & monitoring & analytics
-- No downtime deploys with easy rollbacks
+-   Everything is accessible from an easy to use [GUI, CLI, or API](https://docs.rivet.gg/general/gui-cli-api)
+-   [Serverless Lobbies](https://docs.rivet.gg/serverless-lobbies/introduction) for auto-scaling game lobbies
+-   [Flexible matchmaker](https://docs.rivet.gg/matchmaker/introduction) for placing players in lobbies with no wait times
+-   [CDN](https://docs.rivet.gg/cdn/introduction) for hosting assets and webpages with a custom domain or provided rivet.game subdomain
+-   [Game Guard](https://docs.rivet.gg/serverless-lobbies/concepts/game-guard) for DDoS mitigation and managed WebSocket SSL, TCP+TLS, and UDP
+-   Streamlined DevOps for teams
+-   Unified logging & monitoring & analytics
+-   No downtime deploys with easy rollbacks
 
 <p align="center">
   <img alt="rivet_screenshot" src="./media/splash_screenshot.png">
@@ -52,23 +51,23 @@ Below is a simplified architecture diagram of a Rivet cluster.
 ## 📖 Documentation Overview
 
 > **Looking for documentation on building a game with Rivet?**
-> 
+>
 > Visit our [documentation for game developers](https://docs.rivet.gg/)!
 
 **Getting Started**
 
-- [Project Structure](/docs/getting_started/PROJECT_STRUCTURE.md)
-- [Developing on Rivet](/docs/getting_started/DEVELOPMENT.md)
-- [Error Handling](/docs/libraries/chirp/ERROR_HANDLING.md)
+-   [Project Structure](/docs/getting_started/PROJECT_STRUCTURE.md)
+-   [Developing on Rivet](/docs/getting_started/DEVELOPMENT.md)
+-   [Error Handling](/docs/libraries/chirp/ERROR_HANDLING.md)
 
 **Philosophy**
 
-- [Why open source](/docs/philosophy/WHY_OPEN_SOURCE.md)
+-   [Why open source](/docs/philosophy/WHY_OPEN_SOURCE.md)
 
 **Architecture**
 
-- [Software Bill of Materials](/docs/infrastructure/SBOM.md)
+-   [Software Bill of Materials](/docs/infrastructure/SBOM.md)
 
 **About**
 
-- [Notable missing features](/docs/about/MISSING_FEATURES.md)
+-   [Notable missing features](/docs/about/MISSING_FEATURES.md)

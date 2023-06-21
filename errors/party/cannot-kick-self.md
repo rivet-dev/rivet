@@ -7,4 +7,3 @@ http_status = 400
 # Cannot Kick Self
 
 Cannot kick yourself from your party.
-

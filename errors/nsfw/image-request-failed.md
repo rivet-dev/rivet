@@ -7,4 +7,3 @@ http_status = 500
 # NSFW Image Request Failed
 
 An image request from the NSFW scoring service failed.
-

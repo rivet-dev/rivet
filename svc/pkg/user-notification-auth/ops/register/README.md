@@ -1,2 +1,1 @@
 # user-notification-auth-register
-
