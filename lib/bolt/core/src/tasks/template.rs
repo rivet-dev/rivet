@@ -5,7 +5,7 @@ use std::{
 
 use anyhow::*;
 use async_recursion::async_recursion;
-use tokio::fs;
+use tokio::{fs, io::AsyncWriteExt};
 
 use crate::context::ProjectContext;
 
@@ -139,65 +139,39 @@ pub async fn generate(ctx: &mut ProjectContext, opts: TemplateOpts) -> Result<()
 				.join("msg");
 			let proto_file_path = proto_path.join(format!("{}.proto", service_name));
 
+			// Check if proto exists
+			if fs::metadata(&proto_file_path).await.is_ok() {
+				bail!(
+					"Worker protobuf definition already exists at {}",
+					proto_file_path.display()
+				);
+			}
+
 			// Check if worker parent already exists
 			if check_service_exists(&output_path).await.is_err() {
-				rivet_term::status::progress(
-					"Worker parent already exists, skipping initiation...",
-					"",
-				);
-
-				// Check if proto exists
-				if fs::metadata(&proto_file_path).await.is_ok() {
-					bail!(
-						"Worker protobuf definition already exists at {}",
-						proto_file_path.display()
-					);
-				}
-
-				// Generate partial template
-				let workers_root = output_path.join("src").join("workers");
-				fs::create_dir_all(&workers_root).await?;
-				let tests_root = output_path.join("tests");
-				fs::create_dir_all(&tests_root).await?;
-				generate_file(
+				generate_worker_partial(
 					&mut hb,
 					&render_data,
-					input_path
-						.join("src")
-						.join("workers")
-						.join("{{ snake name }}.rs"),
-					workers_root.join(format!("{}.rs", service_name.replace("-", "_"))),
-				)
-				.await?;
-				generate_file(
-					&mut hb,
-					&render_data,
-					input_path.join("tests").join("{{ snake name }}.rs"),
-					tests_root.join(format!("{}.rs", service_name.replace("-", "_"))),
+					input_path,
+					output_path,
+					service_name,
 				)
 				.await?;
 			} else {
 				generate_dir(&mut hb, &render_data, input_path, output_path).await?;
-
-				if fs::metadata(&proto_file_path).await.is_ok() {
-					bail!(
-						"Worker protobuf definition already exists at {}",
-						proto_file_path.display()
-					);
-				}
 			}
 
 			// Generate proto file
-			let proto_root = base_path
-				.join("svc")
-				.join("templates")
-				.join("types")
-				.join("msg");
-			fs::create_dir_all(&proto_root).await?;
+			fs::create_dir_all(&proto_path).await?;
 			generate_file(
 				&mut hb,
 				&render_data,
-				proto_root.join("{{ name }}.proto"),
+				base_path
+					.join("svc")
+					.join("templates")
+					.join("types")
+					.join("msg")
+					.join("{{ name }}.proto"),
 				proto_path,
 			)
 			.await?;
@@ -210,7 +184,7 @@ pub async fn generate(ctx: &mut ProjectContext, opts: TemplateOpts) -> Result<()
 				.join(pkg_name)
 				.join("types");
 			let proto_file_path = proto_path.join(format!("{}.proto", service_name));
-			if fs::metadata(proto_file_path).await.is_ok() {
+			if fs::metadata(&proto_file_path).await.is_ok() {
 				bail!(
 					"Operation protobuf definition already exists at {}",
 					proto_file_path.display()
@@ -221,6 +195,7 @@ pub async fn generate(ctx: &mut ProjectContext, opts: TemplateOpts) -> Result<()
 			generate_dir(&mut hb, &render_data, input_path, output_path).await?;
 
 			// Generate proto file
+			fs::create_dir_all(&proto_path).await?;
 			generate_file(
 				&mut hb,
 				&render_data,
@@ -241,6 +216,93 @@ pub async fn generate(ctx: &mut ProjectContext, opts: TemplateOpts) -> Result<()
 
 	eprintln!("");
 	rivet_term::status::success("Done", "");
+
+	Ok(())
+}
+
+async fn generate_worker_partial(
+	hb: &mut handlebars::Handlebars<'_>,
+	render_data: &handlebars_helpers::RenderData,
+	input_path: PathBuf,
+	output_path: PathBuf,
+	service_name: String,
+) -> Result<()> {
+	let snake_name = service_name.replace("-", "_");
+
+	// Create directories
+	let workers_root = output_path.join("src").join("workers");
+	let tests_root = output_path.join("tests");
+	fs::create_dir_all(&workers_root).await?;
+	fs::create_dir_all(&tests_root).await?;
+
+	rivet_term::status::progress("Worker parent already exists, skipping initiation...", "");
+
+	// Check if source code exists
+	let worker_file_path = workers_root.join(format!("{}.rs", snake_name));
+	if fs::metadata(&worker_file_path).await.is_ok() {
+		bail!(
+			"Worker file already exists at {}",
+			worker_file_path.display()
+		);
+	}
+
+	generate_file(
+		hb,
+		&render_data,
+		input_path
+			.join("src")
+			.join("workers")
+			.join("{{ snake name }}.rs"),
+		workers_root,
+	)
+	.await?;
+	generate_file(
+		hb,
+		&render_data,
+		input_path.join("tests").join("{{ snake name }}.rs"),
+		tests_root,
+	)
+	.await?;
+
+	// Update worker mod.rs
+	{
+		let worker_mod_path = output_path.join("src").join("workers").join("mod.rs");
+		rivet_term::status::progress("Editing", worker_mod_path.display());
+		let mut worker_mod = fs::OpenOptions::new()
+			.write(true)
+			.append(true)
+			.open(worker_mod_path)
+			.await?;
+
+		worker_mod
+			.write(format!("pub mod {};\n", snake_name).as_str().as_bytes())
+			.await?;
+	}
+
+	// Update main.rs
+	{
+		let main_path = output_path.join("src").join("main.rs");
+		rivet_term::status::progress("Editing", main_path.display());
+		let main_str = fs::read_to_string(&main_path).await?;
+
+		// Find place to insert text
+		let insert_idx = main_str
+			.find("worker_group!")
+			.and_then(|idx| (&main_str[idx..]).find(']').map(|idx2| idx + idx2))
+			.ok_or_else(|| anyhow!("Invalid main.rs file in worker: {}", main_path.display()))?
+			- 3;
+
+		fs::write(
+			main_path,
+			&format!(
+				"{}\n\t\t\t{},{}",
+				&main_str[..insert_idx],
+				snake_name,
+				&main_str[insert_idx..]
+			),
+		)
+		.await?;
+	}
 
 	Ok(())
 }
