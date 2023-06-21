@@ -136,7 +136,7 @@ In code, this is what a worker with error message pattern might look like:
         })
         .await?;
 
-        // Note here that the worker thread itself does not fail, it simply sends back a fail message upon erroneous behavior.
+        // Note here that the worker itself does not fail, it simply sends back a fail message upon erroneous behavior.
         return Ok(());
     } else {
         msg!([ctx] team::msg::create_complete(team_id) {

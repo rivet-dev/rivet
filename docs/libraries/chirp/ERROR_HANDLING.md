@@ -2,9 +2,9 @@
 
 ## Error registry
 
-All recoverable errors are configured in `error-registry/`.
+All recoverable errors are configured in [`errors/`](../../../errors).
 
-See the [frontmatter](https://jekyllrb.com/docs/front-matter/) config at `lib/formatted-error/build.rs`.
+See the [frontmatter](https://jekyllrb.com/docs/front-matter/) config at [`lib/formatted-error/build.rs`](../../../lib/formatted-error/build.rs).
 
 These get auto-generated to https://docs.rivet.gg/.
 
@@ -12,7 +12,7 @@ These get auto-generated to https://docs.rivet.gg/.
 
 ### Operations: Throw errors normally
 
-Throw errors using the macros defined in `lib/global-error/src/macros.rs`.
+Throw errors using the macros defined in [`lib/global-error/src/macros.rs`](../../../lib/global-error/src/macros.rs).
 
 `err_code!` should be used for any potential user error. This throws errors from the error registry.
 
