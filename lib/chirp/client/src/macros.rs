@@ -34,7 +34,6 @@ macro_rules! rpc {
 // TODO: @notrace is not very clean, improve this
 #[macro_export]
 macro_rules! msg {
-	// TODO: Update all branches to use `$mod1:ident$(::$mod2:ident)*`
 	(
 		[$container:expr] $mod1:ident$(::$mod2:ident)* ($($param:expr),*)
 		$body:tt
