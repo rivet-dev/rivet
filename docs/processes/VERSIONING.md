@@ -35,6 +35,6 @@ Internally, Rivet does not have a structured release cycle (yet). We encourage s
 
 As we scale, this will likely change.
 
-**Minor patches*
+**Minor patches**
 
 When we patch a security issue, we must patch older minor Rivet versions to stay compatible with SemVer. If we ship a minor version too frequently (e.g. on a weekly basis), it becomes difficult to patch older versions.
