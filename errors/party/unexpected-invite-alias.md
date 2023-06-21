@@ -9,4 +9,3 @@ http_status = 400
 An invite alias was provided where it's not expected.
 
 Invite aliases are only valid when used with a game identity token.
-

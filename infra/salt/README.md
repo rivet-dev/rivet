@@ -7,4 +7,3 @@ To apply these files, run:
 ```bash
 bin/salt/apply
 ```
-

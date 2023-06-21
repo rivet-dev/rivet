@@ -9,4 +9,3 @@ http_status = 400
 The given lobby is not accepting new players.
 
 Look for any unexpected requests made to `PUT /matchmaker/lobbies/closed`.
-

@@ -7,4 +7,3 @@ logging:
     - mode: ascii
       filename: requests
       format: requests
-

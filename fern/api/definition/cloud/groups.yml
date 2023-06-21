@@ -39,4 +39,3 @@ types:
       errors:
         docs: A list of validation errors.
         type: list<commons.ValidationError>
-

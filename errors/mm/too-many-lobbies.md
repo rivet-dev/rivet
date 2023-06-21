@@ -9,4 +9,3 @@ http_status = 400
 The maximum lobby count has been reached and no more lobbies can be created.
 
 Increase your maximum lobby count in the namespace config on the Rivet dashboard.
-
