@@ -20,10 +20,10 @@ YYYY.MINOR.MICRO
 
 ## Motivations for using CalVer
 
-- We don't ship breaking changes, which makes SemVer less effective. Any significant changes we have _must_ have graceful migrations that run automatically.
-- We ship on a rolling basis, which makes including the year & release cycle more informational.
-- Maintain compatibility with SemVer for releasing patches for older versions.
-- Versions like `2023.2.1` are more intuitive than a verbose SemVer version like `1.46.1`.
+-   We don't ship breaking changes, which makes SemVer less effective. Any significant changes we have _must_ have graceful migrations that run automatically.
+-   We ship on a rolling basis, which makes including the year & release cycle more informational.
+-   Maintain compatibility with SemVer for releasing patches for older versions.
+-   Versions like `2023.2.1` are more intuitive than a verbose SemVer version like `1.46.1`.
 
 ## Why not date by month/week?
 
