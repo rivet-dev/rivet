@@ -431,7 +431,7 @@ impl ProjectContextData {
 	pub fn origin_hub(&self) -> String {
 		self.ns().dns.hub_origin.clone().map_or_else(
 			|| self.ns().dns.domain.main.clone(),
-			|x| format!("https://{x}"),
+			|x| format!("https://hub.{x}"),
 		)
 	}
 	pub fn domain_main(&self) -> String {
