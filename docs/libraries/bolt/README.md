@@ -42,4 +42,4 @@ bolt --help
 
 ### Hacking on Bolt
 
-The Bolt source code lives in `lib/bolt/cli/`. Find something that Bolt could do better? Submit a PR!
+The Bolt source code lives in [`lib/bolt/cli/`](../../../lib/bolt/cli). Find something that Bolt could do better? Submit a PR!

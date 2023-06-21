@@ -14,7 +14,7 @@ Additionally, storing Docker images as layers requires running our own Docker re
 
 ## Implementation
 
-See `svc/pkg/mm/worker/src/workers/lobby_create/mod.rs` for details
+See [`svc/pkg/mm/worker/src/workers/lobby_create/mod.rs`](/svc/pkg/mm/worker/src/workers/lobby_create/mod.rs) for details
 
 ### Direct from S3
 

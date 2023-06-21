@@ -18,7 +18,7 @@ Following these goals will lead to:
 
 It's OK if your PR doesn't actually expose new functionality or exposes incomplete functionality. What matters it that we're making well planned, small changes.
 
-If your feature is a work in progress, put it behind a feature flag by adding a configuration variable in `lib/bolt/config/src/ns.rs`.
+If your feature is a work in progress, put it behind a feature flag by adding a configuration variable in [`lib/bolt/config/src/ns.rs`](/lib/bolt/config/src/ns.rs).
 
 ## Never create PR without a related issue.
 

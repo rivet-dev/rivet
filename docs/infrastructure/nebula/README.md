@@ -4,7 +4,7 @@
 
 Nebula is similar to a VPN. It gives each server a private IP & network interface that automatically encrypts traffic between other servers. It allows allows for fine-grained firewalls to be defined between servers internally to improve security.
 
-Nebula is different from a VPN since Nebula does not have a central server that all traffic has to pass through and instead uses [NAT hole punching](https://docs.github.com/en/enterprise-server@3.4/authentication/keeping-your-account-and-data-secure/creating-a-personal-access-token).
+Nebula is different from a VPN since Nebula does not have a central server that all traffic has to pass through and instead uses [NAT hole punching](https://en.wikipedia.org/wiki/UDP_hole_punching).
 
 ## What do we use Nebula for?
 
