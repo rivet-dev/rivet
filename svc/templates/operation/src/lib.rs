@@ -7,7 +7,7 @@ pub async fn handle(
 ) -> GlobalResult<{{snake pkg}}::{{snake name}}::Response> {
 	todo!();
 
-	// Ok({{pkg}}::{{name}}::Response {
+	// Ok({{snake pkg}}::{{snake name}}::Response {
 
 	// })
 }

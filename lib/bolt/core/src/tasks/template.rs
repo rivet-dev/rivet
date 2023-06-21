@@ -48,6 +48,7 @@ pub async fn generate(ctx: &mut ProjectContext, opts: TemplateOpts) -> Result<()
 		service_name,
 	} = opts;
 
+	// Create base path based on selected root
 	let base_path = if let Some(root) = root {
 		&ctx.config_local()
 			.additional_roots
@@ -59,7 +60,8 @@ pub async fn generate(ctx: &mut ProjectContext, opts: TemplateOpts) -> Result<()
 	};
 
 	if !create_pkg
-		&& fs::metadata(base_path.join("svc").join(&pkg_name))
+		&& !matches!(template_type, TemplateType::Api)
+		&& fs::metadata(base_path.join("svc").join("pkg").join(&pkg_name))
 			.await
 			.is_err()
 	{
@@ -94,39 +96,48 @@ pub async fn generate(ctx: &mut ProjectContext, opts: TemplateOpts) -> Result<()
 		TemplateType::Api => base_path.join("svc").join("api").join(&service_name),
 		TemplateType::Bucket => base_path
 			.join("svc")
+			.join("pkg")
 			.join(&pkg_name)
 			.join("buckets")
 			.join(&service_name),
 		TemplateType::Database => base_path
 			.join("svc")
+			.join("pkg")
 			.join(&pkg_name)
 			.join("db")
 			.join(&service_name),
 		TemplateType::Operation => base_path
 			.join("svc")
+			.join("pkg")
 			.join(&pkg_name)
 			.join("ops")
 			.join(&service_name),
 		TemplateType::Standalone => base_path
 			.join("svc")
+			.join("pkg")
 			.join(&pkg_name)
 			.join("standalone")
 			.join(&service_name),
-		TemplateType::Worker => base_path.join("svc").join(&pkg_name).join("worker"),
+		TemplateType::Worker => base_path
+			.join("svc")
+			.join("pkg")
+			.join(&pkg_name)
+			.join("worker"),
 	};
 
 	rivet_term::status::progress(format!("Creating new {} service...", template_type), "");
 	eprintln!("");
-	
+
 	// Generate new service
 	match template_type {
 		TemplateType::Worker => {
 			let proto_path = base_path
 				.join("svc")
+				.join("pkg")
 				.join(pkg_name)
 				.join("types")
-				.join("msg")
-				.join(format!("{}.proto", service_name));
+				.join("msg");
+			let proto_file_path = proto_path.join(format!("{}.proto", service_name));
 
 			// Check if worker parent already exists
 			if check_service_exists(&output_path).await.is_err() {
@@ -136,10 +147,10 @@ pub async fn generate(ctx: &mut ProjectContext, opts: TemplateOpts) -> Result<()
 				);
 
 				// Check if proto exists
-				if fs::metadata(&proto_path).await.is_ok() {
+				if fs::metadata(&proto_file_path).await.is_ok() {
 					bail!(
 						"Worker protobuf definition already exists at {}",
-						proto_path.display()
+						proto_file_path.display()
 					);
 				}
 
@@ -168,10 +179,10 @@ pub async fn generate(ctx: &mut ProjectContext, opts: TemplateOpts) -> Result<()
 			} else {
 				generate_dir(&mut hb, &render_data, input_path, output_path).await?;
 
-				if fs::metadata(&proto_path).await.is_ok() {
+				if fs::metadata(&proto_file_path).await.is_ok() {
 					bail!(
 						"Worker protobuf definition already exists at {}",
-						proto_path.display()
+						proto_file_path.display()
 					);
 				}
 			}
@@ -195,13 +206,14 @@ pub async fn generate(ctx: &mut ProjectContext, opts: TemplateOpts) -> Result<()
 			// Check if proto exists
 			let proto_path = base_path
 				.join("svc")
+				.join("pkg")
 				.join(pkg_name)
-				.join("types")
-				.join(format!("{}.proto", service_name));
-			if fs::metadata(&proto_path).await.is_ok() {
+				.join("types");
+			let proto_file_path = proto_path.join(format!("{}.proto", service_name));
+			if fs::metadata(proto_file_path).await.is_ok() {
 				bail!(
 					"Operation protobuf definition already exists at {}",
-					proto_path.display()
+					proto_file_path.display()
 				);
 			}
 
