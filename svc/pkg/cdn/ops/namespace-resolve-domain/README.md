@@ -1,2 +1,1 @@
 # cdn-namespace-resolve-domain
-

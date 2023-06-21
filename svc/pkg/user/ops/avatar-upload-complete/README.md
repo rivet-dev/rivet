@@ -1,2 +1,1 @@
 # user-avatar-upload-complete
-

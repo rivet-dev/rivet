@@ -1,2 +1,1 @@
 # team-avatar-upload-complete
-

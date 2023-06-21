@@ -7,4 +7,3 @@ http_status = 400
 # Matchmaker Player In Different Lobby
 
 The player is in a different lobby.
-

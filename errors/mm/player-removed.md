@@ -8,4 +8,3 @@ http_status = 400
 
 Attempted an operation on a player that has already been removed from the
 lobby.
-

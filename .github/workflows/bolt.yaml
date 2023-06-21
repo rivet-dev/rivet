@@ -42,7 +42,7 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-nix-${{ hashfiles('./shell.nix', './nix/**/*.nix') }}
             ${{ runner.os }}-nix-
-      
+
       - name: Build Shell
         run: nix-shell --pure --run "echo 'Built shell'"
 

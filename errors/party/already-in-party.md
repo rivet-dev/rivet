@@ -7,4 +7,3 @@ http_status = 400
 # Already In Party
 
 The identity is already in the given party.
-

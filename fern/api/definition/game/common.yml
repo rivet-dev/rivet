@@ -123,23 +123,19 @@ types:
       priority: integer
       display_name: commons.DisplayName
       postfix_singular:
-        docs:
-          "A string appended to the end of a singular game statistic's value.
+        docs: "A string appended to the end of a singular game statistic's value.
           Example: 1 **dollar**."
         type: optional<string>
       postfix_plural:
-        docs:
-          "A string appended to the end of a game statistic's value that is not
+        docs: "A string appended to the end of a game statistic's value that is not
           exactly 1. Example: 45 **dollars**."
         type: optional<string>
       prefix_singular:
-        docs:
-          "A string appended to the beginning of a singular game statistic's value.
+        docs: "A string appended to the beginning of a singular game statistic's value.
           Example: **value** 1."
         type: optional<string>
       prefix_plural:
-        docs:
-          "A string prepended to the beginning of a game statistic's value that is
+        docs: "A string prepended to the beginning of a game statistic's value that is
           not exactly 1. Example: **values** 45."
         type: optional<string>
 
