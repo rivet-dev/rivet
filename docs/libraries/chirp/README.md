@@ -103,18 +103,18 @@ In code, this is what a worker with error message pattern might look like:
 
     ```rust
     let create_res = msg!([ctx] team::msg::create(team_id) -> Result<team::msg::create_complete, team::msg::create_fail> {
-    	// ... message body
+        // ... message body
     })
     .await?;
     match create_res {
-    	Ok(complete_msg) => {
+        Ok(complete_msg) => {
             // No error
         }
-    	Err(fail_msg) => {
-    		let code = team::msg::create_fail::ErrorCode::from_i32(fail_msg.error_code);
+        Err(fail_msg) => {
+            let code = team::msg::create_fail::ErrorCode::from_i32(fail_msg.error_code);
 
             // Handle error
-    	}
+        }
     };
     ```
 
@@ -122,7 +122,7 @@ In code, this is what a worker with error message pattern might look like:
 
     ```rust
     let complete_res = msg!([ctx] team::msg::create(team_id) -> Result<team::msg::create_complete, team::msg::create_fail> {
-    	// ... message body
+        // ... message body
     })
     .await??; // Note the double `?`
     ```
@@ -131,13 +131,13 @@ In code, this is what a worker with error message pattern might look like:
 
     ```rust
     if fail_condition {
-    	msg!([ctx] team::msg::create_fail(team_id) {
-    		error_code: team::msg::create_fail::ErrorCode::ValidationFailed as i32,
-    	})
-    	.await?;
+        msg!([ctx] team::msg::create_fail(team_id) {
+            error_code: team::msg::create_fail::ErrorCode::ValidationFailed as i32,
+        })
+        .await?;
 
         // Note here that the worker thread itself does not fail, it simply sends back a fail message upon erroneous behavior.
-    	return Ok(());
+        return Ok(());
     } else {
         msg!([ctx] team::msg::create_complete(team_id) {
             // ... message body
