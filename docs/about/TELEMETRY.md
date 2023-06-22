@@ -1,20 +1,31 @@
 # Telemetry
 
-Rivet automatically makes API requests to a centralized server to provide information on how Rivet OSS is being used in the wild.
+By default, Rivet automatically makes API requests to a centralized server (currently [PostHog](https://posthog.com/)) to provide rudimentary information about how Rivet OSS is being used in the wild.
+
+This document is intended to be as transparent as possible about what we collect and our motivations behind it.
 
 ## Why does Rivet include telemetry?
 
-Telemetry is our way of letting us know how Rivet is used in the wild without being in direct contact with developers.
+Rivet collects telemetry for three main reasons:
 
-We work hard to make sure Rivet OSS is easy to run and accessible to everyone. We fully expect there to be users that never pay us a dime nor contact our support, so our telemetry system lets us understand how these users use our product.
+-   **Adjust product investments** Let us know which products are being used & require more attention
+-   **Diagnose issues** Help us diagnose issues users are having on non-standard setups
+-   **Fundraising** Rough usage metrics help us with fundraising to demonstrate real-world usage
 
-## What do we track?
+These metrics are never shared publicly without explicit consent.
+
+## What do we collect?
 
 ### Bolt
- 
+
 [Source code](/lib/bolt/core/src/utils/telemetry.rs)
 
 **Global**
+
+-   `git_remotes` helps us understand what fork is being used
+-   `git_rev` helps us understand what version is being used
+-   `os_release` & `uname` help us diagnose issues caused by the host OS
+-   `services` help us understand what functionality is being added when modifying Rivet and what we need to focus on improving
 
 ```typescript
 {
@@ -26,8 +37,8 @@ We work hard to make sure Rivet OSS is easy to run and accessible to everyone. W
 			"git_remotes": string[],
 			"git_rev": string,
 			"os_release": Map<string, string>,
-			"services": Map<string, {}>,
 			"uname": string,
+			"services": Map<string, {}>,
 		}
 	}
 }
@@ -79,7 +90,8 @@ Sent when running `bolt init`, `bolt infra up`, or `bolt salt apply`.
 Sent when running `bolt init`, `bolt infra up`, or `bolt up`.
 
 ```typescript
-{}
+{
+}
 ```
 
 ### Beacon
@@ -89,6 +101,8 @@ Sent when running `bolt init`, `bolt infra up`, or `bolt up`.
 This data is sent once per day.
 
 **Cluster**
+
+Helps us understand how many Rivet clusters are running in the wild.
 
 ```typescript
 {
@@ -100,6 +114,8 @@ This data is sent once per day.
 ```
 
 **Development teams**
+
+Helps us understand the size of game studio we should be investing resources in to.
 
 ```typescript
 {
@@ -115,6 +131,8 @@ This data is sent once per day.
 ```
 
 **Games**
+
+Helps us understand if developers are running multiple games on a single Rivet cluster.
 
 ```typescript
 {
@@ -132,6 +150,9 @@ This data is sent once per day.
 
 **Game namespaces**
 
+-   `total_users` & `linked_users` helps us understand if Rivet Social is being used
+-   `player_count` helps us understand how well the system is scaling in comparison to the player count
+
 ```typescript
 {
 	"$set": {
@@ -143,6 +164,8 @@ This data is sent once per day.
 		"create_ts": ns.create_ts,
 		"version": version,
 	},
+	"total_users": number,
+	"linked_users": number,
 	"player_count": player_count,
 }
 ```
@@ -159,4 +182,3 @@ disable = true
 ```
 
 Then run `bolt up telemetry-beacon` to disable the beacon.
-
