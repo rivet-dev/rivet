@@ -1,10 +1,7 @@
 use indoc::indoc;
 use rivet_operation::prelude::*;
 use serde_json::json;
-use std::{
-	collections::{HashMap, HashSet},
-	time::Duration,
-};
+use std::{collections::HashSet, fmt::Display, time::Duration};
 
 // This API key is safe to hardcode. It will not change and is intended to be public.
 const POSTHOG_API_KEY: &str = "phc_1lUNmul6sAdFzDK1VHXNrikCfD7ivQZSpf2yzrPvr4m";
@@ -103,123 +100,145 @@ pub async fn run_from_env(ts: i64) -> GlobalResult<()> {
 	// TODO: Registered players
 	// TODO: MAU
 
-	let teams = teams
-		.teams
-		.iter()
-		.map(|team| {
-			let games = games
-				.games
-				.iter()
-				.filter(|x| x.developer_team_id == team.team_id)
-				.map(|game| {
-					let namespaces = namespaces
-						.namespaces
-						.iter()
-						.filter(|x| x.game_id == game.game_id)
-						.map(|ns| {
-							let version = versions
-								.versions
-								.iter()
-								.find(|x| x.version_id == ns.version_id)
-								.map(|version| {
-									let config = cloud_versions
-										.versions
-										.iter()
-										.find(|x| x.version_id == version.version_id)
-										.and_then(|x| x.config.as_ref())
-										.map(|config| {
-											json!({
-												"cdn": config.cdn.as_ref().map(|_| json!({})),
-												"matchmaker": config.matchmaker.as_ref().map(|_| json!({})),
-												"kv": config.kv.as_ref().map(|_| json!({})),
-												"identity": config.identity.as_ref().map(|_| json!({})),
-											})
-										});
+	let mut events = Vec::new();
 
-									json!({
-										"version_id": version.version_id.unwrap().as_uuid(),
-										"create_ts": version.create_ts,
-										"display_name": version.display_name,
-										"config": config,
-									})
-								});
+	{
+		// We include both the cluster ID and the namespace ID in the distinct_id in case the config is
+		// copied to a new namespace with a different name accidentally
+		let mut event = async_posthog::Event::new(
+			"cluster_beacon",
+			&format!(
+				"cluster:{}:{}",
+				util::env::namespace(),
+				util::env::cluster_id()
+			),
+		);
 
-							let ns_id = ns.namespace_id.unwrap().as_uuid();
+		event.insert_prop(
+			"$set",
+			&json!({
+				"ns_id": util::env::namespace(),
+				"cluster_id": util::env::namespace(),
+			}),
+		)?;
 
-							let player_count = player_counts
-								.namespaces
-								.iter()
-								.find(|x| x.namespace_id == ns.namespace_id)
-								.map_or(0, |x| x.player_count);
+		events.push(event);
+	}
 
-							(
-								ns_id,
-								json!({
-									"name_id": ns.name_id,
-									"display_name": ns.display_name,
-									"version": version,
-									"player_count": player_count,
-								}),
-							)
-						})
-						.collect::<HashMap<_, _>>();
+	for team in &teams.teams {
+		let team_id = team.team_id.unwrap().as_uuid();
 
-					let game_id = game.game_id.unwrap().as_uuid();
+		let member_count = team_members
+			.teams
+			.iter()
+			.find(|x| x.team_id == team.team_id)
+			.map_or(0, |x| x.member_count);
 
-					(
-						game_id,
+		let mut event =
+			async_posthog::Event::new("team_beacon", &build_distinct_id(format!("team:{team_id}")));
+		event.insert_prop(
+			"$set",
+			json!({
+				"ns_id": util::env::namespace(),
+				"cluster_id": util::env::cluster_id(),
+				"team_id": team_id,
+				"display_name": team.display_name,
+				"create_ts": team.create_ts,
+				"member_count": member_count,
+			}),
+		)?;
+		events.push(event);
+	}
+
+	for game in &games.games {
+		let game_id = game.game_id.unwrap().as_uuid();
+
+		let mut event =
+			async_posthog::Event::new("game_beacon", &build_distinct_id(format!("game:{game_id}")));
+		event.insert_prop(
+			"$set",
+			json!({
+				"ns_id": util::env::namespace(),
+				"cluster_id": util::env::cluster_id(),
+				"game_id": game_id,
+				"name_id": game.name_id,
+				"display_name": game.display_name,
+				"create_ts": game.create_ts,
+				"url": game.url,
+			}),
+		)?;
+		events.push(event);
+	}
+
+	for ns in &namespaces.namespaces {
+		let ns_id = ns.namespace_id.unwrap().as_uuid();
+
+		let player_count = player_counts
+			.namespaces
+			.iter()
+			.find(|x| x.namespace_id == ns.namespace_id)
+			.map_or(0, |x| x.player_count);
+
+		let version = versions
+			.versions
+			.iter()
+			.find(|x| x.version_id == ns.version_id)
+			.map(|version| {
+				let config = cloud_versions
+					.versions
+					.iter()
+					.find(|x| x.version_id == version.version_id)
+					.and_then(|x| x.config.as_ref())
+					.map(|config| {
 						json!({
-							"name_id": game.name_id,
-							"display_name": game.display_name,
-							"create_ts": team.create_ts,
-							"url": game.url,
-							"namespaces": namespaces,
-						}),
-					)
-				})
-				.collect::<HashMap<_, _>>();
+							"cdn": config.cdn.as_ref().map(|_| json!({})),
+							"matchmaker": config.matchmaker.as_ref().map(|_| json!({})),
+							"kv": config.kv.as_ref().map(|_| json!({})),
+							"identity": config.identity.as_ref().map(|_| json!({})),
+						})
+					});
 
-			let team_id = team.team_id.unwrap().as_uuid();
-
-			let member_count = team_members
-				.teams
-				.iter()
-				.find(|x| x.team_id == team.team_id)
-				.map_or(0, |x| x.member_count);
-
-			(
-				team_id,
 				json!({
-					"display_name": team.display_name,
-					"create_ts": team.create_ts,
-					"member_count": member_count,
-					"games": games,
-				}),
-			)
-		})
-		.collect::<HashMap<_, _>>();
+					"version_id": version.version_id.unwrap().as_uuid(),
+					"create_ts": version.create_ts,
+					"display_name": version.display_name,
+					"config": config,
+				})
+			});
 
-	// We include both the cluster ID and the namespace ID in the distinct_id in case the config is
-	// copied to a new namespace with a different name accidentally
-	let distinct_id = format!(
-		"cluster:{}:{}",
-		util::env::namespace(),
-		util::env::cluster_id()
-	);
-	let mut event = async_posthog::Event::new("cluster_beacon", &distinct_id);
+		let mut event = async_posthog::Event::new(
+			"namespace_beacon",
+			&build_distinct_id(format!("ns:{ns_id}")),
+		);
+		event.insert_prop(
+			"$set",
+			json!({
+				"ns_id": util::env::namespace(),
+				"cluster_id": util::env::cluster_id(),
+				"namespace_id": ns_id,
+				"name_id": ns.name_id,
+				"display_name": ns.display_name,
+				"version": version,
+			}),
+		)?;
+		event.insert_prop("player_count", player_count)?;
+		events.push(event);
+	}
 
-	event.insert_prop(
-		"$set",
-		&json!({
-			"ns_id": util::env::namespace(),
-			"cluster_id": util::env::namespace(),
-			"dev_teams": teams,
-		}),
-	)?;
-
+	// Send events
+	tracing::info!(events_len = ?events.len(), "sending events");
 	async_posthog::client(POSTHOG_API_KEY)
-		.capture(event)
+		.capture_batch(events)
 		.await?;
+	tracing::info!("event sent");
 
 	Ok(())
+}
+
+fn build_distinct_id(entity: impl Display) -> String {
+	format!(
+		"cluster:{}:{}:{entity}",
+		util::env::namespace(),
+		util::env::cluster_id()
+	)
 }
