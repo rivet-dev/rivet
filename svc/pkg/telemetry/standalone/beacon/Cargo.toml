@@ -28,6 +28,10 @@ mm-player-count-for-namespace = { path = "../../../mm/ops/player-count-for-names
 team-get = { path = "../../../team/ops/get" }
 team-member-count = { path = "../../../team/ops/member-count" }
 
+[dependencies.sqlx]
+version = "0.6"
+default-features = false
+
 [dev-dependencies]
 chirp-worker = { path = "../../../../../lib/chirp/worker" }
 chrono = "0.4"

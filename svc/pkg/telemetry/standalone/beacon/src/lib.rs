@@ -6,6 +6,13 @@ use std::{collections::HashSet, fmt::Display, time::Duration};
 // This API key is safe to hardcode. It will not change and is intended to be public.
 const POSTHOG_API_KEY: &str = "phc_1lUNmul6sAdFzDK1VHXNrikCfD7ivQZSpf2yzrPvr4m";
 
+#[derive(Debug, sqlx::FromRow)]
+struct NamespaceAnalytics {
+	namespace_id: Uuid,
+	total_users: i64,
+	linked_users: i64,
+}
+
 #[tracing::instrument]
 pub async fn run_from_env(ts: i64) -> GlobalResult<()> {
 	let pools = rivet_pools::from_env("telemetry-beacon").await?;
@@ -42,6 +49,20 @@ pub async fn run_from_env(ts: i64) -> GlobalResult<()> {
 	.into_iter()
 	.map(|(team_id,)| Into::<common::Uuid>::into(team_id))
 	.collect::<Vec<_>>();
+
+	let game_user_namespaces = sqlx::query_as::<_, NamespaceAnalytics>(indoc!(
+		"
+		SELECT
+			gu.namespace_id,
+			count(DISTINCT gu.user_id) FILTER (WHERE l.link_id IS NULL) AS total_users,
+			count(DISTINCT gu.user_id) FILTER (WHERE l.link_id IS NOT NULL) AS linked_users
+		FROM game_users AS gu
+		LEFT JOIN links AS l ON l.new_game_user_id = gu.game_user_id
+		GROUP BY gu.namespace_id
+		"
+	))
+	.fetch_all(&ctx.crdb("db-game-user").await?)
+	.await?;
 
 	let namespaces = sqlx::query_as::<_, (Uuid, Uuid)>(indoc!(
 		"
@@ -241,6 +262,11 @@ pub async fn run_from_env(ts: i64) -> GlobalResult<()> {
 			.and_then(|x| x.developer_team_id)
 			.map(|x| x.as_uuid());
 
+		let game_user_analytics = game_user_namespaces
+			.iter()
+			.find(|x| x.namespace_id == ns_id);
+
+		// TODO: Replace this with peak player count
 		let player_count = player_counts
 			.namespaces
 			.iter()
@@ -298,6 +324,8 @@ pub async fn run_from_env(ts: i64) -> GlobalResult<()> {
 				"version": version,
 			}),
 		)?;
+		event.insert_prop("total_users", game_user_analytics.map(|x| x.total_users))?;
+		event.insert_prop("linked_users", game_user_analytics.map(|x| x.linked_users))?;
 		event.insert_prop("player_count", player_count)?;
 		events.push(event);
 

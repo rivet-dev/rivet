@@ -7848,6 +7848,7 @@ dependencies = [
  "rivet-operation",
  "rivet-pools",
  "rivet-runtime",
+ "sqlx",
  "team-get",
  "team-member-count",
  "tokio",
