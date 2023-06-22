@@ -23,9 +23,10 @@ pub async fn build_event(ctx: &ProjectContext, name: &str) -> Result<async_posth
 	let distinct_id = format!("cluster:{}:{}", ctx.ns_id(), ctx.ns().cluster.id);
 	let mut event = async_posthog::Event::new(name, &distinct_id);
 
-	// Fetch event data
+	// Helps us understand what version of the cluster is being used.
 	let git_rev = block_in_place(|| cmd!("git", "rev-parse", "HEAD").dir(ctx.path()).read()).ok();
 
+	// Helps us understand what fork of Rivet is being used.
 	let git_remotes = block_in_place(|| cmd!("git", "remote", "--verbose").dir(ctx.path()).read())
 		.ok()
 		.map(|x| {
@@ -36,6 +37,8 @@ pub async fn build_event(ctx: &ProjectContext, name: &str) -> Result<async_posth
 				.collect::<Vec<_>>()
 		});
 
+	// Helps us understand what type of functionality people are adding that we need to add to
+	// Rivet.
 	let services = ctx
 		.all_services()
 		.await
@@ -43,8 +46,10 @@ pub async fn build_event(ctx: &ProjectContext, name: &str) -> Result<async_posth
 		.map(|x| (x.name(), json!({})))
 		.collect::<HashMap<String, serde_json::Value>>();
 
+	// Helps us diagnose issues based on the host OS.
 	let uname = block_in_place(|| cmd!("uname", "-a").read()).ok();
 
+	// Helps us diagnose issues based on the host OS.
 	let os_release = tokio::fs::read_to_string("/etc/os-release")
 		.await
 		.ok()
@@ -62,11 +67,13 @@ pub async fn build_event(ctx: &ProjectContext, name: &str) -> Result<async_posth
 		&json!({
 			"ns_id": ctx.ns_id(),
 			"ns_config": ctx.ns(),
-			"git_rev": git_rev,
-			"git_remotes": git_remotes,
-			"services": services,
-			"uname": uname,
-			"os_release": os_release,
+			"bolt": {
+				"git_rev": git_rev,
+				"git_remotes": git_remotes,
+				"uname": uname,
+				"os_release": os_release,
+				"services": services,
+			},
 		}),
 	)?;
 
