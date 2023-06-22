@@ -123,7 +123,7 @@ pub async fn run_from_env(ts: i64) -> GlobalResult<()> {
 		events.push(event);
 
 		let mut event = async_posthog::Event::new("$groupidentify", &distinct_id);
-		event.insert_prop("$group_type", "group")?;
+		event.insert_prop("$group_type", "cluster")?;
 		event.insert_prop("$group_key", util::env::cluster_id())?;
 		event.insert_prop(
 			"$group_set",
@@ -183,8 +183,9 @@ pub async fn run_from_env(ts: i64) -> GlobalResult<()> {
 		let game_id = game.game_id.unwrap().as_uuid();
 		let team_id = game.developer_team_id.unwrap().as_uuid();
 
-		let mut event =
-			async_posthog::Event::new("game_beacon", &build_distinct_id(format!("game:{game_id}")));
+		let distinct_id = build_distinct_id(format!("game:{game_id}"));
+
+		let mut event = async_posthog::Event::new("game_beacon", &distinct_id);
 		event.insert_prop(
 			"$groups",
 			&json!({
@@ -199,6 +200,20 @@ pub async fn run_from_env(ts: i64) -> GlobalResult<()> {
 				"ns_id": util::env::namespace(),
 				"cluster_id": util::env::cluster_id(),
 				"game_id": game_id,
+				"name_id": game.name_id,
+				"display_name": game.display_name,
+				"create_ts": game.create_ts,
+				"url": game.url,
+			}),
+		)?;
+		events.push(event);
+
+		let mut event = async_posthog::Event::new("$groupidentify", &distinct_id);
+		event.insert_prop("$group_type", "game")?;
+		event.insert_prop("$group_key", game_id)?;
+		event.insert_prop(
+			"$group_set",
+			&json!({
 				"name_id": game.name_id,
 				"display_name": game.display_name,
 				"create_ts": game.create_ts,
@@ -251,10 +266,9 @@ pub async fn run_from_env(ts: i64) -> GlobalResult<()> {
 				})
 			});
 
-		let mut event = async_posthog::Event::new(
-			"namespace_beacon",
-			&build_distinct_id(format!("ns:{ns_id}")),
-		);
+		let distinct_id = build_distinct_id(format!("ns:{ns_id}"));
+
+		let mut event = async_posthog::Event::new("namespace_beacon", &distinct_id);
 		event.insert_prop(
 			"$groups",
 			&json!({
@@ -272,10 +286,24 @@ pub async fn run_from_env(ts: i64) -> GlobalResult<()> {
 				"namespace_id": ns_id,
 				"name_id": ns.name_id,
 				"display_name": ns.display_name,
+				"create_ts": ns.create_ts,
 				"version": version,
 			}),
 		)?;
 		event.insert_prop("player_count", player_count)?;
+		events.push(event);
+
+		let mut event = async_posthog::Event::new("$groupidentify", &distinct_id);
+		event.insert_prop("$group_type", "namespace")?;
+		event.insert_prop("$group_key", game_id)?;
+		event.insert_prop(
+			"$group_set",
+			&json!({
+				"name_id": ns.name_id,
+				"display_name": ns.display_name,
+				"create_ts": ns.create_ts,
+			}),
+		)?;
 		events.push(event);
 	}
 	tracing::info!(len = ?events.len(), "built events");
