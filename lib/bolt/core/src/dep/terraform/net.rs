@@ -44,10 +44,10 @@ pub mod nebula {
 	pub const LOCAL_IP: Ipv4Addr = Ipv4Addr::new(10, 0, 0, 1);
 
 	pub fn nebula_lighthouse_nebula_ip(ctx: &ProjectContext) -> Ipv4Addr {
-		match &ctx.ns().deploy.kind {
-			bolt_config::ns::DeployKind::Local { .. } => LOCAL_IP,
+		match &ctx.ns().cluster.kind {
+			bolt_config::ns::ClusterKind::SingleNode { .. } => LOCAL_IP,
 			// Calculate IP for host
-			bolt_config::ns::DeployKind::Cluster { .. } => Ipv4Net::new(SUBNET_SVC, NETMASK)
+			bolt_config::ns::ClusterKind::Distributed { .. } => Ipv4Net::new(SUBNET_SVC, NETMASK)
 				.unwrap()
 				.hosts()
 				.nth(0)
@@ -56,10 +56,10 @@ pub mod nebula {
 	}
 
 	pub fn salt_master_nebula_ip(ctx: &ProjectContext) -> Ipv4Addr {
-		match &ctx.ns().deploy.kind {
-			bolt_config::ns::DeployKind::Local { .. } => LOCAL_IP,
+		match &ctx.ns().cluster.kind {
+			bolt_config::ns::ClusterKind::SingleNode { .. } => LOCAL_IP,
 			// Calculate IP for host
-			bolt_config::ns::DeployKind::Cluster { .. } => Ipv4Net::new(SUBNET_SVC, NETMASK)
+			bolt_config::ns::ClusterKind::Distributed { .. } => Ipv4Net::new(SUBNET_SVC, NETMASK)
 				.unwrap()
 				.hosts()
 				.nth(9)

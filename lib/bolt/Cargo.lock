@@ -508,6 +508,7 @@ dependencies = [
  "serde",
  "serde_json",
  "toml 0.7.4",
+ "uuid",
 ]
 
 [[package]]

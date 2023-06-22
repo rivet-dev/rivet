@@ -8,6 +8,7 @@ use std::{
 use tokio::fs;
 use tokio::task::block_in_place;
 use toml_edit::value;
+use uuid::Uuid;
 
 use crate::{config::service::RuntimeKind, context::ProjectContextData};
 
@@ -181,10 +182,17 @@ pub async fn generate(project_path: &Path, ns_id: &str) -> Result<()> {
 
 	let mut generator = ConfigGenerator::new(term, &project_path, ns_id).await?;
 
-	// MARK: Deploy
-	if generator.ns.get("deploy").is_none() || generator.ns["deploy"].get("cluster").is_none() {
+	// MARK: Cluster
+	generator
+		.generate_config(&["cluster", "id"], || async {
+			Ok(value(Uuid::new_v4().to_string()).into())
+		})
+		.await?;
+
+	if generator.ns.get("cluster").is_none() || generator.ns["cluster"].get("distributed").is_none()
+	{
 		generator
-			.generate_config(&["deploy", "local", "public_ip"], || async {
+			.generate_config(&["cluster", "single_node", "public_ip"], || async {
 				let public_ip = fetch_public_ip().await?;
 				Ok(value(public_ip).into())
 			})

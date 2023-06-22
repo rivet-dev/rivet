@@ -43,9 +43,9 @@ pub async fn gen_svc(region_id: &str, exec_ctx: &ExecServiceContext) -> Job {
 
 	let project_ctx = svc_ctx.project().await;
 
-	let node_class = match project_ctx.ns().deploy.kind {
-		config::ns::DeployKind::Local { .. } => "local",
-		config::ns::DeployKind::Cluster { .. } => "svc",
+	let node_class = match project_ctx.ns().cluster.kind {
+		config::ns::ClusterKind::SingleNode { .. } => "local",
+		config::ns::ClusterKind::Distributed { .. } => "svc",
 	};
 
 	let (job_type, enable_update, reschedule_attempts) = match svc_ctx.config().kind {
@@ -70,9 +70,9 @@ pub async fn gen_svc(region_id: &str, exec_ctx: &ExecServiceContext) -> Job {
 	];
 
 	let has_health = project_ctx.ns().nomad.health_checks.unwrap_or_else(|| {
-		match project_ctx.ns().deploy.kind {
-			config::ns::DeployKind::Local { .. } => false,
-			config::ns::DeployKind::Cluster { .. } => true,
+		match project_ctx.ns().cluster.kind {
+			config::ns::ClusterKind::SingleNode { .. } => false,
+			config::ns::ClusterKind::Distributed { .. } => true,
 		}
 	}) && matches!(
 		svc_ctx.config().kind,
