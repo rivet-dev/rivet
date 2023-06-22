@@ -25,11 +25,17 @@ This made it clear that we need a self-hosted solution for dealing with security
 
 ### Cloudflare Access
 
-A lot of our initial approach was built on Cloudflare Access. It was fine that this wasn't self hosted since we already pay for Cloudflare and rely on it heavily for our ingress traffic.
+**Initial approach**
+
+A lot of our initial approach was built on Cloudflare Access.
 
 We hit a roadblock when trying to expose Nomad RPC over WAN. Because Nomad uses a gossip protocol, couldn't run the RPC connections through a tunnel since it tried to use the advertized address to make clients connect to other nodes.
 
 i.e. we'd open and connect to a Nomad RPC tunnel running in 127.0.0.1:1234, but then Nomad would make the client connect to the advertised address at 1.2.3.4:4647 which was behind a firewall
+
+**Closed source**
+
+It was fine that this can't be self-hosted since we already pay for Cloudflare and rely on it heavily for our ingress traffic.
 
 ### Consul Connect/other service mesh
 
@@ -37,13 +43,19 @@ Service meshes suffer from the same issue as Cloudflare Access. We can't use ser
 
 ### WireGuard
 
-WireGuard would've worked.
+WireGuard likely would've worked.
+
+**Not designed for mesh networking**
 
 However, Nebula was built from the ground up to work like a mesh network, while WireGuard was built like a VPN. With WireGuard, you have to tell each peer about other peers.
 
 To run WireGuard as a mesh, you can to use [wg-meshconf](https://github.com/k4yt3x/wg-meshconf) to automate the configurations, but this is significantly more complicated than Nebula.
 
-We also may have a very large "fanout" because we use NATS and often other databases which relies on sharding, so not using a proxy makes more sense for us.
+**Fan out**
+
+We also may have a very large "fan out" because we use NATS and often other databases which relies on sharding, so not using a proxy makes more sense for us.
+
+Licensed under GPL, which is not inherently a problem, but it's preferred to use permissive OSS software.
 
 The main advantage for WireGuard is that it has a large community and a lot of tooling around it.
 
@@ -71,11 +83,11 @@ It's worth noting that Nebula was spun out of Slack and is [now managed](https:/
 
 ### NetMaker
 
-YC W22 company, which is cool.
+It's licensed under SSPL, which is a non-starter since we need to self-host it.
+
+Company is still too young to adopt for fundamental infrastructure.
 
 Runs on top of WireGuard, so inherits the same pain points.
-
-Company is still too young.
 
 ## Shortcomings
 
