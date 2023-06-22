@@ -7,7 +7,7 @@ use std::{
 };
 
 // This API key is safe to hardcode. It will not change and is intended to be public.
-const POSTHOG_API_KEY: &str = "phc_6kfTNEAVw7rn1LA51cO3D69FefbKupSWFaM7OUgEpEo";
+const POSTHOG_API_KEY: &str = "phc_1lUNmul6sAdFzDK1VHXNrikCfD7ivQZSpf2yzrPvr4m";
 
 #[tracing::instrument]
 pub async fn run_from_env(ts: i64) -> GlobalResult<()> {
@@ -32,7 +32,7 @@ pub async fn run_from_env(ts: i64) -> GlobalResult<()> {
 		FROM dev_teams
 		"
 	))
-	.fetch_all(&ctx.crdb("db-team").await?)
+	.fetch_all(&ctx.crdb("db-team-dev").await?)
 	.await?
 	.into_iter()
 	.map(|(team_id,)| Into::<common::Uuid>::into(team_id))

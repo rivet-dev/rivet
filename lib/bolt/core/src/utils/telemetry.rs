@@ -7,7 +7,7 @@ use tokio::task::block_in_place;
 use crate::context::ProjectContext;
 
 // This API key is safe to hardcode. It will not change and is intended to be public.
-const POSTHOG_API_KEY: &str = "phc_6kfTNEAVw7rn1LA51cO3D69FefbKupSWFaM7OUgEpEo";
+const POSTHOG_API_KEY: &str = "phc_1lUNmul6sAdFzDK1VHXNrikCfD7ivQZSpf2yzrPvr4m";
 
 fn build_client() -> async_posthog::Client {
 	async_posthog::client(POSTHOG_API_KEY)
