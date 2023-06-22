@@ -12,6 +12,7 @@ This made it clear that we need a self-hosted solution for dealing with security
 
 -   Completely self hosted, since each of our game servers would be counted as a node in any pricing model
 -   Easy to run
+-   Built as a mesh network for P2P communication
 -   Resilient to failure
 -   Doesn't require a public port to be open
 -   Allows for running services that require clients to connect to arbitrary IPs (usually because of gossip protocol)
@@ -24,11 +25,17 @@ This made it clear that we need a self-hosted solution for dealing with security
 
 ### Cloudflare Access
 
-A lot of our initial approach was built on Cloudflare Access. It was fine that this wasn't self hosted since we already pay for Cloudflare and rely on it heavily for our ingress traffic.
+**Initial approach**
+
+A lot of our initial approach was built on Cloudflare Access.
 
 We hit a roadblock when trying to expose Nomad RPC over WAN. Because Nomad uses a gossip protocol, couldn't run the RPC connections through a tunnel since it tried to use the advertized address to make clients connect to other nodes.
 
 i.e. we'd open and connect to a Nomad RPC tunnel running in 127.0.0.1:1234, but then Nomad would make the client connect to the advertised address at 1.2.3.4:4647 which was behind a firewall
+
+**Closed source**
+
+It was fine that this can't be self-hosted since we already pay for Cloudflare and rely on it heavily for our ingress traffic.
 
 ### Consul Connect/other service mesh
 
@@ -36,15 +43,25 @@ Service meshes suffer from the same issue as Cloudflare Access. We can't use ser
 
 ### WireGuard
 
-WireGuard would've fit the bill. However, Nebula is preferred because it allows for direct traffic as opposed to WireGuard which requires a proxy for everything. Nebula is also more intelligent about routing.
+WireGuard likely would've worked.
 
-This removes the WireGuard proxy as a single point of failure and makes it easier to ensure that the optimal route is used between nodes.
+**Not designed for mesh networking**
 
-This also makes it so we don't end up with a large amount of bandwidth on one WireGuard node and instead only use the bandwidth that each node requires independently.
+However, Nebula was built from the ground up to work like a mesh network, while WireGuard was built like a VPN. With WireGuard, you have to tell each peer about other peers.
 
-We also have a very large "fanout" because we use NATS and often other databases which relies on sharding, so not using a proxy makes more sense for us. [See context here.](https://youtu.be/qy2cgqglt3o?t=1305)
+To run WireGuard as a mesh, you can to use [wg-meshconf](https://github.com/k4yt3x/wg-meshconf) to automate the configurations, but this is significantly more complicated than Nebula.
 
-The main advantage to WireGuard is that it has a large community and collection of tools.
+**Fan out**
+
+We also may have a very large "fan out" because we use NATS and often other databases which relies on sharding, so not using a proxy makes more sense for us.
+
+Licensed under GPL, which is not inherently a problem, but it's preferred to use permissive OSS software.
+
+The main advantage for WireGuard is that it has a large community and a lot of tooling around it.
+
+Resources:
+
+-   [Creating a Fast, Secure, Location Agnostic Mesh Network with Nebula - Ryan Huber](https://youtu.be/qy2cgqglt3o?t=1305)
 
 ### VPC/VLAN
 
@@ -54,11 +71,11 @@ We still instruct Nebula to prefer traffic over LAN whenever possible. See [`pre
 
 ### ZeroTier
 
-Achieves a similar goal to Nebula. Was off put about mentions of [less attention to security], a SaaS-first model for what is the most important part of our network, [non-MIT license](https://github.com/zerotier/ZeroTierOne/blob/master/LICENSE.txt), and while you can [self host](https://docs.zerotier.com/self-hosting/network-controllers/) it's not encouraged.
+Achieves a similar goal to Nebula.
 
-None of these reasons alone justify not using ZeroTier, but it didn't seem to be in the business's best interest to use it like we do.
+Likely would have worked fine for us, but Nebula was easy to get up and running, has worked flawlessly, and has already been proven at large scales.
 
-It's worth noting that Nebula also is [now managed](https://www.defined.net/blog/open-for-business/) by [Defined](https://www.defined.net/) which aims to have a similar SaaS model to ZeroTier, but the license is still MIT and is backed by Slack who doesn't care as much if this turns a profit or not.
+It's worth noting that Nebula was spun out of Slack and is [now managed](https://www.defined.net/blog/open-for-business/) by [Defined](https://www.defined.net/) which aims to have a similar SaaS model to ZeroTier.
 
 ### Tailscale
 
@@ -66,11 +83,11 @@ It's worth noting that Nebula also is [now managed](https://www.defined.net/blog
 
 ### NetMaker
 
-YC W22 company, which is cool.
+It's licensed under SSPL, which is a non-starter since we need to self-host it.
+
+Company is still too young to adopt for fundamental infrastructure.
 
 Runs on top of WireGuard, so inherits the same pain points.
-
-Company is still too young.
 
 ## Shortcomings
 

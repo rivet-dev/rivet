@@ -7,4 +7,3 @@ http_status = 400
 # Identity Not In Any Party
 
 This API request attempted to reference the party the current identity is in, but the current identity is not a member of any party.
-

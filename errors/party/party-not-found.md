@@ -7,4 +7,3 @@ http_status = 400
 # Party Not Found
 
 A party with the given ID could not be found.
-

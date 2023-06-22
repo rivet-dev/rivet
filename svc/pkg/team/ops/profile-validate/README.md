@@ -1,2 +1,1 @@
 # team-profile-validate
-

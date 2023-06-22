@@ -6,15 +6,15 @@ Rivet is licensed under [Apache License 2.0](https://en.wikipedia.org/wiki/Apach
 
 Open source licenses come in three broad flavors:
 
-|                   | Examples         | TLDR                                                                                                                               |
-| ----------------- | ---------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
-| ⭐️ **Permissive**    | Apache, MIT, MPL | Allow you to use, modify, and distribute the code as you like, even for commercial purposes, with minimal requirements             |
-| **Copyleft**      | GPL, AGPL, SSPL  | Business-hostile license ensures that derivatives of the software also remain free and open source                                 |
-| **Public domain** | PD, CC0          | Work is not subject to copyright and is freely available for anyone to use, modify, and distribute without any restrictions at all |
+|                    | Examples         | TLDR                                                                                                                               |
+| ------------------ | ---------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
+| ⭐️ **Permissive** | Apache, MIT, MPL | Allow you to use, modify, and distribute the code as you like, even for commercial purposes, with minimal requirements             |
+| **Copyleft**       | GPL, AGPL, SSPL  | Business-hostile license ensures that derivatives of the software also remain free and open source                                 |
+| **Public domain**  | PD, CC0          | Work is not subject to copyright and is freely available for anyone to use, modify, and distribute without any restrictions at all |
 
 There are other types of proprietary licenses that we won't cover.
 
-## Why (sometimes) avoid copyleft licenses 
+## Why (sometimes) avoid copyleft licenses
 
 A lot of fantastic software is written under copyleft licenses, including GCC, MySQL, Blender, and WireGuard.
 
@@ -24,18 +24,18 @@ However, licenses like SSPL and AGPL licenses have been abused by for-profit com
 
 By using copyleft licenses, you lose almost all of the benefits of open source:
 
-- Can't off ramp to other providers if the main provider shuts down or becomes too expensive (i.e. anti-competitive)
-- Inability to modify software without open sourcing it
-- Potential legal risks of misusing software using this license
-- Incompatibility with other licenses
+-   Can't off ramp to other providers if the main provider shuts down or becomes too expensive (i.e. anti-competitive)
+-   Inability to modify software without open sourcing it
+-   Potential legal risks of misusing software using this license
+-   Incompatibility with other licenses
 
 More resources:
 
-- [SSPL is not an open source license](https://blog.opensource.org/the-sspl-is-not-an-open-source-license/)
-- [The Case Against the SSPL](https://thenewstack.io/the-case-against-the-server-side-public-license-sspl/)
+-   [SSPL is not an open source license](https://blog.opensource.org/the-sspl-is-not-an-open-source-license/)
+-   [The Case Against the SSPL](https://thenewstack.io/the-case-against-the-server-side-public-license-sspl/)
 
 > **Technicalities**
-> 
+>
 > There are a lot of nuances in the types of copyleft licenses and what you can do. We hope this gives a brief overview of what to look out for, do your own research if you're looking at using copyleft software.
 
 ## Provide competitive value instead of using a business-hostile license
@@ -50,10 +50,10 @@ There's many other permissive open source licenses, like MIT and MPL.
 
 We chose Apache 2.0 for the following reasons:
 
-- **Well established** Apache 2.0 is used by the majority of large companies for their open source software
-- **Trademark protections** Explicitly states the limitations on the use of our trademarks
-- **Patent rights** Explicitly gives the right to file patents on our software
-- **Compatibility** Apache 2.0 can be used within GPL-licensed software
+-   **Well established** Apache 2.0 is used by the majority of large companies for their open source software
+-   **Trademark protections** Explicitly states the limitations on the use of our trademarks
+-   **Patent rights** Explicitly gives the right to file patents on our software
+-   **Compatibility** Apache 2.0 can be used within GPL-licensed software
 
 ## Feedback
 

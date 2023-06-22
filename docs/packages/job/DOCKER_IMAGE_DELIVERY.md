@@ -14,7 +14,7 @@ Additionally, storing Docker images as layers requires running our own Docker re
 
 ## Implementation
 
-See `svc/pkg/mm/worker/src/workers/lobby_create/mod.rs` for details
+See [`svc/pkg/mm/worker/src/workers/lobby_create/mod.rs`](/svc/pkg/mm/worker/src/workers/lobby_create/mod.rs) for details
 
 ### Direct from S3
 
@@ -27,7 +27,7 @@ When requesting a Docker build using just S3, it goes through these steps:
 
 ### Pull-through cache
 
-Job run builds are hosted behind Apache Traffic Server within the data-center as a pull-through cache to S3. 
+Job run builds are hosted behind Apache Traffic Server within the data-center as a pull-through cache to S3.
 
 1. mm-lobby-create provides an internal URL to Apache Traffic Server
 1. Nomad makes HTTP request for the artifact over the Nebula network

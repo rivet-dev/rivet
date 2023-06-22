@@ -1,7 +1,5 @@
 {
-    "protoc": {
-        "options": [
-            "-I=proto/proto"
-        ]
-    }
+	"protoc": {
+		"options": ["-I=proto/proto"]
+	}
 }

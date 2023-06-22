@@ -9,4 +9,3 @@ http_status = 400
 No lobbies could be found for the given lobby group.
 
 If you want to automatically create a new lobby when no lobbies are found, check that `prevent_auto_create_lobby` is not set.
-

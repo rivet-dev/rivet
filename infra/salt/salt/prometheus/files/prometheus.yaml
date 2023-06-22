@@ -1,7 +1,7 @@
 global:
   scrape_interval: 15s
-  evaluation_interval: 15s  # Needs to be fast for Nomad monitoring
+  evaluation_interval: 15s # Needs to be fast for Nomad monitoring
 
 # Import all provided Prometheus configs
 scrape_config_files:
-  - '/etc/prometheus.*.yaml'
+  - "/etc/prometheus.*.yaml"

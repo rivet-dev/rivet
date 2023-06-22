@@ -1,2 +1,1 @@
 # team-resolve-display-name
-

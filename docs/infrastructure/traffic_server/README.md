@@ -6,9 +6,9 @@ Traffic Server is used as a content caching forward proxy within Rivet. It enabl
 
 ## What do we Traffic Server for?
 
-- CDN assets
-- Docker image delivery
-- Cost savings on frequently requested S3 assets
+-   CDN assets
+-   Docker image delivery
+-   Cost savings on frequently requested S3 assets
 
 ## Can we replace Traefik with Traffic Server?
 

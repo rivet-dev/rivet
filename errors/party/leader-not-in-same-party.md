@@ -7,4 +7,3 @@ http_status = 400
 # Leader Not In Same Party
 
 Attempted to transfer ownership of a party to an identity not in the same party as the current identity.
-

@@ -8,5 +8,5 @@ Tickets and PRs are great internally for people who know the Rivet codebase insi
 
 **Resources**
 
-- [Startups Write Changelogs](https://medium.com/linear-app/startups-write-changelogs-c6a1d2ff4820) elaborates on some of the motivation behind changelogs
-- [Keep a changelog](https://keepachangelog.com/en/1.0.0/) is used as our changelog specification
+-   [Startups Write Changelogs](https://medium.com/linear-app/startups-write-changelogs-c6a1d2ff4820) elaborates on some of the motivation behind changelogs
+-   [Keep a changelog](https://keepachangelog.com/en/1.0.0/) is used as our changelog specification

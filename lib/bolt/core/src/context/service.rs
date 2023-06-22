@@ -1024,10 +1024,7 @@ impl ServiceContextData {
 				.hub_origin_regex
 				.clone()
 				.unwrap_or_else(|| {
-					format!(
-						"^https://({base}|hub\\.{base})$",
-						base = project_ctx.domain_main()
-					)
+					format!("^https://hub\\.{base}$", base = project_ctx.domain_main())
 				}),
 		));
 		env.push((
