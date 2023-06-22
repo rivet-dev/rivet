@@ -23,6 +23,14 @@ pub async fn run_from_env(ts: i64) -> GlobalResult<()> {
 		Vec::new(),
 	);
 
+	if std::env::var("RIVET_TELEMETRY_DISABLE")
+		.ok()
+		.map_or(false, |x| x == "1")
+	{
+		tracing::info!("telemetry disabled");
+		return Ok(());
+	}
+
 	let team_ids = sqlx::query_as::<_, (Uuid,)>(indoc!(
 		"
 		SELECT team_id

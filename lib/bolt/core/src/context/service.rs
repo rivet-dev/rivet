@@ -1020,6 +1020,16 @@ impl ServiceContextData {
 		}
 
 		env.push((
+			"RIVET_TELEMETRY_DISABLE".into(),
+			if project_ctx.ns().rivet.telemetry.disable {
+				"1"
+			} else {
+				"0"
+			}
+			.into(),
+		));
+
+		env.push((
 			"RIVET_API_HUB_ORIGIN_REGEX".into(),
 			project_ctx
 				.ns()

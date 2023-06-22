@@ -24,71 +24,78 @@ pub async fn build_event(ctx: &ProjectContext, name: &str) -> Result<async_posth
 	let distinct_id = format!("cluster:{}:{}", ctx.ns_id(), ctx.ns().cluster.id);
 	let mut event = async_posthog::Event::new(name, &distinct_id);
 
-	// Helps us understand what version of the cluster is being used.
-	let git_rev = block_in_place(|| cmd!("git", "rev-parse", "HEAD").dir(ctx.path()).read()).ok();
+	if !ctx.ns().rivet.telemetry.disable {
+		// Helps us understand what version of the cluster is being used.
+		let git_rev =
+			block_in_place(|| cmd!("git", "rev-parse", "HEAD").dir(ctx.path()).read()).ok();
 
-	// Helps us understand what fork of Rivet is being used.
-	let git_remotes = block_in_place(|| cmd!("git", "remote", "--verbose").dir(ctx.path()).read())
-		.ok()
-		.map(|x| {
-			x.split("\n")
-				.map(|x| x.trim())
-				.filter(|x| !x.is_empty())
-				.map(|x| x.to_string())
-				.collect::<Vec<_>>()
-		});
+		// Helps us understand what fork of Rivet is being used.
+		let git_remotes =
+			block_in_place(|| cmd!("git", "remote", "--verbose").dir(ctx.path()).read())
+				.ok()
+				.map(|x| {
+					x.split("\n")
+						.map(|x| x.trim())
+						.filter(|x| !x.is_empty())
+						.map(|x| x.to_string())
+						.collect::<Vec<_>>()
+				});
 
-	// Helps us understand what type of functionality people are adding that we need to add to
-	// Rivet.
-	let services = ctx
-		.all_services()
-		.await
-		.iter()
-		.map(|x| (x.name(), json!({})))
-		.collect::<HashMap<String, serde_json::Value>>();
+		// Helps us understand what type of functionality people are adding that we need to add to
+		// Rivet.
+		let services = ctx
+			.all_services()
+			.await
+			.iter()
+			.map(|x| (x.name(), json!({})))
+			.collect::<HashMap<String, serde_json::Value>>();
 
-	// Helps us diagnose issues based on the host OS.
-	let uname = block_in_place(|| cmd!("uname", "-a").read()).ok();
+		// Helps us diagnose issues based on the host OS.
+		let uname = block_in_place(|| cmd!("uname", "-a").read()).ok();
 
-	// Helps us diagnose issues based on the host OS.
-	let os_release = tokio::fs::read_to_string("/etc/os-release")
-		.await
-		.ok()
-		.map(|x| {
-			x.split("\n")
-				.map(|x| x.trim())
-				.filter_map(|x| x.split_once("="))
-				.map(|(k, v)| (k.to_string(), v.to_string()))
-				.collect::<HashMap<_, _>>()
-		});
+		// Helps us diagnose issues based on the host OS.
+		let os_release = tokio::fs::read_to_string("/etc/os-release")
+			.await
+			.ok()
+			.map(|x| {
+				x.split("\n")
+					.map(|x| x.trim())
+					.filter_map(|x| x.split_once("="))
+					.map(|(k, v)| (k.to_string(), v.to_string()))
+					.collect::<HashMap<_, _>>()
+			});
 
-	// Add properties
-	event.insert_prop(
-		"$groups",
-		&json!({
-			"cluster_id": ctx.ns().cluster.id,
-		}),
-	)?;
-	event.insert_prop(
-		"$set",
-		&json!({
-			"ns_id": ctx.ns_id(),
-			"cluster_id": ctx.ns().cluster.id,
-			"ns_config": ctx.ns(),
-			"bolt": {
-				"git_rev": git_rev,
-				"git_remotes": git_remotes,
-				"uname": uname,
-				"os_release": os_release,
-				"services": services,
-			},
-		}),
-	)?;
+		// Add properties
+		event.insert_prop(
+			"$groups",
+			&json!({
+				"cluster_id": ctx.ns().cluster.id,
+			}),
+		)?;
+		event.insert_prop(
+			"$set",
+			&json!({
+				"ns_id": ctx.ns_id(),
+				"cluster_id": ctx.ns().cluster.id,
+				"ns_config": ctx.ns(),
+				"bolt": {
+					"git_rev": git_rev,
+					"git_remotes": git_remotes,
+					"uname": uname,
+					"os_release": os_release,
+					"services": services,
+				},
+			}),
+		)?;
+	}
 
 	Ok(event)
 }
 
-pub async fn capture_event(_ctx: &ProjectContext, event: async_posthog::Event) -> Result<()> {
-	build_client().capture(event).await?;
+pub async fn capture_event(ctx: &ProjectContext, event: async_posthog::Event) -> Result<()> {
+	if !ctx.ns().rivet.telemetry.disable {
+		build_client().capture(event).await?;
+	}
+
 	Ok(())
 }
