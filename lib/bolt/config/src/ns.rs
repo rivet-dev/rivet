@@ -1,5 +1,6 @@
 use serde::{Deserialize, Serialize};
 use std::{collections::HashMap, path::PathBuf};
+use uuid::Uuid;
 
 pub fn decode(s: &str) -> Result<Namespace, toml::de::Error> {
 	toml::from_str(s)
@@ -8,7 +9,7 @@ pub fn decode(s: &str) -> Result<Namespace, toml::de::Error> {
 #[derive(Deserialize, Clone, Debug)]
 #[serde(deny_unknown_fields)]
 pub struct Namespace {
-	pub deploy: Deploy,
+	pub cluster: Cluster,
 	#[serde(default)]
 	pub secrets: Secrets,
 	#[serde(default = "default_regions")]
@@ -40,22 +41,26 @@ pub struct Namespace {
 
 #[derive(Deserialize, Clone, Debug)]
 #[serde(deny_unknown_fields)]
-pub struct Deploy {
+pub struct Cluster {
+	/// Unique identifier for this cluster.
+	///
+	/// Should not be changed.
+	pub id: Uuid,
 	#[serde(flatten)]
-	pub kind: DeployKind,
+	pub kind: ClusterKind,
 }
 
 #[derive(Deserialize, Clone, Debug)]
 #[serde(deny_unknown_fields)]
-pub enum DeployKind {
-	#[serde(rename = "local")]
-	Local {
+pub enum ClusterKind {
+	#[serde(rename = "single_node")]
+	SingleNode {
 		public_ip: String,
 		#[serde(default)]
 		preferred_subnets: Vec<String>,
 	},
-	#[serde(rename = "cluster")]
-	Cluster {
+	#[serde(rename = "distributed")]
+	Distributed {
 		salt_master_size: String,
 		nebula_lighthouse_size: String,
 	},
@@ -369,6 +374,8 @@ pub enum RustBuildOpt {
 #[serde(deny_unknown_fields)]
 pub struct Rivet {
 	#[serde(default)]
+	pub telemetry: Telemetry,
+	#[serde(default)]
 	pub test: Option<RivetTest>,
 	#[serde(default)]
 	pub api: Api,
@@ -376,6 +383,14 @@ pub struct Rivet {
 	pub profanity: Profanity,
 	#[serde(default)]
 	pub upload: Upload,
+}
+
+#[derive(Deserialize, Clone, Debug, Default)]
+#[serde(deny_unknown_fields)]
+pub struct Telemetry {
+	/// Disables sending telemetry to Rivet.
+	#[serde(default)]
+	pub disable: bool,
 }
 
 #[derive(Deserialize, Clone, Debug, Default)]
