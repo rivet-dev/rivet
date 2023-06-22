@@ -7786,6 +7786,33 @@ dependencies = [
 ]
 
 [[package]]
+name = "telemetry-beacon"
+version = "0.0.38"
+dependencies = [
+ "chirp-client",
+ "chirp-worker",
+ "chrono",
+ "cloud-version-get",
+ "futures-util",
+ "game-get",
+ "game-namespace-get",
+ "game-version-get",
+ "indoc",
+ "lazy_static",
+ "mm-player-count-for-namespace",
+ "prost 0.10.4",
+ "rivet-connection",
+ "rivet-operation",
+ "rivet-pools",
+ "rivet-runtime",
+ "team-get",
+ "team-member-count",
+ "tokio",
+ "tracing",
+ "tracing-subscriber",
+]
+
+[[package]]
 name = "tempfile"
 version = "3.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"

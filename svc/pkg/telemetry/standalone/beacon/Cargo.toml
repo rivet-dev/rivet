@@ -1,0 +1,32 @@
+[package]
+name = "telemetry-beacon"
+version = "0.0.38"
+edition = "2018"
+authors = ["Rivet Gaming, LLC <developer@rivet.gg>"]
+license = "Apache-2.0"
+
+[dependencies]
+lazy_static = "1.4"
+chirp-client = { path = "../../../../../lib/chirp/client" }
+rivet-operation = { path = "../../../../../lib/operation/core" }
+futures-util = "0.3"
+indoc = "1.0"
+prost = "0.10"
+rivet-connection = { path = "../../../../../lib/connection" }
+rivet-pools = { path = "../../../../../lib/pools" }
+rivet-runtime = { path = "../../../../../lib/runtime" }
+tokio = { version = "1.21", features = ["full"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", default-features = false, features = ["fmt", "json", "ansi"] }
+
+cloud-version-get = { path = "../../../cloud/ops/version-get" }
+game-get = { path = "../../../game/ops/get" }
+game-namespace-get = { path = "../../../game/ops/namespace-get" }
+game-version-get = { path = "../../../game/ops/version-get" }
+mm-player-count-for-namespace = { path = "../../../mm/ops/player-count-for-namespace" }
+team-get = { path = "../../../team/ops/get" }
+team-member-count = { path = "../../../team/ops/member-count" }
+
+[dev-dependencies]
+chirp-worker = { path = "../../../../../lib/chirp/worker" }
+chrono = "0.4"
