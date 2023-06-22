@@ -6,10 +6,11 @@ use tokio::task::block_in_place;
 
 use crate::context::ProjectContext;
 
-const API_KEY: &str = "phc_6kfTNEAVw7rn1LA51cO3D69FefbKupSWFaM7OUgEpEo";
+// This API key is safe to hardcode. It will not change and is intended to be public.
+const POSTHOG_API_KEY: &str = "phc_6kfTNEAVw7rn1LA51cO3D69FefbKupSWFaM7OUgEpEo";
 
 fn build_client() -> async_posthog::Client {
-	async_posthog::client(API_KEY)
+	async_posthog::client(POSTHOG_API_KEY)
 }
 
 /// Builds a new PostHog event with associated data.
@@ -66,6 +67,7 @@ pub async fn build_event(ctx: &ProjectContext, name: &str) -> Result<async_posth
 		"$set",
 		&json!({
 			"ns_id": ctx.ns_id(),
+			"cluster_id": ctx.ns().cluster.id,
 			"ns_config": ctx.ns(),
 			"bolt": {
 				"git_rev": git_rev,

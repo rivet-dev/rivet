@@ -1,12 +1,13 @@
-use futures_util::{StreamExt, TryStreamExt};
 use indoc::indoc;
-use proto::backend::pkg::*;
 use rivet_operation::prelude::*;
 use serde_json::json;
 use std::{
 	collections::{HashMap, HashSet},
 	time::Duration,
 };
+
+// This API key is safe to hardcode. It will not change and is intended to be public.
+const POSTHOG_API_KEY: &str = "phc_6kfTNEAVw7rn1LA51cO3D69FefbKupSWFaM7OUgEpEo";
 
 #[tracing::instrument]
 pub async fn run_from_env(ts: i64) -> GlobalResult<()> {
@@ -48,10 +49,10 @@ pub async fn run_from_env(ts: i64) -> GlobalResult<()> {
 
 	let game_ids = namespaces
 		.iter()
-		.map(|x| x.1.clone())
+		.map(|x| x.1)
 		.collect::<HashSet<Uuid>>()
 		.into_iter()
-		.map(|x| Into::<common::Uuid>::into(x))
+		.map(Into::<common::Uuid>::into)
 		.collect::<Vec<_>>();
 	let namespace_ids = namespaces
 		.iter()
@@ -81,7 +82,7 @@ pub async fn run_from_env(ts: i64) -> GlobalResult<()> {
 	let version_ids = namespaces
 		.namespaces
 		.iter()
-		.filter_map(|x| x.version_id.clone())
+		.filter_map(|x| x.version_id)
 		.collect::<Vec<_>>();
 
 	let versions = op!([ctx] game_version_get {
@@ -102,7 +103,7 @@ pub async fn run_from_env(ts: i64) -> GlobalResult<()> {
 	// TODO: Registered players
 	// TODO: MAU
 
-	let mut teams = teams
+	let teams = teams
 		.teams
 		.iter()
 		.map(|team| {
@@ -198,7 +199,27 @@ pub async fn run_from_env(ts: i64) -> GlobalResult<()> {
 		})
 		.collect::<HashMap<_, _>>();
 
-	// TODO: Report to PostHog
+	// We include both the cluster ID and the namespace ID in the distinct_id in case the config is
+	// copied to a new namespace with a different name accidentally
+	let distinct_id = format!(
+		"cluster:{}:{}",
+		util::env::namespace(),
+		util::env::cluster_id()
+	);
+	let mut event = async_posthog::Event::new("cluster_beacon", &distinct_id);
+
+	event.insert_prop(
+		"$set",
+		&json!({
+			"ns_id": util::env::namespace(),
+			"cluster_id": util::env::namespace(),
+			"dev_teams": teams,
+		}),
+	)?;
+
+	async_posthog::client(POSTHOG_API_KEY)
+		.capture(event)
+		.await?;
 
 	Ok(())
 }

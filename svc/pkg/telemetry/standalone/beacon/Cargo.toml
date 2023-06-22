@@ -6,13 +6,14 @@ authors = ["Rivet Gaming, LLC <developer@rivet.gg>"]
 license = "Apache-2.0"
 
 [dependencies]
-lazy_static = "1.4"
+async-posthog = { git = "https://github.com/rivet-gg/posthog-rs.git", rev = "ef4e80e" }
 chirp-client = { path = "../../../../../lib/chirp/client" }
-rivet-operation = { path = "../../../../../lib/operation/core" }
 futures-util = "0.3"
 indoc = "1.0"
+lazy_static = "1.4"
 prost = "0.10"
 rivet-connection = { path = "../../../../../lib/connection" }
+rivet-operation = { path = "../../../../../lib/operation/core" }
 rivet-pools = { path = "../../../../../lib/pools" }
 rivet-runtime = { path = "../../../../../lib/runtime" }
 tokio = { version = "1.21", features = ["full"] }

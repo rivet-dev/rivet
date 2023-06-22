@@ -706,6 +706,10 @@ impl ServiceContextData {
 		// Generic context
 		env.push(("RIVET_RUN_CONTEXT".into(), run_context.short().into()));
 		env.push(("RIVET_NAMESPACE".into(), project_ctx.ns_id().into()));
+		env.push((
+			"RIVET_CLUSTER_ID".into(),
+			project_ctx.ns().cluster.id.to_string(),
+		));
 
 		if self.enable_tokio_console() {
 			env.push(("TOKIO_CONSOLE_ENABLE".into(), "1".into()));
