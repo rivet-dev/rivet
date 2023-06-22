@@ -62,7 +62,13 @@ pub async fn build_event(ctx: &ProjectContext, name: &str) -> Result<async_posth
 				.collect::<HashMap<_, _>>()
 		});
 
-	// Add property
+	// Add properties
+	event.insert_prop(
+		"$groups",
+		&json!({
+			"cluster_id": ctx.ns().cluster.id,
+		}),
+	)?;
 	event.insert_prop(
 		"$set",
 		&json!({

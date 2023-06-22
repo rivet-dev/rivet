@@ -105,23 +105,32 @@ pub async fn run_from_env(ts: i64) -> GlobalResult<()> {
 	{
 		// We include both the cluster ID and the namespace ID in the distinct_id in case the config is
 		// copied to a new namespace with a different name accidentally
-		let mut event = async_posthog::Event::new(
-			"cluster_beacon",
-			&format!(
-				"cluster:{}:{}",
-				util::env::namespace(),
-				util::env::cluster_id()
-			),
+		let distinct_id = format!(
+			"cluster:{}:{}",
+			util::env::namespace(),
+			util::env::cluster_id()
 		);
 
+		let mut event = async_posthog::Event::new("cluster_beacon", &distinct_id);
+		event.insert_prop("$groups", &json!({ "cluster": util::env::cluster_id() }))?;
 		event.insert_prop(
 			"$set",
 			&json!({
 				"ns_id": util::env::namespace(),
-				"cluster_id": util::env::namespace(),
+				"cluster_id": util::env::cluster_id(),
 			}),
 		)?;
+		events.push(event);
 
+		let mut event = async_posthog::Event::new("$groupidentify", &distinct_id);
+		event.insert_prop("$group_type", "group")?;
+		event.insert_prop("$group_key", util::env::cluster_id())?;
+		event.insert_prop(
+			"$group_set",
+			&json!({
+				"name": util::env::namespace(),
+			}),
+		)?;
 		events.push(event);
 	}
 
@@ -134,8 +143,16 @@ pub async fn run_from_env(ts: i64) -> GlobalResult<()> {
 			.find(|x| x.team_id == team.team_id)
 			.map_or(0, |x| x.member_count);
 
-		let mut event =
-			async_posthog::Event::new("team_beacon", &build_distinct_id(format!("team:{team_id}")));
+		let distinct_id = build_distinct_id(format!("team:{team_id}"));
+
+		let mut event = async_posthog::Event::new("team_beacon", &distinct_id);
+		event.insert_prop(
+			"$groups",
+			&json!({
+				"cluster": util::env::cluster_id(),
+				"team": team_id,
+			}),
+		)?;
 		event.insert_prop(
 			"$set",
 			json!({
@@ -148,13 +165,34 @@ pub async fn run_from_env(ts: i64) -> GlobalResult<()> {
 			}),
 		)?;
 		events.push(event);
+
+		let mut event = async_posthog::Event::new("$groupidentify", &distinct_id);
+		event.insert_prop("$group_type", "team")?;
+		event.insert_prop("$group_key", team_id)?;
+		event.insert_prop(
+			"$group_set",
+			&json!({
+				"display_name": team.display_name,
+				"create_ts": team.create_ts,
+			}),
+		)?;
+		events.push(event);
 	}
 
 	for game in &games.games {
 		let game_id = game.game_id.unwrap().as_uuid();
+		let team_id = game.developer_team_id.unwrap().as_uuid();
 
 		let mut event =
 			async_posthog::Event::new("game_beacon", &build_distinct_id(format!("game:{game_id}")));
+		event.insert_prop(
+			"$groups",
+			&json!({
+				"cluster": util::env::cluster_id(),
+				"team": team_id,
+				"game": game_id,
+			}),
+		)?;
 		event.insert_prop(
 			"$set",
 			json!({
@@ -172,6 +210,13 @@ pub async fn run_from_env(ts: i64) -> GlobalResult<()> {
 
 	for ns in &namespaces.namespaces {
 		let ns_id = ns.namespace_id.unwrap().as_uuid();
+		let game_id = ns.game_id.unwrap().as_uuid();
+		let team_id = games
+			.games
+			.iter()
+			.find(|x| x.game_id == ns.game_id)
+			.and_then(|x| x.developer_team_id)
+			.map(|x| x.as_uuid());
 
 		let player_count = player_counts
 			.namespaces
@@ -211,6 +256,15 @@ pub async fn run_from_env(ts: i64) -> GlobalResult<()> {
 			&build_distinct_id(format!("ns:{ns_id}")),
 		);
 		event.insert_prop(
+			"$groups",
+			&json!({
+				"cluster": util::env::cluster_id(),
+				"team": team_id,
+				"game": game_id,
+				"namespace": ns_id,
+			}),
+		)?;
+		event.insert_prop(
 			"$set",
 			json!({
 				"ns_id": util::env::namespace(),
@@ -224,13 +278,23 @@ pub async fn run_from_env(ts: i64) -> GlobalResult<()> {
 		event.insert_prop("player_count", player_count)?;
 		events.push(event);
 	}
+	tracing::info!(len = ?events.len(), "built events");
 
-	// Send events
-	tracing::info!(events_len = ?events.len(), "sending events");
-	async_posthog::client(POSTHOG_API_KEY)
-		.capture_batch(events)
-		.await?;
-	tracing::info!("event sent");
+	// Send events in chunks
+	let client = async_posthog::client(POSTHOG_API_KEY);
+
+	while !events.is_empty() {
+		let chunk_size = 64;
+		let chunk = if chunk_size < events.len() {
+			events.split_off(events.len() - chunk_size)
+		} else {
+			events.drain(..).collect::<Vec<_>>()
+		};
+		tracing::info!(remaining_len = ?events.len(), chunk_len = ?chunk.len(), "sending events");
+		client.capture_batch(chunk).await?;
+	}
+
+	tracing::info!("all events sent");
 
 	Ok(())
 }
