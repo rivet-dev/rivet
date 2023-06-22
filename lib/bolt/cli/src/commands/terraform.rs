@@ -57,14 +57,7 @@ impl SubCommand {
 
 				gen::generate_project(&ctx).await;
 
-				let mut cmd = terraform::cli::build_command(&ctx, &plan).await;
-				cmd.arg("apply")
-					.arg(format!("-var-file={}", varfile_path.display()))
-					.arg("-parallelism=16");
-				if yes {
-					cmd.arg("-auto-approve");
-				}
-				cmd.exec().await?;
+				terraform::cli::apply(&ctx, &plan, yes, &varfile_path).await?;
 
 				terraform::output::clear_cache(&ctx, &plan).await;
 			}
@@ -73,10 +66,7 @@ impl SubCommand {
 
 				gen::generate_project(&ctx).await;
 
-				let mut cmd = terraform::cli::build_command(&ctx, &plan).await;
-				cmd.arg("destroy")
-					.arg(format!("-var-file={}", varfile_path.display()));
-				cmd.exec().await?;
+				terraform::cli::destroy(&ctx, &plan, &varfile_path).await?;
 
 				terraform::output::clear_cache(&ctx, &plan).await;
 			}

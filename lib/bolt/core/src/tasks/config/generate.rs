@@ -10,7 +10,7 @@ use tokio::task::block_in_place;
 use toml_edit::value;
 use uuid::Uuid;
 
-use crate::{config::service::RuntimeKind, context::ProjectContextData};
+use crate::{config::service::RuntimeKind, context::ProjectContextData, utils};
 
 /// Comment attached to the head of the namespace config.
 const NS_CONFIG_COMMENT: &str = r#"# Documentation: doc/bolt/config/NAMESPACE.md
@@ -428,6 +428,10 @@ pub async fn generate(project_path: &Path, ns_id: &str) -> Result<()> {
 
 	// Write configs again with new secrets
 	generator.write().await?;
+
+	let mut event = utils::telemetry::build_event(&ctx, "bolt_config_generate").await?;
+	event.insert_prop("ns_id", ns_id)?;
+	utils::telemetry::capture_event(&ctx, event).await?;
 
 	eprintln!();
 	rivet_term::status::success(

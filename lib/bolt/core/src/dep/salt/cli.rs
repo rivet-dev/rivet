@@ -4,7 +4,9 @@ use serde::Deserialize;
 use std::path::Path;
 use tokio::task::block_in_place;
 
-use crate::{config, context::ProjectContext, dep::terraform, tasks, tasks::ssh::TempSshKey};
+use crate::{
+	config, context::ProjectContext, dep::terraform, tasks, tasks::ssh::TempSshKey, utils,
+};
 
 #[derive(Clone, Debug, Default)]
 pub struct ApplyOpts {
@@ -26,6 +28,11 @@ pub async fn apply(
 	opts: &ApplyOpts,
 	config_opts: &super::config::BuildOpts,
 ) -> Result<()> {
+	let mut event = utils::telemetry::build_event(ctx, "bolt_salt_apply").await?;
+	event.insert_prop("filter", filter)?;
+	event.insert_prop("sls", &opts.sls)?;
+	utils::telemetry::capture_event(ctx, event).await?;
+
 	// Write Salt configs
 	eprintln!();
 	rivet_term::status::progress("Writing configs", "");

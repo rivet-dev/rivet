@@ -6,7 +6,7 @@ pub fn decode(s: &str) -> Result<Namespace, toml::de::Error> {
 	toml::from_str(s)
 }
 
-#[derive(Deserialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(deny_unknown_fields)]
 pub struct Namespace {
 	pub cluster: Cluster,
@@ -39,7 +39,7 @@ pub struct Namespace {
 	pub rivet: Rivet,
 }
 
-#[derive(Deserialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(deny_unknown_fields)]
 pub struct Cluster {
 	/// Unique identifier for this cluster.
@@ -50,7 +50,7 @@ pub struct Cluster {
 	pub kind: ClusterKind,
 }
 
-#[derive(Deserialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(deny_unknown_fields)]
 pub enum ClusterKind {
 	#[serde(rename = "single_node")]
@@ -66,7 +66,7 @@ pub enum ClusterKind {
 	},
 }
 
-#[derive(Deserialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(deny_unknown_fields)]
 pub enum Secrets {
 	#[serde(rename = "file")]
@@ -94,7 +94,7 @@ pub struct Region {
 	pub preferred_subnets: Vec<String>,
 }
 
-#[derive(Deserialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(deny_unknown_fields)]
 pub struct Pool {
 	pub pool: String,
@@ -107,27 +107,27 @@ pub struct Pool {
 	pub volumes: HashMap<String, Volume>,
 }
 
-#[derive(Deserialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(deny_unknown_fields)]
 pub struct Volume {
 	pub size: usize,
 }
 
-#[derive(Deserialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(deny_unknown_fields)]
 pub enum ProviderKind {
 	#[serde(rename = "linode")]
 	Linode {},
 }
 
-#[derive(Deserialize, Clone, Debug, Default)]
+#[derive(Serialize, Deserialize, Clone, Debug, Default)]
 #[serde(deny_unknown_fields)]
 pub struct Terraform {
 	#[serde(default)]
 	pub backend: TerraformBackend,
 }
 
-#[derive(Deserialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(deny_unknown_fields)]
 pub enum TerraformBackend {
 	#[serde(rename = "local")]
@@ -142,7 +142,7 @@ impl Default for TerraformBackend {
 	}
 }
 
-#[derive(Deserialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(deny_unknown_fields)]
 pub struct Dns {
 	pub domain: DnsDomains,
@@ -152,7 +152,7 @@ pub struct Dns {
 	pub provider: DnsProvider,
 }
 
-#[derive(Deserialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(deny_unknown_fields)]
 pub struct DnsDomains {
 	pub main: String,
@@ -160,7 +160,7 @@ pub struct DnsDomains {
 	pub cdn: String,
 }
 
-#[derive(Deserialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(deny_unknown_fields)]
 pub enum DnsProvider {
 	#[serde(rename = "cloudflare")]
@@ -171,7 +171,7 @@ pub enum DnsProvider {
 	},
 }
 
-#[derive(Deserialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(deny_unknown_fields)]
 pub struct CloudflareZones {
 	pub root: String,
@@ -179,7 +179,7 @@ pub struct CloudflareZones {
 	pub job: String,
 }
 
-#[derive(Deserialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(deny_unknown_fields)]
 pub struct CloudflareAccess {
 	pub groups: CloudflareAccessGroups,
@@ -200,7 +200,7 @@ pub struct CloudflareAccessServices {
 	pub grafana_cloud: String,
 }
 
-#[derive(Deserialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(deny_unknown_fields)]
 pub struct S3 {
 	#[serde(default)]
@@ -209,14 +209,14 @@ pub struct S3 {
 	pub provider: S3Provider,
 }
 
-#[derive(Deserialize, Clone, Debug, Default)]
+#[derive(Serialize, Deserialize, Clone, Debug, Default)]
 #[serde(deny_unknown_fields)]
 pub struct S3Cors {
 	#[serde(default)]
 	pub allowed_origins: Option<Vec<String>>,
 }
 
-#[derive(Deserialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(deny_unknown_fields)]
 pub enum S3Provider {
 	#[serde(rename = "minio")]
@@ -225,34 +225,34 @@ pub enum S3Provider {
 	Backblaze {},
 }
 
-#[derive(Deserialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(deny_unknown_fields)]
 pub struct Email {
 	#[serde(flatten)]
 	pub provider: EmailProvider,
 }
 
-#[derive(Deserialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(deny_unknown_fields)]
 pub enum EmailProvider {
 	#[serde(rename = "sendgrid")]
 	SendGrid {},
 }
 
-#[derive(Deserialize, Clone, Debug, Default)]
+#[derive(Serialize, Deserialize, Clone, Debug, Default)]
 #[serde(deny_unknown_fields)]
 pub struct Captcha {
 	#[serde(default)]
 	pub hcaptcha: Option<Hcaptcha>,
 }
 
-#[derive(Deserialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(deny_unknown_fields)]
 pub struct Hcaptcha {
 	pub site_keys: HcaptchaSiteKeys,
 }
 
-#[derive(Deserialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(deny_unknown_fields)]
 pub struct HcaptchaSiteKeys {
 	pub easy: String,
@@ -261,28 +261,28 @@ pub struct HcaptchaSiteKeys {
 	pub always_on: String,
 }
 
-#[derive(Deserialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(deny_unknown_fields)]
 pub struct Logging {
 	#[serde(flatten)]
 	pub provider: LoggingProvider,
 }
 
-#[derive(Deserialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(deny_unknown_fields)]
 pub enum LoggingProvider {
 	#[serde(rename = "loki")]
 	Loki { endpoint: String },
 }
 
-#[derive(Deserialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(deny_unknown_fields)]
 pub struct Service {
 	pub count: usize,
 	pub resources: ServiceResources,
 }
 
-#[derive(Deserialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(deny_unknown_fields)]
 pub struct ServiceResources {
 	#[serde(flatten)]
@@ -291,7 +291,7 @@ pub struct ServiceResources {
 	pub ephemeral_disk: usize,
 }
 
-#[derive(Deserialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(deny_unknown_fields)]
 pub enum CpuResources {
 	#[serde(rename = "cpu_cores")]
@@ -301,7 +301,7 @@ pub enum CpuResources {
 	Cpu(usize),
 }
 
-#[derive(Deserialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(deny_unknown_fields)]
 pub struct Docker {
 	/// Provides authentication for Docker when pulling public images.
@@ -321,11 +321,11 @@ impl Default for Docker {
 	}
 }
 
-#[derive(Deserialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(deny_unknown_fields)]
 pub struct Grafana {}
 
-#[derive(Deserialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(deny_unknown_fields)]
 pub struct Nomad {
 	pub health_checks: Option<bool>,
@@ -339,7 +339,7 @@ impl Default for Nomad {
 	}
 }
 
-#[derive(Deserialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(deny_unknown_fields)]
 pub struct Traefik {
 	pub log_level: String,
@@ -355,14 +355,14 @@ impl Default for Traefik {
 	}
 }
 
-#[derive(Deserialize, Clone, Debug, Default)]
+#[derive(Serialize, Deserialize, Clone, Debug, Default)]
 #[serde(deny_unknown_fields)]
 pub struct Rust {
 	#[serde(default)]
 	pub build_opt: RustBuildOpt,
 }
 
-#[derive(Deserialize, Clone, Debug, Default)]
+#[derive(Serialize, Deserialize, Clone, Debug, Default)]
 #[serde(deny_unknown_fields)]
 pub enum RustBuildOpt {
 	Release,
@@ -370,7 +370,7 @@ pub enum RustBuildOpt {
 	Debug,
 }
 
-#[derive(Deserialize, Clone, Debug, Default)]
+#[derive(Serialize, Deserialize, Clone, Debug, Default)]
 #[serde(deny_unknown_fields)]
 pub struct Rivet {
 	#[serde(default)]
@@ -385,7 +385,7 @@ pub struct Rivet {
 	pub upload: Upload,
 }
 
-#[derive(Deserialize, Clone, Debug, Default)]
+#[derive(Serialize, Deserialize, Clone, Debug, Default)]
 #[serde(deny_unknown_fields)]
 pub struct Telemetry {
 	/// Disables sending telemetry to Rivet.
@@ -393,11 +393,11 @@ pub struct Telemetry {
 	pub disable: bool,
 }
 
-#[derive(Deserialize, Clone, Debug, Default)]
+#[derive(Serialize, Deserialize, Clone, Debug, Default)]
 #[serde(deny_unknown_fields)]
 pub struct RivetTest {}
 
-#[derive(Deserialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(deny_unknown_fields)]
 pub struct Api {
 	pub error_verbose: bool,
@@ -413,13 +413,13 @@ impl Default for Api {
 	}
 }
 
-#[derive(Deserialize, Clone, Debug, Default)]
+#[derive(Serialize, Deserialize, Clone, Debug, Default)]
 #[serde(deny_unknown_fields)]
 pub struct Profanity {
 	pub filter_disable: bool,
 }
 
-#[derive(Deserialize, Clone, Debug, Default)]
+#[derive(Serialize, Deserialize, Clone, Debug, Default)]
 #[serde(deny_unknown_fields)]
 pub struct Upload {
 	pub nsfw_error_verbose: bool,
