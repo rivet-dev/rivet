@@ -8,6 +8,7 @@ license = "Apache-2.0"
 [dependencies]
 anyhow = "1.0"
 async-recursion = "0.3"
+async-posthog = { git = "https://github.com/rivet-gg/posthog-rs.git", rev = "ef4e80e" }
 async-trait = "0.1"
 bolt-config = { path = "../config" }
 chrono = "0.4"

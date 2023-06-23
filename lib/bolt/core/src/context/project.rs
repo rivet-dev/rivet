@@ -614,9 +614,9 @@ impl ProjectContextData {
 
 impl ProjectContextData {
 	pub fn leader_count(&self) -> usize {
-		match &self.ns().deploy.kind {
-			config::ns::DeployKind::Local { .. } => 1,
-			config::ns::DeployKind::Cluster { .. } => 3,
+		match &self.ns().cluster.kind {
+			config::ns::ClusterKind::SingleNode { .. } => 1,
+			config::ns::ClusterKind::Distributed { .. } => 3,
 		}
 	}
 
@@ -638,9 +638,9 @@ impl ProjectContextData {
 	/// This is useful for deploying Nomad services from Bolt to know which
 	/// region to connect to.
 	pub fn primary_region_or_local(&self) -> String {
-		match &self.ns().deploy.kind {
-			config::ns::DeployKind::Local { .. } => "local".to_string(),
-			config::ns::DeployKind::Cluster { .. } => self.primary_region(),
+		match &self.ns().cluster.kind {
+			config::ns::ClusterKind::SingleNode { .. } => "local".to_string(),
+			config::ns::ClusterKind::Distributed { .. } => self.primary_region(),
 		}
 	}
 }
@@ -648,11 +648,11 @@ impl ProjectContextData {
 impl ProjectContextData {
 	/// Which target to build for with the current configuration.
 	pub fn rust_build_target(&self) -> context::RustBuildTarget {
-		match self.ns().deploy.kind {
+		match self.ns().cluster.kind {
 			// Build natively, since deploying to the same machine locally.
-			config::ns::DeployKind::Local { .. } => context::RustBuildTarget::Native,
+			config::ns::ClusterKind::SingleNode { .. } => context::RustBuildTarget::Native,
 			// Build for MUSL since this will be deployed to a different machine.
-			config::ns::DeployKind::Cluster { .. } => context::RustBuildTarget::Musl,
+			config::ns::ClusterKind::Distributed { .. } => context::RustBuildTarget::Musl,
 		}
 	}
 }

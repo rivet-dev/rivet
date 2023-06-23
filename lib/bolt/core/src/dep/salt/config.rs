@@ -18,15 +18,15 @@ pub async fn build(ctx: &ProjectContext, opts: &BuildOpts) -> Result<Value> {
 	let mut vars = json!({});
 
 	vars["namespace"] = json!(ctx.ns_id());
-	match &ctx.ns().deploy.kind {
-		config::ns::DeployKind::Local { .. } => {
+	match &ctx.ns().cluster.kind {
+		config::ns::ClusterKind::SingleNode { .. } => {
 			vars["deploy"] = json!({
 				"local": {
 					"backend_repo_path": ctx.path(),
 				},
 			});
 		}
-		config::ns::DeployKind::Cluster { .. } => {
+		config::ns::ClusterKind::Distributed { .. } => {
 			vars["deploy"] = json!({
 				"cluster": {},
 			});

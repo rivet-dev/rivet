@@ -1,5 +1,5 @@
 use anyhow::*;
-use bolt_config::ns::DeployKind;
+use bolt_config::ns::ClusterKind;
 
 use crate::{
 	config,
@@ -136,14 +136,14 @@ pub fn build_plan(ctx: &ProjectContext) -> Result<Vec<PlanStep>> {
 	});
 
 	// Master
-	match ctx.ns().deploy.kind {
-		DeployKind::Local { .. } => {
+	match ctx.ns().cluster.kind {
+		ClusterKind::SingleNode { .. } => {
 			plan.push(PlanStep::Terraform {
 				plan_id: "master_local".into(),
 				needs_destroy: false,
 			});
 		}
-		DeployKind::Cluster { .. } => {
+		ClusterKind::Distributed { .. } => {
 			plan.push(PlanStep::Terraform {
 				plan_id: "master_cluster".into(),
 				needs_destroy: true,
