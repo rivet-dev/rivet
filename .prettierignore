@@ -1,0 +1,55 @@
+# Make sure to update .dockerignore & .prettierrc appropriately
+
+**/.DS_Store
+**/symbolCache.db
+
+# Terraform
+**/*.tfstate
+**/*.tfstate.*
+**/.terraform.*
+**/.terraform/
+infra/tf/*/_bolt.tf
+
+# Vagrant
+.vagrant-remote
+.vagrant-digitalocean-token
+**/.vagrant/
+
+# Bolt
+.bolt-cache.json
+.volumes/
+Bolt.local.toml
+
+/namespaces/*
+!/namespaces/.gitkeep
+!/namespaces/README.md
+
+/secrets/*
+!/secrets/.gitkeep
+!/secrets/README.md
+
+
+# Backend
+backend/Cargo.toml
+backend/api/**/Cargo.lock
+backend/api/Cargo.toml
+backend/pkg/**/Cargo.lock
+
+# Rust
+lib/**/Cargo.lock
+!lib/bolt/Cargo.lock
+# Allows symlinking target instead of being a directory
+**/target
+**/target/
+**/*.rustfmt
+
+# JavaScript
+**/.cache/
+**/dist/
+**/node_modules/
+
+tests/basic-game/.env
+
+# MARK: Prettier specific
+gen/
+

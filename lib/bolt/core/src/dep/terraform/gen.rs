@@ -146,8 +146,8 @@ async fn vars(ctx: &ProjectContext) {
 	// Namespace
 	vars.insert("namespace".into(), json!(ns));
 
-	match &config.deploy.kind {
-		config::ns::DeployKind::Local {
+	match &config.cluster.kind {
+		config::ns::ClusterKind::SingleNode {
 			public_ip,
 			preferred_subnets,
 		} => {
@@ -156,7 +156,7 @@ async fn vars(ctx: &ProjectContext) {
 			vars.insert("public_ip".into(), json!(public_ip));
 			vars.insert("local_preferred_subnets".into(), json!(preferred_subnets));
 		}
-		config::ns::DeployKind::Cluster {
+		config::ns::ClusterKind::Distributed {
 			salt_master_size,
 			nebula_lighthouse_size,
 		} => {
@@ -281,9 +281,9 @@ async fn vars(ctx: &ProjectContext) {
 		let mut extra_dns = Vec::new();
 
 		// Which pool of ingress servers the DNS record will be pointed at
-		let ing_pool = match &ctx.ns().deploy.kind {
-			config::ns::DeployKind::Local { .. } => "local",
-			config::ns::DeployKind::Cluster { .. } => "ing-px",
+		let ing_pool = match &ctx.ns().cluster.kind {
+			config::ns::ClusterKind::SingleNode { .. } => "local",
+			config::ns::ClusterKind::Distributed { .. } => "ing-px",
 		};
 
 		// Add services

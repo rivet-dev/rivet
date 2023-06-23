@@ -7,4 +7,3 @@ http_status = 400
 # Matchmaker Lobby Stopped
 
 The given lobby has been stopped.
-

@@ -6,4 +6,3 @@ ip_allow:
       # Nomad, see https://developer.hashicorp.com/nomad/docs/networking/cni#nomad-s-bridge-configuration
       - 172.26.64.0/20
     action: allow
-

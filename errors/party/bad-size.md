@@ -7,4 +7,3 @@ http_status = 400
 # Bad Party Size
 
 Party size must be between 1 and 16 players.
-

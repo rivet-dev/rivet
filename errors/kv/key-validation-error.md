@@ -9,4 +9,3 @@ http_status = 400
 A key passed to one of the KV endpoints was invalid.
 
 The maximum length for a key is 512 characters.
-

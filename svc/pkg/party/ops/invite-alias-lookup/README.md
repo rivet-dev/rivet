@@ -1,2 +1,1 @@
 # party-invite-alias-lookup
-

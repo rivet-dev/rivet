@@ -8,8 +8,9 @@ use std::{
 use tokio::fs;
 use tokio::task::block_in_place;
 use toml_edit::value;
+use uuid::Uuid;
 
-use crate::{config::service::RuntimeKind, context::ProjectContextData};
+use crate::{config::service::RuntimeKind, context::ProjectContextData, utils};
 
 /// Comment attached to the head of the namespace config.
 const NS_CONFIG_COMMENT: &str = r#"# Documentation: doc/bolt/config/NAMESPACE.md
@@ -89,6 +90,23 @@ impl ConfigGenerator {
 		Ok(())
 	}
 
+	/// Moves a value's location. Useful for updating schemas.
+	async fn move_config(&mut self, from_path: &[&str], to_path: &[&str]) -> Result<()> {
+		// Read the parent
+		if let Some(parent_value) =
+			get_value_mut(self.ns.as_item_mut(), &from_path[0..(from_path.len() - 1)])
+				.and_then(|x| x.as_table_mut())
+		{
+			// Remove the item
+			if let Some(value) = parent_value.remove(from_path.last().unwrap()) {
+				// Write to the new path
+				write_value(self.ns.as_item_mut(), to_path, value);
+			}
+		}
+
+		Ok(())
+	}
+
 	/// Inserts a config value if does not exist.
 	async fn generate_config<Fut>(
 		&mut self,
@@ -99,7 +117,7 @@ impl ConfigGenerator {
 		Fut: Future<Output = Result<toml_edit::Item>>,
 	{
 		// Check if item already exists
-		if !value_exists(self.ns.as_item(), path) {
+		if get_value(self.ns.as_item(), path).is_none() {
 			let value = value_fn().await?;
 			write_value(self.ns.as_item_mut(), path, value);
 		}
@@ -110,7 +128,7 @@ impl ConfigGenerator {
 	/// Prompts user for config value if does not exist.
 	async fn prompt_config(&mut self, message: &str, docs: &str, path: &[&str]) -> Result<()> {
 		// Check if item already exists
-		if !value_exists(self.ns.as_item(), path) {
+		if get_value(self.ns.as_item(), path).is_none() {
 			let x = rivet_term::prompt::PromptBuilder::default()
 				.message(message)
 				.docs_url(docs)
@@ -133,7 +151,7 @@ impl ConfigGenerator {
 		Fut: Future<Output = Result<toml_edit::Item>>,
 	{
 		// Check if item already exists
-		if !value_exists(self.secrets.as_item(), path) {
+		if get_value(self.secrets.as_item(), path).is_none() {
 			let value = value_fn().await?;
 			write_value(self.secrets.as_item_mut(), path, value);
 		}
@@ -158,7 +176,7 @@ impl ConfigGenerator {
 		// Check if item already exists
 		if !paths
 			.iter()
-			.all(|x| value_exists(self.secrets.as_item(), x))
+			.all(|x| get_value(self.secrets.as_item(), x).is_some())
 		{
 			let x = rivet_term::prompt::PromptBuilder::default()
 				.message(message)
@@ -181,10 +199,25 @@ pub async fn generate(project_path: &Path, ns_id: &str) -> Result<()> {
 
 	let mut generator = ConfigGenerator::new(term, &project_path, ns_id).await?;
 
-	// MARK: Deploy
-	if generator.ns.get("deploy").is_none() || generator.ns["deploy"].get("cluster").is_none() {
+	// MARK: Migrate
+	generator
+		.move_config(&["deploy", "local"], &["cluster", "single_node"])
+		.await?;
+	generator
+		.move_config(&["deploy", "cluster"], &["cluster", "distributed"])
+		.await?;
+
+	// MARK: Cluster
+	generator
+		.generate_config(&["cluster", "id"], || async {
+			Ok(value(Uuid::new_v4().to_string()).into())
+		})
+		.await?;
+
+	if generator.ns.get("cluster").is_none() || generator.ns["cluster"].get("distributed").is_none()
+	{
 		generator
-			.generate_config(&["deploy", "local", "public_ip"], || async {
+			.generate_config(&["cluster", "single_node", "public_ip"], || async {
 				let public_ip = fetch_public_ip().await?;
 				Ok(value(public_ip).into())
 			})
@@ -396,6 +429,10 @@ pub async fn generate(project_path: &Path, ns_id: &str) -> Result<()> {
 	// Write configs again with new secrets
 	generator.write().await?;
 
+	let mut event = utils::telemetry::build_event(&ctx, "bolt_config_generate").await?;
+	event.insert_prop("ns_id", ns_id)?;
+	utils::telemetry::capture_event(&ctx, event).await?;
+
 	eprintln!();
 	rivet_term::status::success(
 		"Generated config",
@@ -405,17 +442,33 @@ pub async fn generate(project_path: &Path, ns_id: &str) -> Result<()> {
 	Ok(())
 }
 
-/// Checks if a value exists at a path in a TOML item.
-fn value_exists(mut item: &toml_edit::Item, path: &[&str]) -> bool {
+/// Returns a value at a given path.
+fn get_value<'a>(mut item: &'a toml_edit::Item, path: &[&str]) -> Option<&'a toml_edit::Item> {
 	for key in path {
 		if let Some(x) = item.get(key).filter(|x| !x.is_none()) {
 			item = x;
 		} else {
-			return false;
+			return None;
 		}
 	}
 
-	true
+	Some(item)
+}
+
+/// Returns a mutable value at a given path.
+fn get_value_mut<'a>(
+	mut item: &'a mut toml_edit::Item,
+	path: &[&str],
+) -> Option<&'a mut toml_edit::Item> {
+	for key in path {
+		if let Some(x) = item.get_mut(key).filter(|x| !x.is_none()) {
+			item = x;
+		} else {
+			return None;
+		}
+	}
+
+	Some(item)
 }
 
 /// Writes a value to a path in a TOML item.

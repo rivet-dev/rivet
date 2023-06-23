@@ -13,4 +13,3 @@ service:
       method: POST
       path-parameters:
         group_id: uuid
-

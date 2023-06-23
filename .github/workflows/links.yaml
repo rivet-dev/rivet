@@ -1,0 +1,14 @@
+name: link-checker
+
+on: [push]
+
+jobs:
+  linkChecker:
+    runs-on: ubuntu-20.04
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Link Checker
+        uses: lycheeverse/lychee-action@v1.8.0
+        with:
+          fail: true
