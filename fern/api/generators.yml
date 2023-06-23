@@ -37,8 +37,10 @@ groups:
           allowCustomFetcher: true
         output:
           location: npm
-          package-name: "@rivet-fern/api"
-          url: npm.buildwithfern.com
+          package-name: "@rivet-gg/api-internal"
+          token: ${FERN_NPM_TOKEN}
+        github:
+          repository: rivet-gg/rivet-node-internal
   local_external:
     audiences:
       - public

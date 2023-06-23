@@ -3,6 +3,7 @@ use std::fmt::Display;
 use crate::{config, context::ProjectContext, dep::cloudflare};
 
 pub mod api;
+pub mod cli;
 pub mod gen;
 pub mod job_schema;
 
@@ -20,9 +21,9 @@ pub struct NomadCtx {
 
 impl NomadCtx {
 	pub async fn remote(ctx: &ProjectContext) -> Self {
-		let (region_id, access_secret) = match ctx.ns().deploy.kind {
-			config::ns::DeployKind::Local { .. } => ("local".to_string(), None),
-			config::ns::DeployKind::Cluster { .. } => {
+		let (region_id, access_secret) = match ctx.ns().cluster.kind {
+			config::ns::ClusterKind::SingleNode { .. } => ("local".to_string(), None),
+			config::ns::ClusterKind::Distributed { .. } => {
 				assert!(
 					matches!(
 						ctx.ns().dns.provider,
@@ -57,12 +58,12 @@ impl NomadCtx {
 		method: reqwest::Method,
 		path: impl Display,
 	) -> reqwest::RequestBuilder {
-		match self.project_ctx.ns().deploy.kind {
-			config::ns::DeployKind::Local { .. } => self
+		match self.project_ctx.ns().cluster.kind {
+			config::ns::ClusterKind::SingleNode { .. } => self
 				.client
 				.request(method, format!("http://nomad.service.consul:4646{path}")),
 
-			config::ns::DeployKind::Cluster { .. } => {
+			config::ns::ClusterKind::Distributed { .. } => {
 				let access_secret = self.access_secret.as_ref().unwrap();
 				self.client
 					.request(
@@ -83,12 +84,12 @@ impl NomadCtx {
 		method: reqwest::Method,
 		path: impl Display,
 	) -> reqwest::RequestBuilder {
-		match self.project_ctx.ns().deploy.kind {
-			config::ns::DeployKind::Local { .. } => self
+		match self.project_ctx.ns().cluster.kind {
+			config::ns::ClusterKind::SingleNode { .. } => self
 				.client
 				.request(method, format!("http://consul.service.consul:8500{path}")),
 
-			config::ns::DeployKind::Cluster { .. } => {
+			config::ns::ClusterKind::Distributed { .. } => {
 				let access_secret = self.access_secret.as_ref().unwrap();
 				self.client
 					.request(

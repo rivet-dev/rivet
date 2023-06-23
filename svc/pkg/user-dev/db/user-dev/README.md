@@ -1,6 +1,5 @@
 # db-user-dev
 
-**Deprecated*
+\*_Deprecated_
 
 See db-team-dev.
-

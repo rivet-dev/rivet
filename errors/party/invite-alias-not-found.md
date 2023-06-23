@@ -7,4 +7,3 @@ http_status = 400
 # Invite Alias Not Found
 
 The given invite alias was not found.
-

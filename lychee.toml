@@ -1,0 +1,13 @@
+exclude_path = [
+    # Contains a lot of unresolved links
+    "docs/getting_started/INTERNAL_DASHBOARDS.md",
+    # Generated documentation
+    "gen/",
+]
+exclude = [
+    # Bot prevention times out
+    '.*twitter\.com.*',
+    # Repo not public yet
+    '.*github\.com/rivet-gg/hub.*',
+]
+exclude_all_private = true

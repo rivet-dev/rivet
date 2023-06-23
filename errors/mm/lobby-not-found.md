@@ -9,4 +9,3 @@ http_status = 400
 A lobby could not be found for the direct seek request.
 
 Check that the lobby ID is valid.
-

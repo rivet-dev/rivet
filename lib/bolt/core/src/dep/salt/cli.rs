@@ -4,7 +4,9 @@ use serde::Deserialize;
 use std::path::Path;
 use tokio::task::block_in_place;
 
-use crate::{config, context::ProjectContext, dep::terraform, tasks, tasks::ssh::TempSshKey};
+use crate::{
+	config, context::ProjectContext, dep::terraform, tasks, tasks::ssh::TempSshKey, utils,
+};
 
 #[derive(Clone, Debug, Default)]
 pub struct ApplyOpts {
@@ -26,11 +28,16 @@ pub async fn apply(
 	opts: &ApplyOpts,
 	config_opts: &super::config::BuildOpts,
 ) -> Result<()> {
+	let mut event = utils::telemetry::build_event(ctx, "bolt_salt_apply").await?;
+	event.insert_prop("filter", filter)?;
+	event.insert_prop("sls", &opts.sls)?;
+	utils::telemetry::capture_event(ctx, event).await?;
+
 	// Write Salt configs
 	eprintln!();
 	rivet_term::status::progress("Writing configs", "");
-	match ctx.ns().deploy.kind {
-		config::ns::DeployKind::Local { .. } => {
+	match ctx.ns().cluster.kind {
+		config::ns::ClusterKind::SingleNode { .. } => {
 			// Write salt
 			block_in_place(|| cmd!("rm", "-rf", "/srv/salt", "/srv/pillar").run())?;
 			block_in_place(|| cmd!("cp", "-r", ctx.salt_path().join("salt"), "/srv/salt").run())?;
@@ -50,7 +57,7 @@ pub async fn apply(
 			// Write salt context
 			gen_salt_context(ctx, config_opts, Path::new("/srv/salt-context")).await?;
 		}
-		config::ns::DeployKind::Cluster { .. } => {
+		config::ns::ClusterKind::Distributed { .. } => {
 			tokio::try_join!(
 				// /srv/salt
 				async { rsync_dir(ctx, &ctx.salt_path().join("salt"), "/srv/salt").await },
@@ -79,11 +86,11 @@ pub async fn apply(
 	// Refresh pillars
 	eprintln!();
 	rivet_term::status::progress("Refreshing pillars", "saltutil.refresh_pillar");
-	match ctx.ns().deploy.kind {
-		config::ns::DeployKind::Local { .. } => {
+	match ctx.ns().cluster.kind {
+		config::ns::ClusterKind::SingleNode { .. } => {
 			block_in_place(|| cmd!("salt", "-C", filter, "saltutil.refresh_pillar").run())?;
 		}
-		config::ns::DeployKind::Cluster { .. } => {
+		config::ns::ClusterKind::Distributed { .. } => {
 			exec_master_cmd(ctx, &format!("salt -C '{filter}' saltutil.refresh_pillar")).await?
 		}
 	}
@@ -91,11 +98,11 @@ pub async fn apply(
 	// Update mines
 	eprintln!();
 	rivet_term::status::progress("Updating mines", "mine.update");
-	match ctx.ns().deploy.kind {
-		config::ns::DeployKind::Local { .. } => {
+	match ctx.ns().cluster.kind {
+		config::ns::ClusterKind::SingleNode { .. } => {
 			block_in_place(|| cmd!("salt", "-C", filter, "mine.update").run())?;
 		}
-		config::ns::DeployKind::Cluster { .. } => {
+		config::ns::ClusterKind::Distributed { .. } => {
 			exec_master_cmd(ctx, &format!("salt -C '{filter}' mine.update")).await?
 		}
 	}
@@ -108,8 +115,8 @@ pub async fn apply(
 	} else {
 		"--state-output=terse"
 	};
-	match ctx.ns().deploy.kind {
-		config::ns::DeployKind::Local { .. } => {
+	match ctx.ns().cluster.kind {
+		config::ns::ClusterKind::SingleNode { .. } => {
 			if let Some(sls) = &opts.sls {
 				block_in_place(|| {
 					cmd!(
@@ -126,7 +133,7 @@ pub async fn apply(
 				block_in_place(|| cmd!("salt", extra_flags, "-C", filter, "state.apply").run())?;
 			}
 		}
-		config::ns::DeployKind::Cluster { .. } => {
+		config::ns::ClusterKind::Distributed { .. } => {
 			if let Some(sls) = &opts.sls {
 				exec_master_cmd(
 					ctx,

@@ -102,9 +102,9 @@ pub async fn access_service(
 	service_hostname: &str,
 	(tunnel_protocol, tunnel_name): (cloudflare::TunnelProtocol, &str),
 ) -> Result<String> {
-	match &ctx.ns().deploy.kind {
-		config::ns::DeployKind::Local { .. } => Ok(service_hostname.into()),
-		config::ns::DeployKind::Cluster { .. } => {
+	match &ctx.ns().cluster.kind {
+		config::ns::ClusterKind::SingleNode { .. } => Ok(service_hostname.into()),
+		config::ns::ClusterKind::Distributed { .. } => {
 			// Save the tunnel config
 			let local_port = utils::pick_port();
 			tunnel_configs.push(cloudflare::TunnelConfig::new_with_port(

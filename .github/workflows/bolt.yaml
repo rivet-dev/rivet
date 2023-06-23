@@ -42,7 +42,7 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-nix-${{ hashfiles('./shell.nix', './nix/**/*.nix') }}
             ${{ runner.os }}-nix-
-      
+
       - name: Build Shell
         run: nix-shell --pure --run "echo 'Built shell'"
 
@@ -71,7 +71,10 @@ jobs:
           cat <<'EOF' > namespaces/ci.toml
           pools = []
 
-          [deploy.local]
+          [cluster]
+          id = "d0b2b70b-56e3-467a-82ba-8908ab409de9"
+
+          [cluster.single_node]
           public_ip = "1.2.3.4"
 
           [dns.domain]

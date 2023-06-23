@@ -12,4 +12,3 @@ async function handleRequest(request) {
 
 	return await fetch(originRequest);
 }
-

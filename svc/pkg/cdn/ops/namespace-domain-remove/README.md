@@ -1,2 +1,1 @@
 # cdn-namespace-domain-remove
-

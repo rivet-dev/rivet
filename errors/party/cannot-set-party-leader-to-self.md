@@ -7,4 +7,3 @@ http_status = 400
 # Cannot Set Party Leader To Self
 
 Cannot set the party leader to the current identity.
-

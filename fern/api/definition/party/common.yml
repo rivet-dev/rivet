@@ -130,13 +130,11 @@ types:
         docs: A party member state denoting that the member is inactive.
         type: optional<commons.EmptyObject>
       matchmaker_ready:
-        docs:
-          A party member state denoting that the member is currently waiting to
+        docs: A party member state denoting that the member is currently waiting to
           start matchmaking.
         type: optional<commons.EmptyObject>
       matchmaker_finding_lobby:
-        docs:
-          A party member state denoting that the member is currently searching for a
+        docs: A party member state denoting that the member is currently searching for a
           lobby.
         type: optional<commons.EmptyObject>
       matchmaker_lobby: optional<MemberStateMatchmakerLobby>

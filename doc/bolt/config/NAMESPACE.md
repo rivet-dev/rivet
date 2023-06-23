@@ -1,3 +1,0 @@
-# Namespace Config
-
-TODO

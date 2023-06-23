@@ -109,8 +109,7 @@ service:
             bio: optional<commons.Bio>
 
     validateProfile:
-      docs:
-        Validate contents of identity profile. Use to provide immediate feedback
+      docs: Validate contents of identity profile. Use to provide immediate feedback
         on profile changes before committing them.
       path: /self/profile/validate
       method: POST
@@ -167,8 +166,7 @@ service:
             status: identityCommons.Status
 
     follow:
-      docs:
-        Follows the given identity. In order for identities to be "friends", the
+      docs: Follows the given identity. In order for identities to be "friends", the
         other identity has to also follow this identity.
       path: /{identity_id}/follow
       method: POST
@@ -199,8 +197,7 @@ service:
       response: PrepareAvatarUploadResponse
 
     completeAvatarUpload:
-      docs:
-        Completes an avatar image upload. Must be called after the file upload
+      docs: Completes an avatar image upload. Must be called after the file upload
         process completes.
       path: /avatar-upload/{upload_id}/complete
       method: POST
@@ -208,8 +205,7 @@ service:
         upload_id: uuid
 
     signupForBeta:
-      docs:
-        Completes an avatar image upload. Must be called after the file upload
+      docs: Completes an avatar image upload. Must be called after the file upload
         process completes.
       path: /self/beta-signup
       method: POST

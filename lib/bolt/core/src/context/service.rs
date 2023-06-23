@@ -352,9 +352,9 @@ impl ServiceContextData {
 	) -> Result<ServiceBuildPlan> {
 		let project_ctx = self.project().await;
 
-		match &project_ctx.ns().deploy.kind {
+		match &project_ctx.ns().cluster.kind {
 			// Build locally
-			config::ns::DeployKind::Local { .. } => {
+			config::ns::ClusterKind::SingleNode { .. } => {
 				// Derive the build path
 				let optimization = match &build_context {
 					BuildContext::Bin { optimization } => optimization,
@@ -378,7 +378,7 @@ impl ServiceContextData {
 				Ok(ServiceBuildPlan::BuildLocally { output_path })
 			}
 			// Build and upload to S3
-			config::ns::DeployKind::Cluster { .. } => {
+			config::ns::ClusterKind::Distributed { .. } => {
 				// Derive the build key
 				let key = self.s3_build_key(build_context).await?;
 
@@ -658,7 +658,7 @@ impl ServiceContextData {
 		// the output binaries are hardcoded to /nix/store.
 		//
 		// The `/nix/store` directory is mounted as a volume.
-		if let config::ns::DeployKind::Local { .. } = project_ctx.ns().deploy.kind {
+		if let config::ns::ClusterKind::SingleNode { .. } = project_ctx.ns().cluster.kind {
 			env.push((
 				"LD_LIBRARY_PATH".into(),
 				std::env::var("LD_LIBRARY_PATH").context("missing LD_LIBRARY_PATH")?,
@@ -706,6 +706,10 @@ impl ServiceContextData {
 		// Generic context
 		env.push(("RIVET_RUN_CONTEXT".into(), run_context.short().into()));
 		env.push(("RIVET_NAMESPACE".into(), project_ctx.ns_id().into()));
+		env.push((
+			"RIVET_CLUSTER_ID".into(),
+			project_ctx.ns().cluster.id.to_string(),
+		));
 
 		if self.enable_tokio_console() {
 			env.push(("TOKIO_CONSOLE_ENABLE".into(), "1".into()));
@@ -1016,6 +1020,16 @@ impl ServiceContextData {
 		}
 
 		env.push((
+			"RIVET_TELEMETRY_DISABLE".into(),
+			if project_ctx.ns().rivet.telemetry.disable {
+				"1"
+			} else {
+				"0"
+			}
+			.into(),
+		));
+
+		env.push((
 			"RIVET_API_HUB_ORIGIN_REGEX".into(),
 			project_ctx
 				.ns()
@@ -1024,10 +1038,7 @@ impl ServiceContextData {
 				.hub_origin_regex
 				.clone()
 				.unwrap_or_else(|| {
-					format!(
-						"^https://({base}|hub\\.{base})$",
-						base = project_ctx.domain_main()
-					)
+					format!("^https://hub\\.{base}$", base = project_ctx.domain_main())
 				}),
 		));
 		env.push((
@@ -1142,9 +1153,9 @@ pub async fn access_service(
 	service_hostname: &str,
 	(tunnel_protocol, tunnel_name): (cloudflare::TunnelProtocol, &str),
 ) -> Result<String> {
-	match (run_context, &ctx.ns().deploy.kind) {
+	match (run_context, &ctx.ns().cluster.kind) {
 		// Create tunnels to remote services
-		(RunContext::Test, config::ns::DeployKind::Cluster { .. }) => {
+		(RunContext::Test, config::ns::ClusterKind::Distributed { .. }) => {
 			// Save the tunnel config
 			let local_port = utils::pick_port();
 			tunnel_configs.push(cloudflare::TunnelConfig::new_with_port(
@@ -1157,9 +1168,8 @@ pub async fn access_service(
 			Ok(format!("127.0.0.1:{local_port}"))
 		}
 		// Use the Consul address if either in production or running locally
-		(RunContext::Service, _) | (RunContext::Test, config::ns::DeployKind::Local { .. }) => {
-			Ok(service_hostname.into())
-		}
+		(RunContext::Service, _)
+		| (RunContext::Test, config::ns::ClusterKind::SingleNode { .. }) => Ok(service_hostname.into()),
 	}
 }
 
@@ -1184,8 +1194,8 @@ impl ServiceContextData {
 			.get(&self.name())
 			.cloned()
 			.or_else(|| project_ctx.ns().services.get("default").cloned())
-			.unwrap_or_else(|| match project_ctx.ns().deploy.kind {
-				config::ns::DeployKind::Local { .. } => config::ns::Service {
+			.unwrap_or_else(|| match project_ctx.ns().cluster.kind {
+				config::ns::ClusterKind::SingleNode { .. } => config::ns::Service {
 					count: 1,
 					resources: config::ns::ServiceResources {
 						cpu: config::ns::CpuResources::Cpu(50),
@@ -1193,7 +1203,7 @@ impl ServiceContextData {
 						ephemeral_disk: 128,
 					},
 				},
-				config::ns::DeployKind::Cluster { .. } => config::ns::Service {
+				config::ns::ClusterKind::Distributed { .. } => config::ns::Service {
 					count: if is_singleton { 1 } else { 2 },
 					resources: config::ns::ServiceResources {
 						cpu: config::ns::CpuResources::Cpu(250),
