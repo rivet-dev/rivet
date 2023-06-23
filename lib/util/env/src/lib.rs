@@ -45,6 +45,7 @@ lazy_static::lazy_static! {
 	static ref NOMAD_DC: Option<String> = std::env::var("NOMAD_DC").ok();
 	static ref REGION: Option<String> = std::env::var("RIVET_REGION").ok();
 	static ref NAMESPACE: Option<String> = std::env::var("RIVET_NAMESPACE").ok();
+	static ref CLUSTER_ID: Option<String> = std::env::var("RIVET_CLUSTER_ID").ok();
 	static ref SOURCE_HASH: Option<String> = std::env::var("RIVET_SOURCE_HASH").ok();
 	static ref DOMAIN_MAIN: Option<String> = std::env::var("RIVET_DOMAIN_MAIN").ok();
 	static ref DOMAIN_CDN: Option<String> = std::env::var("RIVET_DOMAIN_CDN").ok();
@@ -85,6 +86,13 @@ pub fn namespace() -> &'static str {
 	match &*NAMESPACE {
 		Some(x) => x.as_str(),
 		None => panic!("RIVET_NAMESPACE"),
+	}
+}
+
+pub fn cluster_id() -> &'static str {
+	match &*CLUSTER_ID {
+		Some(x) => x.as_str(),
+		None => panic!("RIVET_CLUSTER_ID"),
 	}
 }
 

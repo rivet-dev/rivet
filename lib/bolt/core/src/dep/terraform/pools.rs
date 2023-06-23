@@ -686,15 +686,15 @@ fn filter_pools(
 	pools: HashMap<String, Pool>,
 ) -> Result<HashMap<String, Pool>> {
 	// Apply filters
-	match &ctx.ns().deploy.kind {
+	match &ctx.ns().cluster.kind {
 		// Return pools that run in a cluster
-		bolt_config::ns::DeployKind::Cluster { .. } => Ok(pools
+		bolt_config::ns::ClusterKind::Distributed { .. } => Ok(pools
 			.into_iter()
 			.filter(|(_, x)| x.local_mode != PoolLocalMode::LocalOnly)
 			.collect()),
 
 		// Merge pools together to `local` node
-		bolt_config::ns::DeployKind::Local { .. } => {
+		bolt_config::ns::ClusterKind::SingleNode { .. } => {
 			let mut new_pools = HashMap::new();
 
 			// Include normal pools
