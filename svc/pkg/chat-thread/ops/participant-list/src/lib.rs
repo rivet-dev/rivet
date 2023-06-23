@@ -108,7 +108,7 @@ async fn handle(
 					}
 				};
 
-				GlobalResult::Ok(chat_thread::participant_list::response::Thread {
+			GlobalResult::Ok(chat_thread::participant_list::response::Thread {
 				thread_id: thread.thread_id,
 				participants,
 			})

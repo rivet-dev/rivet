@@ -15,9 +15,7 @@ struct Team {
 }
 
 #[operation(name = "team-get")]
-async fn handle(
-	ctx: OperationContext<team::get::Request>,
-) -> GlobalResult<team::get::Response> {
+async fn handle(ctx: OperationContext<team::get::Request>) -> GlobalResult<team::get::Response> {
 	let team_ids = ctx
 		.team_ids
 		.iter()
