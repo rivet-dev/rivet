@@ -18,7 +18,7 @@ locals {
 
 provider "aws" {
 	region = local.s3_region
-	access_key = "admin"
+	access_key = "root"
 	secret_key = "password"
 	skip_credentials_validation = true
 	skip_metadata_api_check = true
