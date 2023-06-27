@@ -1,5 +1,5 @@
 install_docker_core_dependencies:
-  ed:
+  pkg.installed:
     - pkgs:
       - apt-transport-https
       - ca-certificates
@@ -24,7 +24,7 @@ add_docker_repository:
       - cmd: add_docker_gpg
 
 install_docker:
-  ed:
+  pkg.installed:
     - pkgs:
       - docker-ce
       - docker-ce-cli
