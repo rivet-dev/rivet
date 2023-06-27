@@ -27,7 +27,7 @@ disk_mount_cockroach:
 #
 # See https://www.cockroachlabs.com/docs/v22.2/deploy-cockroachdb-on-premises#step-1-synchronize-clocks
 sync_clocks_crdb:
-  ed:
+  pkg.installed:
     - name: ntp
   file.managed:
     - name: /etc/ntp.conf

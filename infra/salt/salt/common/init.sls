@@ -2,7 +2,7 @@ update_pkgs:
   pkg.uptodate: []
 
 install_common_pkgs:
-  ed:
+  pkg.installed:
     - pkgs:
       - apt-transport-https
       - ca-certificates

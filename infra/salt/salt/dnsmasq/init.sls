@@ -1,5 +1,5 @@
 install_dnsmasq:
-  ed:
+  pkg.installed:
     - name: dnsmasq
 
 push_etc_resolv_conf:
