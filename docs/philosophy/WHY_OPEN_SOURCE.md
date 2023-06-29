@@ -34,7 +34,7 @@ By providing the source code for Rivet, we can help large studios be confident t
 
 ## Financial accessibility
 
-Unlike many other industries, game developers often have to live off scraps to bootstrap launching their game or simply want to develop a game as a cheap side project. Anyone who's been there knows that feeling of worrying about event an extra $10/mo.
+Unlike many other industries, game developers often have to live off scraps to bootstrap launching their game or simply want to develop a game as a cheap side project. Anyone who's been there knows that feeling of worrying about even an extra $10/mo.
 
 We also see open source as a way to make running Rivet as affordable as possible while bootstrapping your business by using your own hardware to run your game.
 
