@@ -363,7 +363,7 @@ pub struct Rust {
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, Default)]
-#[serde(deny_unknown_fields)]
+#[serde(deny_unknown_fields, rename_all = "snake_case")]
 pub enum RustBuildOpt {
 	Release,
 	#[default]
