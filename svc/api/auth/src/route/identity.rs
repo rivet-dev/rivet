@@ -54,7 +54,6 @@ pub async fn start(
 		};
 	}
 
-
 	let res = op!([ctx] email_verification_create {
 		email: body.email.clone(),
 		game_id: body.game_id
