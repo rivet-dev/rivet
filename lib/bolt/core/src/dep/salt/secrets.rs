@@ -41,5 +41,14 @@ pub async fn build_secrets(ctx: &ProjectContext) -> Result<Value> {
 		},
 	});
 
+	secrets["cloudflare"] = json!({
+		"access": {
+			"proxy": {
+				"client_id": ctx.read_secret(&["cloudflare", "access", "proxy", "client_id"]).await?,
+				"client_secret": ctx.read_secret(&["cloudflare", "access", "proxy", "client_secret"]).await?,
+			},
+		},
+	});
+
 	Ok(secrets)
 }

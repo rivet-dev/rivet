@@ -224,16 +224,6 @@ async fn vars(ctx: &ProjectContext) {
 		}
 	}
 
-	// Logging
-	match &config.logging {
-		Some(config::ns::Logging {
-			provider: config::ns::LoggingProvider::Loki { endpoint },
-		}) => {
-			vars.insert("loki_endpoint".into(), json!(endpoint));
-		}
-		None => {}
-	}
-
 	// Regions
 	vars.insert(
 		"primary_region".into(),

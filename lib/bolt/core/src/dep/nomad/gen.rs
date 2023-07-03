@@ -5,6 +5,7 @@ use std::path::{Path, PathBuf};
 use crate::{
 	config::{
 		self,
+		ns::LoggingProvider,
 		service::{ServiceDomain, ServiceKind, ServiceRouter},
 	},
 	context::{BuildContext, ProjectContext, RunContext, ServiceContext},
@@ -421,6 +422,7 @@ pub async fn gen_svc(region_id: &str, exec_ctx: &ExecServiceContext) -> Job {
 							"force_pull": force_pull,
 							"ports": docker_ports,
 							"auth": nomad_docker_io_auth(&project_ctx).await.unwrap(),
+							"logging": nomad_loki_plugin_config(&project_ctx).await.unwrap(),
 						})
 					}
 					ExecServiceDriver::LocalBinaryArtifact { path, args } => {
@@ -429,6 +431,7 @@ pub async fn gen_svc(region_id: &str, exec_ctx: &ExecServiceContext) -> Job {
 							"args": args,
 							"command": Path::new("/var/rivet/backend").join(path),
 							"auth": nomad_docker_io_auth(&project_ctx).await.unwrap(),
+							"logging": nomad_loki_plugin_config(&project_ctx).await.unwrap(),
 						})
 					}
 					ExecServiceDriver::UploadedBinaryArtifact { args, .. } => {
@@ -437,6 +440,7 @@ pub async fn gen_svc(region_id: &str, exec_ctx: &ExecServiceContext) -> Job {
 							"command": format!("${{NOMAD_TASK_DIR}}/build/{}", svc_ctx.name()),
 							"args": args,
 							"auth": nomad_docker_io_auth(&project_ctx).await.unwrap(),
+							"logging": nomad_loki_plugin_config(&project_ctx).await.unwrap(),
 						})
 					}
 					// TODO: This doesn't work since we don't handle Ctrl-C
@@ -712,15 +716,78 @@ async fn nomad_docker_io_auth(ctx: &ProjectContext) -> Result<serde_json::Value>
 	if ctx.ns().docker.authenticate_all_docker_hub_pulls {
 		let username = ctx
 			.read_secret(&["docker", "docker_io", "username"])
-			.await
-			.unwrap();
+			.await?;
 		let password = ctx
 			.read_secret(&["docker", "docker_io", "password"])
-			.await
-			.unwrap();
+			.await?;
 		Ok(json!({
 			"username": username,
 			"password": password,
+		}))
+	} else {
+		Ok(json!(null))
+	}
+}
+
+async fn nomad_loki_plugin_config(ctx: &ProjectContext) -> Result<serde_json::Value> {
+	if let Some(logging) = &ctx.ns().logging {
+		let _endpoint = match &logging.provider {
+			LoggingProvider::Loki { endpoint } => endpoint,
+		};
+
+		let relabel_config = json!([
+			{
+				"source_labels": ["__meta_consul_node"],
+				"target_label": "__host__",
+			},
+			{
+				"target_label": "ns",
+				"replacement": ctx.ns_id(),
+			},
+			{
+				"source_labels": ["__meta_consul_service_metadata_external_source"],
+				"target_label": "source",
+				"regex": "(.*)",
+				"replacement": "$1",
+			},
+			{
+				"source_labels": ["__meta_consul_service_id"],
+				"regex": "_nomad-task-([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})-.*",
+				"target_label": "alloc",
+				"replacement": "$1",
+			},
+			{
+				"source_labels": ["__meta_consul_service"],
+				"target_label": "service",
+			},
+			{
+				"source_labels": ["__meta_consul_dc"],
+				"target_label": "dc",
+			},
+			{
+				"source_labels": ["__meta_consul_node"],
+				"regex": "(.*)",
+				"target_label": "node",
+				"replacement": "$1",
+			},
+			{
+				"source_labels": ["__meta_consul_service_id"],
+				"regex": "_nomad-task-([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})-.*",
+				"target_label":  "__path__",
+				"replacement": "/nomad/alloc/$1/alloc/logs/*std*.{?,??}",
+			},
+		]);
+
+		Ok(json!({
+			"type": "loki",
+			"config": [{
+				// TODO: Automate proxy system to remove hardcoded URL
+				"loki-url": "http://127.0.0.1:9060/loki/api/v1/push",
+				"loki-retries": 5,
+				"loki-batch-size": 400,
+				"no-file": true,
+				"loki-relabel-config": serde_json::to_string(&relabel_config)?,
+			}],
 		}))
 	} else {
 		Ok(json!(null))

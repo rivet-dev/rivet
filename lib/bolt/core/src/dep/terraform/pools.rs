@@ -188,7 +188,13 @@ pub async fn build_pools(ctx: &ProjectContext) -> Result<HashMap<String, Pool>> 
 	pools.insert(
 		"svc".into(),
 		PoolBuilder::default()
-			.roles(vec!["docker", "nomad-client", "consul-client"])
+			.roles(vec![
+				"docker",
+				"nomad-client",
+				"consul-client",
+				"traefik-cloudflare-proxy",
+				"docker-plugin-loki",
+			])
 			.vpc(true)
 			.local_mode(PoolLocalMode::Locally)
 			.nebula_firewall_inbound(
