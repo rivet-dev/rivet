@@ -5,15 +5,15 @@ pub async fn read_secret(key: &[impl AsRef<str>]) -> Result<String, std::env::Va
 	std::env::var(secret_env_var_key(key))
 }
 
-pub async fn read_secret_opt(key: &[impl AsRef<str>]) -> Option<Result<String, std::env::VarError>> {
+pub async fn read_secret_opt(key: &[impl AsRef<str>]) -> Result<Option<String>, std::env::VarError> {
 	let env_var = read_secret(key).await;
 	
 	match env_var {
-		Ok(v) => Some(Ok(v)),
+		Ok(v) => Ok(Some(v)),
 		Err(var_error) => {
 			match var_error {
-				std::env::VarError::NotPresent => None,
-				std::env::VarError::NotUnicode(_) => Some(Err(var_error)),
+				std::env::VarError::NotPresent => Ok(None),
+				std::env::VarError::NotUnicode(_) => Err(var_error),
 			}
 		}
 	}

@@ -19,9 +19,9 @@ pub async fn start(
 	let user_ent = ctx.auth().user(ctx.op_ctx()).await?;
 
 	// Verify captcha
-	let secret_key_opt = util::env::read_secret_opt(&["turnstile", "rivet_gg", "secret_key"]).await;
+	let secret_key_opt = util::env::read_secret_opt(&["turnstile", "rivet_gg", "secret_key"]).await?;
 
-	// if no Turnstile key defined, skip captcha
+	// If no Turnstile key defined, skip captcha
 	if let Some(secret_key) = secret_key_opt {
 		match body.captcha {
 			models::CaptchaConfig::Turnstile(_) => {
@@ -39,7 +39,7 @@ pub async fn start(
 							domains: vec![
 								backend::captcha::captcha_config::turnstile::Domain {
 									domain: "rivet.gg".to_string(),
-									secret_key: secret_key?
+									secret_key: secret_key
 								},
 							],
 						}),
