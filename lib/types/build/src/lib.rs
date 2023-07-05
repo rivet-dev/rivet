@@ -124,8 +124,10 @@ fn find_all_proto(path: &Path) -> io::Result<Vec<PathBuf>> {
 }
 
 mod plugins {
-	use regex::Regex;
 	use std::{io, path::PathBuf};
+
+	use regex::Regex;
+	use indoc::{indoc, formatdoc};
 
 	use super::config;
 
@@ -157,33 +159,33 @@ mod plugins {
 					.replace(file_contents, include_str!("../static/uuid_expanded.rs"))
 					.to_string();
 			} else if meta.name == vec!["rivet", "backend", "matchmaker"] {
-				file_contents.push_str(
+				file_contents.push_str(indoc!(
 					r#"
-						impl From<lobby_runtime::Docker> for LobbyRuntime {
-							fn from(rt: lobby_runtime::Docker) -> LobbyRuntime {
-								LobbyRuntime {
-									runtime: Some(lobby_runtime::Runtime::Docker(rt)),
-								}
+					impl From<lobby_runtime::Docker> for LobbyRuntime {
+						fn from(rt: lobby_runtime::Docker) -> LobbyRuntime {
+							LobbyRuntime {
+								runtime: Some(lobby_runtime::Runtime::Docker(rt)),
 							}
 						}
+					}
 
-						impl From<lobby_runtime_ctx::Docker> for LobbyRuntimeCtx {
-							fn from(rt: lobby_runtime_ctx::Docker) -> LobbyRuntimeCtx {
-								LobbyRuntimeCtx {
-									runtime: Some(lobby_runtime_ctx::Runtime::Docker(rt)),
-								}
+					impl From<lobby_runtime_ctx::Docker> for LobbyRuntimeCtx {
+						fn from(rt: lobby_runtime_ctx::Docker) -> LobbyRuntimeCtx {
+							LobbyRuntimeCtx {
+								runtime: Some(lobby_runtime_ctx::Runtime::Docker(rt)),
 							}
 						}
+					}
 
-						impl From<lobby_runtime_meta::Docker> for LobbyRuntimeMeta {
-							fn from(rt: lobby_runtime_meta::Docker) -> LobbyRuntimeMeta {
-								LobbyRuntimeMeta {
-									runtime: Some(lobby_runtime_meta::Runtime::Docker(rt)),
-								}
+					impl From<lobby_runtime_meta::Docker> for LobbyRuntimeMeta {
+						fn from(rt: lobby_runtime_meta::Docker) -> LobbyRuntimeMeta {
+							LobbyRuntimeMeta {
+								runtime: Some(lobby_runtime_meta::Runtime::Docker(rt)),
 							}
 						}
-					"#,
-				)
+					}
+					"#
+				))
 			}
 
 			Ok(())
@@ -263,7 +265,7 @@ mod plugins {
 						};
 						let history = config.history.to_string();
 
-						file_contents.push_str(&format!(
+						file_contents.push_str(&formatdoc!(
 							r#"
 							impl ::chirp_types::message::Message for {message_msg_name} {{
 								const NAME: &'static str = "{name}";
