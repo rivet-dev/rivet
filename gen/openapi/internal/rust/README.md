@@ -344,6 +344,8 @@ Class | Method | HTTP request | Description
  - [CloudVersionMatchmakerCaptcha](docs/CloudVersionMatchmakerCaptcha.md)
  - [CloudVersionMatchmakerCaptchaHcaptcha](docs/CloudVersionMatchmakerCaptchaHcaptcha.md)
  - [CloudVersionMatchmakerCaptchaHcaptchaLevel](docs/CloudVersionMatchmakerCaptchaHcaptchaLevel.md)
+ - [CloudVersionMatchmakerCaptchaTurnstile](docs/CloudVersionMatchmakerCaptchaTurnstile.md)
+ - [CloudVersionMatchmakerCaptchaTurnstileDomain](docs/CloudVersionMatchmakerCaptchaTurnstileDomain.md)
  - [CloudVersionMatchmakerConfig](docs/CloudVersionMatchmakerConfig.md)
  - [CloudVersionMatchmakerGameMode](docs/CloudVersionMatchmakerGameMode.md)
  - [CloudVersionMatchmakerGameModeIdleLobbiesConfig](docs/CloudVersionMatchmakerGameModeIdleLobbiesConfig.md)

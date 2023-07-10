@@ -39,67 +39,69 @@ pub fn game_mode_to_proto(
 	internal_assert!(max_players_party >= 0);
 
 	// Derive runtime
-	let runtime = if let Some(either_runtime) = game_mode.docker.as_ref().or(matchmaker.docker.as_ref()) {
-		let args = either_runtime.args.clone().unwrap_or_default();
+	let runtime =
+		if let Some(either_runtime) = game_mode.docker.as_ref().or(matchmaker.docker.as_ref()) {
+			let args = either_runtime.args.clone().unwrap_or_default();
 
-		let mut env_vars = HashMap::<String, String>::new();
-		if let Some(env) = matchmaker.docker.as_ref().and_then(|x| x.env.clone()) {
-			env_vars.extend(env);
-		}
-		if let Some(env) = game_mode.docker.as_ref().and_then(|x| x.env.clone()) {
-			env_vars.extend(env);
-		}
+			let mut env_vars = HashMap::<String, String>::new();
+			if let Some(env) = matchmaker.docker.as_ref().and_then(|x| x.env.clone()) {
+				env_vars.extend(env);
+			}
+			if let Some(env) = game_mode.docker.as_ref().and_then(|x| x.env.clone()) {
+				env_vars.extend(env);
+			}
 
-		let network_mode = either_runtime.network_mode
-			.unwrap_or(models::CloudVersionMatchmakerNetworkMode::Bridge);
+			let network_mode = either_runtime
+				.network_mode
+				.unwrap_or(models::CloudVersionMatchmakerNetworkMode::Bridge);
 
-		let ports = either_runtime.ports.clone().unwrap_or_default();
+			let ports = either_runtime.ports.clone().unwrap_or_default();
 
-		Some(backend::matchmaker::LobbyRuntime {
-			runtime: Some(backend::matchmaker::lobby_runtime::Runtime::Docker(
-				backend::matchmaker::lobby_runtime::Docker {
-					build_id: either_runtime.image_id.map(Into::into),
-					args,
-					env_vars: env_vars
-						.into_iter()
-						.map(|(key, value)| backend::matchmaker::lobby_runtime::EnvVar {
-							key,
-							value,
-						})
-						.collect(),
-					network_mode:
-						ApiInto::<backend::matchmaker::lobby_runtime::NetworkMode>::api_into(
-							network_mode,
-						) as i32,
-					ports: ports
-						.into_iter()
-						.map(|(label, value)| {
-							let proxy_protocol = value
-								.protocol
-								.unwrap_or(models::CloudVersionMatchmakerPortProtocol::Https);
-							let proxy_kind = value
-								.proxy
-								.unwrap_or(models::CloudVersionMatchmakerProxyKind::GameGuard);
-
-							GlobalResult::Ok(backend::matchmaker::lobby_runtime::Port {
-								label,
-								target_port: value.port.map(|x| x as u32),
-								port_range: value.port_range.map(|x| (*x).api_into()),
-								proxy_protocol: ApiInto::<
-									backend::matchmaker::lobby_runtime::ProxyProtocol,
-								>::api_into(proxy_protocol) as i32,
-								proxy_kind: ApiInto::<
-									backend::matchmaker::lobby_runtime::ProxyKind,
-								>::api_into(proxy_kind) as i32,
+			Some(backend::matchmaker::LobbyRuntime {
+				runtime: Some(backend::matchmaker::lobby_runtime::Runtime::Docker(
+					backend::matchmaker::lobby_runtime::Docker {
+						build_id: either_runtime.image_id.map(Into::into),
+						args,
+						env_vars: env_vars
+							.into_iter()
+							.map(|(key, value)| backend::matchmaker::lobby_runtime::EnvVar {
+								key,
+								value,
 							})
-						})
-						.collect::<GlobalResult<_>>()?,
-				},
-			)),
-		})
-	} else {
-		None
-	};
+							.collect(),
+						network_mode:
+							ApiInto::<backend::matchmaker::lobby_runtime::NetworkMode>::api_into(
+								network_mode,
+							) as i32,
+						ports: ports
+							.into_iter()
+							.map(|(label, value)| {
+								let proxy_protocol = value
+									.protocol
+									.unwrap_or(models::CloudVersionMatchmakerPortProtocol::Https);
+								let proxy_kind = value
+									.proxy
+									.unwrap_or(models::CloudVersionMatchmakerProxyKind::GameGuard);
+
+								GlobalResult::Ok(backend::matchmaker::lobby_runtime::Port {
+									label,
+									target_port: value.port.map(|x| x as u32),
+									port_range: value.port_range.map(|x| (*x).api_into()),
+									proxy_protocol: ApiInto::<
+										backend::matchmaker::lobby_runtime::ProxyProtocol,
+									>::api_into(proxy_protocol) as i32,
+									proxy_kind: ApiInto::<
+										backend::matchmaker::lobby_runtime::ProxyKind,
+									>::api_into(proxy_kind) as i32,
+								})
+							})
+							.collect::<GlobalResult<_>>()?,
+					},
+				)),
+			})
+		} else {
+			None
+		};
 
 	Ok(backend::matchmaker::LobbyGroup {
 		name_id,

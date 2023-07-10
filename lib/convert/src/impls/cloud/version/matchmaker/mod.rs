@@ -255,7 +255,7 @@ impl ApiTryFrom<models::CloudVersionMatchmakerCaptcha> for backend::captcha::Cap
 			requests_before_reverify: value.requests_before_reverify as u32,
 			verification_ttl: value.verification_ttl,
 			hcaptcha: value.hcaptcha.map(|x| (*x).api_into()),
-			turnstile: None,
+			turnstile: value.turnstile.map(|x| (*x).api_into()),
 		})
 	}
 }
@@ -269,6 +269,11 @@ impl ApiTryFrom<backend::captcha::CaptchaConfig> for models::CloudVersionMatchma
 			verification_ttl: value.verification_ttl,
 			hcaptcha: value
 				.hcaptcha
+				.map(ApiTryInto::try_into)
+				.transpose()?
+				.map(Box::new),
+			turnstile: value
+				.turnstile
 				.map(ApiTryInto::try_into)
 				.transpose()?
 				.map(Box::new),
@@ -345,6 +350,53 @@ impl ApiFrom<backend::captcha::captcha_config::hcaptcha::Level>
 			backend::captcha::captcha_config::hcaptcha::Level::AlwaysOn => {
 				models::CloudVersionMatchmakerCaptchaHcaptchaLevel::AlwaysOn
 			}
+		}
+	}
+}
+
+impl ApiFrom<models::CloudVersionMatchmakerCaptchaTurnstile>
+	for backend::captcha::captcha_config::Turnstile
+{
+	fn api_from(
+		value: models::CloudVersionMatchmakerCaptchaTurnstile,
+	) -> backend::captcha::captcha_config::Turnstile {
+		backend::captcha::captcha_config::Turnstile {
+			domains: value
+				.domains
+				.into_iter()
+				.map(
+					|(domain, value)| backend::captcha::captcha_config::turnstile::Domain {
+						domain,
+						secret_key: value.secret_key,
+					},
+				)
+				.collect::<Vec<_>>(),
+		}
+	}
+}
+
+impl ApiTryFrom<backend::captcha::captcha_config::Turnstile>
+	for models::CloudVersionMatchmakerCaptchaTurnstile
+{
+	type Error = GlobalError;
+
+	fn try_from(value: backend::captcha::captcha_config::Turnstile) -> GlobalResult<Self> {
+		Ok(models::CloudVersionMatchmakerCaptchaTurnstile {
+			domains: value
+				.domains
+				.into_iter()
+				.map(|d| (d.domain.clone(), ApiInto::api_into(d)))
+				.collect::<HashMap<_, _>>(),
+		})
+	}
+}
+
+impl ApiFrom<backend::captcha::captcha_config::turnstile::Domain>
+	for models::CloudVersionMatchmakerCaptchaTurnstileDomain
+{
+	fn api_from(value: backend::captcha::captcha_config::turnstile::Domain) -> Self {
+		models::CloudVersionMatchmakerCaptchaTurnstileDomain {
+			secret_key: value.secret_key,
 		}
 	}
 }
