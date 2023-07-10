@@ -7871,13 +7871,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "test2-test"
-version = "0.0.1"
-dependencies = [
- "rivet-metrics",
-]
-
-[[package]]
 name = "thiserror"
 version = "1.0.40"
 source = "registry+https://github.com/rust-lang/crates.io-index"
