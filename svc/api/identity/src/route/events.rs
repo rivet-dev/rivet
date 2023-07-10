@@ -196,7 +196,7 @@ async fn events_wait(
 				}
 			}
 		} else {
-			tracing::warn!("unknown user event kind");
+			tracing::warn!(?event, "unknown user event kind");
 		}
 	}
 
