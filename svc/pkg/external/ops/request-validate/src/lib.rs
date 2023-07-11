@@ -43,8 +43,9 @@ async fn handle(
 
 	// Validate DNS
 	if errors.is_empty() {
-		let timeout = std::time::Duration::from_millis(config.timeout);
-		let req = reqwest::Client::new().get(&config.url).timeout(timeout);
+		let req = reqwest::Client::new()
+			.get(&config.url)
+			.timeout(std::time::Duration::from_secs(5));
 
 		if let Err(err) = req.send().await {
 			if err.is_connect() {

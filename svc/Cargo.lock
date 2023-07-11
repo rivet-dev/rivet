@@ -3806,6 +3806,7 @@ version = "0.0.1"
 dependencies = [
  "chirp-client",
  "chirp-worker",
+ "external-request-validate",
  "faker-game",
  "game-version-get",
  "game-version-list",

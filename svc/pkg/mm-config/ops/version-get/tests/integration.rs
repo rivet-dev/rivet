@@ -63,6 +63,9 @@ impl TestVersion {
 					}
 					.into(),
 				),
+
+				find_config: None,
+				join_config: None,
 			}],
 			captcha: None,
 		};

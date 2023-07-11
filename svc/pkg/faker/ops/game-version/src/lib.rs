@@ -102,6 +102,9 @@ async fn handle(
 									}
 									.into(),
 								),
+
+								find_config: None,
+								join_config: None,
 							}]
 						},
 						|v| v.lobby_groups,

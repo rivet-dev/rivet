@@ -113,7 +113,10 @@ pub fn game_mode_to_proto(
 		max_players_party: max_players_party as u32,
 
 		runtime,
-	})
+
+		find_config: game_mode.find_config.map(ApiTryInto::try_into).transpose()?,
+		join_config: game_mode.join_config.map(ApiTryInto::try_into).transpose()?,
+})
 }
 
 pub fn game_mode_to_openapi(
@@ -307,6 +310,31 @@ impl ApiTryFrom<backend::matchmaker::lobby_group::IdleLobbies>
 		Ok(models::CloudVersionMatchmakerGameModeIdleLobbiesConfig {
 			min: value.min_idle_lobbies as i32,
 			max: value.max_idle_lobbies as i32,
+		})
+	}
+}
+
+// TODO:
+impl ApiTryFrom<models::CloudVersionMatchmakerLobbyGroupFindConfig>
+	for backend::matchmaker::FindConfig
+{
+	type Error = GlobalError;
+
+	fn try_from(value: models::CloudVersionMatchmakerLobbyGroupFindConfig) -> GlobalResult<Self> {
+		Ok(backend::matchmaker::FindConfig {
+			
+		})
+	}
+}
+
+impl ApiTryFrom<backend::matchmaker::FindConfig>
+	for models::CloudVersionMatchmakerLobbyGroupFindConfig
+{
+	type Error = GlobalError;
+
+	fn try_from(value: backend::matchmaker::FindConfig) -> GlobalResult<Self> {
+		Ok(models::CloudVersionMatchmakerLobbyGroupRuntime {
+		
 		})
 	}
 }

@@ -7469,6 +7469,7 @@ paths:
                   type: boolean
                 captcha:
                   $ref: '#/components/schemas/CaptchaConfig'
+                verification_data: {}
               required:
                 - game_modes
   /lobbies/join:
@@ -7538,6 +7539,7 @@ paths:
                   type: string
                 captcha:
                   $ref: '#/components/schemas/CaptchaConfig'
+                verification_data: {}
               required:
                 - lobby_id
   /lobbies/list:

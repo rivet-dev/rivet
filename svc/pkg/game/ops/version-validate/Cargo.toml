@@ -11,6 +11,7 @@ rivet-operation = { path = "../../../../../lib/operation/core" }
 prost = "0.10"
 util-mm = { package = "rivet-util-mm", path = "../../../mm/util" }
 
+external-request-validate = { path = "../../../external/ops/request-validate"}
 game-version-get = { path = "../version-get" }
 game-version-list = { path = "../version-list" }
 region-get = { path = "../../../region/ops/get" }

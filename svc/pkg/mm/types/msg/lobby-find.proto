@@ -35,5 +35,8 @@ message Message {
 		rivet.backend.matchmaker.query.Direct direct = 101;
 		rivet.backend.matchmaker.query.LobbyGroup lobby_group = 102;
 	};
+
+	// JSON verification data from the user.
+	optional string verification_data = 201;
 }
 

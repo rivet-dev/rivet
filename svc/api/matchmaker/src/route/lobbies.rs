@@ -66,7 +66,14 @@ pub async fn join(
 		lobby,
 		ports,
 		player,
-	} = find_inner(&ctx, &ns_data, find_query, body.captcha).await?;
+	} = find_inner(
+		&ctx,
+		&ns_data,
+		find_query,
+		body.captcha,
+		body.verification_data,
+	)
+	.await?;
 
 	Ok(models::MatchmakerJoinLobbyResponse {
 		lobby,
@@ -245,7 +252,14 @@ pub async fn find(
 		lobby,
 		ports,
 		player,
-	} = find_inner(&ctx, &ns_data, find_query, body.captcha).await?;
+	} = find_inner(
+		&ctx,
+		&ns_data,
+		find_query,
+		body.captcha,
+		body.verification_data,
+	)
+	.await?;
 
 	Ok(models::MatchmakerFindLobbyResponse {
 		lobby,
@@ -594,6 +608,7 @@ async fn find_inner(
 	game_ns: &NamespaceData,
 	query: mm::msg::lobby_find::message::Query,
 	captcha: Option<Box<models::CaptchaConfig>>,
+	verification_data: Option<Box<()>>,
 ) -> GlobalResult<FindResponse> {
 	// Get version config
 	let version_config_res = op!([ctx] mm_config_version_get {
@@ -695,7 +710,9 @@ async fn find_inner(
 
 	// Find lobby
 	let query_id = Uuid::new_v4();
-	let find_res = msg!([ctx] @notrace mm::msg::lobby_find(game_ns.namespace_id, query_id) -> Result<mm::msg::lobby_find_complete, mm::msg::lobby_find_fail> {
+	let find_res = msg!([ctx] @notrace mm::msg::lobby_find(game_ns.namespace_id, query_id)
+		-> Result<mm::msg::lobby_find_complete, mm::msg::lobby_find_fail>
+	{
 		namespace_id: Some(game_ns.namespace_id.into()),
 		query_id: Some(query_id.into()),
 		join_kind: backend::matchmaker::query::JoinKind::Normal as i32,
@@ -705,6 +722,9 @@ async fn find_inner(
 			client_info: Some(ctx.client_info()),
 		}],
 		query: Some(query),
+		verification_data: verification_data
+			.map(|data| serde_json::to_string(&data))
+			.transpose()?,
 	})
 	.await?;
 	let lobby_id = match find_res

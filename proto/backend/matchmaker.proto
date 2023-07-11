@@ -43,6 +43,10 @@ message LobbyGroup {
 	uint32 max_players_party = 104;
 
 	LobbyRuntime runtime = 201;
+
+	optional FindConfig find_config = 301;
+	optional JoinConfig join_config = 302;
+
 }
 
 message LobbyRuntime {
@@ -100,6 +104,27 @@ message LobbyRuntime {
 	oneof runtime {
 		Docker docker = 201;
 	};
+}
+
+enum IdentityRequirement {
+	NONE = 0;
+	GUEST = 1;
+	REGISTERED = 2;
+}
+
+message VerificationConfig {
+	string url = 1;
+	map<string, string> headers = 2;
+}
+
+message FindConfig {
+	IdentityRequirement identity_requirement = 1;
+	optional VerificationConfig verification_config = 2;
+}
+
+message JoinConfig {
+	IdentityRequirement identity_requirement = 1;
+	optional VerificationConfig verification_config = 2;
 }
 
 // MARK: Game Version Config Context
