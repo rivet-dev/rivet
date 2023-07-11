@@ -3006,6 +3006,35 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0206175f82b8d6bf6652ff7d71a1e27fd2e4efde587fd368662814d6ec1d9ce0"
 
 [[package]]
+name = "external-request-validate"
+version = "0.0.1"
+dependencies = [
+ "chirp-client",
+ "chirp-worker",
+ "chrono",
+ "http",
+ "prost 0.10.4",
+ "reqwest",
+ "rivet-operation",
+ "serde",
+ "serde_json",
+ "sqlx",
+]
+
+[[package]]
+name = "external-worker"
+version = "0.0.1"
+dependencies = [
+ "chirp-client",
+ "chirp-worker",
+ "chrono",
+ "reqwest",
+ "rivet-health-checks",
+ "rivet-metrics",
+ "rivet-runtime",
+]
+
+[[package]]
 name = "faker-build"
 version = "0.0.1"
 dependencies = [

@@ -1,0 +1,15 @@
+syntax = "proto3";
+
+package rivet.backend.pkg.external.msg.request_call_complete;
+
+import "proto/common.proto";
+
+/// name = "msg-external-request-call-complete"
+/// parameters = [
+/// 	{ name = "request_id" },
+/// ]
+message Message {
+	rivet.common.Uuid request_id = 1;
+	uint32 status_code = 2;
+	bytes body = 3;
+}

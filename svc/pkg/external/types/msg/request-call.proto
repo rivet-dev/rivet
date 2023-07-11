@@ -1,0 +1,15 @@
+syntax = "proto3";
+
+package rivet.backend.pkg.external.msg.request_call;
+
+import "proto/common.proto";
+import "proto/backend/net.proto";
+
+/// name = "msg-external-request-call"
+/// parameters = [
+/// 	{ name = "request_id" },
+/// ]
+message Message {
+	rivet.common.Uuid request_id = 1;
+	rivet.backend.net.ExternalRequestConfig config = 2;
+}
