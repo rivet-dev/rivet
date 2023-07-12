@@ -722,9 +722,11 @@ async fn find_inner(
 			client_info: Some(ctx.client_info()),
 		}],
 		query: Some(query),
+		user_id: ctx.auth().fetch_game_user_option(ctx.op_ctx()).await?.map(Into::into),
 		verification_data_json: verification_data
 			.map(|data| serde_json::to_string(&data))
 			.transpose()?,
+		bypass_verification: false,
 	})
 	.await?;
 	let lobby_id = match find_res
@@ -736,7 +738,9 @@ async fn find_inner(
 
 			match code {
 				Unknown => internal_panic!("unknown find error code"),
+
 				StaleMessage => panic_with!(CHIRP_STALE_MESSAGE),
+
 				TooManyPlayersFromSource => panic_with!(MATCHMAKER_TOO_MANY_PLAYERS_FROM_SOURCE),
 
 				LobbyStopped | LobbyStoppedPrematurely => panic_with!(MATCHMAKER_LOBBY_STOPPED),
@@ -748,6 +752,11 @@ async fn find_inner(
 				RegionNotEnabled => panic_with!(MATCHMAKER_REGION_NOT_ENABLED_FOR_GAME_MODE),
 
 				DevTeamInvalidStatus => panic_with!(GROUP_INVALID_DEVELOPER_STATUS),
+
+				VerificationFailed => panic_with!(MATCHMAKER_VERIFICATION_FAILED),
+				VerificationRequestFailed => panic_with!(MATCHMAKER_VERIFICATION_REQUEST_FAILED),
+				IdentityRequired => panic_with!(MATCHMAKER_IDENTITY_REQUIRED),
+				RegistrationRequired => panic_with!(MATCHMAKER_REGISTRATION_REQUIRED),
 			};
 		}
 		Err(None) => internal_panic!("failed to parse find error code"),

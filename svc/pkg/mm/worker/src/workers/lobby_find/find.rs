@@ -1,6 +1,11 @@
 use chirp_worker::prelude::*;
 use proto::backend::{
-	self, matchmaker::query::JoinKind, pkg::mm::msg::lobby_find::message::Query, pkg::*,
+	self,
+	matchmaker::query::JoinKind,
+	pkg::{
+		mm::{msg::lobby_find::message::Query, msg::lobby_find_fail::ErrorCode},
+		*,
+	},
 };
 use rand::seq::SliceRandom;
 use redis_util::RedisResult;
@@ -324,17 +329,17 @@ pub async fn find(
 				.fetch_optional(crdb)
 				.await?
 				{
-					mm::msg::lobby_find_fail::ErrorCode::LobbyStopped
+					ErrorCode::LobbyStopped
 				} else {
-					mm::msg::lobby_find_fail::ErrorCode::LobbyNotFound
+					ErrorCode::LobbyNotFound
 				}
 			} else {
-				mm::msg::lobby_find_fail::ErrorCode::LobbyNotFound
+				ErrorCode::LobbyNotFound
 			}
 		}
-		Err("LOBBY_CLOSED") => mm::msg::lobby_find_fail::ErrorCode::LobbyClosed,
-		Err("LOBBY_FULL") => mm::msg::lobby_find_fail::ErrorCode::LobbyFull,
-		Err("NO_AVAILABLE_LOBBIES") => mm::msg::lobby_find_fail::ErrorCode::NoAvailableLobbies,
+		Err("LOBBY_CLOSED") => ErrorCode::LobbyClosed,
+		Err("LOBBY_FULL") => ErrorCode::LobbyFull,
+		Err("NO_AVAILABLE_LOBBIES") => ErrorCode::NoAvailableLobbies,
 		Err(_) => internal_panic!("unknown redis error"),
 	};
 

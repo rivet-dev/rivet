@@ -1,7 +1,10 @@
 use chirp_worker::prelude::*;
 use proto::backend::{
 	self,
-	pkg::{mm::msg::lobby_find::message::Query, *},
+	pkg::{
+		mm::{msg::lobby_find::message::Query, msg::lobby_find_fail::ErrorCode},
+		*,
+	},
 };
 use serde_json::json;
 use tracing::Instrument;
@@ -24,7 +27,7 @@ async fn fail(
 	ctx: &OperationContext<mm::msg::lobby_find::Message>,
 	namespace_id: Uuid,
 	query_id: Uuid,
-	error_code: mm::msg::lobby_find_fail::ErrorCode,
+	error_code: ErrorCode,
 	force_fail: bool,
 ) -> GlobalResult<()> {
 	tracing::warn!(%namespace_id, ?query_id, ?error_code, ?force_fail, "player create failed");
@@ -89,14 +92,7 @@ async fn worker(ctx: &OperationContext<mm::msg::lobby_find::Message>) -> GlobalR
 	// Check for stale message
 	if ctx.req_dt() > util::duration::seconds(60) {
 		tracing::warn!("discarding stale message");
-		fail(
-			ctx,
-			namespace_id,
-			query_id,
-			mm::msg::lobby_find_fail::ErrorCode::StaleMessage,
-			true,
-		)
-		.await?;
+		fail(ctx, namespace_id, query_id, ErrorCode::StaleMessage, true).await?;
 		return complete_request(ctx.chirp(), analytics_events).await;
 	}
 
@@ -112,14 +108,26 @@ async fn worker(ctx: &OperationContext<mm::msg::lobby_find::Message>) -> GlobalR
 			ctx,
 			namespace_id,
 			query_id,
-			mm::msg::lobby_find_fail::ErrorCode::DevTeamInvalidStatus,
+			ErrorCode::DevTeamInvalidStatus,
 			true,
 		)
 		.await?;
+		return complete_request(ctx.chirp(), analytics_events).await;
 	}
 
 	// Verify user data
-	verification::verify(ctx, query, &lobby_group_config, lobby_state).await?;
+	if !verification::verify(
+		ctx,
+		namespace_id,
+		query_id,
+		query,
+		&lobby_group_config,
+		lobby_state,
+	)
+	.await?
+	{
+		return complete_request(ctx.chirp(), analytics_events).await;
+	}
 
 	// Create players
 	let players = ctx

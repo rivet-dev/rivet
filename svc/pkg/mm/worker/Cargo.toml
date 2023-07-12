@@ -44,6 +44,7 @@ token-create = { path = "../../token/ops/create" }
 upload-complete = { path = "../../upload/ops/complete" }
 upload-get = { path = "../../upload/ops/get" }
 upload-prepare = { path = "../../upload/ops/prepare" }
+user-identity-get = { path = "../../user-identity/ops/get" }
 
 [dependencies.sqlx]
 version = "0.6"

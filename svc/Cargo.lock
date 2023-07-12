@@ -674,6 +674,7 @@ dependencies = [
  "game-get",
  "game-namespace-get",
  "game-namespace-resolve-url",
+ "game-user-get",
  "http",
  "hyper",
  "job-run-get",
@@ -705,6 +706,7 @@ dependencies = [
  "serde_json",
  "thiserror",
  "token-create",
+ "token-revoke",
  "tokio",
  "tracing",
  "tracing-subscriber",
@@ -5157,6 +5159,7 @@ dependencies = [
  "upload-complete",
  "upload-get",
  "upload-prepare",
+ "user-identity-get",
 ]
 
 [[package]]

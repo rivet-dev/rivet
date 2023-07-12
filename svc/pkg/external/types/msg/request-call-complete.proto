@@ -11,5 +11,6 @@ import "proto/common.proto";
 message Message {
 	rivet.common.Uuid request_id = 1;
 	uint32 status_code = 2;
-	bytes body = 3;
+	// This property is only set if `read_response_body` is true in the `external-request-call` message
+	optional bytes body = 3;
 }

@@ -37,6 +37,7 @@ captcha-verify = { path = "../../pkg/captcha/ops/verify" }
 cdn-namespace-get = { path = "../../pkg/cdn/ops/namespace-get" }
 game-namespace-get = { path = "../../pkg/game/ops/namespace-get" }
 game-namespace-resolve-url = { path = "../../pkg/game/ops/namespace-resolve-url" }
+game-user-get = { path = "../../pkg/game-user/ops/get" }
 captcha-hcaptcha-config-get = { path = "../../pkg/captcha/ops/hcaptcha-config-get" }
 job-run-get = { path = "../../pkg/job-run/ops/get" }
 mm-config-lobby-group-resolve-version = { path = "../../pkg/mm-config/ops/lobby-group-resolve-version" }
@@ -49,6 +50,7 @@ region-get = { path = "../../pkg/region/ops/get" }
 region-recommend = { path = "../../pkg/region/ops/recommend" }
 region-resolve = { path = "../../pkg/region/ops/resolve" }
 token-create = { path = "../../pkg/token/ops/create" }
+token-revoke = { path = "../../pkg/token/ops/revoke" }
 
 [dev-dependencies]
 reqwest = "0.11"

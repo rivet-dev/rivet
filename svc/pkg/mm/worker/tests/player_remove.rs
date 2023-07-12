@@ -34,7 +34,7 @@ async fn basic(ctx: TestCtx) {
 		query: Some(mm::msg::lobby_find::message::Query::Direct(backend::matchmaker::query::Direct {
 			lobby_id: Some(lobby_id.into()),
 		})),
-		verification_data_json: None,
+		..Default::default()
 	})
 	.await
 	.unwrap().unwrap();

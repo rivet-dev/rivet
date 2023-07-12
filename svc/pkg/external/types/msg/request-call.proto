@@ -13,4 +13,5 @@ message Message {
 	rivet.common.Uuid request_id = 1;
 	rivet.backend.net.ExternalRequestConfig config = 2;
 	optional bytes body = 3;
+	bool read_response_body = 4;
 }

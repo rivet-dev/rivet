@@ -16,13 +16,14 @@ async fn empty(ctx: TestCtx) {
 				timeout: 0,
 			}),
 			body: None,
+			read_response_body: true,
 		})
 		.await
 		.unwrap();
 
 	assert_eq!(200, res.status_code);
 	// TODO: Verify body
-	tracing::info!(body=?std::str::from_utf8(&res.body));
+	tracing::info!(body=?std::str::from_utf8(res.body.as_ref().unwrap()));
 }
 
 #[worker_test]
@@ -38,6 +39,7 @@ async fn delete(ctx: TestCtx) {
 				timeout: 0,
 			}),
 			body: None,
+			read_response_body: false,
 		})
 		.await
 		.unwrap();
@@ -58,6 +60,7 @@ async fn timeout(ctx: TestCtx) {
 				timeout: 1000,
 			}),
 			body: None,
+			read_response_body: false,
 		})
 		.await
 		.unwrap();

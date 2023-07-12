@@ -373,7 +373,7 @@ async fn find(
 		join_kind: backend::matchmaker::query::JoinKind::Normal as i32,
 		players: players,
 		query: Some(query),
-		verification_data_json: None,
+		..Default::default()
 	})
 	.await
 	.unwrap()

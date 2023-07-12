@@ -36,7 +36,11 @@ message Message {
 		rivet.backend.matchmaker.query.LobbyGroup lobby_group = 102;
 	};
 
+	// The user ID of the game user creating this find request (if there is one).
+	optional rivet.common.Uuid user_id = 201;
 	// JSON verification data from the user.
-	optional string verification_data_json = 201;
+	optional string verification_data_json = 202;
+	// Bypasses user data verification (if the give lobby group has any).
+	bool bypass_verification = 203;
 }
 

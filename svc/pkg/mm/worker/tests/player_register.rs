@@ -25,7 +25,7 @@ async fn empty(ctx: TestCtx) {
 		query: Some(mm::msg::lobby_find::message::Query::Direct(backend::matchmaker::query::Direct {
 			lobby_id: Some(lobby_id.into()),
 		})),
-		verification_data_json: None,
+		..Default::default()
 	})
 	.await
 	.unwrap().unwrap();
@@ -98,7 +98,7 @@ async fn wrong_lobby(ctx: TestCtx) {
 		query: Some(mm::msg::lobby_find::message::Query::Direct(backend::matchmaker::query::Direct {
 			lobby_id: Some(lobby_id.into()),
 		})),
-		verification_data_json: None,
+		..Default::default()
 	})
 	.await
 	.unwrap().unwrap();

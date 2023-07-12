@@ -7,6 +7,21 @@ use reqwest::{
 	StatusCode,
 };
 
+#[tracing::instrument]
+async fn fail(
+	ctx: &OperationContext<external::msg::request_call::Message>,
+	request_id: Uuid,
+	error_code: external::msg::request_call_fail::ErrorCode,
+) -> GlobalResult<()> {
+	msg!([ctx] external::msg::request_call_fail(request_id) {
+		request_id: Some(request_id.into()),
+		error_code: error_code as i32,
+	})
+	.await?;
+
+	Ok(())
+}
+
 #[worker(name = "external-request-call")]
 async fn worker(ctx: &OperationContext<external::msg::request_call::Message>) -> GlobalResult<()> {
 	let request_id = internal_unwrap!(ctx.request_id).as_uuid();
@@ -31,7 +46,8 @@ async fn worker(ctx: &OperationContext<external::msg::request_call::Message>) ->
 		req
 	};
 
-	// Add headers
+	// Add headers (NOTE: If using a config that has been validated by `external-request-validate`, the
+	// creation of this header map should be infallible)
 	let headers = config
 		.headers
 		.iter()
@@ -49,14 +65,29 @@ async fn worker(ctx: &OperationContext<external::msg::request_call::Message>) ->
 
 	// Execute
 	let (status, body) = match req.send().await {
-		Ok(res) => (res.status().as_u16(), res.bytes().await?.to_vec()),
+		Ok(res) => (
+			res.status().as_u16(),
+			if ctx.read_response_body {
+				Some(res.bytes().await?.to_vec())
+			} else {
+				None
+			},
+		),
 		Err(err) => {
 			// Coerce reqwest timeout into http request timeout
 			if err.is_timeout() {
-				(StatusCode::REQUEST_TIMEOUT.as_u16(), Vec::new())
+				(StatusCode::REQUEST_TIMEOUT.as_u16(), None)
 			} else {
-				// Retry worker
-				return Err(err.into());
+				tracing::info!(?err, "external request failed");
+
+				fail(
+					ctx,
+					request_id,
+					external::msg::request_call_fail::ErrorCode::RequestFailed,
+				)
+				.await?;
+
+				return Ok(());
 			}
 		}
 	};

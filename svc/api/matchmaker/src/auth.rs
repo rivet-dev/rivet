@@ -110,4 +110,34 @@ impl Auth {
 			Ok(None)
 		}
 	}
+
+	pub async fn fetch_game_user_option(
+		&self,
+		ctx: &OperationContext<()>,
+	) -> GlobalResult<Option<Uuid>> {
+		if let Ok(claims) = self.claims() {
+			if let Ok(game_user_ent) = claims.as_game_user() {
+				let game_user_res = op!([ctx] game_user_get {
+					game_user_ids: vec![game_user_ent.game_user_id.into()]
+				})
+				.await?;
+				let game_user = internal_unwrap_owned!(game_user_res.game_users.first());
+
+				// Verify that game user is not deleted
+				if game_user.deleted_ts.is_some() {
+					let jti = internal_unwrap_owned!(claims.jti);
+					op!([ctx] token_revoke {
+						jtis: vec![jti],
+					})
+					.await?;
+
+					panic_with!(TOKEN_REVOKED);
+				}
+
+				return Ok(Some(internal_unwrap!(game_user.user_id).as_uuid()));
+			}
+		}
+
+		Ok(None)
+	}
 }

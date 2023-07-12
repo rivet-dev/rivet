@@ -2,18 +2,23 @@ use chirp_worker::prelude::*;
 use http::StatusCode;
 use proto::backend::{
 	self,
-	pkg::{mm::msg::lobby_find::message::Query, *},
+	pkg::{
+		mm::{msg::lobby_find::message::Query, msg::lobby_find_fail::ErrorCode},
+		*,
+	},
 };
 use serde_json::json;
 
-use super::LobbyGroupConfig;
+use super::{fail, LobbyGroupConfig};
 
 pub async fn verify(
 	ctx: &OperationContext<mm::msg::lobby_find::Message>,
+	namespace_id: Uuid,
+	query_id: Uuid,
 	query: &Query,
 	lobby_group_config: &LobbyGroupConfig,
 	lobby_state: Option<backend::matchmaker::Lobby>,
-) -> GlobalResult<()> {
+) -> GlobalResult<bool> {
 	// Get required verifications
 	let (identity_requirement, external_request_config) = match (
 		query,
@@ -55,9 +60,48 @@ pub async fn verify(
 		_ => (backend::matchmaker::IdentityRequirement::None, None),
 	};
 
-	// TODO: Verify identity registration
+	// Verify identity registration
+	match (identity_requirement, ctx.user_id) {
+		(backend::matchmaker::IdentityRequirement::Registered, Some(user_id)) => {
+			let user_identities_res = op!([ctx] user_identity_get {
+				user_ids: vec![user_id],
+			})
+			.await?;
+			let user = internal_unwrap_owned!(
+				user_identities_res.users.first(),
+				"could not find user identities"
+			);
+			let is_registered = !user.identities.is_empty();
 
-	// Verify user data
+			if !is_registered {
+				fail(
+					ctx,
+					namespace_id,
+					query_id,
+					ErrorCode::RegistrationRequired,
+					true,
+				)
+				.await?;
+			}
+		}
+		(
+			backend::matchmaker::IdentityRequirement::Guest
+			| backend::matchmaker::IdentityRequirement::Registered,
+			None,
+		) => {
+			fail(
+				ctx,
+				namespace_id,
+				query_id,
+				ErrorCode::IdentityRequired,
+				true,
+			)
+			.await?;
+		}
+		_ => {}
+	}
+
+	// Verify user data externally
 	if external_request_config.is_some() {
 		let request_id = Uuid::new_v4();
 
@@ -88,19 +132,52 @@ pub async fn verify(
 			},
 		});
 
-		let external_res = msg!([ctx] external::msg::request_call(request_id) -> external::msg::request_call_complete {
+		// Send request
+		let external_res = msg!([ctx] external::msg::request_call(request_id)
+		-> Result<external::msg::request_call_complete, external::msg::request_call_fail>
+		{
 			request_id: Some(request_id.into()),
 			config: external_request_config,
 			body: Some(serde_json::to_vec(&body)?),
-		}).await?;
-		let status = StatusCode::from_u16(external_res.status_code as u16)?;
+			..Default::default()
+		})
+		.await?;
 
-		tracing::info!(?status, "user verification response");
+		// Handle status code
+		let success = if let Ok(res) = external_res {
+			let status = StatusCode::from_u16(res.status_code as u16)?;
 
-		if !status.is_success() {
-			// TODO:
-		}
+			tracing::info!(?status, "user verification response");
+
+			if status.is_success() {
+				true
+			} else {
+				fail(
+					ctx,
+					namespace_id,
+					query_id,
+					ErrorCode::VerificationFailed,
+					true,
+				)
+				.await?;
+
+				false
+			}
+		} else {
+			fail(
+				ctx,
+				namespace_id,
+				query_id,
+				ErrorCode::VerificationRequestFailed,
+				true,
+			)
+			.await?;
+
+			false
+		};
+
+		return Ok(success);
 	}
 
-	Ok(())
+	Ok(true)
 }
