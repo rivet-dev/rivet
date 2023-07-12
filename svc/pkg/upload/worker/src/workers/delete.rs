@@ -22,7 +22,7 @@ struct BucketDeletions {
 }
 
 #[worker(name = "upload-delete")]
-async fn worker(ctx: OperationContext<upload::msg::delete::Message>) -> GlobalResult<()> {
+async fn worker(ctx: &OperationContext<upload::msg::delete::Message>) -> GlobalResult<()> {
 	let crdb = ctx.crdb("db-upload").await?;
 
 	let request_id = internal_unwrap!(ctx.request_id).as_uuid();

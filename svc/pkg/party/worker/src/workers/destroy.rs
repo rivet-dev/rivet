@@ -8,7 +8,7 @@ use redis::AsyncCommands;
 use redis_util::{escape_search_query, SearchResult};
 
 #[worker(name = "party-destroy")]
-async fn worker(ctx: OperationContext<party::msg::destroy::Message>) -> GlobalResult<()> {
+async fn worker(ctx: &OperationContext<party::msg::destroy::Message>) -> GlobalResult<()> {
 	// TODO:
 	return Ok(());
 

@@ -16,7 +16,7 @@ struct RunMetaNomadRow {
 }
 
 #[worker(name = "job-run-cleanup")]
-async fn worker(ctx: OperationContext<job_run::msg::cleanup::Message>) -> GlobalResult<()> {
+async fn worker(ctx: &OperationContext<job_run::msg::cleanup::Message>) -> GlobalResult<()> {
 	// NOTE: Idempotent
 
 	let crdb = ctx.crdb("db-job-state").await?;

@@ -7,7 +7,7 @@ lazy_static::lazy_static! {
 }
 
 #[worker(name = "party-publicity-set")]
-async fn worker(ctx: OperationContext<party::msg::publicity_set::Message>) -> GlobalResult<()> {
+async fn worker(ctx: &OperationContext<party::msg::publicity_set::Message>) -> GlobalResult<()> {
 	// TODO:
 	return Ok(());
 

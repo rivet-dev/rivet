@@ -5,7 +5,7 @@ use serde_json::json;
 const MAX_TEAM_SIZE: i64 = 256;
 
 #[worker(name = "team-member-create")]
-async fn worker(ctx: OperationContext<team::msg::member_create::Message>) -> GlobalResult<()> {
+async fn worker(ctx: &OperationContext<team::msg::member_create::Message>) -> GlobalResult<()> {
 	// Idempotent
 
 	let team_id: Uuid = internal_unwrap!(ctx.team_id).as_uuid();

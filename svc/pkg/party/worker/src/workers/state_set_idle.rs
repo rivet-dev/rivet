@@ -6,7 +6,7 @@ lazy_static::lazy_static! {
 }
 
 #[worker(name = "party-state-set-idle")]
-async fn worker(ctx: OperationContext<party::msg::state_set_idle::Message>) -> GlobalResult<()> {
+async fn worker(ctx: &OperationContext<party::msg::state_set_idle::Message>) -> GlobalResult<()> {
 	// TODO:
 	return Ok(());
 

@@ -2,7 +2,7 @@ use chirp_worker::prelude::*;
 use proto::backend::pkg::*;
 
 #[worker(name = "kv-write")]
-async fn worker(ctx: OperationContext<kv::msg::write::Message>) -> GlobalResult<()> {
+async fn worker(ctx: &OperationContext<kv::msg::write::Message>) -> GlobalResult<()> {
 	let crdb = ctx.crdb("db-kv").await?;
 
 	let namespace_id = internal_unwrap!(ctx.namespace_id).as_uuid();

@@ -15,7 +15,7 @@ struct Event {
 }
 
 #[worker(name = "analytics-event-create")]
-async fn worker(ctx: OperationContext<analytics::msg::event_create::Message>) -> GlobalResult<()> {
+async fn worker(ctx: &OperationContext<analytics::msg::event_create::Message>) -> GlobalResult<()> {
 	let ray_id = ctx.ray_id();
 
 	let client = clickhouse::Client::default()

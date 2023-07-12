@@ -2,7 +2,7 @@ use chirp_worker::prelude::*;
 use proto::backend::pkg::*;
 
 #[worker(name = "party-member-leave-user-presence-leave")]
-async fn worker(ctx: OperationContext<user_presence::msg::leave::Message>) -> GlobalResult<()> {
+async fn worker(ctx: &OperationContext<user_presence::msg::leave::Message>) -> GlobalResult<()> {
 	// TODO:
 	return Ok(());
 

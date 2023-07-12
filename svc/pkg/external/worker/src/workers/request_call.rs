@@ -8,7 +8,7 @@ use reqwest::{
 };
 
 #[worker(name = "external-request-call")]
-async fn worker(ctx: OperationContext<external::msg::request_call::Message>) -> GlobalResult<()> {
+async fn worker(ctx: &OperationContext<external::msg::request_call::Message>) -> GlobalResult<()> {
 	let request_id = internal_unwrap!(ctx.request_id).as_uuid();
 	let config = internal_unwrap!(ctx.config);
 
@@ -21,6 +21,14 @@ async fn worker(ctx: OperationContext<external::msg::request_call::Message>) -> 
 		HttpMethod::Post => req.post(&config.url),
 		HttpMethod::Put => req.put(&config.url),
 		HttpMethod::Delete => req.delete(&config.url),
+	};
+
+	// Add body
+	// TODO: Figure out a way to not clone this
+	let req = if let Some(body) = ctx.body.clone() {
+		req.body(body)
+	} else {
+		req
 	};
 
 	// Add headers

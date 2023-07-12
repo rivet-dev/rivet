@@ -17,16 +17,16 @@ pub struct MatchmakerLobbiesJoinRequest {
     pub captcha: Option<Box<crate::models::CaptchaConfig>>,
     #[serde(rename = "lobby_id")]
     pub lobby_id: String,
-    #[serde(rename = "verification_data", default, with = "::serde_with::rust::double_option", skip_serializing_if = "Option::is_none")]
-    pub verification_data: Option<Option<serde_json::Value>>,
+    #[serde(rename = "verification_data", deserialize_with = "Option::deserialize")]
+    pub verification_data: Option<serde_json::Value>,
 }
 
 impl MatchmakerLobbiesJoinRequest {
-    pub fn new(lobby_id: String) -> MatchmakerLobbiesJoinRequest {
+    pub fn new(lobby_id: String, verification_data: Option<serde_json::Value>) -> MatchmakerLobbiesJoinRequest {
         MatchmakerLobbiesJoinRequest {
             captcha: None,
             lobby_id,
-            verification_data: None,
+            verification_data,
         }
     }
 }

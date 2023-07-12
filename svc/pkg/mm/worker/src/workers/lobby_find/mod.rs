@@ -8,6 +8,7 @@ use tracing::Instrument;
 
 mod find;
 mod limit;
+mod verification;
 
 #[derive(Debug, Clone)]
 pub struct Player {
@@ -68,7 +69,7 @@ async fn complete_request(
 }
 
 #[worker(name = "mm-lobby-find")]
-async fn worker(ctx: OperationContext<mm::msg::lobby_find::Message>) -> GlobalResult<()> {
+async fn worker(ctx: &OperationContext<mm::msg::lobby_find::Message>) -> GlobalResult<()> {
 	// TODO: Fetch all sessions for the current IP
 	// TODO: Map to all players matching the given sessions
 
@@ -99,23 +100,10 @@ async fn worker(ctx: OperationContext<mm::msg::lobby_find::Message>) -> GlobalRe
 		return complete_request(ctx.chirp(), analytics_events).await;
 	}
 
-	let ((_namespace, mm_ns_config, dev_team), lobby_group_config) = tokio::try_join!(
+	let ((_namespace, mm_ns_config, dev_team), (lobby_group_config, lobby_state)) = tokio::try_join!(
 		// Namespace and dev team
 		fetch_ns_config_and_dev_team(ctx.base(), namespace_id),
-		// Fetch lobby group config if auto-creating lobby
-		async {
-			if let Query::LobbyGroup(backend::matchmaker::query::LobbyGroup {
-				auto_create: Some(auto_create),
-				..
-			}) = &query
-			{
-				let lobby_group_id = internal_unwrap!(auto_create.lobby_group_id).as_uuid();
-				let config = fetch_lobby_group_config(ctx.base(), lobby_group_id).await?;
-				Ok(Some(config))
-			} else {
-				Ok(None)
-			}
-		},
+		fetch_lobby_group_config(ctx.base(), query),
 	)?;
 
 	// Verify dev team status
@@ -129,6 +117,9 @@ async fn worker(ctx: OperationContext<mm::msg::lobby_find::Message>) -> GlobalRe
 		)
 		.await?;
 	}
+
+	// Verify user data
+	verification::verify(ctx, query, &lobby_group_config, lobby_state).await?;
 
 	// Create players
 	let players = ctx
@@ -192,7 +183,7 @@ async fn worker(ctx: OperationContext<mm::msg::lobby_find::Message>) -> GlobalRe
 			join_kind,
 			players: &players,
 			query,
-			lobby_group_config: lobby_group_config.as_ref(),
+			lobby_group_config: &lobby_group_config,
 			auto_create_lobby_id,
 		},
 	)
@@ -421,13 +412,35 @@ pub struct LobbyGroupConfig {
 #[tracing::instrument]
 async fn fetch_lobby_group_config(
 	ctx: OperationContext<()>,
-	lobby_group_id: Uuid,
-) -> GlobalResult<LobbyGroupConfig> {
-	let lobby_group_id_proto = Some(common::Uuid::from(lobby_group_id));
+	query: &Query,
+) -> GlobalResult<(LobbyGroupConfig, Option<backend::matchmaker::Lobby>)> {
+	// Get lobby group id from query
+	let (lobby_group_id, lobby_state) = match query {
+		Query::LobbyGroup(backend::matchmaker::query::LobbyGroup { auto_create, .. }) => {
+			let auto_create = internal_unwrap!(auto_create);
+
+			(internal_unwrap_owned!(auto_create.lobby_group_id), None)
+		}
+		Query::Direct(backend::matchmaker::query::Direct { lobby_id, .. }) => {
+			let lobby_id = internal_unwrap_owned!(*lobby_id);
+
+			let lobbies_res = op!([ctx] mm_lobby_get {
+				lobby_ids: vec![lobby_id],
+			})
+			.await?;
+			let lobby = internal_unwrap_owned!(lobbies_res.lobbies.first());
+
+			(
+				internal_unwrap_owned!(lobby.lobby_group_id),
+				Some(lobby.clone()),
+			)
+		}
+	};
+	let lobby_group_id_proto = Some(lobby_group_id);
 
 	// Resolve the version ID
 	let resolve_version_res = op!([ctx] mm_config_lobby_group_resolve_version {
-		lobby_group_ids: vec![lobby_group_id.into()],
+		lobby_group_ids: vec![lobby_group_id],
 	})
 	.await?;
 	let version_id = internal_unwrap!(
@@ -460,11 +473,14 @@ async fn fetch_lobby_group_config(
 	let lobby_group = version_config.lobby_groups.get(*lg_idx);
 	let lobby_group = internal_unwrap!(lobby_group);
 
-	Ok(LobbyGroupConfig {
-		version_id,
-		lobby_group: (*lobby_group).clone(),
-		lobby_group_meta: (*lobby_group_meta).clone(),
-	})
+	Ok((
+		LobbyGroupConfig {
+			version_id,
+			lobby_group: (*lobby_group).clone(),
+			lobby_group_meta: (*lobby_group_meta).clone(),
+		},
+		lobby_state,
+	))
 }
 
 #[derive(Clone)]
@@ -477,7 +493,7 @@ struct InsertCrdbOpts {
 	lobby_id: Uuid,
 	region_id: Uuid,
 	lobby_group_id: Uuid,
-	lobby_group_config: Option<LobbyGroupConfig>,
+	lobby_group_config: LobbyGroupConfig,
 	auto_create_lobby: bool,
 	now_ts: i64,
 	ray_id: Uuid,
@@ -503,9 +519,6 @@ async fn insert_to_crdb(
 ) -> GlobalResult<()> {
 	// Insert preemptive lobby row if needed
 	if auto_create_lobby {
-		// Lobby group config will exist if the lobby was auto created
-		let lobby_group_config = internal_unwrap!(lobby_group_config);
-
 		// Insert lobby if needed
 		sqlx::query(indoc!(
 			"

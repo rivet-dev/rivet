@@ -608,7 +608,7 @@ async fn find_inner(
 	game_ns: &NamespaceData,
 	query: mm::msg::lobby_find::message::Query,
 	captcha: Option<Box<models::CaptchaConfig>>,
-	verification_data: Option<Box<()>>,
+	verification_data: Option<serde_json::Value>,
 ) -> GlobalResult<FindResponse> {
 	// Get version config
 	let version_config_res = op!([ctx] mm_config_version_get {
@@ -722,7 +722,7 @@ async fn find_inner(
 			client_info: Some(ctx.client_info()),
 		}],
 		query: Some(query),
-		verification_data: verification_data
+		verification_data_json: verification_data
 			.map(|data| serde_json::to_string(&data))
 			.transpose()?,
 	})

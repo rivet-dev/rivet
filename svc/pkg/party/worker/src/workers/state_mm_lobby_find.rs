@@ -30,7 +30,7 @@ mod redis_request {
 
 #[worker(name = "party-state-mm-lobby-find")]
 async fn worker(
-	ctx: OperationContext<party::msg::state_mm_lobby_find::Message>,
+	ctx: &OperationContext<party::msg::state_mm_lobby_find::Message>,
 ) -> GlobalResult<()> {
 	// TODO:
 	return Ok(());

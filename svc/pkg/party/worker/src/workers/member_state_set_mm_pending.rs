@@ -8,7 +8,7 @@ lazy_static::lazy_static! {
 
 #[worker(name = "party-member-state-set-mm-pending")]
 async fn worker(
-	ctx: OperationContext<party::msg::member_state_set_mm_pending::Message>,
+	ctx: &OperationContext<party::msg::member_state_set_mm_pending::Message>,
 ) -> GlobalResult<()> {
 	// TODO:
 	return Ok(());

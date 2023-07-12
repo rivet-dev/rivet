@@ -97,48 +97,58 @@ pub fn worker(attr: TokenStream, item: TokenStream) -> TokenStream {
 
 			// Extract the inner request type
 			let ty = match &*pat.ty {
-				syn::Type::Path(path) => {
-					let final_segment = path.path.segments.last().unwrap();
-					if final_segment.ident != "OperationContext" {
-						return error(
-							final_segment.ident.span(),
-							"argument must be a `OperationContext`",
-						);
+				syn::Type::Reference(syn::TypeReference {
+					elem: inner_type,
+					mutability,
+					..
+				}) => {
+					if let Some(mutability) = mutability {
+						return error(mutability.span(), "context cannot be mutable");
 					}
 
-					// Read the generic type
-					match &final_segment.arguments {
-						syn::PathArguments::AngleBracketed(args) => {
-							if args.args.len() != 1 {
+					match &**inner_type {
+						syn::Type::Path(path) => {
+							let final_segment = path.path.segments.last().unwrap();
+							if final_segment.ident != "OperationContext" {
 								return error(
-									final_segment.span(),
-									"must have exactly 1 generic argument",
+									final_segment.ident.span(),
+									"argument must be a `OperationContext`",
 								);
 							}
 
-							// Match the correct generic type
-							match &args.args[0] {
-								syn::GenericArgument::Type(ty) => ty,
-								arg => {
-									return error(arg.span(), "generic argument must be a type");
+							// Read the generic type
+							match &final_segment.arguments {
+								syn::PathArguments::AngleBracketed(args) => {
+									if args.args.len() != 1 {
+										return error(
+											final_segment.span(),
+											"must have exactly 1 generic argument",
+										);
+									}
+
+									// Match the correct generic type
+									match &args.args[0] {
+										syn::GenericArgument::Type(ty) => ty,
+										arg => {
+											return error(
+												arg.span(),
+												"generic argument must be a type",
+											);
+										}
+									}
 								}
+								_ => return error(final_segment.span(), "invalid generic args"),
 							}
 						}
-						_ => {
-							return error(final_segment.span(), "invalid generic args");
-						}
+						_ => return error(pat.ty.span(), "unsupported type"),
 					}
 				}
-				_ => {
-					return error(pat.ty.span(), "unsupported type");
-				}
+				_ => return error(pat.ty.span(), "unsupported type, must be a reference"),
 			};
 
 			(ident, ty)
 		}
-		_ => {
-			return error(input.sig.inputs[0].span(), "invalid function argument");
-		}
+		_ => return error(input.sig.inputs[0].span(), "invalid function argument"),
 	};
 
 	// Derive res type
@@ -178,9 +188,7 @@ pub fn worker(attr: TokenStream, item: TokenStream) -> TokenStream {
 								}
 							}
 						}
-						_ => {
-							return error(final_segment.span(), "invalid generic args");
-						}
+						_ => return error(final_segment.span(), "invalid generic args"),
 					}
 				}
 				_ => return error(ty.span(), "invalid return type"),

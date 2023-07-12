@@ -37,6 +37,6 @@ message Message {
 	};
 
 	// JSON verification data from the user.
-	optional string verification_data = 201;
+	optional string verification_data_json = 201;
 }
 

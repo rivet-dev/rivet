@@ -4,7 +4,7 @@ use proto::backend::{self, pkg::*};
 const DEFAULT_USER_SET_STATUS: i32 = backend::user::Status::Online as i32;
 
 #[worker(name = "user-presence-arrive")]
-async fn worker(ctx: OperationContext<user_presence::msg::arrive::Message>) -> GlobalResult<()> {
+async fn worker(ctx: &OperationContext<user_presence::msg::arrive::Message>) -> GlobalResult<()> {
 	let crdb = ctx.crdb("db-user-presence").await?;
 
 	let user_id = internal_unwrap!(ctx.user_id).as_uuid();

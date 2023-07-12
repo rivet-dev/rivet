@@ -14,7 +14,7 @@ struct JoiningPartyMember {
 }
 
 #[worker(name = "party-state-mm-lobby-find-complete")]
-async fn worker(ctx: OperationContext<mm::msg::lobby_find_complete::Message>) -> GlobalResult<()> {
+async fn worker(ctx: &OperationContext<mm::msg::lobby_find_complete::Message>) -> GlobalResult<()> {
 	// TODO:
 	return Ok(());
 

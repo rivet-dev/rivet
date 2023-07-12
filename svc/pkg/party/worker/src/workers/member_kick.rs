@@ -2,7 +2,7 @@ use chirp_worker::prelude::*;
 use proto::backend::pkg::*;
 
 #[worker(name = "party-member-kick")]
-async fn worker(ctx: OperationContext<party::msg::member_kick::Message>) -> GlobalResult<()> {
+async fn worker(ctx: &OperationContext<party::msg::member_kick::Message>) -> GlobalResult<()> {
 	// TODO:
 	return Ok(());
 

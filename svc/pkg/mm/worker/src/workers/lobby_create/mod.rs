@@ -52,7 +52,7 @@ async fn fail(
 }
 
 #[worker(name = "mm-lobby-create")]
-async fn worker(ctx: OperationContext<mm::msg::lobby_create::Message>) -> GlobalResult<()> {
+async fn worker(ctx: &OperationContext<mm::msg::lobby_create::Message>) -> GlobalResult<()> {
 	let crdb = ctx.crdb("db-mm-state").await?;
 
 	let lobby_id = internal_unwrap!(ctx.lobby_id).as_uuid();

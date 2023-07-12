@@ -16,7 +16,7 @@ struct LobbyRow {
 }
 
 #[worker(name = "mm-lobby-ready-set")]
-async fn worker(ctx: OperationContext<mm::msg::lobby_ready::Message>) -> GlobalResult<()> {
+async fn worker(ctx: &OperationContext<mm::msg::lobby_ready::Message>) -> GlobalResult<()> {
 	let crdb = ctx.crdb("db-mm-state").await?;
 	let mut redis_mm = ctx.redis_mm().await?;
 

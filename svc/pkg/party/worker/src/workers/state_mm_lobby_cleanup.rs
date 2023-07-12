@@ -3,7 +3,7 @@ use proto::backend::pkg::*;
 use redis_util::escape_search_query;
 
 #[worker(name = "party-state-mm-lobby-cleanup")]
-async fn worker(ctx: OperationContext<mm::msg::lobby_cleanup::Message>) -> GlobalResult<()> {
+async fn worker(ctx: &OperationContext<mm::msg::lobby_cleanup::Message>) -> GlobalResult<()> {
 	// TODO:
 	return Ok(());
 

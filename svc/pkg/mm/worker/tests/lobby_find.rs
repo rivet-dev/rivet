@@ -64,6 +64,9 @@ async fn create_lobby_group(ctx: &TestCtx, image: Option<faker::build::Image>) -
 						proxy_kind: backend::matchmaker::lobby_runtime::ProxyKind::GameGuard as i32,
 					}],
 				}.into()),
+
+				find_config: None,
+				join_config: None,
 			}],
 		}),
 		..Default::default()
@@ -370,6 +373,7 @@ async fn find(
 		join_kind: backend::matchmaker::query::JoinKind::Normal as i32,
 		players: players,
 		query: Some(query),
+		verification_data_json: None,
 	})
 	.await
 	.unwrap()

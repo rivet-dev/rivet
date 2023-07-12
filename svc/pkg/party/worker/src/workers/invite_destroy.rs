@@ -2,7 +2,7 @@ use chirp_worker::prelude::*;
 use proto::backend::pkg::*;
 
 #[worker(name = "party-invite-destroy")]
-async fn worker(ctx: OperationContext<party::msg::invite_destroy::Message>) -> GlobalResult<()> {
+async fn worker(ctx: &OperationContext<party::msg::invite_destroy::Message>) -> GlobalResult<()> {
 	// TODO:
 	return Ok(());
 

@@ -2379,8 +2379,12 @@ components:
       properties:
         docker:
           $ref: '#/components/schemas/CloudVersionMatchmakerGameModeRuntimeDocker'
+        find_config:
+          $ref: '#/components/schemas/CloudVersionMatchmakerGameModeFindConfig'
         idle_lobbies:
           $ref: '#/components/schemas/CloudVersionMatchmakerGameModeIdleLobbiesConfig'
+        join_config:
+          $ref: '#/components/schemas/CloudVersionMatchmakerGameModeJoinConfig'
         max_players:
           type: integer
         max_players_direct:
@@ -2394,6 +2398,24 @@ components:
         tier:
           type: string
       type: object
+    CloudVersionMatchmakerGameModeFindConfig:
+      description: Configures the requirements and authentication for the `find` endpoint.
+      properties:
+        identity_requirement:
+          $ref: '#/components/schemas/CloudVersionMatchmakerGameModeIdentityRequirement'
+        verification_config:
+          $ref: '#/components/schemas/CloudVersionMatchmakerGameModeVerificationConfig'
+      required:
+      - identity_requirement
+      type: object
+    CloudVersionMatchmakerGameModeIdentityRequirement:
+      description: The registration requirement for a user when joining/finding/creating
+        a lobby. "None" allows for connections without an identity.
+      enum:
+      - none
+      - guest
+      - registered
+      type: string
     CloudVersionMatchmakerGameModeIdleLobbiesConfig:
       description: Configuration for how many idle lobbies a game version should have.
       properties:
@@ -2404,6 +2426,16 @@ components:
       required:
       - min
       - max
+      type: object
+    CloudVersionMatchmakerGameModeJoinConfig:
+      description: Configures the requirements and authentication for the `join` endpoint.
+      properties:
+        identity_requirement:
+          $ref: '#/components/schemas/CloudVersionMatchmakerGameModeIdentityRequirement'
+        verification_config:
+          $ref: '#/components/schemas/CloudVersionMatchmakerGameModeVerificationConfig'
+      required:
+      - identity_requirement
       type: object
     CloudVersionMatchmakerGameModeRegion:
       description: A game mode region.
@@ -2462,6 +2494,24 @@ components:
         proxy:
           $ref: '#/components/schemas/CloudVersionMatchmakerProxyKind'
           description: How this port should be proxied. Defaults to 'game-guard`.
+      type: object
+    CloudVersionMatchmakerGameModeVerificationConfig:
+      description: Configuration that tells Rivet where to send validation requests
+        and with what headers. When set, Rivet will send the `verification_data` property
+        (given by the user in the find/join/create endpoint) to the given url along
+        with the headers provided and some information about the requested lobby.
+        The response of this request will determine if the user can join that lobby
+        or not.
+      properties:
+        headers:
+          additionalProperties:
+            type: string
+          type: object
+        url:
+          type: string
+      required:
+      - url
+      - headers
       type: object
     CloudVersionMatchmakerLobbyGroup:
       description: A game mode.
@@ -3404,6 +3454,8 @@ components:
       required:
       - game
       - message
+      - public_metadata
+      - mutual_metadata
       type: object
     IdentityGameLinkStatus:
       enum:
@@ -3986,6 +4038,9 @@ components:
             followers.
         public_metadata:
           description: JSON data seen by anyone.
+      required:
+      - public_metadata
+      - mutual_metadata
       type: object
     IdentityValidateProfileResponse:
       properties:
@@ -12237,6 +12292,7 @@ paths:
                 verification_data: {}
               required:
               - game_modes
+              - verification_data
               type: object
         required: true
       responses:
@@ -12310,6 +12366,7 @@ paths:
                 verification_data: {}
               required:
               - lobby_id
+              - verification_data
               type: object
         required: true
       responses:

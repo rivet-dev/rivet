@@ -4,7 +4,7 @@ use proto::backend::{self, pkg::*};
 use rivet_api::models;
 use rivet_operation::prelude::*;
 
-use crate::{ApiInto, ApiTryFrom, ApiTryInto};
+use crate::{ApiFrom, ApiInto, ApiTryFrom, ApiTryInto};
 
 pub fn game_mode_to_proto(
 	name_id: String,
@@ -39,67 +39,69 @@ pub fn game_mode_to_proto(
 	internal_assert!(max_players_party >= 0);
 
 	// Derive runtime
-	let runtime = if let Some(either_runtime) = game_mode.docker.as_ref().or(matchmaker.docker.as_ref()) {
-		let args = either_runtime.args.clone().unwrap_or_default();
+	let runtime =
+		if let Some(either_runtime) = game_mode.docker.as_ref().or(matchmaker.docker.as_ref()) {
+			let args = either_runtime.args.clone().unwrap_or_default();
 
-		let mut env_vars = HashMap::<String, String>::new();
-		if let Some(env) = matchmaker.docker.as_ref().and_then(|x| x.env.clone()) {
-			env_vars.extend(env);
-		}
-		if let Some(env) = game_mode.docker.as_ref().and_then(|x| x.env.clone()) {
-			env_vars.extend(env);
-		}
+			let mut env_vars = HashMap::<String, String>::new();
+			if let Some(env) = matchmaker.docker.as_ref().and_then(|x| x.env.clone()) {
+				env_vars.extend(env);
+			}
+			if let Some(env) = game_mode.docker.as_ref().and_then(|x| x.env.clone()) {
+				env_vars.extend(env);
+			}
 
-		let network_mode = either_runtime.network_mode
-			.unwrap_or(models::CloudVersionMatchmakerNetworkMode::Bridge);
+			let network_mode = either_runtime
+				.network_mode
+				.unwrap_or(models::CloudVersionMatchmakerNetworkMode::Bridge);
 
-		let ports = either_runtime.ports.clone().unwrap_or_default();
+			let ports = either_runtime.ports.clone().unwrap_or_default();
 
-		Some(backend::matchmaker::LobbyRuntime {
-			runtime: Some(backend::matchmaker::lobby_runtime::Runtime::Docker(
-				backend::matchmaker::lobby_runtime::Docker {
-					build_id: either_runtime.image_id.map(Into::into),
-					args,
-					env_vars: env_vars
-						.into_iter()
-						.map(|(key, value)| backend::matchmaker::lobby_runtime::EnvVar {
-							key,
-							value,
-						})
-						.collect(),
-					network_mode:
-						ApiInto::<backend::matchmaker::lobby_runtime::NetworkMode>::api_into(
-							network_mode,
-						) as i32,
-					ports: ports
-						.into_iter()
-						.map(|(label, value)| {
-							let proxy_protocol = value
-								.protocol
-								.unwrap_or(models::CloudVersionMatchmakerPortProtocol::Https);
-							let proxy_kind = value
-								.proxy
-								.unwrap_or(models::CloudVersionMatchmakerProxyKind::GameGuard);
-
-							GlobalResult::Ok(backend::matchmaker::lobby_runtime::Port {
-								label,
-								target_port: value.port.map(|x| x as u32),
-								port_range: value.port_range.map(|x| (*x).api_into()),
-								proxy_protocol: ApiInto::<
-									backend::matchmaker::lobby_runtime::ProxyProtocol,
-								>::api_into(proxy_protocol) as i32,
-								proxy_kind: ApiInto::<
-									backend::matchmaker::lobby_runtime::ProxyKind,
-								>::api_into(proxy_kind) as i32,
+			Some(backend::matchmaker::LobbyRuntime {
+				runtime: Some(backend::matchmaker::lobby_runtime::Runtime::Docker(
+					backend::matchmaker::lobby_runtime::Docker {
+						build_id: either_runtime.image_id.map(Into::into),
+						args,
+						env_vars: env_vars
+							.into_iter()
+							.map(|(key, value)| backend::matchmaker::lobby_runtime::EnvVar {
+								key,
+								value,
 							})
-						})
-						.collect::<GlobalResult<_>>()?,
-				},
-			)),
-		})
-	} else {
-		None
-	};
+							.collect(),
+						network_mode:
+							ApiInto::<backend::matchmaker::lobby_runtime::NetworkMode>::api_into(
+								network_mode,
+							) as i32,
+						ports: ports
+							.into_iter()
+							.map(|(label, value)| {
+								let proxy_protocol = value
+									.protocol
+									.unwrap_or(models::CloudVersionMatchmakerPortProtocol::Https);
+								let proxy_kind = value
+									.proxy
+									.unwrap_or(models::CloudVersionMatchmakerProxyKind::GameGuard);
+
+								GlobalResult::Ok(backend::matchmaker::lobby_runtime::Port {
+									label,
+									target_port: value.port.map(|x| x as u32),
+									port_range: value.port_range.map(|x| (*x).api_into()),
+									proxy_protocol: ApiInto::<
+										backend::matchmaker::lobby_runtime::ProxyProtocol,
+									>::api_into(proxy_protocol) as i32,
+									proxy_kind: ApiInto::<
+										backend::matchmaker::lobby_runtime::ProxyKind,
+									>::api_into(proxy_kind) as i32,
+								})
+							})
+							.collect::<GlobalResult<_>>()?,
+					},
+				)),
+			})
+		} else {
+			None
+		};
 
 	Ok(backend::matchmaker::LobbyGroup {
 		name_id,
@@ -114,9 +116,17 @@ pub fn game_mode_to_proto(
 
 		runtime,
 
-		find_config: game_mode.find_config.map(ApiTryInto::try_into).transpose()?,
-		join_config: game_mode.join_config.map(ApiTryInto::try_into).transpose()?,
-})
+		find_config: game_mode
+			.find_config
+			.clone()
+			.map(|x| ApiTryInto::try_into(*x))
+			.transpose()?,
+		join_config: game_mode
+			.join_config
+			.clone()
+			.map(|x| ApiTryInto::try_into(*x))
+			.transpose()?,
+	})
 }
 
 pub fn game_mode_to_openapi(
@@ -210,6 +220,17 @@ pub fn game_mode_to_openapi(
 			max_players_party: Some(value.max_players_party as i32),
 
 			docker: Some(Box::new(docker)),
+
+			find_config: value
+				.find_config
+				.map(ApiTryInto::try_into)
+				.transpose()?
+				.map(Box::new),
+			join_config: value
+				.join_config
+				.map(ApiTryInto::try_into)
+				.transpose()?
+				.map(Box::new),
 
 			// Overrides
 			idle_lobbies: None,
@@ -314,27 +335,146 @@ impl ApiTryFrom<backend::matchmaker::lobby_group::IdleLobbies>
 	}
 }
 
-// TODO:
-impl ApiTryFrom<models::CloudVersionMatchmakerLobbyGroupFindConfig>
+impl ApiFrom<models::CloudVersionMatchmakerGameModeIdentityRequirement>
+	for backend::matchmaker::IdentityRequirement
+{
+	fn api_from(
+		value: models::CloudVersionMatchmakerGameModeIdentityRequirement,
+	) -> backend::matchmaker::IdentityRequirement {
+		match value {
+			models::CloudVersionMatchmakerGameModeIdentityRequirement::None => {
+				backend::matchmaker::IdentityRequirement::None
+			}
+			models::CloudVersionMatchmakerGameModeIdentityRequirement::Guest => {
+				backend::matchmaker::IdentityRequirement::Guest
+			}
+			models::CloudVersionMatchmakerGameModeIdentityRequirement::Registered => {
+				backend::matchmaker::IdentityRequirement::Registered
+			}
+		}
+	}
+}
+
+impl ApiFrom<backend::matchmaker::IdentityRequirement>
+	for models::CloudVersionMatchmakerGameModeIdentityRequirement
+{
+	fn api_from(value: backend::matchmaker::IdentityRequirement) -> Self {
+		match value {
+			backend::matchmaker::IdentityRequirement::None => {
+				models::CloudVersionMatchmakerGameModeIdentityRequirement::None
+			}
+			backend::matchmaker::IdentityRequirement::Guest => {
+				models::CloudVersionMatchmakerGameModeIdentityRequirement::Guest
+			}
+			backend::matchmaker::IdentityRequirement::Registered => {
+				models::CloudVersionMatchmakerGameModeIdentityRequirement::Registered
+			}
+		}
+	}
+}
+
+impl ApiTryFrom<models::CloudVersionMatchmakerGameModeVerificationConfig>
+	for backend::matchmaker::VerificationConfig
+{
+	type Error = GlobalError;
+
+	fn try_from(
+		value: models::CloudVersionMatchmakerGameModeVerificationConfig,
+	) -> GlobalResult<Self> {
+		Ok(backend::matchmaker::VerificationConfig {
+			url: value.url,
+			headers: value.headers,
+		})
+	}
+}
+
+impl ApiTryFrom<backend::matchmaker::VerificationConfig>
+	for models::CloudVersionMatchmakerGameModeVerificationConfig
+{
+	type Error = GlobalError;
+
+	fn try_from(value: backend::matchmaker::VerificationConfig) -> GlobalResult<Self> {
+		Ok(models::CloudVersionMatchmakerGameModeVerificationConfig {
+			url: value.url,
+			headers: value.headers,
+		})
+	}
+}
+
+impl ApiTryFrom<models::CloudVersionMatchmakerGameModeFindConfig>
 	for backend::matchmaker::FindConfig
 {
 	type Error = GlobalError;
 
-	fn try_from(value: models::CloudVersionMatchmakerLobbyGroupFindConfig) -> GlobalResult<Self> {
+	fn try_from(value: models::CloudVersionMatchmakerGameModeFindConfig) -> GlobalResult<Self> {
 		Ok(backend::matchmaker::FindConfig {
-			
+			identity_requirement: ApiInto::<backend::matchmaker::IdentityRequirement>::api_into(
+				value.identity_requirement,
+			) as i32,
+			verification_config: value
+				.verification_config
+				.map(|x| ApiTryInto::try_into(*x))
+				.transpose()?,
 		})
 	}
 }
 
 impl ApiTryFrom<backend::matchmaker::FindConfig>
-	for models::CloudVersionMatchmakerLobbyGroupFindConfig
+	for models::CloudVersionMatchmakerGameModeFindConfig
 {
 	type Error = GlobalError;
 
 	fn try_from(value: backend::matchmaker::FindConfig) -> GlobalResult<Self> {
-		Ok(models::CloudVersionMatchmakerLobbyGroupRuntime {
-		
+		Ok(models::CloudVersionMatchmakerGameModeFindConfig {
+			identity_requirement: internal_unwrap_owned!(
+				backend::matchmaker::IdentityRequirement::from_i32(value.identity_requirement),
+				"invalid identity requirement variant"
+			)
+			.api_into(),
+			verification_config: value
+				.verification_config
+				.map(ApiTryInto::try_into)
+				.transpose()?
+				.map(Box::new),
+		})
+	}
+}
+
+impl ApiTryFrom<models::CloudVersionMatchmakerGameModeJoinConfig>
+	for backend::matchmaker::JoinConfig
+{
+	type Error = GlobalError;
+
+	fn try_from(value: models::CloudVersionMatchmakerGameModeJoinConfig) -> GlobalResult<Self> {
+		Ok(backend::matchmaker::JoinConfig {
+			identity_requirement: ApiInto::<backend::matchmaker::IdentityRequirement>::api_into(
+				value.identity_requirement,
+			) as i32,
+			verification_config: value
+				.verification_config
+				.map(|x| ApiTryInto::try_into(*x))
+				.transpose()?,
+		})
+	}
+}
+
+impl ApiTryFrom<backend::matchmaker::JoinConfig>
+	for models::CloudVersionMatchmakerGameModeJoinConfig
+{
+	type Error = GlobalError;
+
+	fn try_from(value: backend::matchmaker::JoinConfig) -> GlobalResult<Self> {
+		Ok(models::CloudVersionMatchmakerGameModeJoinConfig {
+			identity_requirement: internal_unwrap_owned!(
+				backend::matchmaker::IdentityRequirement::from_i32(value.identity_requirement),
+				"invalid identity requirement variant"
+			)
+			.api_into(),
+			verification_config: value
+				.verification_config
+				.map(ApiTryInto::try_into)
+				.transpose()?
+				.map(Box::new),
 		})
 	}
 }

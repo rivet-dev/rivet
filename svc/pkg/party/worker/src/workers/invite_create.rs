@@ -20,7 +20,7 @@ async fn fail(
 }
 
 #[worker(name = "party-invite-create")]
-async fn worker(ctx: OperationContext<party::msg::invite_create::Message>) -> GlobalResult<()> {
+async fn worker(ctx: &OperationContext<party::msg::invite_create::Message>) -> GlobalResult<()> {
 	// TODO:
 	return Ok(());
 

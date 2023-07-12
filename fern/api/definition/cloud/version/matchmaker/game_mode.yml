@@ -19,6 +19,11 @@ types:
       docker:
         type: optional<GameModeRuntimeDocker>
 
+      find_config:
+        type: optional<GameModeFindConfig>
+      join_config:
+        type: optional<GameModeJoinConfig>
+
       # Region overrides
       tier:
         type: optional<string>
@@ -76,3 +81,37 @@ types:
     properties:
       min: integer
       max: integer
+
+  GameModeIdentityRequirement:
+    docs: >-
+      The registration requirement for a user when joining/finding/creating a
+      lobby. "None" allows for connections without an identity.
+    enum:
+      - none
+      - guest
+      - registered
+
+  GameModeVerificationConfig:
+    # TODO: Add link to tutorial in docs
+    docs: >-
+      Configuration that tells Rivet where to send validation requests and with
+      what headers. When set, Rivet will send the `verification_data` property
+      (given by the user in the find/join/create endpoint) to the given url
+      along with the headers provided and some information about the requested
+      lobby. The response of this request will determine if the user can join
+      that lobby or not.
+    properties:
+      url: string
+      headers: map<string, string>
+
+  GameModeFindConfig:
+    docs: Configures the requirements and authentication for the `find` endpoint.
+    properties:
+      identity_requirement: GameModeIdentityRequirement
+      verification_config: optional<GameModeVerificationConfig>
+
+  GameModeJoinConfig:
+    docs: Configures the requirements and authentication for the `join` endpoint.
+    properties:
+      identity_requirement: GameModeIdentityRequirement
+      verification_config: optional<GameModeVerificationConfig>

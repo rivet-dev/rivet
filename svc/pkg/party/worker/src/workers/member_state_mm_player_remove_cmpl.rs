@@ -8,7 +8,7 @@ lazy_static::lazy_static! {
 
 #[worker(name = "party-member-state-mm-player-remove-cmpl")]
 async fn worker(
-	ctx: OperationContext<mm::msg::player_remove_complete::Message>,
+	ctx: &OperationContext<mm::msg::player_remove_complete::Message>,
 ) -> GlobalResult<()> {
 	// TODO:
 	return Ok(());

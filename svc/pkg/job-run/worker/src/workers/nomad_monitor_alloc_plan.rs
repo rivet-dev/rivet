@@ -27,7 +27,7 @@ struct ProxiedPort {
 
 #[worker(name = "job-run-nomad-monitor-alloc-plan")]
 async fn worker(
-	ctx: OperationContext<job_run::msg::nomad_monitor_alloc_plan::Message>,
+	ctx: &OperationContext<job_run::msg::nomad_monitor_alloc_plan::Message>,
 ) -> GlobalResult<()> {
 	let crdb = ctx.crdb("db-job-state").await?;
 	let mut redis_job = ctx.redis_job().await?;

@@ -78,7 +78,7 @@ pub struct FindOpts<'a> {
 	pub join_kind: JoinKind,
 	pub players: &'a [super::Player],
 	pub query: &'a Query,
-	pub lobby_group_config: Option<&'a LobbyGroupConfig>,
+	pub lobby_group_config: &'a LobbyGroupConfig,
 	pub auto_create_lobby_id: Uuid,
 }
 
@@ -148,7 +148,7 @@ pub async fn find(
 				.collect::<Vec<_>>();
 
 			// Update config for auto create lobbies
-			let auto_create = if let (Some(auto_create), Some(lobby_group_config)) =
+			let auto_create = if let (Some(auto_create), lobby_group_config) =
 				(auto_create, lobby_group_config)
 			{
 				let region_id = internal_unwrap!(auto_create.region_id).as_uuid();

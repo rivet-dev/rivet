@@ -2,7 +2,7 @@ use chirp_worker::prelude::*;
 use proto::backend::{self, pkg::*};
 
 #[worker(name = "user-event-team-member-remove")]
-async fn worker(ctx: OperationContext<team::msg::member_remove::Message>) -> GlobalResult<()> {
+async fn worker(ctx: &OperationContext<team::msg::member_remove::Message>) -> GlobalResult<()> {
 	let user_id = internal_unwrap!(ctx.user_id);
 
 	msg!([ctx] user::msg::event(user_id) {

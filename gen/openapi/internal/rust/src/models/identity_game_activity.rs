@@ -20,21 +20,21 @@ pub struct IdentityGameActivity {
     #[serde(rename = "message")]
     pub message: String,
     /// JSON data seen only by the given identity and their mutual followers.
-    #[serde(rename = "mutual_metadata", default, with = "::serde_with::rust::double_option", skip_serializing_if = "Option::is_none")]
-    pub mutual_metadata: Option<Option<serde_json::Value>>,
+    #[serde(rename = "mutual_metadata", deserialize_with = "Option::deserialize")]
+    pub mutual_metadata: Option<serde_json::Value>,
     /// JSON data seen by anyone.
-    #[serde(rename = "public_metadata", default, with = "::serde_with::rust::double_option", skip_serializing_if = "Option::is_none")]
-    pub public_metadata: Option<Option<serde_json::Value>>,
+    #[serde(rename = "public_metadata", deserialize_with = "Option::deserialize")]
+    pub public_metadata: Option<serde_json::Value>,
 }
 
 impl IdentityGameActivity {
     /// The game an identity is currently participating in.
-    pub fn new(game: crate::models::GameHandle, message: String) -> IdentityGameActivity {
+    pub fn new(game: crate::models::GameHandle, message: String, mutual_metadata: Option<serde_json::Value>, public_metadata: Option<serde_json::Value>) -> IdentityGameActivity {
         IdentityGameActivity {
             game: Box::new(game),
             message,
-            mutual_metadata: None,
-            public_metadata: None,
+            mutual_metadata,
+            public_metadata,
         }
     }
 }

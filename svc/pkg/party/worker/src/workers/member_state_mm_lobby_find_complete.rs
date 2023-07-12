@@ -7,7 +7,7 @@ lazy_static::lazy_static! {
 }
 
 #[worker(name = "party-member-state-mm-lobby-find-complete")]
-async fn worker(ctx: OperationContext<mm::msg::lobby_find_complete::Message>) -> GlobalResult<()> {
+async fn worker(ctx: &OperationContext<mm::msg::lobby_find_complete::Message>) -> GlobalResult<()> {
 	// TODO:
 	return Ok(());
 

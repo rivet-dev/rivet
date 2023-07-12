@@ -3,7 +3,7 @@ use proto::backend::{self, pkg::*};
 use util_party::key::party_config::PublicityLevel;
 
 #[worker(name = "party-create")]
-async fn worker(ctx: OperationContext<party::msg::create::Message>) -> GlobalResult<()> {
+async fn worker(ctx: &OperationContext<party::msg::create::Message>) -> GlobalResult<()> {
 	// TODO:
 	return Ok(());
 

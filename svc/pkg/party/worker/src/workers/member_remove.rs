@@ -6,7 +6,7 @@ lazy_static::lazy_static! {
 }
 
 #[worker(name = "party-member-remove")]
-async fn worker(ctx: OperationContext<party::msg::member_remove::Message>) -> GlobalResult<()> {
+async fn worker(ctx: &OperationContext<party::msg::member_remove::Message>) -> GlobalResult<()> {
 	// TODO:
 	return Ok(());
 

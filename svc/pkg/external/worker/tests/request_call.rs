@@ -15,6 +15,7 @@ async fn empty(ctx: TestCtx) {
 				headers: HashMap::new(),
 				timeout: 0,
 			}),
+			body: None,
 		})
 		.await
 		.unwrap();
@@ -36,6 +37,7 @@ async fn delete(ctx: TestCtx) {
 				headers: HashMap::new(),
 				timeout: 0,
 			}),
+			body: None,
 		})
 		.await
 		.unwrap();
@@ -55,6 +57,7 @@ async fn timeout(ctx: TestCtx) {
 				headers: HashMap::new(),
 				timeout: 1000,
 			}),
+			body: None,
 		})
 		.await
 		.unwrap();

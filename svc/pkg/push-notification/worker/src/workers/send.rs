@@ -13,7 +13,7 @@ struct NotificationData {
 
 #[worker(name = "push-notification-send")]
 async fn worker(
-	ctx: OperationContext<push_notification::msg::create::Message>,
+	ctx: &OperationContext<push_notification::msg::create::Message>,
 ) -> GlobalResult<()> {
 	let user_id = internal_unwrap!(ctx.user_id).as_uuid();
 	let thread_id = internal_unwrap!(ctx.thread_id).as_uuid();

@@ -5,7 +5,7 @@ use redis::AsyncCommands;
 const DEFAULT_USER_SET_STATUS: i32 = backend::user::Status::Online as i32;
 
 #[worker(name = "user-presence-leave")]
-async fn worker(ctx: OperationContext<user_presence::msg::leave::Message>) -> GlobalResult<()> {
+async fn worker(ctx: &OperationContext<user_presence::msg::leave::Message>) -> GlobalResult<()> {
 	let crdb = ctx.crdb("db-user-presence").await?;
 
 	let mut redis = ctx.redis_user_presence().await?;

@@ -226,6 +226,9 @@ impl Ctx {
 								},
 							],
 						}.into()),
+
+						find_config: None,
+						join_config: None,
 					},
 					backend::matchmaker::LobbyGroup {
 						name_id: LOBBY_GROUP_NAME_ID_HOST.into(),
@@ -288,6 +291,9 @@ impl Ctx {
 								},
 							],
 						}.into()),
+
+						find_config: None,
+						join_config: None,
 					},
 				],
 			}),
@@ -465,6 +471,7 @@ async fn list_lobbies() {
 			query: Some(mm::msg::lobby_find::message::Query::Direct(backend::matchmaker::query::Direct {
 				lobby_id: Some(lobby_id.into()),
 			})),
+			verification_data: None,
 		})
 		.await
 		.unwrap().unwrap();

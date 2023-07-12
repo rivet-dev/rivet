@@ -2,7 +2,7 @@ use chirp_worker::prelude::*;
 use proto::backend::{self, pkg::*};
 
 #[worker(name = "user-event-party-update")]
-async fn worker(ctx: OperationContext<party::msg::update::Message>) -> GlobalResult<()> {
+async fn worker(ctx: &OperationContext<party::msg::update::Message>) -> GlobalResult<()> {
 	let party_id = internal_unwrap!(ctx.party_id).as_uuid();
 
 	let member_list = op!([ctx] party_member_list {

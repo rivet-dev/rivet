@@ -4,7 +4,7 @@ use serde_json::json;
 
 #[worker(name = "team-owner-transfer")]
 async fn worker(
-	ctx: OperationContext<team::msg::owner_transfer::Message>,
+	ctx: &OperationContext<team::msg::owner_transfer::Message>,
 ) -> Result<(), GlobalError> {
 	let raw_team_id = internal_unwrap!(ctx.team_id);
 	let team_id = raw_team_id.as_uuid();

@@ -80,6 +80,9 @@ async fn setup(ctx: &TestCtx) -> Setup {
 					],
 
 				}.into()),
+
+				find_config: None,
+				join_config: None,
 			},
 			backend::matchmaker::LobbyGroup {
 				name_id: "test-2".into(),
@@ -122,6 +125,9 @@ async fn setup(ctx: &TestCtx) -> Setup {
 					],
 
 				}.into()),
+
+				find_config: None,
+				join_config: None,
 			}],
 		}),
 		..Default::default()

@@ -19,7 +19,7 @@ enum RedisResponse {
 
 #[worker(name = "party-member-state-resolve")]
 async fn worker(
-	ctx: OperationContext<party::msg::member_state_resolve::Message>,
+	ctx: &OperationContext<party::msg::member_state_resolve::Message>,
 ) -> GlobalResult<()> {
 	// TODO:
 	return Ok(());

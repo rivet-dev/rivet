@@ -3,7 +3,7 @@ use proto::backend::{self, pkg::*};
 use serde_json::json;
 
 #[worker(name = "team-member-kick")]
-async fn worker(ctx: OperationContext<team::msg::member_kick::Message>) -> GlobalResult<()> {
+async fn worker(ctx: &OperationContext<team::msg::member_kick::Message>) -> GlobalResult<()> {
 	let team_id = internal_unwrap!(ctx.team_id).as_uuid();
 	let user_id = internal_unwrap!(ctx.user_id).as_uuid();
 

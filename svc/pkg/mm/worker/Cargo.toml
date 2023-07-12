@@ -35,6 +35,7 @@ mm-config-version-get = { path = "../../mm-config/ops/version-get" }
 mm-lobby-find-fail = { path = "../ops/lobby-find-fail" }
 mm-lobby-find-lobby-query-list = { path = "../ops/lobby-find-lobby-query-list" }
 mm-lobby-find-try-complete = { path = "../ops/lobby-find-try-complete" }
+mm-lobby-get = { path = "../ops/lobby-get" }
 mm-lobby-idle-update = { path = "../ops/lobby-idle-update" }
 region-get = { path = "../../region/ops/get" }
 team-dev-get = { path = "../../team-dev/ops/get" }
