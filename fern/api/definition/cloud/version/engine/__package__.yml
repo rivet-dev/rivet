@@ -1,0 +1,10 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/fern-api/fern/main/fern.schema.json
+
+imports:
+  unreal: unreal.yml
+
+types:
+  Config:
+    properties:
+      unreal: optional<unreal.UnrealConfig>
+
