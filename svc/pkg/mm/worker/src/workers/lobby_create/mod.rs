@@ -60,6 +60,7 @@ async fn worker(ctx: &OperationContext<mm::msg::lobby_create::Message>) -> Globa
 	let lobby_group_id = internal_unwrap!(ctx.lobby_group_id).as_uuid();
 	let region_id = internal_unwrap!(ctx.region_id).as_uuid();
 	let create_ray_id = ctx.region_id.as_ref().map(common::Uuid::as_uuid);
+	let creator_user_id = ctx.creator_user_id.as_ref().map(common::Uuid::as_uuid);
 
 	// Check for stale message
 	if ctx.req_dt() > util::duration::seconds(60) {
@@ -168,6 +169,7 @@ async fn worker(ctx: &OperationContext<mm::msg::lobby_create::Message>) -> Globa
 		run_id,
 		create_ray_id: ctx.ray_id(),
 		lobby_group: lobby_group.clone(),
+		creator_user_id,
 	};
 	rivet_pools::utils::crdb::tx(&crdb, |tx| {
 		Box::pin(update_db(ctx.ts(), tx, insert_opts.clone()))
@@ -479,6 +481,7 @@ struct UpdateDbOpts {
 	run_id: Uuid,
 	create_ray_id: Uuid,
 	lobby_group: backend::matchmaker::LobbyGroup,
+	creator_user_id: Option<Uuid>,
 }
 
 #[tracing::instrument(skip_all)]
@@ -528,9 +531,11 @@ async fn update_db(
 			max_players_direct,
 			max_players_party,
 
+			creator_user_id,
+
 			is_closed
 		)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, false)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, false)
 		"
 	))
 	.bind(opts.lobby_id)
@@ -544,6 +549,7 @@ async fn update_db(
 	.bind(opts.lobby_group.max_players_normal as i64)
 	.bind(opts.lobby_group.max_players_direct as i64)
 	.bind(opts.lobby_group.max_players_party as i64)
+	.bind(opts.creator_user_id)
 	.execute(&mut *tx)
 	.await?;
 

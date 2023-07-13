@@ -179,6 +179,7 @@ async fn worker(
 		join_kind: backend::matchmaker::query::JoinKind::Party as i32,
 		players: players,
 		query: Some(find_query),
+		..Default::default()
 	})
 	.await?;
 

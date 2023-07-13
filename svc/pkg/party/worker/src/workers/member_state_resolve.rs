@@ -147,6 +147,7 @@ async fn worker(
 				query: Some(mm::msg::lobby_find::message::Query::Direct(backend::matchmaker::query::Direct {
 					lobby_id: Some(lobby_id.into()),
 				})),
+				..Default::default()
 			})
 			.await?;
 

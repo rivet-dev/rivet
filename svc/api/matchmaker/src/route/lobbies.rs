@@ -738,9 +738,7 @@ async fn find_inner(
 
 			match code {
 				Unknown => internal_panic!("unknown find error code"),
-
 				StaleMessage => panic_with!(CHIRP_STALE_MESSAGE),
-
 				TooManyPlayersFromSource => panic_with!(MATCHMAKER_TOO_MANY_PLAYERS_FROM_SOURCE),
 
 				LobbyStopped | LobbyStoppedPrematurely => panic_with!(MATCHMAKER_LOBBY_STOPPED),

@@ -342,6 +342,94 @@ async fn lobby_group_no_auto_create(ctx: TestCtx) {
 	);
 }
 
+#[worker_test]
+async fn direct_verification(ctx: TestCtx) {
+	let region_list_res = op!([ctx] region_list {
+		..Default::default()
+	})
+	.await
+	.unwrap();
+
+	let game_res = op!([ctx] faker_game {
+		..Default::default()
+	})
+	.await
+	.unwrap();
+
+	let build_res = op!([ctx] faker_build {
+		game_id: game_res.game_id,
+		image: faker::build::Image::MmLobbyAutoReady as i32,
+	})
+	.await
+	.unwrap();
+
+	let version_create_res = op!([ctx] faker_game_version {
+		game_id: game_res.game_id,
+		override_lobby_groups: Some(faker::game_version::request::OverrideLobbyGroups {
+			lobby_groups: vec![backend::matchmaker::LobbyGroup {
+				name_id: "test-1".into(),
+
+				regions: region_list_res
+					.region_ids
+					.iter()
+					.cloned()
+					.map(|region_id| backend::matchmaker::lobby_group::Region {
+						region_id: Some(region_id),
+						tier_name_id: util_mm::test::TIER_NAME_ID.to_owned(),
+						idle_lobbies: None,
+					})
+					.collect(),
+
+				max_players_normal: 8,
+				max_players_direct: 10,
+				max_players_party: 12,
+
+				runtime: Some(
+					backend::matchmaker::lobby_runtime::Docker {
+						build_id: build_res.build_id,
+						args: Vec::new(),
+						env_vars: Vec::new(),
+						network_mode:
+							backend::matchmaker::lobby_runtime::NetworkMode::Bridge
+								as i32,
+						ports: Vec::new(),
+					}
+					.into(),
+				),
+
+				// find_config: Some(backend::matchmaker::FindConfig {
+				// 	identity_requirement: backend::matchmaker::IdentityRequirement::None,
+				// 	verification_config: None,
+				// }),
+				find_config: None,
+				join_config: None,
+			}],
+		}),
+	})
+	.await
+	.unwrap();
+
+	let lobby_res = op!([ctx] faker_mm_lobby {
+		version_id: version_create_res.version_id,
+		..Default::default()
+	})
+	.await
+	.unwrap();
+
+	let find_res = find(
+		&ctx,
+		lobby_res.namespace_id.as_ref().unwrap().as_uuid(),
+		gen_players(1),
+		mm::msg::lobby_find::message::Query::Direct(backend::matchmaker::query::Direct {
+			lobby_id: lobby_res.lobby_id,
+		}),
+	)
+	.await
+	.unwrap();
+
+	assert_eq!(lobby_res.lobby_id, find_res.lobby_id);
+}
+
 fn gen_players(count: usize) -> Vec<mm::msg::lobby_find::Player> {
 	let mut players = Vec::new();
 	for _ in 0..count {

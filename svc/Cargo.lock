@@ -5144,6 +5144,7 @@ dependencies = [
  "nomad-util",
  "redis-util",
  "region-get",
+ "region-list",
  "reqwest",
  "rivet-health-checks",
  "rivet-metrics",

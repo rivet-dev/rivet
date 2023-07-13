@@ -44,7 +44,9 @@ async fn handle(
 
 	// Find lobby
 	let query_id = Uuid::new_v4();
-	let find_res = msg!([ctx] @notrace mm::msg::lobby_find(namespace_id, query_id) -> Result<mm::msg::lobby_find_complete, mm::msg::lobby_find_fail> {
+	let find_res = msg!([ctx] @notrace mm::msg::lobby_find(namespace_id, query_id)
+		-> Result<mm::msg::lobby_find_complete, mm::msg::lobby_find_fail>
+	{
 		namespace_id: ctx.namespace_id,
 		query_id: Some(query_id.into()),
 		join_kind: backend::matchmaker::query::JoinKind::Normal as i32,
@@ -56,6 +58,7 @@ async fn handle(
 		query: Some(mm::msg::lobby_find::message::Query::Direct(backend::matchmaker::query::Direct {
 			lobby_id: ctx.lobby_id,
 		})),
+		..Default::default()
 	})
 	.await?;
 
@@ -79,6 +82,11 @@ async fn handle(
 				RegionNotEnabled => panic_with!(MATCHMAKER_REGION_NOT_ENABLED_FOR_GAME_MODE),
 
 				DevTeamInvalidStatus => panic_with!(GROUP_INVALID_DEVELOPER_STATUS),
+
+				VerificationFailed => panic_with!(MATCHMAKER_VERIFICATION_FAILED),
+				VerificationRequestFailed => panic_with!(MATCHMAKER_VERIFICATION_REQUEST_FAILED),
+				IdentityRequired => panic_with!(MATCHMAKER_IDENTITY_REQUIRED),
+				RegistrationRequired => panic_with!(MATCHMAKER_REGISTRATION_REQUIRED),
 			};
 		}
 		Err(None) => internal_panic!("failed to parse find error code"),

@@ -14,6 +14,7 @@ message Request {
 	uint32 max_players_party = 3;
 	bool skip_set_ready = 4;
 	optional rivet.backend.pkg.faker.build.Image image = 5;
+	optional rivet.common.Uuid creator_user_id = 8;
 }
 
 message Response {

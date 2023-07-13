@@ -948,6 +948,7 @@ async fn create_lobby(
 		region_id: Some(ctx.primary_region_id.into()),
 		create_ray_id: None,
 		preemptively_created: false,
+		creator_user_id: None,
 	})
 	.await
 	.unwrap();

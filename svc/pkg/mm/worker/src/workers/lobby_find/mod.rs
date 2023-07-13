@@ -280,6 +280,7 @@ async fn worker(ctx: &OperationContext<mm::msg::lobby_find::Message>) -> GlobalR
 				region_id: Some(auto_create_region_id.into()),
 				create_ray_id: Some(ctx.ray_id().into()),
 				preemptively_created: true,
+				creator_user_id: ctx.user_id,
 			})
 			.await?;
 
@@ -416,7 +417,7 @@ pub struct LobbyGroupConfig {
 	pub lobby_group_meta: backend::matchmaker::LobbyGroupMeta,
 }
 
-/// Fetches the lobby group config. Only used if auto-creating lobby.
+/// Fetches the lobby group config (and lobby if direct).
 #[tracing::instrument]
 async fn fetch_lobby_group_config(
 	ctx: OperationContext<()>,
@@ -436,7 +437,8 @@ async fn fetch_lobby_group_config(
 				lobby_ids: vec![lobby_id],
 			})
 			.await?;
-			let lobby = internal_unwrap_owned!(lobbies_res.lobbies.first());
+			tracing::info!(?lobby_id, ?lobbies_res, "------------");
+			let lobby = internal_unwrap_owned!(lobbies_res.lobbies.first(), "lobby not found");
 
 			(
 				internal_unwrap_owned!(lobby.lobby_group_id),

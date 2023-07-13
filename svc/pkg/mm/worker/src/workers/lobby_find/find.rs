@@ -153,9 +153,7 @@ pub async fn find(
 				.collect::<Vec<_>>();
 
 			// Update config for auto create lobbies
-			let auto_create = if let (Some(auto_create), lobby_group_config) =
-				(auto_create, lobby_group_config)
-			{
+			let auto_create = if let Some(auto_create) = auto_create {
 				let region_id = internal_unwrap!(auto_create.region_id).as_uuid();
 				let lobby_group_id = internal_unwrap!(auto_create.lobby_group_id).as_uuid();
 

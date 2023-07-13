@@ -59,6 +59,9 @@ async fn empty(ctx: TestCtx) {
 							}
 						 )),
 					}),
+
+					find_config: None,
+					join_config: None,
 				},
 			],
 			captcha: None,
@@ -109,6 +112,9 @@ async fn empty(ctx: TestCtx) {
 						}
 						.into()
 					),
+
+					find_config: None,
+					join_config: None,
 				},
 			],
 			captcha: None,

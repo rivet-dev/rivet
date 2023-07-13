@@ -61,5 +61,6 @@ faker-region = { path = "../../faker/ops/region" }
 game-namespace-version-set = { path = "../../game/ops/namespace-version-set" }
 mm-config-namespace-config-set = { path = "../../mm-config/ops/namespace-config-set" }
 mm-config-version-get = { path = "../../mm-config/ops/version-get" }
-mm-lobby-player-count = { path = "../ops/lobby-player-count" }
 mm-lobby-get = { path = "../ops/lobby-get" }
+mm-lobby-player-count = { path = "../ops/lobby-player-count" }
+region-list = { path = "../../region/ops/list" }

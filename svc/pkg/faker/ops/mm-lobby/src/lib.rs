@@ -130,6 +130,7 @@ async fn handle(
 			region_id: region_res.region_id,
 			create_ray_id: Some(ctx.ray_id().into()),
 			preemptively_created: false,
+			creator_user_id: ctx.creator_user_id,
 		})
 		.await?;
 	let run_id = internal_unwrap!(complete_msg.run_id).as_uuid();

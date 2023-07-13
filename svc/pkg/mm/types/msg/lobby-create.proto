@@ -36,5 +36,8 @@ message Message {
 
 	// If a lobby row was preemptively inserted for this lobby.
 	bool preemptively_created = 7;
+
+	// The user (if any) that triggered this lobby's creation (either by /find or /create).
+	optional rivet.common.Uuid creator_user_id = 8;
 }
 

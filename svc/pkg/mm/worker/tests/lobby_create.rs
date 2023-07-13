@@ -181,6 +181,7 @@ async fn lobby_create(ctx: TestCtx) {
 		region_id: Some(setup.region_id.into()),
 		create_ray_id: None,
 		preemptively_created: false,
+		creator_user_id: None,
 	})
 	.await
 	.unwrap();
@@ -228,6 +229,7 @@ async fn lobby_create_max_lobby_count(ctx: TestCtx) {
 			region_id: Some(setup.region_id.into()),
 			create_ray_id: None,
 			preemptively_created: false,
+			creator_user_id: None,
 		})
 		.await
 		.unwrap();
@@ -242,6 +244,7 @@ async fn lobby_create_max_lobby_count(ctx: TestCtx) {
 		region_id: Some(setup.region_id.into()),
 		create_ray_id: None,
 		preemptively_created: false,
+		creator_user_id: None,
 	})
 	.await
 	.unwrap();
@@ -263,6 +266,7 @@ async fn lobby_create_reuse_job_id(ctx: TestCtx) {
 		region_id: Some(setup.region_id.into()),
 		create_ray_id: None,
 		preemptively_created: false,
+		creator_user_id: None,
 	})
 	.await
 	.unwrap();
@@ -275,6 +279,7 @@ async fn lobby_create_reuse_job_id(ctx: TestCtx) {
 		region_id: Some(setup.region_id.into()),
 		create_ray_id: None,
 		preemptively_created: false,
+		creator_user_id: None,
 	})
 	.await
 	.unwrap();
@@ -322,6 +327,7 @@ async fn lobby_create_reuse_job_id(ctx: TestCtx) {
 // 			region_id: Some(setup.region_id.into()),
 // 			create_ray_id: None,
 // 			preemptively_created: false,
+// 			creator_user_id: None,
 // 		})
 // 		.await
 // 		.unwrap();

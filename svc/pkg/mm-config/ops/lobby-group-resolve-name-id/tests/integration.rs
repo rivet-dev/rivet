@@ -43,6 +43,9 @@ async fn empty(ctx: TestCtx) {
 						network_mode: backend::matchmaker::lobby_runtime::NetworkMode::Bridge as i32,
 						ports: Vec::new(),
 					}.into()),
+
+					find_config: None,
+					join_config: None,
 				})
 				.collect(),
 		}),

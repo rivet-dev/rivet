@@ -124,6 +124,8 @@ async fn validate_build(
 	let build_game_id = internal_unwrap!(build.game_id).as_uuid();
 	internal_assert_eq!(game_id, build_game_id);
 
+	tracing::info!(?build);
+
 	// Validate build has completed uploading
 	let upload_res = op!([ctx] upload_get {
 		upload_ids: vec![build_upload_id.into()],
