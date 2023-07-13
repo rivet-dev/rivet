@@ -7,4 +7,3 @@ types:
   Config:
     properties:
       unreal: optional<unreal.UnrealConfig>
-
