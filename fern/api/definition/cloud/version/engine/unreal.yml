@@ -3,7 +3,7 @@
 types:
   UnrealConfig:
     properties:
-      game_module_name:
+      game_module:
         docs: >-
           Name of the Unreal module that holds the game code.
 
