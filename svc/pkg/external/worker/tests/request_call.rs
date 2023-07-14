@@ -13,8 +13,8 @@ async fn empty(ctx: TestCtx) {
 				url: "https://example.com".to_string(),
 				method: backend::net::HttpMethod::Get as i32,
 				headers: HashMap::new(),
-				timeout: 0,
 			}),
+			timeout: 0,
 			body: None,
 			read_response_body: true,
 		})
@@ -36,8 +36,8 @@ async fn delete(ctx: TestCtx) {
 				url: "https://example.com".to_string(),
 				method: backend::net::HttpMethod::Delete as i32,
 				headers: HashMap::new(),
-				timeout: 0,
 			}),
+			timeout: 0,
 			body: None,
 			read_response_body: false,
 		})
@@ -57,8 +57,8 @@ async fn timeout(ctx: TestCtx) {
 				url: "https://httpstat.us/200?sleep=10000".to_string(),
 				method: backend::net::HttpMethod::Get as i32,
 				headers: HashMap::new(),
-				timeout: 1000,
 			}),
+			timeout: 1000,
 			body: None,
 			read_response_body: false,
 		})

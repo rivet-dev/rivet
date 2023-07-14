@@ -17,7 +17,6 @@ pub async fn verify(
 	query_id: Uuid,
 	query: &Query,
 	lobby_group_config: &LobbyGroupConfig,
-	lobby_state: Option<backend::matchmaker::Lobby>,
 ) -> GlobalResult<bool> {
 	// Get required verifications
 	let (identity_requirement, external_request_config) = match (
@@ -37,7 +36,6 @@ pub async fn verify(
 					url: config.url.clone(),
 					method: backend::net::HttpMethod::Post as i32,
 					headers: config.headers.clone(),
-					timeout: util::duration::seconds(10) as u64,
 				}
 			}),
 		),
@@ -53,7 +51,6 @@ pub async fn verify(
 					url: config.url.clone(),
 					method: backend::net::HttpMethod::Post as i32,
 					headers: config.headers.clone(),
-					timeout: util::duration::seconds(10) as u64,
 				}
 			}),
 		),
@@ -106,12 +103,21 @@ pub async fn verify(
 		let request_id = Uuid::new_v4();
 
 		// Build body
-		let lobby_state = if let Some(l) = lobby_state {
-			// TODO: Add readable region name and lobby group name
+		let lobby_state = if let Some(l) = &lobby_group_config.lobby_state {
+			// Fetch region data for readable name
+			let region_id = internal_unwrap_owned!(l.region_id);
+			let regions_res = op!([ctx] region_get {
+				region_ids: vec![region_id],
+			})
+			.await?;
+			let region = internal_unwrap_owned!(regions_res.regions.first());
+
 			json!({
 				"lobby_id": internal_unwrap!(l.lobby_id).as_uuid(),
 				"lobby_group_id": internal_unwrap!(l.lobby_group_id).as_uuid(),
-				"region_id": internal_unwrap!(l.region_id).as_uuid(),
+				"lobby_group_name_id": lobby_group_config.lobby_group.name_id,
+				"region_id": region_id.as_uuid(),
+				"region_name_id": region.name_id,
 				"create_ts": util::timestamp::to_string(l.create_ts)?,
 				"is_closed": l.is_closed,
 				"namespace_id": internal_unwrap!(l.namespace_id).as_uuid(),
@@ -138,6 +144,7 @@ pub async fn verify(
 		{
 			request_id: Some(request_id.into()),
 			config: external_request_config,
+			timeout: util::duration::seconds(10) as u64,
 			body: Some(serde_json::to_vec(&body)?),
 			..Default::default()
 		})

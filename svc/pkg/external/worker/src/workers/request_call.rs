@@ -56,8 +56,8 @@ async fn worker(ctx: &OperationContext<external::msg::request_call::Message>) ->
 	let req = req.headers(headers);
 
 	// Add timeout
-	let req = if config.timeout != 0 {
-		let timeout = std::time::Duration::from_millis(config.timeout);
+	let req = if ctx.timeout != 0 {
+		let timeout = std::time::Duration::from_millis(ctx.timeout);
 		req.timeout(timeout)
 	} else {
 		req

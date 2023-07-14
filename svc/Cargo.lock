@@ -5123,6 +5123,7 @@ dependencies = [
  "faker-game-version",
  "faker-mm-lobby",
  "faker-region",
+ "faker-user",
  "game-get",
  "game-namespace-get",
  "game-namespace-version-set",
@@ -5160,6 +5161,7 @@ dependencies = [
  "upload-complete",
  "upload-get",
  "upload-prepare",
+ "user-identity-create",
  "user-identity-get",
 ]
 

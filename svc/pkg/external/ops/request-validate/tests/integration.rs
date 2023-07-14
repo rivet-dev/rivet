@@ -16,7 +16,6 @@ async fn empty(ctx: TestCtx) {
 			url: "ssh://example.com".to_string(),
 			method: backend::net::HttpMethod::Get as i32,
 			headers,
-			timeout: 0,
 		}),
 	})
 	.await
@@ -26,4 +25,18 @@ async fn empty(ctx: TestCtx) {
 	assert_eq!(3, res.errors.len());
 }
 
-// TODO: Write DNS test
+#[worker_test]
+async fn dns(ctx: TestCtx) {
+	let res = op!([ctx] external_request_validate {
+		config: Some(backend::net::ExternalRequestConfig {
+			url: "https://httpstat.us/200?sleep=6000".to_string(),
+			method: backend::net::HttpMethod::Get as i32,
+			headers: HashMap::new(),
+		}),
+	})
+	.await
+	.unwrap();
+
+	tracing::info!(errors=?res.errors);
+	assert_eq!(1, res.errors.len());
+}

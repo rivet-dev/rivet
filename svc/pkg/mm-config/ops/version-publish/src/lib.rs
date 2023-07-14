@@ -75,6 +75,28 @@ async fn handle(
 			(runtime_buf, runtime_meta_buf)
 		};
 
+		// Encode config data
+		let find_config_buf = lobby_group
+			.find_config
+			.as_ref()
+			.map(|config| {
+				let mut buf = Vec::with_capacity(config.encoded_len());
+				config.encode(&mut buf)?;
+
+				GlobalResult::Ok(buf)
+			})
+			.transpose()?;
+		let join_config_buf = lobby_group
+			.join_config
+			.as_ref()
+			.map(|config| {
+				let mut buf = Vec::with_capacity(config.encoded_len());
+				config.encode(&mut buf)?;
+
+				GlobalResult::Ok(buf)
+			})
+			.transpose()?;
+
 		sqlx::query(indoc!(
 			"
 			INSERT INTO lobby_groups (
@@ -88,9 +110,11 @@ async fn handle(
 				max_players_party,
 
 				runtime,
-				runtime_meta
+				runtime_meta,
+				find_config,
+				join_config
 			)
-			VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
 			"
 		))
 		.bind(lobby_group_id)
@@ -101,6 +125,8 @@ async fn handle(
 		.bind(lobby_group.max_players_party as i64)
 		.bind(&runtime_buf)
 		.bind(&runtime_meta_buf)
+		.bind(&find_config_buf)
+		.bind(&join_config_buf)
 		.execute(&mut tx)
 		.await?;
 

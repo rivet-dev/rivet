@@ -96,7 +96,7 @@ async fn worker(ctx: &OperationContext<mm::msg::lobby_find::Message>) -> GlobalR
 		return complete_request(ctx.chirp(), analytics_events).await;
 	}
 
-	let ((_namespace, mm_ns_config, dev_team), (lobby_group_config, lobby_state)) = tokio::try_join!(
+	let ((_namespace, mm_ns_config, dev_team), lobby_group_config) = tokio::try_join!(
 		// Namespace and dev team
 		fetch_ns_config_and_dev_team(ctx.base(), namespace_id),
 		fetch_lobby_group_config(ctx.base(), query),
@@ -116,16 +116,9 @@ async fn worker(ctx: &OperationContext<mm::msg::lobby_find::Message>) -> GlobalR
 	}
 
 	// Verify user data
-	if !verification::verify(
-		ctx,
-		namespace_id,
-		query_id,
-		query,
-		&lobby_group_config,
-		lobby_state,
-	)
-	.await?
-	{
+	let verification_success = ctx.bypass_verification
+		|| verification::verify(ctx, namespace_id, query_id, query, &lobby_group_config).await?;
+	if !verification_success {
 		return complete_request(ctx.chirp(), analytics_events).await;
 	}
 
@@ -415,6 +408,7 @@ pub struct LobbyGroupConfig {
 	pub lobby_group: backend::matchmaker::LobbyGroup,
 	#[allow(unused)]
 	pub lobby_group_meta: backend::matchmaker::LobbyGroupMeta,
+	pub lobby_state: Option<backend::matchmaker::Lobby>,
 }
 
 /// Fetches the lobby group config (and lobby if direct).
@@ -422,7 +416,7 @@ pub struct LobbyGroupConfig {
 async fn fetch_lobby_group_config(
 	ctx: OperationContext<()>,
 	query: &Query,
-) -> GlobalResult<(LobbyGroupConfig, Option<backend::matchmaker::Lobby>)> {
+) -> GlobalResult<LobbyGroupConfig> {
 	// Get lobby group id from query
 	let (lobby_group_id, lobby_state) = match query {
 		Query::LobbyGroup(backend::matchmaker::query::LobbyGroup { auto_create, .. }) => {
@@ -437,7 +431,6 @@ async fn fetch_lobby_group_config(
 				lobby_ids: vec![lobby_id],
 			})
 			.await?;
-			tracing::info!(?lobby_id, ?lobbies_res, "------------");
 			let lobby = internal_unwrap_owned!(lobbies_res.lobbies.first(), "lobby not found");
 
 			(
@@ -454,7 +447,7 @@ async fn fetch_lobby_group_config(
 	})
 	.await?;
 	let version_id = internal_unwrap!(
-		internal_unwrap!(
+		internal_unwrap_owned!(
 			resolve_version_res.versions.first(),
 			"lobby group not found"
 		)
@@ -483,14 +476,12 @@ async fn fetch_lobby_group_config(
 	let lobby_group = version_config.lobby_groups.get(*lg_idx);
 	let lobby_group = internal_unwrap!(lobby_group);
 
-	Ok((
-		LobbyGroupConfig {
-			version_id,
-			lobby_group: (*lobby_group).clone(),
-			lobby_group_meta: (*lobby_group_meta).clone(),
-		},
+	Ok(LobbyGroupConfig {
+		version_id,
+		lobby_group: (*lobby_group).clone(),
+		lobby_group_meta: (*lobby_group_meta).clone(),
 		lobby_state,
-	))
+	})
 }
 
 #[derive(Clone)]
