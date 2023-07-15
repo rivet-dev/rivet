@@ -319,10 +319,15 @@ pub async fn list(
 				None
 			}
 		})
-		// Filter out empty lobbies
-		.filter(|(lobby, _)| {
+		// Filter out empty and unlistable lobbies
+		.filter(|(lobby, lobby_group)| {
 			// Keep if lobby not empty
 			if lobby.player_count.registered_player_count != 0 {
+				return true;
+			}
+
+			// Keep if listable
+			if lobby_group.listable {
 				return true;
 			}
 

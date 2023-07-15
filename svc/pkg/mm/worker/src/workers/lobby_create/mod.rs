@@ -297,7 +297,7 @@ async fn fetch_region(
 	.await?;
 	let cdn_region = internal_unwrap_owned!(cdn_get_res.regions.first());
 
-	Ok((region.deref().clone(), cdn_region.deref().clone()))
+	Ok((region.clone(), cdn_region.clone()))
 }
 
 #[tracing::instrument]
@@ -324,9 +324,8 @@ async fn fetch_namespace(
 	})
 	.await?;
 
-	let namespace = internal_unwrap!(get_res.namespaces.first(), "namespace not found")
-		.deref()
-		.clone();
+	let namespace =
+		internal_unwrap_owned!(get_res.namespaces.first(), "namespace not found").clone();
 
 	Ok(namespace)
 }
@@ -342,9 +341,8 @@ async fn fetch_mm_namespace_config(
 	.await?;
 
 	let namespace = internal_unwrap!(
-		internal_unwrap!(get_res.namespaces.first(), "namespace not found").config
+		internal_unwrap_owned!(get_res.namespaces.first(), "namespace not found").config
 	)
-	.deref()
 	.clone();
 
 	Ok(namespace)
@@ -591,7 +589,12 @@ async fn create_docker_job(
 	let build = internal_unwrap_owned!(build_get.builds.first());
 
 	// Generate the Docker job
-	let job_spec = nomad_job::gen_lobby_docker_job(runtime, &build.image_tag, tier)?;
+	let job_spec = nomad_job::gen_lobby_docker_job(
+		runtime,
+		&build.image_tag,
+		tier,
+		ctx.lobby_config_json.as_ref(),
+	)?;
 	let job_spec_json = serde_json::to_string(&job_spec)?;
 
 	// Build proxied ports for each exposed port
@@ -761,7 +764,7 @@ async fn resolve_image_artifact_url(
 
 			// Build client
 			let s3_client =
-				s3_util::Client::from_env_opt(&bucket, s3_util::EndpointKind::InternalResolved)
+				s3_util::Client::from_env_opt(bucket, s3_util::EndpointKind::InternalResolved)
 					.await?;
 
 			let upload_id = internal_unwrap!(upload.upload_id).as_uuid();

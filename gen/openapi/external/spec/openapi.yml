@@ -7544,6 +7544,75 @@ paths:
               required:
                 - lobby_id
                 - verification_data
+  /lobbies/create:
+    post:
+      description: |
+        Creates a custom lobby.
+      operationId: matchmaker_lobbies_create
+      tags:
+        - MatchmakerLobbies
+      parameters: []
+      responses:
+        '200':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MatchmakerJoinLobbyResponse'
+        '400':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '403':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '404':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '408':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '429':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '500':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+      servers:
+        - url: https://matchmaker.api.rivet.gg/v1
+      security: *ref_0
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                publicity:
+                  $ref: '#/components/schemas/MatchmakerCustomGamePublicity'
+                lobby_config: {}
+                verification_data: {}
+              required:
+                - publicity
+                - lobby_config
+                - verification_data
   /lobbies/list:
     get:
       description: Lists all open lobbies.
@@ -11490,10 +11559,14 @@ components:
           type: integer
         docker:
           $ref: '#/components/schemas/CloudVersionMatchmakerGameModeRuntimeDocker'
+        listable:
+          type: boolean
         find_config:
           $ref: '#/components/schemas/CloudVersionMatchmakerGameModeFindConfig'
         join_config:
           $ref: '#/components/schemas/CloudVersionMatchmakerGameModeJoinConfig'
+        create_config:
+          $ref: '#/components/schemas/CloudVersionMatchmakerGameModeCreateConfig'
         tier:
           type: string
         idle_lobbies:
@@ -11620,6 +11693,28 @@ components:
             #/components/schemas/CloudVersionMatchmakerGameModeVerificationConfig
       required:
         - identity_requirement
+    CloudVersionMatchmakerGameModeCreateConfig:
+      type: object
+      description: >-
+        Configures the requirements and authentication for the `create`
+        endpoint.
+      properties:
+        identity_requirement:
+          $ref: >-
+            #/components/schemas/CloudVersionMatchmakerGameModeIdentityRequirement
+        verification_config:
+          $ref: >-
+            #/components/schemas/CloudVersionMatchmakerGameModeVerificationConfig
+        enable_public:
+          type: boolean
+        enable_private:
+          type: boolean
+        max_lobbies_per_identity:
+          type: integer
+      required:
+        - identity_requirement
+        - enable_public
+        - enable_private
     CloudVersionMatchmakerLobbyGroup:
       type: object
       description: A game mode.
@@ -12844,6 +12939,11 @@ components:
             server will validate this token with `PlayerConnected.player_token`
       required:
         - token
+    MatchmakerCustomGamePublicity:
+      type: string
+      enum:
+        - public
+        - private
     MatchmakerFindLobbyResponse:
       type: object
       properties:

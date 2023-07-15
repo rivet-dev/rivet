@@ -188,6 +188,7 @@ docs/CloudVersionMatchmakerCaptchaHcaptcha.md
 docs/CloudVersionMatchmakerCaptchaHcaptchaLevel.md
 docs/CloudVersionMatchmakerConfig.md
 docs/CloudVersionMatchmakerGameMode.md
+docs/CloudVersionMatchmakerGameModeCreateConfig.md
 docs/CloudVersionMatchmakerGameModeFindConfig.md
 docs/CloudVersionMatchmakerGameModeIdentityRequirement.md
 docs/CloudVersionMatchmakerGameModeIdleLobbiesConfig.md
@@ -316,6 +317,7 @@ docs/KvListResponse.md
 docs/KvPutBatchRequest.md
 docs/KvPutEntry.md
 docs/KvPutRequest.md
+docs/MatchmakerCustomGamePublicity.md
 docs/MatchmakerFindLobbyResponse.md
 docs/MatchmakerGameModeInfo.md
 docs/MatchmakerGameModeStatistics.md
@@ -329,6 +331,7 @@ docs/MatchmakerJoinRegion.md
 docs/MatchmakerListLobbiesResponse.md
 docs/MatchmakerListRegionsResponse.md
 docs/MatchmakerLobbiesApi.md
+docs/MatchmakerLobbiesCreateRequest.md
 docs/MatchmakerLobbiesFindRequest.md
 docs/MatchmakerLobbiesJoinRequest.md
 docs/MatchmakerLobbiesSetClosedRequest.md
@@ -592,6 +595,7 @@ src/models/cloud_version_matchmaker_captcha_hcaptcha.rs
 src/models/cloud_version_matchmaker_captcha_hcaptcha_level.rs
 src/models/cloud_version_matchmaker_config.rs
 src/models/cloud_version_matchmaker_game_mode.rs
+src/models/cloud_version_matchmaker_game_mode_create_config.rs
 src/models/cloud_version_matchmaker_game_mode_find_config.rs
 src/models/cloud_version_matchmaker_game_mode_identity_requirement.rs
 src/models/cloud_version_matchmaker_game_mode_idle_lobbies_config.rs
@@ -711,6 +715,7 @@ src/models/kv_list_response.rs
 src/models/kv_put_batch_request.rs
 src/models/kv_put_entry.rs
 src/models/kv_put_request.rs
+src/models/matchmaker_custom_game_publicity.rs
 src/models/matchmaker_find_lobby_response.rs
 src/models/matchmaker_game_mode_info.rs
 src/models/matchmaker_game_mode_statistics.rs
@@ -723,6 +728,7 @@ src/models/matchmaker_join_port_range.rs
 src/models/matchmaker_join_region.rs
 src/models/matchmaker_list_lobbies_response.rs
 src/models/matchmaker_list_regions_response.rs
+src/models/matchmaker_lobbies_create_request.rs
 src/models/matchmaker_lobbies_find_request.rs
 src/models/matchmaker_lobbies_join_request.rs
 src/models/matchmaker_lobbies_set_closed_request.rs

@@ -75,6 +75,7 @@ async fn handle(
 					max_players_normal,
 					max_players_direct,
 					max_players_party,
+					listable: true,
 
 					runtime: Some(backend::matchmaker::lobby_runtime::Docker {
 						build_id: build_res.build_id,
@@ -86,6 +87,7 @@ async fn handle(
 
 					find_config: None,
 					join_config: None,
+					create_config: None,
 				}],
 			}),
 			..Default::default()
@@ -131,6 +133,8 @@ async fn handle(
 			create_ray_id: Some(ctx.ray_id().into()),
 			preemptively_created: false,
 			creator_user_id: ctx.creator_user_id,
+			lobby_config_json: None,
+			lobby_config_json: None,
 		})
 		.await?;
 	let run_id = internal_unwrap!(complete_msg.run_id).as_uuid();

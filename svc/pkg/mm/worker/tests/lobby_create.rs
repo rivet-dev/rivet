@@ -39,6 +39,7 @@ async fn setup(ctx: &TestCtx) -> Setup {
 				max_players_normal: 8,
 				max_players_direct: 10,
 				max_players_party: 12,
+				listable: true,
 
 				runtime: Some(backend::matchmaker::lobby_runtime::Docker {
 					build_id: build_res.build_id,
@@ -83,6 +84,7 @@ async fn setup(ctx: &TestCtx) -> Setup {
 
 				find_config: None,
 				join_config: None,
+				create_config: None,
 			},
 			backend::matchmaker::LobbyGroup {
 				name_id: "test-2".into(),
@@ -95,6 +97,7 @@ async fn setup(ctx: &TestCtx) -> Setup {
 				max_players_normal: 8,
 				max_players_direct: 10,
 				max_players_party: 12,
+				listable: true,
 
 				runtime: Some(backend::matchmaker::lobby_runtime::Docker {
 					build_id: build_res.build_id,
@@ -128,6 +131,7 @@ async fn setup(ctx: &TestCtx) -> Setup {
 
 				find_config: None,
 				join_config: None,
+				create_config: None,
 			}],
 		}),
 		..Default::default()
@@ -182,6 +186,7 @@ async fn lobby_create(ctx: TestCtx) {
 		create_ray_id: None,
 		preemptively_created: false,
 		creator_user_id: None,
+		lobby_config_json: None,
 	})
 	.await
 	.unwrap();
@@ -230,6 +235,7 @@ async fn lobby_create_max_lobby_count(ctx: TestCtx) {
 			create_ray_id: None,
 			preemptively_created: false,
 			creator_user_id: None,
+			lobby_config_json: None,
 		})
 		.await
 		.unwrap();
@@ -245,6 +251,7 @@ async fn lobby_create_max_lobby_count(ctx: TestCtx) {
 		create_ray_id: None,
 		preemptively_created: false,
 		creator_user_id: None,
+		lobby_config_json: None,
 	})
 	.await
 	.unwrap();
@@ -267,6 +274,7 @@ async fn lobby_create_reuse_job_id(ctx: TestCtx) {
 		create_ray_id: None,
 		preemptively_created: false,
 		creator_user_id: None,
+		lobby_config_json: None,
 	})
 	.await
 	.unwrap();
@@ -280,6 +288,7 @@ async fn lobby_create_reuse_job_id(ctx: TestCtx) {
 		create_ray_id: None,
 		preemptively_created: false,
 		creator_user_id: None,
+		lobby_config_json: None,
 	})
 	.await
 	.unwrap();

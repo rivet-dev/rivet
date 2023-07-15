@@ -87,6 +87,7 @@ impl Ctx {
 			create_ray_id: None,
 			preemptively_created: false,
 			creator_user_id: None,
+			lobby_config_json: None,
 		})
 		.await
 		.unwrap();

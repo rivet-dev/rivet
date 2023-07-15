@@ -46,6 +46,7 @@ async fn create_lobby_group(ctx: &TestCtx, image: Option<faker::build::Image>) -
 				max_players_normal: 8,
 				max_players_direct: 10,
 				max_players_party: 12,
+				listable: true,
 
 				runtime: Some(backend::matchmaker::lobby_runtime::Docker {
 					// We can't use `curlimages/curl` here because it doesn't allow for
@@ -69,6 +70,7 @@ async fn create_lobby_group(ctx: &TestCtx, image: Option<faker::build::Image>) -
 
 				find_config: None,
 				join_config: None,
+				create_config: None,
 			}],
 		}),
 		..Default::default()
@@ -699,6 +701,7 @@ async fn gen_verification_lobby(
 				max_players_normal: 8,
 				max_players_direct: 10,
 				max_players_party: 12,
+				listable: true,
 
 				runtime: Some(
 					backend::matchmaker::lobby_runtime::Docker {
@@ -721,6 +724,8 @@ async fn gen_verification_lobby(
 					identity_requirement: identity_requirement as i32,
 					verification_config,
 				}),
+				// TODO:
+				create_config: None,
 			}],
 		}),
 	})

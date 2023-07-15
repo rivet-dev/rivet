@@ -45,7 +45,6 @@ async fn handle(
 	.execute(&mut tx)
 	.await?;
 
-	// TODO: Parallelize all futures in this for loop
 	// Save lobby groups
 	internal_assert_eq!(config.lobby_groups.len(), config_ctx.lobby_groups.len());
 	for (lobby_group, lobby_group_ctx) in config
@@ -61,8 +60,7 @@ async fn handle(
 		let (runtime, runtime_meta) = publish_runtime(
 			internal_unwrap!(runtime.runtime),
 			internal_unwrap!(runtime_ctx.runtime),
-		)
-		.await?;
+		)?;
 
 		// Encode runtime data
 		let (runtime_buf, runtime_meta_buf) = {
@@ -108,13 +106,14 @@ async fn handle(
 				max_players_normal,
 				max_players_direct,
 				max_players_party,
+				listable,
 
 				runtime,
 				runtime_meta,
 				find_config,
 				join_config
 			)
-			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
 			"
 		))
 		.bind(lobby_group_id)
@@ -123,6 +122,7 @@ async fn handle(
 		.bind(lobby_group.max_players_normal as i64)
 		.bind(lobby_group.max_players_direct as i64)
 		.bind(lobby_group.max_players_party as i64)
+		.bind(lobby_group.listable)
 		.bind(&runtime_buf)
 		.bind(&runtime_meta_buf)
 		.bind(&find_config_buf)
@@ -132,8 +132,14 @@ async fn handle(
 
 		for region in &lobby_group.regions {
 			let region_id = internal_unwrap!(region.region_id).as_uuid();
-			sqlx::query(
-				"INSERT INTO lobby_group_regions (lobby_group_id, region_id, tier_name_id) VALUES ($1, $2, $3)",
+			sqlx::query(indoc!(
+				"
+				INSERT INTO lobby_group_regions (
+					lobby_group_id, region_id, tier_name_id
+				)
+				VALUES ($1, $2, $3)
+				"
+			),
 			)
 			.bind(lobby_group_id)
 			.bind(region_id)
@@ -142,8 +148,14 @@ async fn handle(
 			.await?;
 
 			if let Some(idle_lobbies) = &region.idle_lobbies {
-				sqlx::query(
-				"INSERT INTO lobby_group_idle_lobbies (lobby_group_id, region_id, min_idle_lobbies, max_idle_lobbies) VALUES ($1, $2, $3, $4)",
+				sqlx::query(indoc!(
+				"
+				INSERT INTO lobby_group_idle_lobbies (
+					lobby_group_id, region_id, min_idle_lobbies, max_idle_lobbies
+				)
+				VALUES ($1, $2, $3, $4)
+				"
+			),
 			)
 			.bind(lobby_group_id)
 			.bind(region_id)
@@ -168,7 +180,7 @@ async fn handle(
 ///
 /// For example: a docker image with an input of `nginx` would have the tag resolved against the
 /// registry to `nginx:1.21.1` in order to pin the version.
-async fn publish_runtime(
+fn publish_runtime(
 	runtime: &backend::matchmaker::lobby_runtime::Runtime,
 	runtime_ctx: &backend::matchmaker::lobby_runtime_ctx::Runtime,
 ) -> GlobalResult<(

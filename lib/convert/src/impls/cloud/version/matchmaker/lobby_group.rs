@@ -23,11 +23,13 @@ impl ApiTryFrom<models::CloudVersionMatchmakerLobbyGroup> for backend::matchmake
 			max_players_normal: value.max_players_normal as u32,
 			max_players_direct: value.max_players_direct as u32,
 			max_players_party: value.max_players_party as u32,
+			listable: true,
 
 			runtime: Some((*value.runtime).try_into()?),
 
 			find_config: None,
 			join_config: None,
+			create_config: None,
 		})
 	}
 }

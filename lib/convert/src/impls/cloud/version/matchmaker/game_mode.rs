@@ -113,6 +113,7 @@ pub fn game_mode_to_proto(
 		max_players_normal: max_players_normal as u32,
 		max_players_direct: max_players_direct as u32,
 		max_players_party: max_players_party as u32,
+		listable: game_mode.listable.unwrap_or(true),
 
 		runtime,
 
@@ -123,6 +124,11 @@ pub fn game_mode_to_proto(
 			.transpose()?,
 		join_config: game_mode
 			.join_config
+			.clone()
+			.map(|x| ApiTryInto::try_into(*x))
+			.transpose()?,
+		create_config: game_mode
+			.create_config
 			.clone()
 			.map(|x| ApiTryInto::try_into(*x))
 			.transpose()?,
@@ -218,6 +224,7 @@ pub fn game_mode_to_openapi(
 			max_players: Some(value.max_players_normal as i32),
 			max_players_direct: Some(value.max_players_direct as i32),
 			max_players_party: Some(value.max_players_party as i32),
+			listable: Some(value.listable),
 
 			docker: Some(Box::new(docker)),
 
@@ -228,6 +235,11 @@ pub fn game_mode_to_openapi(
 				.map(Box::new),
 			join_config: value
 				.join_config
+				.map(ApiTryInto::try_into)
+				.transpose()?
+				.map(Box::new),
+			create_config: value
+				.create_config
 				.map(ApiTryInto::try_into)
 				.transpose()?
 				.map(Box::new),
@@ -475,6 +487,59 @@ impl ApiTryFrom<backend::matchmaker::JoinConfig>
 				.map(ApiTryInto::try_into)
 				.transpose()?
 				.map(Box::new),
+		})
+	}
+}
+
+impl ApiTryFrom<models::CloudVersionMatchmakerGameModeCreateConfig>
+	for backend::matchmaker::CreateConfig
+{
+	type Error = GlobalError;
+
+	fn try_from(value: models::CloudVersionMatchmakerGameModeCreateConfig) -> GlobalResult<Self> {
+		if let Some(max_lobbies_per_identity) = value.max_lobbies_per_identity {
+			assert_with!(
+				max_lobbies_per_identity >= 0,
+				MATCHMAKER_INVALID_VERSION_CONFIG,
+				error = "`create_config.max_lobbies_per_identity` out of bounds"
+			);
+		}
+		
+		Ok(backend::matchmaker::CreateConfig {
+			identity_requirement: ApiInto::<backend::matchmaker::IdentityRequirement>::api_into(
+				value.identity_requirement,
+			) as i32,
+			verification_config: value
+				.verification_config
+				.map(|x| ApiTryInto::try_into(*x))
+				.transpose()?,
+			enable_public: value.enable_public,
+			enable_private: value.enable_private,
+			max_lobbies_per_identity: value.max_lobbies_per_identity.map(ApiTryInto::try_into).transpose()?,
+		})
+	}
+}
+
+impl ApiTryFrom<backend::matchmaker::CreateConfig>
+	for models::CloudVersionMatchmakerGameModeCreateConfig
+{
+	type Error = GlobalError;
+
+	fn try_from(value: backend::matchmaker::CreateConfig) -> GlobalResult<Self> {
+		Ok(models::CloudVersionMatchmakerGameModeCreateConfig {
+			identity_requirement: internal_unwrap_owned!(
+				backend::matchmaker::IdentityRequirement::from_i32(value.identity_requirement),
+				"invalid identity requirement variant"
+			)
+			.api_into(),
+			verification_config: value
+				.verification_config
+				.map(ApiTryInto::try_into)
+				.transpose()?
+				.map(Box::new),
+			enable_public: value.enable_public,
+			enable_private: value.enable_private,
+			max_lobbies_per_identity: value.max_lobbies_per_identity.map(ApiTryInto::try_into).transpose()?,
 		})
 	}
 }

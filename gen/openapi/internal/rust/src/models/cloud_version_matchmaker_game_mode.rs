@@ -14,6 +14,8 @@
 
 #[derive(Clone, Debug, PartialEq, Default, Serialize, Deserialize)]
 pub struct CloudVersionMatchmakerGameMode {
+    #[serde(rename = "create_config", skip_serializing_if = "Option::is_none")]
+    pub create_config: Option<Box<crate::models::CloudVersionMatchmakerGameModeCreateConfig>>,
     #[serde(rename = "docker", skip_serializing_if = "Option::is_none")]
     pub docker: Option<Box<crate::models::CloudVersionMatchmakerGameModeRuntimeDocker>>,
     #[serde(rename = "find_config", skip_serializing_if = "Option::is_none")]
@@ -22,6 +24,8 @@ pub struct CloudVersionMatchmakerGameMode {
     pub idle_lobbies: Option<Box<crate::models::CloudVersionMatchmakerGameModeIdleLobbiesConfig>>,
     #[serde(rename = "join_config", skip_serializing_if = "Option::is_none")]
     pub join_config: Option<Box<crate::models::CloudVersionMatchmakerGameModeJoinConfig>>,
+    #[serde(rename = "listable", skip_serializing_if = "Option::is_none")]
+    pub listable: Option<bool>,
     #[serde(rename = "max_players", skip_serializing_if = "Option::is_none")]
     pub max_players: Option<i32>,
     #[serde(rename = "max_players_direct", skip_serializing_if = "Option::is_none")]
@@ -38,10 +42,12 @@ impl CloudVersionMatchmakerGameMode {
     /// A game mode.
     pub fn new() -> CloudVersionMatchmakerGameMode {
         CloudVersionMatchmakerGameMode {
+            create_config: None,
             docker: None,
             find_config: None,
             idle_lobbies: None,
             join_config: None,
+            listable: None,
             max_players: None,
             max_players_direct: None,
             max_players_party: None,

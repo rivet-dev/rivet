@@ -39,5 +39,8 @@ message Message {
 
 	// The user (if any) that triggered this lobby's creation (either by /find or /create).
 	optional rivet.common.Uuid creator_user_id = 8;
+
+	// Extra lobby config provided by the user in /create. Sent to the lobby as an env var.
+	optional string lobby_config_json = 9;
 }
 

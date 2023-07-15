@@ -17,11 +17,13 @@ struct LobbyGroup {
 	max_players_normal: i64,
 	max_players_direct: i64,
 	max_players_party: i64,
+	listable: bool,
 
 	runtime: Vec<u8>,
 	runtime_meta: Vec<u8>,
 	find_config: Option<Vec<u8>>,
 	join_config: Option<Vec<u8>>,
+	create_config: Option<Vec<u8>>,
 }
 
 #[derive(Clone, sqlx::FromRow)]
@@ -102,9 +104,9 @@ async fn fetch_versions(
 			SELECT 
 				lobby_group_id, version_id,
 				name_id,
-				max_players_normal, max_players_direct, max_players_party,
+				max_players_normal, max_players_direct, max_players_party, listable,
 				runtime, runtime_meta,
-				find_config, join_config
+				find_config, join_config, create_config
 			FROM lobby_groups
 			WHERE version_id = ANY($1)
 			"
@@ -180,6 +182,11 @@ async fn fetch_versions(
 									.as_ref()
 									.map(|jc| backend::matchmaker::JoinConfig::decode(jc.as_ref()))
 									.transpose()?;
+								let create_config = lg
+									.create_config
+									.as_ref()
+									.map(|jc| backend::matchmaker::CreateConfig::decode(jc.as_ref()))
+									.transpose()?;
 
 								Ok(backend::matchmaker::LobbyGroup {
 									name_id: lg.name_id.clone(),
@@ -210,11 +217,13 @@ async fn fetch_versions(
 									max_players_normal: lg.max_players_normal as u32,
 									max_players_direct: lg.max_players_direct as u32,
 									max_players_party: lg.max_players_party as u32,
+									listable: lg.listable,
 
 									runtime: Some(runtime),
 
-									find_config: find_config,
-									join_config: join_config,
+									find_config,
+									join_config,
+									create_config,
 								})
 							})
 							.collect::<GlobalResult<Vec<_>>>()?,

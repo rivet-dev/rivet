@@ -74,7 +74,9 @@ async fn handle(
 			region_id: Some(region_id.into()),
 			create_ray_id: Some(ctx.ray_id().into()),
 			preemptively_created: false,
+			
 			creator_user_id: None,
+			lobby_config_json: None,
 		}));
 	}
 	futures_util::future::try_join_all(create_futs).await?;

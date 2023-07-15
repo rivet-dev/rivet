@@ -2377,6 +2377,8 @@ components:
     CloudVersionMatchmakerGameMode:
       description: A game mode.
       properties:
+        create_config:
+          $ref: '#/components/schemas/CloudVersionMatchmakerGameModeCreateConfig'
         docker:
           $ref: '#/components/schemas/CloudVersionMatchmakerGameModeRuntimeDocker'
         find_config:
@@ -2385,6 +2387,8 @@ components:
           $ref: '#/components/schemas/CloudVersionMatchmakerGameModeIdleLobbiesConfig'
         join_config:
           $ref: '#/components/schemas/CloudVersionMatchmakerGameModeJoinConfig'
+        listable:
+          type: boolean
         max_players:
           type: integer
         max_players_direct:
@@ -2397,6 +2401,25 @@ components:
           type: object
         tier:
           type: string
+      type: object
+    CloudVersionMatchmakerGameModeCreateConfig:
+      description: Configures the requirements and authentication for the `create`
+        endpoint.
+      properties:
+        enable_private:
+          type: boolean
+        enable_public:
+          type: boolean
+        identity_requirement:
+          $ref: '#/components/schemas/CloudVersionMatchmakerGameModeIdentityRequirement'
+        max_lobbies_per_identity:
+          type: integer
+        verification_config:
+          $ref: '#/components/schemas/CloudVersionMatchmakerGameModeVerificationConfig'
+      required:
+      - identity_requirement
+      - enable_public
+      - enable_private
       type: object
     CloudVersionMatchmakerGameModeFindConfig:
       description: Configures the requirements and authentication for the `find` endpoint.
@@ -4172,6 +4195,11 @@ components:
         A `null` value indicates the entry is deleted.
 
         Maximum length of 262,144 bytes when encoded.'
+    MatchmakerCustomGamePublicity:
+      enum:
+      - public
+      - private
+      type: string
     MatchmakerFindLobbyResponse:
       properties:
         lobby:
@@ -12219,6 +12247,76 @@ paths:
         required: true
       responses:
         '204':
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+          description: ''
+        '408':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+          description: ''
+        '429':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+          description: ''
+        '500':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+          description: ''
+      security: *id001
+      servers:
+      - url: https://matchmaker.api.rivet.gg/v1
+      tags:
+      - MatchmakerLobbies
+  /lobbies/create:
+    post:
+      description: 'Creates a custom lobby.
+
+        '
+      operationId: matchmaker_lobbies_create
+      parameters: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              properties:
+                lobby_config: {}
+                publicity:
+                  $ref: '#/components/schemas/MatchmakerCustomGamePublicity'
+                verification_data: {}
+              required:
+              - publicity
+              - lobby_config
+              - verification_data
+              type: object
+        required: true
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MatchmakerJoinLobbyResponse'
           description: ''
         '400':
           content:

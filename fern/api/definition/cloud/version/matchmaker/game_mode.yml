@@ -18,11 +18,15 @@ types:
         type: optional<integer>
       docker:
         type: optional<GameModeRuntimeDocker>
+      listable:
+        type: optional<boolean>
 
       find_config:
         type: optional<GameModeFindConfig>
       join_config:
         type: optional<GameModeJoinConfig>
+      create_config:
+        type: optional<GameModeCreateConfig>
 
       # Region overrides
       tier:
@@ -115,3 +119,12 @@ types:
     properties:
       identity_requirement: GameModeIdentityRequirement
       verification_config: optional<GameModeVerificationConfig>
+
+  GameModeCreateConfig:
+    docs: Configures the requirements and authentication for the `create` endpoint.
+    properties:
+      identity_requirement: GameModeIdentityRequirement
+      verification_config: optional<GameModeVerificationConfig>
+      enable_public: boolean
+      enable_private: boolean
+      max_lobbies_per_identity: optional<integer>

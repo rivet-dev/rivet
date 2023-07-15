@@ -148,6 +148,7 @@ Class | Method | HTTP request | Description
 *KvApi* | [**kv_list**](docs/KvApi.md#kv_list) | **GET** /entries/list | 
 *KvApi* | [**kv_put**](docs/KvApi.md#kv_put) | **PUT** /entries | 
 *KvApi* | [**kv_put_batch**](docs/KvApi.md#kv_put_batch) | **PUT** /entries/batch | 
+*MatchmakerLobbiesApi* | [**matchmaker_lobbies_create**](docs/MatchmakerLobbiesApi.md#matchmaker_lobbies_create) | **POST** /lobbies/create | 
 *MatchmakerLobbiesApi* | [**matchmaker_lobbies_find**](docs/MatchmakerLobbiesApi.md#matchmaker_lobbies_find) | **POST** /lobbies/find | 
 *MatchmakerLobbiesApi* | [**matchmaker_lobbies_join**](docs/MatchmakerLobbiesApi.md#matchmaker_lobbies_join) | **POST** /lobbies/join | 
 *MatchmakerLobbiesApi* | [**matchmaker_lobbies_list**](docs/MatchmakerLobbiesApi.md#matchmaker_lobbies_list) | **GET** /lobbies/list | 
@@ -346,6 +347,7 @@ Class | Method | HTTP request | Description
  - [CloudVersionMatchmakerCaptchaHcaptchaLevel](docs/CloudVersionMatchmakerCaptchaHcaptchaLevel.md)
  - [CloudVersionMatchmakerConfig](docs/CloudVersionMatchmakerConfig.md)
  - [CloudVersionMatchmakerGameMode](docs/CloudVersionMatchmakerGameMode.md)
+ - [CloudVersionMatchmakerGameModeCreateConfig](docs/CloudVersionMatchmakerGameModeCreateConfig.md)
  - [CloudVersionMatchmakerGameModeFindConfig](docs/CloudVersionMatchmakerGameModeFindConfig.md)
  - [CloudVersionMatchmakerGameModeIdentityRequirement](docs/CloudVersionMatchmakerGameModeIdentityRequirement.md)
  - [CloudVersionMatchmakerGameModeIdleLobbiesConfig](docs/CloudVersionMatchmakerGameModeIdleLobbiesConfig.md)
@@ -465,6 +467,7 @@ Class | Method | HTTP request | Description
  - [KvPutBatchRequest](docs/KvPutBatchRequest.md)
  - [KvPutEntry](docs/KvPutEntry.md)
  - [KvPutRequest](docs/KvPutRequest.md)
+ - [MatchmakerCustomGamePublicity](docs/MatchmakerCustomGamePublicity.md)
  - [MatchmakerFindLobbyResponse](docs/MatchmakerFindLobbyResponse.md)
  - [MatchmakerGameModeInfo](docs/MatchmakerGameModeInfo.md)
  - [MatchmakerGameModeStatistics](docs/MatchmakerGameModeStatistics.md)
@@ -477,6 +480,7 @@ Class | Method | HTTP request | Description
  - [MatchmakerJoinRegion](docs/MatchmakerJoinRegion.md)
  - [MatchmakerListLobbiesResponse](docs/MatchmakerListLobbiesResponse.md)
  - [MatchmakerListRegionsResponse](docs/MatchmakerListRegionsResponse.md)
+ - [MatchmakerLobbiesCreateRequest](docs/MatchmakerLobbiesCreateRequest.md)
  - [MatchmakerLobbiesFindRequest](docs/MatchmakerLobbiesFindRequest.md)
  - [MatchmakerLobbiesJoinRequest](docs/MatchmakerLobbiesJoinRequest.md)
  - [MatchmakerLobbiesSetClosedRequest](docs/MatchmakerLobbiesSetClosedRequest.md)

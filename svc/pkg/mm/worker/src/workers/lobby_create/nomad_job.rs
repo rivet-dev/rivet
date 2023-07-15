@@ -44,6 +44,7 @@ pub fn gen_lobby_docker_job(
 	runtime: &backend::matchmaker::lobby_runtime::Docker,
 	image_tag: &str,
 	tier: &backend::region::Tier,
+	lobby_config_json: Option<&String>,
 ) -> GlobalResult<nomad_client::models::Job> {
 	// IMPORTANT: This job spec must be deterministic. Do not pass in parameters
 	// that change with every run, such as the lobby ID. Ensure the
@@ -115,6 +116,13 @@ pub fn gen_lobby_docker_job(
 				v.value.replace('$', "$$"),
 			)
 		})
+		.chain(lobby_config_json.map(|config| {
+			(
+				"RIVET_LOBBY_CONFIG".to_string(),
+				// Escape all interpolation
+				config.replace('$', "$$"),
+			)
+		}))
 		.chain(
 			[
 				("RIVET_CHAT_API_URL", "api-chat"),

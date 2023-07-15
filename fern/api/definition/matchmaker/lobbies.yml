@@ -68,6 +68,20 @@ service:
             verification_data: unknown
       response: JoinLobbyResponse
 
+    create:
+      path: /create
+      method: POST
+      docs: |
+        Creates a custom lobby.
+      request:
+        name: CreateLobbyRequest
+        body:
+          properties:
+            publicity: localCommons.CustomGamePublicity
+            lobby_config: unknown
+            verification_data: unknown
+      response: JoinLobbyResponse
+
     list:
       path: /list
       method: GET
