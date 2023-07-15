@@ -14,6 +14,7 @@ struct LobbyRow {
 	is_closed: bool,
 	namespace_id: Uuid,
 	create_ray_id: Option<Uuid>,
+	is_custom: bool,
 	publicity: i32,
 
 	max_players_normal: i64,
@@ -35,6 +36,7 @@ impl From<LobbyRow> for backend::matchmaker::Lobby {
 			is_closed: value.is_closed,
 			namespace_id: Some(value.namespace_id.into()),
 			create_ray_id: value.create_ray_id.map(Into::into),
+			is_custom: value.is_custom,
 			publicity: value.publicity,
 
 			max_players_normal: value.max_players_normal as u32,
@@ -70,6 +72,7 @@ async fn handle(
 			is_closed,
 			namespace_id,
 			create_ray_id,
+			is_custom,
 			publicity,
 
 			max_players_normal,
@@ -84,7 +87,12 @@ async fn handle(
 	.await?
 	.into_iter()
 	.filter(|x| x.stop_ts.is_none() || ctx.include_stopped)
-	.filter(|x| x.stop_ts.is_none() || ctx.include_private)
+	.filter(|x| {
+		backend::matchmaker::lobby::Publicity::from_i32(x.publicity)
+			.map(|publicity| matches!(publicity, backend::matchmaker::lobby::Publicity::Public))
+			.unwrap_or_default()
+			|| ctx.include_private
+	})
 	.map(Into::<backend::matchmaker::Lobby>::into)
 	.collect();
 

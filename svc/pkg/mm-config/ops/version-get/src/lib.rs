@@ -185,7 +185,9 @@ async fn fetch_versions(
 								let create_config = lg
 									.create_config
 									.as_ref()
-									.map(|jc| backend::matchmaker::CreateConfig::decode(jc.as_ref()))
+									.map(|jc| {
+										backend::matchmaker::CreateConfig::decode(jc.as_ref())
+									})
 									.transpose()?;
 
 								Ok(backend::matchmaker::LobbyGroup {

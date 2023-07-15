@@ -106,6 +106,7 @@ impl Auth {
 			let lobbies_res = op!([ctx] mm_lobby_get {
 				lobby_ids: vec![lobby_ent.lobby_id.into()],
 				include_stopped: false,
+				include_private: true,
 			})
 			.await?;
 

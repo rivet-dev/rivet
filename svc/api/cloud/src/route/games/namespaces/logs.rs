@@ -125,6 +125,7 @@ async fn fetch_lobby_logs(ctx: &Ctx<Auth>, lobby_ids: Vec<Uuid>) -> GlobalResult
 			.map(|x| Into::into(*x))
 			.collect(),
 		include_stopped: true,
+		include_private: true,
 	})
 	.await?;
 	let mut lobbies = lobby_res.lobbies.iter().collect::<Vec<_>>();

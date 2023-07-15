@@ -52,6 +52,8 @@ async fn empty(ctx: TestCtx) {
 						max_players_normal: 33,
 						max_players_direct: 0,
 						max_players_party: 16,
+						listable: true,
+
 						runtime: Some(matchmaker::LobbyRuntime {
 							runtime: Some(matchmaker::lobby_runtime::Runtime::Docker(
 								matchmaker::lobby_runtime::Docker {
@@ -127,6 +129,10 @@ async fn empty(ctx: TestCtx) {
 								},
 							)),
 						}),
+
+						find_config: None,
+						join_config: None,
+						create_config: None,
 					},
 					matchmaker::LobbyGroup {
 						name_id: "name".to_owned(),
@@ -138,6 +144,8 @@ async fn empty(ctx: TestCtx) {
 						max_players_normal: 33,
 						max_players_direct: 0,
 						max_players_party: 16,
+						listable: true,
+
 						runtime: Some(matchmaker::LobbyRuntime {
 							runtime: Some(matchmaker::lobby_runtime::Runtime::Docker(
 								matchmaker::lobby_runtime::Docker {
@@ -150,6 +158,10 @@ async fn empty(ctx: TestCtx) {
 								},
 							)),
 						}),
+
+						find_config: None,
+						join_config: None,
+						create_config: None,
 					},
 				],
 				captcha: Some(backend::captcha::CaptchaConfig {

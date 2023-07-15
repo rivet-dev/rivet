@@ -40,6 +40,7 @@ impl TestVersion {
 				max_players_normal: 8,
 				max_players_direct: 10,
 				max_players_party: 12,
+				listable: true,
 
 				runtime: Some(
 					backend::matchmaker::lobby_runtime::Docker {
@@ -66,6 +67,7 @@ impl TestVersion {
 
 				find_config: None,
 				join_config: None,
+				create_config: None,
 			}],
 			captcha: None,
 		};

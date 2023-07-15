@@ -134,7 +134,6 @@ async fn handle(
 			preemptively_created: false,
 			creator_user_id: ctx.creator_user_id,
 			lobby_config_json: None,
-			lobby_config_json: None,
 		})
 		.await?;
 	let run_id = internal_unwrap!(complete_msg.run_id).as_uuid();

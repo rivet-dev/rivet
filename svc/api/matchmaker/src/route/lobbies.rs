@@ -553,6 +553,7 @@ async fn fetch_lobby_list(
 			op!([ctx] mm_lobby_get {
 				lobby_ids: lobby_ids.clone(),
 				include_stopped: false,
+				include_private: false,
 			}),
 			op!([ctx] mm_lobby_player_count {
 				lobby_ids: lobby_ids.clone(),

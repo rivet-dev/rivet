@@ -76,6 +76,7 @@ impl Ctx {
 					max_players_normal: 1,
 					max_players_direct: 1,
 					max_players_party: 1,
+					listable: true,
 
 					runtime: Some(backend::matchmaker::lobby_runtime::Docker {
 						build_id: build_res.build_id,
@@ -87,6 +88,7 @@ impl Ctx {
 
 					find_config: None,
 					join_config: None,
+					create_config: None,
 				}],
 			}),
 			..Default::default()

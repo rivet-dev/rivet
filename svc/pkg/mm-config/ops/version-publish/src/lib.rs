@@ -139,8 +139,7 @@ async fn handle(
 				)
 				VALUES ($1, $2, $3)
 				"
-			),
-			)
+			))
 			.bind(lobby_group_id)
 			.bind(region_id)
 			.bind(&region.tier_name_id)
@@ -149,19 +148,19 @@ async fn handle(
 
 			if let Some(idle_lobbies) = &region.idle_lobbies {
 				sqlx::query(indoc!(
-				"
+					"
 				INSERT INTO lobby_group_idle_lobbies (
 					lobby_group_id, region_id, min_idle_lobbies, max_idle_lobbies
 				)
 				VALUES ($1, $2, $3, $4)
 				"
-			),
-			)
-			.bind(lobby_group_id)
-			.bind(region_id)
-			.bind(idle_lobbies.min_idle_lobbies as i64).bind(idle_lobbies.max_idle_lobbies as i64)
-			.execute(&mut tx)
-			.await?;
+				))
+				.bind(lobby_group_id)
+				.bind(region_id)
+				.bind(idle_lobbies.min_idle_lobbies as i64)
+				.bind(idle_lobbies.max_idle_lobbies as i64)
+				.execute(&mut tx)
+				.await?;
 			}
 		}
 	}

@@ -36,6 +36,7 @@ async fn empty(ctx: TestCtx) {
 					max_players_normal: 8,
 					max_players_direct: 10,
 					max_players_party: 12,
+					listable: true,
 
 					runtime: Some(backend::matchmaker::lobby_runtime::Docker {
 						build_id: build_res.build_id,
@@ -60,6 +61,7 @@ async fn empty(ctx: TestCtx) {
 
 					find_config: None,
 					join_config: None,
+					create_config: None,
 				},
 				backend::matchmaker::LobbyGroup {
 					name_id: "test-host".into(),
@@ -74,6 +76,7 @@ async fn empty(ctx: TestCtx) {
 					max_players_normal: 8,
 					max_players_direct: 10,
 					max_players_party: 12,
+					listable: true,
 
 					runtime: Some(backend::matchmaker::lobby_runtime::Docker {
 						build_id: build_res.build_id,
@@ -139,6 +142,7 @@ async fn empty(ctx: TestCtx) {
 
 					find_config: None,
 					join_config: None,
+					create_config: None,
 				},
 			],
 			captcha: None,

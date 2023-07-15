@@ -34,6 +34,7 @@ pub async fn matchmaker_live(
 			op!([ctx] mm_lobby_get {
 				lobby_ids: lobby_ids.clone(),
 				include_stopped: false,
+				include_private: true,
 			}),
 			op!([ctx] mm_lobby_player_count {
 				lobby_ids: lobby_ids.clone(),
