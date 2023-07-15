@@ -1,6 +1,6 @@
 use api_helper::{anchor::WatchIndexQuery, ctx::Ctx};
 use rivet_cloud_server::models;
-use rivet_convert::ApiInto;
+use rivet_convert::ApiTryInto;
 use rivet_operation::prelude::*;
 
 use crate::auth::Auth;
@@ -23,7 +23,7 @@ pub async fn list_tiers(
 			.tiers
 			.clone()
 			.into_iter()
-			.map(ApiInto::api_into)
-			.collect::<Vec<_>>(),
+			.map(ApiTryInto::try_into)
+			.collect::<GlobalResult<Vec<_>>>()?,
 	})
 }
