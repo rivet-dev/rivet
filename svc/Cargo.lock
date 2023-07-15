@@ -711,6 +711,7 @@ dependencies = [
  "tracing",
  "tracing-subscriber",
  "url",
+ "user-identity-get",
  "uuid",
 ]
 
@@ -6828,6 +6829,7 @@ dependencies = [
  "bit-vec",
  "rivet-util",
  "serde",
+ "serde_json",
  "strum",
  "uuid",
 ]

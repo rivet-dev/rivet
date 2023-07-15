@@ -51,6 +51,7 @@ region-recommend = { path = "../../pkg/region/ops/recommend" }
 region-resolve = { path = "../../pkg/region/ops/resolve" }
 token-create = { path = "../../pkg/token/ops/create" }
 token-revoke = { path = "../../pkg/token/ops/revoke" }
+user-identity-get = { path = "../../pkg/user-identity/ops/get" }
 
 [dev-dependencies]
 reqwest = "0.11"

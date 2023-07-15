@@ -1,4 +1,10 @@
+use std::{
+	collections::{HashMap, HashSet},
+	str::FromStr,
+};
+
 use api_helper::{anchor::WatchIndexQuery, ctx::Ctx};
+use http::StatusCode;
 use proto::{
 	backend::{self, pkg::*},
 	common,
@@ -7,10 +13,6 @@ use rivet_api::models;
 use rivet_convert::ApiTryInto;
 use rivet_operation::prelude::*;
 use serde_json::json;
-use std::{
-	collections::{HashMap, HashSet},
-	str::FromStr,
-};
 
 use crate::{
 	auth::Auth,
@@ -70,6 +72,7 @@ pub async fn join(
 		&ctx,
 		&ns_data,
 		find_query,
+		None,
 		body.captcha,
 		body.verification_data,
 	)
@@ -256,12 +259,112 @@ pub async fn find(
 		&ctx,
 		&ns_data,
 		find_query,
+		None,
 		body.captcha,
 		body.verification_data,
 	)
 	.await?;
 
 	Ok(models::MatchmakerFindLobbyResponse {
+		lobby,
+		ports,
+		player,
+	})
+}
+
+// MARK: POST /lobbies/create
+pub async fn create(
+	ctx: Ctx<Auth>,
+	body: models::MatchmakerLobbiesCreateRequest,
+) -> GlobalResult<models::MatchmakerCreateLobbyResponse> {
+	// Mock response
+	if let Some(ns_dev_ent) = ctx.auth().game_ns_dev_option()? {
+		let FindResponse {
+			lobby,
+			ports,
+			player,
+		} = dev_mock_lobby(&ctx, &ns_dev_ent).await?;
+		return Ok(models::MatchmakerCreateLobbyResponse {
+			lobby,
+			ports,
+			player,
+		});
+	}
+
+	// Verify bearer auth and get user ID
+	let (game_ns, user_id) = tokio::try_join!(
+		ctx.auth().game_ns(&ctx),
+		ctx.auth().fetch_game_user_option(ctx.op_ctx()),
+	)?;
+	let ns_data = fetch_ns(&ctx, &game_ns).await?;
+
+	// Fetch version config
+	let version_config_res = op!([ctx] mm_config_version_get {
+		version_ids: vec![ns_data.version_id.into()],
+	})
+	.await?;
+	let version_data = internal_unwrap_owned!(version_config_res.versions.first());
+	let version_config = internal_unwrap!(version_data.config);
+	let version_meta = internal_unwrap!(version_data.config_meta);
+
+	// Find lobby groups that match the requested game mode
+	let (lobby_group, lobby_group_meta) = unwrap_with_owned!(
+		version_config
+			.lobby_groups
+			.iter()
+			.zip(version_meta.lobby_groups.iter())
+			.find(|(lgc, _)| lgc.name_id == body.game_mode),
+		MATCHMAKER_GAME_MODE_NOT_FOUND
+	);
+
+	// Verify that lobby creation is enabled and user can create a lobby
+	verify_create_config(
+		&ctx,
+		&body,
+		ns_data.namespace_id,
+		user_id,
+		lobby_group,
+		lobby_group_meta,
+	)
+	.await?;
+
+	let lobby_id = Uuid::new_v4();
+	let lobby_create_res =
+		msg!([ctx] mm::msg::lobby_create(lobby_id) -> mm::msg::lobby_create_complete {
+			lobby_id: Some(lobby_id.into()),
+			namespace_id: Some(ns_data.namespace_id.into()),
+			lobby_group_id: lobby_group_meta.lobby_group_id,
+			region_id: TODO,
+			create_ray_id: Some(ctx.op_ctx().ray_id().into()),
+			preemptively_created: false,
+			creator_user_id: user_id.map(Into::into),
+			lobby_config_json: body.lobby_config
+				.as_ref()
+				.map(serde_json::to_string)
+				.transpose()?,
+		})
+		.await?;
+
+	// Join the lobby that was just created
+	let find_query =
+		mm::msg::lobby_find::message::Query::Direct(backend::matchmaker::query::Direct {
+			lobby_id: lobby_create_res.lobby_id,
+		});
+	let FindResponse {
+		lobby,
+		ports,
+		player,
+	} = find_inner(
+		&ctx,
+		&ns_data,
+		find_query,
+		Some(version_config.clone()),
+		body.captcha,
+		body.verification_data,
+	)
+	.await?;
+
+	Ok(models::MatchmakerCreateLobbyResponse {
 		lobby,
 		ports,
 		player,
@@ -371,76 +474,6 @@ pub async fn list(
 	Ok(models::MatchmakerListLobbiesResponse {
 		game_modes,
 		regions,
-		lobbies,
-	})
-}
-
-async fn dev_mock_lobby_list(
-	ctx: &Ctx<Auth>,
-	ns_dev_ent: &rivet_claims::ent::GameNamespaceDevelopment,
-) -> GlobalResult<models::MatchmakerListLobbiesResponse> {
-	// Read the version config
-	let ns_res = op!([ctx] game_namespace_get {
-		namespace_ids: vec![ns_dev_ent.namespace_id.into()],
-	})
-	.await?;
-	let ns_data = internal_unwrap_owned!(ns_res.namespaces.first());
-	let version_id = internal_unwrap!(ns_data.version_id).as_uuid();
-
-	let version_res = op!([ctx] mm_config_version_get {
-		version_ids: vec![version_id.into()],
-	})
-	.await?;
-	let version = internal_unwrap_owned!(
-		version_res.versions.first(),
-		"no matchmaker config for namespace"
-	);
-	let version_config = internal_unwrap!(version.config);
-
-	// Create fake region
-	let region = models::MatchmakerRegionInfo {
-		region_id: util_mm::consts::DEV_REGION_ID.into(),
-		provider_display_name: util_mm::consts::DEV_PROVIDER_NAME.into(),
-		region_display_name: util_mm::consts::DEV_REGION_NAME.into(),
-		datacenter_coord: Box::new(models::GeoCoord {
-			latitude: 0.0,
-			longitude: 0.0,
-		}),
-		datacenter_distance_from_client: Box::new(models::GeoDistance {
-			kilometers: 0.0,
-			miles: 0.0,
-		}),
-	};
-
-	// List game modes
-	let game_modes = version_config
-		.lobby_groups
-		.iter()
-		.map(|lg| models::MatchmakerGameModeInfo {
-			game_mode_id: lg.name_id.clone(),
-		})
-		.collect();
-
-	// Create a fake lobby in each game mode
-	let lobbies = version_config
-		.lobby_groups
-		.iter()
-		.map(|lg| {
-			GlobalResult::Ok(models::MatchmakerLobbyInfo {
-				region_id: util_mm::consts::DEV_REGION_ID.into(),
-				game_mode_id: lg.name_id.clone(),
-				lobby_id: Uuid::nil(),
-				max_players_normal: std::convert::TryInto::try_into(lg.max_players_normal)?,
-				max_players_direct: std::convert::TryInto::try_into(lg.max_players_direct)?,
-				max_players_party: std::convert::TryInto::try_into(lg.max_players_party)?,
-				total_player_count: 0,
-			})
-		})
-		.collect::<GlobalResult<Vec<_>>>()?;
-
-	Ok(models::MatchmakerListLobbiesResponse {
-		regions: vec![region],
-		game_modes,
 		lobbies,
 	})
 }
@@ -613,17 +646,27 @@ async fn find_inner(
 	ctx: &Ctx<Auth>,
 	game_ns: &NamespaceData,
 	query: mm::msg::lobby_find::message::Query,
+	version_config: Option<backend::matchmaker::VersionConfig>,
 	captcha: Option<Box<models::CaptchaConfig>>,
 	verification_data: Option<serde_json::Value>,
 ) -> GlobalResult<FindResponse> {
-	// Get version config
-	let version_config_res = op!([ctx] mm_config_version_get {
-		version_ids: vec![game_ns.version_id.into()],
-	})
-	.await?;
+	let (version_config, user_id) = tokio::try_join!(
+		// Fetch version config if it was not passed as an argument
+		async {
+			if let Some(version_config) = version_config {
+				Ok(version_config)
+			} else {
+				let version_config_res = op!([ctx] mm_config_version_get {
+					version_ids: vec![game_ns.version_id.into()],
+				})
+				.await?;
 
-	let version_config = internal_unwrap_owned!(version_config_res.versions.first());
-	let version_config = internal_unwrap!(version_config.config);
+				let version_config = internal_unwrap_owned!(version_config_res.versions.first());
+				Ok(internal_unwrap!(version_config.config).clone())
+			}
+		},
+		ctx.auth().fetch_game_user_option(ctx.op_ctx()),
+	)?;
 
 	// Validate captcha
 	if let Some(captcha_config) = &version_config.captcha {
@@ -728,7 +771,7 @@ async fn find_inner(
 			client_info: Some(ctx.client_info()),
 		}],
 		query: Some(query),
-		user_id: ctx.auth().fetch_game_user_option(ctx.op_ctx()).await?.map(Into::into),
+		user_id: user_id.map(Into::into),
 		verification_data_json: verification_data
 			.map(|data| serde_json::to_string(&data))
 			.transpose()?,
@@ -804,6 +847,7 @@ async fn find_inner(
 			})
 			.await?;
 
+			// NOTE: The matchmaker config is fetched again to account for outdated lobbies
 			let version_id = internal_unwrap_owned!(version_res.versions.first());
 			let version_id = internal_unwrap!(version_id.version_id);
 			let version_res = op!([ctx] mm_config_version_get {
@@ -832,7 +876,6 @@ async fn find_inner(
 
 	// Convert the ports to client-friendly ports
 	let run = internal_unwrap_owned!(run_res.runs.first());
-
 	let ports = docker_runtime
 		.ports
 		.iter()
@@ -868,6 +911,112 @@ async fn find_inner(
 		ports,
 		player,
 	})
+}
+
+// TODO: Copied from svc/pkg/mm/worker/src/workers/lobby_find/verification.rs
+async fn verify_create_config(
+	ctx: &Ctx<Auth>,
+	body: &models::MatchmakerLobbiesCreateRequest,
+	namespace_id: Uuid,
+	user_id: Option<Uuid>,
+	lobby_group: &backend::matchmaker::LobbyGroup,
+	lobby_group_meta: &backend::matchmaker::LobbyGroupMeta,
+) -> GlobalResult<()> {
+	if let Some(create_config) = lobby_group.create_config {
+		let identity_requirement = internal_unwrap_owned!(
+			backend::matchmaker::IdentityRequirement::from_i32(create_config.identity_requirement),
+			"invalid identity requirement variant"
+		);
+
+		// Verify identity requirement
+		match (identity_requirement, user_id) {
+			(backend::matchmaker::IdentityRequirement::Registered, Some(user_id)) => {
+				let user_identities_res = op!([ctx] user_identity_get {
+					user_ids: vec![user_id.into()],
+				})
+				.await?;
+				let user = internal_unwrap_owned!(
+					user_identities_res.users.first(),
+					"could not find user identities"
+				);
+				let is_registered = !user.identities.is_empty();
+
+				if !is_registered {
+					panic_with!(MATCHMAKER_REGISTRATION_REQUIRED);
+				}
+			}
+			(
+				backend::matchmaker::IdentityRequirement::Guest
+				| backend::matchmaker::IdentityRequirement::Registered,
+				None,
+			) => {
+				panic_with!(MATCHMAKER_IDENTITY_REQUIRED);
+			}
+			_ => {}
+		}
+
+		// Verify user data externally
+		if let Some(verification_config) = create_config.verification_config {
+			let external_request_config = backend::net::ExternalRequestConfig {
+				url: verification_config.url.clone(),
+				method: backend::net::HttpMethod::Post as i32,
+				headers: verification_config.headers.clone(),
+			};
+
+			let request_id = Uuid::new_v4();
+
+			// Build body
+			let body = util_mm::verification::ExternalVerificationRequest {
+				verification_data: body
+					.verification_data
+					.as_ref()
+					.map(serde_json::to_value)
+					.transpose()?,
+				lobby: util_mm::verification::Lobby {
+					lobby_group_id: internal_unwrap!(lobby_group_meta.lobby_group_id).as_uuid(),
+					lobby_group_name_id: lobby_group.name_id,
+					namespace_id,
+
+					state: None,
+					config: body
+						.lobby_config
+						.as_ref()
+						.map(serde_json::to_value)
+						.transpose()?,
+				},
+				_type: util_mm::verification::MatchmakerConnectionType::Create,
+			};
+
+			// Send request
+			let external_res = msg!([ctx] external::msg::request_call(request_id)
+			-> Result<external::msg::request_call_complete, external::msg::request_call_fail>
+			{
+				request_id: Some(request_id.into()),
+				config: Some(external_request_config),
+				timeout: util::duration::seconds(10) as u64,
+				body: Some(serde_json::to_vec(&body)?),
+				..Default::default()
+			})
+			.await?;
+
+			// Handle status code
+			if let Ok(res) = external_res {
+				let status = StatusCode::from_u16(res.status_code as u16)?;
+
+				tracing::info!(?status, "user verification response");
+
+				if !status.is_success() {
+					panic_with!(MATCHMAKER_VERIFICATION_FAILED);
+				}
+			} else {
+				panic_with!(MATCHMAKER_VERIFICATION_REQUEST_FAILED);
+			}
+		}
+	} else {
+		panic_with!(MATCHMAKER_CUSTOM_LOBBIES_DISABLED);
+	}
+
+	Ok(())
 }
 
 #[tracing::instrument(err, skip(ctx))]
@@ -933,6 +1082,76 @@ async fn dev_mock_lobby(
 		}),
 		ports,
 		player,
+	})
+}
+
+async fn dev_mock_lobby_list(
+	ctx: &Ctx<Auth>,
+	ns_dev_ent: &rivet_claims::ent::GameNamespaceDevelopment,
+) -> GlobalResult<models::MatchmakerListLobbiesResponse> {
+	// Read the version config
+	let ns_res = op!([ctx] game_namespace_get {
+		namespace_ids: vec![ns_dev_ent.namespace_id.into()],
+	})
+	.await?;
+	let ns_data = internal_unwrap_owned!(ns_res.namespaces.first());
+	let version_id = internal_unwrap!(ns_data.version_id).as_uuid();
+
+	let version_res = op!([ctx] mm_config_version_get {
+		version_ids: vec![version_id.into()],
+	})
+	.await?;
+	let version = internal_unwrap_owned!(
+		version_res.versions.first(),
+		"no matchmaker config for namespace"
+	);
+	let version_config = internal_unwrap!(version.config);
+
+	// Create fake region
+	let region = models::MatchmakerRegionInfo {
+		region_id: util_mm::consts::DEV_REGION_ID.into(),
+		provider_display_name: util_mm::consts::DEV_PROVIDER_NAME.into(),
+		region_display_name: util_mm::consts::DEV_REGION_NAME.into(),
+		datacenter_coord: Box::new(models::GeoCoord {
+			latitude: 0.0,
+			longitude: 0.0,
+		}),
+		datacenter_distance_from_client: Box::new(models::GeoDistance {
+			kilometers: 0.0,
+			miles: 0.0,
+		}),
+	};
+
+	// List game modes
+	let game_modes = version_config
+		.lobby_groups
+		.iter()
+		.map(|lg| models::MatchmakerGameModeInfo {
+			game_mode_id: lg.name_id.clone(),
+		})
+		.collect();
+
+	// Create a fake lobby in each game mode
+	let lobbies = version_config
+		.lobby_groups
+		.iter()
+		.map(|lg| {
+			GlobalResult::Ok(models::MatchmakerLobbyInfo {
+				region_id: util_mm::consts::DEV_REGION_ID.into(),
+				game_mode_id: lg.name_id.clone(),
+				lobby_id: Uuid::nil(),
+				max_players_normal: std::convert::TryInto::try_into(lg.max_players_normal)?,
+				max_players_direct: std::convert::TryInto::try_into(lg.max_players_direct)?,
+				max_players_party: std::convert::TryInto::try_into(lg.max_players_party)?,
+				total_player_count: 0,
+			})
+		})
+		.collect::<GlobalResult<Vec<_>>>()?;
+
+	Ok(models::MatchmakerListLobbiesResponse {
+		regions: vec![region],
+		game_modes,
+		lobbies,
 	})
 }
 

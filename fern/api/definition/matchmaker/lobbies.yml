@@ -77,10 +77,12 @@ service:
         name: CreateLobbyRequest
         body:
           properties:
+            game_mode: string
+            captcha: optional<captchaConfig.Config>
             publicity: localCommons.CustomGamePublicity
             lobby_config: unknown
             verification_data: unknown
-      response: JoinLobbyResponse
+      response: CreateLobbyResponse
 
     list:
       path: /list
@@ -96,6 +98,12 @@ types:
       player: matchmakerCommons.JoinPlayer
 
   JoinLobbyResponse:
+    properties:
+      lobby: matchmakerCommons.JoinLobby
+      ports: map<string, matchmakerCommons.JoinPort>
+      player: matchmakerCommons.JoinPlayer
+
+  CreateLobbyResponse:
     properties:
       lobby: matchmakerCommons.JoinLobby
       ports: map<string, matchmakerCommons.JoinPort>

@@ -566,6 +566,8 @@ pub mod kv_put_entry;
 pub use self::kv_put_entry::KvPutEntry;
 pub mod kv_put_request;
 pub use self::kv_put_request::KvPutRequest;
+pub mod matchmaker_create_lobby_response;
+pub use self::matchmaker_create_lobby_response::MatchmakerCreateLobbyResponse;
 pub mod matchmaker_custom_game_publicity;
 pub use self::matchmaker_custom_game_publicity::MatchmakerCustomGamePublicity;
 pub mod matchmaker_find_lobby_response;

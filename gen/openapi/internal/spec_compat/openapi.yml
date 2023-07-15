@@ -4195,6 +4195,21 @@ components:
         A `null` value indicates the entry is deleted.
 
         Maximum length of 262,144 bytes when encoded.'
+    MatchmakerCreateLobbyResponse:
+      properties:
+        lobby:
+          $ref: '#/components/schemas/MatchmakerJoinLobby'
+        player:
+          $ref: '#/components/schemas/MatchmakerJoinPlayer'
+        ports:
+          additionalProperties:
+            $ref: '#/components/schemas/MatchmakerJoinPort'
+          type: object
+      required:
+      - lobby
+      - ports
+      - player
+      type: object
     MatchmakerCustomGamePublicity:
       enum:
       - public
@@ -12301,11 +12316,16 @@ paths:
           application/json:
             schema:
               properties:
+                captcha:
+                  $ref: '#/components/schemas/CaptchaConfig'
+                game_mode:
+                  type: string
                 lobby_config: {}
                 publicity:
                   $ref: '#/components/schemas/MatchmakerCustomGamePublicity'
                 verification_data: {}
               required:
+              - game_mode
               - publicity
               - lobby_config
               - verification_data
@@ -12316,7 +12336,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/MatchmakerJoinLobbyResponse'
+                $ref: '#/components/schemas/MatchmakerCreateLobbyResponse'
           description: ''
         '400':
           content:

@@ -15,7 +15,7 @@ Method | HTTP request | Description
 
 ## matchmaker_lobbies_create
 
-> crate::models::MatchmakerJoinLobbyResponse matchmaker_lobbies_create(matchmaker_lobbies_create_request)
+> crate::models::MatchmakerCreateLobbyResponse matchmaker_lobbies_create(matchmaker_lobbies_create_request)
 
 
 Creates a custom lobby. 
@@ -29,7 +29,7 @@ Name | Type | Description  | Required | Notes
 
 ### Return type
 
-[**crate::models::MatchmakerJoinLobbyResponse**](MatchmakerJoinLobbyResponse.md)
+[**crate::models::MatchmakerCreateLobbyResponse**](MatchmakerCreateLobbyResponse.md)
 
 ### Authorization
 

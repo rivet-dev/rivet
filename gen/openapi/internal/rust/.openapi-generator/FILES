@@ -317,6 +317,7 @@ docs/KvListResponse.md
 docs/KvPutBatchRequest.md
 docs/KvPutEntry.md
 docs/KvPutRequest.md
+docs/MatchmakerCreateLobbyResponse.md
 docs/MatchmakerCustomGamePublicity.md
 docs/MatchmakerFindLobbyResponse.md
 docs/MatchmakerGameModeInfo.md
@@ -715,6 +716,7 @@ src/models/kv_list_response.rs
 src/models/kv_put_batch_request.rs
 src/models/kv_put_entry.rs
 src/models/kv_put_request.rs
+src/models/matchmaker_create_lobby_response.rs
 src/models/matchmaker_custom_game_publicity.rs
 src/models/matchmaker_find_lobby_response.rs
 src/models/matchmaker_game_mode_info.rs

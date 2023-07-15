@@ -8126,7 +8126,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/MatchmakerJoinLobbyResponse'
+                $ref: '#/components/schemas/MatchmakerCreateLobbyResponse'
         '400':
           description: ''
           content:
@@ -8173,11 +8173,16 @@ paths:
             schema:
               type: object
               properties:
+                game_mode:
+                  type: string
+                captcha:
+                  $ref: '#/components/schemas/CaptchaConfig'
                 publicity:
                   $ref: '#/components/schemas/MatchmakerCustomGamePublicity'
                 lobby_config: {}
                 verification_data: {}
               required:
+                - game_mode
                 - publicity
                 - lobby_config
                 - verification_data
@@ -14196,6 +14201,21 @@ components:
         - ports
         - player
     MatchmakerJoinLobbyResponse:
+      type: object
+      properties:
+        lobby:
+          $ref: '#/components/schemas/MatchmakerJoinLobby'
+        ports:
+          type: object
+          additionalProperties:
+            $ref: '#/components/schemas/MatchmakerJoinPort'
+        player:
+          $ref: '#/components/schemas/MatchmakerJoinPlayer'
+      required:
+        - lobby
+        - ports
+        - player
+    MatchmakerCreateLobbyResponse:
       type: object
       properties:
         lobby:

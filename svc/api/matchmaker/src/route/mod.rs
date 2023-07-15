@@ -61,6 +61,18 @@ define_router! {
 				},
 			),
 		},
+		"lobbies" / "create": {
+			POST: lobbies::create(
+				body: rivet_api::models::MatchmakerLobbiesCreateRequest,
+				opt_auth: true,
+				rate_limit: {
+					key: "lobby-create",
+					buckets: [
+						{ count: 3 },
+					],
+				},
+			),
+		},
 		"lobbies" / "closed": {
 			PUT: lobbies::closed(
 				body: rivet_api::models::MatchmakerLobbiesSetClosedRequest,

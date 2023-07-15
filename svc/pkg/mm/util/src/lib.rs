@@ -3,6 +3,7 @@ pub mod defaults;
 pub mod key;
 pub mod test;
 pub mod version_migrations;
+pub mod verification;
 
 pub enum JoinKind {
 	Normal,

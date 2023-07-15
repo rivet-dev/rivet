@@ -95,7 +95,7 @@ pub enum MatchmakerLobbiesSetClosedError {
 
 
 /// Creates a custom lobby. 
-pub async fn matchmaker_lobbies_create(configuration: &configuration::Configuration, matchmaker_lobbies_create_request: crate::models::MatchmakerLobbiesCreateRequest) -> Result<crate::models::MatchmakerJoinLobbyResponse, Error<MatchmakerLobbiesCreateError>> {
+pub async fn matchmaker_lobbies_create(configuration: &configuration::Configuration, matchmaker_lobbies_create_request: crate::models::MatchmakerLobbiesCreateRequest) -> Result<crate::models::MatchmakerCreateLobbyResponse, Error<MatchmakerLobbiesCreateError>> {
     let local_var_configuration = configuration;
 
     let local_var_client = &local_var_configuration.client;

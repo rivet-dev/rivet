@@ -8,6 +8,7 @@ use proto::backend::{
 	},
 };
 use serde_json::json;
+use util_mm;
 
 use super::{fail, LobbyGroupConfig};
 
@@ -57,7 +58,7 @@ pub async fn verify(
 		_ => (backend::matchmaker::IdentityRequirement::None, None),
 	};
 
-	// Verify identity registration
+	// Verify identity requirement
 	match (identity_requirement, ctx.user_id) {
 		(backend::matchmaker::IdentityRequirement::Registered, Some(user_id)) => {
 			let user_identities_res = op!([ctx] user_identity_get {
@@ -112,31 +113,38 @@ pub async fn verify(
 			.await?;
 			let region = internal_unwrap_owned!(regions_res.regions.first());
 
-			json!({
-				"lobby_id": internal_unwrap!(l.lobby_id).as_uuid(),
-				"lobby_group_id": internal_unwrap!(l.lobby_group_id).as_uuid(),
-				"lobby_group_name_id": lobby_group_config.lobby_group.name_id,
-				"region_id": region_id.as_uuid(),
-				"region_name_id": region.name_id,
-				"create_ts": util::timestamp::to_string(l.create_ts)?,
-				"is_closed": l.is_closed,
-				"namespace_id": internal_unwrap!(l.namespace_id).as_uuid(),
+			Some(util_mm::verification::LobbyState {
+				lobby_id: internal_unwrap!(l.lobby_id).as_uuid(),
+				region_id: region_id.as_uuid(),
+				region_name_id: region.name_id.clone(),
+				create_ts: util::timestamp::to_string(l.create_ts)?,
+				is_closed: l.is_closed,
 			})
 		} else {
-			serde_json::Value::Null
+			None
 		};
-		let body = json!({
-			"verification_data": ctx
+		let body = util_mm::verification::ExternalVerificationRequest {
+			verification_data: ctx
 				.verification_data_json
 				.as_ref()
 				.map(serde_json::to_value)
 				.transpose()?,
-			"lobby": lobby_state,
-			"type": match query {
-				Query::LobbyGroup(_) => "find",
-				Query::Direct(_) => "join",
+			lobby: util_mm::verification::Lobby {
+				lobby_group_id: internal_unwrap!(
+					lobby_group_config.lobby_group_meta.lobby_group_id
+				)
+				.as_uuid(),
+				lobby_group_name_id: lobby_group_config.lobby_group.name_id.clone(),
+				namespace_id,
+
+				state: lobby_state,
+				config: None,
 			},
-		});
+			_type: match query {
+				Query::LobbyGroup(_) => util_mm::verification::MatchmakerConnectionType::Find,
+				Query::Direct(_) => util_mm::verification::MatchmakerConnectionType::Join,
+			},
+		};
 
 		// Send request
 		let external_res = msg!([ctx] external::msg::request_call(request_id)
