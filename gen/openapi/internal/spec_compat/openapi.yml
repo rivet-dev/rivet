@@ -2244,8 +2244,23 @@ components:
       type: object
     CloudVersionEngineConfig:
       properties:
+        godot:
+          $ref: '#/components/schemas/CloudVersionEngineGodotConfig'
+        html5:
+          $ref: '#/components/schemas/CloudVersionEngineHtml5Config'
+        unity:
+          $ref: '#/components/schemas/CloudVersionEngineUnityConfig'
         unreal:
           $ref: '#/components/schemas/CloudVersionEngineUnrealConfig'
+      type: object
+    CloudVersionEngineGodotConfig:
+      properties: {}
+      type: object
+    CloudVersionEngineHtml5Config:
+      properties: {}
+      type: object
+    CloudVersionEngineUnityConfig:
+      properties: {}
       type: object
     CloudVersionEngineUnrealConfig:
       properties:

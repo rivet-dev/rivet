@@ -1,9 +1,16 @@
 # yaml-language-server: $schema=https://raw.githubusercontent.com/fern-api/fern/main/fern.schema.json
 
 imports:
+  unity: unity.yml
   unreal: unreal.yml
+  godot: godot.yml
+  html5: html5.yml
 
 types:
   Config:
     properties:
+      unity: optional<unity.UnityConfig>
       unreal: optional<unreal.UnrealConfig>
+      godot: optional<godot.GodotConfig>
+      html5: optional<html5.Html5Config>
+

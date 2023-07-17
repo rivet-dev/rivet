@@ -9317,8 +9317,14 @@ components:
     CloudVersionEngineConfig:
       type: object
       properties:
+        unity:
+          $ref: '#/components/schemas/CloudVersionEngineUnityConfig'
         unreal:
           $ref: '#/components/schemas/CloudVersionEngineUnrealConfig'
+        godot:
+          $ref: '#/components/schemas/CloudVersionEngineGodotConfig'
+        html5:
+          $ref: '#/components/schemas/CloudVersionEngineHtml5Config'
     CloudVersionKvConfig:
       type: object
       description: KV configuration for a given version.
@@ -11371,6 +11377,15 @@ components:
           description: A list of region server tiers.
       required:
         - tiers
+    CloudVersionEngineGodotConfig:
+      type: object
+      properties: {}
+    CloudVersionEngineHtml5Config:
+      type: object
+      properties: {}
+    CloudVersionEngineUnityConfig:
+      type: object
+      properties: {}
     CloudVersionEngineUnrealConfig:
       type: object
       properties:
