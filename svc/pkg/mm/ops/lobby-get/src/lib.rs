@@ -14,6 +14,7 @@ struct LobbyRow {
 	is_closed: bool,
 	namespace_id: Uuid,
 	create_ray_id: Option<Uuid>,
+	creator_user_id: Option<Uuid>,
 	is_custom: bool,
 	publicity: i32,
 
@@ -36,6 +37,7 @@ impl From<LobbyRow> for backend::matchmaker::Lobby {
 			is_closed: value.is_closed,
 			namespace_id: Some(value.namespace_id.into()),
 			create_ray_id: value.create_ray_id.map(Into::into),
+			creator_user_id: value.creator_user_id.map(Into::into),
 			is_custom: value.is_custom,
 			publicity: value.publicity,
 
@@ -72,6 +74,7 @@ async fn handle(
 			is_closed,
 			namespace_id,
 			create_ray_id,
+			creator_user_id,
 			is_custom,
 			publicity,
 

@@ -11,7 +11,6 @@ use tracing::Instrument;
 
 mod find;
 mod limit;
-mod verification;
 
 #[derive(Debug, Clone)]
 pub struct Player {
@@ -116,8 +115,77 @@ async fn worker(ctx: &OperationContext<mm::msg::lobby_find::Message>) -> GlobalR
 	}
 
 	// Verify user data
-	let verification_success = ctx.bypass_verification
-		|| verification::verify(ctx, namespace_id, query_id, query, &lobby_group_config).await?;
+	let verification_res = util_mm::verification::verify_config(
+		&ctx.base(),
+		&util_mm::verification::VerifyConfigOpts {
+			kind: match query {
+				Query::LobbyGroup(_) => util_mm::verification::ConnectionKind::Find,
+				Query::Direct(_) => util_mm::verification::ConnectionKind::Join,
+			},
+			namespace_id,
+			user_id: ctx.user_id.map(|id| id.as_uuid()),
+			lobby_group: &lobby_group_config.lobby_group,
+			lobby_group_meta: &lobby_group_config.lobby_group_meta,
+			lobby_state: lobby_group_config.lobby_state.as_ref(),
+			verification_data_json: ctx.verification_data_json.as_ref(),
+			lobby_config_json: None,
+			custom_lobby_publicity: None,
+		},
+	)
+	.await;
+	let verification_success = match verification_res {
+		Ok(_) => true,
+		Err(err) if err.is(formatted_error::code::MATCHMAKER_REGISTRATION_REQUIRED) => {
+			fail(
+				ctx,
+				namespace_id,
+				query_id,
+				ErrorCode::RegistrationRequired,
+				true,
+			)
+			.await?;
+
+			false
+		}
+		Err(err) if err.is(formatted_error::code::MATCHMAKER_IDENTITY_REQUIRED) => {
+			fail(
+				ctx,
+				namespace_id,
+				query_id,
+				ErrorCode::IdentityRequired,
+				true,
+			)
+			.await?;
+
+			false
+		}
+		Err(err) if err.is(formatted_error::code::MATCHMAKER_VERIFICATION_FAILED) => {
+			fail(
+				ctx,
+				namespace_id,
+				query_id,
+				ErrorCode::VerificationFailed,
+				true,
+			)
+			.await?;
+
+			false
+		}
+		Err(err) if err.is(formatted_error::code::MATCHMAKER_VERIFICATION_REQUEST_FAILED) => {
+			fail(
+				ctx,
+				namespace_id,
+				query_id,
+				ErrorCode::VerificationRequestFailed,
+				true,
+			)
+			.await?;
+
+			false
+		}
+		Err(err) => return Err(err),
+	};
+
 	if !verification_success {
 		return complete_request(ctx.chirp(), analytics_events).await;
 	}

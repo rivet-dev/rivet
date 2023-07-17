@@ -11,7 +11,7 @@
 
 /// 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Ord, PartialOrd, Hash, Serialize, Deserialize)]
-pub enum MatchmakerCustomGamePublicity {
+pub enum MatchmakerCustomLobbyPublicity {
     #[serde(rename = "public")]
     Public,
     #[serde(rename = "private")]
@@ -19,7 +19,7 @@ pub enum MatchmakerCustomGamePublicity {
 
 }
 
-impl ToString for MatchmakerCustomGamePublicity {
+impl ToString for MatchmakerCustomLobbyPublicity {
     fn to_string(&self) -> String {
         match self {
             Self::Public => String::from("public"),
@@ -28,8 +28,8 @@ impl ToString for MatchmakerCustomGamePublicity {
     }
 }
 
-impl Default for MatchmakerCustomGamePublicity {
-    fn default() -> MatchmakerCustomGamePublicity {
+impl Default for MatchmakerCustomLobbyPublicity {
+    fn default() -> MatchmakerCustomLobbyPublicity {
         Self::Public
     }
 }

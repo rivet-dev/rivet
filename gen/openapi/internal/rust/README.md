@@ -468,7 +468,7 @@ Class | Method | HTTP request | Description
  - [KvPutEntry](docs/KvPutEntry.md)
  - [KvPutRequest](docs/KvPutRequest.md)
  - [MatchmakerCreateLobbyResponse](docs/MatchmakerCreateLobbyResponse.md)
- - [MatchmakerCustomGamePublicity](docs/MatchmakerCustomGamePublicity.md)
+ - [MatchmakerCustomLobbyPublicity](docs/MatchmakerCustomLobbyPublicity.md)
  - [MatchmakerFindLobbyResponse](docs/MatchmakerFindLobbyResponse.md)
  - [MatchmakerGameModeInfo](docs/MatchmakerGameModeInfo.md)
  - [MatchmakerGameModeStatistics](docs/MatchmakerGameModeStatistics.md)

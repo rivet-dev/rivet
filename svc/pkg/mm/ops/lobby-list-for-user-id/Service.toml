@@ -1,0 +1,7 @@
+[service]
+name = "mm-lobby-list-for-user-id"
+
+[runtime]
+kind = "rust"
+
+[operation]

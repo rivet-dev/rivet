@@ -78,8 +78,9 @@ service:
         body:
           properties:
             game_mode: string
+            region: optional<string>
             captcha: optional<captchaConfig.Config>
-            publicity: localCommons.CustomGamePublicity
+            publicity: localCommons.CustomLobbyPublicity
             lobby_config: unknown
             verification_data: unknown
       response: CreateLobbyResponse

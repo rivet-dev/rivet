@@ -4210,7 +4210,7 @@ components:
       - ports
       - player
       type: object
-    MatchmakerCustomGamePublicity:
+    MatchmakerCustomLobbyPublicity:
       enum:
       - public
       - private
@@ -12322,7 +12322,9 @@ paths:
                   type: string
                 lobby_config: {}
                 publicity:
-                  $ref: '#/components/schemas/MatchmakerCustomGamePublicity'
+                  $ref: '#/components/schemas/MatchmakerCustomLobbyPublicity'
+                region:
+                  type: string
                 verification_data: {}
               required:
               - game_mode

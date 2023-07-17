@@ -20,18 +20,21 @@ pub struct MatchmakerLobbiesCreateRequest {
     #[serde(rename = "lobby_config", deserialize_with = "Option::deserialize")]
     pub lobby_config: Option<serde_json::Value>,
     #[serde(rename = "publicity")]
-    pub publicity: crate::models::MatchmakerCustomGamePublicity,
+    pub publicity: crate::models::MatchmakerCustomLobbyPublicity,
+    #[serde(rename = "region", skip_serializing_if = "Option::is_none")]
+    pub region: Option<String>,
     #[serde(rename = "verification_data", deserialize_with = "Option::deserialize")]
     pub verification_data: Option<serde_json::Value>,
 }
 
 impl MatchmakerLobbiesCreateRequest {
-    pub fn new(game_mode: String, lobby_config: Option<serde_json::Value>, publicity: crate::models::MatchmakerCustomGamePublicity, verification_data: Option<serde_json::Value>) -> MatchmakerLobbiesCreateRequest {
+    pub fn new(game_mode: String, lobby_config: Option<serde_json::Value>, publicity: crate::models::MatchmakerCustomLobbyPublicity, verification_data: Option<serde_json::Value>) -> MatchmakerLobbiesCreateRequest {
         MatchmakerLobbiesCreateRequest {
             captcha: None,
             game_mode,
             lobby_config,
             publicity,
+            region: None,
             verification_data,
         }
     }

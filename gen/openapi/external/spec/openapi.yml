@@ -7607,10 +7607,12 @@ paths:
               properties:
                 game_mode:
                   type: string
+                region:
+                  type: string
                 captcha:
                   $ref: '#/components/schemas/CaptchaConfig'
                 publicity:
-                  $ref: '#/components/schemas/MatchmakerCustomGamePublicity'
+                  $ref: '#/components/schemas/MatchmakerCustomLobbyPublicity'
                 lobby_config: {}
                 verification_data: {}
               required:
@@ -12944,7 +12946,7 @@ components:
             server will validate this token with `PlayerConnected.player_token`
       required:
         - token
-    MatchmakerCustomGamePublicity:
+    MatchmakerCustomLobbyPublicity:
       type: string
       enum:
         - public

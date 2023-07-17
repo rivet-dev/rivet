@@ -202,8 +202,9 @@ message Lobby {
 	bool is_closed = 11;
 	rivet.common.Uuid namespace_id = 9;
 	optional rivet.common.Uuid create_ray_id = 12;
-	bool is_custom = 15;
-	Publicity publicity = 16;
+	optional rivet.common.Uuid creator_user_id = 15;
+	bool is_custom = 16;
+	Publicity publicity = 17;
 
 	uint32 max_players_normal = 101;
 	uint32 max_players_direct = 102;

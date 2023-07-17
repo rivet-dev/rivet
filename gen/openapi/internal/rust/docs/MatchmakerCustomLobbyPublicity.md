@@ -1,4 +1,4 @@
-# MatchmakerCustomGamePublicity
+# MatchmakerCustomLobbyPublicity
 
 ## Properties
 

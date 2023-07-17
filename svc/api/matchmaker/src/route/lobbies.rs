@@ -4,7 +4,6 @@ use std::{
 };
 
 use api_helper::{anchor::WatchIndexQuery, ctx::Ctx};
-use http::StatusCode;
 use proto::{
 	backend::{self, pkg::*},
 	common,
@@ -74,7 +73,7 @@ pub async fn join(
 		find_query,
 		None,
 		body.captcha,
-		body.verification_data,
+		VerificationType::UserData(body.verification_data),
 	)
 	.await?;
 
@@ -138,56 +137,9 @@ pub async fn find(
 		})
 		.collect::<GlobalResult<Vec<_>>>()?;
 
-	// Resolve the region IDs.
-	//
-	// `region_ids` represents the requested regions in order of priority.
-	let region_ids = if let Some(region_name_ids) = body.regions {
-		// Resolve the region ID corresponding to the name IDs
-		let resolve_res = op!([ctx] region_resolve {
-			name_ids: region_name_ids.clone(),
-		})
-		.await?;
-
-		// Map to region IDs and decide
-		let region_ids = region_name_ids
-			.iter()
-			.flat_map(|name_id| resolve_res.regions.iter().find(|r| r.name_id == *name_id))
-			.flat_map(|r| r.region_id.as_ref())
-			.map(common::Uuid::as_uuid)
-			.collect::<Vec<_>>();
-
-		internal_assert_eq!(region_ids.len(), region_name_ids.len(), "region not found");
-
-		region_ids
-	} else {
-		// Find all enabled region IDs in all requested lobby groups
-		let enabled_region_ids = lobby_groups
-			.iter()
-			.flat_map(|(lg, _)| {
-				lg.regions
-					.iter()
-					.filter_map(|r| r.region_id.as_ref())
-					.map(common::Uuid::as_uuid)
-					.collect::<Vec<_>>()
-			})
-			.collect::<HashSet<Uuid>>()
-			.into_iter()
-			.map(Into::<common::Uuid>::into)
-			.collect::<Vec<_>>();
-
-		// Auto-select the closest region
-		let recommend_res = op!([ctx] region_recommend {
-			latitude: Some(lat),
-			longitude: Some(long),
-			region_ids: enabled_region_ids,
-			..Default::default()
-		})
-		.await?;
-		let primary_region = internal_unwrap_owned!(recommend_res.regions.first());
-		let primary_region_id = internal_unwrap!(primary_region.region_id).as_uuid();
-
-		vec![primary_region_id]
-	};
+	// Resolve region IDs
+	let region_ids =
+		resolve_region_ids(&ctx, lat, long, body.regions.as_ref(), &lobby_groups).await?;
 
 	// Validate that there is a lobby group and region pair that is valid.
 	//
@@ -230,7 +182,7 @@ pub async fn find(
 	let auto_create = if let Some(auto_create) = auto_create {
 		auto_create
 	} else {
-		internal_panic!("no valid lobby group and region id pair found for auto-create");
+		panic_with!(MATCHMAKER_AUTO_CREATE_FAILED);
 	};
 
 	// Build query and find lobby
@@ -261,7 +213,7 @@ pub async fn find(
 		find_query,
 		None,
 		body.captcha,
-		body.verification_data,
+		VerificationType::UserData(body.verification_data),
 	)
 	.await?;
 
@@ -277,6 +229,8 @@ pub async fn create(
 	ctx: Ctx<Auth>,
 	body: models::MatchmakerLobbiesCreateRequest,
 ) -> GlobalResult<models::MatchmakerCreateLobbyResponse> {
+	let (lat, long) = internal_unwrap_owned!(ctx.coords());
+
 	// Mock response
 	if let Some(ns_dev_ent) = ctx.auth().game_ns_dev_option()? {
 		let FindResponse {
@@ -318,15 +272,49 @@ pub async fn create(
 	);
 
 	// Verify that lobby creation is enabled and user can create a lobby
-	verify_create_config(
-		&ctx,
-		&body,
-		ns_data.namespace_id,
-		user_id,
-		lobby_group,
-		lobby_group_meta,
+	util_mm::verification::verify_config(
+		ctx.op_ctx(),
+		&util_mm::verification::VerifyConfigOpts {
+			kind: util_mm::verification::ConnectionKind::Create,
+			namespace_id: ns_data.namespace_id,
+			user_id,
+			lobby_group,
+			lobby_group_meta,
+			lobby_state: None,
+			verification_data_json: body
+				.verification_data
+				.as_ref()
+				.map(serde_json::to_string)
+				.transpose()?
+				.as_ref(),
+			lobby_config_json: body
+				.lobby_config
+				.as_ref()
+				.map(serde_json::to_string)
+				.transpose()?
+				.as_ref(),
+			custom_lobby_publicity: match body.publicity {
+				models::MatchmakerCustomLobbyPublicity::Public => {
+					Some(backend::matchmaker::lobby::Publicity::Public)
+				}
+				models::MatchmakerCustomLobbyPublicity::Private => {
+					Some(backend::matchmaker::lobby::Publicity::Private)
+				}
+			},
+		},
 	)
 	.await?;
+
+	// Resolve region IDs
+	let region_ids = resolve_region_ids(
+		&ctx,
+		lat,
+		long,
+		body.region.map(|r| vec![r]).as_ref(),
+		&[(lobby_group, lobby_group_meta)],
+	)
+	.await?;
+	let region_id = *unwrap_with_owned!(region_ids.first(), MATCHMAKER_REGION_NOT_FOUND);
 
 	let lobby_id = Uuid::new_v4();
 	let lobby_create_res =
@@ -334,7 +322,7 @@ pub async fn create(
 			lobby_id: Some(lobby_id.into()),
 			namespace_id: Some(ns_data.namespace_id.into()),
 			lobby_group_id: lobby_group_meta.lobby_group_id,
-			region_id: TODO,
+			region_id: Some(region_id.into()),
 			create_ray_id: Some(ctx.op_ctx().ray_id().into()),
 			preemptively_created: false,
 			creator_user_id: user_id.map(Into::into),
@@ -360,7 +348,7 @@ pub async fn create(
 		find_query,
 		Some(version_config.clone()),
 		body.captcha,
-		body.verification_data,
+		VerificationType::Bypass,
 	)
 	.await?;
 
@@ -641,6 +629,12 @@ struct FindResponse {
 	player: Box<models::MatchmakerJoinPlayer>,
 }
 
+#[derive(Debug)]
+enum VerificationType {
+	UserData(Option<serde_json::Value>),
+	Bypass,
+}
+
 #[tracing::instrument(err, skip(ctx, game_ns))]
 async fn find_inner(
 	ctx: &Ctx<Auth>,
@@ -648,7 +642,7 @@ async fn find_inner(
 	query: mm::msg::lobby_find::message::Query,
 	version_config: Option<backend::matchmaker::VersionConfig>,
 	captcha: Option<Box<models::CaptchaConfig>>,
-	verification_data: Option<serde_json::Value>,
+	verification: VerificationType,
 ) -> GlobalResult<FindResponse> {
 	let (version_config, user_id) = tokio::try_join!(
 		// Fetch version config if it was not passed as an argument
@@ -772,10 +766,15 @@ async fn find_inner(
 		}],
 		query: Some(query),
 		user_id: user_id.map(Into::into),
-		verification_data_json: verification_data
-			.map(|data| serde_json::to_string(&data))
-			.transpose()?,
-		bypass_verification: false,
+		verification_data_json: if let VerificationType::UserData(verification_data) = &verification {
+				verification_data
+					.as_ref()
+					.map(|data| serde_json::to_string(&data))
+					.transpose()?
+			} else {
+				None
+			},
+		bypass_verification: matches!(verification, VerificationType::Bypass),
 	})
 	.await?;
 	let lobby_id = match find_res
@@ -913,110 +912,69 @@ async fn find_inner(
 	})
 }
 
-// TODO: Copied from svc/pkg/mm/worker/src/workers/lobby_find/verification.rs
-async fn verify_create_config(
+async fn resolve_region_ids(
 	ctx: &Ctx<Auth>,
-	body: &models::MatchmakerLobbiesCreateRequest,
-	namespace_id: Uuid,
-	user_id: Option<Uuid>,
-	lobby_group: &backend::matchmaker::LobbyGroup,
-	lobby_group_meta: &backend::matchmaker::LobbyGroupMeta,
-) -> GlobalResult<()> {
-	if let Some(create_config) = lobby_group.create_config {
-		let identity_requirement = internal_unwrap_owned!(
-			backend::matchmaker::IdentityRequirement::from_i32(create_config.identity_requirement),
-			"invalid identity requirement variant"
+	lat: f64,
+	long: f64,
+	regions: Option<&Vec<String>>,
+	lobby_groups: &[(
+		&backend::matchmaker::LobbyGroup,
+		&backend::matchmaker::LobbyGroupMeta,
+	)],
+) -> GlobalResult<Vec<Uuid>> {
+	// Represents the requested regions in order of priority.
+	let region_ids = if let Some(region_name_ids) = regions {
+		// Resolve the region ID corresponding to the name IDs
+		let resolve_res = op!([ctx] region_resolve {
+			name_ids: region_name_ids.clone(),
+		})
+		.await?;
+
+		// Map to region IDs and decide
+		let region_ids = resolve_res
+			.regions
+			.iter()
+			.map(|r| Ok(internal_unwrap!(r.region_id).as_uuid()))
+			.collect::<GlobalResult<Vec<_>>>()?;
+
+		assert_eq_with!(
+			region_ids.len(),
+			region_name_ids.len(),
+			MATCHMAKER_REGION_NOT_FOUND
 		);
 
-		// Verify identity requirement
-		match (identity_requirement, user_id) {
-			(backend::matchmaker::IdentityRequirement::Registered, Some(user_id)) => {
-				let user_identities_res = op!([ctx] user_identity_get {
-					user_ids: vec![user_id.into()],
-				})
-				.await?;
-				let user = internal_unwrap_owned!(
-					user_identities_res.users.first(),
-					"could not find user identities"
-				);
-				let is_registered = !user.identities.is_empty();
-
-				if !is_registered {
-					panic_with!(MATCHMAKER_REGISTRATION_REQUIRED);
-				}
-			}
-			(
-				backend::matchmaker::IdentityRequirement::Guest
-				| backend::matchmaker::IdentityRequirement::Registered,
-				None,
-			) => {
-				panic_with!(MATCHMAKER_IDENTITY_REQUIRED);
-			}
-			_ => {}
-		}
-
-		// Verify user data externally
-		if let Some(verification_config) = create_config.verification_config {
-			let external_request_config = backend::net::ExternalRequestConfig {
-				url: verification_config.url.clone(),
-				method: backend::net::HttpMethod::Post as i32,
-				headers: verification_config.headers.clone(),
-			};
-
-			let request_id = Uuid::new_v4();
-
-			// Build body
-			let body = util_mm::verification::ExternalVerificationRequest {
-				verification_data: body
-					.verification_data
-					.as_ref()
-					.map(serde_json::to_value)
-					.transpose()?,
-				lobby: util_mm::verification::Lobby {
-					lobby_group_id: internal_unwrap!(lobby_group_meta.lobby_group_id).as_uuid(),
-					lobby_group_name_id: lobby_group.name_id,
-					namespace_id,
-
-					state: None,
-					config: body
-						.lobby_config
-						.as_ref()
-						.map(serde_json::to_value)
-						.transpose()?,
-				},
-				_type: util_mm::verification::MatchmakerConnectionType::Create,
-			};
-
-			// Send request
-			let external_res = msg!([ctx] external::msg::request_call(request_id)
-			-> Result<external::msg::request_call_complete, external::msg::request_call_fail>
-			{
-				request_id: Some(request_id.into()),
-				config: Some(external_request_config),
-				timeout: util::duration::seconds(10) as u64,
-				body: Some(serde_json::to_vec(&body)?),
-				..Default::default()
-			})
-			.await?;
-
-			// Handle status code
-			if let Ok(res) = external_res {
-				let status = StatusCode::from_u16(res.status_code as u16)?;
-
-				tracing::info!(?status, "user verification response");
-
-				if !status.is_success() {
-					panic_with!(MATCHMAKER_VERIFICATION_FAILED);
-				}
-			} else {
-				panic_with!(MATCHMAKER_VERIFICATION_REQUEST_FAILED);
-			}
-		}
+		region_ids
 	} else {
-		panic_with!(MATCHMAKER_CUSTOM_LOBBIES_DISABLED);
-	}
+		// Find all enabled region IDs in all requested lobby groups
+		let enabled_region_ids = lobby_groups
+			.iter()
+			.flat_map(|(lg, _)| {
+				lg.regions
+					.iter()
+					.filter_map(|r| r.region_id.as_ref())
+					.map(common::Uuid::as_uuid)
+					.collect::<Vec<_>>()
+			})
+			.collect::<HashSet<Uuid>>()
+			.into_iter()
+			.map(Into::<common::Uuid>::into)
+			.collect::<Vec<_>>();
 
-	Ok(())
+		// Auto-select the closest region
+		let recommend_res = op!([ctx] region_recommend {
+			latitude: Some(lat),
+			longitude: Some(long),
+			region_ids: enabled_region_ids,
+			..Default::default()
+		})
+		.await?;
+		let primary_region = internal_unwrap_owned!(recommend_res.regions.first());
+		let primary_region_id = internal_unwrap!(primary_region.region_id).as_uuid();
+
+		vec![primary_region_id]
+	};
+
+	Ok(region_ids)
 }
 
 #[tracing::instrument(err, skip(ctx))]

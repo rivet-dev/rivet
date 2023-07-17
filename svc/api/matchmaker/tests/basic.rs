@@ -1,9 +1,13 @@
 use std::{collections::HashSet, str::FromStr, sync::Once};
 
 use proto::backend::{self, pkg::*};
-use rivet_api::apis::{configuration::Configuration, *};
+use rivet_api::{
+	apis::{configuration::Configuration, *},
+	models,
+};
 use rivet_matchmaker::model;
 use rivet_operation::prelude::*;
+use serde_json::json;
 
 const LOBBY_GROUP_NAME_ID_BRIDGE: &str = "test-bridge";
 const LOBBY_GROUP_NAME_ID_HOST: &str = "test-host";
@@ -230,7 +234,14 @@ impl Ctx {
 
 						find_config: None,
 						join_config: None,
-						create_config: None,
+						create_config: Some(backend::matchmaker::CreateConfig {
+							identity_requirement: backend::matchmaker::IdentityRequirement::None as i32,
+							verification_config: None,
+
+							enable_public: true,
+							enable_private: true,
+							max_lobbies_per_identity: Some(1),
+						}),
 					},
 					backend::matchmaker::LobbyGroup {
 						name_id: LOBBY_GROUP_NAME_ID_HOST.into(),
@@ -411,7 +422,7 @@ async fn find_with_regions() {
 			.await
 			.unwrap();
 
-		assert_lobby_state(&ctx, res.lobby().unwrap()).await;
+		assert_lobby_state_smithy(&ctx, res.lobby().unwrap()).await;
 	}
 }
 
@@ -434,7 +445,37 @@ async fn find_without_regions() {
 			.await
 			.unwrap();
 
-		assert_lobby_state(&ctx, res.lobby().unwrap()).await;
+		assert_lobby_state_smithy(&ctx, res.lobby().unwrap()).await;
+	}
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn create_custom_lobby() {
+	let ctx = Ctx::init().await;
+
+	{
+		tracing::info!("creating custom lobby");
+
+		let res = matchmaker_lobbies_api::matchmaker_lobbies_create(
+			&ctx.config(ctx.ns_auth_token.clone()),
+			models::MatchmakerLobbiesCreateRequest {
+				game_mode: LOBBY_GROUP_NAME_ID_BRIDGE.to_string(),
+				region: Some(ctx.primary_region_name_id.clone()),
+				publicity: models::MatchmakerCustomLobbyPublicity::Public,
+				lobby_config: Some(json!({ "foo": "bar" })),
+				verification_data: None,
+				captcha: Some(Box::new(models::CaptchaConfig {
+					hcaptcha: Some(Box::new(models::CaptchaConfigHcaptcha {
+						client_response: "10000000-aaaa-bbbb-cccc-000000000001".to_string(),
+					})),
+					turnstile: None,
+				})),
+			},
+		)
+		.await
+		.unwrap();
+
+		assert_lobby_state(&ctx, &res.lobby).await;
 	}
 }
 
@@ -532,7 +573,7 @@ async fn lobby_lifecycle() {
 			.await
 			.unwrap();
 		let lobby = res.lobby().unwrap();
-		assert_lobby_state(&ctx, lobby).await;
+		assert_lobby_state_smithy(&ctx, lobby).await;
 
 		let lobby_token = ctx.lobby_token(lobby.lobby_id().unwrap()).await;
 
@@ -565,7 +606,7 @@ async fn lobby_lifecycle() {
 			.await
 			.unwrap();
 		let lobby = res.lobby().unwrap();
-		assert_lobby_state(&ctx, lobby).await;
+		assert_lobby_state_smithy(&ctx, lobby).await;
 
 		let lobby_token = ctx.lobby_token(lobby.lobby_id().unwrap()).await;
 
@@ -826,7 +867,7 @@ async fn find_domain_auth() {
 			.send()
 			.await
 			.unwrap();
-		assert_lobby_state(&ctx, res.lobby().unwrap()).await;
+		assert_lobby_state_smithy(&ctx, res.lobby().unwrap()).await;
 	}
 
 	// Custom domain
@@ -843,7 +884,7 @@ async fn find_domain_auth() {
 			.send()
 			.await
 			.unwrap();
-		assert_lobby_state(&ctx, res.lobby().unwrap()).await;
+		assert_lobby_state_smithy(&ctx, res.lobby().unwrap()).await;
 	}
 }
 
@@ -863,7 +904,7 @@ async fn player_statistics() {
 	tracing::info!(?player_count, ?game_modes);
 }
 
-async fn assert_lobby_state(
+async fn assert_lobby_state_smithy(
 	ctx: &Ctx,
 	lobby: &model::MatchmakerLobbyJoinInfo,
 ) -> backend::matchmaker::Lobby {
@@ -880,29 +921,30 @@ async fn assert_lobby_state(
 
 	// Validate ports
 	{
-		tracing::info!(ports = ?lobby.ports().unwrap(), "validating ports");
-		assert_eq!(6, lobby.ports().unwrap().len());
+		let ports = lobby.ports().unwrap();
+		tracing::info!(?ports, "validating ports");
+		assert_eq!(6, ports.len());
 
 		{
-			let p = lobby.ports().unwrap().get("test-80-http").unwrap();
+			let p = ports.get("test-80-http").unwrap();
 			assert_eq!(80, p.port().unwrap());
 			assert!(!p.is_tls().unwrap());
 		}
 
 		{
-			let p = lobby.ports().unwrap().get("test-80-https").unwrap();
+			let p = ports.get("test-80-https").unwrap();
 			assert_eq!(443, p.port().unwrap());
 			assert!(p.is_tls().unwrap());
 		}
 
 		{
-			let p = lobby.ports().unwrap().get("test-5050-https").unwrap();
+			let p = ports.get("test-5050-https").unwrap();
 			assert_eq!(443, p.port().unwrap());
 			assert!(p.is_tls().unwrap());
 		}
 
 		{
-			let p = lobby.ports().unwrap().get("test-5051-tcp").unwrap();
+			let p = ports.get("test-5051-tcp").unwrap();
 			assert!(
 				p.port().unwrap() >= util_job::consts::MIN_INGRESS_PORT_TCP as i32
 					&& p.port().unwrap() <= util_job::consts::MAX_INGRESS_PORT_TCP as i32
@@ -911,7 +953,7 @@ async fn assert_lobby_state(
 		}
 
 		{
-			let p = lobby.ports().unwrap().get("test-5051-tls").unwrap();
+			let p = ports.get("test-5051-tls").unwrap();
 			assert!(
 				p.port().unwrap() >= util_job::consts::MIN_INGRESS_PORT_TCP as i32
 					&& p.port().unwrap() <= util_job::consts::MAX_INGRESS_PORT_TCP as i32
@@ -920,12 +962,82 @@ async fn assert_lobby_state(
 		}
 
 		{
-			let p = lobby.ports().unwrap().get("test-5052-udp").unwrap();
+			let p = ports.get("test-5052-udp").unwrap();
 			assert!(
 				p.port().unwrap() >= util_job::consts::MIN_INGRESS_PORT_UDP as i32
 					&& p.port().unwrap() <= util_job::consts::MAX_INGRESS_PORT_UDP as i32
 			);
 			assert!(!p.is_tls().unwrap());
+		}
+	}
+
+	lobby_data.clone()
+}
+
+async fn assert_lobby_state(
+	ctx: &Ctx,
+	lobby: &models::MatchmakerJoinLobby,
+) -> backend::matchmaker::Lobby {
+	// Fetch lobby data
+	let lobby_res = op!([ctx] mm_lobby_get {
+		lobby_ids: vec![lobby.lobby_id.into()],
+		..Default::default()
+	})
+	.await
+	.unwrap();
+	let lobby_data = lobby_res.lobbies.first().expect("lobby not created");
+	assert!(lobby_data.ready_ts.is_some(), "lobby not ready");
+	assert!(lobby_data.run_id.is_some(), "no run id");
+
+	// Validate ports
+	{
+		let ports = &lobby.ports;
+		tracing::info!(?ports, "validating ports");
+		assert_eq!(6, ports.len());
+
+		{
+			let p = ports.get("test-80-http").unwrap();
+			assert_eq!(80, p.port.unwrap());
+			assert!(!p.is_tls);
+		}
+
+		{
+			let p = ports.get("test-80-https").unwrap();
+			assert_eq!(443, p.port.unwrap());
+			assert!(p.is_tls);
+		}
+
+		{
+			let p = ports.get("test-5050-https").unwrap();
+			assert_eq!(443, p.port.unwrap());
+			assert!(p.is_tls);
+		}
+
+		{
+			let p = ports.get("test-5051-tcp").unwrap();
+			assert!(
+				p.port.unwrap() >= util_job::consts::MIN_INGRESS_PORT_TCP as i32
+					&& p.port.unwrap() <= util_job::consts::MAX_INGRESS_PORT_TCP as i32
+			);
+			assert!(!p.is_tls);
+		}
+
+		{
+			let p = ports.get("test-5051-tls").unwrap();
+			assert!(
+				p.port.unwrap() >= util_job::consts::MIN_INGRESS_PORT_TCP as i32
+					&& p.port.unwrap() <= util_job::consts::MAX_INGRESS_PORT_TCP as i32
+			);
+			assert!(p.is_tls);
+		}
+
+		{
+			let p = ports.get("test-5052-udp").unwrap();
+			assert!(
+				p.port.unwrap() >= util_job::consts::MIN_INGRESS_PORT_UDP as i32
+					&& p.port.unwrap() <= util_job::consts::MAX_INGRESS_PORT_UDP as i32
+			);
+			assert!(!p.is_tls);
 		}
 	}
 

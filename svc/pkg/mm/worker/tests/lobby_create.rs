@@ -323,6 +323,8 @@ async fn lobby_create_reuse_job_id(ctx: TestCtx) {
 	assert_eq!(job_a, job_b, "these runs were dispatched from different jobs. this means the nomad job is not deterministic.");
 }
 
+// TODO: Write test verifying that lobby config data shows up in lobby env
+
 // #[worker_test]
 // async fn lobby_create_stress_test(ctx: TestCtx) {
 // 	let setup = setup(&ctx).await;

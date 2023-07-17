@@ -5053,6 +5053,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "mm-lobby-list-for-user-id"
+version = "0.0.1"
+dependencies = [
+ "chirp-client",
+ "chirp-worker",
+ "faker-mm-lobby",
+ "prost 0.10.4",
+ "rivet-operation",
+ "sqlx",
+]
+
+[[package]]
 name = "mm-lobby-player-count"
 version = "0.0.1"
 dependencies = [
@@ -5163,7 +5175,6 @@ dependencies = [
  "upload-get",
  "upload-prepare",
  "user-identity-create",
- "user-identity-get",
 ]
 
 [[package]]
@@ -6827,10 +6838,16 @@ name = "rivet-util-mm"
 version = "0.1.0"
 dependencies = [
  "bit-vec",
+ "chirp-client",
+ "http",
+ "mm-lobby-list-for-user-id",
+ "region-get",
+ "rivet-operation",
  "rivet-util",
  "serde",
  "serde_json",
  "strum",
+ "user-identity-get",
  "uuid",
 ]
 

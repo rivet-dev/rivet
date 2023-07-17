@@ -87,7 +87,7 @@ types:
           will validate this token with `PlayerConnected.player_token`
         type: commons.JWT
 
-  CustomGamePublicity:
+  CustomLobbyPublicity:
     enum:
       - public
       - private
