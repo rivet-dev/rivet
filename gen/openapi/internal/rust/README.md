@@ -337,6 +337,8 @@ Class | Method | HTTP request | Description
  - [CloudVersionCdnMiddlewareKind](docs/CloudVersionCdnMiddlewareKind.md)
  - [CloudVersionCdnRoute](docs/CloudVersionCdnRoute.md)
  - [CloudVersionConfig](docs/CloudVersionConfig.md)
+ - [CloudVersionEngineConfig](docs/CloudVersionEngineConfig.md)
+ - [CloudVersionEngineUnrealConfig](docs/CloudVersionEngineUnrealConfig.md)
  - [CloudVersionFull](docs/CloudVersionFull.md)
  - [CloudVersionIdentityConfig](docs/CloudVersionIdentityConfig.md)
  - [CloudVersionIdentityCustomAvatar](docs/CloudVersionIdentityCustomAvatar.md)

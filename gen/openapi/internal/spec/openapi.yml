@@ -12428,19 +12428,8 @@ components:
             `MyProject.unproject`.
 
             _Configures Rivet CLI behavior. Has no effect on server behavior._
-        base_docker_image:
-          type: string
-          description: >-
-            Docker image to use for running the server locally & building the
-            server to run on Rivet.
-
-            See versions
-            [here](https://github.com/orgs/EpicGames/packages/container/package/unreal-engine).
-
-            _Configures Rivet CLI behavior. Has no effect on server behavior._
       required:
         - game_module
-        - base_docker_image
     CloudVersionIdentityConfig:
       type: object
       description: Identity configuration for a given version.
