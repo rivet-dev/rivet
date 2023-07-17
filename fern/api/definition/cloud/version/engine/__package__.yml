@@ -13,4 +13,3 @@ types:
       unreal: optional<unreal.UnrealConfig>
       godot: optional<godot.GodotConfig>
       html5: optional<html5.Html5Config>
-

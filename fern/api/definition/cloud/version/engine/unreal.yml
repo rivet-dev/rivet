@@ -11,4 +11,3 @@ types:
           This is usually the value of `$.Modules[0].Name` in the file `MyProject.unproject`.
 
           _Configures Rivet CLI behavior. Has no effect on server behavior._
-
