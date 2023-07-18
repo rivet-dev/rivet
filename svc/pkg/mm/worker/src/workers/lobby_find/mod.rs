@@ -133,61 +133,30 @@ async fn worker(ctx: &OperationContext<mm::msg::lobby_find::Message>) -> GlobalR
 		},
 	)
 	.await;
-	let verification_success = match verification_res {
-		Ok(_) => true,
-		Err(err) if err.is(formatted_error::code::MATCHMAKER_REGISTRATION_REQUIRED) => {
-			fail(
-				ctx,
-				namespace_id,
-				query_id,
-				ErrorCode::RegistrationRequired,
-				true,
-			)
-			.await?;
+	if let Err(err) = verification_res {
+		// Reduces verbosity
+		let err_branch = |err_code| async move {
+			fail(ctx, namespace_id, query_id, err_code, true).await?;
+			complete_request(ctx.chirp(), analytics_events).await
+		};
 
-			false
-		}
-		Err(err) if err.is(formatted_error::code::MATCHMAKER_IDENTITY_REQUIRED) => {
-			fail(
-				ctx,
-				namespace_id,
-				query_id,
-				ErrorCode::IdentityRequired,
-				true,
-			)
-			.await?;
+		let res = if err.is(formatted_error::code::MATCHMAKER_FIND_DISABLED) {
+			err_branch(ErrorCode::FindDisabled).await
+		} else if err.is(formatted_error::code::MATCHMAKER_JOIN_DISABLED) {
+			err_branch(ErrorCode::JoinDisabled).await
+		} else if err.is(formatted_error::code::MATCHMAKER_REGISTRATION_REQUIRED) {
+			err_branch(ErrorCode::RegistrationRequired).await
+		} else if err.is(formatted_error::code::MATCHMAKER_IDENTITY_REQUIRED) {
+			err_branch(ErrorCode::IdentityRequired).await
+		} else if err.is(formatted_error::code::MATCHMAKER_VERIFICATION_FAILED) {
+			err_branch(ErrorCode::VerificationFailed).await
+		} else if err.is(formatted_error::code::MATCHMAKER_VERIFICATION_REQUEST_FAILED) {
+			err_branch(ErrorCode::VerificationRequestFailed).await
+		} else {
+			Err(err)
+		};
 
-			false
-		}
-		Err(err) if err.is(formatted_error::code::MATCHMAKER_VERIFICATION_FAILED) => {
-			fail(
-				ctx,
-				namespace_id,
-				query_id,
-				ErrorCode::VerificationFailed,
-				true,
-			)
-			.await?;
-
-			false
-		}
-		Err(err) if err.is(formatted_error::code::MATCHMAKER_VERIFICATION_REQUEST_FAILED) => {
-			fail(
-				ctx,
-				namespace_id,
-				query_id,
-				ErrorCode::VerificationRequestFailed,
-				true,
-			)
-			.await?;
-
-			false
-		}
-		Err(err) => return Err(err),
-	};
-
-	if !verification_success {
-		return complete_request(ctx.chirp(), analytics_events).await;
+		return res;
 	}
 
 	// Create players

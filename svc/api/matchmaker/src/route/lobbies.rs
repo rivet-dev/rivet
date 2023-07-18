@@ -425,7 +425,7 @@ pub async fn list(
 			if !lobby_group.listable {
 				return false;
 			}
-			
+
 			// Keep if lobby not empty
 			if lobby.player_count.registered_player_count != 0 {
 				return true;
@@ -808,6 +808,8 @@ async fn find_inner(
 
 				DevTeamInvalidStatus => panic_with!(GROUP_INVALID_DEVELOPER_STATUS),
 
+				FindDisabled => panic_with!(MATCHMAKER_FIND_DISABLED),
+				JoinDisabled => panic_with!(MATCHMAKER_JOIN_DISABLED),
 				VerificationFailed => panic_with!(MATCHMAKER_VERIFICATION_FAILED),
 				VerificationRequestFailed => panic_with!(MATCHMAKER_VERIFICATION_REQUEST_FAILED),
 				IdentityRequired => panic_with!(MATCHMAKER_IDENTITY_REQUIRED),

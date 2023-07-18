@@ -403,6 +403,36 @@ async fn lobby_group_no_auto_create(ctx: TestCtx) {
 }
 
 #[worker_test]
+async fn join_disabled(ctx: TestCtx) {
+	let user_id = Uuid::new_v4();
+
+	let (namespace_id, lobby_id) = gen_disabled_lobby(&ctx).await;
+
+	let err = find(
+		&ctx,
+		FindRequest {
+			namespace_id,
+			players: gen_players(1),
+			query: mm::msg::lobby_find::message::Query::Direct(
+				backend::matchmaker::query::Direct {
+					lobby_id: Some(lobby_id.into()),
+				},
+			),
+			user_id: None,
+			verification_data_json: None,
+			bypass_verification: false,
+		},
+	)
+	.await
+	.unwrap_err();
+
+	assert_eq!(
+		mm::msg::lobby_find_fail::ErrorCode::JoinDisabled as i32,
+		err.error_code
+	);
+}
+
+#[worker_test]
 async fn guest_verification(ctx: TestCtx) {
 	let user_id = Uuid::new_v4();
 
@@ -726,7 +756,93 @@ async fn gen_verification_lobby(
 					identity_requirement: identity_requirement as i32,
 					verification_config,
 				}),
-				// TODO:
+				create_config: None,
+			}],
+		}),
+	})
+	.await
+	.unwrap();
+
+	let lobby_res = op!([ctx] faker_mm_lobby {
+		namespace_id: Some(*namespace_id),
+		version_id: version_create_res.version_id,
+		..Default::default()
+	})
+	.await
+	.unwrap();
+
+	(
+		lobby_res.namespace_id.unwrap().as_uuid(),
+		lobby_res.lobby_id.unwrap().as_uuid(),
+	)
+}
+
+async fn gen_disabled_lobby(ctx: &TestCtx) -> (Uuid, Uuid) {
+	let region_list_res = op!([ctx] region_list {
+		..Default::default()
+	})
+	.await
+	.unwrap();
+
+	let game_res = op!([ctx] faker_game {
+		..Default::default()
+	})
+	.await
+	.unwrap();
+	let namespace_id = game_res.namespace_ids.first().unwrap();
+
+	let build_res = op!([ctx] faker_build {
+		game_id: game_res.game_id,
+		image: faker::build::Image::MmLobbyAutoReady as i32,
+	})
+	.await
+	.unwrap();
+
+	let version_create_res = op!([ctx] faker_game_version {
+		game_id: game_res.game_id,
+		override_lobby_groups: Some(faker::game_version::request::OverrideLobbyGroups {
+			lobby_groups: vec![backend::matchmaker::LobbyGroup {
+				name_id: "test-1".into(),
+
+				regions: region_list_res
+					.region_ids
+					.iter()
+					.cloned()
+					.map(|region_id| backend::matchmaker::lobby_group::Region {
+						region_id: Some(region_id),
+						tier_name_id: util_mm::test::TIER_NAME_ID.to_owned(),
+						idle_lobbies: None,
+					})
+					.collect(),
+
+				max_players_normal: 8,
+				max_players_direct: 10,
+				max_players_party: 12,
+				listable: true,
+
+				runtime: Some(
+					backend::matchmaker::lobby_runtime::Docker {
+						build_id: build_res.build_id,
+						args: Vec::new(),
+						env_vars: Vec::new(),
+						network_mode:
+							backend::matchmaker::lobby_runtime::NetworkMode::Bridge
+								as i32,
+						ports: Vec::new(),
+					}
+					.into(),
+				),
+
+				find_config: Some(backend::matchmaker::FindConfig {
+					enabled: false,
+					identity_requirement: backend::matchmaker::IdentityRequirement::None as i32,
+					verification_config: None,
+				}),
+				join_config: Some(backend::matchmaker::JoinConfig {
+					enabled: false,
+					identity_requirement: backend::matchmaker::IdentityRequirement::None as i32,
+					verification_config: None,
+				}),
 				create_config: None,
 			}],
 		}),
