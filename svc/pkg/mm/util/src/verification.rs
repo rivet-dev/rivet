@@ -48,11 +48,11 @@ pub struct VerifyConfigOpts<'a> {
 	pub kind: ConnectionKind,
 	pub namespace_id: Uuid,
 	pub user_id: Option<Uuid>,
-	
+
 	pub lobby_group: &'a backend::matchmaker::LobbyGroup,
 	pub lobby_group_meta: &'a backend::matchmaker::LobbyGroupMeta,
 	pub lobby_state: Option<&'a backend::matchmaker::Lobby>,
-	
+
 	pub verification_data_json: Option<&'a String>,
 	pub lobby_config_json: Option<&'a String>,
 	pub custom_lobby_publicity: Option<backend::matchmaker::lobby::Publicity>,
@@ -70,43 +70,59 @@ pub async fn verify_config(
 		opts.lobby_group.join_config.as_ref(),
 		opts.lobby_group.create_config.as_ref(),
 	) {
-		(ConnectionKind::Find, Some(find_config), _, _) => (
-			internal_unwrap_owned!(
-				backend::matchmaker::IdentityRequirement::from_i32(
-					find_config.identity_requirement
+		(ConnectionKind::Find, Some(find_config), _, _) => {
+			if !find_config.enabled {
+				panic_with!(MATCHMAKER_FIND_DISABLED);
+			}
+
+			(
+				internal_unwrap_owned!(
+					backend::matchmaker::IdentityRequirement::from_i32(
+						find_config.identity_requirement
+					),
+					"invalid identity requirement variant"
 				),
-				"invalid identity requirement variant"
-			),
-			find_config.verification_config.as_ref().map(|config| {
-				backend::net::ExternalRequestConfig {
-					url: config.url.clone(),
-					method: backend::net::HttpMethod::Post as i32,
-					headers: config.headers.clone(),
-				}
-			}),
-		),
-		(ConnectionKind::Join, _, Some(join_config), _) => (
-			internal_unwrap_owned!(
-				backend::matchmaker::IdentityRequirement::from_i32(
-					join_config.identity_requirement
+				find_config.verification_config.as_ref().map(|config| {
+					backend::net::ExternalRequestConfig {
+						url: config.url.clone(),
+						method: backend::net::HttpMethod::Post as i32,
+						headers: config.headers.clone(),
+					}
+				}),
+			)
+		}
+		(ConnectionKind::Join, _, Some(join_config), _) => {
+			if !join_config.enabled {
+				panic_with!(MATCHMAKER_JOIN_DISABLED);
+			}
+
+			(
+				internal_unwrap_owned!(
+					backend::matchmaker::IdentityRequirement::from_i32(
+						join_config.identity_requirement
+					),
+					"invalid identity requirement variant"
 				),
-				"invalid identity requirement variant"
-			),
-			join_config.verification_config.as_ref().map(|config| {
-				backend::net::ExternalRequestConfig {
-					url: config.url.clone(),
-					method: backend::net::HttpMethod::Post as i32,
-				headers: config.headers.clone(),
-				}
-			}),
-		),
+				join_config.verification_config.as_ref().map(|config| {
+					backend::net::ExternalRequestConfig {
+						url: config.url.clone(),
+						method: backend::net::HttpMethod::Post as i32,
+						headers: config.headers.clone(),
+					}
+				}),
+			)
+		}
 		(ConnectionKind::Create, _, _, Some(create_config)) => {
 			let publicity = internal_unwrap_owned!(opts.custom_lobby_publicity);
-			
+
 			// Verify publicity
-			match (publicity, create_config.enable_public, create_config.enable_private) {
-				(backend::matchmaker::lobby::Publicity::Public, true, _) => {},
-				(backend::matchmaker::lobby::Publicity::Private, _, true) => {},
+			match (
+				publicity,
+				create_config.enable_public,
+				create_config.enable_private,
+			) {
+				(backend::matchmaker::lobby::Publicity::Public, true, _) => {}
+				(backend::matchmaker::lobby::Publicity::Private, _, true) => {}
 				_ => {
 					panic_with!(
 						MATCHMAKER_CUSTOM_LOBBY_CONFIG_INVALID,
@@ -116,10 +132,13 @@ pub async fn verify_config(
 			}
 
 			// Verify lobby count
-			if let (Some(max_lobbies_per_identity), Some(user_id)) = (create_config.max_lobbies_per_identity, opts.user_id) {
+			if let (Some(max_lobbies_per_identity), Some(user_id)) =
+				(create_config.max_lobbies_per_identity, opts.user_id)
+			{
 				let lobbies_res = op!([ctx] mm_lobby_list_for_user_id {
 					user_ids: vec![user_id.into()],
-				}).await?;
+				})
+				.await?;
 				let user = internal_unwrap_owned!(lobbies_res.users.first());
 				assert_with!(
 					(user.lobby_ids.len() as u64) < max_lobbies_per_identity,
@@ -142,7 +161,7 @@ pub async fn verify_config(
 					}
 				}),
 			)
-		},
+		}
 		(ConnectionKind::Create, _, _, None) => {
 			panic_with!(MATCHMAKER_CUSTOM_LOBBIES_DISABLED);
 		}

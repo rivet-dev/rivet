@@ -452,6 +452,7 @@ impl ApiTryFrom<models::CloudVersionMatchmakerGameModeFindConfig>
 
 	fn try_from(value: models::CloudVersionMatchmakerGameModeFindConfig) -> GlobalResult<Self> {
 		Ok(backend::matchmaker::FindConfig {
+			enabled: value.enabled,
 			identity_requirement: ApiInto::<backend::matchmaker::IdentityRequirement>::api_into(
 				value.identity_requirement,
 			) as i32,
@@ -470,6 +471,7 @@ impl ApiTryFrom<backend::matchmaker::FindConfig>
 
 	fn try_from(value: backend::matchmaker::FindConfig) -> GlobalResult<Self> {
 		Ok(models::CloudVersionMatchmakerGameModeFindConfig {
+			enabled: value.enabled,
 			identity_requirement: internal_unwrap_owned!(
 				backend::matchmaker::IdentityRequirement::from_i32(value.identity_requirement),
 				"invalid identity requirement variant"
@@ -491,6 +493,7 @@ impl ApiTryFrom<models::CloudVersionMatchmakerGameModeJoinConfig>
 
 	fn try_from(value: models::CloudVersionMatchmakerGameModeJoinConfig) -> GlobalResult<Self> {
 		Ok(backend::matchmaker::JoinConfig {
+			enabled: value.enabled,
 			identity_requirement: ApiInto::<backend::matchmaker::IdentityRequirement>::api_into(
 				value.identity_requirement,
 			) as i32,
@@ -509,6 +512,7 @@ impl ApiTryFrom<backend::matchmaker::JoinConfig>
 
 	fn try_from(value: backend::matchmaker::JoinConfig) -> GlobalResult<Self> {
 		Ok(models::CloudVersionMatchmakerGameModeJoinConfig {
+			enabled: value.enabled,
 			identity_requirement: internal_unwrap_owned!(
 				backend::matchmaker::IdentityRequirement::from_i32(value.identity_requirement),
 				"invalid identity requirement variant"
