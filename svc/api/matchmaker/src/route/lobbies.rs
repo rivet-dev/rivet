@@ -11,6 +11,7 @@ use proto::{
 use rivet_api::models;
 use rivet_convert::ApiTryInto;
 use rivet_operation::prelude::*;
+use serde::Deserialize;
 use serde_json::json;
 
 use crate::{
@@ -368,16 +369,23 @@ pub async fn create(
 	})
 }
 
+#[derive(Deserialize)]
+pub struct ListQuery {
+	#[serde(default)]
+	include_state: bool,
+}
+
 // MARK: GET /lobbies/list
 pub async fn list(
 	ctx: Ctx<Auth>,
 	_watch_index: WatchIndexQuery,
+	query: ListQuery,
 ) -> GlobalResult<models::MatchmakerListLobbiesResponse> {
 	let (lat, long) = internal_unwrap_owned!(ctx.coords());
 
 	// Mock response
 	if let Some(ns_dev_ent) = ctx.auth().game_ns_dev_option()? {
-		return dev_mock_lobby_list(&ctx, &ns_dev_ent).await;
+		return dev_mock_lobby_list(&ctx, &ns_dev_ent, query.include_state).await;
 	}
 
 	let game_ns = ctx.auth().game_ns(&ctx).await?;
@@ -387,7 +395,7 @@ pub async fn list(
 	// Fetch version config and lobbies
 	let (meta, lobbies) = tokio::try_join!(
 		fetch_lobby_list_meta(ctx.op_ctx(), game_ns.namespace_id, lat, long),
-		fetch_lobby_list(ctx.op_ctx(), game_ns.namespace_id),
+		fetch_lobby_list(ctx.op_ctx(), game_ns.namespace_id, query.include_state),
 	)?;
 
 	let regions = meta
@@ -404,8 +412,16 @@ pub async fn list(
 		})
 		.collect();
 
+	// Count lobbies by lobby group id
+	let mut lobbies_by_lobby_group_id: HashMap<Uuid, usize> = HashMap::new();
+	for lobby in &lobbies {
+		let lobby_group_id = internal_unwrap!(lobby.lobby.lobby_group_id).as_uuid();
+		let entry = lobbies_by_lobby_group_id.entry(lobby_group_id).or_default();
+		*entry += 1;
+	}
+
 	let lobbies = lobbies
-		.iter()
+		.into_iter()
 		// Join with lobby group
 		.filter_map(|lobby| {
 			if let Some((lobby_group, _)) = meta
@@ -431,13 +447,14 @@ pub async fn list(
 				return true;
 			}
 
-			// Keep if this is the only lobby in this lobby group
-			if lobbies
-				.iter()
-				.filter(|x| x.lobby.lobby_group_id == lobby.lobby.lobby_group_id)
-				.count() == 1
-			{
-				return true;
+			// Keep if this is the only lobby in this lobby group (even if its empty)
+			if let Some(lobby_group_id) = lobby.lobby.lobby_group_id {
+				if *lobbies_by_lobby_group_id
+					.get(&lobby_group_id.as_uuid())
+					.unwrap_or(&0) == 1
+				{
+					return true;
+				}
 			}
 
 			// This lobby is empty (i.e. idle) and should not be listed
@@ -454,16 +471,13 @@ pub async fn list(
 				region_id: region.name_id.clone(),
 				game_mode_id: lobby_group.name_id.clone(),
 				lobby_id: internal_unwrap!(lobby.lobby.lobby_id).as_uuid(),
-				max_players_normal: std::convert::TryInto::try_into(
-					lobby.lobby.max_players_normal,
-				)?,
-				max_players_direct: std::convert::TryInto::try_into(
-					lobby.lobby.max_players_direct,
-				)?,
-				max_players_party: std::convert::TryInto::try_into(lobby.lobby.max_players_party)?,
-				total_player_count: std::convert::TryInto::try_into(
+				max_players_normal: ApiTryInto::try_into(lobby.lobby.max_players_normal)?,
+				max_players_direct: ApiTryInto::try_into(lobby.lobby.max_players_direct)?,
+				max_players_party: ApiTryInto::try_into(lobby.lobby.max_players_party)?,
+				total_player_count: ApiTryInto::try_into(
 					lobby.player_count.registered_player_count,
 				)?,
+				state: lobby.state.map(Some),
 			})
 		})
 		.collect::<GlobalResult<Vec<_>>>()?;
@@ -559,12 +573,14 @@ async fn fetch_lobby_list_meta(
 struct FetchLobbyListEntry {
 	lobby: backend::matchmaker::Lobby,
 	player_count: mm::lobby_player_count::response::Lobby,
+	state: Option<serde_json::Value>,
 }
 
 /// Fetches all the lobbies and their associated player counts.
 async fn fetch_lobby_list(
 	ctx: &OperationContext<()>,
 	namespace_id: Uuid,
+	include_state: bool,
 ) -> GlobalResult<Vec<FetchLobbyListEntry>> {
 	// Fetch lobby IDs
 	let lobby_ids = {
@@ -579,7 +595,7 @@ async fn fetch_lobby_list(
 
 	// Fetch all lobbies
 	let lobbies = {
-		let (lobby_get_res, player_count_res) = tokio::try_join!(
+		let (lobby_get_res, player_count_res, lobby_states) = tokio::try_join!(
 			op!([ctx] mm_lobby_get {
 				lobby_ids: lobby_ids.clone(),
 				include_stopped: false,
@@ -588,23 +604,47 @@ async fn fetch_lobby_list(
 			op!([ctx] mm_lobby_player_count {
 				lobby_ids: lobby_ids.clone(),
 			}),
+			async {
+				if include_state {
+					let lobbies_res = op!([ctx] mm_lobby_state_get {
+						lobby_ids: lobby_ids.clone(),
+					})
+					.await?;
+
+					Ok(lobbies_res.lobbies)
+				} else {
+					Ok(Vec::new())
+				}
+			},
 		)?;
 
-		// Match lobby data with player counts
+		// Match lobby data with player counts and states
 		lobby_get_res
 			.lobbies
 			.iter()
-			.filter_map(|lobby| {
-				player_count_res
+			.map(|lobby| {
+				let player_count = player_count_res
 					.lobbies
 					.iter()
-					.find(|pc| pc.lobby_id == lobby.lobby_id)
-					.map(|pc| FetchLobbyListEntry {
+					.find(|pc| pc.lobby_id == lobby.lobby_id);
+				let state = lobby_states.iter().find(|ls| ls.lobby_id == lobby.lobby_id);
+
+				if let (Some(player_count), Some(state)) = (player_count, state) {
+					Ok(Some(FetchLobbyListEntry {
 						lobby: lobby.clone(),
-						player_count: pc.clone(),
-					})
+						player_count: player_count.clone(),
+						state: state
+							.state_json
+							.as_ref()
+							.map(|s| serde_json::from_str::<serde_json::Value>(&s))
+							.transpose()?,
+					}))
+				} else {
+					Ok(None)
+				}
 			})
-			.collect::<Vec<_>>()
+			.filter_map(|res| res.transpose())
+			.collect::<GlobalResult<Vec<_>>>()?
 	};
 
 	Ok(lobbies)
@@ -640,7 +680,9 @@ pub async fn set_state(ctx: Ctx<Auth>, body: bytes::Bytes) -> GlobalResult<serde
 
 	let lobby_ent = ctx.auth().lobby()?;
 	let state = if !body.is_empty() {
-		Some(serde_json::to_string(serde_json::from_bytes(&body[..])?))
+		let parsed = serde_json::from_slice::<serde_json::Value>(&body[..])?;
+
+		Some(serde_json::to_string(&parsed)?)
 	} else {
 		None
 	};
@@ -655,21 +697,29 @@ pub async fn set_state(ctx: Ctx<Auth>, body: bytes::Bytes) -> GlobalResult<serde
 }
 
 // MARK: GET /lobbies/{}/state
-pub async fn get_state(ctx: Ctx<Auth>, lobby_id: Uuid) -> GlobalResult<serde_json::Value> {
+pub async fn get_state(
+	ctx: Ctx<Auth>,
+	lobby_id: Uuid,
+	_watch_index: WatchIndexQuery,
+) -> GlobalResult<Option<serde_json::Value>> {
 	// Mock response
 	if ctx.auth().game_ns_dev_option()?.is_some() {
-		return Ok(json!({}));
+		return Ok(Some(json!({})));
 	}
 
 	let lobby_ent = ctx.auth().lobby()?;
 
-	let lobbies_res = op!([ctx] mm_lobby_get {
+	let lobbies_res = op!([ctx] mm_lobby_state_get {
 		lobby_ids: vec![lobby_id.into()],
-		include_state: true,
 	})
 	.await?;
 	let lobby = internal_unwrap_owned!(lobbies_res.lobbies.first());
-	let state = serde_json::to_value(&lobby.state)?;
+
+	let state = lobby
+		.state_json
+		.as_ref()
+		.map(|state_json| serde_json::from_str::<serde_json::Value>(&state_json))
+		.transpose()?;
 
 	Ok(state)
 }
@@ -1098,6 +1148,7 @@ async fn dev_mock_lobby(
 async fn dev_mock_lobby_list(
 	ctx: &Ctx<Auth>,
 	ns_dev_ent: &rivet_claims::ent::GameNamespaceDevelopment,
+	include_state: bool,
 ) -> GlobalResult<models::MatchmakerListLobbiesResponse> {
 	// Read the version config
 	let ns_res = op!([ctx] game_namespace_get {
@@ -1154,6 +1205,7 @@ async fn dev_mock_lobby_list(
 				max_players_direct: std::convert::TryInto::try_into(lg.max_players_direct)?,
 				max_players_party: std::convert::TryInto::try_into(lg.max_players_party)?,
 				total_player_count: 0,
+				state: Some(Some(json!({ "foo": "bar" }))),
 			})
 		})
 		.collect::<GlobalResult<Vec<_>>>()?;

@@ -9,7 +9,6 @@ message Request {
 	repeated rivet.common.Uuid lobby_ids = 1;
 	bool include_stopped = 2;
 	bool include_private = 3;
-	bool include_state = 4;
 }
 
 message Response {

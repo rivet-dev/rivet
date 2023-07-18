@@ -15,6 +15,7 @@ types:
       max_players_direct: integer
       max_players_party: integer
       total_player_count: integer
+      state: optional<unknown>
 
   GameModeInfo:
     docs: A game mode that the player can join.

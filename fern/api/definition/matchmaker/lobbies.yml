@@ -105,6 +105,10 @@ service:
       path: /list
       method: GET
       docs: Lists all open lobbies.
+      request:
+        name: ListLobbiesRequest
+        query-parameters:
+          include_state: optional<boolean>
       response: ListLobbiesResponse
 
 types:

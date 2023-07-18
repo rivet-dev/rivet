@@ -4404,6 +4404,7 @@ components:
           type: integer
         region_id:
           type: string
+        state: {}
         total_player_count:
           type: integer
       required:
@@ -12537,7 +12538,12 @@ paths:
     get:
       description: Lists all open lobbies.
       operationId: matchmaker_lobbies_list
-      parameters: []
+      parameters:
+      - in: query
+        name: include_state
+        required: false
+        schema:
+          type: boolean
       responses:
         '200':
           content:

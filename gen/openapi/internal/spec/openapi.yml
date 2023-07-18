@@ -8305,7 +8305,12 @@ paths:
       operationId: matchmaker_lobbies_list
       tags:
         - MatchmakerLobbies
-      parameters: []
+      parameters:
+        - name: include_state
+          in: query
+          required: false
+          schema:
+            type: boolean
       responses:
         '200':
           description: ''
@@ -14172,6 +14177,7 @@ components:
           type: integer
         total_player_count:
           type: integer
+        state: {}
       required:
         - region_id
         - game_mode_id

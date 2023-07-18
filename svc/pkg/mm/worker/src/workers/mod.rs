@@ -9,6 +9,7 @@ pub mod lobby_find_lobby_ready;
 pub mod lobby_history_export;
 pub mod lobby_job_run_cleanup;
 pub mod lobby_ready_set;
+pub mod lobby_state_set;
 pub mod lobby_stop;
 pub mod player_register;
 pub mod player_remove;

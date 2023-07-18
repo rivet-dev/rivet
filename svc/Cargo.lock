@@ -686,6 +686,7 @@ dependencies = [
  "mm-lobby-get",
  "mm-lobby-list-for-namespace",
  "mm-lobby-player-count",
+ "mm-lobby-state-get",
  "prost 0.10.4",
  "region-get",
  "region-recommend",
@@ -5099,6 +5100,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "mm-lobby-state-get"
+version = "0.0.1"
+dependencies = [
+ "chirp-client",
+ "chirp-worker",
+ "faker-mm-lobby",
+ "prost 0.10.4",
+ "rivet-operation",
+ "rivet-util-mm",
+ "sqlx",
+]
+
+[[package]]
 name = "mm-player-count-for-namespace"
 version = "0.0.1"
 dependencies = [
@@ -5155,6 +5169,7 @@ dependencies = [
  "mm-lobby-get",
  "mm-lobby-idle-update",
  "mm-lobby-player-count",
+ "mm-lobby-state-get",
  "nomad-client",
  "nomad-util",
  "redis-util",

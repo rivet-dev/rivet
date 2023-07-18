@@ -250,7 +250,7 @@ pub async fn matchmaker_lobbies_join(configuration: &configuration::Configuratio
 }
 
 /// Lists all open lobbies.
-pub async fn matchmaker_lobbies_list(configuration: &configuration::Configuration, ) -> Result<crate::models::MatchmakerListLobbiesResponse, Error<MatchmakerLobbiesListError>> {
+pub async fn matchmaker_lobbies_list(configuration: &configuration::Configuration, include_state: Option<bool>) -> Result<crate::models::MatchmakerListLobbiesResponse, Error<MatchmakerLobbiesListError>> {
     let local_var_configuration = configuration;
 
     let local_var_client = &local_var_configuration.client;
@@ -258,6 +258,9 @@ pub async fn matchmaker_lobbies_list(configuration: &configuration::Configuratio
     let local_var_uri_str = format!("{}/lobbies/list", local_var_configuration.base_path);
     let mut local_var_req_builder = local_var_client.request(reqwest::Method::GET, local_var_uri_str.as_str());
 
+    if let Some(ref local_var_str) = include_state {
+        local_var_req_builder = local_var_req_builder.query(&[("include_state", &local_var_str.to_string())]);
+    }
     if let Some(ref local_var_user_agent) = local_var_configuration.user_agent {
         local_var_req_builder = local_var_req_builder.header(reqwest::header::USER_AGENT, local_var_user_agent.clone());
     }

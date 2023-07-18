@@ -47,6 +47,7 @@ mm-dev-player-token-create = { path = "../../pkg/mm/ops/dev-player-token-create"
 mm-lobby-get = { path = "../../pkg/mm/ops/lobby-get" }
 mm-lobby-list-for-namespace = { path = "../../pkg/mm/ops/lobby-list-for-namespace" }
 mm-lobby-player-count = { path = "../../pkg/mm/ops/lobby-player-count" }
+mm-lobby-state-get = { path = "../../pkg/mm/ops/lobby-state-get" }
 region-get = { path = "../../pkg/region/ops/get" }
 region-recommend = { path = "../../pkg/region/ops/recommend" }
 region-resolve = { path = "../../pkg/region/ops/resolve" }

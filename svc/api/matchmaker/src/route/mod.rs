@@ -99,6 +99,7 @@ define_router! {
 		"lobbies" / "list": {
 			GET: lobbies::list(
 				opt_auth: true,
+				query: lobbies::ListQuery,
 				rate_limit: {
 					key: "lobby-list",
 					buckets: [

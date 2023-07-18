@@ -55,6 +55,8 @@ pub mod lobby_config {
 		pub is_closed: bool,
 		#[serde(rename = "cu")]
 		pub is_custom: bool,
+		#[serde(rename = "st", skip_serializing_if = "Option::is_none")]
+		pub state_json: Option<String>,
 	}
 
 	pub const NAMESPACE_ID: &str = "ns";
@@ -66,6 +68,8 @@ pub mod lobby_config {
 	pub const PREEMPTIVE: &str = "p";
 	pub const READY_TS: &str = "rt";
 	pub const IS_CLOSED: &str = "c";
+	pub const IS_CUSTOM: &str = "cu";
+	pub const STATE_JSON: &str = "st";
 }
 
 /// HASH

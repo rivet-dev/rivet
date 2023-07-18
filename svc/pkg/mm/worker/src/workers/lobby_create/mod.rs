@@ -198,6 +198,7 @@ async fn worker(ctx: &OperationContext<mm::msg::lobby_create::Message>) -> Globa
 				ready_ts: None,
 				is_closed: false,
 				is_custom: ctx.is_custom,
+				state_json: None,
 			})?)
 			.arg(ctx.ts() + util_mm::consts::LOBBY_READY_TIMEOUT)
 			.key(key::lobby_config(lobby_id))
@@ -557,7 +558,10 @@ async fn update_db(
 	.bind(opts.lobby_group.max_players_party as i64)
 	.bind(opts.creator_user_id)
 	.bind(opts.is_custom)
-	.bind(opts.publicity.map(|p| p as i32 as i64))
+	.bind(
+		opts.publicity
+			.unwrap_or(backend::matchmaker::lobby::Publicity::Public) as i32 as i64,
+	)
 	.execute(&mut *tx)
 	.await?;
 

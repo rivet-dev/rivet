@@ -136,14 +136,17 @@ Name | Type | Description  | Required | Notes
 
 ## matchmaker_lobbies_list
 
-> crate::models::MatchmakerListLobbiesResponse matchmaker_lobbies_list()
+> crate::models::MatchmakerListLobbiesResponse matchmaker_lobbies_list(include_state)
 
 
 Lists all open lobbies.
 
 ### Parameters
 
-This endpoint does not need any parameter.
+
+Name | Type | Description  | Required | Notes
+------------- | ------------- | ------------- | ------------- | -------------
+**include_state** | Option<**bool**> |  |  |
 
 ### Return type
 
