@@ -86,7 +86,10 @@ impl Ctx {
 			region_id: Some(self.primary_region_id.into()),
 			create_ray_id: None,
 			preemptively_created: false,
+
 			creator_user_id: None,
+			is_custom: false,
+			publicity: None,
 			lobby_config_json: None,
 		})
 		.await

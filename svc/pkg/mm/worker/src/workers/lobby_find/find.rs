@@ -189,6 +189,7 @@ pub async fn find(
 						preemptive: true,
 						ready_ts: None,
 						is_closed: false,
+						is_custom: false,
 					},
 					ready_expire_ts: ctx.ts() + util_mm::consts::LOBBY_READY_TIMEOUT,
 				})

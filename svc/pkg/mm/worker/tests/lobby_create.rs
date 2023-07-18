@@ -185,7 +185,10 @@ async fn lobby_create(ctx: TestCtx) {
 		region_id: Some(setup.region_id.into()),
 		create_ray_id: None,
 		preemptively_created: false,
+
 		creator_user_id: None,
+		is_custom: false,
+		publicity: None,
 		lobby_config_json: None,
 	})
 	.await
@@ -205,6 +208,46 @@ async fn lobby_create(ctx: TestCtx) {
 	assert_eq!(8, sql_mpn);
 	assert_eq!(10, sql_mpd);
 	assert_eq!(12, sql_mpp);
+}
+
+#[worker_test]
+async fn custom_private_lobby_create(ctx: TestCtx) {
+	let setup = setup(&ctx).await;
+
+	let lobby_id = Uuid::new_v4();
+	msg!([ctx] mm::msg::lobby_create(lobby_id) -> mm::msg::lobby_create_complete {
+		lobby_id: Some(lobby_id.into()),
+		namespace_id: Some(setup.namespace_id.into()),
+		lobby_group_id: Some(setup.lobby_group_id.into()),
+		region_id: Some(setup.region_id.into()),
+		create_ray_id: None,
+		preemptively_created: false,
+
+		creator_user_id: None,
+		is_custom: true,
+		publicity: Some(backend::matchmaker::lobby::Publicity::Private as i32),
+		lobby_config_json: Some(r#"{ "foo": "bar" }"#.to_string()),
+	})
+	.await
+	.unwrap();
+
+	let (is_custom, publicity) = sqlx::query_as::<_, (bool, i64)>(indoc!(
+		"
+		SELECT is_custom, publicity 
+		FROM lobbies
+		WHERE lobby_id = $1
+		"
+	))
+	.bind(lobby_id)
+	.fetch_one(&ctx.crdb("db-mm-state").await.unwrap())
+	.await
+	.unwrap();
+
+	assert!(is_custom);
+	assert_eq!(
+		backend::matchmaker::lobby::Publicity::Private as i32 as i64,
+		publicity
+	);
 }
 
 #[worker_test]
@@ -234,7 +277,10 @@ async fn lobby_create_max_lobby_count(ctx: TestCtx) {
 			region_id: Some(setup.region_id.into()),
 			create_ray_id: None,
 			preemptively_created: false,
+
 			creator_user_id: None,
+			is_custom: false,
+			publicity: None,
 			lobby_config_json: None,
 		})
 		.await
@@ -250,7 +296,10 @@ async fn lobby_create_max_lobby_count(ctx: TestCtx) {
 		region_id: Some(setup.region_id.into()),
 		create_ray_id: None,
 		preemptively_created: false,
+
 		creator_user_id: None,
+		is_custom: false,
+		publicity: None,
 		lobby_config_json: None,
 	})
 	.await
@@ -273,7 +322,10 @@ async fn lobby_create_reuse_job_id(ctx: TestCtx) {
 		region_id: Some(setup.region_id.into()),
 		create_ray_id: None,
 		preemptively_created: false,
+
 		creator_user_id: None,
+		is_custom: false,
+		publicity: None,
 		lobby_config_json: None,
 	})
 	.await
@@ -287,7 +339,10 @@ async fn lobby_create_reuse_job_id(ctx: TestCtx) {
 		region_id: Some(setup.region_id.into()),
 		create_ray_id: None,
 		preemptively_created: false,
+
 		creator_user_id: None,
+		is_custom: false,
+		publicity: None,
 		lobby_config_json: None,
 	})
 	.await
@@ -338,7 +393,11 @@ async fn lobby_create_reuse_job_id(ctx: TestCtx) {
 // 			region_id: Some(setup.region_id.into()),
 // 			create_ray_id: None,
 // 			preemptively_created: false,
+
 // 			creator_user_id: None,
+// 			is_custom: false,
+// 			publicity: None,
+// 			lobby_config_json: None,
 // 		})
 // 		.await
 // 		.unwrap();

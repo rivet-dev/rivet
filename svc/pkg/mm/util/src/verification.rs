@@ -122,7 +122,7 @@ pub async fn verify_config(
 				}).await?;
 				let user = internal_unwrap_owned!(lobbies_res.users.first());
 				assert_with!(
-					user.lobby_ids.len() as u64 < max_lobbies_per_identity,
+					(user.lobby_ids.len() as u64) < max_lobbies_per_identity,
 					MATCHMAKER_CUSTOM_LOBBY_LIMIT_REACHED
 				);
 			}

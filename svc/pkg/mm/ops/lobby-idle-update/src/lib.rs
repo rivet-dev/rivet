@@ -76,6 +76,8 @@ async fn handle(
 			preemptively_created: false,
 
 			creator_user_id: None,
+			is_custom: false,
+			publicity: None,
 			lobby_config_json: None,
 		}));
 	}

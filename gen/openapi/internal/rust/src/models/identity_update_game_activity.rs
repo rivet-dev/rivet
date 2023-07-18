@@ -18,20 +18,20 @@ pub struct IdentityUpdateGameActivity {
     #[serde(rename = "message", skip_serializing_if = "Option::is_none")]
     pub message: Option<String>,
     /// JSON data seen only by the given identity and their mutual followers.
-    #[serde(rename = "mutual_metadata", deserialize_with = "Option::deserialize")]
-    pub mutual_metadata: Option<serde_json::Value>,
+    #[serde(rename = "mutual_metadata", default, with = "::serde_with::rust::double_option", skip_serializing_if = "Option::is_none")]
+    pub mutual_metadata: Option<Option<serde_json::Value>>,
     /// JSON data seen by anyone.
-    #[serde(rename = "public_metadata", deserialize_with = "Option::deserialize")]
-    pub public_metadata: Option<serde_json::Value>,
+    #[serde(rename = "public_metadata", default, with = "::serde_with::rust::double_option", skip_serializing_if = "Option::is_none")]
+    pub public_metadata: Option<Option<serde_json::Value>>,
 }
 
 impl IdentityUpdateGameActivity {
     /// Information about the identity's current game. This is information that all other identities can see about what the current identity is doing.
-    pub fn new(mutual_metadata: Option<serde_json::Value>, public_metadata: Option<serde_json::Value>) -> IdentityUpdateGameActivity {
+    pub fn new() -> IdentityUpdateGameActivity {
         IdentityUpdateGameActivity {
             message: None,
-            mutual_metadata,
-            public_metadata,
+            mutual_metadata: None,
+            public_metadata: None,
         }
     }
 }

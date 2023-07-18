@@ -341,7 +341,10 @@ async fn worker(ctx: &OperationContext<mm::msg::lobby_find::Message>) -> GlobalR
 				region_id: Some(auto_create_region_id.into()),
 				create_ray_id: Some(ctx.ray_id().into()),
 				preemptively_created: true,
+
 				creator_user_id: ctx.user_id,
+				is_custom: false,
+				publicity: None,
 				lobby_config_json: None,
 			})
 			.await?;

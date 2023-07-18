@@ -4061,9 +4061,6 @@ components:
             followers.
         public_metadata:
           description: JSON data seen by anyone.
-      required:
-      - public_metadata
-      - mutual_metadata
       type: object
     IdentityValidateProfileResponse:
       properties:
@@ -12329,8 +12326,6 @@ paths:
               required:
               - game_mode
               - publicity
-              - lobby_config
-              - verification_data
               type: object
         required: true
       responses:
@@ -12412,7 +12407,6 @@ paths:
                 verification_data: {}
               required:
               - game_modes
-              - verification_data
               type: object
         required: true
       responses:
@@ -12486,7 +12480,6 @@ paths:
                 verification_data: {}
               required:
               - lobby_id
-              - verification_data
               type: object
         required: true
       responses:

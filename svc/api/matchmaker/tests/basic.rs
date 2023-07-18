@@ -112,7 +112,8 @@ impl Ctx {
 
 	fn config(&self, bearer_token: String) -> Configuration {
 		Configuration {
-			base_path: util::env::svc_router_url("api-matchmaker"),
+			base_path: format!("https://matchmaker.api.{}/v1", util::env::domain_main()),
+			// base_path: util::env::svc_router_url("api-matchmaker"),
 			bearer_access_token: Some(bearer_token),
 			..Default::default()
 		}
@@ -462,7 +463,7 @@ async fn create_custom_lobby() {
 				game_mode: LOBBY_GROUP_NAME_ID_BRIDGE.to_string(),
 				region: Some(ctx.primary_region_name_id.clone()),
 				publicity: models::MatchmakerCustomLobbyPublicity::Public,
-				lobby_config: Some(json!({ "foo": "bar" })),
+				lobby_config: Some(Some(json!({ "foo": "bar" }))),
 				verification_data: None,
 				captcha: Some(Box::new(models::CaptchaConfig {
 					hcaptcha: Some(Box::new(models::CaptchaConfigHcaptcha {
@@ -1064,7 +1065,10 @@ async fn create_lobby(
 		region_id: Some(ctx.primary_region_id.into()),
 		create_ray_id: None,
 		preemptively_created: false,
+
 		creator_user_id: None,
+		is_custom: false,
+		publicity: None,
 		lobby_config_json: None,
 	})
 	.await

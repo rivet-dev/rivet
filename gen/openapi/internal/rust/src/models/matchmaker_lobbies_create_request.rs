@@ -17,25 +17,25 @@ pub struct MatchmakerLobbiesCreateRequest {
     pub captcha: Option<Box<crate::models::CaptchaConfig>>,
     #[serde(rename = "game_mode")]
     pub game_mode: String,
-    #[serde(rename = "lobby_config", deserialize_with = "Option::deserialize")]
-    pub lobby_config: Option<serde_json::Value>,
+    #[serde(rename = "lobby_config", default, with = "::serde_with::rust::double_option", skip_serializing_if = "Option::is_none")]
+    pub lobby_config: Option<Option<serde_json::Value>>,
     #[serde(rename = "publicity")]
     pub publicity: crate::models::MatchmakerCustomLobbyPublicity,
     #[serde(rename = "region", skip_serializing_if = "Option::is_none")]
     pub region: Option<String>,
-    #[serde(rename = "verification_data", deserialize_with = "Option::deserialize")]
-    pub verification_data: Option<serde_json::Value>,
+    #[serde(rename = "verification_data", default, with = "::serde_with::rust::double_option", skip_serializing_if = "Option::is_none")]
+    pub verification_data: Option<Option<serde_json::Value>>,
 }
 
 impl MatchmakerLobbiesCreateRequest {
-    pub fn new(game_mode: String, lobby_config: Option<serde_json::Value>, publicity: crate::models::MatchmakerCustomLobbyPublicity, verification_data: Option<serde_json::Value>) -> MatchmakerLobbiesCreateRequest {
+    pub fn new(game_mode: String, publicity: crate::models::MatchmakerCustomLobbyPublicity) -> MatchmakerLobbiesCreateRequest {
         MatchmakerLobbiesCreateRequest {
             captcha: None,
             game_mode,
-            lobby_config,
+            lobby_config: None,
             publicity,
             region: None,
-            verification_data,
+            verification_data: None,
         }
     }
 }

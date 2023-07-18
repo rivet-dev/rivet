@@ -73,7 +73,7 @@ pub async fn join(
 		find_query,
 		None,
 		body.captcha,
-		VerificationType::UserData(body.verification_data),
+		VerificationType::UserData(body.verification_data.flatten()),
 	)
 	.await?;
 
@@ -213,7 +213,7 @@ pub async fn find(
 		find_query,
 		None,
 		body.captcha,
-		VerificationType::UserData(body.verification_data),
+		VerificationType::UserData(body.verification_data.flatten()),
 	)
 	.await?;
 
@@ -271,6 +271,15 @@ pub async fn create(
 		MATCHMAKER_GAME_MODE_NOT_FOUND
 	);
 
+	let publicity = match body.publicity {
+		models::MatchmakerCustomLobbyPublicity::Public => {
+			backend::matchmaker::lobby::Publicity::Public
+		}
+		models::MatchmakerCustomLobbyPublicity::Private => {
+			backend::matchmaker::lobby::Publicity::Private
+		}
+	};
+
 	// Verify that lobby creation is enabled and user can create a lobby
 	util_mm::verification::verify_config(
 		ctx.op_ctx(),
@@ -284,23 +293,18 @@ pub async fn create(
 			verification_data_json: body
 				.verification_data
 				.as_ref()
-				.map(serde_json::to_string)
+				.map(|o| o.as_ref().map(serde_json::to_string))
+				.flatten()
 				.transpose()?
 				.as_ref(),
 			lobby_config_json: body
 				.lobby_config
 				.as_ref()
-				.map(serde_json::to_string)
+				.map(|o| o.as_ref().map(serde_json::to_string))
+				.flatten()
 				.transpose()?
 				.as_ref(),
-			custom_lobby_publicity: match body.publicity {
-				models::MatchmakerCustomLobbyPublicity::Public => {
-					Some(backend::matchmaker::lobby::Publicity::Public)
-				}
-				models::MatchmakerCustomLobbyPublicity::Private => {
-					Some(backend::matchmaker::lobby::Publicity::Private)
-				}
-			},
+			custom_lobby_publicity: Some(publicity),
 		},
 	)
 	.await?;
@@ -325,7 +329,10 @@ pub async fn create(
 			region_id: Some(region_id.into()),
 			create_ray_id: Some(ctx.op_ctx().ray_id().into()),
 			preemptively_created: false,
+
 			creator_user_id: user_id.map(Into::into),
+			is_custom: true,
+			publicity: Some(publicity as i32),
 			lobby_config_json: body.lobby_config
 				.as_ref()
 				.map(serde_json::to_string)
@@ -351,6 +358,8 @@ pub async fn create(
 		VerificationType::Bypass,
 	)
 	.await?;
+
+	// TODO: Cleanup lobby if find failed
 
 	Ok(models::MatchmakerCreateLobbyResponse {
 		lobby,

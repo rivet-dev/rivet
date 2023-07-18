@@ -8040,7 +8040,6 @@ paths:
                 verification_data: {}
               required:
                 - game_modes
-                - verification_data
   /lobbies/join:
     post:
       description: |
@@ -8111,7 +8110,6 @@ paths:
                 verification_data: {}
               required:
                 - lobby_id
-                - verification_data
   /lobbies/create:
     post:
       description: |
@@ -8186,8 +8184,6 @@ paths:
               required:
                 - game_mode
                 - publicity
-                - lobby_config
-                - verification_data
   /lobbies/list:
     get:
       description: Lists all open lobbies.
@@ -13663,9 +13659,6 @@ components:
           description: >-
             JSON data seen only by the given identity and their mutual
             followers.
-      required:
-        - public_metadata
-        - mutual_metadata
     IdentityHandle:
       type: object
       description: An identity handle.

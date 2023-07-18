@@ -53,6 +53,8 @@ pub mod lobby_config {
 		pub ready_ts: Option<i64>,
 		#[serde(rename = "c")]
 		pub is_closed: bool,
+		#[serde(rename = "cu")]
+		pub is_custom: bool,
 	}
 
 	pub const NAMESPACE_ID: &str = "ns";

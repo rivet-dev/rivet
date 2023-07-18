@@ -3,6 +3,7 @@ syntax = "proto3";
 package rivet.backend.pkg.mm.msg.lobby_create;
 
 import "proto/common.proto";
+import "proto/backend/matchmaker.proto";
 
 /// name = "msg-mm-lobby-create"
 /// parameters = [
@@ -39,8 +40,13 @@ message Message {
 
 	// The user (if any) that triggered this lobby's creation (either by /find or /create).
 	optional rivet.common.Uuid creator_user_id = 8;
+	// If this is a custom lobby created by a user.
+	bool is_custom = 9;
+	// Publicity of the lobby. Private lobbies do not show up in /list. Defaults to
+	// public when not set.
+	optional rivet.backend.matchmaker.Lobby.Publicity publicity = 10;
 
 	// Extra lobby config provided by the user in /create. Sent to the lobby as an env var.
-	optional string lobby_config_json = 9;
+	optional string lobby_config_json = 11;
 }
 

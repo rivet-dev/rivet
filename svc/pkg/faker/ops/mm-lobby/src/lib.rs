@@ -132,8 +132,11 @@ async fn handle(
 			region_id: region_res.region_id,
 			create_ray_id: Some(ctx.ray_id().into()),
 			preemptively_created: false,
+
 			creator_user_id: ctx.creator_user_id,
-			lobby_config_json: None,
+			is_custom: ctx.is_custom,
+			publicity: ctx.publicity,
+			lobby_config_json: ctx.lobby_config_json.clone(),
 		})
 		.await?;
 	let run_id = internal_unwrap!(complete_msg.run_id).as_uuid();

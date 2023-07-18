@@ -49,7 +49,7 @@ service:
             regions: optional<list<string>>
             prevent_auto_create_lobby: optional<boolean>
             captcha: optional<captchaConfig.Config>
-            verification_data: unknown
+            verification_data: optional<unknown>
       response: FindLobbyResponse
 
     join:
@@ -65,7 +65,7 @@ service:
           properties:
             lobby_id: string
             captcha: optional<captchaConfig.Config>
-            verification_data: unknown
+            verification_data: optional<unknown>
       response: JoinLobbyResponse
 
     create:
@@ -81,8 +81,8 @@ service:
             region: optional<string>
             captcha: optional<captchaConfig.Config>
             publicity: localCommons.CustomLobbyPublicity
-            lobby_config: unknown
-            verification_data: unknown
+            lobby_config: optional<unknown>
+            verification_data: optional<unknown>
       response: CreateLobbyResponse
 
     list:

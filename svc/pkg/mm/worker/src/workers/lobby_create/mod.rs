@@ -170,6 +170,10 @@ async fn worker(ctx: &OperationContext<mm::msg::lobby_create::Message>) -> Globa
 		create_ray_id: ctx.ray_id(),
 		lobby_group: lobby_group.clone(),
 		creator_user_id,
+		is_custom: ctx.is_custom,
+		publicity: ctx
+			.publicity
+			.and_then(backend::matchmaker::lobby::Publicity::from_i32),
 	};
 	rivet_pools::utils::crdb::tx(&crdb, |tx| {
 		Box::pin(update_db(ctx.ts(), tx, insert_opts.clone()))
@@ -191,8 +195,9 @@ async fn worker(ctx: &OperationContext<mm::msg::lobby_create::Message>) -> Globa
 				max_players_party: lobby_group.max_players_party,
 				max_players_direct: lobby_group.max_players_direct,
 				preemptive: false,
-				is_closed: false,
 				ready_ts: None,
+				is_closed: false,
+				is_custom: ctx.is_custom,
 			})?)
 			.arg(ctx.ts() + util_mm::consts::LOBBY_READY_TIMEOUT)
 			.key(key::lobby_config(lobby_id))
@@ -480,6 +485,8 @@ struct UpdateDbOpts {
 	create_ray_id: Uuid,
 	lobby_group: backend::matchmaker::LobbyGroup,
 	creator_user_id: Option<Uuid>,
+	is_custom: bool,
+	publicity: Option<backend::matchmaker::lobby::Publicity>,
 }
 
 #[tracing::instrument(skip_all)]
@@ -529,11 +536,12 @@ async fn update_db(
 			max_players_direct,
 			max_players_party,
 
+			is_closed,
 			creator_user_id,
-
-			is_closed
+			is_custom,
+			publicity
 		)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, false)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, false, $12, $13, $14)
 		"
 	))
 	.bind(opts.lobby_id)
@@ -548,6 +556,8 @@ async fn update_db(
 	.bind(opts.lobby_group.max_players_direct as i64)
 	.bind(opts.lobby_group.max_players_party as i64)
 	.bind(opts.creator_user_id)
+	.bind(opts.is_custom)
+	.bind(opts.publicity.map(|p| p as i32 as i64))
 	.execute(&mut *tx)
 	.await?;
 

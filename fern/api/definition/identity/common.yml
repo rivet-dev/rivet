@@ -94,10 +94,10 @@ types:
         type: optional<string>
         docs: A short message about the current game activity.
       public_metadata:
-        type: unknown
+        type: optional<unknown>
         docs: JSON data seen by anyone.
       mutual_metadata:
-        type: unknown
+        type: optional<unknown>
         docs: JSON data seen only by the given identity and their mutual followers.
 
   Handle:
@@ -224,10 +224,10 @@ types:
         type: string
         docs: A short activity message about the current game activity.
       public_metadata:
-        type: unknown
+        type: optional<unknown>
         docs: JSON data seen by anyone.
       mutual_metadata:
-        type: unknown
+        type: optional<unknown>
         docs: JSON data seen only by the given identity and their mutual followers.
 
   Group:
