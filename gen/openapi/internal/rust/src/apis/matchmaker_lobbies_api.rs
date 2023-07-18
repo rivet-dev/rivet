@@ -41,6 +41,19 @@ pub enum MatchmakerLobbiesFindError {
     UnknownValue(serde_json::Value),
 }
 
+/// struct for typed errors of method [`matchmaker_lobbies_get_state`]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(untagged)]
+pub enum MatchmakerLobbiesGetStateError {
+    Status400(crate::models::ErrorBody),
+    Status403(crate::models::ErrorBody),
+    Status404(crate::models::ErrorBody),
+    Status408(crate::models::ErrorBody),
+    Status429(crate::models::ErrorBody),
+    Status500(crate::models::ErrorBody),
+    UnknownValue(serde_json::Value),
+}
+
 /// struct for typed errors of method [`matchmaker_lobbies_join`]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(untagged)]
@@ -84,6 +97,19 @@ pub enum MatchmakerLobbiesReadyError {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum MatchmakerLobbiesSetClosedError {
+    Status400(crate::models::ErrorBody),
+    Status403(crate::models::ErrorBody),
+    Status404(crate::models::ErrorBody),
+    Status408(crate::models::ErrorBody),
+    Status429(crate::models::ErrorBody),
+    Status500(crate::models::ErrorBody),
+    UnknownValue(serde_json::Value),
+}
+
+/// struct for typed errors of method [`matchmaker_lobbies_set_state`]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(untagged)]
+pub enum MatchmakerLobbiesSetStateError {
     Status400(crate::models::ErrorBody),
     Status403(crate::models::ErrorBody),
     Status404(crate::models::ErrorBody),
@@ -156,6 +182,36 @@ pub async fn matchmaker_lobbies_find(configuration: &configuration::Configuratio
         serde_json::from_str(&local_var_content).map_err(Error::from)
     } else {
         let local_var_entity: Option<MatchmakerLobbiesFindError> = serde_json::from_str(&local_var_content).ok();
+        let local_var_error = ResponseContent { status: local_var_status, content: local_var_content, entity: local_var_entity };
+        Err(Error::ResponseError(local_var_error))
+    }
+}
+
+pub async fn matchmaker_lobbies_get_state(configuration: &configuration::Configuration, lobby_id: &str) -> Result<serde_json::Value, Error<MatchmakerLobbiesGetStateError>> {
+    let local_var_configuration = configuration;
+
+    let local_var_client = &local_var_configuration.client;
+
+    let local_var_uri_str = format!("{}/lobbies/{lobby_id}/state", local_var_configuration.base_path, lobby_id=crate::apis::urlencode(lobby_id));
+    let mut local_var_req_builder = local_var_client.request(reqwest::Method::GET, local_var_uri_str.as_str());
+
+    if let Some(ref local_var_user_agent) = local_var_configuration.user_agent {
+        local_var_req_builder = local_var_req_builder.header(reqwest::header::USER_AGENT, local_var_user_agent.clone());
+    }
+    if let Some(ref local_var_token) = local_var_configuration.bearer_access_token {
+        local_var_req_builder = local_var_req_builder.bearer_auth(local_var_token.to_owned());
+    };
+
+    let local_var_req = local_var_req_builder.build()?;
+    let local_var_resp = local_var_client.execute(local_var_req).await?;
+
+    let local_var_status = local_var_resp.status();
+    let local_var_content = local_var_resp.text().await?;
+
+    if !local_var_status.is_client_error() && !local_var_status.is_server_error() {
+        serde_json::from_str(&local_var_content).map_err(Error::from)
+    } else {
+        let local_var_entity: Option<MatchmakerLobbiesGetStateError> = serde_json::from_str(&local_var_content).ok();
         let local_var_error = ResponseContent { status: local_var_status, content: local_var_content, entity: local_var_entity };
         Err(Error::ResponseError(local_var_error))
     }
@@ -255,7 +311,7 @@ pub async fn matchmaker_lobbies_ready(configuration: &configuration::Configurati
     }
 }
 
-/// If `is_closed` is `true`, players will be prevented from joining the lobby. Does not shutdown the lobby. 
+/// If `is_closed` is `true`, the matchmaker will no longer route players to the lobby. Players can still join using the /join endpoint (this can be disabled by the developer by rejecting all new connections after setting the lobby to closed). Does not shutdown the lobby. 
 pub async fn matchmaker_lobbies_set_closed(configuration: &configuration::Configuration, matchmaker_lobbies_set_closed_request: crate::models::MatchmakerLobbiesSetClosedRequest) -> Result<(), Error<MatchmakerLobbiesSetClosedError>> {
     let local_var_configuration = configuration;
 
@@ -282,6 +338,37 @@ pub async fn matchmaker_lobbies_set_closed(configuration: &configuration::Config
         Ok(())
     } else {
         let local_var_entity: Option<MatchmakerLobbiesSetClosedError> = serde_json::from_str(&local_var_content).ok();
+        let local_var_error = ResponseContent { status: local_var_status, content: local_var_content, entity: local_var_entity };
+        Err(Error::ResponseError(local_var_error))
+    }
+}
+
+pub async fn matchmaker_lobbies_set_state(configuration: &configuration::Configuration, body: Option<serde_json::Value>) -> Result<(), Error<MatchmakerLobbiesSetStateError>> {
+    let local_var_configuration = configuration;
+
+    let local_var_client = &local_var_configuration.client;
+
+    let local_var_uri_str = format!("{}/lobbies/state", local_var_configuration.base_path);
+    let mut local_var_req_builder = local_var_client.request(reqwest::Method::PUT, local_var_uri_str.as_str());
+
+    if let Some(ref local_var_user_agent) = local_var_configuration.user_agent {
+        local_var_req_builder = local_var_req_builder.header(reqwest::header::USER_AGENT, local_var_user_agent.clone());
+    }
+    if let Some(ref local_var_token) = local_var_configuration.bearer_access_token {
+        local_var_req_builder = local_var_req_builder.bearer_auth(local_var_token.to_owned());
+    };
+    local_var_req_builder = local_var_req_builder.json(&body);
+
+    let local_var_req = local_var_req_builder.build()?;
+    let local_var_resp = local_var_client.execute(local_var_req).await?;
+
+    let local_var_status = local_var_resp.status();
+    let local_var_content = local_var_resp.text().await?;
+
+    if !local_var_status.is_client_error() && !local_var_status.is_server_error() {
+        Ok(())
+    } else {
+        let local_var_entity: Option<MatchmakerLobbiesSetStateError> = serde_json::from_str(&local_var_content).ok();
         let local_var_error = ResponseContent { status: local_var_status, content: local_var_content, entity: local_var_entity };
         Err(Error::ResponseError(local_var_error))
     }

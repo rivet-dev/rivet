@@ -24,13 +24,29 @@ service:
       path: /closed
       method: PUT
       docs: |
-        If `is_closed` is `true`, players will be prevented from joining the lobby.
+        If `is_closed` is `true`, the matchmaker will no longer route players to the lobby. Players can still
+        join using the /join endpoint (this can be disabled by the developer by rejecting all new connections
+        after setting the lobby to closed).
         Does not shutdown the lobby.
       request:
         name: SetLobbyClosedRequest
         body:
           properties:
             is_closed: boolean
+
+    setState:
+      path: /state
+      method: PUT
+      request:
+        name: SetLobbyStateRequest
+        body: optional<unknown>
+
+    getState:
+      path: /{lobby_id}/state
+      method: GET
+      path-parameters:
+        lobby_id: uuid
+      response: optional<unknown>
 
     find:
       path: /find

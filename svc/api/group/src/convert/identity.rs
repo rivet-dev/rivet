@@ -83,13 +83,13 @@ pub fn presence(
 			public_metadata: game_activity
 				.public_metadata
 				.as_ref()
-				.map(serde_json::to_value)
+				.map(|metadata| serde_json::from_str::<serde_json::Value>(metadata.as_str()))
 				.transpose()?,
 			mutual_metadata: if is_mutual_following {
 				game_activity
 					.friend_metadata
 					.as_ref()
-					.map(serde_json::to_value)
+					.map(|metadata| serde_json::from_str::<serde_json::Value>(metadata.as_str()))
 					.transpose()?
 			} else {
 				None

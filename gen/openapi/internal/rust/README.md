@@ -150,10 +150,12 @@ Class | Method | HTTP request | Description
 *KvApi* | [**kv_put_batch**](docs/KvApi.md#kv_put_batch) | **PUT** /entries/batch | 
 *MatchmakerLobbiesApi* | [**matchmaker_lobbies_create**](docs/MatchmakerLobbiesApi.md#matchmaker_lobbies_create) | **POST** /lobbies/create | 
 *MatchmakerLobbiesApi* | [**matchmaker_lobbies_find**](docs/MatchmakerLobbiesApi.md#matchmaker_lobbies_find) | **POST** /lobbies/find | 
+*MatchmakerLobbiesApi* | [**matchmaker_lobbies_get_state**](docs/MatchmakerLobbiesApi.md#matchmaker_lobbies_get_state) | **GET** /lobbies/{lobby_id}/state | 
 *MatchmakerLobbiesApi* | [**matchmaker_lobbies_join**](docs/MatchmakerLobbiesApi.md#matchmaker_lobbies_join) | **POST** /lobbies/join | 
 *MatchmakerLobbiesApi* | [**matchmaker_lobbies_list**](docs/MatchmakerLobbiesApi.md#matchmaker_lobbies_list) | **GET** /lobbies/list | 
 *MatchmakerLobbiesApi* | [**matchmaker_lobbies_ready**](docs/MatchmakerLobbiesApi.md#matchmaker_lobbies_ready) | **POST** /lobbies/ready | 
 *MatchmakerLobbiesApi* | [**matchmaker_lobbies_set_closed**](docs/MatchmakerLobbiesApi.md#matchmaker_lobbies_set_closed) | **PUT** /lobbies/closed | 
+*MatchmakerLobbiesApi* | [**matchmaker_lobbies_set_state**](docs/MatchmakerLobbiesApi.md#matchmaker_lobbies_set_state) | **PUT** /lobbies/state | 
 *MatchmakerPlayersApi* | [**matchmaker_players_connected**](docs/MatchmakerPlayersApi.md#matchmaker_players_connected) | **POST** /players/connected | 
 *MatchmakerPlayersApi* | [**matchmaker_players_disconnected**](docs/MatchmakerPlayersApi.md#matchmaker_players_disconnected) | **POST** /players/disconnected | 
 *MatchmakerPlayersApi* | [**matchmaker_players_get_statistics**](docs/MatchmakerPlayersApi.md#matchmaker_players_get_statistics) | **GET** /players/statistics | 

@@ -611,7 +611,7 @@ async fn fetch_lobby_list(
 }
 
 // MARK: PUT /lobbies/closed
-pub async fn closed(
+pub async fn set_closed(
 	ctx: Ctx<Auth>,
 	body: models::MatchmakerLobbiesSetClosedRequest,
 ) -> GlobalResult<serde_json::Value> {
@@ -629,6 +629,49 @@ pub async fn closed(
 	.await?;
 
 	Ok(json!({}))
+}
+
+// MARK: PUT /lobbies/state
+pub async fn set_state(ctx: Ctx<Auth>, body: bytes::Bytes) -> GlobalResult<serde_json::Value> {
+	// Mock response
+	if ctx.auth().game_ns_dev_option()?.is_some() {
+		return Ok(json!({}));
+	}
+
+	let lobby_ent = ctx.auth().lobby()?;
+	let state = if !body.is_empty() {
+		Some(serde_json::to_string(serde_json::from_bytes(&body[..])?))
+	} else {
+		None
+	};
+
+	msg!([ctx] mm::msg::lobby_state_set(lobby_ent.lobby_id) {
+		lobby_id: Some(lobby_ent.lobby_id.into()),
+		state_json: state,
+	})
+	.await?;
+
+	Ok(json!({}))
+}
+
+// MARK: GET /lobbies/{}/state
+pub async fn get_state(ctx: Ctx<Auth>, lobby_id: Uuid) -> GlobalResult<serde_json::Value> {
+	// Mock response
+	if ctx.auth().game_ns_dev_option()?.is_some() {
+		return Ok(json!({}));
+	}
+
+	let lobby_ent = ctx.auth().lobby()?;
+
+	let lobbies_res = op!([ctx] mm_lobby_get {
+		lobby_ids: vec![lobby_id.into()],
+		include_state: true,
+	})
+	.await?;
+	let lobby = internal_unwrap_owned!(lobbies_res.lobbies.first());
+	let state = serde_json::to_value(&lobby.state)?;
+
+	Ok(state)
 }
 
 // MARK: Utilities

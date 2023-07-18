@@ -6,10 +6,12 @@ Method | HTTP request | Description
 ------------- | ------------- | -------------
 [**matchmaker_lobbies_create**](MatchmakerLobbiesApi.md#matchmaker_lobbies_create) | **POST** /lobbies/create | 
 [**matchmaker_lobbies_find**](MatchmakerLobbiesApi.md#matchmaker_lobbies_find) | **POST** /lobbies/find | 
+[**matchmaker_lobbies_get_state**](MatchmakerLobbiesApi.md#matchmaker_lobbies_get_state) | **GET** /lobbies/{lobby_id}/state | 
 [**matchmaker_lobbies_join**](MatchmakerLobbiesApi.md#matchmaker_lobbies_join) | **POST** /lobbies/join | 
 [**matchmaker_lobbies_list**](MatchmakerLobbiesApi.md#matchmaker_lobbies_list) | **GET** /lobbies/list | 
 [**matchmaker_lobbies_ready**](MatchmakerLobbiesApi.md#matchmaker_lobbies_ready) | **POST** /lobbies/ready | 
 [**matchmaker_lobbies_set_closed**](MatchmakerLobbiesApi.md#matchmaker_lobbies_set_closed) | **PUT** /lobbies/closed | 
+[**matchmaker_lobbies_set_state**](MatchmakerLobbiesApi.md#matchmaker_lobbies_set_state) | **PUT** /lobbies/state | 
 
 
 
@@ -69,6 +71,34 @@ Name | Type | Description  | Required | Notes
 ### HTTP request headers
 
 - **Content-Type**: application/json
+- **Accept**: application/json
+
+[[Back to top]](#) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to Model list]](../README.md#documentation-for-models) [[Back to README]](../README.md)
+
+
+## matchmaker_lobbies_get_state
+
+> serde_json::Value matchmaker_lobbies_get_state(lobby_id)
+
+
+### Parameters
+
+
+Name | Type | Description  | Required | Notes
+------------- | ------------- | ------------- | ------------- | -------------
+**lobby_id** | **uuid::Uuid** |  | [required] |
+
+### Return type
+
+[**serde_json::Value**](serde_json::Value.md)
+
+### Authorization
+
+[BearerAuth](../README.md#BearerAuth)
+
+### HTTP request headers
+
+- **Content-Type**: Not defined
 - **Accept**: application/json
 
 [[Back to top]](#) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to Model list]](../README.md#documentation-for-models) [[Back to README]](../README.md)
@@ -163,7 +193,7 @@ This endpoint does not need any parameter.
 > matchmaker_lobbies_set_closed(matchmaker_lobbies_set_closed_request)
 
 
-If `is_closed` is `true`, players will be prevented from joining the lobby. Does not shutdown the lobby. 
+If `is_closed` is `true`, the matchmaker will no longer route players to the lobby. Players can still join using the /join endpoint (this can be disabled by the developer by rejecting all new connections after setting the lobby to closed). Does not shutdown the lobby. 
 
 ### Parameters
 
@@ -171,6 +201,34 @@ If `is_closed` is `true`, players will be prevented from joining the lobby. Does
 Name | Type | Description  | Required | Notes
 ------------- | ------------- | ------------- | ------------- | -------------
 **matchmaker_lobbies_set_closed_request** | [**MatchmakerLobbiesSetClosedRequest**](MatchmakerLobbiesSetClosedRequest.md) |  | [required] |
+
+### Return type
+
+ (empty response body)
+
+### Authorization
+
+[BearerAuth](../README.md#BearerAuth)
+
+### HTTP request headers
+
+- **Content-Type**: application/json
+- **Accept**: application/json
+
+[[Back to top]](#) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to Model list]](../README.md#documentation-for-models) [[Back to README]](../README.md)
+
+
+## matchmaker_lobbies_set_state
+
+> matchmaker_lobbies_set_state(body)
+
+
+### Parameters
+
+
+Name | Type | Description  | Required | Notes
+------------- | ------------- | ------------- | ------------- | -------------
+**body** | Option<**serde_json::Value**> |  |  |
 
 ### Return type
 

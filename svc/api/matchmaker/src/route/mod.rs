@@ -74,7 +74,7 @@ define_router! {
 			),
 		},
 		"lobbies" / "closed": {
-			PUT: lobbies::closed(
+			PUT: lobbies::set_closed(
 				body: rivet_api::models::MatchmakerLobbiesSetClosedRequest,
 				rate_limit: {
 					buckets: [
@@ -82,6 +82,19 @@ define_router! {
 					],
 				},
 			),
+		},
+		"lobbies" / "state": {
+			PUT: lobbies::set_state(
+				body_as_bytes: true,
+				rate_limit: {
+					buckets: [
+						{ count: 1024 },
+					],
+				},
+			),
+		},
+		"lobbies" / Uuid / "state": {
+			GET: lobbies::get_state(),
 		},
 		"lobbies" / "list": {
 			GET: lobbies::list(

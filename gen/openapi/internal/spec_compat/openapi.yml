@@ -3477,8 +3477,6 @@ components:
       required:
       - game
       - message
-      - public_metadata
-      - mutual_metadata
       type: object
     IdentityGameLinkStatus:
       enum:
@@ -12238,8 +12236,13 @@ paths:
       - GroupInvites
   /lobbies/closed:
     put:
-      description: 'If `is_closed` is `true`, players will be prevented from joining
-        the lobby.
+      description: 'If `is_closed` is `true`, the matchmaker will no longer route
+        players to the lobby. Players can still
+
+        join using the /join endpoint (this can be disabled by the developer by rejecting
+        all new connections
+
+        after setting the lobby to closed).
 
         Does not shutdown the lobby.
 
@@ -12591,6 +12594,116 @@ paths:
       parameters: []
       responses:
         '204':
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+          description: ''
+        '408':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+          description: ''
+        '429':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+          description: ''
+        '500':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+          description: ''
+      security: *id001
+      servers:
+      - url: https://matchmaker.api.rivet.gg/v1
+      tags:
+      - MatchmakerLobbies
+  /lobbies/state:
+    put:
+      operationId: matchmaker_lobbies_setState
+      parameters: []
+      requestBody:
+        content:
+          application/json:
+            schema: {}
+        required: false
+      responses:
+        '204':
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+          description: ''
+        '408':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+          description: ''
+        '429':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+          description: ''
+        '500':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+          description: ''
+      security: *id001
+      servers:
+      - url: https://matchmaker.api.rivet.gg/v1
+      tags:
+      - MatchmakerLobbies
+  /lobbies/{lobby_id}/state:
+    get:
+      operationId: matchmaker_lobbies_getState
+      parameters:
+      - in: path
+        name: lobby_id
+        required: true
+        schema:
+          format: uuid
+          type: string
+      responses:
+        '200':
+          content:
+            application/json:
+              schema: {}
           description: ''
         '400':
           content:

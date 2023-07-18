@@ -213,7 +213,7 @@ pub async fn verify_config(
 			verification_data: opts
 				.verification_data_json
 				.as_ref()
-				.map(serde_json::to_value)
+				.map(|json| serde_json::from_str::<serde_json::Value>(json.as_str()))
 				.transpose()?,
 			lobby: Lobby {
 				lobby_group_id: internal_unwrap!(opts.lobby_group_meta.lobby_group_id).as_uuid(),
@@ -224,7 +224,7 @@ pub async fn verify_config(
 				config: opts
 					.lobby_config_json
 					.as_ref()
-					.map(serde_json::to_value)
+					.map(|json| serde_json::from_str::<serde_json::Value>(json.as_str()))
 					.transpose()?,
 			},
 			join_kind: JoinKind::Normal,
