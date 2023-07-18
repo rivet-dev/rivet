@@ -126,68 +126,38 @@ async fn worker(ctx: &OperationContext<mm::msg::lobby_find::Message>) -> GlobalR
 			user_id: ctx.user_id.map(|id| id.as_uuid()),
 			lobby_group: &lobby_group_config.lobby_group,
 			lobby_group_meta: &lobby_group_config.lobby_group_meta,
-			lobby_state: lobby_group_config.lobby_state.as_ref(),
-			verification_data_json: ctx.verification_data_json.as_ref(),
+			lobby_info: lobby_group_config.lobby_info.as_ref(),
+			lobby_state_json: lobby_group_config.lobby_state_json.as_deref(),
+			verification_data_json: ctx.verification_data_json.as_deref(),
 			lobby_config_json: None,
 			custom_lobby_publicity: None,
 		},
 	)
 	.await;
-	let verification_success = match verification_res {
-		Ok(_) => true,
-		Err(err) if err.is(formatted_error::code::MATCHMAKER_REGISTRATION_REQUIRED) => {
-			fail(
-				ctx,
-				namespace_id,
-				query_id,
-				ErrorCode::RegistrationRequired,
-				true,
-			)
-			.await?;
+	if let Err(err) = verification_res {
+		// Reduces verbosity
+		let err_branch = |err_code| async move {
+			fail(ctx, namespace_id, query_id, err_code, true).await?;
+			complete_request(ctx.chirp(), analytics_events).await
+		};
 
-			false
-		}
-		Err(err) if err.is(formatted_error::code::MATCHMAKER_IDENTITY_REQUIRED) => {
-			fail(
-				ctx,
-				namespace_id,
-				query_id,
-				ErrorCode::IdentityRequired,
-				true,
-			)
-			.await?;
+		let res = if err.is(formatted_error::code::MATCHMAKER_FIND_DISABLED) {
+			err_branch(ErrorCode::FindDisabled).await
+		} else if err.is(formatted_error::code::MATCHMAKER_JOIN_DISABLED) {
+			err_branch(ErrorCode::JoinDisabled).await
+		} else if err.is(formatted_error::code::MATCHMAKER_REGISTRATION_REQUIRED) {
+			err_branch(ErrorCode::RegistrationRequired).await
+		} else if err.is(formatted_error::code::MATCHMAKER_IDENTITY_REQUIRED) {
+			err_branch(ErrorCode::IdentityRequired).await
+		} else if err.is(formatted_error::code::MATCHMAKER_VERIFICATION_FAILED) {
+			err_branch(ErrorCode::VerificationFailed).await
+		} else if err.is(formatted_error::code::MATCHMAKER_VERIFICATION_REQUEST_FAILED) {
+			err_branch(ErrorCode::VerificationRequestFailed).await
+		} else {
+			Err(err)
+		};
 
-			false
-		}
-		Err(err) if err.is(formatted_error::code::MATCHMAKER_VERIFICATION_FAILED) => {
-			fail(
-				ctx,
-				namespace_id,
-				query_id,
-				ErrorCode::VerificationFailed,
-				true,
-			)
-			.await?;
-
-			false
-		}
-		Err(err) if err.is(formatted_error::code::MATCHMAKER_VERIFICATION_REQUEST_FAILED) => {
-			fail(
-				ctx,
-				namespace_id,
-				query_id,
-				ErrorCode::VerificationRequestFailed,
-				true,
-			)
-			.await?;
-
-			false
-		}
-		Err(err) => return Err(err),
-	};
-
-	if !verification_success {
-		return complete_request(ctx.chirp(), analytics_events).await;
+		return res;
 	}
 
 	// Create players
@@ -480,7 +450,8 @@ pub struct LobbyGroupConfig {
 	pub lobby_group: backend::matchmaker::LobbyGroup,
 	#[allow(unused)]
 	pub lobby_group_meta: backend::matchmaker::LobbyGroupMeta,
-	pub lobby_state: Option<backend::matchmaker::Lobby>,
+	pub lobby_info: Option<backend::matchmaker::Lobby>,
+	pub lobby_state_json: Option<String>,
 }
 
 /// Fetches the lobby group config (and lobby if direct).
@@ -490,24 +461,35 @@ async fn fetch_lobby_group_config(
 	query: &Query,
 ) -> GlobalResult<LobbyGroupConfig> {
 	// Get lobby group id from query
-	let (lobby_group_id, lobby_state) = match query {
+	let (lobby_group_id, lobby_info, lobby_state_json) = match query {
 		Query::LobbyGroup(backend::matchmaker::query::LobbyGroup { auto_create, .. }) => {
 			let auto_create = internal_unwrap!(auto_create);
 
-			(internal_unwrap_owned!(auto_create.lobby_group_id), None)
+			(
+				internal_unwrap_owned!(auto_create.lobby_group_id),
+				None,
+				None,
+			)
 		}
 		Query::Direct(backend::matchmaker::query::Direct { lobby_id, .. }) => {
 			let lobby_id = internal_unwrap_owned!(*lobby_id);
 
-			let lobbies_res = op!([ctx] mm_lobby_get {
-				lobby_ids: vec![lobby_id],
-			})
-			.await?;
-			let lobby = internal_unwrap_owned!(lobbies_res.lobbies.first(), "lobby not found");
+			let (lobbies_res, lobby_states_res) = tokio::try_join!(
+				op!([ctx] mm_lobby_get {
+					lobby_ids: vec![lobby_id],
+				}),
+				op!([ctx] mm_lobby_state_get {
+					lobby_ids: vec![lobby_id],
+				}),
+			)?;
+			let lobby =
+				internal_unwrap_owned!(lobbies_res.lobbies.into_iter().next(), "lobby not found");
+			let lobby_state = internal_unwrap_owned!(lobby_states_res.lobbies.into_iter().next());
 
 			(
 				internal_unwrap_owned!(lobby.lobby_group_id),
-				Some(lobby.clone()),
+				Some(lobby),
+				lobby_state.state_json,
 			)
 		}
 	};
@@ -552,7 +534,8 @@ async fn fetch_lobby_group_config(
 		version_id,
 		lobby_group: (*lobby_group).clone(),
 		lobby_group_meta: (*lobby_group_meta).clone(),
-		lobby_state,
+		lobby_info,
+		lobby_state_json,
 	})
 }
 

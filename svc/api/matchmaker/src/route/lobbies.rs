@@ -290,21 +290,22 @@ pub async fn create(
 			user_id,
 			lobby_group,
 			lobby_group_meta,
-			lobby_state: None,
+			lobby_info: None,
+			lobby_state_json: None,
 			verification_data_json: body
 				.verification_data
 				.as_ref()
 				.map(|o| o.as_ref().map(serde_json::to_string))
 				.flatten()
 				.transpose()?
-				.as_ref(),
+				.as_deref(),
 			lobby_config_json: body
 				.lobby_config
 				.as_ref()
 				.map(|o| o.as_ref().map(serde_json::to_string))
 				.flatten()
 				.transpose()?
-				.as_ref(),
+				.as_deref(),
 			custom_lobby_publicity: Some(publicity),
 		},
 	)
@@ -441,7 +442,7 @@ pub async fn list(
 			if !lobby_group.listable {
 				return false;
 			}
-			
+
 			// Keep if lobby not empty
 			if lobby.player_count.registered_player_count != 0 {
 				return true;

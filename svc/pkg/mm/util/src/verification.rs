@@ -18,12 +18,13 @@ pub struct Lobby {
 	pub lobby_group_id: Uuid,
 	pub lobby_group_name_id: String,
 
-	pub state: Option<LobbyState>,
+	pub info: Option<LobbyInfo>,
+	pub state: Option<serde_json::Value>,
 	pub config: Option<serde_json::Value>,
 }
 
 #[derive(Serialize)]
-pub struct LobbyState {
+pub struct LobbyInfo {
 	pub lobby_id: Uuid,
 	pub region_id: Uuid,
 	pub region_name_id: String,
@@ -51,10 +52,11 @@ pub struct VerifyConfigOpts<'a> {
 
 	pub lobby_group: &'a backend::matchmaker::LobbyGroup,
 	pub lobby_group_meta: &'a backend::matchmaker::LobbyGroupMeta,
-	pub lobby_state: Option<&'a backend::matchmaker::Lobby>,
+	pub lobby_info: Option<&'a backend::matchmaker::Lobby>,
+	pub lobby_state_json: Option<&'a str>,
 
-	pub verification_data_json: Option<&'a String>,
-	pub lobby_config_json: Option<&'a String>,
+	pub verification_data_json: Option<&'a str>,
+	pub lobby_config_json: Option<&'a str>,
 	pub custom_lobby_publicity: Option<backend::matchmaker::lobby::Publicity>,
 }
 
@@ -206,8 +208,8 @@ pub async fn verify_config(
 
 	// Verify user data externally
 	if external_request_config.is_some() {
-		// Build lobby state
-		let lobby_state = if let Some(l) = &opts.lobby_state {
+		// Build lobby info
+		let lobby_info = if let Some(l) = &opts.lobby_info {
 			// Fetch region data for readable name
 			let region_id = internal_unwrap_owned!(l.region_id);
 			let regions_res = op!([ctx] region_get {
@@ -216,7 +218,7 @@ pub async fn verify_config(
 			.await?;
 			let region = internal_unwrap_owned!(regions_res.regions.first());
 
-			Some(LobbyState {
+			Some(LobbyInfo {
 				lobby_id: internal_unwrap!(l.lobby_id).as_uuid(),
 				region_id: region_id.as_uuid(),
 				region_name_id: region.name_id.clone(),
@@ -232,18 +234,23 @@ pub async fn verify_config(
 			verification_data: opts
 				.verification_data_json
 				.as_ref()
-				.map(|json| serde_json::from_str::<serde_json::Value>(json.as_str()))
+				.map(|json| serde_json::from_str::<serde_json::Value>(json))
 				.transpose()?,
 			lobby: Lobby {
 				lobby_group_id: internal_unwrap!(opts.lobby_group_meta.lobby_group_id).as_uuid(),
 				lobby_group_name_id: opts.lobby_group.name_id.clone(),
 				namespace_id: opts.namespace_id,
 
-				state: None,
+				info: lobby_info,
+				state: opts
+					.lobby_state_json
+					.as_ref()
+					.map(|json| serde_json::from_str::<serde_json::Value>(json))
+					.transpose()?,
 				config: opts
 					.lobby_config_json
 					.as_ref()
-					.map(|json| serde_json::from_str::<serde_json::Value>(json.as_str()))
+					.map(|json| serde_json::from_str::<serde_json::Value>(json))
 					.transpose()?,
 			},
 			join_kind: JoinKind::Normal,
