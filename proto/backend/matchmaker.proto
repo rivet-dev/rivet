@@ -119,13 +119,15 @@ message VerificationConfig {
 }
 
 message FindConfig {
-	IdentityRequirement identity_requirement = 1;
-	optional VerificationConfig verification_config = 2;
+	bool enabled = 1;
+	IdentityRequirement identity_requirement = 2;
+	optional VerificationConfig verification_config = 3;
 }
 
 message JoinConfig {
-	IdentityRequirement identity_requirement = 1;
-	optional VerificationConfig verification_config = 2;
+	bool enabled = 1;
+	IdentityRequirement identity_requirement = 2;
+	optional VerificationConfig verification_config = 3;
 }
 
 message CreateConfig {

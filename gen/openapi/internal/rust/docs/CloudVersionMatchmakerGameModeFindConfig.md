@@ -4,6 +4,7 @@
 
 Name | Type | Description | Notes
 ------------ | ------------- | ------------- | -------------
+**enabled** | **bool** | Sets whether or not the /find endpoint is enabled. | 
 **identity_requirement** | [**crate::models::CloudVersionMatchmakerGameModeIdentityRequirement**](CloudVersionMatchmakerGameModeIdentityRequirement.md) |  | 
 **verification_config** | Option<[**crate::models::CloudVersionMatchmakerGameModeVerificationConfig**](CloudVersionMatchmakerGameModeVerificationConfig.md)> |  | [optional]
 

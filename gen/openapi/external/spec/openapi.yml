@@ -11674,8 +11674,14 @@ components:
         - headers
     CloudVersionMatchmakerGameModeFindConfig:
       type: object
-      description: Configures the requirements and authentication for the `find` endpoint.
+      description: >-
+        Configures the requirements and authentication for the /find endpoint.
+        If this value is not set in the config, the /find endpoint is still
+        enabled.
       properties:
+        enabled:
+          type: boolean
+          description: Sets whether or not the /find endpoint is enabled.
         identity_requirement:
           $ref: >-
             #/components/schemas/CloudVersionMatchmakerGameModeIdentityRequirement
@@ -11683,11 +11689,18 @@ components:
           $ref: >-
             #/components/schemas/CloudVersionMatchmakerGameModeVerificationConfig
       required:
+        - enabled
         - identity_requirement
     CloudVersionMatchmakerGameModeJoinConfig:
       type: object
-      description: Configures the requirements and authentication for the `join` endpoint.
+      description: >-
+        Configures the requirements and authentication for the /join endpoint.
+        If this value is not set in the config, the /join endpoint is still
+        enabled.
       properties:
+        enabled:
+          type: boolean
+          description: Sets whether or not the /join endpoint is enabled.
         identity_requirement:
           $ref: >-
             #/components/schemas/CloudVersionMatchmakerGameModeIdentityRequirement
@@ -11695,12 +11708,14 @@ components:
           $ref: >-
             #/components/schemas/CloudVersionMatchmakerGameModeVerificationConfig
       required:
+        - enabled
         - identity_requirement
     CloudVersionMatchmakerGameModeCreateConfig:
       type: object
       description: >-
-        Configures the requirements and authentication for the `create`
-        endpoint.
+        Configures the requirements and authentication for the /create endpoint.
+        If this value is not set in the config, the /create endpoint is NOT
+        enabled.
       properties:
         identity_requirement:
           $ref: >-

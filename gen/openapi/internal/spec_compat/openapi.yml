@@ -2403,8 +2403,9 @@ components:
           type: string
       type: object
     CloudVersionMatchmakerGameModeCreateConfig:
-      description: Configures the requirements and authentication for the `create`
-        endpoint.
+      description: Configures the requirements and authentication for the /create
+        endpoint. If this value is not set in the config, the /create endpoint is
+        NOT enabled.
       properties:
         enable_private:
           type: boolean
@@ -2422,13 +2423,18 @@ components:
       - enable_private
       type: object
     CloudVersionMatchmakerGameModeFindConfig:
-      description: Configures the requirements and authentication for the `find` endpoint.
+      description: Configures the requirements and authentication for the /find endpoint.
+        If this value is not set in the config, the /find endpoint is still enabled.
       properties:
+        enabled:
+          description: Sets whether or not the /find endpoint is enabled.
+          type: boolean
         identity_requirement:
           $ref: '#/components/schemas/CloudVersionMatchmakerGameModeIdentityRequirement'
         verification_config:
           $ref: '#/components/schemas/CloudVersionMatchmakerGameModeVerificationConfig'
       required:
+      - enabled
       - identity_requirement
       type: object
     CloudVersionMatchmakerGameModeIdentityRequirement:
@@ -2451,13 +2457,18 @@ components:
       - max
       type: object
     CloudVersionMatchmakerGameModeJoinConfig:
-      description: Configures the requirements and authentication for the `join` endpoint.
+      description: Configures the requirements and authentication for the /join endpoint.
+        If this value is not set in the config, the /join endpoint is still enabled.
       properties:
+        enabled:
+          description: Sets whether or not the /join endpoint is enabled.
+          type: boolean
         identity_requirement:
           $ref: '#/components/schemas/CloudVersionMatchmakerGameModeIdentityRequirement'
         verification_config:
           $ref: '#/components/schemas/CloudVersionMatchmakerGameModeVerificationConfig'
       required:
+      - enabled
       - identity_requirement
       type: object
     CloudVersionMatchmakerGameModeRegion:
@@ -3477,8 +3488,6 @@ components:
       required:
       - game
       - message
-      - public_metadata
-      - mutual_metadata
       type: object
     IdentityGameLinkStatus:
       enum:

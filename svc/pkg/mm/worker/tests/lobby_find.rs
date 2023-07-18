@@ -717,10 +717,12 @@ async fn gen_verification_lobby(
 				),
 
 				find_config: Some(backend::matchmaker::FindConfig {
+					enabled: true,
 					identity_requirement: identity_requirement as i32,
 					verification_config: verification_config.clone(),
 				}),
 				join_config: Some(backend::matchmaker::JoinConfig {
+					enabled: true,
 					identity_requirement: identity_requirement as i32,
 					verification_config,
 				}),
