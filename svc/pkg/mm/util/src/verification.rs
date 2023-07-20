@@ -15,8 +15,8 @@ pub struct ExternalVerificationRequest {
 #[derive(Serialize)]
 pub struct Lobby {
 	pub namespace_id: Uuid,
-	pub lobby_group_id: Uuid,
-	pub lobby_group_name_id: String,
+	pub game_mode_id: Uuid,
+	pub game_mode_name_id: String,
 
 	pub info: Option<LobbyInfo>,
 	pub state: Option<serde_json::Value>,
@@ -237,8 +237,8 @@ pub async fn verify_config(
 				.map(|json| serde_json::from_str::<serde_json::Value>(json))
 				.transpose()?,
 			lobby: Lobby {
-				lobby_group_id: internal_unwrap!(opts.lobby_group_meta.lobby_group_id).as_uuid(),
-				lobby_group_name_id: opts.lobby_group.name_id.clone(),
+				game_mode_id: internal_unwrap!(opts.lobby_group_meta.lobby_group_id).as_uuid(),
+				game_mode_name_id: opts.lobby_group.name_id.clone(),
 				namespace_id: opts.namespace_id,
 
 				info: lobby_info,

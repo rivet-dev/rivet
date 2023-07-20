@@ -4,7 +4,7 @@ description = "The external matchmaker verification system failed or returned an
 http_status = 500
 ---
 
-# Matchmaker Verification Failed
+# Matchmaker Verification Request Failed
 
 The external matchmaker verification system failed or returned an invalid response. This is not an error that
 has been caused by the user.
