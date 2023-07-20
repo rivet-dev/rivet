@@ -79,7 +79,7 @@ async fn handle(
 		}
 
 		if cdn.routes.len() > 32 {
-			errors.push(util::err_path!["config", "cdn", "routes-meta", "too-many",]);
+			errors.push(util::err_path!["config", "cdn", "routes-meta", "too-many"]);
 		}
 
 		let mut unique_globs = HashSet::<util::glob::Glob>::new();

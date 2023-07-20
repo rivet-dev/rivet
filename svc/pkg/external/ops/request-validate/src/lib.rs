@@ -59,8 +59,12 @@ async fn handle(
 		}
 	}
 
+	if config.headers.len() > 32 {
+		errors.push(util::err_path!["headers-meta", "too-many"]);
+	}
+
 	// Validate headers
-	for (k, v) in &config.headers {
+	for (k, v) in config.headers.iter().take(32) {
 		let header_label = format!("*{}*", k);
 
 		if HeaderName::from_str(k).is_err() {
