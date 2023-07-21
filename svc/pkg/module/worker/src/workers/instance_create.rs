@@ -10,23 +10,32 @@ struct Variables<T> {
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
-struct LaunchAppInput {
+struct CreateAppInput {
 	organization_id: String,
 	name: String,
-	regions: Vec<String>,
-	image: String,
+	preferred_region: String,
 }
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
-struct QueryBody {
+struct CreateReleaseInput {
+	app_id: String,
+	image: String,
+	platform_version: String,
+	strategy: String,
+	definition: serde_json::Value,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct QueryBody<T> {
 	query: &'static str,
-	variables: Variables<LaunchAppInput>,
+	variables: Variables<T>,
 }
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
-struct LaunchAppPayload {
+struct CreateAppPayload {
 	app: App,
 }
 
@@ -38,14 +47,27 @@ struct App {
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
-struct GraphQLResponse {
-	data: GraphQLResponseInner,
+enum GraphQLResponse<T> {
+	Data(T),
+	Errors(Vec<serde_json::Value>),
+}
+
+impl<T> GraphQLResponse<T> {
+	fn data(self) -> GlobalResult<T> {
+		match self {
+			GraphQLResponse::Data(data) => Ok(data),
+			GraphQLResponse::Errors(errors) => {
+				tracing::error!(?errors, "graphql errors");
+				internal_panic!("graphql errors")
+			}
+		}
+	}
 }
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
-struct GraphQLResponseInner {
-	launch_app: LaunchAppPayload,
+struct CreateAppResponse {
+	create_app: CreateAppPayload,
 }
 
 #[worker(name = "module-instance-create")]
@@ -81,21 +103,19 @@ async fn worker(
 	let image = match internal_unwrap!(version.image) {
 		backend::module::version::Image::Docker(docker) => docker.image_tag.clone(),
 	};
-	let app_id = launch_app(
-		LaunchAppInput {
-			organization_id: fly_org,
-			name: format!("module-instance-{}", instance_id),
-			regions: vec![fly_region],
-			image,
-		},
-		&fly_auth_token,
-	)
+	let app_id = launch_app(LaunchAppOpts {
+		organization_id: &fly_org,
+		name: &format!("module-instance-{}", instance_id),
+		preferred_region: &fly_region,
+		auth_token: &fly_auth_token,
+		image: &image,
+	})
 	.await?;
 
 	// Update app ID
 	sqlx::query(indoc!(
 		"
-		UPDATE instances
+		UPDATE instances_driver_fly
 		SET app_id = $2
 		WHERE instance_id = $1
 		"
@@ -168,30 +188,81 @@ async fn insert_instance(
 	Ok(())
 }
 
-async fn launch_app(input: LaunchAppInput, auth_token: &str) -> GlobalResult<String> {
-	let query_body = QueryBody {
-		query: indoc!(
-			"
-			mutation LaunchApp($input: LaunchAppInput!) {
-				launchApp(input: $input) {
-					app {
-						id
-					}
-				}
-			}
-			"
-		),
-		variables: Variables { input },
-	};
+struct LaunchAppOpts<'a> {
+	organization_id: &'a str,
+	name: &'a str,
+	preferred_region: &'a str,
+	auth_token: &'a str,
+	image: &'a str,
+}
 
+async fn launch_app(opts: LaunchAppOpts<'_>) -> GlobalResult<String> {
+	// Create app
+	tracing::info!(organization_id = ?opts.organization_id, name = ?opts.name, preferred_region = ?opts.preferred_region, "creating fly app");
 	let res = reqwest::Client::new()
 		.post("https://api.fly.io/graphql")
-		.bearer_auth(auth_token)
-		.json(&query_body)
+		.bearer_auth(opts.auth_token)
+		.json(&QueryBody {
+			query: indoc!(
+				r#"
+				mutation CreateApp($input: CreateAppInput!) {
+					createApp(input: $input) {
+						app {
+							id
+						}
+					}
+				}
+				"#
+			),
+			variables: Variables {
+				input: CreateAppInput {
+					organization_id: opts.organization_id.into(),
+					name: opts.name.into(),
+					preferred_region: opts.preferred_region.into(),
+				},
+			},
+		})
 		.send()
 		.await?
-		.json::<GraphQLResponse>()
-		.await?;
+		.error_for_status()?
+		.json::<GraphQLResponse<CreateAppResponse>>()
+		.await?
+		.data()?;
+	let app_id = res.create_app.app.id;
 
-	Ok(res.data.launch_app.app.id)
+	// Deploy version
+	tracing::info!(?app_id, image = ?opts.image, "creating fly release");
+	let res = reqwest::Client::new()
+		.post("https://api.fly.io/graphql")
+		.bearer_auth(opts.auth_token)
+		.json(&QueryBody {
+			query: indoc!(
+				r#"
+				mutation CreateRelease($input: CreateReleaseInput!) {
+					createRelease(input: $input) {
+						app {
+							id
+						}
+					}
+				}
+				"#
+			),
+			variables: Variables {
+				input: CreateReleaseInput {
+					app_id: app_id.clone(),
+					image: opts.image.into(),
+					platform_version: "machines".into(),
+					strategy: "CANARY".into(),
+					definition: json!({}),
+				},
+			},
+		})
+		.send()
+		.await?
+		.error_for_status()?
+		.json::<GraphQLResponse<serde_json::Value>>()
+		.await?
+		.data()?;
+
+	Ok(app_id)
 }

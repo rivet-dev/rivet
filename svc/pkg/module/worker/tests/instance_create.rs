@@ -41,7 +41,7 @@ async fn empty(ctx: TestCtx) {
 	.await
 	.unwrap();
 
-	msg!([ctx] module::msg::instance_create(version_id) -> module::msg::instance_create_complete {
+	msg!([ctx] module::msg::instance_create(instance_id) -> module::msg::instance_create_complete {
 		instance_id: Some(instance_id.into()),
 		module_version_id: Some(version_id.into()),
 		driver: Some(module::msg::instance_create::message::Driver::Fly(module::msg::instance_create::message::Fly {
