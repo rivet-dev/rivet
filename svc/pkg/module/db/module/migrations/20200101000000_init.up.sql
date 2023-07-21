@@ -10,7 +10,7 @@ CREATE TABLE modules (
 
 -- Version
 CREATE TABLE versions (
-	module_version_id UUID PRIMARY KEY,
+	version_id UUID PRIMARY KEY,
 	module_id UUID NOT NULL REFERENCES modules (module_id),
 	create_ts INT NOT NULL,
 
@@ -23,42 +23,48 @@ CREATE TABLE versions (
 );
 
 CREATE TABLE versions_image_docker (
-	module_version_id UUID PRIMARY KEY REFERENCES versions (module_version_id),
+	version_id UUID PRIMARY KEY REFERENCES versions (version_id),
 	image_tag STRING NOT NULL
 );
 
 -- Function
 CREATE TABLE functions (
-	module_version_id UUID NOT NULL REFERENCES versions (module_version_id),
+	version_id UUID NOT NULL REFERENCES versions (version_id),
 	name STRING NOT NULL,
 	parameter_schema STRING NOT NULL,
 	response_schema STRING NOT NULL,
-	PRIMARY KEY (module_version_id, name)
+	PRIMARY KEY (version_id, name)
 );
 
 CREATE TABLE functions_callable (
-	module_version_id UUID NOT NULL REFERENCES versions (module_version_id),
+	version_id UUID NOT NULL REFERENCES versions (version_id),
 	name STRING NOT NULL,
-	PRIMARY KEY (module_version_id, name),
-	FOREIGN KEY (module_version_id, name) REFERENCES functions (module_version_id, name)
+	PRIMARY KEY (version_id, name),
+	FOREIGN KEY (version_id, name) REFERENCES functions (version_id, name)
+);
+
+-- Instance
+CREATE TABLE instances (
+	instance_id UUID PRIMARY KEY,
+	version_id UUID NOT NULL REFERENCES versions (version_id),
+	create_ts INT NOT NULL
+);
+
+CREATE TABLE instances_runtime_fly (
+	instance_id UUID PRIMARY KEY REFERENCES instances (instance_id),
+	vm_size STRING NOT NULL,
+	app_id STRING NOT NULL
 );
 
 -- Game version
 CREATE TABLE game_versions (
-	version_id UUID PRIMARY KEY  -- References db-game.versions
+	version_id UUID PRIMARY KEY,  -- References db-game.versions
+	config BYTES NOT NULL
 );
 
-CREATE TABLE game_version_modules (
-	version_id UUID NOT NULL REFERENCES game_versions (version_id),
-	module_version_id UUID NOT NULL REFERENCES versions (module_version_id),
-	PRIMARY KEY (version_id, module_version_id)
-);
-
-CREATE TABLE game_versions_runtime_fly (
-	version_id UUID NOT NULL,
-	module_version_id UUID NOT NULL,
-	vm_size STRING NOT NULL,
-	PRIMARY KEY (version_id, module_version_id),
-	FOREIGN KEY (version_id, module_version_id) REFERENCES game_version_modules (version_id, module_version_id)
+CREATE TABLE game_version_module_instances (
+	game_version_id UUID NOT NULL REFERENCES game_versions (version_id),
+	instance_id UUID NOT NULL REFERENCES instances (instance_id),
+	PRIMARY KEY (game_version_id, instance_id)
 );
 
