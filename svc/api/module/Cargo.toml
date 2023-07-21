@@ -1,0 +1,58 @@
+[package]
+name = "api-module"
+version = "0.0.1"
+edition = "2018"
+authors = ["Rivet Gaming, LLC <developer@rivet.gg>"]
+license = "Apache-2.0"
+
+[dependencies]
+rivet-convert = { path = "../../../lib/convert" }
+api-helper = { path = "../../../lib/api-helper/build" }
+async-trait = "0.1"
+chirp-client = { path = "../../../lib/chirp/client" }
+rivet-operation = { path = "../../../lib/operation/core" }
+chrono = "0.4"
+futures-util = "0.3"
+http = "0.2"
+hyper = { version = "0.14", features = ["server", "http1", "stream", "tcp"] }
+lazy_static = "1.4"
+prost = "0.10"
+regex = "1.5"
+rivet-cache = { path = "../../../lib/cache/build" }
+rivet-claims = { path = "../../../lib/claims" }
+rivet-health-checks = { path = "../../../lib/health-checks" }
+rivet-api = { path = "../../../gen/openapi/internal/rust" }
+rivet-pools = { path = "../../../lib/pools" }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+thiserror = "1.0"
+tokio = { version = "1.21" }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", default-features = false, features = ["fmt", "json", "ansi"] }
+url = "2.2.2"
+urlencoding = "2.1.0"
+uuid = { version = "1", features = ["v4"] }
+
+game-get = { path = "../../pkg/game/ops/get" }
+game-namespace-get = { path = "../../pkg/game/ops/namespace-get" }
+game-user-get = { path = "../../pkg/game-user/ops/get" }
+mm-lobby-get = { path = "../../pkg/mm/ops/lobby-get" }
+token-revoke = { path = "../../pkg/token/ops/revoke" }
+user-get = { path = "../../pkg/user/ops/get" }
+user-identity-get = { path = "../../pkg/user-identity/ops/get" }
+user-team-list = { path = "../../pkg/user/ops/team-list" }
+
+[dev-dependencies]
+rivet-connection = { path = "../../../lib/connection" }
+util-mm = { package = "rivet-util-mm", path = "../../pkg/mm/util" }
+rand = "0.8"
+reqwest = "0.11"
+
+cloud-game-token-create = { path = "../../pkg/cloud/ops/game-token-create" }
+faker-build = { path = "../../pkg/faker/ops/build" }
+faker-game = { path = "../../pkg/faker/ops/game" }
+faker-game-namespace = { path = "../../pkg/faker/ops/game-namespace" }
+faker-game-version = { path = "../../pkg/faker/ops/game-version" }
+faker-region = { path = "../../pkg/faker/ops/region" }
+region-get = { path = "../../pkg/region/ops/get" }
+token-create = { path = "../../pkg/token/ops/create" }

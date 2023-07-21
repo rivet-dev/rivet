@@ -4350,6 +4350,12 @@ components:
       required:
       - player_count
       type: object
+    ModuleCallResponse:
+      properties:
+        data: {}
+      required:
+      - data
+      type: object
     PartyActivity:
       description: A union representing the activity of a given party.
       properties:
@@ -12520,6 +12526,86 @@ paths:
       - url: https://chat.api.rivet.gg/v1
       tags:
       - Chat
+  /modules/{module}/endpoints/{endpoint}/call:
+    post:
+      description: 'Calls a request to a module endpoint.
+
+        '
+      operationId: module_call
+      parameters:
+      - in: path
+        name: module
+        required: true
+        schema:
+          type: string
+      - in: path
+        name: endpoint
+        required: true
+        schema:
+          type: string
+      - in: header
+        name: origin
+        required: false
+        schema:
+          type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              properties:
+                parameters: {}
+              required:
+              - parameters
+              type: object
+        required: true
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ModuleCallResponse'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+          description: ''
+        '408':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+          description: ''
+        '429':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+          description: ''
+        '500':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+          description: ''
+      security: *id001
+      servers:
+      - url: https://module.api.rivet.gg/v1
+      tags:
+      - Module
   /notifications/register:
     delete:
       description: Unregister push notification for the current identity.

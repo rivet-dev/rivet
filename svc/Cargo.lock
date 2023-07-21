@@ -713,6 +713,58 @@ dependencies = [
 ]
 
 [[package]]
+name = "api-module"
+version = "0.0.1"
+dependencies = [
+ "api-helper",
+ "async-trait",
+ "chirp-client",
+ "chrono",
+ "cloud-game-token-create",
+ "faker-build",
+ "faker-game",
+ "faker-game-namespace",
+ "faker-game-version",
+ "faker-region",
+ "futures-util",
+ "game-get",
+ "game-namespace-get",
+ "game-user-get",
+ "http",
+ "hyper",
+ "lazy_static",
+ "mm-lobby-get",
+ "prost 0.10.4",
+ "rand",
+ "regex",
+ "region-get",
+ "reqwest",
+ "rivet-api",
+ "rivet-cache",
+ "rivet-claims",
+ "rivet-connection",
+ "rivet-convert",
+ "rivet-health-checks",
+ "rivet-operation",
+ "rivet-pools",
+ "rivet-util-mm",
+ "serde",
+ "serde_json",
+ "thiserror",
+ "token-create",
+ "token-revoke",
+ "tokio",
+ "tracing",
+ "tracing-subscriber",
+ "url",
+ "urlencoding",
+ "user-get",
+ "user-identity-get",
+ "user-team-list",
+ "uuid",
+]
+
+[[package]]
 name = "api-party"
 version = "0.0.1"
 dependencies = [
