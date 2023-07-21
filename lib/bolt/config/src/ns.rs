@@ -19,6 +19,7 @@ pub struct Namespace {
 	pub terraform: Terraform,
 	pub dns: Dns,
 	pub s3: S3,
+	pub fly: Option<Fly>,
 	pub email: Option<Email>,
 	#[serde(default)]
 	pub captcha: Captcha,
@@ -228,6 +229,13 @@ pub enum S3Provider {
 	Minio {},
 	#[serde(rename = "backblaze")]
 	Backblaze {},
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+#[serde(deny_unknown_fields)]
+pub struct Fly {
+	pub organization_id: String,
+	pub region: String,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]

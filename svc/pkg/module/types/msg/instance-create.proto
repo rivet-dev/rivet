@@ -12,5 +12,13 @@ import "proto/backend/module/function.proto";
 /// ]
 message Message {
 	rivet.common.Uuid instance_id = 1;
-}
+	rivet.common.Uuid module_version_id = 2;
 
+	message Fly {
+
+	}
+
+	oneof driver {
+		Fly fly = 101;
+	};
+}

@@ -6,3 +6,5 @@ kind = "rust"
 
 [consumer]
 
+[secrets]
+"fly/auth_token" = {}

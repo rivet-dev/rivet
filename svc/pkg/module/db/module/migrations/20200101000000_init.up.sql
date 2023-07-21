@@ -52,10 +52,9 @@ CREATE TABLE instances (
 	create_ts INT NOT NULL
 );
 
-CREATE TABLE instances_runtime_fly (
+CREATE TABLE instances_driver_fly (
 	instance_id UUID PRIMARY KEY REFERENCES instances (instance_id),
-	vm_size STRING NOT NULL,
-	app_id STRING NOT NULL
+	app_id STRING
 );
 
 -- Game version

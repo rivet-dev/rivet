@@ -5214,10 +5214,13 @@ dependencies = [
  "chirp-client",
  "chirp-worker",
  "chrono",
+ "module-version-get",
+ "reqwest",
  "rivet-convert",
  "rivet-health-checks",
  "rivet-metrics",
  "rivet-runtime",
+ "serde",
  "upload-get",
  "upload-prepare",
 ]

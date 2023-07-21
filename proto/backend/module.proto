@@ -7,7 +7,7 @@ import "proto/backend/module/function.proto";
 
 // MARK: Game Version Config
 message VersionConfig {	
-	repeated InstanceConfig module_instance_configs = 1;
+	rivet.common.Uuid module_version_id = 1;
 }
 
 // MARK: Game Version Config Context
@@ -55,17 +55,3 @@ message Version {
 		Docker docker = 301;
 	}
 }
-
-// Instance
-message InstanceConfig {
-	rivet.common.Uuid module_version_id = 1;
-
-	message Fly {
-		string vm_size = 1;
-	}
-
-	oneof runtime {
-		Fly fly = 101;
-	};
-}
-
