@@ -22,6 +22,7 @@ service:
         name: FindLobbyRequest
         body:
           properties:
+            namespace_id: optional<uuid>
             parameters: unknown
       response: CallResponse
 

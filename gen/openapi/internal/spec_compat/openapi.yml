@@ -12553,6 +12553,9 @@ paths:
           application/json:
             schema:
               properties:
+                namespace_id:
+                  format: uuid
+                  type: string
                 parameters: {}
               required:
               - parameters

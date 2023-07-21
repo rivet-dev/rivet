@@ -4666,6 +4666,9 @@ paths:
             schema:
               type: object
               properties:
+                namespace_id:
+                  type: string
+                  format: uuid
                 parameters: {}
               required:
                 - parameters

@@ -41,6 +41,7 @@ token-revoke = { path = "../../pkg/token/ops/revoke" }
 user-get = { path = "../../pkg/user/ops/get" }
 user-identity-get = { path = "../../pkg/user-identity/ops/get" }
 user-team-list = { path = "../../pkg/user/ops/team-list" }
+reqwest = "0.11"
 
 [dev-dependencies]
 rivet-connection = { path = "../../../lib/connection" }

@@ -216,7 +216,28 @@ async fn call() {
 	let ctx = Ctx::init().await;
 	let lobby_token = ctx.issue_lobby_token().await;
 
-	todo!("unimplemented");
+	let res = module_api::call(
+		&ctx.config(&cloud_token),
+		models::ModuleCallRequest {
+			namespace_id: None,
+			parameters: Some(json!({
+				"x": 5
+			})),
+		},
+	)
+	.await
+	.unwrap();
+	assert_eq!(
+		10,
+		res.parameters
+			.unwrap()
+			.as_object()
+			.unwrap()
+			.get("y")
+			.unwrap()
+			.as_i64()
+			.unwrap()
+	);
 }
 
 /// Issues a testing lobby token. We use this since we can't access the lobby token issued

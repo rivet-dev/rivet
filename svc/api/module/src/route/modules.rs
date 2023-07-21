@@ -5,22 +5,45 @@ use api_helper::{
 use chirp_client::TailAnchorResponse;
 use proto::backend::pkg::*;
 use rivet_api::models;
+use rivet_operation::prelude::*;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 
 use crate::{auth::Auth, utils};
 
+#[derive(Serialize)]
+struct CallRequest {
+	parameters: serde_json::Value,
+}
+
+#[derive(Deserialize)]
+struct CallResponse {
+	data: serde_json::Value,
+}
+
 // MARK: POST /modules/{}/endpoints/{}/call
 pub async fn endpoint_call(
 	ctx: Ctx<Auth>,
+	module: String,
+	endpoint: String,
 	body: models::ModuleCallRequest,
-) -> GlobalResult<serde_json::Value> {
+) -> GlobalResult<models::ModuleCallResponse> {
 	let namespace_id = ctx
 		.auth()
 		.namespace(ctx.op_ctx(), body.namespace_id, false)
 		.await?;
 
-	// TODO:
+	// Make POST request
+	let response = reqwest::Client::new()
+		.post("https://rivet-module-test.fly.dev/call")
+		.json(&CallRequest {
+			parameters: body.parameters.unwrap_or_else(|| json!({})),
+		})
+		.send()
+		.await?;
+	let res_body = response.json::<CallResponse>().await?;
 
-	Ok(json!({}))
+	Ok(models::ModuleCallResponse {
+		data: Some(res_body.data),
+	})
 }
