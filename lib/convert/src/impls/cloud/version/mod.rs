@@ -41,6 +41,7 @@ pub async fn config_to_openapi(
 	value: backend::cloud::VersionConfig,
 ) -> GlobalResult<models::CloudVersionConfig> {
 	Ok(models::CloudVersionConfig {
+		engine: None, // CLient side only
 		cdn: value
 			.cdn
 			.map(ApiTryFrom::try_from)
