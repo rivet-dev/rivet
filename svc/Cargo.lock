@@ -5201,7 +5201,6 @@ dependencies = [
  "chirp-client",
  "chirp-worker",
  "chrono",
- "lazy_static",
  "rivet-convert",
  "rivet-health-checks",
  "rivet-metrics",

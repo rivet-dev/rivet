@@ -1,7 +1,5 @@
 use chirp_worker::prelude::*;
-use lazy_static::lazy_static;
 use proto::backend::pkg::*;
-use rand::{seq::IteratorRandom, Rng};
 use serde_json::json;
 
 #[worker(name = "module-create")]
@@ -10,17 +8,19 @@ async fn worker(ctx: OperationContext<module::msg::create::Message>) -> Result<(
 
 	let module_id = internal_unwrap!(ctx.module_id).as_uuid();
 	let team_id = internal_unwrap!(ctx.team_id).as_uuid();
+	let creator_user_id = ctx.creator_user_id.map(|x| x.as_uuid());
 
 	sqlx::query(indoc!(
 		"
-		INSERT INTO modules (module_id, name_id, team_id, create_ts)
-		VALUES ($1, $2, $3, $4)
+		INSERT INTO modules (module_id, name_id, team_id, create_ts, creator_user_id)
+		VALUES ($1, $2, $3, $4, $5)
 		"
 	))
-	.bind(&module_id)
+	.bind(module_id)
 	.bind(&ctx.name_id)
-	.bind(&team_id)
+	.bind(team_id)
 	.bind(ctx.ts())
+	.bind(creator_user_id)
 	.execute(&crdb)
 	.await?;
 

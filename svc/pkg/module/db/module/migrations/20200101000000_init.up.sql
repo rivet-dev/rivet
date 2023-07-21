@@ -4,6 +4,7 @@ CREATE TABLE modules (
 	name_id STRING NOT NULL,
 	team_id UUID NOT NULL,  -- References db-team.teams
 	create_ts INT NOT NULL,
+	creator_user_id UUID,  -- References db-user.users
 	publicity INT NOT NULL DEFAULT 0,
 	UNIQUE INDEX (team_id, name_id ASC)
 );
@@ -13,6 +14,7 @@ CREATE TABLE versions (
 	version_id UUID PRIMARY KEY,
 	module_id UUID NOT NULL REFERENCES modules (module_id),
 	create_ts INT NOT NULL,
+	creator_user_id UUID,  -- References db-user.users
 
 	major INT NOT NULL,
 	minor INT NOT NULL,
@@ -31,7 +33,7 @@ CREATE TABLE versions_image_docker (
 CREATE TABLE functions (
 	version_id UUID NOT NULL REFERENCES versions (version_id),
 	name STRING NOT NULL,
-	parameter_schema STRING NOT NULL,
+	request_schema STRING NOT NULL,
 	response_schema STRING NOT NULL,
 	PRIMARY KEY (version_id, name)
 );

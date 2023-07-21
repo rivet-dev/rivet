@@ -32,5 +32,8 @@
 			"language": "markdown",
 			"scheme": "file"
 		}
-	]
+	],
+	"rust-analyzer.cargo.extraEnv": {
+		"RUSTFLAGS": "--cfg tokio_unstable"
+	}
 }

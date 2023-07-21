@@ -10,7 +10,7 @@ message Function {
 	}
 
 	string name = 1;
-	string parameters_schema = 2;
+	string request_schema = 2;
 	string response_schema = 3;
 	optional Callable callable = 4;
 }

@@ -38,19 +38,20 @@ message Module {
 message Version {
 	rivet.common.Uuid version_id = 1;
 	rivet.common.Uuid module_id = 2;
-	repeated rivet.backend.module.Function functions = 3;
 
 	uint64 major = 101;
 	uint64 minor = 102;
 	uint64 patch = 103;
 
-	message DockerImage {
+	repeated rivet.backend.module.Function functions = 201;
+
+	message Docker {
 		// TODO: Auth?
 		string image_tag = 1;
 	}
 
 	oneof image {
-		DockerImage docker_image = 201;
+		Docker docker = 301;
 	}
 }
 
