@@ -179,6 +179,8 @@ docs/CloudVersionCdnMiddleware.md
 docs/CloudVersionCdnMiddlewareKind.md
 docs/CloudVersionCdnRoute.md
 docs/CloudVersionConfig.md
+docs/CloudVersionEngineConfig.md
+docs/CloudVersionEngineUnrealConfig.md
 docs/CloudVersionFull.md
 docs/CloudVersionIdentityConfig.md
 docs/CloudVersionIdentityCustomAvatar.md
@@ -579,6 +581,8 @@ src/models/cloud_version_cdn_middleware.rs
 src/models/cloud_version_cdn_middleware_kind.rs
 src/models/cloud_version_cdn_route.rs
 src/models/cloud_version_config.rs
+src/models/cloud_version_engine_config.rs
+src/models/cloud_version_engine_unreal_config.rs
 src/models/cloud_version_full.rs
 src/models/cloud_version_identity_config.rs
 src/models/cloud_version_identity_custom_avatar.rs

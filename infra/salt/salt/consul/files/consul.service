@@ -24,6 +24,10 @@ KillSignal=SIGTERM
 LimitNOFILE=65536
 Restart=always
 RestartSec=2
+{% if pillar['rivet']['deploy']['local']['restrict_service_resources'] %}
+Nice=10
+CPUAffinity=0
+{% endif %}
 
 [Install]
 WantedBy=multi-user.target
