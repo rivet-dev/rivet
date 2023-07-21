@@ -34,22 +34,29 @@ message VersionConfigMeta {
 	};
 }
 
-// General
+// Module
 message Module {
-	rivet.common.Uuid module_id = 1;
-	rivet.common.Uuid team_id = 2;
-	string name_id = 3;
-	repeated rivet.backend.module.Function function = 4;
-
-	oneof publicity {
-		google.protobuf.Empty public = 101;
-		google.protobuf.Empty private = 102;
+	enum Publicity {
+		PUBLIC = 0;
+		PRIVATE = 1;
 	}
+
+	rivet.common.Uuid module_id = 1;
+	string name_id = 2;
+	rivet.common.Uuid team_id = 3;
+	int64 create_ts = 4;
+	Publicity publicity = 5;
 }
 
+// Version
 message ModuleVersion {
 	rivet.common.Uuid version_id = 1;
 	rivet.common.Uuid module_id = 2;
+	repeated rivet.backend.module.Function functions = 4;
+
+	int major = 101;
+	int minor = 102;
+	int patch = 103;
 
 	message DockerImage {
 		// TODO: Auth?
