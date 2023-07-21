@@ -216,20 +216,23 @@ async fn call() {
 	let ctx = Ctx::init().await;
 	let lobby_token = ctx.issue_lobby_token().await;
 
-	let res = module_api::call(
-		&ctx.config(&cloud_token),
+	let res = module_api::module_call(
+		&ctx.config(&lobby_token),
+		"test",
+		"endpoint",
 		models::ModuleCallRequest {
 			namespace_id: None,
 			parameters: Some(json!({
 				"x": 5
 			})),
 		},
+		None,
 	)
 	.await
 	.unwrap();
 	assert_eq!(
 		10,
-		res.parameters
+		res.data
 			.unwrap()
 			.as_object()
 			.unwrap()
