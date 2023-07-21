@@ -2,6 +2,7 @@
 
 imports:
   commons: ../common.yml
+  engine: engine/__package__.yml
   cdn: cdn/__package__.yml
   matchmaker: matchmaker/__package__.yml
   kv: kv/__package__.yml
@@ -11,6 +12,7 @@ types:
   Config:
     docs: Cloud configuration for a given version.
     properties:
+      engine: optional<engine.Config>
       cdn: optional<cdn.Config>
       matchmaker: optional<matchmaker.Config>
       kv: optional<kv.Config>

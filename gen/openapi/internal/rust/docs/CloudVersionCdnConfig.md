@@ -4,8 +4,8 @@
 
 Name | Type | Description | Notes
 ------------ | ------------- | ------------- | -------------
-**build_command** | Option<**String**> | Client-side configuration | [optional]
-**build_output** | Option<**String**> | Client-side configuration | [optional]
+**build_command** | Option<**String**> | _Configures Rivet CLI behavior. Has no effect on server behavior._ | [optional]
+**build_output** | Option<**String**> | _Configures Rivet CLI behavior. Has no effect on server behavior._ | [optional]
 **routes** | Option<[**Vec<crate::models::CloudVersionCdnRoute>**](CloudVersionCdnRoute.md)> | Multiple CDN version routes. | [optional]
 **site_id** | Option<[**uuid::Uuid**](uuid::Uuid.md)> |  | [optional]
 
