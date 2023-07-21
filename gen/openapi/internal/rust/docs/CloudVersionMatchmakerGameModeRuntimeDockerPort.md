@@ -4,7 +4,7 @@
 
 Name | Type | Description | Notes
 ------------ | ------------- | ------------- | -------------
-**dev_port** | Option<**i32**> | Client-side configuration | [optional]
+**dev_port** | Option<**i32**> | _Configures Rivet CLI behavior. Has no effect on server behavior._ | [optional]
 **dev_port_range** | Option<[**crate::models::CloudVersionMatchmakerPortRange**](CloudVersionMatchmakerPortRange.md)> |  | [optional]
 **dev_protocol** | Option<[**crate::models::CloudVersionMatchmakerPortProtocol**](CloudVersionMatchmakerPortProtocol.md)> |  | [optional]
 **port** | Option<**i32**> | The port number to connect to. | [optional]

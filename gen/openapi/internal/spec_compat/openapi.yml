@@ -2166,10 +2166,10 @@ components:
       description: CDN configuration for a given version.
       properties:
         build_command:
-          description: Client-side configuration
+          description: _Configures Rivet CLI behavior. Has no effect on server behavior._
           type: string
         build_output:
-          description: Client-side configuration
+          description: _Configures Rivet CLI behavior. Has no effect on server behavior._
           type: string
         routes:
           description: Multiple CDN version routes.
@@ -2233,12 +2233,46 @@ components:
       properties:
         cdn:
           $ref: '#/components/schemas/CloudVersionCdnConfig'
+        engine:
+          $ref: '#/components/schemas/CloudVersionEngineConfig'
         identity:
           $ref: '#/components/schemas/CloudVersionIdentityConfig'
         kv:
           $ref: '#/components/schemas/CloudVersionKvConfig'
         matchmaker:
           $ref: '#/components/schemas/CloudVersionMatchmakerConfig'
+      type: object
+    CloudVersionEngineConfig:
+      properties:
+        godot:
+          $ref: '#/components/schemas/CloudVersionEngineGodotConfig'
+        html5:
+          $ref: '#/components/schemas/CloudVersionEngineHtml5Config'
+        unity:
+          $ref: '#/components/schemas/CloudVersionEngineUnityConfig'
+        unreal:
+          $ref: '#/components/schemas/CloudVersionEngineUnrealConfig'
+      type: object
+    CloudVersionEngineGodotConfig:
+      properties: {}
+      type: object
+    CloudVersionEngineHtml5Config:
+      properties: {}
+      type: object
+    CloudVersionEngineUnityConfig:
+      properties: {}
+      type: object
+    CloudVersionEngineUnrealConfig:
+      properties:
+        game_module:
+          description: 'Name of the Unreal module that holds the game code.
+
+            This is usually the value of `$.Modules[0].Name` in the file `MyProject.unproject`.
+
+            _Configures Rivet CLI behavior. Has no effect on server behavior._'
+          type: string
+      required:
+      - game_module
       type: object
     CloudVersionFull:
       description: A full version.
@@ -2343,7 +2377,7 @@ components:
         captcha:
           $ref: '#/components/schemas/CloudVersionMatchmakerCaptcha'
         dev_hostname:
-          description: Client-side configuration
+          description: _Configures Rivet CLI behavior. Has no effect on server behavior._
           type: string
         docker:
           $ref: '#/components/schemas/CloudVersionMatchmakerGameModeRuntimeDocker'
@@ -2421,14 +2455,14 @@ components:
             type: string
           type: array
         dockerfile:
-          description: Client-side configuration
+          description: _Configures Rivet CLI behavior. Has no effect on server behavior._
           type: string
         env:
           additionalProperties:
             type: string
           type: object
         image:
-          description: Client-side configuration
+          description: _Configures Rivet CLI behavior. Has no effect on server behavior._
           type: string
         image_id:
           format: uuid
@@ -2444,14 +2478,14 @@ components:
       description: A docker port.
       properties:
         dev_port:
-          description: Client-side configuration
+          description: _Configures Rivet CLI behavior. Has no effect on server behavior._
           type: integer
         dev_port_range:
           $ref: '#/components/schemas/CloudVersionMatchmakerPortRange'
-          description: Client-side configuration
+          description: _Configures Rivet CLI behavior. Has no effect on server behavior._
         dev_protocol:
           $ref: '#/components/schemas/CloudVersionMatchmakerPortProtocol'
-          description: Client-side configuration
+          description: _Configures Rivet CLI behavior. Has no effect on server behavior._
         port:
           description: The port number to connect to.
           type: integer

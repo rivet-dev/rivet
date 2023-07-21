@@ -37,10 +37,10 @@ types:
     docs: A game mode runtime running through Docker.
     properties:
       dockerfile:
-        docs: Client-side configuration
+        docs: _Configures Rivet CLI behavior. Has no effect on server behavior._
         type: optional<string>
       image:
-        docs: Client-side configuration
+        docs: _Configures Rivet CLI behavior. Has no effect on server behavior._
         type: optional<string>
       image_id: optional<uuid>
       args: optional<list<string>>
@@ -60,15 +60,15 @@ types:
         docs: How this port should be proxied. Defaults to 'game-guard`.
         type: optional<localCommons.ProxyKind>
 
-      # Client-side configuration
+      # _Configures Rivet CLI behavior. Has no effect on server behavior._
       dev_port:
-        docs: Client-side configuration
+        docs: _Configures Rivet CLI behavior. Has no effect on server behavior._
         type: optional<integer>
       dev_port_range:
-        docs: Client-side configuration
+        docs: _Configures Rivet CLI behavior. Has no effect on server behavior._
         type: optional<localCommons.PortRange>
       dev_protocol:
-        docs: Client-side configuration
+        docs: _Configures Rivet CLI behavior. Has no effect on server behavior._
         type: optional<localCommons.PortProtocol>
 
   GameModeIdleLobbiesConfig:

@@ -19,10 +19,14 @@ pub async fn build(ctx: &ProjectContext, opts: &BuildOpts) -> Result<Value> {
 
 	vars["namespace"] = json!(ctx.ns_id());
 	match &ctx.ns().cluster.kind {
-		config::ns::ClusterKind::SingleNode { .. } => {
+		config::ns::ClusterKind::SingleNode {
+			restrict_service_resources,
+			..
+		} => {
 			vars["deploy"] = json!({
 				"local": {
 					"backend_repo_path": ctx.path(),
+					"restrict_service_resources": restrict_service_resources,
 				},
 			});
 		}
