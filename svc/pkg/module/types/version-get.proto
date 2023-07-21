@@ -10,5 +10,5 @@ message Request {
 }
 
 message Response {
-	repeated rivet.backend.module.Version modules = 1;
+	repeated rivet.backend.module.Version versions = 1;
 }

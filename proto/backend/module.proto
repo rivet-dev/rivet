@@ -38,6 +38,7 @@ message Module {
 message Version {
 	rivet.common.Uuid version_id = 1;
 	rivet.common.Uuid module_id = 2;
+	int64 create_ts = 3;
 
 	uint64 major = 101;
 	uint64 minor = 102;

@@ -5194,6 +5194,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "module-version-get"
+version = "0.0.1"
+dependencies = [
+ "chirp-client",
+ "chirp-worker",
+ "module-get",
+ "prost 0.10.4",
+ "rand",
+ "rivet-operation",
+ "sqlx",
+]
+
+[[package]]
 name = "module-worker"
 version = "0.0.1"
 dependencies = [
