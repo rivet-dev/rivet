@@ -7,7 +7,12 @@ import "proto/backend/module/function.proto";
 
 // MARK: Game Version Config
 message VersionConfig {	
-	rivet.common.Uuid module_version_id = 1;
+	message ModuleDependency {
+		string key = 1;
+		rivet.common.Uuid module_version_id = 2;
+	}
+
+	repeated ModuleDependency module_dependencies = 1;
 }
 
 // MARK: Game Version Config Context
