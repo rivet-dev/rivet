@@ -5182,6 +5182,35 @@ dependencies = [
 ]
 
 [[package]]
+name = "module-get"
+version = "0.0.1"
+dependencies = [
+ "chirp-client",
+ "chirp-worker",
+ "prost 0.10.4",
+ "rand",
+ "rivet-operation",
+ "sqlx",
+]
+
+[[package]]
+name = "module-worker"
+version = "0.0.1"
+dependencies = [
+ "chat-thread-get-or-create-for-topic",
+ "chirp-client",
+ "chirp-worker",
+ "chrono",
+ "lazy_static",
+ "rivet-convert",
+ "rivet-health-checks",
+ "rivet-metrics",
+ "rivet-runtime",
+ "upload-get",
+ "upload-prepare",
+]
+
+[[package]]
 name = "multimap"
 version = "0.8.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"

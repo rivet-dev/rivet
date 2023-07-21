@@ -4,7 +4,7 @@ CREATE TABLE modules (
 	name_id STRING NOT NULL,
 	team_id UUID NOT NULL,  -- References db-team.teams
 	create_ts INT NOT NULL,
-	publicity INT NOT NULL,
+	publicity INT NOT NULL DEFAULT 0,
 	UNIQUE INDEX (team_id, name_id ASC)
 );
 
