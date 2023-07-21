@@ -5199,6 +5199,7 @@ version = "0.0.1"
 dependencies = [
  "chirp-client",
  "chirp-worker",
+ "module-instance-get",
  "prost 0.10.4",
  "rand",
  "rivet-operation",

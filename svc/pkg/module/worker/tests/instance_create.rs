@@ -2,7 +2,7 @@ use chirp_worker::prelude::*;
 use proto::backend::{self, pkg::*};
 
 #[worker_test]
-async fn empty(ctx: TestCtx) {
+async fn instance_create(ctx: TestCtx) {
 	let module_id = Uuid::new_v4();
 	let version_id = Uuid::new_v4();
 	let instance_id = Uuid::new_v4();

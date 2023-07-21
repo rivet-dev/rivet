@@ -54,7 +54,7 @@ CREATE TABLE instances (
 
 CREATE TABLE instances_driver_fly (
 	instance_id UUID PRIMARY KEY REFERENCES instances (instance_id),
-	app_id STRING
+	fly_app_id STRING
 );
 
 -- Game version

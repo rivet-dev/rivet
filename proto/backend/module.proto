@@ -68,7 +68,8 @@ message Instance {
 	int64 create_ts = 3;
 
 	message Fly {
-
+		/// Null if app not created yet.
+		optional string fly_app_id = 1;
 	}
 
 	oneof driver {

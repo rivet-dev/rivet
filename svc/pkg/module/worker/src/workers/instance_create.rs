@@ -48,7 +48,9 @@ struct App {
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 enum GraphQLResponse<T> {
+	#[serde(rename = "data")]
 	Data(T),
+	#[serde(rename = "errors")]
 	Errors(Vec<serde_json::Value>),
 }
 
@@ -116,7 +118,7 @@ async fn worker(
 	sqlx::query(indoc!(
 		"
 		UPDATE instances_driver_fly
-		SET app_id = $2
+		SET fly_app_id = $2
 		WHERE instance_id = $1
 		"
 	))

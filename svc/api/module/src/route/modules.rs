@@ -11,16 +11,6 @@ use serde_json::json;
 
 use crate::{auth::Auth, utils};
 
-#[derive(Serialize)]
-struct CallRequest {
-	parameters: serde_json::Value,
-}
-
-#[derive(Deserialize)]
-struct CallResponse {
-	data: serde_json::Value,
-}
-
 // MARK: POST /modules/{}/endpoints/{}/call
 pub async fn endpoint_call(
 	ctx: Ctx<Auth>,

@@ -28,7 +28,7 @@ pub async fn handle(
 			i.version_id,
 			i.create_ts,
 			idv.instance_id IS NOT NULL AS driver_fly,
-			idv.app_id AS driver_fly_app_id
+			idv.fly_app_id AS driver_fly_app_id
 		FROM instances AS i
 		LEFT JOIN instances_driver_fly AS idv ON idv.instance_id = i.instance_id
 		WHERE i.instance_id = ANY($1)
@@ -42,16 +42,18 @@ pub async fn handle(
 		instances: instances
 			.into_iter()
 			.map(|instance| {
-				req_assert!(instance.driver_fly, "instance is not a driver fly instance");
+				internal_assert!(instance.driver_fly, "instance is not a driver fly instance");
 				GlobalResult::Ok(backend::module::Instance {
-					instance_id: instance.instance_id.to_string(),
-					version_id: instance.version_id.to_string(),
+					instance_id: Some(instance.instance_id.into()),
+					module_version_id: Some(instance.version_id.into()),
 					create_ts: instance.create_ts,
-					driver: Some(backend::module::instance::Driver::Fly(backend::module::instance::Fly {
-						app_id: instance.driver_fly_app_id
-					})
+					driver: Some(backend::module::instance::Driver::Fly(
+						backend::module::instance::Fly {
+							fly_app_id: instance.driver_fly_app_id,
+						},
+					)),
 				})
 			})
-			.collect::<GlobalResult<Vec<_>>>()?
+			.collect::<GlobalResult<Vec<_>>>()?,
 	})
 }
