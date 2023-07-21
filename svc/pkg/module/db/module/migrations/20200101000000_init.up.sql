@@ -52,6 +52,10 @@ CREATE TABLE instances (
 	create_ts INT NOT NULL
 );
 
+CREATE TABLE instances_driver_dummy (
+	instance_id UUID PRIMARY KEY REFERENCES instances (instance_id)
+);
+
 CREATE TABLE instances_driver_fly (
 	instance_id UUID PRIMARY KEY REFERENCES instances (instance_id),
 	fly_app_id STRING

@@ -10,8 +10,6 @@ chirp-client = { path = "../../../../../lib/chirp/client" }
 prost = "0.10"
 rivet-operation = { path = "../../../../../lib/operation/core" }
 
-module-get = { path = "../get" }
-
 [dependencies.sqlx]
 version = "0.6"
 default-features = false

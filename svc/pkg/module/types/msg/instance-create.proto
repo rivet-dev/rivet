@@ -14,11 +14,16 @@ message Message {
 	rivet.common.Uuid instance_id = 1;
 	rivet.common.Uuid module_version_id = 2;
 
+	message Dummy {
+
+	}
+
 	message Fly {
 
 	}
 
 	oneof driver {
-		Fly fly = 101;
+		Dummy dummy = 101;
+		Fly fly = 102;
 	};
 }

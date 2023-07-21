@@ -5200,9 +5200,12 @@ dependencies = [
  "chirp-client",
  "chirp-worker",
  "module-instance-get",
+ "module-version-get",
  "prost 0.10.4",
  "rand",
+ "reqwest",
  "rivet-operation",
+ "serde",
  "sqlx",
 ]
 
@@ -5212,7 +5215,6 @@ version = "0.0.1"
 dependencies = [
  "chirp-client",
  "chirp-worker",
- "module-get",
  "prost 0.10.4",
  "rand",
  "rivet-operation",

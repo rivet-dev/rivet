@@ -67,12 +67,17 @@ message Instance {
 	rivet.common.Uuid module_version_id = 2;
 	int64 create_ts = 3;
 
+	message Dummy {
+		
+	}
+
 	message Fly {
 		/// Null if app not created yet.
 		optional string fly_app_id = 1;
 	}
 
 	oneof driver {
-		Fly fly = 101;
+		Dummy dummy = 101;
+		Fly fly = 102;
 	};
 }

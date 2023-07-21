@@ -7,6 +7,8 @@ struct Instance {
 	version_id: Uuid,
 	create_ts: i64,
 
+	driver_dummy: bool,
+
 	driver_fly: bool,
 	driver_fly_app_id: Option<String>,
 }
@@ -27,9 +29,11 @@ pub async fn handle(
 			i.instance_id,
 			i.version_id,
 			i.create_ts,
+			idd.instance_id IS NOT NULL AS driver_dummy,
 			idv.instance_id IS NOT NULL AS driver_fly,
 			idv.fly_app_id AS driver_fly_app_id
 		FROM instances AS i
+		LEFT JOIN instances_driver_dummy AS idv ON idd.instance_id = i.instance_id
 		LEFT JOIN instances_driver_fly AS idv ON idv.instance_id = i.instance_id
 		WHERE i.instance_id = ANY($1)
 		"
@@ -42,16 +46,21 @@ pub async fn handle(
 		instances: instances
 			.into_iter()
 			.map(|instance| {
-				internal_assert!(instance.driver_fly, "instance is not a driver fly instance");
+				let driver = if instance.driver_dummy {
+					backend::module::instance::Driver::Dummy(backend::module::instance::Dummy {})
+				} else if instance.driver_fly {
+					backend::module::instance::Driver::Fly(backend::module::instance::Fly {
+						fly_app_id: instance.driver_fly_app_id,
+					})
+				} else {
+					internal_panic!("instance has no driver")
+				};
+
 				GlobalResult::Ok(backend::module::Instance {
 					instance_id: Some(instance.instance_id.into()),
 					module_version_id: Some(instance.version_id.into()),
 					create_ts: instance.create_ts,
-					driver: Some(backend::module::instance::Driver::Fly(
-						backend::module::instance::Fly {
-							fly_app_id: instance.driver_fly_app_id,
-						},
-					)),
+					driver: Some(driver),
 				})
 			})
 			.collect::<GlobalResult<Vec<_>>>()?,

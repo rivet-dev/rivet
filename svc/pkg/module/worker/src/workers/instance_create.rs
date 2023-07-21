@@ -100,32 +100,38 @@ async fn worker(
 	})
 	.await?;
 
-	// Create app
-	// TODO: Handle failure
-	let image = match internal_unwrap!(version.image) {
-		backend::module::version::Image::Docker(docker) => docker.image_tag.clone(),
-	};
-	let app_id = launch_app(LaunchAppOpts {
-		organization_id: &fly_org,
-		name: &format!("module-instance-{}", instance_id),
-		preferred_region: &fly_region,
-		auth_token: &fly_auth_token,
-		image: &image,
-	})
-	.await?;
+	// Create Fly app
+	if matches!(
+		ctx.driver,
+		Some(module::msg::instance_create::message::Driver::Fly(_))
+	) {
+		// Create app
+		// TODO: Handle failure
+		let image = match internal_unwrap!(version.image) {
+			backend::module::version::Image::Docker(docker) => docker.image_tag.clone(),
+		};
+		let app_id = launch_app(LaunchAppOpts {
+			organization_id: &fly_org,
+			name: &build_app_name(instance_id),
+			preferred_region: &fly_region,
+			auth_token: &fly_auth_token,
+			image: &image,
+		})
+		.await?;
 
-	// Update app ID
-	sqlx::query(indoc!(
-		"
-		UPDATE instances_driver_fly
-		SET fly_app_id = $2
-		WHERE instance_id = $1
-		"
-	))
-	.bind(instance_id)
-	.bind(app_id)
-	.execute(&crdb)
-	.await?;
+		// Update app ID
+		sqlx::query(indoc!(
+			"
+			UPDATE instances_driver_fly
+			SET fly_app_id = $2
+			WHERE instance_id = $1
+			"
+		))
+		.bind(instance_id)
+		.bind(app_id)
+		.execute(&crdb)
+		.await?;
+	}
 
 	// TODO: Find a 2PC system for releasing the app
 
@@ -174,6 +180,17 @@ async fn insert_instance(
 	.await?;
 
 	match internal_unwrap!(msg.driver) {
+		module::msg::instance_create::message::Driver::Dummy(_) => {
+			sqlx::query(indoc!(
+				"
+                INSERT INTO instances_driver_dummy (instance_id)
+                VALUES ($1)
+                "
+			))
+			.bind(instance_id)
+			.execute(&mut *tx)
+			.await?;
+		}
 		module::msg::instance_create::message::Driver::Fly(_) => {
 			sqlx::query(indoc!(
 				"
@@ -267,4 +284,8 @@ async fn launch_app(opts: LaunchAppOpts<'_>) -> GlobalResult<String> {
 		.data()?;
 
 	Ok(app_id)
+}
+
+fn build_app_name(instance_id: Uuid) -> String {
+	format!("{}-mod-{}", util::env::namespace(), instance_id)
 }

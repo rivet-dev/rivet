@@ -4,12 +4,12 @@ use std::collections::HashSet;
 
 #[worker_test]
 async fn empty(ctx: TestCtx) {
-	let res = op!([ctx] module_get {
-		module_ids: Vec::new(),
+	let res = op!([ctx] module_instance_get {
+		instance_ids: Vec::new(),
 	})
 	.await
 	.unwrap();
-	assert!(res.modules.is_empty());
+	assert!(res.instances.is_empty());
 }
 
 #[worker_test]
@@ -17,7 +17,7 @@ async fn fetch(ctx: TestCtx) {
 	let module_id = Uuid::new_v4();
 	let version_id = Uuid::new_v4();
 
-	msg!([ctx] module::msg::create(module_id) -> module::msg::create_complete(module_id) {
+	msg!([ctx] module::msg::create(module_id) -> module::msg::create_complete {
 		module_id: Some(module_id.into()),
 		name_id: "test".into(),
 		team_id: Some(Uuid::new_v4().into()),
@@ -50,20 +50,21 @@ async fn fetch(ctx: TestCtx) {
 	}).await.unwrap();
 
 	// Generate test instances
+	//
+	// Low instance count because of Fly rate limit
 	let instance_ids = std::iter::repeat_with(Uuid::new_v4)
-		.take(8)
+		.take(2)
 		.collect::<HashSet<_>>();
 
 	// Insert test modules
 	for instance_id in &instance_ids {
 		msg!([ctx] module::msg::instance_create(instance_id) -> module::msg::instance_create_complete {
-		instance_id: Some((*instance_id).into()),
-		module_version_id: Some(version_id.into()),
-		driver: Some(module::msg::instance_create::message::Driver::Fly(module::msg::instance_create::message::Fly {
-		})),
-	})
-	.await
-	.unwrap();
+			instance_id: Some((*instance_id).into()),
+			module_version_id: Some(version_id.into()),
+			driver: Some(module::msg::instance_create::message::Driver::Dummy(module::msg::instance_create::message::Dummy {})),
+		})
+		.await
+		.unwrap();
 	}
 
 	// Fetch the versions
