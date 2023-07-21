@@ -58,6 +58,11 @@ pub enum ClusterKind {
 		public_ip: String,
 		#[serde(default)]
 		preferred_subnets: Vec<String>,
+
+		/// Restricts the resources of the core services so there are more resources availble for
+		/// compiling code.
+		#[serde(default)]
+		restrict_service_resources: bool,
 	},
 	#[serde(rename = "distributed")]
 	Distributed {

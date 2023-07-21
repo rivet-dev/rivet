@@ -40,6 +40,7 @@ push_trafficserver_service:
   file.managed:
     - name: /lib/systemd/system/trafficserver.service
     - source: salt://traffic_server/files/trafficserver.service
+    - template: jinja
     - onchanges:
       - cmd: build_nix_shell
 

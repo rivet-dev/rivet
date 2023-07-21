@@ -60,6 +60,7 @@ push_clickhouse_server_service:
   file.managed:
     - name: /etc/systemd/system/clickhouse-server.service
     - source: salt://clickhouse/files/clickhouse-server.service
+    - template: jinja
 
 start_clickhouse_server_service:
   service.running:
