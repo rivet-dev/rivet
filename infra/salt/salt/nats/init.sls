@@ -59,6 +59,7 @@ push_nats_server_service:
   file.managed:
     - name: /etc/systemd/system/nats-server.service
     - source: salt://nats/files/nats-server.service
+    - template: jinja
 
 start_nats_server_service:
   service.running:
