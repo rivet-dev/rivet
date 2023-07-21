@@ -60,3 +60,18 @@ message Version {
 		Docker docker = 301;
 	}
 }
+
+// Instance
+message Instance {
+	rivet.common.Uuid instance_id = 1;
+	rivet.common.Uuid module_version_id = 2;
+	int64 create_ts = 3;
+
+	message Fly {
+
+	}
+
+	oneof driver {
+		Fly fly = 101;
+	};
+}

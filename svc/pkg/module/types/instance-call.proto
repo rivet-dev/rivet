@@ -1,0 +1,16 @@
+syntax = "proto3";
+
+package rivet.backend.pkg.module.instance_call;
+
+import "proto/common.proto";
+
+message Request {
+	rivet.common.Uuid instance_id = 1;
+	string function_name = 2;
+	string request_json = 3;
+}
+
+message Response {
+	string response_json = 1;
+}
+
