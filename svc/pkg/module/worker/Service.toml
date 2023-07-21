@@ -1,0 +1,8 @@
+[service]
+name = "module-worker"
+
+[runtime]
+kind = "rust"
+
+[consumer]
+
