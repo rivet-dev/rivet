@@ -33,7 +33,7 @@ pub async fn handle(
 			idv.instance_id IS NOT NULL AS driver_fly,
 			idv.fly_app_id AS driver_fly_app_id
 		FROM instances AS i
-		LEFT JOIN instances_driver_dummy AS idv ON idd.instance_id = i.instance_id
+		LEFT JOIN instances_driver_dummy AS idd ON idd.instance_id = i.instance_id
 		LEFT JOIN instances_driver_fly AS idv ON idv.instance_id = i.instance_id
 		WHERE i.instance_id = ANY($1)
 		"
