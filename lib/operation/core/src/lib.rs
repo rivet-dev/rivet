@@ -77,7 +77,7 @@ where
 	#[tracing::instrument(err, skip(self), fields(operation = O::NAME))]
 	pub async fn call<O: Operation>(&self, body: O::Request) -> GlobalResult<O::Response> {
 		tracing::info!(?body, "operation call");
-		
+
 		// Record metrics
 		metrics::CHIRP_REQUEST_PENDING
 			.with_label_values(&[&self.service_name])
