@@ -59,5 +59,7 @@ pub async fn config_to_openapi(
 			.map(ApiTryFrom::try_from)
 			.transpose()?
 			.map(Box::new),
+		// TODO:
+		engine: None,
 	})
 }
