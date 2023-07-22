@@ -45,15 +45,13 @@ async fn fetch(ctx: TestCtx) {
 		],
 
 		image: Some(module::msg::version_create::message::Image::Docker(module::msg::version_create::message::Docker {
-			image_tag: "test".into(),
+			image_tag: "ghcr.io/rivet-gg/rivet-module-hello-world:latest".into(),
 		})),
 	}).await.unwrap();
 
 	// Generate test instances
-	//
-	// Low instance count because of Fly rate limit
 	let instance_ids = std::iter::repeat_with(Uuid::new_v4)
-		.take(2)
+		.take(8)
 		.collect::<HashSet<_>>();
 
 	// Insert test modules

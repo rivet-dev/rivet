@@ -1,6 +1,7 @@
 use proto::backend::{self, pkg::*};
 use rivet_operation::prelude::*;
 use serde::{Deserialize, Serialize};
+use std::time::Duration;
 
 #[derive(Serialize)]
 struct CallRequest {
@@ -64,7 +65,8 @@ pub async fn handle(
 	// Call module
 	let request_json = serde_json::from_str::<serde_json::Value>(&ctx.request_json)?;
 	let response = reqwest::Client::new()
-		.post("https://rivet-module-test.fly.dev/call")
+		.post(url)
+		.timeout(Duration::from_secs(15))
 		.json(&CallRequest {
 			function_name: ctx.function_name.clone(),
 			request: request_json,

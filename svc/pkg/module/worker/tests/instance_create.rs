@@ -35,7 +35,7 @@ async fn instance_create(ctx: TestCtx) {
 		],
 
 		image: Some(module::msg::version_create::message::Image::Docker(module::msg::version_create::message::Docker {
-			image_tag: "flyio/hellofly:latest".into(),
+			image_tag: "ghcr.io/rivet-gg/rivet-module-hello-world:latest".into(),
 		})),
 	})
 	.await

@@ -1,6 +1,6 @@
 use chirp_worker::prelude::*;
 use proto::backend::{self, pkg::*};
-use serde::{Deserialize, Serialize};
+use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use serde_json::json;
 
 #[derive(Serialize)]
@@ -11,9 +11,10 @@ struct Variables<T> {
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 struct CreateAppInput {
-	organization_id: String,
 	name: String,
+	organization_id: String,
 	preferred_region: String,
+	machines: bool,
 }
 
 #[derive(Serialize)]
@@ -207,6 +208,7 @@ async fn insert_instance(
 	Ok(())
 }
 
+#[derive(Copy, Clone)]
 struct LaunchAppOpts<'a> {
 	organization_id: &'a str,
 	name: &'a str,
@@ -218,12 +220,10 @@ struct LaunchAppOpts<'a> {
 async fn launch_app(opts: LaunchAppOpts<'_>) -> GlobalResult<String> {
 	// Create app
 	tracing::info!(organization_id = ?opts.organization_id, name = ?opts.name, preferred_region = ?opts.preferred_region, "creating fly app");
-	let res = reqwest::Client::new()
-		.post("https://api.fly.io/graphql")
-		.bearer_auth(opts.auth_token)
-		.json(&QueryBody {
-			query: indoc!(
-				r#"
+	let res = graphql_request::<_, CreateAppResponse>(
+		opts.auth_token,
+		indoc!(
+			r#"
 				mutation CreateApp($input: CreateAppInput!) {
 					createApp(input: $input) {
 						app {
@@ -232,60 +232,242 @@ async fn launch_app(opts: LaunchAppOpts<'_>) -> GlobalResult<String> {
 					}
 				}
 				"#
-			),
-			variables: Variables {
-				input: CreateAppInput {
-					organization_id: opts.organization_id.into(),
-					name: opts.name.into(),
-					preferred_region: opts.preferred_region.into(),
-				},
-			},
-		})
-		.send()
-		.await?
-		.error_for_status()?
-		.json::<GraphQLResponse<CreateAppResponse>>()
-		.await?
-		.data()?;
+		),
+		json!({
+			"organizationId": opts.organization_id,
+			"name": opts.name,
+			"preferredRegion": opts.preferred_region,
+			"machines": true,
+		}),
+	)
+	.await?;
 	let app_id = res.create_app.app.id;
 
-	// Deploy version
-	tracing::info!(?app_id, image = ?opts.image, "creating fly release");
-	let res = reqwest::Client::new()
-		.post("https://api.fly.io/graphql")
-		.bearer_auth(opts.auth_token)
-		.json(&QueryBody {
-			query: indoc!(
-				r#"
-				mutation CreateRelease($input: CreateReleaseInput!) {
-					createRelease(input: $input) {
-						app {
-							id
-						}
+	// Create ipv6
+	tracing::info!("creating ipv6");
+	graphql_request::<_, serde_json::Value>(
+		&opts.auth_token,
+		indoc!(
+			r#"
+			mutation($input: AllocateIPAddressInput!) {
+				allocateIpAddress(input: $input) {
+					ipAddress {
+						id
+						address
+						type
+						region
+						createdAt
 					}
 				}
-				"#
-			),
-			variables: Variables {
-				input: CreateReleaseInput {
-					app_id: app_id.clone(),
-					image: opts.image.into(),
-					platform_version: "machines".into(),
-					strategy: "CANARY".into(),
-					definition: json!({}),
-				},
-			},
-		})
-		.send()
-		.await?
-		.error_for_status()?
-		.json::<GraphQLResponse<serde_json::Value>>()
-		.await?
-		.data()?;
+			}
+			"#
+		),
+		json!({
+			"appId": app_id,
+			"type": "v6"
+		}),
+	)
+	.await?;
+
+	// Create shared ipv4
+	tracing::info!("creating shared ipv4");
+	graphql_request::<_, serde_json::Value>(
+		&opts.auth_token,
+		indoc!(
+			r#"
+			mutation($input: AllocateIPAddressInput!) {
+				allocateIpAddress(input: $input) {
+					app {
+						sharedIpAddress
+					}
+				}
+			}
+			"#
+		),
+		json!({
+			"appId": app_id,
+			"type": "shared_v4"
+		}),
+	)
+	.await?;
+
+	// // Deploy version
+	// tracing::info!(?app_id, image = ?opts.image, "creating fly release");
+	// graphql_request::<_, serde_json::Value>(
+	// 	&opts.auth_token,
+	// 	indoc!(
+	// 		r#"
+	// 			mutation CreateRelease($input: CreateReleaseInput!) {
+	// 				createRelease(input: $input) {
+	// 					app {
+	// 						id
+	// 					}
+	// 				}
+	// 			}
+	// 			"#
+	// 	),
+	// 	json!({
+	// 		"appId": app_id,
+	// 		"image": opts.image,
+	// 		"platformVersion": "machines",
+	// 		"strategy": "CANARY",
+	// 		"definition": {
+	// 			"app": opts.name,
+	// 			"primaryRegion": opts.preferred_region,
+	// 			"platformVersion": "machines",
+	// 			"httpService": {
+	// 				"internalPort": 80,
+	// 				"forceHttps": true,
+	// 				"autoStartMachines": true,
+	// 				"autoStopMachines": true,
+	// 			},
+	// 			"checks": {
+	// 				"alive": {
+	// 					"type": "tcp",
+	// 					"interval": "15s",
+	// 					"timeout": "2s",
+	// 					"gracePeriod": "5s"
+	// 				}
+	// 			}
+
+	// 			// "checks": {
+	// 			// 	"alive": {
+	// 			// 		"type": "http",
+	// 			// 		"endpoint": "/healthz",
+	// 			// 		"interval": "15s",
+	// 			// 		"timeout": "2s",
+	// 			// 		"grace_period": "5s",
+	// 			// 	}
+	// 			// },
+	// 		},
+	// 	}),
+	// )
+	// .await?;
+
+	// Create machines
+	// for i in 0..2 {
+	create_machine(opts).await?;
+	// }
 
 	Ok(app_id)
 }
 
+async fn create_machine(opts: LaunchAppOpts<'_>) -> GlobalResult<()> {
+	tracing::info!("creating machine");
+
+	let config = json!({
+	//   "env": {
+	// 	"FLY_PROCESS_GROUP": "app",
+	// 	"PRIMARY_REGION": "iad"
+	//   },
+	//   "init": {},
+	//   "metadata": {
+	// 	"fly_flyctl_version": "0.1.64",
+	// 	"fly_platform_version": "v2",
+	// 	"fly_process_group": "app",
+	// 	"fly_release_id": "p2xOXzMKKYnx1CeqNemek1eNw",
+	// 	"fly_release_version": "2"
+	//   },
+	  "services": [
+		{
+		  "protocol": "tcp",
+		  "internal_port": 80,
+		  "autostop": true,
+		  "autostart": true,
+		  "ports": [
+			{
+			  "port": 80,
+			  "handlers": [
+				"http"
+			  ],
+			  "force_https": true
+			},
+			{
+			  "port": 443,
+			  "handlers": [
+				"http",
+				"tls"
+			  ]
+			}
+		  ],
+		  "force_instance_key": null
+		}
+	  ],
+	  "checks": {
+		"alive": {
+		  "port": 80,
+		  "type": "tcp",
+		  "interval": "15s",
+		  "timeout": "2s",
+		  "grace_period": "5s"
+		}
+	  },
+	  "image": opts.image,
+	  "restart": {},
+	  "guest": {
+		"cpu_kind": "shared",
+		"cpus": 1,
+		"memory_mb": 256
+	  }
+	});
+
+	// reqwest::Client::new()
+	// 	.post(format!(
+	// 		"https://api.machines.dev/v1/apps/{}/machines",
+	// 		opts.name
+	// 	))
+	// 	.bearer_auth(opts.auth_token)
+	// 	.json(&json!({
+	// 		"region": opts.preferred_region,
+	// 		"config": config,
+	// 	}))
+	// 	.send()
+	// 	.await?
+	// 	.error_for_status()?
+	// 	.json::<serde_json::Value>()
+
+	let res = reqwest::Client::new()
+		.post(format!(
+			"https://api.machines.dev/v1/apps/{}/machines",
+			opts.name
+		))
+		.bearer_auth(opts.auth_token)
+		.json(&json!({
+			"region": opts.preferred_region,
+			"config": config,
+		}))
+		.send()
+		.await?;
+	let status = res.error_for_status_ref().map(|_| ());
+	let res_text = res.text().await;
+	tracing::info!(?status, ?res_text, "machine created");
+	status?;
+
+	Ok(())
+}
+
 fn build_app_name(instance_id: Uuid) -> String {
 	format!("{}-mod-{}", util::env::namespace(), instance_id)
+}
+
+async fn graphql_request<Req: Serialize, Res: DeserializeOwned>(
+	auth_token: &str,
+	query: &'static str,
+	req: Req,
+) -> GlobalResult<Res> {
+	let res = reqwest::Client::new()
+		.post("https://api.fly.io/graphql")
+		.bearer_auth(auth_token)
+		.json(&QueryBody {
+			query,
+			variables: Variables { input: req },
+		})
+		.send()
+		.await?
+		.error_for_status()?
+		.json::<GraphQLResponse<Res>>()
+		.await?
+		.data()?;
+
+	Ok(res)
 }
