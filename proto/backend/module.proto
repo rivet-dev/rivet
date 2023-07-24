@@ -6,7 +6,7 @@ import "proto/common.proto";
 import "proto/backend/module/function.proto";
 
 // MARK: Game Version Config
-message VersionConfig {	
+message GameVersionConfig {	
 	message ModuleDependency {
 		string key = 1;
 		rivet.common.Uuid module_version_id = 2;
@@ -16,13 +16,13 @@ message VersionConfig {
 }
 
 // MARK: Game Version Config Context
-message VersionConfigCtx {
+message GameVersionConfigCtx {
 
 }
 
 // MARK: Game Version Config Meta
-message VersionConfigMeta {
-	repeated rivet.common.Uuid module_instance_ids = 1;
+message GameVersionConfigMeta {
+	
 }
 
 // Module

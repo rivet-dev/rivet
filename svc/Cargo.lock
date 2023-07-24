@@ -5182,6 +5182,45 @@ dependencies = [
 ]
 
 [[package]]
+name = "module-game-version-get"
+version = "0.0.1"
+dependencies = [
+ "chirp-client",
+ "chirp-worker",
+ "faker-game",
+ "faker-game-version",
+ "prost 0.10.4",
+ "rivet-operation",
+ "sqlx",
+]
+
+[[package]]
+name = "module-game-version-prepare"
+version = "0.0.1"
+dependencies = [
+ "chirp-client",
+ "chirp-worker",
+ "faker-game",
+ "prost 0.10.4",
+ "rivet-operation",
+]
+
+[[package]]
+name = "module-game-version-publish"
+version = "0.0.1"
+dependencies = [
+ "chirp-client",
+ "chirp-worker",
+ "faker-game",
+ "itertools",
+ "module-game-version-get",
+ "prost 0.10.4",
+ "rivet-operation",
+ "sqlx",
+ "unzip-n",
+]
+
+[[package]]
 name = "module-get"
 version = "0.0.1"
 dependencies = [
@@ -5242,6 +5281,7 @@ dependencies = [
  "chirp-client",
  "chirp-worker",
  "chrono",
+ "module-game-version-get",
  "module-version-get",
  "reqwest",
  "rivet-convert",
@@ -5249,6 +5289,7 @@ dependencies = [
  "rivet-metrics",
  "rivet-runtime",
  "serde",
+ "sqlx",
  "upload-get",
  "upload-prepare",
 ]

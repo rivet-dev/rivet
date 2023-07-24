@@ -61,15 +61,16 @@ CREATE TABLE instances_driver_fly (
 	fly_app_id STRING
 );
 
+CREATE TABLE namespace_instances (
+	namespace_id UUID NOT NULL,  -- References db-namespace.namespaces
+	key STRING NOT NULL,
+	instance_id UUID NOT NULL REFERENCES instances (instance_id),
+	PRIMARY KEY (namespace_id, key)
+);
+
 -- Game version
 CREATE TABLE game_versions (
 	version_id UUID PRIMARY KEY,  -- References db-game.versions
 	config BYTES NOT NULL
-);
-
-CREATE TABLE game_version_module_instances (
-	game_version_id UUID NOT NULL REFERENCES game_versions (version_id),
-	instance_id UUID NOT NULL REFERENCES instances (instance_id),
-	PRIMARY KEY (game_version_id, instance_id)
 );
 

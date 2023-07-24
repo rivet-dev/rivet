@@ -17,6 +17,19 @@ reqwest = "0.11"
 serde = { version = "1.0", features = ["derive"] }
 
 module-version-get = { path = "../ops/version-get" }
+module-game-version-get = { path = "../ops/game-version-get" }
+
+[dependencies.sqlx]
+version = "0.6"
+default-features = false
+features = [
+	"runtime-tokio-native-tls",
+	"postgres",
+	"macros",
+	"uuid",
+	"json",
+	"tls",
+]
 
 [dev-dependencies]
 chirp-worker = { path = "../../../../lib/chirp/worker" }
