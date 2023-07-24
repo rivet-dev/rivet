@@ -5,6 +5,10 @@ package rivet.backend.module;
 import "proto/common.proto";
 import "proto/backend/module/function.proto";
 
+// MARK: Game Namespace Config
+message GameNamespaceConfig {
+}
+
 // MARK: Game Version Config
 message GameVersionConfig {	
 	message ModuleDependency {

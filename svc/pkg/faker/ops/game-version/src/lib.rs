@@ -127,6 +127,13 @@ async fn handle(
 					custom_avatars: Vec::new(),
 				})
 			},
+			module: if let Some(config) = ctx.override_module_config.clone() {
+				config.config
+			} else {
+				Some(backend::module::GameVersionConfig {
+					module_dependencies: Vec::new(),
+				})
+			},
 		}
 	};
 
