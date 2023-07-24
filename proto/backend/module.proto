@@ -70,6 +70,7 @@ message Instance {
 	rivet.common.Uuid instance_id = 1;
 	rivet.common.Uuid module_version_id = 2;
 	int64 create_ts = 3;
+	optional int64 destroy_ts = 4;
 
 	message Dummy {
 		

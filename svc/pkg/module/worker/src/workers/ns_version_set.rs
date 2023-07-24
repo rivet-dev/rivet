@@ -1,8 +1,6 @@
 use chirp_worker::prelude::*;
 use proto::backend::pkg::*;
-use serde_json::json;
-use std::collections::HashMap;
-use std::convert::TryInto;
+use std::collections::HashSet;
 
 // A note on gradual deploys:
 //
@@ -35,7 +33,11 @@ async fn worker(
 		version_ids: vec![version_id.into()],
 	})
 	.await?;
-	let game_version = internal_unwrap_owned!(game_versions.versions.first());
+	let game_version = internal_unwrap_owned!(game_versions
+		.versions
+		.first()
+		.and_then(|x| x.config.as_ref()));
+
 	let new_version_keys = game_version
 		.module_dependencies
 		.iter()
@@ -62,25 +64,64 @@ async fn worker(
 	let new_dep_keys = new_version_keys
 		.difference(&current_version_keys)
 		.collect::<Vec<_>>();
-	for dep_key in new_dep_keys {
+	for dep_key in &new_dep_keys {
 		let version_id = game_version
 			.module_dependencies
 			.iter()
-			.find(|x| x.key == *key)
-			.map(|x| x.version_id)
-			.as_uuid();
-		create_instances(ctx.chirp(), &crdb, namespace_id, dep_key, version_id).await?;
+			.find(|x| x.key == **dep_key)
+			.and_then(|x| x.module_version_id)
+			.map(|x| x.as_uuid());
+		create_instances(
+			ctx.chirp(),
+			&crdb,
+			namespace_id,
+			dep_key,
+			internal_unwrap_owned!(version_id),
+		)
+		.await?;
 	}
 
 	// Update instances
 	let update_dep_keys = new_version_keys
 		.intersection(&current_version_keys)
 		.collect::<Vec<_>>();
+	for dep_key in &new_dep_keys {
+		let version_id = game_version
+			.module_dependencies
+			.iter()
+			.find(|x| x.key == **dep_key)
+			.and_then(|x| x.module_version_id)
+			.map(|x| x.as_uuid());
+		update_instance(
+			ctx.chirp(),
+			&crdb,
+			namespace_id,
+			dep_key,
+			internal_unwrap_owned!(version_id),
+		)
+		.await?;
+	}
 
 	// Delete instances
 	let delete_dep_keys = current_version_keys
 		.difference(&new_version_keys)
 		.collect::<Vec<_>>();
+	for dep_key in &new_dep_keys {
+		let version_id = game_version
+			.module_dependencies
+			.iter()
+			.find(|x| x.key == **dep_key)
+			.and_then(|x| x.module_version_id)
+			.map(|x| x.as_uuid());
+		delete_instance(
+			ctx.chirp(),
+			&crdb,
+			namespace_id,
+			dep_key,
+			internal_unwrap_owned!(version_id),
+		)
+		.await?;
+	}
 
 	Ok(())
 }
@@ -110,10 +151,34 @@ async fn create_instances(
 		"
 	))
 	.bind(namespace_id)
-	.bind(key)
+	.bind(dep_key)
 	.bind(version_id)
 	.execute(crdb)
 	.await?;
+
+	Ok(())
+}
+
+async fn update_instance(
+	client: &chirp_client::Client,
+	crdb: &CrdbPool,
+	namespace_id: Uuid,
+	dep_key: &str,
+	version_id: Uuid,
+) -> Result<(), GlobalError> {
+	// TODO: Deploy new version
+
+	Ok(())
+}
+
+async fn delete_instance(
+	client: &chirp_client::Client,
+	crdb: &CrdbPool,
+	namespace_id: Uuid,
+	dep_key: &str,
+	version_id: Uuid,
+) -> Result<(), GlobalError> {
+	// TODO: Delete instance
 
 	Ok(())
 }

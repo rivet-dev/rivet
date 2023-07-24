@@ -27,6 +27,7 @@ pub async fn handle(
 	.await?;
 	let instance = internal_unwrap_owned!(instances.instances.first());
 	let version_id = internal_unwrap!(instance.module_version_id).as_uuid();
+	assert_with!(instance.destroy_ts.is_none(), MODULE_INSTANCE_DESTROYED);
 
 	// Get version
 	let versions = op!([ctx] module_version_get {
@@ -36,12 +37,13 @@ pub async fn handle(
 	let version = internal_unwrap_owned!(versions.versions.first());
 
 	// Validate function exists
-	internal_assert!(
+	assert_with!(
 		version
 			.functions
 			.iter()
 			.any(|x| x.name == ctx.function_name),
-		"function does not exist"
+		MODULE_FUNCTION_NOT_FOUND,
+		function = ctx.function_name,
 	);
 
 	// TODO: Validate JSON request schema
@@ -57,7 +59,7 @@ pub async fn handle(
 			if let Some(app_id) = &driver.fly_app_id {
 				format!("https://{}.fly.dev/call", app_id)
 			} else {
-				internal_panic!("fly app not created yet");
+				panic_with!(MODULE_INSTANCE_STARTING)
 			}
 		}
 	};

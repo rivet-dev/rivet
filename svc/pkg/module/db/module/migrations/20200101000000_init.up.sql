@@ -49,7 +49,8 @@ CREATE TABLE functions_callable (
 CREATE TABLE instances (
 	instance_id UUID PRIMARY KEY,
 	version_id UUID NOT NULL REFERENCES versions (version_id),
-	create_ts INT NOT NULL
+	create_ts INT NOT NULL,
+	destroy_ts INT
 );
 
 CREATE TABLE instances_driver_dummy (

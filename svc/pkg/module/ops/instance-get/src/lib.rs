@@ -6,6 +6,7 @@ struct Instance {
 	instance_id: Uuid,
 	version_id: Uuid,
 	create_ts: i64,
+	destroy_ts: Option<i64>,
 
 	driver_dummy: bool,
 
@@ -29,6 +30,7 @@ pub async fn handle(
 			i.instance_id,
 			i.version_id,
 			i.create_ts,
+			i.destroy_ts,
 			idd.instance_id IS NOT NULL AS driver_dummy,
 			idv.instance_id IS NOT NULL AS driver_fly,
 			idv.fly_app_id AS driver_fly_app_id
@@ -60,6 +62,7 @@ pub async fn handle(
 					instance_id: Some(instance.instance_id.into()),
 					module_version_id: Some(instance.version_id.into()),
 					create_ts: instance.create_ts,
+					destroy_ts: instance.destroy_ts,
 					driver: Some(driver),
 				})
 			})
