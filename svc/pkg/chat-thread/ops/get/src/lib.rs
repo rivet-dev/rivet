@@ -21,7 +21,7 @@ struct Thread {
 #[operation(name = "chat-thread-get")]
 async fn handle(
 	ctx: OperationContext<chat_thread::get::Request>,
-) -> Result<chat_thread::get::Response, GlobalError> {
+) -> GlobalResult<chat_thread::get::Response> {
 	let crdb = ctx.crdb("db-chat").await?;
 
 	let thread_ids = ctx
