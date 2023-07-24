@@ -63,8 +63,8 @@ pub async fn group_summaries(
 					team_data.profile_file_name.as_ref(),
 				),
 				external: models::GroupExternalLinks {
-					profile: util::route::team_profile(&team_id),
-					chat: util::route::team_chat(&team_id),
+					profile: util::route::team_profile(team_id),
+					chat: util::route::team_chat(team_id),
 				},
 
 				is_current_identity_member: is_current_user_member,

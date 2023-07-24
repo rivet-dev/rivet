@@ -31,7 +31,7 @@ pub async fn summaries(
 			(
 				party.party_id,
 				convert::party::summary(
-					&current_user_id,
+					current_user_id,
 					party,
 					&games,
 					&members,

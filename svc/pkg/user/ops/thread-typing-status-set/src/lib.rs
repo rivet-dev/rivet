@@ -24,7 +24,7 @@ async fn handle(
 			let exists = redis::pipe()
 				.atomic()
 				.hexists(
-					util_chat::key::typing_statuses(&thread_id),
+					util_chat::key::typing_statuses(thread_id),
 					user_id_str.clone(),
 				)
 				.query_async::<_, Vec<bool>>(&mut ctx.cache_handle().redis())
@@ -39,11 +39,11 @@ async fn handle(
 						redis::pipe()
 							.atomic()
 							.hdel(
-								util_chat::key::typing_statuses(&thread_id),
+								util_chat::key::typing_statuses(thread_id),
 								user_id_str.clone(),
 							)
 							.zrem(
-								util_chat::key::typing_statuses_update_ts(&thread_id),
+								util_chat::key::typing_statuses_update_ts(thread_id),
 								user_id_str,
 							)
 							.query_async::<_, ()>(&mut ctx.cache_handle().redis())
@@ -56,8 +56,8 @@ async fn handle(
 
 			exists
 		} else {
-			let topic_key = util_chat::key::typing_statuses(&thread_id);
-			let topic_update_ts_key = util_chat::key::typing_statuses_update_ts(&thread_id);
+			let topic_key = util_chat::key::typing_statuses(thread_id);
+			let topic_update_ts_key = util_chat::key::typing_statuses_update_ts(thread_id);
 
 			// Save status in cache, set update timestamp, and clear expired keys
 			tokio::try_join!(
@@ -108,8 +108,8 @@ async fn clear_expired_typing_statuses(
 	// Initiate redis script
 	let mut script = REDIS_SCRIPT.prepare_invoke();
 	script
-		.key(util_chat::key::typing_statuses(&thread_id))
-		.key(util_chat::key::typing_statuses_update_ts(&thread_id))
+		.key(util_chat::key::typing_statuses(thread_id))
+		.key(util_chat::key::typing_statuses_update_ts(thread_id))
 		.arg(util_chat::key::TYPING_STATUS_EXPIRE_DURATION)
 		.arg(util::timestamp::now() / 1000);
 

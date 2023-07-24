@@ -15,13 +15,13 @@ pub fn handle(
 		create_ts: util::timestamp::to_string(party.create_ts)?,
 		activity: Box::new(convert::party::activity(party.state.as_ref(), games)?),
 		external: Box::new(models::PartyExternalLinks {
-			chat: util::route::party_chat(&party_id),
+			chat: util::route::party_chat(party_id),
 		}),
 	})
 }
 
 pub fn summary(
-	current_user_id: &Uuid,
+	current_user_id: Uuid,
 	party: &backend::party::Party,
 	games: &[convert::GameWithNamespaceIds],
 	members: &[backend::party::PartyMember],
@@ -51,7 +51,7 @@ pub fn summary(
 			groups: convert::party::publicity_level(publicity.teams),
 		}),
 		external: Box::new(models::PartyExternalLinks {
-			chat: util::route::party_chat(&party_id),
+			chat: util::route::party_chat(party_id),
 		}),
 		members: convert::party::members(current_user_id, party, members, users)?,
 		// TODO: Only members of party should be able to see this
@@ -134,7 +134,7 @@ pub fn publicity(publicity: &backend::party::party::Publicity) -> models::PartyP
 }
 
 pub fn members(
-	current_user_id: &Uuid,
+	current_user_id: Uuid,
 	party: &backend::party::Party,
 	members: &[backend::party::PartyMember],
 	users: &[backend::user::User],

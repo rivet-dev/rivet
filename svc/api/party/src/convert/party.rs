@@ -15,13 +15,13 @@ pub fn handle(
 		create_ts: util::timestamp::to_chrono(party.create_ts)?,
 		activity: convert::party::activity(party.state.as_ref(), games)?,
 		external: models::PartyExternalLinks {
-			chat: util::route::party_chat(&party_id),
+			chat: util::route::party_chat(party_id),
 		},
 	})
 }
 
 pub fn summary(
-	current_user_id: &Uuid,
+	current_user_id: Uuid,
 	party: &backend::party::Party,
 	games: &[convert::GameWithNamespaceIds],
 	members: &[backend::party::PartyMember],
@@ -50,7 +50,7 @@ pub fn summary(
 			groups: convert::party::publicity_level(publicity.teams),
 		},
 		external: models::PartyExternalLinks {
-			chat: util::route::party_chat(&party_id),
+			chat: util::route::party_chat(party_id),
 		},
 		members: convert::party::members(current_user_id, party, members, users)?,
 		thread_id: thread_id.to_string(),
@@ -58,7 +58,7 @@ pub fn summary(
 }
 
 pub fn profile(
-	current_user_id: &Uuid,
+	current_user_id: Uuid,
 	party: &backend::party::Party,
 	games: &[convert::GameWithNamespaceIds],
 	members: &[backend::party::PartyMember],
@@ -76,11 +76,11 @@ pub fn profile(
 		activity: convert::party::activity(party.state.as_ref(), games)?,
 		publicity: publicity(internal_unwrap!(party.publicity)),
 		external: models::PartyExternalLinks {
-			chat: util::route::party_chat(&party_id),
+			chat: util::route::party_chat(party_id),
 		},
 		members: convert::party::members(current_user_id, party, members, users)?,
 		thread_id: thread_id.to_string(),
-		invites: if &internal_unwrap!(party.leader_user_id).as_uuid() == current_user_id {
+		invites: if internal_unwrap!(party.leader_user_id).as_uuid() == current_user_id {
 			convert::party::invites(invites)?
 		} else {
 			Vec::new()
@@ -164,7 +164,7 @@ pub fn publicity(publicity: &backend::party::party::Publicity) -> models::PartyP
 }
 
 pub fn members(
-	current_user_id: &Uuid,
+	current_user_id: Uuid,
 	party: &backend::party::Party,
 	members: &[backend::party::PartyMember],
 	users: &[backend::user::User],
