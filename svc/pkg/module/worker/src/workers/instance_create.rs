@@ -217,6 +217,7 @@ struct LaunchAppOpts<'a> {
 	image: &'a str,
 }
 
+#[tracing::instrument(skip(opts))]
 async fn launch_app(opts: LaunchAppOpts<'_>) -> GlobalResult<String> {
 	// Create app
 	tracing::info!(organization_id = ?opts.organization_id, name = ?opts.name, preferred_region = ?opts.preferred_region, "creating fly app");
@@ -299,12 +300,22 @@ async fn launch_app(opts: LaunchAppOpts<'_>) -> GlobalResult<String> {
 	Ok(app_id)
 }
 
+#[tracing::instrument(skip(opts))]
 async fn create_machine(opts: LaunchAppOpts<'_>) -> GlobalResult<()> {
 	tracing::info!("creating machine");
 
 	let config = util_module::fly::MachineConfig { image: opts.image }.build_machine_config();
 
-	reqwest::Client::new()
+	#[derive(Deserialize, Debug)]
+	#[allow(dead_code)]
+	struct FlyMachine {
+		id: String,
+		instance_id: String,
+		name: String,
+	}
+
+	// Create machine
+	let machine = reqwest::Client::new()
 		.post(format!(
 			"https://api.machines.dev/v1/apps/{}/machines",
 			opts.name
@@ -316,8 +327,54 @@ async fn create_machine(opts: LaunchAppOpts<'_>) -> GlobalResult<()> {
 		}))
 		.send()
 		.await?
-		.error_for_status_ref()?;
-	tracing::info!("machine created");
+		.error_for_status()?
+		.json::<FlyMachine>()
+		.await?;
+	tracing::info!(?machine, "machine created");
+
+	// Wait for machine to start
+	tracing::info!("waiting for machine to start");
+	reqwest::Client::new()
+		.get(format!(
+			"https://api.machines.dev/v1/apps/{}/machines/{}/wait?instance_id={}&timeout=45&state=started",
+			opts.name, machine.id, machine.instance_id
+		))
+		.bearer_auth(opts.auth_token)
+		.send()
+		.await?
+		.error_for_status()?;
+	tracing::info!("machine started");
+
+	// Wait for machine to show up in list
+	let mut backoff = util::Backoff::new(4, Some(5), 200, 100);
+	loop {
+		tracing::info!("listing machines");
+		let res = reqwest::Client::new()
+			.get(format!(
+				"https://api.machines.dev/v1/apps/{}/machines",
+				opts.name
+			))
+			.bearer_auth(opts.auth_token)
+			.send()
+			.await?
+			.error_for_status()?
+			.json::<Vec<FlyMachine>>()
+			.await?;
+
+		// Check if machine exists
+		if res.iter().any(|x| x.id == machine.id) {
+			tracing::info!("found machine in list");
+			break;
+		} else {
+			tracing::info!("machine not in list yet")
+		}
+
+		// Tick
+		if backoff.tick().await {
+			tracing::warn!("machine did not show up in list endpoint soon enough");
+			break;
+		}
+	}
 
 	Ok(())
 }
