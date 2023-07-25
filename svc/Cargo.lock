@@ -3835,6 +3835,7 @@ dependencies = [
  "faker-game",
  "game-version-get",
  "game-version-list",
+ "module-version-get",
  "prost 0.10.4",
  "region-get",
  "rivet-operation",

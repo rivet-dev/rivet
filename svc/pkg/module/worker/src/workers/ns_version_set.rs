@@ -39,7 +39,7 @@ async fn worker(
 		.and_then(|x| x.config.as_ref()));
 
 	let new_version_keys = game_version
-		.module_dependencies
+		.dependencies
 		.iter()
 		.map(|x| x.key.as_str())
 		.collect::<HashSet<&str>>();
@@ -66,7 +66,7 @@ async fn worker(
 		.collect::<Vec<_>>();
 	for dep_key in &new_dep_keys {
 		let version_id = game_version
-			.module_dependencies
+			.dependencies
 			.iter()
 			.find(|x| x.key == **dep_key)
 			.and_then(|x| x.module_version_id)
@@ -91,7 +91,7 @@ async fn worker(
 			.find(|x| x.key == **dep_key)
 			.map(|x| x.instance_id);
 		let version_id = game_version
-			.module_dependencies
+			.dependencies
 			.iter()
 			.find(|x| x.key == **dep_key)
 			.and_then(|x| x.module_version_id)

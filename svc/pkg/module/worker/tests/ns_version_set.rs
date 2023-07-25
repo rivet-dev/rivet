@@ -192,7 +192,7 @@ async fn deploy_game_version(
 	ctx: &TestCtx,
 	game_id: Uuid,
 	namespace_id: Uuid,
-	module_dependencies: Vec<(String, Uuid)>,
+	dependencies: Vec<(String, Uuid)>,
 ) {
 	// Deploy version
 	let mut complete_sub = subscribe!([ctx] module::msg::ns_version_set_complete(namespace_id))
@@ -203,7 +203,7 @@ async fn deploy_game_version(
 		deploy_to_namespace_id: Some(namespace_id.into()),
 		override_module_config: Some(faker::game_version::request::OverrideModuleConfig {
 			config: Some(backend::module::GameVersionConfig {
-				module_dependencies: module_dependencies.into_iter().map(|(key, module_version_id)| {
+				dependencies: dependencies.into_iter().map(|(key, module_version_id)| {
 					backend::module::game_version_config::ModuleDependency {
 						key: key,
 						module_version_id: Some(module_version_id.into()),

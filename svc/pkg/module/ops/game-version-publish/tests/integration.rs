@@ -14,7 +14,7 @@ async fn empty(ctx: TestCtx) {
 	op!([ctx] module_game_version_publish {
 		version_id: Some(version_id),
 		config: Some(backend::module::GameVersionConfig {
-			module_dependencies: Vec::new()
+			dependencies: Vec::new()
 		}),
 		config_ctx: Some(backend::module::GameVersionConfigCtx {}),
 	})

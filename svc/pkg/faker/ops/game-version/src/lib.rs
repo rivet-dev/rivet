@@ -131,7 +131,7 @@ async fn handle(
 				config.config
 			} else {
 				Some(backend::module::GameVersionConfig {
-					module_dependencies: Vec::new(),
+					dependencies: Vec::new(),
 				})
 			},
 		}

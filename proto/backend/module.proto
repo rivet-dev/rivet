@@ -11,12 +11,12 @@ message GameNamespaceConfig {
 
 // MARK: Game Version Config
 message GameVersionConfig {	
-	message ModuleDependency {
+	message Dependency {
 		string key = 1;
 		rivet.common.Uuid module_version_id = 2;
 	}
 
-	repeated ModuleDependency module_dependencies = 1;
+	repeated Dependency dependencies = 1;
 }
 
 // MARK: Game Version Config Context

@@ -12,7 +12,7 @@ async fn empty(ctx: TestCtx) {
 
 	let _res = op!([ctx] module_game_version_prepare {
 		config: Some(backend::module::GameVersionConfig {
-			module_dependencies: Vec::new(),
+			dependencies: Vec::new(),
 		}),
 		game_id: Some(game_id),
 	})
