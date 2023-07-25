@@ -7,7 +7,6 @@ async fn ns_version_set(ctx: TestCtx) {
 	let crdb = ctx.crdb("db-module").await.unwrap();
 
 	let module_id = Uuid::new_v4();
-	let module_version_id = Uuid::new_v4();
 
 	// Create game
 	let game_res = op!([ctx] faker_game {
@@ -54,7 +53,7 @@ async fn ns_version_set(ctx: TestCtx) {
 	.await;
 
 	// Deploy initial version
-	{
+	let versions_a = {
 		let mut create_sub = subscribe!([ctx] module::msg::instance_create("*"))
 			.await
 			.unwrap();
@@ -68,20 +67,96 @@ async fn ns_version_set(ctx: TestCtx) {
 		create_sub.next().await.unwrap();
 		create_sub.next().await.unwrap();
 
-		// TODO: Sub to new messages
-
-		// Check module is created
+		// Check instances created
 		let versions = get_namespace_module_version(&crdb, namespace_id).await;
 		assert_eq!(2, versions.len());
-		assert_eq!(mv_a, versions["module_a"]);
-		assert_eq!(mv_b, versions["module_b"]);
+		assert_eq!(mv_a, versions["module_a"].module_version_id);
+		assert_eq!(mv_b, versions["module_b"].module_version_id);
+
+		versions
+	};
+
+	// Deploy new version
+	let versions_b = {
+		let mut update_sub =
+			subscribe!([ctx] module::msg::instance_version_set(versions_a["module_a"].instance_id))
+				.await
+				.unwrap();
+		deploy_game_version(
+			&ctx,
+			game_id,
+			namespace_id,
+			vec![("module_a".into(), mv_a), ("module_b".into(), mv_c)],
+		)
+		.await;
+		update_sub.next().await.unwrap();
+
+		// Check instances updated & using same instances
+		let versions = get_namespace_module_version(&crdb, namespace_id).await;
+		assert_eq!(2, versions.len());
+		assert_eq!(mv_a, versions["module_a"].module_version_id);
+		assert_eq!(mv_c, versions["module_b"].module_version_id);
+		assert_eq!(
+			versions_a["module_a"].instance_id,
+			versions["module_a"].instance_id
+		);
+		assert_eq!(
+			versions_a["module_b"].instance_id,
+			versions["module_b"].instance_id
+		);
+
+		versions
+	};
+
+	// Remove version
+	let versions_c = {
+		let mut destroy_sub =
+			subscribe!([ctx] module::msg::instance_destroy(versions_b["module_a"].instance_id))
+				.await
+				.unwrap();
+		deploy_game_version(&ctx, game_id, namespace_id, vec![("module_b".into(), mv_c)]).await;
+		destroy_sub.next().await.unwrap();
+
+		// Check instance removed
+		let versions = get_namespace_module_version(&crdb, namespace_id).await;
+		assert_eq!(1, versions.len());
+		assert_eq!(mv_c, versions["module_b"].module_version_id);
+		assert_eq!(
+			versions_b["module_b"].instance_id,
+			versions["module_b"].instance_id
+		);
+
+		versions
+	};
+
+	// Create module A again
+	{
+		let mut create_sub = subscribe!([ctx] module::msg::instance_create("*"))
+			.await
+			.unwrap();
+		deploy_game_version(
+			&ctx,
+			game_id,
+			namespace_id,
+			vec![("module_a".into(), mv_a), ("module_b".into(), mv_c)],
+		)
+		.await;
+		create_sub.next().await.unwrap();
+
+		// Check new instance created for module_a
+		let versions = get_namespace_module_version(&crdb, namespace_id).await;
+		assert_eq!(2, versions.len());
+		assert_eq!(mv_a, versions["module_a"].module_version_id);
+		assert_eq!(mv_c, versions["module_b"].module_version_id);
+		assert_ne!(
+			versions_a["module_a"].instance_id,
+			versions["module_a"].instance_id
+		);
+		assert_eq!(
+			versions_c["module_b"].instance_id,
+			versions["module_b"].instance_id
+		);
 	}
-
-	// Deploy version with new image
-
-	// Deploy version without module
-
-	// Deploy version with module again, check for new instance ID
 }
 
 async fn create_module_version(
@@ -143,13 +218,19 @@ async fn deploy_game_version(
 	complete_sub.next().await.unwrap();
 }
 
+#[derive(Debug)]
+struct NamespaceModule {
+	instance_id: Uuid,
+	module_version_id: Uuid,
+}
+
 async fn get_namespace_module_version(
 	crdb: &CrdbPool,
 	namespace_id: Uuid,
-) -> HashMap<String, Uuid> {
-	let versions = sqlx::query_as::<_, (String, Uuid)>(indoc!(
+) -> HashMap<String, NamespaceModule> {
+	let versions = sqlx::query_as::<_, (String, Uuid, Uuid)>(indoc!(
 		"
-		SELECT ni.key, i.version_id
+		SELECT ni.key, ni.instance_id, i.version_id
 		FROM namespace_instances AS ni
 		INNER JOIN instances AS i ON i.instance_id = ni.instance_id
 		WHERE ni.namespace_id = $1
@@ -160,6 +241,15 @@ async fn get_namespace_module_version(
 	.await
 	.unwrap()
 	.into_iter()
+	.map(|(key, instance_id, module_version_id)| {
+		(
+			key,
+			NamespaceModule {
+				instance_id,
+				module_version_id,
+			},
+		)
+	})
 	.collect::<HashMap<_, _>>();
 
 	tracing::info!(?versions, "namespace module versions");
