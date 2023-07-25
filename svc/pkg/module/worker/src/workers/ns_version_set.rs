@@ -1,5 +1,6 @@
 use chirp_worker::prelude::*;
 use proto::backend::pkg::*;
+use serde::Deserialize;
 use std::collections::HashSet;
 
 // A note on gradual deploys:
@@ -86,17 +87,20 @@ async fn worker(
 		.intersection(&current_version_keys)
 		.collect::<Vec<_>>();
 	for dep_key in &new_dep_keys {
+		let instance_id = existing_instances
+			.iter()
+			.find(|x| x.key == **dep_key)
+			.map(|x| x.instance_id);
 		let version_id = game_version
 			.module_dependencies
 			.iter()
 			.find(|x| x.key == **dep_key)
 			.and_then(|x| x.module_version_id)
 			.map(|x| x.as_uuid());
+
 		update_instance(
 			ctx.chirp(),
-			&crdb,
-			namespace_id,
-			dep_key,
+			internal_unwrap_owned!(instance_id),
 			internal_unwrap_owned!(version_id),
 		)
 		.await?;
@@ -107,20 +111,12 @@ async fn worker(
 		.difference(&new_version_keys)
 		.collect::<Vec<_>>();
 	for dep_key in &new_dep_keys {
-		let version_id = game_version
-			.module_dependencies
+		let instance_id = existing_instances
 			.iter()
 			.find(|x| x.key == **dep_key)
-			.and_then(|x| x.module_version_id)
-			.map(|x| x.as_uuid());
-		delete_instance(
-			ctx.chirp(),
-			&crdb,
-			namespace_id,
-			dep_key,
-			internal_unwrap_owned!(version_id),
-		)
-		.await?;
+			.map(|x| x.instance_id);
+
+		delete_instance(ctx.chirp(), internal_unwrap_owned!(instance_id)).await?;
 	}
 
 	Ok(())
@@ -161,24 +157,30 @@ async fn create_instances(
 
 async fn update_instance(
 	client: &chirp_client::Client,
-	crdb: &CrdbPool,
-	namespace_id: Uuid,
-	dep_key: &str,
+	instance_id: Uuid,
 	version_id: Uuid,
 ) -> Result<(), GlobalError> {
-	// TODO: Deploy new version
+	// Update instance
+	msg!([client] module::msg::instance_version_set(instance_id) -> module::msg::instance_version_set_complete {
+		instance_id: Some(instance_id.into()),
+		version_id: Some(version_id.into()),
+	})
+	.await
+	.unwrap();
 
 	Ok(())
 }
 
 async fn delete_instance(
 	client: &chirp_client::Client,
-	crdb: &CrdbPool,
-	namespace_id: Uuid,
-	dep_key: &str,
-	version_id: Uuid,
+	instance_id: Uuid,
 ) -> Result<(), GlobalError> {
-	// TODO: Delete instance
+	// Delete instance
+	msg!([client] module::msg::instance_destroy(instance_id) -> module::msg::instance_destroy_complete {
+		instance_id: Some(instance_id.into()),
+	})
+	.await
+	.unwrap();
 
 	Ok(())
 }

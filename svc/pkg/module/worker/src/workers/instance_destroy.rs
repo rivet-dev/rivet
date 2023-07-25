@@ -10,5 +10,8 @@ async fn worker(
 ) -> Result<(), GlobalError> {
 	todo!();
 
+	// TODO: Delete app
+	// TODO: Update database
+
 	Ok(())
 }

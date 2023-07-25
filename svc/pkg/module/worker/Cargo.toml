@@ -15,8 +15,10 @@ rivet-metrics = { path = "../../../../lib/metrics" }
 rivet-runtime = { path = "../../../../lib/runtime" }
 reqwest = "0.11"
 serde = { version = "1.0", features = ["derive"] }
+util-module = { package = "rivet-util-module", path = "../util" }
 
 module-version-get = { path = "../ops/version-get" }
+module-instance-get = { path = "../ops/instance-get" }
 module-game-version-get = { path = "../ops/game-version-get" }
 
 [dependencies.sqlx]

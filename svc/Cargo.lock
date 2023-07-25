@@ -5284,12 +5284,14 @@ dependencies = [
  "chirp-worker",
  "chrono",
  "module-game-version-get",
+ "module-instance-get",
  "module-version-get",
  "reqwest",
  "rivet-convert",
  "rivet-health-checks",
  "rivet-metrics",
  "rivet-runtime",
+ "rivet-util-module",
  "serde",
  "sqlx",
  "upload-get",
@@ -6961,6 +6963,14 @@ dependencies = [
  "serde",
  "strum",
  "uuid",
+]
+
+[[package]]
+name = "rivet-util-module"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
 ]
 
 [[package]]

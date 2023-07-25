@@ -246,7 +246,7 @@ async fn launch_app(opts: LaunchAppOpts<'_>) -> GlobalResult<String> {
 	// Create ipv6
 	tracing::info!("creating ipv6");
 	graphql_request::<_, serde_json::Value>(
-		&opts.auth_token,
+		opts.auth_token,
 		indoc!(
 			r#"
 			mutation($input: AllocateIPAddressInput!) {
@@ -272,7 +272,7 @@ async fn launch_app(opts: LaunchAppOpts<'_>) -> GlobalResult<String> {
 	// Create shared ipv4
 	tracing::info!("creating shared ipv4");
 	graphql_request::<_, serde_json::Value>(
-		&opts.auth_token,
+		opts.auth_token,
 		indoc!(
 			r#"
 			mutation($input: AllocateIPAddressInput!) {
@@ -291,63 +291,10 @@ async fn launch_app(opts: LaunchAppOpts<'_>) -> GlobalResult<String> {
 	)
 	.await?;
 
-	// // Deploy version
-	// tracing::info!(?app_id, image = ?opts.image, "creating fly release");
-	// graphql_request::<_, serde_json::Value>(
-	// 	&opts.auth_token,
-	// 	indoc!(
-	// 		r#"
-	// 			mutation CreateRelease($input: CreateReleaseInput!) {
-	// 				createRelease(input: $input) {
-	// 					app {
-	// 						id
-	// 					}
-	// 				}
-	// 			}
-	// 			"#
-	// 	),
-	// 	json!({
-	// 		"appId": app_id,
-	// 		"image": opts.image,
-	// 		"platformVersion": "machines",
-	// 		"strategy": "CANARY",
-	// 		"definition": {
-	// 			"app": opts.name,
-	// 			"primaryRegion": opts.preferred_region,
-	// 			"platformVersion": "machines",
-	// 			"httpService": {
-	// 				"internalPort": 80,
-	// 				"forceHttps": true,
-	// 				"autoStartMachines": true,
-	// 				"autoStopMachines": true,
-	// 			},
-	// 			"checks": {
-	// 				"alive": {
-	// 					"type": "tcp",
-	// 					"interval": "15s",
-	// 					"timeout": "2s",
-	// 					"gracePeriod": "5s"
-	// 				}
-	// 			}
-
-	// 			// "checks": {
-	// 			// 	"alive": {
-	// 			// 		"type": "http",
-	// 			// 		"endpoint": "/healthz",
-	// 			// 		"interval": "15s",
-	// 			// 		"timeout": "2s",
-	// 			// 		"grace_period": "5s",
-	// 			// 	}
-	// 			// },
-	// 		},
-	// 	}),
-	// )
-	// .await?;
-
 	// Create machines
-	// for i in 0..2 {
-	create_machine(opts).await?;
-	// }
+	for _ in 0..2 {
+		create_machine(opts).await?;
+	}
 
 	Ok(app_id)
 }
@@ -355,76 +302,7 @@ async fn launch_app(opts: LaunchAppOpts<'_>) -> GlobalResult<String> {
 async fn create_machine(opts: LaunchAppOpts<'_>) -> GlobalResult<()> {
 	tracing::info!("creating machine");
 
-	let config = json!({
-	//   "env": {
-	// 	"FLY_PROCESS_GROUP": "app",
-	// 	"PRIMARY_REGION": "iad"
-	//   },
-	//   "init": {},
-	//   "metadata": {
-	// 	"fly_flyctl_version": "0.1.64",
-	// 	"fly_platform_version": "v2",
-	// 	"fly_process_group": "app",
-	// 	"fly_release_id": "p2xOXzMKKYnx1CeqNemek1eNw",
-	// 	"fly_release_version": "2"
-	//   },
-	  "services": [
-		{
-		  "protocol": "tcp",
-		  "internal_port": 80,
-		  "autostop": true,
-		  "autostart": true,
-		  "ports": [
-			{
-			  "port": 80,
-			  "handlers": [
-				"http"
-			  ],
-			  "force_https": true
-			},
-			{
-			  "port": 443,
-			  "handlers": [
-				"http",
-				"tls"
-			  ]
-			}
-		  ],
-		  "force_instance_key": null
-		}
-	  ],
-	  "checks": {
-		"alive": {
-		  "port": 80,
-		  "type": "tcp",
-		  "interval": "15s",
-		  "timeout": "2s",
-		  "grace_period": "5s"
-		}
-	  },
-	  "image": opts.image,
-	  "restart": {},
-	  "guest": {
-		"cpu_kind": "shared",
-		"cpus": 1,
-		"memory_mb": 256
-	  }
-	});
-
-	// reqwest::Client::new()
-	// 	.post(format!(
-	// 		"https://api.machines.dev/v1/apps/{}/machines",
-	// 		opts.name
-	// 	))
-	// 	.bearer_auth(opts.auth_token)
-	// 	.json(&json!({
-	// 		"region": opts.preferred_region,
-	// 		"config": config,
-	// 	}))
-	// 	.send()
-	// 	.await?
-	// 	.error_for_status()?
-	// 	.json::<serde_json::Value>()
+	let config = util_module::fly::MachineConfig { image: opts.image }.build_machine_config();
 
 	let res = reqwest::Client::new()
 		.post(format!(
@@ -437,11 +315,9 @@ async fn create_machine(opts: LaunchAppOpts<'_>) -> GlobalResult<()> {
 			"config": config,
 		}))
 		.send()
-		.await?;
-	let status = res.error_for_status_ref().map(|_| ());
-	let res_text = res.text().await;
-	tracing::info!(?status, ?res_text, "machine created");
-	status?;
+		.await?
+		.error_for_status_ref()?;
+	tracing::info!("machine created");
 
 	Ok(())
 }
