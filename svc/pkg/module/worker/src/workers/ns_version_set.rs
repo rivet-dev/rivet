@@ -1,6 +1,5 @@
 use chirp_worker::prelude::*;
 use proto::backend::pkg::*;
-use serde::Deserialize;
 use std::collections::HashSet;
 
 // A note on gradual deploys:
@@ -86,7 +85,7 @@ async fn worker(
 	let update_dep_keys = new_version_keys
 		.intersection(&current_version_keys)
 		.collect::<Vec<_>>();
-	for dep_key in &new_dep_keys {
+	for dep_key in &update_dep_keys {
 		let instance_id = existing_instances
 			.iter()
 			.find(|x| x.key == **dep_key)
@@ -110,7 +109,7 @@ async fn worker(
 	let delete_dep_keys = current_version_keys
 		.difference(&new_version_keys)
 		.collect::<Vec<_>>();
-	for dep_key in &new_dep_keys {
+	for dep_key in &delete_dep_keys {
 		let instance_id = existing_instances
 			.iter()
 			.find(|x| x.key == **dep_key)

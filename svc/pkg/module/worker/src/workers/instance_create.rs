@@ -304,7 +304,7 @@ async fn create_machine(opts: LaunchAppOpts<'_>) -> GlobalResult<()> {
 
 	let config = util_module::fly::MachineConfig { image: opts.image }.build_machine_config();
 
-	let res = reqwest::Client::new()
+	reqwest::Client::new()
 		.post(format!(
 			"https://api.machines.dev/v1/apps/{}/machines",
 			opts.name
