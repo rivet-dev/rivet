@@ -46,7 +46,7 @@ async fn worker(
 		"
 		UPDATE instances
 		SET version_id = $2
-		WHERE instance_id = 1
+		WHERE instance_id = $1
 		"
 	))
 	.bind(instance_id)
