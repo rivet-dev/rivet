@@ -118,6 +118,12 @@ async fn worker(
 		delete_instance(ctx.chirp(), internal_unwrap_owned!(instance_id)).await?;
 	}
 
+	msg!([ctx] module::msg::ns_version_set_complete(namespace_id) {
+		namespace_id: Some(namespace_id.into()),
+		version_id: Some(version_id.into()),
+	})
+	.await?;
+
 	Ok(())
 }
 
@@ -147,7 +153,7 @@ async fn create_instances(
 	))
 	.bind(namespace_id)
 	.bind(dep_key)
-	.bind(version_id)
+	.bind(instance_id)
 	.execute(crdb)
 	.await?;
 

@@ -43,6 +43,7 @@ message Request {
 
 
 	rivet.common.Uuid game_id = 1;
+	optional rivet.common.Uuid deploy_to_namespace_id = 2;
 
 	optional rivet.backend.cloud.VersionConfig override_config = 101;
 	optional OverrideCdnConfig override_cdn_config = 104;

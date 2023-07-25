@@ -144,6 +144,15 @@ async fn handle(
 	})
 	.await?;
 
+	// Automatically deploy version
+	if let Some(namespace_id) = ctx.deploy_to_namespace_id {
+		op!([ctx] game_namespace_version_set {
+			namespace_id: Some(namespace_id),
+			version_id: version_create_res.version_id,
+		})
+		.await?;
+	}
+
 	let version_get = op!([ctx] mm_config_version_get {
 		version_ids: vec![version_create_res.version_id.unwrap()],
 	})
