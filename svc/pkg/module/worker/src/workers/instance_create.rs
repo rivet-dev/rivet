@@ -1,4 +1,5 @@
 use chirp_worker::prelude::*;
+use futures_util::{StreamExt, TryStreamExt};
 use proto::backend::{self, pkg::*};
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use serde_json::json;
@@ -112,11 +113,11 @@ async fn worker(
 			backend::module::version::Image::Docker(docker) => docker.image_tag.clone(),
 		};
 		let app_id = launch_app(LaunchAppOpts {
-			organization_id: &fly_org,
-			name: &build_app_name(instance_id),
-			preferred_region: &fly_region,
-			auth_token: &fly_auth_token,
-			image: &image,
+			organization_id: fly_org.clone(),
+			name: build_app_name(instance_id),
+			preferred_region: fly_region.clone(),
+			auth_token: fly_auth_token.clone(),
+			image: image.clone(),
 		})
 		.await?;
 
@@ -208,21 +209,21 @@ async fn insert_instance(
 	Ok(())
 }
 
-#[derive(Copy, Clone)]
-struct LaunchAppOpts<'a> {
-	organization_id: &'a str,
-	name: &'a str,
-	preferred_region: &'a str,
-	auth_token: &'a str,
-	image: &'a str,
+#[derive(Clone)]
+struct LaunchAppOpts {
+	organization_id: String,
+	name: String,
+	preferred_region: String,
+	auth_token: String,
+	image: String,
 }
 
 #[tracing::instrument(skip(opts))]
-async fn launch_app(opts: LaunchAppOpts<'_>) -> GlobalResult<String> {
+async fn launch_app(opts: LaunchAppOpts) -> GlobalResult<String> {
 	// Create app
 	tracing::info!(organization_id = ?opts.organization_id, name = ?opts.name, preferred_region = ?opts.preferred_region, "creating fly app");
 	let res = graphql_request::<_, CreateAppResponse>(
-		opts.auth_token,
+		&opts.auth_token,
 		indoc!(
 			r#"
 				mutation CreateApp($input: CreateAppInput!) {
@@ -247,7 +248,7 @@ async fn launch_app(opts: LaunchAppOpts<'_>) -> GlobalResult<String> {
 	// Create ipv6
 	tracing::info!("creating ipv6");
 	graphql_request::<_, serde_json::Value>(
-		opts.auth_token,
+		&opts.auth_token,
 		indoc!(
 			r#"
 			mutation($input: AllocateIPAddressInput!) {
@@ -273,7 +274,7 @@ async fn launch_app(opts: LaunchAppOpts<'_>) -> GlobalResult<String> {
 	// Create shared ipv4
 	tracing::info!("creating shared ipv4");
 	graphql_request::<_, serde_json::Value>(
-		opts.auth_token,
+		&opts.auth_token,
 		indoc!(
 			r#"
 			mutation($input: AllocateIPAddressInput!) {
@@ -292,19 +293,24 @@ async fn launch_app(opts: LaunchAppOpts<'_>) -> GlobalResult<String> {
 	)
 	.await?;
 
-	// Create machines
-	for _ in 0..2 {
-		create_machine(opts).await?;
-	}
+	// Create machines in parallel
+	futures_util::stream::iter(0..2)
+		.map({
+			let opts = opts.clone();
+			move |_| Ok(create_machine(opts.clone()))
+		})
+		.try_buffer_unordered(8)
+		.try_collect::<Vec<_>>()
+		.await?;
 
 	Ok(app_id)
 }
 
 #[tracing::instrument(skip(opts))]
-async fn create_machine(opts: LaunchAppOpts<'_>) -> GlobalResult<()> {
+async fn create_machine(opts: LaunchAppOpts) -> GlobalResult<()> {
 	tracing::info!("creating machine");
 
-	let config = util_module::fly::MachineConfig { image: opts.image }.build_machine_config();
+	let config = util_module::fly::MachineConfig { image: &opts.image }.build_machine_config();
 
 	#[derive(Deserialize, Debug)]
 	#[allow(dead_code)]
@@ -320,7 +326,7 @@ async fn create_machine(opts: LaunchAppOpts<'_>) -> GlobalResult<()> {
 			"https://api.machines.dev/v1/apps/{}/machines",
 			opts.name
 		))
-		.bearer_auth(opts.auth_token)
+		.bearer_auth(&opts.auth_token)
 		.json(&json!({
 			"region": opts.preferred_region,
 			"config": config,
@@ -339,7 +345,7 @@ async fn create_machine(opts: LaunchAppOpts<'_>) -> GlobalResult<()> {
 			"https://api.machines.dev/v1/apps/{}/machines/{}/wait?instance_id={}&timeout=45&state=started",
 			opts.name, machine.id, machine.instance_id
 		))
-		.bearer_auth(opts.auth_token)
+		.bearer_auth(&opts.auth_token)
 		.send()
 		.await?
 		.error_for_status()?;
@@ -354,7 +360,7 @@ async fn create_machine(opts: LaunchAppOpts<'_>) -> GlobalResult<()> {
 				"https://api.machines.dev/v1/apps/{}/machines",
 				opts.name
 			))
-			.bearer_auth(opts.auth_token)
+			.bearer_auth(&opts.auth_token)
 			.send()
 			.await?
 			.error_for_status()?
