@@ -69,12 +69,17 @@ async fn update_fly_machines(app_id: &str, image: &str) -> GlobalResult<()> {
 
 	let client = reqwest::Client::new();
 
-	tracing::info!("listing machine");
+	tracing::info!("listing machines");
 
 	#[derive(Deserialize, Debug)]
 	struct FlyMachine {
 		id: String,
-		// TODO: We should be using image_ref instead
+		config: FlyMachineConfig,
+	}
+
+	#[derive(Deserialize, Debug)]
+	struct FlyMachineConfig {
+		// TODO: We should be using image_ref instead for more thorough comparisons
 		image: String,
 	}
 
@@ -91,7 +96,7 @@ async fn update_fly_machines(app_id: &str, image: &str) -> GlobalResult<()> {
 	tracing::info!(len = machines.len(), ?machines, "fetched machines");
 
 	for machine in &machines {
-		if machine.image == image {
+		if machine.config.image == image {
 			tracing::info!(id = ?machine.id, "machine already up to date");
 			continue;
 		}
