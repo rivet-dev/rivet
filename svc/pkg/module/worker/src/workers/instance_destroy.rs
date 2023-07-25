@@ -1,13 +1,21 @@
 use chirp_worker::prelude::*;
-use proto::backend::pkg::*;
-use serde_json::json;
-use std::collections::HashMap;
-use std::convert::TryInto;
+use proto::backend::{self, pkg::*};
 
 #[worker(name = "module-instance-destroy")]
 async fn worker(
-	ctx: OperationContext<game::msg::instance_destroy::Message>,
+	ctx: OperationContext<module::msg::instance_destroy::Message>,
 ) -> Result<(), GlobalError> {
+	let crdb = ctx.crdb("db-module").await?;
+
+	let instance_id = internal_unwrap!(ctx.instance_id).as_uuid();
+
+	let instances = op!([ctx] module_instance_get {
+		instance_ids: vec![instance_id.into()],
+
+	})
+	.await?;
+	let instance = internal_unwrap_owned!(instances.instances.first());
+
 	// Delete app
 	match internal_unwrap!(instance.driver) {
 		backend::module::instance::Driver::Fly(fly) => {
@@ -29,7 +37,7 @@ async fn worker(
 		"
 	))
 	.bind(instance_id)
-	.bind(req.ts())
+	.bind(ctx.ts())
 	.execute(&crdb)
 	.await?;
 
@@ -47,7 +55,7 @@ async fn delete_fly_app(app_id: &str) -> GlobalResult<()> {
 
 	tracing::info!("deleting app");
 
-	let machines = reqwest::Client::new()
+	reqwest::Client::new()
 		.delete(format!("https://api.machines.dev/v1/apps/{app_id}",))
 		.bearer_auth(&fly_auth_token)
 		.send()
