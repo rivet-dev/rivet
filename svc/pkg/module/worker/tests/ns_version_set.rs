@@ -61,7 +61,7 @@ async fn ns_version_set(ctx: TestCtx) {
 			&ctx,
 			game_id,
 			namespace_id,
-			vec![("module_a".into(), mv_a), ("module_b".into(), mv_b)],
+			vec![("module-a".into(), mv_a), ("module-b".into(), mv_b)],
 		)
 		.await;
 		create_sub.next().await.unwrap();
@@ -70,8 +70,8 @@ async fn ns_version_set(ctx: TestCtx) {
 		// Check instances created
 		let versions = get_namespace_module_version(&crdb, namespace_id).await;
 		assert_eq!(2, versions.len());
-		assert_eq!(mv_a, versions["module_a"].module_version_id);
-		assert_eq!(mv_b, versions["module_b"].module_version_id);
+		assert_eq!(mv_a, versions["module-a"].module_version_id);
+		assert_eq!(mv_b, versions["module-b"].module_version_id);
 
 		versions
 	};
@@ -79,14 +79,14 @@ async fn ns_version_set(ctx: TestCtx) {
 	// Deploy new version
 	let versions_b = {
 		let mut update_sub =
-			subscribe!([ctx] module::msg::instance_version_set(versions_a["module_a"].instance_id))
+			subscribe!([ctx] module::msg::instance_version_set(versions_a["module-a"].instance_id))
 				.await
 				.unwrap();
 		deploy_game_version(
 			&ctx,
 			game_id,
 			namespace_id,
-			vec![("module_a".into(), mv_a), ("module_b".into(), mv_c)],
+			vec![("module-a".into(), mv_a), ("module-b".into(), mv_c)],
 		)
 		.await;
 		update_sub.next().await.unwrap();
@@ -94,15 +94,15 @@ async fn ns_version_set(ctx: TestCtx) {
 		// Check instances updated & using same instances
 		let versions = get_namespace_module_version(&crdb, namespace_id).await;
 		assert_eq!(2, versions.len());
-		assert_eq!(mv_a, versions["module_a"].module_version_id);
-		assert_eq!(mv_c, versions["module_b"].module_version_id);
+		assert_eq!(mv_a, versions["module-a"].module_version_id);
+		assert_eq!(mv_c, versions["module-b"].module_version_id);
 		assert_eq!(
-			versions_a["module_a"].instance_id,
-			versions["module_a"].instance_id
+			versions_a["module-a"].instance_id,
+			versions["module-a"].instance_id
 		);
 		assert_eq!(
-			versions_a["module_b"].instance_id,
-			versions["module_b"].instance_id
+			versions_a["module-b"].instance_id,
+			versions["module-b"].instance_id
 		);
 
 		versions
@@ -111,19 +111,19 @@ async fn ns_version_set(ctx: TestCtx) {
 	// Remove version
 	let versions_c = {
 		let mut destroy_sub =
-			subscribe!([ctx] module::msg::instance_destroy(versions_b["module_a"].instance_id))
+			subscribe!([ctx] module::msg::instance_destroy(versions_b["module-a"].instance_id))
 				.await
 				.unwrap();
-		deploy_game_version(&ctx, game_id, namespace_id, vec![("module_b".into(), mv_c)]).await;
+		deploy_game_version(&ctx, game_id, namespace_id, vec![("module-b".into(), mv_c)]).await;
 		destroy_sub.next().await.unwrap();
 
 		// Check instance removed
 		let versions = get_namespace_module_version(&crdb, namespace_id).await;
 		assert_eq!(1, versions.len());
-		assert_eq!(mv_c, versions["module_b"].module_version_id);
+		assert_eq!(mv_c, versions["module-b"].module_version_id);
 		assert_eq!(
-			versions_b["module_b"].instance_id,
-			versions["module_b"].instance_id
+			versions_b["module-b"].instance_id,
+			versions["module-b"].instance_id
 		);
 
 		versions
@@ -138,7 +138,7 @@ async fn ns_version_set(ctx: TestCtx) {
 			&ctx,
 			game_id,
 			namespace_id,
-			vec![("module_a".into(), mv_a), ("module_b".into(), mv_c)],
+			vec![("module-a".into(), mv_a), ("module-b".into(), mv_c)],
 		)
 		.await;
 		create_sub.next().await.unwrap();
@@ -146,15 +146,15 @@ async fn ns_version_set(ctx: TestCtx) {
 		// Check new instance created for module_a
 		let versions = get_namespace_module_version(&crdb, namespace_id).await;
 		assert_eq!(2, versions.len());
-		assert_eq!(mv_a, versions["module_a"].module_version_id);
-		assert_eq!(mv_c, versions["module_b"].module_version_id);
+		assert_eq!(mv_a, versions["module-a"].module_version_id);
+		assert_eq!(mv_c, versions["module-b"].module_version_id);
 		assert_ne!(
-			versions_a["module_a"].instance_id,
-			versions["module_a"].instance_id
+			versions_a["module-a"].instance_id,
+			versions["module-a"].instance_id
 		);
 		assert_eq!(
-			versions_c["module_b"].instance_id,
-			versions["module_b"].instance_id
+			versions_c["module-b"].instance_id,
+			versions["module-b"].instance_id
 		);
 	}
 }
@@ -204,7 +204,7 @@ async fn deploy_game_version(
 		override_module_config: Some(faker::game_version::request::OverrideModuleConfig {
 			config: Some(backend::module::GameVersionConfig {
 				dependencies: dependencies.into_iter().map(|(key, module_version_id)| {
-					backend::module::game_version_config::ModuleDependency {
+					backend::module::game_version_config::Dependency {
 						key: key,
 						module_version_id: Some(module_version_id.into()),
 					}
