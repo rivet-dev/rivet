@@ -10,6 +10,7 @@ use global_error::{GlobalError, GlobalResult};
 use rivet_connection::Connection;
 use rivet_pools::prelude::*;
 use rivet_util as util;
+use tracing::Instrument;
 
 pub mod prelude;
 
@@ -73,7 +74,10 @@ where
 	}
 
 	/// Calls the given operation. Use the `op!` macro instead of calling this directly.
+	#[tracing::instrument(err, skip(self), fields(operation = O::NAME))]
 	pub async fn call<O: Operation>(&self, body: O::Request) -> GlobalResult<O::Response> {
+		tracing::info!(?body, "operation call");
+
 		// Record metrics
 		metrics::CHIRP_REQUEST_PENDING
 			.with_label_values(&[&self.service_name])
@@ -121,14 +125,15 @@ where
 
 		// Submit perf
 		let chirp = self.conn.chirp().clone();
-		tokio::task::Builder::new()
-			.name("operation::perf")
-			.spawn(async move {
+		tokio::task::Builder::new().name("operation::perf").spawn(
+			async move {
 				// HACK: Force submit performance metrics after delay in order to ensure
 				// all spans have ended appropriately
 				tokio::time::sleep(Duration::from_secs(5)).await;
 				chirp.perf().submit().await;
-			})?;
+			}
+			.instrument(tracing::info_span!("operation_perf")),
+		)?;
 
 		res
 	}
