@@ -29,13 +29,13 @@ pub enum ModuleCallError {
 }
 
 
-/// Calls a request to a module endpoint. 
-pub async fn module_call(configuration: &configuration::Configuration, module: &str, endpoint: &str, module_call_request: crate::models::ModuleCallRequest, origin: Option<&str>) -> Result<crate::models::ModuleCallResponse, Error<ModuleCallError>> {
+/// Makes a request to a module's function. 
+pub async fn module_call(configuration: &configuration::Configuration, module: &str, function: &str, module_call_request: crate::models::ModuleCallRequest, origin: Option<&str>) -> Result<crate::models::ModuleCallResponse, Error<ModuleCallError>> {
     let local_var_configuration = configuration;
 
     let local_var_client = &local_var_configuration.client;
 
-    let local_var_uri_str = format!("{}/modules/{module}/endpoints/{endpoint}/call", local_var_configuration.base_path, module=crate::apis::urlencode(module), endpoint=crate::apis::urlencode(endpoint));
+    let local_var_uri_str = format!("{}/modules/{module}/functions/{function}/call", local_var_configuration.base_path, module=crate::apis::urlencode(module), function=crate::apis::urlencode(function));
     let mut local_var_req_builder = local_var_client.request(reqwest::Method::POST, local_var_uri_str.as_str());
 
     if let Some(ref local_var_user_agent) = local_var_configuration.user_agent {

@@ -13,17 +13,17 @@
 
 #[derive(Clone, Debug, PartialEq, Default, Serialize, Deserialize)]
 pub struct ModuleCallRequest {
+    #[serde(rename = "data", deserialize_with = "Option::deserialize")]
+    pub data: Option<serde_json::Value>,
     #[serde(rename = "namespace_id", skip_serializing_if = "Option::is_none")]
     pub namespace_id: Option<uuid::Uuid>,
-    #[serde(rename = "parameters", deserialize_with = "Option::deserialize")]
-    pub parameters: Option<serde_json::Value>,
 }
 
 impl ModuleCallRequest {
-    pub fn new(parameters: Option<serde_json::Value>) -> ModuleCallRequest {
+    pub fn new(data: Option<serde_json::Value>) -> ModuleCallRequest {
         ModuleCallRequest {
+            data,
             namespace_id: None,
-            parameters,
         }
     }
 }

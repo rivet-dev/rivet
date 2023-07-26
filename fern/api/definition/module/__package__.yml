@@ -9,13 +9,13 @@ service:
     - public
   endpoints:
     call:
-      path: /{module}/endpoints/{endpoint}/call
+      path: /{module}/functions/{function}/call
       method: POST
       path-parameters:
         module: string
-        endpoint: string
+        function: string
       docs: |
-        Calls a request to a module endpoint.
+        Makes a request to a module's function.
       request:
         headers:
           origin: optional<string>
@@ -23,7 +23,7 @@ service:
         body:
           properties:
             namespace_id: optional<uuid>
-            parameters: unknown
+            data: unknown
       response: CallResponse
 
 types:

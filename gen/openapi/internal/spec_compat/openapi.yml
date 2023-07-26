@@ -12560,9 +12560,9 @@ paths:
       - url: https://chat.api.rivet.gg/v1
       tags:
       - Chat
-  /modules/{module}/endpoints/{endpoint}/call:
+  /modules/{module}/functions/{function}/call:
     post:
-      description: 'Calls a request to a module endpoint.
+      description: 'Makes a request to a module''s function.
 
         '
       operationId: module_call
@@ -12573,7 +12573,7 @@ paths:
         schema:
           type: string
       - in: path
-        name: endpoint
+        name: function
         required: true
         schema:
           type: string
@@ -12587,12 +12587,12 @@ paths:
           application/json:
             schema:
               properties:
+                data: {}
                 namespace_id:
                   format: uuid
                   type: string
-                parameters: {}
               required:
-              - parameters
+              - data
               type: object
         required: true
       responses:

@@ -4590,10 +4590,10 @@ paths:
       servers:
         - url: https://kv.api.rivet.gg/v1
       security: *ref_0
-  /modules/{module}/endpoints/{endpoint}/call:
+  /modules/{module}/functions/{function}/call:
     post:
       description: |
-        Calls a request to a module endpoint.
+        Makes a request to a module's function.
       operationId: module_call
       tags:
         - Module
@@ -4603,7 +4603,7 @@ paths:
           required: true
           schema:
             type: string
-        - name: endpoint
+        - name: function
           in: path
           required: true
           schema:
@@ -4669,9 +4669,9 @@ paths:
                 namespace_id:
                   type: string
                   format: uuid
-                parameters: {}
+                data: {}
               required:
-                - parameters
+                - data
   /parties/self/activity:
     delete:
       description: |-
