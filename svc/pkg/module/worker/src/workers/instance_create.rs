@@ -3,6 +3,7 @@ use futures_util::{StreamExt, TryStreamExt};
 use proto::backend::{self, pkg::*};
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use serde_json::json;
+use std::{collections::HashSet, time::Duration};
 
 #[derive(Serialize)]
 struct Variables<T> {
@@ -72,6 +73,23 @@ impl<T> GraphQLResponse<T> {
 #[serde(rename_all = "camelCase")]
 struct CreateAppResponse {
 	create_app: CreateAppPayload,
+}
+
+#[derive(Deserialize, Debug)]
+#[allow(dead_code)]
+struct FlyMachine {
+	id: String,
+	instance_id: String,
+	name: String,
+	checks: Vec<CheckStatus>,
+}
+
+#[derive(Deserialize, Debug)]
+#[allow(dead_code)]
+struct CheckStatus {
+	name: String,
+	output: Option<String>,
+	status: String,
 }
 
 #[worker(name = "module-instance-create")]
@@ -294,7 +312,7 @@ async fn launch_app(opts: LaunchAppOpts) -> GlobalResult<String> {
 	.await?;
 
 	// Create machines in parallel
-	futures_util::stream::iter(0..2)
+	let machines = futures_util::stream::iter(0..2)
 		.map({
 			let opts = opts.clone();
 			move |_| Ok(create_machine(opts.clone()))
@@ -302,23 +320,58 @@ async fn launch_app(opts: LaunchAppOpts) -> GlobalResult<String> {
 		.try_buffer_unordered(8)
 		.try_collect::<Vec<_>>()
 		.await?;
+	let machine_ids = machines
+		.iter()
+		.map(|x| x.id.clone())
+		.collect::<HashSet<_>>();
+
+	// Wait for machines to show up in list
+	let mut attempts = 0;
+	loop {
+		tokio::time::sleep(Duration::from_secs(1)).await;
+		attempts += 1;
+
+		tracing::info!(?attempts, "listing machines");
+		let res = reqwest::Client::new()
+			.get(format!(
+				"https://api.machines.dev/v1/apps/{}/machines",
+				opts.name
+			))
+			.bearer_auth(&opts.auth_token)
+			.send()
+			.await?
+			.error_for_status()?
+			.json::<Vec<FlyMachine>>()
+			.await?;
+
+		// Check if machine exists
+		let listed_machine_ids = res.iter().map(|x| x.id.clone()).collect::<HashSet<_>>();
+		if listed_machine_ids.is_superset(&machine_ids) {
+			tracing::info!("machine lists match");
+			break;
+		} else {
+			tracing::info!(
+				?listed_machine_ids,
+				?machine_ids,
+				"machines not in list yet"
+			)
+		}
+
+		// Tick
+		if attempts > 15 {
+			tracing::warn!("machine did not show up in list endpoint soon enough");
+			break;
+		}
+	}
 
 	Ok(app_id)
 }
 
 #[tracing::instrument(skip(opts))]
-async fn create_machine(opts: LaunchAppOpts) -> GlobalResult<()> {
+async fn create_machine(opts: LaunchAppOpts) -> GlobalResult<FlyMachine> {
 	tracing::info!("creating machine");
 
 	let config = util_module::fly::MachineConfig { image: &opts.image }.build_machine_config();
-
-	#[derive(Deserialize, Debug)]
-	#[allow(dead_code)]
-	struct FlyMachine {
-		id: String,
-		instance_id: String,
-		name: String,
-	}
 
 	// Create machine
 	let machine = reqwest::Client::new()
@@ -351,38 +404,43 @@ async fn create_machine(opts: LaunchAppOpts) -> GlobalResult<()> {
 		.error_for_status()?;
 	tracing::info!("machine started");
 
-	// Wait for machine to show up in list
-	let mut backoff = util::Backoff::new(4, Some(5), 200, 100);
+	// Wait for health checks to pass
+	// https://github.com/superfly/flyctl/blob/903ee7d4e3bb5b85c535d05fccae9db94ddcd7b5/api/machine_types.go#L380
+	let mut attempts = 0;
 	loop {
-		tracing::info!("listing machines");
+		tokio::time::sleep(Duration::from_secs(1)).await;
+		attempts += 1;
+
+		tracing::info!(?attempts, id = ?machine.id, "checking health");
 		let res = reqwest::Client::new()
 			.get(format!(
-				"https://api.machines.dev/v1/apps/{}/machines",
-				opts.name
+				"https://api.machines.dev/v1/apps/{}/machines/{}",
+				opts.name, machine.id
 			))
 			.bearer_auth(&opts.auth_token)
 			.send()
 			.await?
 			.error_for_status()?
-			.json::<Vec<FlyMachine>>()
+			.json::<FlyMachine>()
 			.await?;
+		tracing::info!(checks = ?res.checks, "health checks");
 
-		// Check if machine exists
-		if res.iter().any(|x| x.id == machine.id) {
-			tracing::info!("found machine in list");
+		// Check health checks
+		if res.checks.iter().all(|x| x.status == "pass") {
+			tracing::info!("machine health checks passed");
 			break;
 		} else {
-			tracing::info!("machine not in list yet")
+			tracing::info!("machine health checks not passed yet")
 		}
 
 		// Tick
-		if backoff.tick().await {
-			tracing::warn!("machine did not show up in list endpoint soon enough");
+		if attempts > 15 {
+			tracing::warn!("machine health checks did not pass soon enough");
 			break;
 		}
 	}
 
-	Ok(())
+	Ok(machine)
 }
 
 fn build_app_name(instance_id: Uuid) -> String {

@@ -8,47 +8,50 @@ impl MachineConfig<'_> {
 	/// Builds the JSON config for the Fly machine.
 	pub fn build_machine_config(&self) -> serde_json::Value {
 		json!({
-		  "services": [
+			"services": [
 			{
-			  "protocol": "tcp",
-			  "internal_port": 80,
-			  "autostop": true,
-			  "autostart": true,
-			  "ports": [
+				"protocol": "tcp",
+				"internal_port": 80,
+				"autostop": true,
+				"autostart": true,
+				"ports": [
 				{
-				  "port": 80,
-				  "handlers": [
-					"http"
-				  ],
-				  "force_https": true
+					"port": 80,
+					"handlers": ["http"],
+					"force_https": true
 				},
 				{
-				  "port": 443,
-				  "handlers": [
-					"http",
-					"tls"
-				  ]
+					"port": 443,
+					"handlers": ["http", "tls"]
 				}
-			  ],
-			  "force_instance_key": null
+				],
+				"force_instance_key": null
 			}
-		  ],
-		  "checks": {
-			"alive": {
-			  "port": 80,
-			  "type": "tcp",
-			  "interval": "15s",
-			  "timeout": "2s",
-			  "grace_period": "5s"
-			}
-		  },
-		  "image": self.image,
-		  "restart": {},
-		  "guest": {
+			],
+			"checks": {
+				"alive": {
+					"type": "tcp",
+					"port": 80,
+					"interval": "15s",
+					"timeout": "2s",
+					"grace_period": "5s"
+				},
+				"health": {
+					"type": "http",
+					"port": 80,
+					"path": "/healthz",
+					"interval": "15s",
+					"timeout": "2s",
+					"grace_period": "5s"
+				}
+			},
+			"image": self.image,
+			"restart": {},
+			"guest": {
 			"cpu_kind": "shared",
 			"cpus": 1,
 			"memory_mb": 512
-		  }
+			}
 		})
 	}
 }
