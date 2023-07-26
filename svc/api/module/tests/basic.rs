@@ -257,6 +257,10 @@ impl Ctx {
 		.await
 		.unwrap();
 
+		let mut module_ns_version_set_complete =
+			subscribe!([ctx] module::msg::ns_version_set_complete("*"))
+				.await
+				.unwrap();
 		let namespace_res = op!([ctx] faker_game_namespace {
 			game_id: game_res.game_id,
 			version_id: game_version_res.version_id,
@@ -264,6 +268,7 @@ impl Ctx {
 		})
 		.await
 		.unwrap();
+		module_ns_version_set_complete.next().await.unwrap();
 
 		(
 			game_res.game_id.as_ref().unwrap().as_uuid(),

@@ -2552,6 +2552,7 @@ dependencies = [
  "identity-config-version-get",
  "kv-config-version-get",
  "mm-config-version-get",
+ "module-game-version-get",
  "prost 0.10.4",
  "rivet-operation",
  "rivet-util-mm",
