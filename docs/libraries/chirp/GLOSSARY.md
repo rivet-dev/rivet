@@ -2,11 +2,13 @@
 
 ## Chirp
 
--   service: an individual process that does something
--   worker: a type of service that's tightly integrated with chirp; can either be
-    an rpc endpoint or consumer
--   operation: ephemeral requests that; these are intended to be used for non-mutating
-    requests
+-   service: An individual process/container that does something. See `bolt_config::ServiceKind`.
+-   chirp client: A lightweight client to interface with Chirp services. Usually used from a _context_. See `chirp_client::ChirpClient`.
+-   context: Represents a small chunk of code with a specific purpose. Contexts can represent workers (see `chirp_worker::Message`), operations (see `rivet_operation::Operation`), or tests (see `chirp_worker::TestCtx`). See `rivet_operation::OperationCtx` for the core functionality.
+-   worker: A chunk of code that can process inputs from a stream of messsages/requests. These can be consumers or rpc endpoints (not currently used). There are usually multiple workers in a single service using a _worker group_. See `chirp_worker::Manager`.
+-   worker group: Runs multiple _workers_ in parallel in one process.
+-   consumer: A type of worker that consumes a stream of messages and has no response. Used for mutating code that _needs_ to succeed. Requests will be retried until succeeds.
+-   operation: Ephemeral requests. Used for non-mutating, ephemeral code. Represented as individual Rust libraries. See `rivet_operation::Operation`.
 
 ### Consumers
 
