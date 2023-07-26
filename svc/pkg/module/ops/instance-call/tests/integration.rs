@@ -51,29 +51,16 @@ async fn fetch(ctx: TestCtx) {
 	.await
 	.unwrap();
 
-	// Make request
-	let res = loop {
-		tracing::info!("making request");
-
-		tokio::time::sleep(Duration::from_secs(1)).await;
-
-		// Call the module until it's booted
-		let res = op!([ctx] module_instance_call {
-			instance_id: Some(instance_id.into()),
-			function_name: "foo".into(),
-			request_json: serde_json::to_string(&json!({
-				"x": 5
-			})).unwrap(),
-		})
-		.await;
-		let res = match res {
-			Ok(res) => break res,
-			Err(err) => {
-				tracing::warn!("failed to reach service: {:?}", err);
-				continue;
-			}
-		};
-	};
+	// Call request
+	let res = op!([ctx] module_instance_call {
+		instance_id: Some(instance_id.into()),
+		function_name: "foo".into(),
+		request_json: serde_json::to_string(&json!({
+			"x": 5
+		})).unwrap(),
+	})
+	.await
+	.unwrap();
 
 	// Validate response
 	let response_json = serde_json::from_str::<serde_json::Value>(&res.response_json).unwrap();

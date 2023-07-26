@@ -4,9 +4,9 @@ use serde::{Deserialize, Serialize};
 use std::time::Duration;
 
 #[derive(Serialize)]
-struct CallRequest {
+struct CallRequest<'a> {
 	function_name: String,
-	request: serde_json::Value,
+	request: &'a serde_json::Value,
 }
 
 #[derive(Deserialize)]
@@ -64,18 +64,43 @@ pub async fn handle(
 		}
 	};
 
-	// Call module
 	let request_json = serde_json::from_str::<serde_json::Value>(&ctx.request_json)?;
-	let response = reqwest::Client::new()
-		.post(url)
-		.timeout(Duration::from_secs(15))
-		.json(&CallRequest {
-			function_name: ctx.function_name.clone(),
-			request: request_json,
-		})
-		.send()
-		.await?;
-	let res_body = response.json::<CallResponse>().await?;
+
+	// Call module
+	//
+	// Use backoff for this call because Fly.io can be _special_ sometimes.
+	let mut backoff = util::Backoff::new(3, Some(3), 500, 100);
+	let response = loop {
+		let response = reqwest::Client::new()
+			.post(&url)
+			.timeout(Duration::from_secs(5))
+			.json(&CallRequest {
+				function_name: ctx.function_name.clone(),
+				request: &request_json,
+			})
+			.send()
+			.await;
+		match response {
+			Ok(x) => break x,
+			Err(err) => {
+				tracing::error!(?err, "failed to call module");
+				if backoff.tick().await {
+					panic_with!(MODULE_REQUEST_FAILED)
+				}
+			}
+		}
+	};
+	if !response.status().is_success() {
+		tracing::warn!(status = ?response.status(), "module error status");
+		panic_with!(MODULE_ERROR_STATUS, status = response.status().to_string());
+	}
+	let res_body = match response.json::<CallResponse>().await {
+		Ok(x) => x,
+		Err(err) => {
+			tracing::warn!(?err, "malformed module response");
+			panic_with!(MODULE_MALFORMED_RESPONSE)
+		}
+	};
 	let response_json = serde_json::to_string(&res_body.response)?;
 
 	// TODO: Validate JSON response schema
