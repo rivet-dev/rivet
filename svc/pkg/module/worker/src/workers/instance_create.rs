@@ -326,6 +326,10 @@ async fn launch_app(opts: LaunchAppOpts) -> GlobalResult<String> {
 		.collect::<HashSet<_>>();
 
 	// Wait for machines to show up in list
+	//
+	// We need to check this in order to prevent a race condition with deploying a new version when
+	// the machines are not registered yet. Deploying a new version relies on the machine list to
+	// know what machines to update.
 	let mut attempts = 0;
 	loop {
 		tokio::time::sleep(Duration::from_secs(1)).await;
@@ -347,7 +351,7 @@ async fn launch_app(opts: LaunchAppOpts) -> GlobalResult<String> {
 		// Check if machine exists
 		let listed_machine_ids = res.iter().map(|x| x.id.clone()).collect::<HashSet<_>>();
 		if listed_machine_ids.is_superset(&machine_ids) {
-			tracing::info!("machine lists match");
+			tracing::info!(?attempts, "machine lists match");
 			break;
 		} else {
 			tracing::info!(
@@ -360,6 +364,44 @@ async fn launch_app(opts: LaunchAppOpts) -> GlobalResult<String> {
 		// Tick
 		if attempts > 15 {
 			tracing::warn!("machine did not show up in list endpoint soon enough");
+			break;
+		}
+	}
+
+	// Wait for proxy to respond to health checks
+	//
+	// We don't use native health checks since that doesn't reflect if the proxy acknowledges the
+	// machines yet.
+	let mut attempts = 0;
+	loop {
+		tokio::time::sleep(Duration::from_millis(250)).await;
+		attempts += 1;
+
+		tracing::info!(?attempts, "checking health");
+		let res = reqwest::Client::new()
+			.get(format!("https://{}.fly.dev/healthz", opts.name))
+			.bearer_auth(&opts.auth_token)
+			.send()
+			.await;
+		match res {
+			Ok(x) => match x.error_for_status() {
+				Ok(_) => {
+					tracing::info!(?attempts, "health check passed");
+					break;
+				}
+				Err(err) => {
+					tracing::info!("health check request failed: {}", err);
+				}
+			},
+			Err(err) => {
+				tracing::info!("health check request failed: {}", err);
+			}
+		}
+
+		// TODO: Fail worker & roll back if checks do not pass
+		// Tick
+		if attempts > 15_000 / 250 {
+			tracing::warn!("health check did not pass");
 			break;
 		}
 	}
@@ -404,41 +446,43 @@ async fn create_machine(opts: LaunchAppOpts) -> GlobalResult<FlyMachine> {
 		.error_for_status()?;
 	tracing::info!("machine started");
 
-	// Wait for health checks to pass
-	// https://github.com/superfly/flyctl/blob/903ee7d4e3bb5b85c535d05fccae9db94ddcd7b5/api/machine_types.go#L380
-	let mut attempts = 0;
-	loop {
-		tokio::time::sleep(Duration::from_secs(1)).await;
-		attempts += 1;
+	// We run our own manual health checks. Even if these health checks show as passing, the proxy
+	// may not register the machine yet.
+	// // Wait for health checks to pass
+	// // https://github.com/superfly/flyctl/blob/903ee7d4e3bb5b85c535d05fccae9db94ddcd7b5/api/machine_types.go#L380
+	// let mut attempts = 0;
+	// loop {
+	// 	tokio::time::sleep(Duration::from_secs(1)).await;
+	// 	attempts += 1;
 
-		tracing::info!(?attempts, id = ?machine.id, "checking health");
-		let res = reqwest::Client::new()
-			.get(format!(
-				"https://api.machines.dev/v1/apps/{}/machines/{}",
-				opts.name, machine.id
-			))
-			.bearer_auth(&opts.auth_token)
-			.send()
-			.await?
-			.error_for_status()?
-			.json::<FlyMachine>()
-			.await?;
-		tracing::info!(checks = ?res.checks, "health checks");
+	// 	tracing::info!(?attempts, id = ?machine.id, "checking health");
+	// 	let res = reqwest::Client::new()
+	// 		.get(format!(
+	// 			"https://api.machines.dev/v1/apps/{}/machines/{}",
+	// 			opts.name, machine.id
+	// 		))
+	// 		.bearer_auth(&opts.auth_token)
+	// 		.send()
+	// 		.await?
+	// 		.error_for_status()?
+	// 		.json::<FlyMachine>()
+	// 		.await?;
+	// 	tracing::info!(checks = ?res.checks, "health checks");
 
-		// Check health checks
-		if res.checks.iter().all(|x| x.status == "pass") {
-			tracing::info!("machine health checks passed");
-			break;
-		} else {
-			tracing::info!("machine health checks not passed yet")
-		}
+	// 	// Check health checks
+	// 	if res.checks.iter().all(|x| x.status == "pass") {
+	// 		tracing::info!("machine health checks passed");
+	// 		break;
+	// 	} else {
+	// 		tracing::info!("machine health checks not passed yet")
+	// 	}
 
-		// Tick
-		if attempts > 15 {
-			tracing::warn!("machine health checks did not pass soon enough");
-			break;
-		}
-	}
+	// 	// Tick
+	// 	if attempts > 15 {
+	// 		tracing::warn!("machine health checks did not pass soon enough");
+	// 		break;
+	// 	}
+	// }
 
 	Ok(machine)
 }
