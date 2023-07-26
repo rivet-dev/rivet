@@ -20,8 +20,8 @@ pub async fn handle(
 define_router! {
 	cors: CorsConfigBuilder::public().build(),
 	routes: {
-		"modules" / String / "endpoints" / String / "call": {
-			POST: modules::endpoint_call(body: models::ModuleCallRequest),
+		"modules" / String / "functions" / String / "call": {
+			POST: modules::function_call(body: models::ModuleCallRequest),
 		},
 	},
 }

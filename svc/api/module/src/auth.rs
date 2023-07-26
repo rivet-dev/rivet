@@ -66,8 +66,8 @@ impl Auth {
 		Ok(user_ent)
 	}
 
-	pub fn lobby(&self) -> Result<rivet_claims::ent::MatchmakerLobby, GlobalError> {
-		self.claims()?.as_matchmaker_lobby()
+	pub fn namespace_public(&self) -> Result<rivet_claims::ent::GameNamespacePublic, GlobalError> {
+		self.claims()?.as_game_namespace_public()
 	}
 
 	pub fn game_ns_dev_option(
@@ -85,14 +85,13 @@ impl Auth {
 		&self,
 		ctx: &OperationContext<()>,
 		namespace_id: Option<Uuid>,
-		allow_users: bool,
 	) -> GlobalResult<Uuid> {
 		if let Some(namespace_id) = namespace_id {
 			self.namespace_from_cloud(ctx, namespace_id).await
 		} else if let Some(x) = self.game_ns_dev_option()? {
 			Ok(x.namespace_id)
 		} else {
-			self.namespace_from_user_or_lobby(ctx, allow_users).await
+			self.namespace_from_user_or_lobby(ctx).await
 		}
 	}
 
@@ -100,9 +99,11 @@ impl Auth {
 	pub async fn namespace_from_user_or_lobby(
 		&self,
 		ctx: &OperationContext<()>,
-		allow_users: bool,
 	) -> GlobalResult<Uuid> {
-		let namespace_id = if let Ok(lobby_ent) = self.lobby() {
+		let claims = self.claims()?;
+		let namespace_id = if let Some(ns_ent) = claims.as_game_namespace_public_option()? {
+			ns_ent.namespace_id
+		} else if let Some(lobby_ent) = claims.as_matchmaker_lobby_option()? {
 			let lobbies_res = op!([ctx] mm_lobby_get {
 				lobby_ids: vec![lobby_ent.lobby_id.into()],
 				include_stopped: false,
@@ -111,11 +112,8 @@ impl Auth {
 
 			let lobby = internal_unwrap_owned!(lobbies_res.lobbies.first());
 
-			internal_unwrap_owned!(lobby.namespace_id)
-		} else if allow_users {
-			let claims = self.claims()?;
-			let game_user_ent = claims.as_game_user()?;
-
+			internal_unwrap!(lobby.namespace_id).as_uuid()
+		} else if let Some(game_user_ent) = claims.as_game_user_option()? {
 			let game_users_res = op!([ctx] game_user_get {
 				game_user_ids: vec![game_user_ent.game_user_id.into()],
 			})
@@ -133,14 +131,14 @@ impl Auth {
 				panic_with!(TOKEN_REVOKED);
 			}
 
-			*internal_unwrap!(game_user.namespace_id)
+			internal_unwrap!(game_user.namespace_id).as_uuid()
 		} else {
-			panic_with!(API_UNAUTHORIZED);
+			panic_with!(API_UNAUTHORIZED)
 		};
 
 		utils::validate_config(ctx, namespace_id).await?;
 
-		Ok(namespace_id.as_uuid())
+		Ok(namespace_id)
 	}
 
 	/// Validates that the agent can write to a given game.

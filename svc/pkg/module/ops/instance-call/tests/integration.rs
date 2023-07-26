@@ -38,7 +38,7 @@ async fn fetch(ctx: TestCtx) {
 		],
 
 		image: Some(module::msg::version_create::message::Image::Docker(module::msg::version_create::message::Docker {
-			image_tag: "ghcr.io/rivet-gg/rivet-module-hello-world:latest".into(),
+			image_tag: "ghcr.io/rivet-gg/rivet-module-hello-world:0.0.1".into(),
 		})),
 	}).await.unwrap();
 

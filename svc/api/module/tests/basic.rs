@@ -54,8 +54,9 @@ impl Ctx {
 		);
 
 		let (primary_region_id, _) = Self::setup_region(&op_ctx).await;
+		let (_, module_version_id) = Self::setup_module(&op_ctx).await;
 		let (game_id, _, namespace_id, _, mm_config_meta) =
-			Self::setup_game(&op_ctx, primary_region_id).await;
+			Self::setup_game(&op_ctx, primary_region_id, module_version_id).await;
 
 		Ctx {
 			op_ctx,
@@ -72,6 +73,16 @@ impl Ctx {
 			bearer_access_token: Some(bearer_token.to_string()),
 			..Default::default()
 		}
+	}
+
+	async fn issue_ns_token(&self) -> String {
+		let token_res = op!([self.op_ctx] cloud_namespace_token_public_create {
+			namespace_id: Some(self.namespace_id.into()),
+		})
+		.await
+		.unwrap();
+
+		token_res.token
 	}
 
 	async fn issue_lobby_token(&self) -> String {
@@ -119,9 +130,49 @@ impl Ctx {
 		(region_id, region_data.name_id.clone())
 	}
 
+	async fn setup_module(ctx: &OperationContext<()>) -> (Uuid, Uuid) {
+		let module_id = Uuid::new_v4();
+		let version_id = Uuid::new_v4();
+
+		msg!([ctx] module::msg::create(module_id) -> module::msg::create_complete {
+			module_id: Some(module_id.into()),
+			name_id: "test".into(),
+			team_id: Some(Uuid::new_v4().into()),
+			creator_user_id: None,
+		})
+		.await
+		.unwrap();
+
+		msg!([ctx] module::msg::version_create(version_id) -> module::msg::version_create_complete {
+			version_id: Some(version_id.into()),
+			module_id: Some(module_id.into()),
+			creator_user_id: None,
+
+			major: 1,
+			minor: 0,
+			patch: 0,
+
+			functions: vec![
+				backend::module::Function {
+					name: "foo".into(),
+					request_schema: "{}".into(),
+					response_schema: "{}".into(),
+					callable: Some(backend::module::function::Callable {}),
+				},
+			],
+
+			image: Some(module::msg::version_create::message::Image::Docker(module::msg::version_create::message::Docker {
+				image_tag: "ghcr.io/rivet-gg/rivet-module-hello-world:0.0.1".into(),
+			})),
+		}).await.unwrap();
+
+		(module_id, version_id)
+	}
+
 	async fn setup_game(
 		ctx: &OperationContext<()>,
 		region_id: Uuid,
+		module_version_id: Uuid,
 	) -> (
 		Uuid,
 		Uuid,
@@ -144,6 +195,19 @@ impl Ctx {
 
 		let game_version_res = op!([ctx] faker_game_version {
 			game_id: game_res.game_id,
+			override_cdn_config: Some(faker::game_version::request::OverrideCdnConfig {
+				config: None,
+			}),
+			override_module_config: Some(faker::game_version::request::OverrideModuleConfig {
+				config: Some(backend::module::GameVersionConfig {
+					dependencies: vec![
+						backend::module::game_version_config::Dependency {
+							key: "hello-world".into(),
+							module_version_id: Some(module_version_id.into()),
+						}
+					]
+				})
+			}),
 			override_lobby_groups: Some(faker::game_version::request::OverrideLobbyGroups {
 				lobby_groups: vec![backend::matchmaker::LobbyGroup {
 					name_id: LOBBY_GROUP_NAME_ID.into(),
@@ -214,15 +278,15 @@ impl Ctx {
 #[tokio::test(flavor = "multi_thread")]
 async fn call() {
 	let ctx = Ctx::init().await;
-	let lobby_token = ctx.issue_lobby_token().await;
+	let token = ctx.issue_ns_token().await;
 
 	let res = module_api::module_call(
-		&ctx.config(&lobby_token),
-		"test",
-		"endpoint",
+		&ctx.config(&token),
+		"hello-world",
+		"foo",
 		models::ModuleCallRequest {
 			namespace_id: None,
-			parameters: Some(json!({
+			data: Some(json!({
 				"x": 5
 			})),
 		},

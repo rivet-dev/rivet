@@ -1,39 +1,39 @@
-use api_helper::{
-	anchor::{WatchIndexQuery, WatchResponse},
-	ctx::Ctx,
-};
-use chirp_client::TailAnchorResponse;
-use proto::backend::pkg::*;
+use api_helper::ctx::Ctx;
 use rivet_api::models;
 use rivet_operation::prelude::*;
-use serde::{Deserialize, Serialize};
-use serde_json::json;
 
-use crate::{auth::Auth, utils};
+use crate::auth::Auth;
 
-// MARK: POST /modules/{}/endpoints/{}/call
-pub async fn endpoint_call(
+// MARK: POST /modules/{}/functions/{}/call
+pub async fn function_call(
 	ctx: Ctx<Auth>,
 	module: String,
-	endpoint: String,
+	function: String,
 	body: models::ModuleCallRequest,
 ) -> GlobalResult<models::ModuleCallResponse> {
 	let namespace_id = ctx
 		.auth()
-		.namespace(ctx.op_ctx(), body.namespace_id, false)
+		.namespace(ctx.op_ctx(), body.namespace_id)
 		.await?;
 
-	// Make POST request
-	let response = reqwest::Client::new()
-		.post("https://rivet-module-test.fly.dev/call")
-		.json(&CallRequest {
-			parameters: body.parameters.unwrap_or_else(|| json!({})),
-		})
-		.send()
-		.await?;
-	let res_body = response.json::<CallResponse>().await?;
-
-	Ok(models::ModuleCallResponse {
-		data: Some(res_body.data),
+	// Get the associated instance ID
+	let instance_res = op!([ctx] module_ns_instance_get {
+		namespace_id: Some(namespace_id.into()),
+		key: module.clone(),
 	})
+	.await?;
+	let Some(instance) = instance_res.instance else {
+		panic_with!(MODULE_KEY_NOT_FOUND, key = module);
+	};
+
+	// Get the module
+	let res = op!([ctx] module_instance_call {
+		instance_id: instance.instance_id,
+		function_name: function,
+		request_json: serde_json::to_string(&body.data)?,
+	})
+	.await?;
+	let data = serde_json::from_str(&res.response_json)?;
+
+	Ok(models::ModuleCallResponse { data })
 }

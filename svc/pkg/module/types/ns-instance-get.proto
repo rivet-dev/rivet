@@ -1,0 +1,18 @@
+syntax = "proto3";
+
+package rivet.backend.pkg.module.ns_instance_get;
+
+import "proto/common.proto";
+
+message Request {
+	rivet.common.Uuid namespace_id = 1;
+	string key = 2;
+}
+
+message Response {
+	message Instance {
+		rivet.common.Uuid instance_id = 1;
+	}
+
+	optional Instance instance = 1;
+}

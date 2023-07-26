@@ -721,6 +721,7 @@ dependencies = [
  "chirp-client",
  "chrono",
  "cloud-game-token-create",
+ "cloud-namespace-token-public-create",
  "faker-build",
  "faker-game",
  "faker-game-namespace",
@@ -734,6 +735,9 @@ dependencies = [
  "hyper",
  "lazy_static",
  "mm-lobby-get",
+ "module-game-version-get",
+ "module-instance-call",
+ "module-ns-instance-get",
  "prost 0.10.4",
  "rand",
  "regex",
@@ -5254,6 +5258,18 @@ dependencies = [
 
 [[package]]
 name = "module-instance-get"
+version = "0.0.1"
+dependencies = [
+ "chirp-client",
+ "chirp-worker",
+ "prost 0.10.4",
+ "rand",
+ "rivet-operation",
+ "sqlx",
+]
+
+[[package]]
+name = "module-ns-instance-get"
 version = "0.0.1"
 dependencies = [
  "chirp-client",
