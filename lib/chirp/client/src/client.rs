@@ -93,14 +93,14 @@ impl SharedClient {
 		))
 	}
 
-	pub fn wrap_new(self: Arc<Self>, svc_name: &str) -> Client {
+	pub fn wrap_new(self: Arc<Self>, context_name: &str) -> Client {
 		let req_id = Uuid::new_v4();
 
 		self.wrap(
 			req_id,
 			Uuid::new_v4(),
 			vec![chirp::TraceEntry {
-				svc_name: svc_name.into(),
+				context_name: context_name.into(),
 				req_id: Some(req_id.into()),
 				ts: rivet_util::timestamp::now(),
 				run_context: match rivet_util::env::run_context() {

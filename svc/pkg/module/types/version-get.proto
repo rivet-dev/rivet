@@ -1,0 +1,14 @@
+syntax = "proto3";
+
+package rivet.backend.pkg.module.version_get;
+
+import "proto/common.proto";
+import "proto/backend/module.proto";
+
+message Request {
+	repeated rivet.common.Uuid version_ids = 1;
+}
+
+message Response {
+	repeated rivet.backend.module.Version versions = 1;
+}

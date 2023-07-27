@@ -7,36 +7,62 @@ use crate::{
 	config::service::RuntimeKind,
 	context::{ProjectContext, RunContext, ServiceContext},
 	dep::{
-		cloudflare,
+		cloudflare, fly,
 		nomad::{self, NomadCtx},
 	},
 	tasks,
 };
 
 struct TestCleanupManager {
+	project_ctx: ProjectContext,
 	nomad_ctx: NomadCtx,
 
 	/// List of dispatched job names that already before the test starts. Used
 	/// to diff with the new dispatched jobs to stop jobs that were dispatched
 	/// in a test.
 	existing_dispatched_jobs: Vec<nomad::api::JobSummary>,
+
+	/// List of Fly apps that already exist before the test starts. Used to diff with apps created
+	/// afterwares to know what apps to clean up.
+	existing_fly_apps: Option<HashSet<String>>,
 }
 
 impl TestCleanupManager {
-	async fn setup(nomad_ctx: NomadCtx) -> Result<TestCleanupManager> {
+	async fn setup(project_ctx: ProjectContext, nomad_ctx: NomadCtx) -> Result<TestCleanupManager> {
 		let existing_dispatched_jobs = nomad::api::list_jobs_with_prefix(&nomad_ctx, "job-")
 			.await?
 			.into_iter()
 			.filter(|x| x.id.contains("/dispatch-") || x.id.contains("/periodic-"))
 			.collect::<Vec<_>>();
 
+		let existing_fly_apps = if project_ctx.ns().fly.is_some() {
+			Some(
+				fly::api::list_apps(&project_ctx)
+					.await?
+					.into_iter()
+					.map(|x| x.name)
+					.collect::<HashSet<_>>(),
+			)
+		} else {
+			None
+		};
+
 		Ok(TestCleanupManager {
+			project_ctx,
 			nomad_ctx,
 			existing_dispatched_jobs,
+			existing_fly_apps,
 		})
 	}
 
 	async fn run(self) -> Result<()> {
+		self.cleanup_nomad().await?;
+		self.cleanup_fly().await?;
+
+		Ok(())
+	}
+
+	async fn cleanup_nomad(&self) -> Result<()> {
 		// Fetch list of current dispatched jobs
 		let new_dispatched_jobs = nomad::api::list_jobs_with_prefix(&self.nomad_ctx, "job-")
 			.await?
@@ -60,6 +86,32 @@ impl TestCleanupManager {
 			rivet_term::status::info("Cleaning up jobs", format!("{} jobs", created_ids.len()));
 			for id in &created_ids {
 				nomad::api::stop_job(&self.nomad_ctx, id).await?;
+			}
+		}
+
+		Ok(())
+	}
+
+	async fn cleanup_fly(&self) -> Result<()> {
+		let Some(existing_apps) = &self.existing_fly_apps else {
+			return Ok(());
+		};
+
+		// Fetch list of existing apps
+		let current_apps = fly::api::list_apps(&self.project_ctx)
+			.await?
+			.into_iter()
+			.map(|x| x.name)
+			.collect::<HashSet<_>>();
+
+		// Diff the apps
+		let created_apps = &current_apps - existing_apps;
+
+		if !created_apps.is_empty() {
+			rivet_term::status::info("Cleaning up apps", format!("{} apps", created_apps.len()));
+			for name in &created_apps {
+				// Delete app
+				fly::api::delete_app(&self.project_ctx, &name).await?;
 			}
 		}
 
@@ -205,7 +257,9 @@ async fn run_test(svc_ctx: &ServiceContext, test_name: Option<&str>) -> TestResu
 
 	let nomad_ctx = NomadCtx::remote(&project_ctx).await;
 
-	let cleanup = TestCleanupManager::setup(nomad_ctx.clone()).await.unwrap();
+	let cleanup = TestCleanupManager::setup(project_ctx.clone(), nomad_ctx.clone())
+		.await
+		.unwrap();
 
 	let (env, tunnel_configs) = svc_ctx.env(RunContext::Test).await.unwrap();
 

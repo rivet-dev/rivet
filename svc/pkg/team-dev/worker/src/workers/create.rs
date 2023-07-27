@@ -65,7 +65,7 @@ async fn worker(ctx: OperationContext<team_dev::msg::create::Message>) -> Global
 	sqlx::query(indoc!(
 		"
 		INSERT INTO dev_teams (team_id, create_ts, stripe_customer_id)
-		VALUES ($1, $2, $3, $4)
+		VALUES ($1, $2, $3)
 		"
 	))
 	.bind(team_id)

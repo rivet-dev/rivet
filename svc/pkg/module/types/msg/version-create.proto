@@ -1,0 +1,31 @@
+syntax = "proto3";
+
+package rivet.backend.pkg.module.msg.version_create;
+
+import "proto/common.proto";
+import "proto/backend/module.proto";
+import "proto/backend/module/script.proto";
+
+/// name = "msg-module-version-create"
+/// parameters = [
+/// 	{ name = "version_id" },
+/// ]
+message Message {
+	rivet.common.Uuid version_id = 1;
+    rivet.common.Uuid module_id = 2;
+	rivet.common.Uuid creator_user_id = 3;
+	repeated rivet.backend.module.Script scripts = 4;
+
+	uint64 major = 101;
+	uint64 minor = 102;
+	uint64 patch = 103;
+
+    message Docker {
+        string image_tag = 1;
+    }
+
+	oneof image {
+		Docker docker = 201;
+	}
+}
+
