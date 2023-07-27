@@ -79,10 +79,10 @@ push_etc_trafficserver_dynamic:
     - template: jinja
     - context:
         nebula_ipv4: {{ grains['nebula']['ipv4'] }}
-        s3_endpoint: {{ pillar['s3']['endpoint_internal'] }}
-        s3_region: {{ pillar['s3']['region'] }}
-        s3_access_key_id: {{ pillar['s3']['access_key_id'] }}
-        s3_secret_access_key: {{ pillar['s3']['access_key_secret'] }}
+        s3_endpoint: {{ pillar['s3']['config']['default']['endpoint_internal'] }}
+        s3_region: {{ pillar['s3']['config']['default']['region'] }}
+        s3_access_key_id: {{ pillar['s3']['access']['default']['persistent_access_key_id'] }}
+        s3_secret_access_key: {{ pillar['s3']['access']['default']['persistent_access_key_secret'] }}
         volume_size_cache: {{ grains['volumes']['ats']['size']|int - 1 }}G
 
 reload_traffic_server_config:

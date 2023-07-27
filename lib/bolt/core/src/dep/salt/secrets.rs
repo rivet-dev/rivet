@@ -1,7 +1,7 @@
 use anyhow::*;
 use serde_json::{json, Value};
 
-use crate::context::ProjectContext;
+use crate::context::{ProjectContext, S3Provider};
 
 /// Generates a config that will be exposed to Salt.
 pub async fn build_secrets(ctx: &ProjectContext) -> Result<Value> {
@@ -13,11 +13,7 @@ pub async fn build_secrets(ctx: &ProjectContext) -> Result<Value> {
 		}
 	});
 
-	let s3_creds = ctx.s3_credentials().await?;
-	secrets["s3"] = json!({
-		"persistent_access_key_id": s3_creds.access_key_id,
-		"persistent_access_key_secret": s3_creds.access_key_secret,
-	});
+	secrets["s3"] = s3(ctx).await?;
 
 	secrets["clickhouse"] = json!({
 		"users": {
@@ -42,4 +38,52 @@ pub async fn build_secrets(ctx: &ProjectContext) -> Result<Value> {
 	});
 
 	Ok(secrets)
+}
+
+async fn s3(ctx: &ProjectContext) -> Result<Value> {
+	let mut res = serde_json::Map::with_capacity(1);
+
+	let (default_provider, _) = ctx.default_s3_provider()?;
+	let default_s3_creds = ctx.s3_credentials(default_provider).await?;
+	res.insert(
+		"default".to_string(),
+		json!({
+			"persistent_access_key_id": default_s3_creds.access_key_id,
+			"persistent_access_key_secret": default_s3_creds.access_key_secret,
+		}),
+	);
+
+	let providers = &ctx.ns().s3.providers;
+	if providers.minio.is_some() {
+		let s3_creds = ctx.s3_credentials(S3Provider::Minio).await?;
+		res.insert(
+			"minio".to_string(),
+			json!({
+				"persistent_access_key_id": s3_creds.access_key_id,
+				"persistent_access_key_secret": s3_creds.access_key_secret,
+			}),
+		);
+	}
+	if providers.backblaze.is_some() {
+		let s3_creds = ctx.s3_credentials(S3Provider::Backblaze).await?;
+		res.insert(
+			"backblaze".to_string(),
+			json!({
+				"persistent_access_key_id": s3_creds.access_key_id,
+				"persistent_access_key_secret": s3_creds.access_key_secret,
+			}),
+		);
+	}
+	if providers.aws.is_some() {
+		let s3_creds = ctx.s3_credentials(S3Provider::Aws).await?;
+		res.insert(
+			"aws".to_string(),
+			json!({
+				"persistent_access_key_id": s3_creds.access_key_id,
+				"persistent_access_key_secret": s3_creds.access_key_secret,
+			}),
+		);
+	}
+
+	Ok(res.into())
 }

@@ -311,7 +311,8 @@ async fn vars(ctx: &ProjectContext) {
 		}
 
 		// Add Minio
-		if let config::ns::S3Provider::Minio { .. } = &ctx.ns().s3.provider {
+		let s3_providers = &ctx.ns().s3.providers;
+		if s3_providers.minio.is_some() {
 			extra_dns.push(json!({
 				"pool": ing_pool,
 				"zone_name": "base",
@@ -388,7 +389,8 @@ async fn vars(ctx: &ProjectContext) {
 
 		vars.insert("s3_buckets".into(), json!(s3_buckets));
 
-		let credentials = ctx.s3_credentials().await.unwrap();
+		let (default_s3_provider, _) = ctx.default_s3_provider().unwrap();
+		let credentials = ctx.s3_credentials(default_s3_provider).await.unwrap();
 		vars.insert(
 			"s3_persistent_access_key_id".into(),
 			json!(credentials.access_key_id),
