@@ -4,6 +4,12 @@ package rivet.backend.upload;
 
 import "proto/common.proto";
 
+enum Provider {
+	MINIO = 0;
+	BACKBLAZE = 1;
+	AWS = 2;
+}
+
 message Upload {
 	reserved 5;
 
@@ -14,6 +20,7 @@ message Upload {
 	optional int64 complete_ts = 4;
 	optional int64 deleted_ts = 7;
 	optional rivet.common.Uuid user_id = 8;
+	Provider provider = 9;
 }
 
 message UploadFile {

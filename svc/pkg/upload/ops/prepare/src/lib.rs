@@ -12,9 +12,24 @@ async fn handle(
 	ctx: OperationContext<upload::prepare::Request>,
 ) -> GlobalResult<upload::prepare::Response> {
 	let crdb = ctx.crdb("db-upload").await?;
+	let provider = if let Some(provider) = ctx.provider {
+		let proto_provider = internal_unwrap_owned!(
+			backend::upload::Provider::from_i32(provider),
+			"invalid upload provider"
+		);
+
+		match proto_provider {
+			backend::upload::Provider::Minio => s3_util::Provider::Minio,
+			backend::upload::Provider::Backblaze => s3_util::Provider::Backblaze,
+			backend::upload::Provider::Aws => s3_util::Provider::Aws,
+		}
+	} else {
+		s3_util::Provider::default()?
+	};
 
 	let s3_client_external =
-		s3_util::Client::from_env_opt(&ctx.bucket, s3_util::EndpointKind::External).await?;
+		s3_util::Client::from_env_opt(&ctx.bucket, provider, s3_util::EndpointKind::External)
+			.await?;
 
 	let total_content_length = ctx.files.iter().fold(0, |acc, x| acc + x.content_length);
 	tracing::info!(len = ?ctx.files.len(), ?total_content_length, "file info");
@@ -38,7 +53,7 @@ async fn handle(
 
 	// Prepare columns for files
 	let upload_id = Uuid::new_v4();
-	let upload_ids = ctx.files.iter().map(|_| upload_id).collect::<Vec<_>>();
+	let _upload_ids = ctx.files.iter().map(|_| upload_id).collect::<Vec<_>>();
 	let paths = ctx
 		.files
 		.iter()

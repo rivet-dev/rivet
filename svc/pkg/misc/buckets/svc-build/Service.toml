@@ -1,0 +1,8 @@
+[service]
+name = "bucket-svc-build"
+
+[runtime]
+kind = "s3"
+upload_policy = "none"
+
+[database]

@@ -980,6 +980,17 @@ impl ServiceContextData {
 				continue;
 			}
 
+			// Add default provider
+			let default_provider_name = match project_ctx.default_s3_provider()? {
+				(S3Provider::Minio, _) => "MINIO",
+				(S3Provider::Backblaze, _) => "BACKBLAZE",
+				(S3Provider::Aws, _) => "AWS",
+			};
+			env.push((
+				"S3_DEFAULT_PROVIDER".to_string(),
+				default_provider_name.to_string(),
+			));
+
 			add_s3_env(
 				&project_ctx,
 				&mut env,

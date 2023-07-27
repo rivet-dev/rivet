@@ -754,9 +754,12 @@ async fn resolve_image_artifact_url(
 			let bucket_screaming = bucket.to_uppercase().replace('-', "_");
 
 			// Build client
-			let s3_client =
-				s3_util::Client::from_env_opt(&bucket, s3_util::EndpointKind::InternalResolved)
-					.await?;
+			let s3_client = s3_util::Client::from_env_opt(
+				&bucket,
+				s3_util::Provider::default()?,
+				s3_util::EndpointKind::InternalResolved,
+			)
+			.await?;
 
 			let upload_id = internal_unwrap!(upload.upload_id).as_uuid();
 			let presigned_req = s3_client

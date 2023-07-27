@@ -623,15 +623,18 @@ impl ProjectContextData {
 	}
 
 	pub async fn s3_client_service_builds(self: &Arc<Self>) -> Result<s3_util::Client> {
-		let service_key =
-			s3::fetch_service_key(self, &["b2", "bolt_service_builds_upload"]).await?;
+		let s3_dep = self.service_with_name("bucket-svc-build").await;
+		let s3_config = self.s3_config(S3Provider::Backblaze).await?;
+		let s3_creds = self.s3_credentials(S3Provider::Backblaze).await?;
+
 		let client = s3_util::Client::new(
-			s3::service_builds::BUCKET,
-			s3::service_builds::ENDPOINT,
-			s3::service_builds::REGION,
-			&service_key.key_id,
-			&service_key.key,
+			&s3_dep.s3_bucket_name().await,
+			&s3_config.endpoint_internal,
+			&s3_config.region,
+			&s3_creds.access_key_id,
+			&s3_creds.access_key_secret,
 		)?;
+
 		Ok(client)
 	}
 
