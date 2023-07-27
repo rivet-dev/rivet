@@ -299,6 +299,10 @@ impl ServiceContextData {
 		// self.name().starts_with("upload-")
 	}
 
+	pub fn depends_on_s3_backfill(&self) -> bool {
+		self.name() == "upload-provider-fill"
+	}
+
 	pub fn depends_on_cloudflare(&self) -> bool {
 		true
 		// 	|| self.name() == "cf-custom-hostname-create"
@@ -969,7 +973,7 @@ impl ServiceContextData {
 			env.push((format!("CRDB_URL_{}", crdb_dep.name_screaming_snake()), uri));
 		}
 
-		// Expose all S3 endpoints to services that need it
+		// Expose all S3 endpoints to services that need them
 		let s3_deps = if self.depends_on_s3() {
 			project_ctx.all_services().await.to_vec()
 		} else {
@@ -991,27 +995,45 @@ impl ServiceContextData {
 				default_provider_name.to_string(),
 			));
 
-			add_s3_env(
-				&project_ctx,
-				&mut env,
-				&s3_dep,
-				context::project::S3Provider::Minio,
-			)
-			.await?;
-			add_s3_env(
-				&project_ctx,
-				&mut env,
-				&s3_dep,
-				context::project::S3Provider::Backblaze,
-			)
-			.await?;
-			add_s3_env(
-				&project_ctx,
-				&mut env,
-				&s3_dep,
-				context::project::S3Provider::Aws,
-			)
-			.await?;
+			// Add all configured providers
+			let providers = &project_ctx.ns().s3.providers;
+			if providers.minio.is_some() {
+				add_s3_env(
+					&project_ctx,
+					&mut env,
+					&s3_dep,
+					context::project::S3Provider::Minio,
+				)
+				.await?;
+			}
+			if providers.backblaze.is_some() {
+				add_s3_env(
+					&project_ctx,
+					&mut env,
+					&s3_dep,
+					context::project::S3Provider::Backblaze,
+				)
+				.await?;
+			}
+			if providers.aws.is_some() {
+				add_s3_env(
+					&project_ctx,
+					&mut env,
+					&s3_dep,
+					context::project::S3Provider::Aws,
+				)
+				.await?;
+			}
+		}
+
+		// S3 backfill
+		if self.depends_on_s3_backfill() {
+			if let Some(backfill) = &project_ctx.ns().s3.backfill {
+				env.push((
+					"S3_BACKFILL_PROVIDER".into(),
+					heck::ShoutySnakeCase::to_shouty_snake_case(backfill.as_str()),
+				));
+			}
 		}
 
 		// Runtime-specific

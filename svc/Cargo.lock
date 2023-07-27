@@ -8505,6 +8505,26 @@ dependencies = [
 ]
 
 [[package]]
+name = "upload-provider-fill"
+version = "0.0.1"
+dependencies = [
+ "chirp-client",
+ "chirp-worker",
+ "futures-util",
+ "indoc",
+ "prost 0.10.4",
+ "reqwest",
+ "rivet-connection",
+ "rivet-operation",
+ "rivet-pools",
+ "s3-util",
+ "sqlx",
+ "tokio",
+ "tracing",
+ "tracing-subscriber",
+]
+
+[[package]]
 name = "upload-worker"
 version = "0.0.1"
 dependencies = [

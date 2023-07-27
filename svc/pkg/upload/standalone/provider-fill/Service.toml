@@ -1,0 +1,7 @@
+[service]
+name = "upload-provider-fill"
+
+[runtime]
+kind = "rust"
+
+[oneshot]

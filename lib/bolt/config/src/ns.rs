@@ -210,6 +210,7 @@ pub struct CloudflareAccessServices {
 pub struct S3 {
 	#[serde(default)]
 	pub cors: S3Cors,
+	pub backfill: Option<String>,
 	#[serde(flatten)]
 	pub providers: S3Providers,
 }
@@ -217,7 +218,6 @@ pub struct S3 {
 #[derive(Serialize, Deserialize, Clone, Debug, Default)]
 #[serde(deny_unknown_fields)]
 pub struct S3Cors {
-	#[serde(default)]
 	pub allowed_origins: Option<Vec<String>>,
 }
 

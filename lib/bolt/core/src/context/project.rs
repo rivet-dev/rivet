@@ -624,8 +624,9 @@ impl ProjectContextData {
 
 	pub async fn s3_client_service_builds(self: &Arc<Self>) -> Result<s3_util::Client> {
 		let s3_dep = self.service_with_name("bucket-svc-build").await;
-		let s3_config = self.s3_config(S3Provider::Backblaze).await?;
-		let s3_creds = self.s3_credentials(S3Provider::Backblaze).await?;
+		let (default_provider, _) = self.default_s3_provider()?;
+		let s3_config = self.s3_config(default_provider).await?;
+		let s3_creds = self.s3_credentials(default_provider).await?;
 
 		let client = s3_util::Client::new(
 			&s3_dep.s3_bucket_name().await,

@@ -7,7 +7,7 @@ use crate::{
 		self,
 		service::{ServiceDomain, ServiceKind, ServiceRouter},
 	},
-	context::{BuildContext, ProjectContext, RunContext, S3Provider, ServiceContext},
+	context::{BuildContext, ProjectContext, RunContext, ServiceContext},
 	dep::nomad::job_schema::*,
 };
 
@@ -461,11 +461,9 @@ pub async fn gen_svc(region_id: &str, exec_ctx: &ExecServiceContext) -> Job {
 					ExecServiceDriver::UploadedBinaryArtifact { artifact_key, .. } => {
 						let s3_dep = project_ctx.service_with_name("bucket-svc-build").await;
 						let bucket = s3_dep.s3_bucket_name().await;
-						let s3_config = project_ctx.s3_config(S3Provider::Backblaze).await.unwrap();
-						let s3_creds = project_ctx
-							.s3_credentials(S3Provider::Backblaze)
-							.await
-							.unwrap();
+						let (default_provider, _) = project_ctx.default_s3_provider().unwrap();
+						let s3_config = project_ctx.s3_config(default_provider).await.unwrap();
+						let s3_creds = project_ctx.s3_credentials(default_provider).await.unwrap();
 
 						Some(json!([
 							{
