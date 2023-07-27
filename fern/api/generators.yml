@@ -5,7 +5,7 @@ groups:
       - public
     generators:
       - name: fernapi/fern-typescript-sdk
-        version: 0.7.2
+        version: 0.3.7
         config:
           namespaceExport: Rivet
           bundle: true
@@ -31,7 +31,7 @@ groups:
   internal:
     generators:
       - name: fernapi/fern-typescript-sdk
-        version: 0.7.2
+        version: 0.3.7
         config:
           namespaceExport: Rivet
           allowCustomFetcher: true
