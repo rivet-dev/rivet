@@ -3,7 +3,7 @@ syntax = "proto3";
 package rivet.backend.module;
 
 import "proto/common.proto";
-import "proto/backend/module/function.proto";
+import "proto/backend/module/script.proto";
 
 // MARK: Game Namespace Config
 message GameNamespaceConfig {
@@ -53,7 +53,7 @@ message Version {
 	uint64 minor = 102;
 	uint64 patch = 103;
 
-	repeated rivet.backend.module.Function functions = 201;
+	repeated rivet.backend.module.Script scripts = 201;
 
 	message Docker {
 		// TODO: Auth?

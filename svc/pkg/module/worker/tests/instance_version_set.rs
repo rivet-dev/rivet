@@ -28,12 +28,12 @@ async fn instance_version_set_fly(ctx: TestCtx) {
 			minor: 0,
 			patch: 0,
 
-			functions: vec![
-				backend::module::Function {
+			scripts: vec![
+				backend::module::Script {
 					name: "foo".into(),
 					request_schema: "{}".into(),
 					response_schema: "{}".into(),
-					callable: Some(backend::module::function::Callable {}),
+					callable: Some(backend::module::script::Callable {}),
 				},
 			],
 
@@ -65,12 +65,12 @@ async fn instance_version_set_fly(ctx: TestCtx) {
 			minor: 0,
 			patch: 1,
 
-			functions: vec![
-				backend::module::Function {
+			scripts: vec![
+				backend::module::Script {
 					name: "foo".into(),
 					request_schema: "{}".into(),
 					response_schema: "{}".into(),
-					callable: Some(backend::module::function::Callable {}),
+					callable: Some(backend::module::script::Callable {}),
 				},
 			],
 

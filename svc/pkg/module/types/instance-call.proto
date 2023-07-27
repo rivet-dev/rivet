@@ -6,7 +6,7 @@ import "proto/common.proto";
 
 message Request {
 	rivet.common.Uuid instance_id = 1;
-	string function_name = 2;
+	string script_name = 2;
 	string request_json = 3;
 }
 

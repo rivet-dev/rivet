@@ -4,16 +4,16 @@ All URIs are relative to *http://localhost*
 
 Method | HTTP request | Description
 ------------- | ------------- | -------------
-[**module_call**](ModuleApi.md#module_call) | **POST** /modules/{module}/functions/{func}/call | 
+[**module_call**](ModuleApi.md#module_call) | **POST** /modules/{module}/scripts/{script}/call | 
 
 
 
 ## module_call
 
-> crate::models::ModuleCallResponse module_call(module, func, module_call_request, origin)
+> crate::models::ModuleCallResponse module_call(module, script, module_call_request, origin)
 
 
-Makes a request to a module's function. 
+Makes a request to a module's script. 
 
 ### Parameters
 
@@ -21,7 +21,7 @@ Makes a request to a module's function.
 Name | Type | Description  | Required | Notes
 ------------- | ------------- | ------------- | ------------- | -------------
 **module** | **String** |  | [required] |
-**func** | **String** |  | [required] |
+**script** | **String** |  | [required] |
 **module_call_request** | [**ModuleCallRequest**](ModuleCallRequest.md) |  | [required] |
 **origin** | Option<**String**> |  |  |
 

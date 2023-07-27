@@ -79,29 +79,29 @@ async fn update_db(
 		}
 	}
 
-	for function in msg.functions {
+	for script in msg.scripts {
 		sqlx::query(indoc!(
 			"
-            INSERT INTO functions (version_id, name, request_schema, response_schema)
+            INSERT INTO scripts (version_id, name, request_schema, response_schema)
             VALUES ($1, $2, $3, $4)
             "
 		))
 		.bind(version_id)
-		.bind(&function.name)
-		.bind(&function.request_schema)
-		.bind(&function.response_schema)
+		.bind(&script.name)
+		.bind(&script.request_schema)
+		.bind(&script.response_schema)
 		.execute(&mut *tx)
 		.await?;
 
-		if function.callable.is_some() {
+		if script.callable.is_some() {
 			sqlx::query(indoc!(
 				"
-                INSERT INTO functions_callable (version_id, name)
+                INSERT INTO scripts_callable (version_id, name)
                 VALUES ($1, $2)
             "
 			))
 			.bind(version_id)
-			.bind(&function.name)
+			.bind(&script.name)
 			.execute(&mut *tx)
 			.await?;
 		}

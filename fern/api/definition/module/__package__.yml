@@ -8,13 +8,13 @@ service:
     - public
   endpoints:
     call:
-      path: /{module}/functions/{func}/call
+      path: /{module}/scripts/{script}/call
       method: POST
       path-parameters:
         module: string
-        func: string
+        script: string
       docs: |
-        Makes a request to a module's function.
+        Makes a request to a module's script.
       request:
         headers:
           origin: optional<string>

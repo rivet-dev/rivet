@@ -4,7 +4,7 @@ package rivet.backend.pkg.module.msg.version_create_complete;
 
 import "proto/common.proto";
 import "proto/backend/module.proto";
-import "proto/backend/module/function.proto";
+import "proto/backend/module/script.proto";
 
 /// name = "msg-module-version-create-complete"
 /// parameters = [

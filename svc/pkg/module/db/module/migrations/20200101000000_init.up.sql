@@ -29,8 +29,8 @@ CREATE TABLE versions_image_docker (
 	image_tag STRING NOT NULL
 );
 
--- Function
-CREATE TABLE functions (
+-- Scripts
+CREATE TABLE scripts (
 	version_id UUID NOT NULL REFERENCES versions (version_id),
 	name STRING NOT NULL,
 	request_schema STRING NOT NULL,
@@ -38,11 +38,11 @@ CREATE TABLE functions (
 	PRIMARY KEY (version_id, name)
 );
 
-CREATE TABLE functions_callable (
+CREATE TABLE scripts_callable (
 	version_id UUID NOT NULL REFERENCES versions (version_id),
 	name STRING NOT NULL,
 	PRIMARY KEY (version_id, name),
-	FOREIGN KEY (version_id, name) REFERENCES functions (version_id, name)
+	FOREIGN KEY (version_id, name) REFERENCES scripts (version_id, name)
 );
 
 -- Instance

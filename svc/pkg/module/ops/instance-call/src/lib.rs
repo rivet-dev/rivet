@@ -5,7 +5,7 @@ use std::time::Duration;
 
 #[derive(Serialize)]
 struct CallRequest<'a> {
-	function_name: String,
+	script_name: String,
 	request: &'a serde_json::Value,
 }
 
@@ -36,14 +36,11 @@ pub async fn handle(
 	.await?;
 	let version = internal_unwrap_owned!(versions.versions.first());
 
-	// Validate function exists
+	// Validate script exists
 	assert_with!(
-		version
-			.functions
-			.iter()
-			.any(|x| x.name == ctx.function_name),
-		MODULE_FUNCTION_NOT_FOUND,
-		function = ctx.function_name,
+		version.scripts.iter().any(|x| x.name == ctx.script_name),
+		MODULE_SCRIPT_NOT_FOUND,
+		script = ctx.script_name,
 	);
 
 	// TODO: Validate JSON request schema
@@ -75,7 +72,7 @@ pub async fn handle(
 			.post(&url)
 			.timeout(Duration::from_secs(5))
 			.json(&CallRequest {
-				function_name: ctx.function_name.clone(),
+				script_name: ctx.script_name.clone(),
 				request: &request_json,
 			})
 			.send()

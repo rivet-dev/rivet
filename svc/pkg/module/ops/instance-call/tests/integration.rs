@@ -28,12 +28,12 @@ async fn fetch(ctx: TestCtx) {
 		minor: 0,
 		patch: 0,
 
-		functions: vec![
-			backend::module::Function {
+		scripts: vec![
+			backend::module::Script {
 				name: "foo".into(),
 				request_schema: "{}".into(),
 				response_schema: "{}".into(),
-				callable: Some(backend::module::function::Callable {}),
+				callable: Some(backend::module::script::Callable {}),
 			},
 		],
 
@@ -54,7 +54,7 @@ async fn fetch(ctx: TestCtx) {
 	// Call request
 	let res = op!([ctx] module_instance_call {
 		instance_id: Some(instance_id.into()),
-		function_name: "foo".into(),
+		script_name: "foo".into(),
 		request_json: serde_json::to_string(&json!({
 			"x": 5
 		})).unwrap(),

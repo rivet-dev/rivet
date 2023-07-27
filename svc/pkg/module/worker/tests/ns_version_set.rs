@@ -176,7 +176,7 @@ async fn create_module_version(
 		minor: minor,
 		patch: patch,
 
-		functions: vec![],
+		scripts: vec![],
 
 		image: Some(module::msg::version_create::message::Image::Docker(module::msg::version_create::message::Docker {
 			image_tag: tag.to_string(),

@@ -4590,10 +4590,10 @@ paths:
       servers:
         - url: https://kv.api.rivet.gg/v1
       security: *ref_0
-  /modules/{module}/functions/{func}/call:
+  /modules/{module}/scripts/{script}/call:
     post:
       description: |
-        Makes a request to a module's function.
+        Makes a request to a module's script.
       operationId: module_call
       tags:
         - Module
@@ -4603,7 +4603,7 @@ paths:
           required: true
           schema:
             type: string
-        - name: func
+        - name: script
           in: path
           required: true
           schema:

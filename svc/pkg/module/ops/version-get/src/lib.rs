@@ -13,7 +13,7 @@ struct Version {
 }
 
 #[derive(sqlx::FromRow)]
-struct Function {
+struct Script {
 	version_id: Uuid,
 	name: String,
 	request_schema: String,
@@ -50,7 +50,7 @@ pub async fn handle(
 	.fetch_all(&ctx.crdb("db-module").await?)
 	.await?;
 
-	let functions = sqlx::query_as::<_, Function>(indoc!(
+	let scripts = sqlx::query_as::<_, Script>(indoc!(
 		"
 		SELECT
 			f.version_id,
@@ -58,8 +58,8 @@ pub async fn handle(
 			f.request_schema,
 			f.response_schema,
 			fc.version_id IS NOT NULL AS callable
-		FROM functions AS f
-		LEFT JOIN functions_callable AS fc ON fc.version_id = f.version_id AND fc.name = f.name
+		FROM scripts AS f
+		LEFT JOIN scripts_callable AS fc ON fc.version_id = f.version_id AND fc.name = f.name
 		WHERE f.version_id = ANY($1)
 		"
 	))
@@ -71,15 +71,15 @@ pub async fn handle(
 		versions: versions
 			.into_iter()
 			.map(|version| {
-				let functions = functions
+				let scripts = scripts
 					.iter()
-					.filter(|function| function.version_id == version.version_id)
-					.map(|function| backend::module::Function {
-						name: function.name.clone(),
-						request_schema: function.request_schema.clone(),
-						response_schema: function.response_schema.clone(),
-						callable: if function.callable {
-							Some(backend::module::function::Callable {})
+					.filter(|script| script.version_id == version.version_id)
+					.map(|script| backend::module::Script {
+						name: script.name.clone(),
+						request_schema: script.request_schema.clone(),
+						response_schema: script.response_schema.clone(),
+						callable: if script.callable {
+							Some(backend::module::script::Callable {})
 						} else {
 							None
 						},
@@ -93,7 +93,7 @@ pub async fn handle(
 					major: version.major as u64,
 					minor: version.minor as u64,
 					patch: version.patch as u64,
-					functions,
+					scripts,
 					image: version.image_docker_image_tag.map(|image_tag| {
 						backend::module::version::Image::Docker(backend::module::version::Docker {
 							image_tag,

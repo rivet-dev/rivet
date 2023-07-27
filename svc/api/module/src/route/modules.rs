@@ -4,8 +4,8 @@ use rivet_operation::prelude::*;
 
 use crate::auth::Auth;
 
-// MARK: POST /modules/{}/functions/{}/call
-pub async fn function_call(
+// MARK: POST /modules/{}/scripts/{}/call
+pub async fn script_call(
 	ctx: Ctx<Auth>,
 	module: String,
 	func: String,
@@ -29,7 +29,7 @@ pub async fn function_call(
 	// Get the module
 	let res = op!([ctx] module_instance_call {
 		instance_id: instance.instance_id,
-		function_name: func,
+		script_name: func,
 		request_json: serde_json::to_string(&body.data)?,
 	})
 	.await?;

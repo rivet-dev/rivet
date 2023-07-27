@@ -4,7 +4,7 @@ package rivet.backend.module;
 
 import "proto/common.proto";
 
-message Function {
+message Script {
 	message Callable {
 
 	}

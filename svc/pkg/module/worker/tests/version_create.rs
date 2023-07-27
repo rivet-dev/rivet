@@ -24,12 +24,12 @@ async fn empty(ctx: TestCtx) {
 		minor: 0,
 		patch: 0,
 
-		functions: vec![
-			backend::module::Function {
+		scripts: vec![
+			backend::module::Script {
 				name: "foo".into(),
 				request_schema: "{}".into(),
 				response_schema: "{}".into(),
-				callable: Some(backend::module::function::Callable {}),
+				callable: Some(backend::module::script::Callable {}),
 			},
 		],
 
@@ -51,20 +51,20 @@ async fn empty(ctx: TestCtx) {
 	assert!(exists, "version not created");
 
 	let (exists,): (bool,) = sqlx::query_as(
-		"SELECT EXISTS (SELECT 1 FROM functions WHERE version_id = $1 AND name = 'foo')",
+		"SELECT EXISTS (SELECT 1 FROM scripts WHERE version_id = $1 AND name = 'foo')",
 	)
 	.bind(version_id)
 	.fetch_one(&crdb)
 	.await
 	.unwrap();
-	assert!(exists, "function not created");
+	assert!(exists, "script not created");
 
 	let (exists,): (bool,) = sqlx::query_as(
-		"SELECT EXISTS (SELECT 1 FROM functions_callable WHERE version_id = $1 AND name = 'foo')",
+		"SELECT EXISTS (SELECT 1 FROM scripts_callable WHERE version_id = $1 AND name = 'foo')",
 	)
 	.bind(version_id)
 	.fetch_one(&crdb)
 	.await
 	.unwrap();
-	assert!(exists, "function not callable");
+	assert!(exists, "script not callable");
 }

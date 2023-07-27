@@ -12560,9 +12560,9 @@ paths:
       - url: https://chat.api.rivet.gg/v1
       tags:
       - Chat
-  /modules/{module}/functions/{func}/call:
+  /modules/{module}/scripts/{script}/call:
     post:
-      description: 'Makes a request to a module''s function.
+      description: 'Makes a request to a module''s script.
 
         '
       operationId: module_call
@@ -12573,7 +12573,7 @@ paths:
         schema:
           type: string
       - in: path
-        name: func
+        name: script
         required: true
         schema:
           type: string
