@@ -4526,7 +4526,7 @@ paths:
       servers:
         - url: https://kv.api.rivet.gg/v1
       security: *ref_0
-  /modules/{module}/functions/{function}/call:
+  /modules/{module}/functions/{func}/call:
     post:
       description: |
         Makes a request to a module's function.
@@ -4539,7 +4539,7 @@ paths:
           required: true
           schema:
             type: string
-        - name: function
+        - name: func
           in: path
           required: true
           schema:

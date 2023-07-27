@@ -8,7 +8,7 @@ use crate::auth::Auth;
 pub async fn function_call(
 	ctx: Ctx<Auth>,
 	module: String,
-	function: String,
+	func: String,
 	body: models::ModuleCallRequest,
 ) -> GlobalResult<models::ModuleCallResponse> {
 	let namespace_id = ctx
@@ -29,7 +29,7 @@ pub async fn function_call(
 	// Get the module
 	let res = op!([ctx] module_instance_call {
 		instance_id: instance.instance_id,
-		function_name: function,
+		function_name: func,
 		request_json: serde_json::to_string(&body.data)?,
 	})
 	.await?;
