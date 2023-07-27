@@ -113,18 +113,22 @@ async fn handle(
 			)?;
 	}
 
+	// TODO: Update this to use ns_version_set event
 	msg!([ctx] cdn::msg::ns_config_update(namespace_id) {
 		namespace_id: Some(namespace_id.into()),
 	})
 	.await?;
 
-	// Send game update
-	{
-		msg!([ctx] game::msg::update(game_id) {
-			game_id: game.game_id,
-		})
-		.await?;
-	}
+	// Publish updates
+	msg!([ctx] game::msg::update(game_id) {
+		game_id: game.game_id,
+	})
+	.await?;
+	msg!([ctx] game::msg::ns_version_set_complete(namespace_id) {
+		namespace_id: Some(namespace_id.into()),
+		version_id: Some(version_id.into()),
+	})
+	.await?;
 
 	msg!([ctx] analytics::msg::event_create() {
 		events: vec![

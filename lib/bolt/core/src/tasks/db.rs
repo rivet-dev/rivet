@@ -12,6 +12,42 @@ pub async fn shell(ctx: &ProjectContext, svc: &ServiceContext, query: Option<&st
 	let conn = DatabaseConnection::create(ctx, &[svc.clone()]).await?;
 
 	match &svc.config().runtime {
+		RuntimeKind::Redis { .. } => {
+			let db_name = svc.redis_db_name();
+			let host = conn.redis_hosts.get(&svc.name()).unwrap();
+			let (hostname, port) = host.split_once(":").unwrap();
+			let username = ctx.read_secret(&["redis", &db_name, "username"]).await?;
+			let password = ctx
+				.read_secret_opt(&["redis", &db_name, "password"])
+				.await?;
+
+			rivet_term::status::progress("Connecting to Redis", &db_name);
+
+			if let Some(_) = query {
+				todo!("cannot pass query at the moment")
+			} else {
+				if let Some(password) = password {
+					block_in_place(|| {
+						cmd!(
+							"redis-cli",
+							"-h",
+							hostname,
+							"-p",
+							port,
+							"--user",
+							username,
+							"--password",
+							password
+						)
+						.run()
+					})?;
+				} else {
+					block_in_place(|| {
+						cmd!("redis-cli", "-h", hostname, "-p", port, "--user", username).run()
+					})?;
+				}
+			}
+		}
 		RuntimeKind::CRDB { .. } => {
 			let db_name = svc.crdb_db_name();
 			let host = conn.cockroach_host.as_ref().unwrap();
