@@ -8,11 +8,11 @@ service:
     - public
   endpoints:
     call:
-      path: /{module}/functions/{function}/call
+      path: /{module}/functions/{func}/call
       method: POST
       path-parameters:
         module: string
-        function: string
+        func: string
       docs: |
         Makes a request to a module's function.
       request:
