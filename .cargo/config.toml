@@ -7,6 +7,5 @@
 # don't use a Cargo workspace since that causes issues with Cargo chef.
 target-dir = "./target"
 
-# Used for Tokio Console. See https://github.com/tokio-rs/console#using-it
-rustflags = ["--cfg", "tokio_unstable"]
+# NOTE: DO NOT set rustflags in this file. Use bolt.
 

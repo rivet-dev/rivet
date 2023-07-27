@@ -4590,6 +4590,88 @@ paths:
       servers:
         - url: https://kv.api.rivet.gg/v1
       security: *ref_0
+  /modules/{module}/scripts/{script}/call:
+    post:
+      description: |
+        Makes a request to a module's script.
+      operationId: module_call
+      tags:
+        - Module
+      parameters:
+        - name: module
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: script
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: origin
+          in: header
+          required: false
+          schema:
+            type: string
+      responses:
+        '200':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ModuleCallResponse'
+        '400':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '403':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '404':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '408':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '429':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '500':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+      servers:
+        - url: https://module.api.rivet.gg/v1
+      security: *ref_0
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                namespace_id:
+                  type: string
+                  format: uuid
+                data: {}
+              required:
+                - data
   /parties/self/activity:
     delete:
       description: |-
@@ -9952,6 +10034,8 @@ components:
       type: object
       description: Cloud configuration for a given version.
       properties:
+        engine:
+          $ref: '#/components/schemas/CloudVersionEngineConfig'
         cdn:
           $ref: '#/components/schemas/CloudVersionCdnConfig'
         matchmaker:
@@ -10005,10 +10089,10 @@ components:
       properties:
         build_command:
           type: string
-          description: Client-side configuration
+          description: _Configures Rivet CLI behavior. Has no effect on server behavior._
         build_output:
           type: string
-          description: Client-side configuration
+          description: _Configures Rivet CLI behavior. Has no effect on server behavior._
         site_id:
           type: string
           format: uuid
@@ -10065,6 +10149,17 @@ components:
       required:
         - name
         - value
+    CloudVersionEngineConfig:
+      type: object
+      properties:
+        unity:
+          $ref: '#/components/schemas/CloudVersionEngineUnityConfig'
+        unreal:
+          $ref: '#/components/schemas/CloudVersionEngineUnrealConfig'
+        godot:
+          $ref: '#/components/schemas/CloudVersionEngineGodotConfig'
+        html5:
+          $ref: '#/components/schemas/CloudVersionEngineHtml5Config'
     CloudVersionKvConfig:
       type: object
       description: KV configuration for a given version.
@@ -10082,7 +10177,7 @@ components:
           $ref: '#/components/schemas/CloudVersionMatchmakerCaptcha'
         dev_hostname:
           type: string
-          description: Client-side configuration
+          description: _Configures Rivet CLI behavior. Has no effect on server behavior._
         regions:
           type: object
           additionalProperties:
@@ -10520,6 +10615,12 @@ components:
             $ref: '#/components/schemas/KvPutEntry'
       required:
         - entries
+    ModuleCallResponse:
+      type: object
+      properties:
+        data: {}
+      required:
+        - data
     AuthCompleteStatus:
       type: string
       enum:
@@ -12409,6 +12510,29 @@ components:
           description: A list of region server tiers.
       required:
         - tiers
+    CloudVersionEngineGodotConfig:
+      type: object
+      properties: {}
+    CloudVersionEngineHtml5Config:
+      type: object
+      properties: {}
+    CloudVersionEngineUnityConfig:
+      type: object
+      properties: {}
+    CloudVersionEngineUnrealConfig:
+      type: object
+      properties:
+        game_module:
+          type: string
+          description: >-
+            Name of the Unreal module that holds the game code.
+
+            This is usually the value of `$.Modules[0].Name` in the file
+            `MyProject.unproject`.
+
+            _Configures Rivet CLI behavior. Has no effect on server behavior._
+      required:
+        - game_module
     CloudVersionIdentityConfig:
       type: object
       description: Identity configuration for a given version.
@@ -12549,10 +12673,10 @@ components:
       properties:
         dockerfile:
           type: string
-          description: Client-side configuration
+          description: _Configures Rivet CLI behavior. Has no effect on server behavior._
         image:
           type: string
-          description: Client-side configuration
+          description: _Configures Rivet CLI behavior. Has no effect on server behavior._
         image_id:
           type: string
           format: uuid
@@ -12587,13 +12711,13 @@ components:
           description: How this port should be proxied. Defaults to 'game-guard`.
         dev_port:
           type: integer
-          description: Client-side configuration
+          description: _Configures Rivet CLI behavior. Has no effect on server behavior._
         dev_port_range:
           $ref: '#/components/schemas/CloudVersionMatchmakerPortRange'
-          description: Client-side configuration
+          description: _Configures Rivet CLI behavior. Has no effect on server behavior._
         dev_protocol:
           $ref: '#/components/schemas/CloudVersionMatchmakerPortProtocol'
-          description: Client-side configuration
+          description: _Configures Rivet CLI behavior. Has no effect on server behavior._
     CloudVersionMatchmakerGameModeIdleLobbiesConfig:
       type: object
       description: Configuration for how many idle lobbies a game version should have.

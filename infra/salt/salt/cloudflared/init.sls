@@ -25,6 +25,7 @@ push_cloudflared_service:
   file.managed:
     - name: /etc/systemd/system/cloudflared.service
     - source: salt://cloudflared/files/cloudflared.service
+    - template: jinja
 
 start_cloudflared_service:
   service.running:

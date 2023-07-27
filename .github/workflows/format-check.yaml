@@ -16,4 +16,4 @@ jobs:
         run: yarn install --frozen-lockfile
 
       - name: Validate Prettier config
-        run: npx prettier --check .
+        run: npx prettier@3.0 --check .

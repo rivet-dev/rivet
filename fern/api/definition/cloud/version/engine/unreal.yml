@@ -1,0 +1,13 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/fern-api/fern/main/fern.schema.json
+
+types:
+  UnrealConfig:
+    properties:
+      game_module:
+        type: string
+        docs: >-
+          Name of the Unreal module that holds the game code.
+
+          This is usually the value of `$.Modules[0].Name` in the file `MyProject.unproject`.
+
+          _Configures Rivet CLI behavior. Has no effect on server behavior._

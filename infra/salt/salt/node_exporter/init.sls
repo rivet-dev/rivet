@@ -35,6 +35,7 @@ push_node_exporter_service:
   file.managed:
     - name: /etc/systemd/system/node_exporter.service
     - source: salt://node_exporter/files/node_exporter.service
+    - template: jinja
 
 start_node_exporter_service:
   service.running:

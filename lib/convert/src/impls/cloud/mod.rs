@@ -80,7 +80,7 @@ impl ApiTryFrom<perf::SvcPerf> for models::SvcPerf {
 
 	fn try_from(value: perf::SvcPerf) -> GlobalResult<Self> {
 		Ok(models::SvcPerf {
-			svc_name: value.svc_name.to_owned(),
+			svc_name: value.context_name.to_owned(),
 			ts: util::timestamp::to_chrono(value.ts)?,
 			duration: value.duration,
 			req_id: value.req_id.map(|req_id| (*req_id).to_string()),

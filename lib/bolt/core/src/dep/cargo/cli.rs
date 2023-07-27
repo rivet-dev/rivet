@@ -12,13 +12,9 @@ pub enum BuildMethod {
 
 pub struct BuildOpts<'a, T: AsRef<str>> {
 	pub root: &'a Path,
-
 	pub build_calls: Vec<BuildCall<'a, T>>,
-
 	pub build_method: BuildMethod,
-
 	pub release: bool,
-
 	/// How many threads to run in parallel when building.
 	pub jobs: Option<usize>,
 }
@@ -82,7 +78,13 @@ pub async fn build<'a, T: AsRef<str>>(ctx: &ProjectContext, opts: BuildOpts<'a, 
 	// Generate build script
 	let build_script = indoc::formatdoc!(
 		r#"
-		{build_calls}		
+		TARGET_DIR=$(readlink -f ./target)
+		# Used for Tokio Console. See https://github.com/tokio-rs/console#using-it
+		export RUSTFLAGS="--cfg tokio_unstable"
+		# Used for debugging
+		# export CARGO_LOG=cargo::core::compiler::fingerprint=info
+
+		{build_calls}
 
 		EXIT_CODE=$?
 		"#,
@@ -95,8 +97,6 @@ pub async fn build<'a, T: AsRef<str>>(ctx: &ProjectContext, opts: BuildOpts<'a, 
 			cmd.arg("-c");
 			cmd.arg(indoc::formatdoc!(
 				r#"
-				TARGET_DIR=$(readlink -f ./target)
-
 				{build_script}
 
 				# Exit
@@ -123,8 +123,6 @@ pub async fn build<'a, T: AsRef<str>>(ctx: &ProjectContext, opts: BuildOpts<'a, 
 				#
 				# See https://github.com/emk/rust-musl-builder/issues/53#issuecomment-421806898
 				ln -s $(which g++) /usr/local/bin/musl-g++
-
-				TARGET_DIR=$(readlink -f ./target)
 
 				{build_script}
 

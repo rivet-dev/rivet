@@ -14,7 +14,7 @@
 
 #[derive(Clone, Debug, PartialEq, Default, Serialize, Deserialize)]
 pub struct CloudVersionMatchmakerGameModeRuntimeDockerPort {
-    /// Client-side configuration
+    /// _Configures Rivet CLI behavior. Has no effect on server behavior._
     #[serde(rename = "dev_port", skip_serializing_if = "Option::is_none")]
     pub dev_port: Option<i32>,
     #[serde(rename = "dev_port_range", skip_serializing_if = "Option::is_none")]
