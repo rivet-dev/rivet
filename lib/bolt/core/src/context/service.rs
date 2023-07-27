@@ -15,7 +15,7 @@ use crate::{
 		self,
 		service::{RuntimeKind, ServiceKind},
 	},
-	context::{self, BuildContext, ProjectContext, RunContext},
+	context::{self, BuildContext, ProjectContext, RunContext, S3Provider},
 	dep::{self, cloudflare, s3},
 	utils,
 };
@@ -980,35 +980,27 @@ impl ServiceContextData {
 				continue;
 			}
 
-			let s3_config = project_ctx
-				.clone()
-				.s3_config(project_ctx.clone().s3_credentials().await?)
-				.await?;
-
-			env.push((
-				format!("S3_BUCKET_{}", s3_dep.name_screaming_snake()),
-				s3_dep.s3_bucket_name().await,
-			));
-			env.push((
-				format!("S3_ENDPOINT_INTERNAL_{}", s3_dep.name_screaming_snake()),
-				s3_config.endpoint_internal,
-			));
-			env.push((
-				format!("S3_ENDPOINT_EXTERNAL_{}", s3_dep.name_screaming_snake()),
-				s3_config.endpoint_external,
-			));
-			env.push((
-				format!("S3_REGION_{}", s3_dep.name_screaming_snake()),
-				s3_config.region,
-			));
-			env.push((
-				format!("S3_ACCESS_KEY_ID_{}", s3_dep.name_screaming_snake()),
-				s3_config.credentials.access_key_id,
-			));
-			env.push((
-				format!("S3_SECRET_ACCESS_KEY_{}", s3_dep.name_screaming_snake()),
-				s3_config.credentials.access_key_secret,
-			));
+			add_s3_env(
+				&project_ctx,
+				&mut env,
+				&s3_dep,
+				context::project::S3Provider::Minio,
+			)
+			.await?;
+			add_s3_env(
+				&project_ctx,
+				&mut env,
+				&s3_dep,
+				context::project::S3Provider::Backblaze,
+			)
+			.await?;
+			add_s3_env(
+				&project_ctx,
+				&mut env,
+				&s3_dep,
+				context::project::S3Provider::Aws,
+			)
+			.await?;
 		}
 
 		// Runtime-specific
@@ -1219,4 +1211,47 @@ impl ServiceContextData {
 
 		service
 	}
+}
+
+async fn add_s3_env(
+	project_ctx: &ProjectContext,
+	env: &mut Vec<(String, String)>,
+	s3_dep: &Arc<ServiceContextData>,
+	provider: S3Provider,
+) -> Result<()> {
+	let provider_name = match provider {
+		S3Provider::Minio => "MINIO",
+		S3Provider::Backblaze => "BACKBLAZE",
+		S3Provider::Aws => "AWS",
+	};
+	let s3_dep_name = s3_dep.name_screaming_snake();
+	let s3_config = project_ctx.s3_config(provider).await?;
+	let s3_creds = project_ctx.s3_credentials(provider).await?;
+
+	env.push((
+		format!("S3_{}_BUCKET_{}", provider_name, s3_dep_name),
+		s3_dep.s3_bucket_name().await,
+	));
+	env.push((
+		format!("S3_{}_ENDPOINT_INTERNAL_{}", provider_name, s3_dep_name),
+		s3_config.endpoint_internal,
+	));
+	env.push((
+		format!("S3_{}_ENDPOINT_EXTERNAL_{}", provider_name, s3_dep_name),
+		s3_config.endpoint_external,
+	));
+	env.push((
+		format!("S3_{}_REGION_{}", provider_name, s3_dep_name),
+		s3_config.region,
+	));
+	env.push((
+		format!("S3_{}_ACCESS_KEY_ID_{}", provider_name, s3_dep_name),
+		s3_creds.access_key_id,
+	));
+	env.push((
+		format!("S3_{}_SECRET_ACCESS_KEY_{}", provider_name, s3_dep_name),
+		s3_creds.access_key_secret,
+	));
+
+	Ok(())
 }

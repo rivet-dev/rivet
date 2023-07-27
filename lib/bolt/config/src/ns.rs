@@ -211,7 +211,7 @@ pub struct S3 {
 	#[serde(default)]
 	pub cors: S3Cors,
 	#[serde(flatten)]
-	pub provider: S3Provider,
+	pub providers: S3Providers,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, Default)]
@@ -221,13 +221,19 @@ pub struct S3Cors {
 	pub allowed_origins: Option<Vec<String>>,
 }
 
+#[derive(Serialize, Deserialize, Clone, Debug, Default)]
+#[serde(deny_unknown_fields)]
+pub struct S3Providers {
+	pub minio: Option<S3Provider>,
+	pub backblaze: Option<S3Provider>,
+	pub aws: Option<S3Provider>,
+}
+
 #[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(deny_unknown_fields)]
-pub enum S3Provider {
-	#[serde(rename = "minio")]
-	Minio {},
-	#[serde(rename = "backblaze")]
-	Backblaze {},
+pub struct S3Provider {
+	#[serde(default)]
+	pub default: bool,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]

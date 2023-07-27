@@ -26,6 +26,6 @@ provider "aws" {
 	s3_use_path_style = true
 	endpoints {
 		s3 = local.s3_endpoint_internal
-	}	
+	}
 }
 
