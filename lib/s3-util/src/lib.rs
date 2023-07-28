@@ -37,7 +37,7 @@ pub enum EndpointKind {
 pub enum Provider {
 	Minio,
 	Backblaze,
-	Aws
+	Aws,
 }
 
 impl Provider {
@@ -56,13 +56,13 @@ impl Provider {
 }
 
 impl std::fmt::Display for Provider {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		match self {
 			Provider::Minio => write!(f, "MINIO"),
 			Provider::Backblaze => write!(f, "BACKBLAZE"),
 			Provider::Aws => write!(f, "AWS"),
 		}
-    }
+	}
 }
 
 #[derive(Clone)]
