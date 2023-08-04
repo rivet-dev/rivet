@@ -1,5 +1,5 @@
 module "servers" {
-	source = "../modules/generic_server"
+    source = "../modules/generic_server"
 
 	for_each = var.servers
 
