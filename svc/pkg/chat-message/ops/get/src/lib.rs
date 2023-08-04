@@ -12,7 +12,7 @@ struct ChatMessage {
 #[operation(name = "chat-message-get")]
 async fn handle(
 	ctx: OperationContext<chat_message::get::Request>,
-) -> Result<chat_message::get::Response, GlobalError> {
+) -> GlobalResult<chat_message::get::Response> {
 	let crdb = ctx.crdb("db-chat").await?;
 
 	let chat_message_ids = ctx

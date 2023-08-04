@@ -13,7 +13,7 @@ lazy_static::lazy_static! {
 #[operation(name = "token-create")]
 async fn handle(
 	ctx: OperationContext<token::create::Request>,
-) -> Result<token::create::Response, GlobalError> {
+) -> GlobalResult<token::create::Response> {
 	let crdb = ctx.crdb("db-token").await?;
 
 	internal_assert!(!ctx.issuer.is_empty());
@@ -240,7 +240,7 @@ async fn create_token(
 	ent: &[claims::Entitlement],
 	session_id: Uuid,
 	ephemeral: bool,
-) -> Result<TokenData, GlobalError> {
+) -> GlobalResult<TokenData> {
 	// Create claims
 	let exp = if token_config.ttl > 0 {
 		Some(ctx.ts() + token_config.ttl)
@@ -323,7 +323,7 @@ fn encode(
 	header: &Header,
 	claims: &claims::Claims,
 	key: &EncodingKey,
-) -> Result<String, GlobalError> {
+) -> GlobalResult<String> {
 	// TODO:
 	// if key.family != header.alg.family() {
 	//	 return Err(jsonwebtoken::errors::Error::from(

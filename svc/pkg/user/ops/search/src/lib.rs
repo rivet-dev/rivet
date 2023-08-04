@@ -20,7 +20,7 @@ enum Error {
 #[operation(name = "user-search")]
 async fn handle(
 	ctx: OperationContext<user::search::Request>,
-) -> Result<user::search::Response, GlobalError> {
+) -> GlobalResult<user::search::Response> {
 	let crdb = ctx.crdb("db-user").await?;
 	let limit = ctx.limit;
 

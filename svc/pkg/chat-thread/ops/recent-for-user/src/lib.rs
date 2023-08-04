@@ -92,7 +92,7 @@ struct ThreadWithTail {
 #[operation(name = "chat-thread-recent-for-user")]
 async fn handle(
 	ctx: OperationContext<chat_thread::recent_for_user::Request>,
-) -> Result<chat_thread::recent_for_user::Response, GlobalError> {
+) -> GlobalResult<chat_thread::recent_for_user::Response> {
 	// Overview:
 	// 1. Fetch recent thread IDs & tail messages from Redis. If doesn't exists,
 	//       fetch from Cockroach.
