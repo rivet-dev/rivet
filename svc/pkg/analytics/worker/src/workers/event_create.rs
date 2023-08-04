@@ -37,7 +37,8 @@ async fn worker(ctx: OperationContext<analytics::msg::event_create::Message>) ->
 	// Fetch the user's current presence to enrich the event
 	let user_presences = op!([ctx] user_presence_get {
 		user_ids: user_ids_proto.clone(),
-	});
+	})
+	.await?;
 
 	// Build events
 	let mut insert = client.insert("events")?;

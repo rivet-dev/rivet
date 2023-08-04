@@ -113,7 +113,6 @@ async fn empty(ctx: TestCtx) {
 	let populate_db = PopulateDb::populate(
 		&ctx,
 		raw_team_id,
-		Uuid::new_v4(),
 		user_a.user_id.unwrap().as_uuid(),
 		user_b.user_id.unwrap().as_uuid(),
 	)
