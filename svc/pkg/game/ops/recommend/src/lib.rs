@@ -4,7 +4,7 @@ use rivet_operation::prelude::*;
 #[operation(name = "game-recommend")]
 async fn handle(
 	ctx: OperationContext<game::recommend::Request>,
-) -> Result<game::recommend::Response, GlobalError> {
+) -> GlobalResult<game::recommend::Response> {
 	let game_ids = sqlx::query_as::<_, (Uuid,)>("SELECT game_id FROM games")
 		.fetch_all(&ctx.crdb("db-game").await?)
 		.await?

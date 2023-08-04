@@ -12,7 +12,7 @@ use proto::{
 };
 use rivet_api::models;
 use rivet_claims::ClaimsDecode;
-use rivet_convert::{convert, fetch, ApiInto};
+use rivet_convert::{convert, fetch, ApiInto, ApiTryInto};
 use rivet_operation::prelude::*;
 use serde::{Deserialize, Serialize};
 
@@ -431,7 +431,7 @@ pub async fn update_profile(
 	msg!([ctx] user::msg::profile_set(user_ent.user_id) -> user::msg::update {
 		user_id: Some(user_ent.user_id.into()),
 		display_name: body.display_name.clone(),
-		account_number: body.account_number.map(|n| n as u32),
+		account_number: body.account_number.map(|n| n.try_into()).transpose()?,
 		bio: body.bio.clone(),
 	})
 	.await?;
@@ -478,7 +478,7 @@ pub async fn search(
 	let user_handles = res
 		.users
 		.iter()
-		.map(|user| convert::identity::handle_without_presence(&current_user_id, user))
+		.map(|user| convert::identity::handle_without_presence(current_user_id, user))
 		.collect::<GlobalResult<Vec<_>>>()?;
 
 	Ok(models::IdentitySearchResponse {
@@ -589,13 +589,18 @@ pub async fn validate_profile(
 ) -> GlobalResult<models::IdentityValidateProfileResponse> {
 	let user_ent = ctx.auth().user(ctx.op_ctx()).await?;
 
+	internal_assert!(
+		body.account_number.unwrap_or_default() >= 0,
+		"invalid parameter account_number`"
+	);
+
 	let res = op!([ctx] user_profile_validate {
 		user_id: Some(user_ent.user_id.into()),
 		display_name: body.display_name.clone(),
 		account_number:
 			body.account_number
-				.filter(|n| n > &0)
-				.map(|n| n as u32),
+				.map(|n| n.try_into())
+				.transpose()?,
 		bio: body.bio.clone(),
 	})
 	.await?;
@@ -618,9 +623,9 @@ pub async fn prepare_avatar_upload(
 	assert::user_registered(&ctx, user_ent.user_id).await?;
 
 	internal_assert!(body.content_length >= 0, "upload invalid");
-	internal_assert!(
+	assert_with!(
 		body.content_length < MAX_AVATAR_UPLOAD_SIZE,
-		"upload too large"
+		UPLOAD_TOO_LARGE
 	);
 
 	let ext = if body.path.ends_with(".png") {
@@ -638,7 +643,7 @@ pub async fn prepare_avatar_upload(
 			backend::upload::PrepareFile {
 				path: format!("image.{}", ext),
 				mime: Some(format!("image/{}", ext)),
-				content_length: body.content_length as u64,
+				content_length: body.content_length.try_into()?,
 				nsfw_score_threshold: Some(util_nsfw::score_thresholds::USER_AVATAR),
 				..Default::default()
 			},

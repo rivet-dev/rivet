@@ -1,0 +1,7 @@
+[service]
+name = "{{pkg}}-{{name}}"
+
+[runtime]
+kind = "rust"
+
+[operation]

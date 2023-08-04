@@ -8,7 +8,7 @@ const MESSAGE_BATCH_SIZE: usize = 256;
 const UPLOAD_BATCH_SIZE: usize = 256;
 
 #[worker(name = "user-delete")]
-async fn worker(ctx: OperationContext<user::msg::delete::Message>) -> Result<(), GlobalError> {
+async fn worker(ctx: OperationContext<user::msg::delete::Message>) -> GlobalResult<()> {
 	let user_id = internal_unwrap!(ctx.user_id).as_uuid();
 	let crdb = ctx.crdb("db-user").await?;
 

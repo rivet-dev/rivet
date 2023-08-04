@@ -5,7 +5,7 @@ use rivet_operation::prelude::*;
 use crate::{convert, fetch};
 
 pub fn handle(
-	current_user_id: &Uuid,
+	current_user_id: Uuid,
 	user: &backend::user::User,
 	presences_ctx: &fetch::identity::PresencesCtx,
 	is_mutual_following: bool,
@@ -13,7 +13,7 @@ pub fn handle(
 	let raw_user_id = internal_unwrap_owned!(user.user_id);
 	let user_id = raw_user_id.as_uuid();
 
-	let is_self = &user_id == current_user_id;
+	let is_self = user_id == current_user_id;
 
 	let user_presence = internal_unwrap_owned!(presences_ctx
 		.res
@@ -56,9 +56,9 @@ pub fn handle(
 		party,
 		is_registered: true, // TODO:
 		external: models::IdentityExternalLinks {
-			profile: util::route::user_profile(&user_id),
+			profile: util::route::user_profile(user_id),
 			settings: None,
-			chat: (!is_self).then(|| util::route::user_chat(&user_id)),
+			chat: (!is_self).then(|| util::route::user_chat(user_id)),
 		},
 	})
 }

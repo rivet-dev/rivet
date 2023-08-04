@@ -12,17 +12,17 @@ struct Follow {
 #[operation(name = "user-follow-get")]
 async fn handle(
 	ctx: OperationContext<user_follow::get::Request>,
-) -> Result<user_follow::get::Response, GlobalError> {
+) -> GlobalResult<user_follow::get::Response> {
 	let queries = ctx
 		.queries
 		.iter()
-		.map(|query| -> Result<_, GlobalError> {
+		.map(|query| {
 			Ok((
 				internal_unwrap!(query.follower_user_id).as_uuid(),
 				internal_unwrap!(query.following_user_id).as_uuid(),
 			))
 		})
-		.collect::<Result<Vec<(Uuid, Uuid)>, _>>()?;
+		.collect::<GlobalResult<Vec<(Uuid, Uuid)>>>()?;
 
 	let follows = sqlx::query_as::<_, Follow>(indoc!(
 		"

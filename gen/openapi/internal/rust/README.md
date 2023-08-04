@@ -157,6 +157,7 @@ Class | Method | HTTP request | Description
 *MatchmakerPlayersApi* | [**matchmaker_players_disconnected**](docs/MatchmakerPlayersApi.md#matchmaker_players_disconnected) | **POST** /players/disconnected | 
 *MatchmakerPlayersApi* | [**matchmaker_players_get_statistics**](docs/MatchmakerPlayersApi.md#matchmaker_players_get_statistics) | **GET** /players/statistics | 
 *MatchmakerRegionsApi* | [**matchmaker_regions_list**](docs/MatchmakerRegionsApi.md#matchmaker_regions_list) | **GET** /regions | 
+*ModuleApi* | [**module_call**](docs/ModuleApi.md#module_call) | **POST** /modules/{module}/scripts/{script}/call | 
 *PartyActivityApi* | [**party_activity_set_party_to_idle**](docs/PartyActivityApi.md#party_activity_set_party_to_idle) | **DELETE** /parties/self/activity | 
 *PartyActivityMatchmakerApi* | [**party_activity_matchmaker_find_lobby_for_party**](docs/PartyActivityMatchmakerApi.md#party_activity_matchmaker_find_lobby_for_party) | **POST** /parties/self/activity/matchmaker/lobbies/find | 
 *PartyActivityMatchmakerApi* | [**party_activity_matchmaker_join_lobby_for_party**](docs/PartyActivityMatchmakerApi.md#party_activity_matchmaker_join_lobby_for_party) | **POST** /parties/self/activity/matchmaker/lobbies/join | 
@@ -337,6 +338,8 @@ Class | Method | HTTP request | Description
  - [CloudVersionCdnMiddlewareKind](docs/CloudVersionCdnMiddlewareKind.md)
  - [CloudVersionCdnRoute](docs/CloudVersionCdnRoute.md)
  - [CloudVersionConfig](docs/CloudVersionConfig.md)
+ - [CloudVersionEngineConfig](docs/CloudVersionEngineConfig.md)
+ - [CloudVersionEngineUnrealConfig](docs/CloudVersionEngineUnrealConfig.md)
  - [CloudVersionFull](docs/CloudVersionFull.md)
  - [CloudVersionIdentityConfig](docs/CloudVersionIdentityConfig.md)
  - [CloudVersionIdentityCustomAvatar](docs/CloudVersionIdentityCustomAvatar.md)
@@ -344,6 +347,8 @@ Class | Method | HTTP request | Description
  - [CloudVersionMatchmakerCaptcha](docs/CloudVersionMatchmakerCaptcha.md)
  - [CloudVersionMatchmakerCaptchaHcaptcha](docs/CloudVersionMatchmakerCaptchaHcaptcha.md)
  - [CloudVersionMatchmakerCaptchaHcaptchaLevel](docs/CloudVersionMatchmakerCaptchaHcaptchaLevel.md)
+ - [CloudVersionMatchmakerCaptchaTurnstile](docs/CloudVersionMatchmakerCaptchaTurnstile.md)
+ - [CloudVersionMatchmakerCaptchaTurnstileDomain](docs/CloudVersionMatchmakerCaptchaTurnstileDomain.md)
  - [CloudVersionMatchmakerConfig](docs/CloudVersionMatchmakerConfig.md)
  - [CloudVersionMatchmakerGameMode](docs/CloudVersionMatchmakerGameMode.md)
  - [CloudVersionMatchmakerGameModeIdleLobbiesConfig](docs/CloudVersionMatchmakerGameModeIdleLobbiesConfig.md)
@@ -480,6 +485,8 @@ Class | Method | HTTP request | Description
  - [MatchmakerPlayersConnectedRequest](docs/MatchmakerPlayersConnectedRequest.md)
  - [MatchmakerRegionInfo](docs/MatchmakerRegionInfo.md)
  - [MatchmakerRegionStatistics](docs/MatchmakerRegionStatistics.md)
+ - [ModuleCallRequest](docs/ModuleCallRequest.md)
+ - [ModuleCallResponse](docs/ModuleCallResponse.md)
  - [PartyActivity](docs/PartyActivity.md)
  - [PartyActivityFindMatchmakerLobbyForPartyRequest](docs/PartyActivityFindMatchmakerLobbyForPartyRequest.md)
  - [PartyActivityJoinMatchmakerLobbyForPartyRequest](docs/PartyActivityJoinMatchmakerLobbyForPartyRequest.md)

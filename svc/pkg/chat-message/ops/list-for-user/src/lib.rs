@@ -12,7 +12,7 @@ struct ChatMessage {
 #[operation(name = "chat-message-list-for-user")]
 async fn handle(
 	ctx: OperationContext<chat_message::list_for_user::Request>,
-) -> Result<chat_message::list_for_user::Response, GlobalError> {
+) -> GlobalResult<chat_message::list_for_user::Response> {
 	let crdb = ctx.crdb("db-chat").await?;
 
 	let user_id = internal_unwrap!(ctx.user_id).as_uuid();

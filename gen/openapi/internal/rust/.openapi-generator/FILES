@@ -179,6 +179,8 @@ docs/CloudVersionCdnMiddleware.md
 docs/CloudVersionCdnMiddlewareKind.md
 docs/CloudVersionCdnRoute.md
 docs/CloudVersionConfig.md
+docs/CloudVersionEngineConfig.md
+docs/CloudVersionEngineUnrealConfig.md
 docs/CloudVersionFull.md
 docs/CloudVersionIdentityConfig.md
 docs/CloudVersionIdentityCustomAvatar.md
@@ -186,6 +188,8 @@ docs/CloudVersionIdentityCustomDisplayName.md
 docs/CloudVersionMatchmakerCaptcha.md
 docs/CloudVersionMatchmakerCaptchaHcaptcha.md
 docs/CloudVersionMatchmakerCaptchaHcaptchaLevel.md
+docs/CloudVersionMatchmakerCaptchaTurnstile.md
+docs/CloudVersionMatchmakerCaptchaTurnstileDomain.md
 docs/CloudVersionMatchmakerConfig.md
 docs/CloudVersionMatchmakerGameMode.md
 docs/CloudVersionMatchmakerGameModeIdleLobbiesConfig.md
@@ -334,6 +338,9 @@ docs/MatchmakerPlayersConnectedRequest.md
 docs/MatchmakerRegionInfo.md
 docs/MatchmakerRegionStatistics.md
 docs/MatchmakerRegionsApi.md
+docs/ModuleApi.md
+docs/ModuleCallRequest.md
+docs/ModuleCallResponse.md
 docs/PartyActivity.md
 docs/PartyActivityApi.md
 docs/PartyActivityFindMatchmakerLobbyForPartyRequest.md
@@ -418,6 +425,7 @@ src/apis/matchmaker_lobbies_api.rs
 src/apis/matchmaker_players_api.rs
 src/apis/matchmaker_regions_api.rs
 src/apis/mod.rs
+src/apis/module_api.rs
 src/apis/party_activity_api.rs
 src/apis/party_activity_matchmaker_api.rs
 src/apis/party_parties_api.rs
@@ -579,6 +587,8 @@ src/models/cloud_version_cdn_middleware.rs
 src/models/cloud_version_cdn_middleware_kind.rs
 src/models/cloud_version_cdn_route.rs
 src/models/cloud_version_config.rs
+src/models/cloud_version_engine_config.rs
+src/models/cloud_version_engine_unreal_config.rs
 src/models/cloud_version_full.rs
 src/models/cloud_version_identity_config.rs
 src/models/cloud_version_identity_custom_avatar.rs
@@ -586,6 +596,8 @@ src/models/cloud_version_identity_custom_display_name.rs
 src/models/cloud_version_matchmaker_captcha.rs
 src/models/cloud_version_matchmaker_captcha_hcaptcha.rs
 src/models/cloud_version_matchmaker_captcha_hcaptcha_level.rs
+src/models/cloud_version_matchmaker_captcha_turnstile.rs
+src/models/cloud_version_matchmaker_captcha_turnstile_domain.rs
 src/models/cloud_version_matchmaker_config.rs
 src/models/cloud_version_matchmaker_game_mode.rs
 src/models/cloud_version_matchmaker_game_mode_idle_lobbies_config.rs
@@ -723,6 +735,8 @@ src/models/matchmaker_players_connected_request.rs
 src/models/matchmaker_region_info.rs
 src/models/matchmaker_region_statistics.rs
 src/models/mod.rs
+src/models/module_call_request.rs
+src/models/module_call_response.rs
 src/models/party_activity.rs
 src/models/party_activity_find_matchmaker_lobby_for_party_request.rs
 src/models/party_activity_join_matchmaker_lobby_for_party_request.rs

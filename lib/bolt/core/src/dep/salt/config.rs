@@ -2,7 +2,7 @@ use anyhow::*;
 use serde_json::{json, Value};
 
 use crate::{
-	config::{self, service::RuntimeKind},
+	config::{self, ns::LoggingProvider, service::RuntimeKind},
 	context::ProjectContext,
 	dep,
 };
@@ -19,10 +19,14 @@ pub async fn build(ctx: &ProjectContext, opts: &BuildOpts) -> Result<Value> {
 
 	vars["namespace"] = json!(ctx.ns_id());
 	match &ctx.ns().cluster.kind {
-		config::ns::ClusterKind::SingleNode { .. } => {
+		config::ns::ClusterKind::SingleNode {
+			restrict_service_resources,
+			..
+		} => {
 			vars["deploy"] = json!({
 				"local": {
 					"backend_repo_path": ctx.path(),
+					"restrict_service_resources": restrict_service_resources,
 				},
 			});
 		}
@@ -44,6 +48,8 @@ pub async fn build(ctx: &ProjectContext, opts: &BuildOpts) -> Result<Value> {
 	vars["pools"] = json!(crate::dep::terraform::pools::build_pools(ctx).await?);
 
 	vars["cloudflare"] = cloudflare(ctx)?;
+
+	vars["logging"] = logging(ctx)?;
 
 	if !opts.skip_s3 {
 		let s3_config = ctx.s3_config(ctx.clone().s3_credentials().await?).await?;
@@ -82,6 +88,23 @@ fn cloudflare(ctx: &ProjectContext) -> Result<Value> {
 
 	Ok(json!({
 		"access": access,
+	}))
+}
+
+fn logging(ctx: &ProjectContext) -> Result<Value> {
+	#[allow(irrefutable_let_patterns)]
+	let Some(logging) = &ctx.ns().logging else {
+		return Ok(json!(null));
+	};
+
+	let endpoint = match &logging.provider {
+		LoggingProvider::Loki { endpoint } => endpoint,
+	};
+
+	Ok(json!({
+		"loki": {
+			"endpoint": endpoint,
+		},
 	}))
 }
 

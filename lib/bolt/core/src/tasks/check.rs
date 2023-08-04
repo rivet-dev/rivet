@@ -121,6 +121,7 @@ async fn check_svcs(
 			// `cargo clippy` runs `cargo check` under the hood.
 			let mut cmd = Command::new("cargo");
 			cmd.current_dir(path);
+			cmd.env("RUSTFLAGS", "--cfg tokio_unstable");
 			cmd.arg("clippy");
 
 			// Check tests, which will also check the main module. Using
@@ -158,7 +159,7 @@ async fn check_svcs(
 				.arg("clippy::wildcard_imports")
 				.arg("-A")
 				.arg("clippy::module_name_repetitions")
-				.arg("-A")
+				.arg("-W")
 				.arg("clippy::cast_possible_truncation")
 				.arg("-A")
 				.arg("clippy::missing_errors_doc")

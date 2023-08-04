@@ -47,7 +47,7 @@ pub async fn messages(
 		.iter()
 		.map(|message| {
 			convert::chat::message(
-				&current_user_id,
+				current_user_id,
 				message,
 				&users_res.users,
 				&parties.parties,
@@ -159,7 +159,7 @@ pub async fn threads(
 			.iter()
 			.flat_map(|message| {
 				let thread = convert::chat::thread(
-					&current_user_id,
+					current_user_id,
 					message,
 					threads,
 					&users_res.users,

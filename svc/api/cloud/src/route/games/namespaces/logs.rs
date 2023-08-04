@@ -4,7 +4,7 @@ use proto::{
 	common,
 };
 use rivet_cloud_server::models;
-use rivet_convert::ApiInto;
+use rivet_convert::ApiTryInto;
 use rivet_operation::prelude::*;
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
@@ -109,7 +109,7 @@ pub async fn get_lobby(
 	Ok(models::GetNamespaceLobbyResponse {
 		lobby: lobby.summary,
 		perf_lists: Vec::new(),
-		metrics: metrics.map(ApiInto::api_into),
+		metrics: metrics.map(ApiTryInto::try_into).transpose()?,
 
 		// Deprecated
 		stdout_presigned_urls: Vec::new(),
@@ -194,7 +194,7 @@ async fn fetch_lobby_logs(ctx: &Ctx<Auth>, lobby_ids: Vec<Uuid>) -> GlobalResult
 						models::LogsLobbyStatus::Stopped(models::LogsLobbyStatusStopped {
 							stop_ts: util::timestamp::to_chrono(stop_ts)?,
 							failed,
-							exit_code: exit_code as i32,
+							exit_code: exit_code.try_into()?,
 						})
 					} else {
 						models::LogsLobbyStatus::Running(models::Unit {})

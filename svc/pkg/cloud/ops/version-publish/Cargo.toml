@@ -21,6 +21,8 @@ kv-config-version-prepare = { path = "../../../kv-config/ops/version-prepare" }
 kv-config-version-publish = { path = "../../../kv-config/ops/version-publish" }
 mm-config-version-prepare = { path = "../../../mm-config/ops/version-prepare" }
 mm-config-version-publish = { path = "../../../mm-config/ops/version-publish" }
+module-game-version-prepare = { path = "../../../module/ops/game-version-prepare" }
+module-game-version-publish = { path = "../../../module/ops/game-version-publish" }
 
 [dependencies.sqlx]
 version = "0.6"

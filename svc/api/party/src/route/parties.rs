@@ -1,3 +1,5 @@
+use std::convert::TryInto;
+
 use api_helper::{
 	anchor::{WatchIndexQuery, WatchResponse},
 	ctx::Ctx,
@@ -326,7 +328,7 @@ pub async fn create_party(
 	msg!([ctx] party::msg::create(party_id) -> party::msg::create_complete {
 		party_id: Some(party_id.into()),
 		leader_user_id: Some(current_user_id.into()),
-		party_size: body.party_size as u32,
+		party_size: body.party_size.try_into()?,
 		initial_state:  initial_state,
 		publicity: body.publicity.map(|x| party::msg::create::message::Publicity {
 			public: x.public.map(convert::party::publicity_level_to_proto),

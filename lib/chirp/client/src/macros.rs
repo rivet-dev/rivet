@@ -229,7 +229,7 @@ macro_rules! op {
 		op!([$container] $mod { $($name: $value,)* })
 	};
 
-	// TODO: Does nothing
+	// TODO: Does nothing different
 	([$container:expr] @dont_log_body $($t:tt)*) => {
 		op!([$container] $($t)+)
 	};

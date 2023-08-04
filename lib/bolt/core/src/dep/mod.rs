@@ -2,6 +2,7 @@ pub mod cargo;
 pub mod cloudflare;
 pub mod consul;
 pub mod docker;
+pub mod fly;
 pub mod nomad;
 pub mod redis;
 pub mod s3;

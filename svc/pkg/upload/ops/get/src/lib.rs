@@ -40,7 +40,14 @@ async fn handle(
 
 	let uploads = sqlx::query_as::<_, UploadRow>(indoc!(
 		"
-		SELECT bucket, upload_id, create_ts, content_length, complete_ts, deleted_ts, user_id
+		SELECT
+			bucket,
+			upload_id,
+			create_ts,
+			content_length,
+			complete_ts,
+			deleted_ts,
+			user_id
 		FROM uploads
 		WHERE upload_id = ANY($1)
 		"

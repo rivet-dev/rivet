@@ -125,7 +125,7 @@ pub async fn game_summary_fetch(
 			name_id: game.name_id.clone(),
 			display_name: game.display_name.clone(),
 			developer_group_id: developer_team_id.to_string(),
-			total_player_count: total_player_count as i32,
+			total_player_count: total_player_count.try_into()?,
 			logo_url: util::route::game_logo(
 				game.logo_upload_id.as_ref().map(common::Uuid::as_uuid),
 				game.logo_file_name.as_ref(),

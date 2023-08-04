@@ -1,7 +1,7 @@
 ---
 name = "API_UNAUTHORIZED"
 description = "Failed to authenticate: {reason}"
-description_basic = "No bearer token provided. Make sure your `Authorization` header is properly set."
+description_basic = "Make sure your `Authorization` header is properly set."
 http_status = 401
 ---
 

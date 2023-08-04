@@ -11,15 +11,7 @@
         </readonly>
     </profiles>
 
-    <quotas>
-        <default>
-        </default>
-    </quotas>
-
     <users>
-        <default remove="remove">
-        </default>
-
         <bolt>
 			<password>{{ pillar['clickhouse']['users']['bolt']['password'] }}</password>
         </bolt>
@@ -33,5 +25,23 @@
             <profile>readonly</profile>
         </grafana>
     </users>
+
+    <quotas>
+        <default>
+            <!-- Limits for time interval. You could specify many intervals with different limits. -->
+            <interval>
+                <!-- Length of interval. -->
+                <duration>3600</duration>
+
+                <!-- No limits. Just calculate resource usage for time interval. -->
+                <queries>0</queries>
+                <errors>0</errors>
+                <result_rows>0</result_rows>
+                <read_rows>0</read_rows>
+                <execution_time>0</execution_time>
+            </interval>
+        </default>
+    </quotas>
+
 </clickhouse>
 
