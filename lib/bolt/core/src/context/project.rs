@@ -543,6 +543,7 @@ impl ProjectContextData {
 	pub fn default_s3_provider(self: &Arc<Self>) -> Result<(S3Provider, config::ns::S3Provider)> {
 		let providers = &self.ns().s3.providers;
 
+		// Find the provider with the default flag set
 		if let Some(p) = &providers.minio {
 			if p.default {
 				return Ok((S3Provider::Minio, p.clone()));
@@ -561,7 +562,16 @@ impl ProjectContextData {
 			}
 		}
 
-		bail!("no default s3 provider set");
+		// If nonoe have the default flag, return the first provider
+		if let Some(p) = &providers.minio {
+			return Ok((S3Provider::Minio, p.clone()));
+		} else if let Some(p) = &providers.backblaze {
+			return Ok((S3Provider::Backblaze, p.clone()));
+		} else if let Some(p) = &providers.aws {
+			return Ok((S3Provider::Aws, p.clone()));
+		}
+
+		bail!("no s3 provider configured")
 	}
 
 	/// Returns the appropriate S3 connection configuration for the provided S3 provider.
