@@ -41,7 +41,7 @@ impl Auth {
 	pub fn claims(&self) -> GlobalResult<&Claims> {
 		self.claims
 			.as_ref()
-			.ok_or_else(|| err_code!(API_UNAUTHORIZED))
+			.ok_or_else(|| err_code!(API_UNAUTHORIZED, reason = "No bearer token provided."))
 	}
 
 	pub async fn user(&self, ctx: &OperationContext<()>) -> GlobalResult<rivet_claims::ent::User> {
@@ -76,7 +76,8 @@ impl Auth {
 	) -> GlobalResult<()> {
 		let claims = self.claims()?;
 
-		if let Ok(user_ent) = self.user(ctx).await {
+		if claims.as_user().is_ok() {
+			let user_ent = self.user(ctx).await?;
 			assert::user_registered(ctx, user_ent.user_id).await?;
 
 			let team_list_res = op!([ctx] user_team_list {
@@ -103,7 +104,10 @@ impl Auth {
 				reason = "Game cloud token cannot write to this game",
 			);
 		} else {
-			panic_with!(API_UNAUTHORIZED);
+			panic_with!(
+				API_UNAUTHORIZED,
+				reason = "Token is missing one of the following entitlements: user"
+			);
 		}
 	}
 
@@ -136,7 +140,11 @@ impl Auth {
 		ctx: &OperationContext<()>,
 		team_id: Uuid,
 	) -> GlobalResult<()> {
-		if let Ok(user_ent) = self.user(ctx).await {
+		let claims = self.claims()?;
+
+		if claims.as_user().is_ok() {
+			let user_ent = self.user(ctx).await?;
+
 			assert::user_registered(ctx, user_ent.user_id).await?;
 
 			let res = op!([ctx] team_get {
@@ -157,7 +165,10 @@ impl Auth {
 
 			Ok(())
 		} else {
-			panic_with!(API_UNAUTHORIZED);
+			panic_with!(
+				API_UNAUTHORIZED,
+				reason = "token is missing one of the following entitlements: user"
+			);
 		}
 	}
 
@@ -169,7 +180,9 @@ impl Auth {
 	) -> GlobalResult<()> {
 		let claims = self.claims()?;
 
-		if let Ok(user_ent) = self.user(ctx).await {
+		if claims.as_user().is_ok() {
+			let user_ent = self.user(ctx).await?;
+
 			assert::user_registered(ctx, user_ent.user_id).await?;
 
 			// Find the game's development teams
@@ -201,7 +214,10 @@ impl Auth {
 
 			Ok(())
 		} else {
-			panic_with!(API_UNAUTHORIZED);
+			panic_with!(
+				API_UNAUTHORIZED,
+				reason = "token is missing one of the following entitlements: user"
+			);
 		}
 	}
 
@@ -222,7 +238,9 @@ impl Auth {
 	) -> GlobalResult<()> {
 		let claims = self.claims()?;
 
-		if let Ok(user_ent) = self.user(ctx).await {
+		if claims.as_user().is_ok() {
+			let user_ent = self.user(ctx).await?;
+
 			assert::user_registered(ctx, user_ent.user_id).await?;
 
 			// Find the game's development team
@@ -248,7 +266,10 @@ impl Auth {
 
 			Ok(())
 		} else {
-			panic_with!(API_UNAUTHORIZED);
+			panic_with!(
+				API_UNAUTHORIZED,
+				reason = "token is missing one of the following entitlements: user"
+			);
 		}
 	}
 
@@ -290,7 +311,11 @@ impl Auth {
 
 	/// Validates that the given agent is an admin user.
 	pub async fn admin(&self, ctx: &OperationContext<()>) -> GlobalResult<()> {
-		if let Ok(user_ent) = self.user(ctx).await {
+		let claims = self.claims()?;
+
+		if claims.as_user().is_ok() {
+			let user_ent = self.user(ctx).await?;
+
 			// Get user
 			let user_res = op!([ctx] user_get {
 				user_ids: vec![user_ent.user_id.into()]
@@ -302,7 +327,10 @@ impl Auth {
 
 			Ok(())
 		} else {
-			panic_with!(API_UNAUTHORIZED);
+			panic_with!(
+				API_UNAUTHORIZED,
+				reason = "token is missing one of the following entitlements: user"
+			);
 		}
 	}
 
@@ -329,7 +357,10 @@ impl Auth {
 	) -> GlobalResult<AccessibleGameIdsResponse> {
 		let claims = self.claims()?;
 
-		let (user_id, team_ids, game_ids) = if let Ok(user_ent) = self.user(ctx).await {
+		let (user_id, team_ids, game_ids) =
+		if claims.as_user().is_ok() {
+			let user_ent = self.user(ctx).await?;
+
 			// Fetch teams associated with user
 			let teams_res = op!([ctx] user_team_list {
 				user_ids: vec![user_ent.user_id.into()],
@@ -365,7 +396,10 @@ impl Auth {
 		} else if let Ok(cloud_ent) = claims.as_game_cloud() {
 			(None, Vec::new(), vec![cloud_ent.game_id])
 		} else {
-			panic_with!(API_UNAUTHORIZED);
+			panic_with!(
+				API_UNAUTHORIZED,
+				reason = "token is missing one of the following entitlements: user, game_cloud"
+			);
 		};
 
 		Ok(AccessibleGameIdsResponse {

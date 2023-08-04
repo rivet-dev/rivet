@@ -39,7 +39,7 @@ impl Auth {
 	pub fn claims(&self) -> GlobalResult<&Claims> {
 		self.claims
 			.as_ref()
-			.ok_or_else(|| err_code!(API_UNAUTHORIZED))
+			.ok_or_else(|| err_code!(API_UNAUTHORIZED, reason = "No bearer token provided."))
 	}
 
 	pub async fn user(&self, ctx: &OperationContext<()>) -> GlobalResult<rivet_claims::ent::User> {
@@ -64,10 +64,6 @@ impl Auth {
 		}
 
 		Ok(user_ent)
-	}
-
-	pub fn lobby(&self) -> GlobalResult<rivet_claims::ent::MatchmakerLobby> {
-		self.claims()?.as_matchmaker_lobby()
 	}
 
 	pub fn game_ns_dev_option(
@@ -102,7 +98,9 @@ impl Auth {
 		ctx: &OperationContext<()>,
 		allow_users: bool,
 	) -> GlobalResult<Uuid> {
-		let namespace_id = if let Ok(lobby_ent) = self.lobby() {
+		let claims = self.claims()?;
+
+		let namespace_id = if let Ok(lobby_ent) = claims.as_matchmaker_lobby() {
 			let lobbies_res = op!([ctx] mm_lobby_get {
 				lobby_ids: vec![lobby_ent.lobby_id.into()],
 				include_stopped: false,
@@ -113,7 +111,6 @@ impl Auth {
 
 			internal_unwrap_owned!(lobby.namespace_id)
 		} else if allow_users {
-			let claims = self.claims()?;
 			let game_user_ent = claims.as_game_user()?;
 
 			let game_users_res = op!([ctx] game_user_get {
@@ -135,7 +132,14 @@ impl Auth {
 
 			*internal_unwrap!(game_user.namespace_id)
 		} else {
-			panic_with!(API_UNAUTHORIZED);
+			panic_with!(
+				API_UNAUTHORIZED,
+				reason = if allow_users {
+					"token is missing one of the following entitlements: user, lobby"
+				} else {
+					"token is missing one of the following entitlements: lobby"
+				}
+			);
 		};
 
 		utils::validate_config(ctx, namespace_id).await?;
@@ -152,12 +156,17 @@ impl Auth {
 		let claims = self.claims()?;
 
 		// Pre-fetch entitlements so we don't fetch the namespace if there is no ent
-		let (user_ent, cloud_ent) = if let Ok(ent) = self.user(ctx).await {
-			(Some(ent), None)
+		let (user_ent, cloud_ent) = if let Ok(ent) = claims.as_user() {
+			let user_ent = self.user(ctx).await?;
+
+			(Some(user_ent), None)
 		} else if let Ok(ent) = claims.as_game_cloud() {
 			(None, Some(ent))
 		} else {
-			panic_with!(API_UNAUTHORIZED);
+			panic_with!(
+				API_UNAUTHORIZED,
+				reason = "token is missing one of the following entitlements: user, game_cloud"
+			);
 		};
 
 		let namespaces_res = op!([ctx] game_namespace_get {

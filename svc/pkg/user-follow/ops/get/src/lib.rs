@@ -17,12 +17,12 @@ async fn handle(
 		.queries
 		.iter()
 		.map(|query| {
-			GlobalResult::Ok((
+			Ok((
 				internal_unwrap!(query.follower_user_id).as_uuid(),
 				internal_unwrap!(query.following_user_id).as_uuid(),
 			))
 		})
-		.collect::<Result<Vec<(Uuid, Uuid)>, _>>()?;
+		.collect::<GlobalResult<Vec<(Uuid, Uuid)>>>()?;
 
 	let follows = sqlx::query_as::<_, Follow>(indoc!(
 		"

@@ -37,7 +37,7 @@ impl Auth {
 	pub fn claims(&self) -> GlobalResult<&Claims> {
 		self.claims
 			.as_ref()
-			.ok_or_else(|| err_code!(API_UNAUTHORIZED))
+			.ok_or_else(|| err_code!(API_UNAUTHORIZED, reason = "No bearer token provided."))
 	}
 
 	pub async fn user(&self, ctx: &OperationContext<()>) -> GlobalResult<rivet_claims::ent::User> {

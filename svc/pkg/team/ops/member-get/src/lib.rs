@@ -16,12 +16,12 @@ async fn handle(
 		.members
 		.iter()
 		.map(|members| {
-			GlobalResult::Ok((
+			Ok((
 				internal_unwrap!(members.team_id).as_uuid(),
 				internal_unwrap!(members.user_id).as_uuid(),
 			))
 		})
-		.collect::<Result<Vec<(Uuid, Uuid)>, _>>()?;
+		.collect::<GlobalResult<Vec<(Uuid, Uuid)>>>()?;
 
 	let members: Vec<TeamMember> = sqlx::query_as(indoc!(
 		"
