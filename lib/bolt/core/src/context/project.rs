@@ -566,10 +566,8 @@ impl ProjectContextData {
 
 	/// Returns the appropriate S3 connection configuration for the provided S3 provider.
 	pub async fn s3_credentials(self: &Arc<Self>, provider: S3Provider) -> Result<S3Credentials> {
-		// TODO: Add multiple credentials for different services
-
-		match self.ns().s3.provider {
-			config::ns::S3Provider::Minio {} => Ok(S3Credentials {
+		match provider {
+			S3Provider::Minio => Ok(S3Credentials {
 				access_key_id: "root".into(),
 				access_key_secret: self
 					.read_secret(&["minio", "users", "root", "password"])
