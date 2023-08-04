@@ -33,6 +33,7 @@ install_traefik:
     - onchanges:
       - file: install_traefik
 
+{%- if 'consul-client' in grains['roles'] %}
 # Delete old Treafik Consul file that was moved
 remove_etc_consul_traefik_hcl:
   file.absent:
@@ -44,4 +45,5 @@ remove_etc_consul_traefik_hcl:
       - file: remove_etc_consul_traefik_hcl
     - onchanges:
       - file: remove_etc_consul_traefik_hcl
+{%- endif %}
 

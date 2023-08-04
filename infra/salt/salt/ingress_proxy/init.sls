@@ -97,11 +97,11 @@ stop_traefik_service:
 # connections needlessly
 start_ingress_proxy_service:
   service.running:
-    - name: traefik
+    - name: ingress-proxy
     - enable: True
     - require:
       - file: install_traefik
-      - file: push_traefik_service
+      - file: push_ingress_proxy_service
       - file: push_etc_ingress_proxy
       - service: stop_traefik_service
 
@@ -109,7 +109,7 @@ start_ingress_proxy_service:
 push_etc_consul_ingress_proxy_hcl:
   file.managed:
     - name: /etc/consul.d/ingress-proxy.hcl
-    - source: salt://ingress_proxy/files/consul/traefik.hcl.j2
+    - source: salt://ingress_proxy/files/consul/ingress-proxy.hcl.j2
     - template: jinja
     - context:
         service_name: {{ pool }}
