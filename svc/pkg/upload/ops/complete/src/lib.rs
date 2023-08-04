@@ -102,7 +102,7 @@ async fn fetch_files(
 		.fetch_one(crdb),
 		sqlx::query_as::<_, FileRow>(indoc!(
 			"
-			SELECT path, content_length, nsfw_score_threshold
+			SELECT path, content_length, nsfw_score_threshold, multipart_upload_id
 			FROM upload_files
 			WHERE upload_id = $1
 			"
@@ -110,17 +110,6 @@ async fn fetch_files(
 		.bind(upload_id)
 		.fetch_all(crdb)
 	)?;
-
-	let files = sqlx::query_as::<_, FileRow>(indoc!(
-		"
-		SELECT path, content_length, nsfw_score_threshold, multipart_upload_id
-		FROM upload_files
-		WHERE upload_id = $1
-		"
-	))
-	.bind(upload_id)
-	.fetch_all(crdb)
-	.await?;
 
 	// Parse provider
 	let proto_provider = internal_unwrap_owned!(
