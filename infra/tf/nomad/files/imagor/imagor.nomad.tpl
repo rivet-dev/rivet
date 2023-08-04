@@ -117,7 +117,7 @@ job "imagor:${dc}" {
 			driver = "docker"
 
 			config {
-				image = "shumc/imagor:1.4.4"
+				image = "shumc/imagor:1.4.7"
 				${shared.docker_auth}
 
 				ports = ["http"]

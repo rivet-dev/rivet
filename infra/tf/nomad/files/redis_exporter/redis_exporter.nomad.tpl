@@ -38,7 +38,7 @@ job "redis-exporter:${dc}" {
 			driver = "docker"
 
 			config {
-				image = "oliver006/redis_exporter:v1.33.0"
+				image = "oliver006/redis_exporter:v1.52.0"
 				${shared.docker_auth}
 				args = [
 					"--redis.addr=${service.endpoint}",

@@ -20,11 +20,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 -   **Infra** Update CNI plugins to 1.3.0
 -   **Infra** Update ClickHouse to 23.7.2.25
 -   **Infra** Update Cockroach to 23.1.7
+-   **Infra** Update Consul Exporter to 1.9.0
 -   **Infra** Update Consul to 1.16.0
+-   **Infra** Update Imagor to 1.4.7
 -   **Infra** Update NATS server to 2.9.20
 -   **Infra** Update Node Exporter server to 1.6.1
 -   **Infra** Update Nomad to 1.6.1
 -   **Infra** Update Prometheus server to 2.46.0
+-   **Infra** Update Redis Exporter to 1.52.0
 -   **Infra** Update Redis to 7.0.12
 -   **Infra** Update Treafik to 2.10.4
 
