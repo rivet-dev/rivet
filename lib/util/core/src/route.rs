@@ -39,7 +39,7 @@ pub fn user_avatar(avatar_id: &str, upload_id: Option<Uuid>, file_name: Option<&
 			file_name
 		)
 	} else {
-		format!("https://assets.rivet.gg/avatars/{}.png", avatar_id)
+		format!("https://assets2.rivet.gg/avatars/{}.png", avatar_id)
 	}
 }
 
