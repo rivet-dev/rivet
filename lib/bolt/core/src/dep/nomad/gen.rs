@@ -9,7 +9,7 @@ use crate::{
 		service::{ServiceDomain, ServiceKind, ServiceRouter},
 	},
 	context::{BuildContext, ProjectContext, RunContext, ServiceContext},
-	dep::{nomad::job_schema::*, s3},
+	dep::nomad::job_schema::*,
 };
 
 pub struct ExecServiceContext {
@@ -463,25 +463,25 @@ pub async fn gen_svc(region_id: &str, exec_ctx: &ExecServiceContext) -> Job {
 					ExecServiceDriver::Docker { .. }
 					| ExecServiceDriver::LocalBinaryArtifact { .. } => None,
 					ExecServiceDriver::UploadedBinaryArtifact { artifact_key, .. } => {
-						let service_key = s3::fetch_service_key(
-							&project_ctx,
-							&["b2", "bolt_service_builds_download"],
-						)
-						.await
-						.unwrap();
+						let s3_dep = project_ctx.service_with_name("bucket-svc-build").await;
+						let bucket = s3_dep.s3_bucket_name().await;
+						let (default_provider, _) = project_ctx.default_s3_provider().unwrap();
+						let s3_config = project_ctx.s3_config(default_provider).await.unwrap();
+						let s3_creds = project_ctx.s3_credentials(default_provider).await.unwrap();
+
 						Some(json!([
 							{
 								"GetterMode": "dir",
 								"GetterSource": format!(
 									"s3::{endpoint}/{bucket}/{key}",
-									endpoint = s3::service_builds::ENDPOINT,
-									bucket = s3::service_builds::BUCKET,
+									endpoint = s3_config.endpoint_internal,
+									bucket = bucket,
 									key = urlencoding::encode(artifact_key),
 								),
 								"GetterOptions": {
-									"region": s3::service_builds::REGION,
-									"aws_access_key_id": service_key.key_id,
-									"aws_access_key_secret": service_key.key,
+									"region": s3_config.region,
+									"aws_access_key_id": s3_creds.access_key_id,
+									"aws_access_key_secret": s3_creds.access_key_secret,
 									// "checksum": TODO,
 								},
 								"RelativeDest": "${NOMAD_TASK_DIR}/build/",

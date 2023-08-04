@@ -78,7 +78,7 @@ pub async fn init_if_needed_quiet(ctx: &ProjectContext, plan_id: &str, quiet: bo
 			.arg(&localized_workspace_name);
 		let workspace_exists = select_cmd.exec_quiet(quiet, quiet).await.is_ok();
 
-		// Create workspace ifE doesn't exist
+		// Create workspace if it doesn't exist
 		if !workspace_exists {
 			println!();
 			rivet_term::status::progress("Creating Workspace", &localized_workspace_name);

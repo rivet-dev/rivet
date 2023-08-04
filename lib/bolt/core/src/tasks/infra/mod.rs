@@ -188,26 +188,31 @@ pub fn build_plan(ctx: &ProjectContext) -> Result<Vec<PlanStep>> {
 	}
 
 	// S3
-	match ctx.ns().s3.provider {
-		config::ns::S3Provider::Minio { .. } => {
-			// Install Minio for s3_minio Terraform plan
-			plan.push(PlanStep::Salt {
-				filter: Some("G@roles:minio".into()),
-				sls: None,
-				config_opts: salt::config::BuildOpts { skip_s3: true },
-			});
+	let s3_providers = &ctx.ns().s3.providers;
+	if s3_providers.minio.is_some() {
+		// Install Minio for s3_minio Terraform plan
+		plan.push(PlanStep::Salt {
+			filter: Some("G@roles:minio".into()),
+			sls: None,
+			config_opts: salt::config::BuildOpts { skip_s3: true },
+		});
 
-			plan.push(PlanStep::Terraform {
-				plan_id: "s3_minio".into(),
-				needs_destroy: false,
-			});
-		}
-		config::ns::S3Provider::Backblaze { .. } => {
-			plan.push(PlanStep::Terraform {
-				plan_id: "s3_backblaze".into(),
-				needs_destroy: true,
-			});
-		}
+		plan.push(PlanStep::Terraform {
+			plan_id: "s3_minio".into(),
+			needs_destroy: false,
+		});
+	}
+	if s3_providers.backblaze.is_some() {
+		plan.push(PlanStep::Terraform {
+			plan_id: "s3_backblaze".into(),
+			needs_destroy: true,
+		});
+	}
+	if s3_providers.aws.is_some() {
+		plan.push(PlanStep::Terraform {
+			plan_id: "s3_aws".into(),
+			needs_destroy: true,
+		});
 	}
 
 	// Apply the rest of the Salt configs

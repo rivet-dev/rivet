@@ -12,7 +12,7 @@ use rivet_chat_server::models;
 use rivet_claims::ClaimsDecode;
 use rivet_convert::ApiTryInto;
 use rivet_operation::prelude::*;
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 
 use crate::{assert, auth::Auth, convert, fetch, utils};
 
@@ -170,11 +170,18 @@ pub async fn send_chat_message(
 }
 
 // MARK: GET /threads/{}/history
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Deserialize)]
 pub struct GetThreadHistoryQuery {
 	ts: Option<chrono::DateTime<chrono::Utc>>,
 	count: u32,
-	query_direction: Option<String>,
+	query_direction: Option<ThreadHistoryQueryDirection>,
+}
+
+#[derive(Debug, Deserialize)]
+pub enum ThreadHistoryQueryDirection {
+	Before,
+	After,
+	BeforeAndAfter,
 }
 
 pub async fn thread_history(
@@ -194,26 +201,22 @@ pub async fn thread_history(
 
 	assert::chat_thread_participant(&ctx, thread_id, current_user_id).await?;
 
+	let query_direction = match query
+		.query_direction
+		.unwrap_or(ThreadHistoryQueryDirection::Before)
+	{
+		ThreadHistoryQueryDirection::Before => chat_message::list::request::QueryDirection::Before,
+		ThreadHistoryQueryDirection::After => chat_message::list::request::QueryDirection::After,
+		ThreadHistoryQueryDirection::BeforeAndAfter => {
+			chat_message::list::request::QueryDirection::BeforeAndAfter
+		}
+	};
+
 	let list_res = op!([ctx] chat_message_list {
 		thread_id: Some(thread_id.into()),
 		ts: query.ts.map(|ts| ts.timestamp_millis()).unwrap_or_else(util::timestamp::now),
 		count: query.count,
-		query_direction: match query
-			.query_direction
-			.unwrap_or_else(|| "before".to_owned())
-			.as_str()
-		{
-			"before" => chat_message::list::request::QueryDirection::Before,
-			"after" => chat_message::list::request::QueryDirection::After,
-			"before_and_after" => chat_message::list::request::QueryDirection::BeforeAndAfter,
-			_ => {
-				panic_with!(
-					API_BAD_QUERY_PARAMETER,
-					parameter = "query_direction",
-					error = r#"Must be one of "before", "after", "before_and_after""#,
-				);
-			}
-		} as i32,
+		query_direction: query_direction as i32,
 	})
 	.await?;
 

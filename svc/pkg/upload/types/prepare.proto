@@ -8,6 +8,8 @@ import "proto/backend/upload.proto";
 message Request {
 	string bucket = 1;
 	repeated rivet.backend.upload.PrepareFile files = 2;
+	// Which S3 provider to upload to. Defaults to default provider when not set.
+	optional rivet.backend.upload.Provider provider = 4;
 
 	// User ID that created this upload. This is used for reporting purposes
 	// in case some bad content was included in the user upload.

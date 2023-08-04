@@ -1,0 +1,34 @@
+[package]
+name = "upload-provider-fill"
+version = "0.0.1"
+edition = "2018"
+authors = ["Rivet Gaming, LLC <developer@rivet.gg>"]
+license = "Apache-2.0"
+
+[dependencies]
+chirp-client = { path = "../../../../../lib/chirp/client" }
+futures-util = "0.3"
+indoc = "1.0"
+prost = "0.10"
+reqwest = "0.11"
+rivet-connection = { path = "../../../../../lib/connection" }
+rivet-operation = { path = "../../../../../lib/operation/core" }
+rivet-pools = { path = "../../../../../lib/pools" }
+s3-util = { path = "../../../../../lib/s3-util" }
+tokio = { version = "1.21", features = ["full"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", default-features = false, features = ["fmt", "json", "ansi"] }
+
+[dependencies.sqlx]
+version = "0.6"
+default-features = false
+features = [
+	"runtime-tokio-native-tls",
+	"postgres",
+	"uuid",
+	"json",
+	"tls",
+]
+
+[dev-dependencies]
+chirp-worker = { path = "../../../../../lib/chirp/worker" }

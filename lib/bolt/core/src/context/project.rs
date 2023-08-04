@@ -252,8 +252,18 @@ impl ProjectContextData {
 			"failed to read namespace config: {}",
 			path.display()
 		));
-		toml::from_str::<config::ns::Namespace>(&config_str)
-			.expect("failed to parse namespace config")
+		let config = toml::from_str::<config::ns::Namespace>(&config_str)
+			.expect("failed to parse namespace config");
+
+		// Verify s3 config
+		if config.s3.providers.minio.is_none()
+			&& config.s3.providers.backblaze.is_none()
+			&& config.s3.providers.aws.is_none()
+		{
+			panic!("expected at least one s3 provider");
+		}
+
+		config
 	}
 
 	async fn read_cache(project_path: &Path) -> config::cache::Cache {
@@ -520,23 +530,68 @@ pub struct S3Config {
 	pub endpoint_internal: String,
 	pub endpoint_external: String,
 	pub region: String,
-	pub credentials: S3Credentials,
+}
+
+#[derive(Clone, Copy)]
+pub enum S3Provider {
+	Minio,
+	Backblaze,
+	Aws,
 }
 
 impl ProjectContextData {
-	/// Returns the appropriate S3 connection configuration for the provided S3 provider.
-	pub async fn s3_credentials(self: &Arc<Self>) -> Result<S3Credentials> {
-		// TODO: Add multiple credentials for different services
+	pub fn default_s3_provider(self: &Arc<Self>) -> Result<(S3Provider, config::ns::S3Provider)> {
+		let providers = &self.ns().s3.providers;
 
-		match self.ns().s3.provider {
-			config::ns::S3Provider::Minio {} => Ok(S3Credentials {
-				access_key_id: "admin".into(),
+		// Find the provider with the default flag set
+		if let Some(p) = &providers.minio {
+			if p.default {
+				return Ok((S3Provider::Minio, p.clone()));
+			}
+		}
+
+		if let Some(p) = &providers.backblaze {
+			if p.default {
+				return Ok((S3Provider::Backblaze, p.clone()));
+			}
+		}
+
+		if let Some(p) = &providers.aws {
+			if p.default {
+				return Ok((S3Provider::Aws, p.clone()));
+			}
+		}
+
+		// If nonoe have the default flag, return the first provider
+		if let Some(p) = &providers.minio {
+			return Ok((S3Provider::Minio, p.clone()));
+		} else if let Some(p) = &providers.backblaze {
+			return Ok((S3Provider::Backblaze, p.clone()));
+		} else if let Some(p) = &providers.aws {
+			return Ok((S3Provider::Aws, p.clone()));
+		}
+
+		bail!("no s3 provider configured")
+	}
+
+	/// Returns the appropriate S3 connection configuration for the provided S3 provider.
+	pub async fn s3_credentials(self: &Arc<Self>, provider: S3Provider) -> Result<S3Credentials> {
+		match provider {
+			S3Provider::Minio => Ok(S3Credentials {
+				access_key_id: "root".into(),
 				access_key_secret: self
 					.read_secret(&["minio", "users", "root", "password"])
 					.await?,
 			}),
-			config::ns::S3Provider::Backblaze {} => {
-				let service_key = s3::fetch_service_key(&self, &["b2", "persistent"]).await?;
+			S3Provider::Backblaze => {
+				let service_key = s3::fetch_service_key(&self, &["b2", "terraform"]).await?;
+				Ok(S3Credentials {
+					access_key_id: service_key.key_id,
+					access_key_secret: service_key.key,
+				})
+			}
+			S3Provider::Aws => {
+				let service_key = s3::fetch_service_key(&self, &["aws", "terraform"]).await?;
 				Ok(S3Credentials {
 					access_key_id: service_key.key_id,
 					access_key_secret: service_key.key,
@@ -546,41 +601,49 @@ impl ProjectContextData {
 	}
 
 	/// Returns the appropriate S3 connection configuration for the provided S3 provider.
-	pub async fn s3_config(self: &Arc<Self>, credentials: S3Credentials) -> Result<S3Config> {
-		// TODO: Add multiple credentials for different services
-
-		match self.ns().s3.provider {
-			config::ns::S3Provider::Minio {} => {
+	pub async fn s3_config(self: &Arc<Self>, provider: S3Provider) -> Result<S3Config> {
+		match provider {
+			S3Provider::Minio => {
 				let s3 = terraform::output::read_s3_minio(&*self).await;
 				Ok(S3Config {
 					endpoint_internal: (*s3.s3_endpoint_internal).clone(),
 					endpoint_external: (*s3.s3_endpoint_external).clone(),
 					region: (*s3.s3_region).clone(),
-					credentials,
 				})
 			}
-			config::ns::S3Provider::Backblaze {} => {
+			S3Provider::Backblaze => {
 				let s3 = terraform::output::read_s3_backblaze(&*self).await;
 				Ok(S3Config {
 					endpoint_internal: (*s3.s3_endpoint_internal).clone(),
 					endpoint_external: (*s3.s3_endpoint_external).clone(),
 					region: (*s3.s3_region).clone(),
-					credentials,
+				})
+			}
+			S3Provider::Aws => {
+				let s3 = terraform::output::read_s3_aws(&*self).await;
+				Ok(S3Config {
+					endpoint_internal: (*s3.s3_endpoint_internal).clone(),
+					endpoint_external: (*s3.s3_endpoint_external).clone(),
+					region: (*s3.s3_region).clone(),
 				})
 			}
 		}
 	}
 
 	pub async fn s3_client_service_builds(self: &Arc<Self>) -> Result<s3_util::Client> {
-		let service_key =
-			s3::fetch_service_key(self, &["b2", "bolt_service_builds_upload"]).await?;
+		let s3_dep = self.service_with_name("bucket-svc-build").await;
+		let (default_provider, _) = self.default_s3_provider()?;
+		let s3_config = self.s3_config(default_provider).await?;
+		let s3_creds = self.s3_credentials(default_provider).await?;
+
 		let client = s3_util::Client::new(
-			s3::service_builds::BUCKET,
-			s3::service_builds::ENDPOINT,
-			s3::service_builds::REGION,
-			&service_key.key_id,
-			&service_key.key,
+			&s3_dep.s3_bucket_name().await,
+			&s3_config.endpoint_internal,
+			&s3_config.region,
+			&s3_creds.access_key_id,
+			&s3_creds.access_key_secret,
 		)?;
+
 		Ok(client)
 	}
 

@@ -11,7 +11,6 @@ pub enum BuildMethod {
 }
 
 pub struct BuildOpts<'a, T: AsRef<str>> {
-	pub root: &'a Path,
 	pub build_calls: Vec<BuildCall<'a, T>>,
 	pub build_method: BuildMethod,
 	pub release: bool,
@@ -94,6 +93,7 @@ pub async fn build<'a, T: AsRef<str>>(ctx: &ProjectContext, opts: BuildOpts<'a, 
 	match opts.build_method {
 		BuildMethod::Native => {
 			let mut cmd = Command::new("sh");
+			cmd.current_dir(ctx.path());
 			cmd.arg("-c");
 			cmd.arg(indoc::formatdoc!(
 				r#"
@@ -112,7 +112,7 @@ pub async fn build<'a, T: AsRef<str>>(ctx: &ProjectContext, opts: BuildOpts<'a, 
 			cmd.arg("run");
 			cmd.arg("-v").arg("cargo-cache:/root/.cargo/registry");
 			cmd.arg("-v")
-				.arg(format!("{}:/volume", opts.root.display()));
+				.arg(format!("{}:/volume", ctx.path().display()));
 			cmd.arg("--rm")
 				.arg("--interactive")
 				.arg("--tty")
