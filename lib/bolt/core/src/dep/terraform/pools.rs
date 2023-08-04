@@ -187,7 +187,7 @@ pub async fn build_pools(ctx: &ProjectContext) -> Result<HashMap<String, Pool>> 
 
 	let mut svc_roles = vec!["docker", "nomad-client", "consul-client"];
 	if ctx.ns().logging.is_some() {
-		svc_roles.extend(["traefik-cloudflare-proxy", "docker-plugin-loki"]);
+		svc_roles.extend(["traefik", "cloudflare-proxy", "docker-plugin-loki"]);
 	}
 	pools.insert(
 		"svc".into(),
@@ -459,7 +459,7 @@ pub async fn build_pools(ctx: &ProjectContext) -> Result<HashMap<String, Pool>> 
 	pools.insert(
 		"ing-px".into(),
 		PoolBuilder::default()
-			.roles(vec!["traefik", "consul-client"])
+			.roles(vec!["traefik", "ingress-proxy", "consul-client"])
 			.vpc(true)
 			.local_mode(PoolLocalMode::Locally)
 			.tunnels(hashmap! {
@@ -539,7 +539,7 @@ pub async fn build_pools(ctx: &ProjectContext) -> Result<HashMap<String, Pool>> 
 	pools.insert(
 		"ing-job".into(),
 		PoolBuilder::default()
-			.roles(vec!["traefik"])
+			.roles(vec!["traefik", "ingress-proxy"])
 			.vpc(false)
 			.local_mode(PoolLocalMode::Keep)
 			.tunnels(hashmap! {

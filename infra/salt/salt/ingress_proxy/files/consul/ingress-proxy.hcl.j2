@@ -1,5 +1,5 @@
 services {
-	id = "traefik-lb-80"
+	id = "ingress-proxy-lb-80"
 	name = "{{service_name}}"
 	tags = ["traefik", "lb-80"]
 
@@ -15,7 +15,7 @@ services {
 }
 
 services {
-	id = "traefik-lb-443"
+	id = "ingress-proxy-lb-443"
 	name = "{{service_name}}"
 	tags = ["traefik", "lb-443"]
 
@@ -31,7 +31,7 @@ services {
 }
 
 services {
-	id = "traefik-client"
+	id = "ingress-proxy-client"
 	name = "{{service_name}}"
 	tags = ["traefik", "api"]
 

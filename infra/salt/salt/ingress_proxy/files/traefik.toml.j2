@@ -54,12 +54,12 @@
 
 [log]
 	level = "{{ pillar['rivet']['traefik']['log_level'] }}"
-	filePath = "/opt/traefik/traefik.log"
+	filePath = "/opt/ingress_proxy/traefik.log"
 	format = "json"
 
 {% if pillar['rivet']['traefik']['access_logs'] %}
 [accessLog]
-	filePath = "/opt/traefik/access.log"
+	filePath = "/opt/ingress_proxy/access.log"
 	format = "json"
 	fields.defaultMode = "keep"
 	fields.headers.defaultMode = "keep"
@@ -74,7 +74,7 @@
 
 [providers]
 	[providers.file]
-		directory = "/etc/traefik/dynamic"
+		directory = "/etc/ingress_proxy/dynamic"
 
 	{%- if 'consul-client' in grains['roles'] %}
 	[providers.consulCatalog]

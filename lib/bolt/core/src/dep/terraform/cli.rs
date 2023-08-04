@@ -100,7 +100,7 @@ pub async fn apply(
 ) -> Result<()> {
 	let mut event = utils::telemetry::build_event(ctx, "bolt_terraform_apply").await?;
 	event.insert_prop("plan_id", plan_id)?;
-	utils::telemetry::capture_event(ctx, event);
+	utils::telemetry::capture_event(ctx, event)?;
 
 	let mut cmd = build_command(ctx, plan_id).await;
 	cmd.arg("apply")
@@ -117,7 +117,7 @@ pub async fn apply(
 pub async fn destroy(ctx: &ProjectContext, plan_id: &str, varfile_path: &Path) -> Result<()> {
 	let mut event = utils::telemetry::build_event(ctx, "bolt_terraform_destroy").await?;
 	event.insert_prop("plan_id", plan_id)?;
-	utils::telemetry::capture_event(ctx, event);
+	utils::telemetry::capture_event(ctx, event)?;
 
 	let mut cmd = build_command(&ctx, plan_id).await;
 	cmd.arg("destroy")

@@ -65,7 +65,7 @@ pub async fn up_services<T: AsRef<str>>(
 	opts: UpOpts,
 ) -> Result<Vec<ServiceContext>> {
 	let event = utils::telemetry::build_event(ctx, "bolt_up").await?;
-	utils::telemetry::capture_event(ctx, event);
+	utils::telemetry::capture_event(ctx, event)?;
 
 	// let run_context = RunContext::Service;
 	let build_context = BuildContext::Bin {
