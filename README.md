@@ -21,9 +21,9 @@
 ## 👾 Features
 
 -   Everything is accessible from an easy to use [GUI, CLI, or API](https://rivet.gg/docs/general/gui-cli-api)
--   [Serverless Lobbies](https://rivet.gg/docs/serverless-lobbies/introduction) for auto-scaling game lobbies
--   [Flexible matchmaker](https://rivet.gg/docs/matchmaker/introduction) for placing players in lobbies with no wait times
--   [CDN](https://rivet.gg/docs/cdn/introduction) for hosting assets and webpages with a custom domain or provided rivet.game subdomain
+-   [Serverless Lobbies](https://rivet.gg/docs/serverless-lobbies) for auto-scaling game lobbies
+-   [Flexible matchmaker](https://rivet.gg/docs/matchmaker) for placing players in lobbies with no wait times
+-   [CDN](https://rivet.gg/docs/cdn) for hosting assets and webpages with a custom domain or provided rivet.game subdomain
 -   [Game Guard](https://rivet.gg/docs/serverless-lobbies/concepts/game-guard) for DDoS mitigation and managed WebSocket SSL, TCP+TLS, and UDP
 -   Streamlined DevOps for teams
 -   Unified logging & monitoring & analytics
