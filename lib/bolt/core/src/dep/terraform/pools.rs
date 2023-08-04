@@ -186,17 +186,7 @@ pub async fn build_pools(ctx: &ProjectContext) -> Result<HashMap<String, Pool>> 
 	);
 
 	let mut svc_roles = vec!["docker", "nomad-client", "consul-client"];
-	// Add logging roles
-	if ctx.ns().logging.is_some()
-		&& ctx
-			.read_secret_opt(&["cloudflare", "access", "proxy", "client_id"])
-			.await?
-			.is_some()
-		&& ctx
-			.read_secret_opt(&["cloudflare", "access", "proxy", "client_secret"])
-			.await?
-			.is_some()
-	{
+	if ctx.ns().logging.is_some() {
 		svc_roles.extend(["traefik-cloudflare-proxy", "docker-plugin-loki"]);
 	}
 	pools.insert(
