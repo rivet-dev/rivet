@@ -90,6 +90,7 @@ async fn handle(
 	}
 
 	// Prepare columns for files
+	let upload_id = Uuid::new_v4();
 	let paths = ctx
 		.files
 		.iter()
