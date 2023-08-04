@@ -13,7 +13,6 @@ struct Thread {
 	create_ts: i64,
 
 	team_team_id: Option<Uuid>,
-	party_party_id: Option<Uuid>,
 	direct_user_a_id: Option<Uuid>,
 	direct_user_b_id: Option<Uuid>,
 }
@@ -38,7 +37,6 @@ async fn handle(
 			thread_id,
 			create_ts,
 			team_team_id,
-			party_party_id,
 			direct_user_a_id,
 			direct_user_b_id
 		FROM threads
@@ -57,10 +55,6 @@ async fn handle(
 				kind: Some(if let Some(team_id) = thread.team_team_id {
 					backend::chat::topic::Kind::Team(backend::chat::topic::Team {
 						team_id: Some(team_id.into()),
-					})
-				} else if let Some(party_id) = thread.party_party_id {
-					backend::chat::topic::Kind::Party(backend::chat::topic::Party {
-						party_id: Some(party_id.into()),
 					})
 				} else if let (Some(user_a_id), Some(user_b_id)) =
 					(thread.direct_user_a_id, thread.direct_user_b_id)

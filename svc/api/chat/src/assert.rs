@@ -29,29 +29,3 @@ pub async fn chat_thread_participant(
 
 	Ok(())
 }
-
-pub async fn party_leader(
-	ctx: &OperationContext<()>,
-	party_id: Uuid,
-	user_id: Uuid,
-) -> GlobalResult<()> {
-	let party_res = op!([ctx] party_get {
-		party_ids: vec![party_id.into()],
-	})
-	.await?;
-	let party = unwrap_with_owned!(party_res.parties.first(), PARTY_IDENTITY_NOT_IN_ANY_PARTY);
-
-	party_leader_with_party(user_id, party)
-}
-
-pub fn party_leader_with_party(user_id: Uuid, party: &backend::party::Party) -> GlobalResult<()> {
-	let leader_user_id = party.leader_user_id.as_ref().map(common::Uuid::as_uuid);
-
-	assert_eq_with!(
-		Some(user_id),
-		leader_user_id,
-		PARTY_IDENTITY_NOT_PARTY_LEADER
-	);
-
-	Ok(())
-}

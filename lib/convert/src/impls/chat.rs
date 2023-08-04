@@ -33,32 +33,12 @@ impl ApiTryFrom<backend::chat::Topic> for models::ChatSimpleTopic {
 					group_id: internal_unwrap!(team.team_id).as_uuid().to_string(),
 				},
 			)),
-			backend::chat::topic::Kind::Party(party) => Ok(models::ChatSimpleTopic::Party(
-				models::ChatSimpleTopicParty {
-					party_id: internal_unwrap!(party.party_id).as_uuid().to_string(),
-				},
-			)),
 			backend::chat::topic::Kind::Direct(direct) => Ok(models::ChatSimpleTopic::Direct(
 				models::ChatSimpleTopicDirect {
 					identity_a_id: internal_unwrap!(direct.user_a_id).as_uuid().to_string(),
 					identity_b_id: internal_unwrap!(direct.user_b_id).as_uuid().to_string(),
 				},
 			)),
-		}
-	}
-}
-
-impl ApiFrom<backend::chat::message_body::party_activity_change::State>
-	for backend::party::party::State
-{
-	fn api_from(value: backend::chat::message_body::party_activity_change::State) -> Self {
-		match value {
-			backend::chat::message_body::party_activity_change::State::MatchmakerFindingLobby(
-				inner,
-			) => backend::party::party::State::MatchmakerFindingLobby(inner),
-			backend::chat::message_body::party_activity_change::State::MatchmakerLobby(inner) => {
-				backend::party::party::State::MatchmakerLobby(inner)
-			}
 		}
 	}
 }

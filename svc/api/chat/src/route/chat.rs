@@ -40,13 +40,6 @@ pub async fn send_chat_message(
 				},
 			)),
 		}),
-		models::SendChatTopic::PartyId(party_id) => ThreadOrTopic::Topic(backend::chat::Topic {
-			kind: Some(backend::chat::topic::Kind::Party(
-				backend::chat::topic::Party {
-					party_id: Some(util::uuid::parse(&party_id)?.into()),
-				},
-			)),
-		}),
 		models::SendChatTopic::IdentityId(identity_id) => {
 			ThreadOrTopic::Topic(backend::chat::Topic {
 				kind: Some(backend::chat::topic::Kind::Direct(
@@ -59,23 +52,6 @@ pub async fn send_chat_message(
 		}
 	};
 
-	// Validate party before getting or creating a thread
-	let (party_id, invite) =
-		if let models::SendMessageBody::PartyInvite(ref message) = body.message_body {
-			let party_id = unwrap_with_owned!(
-				utils::get_current_party(ctx.op_ctx(), current_user_id).await?,
-				PARTY_IDENTITY_NOT_IN_ANY_PARTY
-			);
-
-			assert::party_leader(ctx.op_ctx(), party_id, current_user_id).await?;
-
-			let invite = rivet_claims::decode(&message.token)??.as_party_invite()?;
-
-			(Some(party_id), Some(invite))
-		} else {
-			(None, None)
-		};
-
 	// Build body
 	let msg_body = match body.message_body {
 		models::SendMessageBody::Text(message) => {
@@ -83,16 +59,6 @@ pub async fn send_chat_message(
 				sender_user_id: Some(current_user_id.into()),
 				body: message.body,
 			})
-		}
-		models::SendMessageBody::PartyInvite(message) => {
-			backend::chat::message_body::Kind::PartyInvite(
-				backend::chat::message_body::PartyInvite {
-					sender_user_id: Some(current_user_id.into()),
-					party_id: Some(internal_unwrap_owned!(party_id).into()),
-					invite_id: Some(internal_unwrap_owned!(invite).invite_id.into()),
-					invite_token: message.token,
-				},
-			)
 		}
 	};
 

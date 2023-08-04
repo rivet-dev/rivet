@@ -9,15 +9,11 @@ use crate::{convert, fetch};
 
 struct ChatMessagePrefetch {
 	pub user_ids: Vec<common::Uuid>,
-	pub party_ids: Vec<common::Uuid>,
-	pub party_invite_ids: Vec<common::Uuid>,
 	pub namespace_ids: Vec<common::Uuid>,
 }
 
 pub struct ChatThreadPrefetch {
 	pub user_ids: Vec<common::Uuid>,
-	pub party_ids: Vec<common::Uuid>,
-	pub party_invite_ids: Vec<common::Uuid>,
 	pub namespace_ids: Vec<common::Uuid>,
 	pub team_ids: Vec<common::Uuid>,
 }
@@ -29,32 +25,15 @@ pub async fn messages(
 ) -> GlobalResult<Vec<models::ChatMessage>> {
 	let ChatMessagePrefetch {
 		user_ids,
-		party_ids,
-		party_invite_ids,
 		namespace_ids,
 	} = prefetch_messages(messages)?;
-	let (users_res, party_invites_res, (parties, games)) = tokio::try_join!(
-		op!([ctx] user_get {
-			user_ids: user_ids,
-		}),
-		op!([ctx] party_invite_get {
-			invite_ids: party_invite_ids,
-		}),
-		fetch::party::parties_and_games(ctx, party_ids, namespace_ids),
-	)?;
+	let (users_res,) = tokio::try_join!(op!([ctx] user_get {
+		user_ids: user_ids,
+	}),)?;
 
 	messages
 		.iter()
-		.map(|message| {
-			convert::chat::message(
-				current_user_id,
-				message,
-				&users_res.users,
-				&parties.parties,
-				&party_invites_res.invites,
-				&games,
-			)
-		})
+		.map(|message| convert::chat::message(current_user_id, message, &users_res.users, &games))
 		.collect::<GlobalResult<Vec<_>>>()
 }
 
@@ -72,33 +51,11 @@ pub async fn threads(
 	// Fetch thread metadata
 	let ChatThreadPrefetch {
 		user_ids,
-		party_ids,
-		party_invite_ids,
 		team_ids,
 		namespace_ids,
 	} = prefetch_threads(threads, tail_messages)?;
 
-	let (
-		(parties, games),
-		party_invites,
-		teams,
-		users_res,
-		dev_teams,
-		(chat_last_read_ts_res, chat_thread_unread_count_res),
-	) = tokio::try_join!(
-		fetch::party::parties_and_games(ctx, party_ids, namespace_ids),
-		async {
-			if !party_invite_ids.is_empty() {
-				let invites_res = op!([ctx] party_invite_get {
-					invite_ids: party_invite_ids,
-				})
-				.await?;
-
-				Ok(invites_res.invites.clone())
-			} else {
-				Ok(Vec::new())
-			}
-		},
+	let (teams, users_res, dev_teams, (chat_last_read_ts_res, chat_thread_unread_count_res)) = tokio::try_join!(
 		async {
 			if !team_ids.is_empty() {
 				let teams_res = op!([ctx] team_get {
@@ -163,8 +120,6 @@ pub async fn threads(
 					message,
 					threads,
 					&users_res.users,
-					&parties.parties,
-					&party_invites,
 					&teams,
 					&dev_teams,
 					&games,
@@ -190,8 +145,6 @@ fn prefetch_messages(messages: &[backend::chat::Message]) -> GlobalResult<ChatMe
 	use backend::chat::message_body as backend_body;
 
 	let mut user_ids = Vec::<common::Uuid>::new();
-	let mut party_ids = Vec::<common::Uuid>::new();
-	let mut party_invite_ids = Vec::<common::Uuid>::new();
 	let mut namespace_ids = Vec::<common::Uuid>::new();
 
 	// Prefetch all user ids and party ids
@@ -219,49 +172,12 @@ fn prefetch_messages(messages: &[backend::chat::Message]) -> GlobalResult<ChatMe
 			backend_body::Kind::TeamMemberKick(backend_body::TeamMemberKick { user_id }) => {
 				user_ids.push(*internal_unwrap!(user_id));
 			}
-			backend_body::Kind::PartyInvite(backend_body::PartyInvite {
-				sender_user_id,
-				party_id,
-				invite_id,
-				..
-			}) => {
-				user_ids.push(*internal_unwrap!(sender_user_id));
-				party_ids.push(*internal_unwrap!(party_id));
-
-				if let Some(invite_id) = invite_id {
-					party_invite_ids.push(*invite_id);
-				}
-			}
-			backend_body::Kind::PartyJoinRequest(backend_body::PartyJoinRequest {
-				sender_user_id,
-			}) => {
-				user_ids.push(*internal_unwrap!(sender_user_id));
-			}
-			backend_body::Kind::PartyJoin(backend_body::PartyJoin { user_id }) => {
-				user_ids.push(*internal_unwrap!(user_id));
-			}
-			backend_body::Kind::PartyLeave(backend_body::PartyLeave { user_id }) => {
-				user_ids.push(*internal_unwrap!(user_id));
-			}
-			backend_body::Kind::PartyActivityChange(backend_body::PartyActivityChange {
-				state,
-			}) => match state {
-				Some(backend_body::party_activity_change::State::MatchmakerFindingLobby(
-					backend::party::party::StateMatchmakerFindingLobby { namespace_id, .. },
-				)) => namespace_ids.push(*internal_unwrap!(namespace_id)),
-				Some(backend_body::party_activity_change::State::MatchmakerLobby(
-					backend::party::party::StateMatchmakerLobby { namespace_id, .. },
-				)) => namespace_ids.push(*internal_unwrap!(namespace_id)),
-				_ => {}
-			},
 			backend_body::Kind::ChatCreate(_) | backend_body::Kind::UserFollow(_) => {}
 		}
 	}
 
 	Ok(ChatMessagePrefetch {
 		user_ids,
-		party_ids,
-		party_invite_ids,
 		namespace_ids,
 	})
 }
@@ -271,7 +187,6 @@ fn prefetch_threads(
 	tail_messages: &[backend::chat::Message],
 ) -> GlobalResult<ChatThreadPrefetch> {
 	let mut user_ids = Vec::new();
-	let mut party_ids = Vec::new();
 	let mut team_ids = Vec::new();
 
 	// Prefetch all required data for building thread
@@ -281,9 +196,6 @@ fn prefetch_threads(
 		match internal_unwrap!(topic.kind) {
 			backend::chat::topic::Kind::Team(team) => {
 				team_ids.push(internal_unwrap_owned!(team.team_id));
-			}
-			backend::chat::topic::Kind::Party(party) => {
-				party_ids.push(internal_unwrap_owned!(party.party_id));
 			}
 			backend::chat::topic::Kind::Direct(direct) => {
 				user_ids.push(internal_unwrap_owned!(direct.user_a_id));
@@ -295,17 +207,12 @@ fn prefetch_threads(
 	// Prefetch chat message info
 	let ChatMessagePrefetch {
 		user_ids: msg_user_ids,
-		party_ids: msg_party_ids,
-		party_invite_ids,
 		namespace_ids,
 	} = prefetch_messages(tail_messages)?;
 	user_ids.extend(msg_user_ids);
-	party_ids.extend(msg_party_ids);
 
 	Ok(ChatThreadPrefetch {
 		user_ids,
-		party_ids,
-		party_invite_ids,
 		namespace_ids,
 		team_ids,
 	})

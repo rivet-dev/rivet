@@ -9,8 +9,6 @@ pub fn message(
 	current_user_id: Uuid,
 	message: &backend::chat::Message,
 	users: &[backend::user::User],
-	parties: &[backend::party::Party],
-	party_invites: &[backend::party::Invite],
 	games: &[convert::GameWithNamespaceIds],
 ) -> GlobalResult<models::ChatMessage> {
 	// Read body message
@@ -81,67 +79,6 @@ pub fn message(
 					identity: convert::identity::handle_without_presence(current_user_id, user)?,
 				})
 			}
-			backend_body::Kind::PartyInvite(backend_body::PartyInvite {
-				sender_user_id,
-				party_id,
-				invite_id,
-				invite_token,
-			}) => {
-				let sender = internal_unwrap_owned!(users
-					.iter()
-					.find(|user| &user.user_id == sender_user_id));
-
-				let party = parties.iter().find(|party| &party.party_id == party_id);
-				let invite = party_invites
-					.iter()
-					.find(|invite| &invite.invite_id == invite_id);
-
-				models::ChatMessageBody::PartyInvite(models::ChatMessageBodyPartyInvite {
-					sender: convert::identity::handle_without_presence(current_user_id, sender)?,
-					party: party
-						.map(|party| convert::party::handle(party, games))
-						.transpose()?,
-					invite_token: (party.is_some() && invite.is_some())
-						.then(|| invite_token.to_owned()),
-				})
-			}
-			backend_body::Kind::PartyJoinRequest(backend_body::PartyJoinRequest {
-				sender_user_id,
-			}) => {
-				let sender = internal_unwrap_owned!(users
-					.iter()
-					.find(|user| &user.user_id == sender_user_id));
-
-				models::ChatMessageBody::PartyJoinRequest(models::ChatMessageBodyPartyJoinRequest {
-					sender: convert::identity::handle_without_presence(current_user_id, sender)?,
-				})
-			}
-			backend_body::Kind::PartyJoin(backend_body::PartyJoin { user_id }) => {
-				let user =
-					internal_unwrap_owned!(users.iter().find(|user| &user.user_id == user_id));
-
-				models::ChatMessageBody::PartyJoin(models::ChatMessageBodyPartyJoin {
-					identity: convert::identity::handle_without_presence(current_user_id, user)?,
-				})
-			}
-			backend_body::Kind::PartyLeave(backend_body::PartyLeave { user_id }) => {
-				let user =
-					internal_unwrap_owned!(users.iter().find(|user| &user.user_id == user_id));
-
-				models::ChatMessageBody::PartyLeave(models::ChatMessageBodyPartyLeave {
-					identity: convert::identity::handle_without_presence(current_user_id, user)?,
-				})
-			}
-			backend_body::Kind::PartyActivityChange(backend_body::PartyActivityChange {
-				state,
-			}) => models::ChatMessageBody::PartyActivityChange(
-				models::ChatMessageBodyPartyActivityChange {
-					activity: convert::party::activity(
-						&state.clone().map(ApiInto::api_into),
-						games,
-					)?,
-				},
-			),
 		}
 	};
 

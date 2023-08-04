@@ -19,7 +19,6 @@ pub fn handle_without_presence(
 			user.profile_file_name.as_ref(),
 		),
 		presence: None,
-		party: None,
 		is_registered: true, // TODO:
 		external: models::IdentityExternalLinks {
 			profile: util::route::user_profile(user_id),

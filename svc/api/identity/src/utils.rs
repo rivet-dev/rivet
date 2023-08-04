@@ -110,20 +110,6 @@ pub fn touch_user_presence(ctx: OperationContext<()>, user_id: Uuid, silent: boo
 	}
 }
 
-pub async fn get_party(ctx: &OperationContext<()>, user_id: Uuid) -> GlobalResult<Option<Uuid>> {
-	// Fetch the party member if exists
-	let party_member_res = op!([ctx] party_member_get {
-		user_ids: vec![user_id.into()],
-	})
-	.await?;
-	if let Some(party_member) = party_member_res.party_members.first() {
-		let party_id = internal_unwrap!(party_member.party_id).as_uuid();
-		Ok(Some(party_id))
-	} else {
-		Ok(None)
-	}
-}
-
 pub async fn validate_config(
 	ctx: &OperationContext<()>,
 	namespace_id: common::Uuid,
