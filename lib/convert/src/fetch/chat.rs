@@ -33,7 +33,7 @@ pub async fn messages(
 
 	messages
 		.iter()
-		.map(|message| convert::chat::message(current_user_id, message, &users_res.users, &games))
+		.map(|message| convert::chat::message(current_user_id, message, &users_res.users))
 		.collect::<GlobalResult<Vec<_>>>()
 }
 
@@ -122,7 +122,7 @@ pub async fn threads(
 					&users_res.users,
 					&teams,
 					&dev_teams,
-					&games,
+					&[],
 					&chat_last_read_ts_res.threads,
 					&chat_thread_unread_count_res.threads,
 				);

@@ -209,7 +209,6 @@ pub async fn activities(
 	Ok(models::IdentityListActivitiesResponse {
 		identities,
 		games: recent_games,
-		parties,
 		suggested_groups,
 		suggested_players,
 

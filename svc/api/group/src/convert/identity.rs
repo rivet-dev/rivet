@@ -43,6 +43,7 @@ pub fn handle(
 			settings: None,
 			chat: (!is_self).then(|| util::route::user_chat(user_id)),
 		},
+		party: None,
 	})
 }
 

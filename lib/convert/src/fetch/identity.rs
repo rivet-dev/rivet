@@ -19,7 +19,6 @@ pub struct PresencesCtx {
 	pub res: user_presence::get::Response,
 	pub games: Vec<backend::game::Game>,
 	pub games_with_namespace_ids: Vec<convert::GameWithNamespaceIds>,
-	pub parties: PartiesCtx,
 }
 
 pub async fn handles(
@@ -182,7 +181,7 @@ pub async fn presence_data(
 			.into_iter()
 			.map(Into::<common::Uuid>::into)
 			.collect::<Vec<_>>(),
-		namespace_ids,
+		Vec::new(),
 	)
 	.await?;
 

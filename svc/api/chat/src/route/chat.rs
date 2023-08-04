@@ -50,6 +50,7 @@ pub async fn send_chat_message(
 				)),
 			})
 		}
+		_ => internal_panic!("unreachable"),
 	};
 
 	// Build body
@@ -60,6 +61,7 @@ pub async fn send_chat_message(
 				body: message.body,
 			})
 		}
+		_ => internal_panic!("unreachable"),
 	};
 
 	// Validate message

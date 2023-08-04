@@ -10,7 +10,6 @@ pub fn message(
 	current_user_id: Uuid,
 	message: &backend::chat::Message,
 	users: &[backend::user::User],
-	games: &[convert::GameWithNamespaceIds],
 ) -> GlobalResult<models::ChatMessage> {
 	// Read body message
 	let backend_body_kind = internal_unwrap!(message.body);
@@ -146,7 +145,6 @@ pub fn thread(
 	let topic = topic_context(
 		current_user_id,
 		users,
-		parties,
 		teams,
 		dev_teams,
 		games,
@@ -161,12 +159,7 @@ pub fn thread(
 				thread_id,
 				create_ts: util::timestamp::to_string(thread.create_ts)?,
 				topic: Box::new(topic),
-				tail_message: Some(Box::new(message(
-					current_user_id,
-					tail_message,
-					users,
-					games,
-				)?)),
+				tail_message: Some(Box::new(message(current_user_id, tail_message, users)?)),
 				last_read_ts: util::timestamp::to_string(
 					last_read_threads
 						.iter()

@@ -38,7 +38,7 @@ pub async fn presence_data(
 			.into_iter()
 			.map(Into::<common::Uuid>::into)
 			.collect::<Vec<_>>(),
-		namespace_ids,
+		Vec::new(),
 	)
 	.await?;
 

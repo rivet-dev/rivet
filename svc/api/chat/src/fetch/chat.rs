@@ -25,7 +25,7 @@ pub async fn messages(
 
 	messages
 		.iter()
-		.map(|message| convert::chat::message(current_user_id, message, &users_res.users))
+		.map(|message| convert::chat::message(current_user_id, message, &users_res.users, &[]))
 		.collect::<GlobalResult<Vec<_>>>()
 }
 

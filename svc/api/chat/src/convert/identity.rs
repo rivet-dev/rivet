@@ -25,5 +25,6 @@ pub fn handle_without_presence(
 			settings: None,
 			chat: (!is_self).then(|| util::route::user_chat(user_id)),
 		},
+		party: None,
 	})
 }
