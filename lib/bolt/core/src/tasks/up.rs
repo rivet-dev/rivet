@@ -170,7 +170,6 @@ pub async fn up_services<T: AsRef<str>>(
 				cargo::cli::build(
 					ctx,
 					cargo::cli::BuildOpts {
-						root: ctx.path(),
 						build_calls: svcs_by_workspace
 							.iter()
 							.map(|(workspace_path, svc_names)| cargo::cli::BuildCall {
@@ -361,7 +360,6 @@ async fn build_svc(svc_ctx: &ServiceContext, optimization: BuildOptimization) {
 				cargo::cli::build(
 					&project_ctx,
 					cargo::cli::BuildOpts {
-						root: svc_ctx.project().await.path(),
 						build_calls: vec![cargo::cli::BuildCall {
 							path: svc_ctx
 								.workspace_path()

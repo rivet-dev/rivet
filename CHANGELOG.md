@@ -24,5 +24,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+-   **Portal** Skip captcha if no Turnstile key provided
 -   **Infra** Resolve [RUSTSEC-2023-0044](https://rustsec.org/advisories/RUSTSEC-2023-0044)
--   Skip captcha if no Turnstile key provided
+-   **Bolt** Correctly resolve project root when building services natively
+
