@@ -7,7 +7,7 @@ use proto::{
 	common,
 };
 use rivet_api::models;
-use rivet_convert::{convert, fetch};
+use rivet_convert::{convert, fetch, ApiTryInto};
 use rivet_operation::prelude::*;
 use std::collections::{HashMap, HashSet};
 
@@ -166,33 +166,38 @@ async fn events_wait(
 	let mut user_update_ts = None;
 	for msg in thread_tail.messages {
 		let event = internal_unwrap!(msg.event);
-		match internal_unwrap!(event.kind) {
-			backend::user::event::event::Kind::ChatMessage(chat_msg) => {
-				let chat_message = internal_unwrap!(chat_msg.chat_message).clone();
-				new_messages.push(chat_message);
+
+		if let Some(event) = &event.kind {
+			match event {
+				backend::user::event::event::Kind::ChatMessage(chat_msg) => {
+					let chat_message = internal_unwrap!(chat_msg.chat_message).clone();
+					new_messages.push(chat_message);
+				}
+				backend::user::event::event::Kind::ChatRead(chat_read) => {
+					new_chat_reads.push((
+						internal_unwrap!(chat_read.thread_id).as_uuid(),
+						chat_read.clone(),
+					));
+				}
+				backend::user::event::event::Kind::PartyUpdate(_) => {
+					party_update_ts = Some(msg.msg_ts());
+				}
+				backend::user::event::event::Kind::MatchmakerLobbyJoin(mm_lobby_join) => {
+					new_mm_lobby_joins.push((msg.msg_ts(), mm_lobby_join.clone()));
+				}
+				backend::user::event::event::Kind::UserUpdate(_) => {
+					user_update_ts = Some(msg.msg_ts());
+				}
+				backend::user::event::event::Kind::PresenceUpdate(_) => {
+					user_update_ts = Some(msg.msg_ts());
+				}
+				backend::user::event::event::Kind::TeamMemberRemove(team) => {
+					removed_team_ids.push((msg.msg_ts(), internal_unwrap!(team.team_id).as_uuid()));
+				}
 			}
-			backend::user::event::event::Kind::ChatRead(chat_read) => {
-				new_chat_reads.push((
-					internal_unwrap!(chat_read.thread_id).as_uuid(),
-					chat_read.clone(),
-				));
-			}
-			backend::user::event::event::Kind::PartyUpdate(_) => {
-				party_update_ts = Some(msg.msg_ts());
-			}
-			backend::user::event::event::Kind::MatchmakerLobbyJoin(mm_lobby_join) => {
-				new_mm_lobby_joins.push((msg.msg_ts(), mm_lobby_join.clone()));
-			}
-			backend::user::event::event::Kind::UserUpdate(_) => {
-				user_update_ts = Some(msg.msg_ts());
-			}
-			backend::user::event::event::Kind::PresenceUpdate(_) => {
-				user_update_ts = Some(msg.msg_ts());
-			}
-			backend::user::event::event::Kind::TeamMemberRemove(team) => {
-				removed_team_ids.push((msg.msg_ts(), internal_unwrap!(team.team_id).as_uuid()));
-			}
-		};
+		} else {
+			tracing::warn!(?event, "unknown user event kind");
+		}
 	}
 
 	Ok(EventsWaitResponse {
@@ -789,8 +794,8 @@ fn build_port(
 				hostname: network.ip.clone(),
 				port: None,
 				port_range: Some(Box::new(models::MatchmakerJoinPortRange {
-					min: port_range.min as i32,
-					max: port_range.max as i32,
+					min: port_range.min.try_into()?,
+					max: port_range.max.try_into()?,
 				})),
 				is_tls: false,
 			})

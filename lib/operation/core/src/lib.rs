@@ -22,7 +22,7 @@ pub trait Operation: Clone + Send + Sync + 'static {
 	const NAME: &'static str;
 	const TIMEOUT: std::time::Duration;
 
-	async fn handle(ctx: OperationContext<Self::Request>) -> Result<Self::Response, GlobalError>;
+	async fn handle(ctx: OperationContext<Self::Request>) -> GlobalResult<Self::Response>;
 }
 
 /// Contains the context that will be passed to the worker.

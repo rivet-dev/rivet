@@ -16,6 +16,7 @@ struct FileRow {
 	path: String,
 	content_length: i64,
 	nsfw_score_threshold: Option<f32>,
+	multipart_upload_id: Option<String>,
 }
 
 #[operation(name = "upload-complete")]
@@ -109,6 +110,17 @@ async fn fetch_files(
 		.bind(upload_id)
 		.fetch_all(crdb)
 	)?;
+
+	let files = sqlx::query_as::<_, FileRow>(indoc!(
+		"
+		SELECT path, content_length, nsfw_score_threshold, multipart_upload_id
+		FROM upload_files
+		WHERE upload_id = $1
+		"
+	))
+	.bind(upload_id)
+	.fetch_all(crdb)
+	.await?;
 
 	// Parse provider
 	let proto_provider = internal_unwrap_owned!(
@@ -229,6 +241,38 @@ async fn validate_files(
 	let files_len = files.len();
 	futures_util::stream::iter(files.into_iter().enumerate())
 		.map(|(i, file_row)| async move {
+			if let Some(multipart_upload_id) = &file_row.multipart_upload_id {
+				tracing::info!(?file_row, "completing multipart upload");
+
+				// Fetch all parts
+				let parts_res = s3_client
+					.list_parts()
+					.bucket(s3_client.bucket())
+					.key(format!("{}/{}", upload_id, file_row.path))
+					.upload_id(multipart_upload_id.clone())
+					.send()
+					.await?;
+				let parts = internal_unwrap_owned!(parts_res.parts());
+
+				s3_client
+					.complete_multipart_upload()
+					.bucket(s3_client.bucket())
+					.key(format!("{}/{}", upload_id, file_row.path))
+					.upload_id(multipart_upload_id)
+					.multipart_upload(
+						s3_util::aws_sdk_s3::model::CompletedMultipartUpload::builder()
+							.set_parts(Some(parts.iter().map(|part| {
+								s3_util::aws_sdk_s3::model::CompletedPart::builder()
+									.part_number(part.part_number())
+									.set_e_tag(part.e_tag().map(|s| s.to_owned()))
+									.build()
+							}).collect::<Vec<_>>()))
+							.build()
+					)
+					.send()
+					.await?;
+			}
+
 			// Fetch & validate file metadata
 			let mut fail_idx = 0;
 			let head_obj = loop {

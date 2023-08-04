@@ -276,33 +276,72 @@ pub async fn create_token_development(
 	let _ns_data = assert::namespace_for_game(&ctx, game_id, namespace_id).await?;
 
 	let lobby_ports = match (body.ports, body.lobby_ports) {
-		(Some(_), Some(_)) => internal_panic!("can not specify both ports and lobby_ports"),
+		(Some(_), Some(_)) => panic_with!(
+			CLOUD_INVALID_CONFIG,
+			error = "can not specify both `ports` and `lobby_ports`"
+		),
 		(Some(ports), None) => ports
 			.into_iter()
-			.map(|(label, port)| backend::matchmaker::lobby_runtime::Port {
-				label,
-				target_port: port.port.map(|x| x as u32),
-				port_range: port.port_range.map(|x| {
-					backend::matchmaker::lobby_runtime::PortRange {
-						min: x.min as u32,
-						max: x.max as u32,
-					}
-				}),
-				proxy_protocol:
-					(ApiInto::<backend::matchmaker::lobby_runtime::ProxyProtocol>::api_into(
-						port.protocol,
-					)) as i32,
-				proxy_kind: backend::matchmaker::lobby_runtime::ProxyKind::GameGuard as i32,
+			.map(|(label, port)| {
+				Ok(backend::matchmaker::lobby_runtime::Port {
+					label,
+					target_port: if let Some(port) = port.port {
+						assert_with!(
+							port >= 0,
+							CLOUD_INVALID_CONFIG,
+							error = "`port` out of bounds"
+						);
+
+						Some(port.try_into()?)
+					} else {
+						None
+					},
+					port_range: if let Some(port_range) = port.port_range {
+						assert_with!(
+							port_range.min >= 0,
+							CLOUD_INVALID_CONFIG,
+							error = "`port_range.min` out of bounds"
+						);
+						assert_with!(
+							port_range.max >= 0,
+							CLOUD_INVALID_CONFIG,
+							error = "`port_range.max` out of bounds"
+						);
+
+						Some(backend::matchmaker::lobby_runtime::PortRange {
+							min: port_range.min.try_into()?,
+							max: port_range.max.try_into()?,
+						})
+					} else {
+						None
+					},
+					proxy_protocol:
+						(ApiInto::<backend::matchmaker::lobby_runtime::ProxyProtocol>::api_into(
+							port.protocol,
+						)) as i32,
+					proxy_kind: backend::matchmaker::lobby_runtime::ProxyKind::GameGuard as i32,
+				})
 			})
-			.collect::<Vec<_>>(),
+			.collect::<GlobalResult<Vec<_>>>()?,
 		(None, Some(ports)) => {
 			// Deprecated
 			ports
 				.into_iter()
 				.map(|port| {
+					let target_port = unwrap_with_owned!(
+						port.target_port,
+						CLOUD_INVALID_CONFIG,
+						error = "expected `target_port`"
+					);
+					assert_with!(
+						target_port >= 0,
+						CLOUD_INVALID_CONFIG,
+						error = "`target_port` out of bounds"
+					);
+
 					Ok(backend::matchmaker::lobby_runtime::Port {
 						label: port.label,
-						target_port: Some(internal_unwrap_owned!(port.target_port) as u32),
+						target_port: Some(target_port.try_into()?),
 						port_range: None,
 						proxy_protocol:
 							(ApiInto::<backend::matchmaker::lobby_runtime::ProxyProtocol>::api_into(
@@ -458,17 +497,25 @@ pub async fn update_mm_config(
 ) -> GlobalResult<serde_json::Value> {
 	let _ns_data = assert::namespace_for_game(&ctx, game_id, namespace_id).await?;
 
-	internal_assert!(body.lobby_count_max >= 0, "invalid `lobby_count_max`");
-	internal_assert!(body.max_players >= 0, "invalid `max_players`");
+	assert_with!(
+		body.lobby_count_max >= 0,
+		CLOUD_INVALID_CONFIG,
+		error = "`lobby_count_max` out of bounds"
+	);
+	assert_with!(
+		body.max_players >= 0,
+		CLOUD_INVALID_CONFIG,
+		error = "`max_players` out of bounds"
+	);
 
 	let _res = op!([ctx] mm_config_namespace_config_set {
 		namespace_id: Some(namespace_id.into()),
-		lobby_count_max: body.lobby_count_max as u32,
-		max_players_per_client: body.max_players as u32,
-		max_players_per_client_vpn: body.max_players as u32,
-		max_players_per_client_proxy: body.max_players as u32,
-		max_players_per_client_tor: body.max_players as u32,
-		max_players_per_client_hosting: body.max_players as u32,
+		lobby_count_max: body.lobby_count_max.try_into()?,
+		max_players_per_client: body.max_players.try_into()?,
+		max_players_per_client_vpn: body.max_players.try_into()?,
+		max_players_per_client_proxy: body.max_players.try_into()?,
+		max_players_per_client_tor: body.max_players.try_into()?,
+		max_players_per_client_hosting: body.max_players.try_into()?,
 	})
 	.await?;
 
@@ -581,17 +628,25 @@ pub async fn validate_mm_config(
 ) -> GlobalResult<models::CloudGamesNamespacesValidateGameNamespaceMatchmakerConfigResponse> {
 	let _ns_data = assert::namespace_for_game(&ctx, game_id, namespace_id).await?;
 
-	internal_assert!(body.lobby_count_max >= 0, "invalid `lobby_count_max`");
-	internal_assert!(body.max_players >= 0, "invalid `max_players`");
+	assert_with!(
+		body.lobby_count_max >= 0,
+		CLOUD_INVALID_CONFIG,
+		error = "`lobby_count_max` out of bounds"
+	);
+	assert_with!(
+		body.max_players >= 0,
+		CLOUD_INVALID_CONFIG,
+		error = "`max_players` out of bounds"
+	);
 
 	let res = op!([ctx] mm_config_namespace_config_validate {
 		namespace_id: Some(namespace_id.into()),
-		lobby_count_max: body.lobby_count_max as u32,
-		max_players_per_client: body.max_players as u32,
-		max_players_per_client_vpn: body.max_players as u32,
-		max_players_per_client_proxy: body.max_players as u32,
-		max_players_per_client_tor: body.max_players as u32,
-		max_players_per_client_hosting: body.max_players as u32,
+		lobby_count_max: body.lobby_count_max.try_into()?,
+		max_players_per_client: body.max_players.try_into()?,
+		max_players_per_client_vpn: body.max_players.try_into()?,
+		max_players_per_client_proxy: body.max_players.try_into()?,
+		max_players_per_client_tor: body.max_players.try_into()?,
+		max_players_per_client_hosting: body.max_players.try_into()?,
 	})
 	.await?;
 

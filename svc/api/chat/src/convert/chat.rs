@@ -6,7 +6,7 @@ use rivet_operation::prelude::*;
 use crate::convert;
 
 pub fn message(
-	current_user_id: &Uuid,
+	current_user_id: Uuid,
 	message: &backend::chat::Message,
 	users: &[backend::user::User],
 	parties: &[backend::party::Party],

@@ -20,6 +20,10 @@ mkdir_clickhouse:
         - user: clickhouse
         - group: clickhouse
         - mode: 700
+      - /etc/clickhouse-server:
+        - user: clickhouse
+        - group: clickhouse
+        - mode: 700
     - require:
       - user: create_clickhouse_user
 
@@ -44,9 +48,9 @@ disk_mount_clickhouse:
 push_etc_clickhouse_server:
   file.managed:
     - names:
-      - /etc/clickhouse-server/config.d/config.xml:
+      - /etc/clickhouse-server/config.xml:
         - source: salt://clickhouse/files/clickhouse-server.d/config.xml.j2
-      - /etc/clickhouse-server/users.d/users.xml:
+      - /etc/clickhouse-server/users.xml:
         - source: salt://clickhouse/files/clickhouse-server.d/users.xml.j2
     - user: clickhouse
     - group: clickhouse

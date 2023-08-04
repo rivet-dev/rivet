@@ -1,6 +1,6 @@
 use chirp_metrics as metrics;
 use futures_util::StreamExt;
-use global_error::GlobalError;
+use global_error::{GlobalResult, GlobalError};
 use prost::Message;
 use redis::{self, AsyncCommands};
 use rivet_connection::Connection;
@@ -856,7 +856,7 @@ where
 	async fn handle_req_with_retry(
 		self: Arc<Self>,
 		req: &Request<W::Request>,
-	) -> Result<W::Response, GlobalError> {
+	) -> GlobalResult<W::Response> {
 		// Will retry 4 times. This will take a maximum of 15 seconds.
 		let mut backoff = rivet_util::Backoff::new(5, Some(4), 1_000, 1_000);
 		loop {
@@ -893,7 +893,7 @@ where
 	async fn handle_worker_res(
 		self: Arc<Self>,
 		req: Request<W::Request>,
-		handle_res: Result<Result<W::Response, GlobalError>, time::error::Elapsed>,
+		handle_res: Result<GlobalResult<W::Response>, time::error::Elapsed>,
 	) -> Result<WorkerResponseSummary, ManagerError> {
 		// Log response status and build RPC response if needed
 		let (rpc_res, debug_error): (Option<chirp::Response>, Option<chirp::DebugServiceError>) =

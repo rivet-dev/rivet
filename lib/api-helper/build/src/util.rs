@@ -186,19 +186,35 @@ pub fn verify_cors(request: &Request<Body>, config: &CorsConfig) -> GlobalResult
 				return Err(err_code!(API_CORS_ORIGIN_NOT_ALLOWED));
 			}
 
+			let allowed_methods_str = config
+				.allowed_methods
+				.iter()
+				.map(|m| m.as_str())
+				.collect::<Vec<_>>()
+				.join(", ");
+
 			// Verify method
 			if let Some(req_method) = headers.get(header::ACCESS_CONTROL_REQUEST_METHOD) {
 				if let Ok(method) = http::Method::from_bytes(req_method.as_bytes()) {
 					if !config.allowed_methods.contains(&method) {
-						return Err(err_code!(API_CORS_METHOD_NOT_ALLOWED));
+						return Err(err_code!(
+							API_CORS_METHOD_NOT_ALLOWED,
+							allowed_methods = allowed_methods_str
+						));
 					}
 				} else {
 					tracing::warn!("failed to decode method header");
-					return Err(err_code!(API_CORS_METHOD_NOT_ALLOWED));
+					return Err(err_code!(
+						API_CORS_METHOD_NOT_ALLOWED,
+						allowed_methods = allowed_methods_str
+					));
 				}
 			} else {
 				tracing::warn!("preflight request missing access-control-request-method header");
-				return Err(err_code!(API_CORS_METHOD_NOT_ALLOWED));
+				return Err(err_code!(
+					API_CORS_METHOD_NOT_ALLOWED,
+					allowed_methods = allowed_methods_str
+				));
 			}
 
 			// Verify headers

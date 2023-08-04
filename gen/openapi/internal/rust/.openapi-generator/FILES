@@ -188,6 +188,8 @@ docs/CloudVersionIdentityCustomDisplayName.md
 docs/CloudVersionMatchmakerCaptcha.md
 docs/CloudVersionMatchmakerCaptchaHcaptcha.md
 docs/CloudVersionMatchmakerCaptchaHcaptchaLevel.md
+docs/CloudVersionMatchmakerCaptchaTurnstile.md
+docs/CloudVersionMatchmakerCaptchaTurnstileDomain.md
 docs/CloudVersionMatchmakerConfig.md
 docs/CloudVersionMatchmakerGameMode.md
 docs/CloudVersionMatchmakerGameModeIdleLobbiesConfig.md
@@ -594,6 +596,8 @@ src/models/cloud_version_identity_custom_display_name.rs
 src/models/cloud_version_matchmaker_captcha.rs
 src/models/cloud_version_matchmaker_captcha_hcaptcha.rs
 src/models/cloud_version_matchmaker_captcha_hcaptcha_level.rs
+src/models/cloud_version_matchmaker_captcha_turnstile.rs
+src/models/cloud_version_matchmaker_captcha_turnstile_domain.rs
 src/models/cloud_version_matchmaker_config.rs
 src/models/cloud_version_matchmaker_game_mode.rs
 src/models/cloud_version_matchmaker_game_mode_idle_lobbies_config.rs

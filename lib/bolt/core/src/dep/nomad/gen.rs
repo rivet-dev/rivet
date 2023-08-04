@@ -5,6 +5,7 @@ use std::path::{Path, PathBuf};
 use crate::{
 	config::{
 		self,
+		ns::LoggingProvider,
 		service::{ServiceDomain, ServiceKind, ServiceRouter},
 	},
 	context::{BuildContext, ProjectContext, RunContext, ServiceContext},
@@ -421,6 +422,7 @@ pub async fn gen_svc(region_id: &str, exec_ctx: &ExecServiceContext) -> Job {
 							"force_pull": force_pull,
 							"ports": docker_ports,
 							"auth": nomad_docker_io_auth(&project_ctx).await.unwrap(),
+							"logging": nomad_loki_plugin_config(&project_ctx, &svc_ctx).await.unwrap(),
 						})
 					}
 					ExecServiceDriver::LocalBinaryArtifact { path, args } => {
@@ -429,6 +431,7 @@ pub async fn gen_svc(region_id: &str, exec_ctx: &ExecServiceContext) -> Job {
 							"args": args,
 							"command": Path::new("/var/rivet/backend").join(path),
 							"auth": nomad_docker_io_auth(&project_ctx).await.unwrap(),
+							"logging": nomad_loki_plugin_config(&project_ctx, &svc_ctx).await.unwrap(),
 						})
 					}
 					ExecServiceDriver::UploadedBinaryArtifact { args, .. } => {
@@ -437,6 +440,7 @@ pub async fn gen_svc(region_id: &str, exec_ctx: &ExecServiceContext) -> Job {
 							"command": format!("${{NOMAD_TASK_DIR}}/build/{}", svc_ctx.name()),
 							"args": args,
 							"auth": nomad_docker_io_auth(&project_ctx).await.unwrap(),
+							"logging": nomad_loki_plugin_config(&project_ctx, &svc_ctx).await.unwrap(),
 						})
 					}
 					// TODO: This doesn't work since we don't handle Ctrl-C
@@ -519,6 +523,7 @@ pub async fn gen_svc(region_id: &str, exec_ctx: &ExecServiceContext) -> Job {
 				log_config: Some(json!({
 					"MaxFiles": 2,
 					"MaxFileSizeMB": 4,
+					"Disabled": project_ctx.ns().logging.is_some(),
 				})),
 
 				volume_mounts: match driver {
@@ -712,17 +717,58 @@ async fn nomad_docker_io_auth(ctx: &ProjectContext) -> Result<serde_json::Value>
 	if ctx.ns().docker.authenticate_all_docker_hub_pulls {
 		let username = ctx
 			.read_secret(&["docker", "docker_io", "username"])
-			.await
-			.unwrap();
+			.await?;
 		let password = ctx
 			.read_secret(&["docker", "docker_io", "password"])
-			.await
-			.unwrap();
+			.await?;
 		Ok(json!({
 			"username": username,
 			"password": password,
 		}))
 	} else {
 		Ok(json!(null))
+	}
+}
+
+async fn nomad_loki_plugin_config(
+	ctx: &ProjectContext,
+	svc_ctx: &ServiceContext,
+) -> Result<serde_json::Value> {
+	match &ctx.ns().logging.as_ref().map(|x| &x.provider) {
+		Some(LoggingProvider::Loki { .. }) => {
+			// Create log labels
+			let labels = [
+				("ns", ctx.ns_id()),
+				("service", &format!("rivet-{}", svc_ctx.name())),
+				("node", "${node.unique.name}"),
+				("alloc", "${NOMAD_ALLOC_ID}"),
+				("dc", "${NOMAD_DC}"),
+			]
+			.iter()
+			.map(|(k, v)| format!("{k}={v}"))
+			.collect::<Vec<_>>()
+			.join(",");
+
+			// Remove default log labels
+			let relabel_config = json!([
+				{
+					"action": "labeldrop",
+					"regex": "^(host|filename)$",
+				},
+			]);
+
+			Ok(json!({
+				"type": "loki",
+				"config": [{
+					"loki-url": "http://127.0.0.1:9060/loki/api/v1/push",
+					"loki-retries": 5,
+					"loki-batch-size": 400,
+					"no-file": true,
+					"loki-external-labels": labels,
+					"loki-relabel-config": serde_json::to_string(&relabel_config)?,
+				}],
+			}))
+		}
+		None => Ok(json!(null)),
 	}
 }

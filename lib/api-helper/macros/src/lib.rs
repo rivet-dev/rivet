@@ -399,6 +399,13 @@ impl Endpoint {
 			.map(|i| format_ident!("arg_{}", i).to_token_stream())
 			.collect::<Vec<_>>();
 
+		let allowed_methods = self
+			.functions
+			.iter()
+			.map(|func| func.req_type.as_ref())
+			.collect::<Vec<_>>()
+			.join(", ");
+
 		// MARK: Endpoint formatter
 		let arms = self
 			.functions
@@ -415,11 +422,10 @@ impl Endpoint {
 					match request.method() {
 						#(#arms)*
 						_ => {
-							Err(
-								rivet_operation::prelude::GlobalError::bad_request(
-									rivet_operation::prelude::formatted_error::code::API_CORS_METHOD_NOT_ALLOWED
-								)
-							)
+							Err(rivet_operation::prelude::err_code!(
+								API_METHOD_NOT_ALLOWED,
+								allowed_methods = #allowed_methods
+							))
 						}
 					}
 				} else {

@@ -2,7 +2,7 @@ use anyhow::*;
 use serde_json::{json, Value};
 
 use crate::{
-	config::{self, service::RuntimeKind},
+	config::{self, service::RuntimeKind, ns::LoggingProvider},
 	context::{ProjectContext, S3Provider},
 	dep,
 };
@@ -50,6 +50,25 @@ pub async fn build(ctx: &ProjectContext, opts: &BuildOpts) -> Result<Value> {
 	vars["cloudflare"] = cloudflare(ctx)?;
 
 	vars["s3"] = s3(ctx, opts.skip_s3).await?;
+
+	vars["logging"] = logging(ctx)?;
+
+	if !opts.skip_s3 {
+		let s3_config = ctx.s3_config(ctx.clone().s3_credentials().await?).await?;
+		vars["s3"] = json!({
+			"endpoint_internal": s3_config.endpoint_internal,
+			"endpoint_external": s3_config.endpoint_external,
+			"region": s3_config.region,
+		});
+	} else {
+		// Provide filler values so the pillars can still render
+		vars["s3"] = json!({
+			"endpoint_internal": "",
+			"endpoint_external": "",
+			"region": "",
+		});
+	}
+>>>>>>> origin/main
 
 	vars["redis"] = redis(ctx).await?;
 
@@ -138,6 +157,23 @@ fn cloudflare(ctx: &ProjectContext) -> Result<Value> {
 
 	Ok(json!({
 		"access": access,
+	}))
+}
+
+fn logging(ctx: &ProjectContext) -> Result<Value> {
+	#[allow(irrefutable_let_patterns)]
+	let Some(logging) = &ctx.ns().logging else {
+		return Ok(json!(null));
+	};
+
+	let endpoint = match &logging.provider {
+		LoggingProvider::Loki { endpoint } => endpoint,
+	};
+
+	Ok(json!({
+		"loki": {
+			"endpoint": endpoint,
+		},
 	}))
 }
 

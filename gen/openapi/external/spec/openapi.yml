@@ -11029,10 +11029,16 @@ components:
           format: uuid
         image_presigned_request:
           $ref: '#/components/schemas/UploadPresignedRequest'
+          description: '**Deprecated: use image_presigned_requests instead**'
+        image_presigned_requests:
+          type: array
+          items:
+            $ref: '#/components/schemas/UploadPresignedRequest'
       required:
         - build_id
         - upload_id
         - image_presigned_request
+        - image_presigned_requests
     CloudGamesListGameCdnSitesResponse:
       type: object
       properties:
@@ -11570,6 +11576,8 @@ components:
             having to reverify a captcha (in milliseconds).
         hcaptcha:
           $ref: '#/components/schemas/CloudVersionMatchmakerCaptchaHcaptcha'
+        turnstile:
+          $ref: '#/components/schemas/CloudVersionMatchmakerCaptchaTurnstile'
       required:
         - requests_before_reverify
         - verification_ttl
@@ -11589,6 +11597,24 @@ components:
         - difficult
         - always_on
       description: How hard a captcha should be.
+    CloudVersionMatchmakerCaptchaTurnstile:
+      type: object
+      description: Turnstile captcha configuration.
+      properties:
+        domains:
+          type: object
+          additionalProperties:
+            $ref: '#/components/schemas/CloudVersionMatchmakerCaptchaTurnstileDomain'
+      required:
+        - domains
+    CloudVersionMatchmakerCaptchaTurnstileDomain:
+      type: object
+      description: Turnstile domain configuration.
+      properties:
+        secret_key:
+          type: string
+      required:
+        - secret_key
     CloudVersionMatchmakerNetworkMode:
       type: string
       enum:

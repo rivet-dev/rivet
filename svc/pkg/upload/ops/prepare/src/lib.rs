@@ -1,11 +1,29 @@
 use std::{collections::HashSet, time::Duration};
 
+use futures_util::FutureExt;
 use futures_util::{StreamExt, TryStreamExt};
 use proto::backend::{self, pkg::*};
 use rivet_operation::prelude::*;
 use serde_json::json;
 
+const CHUNK_SIZE: u64 = util::file_size::mebibytes(100);
 const MAX_UPLOAD_SIZE: u64 = util::file_size::gigabytes(10);
+const MAX_MULTIPART_UPLOAD_SIZE: u64 = util::file_size::gigabytes(100);
+
+struct PrepareResult {
+	multipart: Option<MultipartUpdate>,
+	fut: std::pin::Pin<
+		Box<
+			dyn std::future::Future<Output = GlobalResult<backend::upload::PresignedUploadRequest>>
+				+ Send,
+		>,
+	>,
+}
+
+struct MultipartUpdate {
+	path: String,
+	multipart_upload_id: String,
+}
 
 #[operation(name = "upload-prepare")]
 async fn handle(
@@ -37,11 +55,25 @@ async fn handle(
 		s3_util::Client::from_env_opt(&ctx.bucket, provider, s3_util::EndpointKind::External)
 			.await?;
 
-	let total_content_length = ctx.files.iter().fold(0, |acc, x| acc + x.content_length);
-	tracing::info!(len = ?ctx.files.len(), ?total_content_length, "file info");
+	// Validate upload sizes
+	let total_content_length = ctx
+		.files
+		.iter()
+		.filter(|file| !file.multipart)
+		.fold(0, |acc, x| acc + x.content_length);
+	let total_multipart_content_length = ctx
+		.files
+		.iter()
+		.filter(|file| file.multipart)
+		.fold(0, |acc, x| acc + x.content_length);
+	tracing::info!(len=%ctx.files.len(), %total_content_length, %total_multipart_content_length, "file info");
 	internal_assert!(
 		total_content_length < MAX_UPLOAD_SIZE,
-		"file size must be < 10 gb"
+		"upload size must be < 10 gb"
+	);
+	internal_assert!(
+		total_content_length < MAX_MULTIPART_UPLOAD_SIZE,
+		"multipart uploads must be < 100 gb"
 	);
 
 	let user_id = ctx.user_id.map(|x| x.as_uuid());
@@ -58,8 +90,6 @@ async fn handle(
 	}
 
 	// Prepare columns for files
-	let upload_id = Uuid::new_v4();
-	let _upload_ids = ctx.files.iter().map(|_| upload_id).collect::<Vec<_>>();
 	let paths = ctx
 		.files
 		.iter()
@@ -114,39 +144,61 @@ async fn handle(
 	.execute(&crdb)
 	.await?;
 
-	// Create an upload URL with the given token
-	let presigned_requests = futures_util::stream::iter(ctx.files.iter().cloned())
-		.map(move |file| {
-			let s3_client_external = s3_client_external.clone();
-			async move {
-				tracing::info!(?file, "signing url");
+	// Create iterators to be joined later
+	let (presigned_requests_init, multipart_updates) =
+		futures_util::stream::iter(ctx.files.iter().cloned())
+			.map(move |file| {
+				let s3_client = s3_client_external.clone();
 
-				// Sign an upload request
-				let mut put_obj_builder = s3_client_external
-					.put_object()
-					.bucket(s3_client_external.bucket())
-					.key(format!("{}/{}", upload_id, file.path))
-					.content_length(file.content_length as i64);
-				if let Some(mime) = &file.mime {
-					put_obj_builder = put_obj_builder.content_type(mime.clone());
+				if file.multipart {
+					handle_multipart_upload(s3_client, upload_id, file).boxed()
+				} else {
+					handle_upload(s3_client, upload_id, file).boxed()
 				}
-				let presigned_upload_req = put_obj_builder
-					.presigned(
-						s3_util::aws_sdk_s3::presigning::config::PresigningConfig::builder()
-							.expires_in(Duration::from_secs(60 * 60))
-							.build()?,
-					)
-					.await?;
+			})
+			.buffer_unordered(16)
+			.try_collect::<Vec<_>>()
+			.await?
+			.into_iter()
+			.flatten()
+			.map(|res| (res.fut, res.multipart))
+			.unzip::<_, _, Vec<_>, Vec<_>>();
 
-				GlobalResult::Ok(backend::upload::PresignedUploadRequest {
-					path: file.path.clone(),
-					url: presigned_upload_req.uri().to_string(),
-				})
-			}
-		})
-		.buffer_unordered(32)
-		.try_collect::<Vec<_>>()
-		.await?;
+	// Split columns for query
+	let (multipart_paths, multipart_upload_ids) = multipart_updates
+		.into_iter()
+		.flatten()
+		.map(|mp| (mp.path, mp.multipart_upload_id))
+		.unzip::<_, _, Vec<_>, Vec<_>>();
+
+	let (presigned_requests, _) = tokio::try_join!(
+		// Create presigned requests
+		futures_util::stream::iter(presigned_requests_init)
+			.buffer_unordered(16)
+			.try_collect::<Vec<_>>(),
+		// Set multipart upload ids
+		async {
+			sqlx::query(indoc!(
+				"
+				UPDATE upload_files
+				SET multipart_upload_id = v.multipart_upload_id
+				FROM (
+					SELECT unnest($2) AS path,
+						   unnest($3) AS multipart_upload_id
+				) AS v
+				WHERE
+					upload_files.upload_id = $1 AND
+					upload_files.path = v.path
+				"
+			))
+			.bind(upload_id)
+			.bind(multipart_paths)
+			.bind(multipart_upload_ids)
+			.execute(&crdb)
+			.await
+			.map_err(Into::<GlobalError>::into)
+		},
+	)?;
 
 	msg!([ctx] analytics::msg::event_create() {
 		events: vec![
@@ -158,6 +210,7 @@ async fn handle(
 					"bucket": ctx.bucket,
 					"files": ctx.files.len(),
 					"total_content_length": total_content_length,
+					"total_multipart_content_length": total_multipart_content_length,
 				}))?),
 				..Default::default()
 			}
@@ -169,4 +222,115 @@ async fn handle(
 		upload_id: Some(upload_id.into()),
 		presigned_requests,
 	})
+}
+
+async fn handle_upload(
+	s3_client: s3_util::Client,
+	upload_id: Uuid,
+	file: backend::upload::PrepareFile,
+) -> GlobalResult<Vec<PrepareResult>> {
+	let fut = async move {
+		// Sign an upload request
+		let mut put_obj_builder = s3_client
+			.put_object()
+			.bucket(s3_client.bucket())
+			.key(format!("{}/{}", upload_id, file.path))
+			.content_length(file.content_length as i64);
+		if let Some(mime) = &file.mime {
+			put_obj_builder = put_obj_builder.content_type(mime.clone());
+		}
+		let presigned_upload_req = put_obj_builder
+			.presigned(
+				s3_util::aws_sdk_s3::presigning::config::PresigningConfig::builder()
+					.expires_in(Duration::from_secs(60 * 60))
+					.build()?,
+			)
+			.await?;
+
+		GlobalResult::Ok(backend::upload::PresignedUploadRequest {
+			path: file.path.clone(),
+			url: presigned_upload_req.uri().to_string(),
+			part_number: 0,
+		})
+	}
+	.boxed();
+
+	Ok(vec![PrepareResult {
+		multipart: None,
+		fut,
+	}])
+}
+
+async fn handle_multipart_upload(
+	s3_client: s3_util::Client,
+	upload_id: Uuid,
+	file: backend::upload::PrepareFile,
+) -> GlobalResult<Vec<PrepareResult>> {
+	// NOTE: https://docs.aws.amazon.com/AmazonS3/latest/API/API_CompleteMultipartUpload.html. See error
+	// code `EntityTooSmall`
+	assert_with!(
+		file.content_length >= util::file_size::mebibytes(5),
+		UPLOAD_INVALID,
+		reason = "upload too small for multipart (< 5MiB)"
+	);
+
+	// Create multipart upload
+	let mut multipart_builder = s3_client
+		.create_multipart_upload()
+		.bucket(s3_client.bucket())
+		.key(format!("{}/{}", upload_id, file.path));
+	if let Some(mime) = &file.mime {
+		multipart_builder = multipart_builder.content_type(mime.clone());
+	}
+
+	let multipart = multipart_builder.send().await?;
+	let multipart_upload_id = internal_unwrap_owned!(multipart.upload_id()).to_string();
+
+	let part_count = util::div_up!(file.content_length, CHUNK_SIZE);
+	internal_assert!(part_count <= 10000, "too many parts");
+
+	Ok((1..=part_count)
+		.map(|part_number| {
+			let s3_client = s3_client.clone();
+			let file = file.clone();
+			let multipart_upload_id2 = multipart_upload_id.clone();
+			let path = file.path.clone();
+
+			let fut = async move {
+				// Sign an upload request
+				let upload_part_builder = s3_client
+					.upload_part()
+					.bucket(s3_client.bucket())
+					.key(format!("{}/{}", upload_id, file.path))
+					.content_length(
+						(file.content_length - part_number * CHUNK_SIZE).min(CHUNK_SIZE) as i64,
+					)
+					.upload_id(multipart_upload_id2)
+					.part_number(part_number as i32);
+
+				let presigned_upload_req = upload_part_builder
+					.presigned(
+						s3_util::aws_sdk_s3::presigning::config::PresigningConfig::builder()
+							.expires_in(Duration::from_secs(60 * 60 * 6))
+							.build()?,
+					)
+					.await?;
+
+				GlobalResult::Ok(backend::upload::PresignedUploadRequest {
+					path: file.path.clone(),
+					url: presigned_upload_req.uri().to_string(),
+					part_number: part_number as u32,
+				})
+			}
+			.boxed();
+
+			PrepareResult {
+				multipart: Some(MultipartUpdate {
+					path,
+					multipart_upload_id: multipart_upload_id.clone(),
+				}),
+				fut,
+			}
+		})
+		.collect::<Vec<_>>())
 }

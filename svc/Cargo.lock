@@ -8695,10 +8695,12 @@ dependencies = [
  "chirp-worker",
  "chrono",
  "prost 0.10.4",
+ "rand",
  "reqwest",
  "rivet-operation",
  "s3-util",
  "sqlx",
+ "upload-complete",
  "upload-get",
 ]
 

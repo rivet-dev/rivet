@@ -192,7 +192,12 @@ pub async fn thread_history(
 ) -> GlobalResult<models::GetThreadHistoryResponse> {
 	let current_user_id = ctx.auth().dual_user(ctx.op_ctx()).await?;
 
-	internal_assert!(query.count <= 512, "`count` parameter too high");
+	assert_with!(
+		query.count <= 512,
+		API_BAD_QUERY_PARAMETER,
+		parameter = "count",
+		error = "parameter too high"
+	);
 
 	assert::chat_thread_participant(&ctx, thread_id, current_user_id).await?;
 
@@ -285,7 +290,7 @@ pub async fn thread_live(
 	let update_ts = update_ts.unwrap_or_else(util::timestamp::now);
 
 	let typing_statuses = if typing_status_change {
-		let topic_key = util_chat::key::typing_statuses(&thread_id);
+		let topic_key = util_chat::key::typing_statuses(thread_id);
 		let res = redis::pipe()
 			.atomic()
 			.hgetall(topic_key.clone())
@@ -317,7 +322,7 @@ pub async fn thread_live(
 						)?));
 						let user = users_res.users.iter().find(|u| u.user_id == user_id);
 						let identity = convert::identity::handle_without_presence(
-							&current_user_id,
+							current_user_id,
 							internal_unwrap_owned!(user),
 						)?;
 

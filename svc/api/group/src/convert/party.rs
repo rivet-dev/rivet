@@ -15,7 +15,7 @@ pub fn handle(
 		create_ts: util::timestamp::to_chrono(party.create_ts)?,
 		activity: convert::party::activity(party, games)?,
 		external: models::PartyExternalLinks {
-			chat: util::route::party_chat(&party_id),
+			chat: util::route::party_chat(party_id),
 		},
 	})
 }

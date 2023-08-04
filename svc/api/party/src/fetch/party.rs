@@ -30,7 +30,7 @@ pub async fn summaries(
 		.iter()
 		.map(|party| {
 			convert::party::summary(
-				&current_user_id,
+				current_user_id,
 				party,
 				&games,
 				&members,
@@ -59,7 +59,7 @@ pub async fn profile(
 	)?;
 
 	convert::party::profile(
-		&current_user_id,
+		current_user_id,
 		internal_unwrap_owned!(parties.parties.first()),
 		&games,
 		&members,
