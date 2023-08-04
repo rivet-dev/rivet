@@ -59,19 +59,22 @@ pub async fn apply(
 		}
 		config::ns::ClusterKind::Distributed { .. } => {
 			tokio::try_join!(
-				// /srv/salt
-				async { rsync_dir(ctx, &ctx.salt_path().join("salt"), "/srv/salt").await },
-				// /srv/pillar
-				async { rsync_dir(ctx, &ctx.salt_path().join("pillar"), "/srv/pillar").await },
-				// /srv/rivet-nix
 				async {
+					// /srv/salt
+					rsync_dir(ctx, &ctx.salt_path().join("salt"), "/srv/salt").await?;
+
+					// /srv/salt/nix/files/source
 					rsync_dir(
 						ctx,
-						&ctx.salt_path().join("pillar"),
+						&ctx.path().join("infra").join("nix"),
 						"/srv/salt/nix/files/source",
 					)
-					.await
+					.await?;
+
+					Ok(())
 				},
+				// /srv/pillar
+				async { rsync_dir(ctx, &ctx.salt_path().join("pillar"), "/srv/pillar").await },
 				// /srv/salt-context
 				async {
 					let tmp_dir = tempfile::TempDir::new()?;
