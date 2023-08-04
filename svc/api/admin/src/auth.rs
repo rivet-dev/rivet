@@ -23,9 +23,11 @@ impl ApiAuth for Auth {
 				API_FORBIDDEN,
 				reason = "Invalid auth"
 			);
-		}
 
-		Ok(Auth { _claims: None })
+			Ok(Auth { _claims: None })
+		} else {
+			internal_panic!("unreachable");
+		}
 	}
 
 	async fn rate_limit(_rate_limit_ctx: AuthRateLimitCtx<'_>) -> GlobalResult<()> {
