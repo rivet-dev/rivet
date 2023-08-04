@@ -7,6 +7,7 @@ struct FileRow {
 	path: String,
 	mime: Option<String>,
 	content_length: i64,
+	multipart_upload_id: Option<String>,
 }
 
 impl From<FileRow> for backend::upload::UploadFile {
@@ -16,6 +17,7 @@ impl From<FileRow> for backend::upload::UploadFile {
 			path: val.path,
 			mime: val.mime,
 			content_length: val.content_length as u64,
+			multipart_upload_id: val.multipart_upload_id,
 		}
 	}
 }
@@ -34,7 +36,7 @@ pub async fn handle(
 
 	let files = sqlx::query_as::<_, FileRow>(indoc!(
 		"
-		SELECT upload_id, path, mime, content_length
+		SELECT upload_id, path, mime, content_length, multipart_upload_id
 		FROM upload_files
 		WHERE upload_id = ANY($1)
 		"

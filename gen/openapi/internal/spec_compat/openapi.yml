@@ -848,6 +848,11 @@ components:
           type: string
         image_presigned_request:
           $ref: '#/components/schemas/UploadPresignedRequest'
+          description: '**Deprecated: use image_presigned_requests instead**'
+        image_presigned_requests:
+          items:
+            $ref: '#/components/schemas/UploadPresignedRequest'
+          type: array
         upload_id:
           format: uuid
           type: string
@@ -855,6 +860,7 @@ components:
       - build_id
       - upload_id
       - image_presigned_request
+      - image_presigned_requests
       type: object
     CloudGamesCreateGameCdnSiteRequest:
       properties:

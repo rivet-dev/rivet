@@ -23,6 +23,7 @@ message UploadFile {
 	string path = 2;
 	optional string mime = 3;
 	uint64 content_length = 4;
+	optional string multipart_upload_id = 7;
 }
 
 message PrepareFile {
@@ -30,9 +31,11 @@ message PrepareFile {
 	optional string mime = 2;
 	uint64 content_length = 3;
 	optional float nsfw_score_threshold = 4;
+	bool multipart = 5;
 }
 
 message PresignedUploadRequest {
 	string path = 1;
 	string url = 2;
+	uint32 part_number = 3;
 }
