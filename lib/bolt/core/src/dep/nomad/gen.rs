@@ -25,11 +25,13 @@ pub enum ExecServiceDriver {
 	},
 	UploadedBinaryArtifact {
 		artifact_key: String,
+		/// Path to the executable within the archive.
+		exec_path: String,
 		args: Vec<String>,
 	},
 	LocalBinaryArtifact {
-		/// Path relative to the project root.
-		path: PathBuf,
+		/// Path to the executable relative to the project root.
+		exec_path: PathBuf,
 		args: Vec<String>,
 	},
 }
@@ -425,19 +427,19 @@ pub async fn gen_svc(region_id: &str, exec_ctx: &ExecServiceContext) -> Job {
 							"logging": nomad_loki_plugin_config(&project_ctx, &svc_ctx).await.unwrap(),
 						})
 					}
-					ExecServiceDriver::LocalBinaryArtifact { path, args } => {
+					ExecServiceDriver::LocalBinaryArtifact { exec_path, args } => {
 						json!({
 							"image": "alpine:3.18",
 							"args": args,
-							"command": Path::new("/var/rivet/backend").join(path),
+							"command": Path::new("/var/rivet/backend").join(exec_path),
 							"auth": nomad_docker_io_auth(&project_ctx).await.unwrap(),
 							"logging": nomad_loki_plugin_config(&project_ctx, &svc_ctx).await.unwrap(),
 						})
 					}
-					ExecServiceDriver::UploadedBinaryArtifact { args, .. } => {
+					ExecServiceDriver::UploadedBinaryArtifact { exec_path, args, .. } => {
 						json!({
 							"image": "alpine:3.18",
-							"command": format!("${{NOMAD_TASK_DIR}}/build/{}", svc_ctx.name()),
+							"command": format!("${{NOMAD_TASK_DIR}}/build/{exec_path}"),
 							"args": args,
 							"auth": nomad_docker_io_auth(&project_ctx).await.unwrap(),
 							"logging": nomad_loki_plugin_config(&project_ctx, &svc_ctx).await.unwrap(),

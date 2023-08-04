@@ -332,16 +332,32 @@ impl ServiceContextData {
 #[derive(Debug, Clone)]
 pub enum ServiceBuildPlan {
 	/// Build exists locally.
-	ExistingLocalBuild { output_path: PathBuf },
+	ExistingLocalBuild {
+		/// Absolute path to the executable on the host system.
+		exec_path: PathBuf,
+	},
 
 	/// Build exists on S3 server.
-	ExistingUploadedBuild { build_key: String },
+	ExistingUploadedBuild {
+		build_key: String,
+
+		/// Path to the executable in the archive.
+		exec_path: String,
+	},
 
 	/// Build the service locally.
-	BuildLocally { output_path: PathBuf },
+	BuildLocally {
+		/// Absolute path to the executable on the host system.
+		exec_path: PathBuf,
+	},
 
 	/// Build the service and upload to S3.
-	BuildAndUpload { build_key: String },
+	BuildAndUpload {
+		build_key: String,
+
+		/// Path to the executable in the archive.
+		exec_path: String,
+	},
 
 	/// Run a Docker container.
 	Docker { image_tag: String },
@@ -369,36 +385,52 @@ impl ServiceContextData {
 					.await;
 
 				if force_build {
-					return Ok(ServiceBuildPlan::BuildLocally { output_path });
+					return Ok(ServiceBuildPlan::BuildLocally {
+						exec_path: output_path,
+					});
 				}
 
 				// Check if there's an existing build we can use
 				let build_exists = tokio::fs::metadata(&output_path).await.is_ok();
 				if build_exists {
-					return Ok(ServiceBuildPlan::ExistingLocalBuild { output_path });
+					return Ok(ServiceBuildPlan::ExistingLocalBuild {
+						exec_path: output_path,
+					});
 				}
 
 				// Default to building
-				Ok(ServiceBuildPlan::BuildLocally { output_path })
+				Ok(ServiceBuildPlan::BuildLocally {
+					exec_path: output_path,
+				})
 			}
 			// Build and upload to S3
 			config::ns::ClusterKind::Distributed { .. } => {
 				// Derive the build key
 				let key = self.s3_build_key(build_context).await?;
+				let exec_path = self.cargo_name().expect("no cargo name").to_string();
 
 				if force_build {
-					return Ok(ServiceBuildPlan::BuildAndUpload { build_key: key });
+					return Ok(ServiceBuildPlan::BuildAndUpload {
+						build_key: key,
+						exec_path,
+					});
 				}
 
 				// Check if there's an existing build we can use
 				let s3_client = project_ctx.s3_client_service_builds().await?;
 				let build_exists = s3::check_exists_cached(&project_ctx, &s3_client, &key).await?;
 				if build_exists {
-					return Ok(ServiceBuildPlan::ExistingUploadedBuild { build_key: key });
+					return Ok(ServiceBuildPlan::ExistingUploadedBuild {
+						build_key: key,
+						exec_path,
+					});
 				}
 
 				// Default to building
-				Ok(ServiceBuildPlan::BuildAndUpload { build_key: key })
+				Ok(ServiceBuildPlan::BuildAndUpload {
+					build_key: key,
+					exec_path,
+				})
 			}
 		}
 	}
