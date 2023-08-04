@@ -45,7 +45,7 @@ impl PopulateDb {
 
 			user_a_id,
 			user_b_id,
-			direct_thread_id: thread_ids[2],
+			direct_thread_id: thread_ids[1],
 		}
 	}
 }
