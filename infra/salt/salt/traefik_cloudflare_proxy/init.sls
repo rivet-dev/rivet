@@ -1,5 +1,3 @@
-{% import_json "/srv/salt-context/rivet/secrets.json" as rivet_secrets %}
-
 create_traefik_cloudflare_proxy_user:
   user.present:
     - name: traefik_cloudflare_proxy
