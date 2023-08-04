@@ -1,6 +1,6 @@
 use api_helper::ctx::Ctx;
 use proto::{backend, common};
-use rivet_convert::ApiInto;
+use rivet_convert::{ApiInto, ApiTryInto};
 use rivet_operation::prelude::*;
 use rivet_portal_server::models;
 
@@ -63,8 +63,8 @@ pub async fn group_summaries(
 					team_data.profile_file_name.as_ref(),
 				),
 				external: models::GroupExternalLinks {
-					profile: util::route::team_profile(&team_id),
-					chat: util::route::team_chat(&team_id),
+					profile: util::route::team_profile(team_id),
+					chat: util::route::team_chat(team_id),
 				},
 
 				is_current_identity_member: is_current_user_member,
@@ -72,7 +72,7 @@ pub async fn group_summaries(
 					team_data.publicity
 				))
 				.api_into(),
-				member_count: member_count as i32,
+				member_count: member_count.try_into()?,
 				owner_identity_id: owner_user_id.to_string(),
 				is_developer,
 			})

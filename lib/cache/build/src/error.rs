@@ -1,6 +1,6 @@
-use global_error::GlobalError;
+use global_error::{GlobalError, GlobalResult};
 
-pub type GetterResult<T> = Result<T, GlobalError>;
+pub type GetterResult<T> = GlobalResult<T>;
 
 #[derive(Debug, thiserror::Error)]
 pub enum Error {

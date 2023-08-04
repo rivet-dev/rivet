@@ -1,0 +1,31 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/fern-api/fern/main/fern.schema.json
+
+service:
+  auth: true
+  url: Module
+  base-path: /modules
+  audiences:
+    - public
+  endpoints:
+    call:
+      path: /{module}/scripts/{script}/call
+      method: POST
+      path-parameters:
+        module: string
+        script: string
+      docs: |
+        Makes a request to a module's script.
+      request:
+        headers:
+          origin: optional<string>
+        name: FindLobbyRequest
+        body:
+          properties:
+            namespace_id: optional<uuid>
+            data: unknown
+      response: CallResponse
+
+types:
+  CallResponse:
+    properties:
+      data: unknown

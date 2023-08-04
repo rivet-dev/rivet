@@ -407,6 +407,7 @@ pub trait ClaimsDecode {
 	fn as_game_namespace_public(&self) -> GlobalResult<ent::GameNamespacePublic>;
 	fn as_game_namespace_public_option(&self) -> GlobalResult<Option<ent::GameNamespacePublic>>;
 	fn as_matchmaker_lobby(&self) -> GlobalResult<ent::MatchmakerLobby>;
+	fn as_matchmaker_lobby_option(&self) -> GlobalResult<Option<ent::MatchmakerLobby>>;
 	fn as_matchmaker_player(&self) -> GlobalResult<ent::MatchmakerPlayer>;
 	fn as_job_run(&self) -> GlobalResult<ent::JobRun>;
 	fn as_game_cloud(&self) -> GlobalResult<ent::GameCloud>;
@@ -415,6 +416,7 @@ pub trait ClaimsDecode {
 	) -> GlobalResult<Option<ent::GameNamespaceDevelopment>>;
 	fn as_matchmaker_development_player(&self) -> GlobalResult<ent::MatchmakerDevelopmentPlayer>;
 	fn as_game_user(&self) -> GlobalResult<ent::GameUser>;
+	fn as_game_user_option(&self) -> GlobalResult<Option<ent::GameUser>>;
 	fn as_game_user_link(&self) -> GlobalResult<ent::GameUserLink>;
 	fn as_upload_file(&self) -> GlobalResult<ent::UploadFile>;
 	fn as_party_invite(&self) -> GlobalResult<ent::PartyInvite>;
@@ -490,6 +492,18 @@ impl ClaimsDecode for schema::Claims {
 				entitlement = "MatchmakerLobby"
 			))
 			.and_then(std::convert::identity)
+	}
+
+	fn as_matchmaker_lobby_option(&self) -> GlobalResult<Option<ent::MatchmakerLobby>> {
+		self.entitlements
+			.iter()
+			.find_map(|ent| match &ent.kind {
+				Some(schema::entitlement::Kind::MatchmakerLobby(ent)) => {
+					Some(ent::MatchmakerLobby::try_from(ent))
+				}
+				_ => None,
+			})
+			.transpose()
 	}
 
 	fn as_matchmaker_player(&self) -> GlobalResult<ent::MatchmakerPlayer> {
@@ -582,6 +596,18 @@ impl ClaimsDecode for schema::Claims {
 				entitlement = "GameUser"
 			))
 			.and_then(std::convert::identity)
+	}
+
+	fn as_game_user_option(&self) -> GlobalResult<Option<ent::GameUser>> {
+		self.entitlements
+			.iter()
+			.find_map(|ent| match &ent.kind {
+				Some(schema::entitlement::Kind::GameUser(ent)) => {
+					Some(ent::GameUser::try_from(ent))
+				}
+				_ => None,
+			})
+			.transpose()
 	}
 
 	fn as_game_user_link(&self) -> GlobalResult<ent::GameUserLink> {

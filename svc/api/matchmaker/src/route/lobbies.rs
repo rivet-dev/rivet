@@ -862,14 +862,17 @@ async fn dev_mock_lobby(
 						.target_port
 						.map(|port| format!("{}:{port}", ns_dev_ent.hostname)),
 					hostname: ns_dev_ent.hostname.clone(),
-					port: port.target_port.map(|x| x as i32),
+					port: port.target_port.map(|x| x.try_into()).transpose()?,
 					port_range: port
 						.port_range
 						.as_ref()
-						.map(|x| models::MatchmakerJoinPortRange {
-							min: x.min as i32,
-							max: x.max as i32,
+						.map(|x| {
+							GlobalResult::Ok(models::MatchmakerJoinPortRange {
+								min: x.min.try_into()?,
+								max: x.max.try_into()?,
+							})
 						})
+						.transpose()?
 						.map(Box::new),
 					is_tls: matches!(
 						port.proxy_protocol,
@@ -948,17 +951,20 @@ fn build_port(
 						.first()
 						.map(|hostname| (proxied_port, hostname))
 				})
-				.map(|(proxied_port, hostname)| models::MatchmakerJoinPort {
-					host: Some(format!("{}:{}", hostname, proxied_port.ingress_port)),
-					hostname: hostname.clone(),
-					port: Some(proxied_port.ingress_port as i32),
-					port_range: None,
-					is_tls: matches!(
-						mm_proxy_protocol,
-						MmProxyProtocol::Https | MmProxyProtocol::TcpTls
-					),
+				.map(|(proxied_port, hostname)| {
+					GlobalResult::Ok(models::MatchmakerJoinPort {
+						host: Some(format!("{}:{}", hostname, proxied_port.ingress_port)),
+						hostname: hostname.clone(),
+						port: Some(proxied_port.ingress_port.try_into()?),
+						port_range: None,
+						is_tls: matches!(
+							mm_proxy_protocol,
+							MmProxyProtocol::Https | MmProxyProtocol::TcpTls
+						),
+					})
 				})
 				.next()
+				.transpose()?
 		}
 		(MmProxyKind::None, MmProxyProtocol::Tcp | MmProxyProtocol::Udp) => {
 			let port_range = internal_unwrap!(port.port_range);
@@ -973,8 +979,8 @@ fn build_port(
 				hostname: network.ip.clone(),
 				port: None,
 				port_range: Some(Box::new(models::MatchmakerJoinPortRange {
-					min: port_range.min as i32,
-					max: port_range.max as i32,
+					min: port_range.min.try_into()?,
+					max: port_range.max.try_into()?,
 				})),
 				is_tls: false,
 			})

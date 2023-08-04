@@ -117,7 +117,7 @@ pub async fn get_lobby_logs(
 		models::LogStream::StdOut => backend::nomad_log::StreamType::StdOut,
 		models::LogStream::StdErr => backend::nomad_log::StreamType::StdErr,
 		_ => {
-			util::panic_with!(
+			panic_with!(
 				API_BAD_QUERY_PARAMETER,
 				parameter = "stream",
 				error = r#"Must be one of "std_out" or "std_err""#,
@@ -213,7 +213,7 @@ pub async fn export_lobby_logs(
 		models::LogStream::StdOut => backend::nomad_log::StreamType::StdOut,
 		models::LogStream::StdErr => backend::nomad_log::StreamType::StdErr,
 		models::LogStream::Unknown(_) => {
-			util::panic_with!(API_BAD_BODY, error = r#"Invalid "stream""#,);
+			panic_with!(API_BAD_BODY, error = r#"Invalid "stream""#,);
 		}
 	};
 

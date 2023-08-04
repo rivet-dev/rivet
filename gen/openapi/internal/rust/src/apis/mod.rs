@@ -123,6 +123,7 @@ pub mod kv_api;
 pub mod matchmaker_lobbies_api;
 pub mod matchmaker_players_api;
 pub mod matchmaker_regions_api;
+pub mod module_api;
 pub mod party_activity_api;
 pub mod party_activity_matchmaker_api;
 pub mod party_parties_api;

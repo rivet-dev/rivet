@@ -33,11 +33,11 @@ pub mod thread_tail_message {
 }
 
 /// HMAP<user id, rivet.backend.chat.TypingStatus>
-pub fn typing_statuses(thread_id: &Uuid) -> String {
+pub fn typing_statuses(thread_id: Uuid) -> String {
 	format!("chat:thread:{}:typing_statuses", thread_id)
 }
 
 /// ZSET<user id, update ts>
-pub fn typing_statuses_update_ts(thread_id: &Uuid) -> String {
+pub fn typing_statuses_update_ts(thread_id: Uuid) -> String {
 	format!("chat:thread:{}:typing_statuses_update_ts", thread_id)
 }

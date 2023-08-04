@@ -279,7 +279,7 @@ pub async fn __with_ctx<A: auth::ApiAuth + Send>(
 		req_id,
 		ray_id,
 		vec![chirp_client::TraceEntry {
-			svc_name: svc_name.clone(),
+			context_name: svc_name.clone(),
 			req_id: Some(req_id.into()),
 			ts,
 			run_context: match rivet_util::env::run_context() {

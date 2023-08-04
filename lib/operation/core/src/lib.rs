@@ -10,6 +10,7 @@ use global_error::{GlobalError, GlobalResult};
 use rivet_connection::Connection;
 use rivet_pools::prelude::*;
 use rivet_util as util;
+use tracing::Instrument;
 
 pub mod prelude;
 
@@ -30,8 +31,8 @@ pub struct OperationContext<B>
 where
 	B: Debug + Clone,
 {
-	service_name: String,
-	service_timeout: Duration,
+	name: String,
+	timeout: Duration,
 
 	conn: Connection,
 	req_id: Uuid,
@@ -49,8 +50,8 @@ where
 	B: Debug + Clone,
 {
 	pub fn new(
-		service_name: String,
-		service_timeout: Duration,
+		name: String,
+		timeout: Duration,
 		conn: Connection,
 		req_id: Uuid,
 		ray_id: Uuid,
@@ -60,8 +61,8 @@ where
 		trace: Vec<chirp_client::TraceEntry>,
 	) -> Self {
 		OperationContext {
-			service_name,
-			service_timeout,
+			name,
+			timeout,
 			conn,
 			req_id,
 			ray_id,
@@ -73,13 +74,16 @@ where
 	}
 
 	/// Calls the given operation. Use the `op!` macro instead of calling this directly.
+	#[tracing::instrument(err, skip_all, fields(operation = O::NAME))]
 	pub async fn call<O: Operation>(&self, body: O::Request) -> GlobalResult<O::Response> {
+		tracing::info!(?body, "operation call");
+
 		// Record metrics
 		metrics::CHIRP_REQUEST_PENDING
-			.with_label_values(&[&self.service_name])
+			.with_label_values(&[&self.name])
 			.inc();
 		metrics::CHIRP_REQUEST_TOTAL
-			.with_label_values(&[&self.service_name])
+			.with_label_values(&[&self.name])
 			.inc();
 
 		let start_instant = Instant::now();
@@ -94,14 +98,14 @@ where
 				Err(GlobalError::Internal { ty, code, .. }) => {
 					let error_code_str = code.as_str_name();
 					metrics::CHIRP_REQUEST_ERRORS
-						.with_label_values(&[&self.service_name, error_code_str, &ty])
+						.with_label_values(&[&self.name, error_code_str, &ty])
 						.inc();
 
 					error_code_str.to_string()
 				}
 				Err(GlobalError::BadRequest { code, .. }) => {
 					metrics::CHIRP_REQUEST_ERRORS
-						.with_label_values(&[&self.service_name, &code, "bad_request"])
+						.with_label_values(&[&self.name, &code, "bad_request"])
 						.inc();
 
 					code.clone()
@@ -112,23 +116,24 @@ where
 			// Other request metrics
 			let dt = start_instant.elapsed().as_secs_f64();
 			metrics::CHIRP_REQUEST_PENDING
-				.with_label_values(&[&self.service_name])
+				.with_label_values(&[&self.name])
 				.dec();
 			metrics::CHIRP_REQUEST_DURATION
-				.with_label_values(&[&self.service_name, error_code_str.as_str()])
+				.with_label_values(&[&self.name, error_code_str.as_str()])
 				.observe(dt);
 		}
 
 		// Submit perf
 		let chirp = self.conn.chirp().clone();
-		tokio::task::Builder::new()
-			.name("operation::perf")
-			.spawn(async move {
+		tokio::task::Builder::new().name("operation::perf").spawn(
+			async move {
 				// HACK: Force submit performance metrics after delay in order to ensure
 				// all spans have ended appropriately
 				tokio::time::sleep(Duration::from_secs(5)).await;
 				chirp.perf().submit().await;
-			})?;
+			}
+			.instrument(tracing::info_span!("operation_perf")),
+		)?;
 
 		res
 	}
@@ -140,7 +145,7 @@ where
 		let trace = {
 			let mut x = self.trace.clone();
 			x.push(chirp_client::TraceEntry {
-				svc_name: self.service_name.clone(),
+				context_name: self.name.clone(),
 				req_id: Some(self.req_id.into()),
 				ts: rivet_util::timestamp::now(),
 				run_context: match rivet_util::env::run_context() {
@@ -152,14 +157,14 @@ where
 		};
 
 		Ok(OperationContext {
-			service_name: O::NAME.to_string(),
-			service_timeout: O::TIMEOUT,
+			name: O::NAME.to_string(),
+			timeout: O::TIMEOUT,
 			conn: self.conn.wrap(self.req_id, ray_id, {
 				let mut x = trace.clone();
 
 				// Add new operation's trace to its connection (and chirp client)
 				x.push(chirp_client::TraceEntry {
-					svc_name: O::NAME.to_string(),
+					context_name: O::NAME.to_string(),
 					req_id: Some(self.req_id.into()),
 					ts: rivet_util::timestamp::now(),
 					run_context: match rivet_util::env::run_context() {
@@ -183,8 +188,8 @@ where
 	/// clone the body.
 	pub fn base(&self) -> OperationContext<()> {
 		OperationContext {
-			service_name: self.service_name.clone(),
-			service_timeout: self.service_timeout,
+			name: self.name.clone(),
+			timeout: self.timeout,
 			conn: self.conn.clone(),
 			req_id: self.req_id,
 			ray_id: self.ray_id,
@@ -195,8 +200,12 @@ where
 		}
 	}
 
+	pub fn name(&self) -> &str {
+		&self.name
+	}
+
 	pub fn timeout(&self) -> Duration {
-		self.service_timeout
+		self.timeout
 	}
 
 	pub fn req_id(&self) -> Uuid {
