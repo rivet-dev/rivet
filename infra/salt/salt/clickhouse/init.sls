@@ -45,6 +45,13 @@ disk_mount_clickhouse:
       - file: mkdir_clickhouse
 {% endif %}
 
+# Remove old config directories with residual files
+remove_etc_clickhouse_server_dirs:
+  file.absent:
+    - names:
+      - /etc/clickhouse-server/config.d
+      - /etc/clickhouse-server/users.d
+
 push_etc_clickhouse_server:
   file.managed:
     - names:
