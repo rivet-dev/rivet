@@ -84,5 +84,10 @@ in
 			
 			# Fix dynamic library path to fix issue with Python
 			export LD_LIBRARY_PATH="${pkgs.clang}/resource-root/lib:${pkgs.lib.strings.makeLibraryPath [ pkgs.openssl ]}"
+
+			# Set default Rust flags to match the Rust flags used inside of Bolt.
+			#
+			# If these don't match, then the build cache is purged any time Rust is ran from Bolt.
+			export RUSTFLAGS="--cfg tokio_unstable"
 		'';
 	}
