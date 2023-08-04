@@ -1219,7 +1219,7 @@ impl ServiceContextData {
 			}
 		);
 
-		let service = project_ctx
+		let mut service = project_ctx
 			.ns()
 			.services
 			.get(&self.name())
@@ -1235,7 +1235,7 @@ impl ServiceContextData {
 					},
 				},
 				config::ns::ClusterKind::Distributed { .. } => config::ns::Service {
-					count: if is_singleton { 1 } else { 2 },
+					count: 2,
 					resources: config::ns::ServiceResources {
 						cpu: config::ns::CpuResources::Cpu(250),
 						memory: 256,
@@ -1244,8 +1244,9 @@ impl ServiceContextData {
 				},
 			});
 
+		// Force single count if singleton
 		if is_singleton {
-			assert_eq!(service.count, 1)
+			service.count = 1;
 		}
 
 		service
