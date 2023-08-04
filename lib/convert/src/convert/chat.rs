@@ -1,3 +1,5 @@
+use std::convert::TryInto;
+
 use rivet_api::models;
 use rivet_operation::prelude::*;
 use types::rivet::backend::{self, pkg::*};
@@ -5,7 +7,7 @@ use types::rivet::backend::{self, pkg::*};
 use crate::convert;
 
 pub fn message(
-	current_user_id: &Uuid,
+	current_user_id: Uuid,
 	message: &backend::chat::Message,
 	users: &[backend::user::User],
 	parties: &[backend::party::Party],
@@ -217,7 +219,7 @@ pub fn message(
 
 // Returns `None` when the thread no longer exists
 pub fn thread(
-	current_user_id: &Uuid,
+	current_user_id: Uuid,
 	tail_message: &backend::chat::Message,
 	threads: &[backend::chat::Thread],
 	users: &[backend::user::User],
@@ -270,9 +272,10 @@ pub fn thread(
 					.iter()
 					.find(|t| t.thread_id == thread.thread_id)
 					.map(|t| t.unread_count)
-					.unwrap_or_default() as i64,
+					.unwrap_or_default()
+					.try_into()?,
 				external: Box::new(models::ChatThreadExternalLinks {
-					chat: util::route::thread(&thread_id),
+					chat: util::route::thread(thread_id),
 				}),
 			})
 		})
@@ -281,7 +284,7 @@ pub fn thread(
 
 // Returns `None` when the thread no longer exists
 fn topic_context(
-	current_user_id: &Uuid,
+	current_user_id: Uuid,
 	users: &[backend::user::User],
 	parties: &[backend::party::Party],
 	teams: &[backend::team::Team],

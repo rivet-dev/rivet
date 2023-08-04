@@ -4590,6 +4590,88 @@ paths:
       servers:
         - url: https://kv.api.rivet.gg/v1
       security: *ref_0
+  /modules/{module}/scripts/{script}/call:
+    post:
+      description: |
+        Makes a request to a module's script.
+      operationId: module_call
+      tags:
+        - Module
+      parameters:
+        - name: module
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: script
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: origin
+          in: header
+          required: false
+          schema:
+            type: string
+      responses:
+        '200':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ModuleCallResponse'
+        '400':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '403':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '404':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '408':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '429':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '500':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+      servers:
+        - url: https://module.api.rivet.gg/v1
+      security: *ref_0
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                namespace_id:
+                  type: string
+                  format: uuid
+                data: {}
+              required:
+                - data
   /parties/self/activity:
     delete:
       description: |-
@@ -10533,6 +10615,12 @@ components:
             $ref: '#/components/schemas/KvPutEntry'
       required:
         - entries
+    ModuleCallResponse:
+      type: object
+      properties:
+        data: {}
+      required:
+        - data
     AuthCompleteStatus:
       type: string
       enum:
@@ -11986,10 +12074,16 @@ components:
           format: uuid
         image_presigned_request:
           $ref: '#/components/schemas/UploadPresignedRequest'
+          description: '**Deprecated: use image_presigned_requests instead**'
+        image_presigned_requests:
+          type: array
+          items:
+            $ref: '#/components/schemas/UploadPresignedRequest'
       required:
         - build_id
         - upload_id
         - image_presigned_request
+        - image_presigned_requests
     CloudGamesListGameCdnSitesResponse:
       type: object
       properties:

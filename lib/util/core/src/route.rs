@@ -6,23 +6,23 @@ pub fn user_settings() -> String {
 	format!("{}/settings", origin_hub())
 }
 
-pub fn user_profile(user_id: &Uuid) -> String {
+pub fn user_profile(user_id: Uuid) -> String {
 	format!("{}/identities/{}", origin_hub(), user_id)
 }
 
-pub fn user_chat(user_id: &Uuid) -> String {
+pub fn user_chat(user_id: Uuid) -> String {
 	format!("{}/identities/{}/chat", origin_hub(), user_id)
 }
 
-pub fn team_profile(team_id: &Uuid) -> String {
+pub fn team_profile(team_id: Uuid) -> String {
 	format!("{}/groups/{}", origin_hub(), team_id)
 }
 
-pub fn team_chat(team_id: &Uuid) -> String {
+pub fn team_chat(team_id: Uuid) -> String {
 	format!("{}/groups/{}/chat", origin_hub(), team_id)
 }
 
-pub fn party_chat(party_id: &Uuid) -> String {
+pub fn party_chat(party_id: Uuid) -> String {
 	format!("{}/parties/{}", origin_hub(), party_id)
 }
 
@@ -30,7 +30,7 @@ pub fn party_invite(invite_token: &str) -> String {
 	format!("{}/party/invite/{}", origin_hub(), invite_token)
 }
 
-pub fn thread(thread_id: &Uuid) -> String {
+pub fn thread(thread_id: Uuid) -> String {
 	format!("{}/threads/{}", origin_hub(), thread_id)
 }
 

@@ -37,7 +37,7 @@ pub async fn messages(
 		.iter()
 		.map(|message| {
 			convert::chat::message(
-				&current_user_id,
+				current_user_id,
 				message,
 				&users_res.users,
 				&parties.parties,

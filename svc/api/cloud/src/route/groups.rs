@@ -1,7 +1,7 @@
 use api_helper::{anchor::WatchIndexQuery, ctx::Ctx};
 use proto::backend;
 use rivet_cloud_server::models;
-use rivet_convert::{ApiInto, ApiTryInto};
+use rivet_convert::ApiInto;
 use rivet_operation::prelude::*;
 use serde::{Deserialize, Serialize};
 

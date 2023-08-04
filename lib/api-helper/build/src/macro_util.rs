@@ -212,7 +212,7 @@ pub async fn __with_ctx<A: auth::ApiAuth + Send>(
 	if !optional_auth && bearer_token.is_none() {
 		tracing::info!("no auth");
 
-		return Err(err_code!(API_UNAUTHORIZED));
+		return Err(err_code!(API_UNAUTHORIZED, reason = "No bearer token provided."));
 	}
 
 	let user_agent = __deserialize_optional_header::<String, _>(&request, header::USER_AGENT)?;
@@ -279,7 +279,7 @@ pub async fn __with_ctx<A: auth::ApiAuth + Send>(
 		req_id,
 		ray_id,
 		vec![chirp_client::TraceEntry {
-			svc_name: svc_name.clone(),
+			context_name: svc_name.clone(),
 			req_id: Some(req_id.into()),
 			ts,
 			run_context: match rivet_util::env::run_context() {

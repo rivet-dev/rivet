@@ -2,7 +2,7 @@ use chirp_worker::prelude::*;
 use proto::backend::pkg::*;
 
 #[worker_test]
-async fn empty(ctx: TestCtx) {
+async fn create(ctx: TestCtx) {
 	let user_id = Uuid::new_v4();
 	tracing::info!(%user_id);
 	msg!([ctx] user::msg::create(user_id) -> user::msg::create_complete {

@@ -8,13 +8,13 @@ use types::rivet::{
 use crate::{convert, fetch, ApiTryInto};
 
 pub fn handle(
-	current_user_id: &Uuid,
+	current_user_id: Uuid,
 	user: &backend::user::User,
 	presences_ctx: &fetch::identity::PresencesCtx,
 	is_mutual_following: bool,
 ) -> GlobalResult<models::IdentityHandle> {
 	let user_id = internal_unwrap!(user.user_id).as_uuid();
-	let is_self = &user_id == current_user_id;
+	let is_self = user_id == current_user_id;
 
 	let user_presence = internal_unwrap_owned!(presences_ctx
 		.res
@@ -60,19 +60,19 @@ pub fn handle(
 		party: party.map(Box::new),
 		is_registered: true, // TODO:
 		external: Box::new(models::IdentityExternalLinks {
-			profile: util::route::user_profile(&user_id),
+			profile: util::route::user_profile(user_id),
 			settings: None,
-			chat: (!is_self).then(|| util::route::user_chat(&user_id)),
+			chat: (!is_self).then(|| util::route::user_chat(user_id)),
 		}),
 	})
 }
 
 pub fn handle_without_presence(
-	current_user_id: &Uuid,
+	current_user_id: Uuid,
 	user: &backend::user::User,
 ) -> GlobalResult<models::IdentityHandle> {
 	let user_id = internal_unwrap!(user.user_id).as_uuid();
-	let is_self = &user_id == current_user_id;
+	let is_self = user_id == current_user_id;
 
 	Ok(models::IdentityHandle {
 		identity_id: user_id,
@@ -87,22 +87,22 @@ pub fn handle_without_presence(
 		party: None,
 		is_registered: true, // TODO:
 		external: Box::new(models::IdentityExternalLinks {
-			profile: util::route::user_profile(&user_id),
+			profile: util::route::user_profile(user_id),
 			settings: None,
-			chat: (!is_self).then(|| util::route::user_chat(&user_id)),
+			chat: (!is_self).then(|| util::route::user_chat(user_id)),
 		}),
 	})
 }
 
 pub fn summary(
-	current_user_id: &Uuid,
+	current_user_id: Uuid,
 	user: &backend::user::User,
 	presences_ctx: &fetch::identity::PresencesCtx,
 	mutual_follows: &[user_follow::get::response::Follow],
 ) -> GlobalResult<models::IdentitySummary> {
 	let user_id_proto = internal_unwrap_owned!(user.user_id);
 	let user_id = user_id_proto.as_uuid();
-	let is_self = &user_id == current_user_id;
+	let is_self = user_id == current_user_id;
 
 	let user_presence = internal_unwrap_owned!(presences_ctx
 		.res
@@ -127,7 +127,7 @@ pub fn summary(
 		None
 	};
 
-	let current_user_id = Into::<common::Uuid>::into(*current_user_id);
+	let current_user_id = Into::<common::Uuid>::into(current_user_id);
 	let following = mutual_follows.iter().any(|follow| {
 		follow.follower_user_id.as_ref() == Some(&current_user_id)
 			&& follow.following_user_id.as_ref() == Some(&user_id_proto)
@@ -155,9 +155,9 @@ pub fn summary(
 		party: party.map(Box::new),
 		is_registered: true, // TODO:
 		external: Box::new(models::IdentityExternalLinks {
-			profile: util::route::user_profile(&user_id),
+			profile: util::route::user_profile(user_id),
 			settings: None,
-			chat: (!is_self).then(|| util::route::user_chat(&user_id)),
+			chat: (!is_self).then(|| util::route::user_chat(user_id)),
 		}),
 		following,
 		is_following_me,
@@ -177,14 +177,14 @@ pub struct ProfileCtx<'a> {
 }
 
 pub fn profile(
-	current_user_id: &Uuid,
+	current_user_id: Uuid,
 	user: &backend::user::User,
 	pctx: ProfileCtx,
 ) -> GlobalResult<models::IdentityProfile> {
 	let user_id_proto = internal_unwrap_owned!(user.user_id);
 	let user_id = user_id_proto.as_uuid();
 
-	let is_self = &user_id == current_user_id;
+	let is_self = user_id == current_user_id;
 
 	let identities = internal_unwrap_owned!(pctx
 		.linked_accounts
@@ -273,7 +273,7 @@ pub fn profile(
 		None
 	};
 
-	let current_user_id = Into::<common::Uuid>::into(*current_user_id);
+	let current_user_id = Into::<common::Uuid>::into(current_user_id);
 	let following = pctx.mutual_follows.iter().any(|follow| {
 		follow.follower_user_id.as_ref() == Some(&current_user_id)
 			&& follow.following_user_id.as_ref() == Some(&user_id_proto)
@@ -314,9 +314,9 @@ pub fn profile(
 		party: party.map(Box::new),
 		is_registered,
 		external: Box::new(models::IdentityExternalLinks {
-			profile: util::route::user_profile(&user_id),
+			profile: util::route::user_profile(user_id),
 			settings: (is_self && pctx.is_game_user).then(util::route::user_settings),
-			chat: (!is_self).then(|| util::route::user_chat(&user_id)),
+			chat: (!is_self).then(|| util::route::user_chat(user_id)),
 		}),
 		dev_state: None,
 		is_admin: is_self && user.is_admin,

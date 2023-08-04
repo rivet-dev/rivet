@@ -713,6 +713,62 @@ dependencies = [
 ]
 
 [[package]]
+name = "api-module"
+version = "0.0.1"
+dependencies = [
+ "api-helper",
+ "async-trait",
+ "chirp-client",
+ "chrono",
+ "cloud-game-token-create",
+ "cloud-namespace-token-public-create",
+ "faker-build",
+ "faker-game",
+ "faker-game-namespace",
+ "faker-game-version",
+ "faker-region",
+ "futures-util",
+ "game-get",
+ "game-namespace-get",
+ "game-user-get",
+ "http",
+ "hyper",
+ "lazy_static",
+ "mm-lobby-get",
+ "module-game-version-get",
+ "module-instance-call",
+ "module-ns-instance-get",
+ "prost 0.10.4",
+ "rand",
+ "regex",
+ "region-get",
+ "reqwest",
+ "rivet-api",
+ "rivet-cache",
+ "rivet-claims",
+ "rivet-connection",
+ "rivet-convert",
+ "rivet-health-checks",
+ "rivet-operation",
+ "rivet-pools",
+ "rivet-util-mm",
+ "serde",
+ "serde_json",
+ "thiserror",
+ "token-create",
+ "token-revoke",
+ "tokio",
+ "tracing",
+ "tracing-subscriber",
+ "url",
+ "urlencoding",
+ "user-get",
+ "user-identity-get",
+ "user-team-list",
+ "uuid",
+]
+
+[[package]]
 name = "api-party"
 version = "0.0.1"
 dependencies = [
@@ -2496,6 +2552,7 @@ dependencies = [
  "identity-config-version-get",
  "kv-config-version-get",
  "mm-config-version-get",
+ "module-game-version-get",
  "prost 0.10.4",
  "rivet-operation",
  "rivet-util-mm",
@@ -2521,6 +2578,8 @@ dependencies = [
  "kv-config-version-publish",
  "mm-config-version-prepare",
  "mm-config-version-publish",
+ "module-game-version-prepare",
+ "module-game-version-publish",
  "prost 0.10.4",
  "region-list",
  "rivet-operation",
@@ -3071,6 +3130,7 @@ dependencies = [
  "faker-build",
  "faker-cdn-site",
  "faker-game",
+ "game-namespace-version-set",
  "mm-config-version-get",
  "prost 0.10.4",
  "region-list",
@@ -3780,6 +3840,7 @@ dependencies = [
  "faker-game",
  "game-version-get",
  "game-version-list",
+ "module-version-get",
  "prost 0.10.4",
  "region-get",
  "rivet-operation",
@@ -5125,6 +5186,135 @@ dependencies = [
  "tier-list",
  "token-create",
  "upload-complete",
+ "upload-get",
+ "upload-prepare",
+]
+
+[[package]]
+name = "module-game-version-get"
+version = "0.0.1"
+dependencies = [
+ "chirp-client",
+ "chirp-worker",
+ "faker-game",
+ "faker-game-version",
+ "prost 0.10.4",
+ "rivet-operation",
+ "sqlx",
+]
+
+[[package]]
+name = "module-game-version-prepare"
+version = "0.0.1"
+dependencies = [
+ "chirp-client",
+ "chirp-worker",
+ "faker-game",
+ "prost 0.10.4",
+ "rivet-operation",
+]
+
+[[package]]
+name = "module-game-version-publish"
+version = "0.0.1"
+dependencies = [
+ "chirp-client",
+ "chirp-worker",
+ "faker-game",
+ "itertools",
+ "module-game-version-get",
+ "prost 0.10.4",
+ "rivet-operation",
+ "sqlx",
+ "unzip-n",
+]
+
+[[package]]
+name = "module-get"
+version = "0.0.1"
+dependencies = [
+ "chirp-client",
+ "chirp-worker",
+ "prost 0.10.4",
+ "rand",
+ "rivet-operation",
+ "sqlx",
+]
+
+[[package]]
+name = "module-instance-call"
+version = "0.0.1"
+dependencies = [
+ "chirp-client",
+ "chirp-worker",
+ "module-instance-get",
+ "module-version-get",
+ "prost 0.10.4",
+ "rand",
+ "reqwest",
+ "rivet-operation",
+ "serde",
+ "sqlx",
+]
+
+[[package]]
+name = "module-instance-get"
+version = "0.0.1"
+dependencies = [
+ "chirp-client",
+ "chirp-worker",
+ "prost 0.10.4",
+ "rand",
+ "rivet-operation",
+ "sqlx",
+]
+
+[[package]]
+name = "module-ns-instance-get"
+version = "0.0.1"
+dependencies = [
+ "chirp-client",
+ "chirp-worker",
+ "prost 0.10.4",
+ "rand",
+ "rivet-operation",
+ "sqlx",
+]
+
+[[package]]
+name = "module-version-get"
+version = "0.0.1"
+dependencies = [
+ "chirp-client",
+ "chirp-worker",
+ "module-get",
+ "prost 0.10.4",
+ "rand",
+ "rivet-operation",
+ "sqlx",
+]
+
+[[package]]
+name = "module-worker"
+version = "0.0.1"
+dependencies = [
+ "chat-thread-get-or-create-for-topic",
+ "chirp-client",
+ "chirp-worker",
+ "chrono",
+ "faker-game",
+ "faker-game-version",
+ "module-game-version-get",
+ "module-instance-get",
+ "module-version-get",
+ "reqwest",
+ "rivet-convert",
+ "rivet-health-checks",
+ "rivet-metrics",
+ "rivet-runtime",
+ "rivet-util-module",
+ "serde",
+ "sqlx",
  "upload-get",
  "upload-prepare",
 ]
@@ -6794,6 +6984,14 @@ dependencies = [
  "serde",
  "strum",
  "uuid",
+]
+
+[[package]]
+name = "rivet-util-module"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
 ]
 
 [[package]]
@@ -8497,10 +8695,12 @@ dependencies = [
  "chirp-worker",
  "chrono",
  "prost 0.10.4",
+ "rand",
  "reqwest",
  "rivet-operation",
  "s3-util",
  "sqlx",
+ "upload-complete",
  "upload-get",
 ]
 
