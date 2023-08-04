@@ -5,7 +5,7 @@ use serde_json::json;
 #[operation(name = "game-create")]
 async fn handle(
 	ctx: OperationContext<game::create::Request>,
-) -> Result<game::create::Response, GlobalError> {
+) -> GlobalResult<game::create::Response> {
 	let game::create::Request {
 		name_id,
 		display_name,

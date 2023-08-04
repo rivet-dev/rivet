@@ -10,7 +10,7 @@ struct FollowCount {
 #[operation(name = "user-follow-count")]
 async fn handle(
 	ctx: OperationContext<user_follow::count::Request>,
-) -> Result<user_follow::count::Response, GlobalError> {
+) -> GlobalResult<user_follow::count::Response> {
 	let user_ids = ctx
 		.user_ids
 		.iter()

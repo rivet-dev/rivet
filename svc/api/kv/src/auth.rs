@@ -36,7 +36,7 @@ impl ApiAuth for Auth {
 }
 
 impl Auth {
-	pub fn claims(&self) -> Result<&Claims, GlobalError> {
+	pub fn claims(&self) -> GlobalResult<&Claims> {
 		self.claims
 			.as_ref()
 			.ok_or_else(|| err_code!(API_UNAUTHORIZED))
@@ -66,13 +66,13 @@ impl Auth {
 		Ok(user_ent)
 	}
 
-	pub fn lobby(&self) -> Result<rivet_claims::ent::MatchmakerLobby, GlobalError> {
+	pub fn lobby(&self) -> GlobalResult<rivet_claims::ent::MatchmakerLobby> {
 		self.claims()?.as_matchmaker_lobby()
 	}
 
 	pub fn game_ns_dev_option(
 		&self,
-	) -> Result<Option<rivet_claims::ent::GameNamespaceDevelopment>, GlobalError> {
+	) -> GlobalResult<Option<rivet_claims::ent::GameNamespaceDevelopment>> {
 		if let Some(claims) = &self.claims {
 			Ok(claims.as_game_namespace_development_option()?)
 		} else {

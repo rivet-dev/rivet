@@ -50,6 +50,17 @@ async fn handle(
 	})
 	.await?;
 
+	// Publish updates
+	msg!([ctx] game::msg::update(game_id) {
+		game_id: Some(game_id.into()),
+	})
+	.await?;
+	msg!([ctx] game::msg::ns_version_set_complete(namespace_id) {
+		namespace_id: Some(namespace_id.into()),
+		version_id: Some(version_id.into()),
+	})
+	.await?;
+
 	Ok(game::namespace_create::Response {
 		namespace_id: Some(namespace_id.into()),
 	})

@@ -142,14 +142,14 @@ where
 
 #[derive(Debug)]
 pub struct TraceEntry {
-	svc_name: String,
+	context_name: String,
 	req_id: Uuid,
 	_ts: i64,
 }
 
 impl TraceEntry {
-	pub fn svc_name(&self) -> &str {
-		&self.svc_name
+	pub fn context_name(&self) -> &str {
+		&self.context_name
 	}
 
 	pub fn req_id(&self) -> Uuid {
@@ -162,7 +162,7 @@ impl TryFrom<types::rivet::chirp::TraceEntry> for TraceEntry {
 
 	fn try_from(value: types::rivet::chirp::TraceEntry) -> Result<Self, ClientError> {
 		Ok(TraceEntry {
-			svc_name: value.svc_name.clone(),
+			context_name: value.context_name.clone(),
 			req_id: value
 				.req_id
 				.map(|id| id.as_uuid())

@@ -12,12 +12,12 @@ struct Follow {
 #[operation(name = "user-follow-get")]
 async fn handle(
 	ctx: OperationContext<user_follow::get::Request>,
-) -> Result<user_follow::get::Response, GlobalError> {
+) -> GlobalResult<user_follow::get::Response> {
 	let queries = ctx
 		.queries
 		.iter()
-		.map(|query| -> Result<_, GlobalError> {
-			Ok((
+		.map(|query| {
+			GlobalResult::Ok((
 				internal_unwrap!(query.follower_user_id).as_uuid(),
 				internal_unwrap!(query.following_user_id).as_uuid(),
 			))

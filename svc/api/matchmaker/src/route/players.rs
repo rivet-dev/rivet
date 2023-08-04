@@ -1,3 +1,5 @@
+use std::convert::TryInto;
+
 use api_helper::{anchor::WatchIndexQuery, ctx::Ctx};
 use proto::backend::pkg::*;
 use rivet_api::models;
@@ -240,11 +242,13 @@ pub async fn statistics(
 			}
 		}
 
-		let player_count = internal_unwrap_owned!(lobby_player_counts_res
-			.lobbies
-			.iter()
-			.find(|l| l.lobby_id == lobby.lobby_id))
-		.total_player_count as i64;
+		let player_count = TryInto::<i64>::try_into(
+			internal_unwrap_owned!(lobby_player_counts_res
+				.lobbies
+				.iter()
+				.find(|l| l.lobby_id == lobby.lobby_id))
+			.total_player_count,
+		)?;
 		let lobby_group_id = internal_unwrap!(lobby.lobby_group_id).as_uuid();
 		let lobby_group = internal_unwrap_owned!(all_lobby_groups.get(&lobby_group_id));
 		let region = internal_unwrap_owned!(regions_res

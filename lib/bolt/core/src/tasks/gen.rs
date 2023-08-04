@@ -26,8 +26,8 @@ pub async fn generate_project(ctx: &ProjectContext) {
 
 	// Generate additional roots
 	let additional_roots = &ctx.config_local().additional_roots;
-	for additional_root in additional_roots {
-		let path = fs::canonicalize(ctx.path().join(additional_root))
+	for (_, additional_root) in additional_roots {
+		let path = fs::canonicalize(ctx.path().join(&additional_root.path))
 			.await
 			.expect("additional root path not found");
 

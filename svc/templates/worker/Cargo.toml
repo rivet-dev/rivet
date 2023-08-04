@@ -1,0 +1,19 @@
+[package]
+name = "{{pkg}}-worker"
+version = "0.0.1"
+edition = "2018"
+authors = ["Rivet Gaming, LLC <developer@rivet.gg>"]
+license = "Apache-2.0"
+
+[dependencies]
+rivet-convert = { path = "../../../../lib/convert" }
+chirp-client = { path = "../../../../lib/chirp/client" }
+chirp-worker = { path = "../../../../lib/chirp/worker" }
+chrono = "0.4"
+lazy_static = "1.4.0"
+rivet-health-checks = { path = "../../../../lib/health-checks" }
+rivet-metrics = { path = "../../../../lib/metrics" }
+rivet-runtime = { path = "../../../../lib/runtime" }
+
+[dev-dependencies]
+chirp-worker = { path = "../../../../lib/chirp/worker" }

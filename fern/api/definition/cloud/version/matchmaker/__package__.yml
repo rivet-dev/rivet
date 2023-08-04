@@ -17,9 +17,9 @@ types:
       captcha:
         type: optional<localCommons.Captcha>
 
-      # Client-side configuration
+      # _Configures Rivet CLI behavior. Has no effect on server behavior._
       dev_hostname:
-        docs: Client-side configuration
+        docs: _Configures Rivet CLI behavior. Has no effect on server behavior._
         type: optional<string>
 
       # Game mode overrides

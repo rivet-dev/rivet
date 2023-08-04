@@ -8,7 +8,7 @@ const DEFAULT_STATUS: i32 = backend::user::Status::Offline as i32;
 #[operation(name = "user-presence-get")]
 async fn handle(
 	ctx: OperationContext<user_presence::get::Request>,
-) -> Result<user_presence::get::Response, GlobalError> {
+) -> GlobalResult<user_presence::get::Response> {
 	let mut redis = ctx.redis_user_presence().await?;
 
 	let user_ids = ctx
@@ -129,7 +129,7 @@ async fn handle(
 				presence: Some(presence),
 			})
 		})
-		.collect::<Result<Vec<_>, GlobalError>>()?;
+		.collect::<GlobalResult<Vec<_>>>()?;
 
 	Ok(user_presence::get::Response { users })
 }

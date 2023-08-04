@@ -11,7 +11,7 @@ struct Follow {
 #[operation(name = "user-mutual-friend-list")]
 async fn handle(
 	ctx: OperationContext<user::mutual_friend_list::Request>,
-) -> Result<user::mutual_friend_list::Response, GlobalError> {
+) -> GlobalResult<user::mutual_friend_list::Response> {
 	let user_a_id = internal_unwrap!(ctx.user_a_id).as_uuid();
 	let user_b_id = internal_unwrap!(ctx.user_b_id).as_uuid();
 

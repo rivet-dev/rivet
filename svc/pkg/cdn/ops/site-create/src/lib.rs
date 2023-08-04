@@ -12,12 +12,12 @@ async fn handle(
 		util::check::display_name_long(&ctx.display_name),
 		"invalid display name"
 	);
-	internal_assert!(
+	assert_with!(
 		ctx.files
 			.iter()
 			.fold(0, |acc, file| acc + file.content_length)
 			< MAX_UPLOAD_SIZE,
-		"upload too large"
+		UPLOAD_TOO_LARGE
 	);
 
 	// Validate game exists
