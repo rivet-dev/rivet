@@ -32,4 +32,7 @@ base:
     - minio
   'G@roles:traefik':
     - traefik
-
+  'G@roles:traefik-cloudflare-proxy':
+    - traefik_cloudflare_proxy
+  'G@roles:docker-plugin-loki':
+    - docker_plugin_loki
