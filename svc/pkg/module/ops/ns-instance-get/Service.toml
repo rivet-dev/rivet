@@ -1,0 +1,7 @@
+[service]
+name = "module-ns-instance-get"
+
+[runtime]
+kind = "rust"
+
+[operation]

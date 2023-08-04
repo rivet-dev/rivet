@@ -7,7 +7,7 @@ use serde_json::json;
 #[operation(name = "user-follow-toggle")]
 async fn handle(
 	ctx: OperationContext<user_follow::toggle::Request>,
-) -> Result<user_follow::toggle::Response, GlobalError> {
+) -> GlobalResult<user_follow::toggle::Response> {
 	let follower_user_id = internal_unwrap!(ctx.follower_user_id).as_uuid();
 	let following_user_id = internal_unwrap!(ctx.following_user_id).as_uuid();
 

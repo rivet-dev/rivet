@@ -1,3 +1,5 @@
+use std::convert::TryInto;
+
 use rivet_api::models;
 use rivet_operation::prelude::*;
 use types::rivet::backend::{self, pkg::*};
@@ -270,7 +272,8 @@ pub fn thread(
 					.iter()
 					.find(|t| t.thread_id == thread.thread_id)
 					.map(|t| t.unread_count)
-					.unwrap_or_default() as i64,
+					.unwrap_or_default()
+					.try_into()?,
 				external: Box::new(models::ChatThreadExternalLinks {
 					chat: util::route::thread(&thread_id),
 				}),

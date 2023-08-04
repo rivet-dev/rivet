@@ -26,7 +26,7 @@ async fn handle(
 			let mut captcha_buf = Vec::with_capacity(captcha.encoded_len());
 			captcha.encode(&mut captcha_buf)?;
 
-			Result::<_, GlobalError>::Ok(captcha_buf)
+			GlobalResult::Ok(captcha_buf)
 		})
 		.transpose()?;
 

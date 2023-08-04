@@ -150,6 +150,7 @@ async fn vars(ctx: &ProjectContext) {
 		config::ns::ClusterKind::SingleNode {
 			public_ip,
 			preferred_subnets,
+			..
 		} => {
 			vars.insert("deploy_method_local".into(), json!(true));
 			vars.insert("deploy_method_cluster".into(), json!(false));

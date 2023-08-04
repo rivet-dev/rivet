@@ -941,6 +941,12 @@ impl ServiceContextData {
 			));
 		}
 
+		// Fly
+		if let Some(fly) = &project_ctx.ns().fly {
+			env.push(("FLY_ORGANIZATION_ID".into(), fly.organization_id.clone()));
+			env.push(("FLY_REGION".into(), fly.region.clone()));
+		}
+
 		// CRDB
 		let mut crdb_host = None;
 		for crdb_dep in self.crdb_dependencies().await {

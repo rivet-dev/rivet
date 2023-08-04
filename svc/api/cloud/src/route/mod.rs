@@ -124,7 +124,7 @@ define_router! {
 		},
 		"games" / Uuid / "builds": {
 			GET: games::builds::get_builds(),
-			POST: games::builds::create_build(body: models::CreateGameBuildRequest),
+			POST: games::builds::create_build(body: new_models::CloudGamesCreateGameBuildRequest),
 		},
 		"games" / Uuid / "avatars": {
 			GET: games::avatars::get_custom_avatars(),

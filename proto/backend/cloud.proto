@@ -7,6 +7,7 @@ import "proto/backend/matchmaker.proto";
 import "proto/backend/cdn.proto";
 import "proto/backend/kv.proto";
 import "proto/backend/identity.proto";
+import "proto/backend/module.proto";
 
 message Game {
 	rivet.common.Uuid game_id = 1;
@@ -22,6 +23,7 @@ message NamespaceConfig {
 	optional rivet.backend.matchmaker.NamespaceConfig matchmaker = 102;
 	optional rivet.backend.kv.NamespaceConfig kv = 103;
 	optional rivet.backend.identity.NamespaceConfig identity = 104;
+	optional rivet.backend.module.GameNamespaceConfig module = 105;
 }
 
 message GameVersion {
@@ -36,4 +38,5 @@ message VersionConfig {
 	optional rivet.backend.matchmaker.VersionConfig matchmaker = 102;
 	optional rivet.backend.kv.VersionConfig kv = 103;
 	optional rivet.backend.identity.VersionConfig identity = 104;
+	optional rivet.backend.module.GameVersionConfig module = 105;
 }

@@ -84,8 +84,8 @@ impl ProjectContextData {
 		let mut svc_ctxs_map = HashMap::new();
 
 		// Load sub projects
-		for additional_root in &config_local.additional_roots {
-			let path = project_root.join(additional_root);
+		for (_, additional_root) in &config_local.additional_roots {
+			let path = project_root.join(&additional_root.path);
 			Self::load_root_dir(&mut svc_ctxs_map, path).await;
 		}
 
@@ -530,7 +530,7 @@ impl ProjectContextData {
 
 		match self.ns().s3.provider {
 			config::ns::S3Provider::Minio {} => Ok(S3Credentials {
-				access_key_id: "root".into(),
+				access_key_id: "admin".into(),
 				access_key_secret: self
 					.read_secret(&["minio", "users", "root", "password"])
 					.await?,

@@ -78,6 +78,7 @@ push_consul_service:
   file.managed:
     - name: /etc/systemd/system/consul.service
     - source: salt://consul/files/consul.service
+    - template: jinja
 
 start_consul_service:
   service.running:

@@ -185,7 +185,12 @@ pub async fn thread_history(
 ) -> GlobalResult<models::GetThreadHistoryResponse> {
 	let current_user_id = ctx.auth().dual_user(ctx.op_ctx()).await?;
 
-	internal_assert!(query.count <= 512, "`count` parameter too high");
+	assert_with!(
+		query.count <= 512,
+		API_BAD_QUERY_PARAMETER,
+		parameter = "count",
+		error = "parameter too high"
+	);
 
 	assert::chat_thread_participant(&ctx, thread_id, current_user_id).await?;
 

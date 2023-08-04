@@ -1,5 +1,5 @@
 use proto::backend::{self, pkg::*};
-use rivet_convert::ApiInto;
+use rivet_convert::{ApiInto, ApiTryInto};
 use rivet_group_server::models;
 use rivet_operation::prelude::*;
 
@@ -56,7 +56,7 @@ pub fn summary(
 		is_current_identity_member,
 		publicity: internal_unwrap_owned!(backend::team::Publicity::from_i32(team.publicity))
 			.api_into(),
-		member_count: member_count as i32,
+		member_count: member_count.try_into()?,
 		owner_identity_id: owner_user_id.to_string(),
 		is_developer,
 	})
