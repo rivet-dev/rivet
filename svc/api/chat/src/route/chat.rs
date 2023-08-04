@@ -287,7 +287,7 @@ pub async fn thread_live(
 	let update_ts = update_ts.unwrap_or_else(util::timestamp::now);
 
 	let typing_statuses = if typing_status_change {
-		let topic_key = util_chat::key::typing_statuses(&thread_id);
+		let topic_key = util_chat::key::typing_statuses(thread_id);
 		let res = redis::pipe()
 			.atomic()
 			.hgetall(topic_key.clone())
@@ -319,7 +319,7 @@ pub async fn thread_live(
 						)?));
 						let user = users_res.users.iter().find(|u| u.user_id == user_id);
 						let identity = convert::identity::handle_without_presence(
-							&current_user_id,
+							current_user_id,
 							internal_unwrap_owned!(user),
 						)?;
 

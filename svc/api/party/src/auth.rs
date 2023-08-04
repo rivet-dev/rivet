@@ -37,7 +37,7 @@ impl Auth {
 	pub fn claims(&self) -> GlobalResult<&Claims> {
 		self.claims
 			.as_ref()
-			.ok_or_else(|| err_code!(API_UNAUTHORIZED))
+			.ok_or_else(|| err_code!(API_UNAUTHORIZED, reason = "No bearer token provided."))
 	}
 
 	pub async fn user(&self, ctx: &OperationContext<()>) -> GlobalResult<rivet_claims::ent::User> {
@@ -98,12 +98,21 @@ impl Auth {
 		&self,
 		ctx: &OperationContext<()>,
 	) -> GlobalResult<(Uuid, Option<game_user::get::response::GameUser>)> {
-		if let Ok(user_ent) = self.user(ctx).await {
+		let claims = self.claims()?;
+
+		if claims.as_user().is_ok() {
+			let user_ent = self.user(ctx).await?;
+
 			Ok((user_ent.user_id, None))
-		} else {
+		} else if claims.as_game_user().is_ok() {
 			let (user_id, game_user) = self.fetch_game_user(ctx).await?;
 
 			Ok((user_id, Some(game_user)))
+		} else {
+			panic_with!(
+				API_UNAUTHORIZED,
+				reason = "token is missing one of the following entitlements: user"
+			);
 		}
 	}
 }
