@@ -50,7 +50,7 @@ async fn handle(
 
 		UNION
 
-		SELECT thread_id, create_ts, NULL, NULL, direct_user_a_id, direct_user_b_id
+		SELECT thread_id, create_ts, NULL, direct_user_a_id, direct_user_b_id
 		FROM unnest($2, $3) AS direct (user_a_id, user_b_id)
 		INNER JOIN threads ON
 			direct_user_a_id = direct.user_a_id AND

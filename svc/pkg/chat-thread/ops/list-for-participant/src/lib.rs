@@ -40,7 +40,7 @@ async fn handle(
 
 		UNION
 
-		SELECT thread_id, create_ts, NULL, NULL, direct_user_a_id, direct_user_b_id
+		SELECT thread_id, create_ts, NULL, direct_user_a_id, direct_user_b_id
 		FROM threads
 		WHERE
 			direct_user_a_id = $2 OR
