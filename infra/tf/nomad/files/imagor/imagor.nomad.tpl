@@ -111,20 +111,6 @@ job "imagor:${dc}" {
 				timeout = "2s"
 				on_update = "ignore"
 			}
-
-			check {
-				name = "e2e healthy"
-				type = "http"
-				port = "http"
-				path = "/unsafe/16x16/filters:strip_exif():strip_icc():format(jpeg):quality(80):background_color(2a2a2a)/https%3A%2F%2Frivet-assets.s3.us-west-004.backblazeb2.com%2Fhealthcheck.png"
-				interval = "15s"
-				timeout = "10s"
-				on_update = "require_healthy"
-
-				check_restart {
-					limit = 2
-				}
-			}
 		}
 
 		task "node" {
