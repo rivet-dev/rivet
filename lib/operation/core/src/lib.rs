@@ -285,10 +285,6 @@ where
 		self.conn.redis_user_presence().await
 	}
 
-	pub async fn redis_search(&self) -> Result<RedisPool, rivet_pools::Error> {
-		self.conn.redis_search().await
-	}
-
 	pub fn perf(&self) -> &chirp_perf::PerfCtx {
 		self.conn.perf()
 	}
