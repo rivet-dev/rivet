@@ -10,7 +10,7 @@ use proto::{
 	backend::{self, pkg::*},
 	common,
 };
-use rivet_convert::ApiInto;
+use rivet_convert::{ApiInto, ApiTryInto};
 use rivet_group_server::models;
 use rivet_operation::prelude::*;
 use serde::{Deserialize, Serialize};
@@ -888,9 +888,9 @@ pub async fn prepare_avatar_upload(
 	assert::user_registered(&ctx, user_ent.user_id).await?;
 
 	internal_assert!(body.content_length >= 0, "Upload invalid");
-	internal_assert!(
+	assert_with!(
 		body.content_length < MAX_AVATAR_UPLOAD_SIZE,
-		"upload too large"
+		UPLOAD_TOO_LARGE
 	);
 
 	let ext = if body.path.ends_with(".png") {
@@ -908,7 +908,7 @@ pub async fn prepare_avatar_upload(
 			backend::upload::PrepareFile {
 				path: format!("image.{}", ext),
 				mime: Some(format!("image/{}", ext)),
-				content_length: body.content_length as u64,
+				content_length: body.content_length.try_into()?,
 				nsfw_score_threshold: Some(util_nsfw::score_thresholds::TEAM_AVATAR),
 				..Default::default()
 			},
@@ -990,7 +990,7 @@ pub async fn create_invite(
 	let res = msg!([ctx] team_invite::msg::create(group_id) -> team_invite::msg::create_complete {
 		team_id: Some(group_id.into()),
 		ttl: body.ttl,
-		max_use_count: body.use_count.map(|v| v as u64),
+		max_use_count: body.use_count.map(|v| v.try_into()).transpose()?,
 	})
 	.await?;
 

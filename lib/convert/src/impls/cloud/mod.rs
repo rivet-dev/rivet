@@ -27,11 +27,11 @@ pub fn analytics_lobby_summary_from_lobby(
 		is_idle: player_count.total_player_count == 0,
 		is_closed: lobby.is_closed,
 		is_outdated,
-		max_players_normal: lobby.max_players_normal as i32,
-		max_players_direct: lobby.max_players_direct as i32,
-		max_players_party: lobby.max_players_party as i32,
-		total_player_count: player_count.total_player_count as i32,
-		registered_player_count: player_count.registered_player_count as i32,
+		max_players_normal: lobby.max_players_normal.try_into()?,
+		max_players_direct: lobby.max_players_direct.try_into()?,
+		max_players_party: lobby.max_players_party.try_into()?,
+		total_player_count: player_count.total_player_count.try_into()?,
+		registered_player_count: player_count.registered_player_count.try_into()?,
 	})
 }
 
@@ -98,15 +98,27 @@ impl ApiTryFrom<perf::SvcPerf> for models::SvcPerf {
 	}
 }
 
-impl ApiFrom<job_run::metrics_log::response::Metrics> for models::SvcMetrics {
-	fn api_from(value: job_run::metrics_log::response::Metrics) -> models::SvcMetrics {
-		models::SvcMetrics {
+impl ApiTryFrom<job_run::metrics_log::response::Metrics> for models::SvcMetrics {
+	type Error = GlobalError;
+
+	fn try_from(
+		value: job_run::metrics_log::response::Metrics,
+	) -> GlobalResult<models::SvcMetrics> {
+		Ok(models::SvcMetrics {
 			job: value.job,
 			cpu: value.cpu,
-			memory: value.memory.into_iter().map(|v| v as i64).collect(),
-			memory_max: value.memory_max.into_iter().map(|v| v as i64).collect(),
-			allocated_memory: value.allocated_memory as i64,
-		}
+			memory: value
+				.memory
+				.into_iter()
+				.map(|v| v.try_into())
+				.collect::<Result<Vec<_>, _>>()?,
+			memory_max: value
+				.memory_max
+				.into_iter()
+				.map(|v| v.try_into())
+				.collect::<Result<Vec<_>, _>>()?,
+			allocated_memory: value.allocated_memory.try_into()?,
+		})
 	}
 }
 
@@ -143,7 +155,11 @@ impl ApiTryFrom<models::UploadPrepareFile> for backend::upload::PrepareFile {
 	type Error = GlobalError;
 
 	fn try_from(value: models::UploadPrepareFile) -> GlobalResult<Self> {
-		internal_assert!(value.content_length >= 0);
+		assert_with!(
+			value.content_length >= 0,
+			MATCHMAKER_INVALID_VERSION_CONFIG,
+			error = "`file.content_length` out of bounds"
+		);
 
 		Ok(backend::upload::PrepareFile {
 			path: value.path,
@@ -219,17 +235,19 @@ mod openapi {
 	}
 }
 
-impl ApiFrom<backend::region::Tier> for models::RegionTier {
-	fn api_from(value: backend::region::Tier) -> models::RegionTier {
-		models::RegionTier {
+impl ApiTryFrom<backend::region::Tier> for models::RegionTier {
+	type Error = GlobalError;
+
+	fn try_from(value: backend::region::Tier) -> GlobalResult<models::RegionTier> {
+		Ok(models::RegionTier {
 			tier_name_id: value.tier_name_id.to_owned(),
-			rivet_cores_numerator: value.rivet_cores_numerator as i32,
-			rivet_cores_denominator: value.rivet_cores_denominator as i32,
-			cpu: value.cpu as i64,
-			memory: value.memory as i64,
-			disk: value.disk as i64,
-			bandwidth: value.bandwidth as i64,
-		}
+			rivet_cores_numerator: value.rivet_cores_numerator.try_into()?,
+			rivet_cores_denominator: value.rivet_cores_denominator.try_into()?,
+			cpu: value.cpu.try_into()?,
+			memory: value.memory.try_into()?,
+			disk: value.disk.try_into()?,
+			bandwidth: value.bandwidth.try_into()?,
+		})
 	}
 }
 

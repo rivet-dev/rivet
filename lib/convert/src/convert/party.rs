@@ -1,3 +1,5 @@
+use std::convert::TryInto;
+
 use rivet_api::models;
 use rivet_operation::prelude::*;
 use types::rivet::backend;
@@ -42,7 +44,7 @@ pub fn summary(
 	Ok(models::PartySummary {
 		party_id,
 		create_ts: util::timestamp::to_string(party.create_ts)?,
-		party_size: party.party_size as i32,
+		party_size: party.party_size.try_into()?,
 		activity: Box::new(convert::party::activity(party.state.as_ref(), games)?),
 		// TODO: Only party leader should be able to see this
 		publicity: Box::new(models::PartyPublicity {

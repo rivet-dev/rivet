@@ -7,7 +7,7 @@ use proto::{
 	common,
 };
 use rivet_api::models;
-use rivet_convert::{convert, fetch};
+use rivet_convert::{convert, fetch, ApiTryInto};
 use rivet_operation::prelude::*;
 use std::collections::{HashMap, HashSet};
 
@@ -789,8 +789,8 @@ fn build_port(
 				hostname: network.ip.clone(),
 				port: None,
 				port_range: Some(Box::new(models::MatchmakerJoinPortRange {
-					min: port_range.min as i32,
-					max: port_range.max as i32,
+					min: port_range.min.try_into()?,
+					max: port_range.max.try_into()?,
 				})),
 				is_tls: false,
 			})
