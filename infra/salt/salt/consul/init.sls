@@ -1,5 +1,5 @@
 # https://github.com/hashicorp/consul/releases
-{% set version = '1.14.1' %}
+{% set version = '1.16.0' %}
 
 create_consul_user:
   user.present:

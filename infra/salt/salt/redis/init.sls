@@ -1,4 +1,4 @@
-{% set version = '7.0.8' %}
+{% set version = '7.0.12' %}
 
 
 {% set pool = pillar['rivet']['pools'][grains['rivet']['pool_id']] %}

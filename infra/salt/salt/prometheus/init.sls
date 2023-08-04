@@ -1,5 +1,5 @@
 # https://github.com/prometheus/prometheus/releases
-{% set version = '2.43.0' %}
+{% set version = '2.46.0' %}
 
 {% set pool = grains['rivet']['pool_id'] %}
 

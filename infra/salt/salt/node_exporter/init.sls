@@ -1,5 +1,5 @@
 # https://github.com/prometheus/node_exporter/releases
-{% set version = '1.4.0' %}
+{% set version = '1.6.1' %}
 
 create_node_exporter_user:
   user.present:
