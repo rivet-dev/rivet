@@ -1,6 +1,7 @@
 ---
 name = "API_FORBIDDEN"
 description = "Forbidden: {reason}"
+description_basic = "Forbidden."
 http_status = 403
 ---
 
