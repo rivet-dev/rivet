@@ -4,7 +4,7 @@ use rivet_operation::prelude::*;
 #[operation(name = "pending-delete-toggle")]
 async fn handle(
 	ctx: OperationContext<user::pending_delete_toggle::Request>,
-) -> Result<user::pending_delete_toggle::Response, GlobalError> {
+) -> GlobalResult<user::pending_delete_toggle::Response> {
 	let user_id = internal_unwrap!(ctx.user_id).as_uuid();
 
 	// Verify the user is registered

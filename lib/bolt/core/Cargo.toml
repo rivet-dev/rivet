@@ -7,6 +7,7 @@ license = "Apache-2.0"
 
 [dependencies]
 anyhow = "1.0"
+async-recursion = "0.3"
 async-posthog = { git = "https://github.com/rivet-gg/posthog-rs.git", rev = "ef4e80e" }
 async-trait = "0.1"
 bolt-config = { path = "../config" }
@@ -14,6 +15,7 @@ chrono = "0.4"
 derive_builder = "0.12"
 duct = "0.13"
 futures-util = "0.3"
+handlebars = "4.3.7"
 heck = "0.3"
 indicatif = "0.16"
 indoc = "1.0"
@@ -40,4 +42,3 @@ url = "2.3"
 urlencoding = "2.1"
 uuid = { version = "1", features = ["v4"] }
 wildmatch = "2.1"
-

@@ -5,7 +5,7 @@
 Name | Type | Description | Notes
 ------------ | ------------- | ------------- | -------------
 **captcha** | Option<[**crate::models::CloudVersionMatchmakerCaptcha**](CloudVersionMatchmakerCaptcha.md)> |  | [optional]
-**dev_hostname** | Option<**String**> | Client-side configuration | [optional]
+**dev_hostname** | Option<**String**> | _Configures Rivet CLI behavior. Has no effect on server behavior._ | [optional]
 **docker** | Option<[**crate::models::CloudVersionMatchmakerGameModeRuntimeDocker**](CloudVersionMatchmakerGameModeRuntimeDocker.md)> |  | [optional]
 **game_modes** | Option<[**::std::collections::HashMap<String, crate::models::CloudVersionMatchmakerGameMode>**](CloudVersionMatchmakerGameMode.md)> | A list of game modes. | [optional]
 **idle_lobbies** | Option<[**crate::models::CloudVersionMatchmakerGameModeIdleLobbiesConfig**](CloudVersionMatchmakerGameModeIdleLobbiesConfig.md)> |  | [optional]

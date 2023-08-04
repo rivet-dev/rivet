@@ -218,7 +218,7 @@ impl BadRequestBuilder {
 		self
 	}
 
-	pub fn metadata<T: Serialize>(mut self, metadata: T) -> Result<BadRequestBuilder, GlobalError> {
+	pub fn metadata<T: Serialize>(mut self, metadata: T) -> GlobalResult<BadRequestBuilder> {
 		self.metadata = Some(serde_json::to_value(metadata)?);
 
 		Ok(self)
@@ -231,7 +231,7 @@ impl BadRequestBuilder {
 		}
 	}
 
-	fn build_inner(self) -> Result<GlobalError, GlobalError> {
+	fn build_inner(self) -> GlobalResult<GlobalError> {
 		Ok(GlobalError::BadRequest {
 			code: self.code.ok_or(BadRequestBuilderError)?.to_string(),
 			context: self.context.unwrap_or_else(HashMap::new),

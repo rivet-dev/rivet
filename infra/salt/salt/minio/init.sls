@@ -25,6 +25,7 @@ push_minio_server_service:
   file.managed:
     - name: /etc/systemd/system/minio.service
     - source: salt://minio/files/minio.service
+    - template: jinja
 
 start_minio_server:
   service.running:

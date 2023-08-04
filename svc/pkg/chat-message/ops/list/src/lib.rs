@@ -11,7 +11,7 @@ struct ChatMessage {
 #[operation(name = "chat-message-list")]
 async fn handle(
 	ctx: OperationContext<chat_message::list::Request>,
-) -> Result<chat_message::list::Response, GlobalError> {
+) -> GlobalResult<chat_message::list::Response> {
 	let crdb = ctx.crdb("db-chat").await?;
 
 	let thread_id = internal_unwrap!(ctx.thread_id).as_uuid();

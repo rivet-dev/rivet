@@ -8,7 +8,7 @@ lazy_static::lazy_static! {
 #[operation(name = "user-thread-typing-status-set")]
 async fn handle(
 	ctx: OperationContext<user::thread_typing_status_set::Request>,
-) -> Result<user::thread_typing_status_set::Response, GlobalError> {
+) -> GlobalResult<user::thread_typing_status_set::Response> {
 	let user_id = internal_unwrap!(ctx.user_id).as_uuid();
 	let thread_id = internal_unwrap!(ctx.thread_id).as_uuid();
 	let typing_status = internal_unwrap!(ctx.status);

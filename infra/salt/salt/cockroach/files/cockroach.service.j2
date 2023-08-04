@@ -28,6 +28,10 @@ ExecStart=/usr/local/bin/cockroach start \
 TimeoutStopSec=60
 Restart=always
 RestartSec=10
+{% if pillar['rivet']['deploy']['local']['restrict_service_resources'] %}
+Nice=10
+CPUAffinity=0
+{% endif %}
 
 [Install]
 WantedBy=default.target

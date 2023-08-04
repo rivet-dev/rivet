@@ -1,3 +1,5 @@
+use std::convert::TryInto;
+
 use proto::backend;
 use rivet_operation::prelude::*;
 use rivet_party_server::models;
@@ -42,7 +44,7 @@ pub fn summary(
 	Ok(models::PartySummary {
 		party_id: party_id.to_string(),
 		create_ts: util::timestamp::to_chrono(party.create_ts)?,
-		party_size: party.party_size as i32,
+		party_size: party.party_size.try_into()?,
 		activity: convert::party::activity(party.state.as_ref(), games)?,
 		publicity: models::PartyPublicity {
 			public: convert::party::publicity_level(publicity.public),
@@ -72,7 +74,7 @@ pub fn profile(
 	Ok(models::PartyProfile {
 		party_id: party_id.to_string(),
 		create_ts: util::timestamp::to_chrono(party.create_ts)?,
-		party_size: party.party_size as i32,
+		party_size: party.party_size.try_into()?,
 		activity: convert::party::activity(party.state.as_ref(), games)?,
 		publicity: publicity(internal_unwrap!(party.publicity)),
 		external: models::PartyExternalLinks {

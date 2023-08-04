@@ -4,7 +4,7 @@ use rivet_operation::prelude::*;
 #[operation(name = "chat-message-create-with-topic")]
 async fn handle(
 	ctx: OperationContext<chat_message::create_with_topic::Request>,
-) -> Result<chat_message::create_with_topic::Response, GlobalError> {
+) -> GlobalResult<chat_message::create_with_topic::Response> {
 	let topic = internal_unwrap!(ctx.topic);
 	let chat_message_id = internal_unwrap!(ctx.chat_message_id).as_uuid();
 

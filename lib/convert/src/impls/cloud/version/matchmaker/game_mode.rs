@@ -23,7 +23,7 @@ pub fn game_mode_to_proto(
 	let max_players_normal = game_mode
 		.max_players
 		.or(matchmaker.max_players)
-		.unwrap_or(util_mm::defaults::MAX_PLAYERS_NORMAL as i32);
+		.unwrap_or_else(|| util_mm::defaults::MAX_PLAYERS_NORMAL as i32);
 	let max_players_direct = game_mode
 		.max_players_direct
 		.or(matchmaker.max_players_direct)
@@ -34,72 +34,100 @@ pub fn game_mode_to_proto(
 		.unwrap_or(max_players_normal);
 
 	// TODO: Make this return a 400 error instead
-	internal_assert!(max_players_normal >= 0);
-	internal_assert!(max_players_direct >= 0);
-	internal_assert!(max_players_party >= 0);
+	assert_with!(
+		max_players_normal >= 0,
+		MATCHMAKER_INVALID_VERSION_CONFIG,
+		error = "`max_players` out of bounds"
+	);
+	assert_with!(
+		max_players_direct >= 0,
+		MATCHMAKER_INVALID_VERSION_CONFIG,
+		error = "`max_players_direct` out of bounds"
+	);
+	assert_with!(
+		max_players_party >= 0,
+		MATCHMAKER_INVALID_VERSION_CONFIG,
+		error = "`max_players_party` out of bounds"
+	);
 
 	// Derive runtime
-	let runtime = if let Some(either_runtime) = game_mode.docker.as_ref().or(matchmaker.docker.as_ref()) {
-		let args = either_runtime.args.clone().unwrap_or_default();
+	let runtime =
+		if let Some(either_runtime) = game_mode.docker.as_ref().or(matchmaker.docker.as_ref()) {
+			let args = either_runtime.args.clone().unwrap_or_default();
 
-		let mut env_vars = HashMap::<String, String>::new();
-		if let Some(env) = matchmaker.docker.as_ref().and_then(|x| x.env.clone()) {
-			env_vars.extend(env);
-		}
-		if let Some(env) = game_mode.docker.as_ref().and_then(|x| x.env.clone()) {
-			env_vars.extend(env);
-		}
+			let mut env_vars = HashMap::<String, String>::new();
+			if let Some(env) = matchmaker.docker.as_ref().and_then(|x| x.env.clone()) {
+				env_vars.extend(env);
+			}
+			if let Some(env) = game_mode.docker.as_ref().and_then(|x| x.env.clone()) {
+				env_vars.extend(env);
+			}
 
-		let network_mode = either_runtime.network_mode
-			.unwrap_or(models::CloudVersionMatchmakerNetworkMode::Bridge);
+			let network_mode = either_runtime
+				.network_mode
+				.unwrap_or(models::CloudVersionMatchmakerNetworkMode::Bridge);
 
-		let ports = either_runtime.ports.clone().unwrap_or_default();
+			let ports = either_runtime.ports.clone().unwrap_or_default();
 
-		Some(backend::matchmaker::LobbyRuntime {
-			runtime: Some(backend::matchmaker::lobby_runtime::Runtime::Docker(
-				backend::matchmaker::lobby_runtime::Docker {
-					build_id: either_runtime.image_id.map(Into::into),
-					args,
-					env_vars: env_vars
-						.into_iter()
-						.map(|(key, value)| backend::matchmaker::lobby_runtime::EnvVar {
-							key,
-							value,
-						})
-						.collect(),
-					network_mode:
-						ApiInto::<backend::matchmaker::lobby_runtime::NetworkMode>::api_into(
-							network_mode,
-						) as i32,
-					ports: ports
-						.into_iter()
-						.map(|(label, value)| {
-							let proxy_protocol = value
-								.protocol
-								.unwrap_or(models::CloudVersionMatchmakerPortProtocol::Https);
-							let proxy_kind = value
-								.proxy
-								.unwrap_or(models::CloudVersionMatchmakerProxyKind::GameGuard);
-
-							GlobalResult::Ok(backend::matchmaker::lobby_runtime::Port {
-								label,
-								target_port: value.port.map(|x| x as u32),
-								port_range: value.port_range.map(|x| (*x).api_into()),
-								proxy_protocol: ApiInto::<
-									backend::matchmaker::lobby_runtime::ProxyProtocol,
-								>::api_into(proxy_protocol) as i32,
-								proxy_kind: ApiInto::<
-									backend::matchmaker::lobby_runtime::ProxyKind,
-								>::api_into(proxy_kind) as i32,
+			Some(backend::matchmaker::LobbyRuntime {
+				runtime: Some(backend::matchmaker::lobby_runtime::Runtime::Docker(
+					backend::matchmaker::lobby_runtime::Docker {
+						build_id: either_runtime.image_id.map(Into::into),
+						args,
+						env_vars: env_vars
+							.into_iter()
+							.map(|(key, value)| backend::matchmaker::lobby_runtime::EnvVar {
+								key,
+								value,
 							})
-						})
-						.collect::<GlobalResult<_>>()?,
-				},
-			)),
-		})
-	} else {
-		None
-	};
+							.collect(),
+						network_mode:
+							ApiInto::<backend::matchmaker::lobby_runtime::NetworkMode>::api_into(
+								network_mode,
+							) as i32,
+						ports: ports
+							.into_iter()
+							.map(|(label, value)| {
+								let proxy_protocol = value
+									.protocol
+									.unwrap_or(models::CloudVersionMatchmakerPortProtocol::Https);
+								let proxy_kind = value
+									.proxy
+									.unwrap_or(models::CloudVersionMatchmakerProxyKind::GameGuard);
+
+								GlobalResult::Ok(backend::matchmaker::lobby_runtime::Port {
+									label,
+									target_port: value
+										.port
+										.map(|x| {
+											assert_with!(
+												x >= 0,
+												MATCHMAKER_INVALID_VERSION_CONFIG,
+												error = "`port` out of bounds"
+											);
+
+											Ok(x.try_into()?)
+										})
+										.transpose()?,
+									port_range: value
+										.port_range
+										.map(|x| (*x).try_into())
+										.transpose()?,
+									proxy_protocol: ApiInto::<
+										backend::matchmaker::lobby_runtime::ProxyProtocol,
+									>::api_into(proxy_protocol) as i32,
+									proxy_kind: ApiInto::<
+										backend::matchmaker::lobby_runtime::ProxyKind,
+									>::api_into(proxy_kind) as i32,
+								})
+							})
+							.collect::<GlobalResult<_>>()?,
+					},
+				)),
+			})
+		} else {
+			None
+		};
 
 	Ok(backend::matchmaker::LobbyGroup {
 		name_id,
@@ -108,9 +136,9 @@ pub fn game_mode_to_proto(
 			.iter()
 			.map(|(k, v)| region_to_proto(k.clone(), v, game_mode, matchmaker, regions_data))
 			.collect::<GlobalResult<_>>()?,
-		max_players_normal: max_players_normal as u32,
-		max_players_direct: max_players_direct as u32,
-		max_players_party: max_players_party as u32,
+		max_players_normal: max_players_normal.try_into()?,
+		max_players_direct: max_players_direct.try_into()?,
+		max_players_party: max_players_party.try_into()?,
 
 		runtime,
 	})
@@ -152,11 +180,12 @@ pub fn game_mode_to_openapi(
 							GlobalResult::Ok((
 								x.label.clone(),
 								models::CloudVersionMatchmakerGameModeRuntimeDockerPort {
-									port: x.target_port.map(|x| x as i32),
+									port: x.target_port.map(|x| x.try_into()).transpose()?,
 									port_range: x
 										.port_range
 										.clone()
-										.map(ApiInto::api_into)
+										.map(ApiTryInto::try_into)
+										.transpose()?
 										.map(Box::new),
 									protocol: Some(
 										internal_unwrap_owned!(
@@ -202,9 +231,9 @@ pub fn game_mode_to_openapi(
 					.map(|x| region_to_openapi(x, regions_data))
 					.collect::<GlobalResult<HashMap<_, _>>>()?,
 			),
-			max_players: Some(value.max_players_normal as i32),
-			max_players_direct: Some(value.max_players_direct as i32),
-			max_players_party: Some(value.max_players_party as i32),
+			max_players: Some(value.max_players_normal.try_into()?),
+			max_players_direct: Some(value.max_players_direct.try_into()?),
+			max_players_party: Some(value.max_players_party.try_into()?),
 
 			docker: Some(Box::new(docker)),
 
@@ -249,10 +278,7 @@ fn region_to_proto(
 	Ok(backend::matchmaker::lobby_group::Region {
 		region_id,
 		tier_name_id,
-		idle_lobbies: Some(backend::matchmaker::lobby_group::IdleLobbies {
-			min_idle_lobbies: idle_lobbies.min as u32,
-			max_idle_lobbies: idle_lobbies.max as u32,
-		}),
+		idle_lobbies: Some((*idle_lobbies).try_into()?),
 	})
 }
 
@@ -288,12 +314,20 @@ impl ApiTryFrom<models::CloudVersionMatchmakerGameModeIdleLobbiesConfig>
 	fn try_from(
 		value: models::CloudVersionMatchmakerGameModeIdleLobbiesConfig,
 	) -> GlobalResult<Self> {
-		internal_assert!(value.min >= 0);
-		internal_assert!(value.max >= 0);
+		assert_with!(
+			value.min >= 0,
+			MATCHMAKER_INVALID_VERSION_CONFIG,
+			error = "`idle_lobbies.min` out of bounds"
+		);
+		assert_with!(
+			value.max >= 0,
+			MATCHMAKER_INVALID_VERSION_CONFIG,
+			error = "`idle_lobbies.max` out of bounds"
+		);
 
 		Ok(backend::matchmaker::lobby_group::IdleLobbies {
-			min_idle_lobbies: value.min as u32,
-			max_idle_lobbies: value.max as u32,
+			min_idle_lobbies: value.min.try_into()?,
+			max_idle_lobbies: value.max.try_into()?,
 		})
 	}
 }
@@ -305,8 +339,8 @@ impl ApiTryFrom<backend::matchmaker::lobby_group::IdleLobbies>
 
 	fn try_from(value: backend::matchmaker::lobby_group::IdleLobbies) -> GlobalResult<Self> {
 		Ok(models::CloudVersionMatchmakerGameModeIdleLobbiesConfig {
-			min: value.min_idle_lobbies as i32,
-			max: value.max_idle_lobbies as i32,
+			min: value.min_idle_lobbies.try_into()?,
+			max: value.max_idle_lobbies.try_into()?,
 		})
 	}
 }

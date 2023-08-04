@@ -111,6 +111,7 @@ push_traefik_service:
   file.managed:
     - name: /etc/systemd/system/traefik.service
     - source: salt://traefik/files/traefik.service
+    - template: jinja
 
 # Manually restart the Traefik service yourself in order to prevent terminating
 # connections needlessly

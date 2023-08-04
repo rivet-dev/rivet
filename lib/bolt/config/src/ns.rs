@@ -19,6 +19,7 @@ pub struct Namespace {
 	pub terraform: Terraform,
 	pub dns: Dns,
 	pub s3: S3,
+	pub fly: Option<Fly>,
 	pub email: Option<Email>,
 	#[serde(default)]
 	pub captcha: Captcha,
@@ -58,6 +59,11 @@ pub enum ClusterKind {
 		public_ip: String,
 		#[serde(default)]
 		preferred_subnets: Vec<String>,
+
+		/// Restricts the resources of the core services so there are more resources availble for
+		/// compiling code.
+		#[serde(default)]
+		restrict_service_resources: bool,
 	},
 	#[serde(rename = "distributed")]
 	Distributed {
@@ -227,6 +233,13 @@ pub enum S3Provider {
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(deny_unknown_fields)]
+pub struct Fly {
+	pub organization_id: String,
+	pub region: String,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+#[serde(deny_unknown_fields)]
 pub struct Email {
 	#[serde(flatten)]
 	pub provider: EmailProvider,
@@ -363,7 +376,7 @@ pub struct Rust {
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, Default)]
-#[serde(deny_unknown_fields)]
+#[serde(deny_unknown_fields, rename_all = "snake_case")]
 pub enum RustBuildOpt {
 	Release,
 	#[default]

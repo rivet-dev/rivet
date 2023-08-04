@@ -7,6 +7,14 @@ terraform {
 	}
 }
 
+module "secrets" {
+    source = "../modules/secrets"
+
+    keys = [
+        "minio/users/root/password",
+    ]
+}
+
 locals {
 	s3_endpoint_internal = "http://server.minio.service.consul:9200"
 	s3_endpoint_external = "https://storage.${var.domain_main}"
@@ -18,8 +26,8 @@ locals {
 
 provider "aws" {
 	region = local.s3_region
-	access_key = "admin"
-	secret_key = "password"
+	access_key = "root"
+	secret_key = module.secrets.values["minio/users/root/password"]
 	skip_credentials_validation = true
 	skip_metadata_api_check = true
 	skip_requesting_account_id = true

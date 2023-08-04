@@ -129,7 +129,8 @@ pub async fn check(_ctx: &ProjectContext, services: &[ServiceContext]) -> Result
 		loop {
 			let test_cmd = block_in_place(|| {
 				cmd!(
-					"clickhouse-client",
+					"clickhouse",
+					"client",
 					"-q",
 					"--port",
 					clickhouse_port.to_string(),
@@ -193,7 +194,8 @@ pub async fn check(_ctx: &ProjectContext, services: &[ServiceContext]) -> Result
 				// Create database
 				block_in_place(|| {
 					cmd!(
-						"clickhouse-client",
+						"clickhouse",
+						"client",
 						"--port",
 						clickhouse_port.to_string(),
 						"--query",
@@ -291,7 +293,8 @@ pub async fn up(ctx: &ProjectContext, services: &[ServiceContext]) -> Result<()>
 				rivet_term::status::progress("Creating database", &db_name);
 				block_in_place(|| {
 					cmd!(
-						"clickhouse-client",
+						"clickhouse",
+						"client",
 						"--host",
 						hostname,
 						"--port",
