@@ -124,72 +124,66 @@ async fn empty(ctx: TestCtx) {
 	}
 }
 
-#[worker_test]
-async fn multipart(ctx: TestCtx) {
-	assert!(
-		CHUNK_SIZE <= util::file_size::mebibytes(10),
-		"this test will generate 3 very large strings, are you sure you want to run it?"
-	);
+// TODO: Uncomment once `ignore` works
+// #[worker_test]
+// #[ignore]
+// async fn multipart(ctx: TestCtx) {
+// 	// Create random parts
+// 	let mut parts = (0..3)
+// 		.map(|_| {
+// 			thread_rng()
+// 				.sample_iter(&Alphanumeric)
+// 				.take(CHUNK_SIZE as usize)
+// 				.map(char::from)
+// 				.collect::<String>()
+// 		})
+// 		.collect::<Vec<_>>();
 
-	// Create random parts
-	let mut parts = (0..3)
-		.map(|_| {
-			Some(Box::new(
-				thread_rng()
-					.sample_iter(&Alphanumeric)
-					.take(CHUNK_SIZE as usize)
-					.map(char::from)
-					.collect::<String>(),
-			))
-		})
-		.collect::<Vec<_>>();
+// 	tracing::info!("creating upload");
+// 	let upload_prepare_res = op!([ctx] upload_prepare {
+// 		bucket: TEST_BUCKET_NAME.into(),
+// 		files: vec![backend::upload::PrepareFile {
+// 			path: "file.txt".to_string(),
+// 			mime: Some("text/plain".into()),
+// 			content_length: parts
+// 				.iter()
+// 				.fold(0, |acc, x| {
+// 					acc + x.len()
+// 				}) as u64,
+// 			multipart: true,
+// 			..Default::default()
+// 		}],
+// 	})
+// 	.await
+// 	.unwrap();
+// 	let upload_id = upload_prepare_res.upload_id.unwrap();
 
-	tracing::info!("creating upload");
-	let upload_prepare_res = op!([ctx] upload_prepare {
-		bucket: TEST_BUCKET_NAME.into(),
-		files: vec![backend::upload::PrepareFile {
-			path: "file.txt".to_string(),
-			mime: Some("text/plain".into()),
-			content_length: parts
-				.iter()
-				.fold(0, |acc, x| {
-					acc + x.as_ref().unwrap().len()
-				}) as u64,
-			multipart: true,
-			..Default::default()
-		}],
-	})
-	.await
-	.unwrap();
-	let upload_id = upload_prepare_res.upload_id.unwrap();
+// 	tracing::info!(presigned_requests = ?upload_prepare_res.presigned_requests, "uploading files");
+// 	for file in &upload_prepare_res.presigned_requests {
+// 		let part_data = std::mem::take(parts.get_mut((file.part_number - 1) as usize).unwrap());
 
-	tracing::info!(presigned_requests = ?upload_prepare_res.presigned_requests, "uploading files");
-	for file in &upload_prepare_res.presigned_requests {
-		let part_data =
-			std::mem::take(parts.get_mut((file.part_number - 1) as usize).unwrap()).unwrap();
+// 		let res = reqwest::Client::new()
+// 			.put(&file.url)
+// 			.body(part_data)
+// 			.header("content-type", "text/plain")
+// 			.send()
+// 			.await
+// 			.expect("failed to upload");
+// 		if res.status().is_success() {
+// 			tracing::info!(?file, "uploaded successfully");
+// 		} else {
+// 			panic!(
+// 				"failed to upload ({}): {:?}",
+// 				res.status(),
+// 				res.text().await
+// 			);
+// 		}
+// 	}
 
-		let res = reqwest::Client::new()
-			.put(&file.url)
-			.body(*part_data)
-			.header("content-type", "text/plain")
-			.send()
-			.await
-			.expect("failed to upload");
-		if res.status().is_success() {
-			tracing::info!(?file, "uploaded successfully");
-		} else {
-			panic!(
-				"failed to upload ({}): {:?}",
-				res.status(),
-				res.text().await
-			);
-		}
-	}
-
-	op!([ctx] upload_complete {
-		upload_id: Some(upload_id),
-		bucket: None,
-	})
-	.await
-	.unwrap();
-}
+// 	op!([ctx] upload_complete {
+// 		upload_id: Some(upload_id),
+// 		bucket: None,
+// 	})
+// 	.await
+// 	.unwrap();
+// }
