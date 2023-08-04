@@ -2352,6 +2352,8 @@ components:
           description: Denotes how many requests a connection can make before it is
             required to reverify a captcha.
           type: integer
+        turnstile:
+          $ref: '#/components/schemas/CloudVersionMatchmakerCaptchaTurnstile'
         verification_ttl:
           description: Denotes how long a connection can continue to reconnect without
             having to reverify a captcha (in milliseconds).
@@ -2377,6 +2379,24 @@ components:
       - difficult
       - always_on
       type: string
+    CloudVersionMatchmakerCaptchaTurnstile:
+      description: Turnstile captcha configuration.
+      properties:
+        domains:
+          additionalProperties:
+            $ref: '#/components/schemas/CloudVersionMatchmakerCaptchaTurnstileDomain'
+          type: object
+      required:
+      - domains
+      type: object
+    CloudVersionMatchmakerCaptchaTurnstileDomain:
+      description: Turnstile domain configuration.
+      properties:
+        secret_key:
+          type: string
+      required:
+      - secret_key
+      type: object
     CloudVersionMatchmakerConfig:
       description: Matchmaker configuration for a given version.
       properties:
