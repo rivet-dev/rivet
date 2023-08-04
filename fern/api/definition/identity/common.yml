@@ -7,7 +7,6 @@ imports:
   groupCommons: ../group/common.yml
   identityCommons: ../identity/common.yml
   matchmakerCommons: ../matchmaker/common.yml
-  partyCommons: ../party/common.yml
 
 types:
   GlobalEvent:
@@ -21,7 +20,6 @@ types:
     properties:
       chat_message: optional<GlobalEventChatMessage>
       chat_read: optional<GlobalEventChatRead>
-      party_update: optional<GlobalEventPartyUpdate>
       identity_update: optional<GlobalEventIdentityUpdate>
       matchmaker_lobby_join: optional<GlobalEventMatchmakerLobbyJoin>
       chat_thread_remove: optional<GlobalEventChatThreadRemove>
@@ -64,10 +62,6 @@ types:
       thread_id: uuid
       read_ts: datetime
 
-  GlobalEventPartyUpdate:
-    properties:
-      party: optional<partyCommons.Summary>
-
   GlobalEventIdentityUpdate:
     properties:
       identity: identityCommons.Profile
@@ -77,14 +71,6 @@ types:
       lobby: matchmakerCommons.JoinLobby
       ports: map<string, matchmakerCommons.JoinPort>
       player: matchmakerCommons.JoinPlayer
-
-  GlobalEventChatThreadRemove:
-    docs: >
-      Received any time the current identity is no longer able to access
-      the  given thread. This can happen if the identity leaves a group or
-      party.
-    properties:
-      thread_id: uuid
 
   UpdateGameActivity:
     docs: Information about the identity's current game. This is information that
@@ -110,7 +96,6 @@ types:
         type: string
         docs: The URL of this identity's avatar image.
       presence: optional<Presence>
-      party: optional<partyCommons.Handle>
       is_registered:
         type: boolean
         docs: Whether or not this identity is registered with a linked account.
@@ -126,7 +111,6 @@ types:
         type: string
         docs: The URL of this identity's avatar image.
       presence: optional<Presence>
-      party: optional<partyCommons.Handle>
       is_registered:
         type: boolean
         docs: Whether or not this identity is registered with a linked account.
@@ -150,9 +134,6 @@ types:
         docs: The URL of this identity's avatar image.
         type: string
       presence: optional<Presence>
-      party:
-        docs: Whether or not this identity is registered with a linked account.
-        type: optional<partyCommons.Summary>
       is_registered:
         docs: Whether or not this identity is registered with a linked account.
         type: boolean

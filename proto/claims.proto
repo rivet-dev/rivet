@@ -90,11 +90,6 @@ message Entitlement {
 		uint64 content_length = 3;
 	}
 
-	// Token used to join a party.
-	message PartyInvite {
-		rivet.common.Uuid invite_id = 1;
-	}
-
 	// Token to link a CLI to a given token.
 	message CloudDeviceLink {
 		rivet.common.Uuid device_link_id = 1;
@@ -118,10 +113,11 @@ message Entitlement {
 		GameUser game_user = 10;
 		GameUserLink game_user_link = 11;
 		UploadFile upload_file = 12;
-		PartyInvite party_invite = 13;
 		CloudDeviceLink cloud_device_link = 14;
 		Bypass bypass = 15;
 	}
+
+	reserved 13;
 }
 
 message Claims {

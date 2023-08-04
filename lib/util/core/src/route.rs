@@ -22,14 +22,6 @@ pub fn team_chat(team_id: Uuid) -> String {
 	format!("{}/groups/{}/chat", origin_hub(), team_id)
 }
 
-pub fn party_chat(party_id: Uuid) -> String {
-	format!("{}/parties/{}", origin_hub(), party_id)
-}
-
-pub fn party_invite(invite_token: &str) -> String {
-	format!("{}/party/invite/{}", origin_hub(), invite_token)
-}
-
 pub fn thread(thread_id: Uuid) -> String {
 	format!("{}/threads/{}", origin_hub(), thread_id)
 }

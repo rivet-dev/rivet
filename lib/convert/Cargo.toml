@@ -31,11 +31,6 @@ job-run-metrics-log = { path = "../../svc/pkg/job-run/ops/metrics-log" }
 kv-list = { path = "../../svc/pkg/kv/ops/list" }
 mm-lobby-player-count = { path = "../../svc/pkg/mm/ops/lobby-player-count" }
 mm-lobby-runtime-aggregate = { path = "../../svc/pkg/mm/ops/lobby-runtime-aggregate" }
-party-get = { path = "../../svc/pkg/party/ops/get" }
-party-invite-get = { path = "../../svc/pkg/party/ops/invite-get" }
-party-member-get = { path = "../../svc/pkg/party/ops/member-get" }
-party-member-list = { path = "../../svc/pkg/party/ops/member-list" }
-party-publicity-for-user = { path = "../../svc/pkg/party/ops/publicity-for-user" }
 region-get = { path = "../../svc/pkg/region/ops/get" }
 region-resolve = { path = "../../svc/pkg/region/ops/resolve" }
 team-dev-get = { path = "../../svc/pkg/team-dev/ops/get" }
@@ -57,5 +52,4 @@ rivet-cloud-server = { path = "../../lib/smithy-output/api-cloud/rust-server" }
 rivet-group-server = { path = "../../lib/smithy-output/api-group/rust-server" }
 rivet-kv-server = { path = "../../lib/smithy-output/api-kv/rust-server" }
 rivet-matchmaker-server = { path = "../../lib/smithy-output/api-matchmaker/rust-server" }
-rivet-party-server = { path = "../../lib/smithy-output/api-party/rust-server" }
 rivet-portal-server = { path = "../../lib/smithy-output/api-portal/rust-server" }

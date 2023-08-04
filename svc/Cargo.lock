@@ -55,9 +55,6 @@ dependencies = [
  "faker-game",
  "faker-user",
  "lazy_static",
- "party-get",
- "party-member-get",
- "party-member-list",
  "prost 0.10.4",
  "rivet-health-checks",
  "rivet-metrics",
@@ -220,9 +217,6 @@ dependencies = [
  "http",
  "hyper",
  "lazy_static",
- "party-get",
- "party-invite-get",
- "party-member-get",
  "prost 0.10.4",
  "rand",
  "rivet-cache",
@@ -381,10 +375,6 @@ dependencies = [
  "http",
  "hyper",
  "lazy_static",
- "party-get",
- "party-member-get",
- "party-member-list",
- "party-publicity-for-user",
  "prost 0.10.4",
  "rand",
  "rivet-cache",
@@ -514,8 +504,6 @@ dependencies = [
  "mm-config-lobby-group-resolve-version",
  "mm-config-version-get",
  "mm-lobby-get",
- "party-get",
- "party-member-get",
  "prost 0.10.4",
  "rand",
  "regex",
@@ -765,74 +753,6 @@ dependencies = [
  "user-get",
  "user-identity-get",
  "user-team-list",
- "uuid",
-]
-
-[[package]]
-name = "api-party"
-version = "0.0.1"
-dependencies = [
- "api-helper",
- "async-trait",
- "captcha-hcaptcha-config-get",
- "captcha-request",
- "captcha-verify",
- "chat-message-create-with-topic",
- "chat-thread-get-for-topic",
- "chirp-client",
- "chrono",
- "faker-build",
- "faker-game",
- "faker-game-namespace",
- "faker-game-version",
- "faker-mm-lobby",
- "faker-region",
- "faker-user",
- "futures-util",
- "game-get",
- "game-namespace-get",
- "game-resolve-namespace-id",
- "game-user-create",
- "game-user-get",
- "http",
- "hyper",
- "lazy_static",
- "mm-config-version-get",
- "mm-player-get",
- "party-get",
- "party-invite-alias-lookup",
- "party-invite-get",
- "party-invite-list",
- "party-member-get",
- "party-member-list",
- "party-publicity-for-user",
- "prost 0.10.4",
- "rand",
- "regex",
- "region-get",
- "region-recommend",
- "region-resolve",
- "rivet-cache",
- "rivet-claims",
- "rivet-connection",
- "rivet-convert",
- "rivet-health-checks",
- "rivet-operation",
- "rivet-party",
- "rivet-party-server",
- "rivet-pools",
- "rivet-util-mm",
- "serde",
- "serde_json",
- "thiserror",
- "token-create",
- "token-revoke",
- "tokio",
- "tracing",
- "tracing-subscriber",
- "url",
- "user-get",
- "user-presence-touch",
  "uuid",
 ]
 
@@ -2027,7 +1947,6 @@ version = "0.0.1"
 dependencies = [
  "chirp-client",
  "chirp-worker",
- "party-invite-get",
  "prost 0.10.4",
  "rivet-claims",
  "rivet-operation",
@@ -2091,7 +2010,6 @@ dependencies = [
  "chat-message-body-validate",
  "chirp-client",
  "chirp-worker",
- "party-publicity-for-user",
  "prost 0.10.4",
  "rivet-operation",
 ]
@@ -2175,7 +2093,6 @@ dependencies = [
  "chirp-client",
  "chirp-worker",
  "faker-user",
- "party-member-list",
  "prost 0.10.4",
  "rivet-operation",
  "team-member-list",
@@ -5645,131 +5562,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "party-get"
-version = "0.0.1"
-dependencies = [
- "chirp-client",
- "chirp-worker",
- "prost 0.10.4",
- "rivet-operation",
- "rivet-util-party",
-]
-
-[[package]]
-name = "party-invite-alias-lookup"
-version = "0.0.1"
-dependencies = [
- "chirp-client",
- "chirp-worker",
- "prost 0.10.4",
- "redis-util",
- "rivet-operation",
-]
-
-[[package]]
-name = "party-invite-get"
-version = "0.0.1"
-dependencies = [
- "chirp-client",
- "chirp-worker",
- "prost 0.10.4",
- "rivet-operation",
- "rivet-util-party",
-]
-
-[[package]]
-name = "party-invite-list"
-version = "0.0.1"
-dependencies = [
- "chirp-client",
- "chirp-worker",
- "prost 0.10.4",
- "redis-util",
- "rivet-operation",
-]
-
-[[package]]
-name = "party-member-get"
-version = "0.0.1"
-dependencies = [
- "chirp-client",
- "chirp-worker",
- "prost 0.10.4",
- "rivet-operation",
- "rivet-util-party",
-]
-
-[[package]]
-name = "party-member-list"
-version = "0.0.1"
-dependencies = [
- "chirp-client",
- "chirp-worker",
- "prost 0.10.4",
- "redis-util",
- "rivet-operation",
-]
-
-[[package]]
-name = "party-publicity-for-user"
-version = "0.0.1"
-dependencies = [
- "chirp-client",
- "chirp-worker",
- "faker-team",
- "faker-user",
- "party-get",
- "party-member-list",
- "prost 0.10.4",
- "rivet-operation",
- "team-member-relationship-get",
- "user-follow-relationship-get",
- "user-follow-toggle",
-]
-
-[[package]]
-name = "party-redis-populate"
-version = "0.0.1"
-dependencies = [
- "chirp-client",
- "chirp-worker",
- "futures-util",
- "indoc",
- "prost 0.10.4",
- "rivet-connection",
- "rivet-operation",
- "rivet-pools",
- "tokio",
- "tracing",
- "tracing-subscriber",
- "uuid",
-]
-
-[[package]]
-name = "party-worker"
-version = "0.0.1"
-dependencies = [
- "chat-message-create-with-topic",
- "chirp-client",
- "chirp-worker",
- "faker-mm-lobby",
- "faker-mm-player",
- "lazy_static",
- "mm-player-get",
- "party-get",
- "party-invite-list",
- "party-member-get",
- "party-member-list",
- "redis-util",
- "rivet-health-checks",
- "rivet-metrics",
- "rivet-runtime",
- "rivet-util-party",
- "serde",
- "token-create",
-]
-
-[[package]]
 name = "paste"
 version = "1.0.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6592,11 +6384,6 @@ dependencies = [
  "kv-list",
  "mm-lobby-player-count",
  "mm-lobby-runtime-aggregate",
- "party-get",
- "party-invite-get",
- "party-member-get",
- "party-member-list",
- "party-publicity-for-user",
  "region-get",
  "region-resolve",
  "rivet-api",
@@ -6607,7 +6394,6 @@ dependencies = [
  "rivet-kv-server",
  "rivet-matchmaker-server",
  "rivet-operation",
- "rivet-party-server",
  "rivet-portal-server",
  "rivet-util-mm",
  "serde",
@@ -6785,28 +6571,6 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 2.0.18",
-]
-
-[[package]]
-name = "rivet-party"
-version = "0.0.7"
-dependencies = [
- "aws-smithy-client 0.41.0",
- "aws-smithy-http 0.41.0",
- "aws-smithy-json",
- "aws-smithy-types 0.41.0",
- "bytes",
- "http",
- "tower",
-]
-
-[[package]]
-name = "rivet-party-server"
-version = "0.0.7"
-dependencies = [
- "chrono",
- "serde",
- "serde_json",
 ]
 
 [[package]]
@@ -6997,15 +6761,6 @@ dependencies = [
 [[package]]
 name = "rivet-util-nsfw"
 version = "0.1.0"
-
-[[package]]
-name = "rivet-util-party"
-version = "0.1.0"
-dependencies = [
- "serde",
- "strum",
- "uuid",
-]
 
 [[package]]
 name = "rivet-util-region"
@@ -9177,7 +8932,6 @@ dependencies = [
  "game-namespace-get",
  "identity-config-version-get",
  "lazy_static",
- "party-member-list",
  "rivet-convert",
  "rivet-health-checks",
  "rivet-metrics",

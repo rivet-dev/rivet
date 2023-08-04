@@ -16,9 +16,6 @@ rivet-metrics = { path = "../../../../lib/metrics" }
 rivet-runtime = { path = "../../../../lib/runtime" }
 serde = { version = "1.0", features = ["derive"] }
 
-party-get = { path = "../../party/ops/get" }
-party-member-get = { path = "../../party/ops/member-get" }
-party-member-list = { path = "../../party/ops/member-list" }
 user-presence-get = { path = "../../user-presence/ops/get" }
 
 [dev-dependencies]

@@ -3,7 +3,6 @@ syntax = "proto3";
 package rivet.backend.chat;
 
 import "proto/common.proto";
-import "proto/backend/party.proto";
 
 message Message {
 	rivet.common.Uuid chat_message_id = 1;
@@ -48,33 +47,6 @@ message MessageBody {
 		rivet.common.Uuid user_id = 1;
 	}
 
-	message PartyInvite {
-		rivet.common.Uuid sender_user_id = 1;
-		rivet.common.Uuid party_id = 2;
-		rivet.common.Uuid invite_id = 3;
-		string invite_token = 4;
-	}
-
-	message PartyJoinRequest {
-		rivet.common.Uuid sender_user_id = 1;
-	}
-
-	message PartyJoin {
-		rivet.common.Uuid user_id = 1;
-	}
-
-	message PartyLeave {
-		rivet.common.Uuid user_id = 1;
-	}
-
-	message PartyActivityChange {
-		// Nullable for idle
-		oneof state {
-			backend.party.Party.StateMatchmakerFindingLobby matchmaker_finding_lobby = 101;
-			backend.party.Party.StateMatchmakerLobby matchmaker_lobby = 102;
-		}
-	}
-
 	oneof kind {
 		Custom custom = 1;
 		Text text = 2;
@@ -86,13 +58,9 @@ message MessageBody {
 		TeamJoin team_join = 201;
 		TeamLeave team_leave = 202;
 		TeamMemberKick team_member_kick = 203;
-
-		PartyInvite party_invite = 301;
-		PartyJoinRequest party_join_request = 305;
-		PartyJoin party_join = 302;
-		PartyLeave party_leave = 303;
-		PartyActivityChange party_activity_change = 304;
 	}
+
+	reserved 301, 302, 303, 304, 305;
 }
 
 message Thread {
@@ -111,15 +79,12 @@ message Topic {
 		rivet.common.Uuid team_id = 1;
 	}
 
-	message Party {
-		rivet.common.Uuid party_id = 1;
-	}
-
 	oneof kind {
 		Team team = 1;
-		Party party = 2;
 		Direct direct = 3;
 	}
+
+	reserved 2;
 }
 
 message Direct {

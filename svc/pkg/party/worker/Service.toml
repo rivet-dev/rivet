@@ -1,8 +1,0 @@
-[service]
-name = "party-worker"
-
-[runtime]
-kind = "rust"
-
-[consumer]
-

@@ -11,7 +11,6 @@ chirp-client = { path = "../../../../../lib/chirp/client" }
 prost = "0.10"
 
 chat-message-body-validate = { path = "../body-validate" }
-party-publicity-for-user = { path = "../../../party/ops/publicity-for-user" }
 
 [dev-dependencies]
 chirp-worker = { path = "../../../../../lib/chirp/worker" }

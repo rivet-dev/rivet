@@ -7,10 +7,11 @@ import "proto/backend/user.proto";
 import "proto/backend/chat.proto";
 
 message Event {
+	reserved 3;
+
 	oneof kind {
 		ChatMessage chat_message = 1;
 		ChatRead chat_read = 2;
-		PartyUpdate party_update = 3;
 		UserUpdate user_update = 5;
 		MatchmakerLobbyJoin matchmaker_lobby_join = 4;
 		PresenceUpdate presence_update = 6;
@@ -25,10 +26,6 @@ message ChatMessage {
 message ChatRead {
 	rivet.common.Uuid thread_id = 1;
 	int64 read_ts = 2;
-}
-
-message PartyUpdate {
-
 }
 
 message UserUpdate {
