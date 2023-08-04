@@ -12,7 +12,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 -   **Infra** Support configuring multiple S3 providers
 -   **Infra** Support multipart uploads
 -   **Infra** Replace Promtail-based log shipping with native Loki Docker driver
--   **Infra** Add local Traefik Cloudflare proxy daemon for connecting to Cloudflare Access services
+-   **Infra** Local Traefik Cloudflare proxy daemon for connecting to Cloudflare Access services
+-   **Infra** Upload service builds to default S3 provider instead of hardcoded bucket
 -   **Bolt** Support for connecting to Redis databases with `bolt redis sh`
 -   **Bolt** Add confirmation before running any command in the production namespace
 
