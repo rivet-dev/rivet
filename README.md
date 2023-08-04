@@ -15,7 +15,7 @@
 </p>
 
 <p align="center">
-  <a href="https://rivet.gg/">Home</a> - <a href="https://rivet.gg/docs/">Docs</a> - <a href="https://twitter.com/rivet_gg">Twitter</a> - <a href="https://discord.gg/BG2vqsJczH">Discord</a>
+  <a href="https://rivet.gg/">Home</a> - <a href="https://rivet.gg/docs">Docs</a> - <a href="https://twitter.com/rivet_gg">Twitter</a> - <a href="https://discord.gg/BG2vqsJczH">Discord</a>
 </p>
 
 ## 👾 Features
