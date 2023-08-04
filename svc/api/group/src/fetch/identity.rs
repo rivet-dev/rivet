@@ -9,16 +9,10 @@ use rivet_operation::prelude::*;
 
 use crate::{auth::Auth, convert, fetch};
 
-pub struct PartiesCtx {
-	pub member_users: Vec<backend::user::User>,
-	pub threads: Vec<backend::chat::Thread>,
-}
-
 pub struct PresencesCtx {
 	pub res: user_presence::get::Response,
 	pub games: Vec<backend::game::Game>,
 	pub games_with_namespace_ids: Vec<convert::GameWithNamespaceIds>,
-	pub parties: PartiesCtx,
 }
 
 pub async fn users(

@@ -72,6 +72,14 @@ types:
       ports: map<string, matchmakerCommons.JoinPort>
       player: matchmakerCommons.JoinPlayer
 
+  GlobalEventChatThreadRemove:
+    docs: >
+      Received any time the current identity is no longer able to access
+      the  given thread. This can happen if the identity leaves a group or
+      party.
+    properties:
+      thread_id: uuid
+
   UpdateGameActivity:
     docs: Information about the identity's current game. This is information that
       all other identities can see about what the current identity is doing.
