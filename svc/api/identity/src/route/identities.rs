@@ -478,7 +478,7 @@ pub async fn search(
 	let user_handles = res
 		.users
 		.iter()
-		.map(|user| convert::identity::handle_without_presence(&current_user_id, user))
+		.map(|user| convert::identity::handle_without_presence(current_user_id, user))
 		.collect::<GlobalResult<Vec<_>>>()?;
 
 	Ok(models::IdentitySearchResponse {
