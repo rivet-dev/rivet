@@ -8,7 +8,7 @@ use crate::{
 		ns::LoggingProvider,
 		service::{ServiceDomain, ServiceKind, ServiceRouter},
 	},
-	context::{BuildContext, ProjectContext, RunContext, ServiceContext},
+	context::{BuildContext, ProjectContext, RunContext, S3Provider, ServiceContext},
 	dep::nomad::job_schema::*,
 };
 
@@ -469,15 +469,21 @@ pub async fn gen_svc(region_id: &str, exec_ctx: &ExecServiceContext) -> Job {
 						let s3_config = project_ctx.s3_config(default_provider).await.unwrap();
 						let s3_creds = project_ctx.s3_credentials(default_provider).await.unwrap();
 
+						// The getter source is not a standard URL, so we have to hardcode it
+						// ourselves.
+						//
+						// Using the region in the domain causes it to throw an invalid URL error.
+						let getter_source = match default_provider {
+							S3Provider::Aws => {
+								format!("s3::https://s3.amazonaws.com/{bucket}/{artifact_key}")
+							}
+							_ => todo!(),
+						};
+
 						Some(json!([
 							{
 								"GetterMode": "dir",
-								"GetterSource": format!(
-									"s3::{endpoint}/{bucket}/{key}",
-									endpoint = s3_config.endpoint_internal,
-									bucket = bucket,
-									key = urlencoding::encode(artifact_key),
-								),
+								"GetterSource": getter_source,
 								"GetterOptions": {
 									"region": s3_config.region,
 									"aws_access_key_id": s3_creds.access_key_id,
