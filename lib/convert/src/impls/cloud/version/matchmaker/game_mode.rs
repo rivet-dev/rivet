@@ -111,7 +111,7 @@ pub fn game_mode_to_proto(
 										.transpose()?,
 									port_range: value
 										.port_range
-										.map(|x| (*x).api_into())
+										.map(|x| (*x).try_into())
 										.transpose()?,
 									proxy_protocol: ApiInto::<
 										backend::matchmaker::lobby_runtime::ProxyProtocol,
