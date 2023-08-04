@@ -103,6 +103,11 @@ async fn main() -> Result<std::process::ExitCode> {
 	let ctx =
 		bolt_core::context::ProjectContextData::new(std::env::var("BOLT_NAMESPACE").ok()).await;
 
+	// Prompt confirmation if delpoying to prod
+	if ctx.ns_id() == "prod" {
+		tokio::task::block_in_place(|| prompt_prod())?;
+	}
+
 	match args.command {
 		SubCommand::Init(_) | SubCommand::Config { .. } => {
 			unreachable!("should be evaluated before creating project context")
@@ -124,4 +129,21 @@ async fn main() -> Result<std::process::ExitCode> {
 	}
 
 	Ok(std::process::ExitCode::SUCCESS)
+}
+
+fn prompt_prod() -> Result<()> {
+	use std::io::Write;
+
+	let mut input = String::new();
+
+	print!("Are you sure you want to run this command in prod? (yes) ");
+	std::io::stdout().flush()?;
+
+	std::io::stdin().read_line(&mut input)?;
+
+	if input.trim().eq_ignore_ascii_case("yes") {
+		return Ok(());
+	} else {
+		bail!("Bailing");
+	}
 }
