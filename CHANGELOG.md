@@ -32,6 +32,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 -   **Infra** Update Redis Exporter to 1.52.0
 -   **Infra** Update Redis to 7.0.12
 -   **Infra** Update Treafik to 2.10.4
+-   **Bolt** PostHog events are now captured in a background task
 
 ### Security
 

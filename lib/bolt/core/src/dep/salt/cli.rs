@@ -31,7 +31,7 @@ pub async fn apply(
 	let mut event = utils::telemetry::build_event(ctx, "bolt_salt_apply").await?;
 	event.insert_prop("filter", filter)?;
 	event.insert_prop("sls", &opts.sls)?;
-	utils::telemetry::capture_event(ctx, event).await?;
+	utils::telemetry::capture_event(ctx, event);
 
 	// Write Salt configs
 	eprintln!();
