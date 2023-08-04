@@ -10,6 +10,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 -   **Bolt** Support for connecting to Redis databases with `bolt redis sh`
+-   **Infra** Replace Promtail-based log shipping with native Loki Docker driver
+-   **Infra** Add local Traefik Cloudflare proxy daemon for connecting to Cloudflare Access services
+
+### Changed
+
+-   **Infra** Update Nomad to 1.6.1
 
 ### Security
 
