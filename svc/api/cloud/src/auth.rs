@@ -357,8 +357,7 @@ impl Auth {
 	) -> GlobalResult<AccessibleGameIdsResponse> {
 		let claims = self.claims()?;
 
-		let (user_id, team_ids, game_ids) =
-		if claims.as_user().is_ok() {
+		let (user_id, team_ids, game_ids) = if claims.as_user().is_ok() {
 			let user_ent = self.user(ctx).await?;
 
 			// Fetch teams associated with user
