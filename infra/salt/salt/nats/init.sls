@@ -1,5 +1,5 @@
 # https://github.com/nats-io/nats-server/releases
-{% set version = '2.9.9' %}
+{% set version = '2.9.20' %}
 {% set exporter_version = '0.10.1' %}
 
 create_nats_user:

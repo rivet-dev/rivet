@@ -2,11 +2,11 @@
 
 stdenv.mkDerivation rec {
 	pname = "clickhouse";
-	version = "23.4.2.11";
+	version = "23.7.2.25";
 
 	src = fetchurl {
 		url = "https://github.com/ClickHouse/ClickHouse/releases/download/v${version}-stable/clickhouse-common-static-${version}-amd64.tgz";
-		sha256 = "sha256-Y+8/HmXkvaTX3MvkHylb7ZUuaeMcPyL5UXXAh2SI3h8=";
+		sha256 = "sha256-6EY8Iw+H2ebSK5RvuDlCoM6i4U3L39eJ+WXDruWDXic=";
 	};
 
 	phases = [ "unpackPhase" "installPhase" ];
