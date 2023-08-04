@@ -23,6 +23,7 @@ pub struct Namespace {
 	pub email: Option<Email>,
 	#[serde(default)]
 	pub captcha: Captcha,
+	/// Where to ship logs to. Will default to using built-in Nomad logging if not provided.
 	pub logging: Option<Logging>,
 	#[serde(default)]
 	pub services: HashMap<String, Service>,

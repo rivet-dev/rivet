@@ -523,7 +523,7 @@ pub async fn gen_svc(region_id: &str, exec_ctx: &ExecServiceContext) -> Job {
 				log_config: Some(json!({
 					"MaxFiles": 2,
 					"MaxFileSizeMB": 4,
-					"Disabled": project_ctx.ns().logging.is_none(),
+					"Disabled": project_ctx.ns().logging.is_some(),
 				})),
 
 				volume_mounts: match driver {
