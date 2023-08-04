@@ -12,7 +12,6 @@ prost = "0.10"
 
 chat-thread-get = { path = "../get" }
 team-member-list = { path = "../../../team/ops/member-list" }
-party-member-list = { path = "../../../party/ops/member-list" }
 user-get = { path = "../../../user/ops/get" }
 
 [dev-dependencies]

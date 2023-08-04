@@ -35,34 +35,10 @@ async fn worker(ctx: OperationContext<analytics::msg::event_create::Message>) ->
 		.collect::<Vec<_>>();
 
 	// Fetch the user's current presence to enrich the event
-	let (user_presences, party_members) = tokio::try_join!(
-		op!([ctx] user_presence_get {
-			user_ids: user_ids_proto.clone(),
-		}),
-		op!([ctx] party_member_get {
-			user_ids: user_ids_proto.clone(),
-		}),
-	)?;
-
-	// Fetch the parties
-	let party_ids_proto = party_members
-		.party_members
-		.iter()
-		.flat_map(|x| x.party_id)
-		.collect::<Vec<_>>();
-	let (parties, party_member_lists) = if !party_ids_proto.is_empty() {
-		let (parties, party_member_lists) = tokio::try_join!(
-			op!([ctx] party_get {
-				party_ids: party_ids_proto.clone(),
-			}),
-			op!([ctx] party_member_list {
-				party_ids: party_ids_proto.clone(),
-			}),
-		)?;
-		(Some(parties), Some(party_member_lists))
-	} else {
-		(None, None)
-	};
+	let user_presences = op!([ctx] user_presence_get {
+		user_ids: user_ids_proto.clone(),
+	})
+	.await?;
 
 	// Build events
 	let mut insert = client.insert("events")?;
@@ -72,9 +48,6 @@ async fn worker(ctx: OperationContext<analytics::msg::event_create::Message>) ->
 			ray_id,
 			req_event,
 			&user_presences.users,
-			parties.as_ref().map(|x| x.parties.as_slice()),
-			party_member_lists.as_ref().map(|x| x.parties.as_slice()),
-			&party_members.party_members,
 		)?;
 		insert.write(&event).await?;
 	}
@@ -88,9 +61,6 @@ fn build_event(
 	ray_id: Uuid,
 	req_event: &analytics::msg::event_create::Event,
 	user_presences: &[user_presence::get::UserPresenceEntry],
-	parties: Option<&[backend::party::Party]>,
-	party_member_lists: Option<&[party::member_list::response::Party]>,
-	party_members: &[backend::party::PartyMember],
 ) -> GlobalResult<Event> {
 	let mut properties = HashMap::<String, Box<serde_json::value::RawValue>>::new();
 
@@ -138,91 +108,6 @@ fn build_event(
 			// 		serde_json::from_str::<serde_json::Value>(friend_metadata)?,
 			// 	)?;
 			// }
-		}
-	}
-
-	// Insert party member
-	if let Some(party_member) = party_members
-		.iter()
-		.find(|x| x.user_id == req_event.user_id)
-	{
-		serialize_prop(
-			&mut properties,
-			"party_id",
-			internal_unwrap!(party_member.party_id).as_uuid(),
-		)?;
-		match &party_member.state {
-			None => {
-				serialize_prop(&mut properties, "party_member_state_idle", json!({}))?;
-			}
-			Some(backend::party::party_member::State::MatchmakerReady(_)) => {
-				serialize_prop(
-					&mut properties,
-					"party_member_state_matchmaker_pending",
-					json!({}),
-				)?;
-			}
-			Some(backend::party::party_member::State::MatchmakerFindingLobby(_)) => {
-				serialize_prop(
-					&mut properties,
-					"party_member_state_matchmaker_finding_lobby",
-					json!({}),
-				)?;
-			}
-			Some(backend::party::party_member::State::MatchmakerFindingLobbyDirect(_)) => {
-				serialize_prop(
-					&mut properties,
-					"party_member_state_matchmaker_finding_direct",
-					json!({}),
-				)?;
-			}
-			Some(backend::party::party_member::State::MatchmakerLobby(_)) => {
-				serialize_prop(
-					&mut properties,
-					"party_member_state_matchmaker_lobby",
-					json!({}),
-				)?;
-			}
-		};
-
-		// Insert party member count
-		if let Some(party_member_list) = party_member_lists
-			.as_ref()
-			.and_then(|x| x.iter().find(|y| y.party_id == party_member.party_id))
-		{
-			serialize_prop(
-				&mut properties,
-				"party_member_count",
-				party_member_list.user_ids.len(),
-			)?;
-		}
-
-		// Insert party
-		if let Some(party) = parties
-			.as_ref()
-			.and_then(|x| x.iter().find(|y| y.party_id == party_member.party_id))
-		{
-			match &party.state {
-				None => serialize_prop(&mut properties, "party_state_idle", json!({}))?,
-				Some(backend::party::party::State::MatchmakerFindingLobby(state)) => {
-					serialize_prop(
-						&mut properties,
-						"party_state_finding_lobby",
-						json!({
-							"namespace_id": internal_unwrap!(state.namespace_id).as_uuid(),
-						}),
-					)?;
-				}
-				Some(backend::party::party::State::MatchmakerLobby(state)) => {
-					serialize_prop(
-						&mut properties,
-						"party_state_matchmaker_lobby",
-						json!({
-							"namespace_id": internal_unwrap!(state.namespace_id).as_uuid(),
-						}),
-					)?;
-				}
-			};
 		}
 	}
 

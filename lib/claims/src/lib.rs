@@ -360,21 +360,6 @@ pub mod ent {
 	}
 
 	#[derive(Clone, Debug)]
-	pub struct PartyInvite {
-		pub invite_id: Uuid,
-	}
-
-	impl TryFrom<&schema::entitlement::PartyInvite> for PartyInvite {
-		type Error = GlobalError;
-
-		fn try_from(value: &schema::entitlement::PartyInvite) -> GlobalResult<Self> {
-			Ok(PartyInvite {
-				invite_id: internal_unwrap_owned!(value.invite_id).as_uuid(),
-			})
-		}
-	}
-
-	#[derive(Clone, Debug)]
 	pub struct CloudDeviceLink {
 		pub device_link_id: Uuid,
 	}
@@ -419,7 +404,6 @@ pub trait ClaimsDecode {
 	fn as_game_user_option(&self) -> GlobalResult<Option<ent::GameUser>>;
 	fn as_game_user_link(&self) -> GlobalResult<ent::GameUserLink>;
 	fn as_upload_file(&self) -> GlobalResult<ent::UploadFile>;
-	fn as_party_invite(&self) -> GlobalResult<ent::PartyInvite>;
 	fn as_cloud_device_link(&self) -> GlobalResult<ent::CloudDeviceLink>;
 	fn as_bypass(&self) -> GlobalResult<ent::Bypass>;
 }
@@ -642,22 +626,6 @@ impl ClaimsDecode for schema::Claims {
 			.and_then(std::convert::identity)
 	}
 
-	fn as_party_invite(&self) -> GlobalResult<ent::PartyInvite> {
-		self.entitlements
-			.iter()
-			.find_map(|ent| match &ent.kind {
-				Some(schema::entitlement::Kind::PartyInvite(ent)) => {
-					Some(ent::PartyInvite::try_from(ent))
-				}
-				_ => None,
-			})
-			.ok_or(err_code!(
-				CLAIMS_MISSING_ENTITLEMENT,
-				entitlement = "PartyInvite"
-			))
-			.and_then(std::convert::identity)
-	}
-
 	fn as_cloud_device_link(&self) -> GlobalResult<ent::CloudDeviceLink> {
 		self.entitlements
 			.iter()
@@ -710,7 +678,6 @@ impl EntitlementTag for schema::Entitlement {
 			schema::entitlement::Kind::GameUser(_) => 10,
 			schema::entitlement::Kind::GameUserLink(_) => 11,
 			schema::entitlement::Kind::UploadFile(_) => 12,
-			schema::entitlement::Kind::PartyInvite(_) => 13,
 			schema::entitlement::Kind::CloudDeviceLink(_) => 14,
 			schema::entitlement::Kind::Bypass(_) => 15,
 		})

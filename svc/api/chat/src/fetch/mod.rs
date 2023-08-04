@@ -2,4 +2,3 @@
 // fetching from building models so that we can convert already existing data without having to re-fetch it.
 
 pub mod chat;
-pub mod party;

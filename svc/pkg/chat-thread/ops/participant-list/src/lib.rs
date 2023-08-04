@@ -66,25 +66,6 @@ async fn handle(
 							)
 							.collect::<Vec<_>>()
 					}
-					backend::chat::topic::Kind::Party(party) => {
-						// Fetch party
-						let party_id = internal_unwrap!(party.party_id).as_uuid();
-						let party_members_res = op!([ctx] party_member_list {
-							party_ids: vec![party_id.into()],
-						})
-						.await?;
-
-						// Extract participants
-						internal_unwrap_owned!(party_members_res.parties.first())
-							.user_ids
-							.iter()
-							.map(
-								|user_id| chat_thread::participant_list::response::Participant {
-									user_id: Some(*user_id),
-								},
-							)
-							.collect::<Vec<_>>()
-					}
 					backend::chat::topic::Kind::Direct(direct) => {
 						// Fetch direct chat
 						let user_a_id = internal_unwrap!(direct.user_a_id);

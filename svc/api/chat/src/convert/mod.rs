@@ -7,7 +7,6 @@ use rivet_operation::prelude::*;
 
 pub mod chat;
 pub mod identity;
-pub mod party;
 
 pub struct GameWithNamespaceIds {
 	pub namespace_ids: Vec<Uuid>,

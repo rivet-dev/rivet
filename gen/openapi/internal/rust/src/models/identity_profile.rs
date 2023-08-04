@@ -62,8 +62,6 @@ pub struct IdentityProfile {
     pub join_ts: String,
     #[serde(rename = "linked_accounts")]
     pub linked_accounts: Vec<crate::models::IdentityLinkedAccount>,
-    #[serde(rename = "party", skip_serializing_if = "Option::is_none")]
-    pub party: Option<Box<crate::models::PartySummary>>,
     #[serde(rename = "presence", skip_serializing_if = "Option::is_none")]
     pub presence: Option<Box<crate::models::IdentityPresence>>,
 }
@@ -92,7 +90,6 @@ impl IdentityProfile {
             is_registered,
             join_ts,
             linked_accounts,
-            party: None,
             presence: None,
         }
     }

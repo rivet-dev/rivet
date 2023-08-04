@@ -7,9 +7,6 @@ struct PopulateDb {
 	team_id: Uuid,
 	team_thread_id: Uuid,
 
-	party_id: Uuid,
-	party_thread_id: Uuid,
-
 	user_a_id: Uuid,
 	user_b_id: Uuid,
 	direct_thread_id: Uuid,
@@ -18,7 +15,6 @@ struct PopulateDb {
 impl PopulateDb {
 	async fn populate(ctx: &TestCtx) -> Self {
 		let team_id = Uuid::new_v4();
-		let party_id = Uuid::new_v4();
 		let user_a_id = Uuid::new_v4();
 		let user_b_id = Uuid::new_v4();
 		let (user_a_id, user_b_id) = util::sort::id_pair(user_a_id, user_b_id);
@@ -27,9 +23,6 @@ impl PopulateDb {
 		let topics = vec![
 			backend::chat::topic::Kind::Team(backend::chat::topic::Team {
 				team_id: Some(team_id.into()),
-			}),
-			backend::chat::topic::Kind::Party(backend::chat::topic::Party {
-				party_id: Some(party_id.into()),
 			}),
 			backend::chat::topic::Kind::Direct(backend::chat::topic::Direct {
 				user_a_id: Some(user_a_id.into()),
@@ -52,12 +45,9 @@ impl PopulateDb {
 			team_id,
 			team_thread_id: thread_ids[0],
 
-			party_id,
-			party_thread_id: thread_ids[1],
-
 			user_a_id,
 			user_b_id,
-			direct_thread_id: thread_ids[2],
+			direct_thread_id: thread_ids[1],
 		}
 	}
 }
@@ -71,7 +61,6 @@ async fn empty(ctx: TestCtx) {
 		thread_ids: vec![
 			// Existing
 			populate_db.team_thread_id.into(),
-			populate_db.party_thread_id.into(),
 			// Nonexistent
 			Uuid::new_v4().into(),
 		],
@@ -93,21 +82,5 @@ async fn empty(ctx: TestCtx) {
 		})
 		.next()
 		.expect("missing group thread");
-	let party_thread = res
-		.threads
-		.iter()
-		.filter_map(|t| {
-			if let Some(backend::chat::topic::Kind::Party(t)) = &t.topic.as_ref().unwrap().kind {
-				Some(t)
-			} else {
-				None
-			}
-		})
-		.next()
-		.expect("missing party thread");
 	assert_eq!(populate_db.team_id, team_thread.team_id.unwrap().as_uuid());
-	assert_eq!(
-		populate_db.party_id,
-		party_thread.party_id.unwrap().as_uuid()
-	);
 }

@@ -24,7 +24,6 @@ Name | Type | Description | Notes
 **is_registered** | **bool** | Whether or not this identity is registered with a linked account. | 
 **join_ts** | **String** |  | 
 **linked_accounts** | [**Vec<crate::models::IdentityLinkedAccount>**](IdentityLinkedAccount.md) |  | 
-**party** | Option<[**crate::models::PartySummary**](PartySummary.md)> |  | [optional]
 **presence** | Option<[**crate::models::IdentityPresence**](IdentityPresence.md)> |  | [optional]
 
 [[Back to Model list]](../README.md#documentation-for-models) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to README]](../README.md)

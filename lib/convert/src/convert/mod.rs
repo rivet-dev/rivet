@@ -7,7 +7,6 @@ pub mod chat;
 pub mod game;
 pub mod group;
 pub mod identity;
-pub mod party;
 
 pub struct GameWithNamespaceIds {
 	pub namespace_ids: Vec<Uuid>,

@@ -130,17 +130,6 @@ async fn worker(ctx: OperationContext<chat_message::msg::create::Message>) -> Gl
 		backend::chat::message_body::Kind::TeamJoin(_) => json!({ "team_join": {} }),
 		backend::chat::message_body::Kind::TeamLeave(_) => json!({ "team_leave": {} }),
 		backend::chat::message_body::Kind::TeamMemberKick(_) => json!({ "team_member_kick": {} }),
-		backend::chat::message_body::Kind::PartyInvite(body) => {
-			json!({ "party_invite": { "party_id": internal_unwrap!(body.party_id).as_uuid() } })
-		}
-		backend::chat::message_body::Kind::PartyJoinRequest(_) => {
-			json!({ "party_join_request": {} })
-		}
-		backend::chat::message_body::Kind::PartyJoin(_) => json!({ "party_join": {} }),
-		backend::chat::message_body::Kind::PartyLeave(_) => json!({ "party_leave": {} }),
-		backend::chat::message_body::Kind::PartyActivityChange(_) => {
-			json!({ "party_activity_change": {} })
-		}
 	};
 	msg!([ctx] analytics::msg::event_create() {
 		events: vec![
@@ -167,12 +156,6 @@ fn get_sender_user_id(body: &backend::chat::MessageBody) -> GlobalResult<Option<
 	let sender_user_id = match kind {
 		backend_body::Kind::Custom(body) => Some(internal_unwrap!(body.sender_user_id).as_uuid()),
 		backend_body::Kind::Text(body) => Some(internal_unwrap!(body.sender_user_id).as_uuid()),
-		backend_body::Kind::PartyInvite(body) => {
-			Some(internal_unwrap!(body.sender_user_id).as_uuid())
-		}
-		backend_body::Kind::PartyJoinRequest(body) => {
-			Some(internal_unwrap!(body.sender_user_id).as_uuid())
-		}
 		_ => None,
 	};
 
