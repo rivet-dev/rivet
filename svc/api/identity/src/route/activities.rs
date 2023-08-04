@@ -186,9 +186,7 @@ pub async fn activities(
 
 	let identities = follows
 		.into_iter()
-		.map(|follow| {
-			convert::identity::handle(&current_user_id, follow.user, &presences_ctx, true)
-		})
+		.map(|follow| convert::identity::handle(current_user_id, follow.user, &presences_ctx, true))
 		.collect::<GlobalResult<Vec<_>>>()?;
 
 	// TODO: Add back
@@ -224,7 +222,7 @@ pub async fn activities(
 		.filter_map(|game_user| {
 			if let Some(user) = users.users.iter().find(|u| u.user_id == game_user.user_id) {
 				Some(convert::identity::handle(
-					&current_user_id,
+					current_user_id,
 					user,
 					&presences_ctx,
 					true,

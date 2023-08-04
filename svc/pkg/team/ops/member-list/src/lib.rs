@@ -11,7 +11,7 @@ struct TeamMember {
 #[operation(name = "team-member-list")]
 async fn handle(
 	ctx: OperationContext<team::member_list::Request>,
-) -> Result<team::member_list::Response, GlobalError> {
+) -> GlobalResult<team::member_list::Response> {
 	let team_ids = ctx
 		.team_ids
 		.iter()

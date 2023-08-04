@@ -18,5 +18,5 @@ message Request {
 message Response {
 	rivet.common.Uuid build_id = 1;
 	rivet.common.Uuid upload_id = 2;
-	optional rivet.backend.upload.PresignedUploadRequest image_presigned_request = 3;
+	repeated rivet.backend.upload.PresignedUploadRequest image_presigned_requests = 3;
 }

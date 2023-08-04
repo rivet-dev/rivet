@@ -75,7 +75,7 @@ async fn nats_from_env(client_name: String) -> Result<Option<NatsPool>, Error> {
 					async move {
 						match event {
 							async_nats::Event::Connected => {
-								tracing::info!(?server_addrs, "nats reconnected");
+								tracing::debug!(?server_addrs, "nats reconnected");
 							}
 							async_nats::Event::Disconnected => {
 								tracing::error!(?server_addrs, "nats disconnected");
@@ -100,12 +100,12 @@ async fn nats_from_env(client_name: String) -> Result<Option<NatsPool>, Error> {
 		// NATS has built in backoff with jitter (with max of 4s), so
 		// once the connection is established, we never have to worry
 		// about disconnections that aren't handled by NATS.
-		tracing::info!(?server_addrs, "nats connecting");
+		tracing::debug!(?server_addrs, "nats connecting");
 		let conn = options
 			.connect(&server_addrs[..])
 			.await
 			.map_err(Error::BuildNats)?;
-		tracing::info!(?server_addrs, "nats connected");
+		tracing::debug!(?server_addrs, "nats connected");
 
 		Ok(Some(conn))
 	} else {
@@ -120,7 +120,7 @@ fn crdb_from_env(client_name: String) -> Result<HashMap<String, CrdbPool>, Error
 		if let Some(svc_name_screaming) = key.strip_prefix("CRDB_URL_") {
 			let svc_name = svc_name_screaming.to_lowercase().replace("_", "-");
 
-			tracing::info!(%url, "crdb creating connection");
+			tracing::debug!(%url, "crdb creating connection");
 
 			let client_name = client_name.clone();
 			let pool = sqlx::postgres::PgPoolOptions::new()
@@ -145,7 +145,7 @@ fn crdb_from_env(client_name: String) -> Result<HashMap<String, CrdbPool>, Error
 						let client_name = client_name.clone();
 						let url = url.clone();
 						Box::pin(async move {
-							tracing::info!(%url, "crdb connected");
+							tracing::debug!(%url, "crdb connected");
 							sqlx::query("SET application_name = $1;")
 								.bind(&client_name)
 								.execute(conn)
@@ -177,13 +177,13 @@ async fn redis_from_env() -> Result<HashMap<String, RedisPool>, Error> {
 			let pool = if let Some(existing) = existing_pools.get(&url) {
 				existing.clone()
 			} else {
-				tracing::info!(%url, "redis connecting");
+				tracing::debug!(%url, "redis connecting");
 				let conn = redis::Client::open(url.as_str())
 					.map_err(Error::BuildRedis)?
 					.get_tokio_connection_manager()
 					.await
 					.map_err(Error::BuildRedis)?;
-				tracing::info!(%url, "redis connected");
+				tracing::debug!(%url, "redis connected");
 				conn
 			};
 

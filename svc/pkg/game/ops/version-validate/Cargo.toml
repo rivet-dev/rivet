@@ -13,6 +13,7 @@ util-mm = { package = "rivet-util-mm", path = "../../../mm/util" }
 
 game-version-get = { path = "../version-get" }
 game-version-list = { path = "../version-list" }
+module-version-get = { path = "../../../module/ops/version-get" }
 region-get = { path = "../../../region/ops/get" }
 tier-list = { path = "../../../tier/ops/list" }
 

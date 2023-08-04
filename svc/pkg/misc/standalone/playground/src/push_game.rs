@@ -77,7 +77,8 @@ pub async fn run(
 			})
 			.await?;
 			let build_id = internal_unwrap_owned!(build_res.build_id).as_uuid();
-			let image_presigned_request = internal_unwrap!(build_res.image_presigned_request);
+			let image_presigned_request =
+				internal_unwrap_owned!(build_res.image_presigned_requests.first());
 
 			// Upload image
 			reqwest::Client::new()

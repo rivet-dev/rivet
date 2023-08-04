@@ -4,7 +4,7 @@ use rivet_operation::prelude::*;
 #[operation(name = "team-recommend")]
 async fn handle(
 	ctx: OperationContext<team::recommend::Request>,
-) -> Result<team::recommend::Response, GlobalError> {
+) -> GlobalResult<team::recommend::Response> {
 	let count = ctx.count;
 
 	// TODO: Find teams with the most friends in it, then order by member count

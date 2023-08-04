@@ -1,5 +1,5 @@
 use async_trait::async_trait;
-use global_error::GlobalError;
+use global_error::GlobalResult;
 use rivet_operation::OperationContext;
 
 // TODO: Create custom response type
@@ -14,7 +14,7 @@ pub trait Worker: Clone + Send + Sync + 'static {
 	async fn handle<'a>(
 		&self,
 		req: &OperationContext<Self::Request>,
-	) -> Result<Self::Response, GlobalError>
+	) -> GlobalResult<Self::Response>
 	where
 		Self::Response: 'a;
 }

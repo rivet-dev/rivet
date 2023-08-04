@@ -33,11 +33,38 @@ install_docker:
     - require:
       - pkgrepo: add_docker_repository
 
+create_docker_user:
+  user.present:
+    - name: docker-salt
+    - shell: /bin/false
+    - system: True
+    - usergroup: True
+
+create_etc_docker:
+  file.directory:
+    - names:
+      - /etc/docker/: {}
+    - user: docker-salt
+    - group: docker-salt
+    - mode: 550
+
+push_etc_docker:
+  file.managed:
+    - names:
+      - /etc/docker/daemon.json:
+        - source: salt://docker/files/daemon.json
+    - user: docker-salt
+    - group: docker-salt
+    - mode: 440
+    - require:
+      - file: create_etc_docker
+
 check_docker:
   cmd.run:
     - name: docker run hello-world
     - require:
       - pkg: install_docker
+      - file: push_etc_docker
     - onchanges:
       - pkg: install_docker
 

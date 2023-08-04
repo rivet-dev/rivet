@@ -113,7 +113,7 @@ async fn validate_build(
 	ctx: &OperationContext<mm_config::version_prepare::Request>,
 	game_id: Uuid,
 	build_id: Uuid,
-) -> Result<(Uuid, String), GlobalError> {
+) -> GlobalResult<(Uuid, String)> {
 	// Validate build exists and belongs to this game
 	let build_get = op!([ctx] build_get {
 		build_ids: vec![build_id.into()],

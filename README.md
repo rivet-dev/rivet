@@ -15,16 +15,16 @@
 </p>
 
 <p align="center">
-  <a href="https://rivet.gg/">Home</a> - <a href="https://docs.rivet.gg/">Docs</a> - <a href="https://twitter.com/rivet_gg">Twitter</a> - <a href="https://discord.gg/BG2vqsJczH">Discord</a>
+  <a href="https://rivet.gg/">Home</a> - <a href="https://rivet.gg/docs">Docs</a> - <a href="https://twitter.com/rivet_gg">Twitter</a> - <a href="https://discord.gg/BG2vqsJczH">Discord</a>
 </p>
 
 ## 👾 Features
 
--   Everything is accessible from an easy to use [GUI, CLI, or API](https://docs.rivet.gg/general/gui-cli-api)
--   [Serverless Lobbies](https://docs.rivet.gg/serverless-lobbies/introduction) for auto-scaling game lobbies
--   [Flexible matchmaker](https://docs.rivet.gg/matchmaker/introduction) for placing players in lobbies with no wait times
--   [CDN](https://docs.rivet.gg/cdn/introduction) for hosting assets and webpages with a custom domain or provided rivet.game subdomain
--   [Game Guard](https://docs.rivet.gg/serverless-lobbies/concepts/game-guard) for DDoS mitigation and managed WebSocket SSL, TCP+TLS, and UDP
+-   Everything is accessible from an easy to use [GUI, CLI, or API](https://rivet.gg/docs/general/gui-cli-api)
+-   [Serverless Lobbies](https://rivet.gg/docs/serverless-lobbies) for auto-scaling game lobbies
+-   [Flexible matchmaker](https://rivet.gg/docs/matchmaker) for placing players in lobbies with no wait times
+-   [CDN](https://rivet.gg/docs/cdn) for hosting assets and webpages with a custom domain or provided rivet.game subdomain
+-   [Game Guard](https://rivet.gg/docs/serverless-lobbies/concepts/game-guard) for DDoS mitigation and managed WebSocket SSL, TCP+TLS, and UDP
 -   Streamlined DevOps for teams
 -   Unified logging & monitoring & analytics
 -   No downtime deploys with easy rollbacks
@@ -53,7 +53,7 @@ Below is a simplified architecture diagram of a Rivet cluster.
 
 > **Looking for documentation on building a game with Rivet?**
 >
-> Visit our [documentation for game developers](https://docs.rivet.gg/)!
+> Visit our [documentation for game developers](https://rivet.gg/docs)!
 
 **Getting Started**
 

@@ -848,6 +848,11 @@ components:
           type: string
         image_presigned_request:
           $ref: '#/components/schemas/UploadPresignedRequest'
+          description: '**Deprecated: use image_presigned_requests instead**'
+        image_presigned_requests:
+          items:
+            $ref: '#/components/schemas/UploadPresignedRequest'
+          type: array
         upload_id:
           format: uuid
           type: string
@@ -855,6 +860,7 @@ components:
       - build_id
       - upload_id
       - image_presigned_request
+      - image_presigned_requests
       type: object
     CloudGamesCreateGameCdnSiteRequest:
       properties:
@@ -2166,10 +2172,10 @@ components:
       description: CDN configuration for a given version.
       properties:
         build_command:
-          description: Client-side configuration
+          description: _Configures Rivet CLI behavior. Has no effect on server behavior._
           type: string
         build_output:
-          description: Client-side configuration
+          description: _Configures Rivet CLI behavior. Has no effect on server behavior._
           type: string
         routes:
           description: Multiple CDN version routes.
@@ -2233,12 +2239,46 @@ components:
       properties:
         cdn:
           $ref: '#/components/schemas/CloudVersionCdnConfig'
+        engine:
+          $ref: '#/components/schemas/CloudVersionEngineConfig'
         identity:
           $ref: '#/components/schemas/CloudVersionIdentityConfig'
         kv:
           $ref: '#/components/schemas/CloudVersionKvConfig'
         matchmaker:
           $ref: '#/components/schemas/CloudVersionMatchmakerConfig'
+      type: object
+    CloudVersionEngineConfig:
+      properties:
+        godot:
+          $ref: '#/components/schemas/CloudVersionEngineGodotConfig'
+        html5:
+          $ref: '#/components/schemas/CloudVersionEngineHtml5Config'
+        unity:
+          $ref: '#/components/schemas/CloudVersionEngineUnityConfig'
+        unreal:
+          $ref: '#/components/schemas/CloudVersionEngineUnrealConfig'
+      type: object
+    CloudVersionEngineGodotConfig:
+      properties: {}
+      type: object
+    CloudVersionEngineHtml5Config:
+      properties: {}
+      type: object
+    CloudVersionEngineUnityConfig:
+      properties: {}
+      type: object
+    CloudVersionEngineUnrealConfig:
+      properties:
+        game_module:
+          description: 'Name of the Unreal module that holds the game code.
+
+            This is usually the value of `$.Modules[0].Name` in the file `MyProject.unproject`.
+
+            _Configures Rivet CLI behavior. Has no effect on server behavior._'
+          type: string
+      required:
+      - game_module
       type: object
     CloudVersionFull:
       description: A full version.
@@ -2363,7 +2403,7 @@ components:
         captcha:
           $ref: '#/components/schemas/CloudVersionMatchmakerCaptcha'
         dev_hostname:
-          description: Client-side configuration
+          description: _Configures Rivet CLI behavior. Has no effect on server behavior._
           type: string
         docker:
           $ref: '#/components/schemas/CloudVersionMatchmakerGameModeRuntimeDocker'
@@ -2441,14 +2481,14 @@ components:
             type: string
           type: array
         dockerfile:
-          description: Client-side configuration
+          description: _Configures Rivet CLI behavior. Has no effect on server behavior._
           type: string
         env:
           additionalProperties:
             type: string
           type: object
         image:
-          description: Client-side configuration
+          description: _Configures Rivet CLI behavior. Has no effect on server behavior._
           type: string
         image_id:
           format: uuid
@@ -2464,14 +2504,14 @@ components:
       description: A docker port.
       properties:
         dev_port:
-          description: Client-side configuration
+          description: _Configures Rivet CLI behavior. Has no effect on server behavior._
           type: integer
         dev_port_range:
           $ref: '#/components/schemas/CloudVersionMatchmakerPortRange'
-          description: Client-side configuration
+          description: _Configures Rivet CLI behavior. Has no effect on server behavior._
         dev_protocol:
           $ref: '#/components/schemas/CloudVersionMatchmakerPortProtocol'
-          description: Client-side configuration
+          description: _Configures Rivet CLI behavior. Has no effect on server behavior._
         port:
           description: The port number to connect to.
           type: integer
@@ -4369,6 +4409,12 @@ components:
           type: integer
       required:
       - player_count
+      type: object
+    ModuleCallResponse:
+      properties:
+        data: {}
+      required:
+      - data
       type: object
     PartyActivity:
       description: A union representing the activity of a given party.
@@ -12540,6 +12586,89 @@ paths:
       - url: https://chat.api.rivet.gg/v1
       tags:
       - Chat
+  /modules/{module}/scripts/{script}/call:
+    post:
+      description: 'Makes a request to a module''s script.
+
+        '
+      operationId: module_call
+      parameters:
+      - in: path
+        name: module
+        required: true
+        schema:
+          type: string
+      - in: path
+        name: script
+        required: true
+        schema:
+          type: string
+      - in: header
+        name: origin
+        required: false
+        schema:
+          type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              properties:
+                data: {}
+                namespace_id:
+                  format: uuid
+                  type: string
+              required:
+              - data
+              type: object
+        required: true
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ModuleCallResponse'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+          description: ''
+        '408':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+          description: ''
+        '429':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+          description: ''
+        '500':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+          description: ''
+      security: *id001
+      servers:
+      - url: https://module.api.rivet.gg/v1
+      tags:
+      - Module
   /notifications/register:
     delete:
       description: Unregister push notification for the current identity.

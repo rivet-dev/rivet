@@ -106,27 +106,40 @@ pub async fn config_to_openapi(
 	})
 }
 
-impl ApiFrom<models::CloudVersionMatchmakerPortRange>
+impl ApiTryFrom<models::CloudVersionMatchmakerPortRange>
 	for backend::matchmaker::lobby_runtime::PortRange
 {
-	fn api_from(
-		value: models::CloudVersionMatchmakerPortRange,
-	) -> backend::matchmaker::lobby_runtime::PortRange {
-		backend::matchmaker::lobby_runtime::PortRange {
-			min: value.min as u32,
-			max: value.max as u32,
-		}
+	type Error = GlobalError;
+
+	fn try_from(value: models::CloudVersionMatchmakerPortRange) -> GlobalResult<Self> {
+		assert_with!(
+			value.min >= 0,
+			MATCHMAKER_INVALID_VERSION_CONFIG,
+			error = "`port_range.min` out of bounds"
+		);
+		assert_with!(
+			value.max >= 0,
+			MATCHMAKER_INVALID_VERSION_CONFIG,
+			error = "`port_range.max` out of bounds"
+		);
+
+		Ok(backend::matchmaker::lobby_runtime::PortRange {
+			min: value.min.try_into()?,
+			max: value.max.try_into()?,
+		})
 	}
 }
 
-impl ApiFrom<backend::matchmaker::lobby_runtime::PortRange>
+impl ApiTryFrom<backend::matchmaker::lobby_runtime::PortRange>
 	for models::CloudVersionMatchmakerPortRange
 {
-	fn api_from(value: backend::matchmaker::lobby_runtime::PortRange) -> Self {
-		models::CloudVersionMatchmakerPortRange {
-			min: value.min as i32,
-			max: value.max as i32,
-		}
+	type Error = GlobalError;
+
+	fn try_from(value: backend::matchmaker::lobby_runtime::PortRange) -> GlobalResult<Self> {
+		Ok(models::CloudVersionMatchmakerPortRange {
+			min: value.min.try_into()?,
+			max: value.max.try_into()?,
+		})
 	}
 }
 
@@ -248,11 +261,19 @@ impl ApiTryFrom<models::CloudVersionMatchmakerCaptcha> for backend::captcha::Cap
 	type Error = GlobalError;
 
 	fn try_from(value: models::CloudVersionMatchmakerCaptcha) -> GlobalResult<Self> {
-		internal_assert!(value.requests_before_reverify >= 0);
-		internal_assert!(value.verification_ttl >= 0);
+		assert_with!(
+			value.requests_before_reverify >= 0,
+			MATCHMAKER_INVALID_VERSION_CONFIG,
+			error = "`requests_before_reverify` out of bounds"
+		);
+		assert_with!(
+			value.verification_ttl >= 0,
+			MATCHMAKER_INVALID_VERSION_CONFIG,
+			error = "`verification_ttl` out of bounds"
+		);
 
 		Ok(backend::captcha::CaptchaConfig {
-			requests_before_reverify: value.requests_before_reverify as u32,
+			requests_before_reverify: value.requests_before_reverify.try_into()?,
 			verification_ttl: value.verification_ttl,
 			hcaptcha: value.hcaptcha.map(|x| (*x).api_into()),
 			turnstile: value.turnstile.map(|x| (*x).api_into()),
@@ -265,7 +286,7 @@ impl ApiTryFrom<backend::captcha::CaptchaConfig> for models::CloudVersionMatchma
 
 	fn try_from(value: backend::captcha::CaptchaConfig) -> GlobalResult<Self> {
 		Ok(models::CloudVersionMatchmakerCaptcha {
-			requests_before_reverify: value.requests_before_reverify as i32,
+			requests_before_reverify: value.requests_before_reverify.try_into()?,
 			verification_ttl: value.verification_ttl,
 			hcaptcha: value
 				.hcaptcha

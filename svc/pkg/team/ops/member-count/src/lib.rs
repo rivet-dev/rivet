@@ -4,7 +4,7 @@ use rivet_operation::prelude::*;
 #[operation(name = "team-member-count")]
 async fn handle(
 	ctx: OperationContext<team::member_count::Request>,
-) -> Result<team::member_count::Response, GlobalError> {
+) -> GlobalResult<team::member_count::Response> {
 	let team_ids = ctx
 		.team_ids
 		.iter()

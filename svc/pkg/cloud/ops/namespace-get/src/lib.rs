@@ -109,6 +109,7 @@ async fn handle(
 						tracing::warn!(namespace_id = %cloud_namespace.namespace_id, "missing identity for ns");
 						return None;
 					},
+					module: Some(backend::module::GameNamespaceConfig {}),
 				}),
 			})
 		})

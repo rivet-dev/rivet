@@ -65,7 +65,7 @@ pub async fn handles(
 					&& follow.following_user_id.as_ref() == Some(&raw_current_user_id)
 			});
 
-			convert::identity::handle(&current_user_id, user, &presences_ctx, is_mutual_following)
+			convert::identity::handle(current_user_id, user, &presences_ctx, is_mutual_following)
 		})
 		.collect::<GlobalResult<Vec<_>>>()
 }
@@ -97,7 +97,7 @@ pub async fn summaries(
 		.iter()
 		.map(|user| {
 			convert::identity::summary(
-				&current_user_id,
+				current_user_id,
 				user,
 				&presences_ctx,
 				&mutual_follows.follows,
@@ -150,7 +150,7 @@ pub async fn profiles(
 		.iter()
 		.map(|user| {
 			convert::identity::profile(
-				&current_user_id,
+				current_user_id,
 				user,
 				convert::identity::ProfileCtx {
 					presences_ctx: &presences_ctx,

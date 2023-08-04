@@ -81,14 +81,15 @@ async fn handle(
 		.filter(|p| p.publicity.friends != PublicityLevel::None)
 		.flat_map(|x| x.user_ids.iter())
 		// Validate not querying self
-		.filter(|&&user_id| user_id != this_user_id)
-		.collect::<HashSet<&Uuid>>();
+		.filter(|user_id| user_id != &&this_user_id)
+		.map(|x| *x)
+		.collect::<HashSet<Uuid>>();
 
 	// Fetch follow relationships.
 	let user_follows = user_ids
-		.clone()
-		.into_iter()
-		.map(|&user_id| user_follow::relationship_get::request::User {
+		.iter()
+		.cloned()
+		.map(|user_id| user_follow::relationship_get::request::User {
 			this_user_id: Some(this_user_id.into()),
 			other_user_id: Some(user_id.into()),
 		})
@@ -97,7 +98,7 @@ async fn handle(
 	// Fetch member relationships.
 	let team_members = user_ids
 		.into_iter()
-		.map(|&user_id| team::member_relationship_get::request::User {
+		.map(|user_id| team::member_relationship_get::request::User {
 			this_user_id: Some(this_user_id.into()),
 			other_user_id: Some(user_id.into()),
 		})

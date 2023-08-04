@@ -150,6 +150,7 @@ async fn vars(ctx: &ProjectContext) {
 		config::ns::ClusterKind::SingleNode {
 			public_ip,
 			preferred_subnets,
+			..
 		} => {
 			vars.insert("deploy_method_local".into(), json!(true));
 			vars.insert("deploy_method_cluster".into(), json!(false));
@@ -222,16 +223,6 @@ async fn vars(ctx: &ProjectContext) {
 			vars.insert("cloudflare_zone_id_rivet_game".into(), json!(zones.game));
 			vars.insert("cloudflare_zone_id_rivet_job".into(), json!(zones.job));
 		}
-	}
-
-	// Logging
-	match &config.logging {
-		Some(config::ns::Logging {
-			provider: config::ns::LoggingProvider::Loki { endpoint },
-		}) => {
-			vars.insert("loki_endpoint".into(), json!(endpoint));
-		}
-		None => {}
 	}
 
 	// Regions

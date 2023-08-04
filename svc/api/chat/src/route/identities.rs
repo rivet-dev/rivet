@@ -38,7 +38,7 @@ pub async fn get_direct_thread(
 		identity: user_res
 			.users
 			.first()
-			.map(|user| convert::identity::handle_without_presence(&current_user_id, user))
+			.map(|user| convert::identity::handle_without_presence(current_user_id, user))
 			.transpose()?,
 	})
 }
