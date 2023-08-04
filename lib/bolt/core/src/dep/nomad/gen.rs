@@ -734,45 +734,41 @@ async fn nomad_loki_plugin_config(
 	ctx: &ProjectContext,
 	svc_ctx: &ServiceContext,
 ) -> Result<serde_json::Value> {
-	if let Some(logging) = &ctx.ns().logging {
-		let _endpoint = match &logging.provider {
-			LoggingProvider::Loki { endpoint } => endpoint,
-		};
+	match &ctx.ns().logging.as_ref().map(|x| &x.provider) {
+		Some(LoggingProvider::Loki { .. }) => {
+			// Create log labels
+			let labels = [
+				("ns", ctx.ns_id()),
+				("service", &format!("rivet-{}", svc_ctx.name())),
+				("node", "${node.unique.name}"),
+				("alloc", "${NOMAD_ALLOC_ID}"),
+				("dc", "${NOMAD_DC}"),
+			]
+			.iter()
+			.map(|(k, v)| format!("{k}={v}"))
+			.collect::<Vec<_>>()
+			.join(",");
 
-		// Create log labels
-		let labels = [
-			("ns", ctx.ns_id()),
-			("service", &format!("rivet-{}", svc_ctx.name())),
-			("node", "${node.unique.name}"),
-			("alloc", "${NOMAD_ALLOC_ID}"),
-			("dc", "${NOMAD_DC}"),
-		]
-		.iter()
-		.map(|(k, v)| format!("{k}={v}"))
-		.collect::<Vec<_>>()
-		.join(",");
+			// Remove default log labels
+			let relabel_config = json!([
+				{
+					"action": "labeldrop",
+					"regex": "^(host|filename)$",
+				},
+			]);
 
-		// Remove default log labels
-		let relabel_config = json!([
-			{
-				"action": "labeldrop",
-				"regex": "^(host|filename)$",
-			},
-		]);
-
-		Ok(json!({
-			"type": "loki",
-			"config": [{
-				// TODO: Automate proxy system to remove hardcoded URL
-				"loki-url": "http://127.0.0.1:9060/loki/api/v1/push",
-				"loki-retries": 5,
-				"loki-batch-size": 400,
-				"no-file": true,
-				"loki-external-labels": labels,
-				"loki-relabel-config": serde_json::to_string(&relabel_config)?,
-			}],
-		}))
-	} else {
-		Ok(json!(null))
+			Ok(json!({
+				"type": "loki",
+				"config": [{
+					"loki-url": "http://127.0.0.1:9060/loki/api/v1/push",
+					"loki-retries": 5,
+					"loki-batch-size": 400,
+					"no-file": true,
+					"loki-external-labels": labels,
+					"loki-relabel-config": serde_json::to_string(&relabel_config)?,
+				}],
+			}))
+		}
+		None => Ok(json!(null)),
 	}
 }
