@@ -10,6 +10,7 @@ message Request {
 	string display_name = 2;
 	optional string image_tag = 4;
 	optional rivet.backend.upload.PrepareFile image_file = 3;
+	bool multipart = 6;
 
 	// If provided, will look up the pre-uploaded upload ID for a given kind.
 	optional string default_build_kind = 5;

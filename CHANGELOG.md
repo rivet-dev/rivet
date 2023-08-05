@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+-   **Cloud** Support multipart uploads for builds
 -   **Infra** Support configuring multiple S3 providers
 -   **Infra** Support multipart uploads
 -   **Infra** Replace Promtail-based log shipping with native Loki Docker driver
