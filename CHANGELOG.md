@@ -15,7 +15,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 -   **Infra** Local Traefik Cloudflare proxy daemon for connecting to Cloudflare Access services
 -   **Infra** Upload service builds to default S3 provider instead of hardcoded bucket
 -   **Bolt** Support for connecting to Redis databases with `bolt redis sh`
--   **Bolt** Add confirmation before running any command in the production namespace
+-   **Bolt** Confirmation before running any command in the production namespace
+-   **Bolt** `--start-at` flag for all infra commands
 
 ### Changed
 
@@ -33,6 +34,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 -   **Infra** Update Redis to 7.0.12
 -   **Infra** Update Treafik to 2.10.4
 -   **Bolt** PostHog events are now captured in a background task
+-   **Bolt** Auto-install rsync on Salt Master
 
 ### Security
 

@@ -33,6 +33,18 @@ pub async fn apply(
 	event.insert_prop("sls", &opts.sls)?;
 	utils::telemetry::capture_event(ctx, event)?;
 
+	// Install rsync
+	if let config::ns::ClusterKind::Distributed { .. } = ctx.ns().cluster.kind {
+		eprintln!();
+		rivet_term::status::progress("Installing rsync on Salt Master", "");
+		tasks::ssh::pool(
+			&ctx,
+			"salt_master",
+			Some("if ! which rsync; then apt update -y && apt install -y rsync; fi"),
+		)
+		.await?;
+	}
+
 	// Write Salt configs
 	eprintln!();
 	rivet_term::status::progress("Writing configs", "");
