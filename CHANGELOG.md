@@ -36,6 +36,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 -   **Infra** Update Treafik to 2.10.4
 -   **Bolt** PostHog events are now captured in a background task
 -   **Bolt** Auto-install rsync on Salt Master
+-   **KV** Significantly rate limit of all endpoints
 
 ### Security
 

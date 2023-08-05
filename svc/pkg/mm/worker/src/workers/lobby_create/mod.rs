@@ -725,6 +725,17 @@ async fn resolve_image_artifact_url(
 	.await?;
 	let upload = internal_unwrap_owned!(upload_res.uploads.first());
 
+	// Get provider
+	let proto_provider = internal_unwrap_owned!(
+		backend::upload::Provider::from_i32(upload.provider as i32),
+		"invalid upload provider"
+	);
+	let provider = match proto_provider {
+		backend::upload::Provider::Minio => s3_util::Provider::Minio,
+		backend::upload::Provider::Backblaze => s3_util::Provider::Backblaze,
+		backend::upload::Provider::Aws => s3_util::Provider::Aws,
+	};
+
 	match DELIVERY_METHOD {
 		DeliveryMethod::Ats => {
 			// TODO: Auto-generate password for this & encode in to infra/salt/salt/traffic_server/files/consul/traffic_server.hcl.j2
@@ -756,7 +767,7 @@ async fn resolve_image_artifact_url(
 			// Build client
 			let s3_client = s3_util::Client::from_env_opt(
 				&bucket,
-				s3_util::Provider::default()?,
+				provider,
 				s3_util::EndpointKind::InternalResolved,
 			)
 			.await?;
