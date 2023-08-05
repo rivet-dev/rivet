@@ -553,6 +553,12 @@ impl Client {
 			.map_err(|x| ClientError::CreateSubscription(x.into()))?;
 
 		// Manually publish message
+		tracing::trace!(
+			?subject,
+			?reply,
+			req_len = req_buf.len(),
+			"publishing rpc call to nats"
+		);
 		self.nats
 			.publish_with_reply_and_headers(
 				subject.clone(),
@@ -871,6 +877,11 @@ impl Client {
 			let nats_subject = nats_subject.to_owned();
 			let message_buf = message_buf.to_vec();
 
+			tracing::trace!(
+				?nats_subject,
+				message_len = message_buf.len(),
+				"publishing message to nats"
+			);
 			if let Err(err) = self
 				.nats
 				.publish(nats_subject.clone(), message_buf.into())

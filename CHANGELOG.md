@@ -45,7 +45,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 -   **Portal** Skip captcha if no Turnstile key provided
 -   **Infra** Resolve [RUSTSEC-2023-0044](https://rustsec.org/advisories/RUSTSEC-2023-0044)
--   **Infra** Fix missing dpenedency on mounting volumn before setting permissions of /var/* for Cockroach, ClickHouse, Prometheus, and Traffic Server
+-   **Infra** Missing dpenedency on mounting volumn before setting permissions of /var/* for Cockroach, ClickHouse, Prometheus, and Traffic Server
+-   **Chrip** Empty message parameters now have placeholder so NATS doesn't throw an error
+-   **Chrip** Messages with no parameters no longer have a trailing dot
 -   **Bolt** Correctly resolve project root when building services natively
 -   **Bolt** Correctly determine executable path for `ExecServiceDriver::UploadedBinaryArtifact` with different Cargo names
 
