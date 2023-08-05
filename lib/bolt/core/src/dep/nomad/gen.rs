@@ -479,6 +479,13 @@ pub async fn gen_svc(region_id: &str, exec_ctx: &ExecServiceContext) -> Job {
 							S3Provider::Aws => {
 								format!("s3::https://s3.amazonaws.com/{bucket}/{artifact_key}")
 							}
+							S3Provider::Backblaze => {
+								format!(
+									"s3::{endpoint}/{bucket}/{key}",
+									endpoint = s3_config.endpoint_external,
+									key = urlencoding::encode(artifact_key),
+								)
+							}
 							_ => todo!(),
 						};
 
