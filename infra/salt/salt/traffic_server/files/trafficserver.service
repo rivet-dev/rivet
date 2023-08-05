@@ -6,7 +6,8 @@ After=network-online.target
 Type=simple
 User=trafficserver
 Group=trafficserver
-EnvironmentFile=-/etc/default/trafficserver
+Environment="TM_START=yes"
+# Environment="TS_ROOT=/etc/trafficserver"
 PIDFile=/run/trafficserver/manager.lock
 ExecStart=/var/rivet-nix/result/traffic_server/bin/traffic_manager $TM_DAEMON_ARGS
 ExecReload=/var/rivet-nix/result/traffic_server/bin/traffic_manager config reload

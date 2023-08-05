@@ -3,6 +3,23 @@
 
 {% set pool = grains['rivet']['pool_id'] %}
 
+{% if grains['volumes']['prm']['mount'] %}
+{% set device = '/dev/disk/by-id/scsi-0Linode_Volume_' ~ grains['rivet']['name'] ~ '-prm' %}
+
+disk_create_prometheus:
+  blockdev.formatted:
+    - name: {{device}}
+    - fs_type: ext4
+
+disk_mount_prometheus:
+  mount.mounted:
+    - name: /mnt/prometheus
+    - device: {{device}}
+    - fstype: ext4
+    - require:
+      - blockdev: disk_create_prometheus
+{% endif %}
+
 create_prometheus_user:
   user.present:
     - name: prometheus
@@ -19,24 +36,9 @@ mkdir_prometheus:
         - mode: 700
     - require:
       - user: create_prometheus_user
-
-{% if grains['volumes']['prm']['mount'] %}
-{% set device = '/dev/disk/by-id/scsi-0Linode_Volume_' ~ grains['rivet']['name'] ~ '-prm' %}
-
-disk_create_prometheus:
-  blockdev.formatted:
-    - name: {{device}}
-    - fs_type: ext4
-
-disk_mount_prometheus:
-  mount.mounted:
-    - name: /mnt/prometheus
-    - device: {{device}}
-    - fstype: ext4
-    - require:
-      - file: mkdir_prometheus
-      - blockdev: disk_create_prometheus
-{% endif %}
+      {%- if grains['volumes']['prm']['mount'] %}
+      - mount: disk_mount_prometheus
+      {%- endif %}
 
 install_prometheus:
   archive.extracted:

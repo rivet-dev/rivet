@@ -31,10 +31,11 @@ create_mnt_db_trafficserver:
     - group: trafficserver
     - mode: 700
     - makedirs: True
-    {%- if grains['volumes']['ats']['mount'] %}
     - require:
+      - user: create_trafficserver_user
+      {%- if grains['volumes']['ats']['mount'] %}
       - mount: disk_mount_traffic_server
-    {% endif %}
+      {%- endif %}
 
 create_var_log_trafficserver:
   file.directory:
@@ -43,14 +44,10 @@ create_var_log_trafficserver:
     - group: trafficserver
     - mode: 700
     - makedirs: True
-    {%- if grains['volumes']['ats']['mount'] %}
-    - require:
-      - mount: disk_mount_traffic_server
-    {% endif %}
 
 push_trafficserver_service:
   file.managed:
-    - name: /lib/systemd/system/trafficserver.service
+    - name: /etc/systemd/system/trafficserver.service
     - source: salt://traffic_server/files/trafficserver.service
     - template: jinja
     - onchanges:

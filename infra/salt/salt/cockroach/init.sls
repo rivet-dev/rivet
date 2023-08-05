@@ -19,7 +19,6 @@ disk_mount_cockroach:
     - fstype: ext4
     - require:
       - blockdev: disk_create_cockroach
-      - file: mkdir_crdb
 
 {% endif %}
 
@@ -67,6 +66,9 @@ mkdir_crdb:
       - /usr/local/lib/cockroach: []
     - require:
       - user: create_crdb_user
+      {%- if grains['volumes']['crdb']['mount'] %}
+      - mount: disk_mount_cockroach
+      {%- endif %}
 
 
 install_crdb:
