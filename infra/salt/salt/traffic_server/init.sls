@@ -83,7 +83,7 @@ push_etc_trafficserver_dynamic:
         - source: salt://traffic_server/files/etc/dynamic/s3_auth_v4.config.j2
       - /etc/trafficserver/s3_region_map.config:
         - source: salt://traffic_server/files/etc/dynamic/s3_region_map.config.j2
-      - /etc/trafficserver/stored.config:
+      - /etc/trafficserver/storage.config:
         - source: salt://traffic_server/files/etc/dynamic/storage.config.j2
     - mode: 644
     - template: jinja
