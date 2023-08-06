@@ -26,7 +26,10 @@ create_trafficserver_user:
 
 create_mnt_db_trafficserver:
   file.directory:
-    - name: /mnt/trafficserver/db
+    - names:
+      - /mnt/trafficserver/db
+      - /var/log/trafficserver
+      - /run/trafficserver
     - user: trafficserver
     - group: trafficserver
     - mode: 700
@@ -36,14 +39,6 @@ create_mnt_db_trafficserver:
       {%- if grains['volumes']['ats']['mount'] %}
       - mount: disk_mount_traffic_server
       {%- endif %}
-
-create_var_log_trafficserver:
-  file.directory:
-    - name: /var/log/trafficserver
-    - user: trafficserver
-    - group: trafficserver
-    - mode: 700
-    - makedirs: True
 
 push_trafficserver_service:
   file.managed:
@@ -67,10 +62,14 @@ push_etc_trafficserver_static:
   file.recurse:
     - name: /etc/trafficserver/
     - source: salt://traffic_server/files/etc/static/
+    - user: trafficserver
+    - group: trafficserver
     - file_mode: 644
     - dir_mode: 755
     # Keep other files, since we'll also be writing files in push_etc_trafficserver_dynamic
     - clean: False
+    - require:
+      - user: create_trafficserver_user
 
 push_etc_trafficserver_dynamic:
   file.managed:
@@ -85,6 +84,8 @@ push_etc_trafficserver_dynamic:
         - source: salt://traffic_server/files/etc/dynamic/s3_region_map.config.j2
       - /etc/trafficserver/storage.config:
         - source: salt://traffic_server/files/etc/dynamic/storage.config.j2
+    - user: trafficserver
+    - group: trafficserver
     - mode: 644
     - template: jinja
     - context:
@@ -94,6 +95,9 @@ push_etc_trafficserver_dynamic:
         s3_access_key_id: {{ pillar['s3']['access']['default']['persistent_access_key_id'] }}
         s3_secret_access_key: {{ pillar['s3']['access']['default']['persistent_access_key_secret'] }}
         volume_size_cache: {{ grains['volumes']['ats']['size']|int - 1 }}G
+    - require:
+      - file: push_etc_trafficserver_static
+      - user: create_trafficserver_user
 
 reload_traffic_server_config:
   cmd.run:
