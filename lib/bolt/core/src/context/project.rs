@@ -441,10 +441,11 @@ impl ProjectContextData {
 impl ProjectContextData {
 	/// Origin used for building links to the Hub.
 	pub fn origin_hub(&self) -> String {
-		self.ns().dns.hub_origin.clone().map_or_else(
-			|| self.ns().dns.domain.main.clone(),
-			|x| format!("https://hub.{x}"),
-		)
+		self.ns()
+			.dns
+			.hub_origin
+			.clone()
+			.unwrap_or_else(|| format!("https://hub.{}", self.ns().dns.domain.main.clone()))
 	}
 	pub fn domain_main(&self) -> String {
 		self.ns().dns.domain.main.clone()
