@@ -345,7 +345,7 @@ impl ServiceContextData {
 impl ServiceContextData {
 	pub fn enable_tokio_console(&self) -> bool {
 		// TODO: This seems to have a significant performance impact
-		false
+		true
 	}
 }
 
@@ -787,7 +787,7 @@ impl ServiceContextData {
 			env.push(("TOKIO_CONSOLE_ENABLE".into(), "1".into()));
 			env.push((
 				"TOKIO_CONSOLE_BIND".into(),
-				r#"0.0.0.0:{{env "NOMAD_PORT_tokio_console"}}"#.into(),
+				r#"0.0.0.0:${NOMAD_PORT_tokio-console}"#.into(),
 			));
 		}
 
