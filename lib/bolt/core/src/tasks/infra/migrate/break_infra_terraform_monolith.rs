@@ -21,10 +21,10 @@ pub async fn run(ctx: &ProjectContext) -> Result<()> {
 	crate::tasks::gen::generate_project(&ctx).await;
 	migrate_nebula(ctx).await?;
 	migrate_master_cluster(ctx).await?;
-	// migrate_pools(ctx).await?;
-	// migrate_dns(ctx).await?;
-	// migrate_cloudflare_workers(ctx).await?;
-	// migrate_cloudflare_tunnels(ctx).await?;
+	migrate_pools(ctx).await?;
+	migrate_dns(ctx).await?;
+	migrate_cloudflare_workers(ctx).await?;
+	migrate_cloudflare_tunnels(ctx).await?;
 	migrate_s3(ctx).await?;
 	Ok(())
 }
@@ -429,14 +429,14 @@ async fn migrate_dns(ctx: &ProjectContext) -> Result<()> {
 	)
 	.await?;
 
-	copy_resource(
-		ctx,
-		&src_infra,
-		(None, "managed", "cloudflare_certificate_pack", "rivet_game"),
-		&mut dst,
-		(None, "managed", "cloudflare_certificate_pack", "rivet_game"),
-	)
-	.await?;
+	// copy_resource(
+	// 	ctx,
+	// 	&src_infra,
+	// 	(None, "managed", "cloudflare_certificate_pack", "rivet_game"),
+	// 	&mut dst,
+	// 	(None, "managed", "cloudflare_certificate_pack", "rivet_game"),
+	// )
+	// .await?;
 
 	copy_resource(
 		ctx,
