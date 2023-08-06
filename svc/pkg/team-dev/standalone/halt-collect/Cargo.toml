@@ -16,7 +16,7 @@ rivet-connection = { path = "../../../../../lib/connection" }
 chrono = "0.4"
 rivet-pools = { path = "../../../../../lib/pools" }
 rivet-runtime = { path = "../../../../../lib/runtime" }
-tokio = { version = "1.21", features = ["full"] }
+tokio = { version = "1.29", features = ["full"] }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", default-features = false, features = ["fmt", "json", "ansi"] }
 
