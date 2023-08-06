@@ -7,6 +7,9 @@ disk_create_clickhouse:
     - fs_type: ext4
 
 disk_mount_clickhouse:
+  file.directory:
+    - name: /var/lib/clickhouse
+    - makedirs: True
   mount.mounted:
     - name: /var/lib/clickhouse
     - device: {{ device }}

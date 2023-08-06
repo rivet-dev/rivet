@@ -8,7 +8,7 @@ disk_create_traffic_serer:
 disk_mount_traffic_server:
   file.directory:
     - name: /mnt/trafficserver
-
+    - makedirs: True
   mount.mounted:
     - name: /mnt/trafficserver
     - device: {{ device }}

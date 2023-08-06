@@ -12,6 +12,9 @@ disk_create_prometheus:
     - fs_type: ext4
 
 disk_mount_prometheus:
+  file.directory:
+    - name: /mnt/prometheus
+    - makedirs: True
   mount.mounted:
     - name: /mnt/prometheus
     - device: {{device}}

@@ -13,6 +13,9 @@ disk_create_cockroach:
     - fs_type: ext4
 
 disk_mount_cockroach:
+  file.directory:
+    - name: /var/lib/cockroach
+    - makedirs: True
   mount.mounted:
     - name: /var/lib/cockroach
     - device: {{ device }}
