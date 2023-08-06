@@ -479,33 +479,7 @@ impl ServiceContextData {
 			}
 		}
 
-		// TODO: Add dev dependencies if building for tests
-		// Add operation dependencies from Cargo.toml
-		if let Some(cargo) = &self.cargo {
-			let svc_path = self.path();
-			let svcs = cargo
-				.dependencies
-				.iter()
-				.filter_map(|(_, x)| {
-					if let config::service::CargoDependency::Path { path } = x {
-						Some(path)
-					} else {
-						None
-					}
-				})
-				.filter_map(|path| {
-					let absolute_path = svc_path.join(path);
-					all_svcs
-						.iter()
-						.filter(|x| x.path() == absolute_path)
-						.next()
-						.cloned()
-				});
-
-			dep_ctxs.extend(svcs);
-		}
-
-		// Check that these are services you can explicitly depend on
+		// Check that these are services you can explicitly depend on in the Service.toml
 		for dep in &dep_ctxs {
 			if !self.config().service.test_only && dep.config().service.test_only {
 				panic!(
@@ -525,6 +499,41 @@ impl ServiceContextData {
 					dep.name()
 				);
 			}
+		}
+
+		// TODO: Add dev dependencies if building for tests
+		// Add operation dependencies from Cargo.toml
+		//
+		// You cannot depend on these services from the Service.toml, only as a Cargo dependency
+		if let Some(cargo) = &self.cargo {
+			let svcs = cargo
+				.dependencies
+				.iter()
+				.filter_map(|(name, dep)| {
+					if let config::service::CargoDependency::Path { .. } = dep {
+						Some(name)
+					} else {
+						None
+					}
+				})
+				.filter_map(|name| {
+					all_svcs
+						.iter()
+						.filter(|x| x.name() == *name)
+						.next()
+						.cloned()
+				});
+			// TOOD: Use the path to find the service instead of the name. This is difficult with multiple roots.
+			// .filter_map(|path| {
+			// 	let absolute_path = svc_path.join(path);
+			// 	all_svcs
+			// 		.iter()
+			// 		.filter(|x| x.path() == absolute_path)
+			// 		.next()
+			// 		.cloned()
+			// });
+
+			dep_ctxs.extend(svcs);
 		}
 
 		// Inherit dependencies from the service that was overridden.
