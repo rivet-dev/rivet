@@ -96,7 +96,7 @@ pub fn identity_game_link(link_token: &str) -> String {
 }
 
 pub fn cloud_device_link(link_token: &str) -> String {
-	format!("{}/developer/devices/link/{}", origin_hub(), link_token)
+	format!("{}/devices/link/{}", origin_hub(), link_token)
 }
 
 pub fn team_billing(team_id: Uuid) -> String {
