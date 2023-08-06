@@ -34,7 +34,11 @@ async fn setup(ctx: &TestCtx) -> Setup {
 				regions: vec![backend::matchmaker::lobby_group::Region {
 					region_id: Some(region_id.into()),
 					tier_name_id: util_mm::test::TIER_NAME_ID.to_owned(),
-					idle_lobbies: None,
+					idle_lobbies: Some(backend::matchmaker::lobby_group::IdleLobbies {
+						min_idle_lobbies: 0,
+						// Don't auto-destory lobbies from tests
+						max_idle_lobbies: 32,
+					}),
 				}],
 				max_players_normal: 8,
 				max_players_direct: 10,
@@ -87,7 +91,11 @@ async fn setup(ctx: &TestCtx) -> Setup {
 				regions: vec![backend::matchmaker::lobby_group::Region {
 					region_id: Some(region_id.into()),
 					tier_name_id: util_mm::test::TIER_NAME_ID.to_owned(),
-					idle_lobbies: None,
+					idle_lobbies: Some(backend::matchmaker::lobby_group::IdleLobbies {
+						min_idle_lobbies: 0,
+						// See above
+						max_idle_lobbies: 32,
+					}),
 				}],
 				max_players_normal: 8,
 				max_players_direct: 10,
