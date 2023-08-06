@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/usr/bin/env bash
 set -euf
 
 export BOLT_HEADLESS=1
