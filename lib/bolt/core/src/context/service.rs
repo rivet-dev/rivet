@@ -738,11 +738,6 @@ impl ServiceContextData {
 		}
 
 		// Write secrets
-		println!(
-			"required secrets {} {:#?}",
-			self.name(),
-			self.required_secrets().await?
-		);
 		for (secret_key, secret_config) in self.required_secrets().await? {
 			let env_key = rivet_util::env::secret_env_var_key(&secret_key);
 			if secret_config.optional {
@@ -764,7 +759,7 @@ impl ServiceContextData {
 		env.push((
 			"TOKIO_WORKER_THREADS".into(),
 			match ns_service_config.resources.cpu {
-				config::ns::CpuResources::CpuCores(cores) => cores.max(2),
+				config::ns::CpuResources::CpuCores(cores) => cores.max(cores),
 				config::ns::CpuResources::Cpu(_) => 2,
 			}
 			.to_string(),
