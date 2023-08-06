@@ -1,12 +1,12 @@
+use anyhow::{bail, ensure, Context, Result};
+use async_recursion::async_recursion;
+use s3_util::aws_sdk_s3;
 use std::{
 	collections::HashMap,
 	hash::{Hash, Hasher},
 	path::{Path, PathBuf},
 	sync::{Arc, Weak},
 };
-
-use anyhow::{bail, ensure, Context, Result};
-use s3_util::aws_sdk_s3;
 use tempfile::NamedTempFile;
 use tokio::{fs, process::Command, sync::RwLock};
 
@@ -25,7 +25,9 @@ use super::BuildOptimization;
 pub type ServiceContext = Arc<ServiceContextData>;
 
 pub struct ServiceContextData {
-	pub(in crate::context) project: RwLock<Weak<context::project::ProjectContextData>>,
+	project: RwLock<Weak<context::project::ProjectContextData>>,
+	/// If this is overriding a service from an additional root, then this will be specified.
+	overridden_service: Option<ServiceContext>,
 	config: config::service::ServiceConfig,
 	path: PathBuf,
 	workspace_path: PathBuf,
@@ -45,6 +47,18 @@ impl Hash for ServiceContextData {
 }
 
 impl ServiceContextData {
+	/// Sets the refernece to the project once the project context is finished initiating.
+	#[async_recursion]
+	pub(in crate::context) async fn set_project(
+		&self,
+		project: Weak<context::project::ProjectContextData>,
+	) {
+		*self.project.write().await = project.clone();
+		if let Some(overridden_service) = &self.overridden_service {
+			overridden_service.set_project(project.clone()).await;
+		}
+	}
+
 	pub async fn project(&self) -> ProjectContext {
 		self.project
 			.read()
@@ -69,6 +83,7 @@ impl ServiceContextData {
 impl ServiceContextData {
 	pub async fn from_path(
 		project: Weak<context::project::ProjectContextData>,
+		svc_ctxs_map: &HashMap<String, ServiceContext>,
 		workspace_path: &Path,
 		path: &Path,
 	) -> Option<ServiceContext> {
@@ -92,8 +107,12 @@ impl ServiceContextData {
 			Err(_) => None,
 		};
 
+		// Read overridden service
+		let overridden_service = svc_ctxs_map.get(&config.service.name).cloned();
+
 		Some(Arc::new(ServiceContextData::new(
 			project,
+			overridden_service,
 			config,
 			workspace_path,
 			path,
@@ -103,6 +122,7 @@ impl ServiceContextData {
 
 	fn new(
 		project: Weak<context::project::ProjectContextData>,
+		overridden_service: Option<ServiceContext>,
 		config: config::service::ServiceConfig,
 		workspace_path: &Path,
 		path: &Path,
@@ -111,6 +131,7 @@ impl ServiceContextData {
 		// Build context
 		let ctx = ServiceContextData {
 			project: RwLock::new(project),
+			overridden_service,
 			config,
 			path: path.to_owned(),
 			workspace_path: workspace_path.to_owned(),
@@ -438,6 +459,7 @@ impl ServiceContextData {
 
 // Dependencies
 impl ServiceContextData {
+	#[async_recursion]
 	pub async fn dependencies(&self) -> Vec<ServiceContext> {
 		let project = self.project().await;
 
@@ -503,6 +525,11 @@ impl ServiceContextData {
 					dep.name()
 				);
 			}
+		}
+
+		// Inherit dependencies from the service that was overridden.
+		if let Some(overriden_svc) = &self.overridden_service {
+			dep_ctxs.extend(overriden_svc.dependencies().await);
 		}
 
 		dep_ctxs
@@ -702,6 +729,11 @@ impl ServiceContextData {
 		}
 
 		// Write secrets
+		println!(
+			"required secrets {} {:#?}",
+			self.name(),
+			self.required_secrets().await?
+		);
 		for (secret_key, secret_config) in self.required_secrets().await? {
 			let env_key = rivet_util::env::secret_env_var_key(&secret_key);
 			if secret_config.optional {
