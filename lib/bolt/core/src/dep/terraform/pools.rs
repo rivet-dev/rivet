@@ -649,7 +649,7 @@ pub async fn build_pools(ctx: &ProjectContext) -> Result<HashMap<String, Pool>> 
 				},
 				FirewallRule {
 					label: "nomad-dynamic-udp".into(),
-					ports: "20000-25999".into(),
+					ports: "20000-31999".into(),
 					protocol: "udp".into(),
 					inbound_ipv4_cidr: vec!["0.0.0.0/0".into()],
 					inbound_ipv6_cidr: vec!["::/0".into()],
