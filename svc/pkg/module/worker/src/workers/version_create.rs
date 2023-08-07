@@ -61,7 +61,7 @@ async fn update_db(
 	.bind(TryInto::<i64>::try_into(msg.major)?)
 	.bind(TryInto::<i64>::try_into(msg.minor)?)
 	.bind(TryInto::<i64>::try_into(msg.patch)?)
-	.execute(&mut *tx)
+	.execute(&mut **tx)
 	.await?;
 
 	match internal_unwrap!(msg.image) {
@@ -74,7 +74,7 @@ async fn update_db(
 			))
 			.bind(version_id)
 			.bind(&docker.image_tag)
-			.execute(&mut *tx)
+			.execute(&mut **tx)
 			.await?;
 		}
 	}
@@ -90,7 +90,7 @@ async fn update_db(
 		.bind(&script.name)
 		.bind(&script.request_schema)
 		.bind(&script.response_schema)
-		.execute(&mut *tx)
+		.execute(&mut **tx)
 		.await?;
 
 		if script.callable.is_some() {
@@ -102,7 +102,7 @@ async fn update_db(
 			))
 			.bind(version_id)
 			.bind(&script.name)
-			.execute(&mut *tx)
+			.execute(&mut **tx)
 			.await?;
 		}
 	}

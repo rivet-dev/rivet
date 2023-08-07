@@ -13,7 +13,8 @@ async fn worker(ctx: OperationContext<user_presence::msg::leave::Message>) -> Gl
 	let user_id = internal_unwrap!(ctx.user_id).as_uuid();
 
 	let user_set_status =
-		sqlx::query_as::<_, (Option<i64>,)>("SELECT user_set_status FROM user_presences")
+		sqlx::query_as::<_, (Option<i64>,)>("SELECT user_set_status FROM user_presences WHERE user_id = $1")
+			.bind(user_id)
 			.fetch_optional(&crdb)
 			.await?
 			.and_then(|x| x.0)

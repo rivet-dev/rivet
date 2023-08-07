@@ -14,7 +14,7 @@ game-version-get = { path = "../version-get" }
 game-version-list = { path = "../version-list" }
 
 [dependencies.sqlx]
-version = "0.6"
+version = "0.7"
 default-features = false
 
 [dev-dependencies]

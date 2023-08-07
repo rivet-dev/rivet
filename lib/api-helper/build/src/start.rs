@@ -5,6 +5,8 @@ use hyper::{
 	Body, Request, Response, Server,
 };
 use std::{convert::Infallible, future::Future, net::SocketAddr, sync::Arc, time::Instant};
+use tokio::sync::Semaphore;
+use tokio::time::{sleep, Duration};
 use tracing::Instrument;
 use uuid::Uuid;
 
@@ -66,9 +68,13 @@ where
 		.and_then(|v| v.parse::<u16>().ok())
 		.unwrap();
 
+	// let semaphore = Arc::new(Semaphore::new(8));
+
 	// A `MakeService` that produces a `Service` to handle each connection
 	let health_check_config = Arc::new(health_check_config);
 	let make_service = make_service_fn(move |conn: &AddrStream| {
+		// let semaphore = semaphore.clone();
+
 		let shared_client = shared_client.clone();
 		let pools = pools.clone();
 		let cache = cache.clone();
@@ -79,6 +85,8 @@ where
 		let service = service_fn(move |req: Request<Body>| {
 			let start = Instant::now();
 
+			// let semaphore = semaphore.clone();
+
 			let shared_client = shared_client.clone();
 			let pools = pools.clone();
 			let cache = cache.clone();
@@ -88,28 +96,71 @@ where
 			let ray_id = Uuid::new_v4();
 			let req_span = tracing::info_span!("http request", method = %req.method(), uri = %req.uri(), %ray_id);
 			async move {
+				let sem_start = Instant::now();
+				// let _semaphor_acquire = semaphore.acquire().await.unwrap();
+				// let semaphor_duration = sem_start.elapsed();
+
 				tracing::info!(
 					method = %req.method(),
 					uri = %req.uri(),
 					headers = ?req.headers(),
 					body_size_hint = ?req.body().size_hint(),
 					remote_addr = %remote_addr,
+					// semaphor_duration = ?semaphor_duration,
 					"http request meta"
 				);
 
-				let res: Response<Body> =
-					match rivet_health_checks::handle(&*health_check_config, req).await {
-						Ok(res) => res,
-						Err(req) => {
-							let mut response = handle(shared_client, pools, cache, ray_id, req)
-								.instrument(tracing::info_span!("request_handle"))
-								.await?;
-							response
-								.headers_mut()
-								.insert("rvt-ray-id", ray_id.to_string().parse()?);
-							response
+				let res = tokio::task::Builder::new()
+					.name("api_helper::handle")
+					.spawn(async move {
+						// let res = Response::builder()
+						// 	.status(http::StatusCode::OK)
+						// 	.body(Body::from("ok"))?;
+
+						let res = match rivet_health_checks::handle(&*health_check_config, req)
+							.await
+						{
+							Ok(res) => res,
+							Err(req) => {
+								// Response::builder()
+								// 	.status(http::StatusCode::OK)
+								// 	.body(Body::from("ok"))?
+
+								let mut response = handle(shared_client, pools, cache, ray_id, req)
+									.instrument(tracing::info_span!("request_handle"))
+									.await?;
+								response
+									.headers_mut()
+									.insert("rvt-ray-id", ray_id.to_string().parse()?);
+								response
+							}
+						};
+
+						Result::<Response<Body>, http::Error>::Ok(res)
+					});
+				let res = match res {
+					Ok(res) => match res.await {
+						Ok(res) => match res {
+							Ok(res) => res,
+							Err(err) => {
+								tracing::error!(?err, "http error");
+								return Err(err);
+							}
+						},
+						Err(_) => {
+							tracing::error!("http error");
+							return Ok(Response::builder()
+								.status(http::StatusCode::INTERNAL_SERVER_ERROR)
+								.body(Body::empty())?);
 						}
-					};
+					},
+					Err(err) => {
+						tracing::error!(?err, "http error");
+						return Ok(Response::builder()
+							.status(http::StatusCode::INTERNAL_SERVER_ERROR)
+							.body(Body::empty())?);
+					}
+				};
 
 				if res.status().is_server_error() {
 					tracing::error!(status = ?res.status().as_u16(), "http server error");

@@ -23,14 +23,12 @@ tracing-subscriber = { version = "0.3", default-features = false, features = ["f
 team-dev-halt = { path = "../../ops/halt" }
 
 [dependencies.sqlx]
-version = "0.6"
+version = "0.7"
 default-features = false
 features = [
-	"runtime-tokio-native-tls",
 	"postgres",
 	"uuid",
 	"json",
-	"tls",
 	"macros",
 ]
 

@@ -90,7 +90,12 @@ where
 
 		// TODO: Throw dedicated "timed out" error here
 		// Process the request
-		let res = tokio::time::timeout(O::TIMEOUT, O::handle(self.wrap::<O>(body)?)).await?;
+		let req_op_ctx = self.wrap::<O>(body)?;
+		let timeout_fut = tokio::time::timeout(O::TIMEOUT, O::handle(req_op_ctx));
+		let res = tokio::task::Builder::new()
+			.name("operation::handle")
+			.spawn(timeout_fut)?
+			.await??;
 
 		// Record metrics
 		{
@@ -123,17 +128,18 @@ where
 				.observe(dt);
 		}
 
-		// Submit perf
-		let chirp = self.conn.chirp().clone();
-		tokio::task::Builder::new().name("operation::perf").spawn(
-			async move {
-				// HACK: Force submit performance metrics after delay in order to ensure
-				// all spans have ended appropriately
-				tokio::time::sleep(Duration::from_secs(5)).await;
-				chirp.perf().submit().await;
-			}
-			.instrument(tracing::info_span!("operation_perf")),
-		)?;
+		// TODO: Add back
+		// // Submit perf
+		// let chirp = self.conn.chirp().clone();
+		// tokio::task::Builder::new().name("operation::perf").spawn(
+		// 	async move {
+		// 		// HACK: Force submit performance metrics after delay in order to ensure
+		// 		// all spans have ended appropriately
+		// 		tokio::time::sleep(Duration::from_secs(5)).await;
+		// 		chirp.perf().submit().await;
+		// 	}
+		// 	.instrument(tracing::info_span!("operation_perf")),
+		// )?;
 
 		res
 	}

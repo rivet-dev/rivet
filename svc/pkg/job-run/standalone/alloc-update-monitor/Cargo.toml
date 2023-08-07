@@ -27,7 +27,7 @@ tracing-subscriber = { version = "0.3", default-features = false, features = ["f
 util-job = { package = "rivet-util-job", path = "../../../job/util" }
 
 [dependencies.sqlx]
-version = "0.6"
+version = "0.7"
 default-features = false
 
 [dev-dependencies]

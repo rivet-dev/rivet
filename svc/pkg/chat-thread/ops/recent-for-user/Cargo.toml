@@ -17,7 +17,7 @@ chat-thread-get = { path = "../get" }
 chat-thread-list-for-participant = { path = "../list-for-participant" }
 
 [dependencies.sqlx]
-version = "0.6"
+version = "0.7"
 default-features = false
 
 [dev-dependencies]

@@ -497,7 +497,7 @@ async fn update_db(
 		"SELECT stop_ts, preemptive_create_ts FROM lobbies WHERE lobby_id = $1 FOR UPDATE",
 	)
 	.bind(opts.lobby_id)
-	.fetch_optional(&mut *tx)
+	.fetch_optional(&mut **tx)
 	.await?;
 	if let Some((stop_ts, preemptive_create_ts)) = lobby_row {
 		if preemptive_create_ts.is_none() {
@@ -544,7 +544,7 @@ async fn update_db(
 	.bind(opts.lobby_group.max_players_normal as i64)
 	.bind(opts.lobby_group.max_players_direct as i64)
 	.bind(opts.lobby_group.max_players_party as i64)
-	.execute(&mut *tx)
+	.execute(&mut **tx)
 	.await?;
 
 	Ok(())

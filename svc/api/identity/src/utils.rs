@@ -81,14 +81,16 @@ pub async fn get_namespace_id(ctx: &Ctx<Auth>) -> GlobalResult<common::Uuid> {
 pub async fn resolve_user_with_game_user_id(
 	ctx: &Ctx<Auth>,
 	game_user_id: Uuid,
-) -> GlobalResult<Uuid> {
+) -> GlobalResult<Option<Uuid>> {
 	let game_user_res = op!([ctx] game_user_get {
 		game_user_ids: vec![game_user_id.into()]
 	})
 	.await?;
-	let game_user = internal_unwrap_owned!(game_user_res.game_users.first()).clone();
+	let Some(game_user) = game_user_res.game_users.first().clone() else {
+		return Ok(None)
+	};
 
-	Ok(internal_unwrap!(game_user.user_id).as_uuid())
+	Ok(Some(internal_unwrap!(game_user.user_id).as_uuid()))
 }
 
 pub fn touch_user_presence(ctx: OperationContext<()>, user_id: Uuid, silent: bool) {

@@ -6,7 +6,7 @@ authors = ["Rivet Gaming, LLC <developer@rivet.gg>"]
 license = "Apache-2.0"
 
 [dependencies]
-async-nats = "0.30"
+async-nats = "0.29"
 funty = "=1.1.0"  # Fixes issue with sqlx dependency, see https://github.com/bitvecto-rs/bitvec/issues/105#issuecomment-778570981
 global-error = { path = "../global-error" }
 lazy_static = "1.4"
@@ -18,15 +18,14 @@ tokio-util = "0.6"
 tracing = "0.1"
 
 [dependencies.sqlx]
-version = "0.6"
+version = "0.7"
 default-features = false
 features = [
-	"runtime-tokio-native-tls",
+	"runtime-tokio",
 	"postgres",
 	"macros",
 	"uuid",
 	"json",
-	"tls",
 ]
 
 [dependencies.redis]

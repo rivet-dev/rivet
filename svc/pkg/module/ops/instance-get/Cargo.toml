@@ -11,7 +11,7 @@ prost = "0.10"
 rivet-operation = { path = "../../../../../lib/operation/core" }
 
 [dependencies.sqlx]
-version = "0.6"
+version = "0.7"
 default-features = false
 
 [dev-dependencies]
