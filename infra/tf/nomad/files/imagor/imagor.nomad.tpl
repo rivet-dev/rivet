@@ -80,10 +80,19 @@ job "imagor:${dc}" {
 				"${prefix}.http.routers.imagor-${preset.key}.entrypoints=lb-443",
 				"${prefix}.http.routers.imagor-${preset.key}.priority=${preset.priority}",
 				%{ if preset.query != null }
+				# Default provider
 				"${prefix}.http.routers.imagor-${preset.key}.rule=(Host(`media.${shared.domain.base}`) || HostRegexp(`media.{region:.+}.${shared.domain.base}`)) && Path(`${preset.path}`) && Query(%{ for x in preset.query }`${x[0]}=${x[1]}`,%{ endfor })",
+				%{ for provider in s3_providers }
+				"${prefix}.http.routers.imagor-${provider}-${preset.key}.rule=(Host(`media.${shared.domain.base}`) || HostRegexp(`media.{region:.+}.${shared.domain.base}`)) && Path(`${provider}/${preset.path}`) && Query(%{ for x in preset.query }`${x[0]}=${x[1]}`,%{ endfor })",
+				%{ endfor }
 				%{ else }
+				# Default provider
 				"${prefix}.http.routers.imagor-${preset.key}.rule=(Host(`media.${shared.domain.base}`) || HostRegexp(`media.{region:.+}.${shared.domain.base}`)) && Path(`${preset.path}`)",
+				%{ for provider in s3_providers }
+				"${prefix}.http.routers.imagor-${provider}-${preset.key}.rule=(Host(`media.${shared.domain.base}`) || HostRegexp(`media.{region:.+}.${shared.domain.base}`)) && Path(`${provider}/${preset.path}`)",
+				%{ endfor }
 				%{ endif }
+				
 				%{ if preset.game_cors }
 				"${prefix}.http.routers.imagor-${preset.key}.middlewares=imagor-${preset.key}-path, imagor-cors-game, imagor-cdn",
 				%{ else }
@@ -92,8 +101,13 @@ job "imagor:${dc}" {
 				"${prefix}.http.routers.imagor-${preset.key}.tls=true",
 
 				# middlewares.imagor-${preset.key}-path
+				# Default provider
 				"${prefix}.http.middlewares.imagor-${preset.key}-path.replacePathRegex.regex=${preset.path_regexp}",
 				"${prefix}.http.middlewares.imagor-${preset.key}-path.replacePathRegex.replacement=${replace(preset.path_regex_replacement, "$${", "$$${")}",
+				%{ for provider in s3_providers }
+				"${prefix}.http.middlewares.imagor-${provider}-${preset.key}-path.replacePathRegex.regex=${provider}/${preset.path_regexp}",
+				"${prefix}.http.middlewares.imagor-${provider}-${preset.key}-path.replacePathRegex.replacement=${replace(replace(preset.path_regex_replacement, "$${", "$$${"), "s3-cache/", "s3-cache/${provider}/")}",
+				%{ endfor }
 				%{ endfor }
 
 				%{ endfor }

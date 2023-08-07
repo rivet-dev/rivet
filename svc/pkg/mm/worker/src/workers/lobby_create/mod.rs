@@ -743,16 +743,17 @@ async fn resolve_image_artifact_url(
 			// let http_auth = "job_run_image:XXXX";
 			let http_auth: String = todo!("need to auto-generate password");
 
-			// TODO: Unproxied storage endopint was removed. Replace with Nebula address. We can't
+			// TODO: Unproxied storage endpoint was removed. Replace with Nebula address. We can't
 			// use Consul to resolve this though, since Consul is not installed on the edge nodes.
 			// Pull the image from the CDN region instead of the default region for
 			// faster boot times.
 			let upload_id = internal_unwrap!(upload.upload_id).as_uuid();
 			let addr = format!(
-				"https://{auth}@cdn.{cdn_region}.{domain}/build/{upload_id}/image.tar",
-				cdn_region = cdn_region.name_id,
+				"https://{auth}@cdn.{cdn_region}.{domain}/{provider}/build/{upload_id}/image.tar",
 				auth = http_auth,
+				cdn_region = cdn_region.name_id,
 				domain = util::env::domain_main(),
+				provider = heck::KebabCase::to_kebab_case(provider),
 				upload_id = upload_id,
 			);
 
