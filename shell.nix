@@ -23,6 +23,10 @@ in
 		name = "rivet";
 
 		buildInputs = with pkgs; [
+			k3d
+			kubectl
+			kubernetes-helm
+
 			# Infrastructure
 			salt
 			consul
