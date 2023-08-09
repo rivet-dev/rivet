@@ -906,11 +906,13 @@ checksum = "bddcadddf5e9015d310179a59bb28c4d4b9920ad0f11e8e14dbadf654890c9a6"
 
 [[package]]
 name = "async-nats"
-version = "0.30.0"
+version = "0.29.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "94e3e851ddf3b62be8a8085e1e453968df9cdbf990a37bbb589b5b4f587c68d7"
+checksum = "1174495e436c928905018f10a36160f7a8a6786450f50f4ce7fba05d1539704c"
 dependencies = [
- "base64 0.21.2",
+ "async-nats-tokio-rustls-deps",
+ "base64 0.13.1",
+ "base64-url",
  "bytes",
  "futures",
  "http",
@@ -924,7 +926,6 @@ dependencies = [
  "ring",
  "rustls-native-certs 0.6.3",
  "rustls-pemfile",
- "rustls-webpki",
  "serde",
  "serde_json",
  "serde_nanos",
@@ -933,9 +934,19 @@ dependencies = [
  "time 0.3.25",
  "tokio",
  "tokio-retry",
- "tokio-rustls 0.24.1",
  "tracing",
  "url",
+]
+
+[[package]]
+name = "async-nats-tokio-rustls-deps"
+version = "0.24.0-ALPHA.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8cdefe54cd7867d937c0a507d2a3a830af410044282cd3e4002b5b7860e1892e"
+dependencies = [
+ "rustls 0.21.6",
+ "tokio",
+ "webpki 0.22.0",
 ]
 
 [[package]]
@@ -1398,6 +1409,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "base64-url"
+version = "1.4.13"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "67a99c239d0c7e77c85dddfa9cebce48704b3c49550fcd3b84dd637e4484899f"
+dependencies = [
+ "base64 0.13.1",
+]
+
+[[package]]
 name = "base64ct"
 version = "1.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1565,9 +1585,6 @@ name = "bytes"
 version = "1.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "89b2fd2a0dcf38d7971e2194b6b6eebab45ae01067456a7fd93d5547a61b70be"
-dependencies = [
- "serde",
-]
 
 [[package]]
 name = "bytes-utils"
@@ -4943,7 +4960,6 @@ dependencies = [
  "chirp-client",
  "chirp-worker",
  "prost 0.10.4",
- "rand",
  "rivet-operation",
  "rivet-util-mm",
 ]
@@ -4967,7 +4983,6 @@ dependencies = [
  "chirp-worker",
  "chrono",
  "prost 0.10.4",
- "rand",
  "rivet-operation",
  "rivet-util-mm",
 ]
@@ -5109,6 +5124,7 @@ dependencies = [
  "game-namespace-get",
  "game-namespace-version-set",
  "game-version-get",
+ "heck 0.3.3",
  "http",
  "job-run-get",
  "lazy_static",
@@ -5298,13 +5314,12 @@ dependencies = [
 
 [[package]]
 name = "nkeys"
-version = "0.3.1"
+version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3e9261eb915c785ea65708bc45ef43507ea46914e1a73f1412d1a38aba967c8e"
+checksum = "0e66a7cd1358277b2a6f77078e70aea7315ff2f20db969cc61153103ec162594"
 dependencies = [
  "byteorder",
  "data-encoding",
- "ed25519",
  "ed25519-dalek",
  "getrandom",
  "log",

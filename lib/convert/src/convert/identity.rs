@@ -29,10 +29,7 @@ pub fn handle(
 		display_name: user.display_name.clone(),
 		account_number: user.account_number as i32,
 		avatar_url: util::route::user_avatar(
-			&user.avatar_id,
-			user.profile_upload_id.map(|x| x.as_uuid()),
-			user.profile_file_name.as_ref(),
-		),
+			&user)?,
 		presence: Some(Box::new(presence(
 			user_presence,
 			&presences_ctx.games,
@@ -59,10 +56,7 @@ pub fn handle_without_presence(
 		display_name: user.display_name.to_owned(),
 		account_number: user.account_number as i32,
 		avatar_url: util::route::user_avatar(
-			&user.avatar_id,
-			user.profile_upload_id.map(|x| x.as_uuid()),
-			user.profile_file_name.as_ref(),
-		),
+			&user)?,
 		presence: None,
 		is_registered: true, // TODO:
 		external: Box::new(models::IdentityExternalLinks {
@@ -106,10 +100,7 @@ pub fn summary(
 		display_name: user.display_name.clone(),
 		account_number: user.account_number as i32,
 		avatar_url: util::route::user_avatar(
-			&user.avatar_id,
-			user.profile_upload_id.map(|x| x.as_uuid()),
-			user.profile_file_name.as_ref(),
-		),
+			&user)?,
 		presence: Some(Box::new(presence(
 			user_presence,
 			&presences_ctx.games,
@@ -230,10 +221,7 @@ pub fn profile(
 		display_name: user.display_name.to_owned(),
 		account_number: user.account_number as i32,
 		avatar_url: util::route::user_avatar(
-			&user.avatar_id,
-			user.profile_upload_id.map(|x| x.as_uuid()),
-			user.profile_file_name.as_ref(),
-		),
+			&user)?,
 		presence: Some(Box::new(presence(
 			user_presence,
 			&pctx.presences_ctx.games,

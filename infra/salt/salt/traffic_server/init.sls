@@ -54,7 +54,6 @@ start_trafficserver_service:
     - require:
       - file: create_mnt_db_trafficserver
       - file: push_trafficserver_service
-      - file: create_var_log_trafficserver
     - onchanges:
       - file: push_trafficserver_service
 
@@ -122,9 +121,15 @@ reload_traffic_server_config:
       - cmd: start_trafficserver_service
       - file: push_etc_trafficserver_static
       - file: push_etc_trafficserver_dynamic
+      {%- for provider, _ in pillar['s3']['config'].items() %}
+      - push_etc_trafficserver_dynamic_{{provider}}
+      {%- endfor %}
     - onchanges:
       - file: push_etc_trafficserver_static
       - file: push_etc_trafficserver_dynamic
+      {%- for provider, _ in pillar['s3']['config'].items() %}
+      - push_etc_trafficserver_dynamic_{{provider}}
+      {%- endfor %}
 
 push_etc_consul_traffic_server_hcl:
   file.managed:

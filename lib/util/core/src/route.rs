@@ -1,3 +1,5 @@
+use global_error::prelude::*;
+use types::rivet::backend;
 use uuid::Uuid;
 
 use crate::env::{domain_main, origin_hub};
@@ -30,16 +32,24 @@ pub fn game_profile(game_name_id: &str) -> String {
 	format!("{}/games/{}", origin_hub(), game_name_id)
 }
 
-pub fn user_avatar(avatar_id: &str, upload_id: Option<Uuid>, file_name: Option<&String>) -> String {
-	if let (Some(upload_id), Some(file_name)) = (upload_id, file_name) {
-		format!(
-			"https://media.{}/user-avatar/{}/{}",
+pub fn user_avatar(user: &backend::user::User) -> GlobalResult<String> {
+	if let (Some(upload_id), Some(file_name), Some(provider)) = (
+		user.profile_upload_id,
+		user.profile_file_name.as_ref(),
+		user.profile_provider,
+	) {
+		Ok(format!(
+			"https://media.{}/{}/user-avatar/{}/{}",
 			domain_main(),
+			provider_str(provider)?,
 			upload_id,
 			file_name
-		)
+		))
 	} else {
-		format!("https://assets2.rivet.gg/avatars/{}.png", avatar_id)
+		Ok(format!(
+			"https://assets2.rivet.gg/avatars/{}.png",
+			user.avatar_id
+		))
 	}
 }
 
@@ -101,4 +111,17 @@ pub fn cloud_device_link(link_token: &str) -> String {
 
 pub fn team_billing(team_id: Uuid) -> String {
 	format!("{}/groups/{}/billing", origin_hub(), team_id)
+}
+
+fn provider_str(provider: i32) -> GlobalResult<&'static str> {
+	let proto_provider = internal_unwrap_owned!(
+		backend::upload::Provider::from_i32(provider),
+		"invalid upload provider"
+	);
+
+	match proto_provider {
+		backend::upload::Provider::Minio => Ok("minio"),
+		backend::upload::Provider::Backblaze => Ok("backblaze"),
+		backend::upload::Provider::Aws => Ok("aws"),
+	}
 }

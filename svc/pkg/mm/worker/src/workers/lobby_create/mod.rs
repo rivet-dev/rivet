@@ -753,7 +753,7 @@ async fn resolve_image_artifact_url(
 				auth = http_auth,
 				cdn_region = cdn_region.name_id,
 				domain = util::env::domain_main(),
-				provider = heck::KebabCase::to_kebab_case(provider),
+				provider = heck::KebabCase::to_kebab_case(provider.to_string().as_str()),
 				upload_id = upload_id,
 			);
 

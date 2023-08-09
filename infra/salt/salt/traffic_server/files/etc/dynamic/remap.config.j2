@@ -1,3 +1,7 @@
 {%- for provider_name, provider in s3_providers.items() %}
 map /s3-cache/{{provider_name}} {{provider['endpoint_internal']}} @plugin=s3_auth.so @pparam=--config @pparam=s3_auth_v4_{{provider_name}}.config
 {%- endfor %}
+
+{%- if 'default' in s3_providers %}
+map /s3-cache {{s3_providers['default']['endpoint_internal']}} @plugin=s3_auth.so @pparam=--config @pparam=s3_auth_v4_default.config
+{%- endif %}
