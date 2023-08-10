@@ -277,6 +277,7 @@ async fn run_test(svc_ctx: &ServiceContext, test_name: Option<&str>) -> TestResu
 				let mut cmd = Command::new("cargo");
 				cmd.current_dir(svc_ctx.path());
 				cmd.env("RUSTFLAGS", "--cfg tokio_unstable");
+				cmd.env("CARGO_TARGET_DIR", ctx.path().join("target"));
 				cmd.arg("test");
 				if let Some(jobs) = project_ctx.config_local().rust.num_jobs {
 					cmd.arg("--jobs").arg(jobs.to_string());
