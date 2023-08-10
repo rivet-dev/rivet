@@ -999,7 +999,7 @@ pub fn define_router(item: TokenStream) -> TokenStream {
 
 	match data.render() {
 		Ok(result) => {
-			// println!("{}", result);
+			println!("{}", result);
 			result.into()
 		}
 		Err(err) => err.to_compile_error().into(),

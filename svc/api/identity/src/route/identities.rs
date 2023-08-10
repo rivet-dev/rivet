@@ -206,7 +206,10 @@ async fn attempt_setup_existing_identity_token(
 	.await?;
 
 	// Fetch user data
-	let user_id = utils::resolve_user_with_game_user_id(ctx, game_user_ent.game_user_id).await?;
+	let Some(user_id) = utils::resolve_user_with_game_user_id(ctx, game_user_ent.game_user_id).await? else {
+		tracing::info!("game user not found");
+		return Ok(None);
+	};
 	utils::touch_user_presence(ctx.op_ctx().base(), user_id, false);
 
 	let (identities, game_resolve_res) = tokio::try_join!(

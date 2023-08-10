@@ -42,7 +42,7 @@ async fn handle(
 	.bind(version_id)
 	.bind(captcha_buf)
 	.bind(util_mm::version_migrations::all())
-	.execute(&mut tx)
+	.execute(&mut *tx)
 	.await?;
 
 	// TODO: Parallelize all futures in this for loop
@@ -101,7 +101,7 @@ async fn handle(
 		.bind(lobby_group.max_players_party as i64)
 		.bind(&runtime_buf)
 		.bind(&runtime_meta_buf)
-		.execute(&mut tx)
+		.execute(&mut *tx)
 		.await?;
 
 		for region in &lobby_group.regions {
@@ -112,7 +112,7 @@ async fn handle(
 			.bind(lobby_group_id)
 			.bind(region_id)
 			.bind(&region.tier_name_id)
-			.execute(&mut tx)
+			.execute(&mut *tx)
 			.await?;
 
 			if let Some(idle_lobbies) = &region.idle_lobbies {
@@ -122,7 +122,7 @@ async fn handle(
 			.bind(lobby_group_id)
 			.bind(region_id)
 			.bind(idle_lobbies.min_idle_lobbies as i64).bind(idle_lobbies.max_idle_lobbies as i64)
-			.execute(&mut tx)
+			.execute(&mut *tx)
 			.await?;
 			}
 		}

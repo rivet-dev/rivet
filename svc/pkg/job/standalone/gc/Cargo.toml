@@ -27,14 +27,13 @@ tracing-subscriber = { version = "0.3", default-features = false, features = ["f
 uuid = { version = "1", features = ["serde"] }
 
 [dependencies.sqlx]
-version = "0.6"
+version = "0.7"
 default-features = false
 features = [
-	"runtime-tokio-native-tls",
+	"runtime-tokio",
 	"postgres",
 	"uuid",
 	"json",
-	"tls",
 	"macros",
 ]
 

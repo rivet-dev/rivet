@@ -537,7 +537,7 @@ async fn insert_to_crdb(
 		.bind(lobby_group_config.lobby_group.max_players_normal as i64)
 		.bind(lobby_group_config.lobby_group.max_players_direct as i64)
 		.bind(lobby_group_config.lobby_group.max_players_party as i64)
-		.execute(&mut *tx)
+		.execute(&mut **tx)
 		.await?;
 	}
 
@@ -561,7 +561,7 @@ async fn insert_to_crdb(
 	.bind(lobby_id)
 	.bind(auto_create_lobby)
 	.bind(util_mm::FindQueryStatus::Pending as i64)
-	.execute(&mut *tx)
+	.execute(&mut **tx)
 	.await?;
 
 	// Insert players
@@ -592,7 +592,7 @@ async fn insert_to_crdb(
 		)
 		.bind(now_ts)
 		.bind(ray_id)
-		.execute(&mut *tx)
+		.execute(&mut **tx)
 		.await?;
 	}
 

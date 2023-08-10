@@ -25,14 +25,13 @@ util-mm = { package = "rivet-util-mm", path = "../../util" }
 region-list = { path = "../../../region/ops/list" }
 
 [dependencies.sqlx]
-version = "0.6"
+version = "0.7"
 default-features = false
 features = [
-	"runtime-tokio-native-tls",
+	"runtime-tokio",
 	"postgres",
 	"uuid",
 	"json",
-	"tls",
 	"macros",
 ]
 

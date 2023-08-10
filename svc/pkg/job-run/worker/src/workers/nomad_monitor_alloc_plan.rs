@@ -199,7 +199,7 @@ async fn update_db(
 		"
 	))
 	.bind(&job_id)
-	.fetch_optional(&mut *tx)
+	.fetch_optional(&mut **tx)
 	.await?;
 
 	// Check if run found
@@ -225,7 +225,7 @@ async fn update_db(
 		.bind(&alloc_id)
 		.bind(now)
 		.bind(&nomad_node_id)
-		.execute(&mut *tx)
+		.execute(&mut **tx)
 		.await?;
 
 		// Save the ports to the db
@@ -240,7 +240,7 @@ async fn update_db(
 			.bind(run_id)
 			.bind(&network.mode)
 			.bind(&network.ip)
-			.execute(&mut *tx)
+			.execute(&mut **tx)
 			.await?;
 		}
 
@@ -258,7 +258,7 @@ async fn update_db(
 			.bind(port.source as i64)
 			.bind(port.target as i64)
 			.bind(&port.ip)
-			.execute(&mut *tx)
+			.execute(&mut **tx)
 			.await?;
 		}
 	}
@@ -272,7 +272,7 @@ async fn update_db(
 		"
 	))
 	.bind(run_id)
-	.fetch_all(&mut *tx)
+	.fetch_all(&mut **tx)
 	.await?;
 	tracing::info!(?proxied_ports, "fetched proxied ports");
 

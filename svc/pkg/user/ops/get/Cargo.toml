@@ -14,7 +14,7 @@ upload-file-list = { path = "../../../upload/ops/file-list" }
 upload-get = { path = "../../../upload/ops/get" }
 
 [dependencies.sqlx]
-version = "0.6"
+version = "0.7"
 default-features = false
 
 [dev-dependencies]
