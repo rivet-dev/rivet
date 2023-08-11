@@ -11,7 +11,7 @@ enum DeliveryMethod {
 	S3Direct,
 }
 
-const DELIVERY_METHOD: DeliveryMethod = DeliveryMethod::S3Direct;
+const DELIVERY_METHOD: DeliveryMethod = DeliveryMethod::Ats;
 
 lazy_static::lazy_static! {
 	static ref NOMAD_CONFIG: nomad_client::apis::configuration::Configuration =
@@ -727,7 +727,7 @@ async fn resolve_image_artifact_url(
 
 	// Get provider
 	let proto_provider = internal_unwrap_owned!(
-		backend::upload::Provider::from_i32(upload.provider as i32),
+		backend::upload::Provider::from_i32(upload.provider),
 		"invalid upload provider"
 	);
 	let provider = match proto_provider {
@@ -738,22 +738,20 @@ async fn resolve_image_artifact_url(
 
 	match DELIVERY_METHOD {
 		DeliveryMethod::Ats => {
-			// TODO: Auto-generate password for this & encode in to infra/salt/salt/traffic_server/files/consul/traffic_server.hcl.j2
-			// See tf/svc/traefik/main.tf
-			// let http_auth = "job_run_image:XXXX";
-			let http_auth: String = todo!("need to auto-generate password");
+			let ats_url = if cdn_region.name_id == "lnd-atl" {
+				"10.0.47.2"
+			}
+			else {
+				tracing::info!(?cdn_region.name_id);
+				internal_panic!("invalid cdn region");
+			};
 
-			// TODO: Unproxied storage endpoint was removed. Replace with Nebula address. We can't
-			// use Consul to resolve this though, since Consul is not installed on the edge nodes.
-			// Pull the image from the CDN region instead of the default region for
-			// faster boot times.
 			let upload_id = internal_unwrap!(upload.upload_id).as_uuid();
 			let addr = format!(
-				"https://{auth}@cdn.{cdn_region}.{domain}/{provider}/build/{upload_id}/image.tar",
-				auth = http_auth,
-				cdn_region = cdn_region.name_id,
-				domain = util::env::domain_main(),
+				"http://{ats_url}:9300/s3-cache/{provider}/{namespace}-bucket-build/{upload_id}/image.tar",
+				ats_url = ats_url,
 				provider = heck::KebabCase::to_kebab_case(provider.to_string().as_str()),
+				namespace = util::env::namespace(),
 				upload_id = upload_id,
 			);
 
@@ -767,7 +765,7 @@ async fn resolve_image_artifact_url(
 
 			// Build client
 			let s3_client = s3_util::Client::from_env_opt(
-				&bucket,
+				bucket,
 				provider,
 				s3_util::EndpointKind::InternalResolved,
 			)

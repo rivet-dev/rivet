@@ -5,4 +5,3 @@ name = "mm-worker"
 kind = "rust"
 
 [consumer]
-

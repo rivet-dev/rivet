@@ -15,6 +15,16 @@ pub async fn build_secrets(ctx: &ProjectContext) -> Result<Value> {
 
 	secrets["s3"] = s3(ctx).await?;
 
+	if ctx.ns().s3.providers.minio.is_some() {
+		secrets["minio"] = json!({
+			"users": {
+				"root": {
+					"password": ctx.read_secret(&["minio", "users", "root", "password"]).await?,
+				},
+			},
+		});
+	}
+
 	secrets["clickhouse"] = json!({
 		"users": {
 			"bolt": {
@@ -28,16 +38,6 @@ pub async fn build_secrets(ctx: &ProjectContext) -> Result<Value> {
 			},
 		},
 	});
-
-	if ctx.ns().s3.providers.minio.is_some() {
-		secrets["minio"] = json!({
-			"users": {
-				"root": {
-					"password": ctx.read_secret(&["minio", "users", "root", "password"]).await?,
-				},
-			},
-		});
-	}
 
 	if let (Some(client_id), Some(client_secret)) = (
 		ctx.read_secret_opt(&["cloudflare", "access", "proxy", "client_id"])
