@@ -27,7 +27,7 @@ pub fn handle(
 		identity_id: user_id.to_string(),
 		display_name: user.display_name.clone(),
 		account_number: user.account_number as i32,
-		avatar_url: util::route::user_avatar(&user)?,
+		avatar_url: util::route::user_avatar(&user),
 		presence: Some(presence(
 			user_presence,
 			&presences_ctx.games,

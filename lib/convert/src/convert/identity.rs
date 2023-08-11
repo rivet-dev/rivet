@@ -28,8 +28,7 @@ pub fn handle(
 		identity_id: user_id,
 		display_name: user.display_name.clone(),
 		account_number: user.account_number as i32,
-		avatar_url: util::route::user_avatar(
-			&user)?,
+		avatar_url: util::route::user_avatar(&user),
 		presence: Some(Box::new(presence(
 			user_presence,
 			&presences_ctx.games,
@@ -55,8 +54,7 @@ pub fn handle_without_presence(
 		identity_id: user_id,
 		display_name: user.display_name.to_owned(),
 		account_number: user.account_number as i32,
-		avatar_url: util::route::user_avatar(
-			&user)?,
+		avatar_url: util::route::user_avatar(&user),
 		presence: None,
 		is_registered: true, // TODO:
 		external: Box::new(models::IdentityExternalLinks {
@@ -99,8 +97,7 @@ pub fn summary(
 		identity_id: user_id,
 		display_name: user.display_name.clone(),
 		account_number: user.account_number as i32,
-		avatar_url: util::route::user_avatar(
-			&user)?,
+		avatar_url: util::route::user_avatar(&user),
 		presence: Some(Box::new(presence(
 			user_presence,
 			&presences_ctx.games,
@@ -220,8 +217,7 @@ pub fn profile(
 		identity_id: user_id,
 		display_name: user.display_name.to_owned(),
 		account_number: user.account_number as i32,
-		avatar_url: util::route::user_avatar(
-			&user)?,
+		avatar_url: util::route::user_avatar(&user),
 		presence: Some(Box::new(presence(
 			user_presence,
 			&pctx.presences_ctx.games,

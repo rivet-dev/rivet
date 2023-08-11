@@ -13,7 +13,7 @@ pub fn handle_without_presence(
 		identity_id: user_id.to_string(),
 		display_name: user.display_name.to_owned(),
 		account_number: user.account_number as i32,
-		avatar_url: util::route::user_avatar(&user)?,
+		avatar_url: util::route::user_avatar(&user),
 		presence: None,
 		is_registered: true, // TODO:
 		external: models::IdentityExternalLinks {

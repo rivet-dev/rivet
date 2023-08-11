@@ -32,41 +32,44 @@ pub fn game_profile(game_name_id: &str) -> String {
 	format!("{}/games/{}", origin_hub(), game_name_id)
 }
 
-pub fn user_avatar(user: &backend::user::User) -> GlobalResult<String> {
+pub fn user_avatar(user: &backend::user::User) -> String {
 	if let (Some(upload_id), Some(file_name), Some(provider)) = (
 		user.profile_upload_id,
 		user.profile_file_name.as_ref(),
 		user.profile_provider,
 	) {
-		Ok(format!(
-			"https://media.{}/{}/user-avatar/{}/{}",
+		format!(
+			"https://media.{}{}/user-avatar/{}/{}",
 			domain_main(),
-			provider_str(provider)?,
+			provider_str(provider),
 			upload_id,
 			file_name
-		))
+		)
 	} else {
-		Ok(format!(
-			"https://assets2.rivet.gg/avatars/{}.png",
-			user.avatar_id
-		))
+		format!("https://assets2.rivet.gg/avatars/{}.png", user.avatar_id)
 	}
 }
 
-pub fn custom_avatar(upload_id: Uuid, file_name: &str) -> String {
+pub fn custom_avatar(upload_id: Uuid, file_name: &str, provider: i32) -> String {
 	format!(
-		"https://media.{}/user-avatar/{}/{}",
+		"https://media.{}/{}/user-avatar/{}/{}",
 		domain_main(),
+		provider_str(provider),
 		upload_id,
 		file_name
 	)
 }
 
-pub fn team_avatar(upload_id: Option<Uuid>, file_name: Option<&String>) -> Option<String> {
-	if let (Some(upload_id), Some(file_name)) = (upload_id, file_name) {
+pub fn team_avatar(team: &backend::team::Team) -> Option<String> {
+	if let (Some(upload_id), Some(file_name), Some(provider)) = (
+		team.profile_upload_id,
+		team.profile_file_name.as_ref(),
+		team.profile_provider,
+	) {
 		Some(format!(
-			"https://media.{}/team-avatar/{}/{}",
+			"https://media.{}/{}/team-avatar/{}/{}",
 			domain_main(),
+			provider_str(provider),
 			upload_id,
 			file_name
 		))
@@ -75,11 +78,16 @@ pub fn team_avatar(upload_id: Option<Uuid>, file_name: Option<&String>) -> Optio
 	}
 }
 
-pub fn game_logo(upload_id: Option<Uuid>, file_name: Option<&String>) -> Option<String> {
-	if let (Some(upload_id), Some(file_name)) = (upload_id, file_name) {
+pub fn game_logo(game: &backend::game::Game) -> Option<String> {
+	if let (Some(upload_id), Some(file_name), Some(provider)) = (
+		game.logo_upload_id,
+		game.logo_file_name.as_ref(),
+		game.logo_provider,
+	) {
 		Some(format!(
-			"https://media.{}/game-logo/{}/{}",
+			"https://media.{}/{}/game-logo/{}/{}",
 			domain_main(),
+			provider_str(provider),
 			upload_id,
 			file_name
 		))
@@ -88,11 +96,16 @@ pub fn game_logo(upload_id: Option<Uuid>, file_name: Option<&String>) -> Option<
 	}
 }
 
-pub fn game_banner(upload_id: Option<Uuid>, file_name: Option<&String>) -> Option<String> {
-	if let (Some(upload_id), Some(file_name)) = (upload_id, file_name) {
+pub fn game_banner(game: &backend::game::Game) -> Option<String> {
+	if let (Some(upload_id), Some(file_name), Some(provider)) = (
+		game.banner_upload_id,
+		game.banner_file_name.as_ref(),
+		game.banner_provider,
+	) {
 		Some(format!(
-			"https://media.{}/game-banner/{}/{}",
+			"https://media.{}/{}/game-banner/{}/{}",
 			domain_main(),
+			provider_str(provider),
 			upload_id,
 			file_name
 		))
@@ -113,15 +126,11 @@ pub fn team_billing(team_id: Uuid) -> String {
 	format!("{}/groups/{}/billing", origin_hub(), team_id)
 }
 
-fn provider_str(provider: i32) -> GlobalResult<&'static str> {
-	let proto_provider = internal_unwrap_owned!(
-		backend::upload::Provider::from_i32(provider),
-		"invalid upload provider"
-	);
-
-	match proto_provider {
-		backend::upload::Provider::Minio => Ok("minio"),
-		backend::upload::Provider::Backblaze => Ok("backblaze"),
-		backend::upload::Provider::Aws => Ok("aws"),
+fn provider_str(provider: i32) -> &'static str {
+	// Default gracefully
+	match backend::upload::Provider::from_i32(provider).unwrap_or_default() {
+		backend::upload::Provider::Minio => "minio",
+		backend::upload::Provider::Backblaze => "backblaze",
+		backend::upload::Provider::Aws => "aws",
 	}
 }

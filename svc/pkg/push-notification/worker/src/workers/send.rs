@@ -63,7 +63,7 @@ async fn worker(
 							&text.body.chars().collect::<Vec<_>>(),
 							1024,
 						)?;
-						let icon = util::route::user_avatar(&user)?;
+						let icon = util::route::user_avatar(&user);
 						let click_url = format!("/threads/{}", thread_id);
 
 						let mut notif_builder = NotificationBuilder::new();
