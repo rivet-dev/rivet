@@ -28,8 +28,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 -   **Infra** Update Consul to 1.16.0
 -   **Infra** Update Imagor to 1.4.7
 -   **Infra** Update NATS server to 2.9.20
--   **Infra** Update Node Exporter server to 1.6.1
--   **Infra** Update Nomad to 1.6.1
+-   **Infra** Update Node Exporter server to 1.6.0
+-   **Infra** Update Nomad to 1.6.0
 -   **Infra** Update Prometheus server to 2.46.0
 -   **Infra** Update Redis Exporter to 1.52.0
 -   **Infra** Update Redis to 7.0.12
