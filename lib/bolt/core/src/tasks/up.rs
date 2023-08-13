@@ -18,10 +18,7 @@ use crate::{
 	context::{BuildContext, BuildOptimization, ProjectContext, ServiceBuildPlan, ServiceContext},
 	dep::{
 		self, cargo,
-		nomad::{
-			gen::{ExecServiceContext, ExecServiceDriver},
-			NomadCtx,
-		},
+		k8s::gen::{ExecServiceContext, ExecServiceDriver},
 	},
 	tasks, utils,
 };
@@ -305,37 +302,47 @@ pub async fn up_services<T: AsRef<str>>(
 	);
 	utils::join_set_progress(upload_join_set).await?;
 
-	// Generate Nomad Jobs
+	// Generate Kubernetes deployments
 	//
-	// We resolve the upstream services after applying Terraform since teh services we need to
+	// We resolve the upstream services after applying Terraform since the services we need to
 	// resolve won't exist yet.
 	eprintln!();
-	rivet_term::status::progress("Generating jobs", "");
-	let mut job_specs = Vec::new();
+	rivet_term::status::progress("Generating deployments", "");
+
+	let mut deployment_specs = Vec::new();
 	let leader_region_id = ctx.primary_region_or_local();
 	{
 		let pb = utils::progress_bar(all_exec_svcs.len());
 		for exec_ctx in &exec_ctxs {
 			pb.set_message(exec_ctx.svc_ctx.name());
-			job_specs.push(dep::nomad::gen::gen_svc(&leader_region_id, &exec_ctx).await);
+			deployment_specs.push(dep::k8s::gen::gen_svc(&leader_region_id, &exec_ctx).await);
 			pb.inc(1);
 		}
 		pb.finish();
 	}
 
-	// Apply jobs
-	eprintln!();
-	rivet_term::status::progress("Submitting jobs", "");
-	let nomad_ctx = NomadCtx::remote(&ctx).await;
-	let dangling_jobs =
-		dep::nomad::api::list_dangling_jobs(&ctx, &nomad_ctx, &leader_region_id).await?;
-	if !dangling_jobs.is_empty() {
-		rivet_term::status::warn("Dangling jobs", format!("{} jobs", dangling_jobs.len()));
-		for job in dangling_jobs {
-			eprintln!("  * {job}");
-		}
-	}
-	dep::nomad::api::job_run_parallel(&ctx, &nomad_ctx, job_specs).await?;
+	// TEMP:
+	use crate::utils::command_helper::CommandHelper;
+	let mut cmd = std::process::Command::new("sh");
+	cmd.arg("-c").arg(format!(
+		"echo {:?} | kubectl apply -f -",
+		serde_json::to_string(&deployment_specs.first().unwrap())?
+	));
+	cmd.exec().await?;
+
+	// // Apply jobs
+	// eprintln!();
+	// rivet_term::status::progress("Submitting jobs", "");
+	// let nomad_ctx = NomadCtx::remote(&ctx).await;
+	// let dangling_jobs =
+	// 	dep::nomad::api::list_dangling_jobs(&ctx, &nomad_ctx, &leader_region_id).await?;
+	// if !dangling_jobs.is_empty() {
+	// 	rivet_term::status::warn("Dangling jobs", format!("{} jobs", dangling_jobs.len()));
+	// 	for job in dangling_jobs {
+	// 		eprintln!("  * {job}");
+	// 	}
+	// }
+	// dep::nomad::api::job_run_parallel(&ctx, &nomad_ctx, job_specs).await?;
 
 	eprintln!();
 	rivet_term::status::success("Finished", "");

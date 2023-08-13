@@ -279,13 +279,13 @@ pub fn build_plan(ctx: &ProjectContext, start_at: Option<String>) -> Result<Vec<
 		},
 	});
 
-	plan.push(PlanStep {
-		name_id: "tf-nomad",
-		kind: PlanStepKind::Terraform {
-			plan_id: "nomad".into(),
-			needs_destroy: false,
-		},
-	});
+	// plan.push(PlanStep {
+	// 	name_id: "tf-nomad",
+	// 	kind: PlanStepKind::Terraform {
+	// 		plan_id: "nomad".into(),
+	// 		needs_destroy: false,
+	// 	},
+	// });
 
 	plan.push(PlanStep {
 		name_id: "migrate",
