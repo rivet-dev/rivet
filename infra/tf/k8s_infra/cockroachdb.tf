@@ -5,10 +5,8 @@ resource "kubernetes_namespace" "cockroachdb" {
 }
 
 resource "helm_release" "cockroachdb" {
-	depends_on = [kubernetes_namespace_v1.cockroachdb]
-
 	name = "cockroachdb"
-	namespace = "cockroachdb"
+	namespace = kubernetes_namespace.cockroachdb.metadata.0.name
 	repository = "https://charts.cockroachdb.com/"
 	chart = "cockroachdb"
 	version = "11.1.5"

@@ -5,10 +5,8 @@ resource "kubernetes_namespace" "nats" {
 }
 
 resource "helm_release" "nats" {
-	depends_on = [kubernetes_namespace_v1.nats]
-
 	name = "nats"
-	namespace = "nats"
+	namespace = kubernetes_namespace.nats.metadata.0.name
 	repository = "https://nats-io.github.io/k8s/helm/charts/"
 	chart = "nats"
 	version = "1.0.0"

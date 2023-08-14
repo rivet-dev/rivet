@@ -5,10 +5,8 @@ resource "kubernetes_namespace" "k8s_dashboard" {
 }
 
 resource "helm_release" "k8s_dashboard" {
-	depends_on = [kubernetes_namespace_v1.k8s_dashboard]
-
 	name = "kubernetes-dashboard"
-	namespace = "kubernetes-dashboard"
+	namespace = kubernetes_namespace.k8s_dashboard.metadata.0.name
 	repository = "https://kubernetes.github.io/dashboard/"
 	chart = "kubernetes-dashboard"
 	# Version 7 doesn't seem to work
@@ -22,17 +20,13 @@ resource "helm_release" "k8s_dashboard" {
 }
 
 resource "kubernetes_service_account" "example" {
-	depends_on = [helm_release.k8s_dashboard]
-
 	metadata {
+		namespace = kubernetes_namespace.k8s_dashboard.metadata.0.name
 		name = "admin-user"
-		namespace = "kubernetes-dashboard"
 	}
 }
 
 resource "kubernetes_cluster_role_binding" "example" {
-	depends_on = [helm_release.k8s_dashboard]
-
 	metadata {
 		name = "admin-user"
 	}
@@ -45,8 +39,8 @@ resource "kubernetes_cluster_role_binding" "example" {
 
 	subject {
 		kind = "ServiceAccount"
+		namespace = kubernetes_namespace.k8s_dashboard.metadata.0.name
 		name = "admin-user"
-		namespace = "kubernetes-dashboard"
 	}
 }
 

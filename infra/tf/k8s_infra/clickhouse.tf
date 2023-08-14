@@ -5,10 +5,8 @@ resource "kubernetes_namespace" "clickhouse" {
 }
 
 resource "helm_release" "clickhouse" {
-	depends_on = [kubernetes_namespace_v1.clickhouse]
-
 	name = "clickhouse"
-	namespace = "clickhouse"
+	namespace = kubernetes_namespace.clickhouse.metadata.0.name
 	repository = "oci://registry-1.docker.io/bitnamicharts"
 	chart = "clickhouse"
 	version = "3.6.3"
