@@ -8,6 +8,7 @@ locals {
 	server_addrs_escaped = [for addr in local.server_addrs : "\"${addr}\""]
 	server_configmap_data = {
 		"server.hcl" = <<-EOT
+			# Trigger update
 			datacenter = "global"
 			data_dir = "/opt/nomad/data"
 			bind_addr = "0.0.0.0"
@@ -165,11 +166,21 @@ resource "kubernetes_stateful_set" "nomad_server" {
 						name = kubernetes_config_map.nomad_server.metadata.0.name
 					}
 				}
+			}
+		}
 
-				volume {
-					name = "nomad-data"
-					empty_dir {}
+		volume_claim_template {
+			metadata {
+				name = "nomad-data"
+			}
+			spec {
+				access_modes = ["ReadWriteOnce"]
+				resources {
+					requests = {
+						storage = "1Gi"
+					}
 				}
+				storage_class_name = "local-path"
 			}
 		}
 	}
