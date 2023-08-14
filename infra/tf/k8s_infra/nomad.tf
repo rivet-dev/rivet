@@ -1,5 +1,7 @@
 # TODO: Document why we don't use the Consul provider for server discovery like https://www.linode.com/docs/guides/nomad-alongside-kubernetes/
 # TODO: Attempt to invalidate this cluster by killing random pods
+# TODO: Figure out how to recover from a hard server crash (won't be able to notify other servers of leaving)
+# TODO: Scope locals
 
 locals {
 	count = 3
@@ -7,12 +9,15 @@ locals {
 	server_addrs = formatlist("nomad-server-statefulset-%d.${local.server_service_name}.${kubernetes_namespace.nomad.metadata.0.name}.svc.cluster.local", range(0, local.count))
 	server_addrs_escaped = [for addr in local.server_addrs : "\"${addr}\""]
 	server_configmap_data = {
+		# We don't use Consul for server discovery because we don't want to depend on Consul for Nomad to work
 		"server.hcl" = <<-EOT
-			# Trigger update
 			datacenter = "global"
 			data_dir = "/opt/nomad/data"
 			bind_addr = "0.0.0.0"
 			disable_update_check = true
+
+			# The Nomad server IP changes, so we need to leave the cluster when terminating
+			leave_on_terminate = true
 
 			server {
 				enabled = true
