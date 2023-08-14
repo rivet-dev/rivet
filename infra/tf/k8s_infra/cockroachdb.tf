@@ -1,4 +1,4 @@
-resource "kubernetes_namespace_v1" "cockroachdb" {
+resource "kubernetes_namespace" "cockroachdb" {
 	metadata {
 		name = "cockroachdb"
 	}

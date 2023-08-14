@@ -1,6 +1,6 @@
 # TODO: Create multiple of these
 
-resource "kubernetes_namespace_v1" "redis" {
+resource "kubernetes_namespace" "redis" {
 	metadata {
 		name = "redis"
 	}

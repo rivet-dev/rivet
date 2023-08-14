@@ -1,4 +1,4 @@
-resource "kubernetes_namespace_v1" "nats" {
+resource "kubernetes_namespace" "nats" {
 	metadata {
 		name = "nats"
 	}

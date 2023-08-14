@@ -1,4 +1,4 @@
-resource "kubernetes_namespace_v1" "k8s_dashboard" {
+resource "kubernetes_namespace" "k8s_dashboard" {
 	metadata {
 		name = "kubernetes-dashboard"
 	}
@@ -21,7 +21,7 @@ resource "helm_release" "k8s_dashboard" {
 	})]
 }
 
-resource "kubernetes_service_account_v1" "example" {
+resource "kubernetes_service_account" "example" {
 	depends_on = [helm_release.k8s_dashboard]
 
 	metadata {
@@ -30,7 +30,7 @@ resource "kubernetes_service_account_v1" "example" {
 	}
 }
 
-resource "kubernetes_cluster_role_binding_v1" "example" {
+resource "kubernetes_cluster_role_binding" "example" {
 	depends_on = [helm_release.k8s_dashboard]
 
 	metadata {
