@@ -1,7 +1,6 @@
 # TODO: Document why we don't use the Consul provider for server discovery like https://www.linode.com/docs/guides/nomad-alongside-kubernetes/
 # TODO: Look at using Reloader  (https://github.com/stakater/Reloader) for graceful migrations, but this adds extra complexity
-# TODO: Attempt to kill this cluster
-# TODO: Figure out health checks
+# TODO: Attempt to invalidate this cluster by killing random pods
 
 locals {
 	count = 3
@@ -35,6 +34,9 @@ resource "kubernetes_config_map" "nomad_server" {
 			server {
 				enabled = true
 				bootstrap_expect = ${local.count}
+			}
+
+			server_join {
 				retry_join = [${join(",", local.server_addrs_escaped)}]
 				retry_interval = "10s"
 			}
@@ -126,6 +128,18 @@ resource "kubernetes_stateful_set" "nomad_server" {
 						container_port = 4648
 						protocol = "UDP"
 					}
+
+					# We don't use a readiness probe for `/v1/status/leader` because
+					# we need all three nodes to boot successfully and bootstrap.
+					# The load balancer itself should prevent routing traffic to
+					# nodes that don't have a leader.
+					readiness_probe {
+						http_get {
+							path = "/v1/agent/self"
+							port = "http"
+						}
+					}
+
 					volume_mount {
 						name = "nomad-config"
 						mount_path = "/etc/nomad/nomad.d"
