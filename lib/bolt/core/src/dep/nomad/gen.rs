@@ -96,7 +96,7 @@ pub async fn gen_svc(region_id: &str, exec_ctx: &ExecServiceContext) -> Job {
 
 	// Render ports
 	let (dynamic_ports, reserved_ports) = {
-		let mut reserved_ports = vec![];
+		let mut reserved_ports = Vec::new();
 		let mut ports = Vec::new();
 
 		ports.push(DynamicPort {

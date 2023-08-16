@@ -767,10 +767,10 @@ impl ServiceContextData {
 
 		// Provide default Nomad variables if in test
 		if matches!(run_context, RunContext::Test) {
-			env.push(("NOMAD_REGION".into(), "global".into()));
-			env.push(("NOMAD_DC".into(), region_id.clone()));
+			env.push(("KUBERNETES_REGION".into(), "global".into()));
+			env.push(("KUBERNETES_DC".into(), region_id.clone()));
 			env.push((
-				"NOMAD_TASK_DIR".into(),
+				"KUBERNETES_TASK_DIR".into(),
 				project_ctx.gen_path().display().to_string(),
 			));
 		}
@@ -787,7 +787,7 @@ impl ServiceContextData {
 			env.push(("TOKIO_CONSOLE_ENABLE".into(), "1".into()));
 			env.push((
 				"TOKIO_CONSOLE_BIND".into(),
-				r#"0.0.0.0:${NOMAD_PORT_tokio-console}"#.into(),
+				r#"0.0.0.0:$(KUBERNETES_PORT_tokio-console)"#.into(),
 			));
 		}
 
@@ -798,22 +798,15 @@ impl ServiceContextData {
 		env.push(("RIVET_ORIGIN_HUB".into(), project_ctx.origin_hub()));
 
 		// Regions
-		match run_context {
-			RunContext::Service => {
-				env.push(("RIVET_REGION".into(), "${NOMAD_DC}".into()));
-			}
-			RunContext::Test => {
-				env.push(("RIVET_REGION".into(), region_id.clone()));
-			}
-		}
+		env.push(("RIVET_REGION".into(), region_id.clone()));
 		env.push(("RIVET_PRIMARY_REGION".into(), project_ctx.primary_region()));
 
 		// Networking
 		if run_context == RunContext::Service {
-			env.push(("HEALTH_PORT".into(), "${NOMAD_PORT_health}".into()));
-			env.push(("METRICS_PORT".into(), "${NOMAD_PORT_metrics}".into()));
+			env.push(("HEALTH_PORT".into(), "$(KUBERNETES_PORT_health)".into()));
+			env.push(("METRICS_PORT".into(), "$(KUBERNETES_PORT_metrics)".into()));
 			if self.config().kind.has_server() {
-				env.push(("PORT".into(), "${NOMAD_PORT_http}".into()));
+				env.push(("PORT".into(), "$(KUBERNETES_PORT_http)".into()));
 			}
 		}
 
@@ -941,7 +934,7 @@ impl ServiceContextData {
 		// NATS config
 		env.push((
 			"NATS_URL".into(),
-			// TODO: Add back passsing multiple NATS nodes for failover instead of using DNS resolution
+			// TODO: Add back passing multiple NATS nodes for failover instead of using DNS resolution
 			access_service(
 				&project_ctx,
 				&mut tunnel_configs,
@@ -957,14 +950,7 @@ impl ServiceContextData {
 
 		// Chirp config (used for both Chirp clients and Chirp workers)
 		env.push(("CHIRP_SERVICE_NAME".into(), self.name()));
-		match run_context {
-			RunContext::Service => {
-				env.push(("CHIRP_REGION".into(), "${NOMAD_DC}".into()));
-			}
-			RunContext::Test => {
-				env.push(("CHIRP_REGION".into(), region_id.clone()));
-			}
-		}
+		env.push(("CHIRP_REGION".into(), region_id.clone()));
 
 		// Chirp worker config
 		if let (RunContext::Service, ServiceKind::Consumer { .. }) =
@@ -972,7 +958,7 @@ impl ServiceContextData {
 		{
 			env.push((
 				"CHIRP_WORKER_INSTANCE".into(),
-				format!("{}-${{NOMAD_DC}}-${{NOMAD_ALLOC_INDEX}}", self.name()),
+				format!("{}-$(HOSTNAME)", self.name()),
 			));
 
 			env.push(("CHIRP_WORKER_KIND".into(), "consumer".into()));

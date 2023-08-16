@@ -1,11 +1,14 @@
-use anyhow::*;
-use futures_util::stream::StreamExt;
 use std::{
 	collections::{HashMap, HashSet},
 	path::PathBuf,
 	sync::Arc,
 };
+
+use anyhow::*;
+use futures_util::stream::StreamExt;
+use serde_json::json;
 use tokio::{
+	fs,
 	sync::{Mutex, Semaphore},
 	task::JoinSet,
 };
@@ -20,7 +23,8 @@ use crate::{
 		self, cargo,
 		k8s::gen::{ExecServiceContext, ExecServiceDriver},
 	},
-	tasks, utils,
+	tasks,
+	utils::{self, command_helper::CommandHelper},
 };
 
 #[derive(Debug, Clone)]
@@ -306,28 +310,58 @@ pub async fn up_services<T: AsRef<str>>(
 	//
 	// We resolve the upstream services after applying Terraform since the services we need to
 	// resolve won't exist yet.
-	eprintln!();
-	rivet_term::status::progress("Generating deployments", "");
 
-	let mut deployment_specs = Vec::new();
-	let leader_region_id = ctx.primary_region_or_local();
 	{
+		eprintln!();
+		rivet_term::status::progress("Generating specs", "");
+
+		let leader_region_id = ctx.primary_region_or_local();
+
+		fs::create_dir_all(ctx.gen_path().join("kubernetes")).await?;
+
+		// Region config spec
+		write_k8s_spec(
+			ctx,
+			"region-config".to_string(),
+			json!({
+				"apiVersion": "v1",
+				"kind": "ConfigMap",
+				"metadata": {
+					"name": "region-config"
+				},
+				"data": {
+					"region-config.json": serde_json::to_string(&ctx.ns().regions)?
+				}
+			}),
+		)
+		.await?;
+
 		let pb = utils::progress_bar(all_exec_svcs.len());
 		for exec_ctx in &exec_ctxs {
 			pb.set_message(exec_ctx.svc_ctx.name());
-			deployment_specs.push(dep::k8s::gen::gen_svc(&leader_region_id, &exec_ctx).await);
+
+			// Write all specs to file
+			for (spec_name, spec) in dep::k8s::gen::gen_svc(&leader_region_id, &exec_ctx).await {
+				write_k8s_spec(
+					ctx,
+					format!("{}-{}", exec_ctx.svc_ctx.name(), spec_name),
+					spec,
+				)
+				.await?;
+			}
+
 			pb.inc(1);
 		}
 		pb.finish();
 	}
 
-	// TEMP:
-	use crate::utils::command_helper::CommandHelper;
+	// Apply kubernetes specs
+	eprintln!();
+	rivet_term::status::progress("Applying", "");
 	let mut cmd = std::process::Command::new("sh");
-	cmd.arg("-c").arg(format!(
-		"echo {:?} | kubectl apply -f -",
-		serde_json::to_string(&deployment_specs.first().unwrap())?
-	));
+	cmd.current_dir(ctx.path());
+	cmd.arg("-c")
+		.arg("kubectl apply -f 'gen/kubernetes/*.json'");
 	cmd.exec().await?;
 
 	// // Apply jobs
@@ -447,4 +481,15 @@ async fn derive_uploaded_svc_driver(
 			unreachable!()
 		}
 	}
+}
+
+async fn write_k8s_spec(ctx: &ProjectContext, name: String, spec: serde_json::Value) -> Result<()> {
+	let spec_path = ctx
+		.gen_path()
+		.join("kubernetes")
+		.join(format!("{}.json", name));
+
+	fs::write(spec_path, serde_json::to_vec(&spec)?).await?;
+
+	Ok(())
 }
