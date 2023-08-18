@@ -61,7 +61,7 @@ impl NomadCtx {
 		match self.project_ctx.ns().cluster.kind {
 			config::ns::ClusterKind::SingleNode { .. } => self
 				.client
-				.request(method, format!("http://nomad.service.consul:4646{path}")),
+				.request(method, format!("http://nomad-server.nomad.svc.cluster.local:4646{path}")),
 
 			config::ns::ClusterKind::Distributed { .. } => {
 				let access_secret = self.access_secret.as_ref().unwrap();

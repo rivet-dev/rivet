@@ -885,17 +885,7 @@ impl ServiceContextData {
 		if self.depends_on_nomad_api() {
 			env.push((
 				"NOMAD_ADDRESS".into(),
-				format!(
-					"http://{}",
-					access_service(
-						&project_ctx,
-						&mut tunnel_configs,
-						&run_context,
-						"nomad.service.consul:4646",
-						(cloudflare::TunnelProtocol::Http, "nomad"),
-					)
-					.await?,
-				),
+				"http://nomad-server.nomad.svc.cluster.local:4646",
 			));
 			env.push((
 				"CONSUL_ADDRESS".into(),
