@@ -15,10 +15,10 @@ use crate::{
 
 // Kubernetes requires a specific port for containers because they have their own networking namespace, the
 // port bound on the host is randomly generated.
-const HEALTH_PORT: usize = 1000;
-const METRICS_PORT: usize = 1001;
-const TOKIO_CONSOLE_PORT: usize = 1002;
-const HTTP_SERVER_PORT: usize = 1003;
+pub const HEALTH_PORT: usize = 1000;
+pub const METRICS_PORT: usize = 1001;
+pub const TOKIO_CONSOLE_PORT: usize = 1002;
+pub const HTTP_SERVER_PORT: usize = 1003;
 
 pub struct ExecServiceContext {
 	pub svc_ctx: ServiceContext,
@@ -157,7 +157,7 @@ pub async fn gen_svc(
 	})];
 
 	match driver {
-		// Mount the service binaries to execute directly in directly in the container. See
+		// Mount the service binaries to execute directly in the container. See
 		// notes in salt/salt/nomad/files/nomad.d/client.hcl.j2.
 		ExecServiceDriver::LocalBinaryArtifact { .. } => {
 			volumes.push(json!({
@@ -202,6 +202,20 @@ pub async fn gen_svc(
 		}));
 	}
 
+	let priority_class_name = format!("{}-priority", service_name);
+	specs.insert(
+		"priority",
+		json!({
+			"apiVersion": "scheduling.k8s.io/v1",
+			"kind": "PriorityClass",
+			"metadata": {
+				"name": priority_class_name,
+				"namespace": "rivet-service"
+			},
+			"value": svc_ctx.config().service.priority()
+		}),
+	);
+
 	// TODO: app.kubernetes.io/managed-by
 	specs.insert(
 		"deployment",
@@ -209,22 +223,27 @@ pub async fn gen_svc(
 			"apiVersion": "apps/v1",
 			"kind": "Deployment",
 			"metadata": {
-				"name": service_name
+				"name": service_name,
+				"namespace": "rivet-service",
+				"labels": {
+					"app.kubernetes.io/name": service_name
+				}
 			},
 			"spec": {
 				"replicas": 1,
 				"selector": {
 					"matchLabels": {
-						"app": service_name
+						"app.kubernetes.io/name": service_name
 					}
 				},
 				"template": {
 					"metadata": {
 						"labels": {
-							"app": service_name
+							"app.kubernetes.io/name": service_name
 						}
 					},
 					"spec": {
+						"priorityClassName": priority_class_name,
 						"containers": [
 							match &driver {
 								ExecServiceDriver::Docker { image, force_pull } => {
@@ -269,6 +288,35 @@ pub async fn gen_svc(
 		}),
 	);
 
+	if svc_ctx.config().kind.has_server() {
+		specs.insert(
+			"http-server",
+			json!({
+				"apiVersion": "v1",
+				"kind": "Service",
+				"metadata": {
+					"name": service_name,
+					"namespace": "rivet-service"
+				},
+				"spec": {
+					"type": "ClusterIP",
+					"selector": {
+						"app.kubernetes.io/name": service_name
+					},
+					"ports": [{
+						"protocol": "TCP",
+						"port": 80,
+						"targetPort": "http"
+					}]
+				}
+			}),
+		);
+	}
+
+	if let Some(router) = svc_ctx.config().kind.router() {
+		build_ingress_router(&project_ctx, svc_ctx, &service_name, &router, &mut specs);
+	}
+
 	specs
 }
 
@@ -298,17 +346,182 @@ fn generate_k8s_variables() -> Vec<serde_json::Value> {
 				}
 			}
 		}),
-		json!({
-			"name": "KUBERNETES_PORT_health",
-			"value": HEALTH_PORT.to_string()
-		}),
-		json!({
-			"name": "KUBERNETES_PORT_metrics",
-			"value": METRICS_PORT.to_string()
-		}),
-		json!({
-			"name": "KUBERNETES_PORT_tokio-console",
-			"value": TOKIO_CONSOLE_PORT.to_string()
-		}),
 	]
+}
+
+fn build_ingress_router(
+	project_ctx: &ProjectContext,
+	svc_ctx: &ServiceContext,
+	service_name: &str,
+	router: &ServiceRouter,
+	specs: &mut HashMap<&str, serde_json::Value>,
+) {
+	// Enable Traefik if there are mounts
+	if !router.mounts.is_empty() {}
+
+	// Register all mounts with Traefik
+	for (i, mount) in router.mounts.iter().enumerate() {
+		// Derive routing info
+		let domain = match mount.domain {
+			ServiceDomain::Base => project_ctx.domain_main(),
+			ServiceDomain::BaseGame => project_ctx.domain_cdn(),
+			ServiceDomain::BaseJob => project_ctx.domain_job(),
+		};
+		let host = if let Some(subdomain) = &mount.subdomain {
+			format!("{}.{}", subdomain, domain)
+		} else {
+			domain
+		};
+
+		// Build rule
+		let mut rule = format!("Host(`{host}`)");
+		if let Some(path) = &mount.path {
+			rule.push_str(&format!(" && PathPrefix(`{path}`)"));
+		}
+
+		// Build middlewares
+		let mut middlewares = Vec::new();
+
+		// Strip prefix
+		if let Some(path) = &mount.path {
+			let mw_name = format!("{}-{i}-strip-prefix", svc_ctx.name());
+			middlewares.push(json!({
+				"apiVersion": "traefik.containo.us/v1alpha1",
+				"kind": "Middleware",
+				"metadata": {
+					"name": mw_name,
+					"namespace": "rivet-service"
+				},
+				"spec": {
+					"stripPrefix": {
+						"prefixes": [ path ],
+						"forceSlash": true
+					}
+				}
+			}));
+		}
+
+		// Compress
+		{
+			let mw_name = format!("{}-{i}-compress", svc_ctx.name());
+			middlewares.push(json!({
+				"apiVersion": "traefik.containo.us/v1alpha1",
+				"kind": "Middleware",
+				"metadata": {
+					"name": mw_name,
+					"namespace": "rivet-service"
+				},
+				"spec": {
+					"compress": {}
+				}
+			}));
+		}
+
+		// In flight
+		{
+			let mw_name = format!("{}-{i}-inflight", svc_ctx.name());
+			middlewares.push(json!({
+				"apiVersion": "traefik.containo.us/v1alpha1",
+				"kind": "Middleware",
+				"metadata": {
+					"name": mw_name,
+					"namespace": "rivet-service"
+				},
+				"spec": {
+					"inFlightReq": {
+						"amount": 64,
+						"sourcecriterion": {
+							"requestheadername": "cf-connecting-ip"
+						}
+					}
+				}
+			}));
+		}
+
+		let ingress_middlewares = middlewares
+			.iter()
+			.map(|mw| mw["metadata"].clone())
+			.collect::<Vec<_>>();
+
+		specs.insert(
+			"middlewares",
+			json!({
+				"apiVersion": "v1",
+				"kind": "List",
+				"items": middlewares
+			}),
+		);
+
+		// Build router
+		let r_name = format!("{}-{i}", svc_ctx.name());
+
+		specs.insert(
+			"ingress",
+			json!({
+				"apiVersion": "traefik.containo.us/v1alpha1",
+				"kind": "IngressRoute",
+				"metadata": {
+					"name": r_name,
+					"namespace": "rivet-service"
+				},
+				"spec": {
+					// "entryPoints": [ "lb-443" ],
+					"routes": [
+						{
+							"kind": "Rule",
+							"match": rule,
+							"middlewares": ingress_middlewares,
+							"services": [
+								{
+									"kind": "Service",
+									"name": service_name,
+									"namespace": "rivet-service",
+									"port": 80
+								}
+							]
+						}
+					],
+					"tls": {
+						"secretName": "ingress-tls-cert",
+						"options": {
+							"name": "ingress-tls",
+							"namespace": "rivet-service"
+						},
+						// "domains": [
+						// 	{
+						// 		"main": "example.net",
+						// 		"sans": [
+						// 			"a.example.net",
+						// 			"b.example.net"
+						// 		]
+						// 	}
+						// ]
+					}
+				}
+			}),
+		);
+
+		if svc_ctx.name() == "api-cf-verification" {
+			specs.insert(
+				"challenge-ingress",
+				json!({
+					"apiVersion": "traefik.containo.us/v1alpha1",
+					"kind": "IngressRoute",
+					"metadata": {
+						"name": "cf-verification-challenge",
+						"namespace": "rivet-service"
+					},
+					"spec": {
+						"routes": [
+							{
+								"kind": "Rule",
+								"match": "PathPrefix(`/.well-known/cf-custom-hostname-challenge/`)",
+								"priority": 90
+							}
+						]
+					}
+				}),
+			);
+		}
+	}
 }

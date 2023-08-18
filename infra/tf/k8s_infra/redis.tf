@@ -18,6 +18,9 @@ resource "helm_release" "redis" {
 		replica = {
 			replicaCount = 1
 		}
+		auth = {
+			enabled = false
+		}
 	})]
 }
 

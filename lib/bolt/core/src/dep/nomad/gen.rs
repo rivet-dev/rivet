@@ -282,7 +282,7 @@ pub async fn gen_svc(region_id: &str, exec_ctx: &ExecServiceContext) -> Job {
 							timeout: Some(chrono::secs(5)),
 							on_update: Some(on_update.into()),
 							// This indicates the runtime might
-							// be bricked in a very rare care.
+							// be bricked in a very rare case.
 							// Restarting the process will fix
 							// that.
 							//

@@ -16,7 +16,7 @@ use crate::{
 		service::{RuntimeKind, ServiceKind},
 	},
 	context::{self, BuildContext, ProjectContext, RunContext, S3Provider},
-	dep::{self, cloudflare, s3},
+	dep::{self, cloudflare, k8s, s3},
 	utils,
 };
 
@@ -787,7 +787,7 @@ impl ServiceContextData {
 			env.push(("TOKIO_CONSOLE_ENABLE".into(), "1".into()));
 			env.push((
 				"TOKIO_CONSOLE_BIND".into(),
-				r#"0.0.0.0:$(KUBERNETES_PORT_tokio-console)"#.into(),
+				format!("0.0.0.0:{}", k8s::gen::TOKIO_CONSOLE_PORT),
 			));
 		}
 
@@ -803,10 +803,10 @@ impl ServiceContextData {
 
 		// Networking
 		if run_context == RunContext::Service {
-			env.push(("HEALTH_PORT".into(), "$(KUBERNETES_PORT_health)".into()));
-			env.push(("METRICS_PORT".into(), "$(KUBERNETES_PORT_metrics)".into()));
+			env.push(("HEALTH_PORT".into(), k8s::gen::HEALTH_PORT.to_string()));
+			env.push(("METRICS_PORT".into(), k8s::gen::METRICS_PORT.to_string()));
 			if self.config().kind.has_server() {
-				env.push(("PORT".into(), "$(KUBERNETES_PORT_http)".into()));
+				env.push(("PORT".into(), k8s::gen::HTTP_SERVER_PORT.to_string()));
 			}
 		}
 
@@ -934,15 +934,16 @@ impl ServiceContextData {
 		// NATS config
 		env.push((
 			"NATS_URL".into(),
-			// TODO: Add back passing multiple NATS nodes for failover instead of using DNS resolution
-			access_service(
-				&project_ctx,
-				&mut tunnel_configs,
-				&run_context,
-				"client.nats-server.service.consul:4222",
-				(cloudflare::TunnelProtocol::Tcp, "nats-client"),
-			)
-			.await?,
+			"nats.nats.svc.cluster.local:4222".to_string(),
+			// // TODO: Add back passing multiple NATS nodes for failover instead of using DNS resolution
+			// access_service(
+			// 	&project_ctx,
+			// 	&mut tunnel_configs,
+			// 	&run_context,
+			// 	"client.nats-server.service.consul:4222",
+			// 	(cloudflare::TunnelProtocol::Tcp, "nats-client"),
+			// )
+			// .await?,
 		));
 
 		env.push(("NATS_USERNAME".into(), "chirp".into()));
@@ -966,19 +967,20 @@ impl ServiceContextData {
 		}
 
 		// Redis
+		let redis_host = "redis-master.redis.svc.cluster.local:6379";
 		for redis_dep in self.redis_dependencies().await {
 			let name = redis_dep.name();
 			let db_name = redis_dep.redis_db_name();
 			let port = dep::redis::server_port(&redis_dep);
 
-			let host = access_service(
-				&project_ctx,
-				&mut tunnel_configs,
-				&run_context,
-				&format!("listen.{name}.service.consul:{port}"),
-				(cloudflare::TunnelProtocol::Tcp, &name),
-			)
-			.await?;
+			// let host = access_service(
+			// 	&project_ctx,
+			// 	&mut tunnel_configs,
+			// 	&run_context,
+			// 	&format!("listen.{name}.service.consul:{port}"),
+			// 	(cloudflare::TunnelProtocol::Tcp, &name),
+			// )
+			// .await?;
 
 			// Build URL with auth
 			let username = project_ctx
@@ -988,9 +990,9 @@ impl ServiceContextData {
 				.read_secret_opt(&["redis", &db_name, "password"])
 				.await?;
 			let url = if let Some(password) = password {
-				format!("redis://{}:{}@{host}", username, password)
+				format!("redis://{}:{}@{redis_host}", username, password)
 			} else {
-				format!("redis://{}@{host}", username)
+				format!("redis://{}@{redis_host}", username)
 			};
 
 			env.push((
@@ -1006,28 +1008,21 @@ impl ServiceContextData {
 		}
 
 		// CRDB
-		let mut crdb_host = None;
+		let crdb_host = "cockroachdb.cockroachdb.svc.cluster.local:26257";
+		// let crdb_host = access_service(
+		// 	&project_ctx,
+		// 	&mut tunnel_configs,
+		// 	&run_context,
+		// 	"scv.cluster.local:26257",
+		// 	(cloudflare::TunnelProtocol::Tcp, "cockroach-sql"),
+		// )
+		// .await?;
 		for crdb_dep in self.crdb_dependencies().await {
 			let username = "root"; // TODO:
 			let sslmode = "disable"; // TODO:
 
-			// Resolve CRDB host
-			if crdb_host.is_none() {
-				crdb_host = Some(
-					access_service(
-						&project_ctx,
-						&mut tunnel_configs,
-						&run_context,
-						"sql.cockroach.service.consul:26257",
-						(cloudflare::TunnelProtocol::Tcp, "cockroach-sql"),
-					)
-					.await?,
-				);
-			}
-			let host = crdb_host.as_ref().unwrap();
-
 			let uri = format!(
-				"postgres://{username}@{host}/{db_name}?sslmode={sslmode}",
+				"postgres://{username}@{crdb_host}/{db_name}?sslmode={sslmode}",
 				db_name = crdb_dep.crdb_db_name(),
 			);
 			env.push((format!("CRDB_URL_{}", crdb_dep.name_screaming_snake()), uri));

@@ -46,6 +46,17 @@ pub struct S3 {
 	pub s3_region: TerraformOutputValue<String>,
 }
 
+#[derive(Debug, Clone, Deserialize)]
+pub struct Cert {
+	pub cert_pem: String,
+	pub key_pem: String,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct Tls {
+	pub tls_cert_cloudflare_rivet_gg: TerraformOutputValue<Cert>,
+}
+
 pub async fn read_master_cluster(ctx: &ProjectContext) -> MasterCluster {
 	read_plan::<MasterCluster>(ctx, "master_cluster").await
 }
@@ -64,6 +75,10 @@ pub async fn read_s3_backblaze(ctx: &ProjectContext) -> S3 {
 
 pub async fn read_s3_aws(ctx: &ProjectContext) -> S3 {
 	read_plan::<S3>(ctx, "s3_aws").await
+}
+
+pub async fn read_tls_cert(ctx: &ProjectContext) -> Tls {
+	read_plan::<Tls>(ctx, "tls").await
 }
 
 /// Reads a Terraform plan's output and decodes in to type.

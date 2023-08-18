@@ -573,6 +573,7 @@ dependencies = [
  "async-posthog",
  "async-recursion",
  "async-trait",
+ "base64 0.13.1",
  "bolt-config",
  "chrono",
  "derive_builder",

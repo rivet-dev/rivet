@@ -70,7 +70,7 @@ impl DatabaseConnection {
 						);
 					}
 				}
-				x @ _ => bail!("cannot connect to this type of service: {x:?}"),
+				x => bail!("cannot connect to this type of service: {x:?}"),
 			}
 		}
 
