@@ -188,6 +188,7 @@ async fn lobby_group_closed(ctx: TestCtx) {
 	.unwrap();
 	let lobby_id = lobby_res.lobby_id.as_ref().unwrap().as_uuid();
 
+	// Cannot find closed lobby
 	msg!([ctx] mm::msg::lobby_closed_set(lobby_id) -> mm::msg::lobby_closed_set_complete {
 		lobby_id: Some(lobby_id.into()),
 		is_closed: true,
@@ -212,6 +213,62 @@ async fn lobby_group_closed(ctx: TestCtx) {
 		mm::msg::lobby_find_fail::ErrorCode::NoAvailableLobbies as i32,
 		err.error_code
 	);
+
+	// Can find lobby once opened again
+	msg!([ctx] mm::msg::lobby_closed_set(lobby_id) -> mm::msg::lobby_closed_set_complete {
+		lobby_id: Some(lobby_id.into()),
+		is_closed: false,
+	})
+	.await
+	.unwrap();
+
+	let res = find(
+		&ctx,
+		lobby_res.namespace_id.as_ref().unwrap().as_uuid(),
+		gen_players(1),
+		mm::msg::lobby_find::message::Query::LobbyGroup(backend::matchmaker::query::LobbyGroup {
+			lobby_group_ids: vec![lobby_res.lobby_group_id.unwrap()],
+			region_ids: vec![lobby_res.region_id.unwrap()],
+			auto_create: None,
+		}),
+	)
+	.await
+	.unwrap();
+	assert_eq!(lobby_res.lobby_id, res.lobby_id);
+}
+
+#[worker_test]
+async fn lobby_group_closed_auto_create(ctx: TestCtx) {
+	let lobby_res = op!([ctx] faker_mm_lobby {
+		..Default::default()
+	})
+	.await
+	.unwrap();
+	let lobby_id = lobby_res.lobby_id.as_ref().unwrap().as_uuid();
+
+	msg!([ctx] mm::msg::lobby_closed_set(lobby_id) -> mm::msg::lobby_closed_set_complete {
+		lobby_id: Some(lobby_id.into()),
+		is_closed: true,
+	})
+	.await
+	.unwrap();
+
+	let res = find(
+		&ctx,
+		lobby_res.namespace_id.as_ref().unwrap().as_uuid(),
+		gen_players(1),
+		mm::msg::lobby_find::message::Query::LobbyGroup(backend::matchmaker::query::LobbyGroup {
+			lobby_group_ids: vec![lobby_res.lobby_group_id.unwrap()],
+			region_ids: vec![lobby_res.region_id.unwrap()],
+			auto_create: Some(backend::matchmaker::query::AutoCreate {
+				lobby_group_id: lobby_res.lobby_group_id,
+				region_id: lobby_res.region_id,
+			}),
+		}),
+	)
+	.await
+	.unwrap();
+	assert_ne!(lobby_res.lobby_id, res.lobby_id);
 }
 
 #[worker_test]
