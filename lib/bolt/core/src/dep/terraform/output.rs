@@ -62,12 +62,17 @@ pub async fn read_s3_backblaze(ctx: &ProjectContext) -> S3 {
 	read_plan::<S3>(ctx, "s3_backblaze").await
 }
 
+pub async fn read_s3_aws(ctx: &ProjectContext) -> S3 {
+	read_plan::<S3>(ctx, "s3_aws").await
+}
+
 /// Reads a Terraform plan's output and decodes in to type.
 pub async fn read_plan<T: serde::de::DeserializeOwned>(ctx: &ProjectContext, plan_id: &str) -> T {
 	let terraform_plans = crate::tasks::infra::all_terraform_plans(ctx).unwrap();
 	assert!(
 		terraform_plans.iter().any(|x| x == plan_id),
-		"reading terraform output not in plan"
+		"reading terraform output not in plan: {}",
+		plan_id
 	);
 
 	// Read the Terraform

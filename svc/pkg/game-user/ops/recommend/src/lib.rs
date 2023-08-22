@@ -4,7 +4,7 @@ use rivet_operation::prelude::*;
 #[operation(name = "game-user-recommend")]
 async fn handle(
 	ctx: OperationContext<game_user::recommend::Request>,
-) -> Result<game_user::recommend::Response, GlobalError> {
+) -> GlobalResult<game_user::recommend::Response> {
 	let crdb = ctx.crdb("db-game-user").await?;
 
 	let count = ctx.count as i32;

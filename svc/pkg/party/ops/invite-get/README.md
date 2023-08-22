@@ -1,1 +1,0 @@
-# party-invite-get

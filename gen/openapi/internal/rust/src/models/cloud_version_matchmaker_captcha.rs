@@ -19,6 +19,8 @@ pub struct CloudVersionMatchmakerCaptcha {
     /// Denotes how many requests a connection can make before it is required to reverify a captcha.
     #[serde(rename = "requests_before_reverify")]
     pub requests_before_reverify: i32,
+    #[serde(rename = "turnstile", skip_serializing_if = "Option::is_none")]
+    pub turnstile: Option<Box<crate::models::CloudVersionMatchmakerCaptchaTurnstile>>,
     /// Denotes how long a connection can continue to reconnect without having to reverify a captcha (in milliseconds).
     #[serde(rename = "verification_ttl")]
     pub verification_ttl: i64,
@@ -30,6 +32,7 @@ impl CloudVersionMatchmakerCaptcha {
         CloudVersionMatchmakerCaptcha {
             hcaptcha: None,
             requests_before_reverify,
+            turnstile: None,
             verification_ttl,
         }
     }

@@ -3,8 +3,8 @@ use proto::backend::pkg::*;
 
 #[worker(name = "user-follow-request-ignore")]
 async fn worker(
-	ctx: &OperationContext<user_follow::msg::request_ignore::Message>,
-) -> Result<(), GlobalError> {
+	ctx: OperationContext<user_follow::msg::request_ignore::Message>,
+) -> GlobalResult<()> {
 	let follower_user_id = internal_unwrap!(ctx.follower_user_id).as_uuid();
 	let following_user_id = internal_unwrap!(ctx.following_user_id).as_uuid();
 

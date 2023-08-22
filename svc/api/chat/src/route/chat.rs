@@ -12,7 +12,7 @@ use rivet_chat_server::models;
 use rivet_claims::ClaimsDecode;
 use rivet_convert::ApiTryInto;
 use rivet_operation::prelude::*;
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 
 use crate::{assert, auth::Auth, convert, fetch, utils};
 
@@ -40,13 +40,6 @@ pub async fn send_chat_message(
 				},
 			)),
 		}),
-		models::SendChatTopic::PartyId(party_id) => ThreadOrTopic::Topic(backend::chat::Topic {
-			kind: Some(backend::chat::topic::Kind::Party(
-				backend::chat::topic::Party {
-					party_id: Some(util::uuid::parse(&party_id)?.into()),
-				},
-			)),
-		}),
 		models::SendChatTopic::IdentityId(identity_id) => {
 			ThreadOrTopic::Topic(backend::chat::Topic {
 				kind: Some(backend::chat::topic::Kind::Direct(
@@ -57,24 +50,8 @@ pub async fn send_chat_message(
 				)),
 			})
 		}
+		_ => internal_panic!("unreachable"),
 	};
-
-	// Validate party before getting or creating a thread
-	let (party_id, invite) =
-		if let models::SendMessageBody::PartyInvite(ref message) = body.message_body {
-			let party_id = unwrap_with_owned!(
-				utils::get_current_party(ctx.op_ctx(), current_user_id).await?,
-				PARTY_IDENTITY_NOT_IN_ANY_PARTY
-			);
-
-			assert::party_leader(ctx.op_ctx(), party_id, current_user_id).await?;
-
-			let invite = rivet_claims::decode(&message.token)??.as_party_invite()?;
-
-			(Some(party_id), Some(invite))
-		} else {
-			(None, None)
-		};
 
 	// Build body
 	let msg_body = match body.message_body {
@@ -84,16 +61,7 @@ pub async fn send_chat_message(
 				body: message.body,
 			})
 		}
-		models::SendMessageBody::PartyInvite(message) => {
-			backend::chat::message_body::Kind::PartyInvite(
-				backend::chat::message_body::PartyInvite {
-					sender_user_id: Some(current_user_id.into()),
-					party_id: Some(internal_unwrap_owned!(party_id).into()),
-					invite_id: Some(internal_unwrap_owned!(invite).invite_id.into()),
-					invite_token: message.token,
-				},
-			)
-		}
+		_ => internal_panic!("unreachable"),
 	};
 
 	// Validate message
@@ -170,11 +138,18 @@ pub async fn send_chat_message(
 }
 
 // MARK: GET /threads/{}/history
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Deserialize)]
 pub struct GetThreadHistoryQuery {
 	ts: Option<chrono::DateTime<chrono::Utc>>,
 	count: u32,
-	query_direction: Option<String>,
+	query_direction: Option<ThreadHistoryQueryDirection>,
+}
+
+#[derive(Debug, Deserialize)]
+pub enum ThreadHistoryQueryDirection {
+	Before,
+	After,
+	BeforeAndAfter,
 }
 
 pub async fn thread_history(
@@ -194,26 +169,22 @@ pub async fn thread_history(
 
 	assert::chat_thread_participant(&ctx, thread_id, current_user_id).await?;
 
+	let query_direction = match query
+		.query_direction
+		.unwrap_or(ThreadHistoryQueryDirection::Before)
+	{
+		ThreadHistoryQueryDirection::Before => chat_message::list::request::QueryDirection::Before,
+		ThreadHistoryQueryDirection::After => chat_message::list::request::QueryDirection::After,
+		ThreadHistoryQueryDirection::BeforeAndAfter => {
+			chat_message::list::request::QueryDirection::BeforeAndAfter
+		}
+	};
+
 	let list_res = op!([ctx] chat_message_list {
 		thread_id: Some(thread_id.into()),
 		ts: query.ts.map(|ts| ts.timestamp_millis()).unwrap_or_else(util::timestamp::now),
 		count: query.count,
-		query_direction: match query
-			.query_direction
-			.unwrap_or_else(|| "before".to_owned())
-			.as_str()
-		{
-			"before" => chat_message::list::request::QueryDirection::Before,
-			"after" => chat_message::list::request::QueryDirection::After,
-			"before_and_after" => chat_message::list::request::QueryDirection::BeforeAndAfter,
-			_ => {
-				panic_with!(
-					API_BAD_QUERY_PARAMETER,
-					parameter = "query_direction",
-					error = r#"Must be one of "before", "after", "before_and_after""#,
-				);
-			}
-		} as i32,
+		query_direction: query_direction as i32,
 	})
 	.await?;
 
@@ -287,7 +258,7 @@ pub async fn thread_live(
 	let update_ts = update_ts.unwrap_or_else(util::timestamp::now);
 
 	let typing_statuses = if typing_status_change {
-		let topic_key = util_chat::key::typing_statuses(&thread_id);
+		let topic_key = util_chat::key::typing_statuses(thread_id);
 		let res = redis::pipe()
 			.atomic()
 			.hgetall(topic_key.clone())
@@ -319,7 +290,7 @@ pub async fn thread_live(
 						)?));
 						let user = users_res.users.iter().find(|u| u.user_id == user_id);
 						let identity = convert::identity::handle_without_presence(
-							&current_user_id,
+							current_user_id,
 							internal_unwrap_owned!(user),
 						)?;
 

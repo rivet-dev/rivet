@@ -1,4 +1,5 @@
 use api_helper::{anchor::WatchIndexQuery, ctx::Ctx};
+use rivet_api::models as new_models;
 use rivet_cloud_server::models;
 use rivet_convert::ApiTryInto;
 use rivet_operation::prelude::*;
@@ -69,8 +70,8 @@ pub async fn get_builds(
 pub async fn create_build(
 	ctx: Ctx<Auth>,
 	game_id: Uuid,
-	body: models::CreateGameBuildRequest,
-) -> GlobalResult<models::CreateGameBuildResponse> {
+	body: new_models::CloudGamesCreateGameBuildRequest,
+) -> GlobalResult<new_models::CloudGamesCreateGameBuildResponse> {
 	ctx.auth().check_game_write(ctx.op_ctx(), game_id).await?;
 
 	// TODO: Read and validate image file
@@ -79,16 +80,25 @@ pub async fn create_build(
 		game_id: Some(game_id.into()),
 		display_name: body.display_name,
 		image_tag: Some(body.image_tag),
-		image_file: Some(body.image_file.try_into()?),
+		image_file: Some((*body.image_file).try_into()?),
 		..Default::default()
 	})
 	.await?;
 
-	Ok(models::CreateGameBuildResponse {
-		build_id: internal_unwrap!(create_res.build_id).as_uuid().to_string(),
-		upload_id: internal_unwrap!(create_res.upload_id).as_uuid().to_string(),
-		image_presigned_request: internal_unwrap!(create_res.image_presigned_request)
-			.clone()
-			.try_into()?,
+	Ok(new_models::CloudGamesCreateGameBuildResponse {
+		build_id: internal_unwrap!(create_res.build_id).as_uuid(),
+		upload_id: internal_unwrap!(create_res.upload_id).as_uuid(),
+		// Deprecated
+		image_presigned_request: Box::new(
+			internal_unwrap_owned!(create_res.image_presigned_requests.first())
+				.clone()
+				.try_into()?,
+		),
+		image_presigned_requests: create_res
+			.image_presigned_requests
+			.iter()
+			.cloned()
+			.map(ApiTryInto::try_into)
+			.collect::<GlobalResult<Vec<_>>>()?,
 	})
 }

@@ -2,9 +2,7 @@ use chirp_worker::prelude::*;
 use proto::backend::pkg::*;
 
 #[worker(name = "user-report-create")]
-async fn worker(
-	ctx: &OperationContext<user_report::msg::create::Message>,
-) -> Result<(), GlobalError> {
+async fn worker(ctx: OperationContext<user_report::msg::create::Message>) -> GlobalResult<()> {
 	let reporter_user_id = internal_unwrap!(ctx.reporter_user_id).as_uuid();
 	let subject_user_id = internal_unwrap!(ctx.subject_user_id).as_uuid();
 	let namespace_id = ctx.subject_user_id.as_ref().map(common::Uuid::as_uuid);

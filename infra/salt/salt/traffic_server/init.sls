@@ -36,10 +36,23 @@ create_mnt_db_trafficserver:
       - mount: disk_mount_traffic_server
     {% endif %}
 
+create_var_log_trafficserver:
+  file.directory:
+    - name: /var/log/trafficserver
+    - user: trafficserver
+    - group: trafficserver
+    - mode: 700
+    - makedirs: True
+    {%- if grains['volumes']['ats']['mount'] %}
+    - require:
+      - mount: disk_mount_traffic_server
+    {% endif %}
+
 push_trafficserver_service:
   file.managed:
     - name: /lib/systemd/system/trafficserver.service
     - source: salt://traffic_server/files/trafficserver.service
+    - template: jinja
     - onchanges:
       - cmd: build_nix_shell
 
@@ -49,6 +62,7 @@ start_trafficserver_service:
     - require:
       - file: create_mnt_db_trafficserver
       - file: push_trafficserver_service
+      - file: create_var_log_trafficserver
     - onchanges:
       - file: push_trafficserver_service
 
@@ -78,10 +92,10 @@ push_etc_trafficserver_dynamic:
     - template: jinja
     - context:
         nebula_ipv4: {{ grains['nebula']['ipv4'] }}
-        s3_endpoint: {{ pillar['s3']['endpoint_internal'] }}
-        s3_region: {{ pillar['s3']['region'] }}
-        s3_access_key_id: {{ pillar['s3']['access_key_id'] }}
-        s3_secret_access_key: {{ pillar['s3']['access_key_secret'] }}
+        s3_endpoint: {{ pillar['s3']['config']['default']['endpoint_internal'] }}
+        s3_region: {{ pillar['s3']['config']['default']['region'] }}
+        s3_access_key_id: {{ pillar['s3']['access']['default']['persistent_access_key_id'] }}
+        s3_secret_access_key: {{ pillar['s3']['access']['default']['persistent_access_key_secret'] }}
         volume_size_cache: {{ grains['volumes']['ats']['size']|int - 1 }}G
 
 reload_traffic_server_config:

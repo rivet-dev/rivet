@@ -10,6 +10,8 @@ pub enum Error {
 	LookupHost(std::io::Error),
 	#[error("unresolved host")]
 	UnresolvedHost,
+	#[error("unknown provider: {0}")]
+	UnknownProvider(String),
 }
 
 /// How to access the S3 service.
@@ -29,6 +31,38 @@ pub enum EndpointKind {
 	///
 	/// This should be used for all public presigned requests.
 	External,
+}
+
+#[derive(Debug)]
+pub enum Provider {
+	Minio,
+	Backblaze,
+	Aws,
+}
+
+impl Provider {
+	pub fn default() -> Result<Self, Error> {
+		Self::from_str(&std::env::var("S3_DEFAULT_PROVIDER")?)
+	}
+
+	pub fn from_str(s: &str) -> Result<Self, Error> {
+		match s {
+			"MINIO" => Ok(Provider::Minio),
+			"BACKBLAZE" => Ok(Provider::Backblaze),
+			"AWS" => Ok(Provider::Aws),
+			_ => Err(Error::UnknownProvider(s.to_string())),
+		}
+	}
+}
+
+impl std::fmt::Display for Provider {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		match self {
+			Provider::Minio => write!(f, "MINIO"),
+			Provider::Backblaze => write!(f, "BACKBLAZE"),
+			Provider::Aws => write!(f, "AWS"),
+		}
+	}
 }
 
 #[derive(Clone)]
@@ -74,24 +108,39 @@ impl Client {
 	}
 
 	pub async fn from_env(svc_name: &str) -> Result<Self, Error> {
-		Self::from_env_opt(svc_name, EndpointKind::Internal).await
+		Self::from_env_opt(svc_name, Provider::default()?, EndpointKind::Internal).await
 	}
 
-	pub async fn from_env_opt(svc_name: &str, endpoint_kind: EndpointKind) -> Result<Self, Error> {
+	pub async fn from_env_with_provider(svc_name: &str, provider: Provider) -> Result<Self, Error> {
+		Self::from_env_opt(svc_name, provider, EndpointKind::Internal).await
+	}
+
+	pub async fn from_env_opt(
+		svc_name: &str,
+		provider: Provider,
+		endpoint_kind: EndpointKind,
+	) -> Result<Self, Error> {
 		let svc_screaming = svc_name.to_uppercase().replace("-", "_");
 
-		let bucket = std::env::var(format!("S3_BUCKET_{}", svc_screaming))?;
-		let region = std::env::var(format!("S3_REGION_{}", svc_screaming))?;
-		let access_key_id = std::env::var(format!("S3_ACCESS_KEY_ID_{}", svc_screaming))?;
-		let secret_access_key = std::env::var(format!("S3_SECRET_ACCESS_KEY_{}", svc_screaming))?;
+		let bucket = std::env::var(format!("S3_{}_BUCKET_{}", provider, svc_screaming))?;
+		let region = std::env::var(format!("S3_{}_REGION_{}", provider, svc_screaming))?;
+		let access_key_id =
+			std::env::var(format!("S3_{}_ACCESS_KEY_ID_{}", provider, svc_screaming))?;
+		let secret_access_key = std::env::var(format!(
+			"S3_{}_SECRET_ACCESS_KEY_{}",
+			provider, svc_screaming
+		))?;
 
 		let endpoint = match endpoint_kind {
-			EndpointKind::Internal => {
-				std::env::var(format!("S3_ENDPOINT_INTERNAL_{}", svc_screaming))?
-			}
+			EndpointKind::Internal => std::env::var(format!(
+				"S3_{}_ENDPOINT_INTERNAL_{}",
+				provider, svc_screaming
+			))?,
 			EndpointKind::InternalResolved => {
-				let mut endpoint =
-					std::env::var(format!("S3_ENDPOINT_INTERNAL_{}", svc_screaming))?;
+				let mut endpoint = std::env::var(format!(
+					"S3_{}_ENDPOINT_INTERNAL_{}",
+					provider, svc_screaming
+				))?;
 
 				// HACK: Resolve Minio Consul address to schedule the job with. We
 				// do this since the job servers don't have Consul clients
@@ -120,9 +169,10 @@ impl Client {
 
 				endpoint
 			}
-			EndpointKind::External => {
-				std::env::var(format!("S3_ENDPOINT_EXTERNAL_{}", svc_screaming))?
-			}
+			EndpointKind::External => std::env::var(format!(
+				"S3_{}_ENDPOINT_EXTERNAL_{}",
+				provider, svc_screaming
+			))?,
 		};
 
 		Self::new(

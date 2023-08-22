@@ -1,7 +1,0 @@
-[service]
-name = "party-invite-list"
-
-[runtime]
-kind = "rust"
-
-[operation]

@@ -1,0 +1,88 @@
+syntax = "proto3";
+
+package rivet.backend.module;
+
+import "proto/common.proto";
+import "proto/backend/module/script.proto";
+
+// MARK: Game Namespace Config
+message GameNamespaceConfig {
+}
+
+// MARK: Game Version Config
+message GameVersionConfig {	
+	message Dependency {
+		string key = 1;
+		rivet.common.Uuid module_version_id = 2;
+	}
+
+	repeated Dependency dependencies = 1;
+}
+
+// MARK: Game Version Config Context
+message GameVersionConfigCtx {
+
+}
+
+// MARK: Game Version Config Meta
+message GameVersionConfigMeta {
+	
+}
+
+// Module
+message Module {
+	enum Publicity {
+		PRIVATE = 0;
+		PUBLIC = 1;
+	}
+
+	rivet.common.Uuid module_id = 1;
+	string name_id = 2;
+	rivet.common.Uuid team_id = 3;
+	int64 create_ts = 4;
+	Publicity publicity = 5;
+}
+
+// Version
+message Version {
+	rivet.common.Uuid version_id = 1;
+	rivet.common.Uuid module_id = 2;
+	int64 create_ts = 3;
+
+	uint64 major = 101;
+	uint64 minor = 102;
+	uint64 patch = 103;
+
+	repeated rivet.backend.module.Script scripts = 201;
+
+	message Docker {
+		// TODO: Auth?
+		string image_tag = 1;
+	}
+
+	oneof image {
+		Docker docker = 301;
+	}
+}
+
+// Instance
+message Instance {
+	rivet.common.Uuid instance_id = 1;
+	rivet.common.Uuid module_version_id = 2;
+	int64 create_ts = 3;
+	optional int64 destroy_ts = 4;
+
+	message Dummy {
+		
+	}
+
+	message Fly {
+		/// Null if app not created yet.
+		optional string fly_app_id = 1;
+	}
+
+	oneof driver {
+		Dummy dummy = 101;
+		Fly fly = 102;
+	};
+}

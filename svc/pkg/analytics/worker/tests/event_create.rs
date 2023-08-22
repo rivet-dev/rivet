@@ -43,16 +43,6 @@ async fn basic_with_metadata(ctx: TestCtx) {
 
 	let user_id = user.user_id.unwrap().as_uuid();
 
-	let party_id = Uuid::new_v4();
-	msg!([ctx] party::msg::create(party_id) -> party::msg::create_complete {
-		party_id: Some(party_id.into()),
-		leader_user_id: user.user_id,
-		party_size: 4,
-		..Default::default()
-	})
-	.await
-	.unwrap();
-
 	msg!([ctx] user_presence::msg::game_activity_set(user_id) -> user_presence::msg::update {
 		user_id: user.user_id,
 		game_activity: Some(backend::user::presence::GameActivity {
@@ -87,19 +77,6 @@ async fn basic_with_metadata(ctx: TestCtx) {
 				name: "test.with_game".into(),
 				user_id: None,
 				namespace_id: Some(Uuid::new_v4().into()),
-				properties_json: Some(serde_json::to_string(&json!({
-					"foo": "bar",
-					"hello": 123,
-					"world": { "around": true },
-				})).unwrap()),
-				..Default::default()
-			},
-
-			// Event with user
-			analytics::msg::event_create::Event {
-				name: "test.with_user_and_party".into(),
-				user_id: user.user_id,
-				namespace_id: None,
 				properties_json: Some(serde_json::to_string(&json!({
 					"foo": "bar",
 					"hello": 123,

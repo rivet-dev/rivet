@@ -41,8 +41,8 @@ pub fn group_handle(
 			team.profile_file_name.as_ref(),
 		),
 		external: models::GroupExternalLinks {
-			profile: util::route::team_profile(&team_id),
-			chat: util::route::team_chat(&team_id),
+			profile: util::route::team_profile(team_id),
+			chat: util::route::team_chat(team_id),
 		},
 		is_developer: is_developer.then_some(true),
 	})

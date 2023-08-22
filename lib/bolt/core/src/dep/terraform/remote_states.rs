@@ -2,7 +2,7 @@ use derive_builder::Builder;
 use maplit::hashmap;
 use std::collections::HashMap;
 
-use crate::{config, context::ProjectContext};
+use crate::context::{ProjectContext, S3Provider};
 
 /// Defines the dependency graph for the Terraform plans.
 ///
@@ -13,17 +13,20 @@ pub fn dependency_graph(ctx: &ProjectContext) -> HashMap<&'static str, Vec<Remot
 		"dns" => vec![RemoteStateBuilder::default().plan_id("pools").build().unwrap()],
 		"master_local" => vec![RemoteStateBuilder::default().plan_id("nebula").build().unwrap()],
 		"master_cluster" => vec![RemoteStateBuilder::default().plan_id("nebula").build().unwrap()],
-		"nomad" => vec![
-			RemoteStateBuilder::default()
-				// TODO: Find a cleaner way of doing this
-				.plan_id(match ctx.ns().s3.provider {
-					config::ns::S3Provider::Minio { .. } => "s3_minio",
-					config::ns::S3Provider::Backblaze { .. } => "s3_backblaze"
-				})
-				.data_name("s3")
-				.build()
-				.unwrap()
-		],
+		"nomad" => {
+			let (default_s3_provider, _) = ctx.default_s3_provider().unwrap();
+			let provider_plan_id = match default_s3_provider {
+				S3Provider::Minio => "s3_minio",
+				S3Provider::Backblaze => "s3_backblaze",
+				S3Provider::Aws => "s3_aws",
+			};
+
+			vec![RemoteStateBuilder::default()
+			.plan_id(provider_plan_id)
+			.data_name("s3")
+			.build()
+			.unwrap()]
+		},
 		"pools" => vec![
 			RemoteStateBuilder::default().plan_id("nebula").build().unwrap(),
 			RemoteStateBuilder::default().plan_id("master_local").condition("var.deploy_method_local").build().unwrap(),

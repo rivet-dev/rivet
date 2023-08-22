@@ -36,7 +36,6 @@ pub async fn events(
 		new_chat_reads,
 		new_mm_lobby_joins,
 		removed_team_ids,
-		party_update_ts,
 		user_update_ts,
 		last_update_ts,
 		valid_anchor,
@@ -49,7 +48,6 @@ pub async fn events(
 			new_mm_lobby_joins: Vec::new(),
 			removed_team_ids: Vec::new(),
 
-			party_update_ts: Some(util::timestamp::now()),
 			user_update_ts: None,
 			last_update_ts: None,
 			valid_anchor: false,
@@ -57,51 +55,28 @@ pub async fn events(
 	};
 	let last_update_ts = last_update_ts.unwrap_or_else(util::timestamp::now);
 
-	// If the anchor was invalid, then force a party update message to be sent.
-	let party_update_ts = if let Some(x) = party_update_ts {
-		Some(x)
-	} else if !valid_anchor {
-		Some(util::timestamp::now())
-	} else {
-		None
-	};
-
 	// Process events
-	let (
-		msg_events,
-		chat_read_events,
-		party_events,
-		user_update_events,
-		mm_lobby_events,
-		thread_remove_events,
-	) = tokio::try_join!(
-		process_msg_events(&ctx, current_user_id, new_messages, valid_anchor),
-		process_chat_read_events(new_chat_reads),
-		async {
-			if let Some(ts) = party_update_ts {
-				Ok(process_party_update_events(&ctx, ts, current_user_id, valid_anchor).await?)
-			} else {
-				Ok(None)
-			}
-		},
-		async {
-			if let Some(ts) = user_update_ts {
-				Ok(Some(
-					process_user_update_events(&ctx, ts, current_user_id, game_user).await?,
-				))
-			} else {
-				Ok(None)
-			}
-		},
-		process_mm_lobby_events(&ctx, namespace_id, new_mm_lobby_joins),
-		process_chat_thread_remove_events(&ctx, removed_team_ids),
-	)?;
+	let (msg_events, chat_read_events, user_update_events, mm_lobby_events, thread_remove_events) =
+		tokio::try_join!(
+			process_msg_events(&ctx, current_user_id, new_messages, valid_anchor),
+			process_chat_read_events(new_chat_reads),
+			async {
+				if let Some(ts) = user_update_ts {
+					Ok(Some(
+						process_user_update_events(&ctx, ts, current_user_id, game_user).await?,
+					))
+				} else {
+					Ok(None)
+				}
+			},
+			process_mm_lobby_events(&ctx, namespace_id, new_mm_lobby_joins),
+			process_chat_thread_remove_events(&ctx, removed_team_ids),
+		)?;
 
 	// Merge and sort events
 	let mut events = msg_events
 		.into_iter()
 		.chain(chat_read_events)
-		.chain(party_events)
 		.chain(user_update_events)
 		.chain(mm_lobby_events)
 		.chain(thread_remove_events)
@@ -123,10 +98,6 @@ struct EventsWaitResponse {
 	new_mm_lobby_joins: Vec<(i64, backend::user::event::MatchmakerLobbyJoin)>,
 
 	removed_team_ids: Vec<(i64, Uuid)>,
-
-	/// If there was a party update, this is the timestamp of the published
-	/// message.
-	party_update_ts: Option<i64>,
 
 	/// Timestamp of the last message that was received from the tail. This is
 	/// used to build the new watch index.
@@ -162,37 +133,38 @@ async fn events_wait(
 	let mut new_chat_reads = Vec::new();
 	let mut new_mm_lobby_joins = Vec::new();
 	let mut removed_team_ids = Vec::new();
-	let mut party_update_ts = None;
 	let mut user_update_ts = None;
 	for msg in thread_tail.messages {
 		let event = internal_unwrap!(msg.event);
-		match internal_unwrap!(event.kind) {
-			backend::user::event::event::Kind::ChatMessage(chat_msg) => {
-				let chat_message = internal_unwrap!(chat_msg.chat_message).clone();
-				new_messages.push(chat_message);
+
+		if let Some(event) = &event.kind {
+			match event {
+				backend::user::event::event::Kind::ChatMessage(chat_msg) => {
+					let chat_message = internal_unwrap!(chat_msg.chat_message).clone();
+					new_messages.push(chat_message);
+				}
+				backend::user::event::event::Kind::ChatRead(chat_read) => {
+					new_chat_reads.push((
+						internal_unwrap!(chat_read.thread_id).as_uuid(),
+						chat_read.clone(),
+					));
+				}
+				backend::user::event::event::Kind::MatchmakerLobbyJoin(mm_lobby_join) => {
+					new_mm_lobby_joins.push((msg.msg_ts(), mm_lobby_join.clone()));
+				}
+				backend::user::event::event::Kind::UserUpdate(_) => {
+					user_update_ts = Some(msg.msg_ts());
+				}
+				backend::user::event::event::Kind::PresenceUpdate(_) => {
+					user_update_ts = Some(msg.msg_ts());
+				}
+				backend::user::event::event::Kind::TeamMemberRemove(team) => {
+					removed_team_ids.push((msg.msg_ts(), internal_unwrap!(team.team_id).as_uuid()));
+				}
 			}
-			backend::user::event::event::Kind::ChatRead(chat_read) => {
-				new_chat_reads.push((
-					internal_unwrap!(chat_read.thread_id).as_uuid(),
-					chat_read.clone(),
-				));
-			}
-			backend::user::event::event::Kind::PartyUpdate(_) => {
-				party_update_ts = Some(msg.msg_ts());
-			}
-			backend::user::event::event::Kind::MatchmakerLobbyJoin(mm_lobby_join) => {
-				new_mm_lobby_joins.push((msg.msg_ts(), mm_lobby_join.clone()));
-			}
-			backend::user::event::event::Kind::UserUpdate(_) => {
-				user_update_ts = Some(msg.msg_ts());
-			}
-			backend::user::event::event::Kind::PresenceUpdate(_) => {
-				user_update_ts = Some(msg.msg_ts());
-			}
-			backend::user::event::event::Kind::TeamMemberRemove(team) => {
-				removed_team_ids.push((msg.msg_ts(), internal_unwrap!(team.team_id).as_uuid()));
-			}
-		};
+		} else {
+			tracing::warn!(?event, "unknown user event kind");
+		}
 	}
 
 	Ok(EventsWaitResponse {
@@ -200,7 +172,6 @@ async fn events_wait(
 		new_chat_reads,
 		new_mm_lobby_joins,
 		removed_team_ids,
-		party_update_ts,
 		user_update_ts,
 		last_update_ts,
 		valid_anchor: thread_tail.anchor_status != chirp_client::TailAllAnchorStatus::Expired,
@@ -274,74 +245,6 @@ async fn process_msg_events(
 	}
 
 	Ok(msg_events)
-}
-
-async fn fetch_parties_and_games(
-	ctx: &Ctx<Auth>,
-	party_ids: Vec<common::Uuid>,
-) -> GlobalResult<(
-	Vec<backend::party::Party>,
-	Vec<convert::GameWithNamespaceIds>,
-)> {
-	let party_res = op!([ctx] party_get {
-		party_ids: party_ids,
-	})
-	.await?;
-
-	// Fetch games from parties
-	let namespace_ids = party_res
-		.parties
-		.iter()
-		.filter_map(|party| {
-			party.state.as_ref().and_then(|state| match state {
-				backend::party::party::State::MatchmakerFindingLobby(state) => state.namespace_id,
-				backend::party::party::State::MatchmakerLobby(state) => state.namespace_id,
-			})
-		})
-		.collect::<Vec<_>>();
-
-	let resolve_res = op!([ctx] game_resolve_namespace_id {
-		namespace_ids: namespace_ids.clone(),
-	})
-	.await?;
-
-	let game_res = op!([ctx] game_get {
-		game_ids: resolve_res
-			.games
-			.iter()
-			.map(|game| Ok(internal_unwrap_owned!(game.game_id)))
-			.collect::<GlobalResult<Vec<_>>>()?,
-	})
-	.await?;
-
-	// Collect games with the namespace id that was used to query them
-	let games = namespace_ids
-		.iter()
-		.filter_map(|namespace_id| {
-			resolve_res
-				.games
-				.iter()
-				.find(|resolved_game| {
-					resolved_game
-						.namespace_ids
-						.iter()
-						.any(|n_id| namespace_id == n_id)
-				})
-				.map(|resolved_game| {
-					let game = internal_unwrap_owned!(game_res
-						.games
-						.iter()
-						.find(|game| resolved_game.game_id == game.game_id));
-
-					Ok(convert::GameWithNamespaceIds {
-						namespace_ids: vec![namespace_id.as_uuid()],
-						game: game.clone(),
-					})
-				})
-		})
-		.collect::<GlobalResult<Vec<_>>>()?;
-
-	Ok((party_res.parties.clone(), games))
 }
 
 struct FetchThreadsResponse {
@@ -429,43 +332,6 @@ async fn fetch_threads_incremental(
 		threads,
 		tail_messages: new_messages,
 	})
-}
-
-// MARK: Party update
-async fn process_party_update_events(
-	ctx: &Ctx<Auth>,
-	ts: i64,
-	current_user_id: Uuid,
-	valid_anchor: bool,
-) -> GlobalResult<Option<models::IdentityGlobalEvent>> {
-	let party = if let Some(party_id) = utils::get_party(ctx.op_ctx(), current_user_id).await? {
-		let res = fetch::party::summaries(ctx.op_ctx(), current_user_id, vec![party_id]).await;
-
-		match res {
-			Ok(mut parties) => parties.pop(),
-			// Explicitly handle PARTY_PARTY_NOT_FOUND since indicates there was a race condition
-			// between the party the user is in.
-			Err(x) if x.is(formatted_error::code::PARTY_PARTY_NOT_FOUND) => None,
-			Err(x) => return Err(x),
-		}
-	} else {
-		None
-	};
-
-	if !valid_anchor && party.is_none() {
-		Ok(None)
-	} else {
-		Ok(Some(models::IdentityGlobalEvent {
-			ts: util::timestamp::to_string(ts)?,
-			kind: Box::new(models::IdentityGlobalEventKind {
-				party_update: Some(Box::new(models::IdentityGlobalEventPartyUpdate {
-					party: party.map(Box::new),
-				})),
-				..Default::default()
-			}),
-			notification: None,
-		}))
-	}
 }
 
 // MARK: User update

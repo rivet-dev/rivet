@@ -5,4 +5,3 @@ pub mod chat;
 pub mod game;
 pub mod group;
 pub mod identity;
-pub mod party;

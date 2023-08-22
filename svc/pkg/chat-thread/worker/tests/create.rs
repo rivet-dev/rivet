@@ -11,7 +11,6 @@ struct Thread {
 	thread_id: Uuid,
 
 	team_team_id: Option<Uuid>,
-	party_party_id: Option<Uuid>,
 	direct_user_a_id: Option<Uuid>,
 	direct_user_b_id: Option<Uuid>,
 }
@@ -23,12 +22,6 @@ async fn empty(ctx: TestCtx) {
 			thread_id: None,
 			kind: backend::chat::topic::Kind::Team(backend::chat::topic::Team {
 				team_id: Some(Uuid::new_v4().into()),
-			}),
-		},
-		ThreadEntry {
-			thread_id: None,
-			kind: backend::chat::topic::Kind::Party(backend::chat::topic::Party {
-				party_id: Some(Uuid::new_v4().into()),
 			}),
 		},
 		ThreadEntry {
@@ -62,7 +55,6 @@ async fn empty(ctx: TestCtx) {
 		SELECT
 			thread_id,
 			team_team_id,
-			party_party_id,
 			direct_user_a_id,
 			direct_user_b_id
 		FROM threads
@@ -83,7 +75,6 @@ async fn empty(ctx: TestCtx) {
 
 		match &thread.kind {
 			backend::chat::topic::Kind::Team(team) => {
-				assert_eq!(None, crdb_thread.party_party_id);
 				assert_eq!(None, crdb_thread.direct_user_a_id);
 				assert_eq!(None, crdb_thread.direct_user_b_id);
 				assert_eq!(
@@ -91,18 +82,8 @@ async fn empty(ctx: TestCtx) {
 					crdb_thread.team_team_id.unwrap()
 				);
 			}
-			backend::chat::topic::Kind::Party(party) => {
-				assert_eq!(None, crdb_thread.team_team_id);
-				assert_eq!(None, crdb_thread.direct_user_a_id);
-				assert_eq!(None, crdb_thread.direct_user_b_id);
-				assert_eq!(
-					party.party_id.unwrap().as_uuid(),
-					crdb_thread.party_party_id.unwrap()
-				);
-			}
 			backend::chat::topic::Kind::Direct(direct) => {
 				assert_eq!(None, crdb_thread.team_team_id);
-				assert_eq!(None, crdb_thread.party_party_id);
 
 				let (user_a_id, user_b_id) = util::sort::id_pair(
 					direct.user_a_id.unwrap().as_uuid(),

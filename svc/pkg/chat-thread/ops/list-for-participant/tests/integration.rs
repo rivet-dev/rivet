@@ -7,9 +7,6 @@ struct PopulateDb {
 	team_id: Uuid,
 	team_thread_id: Uuid,
 
-	party_id: Uuid,
-	party_thread_id: Uuid,
-
 	user_a_id: Uuid,
 	user_b_id: Uuid,
 	direct_thread_id: Uuid,
@@ -19,7 +16,6 @@ impl PopulateDb {
 	async fn populate(
 		ctx: &TestCtx,
 		team_id: Uuid,
-		party_id: Uuid,
 		user_a_id: Uuid,
 		user_b_id: Uuid,
 	) -> PopulateDb {
@@ -29,9 +25,6 @@ impl PopulateDb {
 		let threads = vec![
 			backend::chat::topic::Kind::Team(backend::chat::topic::Team {
 				team_id: Some(team_id.into()),
-			}),
-			backend::chat::topic::Kind::Party(backend::chat::topic::Party {
-				party_id: Some(party_id.into()),
 			}),
 			backend::chat::topic::Kind::Direct(backend::chat::topic::Direct {
 				user_a_id: Some(user_a_id.into()),
@@ -54,12 +47,9 @@ impl PopulateDb {
 			team_id,
 			team_thread_id: thread_ids[0],
 
-			party_id,
-			party_thread_id: thread_ids[1],
-
 			user_a_id,
 			user_b_id,
-			direct_thread_id: thread_ids[2],
+			direct_thread_id: thread_ids[1],
 		}
 	}
 
@@ -123,7 +113,6 @@ async fn empty(ctx: TestCtx) {
 	let populate_db = PopulateDb::populate(
 		&ctx,
 		raw_team_id,
-		Uuid::new_v4(),
 		user_a.user_id.unwrap().as_uuid(),
 		user_b.user_id.unwrap().as_uuid(),
 	)
@@ -143,9 +132,6 @@ async fn empty(ctx: TestCtx) {
 		match thread_kind {
 			backend::chat::topic::Kind::Team(team) => {
 				assert_eq!(populate_db.team_id, team.team_id.unwrap().as_uuid());
-			}
-			backend::chat::topic::Kind::Party(party) => {
-				assert_eq!(populate_db.party_id, party.party_id.unwrap().as_uuid());
 			}
 			backend::chat::topic::Kind::Direct(direct) => {
 				let (user_a_id, user_b_id) = util::sort::id_pair(

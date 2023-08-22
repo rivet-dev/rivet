@@ -6,7 +6,7 @@ All recoverable errors are configured in [`errors/`](../../../errors).
 
 See the [frontmatter](https://jekyllrb.com/docs/front-matter/) config at [`lib/formatted-error/build.rs`](../../../lib/formatted-error/build.rs).
 
-These get auto-generated to https://docs.rivet.gg/.
+These get auto-generated to https://rivet.gg/docs.
 
 ## Service types
 

@@ -1,0 +1,15 @@
+syntax = "proto3";
+
+package rivet.backend.pkg.module.msg.instance_version_set_complete;
+
+import "proto/common.proto";
+
+/// name = "msg-module-instance-version-set-complete"
+/// parameters = [
+/// 	{ name = "instance_id" },
+/// ]
+message Message {
+	rivet.common.Uuid instance_id = 1;
+	rivet.common.Uuid version_id = 2;
+}
+

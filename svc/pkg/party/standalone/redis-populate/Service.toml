@@ -1,8 +1,0 @@
-[service]
-name = "party-redis-populate"
-essential = true
-
-[runtime]
-kind = "rust"
-
-[oneshot]

@@ -82,6 +82,9 @@ async fn empty(ctx: TestCtx) {
 				}],
 				custom_avatars: Vec::new(),
 			}),
+			module: Some(backend::module::GameVersionConfig {
+				dependencies: Vec::new(),
+			})
 		})
 	})
 	.await

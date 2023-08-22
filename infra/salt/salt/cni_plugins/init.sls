@@ -1,5 +1,5 @@
 # https://github.com/containernetworking/plugins/releases
-{% set version = '1.1.1' %}
+{% set version = '1.3.0' %}
 
 install_cni_plugins:
   archive.extracted:

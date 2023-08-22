@@ -18,8 +18,6 @@ pub struct ChatSendTopic {
     pub group_id: Option<uuid::Uuid>,
     #[serde(rename = "identity_id", skip_serializing_if = "Option::is_none")]
     pub identity_id: Option<uuid::Uuid>,
-    #[serde(rename = "party_id", skip_serializing_if = "Option::is_none")]
-    pub party_id: Option<uuid::Uuid>,
     #[serde(rename = "thread_id", skip_serializing_if = "Option::is_none")]
     pub thread_id: Option<uuid::Uuid>,
 }
@@ -30,7 +28,6 @@ impl ChatSendTopic {
         ChatSendTopic {
             group_id: None,
             identity_id: None,
-            party_id: None,
             thread_id: None,
         }
     }

@@ -2,12 +2,13 @@ use std::collections::HashMap;
 
 use chirp_worker::prelude::*;
 use futures_util::stream::{StreamExt, TryStreamExt};
-use proto::backend::pkg::*;
+use proto::backend::{self, pkg::*};
 
 #[derive(sqlx::FromRow)]
 struct UploadRow {
 	upload_id: Uuid,
 	bucket: String,
+	provider: i64,
 }
 
 #[derive(sqlx::FromRow)]
@@ -34,7 +35,7 @@ async fn worker(ctx: &OperationContext<upload::msg::delete::Message>) -> GlobalR
 
 	let uploads = sqlx::query_as::<_, UploadRow>(indoc!(
 		"
-		SELECT upload_id, bucket
+		SELECT upload_id, bucket, provider
 		FROM uploads
 		WHERE upload_id = ANY($1)
 		"
@@ -66,7 +67,18 @@ async fn worker(ctx: &OperationContext<upload::msg::delete::Message>) -> GlobalR
 		if let Some(x) = deletions.get_mut(&upload.bucket) {
 			x.keys.push(key);
 		} else {
-			let client = s3_util::Client::from_env(&upload.bucket).await?;
+			// Parse provider
+			let proto_provider = internal_unwrap_owned!(
+				backend::upload::Provider::from_i32(upload.provider as i32),
+				"invalid upload provider"
+			);
+			let provider = match proto_provider {
+				backend::upload::Provider::Minio => s3_util::Provider::Minio,
+				backend::upload::Provider::Backblaze => s3_util::Provider::Backblaze,
+				backend::upload::Provider::Aws => s3_util::Provider::Aws,
+			};
+
+			let client = s3_util::Client::from_env_with_provider(&upload.bucket, provider).await?;
 
 			deletions.insert(
 				upload.bucket.clone(),

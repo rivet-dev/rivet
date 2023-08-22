@@ -186,45 +186,15 @@ pub async fn activities(
 
 	let identities = follows
 		.into_iter()
-		.map(|follow| {
-			convert::identity::handle(&current_user_id, follow.user, &presences_ctx, true)
-		})
+		.map(|follow| convert::identity::handle(current_user_id, follow.user, &presences_ctx, true))
 		.collect::<GlobalResult<Vec<_>>>()?;
-
-	// TODO: Add back
-	let parties = Vec::new();
-	// let parties = presences_ctx
-	// 	.parties
-	// 	.parties
-	// 	.values()
-	// 	.map(|party| {
-	// 		(
-	// 			party.party_id,
-	// 			convert::party::summary(
-	// 				&current_user_id,
-	// 				party,
-	// 				&presences_ctx.games_with_namespace_ids,
-	// 				&presences_ctx.parties.members,
-	// 				&presences_ctx.parties.member_users,
-	// 				&presences_ctx.parties.threads,
-	// 			),
-	// 		)
-	// 	})
-	// 	.filter_map(|(party_id, result)| match result {
-	// 		Ok(x) => Some(x),
-	// 		Err(err) => {
-	// 			tracing::error!(?err, ?party_id, "failed to fetch party for activity");
-	// 			None
-	// 		}
-	// 	})
-	// 	.collect::<Vec<_>>();
 
 	let suggested_players = suggested_players
 		.into_iter()
 		.filter_map(|game_user| {
 			if let Some(user) = users.users.iter().find(|u| u.user_id == game_user.user_id) {
 				Some(convert::identity::handle(
-					&current_user_id,
+					current_user_id,
 					user,
 					&presences_ctx,
 					true,
@@ -239,7 +209,6 @@ pub async fn activities(
 	Ok(models::IdentityListActivitiesResponse {
 		identities,
 		games: recent_games,
-		parties,
 		suggested_groups,
 		suggested_players,
 

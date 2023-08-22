@@ -82,10 +82,6 @@ impl Connection {
 		self.pools.redis("redis-mm")
 	}
 
-	pub async fn redis_party(&self) -> Result<RedisPool, rivet_pools::Error> {
-		self.pools.redis("redis-party")
-	}
-
 	pub async fn redis_user_presence(&self) -> Result<RedisPool, rivet_pools::Error> {
 		self.pools.redis("redis-user-presence")
 	}

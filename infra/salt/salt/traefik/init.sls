@@ -1,5 +1,5 @@
 # https://github.com/traefik/traefik/releases
-{% set version = '2.9.6' %}
+{% set version = '2.10.4' %}
 
 {% set pool = grains['rivet']['pool_id'] %}
 {% if pool == 'ing-px' or pool == 'local' %}
@@ -111,6 +111,7 @@ push_traefik_service:
   file.managed:
     - name: /etc/systemd/system/traefik.service
     - source: salt://traefik/files/traefik.service
+    - template: jinja
 
 # Manually restart the Traefik service yourself in order to prevent terminating
 # connections needlessly

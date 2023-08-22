@@ -19,35 +19,41 @@ pub async fn start(
 	let user_ent = ctx.auth().user(ctx.op_ctx()).await?;
 
 	// Verify captcha
-	match body.captcha {
-		models::CaptchaConfig::Turnstile(_) => {
-			// Will throw an error if the captcha is invalid
-			op!([ctx] captcha_verify {
-				topic: HashMap::<String, String>::from([
-					("kind".into(), "auth:verification-start".into()),
-				]),
-				remote_address: internal_unwrap!(ctx.remote_address()).to_string(),
-				origin_host: Some("rivet.gg".to_string()),
-				captcha_config: Some(backend::captcha::CaptchaConfig {
-					requests_before_reverify: 0,
-					verification_ttl: 0,
-					turnstile: Some(backend::captcha::captcha_config::Turnstile {
-						domains: vec![
-							backend::captcha::captcha_config::turnstile::Domain {
-								domain: "rivet.gg".to_string(),
-								secret_key: util::env::read_secret(&["turnstile", "rivet_gg", "secret_key"]).await?
-							},
-						],
+	let secret_key_opt =
+		util::env::read_secret_opt(&["turnstile", "rivet_gg", "secret_key"]).await?;
+
+	// If no Turnstile key defined, skip captcha
+	if let Some(secret_key) = secret_key_opt {
+		match body.captcha {
+			models::CaptchaConfig::Turnstile(_) => {
+				// Will throw an error if the captcha is invalid
+				op!([ctx] captcha_verify {
+					topic: HashMap::<String, String>::from([
+						("kind".into(), "auth:verification-start".into()),
+					]),
+					remote_address: internal_unwrap!(ctx.remote_address()).to_string(),
+					origin_host: Some("rivet.gg".to_string()),
+					captcha_config: Some(backend::captcha::CaptchaConfig {
+						requests_before_reverify: 0,
+						verification_ttl: 0,
+						turnstile: Some(backend::captcha::captcha_config::Turnstile {
+							domains: vec![
+								backend::captcha::captcha_config::turnstile::Domain {
+									domain: "rivet.gg".to_string(),
+									secret_key: secret_key
+								},
+							],
+						}),
+						..Default::default()
 					}),
-					..Default::default()
-				}),
-				client_response: Some(body.captcha.try_into()?),
-				user_id: Some(user_ent.user_id.into()),
-			})
-			.await?;
-		}
-		_ => panic_with!(CAPTCHA_CAPTCHA_INVALID),
-	};
+					client_response: Some(body.captcha.try_into()?),
+					user_id: Some(user_ent.user_id.into()),
+				})
+				.await?;
+			}
+			_ => panic_with!(CAPTCHA_CAPTCHA_INVALID),
+		};
+	}
 
 	let res = op!([ctx] email_verification_create {
 		email: body.email.clone(),

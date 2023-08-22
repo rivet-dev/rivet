@@ -18,8 +18,6 @@ pub struct ChatSimpleTopic {
     pub direct: Option<Box<crate::models::ChatSimpleTopicDirect>>,
     #[serde(rename = "group", skip_serializing_if = "Option::is_none")]
     pub group: Option<Box<crate::models::ChatSimpleTopicGroup>>,
-    #[serde(rename = "party", skip_serializing_if = "Option::is_none")]
-    pub party: Option<Box<crate::models::ChatSimpleTopicParty>>,
 }
 
 impl ChatSimpleTopic {
@@ -28,7 +26,6 @@ impl ChatSimpleTopic {
         ChatSimpleTopic {
             direct: None,
             group: None,
-            party: None,
         }
     }
 }

@@ -1,7 +1,0 @@
-[service]
-name = "party-member-get"
-
-[runtime]
-kind = "rust"
-
-[operation]

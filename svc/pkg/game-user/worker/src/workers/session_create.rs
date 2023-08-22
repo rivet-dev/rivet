@@ -3,8 +3,8 @@ use proto::backend::pkg::*;
 
 #[worker(name = "game-user-session-create")]
 async fn worker(
-	ctx: &OperationContext<game_user::msg::session_create::Message>,
-) -> Result<(), GlobalError> {
+	ctx: OperationContext<game_user::msg::session_create::Message>,
+) -> GlobalResult<()> {
 	let crdb = ctx.crdb("db-game-user").await?;
 
 	let game_user_id = internal_unwrap!(ctx.game_user_id).as_uuid();

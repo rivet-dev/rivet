@@ -1,5 +1,5 @@
 # https://github.com/prometheus/node_exporter/releases
-{% set version = '1.4.0' %}
+{% set version = '1.6.1' %}
 
 create_node_exporter_user:
   user.present:
@@ -35,6 +35,7 @@ push_node_exporter_service:
   file.managed:
     - name: /etc/systemd/system/node_exporter.service
     - source: salt://node_exporter/files/node_exporter.service
+    - template: jinja
 
 start_node_exporter_service:
   service.running:

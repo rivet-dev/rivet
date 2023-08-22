@@ -1,5 +1,5 @@
 # https://github.com/nats-io/nats-server/releases
-{% set version = '2.9.9' %}
+{% set version = '2.9.20' %}
 {% set exporter_version = '0.10.1' %}
 
 create_nats_user:
@@ -59,6 +59,7 @@ push_nats_server_service:
   file.managed:
     - name: /etc/systemd/system/nats-server.service
     - source: salt://nats/files/nats-server.service
+    - template: jinja
 
 start_nats_server_service:
   service.running:

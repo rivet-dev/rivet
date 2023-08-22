@@ -1,7 +1,0 @@
-[service]
-name = "party-invite-alias-lookup"
-
-[runtime]
-kind = "rust"
-
-[operation]

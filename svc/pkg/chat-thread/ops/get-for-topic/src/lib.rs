@@ -7,7 +7,6 @@ struct ThreadRow {
 	create_ts: i64,
 
 	team_team_id: Option<Uuid>,
-	party_party_id: Option<Uuid>,
 	direct_user_a_id: Option<Uuid>,
 	direct_user_b_id: Option<Uuid>,
 }
@@ -20,7 +19,6 @@ async fn handle(
 
 	// Split up rows in to associated IDs
 	let mut team_ids = Vec::new();
-	let mut party_ids = Vec::new();
 	let mut direct_user_a_ids = Vec::new();
 	let mut direct_user_b_ids = Vec::new();
 
@@ -30,9 +28,6 @@ async fn handle(
 		match kind {
 			backend::chat::topic::Kind::Team(team) => {
 				team_ids.push(internal_unwrap!(team.team_id).as_uuid())
-			}
-			backend::chat::topic::Kind::Party(party) => {
-				party_ids.push(internal_unwrap!(party.party_id).as_uuid())
 			}
 			backend::chat::topic::Kind::Direct(direct) => {
 				let (user_a_id, user_b_id) = util::sort::id_pair(
@@ -49,27 +44,20 @@ async fn handle(
 	// Query threads
 	let threads = sqlx::query_as::<_, ThreadRow>(indoc!(
 		"
-		SELECT thread_id, create_ts, team_team_id, NULL AS party_party_id, NULL AS direct_user_a_id, NULL AS direct_user_b_id
+		SELECT thread_id, create_ts, team_team_id, NULL AS direct_user_a_id, NULL AS direct_user_b_id
 		FROM threads
 		WHERE team_team_id = ANY($1)
 
 		UNION
 
-		SELECT thread_id, create_ts, NULL, party_party_id, NULL, NULL
-		FROM threads
-		WHERE party_party_id = ANY($2)
-
-		UNION
-
-		SELECT thread_id, create_ts, NULL, NULL, direct_user_a_id, direct_user_b_id
-		FROM unnest($3, $4) AS direct (user_a_id, user_b_id)
+		SELECT thread_id, create_ts, NULL, direct_user_a_id, direct_user_b_id
+		FROM unnest($2, $3) AS direct (user_a_id, user_b_id)
 		INNER JOIN threads ON
 			direct_user_a_id = direct.user_a_id AND
 			direct_user_b_id = direct.user_b_id
 		"
 	))
 	.bind(team_ids)
-	.bind(party_ids)
 	.bind(direct_user_a_ids)
 	.bind(direct_user_b_ids)
 	.fetch_all(&crdb)
@@ -83,10 +71,6 @@ async fn handle(
 				kind: Some(if let Some(team_id) = thread.team_team_id {
 					backend::chat::topic::Kind::Team(backend::chat::topic::Team {
 						team_id: Some(team_id.into()),
-					})
-				} else if let Some(party_id) = thread.party_party_id {
-					backend::chat::topic::Kind::Party(backend::chat::topic::Party {
-						party_id: Some(party_id.into()),
 					})
 				} else if let (Some(user_a_id), Some(user_b_id)) =
 					(thread.direct_user_a_id, thread.direct_user_b_id)

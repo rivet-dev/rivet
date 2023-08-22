@@ -8,13 +8,13 @@ use types::rivet::{
 use crate::{convert, fetch, ApiTryInto};
 
 pub fn handle(
-	current_user_id: &Uuid,
+	current_user_id: Uuid,
 	user: &backend::user::User,
 	presences_ctx: &fetch::identity::PresencesCtx,
 	is_mutual_following: bool,
 ) -> GlobalResult<models::IdentityHandle> {
 	let user_id = internal_unwrap!(user.user_id).as_uuid();
-	let is_self = &user_id == current_user_id;
+	let is_self = user_id == current_user_id;
 
 	let user_presence = internal_unwrap_owned!(presences_ctx
 		.res
@@ -23,25 +23,6 @@ pub fn handle(
 		.find(|presence| presence.user_id == user.user_id));
 	let user_presence = internal_unwrap!(user_presence.presence);
 	let status = internal_unwrap_owned!(backend::user::Status::from_i32(user_presence.status));
-	let party = if status != backend::user::Status::Offline {
-		if let Some(party_id) = presences_ctx.parties.member_to_party.get(&user_id) {
-			// Determine if party is viewable to the current user
-			match (
-				presences_ctx.parties.publicity.get(party_id),
-				presences_ctx.parties.parties.get(party_id),
-			) {
-				(Some(backend::party::party::PublicityLevel::View), Some(party))
-				| (Some(backend::party::party::PublicityLevel::Join), Some(party)) => Some(
-					convert::party::handle(party, &presences_ctx.games_with_namespace_ids)?,
-				),
-				_ => None,
-			}
-		} else {
-			None
-		}
-	} else {
-		None
-	};
 
 	Ok(models::IdentityHandle {
 		identity_id: user_id,
@@ -57,22 +38,21 @@ pub fn handle(
 			&presences_ctx.games,
 			is_self || is_mutual_following,
 		)?)),
-		party: party.map(Box::new),
 		is_registered: true, // TODO:
 		external: Box::new(models::IdentityExternalLinks {
-			profile: util::route::user_profile(&user_id),
+			profile: util::route::user_profile(user_id),
 			settings: None,
-			chat: (!is_self).then(|| util::route::user_chat(&user_id)),
+			chat: (!is_self).then(|| util::route::user_chat(user_id)),
 		}),
 	})
 }
 
 pub fn handle_without_presence(
-	current_user_id: &Uuid,
+	current_user_id: Uuid,
 	user: &backend::user::User,
 ) -> GlobalResult<models::IdentityHandle> {
 	let user_id = internal_unwrap!(user.user_id).as_uuid();
-	let is_self = &user_id == current_user_id;
+	let is_self = user_id == current_user_id;
 
 	Ok(models::IdentityHandle {
 		identity_id: user_id,
@@ -84,25 +64,24 @@ pub fn handle_without_presence(
 			user.profile_file_name.as_ref(),
 		),
 		presence: None,
-		party: None,
 		is_registered: true, // TODO:
 		external: Box::new(models::IdentityExternalLinks {
-			profile: util::route::user_profile(&user_id),
+			profile: util::route::user_profile(user_id),
 			settings: None,
-			chat: (!is_self).then(|| util::route::user_chat(&user_id)),
+			chat: (!is_self).then(|| util::route::user_chat(user_id)),
 		}),
 	})
 }
 
 pub fn summary(
-	current_user_id: &Uuid,
+	current_user_id: Uuid,
 	user: &backend::user::User,
 	presences_ctx: &fetch::identity::PresencesCtx,
 	mutual_follows: &[user_follow::get::response::Follow],
 ) -> GlobalResult<models::IdentitySummary> {
 	let user_id_proto = internal_unwrap_owned!(user.user_id);
 	let user_id = user_id_proto.as_uuid();
-	let is_self = &user_id == current_user_id;
+	let is_self = user_id == current_user_id;
 
 	let user_presence = internal_unwrap_owned!(presences_ctx
 		.res
@@ -111,23 +90,7 @@ pub fn summary(
 		.find(|presence| presence.user_id == user.user_id));
 	let user_presence = internal_unwrap!(user_presence.presence);
 
-	let party = if let Some(party_id) = presences_ctx.parties.member_to_party.get(&user_id) {
-		// Determine if party is viewable to the current user
-		match (
-			presences_ctx.parties.publicity.get(party_id),
-			presences_ctx.parties.parties.get(party_id),
-		) {
-			(Some(backend::party::party::PublicityLevel::View), Some(party))
-			| (Some(backend::party::party::PublicityLevel::Join), Some(party)) => Some(
-				convert::party::handle(party, &presences_ctx.games_with_namespace_ids)?,
-			),
-			_ => None,
-		}
-	} else {
-		None
-	};
-
-	let current_user_id = Into::<common::Uuid>::into(*current_user_id);
+	let current_user_id = Into::<common::Uuid>::into(current_user_id);
 	let following = mutual_follows.iter().any(|follow| {
 		follow.follower_user_id.as_ref() == Some(&current_user_id)
 			&& follow.following_user_id.as_ref() == Some(&user_id_proto)
@@ -152,12 +115,11 @@ pub fn summary(
 			&presences_ctx.games,
 			is_self || is_mutual_following,
 		)?)),
-		party: party.map(Box::new),
 		is_registered: true, // TODO:
 		external: Box::new(models::IdentityExternalLinks {
-			profile: util::route::user_profile(&user_id),
+			profile: util::route::user_profile(user_id),
 			settings: None,
-			chat: (!is_self).then(|| util::route::user_chat(&user_id)),
+			chat: (!is_self).then(|| util::route::user_chat(user_id)),
 		}),
 		following,
 		is_following_me,
@@ -177,14 +139,14 @@ pub struct ProfileCtx<'a> {
 }
 
 pub fn profile(
-	current_user_id: &Uuid,
+	current_user_id: Uuid,
 	user: &backend::user::User,
 	pctx: ProfileCtx,
 ) -> GlobalResult<models::IdentityProfile> {
 	let user_id_proto = internal_unwrap_owned!(user.user_id);
 	let user_id = user_id_proto.as_uuid();
 
-	let is_self = &user_id == current_user_id;
+	let is_self = user_id == current_user_id;
 
 	let identities = internal_unwrap_owned!(pctx
 		.linked_accounts
@@ -238,42 +200,8 @@ pub fn profile(
 		.find(|presence| presence.user_id == user.user_id));
 	let user_presence = internal_unwrap!(user_presence.presence);
 	let status = internal_unwrap_owned!(backend::user::Status::from_i32(user_presence.status));
-	let party = if status != backend::user::Status::Offline {
-		if let Some(party_id) = pctx.presences_ctx.parties.member_to_party.get(&user_id) {
-			// Determine if party is viewable to the current user
-			match (
-				pctx.presences_ctx.parties.publicity.get(party_id),
-				pctx.presences_ctx.parties.parties.get(party_id),
-			) {
-				(Some(backend::party::party::PublicityLevel::View), Some(party))
-				| (Some(backend::party::party::PublicityLevel::Join), Some(party)) => {
-					let party = convert::party::summary(
-						current_user_id,
-						party,
-						&pctx.presences_ctx.games_with_namespace_ids,
-						&pctx.presences_ctx.parties.members,
-						&pctx.presences_ctx.parties.member_users,
-						&pctx.presences_ctx.parties.threads,
-					);
 
-					match party {
-						Ok(x) => Some(x),
-						Err(err) => {
-							tracing::error!(?err, ?party_id, user = ?user_id, "failed to convert party for user");
-							None
-						}
-					}
-				}
-				_ => None,
-			}
-		} else {
-			None
-		}
-	} else {
-		None
-	};
-
-	let current_user_id = Into::<common::Uuid>::into(*current_user_id);
+	let current_user_id = Into::<common::Uuid>::into(current_user_id);
 	let following = pctx.mutual_follows.iter().any(|follow| {
 		follow.follower_user_id.as_ref() == Some(&current_user_id)
 			&& follow.following_user_id.as_ref() == Some(&user_id_proto)
@@ -311,12 +239,11 @@ pub fn profile(
 			&pctx.presences_ctx.games,
 			is_self || is_mutual_following,
 		)?)),
-		party: party.map(Box::new),
 		is_registered,
 		external: Box::new(models::IdentityExternalLinks {
-			profile: util::route::user_profile(&user_id),
+			profile: util::route::user_profile(user_id),
 			settings: (is_self && pctx.is_game_user).then(util::route::user_settings),
-			chat: (!is_self).then(|| util::route::user_chat(&user_id)),
+			chat: (!is_self).then(|| util::route::user_chat(user_id)),
 		}),
 		dev_state: None,
 		is_admin: is_self && user.is_admin,

@@ -14,7 +14,7 @@ lazy_static! {
 }
 
 #[worker(name = "user-create")]
-async fn worker(ctx: &OperationContext<user::msg::create::Message>) -> Result<(), GlobalError> {
+async fn worker(ctx: OperationContext<user::msg::create::Message>) -> GlobalResult<()> {
 	let user_id = internal_unwrap!(ctx.user_id).as_uuid();
 
 	let join_ts = ctx.ts();

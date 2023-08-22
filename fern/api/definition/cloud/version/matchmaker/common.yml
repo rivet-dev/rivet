@@ -43,6 +43,7 @@ types:
           to reverify a captcha (in milliseconds).
         type: long
       hcaptcha: optional<CaptchaHcaptcha>
+      turnstile: optional<CaptchaTurnstile>
 
   CaptchaHcaptcha:
     docs: hCpatcha configuration.
@@ -56,6 +57,16 @@ types:
       - moderate
       - difficult
       - always_on
+
+  CaptchaTurnstile:
+    docs: Turnstile captcha configuration.
+    properties:
+      domains: map<string, CaptchaTurnstileDomain>
+
+  CaptchaTurnstileDomain:
+    docs: Turnstile domain configuration.
+    properties:
+      secret_key: string
 
   NetworkMode:
     enum:

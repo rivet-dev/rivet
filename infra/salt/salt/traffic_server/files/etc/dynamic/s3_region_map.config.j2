@@ -1,5 +1,5 @@
-{% set s3_host = s3_endpoint.split('://')[1] if '://' in s3_endpoint else s3_endpoint %}
-{% set s3_hostname = s3_host.split(':')[0] if ':' in s3_host else s3_host %}
+{% set s3_host = s3_endpoint.split('://')[1] if s3_endpoint is not none and '://' in s3_endpoint else s3_endpoint %}
+{% set s3_hostname = s3_host.split(':')[0] if s3_host is not none and ':' in s3_host else s3_host %}
 
 # Default region
 {{s3_hostname}}: {{s3_region}}

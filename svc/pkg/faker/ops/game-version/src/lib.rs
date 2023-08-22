@@ -132,6 +132,13 @@ async fn handle(
 					custom_avatars: Vec::new(),
 				})
 			},
+			module: if let Some(config) = ctx.override_module_config.clone() {
+				config.config
+			} else {
+				Some(backend::module::GameVersionConfig {
+					dependencies: Vec::new(),
+				})
+			},
 		}
 	};
 
@@ -141,6 +148,15 @@ async fn handle(
 		config: Some(config),
 	})
 	.await?;
+
+	// Automatically deploy version
+	if let Some(namespace_id) = ctx.deploy_to_namespace_id {
+		op!([ctx] game_namespace_version_set {
+			namespace_id: Some(namespace_id),
+			version_id: version_create_res.version_id,
+		})
+		.await?;
+	}
 
 	let version_get = op!([ctx] mm_config_version_get {
 		version_ids: vec![version_create_res.version_id.unwrap()],
