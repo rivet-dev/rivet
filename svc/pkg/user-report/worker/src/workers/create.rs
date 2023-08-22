@@ -3,7 +3,7 @@ use proto::backend::pkg::*;
 
 #[worker(name = "user-report-create")]
 async fn worker(
-	ctx: OperationOperationContext<user_report::msg::create::Message>,
+	ctx: &OperationOperationContext<user_report::msg::create::Message>,
 ) -> GlobalResult<()> {
 	let reporter_user_id = internal_unwrap!(ctx.reporter_user_id).as_uuid();
 	let subject_user_id = internal_unwrap!(ctx.subject_user_id).as_uuid();
