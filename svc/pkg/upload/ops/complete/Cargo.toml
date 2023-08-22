@@ -16,7 +16,7 @@ url = "2.2"
 nsfw-image-score = { path = "../../../nsfw/ops/image-score" }
 
 [dependencies.sqlx]
-version = "0.6"
+version = "0.7"
 default-features = false
 
 [dev-dependencies]

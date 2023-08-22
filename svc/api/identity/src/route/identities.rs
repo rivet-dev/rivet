@@ -206,7 +206,10 @@ async fn attempt_setup_existing_identity_token(
 	.await?;
 
 	// Fetch user data
-	let user_id = utils::resolve_user_with_game_user_id(ctx, game_user_ent.game_user_id).await?;
+	let Some(user_id) = utils::resolve_user_with_game_user_id(ctx, game_user_ent.game_user_id).await? else {
+		tracing::info!("game user not found");
+		return Ok(None);
+	};
 	utils::touch_user_presence(ctx.op_ctx().base(), user_id, false);
 
 	let (identities, game_resolve_res) = tokio::try_join!(
@@ -499,16 +502,14 @@ pub async fn set_game_activity(
 		game_activity: Some(backend::user::presence::GameActivity {
 			game_id: Some(game_user.game_id.into()),
 			message: body.game_activity.message.unwrap_or_default(),
-			// TODO:
-			public_metadata: None, friend_metadata: None,
-			// public_metadata: body.game_activity
-			// 	.public_metadata
-			// 	.map(|public_metadata| serde_json::to_string(&public_metadata))
-			// 	.transpose()?,
-			// friend_metadata: body.game_activity
-			// 	.mutual_metadata
-			// 	.map(|mutual_metadata| serde_json::to_string(&mutual_metadata))
-			// 	.transpose()?,
+			public_metadata: body.game_activity
+				.public_metadata
+				.map(|public_metadata| serde_json::to_string(&public_metadata))
+				.transpose()?,
+			friend_metadata: body.game_activity
+				.mutual_metadata
+				.map(|mutual_metadata| serde_json::to_string(&mutual_metadata))
+				.transpose()?,
 		}),
 	})
 	.await?;

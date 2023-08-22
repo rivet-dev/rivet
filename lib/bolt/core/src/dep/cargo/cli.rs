@@ -116,7 +116,7 @@ pub async fn build<'a, T: AsRef<str>>(ctx: &ProjectContext, opts: BuildOpts<'a, 
 			cmd.arg("--rm")
 				.arg("--interactive")
 				.arg("--tty")
-				.arg("clux/muslrust:1.65.0-stable");
+				.arg("clux/muslrust:1.71.1-stable");
 			cmd.arg("sh").arg("-c").arg(indoc::formatdoc!(
 				r#"
 				# HACK: Link musl-g++

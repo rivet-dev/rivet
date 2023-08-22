@@ -19,7 +19,7 @@ rivet-pools = { path = "../../pools" }
 rivet-util = { path = "../../util/core" }
 serde = { version = "1.0", features = ["derive"] }
 thiserror = "1.0"
-tokio = { version = "1.21", features = ["full"] }
+tokio = { version = "1.29", features = ["full"] }
 tokio-util = "0.6"
 tracing = "0.1"
 types = { path = "../../types/core" }

@@ -14,7 +14,7 @@ prost = "0.10"
 rivet-connection = { path = "../../../../../lib/connection" }
 reqwest = "0.11"
 rivet-pools = { path = "../../../../../lib/pools" }
-tokio = { version = "1.21", features = ["full"] }
+tokio = { version = "1.29", features = ["full"] }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", default-features = false, features = ["fmt", "json", "ansi"] }
 uuid = { version = "1", features = ["v4"] }
@@ -23,14 +23,13 @@ upload-complete = { path = "../../../upload/ops/complete" }
 upload-prepare = { path = "../../../upload/ops/prepare" }
 
 [dependencies.sqlx]
-version = "0.6"
+version = "0.7"
 default-features = false
 features = [
-	"runtime-tokio-native-tls",
+	"runtime-tokio",
 	"postgres",
 	"uuid",
 	"json",
-	"tls",
 ]
 
 [dev-dependencies]

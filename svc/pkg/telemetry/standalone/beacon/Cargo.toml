@@ -16,7 +16,7 @@ rivet-connection = { path = "../../../../../lib/connection" }
 rivet-operation = { path = "../../../../../lib/operation/core" }
 rivet-pools = { path = "../../../../../lib/pools" }
 rivet-runtime = { path = "../../../../../lib/runtime" }
-tokio = { version = "1.21", features = ["full"] }
+tokio = { version = "1.29", features = ["full"] }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", default-features = false, features = ["fmt", "json", "ansi"] }
 
@@ -29,7 +29,7 @@ team-get = { path = "../../../team/ops/get" }
 team-member-count = { path = "../../../team/ops/member-count" }
 
 [dependencies.sqlx]
-version = "0.6"
+version = "0.7"
 default-features = false
 
 [dev-dependencies]

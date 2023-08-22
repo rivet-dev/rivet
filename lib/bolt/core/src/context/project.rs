@@ -112,7 +112,7 @@ impl ProjectContextData {
 
 		// Assign references to all services after we're done
 		for svc in &ctx.svc_ctxs {
-			*svc.project.write().await = Arc::downgrade(&ctx);
+			svc.set_project(Arc::downgrade(&ctx)).await;
 		}
 
 		ctx
@@ -172,6 +172,7 @@ impl ProjectContextData {
 				// Load the service
 				let svc_ctx = context::service::ServiceContextData::from_path(
 					Weak::new(),
+					&svc_ctxs_map,
 					&workspace_path,
 					&worker_path,
 				)
@@ -218,6 +219,7 @@ impl ProjectContextData {
 			// Load the service
 			let svc_ctx = context::service::ServiceContextData::from_path(
 				Weak::new(),
+				&svc_ctxs_map,
 				workspace_path,
 				&entry.path(),
 			)
@@ -439,10 +441,11 @@ impl ProjectContextData {
 impl ProjectContextData {
 	/// Origin used for building links to the Hub.
 	pub fn origin_hub(&self) -> String {
-		self.ns().dns.hub_origin.clone().map_or_else(
-			|| self.ns().dns.domain.main.clone(),
-			|x| format!("https://hub.{x}"),
-		)
+		self.ns()
+			.dns
+			.hub_origin
+			.clone()
+			.unwrap_or_else(|| format!("https://hub.{}", self.ns().dns.domain.main.clone()))
 	}
 	pub fn domain_main(&self) -> String {
 		self.ns().dns.domain.main.clone()

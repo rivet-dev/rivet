@@ -10,6 +10,6 @@ terraform {
 data "external" "bolt_secret" {
 	for_each = var.keys
 
-	program = var.optional ? ["bolt", "secret", "get", "--format=json", "--optional", each.key] : ["bolt", "secret", "get", "--format=json", each.key]
+	program = ["${path.module}/scripts/get_secret.sh", each.key, var.optional ? "true" : "false"]
 }
 

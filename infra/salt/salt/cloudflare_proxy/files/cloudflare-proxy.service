@@ -4,9 +4,9 @@ After=network-online.target
 Wants=network-online.target systemd-networkd-wait-online.service
 
 [Service]
-User=traefik_cloudflare_proxy
-Group=traefik_cloudflare_proxy
-ExecStart=/usr/bin/traefik --configFile=/etc/traefik_cloudflare_proxy/traefik.toml
+User=cloudflare_proxy
+Group=cloudflare_proxy
+ExecStart=/usr/bin/traefik --configFile=/etc/cloudflare_proxy/traefik.toml
 PrivateTmp=true
 PrivateDevices=false
 ProtectHome=true

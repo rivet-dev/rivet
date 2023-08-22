@@ -99,7 +99,7 @@ async fn update_db(
 		"
 	))
 	.bind(run_id)
-	.fetch_optional(&mut *tx)
+	.fetch_optional(&mut **tx)
 	.await?;
 	tracing::info!(?run_row, "fetched run");
 
@@ -116,7 +116,7 @@ async fn update_db(
 		"
 	))
 	.bind(run_id)
-	.fetch_optional(&mut *tx)
+	.fetch_optional(&mut **tx)
 	.await?;
 	tracing::info!(?run_meta_nomad_row, "fetched run meta nomad");
 
@@ -143,7 +143,7 @@ async fn update_db(
 		sqlx::query("UPDATE runs SET stop_ts = $2 WHERE run_id = $1")
 			.bind(run_id)
 			.bind(now)
-			.execute(&mut *tx)
+			.execute(&mut **tx)
 			.await?;
 	}
 

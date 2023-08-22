@@ -756,6 +756,8 @@ components:
         image_tag:
           description: A tag given to the game build.
           type: string
+        multipart_upload:
+          type: boolean
       required:
       - display_name
       - image_tag
@@ -768,7 +770,6 @@ components:
           type: string
         image_presigned_request:
           $ref: '#/components/schemas/UploadPresignedRequest'
-          description: '**Deprecated: use image_presigned_requests instead**'
         image_presigned_requests:
           items:
             $ref: '#/components/schemas/UploadPresignedRequest'
@@ -779,8 +780,6 @@ components:
       required:
       - build_id
       - upload_id
-      - image_presigned_request
-      - image_presigned_requests
       type: object
     CloudGamesCreateGameCdnSiteRequest:
       properties:

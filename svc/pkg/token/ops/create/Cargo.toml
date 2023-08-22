@@ -16,7 +16,7 @@ jsonwebtoken = "8.2.0"
 lazy_static = "1.4"
 
 [dependencies.sqlx]
-version = "0.6"
+version = "0.7"
 default-features = false
 
 [dev-dependencies]

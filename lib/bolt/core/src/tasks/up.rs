@@ -65,7 +65,7 @@ pub async fn up_services<T: AsRef<str>>(
 	opts: UpOpts,
 ) -> Result<Vec<ServiceContext>> {
 	let event = utils::telemetry::build_event(ctx, "bolt_up").await?;
-	utils::telemetry::capture_event(ctx, event).await?;
+	utils::telemetry::capture_event(ctx, event)?;
 
 	// let run_context = RunContext::Service;
 	let build_context = BuildContext::Bin {
@@ -260,16 +260,21 @@ pub async fn up_services<T: AsRef<str>>(
 				svc_ctx: svc_ctx.clone().clone(),
 				build_context,
 				driver: match &build_plan {
-					ServiceBuildPlan::ExistingLocalBuild { output_path }
-					| ServiceBuildPlan::BuildLocally { output_path } => {
-						derive_local_build_driver(svc_ctx, output_path.clone()).await
+					ServiceBuildPlan::ExistingLocalBuild { exec_path }
+					| ServiceBuildPlan::BuildLocally { exec_path } => {
+						derive_local_build_driver(svc_ctx, exec_path.clone()).await
 					}
 					ServiceBuildPlan::ExistingUploadedBuild {
 						build_key: artifact_key,
+						exec_path,
 					}
 					| ServiceBuildPlan::BuildAndUpload {
 						build_key: artifact_key,
-					} => derive_uploaded_svc_driver(svc_ctx, artifact_key.clone()).await,
+						exec_path,
+					} => {
+						derive_uploaded_svc_driver(svc_ctx, artifact_key.clone(), exec_path.clone())
+							.await
+					}
 					ServiceBuildPlan::Docker { image_tag } => ExecServiceDriver::Docker {
 						image: image_tag.clone(),
 						force_pull: false,
@@ -395,12 +400,12 @@ async fn build_svc(svc_ctx: &ServiceContext, optimization: BuildOptimization) {
 
 async fn derive_local_build_driver(
 	svc_ctx: &ServiceContext,
-	output_path: PathBuf,
+	exec_path: PathBuf,
 ) -> ExecServiceDriver {
 	match &svc_ctx.config().runtime {
 		RuntimeKind::Rust {} => ExecServiceDriver::LocalBinaryArtifact {
 			// Convert path to be relative to the project root
-			path: output_path
+			exec_path: exec_path
 				.strip_prefix(svc_ctx.project().await.path())
 				.expect("rust binary path not inside of project dir")
 				.to_owned(),
@@ -419,10 +424,12 @@ async fn derive_local_build_driver(
 async fn derive_uploaded_svc_driver(
 	svc_ctx: &ServiceContext,
 	artifact_key: String,
+	exec_path: String,
 ) -> ExecServiceDriver {
 	match &svc_ctx.config().runtime {
 		RuntimeKind::Rust {} => ExecServiceDriver::UploadedBinaryArtifact {
 			artifact_key,
+			exec_path,
 			args: Vec::new(),
 		},
 		RuntimeKind::CRDB { .. }

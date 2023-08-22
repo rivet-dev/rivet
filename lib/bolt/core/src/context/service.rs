@@ -1,12 +1,12 @@
+use anyhow::{bail, ensure, Context, Result};
+use async_recursion::async_recursion;
+use s3_util::aws_sdk_s3;
 use std::{
 	collections::HashMap,
 	hash::{Hash, Hasher},
 	path::{Path, PathBuf},
 	sync::{Arc, Weak},
 };
-
-use anyhow::{bail, ensure, Context, Result};
-use s3_util::aws_sdk_s3;
 use tempfile::NamedTempFile;
 use tokio::{fs, process::Command, sync::RwLock};
 
@@ -25,7 +25,9 @@ use super::BuildOptimization;
 pub type ServiceContext = Arc<ServiceContextData>;
 
 pub struct ServiceContextData {
-	pub(in crate::context) project: RwLock<Weak<context::project::ProjectContextData>>,
+	project: RwLock<Weak<context::project::ProjectContextData>>,
+	/// If this is overriding a service from an additional root, then this will be specified.
+	overridden_service: Option<ServiceContext>,
 	config: config::service::ServiceConfig,
 	path: PathBuf,
 	workspace_path: PathBuf,
@@ -45,6 +47,18 @@ impl Hash for ServiceContextData {
 }
 
 impl ServiceContextData {
+	/// Sets the refernece to the project once the project context is finished initiating.
+	#[async_recursion]
+	pub(in crate::context) async fn set_project(
+		&self,
+		project: Weak<context::project::ProjectContextData>,
+	) {
+		*self.project.write().await = project.clone();
+		if let Some(overridden_service) = &self.overridden_service {
+			overridden_service.set_project(project.clone()).await;
+		}
+	}
+
 	pub async fn project(&self) -> ProjectContext {
 		self.project
 			.read()
@@ -69,6 +83,7 @@ impl ServiceContextData {
 impl ServiceContextData {
 	pub async fn from_path(
 		project: Weak<context::project::ProjectContextData>,
+		svc_ctxs_map: &HashMap<String, ServiceContext>,
 		workspace_path: &Path,
 		path: &Path,
 	) -> Option<ServiceContext> {
@@ -92,8 +107,12 @@ impl ServiceContextData {
 			Err(_) => None,
 		};
 
+		// Read overridden service
+		let overridden_service = svc_ctxs_map.get(&config.service.name).cloned();
+
 		Some(Arc::new(ServiceContextData::new(
 			project,
+			overridden_service,
 			config,
 			workspace_path,
 			path,
@@ -103,6 +122,7 @@ impl ServiceContextData {
 
 	fn new(
 		project: Weak<context::project::ProjectContextData>,
+		overridden_service: Option<ServiceContext>,
 		config: config::service::ServiceConfig,
 		workspace_path: &Path,
 		path: &Path,
@@ -111,6 +131,7 @@ impl ServiceContextData {
 		// Build context
 		let ctx = ServiceContextData {
 			project: RwLock::new(project),
+			overridden_service,
 			config,
 			path: path.to_owned(),
 			workspace_path: workspace_path.to_owned(),
@@ -324,7 +345,7 @@ impl ServiceContextData {
 impl ServiceContextData {
 	pub fn enable_tokio_console(&self) -> bool {
 		// TODO: This seems to have a significant performance impact
-		false
+		true
 	}
 }
 
@@ -332,16 +353,32 @@ impl ServiceContextData {
 #[derive(Debug, Clone)]
 pub enum ServiceBuildPlan {
 	/// Build exists locally.
-	ExistingLocalBuild { output_path: PathBuf },
+	ExistingLocalBuild {
+		/// Absolute path to the executable on the host system.
+		exec_path: PathBuf,
+	},
 
 	/// Build exists on S3 server.
-	ExistingUploadedBuild { build_key: String },
+	ExistingUploadedBuild {
+		build_key: String,
+
+		/// Path to the executable in the archive.
+		exec_path: String,
+	},
 
 	/// Build the service locally.
-	BuildLocally { output_path: PathBuf },
+	BuildLocally {
+		/// Absolute path to the executable on the host system.
+		exec_path: PathBuf,
+	},
 
 	/// Build the service and upload to S3.
-	BuildAndUpload { build_key: String },
+	BuildAndUpload {
+		build_key: String,
+
+		/// Path to the executable in the archive.
+		exec_path: String,
+	},
 
 	/// Run a Docker container.
 	Docker { image_tag: String },
@@ -369,36 +406,52 @@ impl ServiceContextData {
 					.await;
 
 				if force_build {
-					return Ok(ServiceBuildPlan::BuildLocally { output_path });
+					return Ok(ServiceBuildPlan::BuildLocally {
+						exec_path: output_path,
+					});
 				}
 
 				// Check if there's an existing build we can use
 				let build_exists = tokio::fs::metadata(&output_path).await.is_ok();
 				if build_exists {
-					return Ok(ServiceBuildPlan::ExistingLocalBuild { output_path });
+					return Ok(ServiceBuildPlan::ExistingLocalBuild {
+						exec_path: output_path,
+					});
 				}
 
 				// Default to building
-				Ok(ServiceBuildPlan::BuildLocally { output_path })
+				Ok(ServiceBuildPlan::BuildLocally {
+					exec_path: output_path,
+				})
 			}
 			// Build and upload to S3
 			config::ns::ClusterKind::Distributed { .. } => {
 				// Derive the build key
 				let key = self.s3_build_key(build_context).await?;
+				let exec_path = self.cargo_name().expect("no cargo name").to_string();
 
 				if force_build {
-					return Ok(ServiceBuildPlan::BuildAndUpload { build_key: key });
+					return Ok(ServiceBuildPlan::BuildAndUpload {
+						build_key: key,
+						exec_path,
+					});
 				}
 
 				// Check if there's an existing build we can use
 				let s3_client = project_ctx.s3_client_service_builds().await?;
 				let build_exists = s3::check_exists_cached(&project_ctx, &s3_client, &key).await?;
 				if build_exists {
-					return Ok(ServiceBuildPlan::ExistingUploadedBuild { build_key: key });
+					return Ok(ServiceBuildPlan::ExistingUploadedBuild {
+						build_key: key,
+						exec_path,
+					});
 				}
 
 				// Default to building
-				Ok(ServiceBuildPlan::BuildAndUpload { build_key: key })
+				Ok(ServiceBuildPlan::BuildAndUpload {
+					build_key: key,
+					exec_path,
+				})
 			}
 		}
 	}
@@ -406,6 +459,7 @@ impl ServiceContextData {
 
 // Dependencies
 impl ServiceContextData {
+	#[async_recursion]
 	pub async fn dependencies(&self) -> Vec<ServiceContext> {
 		let project = self.project().await;
 
@@ -425,33 +479,7 @@ impl ServiceContextData {
 			}
 		}
 
-		// TODO: Add dev dependencies if building for tests
-		// Add operation dependencies from Cargo.toml
-		if let Some(cargo) = &self.cargo {
-			let svc_path = self.path();
-			let svcs = cargo
-				.dependencies
-				.iter()
-				.filter_map(|(_, x)| {
-					if let config::service::CargoDependency::Path { path } = x {
-						Some(path)
-					} else {
-						None
-					}
-				})
-				.filter_map(|path| {
-					let absolute_path = svc_path.join(path);
-					all_svcs
-						.iter()
-						.filter(|x| x.path() == absolute_path)
-						.next()
-						.cloned()
-				});
-
-			dep_ctxs.extend(svcs);
-		}
-
-		// Check that these are services you can explicitly depend on
+		// Check that these are services you can explicitly depend on in the Service.toml
 		for dep in &dep_ctxs {
 			if !self.config().service.test_only && dep.config().service.test_only {
 				panic!(
@@ -471,6 +499,46 @@ impl ServiceContextData {
 					dep.name()
 				);
 			}
+		}
+
+		// TODO: Add dev dependencies if building for tests
+		// Add operation dependencies from Cargo.toml
+		//
+		// You cannot depend on these services from the Service.toml, only as a Cargo dependency
+		if let Some(cargo) = &self.cargo {
+			let svcs = cargo
+				.dependencies
+				.iter()
+				.filter_map(|(name, dep)| {
+					if let config::service::CargoDependency::Path { .. } = dep {
+						Some(name)
+					} else {
+						None
+					}
+				})
+				.filter_map(|name| {
+					all_svcs
+						.iter()
+						.filter(|x| x.name() == *name)
+						.next()
+						.cloned()
+				});
+			// TOOD: Use the path to find the service instead of the name. This is difficult with multiple roots.
+			// .filter_map(|path| {
+			// 	let absolute_path = svc_path.join(path);
+			// 	all_svcs
+			// 		.iter()
+			// 		.filter(|x| x.path() == absolute_path)
+			// 		.next()
+			// 		.cloned()
+			// });
+
+			dep_ctxs.extend(svcs);
+		}
+
+		// Inherit dependencies from the service that was overridden.
+		if let Some(overriden_svc) = &self.overridden_service {
+			dep_ctxs.extend(overriden_svc.dependencies().await);
 		}
 
 		dep_ctxs
@@ -691,7 +759,7 @@ impl ServiceContextData {
 		env.push((
 			"TOKIO_WORKER_THREADS".into(),
 			match ns_service_config.resources.cpu {
-				config::ns::CpuResources::CpuCores(cores) => cores.max(2),
+				config::ns::CpuResources::CpuCores(cores) => cores.max(cores),
 				config::ns::CpuResources::Cpu(_) => 2,
 			}
 			.to_string(),
@@ -719,7 +787,7 @@ impl ServiceContextData {
 			env.push(("TOKIO_CONSOLE_ENABLE".into(), "1".into()));
 			env.push((
 				"TOKIO_CONSOLE_BIND".into(),
-				r#"0.0.0.0:{{env "NOMAD_PORT_tokio_console"}}"#.into(),
+				r#"0.0.0.0:${NOMAD_PORT_tokio-console}"#.into(),
 			));
 		}
 
@@ -1219,7 +1287,7 @@ impl ServiceContextData {
 			}
 		);
 
-		let service = project_ctx
+		let mut service = project_ctx
 			.ns()
 			.services
 			.get(&self.name())
@@ -1235,7 +1303,7 @@ impl ServiceContextData {
 					},
 				},
 				config::ns::ClusterKind::Distributed { .. } => config::ns::Service {
-					count: if is_singleton { 1 } else { 2 },
+					count: 2,
 					resources: config::ns::ServiceResources {
 						cpu: config::ns::CpuResources::Cpu(250),
 						memory: 256,
@@ -1244,8 +1312,9 @@ impl ServiceContextData {
 				},
 			});
 
+		// Force single count if singleton
 		if is_singleton {
-			assert_eq!(service.count, 1)
+			service.count = 1;
 		}
 
 		service

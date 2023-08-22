@@ -293,14 +293,12 @@ pub fn presence(
 			public_metadata: game_activity
 				.public_metadata
 				.as_ref()
-				.map(|s| serde_json::from_str(s))
-				.transpose()?,
+				.and_then(|s| serde_json::from_str(s).ok()),
 			mutual_metadata: if is_mutual_following {
 				game_activity
 					.friend_metadata
 					.as_ref()
-					.map(|s| serde_json::from_str(s))
-					.transpose()?
+					.and_then(|s| serde_json::from_str(s).ok())
 			} else {
 				None
 			},

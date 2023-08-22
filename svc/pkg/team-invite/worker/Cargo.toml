@@ -17,7 +17,7 @@ team-member-list = { path = "../../team/ops/member-list" }
 team-user-ban-get = { path = "../../team/ops/user-ban-get" }
 
 [dependencies.sqlx]
-version = "0.6"
+version = "0.7"
 default-features = false
 
 [dev-dependencies]

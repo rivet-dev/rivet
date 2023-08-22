@@ -70,7 +70,13 @@ async fn handle(
 					regions: vec![backend::matchmaker::lobby_group::Region {
 						region_id: region_res.region_id,
 						tier_name_id: util_mm::test::TIER_NAME_ID.to_owned(),
-						idle_lobbies: None,
+						idle_lobbies: Some(backend::matchmaker::lobby_group::IdleLobbies {
+							min_idle_lobbies: 0,
+							// Set a high max lobby count in case this is
+							// coming from a test that test mm-lobby-create
+							// without creating an associated player
+							max_idle_lobbies: 32,
+						}),
 					}],
 					max_players_normal,
 					max_players_direct,

@@ -12,67 +12,68 @@ async fn handle(
 	})
 	.await?;
 
-	let config = if let Some(config) = ctx.override_config.clone() {
-		config
-	} else {
-		backend::cloud::VersionConfig {
-			cdn: if let Some(config) = ctx.override_cdn_config.clone() {
-				config.config
-			} else {
-				let cdn_site_res = op!([ctx] faker_cdn_site {
-					game_id: Some(*game_id),
-				})
-				.await?;
-				let site_id = internal_unwrap!(cdn_site_res.site_id);
+	let config =
+		if let Some(config) = ctx.override_config.clone() {
+			config
+		} else {
+			backend::cloud::VersionConfig {
+				cdn: if let Some(config) = ctx.override_cdn_config.clone() {
+					config.config
+				} else {
+					let cdn_site_res = op!([ctx] faker_cdn_site {
+						game_id: Some(*game_id),
+					})
+					.await?;
+					let site_id = internal_unwrap!(cdn_site_res.site_id);
 
-				Some(VersionConfig {
-					site_id: Some(*site_id),
-					routes: vec![
-						Route {
-							glob: Some(util::glob::Glob::parse("test-glob")?.into()),
-							priority: 0,
-							middlewares: vec![Middleware {
-								kind: Some(middleware::Kind::CustomHeaders(
-									CustomHeadersMiddleware {
-										headers: vec![custom_headers_middleware::Header {
-											name: "header-name".to_string(),
-											value: "header-value".to_string(),
-										}],
-									},
-								)),
-							}],
-						},
-						Route {
-							glob: Some(util::glob::Glob::parse("test-glob2")?.into()),
-							priority: 1,
-							middlewares: vec![Middleware {
-								kind: Some(middleware::Kind::CustomHeaders(
-									CustomHeadersMiddleware {
-										headers: vec![custom_headers_middleware::Header {
-											name: "header-name2".to_string(),
-											value: "header-value2".to_string(),
-										}],
-									},
-								)),
-							}],
-						},
-					],
-				})
-			},
-			matchmaker: if let Some(config) = ctx.override_mm_config.clone() {
-				config.config
-			} else {
-				let build_res = op!([ctx] faker_build {
-					game_id: Some(*game_id),
-					image: faker::build::Image::MmLobbyAutoReady as i32,
-				})
-				.await?;
-				let build_id = internal_unwrap!(build_res.build_id);
+					Some(VersionConfig {
+						site_id: Some(*site_id),
+						routes: vec![
+							Route {
+								glob: Some(util::glob::Glob::parse("test-glob")?.into()),
+								priority: 0,
+								middlewares: vec![Middleware {
+									kind: Some(middleware::Kind::CustomHeaders(
+										CustomHeadersMiddleware {
+											headers: vec![custom_headers_middleware::Header {
+												name: "header-name".to_string(),
+												value: "header-value".to_string(),
+											}],
+										},
+									)),
+								}],
+							},
+							Route {
+								glob: Some(util::glob::Glob::parse("test-glob2")?.into()),
+								priority: 1,
+								middlewares: vec![Middleware {
+									kind: Some(middleware::Kind::CustomHeaders(
+										CustomHeadersMiddleware {
+											headers: vec![custom_headers_middleware::Header {
+												name: "header-name2".to_string(),
+												value: "header-value2".to_string(),
+											}],
+										},
+									)),
+								}],
+							},
+						],
+					})
+				},
+				matchmaker: if let Some(config) = ctx.override_mm_config.clone() {
+					config.config
+				} else {
+					let build_res = op!([ctx] faker_build {
+						game_id: Some(*game_id),
+						image: faker::build::Image::MmLobbyAutoReady as i32,
+					})
+					.await?;
+					let build_id = internal_unwrap!(build_res.build_id);
 
-				Some(backend::matchmaker::VersionConfig {
-					lobby_groups: ctx.override_lobby_groups.clone().map_or_else(
-						|| {
-							vec![backend::matchmaker::LobbyGroup {
+					Some(backend::matchmaker::VersionConfig {
+						lobby_groups: ctx.override_lobby_groups.clone().map_or_else(
+							|| {
+								vec![backend::matchmaker::LobbyGroup {
 								name_id: "test-1".into(),
 
 								regions: region_list_res
@@ -82,7 +83,13 @@ async fn handle(
 									.map(|region_id| backend::matchmaker::lobby_group::Region {
 										region_id: Some(region_id),
 										tier_name_id: util_mm::test::TIER_NAME_ID.to_owned(),
-										idle_lobbies: None,
+										idle_lobbies: Some(backend::matchmaker::lobby_group::IdleLobbies {
+											min_idle_lobbies: 0,
+											// Set a high max lobby count in case this is
+											// coming from a test that test mm-lobby-create
+											// without creating an associated player
+											max_idle_lobbies: 32,
+										}),
 									})
 									.collect(),
 
@@ -108,39 +115,39 @@ async fn handle(
 								join_config: None,
 								create_config: None,
 							}]
-						},
-						|v| v.lobby_groups,
-					),
-					captcha: ctx
-						.override_captcha
-						.clone()
-						.map_or_else(|| None, |config| config.captcha_config),
-				})
-			},
-			kv: if let Some(config) = ctx.override_kv_config.clone() {
-				config.config
-			} else {
-				Some(backend::kv::VersionConfig {})
-			},
-			identity: if let Some(config) = ctx.override_identity_config.clone() {
-				config.config
-			} else {
-				Some(backend::identity::VersionConfig {
-					custom_display_names: vec![backend::identity::CustomDisplayName {
-						display_name: "Guest".to_string(),
-					}],
-					custom_avatars: Vec::new(),
-				})
-			},
-			module: if let Some(config) = ctx.override_module_config.clone() {
-				config.config
-			} else {
-				Some(backend::module::GameVersionConfig {
-					dependencies: Vec::new(),
-				})
-			},
-		}
-	};
+							},
+							|v| v.lobby_groups,
+						),
+						captcha: ctx
+							.override_captcha
+							.clone()
+							.map_or_else(|| None, |config| config.captcha_config),
+					})
+				},
+				kv: if let Some(config) = ctx.override_kv_config.clone() {
+					config.config
+				} else {
+					Some(backend::kv::VersionConfig {})
+				},
+				identity: if let Some(config) = ctx.override_identity_config.clone() {
+					config.config
+				} else {
+					Some(backend::identity::VersionConfig {
+						custom_display_names: vec![backend::identity::CustomDisplayName {
+							display_name: "Guest".to_string(),
+						}],
+						custom_avatars: Vec::new(),
+					})
+				},
+				module: if let Some(config) = ctx.override_module_config.clone() {
+					config.config
+				} else {
+					Some(backend::module::GameVersionConfig {
+						dependencies: Vec::new(),
+					})
+				},
+			}
+		};
 
 	let version_create_res = op!([ctx] cloud_version_publish {
 		game_id: Some(*game_id),

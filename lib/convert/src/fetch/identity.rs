@@ -275,42 +275,48 @@ async fn games(
 }
 
 async fn teams(ctx: &OperationContext<()>, user_ids: Vec<common::Uuid>) -> GlobalResult<TeamsCtx> {
-	let user_teams_res = op!([ctx] user_team_list {
-		user_ids: user_ids,
-	})
-	.await?;
+	return Ok(TeamsCtx {
+		user_teams: user::team_list::Response { users: vec![] },
+		teams: vec![],
+		dev_teams: team_dev::get::Response { teams: vec![] },
+	});
 
-	let team_ids = user_teams_res
-		.users
-		.iter()
-		.map(|user| {
-			user.teams
-				.iter()
-				.map(|t| Ok(internal_unwrap_owned!(t.team_id)))
-				.collect::<GlobalResult<Vec<_>>>()
-		})
-		.collect::<GlobalResult<Vec<_>>>()?
-		.into_iter()
-		.flatten()
-		.collect::<Vec<_>>();
+	// let user_teams_res = op!([ctx] user_team_list {
+	// 	user_ids: user_ids,
+	// })
+	// .await?;
 
-	let (teams_res, dev_teams_res) = tokio::try_join!(
-		op!([ctx] team_get {
-			team_ids: team_ids.clone(),
-		}),
-		op!([ctx] team_dev_get {
-			team_ids: team_ids.clone(),
-		}),
-	)?;
+	// let team_ids = user_teams_res
+	// 	.users
+	// 	.iter()
+	// 	.map(|user| {
+	// 		user.teams
+	// 			.iter()
+	// 			.map(|t| Ok(internal_unwrap_owned!(t.team_id)))
+	// 			.collect::<GlobalResult<Vec<_>>>()
+	// 	})
+	// 	.collect::<GlobalResult<Vec<_>>>()?
+	// 	.into_iter()
+	// 	.flatten()
+	// 	.collect::<Vec<_>>();
 
-	// TODO: hide all closed teams
-	let teams = teams_res.teams.clone();
+	// let (teams_res, dev_teams_res) = tokio::try_join!(
+	// 	op!([ctx] team_get {
+	// 		team_ids: team_ids.clone(),
+	// 	}),
+	// 	op!([ctx] team_dev_get {
+	// 		team_ids: team_ids.clone(),
+	// 	}),
+	// )?;
 
-	Ok(TeamsCtx {
-		user_teams: user_teams_res,
-		teams,
-		dev_teams: dev_teams_res,
-	})
+	// // TODO: hide all closed teams
+	// let teams = teams_res.teams.clone();
+
+	// Ok(TeamsCtx {
+	// 	user_teams: user_teams_res,
+	// 	teams,
+	// 	dev_teams: dev_teams_res,
+	// })
 }
 
 async fn follows(
@@ -334,23 +340,24 @@ pub async fn mutual_follows(
 	current_user_id: Uuid,
 	raw_user_ids: Vec<Uuid>,
 ) -> GlobalResult<user_follow::get::Response> {
-	// Converts to hashmap to remove duplicate queries
-	let queries = raw_user_ids
-		.clone()
-		.into_iter()
-		.flat_map(|user_id| [(current_user_id, user_id), (user_id, current_user_id)])
-		.collect::<HashSet<_>>()
-		.into_iter()
-		.map(|(user_a_id, user_b_id)| user_follow::get::request::Query {
-			follower_user_id: Some(user_a_id.into()),
-			following_user_id: Some(user_b_id.into()),
-		})
-		.collect::<Vec<_>>();
+	return Ok(user_follow::get::Response { follows: vec![] });
+	// // Converts to hashmap to remove duplicate queries
+	// let queries = raw_user_ids
+	// 	.clone()
+	// 	.into_iter()
+	// 	.flat_map(|user_id| [(current_user_id, user_id), (user_id, current_user_id)])
+	// 	.collect::<HashSet<_>>()
+	// 	.into_iter()
+	// 	.map(|(user_a_id, user_b_id)| user_follow::get::request::Query {
+	// 		follower_user_id: Some(user_a_id.into()),
+	// 		following_user_id: Some(user_b_id.into()),
+	// 	})
+	// 	.collect::<Vec<_>>();
 
-	op!([ctx] user_follow_get {
-		queries: queries,
-	})
-	.await
+	// op!([ctx] user_follow_get {
+	// 	queries: queries,
+	// })
+	// .await
 }
 
 async fn linked_accounts(

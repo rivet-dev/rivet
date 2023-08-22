@@ -497,7 +497,7 @@ async fn update_db(
 		"SELECT stop_ts, preemptive_create_ts FROM lobbies WHERE lobby_id = $1 FOR UPDATE",
 	)
 	.bind(opts.lobby_id)
-	.fetch_optional(&mut *tx)
+	.fetch_optional(&mut **tx)
 	.await?;
 	if let Some((stop_ts, preemptive_create_ts)) = lobby_row {
 		if preemptive_create_ts.is_none() {
@@ -544,7 +544,7 @@ async fn update_db(
 	.bind(opts.lobby_group.max_players_normal as i64)
 	.bind(opts.lobby_group.max_players_direct as i64)
 	.bind(opts.lobby_group.max_players_party as i64)
-	.execute(&mut *tx)
+	.execute(&mut **tx)
 	.await?;
 
 	Ok(())
@@ -725,6 +725,17 @@ async fn resolve_image_artifact_url(
 	.await?;
 	let upload = internal_unwrap_owned!(upload_res.uploads.first());
 
+	// Get provider
+	let proto_provider = internal_unwrap_owned!(
+		backend::upload::Provider::from_i32(upload.provider as i32),
+		"invalid upload provider"
+	);
+	let provider = match proto_provider {
+		backend::upload::Provider::Minio => s3_util::Provider::Minio,
+		backend::upload::Provider::Backblaze => s3_util::Provider::Backblaze,
+		backend::upload::Provider::Aws => s3_util::Provider::Aws,
+	};
+
 	match DELIVERY_METHOD {
 		DeliveryMethod::Ats => {
 			// TODO: Auto-generate password for this & encode in to infra/salt/salt/traffic_server/files/consul/traffic_server.hcl.j2
@@ -756,7 +767,7 @@ async fn resolve_image_artifact_url(
 			// Build client
 			let s3_client = s3_util::Client::from_env_opt(
 				&bucket,
-				s3_util::Provider::default()?,
+				provider,
 				s3_util::EndpointKind::InternalResolved,
 			)
 			.await?;
