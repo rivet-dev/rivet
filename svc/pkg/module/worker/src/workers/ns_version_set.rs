@@ -19,7 +19,7 @@ struct NamespaceInstances {
 
 #[worker(name = "module-ns-version-set")]
 async fn worker(
-	ctx: OperationContext<game::msg::ns_version_set_complete::Message>,
+	ctx: &OperationContext<game::msg::ns_version_set_complete::Message>,
 ) -> Result<(), GlobalError> {
 	let crdb = ctx.crdb("db-module").await?;
 

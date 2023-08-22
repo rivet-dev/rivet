@@ -127,7 +127,6 @@ async fn handle(
 		.bind(&runtime_meta_buf)
 		.bind(&find_config_buf)
 		.bind(&join_config_buf)
-		.execute(&mut tx)
 		.execute(&mut *tx)
 		.await?;
 

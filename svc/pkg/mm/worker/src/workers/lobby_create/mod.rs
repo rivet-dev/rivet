@@ -52,7 +52,7 @@ async fn fail(
 }
 
 #[worker(name = "mm-lobby-create")]
-async fn worker(ctx: OperationContext<mm::msg::lobby_create::Message>) -> GlobalResult<()> {
+async fn worker(ctx: &OperationContext<mm::msg::lobby_create::Message>) -> GlobalResult<()> {
 	let crdb = ctx.crdb("db-mm-state").await?;
 
 	let lobby_id = internal_unwrap!(ctx.lobby_id).as_uuid();
@@ -60,6 +60,7 @@ async fn worker(ctx: OperationContext<mm::msg::lobby_create::Message>) -> Global
 	let lobby_group_id = internal_unwrap!(ctx.lobby_group_id).as_uuid();
 	let region_id = internal_unwrap!(ctx.region_id).as_uuid();
 	let create_ray_id = ctx.region_id.as_ref().map(common::Uuid::as_uuid);
+	let creator_user_id = ctx.creator_user_id.as_ref().map(common::Uuid::as_uuid);
 
 	// Check for stale message
 	if ctx.req_dt() > util::duration::seconds(60) {
@@ -168,6 +169,11 @@ async fn worker(ctx: OperationContext<mm::msg::lobby_create::Message>) -> Global
 		run_id,
 		create_ray_id: ctx.ray_id(),
 		lobby_group: lobby_group.clone(),
+		creator_user_id,
+		is_custom: ctx.is_custom,
+		publicity: ctx
+			.publicity
+			.and_then(backend::matchmaker::lobby::Publicity::from_i32),
 	};
 	rivet_pools::utils::crdb::tx(&crdb, |tx| {
 		Box::pin(update_db(ctx.ts(), tx, insert_opts.clone()))
@@ -191,6 +197,7 @@ async fn worker(ctx: OperationContext<mm::msg::lobby_create::Message>) -> Global
 				preemptive: false,
 				is_closed: false,
 				ready_ts: None,
+				is_custom: ctx.is_custom,
 			})?)
 			.arg(ctx.ts() + util_mm::consts::LOBBY_READY_TIMEOUT)
 			.key(key::lobby_config(lobby_id))
@@ -295,7 +302,7 @@ async fn fetch_region(
 	.await?;
 	let cdn_region = internal_unwrap_owned!(cdn_get_res.regions.first());
 
-	Ok((region.deref().clone(), cdn_region.deref().clone()))
+	Ok((region.clone(), cdn_region.clone()))
 }
 
 #[tracing::instrument]
@@ -322,9 +329,8 @@ async fn fetch_namespace(
 	})
 	.await?;
 
-	let namespace = internal_unwrap!(get_res.namespaces.first(), "namespace not found")
-		.deref()
-		.clone();
+	let namespace =
+		internal_unwrap_owned!(get_res.namespaces.first(), "namespace not found").clone();
 
 	Ok(namespace)
 }
@@ -340,7 +346,7 @@ async fn fetch_mm_namespace_config(
 	.await?;
 
 	let namespace = internal_unwrap!(
-		internal_unwrap!(get_res.namespaces.first(), "namespace not found").config
+		internal_unwrap_owned!(get_res.namespaces.first(), "namespace not found").config
 	)
 	.deref()
 	.clone();
@@ -479,6 +485,9 @@ struct UpdateDbOpts {
 	run_id: Uuid,
 	create_ray_id: Uuid,
 	lobby_group: backend::matchmaker::LobbyGroup,
+	creator_user_id: Option<Uuid>,
+	is_custom: bool,
+	publicity: Option<backend::matchmaker::lobby::Publicity>,
 }
 
 #[tracing::instrument(skip_all)]
@@ -528,9 +537,12 @@ async fn update_db(
 			max_players_direct,
 			max_players_party,
 
-			is_closed
+			is_closed,
+			creator_user_id,
+			is_custom,
+			publicity
 		)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, false)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, false, $12, $13, $14)
 		"
 	))
 	.bind(opts.lobby_id)
@@ -544,6 +556,9 @@ async fn update_db(
 	.bind(opts.lobby_group.max_players_normal as i64)
 	.bind(opts.lobby_group.max_players_direct as i64)
 	.bind(opts.lobby_group.max_players_party as i64)
+	.bind(opts.creator_user_id)
+	.bind(opts.is_custom)
+	.bind(opts.publicity.map(|p| p as i32 as i64))
 	.execute(&mut **tx)
 	.await?;
 
@@ -585,7 +600,12 @@ async fn create_docker_job(
 	let build = internal_unwrap_owned!(build_get.builds.first());
 
 	// Generate the Docker job
-	let job_spec = nomad_job::gen_lobby_docker_job(runtime, &build.image_tag, tier)?;
+	let job_spec = nomad_job::gen_lobby_docker_job(
+		runtime,
+		&build.image_tag,
+		tier,
+		ctx.lobby_config_json.as_ref(),
+	)?;
 	let job_spec_json = serde_json::to_string(&job_spec)?;
 
 	// Build proxied ports for each exposed port
@@ -767,7 +787,7 @@ async fn resolve_image_artifact_url(
 			// Build client
 			let s3_client = s3_util::Client::from_env_opt(
 				&bucket,
-				provider,
+				s3_util::Provider::default()?,
 				s3_util::EndpointKind::InternalResolved,
 			)
 			.await?;

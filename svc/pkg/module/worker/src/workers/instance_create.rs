@@ -94,7 +94,7 @@ struct CheckStatus {
 
 #[worker(name = "module-instance-create")]
 async fn worker(
-	ctx: OperationContext<module::msg::instance_create::Message>,
+	ctx: &OperationContext<module::msg::instance_create::Message>,
 ) -> Result<(), GlobalError> {
 	let crdb = ctx.crdb("db-module").await?;
 
