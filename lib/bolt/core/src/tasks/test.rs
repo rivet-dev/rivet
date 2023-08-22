@@ -10,7 +10,7 @@ use crate::{
 		cloudflare, fly,
 		nomad::{self, NomadCtx},
 	},
-	tasks,
+	tasks, utils,
 };
 
 struct TestCleanupManager {
@@ -255,20 +255,30 @@ async fn run_test(svc_ctx: &ServiceContext, test_name: Option<&str>) -> TestResu
 		unreachable!();
 	}
 
-	let nomad_ctx = NomadCtx::remote(&project_ctx).await;
+	let nomad_ctx = NomadCtx::remote(&project_ctx).await.unwrap();
 
 	let cleanup = TestCleanupManager::setup(project_ctx.clone(), nomad_ctx.clone())
 		.await
 		.unwrap();
 
-	let (env, tunnel_configs) = svc_ctx.env(RunContext::Test).await.unwrap();
+	let (env, forward_configs) = svc_ctx.env(RunContext::Test).await.unwrap();
 
 	// Forward services
-	let _tunnel = if !tunnel_configs.is_empty() {
-		Some(cloudflare::Tunnel::open(&project_ctx, tunnel_configs).await)
-	} else {
-		None
-	};
+	let forwards = forward_configs
+		.into_iter()
+		.map(|c| {
+			utils::kubectl_port_forward(c.service_name, c.namespace, (c.local_port, c.remote_port))
+		})
+		.collect::<Result<Vec<_>>>()
+		.unwrap();
+
+	// Wait for port forwards to open and check if successful
+	tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+	forwards
+		.iter()
+		.map(|h| h.check())
+		.collect::<Result<Vec<_>>>()
+		.unwrap();
 
 	// Run tests
 	let res = async {

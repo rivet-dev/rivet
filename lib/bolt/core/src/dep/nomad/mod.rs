@@ -1,6 +1,13 @@
-use std::fmt::Display;
+use std::{fmt::Display, sync::Arc};
 
-use crate::{config, context::ProjectContext, dep::cloudflare};
+use anyhow::*;
+
+use crate::{
+	config,
+	context::ProjectContext,
+	dep::cloudflare,
+	utils::{self, DroppablePort},
+};
 
 pub mod api;
 pub mod cli;
@@ -17,10 +24,13 @@ pub struct NomadCtx {
 
 	/// Secret used to connect to the Cloudflare tunnel.
 	access_secret: Option<cloudflare::AccessSecret>,
+
+	/// Port forward to Nomad.
+	_handle: Arc<DroppablePort>,
 }
 
 impl NomadCtx {
-	pub async fn remote(ctx: &ProjectContext) -> Self {
+	pub async fn remote(ctx: &ProjectContext) -> Result<Self> {
 		let (region_id, access_secret) = match ctx.ns().cluster.kind {
 			config::ns::ClusterKind::SingleNode { .. } => ("local".to_string(), None),
 			config::ns::ClusterKind::Distributed { .. } => {
@@ -45,12 +55,19 @@ impl NomadCtx {
 			}
 		};
 
-		NomadCtx {
+		let handle = utils::kubectl_port_forward("nomad-server", "nomad", (4646, 4646))?;
+
+		// Wait for port forward to open and check if successful
+		tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+		handle.check()?;
+
+		Ok(NomadCtx {
 			project_ctx: ctx.clone(),
 			client: reqwest::Client::new(),
 			region: region_id.clone(),
 			access_secret,
-		}
+			_handle: Arc::new(handle),
+		})
 	}
 
 	pub fn build_nomad_request(
@@ -61,7 +78,7 @@ impl NomadCtx {
 		match self.project_ctx.ns().cluster.kind {
 			config::ns::ClusterKind::SingleNode { .. } => self
 				.client
-				.request(method, format!("http://nomad-server.nomad.svc.cluster.local:4646{path}")),
+				.request(method, format!("http://127.0.0.1:4646{path}")),
 
 			config::ns::ClusterKind::Distributed { .. } => {
 				let access_secret = self.access_secret.as_ref().unwrap();
@@ -69,32 +86,6 @@ impl NomadCtx {
 					.request(
 						method,
 						format!("https://nomad.{}{path}", self.project_ctx.domain_main()),
-					)
-					.header("CF-Access-Client-Id", access_secret.client_id.as_str())
-					.header(
-						"CF-Access-Client-Secret",
-						access_secret.client_secret.as_str(),
-					)
-			}
-		}
-	}
-
-	pub fn build_consul_request(
-		&self,
-		method: reqwest::Method,
-		path: impl Display,
-	) -> reqwest::RequestBuilder {
-		match self.project_ctx.ns().cluster.kind {
-			config::ns::ClusterKind::SingleNode { .. } => self
-				.client
-				.request(method, format!("http://consul.service.consul:8500{path}")),
-
-			config::ns::ClusterKind::Distributed { .. } => {
-				let access_secret = self.access_secret.as_ref().unwrap();
-				self.client
-					.request(
-						method,
-						format!("https://consul.{}{path}", self.project_ctx.domain_main()),
 					)
 					.header("CF-Access-Client-Id", access_secret.client_id.as_str())
 					.header(

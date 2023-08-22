@@ -16,7 +16,7 @@ use crate::{
 		service::{RuntimeKind, ServiceKind},
 	},
 	context::{self, BuildContext, ProjectContext, RunContext, S3Provider},
-	dep::{self, cloudflare, k8s, s3},
+	dep::{self, k8s, s3},
 	utils,
 };
 
@@ -47,7 +47,7 @@ impl Hash for ServiceContextData {
 }
 
 impl ServiceContextData {
-	/// Sets the refernece to the project once the project context is finished initiating.
+	/// Sets the reference to the project once the project context is finished initiating.
 	#[async_recursion]
 	pub(in crate::context) async fn set_project(
 		&self,
@@ -717,12 +717,12 @@ impl ServiceContextData {
 	pub async fn env(
 		&self,
 		run_context: RunContext,
-	) -> Result<(Vec<(String, String)>, Vec<cloudflare::TunnelConfig>)> {
+	) -> Result<(Vec<(String, String)>, Vec<utils::PortForwardConfig>)> {
 		let project_ctx = self.project().await;
 
 		let region_id = project_ctx.primary_region_or_local();
 		let mut env = Vec::new();
-		let mut tunnel_configs = Vec::<cloudflare::TunnelConfig>::new();
+		let mut forward_configs = Vec::<utils::PortForwardConfig>::new();
 
 		// HACK: Link to dynamically linked libraries in /nix/store
 		//
@@ -885,55 +885,51 @@ impl ServiceContextData {
 		if self.depends_on_nomad_api() {
 			env.push((
 				"NOMAD_ADDRESS".into(),
-				"http://nomad-server.nomad.svc.cluster.local:4646",
-			));
-			env.push((
-				"CONSUL_ADDRESS".into(),
-				format!(
-					"http://{}",
-					access_service(
-						&project_ctx,
-						&mut tunnel_configs,
-						&run_context,
-						"consul.service.consul:8500",
-						(cloudflare::TunnelProtocol::Http, "consul"),
-					)
-					.await?,
-				),
-			));
-		}
-
-		if self.depends_on_prometheus_api() {
-			// Add all prometheus regions to env
-			//
-			// We don't run Prometheus regionally at the moment, but we can add
-			// that later.
-			env.push((
-				format!("PROMETHEUS_URL"),
 				access_service(
 					&project_ctx,
-					&mut tunnel_configs,
+					&mut forward_configs,
 					&run_context,
-					"http.prometheus-job.service.consul:9090",
-					(cloudflare::TunnelProtocol::Http, "prometheus"),
+					"nomad-server",
+					"nomad",
+					4646,
 				)
 				.await?,
 			));
 		}
 
+		// TODO:
+		// if self.depends_on_prometheus_api() {
+		// 	// Add all prometheus regions to env
+		// 	//
+		// 	// We don't run Prometheus regionally at the moment, but we can add
+		// 	// that later.
+		// 	env.push((
+		// 		format!("PROMETHEUS_URL"),
+		// 		access_service(
+		// 			&project_ctx,
+		// 			&mut forward_configs,
+		// 			&run_context,
+		// 			"prometheus",
+		// 			"prometheus",
+		// 			9090,
+		// 		)
+		// 		.await?,
+		// 	));
+		// }
+
 		// NATS config
 		env.push((
 			"NATS_URL".into(),
-			"nats.nats.svc.cluster.local:4222".to_string(),
-			// // TODO: Add back passing multiple NATS nodes for failover instead of using DNS resolution
-			// access_service(
-			// 	&project_ctx,
-			// 	&mut tunnel_configs,
-			// 	&run_context,
-			// 	"client.nats-server.service.consul:4222",
-			// 	(cloudflare::TunnelProtocol::Tcp, "nats-client"),
-			// )
-			// .await?,
+			// TODO: Add back passing multiple NATS nodes for failover instead of using DNS resolution
+			access_service(
+				&project_ctx,
+				&mut forward_configs,
+				&run_context,
+				"nats",
+				"nats",
+				4222,
+			)
+			.await?,
 		));
 
 		env.push(("NATS_USERNAME".into(), "chirp".into()));
@@ -949,7 +945,7 @@ impl ServiceContextData {
 		{
 			env.push((
 				"CHIRP_WORKER_INSTANCE".into(),
-				format!("{}-$(HOSTNAME)", self.name()),
+				format!("{}-$(KUBERNETES_POD_ID)", self.name()),
 			));
 
 			env.push(("CHIRP_WORKER_KIND".into(), "consumer".into()));
@@ -957,20 +953,22 @@ impl ServiceContextData {
 		}
 
 		// Redis
-		let redis_host = "redis-master.redis.svc.cluster.local:6379";
 		for redis_dep in self.redis_dependencies().await {
 			let name = redis_dep.name();
 			let db_name = redis_dep.redis_db_name();
 			let port = dep::redis::server_port(&redis_dep);
 
-			// let host = access_service(
-			// 	&project_ctx,
-			// 	&mut tunnel_configs,
-			// 	&run_context,
-			// 	&format!("listen.{name}.service.consul:{port}"),
-			// 	(cloudflare::TunnelProtocol::Tcp, &name),
-			// )
-			// .await?;
+			// TODO: Use name and port to connect to different redis instances
+			// let host = format!("redis-{name}.redis.svc.cluster.local:{port}");
+			let host = access_service(
+				&project_ctx,
+				&mut forward_configs,
+				&run_context,
+				"redis-master",
+				"redis",
+				6379,
+			)
+			.await?;
 
 			// Build URL with auth
 			let username = project_ctx
@@ -980,9 +978,9 @@ impl ServiceContextData {
 				.read_secret_opt(&["redis", &db_name, "password"])
 				.await?;
 			let url = if let Some(password) = password {
-				format!("redis://{}:{}@{redis_host}", username, password)
+				format!("redis://{}:{}@{host}", username, password)
 			} else {
-				format!("redis://{}@{redis_host}", username)
+				format!("redis://{}@{host}", username)
 			};
 
 			env.push((
@@ -998,15 +996,15 @@ impl ServiceContextData {
 		}
 
 		// CRDB
-		let crdb_host = "cockroachdb.cockroachdb.svc.cluster.local:26257";
-		// let crdb_host = access_service(
-		// 	&project_ctx,
-		// 	&mut tunnel_configs,
-		// 	&run_context,
-		// 	"scv.cluster.local:26257",
-		// 	(cloudflare::TunnelProtocol::Tcp, "cockroach-sql"),
-		// )
-		// .await?;
+		let crdb_host = access_service(
+			&project_ctx,
+			&mut forward_configs,
+			&run_context,
+			"cockroachdb",
+			"cockroachdb",
+			26257,
+		)
+		.await?;
 		for crdb_dep in self.crdb_dependencies().await {
 			let username = "root"; // TODO:
 			let sslmode = "disable"; // TODO:
@@ -1142,7 +1140,7 @@ impl ServiceContextData {
 		// Sort env by keys so it's always in the same order
 		env.sort_by_cached_key(|x| x.0.clone());
 
-		Ok((env, tunnel_configs))
+		Ok((env, forward_configs))
 	}
 }
 
@@ -1217,29 +1215,29 @@ impl ServiceContextData {
 }
 
 pub async fn access_service(
-	ctx: &ProjectContext,
-	tunnel_configs: &mut Vec<cloudflare::TunnelConfig>,
+	_ctx: &ProjectContext,
+	forward_configs: &mut Vec<utils::PortForwardConfig>,
 	run_context: &RunContext,
-	service_hostname: &str,
-	(tunnel_protocol, tunnel_name): (cloudflare::TunnelProtocol, &str),
+	service_name: &'static str,
+	namespace: &'static str,
+	remote_port: u16,
 ) -> Result<String> {
-	match (run_context, &ctx.ns().cluster.kind) {
-		// Create tunnels to remote services
-		(RunContext::Test, config::ns::ClusterKind::Distributed { .. }) => {
-			// Save the tunnel config
+	match run_context {
+		RunContext::Test => {
 			let local_port = utils::pick_port();
-			tunnel_configs.push(cloudflare::TunnelConfig::new_with_port(
-				tunnel_protocol,
-				tunnel_name,
+			forward_configs.push(utils::PortForwardConfig {
+				service_name,
+				namespace,
 				local_port,
-			));
+				remote_port,
+			});
 
-			// Hardcode to the forwarded port
 			Ok(format!("127.0.0.1:{local_port}"))
 		}
-		// Use the Consul address if either in production or running locally
-		(RunContext::Service, _)
-		| (RunContext::Test, config::ns::ClusterKind::SingleNode { .. }) => Ok(service_hostname.into()),
+		// Use the cluster address if running locally
+		RunContext::Service => Ok(format!(
+			"{service_name}.{namespace}.svc.cluster.local:{remote_port}"
+		)),
 	}
 }
 

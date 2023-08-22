@@ -58,6 +58,7 @@ resource "kubernetes_service" "nomad_server" {
 		name = local.server_service_name
 		labels = {
 			name = "nomad-server"
+			"app.kubernetes.io/name" = "nomad-server"
 		}
 	}
 	spec {

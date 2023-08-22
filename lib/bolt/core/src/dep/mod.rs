@@ -1,6 +1,5 @@
 pub mod cargo;
 pub mod cloudflare;
-pub mod consul;
 pub mod docker;
 pub mod fly;
 pub mod k8s;

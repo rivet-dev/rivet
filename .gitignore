@@ -32,6 +32,7 @@ Bolt.local.toml
 gen/region-config.json
 gen/svc/
 gen/tf/
+gen/kubernetes/
 
 # Backend
 backend/Cargo.toml

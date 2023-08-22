@@ -1,11 +1,12 @@
-use anyhow::*;
 use std::collections::HashMap;
+
+use anyhow::*;
 
 use crate::{
 	config::{self, service::RuntimeKind},
 	context::{ProjectContext, ServiceContext},
 	dep::{self, cloudflare},
-	utils,
+	utils::{self, DroppablePort},
 };
 
 pub struct DatabaseConnection {
@@ -13,9 +14,7 @@ pub struct DatabaseConnection {
 	pub cockroach_host: Option<String>,
 	pub clickhouse_host: Option<String>,
 
-	/// Reference to tunnels that these ports are proxied through. Tunnel will
-	/// close on drop.
-	_tunnel: Option<cloudflare::Tunnel>,
+	_handles: Vec<DroppablePort>,
 }
 
 impl DatabaseConnection {
@@ -23,69 +22,67 @@ impl DatabaseConnection {
 		ctx: &ProjectContext,
 		services: &[ServiceContext],
 	) -> Result<DatabaseConnection> {
-		// Create tunnels for databases
-		let mut tunnel_configs = Vec::new();
+		let mut handles = Vec::new();
 		let mut redis_hosts = HashMap::new();
 		let mut cockroach_host = None;
 		let mut clickhouse_host = None;
+
 		for svc in services {
 			match &svc.config().runtime {
 				RuntimeKind::Redis { .. } => {
 					let name = svc.name();
 					let port = dep::redis::server_port(&svc);
+
 					if !redis_hosts.contains_key(&name) {
-						let host = access_service(
-							&mut tunnel_configs,
-							&ctx,
-							&format!("listen.{name}.service.consul:{port}"),
-							(cloudflare::TunnelProtocol::Tcp, &name),
-						)
-						.await?;
+						// TODO:
+						// let host = format!("127.0.0.1:{port}");
+						let host = "127.0.0.1:6379".to_string();
+						let port = 6379;
+
 						redis_hosts.insert(name, host);
+						handles.push(utils::kubectl_port_forward(
+							"redis-master",
+							"redis",
+							(port, port),
+						)?);
 					}
 				}
 				RuntimeKind::CRDB { .. } => {
 					if cockroach_host.is_none() {
-						cockroach_host = Some(
-							access_service(
-								&mut tunnel_configs,
-								ctx,
-								"sql.cockroach.service.consul:26257",
-								(cloudflare::TunnelProtocol::Tcp, "cockroach-sql"),
-							)
-							.await?,
-						);
+						cockroach_host = Some("127.0.0.1:26257".to_string());
+						handles.push(utils::kubectl_port_forward(
+							"cockroachdb",
+							"cockroachdb",
+							(26257, 26257),
+						)?);
 					}
 				}
 				RuntimeKind::ClickHouse { .. } => {
 					if clickhouse_host.is_none() {
-						clickhouse_host = Some(
-							access_service(
-								&mut tunnel_configs,
-								ctx,
-								"tcp.clickhouse.service.consul:9000",
-								(cloudflare::TunnelProtocol::Tcp, "clickhouse-tcp"),
-							)
-							.await?,
-						);
+						clickhouse_host = Some("127.0.0.1:9000".to_string());
+						handles.push(utils::kubectl_port_forward(
+							"clickhouse",
+							"clickhouse",
+							(9000, 9000),
+						)?);
 					}
 				}
 				x => bail!("cannot connect to this type of service: {x:?}"),
 			}
 		}
 
-		// Open tunnels if needed
-		let tunnel = if !tunnel_configs.is_empty() {
-			Some(cloudflare::Tunnel::open(&ctx, tunnel_configs).await)
-		} else {
-			None
-		};
+		// Wait for port forwards to open and check if successful
+		tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+		handles
+			.iter()
+			.map(|h| h.check())
+			.collect::<Result<Vec<_>>>()?;
 
 		Ok(DatabaseConnection {
 			redis_hosts,
 			cockroach_host,
 			clickhouse_host,
-			_tunnel: tunnel,
+			_handles: handles,
 		})
 	}
 
@@ -109,30 +106,6 @@ impl DatabaseConnection {
 				Ok(format!("clickhouse://{host}/?database={db_name}&username={clickhouse_user}&password={clickhouse_password}&x-multi-statement=true"))
 			}
 			x @ _ => bail!("cannot migrate this type of service: {x:?}"),
-		}
-	}
-}
-
-/// Creates a tunnel or returns the Consul address depending on the deploy method.
-pub async fn access_service(
-	tunnel_configs: &mut Vec<cloudflare::TunnelConfig>,
-	ctx: &ProjectContext,
-	service_hostname: &str,
-	(tunnel_protocol, tunnel_name): (cloudflare::TunnelProtocol, &str),
-) -> Result<String> {
-	match &ctx.ns().cluster.kind {
-		config::ns::ClusterKind::SingleNode { .. } => Ok(service_hostname.into()),
-		config::ns::ClusterKind::Distributed { .. } => {
-			// Save the tunnel config
-			let local_port = utils::pick_port();
-			tunnel_configs.push(cloudflare::TunnelConfig::new_with_port(
-				tunnel_protocol,
-				tunnel_name,
-				local_port,
-			));
-
-			// Hardcode to the forwarded port
-			Ok(format!("127.0.0.1:{local_port}"))
 		}
 	}
 }

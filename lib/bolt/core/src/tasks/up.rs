@@ -6,6 +6,7 @@ use std::{
 
 use anyhow::*;
 use futures_util::stream::StreamExt;
+use indoc::indoc;
 use serde_json::json;
 use tokio::{
 	fs,
@@ -312,14 +313,12 @@ pub async fn up_services<T: AsRef<str>>(
 	// We resolve the upstream services after applying Terraform since the services we need to
 	// resolve won't exist yet.
 	{
+		init_k8s_project(ctx).await?;
+
 		eprintln!();
 		rivet_term::status::progress("Generating specs", "");
 
 		let leader_region_id = ctx.primary_region_or_local();
-
-		fs::create_dir_all(ctx.gen_path().join("kubernetes")).await?;
-
-		init_k8s_project_specs(ctx).await?;
 
 		let pb = utils::progress_bar(all_exec_svcs.len());
 		for exec_ctx in &exec_ctxs {
@@ -466,7 +465,9 @@ async fn write_k8s_spec(ctx: &ProjectContext, name: String, spec: serde_json::Va
 }
 
 // TODO: Move somewhere else?
-async fn init_k8s_project_specs(ctx: &ProjectContext) -> Result<()> {
+async fn init_k8s_project(ctx: &ProjectContext) -> Result<()> {
+	fs::create_dir_all(ctx.gen_path().join("kubernetes")).await?;
+
 	// Services namespace spec
 	write_k8s_spec(
 		ctx,
@@ -608,8 +609,16 @@ async fn init_k8s_project_specs(ctx: &ProjectContext) -> Result<()> {
 	rivet_term::status::progress("Initiating project", "");
 	let mut cmd = std::process::Command::new("sh");
 	cmd.current_dir(ctx.path());
-	cmd.arg("-c")
-		.arg("kubectl apply -f 'gen/kubernetes/*.json'");
+	cmd.arg("-c").arg(indoc!(
+		"
+		kubectl apply \
+			-f gen/kubernetes/namespace.json \
+			-f gen/kubernetes/region-config.json \
+			-f gen/kubernetes/ingress-tls.json \
+			-f gen/kubernetes/ingress-tls-cert.json \
+			-f gen/kubernetes/ingress-tls-ca-cert.json
+		"
+	));
 	cmd.exec().await?;
 
 	Ok(())

@@ -1,8 +1,10 @@
-use std::{fs, path::Path, process::Command, sync::Arc};
+use std::{fs, ops::Deref, path::Path, process::Command, sync::Arc};
 
 use anyhow::*;
+use duct::cmd;
 use futures_util::future::{BoxFuture, FutureExt};
 use indicatif::{ProgressBar, ProgressStyle};
+use indoc::formatdoc;
 use tokio::sync::Mutex;
 
 pub mod command_helper;
@@ -197,4 +199,59 @@ pub fn copy_dir_all<'a>(src: &'a Path, dst: &'a Path) -> BoxFuture<'a, tokio::io
 
 pub fn pick_port() -> u16 {
 	portpicker::pick_unused_port().expect("no free ports")
+}
+
+pub struct PortForwardConfig {
+	pub service_name: &'static str,
+	pub namespace: &'static str,
+	pub local_port: u16,
+	pub remote_port: u16,
+}
+
+pub struct DroppablePort {
+	handle: duct::Handle,
+}
+
+impl DroppablePort {
+	pub fn check(&self) -> Result<()> {
+		if let Some(output) = self.handle.try_wait()? {
+			eprintln!("{}", std::str::from_utf8(&output.stdout)?);
+			bail!(
+				"port forward closed prematurely: {}",
+				std::str::from_utf8(&output.stderr)?
+			);
+		}
+
+		Ok(())
+	}
+}
+
+// Safety implementation to ensure port forward is cleaned up
+impl Drop for DroppablePort {
+	fn drop(&mut self) {
+		self.handle.kill().unwrap();
+	}
+}
+
+pub fn kubectl_port_forward(
+	service_name: &str,
+	namespace: &str,
+	(local_port, remote_port): (u16, u16),
+) -> Result<DroppablePort> {
+	let handle = cmd!(
+		"sh",
+		"-c",
+		formatdoc!(
+			r#"
+			kubectl port-forward \
+				service/{service_name} \
+				--namespace {namespace} {local_port}:{remote_port}
+			"#
+		),
+	)
+	.stdout_capture()
+	.stderr_capture()
+	.start()?;
+
+	Ok(DroppablePort { handle })
 }
