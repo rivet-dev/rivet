@@ -68,12 +68,14 @@ pub async fn gen_svc(
 		format!("runtime-{}", svc_ctx.config().runtime.short()),
 	];
 
-	let has_health = project_ctx.ns().nomad.health_checks.unwrap_or_else(|| {
-		match project_ctx.ns().cluster.kind {
+	let has_health = project_ctx
+		.ns()
+		.kubernetes
+		.health_checks
+		.unwrap_or_else(|| match project_ctx.ns().cluster.kind {
 			config::ns::ClusterKind::SingleNode { .. } => false,
 			config::ns::ClusterKind::Distributed { .. } => true,
-		}
-	}) && matches!(
+		}) && matches!(
 		svc_ctx.config().kind,
 		ServiceKind::Headless { .. } | ServiceKind::Consumer { .. } | ServiceKind::Api { .. }
 	);
@@ -142,17 +144,50 @@ pub async fn gen_svc(
 		ports
 	};
 
-	// TODO: `resources` block
+	let health_check = if has_health {
+		let cmd = if matches!(svc_ctx.config().kind, ServiceKind::Static { .. }) {
+			"/local/health-checks.sh --static"
+		} else {
+			"/local/health-checks.sh"
+		};
+
+		json!({
+			"exec": {
+				"command": ["/bin/sh", "-c", cmd],
+			},
+			"initialDelaySeconds": 1,
+			"periodSeconds": 5,
+			"timeoutSeconds": 5
+		})
+	} else {
+		serde_json::Value::Null
+	};
+
+	// Create resource limits
 	let ns_service_config = svc_ctx.ns_service_config().await;
+	let resources = json!({
+		// TODO: Disabled for now
+		// "limits": {
+		// 	"memory": format!("{}Mi", ns_service_config.resources.memory),
+		// 	"cpu": match ns_service_config.resources.cpu {
+		// 		config::ns::CpuResources::Cpu(x) => format!("{x}m"),
+		// 		config::ns::CpuResources::CpuCores(x) => format!("{}m", x * 1000),
+		// 	},
+		// 	"ephemeral-storage": format!("{}M", ns_service_config.resources.ephemeral_disk)
+		// },
+		// "requests": {}
+	});
 
 	// Shared data between containers
-	let mut volumes = vec![json!({
-		"name": "shared-data",
-		"emptyDir": {}
+	let mut volumes = vec![];
+	let mut local = vec![json!({
+		"configMap": {
+			"name": "health-checks"
+		}
 	})];
 	let mut volume_mounts = vec![json!({
-		"name": "shared-data",
-		"mountPath": "/local/shared",
+		"name": "local",
+		"mountPath": "/local",
 		"readOnly": true
 	})];
 
@@ -189,18 +224,20 @@ pub async fn gen_svc(
 	}
 
 	if svc_ctx.depends_on_region_config() {
-		volumes.push(json!({
-			"name": "region-config",
+		local.push(json!({
 			"configMap": {
 				"name": "region-config",
 			}
 		}));
-		volume_mounts.push(json!({
-			"name": "region-config",
-			"mountPath": "/local",
-			"readOnly": true
-		}));
 	}
+
+	volumes.push(json!({
+		"name": "local",
+		"projected": {
+			"defaultMode": 0o0777,
+			"sources": local
+		}
+	}));
 
 	let priority_class_name = format!("{}-priority", service_name);
 	specs.insert(
@@ -230,7 +267,7 @@ pub async fn gen_svc(
 				}
 			},
 			"spec": {
-				"replicas": 1,
+				"replicas": ns_service_config.count,
 				"selector": {
 					"matchLabels": {
 						"app.kubernetes.io/name": service_name
@@ -244,6 +281,8 @@ pub async fn gen_svc(
 					},
 					"spec": {
 						"priorityClassName": priority_class_name,
+						// TODO: Doesn't work
+						// "restartPolicy": "OnFailure",
 						"containers": [
 							match &driver {
 								ExecServiceDriver::Docker { image, force_pull } => {
@@ -264,7 +303,9 @@ pub async fn gen_svc(
 										"args": args,
 										"env": env,
 										"volumeMounts": volume_mounts,
-										"ports": ports
+										"ports": ports,
+										"livenessProbe": health_check,
+										"resources": resources,
 									})
 								}
 								_ => todo!(),

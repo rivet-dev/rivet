@@ -23,7 +23,7 @@ pub struct Namespace {
 	pub email: Option<Email>,
 	#[serde(default)]
 	pub captcha: Captcha,
-	/// Where to ship logs to. Will default to using built-in Nomad logging if not provided.
+	/// Where to ship logs to. Will default to using built-in K8s logging if not provided.
 	pub logging: Option<Logging>,
 	#[serde(default)]
 	pub services: HashMap<String, Service>,
@@ -33,6 +33,8 @@ pub struct Namespace {
 	pub grafana: Option<Grafana>,
 	#[serde(default)]
 	pub nomad: Nomad,
+	#[serde(default)]
+	pub kubernetes: Kubernetes,
 	#[serde(default)]
 	pub traefik: Traefik,
 	#[serde(default)]
@@ -352,6 +354,20 @@ pub struct Nomad {
 }
 
 impl Default for Nomad {
+	fn default() -> Self {
+		Self {
+			health_checks: None,
+		}
+	}
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+#[serde(deny_unknown_fields)]
+pub struct Kubernetes {
+	pub health_checks: Option<bool>,
+}
+
+impl Default for Kubernetes {
 	fn default() -> Self {
 		Self {
 			health_checks: None,

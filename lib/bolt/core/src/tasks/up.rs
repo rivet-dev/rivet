@@ -6,7 +6,7 @@ use std::{
 
 use anyhow::*;
 use futures_util::stream::StreamExt;
-use indoc::indoc;
+use indoc::{formatdoc, indoc};
 use serde_json::json;
 use tokio::{
 	fs,
@@ -605,6 +605,76 @@ async fn init_k8s_project(ctx: &ProjectContext) -> Result<()> {
 	)
 	.await?;
 
+	// Region config spec
+	write_k8s_spec(
+		ctx,
+		"health-checks".to_string(),
+		json!({
+			"apiVersion": "v1",
+			"kind": "ConfigMap",
+			"metadata": {
+				"name": "health-checks",
+				"namespace": "rivet-service"
+			},
+			"data": {
+				"health-checks.sh": formatdoc!(
+					r#"
+					#!/bin/sh
+					set -uf
+
+					# Install curl
+					if ! [ -x "$(command -v curl)" ]; then
+						apk add --no-cache curl
+					fi
+
+					curl 127.0.0.1:{health_port}/health/liveness
+					EXIT_STATUS=$?
+					if [ $EXIT_STATUS -ne 0 ]; then
+						echo "health server liveness check failed"
+						exit $EXIT_STATUS
+					fi
+
+					curl 127.0.0.1:{health_port}/health/crdb/db-user
+					EXIT_STATUS=$?
+					if [ $EXIT_STATUS -ne 0 ]; then
+						echo "cockroach check failed"
+						exit $EXIT_STATUS
+					fi
+
+					curl 127.0.0.1:{health_port}/health/nats
+					EXIT_STATUS=$?
+					if [ $EXIT_STATUS -ne 0 ]; then
+						echo "nats connection check failed"
+						exit $EXIT_STATUS
+					fi
+
+					curl 127.0.0.1:{health_port}/health/redis/redis-chirp
+					EXIT_STATUS=$?
+					if [ $EXIT_STATUS -ne 0 ]; then
+						echo "redis chirp connection check failed"
+						exit $EXIT_STATUS
+					fi
+
+					# Static endpoint flag
+					if [[ "$*" == *"--static"* ]]; then
+						curl 127.0.0.1:{health_port}/
+						EXIT_STATUS=$?
+						if [ $EXIT_STATUS -ne 0 ]; then
+							echo "static root accessible check failed"
+							exit $EXIT_STATUS
+						fi
+					fi
+
+					echo Ok
+					echo
+					"#,
+					health_port = dep::k8s::gen::HEALTH_PORT
+				),
+			}
+		}),
+	)
+	.await?;
+
 	eprintln!();
 	rivet_term::status::progress("Initiating project", "");
 	let mut cmd = std::process::Command::new("sh");
@@ -613,6 +683,7 @@ async fn init_k8s_project(ctx: &ProjectContext) -> Result<()> {
 		"
 		kubectl apply \
 			-f gen/kubernetes/namespace.json \
+			-f gen/kubernetes/health-checks.json \
 			-f gen/kubernetes/region-config.json \
 			-f gen/kubernetes/ingress-tls.json \
 			-f gen/kubernetes/ingress-tls-cert.json \
