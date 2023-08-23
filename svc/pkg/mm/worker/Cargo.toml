@@ -37,6 +37,7 @@ mm-lobby-find-lobby-query-list = { path = "../ops/lobby-find-lobby-query-list" }
 mm-lobby-find-try-complete = { path = "../ops/lobby-find-try-complete" }
 mm-lobby-get = { path = "../ops/lobby-get" }
 mm-lobby-idle-update = { path = "../ops/lobby-idle-update" }
+mm-lobby-state-get = { path = "../ops/lobby-state-get" }
 region-get = { path = "../../region/ops/get" }
 team-dev-get = { path = "../../team-dev/ops/get" }
 tier-list = { path = "../../tier/ops/list" }
@@ -63,6 +64,5 @@ mm-config-namespace-config-set = { path = "../../mm-config/ops/namespace-config-
 mm-config-version-get = { path = "../../mm-config/ops/version-get" }
 mm-lobby-get = { path = "../ops/lobby-get" }
 mm-lobby-player-count = { path = "../ops/lobby-player-count" }
-mm-lobby-state-get = { path = "../ops/lobby-state-get" }
 region-list = { path = "../../region/ops/list" }
 user-identity-create = { path = "../../user-identity/ops/create" }
