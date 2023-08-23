@@ -15,12 +15,11 @@ module "secrets" {
 
 locals {
 	cf_request_meta_routes = toset([
-		"matchmaker.api.${var.domain_main}/v1/lobbies/list",
-		"matchmaker.api.${var.domain_main}/v1/lobbies/join",
-		"matchmaker.api.${var.domain_main}/v1/regions",
+		"matchmaker.api.${var.domain_main}/v1/lobbies/create",
 		"matchmaker.api.${var.domain_main}/v1/lobbies/find",
-		"party.api.${var.domain_main}/v1/parties/self/activity/matchmaker/lobbies/find",
-		"party.api.${var.domain_main}/v1/parties/self/activity/matchmaker/lobbies/join",
+		"matchmaker.api.${var.domain_main}/v1/lobbies/join",
+		"matchmaker.api.${var.domain_main}/v1/lobbies/list",
+		"matchmaker.api.${var.domain_main}/v1/regions",
 	])
 }
 
