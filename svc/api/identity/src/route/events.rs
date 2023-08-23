@@ -388,7 +388,6 @@ async fn process_mm_lobby_events(
 			.filter_map(|(_, x)| x.lobby_id)
 			.collect(),
 		include_stopped: true,
-		include_private: true,
 	})
 	.await?;
 

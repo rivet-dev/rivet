@@ -44,7 +44,6 @@ async fn remove_unready_lobbies(ctx: TestCtx, crdb: CrdbPool) {
 		let get_res = op!([ctx] mm_lobby_get {
 			lobby_ids: vec![lobby_id.into()],
 			include_stopped: true,
-			include_private: true,
 		})
 		.await
 		.unwrap();
@@ -74,7 +73,6 @@ async fn remove_unready_lobbies(ctx: TestCtx, crdb: CrdbPool) {
 		let get_res = op!([ctx] mm_lobby_get {
 			lobby_ids: vec![lobby_id.into()],
 			include_stopped: true,
-			include_private: true,
 		})
 		.await
 		.unwrap();

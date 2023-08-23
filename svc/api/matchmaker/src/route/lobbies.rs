@@ -600,7 +600,6 @@ async fn fetch_lobby_list(
 			op!([ctx] mm_lobby_get {
 				lobby_ids: lobby_ids.clone(),
 				include_stopped: false,
-				include_private: false,
 			}),
 			op!([ctx] mm_lobby_player_count {
 				lobby_ids: lobby_ids.clone(),
@@ -623,6 +622,12 @@ async fn fetch_lobby_list(
 		lobby_get_res
 			.lobbies
 			.iter()
+			.filter(|x| {
+				matches!(
+					backend::matchmaker::lobby::Publicity::from_i32(x.publicity as i32),
+					Some(backend::matchmaker::lobby::Publicity::Public)
+				)
+			})
 			.map(|lobby| {
 				let player_count = player_count_res
 					.lobbies

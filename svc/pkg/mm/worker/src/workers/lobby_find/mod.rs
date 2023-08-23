@@ -477,6 +477,7 @@ async fn fetch_lobby_group_config(
 			let (lobbies_res, lobby_states_res) = tokio::try_join!(
 				op!([ctx] mm_lobby_get {
 					lobby_ids: vec![lobby_id],
+					include_stopped: true,
 				}),
 				op!([ctx] mm_lobby_state_get {
 					lobby_ids: vec![lobby_id],

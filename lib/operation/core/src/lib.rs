@@ -97,6 +97,8 @@ where
 			.spawn(timeout_fut)?
 			.await??;
 
+		tracing::info!(?res, "operation response");
+
 		// Record metrics
 		{
 			let error_code_str = match &res {

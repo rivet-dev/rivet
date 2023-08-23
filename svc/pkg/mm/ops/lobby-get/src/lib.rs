@@ -90,12 +90,6 @@ async fn handle(
 	.await?
 	.into_iter()
 	.filter(|x| x.stop_ts.is_none() || ctx.include_stopped)
-	.filter(|x| {
-		backend::matchmaker::lobby::Publicity::from_i32(x.publicity as i32)
-			.map(|publicity| matches!(publicity, backend::matchmaker::lobby::Publicity::Public))
-			.unwrap_or_default()
-			|| ctx.include_private
-	})
 	.map(Into::<backend::matchmaker::Lobby>::into)
 	.collect();
 

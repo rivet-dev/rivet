@@ -23,7 +23,6 @@ pub async fn delete_lobby(
 	let lobby_get_res = op!([ctx] mm_lobby_get {
 		lobby_ids: vec![lobby_id.into()],
 		include_stopped: false,
-		include_private: true,
 	})
 	.await?;
 
@@ -262,7 +261,6 @@ async fn get_alloc_id(
 	let lobby_res = op!([ctx] mm_lobby_get {
 		lobby_ids: vec![lobby_id.into()],
 		include_stopped: true,
-		include_private: true,
 	})
 	.await?;
 	let lobby = unwrap_with_owned!(lobby_res.lobbies.first(), MATCHMAKER_LOBBY_NOT_FOUND);
