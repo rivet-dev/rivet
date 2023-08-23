@@ -127,6 +127,7 @@ pub fn summary(
 	})
 }
 
+#[derive(Debug)]
 pub struct ProfileCtx<'a> {
 	pub presences_ctx: &'a fetch::identity::PresencesCtx,
 	pub teams_ctx: &'a fetch::identity::TeamsCtx,
