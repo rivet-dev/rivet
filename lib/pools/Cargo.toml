@@ -14,7 +14,7 @@ rand = "0.8"
 rivet-metrics = { path = "../metrics" }
 thiserror = "1.0"
 tokio = { version = "1.29", features = ["tracing"] }
-tokio-util = "0.6"
+tokio-util = "0.7"
 tracing = "0.1"
 
 [dependencies.sqlx]
