@@ -7,7 +7,6 @@ use rivet_operation::prelude::*;
 
 pub mod group;
 pub mod identity;
-pub mod party;
 
 // TODO: Move all below functions to own files
 

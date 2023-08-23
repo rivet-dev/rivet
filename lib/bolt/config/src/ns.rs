@@ -19,9 +19,11 @@ pub struct Namespace {
 	pub terraform: Terraform,
 	pub dns: Dns,
 	pub s3: S3,
+	pub fly: Option<Fly>,
 	pub email: Option<Email>,
 	#[serde(default)]
 	pub captcha: Captcha,
+	/// Where to ship logs to. Will default to using built-in Nomad logging if not provided.
 	pub logging: Option<Logging>,
 	#[serde(default)]
 	pub services: HashMap<String, Service>,
@@ -58,6 +60,11 @@ pub enum ClusterKind {
 		public_ip: String,
 		#[serde(default)]
 		preferred_subnets: Vec<String>,
+
+		/// Restricts the resources of the core services so there are more resources availble for
+		/// compiling code.
+		#[serde(default)]
+		restrict_service_resources: bool,
 	},
 	#[serde(rename = "distributed")]
 	Distributed {
@@ -205,24 +212,37 @@ pub struct CloudflareAccessServices {
 pub struct S3 {
 	#[serde(default)]
 	pub cors: S3Cors,
+	pub backfill: Option<String>,
 	#[serde(flatten)]
-	pub provider: S3Provider,
+	pub providers: S3Providers,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, Default)]
 #[serde(deny_unknown_fields)]
 pub struct S3Cors {
-	#[serde(default)]
 	pub allowed_origins: Option<Vec<String>>,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, Default)]
+#[serde(deny_unknown_fields)]
+pub struct S3Providers {
+	pub minio: Option<S3Provider>,
+	pub backblaze: Option<S3Provider>,
+	pub aws: Option<S3Provider>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(deny_unknown_fields)]
-pub enum S3Provider {
-	#[serde(rename = "minio")]
-	Minio {},
-	#[serde(rename = "backblaze")]
-	Backblaze {},
+pub struct S3Provider {
+	#[serde(default)]
+	pub default: bool,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+#[serde(deny_unknown_fields)]
+pub struct Fly {
+	pub organization_id: String,
+	pub region: String,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]

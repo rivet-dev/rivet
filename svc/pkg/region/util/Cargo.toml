@@ -8,5 +8,5 @@ license = "Apache-2.0"
 [dependencies]
 serde = { version = "1.0", features = ["derive"] }
 uuid = { version = "1", features = ["v4", "serde"] }
-tokio = { version = "1.21", features = ["sync"] }
+tokio = { version = "1.29", features = ["sync"] }
 serde_json = "1.0"

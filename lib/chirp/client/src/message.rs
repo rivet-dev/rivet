@@ -22,6 +22,10 @@ pub fn serialize_message_params(parameters: &[impl AsRef<str>], join: &str) -> S
 		.map(|x| {
 			if x == "*" {
 				x.to_string()
+			} else if x.is_empty() {
+				// Provide a null value since NATS requires a valid subject
+				// TODO: Find a better null placeholder that doesn't conflict with manual value
+				"__NULL__".to_string()
 			} else {
 				urlencoding::encode(x).to_string()
 			}
@@ -35,11 +39,15 @@ where
 	M: Message,
 	S: AsRef<str>,
 {
-	format!(
-		"chirp.msg.{}.{}",
-		M::NAME,
-		serialize_message_params(parameters, ".")
-	)
+	if parameters.is_empty() {
+		format!("chirp.msg.{}", M::NAME)
+	} else {
+		format!(
+			"chirp.msg.{}.{}",
+			M::NAME,
+			serialize_message_params(parameters, ".")
+		)
+	}
 }
 
 /// A message received from a Chirp subscription.
@@ -142,14 +150,14 @@ where
 
 #[derive(Debug)]
 pub struct TraceEntry {
-	svc_name: String,
+	context_name: String,
 	req_id: Uuid,
 	_ts: i64,
 }
 
 impl TraceEntry {
-	pub fn svc_name(&self) -> &str {
-		&self.svc_name
+	pub fn context_name(&self) -> &str {
+		&self.context_name
 	}
 
 	pub fn req_id(&self) -> Uuid {
@@ -162,7 +170,7 @@ impl TryFrom<types::rivet::chirp::TraceEntry> for TraceEntry {
 
 	fn try_from(value: types::rivet::chirp::TraceEntry) -> Result<Self, ClientError> {
 		Ok(TraceEntry {
-			svc_name: value.svc_name.clone(),
+			context_name: value.context_name.clone(),
 			req_id: value
 				.req_id
 				.map(|id| id.as_uuid())

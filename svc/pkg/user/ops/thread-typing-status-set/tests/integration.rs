@@ -7,7 +7,7 @@ use proto::backend;
 async fn empty(ctx: TestCtx) {
 	let user_id = Uuid::new_v4();
 	let thread_id = Uuid::new_v4();
-	let topic_key = util_chat::key::typing_statuses(&thread_id);
+	let topic_key = util_chat::key::typing_statuses(thread_id);
 	tracing::info!(?topic_key);
 
 	op!([ctx] user_thread_typing_status_set {
@@ -68,7 +68,7 @@ async fn expiration(ctx: TestCtx) {
 	let user_id = Uuid::new_v4();
 	let user_id2 = Uuid::new_v4();
 	let thread_id = Uuid::new_v4();
-	let topic_key = util_chat::key::typing_statuses(&thread_id);
+	let topic_key = util_chat::key::typing_statuses(thread_id);
 	tracing::info!(?topic_key);
 
 	// Insert first user

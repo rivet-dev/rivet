@@ -16,7 +16,7 @@
 pub struct CloudVersionMatchmakerConfig {
     #[serde(rename = "captcha", skip_serializing_if = "Option::is_none")]
     pub captcha: Option<Box<crate::models::CloudVersionMatchmakerCaptcha>>,
-    /// Client-side configuration
+    /// _Configures Rivet CLI behavior. Has no effect on server behavior._
     #[serde(rename = "dev_hostname", skip_serializing_if = "Option::is_none")]
     pub dev_hostname: Option<String>,
     #[serde(rename = "docker", skip_serializing_if = "Option::is_none")]

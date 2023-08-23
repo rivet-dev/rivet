@@ -4,7 +4,6 @@ imports:
   commons: ../common.yml
   localCommons: common.yml
   groupCommons: ../group/common.yml
-  partyCommons: ../party/common.yml
   identityCommons: ../identity/common.yml
 
 types:
@@ -13,23 +12,17 @@ types:
     properties:
       thread_id: optional<uuid>
       group_id: optional<uuid>
-      party_id: optional<uuid>
       identity_id: optional<uuid>
 
   SendMessageBody:
     docs: Data to send in a chat message.
     properties:
       text: optional<SendMessageBodyText>
-      party_invite: optional<SendMessageBodyPartyInvite>
 
   SendMessageBodyText:
     docs: The text in the text message.
     properties:
       body: string
-
-  SendMessageBodyPartyInvite:
-    properties:
-      token: commons.JWT
 
   QueryDirection:
     enum:
@@ -68,11 +61,6 @@ types:
       group_join: optional<MessageBodyGroupJoin>
       group_leave: optional<MessageBodyGroupLeave>
       group_member_kick: optional<MessageBodyGroupMemberKick>
-      party_invite: optional<MessageBodyPartyInvite>
-      party_join_request: optional<MessageBodyPartyJoinRequest>
-      party_join: optional<MessageBodyPartyJoin>
-      party_leave: optional<MessageBodyPartyLeave>
-      party_activity_change: optional<MessageBodyPartyActivityChange>
 
   MessageBodyText:
     properties:
@@ -101,42 +89,15 @@ types:
     properties:
       identity: identityCommons.Handle
 
-  MessageBodyPartyInvite:
-    properties:
-      sender: identityCommons.Handle
-      party: optional<partyCommons.Handle>
-      invite_token: optional<commons.JWT>
-
-  MessageBodyPartyJoinRequest:
-    properties:
-      sender: identityCommons.Handle
-
-  MessageBodyPartyJoin:
-    properties:
-      identity: identityCommons.Handle
-
-  MessageBodyPartyLeave:
-    properties:
-      identity: identityCommons.Handle
-
-  MessageBodyPartyActivityChange:
-    properties:
-      activity: partyCommons.Activity
-
   Topic:
     docs: Represents the topic of the given chat thread.
     properties:
       group: optional<TopicGroup>
-      party: optional<TopicParty>
       direct: optional<TopicDirect>
 
   TopicGroup:
     properties:
       group: groupCommons.Handle
-
-  TopicParty:
-    properties:
-      party: partyCommons.Handle
 
   TopicDirect:
     properties:
@@ -149,16 +110,11 @@ types:
       for the topic.
     properties:
       group: optional<SimpleTopicGroup>
-      party: optional<SimpleTopicParty>
       direct: optional<SimpleTopicDirect>
 
   SimpleTopicGroup:
     properties:
       group: uuid
-
-  SimpleTopicParty:
-    properties:
-      party: uuid
 
   SimpleTopicDirect:
     properties:

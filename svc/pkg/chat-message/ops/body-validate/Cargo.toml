@@ -11,7 +11,5 @@ chirp-client = { path = "../../../../../lib/chirp/client" }
 prost = "0.10"
 rivet-claims = { path = "../../../../../lib/claims" }
 
-party-invite-get = { path = "../../../party/ops/invite-get" }
-
 [dev-dependencies]
 chirp-worker = { path = "../../../../../lib/chirp/worker" }

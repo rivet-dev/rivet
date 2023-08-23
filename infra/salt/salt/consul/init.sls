@@ -1,5 +1,5 @@
 # https://github.com/hashicorp/consul/releases
-{% set version = '1.14.1' %}
+{% set version = '1.16.0' %}
 
 create_consul_user:
   user.present:
@@ -78,6 +78,7 @@ push_consul_service:
   file.managed:
     - name: /etc/systemd/system/consul.service
     - source: salt://consul/files/consul.service
+    - template: jinja
 
 start_consul_service:
   service.running:

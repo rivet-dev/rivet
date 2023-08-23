@@ -13,7 +13,7 @@ enum TestError {
 }
 
 #[chirp_worker_attributes::worker]
-async fn worker(ctx: OperationContext<TestMessage>) -> Result<TestResponse, GlobalError> {
+async fn worker(ctx: &OperationContext<TestMessage>) -> GlobalResult<TestResponse> {
 	tracing::info!(body = ?req, "hello, world!");
 
 	do_something()?;

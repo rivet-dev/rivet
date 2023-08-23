@@ -19,7 +19,6 @@ chat-message-list-for-user = { path = "../../chat-message/ops/list-for-user" }
 game-get = { path = "../../game/ops/get" }
 game-namespace-get = { path = "../../game/ops/namespace-get" }
 identity-config-version-get = { path = "../../identity-config/ops/version-get" }
-party-member-list = { path = "../../party/ops/member-list" }
 team-get = { path = "../../team/ops/get" }
 team-member-list = { path = "../../team/ops/member-list" }
 upload-list-for-user = { path = "../../upload/ops/list-for-user" }

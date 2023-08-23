@@ -3,9 +3,7 @@ use proto::backend::{self, pkg::*};
 use serde_json::json;
 
 #[worker(name = "chat-thread-create")]
-async fn worker(
-	ctx: &OperationContext<chat_thread::msg::create::Message>,
-) -> Result<(), GlobalError> {
+async fn worker(ctx: &OperationContext<chat_thread::msg::create::Message>) -> GlobalResult<()> {
 	let crdb = ctx.crdb("db-chat").await?;
 
 	let request_id = internal_unwrap!(ctx.request_id).as_uuid();
@@ -44,35 +42,6 @@ async fn worker(
 			.await?;
 
 			(thread_id, json!({ "team": { "team_id": team_id } }))
-		}
-		backend::chat::topic::Kind::Party(party) => {
-			let party_id = internal_unwrap!(party.party_id).as_uuid();
-			tracing::info!(?party_id, "creating party thread");
-
-			// See above
-			let (thread_id,) = sqlx::query_as::<_, (Uuid,)>(indoc!(
-				"
-				WITH
-					insert AS (
-						INSERT INTO threads (thread_id, create_ts, party_party_id)
-						VALUES ($1, $2, $3)
-						ON CONFLICT (party_party_id)
-						DO NOTHING
-						RETURNING thread_id
-					)
-				SELECT thread_id FROM insert
-				UNION
-				SELECT thread_id FROM threads WHERE party_party_id = $3
-				LIMIT 1
-				"
-			))
-			.bind(preliminary_thread_id)
-			.bind(create_ts)
-			.bind(party_id)
-			.fetch_one(&crdb)
-			.await?;
-
-			(thread_id, json!({ "party": { "party_id": party_id } }))
 		}
 		backend::chat::topic::Kind::Direct(direct) => {
 			let (user_a_id, user_b_id) = util::sort::id_pair(

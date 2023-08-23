@@ -175,7 +175,13 @@ impl Ctx {
 						regions: vec![backend::matchmaker::lobby_group::Region {
 							region_id: Some(region_id.into()),
 							tier_name_id: "basic-1d8".into(),
-							idle_lobbies: None,
+							idle_lobbies: Some(backend::matchmaker::lobby_group::IdleLobbies {
+								min_idle_lobbies: 0,
+								// Set a high max lobby count in case this is
+								// coming from a test that test mm-lobby-create
+								// without creating an associated player
+								max_idle_lobbies: 32,
+							}),
 						}],
 						max_players_normal: 8,
 						max_players_direct: 10,

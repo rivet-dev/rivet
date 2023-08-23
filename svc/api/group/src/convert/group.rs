@@ -14,8 +14,8 @@ pub fn handle(team: &backend::team::Team, is_developer: bool) -> GlobalResult<mo
 			team.profile_file_name.as_ref(),
 		),
 		external: models::GroupExternalLinks {
-			profile: util::route::team_profile(&team_id),
-			chat: util::route::team_chat(&team_id),
+			profile: util::route::team_profile(team_id),
+			chat: util::route::team_chat(team_id),
 		},
 		is_developer: is_developer.then_some(true),
 	})
@@ -49,8 +49,8 @@ pub fn summary(
 			team.profile_file_name.as_ref(),
 		),
 		external: models::GroupExternalLinks {
-			profile: util::route::team_profile(&team_id),
-			chat: util::route::team_chat(&team_id),
+			profile: util::route::team_profile(team_id),
+			chat: util::route::team_chat(team_id),
 		},
 
 		is_current_identity_member,

@@ -13,20 +13,19 @@ lazy_static = "1.4"
 rand = "0.8"
 rivet-metrics = { path = "../metrics" }
 thiserror = "1.0"
-tokio = { version = "1.21", features = ["tracing"] }
+tokio = { version = "1.29", features = ["tracing"] }
 tokio-util = "0.6"
 tracing = "0.1"
 
 [dependencies.sqlx]
-version = "0.6"
+version = "0.7"
 default-features = false
 features = [
-	"runtime-tokio-native-tls",
+	"runtime-tokio",
 	"postgres",
 	"macros",
 	"uuid",
 	"json",
-	"tls",
 ]
 
 [dependencies.redis]

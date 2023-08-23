@@ -14,7 +14,7 @@ user-get = { path = "../get" }
 profanity-check = { path = "../../../profanity/ops/check" }
 
 [dependencies.sqlx]
-version = "0.6"
+version = "0.7"
 default-features = false
 
 [dev-dependencies]

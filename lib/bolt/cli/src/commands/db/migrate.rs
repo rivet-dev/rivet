@@ -21,6 +21,8 @@ pub enum SubCommand {
 	///
 	/// Helpful when dealing with bugged migrations.
 	Force { service: String, num: usize },
+	/// Lists migrations
+	List,
 	/// Drops the entire database.
 	Drop { service: String },
 }
@@ -60,6 +62,11 @@ impl SubCommand {
 			}
 			Self::Force { service, num } => {
 				tasks::migrate::force(&ctx, &ctx.service_with_name(&service).await, num).await?;
+			}
+			Self::List => {
+				for svc in ctx.services_with_migrations().await {
+					println!("{}", svc.name());
+				}
 			}
 			Self::Drop { service } => {
 				tasks::migrate::drop(&ctx, &ctx.service_with_name(&service).await).await?;

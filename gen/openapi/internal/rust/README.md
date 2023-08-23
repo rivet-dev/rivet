@@ -160,24 +160,7 @@ Class | Method | HTTP request | Description
 *MatchmakerPlayersApi* | [**matchmaker_players_disconnected**](docs/MatchmakerPlayersApi.md#matchmaker_players_disconnected) | **POST** /players/disconnected | 
 *MatchmakerPlayersApi* | [**matchmaker_players_get_statistics**](docs/MatchmakerPlayersApi.md#matchmaker_players_get_statistics) | **GET** /players/statistics | 
 *MatchmakerRegionsApi* | [**matchmaker_regions_list**](docs/MatchmakerRegionsApi.md#matchmaker_regions_list) | **GET** /regions | 
-*PartyActivityApi* | [**party_activity_set_party_to_idle**](docs/PartyActivityApi.md#party_activity_set_party_to_idle) | **DELETE** /parties/self/activity | 
-*PartyActivityMatchmakerApi* | [**party_activity_matchmaker_find_lobby_for_party**](docs/PartyActivityMatchmakerApi.md#party_activity_matchmaker_find_lobby_for_party) | **POST** /parties/self/activity/matchmaker/lobbies/find | 
-*PartyActivityMatchmakerApi* | [**party_activity_matchmaker_join_lobby_for_party**](docs/PartyActivityMatchmakerApi.md#party_activity_matchmaker_join_lobby_for_party) | **POST** /parties/self/activity/matchmaker/lobbies/join | 
-*PartyActivityMatchmakerApi* | [**party_activity_matchmaker_request_player**](docs/PartyActivityMatchmakerApi.md#party_activity_matchmaker_request_player) | **POST** /parties/self/members/self/matchmaker/request-player | 
-*PartyPartiesApi* | [**party_parties_create**](docs/PartyPartiesApi.md#party_parties_create) | **POST** /parties | 
-*PartyPartiesApi* | [**party_parties_create_invite**](docs/PartyPartiesApi.md#party_parties_create_invite) | **POST** /parties/self/invites | 
-*PartyPartiesApi* | [**party_parties_get_from_invite**](docs/PartyPartiesApi.md#party_parties_get_from_invite) | **GET** /invites | 
-*PartyPartiesApi* | [**party_parties_get_profile**](docs/PartyPartiesApi.md#party_parties_get_profile) | **GET** /parties/{party_id}/profile | 
-*PartyPartiesApi* | [**party_parties_get_self_profile**](docs/PartyPartiesApi.md#party_parties_get_self_profile) | **GET** /parties/self/profile | 
-*PartyPartiesApi* | [**party_parties_get_self_summary**](docs/PartyPartiesApi.md#party_parties_get_self_summary) | **GET** /parties/self/summary | 
-*PartyPartiesApi* | [**party_parties_get_summary**](docs/PartyPartiesApi.md#party_parties_get_summary) | **GET** /parties/{party_id}/summary | 
-*PartyPartiesApi* | [**party_parties_join**](docs/PartyPartiesApi.md#party_parties_join) | **POST** /parties/join | 
-*PartyPartiesApi* | [**party_parties_kick_member**](docs/PartyPartiesApi.md#party_parties_kick_member) | **POST** /parties/self/members/{identity_id}/kick | 
-*PartyPartiesApi* | [**party_parties_leave**](docs/PartyPartiesApi.md#party_parties_leave) | **POST** /parties/self/leave | 
-*PartyPartiesApi* | [**party_parties_revoke_invite**](docs/PartyPartiesApi.md#party_parties_revoke_invite) | **DELETE** /parties/self/invites/{invite_id} | 
-*PartyPartiesApi* | [**party_parties_send_join_request**](docs/PartyPartiesApi.md#party_parties_send_join_request) | **POST** /parties/{party_id}/join-request/send | 
-*PartyPartiesApi* | [**party_parties_set_publicity**](docs/PartyPartiesApi.md#party_parties_set_publicity) | **PUT** /parties/self/publicity | 
-*PartyPartiesApi* | [**party_parties_transfer_ownership**](docs/PartyPartiesApi.md#party_parties_transfer_ownership) | **POST** /parties/self/members/{identity_id}/transfer-ownership | 
+*ModuleApi* | [**module_call**](docs/ModuleApi.md#module_call) | **POST** /modules/{module}/scripts/{script}/call | 
 *PortalGamesApi* | [**portal_games_get_game_profile**](docs/PortalGamesApi.md#portal_games_get_game_profile) | **GET** /games/{game_name_id}/profile | 
 *PortalNotificationsApi* | [**portal_notifications_register_notifications**](docs/PortalNotificationsApi.md#portal_notifications_register_notifications) | **POST** /notifications/register | 
 *PortalNotificationsApi* | [**portal_notifications_unregister_notifications**](docs/PortalNotificationsApi.md#portal_notifications_unregister_notifications) | **DELETE** /notifications/register | 
@@ -205,14 +188,8 @@ Class | Method | HTTP request | Description
  - [ChatMessageBodyGroupJoin](docs/ChatMessageBodyGroupJoin.md)
  - [ChatMessageBodyGroupLeave](docs/ChatMessageBodyGroupLeave.md)
  - [ChatMessageBodyGroupMemberKick](docs/ChatMessageBodyGroupMemberKick.md)
- - [ChatMessageBodyPartyActivityChange](docs/ChatMessageBodyPartyActivityChange.md)
- - [ChatMessageBodyPartyInvite](docs/ChatMessageBodyPartyInvite.md)
- - [ChatMessageBodyPartyJoin](docs/ChatMessageBodyPartyJoin.md)
- - [ChatMessageBodyPartyJoinRequest](docs/ChatMessageBodyPartyJoinRequest.md)
- - [ChatMessageBodyPartyLeave](docs/ChatMessageBodyPartyLeave.md)
  - [ChatMessageBodyText](docs/ChatMessageBodyText.md)
  - [ChatSendMessageBody](docs/ChatSendMessageBody.md)
- - [ChatSendMessageBodyPartyInvite](docs/ChatSendMessageBodyPartyInvite.md)
  - [ChatSendMessageBodyText](docs/ChatSendMessageBodyText.md)
  - [ChatSendMessageRequest](docs/ChatSendMessageRequest.md)
  - [ChatSendMessageResponse](docs/ChatSendMessageResponse.md)
@@ -222,13 +199,11 @@ Class | Method | HTTP request | Description
  - [ChatSimpleTopic](docs/ChatSimpleTopic.md)
  - [ChatSimpleTopicDirect](docs/ChatSimpleTopicDirect.md)
  - [ChatSimpleTopicGroup](docs/ChatSimpleTopicGroup.md)
- - [ChatSimpleTopicParty](docs/ChatSimpleTopicParty.md)
  - [ChatThread](docs/ChatThread.md)
  - [ChatThreadExternalLinks](docs/ChatThreadExternalLinks.md)
  - [ChatTopic](docs/ChatTopic.md)
  - [ChatTopicDirect](docs/ChatTopicDirect.md)
  - [ChatTopicGroup](docs/ChatTopicGroup.md)
- - [ChatTopicParty](docs/ChatTopicParty.md)
  - [ChatTypingStatus](docs/ChatTypingStatus.md)
  - [ChatWatchThreadResponse](docs/ChatWatchThreadResponse.md)
  - [CloudAuthAgent](docs/CloudAuthAgent.md)
@@ -340,6 +315,8 @@ Class | Method | HTTP request | Description
  - [CloudVersionCdnMiddlewareKind](docs/CloudVersionCdnMiddlewareKind.md)
  - [CloudVersionCdnRoute](docs/CloudVersionCdnRoute.md)
  - [CloudVersionConfig](docs/CloudVersionConfig.md)
+ - [CloudVersionEngineConfig](docs/CloudVersionEngineConfig.md)
+ - [CloudVersionEngineUnrealConfig](docs/CloudVersionEngineUnrealConfig.md)
  - [CloudVersionFull](docs/CloudVersionFull.md)
  - [CloudVersionIdentityConfig](docs/CloudVersionIdentityConfig.md)
  - [CloudVersionIdentityCustomAvatar](docs/CloudVersionIdentityCustomAvatar.md)
@@ -347,6 +324,8 @@ Class | Method | HTTP request | Description
  - [CloudVersionMatchmakerCaptcha](docs/CloudVersionMatchmakerCaptcha.md)
  - [CloudVersionMatchmakerCaptchaHcaptcha](docs/CloudVersionMatchmakerCaptchaHcaptcha.md)
  - [CloudVersionMatchmakerCaptchaHcaptchaLevel](docs/CloudVersionMatchmakerCaptchaHcaptchaLevel.md)
+ - [CloudVersionMatchmakerCaptchaTurnstile](docs/CloudVersionMatchmakerCaptchaTurnstile.md)
+ - [CloudVersionMatchmakerCaptchaTurnstileDomain](docs/CloudVersionMatchmakerCaptchaTurnstileDomain.md)
  - [CloudVersionMatchmakerConfig](docs/CloudVersionMatchmakerConfig.md)
  - [CloudVersionMatchmakerGameMode](docs/CloudVersionMatchmakerGameMode.md)
  - [CloudVersionMatchmakerGameModeCreateConfig](docs/CloudVersionMatchmakerGameModeCreateConfig.md)
@@ -434,7 +413,6 @@ Class | Method | HTTP request | Description
  - [IdentityGlobalEventKind](docs/IdentityGlobalEventKind.md)
  - [IdentityGlobalEventMatchmakerLobbyJoin](docs/IdentityGlobalEventMatchmakerLobbyJoin.md)
  - [IdentityGlobalEventNotification](docs/IdentityGlobalEventNotification.md)
- - [IdentityGlobalEventPartyUpdate](docs/IdentityGlobalEventPartyUpdate.md)
  - [IdentityGroup](docs/IdentityGroup.md)
  - [IdentityHandle](docs/IdentityHandle.md)
  - [IdentityLinkedAccount](docs/IdentityLinkedAccount.md)
@@ -491,40 +469,8 @@ Class | Method | HTTP request | Description
  - [MatchmakerPlayersConnectedRequest](docs/MatchmakerPlayersConnectedRequest.md)
  - [MatchmakerRegionInfo](docs/MatchmakerRegionInfo.md)
  - [MatchmakerRegionStatistics](docs/MatchmakerRegionStatistics.md)
- - [PartyActivity](docs/PartyActivity.md)
- - [PartyActivityFindMatchmakerLobbyForPartyRequest](docs/PartyActivityFindMatchmakerLobbyForPartyRequest.md)
- - [PartyActivityJoinMatchmakerLobbyForPartyRequest](docs/PartyActivityJoinMatchmakerLobbyForPartyRequest.md)
- - [PartyActivityMatchmakerFindingLobby](docs/PartyActivityMatchmakerFindingLobby.md)
- - [PartyActivityMatchmakerLobby](docs/PartyActivityMatchmakerLobby.md)
- - [PartyCreateInviteConfig](docs/PartyCreateInviteConfig.md)
- - [PartyCreateInviteRequest](docs/PartyCreateInviteRequest.md)
- - [PartyCreateInviteResponse](docs/PartyCreateInviteResponse.md)
- - [PartyCreatePublicityConfig](docs/PartyCreatePublicityConfig.md)
- - [PartyCreateRequest](docs/PartyCreateRequest.md)
- - [PartyCreateResponse](docs/PartyCreateResponse.md)
- - [PartyCreatedInvite](docs/PartyCreatedInvite.md)
- - [PartyExternalLinks](docs/PartyExternalLinks.md)
- - [PartyGetInviteResponse](docs/PartyGetInviteResponse.md)
- - [PartyGetProfileResponse](docs/PartyGetProfileResponse.md)
- - [PartyGetSelfProfileResponse](docs/PartyGetSelfProfileResponse.md)
- - [PartyGetSelfSummaryResponse](docs/PartyGetSelfSummaryResponse.md)
- - [PartyGetSummaryResponse](docs/PartyGetSummaryResponse.md)
- - [PartyHandle](docs/PartyHandle.md)
- - [PartyInvite](docs/PartyInvite.md)
- - [PartyInviteAlias](docs/PartyInviteAlias.md)
- - [PartyInviteExternalLinks](docs/PartyInviteExternalLinks.md)
- - [PartyJoinInvite](docs/PartyJoinInvite.md)
- - [PartyJoinRequest](docs/PartyJoinRequest.md)
- - [PartyJoinResponse](docs/PartyJoinResponse.md)
- - [PartyMatchmakerLobby](docs/PartyMatchmakerLobby.md)
- - [PartyMemberState](docs/PartyMemberState.md)
- - [PartyMemberStateMatchmakerLobby](docs/PartyMemberStateMatchmakerLobby.md)
- - [PartyMemberSummary](docs/PartyMemberSummary.md)
- - [PartyProfile](docs/PartyProfile.md)
- - [PartyPublicity](docs/PartyPublicity.md)
- - [PartyPublicityLevel](docs/PartyPublicityLevel.md)
- - [PartySetPublicityRequest](docs/PartySetPublicityRequest.md)
- - [PartySummary](docs/PartySummary.md)
+ - [ModuleCallRequest](docs/ModuleCallRequest.md)
+ - [ModuleCallResponse](docs/ModuleCallResponse.md)
  - [PortalGetGameProfileResponse](docs/PortalGetGameProfileResponse.md)
  - [PortalGetSuggestedGamesResponse](docs/PortalGetSuggestedGamesResponse.md)
  - [PortalNotificationRegisterFirebaseService](docs/PortalNotificationRegisterFirebaseService.md)

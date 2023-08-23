@@ -3,12 +3,6 @@ use s3_util::aws_sdk_s3;
 
 use crate::{config::cache, context::ProjectContext};
 
-pub mod service_builds {
-	pub const BUCKET: &str = "rivet-service-builds";
-	pub const ENDPOINT: &str = "https://s3.us-west-004.backblazeb2.com";
-	pub const REGION: &str = "us-west-004";
-}
-
 #[derive(Clone, serde::Deserialize)]
 pub struct ServiceKey {
 	pub key_id: String,

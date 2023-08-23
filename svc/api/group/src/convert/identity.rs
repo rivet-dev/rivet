@@ -5,7 +5,7 @@ use rivet_operation::prelude::*;
 use crate::{convert, fetch};
 
 pub fn handle(
-	current_user_id: &Uuid,
+	current_user_id: Uuid,
 	user: &backend::user::User,
 	presences_ctx: &fetch::identity::PresencesCtx,
 	is_mutual_following: bool,
@@ -13,7 +13,7 @@ pub fn handle(
 	let raw_user_id = internal_unwrap_owned!(user.user_id);
 	let user_id = raw_user_id.as_uuid();
 
-	let is_self = &user_id == current_user_id;
+	let is_self = user_id == current_user_id;
 
 	let user_presence = internal_unwrap_owned!(presences_ctx
 		.res
@@ -22,22 +22,6 @@ pub fn handle(
 		.find(|presence| presence.user_id == user.user_id));
 	let user_presence = internal_unwrap!(user_presence.presence);
 	let status = internal_unwrap_owned!(backend::user::Status::from_i32(user_presence.status));
-	let party = if status != backend::user::Status::Offline {
-		if let Some(party_id) = presences_ctx.parties.member_to_party.get(&user_id) {
-			if let Some(party) = presences_ctx.parties.parties.get(party_id) {
-				Some(convert::party::handle(
-					party,
-					&presences_ctx.games_with_namespace_ids,
-				)?)
-			} else {
-				None
-			}
-		} else {
-			None
-		}
-	} else {
-		None
-	};
 
 	Ok(models::IdentityHandle {
 		identity_id: user_id.to_string(),
@@ -53,13 +37,13 @@ pub fn handle(
 			&presences_ctx.games,
 			is_self || is_mutual_following,
 		)?),
-		party,
 		is_registered: true, // TODO:
 		external: models::IdentityExternalLinks {
-			profile: util::route::user_profile(&user_id),
+			profile: util::route::user_profile(user_id),
 			settings: None,
-			chat: (!is_self).then(|| util::route::user_chat(&user_id)),
+			chat: (!is_self).then(|| util::route::user_chat(user_id)),
 		},
+		party: None,
 	})
 }
 

@@ -14,7 +14,6 @@ impl ApiAuth for Auth {
 	) -> GlobalResult<Auth> {
 		Self::rate_limit(rate_limit_ctx).await?;
 
-		// TODO: Don't hardcode this
 		// TODO: Use JWT
 		if let Some(api_token) = api_token {
 			assert_eq_with!(
@@ -23,9 +22,10 @@ impl ApiAuth for Auth {
 				API_FORBIDDEN,
 				reason = "Invalid auth"
 			);
+			Ok(Auth { _claims: None })
+		} else {
+			internal_panic!("unreachable");
 		}
-
-		Ok(Auth { _claims: None })
 	}
 
 	async fn rate_limit(_rate_limit_ctx: AuthRateLimitCtx<'_>) -> GlobalResult<()> {

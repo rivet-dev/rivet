@@ -25,7 +25,7 @@ rivet-pools = { path = "../../../lib/pools" }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 thiserror = "1.0"
-tokio = { version = "1.21" }
+tokio = { version = "1.29" }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", default-features = false, features = ["fmt", "json", "ansi"] }
 url = "2.2.2"
@@ -36,17 +36,14 @@ chat-thread-participant-list = { path = "../../pkg/chat-thread/ops/participant-l
 user-get = { path = "../../pkg/user/ops/get" }
 token-revoke = { path = "../../pkg/token/ops/revoke" }
 game-user-get = { path = "../../pkg/game-user/ops/get" }
-party-invite-get = { path = "../../pkg/party/ops/invite-get" }
 game-resolve-namespace-id = { path = "../../pkg/game/ops/resolve-namespace-id" }
 game-get = { path = "../../pkg/game/ops/get" }
-party-get = { path = "../../pkg/party/ops/get" }
 chat-thread-get = { path = "../../pkg/chat-thread/ops/get" }
 chat-message-validate = { path = "../../pkg/chat-message/ops/validate" }
 chat-thread-get-or-create-for-topic = { path = "../../pkg/chat-thread/ops/get-or-create-for-topic" }
 chat-message-list = { path = "../../pkg/chat-message/ops/list" }
 user-thread-typing-status-set = { path = "../../pkg/user/ops/thread-typing-status-set" }
 chat-thread-get-for-topic = { path = "../../pkg/chat-thread/ops/get-for-topic" }
-party-member-get = { path = "../../pkg/party/ops/member-get" }
 
 [dev-dependencies]
 rand = "0.8"

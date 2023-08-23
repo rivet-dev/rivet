@@ -154,9 +154,10 @@ impl PerfCtxInner {
 		req_id: Uuid,
 	) -> Result<perf::SvcPerf, PerfCtxInnerError> {
 		Ok(perf::SvcPerf {
-			svc_name: env::var("CHIRP_SERVICE_NAME")
+			// TODO: This should reflect the worker name, not the service name
+			context_name: env::var("CHIRP_SERVICE_NAME")
 				.map_err(|_| PerfCtxInnerError::MissingEnvVar("CHIRP_SERVICE_NAME".to_owned()))?,
-			ts: ts,
+			ts,
 			duration: self.base_ts.elapsed().as_nanos() as i64,
 			req_id: Some(req_id.into()),
 			spans: self
@@ -214,8 +215,8 @@ impl PerfCtxInner {
 
 	/// Start a new performance measurement time span for an rpc call
 	#[tracing::instrument]
-	pub async fn start_rpc(&self, svc_name: &'static str, req_id: Uuid) -> PerfSpan {
-		let span = PerfSpan::new(self.base_ts, svc_name, Some(req_id));
+	pub async fn start_rpc(&self, context_name: &'static str, req_id: Uuid) -> PerfSpan {
+		let span = PerfSpan::new(self.base_ts, context_name, Some(req_id));
 
 		self.perf_spans.write().await.push(span.clone());
 

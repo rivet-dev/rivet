@@ -2,7 +2,6 @@
 
 imports:
   commons: ../common.yml
-  partyCommons: ../party/common.yml
   identityCommons: ../identity/common.yml
   groupCommons: ../group/common.yml
   gameCommons: ../game/common.yml
@@ -27,7 +26,6 @@ types:
     properties:
       identities: list<identityCommons.Handle>
       games: list<gameCommons.Summary>
-      parties: list<partyCommons.Summary>
       suggested_groups: list<groupCommons.Summary>
       suggested_players: list<identityCommons.Handle>
       watch: commons.WatchResponse

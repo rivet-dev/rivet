@@ -34,7 +34,7 @@ job "consul-exporter:${dc}" {
 			driver = "docker"
 
 			config {
-				image = "prom/consul-exporter:v0.8.0"
+				image = "prom/consul-exporter:v0.9.0"
 				${shared.docker_auth}
 				args = ["--consul.server=$${attr.unique.network.ip-address}:8500", "--web.listen-address=0.0.0.0:$${NOMAD_PORT_http}"]
 

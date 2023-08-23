@@ -4,6 +4,7 @@ use proto::{
 };
 use rivet_cloud_server::models;
 use rivet_operation::prelude::*;
+use rivet_api::models as new_models;
 
 use crate::{ApiFrom, ApiTryFrom, ApiTryInto};
 
@@ -80,7 +81,7 @@ impl ApiTryFrom<perf::SvcPerf> for models::SvcPerf {
 
 	fn try_from(value: perf::SvcPerf) -> GlobalResult<Self> {
 		Ok(models::SvcPerf {
-			svc_name: value.svc_name.to_owned(),
+			svc_name: value.context_name.to_owned(),
 			ts: util::timestamp::to_chrono(value.ts)?,
 			duration: value.duration,
 			req_id: value.req_id.map(|req_id| (*req_id).to_string()),
@@ -147,6 +148,32 @@ impl ApiTryFrom<perf::Mark> for models::LogsPerfMark {
 			ts: util::timestamp::to_chrono(value.ts)?,
 			ray_id: value.ray_id.map(|ray_id| (*ray_id).to_string()),
 			req_id: value.req_id.map(|ray_id| (*ray_id).to_string()),
+		})
+	}
+}
+
+impl ApiTryFrom<new_models::UploadPrepareFile> for backend::upload::PrepareFile {
+	type Error = GlobalError;
+
+	fn try_from(value: new_models::UploadPrepareFile) -> GlobalResult<Self> {
+		internal_assert!(value.content_length >= 0);
+
+		Ok(backend::upload::PrepareFile {
+			path: value.path,
+			mime: value.content_type,
+			content_length: value.content_length as u64,
+			..Default::default()
+		})
+	}
+}
+
+impl ApiTryFrom<backend::upload::PresignedUploadRequest> for new_models::UploadPresignedRequest {
+	type Error = GlobalError;
+
+	fn try_from(value: backend::upload::PresignedUploadRequest) -> GlobalResult<Self> {
+		Ok(new_models::UploadPresignedRequest {
+			path: value.path,
+			url: value.url,
 		})
 	}
 }

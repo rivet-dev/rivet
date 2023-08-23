@@ -33,6 +33,8 @@ pub async fn config_to_proto(
 		},
 		kv: value.kv.map(|_| backend::kv::VersionConfig {}),
 		identity: value.identity.map(|x| (*x).try_into()).transpose()?,
+		// TODO:
+		module: None,
 	})
 }
 
@@ -41,6 +43,7 @@ pub async fn config_to_openapi(
 	value: backend::cloud::VersionConfig,
 ) -> GlobalResult<models::CloudVersionConfig> {
 	Ok(models::CloudVersionConfig {
+		engine: None, // CLient side only
 		cdn: value
 			.cdn
 			.map(ApiTryFrom::try_from)

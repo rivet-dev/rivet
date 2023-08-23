@@ -7,12 +7,9 @@ use types::rivet::backend::{self, pkg::*};
 use crate::convert;
 
 pub fn message(
-	current_user_id: &Uuid,
+	current_user_id: Uuid,
 	message: &backend::chat::Message,
 	users: &[backend::user::User],
-	parties: &[backend::party::Party],
-	party_invites: &[backend::party::Invite],
-	games: &[convert::GameWithNamespaceIds],
 ) -> GlobalResult<models::ChatMessage> {
 	// Read body message
 	let backend_body_kind = internal_unwrap!(message.body);
@@ -118,94 +115,6 @@ pub fn message(
 					..Default::default()
 				}
 			}
-			backend_body::Kind::PartyInvite(backend_body::PartyInvite {
-				sender_user_id,
-				party_id,
-				invite_id,
-				invite_token,
-			}) => {
-				let sender = internal_unwrap_owned!(users
-					.iter()
-					.find(|user| &user.user_id == sender_user_id));
-
-				let party = parties.iter().find(|party| &party.party_id == party_id);
-				let invite = party_invites
-					.iter()
-					.find(|invite| &invite.invite_id == invite_id);
-
-				models::ChatMessageBody {
-					party_invite: Some(Box::new(models::ChatMessageBodyPartyInvite {
-						sender: Box::new(convert::identity::handle_without_presence(
-							current_user_id,
-							sender,
-						)?),
-						party: party
-							.map(|party| convert::party::handle(party, games))
-							.transpose()?
-							.map(Box::new),
-						invite_token: (party.is_some() && invite.is_some())
-							.then(|| invite_token.to_owned()),
-					})),
-					..Default::default()
-				}
-			}
-			backend_body::Kind::PartyJoinRequest(backend_body::PartyJoinRequest {
-				sender_user_id,
-			}) => {
-				let sender = internal_unwrap_owned!(users
-					.iter()
-					.find(|user| &user.user_id == sender_user_id));
-
-				models::ChatMessageBody {
-					party_join_request: Some(Box::new(models::ChatMessageBodyPartyJoinRequest {
-						sender: Box::new(convert::identity::handle_without_presence(
-							current_user_id,
-							sender,
-						)?),
-					})),
-					..Default::default()
-				}
-			}
-			backend_body::Kind::PartyJoin(backend_body::PartyJoin { user_id }) => {
-				let user =
-					internal_unwrap_owned!(users.iter().find(|user| &user.user_id == user_id));
-
-				models::ChatMessageBody {
-					party_join: Some(Box::new(models::ChatMessageBodyPartyJoin {
-						identity: Box::new(convert::identity::handle_without_presence(
-							current_user_id,
-							user,
-						)?),
-					})),
-					..Default::default()
-				}
-			}
-			backend_body::Kind::PartyLeave(backend_body::PartyLeave { user_id }) => {
-				let user =
-					internal_unwrap_owned!(users.iter().find(|user| &user.user_id == user_id));
-
-				models::ChatMessageBody {
-					party_leave: Some(Box::new(models::ChatMessageBodyPartyLeave {
-						identity: Box::new(convert::identity::handle_without_presence(
-							current_user_id,
-							user,
-						)?),
-					})),
-					..Default::default()
-				}
-			}
-			backend_body::Kind::PartyActivityChange(backend_body::PartyActivityChange {
-				state,
-			}) => models::ChatMessageBody {
-				// TODO:
-				// party_activity_change: Some(Box::new(models::ChatMessageBodyPartyActivityChange {
-				// 	activity: Box::new(convert::party::activity(
-				// 		state.clone().map(ApiInto::api_into).as_ref(),
-				// 		games,
-				// 	)?),
-				// })),
-				..Default::default()
-			},
 		}
 	};
 
@@ -219,12 +128,10 @@ pub fn message(
 
 // Returns `None` when the thread no longer exists
 pub fn thread(
-	current_user_id: &Uuid,
+	current_user_id: Uuid,
 	tail_message: &backend::chat::Message,
 	threads: &[backend::chat::Thread],
 	users: &[backend::user::User],
-	parties: &[backend::party::Party],
-	party_invites: &[backend::party::Invite],
 	teams: &[backend::team::Team],
 	dev_teams: &[backend::team::DevTeam],
 	games: &[convert::GameWithNamespaceIds],
@@ -238,7 +145,6 @@ pub fn thread(
 	let topic = topic_context(
 		current_user_id,
 		users,
-		parties,
 		teams,
 		dev_teams,
 		games,
@@ -253,14 +159,7 @@ pub fn thread(
 				thread_id,
 				create_ts: util::timestamp::to_string(thread.create_ts)?,
 				topic: Box::new(topic),
-				tail_message: Some(Box::new(message(
-					current_user_id,
-					tail_message,
-					users,
-					parties,
-					party_invites,
-					games,
-				)?)),
+				tail_message: Some(Box::new(message(current_user_id, tail_message, users)?)),
 				last_read_ts: util::timestamp::to_string(
 					last_read_threads
 						.iter()
@@ -275,7 +174,7 @@ pub fn thread(
 					.unwrap_or_default()
 					.try_into()?,
 				external: Box::new(models::ChatThreadExternalLinks {
-					chat: util::route::thread(&thread_id),
+					chat: util::route::thread(thread_id),
 				}),
 			})
 		})
@@ -284,9 +183,8 @@ pub fn thread(
 
 // Returns `None` when the thread no longer exists
 fn topic_context(
-	current_user_id: &Uuid,
+	current_user_id: Uuid,
 	users: &[backend::user::User],
-	parties: &[backend::party::Party],
 	teams: &[backend::team::Team],
 	dev_teams: &[backend::team::DevTeam],
 	games: &[convert::GameWithNamespaceIds],
@@ -313,20 +211,6 @@ fn topic_context(
 				})
 			})
 			.transpose()?
-		}
-		backend::chat::topic::Kind::Party(party) => {
-			let party = parties.iter().find(|p| p.party_id == party.party_id);
-
-			party
-				.map(|party| {
-					GlobalResult::Ok(models::ChatTopic {
-						party: Some(Box::new(models::ChatTopicParty {
-							party: Box::new(convert::party::handle(party, games)?),
-						})),
-						..Default::default()
-					})
-				})
-				.transpose()?
 		}
 		backend::chat::topic::Kind::Direct(direct) => {
 			let user_a = users.iter().find(|u| u.user_id == direct.user_a_id);

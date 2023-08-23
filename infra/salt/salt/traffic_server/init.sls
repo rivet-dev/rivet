@@ -8,7 +8,7 @@ disk_create_traffic_serer:
 disk_mount_traffic_server:
   file.directory:
     - name: /mnt/trafficserver
-
+    - makedirs: True
   mount.mounted:
     - name: /mnt/trafficserver
     - device: {{ device }}
@@ -26,20 +26,25 @@ create_trafficserver_user:
 
 create_mnt_db_trafficserver:
   file.directory:
-    - name: /mnt/trafficserver/db
+    - names:
+      - /mnt/trafficserver/db
+      - /var/log/trafficserver
+      - /run/trafficserver
     - user: trafficserver
     - group: trafficserver
     - mode: 700
     - makedirs: True
-    {%- if grains['volumes']['ats']['mount'] %}
     - require:
+      - user: create_trafficserver_user
+      {%- if grains['volumes']['ats']['mount'] %}
       - mount: disk_mount_traffic_server
-    {% endif %}
+      {%- endif %}
 
 push_trafficserver_service:
   file.managed:
-    - name: /lib/systemd/system/trafficserver.service
+    - name: /etc/systemd/system/trafficserver.service
     - source: salt://traffic_server/files/trafficserver.service
+    - template: jinja
     - onchanges:
       - cmd: build_nix_shell
 
@@ -49,6 +54,7 @@ start_trafficserver_service:
     - require:
       - file: create_mnt_db_trafficserver
       - file: push_trafficserver_service
+      - file: create_var_log_trafficserver
     - onchanges:
       - file: push_trafficserver_service
 
@@ -56,10 +62,14 @@ push_etc_trafficserver_static:
   file.recurse:
     - name: /etc/trafficserver/
     - source: salt://traffic_server/files/etc/static/
+    - user: trafficserver
+    - group: trafficserver
     - file_mode: 644
     - dir_mode: 755
     # Keep other files, since we'll also be writing files in push_etc_trafficserver_dynamic
     - clean: False
+    - require:
+      - user: create_trafficserver_user
 
 push_etc_trafficserver_dynamic:
   file.managed:
@@ -72,17 +82,22 @@ push_etc_trafficserver_dynamic:
         - source: salt://traffic_server/files/etc/dynamic/s3_auth_v4.config.j2
       - /etc/trafficserver/s3_region_map.config:
         - source: salt://traffic_server/files/etc/dynamic/s3_region_map.config.j2
-      - /etc/trafficserver/stored.config:
+      - /etc/trafficserver/storage.config:
         - source: salt://traffic_server/files/etc/dynamic/storage.config.j2
+    - user: trafficserver
+    - group: trafficserver
     - mode: 644
     - template: jinja
     - context:
         nebula_ipv4: {{ grains['nebula']['ipv4'] }}
-        s3_endpoint: {{ pillar['s3']['endpoint_internal'] }}
-        s3_region: {{ pillar['s3']['region'] }}
-        s3_access_key_id: {{ pillar['s3']['access_key_id'] }}
-        s3_secret_access_key: {{ pillar['s3']['access_key_secret'] }}
+        s3_endpoint: {{ pillar['s3']['config']['default']['endpoint_internal'] }}
+        s3_region: {{ pillar['s3']['config']['default']['region'] }}
+        s3_access_key_id: {{ pillar['s3']['access']['default']['persistent_access_key_id'] }}
+        s3_secret_access_key: {{ pillar['s3']['access']['default']['persistent_access_key_secret'] }}
         volume_size_cache: {{ grains['volumes']['ats']['size']|int - 1 }}G
+    - require:
+      - file: push_etc_trafficserver_static
+      - user: create_trafficserver_user
 
 reload_traffic_server_config:
   cmd.run:

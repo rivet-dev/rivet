@@ -33,7 +33,7 @@ async fn fail(
 }
 
 #[worker(name = "job-run-create")]
-async fn worker(ctx: &OperationContext<job_run::msg::create::Message>) -> Result<(), GlobalError> {
+async fn worker(ctx: &OperationContext<job_run::msg::create::Message>) -> GlobalResult<()> {
 	let crdb = ctx.crdb("db-job-state").await?;
 
 	let run_id = internal_unwrap!(ctx.run_id).as_uuid();
@@ -238,12 +238,12 @@ async fn write_to_db_before_run(
 	.bind(region_id)
 	.bind(ts)
 	.bind(token_session_id)
-	.execute(&mut *tx)
+	.execute(&mut **tx)
 	.await?;
 
 	sqlx::query(indoc!("INSERT INTO run_meta_nomad (run_id) VALUES ($1)"))
 		.bind(run_id)
-		.execute(&mut *tx)
+		.execute(&mut **tx)
 		.await?;
 
 	// Validate that the proxied ports point to existing ports
@@ -289,7 +289,7 @@ async fn write_to_db_before_run(
 		.bind(ingress_hostnames_sorted.join(","))
 		.bind(proxied_port.proxy_protocol)
 		.bind(proxied_port.ssl_domain_mode)
-		.execute(&mut *tx)
+		.execute(&mut **tx)
 		.await?;
 	}
 

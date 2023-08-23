@@ -29,7 +29,7 @@ message Mark {
 }
 
 message SvcPerf {
-	string svc_name = 1;
+	string context_name = 1;
 	int64 ts = 2;  // Timestamp of request in milliseconds
 	int64 duration = 3;  // Duration of request in nanoseconds
 	rivet.common.Uuid req_id = 4;

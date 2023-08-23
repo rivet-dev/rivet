@@ -18,6 +18,16 @@ locals {
 		lighthouse = {
 			am_lighthouse = var.is_lighthouse
 			hosts = var.is_lighthouse ? null : sort(var.lighthouse_hosts)
+
+			# Disable IPv6
+			remote_allow_list = {
+				"0.0.0.0/0" = true
+				"::/0" = false
+			}
+			local_allow_list = {
+				"0.0.0.0/0" = true
+				"::/0" = false
+			}
 		}
 		listen = {
 			host = "0.0.0.0"

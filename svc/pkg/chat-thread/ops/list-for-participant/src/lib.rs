@@ -7,7 +7,6 @@ struct ThreadRow {
 	create_ts: i64,
 
 	team_team_id: Option<Uuid>,
-	party_party_id: Option<Uuid>,
 	direct_user_a_id: Option<Uuid>,
 	direct_user_b_id: Option<Uuid>,
 }
@@ -32,33 +31,23 @@ async fn handle(
 		.map(|x| x.as_uuid())
 		.collect::<Vec<_>>();
 
-	// TODO: Fetch this
-	let party_id = Option::<Uuid>::None;
-
 	// Query threads
 	let threads = sqlx::query_as::<_, ThreadRow>(indoc!(
 		"
-		SELECT thread_id, create_ts, team_team_id, NULL AS party_party_id, NULL AS direct_user_a_id, NULL AS direct_user_b_id
+		SELECT thread_id, create_ts, team_team_id, NULL AS direct_user_a_id, NULL AS direct_user_b_id
 		FROM threads
 		WHERE team_team_id = ANY($1)
 
 		UNION
 
-		SELECT thread_id, create_ts, NULL, party_party_id, NULL, NULL
-		FROM threads
-		WHERE party_party_id = $2
-
-		UNION
-
-		SELECT thread_id, create_ts, NULL, NULL, direct_user_a_id, direct_user_b_id
+		SELECT thread_id, create_ts, NULL, direct_user_a_id, direct_user_b_id
 		FROM threads
 		WHERE
-			direct_user_a_id = $3 OR
-			direct_user_b_id = $3
+			direct_user_a_id = $2 OR
+			direct_user_b_id = $2
 		"
 	))
 	.bind(team_ids)
-	.bind(party_id)
 	.bind(user_id)
 	.fetch_all(&crdb)
 	.await?
@@ -71,10 +60,6 @@ async fn handle(
 				kind: Some(if let Some(team_id) = thread.team_team_id {
 					backend::chat::topic::Kind::Team(backend::chat::topic::Team {
 						team_id: Some(team_id.into()),
-					})
-				} else if let Some(party_id) = thread.party_party_id {
-					backend::chat::topic::Kind::Party(backend::chat::topic::Party {
-						party_id: Some(party_id.into()),
 					})
 				} else if let (Some(user_a_id), Some(user_b_id)) =
 					(thread.direct_user_a_id, thread.direct_user_b_id)

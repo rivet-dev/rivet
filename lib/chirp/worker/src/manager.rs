@@ -1,6 +1,6 @@
 use chirp_metrics as metrics;
 use futures_util::StreamExt;
-use global_error::GlobalError;
+use global_error::{GlobalError, GlobalResult};
 use prost::Message;
 use redis::{self, AsyncCommands};
 use rivet_connection::Connection;
@@ -276,7 +276,7 @@ where
 					.arg(pending_retry_time.as_millis() as i64)
 					.arg("-")
 					.arg("+")
-					.arg(16usize)
+					.arg(1usize)
 					.query_async::<_, redis::streams::StreamPendingCountReply>(redis_chirp_conn)
 					.await
 				{
@@ -451,7 +451,7 @@ where
 			let read_options = redis::streams::StreamReadOptions::default()
 				.group(&group, &consumer)
 				.block(30_000)
-				.count(16);
+				.count(1);
 			let res = match redis_chirp_conn
 				.xread_options::<_, _, redis::streams::StreamReadReply>(keys, &[">"], &read_options)
 				.await
@@ -523,7 +523,13 @@ where
 		nats_message: Option<nats::Message>,
 		mut redis_message_meta: Option<RedisMessageMeta>,
 	) {
+		let worker_name = match &self.config.worker_kind {
+			WorkerKind::Rpc { .. } => self.config.service_name.clone(),
+			WorkerKind::Consumer { group, .. } => format!("{}--{}", group, W::NAME),
+		};
+
 		tracing::info!(
+			?worker_name,
 			bytes = raw_msg_buf.len(),
 			?nats_message,
 			"received raw message"
@@ -611,7 +617,7 @@ where
 						let recv_lag =
 							(rivet_util::timestamp::now() as f64 - msg.ts as f64) / 1000.;
 						metrics::CHIRP_MESSAGE_RECV_LAG
-							.with_label_values(&[&self.config.service_name])
+							.with_label_values(&[&worker_name])
 							.observe(recv_lag);
 
 						tracing::info!(
@@ -662,13 +668,6 @@ where
 			tracing::info!("request")
 		}
 
-		let svc_name = match &self.config.worker_kind {
-			WorkerKind::Rpc { .. } => self.config.service_name.clone(),
-			WorkerKind::Consumer { .. } => {
-				format!("{}--{}", self.config.service_name, W::NAME)
-			}
-		};
-
 		let worker_req = {
 			// Build client
 			let ts = rivet_util::timestamp::now();
@@ -679,7 +678,7 @@ where
 				{
 					let mut x = trace.clone();
 					x.push(chirp::TraceEntry {
-						svc_name: svc_name.clone(),
+						context_name: worker_name.clone(),
 						req_id: req_id_proto.clone(),
 						ts: rivet_util::timestamp::now(),
 						run_context: chirp::RunContext::Service as i32,
@@ -713,7 +712,7 @@ where
 				ts,
 				req_ts,
 				op_ctx: OperationContext::new(
-					svc_name,
+					worker_name,
 					W::TIMEOUT,
 					conn,
 					req_id,
@@ -734,20 +733,21 @@ where
 	#[tracing::instrument(
 		skip_all,
 		fields(
-			worker_name = %req.config.service_name,
+			worker_name = %req.op_ctx.name(),
 			req_id = %req.req_id,
 			ray_id = %req.ray_id
 		)
 	)]
 	async fn handle_req(self: Arc<Self>, req: Request<W::Request>) {
 		let client = req.chirp().clone();
+		let worker_name = req.op_ctx.name().to_string();
 
 		// Record metrics
 		metrics::CHIRP_REQUEST_PENDING
-			.with_label_values(&[&self.config.service_name])
+			.with_label_values(&[req.op_ctx.name()])
 			.inc();
 		metrics::CHIRP_REQUEST_TOTAL
-			.with_label_values(&[&self.config.service_name])
+			.with_label_values(&[req.op_ctx.name()])
 			.inc();
 
 		let start_instant = Instant::now();
@@ -764,11 +764,7 @@ where
 						Some(chirp::response::err::Kind::Internal(error)) => {
 							let error_code_str = error.code.to_string();
 							metrics::CHIRP_REQUEST_ERRORS
-								.with_label_values(&[
-									&self.config.service_name,
-									&error_code_str,
-									&error.ty,
-								])
+								.with_label_values(&[&worker_name, &error_code_str, &error.ty])
 								.inc();
 
 							error_code_str
@@ -776,11 +772,7 @@ where
 						Some(chirp::response::err::Kind::BadRequest(error)) => {
 							let error_code_str = error.code.to_string();
 							metrics::CHIRP_REQUEST_ERRORS
-								.with_label_values(&[
-									&self.config.service_name,
-									&error_code_str,
-									"bad_request",
-								])
+								.with_label_values(&[&worker_name, &error_code_str, "bad_request"])
 								.inc();
 
 							error_code_str
@@ -799,10 +791,10 @@ where
 			// Other request metrics
 			let dt = start_instant.elapsed().as_secs_f64();
 			metrics::CHIRP_REQUEST_PENDING
-				.with_label_values(&[&self.config.service_name])
+				.with_label_values(&[&worker_name])
 				.dec();
 			metrics::CHIRP_REQUEST_DURATION
-				.with_label_values(&[&self.config.service_name, error_code_str.as_str()])
+				.with_label_values(&[&worker_name, error_code_str.as_str()])
 				.observe(dt);
 		}
 
@@ -827,11 +819,11 @@ where
 			.op_ctx
 			.trace()
 			.iter()
-			.any(|x| x.svc_name == self.config.service_name);
+			.any(|x| x.context_name == req.op_ctx.name());
 		let handle_res = if is_recursive {
 			Ok(Err(GlobalError::new(
 				ManagerError::RecursiveRequest {
-					worker_name: self.config.service_name.clone(),
+					worker_name: req.op_ctx.name().into(),
 				},
 				chirp::ErrorCode::RecursiveRequest,
 			)))
@@ -864,44 +856,50 @@ where
 	async fn handle_req_with_retry(
 		self: Arc<Self>,
 		req: &Request<W::Request>,
-	) -> Result<W::Response, GlobalError> {
-		// Will retry 4 times. This will take a maximum of 15 seconds.
-		let mut backoff = rivet_util::Backoff::new(5, Some(4), 1_000, 1_000);
-		loop {
-			let res = self
-				.worker
-				.handle(req.op_ctx())
-				.instrument(tracing::info_span!("handle", name = %W::NAME))
-				.await;
+	) -> GlobalResult<W::Response> {
+		self.worker
+			.handle(req.op_ctx())
+			.instrument(tracing::info_span!("handle", name = %W::NAME))
+			.await
 
-			// Attempt to retry the request with backoff
-			if matches!(
-				res,
-				Err(GlobalError::Internal {
-					retry_immediately: true,
-					..
-				})
-			) {
-				tracing::info!("ticking request retry backoff");
+		// // TODO: Add back
+		// // Will retry 4 times. This will take a maximum of 15 seconds.
+		// let mut backoff = rivet_util::Backoff::new(5, Some(4), 1_000, 1_000);
+		// loop {
+		// 	let res = self
+		// 		.worker
+		// 		.handle(req.op_ctx())
+		// 		.instrument(tracing::info_span!("handle", name = %W::NAME))
+		// 		.await;
 
-				if backoff.tick().await {
-					tracing::warn!("retry request failed too many times");
-					return res;
-				} else {
-					tracing::info!("retrying request");
-				}
-			} else {
-				// Return result immediately
-				return res;
-			}
-		}
+		// 	// Attempt to retry the request with backoff
+		// 	if matches!(
+		// 		res,
+		// 		Err(GlobalError::Internal {
+		// 			retry_immediately: true,
+		// 			..
+		// 		})
+		// 	) {
+		// 		tracing::info!("ticking request retry backoff");
+
+		// 		if backoff.tick().await {
+		// 			tracing::warn!("retry request failed too many times");
+		// 			return res;
+		// 		} else {
+		// 			tracing::info!("retrying request");
+		// 		}
+		// 	} else {
+		// 		// Return result immediately
+		// 		return res;
+		// 	}
+		// }
 	}
 
 	#[tracing::instrument(level = "trace", skip_all)]
 	async fn handle_worker_res(
 		self: Arc<Self>,
 		req: Request<W::Request>,
-		handle_res: Result<Result<W::Response, GlobalError>, time::error::Elapsed>,
+		handle_res: Result<GlobalResult<W::Response>, time::error::Elapsed>,
 	) -> Result<WorkerResponseSummary, ManagerError> {
 		// Log response status and build RPC response if needed
 		let (rpc_res, debug_error): (Option<chirp::Response>, Option<chirp::DebugServiceError>) =
@@ -980,7 +978,7 @@ where
 							None
 						},
 						Some(chirp::DebugServiceError {
-							svc_name: self.config.service_name.clone(),
+							context_name: req.op_ctx.name().into(),
 							error: Some(err_proto),
 						}),
 					)
@@ -1002,7 +1000,7 @@ where
 							None
 						},
 						Some(chirp::DebugServiceError {
-							svc_name: self.config.service_name.clone(),
+							context_name: req.op_ctx.name().into(),
 							error: Some(err_proto),
 						}),
 					)
@@ -1036,11 +1034,11 @@ where
 	#[tracing::instrument]
 	async fn consumer_ack(self: Arc<Self>, msg_meta: RedisMessageMeta) {
 		let mut backoff = rivet_util::Backoff::default();
-		loop {
-			if backoff.tick().await {
-				tracing::error!("acking stream message failed too many times, aborting");
-				return;
-			}
+		// loop {
+		// 	if backoff.tick().await {
+		// 		tracing::error!("acking stream message failed too many times, aborting");
+		// 		return;
+		// 	}
 
 			// Acknowledge the messages
 			let mut redis_chirp = self.redis_chirp.clone();
@@ -1050,13 +1048,13 @@ where
 			{
 				Ok(_) => {
 					tracing::info!(?msg_meta, "acknowledged stream message");
-					break;
+					// break;
 				}
 				Err(err) => {
 					tracing::error!(?err, "failed to ack message");
 				}
 			}
-		}
+		// }
 	}
 }
 

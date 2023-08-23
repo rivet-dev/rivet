@@ -6,10 +6,11 @@ import "proto/common.proto";
 import "proto/backend/user.proto";
 
 message Update {
+	reserved 3;
+
 	oneof kind {
 		UserUpdate update = 1;
 		PresenceUpdate presence_update = 2;
-		PartyUpdate party_update = 3;
 		FollowCreate follow_create = 4;
 		FollowDelete follow_delete = 5;
 	}
@@ -26,10 +27,6 @@ message PresenceUpdate {
 		backend.user.Status status = 2;
 		backend.user.Presence.GameActivity game_activity = 3;
 	}
-}
-
-message PartyUpdate {
-
 }
 
 message FollowCreate {

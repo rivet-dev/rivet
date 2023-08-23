@@ -12,7 +12,7 @@ chrono = "0.4"
 prost = "0.10"
 
 [dependencies.sqlx]
-version = "0.6"
+version = "0.7"
 default-features = false
 
 

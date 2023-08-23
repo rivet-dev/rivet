@@ -173,7 +173,7 @@ fn visit_dir(ctx: &mut Ctx, path: PathBuf) -> std::io::Result<()> {
 			let stripped_path = stripped_path
 				.strip_suffix(".md")
 				.expect("file should end with `.md`");
-			let documentation = format!("https://docs.rivet.gg/errors/{}", stripped_path);
+			let documentation = format!("https://rivet.gg/docs/errors/{}", stripped_path);
 
 			ctx.hash_items.push(formatdoc!(
 				"

@@ -8,6 +8,7 @@ import "proto/backend/cdn.proto";
 import "proto/backend/matchmaker.proto";
 import "proto/backend/kv.proto";
 import "proto/backend/identity.proto";
+import "proto/backend/module.proto";
 import "proto/backend/captcha.proto";
 
 message Request {
@@ -27,6 +28,11 @@ message Request {
 		optional rivet.backend.identity.VersionConfig config = 1;
 	}
 
+	message OverrideModuleConfig {
+		optional rivet.backend.module.GameVersionConfig config = 1;
+	}
+
+
 	message OverrideLobbyGroups {
 		repeated rivet.backend.matchmaker.LobbyGroup lobby_groups = 1;
 	}
@@ -35,13 +41,17 @@ message Request {
 		optional rivet.backend.captcha.CaptchaConfig captcha_config = 1;
 	}
 
+
 	rivet.common.Uuid game_id = 1;
+	optional rivet.common.Uuid deploy_to_namespace_id = 2;
 
 	optional rivet.backend.cloud.VersionConfig override_config = 101;
 	optional OverrideCdnConfig override_cdn_config = 104;
 	optional OverrideMatchmakerConfig override_mm_config = 102;
 	optional OverrideKvConfig override_kv_config = 106;
 	optional OverrideIdentityConfig override_identity_config = 107;
+	optional OverrideModuleConfig override_module_config = 108;
+
 	optional OverrideLobbyGroups override_lobby_groups = 103;
 	optional OverrideCaptcha override_captcha = 105;
 }

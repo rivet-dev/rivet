@@ -65,12 +65,12 @@ impl SharedClient {
 		redis_cache: RedisPool,
 		region: String,
 	) -> SharedClientHandle {
-		let spawn_res = tokio::task::Builder::new()
-			.name("chirp_client::metrics_update_update")
-			.spawn(metrics::start_update_uptime());
-		if let Err(err) = spawn_res {
-			tracing::error!(?err, "failed to spawn user_presence_touch task");
-		}
+		// let spawn_res = tokio::task::Builder::new()
+		// 	.name("chirp_client::metrics_update_update")
+		// 	.spawn(metrics::start_update_uptime());
+		// if let Err(err) = spawn_res {
+		// 	tracing::error!(?err, "failed to spawn user_presence_touch task");
+		// }
 
 		Arc::new(SharedClient {
 			nats,
@@ -93,14 +93,14 @@ impl SharedClient {
 		))
 	}
 
-	pub fn wrap_new(self: Arc<Self>, svc_name: &str) -> Client {
+	pub fn wrap_new(self: Arc<Self>, context_name: &str) -> Client {
 		let req_id = Uuid::new_v4();
 
 		self.wrap(
 			req_id,
 			Uuid::new_v4(),
 			vec![chirp::TraceEntry {
-				svc_name: svc_name.into(),
+				context_name: context_name.into(),
 				req_id: Some(req_id.into()),
 				ts: rivet_util::timestamp::now(),
 				run_context: match rivet_util::env::run_context() {
@@ -553,6 +553,12 @@ impl Client {
 			.map_err(|x| ClientError::CreateSubscription(x.into()))?;
 
 		// Manually publish message
+		tracing::trace!(
+			?subject,
+			?reply,
+			req_len = req_buf.len(),
+			"publishing rpc call to nats"
+		);
 		self.nats
 			.publish_with_reply_and_headers(
 				subject.clone(),
@@ -768,86 +774,86 @@ impl Client {
 
 		// Write message to Redis stream
 		let span = self.perf().start(M::PERF_LABEL_WRITE_STREAM).await;
-		let mut backoff = rivet_util::Backoff::default_infinite();
-		loop {
-			// Ignore for infinite backoff
-			backoff.tick().await;
+		// let mut backoff = rivet_util::Backoff::default_infinite();
+		// loop {
+		// 	// Ignore for infinite backoff
+		// 	backoff.tick().await;
 
-			let mut conn = self.redis_chirp.clone();
+		let mut conn = self.redis_chirp.clone();
 
-			let mut pipe = redis::pipe();
-			pipe.atomic();
+		let mut pipe = redis::pipe();
+		pipe.atomic();
 
-			// Write to stream
-			let topic_key = redis_keys::message_topic(M::NAME);
-			pipe.xadd_maxlen(
-				&topic_key,
-				redis::streams::StreamMaxlen::Approx(8192),
-				"*",
-				&[("m", &message_buf)],
-			)
-			.ignore();
+		// Write to stream
+		let topic_key = redis_keys::message_topic(M::NAME);
+		pipe.xadd_maxlen(
+			&topic_key,
+			redis::streams::StreamMaxlen::Approx(8192),
+			"*",
+			&[("m", &message_buf)],
+		)
+		.ignore();
 
-			// Write tails for all permuted parameters
-			for wildcard_parameters in &permuted_wildcard_parameters {
-				// Write tail
-				if let Some(ttl) = M::TAIL_TTL {
-					// Write single tail message
+		// Write tails for all permuted parameters
+		for wildcard_parameters in &permuted_wildcard_parameters {
+			// Write tail
+			if let Some(ttl) = M::TAIL_TTL {
+				// Write single tail message
 
-					let tail_key = redis_keys::message_tail::<M, _>(wildcard_parameters);
+				let tail_key = redis_keys::message_tail::<M, _>(wildcard_parameters);
+
+				// Save message
+				pipe.hset(
+					&tail_key,
+					redis_keys::message_tail::REQUEST_ID,
+					req_id.to_string(),
+				)
+				.ignore();
+				pipe.hset(&tail_key, redis_keys::message_tail::TS, ts)
+					.ignore();
+				pipe.hset(&tail_key, redis_keys::message_tail::BODY, message_buf)
+					.ignore();
+
+				// Automatically expire
+				pipe.expire(&tail_key, ttl as usize).ignore();
+
+				// Write history
+				if M::HISTORY {
+					let history_key = redis_keys::message_history::<M, _>(wildcard_parameters);
+
+					// Remove old entries 10% of the time.
+					//
+					// This is a slow operation, so we perform this
+					// sparingly.
+					if rand::thread_rng().gen_bool(0.1) {
+						pipe.cmd("ZREMRANGEBYSCORE")
+							.arg(&history_key)
+							.arg("-inf")
+							.arg(rivet_util::timestamp::now() - ttl * 1000)
+							.ignore();
+					}
 
 					// Save message
-					pipe.hset(
-						&tail_key,
-						redis_keys::message_tail::REQUEST_ID,
-						req_id.to_string(),
-					)
-					.ignore();
-					pipe.hset(&tail_key, redis_keys::message_tail::TS, ts)
-						.ignore();
-					pipe.hset(&tail_key, redis_keys::message_tail::BODY, message_buf)
-						.ignore();
+					pipe.zadd(&history_key, message_buf, ts).ignore();
 
 					// Automatically expire
-					pipe.expire(&tail_key, ttl as usize).ignore();
-
-					// Write history
-					if M::HISTORY {
-						let history_key = redis_keys::message_history::<M, _>(wildcard_parameters);
-
-						// Remove old entries 10% of the time.
-						//
-						// This is a slow operation, so we perform this
-						// sparingly.
-						if rand::thread_rng().gen_bool(0.1) {
-							pipe.cmd("ZREMRANGEBYSCORE")
-								.arg(&history_key)
-								.arg("-inf")
-								.arg(rivet_util::timestamp::now() - ttl * 1000)
-								.ignore();
-						}
-
-						// Save message
-						pipe.zadd(&history_key, message_buf, ts).ignore();
-
-						// Automatically expire
-						pipe.expire(&history_key, ttl as usize).ignore();
-					} else {
-					}
-				}
-			}
-
-			// Write to Redis
-			match pipe.query_async::<_, ()>(&mut conn).await {
-				Ok(_) => {
-					tracing::debug!("write to redis stream succeeded");
-					break;
-				}
-				Err(err) => {
-					tracing::error!(?err, "failed to write to redis");
+					pipe.expire(&history_key, ttl as usize).ignore();
+				} else {
 				}
 			}
 		}
+
+		// Write to Redis
+		match pipe.query_async::<_, ()>(&mut conn).await {
+			Ok(_) => {
+				tracing::debug!("write to redis stream succeeded");
+				// break;
+			}
+			Err(err) => {
+				tracing::error!(?err, "failed to write to redis");
+			}
+		}
+		// }
 		span.end();
 	}
 
@@ -863,34 +869,39 @@ impl Client {
 		//
 		// Infinite backoff since we want to wait until the service reboots.
 		let span = self.perf().start(M::PERF_LABEL_PUBLISH).await;
-		let mut backoff = rivet_util::Backoff::default_infinite();
-		loop {
-			// Ignore for infinite backoff
-			backoff.tick().await;
+		// let mut backoff = rivet_util::Backoff::default_infinite();
+		// loop {
+		// 	// Ignore for infinite backoff
+		// 	backoff.tick().await;
 
-			let nats_subject = nats_subject.to_owned();
-			let message_buf = message_buf.to_vec();
+		let nats_subject = nats_subject.to_owned();
+		let message_buf = message_buf.to_vec();
 
-			if let Err(err) = self
-				.nats
-				.publish(nats_subject.clone(), message_buf.into())
-				.await
-			{
-				tracing::warn!(?err, "publish message failed, trying again");
-				continue;
-			}
-
-			// TODO: Most messages don't need to be flushed immediately. We
-			// should add an option to enable high performance message
-			// publishing to enable flushing immediately after publishing.
-			// if let Err(err) = self.nats.flush().await {
-			// 	tracing::error!(?err, "flush message failed, the message probably sent");
-			// 	break;
-			// }
-
-			tracing::debug!("publish nats message succeeded");
-			break;
+		tracing::trace!(
+			?nats_subject,
+			message_len = message_buf.len(),
+			"publishing message to nats"
+		);
+		if let Err(err) = self
+			.nats
+			.publish(nats_subject.clone(), message_buf.into())
+			.await
+		{
+			tracing::warn!(?err, "publish message failed, trying again");
+			// continue;
 		}
+
+		// 	// TODO: Most messages don't need to be flushed immediately. We
+		// 	// should add an option to enable high performance message
+		// 	// publishing to enable flushing immediately after publishing.
+		// 	// if let Err(err) = self.nats.flush().await {
+		// 	// 	tracing::error!(?err, "flush message failed, the message probably sent");
+		// 	// 	break;
+		// 	// }
+
+		// 	tracing::debug!("publish nats message succeeded");
+		// 	break;
+		// }
 		span.end();
 	}
 

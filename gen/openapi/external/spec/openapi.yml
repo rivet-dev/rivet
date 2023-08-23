@@ -4526,18 +4526,36 @@ paths:
       servers:
         - url: https://kv.api.rivet.gg/v1
       security: *ref_0
-  /parties/self/activity:
-    delete:
-      description: |-
-        Sets the activity of the current identity's party to idle.
-        Identity must be the party leader.
-      operationId: party_activity_setPartyToIdle
+  /modules/{module}/scripts/{script}/call:
+    post:
+      description: |
+        Makes a request to a module's script.
+      operationId: module_call
       tags:
-        - PartyActivity
-      parameters: []
+        - Module
+      parameters:
+        - name: module
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: script
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: origin
+          in: header
+          required: false
+          schema:
+            type: string
       responses:
-        '204':
+        '200':
           description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ModuleCallResponse'
         '400':
           description: ''
           content:
@@ -4575,8 +4593,21 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorBody'
       servers:
-        - url: https://party.api.rivet.gg/v1
+        - url: https://module.api.rivet.gg/v1
       security: *ref_0
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                namespace_id:
+                  type: string
+                  format: uuid
+                data: {}
+              required:
+                - data
   /identities/{identity_id}/thread:
     get:
       description: Returns a thread ID with a given identity.
@@ -8090,1007 +8121,6 @@ paths:
       servers:
         - url: https://matchmaker.api.rivet.gg/v1
       security: *ref_0
-  /parties/self/activity/matchmaker/lobbies/find:
-    post:
-      description: >-
-        Attempts to make the current identity's party find a lobby based on the
-        given criteria. If succeeds, all party members will receive a
-        `GlobalEventMatchmakerLobbyJoin` event with all the information required
-        to join the lobby. This request will use the party player count
-        configured for the lobby group. See `FindLobby`.
-      operationId: party_activity_matchmaker_findLobbyForParty
-      tags:
-        - PartyActivityMatchmaker
-      parameters: []
-      responses:
-        '204':
-          description: ''
-        '400':
-          description: ''
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBody'
-        '403':
-          description: ''
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBody'
-        '404':
-          description: ''
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBody'
-        '408':
-          description: ''
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBody'
-        '429':
-          description: ''
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBody'
-        '500':
-          description: ''
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBody'
-      servers:
-        - url: https://party.api.rivet.gg/v1
-      security: *ref_0
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: >-
-                #/components/schemas/PartyActivityFindMatchmakerLobbyForPartyRequest
-  /parties/self/activity/matchmaker/lobbies/join:
-    post:
-      description: >-
-        Attempts to make the current identity's party join a specific matchmaker
-        lobby. This request will use the party player count configured for the
-        lobby group. If succeeds, all party members will receive a
-        `GlobalEventMatchmakerLobbyJoin` event with all the information required
-        to join the lobby. Identity must be the party leader. See `JoinLobby`.
-      operationId: party_activity_matchmaker_joinLobbyForParty
-      tags:
-        - PartyActivityMatchmaker
-      parameters: []
-      responses:
-        '204':
-          description: ''
-        '400':
-          description: ''
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBody'
-        '403':
-          description: ''
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBody'
-        '404':
-          description: ''
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBody'
-        '408':
-          description: ''
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBody'
-        '429':
-          description: ''
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBody'
-        '500':
-          description: ''
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBody'
-      servers:
-        - url: https://party.api.rivet.gg/v1
-      security: *ref_0
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: >-
-                #/components/schemas/PartyActivityJoinMatchmakerLobbyForPartyRequest
-  /parties/self/members/self/matchmaker/request-player:
-    post:
-      operationId: party_activity_matchmaker_requestPlayer
-      tags:
-        - PartyActivityMatchmaker
-      parameters: []
-      responses:
-        '204':
-          description: ''
-        '400':
-          description: ''
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBody'
-        '403':
-          description: ''
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBody'
-        '404':
-          description: ''
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBody'
-        '408':
-          description: ''
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBody'
-        '429':
-          description: ''
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBody'
-        '500':
-          description: ''
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBody'
-      servers:
-        - url: https://party.api.rivet.gg/v1
-      security: *ref_0
-  /invites:
-    get:
-      description: Fetches a party based on a given invite.
-      operationId: party_parties_getFromInvite
-      tags:
-        - PartyParties
-      parameters:
-        - name: token
-          in: query
-          description: See `rivet.api.party#CreatedInvite$token`.
-          required: false
-          schema:
-            type: string
-        - name: alias
-          in: query
-          description: >-
-            An alias used to join a given party. This alias must be unique for
-            all invites for your game. Pass this alias to
-            `rivet.api.party.common#CreatedInvite$alias` to consume the invite.
-          required: false
-          schema:
-            type: string
-      responses:
-        '200':
-          description: ''
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/PartyGetInviteResponse'
-        '400':
-          description: ''
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBody'
-        '403':
-          description: ''
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBody'
-        '404':
-          description: ''
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBody'
-        '408':
-          description: ''
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBody'
-        '429':
-          description: ''
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBody'
-        '500':
-          description: ''
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBody'
-      servers:
-        - url: https://party.api.rivet.gg/v1
-      security: *ref_0
-  /parties:
-    post:
-      description: Creates a new party.
-      operationId: party_parties_create
-      tags:
-        - PartyParties
-      parameters: []
-      responses:
-        '200':
-          description: ''
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/PartyCreateResponse'
-        '400':
-          description: ''
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBody'
-        '403':
-          description: ''
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBody'
-        '404':
-          description: ''
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBody'
-        '408':
-          description: ''
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBody'
-        '429':
-          description: ''
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBody'
-        '500':
-          description: ''
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBody'
-      servers:
-        - url: https://party.api.rivet.gg/v1
-      security: *ref_0
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/PartyCreateRequest'
-  /parties/join:
-    post:
-      description: Joins a party using a given party invite.
-      operationId: party_parties_join
-      tags:
-        - PartyParties
-      parameters: []
-      responses:
-        '200':
-          description: ''
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/PartyJoinResponse'
-        '400':
-          description: ''
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBody'
-        '403':
-          description: ''
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBody'
-        '404':
-          description: ''
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBody'
-        '408':
-          description: ''
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBody'
-        '429':
-          description: ''
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBody'
-        '500':
-          description: ''
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBody'
-      servers:
-        - url: https://party.api.rivet.gg/v1
-      security: *ref_0
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/PartyJoinRequest'
-  /parties/self/invites:
-    post:
-      description: |-
-        Creates a new party invite for the current identity's party.
-        Identity must be the party leader.
-      operationId: party_parties_createInvite
-      tags:
-        - PartyParties
-      parameters: []
-      responses:
-        '200':
-          description: ''
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/PartyCreateInviteResponse'
-        '400':
-          description: ''
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBody'
-        '403':
-          description: ''
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBody'
-        '404':
-          description: ''
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBody'
-        '408':
-          description: ''
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBody'
-        '429':
-          description: ''
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBody'
-        '500':
-          description: ''
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBody'
-      servers:
-        - url: https://party.api.rivet.gg/v1
-      security: *ref_0
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/PartyCreateInviteRequest'
-  /parties/self/invites/{invite_id}:
-    delete:
-      description: |-
-        Revokes a party invite from the current identity's party.
-        Identity must be the party leader.
-      operationId: party_parties_revokeInvite
-      tags:
-        - PartyParties
-      parameters:
-        - name: invite_id
-          in: path
-          required: true
-          schema:
-            type: string
-            format: uuid
-      responses:
-        '204':
-          description: ''
-        '400':
-          description: ''
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBody'
-        '403':
-          description: ''
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBody'
-        '404':
-          description: ''
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBody'
-        '408':
-          description: ''
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBody'
-        '429':
-          description: ''
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBody'
-        '500':
-          description: ''
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBody'
-      servers:
-        - url: https://party.api.rivet.gg/v1
-      security: *ref_0
-  /parties/self/leave:
-    post:
-      description: Leaves the current identity's party.
-      operationId: party_parties_leave
-      tags:
-        - PartyParties
-      parameters: []
-      responses:
-        '204':
-          description: ''
-        '400':
-          description: ''
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBody'
-        '403':
-          description: ''
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBody'
-        '404':
-          description: ''
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBody'
-        '408':
-          description: ''
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBody'
-        '429':
-          description: ''
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBody'
-        '500':
-          description: ''
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBody'
-      servers:
-        - url: https://party.api.rivet.gg/v1
-      security: *ref_0
-  /parties/self/members/{identity_id}/kick:
-    post:
-      description: |-
-        Kicks a member from the current identity's current party.
-        Identity must be the party leader.
-      operationId: party_parties_kickMember
-      tags:
-        - PartyParties
-      parameters:
-        - name: identity_id
-          in: path
-          required: true
-          schema:
-            type: string
-            format: uuid
-      responses:
-        '204':
-          description: ''
-        '400':
-          description: ''
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBody'
-        '403':
-          description: ''
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBody'
-        '404':
-          description: ''
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBody'
-        '408':
-          description: ''
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBody'
-        '429':
-          description: ''
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBody'
-        '500':
-          description: ''
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBody'
-      servers:
-        - url: https://party.api.rivet.gg/v1
-      security: *ref_0
-  /parties/self/members/{identity_id}/transfer-ownership:
-    post:
-      description: |-
-        Transfers ownership of the party to another party member.
-        Identity must be the party leader.
-      operationId: party_parties_transferOwnership
-      tags:
-        - PartyParties
-      parameters:
-        - name: identity_id
-          in: path
-          required: true
-          schema:
-            type: string
-            format: uuid
-      responses:
-        '204':
-          description: ''
-        '400':
-          description: ''
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBody'
-        '403':
-          description: ''
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBody'
-        '404':
-          description: ''
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBody'
-        '408':
-          description: ''
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBody'
-        '429':
-          description: ''
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBody'
-        '500':
-          description: ''
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBody'
-      servers:
-        - url: https://party.api.rivet.gg/v1
-      security: *ref_0
-  /parties/self/profile:
-    get:
-      description: >-
-        Returns a party profile for the party the current identity is a member
-        of.
-      operationId: party_parties_getSelfProfile
-      tags:
-        - PartyParties
-      parameters:
-        - name: watch_index
-          in: query
-          description: A query parameter denoting the requests watch index.
-          required: false
-          schema:
-            type: string
-      responses:
-        '200':
-          description: ''
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/PartyGetSelfProfileResponse'
-        '400':
-          description: ''
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBody'
-        '403':
-          description: ''
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBody'
-        '404':
-          description: ''
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBody'
-        '408':
-          description: ''
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBody'
-        '429':
-          description: ''
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBody'
-        '500':
-          description: ''
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBody'
-      servers:
-        - url: https://party.api.rivet.gg/v1
-      security: *ref_0
-  /parties/self/publicity:
-    put:
-      description: |-
-        Sets the publicity of a party.
-        This configures who can view and join the party.
-        Identity must be the party leader.
-      operationId: party_parties_setPublicity
-      tags:
-        - PartyParties
-      parameters: []
-      responses:
-        '204':
-          description: ''
-        '400':
-          description: ''
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBody'
-        '403':
-          description: ''
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBody'
-        '404':
-          description: ''
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBody'
-        '408':
-          description: ''
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBody'
-        '429':
-          description: ''
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBody'
-        '500':
-          description: ''
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBody'
-      servers:
-        - url: https://party.api.rivet.gg/v1
-      security: *ref_0
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/PartySetPublicityRequest'
-  /parties/self/summary:
-    get:
-      description: >-
-        Returns a party summary for the party the current identity is a member
-        of.
-      operationId: party_parties_getSelfSummary
-      tags:
-        - PartyParties
-      parameters:
-        - name: watch_index
-          in: query
-          description: A query parameter denoting the requests watch index.
-          required: false
-          schema:
-            type: string
-      responses:
-        '200':
-          description: ''
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/PartyGetSelfSummaryResponse'
-        '400':
-          description: ''
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBody'
-        '403':
-          description: ''
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBody'
-        '404':
-          description: ''
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBody'
-        '408':
-          description: ''
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBody'
-        '429':
-          description: ''
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBody'
-        '500':
-          description: ''
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBody'
-      servers:
-        - url: https://party.api.rivet.gg/v1
-      security: *ref_0
-  /parties/{party_id}/join-request/send:
-    post:
-      operationId: party_parties_sendJoinRequest
-      tags:
-        - PartyParties
-      parameters:
-        - name: party_id
-          in: path
-          required: true
-          schema:
-            type: string
-            format: uuid
-      responses:
-        '204':
-          description: ''
-        '400':
-          description: ''
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBody'
-        '403':
-          description: ''
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBody'
-        '404':
-          description: ''
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBody'
-        '408':
-          description: ''
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBody'
-        '429':
-          description: ''
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBody'
-        '500':
-          description: ''
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBody'
-      servers:
-        - url: https://party.api.rivet.gg/v1
-      security: *ref_0
-  /parties/{party_id}/profile:
-    get:
-      description: Returns a party profile.
-      operationId: party_parties_getProfile
-      tags:
-        - PartyParties
-      parameters:
-        - name: party_id
-          in: path
-          required: true
-          schema:
-            type: string
-            format: uuid
-        - name: watch_index
-          in: query
-          description: A query parameter denoting the requests watch index.
-          required: false
-          schema:
-            type: string
-      responses:
-        '200':
-          description: ''
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/PartyGetProfileResponse'
-        '400':
-          description: ''
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBody'
-        '403':
-          description: ''
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBody'
-        '404':
-          description: ''
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBody'
-        '408':
-          description: ''
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBody'
-        '429':
-          description: ''
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBody'
-        '500':
-          description: ''
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBody'
-      servers:
-        - url: https://party.api.rivet.gg/v1
-      security: *ref_0
-  /parties/{party_id}/summary:
-    get:
-      description: Returns a party summary.
-      operationId: party_parties_getSummary
-      tags:
-        - PartyParties
-      parameters:
-        - name: party_id
-          in: path
-          required: true
-          schema:
-            type: string
-            format: uuid
-        - name: watch_index
-          in: query
-          description: A query parameter denoting the requests watch index.
-          required: false
-          schema:
-            type: string
-      responses:
-        '200':
-          description: ''
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/PartyGetSummaryResponse'
-        '400':
-          description: ''
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBody'
-        '403':
-          description: ''
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBody'
-        '404':
-          description: ''
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBody'
-        '408':
-          description: ''
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBody'
-        '429':
-          description: ''
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBody'
-        '500':
-          description: ''
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBody'
-      servers:
-        - url: https://party.api.rivet.gg/v1
-      security: *ref_0
 components:
   schemas:
     ChatSendMessageRequest:
@@ -9395,6 +8425,8 @@ components:
       type: object
       description: Cloud configuration for a given version.
       properties:
+        engine:
+          $ref: '#/components/schemas/CloudVersionEngineConfig'
         cdn:
           $ref: '#/components/schemas/CloudVersionCdnConfig'
         matchmaker:
@@ -9448,10 +8480,10 @@ components:
       properties:
         build_command:
           type: string
-          description: Client-side configuration
+          description: _Configures Rivet CLI behavior. Has no effect on server behavior._
         build_output:
           type: string
-          description: Client-side configuration
+          description: _Configures Rivet CLI behavior. Has no effect on server behavior._
         site_id:
           type: string
           format: uuid
@@ -9508,6 +8540,17 @@ components:
       required:
         - name
         - value
+    CloudVersionEngineConfig:
+      type: object
+      properties:
+        unity:
+          $ref: '#/components/schemas/CloudVersionEngineUnityConfig'
+        unreal:
+          $ref: '#/components/schemas/CloudVersionEngineUnrealConfig'
+        godot:
+          $ref: '#/components/schemas/CloudVersionEngineGodotConfig'
+        html5:
+          $ref: '#/components/schemas/CloudVersionEngineHtml5Config'
     CloudVersionKvConfig:
       type: object
       description: KV configuration for a given version.
@@ -9525,7 +8568,7 @@ components:
           $ref: '#/components/schemas/CloudVersionMatchmakerCaptcha'
         dev_hostname:
           type: string
-          description: Client-side configuration
+          description: _Configures Rivet CLI behavior. Has no effect on server behavior._
         regions:
           type: object
           additionalProperties:
@@ -9945,6 +8988,12 @@ components:
             $ref: '#/components/schemas/KvPutEntry'
       required:
         - entries
+    ModuleCallResponse:
+      type: object
+      properties:
+        data: {}
+      required:
+        - data
     CaptchaConfig:
       type: object
       description: Methods to verify a captcha
@@ -9979,9 +9028,6 @@ components:
         group_id:
           type: string
           format: uuid
-        party_id:
-          type: string
-          format: uuid
         identity_id:
           type: string
           format: uuid
@@ -9991,8 +9037,6 @@ components:
       properties:
         text:
           $ref: '#/components/schemas/ChatSendMessageBodyText'
-        party_invite:
-          $ref: '#/components/schemas/ChatSendMessageBodyPartyInvite'
     ChatSendMessageBodyText:
       type: object
       description: The text in the text message.
@@ -10001,13 +9045,6 @@ components:
           type: string
       required:
         - body
-    ChatSendMessageBodyPartyInvite:
-      type: object
-      properties:
-        token:
-          $ref: '#/components/schemas/Jwt'
-      required:
-        - token
     ChatQueryDirection:
       type: string
       enum:
@@ -10080,16 +9117,6 @@ components:
           $ref: '#/components/schemas/ChatMessageBodyGroupLeave'
         group_member_kick:
           $ref: '#/components/schemas/ChatMessageBodyGroupMemberKick'
-        party_invite:
-          $ref: '#/components/schemas/ChatMessageBodyPartyInvite'
-        party_join_request:
-          $ref: '#/components/schemas/ChatMessageBodyPartyJoinRequest'
-        party_join:
-          $ref: '#/components/schemas/ChatMessageBodyPartyJoin'
-        party_leave:
-          $ref: '#/components/schemas/ChatMessageBodyPartyLeave'
-        party_activity_change:
-          $ref: '#/components/schemas/ChatMessageBodyPartyActivityChange'
     ChatMessageBodyText:
       type: object
       properties:
@@ -10134,53 +9161,12 @@ components:
           $ref: '#/components/schemas/IdentityHandle'
       required:
         - identity
-    ChatMessageBodyPartyInvite:
-      type: object
-      properties:
-        sender:
-          $ref: '#/components/schemas/IdentityHandle'
-        party:
-          $ref: '#/components/schemas/PartyHandle'
-        invite_token:
-          $ref: '#/components/schemas/Jwt'
-      required:
-        - sender
-    ChatMessageBodyPartyJoinRequest:
-      type: object
-      properties:
-        sender:
-          $ref: '#/components/schemas/IdentityHandle'
-      required:
-        - sender
-    ChatMessageBodyPartyJoin:
-      type: object
-      properties:
-        identity:
-          $ref: '#/components/schemas/IdentityHandle'
-      required:
-        - identity
-    ChatMessageBodyPartyLeave:
-      type: object
-      properties:
-        identity:
-          $ref: '#/components/schemas/IdentityHandle'
-      required:
-        - identity
-    ChatMessageBodyPartyActivityChange:
-      type: object
-      properties:
-        activity:
-          $ref: '#/components/schemas/PartyActivity'
-      required:
-        - activity
     ChatTopic:
       type: object
       description: Represents the topic of the given chat thread.
       properties:
         group:
           $ref: '#/components/schemas/ChatTopicGroup'
-        party:
-          $ref: '#/components/schemas/ChatTopicParty'
         direct:
           $ref: '#/components/schemas/ChatTopicDirect'
     ChatTopicGroup:
@@ -10190,13 +9176,6 @@ components:
           $ref: '#/components/schemas/GroupHandle'
       required:
         - group
-    ChatTopicParty:
-      type: object
-      properties:
-        party:
-          $ref: '#/components/schemas/PartyHandle'
-      required:
-        - party
     ChatTopicDirect:
       type: object
       properties:
@@ -10217,8 +9196,6 @@ components:
       properties:
         group:
           $ref: '#/components/schemas/ChatSimpleTopicGroup'
-        party:
-          $ref: '#/components/schemas/ChatSimpleTopicParty'
         direct:
           $ref: '#/components/schemas/ChatSimpleTopicDirect'
     ChatSimpleTopicGroup:
@@ -10229,14 +9206,6 @@ components:
           format: uuid
       required:
         - group
-    ChatSimpleTopicParty:
-      type: object
-      properties:
-        party:
-          type: string
-          format: uuid
-      required:
-        - party
     ChatSimpleTopicDirect:
       type: object
       properties:
@@ -11109,6 +10078,8 @@ components:
           description: A tag given to the game build.
         image_file:
           $ref: '#/components/schemas/UploadPrepareFile'
+        multipart_upload:
+          type: boolean
       required:
         - display_name
         - image_tag
@@ -11124,10 +10095,13 @@ components:
           format: uuid
         image_presigned_request:
           $ref: '#/components/schemas/UploadPresignedRequest'
+        image_presigned_requests:
+          type: array
+          items:
+            $ref: '#/components/schemas/UploadPresignedRequest'
       required:
         - build_id
         - upload_id
-        - image_presigned_request
     CloudGamesListGameCdnSitesResponse:
       type: object
       properties:
@@ -11560,6 +10534,29 @@ components:
           description: A list of region server tiers.
       required:
         - tiers
+    CloudVersionEngineGodotConfig:
+      type: object
+      properties: {}
+    CloudVersionEngineHtml5Config:
+      type: object
+      properties: {}
+    CloudVersionEngineUnityConfig:
+      type: object
+      properties: {}
+    CloudVersionEngineUnrealConfig:
+      type: object
+      properties:
+        game_module:
+          type: string
+          description: >-
+            Name of the Unreal module that holds the game code.
+
+            This is usually the value of `$.Modules[0].Name` in the file
+            `MyProject.unproject`.
+
+            _Configures Rivet CLI behavior. Has no effect on server behavior._
+      required:
+        - game_module
     CloudVersionIdentityConfig:
       type: object
       description: Identity configuration for a given version.
@@ -11642,6 +10639,8 @@ components:
             having to reverify a captcha (in milliseconds).
         hcaptcha:
           $ref: '#/components/schemas/CloudVersionMatchmakerCaptchaHcaptcha'
+        turnstile:
+          $ref: '#/components/schemas/CloudVersionMatchmakerCaptchaTurnstile'
       required:
         - requests_before_reverify
         - verification_ttl
@@ -11661,6 +10660,24 @@ components:
         - difficult
         - always_on
       description: How hard a captcha should be.
+    CloudVersionMatchmakerCaptchaTurnstile:
+      type: object
+      description: Turnstile captcha configuration.
+      properties:
+        domains:
+          type: object
+          additionalProperties:
+            $ref: '#/components/schemas/CloudVersionMatchmakerCaptchaTurnstileDomain'
+      required:
+        - domains
+    CloudVersionMatchmakerCaptchaTurnstileDomain:
+      type: object
+      description: Turnstile domain configuration.
+      properties:
+        secret_key:
+          type: string
+      required:
+        - secret_key
     CloudVersionMatchmakerNetworkMode:
       type: string
       enum:
@@ -11708,10 +10725,10 @@ components:
       properties:
         dockerfile:
           type: string
-          description: Client-side configuration
+          description: _Configures Rivet CLI behavior. Has no effect on server behavior._
         image:
           type: string
-          description: Client-side configuration
+          description: _Configures Rivet CLI behavior. Has no effect on server behavior._
         image_id:
           type: string
           format: uuid
@@ -11746,13 +10763,13 @@ components:
           description: How this port should be proxied. Defaults to 'game-guard`.
         dev_port:
           type: integer
-          description: Client-side configuration
+          description: _Configures Rivet CLI behavior. Has no effect on server behavior._
         dev_port_range:
           $ref: '#/components/schemas/CloudVersionMatchmakerPortRange'
-          description: Client-side configuration
+          description: _Configures Rivet CLI behavior. Has no effect on server behavior._
         dev_protocol:
           $ref: '#/components/schemas/CloudVersionMatchmakerPortProtocol'
-          description: Client-side configuration
+          description: _Configures Rivet CLI behavior. Has no effect on server behavior._
     CloudVersionMatchmakerGameModeIdleLobbiesConfig:
       type: object
       description: Configuration for how many idle lobbies a game version should have.
@@ -12435,8 +11452,6 @@ components:
           $ref: '#/components/schemas/IdentityGlobalEventChatMessage'
         chat_read:
           $ref: '#/components/schemas/IdentityGlobalEventChatRead'
-        party_update:
-          $ref: '#/components/schemas/IdentityGlobalEventPartyUpdate'
         identity_update:
           $ref: '#/components/schemas/IdentityGlobalEventIdentityUpdate'
         matchmaker_lobby_join:
@@ -12521,11 +11536,6 @@ components:
       required:
         - thread_id
         - read_ts
-    IdentityGlobalEventPartyUpdate:
-      type: object
-      properties:
-        party:
-          $ref: '#/components/schemas/PartySummary'
     IdentityGlobalEventIdentityUpdate:
       type: object
       properties:
@@ -12590,8 +11600,6 @@ components:
           description: The URL of this identity's avatar image.
         presence:
           $ref: '#/components/schemas/IdentityPresence'
-        party:
-          $ref: '#/components/schemas/PartyHandle'
         is_registered:
           type: boolean
           description: Whether or not this identity is registered with a linked account.
@@ -12620,8 +11628,6 @@ components:
           description: The URL of this identity's avatar image.
         presence:
           $ref: '#/components/schemas/IdentityPresence'
-        party:
-          $ref: '#/components/schemas/PartyHandle'
         is_registered:
           type: boolean
           description: Whether or not this identity is registered with a linked account.
@@ -12663,9 +11669,6 @@ components:
           description: The URL of this identity's avatar image.
         presence:
           $ref: '#/components/schemas/IdentityPresence'
-        party:
-          $ref: '#/components/schemas/PartySummary'
-          description: Whether or not this identity is registered with a linked account.
         is_registered:
           type: boolean
           description: Whether or not this identity is registered with a linked account.
@@ -13185,487 +12188,6 @@ components:
             $ref: '#/components/schemas/MatchmakerRegionInfo'
       required:
         - regions
-    PartyActivityFindMatchmakerLobbyForPartyRequest:
-      type: object
-      properties:
-        game_modes:
-          type: array
-          items:
-            type: string
-          description: Game modes to match lobbies against.
-        regions:
-          type: array
-          items:
-            type: string
-          description: >-
-            Regions to match lobbies against. If not specified, the optimal
-            region
-
-            will be determined and will attempt to find lobbies in that region.
-        prevent_auto_create_lobby:
-          type: boolean
-          description: |-
-            Prevents a new lobby from being created when finding a lobby. If no
-            lobby is found, `MATCHMAKER_LOBBY_NOT_FOUND` will be returned.
-        captcha:
-          $ref: '#/components/schemas/CaptchaConfig'
-      required:
-        - game_modes
-    PartyActivityJoinMatchmakerLobbyForPartyRequest:
-      type: object
-      properties:
-        lobby_id:
-          type: string
-          format: uuid
-        captcha:
-          $ref: '#/components/schemas/CaptchaConfig'
-      required:
-        - lobby_id
-    PartyCreatePublicityConfig:
-      type: object
-      description: |-
-        Publicity configuration for creating a party.
-        Null values will default
-      properties:
-        public:
-          $ref: '#/components/schemas/PartyPublicityLevel'
-        mutual_followers:
-          $ref: '#/components/schemas/PartyPublicityLevel'
-        groups:
-          $ref: '#/components/schemas/PartyPublicityLevel'
-    PartyCreateInviteConfig:
-      type: object
-      description: Configuration for creating a party invite.
-      properties:
-        alias:
-          type: string
-          description: >-
-            An alias used to join a given party. This alias must be unique for
-            all invites for your game. Pass this alias to
-            `rivet.api.party.common#CreatedInvite$alias` to consume the invite.
-    PartyCreatedInvite:
-      type: object
-      description: Output from a created invite.
-      properties:
-        alias:
-          type: string
-          description: >-
-            An alias used to join a given party. This alias must be unique for
-            all invites for your game. Pass this alias to
-            `rivet.api.party.common#CreatedInvite$alias` to consume the invite.
-        token:
-          type: string
-          description: >-
-            A JSON Web Token.
-
-            Slightly modified to include a description prefix and use Protobufs
-            of
-
-            JSON.
-      required:
-        - token
-    PartyJoinInvite:
-      type: object
-      description: Represents methods of joining a party.
-      properties:
-        party_id:
-          type: string
-          format: uuid
-        token:
-          $ref: '#/components/schemas/Jwt'
-        alias:
-          type: string
-    PartySummary:
-      type: object
-      properties:
-        party_id:
-          type: string
-          format: uuid
-        create_ts:
-          type: string
-          format: date-time
-        activity:
-          $ref: '#/components/schemas/PartyActivity'
-        external:
-          $ref: '#/components/schemas/PartyExternalLinks'
-        publicity:
-          $ref: '#/components/schemas/PartyPublicity'
-        party_size:
-          type: integer
-        members:
-          type: array
-          items:
-            $ref: '#/components/schemas/PartyMemberSummary'
-        thread_id:
-          type: string
-          format: uuid
-      required:
-        - party_id
-        - create_ts
-        - activity
-        - external
-        - publicity
-        - party_size
-        - members
-        - thread_id
-    PartyHandle:
-      type: object
-      properties:
-        party_id:
-          type: string
-          format: uuid
-        create_ts:
-          type: string
-          format: date-time
-        activity:
-          $ref: '#/components/schemas/PartyActivity'
-        external:
-          $ref: '#/components/schemas/PartyExternalLinks'
-      required:
-        - party_id
-        - create_ts
-        - activity
-        - external
-    PartyActivity:
-      type: object
-      description: A union representing the activity of a given party.
-      properties:
-        idle:
-          $ref: '#/components/schemas/EmptyObject'
-          description: A party activity denoting that the party is idle.
-        matchmaker_finding_lobby:
-          $ref: '#/components/schemas/PartyActivityMatchmakerFindingLobby'
-        matchmaker_lobby:
-          $ref: '#/components/schemas/PartyActivityMatchmakerLobby'
-    PartyActivityMatchmakerFindingLobby:
-      type: object
-      description: >-
-        A party activity denoting that the party is currently searching for a
-        lobby.
-      properties:
-        game:
-          $ref: '#/components/schemas/GameHandle'
-      required:
-        - game
-    PartyActivityMatchmakerLobby:
-      type: object
-      description: A party activity denoting that the party is currently in a lobby.
-      properties:
-        lobby:
-          $ref: '#/components/schemas/PartyMatchmakerLobby'
-        game:
-          $ref: '#/components/schemas/GameHandle'
-      required:
-        - lobby
-        - game
-    PartyExternalLinks:
-      type: object
-      description: External links for a party.
-      properties:
-        chat:
-          type: string
-          description: A link to the given party's chat thread.
-      required:
-        - chat
-    PartyMatchmakerLobby:
-      type: object
-      description: A party lobby.
-      properties:
-        lobby_id:
-          type: string
-          format: uuid
-      required:
-        - lobby_id
-    PartyPublicity:
-      type: object
-      properties:
-        public:
-          $ref: '#/components/schemas/PartyPublicityLevel'
-        mutual_followers:
-          $ref: '#/components/schemas/PartyPublicityLevel'
-        groups:
-          $ref: '#/components/schemas/PartyPublicityLevel'
-      required:
-        - public
-        - mutual_followers
-        - groups
-    PartyPublicityLevel:
-      type: string
-      enum:
-        - none
-        - view
-        - join
-    PartyMemberSummary:
-      type: object
-      properties:
-        identity:
-          $ref: '#/components/schemas/IdentityHandle'
-        is_leader:
-          type: boolean
-          description: Whether or not this party member is the leader of the given party.
-        join_ts:
-          type: string
-          format: date-time
-        state:
-          $ref: '#/components/schemas/PartyMemberState'
-      required:
-        - identity
-        - is_leader
-        - join_ts
-        - state
-    PartyMemberState:
-      type: object
-      properties:
-        inactive:
-          $ref: '#/components/schemas/EmptyObject'
-          description: A party member state denoting that the member is inactive.
-        matchmaker_ready:
-          $ref: '#/components/schemas/EmptyObject'
-          description: >-
-            A party member state denoting that the member is currently waiting
-            to start matchmaking.
-        matchmaker_finding_lobby:
-          $ref: '#/components/schemas/EmptyObject'
-          description: >-
-            A party member state denoting that the member is currently searching
-            for a lobby.
-        matchmaker_lobby:
-          $ref: '#/components/schemas/PartyMemberStateMatchmakerLobby'
-    PartyMemberStateMatchmakerLobby:
-      type: object
-      description: A party member state denoting that the member is in a lobby.
-      properties:
-        player_id:
-          type: string
-          format: uuid
-      required:
-        - player_id
-    PartyProfile:
-      type: object
-      properties:
-        party_id:
-          type: string
-          format: uuid
-        create_ts:
-          type: string
-          format: date-time
-          description: RFC3339 timestamp.
-        activity:
-          $ref: '#/components/schemas/PartyActivity'
-        external:
-          $ref: '#/components/schemas/PartyExternalLinks'
-        publicity:
-          $ref: '#/components/schemas/PartyPublicity'
-        party_size:
-          type: integer
-          description: Unsigned 32 bit integer.
-        members:
-          type: array
-          items:
-            $ref: '#/components/schemas/PartyMemberSummary'
-          description: A list of party members.
-        thread_id:
-          type: string
-          format: uuid
-        invites:
-          type: array
-          items:
-            $ref: '#/components/schemas/PartyInvite'
-          description: A list of party invites.
-      required:
-        - party_id
-        - create_ts
-        - activity
-        - external
-        - publicity
-        - members
-        - thread_id
-        - invites
-    PartyInvite:
-      type: object
-      description: A party invite.
-      properties:
-        invite_id:
-          type: string
-          format: uuid
-        create_ts:
-          type: string
-          format: date-time
-          description: RFC3339 timestamp.
-        token:
-          type: string
-          description: >-
-            A JSON Web Token.
-
-            Slightly modified to include a description prefix and use Protobufs
-            of
-
-            JSON.
-        alias:
-          $ref: '#/components/schemas/PartyInviteAlias'
-        external:
-          $ref: '#/components/schemas/PartyInviteExternalLinks'
-      required:
-        - invite_id
-        - create_ts
-        - token
-        - external
-    PartyInviteAlias:
-      type: object
-      description: An alias used to join a given party.
-      properties:
-        namespace_id:
-          type: string
-          format: uuid
-        alias:
-          type: string
-          description: The alias used to join a given party.
-      required:
-        - namespace_id
-        - alias
-    PartyInviteExternalLinks:
-      type: object
-      description: Extenral links for a party invite.
-      properties:
-        invite:
-          type: string
-          description: The invite link used to join this party from an external site.
-      required:
-        - invite
-    PartyGetInviteResponse:
-      type: object
-      properties:
-        party:
-          $ref: '#/components/schemas/PartySummary'
-      required:
-        - party
-    PartyCreateRequest:
-      type: object
-      properties:
-        party_size:
-          type: number
-          format: double
-          description: >-
-            How many members can join the party. If using this party with the
-            matchmaker, this number should be less than or equal to your party
-            player limit. Super large parties may not be able to fit insite a
-            lobby and be unable to join the game.
-        publicity:
-          $ref: '#/components/schemas/PartyCreatePublicityConfig'
-        invites:
-          type: array
-          items:
-            $ref: '#/components/schemas/PartyCreateInviteConfig'
-        matchmaker_current_player_token:
-          type: string
-          description: >-
-            If the player is currently in the lobby, pass the token from
-
-            `rivet.matchmaker#MatchmakerLobbyJoinInfoPlayer$token`.
-
-            This will prevent issuing a new player token and automatically set
-            the
-
-            party state to the player's current lobby.
-    PartyCreateResponse:
-      type: object
-      properties:
-        party_id:
-          type: string
-          format: uuid
-        invites:
-          type: array
-          items:
-            $ref: '#/components/schemas/PartyCreatedInvite'
-      required:
-        - party_id
-        - invites
-    PartyJoinRequest:
-      type: object
-      properties:
-        invite:
-          $ref: '#/components/schemas/PartyJoinInvite'
-        matchmaker_auto_join_lobby:
-          type: boolean
-          description: >-
-            Whether or not to automatically join the game lobby if a party is
-            currently in game.
-        matchmaker_current_player_token:
-          type: string
-          description: |-
-            If the player is currently in the lobby, pass the token from
-            `rivet.matchmaker#MatchmakerLobbyJoinInfoPlayer$token`.
-            This will prevent issuing a new player token.
-      required:
-        - invite
-    PartyJoinResponse:
-      type: object
-      properties:
-        party_id:
-          type: string
-          format: uuid
-      required:
-        - party_id
-    PartyCreateInviteRequest:
-      type: object
-      properties:
-        alias:
-          type: string
-          description: An alias used to join a given party.
-    PartyCreateInviteResponse:
-      type: object
-      properties:
-        invite:
-          $ref: '#/components/schemas/PartyCreatedInvite'
-      required:
-        - invite
-    PartyGetSelfProfileResponse:
-      type: object
-      properties:
-        party:
-          $ref: '#/components/schemas/PartyProfile'
-        watch:
-          $ref: '#/components/schemas/WatchResponse'
-      required:
-        - watch
-    PartySetPublicityRequest:
-      type: object
-      properties:
-        public:
-          $ref: '#/components/schemas/PartyPublicityLevel'
-        mutual_followers:
-          $ref: '#/components/schemas/PartyPublicityLevel'
-        groups:
-          $ref: '#/components/schemas/PartyPublicityLevel'
-    PartyGetSelfSummaryResponse:
-      type: object
-      properties:
-        party:
-          $ref: '#/components/schemas/PartySummary'
-        watch:
-          $ref: '#/components/schemas/WatchResponse'
-      required:
-        - watch
-    PartyGetProfileResponse:
-      type: object
-      properties:
-        party:
-          $ref: '#/components/schemas/PartyProfile'
-        watch:
-          $ref: '#/components/schemas/WatchResponse'
-      required:
-        - party
-        - watch
-    PartyGetSummaryResponse:
-      type: object
-      properties:
-        party:
-          $ref: '#/components/schemas/PartySummary'
-        watch:
-          $ref: '#/components/schemas/WatchResponse'
-      required:
-        - party
-        - watch
     UploadPresignedRequest:
       type: object
       description: >

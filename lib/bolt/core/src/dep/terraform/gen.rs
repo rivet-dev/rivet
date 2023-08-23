@@ -150,6 +150,7 @@ async fn vars(ctx: &ProjectContext) {
 		config::ns::ClusterKind::SingleNode {
 			public_ip,
 			preferred_subnets,
+			..
 		} => {
 			vars.insert("deploy_method_local".into(), json!(true));
 			vars.insert("deploy_method_cluster".into(), json!(false));
@@ -222,16 +223,6 @@ async fn vars(ctx: &ProjectContext) {
 			vars.insert("cloudflare_zone_id_rivet_game".into(), json!(zones.game));
 			vars.insert("cloudflare_zone_id_rivet_job".into(), json!(zones.job));
 		}
-	}
-
-	// Logging
-	match &config.logging {
-		Some(config::ns::Logging {
-			provider: config::ns::LoggingProvider::Loki { endpoint },
-		}) => {
-			vars.insert("loki_endpoint".into(), json!(endpoint));
-		}
-		None => {}
 	}
 
 	// Regions
@@ -310,7 +301,8 @@ async fn vars(ctx: &ProjectContext) {
 		}
 
 		// Add Minio
-		if let config::ns::S3Provider::Minio { .. } = &ctx.ns().s3.provider {
+		let s3_providers = &ctx.ns().s3.providers;
+		if s3_providers.minio.is_some() {
 			extra_dns.push(json!({
 				"pool": ing_pool,
 				"zone_name": "base",
@@ -387,7 +379,8 @@ async fn vars(ctx: &ProjectContext) {
 
 		vars.insert("s3_buckets".into(), json!(s3_buckets));
 
-		let credentials = ctx.s3_credentials().await.unwrap();
+		let (default_s3_provider, _) = ctx.default_s3_provider().unwrap();
+		let credentials = ctx.s3_credentials(default_s3_provider).await.unwrap();
 		vars.insert(
 			"s3_persistent_access_key_id".into(),
 			json!(credentials.access_key_id),

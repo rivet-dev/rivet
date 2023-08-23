@@ -1,1 +1,0 @@
-# party-member-list

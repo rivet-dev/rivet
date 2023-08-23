@@ -3,7 +3,7 @@ use proto::backend::pkg::*;
 use serde_json::json;
 
 #[worker(name = "team-create")]
-async fn worker(ctx: &OperationContext<team::msg::create::Message>) -> Result<(), GlobalError> {
+async fn worker(ctx: &OperationContext<team::msg::create::Message>) -> GlobalResult<()> {
 	let team_id = internal_unwrap!(ctx.team_id).as_uuid();
 
 	// Validate team

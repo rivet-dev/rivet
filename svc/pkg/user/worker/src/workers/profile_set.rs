@@ -2,9 +2,7 @@ use chirp_worker::prelude::*;
 use proto::backend::pkg::*;
 
 #[worker(name = "user-profile-set")]
-async fn worker(
-	ctx: &OperationContext<user::msg::profile_set::Message>,
-) -> Result<(), GlobalError> {
+async fn worker(ctx: &OperationContext<user::msg::profile_set::Message>) -> GlobalResult<()> {
 	let body = ctx.body();
 	let user::msg::profile_set::Message {
 		user_id,

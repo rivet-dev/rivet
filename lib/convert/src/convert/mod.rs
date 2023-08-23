@@ -7,8 +7,8 @@ pub mod chat;
 pub mod game;
 pub mod group;
 pub mod identity;
-pub mod party;
 
+#[derive(Debug)]
 pub struct GameWithNamespaceIds {
 	pub namespace_ids: Vec<Uuid>,
 	pub game: backend::game::Game,

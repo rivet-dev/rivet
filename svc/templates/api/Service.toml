@@ -1,0 +1,9 @@
+[service]
+name = "api-{{name}}"
+
+[runtime]
+kind = "rust"
+
+[[api.router.mounts]]
+path = "/v1"
+subdomain = "{{name}}.api"

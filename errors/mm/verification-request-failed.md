@@ -1,7 +1,7 @@
 ---
 name = "MATCHMAKER_VERIFICATION_REQUEST_FAILED"
 description = "The external matchmaker verification system failed or returned an invalid response."
-http_status = 500
+http_status = 400
 ---
 
 # Matchmaker Verification Request Failed

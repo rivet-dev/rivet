@@ -66,38 +66,7 @@ async fn validate(
 		Kind::TeamMemberKick(TeamMemberKick { user_id }) => {
 			internal_assert!(user_id.is_some());
 		}
-		Kind::PartyInvite(PartyInvite {
-			sender_user_id,
-			party_id,
-			invite_id,
-			invite_token,
-		}) => {
-			internal_assert!(sender_user_id.is_some());
-			internal_assert!(party_id.is_some());
-
-			let invite = rivet_claims::decode(invite_token)??.as_party_invite()?;
-			internal_assert_eq!(internal_unwrap!(invite_id).as_uuid(), invite.invite_id);
-
-			let invite_res = op!([ctx] party_invite_get {
-				invite_ids: vec![invite.invite_id.into()],
-			})
-			.await?;
-
-			// Verify that invite exists
-			unwrap_with_owned!(invite_res.invites.first(), PARTY_INVITE_NOT_FOUND);
-		}
-		Kind::PartyJoinRequest(PartyJoinRequest { sender_user_id }) => {
-			internal_assert!(sender_user_id.is_some());
-		}
-		Kind::PartyJoin(PartyJoin { user_id }) => {
-			internal_assert!(user_id.is_some());
-		}
-		Kind::PartyLeave(PartyLeave { user_id }) => {
-			internal_assert!(user_id.is_some());
-		}
-		Kind::ChatCreate(ChatCreate {})
-		| Kind::UserFollow(UserFollow {})
-		| Kind::PartyActivityChange(PartyActivityChange { .. }) => {
+		Kind::ChatCreate(ChatCreate {}) | Kind::UserFollow(UserFollow {}) => {
 			// Do nothing
 		}
 		Kind::Deleted(Deleted { sender_user_id }) => {

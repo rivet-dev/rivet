@@ -14,7 +14,7 @@ rivet-runtime = { path = "../../../../lib/runtime" }
 util-user-presence = { package = "rivet-util-user-presence", path = "../util" }
 
 [dependencies.sqlx]
-version = "0.6"
+version = "0.7"
 default-features = false
 
 [dev-dependencies]

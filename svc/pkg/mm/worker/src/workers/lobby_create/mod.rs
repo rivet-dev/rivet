@@ -195,8 +195,8 @@ async fn worker(ctx: &OperationContext<mm::msg::lobby_create::Message>) -> Globa
 				max_players_party: lobby_group.max_players_party,
 				max_players_direct: lobby_group.max_players_direct,
 				preemptive: false,
-				ready_ts: None,
 				is_closed: false,
+				ready_ts: None,
 				is_custom: ctx.is_custom,
 				state_json: None,
 			})?)
@@ -349,6 +349,7 @@ async fn fetch_mm_namespace_config(
 	let namespace = internal_unwrap!(
 		internal_unwrap_owned!(get_res.namespaces.first(), "namespace not found").config
 	)
+	.deref()
 	.clone();
 
 	Ok(namespace)
@@ -506,7 +507,7 @@ async fn update_db(
 		"SELECT stop_ts, preemptive_create_ts FROM lobbies WHERE lobby_id = $1 FOR UPDATE",
 	)
 	.bind(opts.lobby_id)
-	.fetch_optional(&mut *tx)
+	.fetch_optional(&mut **tx)
 	.await?;
 	if let Some((stop_ts, preemptive_create_ts)) = lobby_row {
 		if preemptive_create_ts.is_none() {
@@ -562,7 +563,7 @@ async fn update_db(
 		opts.publicity
 			.unwrap_or(backend::matchmaker::lobby::Publicity::Public) as i32 as i64,
 	)
-	.execute(&mut *tx)
+	.execute(&mut **tx)
 	.await?;
 
 	Ok(())
@@ -748,6 +749,17 @@ async fn resolve_image_artifact_url(
 	.await?;
 	let upload = internal_unwrap_owned!(upload_res.uploads.first());
 
+	// Get provider
+	let proto_provider = internal_unwrap_owned!(
+		backend::upload::Provider::from_i32(upload.provider as i32),
+		"invalid upload provider"
+	);
+	let provider = match proto_provider {
+		backend::upload::Provider::Minio => s3_util::Provider::Minio,
+		backend::upload::Provider::Backblaze => s3_util::Provider::Backblaze,
+		backend::upload::Provider::Aws => s3_util::Provider::Aws,
+	};
+
 	match DELIVERY_METHOD {
 		DeliveryMethod::Ats => {
 			// TODO: Auto-generate password for this & encode in to infra/salt/salt/traffic_server/files/consul/traffic_server.hcl.j2
@@ -777,9 +789,12 @@ async fn resolve_image_artifact_url(
 			let bucket_screaming = bucket.to_uppercase().replace('-', "_");
 
 			// Build client
-			let s3_client =
-				s3_util::Client::from_env_opt(bucket, s3_util::EndpointKind::InternalResolved)
-					.await?;
+			let s3_client = s3_util::Client::from_env_opt(
+				&bucket,
+				s3_util::Provider::default()?,
+				s3_util::EndpointKind::InternalResolved,
+			)
+			.await?;
 
 			let upload_id = internal_unwrap!(upload.upload_id).as_uuid();
 			let presigned_req = s3_client

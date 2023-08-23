@@ -27,12 +27,17 @@ This will use Nix to install Git, then clone the repository to `/root/rivet`. Yo
 Run:
 
 ```
+nix-env -i git -i git-lfs
 nix-shell -p git -p git-lfs --command "git clone https://github.com/rivet-gg/rivet.git /root/rivet"
 ```
 
+> **Warp compatability**
+>
+> Warp may have issues with the Nix installer since it does not use the default shell. [Read more.](https://docs.warp.dev/features/ssh)
+
 ## Step 3: Setup environment
 
-Run:
+Open your project's folder and run:
 
 ```
 nix-shell

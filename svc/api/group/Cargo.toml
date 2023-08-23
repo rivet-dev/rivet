@@ -25,7 +25,7 @@ rivet-pools = { path = "../../../lib/pools" }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 thiserror = "1.0"
-tokio = { version = "1.21" }
+tokio = { version = "1.29" }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", default-features = false, features = ["fmt", "json", "ansi"] }
 url = "2.2.2"
@@ -35,10 +35,6 @@ uuid = { version = "1", features = ["v4"] }
 chat-thread-get-for-topic = { path = "../../pkg/chat-thread/ops/get-for-topic" }
 game-get = { path = "../../pkg/game/ops/get" }
 game-resolve-namespace-id = { path = "../../pkg/game/ops/resolve-namespace-id" }
-party-get = { path = "../../pkg/party/ops/get" }
-party-member-get = { path = "../../pkg/party/ops/member-get" }
-party-member-list = { path = "../../pkg/party/ops/member-list" }
-party-publicity-for-user = { path = "../../pkg/party/ops/publicity-for-user" }
 team-avatar-upload-complete = { path = "../../pkg/team/ops/avatar-upload-complete" }
 team-dev-get = { path = "../../pkg/team-dev/ops/get" }
 team-get = { path = "../../pkg/team/ops/get" }

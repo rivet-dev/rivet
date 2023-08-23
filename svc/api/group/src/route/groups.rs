@@ -167,8 +167,8 @@ pub async fn profile(
 				team.profile_file_name.as_ref(),
 			),
 			external: models::GroupExternalLinks {
-				profile: util::route::team_profile(&team_id),
-				chat: util::route::team_chat(&team_id),
+				profile: util::route::team_profile(team_id),
+				chat: util::route::team_chat(team_id),
 			},
 
 			is_current_identity_member,
@@ -323,7 +323,7 @@ pub async fn members(
 
 			Ok(models::GroupMember {
 				identity: convert::identity::handle(
-					&user_ent.user_id,
+					user_ent.user_id,
 					user,
 					&presences_ctx,
 					is_mutual_following,
@@ -497,7 +497,7 @@ pub async fn join_requests(
 
 			Ok(models::GroupJoinRequest {
 				identity: convert::identity::handle(
-					&user_ent.user_id,
+					user_ent.user_id,
 					user,
 					&presences_ctx,
 					is_mutual_following,
@@ -1415,7 +1415,7 @@ pub async fn bans(
 
 			Ok(models::GroupBannedIdentity {
 				identity: convert::identity::handle(
-					&user_ent.user_id,
+					user_ent.user_id,
 					user,
 					&presences_ctx,
 					is_mutual_following,

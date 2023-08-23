@@ -8,6 +8,10 @@ Type=notify
 ExecStart=/var/rivet-nix/result/cloudflared/bin/cloudflared --no-autoupdate --config /etc/cloudflared/config.yml tunnel run
 Restart=on-failure
 RestartSec=5s
+{% if 'local' in pillar.rivet.deploy and pillar.rivet.deploy.local.restrict_service_resources %}
+Nice=10
+CPUAffinity=0
+{% endif %}
 
 [Install]
 WantedBy=multi-user.target

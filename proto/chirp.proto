@@ -30,7 +30,7 @@ message Request {
 }
 
 message TraceEntry {
-	string svc_name = 1;
+	string context_name = 1;
 	rivet.common.Uuid req_id = 2;
 	int64 ts = 3;
 	RunContext run_context = 4;
@@ -96,7 +96,7 @@ enum ErrorCode {
 }
 
 message DebugServiceError {
-	string svc_name = 1;
+	string context_name = 1;
 	Response.Err error = 2;
 }
 

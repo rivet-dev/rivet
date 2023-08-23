@@ -126,34 +126,47 @@ fn crdb_from_env(client_name: String) -> Result<HashMap<String, CrdbPool>, Error
 			let pool = sqlx::postgres::PgPoolOptions::new()
 				// The default connection timeout is too high
 				.acquire_timeout(Duration::from_secs(15))
+				.max_lifetime(Duration::from_secs(60 * 5))
 				// Remove connections after a while in order to reduce load
 				// on CRDB after bursts
 				.idle_timeout(Some(Duration::from_secs(60)))
 				// Open a connection
 				// immediately on startup
-				.min_connections(1)
+				.min_connections(0)
 				// Raise the cap, since this is effectively the amount of
 				// simultaneous requests we can handle. See
 				// https://www.cockroachlabs.com/docs/stable/connection-pooling.html
-				.max_connections(512)
+				.max_connections(20_000)
 				// Speeds up requests at the expense of potential
 				// failures
 				// .test_before_acquire(false)
-				.after_connect({
-					let url = url.clone();
-					move |conn, _| {
-						let client_name = client_name.clone();
-						let url = url.clone();
-						Box::pin(async move {
-							tracing::info!(%url, "crdb connected");
-							sqlx::query("SET application_name = $1;")
-								.bind(&client_name)
-								.execute(conn)
-								.await?;
-							Ok(())
-						})
-					}
-				})
+				// .after_connect(|conn, _meta| {
+				// 	Box::pin(async move {
+				// 		tracing::info!("pg connected");
+				// 		Ok(())
+				// 	})
+				// })
+				// .after_release(|conn, meta| {
+				// 	Box::pin(async move {
+				// 		tracing::info!("pg released");
+				// 		Ok(false)
+				// 	})
+				// })
+				// .after_connect({
+				// 	let url = url.clone();
+				// 	move |conn, _| {
+				// 		let client_name = client_name.clone();
+				// 		let url = url.clone();
+				// 		Box::pin(async move {
+				// 			tracing::info!(%url, "crdb connected");
+				// 			sqlx::query("SET application_name = $1;")
+				// 				.bind(&client_name)
+				// 				.execute(conn)
+				// 				.await?;
+				// 			Ok(())
+				// 		})
+				// 	}
+				// })
 				.connect_lazy(&url)
 				.map_err(Error::BuildSqlx)?;
 

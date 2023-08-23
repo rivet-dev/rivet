@@ -10,6 +10,7 @@ struct UploadRow {
 	complete_ts: Option<i64>,
 	deleted_ts: Option<i64>,
 	user_id: Option<Uuid>,
+	provider: i64,
 }
 
 impl From<UploadRow> for backend::upload::Upload {
@@ -22,6 +23,7 @@ impl From<UploadRow> for backend::upload::Upload {
 			complete_ts: val.complete_ts,
 			deleted_ts: val.deleted_ts,
 			user_id: val.user_id.map(Into::into),
+			provider: val.provider as i32,
 		}
 	}
 }
@@ -40,7 +42,15 @@ async fn handle(
 
 	let uploads = sqlx::query_as::<_, UploadRow>(indoc!(
 		"
-		SELECT bucket, upload_id, create_ts, content_length, complete_ts, deleted_ts, user_id
+		SELECT
+			bucket,
+			upload_id,
+			create_ts,
+			content_length,
+			complete_ts,
+			deleted_ts,
+			user_id,
+			provider
 		FROM uploads
 		WHERE upload_id = ANY($1)
 		"

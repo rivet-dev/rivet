@@ -23,7 +23,7 @@ async fn handle(
 	let game = game_res.games.first();
 	internal_assert!(game.is_some(), "game not found");
 
-	let (image_tag, upload_id, image_presigned_request) =
+	let (image_tag, upload_id, image_presigned_requests) =
 		if let Some(build_kind) = &ctx.default_build_kind {
 			let (image_tag, upload_id) = sqlx::query_as::<_, (String, Uuid)>(
 				"SELECT image_tag, upload_id FROM default_builds WHERE kind = $1",
@@ -32,7 +32,7 @@ async fn handle(
 			.fetch_one(&crdb)
 			.await?;
 
-			(image_tag, upload_id, None)
+			(image_tag, upload_id, Vec::new())
 		} else {
 			let image_file = internal_unwrap!(ctx.image_file);
 			let image_tag = internal_unwrap!(ctx.image_tag);
@@ -52,7 +52,7 @@ async fn handle(
 
 			// Check if build is unique
 			let (build_exists,) = sqlx::query_as::<_, (bool,)>(
-				"SELECT EXISTS(SELECT 1 FROM builds WHERE image_tag = $1)",
+				"SELECT EXISTS (SELECT 1 FROM builds WHERE image_tag = $1)",
 			)
 			.bind(image_tag)
 			.fetch_one(&crdb)
@@ -72,16 +72,19 @@ async fn handle(
 						path: "image.tar".into(),
 						mime: Some("application/x-tar".into()),
 						content_length: image_file.content_length,
+						multipart: ctx.multipart,
 						..Default::default()
 					},
 				],
 			})
 			.await?;
 			let upload_id = **internal_unwrap!(upload_prepare_res.upload_id);
-			let image_presigned_request =
-				internal_unwrap_owned!(upload_prepare_res.presigned_requests.first()).clone();
 
-			(image_tag.clone(), upload_id, Some(image_presigned_request))
+			(
+				image_tag.clone(),
+				upload_id,
+				upload_prepare_res.presigned_requests.clone(),
+			)
 		};
 
 	// Create build
@@ -104,6 +107,6 @@ async fn handle(
 	Ok(build::create::Response {
 		build_id: Some(build_id.into()),
 		upload_id: Some(upload_id.into()),
-		image_presigned_request,
+		image_presigned_requests,
 	})
 }

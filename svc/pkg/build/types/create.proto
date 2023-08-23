@@ -10,6 +10,7 @@ message Request {
 	string display_name = 2;
 	optional string image_tag = 4;
 	optional rivet.backend.upload.PrepareFile image_file = 3;
+	bool multipart = 6;
 
 	// If provided, will look up the pre-uploaded upload ID for a given kind.
 	optional string default_build_kind = 5;
@@ -18,5 +19,5 @@ message Request {
 message Response {
 	rivet.common.Uuid build_id = 1;
 	rivet.common.Uuid upload_id = 2;
-	optional rivet.backend.upload.PresignedUploadRequest image_presigned_request = 3;
+	repeated rivet.backend.upload.PresignedUploadRequest image_presigned_requests = 3;
 }

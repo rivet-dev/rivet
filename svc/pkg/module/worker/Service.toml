@@ -1,0 +1,10 @@
+[service]
+name = "module-worker"
+
+[runtime]
+kind = "rust"
+
+[consumer]
+
+[secrets]
+"fly/auth_token" = { optional = true }

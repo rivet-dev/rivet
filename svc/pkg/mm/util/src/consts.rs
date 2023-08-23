@@ -1,6 +1,7 @@
 use rivet_util as util;
 
-pub const LOBBY_READY_TIMEOUT: i64 = util::duration::minutes(5); // Also see mm-gc.LOBBY_READY_TIMEOUT
+// TODO: Lower this again
+pub const LOBBY_READY_TIMEOUT: i64 = util::duration::minutes(10); // Also see mm-gc.LOBBY_READY_TIMEOUT
 pub const PLAYER_READY_TIMEOUT: i64 = util::duration::minutes(2); // Also see mm-gc.LOBBY_READY_TIMEOUT
 
 pub const MIN_HOST_PORT: u16 = 26000;
@@ -18,7 +19,6 @@ pub const DEFAULT_ENV_KEYS: &[&str] = &[
 	"RIVET_IDENTITY_API_URL",
 	"RIVET_KV_API_URL",
 	"RIVET_MATCHMAKER_API_URL",
-	"RIVET_PARTY_API_URL",
 	"RIVET_NAMESPACE_NAME",
 	"RIVET_NAMESPACE_ID",
 	"RIVET_VERSION_NAME",

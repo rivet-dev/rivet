@@ -44,6 +44,8 @@ types:
         docs: A tag given to the game build.
         type: string
       image_file: uploadCommons.PrepareFile
+      multipart_upload:
+        type: optional<boolean>
 
   CreateGameBuildResponse:
     properties:
@@ -51,4 +53,6 @@ types:
         type: uuid
       upload_id:
         type: uuid
-      image_presigned_request: uploadCommons.PresignedRequest
+      image_presigned_request: optional<uploadCommons.PresignedRequest>
+      image_presigned_requests: optional<list<uploadCommons.PresignedRequest>>
+

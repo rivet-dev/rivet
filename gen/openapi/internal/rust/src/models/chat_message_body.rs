@@ -26,16 +26,6 @@ pub struct ChatMessageBody {
     pub group_member_kick: Option<Box<crate::models::ChatMessageBodyGroupMemberKick>>,
     #[serde(rename = "identity_follow", skip_serializing_if = "Option::is_none")]
     pub identity_follow: Option<serde_json::Value>,
-    #[serde(rename = "party_activity_change", skip_serializing_if = "Option::is_none")]
-    pub party_activity_change: Option<Box<crate::models::ChatMessageBodyPartyActivityChange>>,
-    #[serde(rename = "party_invite", skip_serializing_if = "Option::is_none")]
-    pub party_invite: Option<Box<crate::models::ChatMessageBodyPartyInvite>>,
-    #[serde(rename = "party_join", skip_serializing_if = "Option::is_none")]
-    pub party_join: Option<Box<crate::models::ChatMessageBodyPartyJoin>>,
-    #[serde(rename = "party_join_request", skip_serializing_if = "Option::is_none")]
-    pub party_join_request: Option<Box<crate::models::ChatMessageBodyPartyJoinRequest>>,
-    #[serde(rename = "party_leave", skip_serializing_if = "Option::is_none")]
-    pub party_leave: Option<Box<crate::models::ChatMessageBodyPartyLeave>>,
     #[serde(rename = "text", skip_serializing_if = "Option::is_none")]
     pub text: Option<Box<crate::models::ChatMessageBodyText>>,
 }
@@ -50,11 +40,6 @@ impl ChatMessageBody {
             group_leave: None,
             group_member_kick: None,
             identity_follow: None,
-            party_activity_change: None,
-            party_invite: None,
-            party_join: None,
-            party_join_request: None,
-            party_leave: None,
             text: None,
         }
     }

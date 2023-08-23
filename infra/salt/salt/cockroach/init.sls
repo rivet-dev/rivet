@@ -2,7 +2,7 @@
 # cockroach init --insecure --cluster-name rivet-X --host 10.0.8.1:26258
 
 # See https://www.cockroachlabs.com/docs/releases/index.html
-{% set version = '22.2.0' %}
+{% set version = '23.1.7' %}
 
 {% if grains['volumes']['crdb']['mount'] %}
 {% set device = '/dev/disk/by-id/scsi-0Linode_Volume_' ~ grains['rivet']['name'] ~ '-crdb' %}
@@ -13,13 +13,14 @@ disk_create_cockroach:
     - fs_type: ext4
 
 disk_mount_cockroach:
+  file.directory:
+    - name: /var/lib/cockroach
   mount.mounted:
     - name: /var/lib/cockroach
     - device: {{ device }}
     - fstype: ext4
     - require:
       - blockdev: disk_create_cockroach
-      - file: mkdir_crdb
 
 {% endif %}
 
@@ -67,6 +68,9 @@ mkdir_crdb:
       - /usr/local/lib/cockroach: []
     - require:
       - user: create_crdb_user
+      {%- if grains['volumes']['crdb']['mount'] %}
+      - mount: disk_mount_cockroach
+      {%- endif %}
 
 
 install_crdb:

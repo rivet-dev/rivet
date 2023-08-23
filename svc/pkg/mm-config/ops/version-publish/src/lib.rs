@@ -26,7 +26,7 @@ async fn handle(
 			let mut captcha_buf = Vec::with_capacity(captcha.encoded_len());
 			captcha.encode(&mut captcha_buf)?;
 
-			Result::<_, GlobalError>::Ok(captcha_buf)
+			GlobalResult::Ok(captcha_buf)
 		})
 		.transpose()?;
 
@@ -42,7 +42,7 @@ async fn handle(
 	.bind(version_id)
 	.bind(captcha_buf)
 	.bind(util_mm::version_migrations::all())
-	.execute(&mut tx)
+	.execute(&mut *tx)
 	.await?;
 
 	// Save lobby groups
@@ -127,7 +127,7 @@ async fn handle(
 		.bind(&runtime_meta_buf)
 		.bind(&find_config_buf)
 		.bind(&join_config_buf)
-		.execute(&mut tx)
+		.execute(&mut *tx)
 		.await?;
 
 		for region in &lobby_group.regions {
@@ -143,7 +143,7 @@ async fn handle(
 			.bind(lobby_group_id)
 			.bind(region_id)
 			.bind(&region.tier_name_id)
-			.execute(&mut tx)
+			.execute(&mut *tx)
 			.await?;
 
 			if let Some(idle_lobbies) = &region.idle_lobbies {
@@ -159,7 +159,7 @@ async fn handle(
 				.bind(region_id)
 				.bind(idle_lobbies.min_idle_lobbies as i64)
 				.bind(idle_lobbies.max_idle_lobbies as i64)
-				.execute(&mut tx)
+				.execute(&mut *tx)
 				.await?;
 			}
 		}

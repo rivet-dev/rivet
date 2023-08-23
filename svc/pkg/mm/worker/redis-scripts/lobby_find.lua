@@ -22,14 +22,14 @@ if query.kind.direct ~= nil then
 
 	-- Check lobby exists
 	if redis.call('EXISTS', key_direct_lobby_config) == 0 then
-		return {'err', 'LOBBY_NOT_FOUND'}
+		return { 'err', 'LOBBY_NOT_FOUND' }
 	end
 
 	-- Check lobby is not closed
-	local is_closed = redis.call('HGET', key_direct_lobby_config, 'c') == '1'
-	if is_closed then
-		return {'err', 'LOBBY_CLOSED'}
-	end
+	-- local is_closed = redis.call('HGET', key_direct_lobby_config, 'c') == '1'
+	-- if is_closed then
+	-- 	return {'err', 'LOBBY_CLOSED'}
+	-- end
 
 	-- Get max player count
 	local max_player_count = nil
@@ -44,7 +44,7 @@ if query.kind.direct ~= nil then
 	-- Validate player count
 	local player_count = redis.call('ZCARD', key_direct_lobby_player_ids)
 	if player_count + table.getn(query.players) > max_player_count then
-		return {'err', 'LOBBY_FULL'}
+		return { 'err', 'LOBBY_FULL' }
 	end
 
 	lobby_id = query.kind.direct.lobby_id
@@ -63,7 +63,8 @@ elseif query.kind.lobby_group ~= nil then
 		-- instead of `max_players_party` because `max_players_party` is
 		-- only relevant when joining a lobby with the exact lobby ID (i.e.
 		-- where `max_players_direct` would normally be used).
-		local lobby = redis.call('ZRANGEBYSCORE', key_available_spots, table.getn(query.players), '+inf', 'WITHSCORES', 'LIMIT', '0', '1')
+		local lobby = redis.call('ZRANGEBYSCORE', key_available_spots, table.getn(query.players), '+inf', 'WITHSCORES',
+			'LIMIT', '0', '1')
 		if table.getn(lobby) > 0 then
 			local lobby_id = lobby[1]
 			local available_spots = tonumber(lobby[2])
@@ -93,8 +94,10 @@ elseif query.kind.lobby_group ~= nil then
 			redis.call('HSET', key_auto_create_lobby_config, k, tostring(v))
 		end
 		redis.call('ZADD', key_auto_create_ns_lobby_ids, ts, auto_create.lobby_id)
-		redis.call('ZADD', key_auto_create_lobby_available_spots_normal, auto_create.lobby_config['mpn'], auto_create.lobby_id)
-		redis.call('ZADD', key_auto_create_lobby_available_spots_party, auto_create.lobby_config['mpp'], auto_create.lobby_id)
+		redis.call('ZADD', key_auto_create_lobby_available_spots_normal, auto_create.lobby_config['mpn'],
+			auto_create.lobby_id)
+		redis.call('ZADD', key_auto_create_lobby_available_spots_party, auto_create.lobby_config['mpp'],
+			auto_create.lobby_id)
 		redis.call('ZADD', key_lobby_unready, tonumber(auto_create.ready_expire_ts), auto_create.lobby_id)
 	end
 
@@ -104,7 +107,7 @@ elseif query.kind.lobby_group ~= nil then
 	elseif auto_create ~= nil then
 		lobby_id = auto_create.lobby_id
 	else
-		return {'err', 'NO_AVAILABLE_LOBBIES'}
+		return { 'err', 'NO_AVAILABLE_LOBBIES' }
 	end
 else
 	return redis.error_reply('Invalid query kind')
@@ -131,10 +134,14 @@ local max_players_party = tonumber(redis.call('HGET', key_lobby_config, 'mpp'))
 -- Build keys for the given lobby ID
 local key_lobby_find_queries = 'mm:lobby:' .. lobby_id .. ':find_queries'
 local key_lobby_player_ids = 'mm:lobby:' .. lobby_id .. ':player_ids'
-local key_lobby_available_spots_normal = 'mm:ns:' .. namespace_id .. ':region:' .. region_id .. ':lg:' .. lobby_group_id .. ':lobby:available_spots:normal'
-local key_lobby_available_spots_party = 'mm:ns:' .. namespace_id .. ':region:' .. region_id .. ':lg:' .. lobby_group_id .. ':lobby:available_spots:party'
-local key_idle_lobby_ids = 'mm:ns:' .. namespace_id .. ':region:' .. region_id .. ':lg:' .. lobby_group_id .. ':idle_lobby_ids'
-local key_idle_lobby_lobby_group_ids = 'mm:ns:' .. namespace_id .. ':region:' .. region_id .. ':lobby:idle:lobby_group_ids'
+local key_lobby_available_spots_normal = 'mm:ns:' ..
+namespace_id .. ':region:' .. region_id .. ':lg:' .. lobby_group_id .. ':lobby:available_spots:normal'
+local key_lobby_available_spots_party = 'mm:ns:' ..
+namespace_id .. ':region:' .. region_id .. ':lg:' .. lobby_group_id .. ':lobby:available_spots:party'
+local key_idle_lobby_ids = 'mm:ns:' ..
+namespace_id .. ':region:' .. region_id .. ':lg:' .. lobby_group_id .. ':idle_lobby_ids'
+local key_idle_lobby_lobby_group_ids = 'mm:ns:' ..
+namespace_id .. ':region:' .. region_id .. ':lobby:idle:lobby_group_ids'
 
 -- Assert lobby state
 if #lobby_id ~= 36 then
@@ -201,5 +208,4 @@ for _, player in ipairs(query.players) do
 end
 
 
-return {'ok', {lobby_id, region_id, lobby_group_id}}
-
+return { 'ok', { lobby_id, region_id, lobby_group_id } }

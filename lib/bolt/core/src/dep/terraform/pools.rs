@@ -185,10 +185,14 @@ pub async fn build_pools(ctx: &ProjectContext) -> Result<HashMap<String, Pool>> 
 			.build()?,
 	);
 
+	let mut svc_roles = vec!["docker", "nomad-client", "consul-client"];
+	if ctx.ns().logging.is_some() {
+		svc_roles.extend(["traefik", "cloudflare-proxy", "docker-plugin-loki"]);
+	}
 	pools.insert(
 		"svc".into(),
 		PoolBuilder::default()
-			.roles(vec!["docker", "nomad-client", "consul-client"])
+			.roles(svc_roles)
 			.vpc(true)
 			.local_mode(PoolLocalMode::Locally)
 			.nebula_firewall_inbound(
@@ -455,7 +459,7 @@ pub async fn build_pools(ctx: &ProjectContext) -> Result<HashMap<String, Pool>> 
 	pools.insert(
 		"ing-px".into(),
 		PoolBuilder::default()
-			.roles(vec!["traefik", "consul-client"])
+			.roles(vec!["traefik", "ingress-proxy", "consul-client"])
 			.vpc(true)
 			.local_mode(PoolLocalMode::Locally)
 			.tunnels(hashmap! {
@@ -535,7 +539,7 @@ pub async fn build_pools(ctx: &ProjectContext) -> Result<HashMap<String, Pool>> 
 	pools.insert(
 		"ing-job".into(),
 		PoolBuilder::default()
-			.roles(vec!["traefik"])
+			.roles(vec!["traefik", "ingress-proxy"])
 			.vpc(false)
 			.local_mode(PoolLocalMode::Keep)
 			.tunnels(hashmap! {
@@ -645,7 +649,7 @@ pub async fn build_pools(ctx: &ProjectContext) -> Result<HashMap<String, Pool>> 
 				},
 				FirewallRule {
 					label: "nomad-dynamic-udp".into(),
-					ports: "20000-25999".into(),
+					ports: "20000-31999".into(),
 					protocol: "udp".into(),
 					inbound_ipv4_cidr: vec!["0.0.0.0/0".into()],
 					inbound_ipv6_cidr: vec!["::/0".into()],
