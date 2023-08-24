@@ -1,5 +1,5 @@
 provider "nomad" {
-	address = var.deploy_method_cluster ? "https://nomad.${var.domain_main}" : "http://nomad-server.nomad.svc.cluster.local:4646"
+	address = var.deploy_method_cluster ? "https://nomad.${var.domain_main}" : "http://127.0.0.1:4646"
 
 	headers {
 		name = "CF-Access-Client-Id"

@@ -144,7 +144,7 @@ pub async fn build_pools(ctx: &ProjectContext) -> Result<HashMap<String, Pool>> 
 				},
 				"nomad".into() => PoolTunnel {
 					name: "Nomad".into(),
-					service: "http://nomad-server.nomad.svc.cluster.local:4646".into(),
+					service: "http://127.0.0.1:4646".into(),
 					access_groups: access.map(|x| vec![x.groups.engineering.clone()]).unwrap_or_default(),
 					service_tokens: access.map(|x| vec![x.services.terraform_nomad.clone(), x.services.bolt.clone()]).unwrap_or_default(),
 					app_launcher: true,
