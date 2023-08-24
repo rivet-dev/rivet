@@ -47,7 +47,7 @@ impl Hash for ServiceContextData {
 }
 
 impl ServiceContextData {
-	/// Sets the refernece to the project once the project context is finished initiating.
+	/// Sets the reference to the project once the project context is finished initiating.
 	#[async_recursion]
 	pub(in crate::context) async fn set_project(
 		&self,
@@ -160,6 +160,8 @@ impl ServiceContextData {
 				.supports_component_class(&component_class),
 			"runtime does not support component class"
 		);
+
+		// TODO: Validate that all services in `config.databases` are actually databases
 	}
 }
 
@@ -467,40 +469,6 @@ impl ServiceContextData {
 
 		let mut dep_ctxs = Vec::<ServiceContext>::new();
 
-		// TODO: Find a cleaner way of specifying database dependencies
-		// HACK: Mark all database & S3 dependencies as dependencies for all services in order to
-		// expose the env
-		for svc in all_svcs {
-			if matches!(
-				svc.config().kind,
-				ServiceKind::Database { .. } | ServiceKind::Cache { .. }
-			) {
-				dep_ctxs.push(svc.clone());
-			}
-		}
-
-		// Check that these are services you can explicitly depend on in the Service.toml
-		for dep in &dep_ctxs {
-			if !self.config().service.test_only && dep.config().service.test_only {
-				panic!(
-					"{} -> {}: cannot depend on a `service.test-only` service outside of `test-dependencies`",
-					self.name(),
-					dep.name()
-				);
-			}
-
-			if !matches!(
-				dep.config().kind,
-				ServiceKind::Database { .. } | ServiceKind::Cache { .. }
-			) {
-				panic!(
-					"{} -> {}: cannot explicitly depend on this kind of service",
-					self.name(),
-					dep.name()
-				);
-			}
-		}
-
 		// TODO: Add dev dependencies if building for tests
 		// Add operation dependencies from Cargo.toml
 		//
@@ -536,71 +504,115 @@ impl ServiceContextData {
 			dep_ctxs.extend(svcs);
 		}
 
-		// Inherit dependencies from the service that was overridden.
+		// Inherit dependencies from the service that was overridden
 		if let Some(overriden_svc) = &self.overridden_service {
 			dep_ctxs.extend(overriden_svc.dependencies().await);
+		}
+
+		// Check that these are services you can explicitly depend on in the Service.toml
+		for dep in &dep_ctxs {
+			if !self.config().service.test_only && dep.config().service.test_only {
+				panic!(
+					"{} -> {}: cannot depend on a `service.test-only` service outside of `test-dependencies`",
+					self.name(),
+					dep.name()
+				);
+			}
+
+			if !matches!(
+				dep.config().kind,
+				ServiceKind::Database { .. }
+					| ServiceKind::Cache { .. }
+					| ServiceKind::Operation { .. }
+			) {
+				panic!(
+					"{} -> {}: cannot explicitly depend on this kind of service",
+					self.name(),
+					dep.name()
+				);
+			}
 		}
 
 		dep_ctxs
 	}
 
-	pub async fn crdb_dependencies(&self) -> Vec<ServiceContext> {
-		self.dependencies()
+	pub async fn database_dependencies(&self) -> HashMap<String, config::service::Database> {
+		self.project()
 			.await
-			.iter()
+			.recursive_dependencies(&[self.name()])
+			.await
+			.into_iter()
+			// Filter filter services to include only operations, since these run in-process
 			.filter(|svc| {
-				if let RuntimeKind::CRDB { .. } = svc.config().runtime {
-					true
-				} else {
-					false
-				}
+				**svc == *self || matches!(svc.config().kind, ServiceKind::Operation { .. })
 			})
-			.cloned()
+			// Aggregate secrets from all dependencies
+			.flat_map(|x| x.config().databases.clone().into_iter())
+			// Dedupe
+			.collect::<HashMap<_, _>>()
+	}
+
+	pub async fn crdb_dependencies(&self) -> Vec<ServiceContext> {
+		let dep_names = self
+			.database_dependencies()
+			.await
+			.into_iter()
+			.map(|(k, _)| k)
+			.collect::<Vec<_>>();
+		self.project()
+			.await
+			.services_with_names(&dep_names)
+			.await
+			.into_iter()
+			.filter(|svc| matches!(svc.config().runtime, RuntimeKind::CRDB { .. }))
 			.collect()
 	}
 
 	pub async fn redis_dependencies(&self) -> Vec<ServiceContext> {
-		self.dependencies()
+		let dep_names = self
+			.database_dependencies()
 			.await
-			.iter()
-			.filter(|svc| {
-				if let RuntimeKind::Redis { .. } = svc.config().runtime {
-					true
-				} else {
-					false
-				}
-			})
-			.cloned()
+			.into_iter()
+			.map(|(k, _)| k)
+			.collect::<Vec<_>>();
+		self.project()
+			.await
+			.services_with_names(&dep_names)
+			.await
+			.into_iter()
+			.filter(|svc| matches!(svc.config().runtime, RuntimeKind::Redis { .. }))
 			.collect()
 	}
 
 	pub async fn s3_dependencies(&self) -> Vec<ServiceContext> {
-		self.dependencies()
+		let dep_names = self
+			.database_dependencies()
 			.await
-			.iter()
-			.filter(|svc| {
-				if let RuntimeKind::S3 { .. } = svc.config().runtime {
-					true
-				} else {
-					false
-				}
-			})
-			.cloned()
+			.into_iter()
+			.map(|(k, _)| k)
+			.collect::<Vec<_>>();
+		self.project()
+			.await
+			.services_with_names(&dep_names)
+			.await
+			.into_iter()
+			.filter(|svc| matches!(svc.config().runtime, RuntimeKind::S3 { .. }))
 			.collect()
 	}
 
 	pub async fn nats_dependencies(&self) -> Vec<ServiceContext> {
-		self.dependencies()
+		let dep_names = self
+			.database_dependencies()
 			.await
-			.iter()
-			.filter(|svc| {
-				if let RuntimeKind::Nats { .. } = svc.config().runtime {
-					true
-				} else {
-					false
-				}
-			})
-			.cloned()
+			.into_iter()
+			.map(|(k, _)| k)
+			.collect::<Vec<_>>();
+		self.project()
+			.await
+			.services_with_names(&dep_names)
+			.await
+			.into_iter()
+			.filter(|svc| matches!(svc.config().runtime, RuntimeKind::Nats { .. }))
 			.collect()
 	}
 }

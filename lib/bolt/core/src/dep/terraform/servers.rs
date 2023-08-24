@@ -96,7 +96,7 @@ pub fn build_servers(
 				netnum: pool.netnum,
 				volumes,
 
-				// Tags that will be assgned to the servers.
+				// Tags that will be assigned to the servers.
 				tags: vec![
 					ns.to_string(),
 					format!("{ns}-{region_id}"),

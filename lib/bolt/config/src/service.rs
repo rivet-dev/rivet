@@ -25,6 +25,10 @@ pub struct ServiceConfig {
 
 	pub runtime: RuntimeKind,
 
+	/// Databases that need a pool for this service.
+	#[serde(default)]
+	pub databases: HashMap<String, Database>,
+
 	/// Secrets that need to be exposed for this service.
 	#[serde(default)]
 	pub secrets: HashMap<String, Secret>,
@@ -49,6 +53,10 @@ pub struct Service {
 	#[serde(default)]
 	pub test_only: bool,
 }
+
+#[derive(Deserialize, Clone, Debug)]
+#[serde(rename_all = "kebab-case", deny_unknown_fields)]
+pub struct Database {}
 
 #[derive(Deserialize, Clone, Debug)]
 #[serde(rename_all = "kebab-case", deny_unknown_fields)]
