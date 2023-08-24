@@ -87,7 +87,7 @@ pub async fn resolve_user_with_game_user_id(
 	})
 	.await?;
 	let Some(game_user) = game_user_res.game_users.first().clone() else {
-		return Ok(None)
+		return Ok(None);
 	};
 
 	Ok(Some(internal_unwrap!(game_user.user_id).as_uuid()))
