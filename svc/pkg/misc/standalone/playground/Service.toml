@@ -7,3 +7,6 @@ kind = "rust"
 
 [oneshot]
 
+[databases]
+db-team = {}
+db-build = {}

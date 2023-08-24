@@ -5,3 +5,6 @@ name = "user-identity-delete"
 kind = "rust"
 
 [operation]
+
+[databases]
+db-user-identity = {}

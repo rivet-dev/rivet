@@ -5,3 +5,6 @@ name = "game-namespace-version-set"
 kind = "rust"
 
 [operation]
+
+[databases]
+db-game = {}

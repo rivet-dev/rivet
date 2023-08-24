@@ -5,3 +5,6 @@ name = "identity-config-version-publish"
 kind = "rust"
 
 [operation]
+
+[databases]
+db-identity-config = {}

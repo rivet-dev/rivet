@@ -6,3 +6,6 @@ test-only = true
 kind = "rust"
 
 [operation]
+
+[databases]
+db-mm-state = {}

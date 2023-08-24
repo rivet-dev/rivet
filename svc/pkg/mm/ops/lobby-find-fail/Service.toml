@@ -5,3 +5,6 @@ name = "mm-lobby-find-fail"
 kind = "rust"
 
 [operation]
+
+[databases]
+db-mm-state = {}

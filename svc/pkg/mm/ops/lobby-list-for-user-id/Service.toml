@@ -5,3 +5,6 @@ name = "mm-lobby-list-for-user-id"
 kind = "rust"
 
 [operation]
+
+[databases]
+db-mm-state = {}

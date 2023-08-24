@@ -5,3 +5,6 @@ name = "game-user-link-get"
 kind = "rust"
 
 [operation]
+
+[databases]
+db-game-user = {}

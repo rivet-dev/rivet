@@ -6,3 +6,5 @@ kind = "rust"
 
 [consumer]
 
+[databases]
+db-user-presence = {}

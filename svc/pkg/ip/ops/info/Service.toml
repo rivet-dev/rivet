@@ -5,3 +5,6 @@ name = "ip-info"
 kind = "rust"
 
 [operation]
+
+[databases]
+db-ip-info = {}

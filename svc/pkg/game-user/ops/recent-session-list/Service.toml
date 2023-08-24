@@ -5,3 +5,6 @@ name = "game-user-recent-session-list"
 kind = "rust"
 
 [operation]
+
+[databases]
+db-game-user = {}

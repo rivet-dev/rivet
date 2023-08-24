@@ -40,9 +40,13 @@ async fn handle(
 	let token = internal_unwrap!(token_res.token);
 	let token_session_id = internal_unwrap!(token_res.session_id).as_uuid();
 
-	sqlx::query(
-		"INSERT INTO game_namespace_public_tokens (namespace_id, token_session_id) VALUES ($1, $2)",
-	)
+	sqlx::query(indoc!(
+		"
+		INSERT INTO game_namespace_public_tokens
+		(namespace_id, token_session_id)
+		VALUES ($1, $2)
+		"
+	))
 	.bind(namespace_id)
 	.bind(token_session_id)
 	.execute(&ctx.crdb("db-cloud").await?)

@@ -5,3 +5,6 @@ name = "game-recommend"
 kind = "rust"
 
 [operation]
+
+[databases]
+db-game = {}

@@ -5,3 +5,6 @@ name = "module-game-version-publish"
 kind = "rust"
 
 [operation]
+
+[databases]
+db-module = {}
