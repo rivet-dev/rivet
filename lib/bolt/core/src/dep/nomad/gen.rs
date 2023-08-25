@@ -81,6 +81,11 @@ pub async fn gen_svc(region_id: &str, exec_ctx: &ExecServiceContext) -> Job {
 		svc_ctx.config().kind,
 		ServiceKind::Headless { .. } | ServiceKind::Consumer { .. } | ServiceKind::Api { .. }
 	);
+	let crdb_dep = svc_ctx
+		.crdb_dependencies()
+		.await
+		.first()
+		.map(|svc| svc.name());
 
 	let has_metrics = matches!(
 		svc_ctx.config().kind,
@@ -295,12 +300,14 @@ pub async fn gen_svc(region_id: &str, exec_ctx: &ExecServiceContext) -> Job {
 							..Default::default()
 						});
 
-						checks.push(build_conn_check(
-							"Cockroach",
-							"/health/crdb/db-user",
-							interval,
-							on_update,
-						));
+						if let Some(crdb_dep) = crdb_dep {
+							checks.push(build_conn_check(
+								"Cockroach",
+								&format!("/health/crdb/{}", crdb_dep),
+								interval,
+								on_update,
+							));
+						}
 
 						checks.push(build_conn_check(
 							"Nats Connection",

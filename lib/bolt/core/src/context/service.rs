@@ -484,6 +484,13 @@ impl ServiceContextData {
 						None
 					}
 				})
+				// Remove overridden service from deps list
+				.filter(|name| {
+					self.overridden_service
+						.as_ref()
+						.map(|osvc| &&osvc.name() != name)
+						.unwrap_or(true)
+				})
 				.filter_map(|name| {
 					all_svcs
 						.iter()
@@ -755,12 +762,6 @@ impl ServiceContextData {
 				std::env::var("LD_LIBRARY_PATH").context("missing LD_LIBRARY_PATH")?,
 			));
 		}
-
-		eprintln!(
-			"\n\n{} {}\n\n",
-			self.name(),
-			self.database_dependencies().await.len()
-		);
 
 		// Write secrets
 		for (secret_key, secret_config) in self.required_secrets().await? {

@@ -7,4 +7,4 @@ kind = "rust"
 [operation]
 
 [databases]
-redisuser-presence = {}
+redis-user-presence = {}
