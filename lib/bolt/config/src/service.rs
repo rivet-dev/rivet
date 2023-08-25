@@ -25,7 +25,7 @@ pub struct ServiceConfig {
 
 	pub runtime: RuntimeKind,
 
-	/// Databases that need a pool for this service.
+	/// Database dependencies that need a pool for this service.
 	#[serde(default)]
 	pub databases: HashMap<String, Database>,
 

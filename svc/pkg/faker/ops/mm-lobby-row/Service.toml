@@ -9,3 +9,4 @@ kind = "rust"
 
 [databases]
 db-mm-state = {}
+redis-mm = {}

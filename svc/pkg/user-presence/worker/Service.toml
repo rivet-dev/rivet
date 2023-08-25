@@ -8,3 +8,4 @@ kind = "rust"
 
 [databases]
 db-user-presence = {}
+redis-user-presence = {}

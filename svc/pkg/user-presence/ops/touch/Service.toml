@@ -5,3 +5,6 @@ name = "user-presence-touch"
 kind = "rust"
 
 [operation]
+
+[databases]
+redisuser-presence = {}

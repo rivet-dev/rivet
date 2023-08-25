@@ -5,3 +5,6 @@ name = "mm-lobby-state-get"
 kind = "rust"
 
 [operation]
+
+[databases]
+redis-mm = {}

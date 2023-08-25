@@ -10,3 +10,4 @@ singleton = true
 
 [databases]
 db-mm-state = {}
+redis-mm = {}

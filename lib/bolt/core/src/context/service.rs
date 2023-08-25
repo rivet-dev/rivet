@@ -537,7 +537,8 @@ impl ServiceContextData {
 	}
 
 	pub async fn database_dependencies(&self) -> HashMap<String, config::service::Database> {
-		self.project()
+		let dbs = self
+			.project()
 			.await
 			.recursive_dependencies(&[self.name()])
 			.await
@@ -549,7 +550,9 @@ impl ServiceContextData {
 			// Aggregate secrets from all dependencies
 			.flat_map(|x| x.config().databases.clone().into_iter())
 			// Dedupe
-			.collect::<HashMap<_, _>>()
+			.collect::<HashMap<_, _>>();
+
+		dbs
 	}
 
 	pub async fn crdb_dependencies(&self) -> Vec<ServiceContext> {
@@ -569,12 +572,16 @@ impl ServiceContextData {
 	}
 
 	pub async fn redis_dependencies(&self) -> Vec<ServiceContext> {
+		let default_deps = ["redis-chirp".to_string(), "redis-cache".to_string()];
+
 		let dep_names = self
 			.database_dependencies()
 			.await
 			.into_iter()
 			.map(|(k, _)| k)
+			.chain(default_deps)
 			.collect::<Vec<_>>();
+
 		self.project()
 			.await
 			.services_with_names(&dep_names)
@@ -748,6 +755,12 @@ impl ServiceContextData {
 				std::env::var("LD_LIBRARY_PATH").context("missing LD_LIBRARY_PATH")?,
 			));
 		}
+
+		eprintln!(
+			"\n\n{} {}\n\n",
+			self.name(),
+			self.database_dependencies().await.len()
+		);
 
 		// Write secrets
 		for (secret_key, secret_config) in self.required_secrets().await? {

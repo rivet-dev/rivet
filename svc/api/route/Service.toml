@@ -12,3 +12,6 @@ subdomain = "route.api"
 
 [secrets]
 "rivet/api_route/token" = {}
+
+[databases]
+redis-job = {}
