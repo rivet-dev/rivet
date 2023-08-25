@@ -69,7 +69,8 @@ async fn handle(
 	))
 	.bind(namespace_id)
 	.bind(token_session_id)
-	.execute(&ctx.crdb("db-cloud").await?).await?;
+	.execute(&ctx.crdb("db-cloud").await?)
+	.await?;
 
 	Ok(cloud::namespace_token_development_create::Response {
 		token: token.token.clone(),

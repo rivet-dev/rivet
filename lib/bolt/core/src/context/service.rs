@@ -347,7 +347,7 @@ impl ServiceContextData {
 impl ServiceContextData {
 	pub fn enable_tokio_console(&self) -> bool {
 		// TODO: This seems to have a significant performance impact
-		true
+		false
 	}
 }
 

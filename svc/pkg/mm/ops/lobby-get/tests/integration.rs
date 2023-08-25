@@ -25,7 +25,6 @@ async fn fetch_batch(ctx: TestCtx) {
 	op!([ctx] mm_lobby_get {
 		lobby_ids: lobby_ids,
 		include_stopped: true,
-		exclude_private: false,
 	})
 	.await
 	.unwrap();
