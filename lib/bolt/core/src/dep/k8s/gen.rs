@@ -431,7 +431,7 @@ fn build_ingress_router(
 				"kind": "Middleware",
 				"metadata": {
 					"name": mw_name,
-					"namespace": "rivet-service"
+					"namespace": "traefik"
 				},
 				"spec": {
 					"stripPrefix": {
@@ -450,7 +450,7 @@ fn build_ingress_router(
 				"kind": "Middleware",
 				"metadata": {
 					"name": mw_name,
-					"namespace": "rivet-service"
+					"namespace": "traefik"
 				},
 				"spec": {
 					"compress": {}
@@ -466,13 +466,13 @@ fn build_ingress_router(
 				"kind": "Middleware",
 				"metadata": {
 					"name": mw_name,
-					"namespace": "rivet-service"
+					"namespace": "traefik"
 				},
 				"spec": {
 					"inFlightReq": {
 						"amount": 64,
-						"sourcecriterion": {
-							"requestheadername": "cf-connecting-ip"
+						"sourceCriterion": {
+							"requestHeaderName": "cf-connecting-ip"
 						}
 					}
 				}
@@ -493,20 +493,49 @@ fn build_ingress_router(
 			}),
 		);
 
-		// Build router
-		let r_name = format!("{}-{i}", svc_ctx.name());
-
+		// Build insecure router
 		specs.insert(
-			"ingress",
+			"ingress-insecure",
 			json!({
 				"apiVersion": "traefik.containo.us/v1alpha1",
 				"kind": "IngressRoute",
 				"metadata": {
-					"name": r_name,
-					"namespace": "rivet-service"
+					"name": format!("{}-{i}-insecure", svc_ctx.name()),
+					"namespace": "traefik"
 				},
 				"spec": {
-					// "entryPoints": [ "lb-443" ],
+					"entryPoints": [ "web" ],
+					"routes": [
+						{
+							"kind": "Rule",
+							"match": rule,
+							"middlewares": ingress_middlewares,
+							"services": [
+								{
+									"kind": "Service",
+									"name": service_name,
+									"namespace": "rivet-service",
+									"port": 80
+								}
+							]
+						}
+					],
+				}
+			}),
+		);
+
+		// Build secure router
+		specs.insert(
+			"ingress-secure",
+			json!({
+				"apiVersion": "traefik.containo.us/v1alpha1",
+				"kind": "IngressRoute",
+				"metadata": {
+					"name": format!("{}-{i}-secure", svc_ctx.name()),
+					"namespace": "traefik"
+				},
+				"spec": {
+					"entryPoints": [ "websecure" ],
 					"routes": [
 						{
 							"kind": "Rule",
@@ -526,7 +555,7 @@ fn build_ingress_router(
 						"secretName": "ingress-tls-cert",
 						"options": {
 							"name": "ingress-tls",
-							"namespace": "rivet-service"
+							"namespace": "traefik"
 						},
 						// "domains": [
 						// 	{
@@ -550,7 +579,7 @@ fn build_ingress_router(
 					"kind": "IngressRoute",
 					"metadata": {
 						"name": "cf-verification-challenge",
-						"namespace": "rivet-service"
+						"namespace": "traefik"
 					},
 					"spec": {
 						"routes": [

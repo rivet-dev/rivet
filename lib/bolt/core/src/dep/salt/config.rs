@@ -128,7 +128,8 @@ async fn s3(ctx: &ProjectContext, skip: bool) -> Result<Value> {
 
 fn cloudflare(ctx: &ProjectContext) -> Result<Value> {
 	#[allow(irrefutable_let_patterns)]
-	let config::ns::DnsProvider::Cloudflare { access, .. } = &ctx.ns().dns.provider else {
+	let config::ns::DnsProvider::Cloudflare { access, .. } = &ctx.ns().dns.provider
+	else {
 		return Ok(json!(null));
 	};
 
@@ -145,7 +146,8 @@ fn cloudflare(ctx: &ProjectContext) -> Result<Value> {
 
 fn logging(ctx: &ProjectContext) -> Result<Value> {
 	#[allow(irrefutable_let_patterns)]
-	let Some(logging) = &ctx.ns().logging else {
+	let Some(logging) = &ctx.ns().logging
+	else {
 		return Ok(json!(null));
 	};
 

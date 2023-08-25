@@ -490,7 +490,7 @@ async fn init_k8s_project(ctx: &ProjectContext) -> Result<()> {
 			"kind": "TLSOption",
 			"metadata": {
 				"name": "ingress-tls",
-				"namespace": "rivet-service"
+				"namespace": "traefik"
 			},
 			"spec": {
 				"curvePreferences": [
@@ -519,7 +519,7 @@ async fn init_k8s_project(ctx: &ProjectContext) -> Result<()> {
 			"kind": "Secret",
 			"metadata": {
 				"name": "ingress-tls-cert",
-				"namespace": "rivet-service"
+				"namespace": "traefik"
 			},
 			"type": "kubernetes.io/tls",
 			"data": {
@@ -539,7 +539,7 @@ async fn init_k8s_project(ctx: &ProjectContext) -> Result<()> {
 			"kind": "Secret",
 			"metadata": {
 				"name": "ingress-tls-ca-cert",
-				"namespace": "rivet-service"
+				"namespace": "traefik"
 			},
 			// "type": "kubernetes.io/tls",
 			"data": {
