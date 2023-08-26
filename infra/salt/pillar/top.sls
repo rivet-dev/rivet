@@ -11,7 +11,6 @@ base:
     - nomad
   'G@roles:traffic-server':
     - s3
-    - ats
   'G@roles:traefik':
     - tls
     - api-route
