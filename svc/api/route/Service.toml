@@ -15,3 +15,5 @@ subdomain = "route.api"
 
 [databases]
 redis-job = {}
+redis-cdn = {}
+
