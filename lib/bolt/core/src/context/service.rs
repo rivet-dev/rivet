@@ -1177,6 +1177,15 @@ impl ServiceContextData {
 			}
 			.into(),
 		));
+		env.push((
+			"RIVET_MM_LOBBY_DELIVERY_METHOD".into(),
+			project_ctx
+				.ns()
+				.rivet
+				.matchmaker
+				.lobby_delivery_method
+				.to_string(),
+		));
 
 		// Sort env by keys so it's always in the same order
 		env.sort_by_cached_key(|x| x.0.clone());

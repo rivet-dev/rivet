@@ -6,13 +6,6 @@ use std::ops::Deref;
 
 mod nomad_job;
 
-enum DeliveryMethod {
-	Ats,
-	S3Direct,
-}
-
-const DELIVERY_METHOD: DeliveryMethod = DeliveryMethod::Ats;
-
 lazy_static::lazy_static! {
 	static ref NOMAD_CONFIG: nomad_client::apis::configuration::Configuration =
 		nomad_util::config_from_env().unwrap();
@@ -760,12 +753,54 @@ async fn resolve_image_artifact_url(
 		backend::upload::Provider::Aws => s3_util::Provider::Aws,
 	};
 
-	match DELIVERY_METHOD {
-		DeliveryMethod::Ats => {
+	match internal_unwrap_owned!(
+		std::env::var("RIVET_MM_LOBBY_DELIVERY_METHOD").ok(),
+		"missing RIVET_MM_LOBBY_DELIVERY_METHOD"
+	)
+	.as_str()
+	{
+		// "s3_direct" => {
+		// 	tracing::info!("using s3 direct delivery");
+
+		// 	let bucket = "bucket-build";
+		// 	let bucket_screaming = bucket.to_uppercase().replace('-', "_");
+
+		// 	// Build client
+		// 	let s3_client = s3_util::Client::from_env_opt(
+		// 		bucket,
+		// 		provider,
+		// 		s3_util::EndpointKind::InternalResolved,
+		// 	)
+		// 	.await?;
+
+		// 	let upload_id = internal_unwrap!(upload.upload_id).as_uuid();
+		// 	let presigned_req = s3_client
+		// 		.get_object()
+		// 		.bucket(s3_client.bucket())
+		// 		.key(format!("{upload_id}/image.tar"))
+		// 		.presigned(
+		// 			s3_util::aws_sdk_s3::presigning::config::PresigningConfig::builder()
+		// 				.expires_in(std::time::Duration::from_secs(15 * 60))
+		// 				.build()?,
+		// 		)
+		// 		.await?;
+
+		// 	let addr = presigned_req.uri().clone();
+
+		// 	let addr_str = addr.to_string();
+		// 	tracing::info!(addr = %addr_str, "resolved artifact s3 presigned request");
+
+		// 	Ok(addr_str)
+		// }
+		"traffic_server" => {
+			tracing::info!("using traffic server delivery");
+
+			// HACK: Hardcode ATS IP since this will be replaced shortly
 			let ats_url = if cdn_region.name_id == "lnd-atl" {
-				"10.0.47.2"
-			}
-			else {
+				"10.0.25.2"
+			} else if cdn_region.name_id == "lnd-fra" {
+				"10.0.50.2"
+			} else {
 				tracing::info!(?cdn_region.name_id);
 				internal_panic!("invalid cdn region");
 			};
@@ -783,36 +818,8 @@ async fn resolve_image_artifact_url(
 
 			Ok(addr)
 		}
-		DeliveryMethod::S3Direct => {
-			let bucket = "bucket-build";
-			let bucket_screaming = bucket.to_uppercase().replace('-', "_");
-
-			// Build client
-			let s3_client = s3_util::Client::from_env_opt(
-				bucket,
-				provider,
-				s3_util::EndpointKind::InternalResolved,
-			)
-			.await?;
-
-			let upload_id = internal_unwrap!(upload.upload_id).as_uuid();
-			let presigned_req = s3_client
-				.get_object()
-				.bucket(s3_client.bucket())
-				.key(format!("{upload_id}/image.tar"))
-				.presigned(
-					s3_util::aws_sdk_s3::presigning::config::PresigningConfig::builder()
-						.expires_in(std::time::Duration::from_secs(15 * 60))
-						.build()?,
-				)
-				.await?;
-
-			let addr = presigned_req.uri().clone();
-
-			let addr_str = addr.to_string();
-			tracing::info!(addr = %addr_str, "resolved artifact s3 presigned request");
-
-			Ok(addr_str)
+		_ => {
+			internal_panic!("invalid RIVET_MM_LOBBY_DELIVERY_METHOD")
 		}
 	}
 }
