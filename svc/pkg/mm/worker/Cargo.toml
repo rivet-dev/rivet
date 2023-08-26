@@ -23,6 +23,7 @@ serde = { version = "1.0", features = ["derive"] }
 util-job = { package = "rivet-util-job", path = "../../job/util" }
 util-mm = { package = "rivet-util-mm", path = "../../mm/util" }
 http = "0.2"
+heck = "0.3"
 
 build-get = { path = "../../build/ops/get" }
 game-get = { path = "../../game/ops/get" }

@@ -61,12 +61,10 @@ pub async fn build<'a, T: AsRef<str>>(ctx: &ProjectContext, opts: BuildOpts<'a, 
 				.collect::<Vec<String>>()
 				.join(" ");
 
-			// TODO: Not sure why the .cargo/config.toml isn't working with nested projects, have to hardcode
-			// the target dir
 			indoc::formatdoc!(
 				"
 				if [ $? -eq 0 ]; then
-					(cd {path} && cargo build {jobs_flag} {format_flag} {release_flag} {bin_flags} --target-dir $TARGET_DIR)
+				(cd {path} && cargo build {jobs_flag} {format_flag} {release_flag} {bin_flags})
 				fi
 				"
 			)
@@ -77,7 +75,9 @@ pub async fn build<'a, T: AsRef<str>>(ctx: &ProjectContext, opts: BuildOpts<'a, 
 	// Generate build script
 	let build_script = indoc::formatdoc!(
 		r#"
-		TARGET_DIR=$(readlink -f ./target)
+		# TODO: Not sure why the .cargo/config.toml isn't working with nested projects, have to hardcode
+		# the target dir
+		export CARGO_TARGET_DIR={target}
 		# Used for Tokio Console. See https://github.com/tokio-rs/console#using-it
 		export RUSTFLAGS="--cfg tokio_unstable"
 		# Used for debugging
@@ -87,6 +87,7 @@ pub async fn build<'a, T: AsRef<str>>(ctx: &ProjectContext, opts: BuildOpts<'a, 
 
 		EXIT_CODE=$?
 		"#,
+		target = ctx.path().join("target").display(),
 	);
 
 	// Execute build command

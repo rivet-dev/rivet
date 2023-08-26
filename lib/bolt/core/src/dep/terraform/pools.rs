@@ -60,6 +60,9 @@ pub enum PoolLocalMode {
 	/// Run this only when developing locally.
 	LocalOnly,
 
+	/// Run this locally and remotely when developing.
+	LocalAndRemote,
+
 	/// Treat the pool normally.
 	Keep,
 }
@@ -240,7 +243,7 @@ pub async fn build_pools(ctx: &ProjectContext) -> Result<HashMap<String, Pool>> 
 			.vpc(true)
 			// TODO: We need a new PoolLocalMode for running locally and being able to run remote
 			// nodes
-			.local_mode(PoolLocalMode::Locally)
+			.local_mode(PoolLocalMode::LocalAndRemote)
 			.volumes(hashmap! {
 				"ats".into() => PoolVolume {},
 			})
@@ -705,7 +708,10 @@ fn filter_pools(
 			new_pools.extend(
 				pools
 					.iter()
-					.filter(|(_, x)| x.local_mode == PoolLocalMode::Keep)
+					.filter(|(_, x)| {
+						x.local_mode == PoolLocalMode::Keep
+							|| x.local_mode == PoolLocalMode::LocalAndRemote
+					})
 					.map(|(k, v)| (k.clone(), v.clone())),
 			);
 
@@ -715,6 +721,7 @@ fn filter_pools(
 				.filter(|(_, x)| {
 					x.local_mode == PoolLocalMode::Locally
 						|| x.local_mode == PoolLocalMode::LocalOnly
+						|| x.local_mode == PoolLocalMode::LocalAndRemote
 				})
 				.map(|(_, x)| x)
 				.collect::<Vec<_>>();

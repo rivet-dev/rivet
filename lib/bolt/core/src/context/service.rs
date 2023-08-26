@@ -15,7 +15,7 @@ use crate::{
 		self,
 		service::{RuntimeKind, ServiceKind},
 	},
-	context::{self, BuildContext, ProjectContext, RunContext, S3Provider},
+	context::{self, BuildContext, ProjectContext, RunContext},
 	dep::{self, cloudflare, s3},
 	utils,
 };
@@ -967,7 +967,7 @@ impl ServiceContextData {
 		// NATS config
 		env.push((
 			"NATS_URL".into(),
-			// TODO: Add back passsing multiple NATS nodes for failover instead of using DNS resolution
+			// TODO: Add back passing multiple NATS nodes for failover instead of using DNS resolution
 			access_service(
 				&project_ctx,
 				&mut tunnel_configs,
@@ -1085,44 +1085,28 @@ impl ServiceContextData {
 			}
 
 			// Add default provider
-			let default_provider_name = match project_ctx.default_s3_provider()? {
-				(S3Provider::Minio, _) => "MINIO",
-				(S3Provider::Backblaze, _) => "BACKBLAZE",
-				(S3Provider::Aws, _) => "AWS",
-			};
+			let (default_provider, _) = project_ctx.default_s3_provider()?;
 			env.push((
 				"S3_DEFAULT_PROVIDER".to_string(),
-				default_provider_name.to_string(),
+				default_provider.to_string(),
 			));
 
 			// Add all configured providers
 			let providers = &project_ctx.ns().s3.providers;
 			if providers.minio.is_some() {
-				add_s3_env(
-					&project_ctx,
-					&mut env,
-					&s3_dep,
-					context::project::S3Provider::Minio,
-				)
-				.await?;
+				add_s3_env(&project_ctx, &mut env, &s3_dep, s3_util::Provider::Minio).await?;
 			}
 			if providers.backblaze.is_some() {
 				add_s3_env(
 					&project_ctx,
 					&mut env,
 					&s3_dep,
-					context::project::S3Provider::Backblaze,
+					s3_util::Provider::Backblaze,
 				)
 				.await?;
 			}
 			if providers.aws.is_some() {
-				add_s3_env(
-					&project_ctx,
-					&mut env,
-					&s3_dep,
-					context::project::S3Provider::Aws,
-				)
-				.await?;
+				add_s3_env(&project_ctx, &mut env, &s3_dep, s3_util::Provider::Aws).await?;
 			}
 		}
 
@@ -1351,13 +1335,9 @@ async fn add_s3_env(
 	project_ctx: &ProjectContext,
 	env: &mut Vec<(String, String)>,
 	s3_dep: &Arc<ServiceContextData>,
-	provider: S3Provider,
+	provider: s3_util::Provider,
 ) -> Result<()> {
-	let provider_name = match provider {
-		S3Provider::Minio => "MINIO",
-		S3Provider::Backblaze => "BACKBLAZE",
-		S3Provider::Aws => "AWS",
-	};
+	let provider_name = provider.to_string();
 	let s3_dep_name = s3_dep.name_screaming_snake();
 	let s3_config = project_ctx.s3_config(provider).await?;
 	let s3_creds = project_ctx.s3_credentials(provider).await?;

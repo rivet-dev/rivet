@@ -28,10 +28,7 @@ pub fn summary(
 		group_id: team_id.to_string(),
 		display_name: team.display_name.clone(),
 		bio: team.bio.clone(),
-		avatar_url: util::route::team_avatar(
-			team.profile_upload_id.map(|x| x.as_uuid()),
-			team.profile_file_name.as_ref(),
-		),
+		avatar_url: util::route::team_avatar(&team),
 		external: models::GroupExternalLinks {
 			profile: util::route::team_profile(team_id),
 			chat: util::route::team_chat(team_id),

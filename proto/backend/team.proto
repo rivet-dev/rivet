@@ -4,6 +4,7 @@ package rivet.backend.team;
 
 import "proto/common.proto";
 import "proto/backend/user.proto";
+import "proto/backend/upload.proto";
 
 message Team {
 	reserved 5, 8;
@@ -14,6 +15,7 @@ message Team {
 	string bio = 4;
 	optional rivet.common.Uuid profile_upload_id = 9;
 	optional string profile_file_name = 10;
+	optional upload.Provider profile_provider = 11;
 	int64 create_ts = 6;
 	Publicity publicity = 7;
 }

@@ -12,10 +12,7 @@ pub fn handle(team: &backend::team::Team, is_developer: bool) -> GlobalResult<mo
 	Ok(models::GroupHandle {
 		group_id: team_id,
 		display_name: team.display_name.to_owned(),
-		avatar_url: util::route::team_avatar(
-			team.profile_upload_id.map(|x| x.as_uuid()),
-			team.profile_file_name.as_ref(),
-		),
+		avatar_url: util::route::team_avatar(&team),
 		external: Box::new(models::GroupExternalLinks {
 			profile: util::route::team_profile(team_id),
 			chat: util::route::team_chat(team_id),
@@ -47,10 +44,7 @@ pub fn summary(
 		group_id: team_id,
 		display_name: team.display_name.clone(),
 		bio: team.bio.clone(),
-		avatar_url: util::route::team_avatar(
-			team.profile_upload_id.map(|x| x.as_uuid()),
-			team.profile_file_name.as_ref(),
-		),
+		avatar_url: util::route::team_avatar(&team),
 		external: Box::new(models::GroupExternalLinks {
 			profile: util::route::team_profile(team_id),
 			chat: util::route::team_chat(team_id),

@@ -54,7 +54,6 @@ start_trafficserver_service:
     - require:
       - file: create_mnt_db_trafficserver
       - file: push_trafficserver_service
-      - file: create_var_log_trafficserver
     - onchanges:
       - file: push_trafficserver_service
 
@@ -78,10 +77,6 @@ push_etc_trafficserver_dynamic:
         - source: salt://traffic_server/files/etc/dynamic/records.config.j2
       - /etc/trafficserver/remap.config:
         - source: salt://traffic_server/files/etc/dynamic/remap.config.j2
-      - /etc/trafficserver/s3_auth_v4.config:
-        - source: salt://traffic_server/files/etc/dynamic/s3_auth_v4.config.j2
-      - /etc/trafficserver/s3_region_map.config:
-        - source: salt://traffic_server/files/etc/dynamic/s3_region_map.config.j2
       - /etc/trafficserver/storage.config:
         - source: salt://traffic_server/files/etc/dynamic/storage.config.j2
     - user: trafficserver
@@ -90,14 +85,34 @@ push_etc_trafficserver_dynamic:
     - template: jinja
     - context:
         nebula_ipv4: {{ grains['nebula']['ipv4'] }}
-        s3_endpoint: {{ pillar['s3']['config']['default']['endpoint_internal'] }}
-        s3_region: {{ pillar['s3']['config']['default']['region'] }}
-        s3_access_key_id: {{ pillar['s3']['access']['default']['persistent_access_key_id'] }}
-        s3_secret_access_key: {{ pillar['s3']['access']['default']['persistent_access_key_secret'] }}
+        s3_providers: {{ pillar['s3']['config'] }}
         volume_size_cache: {{ grains['volumes']['ats']['size']|int - 1 }}G
     - require:
       - file: push_etc_trafficserver_static
       - user: create_trafficserver_user
+
+{%- for provider, _ in pillar['s3']['config'].items() %}
+push_etc_trafficserver_dynamic_{{provider}}:
+  file.managed:
+    - names:
+      - /etc/trafficserver/s3_auth_v4_{{provider}}.config:
+        - source: salt://traffic_server/files/etc/dynamic/s3_auth_v4.config.j2
+      - /etc/trafficserver/s3_region_map_{{provider}}.config:
+        - source: salt://traffic_server/files/etc/dynamic/s3_region_map.config.j2
+    - user: trafficserver
+    - group: trafficserver
+    - mode: 644
+    - template: jinja
+    - context:
+        s3_endpoint: {{ pillar['s3']['config'][provider]['endpoint_internal'] }}
+        s3_region: {{ pillar['s3']['config'][provider]['region'] }}
+        s3_access_key_id: {{ pillar['s3']['access'][provider]['persistent_access_key_id'] }}
+        s3_secret_access_key: {{ pillar['s3']['access'][provider]['persistent_access_key_secret'] }}
+        s3_region_map_file_name: s3_region_map_{{provider}}
+    - require:
+      - file: push_etc_trafficserver_static
+      - user: create_trafficserver_user
+{%- endfor %}
 
 reload_traffic_server_config:
   cmd.run:
@@ -106,9 +121,15 @@ reload_traffic_server_config:
       - cmd: start_trafficserver_service
       - file: push_etc_trafficserver_static
       - file: push_etc_trafficserver_dynamic
+      {%- for provider, _ in pillar['s3']['config'].items() %}
+      - push_etc_trafficserver_dynamic_{{provider}}
+      {%- endfor %}
     - onchanges:
       - file: push_etc_trafficserver_static
       - file: push_etc_trafficserver_dynamic
+      {%- for provider, _ in pillar['s3']['config'].items() %}
+      - push_etc_trafficserver_dynamic_{{provider}}
+      {%- endfor %}
 
 push_etc_consul_traffic_server_hcl:
   file.managed:
@@ -119,6 +140,7 @@ push_etc_consul_traffic_server_hcl:
         namespace: {{ pillar['rivet']['namespace'] }}
         domain: {{ pillar['rivet']['domain'] }}
         nebula_ipv4: {{ grains['nebula']['ipv4'] }}
+        s3_providers: {{ pillar['s3']['config'] }}
     - require:
       - file: create_etc_consul
   cmd.run:
