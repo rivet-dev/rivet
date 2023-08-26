@@ -791,7 +791,7 @@ async fn resolve_image_artifact_url(
 			// Build client
 			let s3_client = s3_util::Client::from_env_opt(
 				&bucket,
-				s3_util::Provider::default()?,
+				provider,
 				s3_util::EndpointKind::InternalResolved,
 			)
 			.await?;
