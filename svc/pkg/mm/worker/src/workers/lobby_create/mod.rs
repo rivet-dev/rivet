@@ -67,13 +67,7 @@ async fn worker(ctx: &OperationContext<mm::msg::lobby_create::Message>) -> Globa
 		.await;
 	}
 
-	let (
-		namespace,
-		mm_ns_config,
-		(lobby_group, lobby_group_meta, version_id),
-		(region, cdn_region),
-		tiers,
-	) = tokio::try_join!(
+	let (namespace, mm_ns_config, (lobby_group, lobby_group_meta, version_id), region, tiers) = tokio::try_join!(
 		fetch_namespace(ctx, namespace_id),
 		fetch_mm_namespace_config(ctx, namespace_id),
 		fetch_lobby_group_config(ctx, lobby_group_id),
@@ -233,7 +227,6 @@ async fn worker(ctx: &OperationContext<mm::msg::lobby_create::Message>) -> Globa
 				&lobby_group,
 				&lobby_group_meta,
 				&region,
-				&cdn_region,
 				tier,
 				run_id,
 				lobby_id,
@@ -281,22 +274,15 @@ async fn worker(ctx: &OperationContext<mm::msg::lobby_create::Message>) -> Globa
 async fn fetch_region(
 	ctx: &OperationContext<mm::msg::lobby_create::Message>,
 	region_id: Uuid,
-) -> GlobalResult<(backend::region::Region, backend::region::Region)> {
+) -> GlobalResult<backend::region::Region> {
 	tracing::info!(?region_id, "fetching primary region");
 	let primary_get_res = op!([ctx] region_get {
 		region_ids: vec![region_id.into()],
 	})
 	.await?;
 	let region = internal_unwrap_owned!(primary_get_res.regions.first(), "region not found");
-	let cdn_region_id = internal_unwrap!(region.cdn_region_id).as_uuid();
-	tracing::info!(?region_id, "fetching cdn region");
-	let cdn_get_res = op!([ctx] region_get {
-		region_ids: vec![cdn_region_id.into()],
-	})
-	.await?;
-	let cdn_region = internal_unwrap_owned!(cdn_get_res.regions.first());
 
-	Ok((region.clone(), cdn_region.clone()))
+	Ok(region.clone())
 }
 
 #[tracing::instrument]
@@ -572,7 +558,6 @@ async fn create_docker_job(
 	lobby_group: &backend::matchmaker::LobbyGroup,
 	lobby_group_meta: &backend::matchmaker::LobbyGroupMeta,
 	region: &backend::region::Region,
-	cdn_region: &backend::region::Region,
 	tier: &backend::region::Tier,
 	run_id: Uuid,
 	lobby_id: Uuid,
@@ -585,7 +570,7 @@ async fn create_docker_job(
 
 	let resolve_perf = ctx.perf().start("resolve-image-artifact-url").await;
 	let build_id = internal_unwrap!(runtime.build_id).as_uuid();
-	let image_artifact_url = resolve_image_artifact_url(ctx, build_id, cdn_region).await?;
+	let image_artifact_url = resolve_image_artifact_url(ctx, build_id, region).await?;
 	resolve_perf.end();
 
 	// Validate build exists and belongs to this game
@@ -726,7 +711,7 @@ async fn create_docker_job(
 async fn resolve_image_artifact_url(
 	ctx: &OperationContext<mm::msg::lobby_create::Message>,
 	build_id: Uuid,
-	cdn_region: &backend::region::Region,
+	region: &backend::region::Region,
 ) -> GlobalResult<String> {
 	let build_res = op!([ctx] build_get {
 		build_ids: vec![build_id.into()],
@@ -796,13 +781,13 @@ async fn resolve_image_artifact_url(
 			tracing::info!("using traffic server delivery");
 
 			// HACK: Hardcode ATS IP since this will be replaced shortly
-			let ats_url = if cdn_region.name_id == "lnd-atl" {
+			let ats_url = if region.name_id == "lnd-atl" {
 				"10.0.25.2"
-			} else if cdn_region.name_id == "lnd-fra" {
+			} else if region.name_id == "lnd-fra" {
 				"10.0.50.2"
 			} else {
-				tracing::info!(?cdn_region.name_id);
-				internal_panic!("invalid cdn region");
+				tracing::info!(?region.name_id);
+				internal_panic!("invalid region");
 			};
 
 			let upload_id = internal_unwrap!(upload.upload_id).as_uuid();
