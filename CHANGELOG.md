@@ -18,6 +18,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 -   **Bolt** Support for connecting to Redis databases with `bolt redis sh`
 -   **Bolt** Confirmation before running any command in the production namespace
 -   **Bolt** `--start-at` flag for all infra commands
+-   **Bolt** Explicit database dependencies in services to reduce excess database pools
 
 ### Changed
 
