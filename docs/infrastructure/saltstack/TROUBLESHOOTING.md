@@ -42,4 +42,3 @@ bolt ssh name staging-lnd-atl-crdb-05-2 'systemctl stop salt-minion; apt remove 
 (cd infra/tf/pools && terraform state rm 'module.install_salt_minion["staging-lnd-atl-crdb-05-2"]')
 bolt tf apply pools
 ```
-
