@@ -373,10 +373,24 @@ async fn lobby_create_reuse_job_id(ctx: TestCtx) {
 	.await
 	.unwrap();
 
-	let Some(backend::job::RunMeta { kind: Some(backend::job::run_meta::Kind::Nomad(backend::job::run_meta::Nomad { dispatched_job_id: dispatch_a, .. }))}) = &runs.runs[0].run_meta else {
+	let Some(backend::job::RunMeta {
+		kind:
+			Some(backend::job::run_meta::Kind::Nomad(backend::job::run_meta::Nomad {
+				dispatched_job_id: dispatch_a,
+				..
+			})),
+	}) = &runs.runs[0].run_meta
+	else {
 		panic!()
 	};
-	let Some(backend::job::RunMeta { kind: Some(backend::job::run_meta::Kind::Nomad(backend::job::run_meta::Nomad { dispatched_job_id: dispatch_b, .. }))}) = &runs.runs[1].run_meta else {
+	let Some(backend::job::RunMeta {
+		kind:
+			Some(backend::job::run_meta::Kind::Nomad(backend::job::run_meta::Nomad {
+				dispatched_job_id: dispatch_b,
+				..
+			})),
+	}) = &runs.runs[1].run_meta
+	else {
 		panic!()
 	};
 

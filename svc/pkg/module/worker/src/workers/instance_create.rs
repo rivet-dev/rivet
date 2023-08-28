@@ -98,7 +98,10 @@ async fn worker(
 ) -> Result<(), GlobalError> {
 	let crdb = ctx.crdb("db-module").await?;
 
-	let (Ok(fly_org), Ok(fly_region)) = (std::env::var("FLY_ORGANIZATION_ID"), std::env::var("FLY_REGION"))  else {
+	let (Ok(fly_org), Ok(fly_region)) = (
+		std::env::var("FLY_ORGANIZATION_ID"),
+		std::env::var("FLY_REGION"),
+	) else {
 		internal_panic!("fly not enabled")
 	};
 	let fly_auth_token = util::env::read_secret(&["fly", "auth_token"]).await?;

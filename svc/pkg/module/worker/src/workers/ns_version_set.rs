@@ -36,7 +36,8 @@ async fn worker(
 	let Some(game_version) = game_versions
 		.versions
 		.first()
-		.and_then(|x| x.config.as_ref()) else {
+		.and_then(|x| x.config.as_ref())
+	else {
 		tracing::info!("no game version found");
 		return Ok(());
 	};

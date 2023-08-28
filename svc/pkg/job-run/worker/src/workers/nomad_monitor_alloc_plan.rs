@@ -105,7 +105,8 @@ async fn worker(
 		run_id,
 		region_id,
 		proxied_ports,
-	}) = db_output else {
+	}) = db_output
+	else {
 		if ctx.req_dt() > util::duration::minutes(5) {
 			tracing::error!("discarding stale message");
 			return Ok(());
