@@ -1,0 +1,165 @@
+resource "kubernetes_namespace" "rivet_service" {
+	metadata {
+		name = "rivet-service"
+	}
+}
+
+# NOTE: Must use kubectl_manifest because kubernetes_manifest doesn't work with CRDs. If this stops working
+# correctly replace with a raw helm chart: https://artifacthub.io/packages/helm/wikimedia/raw
+resource "kubectl_manifest" "ingress_tls" {
+	depends_on = [helm_release.traefik]
+
+	yaml_body = yamlencode({
+		apiVersion = "traefik.containo.us/v1alpha1"
+		kind = "TLSOption"
+
+		metadata = {
+			name = "ingress-tls"
+			namespace = "traefik"
+		}
+
+		spec = {
+			curvePreferences = [ "CurveP384" ]
+
+			clientAuth = {
+				secretNames = [ "ingress-tls-ca-cert" ]
+				clientAuthType = "RequireAndVerifyClientCert"
+			}
+		}
+	})
+}
+
+resource "kubernetes_secret" "ingress_tls_cert" {
+	depends_on = [kubernetes_namespace.traefik]
+
+	metadata {
+		name = "ingress-tls-cert"
+		namespace = "traefik"
+	}
+
+	type = "kubernetes.io/tls"
+
+	data = {
+		"tls.crt" = base64encode(data.terraform_remote_state.tls.outputs.tls_cert_cloudflare_rivet_gg.cert_pem)
+		"tls.key" = base64encode(data.terraform_remote_state.tls.outputs.tls_cert_cloudflare_rivet_gg.key_pem)
+	}
+}
+
+resource "kubernetes_secret" "ingress_tls_ca_cert" {
+	depends_on = [kubernetes_namespace.traefik]
+
+	metadata {
+		name = "ingress-tls-ca-cert"
+		namespace = "traefik"
+	}
+
+	data = {
+		"tls.ca" = base64encode(data.terraform_remote_state.tls.outputs.tls_cert_cloudflare_ca)
+	}
+}
+
+resource "kubernetes_config_map" "region_config" {
+	depends_on = [kubernetes_namespace.rivet_service]
+
+	metadata {
+		name = "region-config"
+		namespace = "rivet-service"
+	}
+
+	data = {
+		"region-config.json" = jsonencode(var.regions)
+	}
+}
+
+resource "kubernetes_config_map" "health_checks" {
+	depends_on = [kubernetes_namespace.rivet_service]
+
+	metadata {
+		name = "health-checks"
+		namespace = "rivet-service"
+	}
+
+	data = {
+		"health-checks.sh" = <<-EOF
+			#!/bin/sh
+			set -uf
+
+			# Install curl
+			if ! [ -x "$(command -v curl)" ]; then
+				apk add --no-cache curl
+			fi
+
+			curl 127.0.0.1:${var.k8s_health_port}/health/liveness
+			EXIT_STATUS=$?
+			if [ $EXIT_STATUS -ne 0 ]; then
+				echo "health server liveness check failed"
+				exit $EXIT_STATUS
+			fi
+
+			curl 127.0.0.1:${var.k8s_health_port}/health/crdb/db-user
+			EXIT_STATUS=$?
+			if [ $EXIT_STATUS -ne 0 ]; then
+				echo "cockroach check failed"
+				exit $EXIT_STATUS
+			fi
+
+			curl 127.0.0.1:${var.k8s_health_port}/health/nats
+			EXIT_STATUS=$?
+			if [ $EXIT_STATUS -ne 0 ]; then
+				echo "nats connection check failed"
+				exit $EXIT_STATUS
+			fi
+
+			curl 127.0.0.1:${var.k8s_health_port}/health/redis/redis-chirp
+			EXIT_STATUS=$?
+			if [ $EXIT_STATUS -ne 0 ]; then
+				echo "redis chirp connection check failed"
+				exit $EXIT_STATUS
+			fi
+
+			# Static endpoint flag
+			if [[ "$*" == *"--static"* ]]; then
+				curl 127.0.0.1:${var.k8s_health_port}/
+				EXIT_STATUS=$?
+				if [ $EXIT_STATUS -ne 0 ]; then
+					echo "static root accessible check failed"
+					exit $EXIT_STATUS
+				fi
+			fi
+
+			echo Ok
+			echo
+			EOF
+	}
+}
+
+# NOTE: Needs to be created in every K8s namespace it is used in
+resource "kubernetes_secret" "docker_auth" {
+	depends_on = [kubernetes_namespace.redis]
+	for_each = toset([
+		for namespace in [ "redis" ]: namespace
+		# Disable creation unless auth is needed
+		if var.authenticate_all_docker_hub_pulls
+	])
+
+	metadata {
+		name = "docker-auth"
+		namespace = each.value
+	}
+
+	type = "kubernetes.io/dockerconfigjson"
+	
+	data = {
+		".dockerconfigjson": base64encode(jsonencode({
+			auths = {
+				"https://index.docker.io/v1/": {
+					username = module.secrets.values["docker/docker_io/username"]
+					password = module.secrets.values["docker/docker_io/password"]
+					auth = base64encode(
+						"${module.secrets.values["docker/docker_io/username"]}:${module.secrets.values["docker/docker_io/password"]}"
+					)
+				}
+			}
+		}))
+	}
+}

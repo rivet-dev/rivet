@@ -344,7 +344,7 @@ async fn vars(ctx: &ProjectContext) {
 				redis_svcs.insert(
 					svc_ctx.redis_db_name(),
 					json!({
-						"endpoint": format!("redis://listen.{name}.service.consul:{port}"),
+						"endpoint": format!("redis://redis-{name}.svc.cluster.local:{port}"),
 					}),
 				);
 			}
@@ -399,6 +399,8 @@ async fn vars(ctx: &ProjectContext) {
 			.map(media_resize::ResizePresetSerialize::from)
 			.collect::<Vec<_>>()),
 	);
+
+	vars.insert("k8s_health_port".into(), json!(dep::k8s::gen::HEALTH_PORT));
 
 	let tf_gen_path = ctx.gen_tf_env_path();
 	let _ = fs::create_dir_all(&tf_gen_path.parent().unwrap()).await;

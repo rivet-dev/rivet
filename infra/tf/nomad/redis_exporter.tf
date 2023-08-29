@@ -29,7 +29,7 @@ resource "nomad_job" "redis_exporter" {
 	detach = false
 
 	hcl2 {
-		enabled  = true
+		enabled = true
 	}
 
 	jobspec = templatefile("${path.module}/files/redis_exporter/redis_exporter.nomad.tpl", {

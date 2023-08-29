@@ -305,6 +305,10 @@ impl ServiceContextData {
 		// self.name() == "job-run-metrics-log"
 	}
 
+	pub fn depends_on_clickhouse(&self) -> bool {
+		true
+	}
+
 	pub fn depends_on_jwt_key_private(&self) -> bool {
 		true
 		// self.name() == "token-create"
@@ -884,7 +888,7 @@ impl ServiceContextData {
 
 		if self.depends_on_nomad_api() {
 			env.push((
-				"NOMAD_ADDRESS".into(),
+				"NOMAD_URL".into(),
 				access_service(
 					&project_ctx,
 					&mut forward_configs,
@@ -892,6 +896,21 @@ impl ServiceContextData {
 					"nomad-server",
 					"nomad",
 					4646,
+				)
+				.await?,
+			));
+		}
+
+		if self.depends_on_clickhouse() {
+			env.push((
+				"CLICKHOUSE_URL".into(),
+				access_service(
+					&project_ctx,
+					&mut forward_configs,
+					&run_context,
+					"clickhouse",
+					"clickhouse",
+					8123,
 				)
 				.await?,
 			));
@@ -916,6 +935,9 @@ impl ServiceContextData {
 		// 		.await?,
 		// 	));
 		// }
+
+
+
 
 		// NATS config
 		env.push((

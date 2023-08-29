@@ -47,6 +47,11 @@ output "tls_cert_letsencrypt_rivet_job" {
 	sensitive = true
 }
 
+output "tls_cert_cloudflare_ca" {
+	value = local.cloudflare_ca_cert
+	sensitive = true
+}
+
 output "salt_output" {
 	value = {
 		tls_certs = {
