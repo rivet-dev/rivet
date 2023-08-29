@@ -25,11 +25,13 @@ pub enum ExecServiceDriver {
 	},
 	UploadedBinaryArtifact {
 		artifact_key: String,
+		/// Path to the executable within the archive.
+		exec_path: String,
 		args: Vec<String>,
 	},
 	LocalBinaryArtifact {
-		/// Path relative to the project root.
-		path: PathBuf,
+		/// Path to the executable relative to the project root.
+		exec_path: PathBuf,
 		args: Vec<String>,
 	},
 }
@@ -79,6 +81,11 @@ pub async fn gen_svc(region_id: &str, exec_ctx: &ExecServiceContext) -> Job {
 		svc_ctx.config().kind,
 		ServiceKind::Headless { .. } | ServiceKind::Consumer { .. } | ServiceKind::Api { .. }
 	);
+	let crdb_dep = svc_ctx
+		.crdb_dependencies()
+		.await
+		.first()
+		.map(|svc| svc.name());
 
 	let has_metrics = matches!(
 		svc_ctx.config().kind,
@@ -183,32 +190,32 @@ pub async fn gen_svc(region_id: &str, exec_ctx: &ExecServiceContext) -> Job {
 			name: Some("svc".into()),
 			// TODO: Add autoscaling
 			count: Some(ns_service_config.count as i64),
-			update: if enable_update {
-				Some(
-					// Wait for services to be healthy before progressing deploy
-					if has_health {
-						Update {
-							max_parallel: Some(1),
-							health_check: Some("checks".to_owned()),
-							min_healthy_time: Some(chrono::secs(10)),
-							healthy_deadline: Some(chrono::min(5)),
-							progress_deadline: Some(chrono::min(10)),
-							auto_revert: Some(true),
-							canary: Some(0),
-							stagger: Some(chrono::secs(30)),
-							..Default::default()
-						}
-					} else {
-						// Just monitor the task status
-						Update {
-							health_check: Some("task_states".into()),
-							..Default::default()
-						}
-					},
-				)
-			} else {
-				None
-			},
+			// update: if enable_update {
+			// 	Some(
+			// 		// Wait for services to be healthy before progressing deploy
+			// 		if has_health {
+			// 			Update {
+			// 				max_parallel: Some(1),
+			// 				health_check: Some("checks".to_owned()),
+			// 				min_healthy_time: Some(chrono::secs(10)),
+			// 				healthy_deadline: Some(chrono::min(5)),
+			// 				progress_deadline: Some(chrono::min(10)),
+			// 				auto_revert: Some(true),
+			// 				canary: Some(0),
+			// 				stagger: Some(chrono::secs(30)),
+			// 				..Default::default()
+			// 			}
+			// 		} else {
+			// 			// Just monitor the task status
+			// 			Update {
+			// 				health_check: Some("task_states".into()),
+			// 				..Default::default()
+			// 			}
+			// 		},
+			// 	)
+			// } else {
+			// 	None
+			// },
 			reschedule_policy: Some(ReschedulePolicy {
 				delay: Some(chrono::secs(30)),
 				delay_function: Some("constant".into()),
@@ -239,7 +246,7 @@ pub async fn gen_svc(region_id: &str, exec_ctx: &ExecServiceContext) -> Job {
 			}]),
 			ephemeral_disk: Some(json!({
 				// Prevent exhausting all storage resources on the local machine. We don't
-				// accept anything over 512 MB since our dev machiens are limited in space.
+				// accept anything over 512 MB since our dev machines are limited in space.
 				"SizeMB": ns_service_config.resources.ephemeral_disk,
 			})),
 			services: Some({
@@ -268,15 +275,15 @@ pub async fn gen_svc(region_id: &str, exec_ctx: &ExecServiceContext) -> Job {
 						let mut checks = Vec::new();
 
 						// Require a healthy health check before booting
-						let interval = chrono::secs(15);
-						let on_update = "require_healthy";
+						let interval = chrono::secs(5);
+						let on_update = "ignore";
 
 						checks.push(Check {
 							name: Some("Health Server Liveness".into()),
 							check_type: Some("http".into()),
 							port_label: Some("health".into()),
 							path: Some("/health/liveness".into()),
-							interval: Some(chrono::secs(15)),
+							interval: Some(chrono::secs(5)),
 							timeout: Some(chrono::secs(5)),
 							on_update: Some(on_update.into()),
 							// This indicates the runtime might
@@ -286,12 +293,21 @@ pub async fn gen_svc(region_id: &str, exec_ctx: &ExecServiceContext) -> Job {
 							//
 							// Ignore in staging since we have
 							// `on_update` set to `ignore`.
-							check_restart: Some(CheckRestart {
-								limit: Some(3),
-								..Default::default()
-							}),
+							// check_restart: Some(CheckRestart {
+							// 	limit: Some(3),
+							// 	..Default::default()
+							// }),
 							..Default::default()
 						});
+
+						if let Some(crdb_dep) = crdb_dep {
+							checks.push(build_conn_check(
+								"Cockroach",
+								&format!("/health/crdb/{}", crdb_dep),
+								interval,
+								on_update,
+							));
+						}
 
 						checks.push(build_conn_check(
 							"Nats Connection",
@@ -425,19 +441,19 @@ pub async fn gen_svc(region_id: &str, exec_ctx: &ExecServiceContext) -> Job {
 							"logging": nomad_loki_plugin_config(&project_ctx, &svc_ctx).await.unwrap(),
 						})
 					}
-					ExecServiceDriver::LocalBinaryArtifact { path, args } => {
+					ExecServiceDriver::LocalBinaryArtifact { exec_path, args } => {
 						json!({
 							"image": "alpine:3.18",
 							"args": args,
-							"command": Path::new("/var/rivet/backend").join(path),
+							"command": Path::new("/var/rivet/backend").join(exec_path),
 							"auth": nomad_docker_io_auth(&project_ctx).await.unwrap(),
 							"logging": nomad_loki_plugin_config(&project_ctx, &svc_ctx).await.unwrap(),
 						})
 					}
-					ExecServiceDriver::UploadedBinaryArtifact { args, .. } => {
+					ExecServiceDriver::UploadedBinaryArtifact { exec_path, args, .. } => {
 						json!({
 							"image": "alpine:3.18",
-							"command": format!("${{NOMAD_TASK_DIR}}/build/{}", svc_ctx.name()),
+							"command": format!("${{NOMAD_TASK_DIR}}/build/{exec_path}"),
 							"args": args,
 							"auth": nomad_docker_io_auth(&project_ctx).await.unwrap(),
 							"logging": nomad_loki_plugin_config(&project_ctx, &svc_ctx).await.unwrap(),
@@ -469,15 +485,28 @@ pub async fn gen_svc(region_id: &str, exec_ctx: &ExecServiceContext) -> Job {
 						let s3_config = project_ctx.s3_config(default_provider).await.unwrap();
 						let s3_creds = project_ctx.s3_credentials(default_provider).await.unwrap();
 
+						// The getter source is not a standard URL, so we have to hardcode it
+						// ourselves.
+						//
+						// Using the region in the domain causes it to throw an invalid URL error.
+						let getter_source = match default_provider {
+							s3_util::Provider::Aws => {
+								format!("s3::https://s3.amazonaws.com/{bucket}/{artifact_key}")
+							}
+							s3_util::Provider::Backblaze => {
+								format!(
+									"s3::{endpoint}/{bucket}/{key}",
+									endpoint = s3_config.endpoint_external,
+									key = urlencoding::encode(artifact_key),
+								)
+							}
+							_ => todo!(),
+						};
+
 						Some(json!([
 							{
 								"GetterMode": "dir",
-								"GetterSource": format!(
-									"s3::{endpoint}/{bucket}/{key}",
-									endpoint = s3_config.endpoint_internal,
-									bucket = bucket,
-									key = urlencoding::encode(artifact_key),
-								),
+								"GetterSource": getter_source,
 								"GetterOptions": {
 									"region": s3_config.region,
 									"aws_access_key_id": s3_creds.access_key_id,

@@ -5,3 +5,6 @@ name = "cloud-version-get"
 kind = "rust"
 
 [operation]
+
+[databases]
+db-cloud = {}

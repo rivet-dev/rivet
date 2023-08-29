@@ -74,8 +74,4 @@ impl TestCtx {
 	pub async fn redis_user_presence(&self) -> Result<RedisConn, rivet_pools::Error> {
 		self.op_ctx.redis_user_presence().await
 	}
-
-	pub async fn redis_search(&self) -> Result<RedisConn, rivet_pools::Error> {
-		self.op_ctx.redis_search().await
-	}
 }

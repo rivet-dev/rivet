@@ -7,3 +7,5 @@ kind = "rust"
 [headless]
 singleton = true
 
+[databases]
+db-job-state = {}

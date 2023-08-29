@@ -5,3 +5,6 @@ name = "captcha-request"
 kind = "rust"
 
 [operation]
+
+[databases]
+db-captcha = {}

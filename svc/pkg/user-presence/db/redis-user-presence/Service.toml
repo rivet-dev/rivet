@@ -3,7 +3,7 @@ name = "redis-user-presence"
 
 [runtime]
 kind = "redis"
-index = 6
+index = 5
 persistent = true
 
 [cache]

@@ -4,7 +4,7 @@ use serde_json::json;
 
 #[worker(name = "team-join-request-resolve")]
 async fn worker(
-	ctx: OperationContext<team::msg::join_request_resolve::Message>,
+	ctx: &OperationContext<team::msg::join_request_resolve::Message>,
 ) -> GlobalResult<()> {
 	let team_id: Uuid = internal_unwrap!(ctx.team_id).as_uuid();
 	let user_id: Uuid = internal_unwrap!(ctx.user_id).as_uuid();

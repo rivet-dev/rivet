@@ -8,3 +8,6 @@ kind = "rust"
 
 [secrets]
 "turnstile/rivet_game/secret_key" = { optional = true }
+
+[databases]
+db-captcha = {}

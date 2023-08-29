@@ -5,3 +5,6 @@ name = "team-invite-worker"
 kind = "rust"
 
 [consumer]
+
+[databases]
+db-team-invite = {}

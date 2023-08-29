@@ -27,7 +27,7 @@ region-get = { path = "../../region/ops/get" }
 token-create = { path = "../../token/ops/create" }
 
 [dependencies.sqlx]
-version = "0.6"
+version = "0.7"
 default-features = false
 
 [dev-dependencies]

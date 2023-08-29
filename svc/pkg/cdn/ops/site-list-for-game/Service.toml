@@ -5,3 +5,6 @@ name = "cdn-site-list-for-game"
 kind = "rust"
 
 [operation]
+
+[databases]
+db-cdn = {}

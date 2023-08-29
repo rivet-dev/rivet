@@ -14,7 +14,7 @@ ExecStartPre=-/usr/bin/docker stop {{container_name}}
 ExecStartPre=-/usr/bin/docker rm {{container_name}}
 ExecStartPre=/usr/bin/docker pull {{image}}
 ExecStart=/bin/sh -c '/usr/bin/docker run --rm --name {{container_name}} --user "$(id -u redis):$(id -g redis)" -v /etc/redis/{{db}}.conf:/etc/redis/{{db}}.conf {% if persistent %}-v /var/lib/redis/{{db}}/db:/var/lib/redis/{{db}}/db{% endif %} --network host -p "{{port}}:{{port}}" {{image}} /etc/redis/{{db}}.conf'
-{% if pillar['rivet']['deploy']['local']['restrict_service_resources'] %}
+{% if 'local' in pillar.rivet.deploy and pillar.rivet.deploy.local.restrict_service_resources %}
 Nice=10
 CPUAffinity=0
 {% endif %}

@@ -41,8 +41,13 @@ message LobbyGroup {
 	uint32 max_players_normal = 102;
 	uint32 max_players_direct = 103;
 	uint32 max_players_party = 104;
+	bool listable = 105;
 
 	LobbyRuntime runtime = 201;
+
+	optional FindConfig find_config = 301;
+	optional JoinConfig join_config = 302;
+	optional CreateConfig create_config = 303;
 }
 
 message LobbyRuntime {
@@ -102,6 +107,39 @@ message LobbyRuntime {
 	};
 }
 
+enum IdentityRequirement {
+	NONE = 0;
+	GUEST = 1;
+	REGISTERED = 2;
+}
+
+message VerificationConfig {
+	string url = 1;
+	map<string, string> headers = 2;
+}
+
+message FindConfig {
+	bool enabled = 1;
+	IdentityRequirement identity_requirement = 2;
+	optional VerificationConfig verification_config = 3;
+}
+
+message JoinConfig {
+	bool enabled = 1;
+	IdentityRequirement identity_requirement = 2;
+	optional VerificationConfig verification_config = 3;
+}
+
+message CreateConfig {
+	IdentityRequirement identity_requirement = 1;
+	optional VerificationConfig verification_config = 2;
+
+	bool enable_public = 3;
+	bool enable_private = 4;
+
+	optional uint64 max_lobbies_per_identity = 5;
+}
+
 // MARK: Game Version Config Context
 // Context required to publish a new version.
 message VersionConfigCtx {
@@ -148,6 +186,11 @@ message LobbyRuntimeMeta {
 
 // MARK: Lobby State
 message Lobby {
+	enum Publicity {
+		PUBLIC = 0;
+		PRIVATE = 1;
+	}
+
 	reserved 10;
 
 	rivet.common.Uuid lobby_id = 1;
@@ -161,6 +204,9 @@ message Lobby {
 	bool is_closed = 11;
 	rivet.common.Uuid namespace_id = 9;
 	optional rivet.common.Uuid create_ray_id = 12;
+	optional rivet.common.Uuid creator_user_id = 15;
+	bool is_custom = 16;
+	Publicity publicity = 17;
 
 	uint32 max_players_normal = 101;
 	uint32 max_players_direct = 102;

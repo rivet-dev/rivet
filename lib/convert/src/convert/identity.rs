@@ -28,11 +28,7 @@ pub fn handle(
 		identity_id: user_id,
 		display_name: user.display_name.clone(),
 		account_number: user.account_number as i32,
-		avatar_url: util::route::user_avatar(
-			&user.avatar_id,
-			user.profile_upload_id.map(|x| x.as_uuid()),
-			user.profile_file_name.as_ref(),
-		),
+		avatar_url: util::route::user_avatar(&user),
 		presence: Some(Box::new(presence(
 			user_presence,
 			&presences_ctx.games,
@@ -58,11 +54,7 @@ pub fn handle_without_presence(
 		identity_id: user_id,
 		display_name: user.display_name.to_owned(),
 		account_number: user.account_number as i32,
-		avatar_url: util::route::user_avatar(
-			&user.avatar_id,
-			user.profile_upload_id.map(|x| x.as_uuid()),
-			user.profile_file_name.as_ref(),
-		),
+		avatar_url: util::route::user_avatar(&user),
 		presence: None,
 		is_registered: true, // TODO:
 		external: Box::new(models::IdentityExternalLinks {
@@ -105,11 +97,7 @@ pub fn summary(
 		identity_id: user_id,
 		display_name: user.display_name.clone(),
 		account_number: user.account_number as i32,
-		avatar_url: util::route::user_avatar(
-			&user.avatar_id,
-			user.profile_upload_id.map(|x| x.as_uuid()),
-			user.profile_file_name.as_ref(),
-		),
+		avatar_url: util::route::user_avatar(&user),
 		presence: Some(Box::new(presence(
 			user_presence,
 			&presences_ctx.games,
@@ -127,6 +115,7 @@ pub fn summary(
 	})
 }
 
+#[derive(Debug)]
 pub struct ProfileCtx<'a> {
 	pub presences_ctx: &'a fetch::identity::PresencesCtx,
 	pub teams_ctx: &'a fetch::identity::TeamsCtx,
@@ -229,11 +218,7 @@ pub fn profile(
 		identity_id: user_id,
 		display_name: user.display_name.to_owned(),
 		account_number: user.account_number as i32,
-		avatar_url: util::route::user_avatar(
-			&user.avatar_id,
-			user.profile_upload_id.map(|x| x.as_uuid()),
-			user.profile_file_name.as_ref(),
-		),
+		avatar_url: util::route::user_avatar(&user),
 		presence: Some(Box::new(presence(
 			user_presence,
 			&pctx.presences_ctx.games,
@@ -293,14 +278,12 @@ pub fn presence(
 			public_metadata: game_activity
 				.public_metadata
 				.as_ref()
-				.map(|s| serde_json::from_str(s))
-				.transpose()?,
+				.and_then(|s| serde_json::from_str(s).ok()),
 			mutual_metadata: if is_mutual_following {
 				game_activity
 					.friend_metadata
 					.as_ref()
-					.map(|s| serde_json::from_str(s))
-					.transpose()?
+					.and_then(|s| serde_json::from_str(s).ok())
 			} else {
 				None
 			},

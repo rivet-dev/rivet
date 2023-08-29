@@ -1,0 +1,4 @@
+ALTER TABLE lobbies
+	ADD COLUMN creator_user_id UUID,
+	ADD COLUMN is_custom BOOLEAN NOT NULL DEFAULT false,
+	ADD COLUMN publicity INT NOT NULL DEFAULT 0;

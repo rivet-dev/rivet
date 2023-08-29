@@ -31,3 +31,14 @@ Try a few things to figure this out:
 -   Run `pstree -p my-pid` on the `salt-minion` process to see what subcommand is being ran
 -   Read the `salt-minion` logs with `journalctl -u salt-minion`
 -   Try applying specific SLS files with `salt apply 'my-minion' --sls my_file`
+
+## Error when bootstrapping Minion: `RSA key format is not supported`
+
+```bash
+# Uninstall Salt
+bolt ssh name staging-lnd-atl-crdb-05-2 'systemctl stop salt-minion; apt remove -y salt-cloud salt-common salt-minion; rm -rf /etc/salt /opt/saltstack /var/log/salt /var/cache/salt /run/salt /usr/bin/salt-*; echo Done'
+
+# Re-run install_salt_minion
+(cd infra/tf/pools && terraform state rm 'module.install_salt_minion["staging-lnd-atl-crdb-05-2"]')
+bolt tf apply pools
+```

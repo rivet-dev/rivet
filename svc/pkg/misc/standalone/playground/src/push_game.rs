@@ -108,7 +108,10 @@ pub async fn run(
 			lobby_group.regions = vec![primary_region];
 
 			// Override the build with the new build
-			let Some(backend::matchmaker::LobbyRuntime { runtime: Some(backend::matchmaker::lobby_runtime::Runtime::Docker(docker)) }) = lobby_group.runtime.as_mut() else {
+			let Some(backend::matchmaker::LobbyRuntime {
+				runtime: Some(backend::matchmaker::lobby_runtime::Runtime::Docker(docker)),
+			}) = lobby_group.runtime.as_mut()
+			else {
 				internal_panic!("invalid runtime")
 			};
 			docker.build_id = Some(build_id.into());

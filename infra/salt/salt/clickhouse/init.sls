@@ -1,3 +1,23 @@
+{% if grains['volumes']['ch']['mount'] %}
+{% set device = '/dev/disk/by-id/scsi-0Linode_Volume_' ~ grains['rivet']['name'] ~ '-ch' %}
+
+disk_create_clickhouse:
+  blockdev.formatted:
+    - name: {{ device }}
+    - fs_type: ext4
+
+disk_mount_clickhouse:
+  file.directory:
+    - name: /var/lib/clickhouse
+    - makedirs: True
+  mount.mounted:
+    - name: /var/lib/clickhouse
+    - device: {{ device }}
+    - fstype: ext4
+    - require:
+      - blockdev: disk_create_clickhouse
+{% endif %}
+
 create_clickhouse_user:
   user.present:
     - name: clickhouse
@@ -26,24 +46,16 @@ mkdir_clickhouse:
         - mode: 700
     - require:
       - user: create_clickhouse_user
+      {%- if grains['volumes']['ch']['mount'] %}
+      - mount: disk_mount_clickhouse
+      {%- endif %}
 
-{% if grains['volumes']['ch']['mount'] %}
-{% set device = '/dev/disk/by-id/scsi-0Linode_Volume_' ~ grains['rivet']['name'] ~ '-ch' %}
-
-disk_create_clickhouse:
-  blockdev.formatted:
-    - name: {{ device }}
-    - fs_type: ext4
-
-disk_mount_clickhouse:
-  mount.mounted:
-    - name: /var/lib/clickhouse
-    - device: {{ device }}
-    - fstype: ext4
-    - require:
-      - blockdev: disk_create_clickhouse
-      - file: mkdir_clickhouse
-{% endif %}
+# Remove old config directories with residual files
+remove_etc_clickhouse_server_dirs:
+  file.absent:
+    - names:
+      - /etc/clickhouse-server/config.d
+      - /etc/clickhouse-server/users.d
 
 push_etc_clickhouse_server:
   file.managed:

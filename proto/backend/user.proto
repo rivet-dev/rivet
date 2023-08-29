@@ -3,6 +3,7 @@ syntax = "proto3";
 package rivet.backend.user;
 
 import "proto/common.proto";
+import "proto/backend/upload.proto";
 
 message User {
 	reserved 5, 9;
@@ -13,6 +14,7 @@ message User {
 	string avatar_id = 4;
 	optional rivet.common.Uuid profile_upload_id = 10;
 	optional string profile_file_name = 11;
+	optional upload.Provider profile_provider = 14;
 	int64 join_ts = 6;
 	string bio = 7;
 	bool is_admin = 8;

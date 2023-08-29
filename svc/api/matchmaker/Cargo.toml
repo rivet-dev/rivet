@@ -9,6 +9,7 @@ license = "Apache-2.0"
 rivet-convert = { path = "../../../lib/convert" }
 api-helper = { path = "../../../lib/api-helper/build" }
 async-trait = "0.1"
+bytes = "1.0"
 chirp-client = { path = "../../../lib/chirp/client" }
 rivet-operation = { path = "../../../lib/operation/core" }
 chrono = "0.4"
@@ -25,7 +26,7 @@ rivet-pools = { path = "../../../lib/pools" }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 thiserror = "1.0"
-tokio = { version = "1.21" }
+tokio = { version = "1.29" }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", default-features = false, features = ["fmt", "json", "ansi"] }
 url = "2.2.2"
@@ -37,6 +38,7 @@ captcha-verify = { path = "../../pkg/captcha/ops/verify" }
 cdn-namespace-get = { path = "../../pkg/cdn/ops/namespace-get" }
 game-namespace-get = { path = "../../pkg/game/ops/namespace-get" }
 game-namespace-resolve-url = { path = "../../pkg/game/ops/namespace-resolve-url" }
+game-user-get = { path = "../../pkg/game-user/ops/get" }
 captcha-hcaptcha-config-get = { path = "../../pkg/captcha/ops/hcaptcha-config-get" }
 job-run-get = { path = "../../pkg/job-run/ops/get" }
 mm-config-lobby-group-resolve-version = { path = "../../pkg/mm-config/ops/lobby-group-resolve-version" }
@@ -45,10 +47,13 @@ mm-dev-player-token-create = { path = "../../pkg/mm/ops/dev-player-token-create"
 mm-lobby-get = { path = "../../pkg/mm/ops/lobby-get" }
 mm-lobby-list-for-namespace = { path = "../../pkg/mm/ops/lobby-list-for-namespace" }
 mm-lobby-player-count = { path = "../../pkg/mm/ops/lobby-player-count" }
+mm-lobby-state-get = { path = "../../pkg/mm/ops/lobby-state-get" }
 region-get = { path = "../../pkg/region/ops/get" }
 region-recommend = { path = "../../pkg/region/ops/recommend" }
 region-resolve = { path = "../../pkg/region/ops/resolve" }
 token-create = { path = "../../pkg/token/ops/create" }
+token-revoke = { path = "../../pkg/token/ops/revoke" }
+user-identity-get = { path = "../../pkg/user-identity/ops/get" }
 
 [dev-dependencies]
 reqwest = "0.11"

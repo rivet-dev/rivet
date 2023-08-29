@@ -2,7 +2,7 @@ use derive_builder::Builder;
 use maplit::hashmap;
 use std::collections::HashMap;
 
-use crate::context::{ProjectContext, S3Provider};
+use crate::context::ProjectContext;
 
 /// Defines the dependency graph for the Terraform plans.
 ///
@@ -16,9 +16,9 @@ pub fn dependency_graph(ctx: &ProjectContext) -> HashMap<&'static str, Vec<Remot
 		"nomad" => {
 			let (default_s3_provider, _) = ctx.default_s3_provider().unwrap();
 			let provider_plan_id = match default_s3_provider {
-				S3Provider::Minio => "s3_minio",
-				S3Provider::Backblaze => "s3_backblaze",
-				S3Provider::Aws => "s3_aws",
+				s3_util::Provider::Minio => "s3_minio",
+				s3_util::Provider::Backblaze => "s3_backblaze",
+				s3_util::Provider::Aws => "s3_aws",
 			};
 
 			vec![RemoteStateBuilder::default()

@@ -1,5 +1,5 @@
 use chirp_worker::prelude::*;
-use proto::backend::{self, pkg::*};
+use proto::backend::{self, pkg::mm::msg::lobby_find_fail::ErrorCode, pkg::*};
 use serde_json::json;
 
 use super::fail;
@@ -79,7 +79,7 @@ pub async fn check_remote_addresses(
 				ctx,
 				namespace_id,
 				query_id,
-				mm::msg::lobby_find_fail::ErrorCode::TooManyPlayersFromSource,
+				ErrorCode::TooManyPlayersFromSource,
 				true,
 			)
 			.await

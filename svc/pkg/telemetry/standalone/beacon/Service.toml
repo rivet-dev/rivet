@@ -8,3 +8,7 @@ kind = "rust"
 [periodic]
 cron = "0 0 * * *"
 
+[databases]
+db-team-dev = {}
+db-game-user = {}
+db-game = {}

@@ -15,7 +15,7 @@ struct LobbyRow {
 }
 
 #[worker(name = "mm-lobby-closed-set")]
-async fn worker(ctx: OperationContext<mm::msg::lobby_closed_set::Message>) -> GlobalResult<()> {
+async fn worker(ctx: &OperationContext<mm::msg::lobby_closed_set::Message>) -> GlobalResult<()> {
 	let crdb = ctx.crdb("db-mm-state").await?;
 
 	let lobby_id = internal_unwrap!(ctx.lobby_id).as_uuid();

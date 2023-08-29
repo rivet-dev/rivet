@@ -10,6 +10,7 @@ Name | Type | Description | Notes
 **max_players_normal** | **i32** |  | 
 **max_players_party** | **i32** |  | 
 **region_id** | **String** |  | 
+**state** | Option<[**serde_json::Value**](.md)> |  | [optional]
 **total_player_count** | **i32** |  | 
 
 [[Back to Model list]](../README.md#documentation-for-models) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to README]](../README.md)

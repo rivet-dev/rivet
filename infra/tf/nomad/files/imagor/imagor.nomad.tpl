@@ -75,14 +75,41 @@ job "imagor:${dc}" {
 				"${prefix}.http.middlewares.imagor-cdn-cache-control.headers.customResponseHeaders.Cache-Control=public, max-age=604800, immutable",
 				# "${prefix}.http.middlewares.imagor-cdn-cache-control.headers.customResponseHeaders.Vary=Accept",
 
+				# Individual S3 providers
+				%{ for preset in imagor_presets }
+				%{ for provider in s3_providers }
+				# routers.imagor-${provider}-${preset.key}
+				"${prefix}.http.routers.imagor-${provider}-${preset.key}.entrypoints=lb-443",
+				"${prefix}.http.routers.imagor-${provider}-${preset.key}.priority=${preset.priority}",
+				%{ if preset.query != null }
+				"${prefix}.http.routers.imagor-${provider}-${preset.key}.rule=HostRegexp(`media.${shared.domain.base}`, `media.{region:.+}.${shared.domain.base}`) && Path(`/${provider}${preset.path}`) && Query(%{ for x in preset.query }`${x[0]}=${x[1]}`,%{ endfor })",
+				%{ else }
+				"${prefix}.http.routers.imagor-${provider}-${preset.key}.rule=HostRegexp(`media.${shared.domain.base}`, `media.{region:.+}.${shared.domain.base}`) && Path(`/${provider}${preset.path}`)",
+				%{ endif }
+
+				%{ if preset.game_cors }
+				"${prefix}.http.routers.imagor-${provider}-${preset.key}.middlewares=imagor-${provider}-${preset.key}-path, imagor-cors-game, imagor-cdn",
+				%{ else }
+				"${prefix}.http.routers.imagor-${provider}-${preset.key}.middlewares=imagor-${provider}-${preset.key}-path, imagor-cors, imagor-cdn",
+				%{ endif }
+				"${prefix}.http.routers.imagor-${provider}-${preset.key}.tls=true",
+
+				# middlewares.imagor-${provider}-${preset.key}-path	
+				"${prefix}.http.middlewares.imagor-${provider}-${preset.key}-path.replacePathRegex.regex=/${provider}${preset.path_regexp}",
+				# Escape replacement and replace `s3-cache/` with `s3-cache/{provider}/`
+				"${prefix}.http.middlewares.imagor-${provider}-${preset.key}-path.replacePathRegex.replacement=${replace(replace(preset.path_regex_replacement, "$${", "$$${"), "s3-cache%2F", "s3-cache%2F${provider}%2F")}",
+				%{ endfor }
+				%{ endfor }
+
+				# Default S3 provider
 				%{ for preset in imagor_presets }
 				# routers.imagor-${preset.key}
 				"${prefix}.http.routers.imagor-${preset.key}.entrypoints=lb-443",
 				"${prefix}.http.routers.imagor-${preset.key}.priority=${preset.priority}",
 				%{ if preset.query != null }
-				"${prefix}.http.routers.imagor-${preset.key}.rule=(Host(`media.${shared.domain.base}`) || HostRegexp(`media.{region:.+}.${shared.domain.base}`)) && Path(`${preset.path}`) && Query(%{ for x in preset.query }`${x[0]}=${x[1]}`,%{ endfor })",
+				"${prefix}.http.routers.imagor-${preset.key}.rule=HostRegexp(`media.${shared.domain.base}`, `media.{region:.+}.${shared.domain.base}`) && Path(`${preset.path}`) && Query(%{ for x in preset.query }`${x[0]}=${x[1]}`,%{ endfor })",
 				%{ else }
-				"${prefix}.http.routers.imagor-${preset.key}.rule=(Host(`media.${shared.domain.base}`) || HostRegexp(`media.{region:.+}.${shared.domain.base}`)) && Path(`${preset.path}`)",
+				"${prefix}.http.routers.imagor-${preset.key}.rule=HostRegexp(`media.${shared.domain.base}`, `media.{region:.+}.${shared.domain.base}`) && Path(`${preset.path}`)",
 				%{ endif }
 				%{ if preset.game_cors }
 				"${prefix}.http.routers.imagor-${preset.key}.middlewares=imagor-${preset.key}-path, imagor-cors-game, imagor-cdn",

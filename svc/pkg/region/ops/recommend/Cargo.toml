@@ -15,7 +15,7 @@ ip-info = { path = "../../../ip/ops/info" }
 region-get = { path = "../get" }
 
 [dependencies.sqlx]
-version = "0.6"
+version = "0.7"
 default-features = false
 
 [dev-dependencies]

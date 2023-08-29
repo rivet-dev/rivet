@@ -26,7 +26,7 @@ impl InitOpts {
 		let ctx = context::ProjectContextData::new(Some(self.namespace.clone())).await;
 
 		// Apply infra
-		let plan = tasks::infra::build_plan(&ctx)?;
+		let plan = tasks::infra::build_plan(&ctx, None)?;
 		tasks::infra::execute_plan(
 			&ctx,
 			&plan,

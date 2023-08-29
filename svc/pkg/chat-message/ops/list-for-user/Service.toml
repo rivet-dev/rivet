@@ -5,3 +5,6 @@ name = "chat-message-list-for-user"
 kind = "rust"
 
 [operation]
+
+[databases]
+db-chat = {}

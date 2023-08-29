@@ -51,7 +51,7 @@ async fn fail(
 
 #[worker(name = "cf-custom-hostname-create")]
 async fn worker(
-	ctx: OperationContext<cf_custom_hostname::msg::create::Message>,
+	ctx: &OperationContext<cf_custom_hostname::msg::create::Message>,
 ) -> GlobalResult<()> {
 	let namespace_id = internal_unwrap!(ctx.namespace_id).as_uuid();
 

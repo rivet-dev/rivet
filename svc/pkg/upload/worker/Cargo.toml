@@ -14,7 +14,7 @@ rivet-runtime = { path = "../../../../lib/runtime" }
 s3-util = { path = "../../../../lib/s3-util" }
 
 [dependencies.sqlx]
-version = "0.6"
+version = "0.7"
 default-features = false
 
 [dev-dependencies]

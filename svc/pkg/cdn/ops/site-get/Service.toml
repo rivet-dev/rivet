@@ -5,3 +5,6 @@ name = "cdn-site-get"
 kind = "rust"
 
 [operation]
+
+[databases]
+db-cdn = {}

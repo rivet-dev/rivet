@@ -5,3 +5,6 @@ name = "game-logo-upload-complete"
 kind = "rust"
 
 [operation]
+
+[databases]
+db-game = {}

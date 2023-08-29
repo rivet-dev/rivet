@@ -5,3 +5,6 @@ name = "upload-provider-fill"
 kind = "rust"
 
 [oneshot]
+
+[databases]
+db-upload = {}

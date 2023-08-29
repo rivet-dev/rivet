@@ -2,7 +2,7 @@ use chirp_worker::prelude::*;
 use proto::backend::{self, pkg::*};
 
 #[worker(name = "team-dev-halt-team-dev-update")]
-async fn worker(ctx: OperationContext<team_dev::msg::update::Message>) -> GlobalResult<()> {
+async fn worker(ctx: &OperationContext<team_dev::msg::update::Message>) -> GlobalResult<()> {
 	let team_id = internal_unwrap!(ctx.team_id).as_uuid();
 
 	let team_dev_res = op!([ctx] team_dev_get {
