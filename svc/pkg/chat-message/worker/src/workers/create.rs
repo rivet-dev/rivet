@@ -7,7 +7,7 @@ lazy_static::lazy_static! {
 }
 
 #[worker(name = "chat-message-create")]
-async fn worker(ctx: OperationContext<chat_message::msg::create::Message>) -> GlobalResult<()> {
+async fn worker(ctx: &OperationContext<chat_message::msg::create::Message>) -> GlobalResult<()> {
 	let crdb = ctx.crdb("db-chat").await?;
 
 	let chat_message_id = internal_unwrap!(ctx.chat_message_id).as_uuid();

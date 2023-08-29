@@ -6,7 +6,7 @@ use futures_util::{
 use proto::backend::pkg::*;
 
 #[worker(name = "user-dev-game-update")]
-async fn worker(ctx: OperationContext<game::msg::update::Message>) -> GlobalResult<()> {
+async fn worker(ctx: &OperationContext<game::msg::update::Message>) -> GlobalResult<()> {
 	let game_id = internal_unwrap!(ctx.game_id).as_uuid();
 
 	let game_res = op!([ctx] game_get {

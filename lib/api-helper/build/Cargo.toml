@@ -37,7 +37,7 @@ serde = { version = "1.0", features = ["derive"] }
 serde_array_query = { git = "https://github.com/rivet-gg/serde_array_query.git", rev = "b9f8bfad77aea6f01dccc6cb77146b8c5daecaa3" }
 serde_json = "1.0"
 thiserror = "1.0"
-tokio = { version = "1.21" }
+tokio = { version = "1.29" }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", default-features = false, features = ["fmt", "json", "ansi"] }
 types = { path = "../../types/core" }

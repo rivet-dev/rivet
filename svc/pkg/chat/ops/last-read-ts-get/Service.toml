@@ -5,3 +5,6 @@ name = "chat-last-read-ts-get"
 kind = "rust"
 
 [operation]
+
+[databases]
+db-chat = {}

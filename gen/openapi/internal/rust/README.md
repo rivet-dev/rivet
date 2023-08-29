@@ -148,11 +148,14 @@ Class | Method | HTTP request | Description
 *KvApi* | [**kv_list**](docs/KvApi.md#kv_list) | **GET** /entries/list | 
 *KvApi* | [**kv_put**](docs/KvApi.md#kv_put) | **PUT** /entries | 
 *KvApi* | [**kv_put_batch**](docs/KvApi.md#kv_put_batch) | **PUT** /entries/batch | 
+*MatchmakerLobbiesApi* | [**matchmaker_lobbies_create**](docs/MatchmakerLobbiesApi.md#matchmaker_lobbies_create) | **POST** /lobbies/create | 
 *MatchmakerLobbiesApi* | [**matchmaker_lobbies_find**](docs/MatchmakerLobbiesApi.md#matchmaker_lobbies_find) | **POST** /lobbies/find | 
+*MatchmakerLobbiesApi* | [**matchmaker_lobbies_get_state**](docs/MatchmakerLobbiesApi.md#matchmaker_lobbies_get_state) | **GET** /lobbies/{lobby_id}/state | 
 *MatchmakerLobbiesApi* | [**matchmaker_lobbies_join**](docs/MatchmakerLobbiesApi.md#matchmaker_lobbies_join) | **POST** /lobbies/join | 
 *MatchmakerLobbiesApi* | [**matchmaker_lobbies_list**](docs/MatchmakerLobbiesApi.md#matchmaker_lobbies_list) | **GET** /lobbies/list | 
 *MatchmakerLobbiesApi* | [**matchmaker_lobbies_ready**](docs/MatchmakerLobbiesApi.md#matchmaker_lobbies_ready) | **POST** /lobbies/ready | 
 *MatchmakerLobbiesApi* | [**matchmaker_lobbies_set_closed**](docs/MatchmakerLobbiesApi.md#matchmaker_lobbies_set_closed) | **PUT** /lobbies/closed | 
+*MatchmakerLobbiesApi* | [**matchmaker_lobbies_set_state**](docs/MatchmakerLobbiesApi.md#matchmaker_lobbies_set_state) | **PUT** /lobbies/state | 
 *MatchmakerPlayersApi* | [**matchmaker_players_connected**](docs/MatchmakerPlayersApi.md#matchmaker_players_connected) | **POST** /players/connected | 
 *MatchmakerPlayersApi* | [**matchmaker_players_disconnected**](docs/MatchmakerPlayersApi.md#matchmaker_players_disconnected) | **POST** /players/disconnected | 
 *MatchmakerPlayersApi* | [**matchmaker_players_get_statistics**](docs/MatchmakerPlayersApi.md#matchmaker_players_get_statistics) | **GET** /players/statistics | 
@@ -325,10 +328,15 @@ Class | Method | HTTP request | Description
  - [CloudVersionMatchmakerCaptchaTurnstileDomain](docs/CloudVersionMatchmakerCaptchaTurnstileDomain.md)
  - [CloudVersionMatchmakerConfig](docs/CloudVersionMatchmakerConfig.md)
  - [CloudVersionMatchmakerGameMode](docs/CloudVersionMatchmakerGameMode.md)
+ - [CloudVersionMatchmakerGameModeCreateConfig](docs/CloudVersionMatchmakerGameModeCreateConfig.md)
+ - [CloudVersionMatchmakerGameModeFindConfig](docs/CloudVersionMatchmakerGameModeFindConfig.md)
+ - [CloudVersionMatchmakerGameModeIdentityRequirement](docs/CloudVersionMatchmakerGameModeIdentityRequirement.md)
  - [CloudVersionMatchmakerGameModeIdleLobbiesConfig](docs/CloudVersionMatchmakerGameModeIdleLobbiesConfig.md)
+ - [CloudVersionMatchmakerGameModeJoinConfig](docs/CloudVersionMatchmakerGameModeJoinConfig.md)
  - [CloudVersionMatchmakerGameModeRegion](docs/CloudVersionMatchmakerGameModeRegion.md)
  - [CloudVersionMatchmakerGameModeRuntimeDocker](docs/CloudVersionMatchmakerGameModeRuntimeDocker.md)
  - [CloudVersionMatchmakerGameModeRuntimeDockerPort](docs/CloudVersionMatchmakerGameModeRuntimeDockerPort.md)
+ - [CloudVersionMatchmakerGameModeVerificationConfig](docs/CloudVersionMatchmakerGameModeVerificationConfig.md)
  - [CloudVersionMatchmakerLobbyGroup](docs/CloudVersionMatchmakerLobbyGroup.md)
  - [CloudVersionMatchmakerLobbyGroupIdleLobbiesConfig](docs/CloudVersionMatchmakerLobbyGroupIdleLobbiesConfig.md)
  - [CloudVersionMatchmakerLobbyGroupRegion](docs/CloudVersionMatchmakerLobbyGroupRegion.md)
@@ -439,6 +447,8 @@ Class | Method | HTTP request | Description
  - [KvPutBatchRequest](docs/KvPutBatchRequest.md)
  - [KvPutEntry](docs/KvPutEntry.md)
  - [KvPutRequest](docs/KvPutRequest.md)
+ - [MatchmakerCreateLobbyResponse](docs/MatchmakerCreateLobbyResponse.md)
+ - [MatchmakerCustomLobbyPublicity](docs/MatchmakerCustomLobbyPublicity.md)
  - [MatchmakerFindLobbyResponse](docs/MatchmakerFindLobbyResponse.md)
  - [MatchmakerGameModeInfo](docs/MatchmakerGameModeInfo.md)
  - [MatchmakerGameModeStatistics](docs/MatchmakerGameModeStatistics.md)
@@ -451,6 +461,7 @@ Class | Method | HTTP request | Description
  - [MatchmakerJoinRegion](docs/MatchmakerJoinRegion.md)
  - [MatchmakerListLobbiesResponse](docs/MatchmakerListLobbiesResponse.md)
  - [MatchmakerListRegionsResponse](docs/MatchmakerListRegionsResponse.md)
+ - [MatchmakerLobbiesCreateRequest](docs/MatchmakerLobbiesCreateRequest.md)
  - [MatchmakerLobbiesFindRequest](docs/MatchmakerLobbiesFindRequest.md)
  - [MatchmakerLobbiesJoinRequest](docs/MatchmakerLobbiesJoinRequest.md)
  - [MatchmakerLobbiesSetClosedRequest](docs/MatchmakerLobbiesSetClosedRequest.md)

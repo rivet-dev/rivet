@@ -16,7 +16,7 @@ region-list = { path = "../../../region/ops/list" }
 mm-lobby-idle-update = { path = "../../../mm/ops/lobby-idle-update" }
 
 [dependencies.sqlx]
-version = "0.6"
+version = "0.7"
 default-features = false
 
 [dev-dependencies]

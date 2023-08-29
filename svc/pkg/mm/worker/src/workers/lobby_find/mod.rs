@@ -1,7 +1,10 @@
 use chirp_worker::prelude::*;
 use proto::backend::{
 	self,
-	pkg::{mm::msg::lobby_find::message::Query, *},
+	pkg::{
+		mm::{msg::lobby_find::message::Query, msg::lobby_find_fail::ErrorCode},
+		*,
+	},
 };
 use serde_json::json;
 use tracing::Instrument;
@@ -23,7 +26,7 @@ async fn fail(
 	ctx: &OperationContext<mm::msg::lobby_find::Message>,
 	namespace_id: Uuid,
 	query_id: Uuid,
-	error_code: mm::msg::lobby_find_fail::ErrorCode,
+	error_code: ErrorCode,
 	force_fail: bool,
 ) -> GlobalResult<()> {
 	tracing::warn!(%namespace_id, ?query_id, ?error_code, ?force_fail, "player create failed");
@@ -68,7 +71,7 @@ async fn complete_request(
 }
 
 #[worker(name = "mm-lobby-find")]
-async fn worker(ctx: OperationContext<mm::msg::lobby_find::Message>) -> GlobalResult<()> {
+async fn worker(ctx: &OperationContext<mm::msg::lobby_find::Message>) -> GlobalResult<()> {
 	// TODO: Fetch all sessions for the current IP
 	// TODO: Map to all players matching the given sessions
 
@@ -88,34 +91,14 @@ async fn worker(ctx: OperationContext<mm::msg::lobby_find::Message>) -> GlobalRe
 	// Check for stale message
 	if ctx.req_dt() > util::duration::seconds(60) {
 		tracing::warn!("discarding stale message");
-		fail(
-			ctx,
-			namespace_id,
-			query_id,
-			mm::msg::lobby_find_fail::ErrorCode::StaleMessage,
-			true,
-		)
-		.await?;
+		fail(ctx, namespace_id, query_id, ErrorCode::StaleMessage, true).await?;
 		return complete_request(ctx.chirp(), analytics_events).await;
 	}
 
 	let ((_namespace, mm_ns_config, dev_team), lobby_group_config) = tokio::try_join!(
 		// Namespace and dev team
 		fetch_ns_config_and_dev_team(ctx.base(), namespace_id),
-		// Fetch lobby group config if auto-creating lobby
-		async {
-			if let Query::LobbyGroup(backend::matchmaker::query::LobbyGroup {
-				auto_create: Some(auto_create),
-				..
-			}) = &query
-			{
-				let lobby_group_id = internal_unwrap!(auto_create.lobby_group_id).as_uuid();
-				let config = fetch_lobby_group_config(ctx.base(), lobby_group_id).await?;
-				Ok(Some(config))
-			} else {
-				Ok(None)
-			}
-		},
+		fetch_lobby_group_config(ctx.base(), query),
 	)?;
 
 	// Verify dev team status
@@ -124,10 +107,57 @@ async fn worker(ctx: OperationContext<mm::msg::lobby_find::Message>) -> GlobalRe
 			ctx,
 			namespace_id,
 			query_id,
-			mm::msg::lobby_find_fail::ErrorCode::DevTeamInvalidStatus,
+			ErrorCode::DevTeamInvalidStatus,
 			true,
 		)
 		.await?;
+		return complete_request(ctx.chirp(), analytics_events).await;
+	}
+
+	// Verify user data
+	let verification_res = util_mm::verification::verify_config(
+		&ctx.base(),
+		&util_mm::verification::VerifyConfigOpts {
+			kind: match query {
+				Query::LobbyGroup(_) => util_mm::verification::ConnectionKind::Find,
+				Query::Direct(_) => util_mm::verification::ConnectionKind::Join,
+			},
+			namespace_id,
+			user_id: ctx.user_id.map(|id| id.as_uuid()),
+			lobby_group: &lobby_group_config.lobby_group,
+			lobby_group_meta: &lobby_group_config.lobby_group_meta,
+			lobby_info: lobby_group_config.lobby_info.as_ref(),
+			lobby_state_json: lobby_group_config.lobby_state_json.as_deref(),
+			verification_data_json: ctx.verification_data_json.as_deref(),
+			lobby_config_json: None,
+			custom_lobby_publicity: None,
+		},
+	)
+	.await;
+	if let Err(err) = verification_res {
+		// Reduces verbosity
+		let err_branch = |err_code| async move {
+			fail(ctx, namespace_id, query_id, err_code, true).await?;
+			complete_request(ctx.chirp(), analytics_events).await
+		};
+
+		let res = if err.is(formatted_error::code::MATCHMAKER_FIND_DISABLED) {
+			err_branch(ErrorCode::FindDisabled).await
+		} else if err.is(formatted_error::code::MATCHMAKER_JOIN_DISABLED) {
+			err_branch(ErrorCode::JoinDisabled).await
+		} else if err.is(formatted_error::code::MATCHMAKER_REGISTRATION_REQUIRED) {
+			err_branch(ErrorCode::RegistrationRequired).await
+		} else if err.is(formatted_error::code::MATCHMAKER_IDENTITY_REQUIRED) {
+			err_branch(ErrorCode::IdentityRequired).await
+		} else if err.is(formatted_error::code::MATCHMAKER_VERIFICATION_FAILED) {
+			err_branch(ErrorCode::VerificationFailed).await
+		} else if err.is(formatted_error::code::MATCHMAKER_VERIFICATION_REQUEST_FAILED) {
+			err_branch(ErrorCode::VerificationRequestFailed).await
+		} else {
+			Err(err)
+		};
+
+		return res;
 	}
 
 	// Create players
@@ -192,7 +222,7 @@ async fn worker(ctx: OperationContext<mm::msg::lobby_find::Message>) -> GlobalRe
 			join_kind,
 			players: &players,
 			query,
-			lobby_group_config: lobby_group_config.as_ref(),
+			lobby_group_config: &lobby_group_config,
 			auto_create_lobby_id,
 		},
 	)
@@ -281,6 +311,11 @@ async fn worker(ctx: OperationContext<mm::msg::lobby_find::Message>) -> GlobalRe
 				region_id: Some(auto_create_region_id.into()),
 				create_ray_id: Some(ctx.ray_id().into()),
 				preemptively_created: true,
+
+				creator_user_id: ctx.user_id,
+				is_custom: false,
+				publicity: None,
+				lobby_config_json: None,
 			})
 			.await?;
 
@@ -415,23 +450,59 @@ pub struct LobbyGroupConfig {
 	pub lobby_group: backend::matchmaker::LobbyGroup,
 	#[allow(unused)]
 	pub lobby_group_meta: backend::matchmaker::LobbyGroupMeta,
+	pub lobby_info: Option<backend::matchmaker::Lobby>,
+	pub lobby_state_json: Option<String>,
 }
 
-/// Fetches the lobby group config. Only used if auto-creating lobby.
+/// Fetches the lobby group config (and lobby if direct).
 #[tracing::instrument]
 async fn fetch_lobby_group_config(
 	ctx: OperationContext<()>,
-	lobby_group_id: Uuid,
+	query: &Query,
 ) -> GlobalResult<LobbyGroupConfig> {
-	let lobby_group_id_proto = Some(common::Uuid::from(lobby_group_id));
+	// Get lobby group id from query
+	let (lobby_group_id, lobby_info, lobby_state_json) = match query {
+		Query::LobbyGroup(backend::matchmaker::query::LobbyGroup { auto_create, .. }) => {
+			let auto_create = internal_unwrap!(auto_create);
+
+			(
+				internal_unwrap_owned!(auto_create.lobby_group_id),
+				None,
+				None,
+			)
+		}
+		Query::Direct(backend::matchmaker::query::Direct { lobby_id, .. }) => {
+			let lobby_id = internal_unwrap_owned!(*lobby_id);
+
+			let (lobbies_res, lobby_states_res) = tokio::try_join!(
+				op!([ctx] mm_lobby_get {
+					lobby_ids: vec![lobby_id],
+					include_stopped: true,
+				}),
+				op!([ctx] mm_lobby_state_get {
+					lobby_ids: vec![lobby_id],
+				}),
+			)?;
+			let lobby =
+				internal_unwrap_owned!(lobbies_res.lobbies.into_iter().next(), "lobby not found");
+			let lobby_state = internal_unwrap_owned!(lobby_states_res.lobbies.into_iter().next());
+
+			(
+				internal_unwrap_owned!(lobby.lobby_group_id),
+				Some(lobby),
+				lobby_state.state_json,
+			)
+		}
+	};
+	let lobby_group_id_proto = Some(lobby_group_id);
 
 	// Resolve the version ID
 	let resolve_version_res = op!([ctx] mm_config_lobby_group_resolve_version {
-		lobby_group_ids: vec![lobby_group_id.into()],
+		lobby_group_ids: vec![lobby_group_id],
 	})
 	.await?;
 	let version_id = internal_unwrap!(
-		internal_unwrap!(
+		internal_unwrap_owned!(
 			resolve_version_res.versions.first(),
 			"lobby group not found"
 		)
@@ -464,6 +535,8 @@ async fn fetch_lobby_group_config(
 		version_id,
 		lobby_group: (*lobby_group).clone(),
 		lobby_group_meta: (*lobby_group_meta).clone(),
+		lobby_info,
+		lobby_state_json,
 	})
 }
 
@@ -477,7 +550,7 @@ struct InsertCrdbOpts {
 	lobby_id: Uuid,
 	region_id: Uuid,
 	lobby_group_id: Uuid,
-	lobby_group_config: Option<LobbyGroupConfig>,
+	lobby_group_config: LobbyGroupConfig,
 	auto_create_lobby: bool,
 	now_ts: i64,
 	ray_id: Uuid,
@@ -503,9 +576,6 @@ async fn insert_to_crdb(
 ) -> GlobalResult<()> {
 	// Insert preemptive lobby row if needed
 	if auto_create_lobby {
-		// Lobby group config will exist if the lobby was auto created
-		let lobby_group_config = internal_unwrap!(lobby_group_config);
-
 		// Insert lobby if needed
 		sqlx::query(indoc!(
 			"
@@ -537,7 +607,7 @@ async fn insert_to_crdb(
 		.bind(lobby_group_config.lobby_group.max_players_normal as i64)
 		.bind(lobby_group_config.lobby_group.max_players_direct as i64)
 		.bind(lobby_group_config.lobby_group.max_players_party as i64)
-		.execute(&mut *tx)
+		.execute(&mut **tx)
 		.await?;
 	}
 
@@ -561,7 +631,7 @@ async fn insert_to_crdb(
 	.bind(lobby_id)
 	.bind(auto_create_lobby)
 	.bind(util_mm::FindQueryStatus::Pending as i64)
-	.execute(&mut *tx)
+	.execute(&mut **tx)
 	.await?;
 
 	// Insert players
@@ -592,7 +662,7 @@ async fn insert_to_crdb(
 		)
 		.bind(now_ts)
 		.bind(ray_id)
-		.execute(&mut *tx)
+		.execute(&mut **tx)
 		.await?;
 	}
 

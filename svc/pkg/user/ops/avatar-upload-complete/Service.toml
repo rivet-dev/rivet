@@ -5,3 +5,6 @@ name = "user-avatar-upload-complete"
 kind = "rust"
 
 [operation]
+
+[databases]
+db-user = {}

@@ -5,3 +5,6 @@ name = "mm-config-namespace-create"
 kind = "rust"
 
 [operation]
+
+[databases]
+db-mm-config = {}

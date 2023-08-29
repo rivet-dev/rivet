@@ -7,7 +7,7 @@ lazy_static::lazy_static! {
 
 // TODO: Implement editing for `Text` message bodies with an `edited` property (See RIV-460)
 #[worker(name = "chat-message-edit")]
-async fn worker(ctx: OperationContext<chat_message::msg::edit::Message>) -> GlobalResult<()> {
+async fn worker(ctx: &OperationContext<chat_message::msg::edit::Message>) -> GlobalResult<()> {
 	let crdb = ctx.crdb("db-chat").await?;
 
 	let chat_message_id = internal_unwrap!(ctx.chat_message_id).as_uuid();

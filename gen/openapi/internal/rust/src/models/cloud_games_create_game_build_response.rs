@@ -15,20 +15,20 @@
 pub struct CloudGamesCreateGameBuildResponse {
     #[serde(rename = "build_id")]
     pub build_id: uuid::Uuid,
-    #[serde(rename = "image_presigned_request")]
-    pub image_presigned_request: Box<crate::models::UploadPresignedRequest>,
-    #[serde(rename = "image_presigned_requests")]
-    pub image_presigned_requests: Vec<crate::models::UploadPresignedRequest>,
+    #[serde(rename = "image_presigned_request", skip_serializing_if = "Option::is_none")]
+    pub image_presigned_request: Option<Box<crate::models::UploadPresignedRequest>>,
+    #[serde(rename = "image_presigned_requests", skip_serializing_if = "Option::is_none")]
+    pub image_presigned_requests: Option<Vec<crate::models::UploadPresignedRequest>>,
     #[serde(rename = "upload_id")]
     pub upload_id: uuid::Uuid,
 }
 
 impl CloudGamesCreateGameBuildResponse {
-    pub fn new(build_id: uuid::Uuid, image_presigned_request: crate::models::UploadPresignedRequest, image_presigned_requests: Vec<crate::models::UploadPresignedRequest>, upload_id: uuid::Uuid) -> CloudGamesCreateGameBuildResponse {
+    pub fn new(build_id: uuid::Uuid, upload_id: uuid::Uuid) -> CloudGamesCreateGameBuildResponse {
         CloudGamesCreateGameBuildResponse {
             build_id,
-            image_presigned_request: Box::new(image_presigned_request),
-            image_presigned_requests,
+            image_presigned_request: None,
+            image_presigned_requests: None,
             upload_id,
         }
     }

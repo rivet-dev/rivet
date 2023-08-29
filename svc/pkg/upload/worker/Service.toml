@@ -5,3 +5,6 @@ name = "upload-worker"
 kind = "rust"
 
 [consumer]
+
+[databases]
+db-upload = {}

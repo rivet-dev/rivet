@@ -1,0 +1,93 @@
+[entryPoints]
+	[entryPoints.lb-80]
+		address = ":80"
+
+		[entryPoints.lb-80.transport.lifeCycle]
+			# 60s for the long polling requests to gracefully exit + 30s for padding
+			graceTimeOut = "90s"
+
+		[entryPoints.lb-80.http]
+			# Integrate universal middleware
+			middlewares = ["universal@file"]
+
+	[entryPoints.lb-443]
+		address = ":443"
+
+		[entryPoints.lb-443.transport.lifeCycle]
+			# 60s for the long polling requests to gracefully exit + 30s for padding
+			graceTimeOut = "90s"
+
+		[entryPoints.lb-443.http]
+			# Integrate universal middleware
+			middlewares = ["universal@file"]
+
+	[entryPoints.traefik]
+		address = "{{ nebula_ipv4 }}:9980"
+
+	{%- if pool == 'ing-job' %}
+	# TCP
+	{%- for port in range(20000, 20512 + 1) %}
+	[entryPoints.lb-{{port}}]
+		address = ":{{port}}/tcp"
+
+		[entryPoints.lb-{{port}}.transport.respondingTimeouts]
+			readTimeout = "15s"
+			writeTimeout = "15s"
+			idleTimeout = "15s"
+	{%- endfor %}
+
+	# UDP
+	{%- for port in range(26000, 26512 + 1) %}
+	[entryPoints.lb-{{port}}]
+		address = ":{{port}}/udp"
+
+		[entryPoints.lb-{{port}}.udp]
+			timeout = "15s"
+	{%- endfor %}
+	{%- endif %}
+
+[api]
+	dashboard = true
+	insecure = true
+
+[ping]
+
+[log]
+	level = "{{ pillar['rivet']['traefik']['log_level'] }}"
+	filePath = "/opt/ingress_proxy/traefik.log"
+	format = "json"
+
+{% if pillar['rivet']['traefik']['access_logs'] %}
+[accessLog]
+	filePath = "/opt/ingress_proxy/access.log"
+	format = "json"
+	fields.defaultMode = "keep"
+	fields.headers.defaultMode = "keep"
+{% endif %}
+
+[metrics.prometheus]
+	# See lib/chirp/metrics/src/buckets.rs
+	buckets = [0.001, 0.0025, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 10.0, 25.0, 50.0, 100.0]
+	addEntryPointsLabels = true
+	addRoutersLabels = true
+	addServicesLabels = true
+
+[providers]
+	[providers.file]
+		directory = "/etc/ingress_proxy/dynamic"
+
+	{%- if 'consul-client' in grains['roles'] %}
+	[providers.consulCatalog]
+		prefix = "traefik-{{ pool }}"
+		exposedByDefault = false
+
+		[providers.consulCatalog.endpoint]
+			address = "127.0.0.1:8500"
+	{%- endif %}
+
+	{%- if provider_http is defined %}
+	[providers.http]
+		endpoint = "{{provider_http.endpoint}}"
+		pollInterval = "{{provider_http.poll_interval}}"
+	{%- endif %}
+

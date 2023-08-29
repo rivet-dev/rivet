@@ -1,12 +1,12 @@
+use anyhow::{bail, ensure, Context, Result};
+use async_recursion::async_recursion;
+use s3_util::aws_sdk_s3;
 use std::{
 	collections::HashMap,
 	hash::{Hash, Hasher},
 	path::{Path, PathBuf},
 	sync::{Arc, Weak},
 };
-
-use anyhow::{bail, ensure, Context, Result};
-use s3_util::aws_sdk_s3;
 use tempfile::NamedTempFile;
 use tokio::{fs, process::Command, sync::RwLock};
 
@@ -15,7 +15,7 @@ use crate::{
 		self,
 		service::{RuntimeKind, ServiceKind},
 	},
-	context::{self, BuildContext, ProjectContext, RunContext, S3Provider},
+	context::{self, BuildContext, ProjectContext, RunContext},
 	dep::{self, cloudflare, s3},
 	utils,
 };
@@ -25,7 +25,9 @@ use super::BuildOptimization;
 pub type ServiceContext = Arc<ServiceContextData>;
 
 pub struct ServiceContextData {
-	pub(in crate::context) project: RwLock<Weak<context::project::ProjectContextData>>,
+	project: RwLock<Weak<context::project::ProjectContextData>>,
+	/// If this is overriding a service from an additional root, then this will be specified.
+	overridden_service: Option<ServiceContext>,
 	config: config::service::ServiceConfig,
 	path: PathBuf,
 	workspace_path: PathBuf,
@@ -45,6 +47,18 @@ impl Hash for ServiceContextData {
 }
 
 impl ServiceContextData {
+	/// Sets the reference to the project once the project context is finished initiating.
+	#[async_recursion]
+	pub(in crate::context) async fn set_project(
+		&self,
+		project: Weak<context::project::ProjectContextData>,
+	) {
+		*self.project.write().await = project.clone();
+		if let Some(overridden_service) = &self.overridden_service {
+			overridden_service.set_project(project.clone()).await;
+		}
+	}
+
 	pub async fn project(&self) -> ProjectContext {
 		self.project
 			.read()
@@ -69,6 +83,7 @@ impl ServiceContextData {
 impl ServiceContextData {
 	pub async fn from_path(
 		project: Weak<context::project::ProjectContextData>,
+		svc_ctxs_map: &HashMap<String, ServiceContext>,
 		workspace_path: &Path,
 		path: &Path,
 	) -> Option<ServiceContext> {
@@ -92,8 +107,12 @@ impl ServiceContextData {
 			Err(_) => None,
 		};
 
+		// Read overridden service
+		let overridden_service = svc_ctxs_map.get(&config.service.name).cloned();
+
 		Some(Arc::new(ServiceContextData::new(
 			project,
+			overridden_service,
 			config,
 			workspace_path,
 			path,
@@ -103,6 +122,7 @@ impl ServiceContextData {
 
 	fn new(
 		project: Weak<context::project::ProjectContextData>,
+		overridden_service: Option<ServiceContext>,
 		config: config::service::ServiceConfig,
 		workspace_path: &Path,
 		path: &Path,
@@ -111,6 +131,7 @@ impl ServiceContextData {
 		// Build context
 		let ctx = ServiceContextData {
 			project: RwLock::new(project),
+			overridden_service,
 			config,
 			path: path.to_owned(),
 			workspace_path: workspace_path.to_owned(),
@@ -139,6 +160,8 @@ impl ServiceContextData {
 				.supports_component_class(&component_class),
 			"runtime does not support component class"
 		);
+
+		// TODO: Validate that all services in `config.databases` are actually databases
 	}
 }
 
@@ -332,16 +355,32 @@ impl ServiceContextData {
 #[derive(Debug, Clone)]
 pub enum ServiceBuildPlan {
 	/// Build exists locally.
-	ExistingLocalBuild { output_path: PathBuf },
+	ExistingLocalBuild {
+		/// Absolute path to the executable on the host system.
+		exec_path: PathBuf,
+	},
 
 	/// Build exists on S3 server.
-	ExistingUploadedBuild { build_key: String },
+	ExistingUploadedBuild {
+		build_key: String,
+
+		/// Path to the executable in the archive.
+		exec_path: String,
+	},
 
 	/// Build the service locally.
-	BuildLocally { output_path: PathBuf },
+	BuildLocally {
+		/// Absolute path to the executable on the host system.
+		exec_path: PathBuf,
+	},
 
 	/// Build the service and upload to S3.
-	BuildAndUpload { build_key: String },
+	BuildAndUpload {
+		build_key: String,
+
+		/// Path to the executable in the archive.
+		exec_path: String,
+	},
 
 	/// Run a Docker container.
 	Docker { image_tag: String },
@@ -369,36 +408,52 @@ impl ServiceContextData {
 					.await;
 
 				if force_build {
-					return Ok(ServiceBuildPlan::BuildLocally { output_path });
+					return Ok(ServiceBuildPlan::BuildLocally {
+						exec_path: output_path,
+					});
 				}
 
 				// Check if there's an existing build we can use
 				let build_exists = tokio::fs::metadata(&output_path).await.is_ok();
 				if build_exists {
-					return Ok(ServiceBuildPlan::ExistingLocalBuild { output_path });
+					return Ok(ServiceBuildPlan::ExistingLocalBuild {
+						exec_path: output_path,
+					});
 				}
 
 				// Default to building
-				Ok(ServiceBuildPlan::BuildLocally { output_path })
+				Ok(ServiceBuildPlan::BuildLocally {
+					exec_path: output_path,
+				})
 			}
 			// Build and upload to S3
 			config::ns::ClusterKind::Distributed { .. } => {
 				// Derive the build key
 				let key = self.s3_build_key(build_context).await?;
+				let exec_path = self.cargo_name().expect("no cargo name").to_string();
 
 				if force_build {
-					return Ok(ServiceBuildPlan::BuildAndUpload { build_key: key });
+					return Ok(ServiceBuildPlan::BuildAndUpload {
+						build_key: key,
+						exec_path,
+					});
 				}
 
 				// Check if there's an existing build we can use
 				let s3_client = project_ctx.s3_client_service_builds().await?;
 				let build_exists = s3::check_exists_cached(&project_ctx, &s3_client, &key).await?;
 				if build_exists {
-					return Ok(ServiceBuildPlan::ExistingUploadedBuild { build_key: key });
+					return Ok(ServiceBuildPlan::ExistingUploadedBuild {
+						build_key: key,
+						exec_path,
+					});
 				}
 
 				// Default to building
-				Ok(ServiceBuildPlan::BuildAndUpload { build_key: key })
+				Ok(ServiceBuildPlan::BuildAndUpload {
+					build_key: key,
+					exec_path,
+				})
 			}
 		}
 	}
@@ -406,6 +461,7 @@ impl ServiceContextData {
 
 // Dependencies
 impl ServiceContextData {
+	#[async_recursion]
 	pub async fn dependencies(&self) -> Vec<ServiceContext> {
 		let project = self.project().await;
 
@@ -413,45 +469,54 @@ impl ServiceContextData {
 
 		let mut dep_ctxs = Vec::<ServiceContext>::new();
 
-		// TODO: Find a cleaner way of specifying database dependencies
-		// HACK: Mark all database & S3 dependencies as dependencies for all services in order to
-		// expose the env
-		for svc in all_svcs {
-			if matches!(
-				svc.config().kind,
-				ServiceKind::Database { .. } | ServiceKind::Cache { .. }
-			) {
-				dep_ctxs.push(svc.clone());
-			}
-		}
-
 		// TODO: Add dev dependencies if building for tests
 		// Add operation dependencies from Cargo.toml
+		//
+		// You cannot depend on these services from the Service.toml, only as a Cargo dependency
 		if let Some(cargo) = &self.cargo {
-			let svc_path = self.path();
 			let svcs = cargo
 				.dependencies
 				.iter()
-				.filter_map(|(_, x)| {
-					if let config::service::CargoDependency::Path { path } = x {
-						Some(path)
+				.filter_map(|(name, dep)| {
+					if let config::service::CargoDependency::Path { .. } = dep {
+						Some(name)
 					} else {
 						None
 					}
 				})
-				.filter_map(|path| {
-					let absolute_path = svc_path.join(path);
+				// Remove overridden service from deps list
+				.filter(|name| {
+					self.overridden_service
+						.as_ref()
+						.map(|osvc| &&osvc.name() != name)
+						.unwrap_or(true)
+				})
+				.filter_map(|name| {
 					all_svcs
 						.iter()
-						.filter(|x| x.path() == absolute_path)
+						.filter(|x| x.name() == *name)
 						.next()
 						.cloned()
 				});
+			// TOOD: Use the path to find the service instead of the name. This is difficult with multiple roots.
+			// .filter_map(|path| {
+			// 	let absolute_path = svc_path.join(path);
+			// 	all_svcs
+			// 		.iter()
+			// 		.filter(|x| x.path() == absolute_path)
+			// 		.next()
+			// 		.cloned()
+			// });
 
 			dep_ctxs.extend(svcs);
 		}
 
-		// Check that these are services you can explicitly depend on
+		// Inherit dependencies from the service that was overridden
+		if let Some(overriden_svc) = &self.overridden_service {
+			dep_ctxs.extend(overriden_svc.dependencies().await);
+		}
+
+		// Check that these are services you can explicitly depend on in the Service.toml
 		for dep in &dep_ctxs {
 			if !self.config().service.test_only && dep.config().service.test_only {
 				panic!(
@@ -463,7 +528,9 @@ impl ServiceContextData {
 
 			if !matches!(
 				dep.config().kind,
-				ServiceKind::Database { .. } | ServiceKind::Cache { .. }
+				ServiceKind::Database { .. }
+					| ServiceKind::Cache { .. }
+					| ServiceKind::Operation { .. }
 			) {
 				panic!(
 					"{} -> {}: cannot explicitly depend on this kind of service",
@@ -476,63 +543,90 @@ impl ServiceContextData {
 		dep_ctxs
 	}
 
-	pub async fn crdb_dependencies(&self) -> Vec<ServiceContext> {
-		self.dependencies()
+	pub async fn database_dependencies(&self) -> HashMap<String, config::service::Database> {
+		let dbs = self
+			.project()
 			.await
-			.iter()
+			.recursive_dependencies(&[self.name()])
+			.await
+			.into_iter()
+			// Filter filter services to include only operations, since these run in-process
 			.filter(|svc| {
-				if let RuntimeKind::CRDB { .. } = svc.config().runtime {
-					true
-				} else {
-					false
-				}
+				**svc == *self || matches!(svc.config().kind, ServiceKind::Operation { .. })
 			})
-			.cloned()
+			// Aggregate secrets from all dependencies
+			.flat_map(|x| x.config().databases.clone().into_iter())
+			// Dedupe
+			.collect::<HashMap<_, _>>();
+
+		dbs
+	}
+
+	pub async fn crdb_dependencies(&self) -> Vec<ServiceContext> {
+		let dep_names = self
+			.database_dependencies()
+			.await
+			.into_iter()
+			.map(|(k, _)| k)
+			.collect::<Vec<_>>();
+		self.project()
+			.await
+			.services_with_names(&dep_names)
+			.await
+			.into_iter()
+			.filter(|svc| matches!(svc.config().runtime, RuntimeKind::CRDB { .. }))
 			.collect()
 	}
 
 	pub async fn redis_dependencies(&self) -> Vec<ServiceContext> {
-		self.dependencies()
+		let default_deps = ["redis-chirp".to_string(), "redis-cache".to_string()];
+
+		let dep_names = self
+			.database_dependencies()
 			.await
-			.iter()
-			.filter(|svc| {
-				if let RuntimeKind::Redis { .. } = svc.config().runtime {
-					true
-				} else {
-					false
-				}
-			})
-			.cloned()
+			.into_iter()
+			.map(|(k, _)| k)
+			.chain(default_deps)
+			.collect::<Vec<_>>();
+
+		self.project()
+			.await
+			.services_with_names(&dep_names)
+			.await
+			.into_iter()
+			.filter(|svc| matches!(svc.config().runtime, RuntimeKind::Redis { .. }))
 			.collect()
 	}
 
 	pub async fn s3_dependencies(&self) -> Vec<ServiceContext> {
-		self.dependencies()
+		let dep_names = self
+			.database_dependencies()
 			.await
-			.iter()
-			.filter(|svc| {
-				if let RuntimeKind::S3 { .. } = svc.config().runtime {
-					true
-				} else {
-					false
-				}
-			})
-			.cloned()
+			.into_iter()
+			.map(|(k, _)| k)
+			.collect::<Vec<_>>();
+		self.project()
+			.await
+			.services_with_names(&dep_names)
+			.await
+			.into_iter()
+			.filter(|svc| matches!(svc.config().runtime, RuntimeKind::S3 { .. }))
 			.collect()
 	}
 
 	pub async fn nats_dependencies(&self) -> Vec<ServiceContext> {
-		self.dependencies()
+		let dep_names = self
+			.database_dependencies()
 			.await
-			.iter()
-			.filter(|svc| {
-				if let RuntimeKind::Nats { .. } = svc.config().runtime {
-					true
-				} else {
-					false
-				}
-			})
-			.cloned()
+			.into_iter()
+			.map(|(k, _)| k)
+			.collect::<Vec<_>>();
+		self.project()
+			.await
+			.services_with_names(&dep_names)
+			.await
+			.into_iter()
+			.filter(|svc| matches!(svc.config().runtime, RuntimeKind::Nats { .. }))
 			.collect()
 	}
 }
@@ -691,7 +785,7 @@ impl ServiceContextData {
 		env.push((
 			"TOKIO_WORKER_THREADS".into(),
 			match ns_service_config.resources.cpu {
-				config::ns::CpuResources::CpuCores(cores) => cores.max(2),
+				config::ns::CpuResources::CpuCores(cores) => cores.max(cores),
 				config::ns::CpuResources::Cpu(_) => 2,
 			}
 			.to_string(),
@@ -719,7 +813,7 @@ impl ServiceContextData {
 			env.push(("TOKIO_CONSOLE_ENABLE".into(), "1".into()));
 			env.push((
 				"TOKIO_CONSOLE_BIND".into(),
-				r#"0.0.0.0:{{env "NOMAD_PORT_tokio_console"}}"#.into(),
+				r#"0.0.0.0:${NOMAD_PORT_tokio-console}"#.into(),
 			));
 		}
 
@@ -873,7 +967,7 @@ impl ServiceContextData {
 		// NATS config
 		env.push((
 			"NATS_URL".into(),
-			// TODO: Add back passsing multiple NATS nodes for failover instead of using DNS resolution
+			// TODO: Add back passing multiple NATS nodes for failover instead of using DNS resolution
 			access_service(
 				&project_ctx,
 				&mut tunnel_configs,
@@ -991,44 +1085,28 @@ impl ServiceContextData {
 			}
 
 			// Add default provider
-			let default_provider_name = match project_ctx.default_s3_provider()? {
-				(S3Provider::Minio, _) => "MINIO",
-				(S3Provider::Backblaze, _) => "BACKBLAZE",
-				(S3Provider::Aws, _) => "AWS",
-			};
+			let (default_provider, _) = project_ctx.default_s3_provider()?;
 			env.push((
 				"S3_DEFAULT_PROVIDER".to_string(),
-				default_provider_name.to_string(),
+				default_provider.to_string(),
 			));
 
 			// Add all configured providers
 			let providers = &project_ctx.ns().s3.providers;
 			if providers.minio.is_some() {
-				add_s3_env(
-					&project_ctx,
-					&mut env,
-					&s3_dep,
-					context::project::S3Provider::Minio,
-				)
-				.await?;
+				add_s3_env(&project_ctx, &mut env, &s3_dep, s3_util::Provider::Minio).await?;
 			}
 			if providers.backblaze.is_some() {
 				add_s3_env(
 					&project_ctx,
 					&mut env,
 					&s3_dep,
-					context::project::S3Provider::Backblaze,
+					s3_util::Provider::Backblaze,
 				)
 				.await?;
 			}
 			if providers.aws.is_some() {
-				add_s3_env(
-					&project_ctx,
-					&mut env,
-					&s3_dep,
-					context::project::S3Provider::Aws,
-				)
-				.await?;
+				add_s3_env(&project_ctx, &mut env, &s3_dep, s3_util::Provider::Aws).await?;
 			}
 		}
 
@@ -1098,6 +1176,15 @@ impl ServiceContextData {
 				"0"
 			}
 			.into(),
+		));
+		env.push((
+			"RIVET_MM_LOBBY_DELIVERY_METHOD".into(),
+			project_ctx
+				.ns()
+				.rivet
+				.matchmaker
+				.lobby_delivery_method
+				.to_string(),
 		));
 
 		// Sort env by keys so it's always in the same order
@@ -1219,7 +1306,7 @@ impl ServiceContextData {
 			}
 		);
 
-		let service = project_ctx
+		let mut service = project_ctx
 			.ns()
 			.services
 			.get(&self.name())
@@ -1235,7 +1322,7 @@ impl ServiceContextData {
 					},
 				},
 				config::ns::ClusterKind::Distributed { .. } => config::ns::Service {
-					count: if is_singleton { 1 } else { 2 },
+					count: 2,
 					resources: config::ns::ServiceResources {
 						cpu: config::ns::CpuResources::Cpu(250),
 						memory: 256,
@@ -1244,8 +1331,9 @@ impl ServiceContextData {
 				},
 			});
 
+		// Force single count if singleton
 		if is_singleton {
-			assert_eq!(service.count, 1)
+			service.count = 1;
 		}
 
 		service
@@ -1256,13 +1344,9 @@ async fn add_s3_env(
 	project_ctx: &ProjectContext,
 	env: &mut Vec<(String, String)>,
 	s3_dep: &Arc<ServiceContextData>,
-	provider: S3Provider,
+	provider: s3_util::Provider,
 ) -> Result<()> {
-	let provider_name = match provider {
-		S3Provider::Minio => "MINIO",
-		S3Provider::Backblaze => "BACKBLAZE",
-		S3Provider::Aws => "AWS",
-	};
+	let provider_name = provider.to_string();
 	let s3_dep_name = s3_dep.name_screaming_snake();
 	let s3_config = project_ctx.s3_config(provider).await?;
 	let s3_creds = project_ctx.s3_credentials(provider).await?;

@@ -5,3 +5,6 @@ name = "mm-player-count-for-namespace"
 kind = "rust"
 
 [operation]
+
+[databases]
+redis-mm = {}

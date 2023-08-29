@@ -13,3 +13,15 @@ message IpInfo {
 	double longitude = 3;
 }
 
+enum HttpMethod {
+	GET = 0;
+	POST = 1;
+	PUT = 2;
+	DELETE = 3;
+}
+
+message ExternalRequestConfig {
+	string url = 1;
+	HttpMethod method = 2;
+	map<string, string> headers = 3;
+}

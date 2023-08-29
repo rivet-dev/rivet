@@ -5,3 +5,6 @@ name = "user-resolve-email"
 kind = "rust"
 
 [operation]
+
+[databases]
+db-user-identity = {}

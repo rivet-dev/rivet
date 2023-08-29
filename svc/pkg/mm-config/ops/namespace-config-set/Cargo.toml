@@ -13,7 +13,7 @@ prost = "0.10"
 mm-config-namespace-config-validate = { path = "../namespace-config-validate" }
 
 [dependencies.sqlx]
-version = "0.6"
+version = "0.7"
 default-features = false
 
 [dev-dependencies]

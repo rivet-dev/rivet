@@ -22,17 +22,59 @@ define_router! {
 	cors: CorsConfigBuilder::public().build(),
 	routes: {
 		"entries": {
-			GET: operations::get(query: operations::SingleQuery),
-			PUT: operations::put(body: models::KvPutRequest),
-			DELETE: operations::delete(query: operations::SingleQuery),
+			GET: operations::get(
+				query: operations::SingleQuery,
+				rate_limit: {
+					buckets: [
+						{ count: 1_000_000 },
+					],
+				},
+			),
+			PUT: operations::put(
+				body: models::KvPutRequest,
+				rate_limit: {
+					buckets: [
+						{ count: 100_000 },
+					],
+				},
+			),
+			DELETE: operations::delete(
+				query: operations::SingleQuery,
+				rate_limit: {
+					buckets: [
+						{ count: 100_000 },
+					],
+				},
+			),
 		},
 		"entries" / "list": {
 			GET: operations::list(query: operations::ListQuery),
 		},
 		"entries" / "batch": {
-			GET: batch_operations::get_batch(query: batch_operations::BatchQuery),
-			PUT: batch_operations::put_batch(body: models::KvPutBatchRequest),
-			DELETE: batch_operations::delete_batch(query: batch_operations::BatchQuery),
+			GET: batch_operations::get_batch(
+				query: batch_operations::BatchQuery,
+				rate_limit: {
+					buckets: [
+						{ count: 1_000_000 },
+					],
+				},
+			),
+			PUT: batch_operations::put_batch(
+				body: models::KvPutBatchRequest,
+				rate_limit: {
+					buckets: [
+						{ count: 100_000 },
+					],
+				},
+			),
+			DELETE: batch_operations::delete_batch(
+				query: batch_operations::BatchQuery,
+				rate_limit: {
+					buckets: [
+						{ count: 100_000 },
+					],
+				},
+			),
 		},
 	},
 }

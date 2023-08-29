@@ -4,6 +4,6 @@ description = "Invalid glob pattern: {error}"
 http_status = 400
 ---
 
-# CDN Too Many Auth Users
+# Glob Invalid
 
-The limit for auth users on a namespace has been reached.
+Invalid glob pattern given

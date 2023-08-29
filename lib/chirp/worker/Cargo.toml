@@ -32,7 +32,7 @@ rivet-runtime = { path = "../../runtime" }
 rivet-util = { path = "../../util/core" }
 serde_json = "1.0"
 thiserror = "1.0"
-tokio = { version = "1.21", features = ["full", "tracing"] }
+tokio = { version = "1.29", features = ["full", "tracing"] }
 tracing = "0.1"
 types = { path = "../../types/core" }
 tracing-subscriber = { version = "0.3", optional = true, default-features = false, features = ["fmt", "json", "ansi"] }  # Used with attribute

@@ -5,3 +5,6 @@ name = "email-verification-complete"
 kind = "rust"
 
 [operation]
+
+[databases]
+db-email-verification = {}

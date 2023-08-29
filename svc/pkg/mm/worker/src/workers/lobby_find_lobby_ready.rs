@@ -2,7 +2,9 @@ use chirp_worker::prelude::*;
 use proto::backend::pkg::*;
 
 #[worker(name = "mm-lobby-find-lobby-ready")]
-async fn worker(ctx: OperationContext<mm::msg::lobby_ready_complete::Message>) -> GlobalResult<()> {
+async fn worker(
+	ctx: &OperationContext<mm::msg::lobby_ready_complete::Message>,
+) -> GlobalResult<()> {
 	let lobby_id = internal_unwrap!(ctx.lobby_id).as_uuid();
 
 	// TODO: Is there a race condition here for new queries?

@@ -5,3 +5,6 @@ name = "token-revoke"
 kind = "rust"
 
 [operation]
+
+[databases]
+db-token = {}

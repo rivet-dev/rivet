@@ -12,7 +12,7 @@ struct PlayerRow {
 }
 
 #[worker(name = "mm-player-register")]
-async fn worker(ctx: OperationContext<mm::msg::player_register::Message>) -> GlobalResult<()> {
+async fn worker(ctx: &OperationContext<mm::msg::player_register::Message>) -> GlobalResult<()> {
 	let crdb = ctx.crdb("db-mm-state").await?;
 
 	let player_id = internal_unwrap!(ctx.player_id).as_uuid();

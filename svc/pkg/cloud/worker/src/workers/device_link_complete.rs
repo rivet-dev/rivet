@@ -3,7 +3,7 @@ use proto::backend::pkg::*;
 
 #[worker(name = "cloud-device-link-complete")]
 async fn worker(
-	ctx: OperationContext<cloud::msg::device_link_complete::Message>,
+	ctx: &OperationContext<cloud::msg::device_link_complete::Message>,
 ) -> GlobalResult<()> {
 	let device_link_id = internal_unwrap!(ctx.device_link_id).as_uuid();
 

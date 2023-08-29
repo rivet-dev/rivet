@@ -12,7 +12,7 @@ struct LogEntry<'a> {
 }
 
 #[worker(name = "nomad-log-write")]
-async fn worker(ctx: OperationContext<nomad_log::msg::entries::Message>) -> GlobalResult<()> {
+async fn worker(ctx: &OperationContext<nomad_log::msg::entries::Message>) -> GlobalResult<()> {
 	let client = clickhouse::Client::default()
 		.with_url("http://http.clickhouse.service.consul:8123")
 		.with_user("chirp")

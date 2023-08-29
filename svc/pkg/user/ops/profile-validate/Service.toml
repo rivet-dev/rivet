@@ -5,3 +5,6 @@ name = "user-profile-validate"
 kind = "rust"
 
 [operation]
+
+[databases]
+db-user = {}

@@ -5,3 +5,7 @@ name = "game-user-worker"
 kind = "rust"
 
 [consumer]
+
+
+[databases]
+db-game-user = {}

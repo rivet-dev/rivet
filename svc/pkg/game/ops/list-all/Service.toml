@@ -5,3 +5,6 @@ name = "game-list-all"
 kind = "rust"
 
 [operation]
+
+[databases]
+db-game = {}

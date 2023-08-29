@@ -28,7 +28,7 @@ struct RunRow {
 
 #[worker(name = "job-run-nomad-monitor-eval-update")]
 async fn worker(
-	ctx: OperationContext<job_run::msg::nomad_monitor_eval_update::Message>,
+	ctx: &OperationContext<job_run::msg::nomad_monitor_eval_update::Message>,
 ) -> GlobalResult<()> {
 	let crdb = ctx.crdb("db-job-state").await?;
 

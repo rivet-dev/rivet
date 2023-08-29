@@ -70,11 +70,18 @@ async fn handle(
 					regions: vec![backend::matchmaker::lobby_group::Region {
 						region_id: region_res.region_id,
 						tier_name_id: util_mm::test::TIER_NAME_ID.to_owned(),
-						idle_lobbies: None,
+						idle_lobbies: Some(backend::matchmaker::lobby_group::IdleLobbies {
+							min_idle_lobbies: 0,
+							// Set a high max lobby count in case this is
+							// coming from a test that test mm-lobby-create
+							// without creating an associated player
+							max_idle_lobbies: 32,
+						}),
 					}],
 					max_players_normal,
 					max_players_direct,
 					max_players_party,
+					listable: true,
 
 					runtime: Some(backend::matchmaker::lobby_runtime::Docker {
 						build_id: build_res.build_id,
@@ -83,6 +90,10 @@ async fn handle(
 						network_mode: backend::matchmaker::lobby_runtime::NetworkMode::Bridge as i32,
 						ports: Vec::new(),
 					}.into()),
+
+					find_config: None,
+					join_config: None,
+					create_config: None,
 				}],
 			}),
 			..Default::default()
@@ -127,6 +138,11 @@ async fn handle(
 			region_id: region_res.region_id,
 			create_ray_id: Some(ctx.ray_id().into()),
 			preemptively_created: false,
+
+			creator_user_id: ctx.creator_user_id,
+			is_custom: ctx.is_custom,
+			publicity: ctx.publicity,
+			lobby_config_json: ctx.lobby_config_json.clone(),
 		})
 		.await?;
 	let run_id = internal_unwrap!(complete_msg.run_id).as_uuid();

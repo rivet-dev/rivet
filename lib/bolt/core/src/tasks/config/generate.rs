@@ -431,7 +431,7 @@ pub async fn generate(project_path: &Path, ns_id: &str) -> Result<()> {
 
 	let mut event = utils::telemetry::build_event(&ctx, "bolt_config_generate").await?;
 	event.insert_prop("ns_id", ns_id)?;
-	utils::telemetry::capture_event(&ctx, event).await?;
+	utils::telemetry::capture_event(&ctx, event)?;
 
 	eprintln!();
 	rivet_term::status::success(

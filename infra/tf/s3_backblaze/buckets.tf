@@ -1,6 +1,11 @@
 resource "b2_bucket" "bucket" {
 	for_each = var.s3_buckets
 
+	lifecycle {
+		# TODO: Remove this. Fixes an issue with accidentally enabled file locks that can't be disabled.
+		ignore_changes = ["file_lock_configuration"]
+	}
+
 	bucket_name = each.key
 	bucket_type = "allPrivate"
 

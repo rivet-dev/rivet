@@ -1,6 +1,6 @@
 use chirp_metrics as metrics;
 use futures_util::StreamExt;
-use global_error::{GlobalResult, GlobalError};
+use global_error::{GlobalError, GlobalResult};
 use prost::Message;
 use redis::{self, AsyncCommands};
 use rivet_connection::Connection;
@@ -276,7 +276,7 @@ where
 					.arg(pending_retry_time.as_millis() as i64)
 					.arg("-")
 					.arg("+")
-					.arg(16usize)
+					.arg(1usize)
 					.query_async::<_, redis::streams::StreamPendingCountReply>(redis_chirp_conn)
 					.await
 				{
@@ -451,7 +451,7 @@ where
 			let read_options = redis::streams::StreamReadOptions::default()
 				.group(&group, &consumer)
 				.block(30_000)
-				.count(16);
+				.count(1);
 			let res = match redis_chirp_conn
 				.xread_options::<_, _, redis::streams::StreamReadReply>(keys, &[">"], &read_options)
 				.await
@@ -857,36 +857,42 @@ where
 		self: Arc<Self>,
 		req: &Request<W::Request>,
 	) -> GlobalResult<W::Response> {
-		// Will retry 4 times. This will take a maximum of 15 seconds.
-		let mut backoff = rivet_util::Backoff::new(5, Some(4), 1_000, 1_000);
-		loop {
-			let res = self
-				.worker
-				.handle(req.op_ctx())
-				.instrument(tracing::info_span!("handle", name = %W::NAME))
-				.await;
+		self.worker
+			.handle(req.op_ctx())
+			.instrument(tracing::info_span!("handle", name = %W::NAME))
+			.await
 
-			// Attempt to retry the request with backoff
-			if matches!(
-				res,
-				Err(GlobalError::Internal {
-					retry_immediately: true,
-					..
-				})
-			) {
-				tracing::info!("ticking request retry backoff");
+		// // TODO: Add back
+		// // Will retry 4 times. This will take a maximum of 15 seconds.
+		// let mut backoff = rivet_util::Backoff::new(5, Some(4), 1_000, 1_000);
+		// loop {
+		// 	let res = self
+		// 		.worker
+		// 		.handle(req.op_ctx())
+		// 		.instrument(tracing::info_span!("handle", name = %W::NAME))
+		// 		.await;
 
-				if backoff.tick().await {
-					tracing::warn!("retry request failed too many times");
-					return res;
-				} else {
-					tracing::info!("retrying request");
-				}
-			} else {
-				// Return result immediately
-				return res;
-			}
-		}
+		// 	// Attempt to retry the request with backoff
+		// 	if matches!(
+		// 		res,
+		// 		Err(GlobalError::Internal {
+		// 			retry_immediately: true,
+		// 			..
+		// 		})
+		// 	) {
+		// 		tracing::info!("ticking request retry backoff");
+
+		// 		if backoff.tick().await {
+		// 			tracing::warn!("retry request failed too many times");
+		// 			return res;
+		// 		} else {
+		// 			tracing::info!("retrying request");
+		// 		}
+		// 	} else {
+		// 		// Return result immediately
+		// 		return res;
+		// 	}
+		// }
 	}
 
 	#[tracing::instrument(level = "trace", skip_all)]
@@ -1028,11 +1034,11 @@ where
 	#[tracing::instrument]
 	async fn consumer_ack(self: Arc<Self>, msg_meta: RedisMessageMeta) {
 		let mut backoff = rivet_util::Backoff::default();
-		loop {
-			if backoff.tick().await {
-				tracing::error!("acking stream message failed too many times, aborting");
-				return;
-			}
+		// loop {
+		// 	if backoff.tick().await {
+		// 		tracing::error!("acking stream message failed too many times, aborting");
+		// 		return;
+		// 	}
 
 			// Acknowledge the messages
 			let mut redis_chirp = self.redis_chirp.clone();
@@ -1042,13 +1048,13 @@ where
 			{
 				Ok(_) => {
 					tracing::info!(?msg_meta, "acknowledged stream message");
-					break;
+					// break;
 				}
 				Err(err) => {
 					tracing::error!(?err, "failed to ack message");
 				}
 			}
-		}
+		// }
 	}
 }
 

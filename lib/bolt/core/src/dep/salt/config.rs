@@ -3,7 +3,7 @@ use serde_json::{json, Value};
 
 use crate::{
 	config::{self, ns::LoggingProvider, service::RuntimeKind},
-	context::{ProjectContext, S3Provider},
+	context::ProjectContext,
 	dep,
 };
 
@@ -49,7 +49,11 @@ pub async fn build(ctx: &ProjectContext, opts: &BuildOpts) -> Result<Value> {
 
 	vars["cloudflare"] = cloudflare(ctx)?;
 
-	vars["s3"] = s3(ctx, opts.skip_s3).await?;
+	vars["s3"] = if opts.skip_s3 {
+		json!({})
+	} else {
+		s3(ctx).await?
+	};
 
 	vars["logging"] = logging(ctx)?;
 
@@ -60,22 +64,8 @@ pub async fn build(ctx: &ProjectContext, opts: &BuildOpts) -> Result<Value> {
 	Ok(vars)
 }
 
-async fn s3(ctx: &ProjectContext, skip: bool) -> Result<Value> {
+async fn s3(ctx: &ProjectContext) -> Result<Value> {
 	let mut res = serde_json::Map::with_capacity(1);
-
-	if skip {
-		// Provide filler values so the pillars can still render
-		res.insert(
-			"default".to_string(),
-			json!({
-				"endpoint_internal": "",
-				"endpoint_external": "",
-				"region": "",
-			}),
-		);
-
-		return Ok(res.into());
-	}
 
 	let (default_provider, _) = ctx.default_s3_provider()?;
 	let default_s3_config = ctx.s3_config(default_provider).await?;
@@ -90,7 +80,7 @@ async fn s3(ctx: &ProjectContext, skip: bool) -> Result<Value> {
 
 	let providers = &ctx.ns().s3.providers;
 	if providers.minio.is_some() {
-		let s3_config = ctx.s3_config(S3Provider::Minio).await?;
+		let s3_config = ctx.s3_config(s3_util::Provider::Minio).await?;
 		res.insert(
 			"minio".to_string(),
 			json!({
@@ -101,7 +91,7 @@ async fn s3(ctx: &ProjectContext, skip: bool) -> Result<Value> {
 		);
 	}
 	if providers.backblaze.is_some() {
-		let s3_config = ctx.s3_config(S3Provider::Backblaze).await?;
+		let s3_config = ctx.s3_config(s3_util::Provider::Backblaze).await?;
 		res.insert(
 			"backblaze".to_string(),
 			json!({
@@ -112,7 +102,7 @@ async fn s3(ctx: &ProjectContext, skip: bool) -> Result<Value> {
 		);
 	}
 	if providers.aws.is_some() {
-		let s3_config = ctx.s3_config(S3Provider::Aws).await?;
+		let s3_config = ctx.s3_config(s3_util::Provider::Aws).await?;
 		res.insert(
 			"aws".to_string(),
 			json!({
@@ -128,7 +118,8 @@ async fn s3(ctx: &ProjectContext, skip: bool) -> Result<Value> {
 
 fn cloudflare(ctx: &ProjectContext) -> Result<Value> {
 	#[allow(irrefutable_let_patterns)]
-	let config::ns::DnsProvider::Cloudflare { access, .. } = &ctx.ns().dns.provider else {
+	let config::ns::DnsProvider::Cloudflare { access, .. } = &ctx.ns().dns.provider
+	else {
 		return Ok(json!(null));
 	};
 
@@ -145,7 +136,8 @@ fn cloudflare(ctx: &ProjectContext) -> Result<Value> {
 
 fn logging(ctx: &ProjectContext) -> Result<Value> {
 	#[allow(irrefutable_let_patterns)]
-	let Some(logging) = &ctx.ns().logging else {
+	let Some(logging) = &ctx.ns().logging
+	else {
 		return Ok(json!(null));
 	};
 

@@ -92,9 +92,14 @@ pub async fn build_event(ctx: &ProjectContext, name: &str) -> Result<async_posth
 	Ok(event)
 }
 
-pub async fn capture_event(ctx: &ProjectContext, event: async_posthog::Event) -> Result<()> {
+pub fn capture_event(ctx: &ProjectContext, event: async_posthog::Event) -> Result<()> {
 	if !ctx.ns().rivet.telemetry.disable {
-		build_client().capture(event).await?;
+		tokio::spawn(async move {
+			match build_client().capture(event).await {
+				Ok(_) => {}
+				Err(err) => println!("Failed to capture event: {err:?}"),
+			}
+		});
 	}
 
 	Ok(())

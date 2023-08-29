@@ -42,24 +42,23 @@ services {
 		# and https://imagekit.io/blog/ultimate-guide-to-http-caching-for-static-assets/
 		"{{prefix}}.http.middlewares.ats-cdn-cache-control.headers.customResponseHeaders.Cache-Control=public, max-age=604800, immutable",
 
-		# MARK: routers.ats-build
-		# "{{prefix}}.http.routers.ats-build.entryPoints=lb-443",
-		# "{{prefix}}.http.routers.ats-build.rule=Host(`cdn.{{domain['base']}}`) && PathPrefix(`/build/`)",
-		# "{{prefix}}.http.routers.ats-build.middlewares=ats-build-auth, ats-build-path, ats-cdn-lfs",
-		# "{{prefix}}.http.routers.ats-build.tls=true",
+		{% for provider, _ in s3_providers.items() %}
+		{% for bucket in ["job-log", "team-billing", "lobby-history-export", "nomad-log-export"] %}
+		# MARK: http.routers-{{provider}}-{{bucket}}
+		"{{prefix}}.http.routers.ats-{{provider}}-{{bucket}}.entryPoints=lb-443",
+		"{{prefix}}.http.routers.ats-{{provider}}-{{bucket}}.rule=Host(`cdn.{{domain['base']}}`) && PathPrefix(`/{{provider}}/{{bucket}}/`)",
+		"{{prefix}}.http.routers.ats-{{provider}}-{{bucket}}.middlewares=ats-{{bucket}}-path, ats-cors, ats-cdn",
+		"{{prefix}}.http.routers.ats-{{provider}}-{{bucket}}.tls=true",
 
-		# MARK: middlewares.ats-build-auth
-		# TODO: Add more secure per-game authentication with https://doc.traefik.io/traefik/middlewares/http/forwardauth/
-		# "{{prefix}}.http.middlewares.ats-build-auth.basicAuth.users=job_run_image:$apr1$0peMM8t1$/ST0ckxxbp4AY.SUzkk4E1",
-		# Without this, we'll receive a `SignatureDoesNotMatch` error
-		# "{{prefix}}.http.middlewares.ats-build-auth.basicAuth.removeHeader=true",
-
-		# MARK: middlewares.ats-build-path
-		# "{{prefix}}.http.middlewares.ats-build-path.replacePathRegex.regex=^/build/(.*)",
-		# "{{prefix}}.http.middlewares.ats-build-path.replacePathRegex.replacement=/s3-cache/{{namespace}}-bucket-build/${1}",
+		# MARK: middlewares.ats-{{provider}}-{{bucket}}-path
+		"{{prefix}}.http.middlewares.ats-{{provider}}-{{bucket}}-path.replacePathRegex.regex=^/{{provider}}/{{bucket}}/(.*)",
+		"{{prefix}}.http.middlewares.ats-{{provider}}-{{bucket}}-path.replacePathRegex.replacement=/s3-cache/{{provider}}/{{namespace}}-bucket-{{bucket}}/${1}",
+		{% endfor %}
+		{% endfor %}
 
 		{% for bucket in ["job-log", "team-billing", "lobby-history-export", "nomad-log-export"] %}
 		# MARK: http.routers-{{bucket}}
+		# Default route for backwards compatibility
 		"{{prefix}}.http.routers.ats-{{bucket}}.entryPoints=lb-443",
 		"{{prefix}}.http.routers.ats-{{bucket}}.rule=Host(`cdn.{{domain['base']}}`) && PathPrefix(`/{{bucket}}/`)",
 		"{{prefix}}.http.routers.ats-{{bucket}}.middlewares=ats-{{bucket}}-path, ats-cors, ats-cdn",

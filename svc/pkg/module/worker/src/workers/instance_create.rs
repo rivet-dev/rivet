@@ -94,11 +94,14 @@ struct CheckStatus {
 
 #[worker(name = "module-instance-create")]
 async fn worker(
-	ctx: OperationContext<module::msg::instance_create::Message>,
+	ctx: &OperationContext<module::msg::instance_create::Message>,
 ) -> Result<(), GlobalError> {
 	let crdb = ctx.crdb("db-module").await?;
 
-	let (Ok(fly_org), Ok(fly_region)) = (std::env::var("FLY_ORGANIZATION_ID"), std::env::var("FLY_REGION"))  else {
+	let (Ok(fly_org), Ok(fly_region)) = (
+		std::env::var("FLY_ORGANIZATION_ID"),
+		std::env::var("FLY_REGION"),
+	) else {
 		internal_panic!("fly not enabled")
 	};
 	let fly_auth_token = util::env::read_secret(&["fly", "auth_token"]).await?;
@@ -196,7 +199,7 @@ async fn insert_instance(
 	.bind(instance_id)
 	.bind(version_id)
 	.bind(now)
-	.execute(&mut *tx)
+	.execute(&mut **tx)
 	.await?;
 
 	match internal_unwrap!(msg.driver) {
@@ -208,7 +211,7 @@ async fn insert_instance(
                 "
 			))
 			.bind(instance_id)
-			.execute(&mut *tx)
+			.execute(&mut **tx)
 			.await?;
 		}
 		module::msg::instance_create::message::Driver::Fly(_) => {
@@ -219,7 +222,7 @@ async fn insert_instance(
                 "
 			))
 			.bind(instance_id)
-			.execute(&mut *tx)
+			.execute(&mut **tx)
 			.await?;
 		}
 	}

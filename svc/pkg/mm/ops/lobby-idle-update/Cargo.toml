@@ -17,7 +17,7 @@ game-namespace-get = { path = "../../../game/ops/namespace-get" }
 mm-config-version-get = { path = "../../../mm-config/ops/version-get" }
 
 [dependencies.sqlx]
-version = "0.6"
+version = "0.7"
 default-features = false
 
 [dev-dependencies]

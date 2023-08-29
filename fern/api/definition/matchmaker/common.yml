@@ -15,6 +15,7 @@ types:
       max_players_direct: integer
       max_players_party: integer
       total_player_count: integer
+      state: optional<unknown>
 
   GameModeInfo:
     docs: A game mode that the player can join.
@@ -86,3 +87,8 @@ types:
           Pass this token through the socket to the lobby server. The lobby server
           will validate this token with `PlayerConnected.player_token`
         type: commons.JWT
+
+  CustomLobbyPublicity:
+    enum:
+      - public
+      - private

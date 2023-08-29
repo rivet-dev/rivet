@@ -5,3 +5,6 @@ name = "mm-player-get"
 kind = "rust"
 
 [operation]
+
+[databases]
+db-mm-state = {}

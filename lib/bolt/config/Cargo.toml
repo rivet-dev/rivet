@@ -9,5 +9,7 @@ license = "Apache-2.0"
 heck = "0.3"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
+strum = "0.25"
+strum_macros = "0.25"
 toml = "0.7"
 uuid = "1.3"
