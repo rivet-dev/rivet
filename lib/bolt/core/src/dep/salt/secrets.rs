@@ -1,7 +1,7 @@
 use anyhow::*;
 use serde_json::{json, Value};
 
-use crate::context::{ProjectContext, S3Provider};
+use crate::context::ProjectContext;
 
 /// Generates a config that will be exposed to Salt.
 pub async fn build_secrets(ctx: &ProjectContext) -> Result<Value> {
@@ -15,6 +15,16 @@ pub async fn build_secrets(ctx: &ProjectContext) -> Result<Value> {
 
 	secrets["s3"] = s3(ctx).await?;
 
+	if ctx.ns().s3.providers.minio.is_some() {
+		secrets["minio"] = json!({
+			"users": {
+				"root": {
+					"password": ctx.read_secret(&["minio", "users", "root", "password"]).await?,
+				},
+			},
+		});
+	}
+
 	secrets["clickhouse"] = json!({
 		"users": {
 			"bolt": {
@@ -25,14 +35,6 @@ pub async fn build_secrets(ctx: &ProjectContext) -> Result<Value> {
 			},
 			"grafana": {
 				"password": ctx.read_secret(&["clickhouse", "users", "grafana", "password"]).await?,
-			},
-		},
-	});
-
-	secrets["minio"] = json!({
-		"users": {
-			"root": {
-				"password": ctx.read_secret(&["minio", "users", "root", "password"]).await?,
 			},
 		},
 	});
@@ -71,7 +73,7 @@ async fn s3(ctx: &ProjectContext) -> Result<Value> {
 
 	let providers = &ctx.ns().s3.providers;
 	if providers.minio.is_some() {
-		let s3_creds = ctx.s3_credentials(S3Provider::Minio).await?;
+		let s3_creds = ctx.s3_credentials(s3_util::Provider::Minio).await?;
 		res.insert(
 			"minio".to_string(),
 			json!({
@@ -81,7 +83,7 @@ async fn s3(ctx: &ProjectContext) -> Result<Value> {
 		);
 	}
 	if providers.backblaze.is_some() {
-		let s3_creds = ctx.s3_credentials(S3Provider::Backblaze).await?;
+		let s3_creds = ctx.s3_credentials(s3_util::Provider::Backblaze).await?;
 		res.insert(
 			"backblaze".to_string(),
 			json!({
@@ -91,7 +93,7 @@ async fn s3(ctx: &ProjectContext) -> Result<Value> {
 		);
 	}
 	if providers.aws.is_some() {
-		let s3_creds = ctx.s3_credentials(S3Provider::Aws).await?;
+		let s3_creds = ctx.s3_credentials(s3_util::Provider::Aws).await?;
 		res.insert(
 			"aws".to_string(),
 			json!({

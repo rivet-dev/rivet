@@ -5,3 +5,6 @@ name = "kv-get"
 kind = "rust"
 
 [operation]
+
+[databases]
+db-kv = {}

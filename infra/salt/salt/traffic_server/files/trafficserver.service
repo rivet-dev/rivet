@@ -6,11 +6,11 @@ After=network-online.target
 Type=simple
 User=trafficserver
 Group=trafficserver
-EnvironmentFile=-/etc/default/trafficserver
+Environment="TM_START=yes"
 PIDFile=/run/trafficserver/manager.lock
 ExecStart=/var/rivet-nix/result/traffic_server/bin/traffic_manager $TM_DAEMON_ARGS
 ExecReload=/var/rivet-nix/result/traffic_server/bin/traffic_manager config reload
-{% if pillar['rivet']['deploy']['local']['restrict_service_resources'] %}
+{% if 'local' in pillar.rivet.deploy and pillar.rivet.deploy.local.restrict_service_resources %}
 Nice=10
 CPUAffinity=0
 {% endif %}

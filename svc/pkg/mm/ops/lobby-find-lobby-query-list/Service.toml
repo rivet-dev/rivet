@@ -5,3 +5,6 @@ name = "mm-lobby-find-lobby-query-list"
 kind = "rust"
 
 [operation]
+
+[databases]
+redis-mm = {}

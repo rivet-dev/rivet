@@ -57,7 +57,10 @@ pub async fn run(
 		let s3_client = s3_util::Client::from_env("bucket-build").await?;
 
 		let lobby_group = internal_unwrap_owned!(matchmaker.lobby_groups.first());
-		let backend::matchmaker::LobbyRuntime { runtime: Some(backend::matchmaker::lobby_runtime::Runtime::Docker(docker)) } = internal_unwrap!(lobby_group.runtime) else {
+		let backend::matchmaker::LobbyRuntime {
+			runtime: Some(backend::matchmaker::lobby_runtime::Runtime::Docker(docker)),
+		} = internal_unwrap!(lobby_group.runtime)
+		else {
 			internal_panic!("invalid runtime");
 		};
 		let build_id = internal_unwrap_owned!(docker.build_id);

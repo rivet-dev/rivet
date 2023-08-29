@@ -19,7 +19,7 @@ struct RunMetaNomadRow {
 }
 
 #[worker(name = "job-run-stop")]
-async fn worker(ctx: OperationContext<job_run::msg::stop::Message>) -> GlobalResult<()> {
+async fn worker(ctx: &OperationContext<job_run::msg::stop::Message>) -> GlobalResult<()> {
 	// NOTE: Idempotent
 
 	let crdb = ctx.crdb("db-job-state").await?;
@@ -36,7 +36,8 @@ async fn worker(ctx: OperationContext<job_run::msg::stop::Message>) -> GlobalRes
 	.await?;
 
 	let Some((run_row, run_meta_nomad_row)) =
-		rivet_pools::utils::crdb::tx(&crdb, |tx| Box::pin(update_db(ctx.ts(), run_id, tx))).await? else {
+		rivet_pools::utils::crdb::tx(&crdb, |tx| Box::pin(update_db(ctx.ts(), run_id, tx))).await?
+	else {
 		if ctx.req_dt() > util::duration::minutes(5) {
 			tracing::error!("discarding stale message");
 			return Ok(());
@@ -99,7 +100,7 @@ async fn update_db(
 		"
 	))
 	.bind(run_id)
-	.fetch_optional(&mut *tx)
+	.fetch_optional(&mut **tx)
 	.await?;
 	tracing::info!(?run_row, "fetched run");
 
@@ -116,7 +117,7 @@ async fn update_db(
 		"
 	))
 	.bind(run_id)
-	.fetch_optional(&mut *tx)
+	.fetch_optional(&mut **tx)
 	.await?;
 	tracing::info!(?run_meta_nomad_row, "fetched run meta nomad");
 
@@ -143,7 +144,7 @@ async fn update_db(
 		sqlx::query("UPDATE runs SET stop_ts = $2 WHERE run_id = $1")
 			.bind(run_id)
 			.bind(now)
-			.execute(&mut *tx)
+			.execute(&mut **tx)
 			.await?;
 	}
 

@@ -3,7 +3,7 @@ use proto::backend::pkg::*;
 use serde_json::json;
 
 #[worker(name = "module-create")]
-async fn worker(ctx: OperationContext<module::msg::create::Message>) -> Result<(), GlobalError> {
+async fn worker(ctx: &OperationContext<module::msg::create::Message>) -> Result<(), GlobalError> {
 	let crdb = ctx.crdb("db-module").await?;
 
 	let module_id = internal_unwrap!(ctx.module_id).as_uuid();

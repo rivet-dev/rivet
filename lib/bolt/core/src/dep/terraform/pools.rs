@@ -60,6 +60,9 @@ pub enum PoolLocalMode {
 	/// Run this only when developing locally.
 	LocalOnly,
 
+	/// Run this locally and remotely when developing.
+	LocalAndRemote,
+
 	/// Treat the pool normally.
 	Keep,
 }
@@ -186,18 +189,8 @@ pub async fn build_pools(ctx: &ProjectContext) -> Result<HashMap<String, Pool>> 
 	);
 
 	let mut svc_roles = vec!["docker", "nomad-client", "consul-client"];
-	// Add logging roles
-	if ctx.ns().logging.is_some()
-		&& ctx
-			.read_secret_opt(&["cloudflare", "access", "proxy", "client_id"])
-			.await?
-			.is_some()
-		&& ctx
-			.read_secret_opt(&["cloudflare", "access", "proxy", "client_secret"])
-			.await?
-			.is_some()
-	{
-		svc_roles.extend(["traefik-cloudflare-proxy", "docker-plugin-loki"]);
+	if ctx.ns().logging.is_some() {
+		svc_roles.extend(["traefik", "cloudflare-proxy", "docker-plugin-loki"]);
 	}
 	pools.insert(
 		"svc".into(),
@@ -250,7 +243,7 @@ pub async fn build_pools(ctx: &ProjectContext) -> Result<HashMap<String, Pool>> 
 			.vpc(true)
 			// TODO: We need a new PoolLocalMode for running locally and being able to run remote
 			// nodes
-			.local_mode(PoolLocalMode::Locally)
+			.local_mode(PoolLocalMode::LocalAndRemote)
 			.volumes(hashmap! {
 				"ats".into() => PoolVolume {},
 			})
@@ -469,7 +462,7 @@ pub async fn build_pools(ctx: &ProjectContext) -> Result<HashMap<String, Pool>> 
 	pools.insert(
 		"ing-px".into(),
 		PoolBuilder::default()
-			.roles(vec!["traefik", "consul-client"])
+			.roles(vec!["traefik", "ingress-proxy", "consul-client"])
 			.vpc(true)
 			.local_mode(PoolLocalMode::Locally)
 			.tunnels(hashmap! {
@@ -549,7 +542,7 @@ pub async fn build_pools(ctx: &ProjectContext) -> Result<HashMap<String, Pool>> 
 	pools.insert(
 		"ing-job".into(),
 		PoolBuilder::default()
-			.roles(vec!["traefik"])
+			.roles(vec!["traefik", "ingress-proxy"])
 			.vpc(false)
 			.local_mode(PoolLocalMode::Keep)
 			.tunnels(hashmap! {
@@ -659,7 +652,7 @@ pub async fn build_pools(ctx: &ProjectContext) -> Result<HashMap<String, Pool>> 
 				},
 				FirewallRule {
 					label: "nomad-dynamic-udp".into(),
-					ports: "20000-25999".into(),
+					ports: "20000-31999".into(),
 					protocol: "udp".into(),
 					inbound_ipv4_cidr: vec!["0.0.0.0/0".into()],
 					inbound_ipv6_cidr: vec!["::/0".into()],
@@ -715,7 +708,10 @@ fn filter_pools(
 			new_pools.extend(
 				pools
 					.iter()
-					.filter(|(_, x)| x.local_mode == PoolLocalMode::Keep)
+					.filter(|(_, x)| {
+						x.local_mode == PoolLocalMode::Keep
+							|| x.local_mode == PoolLocalMode::LocalAndRemote
+					})
 					.map(|(k, v)| (k.clone(), v.clone())),
 			);
 
@@ -725,6 +721,7 @@ fn filter_pools(
 				.filter(|(_, x)| {
 					x.local_mode == PoolLocalMode::Locally
 						|| x.local_mode == PoolLocalMode::LocalOnly
+						|| x.local_mode == PoolLocalMode::LocalAndRemote
 				})
 				.map(|(_, x)| x)
 				.collect::<Vec<_>>();

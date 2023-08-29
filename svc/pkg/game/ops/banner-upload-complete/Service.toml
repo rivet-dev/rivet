@@ -5,3 +5,6 @@ name = "game-banner-upload-complete"
 kind = "rust"
 
 [operation]
+
+[databases]
+db-game = {}

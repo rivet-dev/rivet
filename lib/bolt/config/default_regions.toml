@@ -7,6 +7,7 @@ provider = "linode"
 provider_region = "us-southeast"
 netnum = 0
 preferred_subnets = ["192.168.128.0/17"]
+supports_vlan = true
 
 [lnd-sfo]
 id = "19f1b737-0ff1-4676-a834-1af8c4e9890f"

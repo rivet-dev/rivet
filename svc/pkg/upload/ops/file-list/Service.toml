@@ -5,3 +5,6 @@ name = "upload-file-list"
 kind = "rust"
 
 [operation]
+
+[databases]
+db-upload = {}

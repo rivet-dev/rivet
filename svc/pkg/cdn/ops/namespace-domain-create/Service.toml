@@ -5,3 +5,6 @@ name = "cdn-namespace-domain-create"
 kind = "rust"
 
 [operation]
+
+[databases]
+db-cdn = {}

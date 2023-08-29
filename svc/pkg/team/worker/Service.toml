@@ -5,3 +5,6 @@ name = "team-worker"
 kind = "rust"
 
 [consumer]
+
+[databases]
+db-team = {}

@@ -2,7 +2,7 @@ use chirp_worker::prelude::*;
 use proto::backend::pkg::*;
 
 #[worker(name = "mm-lobby-job-run-cleanup")]
-async fn worker(ctx: OperationContext<job_run::msg::cleanup::Message>) -> GlobalResult<()> {
+async fn worker(ctx: &OperationContext<job_run::msg::cleanup::Message>) -> GlobalResult<()> {
 	let crdb = ctx.crdb("db-mm-state").await?;
 
 	let run_id = internal_unwrap!(ctx.run_id).as_uuid();

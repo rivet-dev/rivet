@@ -5,7 +5,7 @@ use serde_json::json;
 
 #[worker(name = "module-instance-version-set")]
 async fn worker(
-	ctx: OperationContext<module::msg::instance_version_set::Message>,
+	ctx: &OperationContext<module::msg::instance_version_set::Message>,
 ) -> Result<(), GlobalError> {
 	let crdb = ctx.crdb("db-module").await?;
 

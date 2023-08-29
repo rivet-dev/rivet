@@ -1,0 +1,2 @@
+ALTER TABLE lobby_groups
+	ADD COLUMN listable BOOLEAN NOT NULL DEFAULT true;

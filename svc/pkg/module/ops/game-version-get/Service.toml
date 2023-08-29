@@ -5,3 +5,6 @@ name = "module-game-version-get"
 kind = "rust"
 
 [operation]
+
+[databases]
+db-module = {}

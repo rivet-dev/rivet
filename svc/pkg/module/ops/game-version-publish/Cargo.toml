@@ -13,7 +13,7 @@ unzip-n = "0.1.2"
 itertools = "0.10.5"
 
 [dependencies.sqlx]
-version = "0.6"
+version = "0.7"
 default-features = false
 
 [dev-dependencies]

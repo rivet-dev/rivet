@@ -1,3 +1,8 @@
+use std::{
+	collections::{HashMap, HashSet},
+	str::FromStr,
+};
+
 use api_helper::{anchor::WatchIndexQuery, ctx::Ctx};
 use proto::{
 	backend::{self, pkg::*},
@@ -6,11 +11,8 @@ use proto::{
 use rivet_api::models;
 use rivet_convert::ApiTryInto;
 use rivet_operation::prelude::*;
+use serde::Deserialize;
 use serde_json::json;
-use std::{
-	collections::{HashMap, HashSet},
-	str::FromStr,
-};
 
 use crate::{
 	auth::Auth,
@@ -66,7 +68,15 @@ pub async fn join(
 		lobby,
 		ports,
 		player,
-	} = find_inner(&ctx, &ns_data, find_query, body.captcha).await?;
+	} = find_inner(
+		&ctx,
+		&ns_data,
+		find_query,
+		None,
+		body.captcha,
+		VerificationType::UserData(body.verification_data.flatten()),
+	)
+	.await?;
 
 	Ok(models::MatchmakerJoinLobbyResponse {
 		lobby,
@@ -128,56 +138,9 @@ pub async fn find(
 		})
 		.collect::<GlobalResult<Vec<_>>>()?;
 
-	// Resolve the region IDs.
-	//
-	// `region_ids` represents the requested regions in order of priority.
-	let region_ids = if let Some(region_name_ids) = body.regions {
-		// Resolve the region ID corresponding to the name IDs
-		let resolve_res = op!([ctx] region_resolve {
-			name_ids: region_name_ids.clone(),
-		})
-		.await?;
-
-		// Map to region IDs and decide
-		let region_ids = region_name_ids
-			.iter()
-			.flat_map(|name_id| resolve_res.regions.iter().find(|r| r.name_id == *name_id))
-			.flat_map(|r| r.region_id.as_ref())
-			.map(common::Uuid::as_uuid)
-			.collect::<Vec<_>>();
-
-		internal_assert_eq!(region_ids.len(), region_name_ids.len(), "region not found");
-
-		region_ids
-	} else {
-		// Find all enabled region IDs in all requested lobby groups
-		let enabled_region_ids = lobby_groups
-			.iter()
-			.flat_map(|(lg, _)| {
-				lg.regions
-					.iter()
-					.filter_map(|r| r.region_id.as_ref())
-					.map(common::Uuid::as_uuid)
-					.collect::<Vec<_>>()
-			})
-			.collect::<HashSet<Uuid>>()
-			.into_iter()
-			.map(Into::<common::Uuid>::into)
-			.collect::<Vec<_>>();
-
-		// Auto-select the closest region
-		let recommend_res = op!([ctx] region_recommend {
-			latitude: Some(lat),
-			longitude: Some(long),
-			region_ids: enabled_region_ids,
-			..Default::default()
-		})
-		.await?;
-		let primary_region = internal_unwrap_owned!(recommend_res.regions.first());
-		let primary_region_id = internal_unwrap!(primary_region.region_id).as_uuid();
-
-		vec![primary_region_id]
-	};
+	// Resolve region IDs
+	let region_ids =
+		resolve_region_ids(&ctx, lat, long, body.regions.as_ref(), &lobby_groups).await?;
 
 	// Validate that there is a lobby group and region pair that is valid.
 	//
@@ -220,7 +183,7 @@ pub async fn find(
 	let auto_create = if let Some(auto_create) = auto_create {
 		auto_create
 	} else {
-		internal_panic!("no valid lobby group and region id pair found for auto-create");
+		panic_with!(MATCHMAKER_AUTO_CREATE_FAILED);
 	};
 
 	// Build query and find lobby
@@ -245,7 +208,15 @@ pub async fn find(
 		lobby,
 		ports,
 		player,
-	} = find_inner(&ctx, &ns_data, find_query, body.captcha).await?;
+	} = find_inner(
+		&ctx,
+		&ns_data,
+		find_query,
+		None,
+		body.captcha,
+		VerificationType::UserData(body.verification_data.flatten()),
+	)
+	.await?;
 
 	Ok(models::MatchmakerFindLobbyResponse {
 		lobby,
@@ -254,16 +225,171 @@ pub async fn find(
 	})
 }
 
+// MARK: POST /lobbies/create
+pub async fn create(
+	ctx: Ctx<Auth>,
+	body: models::MatchmakerLobbiesCreateRequest,
+) -> GlobalResult<models::MatchmakerCreateLobbyResponse> {
+	let (lat, long) = internal_unwrap_owned!(ctx.coords());
+
+	// Mock response
+	if let Some(ns_dev_ent) = ctx.auth().game_ns_dev_option()? {
+		let FindResponse {
+			lobby,
+			ports,
+			player,
+		} = dev_mock_lobby(&ctx, &ns_dev_ent).await?;
+		return Ok(models::MatchmakerCreateLobbyResponse {
+			lobby,
+			ports,
+			player,
+		});
+	}
+
+	// Verify bearer auth and get user ID
+	let (game_ns, user_id) = tokio::try_join!(
+		ctx.auth().game_ns(&ctx),
+		ctx.auth().fetch_game_user_option(ctx.op_ctx()),
+	)?;
+	let ns_data = fetch_ns(&ctx, &game_ns).await?;
+
+	// Fetch version config
+	let version_config_res = op!([ctx] mm_config_version_get {
+		version_ids: vec![ns_data.version_id.into()],
+	})
+	.await?;
+	let version_data = internal_unwrap_owned!(version_config_res.versions.first());
+	let version_config = internal_unwrap!(version_data.config);
+	let version_meta = internal_unwrap!(version_data.config_meta);
+
+	// Find lobby groups that match the requested game mode
+	let (lobby_group, lobby_group_meta) = unwrap_with_owned!(
+		version_config
+			.lobby_groups
+			.iter()
+			.zip(version_meta.lobby_groups.iter())
+			.find(|(lgc, _)| lgc.name_id == body.game_mode),
+		MATCHMAKER_GAME_MODE_NOT_FOUND
+	);
+
+	let publicity = match body.publicity {
+		models::MatchmakerCustomLobbyPublicity::Public => {
+			backend::matchmaker::lobby::Publicity::Public
+		}
+		models::MatchmakerCustomLobbyPublicity::Private => {
+			backend::matchmaker::lobby::Publicity::Private
+		}
+	};
+
+	// Verify that lobby creation is enabled and user can create a lobby
+	util_mm::verification::verify_config(
+		ctx.op_ctx(),
+		&util_mm::verification::VerifyConfigOpts {
+			kind: util_mm::verification::ConnectionKind::Create,
+			namespace_id: ns_data.namespace_id,
+			user_id,
+			lobby_group,
+			lobby_group_meta,
+			lobby_info: None,
+			lobby_state_json: None,
+			verification_data_json: body
+				.verification_data
+				.as_ref()
+				.map(|o| o.as_ref().map(serde_json::to_string))
+				.flatten()
+				.transpose()?
+				.as_deref(),
+			lobby_config_json: body
+				.lobby_config
+				.as_ref()
+				.map(|o| o.as_ref().map(serde_json::to_string))
+				.flatten()
+				.transpose()?
+				.as_deref(),
+			custom_lobby_publicity: Some(publicity),
+		},
+	)
+	.await?;
+
+	// Resolve region IDs
+	let region_ids = resolve_region_ids(
+		&ctx,
+		lat,
+		long,
+		body.region.map(|r| vec![r]).as_ref(),
+		&[(lobby_group, lobby_group_meta)],
+	)
+	.await?;
+	let region_id = *unwrap_with_owned!(region_ids.first(), MATCHMAKER_REGION_NOT_FOUND);
+
+	let lobby_id = Uuid::new_v4();
+	let lobby_create_res =
+		msg!([ctx] mm::msg::lobby_create(lobby_id) -> mm::msg::lobby_create_complete {
+			lobby_id: Some(lobby_id.into()),
+			namespace_id: Some(ns_data.namespace_id.into()),
+			lobby_group_id: lobby_group_meta.lobby_group_id,
+			region_id: Some(region_id.into()),
+			create_ray_id: Some(ctx.op_ctx().ray_id().into()),
+			preemptively_created: false,
+
+			creator_user_id: user_id.map(Into::into),
+			is_custom: true,
+			publicity: Some(publicity as i32),
+			lobby_config_json: body.lobby_config
+				.as_ref()
+				.map(serde_json::to_string)
+				.transpose()?,
+		})
+		.await?;
+
+	// Join the lobby that was just created
+	let find_query =
+		mm::msg::lobby_find::message::Query::Direct(backend::matchmaker::query::Direct {
+			lobby_id: lobby_create_res.lobby_id,
+		});
+	let FindResponse {
+		lobby,
+		ports,
+		player,
+	} = find_inner(
+		&ctx,
+		&ns_data,
+		find_query,
+		Some(version_config.clone()),
+		body.captcha,
+		VerificationType::Bypass,
+	)
+	.await?;
+
+	// TODO: Remove this hack to give Treafik time to update
+	tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+
+	// TODO: Cleanup lobby if find failed
+
+	Ok(models::MatchmakerCreateLobbyResponse {
+		lobby,
+		ports,
+		player,
+	})
+}
+
+#[derive(Deserialize)]
+pub struct ListQuery {
+	#[serde(default)]
+	include_state: bool,
+}
+
 // MARK: GET /lobbies/list
 pub async fn list(
 	ctx: Ctx<Auth>,
 	_watch_index: WatchIndexQuery,
+	query: ListQuery,
 ) -> GlobalResult<models::MatchmakerListLobbiesResponse> {
 	let (lat, long) = internal_unwrap_owned!(ctx.coords());
 
 	// Mock response
 	if let Some(ns_dev_ent) = ctx.auth().game_ns_dev_option()? {
-		return dev_mock_lobby_list(&ctx, &ns_dev_ent).await;
+		return dev_mock_lobby_list(&ctx, &ns_dev_ent, query.include_state).await;
 	}
 
 	let game_ns = ctx.auth().game_ns(&ctx).await?;
@@ -273,7 +399,7 @@ pub async fn list(
 	// Fetch version config and lobbies
 	let (meta, lobbies) = tokio::try_join!(
 		fetch_lobby_list_meta(ctx.op_ctx(), game_ns.namespace_id, lat, long),
-		fetch_lobby_list(ctx.op_ctx(), game_ns.namespace_id),
+		fetch_lobby_list(ctx.op_ctx(), game_ns.namespace_id, query.include_state),
 	)?;
 
 	let regions = meta
@@ -290,8 +416,16 @@ pub async fn list(
 		})
 		.collect();
 
+	// Count lobbies by lobby group id
+	let mut lobbies_by_lobby_group_id: HashMap<Uuid, usize> = HashMap::new();
+	for lobby in &lobbies {
+		let lobby_group_id = internal_unwrap!(lobby.lobby.lobby_group_id).as_uuid();
+		let entry = lobbies_by_lobby_group_id.entry(lobby_group_id).or_default();
+		*entry += 1;
+	}
+
 	let lobbies = lobbies
-		.iter()
+		.into_iter()
 		// Join with lobby group
 		.filter_map(|lobby| {
 			if let Some((lobby_group, _)) = meta
@@ -305,20 +439,26 @@ pub async fn list(
 				None
 			}
 		})
-		// Filter out empty lobbies
-		.filter(|(lobby, _)| {
+		// Filter out empty and unlistable lobbies
+		.filter(|(lobby, lobby_group)| {
+			// Hide if not listable
+			if !lobby_group.listable {
+				return false;
+			}
+
 			// Keep if lobby not empty
 			if lobby.player_count.registered_player_count != 0 {
 				return true;
 			}
 
-			// Keep if this is the only lobby in this lobby group
-			if lobbies
-				.iter()
-				.filter(|x| x.lobby.lobby_group_id == lobby.lobby.lobby_group_id)
-				.count() == 1
-			{
-				return true;
+			// Keep if this is the only lobby in this lobby group (even if its empty)
+			if let Some(lobby_group_id) = lobby.lobby.lobby_group_id {
+				if *lobbies_by_lobby_group_id
+					.get(&lobby_group_id.as_uuid())
+					.unwrap_or(&0) == 1
+				{
+					return true;
+				}
 			}
 
 			// This lobby is empty (i.e. idle) and should not be listed
@@ -335,16 +475,13 @@ pub async fn list(
 				region_id: region.name_id.clone(),
 				game_mode_id: lobby_group.name_id.clone(),
 				lobby_id: internal_unwrap!(lobby.lobby.lobby_id).as_uuid(),
-				max_players_normal: std::convert::TryInto::try_into(
-					lobby.lobby.max_players_normal,
-				)?,
-				max_players_direct: std::convert::TryInto::try_into(
-					lobby.lobby.max_players_direct,
-				)?,
-				max_players_party: std::convert::TryInto::try_into(lobby.lobby.max_players_party)?,
-				total_player_count: std::convert::TryInto::try_into(
+				max_players_normal: ApiTryInto::try_into(lobby.lobby.max_players_normal)?,
+				max_players_direct: ApiTryInto::try_into(lobby.lobby.max_players_direct)?,
+				max_players_party: ApiTryInto::try_into(lobby.lobby.max_players_party)?,
+				total_player_count: ApiTryInto::try_into(
 					lobby.player_count.registered_player_count,
 				)?,
+				state: lobby.state.map(Some),
 			})
 		})
 		.collect::<GlobalResult<Vec<_>>>()?;
@@ -352,76 +489,6 @@ pub async fn list(
 	Ok(models::MatchmakerListLobbiesResponse {
 		game_modes,
 		regions,
-		lobbies,
-	})
-}
-
-async fn dev_mock_lobby_list(
-	ctx: &Ctx<Auth>,
-	ns_dev_ent: &rivet_claims::ent::GameNamespaceDevelopment,
-) -> GlobalResult<models::MatchmakerListLobbiesResponse> {
-	// Read the version config
-	let ns_res = op!([ctx] game_namespace_get {
-		namespace_ids: vec![ns_dev_ent.namespace_id.into()],
-	})
-	.await?;
-	let ns_data = internal_unwrap_owned!(ns_res.namespaces.first());
-	let version_id = internal_unwrap!(ns_data.version_id).as_uuid();
-
-	let version_res = op!([ctx] mm_config_version_get {
-		version_ids: vec![version_id.into()],
-	})
-	.await?;
-	let version = internal_unwrap_owned!(
-		version_res.versions.first(),
-		"no matchmaker config for namespace"
-	);
-	let version_config = internal_unwrap!(version.config);
-
-	// Create fake region
-	let region = models::MatchmakerRegionInfo {
-		region_id: util_mm::consts::DEV_REGION_ID.into(),
-		provider_display_name: util_mm::consts::DEV_PROVIDER_NAME.into(),
-		region_display_name: util_mm::consts::DEV_REGION_NAME.into(),
-		datacenter_coord: Box::new(models::GeoCoord {
-			latitude: 0.0,
-			longitude: 0.0,
-		}),
-		datacenter_distance_from_client: Box::new(models::GeoDistance {
-			kilometers: 0.0,
-			miles: 0.0,
-		}),
-	};
-
-	// List game modes
-	let game_modes = version_config
-		.lobby_groups
-		.iter()
-		.map(|lg| models::MatchmakerGameModeInfo {
-			game_mode_id: lg.name_id.clone(),
-		})
-		.collect();
-
-	// Create a fake lobby in each game mode
-	let lobbies = version_config
-		.lobby_groups
-		.iter()
-		.map(|lg| {
-			GlobalResult::Ok(models::MatchmakerLobbyInfo {
-				region_id: util_mm::consts::DEV_REGION_ID.into(),
-				game_mode_id: lg.name_id.clone(),
-				lobby_id: Uuid::nil(),
-				max_players_normal: std::convert::TryInto::try_into(lg.max_players_normal)?,
-				max_players_direct: std::convert::TryInto::try_into(lg.max_players_direct)?,
-				max_players_party: std::convert::TryInto::try_into(lg.max_players_party)?,
-				total_player_count: 0,
-			})
-		})
-		.collect::<GlobalResult<Vec<_>>>()?;
-
-	Ok(models::MatchmakerListLobbiesResponse {
-		regions: vec![region],
-		game_modes,
 		lobbies,
 	})
 }
@@ -510,12 +577,14 @@ async fn fetch_lobby_list_meta(
 struct FetchLobbyListEntry {
 	lobby: backend::matchmaker::Lobby,
 	player_count: mm::lobby_player_count::response::Lobby,
+	state: Option<serde_json::Value>,
 }
 
 /// Fetches all the lobbies and their associated player counts.
 async fn fetch_lobby_list(
 	ctx: &OperationContext<()>,
 	namespace_id: Uuid,
+	include_state: bool,
 ) -> GlobalResult<Vec<FetchLobbyListEntry>> {
 	// Fetch lobby IDs
 	let lobby_ids = {
@@ -530,7 +599,7 @@ async fn fetch_lobby_list(
 
 	// Fetch all lobbies
 	let lobbies = {
-		let (lobby_get_res, player_count_res) = tokio::try_join!(
+		let (lobby_get_res, player_count_res, lobby_states) = tokio::try_join!(
 			op!([ctx] mm_lobby_get {
 				lobby_ids: lobby_ids.clone(),
 				include_stopped: false,
@@ -538,30 +607,60 @@ async fn fetch_lobby_list(
 			op!([ctx] mm_lobby_player_count {
 				lobby_ids: lobby_ids.clone(),
 			}),
+			async {
+				if include_state {
+					let lobbies_res = op!([ctx] mm_lobby_state_get {
+						lobby_ids: lobby_ids.clone(),
+					})
+					.await?;
+
+					Ok(lobbies_res.lobbies)
+				} else {
+					Ok(Vec::new())
+				}
+			},
 		)?;
 
-		// Match lobby data with player counts
+		// Match lobby data with player counts and states
 		lobby_get_res
 			.lobbies
 			.iter()
-			.filter_map(|lobby| {
-				player_count_res
+			.filter(|x| {
+				matches!(
+					backend::matchmaker::lobby::Publicity::from_i32(x.publicity as i32),
+					Some(backend::matchmaker::lobby::Publicity::Public)
+				)
+			})
+			.map(|lobby| {
+				let player_count = player_count_res
 					.lobbies
 					.iter()
-					.find(|pc| pc.lobby_id == lobby.lobby_id)
-					.map(|pc| FetchLobbyListEntry {
+					.find(|pc| pc.lobby_id == lobby.lobby_id);
+				let state = lobby_states.iter().find(|ls| ls.lobby_id == lobby.lobby_id);
+
+				if let (Some(player_count), Some(state)) = (player_count, state) {
+					Ok(Some(FetchLobbyListEntry {
 						lobby: lobby.clone(),
-						player_count: pc.clone(),
-					})
+						player_count: player_count.clone(),
+						state: state
+							.state_json
+							.as_ref()
+							.map(|s| serde_json::from_str::<serde_json::Value>(&s))
+							.transpose()?,
+					}))
+				} else {
+					Ok(None)
+				}
 			})
-			.collect::<Vec<_>>()
+			.filter_map(|res| res.transpose())
+			.collect::<GlobalResult<Vec<_>>>()?
 	};
 
 	Ok(lobbies)
 }
 
 // MARK: PUT /lobbies/closed
-pub async fn closed(
+pub async fn set_closed(
 	ctx: Ctx<Auth>,
 	body: models::MatchmakerLobbiesSetClosedRequest,
 ) -> GlobalResult<serde_json::Value> {
@@ -581,6 +680,59 @@ pub async fn closed(
 	Ok(json!({}))
 }
 
+// MARK: PUT /lobbies/state
+pub async fn set_state(ctx: Ctx<Auth>, body: bytes::Bytes) -> GlobalResult<serde_json::Value> {
+	// Mock response
+	if ctx.auth().game_ns_dev_option()?.is_some() {
+		return Ok(json!({}));
+	}
+
+	let lobby_ent = ctx.auth().lobby()?;
+	let state = if !body.is_empty() {
+		let parsed = serde_json::from_slice::<serde_json::Value>(&body[..])?;
+
+		Some(serde_json::to_string(&parsed)?)
+	} else {
+		None
+	};
+
+	msg!([ctx] mm::msg::lobby_state_set(lobby_ent.lobby_id) {
+		lobby_id: Some(lobby_ent.lobby_id.into()),
+		state_json: state,
+	})
+	.await?;
+
+	Ok(json!({}))
+}
+
+// MARK: GET /lobbies/{}/state
+pub async fn get_state(
+	ctx: Ctx<Auth>,
+	lobby_id: Uuid,
+	_watch_index: WatchIndexQuery,
+) -> GlobalResult<Option<serde_json::Value>> {
+	// Mock response
+	if ctx.auth().game_ns_dev_option()?.is_some() {
+		return Ok(Some(json!({})));
+	}
+
+	let lobby_ent = ctx.auth().lobby()?;
+
+	let lobbies_res = op!([ctx] mm_lobby_state_get {
+		lobby_ids: vec![lobby_id.into()],
+	})
+	.await?;
+	let lobby = internal_unwrap_owned!(lobbies_res.lobbies.first());
+
+	let state = lobby
+		.state_json
+		.as_ref()
+		.map(|state_json| serde_json::from_str::<serde_json::Value>(&state_json))
+		.transpose()?;
+
+	Ok(state)
+}
+
 // MARK: Utilities
 struct FindResponse {
 	lobby: Box<models::MatchmakerJoinLobby>,
@@ -588,21 +740,38 @@ struct FindResponse {
 	player: Box<models::MatchmakerJoinPlayer>,
 }
 
+#[derive(Debug)]
+enum VerificationType {
+	UserData(Option<serde_json::Value>),
+	Bypass,
+}
+
 #[tracing::instrument(err, skip(ctx, game_ns))]
 async fn find_inner(
 	ctx: &Ctx<Auth>,
 	game_ns: &NamespaceData,
 	query: mm::msg::lobby_find::message::Query,
+	version_config: Option<backend::matchmaker::VersionConfig>,
 	captcha: Option<Box<models::CaptchaConfig>>,
+	verification: VerificationType,
 ) -> GlobalResult<FindResponse> {
-	// Get version config
-	let version_config_res = op!([ctx] mm_config_version_get {
-		version_ids: vec![game_ns.version_id.into()],
-	})
-	.await?;
+	let (version_config, user_id) = tokio::try_join!(
+		// Fetch version config if it was not passed as an argument
+		async {
+			if let Some(version_config) = version_config {
+				Ok(version_config)
+			} else {
+				let version_config_res = op!([ctx] mm_config_version_get {
+					version_ids: vec![game_ns.version_id.into()],
+				})
+				.await?;
 
-	let version_config = internal_unwrap_owned!(version_config_res.versions.first());
-	let version_config = internal_unwrap!(version_config.config);
+				let version_config = internal_unwrap_owned!(version_config_res.versions.first());
+				Ok(internal_unwrap!(version_config.config).clone())
+			}
+		},
+		ctx.auth().fetch_game_user_option(ctx.op_ctx()),
+	)?;
 
 	// Validate captcha
 	if let Some(captcha_config) = &version_config.captcha {
@@ -695,7 +864,9 @@ async fn find_inner(
 
 	// Find lobby
 	let query_id = Uuid::new_v4();
-	let find_res = msg!([ctx] @notrace mm::msg::lobby_find(game_ns.namespace_id, query_id) -> Result<mm::msg::lobby_find_complete, mm::msg::lobby_find_fail> {
+	let find_res = msg!([ctx] @notrace mm::msg::lobby_find(game_ns.namespace_id, query_id)
+		-> Result<mm::msg::lobby_find_complete, mm::msg::lobby_find_fail>
+	{
 		namespace_id: Some(game_ns.namespace_id.into()),
 		query_id: Some(query_id.into()),
 		join_kind: backend::matchmaker::query::JoinKind::Normal as i32,
@@ -705,6 +876,16 @@ async fn find_inner(
 			client_info: Some(ctx.client_info()),
 		}],
 		query: Some(query),
+		user_id: user_id.map(Into::into),
+		verification_data_json: if let VerificationType::UserData(verification_data) = &verification {
+				verification_data
+					.as_ref()
+					.map(|data| serde_json::to_string(&data))
+					.transpose()?
+			} else {
+				None
+			},
+		bypass_verification: matches!(verification, VerificationType::Bypass),
 	})
 	.await?;
 	let lobby_id = match find_res
@@ -728,6 +909,13 @@ async fn find_inner(
 				RegionNotEnabled => panic_with!(MATCHMAKER_REGION_NOT_ENABLED_FOR_GAME_MODE),
 
 				DevTeamInvalidStatus => panic_with!(GROUP_INVALID_DEVELOPER_STATUS),
+
+				FindDisabled => panic_with!(MATCHMAKER_FIND_DISABLED),
+				JoinDisabled => panic_with!(MATCHMAKER_JOIN_DISABLED),
+				VerificationFailed => panic_with!(MATCHMAKER_VERIFICATION_FAILED),
+				VerificationRequestFailed => panic_with!(MATCHMAKER_VERIFICATION_REQUEST_FAILED),
+				IdentityRequired => panic_with!(MATCHMAKER_IDENTITY_REQUIRED),
+				RegistrationRequired => panic_with!(MATCHMAKER_REGISTRATION_REQUIRED),
 			};
 		}
 		Err(None) => internal_panic!("failed to parse find error code"),
@@ -771,6 +959,7 @@ async fn find_inner(
 			})
 			.await?;
 
+			// NOTE: The matchmaker config is fetched again to account for outdated lobbies
 			let version_id = internal_unwrap_owned!(version_res.versions.first());
 			let version_id = internal_unwrap!(version_id.version_id);
 			let version_res = op!([ctx] mm_config_version_get {
@@ -799,7 +988,6 @@ async fn find_inner(
 
 	// Convert the ports to client-friendly ports
 	let run = internal_unwrap_owned!(run_res.runs.first());
-
 	let ports = docker_runtime
 		.ports
 		.iter()
@@ -835,6 +1023,71 @@ async fn find_inner(
 		ports,
 		player,
 	})
+}
+
+async fn resolve_region_ids(
+	ctx: &Ctx<Auth>,
+	lat: f64,
+	long: f64,
+	regions: Option<&Vec<String>>,
+	lobby_groups: &[(
+		&backend::matchmaker::LobbyGroup,
+		&backend::matchmaker::LobbyGroupMeta,
+	)],
+) -> GlobalResult<Vec<Uuid>> {
+	// Represents the requested regions in order of priority.
+	let region_ids = if let Some(region_name_ids) = regions {
+		// Resolve the region ID corresponding to the name IDs
+		let resolve_res = op!([ctx] region_resolve {
+			name_ids: region_name_ids.clone(),
+		})
+		.await?;
+
+		// Map to region IDs and decide
+		let region_ids = resolve_res
+			.regions
+			.iter()
+			.map(|r| Ok(internal_unwrap!(r.region_id).as_uuid()))
+			.collect::<GlobalResult<Vec<_>>>()?;
+
+		assert_eq_with!(
+			region_ids.len(),
+			region_name_ids.len(),
+			MATCHMAKER_REGION_NOT_FOUND
+		);
+
+		region_ids
+	} else {
+		// Find all enabled region IDs in all requested lobby groups
+		let enabled_region_ids = lobby_groups
+			.iter()
+			.flat_map(|(lg, _)| {
+				lg.regions
+					.iter()
+					.filter_map(|r| r.region_id.as_ref())
+					.map(common::Uuid::as_uuid)
+					.collect::<Vec<_>>()
+			})
+			.collect::<HashSet<Uuid>>()
+			.into_iter()
+			.map(Into::<common::Uuid>::into)
+			.collect::<Vec<_>>();
+
+		// Auto-select the closest region
+		let recommend_res = op!([ctx] region_recommend {
+			latitude: Some(lat),
+			longitude: Some(long),
+			region_ids: enabled_region_ids,
+			..Default::default()
+		})
+		.await?;
+		let primary_region = internal_unwrap_owned!(recommend_res.regions.first());
+		let primary_region_id = internal_unwrap!(primary_region.region_id).as_uuid();
+
+		vec![primary_region_id]
+	};
+
+	Ok(region_ids)
 }
 
 #[tracing::instrument(err, skip(ctx))]
@@ -900,6 +1153,78 @@ async fn dev_mock_lobby(
 		}),
 		ports,
 		player,
+	})
+}
+
+async fn dev_mock_lobby_list(
+	ctx: &Ctx<Auth>,
+	ns_dev_ent: &rivet_claims::ent::GameNamespaceDevelopment,
+	include_state: bool,
+) -> GlobalResult<models::MatchmakerListLobbiesResponse> {
+	// Read the version config
+	let ns_res = op!([ctx] game_namespace_get {
+		namespace_ids: vec![ns_dev_ent.namespace_id.into()],
+	})
+	.await?;
+	let ns_data = internal_unwrap_owned!(ns_res.namespaces.first());
+	let version_id = internal_unwrap!(ns_data.version_id).as_uuid();
+
+	let version_res = op!([ctx] mm_config_version_get {
+		version_ids: vec![version_id.into()],
+	})
+	.await?;
+	let version = internal_unwrap_owned!(
+		version_res.versions.first(),
+		"no matchmaker config for namespace"
+	);
+	let version_config = internal_unwrap!(version.config);
+
+	// Create fake region
+	let region = models::MatchmakerRegionInfo {
+		region_id: util_mm::consts::DEV_REGION_ID.into(),
+		provider_display_name: util_mm::consts::DEV_PROVIDER_NAME.into(),
+		region_display_name: util_mm::consts::DEV_REGION_NAME.into(),
+		datacenter_coord: Box::new(models::GeoCoord {
+			latitude: 0.0,
+			longitude: 0.0,
+		}),
+		datacenter_distance_from_client: Box::new(models::GeoDistance {
+			kilometers: 0.0,
+			miles: 0.0,
+		}),
+	};
+
+	// List game modes
+	let game_modes = version_config
+		.lobby_groups
+		.iter()
+		.map(|lg| models::MatchmakerGameModeInfo {
+			game_mode_id: lg.name_id.clone(),
+		})
+		.collect();
+
+	// Create a fake lobby in each game mode
+	let lobbies = version_config
+		.lobby_groups
+		.iter()
+		.map(|lg| {
+			GlobalResult::Ok(models::MatchmakerLobbyInfo {
+				region_id: util_mm::consts::DEV_REGION_ID.into(),
+				game_mode_id: lg.name_id.clone(),
+				lobby_id: Uuid::nil(),
+				max_players_normal: std::convert::TryInto::try_into(lg.max_players_normal)?,
+				max_players_direct: std::convert::TryInto::try_into(lg.max_players_direct)?,
+				max_players_party: std::convert::TryInto::try_into(lg.max_players_party)?,
+				total_player_count: 0,
+				state: Some(Some(json!({ "foo": "bar" }))),
+			})
+		})
+		.collect::<GlobalResult<Vec<_>>>()?;
+
+	Ok(models::MatchmakerListLobbiesResponse {
+		regions: vec![region],
+		game_modes,
+		lobbies,
 	})
 }
 

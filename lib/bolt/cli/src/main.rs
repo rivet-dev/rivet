@@ -134,6 +134,10 @@ async fn main() -> Result<std::process::ExitCode> {
 fn prompt_prod() -> Result<()> {
 	use std::io::Write;
 
+	if std::env::var("BOLT_HEADLESS").ok() == Some("1".to_string()) {
+		return Ok(());
+	}
+
 	let mut input = String::new();
 
 	print!("Are you sure you want to run this command in prod? (yes) ");

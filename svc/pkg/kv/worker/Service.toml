@@ -5,3 +5,6 @@ name = "kv-worker"
 kind = "rust"
 
 [consumer]
+
+[databases]
+db-kv = {}

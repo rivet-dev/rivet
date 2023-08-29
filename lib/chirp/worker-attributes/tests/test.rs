@@ -7,7 +7,7 @@ struct TestRequest {}
 struct TestResponse {}
 
 #[chirp_worker_attributes::worker]
-async fn worker(ctx: OperationContext<TestMessage>) -> GlobalResult<TestResponse> {
+async fn worker(ctx: &OperationContext<TestMessage>) -> GlobalResult<TestResponse> {
 	tracing::info!(body = ?req, "hello, world!");
 
 	Ok(TestResponse {})

@@ -5,3 +5,6 @@ name = "kv-config-namespace-create"
 kind = "rust"
 
 [operation]
+
+[databases]
+db-kv-config = {}

@@ -119,6 +119,7 @@ pub fn traffic_server() -> Vec<Rule> {
 	vec![
 		Rule::group("pool:svc", RuleProtocol::TCP, "9300"),
 		Rule::group("pool:ing-px", RuleProtocol::TCP, "9300"),
+		Rule::group("pool:job", RuleProtocol::TCP, "9300"),
 	]
 }
 

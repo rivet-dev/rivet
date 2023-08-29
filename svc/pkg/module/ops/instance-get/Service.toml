@@ -5,3 +5,6 @@ name = "module-instance-get"
 kind = "rust"
 
 [operation]
+
+[databases]
+db-module = {}

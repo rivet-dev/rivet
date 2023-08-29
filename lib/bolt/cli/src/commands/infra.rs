@@ -8,16 +8,23 @@ use clap::Parser;
 #[derive(Parser)]
 pub enum SubCommand {
 	/// Prints out the plan used to provision the Rivet cluster.
-	Plan,
+	Plan {
+		#[clap(long)]
+		start_at: Option<String>,
+	},
 	/// Provisions all infrastructure required for the Rivet cluster.
 	Up {
 		#[clap(long, short = 'y')]
 		yes: bool,
+		#[clap(long)]
+		start_at: Option<String>,
 	},
 	/// Destroys all provisioned infrastructure.
 	Destroy {
 		#[clap(long, short = 'y')]
 		yes: bool,
+		#[clap(long)]
+		start_at: Option<String>,
 	},
 	/// Manages infrastructure migrations.
 	#[clap(hide(true))]
@@ -35,16 +42,24 @@ pub enum MigrateSubCommand {
 impl SubCommand {
 	pub async fn execute(self, ctx: ProjectContext) -> Result<()> {
 		match self {
-			Self::Plan => {
-				let plan = tasks::infra::build_plan(&ctx)?;
-				println!("{plan:#?}");
+			Self::Plan { start_at } => {
+				let plan = tasks::infra::build_plan(&ctx, start_at)?;
+				for step in plan {
+					println!("{}: {:?}", step.name_id, step.kind);
+				}
 			}
-			Self::Up { yes: auto_approve } => {
-				let plan = tasks::infra::build_plan(&ctx)?;
+			Self::Up {
+				yes: auto_approve,
+				start_at,
+			} => {
+				let plan = tasks::infra::build_plan(&ctx, start_at)?;
 				tasks::infra::execute_plan(&ctx, &plan, ExecutePlanOpts { auto_approve }).await?;
 			}
-			Self::Destroy { yes: auto_approve } => {
-				let plan = tasks::infra::build_plan(&ctx)?;
+			Self::Destroy {
+				yes: auto_approve,
+				start_at,
+			} => {
+				let plan = tasks::infra::build_plan(&ctx, start_at)?;
 				tasks::infra::destroy_plan(&ctx, &plan, ExecutePlanOpts { auto_approve }).await?;
 			}
 			Self::Migrate { command } => match command {

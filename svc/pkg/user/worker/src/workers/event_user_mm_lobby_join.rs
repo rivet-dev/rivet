@@ -2,7 +2,7 @@ use chirp_worker::prelude::*;
 use proto::backend::{self, pkg::*};
 
 #[worker(name = "user-event-user-mm-lobby-join")]
-async fn worker(ctx: OperationContext<user::msg::mm_lobby_join::Message>) -> GlobalResult<()> {
+async fn worker(ctx: &OperationContext<user::msg::mm_lobby_join::Message>) -> GlobalResult<()> {
 	let user_id = internal_unwrap!(ctx.user_id).as_uuid();
 
 	msg!([ctx] user::msg::event(user_id) {

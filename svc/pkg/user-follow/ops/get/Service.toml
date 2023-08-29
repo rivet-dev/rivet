@@ -5,3 +5,6 @@ name = "user-follow-get"
 kind = "rust"
 
 [operation]
+
+[databases]
+db-user-follow = {}

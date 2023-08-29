@@ -72,7 +72,7 @@ async fn handle(
 						path: "image.tar".into(),
 						mime: Some("application/x-tar".into()),
 						content_length: image_file.content_length,
-						multipart: true,
+						multipart: ctx.multipart,
 						..Default::default()
 					},
 				],

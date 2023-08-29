@@ -12,7 +12,7 @@ prost = "0.10"
 util-mm = { package = "rivet-util-mm", path = "../../../mm/util" }
 
 [dependencies.sqlx]
-version = "0.6"
+version = "0.7"
 default-features = false
 
 [dev-dependencies]

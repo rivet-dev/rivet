@@ -5,3 +5,6 @@ name = "game-namespace-list"
 kind = "rust"
 
 [operation]
+
+[databases]
+db-game = {}

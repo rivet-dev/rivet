@@ -5,3 +5,6 @@ name = "team-user-ban-list"
 kind = "rust"
 
 [operation]
+
+[databases]
+db-team = {}

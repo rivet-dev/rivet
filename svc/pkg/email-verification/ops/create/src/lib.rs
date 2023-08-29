@@ -52,9 +52,7 @@ async fn handle(
 			json!({
 				"game_display_name": game.display_name.clone(),
 				"game_logo_url": util::route::game_logo(
-					game.logo_upload_id.as_ref().map(common::Uuid::as_uuid),
-					game.logo_file_name.as_ref(),
-				),
+					&game),
 				"verification_code": code,
 			}),
 		)

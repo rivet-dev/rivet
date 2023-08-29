@@ -51,15 +51,14 @@ pub async fn handle(
 		.filter_map(|user| user.profile_id.map(Into::into))
 		.collect::<Vec<_>>();
 
-	let upload_res = op!([ctx] upload_get {
-		upload_ids: upload_ids.clone(),
-	})
-	.await?;
-
-	let files_res = op!([ctx] upload_file_list {
-		upload_ids: upload_ids.clone(),
-	})
-	.await?;
+	let (upload_res, files_res) = tokio::try_join!(
+		op!([ctx] upload_get {
+			upload_ids: upload_ids.clone(),
+		}),
+		op!([ctx] upload_file_list {
+			upload_ids: upload_ids.clone(),
+		})
+	)?;
 
 	Ok(user::get::Response {
 		users: users
@@ -68,7 +67,7 @@ pub async fn handle(
 				let profile_id = user.profile_id.map(Into::<common::Uuid>::into);
 
 				// Fetch all information relating to the profile image
-				let (profile_upload_complete_ts, profile_file_name) = {
+				let (profile_upload_complete_ts, profile_file_name, profile_provider) = {
 					let upload = upload_res
 						.uploads
 						.iter()
@@ -84,7 +83,7 @@ pub async fn handle(
 							.rsplit_once('/')
 							.map(|(_, file_name)| file_name.to_owned())
 							.or(Some(file.path.clone()));
-						(upload.complete_ts, profile_file_name)
+						(upload.complete_ts, profile_file_name, Some(upload.provider))
 					} else {
 						Default::default()
 					}
@@ -101,6 +100,7 @@ pub async fn handle(
 						None
 					},
 					profile_file_name,
+					profile_provider,
 					join_ts: user.join_ts,
 					bio: user.bio,
 					is_admin: user.is_admin,

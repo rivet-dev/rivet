@@ -15,7 +15,7 @@ serde_json = "1.0"
 chat-last-read-ts-get = { path = "../../../chat/ops/last-read-ts-get" }
 
 [dependencies.sqlx]
-version = "0.6"
+version = "0.7"
 default-features = false
 
 [dev-dependencies]

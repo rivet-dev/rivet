@@ -5,3 +5,6 @@ name = "chat-thread-get-for-topic"
 kind = "rust"
 
 [operation]
+
+[databases]
+db-chat = {}

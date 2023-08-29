@@ -22,6 +22,10 @@ pub fn serialize_message_params(parameters: &[impl AsRef<str>], join: &str) -> S
 		.map(|x| {
 			if x == "*" {
 				x.to_string()
+			} else if x.is_empty() {
+				// Provide a null value since NATS requires a valid subject
+				// TODO: Find a better null placeholder that doesn't conflict with manual value
+				"__NULL__".to_string()
 			} else {
 				urlencoding::encode(x).to_string()
 			}
@@ -35,11 +39,15 @@ where
 	M: Message,
 	S: AsRef<str>,
 {
-	format!(
-		"chirp.msg.{}.{}",
-		M::NAME,
-		serialize_message_params(parameters, ".")
-	)
+	if parameters.is_empty() {
+		format!("chirp.msg.{}", M::NAME)
+	} else {
+		format!(
+			"chirp.msg.{}.{}",
+			M::NAME,
+			serialize_message_params(parameters, ".")
+		)
+	}
 }
 
 /// A message received from a Chirp subscription.

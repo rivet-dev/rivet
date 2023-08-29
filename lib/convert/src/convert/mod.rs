@@ -8,6 +8,7 @@ pub mod game;
 pub mod group;
 pub mod identity;
 
+#[derive(Debug)]
 pub struct GameWithNamespaceIds {
 	pub namespace_ids: Vec<Uuid>,
 	pub game: backend::game::Game,

@@ -8,7 +8,7 @@ struct LogEntry {
 }
 
 #[worker(name = "nomad-log-export")]
-async fn worker(ctx: OperationContext<nomad_log::msg::export::Message>) -> GlobalResult<()> {
+async fn worker(ctx: &OperationContext<nomad_log::msg::export::Message>) -> GlobalResult<()> {
 	let clickhouse = clickhouse::Client::default()
 		.with_url("http://http.clickhouse.service.consul:8123")
 		.with_user("chirp")

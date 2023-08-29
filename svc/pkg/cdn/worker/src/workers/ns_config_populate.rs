@@ -3,7 +3,7 @@ use proto::backend::{self, pkg::*};
 use redis::AsyncCommands;
 
 #[worker(name = "cdn-ns-config-populate")]
-async fn worker(ctx: OperationContext<cdn::msg::ns_config_update::Message>) -> GlobalResult<()> {
+async fn worker(ctx: &OperationContext<cdn::msg::ns_config_update::Message>) -> GlobalResult<()> {
 	let namespace_id = internal_unwrap_owned!(ctx.namespace_id).as_uuid();
 
 	if let Some((game, ns, cdn_ns_config, cdn_version)) = get_cdn_version(ctx, namespace_id).await?

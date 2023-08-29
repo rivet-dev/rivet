@@ -19,7 +19,7 @@ struct NamespaceInstances {
 
 #[worker(name = "module-ns-version-set")]
 async fn worker(
-	ctx: OperationContext<game::msg::ns_version_set_complete::Message>,
+	ctx: &OperationContext<game::msg::ns_version_set_complete::Message>,
 ) -> Result<(), GlobalError> {
 	let crdb = ctx.crdb("db-module").await?;
 
@@ -33,10 +33,14 @@ async fn worker(
 		version_ids: vec![version_id.into()],
 	})
 	.await?;
-	let game_version = internal_unwrap_owned!(game_versions
+	let Some(game_version) = game_versions
 		.versions
 		.first()
-		.and_then(|x| x.config.as_ref()));
+		.and_then(|x| x.config.as_ref())
+	else {
+		tracing::info!("no game version found");
+		return Ok(());
+	};
 
 	let new_version_keys = game_version
 		.dependencies

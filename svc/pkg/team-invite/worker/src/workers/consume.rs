@@ -12,7 +12,7 @@ struct InvitationRow {
 }
 
 #[worker(name = "team-invite-consume")]
-async fn worker(ctx: OperationContext<team_invite::msg::consume::Message>) -> GlobalResult<()> {
+async fn worker(ctx: &OperationContext<team_invite::msg::consume::Message>) -> GlobalResult<()> {
 	let crdb = ctx.crdb("db-team-invite").await?;
 
 	let user_id = internal_unwrap!(ctx.user_id).as_uuid();
@@ -111,7 +111,7 @@ async fn update_db(
 		",
 	)
 	.bind(&code)
-	.fetch_optional(&mut *tx)
+	.fetch_optional(&mut **tx)
 	.await?;
 	let invitation_row = if let Some(invitation) = invitation_row {
 		tracing::info!(?invitation, "found invitation");
@@ -188,13 +188,13 @@ async fn update_db(
 	// Insert consumption
 	sqlx::query("UPDATE invitations SET use_counter = use_counter + 1 WHERE code = $1")
 		.bind(&code)
-		.execute(&mut *tx)
+		.execute(&mut **tx)
 		.await?;
 	sqlx::query("INSERT INTO invitation_uses (code, user_id, create_ts) VALUES ($1, $2, $3)")
 		.bind(&code)
 		.bind(user_id)
 		.bind(now)
-		.execute(&mut *tx)
+		.execute(&mut **tx)
 		.await?;
 
 	Ok(DbOutput::Success { invitation_row })

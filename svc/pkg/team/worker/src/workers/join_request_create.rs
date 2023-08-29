@@ -35,7 +35,7 @@ async fn fail(
 
 #[worker(name = "team-join-request-create")]
 async fn worker(
-	ctx: OperationContext<team::msg::join_request_create::Message>,
+	ctx: &OperationContext<team::msg::join_request_create::Message>,
 ) -> GlobalResult<()> {
 	let crdb = ctx.crdb("db-team").await?;
 	let team_id: Uuid = internal_unwrap!(ctx.team_id).as_uuid();

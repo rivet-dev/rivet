@@ -3,7 +3,7 @@ use proto::backend::{self, pkg::*};
 
 #[worker(name = "module-instance-destroy")]
 async fn worker(
-	ctx: OperationContext<module::msg::instance_destroy::Message>,
+	ctx: &OperationContext<module::msg::instance_destroy::Message>,
 ) -> Result<(), GlobalError> {
 	let crdb = ctx.crdb("db-module").await?;
 
