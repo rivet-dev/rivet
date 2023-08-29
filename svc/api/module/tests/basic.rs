@@ -97,6 +97,7 @@ impl Ctx {
 			region_id: Some(self.primary_region_id.into()),
 			create_ray_id: None,
 			preemptively_created: false,
+			..Default::default()
 		})
 		.await
 		.unwrap();
@@ -250,6 +251,7 @@ impl Ctx {
 							},
 						],
 					}.into()),
+					..Default::default()
 				}],
 			}),
 			..Default::default()

@@ -100,6 +100,16 @@ impl PoolsInner {
 	async fn record_metrics(&self) {
 		use crate::metrics::*;
 
+		let mut dbs = self
+			.crdb_map()
+			.clone()
+			.into_iter()
+			.map(|(k, v)| (k, v.size(), v.num_idle()))
+			.filter(|x| x.1 > 0)
+			.collect::<Vec<_>>();
+		dbs.sort_by_key(|(_, size, _)| *size);
+		dbs.reverse();
+
 		// CRDB
 		for (db_name, pool) in self.crdb_map() {
 			let label = &[db_name.as_str()];

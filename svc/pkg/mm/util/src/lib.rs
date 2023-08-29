@@ -2,6 +2,7 @@ pub mod consts;
 pub mod defaults;
 pub mod key;
 pub mod test;
+pub mod verification;
 pub mod version_migrations;
 
 pub enum JoinKind {

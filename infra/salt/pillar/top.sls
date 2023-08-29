@@ -18,6 +18,6 @@ base:
     - clickhouse
   'G@roles:minio':
     - minio
-  'G@roles:traefik-cloudflare-proxy':
+  'G@roles:cloudflare-proxy':
     - cloudflare
 

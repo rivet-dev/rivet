@@ -5,3 +5,6 @@ name = "cf-custom-hostname-list-for-namespace-id"
 kind = "rust"
 
 [operation]
+
+[databases]
+db-cf-custom-hostname = {}

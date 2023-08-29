@@ -19,7 +19,7 @@ token-exchange = { path = "../../token/ops/exchange" }
 token-revoke = { path = "../../token/ops/revoke" }
 
 [dependencies.sqlx]
-version = "0.6"
+version = "0.7"
 default-features = false
 
 [dev-dependencies]

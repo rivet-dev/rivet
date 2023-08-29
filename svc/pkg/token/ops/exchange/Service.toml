@@ -5,3 +5,6 @@ name = "token-exchange"
 kind = "rust"
 
 [operation]
+
+[databases]
+db-token = {}

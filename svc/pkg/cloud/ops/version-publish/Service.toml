@@ -5,3 +5,6 @@ name = "cloud-version-publish"
 kind = "rust"
 
 [operation]
+
+[databases]
+db-cloud = {}

@@ -86,10 +86,6 @@ impl Connection {
 		self.pools.redis("redis-user-presence")
 	}
 
-	pub async fn redis_search(&self) -> Result<RedisPool, rivet_pools::Error> {
-		self.pools.redis("redis-search")
-	}
-
 	pub fn perf(&self) -> &chirp_perf::PerfCtx {
 		self.client.perf()
 	}

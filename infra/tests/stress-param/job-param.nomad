@@ -45,7 +45,7 @@ job "test-param" {
 			}
 
 			artifact {
-				source = "https://assets.rivet.gg/graphics/landing.png"
+				source = "https://assets2.rivet.gg/graphics/landing.png"
 				destination = "local/landing.png"
 			}
 

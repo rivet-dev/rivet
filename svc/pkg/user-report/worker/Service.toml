@@ -5,3 +5,6 @@ name = "user-report-worker"
 kind = "rust"
 
 [consumer]
+
+[databases]
+db-user-report = {}

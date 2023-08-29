@@ -5,3 +5,6 @@ name = "cdn-version-publish"
 kind = "rust"
 
 [operation]
+
+[databases]
+db-cdn = {}

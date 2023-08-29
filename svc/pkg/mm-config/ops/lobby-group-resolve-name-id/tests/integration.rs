@@ -35,6 +35,7 @@ async fn empty(ctx: TestCtx) {
 					max_players_normal: 1,
 					max_players_direct: 1,
 					max_players_party: 1,
+					listable: true,
 
 					runtime: Some(backend::matchmaker::lobby_runtime::Docker {
 						build_id: build_res.build_id,
@@ -43,6 +44,10 @@ async fn empty(ctx: TestCtx) {
 						network_mode: backend::matchmaker::lobby_runtime::NetworkMode::Bridge as i32,
 						ports: Vec::new(),
 					}.into()),
+
+					find_config: None,
+					join_config: None,
+					create_config: None,
 				})
 				.collect(),
 		}),

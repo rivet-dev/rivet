@@ -5,3 +5,6 @@ name = "mm-lobby-history"
 kind = "rust"
 
 [operation]
+
+[databases]
+db-mm-state = {}

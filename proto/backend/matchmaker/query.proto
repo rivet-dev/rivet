@@ -23,4 +23,3 @@ message AutoCreate {
 	rivet.common.Uuid lobby_group_id = 1;
 	rivet.common.Uuid region_id = 2;
 }
-

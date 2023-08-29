@@ -5,3 +5,6 @@ name = "game-namespace-version-history-list"
 kind = "rust"
 
 [operation]
+
+[databases]
+db-game = {}

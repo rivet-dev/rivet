@@ -5,3 +5,6 @@ name = "kv-config-version-publish"
 kind = "rust"
 
 [operation]
+
+[databases]
+db-kv-config = {}

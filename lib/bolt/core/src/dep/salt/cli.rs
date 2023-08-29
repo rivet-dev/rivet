@@ -31,7 +31,19 @@ pub async fn apply(
 	let mut event = utils::telemetry::build_event(ctx, "bolt_salt_apply").await?;
 	event.insert_prop("filter", filter)?;
 	event.insert_prop("sls", &opts.sls)?;
-	utils::telemetry::capture_event(ctx, event).await?;
+	utils::telemetry::capture_event(ctx, event)?;
+
+	// Install rsync
+	if let config::ns::ClusterKind::Distributed { .. } = ctx.ns().cluster.kind {
+		eprintln!();
+		rivet_term::status::progress("Installing rsync on Salt Master", "");
+		tasks::ssh::pool(
+			&ctx,
+			"salt_master",
+			Some("if ! which rsync; then apt update -y && apt install -y rsync; fi"),
+		)
+		.await?;
+	}
 
 	// Write Salt configs
 	eprintln!();
@@ -59,19 +71,22 @@ pub async fn apply(
 		}
 		config::ns::ClusterKind::Distributed { .. } => {
 			tokio::try_join!(
-				// /srv/salt
-				async { rsync_dir(ctx, &ctx.salt_path().join("salt"), "/srv/salt").await },
-				// /srv/pillar
-				async { rsync_dir(ctx, &ctx.salt_path().join("pillar"), "/srv/pillar").await },
-				// /srv/rivet-nix
 				async {
+					// /srv/salt
+					rsync_dir(ctx, &ctx.salt_path().join("salt"), "/srv/salt").await?;
+
+					// /srv/salt/nix/files/source
 					rsync_dir(
 						ctx,
-						&ctx.salt_path().join("pillar"),
+						&ctx.path().join("infra").join("nix"),
 						"/srv/salt/nix/files/source",
 					)
-					.await
+					.await?;
+
+					Ok(())
 				},
+				// /srv/pillar
+				async { rsync_dir(ctx, &ctx.salt_path().join("pillar"), "/srv/pillar").await },
 				// /srv/salt-context
 				async {
 					let tmp_dir = tempfile::TempDir::new()?;

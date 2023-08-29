@@ -37,7 +37,12 @@ async fn handle(
 	let needs_verification = if let Some((success_complete_ts,)) = success_res {
 		let duration_since_verification = ctx.ts() - success_complete_ts;
 		if duration_since_verification >= captcha_config.verification_ttl {
-			tracing::info!(?duration_since_verification, verification_ttl = ?captcha_config.verification_ttl, "been too long since last verification");
+			tracing::info!(
+				?duration_since_verification,
+				verification_ttl = ?captcha_config.verification_ttl,
+				"been too long since last verification"
+			);
+
 			true
 		} else {
 			// Fetch requests since the last success. Include limit since we

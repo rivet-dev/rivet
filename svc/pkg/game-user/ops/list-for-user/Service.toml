@@ -5,3 +5,6 @@ name = "game-user-list-for-user"
 kind = "rust"
 
 [operation]
+
+[databases]
+db-game-user = {}

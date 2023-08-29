@@ -5,3 +5,6 @@ name = "mm-config-lobby-group-resolve-version"
 kind = "rust"
 
 [operation]
+
+[databases]
+db-mm-config = {}

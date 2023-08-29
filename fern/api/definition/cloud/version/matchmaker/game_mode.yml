@@ -18,6 +18,15 @@ types:
         type: optional<integer>
       docker:
         type: optional<GameModeRuntimeDocker>
+      listable:
+        type: optional<boolean>
+
+      find_config:
+        type: optional<GameModeFindConfig>
+      join_config:
+        type: optional<GameModeJoinConfig>
+      create_config:
+        type: optional<GameModeCreateConfig>
 
       # Region overrides
       tier:
@@ -76,3 +85,58 @@ types:
     properties:
       min: integer
       max: integer
+
+  GameModeIdentityRequirement:
+    docs: >-
+      The registration requirement for a user when joining/finding/creating a
+      lobby. "None" allows for connections without an identity.
+    enum:
+      - none
+      - guest
+      - registered
+
+  GameModeVerificationConfig:
+    # TODO: Add link to tutorial in docs
+    docs: >-
+      Configuration that tells Rivet where to send validation requests and with
+      what headers. When set, Rivet will send the `verification_data` property
+      (given by the user in the find/join/create endpoint) to the given url
+      along with the headers provided and some information about the requested
+      lobby. The response of this request will determine if the user can join
+      that lobby or not.
+    properties:
+      url: string
+      headers: map<string, string>
+
+  GameModeFindConfig:
+    docs: >-
+      Configures the requirements and authentication for the /find endpoint.
+      If this value is not set in the config, the /find endpoint is still enabled.
+    properties:
+      enabled:
+        docs: Sets whether or not the /find endpoint is enabled.
+        type: boolean
+      identity_requirement: GameModeIdentityRequirement
+      verification_config: optional<GameModeVerificationConfig>
+
+  GameModeJoinConfig:
+    docs: >-
+      Configures the requirements and authentication for the /join endpoint.
+      If this value is not set in the config, the /join endpoint is still enabled.
+    properties:
+      enabled:
+        docs: Sets whether or not the /join endpoint is enabled.
+        type: boolean
+      identity_requirement: GameModeIdentityRequirement
+      verification_config: optional<GameModeVerificationConfig>
+
+  GameModeCreateConfig:
+    docs: >-
+      Configures the requirements and authentication for the /create endpoint.
+      If this value is not set in the config, the /create endpoint is NOT enabled.
+    properties:
+      identity_requirement: GameModeIdentityRequirement
+      verification_config: optional<GameModeVerificationConfig>
+      enable_public: boolean
+      enable_private: boolean
+      max_lobbies_per_identity: optional<integer>

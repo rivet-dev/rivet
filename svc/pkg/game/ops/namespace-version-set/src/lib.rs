@@ -95,7 +95,10 @@ async fn handle(
 									.await;
 									match res {
 										Ok(_) => {
-											tracing::info!("lobby idle updated successfully");
+											tracing::info!(
+												?namespace_id,
+												"lobby idle updated successfully"
+											);
 										}
 										Err(err) => {
 											tracing::error!(?err, "failed to update idle lobbies");

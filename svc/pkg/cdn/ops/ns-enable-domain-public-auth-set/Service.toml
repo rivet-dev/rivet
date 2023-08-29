@@ -5,3 +5,6 @@ name = "cdn-ns-enable-domain-public-auth-set"
 kind = "rust"
 
 [operation]
+
+[databases]
+db-cdn = {}

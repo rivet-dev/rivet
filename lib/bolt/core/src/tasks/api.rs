@@ -34,7 +34,7 @@ pub async fn convert_team(project_ctx: &ProjectContext, team_id: String) -> Resu
 		bail!(
 			"failed to convert team ({}):\n{:#?}",
 			response.status().as_u16(),
-			response.json().await?
+			response.json::<serde_json::Value>().await?
 		);
 	}
 

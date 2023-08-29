@@ -5,3 +5,6 @@ name = "team-dev-halt"
 kind = "rust"
 
 [operation]
+
+[databases]
+db-game = {}

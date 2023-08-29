@@ -5,3 +5,6 @@ name = "game-resolve-name-id"
 kind = "rust"
 
 [operation]
+
+[databases]
+db-game = {}

@@ -76,29 +76,45 @@ pub async fn create_build(
 
 	// TODO: Read and validate image file
 
+	let multipart_upload = body.multipart_upload.unwrap_or(false);
+
 	let create_res = op!([ctx] build_create {
 		game_id: Some(game_id.into()),
 		display_name: body.display_name,
 		image_tag: Some(body.image_tag),
 		image_file: Some((*body.image_file).try_into()?),
+		multipart: multipart_upload,
 		..Default::default()
 	})
 	.await?;
 
-	Ok(new_models::CloudGamesCreateGameBuildResponse {
-		build_id: internal_unwrap!(create_res.build_id).as_uuid(),
-		upload_id: internal_unwrap!(create_res.upload_id).as_uuid(),
-		// Deprecated
-		image_presigned_request: Box::new(
+	let image_presigned_request = if !multipart_upload {
+		Some(Box::new(
 			internal_unwrap_owned!(create_res.image_presigned_requests.first())
 				.clone()
 				.try_into()?,
-		),
-		image_presigned_requests: create_res
-			.image_presigned_requests
-			.iter()
-			.cloned()
-			.map(ApiTryInto::try_into)
-			.collect::<GlobalResult<Vec<_>>>()?,
+		))
+	} else {
+		None
+	};
+
+	let image_presigned_requests = if multipart_upload {
+		Some(
+			create_res
+				.image_presigned_requests
+				.iter()
+				.cloned()
+				.map(ApiTryInto::try_into)
+				.collect::<GlobalResult<Vec<_>>>()?,
+		)
+	} else {
+		None
+	};
+
+	Ok(new_models::CloudGamesCreateGameBuildResponse {
+		build_id: internal_unwrap!(create_res.build_id).as_uuid(),
+		upload_id: internal_unwrap!(create_res.upload_id).as_uuid(),
+		image_presigned_request,
+		image_presigned_requests,
 	})
 }

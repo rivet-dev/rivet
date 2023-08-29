@@ -25,20 +25,21 @@ module "nebula_lighthouse_server" {
 	]
 	backup = true
 
+	# Nebula does not support IPv6
 	firewall_inbound = [
 		{
 			label = "nebula-udp"
 			ports = "4242"
 			protocol = "udp"
 			inbound_ipv4_cidr = ["0.0.0.0/0"]
-			inbound_ipv6_cidr = ["::/0"]
+			inbound_ipv6_cidr = []
 		},
 		{
 			label = "nebula-tcp"
 			ports = "4242"
 			protocol = "tcp"
 			inbound_ipv4_cidr = ["0.0.0.0/0"]
-			inbound_ipv6_cidr = ["::/0"]
+			inbound_ipv6_cidr = []
 		},
 	]
 }

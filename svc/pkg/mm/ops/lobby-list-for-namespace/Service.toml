@@ -5,3 +5,6 @@ name = "mm-lobby-list-for-namespace"
 kind = "rust"
 
 [operation]
+
+[databases]
+redis-mm = {}

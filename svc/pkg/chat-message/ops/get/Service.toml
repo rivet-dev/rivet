@@ -5,3 +5,6 @@ name = "chat-message-get"
 kind = "rust"
 
 [operation]
+
+[databases]
+db-chat = {}

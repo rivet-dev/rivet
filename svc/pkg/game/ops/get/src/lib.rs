@@ -79,7 +79,7 @@ async fn handle(ctx: OperationContext<game::get::Request>) -> GlobalResult<game:
 				let banner_upload_id = game.banner_upload_id.map(Into::<common::Uuid>::into);
 
 				// Fetch all information relating to the logo image
-				let (logo_upload_complete_ts, logo_file_name) = {
+				let (logo_upload_complete_ts, logo_file_name, logo_provider) = {
 					let upload = upload_res
 						.uploads
 						.iter()
@@ -95,14 +95,14 @@ async fn handle(ctx: OperationContext<game::get::Request>) -> GlobalResult<game:
 							.rsplit_once('/')
 							.map(|(_, file_name)| file_name.to_owned())
 							.or(Some(file.path.clone()));
-						(upload.complete_ts, logo_file_name)
+						(upload.complete_ts, logo_file_name, Some(upload.provider))
 					} else {
 						Default::default()
 					}
 				};
 
 				// Fetch all information relating to the banner image
-				let (banner_upload_complete_ts, banner_file_name) = {
+				let (banner_upload_complete_ts, banner_file_name, banner_provider) = {
 					let upload = upload_res
 						.uploads
 						.iter()
@@ -118,7 +118,7 @@ async fn handle(ctx: OperationContext<game::get::Request>) -> GlobalResult<game:
 							.rsplit_once('/')
 							.map(|(_, file_name)| file_name.to_owned())
 							.or(Some(file.path.clone()));
-						(upload.complete_ts, banner_file_name)
+						(upload.complete_ts, banner_file_name, Some(upload.provider))
 					} else {
 						Default::default()
 					}
@@ -140,12 +140,14 @@ async fn handle(ctx: OperationContext<game::get::Request>) -> GlobalResult<game:
 						None
 					},
 					logo_file_name,
+					logo_provider,
 					banner_upload_id: if banner_upload_complete_ts.is_some() {
 						banner_upload_id
 					} else {
 						None
 					},
 					banner_file_name,
+					banner_provider,
 					plan_code: game.plan_code.clone(),
 					subscription_id: game.subscription_id.map(Into::into),
 				}

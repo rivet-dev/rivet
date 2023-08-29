@@ -5,3 +5,6 @@ name = "identity-config-version-get"
 kind = "rust"
 
 [operation]
+
+[databases]
+db-identity-config = {}
