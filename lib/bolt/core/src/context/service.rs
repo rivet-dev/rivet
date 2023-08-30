@@ -889,15 +889,18 @@ impl ServiceContextData {
 		if self.depends_on_nomad_api() {
 			env.push((
 				"NOMAD_URL".into(),
-				access_service(
-					&project_ctx,
-					&mut forward_configs,
-					&run_context,
-					"nomad-server",
-					"nomad",
-					4646,
-				)
-				.await?,
+				format!(
+					"http://{}",
+					access_service(
+						&project_ctx,
+						&mut forward_configs,
+						&run_context,
+						"nomad-server",
+						"nomad",
+						4646,
+					)
+					.await?
+				),
 			));
 		}
 

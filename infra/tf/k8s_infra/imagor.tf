@@ -137,9 +137,11 @@ resource "kubernetes_deployment" "imagor" {
 					}
 					
 					liveness_probe {
-						exec {
-							command = [ "/bin/sh", "-c", "/local/health-checks.sh" ]
+						http_get {
+							path = "/"
+							port = 8000
 						}
+						
 						initial_delay_seconds = 1
 						period_seconds = 5
 						timeout_seconds = 2
@@ -156,25 +158,6 @@ resource "kubernetes_deployment" "imagor" {
 							"ephemeral-storage" = "${local.ephemeral_disk}M"
 						}
 					}
-
-					volume_mount {
-						name = "local"
-						mount_path = "/local"
-						read_only = true
-					}
-				}
-
-				volume {
-					name = "local"
-
-					projected {
-						sources {
-							config_map {
-								name = "imagor-health-checks"
-							}
-						}
-					}
-
 				}
 			}
 		}
@@ -390,35 +373,4 @@ resource "kubectl_manifest" "imagor_preset_middlewares" {
 			}
 		}
 	})
-}
-
-resource "kubernetes_config_map" "imagor_health_checks" {
-	depends_on = [kubernetes_namespace.imagor]
-
-	metadata {
-		name = "imagor-health-checks"
-		namespace = "imagor"
-	}
-
-	data = {
-		"health-checks.sh" = <<-EOF
-			#!/bin/sh
-			set -uf
-
-			# Install curl
-			if ! [ -x "$(command -v curl)" ]; then
-				apk add --no-cache curl
-			fi
-
-			curl 127.0.0.1:8000/
-			EXIT_STATUS=$?
-			if [ $EXIT_STATUS -ne 0 ]; then
-				echo "root liveness check failed"
-				exit $EXIT_STATUS
-			fi
-
-			echo Ok
-			echo
-			EOF
-	}
 }

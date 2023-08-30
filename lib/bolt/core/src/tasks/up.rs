@@ -316,6 +316,9 @@ pub async fn up_services<T: AsRef<str>>(
 		eprintln!();
 		rivet_term::status::progress("Generating specs", "");
 
+		// Create directory for specs
+		fs::create_dir_all(ctx.gen_path().join("kubernetes")).await?;
+
 		let leader_region_id = ctx.primary_region_or_local();
 
 		let pb = utils::progress_bar(all_exec_svcs.len());
