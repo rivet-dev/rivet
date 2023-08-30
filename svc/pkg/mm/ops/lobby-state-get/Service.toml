@@ -1,0 +1,10 @@
+[service]
+name = "mm-lobby-state-get"
+
+[runtime]
+kind = "rust"
+
+[operation]
+
+[databases]
+redis-mm = {}

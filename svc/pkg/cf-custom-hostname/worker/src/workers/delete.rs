@@ -15,7 +15,7 @@ struct CloudflareErrorEntry {
 
 #[worker(name = "cf-custom-hostname-delete")]
 async fn worker(
-	ctx: OperationContext<cf_custom_hostname::msg::delete::Message>,
+	ctx: &OperationContext<cf_custom_hostname::msg::delete::Message>,
 ) -> GlobalResult<()> {
 	let namespace_id = internal_unwrap!(ctx.namespace_id).as_uuid();
 	let crdb = ctx.crdb("db-cf-custom-hostname").await?;

@@ -17,9 +17,13 @@ struct LobbyGroup {
 	max_players_normal: i64,
 	max_players_direct: i64,
 	max_players_party: i64,
+	listable: bool,
 
 	runtime: Vec<u8>,
 	runtime_meta: Vec<u8>,
+	find_config: Option<Vec<u8>>,
+	join_config: Option<Vec<u8>>,
+	create_config: Option<Vec<u8>>,
 }
 
 #[derive(Clone, sqlx::FromRow)]
@@ -100,8 +104,9 @@ async fn fetch_versions(
 			SELECT 
 				lobby_group_id, version_id,
 				name_id,
-				max_players_normal, max_players_direct, max_players_party,
-				runtime, runtime_meta
+				max_players_normal, max_players_direct, max_players_party, listable,
+				runtime, runtime_meta,
+				find_config, join_config, create_config
 			FROM lobby_groups
 			WHERE version_id = ANY($1)
 			"
@@ -117,19 +122,19 @@ async fn fetch_versions(
 	let (lobby_group_regions, lobby_group_idle_lobbies) = tokio::try_join!(
 		sqlx::query_as::<_, LobbyGroupRegion>(indoc!(
 			"
-				SELECT lobby_group_id, region_id, tier_name_id
-				FROM lobby_group_regions
-				WHERE lobby_group_id = ANY($1)
-				"
+			SELECT lobby_group_id, region_id, tier_name_id
+			FROM lobby_group_regions
+			WHERE lobby_group_id = ANY($1)
+			"
 		))
 		.bind(&all_lobby_group_ids)
 		.fetch_all(sql_pool),
 		sqlx::query_as::<_, LobbyGroupIdleLobbies>(indoc!(
 			"
-				SELECT lobby_group_id, region_id, min_idle_lobbies, max_idle_lobbies
-				FROM lobby_group_idle_lobbies
-				WHERE lobby_group_id = ANY($1)
-				"
+			SELECT lobby_group_id, region_id, min_idle_lobbies, max_idle_lobbies
+			FROM lobby_group_idle_lobbies
+			WHERE lobby_group_id = ANY($1)
+			"
 		))
 		.bind(&all_lobby_group_ids)
 		.fetch_all(sql_pool),
@@ -167,6 +172,23 @@ async fn fetch_versions(
 
 								let runtime =
 									backend::matchmaker::LobbyRuntime::decode(lg.runtime.as_ref())?;
+								let find_config = lg
+									.find_config
+									.as_ref()
+									.map(|fc| backend::matchmaker::FindConfig::decode(fc.as_ref()))
+									.transpose()?;
+								let join_config = lg
+									.join_config
+									.as_ref()
+									.map(|jc| backend::matchmaker::JoinConfig::decode(jc.as_ref()))
+									.transpose()?;
+								let create_config = lg
+									.create_config
+									.as_ref()
+									.map(|jc| {
+										backend::matchmaker::CreateConfig::decode(jc.as_ref())
+									})
+									.transpose()?;
 
 								Ok(backend::matchmaker::LobbyGroup {
 									name_id: lg.name_id.clone(),
@@ -197,8 +219,13 @@ async fn fetch_versions(
 									max_players_normal: lg.max_players_normal as u32,
 									max_players_direct: lg.max_players_direct as u32,
 									max_players_party: lg.max_players_party as u32,
+									listable: lg.listable,
 
 									runtime: Some(runtime),
+
+									find_config,
+									join_config,
+									create_config,
 								})
 							})
 							.collect::<GlobalResult<Vec<_>>>()?,

@@ -29,7 +29,7 @@ struct PlayerRow {
 struct LobbyRow {}
 
 #[worker(name = "mm-player-remove")]
-async fn worker(ctx: OperationContext<mm::msg::player_remove::Message>) -> GlobalResult<()> {
+async fn worker(ctx: &OperationContext<mm::msg::player_remove::Message>) -> GlobalResult<()> {
 	// NOTE: Idempotent
 
 	let crdb = ctx.crdb("db-mm-state").await?;

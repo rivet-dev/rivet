@@ -2,7 +2,7 @@ use chirp_worker::prelude::*;
 use proto::backend::{self, pkg::*};
 
 #[worker(name = "user-updated-user-update")]
-async fn worker(ctx: OperationContext<user::msg::update::Message>) -> GlobalResult<()> {
+async fn worker(ctx: &OperationContext<user::msg::update::Message>) -> GlobalResult<()> {
 	let user_id = internal_unwrap!(ctx.user_id);
 
 	msg!([ctx] user::msg::updated(user_id) {

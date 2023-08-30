@@ -5,7 +5,7 @@ use std::convert::TryInto;
 
 #[worker(name = "module-version-create")]
 async fn worker(
-	ctx: OperationContext<module::msg::version_create::Message>,
+	ctx: &OperationContext<module::msg::version_create::Message>,
 ) -> Result<(), GlobalError> {
 	let crdb = ctx.crdb("db-module").await?;
 

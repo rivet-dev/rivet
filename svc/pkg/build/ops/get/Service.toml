@@ -5,3 +5,6 @@ name = "build-get"
 kind = "rust"
 
 [operation]
+
+[databases]
+db-build = {}

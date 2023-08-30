@@ -108,6 +108,7 @@ async fn remove_unregistered_players(ctx: TestCtx, crdb: CrdbPool) {
 		query: Some(mm::msg::lobby_find::message::Query::Direct(backend::matchmaker::query::Direct {
 			lobby_id: Some(lobby_id.into()),
 		})),
+		..Default::default()
 	})
 	.await
 	.unwrap().unwrap();

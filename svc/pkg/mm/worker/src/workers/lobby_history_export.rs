@@ -48,7 +48,9 @@ struct LobbyGroupCache {
 }
 
 #[worker(name = "mm-lobby-history-export")]
-async fn worker(ctx: OperationContext<mm::msg::lobby_history_export::Message>) -> GlobalResult<()> {
+async fn worker(
+	ctx: &OperationContext<mm::msg::lobby_history_export::Message>,
+) -> GlobalResult<()> {
 	let crdb = ctx.crdb("db-mm-state").await?;
 
 	let request_id = internal_unwrap!(ctx.request_id).as_uuid();

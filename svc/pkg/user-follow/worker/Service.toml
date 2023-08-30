@@ -5,3 +5,6 @@ name = "user-follow-worker"
 kind = "rust"
 
 [consumer]
+
+[databases]
+db-user-follow = {}

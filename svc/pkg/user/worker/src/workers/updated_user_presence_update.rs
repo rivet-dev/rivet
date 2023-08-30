@@ -3,7 +3,7 @@ use proto::backend::{self, pkg::*};
 use rivet_convert::ApiInto;
 
 #[worker(name = "user-updated-user-presence-update")]
-async fn worker(ctx: OperationContext<user_presence::msg::update::Message>) -> GlobalResult<()> {
+async fn worker(ctx: &OperationContext<user_presence::msg::update::Message>) -> GlobalResult<()> {
 	let user_id = internal_unwrap!(ctx.user_id);
 
 	msg!([ctx] user::msg::updated(user_id) {

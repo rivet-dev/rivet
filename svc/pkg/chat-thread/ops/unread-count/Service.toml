@@ -5,3 +5,6 @@ name = "chat-thread-unread-count"
 kind = "rust"
 
 [operation]
+
+[databases]
+db-chat = {}

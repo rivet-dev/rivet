@@ -5,3 +5,6 @@ name = "chat-thread-list-for-participant"
 kind = "rust"
 
 [operation]
+
+[databases]
+db-chat = {}

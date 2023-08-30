@@ -27,7 +27,7 @@ struct ProxiedPort {
 
 #[worker(name = "job-run-nomad-monitor-alloc-plan")]
 async fn worker(
-	ctx: OperationContext<job_run::msg::nomad_monitor_alloc_plan::Message>,
+	ctx: &OperationContext<job_run::msg::nomad_monitor_alloc_plan::Message>,
 ) -> GlobalResult<()> {
 	let crdb = ctx.crdb("db-job-state").await?;
 	let mut redis_job = ctx.redis_job().await?;
@@ -105,7 +105,8 @@ async fn worker(
 		run_id,
 		region_id,
 		proxied_ports,
-	}) = db_output else {
+	}) = db_output
+	else {
 		if ctx.req_dt() > util::duration::minutes(5) {
 			tracing::error!("discarding stale message");
 			return Ok(());

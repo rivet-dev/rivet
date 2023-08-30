@@ -535,65 +535,63 @@ pub struct S3Config {
 	pub region: String,
 }
 
-#[derive(Clone, Copy)]
-pub enum S3Provider {
-	Minio,
-	Backblaze,
-	Aws,
-}
-
 impl ProjectContextData {
-	pub fn default_s3_provider(self: &Arc<Self>) -> Result<(S3Provider, config::ns::S3Provider)> {
+	pub fn default_s3_provider(
+		self: &Arc<Self>,
+	) -> Result<(s3_util::Provider, config::ns::S3Provider)> {
 		let providers = &self.ns().s3.providers;
 
 		// Find the provider with the default flag set
 		if let Some(p) = &providers.minio {
 			if p.default {
-				return Ok((S3Provider::Minio, p.clone()));
+				return Ok((s3_util::Provider::Minio, p.clone()));
 			}
 		}
 
 		if let Some(p) = &providers.backblaze {
 			if p.default {
-				return Ok((S3Provider::Backblaze, p.clone()));
+				return Ok((s3_util::Provider::Backblaze, p.clone()));
 			}
 		}
 
 		if let Some(p) = &providers.aws {
 			if p.default {
-				return Ok((S3Provider::Aws, p.clone()));
+				return Ok((s3_util::Provider::Aws, p.clone()));
 			}
 		}
 
 		// If nonoe have the default flag, return the first provider
 		if let Some(p) = &providers.minio {
-			return Ok((S3Provider::Minio, p.clone()));
+			return Ok((s3_util::Provider::Minio, p.clone()));
 		} else if let Some(p) = &providers.backblaze {
-			return Ok((S3Provider::Backblaze, p.clone()));
+			return Ok((s3_util::Provider::Backblaze, p.clone()));
 		} else if let Some(p) = &providers.aws {
-			return Ok((S3Provider::Aws, p.clone()));
+			return Ok((s3_util::Provider::Aws, p.clone()));
 		}
 
 		bail!("no s3 provider configured")
 	}
 
 	/// Returns the appropriate S3 connection configuration for the provided S3 provider.
-	pub async fn s3_credentials(self: &Arc<Self>, provider: S3Provider) -> Result<S3Credentials> {
+	pub async fn s3_credentials(
+		self: &Arc<Self>,
+		provider: s3_util::Provider,
+	) -> Result<S3Credentials> {
 		match provider {
-			S3Provider::Minio => Ok(S3Credentials {
+			s3_util::Provider::Minio => Ok(S3Credentials {
 				access_key_id: "root".into(),
 				access_key_secret: self
 					.read_secret(&["minio", "users", "root", "password"])
 					.await?,
 			}),
-			S3Provider::Backblaze => {
+			s3_util::Provider::Backblaze => {
 				let service_key = s3::fetch_service_key(&self, &["b2", "terraform"]).await?;
 				Ok(S3Credentials {
 					access_key_id: service_key.key_id,
 					access_key_secret: service_key.key,
 				})
 			}
-			S3Provider::Aws => {
+			s3_util::Provider::Aws => {
 				let service_key = s3::fetch_service_key(&self, &["aws", "terraform"]).await?;
 				Ok(S3Credentials {
 					access_key_id: service_key.key_id,
@@ -604,9 +602,9 @@ impl ProjectContextData {
 	}
 
 	/// Returns the appropriate S3 connection configuration for the provided S3 provider.
-	pub async fn s3_config(self: &Arc<Self>, provider: S3Provider) -> Result<S3Config> {
+	pub async fn s3_config(self: &Arc<Self>, provider: s3_util::Provider) -> Result<S3Config> {
 		match provider {
-			S3Provider::Minio => {
+			s3_util::Provider::Minio => {
 				let s3 = terraform::output::read_s3_minio(&*self).await;
 				Ok(S3Config {
 					endpoint_internal: (*s3.s3_endpoint_internal).clone(),
@@ -614,7 +612,7 @@ impl ProjectContextData {
 					region: (*s3.s3_region).clone(),
 				})
 			}
-			S3Provider::Backblaze => {
+			s3_util::Provider::Backblaze => {
 				let s3 = terraform::output::read_s3_backblaze(&*self).await;
 				Ok(S3Config {
 					endpoint_internal: (*s3.s3_endpoint_internal).clone(),
@@ -622,7 +620,7 @@ impl ProjectContextData {
 					region: (*s3.s3_region).clone(),
 				})
 			}
-			S3Provider::Aws => {
+			s3_util::Provider::Aws => {
 				let s3 = terraform::output::read_s3_aws(&*self).await;
 				Ok(S3Config {
 					endpoint_internal: (*s3.s3_endpoint_internal).clone(),

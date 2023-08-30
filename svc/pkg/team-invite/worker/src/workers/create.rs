@@ -3,7 +3,7 @@ use proto::backend::pkg::*;
 use serde_json::json;
 
 #[worker(name = "team-invite-create")]
-async fn worker(ctx: OperationContext<team_invite::msg::create::Message>) -> GlobalResult<()> {
+async fn worker(ctx: &OperationContext<team_invite::msg::create::Message>) -> GlobalResult<()> {
 	let crdb = ctx.crdb("db-team-invite").await?;
 
 	let team_id = internal_unwrap!(ctx.team_id).as_uuid();

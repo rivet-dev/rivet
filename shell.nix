@@ -50,7 +50,7 @@ in
 			redis  # For the redis-cli
 
 			# Runtimes
-			nodejs-slim  # Required for Fern
+			nodejs  # Required for Fern
 
 			# Compilers
 			clang

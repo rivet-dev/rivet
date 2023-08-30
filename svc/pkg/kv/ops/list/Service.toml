@@ -5,3 +5,6 @@ name = "kv-list"
 kind = "rust"
 
 [operation]
+
+[databases]
+db-kv = {}

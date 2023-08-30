@@ -5,3 +5,6 @@ name = "cdn-namespace-auth-user-remove"
 kind = "rust"
 
 [operation]
+
+[databases]
+db-cdn = {}

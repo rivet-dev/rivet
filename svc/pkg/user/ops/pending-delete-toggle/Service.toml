@@ -5,3 +5,6 @@ name = "user-pending-delete-toggle"
 kind = "rust"
 
 [operation]
+
+[databases]
+db-user = {}

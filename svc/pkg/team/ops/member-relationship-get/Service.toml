@@ -5,3 +5,6 @@ name = "team-member-relationship-get"
 kind = "rust"
 
 [operation]
+
+[databases]
+db-team = {}

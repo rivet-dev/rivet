@@ -5,3 +5,6 @@ name = "game-version-list"
 kind = "rust"
 
 [operation]
+
+[databases]
+db-game = {}

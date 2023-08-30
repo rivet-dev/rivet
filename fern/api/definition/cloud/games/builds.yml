@@ -55,4 +55,3 @@ types:
         type: uuid
       image_presigned_request: optional<uploadCommons.PresignedRequest>
       image_presigned_requests: optional<list<uploadCommons.PresignedRequest>>
-
