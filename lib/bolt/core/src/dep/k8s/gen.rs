@@ -7,10 +7,10 @@ use serde_json::json;
 use crate::{
 	config::{
 		self,
-		ns::LoggingProvider,
+		ns::{LoggingProvider, S3Provider},
 		service::{ServiceDomain, ServiceKind, ServiceRouter},
 	},
-	context::{BuildContext, ProjectContext, RunContext, S3Provider, ServiceContext},
+	context::{BuildContext, ProjectContext, RunContext, ServiceContext},
 };
 
 // Kubernetes requires a specific port for containers because they have their own networking namespace, the

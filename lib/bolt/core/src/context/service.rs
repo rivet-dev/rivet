@@ -13,9 +13,10 @@ use tokio::{fs, process::Command, sync::RwLock};
 use crate::{
 	config::{
 		self,
+		ns::S3Provider,
 		service::{RuntimeKind, ServiceKind},
 	},
-	context::{self, BuildContext, ProjectContext, RunContext, S3Provider},
+	context::{self, BuildContext, ProjectContext, RunContext},
 	dep::{self, cloudflare, k8s, s3},
 	utils,
 };
