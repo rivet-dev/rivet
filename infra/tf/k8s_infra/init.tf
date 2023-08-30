@@ -7,7 +7,7 @@ resource "kubernetes_namespace" "rivet_service" {
 # NOTE: Must use kubectl_manifest because kubernetes_manifest doesn't work with CRDs. If this stops working
 # correctly replace with a raw helm chart: https://artifacthub.io/packages/helm/wikimedia/raw
 resource "kubectl_manifest" "ingress_tls" {
-	depends_on = [helm_release.traefik]
+	depends_on = [helm_release.traefik, kubernetes_namespace.traefik, kubernetes_namespace.imagor]
 
 	yaml_body = yamlencode({
 		apiVersion = "traefik.containo.us/v1alpha1"
@@ -29,19 +29,21 @@ resource "kubectl_manifest" "ingress_tls" {
 	})
 }
 
+# Must be created in every namespace it is used in
 resource "kubernetes_secret" "ingress_tls_cert" {
-	depends_on = [kubernetes_namespace.traefik]
+	depends_on = [kubernetes_namespace.traefik, kubernetes_namespace.imagor]
+	for_each = toset([ "traefik", "imagor" ])
 
 	metadata {
 		name = "ingress-tls-cert"
-		namespace = "traefik"
+		namespace = each.value
 	}
 
 	type = "kubernetes.io/tls"
 
 	data = {
-		"tls.crt" = base64encode(data.terraform_remote_state.tls.outputs.tls_cert_cloudflare_rivet_gg.cert_pem)
-		"tls.key" = base64encode(data.terraform_remote_state.tls.outputs.tls_cert_cloudflare_rivet_gg.key_pem)
+		"tls.crt" = data.terraform_remote_state.tls.outputs.tls_cert_cloudflare_rivet_gg.cert_pem
+		"tls.key" = data.terraform_remote_state.tls.outputs.tls_cert_cloudflare_rivet_gg.key_pem
 	}
 }
 
@@ -54,7 +56,7 @@ resource "kubernetes_secret" "ingress_tls_ca_cert" {
 	}
 
 	data = {
-		"tls.ca" = base64encode(data.terraform_remote_state.tls.outputs.tls_cert_cloudflare_ca)
+		"tls.ca" = data.terraform_remote_state.tls.outputs.tls_cert_cloudflare_ca
 	}
 }
 

@@ -84,16 +84,18 @@ job "imagor:${dc}" {
 				%{ else }
 				"${prefix}.http.routers.imagor-${preset.key}.rule=(Host(`media.${shared.domain.base}`) || HostRegexp(`media.{region:.+}.${shared.domain.base}`)) && Path(`${preset.path}`)",
 				%{ endif }
+				
 				%{ if preset.game_cors }
 				"${prefix}.http.routers.imagor-${preset.key}.middlewares=imagor-${preset.key}-path, imagor-cors-game, imagor-cdn",
 				%{ else }
 				"${prefix}.http.routers.imagor-${preset.key}.middlewares=imagor-${preset.key}-path, imagor-cors, imagor-cdn",
 				%{ endif }
-				"${prefix}.http.routers.imagor-${preset.key}.tls=true",
 
 				# middlewares.imagor-${preset.key}-path
 				"${prefix}.http.middlewares.imagor-${preset.key}-path.replacePathRegex.regex=${preset.path_regexp}",
 				"${prefix}.http.middlewares.imagor-${preset.key}-path.replacePathRegex.replacement=${replace(preset.path_regex_replacement, "$${", "$$${")}",
+				
+				"${prefix}.http.routers.imagor-${preset.key}.tls=true",
 				%{ endfor }
 
 				%{ endfor }

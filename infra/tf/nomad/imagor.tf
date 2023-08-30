@@ -13,7 +13,7 @@ resource "nomad_job" "imagor" {
 	detach = false
 
 	hcl2 {
-		enabled  = true
+		enabled = true
 	}
 
 	jobspec = templatefile("${path.module}/files/imagor/imagor.nomad.tpl", {

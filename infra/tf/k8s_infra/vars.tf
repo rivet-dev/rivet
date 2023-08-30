@@ -1,3 +1,7 @@
+variable "namespace" {
+	type = string
+}
+
 # MARK: DNS
 variable "domain_main" {
 	type = string
@@ -45,6 +49,17 @@ variable "regions" {
 	type = map(any)
 }
 
+# MARK: K8s
 variable "k8s_health_port" {
 	type = number
+}
+
+# MARK: S3
+variable "s3_persistent_access_key_id" {
+	type = string
+}
+
+variable "s3_persistent_access_key_secret" {
+	type = string
+	sensitive = true
 }

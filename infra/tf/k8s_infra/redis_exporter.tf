@@ -10,6 +10,15 @@ locals {
 			memory = 256
 		}
 	})
+	
+	redis_svcs = {
+		for k, v in var.redis_svcs:
+		k => {
+			endpoint = v.endpoint
+			username = module.redis_secrets.values["redis/${k}/username"]
+			password = module.redis_secrets.values["redis/${k}/password"]
+		}
+	}
 }
 
 module "redis_secrets" {
@@ -28,6 +37,7 @@ module "redis_secrets" {
 resource "kubernetes_priority_class" "redis_exporter_priority" {
 	metadata {
 		name = "redis-exporter-priority"
+		# namespace = "redis"
 	}
 
 	value = 40
@@ -36,7 +46,7 @@ resource "kubernetes_priority_class" "redis_exporter_priority" {
 resource "kubernetes_deployment" "redis_exporter" {
 	depends_on = [kubernetes_namespace.redis, kubernetes_secret.docker_auth]
 
-	for_each = var.redis_svcs
+	for_each = local.redis_svcs
 	
 	metadata {
 		name = "redis-exporter-${each.key}"
@@ -62,6 +72,7 @@ resource "kubernetes_deployment" "redis_exporter" {
 			spec {
 				priority_class_name = "redis-exporter-priority"
 				
+				# MARK: Docker auth
 				dynamic "image_pull_secrets" {
 					for_each = var.authenticate_all_docker_hub_pulls ? toset([1]) : toset([])
 
@@ -77,25 +88,29 @@ resource "kubernetes_deployment" "redis_exporter" {
 					# TODO: How to make this cleaner? Ternary operator solely for last element in list
 					args = each.key == "redis-chirp" ? [ 
 						"--redis.addr=${each.value.endpoint}",
-						"--redis.user=${module.redis_secrets.values["redis/${each.key}/username"]}",
-						"--redis.password=${module.redis_secrets.values["redis/${each.key}/password"]}",
+						"--redis.user=${each.value.username}",
+						"--redis.password=${each.value.password}",
 						"--check-streams=chirp:topic:*",
 					] : [ 
 						"--redis.addr=${each.value.endpoint}",
-						"--redis.user=${module.redis_secrets.values["redis/${each.key}/username"]}",
-						"--redis.password=${module.redis_secrets.values["redis/${each.key}/password"]}",
+						"--redis.user=${each.value.username}",
+						"--redis.password=${each.value.password}",
 					]
-
-					resources {
-						limits = {
-							memory = "${local.service_redis_exporter.resources.memory}Mi"
-							cpu = local.service_redis_exporter.resources.cpu_cores > 0 ? "${local.service_redis_exporter.resources.cpu_cores * 1000}m" : "${local.service_redis_exporter.resources.cpu}m"
-						}
-					}
 
 					port {
 						name = "http"
 						container_port = 9121
+					}
+					
+					resources {
+						limits = {
+							memory = "${local.service_redis_exporter.resources.memory}Mi"
+							cpu = (
+								local.service_redis_exporter.resources.cpu_cores > 0 ?
+								"${local.service_redis_exporter.resources.cpu_cores * 1000}m"
+								: "${local.service_redis_exporter.resources.cpu}m"
+							)
+						}
 					}
 				}
 			}
@@ -104,14 +119,17 @@ resource "kubernetes_deployment" "redis_exporter" {
 }
 
 resource "kubernetes_service" "redis_exporter" {
-	for_each = var.redis_svcs
+	depends_on = [kubernetes_namespace.redis]
+	
+	for_each = local.redis_svcs
 
 	metadata {
 		name = "redis-exporter-${each.key}"
+		namespace = "redis"
 	}
 	spec {
 		selector = {
-			app = kubernetes_deployment.redis_exporter[each.key].metadata.0.name
+			"app.kubernetes.io/name" = kubernetes_deployment.redis_exporter[each.key].metadata.0.name
 		}
 		type = "ClusterIP"
 

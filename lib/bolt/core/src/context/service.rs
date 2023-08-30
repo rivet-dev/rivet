@@ -936,9 +936,6 @@ impl ServiceContextData {
 		// 	));
 		// }
 
-
-
-
 		// NATS config
 		env.push((
 			"NATS_URL".into(),

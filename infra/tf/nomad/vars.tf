@@ -47,7 +47,7 @@ variable "authenticate_all_docker_hub_pulls" {
 
 # MARK: Imagor
 variable "imagor_presets" {
-	type = any
+	type = list(any)
 }
 
 # MARK: Redis
