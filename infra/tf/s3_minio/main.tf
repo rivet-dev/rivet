@@ -16,7 +16,7 @@ module "secrets" {
 }
 
 locals {
-	s3_endpoint_internal = "http://server.minio.service.consul:9200"
+	s3_endpoint_internal = "http://minio.minio.svc.cluster.local:9200"
 	s3_endpoint_external = "https://storage.${var.domain_main}"
 	# Minio defaults to us-east-1 region
 	# https://github.com/minio/minio/blob/0ec722bc5430ad768a263b8464675da67330ad7c/cmd/server-main.go#L739
@@ -36,4 +36,3 @@ provider "aws" {
 		s3 = local.s3_endpoint_internal
 	}
 }
-

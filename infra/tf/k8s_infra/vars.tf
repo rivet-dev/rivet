@@ -63,3 +63,7 @@ variable "s3_persistent_access_key_secret" {
 	type = string
 	sensitive = true
 }
+
+variable "has_minio" {
+	type = bool
+}

@@ -379,6 +379,7 @@ async fn vars(ctx: &ProjectContext) {
 
 		vars.insert("s3_buckets".into(), json!(s3_buckets));
 
+		// TODO: Don't set secrets as tf vars, read from secrets module
 		let (default_s3_provider, _) = ctx.default_s3_provider().unwrap();
 		let credentials = ctx.s3_credentials(default_s3_provider).await.unwrap();
 		vars.insert(
@@ -389,6 +390,9 @@ async fn vars(ctx: &ProjectContext) {
 			"s3_persistent_access_key_secret".into(),
 			json!(credentials.access_key_secret),
 		);
+
+		let s3_providers = &ctx.ns().s3.providers;
+		vars.insert("has_minio".into(), json!(s3_providers.minio.is_some()));
 	}
 
 	// Media presets

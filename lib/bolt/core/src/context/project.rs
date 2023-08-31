@@ -565,7 +565,7 @@ impl ProjectContextData {
 			}
 		}
 
-		// If nonoe have the default flag, return the first provider
+		// If none have the default flag, return the first provider
 		if let Some(p) = &providers.minio {
 			return Ok((S3Provider::Minio, p.clone()));
 		} else if let Some(p) = &providers.backblaze {
