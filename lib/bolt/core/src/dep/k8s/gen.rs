@@ -101,11 +101,12 @@ pub async fn gen_svc(
 
 	// Render env
 	let (env, forward_services) = svc_ctx.env(RunContext::Service).await.unwrap();
+	let (secret_env, secret_forward_services) =
+		svc_ctx.secret_env(RunContext::Service).await.unwrap();
 	assert!(
-		forward_services.is_empty(),
+		forward_services.is_empty() && secret_forward_services.is_empty(),
 		"should not forward services for RunContext::Service"
 	);
-
 	let env = generate_k8s_variables()
 		.into_iter()
 		.chain(
@@ -205,54 +206,78 @@ pub async fn gen_svc(
 		"readOnly": true
 	})];
 
-	match driver {
-		// Mount the service binaries to execute directly in the container. See
-		// notes in salt/salt/nomad/files/nomad.d/client.hcl.j2.
-		ExecServiceDriver::LocalBinaryArtifact { .. } => {
-			volumes.push(json!({
-				"name": "backend-repo",
-				"hostPath": {
-					"path": project_ctx.path(),
-					"type": "Directory"
+	// Add volumes
+	{
+		match driver {
+			// Mount the service binaries to execute directly in the container. See
+			// notes in salt/salt/nomad/files/nomad.d/client.hcl.j2.
+			ExecServiceDriver::LocalBinaryArtifact { .. } => {
+				volumes.push(json!({
+					"name": "backend-repo",
+					"hostPath": {
+						"path": project_ctx.path(),
+						"type": "Directory"
+					}
+				}));
+				volumes.push(json!({
+					"name": "nix-store",
+					"hostPath": {
+						"path": "/nix/store",
+						"type": "Directory"
+					}
+				}));
+				volume_mounts.push(json!({
+					"name": "backend-repo",
+					"mountPath": "/var/rivet/backend",
+					"readOnly": true
+				}));
+				volume_mounts.push(json!({
+					"name": "nix-store",
+					"mountPath": "/nix/store",
+					"readOnly": true
+				}));
+			}
+			ExecServiceDriver::Docker { .. } | ExecServiceDriver::UploadedBinaryArtifact { .. } => {
+			}
+		}
+
+		if svc_ctx.depends_on_region_config() {
+			local.push(json!({
+				"configMap": {
+					"name": "region-config",
 				}
-			}));
-			volumes.push(json!({
-				"name": "nix-store",
-				"hostPath": {
-					"path": "/nix/store",
-					"type": "Directory"
-				}
-			}));
-			volume_mounts.push(json!({
-				"name": "backend-repo",
-				"mountPath": "/var/rivet/backend",
-				"readOnly": true
-			}));
-			volume_mounts.push(json!({
-				"name": "nix-store",
-				"mountPath": "/nix/store",
-				"readOnly": true
 			}));
 		}
-		ExecServiceDriver::Docker { .. } | ExecServiceDriver::UploadedBinaryArtifact { .. } => {}
-	}
 
-	if svc_ctx.depends_on_region_config() {
-		local.push(json!({
-			"configMap": {
-				"name": "region-config",
+		volumes.push(json!({
+			"name": "local",
+			"projected": {
+				"defaultMode": 0o0777,
+				"sources": local
 			}
 		}));
 	}
 
-	volumes.push(json!({
-		"name": "local",
-		"projected": {
-			"defaultMode": 0o0777,
-			"sources": local
-		}
-	}));
+	// Create secret env vars
+	let secret_env_name = format!("{}-secret-env", service_name);
+	let secret_data = secret_env
+		.into_iter()
+		.map(|(k, v)| (k, base64::encode(v)))
+		.collect::<HashMap<_, _>>();
+	specs.insert(
+		"secret-env",
+		json!({
+			"apiVersion": "v1",
+			"kind": "Secret",
+			"metadata": {
+				"name": secret_env_name,
+				"namespace": "rivet-service"
+			},
+			"data": secret_data
+		}),
+	);
 
+	// Create priority class
 	let priority_class_name = format!("{}-priority", service_name);
 	specs.insert(
 		"priority",
@@ -267,6 +292,7 @@ pub async fn gen_svc(
 		}),
 	);
 
+	// Create pod template
 	let pod_template = json!({
 		"metadata": {
 			"labels": {
@@ -300,10 +326,15 @@ pub async fn gen_svc(
 							// "command": ["/bin/sh", "-c", "printenv && sleep 1000"],
 							"args": args,
 							"env": env,
+							"envFrom": [{
+								"secretRef": {
+									"name": secret_env_name
+								}
+							}],
 							"volumeMounts": volume_mounts,
 							"ports": ports,
 							"livenessProbe": health_check,
-							"resources": resources,
+							"resources": resources
 						})
 					}
 					_ => todo!(),

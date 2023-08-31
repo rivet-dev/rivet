@@ -261,11 +261,15 @@ async fn run_test(svc_ctx: &ServiceContext, test_name: Option<&str>) -> TestResu
 		.await
 		.unwrap();
 
-	let (env, forward_configs) = svc_ctx.env(RunContext::Test).await.unwrap();
+	// Render env
+	let (mut env, forward_configs) = svc_ctx.env(RunContext::Test).await.unwrap();
+	let (secret_env, secret_forward_configs) = svc_ctx.secret_env(RunContext::Test).await.unwrap();
+	env.extend(secret_env);
 
 	// Forward services
 	let forwards = forward_configs
 		.into_iter()
+		.chain(secret_forward_configs)
 		.map(|c| {
 			utils::kubectl_port_forward(c.service_name, c.namespace, (c.local_port, c.remote_port))
 		})
