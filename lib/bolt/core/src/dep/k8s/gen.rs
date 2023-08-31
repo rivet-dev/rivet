@@ -60,6 +60,20 @@ pub async fn gen_svc(
 	let project_ctx = svc_ctx.project().await;
 	let mut specs = HashMap::with_capacity(1);
 
+	let (spec_type, _reschedule_attempts) = match svc_ctx.config().kind {
+		ServiceKind::Headless { .. }
+		| ServiceKind::Consumer { .. }
+		| ServiceKind::Api { .. }
+		| ServiceKind::Static { .. } => ("deployment", 0),
+		ServiceKind::Oneshot { .. } => ("job", 1),
+		ServiceKind::Periodic { .. } => ("cron-job", 1),
+		ServiceKind::Operation { .. }
+		| ServiceKind::Database { .. }
+		| ServiceKind::Cache { .. } => {
+			unreachable!()
+		}
+	};
+
 	let service_name = format!("rivet-{}", svc_ctx.name());
 	let service_tags = vec![
 		"rivet".into(),
@@ -253,81 +267,147 @@ pub async fn gen_svc(
 		}),
 	);
 
-	// TODO: app.kubernetes.io/managed-by
-	specs.insert(
-		"deployment",
-		json!({
-			"apiVersion": "apps/v1",
-			"kind": "Deployment",
-			"metadata": {
-				"name": service_name,
-				"namespace": "rivet-service",
-				"labels": {
-					"app.kubernetes.io/name": service_name
-				}
+	let pod_template = json!({
+		"metadata": {
+			"labels": {
+				"app.kubernetes.io/name": service_name
+			}
+		},
+		"spec": {
+			"priorityClassName": priority_class_name,
+			// TODO: `OnFailure` Doesn't work with deployments
+			"restartPolicy": if spec_type == "deployment" {
+				"Always"
+			} else {
+				"OnFailure"
 			},
-			"spec": {
-				"replicas": ns_service_config.count,
-				"selector": {
-					"matchLabels": {
+			"containers": [
+				match &driver {
+					ExecServiceDriver::Docker { image, force_pull } => {
+						todo!()
+						// json!({
+						// 	"image": image,
+						// 	"imagePullPolicy": if *force_pull { "Always" } else {
+						// 		"IfNotPresent"
+						// 	},
+						// })
+					}
+					ExecServiceDriver::LocalBinaryArtifact { exec_path, args } => {
+						json!({
+							"name": "alpine",
+							"image": "alpine:3.8",
+							"command": [Path::new("/var/rivet/backend").join(exec_path)],
+							// "command": ["/bin/sh", "-c", "printenv && sleep 1000"],
+							"args": args,
+							"env": env,
+							"volumeMounts": volume_mounts,
+							"ports": ports,
+							"livenessProbe": health_check,
+							"resources": resources,
+						})
+					}
+					_ => todo!(),
+					// TODO:
+					// ExecServiceDriver::UploadedBinaryArtifact { exec_path, args, .. } => {
+					// 	json!({
+					// 		"image": "alpine:3.18",
+					// 		"command": format!("${{NOMAD_TASK_DIR}}/build/{exec_path}"),
+					// 		"args": args,
+					// 		"auth": nomad_docker_io_auth(&project_ctx).await.unwrap(),
+					// 		"logging": nomad_loki_plugin_config(&project_ctx, &svc_ctx).await.unwrap(),
+					// 	})
+					// }
+					// ExecServiceDriver::Binary { path, args } => json!({}),
+				}
+			],
+			"volumes": volumes
+		}
+	});
+
+	if spec_type == "deployment" {
+		specs.insert(
+			"deployment",
+			json!({
+				"apiVersion": "apps/v1",
+				"kind": "Deployment",
+				"metadata": {
+					"name": service_name,
+					"namespace": "rivet-service",
+					"labels": {
 						"app.kubernetes.io/name": service_name
 					}
 				},
-				"template": {
-					"metadata": {
-						"labels": {
+				"spec": {
+					"replicas": ns_service_config.count,
+					"selector": {
+						"matchLabels": {
 							"app.kubernetes.io/name": service_name
 						}
 					},
-					"spec": {
-						"priorityClassName": priority_class_name,
-						// TODO: Doesn't work
-						// "restartPolicy": "OnFailure",
-						"containers": [
-							match &driver {
-								ExecServiceDriver::Docker { image, force_pull } => {
-									todo!()
-									// json!({
-									// 	"image": image,
-									// 	"imagePullPolicy": if *force_pull { "Always" } else {
-									// 		"IfNotPresent"
-									// 	},
-									// })
-								}
-								ExecServiceDriver::LocalBinaryArtifact { exec_path, args } => {
-									json!({
-										"name": "alpine",
-										"image": "alpine:3.8",
-										"command": [Path::new("/var/rivet/backend").join(exec_path)],
-										// "command": ["/bin/sh", "-c", "printenv && sleep 1000"],
-										"args": args,
-										"env": env,
-										"volumeMounts": volume_mounts,
-										"ports": ports,
-										"livenessProbe": health_check,
-										"resources": resources,
-									})
-								}
-								_ => todo!(),
-								// TODO:
-								// ExecServiceDriver::UploadedBinaryArtifact { exec_path, args, .. } => {
-								// 	json!({
-								// 		"image": "alpine:3.18",
-								// 		"command": format!("${{NOMAD_TASK_DIR}}/build/{exec_path}"),
-								// 		"args": args,
-								// 		"auth": nomad_docker_io_auth(&project_ctx).await.unwrap(),
-								// 		"logging": nomad_loki_plugin_config(&project_ctx, &svc_ctx).await.unwrap(),
-								// 	})
-								// }
-								// ExecServiceDriver::Binary { path, args } => json!({}),
-							}
-						],
-						"volumes": volumes
+					"template": pod_template
+				}
+			}),
+		);
+	} else if spec_type == "job" {
+		specs.insert(
+			"job",
+			json!({
+				"apiVersion": "batch/v1",
+				"kind": "Job",
+				"metadata": {
+					"name": service_name,
+					"namespace": "rivet-service",
+					"labels": {
+						"app.kubernetes.io/name": service_name
+					}
+				},
+				"spec": {
+					"completions": 1,
+					// "parallelism": ns_service_config.count,
+					// Deletes job after it is finished
+					"ttlSecondsAfterFinished": 1,
+					"template": pod_template
+				}
+			}),
+		);
+	} else if let ServiceKind::Periodic {
+		cron,
+		prohibit_overlap,
+		time_zone,
+	} = &svc_ctx.config().kind
+	{
+		specs.insert(
+			"cron-job",
+			json!({
+				"apiVersion": "batch/v1",
+				"kind": "CronJob",
+				"metadata": {
+					"name": service_name,
+					"namespace": "rivet-service",
+					"labels": {
+						"app.kubernetes.io/name": service_name
+					}
+				},
+				"spec": {
+					"schedule": cron,
+					// Timezones are in alpha
+					// "timeZone": time_zone,
+					"concurrencyPolicy": if *prohibit_overlap {
+						"Forbid"
+					} else {
+						"Allow"
+					},
+					"jobTemplate": {
+						"spec": {
+							"template": pod_template
+						}
 					}
 				}
-			}
-		}),
-	);
+			}),
+		);
+	} else {
+		panic!("invalid `spec_type` value `{}`", spec_type);
+	}
 
 	if svc_ctx.config().kind.has_server() {
 		specs.insert(
