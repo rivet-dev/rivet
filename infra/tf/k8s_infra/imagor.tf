@@ -111,14 +111,6 @@ resource "kubernetes_deployment" "imagor" {
 						value = "${local.result_storage_s3_region}"
 					}
 					env {
-						name = "AWS_RESULT_STORAGE_ACCESS_KEY_ID"
-						value = "${local.result_storage_s3_access_key_id}"
-					}
-					env {
-						name = "AWS_RESULT_STORAGE_SECRET_ACCESS_KEY"
-						value = "${local.result_storage_s3_secret_access_key}"
-					}
-					env {
 						name = "S3_RESULT_STORAGE_BUCKET"
 						value = "${local.result_storage_s3_bucket}"
 					}
@@ -129,6 +121,11 @@ resource "kubernetes_deployment" "imagor" {
 					env {
 						name = "S3_FORCE_PATH_STYLE"
 						value = "1"
+					}
+					env_from {
+						secret_ref {
+							name = "imagor-secret-env"
+						}
 					}
 
 					port {
@@ -161,6 +158,18 @@ resource "kubernetes_deployment" "imagor" {
 				}
 			}
 		}
+	}
+}
+
+resource "kubernetes_secret" "imagor_secret_env" {
+	metadata {
+		name = "imagor-secret-env"
+		namespace = "imagor"
+	}
+	
+	data = {
+		"AWS_RESULT_STORAGE_ACCESS_KEY_ID" = base64encode(local.result_storage_s3_access_key_id)
+		"AWS_RESULT_STORAGE_SECRET_ACCESS_KEY" = base64encode(local.result_storage_s3_secret_access_key)
 	}
 }
 

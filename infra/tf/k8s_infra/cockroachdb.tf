@@ -18,9 +18,6 @@ resource "helm_release" "cockroachdb" {
 				replicas = 1
 			}
 		}
-		# statefulset = {
-		# 	args = ["--insecure"]
-		# }
 		tls = {
 			enabled = false
 		}
