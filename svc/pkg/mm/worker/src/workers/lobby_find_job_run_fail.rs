@@ -8,7 +8,7 @@ struct LobbyRow {
 }
 
 #[worker(name = "mm-lobby-find-job-run-fail")]
-async fn worker(ctx: OperationContext<job_run::msg::fail::Message>) -> GlobalResult<()> {
+async fn worker(ctx: &OperationContext<job_run::msg::fail::Message>) -> GlobalResult<()> {
 	let crdb = ctx.crdb("db-mm-state").await?;
 
 	let run_id = internal_unwrap!(ctx.run_id).as_uuid();

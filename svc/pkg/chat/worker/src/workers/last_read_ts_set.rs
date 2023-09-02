@@ -2,7 +2,7 @@ use chirp_worker::prelude::*;
 use proto::backend::pkg::*;
 
 #[worker(name = "chat-last-read-ts-set")]
-async fn worker(ctx: OperationContext<chat::msg::last_read_ts_set::Message>) -> GlobalResult<()> {
+async fn worker(ctx: &OperationContext<chat::msg::last_read_ts_set::Message>) -> GlobalResult<()> {
 	let crdb = ctx.crdb("db-chat").await?;
 
 	let user_id = internal_unwrap!(ctx.user_id).as_uuid();

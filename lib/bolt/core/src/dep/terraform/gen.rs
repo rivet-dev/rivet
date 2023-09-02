@@ -389,6 +389,25 @@ async fn vars(ctx: &ProjectContext) {
 			"s3_persistent_access_key_secret".into(),
 			json!(credentials.access_key_secret),
 		);
+
+		// Build providers list
+		let ns_s3_providers = &ctx.ns().s3.providers;
+		let mut s3_providers = Vec::with_capacity(1);
+
+		if ns_s3_providers.backblaze.is_some() {
+			s3_providers.push("backblaze");
+		}
+		if ns_s3_providers.minio.is_some() {
+			s3_providers.push("minio");
+		}
+		if ns_s3_providers.aws.is_some() {
+			s3_providers.push("aws");
+		}
+
+		vars.insert(
+			"s3_providers".into(),
+			Into::<serde_json::Value>::into(s3_providers),
+		);
 	}
 
 	// Media presets

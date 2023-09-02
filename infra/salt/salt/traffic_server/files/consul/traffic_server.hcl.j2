@@ -42,8 +42,23 @@ services {
 		# and https://imagekit.io/blog/ultimate-guide-to-http-caching-for-static-assets/
 		"{{prefix}}.http.middlewares.ats-cdn-cache-control.headers.customResponseHeaders.Cache-Control=public, max-age=604800, immutable",
 
+		{% for provider, _ in s3_providers.items() %}
+		{% for bucket in ["job-log", "team-billing", "lobby-history-export", "nomad-log-export"] %}
+		# MARK: http.routers-{{provider}}-{{bucket}}
+		"{{prefix}}.http.routers.ats-{{provider}}-{{bucket}}.entryPoints=lb-443",
+		"{{prefix}}.http.routers.ats-{{provider}}-{{bucket}}.rule=Host(`cdn.{{domain['base']}}`) && PathPrefix(`/{{provider}}/{{bucket}}/`)",
+		"{{prefix}}.http.routers.ats-{{provider}}-{{bucket}}.middlewares=ats-{{bucket}}-path, ats-cors, ats-cdn",
+		"{{prefix}}.http.routers.ats-{{provider}}-{{bucket}}.tls=true",
+
+		# MARK: middlewares.ats-{{provider}}-{{bucket}}-path
+		"{{prefix}}.http.middlewares.ats-{{provider}}-{{bucket}}-path.replacePathRegex.regex=^/{{provider}}/{{bucket}}/(.*)",
+		"{{prefix}}.http.middlewares.ats-{{provider}}-{{bucket}}-path.replacePathRegex.replacement=/s3-cache/{{provider}}/{{namespace}}-bucket-{{bucket}}/${1}",
+		{% endfor %}
+		{% endfor %}
+
 		{% for bucket in ["job-log", "team-billing", "lobby-history-export", "nomad-log-export"] %}
 		# MARK: http.routers-{{bucket}}
+		# Default route for backwards compatibility
 		"{{prefix}}.http.routers.ats-{{bucket}}.entryPoints=lb-443",
 		"{{prefix}}.http.routers.ats-{{bucket}}.rule=Host(`cdn.{{domain['base']}}`) && PathPrefix(`/{{bucket}}/`)",
 		"{{prefix}}.http.routers.ats-{{bucket}}.middlewares=ats-{{bucket}}-path, ats-cors, ats-cdn",

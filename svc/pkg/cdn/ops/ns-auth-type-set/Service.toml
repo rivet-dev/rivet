@@ -5,3 +5,6 @@ name = "cdn-ns-auth-type-set"
 kind = "rust"
 
 [operation]
+
+[databases]
+db-cdn = {}

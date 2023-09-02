@@ -109,7 +109,6 @@ impl PoolsInner {
 			.collect::<Vec<_>>();
 		dbs.sort_by_key(|(_, size, _)| *size);
 		dbs.reverse();
-		tracing::info!(?dbs, "db metrics");
 
 		// CRDB
 		for (db_name, pool) in self.crdb_map() {

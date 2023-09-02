@@ -76,6 +76,7 @@ impl Ctx {
 					max_players_normal: 1,
 					max_players_direct: 1,
 					max_players_party: 1,
+					listable: true,
 
 					runtime: Some(backend::matchmaker::lobby_runtime::Docker {
 						build_id: build_res.build_id,
@@ -84,6 +85,10 @@ impl Ctx {
 						network_mode: backend::matchmaker::lobby_runtime::NetworkMode::Bridge as i32,
 						ports: Vec::new(),
 					}.into()),
+
+					find_config: None,
+					join_config: None,
+					create_config: None,
 				}],
 			}),
 			..Default::default()
@@ -507,7 +512,9 @@ async fn test_find_idle_lobby(ctx: TestCtx) {
 		tracing::info!("finding lobby");
 		let player_id = Uuid::new_v4();
 		let query_id = Uuid::new_v4();
-		let find_res = msg!([ctx] @notrace mm::msg::lobby_find(test_ctx.namespace_id, query_id) -> Result<mm::msg::lobby_find_complete, mm::msg::lobby_find_fail> {
+		let find_res = msg!([ctx] @notrace mm::msg::lobby_find(test_ctx.namespace_id, query_id)
+			-> Result<mm::msg::lobby_find_complete, mm::msg::lobby_find_fail>
+		{
 			namespace_id: Some(test_ctx.namespace_id.into()),
 			query_id: Some(query_id.into()),
 			join_kind: backend::matchmaker::query::JoinKind::Normal as i32,
@@ -524,9 +531,11 @@ async fn test_find_idle_lobby(ctx: TestCtx) {
 				region_ids: vec![test_ctx.region_id.into()],
 				auto_create: None,
 			})),
+			..Default::default()
 		})
 		.await
-		.unwrap().unwrap();
+		.unwrap()
+		.unwrap();
 		let find_lobby_id = find_res.lobby_id.as_ref().unwrap().as_uuid();
 
 		assert!(

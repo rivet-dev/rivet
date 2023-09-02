@@ -34,6 +34,7 @@ async fn player_remove(ctx: TestCtx) {
 		query: Some(mm::msg::lobby_find::message::Query::Direct(backend::matchmaker::query::Direct {
 			lobby_id: Some(lobby_id.into()),
 		})),
+		..Default::default()
 	})
 	.await
 	.unwrap().unwrap();

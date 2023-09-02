@@ -1,6 +1,11 @@
 use chirp_worker::prelude::*;
 use proto::backend::{
-	self, matchmaker::query::JoinKind, pkg::mm::msg::lobby_find::message::Query, pkg::*,
+	self,
+	matchmaker::query::JoinKind,
+	pkg::{
+		mm::{msg::lobby_find::message::Query, msg::lobby_find_fail::ErrorCode},
+		*,
+	},
 };
 use rand::seq::SliceRandom;
 use redis_util::RedisResult;
@@ -78,7 +83,7 @@ pub struct FindOpts<'a> {
 	pub join_kind: JoinKind,
 	pub players: &'a [super::Player],
 	pub query: &'a Query,
-	pub lobby_group_config: Option<&'a LobbyGroupConfig>,
+	pub lobby_group_config: &'a LobbyGroupConfig,
 	pub auto_create_lobby_id: Uuid,
 }
 
@@ -148,9 +153,7 @@ pub async fn find(
 				.collect::<Vec<_>>();
 
 			// Update config for auto create lobbies
-			let auto_create = if let (Some(auto_create), Some(lobby_group_config)) =
-				(auto_create, lobby_group_config)
-			{
+			let auto_create = if let Some(auto_create) = auto_create {
 				let region_id = internal_unwrap!(auto_create.region_id).as_uuid();
 				let lobby_group_id = internal_unwrap!(auto_create.lobby_group_id).as_uuid();
 
@@ -186,6 +189,8 @@ pub async fn find(
 						preemptive: true,
 						ready_ts: None,
 						is_closed: false,
+						is_custom: false,
+						state_json: None,
 					},
 					ready_expire_ts: ctx.ts() + util_mm::consts::LOBBY_READY_TIMEOUT,
 				})
@@ -324,17 +329,17 @@ pub async fn find(
 				.fetch_optional(crdb)
 				.await?
 				{
-					mm::msg::lobby_find_fail::ErrorCode::LobbyStopped
+					ErrorCode::LobbyStopped
 				} else {
-					mm::msg::lobby_find_fail::ErrorCode::LobbyNotFound
+					ErrorCode::LobbyNotFound
 				}
 			} else {
-				mm::msg::lobby_find_fail::ErrorCode::LobbyNotFound
+				ErrorCode::LobbyNotFound
 			}
 		}
-		Err("LOBBY_CLOSED") => mm::msg::lobby_find_fail::ErrorCode::LobbyClosed,
-		Err("LOBBY_FULL") => mm::msg::lobby_find_fail::ErrorCode::LobbyFull,
-		Err("NO_AVAILABLE_LOBBIES") => mm::msg::lobby_find_fail::ErrorCode::NoAvailableLobbies,
+		Err("LOBBY_CLOSED") => ErrorCode::LobbyClosed,
+		Err("LOBBY_FULL") => ErrorCode::LobbyFull,
+		Err("NO_AVAILABLE_LOBBIES") => ErrorCode::NoAvailableLobbies,
 		Err(_) => internal_panic!("unknown redis error"),
 	};
 

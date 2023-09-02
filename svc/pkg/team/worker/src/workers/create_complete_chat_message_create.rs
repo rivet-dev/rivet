@@ -2,7 +2,7 @@ use chirp_worker::prelude::*;
 use proto::backend::{self, pkg::*};
 
 #[worker(name = "team-create-complete-chat-message-create")]
-async fn worker(ctx: OperationContext<team::msg::create_complete::Message>) -> GlobalResult<()> {
+async fn worker(ctx: &OperationContext<team::msg::create_complete::Message>) -> GlobalResult<()> {
 	// Create new chat with team
 	op!([ctx] chat_message_create_with_topic {
 		chat_message_id: Some(Uuid::new_v4().into()),

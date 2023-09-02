@@ -5,3 +5,6 @@ name = "user-notification-auth-register"
 kind = "rust"
 
 [operation]
+
+[databases]
+db-user-notification-auth = {}

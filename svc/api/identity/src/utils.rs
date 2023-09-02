@@ -30,11 +30,7 @@ pub fn create_notification(
 			let title = sender.display_name.to_owned();
 			let description =
 				util::format::truncate_at_code_point(&text.body.chars().collect::<Vec<_>>(), 1024)?;
-			let thumbnail_url = util::route::user_avatar(
-				&sender.avatar_id,
-				sender.profile_upload_id.map(|id| id.as_uuid()),
-				sender.profile_file_name.as_ref(),
-			);
+			let thumbnail_url = util::route::user_avatar(&sender);
 			let url = util::route::thread(thread_id.as_uuid());
 
 			Ok(Some(models::IdentityGlobalEventNotification {
@@ -87,7 +83,7 @@ pub async fn resolve_user_with_game_user_id(
 	})
 	.await?;
 	let Some(game_user) = game_user_res.game_users.first().clone() else {
-		return Ok(None)
+		return Ok(None);
 	};
 
 	Ok(Some(internal_unwrap!(game_user.user_id).as_uuid()))

@@ -5,3 +5,6 @@ name = "user-token-create"
 kind = "rust"
 
 [operation]
+
+[databases]
+db-user = {}

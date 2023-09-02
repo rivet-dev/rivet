@@ -5,3 +5,6 @@ name = "team-dev-get"
 kind = "rust"
 
 [operation]
+
+[databases]
+db-team-dev = {}

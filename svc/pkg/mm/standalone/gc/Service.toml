@@ -8,3 +8,6 @@ kind = "rust"
 [headless]
 singleton = true
 
+[databases]
+db-mm-state = {}
+redis-mm = {}

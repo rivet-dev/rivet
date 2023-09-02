@@ -4,7 +4,7 @@ use redis::AsyncCommands;
 
 #[worker(name = "user-presence-game-activity-set")]
 async fn worker(
-	ctx: OperationContext<user_presence::msg::game_activity_set::Message>,
+	ctx: &OperationContext<user_presence::msg::game_activity_set::Message>,
 ) -> GlobalResult<()> {
 	let mut redis = ctx.redis_user_presence().await?;
 

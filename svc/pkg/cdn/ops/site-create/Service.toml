@@ -5,3 +5,6 @@ name = "cdn-site-create"
 kind = "rust"
 
 [operation]
+
+[databases]
+db-cdn = {}

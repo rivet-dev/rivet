@@ -1,0 +1,10 @@
+[service]
+name = "mm-lobby-list-for-user-id"
+
+[runtime]
+kind = "rust"
+
+[operation]
+
+[databases]
+db-mm-state = {}

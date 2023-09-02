@@ -1,0 +1,21 @@
+syntax = "proto3";
+
+package rivet.backend.pkg.external.msg.request_call_fail;
+
+import "proto/common.proto";
+
+enum ErrorCode {
+	UNKNOWN = 0;
+
+	REQUEST_FAILED = 1;
+}
+
+/// name = "msg-external-request-call-fail"
+/// parameters = [
+/// 	{ name = "request_id" },
+/// ]
+message Message {
+	rivet.common.Uuid request_id = 1;
+	ErrorCode error_code = 2;
+}
+

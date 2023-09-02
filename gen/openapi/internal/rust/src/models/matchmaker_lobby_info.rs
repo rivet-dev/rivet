@@ -26,6 +26,8 @@ pub struct MatchmakerLobbyInfo {
     pub max_players_party: i32,
     #[serde(rename = "region_id")]
     pub region_id: String,
+    #[serde(rename = "state", default, with = "::serde_with::rust::double_option", skip_serializing_if = "Option::is_none")]
+    pub state: Option<Option<serde_json::Value>>,
     #[serde(rename = "total_player_count")]
     pub total_player_count: i32,
 }
@@ -40,6 +42,7 @@ impl MatchmakerLobbyInfo {
             max_players_normal,
             max_players_party,
             region_id,
+            state: None,
             total_player_count,
         }
     }

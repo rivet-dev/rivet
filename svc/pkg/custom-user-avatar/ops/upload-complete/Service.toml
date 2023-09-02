@@ -5,3 +5,6 @@ name = "custom-user-avatar-upload-complete"
 kind = "rust"
 
 [operation]
+
+[databases]
+db-game-custom-avatar = {}

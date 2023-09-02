@@ -5,3 +5,6 @@ name = "game-create"
 kind = "rust"
 
 [operation]
+
+[databases]
+db-game = {}

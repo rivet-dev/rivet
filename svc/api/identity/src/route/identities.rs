@@ -206,7 +206,9 @@ async fn attempt_setup_existing_identity_token(
 	.await?;
 
 	// Fetch user data
-	let Some(user_id) = utils::resolve_user_with_game_user_id(ctx, game_user_ent.game_user_id).await? else {
+	let Some(user_id) =
+		utils::resolve_user_with_game_user_id(ctx, game_user_ent.game_user_id).await?
+	else {
 		tracing::info!("game user not found");
 		return Ok(None);
 	};

@@ -2356,10 +2356,18 @@ components:
     CloudVersionMatchmakerGameMode:
       description: A game mode.
       properties:
+        create_config:
+          $ref: '#/components/schemas/CloudVersionMatchmakerGameModeCreateConfig'
         docker:
           $ref: '#/components/schemas/CloudVersionMatchmakerGameModeRuntimeDocker'
+        find_config:
+          $ref: '#/components/schemas/CloudVersionMatchmakerGameModeFindConfig'
         idle_lobbies:
           $ref: '#/components/schemas/CloudVersionMatchmakerGameModeIdleLobbiesConfig'
+        join_config:
+          $ref: '#/components/schemas/CloudVersionMatchmakerGameModeJoinConfig'
+        listable:
+          type: boolean
         max_players:
           type: integer
         max_players_direct:
@@ -2373,6 +2381,49 @@ components:
         tier:
           type: string
       type: object
+    CloudVersionMatchmakerGameModeCreateConfig:
+      description: Configures the requirements and authentication for the /create
+        endpoint. If this value is not set in the config, the /create endpoint is
+        NOT enabled.
+      properties:
+        enable_private:
+          type: boolean
+        enable_public:
+          type: boolean
+        identity_requirement:
+          $ref: '#/components/schemas/CloudVersionMatchmakerGameModeIdentityRequirement'
+        max_lobbies_per_identity:
+          type: integer
+        verification_config:
+          $ref: '#/components/schemas/CloudVersionMatchmakerGameModeVerificationConfig'
+      required:
+      - identity_requirement
+      - enable_public
+      - enable_private
+      type: object
+    CloudVersionMatchmakerGameModeFindConfig:
+      description: Configures the requirements and authentication for the /find endpoint.
+        If this value is not set in the config, the /find endpoint is still enabled.
+      properties:
+        enabled:
+          description: Sets whether or not the /find endpoint is enabled.
+          type: boolean
+        identity_requirement:
+          $ref: '#/components/schemas/CloudVersionMatchmakerGameModeIdentityRequirement'
+        verification_config:
+          $ref: '#/components/schemas/CloudVersionMatchmakerGameModeVerificationConfig'
+      required:
+      - enabled
+      - identity_requirement
+      type: object
+    CloudVersionMatchmakerGameModeIdentityRequirement:
+      description: The registration requirement for a user when joining/finding/creating
+        a lobby. "None" allows for connections without an identity.
+      enum:
+      - none
+      - guest
+      - registered
+      type: string
     CloudVersionMatchmakerGameModeIdleLobbiesConfig:
       description: Configuration for how many idle lobbies a game version should have.
       properties:
@@ -2383,6 +2434,21 @@ components:
       required:
       - min
       - max
+      type: object
+    CloudVersionMatchmakerGameModeJoinConfig:
+      description: Configures the requirements and authentication for the /join endpoint.
+        If this value is not set in the config, the /join endpoint is still enabled.
+      properties:
+        enabled:
+          description: Sets whether or not the /join endpoint is enabled.
+          type: boolean
+        identity_requirement:
+          $ref: '#/components/schemas/CloudVersionMatchmakerGameModeIdentityRequirement'
+        verification_config:
+          $ref: '#/components/schemas/CloudVersionMatchmakerGameModeVerificationConfig'
+      required:
+      - enabled
+      - identity_requirement
       type: object
     CloudVersionMatchmakerGameModeRegion:
       description: A game mode region.
@@ -2441,6 +2507,24 @@ components:
         proxy:
           $ref: '#/components/schemas/CloudVersionMatchmakerProxyKind'
           description: How this port should be proxied. Defaults to 'game-guard`.
+      type: object
+    CloudVersionMatchmakerGameModeVerificationConfig:
+      description: Configuration that tells Rivet where to send validation requests
+        and with what headers. When set, Rivet will send the `verification_data` property
+        (given by the user in the find/join/create endpoint) to the given url along
+        with the headers provided and some information about the requested lobby.
+        The response of this request will determine if the user can join that lobby
+        or not.
+      properties:
+        headers:
+          additionalProperties:
+            type: string
+          type: object
+        url:
+          type: string
+      required:
+      - url
+      - headers
       type: object
     CloudVersionMatchmakerLobbyGroup:
       description: A game mode.
@@ -4077,6 +4161,26 @@ components:
         A `null` value indicates the entry is deleted.
 
         Maximum length of 262,144 bytes when encoded.'
+    MatchmakerCreateLobbyResponse:
+      properties:
+        lobby:
+          $ref: '#/components/schemas/MatchmakerJoinLobby'
+        player:
+          $ref: '#/components/schemas/MatchmakerJoinPlayer'
+        ports:
+          additionalProperties:
+            $ref: '#/components/schemas/MatchmakerJoinPort'
+          type: object
+      required:
+      - lobby
+      - ports
+      - player
+      type: object
+    MatchmakerCustomLobbyPublicity:
+      enum:
+      - public
+      - private
+      type: string
     MatchmakerFindLobbyResponse:
       properties:
         lobby:
@@ -4271,6 +4375,7 @@ components:
           type: integer
         region_id:
           type: string
+        state: {}
         total_player_count:
           type: integer
       required:
@@ -11572,8 +11677,13 @@ paths:
       - GroupInvites
   /lobbies/closed:
     put:
-      description: 'If `is_closed` is `true`, players will be prevented from joining
-        the lobby.
+      description: 'If `is_closed` is `true`, the matchmaker will no longer route
+        players to the lobby. Players can still
+
+        join using the /join endpoint (this can be disabled by the developer by rejecting
+        all new connections
+
+        after setting the lobby to closed).
 
         Does not shutdown the lobby.
 
@@ -11593,6 +11703,81 @@ paths:
         required: true
       responses:
         '204':
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+          description: ''
+        '408':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+          description: ''
+        '429':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+          description: ''
+        '500':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+          description: ''
+      security: *id001
+      servers:
+      - url: https://matchmaker.api.rivet.gg/v1
+      tags:
+      - MatchmakerLobbies
+  /lobbies/create:
+    post:
+      description: 'Creates a custom lobby.
+
+        '
+      operationId: matchmaker_lobbies_create
+      parameters: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              properties:
+                captcha:
+                  $ref: '#/components/schemas/CaptchaConfig'
+                game_mode:
+                  type: string
+                lobby_config: {}
+                publicity:
+                  $ref: '#/components/schemas/MatchmakerCustomLobbyPublicity'
+                region:
+                  type: string
+                verification_data: {}
+              required:
+              - game_mode
+              - publicity
+              type: object
+        required: true
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MatchmakerCreateLobbyResponse'
           description: ''
         '400':
           content:
@@ -11663,6 +11848,7 @@ paths:
                   items:
                     type: string
                   type: array
+                verification_data: {}
               required:
               - game_modes
               type: object
@@ -11735,6 +11921,7 @@ paths:
                   $ref: '#/components/schemas/CaptchaConfig'
                 lobby_id:
                   type: string
+                verification_data: {}
               required:
               - lobby_id
               type: object
@@ -11791,7 +11978,12 @@ paths:
     get:
       description: Lists all open lobbies.
       operationId: matchmaker_lobbies_list
-      parameters: []
+      parameters:
+      - in: query
+        name: include_state
+        required: false
+        schema:
+          type: boolean
       responses:
         '200':
           content:
@@ -11848,6 +12040,116 @@ paths:
       parameters: []
       responses:
         '204':
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+          description: ''
+        '408':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+          description: ''
+        '429':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+          description: ''
+        '500':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+          description: ''
+      security: *id001
+      servers:
+      - url: https://matchmaker.api.rivet.gg/v1
+      tags:
+      - MatchmakerLobbies
+  /lobbies/state:
+    put:
+      operationId: matchmaker_lobbies_setState
+      parameters: []
+      requestBody:
+        content:
+          application/json:
+            schema: {}
+        required: false
+      responses:
+        '204':
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+          description: ''
+        '408':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+          description: ''
+        '429':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+          description: ''
+        '500':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+          description: ''
+      security: *id001
+      servers:
+      - url: https://matchmaker.api.rivet.gg/v1
+      tags:
+      - MatchmakerLobbies
+  /lobbies/{lobby_id}/state:
+    get:
+      operationId: matchmaker_lobbies_getState
+      parameters:
+      - in: path
+        name: lobby_id
+        required: true
+        schema:
+          format: uuid
+          type: string
+      responses:
+        '200':
+          content:
+            application/json:
+              schema: {}
           description: ''
         '400':
           content:

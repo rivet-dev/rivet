@@ -13,7 +13,7 @@ struct NotificationData {
 
 #[worker(name = "push-notification-send")]
 async fn worker(
-	ctx: OperationContext<push_notification::msg::create::Message>,
+	ctx: &OperationContext<push_notification::msg::create::Message>,
 ) -> GlobalResult<()> {
 	let user_id = internal_unwrap!(ctx.user_id).as_uuid();
 	let thread_id = internal_unwrap!(ctx.thread_id).as_uuid();
@@ -22,7 +22,7 @@ async fn worker(
 	));
 
 	match service {
-		// Send push notificaton through Firebase
+		// Send push notification through Firebase
 		backend::notification::NotificationService::Firebase => {
 			let row = sqlx::query_as::<_, (Option<String>,)>(indoc!(
 				"
@@ -63,11 +63,7 @@ async fn worker(
 							&text.body.chars().collect::<Vec<_>>(),
 							1024,
 						)?;
-						let icon = util::route::user_avatar(
-							&user.avatar_id,
-							user.profile_upload_id.as_ref().map(common::Uuid::as_uuid),
-							user.profile_file_name.as_ref(),
-						);
+						let icon = util::route::user_avatar(&user);
 						let click_url = format!("/threads/{}", thread_id);
 
 						let mut notif_builder = NotificationBuilder::new();

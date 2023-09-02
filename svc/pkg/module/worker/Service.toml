@@ -6,5 +6,8 @@ kind = "rust"
 
 [consumer]
 
+[databases]
+db-module = {}
+
 [secrets]
 "fly/auth_token" = { optional = true }

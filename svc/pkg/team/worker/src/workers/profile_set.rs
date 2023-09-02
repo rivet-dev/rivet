@@ -4,7 +4,7 @@ use proto::backend::{self, pkg::*};
 use serde_json::json;
 
 #[worker(name = "team-profile-set")]
-async fn worker(ctx: OperationContext<team::msg::profile_set::Message>) -> GlobalResult<()> {
+async fn worker(ctx: &OperationContext<team::msg::profile_set::Message>) -> GlobalResult<()> {
 	let team::msg::profile_set::Message {
 		team_id,
 		display_name,

@@ -2,7 +2,7 @@ use chirp_worker::prelude::*;
 use proto::backend::pkg::*;
 
 #[worker(name = "user-search-update")]
-async fn worker(ctx: OperationContext<user::msg::search_update::Message>) -> GlobalResult<()> {
+async fn worker(ctx: &OperationContext<user::msg::search_update::Message>) -> GlobalResult<()> {
 	let crdb = ctx.crdb("db-user").await?;
 	let user_id = internal_unwrap_owned!(ctx.user_id).as_uuid();
 

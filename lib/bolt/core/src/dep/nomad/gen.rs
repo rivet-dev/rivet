@@ -8,7 +8,7 @@ use crate::{
 		ns::LoggingProvider,
 		service::{ServiceDomain, ServiceKind, ServiceRouter},
 	},
-	context::{BuildContext, ProjectContext, RunContext, S3Provider, ServiceContext},
+	context::{BuildContext, ProjectContext, RunContext, ServiceContext},
 	dep::nomad::job_schema::*,
 };
 
@@ -81,6 +81,11 @@ pub async fn gen_svc(region_id: &str, exec_ctx: &ExecServiceContext) -> Job {
 		svc_ctx.config().kind,
 		ServiceKind::Headless { .. } | ServiceKind::Consumer { .. } | ServiceKind::Api { .. }
 	);
+	let crdb_dep = svc_ctx
+		.crdb_dependencies()
+		.await
+		.first()
+		.map(|svc| svc.name());
 
 	let has_metrics = matches!(
 		svc_ctx.config().kind,
@@ -241,7 +246,7 @@ pub async fn gen_svc(region_id: &str, exec_ctx: &ExecServiceContext) -> Job {
 			}]),
 			ephemeral_disk: Some(json!({
 				// Prevent exhausting all storage resources on the local machine. We don't
-				// accept anything over 512 MB since our dev machiens are limited in space.
+				// accept anything over 512 MB since our dev machines are limited in space.
 				"SizeMB": ns_service_config.resources.ephemeral_disk,
 			})),
 			services: Some({
@@ -295,12 +300,14 @@ pub async fn gen_svc(region_id: &str, exec_ctx: &ExecServiceContext) -> Job {
 							..Default::default()
 						});
 
-						checks.push(build_conn_check(
-							"Cockroach",
-							"/health/crdb/db-user",
-							interval,
-							on_update,
-						));
+						if let Some(crdb_dep) = crdb_dep {
+							checks.push(build_conn_check(
+								"Cockroach",
+								&format!("/health/crdb/{}", crdb_dep),
+								interval,
+								on_update,
+							));
+						}
 
 						checks.push(build_conn_check(
 							"Nats Connection",
@@ -483,10 +490,10 @@ pub async fn gen_svc(region_id: &str, exec_ctx: &ExecServiceContext) -> Job {
 						//
 						// Using the region in the domain causes it to throw an invalid URL error.
 						let getter_source = match default_provider {
-							S3Provider::Aws => {
+							s3_util::Provider::Aws => {
 								format!("s3::https://s3.amazonaws.com/{bucket}/{artifact_key}")
 							}
-							S3Provider::Backblaze => {
+							s3_util::Provider::Backblaze => {
 								format!(
 									"s3::{endpoint}/{bucket}/{key}",
 									endpoint = s3_config.endpoint_external,

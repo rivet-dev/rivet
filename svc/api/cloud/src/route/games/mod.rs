@@ -177,6 +177,7 @@ async fn gen_default_version_config(
 				max_players_normal: 32,
 				max_players_direct: 32,
 				max_players_party: 32,
+				listable: true,
 
 				runtime: Some(
 					backend::matchmaker::lobby_runtime::Docker {
@@ -200,6 +201,10 @@ async fn gen_default_version_config(
 					}
 					.into(),
 				),
+
+				find_config: None,
+				join_config: None,
+				create_config: None,
 			}],
 			captcha: None,
 		}),

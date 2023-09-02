@@ -5,3 +5,6 @@ name = "push-notification-worker"
 kind = "rust"
 
 [consumer]
+
+[databases]
+db-user-notification-auth = {}

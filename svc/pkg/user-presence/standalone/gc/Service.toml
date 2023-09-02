@@ -8,3 +8,5 @@ kind = "rust"
 [headless]
 singleton = true
 
+[databases]
+redis-user-presence = {}

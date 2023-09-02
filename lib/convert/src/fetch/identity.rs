@@ -9,12 +9,14 @@ use rivet_operation::prelude::*;
 
 use crate::{convert, fetch};
 
+#[derive(Debug)]
 pub struct TeamsCtx {
 	pub user_teams: user::team_list::Response,
 	pub teams: Vec<backend::team::Team>,
 	pub dev_teams: team_dev::get::Response,
 }
 
+#[derive(Debug)]
 pub struct PresencesCtx {
 	pub res: user_presence::get::Response,
 	pub games: Vec<backend::game::Game>,
@@ -275,48 +277,42 @@ async fn games(
 }
 
 async fn teams(ctx: &OperationContext<()>, user_ids: Vec<common::Uuid>) -> GlobalResult<TeamsCtx> {
-	return Ok(TeamsCtx {
-		user_teams: user::team_list::Response { users: vec![] },
-		teams: vec![],
-		dev_teams: team_dev::get::Response { teams: vec![] },
-	});
+	let user_teams_res = op!([ctx] user_team_list {
+		user_ids: user_ids,
+	})
+	.await?;
 
-	// let user_teams_res = op!([ctx] user_team_list {
-	// 	user_ids: user_ids,
-	// })
-	// .await?;
+	let team_ids = user_teams_res
+		.users
+		.iter()
+		.map(|user| {
+			user.teams
+				.iter()
+				.map(|t| Ok(internal_unwrap_owned!(t.team_id)))
+				.collect::<GlobalResult<Vec<_>>>()
+		})
+		.collect::<GlobalResult<Vec<_>>>()?
+		.into_iter()
+		.flatten()
+		.collect::<Vec<_>>();
 
-	// let team_ids = user_teams_res
-	// 	.users
-	// 	.iter()
-	// 	.map(|user| {
-	// 		user.teams
-	// 			.iter()
-	// 			.map(|t| Ok(internal_unwrap_owned!(t.team_id)))
-	// 			.collect::<GlobalResult<Vec<_>>>()
-	// 	})
-	// 	.collect::<GlobalResult<Vec<_>>>()?
-	// 	.into_iter()
-	// 	.flatten()
-	// 	.collect::<Vec<_>>();
+	let (teams_res, dev_teams_res) = tokio::try_join!(
+		op!([ctx] team_get {
+			team_ids: team_ids.clone(),
+		}),
+		op!([ctx] team_dev_get {
+			team_ids: team_ids.clone(),
+		}),
+	)?;
 
-	// let (teams_res, dev_teams_res) = tokio::try_join!(
-	// 	op!([ctx] team_get {
-	// 		team_ids: team_ids.clone(),
-	// 	}),
-	// 	op!([ctx] team_dev_get {
-	// 		team_ids: team_ids.clone(),
-	// 	}),
-	// )?;
+	// TODO: hide all closed teams
+	let teams = teams_res.teams.clone();
 
-	// // TODO: hide all closed teams
-	// let teams = teams_res.teams.clone();
-
-	// Ok(TeamsCtx {
-	// 	user_teams: user_teams_res,
-	// 	teams,
-	// 	dev_teams: dev_teams_res,
-	// })
+	Ok(TeamsCtx {
+		user_teams: user_teams_res,
+		teams,
+		dev_teams: dev_teams_res,
+	})
 }
 
 async fn follows(

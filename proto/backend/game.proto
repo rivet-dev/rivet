@@ -3,6 +3,7 @@ syntax = "proto3";
 package rivet.backend.game;
 
 import "proto/common.proto";
+import "proto/backend/upload.proto";
 
 message Game {
 	rivet.common.Uuid game_id = 1;
@@ -13,10 +14,13 @@ message Game {
 	rivet.common.Uuid developer_team_id = 6;
 	string description = 7;
 	repeated string tags = 8;
+	
 	optional rivet.common.Uuid logo_upload_id = 9;
 	optional string logo_file_name = 10;
+	optional upload.Provider logo_provider = 15;
 	optional rivet.common.Uuid banner_upload_id = 11;
 	optional string banner_file_name = 12;
+	optional upload.Provider banner_provider = 16;
 
 	optional string plan_code = 13;
 	optional rivet.common.Uuid subscription_id = 14;

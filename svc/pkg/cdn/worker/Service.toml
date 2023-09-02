@@ -5,3 +5,7 @@ name = "cdn-worker"
 kind = "rust"
 
 [consumer]
+
+[databases]
+redis-cdn = {}
+

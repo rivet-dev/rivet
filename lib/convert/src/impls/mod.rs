@@ -43,4 +43,20 @@ mod num {
 			std::convert::TryInto::try_into(v)
 		}
 	}
+
+	impl ApiTryFrom<u64> for i32 {
+		type Error = std::num::TryFromIntError;
+
+		fn try_from(v: u64) -> Result<Self, Self::Error> {
+			std::convert::TryInto::try_into(v)
+		}
+	}
+
+	impl ApiTryFrom<i32> for u64 {
+		type Error = std::num::TryFromIntError;
+
+		fn try_from(v: i32) -> Result<Self, Self::Error> {
+			std::convert::TryInto::try_into(v)
+		}
+	}
 }

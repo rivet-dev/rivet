@@ -5,3 +5,6 @@ name = "build-list-for-game"
 kind = "rust"
 
 [operation]
+
+[databases]
+db-build = {}
