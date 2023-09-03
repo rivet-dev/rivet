@@ -5,7 +5,7 @@ groups:
       - public
     generators:
       - name: fernapi/fern-typescript-node-sdk
-        version: 0.7.2
+        version: 0.5.6
         config:
           namespaceExport: Rivet
           bundle: true
@@ -38,9 +38,10 @@ groups:
   internal:
     generators:
       - name: fernapi/fern-typescript-node-sdk
-        version: 0.7.2
+        version: 0.5.6
         config:
           namespaceExport: Rivet
+          bundle: true
           allowCustomFetcher: true
         output:
           location: npm
@@ -51,7 +52,7 @@ groups:
       - public
     generators:
       - name: fernapi/fern-typescript-node-sdk
-        version: 0.7.2
+        version: 0.5.6
         output:
           location: local-file-system
           path: ../sdks/ts
