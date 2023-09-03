@@ -21,13 +21,6 @@ util-mm = { package = "rivet-util-mm", path = "../../util" }
 [dependencies.sqlx]
 version = "0.7"
 default-features = false
-features = [
-	"runtime-tokio",
-	"postgres",
-	"uuid",
-	"json",
-	"macros",
-]
 
 [dev-dependencies]
 chirp-worker = { path = "../../../../../lib/chirp/worker" }
