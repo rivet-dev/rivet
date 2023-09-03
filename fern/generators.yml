@@ -46,6 +46,28 @@ groups:
           location: npm
           package-name: "@rivet-gg/api-internal"
           token: ${FERN_NPM_TOKEN}
+  local_sdks: 
+    audiences:
+      - public
+    generators:
+      - name: fernapi/fern-typescript-sdk
+        version: 0.5.6
+        output:
+          location: local-file-system
+          path: ../sdks/ts
+        config:
+          namespaceExport: Rivet
+          bundle: true
+      - name: fernapi/fern-java-sdk
+        version: 0.4.8
+        output:
+          location: local-file-system
+          path: ../sdks/java
+      - name: fernapi/fern-go-sdk
+        version: 0.3.0
+        output: 
+          location: local-file-system
+          path: ../sdks/go
   local_external:
     audiences:
       - public
