@@ -7,14 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [23.1.0] - 2023-09-02
+
 ### Added
 
+-   **Matchmaker** Support custom lobbies
+-   **Matchmaker** Support lobby state
+-   **Matchmaker** Support external verification
+-   **Library** Support Java library
+-   **Library** Support Go library
 -   **Cloud** Support multipart uploads for builds
 -   **Infra** Support configuring multiple S3 providers
 -   **Infra** Support multipart uploads
 -   **Infra** Replace Promtail-based log shipping with native Loki Docker driver
 -   **Infra** Local Traefik Cloudflare proxy daemon for connecting to Cloudflare Access services
 -   **Infra** Upload service builds to default S3 provider instead of hardcoded bucket
+-   **Infra** Enable Apache Traffic Server pull-through cache for Docker builds
 -   **Bolt** Support for connecting to Redis databases with `bolt redis sh`
 -   **Bolt** Confirmation before running any command in the production namespace
 -   **Bolt** `--start-at` flag for all infra commands
