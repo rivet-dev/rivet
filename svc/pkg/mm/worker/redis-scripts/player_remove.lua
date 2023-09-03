@@ -29,10 +29,13 @@ if key_ns_remote_address_player_ids ~= "" then
 end
 
 if redis.call('EXISTS', key_lobby_config) == 1 then
-	-- Update available spots
 	local player_count = redis.call('ZCARD', key_lobby_player_ids)
-	redis.call('ZADD', key_lobby_available_spots_normal, max_players_normal - player_count, lobby_id)
-	redis.call('ZADD', key_lobby_available_spots_party, max_players_party - player_count, lobby_id)
+
+	-- Update available spots
+	if redis.call('HGET', key_lobby_config, 'c') ~= '1' then
+		redis.call('ZADD', key_lobby_available_spots_normal, max_players_normal - player_count, lobby_id)
+		redis.call('ZADD', key_lobby_available_spots_party, max_players_party - player_count, lobby_id)
+	end
 
 	-- Remove the lobby if empty
 	if player_count == 0 then
@@ -41,21 +44,20 @@ if redis.call('EXISTS', key_lobby_config) == 1 then
 			redis.call('ZREM', key_lobby_available_spots_normal, lobby_id)
 			redis.call('ZREM', key_lobby_available_spots_party, lobby_id)
 
-			return {true, false}
+			return { true, false }
 		else
 			-- Mark lobby as idle
 			local did_set_idle = redis.call('ZADD', key_idle_lobby_ids, ts, lobby_id) == 1
 			redis.call('HSET', key_idle_lobby_lobby_group_ids, lobby_id, lobby_group_id)
 
-			return {false, did_set_idle}
+			return { false, did_set_idle }
 		end
 	else
 		-- Normal player removing, nothing to do
 
-		return {false, false}
+		return { false, false }
 	end
 else
 	-- Lobby does not exist
-	return {false, false}
+	return { false, false }
 end
-
