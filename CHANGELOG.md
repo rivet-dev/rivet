@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [23.1.0-rc3] - 2023-09-02
+
+### Changed
+
+-   Don't publish internal Fern package on tag to prevent duplicate pushes
+
 ## [23.1.0-rc2] - 2023-09-02
 
 ### Changed
