@@ -46,7 +46,7 @@ groups:
           location: npm
           package-name: "@rivet-gg/api-internal"
           token: ${FERN_NPM_TOKEN}
-  local_sdks: 
+  local_sdks:
     audiences:
       - public
     generators:
@@ -65,7 +65,7 @@ groups:
           path: ../sdks/java
       - name: fernapi/fern-go-sdk
         version: 0.3.0
-        output: 
+        output:
           location: local-file-system
           path: ../sdks/go
   local_external:
