@@ -259,13 +259,20 @@ async fn lobby_group_closed(ctx: TestCtx) {
 
 	let res = find(
 		&ctx,
-		lobby_res.namespace_id.as_ref().unwrap().as_uuid(),
-		gen_players(1),
-		mm::msg::lobby_find::message::Query::LobbyGroup(backend::matchmaker::query::LobbyGroup {
-			lobby_group_ids: vec![lobby_res.lobby_group_id.unwrap()],
-			region_ids: vec![lobby_res.region_id.unwrap()],
-			auto_create: None,
-		}),
+		FindRequest {
+			namespace_id: lobby_res.namespace_id.as_ref().unwrap().as_uuid(),
+			players: gen_players(1),
+			query: mm::msg::lobby_find::message::Query::LobbyGroup(
+				backend::matchmaker::query::LobbyGroup {
+					lobby_group_ids: vec![lobby_res.lobby_group_id.unwrap()],
+					region_ids: vec![lobby_res.region_id.unwrap()],
+					auto_create: None,
+				},
+			),
+			user_id: None,
+			verification_data_json: None,
+			bypass_verification: false,
+		},
 	)
 	.await
 	.unwrap();
@@ -290,16 +297,23 @@ async fn lobby_group_closed_auto_create(ctx: TestCtx) {
 
 	let res = find(
 		&ctx,
-		lobby_res.namespace_id.as_ref().unwrap().as_uuid(),
-		gen_players(1),
-		mm::msg::lobby_find::message::Query::LobbyGroup(backend::matchmaker::query::LobbyGroup {
-			lobby_group_ids: vec![lobby_res.lobby_group_id.unwrap()],
-			region_ids: vec![lobby_res.region_id.unwrap()],
-			auto_create: Some(backend::matchmaker::query::AutoCreate {
-				lobby_group_id: lobby_res.lobby_group_id,
-				region_id: lobby_res.region_id,
-			}),
-		}),
+		FindRequest {
+			namespace_id: lobby_res.namespace_id.as_ref().unwrap().as_uuid(),
+			players: gen_players(1),
+			query: mm::msg::lobby_find::message::Query::LobbyGroup(
+				backend::matchmaker::query::LobbyGroup {
+					lobby_group_ids: vec![lobby_res.lobby_group_id.unwrap()],
+					region_ids: vec![lobby_res.region_id.unwrap()],
+					auto_create: Some(backend::matchmaker::query::AutoCreate {
+						lobby_group_id: lobby_res.lobby_group_id,
+						region_id: lobby_res.region_id,
+					}),
+				},
+			),
+			user_id: None,
+			verification_data_json: None,
+			bypass_verification: false,
+		},
 	)
 	.await
 	.unwrap();
