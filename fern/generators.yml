@@ -4,8 +4,8 @@ groups:
     audiences:
       - public
     generators:
-      - name: fernapi/fern-typescript-node-sdk
-        version: 0.7.2
+      - name: fernapi/fern-typescript-sdk
+        version: 0.5.6
         config:
           namespaceExport: Rivet
           bundle: true
@@ -37,10 +37,11 @@ groups:
           repository: rivet-gg/rivet-openapi
   internal:
     generators:
-      - name: fernapi/fern-typescript-node-sdk
-        version: 0.7.2
+      - name: fernapi/fern-typescript-sdk
+        version: 0.5.6
         config:
           namespaceExport: Rivet
+          bundle: true
           allowCustomFetcher: true
         output:
           location: npm
@@ -50,8 +51,8 @@ groups:
     audiences:
       - public
     generators:
-      - name: fernapi/fern-typescript-node-sdk
-        version: 0.7.2
+      - name: fernapi/fern-typescript-sdk
+        version: 0.5.6
         output:
           location: local-file-system
           path: ../sdks/ts

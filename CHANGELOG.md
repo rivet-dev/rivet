@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [23.1.0-rc4] - 2023-09-02
+
+### Changed
+
+-   Revert Fern TypeScript generator to 0.5.6 to fix bundled export
+
 ## [23.1.0-rc3] - 2023-09-02
 
 ### Changed
