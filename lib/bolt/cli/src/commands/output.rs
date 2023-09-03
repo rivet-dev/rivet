@@ -1,3 +1,5 @@
+use std::collections::HashSet;
+
 use anyhow::*;
 use bolt_core::context::ProjectContext;
 use clap::Parser;
@@ -18,6 +20,10 @@ pub enum SubCommand {
 		#[clap(index = 1, action = clap::ArgAction::Append)]
 		service_names: Vec<String>,
 	},
+	ServiceDatabases {
+		#[clap(index = 1, action = clap::ArgAction::Append)]
+		service_names: Vec<String>,
+	},
 }
 
 impl SubCommand {
@@ -34,6 +40,25 @@ impl SubCommand {
 			Self::ServicePath { service_names } => {
 				for svc_ctx in ctx.services_with_patterns(&service_names).await {
 					println!("{}", svc_ctx.path().display());
+				}
+			}
+			Self::ServiceDatabases { service_names } => {
+				let mut databases = HashSet::new();
+
+				// TODO: Use a stream iter instead
+				for svc_ctx in ctx.services_with_patterns(&service_names).await {
+					let dbs = svc_ctx.database_dependencies().await;
+
+					databases.extend(dbs.keys().cloned());
+				}
+
+				let mut list = databases.into_iter().collect::<Vec<_>>();
+				list.sort();
+
+				if list.is_empty() {
+					eprintln!("no databases");
+				} else {
+					println!("{}", list.join("\n"));
 				}
 			}
 		}
