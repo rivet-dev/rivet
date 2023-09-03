@@ -4,7 +4,7 @@ groups:
     audiences:
       - public
     generators:
-      - name: fernapi/fern-typescript-node-sdk
+      - name: fernapi/fern-typescript-sdk
         version: 0.5.6
         config:
           namespaceExport: Rivet
@@ -37,7 +37,7 @@ groups:
           repository: rivet-gg/rivet-openapi
   internal:
     generators:
-      - name: fernapi/fern-typescript-node-sdk
+      - name: fernapi/fern-typescript-sdk
         version: 0.5.6
         config:
           namespaceExport: Rivet
@@ -51,7 +51,7 @@ groups:
     audiences:
       - public
     generators:
-      - name: fernapi/fern-typescript-node-sdk
+      - name: fernapi/fern-typescript-sdk
         version: 0.5.6
         output:
           location: local-file-system
