@@ -10,6 +10,7 @@ use crate::{
 	config::{self, service::ServiceDomain},
 	context,
 	dep::{self, s3, terraform},
+	utils,
 };
 
 use super::ServiceContext;
@@ -25,6 +26,8 @@ pub struct ProjectContextData {
 	path: PathBuf,
 	svc_ctxs: Vec<context::service::ServiceContext>,
 	svc_ctxs_map: HashMap<String, context::service::ServiceContext>,
+
+	source_hash: String,
 }
 
 impl ProjectContextData {
@@ -103,9 +106,19 @@ impl ProjectContextData {
 			config_local,
 			ns_config,
 			cache: Mutex::new(cache),
-			path: project_root,
+			path: project_root.clone(),
 			svc_ctxs,
 			svc_ctxs_map,
+
+			source_hash: {
+				let modified_ts =
+					tokio::task::spawn_blocking(move || utils::deep_modified_ts(&project_root))
+						.await
+						.unwrap()
+						.unwrap();
+
+				modified_ts.to_string()
+			},
 		});
 
 		ctx.validate_ns();
@@ -633,23 +646,6 @@ impl ProjectContextData {
 		}
 	}
 
-	pub async fn s3_client_service_builds(self: &Arc<Self>) -> Result<s3_util::Client> {
-		let s3_dep = self.service_with_name("bucket-svc-build").await;
-		let (default_provider, _) = self.default_s3_provider()?;
-		let s3_config = self.s3_config(default_provider).await?;
-		let s3_creds = self.s3_credentials(default_provider).await?;
-
-		let client = s3_util::Client::new(
-			&s3_dep.s3_bucket_name().await,
-			&s3_config.endpoint_internal,
-			&s3_config.region,
-			&s3_creds.access_key_id,
-			&s3_creds.access_key_secret,
-		)?;
-
-		Ok(client)
-	}
-
 	pub fn s3_cors_allowed_origins(&self) -> Vec<String> {
 		self.ns()
 			.s3
@@ -712,14 +708,8 @@ impl ProjectContextData {
 }
 
 impl ProjectContextData {
-	/// Which target to build for with the current configuration.
-	pub fn rust_build_target(&self) -> context::RustBuildTarget {
-		match self.ns().cluster.kind {
-			// Build natively, since deploying to the same machine locally.
-			config::ns::ClusterKind::SingleNode { .. } => context::RustBuildTarget::Native,
-			// Build for MUSL since this will be deployed to a different machine.
-			config::ns::ClusterKind::Distributed { .. } => context::RustBuildTarget::Musl,
-		}
+	pub fn source_hash(&self) -> String {
+		self.source_hash.clone()
 	}
 }
 

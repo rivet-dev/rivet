@@ -1,16 +1,14 @@
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
-use anyhow::Result;
 use serde_json::json;
 
 use crate::{
 	config::{
 		self,
-		ns::LoggingProvider,
 		service::{ServiceDomain, ServiceKind, ServiceRouter},
 	},
-	context::{BuildContext, ProjectContext, RunContext, S3Provider, ServiceContext},
+	context::{BuildContext, ProjectContext, RunContext, ServiceContext},
 };
 
 // Kubernetes requires a specific port for containers because they have their own networking namespace, the
@@ -28,15 +26,8 @@ pub struct ExecServiceContext {
 
 pub enum ExecServiceDriver {
 	Docker {
-		image: String,
+		image_tag: String,
 		force_pull: bool,
-	},
-	UploadedBinaryArtifact {
-		artifact_key: String,
-		/// Path to the executable within the archive.
-		exec_path: String,
-		// TODO: Remove?
-		args: Vec<String>,
 	},
 	LocalBinaryArtifact {
 		/// Path to the executable relative to the project root.
@@ -75,12 +66,6 @@ pub async fn gen_svc(
 	};
 
 	let service_name = format!("rivet-{}", svc_ctx.name());
-	let service_tags = vec![
-		"rivet".into(),
-		svc_ctx.name(),
-		format!("service-{}", svc_ctx.config().kind.short()),
-		format!("runtime-{}", svc_ctx.config().runtime.short()),
-	];
 
 	let has_health = project_ctx
 		.ns()
@@ -178,6 +163,28 @@ pub async fn gen_svc(
 		serde_json::Value::Null
 	};
 
+	let (image, image_pull_policy, command, args) = match &driver {
+		ExecServiceDriver::LocalBinaryArtifact { exec_path, args } => (
+			"alpine:3.8",
+			"IfNotPresent",
+			vec![Path::new("/var/rivet/backend").join(exec_path)],
+			args.clone(),
+		),
+		ExecServiceDriver::Docker {
+			image_tag,
+			force_pull,
+		} => (
+			image_tag.as_str(),
+			if *force_pull {
+				"Always"
+			} else {
+				"IfNotPresent"
+			},
+			Vec::new(),
+			Vec::new(),
+		),
+	};
+
 	// Create resource limits
 	let ns_service_config = svc_ctx.ns_service_config().await;
 	let resources = json!({
@@ -237,8 +244,7 @@ pub async fn gen_svc(
 					"readOnly": true
 				}));
 			}
-			ExecServiceDriver::Docker { .. } | ExecServiceDriver::UploadedBinaryArtifact { .. } => {
-			}
+			ExecServiceDriver::Docker { .. } => {}
 		}
 
 		if svc_ctx.depends_on_region_config() {
@@ -307,50 +313,27 @@ pub async fn gen_svc(
 			} else {
 				"OnFailure"
 			},
-			"containers": [
-				match &driver {
-					ExecServiceDriver::Docker { image, force_pull } => {
-						todo!()
-						// json!({
-						// 	"image": image,
-						// 	"imagePullPolicy": if *force_pull { "Always" } else {
-						// 		"IfNotPresent"
-						// 	},
-						// })
+			"imagePullSecrets": [{
+				"name": "docker-auth"
+			}],
+			"containers": [{
+				"name": "alpine",
+				"image": image,
+				"imagePullPolicy": image_pull_policy,
+				"command": command,
+				// "command": ["/bin/sh", "-c", "printenv && sleep 1000"],
+				"args": args,
+				"env": env,
+				"envFrom": [{
+					"secretRef": {
+						"name": secret_env_name
 					}
-					ExecServiceDriver::LocalBinaryArtifact { exec_path, args } => {
-						json!({
-							"name": "alpine",
-							"image": "alpine:3.8",
-							"command": [Path::new("/var/rivet/backend").join(exec_path)],
-							// "command": ["/bin/sh", "-c", "printenv && sleep 1000"],
-							"args": args,
-							"env": env,
-							"envFrom": [{
-								"secretRef": {
-									"name": secret_env_name
-								}
-							}],
-							"volumeMounts": volume_mounts,
-							"ports": ports,
-							"livenessProbe": health_check,
-							"resources": resources
-						})
-					}
-					_ => todo!(),
-					// TODO:
-					// ExecServiceDriver::UploadedBinaryArtifact { exec_path, args, .. } => {
-					// 	json!({
-					// 		"image": "alpine:3.18",
-					// 		"command": format!("${{NOMAD_TASK_DIR}}/build/{exec_path}"),
-					// 		"args": args,
-					// 		"auth": nomad_docker_io_auth(&project_ctx).await.unwrap(),
-					// 		"logging": nomad_loki_plugin_config(&project_ctx, &svc_ctx).await.unwrap(),
-					// 	})
-					// }
-					// ExecServiceDriver::Binary { path, args } => json!({}),
-				}
-			],
+				}],
+				"volumeMounts": volume_mounts,
+				"ports": ports,
+				"livenessProbe": health_check,
+				"resources": resources
+			}],
 			"volumes": volumes
 		}
 	});
@@ -404,7 +387,7 @@ pub async fn gen_svc(
 	} else if let ServiceKind::Periodic {
 		cron,
 		prohibit_overlap,
-		time_zone,
+		time_zone: _,
 	} = &svc_ctx.config().kind
 	{
 		specs.insert(

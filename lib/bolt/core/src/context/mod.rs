@@ -59,9 +59,3 @@ impl BuildOptimization {
 		}
 	}
 }
-
-#[derive(Debug, Eq, PartialEq, Clone, Copy)]
-pub enum RustBuildTarget {
-	Native,
-	Musl,
-}

@@ -1,4 +1,4 @@
-use std::{fs, ops::Deref, path::Path, process::Command, sync::Arc};
+use std::{fs, path::Path, process::Command, sync::Arc};
 
 use anyhow::*;
 use duct::cmd;

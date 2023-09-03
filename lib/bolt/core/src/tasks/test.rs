@@ -7,7 +7,7 @@ use crate::{
 	config::service::RuntimeKind,
 	context::{ProjectContext, RunContext, ServiceContext},
 	dep::{
-		cloudflare, fly,
+		fly,
 		nomad::{self, NomadCtx},
 	},
 	tasks, utils,

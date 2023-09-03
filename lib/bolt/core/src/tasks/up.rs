@@ -6,8 +6,6 @@ use std::{
 
 use anyhow::*;
 use futures_util::stream::StreamExt;
-use indoc::{formatdoc, indoc};
-use serde_json::json;
 use tokio::{
 	fs,
 	sync::{Mutex, Semaphore},
@@ -15,15 +13,11 @@ use tokio::{
 };
 
 use crate::{
-	config::{
-		self,
-		service::{ComponentClass, RuntimeKind},
-	},
+	config::service::{ComponentClass, RuntimeKind},
 	context::{BuildContext, BuildOptimization, ProjectContext, ServiceBuildPlan, ServiceContext},
 	dep::{
 		self, cargo,
 		k8s::gen::{ExecServiceContext, ExecServiceDriver},
-		terraform,
 	},
 	tasks,
 	utils::{self, command_helper::CommandHelper},
@@ -180,14 +174,6 @@ pub async fn up_services<T: AsRef<str>>(
 								bins: &svc_names,
 							})
 							.collect::<Vec<_>>(),
-						build_method: match &ctx.ns().cluster.kind {
-							config::ns::ClusterKind::SingleNode { .. } => {
-								cargo::cli::BuildMethod::Native
-							}
-							config::ns::ClusterKind::Distributed { .. } => {
-								cargo::cli::BuildMethod::Musl
-							}
-						},
 						release: ctx.build_optimization() == BuildOptimization::Release,
 						jobs: ctx.config_local().rust.num_jobs,
 					},
@@ -248,7 +234,7 @@ pub async fn up_services<T: AsRef<str>>(
 						.unwrap();
 
 				// Build service
-				build_svc(svc_ctx, ctx.build_optimization()).await;
+				build_svc(svc_ctx, &build_context, ctx.build_optimization()).await;
 
 				// Upload build
 				upload_join_set.spawn(upload_svc_build(
@@ -263,25 +249,13 @@ pub async fn up_services<T: AsRef<str>>(
 				svc_ctx: svc_ctx.clone().clone(),
 				build_context,
 				driver: match &build_plan {
-					ServiceBuildPlan::ExistingLocalBuild { exec_path }
-					| ServiceBuildPlan::BuildLocally { exec_path } => {
+					ServiceBuildPlan::BuildLocally { exec_path } => {
 						derive_local_build_driver(svc_ctx, exec_path.clone()).await
 					}
-					ServiceBuildPlan::ExistingUploadedBuild {
-						build_key: artifact_key,
-						exec_path,
+					ServiceBuildPlan::ExistingUploadedBuild { image_tag }
+					| ServiceBuildPlan::BuildAndUpload { image_tag } => {
+						derive_uploaded_svc_driver(svc_ctx, image_tag.clone(), false).await
 					}
-					| ServiceBuildPlan::BuildAndUpload {
-						build_key: artifact_key,
-						exec_path,
-					} => {
-						derive_uploaded_svc_driver(svc_ctx, artifact_key.clone(), exec_path.clone())
-							.await
-					}
-					ServiceBuildPlan::Docker { image_tag } => ExecServiceDriver::Docker {
-						image: image_tag.clone(),
-						force_pull: false,
-					},
 				},
 			});
 
@@ -366,7 +340,11 @@ async fn upload_svc_build(
 	Result::Ok(())
 }
 
-async fn build_svc(svc_ctx: &ServiceContext, optimization: BuildOptimization) {
+async fn build_svc(
+	svc_ctx: &ServiceContext,
+	build_context: &BuildContext,
+	optimization: BuildOptimization,
+) {
 	match &svc_ctx.config().runtime {
 		RuntimeKind::Rust {} => {
 			let project_ctx = svc_ctx.project().await;
@@ -384,14 +362,6 @@ async fn build_svc(svc_ctx: &ServiceContext, optimization: BuildOptimization) {
 								.unwrap(),
 							bins: &[svc_ctx.cargo_name().expect("no cargo name")],
 						}],
-						build_method: match &project_ctx.ns().cluster.kind {
-							config::ns::ClusterKind::SingleNode { .. } => {
-								cargo::cli::BuildMethod::Native
-							}
-							config::ns::ClusterKind::Distributed { .. } => {
-								cargo::cli::BuildMethod::Musl
-							}
-						},
 						release: optimization == BuildOptimization::Release,
 						jobs: project_ctx.config_local().rust.num_jobs,
 					},
@@ -435,14 +405,13 @@ async fn derive_local_build_driver(
 
 async fn derive_uploaded_svc_driver(
 	svc_ctx: &ServiceContext,
-	artifact_key: String,
-	exec_path: String,
+	image_tag: String,
+	force_pull: bool,
 ) -> ExecServiceDriver {
 	match &svc_ctx.config().runtime {
-		RuntimeKind::Rust {} => ExecServiceDriver::UploadedBinaryArtifact {
-			artifact_key,
-			exec_path,
-			args: Vec::new(),
+		RuntimeKind::Rust {} => ExecServiceDriver::Docker {
+			image_tag,
+			force_pull,
 		},
 		RuntimeKind::CRDB { .. }
 		| RuntimeKind::ClickHouse { .. }

@@ -1,13 +1,11 @@
-use anyhow::{bail, ensure, Context, Result};
+use anyhow::{ensure, Context, Result};
 use async_recursion::async_recursion;
-use s3_util::aws_sdk_s3;
 use std::{
 	collections::HashMap,
 	hash::{Hash, Hasher},
 	path::{Path, PathBuf},
 	sync::{Arc, Weak},
 };
-use tempfile::NamedTempFile;
 use tokio::{fs, process::Command, sync::RwLock};
 
 use crate::{
@@ -16,7 +14,7 @@ use crate::{
 		service::{RuntimeKind, ServiceKind},
 	},
 	context::{self, BuildContext, ProjectContext, RunContext, S3Provider},
-	dep::{self, k8s, s3},
+	dep::{self, k8s},
 	utils,
 };
 
@@ -226,34 +224,16 @@ impl ServiceContextData {
 	}
 
 	/// Path to the executable binary.
-	pub async fn rust_bin_path(
-		&self,
-		optimization: &BuildOptimization,
-		target: super::RustBuildTarget,
-	) -> PathBuf {
-		match target {
-			super::RustBuildTarget::Native => self
-				.project()
-				.await
-				.path()
-				.join("target")
-				.join(match optimization {
-					BuildOptimization::Release => "release",
-					BuildOptimization::Debug => "debug",
-				})
-				.join(self.cargo_name().expect("no cargo name")),
-			super::RustBuildTarget::Musl => self
-				.project()
-				.await
-				.path()
-				.join("target")
-				.join("x86_64-unknown-linux-musl")
-				.join(match optimization {
-					BuildOptimization::Release => "release",
-					BuildOptimization::Debug => "debug",
-				})
-				.join(self.cargo_name().expect("no cargo name")),
-		}
+	pub async fn rust_bin_path(&self, optimization: &BuildOptimization) -> PathBuf {
+		self.project()
+			.await
+			.path()
+			.join("target")
+			.join(match optimization {
+				BuildOptimization::Release => "release",
+				BuildOptimization::Debug => "debug",
+			})
+			.join(self.cargo_name().expect("no cargo name"))
 	}
 }
 
@@ -356,36 +336,17 @@ impl ServiceContextData {
 // Build info
 #[derive(Debug, Clone)]
 pub enum ServiceBuildPlan {
-	/// Build exists locally.
-	ExistingLocalBuild {
-		/// Absolute path to the executable on the host system.
-		exec_path: PathBuf,
-	},
-
-	/// Build exists on S3 server.
-	ExistingUploadedBuild {
-		build_key: String,
-
-		/// Path to the executable in the archive.
-		exec_path: String,
-	},
-
 	/// Build the service locally.
 	BuildLocally {
 		/// Absolute path to the executable on the host system.
 		exec_path: PathBuf,
 	},
 
-	/// Build the service and upload to S3.
-	BuildAndUpload {
-		build_key: String,
+	/// Build exists on Docker.
+	ExistingUploadedBuild { image_tag: String },
 
-		/// Path to the executable in the archive.
-		exec_path: String,
-	},
-
-	/// Run a Docker container.
-	Docker { image_tag: String },
+	/// Build the service and upload to Docker.
+	BuildAndUpload { image_tag: String },
 }
 
 impl ServiceContextData {
@@ -405,57 +366,31 @@ impl ServiceContextData {
 					BuildContext::Bin { optimization } => optimization,
 					BuildContext::Test => &BuildOptimization::Debug,
 				};
-				let output_path = self
-					.rust_bin_path(optimization, project_ctx.rust_build_target())
-					.await;
+				let output_path = self.rust_bin_path(optimization).await;
 
-				if force_build {
-					return Ok(ServiceBuildPlan::BuildLocally {
-						exec_path: output_path,
-					});
-				}
-
-				// Check if there's an existing build we can use
-				let build_exists = tokio::fs::metadata(&output_path).await.is_ok();
-				if build_exists {
-					return Ok(ServiceBuildPlan::ExistingLocalBuild {
-						exec_path: output_path,
-					});
-				}
-
-				// Default to building
+				// Rust libs always attempt to rebuild (handled by cargo)
 				Ok(ServiceBuildPlan::BuildLocally {
 					exec_path: output_path,
 				})
 			}
 			// Build and upload to S3
 			config::ns::ClusterKind::Distributed { .. } => {
-				// Derive the build key
-				let key = self.s3_build_key(build_context).await?;
-				let exec_path = self.cargo_name().expect("no cargo name").to_string();
+				let image_tag = self.docker_image_tag().await?;
 
-				if force_build {
-					return Ok(ServiceBuildPlan::BuildAndUpload {
-						build_key: key,
-						exec_path,
-					});
-				}
+				if !force_build {
+					// TODO: Check docker if build was pushed
+					// let mut cmd = Command::new("docker");
+					// cmd.arg("images");
+					// cmd.arg("-q").arg(&image_tag);
+					// let image_exists = !cmd.output().await?.stdout.is_empty();
 
-				// Check if there's an existing build we can use
-				let s3_client = project_ctx.s3_client_service_builds().await?;
-				let build_exists = s3::check_exists_cached(&project_ctx, &s3_client, &key).await?;
-				if build_exists {
-					return Ok(ServiceBuildPlan::ExistingUploadedBuild {
-						build_key: key,
-						exec_path,
-					});
+					// if image_exists {
+					// 	return Ok(ServiceBuildPlan::ExistingUploadedBuild { image_tag });
+					// }
 				}
 
 				// Default to building
-				Ok(ServiceBuildPlan::BuildAndUpload {
-					build_key: key,
-					exec_path,
-				})
+				Ok(ServiceBuildPlan::BuildAndUpload { image_tag })
 			}
 		}
 	}
@@ -614,14 +549,8 @@ impl ServiceContextData {
 		match self.config().runtime {
 			// Use binary modified timestamp for rust runtimes
 			RuntimeKind::Rust { .. } => {
-				let bin_ts = if let Ok(metadata) = fs::metadata(
-					self.rust_bin_path(
-						&build_optimization,
-						self.project().await.rust_build_target(),
-					)
-					.await,
-				)
-				.await
+				let bin_ts = if let Ok(metadata) =
+					fs::metadata(self.rust_bin_path(&build_optimization).await).await
 				{
 					metadata
 						.modified()?
@@ -1181,70 +1110,36 @@ impl ServiceContextData {
 }
 
 impl ServiceContextData {
-	pub async fn s3_build_key(&self, build_context: &BuildContext) -> Result<String> {
-		let source_hash = self
-			.source_hash_dev(match &build_context {
-				BuildContext::Bin { optimization } => optimization,
-				BuildContext::Test => &BuildOptimization::Debug,
-			})
-			.await?;
+	pub async fn docker_image_tag(&self) -> Result<String> {
+		let source_hash = self.project().await.source_hash();
+
 		Ok(format!(
-			"{}/{}/{source_hash}.tar.bz2",
-			self.name(),
-			build_context.path()
+			"{}:{}",
+			self.cargo_name().expect("no cargo name"),
+			source_hash
 		))
 	}
 
-	pub async fn package_build(&self, build_context: &BuildContext) -> Result<NamedTempFile> {
-		let tar_bz2 = NamedTempFile::new()?;
-
-		// Compress with bzip2. It has similar performance as gzip. xz is way
-		// too slow.
-		let mut cmd = Command::new("tar");
-		cmd.arg("cfj").arg(tar_bz2.path());
-
-		match build_context {
-			BuildContext::Bin { optimization } => match &self.config.runtime {
-				RuntimeKind::Rust {} => {
-					// Write binary
-					let bin_path = self
-						.rust_bin_path(optimization, self.project().await.rust_build_target())
-						.await;
-					cmd.arg("-C")
-						.arg(bin_path.parent().context("bin_path.parent()")?)
-						.arg(bin_path.file_name().context("bin_path.file_name()")?);
-				}
-				_ => bail!("can't get build binary for this runtime type"),
-			},
-			BuildContext::Test => {
-				bail!("can't get build path for test")
-			}
-		}
-
-		let output = cmd.output().await?;
-		ensure!(
-			output.status.success(),
-			"tar failed: {}",
-			String::from_utf8_lossy(&output.stderr)
-		);
-
-		Ok(tar_bz2)
-	}
-
 	pub async fn upload_build(&self, build_context: &BuildContext) -> Result<()> {
-		let package_file = self.package_build(build_context).await?;
+		let project_ctx = self.project().await;
 
-		let body = aws_sdk_s3::types::ByteStream::from_path(package_file.path()).await?;
+		let image_tag = self.docker_image_tag().await?;
+		let repo = if let Some(repo) = &project_ctx.ns().docker.repository {
+			ensure!(repo.ends_with('/'), "docker repository must end with slash");
 
-		let s3_client = self.project().await.s3_client_service_builds().await?;
-		let key = self.s3_build_key(build_context).await?;
-		s3_client
-			.put_object()
-			.bucket(s3_client.bucket())
-			.key(key)
-			.body(body)
-			.send()
-			.await?;
+			repo.clone()
+		} else {
+			"".to_string()
+		};
+
+		let mut cmd = Command::new("docker");
+		cmd.arg("push");
+		cmd.arg(image_tag);
+
+		let status = cmd.status().await?;
+		eprintln!();
+
+		ensure!(status.success());
 
 		Ok(())
 	}

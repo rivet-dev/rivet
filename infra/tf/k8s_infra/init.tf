@@ -137,9 +137,9 @@ resource "kubernetes_config_map" "health_checks" {
 
 # NOTE: Needs to be created in every K8s namespace it is used in
 resource "kubernetes_secret" "docker_auth" {
-	depends_on = [kubernetes_namespace.redis]
+	depends_on = [kubernetes_namespace.redis, kubernetes_namespace.rivet_service]
 	for_each = toset([
-		for namespace in [ "redis" ]: namespace
+		for namespace in [ "redis", "rivet-service" ]: namespace
 		# Disable creation unless auth is needed
 		if var.authenticate_all_docker_hub_pulls
 	])
