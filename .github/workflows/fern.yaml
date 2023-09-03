@@ -27,6 +27,7 @@ jobs:
   # Release internal version to Git to be installed on the hub
   fern-release-internal:
     needs: fern-check
+    if: github.event_name == 'push' && !contains(github.ref, 'refs/tags/')
     runs-on: ubuntu-20.04
     steps:
       - name: Checkout repo
