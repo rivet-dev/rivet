@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [23.1.0-rc2] - 2023-09-02
+
+### Changed
+
+-   Update to Fern 0.15.0-rc7
+-   Update Fern TypeScript, Java, and Go generators
+
 ## [23.1.0-rc1] - 2023-09-02
 
 ### Added

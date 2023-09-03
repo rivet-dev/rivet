@@ -65,5 +65,7 @@ jobs:
         env:
           FERN_TOKEN: ${{ secrets.FERN_TOKEN }}
           FERN_NPM_TOKEN: ${{ secrets.FERN_NPM_TOKEN }}
+          RIVET_MAVEN_USERNAME: ${{ secrets.RIVET_MAVEN_USERNAME }}
+          RIVET_MAVEN_PASSWORD: ${{ secrets.RIVET_MAVEN_PASSWORD }}
         run: |
           fern generate --group external --version ${{ github.ref_name }} --log-level debug
