@@ -24,6 +24,13 @@ groups:
           password: ${RIVET_MAVEN_PASSWORD}
         github:
           repository: rivet-gg/rivet-java
+      - name: fernapi/fern-go-sdk
+        version: 0.3.0
+        config:
+          module:
+            path: github.com/rivet-gg/rivet-go
+        github:
+          repository: rivet-gg/rivet-go
       - name: fernapi/fern-openapi
         version: 0.0.22
         github:
