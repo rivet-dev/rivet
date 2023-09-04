@@ -4,7 +4,7 @@ use anyhow::{ensure, Result};
 use indoc::formatdoc;
 use tokio::{fs, process::Command};
 
-use crate::{config, context::ProjectContext, utils::command_helper::CommandHelper};
+use crate::{config, context::ProjectContext};
 
 pub struct BuildOpts<'a, T: AsRef<str>> {
 	pub build_calls: Vec<BuildCall<'a, T>>,
@@ -32,17 +32,6 @@ pub async fn build<'a, T: AsRef<str>>(ctx: &ProjectContext, opts: BuildOpts<'a, 
 	};
 
 	let release_flag = if opts.release { "--release" } else { "" };
-
-	let user_id = {
-		let mut cmd = std::process::Command::new("id");
-		cmd.arg("-u");
-		cmd.exec_string().await.unwrap().trim().to_owned()
-	};
-	let user_group = {
-		let mut cmd = std::process::Command::new("id");
-		cmd.arg("-g");
-		cmd.exec_string().await.unwrap().trim().to_owned()
-	};
 
 	let build_calls = opts
 		.build_calls
@@ -112,6 +101,8 @@ pub async fn build<'a, T: AsRef<str>>(ctx: &ProjectContext, opts: BuildOpts<'a, 
 				exit $EXIT_CODE
 				"#
 			);
+			let repo = &ctx.ns().docker.repository;
+			ensure!(repo.ends_with('/'), "docker repository must end with slash");
 			let source_hash = ctx.source_hash();
 
 			// Create directory for docker files
@@ -119,11 +110,9 @@ pub async fn build<'a, T: AsRef<str>>(ctx: &ProjectContext, opts: BuildOpts<'a, 
 			fs::create_dir_all(&gen_path).await?;
 
 			for call in &opts.build_calls {
-				let path = call.path.display();
-
 				for bin in call.bins {
 					let bin = bin.as_ref();
-					let image_tag = format!("{bin}:{source_hash}");
+					let image_tag = format!("{repo}{bin}:{source_hash}");
 
 					// TODO: Figure out what to tag images with
 
@@ -143,8 +132,11 @@ pub async fn build<'a, T: AsRef<str>>(ctx: &ProjectContext, opts: BuildOpts<'a, 
 							RUN ["sh", "-c", {build_script:?}]
 				
 							FROM debian:12.1-slim as run
+							
 							COPY --from=build /usr/rivet/target/{optimization}/{bin} /bin/svc
-				
+							RUN apt-get update
+							RUN apt-get -y install openssl
+							
 							CMD ["bin/svc"]
 							"#
 						),

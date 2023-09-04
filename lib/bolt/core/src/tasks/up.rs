@@ -8,12 +8,16 @@ use anyhow::*;
 use futures_util::stream::StreamExt;
 use tokio::{
 	fs,
+	process::Command,
 	sync::{Mutex, Semaphore},
 	task::JoinSet,
 };
 
 use crate::{
-	config::service::{ComponentClass, RuntimeKind},
+	config::{
+		self,
+		service::{ComponentClass, RuntimeKind},
+	},
 	context::{BuildContext, BuildOptimization, ProjectContext, ServiceBuildPlan, ServiceContext},
 	dep::{
 		self, cargo,
@@ -140,6 +144,26 @@ pub async fn up_services<T: AsRef<str>>(
 	let mut upload_join_set = JoinSet::<Result<()>>::new();
 	let upload_semaphore = Arc::new(Semaphore::new(4));
 
+	// Login to docker repo for uploading
+	match &ctx.ns().cluster.kind {
+		config::ns::ClusterKind::SingleNode { .. } => {}
+		config::ns::ClusterKind::Distributed { .. } => {
+			if let Some((repo, _)) = ctx.ns().docker.repository.split_once("/") {
+				let password = ctx.read_secret(&["docker", "ghcr", "token"]).await?;
+
+				let mut cmd = Command::new("sh");
+				cmd.arg("-c").arg(format!(
+					"echo {password} | docker login {repo} -u $ --password-stdin"
+				));
+
+				let status = cmd.status().await?;
+				ensure!(status.success());
+			} else {
+				bail!("docker repo must end with a slash");
+			};
+		}
+	}
+
 	// Run batch commands for all given services
 	eprintln!();
 	rivet_term::status::progress("Building", "(batch)");
@@ -237,11 +261,7 @@ pub async fn up_services<T: AsRef<str>>(
 				build_svc(svc_ctx, &build_context, ctx.build_optimization()).await;
 
 				// Upload build
-				upload_join_set.spawn(upload_svc_build(
-					svc_ctx.clone(),
-					build_context.clone(),
-					upload_semaphore.clone(),
-				));
+				upload_join_set.spawn(upload_svc_build(svc_ctx.clone(), upload_semaphore.clone()));
 			}
 
 			// Save exec ctx
@@ -330,13 +350,9 @@ pub async fn up_services<T: AsRef<str>>(
 	Ok(all_svcs.iter().cloned().collect())
 }
 
-async fn upload_svc_build(
-	svc_ctx: ServiceContext,
-	build_context: BuildContext,
-	upload_semaphore: Arc<Semaphore>,
-) -> Result<()> {
+async fn upload_svc_build(svc_ctx: ServiceContext, upload_semaphore: Arc<Semaphore>) -> Result<()> {
 	let _permit = upload_semaphore.acquire().await?;
-	svc_ctx.upload_build(&build_context).await?;
+	svc_ctx.upload_build().await?;
 	Result::Ok(())
 }
 

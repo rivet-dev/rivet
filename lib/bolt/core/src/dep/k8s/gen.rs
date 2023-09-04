@@ -317,7 +317,7 @@ pub async fn gen_svc(
 				"name": "docker-auth"
 			}],
 			"containers": [{
-				"name": "alpine",
+				"name": "service",
 				"image": image,
 				"imagePullPolicy": image_pull_policy,
 				"command": command,

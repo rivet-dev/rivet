@@ -33,6 +33,7 @@ gen/region-config.json
 gen/svc/
 gen/tf/
 gen/kubernetes/
+gen/docker/
 
 # Backend
 backend/Cargo.toml

@@ -88,7 +88,11 @@ resource "kubernetes_config_map" "health_checks" {
 
 			# Install curl
 			if ! [ -x "$(command -v curl)" ]; then
-				apk add --no-cache curl
+				if ! [ -x "$(command -v apk)" ]; then
+					apt-get install -y curl
+				else
+					apk add --no-cache curl
+				fi
 			fi
 
 			curl 127.0.0.1:${var.k8s_health_port}/health/liveness
@@ -135,13 +139,32 @@ resource "kubernetes_config_map" "health_checks" {
 	}
 }
 
+module "docker_secrets" {
+	source = "../modules/secrets"
+
+	keys = flatten([
+		var.authenticate_all_docker_hub_pulls ? [
+			"docker/docker_io/username",
+			"docker/docker_io/password",
+		] : [],
+	])
+}
+
+module "docker_ghcr_secrets" {
+	source = "../modules/secrets"
+
+	keys = flatten([
+		"docker/ghcr/token",
+	])
+
+	optional = true
+}
+
 # NOTE: Needs to be created in every K8s namespace it is used in
 resource "kubernetes_secret" "docker_auth" {
 	depends_on = [kubernetes_namespace.redis, kubernetes_namespace.rivet_service]
 	for_each = toset([
 		for namespace in [ "redis", "rivet-service" ]: namespace
-		# Disable creation unless auth is needed
-		if var.authenticate_all_docker_hub_pulls
 	])
 
 	metadata {
@@ -150,18 +173,33 @@ resource "kubernetes_secret" "docker_auth" {
 	}
 
 	type = "kubernetes.io/dockerconfigjson"
-	
+
 	data = {
-		".dockerconfigjson": base64encode(jsonencode({
+		".dockerconfigjson" = jsonencode({
 			auths = {
-				"https://index.docker.io/v1/": {
-					username = module.secrets.values["docker/docker_io/username"]
-					password = module.secrets.values["docker/docker_io/password"]
-					auth = base64encode(
-						"${module.secrets.values["docker/docker_io/username"]}:${module.secrets.values["docker/docker_io/password"]}"
-					)
-				}
+				"https://index.docker.io/v1/" = (
+						var.authenticate_all_docker_hub_pulls ?
+						{
+							username = module.docker_secrets.values["docker/docker_io/username"]
+							password = module.docker_secrets.values["docker/docker_io/password"]
+							auth = base64encode(
+								"${module.docker_secrets.values["docker/docker_io/username"]}:${module.docker_secrets.values["docker/docker_io/password"]}"
+							)
+						}
+						: null
+				)
+				"ghcr.io" = (
+					module.docker_ghcr_secrets.values["docker/ghcr/token"] != null ?
+					{
+						username = "$"
+						pasword = module.docker_ghcr_secrets.values["docker/ghcr/token"]
+						auth = base64encode(
+							"$:${module.docker_ghcr_secrets.values["docker/ghcr/token"]}"
+						)
+					}
+					: null
+				)
 			}
-		}))
+		})
 	}
 }

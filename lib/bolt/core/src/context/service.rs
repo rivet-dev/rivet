@@ -1111,26 +1111,22 @@ impl ServiceContextData {
 
 impl ServiceContextData {
 	pub async fn docker_image_tag(&self) -> Result<String> {
-		let source_hash = self.project().await.source_hash();
+		let project_ctx = self.project().await;
+
+		let source_hash = project_ctx.source_hash();
+		let repo = &project_ctx.ns().docker.repository;
+		ensure!(repo.ends_with('/'), "docker repository must end with slash");
 
 		Ok(format!(
-			"{}:{}",
+			"{}{}:{}",
+			repo,
 			self.cargo_name().expect("no cargo name"),
 			source_hash
 		))
 	}
 
-	pub async fn upload_build(&self, build_context: &BuildContext) -> Result<()> {
-		let project_ctx = self.project().await;
-
+	pub async fn upload_build(&self) -> Result<()> {
 		let image_tag = self.docker_image_tag().await?;
-		let repo = if let Some(repo) = &project_ctx.ns().docker.repository {
-			ensure!(repo.ends_with('/'), "docker repository must end with slash");
-
-			repo.clone()
-		} else {
-			"".to_string()
-		};
 
 		let mut cmd = Command::new("docker");
 		cmd.arg("push");
