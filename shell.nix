@@ -62,6 +62,10 @@ in
 			# Libraries
 			openssl
 			protobuf
+
+			# Autocomplete
+			bashInteractive
+			bash-completion
 		] ++ (
 			pkgs.lib.optionals stdenv.isDarwin [
 				libiconv  # See https://stackoverflow.com/a/69732679
@@ -82,12 +86,17 @@ in
 			export PROTOC_INCLUDE="${pkgs.protobuf}/include"
 
 			
+			# Install autocomplete
+			source ${pkgs.bash-completion}/share/bash-completion/bash_completion
       		# nomad -autocomplete-install
       		complete -C ${pkgs.nomad}/bin/nomad nomad
       		# consul -autocomplete-install
       		complete -C ${pkgs.consul}/bin/consul consul
       		# terraform -install-autocomplete
       		complete -C ${pkgs.terraform}/bin/terraform terraform
+			# kubectl completion bash
+			source <(kubectl completion bash)
+
 
 			# Fix dynamic library path to fix issue with Python
 			export LD_LIBRARY_PATH="${pkgs.clang}/resource-root/lib:${pkgs.lib.strings.makeLibraryPath [ pkgs.openssl ]}"
