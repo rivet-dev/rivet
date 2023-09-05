@@ -7,6 +7,11 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+    - name: Install Nix
+      run: |
+        curl -L https://nixos.org/nix/install | sh
+        . /home/runner/.nix-profile/etc/profile.d/nix.sh
+
     - name: Checkout code
       uses: actions/checkout@v2
 
@@ -25,6 +30,7 @@ jobs:
 
     - name: Push Docker image
       run: |
-        docker tag apache-traffic-server:latest ghcr.io/rivet-gg/apache-traffic-server:latest
-        docker push ghcr.io/rivet-gg/${{ github.repository }}:latest
+        GHCR_TAG="ghcr.io/rivet-gg/apache-traffic-server:latest"
+        docker tag apache-traffic-server:latest "$GHCR_TAG"
+        docker "$GHCR_TAG"
 
