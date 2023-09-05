@@ -24,6 +24,7 @@ jobs:
 
     - name: Build Docker image using Nix
       run: |
+        . /home/runner/.nix-profile/etc/profile.d/nix.sh
         cd infra/docker/traffic_server
         nix-build docker.nix
         docker load < result
