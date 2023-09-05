@@ -1,0 +1,26 @@
+name: docker-publish
+
+on: [push]
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v2
+
+    - name: Login to GitHub Container Registry
+      run: echo "${{ secrets.GHCR_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+
+    - name: Build Docker image using Nix
+      run: |
+        cd infra/docker/traffic_server
+        nix-build docker.nix
+        docker load < result
+
+    - name: Push Docker image to GHCR
+      run: |
+        docker tag apache-traffic-server:latest ghcr.io/rivet-gg/apache-traffic-server:latest
+        docker push ghcr.io/rivet-gg/${{ github.repository }}:latest
+
