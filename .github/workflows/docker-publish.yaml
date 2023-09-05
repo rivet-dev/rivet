@@ -31,7 +31,7 @@ jobs:
 
     - name: Push Docker image
       run: |
-        GHCR_TAG="ghcr.io/rivet-gg/apache-traffic-server:latest"
+        GHCR_TAG="ghcr.io/rivet-gg/apache-traffic-server:$(git rev-parse --short HEAD)"
         docker tag apache-traffic-server:latest "$GHCR_TAG"
-        docker "$GHCR_TAG"
+        docker push "$GHCR_TAG"
 
