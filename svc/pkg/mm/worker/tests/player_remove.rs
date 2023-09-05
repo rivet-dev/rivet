@@ -3,7 +3,7 @@ use proto::backend::{self, pkg::*};
 use redis::AsyncCommands;
 
 #[worker_test]
-async fn basic(ctx: TestCtx) {
+async fn player_remove(ctx: TestCtx) {
 	let lobby_res = op!([ctx] faker_mm_lobby {
 		max_players_normal: 50,
 		max_players_party: 100,

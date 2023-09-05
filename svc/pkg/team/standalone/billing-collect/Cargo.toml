@@ -25,12 +25,6 @@ team-billing-aggregate = { path = "../../ops/billing-aggregate" }
 [dependencies.sqlx]
 version = "0.7"
 default-features = false
-features = [
-	"postgres",
-	"uuid",
-	"json",
-	"macros",
-]
 
 [dev-dependencies]
 chirp-worker = { path = "../../../../../lib/chirp/worker" }

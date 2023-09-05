@@ -31,7 +31,7 @@ nix-env -i git -i git-lfs
 nix-shell -p git -p git-lfs --command "git clone https://github.com/rivet-gg/rivet.git /root/rivet"
 ```
 
-> **Warp compatability**
+> **Warp compatibility**
 >
 > Warp may have issues with the Nix installer since it does not use the default shell. [Read more.](https://docs.warp.dev/features/ssh)
 

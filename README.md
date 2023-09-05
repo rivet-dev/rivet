@@ -8,7 +8,7 @@
 
 <p align="center">
   <a href="/docs/philosophy/LICENSING.md"><img alt="License Apache-2.0" src="https://img.shields.io/github/license/rivet-gg/rivet?style=flat-square"></a>
-  <a href="/docs/processes/VERSIONING.md"><img alt="Calendar versioning" src="https://img.shields.io/badge/calver-YYYY.MINOR.MICRO-22bfda.svg?style=flat-square"/></a>
+  <a href="/docs/processes/VERSIONING.md"><img alt="Calendar versioning" src="https://img.shields.io/badge/calver-YY.MINOR.MICRO-22bfda.svg?style=flat-square"/></a>
   <a href='http://makeapullrequest.com'><img alt='PRs Welcome' src='https://img.shields.io/badge/PRs-welcome-brightgreen.svg?style=flat-square'/></a>
   <a href="https://github.com/rivet-gg/rivet/graphs/commit-activity"><img alt="GitHub commit activity" src="https://img.shields.io/github/commit-activity/m/rivet-gg/rivet?style=flat-square"/></a>
   <a href="https://github.com/rivet-gg/rivet/issues"><img alt="GitHub closed issues" src="https://img.shields.io/github/issues-closed/rivet-gg/rivet?style=flat-square"/></a>

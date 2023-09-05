@@ -81,11 +81,14 @@ in
 			export PROTOC="${pkgs.protobuf}/bin/protoc"
 			export PROTOC_INCLUDE="${pkgs.protobuf}/include"
 
-			# TODO: Figure out how to do this under nix
-			# nomad -autocomplete-install
-			# consul -autocomplete-install
-			# terraform -install-autocomplete
 			
+      		# nomad -autocomplete-install
+      		complete -C ${pkgs.nomad}/bin/nomad nomad
+      		# consul -autocomplete-install
+      		complete -C ${pkgs.consul}/bin/consul consul
+      		# terraform -install-autocomplete
+      		complete -C ${pkgs.terraform}/bin/terraform terraform
+
 			# Fix dynamic library path to fix issue with Python
 			export LD_LIBRARY_PATH="${pkgs.clang}/resource-root/lib:${pkgs.lib.strings.makeLibraryPath [ pkgs.openssl ]}"
 

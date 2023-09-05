@@ -1286,8 +1286,8 @@ impl ServiceContextData {
 				config::ns::ClusterKind::SingleNode { .. } => config::ns::Service {
 					count: 1,
 					resources: config::ns::ServiceResources {
-						cpu: config::ns::CpuResources::Cpu(50),
-						memory: 64,
+						cpu: config::ns::CpuResources::Cpu(100),
+						memory: 512,
 						ephemeral_disk: 128,
 					},
 				},

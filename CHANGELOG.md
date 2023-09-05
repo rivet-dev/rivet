@@ -7,14 +7,41 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [23.1.0-rc4] - 2023-09-02
+
+### Changed
+
+-   Revert Fern TypeScript generator to 0.5.6 to fix bundled export
+
+## [23.1.0-rc3] - 2023-09-02
+
+### Changed
+
+-   Don't publish internal Fern package on tag to prevent duplicate pushes
+
+## [23.1.0-rc2] - 2023-09-02
+
+### Changed
+
+-   Update to Fern 0.15.0-rc7
+-   Update Fern TypeScript, Java, and Go generators
+
+## [23.1.0-rc1] - 2023-09-02
+
 ### Added
 
+-   **Matchmaker** Support custom lobbies
+-   **Matchmaker** Support lobby state
+-   **Matchmaker** Support external verification
+-   **Library** Support Java library
+-   **Library** Support Go library
 -   **Cloud** Support multipart uploads for builds
 -   **Infra** Support configuring multiple S3 providers
 -   **Infra** Support multipart uploads
 -   **Infra** Replace Promtail-based log shipping with native Loki Docker driver
 -   **Infra** Local Traefik Cloudflare proxy daemon for connecting to Cloudflare Access services
 -   **Infra** Upload service builds to default S3 provider instead of hardcoded bucket
+-   **Infra** Enable Apache Traffic Server pull-through cache for Docker builds
 -   **Bolt** Support for connecting to Redis databases with `bolt redis sh`
 -   **Bolt** Confirmation before running any command in the production namespace
 -   **Bolt** `--start-at` flag for all infra commands
