@@ -23,8 +23,8 @@ EOF
 		docker_auth = var.authenticate_all_docker_hub_pulls ?  (
 			<<-EOF
 			auth {
-				username = "${module.secrets.values["docker/docker_io/username"]}"
-				password = "${module.secrets.values["docker/docker_io/password"]}"
+				username = "${module.secrets.values["docker/registry/docker.io/username"]}"
+				password = "${module.secrets.values["docker/registry/docker.io/password"]}"
 			}
 			EOF
 		) : ""
