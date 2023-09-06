@@ -9,6 +9,13 @@ use crate::context::ProjectContext;
 /// This is used to automatically generate `terraform_remote_state` blocks
 /// for each Terraform plan with the correct state backend.
 pub fn dependency_graph(ctx: &ProjectContext) -> HashMap<&'static str, Vec<RemoteState>> {
+	let (default_s3_provider, _) = ctx.default_s3_provider().unwrap();
+	let provider_plan_id = match default_s3_provider {
+		S3Provider::Minio => "s3_minio",
+		S3Provider::Backblaze => "s3_backblaze",
+		S3Provider::Aws => "s3_aws",
+	};
+
 	hashmap! {
 		"dns" => vec![RemoteStateBuilder::default().plan_id("pools").build().unwrap()],
 		"master_local" => vec![RemoteStateBuilder::default().plan_id("nebula").build().unwrap()],
@@ -32,11 +39,12 @@ pub fn dependency_graph(ctx: &ProjectContext) -> HashMap<&'static str, Vec<Remot
 			RemoteStateBuilder::default().plan_id("master_local").condition("var.deploy_method_local").build().unwrap(),
 			RemoteStateBuilder::default().plan_id("master_cluster").condition("var.deploy_method_cluster").build().unwrap(),
 		],
+		"k8s_infra" => vec![s3, RemoteStateBuilder::default().plan_id("tls").build().unwrap()],
 	}
 }
 
 /// Specifies a remote dependency from one Terraform plan to another.
-#[derive(Builder)]
+#[derive(Clone, Builder)]
 #[builder(setter(into))]
 pub struct RemoteState {
 	/// The remote plan ID to import.
@@ -46,7 +54,7 @@ pub struct RemoteState {
 	#[builder(setter(strip_option), default)]
 	pub data_name: Option<&'static str>,
 
-	/// Condition for wether or not to include the remote sate.
+	/// Condition for whether or not to include the remote sate.
 	///
 	/// This will add a `count` under the hood.
 	#[builder(setter(strip_option), default)]

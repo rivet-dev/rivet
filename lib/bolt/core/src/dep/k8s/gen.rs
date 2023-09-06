@@ -1,7 +1,6 @@
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
-use anyhow::Result;
 use serde_json::json;
 
 use crate::{
@@ -28,15 +27,8 @@ pub struct ExecServiceContext {
 
 pub enum ExecServiceDriver {
 	Docker {
-		image: String,
+		image_tag: String,
 		force_pull: bool,
-	},
-	UploadedBinaryArtifact {
-		artifact_key: String,
-		/// Path to the executable within the archive.
-		exec_path: String,
-		// TODO: Remove?
-		args: Vec<String>,
 	},
 	LocalBinaryArtifact {
 		/// Path to the executable relative to the project root.
@@ -60,13 +52,21 @@ pub async fn gen_svc(
 	let project_ctx = svc_ctx.project().await;
 	let mut specs = HashMap::with_capacity(1);
 
+	let (spec_type, _reschedule_attempts) = match svc_ctx.config().kind {
+		ServiceKind::Headless { .. }
+		| ServiceKind::Consumer { .. }
+		| ServiceKind::Api { .. }
+		| ServiceKind::Static { .. } => ("deployment", 0),
+		ServiceKind::Oneshot { .. } => ("job", 1),
+		ServiceKind::Periodic { .. } => ("cron-job", 1),
+		ServiceKind::Operation { .. }
+		| ServiceKind::Database { .. }
+		| ServiceKind::Cache { .. } => {
+			unreachable!()
+		}
+	};
+
 	let service_name = format!("rivet-{}", svc_ctx.name());
-	let service_tags = vec![
-		"rivet".into(),
-		svc_ctx.name(),
-		format!("service-{}", svc_ctx.config().kind.short()),
-		format!("runtime-{}", svc_ctx.config().runtime.short()),
-	];
 
 	let has_health = project_ctx
 		.ns()
@@ -87,11 +87,12 @@ pub async fn gen_svc(
 
 	// Render env
 	let (env, forward_services) = svc_ctx.env(RunContext::Service).await.unwrap();
+	let (secret_env, secret_forward_services) =
+		svc_ctx.secret_env(RunContext::Service).await.unwrap();
 	assert!(
-		forward_services.is_empty(),
+		forward_services.is_empty() && secret_forward_services.is_empty(),
 		"should not forward services for RunContext::Service"
 	);
-
 	let env = generate_k8s_variables()
 		.into_iter()
 		.chain(
@@ -163,6 +164,28 @@ pub async fn gen_svc(
 		serde_json::Value::Null
 	};
 
+	let (image, image_pull_policy, command, args) = match &driver {
+		ExecServiceDriver::LocalBinaryArtifact { exec_path, args } => (
+			"alpine:3.8",
+			"IfNotPresent",
+			vec![Path::new("/var/rivet/backend").join(exec_path)],
+			args.clone(),
+		),
+		ExecServiceDriver::Docker {
+			image_tag,
+			force_pull,
+		} => (
+			image_tag.as_str(),
+			if *force_pull {
+				"Always"
+			} else {
+				"IfNotPresent"
+			},
+			Vec::new(),
+			Vec::new(),
+		),
+	};
+
 	// Create resource limits
 	let ns_service_config = svc_ctx.ns_service_config().await;
 	let resources = json!({
@@ -191,54 +214,77 @@ pub async fn gen_svc(
 		"readOnly": true
 	})];
 
-	match driver {
-		// Mount the service binaries to execute directly in the container. See
-		// notes in salt/salt/nomad/files/nomad.d/client.hcl.j2.
-		ExecServiceDriver::LocalBinaryArtifact { .. } => {
-			volumes.push(json!({
-				"name": "backend-repo",
-				"hostPath": {
-					"path": project_ctx.path(),
-					"type": "Directory"
+	// Add volumes
+	{
+		match driver {
+			// Mount the service binaries to execute directly in the container. See
+			// notes in salt/salt/nomad/files/nomad.d/client.hcl.j2.
+			ExecServiceDriver::LocalBinaryArtifact { .. } => {
+				volumes.push(json!({
+					"name": "backend-repo",
+					"hostPath": {
+						"path": project_ctx.path(),
+						"type": "Directory"
+					}
+				}));
+				volumes.push(json!({
+					"name": "nix-store",
+					"hostPath": {
+						"path": "/nix/store",
+						"type": "Directory"
+					}
+				}));
+				volume_mounts.push(json!({
+					"name": "backend-repo",
+					"mountPath": "/var/rivet/backend",
+					"readOnly": true
+				}));
+				volume_mounts.push(json!({
+					"name": "nix-store",
+					"mountPath": "/nix/store",
+					"readOnly": true
+				}));
+			}
+			ExecServiceDriver::Docker { .. } => {}
+		}
+
+		if svc_ctx.depends_on_region_config() {
+			local.push(json!({
+				"configMap": {
+					"name": "region-config",
 				}
-			}));
-			volumes.push(json!({
-				"name": "nix-store",
-				"hostPath": {
-					"path": "/nix/store",
-					"type": "Directory"
-				}
-			}));
-			volume_mounts.push(json!({
-				"name": "backend-repo",
-				"mountPath": "/var/rivet/backend",
-				"readOnly": true
-			}));
-			volume_mounts.push(json!({
-				"name": "nix-store",
-				"mountPath": "/nix/store",
-				"readOnly": true
 			}));
 		}
-		ExecServiceDriver::Docker { .. } | ExecServiceDriver::UploadedBinaryArtifact { .. } => {}
-	}
 
-	if svc_ctx.depends_on_region_config() {
-		local.push(json!({
-			"configMap": {
-				"name": "region-config",
+		volumes.push(json!({
+			"name": "local",
+			"projected": {
+				"defaultMode": 0o0777,
+				"sources": local
 			}
 		}));
 	}
 
-	volumes.push(json!({
-		"name": "local",
-		"projected": {
-			"defaultMode": 0o0777,
-			"sources": local
-		}
-	}));
+	// Create secret env vars
+	let secret_env_name = format!("{}-secret-env", service_name);
+	let secret_data = secret_env
+		.into_iter()
+		.map(|(k, v)| (k, base64::encode(v)))
+		.collect::<HashMap<_, _>>();
+	specs.insert(
+		"secret-env",
+		json!({
+			"apiVersion": "v1",
+			"kind": "Secret",
+			"metadata": {
+				"name": secret_env_name,
+				"namespace": "rivet-service"
+			},
+			"data": secret_data
+		}),
+	);
 
+	// Create priority class
 	let priority_class_name = format!("{}-priority", service_name);
 	specs.insert(
 		"priority",
@@ -253,81 +299,130 @@ pub async fn gen_svc(
 		}),
 	);
 
-	// TODO: app.kubernetes.io/managed-by
-	specs.insert(
-		"deployment",
-		json!({
-			"apiVersion": "apps/v1",
-			"kind": "Deployment",
-			"metadata": {
-				"name": service_name,
-				"namespace": "rivet-service",
-				"labels": {
-					"app.kubernetes.io/name": service_name
-				}
+	// Create pod template
+	let pod_template = json!({
+		"metadata": {
+			"labels": {
+				"app.kubernetes.io/name": service_name
+			}
+		},
+		"spec": {
+			"priorityClassName": priority_class_name,
+			// TODO: `OnFailure` Doesn't work with deployments
+			"restartPolicy": if spec_type == "deployment" {
+				"Always"
+			} else {
+				"OnFailure"
 			},
-			"spec": {
-				"replicas": ns_service_config.count,
-				"selector": {
-					"matchLabels": {
+			"imagePullSecrets": [{
+				"name": "docker-auth"
+			}],
+			"containers": [{
+				"name": "service",
+				"image": image,
+				"imagePullPolicy": image_pull_policy,
+				"command": command,
+				// "command": ["/bin/sh", "-c", "printenv && sleep 1000"],
+				"args": args,
+				"env": env,
+				"envFrom": [{
+					"secretRef": {
+						"name": secret_env_name
+					}
+				}],
+				"volumeMounts": volume_mounts,
+				"ports": ports,
+				"livenessProbe": health_check,
+				"resources": resources
+			}],
+			"volumes": volumes
+		}
+	});
+
+	if spec_type == "deployment" {
+		specs.insert(
+			"deployment",
+			json!({
+				"apiVersion": "apps/v1",
+				"kind": "Deployment",
+				"metadata": {
+					"name": service_name,
+					"namespace": "rivet-service",
+					"labels": {
 						"app.kubernetes.io/name": service_name
 					}
 				},
-				"template": {
-					"metadata": {
-						"labels": {
+				"spec": {
+					"replicas": ns_service_config.count,
+					"selector": {
+						"matchLabels": {
 							"app.kubernetes.io/name": service_name
 						}
 					},
-					"spec": {
-						"priorityClassName": priority_class_name,
-						// TODO: Doesn't work
-						// "restartPolicy": "OnFailure",
-						"containers": [
-							match &driver {
-								ExecServiceDriver::Docker { image, force_pull } => {
-									todo!()
-									// json!({
-									// 	"image": image,
-									// 	"imagePullPolicy": if *force_pull { "Always" } else {
-									// 		"IfNotPresent"
-									// 	},
-									// })
-								}
-								ExecServiceDriver::LocalBinaryArtifact { exec_path, args } => {
-									json!({
-										"name": "alpine",
-										"image": "alpine:3.8",
-										"command": [Path::new("/var/rivet/backend").join(exec_path)],
-										// "command": ["/bin/sh", "-c", "printenv && sleep 1000"],
-										"args": args,
-										"env": env,
-										"volumeMounts": volume_mounts,
-										"ports": ports,
-										"livenessProbe": health_check,
-										"resources": resources,
-									})
-								}
-								_ => todo!(),
-								// TODO:
-								// ExecServiceDriver::UploadedBinaryArtifact { exec_path, args, .. } => {
-								// 	json!({
-								// 		"image": "alpine:3.18",
-								// 		"command": format!("${{NOMAD_TASK_DIR}}/build/{exec_path}"),
-								// 		"args": args,
-								// 		"auth": nomad_docker_io_auth(&project_ctx).await.unwrap(),
-								// 		"logging": nomad_loki_plugin_config(&project_ctx, &svc_ctx).await.unwrap(),
-								// 	})
-								// }
-								// ExecServiceDriver::Binary { path, args } => json!({}),
-							}
-						],
-						"volumes": volumes
+					"template": pod_template
+				}
+			}),
+		);
+	} else if spec_type == "job" {
+		specs.insert(
+			"job",
+			json!({
+				"apiVersion": "batch/v1",
+				"kind": "Job",
+				"metadata": {
+					"name": service_name,
+					"namespace": "rivet-service",
+					"labels": {
+						"app.kubernetes.io/name": service_name
+					}
+				},
+				"spec": {
+					"completions": 1,
+					// "parallelism": ns_service_config.count,
+					// Deletes job after it is finished
+					"ttlSecondsAfterFinished": 1,
+					"template": pod_template
+				}
+			}),
+		);
+	} else if let ServiceKind::Periodic {
+		cron,
+		prohibit_overlap,
+		time_zone: _,
+	} = &svc_ctx.config().kind
+	{
+		specs.insert(
+			"cron-job",
+			json!({
+				"apiVersion": "batch/v1",
+				"kind": "CronJob",
+				"metadata": {
+					"name": service_name,
+					"namespace": "rivet-service",
+					"labels": {
+						"app.kubernetes.io/name": service_name
+					}
+				},
+				"spec": {
+					"schedule": cron,
+					// Timezones are in alpha
+					// "timeZone": time_zone,
+					"concurrencyPolicy": if *prohibit_overlap {
+						"Forbid"
+					} else {
+						"Allow"
+					},
+					"jobTemplate": {
+						"spec": {
+							"template": pod_template
+						}
 					}
 				}
-			}
-		}),
-	);
+			}),
+		);
+	} else {
+		panic!("invalid `spec_type` value `{}`", spec_type);
+	}
 
 	if svc_ctx.config().kind.has_server() {
 		specs.insert(
@@ -431,7 +526,7 @@ fn build_ingress_router(
 				"kind": "Middleware",
 				"metadata": {
 					"name": mw_name,
-					"namespace": "rivet-service"
+					"namespace": "traefik"
 				},
 				"spec": {
 					"stripPrefix": {
@@ -450,7 +545,7 @@ fn build_ingress_router(
 				"kind": "Middleware",
 				"metadata": {
 					"name": mw_name,
-					"namespace": "rivet-service"
+					"namespace": "traefik"
 				},
 				"spec": {
 					"compress": {}
@@ -466,13 +561,13 @@ fn build_ingress_router(
 				"kind": "Middleware",
 				"metadata": {
 					"name": mw_name,
-					"namespace": "rivet-service"
+					"namespace": "traefik"
 				},
 				"spec": {
 					"inFlightReq": {
 						"amount": 64,
-						"sourcecriterion": {
-							"requestheadername": "cf-connecting-ip"
+						"sourceCriterion": {
+							"requestHeaderName": "cf-connecting-ip"
 						}
 					}
 				}
@@ -493,20 +588,49 @@ fn build_ingress_router(
 			}),
 		);
 
-		// Build router
-		let r_name = format!("{}-{i}", svc_ctx.name());
-
+		// Build insecure router
 		specs.insert(
-			"ingress",
+			"ingress-insecure",
 			json!({
 				"apiVersion": "traefik.containo.us/v1alpha1",
 				"kind": "IngressRoute",
 				"metadata": {
-					"name": r_name,
-					"namespace": "rivet-service"
+					"name": format!("{}-{i}-insecure", svc_ctx.name()),
+					"namespace": "traefik"
 				},
 				"spec": {
-					// "entryPoints": [ "lb-443" ],
+					"entryPoints": [ "web" ],
+					"routes": [
+						{
+							"kind": "Rule",
+							"match": rule,
+							"middlewares": ingress_middlewares,
+							"services": [
+								{
+									"kind": "Service",
+									"name": service_name,
+									"namespace": "rivet-service",
+									"port": 80
+								}
+							]
+						}
+					],
+				}
+			}),
+		);
+
+		// Build secure router
+		specs.insert(
+			"ingress-secure",
+			json!({
+				"apiVersion": "traefik.containo.us/v1alpha1",
+				"kind": "IngressRoute",
+				"metadata": {
+					"name": format!("{}-{i}-secure", svc_ctx.name()),
+					"namespace": "traefik"
+				},
+				"spec": {
+					"entryPoints": [ "websecure" ],
 					"routes": [
 						{
 							"kind": "Rule",
@@ -526,7 +650,7 @@ fn build_ingress_router(
 						"secretName": "ingress-tls-cert",
 						"options": {
 							"name": "ingress-tls",
-							"namespace": "rivet-service"
+							"namespace": "traefik"
 						},
 						// "domains": [
 						// 	{
@@ -550,7 +674,7 @@ fn build_ingress_router(
 					"kind": "IngressRoute",
 					"metadata": {
 						"name": "cf-verification-challenge",
-						"namespace": "rivet-service"
+						"namespace": "traefik"
 					},
 					"spec": {
 						"routes": [

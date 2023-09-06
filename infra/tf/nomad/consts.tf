@@ -20,7 +20,7 @@ EOF
 		# Provide a Docker download token so we don't hit the download rate limit.
 		#
 		# https://docs.docker.com/docker-hub/download-rate-limit/#:~:text=For%20anonymous%20users%2C%20the%20rate,Enhanced%20Service%20Account%20add%2Don.
-		docker_auth = var.authenticate_all_docker_hub_pulls ?  (
+		docker_auth = var.authenticate_all_docker_hub_pulls ? (
 			<<-EOF
 			auth {
 				username = "${module.secrets.values["docker/registry/docker.io/username"]}"

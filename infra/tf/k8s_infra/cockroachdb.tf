@@ -14,12 +14,10 @@ resource "helm_release" "cockroachdb" {
 		conf = {
 			single-node = true
 			statefulset = {
-				replicas = 3
+				# TODO: Doesn't work for some reason, still makes 3 replicas
+				replicas = 1
 			}
 		}
-		# statefulset = {
-		# 	args = ["--insecure"]
-		# }
 		tls = {
 			enabled = false
 		}

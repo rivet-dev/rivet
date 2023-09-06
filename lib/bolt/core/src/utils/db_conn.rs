@@ -3,9 +3,9 @@ use std::collections::HashMap;
 use anyhow::*;
 
 use crate::{
-	config::{self, service::RuntimeKind},
+	config::service::RuntimeKind,
 	context::{ProjectContext, ServiceContext},
-	dep::{self, cloudflare},
+	dep,
 	utils::{self, DroppablePort},
 };
 

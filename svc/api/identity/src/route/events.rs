@@ -7,7 +7,7 @@ use proto::{
 	common,
 };
 use rivet_api::models;
-use rivet_convert::{convert, fetch, ApiTryInto};
+use rivet_convert::{fetch, ApiTryInto};
 use rivet_operation::prelude::*;
 use std::collections::{HashMap, HashSet};
 

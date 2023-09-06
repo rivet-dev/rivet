@@ -333,12 +333,16 @@ pub struct Docker {
 	/// See [here](https://docs.docker.com/docker-hub/download-rate-limit) for
 	/// more information on Docker Hub's rate limits.
 	pub authenticate_all_docker_hub_pulls: bool,
+	/// Docker repository to upload builds to. Must end in a slash.
+	#[serde(default = "default_docker_repo")]
+	pub repository: String,
 }
 
 impl Default for Docker {
 	fn default() -> Self {
 		Docker {
 			authenticate_all_docker_hub_pulls: false,
+			repository: default_docker_repo(),
 		}
 	}
 }
@@ -484,4 +488,8 @@ pub enum MatchmakerLobbyDeliveryMethod {
 fn default_regions() -> HashMap<String, Region> {
 	toml::from_str(include_str!("../default_regions.toml"))
 		.expect("failed to parse default_regions.toml")
+}
+
+fn default_docker_repo() -> String {
+	"ghcr.io/rivet-gg/".to_string()
 }

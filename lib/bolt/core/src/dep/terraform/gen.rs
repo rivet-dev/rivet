@@ -344,7 +344,7 @@ async fn vars(ctx: &ProjectContext) {
 				redis_svcs.insert(
 					svc_ctx.redis_db_name(),
 					json!({
-						"endpoint": format!("redis://listen.{name}.service.consul:{port}"),
+						"endpoint": format!("redis://redis-{name}.svc.cluster.local:{port}"),
 					}),
 				);
 			}
@@ -379,6 +379,7 @@ async fn vars(ctx: &ProjectContext) {
 
 		vars.insert("s3_buckets".into(), json!(s3_buckets));
 
+		// TODO: Don't set secrets as tf vars, read from secrets module
 		let (default_s3_provider, _) = ctx.default_s3_provider().unwrap();
 		let credentials = ctx.s3_credentials(default_s3_provider).await.unwrap();
 		vars.insert(
@@ -390,7 +391,10 @@ async fn vars(ctx: &ProjectContext) {
 			json!(credentials.access_key_secret),
 		);
 
-		// vars.insert("s3_providers".into(), s3_providers(ctx).await.unwrap());
+		vars.insert("s3_providers".into(), s3_providers(ctx).await.unwrap());
+
+		let s3_providers = &ctx.ns().s3.providers;
+		vars.insert("has_minio".into(), json!(s3_providers.minio.is_some()));
 	}
 
 	// Media presets
@@ -401,6 +405,8 @@ async fn vars(ctx: &ProjectContext) {
 			.map(media_resize::ResizePresetSerialize::from)
 			.collect::<Vec<_>>()),
 	);
+
+	vars.insert("k8s_health_port".into(), json!(dep::k8s::gen::HEALTH_PORT));
 
 	let tf_gen_path = ctx.gen_tf_env_path();
 	let _ = fs::create_dir_all(&tf_gen_path.parent().unwrap()).await;

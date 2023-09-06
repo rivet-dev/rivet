@@ -151,12 +151,12 @@ impl Client {
 				//
 				// We can't resolve the presigned URL, since the host's presigned
 				// host is part of the signature.
-				const MINIO_CONSUL_HOST: &str = "server.minio.service.consul:9200";
-				if endpoint.contains(MINIO_CONSUL_HOST) {
-					tracing::info!(host = %MINIO_CONSUL_HOST, "looking up dns");
+				const MINIO_K8S_HOST: &str = "minio.minio.svc.cluster.local:9200";
+				if endpoint.contains(MINIO_K8S_HOST) {
+					tracing::info!(host = %MINIO_K8S_HOST, "looking up dns");
 
 					// Resolve IP
-					let mut hosts = tokio::net::lookup_host(MINIO_CONSUL_HOST)
+					let mut hosts = tokio::net::lookup_host(MINIO_K8S_HOST)
 						.await
 						.map_err(Error::LookupHost)?;
 					let Some(host) = hosts.next() else {
@@ -164,7 +164,7 @@ impl Client {
 					};
 
 					// Substitute endpoint with IP
-					endpoint = endpoint.replace(MINIO_CONSUL_HOST, &host.to_string());
+					endpoint = endpoint.replace(MINIO_K8S_HOST, &host.to_string());
 				}
 
 				endpoint

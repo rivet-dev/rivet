@@ -93,11 +93,15 @@ pub async fn gen_svc(region_id: &str, exec_ctx: &ExecServiceContext) -> Job {
 	);
 
 	// Render env
-	let (env, forward_services) = svc_ctx.env(RunContext::Service).await.unwrap();
+	let (mut env, forward_services) = svc_ctx.env(RunContext::Service).await.unwrap();
+	let (secret_env, secret_forward_services) =
+		svc_ctx.secret_env(RunContext::Service).await.unwrap();
 	assert!(
-		forward_services.is_empty(),
+		forward_services.is_empty() && secret_forward_services.is_empty(),
 		"should not forward services for RunContext::Service"
 	);
+
+	env.extend(secret_env);
 
 	// Render ports
 	let (dynamic_ports, reserved_ports) = {

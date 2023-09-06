@@ -1,18 +1,13 @@
 use std::path::Path;
 
 use anyhow::{ensure, Result};
-use tokio::process::Command;
+use indoc::formatdoc;
+use tokio::{fs, process::Command};
 
-use crate::{context::ProjectContext, utils::command_helper::CommandHelper};
-
-pub enum BuildMethod {
-	Native,
-	Musl,
-}
+use crate::{config, context::ProjectContext};
 
 pub struct BuildOpts<'a, T: AsRef<str>> {
 	pub build_calls: Vec<BuildCall<'a, T>>,
-	pub build_method: BuildMethod,
 	pub release: bool,
 	/// How many threads to run in parallel when building.
 	pub jobs: Option<usize>,
@@ -38,17 +33,6 @@ pub async fn build<'a, T: AsRef<str>>(ctx: &ProjectContext, opts: BuildOpts<'a, 
 
 	let release_flag = if opts.release { "--release" } else { "" };
 
-	let user_id = {
-		let mut cmd = std::process::Command::new("id");
-		cmd.arg("-u");
-		cmd.exec_string().await.unwrap().trim().to_owned()
-	};
-	let user_group = {
-		let mut cmd = std::process::Command::new("id");
-		cmd.arg("-g");
-		cmd.exec_string().await.unwrap().trim().to_owned()
-	};
-
 	let build_calls = opts
 		.build_calls
 		.iter()
@@ -61,7 +45,9 @@ pub async fn build<'a, T: AsRef<str>>(ctx: &ProjectContext, opts: BuildOpts<'a, 
 				.collect::<Vec<String>>()
 				.join(" ");
 
-			indoc::formatdoc!(
+			// TODO: Not sure why the .cargo/config.toml isn't working with nested projects, have to hardcode
+			// the target dir
+			formatdoc!(
 				"
 				if [ $? -eq 0 ]; then
 				(cd {path} && cargo build {jobs_flag} {format_flag} {release_flag} {bin_flags})
@@ -73,7 +59,7 @@ pub async fn build<'a, T: AsRef<str>>(ctx: &ProjectContext, opts: BuildOpts<'a, 
 		.join("\n");
 
 	// Generate build script
-	let build_script = indoc::formatdoc!(
+	let build_script = formatdoc!(
 		r#"
 		# TODO: Not sure why the .cargo/config.toml isn't working with nested projects, have to hardcode
 		# the target dir
@@ -91,12 +77,12 @@ pub async fn build<'a, T: AsRef<str>>(ctx: &ProjectContext, opts: BuildOpts<'a, 
 	);
 
 	// Execute build command
-	match opts.build_method {
-		BuildMethod::Native => {
+	match &ctx.ns().cluster.kind {
+		config::ns::ClusterKind::SingleNode { .. } => {
 			let mut cmd = Command::new("sh");
 			cmd.current_dir(ctx.path());
 			cmd.arg("-c");
-			cmd.arg(indoc::formatdoc!(
+			cmd.arg(formatdoc!(
 				r#"
 				{build_script}
 
@@ -108,35 +94,71 @@ pub async fn build<'a, T: AsRef<str>>(ctx: &ProjectContext, opts: BuildOpts<'a, 
 
 			ensure!(status.success());
 		}
-		BuildMethod::Musl => {
-			let mut cmd = Command::new("docker");
-			cmd.arg("run");
-			cmd.arg("-v").arg("cargo-cache:/root/.cargo/registry");
-			cmd.arg("-v")
-				.arg(format!("{}:/volume", ctx.path().display()));
-			cmd.arg("--rm")
-				.arg("--interactive")
-				.arg("--tty")
-				.arg("clux/muslrust:1.72.0-stable");
-			cmd.arg("sh").arg("-c").arg(indoc::formatdoc!(
+		config::ns::ClusterKind::Distributed { .. } => {
+			let optimization = if opts.release { "release" } else { "debug" };
+			let build_script = formatdoc!(
 				r#"
-				# HACK: Link musl-g++
-				#
-				# See https://github.com/emk/rust-musl-builder/issues/53#issuecomment-421806898
-				ln -s $(which g++) /usr/local/bin/musl-g++
-
 				{build_script}
-
-				# Fix permissions of target folder no matter the exit status
-				chown -R "{user_id}:{user_group}" ./target
 
 				# Exit
 				exit $EXIT_CODE
 				"#
-			));
-			let status = cmd.status().await?;
+			);
+			let repo = &ctx.ns().docker.repository;
+			ensure!(repo.ends_with('/'), "docker repository must end with slash");
+			let source_hash = ctx.source_hash();
 
-			ensure!(status.success());
+			// Create directory for docker files
+			let gen_path = ctx.gen_path().join("docker");
+			fs::create_dir_all(&gen_path).await?;
+
+			for call in &opts.build_calls {
+				for bin in call.bins {
+					let bin = bin.as_ref();
+					let image_tag = format!("{repo}{bin}:{source_hash}");
+
+					// TODO: Figure out what to tag images with
+
+					// Write docker file
+					let dockerfile_path = gen_path.join(format!("Dockerfile.{bin}"));
+					fs::write(
+						&dockerfile_path,
+						formatdoc!(
+							r#"
+							FROM rust:1.72-slim as build
+
+							RUN apt-get update
+							RUN apt-get install -y protobuf-compiler pkg-config libssl-dev
+				
+							WORKDIR /usr/rivet
+							COPY . .
+							RUN ["sh", "-c", {build_script:?}]
+				
+							FROM debian:12.1-slim as run
+							
+							COPY --from=build /usr/rivet/target/{optimization}/{bin} /bin/svc
+							RUN apt-get update
+							RUN apt-get -y install openssl
+							
+							CMD ["bin/svc"]
+							"#
+						),
+					)
+					.await?;
+
+					// Build docker image for each binary needed
+					let mut cmd = Command::new("docker");
+					cmd.current_dir(ctx.path());
+					cmd.arg("build");
+					cmd.arg("--rm");
+					cmd.arg("-f").arg(dockerfile_path);
+					cmd.arg("-t").arg(image_tag);
+					cmd.arg(".");
+
+					let status = cmd.status().await?;
+					ensure!(status.success());
+				}
+			}
 		}
 	}
 

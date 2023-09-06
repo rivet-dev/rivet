@@ -1,13 +1,11 @@
-use anyhow::{bail, ensure, Context, Result};
+use anyhow::{ensure, Context, Result};
 use async_recursion::async_recursion;
-use s3_util::aws_sdk_s3;
 use std::{
 	collections::HashMap,
 	hash::{Hash, Hasher},
 	path::{Path, PathBuf},
 	sync::{Arc, Weak},
 };
-use tempfile::NamedTempFile;
 use tokio::{fs, process::Command, sync::RwLock};
 
 use crate::{
@@ -16,7 +14,7 @@ use crate::{
 		ns::S3Provider,
 		service::{RuntimeKind, ServiceKind},
 	},
-	context::{self, BuildContext, ProjectContext, RunContext},
+	context::{self, BuildContext, ProjectContext, RunContext, S3Provider},
 	dep::{self, cloudflare, k8s, s3},
 	utils,
 };
@@ -229,34 +227,16 @@ impl ServiceContextData {
 	}
 
 	/// Path to the executable binary.
-	pub async fn rust_bin_path(
-		&self,
-		optimization: &BuildOptimization,
-		target: super::RustBuildTarget,
-	) -> PathBuf {
-		match target {
-			super::RustBuildTarget::Native => self
-				.project()
-				.await
-				.path()
-				.join("target")
-				.join(match optimization {
-					BuildOptimization::Release => "release",
-					BuildOptimization::Debug => "debug",
-				})
-				.join(self.cargo_name().expect("no cargo name")),
-			super::RustBuildTarget::Musl => self
-				.project()
-				.await
-				.path()
-				.join("target")
-				.join("x86_64-unknown-linux-musl")
-				.join(match optimization {
-					BuildOptimization::Release => "release",
-					BuildOptimization::Debug => "debug",
-				})
-				.join(self.cargo_name().expect("no cargo name")),
-		}
+	pub async fn rust_bin_path(&self, optimization: &BuildOptimization) -> PathBuf {
+		self.project()
+			.await
+			.path()
+			.join("target")
+			.join(match optimization {
+				BuildOptimization::Release => "release",
+				BuildOptimization::Debug => "debug",
+			})
+			.join(self.cargo_name().expect("no cargo name"))
 	}
 }
 
@@ -308,6 +288,10 @@ impl ServiceContextData {
 		// self.name() == "job-run-metrics-log"
 	}
 
+	pub fn depends_on_clickhouse(&self) -> bool {
+		true
+	}
+
 	pub fn depends_on_jwt_key_private(&self) -> bool {
 		true
 		// self.name() == "token-create"
@@ -355,36 +339,17 @@ impl ServiceContextData {
 // Build info
 #[derive(Debug, Clone)]
 pub enum ServiceBuildPlan {
-	/// Build exists locally.
-	ExistingLocalBuild {
-		/// Absolute path to the executable on the host system.
-		exec_path: PathBuf,
-	},
-
-	/// Build exists on S3 server.
-	ExistingUploadedBuild {
-		build_key: String,
-
-		/// Path to the executable in the archive.
-		exec_path: String,
-	},
-
 	/// Build the service locally.
 	BuildLocally {
 		/// Absolute path to the executable on the host system.
 		exec_path: PathBuf,
 	},
 
-	/// Build the service and upload to S3.
-	BuildAndUpload {
-		build_key: String,
+	/// Build exists on Docker.
+	ExistingUploadedBuild { image_tag: String },
 
-		/// Path to the executable in the archive.
-		exec_path: String,
-	},
-
-	/// Run a Docker container.
-	Docker { image_tag: String },
+	/// Build the service and upload to Docker.
+	BuildAndUpload { image_tag: String },
 }
 
 impl ServiceContextData {
@@ -404,57 +369,31 @@ impl ServiceContextData {
 					BuildContext::Bin { optimization } => optimization,
 					BuildContext::Test => &BuildOptimization::Debug,
 				};
-				let output_path = self
-					.rust_bin_path(optimization, project_ctx.rust_build_target())
-					.await;
+				let output_path = self.rust_bin_path(optimization).await;
 
-				if force_build {
-					return Ok(ServiceBuildPlan::BuildLocally {
-						exec_path: output_path,
-					});
-				}
-
-				// Check if there's an existing build we can use
-				let build_exists = tokio::fs::metadata(&output_path).await.is_ok();
-				if build_exists {
-					return Ok(ServiceBuildPlan::ExistingLocalBuild {
-						exec_path: output_path,
-					});
-				}
-
-				// Default to building
+				// Rust libs always attempt to rebuild (handled by cargo)
 				Ok(ServiceBuildPlan::BuildLocally {
 					exec_path: output_path,
 				})
 			}
 			// Build and upload to S3
 			config::ns::ClusterKind::Distributed { .. } => {
-				// Derive the build key
-				let key = self.s3_build_key(build_context).await?;
-				let exec_path = self.cargo_name().expect("no cargo name").to_string();
+				let image_tag = self.docker_image_tag().await?;
 
-				if force_build {
-					return Ok(ServiceBuildPlan::BuildAndUpload {
-						build_key: key,
-						exec_path,
-					});
-				}
+				if !force_build {
+					// TODO: Check docker if build was pushed
+					// let mut cmd = Command::new("docker");
+					// cmd.arg("images");
+					// cmd.arg("-q").arg(&image_tag);
+					// let image_exists = !cmd.output().await?.stdout.is_empty();
 
-				// Check if there's an existing build we can use
-				let s3_client = project_ctx.s3_client_service_builds().await?;
-				let build_exists = s3::check_exists_cached(&project_ctx, &s3_client, &key).await?;
-				if build_exists {
-					return Ok(ServiceBuildPlan::ExistingUploadedBuild {
-						build_key: key,
-						exec_path,
-					});
+					// if image_exists {
+					// 	return Ok(ServiceBuildPlan::ExistingUploadedBuild { image_tag });
+					// }
 				}
 
 				// Default to building
-				Ok(ServiceBuildPlan::BuildAndUpload {
-					build_key: key,
-					exec_path,
-				})
+				Ok(ServiceBuildPlan::BuildAndUpload { image_tag })
 			}
 		}
 	}
@@ -637,14 +576,8 @@ impl ServiceContextData {
 		match self.config().runtime {
 			// Use binary modified timestamp for rust runtimes
 			RuntimeKind::Rust { .. } => {
-				let bin_ts = if let Ok(metadata) = fs::metadata(
-					self.rust_bin_path(
-						&build_optimization,
-						self.project().await.rust_build_target(),
-					)
-					.await,
-				)
-				.await
+				let bin_ts = if let Ok(metadata) =
+					fs::metadata(self.rust_bin_path(&build_optimization).await).await
 				{
 					metadata
 						.modified()?
@@ -749,7 +682,7 @@ impl ServiceContextData {
 
 		let region_id = project_ctx.primary_region_or_local();
 		let mut env = Vec::new();
-		let mut forward_configs = Vec::<utils::PortForwardConfig>::new();
+		let mut forward_configs = Vec::new();
 
 		// HACK: Link to dynamically linked libraries in /nix/store
 		//
@@ -762,18 +695,6 @@ impl ServiceContextData {
 				"LD_LIBRARY_PATH".into(),
 				std::env::var("LD_LIBRARY_PATH").context("missing LD_LIBRARY_PATH")?,
 			));
-		}
-
-		// Write secrets
-		for (secret_key, secret_config) in self.required_secrets().await? {
-			let env_key = rivet_util::env::secret_env_var_key(&secret_key);
-			if secret_config.optional {
-				if let Some(value) = project_ctx.read_secret_opt(&secret_key).await? {
-					env.push((env_key, value));
-				}
-			} else {
-				env.push((env_key, project_ctx.read_secret(&secret_key).await?));
-			}
 		}
 
 		// TODO: Convert this to use the bolt taint
@@ -851,39 +772,7 @@ impl ServiceContextData {
 		// for some services which don't have an explicit dependency.
 		env.extend(project_ctx.all_router_url_env().await);
 
-		env.push((
-			"RIVET_JWT_KEY_PUBLIC".into(),
-			project_ctx
-				.read_secret(&["jwt", "key", "public_pem"])
-				.await?,
-		));
-		if self.depends_on_jwt_key_private() {
-			env.push((
-				"RIVET_JWT_KEY_PRIVATE".into(),
-				project_ctx
-					.read_secret(&["jwt", "key", "private_pem"])
-					.await?,
-			));
-		}
-
-		if run_context == RunContext::Service {
-			if self.depends_on_sendgrid_key() {
-				env.push((
-					"SENDGRID_KEY".into(),
-					project_ctx.read_secret(&["sendgrid", "key"]).await?,
-				));
-			}
-		}
-
 		let config::ns::DnsProvider::Cloudflare { zones, .. } = &project_ctx.ns().dns.provider;
-		if self.depends_on_cloudflare() {
-			env.push((
-				"CLOUDFLARE_AUTH_TOKEN".into(),
-				project_ctx
-					.read_secret(&["cloudflare", "terraform", "auth_token"])
-					.await?,
-			));
-		}
 		env.push(("CLOUDFLARE_ZONE_ID_BASE".into(), zones.root.clone()));
 		env.push(("CLOUDFLARE_ZONE_ID_GAME".into(), zones.game.clone()));
 		env.push(("CLOUDFLARE_ZONE_ID_JOB".into(), zones.job.clone()));
@@ -911,14 +800,32 @@ impl ServiceContextData {
 
 		if self.depends_on_nomad_api() {
 			env.push((
-				"NOMAD_ADDRESS".into(),
+				"NOMAD_URL".into(),
+				format!(
+					"http://{}",
+					access_service(
+						&project_ctx,
+						&mut forward_configs,
+						&run_context,
+						"nomad-server",
+						"nomad",
+						4646,
+					)
+					.await?
+				),
+			));
+		}
+
+		if self.depends_on_clickhouse() {
+			env.push((
+				"CLICKHOUSE_URL".into(),
 				access_service(
 					&project_ctx,
 					&mut forward_configs,
 					&run_context,
-					"nomad-server",
-					"nomad",
-					4646,
+					"clickhouse",
+					"clickhouse",
+					8123,
 				)
 				.await?,
 			));
@@ -944,7 +851,7 @@ impl ServiceContextData {
 		// 	));
 		// }
 
-		// NATS config
+		// NATS
 		env.push((
 			"NATS_URL".into(),
 			// TODO: Add back passing multiple NATS nodes for failover instead of using DNS resolution
@@ -958,9 +865,6 @@ impl ServiceContextData {
 			)
 			.await?,
 		));
-
-		env.push(("NATS_USERNAME".into(), "chirp".into()));
-		env.push(("NATS_PASSWORD".into(), "password".into()));
 
 		// Chirp config (used for both Chirp clients and Chirp workers)
 		env.push(("CHIRP_SERVICE_NAME".into(), self.name()));
@@ -977,43 +881,6 @@ impl ServiceContextData {
 
 			env.push(("CHIRP_WORKER_KIND".into(), "consumer".into()));
 			env.push(("CHIRP_WORKER_CONSUMER_GROUP".into(), self.name()));
-		}
-
-		// Redis
-		for redis_dep in self.redis_dependencies().await {
-			let name = redis_dep.name();
-			let db_name = redis_dep.redis_db_name();
-			let port = dep::redis::server_port(&redis_dep);
-
-			// TODO: Use name and port to connect to different redis instances
-			// let host = format!("redis-{name}.redis.svc.cluster.local:{port}");
-			let host = access_service(
-				&project_ctx,
-				&mut forward_configs,
-				&run_context,
-				"redis-master",
-				"redis",
-				6379,
-			)
-			.await?;
-
-			// Build URL with auth
-			let username = project_ctx
-				.read_secret(&["redis", &db_name, "username"])
-				.await?;
-			let password = project_ctx
-				.read_secret_opt(&["redis", &db_name, "password"])
-				.await?;
-			let url = if let Some(password) = password {
-				format!("redis://{}:{}@{host}", username, password)
-			} else {
-				format!("redis://{}@{host}", username)
-			};
-
-			env.push((
-				format!("REDIS_URL_{}", db_name.to_uppercase().replace("-", "_")),
-				url,
-			));
 		}
 
 		// Fly
@@ -1162,73 +1029,207 @@ impl ServiceContextData {
 
 		Ok((env, forward_configs))
 	}
-}
 
-impl ServiceContextData {
-	pub async fn s3_build_key(&self, build_context: &BuildContext) -> Result<String> {
-		let source_hash = self
-			.source_hash_dev(match &build_context {
-				BuildContext::Bin { optimization } => optimization,
-				BuildContext::Test => &BuildOptimization::Debug,
-			})
-			.await?;
-		Ok(format!(
-			"{}/{}/{source_hash}.tar.bz2",
-			self.name(),
-			build_context.path()
-		))
-	}
+	pub async fn secret_env(
+		&self,
+		run_context: RunContext,
+	) -> Result<(Vec<(String, String)>, Vec<utils::PortForwardConfig>)> {
+		let project_ctx = self.project().await;
 
-	pub async fn package_build(&self, build_context: &BuildContext) -> Result<NamedTempFile> {
-		let tar_bz2 = NamedTempFile::new()?;
+		let mut env = Vec::new();
+		let mut forward_configs = Vec::new();
 
-		// Compress with bzip2. It has similar performance as gzip. xz is way
-		// too slow.
-		let mut cmd = Command::new("tar");
-		cmd.arg("cfj").arg(tar_bz2.path());
-
-		match build_context {
-			BuildContext::Bin { optimization } => match &self.config.runtime {
-				RuntimeKind::Rust {} => {
-					// Write binary
-					let bin_path = self
-						.rust_bin_path(optimization, self.project().await.rust_build_target())
-						.await;
-					cmd.arg("-C")
-						.arg(bin_path.parent().context("bin_path.parent()")?)
-						.arg(bin_path.file_name().context("bin_path.file_name()")?);
+		// Write secrets
+		for (secret_key, secret_config) in self.required_secrets().await? {
+			let env_key = rivet_util::env::secret_env_var_key(&secret_key);
+			if secret_config.optional {
+				if let Some(value) = project_ctx.read_secret_opt(&secret_key).await? {
+					env.push((env_key, value));
 				}
-				_ => bail!("can't get build binary for this runtime type"),
-			},
-			BuildContext::Test => {
-				bail!("can't get build path for test")
+			} else {
+				env.push((env_key, project_ctx.read_secret(&secret_key).await?));
 			}
 		}
 
-		let output = cmd.output().await?;
-		ensure!(
-			output.status.success(),
-			"tar failed: {}",
-			String::from_utf8_lossy(&output.stderr)
-		);
+		// NATS
+		env.push(("NATS_USERNAME".into(), "chirp".into()));
+		env.push(("NATS_PASSWORD".into(), "password".into()));
 
-		Ok(tar_bz2)
+		env.push((
+			"RIVET_JWT_KEY_PUBLIC".into(),
+			project_ctx
+				.read_secret(&["jwt", "key", "public_pem"])
+				.await?,
+		));
+		if self.depends_on_jwt_key_private() {
+			env.push((
+				"RIVET_JWT_KEY_PRIVATE".into(),
+				project_ctx
+					.read_secret(&["jwt", "key", "private_pem"])
+					.await?,
+			));
+		}
+
+		if run_context == RunContext::Service {
+			if self.depends_on_sendgrid_key() {
+				env.push((
+					"SENDGRID_KEY".into(),
+					project_ctx.read_secret(&["sendgrid", "key"]).await?,
+				));
+			}
+		}
+
+		if self.depends_on_cloudflare() {
+			env.push((
+				"CLOUDFLARE_AUTH_TOKEN".into(),
+				project_ctx
+					.read_secret(&["cloudflare", "terraform", "auth_token"])
+					.await?,
+			));
+		}
+
+		// CRDB
+		let crdb_host = access_service(
+			&project_ctx,
+			&mut forward_configs,
+			&run_context,
+			"cockroachdb",
+			"cockroachdb",
+			26257,
+		)
+		.await?;
+		for crdb_dep in self.crdb_dependencies().await {
+			let username = "root"; // TODO:
+			let sslmode = "disable"; // TODO:
+
+			let uri = format!(
+				"postgres://{username}@{crdb_host}/{db_name}?sslmode={sslmode}",
+				db_name = crdb_dep.crdb_db_name(),
+			);
+			env.push((format!("CRDB_URL_{}", crdb_dep.name_screaming_snake()), uri));
+		}
+
+		// Redis
+		for redis_dep in self.redis_dependencies().await {
+			let name = redis_dep.name();
+			let db_name = redis_dep.redis_db_name();
+			let port = dep::redis::server_port(&redis_dep);
+
+			// TODO: Use name and port to connect to different redis instances
+			// let host = format!("redis-{name}.redis.svc.cluster.local:{port}");
+			let host = access_service(
+				&project_ctx,
+				&mut forward_configs,
+				&run_context,
+				"redis-master",
+				"redis",
+				6379,
+			)
+			.await?;
+
+			// Build URL with auth
+			let username = project_ctx
+				.read_secret(&["redis", &db_name, "username"])
+				.await?;
+			let password = project_ctx
+				.read_secret_opt(&["redis", &db_name, "password"])
+				.await?;
+			let url = if let Some(password) = password {
+				format!("redis://{}:{}@{host}", username, password)
+			} else {
+				format!("redis://{}@{host}", username)
+			};
+
+			env.push((
+				format!("REDIS_URL_{}", db_name.to_uppercase().replace("-", "_")),
+				url,
+			));
+		}
+
+		// Expose S3 endpoints to services that need them
+		let s3_deps = if self.depends_on_s3() {
+			project_ctx.all_services().await.to_vec()
+		} else {
+			self.s3_dependencies().await
+		};
+		for s3_dep in s3_deps {
+			if !matches!(s3_dep.config().runtime, RuntimeKind::S3 { .. }) {
+				continue;
+			}
+
+			// Add default provider
+			let default_provider_name = match project_ctx.default_s3_provider()? {
+				(S3Provider::Minio, _) => "MINIO",
+				(S3Provider::Backblaze, _) => "BACKBLAZE",
+				(S3Provider::Aws, _) => "AWS",
+			};
+			env.push((
+				"S3_DEFAULT_PROVIDER".to_string(),
+				default_provider_name.to_string(),
+			));
+
+			// Add all configured providers
+			let providers = &project_ctx.ns().s3.providers;
+			if providers.minio.is_some() {
+				add_s3_env(
+					&project_ctx,
+					&mut env,
+					&s3_dep,
+					context::project::S3Provider::Minio,
+				)
+				.await?;
+			}
+			if providers.backblaze.is_some() {
+				add_s3_env(
+					&project_ctx,
+					&mut env,
+					&s3_dep,
+					context::project::S3Provider::Backblaze,
+				)
+				.await?;
+			}
+			if providers.aws.is_some() {
+				add_s3_env(
+					&project_ctx,
+					&mut env,
+					&s3_dep,
+					context::project::S3Provider::Aws,
+				)
+				.await?;
+			}
+		}
+
+		Ok((env, forward_configs))
+	}
+}
+
+impl ServiceContextData {
+	pub async fn docker_image_tag(&self) -> Result<String> {
+		let project_ctx = self.project().await;
+
+		let source_hash = project_ctx.source_hash();
+		let repo = &project_ctx.ns().docker.repository;
+		ensure!(repo.ends_with('/'), "docker repository must end with slash");
+
+		Ok(format!(
+			"{}{}:{}",
+			repo,
+			self.cargo_name().expect("no cargo name"),
+			source_hash
+		))
 	}
 
-	pub async fn upload_build(&self, build_context: &BuildContext) -> Result<()> {
-		let package_file = self.package_build(build_context).await?;
+	pub async fn upload_build(&self) -> Result<()> {
+		let image_tag = self.docker_image_tag().await?;
 
-		let body = aws_sdk_s3::types::ByteStream::from_path(package_file.path()).await?;
+		let mut cmd = Command::new("docker");
+		cmd.arg("push");
+		cmd.arg(image_tag);
 
-		let s3_client = self.project().await.s3_client_service_builds().await?;
-		let key = self.s3_build_key(build_context).await?;
-		s3_client
-			.put_object()
-			.bucket(s3_client.bucket())
-			.key(key)
-			.body(body)
-			.send()
-			.await?;
+		let status = cmd.status().await?;
+		eprintln!();
+
+		ensure!(status.success());
 
 		Ok(())
 	}

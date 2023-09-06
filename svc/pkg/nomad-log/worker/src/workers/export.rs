@@ -8,9 +8,10 @@ struct LogEntry {
 }
 
 #[worker(name = "nomad-log-export")]
-async fn worker(ctx: &OperationContext<nomad_log::msg::export::Message>) -> GlobalResult<()> {
+async fn worker(ctx: OperationContext<nomad_log::msg::export::Message>) -> GlobalResult<()> {
+	let clickhouse_url = std::env::var("CLICKHOUSE_URL")?;
 	let clickhouse = clickhouse::Client::default()
-		.with_url("http://http.clickhouse.service.consul:8123")
+		.with_url(clickhouse_url)
 		.with_user("chirp")
 		.with_password(util::env::read_secret(&["clickhouse", "users", "chirp", "password"]).await?)
 		.with_database("db_nomad_logs");
