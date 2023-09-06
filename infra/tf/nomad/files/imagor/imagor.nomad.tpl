@@ -77,7 +77,7 @@ job "imagor:${dc}" {
 
 				# Individual S3 providers
 				%{ for preset in imagor_presets }
-				%{ for provider in s3_providers }
+				%{ for provider, _ in s3_providers }
 				# routers.imagor-${provider}-${preset.key}
 				"${prefix}.http.routers.imagor-${provider}-${preset.key}.entrypoints=lb-443",
 				"${prefix}.http.routers.imagor-${provider}-${preset.key}.priority=${preset.priority}",

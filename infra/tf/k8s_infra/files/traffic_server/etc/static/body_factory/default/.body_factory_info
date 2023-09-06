@@ -1,0 +1,16 @@
+# .body_factory_info
+#
+# The .body_factory_info file contains descriptive information
+# about the error pages in this directory.
+#
+# Currently, .body_factory_info contains information which
+# indicates the character set and natural language of the error
+# pages in this directory.  For example, to describe Korean
+# web pages encoded in the iso-2022-kr character set, you might
+# add these lines to .body_factory_info file:
+#
+#	Content-Language: kr
+#	Content-Charset: iso-2022-kr
+#
+# If this file is empty, or only contains comments, the default is
+# assumed: English text in the standard utf-8 character set.

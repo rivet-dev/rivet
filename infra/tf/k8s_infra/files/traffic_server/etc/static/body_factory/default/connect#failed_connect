@@ -1,0 +1,14 @@
+<HTML>
+<HEAD>
+<TITLE>Could Not Connect</TITLE>
+</HEAD>
+
+<BODY BGCOLOR="white" FGCOLOR="black">
+<H1>Could Not Connect</H1>
+<HR>
+
+<FONT FACE="Helvetica,Arial"><B>
+Description: Could not connect to the requested server host.
+</B></FONT>
+<HR>
+</BODY>

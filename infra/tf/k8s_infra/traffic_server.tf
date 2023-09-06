@@ -4,6 +4,8 @@ locals {
 		# TODO:
 	}
 	traffic_server_configmap_hash = sha256(jsonencode(local.server_configmap_data))
+	# TODO: Enable dynamic configuration
+	traffic_server_cache_size = 10
 }
 
 resource "kubernetes_namespace" "traffic_server" {
@@ -24,8 +26,8 @@ resource "kubernetes_secret" "traffic_server_docker_config" {
 
 }
 
+# TODO: Secrets
 
-# Create a new config map for each version of the config so the stateful set can roll back gracefully.
 resource "kubernetes_config_map" "traffic_server" {
 	metadata {
 		namespace = kubernetes_namespace.traffic_server.metadata.0.name
@@ -35,9 +37,39 @@ resource "kubernetes_config_map" "traffic_server" {
 		}
 	}
 
-	# TODO:
-	data = {}
+	data = merge(
+		# Static files
+		{
+			for f in fileset("${path.module}/files/traffic_server/etc/static", "**/*"):
+			f => file("${path.module}/files/traffic_server/etc/${f}/static")
+		},
+		# Dynamic files
+		{
+			for f in fileset("${path.module}/files/traffic_server/etc/static", "**/*"):
+			f => templatefile("${path.module}/files/traffic_server/etc/${f}/static", {
+				s3_providers = var.s3_providers
+				volume_size_cache = "${traffic_server_cache_size}G"
+			})
+		},
+		# S3 providers
+		# flatten([
+		# 	for provider_name, provider in var.s3_providers:
+		# 	{
+		# 		"s3_region_map_${provider_name}.config" = templatefile("${path.module}/files/traffic_server/s3/s3_region_map.config", {
+		# 			s3_endpoint = provider.endpoint_internal
+		# 			s3_region = provider.region
+		# 		})
+		# 	}
+		# ]),
+	)
 }
+
+# TODO: Create secrets
+				# "s3_auth_v4_${provider}.config" = templatefile("${path.module}/files/traffic_server/s3/s3_auth_v4.config", {
+				# 	s3_access_key_id = TODO
+				# 	s3_secret_access_key = TODO
+				# 	s3_region_map_file_name = "s3_region_map_${provider}"
+				# })
 
 resource "kubernetes_service" "traffic_server" {
 	metadata {
@@ -150,8 +182,7 @@ resource "kubernetes_stateful_set" "traffic_server" {
 				access_modes = ["ReadWriteOnce"]
 				resources {
 					requests = {
-						# TODO: Enable configuration
-						storage = "10Gi"
+						storage = "${local.traffic_server_cache_size}Gi"
 					}
 				}
 				storage_class_name = "local-path"

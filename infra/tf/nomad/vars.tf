@@ -68,5 +68,5 @@ variable "s3_persistent_access_key_secret" {
 }
 
 variable "s3_providers" {
-	type = list(string)
+	type = map(string, any)
 }
