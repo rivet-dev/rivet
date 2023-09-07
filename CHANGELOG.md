@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+-  **Bolt** Remove `disable_cargo_workspace` flag since it is seldom used
+
 ## [23.1.0-rc4] - 2023-09-02
 
 ### Changed

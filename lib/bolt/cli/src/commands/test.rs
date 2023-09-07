@@ -29,26 +29,11 @@ impl TestOpts {
 			skip_generate,
 		} = self;
 
+		// Test services
 		if !service_names.is_empty() {
-			tasks::test::test_service(
-				&ctx,
-				&service_names,
-				test_only,
-				test_name.as_deref(),
-				skip_dependencies,
-				force_build,
-				skip_generate,
-			)
-			.await?;
+			tasks::test::test_services(&ctx, &service_names).await?;
 		} else {
-			tasks::test::test_all(
-				&ctx,
-				test_only,
-				test_name.as_deref(),
-				force_build,
-				skip_generate,
-			)
-			.await?;
+			tasks::test::test_all(&ctx).await?;
 		}
 
 		utils::ringadingding();

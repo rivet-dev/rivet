@@ -360,8 +360,8 @@ async fn upload_svc_build(svc_ctx: ServiceContext, upload_semaphore: Arc<Semapho
 
 async fn build_svc(
 	svc_ctx: &ServiceContext,
-	build_context: &BuildContext,
-	optimization: BuildOptimization,
+	_build_context: &BuildContext,
+	_optimization: BuildOptimization,
 ) {
 	match &svc_ctx.config().runtime {
 		RuntimeKind::Rust {} => {
