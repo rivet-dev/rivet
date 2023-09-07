@@ -963,10 +963,7 @@ impl ServiceContextData {
 		// S3 backfill
 		if self.depends_on_s3_backfill() {
 			if let Some(backfill) = &project_ctx.ns().s3.backfill {
-				env.push((
-					"S3_BACKFILL_PROVIDER".into(),
-					heck::ShoutySnakeCase::to_shouty_snake_case(backfill.as_str()),
-				));
+				env.push(("S3_BACKFILL_PROVIDER".into(), backfill.as_str().to_string()));
 			}
 		}
 
@@ -1169,14 +1166,9 @@ impl ServiceContextData {
 			}
 
 			// Add default provider
-			let default_provider_name = match project_ctx.default_s3_provider()? {
-				(s3_util::Provider::Minio, _) => "MINIO",
-				(s3_util::Provider::Backblaze, _) => "BACKBLAZE",
-				(s3_util::Provider::Aws, _) => "AWS",
-			};
 			env.push((
 				"S3_DEFAULT_PROVIDER".to_string(),
-				default_provider_name.to_string(),
+				project_ctx.default_s3_provider()?.0.as_str().to_string(),
 			));
 
 			// Add all configured providers
