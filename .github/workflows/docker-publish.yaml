@@ -26,7 +26,7 @@ jobs:
       run: |
         . /home/runner/.nix-profile/etc/profile.d/nix.sh
         cd infra/docker/traffic_server
-        nix-build docker.nix
+        nix-build docker.nix --option system-features kvm
         docker load < result
 
     - name: Push Docker image
