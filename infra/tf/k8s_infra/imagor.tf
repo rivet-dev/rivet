@@ -202,6 +202,29 @@ resource "kubernetes_service" "imagor" {
 	}
 }
 
+resource "kubectl_manifest" "imagor_traefik_service" {
+	depends_on = [kubernetes_namespace.imagor, helm_release.traefik]
+
+	yaml_body = yamlencode({
+		apiVersion = "traefik.containo.us/v1alpha1"
+		kind = "TraefikService"
+
+		metadata = {
+			name = "imagor"
+			namespace = "imagor"
+		}
+
+		spec = {
+			mirroring = {
+				name = "imagor"
+				namespace = "imagor"
+				port = 8000
+			}
+		}
+	})
+}
+
+# TODO: Create single traefik service
 resource "kubectl_manifest" "imagor_ingress" {
 	depends_on = [kubernetes_namespace.imagor, helm_release.traefik]
 
@@ -230,10 +253,9 @@ resource "kubectl_manifest" "imagor_ingress" {
 						}
 					]
 					services = [{
-						kind = "Service"
+						kind = "TraefikService"
 						name = "imagor"
 						namespace = "imagor"
-						port = 8000
 					}]
 				}
 			]

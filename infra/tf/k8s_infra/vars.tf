@@ -67,3 +67,6 @@ variable "s3_providers" {
 	}))
 }
 
+variable "s3_buckets" {
+	type = map(any)
+}

@@ -37,7 +37,6 @@ module "redis_secrets" {
 resource "kubernetes_priority_class" "redis_exporter_priority" {
 	metadata {
 		name = "redis-exporter-priority"
-		# namespace = "redis"
 	}
 
 	value = 40
@@ -86,6 +85,7 @@ resource "kubernetes_deployment" "redis_exporter" {
 					name = "redis-exporter"
 
 					# TODO: How to make this cleaner? Ternary operator solely for last element in list
+					# TODO: Move to secret
 					args = each.key == "redis-chirp" ? [ 
 						"--redis.addr=${each.value.endpoint}",
 						"--redis.user=${each.value.username}",
@@ -131,7 +131,6 @@ resource "kubernetes_service" "redis_exporter" {
 		selector = {
 			"app.kubernetes.io/name" = kubernetes_deployment.redis_exporter[each.key].metadata.0.name
 		}
-		type = "ClusterIP"
 
 		port {
 			protocol = "TCP"

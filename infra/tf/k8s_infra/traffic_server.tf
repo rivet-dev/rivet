@@ -83,7 +83,6 @@ resource "kubernetes_service" "traffic_server" {
 		}
 	}
 	spec {
-		type = "LoadBalancer"
 		selector = {
 			app = "traffic-server"
 		}
@@ -191,5 +190,90 @@ resource "kubernetes_stateful_set" "traffic_server" {
 			}
 		}
 	}
+}
+
+resource "kubectl_manifest" "traffic_server_traefik_service" {
+	depends_on = [kubernetes_namespace.traffic_server, helm_release.traefik]
+
+	yaml_body = yamlencode({
+		apiVersion = "traefik.containo.us/v1alpha1"
+		kind = "TraefikService"
+
+		metadata = {
+			name = "traffic-server"
+			namespace = "traffic-server"
+		}
+
+		spec = {
+			mirroring = {
+				name = "traffic-server"
+				namespace = "traffic-server"
+				port = 8080
+			}
+		}
+	})
+}
+
+locals {
+	traffic_server_middlewares = {
+		"traffic-server-cors" = {
+			headers = {
+				accessControlAllowMethods = [ "GET", "OPTIONS" ]
+				accessControlAllowOriginList = [ "https://${var.domain_main}" ]
+				accessControlMaxAge = 300
+			}
+		}
+		"traffic-server-cors-game" = {
+			headers = {
+				accessControlAllowMethods = [ "GET", "OPTIONS" ]
+				accessControlAllowOriginList = [ "*" ]
+				accessControlMaxAge = 300
+			}
+		}
+		"traffic-server-cdn" = {
+			chain = {
+				middlewares = [
+					for x in ["traffic-server-cdn-retry", "traffic-server-cdn-compress", "traffic-server-cdn-cache-control"]:
+					{ name = x, namespace = "traffic-server" }
+				]
+			}
+		}
+		"traffic-server-cdn-retry" = {
+			retry = {
+				attempts = 2
+				initialInterval = "1s"
+			}
+		}
+		"traffic-server-cdn-compress" = {
+			compress = { compress = true }
+		}
+		"traffic-server-cdn-cache-control" = {
+			headers = {
+				customResponseHeaders = {
+					# See https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Cache-Control#caching_static_assets
+					# and https://imagekit.io/blog/ultimate-guide-to-http-caching-for-static-assets/
+					"Cache-Control" = "public, max-age=604800, immutable"
+				}
+			}
+		}
+	}
+}
+
+resource "kubectl_manifest" "traffic_server_middlewares" {
+	depends_on = [kubernetes_namespace.traffic_server, helm_release.traefik]
+
+	for_each = local.traffic_server_middlewares
+
+	yaml_body = yamlencode({
+		apiVersion = "traefik.containo.us/v1alpha1"
+		kind = "Middleware"
+		
+		metadata = {
+			name = each.key
+			namespace = "traffic-server"
+		}
+
+		spec = each.value
+	})
 }
 

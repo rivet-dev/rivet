@@ -100,7 +100,6 @@ resource "kubernetes_service" "nsfw_api" {
 		selector = {
 			"app.kubernetes.io/name" = kubernetes_deployment.nsfw_api.metadata.0.name
 		}
-		type = "ClusterIP"
 
 		port {
 			protocol = "TCP"

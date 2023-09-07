@@ -75,7 +75,6 @@ resource "kubernetes_service" "nomad_server" {
 			port = 4647
 			protocol = "TCP"
 		}
-		type = "LoadBalancer"
 	}
 }
 
