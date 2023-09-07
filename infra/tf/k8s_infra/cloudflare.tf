@@ -84,6 +84,7 @@ resource "kubernetes_deployment" "cloudflare" {
 	}
 }
 
+# TODO:
 resource "kubernetes_secret" "tunnel_credentials" {
 	depends_on = [kubernetes_namespace.cloudflare]
 
@@ -93,10 +94,11 @@ resource "kubernetes_secret" "tunnel_credentials" {
 	}
 
 	data = {
-		"credentials.json" = data.terraform_remote_state.tls.outputs.tls_cert_cloudflare_ca
+		"credentials.json" = data.terraform_remote_state.cloudflare_tunnels.outputs.k8s_output.tunnels["loki"].cert_json
 	}
 }
 
+# TODO:
 resource "kubernetes_config_map" "cloudflared" {
 	depends_on = [kubernetes_namespace.cloudflare]
 

@@ -1,4 +1,4 @@
-output "salt_output" {
+output "k8s_output" {
 	value = {
 		tunnels = {
 			for k, v in module.cloudflare_tunnels:
@@ -12,4 +12,3 @@ output "salt_output" {
 	}
     sensitive = true
 }
-

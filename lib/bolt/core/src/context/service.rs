@@ -15,7 +15,7 @@ use crate::{
 		service::{RuntimeKind, ServiceKind},
 	},
 	context::{self, BuildContext, ProjectContext, RunContext},
-	dep::{self, k8s, s3},
+	dep::{self, k8s},
 	utils,
 };
 
