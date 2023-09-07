@@ -193,7 +193,6 @@ resource "kubernetes_service" "imagor" {
 		selector = {
 			"app.kubernetes.io/name" = kubernetes_deployment.imagor.metadata.0.name
 		}
-		type = "ClusterIP"
 
 		port {
 			protocol = "TCP"
@@ -205,40 +204,39 @@ resource "kubernetes_service" "imagor" {
 
 resource "kubectl_manifest" "imagor_ingress" {
 	depends_on = [kubernetes_namespace.imagor, helm_release.traefik]
-	for_each = {
-		for index, preset in local.imagor_presets:
-		preset.key => preset
-	}
 
 	yaml_body = yamlencode({
 		apiVersion = "traefik.containo.us/v1alpha1"
 		kind = "IngressRoute"
 
 		metadata = {
-			name = "imagor-${each.key}"
+			name = "imagor"
 			namespace = "imagor"
 		}
 
 		spec = {
 			entryPoints = [ "websecure" ]
-			priority = each.value.priority
 
-			routes = [{
-				kind = "Rule"
-				match = "${each.value.rule}${each.value.query}"
-				middlewares = [
-					for mw in each.value.middlewares: {
-						name = mw
+			routes = [
+				for index, preset in local.imagor_presets:
+				{
+					kind = "Rule"
+					match = "${preset.rule}${preset.query}"
+					priority = preset.priority
+					middlewares = [
+						for mw in preset.middlewares: {
+							name = mw
+							namespace = "imagor"
+						}
+					]
+					services = [{
+						kind = "Service"
+						name = "imagor"
 						namespace = "imagor"
-					}
-				]
-				services = [{
-					kind = "Service"
-					name = "imagor"
-					namespace = "imagor"
-					port = 8000
-				}]
-			}]
+						port = 8000
+					}]
+				}
+			]
 
 			tls = {
 				secretName = "ingress-tls-cert"
