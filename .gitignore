@@ -55,3 +55,6 @@ lib/**/Cargo.lock
 **/node_modules/
 
 tests/basic-game/.env
+
+# Local SDKs
+sdks/

@@ -5,3 +5,6 @@ name = "user-mutual-friend-list"
 kind = "rust"
 
 [operation]
+
+[databases]
+db-user-follow = {}

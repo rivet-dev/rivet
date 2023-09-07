@@ -3,7 +3,7 @@ use proto::backend::{self, pkg::*};
 
 #[worker(name = "cf-custom-hostname-status-set")]
 async fn worker(
-	ctx: OperationContext<cf_custom_hostname::msg::status_set::Message>,
+	ctx: &OperationContext<cf_custom_hostname::msg::status_set::Message>,
 ) -> GlobalResult<()> {
 	let identifier = internal_unwrap!(ctx.identifier).as_uuid();
 

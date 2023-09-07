@@ -2,7 +2,7 @@ use derive_builder::Builder;
 use maplit::hashmap;
 use std::collections::HashMap;
 
-use crate::context::{ProjectContext, S3Provider};
+use crate::context::ProjectContext;
 
 /// Defines the dependency graph for the Terraform plans.
 ///
@@ -11,10 +11,11 @@ use crate::context::{ProjectContext, S3Provider};
 pub fn dependency_graph(ctx: &ProjectContext) -> HashMap<&'static str, Vec<RemoteState>> {
 	let (default_s3_provider, _) = ctx.default_s3_provider().unwrap();
 	let provider_plan_id = match default_s3_provider {
-		S3Provider::Minio => "s3_minio",
-		S3Provider::Backblaze => "s3_backblaze",
-		S3Provider::Aws => "s3_aws",
+		s3_util::Provider::Minio => "s3_minio",
+		s3_util::Provider::Backblaze => "s3_backblaze",
+		s3_util::Provider::Aws => "s3_aws",
 	};
+
 	let s3 = RemoteStateBuilder::default()
 		.plan_id(provider_plan_id)
 		.data_name("s3")
@@ -25,13 +26,12 @@ pub fn dependency_graph(ctx: &ProjectContext) -> HashMap<&'static str, Vec<Remot
 		"dns" => vec![RemoteStateBuilder::default().plan_id("pools").build().unwrap()],
 		"master_local" => vec![RemoteStateBuilder::default().plan_id("nebula").build().unwrap()],
 		"master_cluster" => vec![RemoteStateBuilder::default().plan_id("nebula").build().unwrap()],
-		"nomad" => vec![s3.clone()],
 		"pools" => vec![
 			RemoteStateBuilder::default().plan_id("nebula").build().unwrap(),
 			RemoteStateBuilder::default().plan_id("master_local").condition("var.deploy_method_local").build().unwrap(),
 			RemoteStateBuilder::default().plan_id("master_cluster").condition("var.deploy_method_cluster").build().unwrap(),
 		],
-		"k8s_infra" => vec![s3, RemoteStateBuilder::default().plan_id("tls").build().unwrap()],
+		"k8s_infra" => vec![RemoteStateBuilder::default().plan_id("tls").build().unwrap()],
 	}
 }
 

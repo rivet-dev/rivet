@@ -2,7 +2,7 @@
 # cockroach init --insecure --cluster-name rivet-X --host 10.0.8.1:26258
 
 # See https://www.cockroachlabs.com/docs/releases/index.html
-{% set version = '22.2.0' %}
+{% set version = '23.1.7' %}
 
 {% if grains['volumes']['crdb']['mount'] %}
 {% set device = '/dev/disk/by-id/scsi-0Linode_Volume_' ~ grains['rivet']['name'] ~ '-crdb' %}

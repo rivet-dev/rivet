@@ -15,7 +15,7 @@ async fn empty(ctx: TestCtx) {
 		identity: Some(backend::user_identity::Identity {
 			kind: Some(backend::user_identity::identity::Kind::Email(
 				backend::user_identity::identity::Email {
-					email: email.clone()
+					email: email.clone(),
 				}
 			)),
 		}),

@@ -138,15 +138,6 @@ pub fn build_plan(ctx: &ProjectContext, start_at: Option<String>) -> Result<Vec<
 		},
 	});
 
-	// Nebula
-	plan.push(PlanStep {
-		name_id: "tf-nebula",
-		kind: PlanStepKind::Terraform {
-			plan_id: "nebula".into(),
-			needs_destroy: false,
-		},
-	});
-
 	// Kubernetes
 	plan.push(PlanStep {
 		name_id: "k8s-infra",
@@ -155,28 +146,6 @@ pub fn build_plan(ctx: &ProjectContext, start_at: Option<String>) -> Result<Vec<
 			needs_destroy: false,
 		},
 	});
-
-	// Master
-	match ctx.ns().cluster.kind {
-		ClusterKind::SingleNode { .. } => {
-			plan.push(PlanStep {
-				name_id: "tf-master-local",
-				kind: PlanStepKind::Terraform {
-					plan_id: "master_local".into(),
-					needs_destroy: false,
-				},
-			});
-		}
-		ClusterKind::Distributed { .. } => {
-			plan.push(PlanStep {
-				name_id: "tf-master-cluster",
-				kind: PlanStepKind::Terraform {
-					plan_id: "master_cluster".into(),
-					needs_destroy: true,
-				},
-			});
-		}
-	}
 
 	// Pools
 	plan.push(PlanStep {
@@ -218,30 +187,9 @@ pub fn build_plan(ctx: &ProjectContext, start_at: Option<String>) -> Result<Vec<
 		});
 	}
 
-	// Grafana
-	if ctx.ns().grafana.is_some() {
-		plan.push(PlanStep {
-			name_id: "tf-grafana",
-			kind: PlanStepKind::Terraform {
-				plan_id: "grafana".into(),
-				needs_destroy: true,
-			},
-		});
-	}
-
 	// S3
 	let s3_providers = &ctx.ns().s3.providers;
 	if s3_providers.minio.is_some() {
-		// Install Minio for s3_minio Terraform plan
-		plan.push(PlanStep {
-			name_id: "salt-minio",
-			kind: PlanStepKind::Salt {
-				filter: Some("G@roles:minio".into()),
-				sls: None,
-				config_opts: salt::config::BuildOpts { skip_s3: true },
-			},
-		});
-
 		plan.push(PlanStep {
 			name_id: "tf-s3-minio",
 			kind: PlanStepKind::Terraform {
@@ -269,23 +217,16 @@ pub fn build_plan(ctx: &ProjectContext, start_at: Option<String>) -> Result<Vec<
 		});
 	}
 
-	// Apply the rest of the Salt configs
-	plan.push(PlanStep {
-		name_id: "salt",
-		kind: PlanStepKind::Salt {
-			filter: None,
-			sls: None,
-			config_opts: Default::default(),
-		},
-	});
-
-	// plan.push(PlanStep {
-	// 	name_id: "tf-nomad",
-	// 	kind: PlanStepKind::Terraform {
-	// 		plan_id: "nomad".into(),
-	// 		needs_destroy: false,
-	// 	},
-	// });
+	// Grafana
+	if ctx.ns().grafana.is_some() {
+		plan.push(PlanStep {
+			name_id: "tf-grafana",
+			kind: PlanStepKind::Terraform {
+				plan_id: "grafana".into(),
+				needs_destroy: true,
+			},
+		});
+	}
 
 	plan.push(PlanStep {
 		name_id: "migrate",

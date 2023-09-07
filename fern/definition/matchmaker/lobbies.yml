@@ -1,0 +1,137 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/fern-api/fern/main/fern.schema.json
+
+imports:
+  commons: ../common.yml
+  matchmakerCommons: ../matchmaker/common.yml
+  captchaConfig: ../captcha/config.yml
+  localCommons: common.yml
+
+service:
+  auth: true
+  url: Matchmaker
+  audiences:
+    - public
+  base-path: /lobbies
+  endpoints:
+    ready:
+      path: /ready
+      method: POST
+      docs: >-
+        Marks the current lobby as ready to accept connections.  Players will not
+        be able to connect to this lobby until the  lobby is flagged as ready.
+
+    setClosed:
+      path: /closed
+      method: PUT
+      docs: |
+        If `is_closed` is `true`, the matchmaker will no longer route players to the lobby. Players can still
+        join using the /join endpoint (this can be disabled by the developer by rejecting all new connections
+        after setting the lobby to closed).
+        Does not shutdown the lobby.
+      request:
+        name: SetLobbyClosedRequest
+        body:
+          properties:
+            is_closed: boolean
+
+    setState:
+      path: /state
+      method: PUT
+      request:
+        name: SetLobbyStateRequest
+        body: optional<unknown>
+
+    getState:
+      path: /{lobby_id}/state
+      method: GET
+      path-parameters:
+        lobby_id: uuid
+      response: optional<unknown>
+
+    find:
+      path: /find
+      method: POST
+      docs: |
+        Finds a lobby based on the given criteria.
+        If a lobby is not found and `prevent_auto_create_lobby` is `true`, 
+        a new lobby will be created.
+      request:
+        headers:
+          origin: optional<string>
+        name: FindLobbyRequest
+        body:
+          properties:
+            game_modes: list<string>
+            regions: optional<list<string>>
+            prevent_auto_create_lobby: optional<boolean>
+            captcha: optional<captchaConfig.Config>
+            verification_data: optional<unknown>
+      response: FindLobbyResponse
+
+    join:
+      path: /join
+      method: POST
+      docs: |
+        Joins a specific lobby.
+        This request will use the direct player count configured for the
+        lobby group.
+      request:
+        name: JoinLobbyRequest
+        body:
+          properties:
+            lobby_id: string
+            captcha: optional<captchaConfig.Config>
+            verification_data: optional<unknown>
+      response: JoinLobbyResponse
+
+    create:
+      path: /create
+      method: POST
+      docs: |
+        Creates a custom lobby.
+      request:
+        name: CreateLobbyRequest
+        body:
+          properties:
+            game_mode: string
+            region: optional<string>
+            captcha: optional<captchaConfig.Config>
+            publicity: localCommons.CustomLobbyPublicity
+            lobby_config: optional<unknown>
+            verification_data: optional<unknown>
+      response: CreateLobbyResponse
+
+    list:
+      path: /list
+      method: GET
+      docs: Lists all open lobbies.
+      request:
+        name: ListLobbiesRequest
+        query-parameters:
+          include_state: optional<boolean>
+      response: ListLobbiesResponse
+
+types:
+  FindLobbyResponse:
+    properties:
+      lobby: matchmakerCommons.JoinLobby
+      ports: map<string, matchmakerCommons.JoinPort>
+      player: matchmakerCommons.JoinPlayer
+
+  JoinLobbyResponse:
+    properties:
+      lobby: matchmakerCommons.JoinLobby
+      ports: map<string, matchmakerCommons.JoinPort>
+      player: matchmakerCommons.JoinPlayer
+
+  CreateLobbyResponse:
+    properties:
+      lobby: matchmakerCommons.JoinLobby
+      ports: map<string, matchmakerCommons.JoinPort>
+      player: matchmakerCommons.JoinPlayer
+
+  ListLobbiesResponse:
+    properties:
+      game_modes: list<localCommons.GameModeInfo>
+      regions: list<localCommons.RegionInfo>
+      lobbies: list<localCommons.LobbyInfo>

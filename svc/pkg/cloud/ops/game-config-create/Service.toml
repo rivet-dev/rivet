@@ -5,3 +5,6 @@ name = "cloud-game-config-create"
 kind = "rust"
 
 [operation]
+
+[databases]
+db-cloud = {}

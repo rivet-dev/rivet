@@ -31,5 +31,6 @@ resource "nomad_job" "imagor" {
 		result_storage_s3_access_key_id = var.s3_persistent_access_key_id
 		result_storage_s3_secret_access_key = nonsensitive(var.s3_persistent_access_key_secret)
 		result_storage_s3_bucket = "${var.namespace}-bucket-imagor-result-storage"
+		s3_providers = var.s3_providers
 	})
 }

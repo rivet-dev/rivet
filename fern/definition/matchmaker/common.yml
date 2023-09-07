@@ -1,0 +1,94 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/fern-api/fern/main/fern.schema.json
+
+imports:
+  commons: ../common.yml
+  geoCommons: ../geo/common.yml
+
+types:
+  LobbyInfo:
+    docs: A public lobby in the lobby list.
+    properties:
+      region_id: string
+      game_mode_id: string
+      lobby_id: uuid
+      max_players_normal: integer
+      max_players_direct: integer
+      max_players_party: integer
+      total_player_count: integer
+      state: optional<unknown>
+
+  GameModeInfo:
+    docs: A game mode that the player can join.
+    properties:
+      game_mode_id: commons.Identifier
+
+  RegionInfo:
+    docs: A region that the player can connect to.
+    properties:
+      region_id: commons.Identifier
+      provider_display_name: string
+      region_display_name: string
+      datacenter_coord: geoCommons.Coord
+      datacenter_distance_from_client: geoCommons.Distance
+
+  JoinLobby:
+    docs: A matchmaker lobby.
+    properties:
+      lobby_id: uuid
+      region: JoinRegion
+      ports:
+        docs: >-
+          **Deprecated**
+        type: map<string, JoinPort>
+      player:
+        docs: >-
+          **Deprecated**
+        type: JoinPlayer
+
+  JoinRegion:
+    docs: A matchmaker lobby region.
+    properties:
+      region_id: commons.Identifier
+      display_name: commons.DisplayName
+
+  JoinPort:
+    properties:
+      host:
+        type: optional<string>
+        docs: >
+          The host for the given port. Will be null if using a port range.
+      hostname: string
+      port:
+        type: optional<integer>
+        docs: >
+          The port number for this lobby. Will be null if using a port range.
+      port_range:
+        type: optional<JoinPortRange>
+        docs: >
+          Whether or not this lobby port uses TLS. You cannot mix a non-TLS and TLS
+          ports.
+      is_tls: boolean
+
+  JoinPortRange:
+    docs: Inclusive range of ports that can be connected to.
+    properties:
+      min:
+        type: integer
+        docs: Minimum port that can be connected to. Inclusive range.
+      max:
+        type: integer
+        docs: Maximum port that can be connected to. Inclusive range.
+
+  JoinPlayer:
+    docs: A matchmaker lobby player.
+    properties:
+      token:
+        docs: >
+          Pass this token through the socket to the lobby server. The lobby server
+          will validate this token with `PlayerConnected.player_token`
+        type: commons.JWT
+
+  CustomLobbyPublicity:
+    enum:
+      - public
+      - private

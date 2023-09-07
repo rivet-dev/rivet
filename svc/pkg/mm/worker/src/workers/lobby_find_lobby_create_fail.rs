@@ -2,7 +2,7 @@ use chirp_worker::prelude::*;
 use proto::backend::pkg::*;
 
 #[worker(name = "mm-lobby-find-lobby-create-fail")]
-async fn worker(ctx: OperationContext<mm::msg::lobby_create_fail::Message>) -> GlobalResult<()> {
+async fn worker(ctx: &OperationContext<mm::msg::lobby_create_fail::Message>) -> GlobalResult<()> {
 	let lobby_id = internal_unwrap!(ctx.lobby_id).as_uuid();
 
 	let error_code = match mm::msg::lobby_create_fail::ErrorCode::from_i32(ctx.error_code) {

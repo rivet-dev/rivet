@@ -9,3 +9,5 @@ kind = "rust"
 [headless]
 singleton = true
 
+[databases]
+redis-job = {}

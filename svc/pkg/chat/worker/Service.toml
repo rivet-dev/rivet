@@ -5,3 +5,6 @@ name = "chat-worker"
 kind = "rust"
 
 [consumer]
+
+[databases]
+db-chat = {}

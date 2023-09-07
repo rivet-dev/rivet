@@ -8,3 +8,6 @@ kind = "rust"
 
 [secrets]
 "clickhouse/users/chirp/password" = {}
+
+[databases]
+db-nomad-logs = {}

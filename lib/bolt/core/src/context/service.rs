@@ -11,10 +11,11 @@ use tokio::{fs, process::Command, sync::RwLock};
 use crate::{
 	config::{
 		self,
+		ns::S3Provider,
 		service::{RuntimeKind, ServiceKind},
 	},
-	context::{self, BuildContext, ProjectContext, RunContext, S3Provider},
-	dep::{self, k8s},
+	context::{self, BuildContext, ProjectContext, RunContext},
+	dep::{self, k8s, s3},
 	utils,
 };
 
@@ -158,6 +159,8 @@ impl ServiceContextData {
 				.supports_component_class(&component_class),
 			"runtime does not support component class"
 		);
+
+		// TODO: Validate that all services in `config.databases` are actually databases
 	}
 }
 
@@ -329,7 +332,7 @@ impl ServiceContextData {
 impl ServiceContextData {
 	pub fn enable_tokio_console(&self) -> bool {
 		// TODO: This seems to have a significant performance impact
-		true
+		false
 	}
 }
 
@@ -406,40 +409,6 @@ impl ServiceContextData {
 
 		let mut dep_ctxs = Vec::<ServiceContext>::new();
 
-		// TODO: Find a cleaner way of specifying database dependencies
-		// HACK: Mark all database & S3 dependencies as dependencies for all services in order to
-		// expose the env
-		for svc in all_svcs {
-			if matches!(
-				svc.config().kind,
-				ServiceKind::Database { .. } | ServiceKind::Cache { .. }
-			) {
-				dep_ctxs.push(svc.clone());
-			}
-		}
-
-		// Check that these are services you can explicitly depend on in the Service.toml
-		for dep in &dep_ctxs {
-			if !self.config().service.test_only && dep.config().service.test_only {
-				panic!(
-					"{} -> {}: cannot depend on a `service.test-only` service outside of `test-dependencies`",
-					self.name(),
-					dep.name()
-				);
-			}
-
-			if !matches!(
-				dep.config().kind,
-				ServiceKind::Database { .. } | ServiceKind::Cache { .. }
-			) {
-				panic!(
-					"{} -> {}: cannot explicitly depend on this kind of service",
-					self.name(),
-					dep.name()
-				);
-			}
-		}
-
 		// TODO: Add dev dependencies if building for tests
 		// Add operation dependencies from Cargo.toml
 		//
@@ -454,6 +423,13 @@ impl ServiceContextData {
 					} else {
 						None
 					}
+				})
+				// Remove overridden service from deps list
+				.filter(|name| {
+					self.overridden_service
+						.as_ref()
+						.map(|osvc| &&osvc.name() != name)
+						.unwrap_or(true)
 				})
 				.filter_map(|name| {
 					all_svcs
@@ -475,71 +451,122 @@ impl ServiceContextData {
 			dep_ctxs.extend(svcs);
 		}
 
-		// Inherit dependencies from the service that was overridden.
+		// Inherit dependencies from the service that was overridden
 		if let Some(overriden_svc) = &self.overridden_service {
 			dep_ctxs.extend(overriden_svc.dependencies().await);
+		}
+
+		// Check that these are services you can explicitly depend on in the Service.toml
+		for dep in &dep_ctxs {
+			if !self.config().service.test_only && dep.config().service.test_only {
+				panic!(
+					"{} -> {}: cannot depend on a `service.test-only` service outside of `test-dependencies`",
+					self.name(),
+					dep.name()
+				);
+			}
+
+			if !matches!(
+				dep.config().kind,
+				ServiceKind::Database { .. }
+					| ServiceKind::Cache { .. }
+					| ServiceKind::Operation { .. }
+			) {
+				panic!(
+					"{} -> {}: cannot explicitly depend on this kind of service",
+					self.name(),
+					dep.name()
+				);
+			}
 		}
 
 		dep_ctxs
 	}
 
-	pub async fn crdb_dependencies(&self) -> Vec<ServiceContext> {
-		self.dependencies()
+	pub async fn database_dependencies(&self) -> HashMap<String, config::service::Database> {
+		let dbs = self
+			.project()
 			.await
-			.iter()
+			.recursive_dependencies(&[self.name()])
+			.await
+			.into_iter()
+			// Filter filter services to include only operations, since these run in-process
 			.filter(|svc| {
-				if let RuntimeKind::CRDB { .. } = svc.config().runtime {
-					true
-				} else {
-					false
-				}
+				**svc == *self || matches!(svc.config().kind, ServiceKind::Operation { .. })
 			})
-			.cloned()
+			// Aggregate secrets from all dependencies
+			.flat_map(|x| x.config().databases.clone().into_iter())
+			// Dedupe
+			.collect::<HashMap<_, _>>();
+
+		dbs
+	}
+
+	pub async fn crdb_dependencies(&self) -> Vec<ServiceContext> {
+		let dep_names = self
+			.database_dependencies()
+			.await
+			.into_iter()
+			.map(|(k, _)| k)
+			.collect::<Vec<_>>();
+		self.project()
+			.await
+			.services_with_names(&dep_names)
+			.await
+			.into_iter()
+			.filter(|svc| matches!(svc.config().runtime, RuntimeKind::CRDB { .. }))
 			.collect()
 	}
 
 	pub async fn redis_dependencies(&self) -> Vec<ServiceContext> {
-		self.dependencies()
+		let default_deps = ["redis-chirp".to_string(), "redis-cache".to_string()];
+
+		let dep_names = self
+			.database_dependencies()
 			.await
-			.iter()
-			.filter(|svc| {
-				if let RuntimeKind::Redis { .. } = svc.config().runtime {
-					true
-				} else {
-					false
-				}
-			})
-			.cloned()
+			.into_iter()
+			.map(|(k, _)| k)
+			.chain(default_deps)
+			.collect::<Vec<_>>();
+
+		self.project()
+			.await
+			.services_with_names(&dep_names)
+			.await
+			.into_iter()
+			.filter(|svc| matches!(svc.config().runtime, RuntimeKind::Redis { .. }))
 			.collect()
 	}
 
 	pub async fn s3_dependencies(&self) -> Vec<ServiceContext> {
-		self.dependencies()
+		let dep_names = self
+			.database_dependencies()
 			.await
-			.iter()
-			.filter(|svc| {
-				if let RuntimeKind::S3 { .. } = svc.config().runtime {
-					true
-				} else {
-					false
-				}
-			})
-			.cloned()
+			.into_iter()
+			.map(|(k, _)| k)
+			.collect::<Vec<_>>();
+		self.project()
+			.await
+			.services_with_names(&dep_names)
+			.await
+			.into_iter()
+			.filter(|svc| matches!(svc.config().runtime, RuntimeKind::S3 { .. }))
 			.collect()
 	}
 
 	pub async fn nats_dependencies(&self) -> Vec<ServiceContext> {
-		self.dependencies()
+		let dep_names = self
+			.database_dependencies()
 			.await
-			.iter()
-			.filter(|svc| {
-				if let RuntimeKind::Nats { .. } = svc.config().runtime {
-					true
-				} else {
-					false
-				}
-			})
-			.cloned()
+			.into_iter()
+			.map(|(k, _)| k)
+			.collect::<Vec<_>>();
+		self.project()
+			.await
+			.services_with_names(&dep_names)
+			.await
+			.into_iter()
+			.filter(|svc| matches!(svc.config().runtime, RuntimeKind::Nats { .. }))
 			.collect()
 	}
 }
@@ -862,6 +889,64 @@ impl ServiceContextData {
 			env.push(("FLY_REGION".into(), fly.region.clone()));
 		}
 
+		// CRDB
+		let crdb_host = access_service(
+			&project_ctx,
+			&mut forward_configs,
+			&run_context,
+			"cockroachdb",
+			"cockroachdb",
+			26257,
+		)
+		.await?;
+		for crdb_dep in self.crdb_dependencies().await {
+			let username = "root"; // TODO:
+			let sslmode = "disable"; // TODO:
+
+			let uri = format!(
+				"postgres://{username}@{crdb_host}/{db_name}?sslmode={sslmode}",
+				db_name = crdb_dep.crdb_db_name(),
+			);
+			env.push((format!("CRDB_URL_{}", crdb_dep.name_screaming_snake()), uri));
+		}
+
+		// Expose all S3 endpoints to services that need them
+		let s3_deps = if self.depends_on_s3() {
+			project_ctx.all_services().await.to_vec()
+		} else {
+			self.s3_dependencies().await
+		};
+		for s3_dep in s3_deps {
+			if !matches!(s3_dep.config().runtime, RuntimeKind::S3 { .. }) {
+				continue;
+			}
+
+			// Add default provider
+			let (default_provider, _) = project_ctx.default_s3_provider()?;
+			env.push((
+				"S3_DEFAULT_PROVIDER".to_string(),
+				default_provider.as_str().to_uppercase(),
+			));
+
+			// Add all configured providers
+			let providers = &project_ctx.ns().s3.providers;
+			if providers.minio.is_some() {
+				add_s3_env(&project_ctx, &mut env, &s3_dep, s3_util::Provider::Minio).await?;
+			}
+			if providers.backblaze.is_some() {
+				add_s3_env(
+					&project_ctx,
+					&mut env,
+					&s3_dep,
+					s3_util::Provider::Backblaze,
+				)
+				.await?;
+			}
+			if providers.aws.is_some() {
+				add_s3_env(&project_ctx, &mut env, &s3_dep, s3_util::Provider::Aws).await?;
+			}
+		}
+
 		// S3 backfill
 		if self.depends_on_s3_backfill() {
 			if let Some(backfill) = &project_ctx.ns().s3.backfill {
@@ -928,6 +1013,15 @@ impl ServiceContextData {
 				"0"
 			}
 			.into(),
+		));
+		env.push((
+			"RIVET_MM_LOBBY_DELIVERY_METHOD".into(),
+			project_ctx
+				.ns()
+				.rivet
+				.matchmaker
+				.lobby_delivery_method
+				.to_string(),
 		));
 
 		// Sort env by keys so it's always in the same order
@@ -1065,9 +1159,9 @@ impl ServiceContextData {
 
 			// Add default provider
 			let default_provider_name = match project_ctx.default_s3_provider()? {
-				(S3Provider::Minio, _) => "MINIO",
-				(S3Provider::Backblaze, _) => "BACKBLAZE",
-				(S3Provider::Aws, _) => "AWS",
+				(s3_util::Provider::Minio, _) => "MINIO",
+				(s3_util::Provider::Backblaze, _) => "BACKBLAZE",
+				(s3_util::Provider::Aws, _) => "AWS",
 			};
 			env.push((
 				"S3_DEFAULT_PROVIDER".to_string(),
@@ -1077,31 +1171,19 @@ impl ServiceContextData {
 			// Add all configured providers
 			let providers = &project_ctx.ns().s3.providers;
 			if providers.minio.is_some() {
-				add_s3_env(
-					&project_ctx,
-					&mut env,
-					&s3_dep,
-					context::project::S3Provider::Minio,
-				)
-				.await?;
+				add_s3_env(&project_ctx, &mut env, &s3_dep, s3_util::Provider::Minio).await?;
 			}
 			if providers.backblaze.is_some() {
 				add_s3_env(
 					&project_ctx,
 					&mut env,
 					&s3_dep,
-					context::project::S3Provider::Backblaze,
+					s3_util::Provider::Backblaze,
 				)
 				.await?;
 			}
 			if providers.aws.is_some() {
-				add_s3_env(
-					&project_ctx,
-					&mut env,
-					&s3_dep,
-					context::project::S3Provider::Aws,
-				)
-				.await?;
+				add_s3_env(&project_ctx, &mut env, &s3_dep, s3_util::Provider::Aws).await?;
 			}
 		}
 
@@ -1193,8 +1275,8 @@ impl ServiceContextData {
 				config::ns::ClusterKind::SingleNode { .. } => config::ns::Service {
 					count: 1,
 					resources: config::ns::ServiceResources {
-						cpu: config::ns::CpuResources::Cpu(50),
-						memory: 64,
+						cpu: config::ns::CpuResources::Cpu(100),
+						memory: 512,
 						ephemeral_disk: 128,
 					},
 				},
@@ -1221,39 +1303,36 @@ async fn add_s3_env(
 	project_ctx: &ProjectContext,
 	env: &mut Vec<(String, String)>,
 	s3_dep: &Arc<ServiceContextData>,
-	provider: S3Provider,
+	provider: s3_util::Provider,
 ) -> Result<()> {
-	let provider_name = match provider {
-		S3Provider::Minio => "MINIO",
-		S3Provider::Backblaze => "BACKBLAZE",
-		S3Provider::Aws => "AWS",
-	};
+	let provider_upper = provider.as_str().to_uppercase();
+
 	let s3_dep_name = s3_dep.name_screaming_snake();
 	let s3_config = project_ctx.s3_config(provider).await?;
 	let s3_creds = project_ctx.s3_credentials(provider).await?;
 
 	env.push((
-		format!("S3_{}_BUCKET_{}", provider_name, s3_dep_name),
+		format!("S3_{}_BUCKET_{}", provider_upper, s3_dep_name),
 		s3_dep.s3_bucket_name().await,
 	));
 	env.push((
-		format!("S3_{}_ENDPOINT_INTERNAL_{}", provider_name, s3_dep_name),
+		format!("S3_{}_ENDPOINT_INTERNAL_{}", provider_upper, s3_dep_name),
 		s3_config.endpoint_internal,
 	));
 	env.push((
-		format!("S3_{}_ENDPOINT_EXTERNAL_{}", provider_name, s3_dep_name),
+		format!("S3_{}_ENDPOINT_EXTERNAL_{}", provider_upper, s3_dep_name),
 		s3_config.endpoint_external,
 	));
 	env.push((
-		format!("S3_{}_REGION_{}", provider_name, s3_dep_name),
+		format!("S3_{}_REGION_{}", provider_upper, s3_dep_name),
 		s3_config.region,
 	));
 	env.push((
-		format!("S3_{}_ACCESS_KEY_ID_{}", provider_name, s3_dep_name),
+		format!("S3_{}_ACCESS_KEY_ID_{}", provider_upper, s3_dep_name),
 		s3_creds.access_key_id,
 	));
 	env.push((
-		format!("S3_{}_SECRET_ACCESS_KEY_{}", provider_name, s3_dep_name),
+		format!("S3_{}_SECRET_ACCESS_KEY_{}", provider_upper, s3_dep_name),
 		s3_creds.access_key_secret,
 	));
 

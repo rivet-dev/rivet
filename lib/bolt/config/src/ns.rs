@@ -423,6 +423,8 @@ pub struct Rivet {
 	pub profanity: Profanity,
 	#[serde(default)]
 	pub upload: Upload,
+	#[serde(default)]
+	pub matchmaker: Matchmaker,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, Default)]
@@ -463,6 +465,24 @@ pub struct Profanity {
 #[serde(deny_unknown_fields)]
 pub struct Upload {
 	pub nsfw_error_verbose: bool,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, Default)]
+#[serde(deny_unknown_fields)]
+pub struct Matchmaker {
+	#[serde(default)]
+	pub lobby_delivery_method: MatchmakerLobbyDeliveryMethod,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, Default, strum_macros::Display)]
+pub enum MatchmakerLobbyDeliveryMethod {
+	#[serde(rename = "s3_direct")]
+	#[strum(serialize = "s3_direct")]
+	#[default]
+	S3Direct,
+	#[serde(rename = "traffic_server")]
+	#[strum(serialize = "traffic_server")]
+	TrafficServer,
 }
 
 fn default_regions() -> HashMap<String, Region> {

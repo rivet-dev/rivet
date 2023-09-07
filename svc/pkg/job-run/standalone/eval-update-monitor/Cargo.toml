@@ -31,6 +31,5 @@ util-job = { package = "rivet-util-job", path = "../../../job/util" }
 version = "0.7"
 default-features = false
 
-
 [dev-dependencies]
 chirp-worker = { path = "../../../../../lib/chirp/worker" }

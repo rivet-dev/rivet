@@ -401,9 +401,27 @@ pub async fn generate(project_path: &Path, ns_id: &str) -> Result<()> {
 
 	// MARK: Minio
 	if generator.ns["s3"].get("minio").is_some() {
+		let root_pass = generate_password(32);
+
 		generator
-			.generate_secret(&["minio", "users", "root", "password"], || async {
-				Ok(value(generate_password(32)))
+			.generate_secret(&["s3", "minio", "root", "key_id"], || async {
+				Ok(value("root"))
+			})
+			.await?;
+		generator
+			.generate_secret(&["s3", "minio", "root", "key"], {
+				let root_pass = root_pass.clone();
+				|| async { Ok(value(root_pass)) }
+			})
+			.await?;
+		generator
+			.generate_secret(&["s3", "minio", "terraform", "key_id"], || async {
+				Ok(value("root"))
+			})
+			.await?;
+		generator
+			.generate_secret(&["s3", "minio", "terraform", "key"], || async {
+				Ok(value(root_pass))
 			})
 			.await?;
 	}

@@ -548,99 +548,86 @@ pub struct S3Config {
 	pub region: String,
 }
 
-#[derive(Clone, Copy)]
-pub enum S3Provider {
-	Minio,
-	Backblaze,
-	Aws,
-}
-
 impl ProjectContextData {
-	pub fn default_s3_provider(self: &Arc<Self>) -> Result<(S3Provider, config::ns::S3Provider)> {
+	pub fn default_s3_provider(
+		self: &Arc<Self>,
+	) -> Result<(s3_util::Provider, config::ns::S3Provider)> {
 		let providers = &self.ns().s3.providers;
 
 		// Find the provider with the default flag set
 		if let Some(p) = &providers.minio {
 			if p.default {
-				return Ok((S3Provider::Minio, p.clone()));
+				return Ok((s3_util::Provider::Minio, p.clone()));
 			}
 		}
 
 		if let Some(p) = &providers.backblaze {
 			if p.default {
-				return Ok((S3Provider::Backblaze, p.clone()));
+				return Ok((s3_util::Provider::Backblaze, p.clone()));
 			}
 		}
 
 		if let Some(p) = &providers.aws {
 			if p.default {
-				return Ok((S3Provider::Aws, p.clone()));
+				return Ok((s3_util::Provider::Aws, p.clone()));
 			}
 		}
 
 		// If none have the default flag, return the first provider
 		if let Some(p) = &providers.minio {
-			return Ok((S3Provider::Minio, p.clone()));
+			return Ok((s3_util::Provider::Minio, p.clone()));
 		} else if let Some(p) = &providers.backblaze {
-			return Ok((S3Provider::Backblaze, p.clone()));
+			return Ok((s3_util::Provider::Backblaze, p.clone()));
 		} else if let Some(p) = &providers.aws {
-			return Ok((S3Provider::Aws, p.clone()));
+			return Ok((s3_util::Provider::Aws, p.clone()));
 		}
 
 		bail!("no s3 provider configured")
 	}
 
 	/// Returns the appropriate S3 connection configuration for the provided S3 provider.
-	pub async fn s3_credentials(self: &Arc<Self>, provider: S3Provider) -> Result<S3Credentials> {
-		match provider {
-			S3Provider::Minio => Ok(S3Credentials {
-				access_key_id: "root".into(),
-				access_key_secret: self
-					.read_secret(&["minio", "users", "root", "password"])
-					.await?,
-			}),
-			S3Provider::Backblaze => {
-				let service_key = s3::fetch_service_key(&self, &["b2", "terraform"]).await?;
-				Ok(S3Credentials {
-					access_key_id: service_key.key_id,
-					access_key_secret: service_key.key,
-				})
-			}
-			S3Provider::Aws => {
-				let service_key = s3::fetch_service_key(&self, &["aws", "terraform"]).await?;
-				Ok(S3Credentials {
-					access_key_id: service_key.key_id,
-					access_key_secret: service_key.key,
-				})
-			}
-		}
+	pub async fn s3_credentials(
+		self: &Arc<Self>,
+		provider: s3_util::Provider,
+	) -> Result<S3Credentials> {
+		Ok(S3Credentials {
+			access_key_id: self
+				.read_secret(&["s3", provider.as_str(), "terraform", "key_id"])
+				.await?,
+			access_key_secret: self
+				.read_secret(&["s3", provider.as_str(), "terraform", "key"])
+				.await?,
+		})
 	}
 
 	/// Returns the appropriate S3 connection configuration for the provided S3 provider.
-	pub async fn s3_config(self: &Arc<Self>, provider: S3Provider) -> Result<S3Config> {
+	pub async fn s3_config(self: &Arc<Self>, provider: s3_util::Provider) -> Result<S3Config> {
 		match provider {
-			S3Provider::Minio => {
-				let s3 = terraform::output::read_s3_minio(&*self).await;
+			s3_util::Provider::Minio => {
 				Ok(S3Config {
-					endpoint_internal: (*s3.s3_endpoint_internal).clone(),
-					endpoint_external: (*s3.s3_endpoint_external).clone(),
-					region: (*s3.s3_region).clone(),
+					endpoint_internal: "http://minio.minio.svc.cluster.local:9200".into(),
+					endpoint_external: format!("https://minio.{}", self.domain_main()),
+					// Minio defaults to us-east-1 region
+					// https://github.com/minio/minio/blob/0ec722bc5430ad768a263b8464675da67330ad7c/cmd/server-main.go#L739
+					region: "us-east-1".into(),
 				})
 			}
-			S3Provider::Backblaze => {
-				let s3 = terraform::output::read_s3_backblaze(&*self).await;
+			s3_util::Provider::Backblaze => {
+				let endpoint = "https://s3.us-west-004.backblazeb2.com".to_string();
 				Ok(S3Config {
-					endpoint_internal: (*s3.s3_endpoint_internal).clone(),
-					endpoint_external: (*s3.s3_endpoint_external).clone(),
-					region: (*s3.s3_region).clone(),
+					endpoint_internal: endpoint.clone(),
+					endpoint_external: endpoint,
+					// See region information here:
+					// https://help.backblaze.com/hc/en-us/articles/360047425453-Getting-Started-with-the-S3-Compatible-API
+					region: "us-west-004".into(),
 				})
 			}
-			S3Provider::Aws => {
-				let s3 = terraform::output::read_s3_aws(&*self).await;
+			s3_util::Provider::Aws => {
+				let endpoint = "https://s3.us-east-1.amazonaws.com".to_string();
 				Ok(S3Config {
-					endpoint_internal: (*s3.s3_endpoint_internal).clone(),
-					endpoint_external: (*s3.s3_endpoint_external).clone(),
-					region: (*s3.s3_region).clone(),
+					endpoint_internal: endpoint.clone(),
+					endpoint_external: endpoint,
+					region: "us-east-1".into(),
 				})
 			}
 		}

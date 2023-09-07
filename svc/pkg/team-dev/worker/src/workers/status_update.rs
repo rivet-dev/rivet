@@ -2,7 +2,7 @@ use chirp_worker::prelude::*;
 use proto::backend::pkg::*;
 
 #[worker(name = "team-dev-status-update")]
-async fn worker(ctx: OperationContext<team_dev::msg::status_update::Message>) -> GlobalResult<()> {
+async fn worker(ctx: &OperationContext<team_dev::msg::status_update::Message>) -> GlobalResult<()> {
 	let team_id = if let Some(setup_complete) = ctx.setup_complete {
 		let (team_id,) = sqlx::query_as::<_, (Uuid,)>(indoc!(
 			"

@@ -61,7 +61,7 @@ async fn handle(ctx: OperationContext<team::get::Request>) -> GlobalResult<team:
 				let profile_id = team.profile_id.map(Into::<common::Uuid>::into);
 
 				// Fetch all information relating to the profile image
-				let (profile_upload_complete_ts, profile_file_name) = {
+				let (profile_upload_complete_ts, profile_file_name, profile_provider) = {
 					let upload = upload_res
 						.uploads
 						.iter()
@@ -77,7 +77,7 @@ async fn handle(ctx: OperationContext<team::get::Request>) -> GlobalResult<team:
 							.rsplit_once('/')
 							.map(|(_, file_name)| file_name.to_owned())
 							.or(Some(file.path.clone()));
-						(upload.complete_ts, profile_file_name)
+						(upload.complete_ts, profile_file_name, Some(upload.provider))
 					} else {
 						Default::default()
 					}
@@ -94,6 +94,7 @@ async fn handle(ctx: OperationContext<team::get::Request>) -> GlobalResult<team:
 						None
 					},
 					profile_file_name,
+					profile_provider,
 					create_ts: team.create_ts,
 					publicity: team.publicity.try_into()?,
 				})

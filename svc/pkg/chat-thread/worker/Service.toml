@@ -5,3 +5,6 @@ name = "chat-thread-worker"
 kind = "rust"
 
 [consumer]
+
+[databases]
+db-chat = {}

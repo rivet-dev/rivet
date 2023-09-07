@@ -2,9 +2,9 @@ use proto::{
 	backend::{self, pkg::*},
 	perf,
 };
+use rivet_api::models as new_models;
 use rivet_cloud_server::models;
 use rivet_operation::prelude::*;
-use rivet_api::models as new_models;
 
 use crate::{ApiFrom, ApiTryFrom, ApiTryInto};
 
@@ -65,13 +65,9 @@ impl ApiTryFrom<backend::game::Game> for models::GameHandle {
 			name_id: value.name_id.to_owned(),
 			display_name: value.display_name.to_owned(),
 			logo_url: util::route::game_logo(
-				value.logo_upload_id.map(|x| *x),
-				value.logo_file_name.as_ref(),
-			),
+				&value),
 			banner_url: util::route::game_banner(
-				value.banner_upload_id.map(|x| *x),
-				value.banner_file_name.as_ref(),
-			),
+				&value),
 		})
 	}
 }

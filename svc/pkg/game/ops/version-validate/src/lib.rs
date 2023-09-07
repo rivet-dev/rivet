@@ -79,7 +79,7 @@ async fn handle(
 		}
 
 		if cdn.routes.len() > 32 {
-			errors.push(util::err_path!["config", "cdn", "routes-meta", "too-many",]);
+			errors.push(util::err_path!["config", "cdn", "routes-meta", "too-many"]);
 		}
 
 		let mut unique_globs = HashSet::<util::glob::Glob>::new();
@@ -975,6 +975,68 @@ async fn handle(
 					lobby_group_label,
 					"no-runtime",
 				]);
+			}
+
+			// Validate find config
+			if let Some(matchmaker::FindConfig {
+				verification_config: Some(verification_config),
+				..
+			}) = &lobby_group.find_config
+			{
+				let validation_res = op!([ctx] external_request_validate {
+					config: Some(backend::net::ExternalRequestConfig {
+						url: verification_config.url.clone(),
+						headers: verification_config.headers.clone(),
+						..Default::default()
+					}),
+				})
+				.await?;
+
+				// Append errors from external request validation
+				errors.extend(validation_res.errors.iter().map(|err| {
+					util::err_path![
+						"config",
+						"matchmaker",
+						"game-modes",
+						lobby_group_label,
+						"find-config",
+						"verification-config"
+					]
+					.into_iter()
+					.chain(err.path.clone())
+					.collect::<Vec<_>>()
+				}));
+			}
+
+			// Validate join config
+			if let Some(matchmaker::JoinConfig {
+				verification_config: Some(verification_config),
+				..
+			}) = &lobby_group.join_config
+			{
+				let validation_res = op!([ctx] external_request_validate {
+					config: Some(backend::net::ExternalRequestConfig {
+						url: verification_config.url.clone(),
+						headers: verification_config.headers.clone(),
+						..Default::default()
+					}),
+				})
+				.await?;
+
+				// Append errors from external request validation
+				errors.extend(validation_res.errors.iter().map(|err| {
+					util::err_path![
+						"config",
+						"matchmaker",
+						"game-modes",
+						lobby_group_label,
+						"join-config",
+						"verification-config"
+					]
+					.into_iter()
+					.chain(err.path.clone())
+					.collect::<Vec<_>>()
+				}));
 			}
 		}
 	}

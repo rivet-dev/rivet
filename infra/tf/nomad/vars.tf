@@ -67,3 +67,6 @@ variable "s3_persistent_access_key_secret" {
 	sensitive = true
 }
 
+variable "s3_providers" {
+	type = map(string, any)
+}

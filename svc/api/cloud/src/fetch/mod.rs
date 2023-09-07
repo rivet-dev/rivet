@@ -126,14 +126,8 @@ pub async fn game_summary_fetch(
 			display_name: game.display_name.clone(),
 			developer_group_id: developer_team_id.to_string(),
 			total_player_count: total_player_count.try_into()?,
-			logo_url: util::route::game_logo(
-				game.logo_upload_id.as_ref().map(common::Uuid::as_uuid),
-				game.logo_file_name.as_ref(),
-			),
-			banner_url: util::route::game_banner(
-				game.banner_upload_id.as_ref().map(common::Uuid::as_uuid),
-				game.banner_file_name.as_ref(),
-			),
+			logo_url: util::route::game_logo(&game),
+			banner_url: util::route::game_banner(&game),
 		});
 	}
 

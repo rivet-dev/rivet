@@ -6,3 +6,6 @@ kind = "rust"
 
 [consumer]
 
+[databases]
+db-job-state = {}
+redis-job = {}

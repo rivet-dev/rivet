@@ -12,7 +12,7 @@ struct InvitationRow {
 }
 
 #[worker(name = "team-invite-consume")]
-async fn worker(ctx: OperationContext<team_invite::msg::consume::Message>) -> GlobalResult<()> {
+async fn worker(ctx: &OperationContext<team_invite::msg::consume::Message>) -> GlobalResult<()> {
 	let crdb = ctx.crdb("db-team-invite").await?;
 
 	let user_id = internal_unwrap!(ctx.user_id).as_uuid();

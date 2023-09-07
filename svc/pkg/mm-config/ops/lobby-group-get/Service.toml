@@ -5,3 +5,6 @@ name = "mm-config-lobby-group-get"
 kind = "rust"
 
 [operation]
+
+[databases]
+db-mm-config = {}

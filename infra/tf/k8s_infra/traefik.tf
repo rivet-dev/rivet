@@ -19,7 +19,6 @@ resource "helm_release" "traefik" {
 		}
 
 		service = {
-			# type = "NodePort"
 		}
 
 		logs = {
@@ -34,15 +33,3 @@ resource "helm_release" "traefik" {
 	})]
 }
 
-# data "helm_template" "traefik" {
-# 	name = "traefik"
-# 	namespace = "traefik"
-
-# 	repository = "https://traefik.github.io/charts"
-# 	chart = "traefik"
-# 	include_crds = true
-# }
-
-# output "test" {
-# 	value = data.helm_template.traefik.crds
-# }

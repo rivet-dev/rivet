@@ -68,9 +68,9 @@ pub async fn get_custom_avatars(
 			GlobalResult::Ok(models::CustomAvatarSummary {
 				upload_id: upload_id.to_string(),
 				display_name: profile_file_name.clone(),
-				url: upload
-					.complete_ts
-					.map(|_| util::route::custom_avatar(upload_id, &profile_file_name)),
+				url: upload.complete_ts.map(|_| {
+					util::route::custom_avatar(upload_id, &profile_file_name, upload.provider)
+				}),
 				create_ts: util::timestamp::to_chrono(upload.create_ts)?,
 				content_length: upload.content_length as i64,
 				complete: upload.complete_ts.is_some(),

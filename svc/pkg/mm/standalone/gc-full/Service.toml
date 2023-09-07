@@ -8,3 +8,6 @@ kind = "rust"
 [periodic]
 cron = "0 0 * * *"
 
+[databases]
+db-mm-state = {}
+redis-mm = {}

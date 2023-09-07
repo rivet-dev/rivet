@@ -5,3 +5,6 @@ name = "user-get"
 kind = "rust"
 
 [operation]
+
+[databases]
+db-user = {}

@@ -3,7 +3,7 @@ use proto::backend::{self, pkg::*};
 
 #[worker(name = "user-event-chat-last-read-ts-update")]
 async fn worker(
-	ctx: OperationContext<chat::msg::last_read_ts_update::Message>,
+	ctx: &OperationContext<chat::msg::last_read_ts_update::Message>,
 ) -> GlobalResult<()> {
 	let user_id = internal_unwrap!(ctx.user_id).as_uuid();
 

@@ -33,7 +33,7 @@ async fn fail(
 }
 
 #[worker(name = "job-run-create")]
-async fn worker(ctx: OperationContext<job_run::msg::create::Message>) -> GlobalResult<()> {
+async fn worker(ctx: &OperationContext<job_run::msg::create::Message>) -> GlobalResult<()> {
 	let crdb = ctx.crdb("db-job-state").await?;
 
 	let run_id = internal_unwrap!(ctx.run_id).as_uuid();

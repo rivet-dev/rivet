@@ -306,7 +306,7 @@ async fn vars(ctx: &ProjectContext) {
 			extra_dns.push(json!({
 				"pool": ing_pool,
 				"zone_name": "base",
-				"name": format!("storage.{}", ctx.domain_main()),
+				"name": format!("minio.{}", ctx.domain_main()),
 			}));
 		}
 
@@ -379,20 +379,11 @@ async fn vars(ctx: &ProjectContext) {
 
 		vars.insert("s3_buckets".into(), json!(s3_buckets));
 
-		// TODO: Don't set secrets as tf vars, read from secrets module
-		let (default_s3_provider, _) = ctx.default_s3_provider().unwrap();
-		let credentials = ctx.s3_credentials(default_s3_provider).await.unwrap();
 		vars.insert(
-			"s3_persistent_access_key_id".into(),
-			json!(credentials.access_key_id),
+			"s3_default_provider".into(),
+			json!(ctx.default_s3_provider().unwrap().0.as_str()),
 		);
-		vars.insert(
-			"s3_persistent_access_key_secret".into(),
-			json!(credentials.access_key_secret),
-		);
-
-		let s3_providers = &ctx.ns().s3.providers;
-		vars.insert("has_minio".into(), json!(s3_providers.minio.is_some()));
+		vars.insert("s3_providers".into(), s3_providers(ctx).await.unwrap());
 	}
 
 	// Media presets
@@ -410,4 +401,45 @@ async fn vars(ctx: &ProjectContext) {
 	let _ = fs::create_dir_all(&tf_gen_path.parent().unwrap()).await;
 	let vars_json = serde_json::to_string(&vars).unwrap();
 	fs::write(&tf_gen_path, vars_json).await.unwrap();
+}
+
+async fn s3_providers(ctx: &ProjectContext) -> Result<serde_json::Value> {
+	let mut res = serde_json::Map::with_capacity(1);
+
+	let providers = &ctx.ns().s3.providers;
+	if providers.minio.is_some() {
+		let s3_config = ctx.s3_config(s3_util::Provider::Minio).await?;
+		res.insert(
+			"minio".to_string(),
+			json!({
+				"endpoint_internal": s3_config.endpoint_internal,
+				"endpoint_external": s3_config.endpoint_external,
+				"region": s3_config.region,
+			}),
+		);
+	}
+	if providers.backblaze.is_some() {
+		let s3_config = ctx.s3_config(s3_util::Provider::Backblaze).await?;
+		res.insert(
+			"backblaze".to_string(),
+			json!({
+				"endpoint_internal": s3_config.endpoint_internal,
+				"endpoint_external": s3_config.endpoint_external,
+				"region": s3_config.region,
+			}),
+		);
+	}
+	if providers.aws.is_some() {
+		let s3_config = ctx.s3_config(s3_util::Provider::Aws).await?;
+		res.insert(
+			"aws".to_string(),
+			json!({
+				"endpoint_internal": s3_config.endpoint_internal,
+				"endpoint_external": s3_config.endpoint_external,
+				"region": s3_config.region,
+			}),
+		);
+	}
+
+	Ok(res.into())
 }

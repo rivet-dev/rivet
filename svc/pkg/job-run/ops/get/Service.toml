@@ -5,3 +5,6 @@ name = "job-run-get"
 kind = "rust"
 
 [operation]
+
+[databases]
+db-job-state = {}

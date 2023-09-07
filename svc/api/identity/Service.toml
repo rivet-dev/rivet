@@ -10,3 +10,5 @@ kind = "rust"
 path = "/v1"
 subdomain = "identity.api"
 
+[databases]
+db-team-dev = {}

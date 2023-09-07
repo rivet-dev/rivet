@@ -2,7 +2,7 @@ use chirp_worker::prelude::*;
 use proto::backend::{self, pkg::*};
 
 #[worker(name = "user-updated-user-follow-delete")]
-async fn worker(ctx: OperationContext<user_follow::msg::delete::Message>) -> GlobalResult<()> {
+async fn worker(ctx: &OperationContext<user_follow::msg::delete::Message>) -> GlobalResult<()> {
 	let follower_user_id = internal_unwrap!(ctx.follower_user_id);
 	let following_user_id = internal_unwrap!(ctx.following_user_id);
 

@@ -3,7 +3,9 @@ use proto::backend::pkg::*;
 use serde_json::json;
 
 #[worker(name = "game-user-link-complete")]
-async fn worker(ctx: OperationContext<game_user::msg::link_complete::Message>) -> GlobalResult<()> {
+async fn worker(
+	ctx: &OperationContext<game_user::msg::link_complete::Message>,
+) -> GlobalResult<()> {
 	let crdb = ctx.crdb("db-game-user").await?;
 
 	let user_id = internal_unwrap!(ctx.user_id).as_uuid();

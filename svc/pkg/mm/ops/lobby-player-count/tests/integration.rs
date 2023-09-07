@@ -67,6 +67,7 @@ async fn empty(ctx: TestCtx) {
 			query: Some(mm::msg::lobby_find::message::Query::Direct(backend::matchmaker::query::Direct {
 				lobby_id: Some(player.lobby_id.into()),
 			})),
+			..Default::default()
 		})
 		.await
 		.unwrap().unwrap();

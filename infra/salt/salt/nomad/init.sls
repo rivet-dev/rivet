@@ -1,5 +1,5 @@
 # https://github.com/hashicorp/nomad/releases
-{% set version = '1.6.1' %}
+{% set version = '1.6.0' %}
 {% set create_nomad_user = 'nomad-server' in grains['roles'] %}
 
 {% if create_nomad_user %}

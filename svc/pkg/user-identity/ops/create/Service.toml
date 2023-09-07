@@ -5,3 +5,6 @@ name = "user-identity-create"
 kind = "rust"
 
 [operation]
+
+[databases]
+db-user-identity = {}

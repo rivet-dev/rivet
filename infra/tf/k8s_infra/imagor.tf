@@ -10,10 +10,10 @@ locals {
 
 	ephemeral_disk = 8000
 
-	result_storage_s3_endpoint = data.terraform_remote_state.s3.outputs["s3_endpoint_internal"]
-	result_storage_s3_region = data.terraform_remote_state.s3.outputs["s3_region"]
-	result_storage_s3_access_key_id = var.s3_persistent_access_key_id
-	result_storage_s3_secret_access_key = nonsensitive(var.s3_persistent_access_key_secret)
+	result_storage_s3_endpoint = var.s3_providers[var.s3_default_provider].endpoint_internal
+	result_storage_s3_region = var.s3_providers[var.s3_default_provider].region
+	result_storage_s3_access_key_id = module.imagor_secrets.values["s3/${var.s3_default_provider}/terraform/key_id"]
+	result_storage_s3_secret_access_key = module.imagor_secrets.values["s3/${var.s3_default_provider}/terraform/key"]
 	result_storage_s3_bucket = "${var.namespace}-bucket-imagor-result-storage"
 
 	imagor_presets = [
@@ -35,6 +35,15 @@ locals {
 			)
 		}
 		
+	]
+}
+
+module "imagor_secrets" {
+	source = "../modules/secrets"
+
+	keys = [
+		"s3/${var.s3_default_provider}/terraform/key_id",
+		"s3/${var.s3_default_provider}/terraform/key",
 	]
 }
 
@@ -184,7 +193,6 @@ resource "kubernetes_service" "imagor" {
 		selector = {
 			"app.kubernetes.io/name" = kubernetes_deployment.imagor.metadata.0.name
 		}
-		type = "ClusterIP"
 
 		port {
 			protocol = "TCP"
@@ -194,42 +202,63 @@ resource "kubernetes_service" "imagor" {
 	}
 }
 
+resource "kubectl_manifest" "imagor_traefik_service" {
+	depends_on = [kubernetes_namespace.imagor, helm_release.traefik]
+
+	yaml_body = yamlencode({
+		apiVersion = "traefik.containo.us/v1alpha1"
+		kind = "TraefikService"
+
+		metadata = {
+			name = "imagor"
+			namespace = "imagor"
+		}
+
+		spec = {
+			mirroring = {
+				name = "imagor"
+				namespace = "imagor"
+				port = 8000
+			}
+		}
+	})
+}
+
+# TODO: Create single traefik service
 resource "kubectl_manifest" "imagor_ingress" {
 	depends_on = [kubernetes_namespace.imagor, helm_release.traefik]
-	for_each = {
-		for index, preset in local.imagor_presets:
-		preset.key => preset
-	}
 
 	yaml_body = yamlencode({
 		apiVersion = "traefik.containo.us/v1alpha1"
 		kind = "IngressRoute"
 
 		metadata = {
-			name = "imagor-${each.key}"
+			name = "imagor"
 			namespace = "imagor"
 		}
 
 		spec = {
 			entryPoints = [ "websecure" ]
-			priority = each.value.priority
 
-			routes = [{
-				kind = "Rule"
-				match = "${each.value.rule}${each.value.query}"
-				middlewares = [
-					for mw in each.value.middlewares: {
-						name = mw
+			routes = [
+				for index, preset in local.imagor_presets:
+				{
+					kind = "Rule"
+					match = "${preset.rule}${preset.query}"
+					priority = preset.priority
+					middlewares = [
+						for mw in preset.middlewares: {
+							name = mw
+							namespace = "imagor"
+						}
+					]
+					services = [{
+						kind = "TraefikService"
+						name = "imagor"
 						namespace = "imagor"
-					}
-				]
-				services = [{
-					kind = "Service"
-					name = "imagor"
-					namespace = "imagor"
-					port = 8000
-				}]
-			}]
+					}]
+				}
+			]
 
 			tls = {
 				secretName = "ingress-tls-cert"

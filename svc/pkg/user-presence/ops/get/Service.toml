@@ -5,3 +5,6 @@ name = "user-presence-get"
 kind = "rust"
 
 [operation]
+
+[databases]
+redis-user-presence = {}

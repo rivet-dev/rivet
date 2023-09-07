@@ -40,13 +40,6 @@ pub struct PoolServer {
 }
 
 #[derive(Debug, Clone, Deserialize)]
-pub struct S3 {
-	pub s3_endpoint_internal: TerraformOutputValue<String>,
-	pub s3_endpoint_external: TerraformOutputValue<String>,
-	pub s3_region: TerraformOutputValue<String>,
-}
-
-#[derive(Debug, Clone, Deserialize)]
 pub struct Cert {
 	pub cert_pem: String,
 	pub key_pem: String,
@@ -63,18 +56,6 @@ pub async fn read_master_cluster(ctx: &ProjectContext) -> MasterCluster {
 
 pub async fn read_pools(ctx: &ProjectContext) -> Pools {
 	read_plan::<Pools>(ctx, "pools").await
-}
-
-pub async fn read_s3_minio(ctx: &ProjectContext) -> S3 {
-	read_plan::<S3>(ctx, "s3_minio").await
-}
-
-pub async fn read_s3_backblaze(ctx: &ProjectContext) -> S3 {
-	read_plan::<S3>(ctx, "s3_backblaze").await
-}
-
-pub async fn read_s3_aws(ctx: &ProjectContext) -> S3 {
-	read_plan::<S3>(ctx, "s3_aws").await
 }
 
 pub async fn read_tls_cert(ctx: &ProjectContext) -> Tls {

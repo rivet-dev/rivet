@@ -10,7 +10,7 @@ enum Error {
 
 #[worker(name = "user-presence-status-set")]
 async fn worker(
-	ctx: OperationContext<user_presence::msg::status_set::Message>,
+	ctx: &OperationContext<user_presence::msg::status_set::Message>,
 ) -> GlobalResult<()> {
 	let crdb = ctx.crdb("db-user-presence").await?;
 
