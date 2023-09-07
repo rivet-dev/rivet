@@ -5,7 +5,8 @@ let
 		tag = "latest";
 		contents = [ pkgs.trafficserver ];
 		config = {
-			Cmd = [ "${pkgs.trafficserver}/bin/traffic_server" ];
+			# Cmd = [ "${pkgs.trafficserver}/bin/traffic_server" ];
+			Entrypoint = [ "${pkgs.trafficserver}/bin/traffic_server" ];
 		};
 	};
 in image
