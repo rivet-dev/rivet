@@ -28,13 +28,45 @@ resource "helm_release" "minio" {
 		auth = {
 			rootUser = module.minio_secrets.values["s3/minio/root/key_id"]
 			rootPassword = module.minio_secrets.values["s3/minio/root/key"]
-			service = {
-				nodePorts = {
-					api = 92000
-					console = 9201
-				}
-			}
 		}
 	})]
 }
 
+resource "kubectl_manifest" "minio_ingress_route" {
+	depends_on = [kubernetes_namespace.minio, helm_release.minio]
+
+	yaml_body = yamlencode({
+		apiVersion = "traefik.containo.us/v1alpha1"
+		kind = "IngressRoute"
+
+		metadata = {
+			name = "minio"
+			namespace = "minio"
+		}
+
+		spec = {
+			entryPoints = [ "websecure" ]
+
+			routes = [
+				{
+					match = "Host(`minio.${var.domain_main}`)"
+					kind  = "Rule"
+					services = [
+						{
+							name = "minio"
+							port = 9000
+						}
+					]
+				}
+			]
+
+			tls = {
+				secretName = "ingress-tls-cert"
+				options = {
+					name = "ingress-tls"
+					namespace = "traefik"
+				}
+			}
+		}
+	})
+}
