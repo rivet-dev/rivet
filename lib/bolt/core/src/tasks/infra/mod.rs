@@ -147,6 +147,15 @@ pub fn build_plan(ctx: &ProjectContext, start_at: Option<String>) -> Result<Vec<
 		},
 	});
 
+	// Pools
+	plan.push(PlanStep {
+		name_id: "tf-pools",
+		kind: PlanStepKind::Terraform {
+			plan_id: "pools".into(),
+			needs_destroy: true,
+		},
+	});
+
 	// DNS
 	plan.push(PlanStep {
 		name_id: "tf-dns",
