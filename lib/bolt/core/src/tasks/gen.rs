@@ -36,6 +36,9 @@ pub async fn generate_project(ctx: &ProjectContext) {
 
 	// Generate root
 	generate_root(ctx.path(), disable_cargo_workspace).await;
+
+	// Generate regions
+	generate_regions(ctx).await;
 }
 
 async fn generate_root(path: &Path, disable_cargo_workspace: bool) {
@@ -222,4 +225,17 @@ pub async fn generate_all_services(ctx: &ProjectContext) {
 
 pub async fn generate_service(_ctx: &ServiceContext) {
 	// println!("  * Generating service {}", ctx.name());
+}
+
+async fn generate_regions(ctx: &ProjectContext) {
+	let svc = ctx.service_with_name("region-config-get").await;
+	let gen_path = svc.path().join("gen");
+	let gen_config_path = gen_path.join("region_config.json");
+
+	// Make gen dir
+	fs::create_dir_all(gen_path).await.unwrap();
+
+	// Write config
+	let regions_json = serde_json::to_vec(&ctx.ns().regions).unwrap();
+	fs::write(gen_config_path, &regions_json).await.unwrap();
 }

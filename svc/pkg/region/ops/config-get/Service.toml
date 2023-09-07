@@ -1,0 +1,7 @@
+[service]
+name = "region-config-get"
+
+[runtime]
+kind = "rust"
+
+[operation]

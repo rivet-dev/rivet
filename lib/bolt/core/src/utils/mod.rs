@@ -239,15 +239,12 @@ pub fn kubectl_port_forward(
 	(local_port, remote_port): (u16, u16),
 ) -> Result<DroppablePort> {
 	let handle = cmd!(
-		"sh",
-		"-c",
-		formatdoc!(
-			r#"
-			kubectl port-forward \
-				service/{service_name} \
-				--namespace {namespace} {local_port}:{remote_port}
-			"#
-		),
+		"kubectl",
+		"port-forward",
+		format!("service/{service_name}"),
+		"--namespace",
+		namespace,
+		format!("{local_port}:{remote_port}")
 	)
 	.stdout_capture()
 	.stderr_capture()

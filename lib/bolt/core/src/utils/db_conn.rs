@@ -31,11 +31,8 @@ impl DatabaseConnection {
 			match &svc.config().runtime {
 				RuntimeKind::Redis { .. } => {
 					let name = svc.name();
-					let port = dep::redis::server_port(&svc);
 
 					if !redis_hosts.contains_key(&name) {
-						// TODO:
-						// let host = format!("127.0.0.1:{port}");
 						let host = "127.0.0.1:6379".to_string();
 						let port = 6379;
 

@@ -195,10 +195,6 @@ pub async fn test_service<T: AsRef<str>>(
 		.await?;
 	}
 
-	// HACK: Write region config locally to mimic the file mounted to the task dir
-	let regions_json = serde_json::to_vec(&ctx.ns().regions)?;
-	fs::write(ctx.gen_path().join("region-config.json"), &regions_json).await?;
-
 	// Test service
 	let mut passed = Vec::new();
 	let mut failed = Vec::new();

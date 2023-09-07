@@ -161,11 +161,9 @@ async fn redis(ctx: &ProjectContext) -> Result<Value> {
 			_ => continue,
 		};
 
-		let port = dep::redis::server_port(redis_dep);
-
 		dbs[redis_dep.name()] = json!({
 			"index": index,
-			"port": port,
+			"port": 0,  // Removed
 			"persistent": persistent,
 		});
 	}

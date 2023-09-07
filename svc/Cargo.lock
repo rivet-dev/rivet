@@ -6258,6 +6258,17 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "dbb5fb1acd8a1a18b3dd5be62d25485eb770e05afb408a9627d14d451bae12da"
 
 [[package]]
+name = "region-config-get"
+version = "0.0.1"
+dependencies = [
+ "chirp-client",
+ "chirp-worker",
+ "rivet-operation",
+ "serde",
+ "sqlx",
+]
+
+[[package]]
 name = "region-get"
 version = "0.0.1"
 dependencies = [
@@ -6265,8 +6276,8 @@ dependencies = [
  "chirp-worker",
  "faker-region",
  "prost 0.10.4",
+ "region-config-get",
  "rivet-operation",
- "rivet-util-region",
  "sqlx",
 ]
 
@@ -6278,8 +6289,8 @@ dependencies = [
  "chirp-worker",
  "faker-region",
  "prost 0.10.4",
+ "region-config-get",
  "rivet-operation",
- "rivet-util-region",
  "sqlx",
 ]
 
@@ -6306,9 +6317,9 @@ dependencies = [
  "chirp-worker",
  "faker-region",
  "prost 0.10.4",
+ "region-config-get",
  "region-get",
  "rivet-operation",
- "rivet-util-region",
  "sqlx",
 ]
 
@@ -6937,16 +6948,6 @@ dependencies = [
 [[package]]
 name = "rivet-util-nsfw"
 version = "0.1.0"
-
-[[package]]
-name = "rivet-util-region"
-version = "0.1.0"
-dependencies = [
- "serde",
- "serde_json",
- "tokio",
- "uuid",
-]
 
 [[package]]
 name = "rivet-util-user-presence"
