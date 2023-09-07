@@ -324,11 +324,6 @@ impl ServiceContextData {
 		// TODO:
 		true
 	}
-
-	pub fn depends_on_region_config(&self) -> bool {
-		true
-		// self.name().starts_with("region-")
-	}
 }
 
 impl ServiceContextData {

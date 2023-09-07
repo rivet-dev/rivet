@@ -202,11 +202,6 @@ pub async fn gen_svc(
 
 	// Shared data between containers
 	let mut volumes = vec![];
-	let mut local = vec![json!({
-		"configMap": {
-			"name": "health-checks"
-		}
-	})];
 	let mut volume_mounts = vec![json!({
 		"name": "local",
 		"mountPath": "/local",
@@ -247,19 +242,17 @@ pub async fn gen_svc(
 			ExecServiceDriver::Docker { .. } => {}
 		}
 
-		if svc_ctx.depends_on_region_config() {
-			local.push(json!({
-				"configMap": {
-					"name": "region-config",
-				}
-			}));
-		}
-
 		volumes.push(json!({
 			"name": "local",
 			"projected": {
 				"defaultMode": 0o0777,
-				"sources": local
+				"sources": [
+					{
+						"configMap": {
+							"name": "health-checks"
+						}
+					}
+				]
 			}
 		}));
 	}

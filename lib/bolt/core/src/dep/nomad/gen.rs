@@ -522,16 +522,6 @@ pub async fn gen_svc(region_id: &str, exec_ctx: &ExecServiceContext) -> Job {
 						]))
 					}
 				},
-				templates: Some({
-					let mut templates = Vec::new();
-
-					// Render custom templates
-					if svc_ctx.depends_on_region_config() {
-						build_region_config_template(&project_ctx, &mut templates).await;
-					}
-
-					json!(templates)
-				}),
 				// TODO: Add back
 				// Give time for the blocking requests (60s long) to repeat, give another 15s for extra shutdown time
 				// kill_timeout: Some(json!(chrono::secs(75))),
