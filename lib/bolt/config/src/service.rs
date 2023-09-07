@@ -184,6 +184,8 @@ impl Default for ServiceDomain {
 pub struct CargoConfig {
 	pub package: CargoPackage,
 	pub dependencies: HashMap<String, CargoDependency>,
+	#[serde(default)]
+	pub dev_dependencies: HashMap<String, CargoDependency>,
 }
 
 #[derive(Deserialize, Clone, Debug)]

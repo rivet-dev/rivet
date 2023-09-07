@@ -18,7 +18,10 @@ use crate::{
 		self,
 		service::{ComponentClass, RuntimeKind},
 	},
-	context::{BuildContext, BuildOptimization, ProjectContext, ServiceBuildPlan, ServiceContext},
+	context::{
+		BuildContext, BuildOptimization, ProjectContext, RunContext, ServiceBuildPlan,
+		ServiceContext,
+	},
 	dep::{
 		self, cargo,
 		k8s::gen::{ExecServiceContext, ExecServiceDriver},
@@ -89,7 +92,8 @@ pub async fn up_services<T: AsRef<str>>(
 	} else if opts.skip_dependencies {
 		ctx.services_with_patterns(&svc_names).await
 	} else {
-		ctx.recursive_dependencies_with_pattern(&svc_names).await
+		ctx.recursive_dependencies_with_pattern(&svc_names, RunContext::Service)
+			.await
 	};
 
 	// Find all services that are executables

@@ -13,7 +13,7 @@ use crate::{
 	utils,
 };
 
-use super::ServiceContext;
+use super::{RunContext, ServiceContext};
 
 pub type ProjectContext = Arc<ProjectContextData>;
 
@@ -377,6 +377,7 @@ impl ProjectContextData {
 	pub async fn recursive_dependencies_with_pattern(
 		self: &Arc<Self>,
 		svc_names: &[impl AsRef<str>],
+		run_context: RunContext,
 	) -> Vec<ServiceContext> {
 		let svc_names = self
 			.services_with_patterns(svc_names)
@@ -384,12 +385,14 @@ impl ProjectContextData {
 			.iter()
 			.map(|x| x.name())
 			.collect::<Vec<String>>();
-		self.recursive_dependencies(svc_names.as_slice()).await
+		self.recursive_dependencies(svc_names.as_slice(), run_context)
+			.await
 	}
 
 	pub async fn recursive_dependencies(
 		self: &Arc<Self>,
 		svc_names: &[impl AsRef<str>],
+		run_context: RunContext,
 	) -> Vec<ServiceContext> {
 		// Fetch core services
 		let mut all_svc = self.services_with_names(&svc_names).await;
@@ -400,7 +403,7 @@ impl ProjectContextData {
 			// Find all new dependencies
 			let mut new_deps = Vec::<ServiceContext>::new();
 			for svc_ctx in &pending_deps {
-				let dependencies = svc_ctx.dependencies().await;
+				let dependencies = svc_ctx.dependencies(run_context).await;
 				for dep_ctx in dependencies {
 					// Check if dependency is already registered
 					if !all_svc.iter().any(|d| d.name() == dep_ctx.name()) {

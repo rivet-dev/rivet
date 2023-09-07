@@ -1,5 +1,8 @@
 use anyhow::*;
-use bolt_core::{context, tasks};
+use bolt_core::{
+	context::{self, RunContext},
+	tasks,
+};
 use clap::Parser;
 
 #[derive(Parser)]
@@ -52,10 +55,11 @@ impl SubCommand {
 
 				// Read deps
 				let deps = if *recursive {
-					ctx.recursive_dependencies(&[&svc_name]).await
+					ctx.recursive_dependencies(&[&svc_name], RunContext::Service)
+						.await
 				} else {
 					let svc = ctx.service_with_name(svc_name).await;
-					svc.dependencies().await
+					svc.dependencies(RunContext::Service).await
 				};
 
 				// Print deps

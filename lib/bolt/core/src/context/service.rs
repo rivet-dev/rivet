@@ -399,7 +399,7 @@ impl ServiceContextData {
 // Dependencies
 impl ServiceContextData {
 	#[async_recursion]
-	pub async fn dependencies(&self) -> Vec<ServiceContext> {
+	pub async fn dependencies(&self, run_context: RunContext) -> Vec<ServiceContext> {
 		let project = self.project().await;
 
 		let all_svcs = project.all_services().await;
@@ -414,6 +414,13 @@ impl ServiceContextData {
 			let svcs = cargo
 				.dependencies
 				.iter()
+				// Add dev dependencies for tests
+				.chain(
+					cargo
+						.dev_dependencies
+						.iter()
+						.filter(|x| run_context == RunContext::Test),
+				)
 				.filter_map(|(name, dep)| {
 					if let config::service::CargoDependency::Path { .. } = dep {
 						Some(name)
@@ -450,12 +457,15 @@ impl ServiceContextData {
 
 		// Inherit dependencies from the service that was overridden
 		if let Some(overriden_svc) = &self.overridden_service {
-			dep_ctxs.extend(overriden_svc.dependencies().await);
+			dep_ctxs.extend(overriden_svc.dependencies(run_context).await);
 		}
 
 		// Check that these are services you can explicitly depend on in the Service.toml
 		for dep in &dep_ctxs {
-			if !self.config().service.test_only && dep.config().service.test_only {
+			if run_context == RunContext::Service
+				&& !self.config().service.test_only
+				&& dep.config().service.test_only
+			{
 				panic!(
 					"{} -> {}: cannot depend on a `service.test-only` service outside of `test-dependencies`",
 					self.name(),
@@ -480,11 +490,14 @@ impl ServiceContextData {
 		dep_ctxs
 	}
 
-	pub async fn database_dependencies(&self) -> HashMap<String, config::service::Database> {
+	pub async fn database_dependencies(
+		&self,
+		run_context: RunContext,
+	) -> HashMap<String, config::service::Database> {
 		let dbs = self
 			.project()
 			.await
-			.recursive_dependencies(&[self.name()])
+			.recursive_dependencies(&[self.name()], run_context)
 			.await
 			.into_iter()
 			// Filter filter services to include only operations, since these run in-process
@@ -499,9 +512,9 @@ impl ServiceContextData {
 		dbs
 	}
 
-	pub async fn crdb_dependencies(&self) -> Vec<ServiceContext> {
+	pub async fn crdb_dependencies(&self, run_context: RunContext) -> Vec<ServiceContext> {
 		let dep_names = self
-			.database_dependencies()
+			.database_dependencies(run_context)
 			.await
 			.into_iter()
 			.map(|(k, _)| k)
@@ -515,11 +528,11 @@ impl ServiceContextData {
 			.collect()
 	}
 
-	pub async fn redis_dependencies(&self) -> Vec<ServiceContext> {
+	pub async fn redis_dependencies(&self, run_context: RunContext) -> Vec<ServiceContext> {
 		let default_deps = ["redis-chirp".to_string(), "redis-cache".to_string()];
 
 		let dep_names = self
-			.database_dependencies()
+			.database_dependencies(run_context)
 			.await
 			.into_iter()
 			.map(|(k, _)| k)
@@ -535,9 +548,9 @@ impl ServiceContextData {
 			.collect()
 	}
 
-	pub async fn s3_dependencies(&self) -> Vec<ServiceContext> {
+	pub async fn s3_dependencies(&self, run_context: RunContext) -> Vec<ServiceContext> {
 		let dep_names = self
-			.database_dependencies()
+			.database_dependencies(run_context)
 			.await
 			.into_iter()
 			.map(|(k, _)| k)
@@ -551,9 +564,9 @@ impl ServiceContextData {
 			.collect()
 	}
 
-	pub async fn nats_dependencies(&self) -> Vec<ServiceContext> {
+	pub async fn nats_dependencies(&self, run_context: RunContext) -> Vec<ServiceContext> {
 		let dep_names = self
-			.database_dependencies()
+			.database_dependencies(run_context)
 			.await
 			.into_iter()
 			.map(|(k, _)| k)
@@ -648,11 +661,14 @@ impl ServiceContextData {
 		}
 	}
 
-	async fn required_secrets(&self) -> Result<Vec<(Vec<String>, config::service::Secret)>> {
+	async fn required_secrets(
+		&self,
+		run_context: RunContext,
+	) -> Result<Vec<(Vec<String>, config::service::Secret)>> {
 		let mut secrets = self
 			.project()
 			.await
-			.recursive_dependencies(&[self.name()])
+			.recursive_dependencies(&[self.name()], run_context)
 			.await
 			.into_iter()
 			// Filter filter services to include only operations, since these run in-process
@@ -896,7 +912,7 @@ impl ServiceContextData {
 			26257,
 		)
 		.await?;
-		for crdb_dep in self.crdb_dependencies().await {
+		for crdb_dep in self.crdb_dependencies(run_context).await {
 			let username = "root"; // TODO:
 			let sslmode = "disable"; // TODO:
 
@@ -911,7 +927,7 @@ impl ServiceContextData {
 		let s3_deps = if self.depends_on_s3() {
 			project_ctx.all_services().await.to_vec()
 		} else {
-			self.s3_dependencies().await
+			self.s3_dependencies(run_context).await
 		};
 		for s3_dep in s3_deps {
 			if !matches!(s3_dep.config().runtime, RuntimeKind::S3 { .. }) {
@@ -1037,7 +1053,7 @@ impl ServiceContextData {
 		let mut forward_configs = Vec::new();
 
 		// Write secrets
-		for (secret_key, secret_config) in self.required_secrets().await? {
+		for (secret_key, secret_config) in self.required_secrets(run_context).await? {
 			let env_key = rivet_util::env::secret_env_var_key(&secret_key);
 			if secret_config.optional {
 				if let Some(value) = project_ctx.read_secret_opt(&secret_key).await? {
@@ -1095,7 +1111,7 @@ impl ServiceContextData {
 			26257,
 		)
 		.await?;
-		for crdb_dep in self.crdb_dependencies().await {
+		for crdb_dep in self.crdb_dependencies(run_context).await {
 			let username = "root"; // TODO:
 			let sslmode = "disable"; // TODO:
 
@@ -1107,7 +1123,7 @@ impl ServiceContextData {
 		}
 
 		// Redis
-		for redis_dep in self.redis_dependencies().await {
+		for redis_dep in self.redis_dependencies(run_context).await {
 			let name = redis_dep.name();
 			let db_name = redis_dep.redis_db_name();
 
@@ -1145,7 +1161,7 @@ impl ServiceContextData {
 		let s3_deps = if self.depends_on_s3() {
 			project_ctx.all_services().await.to_vec()
 		} else {
-			self.s3_dependencies().await
+			self.s3_dependencies(run_context).await
 		};
 		for s3_dep in s3_deps {
 			if !matches!(s3_dep.config().runtime, RuntimeKind::S3 { .. }) {

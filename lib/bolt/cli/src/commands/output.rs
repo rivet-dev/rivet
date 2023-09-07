@@ -1,7 +1,7 @@
 use std::collections::HashSet;
 
 use anyhow::*;
-use bolt_core::context::ProjectContext;
+use bolt_core::context::{ProjectContext, RunContext};
 use clap::Parser;
 
 /// Used to extract data from the Bolt configs. This gets called primarily in
@@ -51,7 +51,7 @@ impl SubCommand {
 
 				// TODO: Use a stream iter instead
 				for svc_ctx in ctx.services_with_patterns(&service_names).await {
-					let dbs = svc_ctx.database_dependencies().await;
+					let dbs = svc_ctx.database_dependencies(RunContext::Service).await;
 
 					databases.extend(dbs.keys().cloned());
 				}
