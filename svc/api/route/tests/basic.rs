@@ -168,11 +168,11 @@ async fn cdn() {
 			assert!(ns_router_secure.rule().unwrap().contains(&domain_part));
 
 			assert_eq!(
-				"traffic-server@consulcatalog",
+				"traffic-server-traffic-server@kubernetescrd",
 				ns_router_insecure.service().unwrap()
 			);
 			assert_eq!(
-				"traffic-server@consulcatalog",
+				"traffic-server-traffic-server@kubernetescrd",
 				ns_router_secure.service().unwrap()
 			);
 

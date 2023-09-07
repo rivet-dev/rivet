@@ -234,7 +234,7 @@ fn register_namespace(
 	.concat();
 
 	let upload_id = internal_unwrap!(ns.upload_id);
-	let service = "traffic-server@consulcatalog";
+	let service = "traffic-server-traffic-server@kubernetescrd";
 	let path_prefix = format!("/s3-cache/{}/{}", s3_client.bucket(), *upload_id);
 
 	// Create default routers
