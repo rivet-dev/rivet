@@ -590,55 +590,44 @@ impl ProjectContextData {
 		self: &Arc<Self>,
 		provider: s3_util::Provider,
 	) -> Result<S3Credentials> {
-		match provider {
-			s3_util::Provider::Minio => Ok(S3Credentials {
-				access_key_id: "root".into(),
-				access_key_secret: self
-					.read_secret(&["minio", "users", "root", "password"])
-					.await?,
-			}),
-			s3_util::Provider::Backblaze => {
-				let service_key = s3::fetch_service_key(&self, &["b2", "terraform"]).await?;
-				Ok(S3Credentials {
-					access_key_id: service_key.key_id,
-					access_key_secret: service_key.key,
-				})
-			}
-			s3_util::Provider::Aws => {
-				let service_key = s3::fetch_service_key(&self, &["aws", "terraform"]).await?;
-				Ok(S3Credentials {
-					access_key_id: service_key.key_id,
-					access_key_secret: service_key.key,
-				})
-			}
-		}
+		Ok(S3Credentials {
+			access_key_id: self
+				.read_secret(&["s3", provider.as_str(), "terraform", "key_id"])
+				.await?,
+			access_key_secret: self
+				.read_secret(&["s3", provider.as_str(), "terraform", "key"])
+				.await?,
+		})
 	}
 
 	/// Returns the appropriate S3 connection configuration for the provided S3 provider.
 	pub async fn s3_config(self: &Arc<Self>, provider: s3_util::Provider) -> Result<S3Config> {
 		match provider {
 			s3_util::Provider::Minio => {
-				let s3 = terraform::output::read_s3_minio(&*self).await;
 				Ok(S3Config {
-					endpoint_internal: (*s3.s3_endpoint_internal).clone(),
-					endpoint_external: (*s3.s3_endpoint_external).clone(),
-					region: (*s3.s3_region).clone(),
+					endpoint_internal: "http://minio.minio.svc.cluster.local:9200".into(),
+					endpoint_external: format!("https://minio.{}", self.domain_main()),
+					// Minio defaults to us-east-1 region
+					// https://github.com/minio/minio/blob/0ec722bc5430ad768a263b8464675da67330ad7c/cmd/server-main.go#L739
+					region: "us-east-1".into(),
 				})
 			}
 			s3_util::Provider::Backblaze => {
-				let s3 = terraform::output::read_s3_backblaze(&*self).await;
+				let endpoint = "https://s3.us-west-004.backblazeb2.com".to_string();
 				Ok(S3Config {
-					endpoint_internal: (*s3.s3_endpoint_internal).clone(),
-					endpoint_external: (*s3.s3_endpoint_external).clone(),
-					region: (*s3.s3_region).clone(),
+					endpoint_internal: endpoint.clone(),
+					endpoint_external: endpoint,
+					// See region information here:
+					// https://help.backblaze.com/hc/en-us/articles/360047425453-Getting-Started-with-the-S3-Compatible-API
+					region: "us-west-004".into(),
 				})
 			}
 			s3_util::Provider::Aws => {
-				let s3 = terraform::output::read_s3_aws(&*self).await;
+				let endpoint = "https://s3.us-east-1.amazonaws.com".to_string();
 				Ok(S3Config {
-					endpoint_internal: (*s3.s3_endpoint_internal).clone(),
-					endpoint_external: (*s3.s3_endpoint_external).clone(),
-					region: (*s3.s3_region).clone(),
+					endpoint_internal: endpoint.clone(),
+					endpoint_external: endpoint,
+					region: "us-east-1".into(),
 				})
 			}
 		}

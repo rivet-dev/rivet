@@ -306,7 +306,7 @@ async fn vars(ctx: &ProjectContext) {
 			extra_dns.push(json!({
 				"pool": ing_pool,
 				"zone_name": "base",
-				"name": format!("storage.{}", ctx.domain_main()),
+				"name": format!("minio.{}", ctx.domain_main()),
 			}));
 		}
 
@@ -379,22 +379,11 @@ async fn vars(ctx: &ProjectContext) {
 
 		vars.insert("s3_buckets".into(), json!(s3_buckets));
 
-		// TODO: Don't set secrets as tf vars, read from secrets module
-		let (default_s3_provider, _) = ctx.default_s3_provider().unwrap();
-		let credentials = ctx.s3_credentials(default_s3_provider).await.unwrap();
 		vars.insert(
-			"s3_persistent_access_key_id".into(),
-			json!(credentials.access_key_id),
+			"s3_default_provider".into(),
+			json!(ctx.default_s3_provider().unwrap().0.as_str()),
 		);
-		vars.insert(
-			"s3_persistent_access_key_secret".into(),
-			json!(credentials.access_key_secret),
-		);
-
 		vars.insert("s3_providers".into(), s3_providers(ctx).await.unwrap());
-
-		let s3_providers = &ctx.ns().s3.providers;
-		vars.insert("has_minio".into(), json!(s3_providers.minio.is_some()));
 	}
 
 	// Media presets
@@ -416,17 +405,6 @@ async fn vars(ctx: &ProjectContext) {
 
 async fn s3_providers(ctx: &ProjectContext) -> Result<serde_json::Value> {
 	let mut res = serde_json::Map::with_capacity(1);
-
-	let (default_provider, _) = ctx.default_s3_provider()?;
-	let default_s3_config = ctx.s3_config(default_provider).await?;
-	res.insert(
-		"default".to_string(),
-		json!({
-			"endpoint_internal": default_s3_config.endpoint_internal,
-			"endpoint_external": default_s3_config.endpoint_external,
-			"region": default_s3_config.region,
-		}),
-	);
 
 	let providers = &ctx.ns().s3.providers;
 	if providers.minio.is_some() {

@@ -1,4 +1,3 @@
-use global_error::prelude::*;
 use types::rivet::backend;
 use uuid::Uuid;
 

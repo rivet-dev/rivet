@@ -1,3 +1,7 @@
+locals {
+	has_minio = can(var.s3_providers["minio"])
+}
+
 resource "kubernetes_namespace" "minio" {
 	metadata {
 		name = "minio"
@@ -7,12 +11,12 @@ resource "kubernetes_namespace" "minio" {
 module "minio_secrets" {
 	source = "../modules/secrets"
 
-	keys = ["minio/users/root/password"]
+	keys = ["s3/minio/root/key_id", "s3/minio/root/key"]
 	optional = true
 }
 
 resource "helm_release" "minio" {
-	count = var.has_minio ? 1 : 0
+	count = local.has_minio ? 1 : 0
 
 	name = "minio"
 	namespace = kubernetes_namespace.minio.metadata.0.name
@@ -38,15 +42,15 @@ resource "helm_release" "minio" {
 
 resource "kubernetes_secret" "minio_auth" {
 	depends_on = [kubernetes_namespace.minio]
-	count = var.has_minio ? 1 : 0
+	count = local.has_minio ? 1 : 0
 
 	metadata {
+		namespace = kubernetes_namespace.minio.metadata.0.name
 		name = "minio-auth"
-		namespace = "minio"
 	}
 
 	data = {
-		rootUser = "root"
-		rootPassword = module.minio_secrets.values["minio/users/root/password"]
+		rootUser = module.minio_secrets.values["s3/minio/root/key_id"]
+		rootPassword = module.minio_secrets.values["s3/minio/root/key"]
 	}
 }

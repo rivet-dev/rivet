@@ -1,3 +1,5 @@
+# TODO: Add back body_factory
+
 locals {
 	traffic_server_count = 2
 	traffic_server_configmap_data = {
@@ -41,14 +43,14 @@ resource "kubernetes_config_map" "traffic_server" {
 		# Static files
 		{
 			for f in fileset("${path.module}/files/traffic_server/etc/static", "**/*"):
-			f => file("${path.module}/files/traffic_server/etc/${f}/static")
+			f => file("${path.module}/files/traffic_server/etc/static/${f}")
 		},
 		# Dynamic files
 		{
-			for f in fileset("${path.module}/files/traffic_server/etc/static", "**/*"):
-			f => templatefile("${path.module}/files/traffic_server/etc/${f}/static", {
+			for f in fileset("${path.module}/files/traffic_server/etc/dynamic", "**/*"):
+			f => templatefile("${path.module}/files/traffic_server/etc/dynamic/${f}", {
 				s3_providers = var.s3_providers
-				volume_size_cache = "${traffic_server_cache_size}G"
+				volume_size_cache = "${local.traffic_server_cache_size}G"
 			})
 		},
 		# S3 providers
@@ -124,18 +126,18 @@ resource "kubernetes_stateful_set" "traffic_server" {
 			}
 
 			spec {
-				security_context {
-					run_as_user   = 100
-					run_as_group  = 999
-					fs_group      = 999
-				}
+				# security_context {
+				# 	run_as_user   = 100
+				# 	run_as_group  = 999
+				# 	fs_group      = 999
+				# }
 				image_pull_secrets {
 					name = kubernetes_secret.traffic_server_docker_config.metadata.0.name
 				}
 				container {
 					name = "traffic-server-instance"
 					# TODO: Use the git hash here
-					image = "ghcr.io/rivet-gg/apache-traffic-server:1a5aacc"
+					image = "ghcr.io/rivet-gg/apache-traffic-server:5e1d6e5"
 					image_pull_policy = "IfNotPresent"
 
 					port {

@@ -6,7 +6,6 @@ use serde_json::json;
 use crate::{
 	config::{
 		self,
-		ns::{LoggingProvider, S3Provider},
 		service::{ServiceDomain, ServiceKind, ServiceRouter},
 	},
 	context::{BuildContext, ProjectContext, RunContext, ServiceContext},
