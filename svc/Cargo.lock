@@ -5889,47 +5889,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4503fa043bf02cee09a9582e9554b4c6403b2ef55e4612e96561d294419429f8"
 
 [[package]]
-name = "playground"
-version = "0.0.1"
-dependencies = [
- "build-create",
- "build-get",
- "chirp-client",
- "chirp-worker",
- "chrono",
- "cloud-version-get",
- "cloud-version-publish",
- "futures-util",
- "game-get",
- "game-namespace-get",
- "game-namespace-list",
- "indoc",
- "lazy_static",
- "nomad-client",
- "nomad-util",
- "prost 0.10.4",
- "region-get",
- "region-list",
- "reqwest",
- "rivet-cache",
- "rivet-connection",
- "rivet-health-checks",
- "rivet-metrics",
- "rivet-operation",
- "rivet-pools",
- "rivet-util-mm",
- "s3-util",
- "serde",
- "serde_json",
- "sqlx",
- "tokio",
- "tracing",
- "tracing-subscriber",
- "upload-complete",
- "uuid",
-]
-
-[[package]]
 name = "posthog-core"
 version = "0.1.0"
 source = "git+https://github.com/rivet-gg/posthog-rs.git?rev=ef4e80e#ef4e80e57747ea7204794bce9a103bfeccefabf1"
