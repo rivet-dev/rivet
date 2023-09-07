@@ -12,6 +12,7 @@ use clap::Parser;
 #[derive(Parser, Debug)]
 pub enum SubCommand {
 	Namespace,
+	ProjectRoot,
 	ServiceName {
 		#[clap(index = 1, action = clap::ArgAction::Append)]
 		service_names: Vec<String>,
@@ -31,6 +32,9 @@ impl SubCommand {
 		match self {
 			Self::Namespace => {
 				println!("{}", ctx.ns_id());
+			}
+			Self::ProjectRoot => {
+				print!("{}", ctx.path().display());
 			}
 			Self::ServiceName { service_names } => {
 				for svc_ctx in ctx.services_with_patterns(&service_names).await {

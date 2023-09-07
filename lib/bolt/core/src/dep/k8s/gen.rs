@@ -222,7 +222,7 @@ pub async fn gen_svc(
 				volumes.push(json!({
 					"name": "backend-repo",
 					"hostPath": {
-						"path": project_ctx.path(),
+						"path": "/rivet-src",
 						"type": "Directory"
 					}
 				}));
