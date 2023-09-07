@@ -1,3 +1,7 @@
+locals {
+	tunnel = data.terraform_remote_state.cloudflare_tunnels.outputs.k8s_output.tunnels["local"]
+}
+
 resource "kubernetes_namespace" "cloudflare" {
 	metadata {
 		name = "cloudflare"
@@ -84,7 +88,6 @@ resource "kubernetes_deployment" "cloudflare" {
 	}
 }
 
-# TODO:
 resource "kubernetes_secret" "tunnel_credentials" {
 	depends_on = [kubernetes_namespace.cloudflare]
 
@@ -94,11 +97,10 @@ resource "kubernetes_secret" "tunnel_credentials" {
 	}
 
 	data = {
-		"credentials.json" = data.terraform_remote_state.cloudflare_tunnels.outputs.k8s_output.tunnels["loki"].cert_json
+		"credentials.json" = jsonencode(local.tunnel.cert)
 	}
 }
 
-# TODO:
 resource "kubernetes_config_map" "cloudflared" {
 	depends_on = [kubernetes_namespace.cloudflare]
 
@@ -109,14 +111,11 @@ resource "kubernetes_config_map" "cloudflared" {
 
 	data = {
 		"config.yaml" = yamlencode({
-			tunnel = "example-tunnel"
+			tunnel = local.tunnel.tunnel_name
 			credentials-file = "/etc/cloudflared/creds/credentials.json"
 			metrics = "0.0.0.0:2000"
 			"no-autoupdate" = true
-			ingress = [{
-				hostname = ""
-				service = ""
-			}]
+			ingress = local.tunnel.ingress
 		})
 	}
 }

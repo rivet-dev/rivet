@@ -5,8 +5,8 @@ output "k8s_output" {
 			k => {
 				tunnel_name = v.tunnel_name
 				tunnel_id = v.tunnel_id
-				cert_json = v.cert_json
-				ingress_json = v.ingress_json
+				cert = v.cert
+				ingress = v.ingress
 			}
 		}
 	}

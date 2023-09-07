@@ -202,9 +202,9 @@ pub async fn build_pools(ctx: &ProjectContext) -> Result<HashMap<String, Pool>> 
 			.tunnels(hashmap! {
 				"loki".into() => PoolTunnel {
 					name: "Loki".into(),
-					service: "http://127.0.0.1:9060".into(),
+					service: "http://loki.loki.svc.cluster.local:3100".into(),
 					access_groups: access.map(|x| vec![x.groups.engineering.clone()]).unwrap_or_default(),
-					service_tokens: access.map(|x| vec![x.services.bolt.clone()]).unwrap_or_default(),
+					service_tokens: access.map(|x| vec![x.services.grafana_cloud.clone()]).unwrap_or_default(),
 					app_launcher: true,
 				},
 			})
