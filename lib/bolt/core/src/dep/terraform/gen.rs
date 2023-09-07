@@ -339,12 +339,11 @@ async fn vars(ctx: &ProjectContext) {
 		for svc_ctx in all_svc {
 			if matches!(svc_ctx.config().runtime, RuntimeKind::Redis { .. }) {
 				let name = svc_ctx.name();
-				let port = dep::redis::server_port(&svc_ctx);
 
 				redis_svcs.insert(
 					svc_ctx.redis_db_name(),
 					json!({
-						"endpoint": format!("redis://redis-{name}.svc.cluster.local:{port}"),
+						"endpoint": format!("redis://redis-{name}.svc.cluster.local:6379"),
 					}),
 				);
 			}

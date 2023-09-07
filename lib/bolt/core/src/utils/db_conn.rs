@@ -31,39 +31,38 @@ impl DatabaseConnection {
 			match &svc.config().runtime {
 				RuntimeKind::Redis { .. } => {
 					let name = svc.name();
-					let port = dep::redis::server_port(&svc);
 
 					if !redis_hosts.contains_key(&name) {
-						// TODO:
-						// let host = format!("127.0.0.1:{port}");
-						let host = "127.0.0.1:6379".to_string();
-						let port = 6379;
+						let port = utils::pick_port();
+						let host = format!("127.0.0.1:{port}");
 
 						redis_hosts.insert(name, host);
 						handles.push(utils::kubectl_port_forward(
 							"redis-master",
 							"redis",
-							(port, port),
+							(port, 6379),
 						)?);
 					}
 				}
 				RuntimeKind::CRDB { .. } => {
 					if cockroach_host.is_none() {
-						cockroach_host = Some("127.0.0.1:26257".to_string());
+						let port = utils::pick_port();
+						cockroach_host = Some(format!("127.0.0.1:{port}"));
 						handles.push(utils::kubectl_port_forward(
 							"cockroachdb",
 							"cockroachdb",
-							(26257, 26257),
+							(port, 26257),
 						)?);
 					}
 				}
 				RuntimeKind::ClickHouse { .. } => {
 					if clickhouse_host.is_none() {
-						clickhouse_host = Some("127.0.0.1:9000".to_string());
+						let port = utils::pick_port();
+						clickhouse_host = Some(format!("127.0.0.1:{port}"));
 						handles.push(utils::kubectl_port_forward(
 							"clickhouse",
 							"clickhouse",
-							(9000, 9000),
+							(port, 9000),
 						)?);
 					}
 				}

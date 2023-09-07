@@ -60,19 +60,6 @@ resource "kubernetes_secret" "ingress_tls_ca_cert" {
 	}
 }
 
-resource "kubernetes_config_map" "region_config" {
-	depends_on = [kubernetes_namespace.rivet_service]
-
-	metadata {
-		name = "region-config"
-		namespace = "rivet-service"
-	}
-
-	data = {
-		"region-config.json" = jsonencode(var.regions)
-	}
-}
-
 resource "kubernetes_config_map" "health_checks" {
 	depends_on = [kubernetes_namespace.rivet_service]
 

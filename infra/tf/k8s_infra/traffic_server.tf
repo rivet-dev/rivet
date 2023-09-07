@@ -2,12 +2,56 @@
 
 locals {
 	traffic_server_count = 2
-	traffic_server_configmap_data = {
-		# TODO:
+	traffic_server_configmap_data = merge(
+		# Static files
+		{
+			for f in fileset("${path.module}/files/traffic_server/etc/static", "**/*"):
+			f => file("${path.module}/files/traffic_server/etc/static/${f}")
+		},
+		# Dynamic files
+		{
+			for f in fileset("${path.module}/files/traffic_server/etc/dynamic", "**/*"):
+			f => templatefile("${path.module}/files/traffic_server/etc/dynamic/${f}", {
+				s3_providers = var.s3_providers
+				s3_default_provider = var.s3_default_provider
+				volume_size_cache = "${local.traffic_server_cache_size}G"
+			})
+		},
+		# S3 providers
+		flatten([
+			for provider_name, provider in var.s3_providers:
+			{
+				"s3_region_map_${provider_name}.config" = templatefile("${path.module}/files/traffic_server/etc/s3/s3_region_map.config", {
+					s3_host = element(regex("^(?:https?://)?([^/]+)", provider.endpoint_internal), 1)
+					s3_region = provider.region
+				})
+			}
+		])...
+	)
+
+	traffic_server_s3_auth_data = {
+		for provider_name, provider in var.s3_providers:
+		"s3_auth_v4_${provider_name}.config" => templatefile("${path.module}/files/traffic_server/etc/s3/s3_auth_v4.config", {
+			s3_provider_name = provider_name
+			s3_access_key_id = module.traffic_server_s3_secrets.values["s3/${provider_name}/terraform/key_id"]
+			s3_secret_access_key = module.traffic_server_s3_secrets.values["s3/${provider_name}/terraform/key"]
+		})
 	}
-	traffic_server_configmap_hash = sha256(jsonencode(local.server_configmap_data))
+
+	traffic_server_configmap_hash = sha256(jsonencode(local.traffic_server_configmap_data))
+	traffic_server_s3_auth_hash = sha256(jsonencode(local.traffic_server_s3_auth_data))
+
 	# TODO: Enable dynamic configuration
 	traffic_server_cache_size = 10
+}
+
+module "traffic_server_s3_secrets" {
+	source = "../modules/secrets"
+
+	keys = flatten([
+		for provider_name, provider in var.s3_providers:
+		["s3/${provider_name}/terraform/key_id", "s3/${provider_name}/terraform/key"]
+	])
 }
 
 resource "kubernetes_namespace" "traffic_server" {
@@ -28,8 +72,6 @@ resource "kubernetes_secret" "traffic_server_docker_config" {
 
 }
 
-# TODO: Secrets
-
 resource "kubernetes_config_map" "traffic_server" {
 	metadata {
 		namespace = kubernetes_namespace.traffic_server.metadata.0.name
@@ -39,39 +81,17 @@ resource "kubernetes_config_map" "traffic_server" {
 		}
 	}
 
-	data = merge(
-		# Static files
-		{
-			for f in fileset("${path.module}/files/traffic_server/etc/static", "**/*"):
-			f => file("${path.module}/files/traffic_server/etc/static/${f}")
-		},
-		# Dynamic files
-		{
-			for f in fileset("${path.module}/files/traffic_server/etc/dynamic", "**/*"):
-			f => templatefile("${path.module}/files/traffic_server/etc/dynamic/${f}", {
-				s3_providers = var.s3_providers
-				volume_size_cache = "${local.traffic_server_cache_size}G"
-			})
-		},
-		# S3 providers
-		# flatten([
-		# 	for provider_name, provider in var.s3_providers:
-		# 	{
-		# 		"s3_region_map_${provider_name}.config" = templatefile("${path.module}/files/traffic_server/s3/s3_region_map.config", {
-		# 			s3_endpoint = provider.endpoint_internal
-		# 			s3_region = provider.region
-		# 		})
-		# 	}
-		# ]),
-	)
+	data = local.traffic_server_configmap_data
 }
 
-# TODO: Create secrets
-				# "s3_auth_v4_${provider}.config" = templatefile("${path.module}/files/traffic_server/s3/s3_auth_v4.config", {
-				# 	s3_access_key_id = TODO
-				# 	s3_secret_access_key = TODO
-				# 	s3_region_map_file_name = "s3_region_map_${provider}"
-				# })
+resource "kubernetes_secret" "traffic_server_s3_auth" {
+	metadata {
+		namespace = kubernetes_namespace.traffic_server.metadata.0.name
+		name = "traffic-server-s3-auth"
+	}
+
+	data = local.traffic_server_s3_auth_data
+}
 
 resource "kubernetes_service" "traffic_server" {
 	metadata {
@@ -121,15 +141,11 @@ resource "kubernetes_stateful_set" "traffic_server" {
 				annotations = {
 					# Trigger a rolling update on config chagne
 					"configmap-version" = local.traffic_server_configmap_hash
+					"s3-auth-version" = local.traffic_server_s3_auth_hash
 				}
 			}
 
 			spec {
-				# security_context {
-				# 	run_as_user   = 100
-				# 	run_as_group  = 999
-				# 	fs_group      = 999
-				# }
 				image_pull_secrets {
 					name = kubernetes_secret.traffic_server_docker_config.metadata.0.name
 				}
@@ -145,20 +161,23 @@ resource "kubernetes_stateful_set" "traffic_server" {
 						protocol = "TCP"
 					}
 
-					# TODO:
-					# readiness_probe {
-						# http_get {
-							# path = "/v1/agent/self"
-							# port = "http"
-						# }
-# 
-						# initial_delay_seconds = 5
-						# period_seconds = 5
-					# }
+					liveness_probe {
+						tcp_socket {
+							port = 8080
+						}
+						
+						initial_delay_seconds = 1
+						period_seconds = 5
+						timeout_seconds = 2
+					}
 
 					volume_mount {
 						name = "traffic-server-config"
 						mount_path = "/etc/trafficserver"
+					}
+					volume_mount {
+						name = "traffic-server-s3-auth"
+						mount_path = "/etc/trafficserver-s3-auth"
 					}
 					volume_mount {
 						name = "traffic-server-cache"
@@ -170,6 +189,13 @@ resource "kubernetes_stateful_set" "traffic_server" {
 					name = "traffic-server-config"
 					config_map {
 						name = kubernetes_config_map.traffic_server.metadata.0.name
+					}
+				}
+
+				volume {
+					name = "traffic-server-s3-auth"
+					secret {
+						secret_name = kubernetes_secret.traffic_server_s3_auth.metadata.0.name
 					}
 				}
 			}

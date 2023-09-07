@@ -1113,10 +1113,8 @@ impl ServiceContextData {
 		for redis_dep in self.redis_dependencies().await {
 			let name = redis_dep.name();
 			let db_name = redis_dep.redis_db_name();
-			let port = dep::redis::server_port(&redis_dep);
 
 			// TODO: Use name and port to connect to different redis instances
-			// let host = format!("redis-{name}.redis.svc.cluster.local:{port}");
 			let host = access_service(
 				&project_ctx,
 				&mut forward_configs,

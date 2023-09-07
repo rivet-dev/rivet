@@ -195,10 +195,6 @@ pub async fn test_service<T: AsRef<str>>(
 		.await?;
 	}
 
-	// HACK: Write region config locally to mimic the file mounted to the task dir
-	let regions_json = serde_json::to_vec(&ctx.ns().regions)?;
-	fs::write(ctx.gen_path().join("region-config.json"), &regions_json).await?;
-
 	// Test service
 	let mut passed = Vec::new();
 	let mut failed = Vec::new();
@@ -255,11 +251,11 @@ async fn run_test(svc_ctx: &ServiceContext, test_name: Option<&str>) -> TestResu
 		unreachable!();
 	}
 
-	let nomad_ctx = NomadCtx::remote(&project_ctx).await.unwrap();
+	// let nomad_ctx = NomadCtx::remote(&project_ctx).await.unwrap();
 
-	let cleanup = TestCleanupManager::setup(project_ctx.clone(), nomad_ctx.clone())
-		.await
-		.unwrap();
+	// let cleanup = TestCleanupManager::setup(project_ctx.clone(), nomad_ctx.clone())
+	// 	.await
+	// 	.unwrap();
 
 	// Render env
 	let (mut env, forward_configs) = svc_ctx.env(RunContext::Test).await.unwrap();
@@ -336,7 +332,7 @@ async fn run_test(svc_ctx: &ServiceContext, test_name: Option<&str>) -> TestResu
 		}
 	};
 
-	cleanup.run().await.unwrap();
+	// cleanup.run().await.unwrap();
 
 	test_result
 }
