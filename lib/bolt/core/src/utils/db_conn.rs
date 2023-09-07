@@ -71,11 +71,7 @@ impl DatabaseConnection {
 		}
 
 		// Wait for port forwards to open and check if successful
-		tokio::time::sleep(std::time::Duration::from_millis(500)).await;
-		handles
-			.iter()
-			.map(|h| h.check())
-			.collect::<Result<Vec<_>>>()?;
+		DroppablePort::check_all(&handles).await?;
 
 		Ok(DatabaseConnection {
 			redis_hosts,

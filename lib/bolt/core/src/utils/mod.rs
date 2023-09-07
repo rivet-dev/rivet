@@ -5,7 +5,7 @@ use duct::cmd;
 use futures_util::future::{BoxFuture, FutureExt};
 use indicatif::{ProgressBar, ProgressStyle};
 use indoc::formatdoc;
-use tokio::sync::Mutex;
+use tokio::{net::TcpStream, sync::Mutex};
 
 pub mod command_helper;
 pub mod db_conn;
@@ -209,17 +209,41 @@ pub struct PortForwardConfig {
 }
 
 pub struct DroppablePort {
+	local_port: u16,
 	handle: duct::Handle,
 }
 
 impl DroppablePort {
-	pub fn check(&self) -> Result<()> {
+	pub async fn check_all(ports: &Vec<DroppablePort>) -> Result<()> {
+		let mut futures = Vec::new();
+		for port in ports {
+			futures.push(port.check());
+		}
+		futures_util::future::try_join_all(futures).await?;
+		Ok(())
+	}
+
+	pub async fn check(&self) -> Result<()> {
+		// TODO: Probe TCP in loop
+		tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+
+		// Check that handle didn't close
 		if let Some(output) = self.handle.try_wait()? {
 			eprintln!("{}", std::str::from_utf8(&output.stdout)?);
 			bail!(
 				"port forward closed prematurely: {}",
 				std::str::from_utf8(&output.stderr)?
 			);
+		}
+
+		// Probe port
+		match TcpStream::connect(format!("127.0.0.1:{}", self.local_port)).await {
+			Result::Ok(_) => {
+				// println!("Port forward ready: {}", self.local_port)
+			}
+			Err(_) => {
+				bail!("port forward failed: {}", self.local_port)
+			}
 		}
 
 		Ok(())
@@ -238,6 +262,10 @@ pub fn kubectl_port_forward(
 	namespace: &str,
 	(local_port, remote_port): (u16, u16),
 ) -> Result<DroppablePort> {
+	// println!(
+	// 	"Forwarding {}: {} -> {}",
+	// 	service_name, local_port, remote_port
+	// );
 	let handle = cmd!(
 		"kubectl",
 		"port-forward",
@@ -250,5 +278,5 @@ pub fn kubectl_port_forward(
 	.stderr_capture()
 	.start()?;
 
-	Ok(DroppablePort { handle })
+	Ok(DroppablePort { local_port, handle })
 }

@@ -10,7 +10,8 @@ use crate::{
 		fly,
 		nomad::{self, NomadCtx},
 	},
-	tasks, utils,
+	tasks,
+	utils::{self, DroppablePort},
 };
 
 struct TestCleanupManager {
@@ -273,12 +274,7 @@ async fn run_test(svc_ctx: &ServiceContext, test_name: Option<&str>) -> TestResu
 		.unwrap();
 
 	// Wait for port forwards to open and check if successful
-	tokio::time::sleep(std::time::Duration::from_millis(500)).await;
-	forwards
-		.iter()
-		.map(|h| h.check())
-		.collect::<Result<Vec<_>>>()
-		.unwrap();
+	DroppablePort::check_all(&forwards).await.unwrap();
 
 	// Run tests
 	let res = async {
