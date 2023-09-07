@@ -55,8 +55,6 @@ lazy_static::lazy_static! {
 	static ref RUN_CONTEXT: Option<RunContext> = std::env::var("RIVET_RUN_CONTEXT")
 		.ok()
 		.and_then(|ctx| RunContext::from_str(&ctx));
-	static ref NOMAD_REGION: Option<String> = std::env::var("NOMAD_REGION").ok();
-	static ref NOMAD_DC: Option<String> = std::env::var("NOMAD_DC").ok();
 	static ref REGION: Option<String> = std::env::var("RIVET_REGION").ok();
 	static ref NAMESPACE: Option<String> = std::env::var("RIVET_NAMESPACE").ok();
 	static ref CLUSTER_ID: Option<String> = std::env::var("RIVET_CLUSTER_ID").ok();
@@ -71,20 +69,6 @@ lazy_static::lazy_static! {
 		.ok()
 		.map(|s| s == "1")
 		.unwrap_or_default();
-}
-
-pub fn nomad_region() -> &'static str {
-	match &*NOMAD_REGION {
-		Some(x) => x.as_str(),
-		None => panic!("NOMAD_REGION"),
-	}
-}
-
-pub fn nomad_dc() -> &'static str {
-	match &*NOMAD_DC {
-		Some(x) => x.as_str(),
-		None => panic!("NOMAD_DC"),
-	}
 }
 
 pub fn region() -> &'static str {

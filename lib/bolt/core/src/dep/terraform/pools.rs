@@ -67,6 +67,7 @@ pub enum PoolLocalMode {
 #[derive(Serialize, Clone, Builder)]
 #[builder(setter(into))]
 pub struct Pool {
+	// TODO: Remove
 	/// Salt roles applied to this pool.
 	roles: Vec<&'static str>,
 
@@ -195,6 +196,15 @@ pub async fn build_pools(ctx: &ProjectContext) -> Result<HashMap<String, Pool>> 
 			.roles(svc_roles)
 			.vpc(true)
 			.local_mode(PoolLocalMode::Locally)
+			.tunnels(hashmap! {
+				"loki".into() => PoolTunnel {
+					name: "Loki".into(),
+					service: "http://127.0.0.1:9060".into(),
+					access_groups: access.map(|x| vec![x.groups.engineering.clone()]).unwrap_or_default(),
+					service_tokens: access.map(|x| vec![x.services.bolt.clone()]).unwrap_or_default(),
+					app_launcher: true,
+				},
+			})
 			.nebula_firewall_inbound(
 				[
 					nebula_firewall_rules::common(),
