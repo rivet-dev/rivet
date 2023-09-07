@@ -12,7 +12,7 @@ struct LogEntry<'a> {
 }
 
 #[worker(name = "nomad-log-write")]
-async fn worker(ctx: OperationContext<nomad_log::msg::entries::Message>) -> GlobalResult<()> {
+async fn worker(ctx: &OperationContext<nomad_log::msg::entries::Message>) -> GlobalResult<()> {
 	let clickhouse_url = std::env::var("CLICKHOUSE_URL")?;
 	let client = clickhouse::Client::default()
 		.with_url(clickhouse_url)
