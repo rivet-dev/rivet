@@ -608,7 +608,7 @@ impl ProjectContextData {
 		match provider {
 			s3_util::Provider::Minio => {
 				Ok(S3Config {
-					endpoint_internal: "http://minio.minio.svc.cluster.local:9200".into(),
+					endpoint_internal: "http://minio.minio.svc.cluster.local:9000".into(),
 					endpoint_external: format!("https://minio.{}", self.domain_main()),
 					// Minio defaults to us-east-1 region
 					// https://github.com/minio/minio/blob/0ec722bc5430ad768a263b8464675da67330ad7c/cmd/server-main.go#L739
