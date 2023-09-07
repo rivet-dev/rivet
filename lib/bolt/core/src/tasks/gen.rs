@@ -22,8 +22,6 @@ pub async fn generate_project(ctx: &ProjectContext) {
 		rivet_term::status::info("Skipping Terrafrom Init", "");
 	}
 
-	let disable_cargo_workspace = ctx.config_local().generate.disable_cargo_workspace;
-
 	// Generate additional roots
 	let additional_roots = &ctx.config_local().additional_roots;
 	for (_, additional_root) in additional_roots {
@@ -31,122 +29,121 @@ pub async fn generate_project(ctx: &ProjectContext) {
 			.await
 			.expect("additional root path not found");
 
-		generate_root(&path, disable_cargo_workspace).await;
+		generate_root(&path).await;
 	}
 
 	// Generate root
-	generate_root(ctx.path(), disable_cargo_workspace).await;
+	generate_root(ctx.path()).await;
 
 	// Generate regions
 	generate_regions(ctx).await;
 }
 
-async fn generate_root(path: &Path, disable_cargo_workspace: bool) {
+async fn generate_root(path: &Path) {
 	// Generate Cargo files
 	let cargo_toml_path = path.join("svc").join("Cargo.toml");
 	let cargo_lock_path = path.join("svc").join("Cargo.lock");
 	let api_path = path.join("svc").join("api");
 	let pkg_path = path.join("svc").join("pkg");
 
-	if !disable_cargo_workspace {
-		let mut workspace_members = Vec::new();
+	let mut workspace_members = Vec::new();
 
-		// APIs
-		{
-			// Iterate through each pkg folder
-			let mut api_dir = fs::read_dir(api_path).await.unwrap();
-			while let Some(entry) = api_dir.next_entry().await.unwrap() {
-				if !entry.metadata().await.unwrap().is_dir() {
-					continue;
-				}
+	// APIs
+	{
+		// Iterate through each pkg folder
+		let mut api_dir = fs::read_dir(api_path).await.unwrap();
+		while let Some(entry) = api_dir.next_entry().await.unwrap() {
+			if !entry.metadata().await.unwrap().is_dir() {
+				continue;
+			}
 
+			workspace_members.push(format!(
+				r#""api/{entry}""#,
+				entry = entry.file_name().into_string().unwrap()
+			));
+
+			// Remove services' Cargo.lock files in favor of the shared svc
+			// Cargo.toml
+			let _ = fs::remove_file(entry.path().join("Cargo.lock")).await;
+
+			set_license(&entry.path().join("Cargo.toml")).await;
+		}
+	}
+
+	// Packages
+	{
+		// Iterate through each pkg folder
+		let mut pkg_dir = fs::read_dir(pkg_path).await.unwrap();
+		while let Some(pkg) = pkg_dir.next_entry().await.unwrap() {
+			let pkg_metadata = pkg.metadata().await.unwrap();
+			if !pkg_metadata.is_dir() {
+				continue;
+			}
+
+			let _ = fs::remove_file(pkg.path().join("Cargo.lock")).await;
+			let _ = fs::remove_file(pkg.path().join("ops").join("Cargo.lock")).await;
+
+			// Check worker
+			let worker_path = pkg.path().join("worker");
+			if fs::metadata(&worker_path).await.is_ok() {
 				workspace_members.push(format!(
-					r#""api/{entry}""#,
-					entry = entry.file_name().into_string().unwrap()
+					r#""pkg/{pkg}/worker""#,
+					pkg = pkg.file_name().into_string().unwrap(),
 				));
 
 				// Remove services' Cargo.lock files in favor of the shared svc
 				// Cargo.toml
-				let _ = fs::remove_file(entry.path().join("Cargo.lock")).await;
+				let _ = fs::remove_file(worker_path.join("Cargo.lock")).await;
 
-				set_license(&entry.path().join("Cargo.toml")).await;
+				set_license(&worker_path.join("Cargo.toml")).await;
 			}
-		}
 
-		// Packages
-		{
-			// Iterate through each pkg folder
-			let mut pkg_dir = fs::read_dir(pkg_path).await.unwrap();
-			while let Some(pkg) = pkg_dir.next_entry().await.unwrap() {
-				let pkg_metadata = pkg.metadata().await.unwrap();
-				if !pkg_metadata.is_dir() {
-					continue;
-				}
+			// Iterate through `standalone` folder
+			let standalone_path = pkg.path().join("standalone");
+			if fs::metadata(&standalone_path).await.is_ok() {
+				let mut dir = fs::read_dir(standalone_path).await.unwrap();
+				while let Some(entry) = dir.next_entry().await.unwrap() {
+					if entry.metadata().await.unwrap().is_dir() {
+						workspace_members.push(format!(
+							r#""pkg/{pkg}/standalone/{entry}""#,
+							pkg = pkg.file_name().into_string().unwrap(),
+							entry = entry.file_name().into_string().unwrap()
+						));
 
-				let _ = fs::remove_file(pkg.path().join("Cargo.lock")).await;
-				let _ = fs::remove_file(pkg.path().join("ops").join("Cargo.lock")).await;
+						// Remove services' Cargo.lock files in favor of the shared svc
+						// Cargo.toml
+						let _ = fs::remove_file(entry.path().join("Cargo.lock")).await;
 
-				// Check worker
-				let worker_path = pkg.path().join("worker");
-				if fs::metadata(&worker_path).await.is_ok() {
-					workspace_members.push(format!(
-						r#""pkg/{pkg}/worker""#,
-						pkg = pkg.file_name().into_string().unwrap(),
-					));
-
-					// Remove services' Cargo.lock files in favor of the shared svc
-					// Cargo.toml
-					let _ = fs::remove_file(worker_path.join("Cargo.lock")).await;
-
-					set_license(&worker_path.join("Cargo.toml")).await;
-				}
-
-				// Iterate through `standalone` folder
-				let standalone_path = pkg.path().join("standalone");
-				if fs::metadata(&standalone_path).await.is_ok() {
-					let mut dir = fs::read_dir(standalone_path).await.unwrap();
-					while let Some(entry) = dir.next_entry().await.unwrap() {
-						if entry.metadata().await.unwrap().is_dir() {
-							workspace_members.push(format!(
-								r#""pkg/{pkg}/standalone/{entry}""#,
-								pkg = pkg.file_name().into_string().unwrap(),
-								entry = entry.file_name().into_string().unwrap()
-							));
-
-							// Remove services' Cargo.lock files in favor of the shared svc
-							// Cargo.toml
-							let _ = fs::remove_file(entry.path().join("Cargo.lock")).await;
-
-							set_license(&entry.path().join("Cargo.toml")).await;
-						}
+						set_license(&entry.path().join("Cargo.toml")).await;
 					}
 				}
-				// Iterate through `ops` folder
-				let ops_path = pkg.path().join("ops");
-				if fs::metadata(&ops_path).await.is_ok() {
-					let mut dir = fs::read_dir(ops_path).await.unwrap();
-					while let Some(entry) = dir.next_entry().await.unwrap() {
-						if entry.metadata().await.unwrap().is_dir() {
-							workspace_members.push(format!(
-								r#""pkg/{pkg}/ops/{entry}""#,
-								pkg = pkg.file_name().into_string().unwrap(),
-								entry = entry.file_name().into_string().unwrap()
-							));
+			}
+			// Iterate through `ops` folder
+			let ops_path = pkg.path().join("ops");
+			if fs::metadata(&ops_path).await.is_ok() {
+				let mut dir = fs::read_dir(ops_path).await.unwrap();
+				while let Some(entry) = dir.next_entry().await.unwrap() {
+					if entry.metadata().await.unwrap().is_dir() {
+						workspace_members.push(format!(
+							r#""pkg/{pkg}/ops/{entry}""#,
+							pkg = pkg.file_name().into_string().unwrap(),
+							entry = entry.file_name().into_string().unwrap()
+						));
 
-							// Remove services' Cargo.lock files in favor of the shared svc
-							// Cargo.toml
-							let _ = fs::remove_file(entry.path().join("Cargo.lock")).await;
+						// Remove services' Cargo.lock files in favor of the shared svc
+						// Cargo.toml
+						let _ = fs::remove_file(entry.path().join("Cargo.lock")).await;
 
-							set_license(&entry.path().join("Cargo.toml")).await;
-						}
+						set_license(&entry.path().join("Cargo.toml")).await;
 					}
 				}
 			}
 		}
+	}
 
-		// Generate a project manifest for all of the services. This will let us use a shared lockfile.
-		let cargo_project_manifest = indoc::formatdoc!(
-			r#"
+	// Generate a project manifest for all of the services. This will let us use a shared lockfile.
+	let cargo_project_manifest = indoc::formatdoc!(
+		r#"
 			# This is generated by Bolt. Do not modify.
 
 			[workspace]
@@ -164,16 +161,11 @@ async fn generate_root(path: &Path, disable_cargo_workspace: bool) {
 			[profile.dev.build-override]
 			opt-level = 3
 			"#,
-			workspace_members.join(", "),
-		);
-		fs::write(&cargo_toml_path, cargo_project_manifest)
-			.await
-			.unwrap();
-	} else {
-		// Remove previous project-level workspace files
-		let _ = fs::remove_file(&cargo_toml_path).await;
-		let _ = fs::remove_file(&cargo_lock_path).await;
-	}
+		workspace_members.join(", "),
+	);
+	fs::write(&cargo_toml_path, cargo_project_manifest)
+		.await
+		.unwrap();
 
 	update_libs(&path.join("lib")).await;
 }

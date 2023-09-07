@@ -172,43 +172,41 @@ pub async fn up_services<T: AsRef<str>>(
 	eprintln!();
 	rivet_term::status::progress("Building", "(batch)");
 	{
-		// Build all the Rust modules in parallel if enabled
-		if !ctx.config_local().generate.disable_cargo_workspace {
-			let rust_svcs = all_exec_svcs
-				.iter()
-				.filter(|svc_ctx| match svc_ctx.config().runtime {
-					RuntimeKind::Rust {} => true,
-					_ => false,
-				});
+		// Build all the Rust modules in parallel
+		let rust_svcs = all_exec_svcs
+			.iter()
+			.filter(|svc_ctx| match svc_ctx.config().runtime {
+				RuntimeKind::Rust {} => true,
+				_ => false,
+			});
 
-			// Collect rust services by their workspace root
-			let mut svcs_by_workspace = HashMap::new();
-			for svc in rust_svcs {
-				let workspace = svcs_by_workspace
-					.entry(svc.workspace_path())
-					.or_insert_with(Vec::new);
-				workspace.push(svc.cargo_name().expect("no cargo name"));
-			}
+		// Collect rust services by their workspace root
+		let mut svcs_by_workspace = HashMap::new();
+		for svc in rust_svcs {
+			let workspace = svcs_by_workspace
+				.entry(svc.workspace_path())
+				.or_insert_with(Vec::new);
+			workspace.push(svc.cargo_name().expect("no cargo name"));
+		}
 
-			if !svcs_by_workspace.is_empty() {
-				// Run build
-				cargo::cli::build(
-					ctx,
-					cargo::cli::BuildOpts {
-						build_calls: svcs_by_workspace
-							.iter()
-							.map(|(workspace_path, svc_names)| cargo::cli::BuildCall {
-								path: workspace_path.strip_prefix(ctx.path()).unwrap(),
-								bins: &svc_names,
-							})
-							.collect::<Vec<_>>(),
-						release: ctx.build_optimization() == BuildOptimization::Release,
-						jobs: ctx.config_local().rust.num_jobs,
-					},
-				)
-				.await
-				.unwrap();
-			}
+		if !svcs_by_workspace.is_empty() {
+			// Run build
+			cargo::cli::build(
+				ctx,
+				cargo::cli::BuildOpts {
+					build_calls: svcs_by_workspace
+						.iter()
+						.map(|(workspace_path, svc_names)| cargo::cli::BuildCall {
+							path: workspace_path.strip_prefix(ctx.path()).unwrap(),
+							bins: &svc_names,
+						})
+						.collect::<Vec<_>>(),
+					release: ctx.build_optimization() == BuildOptimization::Release,
+					jobs: ctx.config_local().rust.num_jobs,
+				},
+			)
+			.await
+			.unwrap();
 		}
 	}
 
@@ -367,28 +365,7 @@ async fn build_svc(
 ) {
 	match &svc_ctx.config().runtime {
 		RuntimeKind::Rust {} => {
-			let project_ctx = svc_ctx.project().await;
-
-			// Build the service individually if workspace building is
-			// not enabled
-			if project_ctx.config_local().generate.disable_cargo_workspace {
-				cargo::cli::build(
-					&project_ctx,
-					cargo::cli::BuildOpts {
-						build_calls: vec![cargo::cli::BuildCall {
-							path: svc_ctx
-								.workspace_path()
-								.strip_prefix(project_ctx.path())
-								.unwrap(),
-							bins: &[svc_ctx.cargo_name().expect("no cargo name")],
-						}],
-						release: optimization == BuildOptimization::Release,
-						jobs: project_ctx.config_local().rust.num_jobs,
-					},
-				)
-				.await
-				.unwrap();
-			}
+			// Do nothing
 		}
 		RuntimeKind::CRDB { .. }
 		| RuntimeKind::ClickHouse { .. }
