@@ -11,8 +11,6 @@ use crate::{
 
 pub mod api;
 pub mod cli;
-pub mod gen;
-pub mod job_schema;
 
 #[derive(Clone)]
 pub struct NomadCtx {
