@@ -251,11 +251,11 @@ async fn run_test(svc_ctx: &ServiceContext, test_name: Option<&str>) -> TestResu
 		unreachable!();
 	}
 
-	let nomad_ctx = NomadCtx::remote(&project_ctx).await.unwrap();
+	// let nomad_ctx = NomadCtx::remote(&project_ctx).await.unwrap();
 
-	let cleanup = TestCleanupManager::setup(project_ctx.clone(), nomad_ctx.clone())
-		.await
-		.unwrap();
+	// let cleanup = TestCleanupManager::setup(project_ctx.clone(), nomad_ctx.clone())
+	// 	.await
+	// 	.unwrap();
 
 	// Render env
 	let (mut env, forward_configs) = svc_ctx.env(RunContext::Test).await.unwrap();
@@ -332,7 +332,7 @@ async fn run_test(svc_ctx: &ServiceContext, test_name: Option<&str>) -> TestResu
 		}
 	};
 
-	cleanup.run().await.unwrap();
+	// cleanup.run().await.unwrap();
 
 	test_result
 }
