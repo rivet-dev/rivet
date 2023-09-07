@@ -33,6 +33,8 @@ resource "helm_release" "minio" {
 }
 
 resource "kubectl_manifest" "minio_ingress_route" {
+	count = local.has_minio ? 1 : 0
+
 	depends_on = [kubernetes_namespace.minio, helm_release.minio]
 
 	yaml_body = yamlencode({
