@@ -416,7 +416,10 @@ pub async fn test_services<T: AsRef<str>>(ctx: &ProjectContext, svc_names: &[T])
 		test_binaries
 	};
 
-	let test_resuts = futures_util::stream::iter(test_binaries.into_iter().map(|test_binary| {
+	// Run tests
+	eprintln!();
+	rivet_term::status::progress("Running tests", "");
+	let test_results = futures_util::stream::iter(test_binaries.into_iter().map(|test_binary| {
 		let ctx = ctx.clone();
 		async move { run_test(&ctx, test_binary).await }
 	}))
@@ -424,9 +427,85 @@ pub async fn test_services<T: AsRef<str>>(ctx: &ProjectContext, svc_names: &[T])
 	.try_collect::<Vec<_>>()
 	.await?;
 
-	println!("test results: {:#?}", test_resuts);
+	// Print results
+	print_resuilts(&test_results);
 
 	Ok(())
+}
+
+fn print_resuilts(test_results: &[TestResult]) {
+	eprintln!();
+	rivet_term::status::success("Complete", "");
+
+	let passed_count = test_results
+		.iter()
+		.filter(|test_result| matches!(test_result.status, TestStatus::Pass))
+		.count();
+	if passed_count > 0 {
+		eprintln!(
+			"  {}: {}/{}",
+			style("PASS").italic().green(),
+			passed_count,
+			test_results.len()
+		);
+	}
+
+	let failed_count = test_results
+		.iter()
+		.filter(|test_result| matches!(test_result.status, TestStatus::TestFailed))
+		.count();
+	if failed_count > 0 {
+		eprintln!(
+			"  {}: {}/{}",
+			style("FAIL").italic().red(),
+			failed_count,
+			test_results.len()
+		);
+	}
+
+	let compile_failed_count = test_results
+		.iter()
+		.filter(|test_result| matches!(test_result.status, TestStatus::CompileFailed))
+		.count();
+	if compile_failed_count > 0 {
+		eprintln!(
+			"  {}: {}/{}",
+			style("COMPILE FAILED").italic().red(),
+			compile_failed_count,
+			test_results.len()
+		);
+	}
+
+	let timeout_count = test_results
+		.iter()
+		.filter(|test_result| matches!(test_result.status, TestStatus::Timeout))
+		.count();
+	if timeout_count > 0 {
+		eprintln!(
+			"  {}: {}/{}",
+			style("TIMEOUT").italic().red(),
+			timeout_count,
+			test_results.len()
+		);
+	}
+
+	let unknown_count = test_results
+		.iter()
+		.filter(|test_result| {
+			matches!(
+				test_result.status,
+				TestStatus::UnknownExitCode(_) | TestStatus::UnknownError(_)
+			)
+		})
+		.count();
+	if unknown_count > 0 {
+		eprintln!(
+			"  {}: {}/{}",
+			style("UNKNOWN").italic().red(),
+			unknown_count,
+			test_results.len()
+		);
+	}
 }
 
 #[derive(Debug)]
@@ -440,7 +519,7 @@ enum TestStatus {
 }
 
 #[derive(Debug)]
-struct TestResults {
+struct TestResult {
 	package: String,
 	target: String,
 	status: TestStatus,
@@ -449,7 +528,7 @@ struct TestResults {
 	pod_name: String,
 }
 
-async fn run_test(ctx: &ProjectContext, test_binary: TestBinary) -> Result<TestResults> {
+async fn run_test(ctx: &ProjectContext, test_binary: TestBinary) -> Result<TestResult> {
 	let svc_ctx = ctx.service_with_name(&test_binary.package).await;
 	let display_name = format!("{}::{}", svc_ctx.name(), test_binary.target);
 
@@ -529,7 +608,7 @@ async fn run_test(ctx: &ProjectContext, test_binary: TestBinary) -> Result<TestR
 		}
 	}
 
-	Ok(TestResults {
+	Ok(TestResult {
 		package: test_binary.package,
 		target: test_binary.target,
 		status,
