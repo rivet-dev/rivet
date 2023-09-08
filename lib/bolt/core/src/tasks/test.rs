@@ -1,10 +1,12 @@
 use anyhow::*;
+use futures_util::{StreamExt, TryStreamExt};
+use rand::{distributions::Alphanumeric, seq::SliceRandom, thread_rng, Rng};
 use rivet_term::console::style;
 use serde_json::{json, Value};
 use std::{
 	collections::{HashMap, HashSet},
 	path::Path,
-	time::Duration,
+	time::{Duration, Instant},
 };
 use tokio::{fs, process::Command};
 use uuid::Uuid;
@@ -13,13 +15,17 @@ use crate::{
 	config::service::RuntimeKind,
 	context::{BuildContext, ProjectContext, RunContext, ServiceContext},
 	dep::{
-		self, cargo, fly,
+		self,
+		cargo::{self, cli::TestBinary},
+		fly,
 		k8s::gen::{ExecServiceContext, ExecServiceDriver},
 		nomad::{self, NomadCtx},
 	},
 	tasks,
 	utils::{self, command_helper::CommandHelper, DroppablePort},
 };
+
+const TEST_TIMEOUT: Duration = Duration::from_secs(60);
 
 struct TestCleanupManager {
 	project_ctx: ProjectContext,
@@ -408,135 +414,131 @@ pub async fn test_services<T: AsRef<str>>(ctx: &ProjectContext, svc_names: &[T])
 
 		test_binaries
 	};
-	println!("Test binaries: {:#?}", test_binaries);
 
-	// Generate Kubernetes deployments
-	let mut specs = Vec::new();
-	let mut k8s_svc_names = Vec::new();
-	{
-		eprintln!();
-		rivet_term::status::progress("Generating specs", "");
+	let test_resuts = futures_util::stream::iter(test_binaries.into_iter().map(|test_binary| {
+		let ctx = ctx.clone();
+		async move { run_test(&ctx, test_binary).await }
+	}))
+	.buffer_unordered(8)
+	.try_collect::<Vec<_>>()
+	.await?;
 
-		// Create directory for specs
-		fs::create_dir_all(ctx.gen_path().join("kubernetes")).await?;
-
-		let pb = utils::progress_bar(test_binaries.len());
-		for test_binary in test_binaries {
-			// Convert path relative to project
-			let relative_path = test_binary
-				.path
-				.strip_prefix(ctx.path())
-				.context("path not in project")?;
-			let container_path = Path::new("/rivet-src").join(relative_path);
-			println!("container path: {:?}", container_path);
-
-			// Build exec ctx
-			let svc_ctx = ctx.service_with_name(&test_binary.package).await;
-			let exec_ctx = ExecServiceContext {
-				svc_ctx,
-				build_context: BuildContext::Test {
-					test_id: Uuid::new_v4(),
-				},
-				driver: ExecServiceDriver::LocalBinaryArtifact {
-					exec_path: container_path,
-					// Only run one test at a time
-					// args: vec!["--test-threads".into(), "1".into()],
-					args: vec![],
-				},
-			};
-
-			pb.set_message(exec_ctx.svc_ctx.name());
-
-			// Save specs
-			specs.extend(dep::k8s::gen::gen_svc(&exec_ctx).await);
-			k8s_svc_names.push((svc_ctx, dep::k8s::gen::k8s_svc_name(&exec_ctx)));
-
-			pb.inc(1);
-		}
-		pb.finish();
-	}
-
-	// Apply specs
-	eprintln!();
-	rivet_term::status::progress("Running", "");
-	dep::k8s::cli::apply_specs(specs).await?;
-
-	// Tail pod
-	#[derive(Debug)]
-	enum FailReason {
-		ExitCode(i32),
-		Error(String),
-	}
-	let mut passed = Vec::new();
-	let mut failed = Vec::new();
-	for (svc_ctx, k8s_svc_name) in k8s_svc_names {
-		// Tail pod results
-		match tail_or_timeout_pod(&k8s_svc_name).await {
-			Resut::Ok(exit_status) => {
-				if exit_status == 0 {
-					rivet_term::status::success("Passed", svc_ctx.name());
-					passed.push(svc_ctx);
-				} else {
-					rivet_term::status::error(
-						"Failed",
-						format!("{}, exit code {}", svc_ctx.name(), exit_status),
-					);
-					failed.push((svc_ctx, FailReason::ExitCode(exit_status)));
-				}
-			}
-			Err(err) => {
-				rivet_term::status::error("Failed", format!("{}, error: {}", svc_ctx.name(), err));
-				failed.push((svc_ctx, FailReason::Error(err.to_string())));
-			}
-		}
-	}
-
-	// Print results
-	eprintln!();
-	rivet_term::status::success(
-		"Finished",
-		format!(
-			"{}/{} passed",
-			(rust_svcs.len() - failed.len()),
-			rust_svcs.len()
-		),
-	);
-
-	for svc in &passed {
-		eprintln!("  * {}: {}", svc.name(), style("PASS").italic().green());
-	}
-
-	for (svc, reason) in &failed {
-		eprintln!(
-			"  * {}: {} ({:?})",
-			svc.name(),
-			style("FAIL").italic().red(),
-			reason
-		);
-	}
+	println!("test results: {:#?}", test_resuts);
 
 	Ok(())
 }
 
-async fn tail_or_timeout_pod(pod: &str) -> Result<i32> {
-	match tokio::time::timeout(Duration::from_secs(5), tail_pod(pod)).await {
-		Result::Ok(x) => x,
+#[derive(Debug)]
+enum TestStatus {
+	Pass,
+	TestFailed,
+	CompileFailed,
+	Timeout,
+	UnknownExitCode(i32),
+	UnknownError(String),
+}
+
+#[derive(Debug)]
+struct TestResults {
+	status: TestStatus,
+	setup_duration: Duration,
+	test_duration: Duration,
+	pod_name: String,
+}
+
+async fn run_test(ctx: &ProjectContext, test_binary: TestBinary) -> Result<TestResults> {
+	let svc_ctx = ctx.service_with_name(&test_binary.package).await;
+
+	let setup_start = Instant::now();
+	rivet_term::status::progress("Starting", svc_ctx.name());
+
+	// Convert path relative to project
+	let relative_path = test_binary
+		.path
+		.strip_prefix(ctx.path())
+		.context("path not in project")?;
+	let container_path = Path::new("/rivet-src").join(relative_path);
+
+	// Build exec ctx
+	let exec_ctx = ExecServiceContext {
+		svc_ctx: svc_ctx.clone(),
+		build_context: BuildContext::Test {
+			test_id: gen_test_id(),
+		},
+		driver: ExecServiceDriver::LocalBinaryArtifact {
+			exec_path: container_path,
+			// Only run one test at a time
+			// args: vec!["--test-threads".into(), "1".into()],
+			args: vec![],
+		},
+	};
+
+	// Build specs
+	let specs = dep::k8s::gen::gen_svc(&exec_ctx).await;
+	let pod_name = dep::k8s::gen::k8s_svc_name(&exec_ctx);
+
+	// Apply pod
+	dep::k8s::cli::apply_specs(specs).await?;
+	let setup_duration = setup_start.elapsed();
+
+	// Tail pod
+	let test_start_time = Instant::now();
+	let status = match tokio::time::timeout(TEST_TIMEOUT, tail_pod(&pod_name)).await {
+		Result::Ok(Result::Ok(x)) => x,
+		Result::Ok(Err(err)) => TestStatus::UnknownError(err.to_string()),
 		Err(_) => {
 			// Kill pod
 			Command::new("kubectl")
-				.args(&["delete", "pod", pod, "-n", "rivet-service"])
+				.args(&["delete", "pod", &pod_name, "-n", "rivet-service"])
 				.output()
 				.await?;
 
-			bail!("test timed out")
+			TestStatus::Timeout
+		}
+	};
+
+	// Print status
+	match &status {
+		TestStatus::Pass => {
+			rivet_term::status::success("Passed", svc_ctx.name());
+		}
+		TestStatus::TestFailed => {
+			rivet_term::status::error("Failed", svc_ctx.name());
+		}
+		TestStatus::CompileFailed => {
+			rivet_term::status::error("Compile failed", svc_ctx.name());
+		}
+		TestStatus::Timeout => {
+			rivet_term::status::error("Timeout", svc_ctx.name());
+		}
+		TestStatus::UnknownExitCode(code) => {
+			rivet_term::status::error(&format!("Unknown exit code {}", code), svc_ctx.name());
+		}
+		TestStatus::UnknownError(err) => {
+			rivet_term::status::error(&format!("Unknown error: {}", err), svc_ctx.name());
 		}
 	}
+
+	Ok(TestResults {
+		status,
+		setup_duration,
+		test_duration: test_start_time.elapsed(),
+		pod_name,
+	})
 }
 
-async fn tail_pod(pod: &str) -> Result<i32> {
-	// TODO: Kill the pod after x seconds
+fn gen_test_id() -> String {
+	let mut rng = thread_rng();
+	(0..8)
+		.map(|_| {
+			let mut chars = ('a'..='z').chain('0'..='9').collect::<Vec<_>>();
+			chars.shuffle(&mut rng);
+			chars[0]
+		})
+		.collect()
+}
 
-	// Wait for the pod to start
+async fn tail_pod(pod: &str) -> Result<TestStatus> {
 	loop {
 		let output = Command::new("kubectl")
 			.args(&[
@@ -551,38 +553,39 @@ async fn tail_pod(pod: &str) -> Result<i32> {
 			.await?;
 
 		let output_str = String::from_utf8_lossy(&output.stdout);
-		if !matches!(output_str.trim(), "Pending" | "ContainerCreating") {
-			println!("Received status {:?}", output_str);
-			break;
+		let output_str = output_str.trim();
+		match output_str {
+			"Pending" | "Running" => {
+				// Continue
+				tokio::time::sleep(Duration::from_millis(250)).await;
+			}
+			"Succeeded" | "Failed" => {
+				// Get the exit code of the pod
+				let output = Command::new("kubectl")
+					.args(&[
+						"get",
+						"pod",
+						pod,
+						"-n",
+						"rivet-service",
+						"-o=jsonpath={.status.containerStatuses[0].state.terminated.exitCode}",
+					])
+					.output()
+					.await?;
+
+				let exit_code_str = String::from_utf8_lossy(&output.stdout);
+				let exit_code: i32 = exit_code_str.trim().parse()?;
+
+				let test_status = match exit_code {
+					0 => TestStatus::Pass,
+					1 => TestStatus::TestFailed,
+					101 => TestStatus::CompileFailed,
+					x => TestStatus::UnknownExitCode(x),
+				};
+
+				return Ok(test_status);
+			}
+			_ => bail!("unexpected pod status: {}", output_str),
 		}
-		tokio::time::sleep(Duration::from_secs(1)).await;
 	}
-
-	// Tail logs for pod
-	let log_status = Command::new("kubectl")
-		.args(&["logs", "-f", pod, "-n", "rivet-service"])
-		.spawn()?
-		.wait()
-		.await?;
-	ensure!(log_status.success(), "failed to tail logs");
-
-	// Get the exit code of the pod
-	let output = Command::new("kubectl")
-		.args(&[
-			"get",
-			"pod",
-			pod,
-			"-n",
-			"rivet-service",
-			"-o=jsonpath={.status.containerStatuses[0].state.terminated.exitCode}",
-		])
-		.output()
-		.await?;
-
-	let exit_code_str = String::from_utf8_lossy(&output.stdout);
-	let exit_code: i32 = exit_code_str.trim().parse()?;
-
-	tokio::time::sleep(Duration::from_secs(999)).await;
-
-	Ok(exit_code)
 }

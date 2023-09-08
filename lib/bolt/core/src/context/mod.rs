@@ -25,10 +25,10 @@ impl RunContext {
 }
 
 /// How the service is going to be built.
-#[derive(Eq, PartialEq, Clone, Copy)]
+#[derive(Eq, PartialEq, Clone)]
 pub enum BuildContext {
 	Bin { optimization: BuildOptimization },
-	Test { test_id: Uuid },
+	Test { test_id: String },
 }
 
 impl BuildContext {

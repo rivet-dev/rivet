@@ -216,6 +216,7 @@ pub async fn up_services<T: AsRef<str>>(
 	let pb = utils::progress_bar(all_exec_svcs.len());
 	let all_exec_svcs_with_build_plan = futures_util::stream::iter(all_exec_svcs.clone())
 		.map(|svc| {
+			let build_context = build_context.clone();
 			let opts = opts.clone();
 			let pb = pb.clone();
 
@@ -269,7 +270,7 @@ pub async fn up_services<T: AsRef<str>>(
 			// Save exec ctx
 			exec_ctxs.push(ExecServiceContext {
 				svc_ctx: svc_ctx.clone().clone(),
-				build_context,
+				build_context: build_context.clone(),
 				driver: match &build_plan {
 					ServiceBuildPlan::BuildLocally { exec_path } => {
 						derive_local_build_driver(svc_ctx, exec_path.clone()).await

@@ -46,7 +46,7 @@ enum SpecType {
 }
 
 pub fn k8s_svc_name(exec_ctx: &ExecServiceContext) -> String {
-	match exec_ctx.build_context {
+	match &exec_ctx.build_context {
 		BuildContext::Bin { .. } => format!("rivet-{}", exec_ctx.svc_ctx.name()),
 		BuildContext::Test { test_id } => {
 			format!("rivet-{}-test-{test_id}", exec_ctx.svc_ctx.name())

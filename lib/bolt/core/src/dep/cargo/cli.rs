@@ -176,7 +176,7 @@ pub struct BuildTestCall<'a, T: AsRef<str>> {
 }
 
 #[derive(Debug)]
-pub struct TestBinaries {
+pub struct TestBinary {
 	pub package: String,
 	pub path: PathBuf,
 }
@@ -184,7 +184,7 @@ pub struct TestBinaries {
 pub async fn build_tests<'a, T: AsRef<str>>(
 	ctx: &ProjectContext,
 	opts: BuildTestOpts<'a, T>,
-) -> Result<Vec<TestBinaries>> {
+) -> Result<Vec<TestBinary>> {
 	let mut test_binaries = vec![];
 	for build_call in opts.build_calls {
 		let abs_path = ctx.path().join(build_call.path);
@@ -233,7 +233,7 @@ pub async fn build_tests<'a, T: AsRef<str>>(
 						.context("split_once failed")?
 						.0;
 
-					test_binaries.push(TestBinaries {
+					test_binaries.push(TestBinary {
 						package: package.to_string(),
 						path: PathBuf::from(executable),
 					})
