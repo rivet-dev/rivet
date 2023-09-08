@@ -4,6 +4,7 @@ use serde_json::{json, Value};
 use std::{
 	collections::{HashMap, HashSet},
 	path::Path,
+	time::Duration,
 };
 use tokio::{fs, process::Command};
 use uuid::Uuid;
@@ -411,6 +412,7 @@ pub async fn test_services<T: AsRef<str>>(ctx: &ProjectContext, svc_names: &[T])
 
 	// Generate Kubernetes deployments
 	let mut specs = Vec::new();
+	let mut k8s_svc_names = Vec::new();
 	{
 		eprintln!();
 		rivet_term::status::progress("Generating specs", "");
@@ -447,6 +449,7 @@ pub async fn test_services<T: AsRef<str>>(ctx: &ProjectContext, svc_names: &[T])
 
 			// Save specs
 			specs.extend(dep::k8s::gen::gen_svc(&exec_ctx).await);
+			k8s_svc_names.push((svc_ctx, dep::k8s::gen::k8s_svc_name(&exec_ctx)));
 
 			pb.inc(1);
 		}
@@ -455,24 +458,131 @@ pub async fn test_services<T: AsRef<str>>(ctx: &ProjectContext, svc_names: &[T])
 
 	// Apply specs
 	eprintln!();
-	rivet_term::status::progress("Applying", "");
+	rivet_term::status::progress("Running", "");
 	dep::k8s::cli::apply_specs(specs).await?;
 
-	// TODO: Tail logs
+	// Tail pod
+	#[derive(Debug)]
+	enum FailReason {
+		ExitCode(i32),
+		Error(String),
+	}
+	let mut passed = Vec::new();
+	let mut failed = Vec::new();
+	for (svc_ctx, k8s_svc_name) in k8s_svc_names {
+		// Tail pod results
+		match tail_or_timeout_pod(&k8s_svc_name).await {
+			Resut::Ok(exit_status) => {
+				if exit_status == 0 {
+					rivet_term::status::success("Passed", svc_ctx.name());
+					passed.push(svc_ctx);
+				} else {
+					rivet_term::status::error(
+						"Failed",
+						format!("{}, exit code {}", svc_ctx.name(), exit_status),
+					);
+					failed.push((svc_ctx, FailReason::ExitCode(exit_status)));
+				}
+			}
+			Err(err) => {
+				rivet_term::status::error("Failed", format!("{}, error: {}", svc_ctx.name(), err));
+				failed.push((svc_ctx, FailReason::Error(err.to_string())));
+			}
+		}
+	}
 
+	// Print results
 	eprintln!();
-	rivet_term::status::success("Finished", "");
+	rivet_term::status::success(
+		"Finished",
+		format!(
+			"{}/{} passed",
+			(rust_svcs.len() - failed.len()),
+			rust_svcs.len()
+		),
+	);
+
+	for svc in &passed {
+		eprintln!("  * {}: {}", svc.name(), style("PASS").italic().green());
+	}
+
+	for (svc, reason) in &failed {
+		eprintln!(
+			"  * {}: {} ({:?})",
+			svc.name(),
+			style("FAIL").italic().red(),
+			reason
+		);
+	}
 
 	Ok(())
 }
 
-async fn write_k8s_spec(ctx: &ProjectContext, name: String, spec: serde_json::Value) -> Result<()> {
-	let spec_path = ctx
-		.gen_path()
-		.join("kubernetes")
-		.join(format!("{}.json", name));
+async fn tail_or_timeout_pod(pod: &str) -> Result<i32> {
+	match tokio::time::timeout(Duration::from_secs(5), tail_pod(pod)).await {
+		Result::Ok(x) => x,
+		Err(_) => {
+			// Kill pod
+			Command::new("kubectl")
+				.args(&["delete", "pod", pod, "-n", "rivet-service"])
+				.output()
+				.await?;
 
-	fs::write(spec_path, serde_json::to_vec(&spec)?).await?;
+			bail!("test timed out")
+		}
+	}
+}
 
-	Ok(())
+async fn tail_pod(pod: &str) -> Result<i32> {
+	// TODO: Kill the pod after x seconds
+
+	// Wait for the pod to start
+	loop {
+		let output = Command::new("kubectl")
+			.args(&[
+				"get",
+				"pod",
+				pod,
+				"-n",
+				"rivet-service",
+				"-o=jsonpath={.status.phase}",
+			])
+			.output()
+			.await?;
+
+		let output_str = String::from_utf8_lossy(&output.stdout);
+		if !matches!(output_str.trim(), "Pending" | "ContainerCreating") {
+			println!("Received status {:?}", output_str);
+			break;
+		}
+		tokio::time::sleep(Duration::from_secs(1)).await;
+	}
+
+	// Tail logs for pod
+	let log_status = Command::new("kubectl")
+		.args(&["logs", "-f", pod, "-n", "rivet-service"])
+		.spawn()?
+		.wait()
+		.await?;
+	ensure!(log_status.success(), "failed to tail logs");
+
+	// Get the exit code of the pod
+	let output = Command::new("kubectl")
+		.args(&[
+			"get",
+			"pod",
+			pod,
+			"-n",
+			"rivet-service",
+			"-o=jsonpath={.status.containerStatuses[0].state.terminated.exitCode}",
+		])
+		.output()
+		.await?;
+
+	let exit_code_str = String::from_utf8_lossy(&output.stdout);
+	let exit_code: i32 = exit_code_str.trim().parse()?;
+
+	tokio::time::sleep(Duration::from_secs(999)).await;
+
+	Ok(exit_code)
 }

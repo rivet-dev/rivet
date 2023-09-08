@@ -45,8 +45,19 @@ enum SpecType {
 	CronJob,
 }
 
+pub fn k8s_svc_name(exec_ctx: &ExecServiceContext) -> String {
+	match exec_ctx.build_context {
+		BuildContext::Bin { .. } => format!("rivet-{}", exec_ctx.svc_ctx.name()),
+		BuildContext::Test { test_id } => {
+			format!("rivet-{}-test-{test_id}", exec_ctx.svc_ctx.name())
+		}
+	}
+}
+
 /// Generates a job definition for services for the development Nomad cluster.
 pub async fn gen_svc(exec_ctx: &ExecServiceContext) -> Vec<serde_json::Value> {
+	let service_name = k8s_svc_name(exec_ctx);
+
 	let ExecServiceContext {
 		svc_ctx,
 		build_context,
@@ -71,11 +82,6 @@ pub async fn gen_svc(exec_ctx: &ExecServiceContext) -> Vec<serde_json::Value> {
 				unreachable!()
 			}
 		},
-	};
-
-	let service_name = match build_context {
-		BuildContext::Bin { .. } => format!("rivet-{}", svc_ctx.name()),
-		BuildContext::Test { test_id } => format!("rivet-{}-test-{test_id}", svc_ctx.name()),
 	};
 
 	let has_health = project_ctx
