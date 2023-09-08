@@ -364,7 +364,7 @@ impl ServiceContextData {
 				// Derive the build path
 				let optimization = match &build_context {
 					BuildContext::Bin { optimization } => optimization,
-					BuildContext::Test => &BuildOptimization::Debug,
+					BuildContext::Test { .. } => &BuildOptimization::Debug,
 				};
 				let output_path = self.rust_bin_path(optimization).await;
 

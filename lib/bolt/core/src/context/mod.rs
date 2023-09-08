@@ -1,3 +1,5 @@
+use uuid::Uuid;
+
 mod project;
 mod service;
 
@@ -26,21 +28,21 @@ impl RunContext {
 #[derive(Eq, PartialEq, Clone, Copy)]
 pub enum BuildContext {
 	Bin { optimization: BuildOptimization },
-	Test,
+	Test { test_id: Uuid },
 }
 
 impl BuildContext {
 	pub fn short(&self) -> String {
 		match self {
 			BuildContext::Bin { optimization } => format!("bin-{}", optimization.short()),
-			BuildContext::Test => "test".into(),
+			BuildContext::Test { .. } => "test".into(),
 		}
 	}
 
 	pub fn path(&self) -> String {
 		match self {
 			BuildContext::Bin { optimization } => format!("bin/{}", optimization.short()),
-			BuildContext::Test => "test".into(),
+			BuildContext::Test { .. } => "test".into(),
 		}
 	}
 }

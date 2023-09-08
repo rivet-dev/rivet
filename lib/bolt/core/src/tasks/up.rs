@@ -308,6 +308,7 @@ pub async fn up_services<T: AsRef<str>>(
 	//
 	// We resolve the upstream services after applying Terraform since the services we need to
 	// resolve won't exist yet.
+	let mut specs = Vec::new();
 	{
 		eprintln!();
 		rivet_term::status::progress("Generating specs", "");
@@ -315,35 +316,22 @@ pub async fn up_services<T: AsRef<str>>(
 		// Create directory for specs
 		fs::create_dir_all(ctx.gen_path().join("kubernetes")).await?;
 
-		let leader_region_id = ctx.primary_region_or_local();
-
 		let pb = utils::progress_bar(all_exec_svcs.len());
 		for exec_ctx in &exec_ctxs {
 			pb.set_message(exec_ctx.svc_ctx.name());
 
-			// Write all specs to file
-			for (spec_name, spec) in dep::k8s::gen::gen_svc(&leader_region_id, &exec_ctx).await {
-				write_k8s_spec(
-					ctx,
-					format!("{}-{}", exec_ctx.svc_ctx.name(), spec_name),
-					spec,
-				)
-				.await?;
-			}
+			// Save specs
+			specs.extend(dep::k8s::gen::gen_svc(&exec_ctx).await);
 
 			pb.inc(1);
 		}
 		pb.finish();
 	}
 
-	// Apply kubernetes specs
+	// Apply specs
 	eprintln!();
 	rivet_term::status::progress("Applying", "");
-	let mut cmd = std::process::Command::new("sh");
-	cmd.current_dir(ctx.path());
-	cmd.arg("-c")
-		.arg("kubectl apply -f 'gen/kubernetes/*.json'");
-	cmd.exec().await?;
+	dep::k8s::cli::apply_specs(specs).await?;
 
 	eprintln!();
 	rivet_term::status::success("Finished", "");
@@ -418,15 +406,4 @@ async fn derive_uploaded_svc_driver(
 			unreachable!()
 		}
 	}
-}
-
-async fn write_k8s_spec(ctx: &ProjectContext, name: String, spec: serde_json::Value) -> Result<()> {
-	let spec_path = ctx
-		.gen_path()
-		.join("kubernetes")
-		.join(format!("{}.json", name));
-
-	fs::write(spec_path, serde_json::to_vec(&spec)?).await?;
-
-	Ok(())
 }

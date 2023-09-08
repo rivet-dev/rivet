@@ -37,35 +37,46 @@ pub enum ExecServiceDriver {
 	},
 }
 
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum SpecType {
+	Pod,
+	Deployment,
+	Job,
+	CronJob,
+}
+
 /// Generates a job definition for services for the development Nomad cluster.
-pub async fn gen_svc(
-	region_id: &str,
-	exec_ctx: &ExecServiceContext,
-) -> HashMap<&'static str, serde_json::Value> {
+pub async fn gen_svc(exec_ctx: &ExecServiceContext) -> Vec<serde_json::Value> {
 	let ExecServiceContext {
 		svc_ctx,
-		build_context: _,
+		build_context,
 		driver,
 	} = exec_ctx;
 
 	let project_ctx = svc_ctx.project().await;
-	let mut specs = HashMap::with_capacity(1);
+	let mut specs = Vec::new();
 
-	let (spec_type, _reschedule_attempts) = match svc_ctx.config().kind {
-		ServiceKind::Headless { .. }
-		| ServiceKind::Consumer { .. }
-		| ServiceKind::Api { .. }
-		| ServiceKind::Static { .. } => ("deployment", 0),
-		ServiceKind::Oneshot { .. } => ("job", 1),
-		ServiceKind::Periodic { .. } => ("cron-job", 1),
-		ServiceKind::Operation { .. }
-		| ServiceKind::Database { .. }
-		| ServiceKind::Cache { .. } => {
-			unreachable!()
-		}
+	let spec_type = match build_context {
+		BuildContext::Test { .. } => SpecType::Pod,
+		BuildContext::Bin { .. } => match svc_ctx.config().kind {
+			ServiceKind::Headless { .. }
+			| ServiceKind::Consumer { .. }
+			| ServiceKind::Api { .. }
+			| ServiceKind::Static { .. } => SpecType::Deployment,
+			ServiceKind::Oneshot { .. } => SpecType::Job,
+			ServiceKind::Periodic { .. } => SpecType::CronJob,
+			ServiceKind::Operation { .. }
+			| ServiceKind::Database { .. }
+			| ServiceKind::Cache { .. } => {
+				unreachable!()
+			}
+		},
 	};
 
-	let service_name = format!("rivet-{}", svc_ctx.name());
+	let service_name = match build_context {
+		BuildContext::Bin { .. } => format!("rivet-{}", svc_ctx.name()),
+		BuildContext::Test { test_id } => format!("rivet-{}-test-{test_id}", svc_ctx.name()),
+	};
 
 	let has_health = project_ctx
 		.ns()
@@ -263,78 +274,88 @@ pub async fn gen_svc(
 		.into_iter()
 		.map(|(k, v)| (k, base64::encode(v)))
 		.collect::<HashMap<_, _>>();
-	specs.insert(
-		"secret-env",
-		json!({
-			"apiVersion": "v1",
-			"kind": "Secret",
-			"metadata": {
-				"name": secret_env_name,
-				"namespace": "rivet-service"
-			},
-			"data": secret_data
-		}),
-	);
+	specs.push(json!({
+		"apiVersion": "v1",
+		"kind": "Secret",
+		"metadata": {
+			"name": secret_env_name,
+			"namespace": "rivet-service"
+		},
+		"data": secret_data
+	}));
 
 	// Create priority class
 	let priority_class_name = format!("{}-priority", service_name);
-	specs.insert(
-		"priority",
-		json!({
-			"apiVersion": "scheduling.k8s.io/v1",
-			"kind": "PriorityClass",
-			"metadata": {
-				"name": priority_class_name,
-				"namespace": "rivet-service"
-			},
-			"value": svc_ctx.config().service.priority()
-		}),
-	);
+	specs.push(json!({
+		"apiVersion": "scheduling.k8s.io/v1",
+		"kind": "PriorityClass",
+		"metadata": {
+			"name": priority_class_name,
+			"namespace": "rivet-service"
+		},
+		"value": svc_ctx.config().service.priority()
+	}));
 
 	// Create pod template
+	let pod_spec = json!({
+		"priorityClassName": priority_class_name,
+		// TODO: `OnFailure` Doesn't work with deployments
+		"restartPolicy": if matches!(build_context, BuildContext::Test { .. }) {
+			"Never"
+		} else if spec_type == SpecType::Deployment {
+			"Always"
+		} else {
+			"OnFailure"
+		},
+		"imagePullSecrets": [{
+			"name": "docker-auth"
+		}],
+		"containers": [{
+			"name": "service",
+			"image": image,
+			"imagePullPolicy": image_pull_policy,
+			"command": command,
+			// "command": ["/bin/sh", "-c", "printenv && sleep 1000"],
+			"args": args,
+			"env": env,
+			"envFrom": [{
+				"secretRef": {
+					"name": secret_env_name
+				}
+			}],
+			"volumeMounts": volume_mounts,
+			"ports": ports,
+			"livenessProbe": health_check,
+			"resources": resources
+		}],
+		"volumes": volumes
+	});
 	let pod_template = json!({
 		"metadata": {
 			"labels": {
 				"app.kubernetes.io/name": service_name
 			}
 		},
-		"spec": {
-			"priorityClassName": priority_class_name,
-			// TODO: `OnFailure` Doesn't work with deployments
-			"restartPolicy": if spec_type == "deployment" {
-				"Always"
-			} else {
-				"OnFailure"
-			},
-			"imagePullSecrets": [{
-				"name": "docker-auth"
-			}],
-			"containers": [{
-				"name": "service",
-				"image": image,
-				"imagePullPolicy": image_pull_policy,
-				"command": command,
-				// "command": ["/bin/sh", "-c", "printenv && sleep 1000"],
-				"args": args,
-				"env": env,
-				"envFrom": [{
-					"secretRef": {
-						"name": secret_env_name
-					}
-				}],
-				"volumeMounts": volume_mounts,
-				"ports": ports,
-				"livenessProbe": health_check,
-				"resources": resources
-			}],
-			"volumes": volumes
-		}
+		"spec": pod_spec,
 	});
 
-	if spec_type == "deployment" {
-		specs.insert(
-			"deployment",
-			json!({
+	match spec_type {
+		SpecType::Pod => {
+			specs.push(json!({
+				"apiVersion": "v1",
+				"kind": "Pod",
+				"metadata": {
+					"name": service_name,
+					"namespace": "rivet-service",
+					"labels": {
+						"app.kubernetes.io/name": service_name
+					}
+				},
+				"spec": pod_spec
+			}));
+		}
+		SpecType::Deployment => {
+			specs.push(json!({
 				"apiVersion": "apps/v1",
 				"kind": "Deployment",
 				"metadata": {
@@ -353,12 +374,10 @@ pub async fn gen_svc(
 					},
 					"template": pod_template
 				}
-			}),
-		);
-	} else if spec_type == "job" {
-		specs.insert(
-			"job",
-			json!({
+			}));
+		}
+		SpecType::Job => {
+			specs.push(json!({
 				"apiVersion": "batch/v1",
 				"kind": "Job",
 				"metadata": {
@@ -375,17 +394,19 @@ pub async fn gen_svc(
 					"ttlSecondsAfterFinished": 1,
 					"template": pod_template
 				}
-			}),
-		);
-	} else if let ServiceKind::Periodic {
-		cron,
-		prohibit_overlap,
-		time_zone: _,
-	} = &svc_ctx.config().kind
-	{
-		specs.insert(
-			"cron-job",
-			json!({
+			}));
+		}
+		SpecType::CronJob => {
+			let ServiceKind::Periodic {
+				cron,
+				prohibit_overlap,
+				time_zone: _,
+			} = &svc_ctx.config().kind
+			else {
+				unreachable!()
+			};
+
+			specs.push(json!({
 				"apiVersion": "batch/v1",
 				"kind": "CronJob",
 				"metadata": {
@@ -410,16 +431,14 @@ pub async fn gen_svc(
 						}
 					}
 				}
-			}),
-		);
-	} else {
-		panic!("invalid `spec_type` value `{}`", spec_type);
+			}));
+		}
 	}
 
-	if svc_ctx.config().kind.has_server() {
-		specs.insert(
-			"http-server",
-			json!({
+	// Network the service
+	if matches!(build_context, BuildContext::Bin { .. }) {
+		if svc_ctx.config().kind.has_server() {
+			specs.push(json!({
 				"apiVersion": "v1",
 				"kind": "Service",
 				"metadata": {
@@ -437,12 +456,12 @@ pub async fn gen_svc(
 						"targetPort": "http"
 					}]
 				}
-			}),
-		);
-	}
+			}));
+		}
 
-	if let Some(router) = svc_ctx.config().kind.router() {
-		build_ingress_router(&project_ctx, svc_ctx, &service_name, &router, &mut specs);
+		if let Some(router) = svc_ctx.config().kind.router() {
+			build_ingress_router(&project_ctx, svc_ctx, &service_name, &router, &mut specs);
+		}
 	}
 
 	specs
@@ -482,7 +501,7 @@ fn build_ingress_router(
 	svc_ctx: &ServiceContext,
 	service_name: &str,
 	router: &ServiceRouter,
-	specs: &mut HashMap<&str, serde_json::Value>,
+	specs: &mut Vec<serde_json::Value>,
 ) {
 	// Enable Traefik if there are mounts
 	if !router.mounts.is_empty() {}
@@ -571,114 +590,102 @@ fn build_ingress_router(
 			.map(|mw| mw["metadata"].clone())
 			.collect::<Vec<_>>();
 
-		specs.insert(
-			"middlewares",
-			json!({
-				"apiVersion": "v1",
-				"kind": "List",
-				"items": middlewares
-			}),
-		);
+		specs.push(json!({
+			"apiVersion": "v1",
+			"kind": "List",
+			"items": middlewares
+		}));
 
 		// Build insecure router
-		specs.insert(
-			"ingress-insecure",
-			json!({
-				"apiVersion": "traefik.containo.us/v1alpha1",
-				"kind": "IngressRoute",
-				"metadata": {
-					"name": format!("{}-{i}-insecure", svc_ctx.name()),
-					"namespace": "traefik"
-				},
-				"spec": {
-					"entryPoints": [ "web" ],
-					"routes": [
-						{
-							"kind": "Rule",
-							"match": rule,
-							"middlewares": ingress_middlewares,
-							"services": [
-								{
-									"kind": "Service",
-									"name": service_name,
-									"namespace": "rivet-service",
-									"port": 80
-								}
-							]
-						}
-					],
-				}
-			}),
-		);
-
-		// Build secure router
-		specs.insert(
-			"ingress-secure",
-			json!({
-				"apiVersion": "traefik.containo.us/v1alpha1",
-				"kind": "IngressRoute",
-				"metadata": {
-					"name": format!("{}-{i}-secure", svc_ctx.name()),
-					"namespace": "traefik"
-				},
-				"spec": {
-					"entryPoints": [ "websecure" ],
-					"routes": [
-						{
-							"kind": "Rule",
-							"match": rule,
-							"middlewares": ingress_middlewares,
-							"services": [
-								{
-									"kind": "Service",
-									"name": service_name,
-									"namespace": "rivet-service",
-									"port": 80
-								}
-							]
-						}
-					],
-					"tls": {
-						"secretName": "ingress-tls-cert",
-						"options": {
-							"name": "ingress-tls",
-							"namespace": "traefik"
-						},
-						// "domains": [
-						// 	{
-						// 		"main": "example.net",
-						// 		"sans": [
-						// 			"a.example.net",
-						// 			"b.example.net"
-						// 		]
-						// 	}
-						// ]
-					}
-				}
-			}),
-		);
-
-		if svc_ctx.name() == "api-cf-verification" {
-			specs.insert(
-				"challenge-ingress",
-				json!({
-					"apiVersion": "traefik.containo.us/v1alpha1",
-					"kind": "IngressRoute",
-					"metadata": {
-						"name": "cf-verification-challenge",
-						"namespace": "traefik"
-					},
-					"spec": {
-						"routes": [
+		specs.push(json!({
+			"apiVersion": "traefik.containo.us/v1alpha1",
+			"kind": "IngressRoute",
+			"metadata": {
+				"name": format!("{}-{i}-insecure", svc_ctx.name()),
+				"namespace": "traefik"
+			},
+			"spec": {
+				"entryPoints": [ "web" ],
+				"routes": [
+					{
+						"kind": "Rule",
+						"match": rule,
+						"middlewares": ingress_middlewares,
+						"services": [
 							{
-								"kind": "Rule",
-								"match": "PathPrefix(`/.well-known/cf-custom-hostname-challenge/`)",
-								"priority": 90
+								"kind": "Service",
+								"name": service_name,
+								"namespace": "rivet-service",
+								"port": 80
 							}
 						]
 					}
-				}),
-			);
+				],
+			}
+		}));
+
+		// Build secure router
+		specs.push(json!({
+			"apiVersion": "traefik.containo.us/v1alpha1",
+			"kind": "IngressRoute",
+			"metadata": {
+				"name": format!("{}-{i}-secure", svc_ctx.name()),
+				"namespace": "traefik"
+			},
+			"spec": {
+				"entryPoints": [ "websecure" ],
+				"routes": [
+					{
+						"kind": "Rule",
+						"match": rule,
+						"middlewares": ingress_middlewares,
+						"services": [
+							{
+								"kind": "Service",
+								"name": service_name,
+								"namespace": "rivet-service",
+								"port": 80
+							}
+						]
+					}
+				],
+				"tls": {
+					"secretName": "ingress-tls-cert",
+					"options": {
+						"name": "ingress-tls",
+						"namespace": "traefik"
+					},
+					// "domains": [
+					// 	{
+					// 		"main": "example.net",
+					// 		"sans": [
+					// 			"a.example.net",
+					// 			"b.example.net"
+					// 		]
+					// 	}
+					// ]
+				}
+			}
+		}));
+
+		if svc_ctx.name() == "api-cf-verification" {
+			specs.push(json!({
+				"apiVersion": "traefik.containo.us/v1alpha1",
+				"kind": "IngressRoute",
+				"metadata": {
+					"name": "cf-verification-challenge",
+					"namespace": "traefik"
+				},
+				"spec": {
+					"routes": [
+						{
+							"kind": "Rule",
+							"match": "PathPrefix(`/.well-known/cf-custom-hostname-challenge/`)",
+							"priority": 90
+						}
+					]
+				}
+			}));
 		}
 	}
 }

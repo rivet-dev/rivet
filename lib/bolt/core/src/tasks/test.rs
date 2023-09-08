@@ -1,18 +1,23 @@
 use anyhow::*;
 use rivet_term::console::style;
 use serde_json::{json, Value};
-use std::collections::{HashMap, HashSet};
+use std::{
+	collections::{HashMap, HashSet},
+	path::Path,
+};
 use tokio::{fs, process::Command};
+use uuid::Uuid;
 
 use crate::{
 	config::service::RuntimeKind,
-	context::{ProjectContext, RunContext, ServiceContext},
+	context::{BuildContext, ProjectContext, RunContext, ServiceContext},
 	dep::{
-		cargo, fly,
+		self, cargo, fly,
+		k8s::gen::{ExecServiceContext, ExecServiceDriver},
 		nomad::{self, NomadCtx},
 	},
 	tasks,
-	utils::{self, DroppablePort},
+	utils::{self, command_helper::CommandHelper, DroppablePort},
 };
 
 struct TestCleanupManager {
@@ -347,16 +352,13 @@ pub async fn test_all(ctx: &ProjectContext) -> Result<()> {
 	Ok(())
 }
 
-pub async fn test_services<T: AsRef<str>>(
-	ctx: &ProjectContext,
-	svc_names: &[T],
-) -> Result<Vec<ServiceContext>> {
+pub async fn test_services<T: AsRef<str>>(ctx: &ProjectContext, svc_names: &[T]) -> Result<()> {
 	if ctx.ns().rivet.test.is_none() {
 		bail!("tests are disabled, enable them by setting rivet.test in the namespace config");
 	}
 
 	// Resolve services
-	let mut svc_names = svc_names
+	let svc_names = svc_names
 		.iter()
 		.map(|x| x.as_ref().to_string())
 		.collect::<HashSet<_>>()
@@ -405,10 +407,70 @@ pub async fn test_services<T: AsRef<str>>(
 
 		test_binaries
 	};
+	println!("Test binaries: {:#?}", test_binaries);
 
-	println!("test binaries {test_binaries:?}");
+	// Generate Kubernetes deployments
+	let mut specs = Vec::new();
+	{
+		eprintln!();
+		rivet_term::status::progress("Generating specs", "");
 
-	// TODO: Create k8s jobs
+		// Create directory for specs
+		fs::create_dir_all(ctx.gen_path().join("kubernetes")).await?;
 
-	todo!()
+		let pb = utils::progress_bar(test_binaries.len());
+		for test_binary in test_binaries {
+			// Convert path relative to project
+			let relative_path = test_binary
+				.path
+				.strip_prefix(ctx.path())
+				.context("path not in project")?;
+			let container_path = Path::new("/rivet-src").join(relative_path);
+			println!("container path: {:?}", container_path);
+
+			// Build exec ctx
+			let svc_ctx = ctx.service_with_name(&test_binary.package).await;
+			let exec_ctx = ExecServiceContext {
+				svc_ctx,
+				build_context: BuildContext::Test {
+					test_id: Uuid::new_v4(),
+				},
+				driver: ExecServiceDriver::LocalBinaryArtifact {
+					exec_path: container_path,
+					// Only run one test at a time
+					// args: vec!["--test-threads".into(), "1".into()],
+					args: vec![],
+				},
+			};
+
+			pb.set_message(exec_ctx.svc_ctx.name());
+
+			// Save specs
+			specs.extend(dep::k8s::gen::gen_svc(&exec_ctx).await);
+
+			pb.inc(1);
+		}
+		pb.finish();
+	}
+
+	// Apply specs
+	eprintln!();
+	rivet_term::status::progress("Applying", "");
+	dep::k8s::cli::apply_specs(specs).await?;
+
+	eprintln!();
+	rivet_term::status::success("Finished", "");
+
+	Ok(())
+}
+
+async fn write_k8s_spec(ctx: &ProjectContext, name: String, spec: serde_json::Value) -> Result<()> {
+	let spec_path = ctx
+		.gen_path()
+		.join("kubernetes")
+		.join(format!("{}.json", name));
+
+	fs::write(spec_path, serde_json::to_vec(&spec)?).await?;
+
+	Ok(())
 }
