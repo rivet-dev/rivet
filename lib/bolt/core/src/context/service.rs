@@ -245,7 +245,9 @@ impl ServiceContextData {
 	pub fn has_migrations(&self) -> bool {
 		matches!(
 			self.config().runtime,
-			RuntimeKind::CRDB { .. } | RuntimeKind::ClickHouse { .. }
+			// TODO: Add back ClickHouse
+			// RuntimeKind::CRDB { .. } | RuntimeKind::ClickHouse { .. }
+			RuntimeKind::CRDB { .. }
 		)
 	}
 
@@ -322,11 +324,6 @@ impl ServiceContextData {
 		// TODO:
 		true
 	}
-
-	pub fn depends_on_region_config(&self) -> bool {
-		true
-		// self.name().starts_with("region-")
-	}
 }
 
 impl ServiceContextData {
@@ -354,11 +351,7 @@ pub enum ServiceBuildPlan {
 
 impl ServiceContextData {
 	/// Determines if this service needs to be recompiled.
-	pub async fn build_plan(
-		&self,
-		build_context: &BuildContext,
-		force_build: bool,
-	) -> Result<ServiceBuildPlan> {
+	pub async fn build_plan(&self, build_context: &BuildContext) -> Result<ServiceBuildPlan> {
 		let project_ctx = self.project().await;
 
 		match &project_ctx.ns().cluster.kind {
@@ -367,7 +360,7 @@ impl ServiceContextData {
 				// Derive the build path
 				let optimization = match &build_context {
 					BuildContext::Bin { optimization } => optimization,
-					BuildContext::Test => &BuildOptimization::Debug,
+					BuildContext::Test { .. } => &BuildOptimization::Debug,
 				};
 				let output_path = self.rust_bin_path(optimization).await;
 
@@ -380,18 +373,6 @@ impl ServiceContextData {
 			config::ns::ClusterKind::Distributed { .. } => {
 				let image_tag = self.docker_image_tag().await?;
 
-				if !force_build {
-					// TODO: Check docker if build was pushed
-					// let mut cmd = Command::new("docker");
-					// cmd.arg("images");
-					// cmd.arg("-q").arg(&image_tag);
-					// let image_exists = !cmd.output().await?.stdout.is_empty();
-
-					// if image_exists {
-					// 	return Ok(ServiceBuildPlan::ExistingUploadedBuild { image_tag });
-					// }
-				}
-
 				// Default to building
 				Ok(ServiceBuildPlan::BuildAndUpload { image_tag })
 			}
@@ -402,14 +383,13 @@ impl ServiceContextData {
 // Dependencies
 impl ServiceContextData {
 	#[async_recursion]
-	pub async fn dependencies(&self) -> Vec<ServiceContext> {
+	pub async fn dependencies(&self, run_context: &RunContext) -> Vec<ServiceContext> {
 		let project = self.project().await;
 
 		let all_svcs = project.all_services().await;
 
 		let mut dep_ctxs = Vec::<ServiceContext>::new();
 
-		// TODO: Add dev dependencies if building for tests
 		// Add operation dependencies from Cargo.toml
 		//
 		// You cannot depend on these services from the Service.toml, only as a Cargo dependency
@@ -417,6 +397,13 @@ impl ServiceContextData {
 			let svcs = cargo
 				.dependencies
 				.iter()
+				// Add dev dependencies for tests
+				.chain(
+					cargo
+						.dev_dependencies
+						.iter()
+						.filter(|_| matches!(run_context, RunContext::Test { .. })),
+				)
 				.filter_map(|(name, dep)| {
 					if let config::service::CargoDependency::Path { .. } = dep {
 						Some(name)
@@ -453,12 +440,15 @@ impl ServiceContextData {
 
 		// Inherit dependencies from the service that was overridden
 		if let Some(overriden_svc) = &self.overridden_service {
-			dep_ctxs.extend(overriden_svc.dependencies().await);
+			dep_ctxs.extend(overriden_svc.dependencies(run_context).await);
 		}
 
 		// Check that these are services you can explicitly depend on in the Service.toml
 		for dep in &dep_ctxs {
-			if !self.config().service.test_only && dep.config().service.test_only {
+			if matches!(run_context, RunContext::Service { .. })
+				&& !self.config().service.test_only
+				&& dep.config().service.test_only
+			{
 				panic!(
 					"{} -> {}: cannot depend on a `service.test-only` service outside of `test-dependencies`",
 					self.name(),
@@ -483,11 +473,14 @@ impl ServiceContextData {
 		dep_ctxs
 	}
 
-	pub async fn database_dependencies(&self) -> HashMap<String, config::service::Database> {
+	pub async fn database_dependencies(
+		&self,
+		run_context: &RunContext,
+	) -> HashMap<String, config::service::Database> {
 		let dbs = self
 			.project()
 			.await
-			.recursive_dependencies(&[self.name()])
+			.recursive_dependencies(&[self.name()], run_context)
 			.await
 			.into_iter()
 			// Filter filter services to include only operations, since these run in-process
@@ -502,9 +495,9 @@ impl ServiceContextData {
 		dbs
 	}
 
-	pub async fn crdb_dependencies(&self) -> Vec<ServiceContext> {
+	pub async fn crdb_dependencies(&self, run_context: &RunContext) -> Vec<ServiceContext> {
 		let dep_names = self
-			.database_dependencies()
+			.database_dependencies(run_context)
 			.await
 			.into_iter()
 			.map(|(k, _)| k)
@@ -518,11 +511,11 @@ impl ServiceContextData {
 			.collect()
 	}
 
-	pub async fn redis_dependencies(&self) -> Vec<ServiceContext> {
+	pub async fn redis_dependencies(&self, run_context: &RunContext) -> Vec<ServiceContext> {
 		let default_deps = ["redis-chirp".to_string(), "redis-cache".to_string()];
 
 		let dep_names = self
-			.database_dependencies()
+			.database_dependencies(run_context)
 			.await
 			.into_iter()
 			.map(|(k, _)| k)
@@ -538,9 +531,9 @@ impl ServiceContextData {
 			.collect()
 	}
 
-	pub async fn s3_dependencies(&self) -> Vec<ServiceContext> {
+	pub async fn s3_dependencies(&self, run_context: &RunContext) -> Vec<ServiceContext> {
 		let dep_names = self
-			.database_dependencies()
+			.database_dependencies(run_context)
 			.await
 			.into_iter()
 			.map(|(k, _)| k)
@@ -554,9 +547,9 @@ impl ServiceContextData {
 			.collect()
 	}
 
-	pub async fn nats_dependencies(&self) -> Vec<ServiceContext> {
+	pub async fn nats_dependencies(&self, run_context: &RunContext) -> Vec<ServiceContext> {
 		let dep_names = self
-			.database_dependencies()
+			.database_dependencies(run_context)
 			.await
 			.into_iter()
 			.map(|(k, _)| k)
@@ -651,11 +644,14 @@ impl ServiceContextData {
 		}
 	}
 
-	async fn required_secrets(&self) -> Result<Vec<(Vec<String>, config::service::Secret)>> {
+	async fn required_secrets(
+		&self,
+		run_context: &RunContext,
+	) -> Result<Vec<(Vec<String>, config::service::Secret)>> {
 		let mut secrets = self
 			.project()
 			.await
-			.recursive_dependencies(&[self.name()])
+			.recursive_dependencies(&[self.name()], run_context)
 			.await
 			.into_iter()
 			// Filter filter services to include only operations, since these run in-process
@@ -674,15 +670,11 @@ impl ServiceContextData {
 		Ok(secrets)
 	}
 
-	pub async fn env(
-		&self,
-		run_context: RunContext,
-	) -> Result<(Vec<(String, String)>, Vec<utils::PortForwardConfig>)> {
+	pub async fn env(&self, run_context: &RunContext) -> Result<Vec<(String, String)>> {
 		let project_ctx = self.project().await;
 
 		let region_id = project_ctx.primary_region_or_local();
 		let mut env = Vec::new();
-		let mut forward_configs = Vec::new();
 
 		// HACK: Link to dynamically linked libraries in /nix/store
 		//
@@ -714,7 +706,7 @@ impl ServiceContextData {
 		));
 
 		// Provide default Nomad variables if in test
-		if matches!(run_context, RunContext::Test) {
+		if matches!(run_context, RunContext::Test { .. }) {
 			env.push(("KUBERNETES_REGION".into(), "global".into()));
 			env.push(("KUBERNETES_DC".into(), region_id.clone()));
 			env.push((
@@ -750,7 +742,7 @@ impl ServiceContextData {
 		env.push(("RIVET_PRIMARY_REGION".into(), project_ctx.primary_region()));
 
 		// Networking
-		if run_context == RunContext::Service {
+		if matches!(run_context, RunContext::Service { .. }) {
 			env.push(("HEALTH_PORT".into(), k8s::gen::HEALTH_PORT.to_string()));
 			env.push(("METRICS_PORT".into(), k8s::gen::METRICS_PORT.to_string()));
 			if self.config().kind.has_server() {
@@ -801,33 +793,14 @@ impl ServiceContextData {
 		if self.depends_on_nomad_api() {
 			env.push((
 				"NOMAD_URL".into(),
-				format!(
-					"http://{}",
-					access_service(
-						&project_ctx,
-						&mut forward_configs,
-						&run_context,
-						"nomad-server",
-						"nomad",
-						4646,
-					)
-					.await?
-				),
+				"http://nomad-server.nomad.svc.cluster.local:4646".into(),
 			));
 		}
 
 		if self.depends_on_clickhouse() {
 			env.push((
 				"CLICKHOUSE_URL".into(),
-				access_service(
-					&project_ctx,
-					&mut forward_configs,
-					&run_context,
-					"clickhouse",
-					"clickhouse",
-					8123,
-				)
-				.await?,
+				"clickhouse.clickhouse.svc.cluster.local:8123".into(),
 			));
 		}
 
@@ -839,15 +812,7 @@ impl ServiceContextData {
 		// 	// that later.
 		// 	env.push((
 		// 		format!("PROMETHEUS_URL"),
-		// 		access_service(
-		// 			&project_ctx,
-		// 			&mut forward_configs,
-		// 			&run_context,
-		// 			"prometheus",
-		// 			"prometheus",
-		// 			9090,
-		// 		)
-		// 		.await?,
+		// 		"prometheus.prometheus.svc.cluster.local:9090".into(),
 		// 	));
 		// }
 
@@ -855,15 +820,7 @@ impl ServiceContextData {
 		env.push((
 			"NATS_URL".into(),
 			// TODO: Add back passing multiple NATS nodes for failover instead of using DNS resolution
-			access_service(
-				&project_ctx,
-				&mut forward_configs,
-				&run_context,
-				"nats",
-				"nats",
-				4222,
-			)
-			.await?,
+			"nats.nats.svc.cluster.local:4222".into(),
 		));
 
 		// Chirp config (used for both Chirp clients and Chirp workers)
@@ -871,7 +828,7 @@ impl ServiceContextData {
 		env.push(("CHIRP_REGION".into(), region_id.clone()));
 
 		// Chirp worker config
-		if let (RunContext::Service, ServiceKind::Consumer { .. }) =
+		if let (RunContext::Service { .. }, ServiceKind::Consumer { .. }) =
 			(run_context, &self.config().kind)
 		{
 			env.push((
@@ -889,32 +846,11 @@ impl ServiceContextData {
 			env.push(("FLY_REGION".into(), fly.region.clone()));
 		}
 
-		// CRDB
-		let crdb_host = access_service(
-			&project_ctx,
-			&mut forward_configs,
-			&run_context,
-			"cockroachdb",
-			"cockroachdb",
-			26257,
-		)
-		.await?;
-		for crdb_dep in self.crdb_dependencies().await {
-			let username = "root"; // TODO:
-			let sslmode = "disable"; // TODO:
-
-			let uri = format!(
-				"postgres://{username}@{crdb_host}/{db_name}?sslmode={sslmode}",
-				db_name = crdb_dep.crdb_db_name(),
-			);
-			env.push((format!("CRDB_URL_{}", crdb_dep.name_screaming_snake()), uri));
-		}
-
 		// Expose all S3 endpoints to services that need them
 		let s3_deps = if self.depends_on_s3() {
 			project_ctx.all_services().await.to_vec()
 		} else {
-			self.s3_dependencies().await
+			self.s3_dependencies(&run_context).await
 		};
 		for s3_dep in s3_deps {
 			if !matches!(s3_dep.config().runtime, RuntimeKind::S3 { .. }) {
@@ -925,16 +861,17 @@ impl ServiceContextData {
 			let (default_provider, _) = project_ctx.default_s3_provider()?;
 			env.push((
 				"S3_DEFAULT_PROVIDER".to_string(),
-				default_provider.as_str().to_uppercase(),
+				default_provider.as_str().to_string(),
 			));
 
 			// Add all configured providers
 			let providers = &project_ctx.ns().s3.providers;
 			if providers.minio.is_some() {
-				add_s3_env(&project_ctx, &mut env, &s3_dep, s3_util::Provider::Minio).await?;
+				add_s3_secret_env(&project_ctx, &mut env, &s3_dep, s3_util::Provider::Minio)
+					.await?;
 			}
 			if providers.backblaze.is_some() {
-				add_s3_env(
+				add_s3_secret_env(
 					&project_ctx,
 					&mut env,
 					&s3_dep,
@@ -943,17 +880,14 @@ impl ServiceContextData {
 				.await?;
 			}
 			if providers.aws.is_some() {
-				add_s3_env(&project_ctx, &mut env, &s3_dep, s3_util::Provider::Aws).await?;
+				add_s3_secret_env(&project_ctx, &mut env, &s3_dep, s3_util::Provider::Aws).await?;
 			}
 		}
 
 		// S3 backfill
 		if self.depends_on_s3_backfill() {
 			if let Some(backfill) = &project_ctx.ns().s3.backfill {
-				env.push((
-					"S3_BACKFILL_PROVIDER".into(),
-					heck::ShoutySnakeCase::to_shouty_snake_case(backfill.as_str()),
-				));
+				env.push(("S3_BACKFILL_PROVIDER".into(), backfill.as_str().to_string()));
 			}
 		}
 
@@ -1027,20 +961,16 @@ impl ServiceContextData {
 		// Sort env by keys so it's always in the same order
 		env.sort_by_cached_key(|x| x.0.clone());
 
-		Ok((env, forward_configs))
+		Ok(env)
 	}
 
-	pub async fn secret_env(
-		&self,
-		run_context: RunContext,
-	) -> Result<(Vec<(String, String)>, Vec<utils::PortForwardConfig>)> {
+	pub async fn secret_env(&self, run_context: &RunContext) -> Result<Vec<(String, String)>> {
 		let project_ctx = self.project().await;
 
 		let mut env = Vec::new();
-		let mut forward_configs = Vec::new();
 
 		// Write secrets
-		for (secret_key, secret_config) in self.required_secrets().await? {
+		for (secret_key, secret_config) in self.required_secrets(run_context).await? {
 			let env_key = rivet_util::env::secret_env_var_key(&secret_key);
 			if secret_config.optional {
 				if let Some(value) = project_ctx.read_secret_opt(&secret_key).await? {
@@ -1070,7 +1000,7 @@ impl ServiceContextData {
 			));
 		}
 
-		if run_context == RunContext::Service {
+		if matches!(run_context, RunContext::Service { .. }) {
 			if self.depends_on_sendgrid_key() {
 				env.push((
 					"SENDGRID_KEY".into(),
@@ -1089,16 +1019,8 @@ impl ServiceContextData {
 		}
 
 		// CRDB
-		let crdb_host = access_service(
-			&project_ctx,
-			&mut forward_configs,
-			&run_context,
-			"cockroachdb",
-			"cockroachdb",
-			26257,
-		)
-		.await?;
-		for crdb_dep in self.crdb_dependencies().await {
+		let crdb_host = "cockroachdb.cockroachdb.svc.cluster.local:26257";
+		for crdb_dep in self.crdb_dependencies(run_context).await {
 			let username = "root"; // TODO:
 			let sslmode = "disable"; // TODO:
 
@@ -1110,20 +1032,12 @@ impl ServiceContextData {
 		}
 
 		// Redis
-		for redis_dep in self.redis_dependencies().await {
+		for redis_dep in self.redis_dependencies(run_context).await {
 			let name = redis_dep.name();
 			let db_name = redis_dep.redis_db_name();
 
 			// TODO: Use name and port to connect to different redis instances
-			let host = access_service(
-				&project_ctx,
-				&mut forward_configs,
-				&run_context,
-				"redis-master",
-				"redis",
-				6379,
-			)
-			.await?;
+			let host = "redis-master.redis.svc.cluster.local:6379";
 
 			// Build URL with auth
 			let username = project_ctx
@@ -1148,23 +1062,12 @@ impl ServiceContextData {
 		let s3_deps = if self.depends_on_s3() {
 			project_ctx.all_services().await.to_vec()
 		} else {
-			self.s3_dependencies().await
+			self.s3_dependencies(run_context).await
 		};
 		for s3_dep in s3_deps {
 			if !matches!(s3_dep.config().runtime, RuntimeKind::S3 { .. }) {
 				continue;
 			}
-
-			// Add default provider
-			let default_provider_name = match project_ctx.default_s3_provider()? {
-				(s3_util::Provider::Minio, _) => "MINIO",
-				(s3_util::Provider::Backblaze, _) => "BACKBLAZE",
-				(s3_util::Provider::Aws, _) => "AWS",
-			};
-			env.push((
-				"S3_DEFAULT_PROVIDER".to_string(),
-				default_provider_name.to_string(),
-			));
 
 			// Add all configured providers
 			let providers = &project_ctx.ns().s3.providers;
@@ -1185,7 +1088,7 @@ impl ServiceContextData {
 			}
 		}
 
-		Ok((env, forward_configs))
+		Ok(env)
 	}
 }
 
@@ -1218,33 +1121,6 @@ impl ServiceContextData {
 		ensure!(status.success());
 
 		Ok(())
-	}
-}
-
-pub async fn access_service(
-	_ctx: &ProjectContext,
-	forward_configs: &mut Vec<utils::PortForwardConfig>,
-	run_context: &RunContext,
-	service_name: &'static str,
-	namespace: &'static str,
-	remote_port: u16,
-) -> Result<String> {
-	match run_context {
-		RunContext::Test => {
-			let local_port = utils::pick_port();
-			forward_configs.push(utils::PortForwardConfig {
-				service_name,
-				namespace,
-				local_port,
-				remote_port,
-			});
-
-			Ok(format!("127.0.0.1:{local_port}"))
-		}
-		// Use the cluster address if running locally
-		RunContext::Service => Ok(format!(
-			"{service_name}.{namespace}.svc.cluster.local:{remote_port}"
-		)),
 	}
 }
 
@@ -1307,30 +1183,44 @@ async fn add_s3_env(
 
 	let s3_dep_name = s3_dep.name_screaming_snake();
 	let s3_config = project_ctx.s3_config(provider).await?;
-	let s3_creds = project_ctx.s3_credentials(provider).await?;
 
 	env.push((
-		format!("S3_{}_BUCKET_{}", provider_upper, s3_dep_name),
+		format!("S3_{provider_upper}_BUCKET_{s3_dep_name}"),
 		s3_dep.s3_bucket_name().await,
 	));
 	env.push((
-		format!("S3_{}_ENDPOINT_INTERNAL_{}", provider_upper, s3_dep_name),
+		format!("S3_{provider_upper}_ENDPOINT_INTERNAL_{s3_dep_name}"),
 		s3_config.endpoint_internal,
 	));
 	env.push((
-		format!("S3_{}_ENDPOINT_EXTERNAL_{}", provider_upper, s3_dep_name),
+		format!("S3_{provider_upper}_ENDPOINT_EXTERNAL_{s3_dep_name}"),
 		s3_config.endpoint_external,
 	));
 	env.push((
-		format!("S3_{}_REGION_{}", provider_upper, s3_dep_name),
+		format!("S3_{provider_upper}_REGION_{s3_dep_name}"),
 		s3_config.region,
 	));
+
+	Ok(())
+}
+
+async fn add_s3_secret_env(
+	project_ctx: &ProjectContext,
+	env: &mut Vec<(String, String)>,
+	s3_dep: &Arc<ServiceContextData>,
+	provider: s3_util::Provider,
+) -> Result<()> {
+	let provider_upper = provider.as_str().to_uppercase();
+
+	let s3_dep_name = s3_dep.name_screaming_snake();
+	let s3_creds = project_ctx.s3_credentials(provider).await?;
+
 	env.push((
-		format!("S3_{}_ACCESS_KEY_ID_{}", provider_upper, s3_dep_name),
+		format!("S3_{provider_upper}_ACCESS_KEY_ID_{s3_dep_name}"),
 		s3_creds.access_key_id,
 	));
 	env.push((
-		format!("S3_{}_SECRET_ACCESS_KEY_{}", provider_upper, s3_dep_name),
+		format!("S3_{provider_upper}_SECRET_ACCESS_KEY_{s3_dep_name}"),
 		s3_creds.access_key_secret,
 	));
 

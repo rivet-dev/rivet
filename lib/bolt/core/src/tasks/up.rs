@@ -18,7 +18,10 @@ use crate::{
 		self,
 		service::{ComponentClass, RuntimeKind},
 	},
-	context::{BuildContext, BuildOptimization, ProjectContext, ServiceBuildPlan, ServiceContext},
+	context::{
+		BuildContext, BuildOptimization, ProjectContext, RunContext, ServiceBuildPlan,
+		ServiceContext,
+	},
 	dep::{
 		self, cargo,
 		k8s::gen::{ExecServiceContext, ExecServiceDriver},
@@ -27,35 +30,14 @@ use crate::{
 	utils::{self, command_helper::CommandHelper},
 };
 
-#[derive(Debug, Clone)]
-pub struct UpOpts {
-	pub skip_build: bool,
-	pub skip_dependencies: bool,
-	pub force_build: bool,
-	pub skip_generate: bool,
-	pub auto_approve: bool,
-}
-
-impl Default for UpOpts {
-	fn default() -> Self {
-		Self {
-			skip_build: false,
-			skip_dependencies: false,
-			force_build: false,
-			skip_generate: false,
-			auto_approve: false,
-		}
-	}
-}
-
-pub async fn up_all(ctx: &ProjectContext, opts: UpOpts) -> Result<()> {
+pub async fn up_all(ctx: &ProjectContext) -> Result<()> {
 	let all_svc_names = ctx
 		.all_services()
 		.await
 		.iter()
 		.map(|svc| svc.name())
 		.collect::<Vec<_>>();
-	up_services(ctx, &all_svc_names, opts).await?;
+	up_services(ctx, &all_svc_names).await?;
 
 	Ok(())
 }
@@ -63,7 +45,6 @@ pub async fn up_all(ctx: &ProjectContext, opts: UpOpts) -> Result<()> {
 pub async fn up_services<T: AsRef<str>>(
 	ctx: &ProjectContext,
 	svc_names: &[T],
-	opts: UpOpts,
 ) -> Result<Vec<ServiceContext>> {
 	let event = utils::telemetry::build_event(ctx, "bolt_up").await?;
 	utils::telemetry::capture_event(ctx, event)?;
@@ -78,19 +59,10 @@ pub async fn up_services<T: AsRef<str>>(
 		.iter()
 		.map(|x| x.as_ref().to_string())
 		.collect::<HashSet<_>>();
-	if !opts.skip_dependencies {
-		svc_names.extend(ctx.essential_services().await.into_iter().map(|x| x.name()));
-	}
 	let svc_names = svc_names.into_iter().collect::<Vec<_>>();
 
 	// Find all services and their dependencies
-	let all_svcs = if opts.skip_build {
-		Vec::new()
-	} else if opts.skip_dependencies {
-		ctx.services_with_patterns(&svc_names).await
-	} else {
-		ctx.recursive_dependencies_with_pattern(&svc_names).await
-	};
+	let all_svcs = ctx.services_with_patterns(&svc_names).await;
 
 	// Find all services that are executables
 	let all_exec_svcs = all_svcs
@@ -105,7 +77,7 @@ pub async fn up_services<T: AsRef<str>>(
 	tasks::gen::generate_project(ctx).await;
 
 	// Generate service config
-	if !opts.skip_generate {
+	{
 		eprintln!();
 		rivet_term::status::progress("Generating", "");
 		{
@@ -168,43 +140,41 @@ pub async fn up_services<T: AsRef<str>>(
 	eprintln!();
 	rivet_term::status::progress("Building", "(batch)");
 	{
-		// Build all the Rust modules in parallel if enabled
-		if !ctx.config_local().generate.disable_cargo_workspace {
-			let rust_svcs = all_exec_svcs
-				.iter()
-				.filter(|svc_ctx| match svc_ctx.config().runtime {
-					RuntimeKind::Rust {} => true,
-					_ => false,
-				});
+		// Build all the Rust modules in parallel
+		let rust_svcs = all_exec_svcs
+			.iter()
+			.filter(|svc_ctx| match svc_ctx.config().runtime {
+				RuntimeKind::Rust {} => true,
+				_ => false,
+			});
 
-			// Collect rust services by their workspace root
-			let mut svcs_by_workspace = HashMap::new();
-			for svc in rust_svcs {
-				let workspace = svcs_by_workspace
-					.entry(svc.workspace_path())
-					.or_insert_with(Vec::new);
-				workspace.push(svc.cargo_name().expect("no cargo name"));
-			}
+		// Collect rust services by their workspace root
+		let mut svcs_by_workspace = HashMap::new();
+		for svc in rust_svcs {
+			let workspace = svcs_by_workspace
+				.entry(svc.workspace_path())
+				.or_insert_with(Vec::new);
+			workspace.push(svc.cargo_name().expect("no cargo name"));
+		}
 
-			if !svcs_by_workspace.is_empty() {
-				// Run build
-				cargo::cli::build(
-					ctx,
-					cargo::cli::BuildOpts {
-						build_calls: svcs_by_workspace
-							.iter()
-							.map(|(workspace_path, svc_names)| cargo::cli::BuildCall {
-								path: workspace_path.strip_prefix(ctx.path()).unwrap(),
-								bins: &svc_names,
-							})
-							.collect::<Vec<_>>(),
-						release: ctx.build_optimization() == BuildOptimization::Release,
-						jobs: ctx.config_local().rust.num_jobs,
-					},
-				)
-				.await
-				.unwrap();
-			}
+		if !svcs_by_workspace.is_empty() {
+			// Run build
+			cargo::cli::build(
+				ctx,
+				cargo::cli::BuildOpts {
+					build_calls: svcs_by_workspace
+						.iter()
+						.map(|(workspace_path, svc_names)| cargo::cli::BuildCall {
+							path: workspace_path.strip_prefix(ctx.path()).unwrap(),
+							bins: &svc_names,
+						})
+						.collect::<Vec<_>>(),
+					release: ctx.build_optimization() == BuildOptimization::Release,
+					jobs: ctx.config_local().rust.num_jobs,
+				},
+			)
+			.await
+			.unwrap();
 		}
 	}
 
@@ -214,14 +184,11 @@ pub async fn up_services<T: AsRef<str>>(
 	let pb = utils::progress_bar(all_exec_svcs.len());
 	let all_exec_svcs_with_build_plan = futures_util::stream::iter(all_exec_svcs.clone())
 		.map(|svc| {
-			let opts = opts.clone();
+			let build_context = build_context.clone();
 			let pb = pb.clone();
 
 			async move {
-				let build_plan = svc
-					.build_plan(&build_context, opts.force_build)
-					.await
-					.unwrap();
+				let build_plan = svc.build_plan(&build_context).await.unwrap();
 				pb.inc(1);
 				(svc, build_plan)
 			}
@@ -267,7 +234,7 @@ pub async fn up_services<T: AsRef<str>>(
 			// Save exec ctx
 			exec_ctxs.push(ExecServiceContext {
 				svc_ctx: svc_ctx.clone().clone(),
-				build_context,
+				run_context: RunContext::Service {},
 				driver: match &build_plan {
 					ServiceBuildPlan::BuildLocally { exec_path } => {
 						derive_local_build_driver(svc_ctx, exec_path.clone()).await
@@ -306,6 +273,7 @@ pub async fn up_services<T: AsRef<str>>(
 	//
 	// We resolve the upstream services after applying Terraform since the services we need to
 	// resolve won't exist yet.
+	let mut specs = Vec::new();
 	{
 		eprintln!();
 		rivet_term::status::progress("Generating specs", "");
@@ -313,35 +281,22 @@ pub async fn up_services<T: AsRef<str>>(
 		// Create directory for specs
 		fs::create_dir_all(ctx.gen_path().join("kubernetes")).await?;
 
-		let leader_region_id = ctx.primary_region_or_local();
-
 		let pb = utils::progress_bar(all_exec_svcs.len());
 		for exec_ctx in &exec_ctxs {
 			pb.set_message(exec_ctx.svc_ctx.name());
 
-			// Write all specs to file
-			for (spec_name, spec) in dep::k8s::gen::gen_svc(&leader_region_id, &exec_ctx).await {
-				write_k8s_spec(
-					ctx,
-					format!("{}-{}", exec_ctx.svc_ctx.name(), spec_name),
-					spec,
-				)
-				.await?;
-			}
+			// Save specs
+			specs.extend(dep::k8s::gen::gen_svc(&exec_ctx).await);
 
 			pb.inc(1);
 		}
 		pb.finish();
 	}
 
-	// Apply kubernetes specs
+	// Apply specs
 	eprintln!();
 	rivet_term::status::progress("Applying", "");
-	let mut cmd = std::process::Command::new("sh");
-	cmd.current_dir(ctx.path());
-	cmd.arg("-c")
-		.arg("kubectl apply -f 'gen/kubernetes/*.json'");
-	cmd.exec().await?;
+	dep::k8s::cli::apply_specs(specs).await?;
 
 	eprintln!();
 	rivet_term::status::success("Finished", "");
@@ -358,33 +313,12 @@ async fn upload_svc_build(svc_ctx: ServiceContext, upload_semaphore: Arc<Semapho
 
 async fn build_svc(
 	svc_ctx: &ServiceContext,
-	build_context: &BuildContext,
-	optimization: BuildOptimization,
+	_build_context: &BuildContext,
+	_optimization: BuildOptimization,
 ) {
 	match &svc_ctx.config().runtime {
 		RuntimeKind::Rust {} => {
-			let project_ctx = svc_ctx.project().await;
-
-			// Build the service individually if workspace building is
-			// not enabled
-			if project_ctx.config_local().generate.disable_cargo_workspace {
-				cargo::cli::build(
-					&project_ctx,
-					cargo::cli::BuildOpts {
-						build_calls: vec![cargo::cli::BuildCall {
-							path: svc_ctx
-								.workspace_path()
-								.strip_prefix(project_ctx.path())
-								.unwrap(),
-							bins: &[svc_ctx.cargo_name().expect("no cargo name")],
-						}],
-						release: optimization == BuildOptimization::Release,
-						jobs: project_ctx.config_local().rust.num_jobs,
-					},
-				)
-				.await
-				.unwrap();
-			}
+			// Do nothing
 		}
 		RuntimeKind::CRDB { .. }
 		| RuntimeKind::ClickHouse { .. }
@@ -437,15 +371,4 @@ async fn derive_uploaded_svc_driver(
 			unreachable!()
 		}
 	}
-}
-
-async fn write_k8s_spec(ctx: &ProjectContext, name: String, spec: serde_json::Value) -> Result<()> {
-	let spec_path = ctx
-		.gen_path()
-		.join("kubernetes")
-		.join(format!("{}.json", name));
-
-	fs::write(spec_path, serde_json::to_vec(&spec)?).await?;
-
-	Ok(())
 }

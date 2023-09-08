@@ -11,8 +11,6 @@ use crate::{
 
 pub mod api;
 pub mod cli;
-pub mod gen;
-pub mod job_schema;
 
 #[derive(Clone)]
 pub struct NomadCtx {
@@ -58,8 +56,7 @@ impl NomadCtx {
 		let handle = utils::kubectl_port_forward("nomad-server", "nomad", (4646, 4646))?;
 
 		// Wait for port forward to open and check if successful
-		tokio::time::sleep(std::time::Duration::from_millis(500)).await;
-		handle.check()?;
+		handle.check().await?;
 
 		Ok(NomadCtx {
 			project_ctx: ctx.clone(),

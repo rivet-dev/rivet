@@ -6,3 +6,6 @@ essential = true
 kind = "rust"
 
 [oneshot]
+
+[databases]
+db-build = {}

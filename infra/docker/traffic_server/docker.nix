@@ -4,9 +4,6 @@ let
 		name = "apache-traffic-server";
 		tag = "latest";
 
-		fromImageName = "debian";
-		fromImageTag = "12.1";
-
 		copyToRoot = pkgs.buildEnv {
 			name = "image-root";
 			paths = [ pkgs.trafficserver ];

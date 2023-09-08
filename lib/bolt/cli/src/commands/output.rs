@@ -1,7 +1,7 @@
 use std::collections::HashSet;
 
 use anyhow::*;
-use bolt_core::context::ProjectContext;
+use bolt_core::context::{ProjectContext, RunContext};
 use clap::Parser;
 
 /// Used to extract data from the Bolt configs. This gets called primarily in
@@ -24,6 +24,8 @@ pub enum SubCommand {
 	ServiceDatabases {
 		#[clap(index = 1, action = clap::ArgAction::Append)]
 		service_names: Vec<String>,
+		#[clap(long)]
+		test: bool,
 	},
 }
 
@@ -46,12 +48,21 @@ impl SubCommand {
 					println!("{}", svc_ctx.path().display());
 				}
 			}
-			Self::ServiceDatabases { service_names } => {
+			Self::ServiceDatabases {
+				service_names,
+				test,
+			} => {
+				let run_context = if test {
+					RunContext::Test { test_id: "".into() }
+				} else {
+					RunContext::Service {}
+				};
+
 				let mut databases = HashSet::new();
 
 				// TODO: Use a stream iter instead
 				for svc_ctx in ctx.services_with_patterns(&service_names).await {
-					let dbs = svc_ctx.database_dependencies().await;
+					let dbs = svc_ctx.database_dependencies(&run_context).await;
 
 					databases.extend(dbs.keys().cloned());
 				}

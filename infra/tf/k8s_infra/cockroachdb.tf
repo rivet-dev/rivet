@@ -11,12 +11,11 @@ resource "helm_release" "cockroachdb" {
 	chart = "cockroachdb"
 	version = "11.1.5"
 	values = [yamlencode({
+		statefulset = {
+			replicas = 1
+		}
 		conf = {
 			single-node = true
-			statefulset = {
-				# TODO: Doesn't work for some reason, still makes 3 replicas
-				replicas = 1
-			}
 		}
 		tls = {
 			enabled = false
