@@ -149,10 +149,11 @@ resource "kubernetes_stateful_set" "traffic_server" {
 				image_pull_secrets {
 					name = kubernetes_secret.traffic_server_docker_config.metadata.0.name
 				}
+
 				container {
 					name = "traffic-server-instance"
 					# TODO: Use the git hash here
-					image = "ghcr.io/rivet-gg/apache-traffic-server:5e1d6e5"
+					image = "ghcr.io/rivet-gg/apache-traffic-server:378f44b"
 					image_pull_policy = "IfNotPresent"
 
 					port {
