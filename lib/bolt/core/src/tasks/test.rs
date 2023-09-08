@@ -463,19 +463,6 @@ fn print_resuilts(test_results: &[TestResult]) {
 		);
 	}
 
-	let compile_failed_count = test_results
-		.iter()
-		.filter(|test_result| matches!(test_result.status, TestStatus::CompileFailed))
-		.count();
-	if compile_failed_count > 0 {
-		eprintln!(
-			"  {}: {}/{}",
-			style("COMPILE FAILED").italic().red(),
-			compile_failed_count,
-			test_results.len()
-		);
-	}
-
 	let timeout_count = test_results
 		.iter()
 		.filter(|test_result| matches!(test_result.status, TestStatus::Timeout))
@@ -512,7 +499,6 @@ fn print_resuilts(test_results: &[TestResult]) {
 enum TestStatus {
 	Pass,
 	TestFailed,
-	CompileFailed,
 	Timeout,
 	UnknownExitCode(i32),
 	UnknownError(String),
@@ -594,9 +580,6 @@ async fn run_test(ctx: &ProjectContext, test_binary: TestBinary) -> Result<TestR
 		TestStatus::TestFailed => {
 			rivet_term::status::error("Failed", &run_info);
 		}
-		TestStatus::CompileFailed => {
-			rivet_term::status::error("Compile failed", &run_info);
-		}
 		TestStatus::Timeout => {
 			rivet_term::status::error("Timeout", &run_info);
 		}
@@ -669,8 +652,7 @@ async fn tail_pod(pod: &str) -> Result<TestStatus> {
 
 				let test_status = match exit_code {
 					0 => TestStatus::Pass,
-					1 => TestStatus::TestFailed,
-					101 => TestStatus::CompileFailed,
+					101 => TestStatus::TestFailed,
 					x => TestStatus::UnknownExitCode(x),
 				};
 
