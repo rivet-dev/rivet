@@ -515,7 +515,12 @@ struct TestResult {
 }
 
 async fn run_test(ctx: &ProjectContext, test_binary: TestBinary) -> Result<TestResult> {
-	let svc_ctx = ctx.service_with_name(&test_binary.package).await;
+	let svc_ctx = ctx
+		.all_services()
+		.await
+		.into_iter()
+		.find(|x| x.cargo_name() == Some(&test_binary.package))
+		.context("svc not found for package")?;
 	let display_name = format!("{}::{}", svc_ctx.name(), test_binary.target);
 
 	let setup_start = Instant::now();
