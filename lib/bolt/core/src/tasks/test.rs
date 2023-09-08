@@ -26,6 +26,7 @@ use crate::{
 };
 
 const TEST_TIMEOUT: Duration = Duration::from_secs(60);
+const PARALLEL_TESTS: usize = 64;
 
 struct TestCleanupManager {
 	project_ctx: ProjectContext,
@@ -419,7 +420,7 @@ pub async fn test_services<T: AsRef<str>>(ctx: &ProjectContext, svc_names: &[T])
 		let ctx = ctx.clone();
 		async move { run_test(&ctx, test_binary).await }
 	}))
-	.buffer_unordered(8)
+	.buffer_unordered(PARALLEL_TESTS)
 	.try_collect::<Vec<_>>()
 	.await?;
 
@@ -440,6 +441,8 @@ enum TestStatus {
 
 #[derive(Debug)]
 struct TestResults {
+	package: String,
+	target: String,
 	status: TestStatus,
 	setup_duration: Duration,
 	test_duration: Duration,
@@ -448,9 +451,10 @@ struct TestResults {
 
 async fn run_test(ctx: &ProjectContext, test_binary: TestBinary) -> Result<TestResults> {
 	let svc_ctx = ctx.service_with_name(&test_binary.package).await;
+	let display_name = format!("{}::{}", svc_ctx.name(), test_binary.target);
 
 	let setup_start = Instant::now();
-	rivet_term::status::progress("Starting", svc_ctx.name());
+	rivet_term::status::info("Booting", &display_name);
 
 	// Convert path relative to project
 	let relative_path = test_binary
@@ -482,6 +486,7 @@ async fn run_test(ctx: &ProjectContext, test_binary: TestBinary) -> Result<TestR
 	let setup_duration = setup_start.elapsed();
 
 	// Tail pod
+	rivet_term::status::info("Starting", format!("{display_name} [pod/{pod_name}]",));
 	let test_start_time = Instant::now();
 	let status = match tokio::time::timeout(TEST_TIMEOUT, tail_pod(&pod_name)).await {
 		Result::Ok(Result::Ok(x)) => x,
@@ -498,31 +503,38 @@ async fn run_test(ctx: &ProjectContext, test_binary: TestBinary) -> Result<TestR
 	};
 
 	// Print status
+	let test_duration = test_start_time.elapsed();
+	let run_info = format!(
+		"{display_name} [pod/{pod_name}] [{td:.1}s]",
+		td = test_duration.as_secs_f32()
+	);
 	match &status {
 		TestStatus::Pass => {
-			rivet_term::status::success("Passed", svc_ctx.name());
+			rivet_term::status::success("Passed", &run_info);
 		}
 		TestStatus::TestFailed => {
-			rivet_term::status::error("Failed", svc_ctx.name());
+			rivet_term::status::error("Failed", &run_info);
 		}
 		TestStatus::CompileFailed => {
-			rivet_term::status::error("Compile failed", svc_ctx.name());
+			rivet_term::status::error("Compile failed", &run_info);
 		}
 		TestStatus::Timeout => {
-			rivet_term::status::error("Timeout", svc_ctx.name());
+			rivet_term::status::error("Timeout", &run_info);
 		}
 		TestStatus::UnknownExitCode(code) => {
-			rivet_term::status::error(&format!("Unknown exit code {}", code), svc_ctx.name());
+			rivet_term::status::error(&format!("Unknown exit code {}", code), &run_info);
 		}
 		TestStatus::UnknownError(err) => {
-			rivet_term::status::error(&format!("Unknown error: {}", err), svc_ctx.name());
+			rivet_term::status::error(&format!("Unknown error: {}", err), &run_info);
 		}
 	}
 
 	Ok(TestResults {
+		package: test_binary.package,
+		target: test_binary.target,
 		status,
 		setup_duration,
-		test_duration: test_start_time.elapsed(),
+		test_duration,
 		pod_name,
 	})
 }

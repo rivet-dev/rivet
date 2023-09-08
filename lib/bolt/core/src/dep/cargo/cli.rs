@@ -178,6 +178,7 @@ pub struct BuildTestCall<'a, T: AsRef<str>> {
 #[derive(Debug)]
 pub struct TestBinary {
 	pub package: String,
+	pub target: String,
 	pub path: PathBuf,
 }
 
@@ -233,8 +234,13 @@ pub async fn build_tests<'a, T: AsRef<str>>(
 						.context("split_once failed")?
 						.0;
 
+					let target = v["target"]["name"]
+						.as_str()
+						.context("missing target name")?;
+
 					test_binaries.push(TestBinary {
 						package: package.to_string(),
+						target: target.to_string(),
 						path: PathBuf::from(executable),
 					})
 				}

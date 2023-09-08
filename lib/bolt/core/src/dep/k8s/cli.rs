@@ -14,6 +14,7 @@ pub async fn apply_specs(specs: Vec<serde_json::Value>) -> Result<()> {
 	// Apply kubectl from stdin
 	let mut cmd = tokio::process::Command::new("kubectl");
 	cmd.stdin(std::process::Stdio::piped());
+	cmd.stdout(std::process::Stdio::null());
 	cmd.args(&["apply", "-f", "-"]);
 	let mut child = cmd.spawn()?;
 
