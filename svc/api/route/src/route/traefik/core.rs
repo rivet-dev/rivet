@@ -1,14 +1,14 @@
+use api_helper::{anchor::WatchIndexQuery, ctx::Ctx};
+use proto::backend::{self, pkg::*};
+use redis::AsyncCommands;
+use rivet_operation::prelude::*;
+use serde::{Deserialize, Serialize};
 use std::{
 	collections::{hash_map::DefaultHasher, HashMap},
 	convert::TryInto,
 	fmt::Write,
 	hash::{Hash, Hasher},
 };
-
-use api_helper::ctx::Ctx;
-use proto::backend::{self, pkg::*};
-use redis::AsyncCommands;
-use rivet_operation::prelude::*;
 use util::glob::Traefik;
 
 use crate::{auth::Auth, route::traefik};
@@ -16,14 +16,53 @@ use crate::{auth::Auth, route::traefik};
 const BASE_ROUTER_PRIORITY: usize = 100;
 const HTML_ROUTER_PRIORITY: usize = 150;
 
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ConfigQuery {
+	token: String,
+}
+
 #[tracing::instrument(skip(ctx))]
-pub async fn build(ctx: &Ctx<Auth>, pool: &str) -> GlobalResult<traefik::TraefikConfigResponse> {
+pub async fn config(
+	ctx: Ctx<Auth>,
+	_watch_index: WatchIndexQuery,
+	ConfigQuery { token }: ConfigQuery,
+) -> GlobalResult<super::TraefikConfigResponseNullified> {
+	assert_eq_with!(
+		token,
+		util::env::read_secret(&["rivet", "api_route", "token"]).await?,
+		API_FORBIDDEN,
+		reason = "Invalid token"
+	);
+
+	// Fetch configs and catch any errors
+	let config = build_cdn(&ctx).await?;
+
+	// tracing::info!(
+	// 	http_services = ?config.http.services.len(),
+	// 	http_routers = config.http.routers.len(),
+	// 	http_middlewares = ?config.http.middlewares.len(),
+	// 	tcp_services = ?config.tcp.services.len(),
+	// 	tcp_routers = config.tcp.routers.len(),
+	// 	tcp_middlewares = ?config.tcp.middlewares.len(),
+	// 	udp_services = ?config.udp.services.len(),
+	// 	udp_routers = config.udp.routers.len(),
+	// 	udp_middlewares = ?config.udp.middlewares.len(),
+	// 	"traefik config"
+	// );
+
+	Ok(super::TraefikConfigResponseNullified {
+		http: config.http.nullified(),
+		tcp: config.tcp.nullified(),
+		udp: config.udp.nullified(),
+	})
+}
+
+/// Builds configuration for CDN routes.
+#[tracing::instrument(skip(ctx))]
+pub async fn build_cdn(ctx: &Ctx<Auth>) -> GlobalResult<traefik::TraefikConfigResponse> {
 	let mut config = traefik::TraefikConfigResponse::default();
 	let s3_client = s3_util::Client::from_env("bucket-cdn").await?;
-
-	if pool != "ing-px" && pool != "local" {
-		return Ok(config);
-	}
 
 	let redis_cdn = ctx.op_ctx().redis_cdn().await?;
 	let cdn_fetch = fetch_cdn(redis_cdn).await?;
