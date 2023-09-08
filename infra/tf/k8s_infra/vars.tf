@@ -70,3 +70,8 @@ variable "s3_providers" {
 variable "s3_buckets" {
 	type = map(any)
 }
+
+# MARK: Rivet
+variable "cdn_cache_size_gb" {
+	type = number
+}

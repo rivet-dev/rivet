@@ -425,6 +425,8 @@ pub struct Rivet {
 	pub upload: Upload,
 	#[serde(default)]
 	pub matchmaker: Matchmaker,
+	#[serde(default)]
+	pub cdn: Cdn,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, Default)]
@@ -483,6 +485,17 @@ pub enum MatchmakerLobbyDeliveryMethod {
 	#[serde(rename = "traffic_server")]
 	#[strum(serialize = "traffic_server")]
 	TrafficServer,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, Default)]
+#[serde(deny_unknown_fields)]
+pub struct Cdn {
+	#[serde(default = "default_cdn_cache_size")]
+	pub cache_size_gb: usize,
+}
+
+fn default_cdn_cache_size() -> usize {
+	10
 }
 
 fn default_regions() -> HashMap<String, Region> {

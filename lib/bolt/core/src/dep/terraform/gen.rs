@@ -396,6 +396,11 @@ async fn vars(ctx: &ProjectContext) {
 
 	vars.insert("k8s_health_port".into(), json!(dep::k8s::gen::HEALTH_PORT));
 
+	vars.insert(
+		"cdn_cache_size_gb".into(),
+		json!(config.rivet.cdn.cache_size_gb),
+	);
+
 	let tf_gen_path = ctx.gen_tf_env_path();
 	let _ = fs::create_dir_all(&tf_gen_path.parent().unwrap()).await;
 	let vars_json = serde_json::to_string(&vars).unwrap();

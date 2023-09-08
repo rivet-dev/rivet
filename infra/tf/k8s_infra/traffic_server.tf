@@ -1,9 +1,8 @@
-# TODO: Add back body_factory
-
 locals {
 	traffic_server_count = 2
 	traffic_server_configmap_data = merge(
 		# Static files
+		# TODO: Add back body_factory. These use `#` in the file names, so it doesn't work in configmaps.
 		{
 			for f in fileset("${path.module}/files/traffic_server/etc/static", "**/*"):
 			f => file("${path.module}/files/traffic_server/etc/static/${f}")
@@ -14,7 +13,9 @@ locals {
 			f => templatefile("${path.module}/files/traffic_server/etc/dynamic/${f}", {
 				s3_providers = var.s3_providers
 				s3_default_provider = var.s3_default_provider
-				volume_size_cache = "${local.traffic_server_cache_size}G"
+			# G = k8s Gi
+			# https://docs.trafficserver.apache.org/admin-guide/files/storage.config.en.html#:~:text=As%20with%20standard%20records.config%20integers%2C%20human%20readable%20prefixes%20are%20also%20supported.%20They%20include
+				volume_size_cache = "${var.cdn_cache_size_gb}G"
 			})
 		},
 		# S3 providers
@@ -40,9 +41,6 @@ locals {
 
 	traffic_server_configmap_hash = sha256(jsonencode(local.traffic_server_configmap_data))
 	traffic_server_s3_auth_hash = sha256(jsonencode(local.traffic_server_s3_auth_data))
-
-	# TODO: Enable dynamic configuration
-	traffic_server_cache_size = 10
 }
 
 module "traffic_server_s3_secrets" {
@@ -210,7 +208,7 @@ resource "kubernetes_stateful_set" "traffic_server" {
 				access_modes = ["ReadWriteOnce"]
 				resources {
 					requests = {
-						storage = "${local.traffic_server_cache_size}Gi"
+						storage = "${var.cdn_cache_size_gb}Gi"
 					}
 				}
 				storage_class_name = "local-path"
