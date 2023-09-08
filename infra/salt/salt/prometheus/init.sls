@@ -79,7 +79,7 @@ push_etc_prometheus_yaml:
         - source: salt://prometheus/files/prometheus.prm-svc.yaml.j2
         - template: jinja
       {%- endif %}
-      {%- if pool == "pool-job" or pool == "local" %}
+      {%- if pool == "prm-job" or pool == "local" %}
       - /etc/prometheus.prm-job.yaml:
         - source: salt://prometheus/files/prometheus.prm-job.yaml.j2
         - template: jinja
