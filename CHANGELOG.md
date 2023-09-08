@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+-   `prm-job` configuration now gets applied correctly again
+
 ## [23.1.0-rc4] - 2023-09-02
 
 ### Changed
