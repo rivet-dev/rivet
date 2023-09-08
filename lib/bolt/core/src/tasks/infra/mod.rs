@@ -79,16 +79,7 @@ impl PlanStepKind {
 			PlanStepKind::Migrate => {
 				tasks::migrate::up_all(&ctx).await?;
 			}
-			PlanStepKind::Up => {
-				tasks::up::up_all(
-					&ctx,
-					tasks::up::UpOpts {
-						auto_approve: opts.auto_approve,
-						..Default::default()
-					},
-				)
-				.await?
-			}
+			PlanStepKind::Up => tasks::up::up_all(&ctx).await?,
 		}
 
 		Ok(())

@@ -365,15 +365,6 @@ impl ProjectContextData {
 		svc_ctxs
 	}
 
-	pub async fn essential_services(self: &Arc<Self>) -> Vec<context::service::ServiceContext> {
-		self.all_services()
-			.await
-			.iter()
-			.filter(|x| x.config().service.essential)
-			.cloned()
-			.collect::<Vec<_>>()
-	}
-
 	pub async fn recursive_dependencies_with_pattern(
 		self: &Arc<Self>,
 		svc_names: &[impl AsRef<str>],

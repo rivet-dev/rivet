@@ -30,35 +30,14 @@ use crate::{
 	utils::{self, command_helper::CommandHelper},
 };
 
-#[derive(Debug, Clone)]
-pub struct UpOpts {
-	pub skip_build: bool,
-	pub skip_dependencies: bool,
-	pub force_build: bool,
-	pub skip_generate: bool,
-	pub auto_approve: bool,
-}
-
-impl Default for UpOpts {
-	fn default() -> Self {
-		Self {
-			skip_build: false,
-			skip_dependencies: false,
-			force_build: false,
-			skip_generate: false,
-			auto_approve: false,
-		}
-	}
-}
-
-pub async fn up_all(ctx: &ProjectContext, opts: UpOpts) -> Result<()> {
+pub async fn up_all(ctx: &ProjectContext) -> Result<()> {
 	let all_svc_names = ctx
 		.all_services()
 		.await
 		.iter()
 		.map(|svc| svc.name())
 		.collect::<Vec<_>>();
-	up_services(ctx, &all_svc_names, opts).await?;
+	up_services(ctx, &all_svc_names).await?;
 
 	Ok(())
 }
@@ -66,7 +45,6 @@ pub async fn up_all(ctx: &ProjectContext, opts: UpOpts) -> Result<()> {
 pub async fn up_services<T: AsRef<str>>(
 	ctx: &ProjectContext,
 	svc_names: &[T],
-	opts: UpOpts,
 ) -> Result<Vec<ServiceContext>> {
 	let event = utils::telemetry::build_event(ctx, "bolt_up").await?;
 	utils::telemetry::capture_event(ctx, event)?;
@@ -81,20 +59,10 @@ pub async fn up_services<T: AsRef<str>>(
 		.iter()
 		.map(|x| x.as_ref().to_string())
 		.collect::<HashSet<_>>();
-	if !opts.skip_dependencies {
-		svc_names.extend(ctx.essential_services().await.into_iter().map(|x| x.name()));
-	}
 	let svc_names = svc_names.into_iter().collect::<Vec<_>>();
 
 	// Find all services and their dependencies
-	let all_svcs = if opts.skip_build {
-		Vec::new()
-	} else if opts.skip_dependencies {
-		ctx.services_with_patterns(&svc_names).await
-	} else {
-		ctx.recursive_dependencies_with_pattern(&svc_names, &RunContext::Service {})
-			.await
-	};
+	let all_svcs = ctx.services_with_patterns(&svc_names).await;
 
 	// Find all services that are executables
 	let all_exec_svcs = all_svcs
@@ -109,7 +77,7 @@ pub async fn up_services<T: AsRef<str>>(
 	tasks::gen::generate_project(ctx).await;
 
 	// Generate service config
-	if !opts.skip_generate {
+	{
 		eprintln!();
 		rivet_term::status::progress("Generating", "");
 		{
@@ -217,14 +185,10 @@ pub async fn up_services<T: AsRef<str>>(
 	let all_exec_svcs_with_build_plan = futures_util::stream::iter(all_exec_svcs.clone())
 		.map(|svc| {
 			let build_context = build_context.clone();
-			let opts = opts.clone();
 			let pb = pb.clone();
 
 			async move {
-				let build_plan = svc
-					.build_plan(&build_context, opts.force_build)
-					.await
-					.unwrap();
+				let build_plan = svc.build_plan(&build_context).await.unwrap();
 				pb.inc(1);
 				(svc, build_plan)
 			}

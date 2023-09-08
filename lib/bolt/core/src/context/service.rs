@@ -351,11 +351,7 @@ pub enum ServiceBuildPlan {
 
 impl ServiceContextData {
 	/// Determines if this service needs to be recompiled.
-	pub async fn build_plan(
-		&self,
-		build_context: &BuildContext,
-		force_build: bool,
-	) -> Result<ServiceBuildPlan> {
+	pub async fn build_plan(&self, build_context: &BuildContext) -> Result<ServiceBuildPlan> {
 		let project_ctx = self.project().await;
 
 		match &project_ctx.ns().cluster.kind {
@@ -376,18 +372,6 @@ impl ServiceContextData {
 			// Build and upload to S3
 			config::ns::ClusterKind::Distributed { .. } => {
 				let image_tag = self.docker_image_tag().await?;
-
-				if !force_build {
-					// TODO: Check docker if build was pushed
-					// let mut cmd = Command::new("docker");
-					// cmd.arg("images");
-					// cmd.arg("-q").arg(&image_tag);
-					// let image_exists = !cmd.output().await?.stdout.is_empty();
-
-					// if image_exists {
-					// 	return Ok(ServiceBuildPlan::ExistingUploadedBuild { image_tag });
-					// }
-				}
 
 				// Default to building
 				Ok(ServiceBuildPlan::BuildAndUpload { image_tag })
@@ -1222,6 +1206,7 @@ async fn add_s3_env(
 		format!("S3_{}_REGION_{}", provider_upper, s3_dep_name),
 		s3_config.region,
 	));
+	// TODO: Add to secret env
 	env.push((
 		format!("S3_{}_ACCESS_KEY_ID_{}", provider_upper, s3_dep_name),
 		s3_creds.access_key_id,
