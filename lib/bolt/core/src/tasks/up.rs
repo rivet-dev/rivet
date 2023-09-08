@@ -92,7 +92,7 @@ pub async fn up_services<T: AsRef<str>>(
 	} else if opts.skip_dependencies {
 		ctx.services_with_patterns(&svc_names).await
 	} else {
-		ctx.recursive_dependencies_with_pattern(&svc_names, RunContext::Service)
+		ctx.recursive_dependencies_with_pattern(&svc_names, &RunContext::Service {})
 			.await
 	};
 
@@ -270,7 +270,7 @@ pub async fn up_services<T: AsRef<str>>(
 			// Save exec ctx
 			exec_ctxs.push(ExecServiceContext {
 				svc_ctx: svc_ctx.clone().clone(),
-				build_context: build_context.clone(),
+				run_context: RunContext::Service {},
 				driver: match &build_plan {
 					ServiceBuildPlan::BuildLocally { exec_path } => {
 						derive_local_build_driver(svc_ctx, exec_path.clone()).await

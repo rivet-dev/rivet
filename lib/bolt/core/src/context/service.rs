@@ -399,14 +399,13 @@ impl ServiceContextData {
 // Dependencies
 impl ServiceContextData {
 	#[async_recursion]
-	pub async fn dependencies(&self, run_context: RunContext) -> Vec<ServiceContext> {
+	pub async fn dependencies(&self, run_context: &RunContext) -> Vec<ServiceContext> {
 		let project = self.project().await;
 
 		let all_svcs = project.all_services().await;
 
 		let mut dep_ctxs = Vec::<ServiceContext>::new();
 
-		// TODO: Add dev dependencies if building for tests
 		// Add operation dependencies from Cargo.toml
 		//
 		// You cannot depend on these services from the Service.toml, only as a Cargo dependency
@@ -419,7 +418,7 @@ impl ServiceContextData {
 					cargo
 						.dev_dependencies
 						.iter()
-						.filter(|x| run_context == RunContext::Test),
+						.filter(|_| matches!(run_context, RunContext::Test { .. })),
 				)
 				.filter_map(|(name, dep)| {
 					if let config::service::CargoDependency::Path { .. } = dep {
@@ -462,7 +461,7 @@ impl ServiceContextData {
 
 		// Check that these are services you can explicitly depend on in the Service.toml
 		for dep in &dep_ctxs {
-			if run_context == RunContext::Service
+			if matches!(run_context, RunContext::Service { .. })
 				&& !self.config().service.test_only
 				&& dep.config().service.test_only
 			{
@@ -492,7 +491,7 @@ impl ServiceContextData {
 
 	pub async fn database_dependencies(
 		&self,
-		run_context: RunContext,
+		run_context: &RunContext,
 	) -> HashMap<String, config::service::Database> {
 		let dbs = self
 			.project()
@@ -512,7 +511,7 @@ impl ServiceContextData {
 		dbs
 	}
 
-	pub async fn crdb_dependencies(&self, run_context: RunContext) -> Vec<ServiceContext> {
+	pub async fn crdb_dependencies(&self, run_context: &RunContext) -> Vec<ServiceContext> {
 		let dep_names = self
 			.database_dependencies(run_context)
 			.await
@@ -528,7 +527,7 @@ impl ServiceContextData {
 			.collect()
 	}
 
-	pub async fn redis_dependencies(&self, run_context: RunContext) -> Vec<ServiceContext> {
+	pub async fn redis_dependencies(&self, run_context: &RunContext) -> Vec<ServiceContext> {
 		let default_deps = ["redis-chirp".to_string(), "redis-cache".to_string()];
 
 		let dep_names = self
@@ -548,7 +547,7 @@ impl ServiceContextData {
 			.collect()
 	}
 
-	pub async fn s3_dependencies(&self, run_context: RunContext) -> Vec<ServiceContext> {
+	pub async fn s3_dependencies(&self, run_context: &RunContext) -> Vec<ServiceContext> {
 		let dep_names = self
 			.database_dependencies(run_context)
 			.await
@@ -564,7 +563,7 @@ impl ServiceContextData {
 			.collect()
 	}
 
-	pub async fn nats_dependencies(&self, run_context: RunContext) -> Vec<ServiceContext> {
+	pub async fn nats_dependencies(&self, run_context: &RunContext) -> Vec<ServiceContext> {
 		let dep_names = self
 			.database_dependencies(run_context)
 			.await
@@ -663,7 +662,7 @@ impl ServiceContextData {
 
 	async fn required_secrets(
 		&self,
-		run_context: RunContext,
+		run_context: &RunContext,
 	) -> Result<Vec<(Vec<String>, config::service::Secret)>> {
 		let mut secrets = self
 			.project()
@@ -687,7 +686,7 @@ impl ServiceContextData {
 		Ok(secrets)
 	}
 
-	pub async fn env(&self, run_context: RunContext) -> Result<Vec<(String, String)>> {
+	pub async fn env(&self, run_context: &RunContext) -> Result<Vec<(String, String)>> {
 		let project_ctx = self.project().await;
 
 		let region_id = project_ctx.primary_region_or_local();
@@ -723,7 +722,7 @@ impl ServiceContextData {
 		));
 
 		// Provide default Nomad variables if in test
-		if matches!(run_context, RunContext::Test) {
+		if matches!(run_context, RunContext::Test { .. }) {
 			env.push(("KUBERNETES_REGION".into(), "global".into()));
 			env.push(("KUBERNETES_DC".into(), region_id.clone()));
 			env.push((
@@ -759,7 +758,7 @@ impl ServiceContextData {
 		env.push(("RIVET_PRIMARY_REGION".into(), project_ctx.primary_region()));
 
 		// Networking
-		if run_context == RunContext::Service {
+		if matches!(run_context, RunContext::Service { .. }) {
 			env.push(("HEALTH_PORT".into(), k8s::gen::HEALTH_PORT.to_string()));
 			env.push(("METRICS_PORT".into(), k8s::gen::METRICS_PORT.to_string()));
 			if self.config().kind.has_server() {
@@ -845,7 +844,7 @@ impl ServiceContextData {
 		env.push(("CHIRP_REGION".into(), region_id.clone()));
 
 		// Chirp worker config
-		if let (RunContext::Service, ServiceKind::Consumer { .. }) =
+		if let (RunContext::Service { .. }, ServiceKind::Consumer { .. }) =
 			(run_context, &self.config().kind)
 		{
 			env.push((
@@ -867,7 +866,7 @@ impl ServiceContextData {
 		let s3_deps = if self.depends_on_s3() {
 			project_ctx.all_services().await.to_vec()
 		} else {
-			self.s3_dependencies(run_context).await
+			self.s3_dependencies(&run_context).await
 		};
 		for s3_dep in s3_deps {
 			if !matches!(s3_dep.config().runtime, RuntimeKind::S3 { .. }) {
@@ -980,7 +979,7 @@ impl ServiceContextData {
 		Ok(env)
 	}
 
-	pub async fn secret_env(&self, run_context: RunContext) -> Result<Vec<(String, String)>> {
+	pub async fn secret_env(&self, run_context: &RunContext) -> Result<Vec<(String, String)>> {
 		let project_ctx = self.project().await;
 
 		let mut env = Vec::new();
@@ -1016,7 +1015,7 @@ impl ServiceContextData {
 			));
 		}
 
-		if run_context == RunContext::Service {
+		if matches!(run_context, RunContext::Service { .. }) {
 			if self.depends_on_sendgrid_key() {
 				env.push((
 					"SENDGRID_KEY".into(),

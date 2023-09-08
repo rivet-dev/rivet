@@ -29,6 +29,8 @@ pub enum SubCommand {
 		svc_name: String,
 		#[clap(long, short = 'r')]
 		recursive: bool,
+		#[clap(long)]
+		test: bool,
 	},
 }
 
@@ -46,7 +48,14 @@ impl SubCommand {
 			Self::ServiceDependencies {
 				svc_name,
 				recursive,
+				test,
 			} => {
+				let run_context = if *test {
+					RunContext::Test { test_id: "".into() }
+				} else {
+					RunContext::Service {}
+				};
+
 				// Build project
 				let ctx = bolt_core::context::ProjectContextData::new(
 					std::env::var("BOLT_NAMESPACE").ok(),
@@ -55,11 +64,10 @@ impl SubCommand {
 
 				// Read deps
 				let deps = if *recursive {
-					ctx.recursive_dependencies(&[&svc_name], RunContext::Service)
-						.await
+					ctx.recursive_dependencies(&[&svc_name], &run_context).await
 				} else {
 					let svc = ctx.service_with_name(svc_name).await;
-					svc.dependencies(RunContext::Service).await
+					svc.dependencies(&run_context).await
 				};
 
 				// Print deps

@@ -536,7 +536,7 @@ async fn run_test(ctx: &ProjectContext, test_binary: TestBinary) -> Result<TestR
 	// Build exec ctx
 	let exec_ctx = ExecServiceContext {
 		svc_ctx: svc_ctx.clone(),
-		build_context: BuildContext::Test {
+		run_context: RunContext::Test {
 			test_id: gen_test_id(),
 		},
 		driver: ExecServiceDriver::LocalBinaryArtifact {

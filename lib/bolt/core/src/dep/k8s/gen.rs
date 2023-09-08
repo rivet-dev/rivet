@@ -8,7 +8,7 @@ use crate::{
 		self,
 		service::{ServiceDomain, ServiceKind, ServiceRouter},
 	},
-	context::{BuildContext, ProjectContext, RunContext, ServiceContext},
+	context::{ProjectContext, RunContext, ServiceContext},
 };
 
 // Kubernetes requires a specific port for containers because they have their own networking namespace, the
@@ -20,7 +20,7 @@ pub const HTTP_SERVER_PORT: usize = 1003;
 
 pub struct ExecServiceContext {
 	pub svc_ctx: ServiceContext,
-	pub build_context: BuildContext,
+	pub run_context: RunContext,
 	pub driver: ExecServiceDriver,
 }
 
@@ -46,9 +46,9 @@ enum SpecType {
 }
 
 pub fn k8s_svc_name(exec_ctx: &ExecServiceContext) -> String {
-	match &exec_ctx.build_context {
-		BuildContext::Bin { .. } => format!("rivet-{}", exec_ctx.svc_ctx.name()),
-		BuildContext::Test { test_id } => {
+	match &exec_ctx.run_context {
+		RunContext::Service { .. } => format!("rivet-{}", exec_ctx.svc_ctx.name()),
+		RunContext::Test { test_id } => {
 			format!("rivet-{}-test-{test_id}", exec_ctx.svc_ctx.name())
 		}
 	}
@@ -60,16 +60,15 @@ pub async fn gen_svc(exec_ctx: &ExecServiceContext) -> Vec<serde_json::Value> {
 
 	let ExecServiceContext {
 		svc_ctx,
-		build_context,
+		run_context,
 		driver,
 	} = exec_ctx;
 
 	let project_ctx = svc_ctx.project().await;
 	let mut specs = Vec::new();
 
-	let spec_type = match build_context {
-		BuildContext::Test { .. } => SpecType::Pod,
-		BuildContext::Bin { .. } => match svc_ctx.config().kind {
+	let spec_type = match run_context {
+		RunContext::Service { .. } => match svc_ctx.config().kind {
 			ServiceKind::Headless { .. }
 			| ServiceKind::Consumer { .. }
 			| ServiceKind::Api { .. }
@@ -82,6 +81,7 @@ pub async fn gen_svc(exec_ctx: &ExecServiceContext) -> Vec<serde_json::Value> {
 				unreachable!()
 			}
 		},
+		RunContext::Test { .. } => SpecType::Pod,
 	};
 
 	let has_health = project_ctx
@@ -102,8 +102,8 @@ pub async fn gen_svc(exec_ctx: &ExecServiceContext) -> Vec<serde_json::Value> {
 	);
 
 	// Render env
-	let env = svc_ctx.env(RunContext::Service).await.unwrap();
-	let secret_env = svc_ctx.secret_env(RunContext::Service).await.unwrap();
+	let env = svc_ctx.env(run_context).await.unwrap();
+	let secret_env = svc_ctx.secret_env(run_context).await.unwrap();
 	let env = generate_k8s_variables()
 		.into_iter()
 		.chain(
@@ -304,7 +304,7 @@ pub async fn gen_svc(exec_ctx: &ExecServiceContext) -> Vec<serde_json::Value> {
 	let pod_spec = json!({
 		"priorityClassName": priority_class_name,
 		// TODO: `OnFailure` Doesn't work with deployments
-		"restartPolicy": if matches!(build_context, BuildContext::Test { .. }) {
+		"restartPolicy": if matches!(run_context, RunContext::Test { .. }) {
 			"Never"
 		} else if spec_type == SpecType::Deployment {
 			"Always"
@@ -440,7 +440,7 @@ pub async fn gen_svc(exec_ctx: &ExecServiceContext) -> Vec<serde_json::Value> {
 	}
 
 	// Network the service
-	if matches!(build_context, BuildContext::Bin { .. }) {
+	if matches!(run_context, RunContext::Service { .. }) {
 		if svc_ctx.config().kind.has_server() {
 			specs.push(json!({
 				"apiVersion": "v1",

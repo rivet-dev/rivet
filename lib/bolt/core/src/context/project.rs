@@ -377,7 +377,7 @@ impl ProjectContextData {
 	pub async fn recursive_dependencies_with_pattern(
 		self: &Arc<Self>,
 		svc_names: &[impl AsRef<str>],
-		run_context: RunContext,
+		run_context: &RunContext,
 	) -> Vec<ServiceContext> {
 		let svc_names = self
 			.services_with_patterns(svc_names)
@@ -392,18 +392,28 @@ impl ProjectContextData {
 	pub async fn recursive_dependencies(
 		self: &Arc<Self>,
 		svc_names: &[impl AsRef<str>],
-		run_context: RunContext,
+		run_context: &RunContext,
 	) -> Vec<ServiceContext> {
 		// Fetch core services
 		let mut all_svc = self.services_with_names(&svc_names).await;
 
 		// Add all dependencies
+		let mut first_iter = true; // If this is the first recursive iteration
 		let mut pending_deps = all_svc.clone(); // Services whose dependencies still need to be processed
 		while !pending_deps.is_empty() {
 			// Find all new dependencies
 			let mut new_deps = Vec::<ServiceContext>::new();
 			for svc_ctx in &pending_deps {
-				let dependencies = svc_ctx.dependencies(run_context).await;
+				let dependencies = if first_iter {
+					// Use the provided run context for the root services
+					svc_ctx.dependencies(run_context).await
+				} else {
+					// Use `Service` context for recursive dependencies. If we recursively use the `Test` run
+					// context recursively, we'll get all of the dev-dependencies and likely get circular
+					// dependencies.
+					svc_ctx.dependencies(&RunContext::Service {}).await
+				};
+
 				for dep_ctx in dependencies {
 					// Check if dependency is already registered
 					if !all_svc.iter().any(|d| d.name() == dep_ctx.name()) {
@@ -415,6 +425,7 @@ impl ProjectContextData {
 
 			// Save new pending dep list
 			pending_deps = new_deps;
+			first_iter = false;
 		}
 
 		all_svc

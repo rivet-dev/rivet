@@ -7,19 +7,19 @@ pub use project::*;
 pub use service::*;
 
 /// Defines what this code is being ran for.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum RunContext {
 	/// Being ran as a standalone binary service.
-	Service,
+	Service {},
 	/// Being ran as a test.
-	Test,
+	Test { test_id: String },
 }
 
 impl RunContext {
 	pub fn short(&self) -> &str {
 		match self {
-			RunContext::Service => "service",
-			RunContext::Test => "test",
+			RunContext::Service { .. } => "service",
+			RunContext::Test { .. } => "test",
 		}
 	}
 }
@@ -28,7 +28,7 @@ impl RunContext {
 #[derive(Eq, PartialEq, Clone)]
 pub enum BuildContext {
 	Bin { optimization: BuildOptimization },
-	Test { test_id: String },
+	Test {},
 }
 
 impl BuildContext {
