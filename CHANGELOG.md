@@ -18,6 +18,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 -  **Bolt** Run tests inside of Kubernetes pod inside cluster, removing the need for port forwarding for tests
 -  **Bolt** Remove `disable_cargo_workspace` flag since it is seldom used
 -  **Bolt** Remove  `skip_dependencies`, `force_build`, and `skip_generate` on `bolt up` and `bolt test` commands that are no longer relevant
+-  **api-route** Split up routes in to `/traefik/config/core` and `/traefik/config/game-guard`
 
 ## [23.1.0-rc4] - 2023-09-02
 
