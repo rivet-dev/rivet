@@ -14,6 +14,12 @@ static GLOBAL_INIT: Once = Once::new();
 
 const API_ROUTE_URL: &'static str = "http://rivet-api-route.rivet-service.svc.cluster.local";
 
+async fn get_api_route_token() -> String {
+	util::env::read_secret(&["rivet", "api_route", "token"])
+		.await
+		.unwrap()
+}
+
 struct Ctx {
 	op_ctx: OperationContext<()>,
 }
@@ -103,25 +109,23 @@ async fn cdn() {
 	{
 		tracing::info!("fetching traefik config");
 
-		// TODO: Arguments
-		let token = util::env::read_secret(&["rivet", "api_route", "token"])
-			.await
-			.unwrap();
 		let res = reqwest::Client::new()
 			.get(&format!(
-				"{API_ROUTE_URL}/traefik/config/core?token={token}"
+				"{API_ROUTE_URL}/traefik/config/core?token={token}",
+				token = get_api_route_token().await
 			))
 			.send()
 			.await
 			.unwrap()
 			.error_for_status()
 			.unwrap()
-			.json::<api_route::route::traefik::TraefikHttpNullified>()
+			.json::<api_route::route::traefik::TraefikConfigResponseNullified>()
 			.await
 			.unwrap();
-		let routers = res.routers.as_ref().expect("no routers");
+		let routers = res.http.as_ref().unwrap().routers.as_ref().unwrap();
 		let middlewares = res
-			.http()
+			.http
+			.as_ref()
 			.unwrap()
 			.middlewares
 			.as_ref()
@@ -160,26 +164,32 @@ async fn cdn() {
 			);
 
 			let domain_part = format!("Host(`{}`)", ns.domain);
-			assert!(ns_router_insecure.rule().unwrap().contains(&domain_part));
-			assert!(ns_router_secure.rule().unwrap().contains(&domain_part));
+			assert!(ns_router_insecure
+				.rule
+				.as_ref()
+				.unwrap()
+				.contains(&domain_part));
+			assert!(ns_router_secure
+				.rule
+				.as_ref()
+				.unwrap()
+				.contains(&domain_part));
 
 			assert_eq!(
 				"traffic-server-traffic-server@kubernetescrd",
-				ns_router_insecure.service().unwrap()
+				ns_router_insecure.service,
 			);
 			assert_eq!(
 				"traffic-server-traffic-server@kubernetescrd",
-				ns_router_secure.service().unwrap()
+				ns_router_secure.service,
 			);
 
-			ns_router_insecure
-				.middlewares()
-				.unwrap()
-				.contains(&rewrite_middleware_key);
-			ns_router_secure
-				.middlewares()
-				.unwrap()
-				.contains(&rewrite_middleware_key);
+			assert!(ns_router_insecure
+				.middlewares
+				.contains(&rewrite_middleware_key));
+			assert!(ns_router_secure
+				.middlewares
+				.contains(&rewrite_middleware_key));
 		}
 	}
 }
@@ -229,21 +239,34 @@ async fn job_run() {
 	{
 		tracing::info!("fetching traefik config");
 
-		let res = ctx
-			.http_client
-			.traefik_config()
-			.token(
-				util::env::read_secret(&["rivet", "api_route", "token"])
-					.await
-					.unwrap(),
-			)
-			.region(&region.name_id)
-			.pool("ing-job")
+		let res = reqwest::Client::new()
+			.get(&format!(
+				"{API_ROUTE_URL}/traefik/config/core?region={region}&token={token}",
+				region = region.name_id,
+				token = get_api_route_token().await
+			))
 			.send()
 			.await
+			.unwrap()
+			.error_for_status()
+			.unwrap()
+			.json::<api_route::route::traefik::TraefikConfigResponseNullified>()
+			.await
 			.unwrap();
-		let services = res.http().unwrap().services.as_ref().expect("no services");
-		let routers = res.http().unwrap().routers.as_ref().expect("no routers");
+		let services = res
+			.http
+			.as_ref()
+			.unwrap()
+			.services
+			.as_ref()
+			.expect("no services");
+		let routers = res
+			.http
+			.as_ref()
+			.unwrap()
+			.routers
+			.as_ref()
+			.expect("no routers");
 
 		tracing::info!(
 			keys = ?services.keys().collect::<Vec<_>>(),
@@ -262,18 +285,16 @@ async fn job_run() {
 		let router_http = routers
 			.get(&format!("job-run:{run_id}:http:http"))
 			.expect("missing http router");
-		assert_eq!(vec!["lb-80"], router_http.entry_points().unwrap());
+		assert_eq!(vec!["lb-80"], router_http.entry_points);
 		assert_eq!(
 			"Host(`test1.com`) || Host(`test2.com`)",
-			router_http.rule().unwrap()
+			router_http.rule.as_ref().unwrap()
 		);
-		assert_eq!(service_id, router_http.service().unwrap());
+		assert_eq!(service_id, router_http.service);
 		assert!(router_http.tls.is_none());
 
 		// Validate HTTPS
-		let _router_https = routers
-			.get(&format!("job-run:{run_id}:http:https"))
-			.expect("missing http router");
+		assert!(routers.contains_key(&format!("job-run:{run_id}:http:https")));
 	}
 }
 

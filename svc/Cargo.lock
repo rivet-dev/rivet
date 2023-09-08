@@ -849,6 +849,7 @@ dependencies = [
  "rivet-health-checks",
  "rivet-operation",
  "rivet-pools",
+ "rivet-route",
  "rivet-util-cdn",
  "rivet-util-job",
  "s3-util",
@@ -6749,6 +6750,19 @@ dependencies = [
  "chrono",
  "serde",
  "serde_json",
+]
+
+[[package]]
+name = "rivet-route"
+version = "0.0.1"
+dependencies = [
+ "aws-smithy-client 0.41.0",
+ "aws-smithy-http 0.41.0",
+ "aws-smithy-json",
+ "aws-smithy-types 0.41.0",
+ "bytes",
+ "http",
+ "tower",
 ]
 
 [[package]]
