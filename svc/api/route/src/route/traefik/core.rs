@@ -281,7 +281,7 @@ fn register_namespace(
 		config.http.routers.insert(
 			format!("ns:{}-insecure", ns_id),
 			traefik::TraefikRouter {
-				entry_points: vec!["lb-80".into()],
+				entry_points: vec!["web".into()],
 				rule: Some(router_rule.clone()),
 				priority: Some(BASE_ROUTER_PRIORITY),
 				service: service.to_owned(),
@@ -292,7 +292,7 @@ fn register_namespace(
 		config.http.routers.insert(
 			format!("ns:{}-insecure-html", ns_id),
 			traefik::TraefikRouter {
-				entry_points: vec!["lb-80".into()],
+				entry_points: vec!["web".into()],
 				rule: Some(router_rule_html.clone()),
 				priority: Some(HTML_ROUTER_PRIORITY),
 				service: service.to_owned(),
@@ -303,7 +303,7 @@ fn register_namespace(
 		config.http.routers.insert(
 			format!("ns:{}-secure", ns_id),
 			traefik::TraefikRouter {
-				entry_points: vec!["lb-443".into()],
+				entry_points: vec!["websecure".into()],
 				rule: Some(router_rule),
 				priority: Some(BASE_ROUTER_PRIORITY),
 				service: service.to_owned(),
@@ -319,7 +319,7 @@ fn register_namespace(
 		config.http.routers.insert(
 			format!("ns:{}-secure-html", ns_id),
 			traefik::TraefikRouter {
-				entry_points: vec!["lb-443".into()],
+				entry_points: vec!["websecure".into()],
 				rule: Some(router_rule_html),
 				priority: Some(HTML_ROUTER_PRIORITY),
 				service: service.to_owned(),
@@ -490,7 +490,7 @@ fn register_custom_cdn_route(
 				config.http.routers.insert(
 					format!("ns-custom-headers:{}-insecure:{}", ns_id, glob_hash),
 					traefik::TraefikRouter {
-						entry_points: vec!["lb-80".into()],
+						entry_points: vec!["web".into()],
 						rule: Some(router_rule.clone()),
 						priority: Some(
 							(BASE_ROUTER_PRIORITY + 1).saturating_add(route.priority.try_into()?),
@@ -503,7 +503,7 @@ fn register_custom_cdn_route(
 				config.http.routers.insert(
 					format!("ns-custom-headers:{}-insecure-html:{}", ns_id, glob_hash),
 					traefik::TraefikRouter {
-						entry_points: vec!["lb-80".into()],
+						entry_points: vec!["web".into()],
 						rule: Some(router_rule_html.clone()),
 						priority: Some(
 							(HTML_ROUTER_PRIORITY + 1).saturating_add(route.priority.try_into()?),
@@ -516,7 +516,7 @@ fn register_custom_cdn_route(
 				config.http.routers.insert(
 					format!("ns-custom-headers:{}-secure:{}", ns_id, glob_hash),
 					traefik::TraefikRouter {
-						entry_points: vec!["lb-443".into()],
+						entry_points: vec!["websecure".into()],
 						rule: Some(router_rule),
 						priority: Some(
 							(BASE_ROUTER_PRIORITY + 1).saturating_add(route.priority.try_into()?),
@@ -534,7 +534,7 @@ fn register_custom_cdn_route(
 				config.http.routers.insert(
 					format!("ns-custom-headers:{}-secure-html:{}", ns_id, glob_hash),
 					traefik::TraefikRouter {
-						entry_points: vec!["lb-443".into()],
+						entry_points: vec!["websecure".into()],
 						rule: Some(router_rule_html),
 						priority: Some(
 							(HTML_ROUTER_PRIORITY + 1).saturating_add(route.priority.try_into()?),
