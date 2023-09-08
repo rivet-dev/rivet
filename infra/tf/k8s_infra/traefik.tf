@@ -33,13 +33,13 @@ resource "helm_release" "traefik" {
 		]
 
 		logs = {
-			general = {
-				level = "DEBUG"
-			}
-			# TODO: Disable on prod
-			access = {
-				enabled = true
-			}
+			# general = {
+			# 	level = "DEBUG"
+			# }
+			# NOTE: Do not enable on prod
+			# access = {
+			# 	enabled = true
+			# }
 		}
 
 		metrics = {

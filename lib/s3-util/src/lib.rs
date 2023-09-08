@@ -136,13 +136,13 @@ impl Client {
 		let endpoint = match endpoint_kind {
 			EndpointKind::Internal => std::env::var(format!(
 				"S3_{}_ENDPOINT_INTERNAL_{}",
-				provider_upper.to_uppercase(),
+				provider_upper,
 				svc_screaming
 			))?,
 			EndpointKind::InternalResolved => {
 				let mut endpoint = std::env::var(format!(
 					"S3_{}_ENDPOINT_INTERNAL_{}",
-					provider_upper.to_uppercase(),
+					provider_upper,
 					svc_screaming
 				))?;
 

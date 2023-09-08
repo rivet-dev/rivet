@@ -846,6 +846,13 @@ impl ServiceContextData {
 			env.push(("FLY_REGION".into(), fly.region.clone()));
 		}
 
+		// Add default provider
+		let (default_provider, _) = project_ctx.default_s3_provider()?;
+		env.push((
+			"S3_DEFAULT_PROVIDER".to_string(),
+			default_provider.as_str().to_string(),
+		));
+
 		// Expose all S3 endpoints to services that need them
 		let s3_deps = if self.depends_on_s3() {
 			project_ctx.all_services().await.to_vec()
@@ -857,21 +864,13 @@ impl ServiceContextData {
 				continue;
 			}
 
-			// Add default provider
-			let (default_provider, _) = project_ctx.default_s3_provider()?;
-			env.push((
-				"S3_DEFAULT_PROVIDER".to_string(),
-				default_provider.as_str().to_string(),
-			));
-
 			// Add all configured providers
 			let providers = &project_ctx.ns().s3.providers;
 			if providers.minio.is_some() {
-				add_s3_secret_env(&project_ctx, &mut env, &s3_dep, s3_util::Provider::Minio)
-					.await?;
+				add_s3_env(&project_ctx, &mut env, &s3_dep, s3_util::Provider::Minio).await?;
 			}
 			if providers.backblaze.is_some() {
-				add_s3_secret_env(
+				add_s3_env(
 					&project_ctx,
 					&mut env,
 					&s3_dep,
@@ -880,7 +879,7 @@ impl ServiceContextData {
 				.await?;
 			}
 			if providers.aws.is_some() {
-				add_s3_secret_env(&project_ctx, &mut env, &s3_dep, s3_util::Provider::Aws).await?;
+				add_s3_env(&project_ctx, &mut env, &s3_dep, s3_util::Provider::Aws).await?;
 			}
 		}
 
@@ -1072,10 +1071,11 @@ impl ServiceContextData {
 			// Add all configured providers
 			let providers = &project_ctx.ns().s3.providers;
 			if providers.minio.is_some() {
-				add_s3_env(&project_ctx, &mut env, &s3_dep, s3_util::Provider::Minio).await?;
+				add_s3_secret_env(&project_ctx, &mut env, &s3_dep, s3_util::Provider::Minio)
+					.await?;
 			}
 			if providers.backblaze.is_some() {
-				add_s3_env(
+				add_s3_secret_env(
 					&project_ctx,
 					&mut env,
 					&s3_dep,
@@ -1084,7 +1084,7 @@ impl ServiceContextData {
 				.await?;
 			}
 			if providers.aws.is_some() {
-				add_s3_env(&project_ctx, &mut env, &s3_dep, s3_util::Provider::Aws).await?;
+				add_s3_secret_env(&project_ctx, &mut env, &s3_dep, s3_util::Provider::Aws).await?;
 			}
 		}
 

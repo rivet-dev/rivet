@@ -58,7 +58,6 @@ resource "helm_release" "promtail" {
 						# https://groups.google.com/g/prometheus-users/c/dGx7MArW-eE
 						# https://github.com/prometheus/docs/issues/735
 						source_labels = ["__meta_kubernetes_pod_label_app_kubernetes_io_name"]
-						replacement = "rivet-$1"
 						target_label = "service"
 					},
 					# Doesn't work for some reason
