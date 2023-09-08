@@ -557,6 +557,8 @@ async fn run_test(ctx: &ProjectContext, test_binary: TestBinary) -> Result<TestR
 		Result::Ok(Result::Ok(x)) => x,
 		Result::Ok(Err(err)) => TestStatus::UnknownError(err.to_string()),
 		Err(_) => {
+			// TODO: This delete the pod and its logs. Can we send a SIGKILL to the pod instead
+			// with `exec`?
 			// Kill pod
 			Command::new("kubectl")
 				.args(&["delete", "pod", &pod_name, "-n", "rivet-service"])
