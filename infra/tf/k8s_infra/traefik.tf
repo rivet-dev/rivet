@@ -28,7 +28,7 @@ resource "helm_release" "traefik" {
 		}
 
 		additionalArguments = [
-			"--providers.http.endpoint=http://rivet-api-route.rivet-service.svc.cluster.local:80/traefik/config/core?token=${module.traefik_secrets.values["rivet/api_route/token"]}",
+			"--providers.http.endpoint=http://rivet-api-route.rivet-service.svc.cluster.local/traefik/config/core?token=${module.traefik_secrets.values["rivet/api_route/token"]}",
 			"--providers.http.pollInterval=2.5s",
 		]
 
