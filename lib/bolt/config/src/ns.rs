@@ -487,15 +487,16 @@ pub enum MatchmakerLobbyDeliveryMethod {
 	TrafficServer,
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug, Default)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(deny_unknown_fields)]
 pub struct Cdn {
-	#[serde(default = "default_cdn_cache_size")]
 	pub cache_size_gb: usize,
 }
 
-fn default_cdn_cache_size() -> usize {
-	10
+impl Default for Cdn {
+	fn default() -> Self {
+		Cdn { cache_size_gb: 10 }
+	}
 }
 
 fn default_regions() -> HashMap<String, Region> {
