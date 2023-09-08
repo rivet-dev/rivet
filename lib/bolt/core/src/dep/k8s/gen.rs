@@ -178,7 +178,7 @@ pub async fn gen_svc(exec_ctx: &ExecServiceContext) -> Vec<serde_json::Value> {
 		ExecServiceDriver::LocalBinaryArtifact { exec_path, args } => (
 			"alpine:3.8",
 			"IfNotPresent",
-			vec![Path::new("/var/rivet/backend").join(exec_path)],
+			vec![Path::new("/rivet-src").join(exec_path)],
 			args.clone(),
 		),
 		ExecServiceDriver::Docker {
@@ -225,8 +225,9 @@ pub async fn gen_svc(exec_ctx: &ExecServiceContext) -> Vec<serde_json::Value> {
 			// Mount the service binaries to execute directly in the container. See
 			// notes in salt/salt/nomad/files/nomad.d/client.hcl.j2.
 			ExecServiceDriver::LocalBinaryArtifact { .. } => {
+				// Volumes
 				volumes.push(json!({
-					"name": "backend-repo",
+					"name": "rivet-src",
 					"hostPath": {
 						"path": "/rivet-src",
 						"type": "Directory"
@@ -239,9 +240,11 @@ pub async fn gen_svc(exec_ctx: &ExecServiceContext) -> Vec<serde_json::Value> {
 						"type": "Directory"
 					}
 				}));
+
+				// Mounts
 				volume_mounts.push(json!({
-					"name": "backend-repo",
-					"mountPath": "/var/rivet/backend",
+					"name": "rivet-src",
+					"mountPath": "/rivet-src",
 					"readOnly": true
 				}));
 				volume_mounts.push(json!({

@@ -938,7 +938,7 @@ impl ServiceContextData {
 			let (default_provider, _) = project_ctx.default_s3_provider()?;
 			env.push((
 				"S3_DEFAULT_PROVIDER".to_string(),
-				default_provider.as_str().to_uppercase(),
+				default_provider.as_str().to_string(),
 			));
 
 			// Add all configured providers

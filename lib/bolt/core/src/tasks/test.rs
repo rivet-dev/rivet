@@ -458,6 +458,8 @@ pub async fn test_services<T: AsRef<str>>(ctx: &ProjectContext, svc_names: &[T])
 	rivet_term::status::progress("Applying", "");
 	dep::k8s::cli::apply_specs(specs).await?;
 
+	// TODO: Tail logs
+
 	eprintln!();
 	rivet_term::status::success("Finished", "");
 
