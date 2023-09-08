@@ -102,13 +102,8 @@ pub async fn gen_svc(exec_ctx: &ExecServiceContext) -> Vec<serde_json::Value> {
 	);
 
 	// Render env
-	let (env, forward_services) = svc_ctx.env(RunContext::Service).await.unwrap();
-	let (secret_env, secret_forward_services) =
-		svc_ctx.secret_env(RunContext::Service).await.unwrap();
-	assert!(
-		forward_services.is_empty() && secret_forward_services.is_empty(),
-		"should not forward services for RunContext::Service"
-	);
+	let env = svc_ctx.env(RunContext::Service).await.unwrap();
+	let secret_env = svc_ctx.secret_env(RunContext::Service).await.unwrap();
 	let env = generate_k8s_variables()
 		.into_iter()
 		.chain(

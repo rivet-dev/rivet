@@ -565,7 +565,7 @@ async fn run_test(ctx: &ProjectContext, test_binary: TestBinary) -> Result<TestR
 	let setup_duration = setup_start.elapsed();
 
 	// Tail pod
-	rivet_term::status::info("Starting", format!("{display_name} [pod/{pod_name}]",));
+	rivet_term::status::info("Running", format!("{display_name} [pod/{pod_name}]",));
 	let test_start_time = Instant::now();
 	let status = match tokio::time::timeout(TEST_TIMEOUT, tail_pod(&pod_name)).await {
 		Result::Ok(Result::Ok(x)) => x,

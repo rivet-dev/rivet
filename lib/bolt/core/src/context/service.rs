@@ -687,15 +687,11 @@ impl ServiceContextData {
 		Ok(secrets)
 	}
 
-	pub async fn env(
-		&self,
-		run_context: RunContext,
-	) -> Result<(Vec<(String, String)>, Vec<utils::PortForwardConfig>)> {
+	pub async fn env(&self, run_context: RunContext) -> Result<Vec<(String, String)>> {
 		let project_ctx = self.project().await;
 
 		let region_id = project_ctx.primary_region_or_local();
 		let mut env = Vec::new();
-		let mut forward_configs = Vec::new();
 
 		// HACK: Link to dynamically linked libraries in /nix/store
 		//
@@ -814,33 +810,14 @@ impl ServiceContextData {
 		if self.depends_on_nomad_api() {
 			env.push((
 				"NOMAD_URL".into(),
-				format!(
-					"http://{}",
-					access_service(
-						&project_ctx,
-						&mut forward_configs,
-						&run_context,
-						"nomad-server",
-						"nomad",
-						4646,
-					)
-					.await?
-				),
+				"http://nomad-server.nomad.svc.cluster.local:4646".into(),
 			));
 		}
 
 		if self.depends_on_clickhouse() {
 			env.push((
 				"CLICKHOUSE_URL".into(),
-				access_service(
-					&project_ctx,
-					&mut forward_configs,
-					&run_context,
-					"clickhouse",
-					"clickhouse",
-					8123,
-				)
-				.await?,
+				"clickhouse.clickhouse.svc.cluster.local:8123".into(),
 			));
 		}
 
@@ -852,15 +829,7 @@ impl ServiceContextData {
 		// 	// that later.
 		// 	env.push((
 		// 		format!("PROMETHEUS_URL"),
-		// 		access_service(
-		// 			&project_ctx,
-		// 			&mut forward_configs,
-		// 			&run_context,
-		// 			"prometheus",
-		// 			"prometheus",
-		// 			9090,
-		// 		)
-		// 		.await?,
+		// 		"prometheus.prometheus.svc.cluster.local:9090".into(),
 		// 	));
 		// }
 
@@ -868,15 +837,7 @@ impl ServiceContextData {
 		env.push((
 			"NATS_URL".into(),
 			// TODO: Add back passing multiple NATS nodes for failover instead of using DNS resolution
-			access_service(
-				&project_ctx,
-				&mut forward_configs,
-				&run_context,
-				"nats",
-				"nats",
-				4222,
-			)
-			.await?,
+			"nats.nats.svc.cluster.local:4222".into(),
 		));
 
 		// Chirp config (used for both Chirp clients and Chirp workers)
@@ -900,27 +861,6 @@ impl ServiceContextData {
 		if let Some(fly) = &project_ctx.ns().fly {
 			env.push(("FLY_ORGANIZATION_ID".into(), fly.organization_id.clone()));
 			env.push(("FLY_REGION".into(), fly.region.clone()));
-		}
-
-		// CRDB
-		let crdb_host = access_service(
-			&project_ctx,
-			&mut forward_configs,
-			&run_context,
-			"cockroachdb",
-			"cockroachdb",
-			26257,
-		)
-		.await?;
-		for crdb_dep in self.crdb_dependencies(run_context).await {
-			let username = "root"; // TODO:
-			let sslmode = "disable"; // TODO:
-
-			let uri = format!(
-				"postgres://{username}@{crdb_host}/{db_name}?sslmode={sslmode}",
-				db_name = crdb_dep.crdb_db_name(),
-			);
-			env.push((format!("CRDB_URL_{}", crdb_dep.name_screaming_snake()), uri));
 		}
 
 		// Expose all S3 endpoints to services that need them
@@ -1037,17 +977,13 @@ impl ServiceContextData {
 		// Sort env by keys so it's always in the same order
 		env.sort_by_cached_key(|x| x.0.clone());
 
-		Ok((env, forward_configs))
+		Ok(env)
 	}
 
-	pub async fn secret_env(
-		&self,
-		run_context: RunContext,
-	) -> Result<(Vec<(String, String)>, Vec<utils::PortForwardConfig>)> {
+	pub async fn secret_env(&self, run_context: RunContext) -> Result<Vec<(String, String)>> {
 		let project_ctx = self.project().await;
 
 		let mut env = Vec::new();
-		let mut forward_configs = Vec::new();
 
 		// Write secrets
 		for (secret_key, secret_config) in self.required_secrets(run_context).await? {
@@ -1099,15 +1035,7 @@ impl ServiceContextData {
 		}
 
 		// CRDB
-		let crdb_host = access_service(
-			&project_ctx,
-			&mut forward_configs,
-			&run_context,
-			"cockroachdb",
-			"cockroachdb",
-			26257,
-		)
-		.await?;
+		let crdb_host = "cockroachdb.cockroachdb.svc.cluster.local:26257";
 		for crdb_dep in self.crdb_dependencies(run_context).await {
 			let username = "root"; // TODO:
 			let sslmode = "disable"; // TODO:
@@ -1125,15 +1053,7 @@ impl ServiceContextData {
 			let db_name = redis_dep.redis_db_name();
 
 			// TODO: Use name and port to connect to different redis instances
-			let host = access_service(
-				&project_ctx,
-				&mut forward_configs,
-				&run_context,
-				"redis-master",
-				"redis",
-				6379,
-			)
-			.await?;
+			let host = "redis-master.redis.svc.cluster.local:6379";
 
 			// Build URL with auth
 			let username = project_ctx
@@ -1190,7 +1110,7 @@ impl ServiceContextData {
 			}
 		}
 
-		Ok((env, forward_configs))
+		Ok(env)
 	}
 }
 
@@ -1223,33 +1143,6 @@ impl ServiceContextData {
 		ensure!(status.success());
 
 		Ok(())
-	}
-}
-
-pub async fn access_service(
-	_ctx: &ProjectContext,
-	forward_configs: &mut Vec<utils::PortForwardConfig>,
-	run_context: &RunContext,
-	service_name: &'static str,
-	namespace: &'static str,
-	remote_port: u16,
-) -> Result<String> {
-	match run_context {
-		RunContext::Test => {
-			let local_port = utils::pick_port();
-			forward_configs.push(utils::PortForwardConfig {
-				service_name,
-				namespace,
-				local_port,
-				remote_port,
-			});
-
-			Ok(format!("127.0.0.1:{local_port}"))
-		}
-		// Use the cluster address if running locally
-		RunContext::Service => Ok(format!(
-			"{service_name}.{namespace}.svc.cluster.local:{remote_port}"
-		)),
 	}
 }
 
