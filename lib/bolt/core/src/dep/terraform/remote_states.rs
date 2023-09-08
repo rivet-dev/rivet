@@ -31,7 +31,10 @@ pub fn dependency_graph(ctx: &ProjectContext) -> HashMap<&'static str, Vec<Remot
 			RemoteStateBuilder::default().plan_id("master_local").condition("var.deploy_method_local").build().unwrap(),
 			RemoteStateBuilder::default().plan_id("master_cluster").condition("var.deploy_method_cluster").build().unwrap(),
 		],
-		"k8s_infra" => vec![RemoteStateBuilder::default().plan_id("tls").build().unwrap()],
+		"k8s_infra" => vec![
+			RemoteStateBuilder::default().plan_id("tls").build().unwrap(),
+			RemoteStateBuilder::default().plan_id("cloudflare_tunnels").build().unwrap()
+		],
 	}
 }
 

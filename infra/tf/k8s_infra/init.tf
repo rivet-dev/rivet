@@ -6,6 +6,7 @@ resource "kubernetes_namespace" "rivet_service" {
 
 # NOTE: Must use kubectl_manifest because kubernetes_manifest doesn't work with CRDs. If this stops working
 # correctly replace with a raw helm chart: https://artifacthub.io/packages/helm/wikimedia/raw
+# https://github.com/hashicorp/terraform-provider-kubernetes/issues/1367#
 resource "kubectl_manifest" "ingress_tls" {
 	depends_on = [helm_release.traefik, kubernetes_namespace.traefik, kubernetes_namespace.imagor]
 

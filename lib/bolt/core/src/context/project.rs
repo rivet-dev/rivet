@@ -9,7 +9,7 @@ use tokio::{fs, sync::Mutex};
 use crate::{
 	config::{self, service::ServiceDomain},
 	context,
-	dep::{self, s3, terraform},
+	dep::{self, terraform},
 	utils,
 };
 

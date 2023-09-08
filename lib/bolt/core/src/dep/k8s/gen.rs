@@ -472,6 +472,7 @@ pub async fn gen_svc(exec_ctx: &ExecServiceContext) -> Vec<serde_json::Value> {
 	specs
 }
 
+// Added for ease of use
 fn generate_k8s_variables() -> Vec<serde_json::Value> {
 	vec![
 		json!({

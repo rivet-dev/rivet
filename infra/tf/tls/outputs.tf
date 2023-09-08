@@ -51,16 +51,3 @@ output "tls_cert_cloudflare_ca" {
 	value = local.cloudflare_ca_cert
 	sensitive = true
 }
-
-output "salt_output" {
-	value = {
-		tls_certs = {
-			cloudflare_rivet_gg = local.tls_cert_cloudflare_rivet_gg
-			letsencrypt_rivet_gg = local.tls_cert_letsencrypt_rivet_gg
-			letsencrypt_rivet_game = local.tls_cert_letsencrypt_rivet_game
-			letsencrypt_rivet_job = local.tls_cert_letsencrypt_rivet_job
-		}
-	}
-	sensitive = true
-}
-
