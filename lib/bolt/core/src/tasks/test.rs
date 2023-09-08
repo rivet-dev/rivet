@@ -394,7 +394,7 @@ pub async fn test_services<T: AsRef<str>>(ctx: &ProjectContext, svc_names: &[T])
 				.or_insert_with(Vec::new);
 			workspace.push(svc.cargo_name().expect("no cargo name"));
 		}
-		ensure!(!svcs_by_workspace.is_empty());
+		ensure!(!svcs_by_workspace.is_empty(), "no matching services");
 
 		// Run build
 		let test_binaries = cargo::cli::build_tests(
