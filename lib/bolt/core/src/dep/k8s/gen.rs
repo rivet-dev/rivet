@@ -84,14 +84,15 @@ pub async fn gen_svc(exec_ctx: &ExecServiceContext) -> Vec<serde_json::Value> {
 		RunContext::Test { .. } => SpecType::Pod,
 	};
 
-	let has_health = project_ctx
-		.ns()
-		.kubernetes
-		.health_checks
-		.unwrap_or_else(|| match project_ctx.ns().cluster.kind {
-			config::ns::ClusterKind::SingleNode { .. } => false,
-			config::ns::ClusterKind::Distributed { .. } => true,
-		}) && matches!(
+	let has_health = matches!(run_context, RunContext::Service { .. })
+		&& project_ctx
+			.ns()
+			.kubernetes
+			.health_checks
+			.unwrap_or_else(|| match project_ctx.ns().cluster.kind {
+				config::ns::ClusterKind::SingleNode { .. } => false,
+				config::ns::ClusterKind::Distributed { .. } => true,
+			}) && matches!(
 		svc_ctx.config().kind,
 		ServiceKind::Headless { .. } | ServiceKind::Consumer { .. } | ServiceKind::Api { .. }
 	);
