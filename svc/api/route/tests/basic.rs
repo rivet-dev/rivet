@@ -12,9 +12,10 @@ const CDN_POLL_INTERVAL: Duration = Duration::from_millis(500);
 
 static GLOBAL_INIT: Once = Once::new();
 
+const API_ROUTE_URL: &'static str = "http://rivet-api-route.rivet-service.svc.cluster.local";
+
 struct Ctx {
 	op_ctx: OperationContext<()>,
-	http_client: rivet_route::ClientWrapper,
 }
 
 impl Ctx {
@@ -50,14 +51,7 @@ impl Ctx {
 			Vec::new(),
 		);
 
-		let http_client = rivet_route::Config::builder()
-			.set_uri(util::env::svc_router_url("api-route"))
-			.build_client();
-
-		Ctx {
-			op_ctx,
-			http_client,
-		}
+		Ctx { op_ctx }
 	}
 
 	fn chirp(&self) -> &chirp_client::Client {
@@ -105,25 +99,27 @@ async fn cdn() {
 
 	tokio::time::sleep(CDN_SLEEP_DURATION).await;
 
-	// MARK: GET /traefik/config
+	// MARK: GET /traefik/config/core
 	{
 		tracing::info!("fetching traefik config");
 
 		// TODO: Arguments
-		let res = ctx
-			.http_client
-			.traefik_config()
-			.token(
-				util::env::read_secret(&["rivet", "api_route", "token"])
-					.await
-					.unwrap(),
-			)
-			.region(util::env::region())
-			.pool("ing-px")
-			.send()
+		let token = util::env::read_secret(&["rivet", "api_route", "token"])
 			.await
 			.unwrap();
-		let routers = res.http().unwrap().routers.as_ref().expect("no routers");
+		let res = reqwest::Client::new()
+			.get(&format!(
+				"{API_ROUTE_URL}/traefik/config/core?token={token}"
+			))
+			.send()
+			.await
+			.unwrap()
+			.error_for_status()
+			.unwrap()
+			.json::<api_route::route::traefik::TraefikHttpNullified>()
+			.await
+			.unwrap();
+		let routers = res.routers.as_ref().expect("no routers");
 		let middlewares = res
 			.http()
 			.unwrap()
