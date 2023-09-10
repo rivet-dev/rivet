@@ -11,7 +11,7 @@ locals {
 
 resource "kubernetes_namespace" "nsfw_api" {
 	metadata {
-		name = "nsfw-api"
+		name = "rivet-nsfw-api"
 	}
 }
 

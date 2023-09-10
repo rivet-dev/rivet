@@ -50,6 +50,10 @@ variable "regions" {
 }
 
 # MARK: K8s
+variable "kubeconfig_path" {
+	type = string
+}
+
 variable "k8s_health_port" {
 	type = number
 }

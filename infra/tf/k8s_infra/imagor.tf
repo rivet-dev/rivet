@@ -49,7 +49,7 @@ module "imagor_secrets" {
 
 resource "kubernetes_namespace" "imagor" {
 	metadata {
-		name = "imagor"
+		name = "rivet-imagor"
 	}
 }
 

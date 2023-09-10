@@ -22,6 +22,9 @@ pub async fn generate_project(ctx: &ProjectContext) {
 		rivet_term::status::info("Skipping Terrafrom Init", "");
 	}
 
+	// Generate K8S configs
+	dep::k8s::gen::project(ctx).await.unwrap();
+
 	// Generate additional roots
 	let additional_roots = &ctx.config_local().additional_roots;
 	for (_, additional_root) in additional_roots {

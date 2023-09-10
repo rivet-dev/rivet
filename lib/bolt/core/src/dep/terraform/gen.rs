@@ -394,6 +394,7 @@ async fn vars(ctx: &ProjectContext) {
 			.collect::<Vec<_>>()),
 	);
 
+	vars.insert("kubeconfig_path".into(), json!(ctx.gen_kubeconfig_path()));
 	vars.insert("k8s_health_port".into(), json!(dep::k8s::gen::HEALTH_PORT));
 
 	vars.insert(

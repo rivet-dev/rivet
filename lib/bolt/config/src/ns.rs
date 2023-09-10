@@ -368,14 +368,32 @@ impl Default for Nomad {
 #[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(deny_unknown_fields)]
 pub struct Kubernetes {
+	#[serde(flatten)]
+	pub provider: KubernetesProvider,
 	pub health_checks: Option<bool>,
 }
 
 impl Default for Kubernetes {
 	fn default() -> Self {
 		Self {
+			provider: KubernetesProvider::default(),
 			health_checks: None,
 		}
+	}
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+#[serde(deny_unknown_fields)]
+pub enum KubernetesProvider {
+	#[serde(rename = "k3d")]
+	K3d {},
+	#[serde(rename = "aws_eks")]
+	AwsEks {},
+}
+
+impl Default for KubernetesProvider {
+	fn default() -> Self {
+		Self::K3d {}
 	}
 }
 
