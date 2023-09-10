@@ -34,6 +34,12 @@ module "redis_secrets" {
 	optional = true
 }
 
+resource "kubernetes_namespace" "redis_exporter" {
+	metadata {
+		name = "rivet-redis-exporter"
+	}
+}
+
 resource "kubernetes_priority_class" "redis_exporter_priority" {
 	metadata {
 		name = "redis-exporter-priority"
@@ -43,13 +49,13 @@ resource "kubernetes_priority_class" "redis_exporter_priority" {
 }
 
 resource "kubernetes_deployment" "redis_exporter" {
-	depends_on = [kubernetes_namespace.redis, kubernetes_secret.docker_auth]
+	depends_on = [kubernetes_secret.docker_auth]
 
 	for_each = local.redis_svcs
 	
 	metadata {
 		name = "redis-exporter-${each.key}"
-		namespace = "redis"
+		namespace = kubernetes_namespace.redis_exporter.metadata[0].name
 	}
 
 	spec {
@@ -119,13 +125,11 @@ resource "kubernetes_deployment" "redis_exporter" {
 }
 
 resource "kubernetes_service" "redis_exporter" {
-	depends_on = [kubernetes_namespace.redis]
-	
 	for_each = local.redis_svcs
 
 	metadata {
 		name = "redis-exporter-${each.key}"
-		namespace = "redis"
+		namespace = kubernetes_namespace.redis_exporter.metadata[0].name
 	}
 	spec {
 		selector = {

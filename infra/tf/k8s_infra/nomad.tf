@@ -78,116 +78,116 @@ resource "kubernetes_service" "nomad_server" {
 	}
 }
 
-resource "kubernetes_stateful_set" "nomad_server" {
-	metadata {
-		namespace = kubernetes_namespace.nomad.metadata.0.name
-		name = "nomad-server-statefulset"
-		labels = {
-			app = "nomad-server"
-		}
-	}
-	spec {
-		replicas = local.count
+# resource "kubernetes_stateful_set" "nomad_server" {
+# 	metadata {
+# 		namespace = kubernetes_namespace.nomad.metadata.0.name
+# 		name = "nomad-server-statefulset"
+# 		labels = {
+# 			app = "nomad-server"
+# 		}
+# 	}
+# 	spec {
+# 		replicas = local.count
 
-		selector {
-			match_labels = {
-				app = "nomad-server"
-			}
-		}
+# 		selector {
+# 			match_labels = {
+# 				app = "nomad-server"
+# 			}
+# 		}
 
-		service_name = kubernetes_service.nomad_server.metadata.0.name
+# 		service_name = kubernetes_service.nomad_server.metadata.0.name
 
-		template {
-			metadata {
-				labels = {
-					app = "nomad-server"
-				}
-				annotations = {
-					# Trigger a rolling update on config chagne
-					"configmap-version" = local.server_configmap_hash
-				}
-			}
+# 		template {
+# 			metadata {
+# 				labels = {
+# 					app = "nomad-server"
+# 				}
+# 				annotations = {
+# 					# Trigger a rolling update on config chagne
+# 					"configmap-version" = local.server_configmap_hash
+# 				}
+# 			}
 
-			spec {
-				security_context {
-					run_as_user   = 100
-					run_as_group  = 999
-					fs_group      = 999
-				}
-				container {
-					name = "nomad-instance"
-					image = "hashicorp/nomad:1.6.0"
-					image_pull_policy = "IfNotPresent"
-					args = ["agent", "-config=/etc/nomad/nomad.d/server.hcl"]
+# 			spec {
+# 				security_context {
+# 					run_as_user   = 100
+# 					run_as_group  = 999
+# 					fs_group      = 999
+# 				}
+# 				container {
+# 					name = "nomad-instance"
+# 					image = "hashicorp/nomad:1.6.0"
+# 					image_pull_policy = "IfNotPresent"
+# 					args = ["agent", "-config=/etc/nomad/nomad.d/server.hcl"]
 
-					port {
-						name = "http"
-						container_port = 4646
-						protocol = "TCP"
-					}
-					port {
-						name = "rpc"
-						container_port = 4647
-						protocol = "TCP"
-					}
-					port {
-						name = "serf-tcp"
-						container_port = 4648
-						protocol = "TCP"
-					}
-					port {
-						name = "serf-udp"
-						container_port = 4648
-						protocol = "UDP"
-					}
+# 					port {
+# 						name = "http"
+# 						container_port = 4646
+# 						protocol = "TCP"
+# 					}
+# 					port {
+# 						name = "rpc"
+# 						container_port = 4647
+# 						protocol = "TCP"
+# 					}
+# 					port {
+# 						name = "serf-tcp"
+# 						container_port = 4648
+# 						protocol = "TCP"
+# 					}
+# 					port {
+# 						name = "serf-udp"
+# 						container_port = 4648
+# 						protocol = "UDP"
+# 					}
 
-					# We don't use a readiness probe for `/v1/status/leader` because
-					# we need all three nodes to boot successfully and bootstrap.
-					# The load balancer itself should prevent routing traffic to
-					# nodes that don't have a leader.
-					readiness_probe {
-						http_get {
-							path = "/v1/agent/self"
-							port = "http"
-						}
+# 					# We don't use a readiness probe for `/v1/status/leader` because
+# 					# we need all three nodes to boot successfully and bootstrap.
+# 					# The load balancer itself should prevent routing traffic to
+# 					# nodes that don't have a leader.
+# 					readiness_probe {
+# 						http_get {
+# 							path = "/v1/agent/self"
+# 							port = "http"
+# 						}
 
-						initial_delay_seconds = 5
-						period_seconds = 5
-					}
+# 						initial_delay_seconds = 5
+# 						period_seconds = 5
+# 					}
 
-					volume_mount {
-						name = "nomad-config"
-						mount_path = "/etc/nomad/nomad.d"
-					}
-					volume_mount {
-						name = "nomad-data"
-						mount_path = "/opt/nomad/data"
-					}
-				}
+# 					volume_mount {
+# 						name = "nomad-config"
+# 						mount_path = "/etc/nomad/nomad.d"
+# 					}
+# 					volume_mount {
+# 						name = "nomad-data"
+# 						mount_path = "/opt/nomad/data"
+# 					}
+# 				}
 
-				volume {
-					name = "nomad-config"
-					config_map {
-						name = kubernetes_config_map.nomad_server.metadata.0.name
-					}
-				}
-			}
-		}
+# 				volume {
+# 					name = "nomad-config"
+# 					config_map {
+# 						name = kubernetes_config_map.nomad_server.metadata.0.name
+# 					}
+# 				}
+# 			}
+# 		}
 
-		volume_claim_template {
-			metadata {
-				name = "nomad-data"
-			}
-			spec {
-				access_modes = ["ReadWriteOnce"]
-				resources {
-					requests = {
-						storage = "1Gi"
-					}
-				}
-				storage_class_name = "local-path"
-			}
-		}
-	}
-}
+# 		volume_claim_template {
+# 			metadata {
+# 				name = "nomad-data"
+# 			}
+# 			spec {
+# 				access_modes = ["ReadWriteOnce"]
+# 				resources {
+# 					requests = {
+# 						storage = "1Gi"
+# 					}
+# 				}
+# 				storage_class_name = var.k8s_storage_class
+# 			}
+# 		}
+# 	}
+# }
 

@@ -13,8 +13,8 @@ locals {
 			f => templatefile("${path.module}/files/traffic_server/etc/dynamic/${f}", {
 				s3_providers = var.s3_providers
 				s3_default_provider = var.s3_default_provider
-			# G = k8s Gi
-			# https://docs.trafficserver.apache.org/admin-guide/files/storage.config.en.html#:~:text=As%20with%20standard%20records.config%20integers%2C%20human%20readable%20prefixes%20are%20also%20supported.%20They%20include
+				# G = k8s Gi
+				# https://docs.trafficserver.apache.org/admin-guide/files/storage.config.en.html#:~:text=As%20with%20standard%20records.config%20integers%2C%20human%20readable%20prefixes%20are%20also%20supported.%20They%20include
 				volume_size_cache = "${var.cdn_cache_size_gb}G"
 			})
 		},
@@ -112,6 +112,35 @@ resource "kubernetes_service" "traffic_server" {
 	}
 }
 
+# TODO: Configure for k3d
+resource "kubernetes_persistent_volume" "traffic_server" {
+	count = local.traffic_server_count
+
+	metadata {
+		name = "traffic-server-${count.index}"
+		labels = {
+			app = "traffic-server"
+		}
+	}
+
+	spec {
+		capacity = {
+			storage = "${var.cdn_cache_size_gb}Gi"
+		}
+		volume_mode = "Filesystem"
+		access_modes = ["ReadWriteOnce"]
+		storage_class_name = var.k8s_storage_class
+		# TODO:
+		persistent_volume_reclaim_policy = "Recycle"
+		persistent_volume_source {
+			csi {
+				driver = "efs.csi.aws.com"
+				volume_handle = "fs-0846bd0690ee38e63:/traffic-server/instance-${count.index}"
+			}
+		}
+	}
+}
+
 resource "kubernetes_stateful_set" "traffic_server" {
 	metadata {
 		namespace = kubernetes_namespace.traffic_server.metadata.0.name
@@ -205,13 +234,18 @@ resource "kubernetes_stateful_set" "traffic_server" {
 				name = "traffic-server-cache"
 			}
 			spec {
+				selector {
+					match_labels = {
+						app = "traffic-server"
+					}
+				}
 				access_modes = ["ReadWriteOnce"]
 				resources {
 					requests = {
 						storage = "${var.cdn_cache_size_gb}Gi"
 					}
 				}
-				storage_class_name = "local-path"
+				storage_class_name = var.k8s_storage_class
 			}
 		}
 	}

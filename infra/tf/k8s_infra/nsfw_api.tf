@@ -24,11 +24,9 @@ resource "kubernetes_priority_class" "nsfw_api_priority" {
 }
 
 resource "kubernetes_deployment" "nsfw_api" {
-	depends_on = [kubernetes_namespace.nsfw_api]
-	
 	metadata {
 		name = "nsfw-api"
-		namespace = "nsfw-api"
+		namespace = kubernetes_namespace.nsfw_api.metadata[0].name
 	}
 
 	spec {
@@ -90,11 +88,9 @@ resource "kubernetes_deployment" "nsfw_api" {
 }
 
 resource "kubernetes_service" "nsfw_api" {
-	depends_on = [kubernetes_namespace.nsfw_api]
-	
 	metadata {
 		name = "nsfw-api"
-		namespace = "nsfw-api"
+		namespace = kubernetes_namespace.nsfw_api.metadata[0].name
 	}
 	spec {
 		selector = {
