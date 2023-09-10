@@ -33,5 +33,7 @@ module "efs_csi_iam_assumable_role" {
 		"system:serviceaccount:kube-system:efs-csi-controller-sa",
 		"system:serviceaccount:kube-system:efs-csi-node-sa"
 	]
+
+	tags = local.tags
 }
 

@@ -8,7 +8,7 @@ terraform {
 }
 
 locals {
-	name = "eks-test"
+	name = "rivet-${var.namespace}"
 	cluster_version = "1.27"
 	region = "us-east-1"
 
@@ -16,7 +16,7 @@ locals {
 	azs = slice(data.aws_availability_zones.available.names, 0, 3)
 
 	tags = {
-		Example = local.name
+		Namespace = var.namespace
 	}
 }
 
