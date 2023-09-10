@@ -132,13 +132,24 @@ resource "aws_iam_policy" "additional" {
 	policy = jsonencode({
 		Version = "2012-10-17"
 		Statement = [
+			# Null policy that can be updated later to affect the Fargate profiles
 			{
-				Action = [
-					"ec2:Describe*",
-				]
-				Effect = "Allow"
-				Resource = "*"
-			},
+				"Effect": "Deny",
+				"Action": "*",
+				"Resource": "*"
+			}
 		]
 	})
 }
+
+# MARK: EFS
+# resource "aws_efs_file_system" "eks_main" {
+# 	creation_token = "my-token"
+# }
+
+# resource "aws_efs_mount_target" "eks_main" {
+# 	for_each = module.vpc.private_subnets
+# 	file_system_id = aws_efs_file_system.eks_main.id
+# 	subnet_id = each.key
+# }
+
