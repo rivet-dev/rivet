@@ -1,6 +1,6 @@
 # resource "kubernetes_namespace" "loki" {
 # 	metadata {
-# 		name = "loki"
+# 		name = "rivet-loki"
 # 	}
 # }
 

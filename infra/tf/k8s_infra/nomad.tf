@@ -35,7 +35,7 @@ locals {
 
 resource "kubernetes_namespace" "nomad" {
 	metadata {
-		name = "nomad"
+		name = "rivet-nomad"
 	}
 }
 

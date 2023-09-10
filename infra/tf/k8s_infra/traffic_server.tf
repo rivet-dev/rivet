@@ -54,7 +54,7 @@ module "traffic_server_s3_secrets" {
 
 resource "kubernetes_namespace" "traffic_server" {
 	metadata {
-		name = "traffic-server"
+		name = "rivet-traffic-server"
 	}
 }
 
@@ -218,7 +218,7 @@ resource "kubernetes_stateful_set" "traffic_server" {
 }
 
 resource "kubectl_manifest" "traffic_server_traefik_service" {
-	depends_on = [kubernetes_namespace.traffic_server, helm_release.traefik]
+	depends_on = [helm_release.traefik]
 
 	yaml_body = yamlencode({
 		apiVersion = "traefik.containo.us/v1alpha1"
@@ -226,13 +226,13 @@ resource "kubectl_manifest" "traffic_server_traefik_service" {
 
 		metadata = {
 			name = "traffic-server"
-			namespace = "traffic-server"
+			namespace = kubernetes_namespace.traffic_server.metadata.0.name
 		}
 
 		spec = {
 			mirroring = {
 				name = "traffic-server"
-				namespace = "traffic-server"
+				namespace = kubernetes_namespace.traffic_server.metadata.0.name
 				port = 8080
 			}
 		}
@@ -259,7 +259,7 @@ locals {
 			chain = {
 				middlewares = [
 					for x in ["traffic-server-cdn-retry", "traffic-server-cdn-compress", "traffic-server-cdn-cache-control"]:
-					{ name = x, namespace = "traffic-server" }
+					{ name = x, namespace = kubernetes_namespace.traffic_server.metadata.0.name }
 				]
 			}
 		}
@@ -285,7 +285,7 @@ locals {
 }
 
 resource "kubectl_manifest" "traffic_server_middlewares" {
-	depends_on = [kubernetes_namespace.traffic_server, helm_release.traefik]
+	depends_on = [helm_release.traefik]
 
 	for_each = local.traffic_server_middlewares
 
@@ -295,7 +295,7 @@ resource "kubectl_manifest" "traffic_server_middlewares" {
 		
 		metadata = {
 			name = each.key
-			namespace = "traffic-server"
+			namespace = kubernetes_namespace.traffic_server.metadata.0.name
 		}
 
 		spec = each.value

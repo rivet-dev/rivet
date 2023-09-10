@@ -53,9 +53,9 @@ module "eks" {
 		},
 		{
 			for i in range(3):
-			"test-ns-${element(split("-", local.azs[i]), 2)}" => {
+			"rivet-${element(split("-", local.azs[i]), 2)}" => {
 				selectors = [
-					{ namespace = "test-ns" }
+					{ namespace = "rivet-*" }
 				]
 				subnet_ids = [element(module.vpc.private_subnets, i)]
 			}

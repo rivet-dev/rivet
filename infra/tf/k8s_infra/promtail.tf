@@ -10,7 +10,7 @@
 
 # resource "kubernetes_namespace" "promtail" {
 # 	metadata {
-# 		name = "promtail"
+# 		name = "rivet-promtail"
 # 	}
 # }
 

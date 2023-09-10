@@ -4,7 +4,7 @@ locals {
 
 resource "kubernetes_namespace" "minio" {
 	metadata {
-		name = "minio"
+		name = "rivet-minio"
 	}
 }
 
@@ -35,7 +35,7 @@ resource "helm_release" "minio" {
 resource "kubectl_manifest" "minio_ingress_route" {
 	count = local.has_minio ? 1 : 0
 
-	depends_on = [kubernetes_namespace.minio, helm_release.minio]
+	depends_on = [helm_release.minio]
 
 	yaml_body = yamlencode({
 		apiVersion = "traefik.containo.us/v1alpha1"
@@ -43,7 +43,7 @@ resource "kubectl_manifest" "minio_ingress_route" {
 
 		metadata = {
 			name = "minio"
-			namespace = "minio"
+			namespace = kubernetes_namespace.minio.metadata.0.name
 		}
 
 		spec = {
@@ -66,7 +66,7 @@ resource "kubectl_manifest" "minio_ingress_route" {
 				secretName = "ingress-tls-cert"
 				options = {
 					name = "ingress-tls"
-					namespace = "traefik"
+					namespace = kubernetes_namespace.traefik.metadata.0.name
 				}
 			}
 		}

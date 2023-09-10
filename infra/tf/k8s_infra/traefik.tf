@@ -15,7 +15,7 @@ module "traefik_secrets" {
 
 resource "helm_release" "traefik" {
 	name = "traefik"
-	namespace = "traefik"
+	namespace = kuerbetes_namespace.traefik.metadata.0.name
 
 	repository = "https://traefik.github.io/charts"
 	chart = "traefik"

@@ -2,7 +2,7 @@
 
 resource "kubernetes_namespace" "redis" {
 	metadata {
-		name = "redis"
+		name = "rivet-redis"
 	}
 }
 

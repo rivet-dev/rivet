@@ -1,6 +1,6 @@
 resource "kubernetes_namespace" "cockroachdb" {
 	metadata {
-		name = "cockroachdb"
+		name = "rivet-cockroachdb"
 	}
 }
 

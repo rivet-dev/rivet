@@ -1,6 +1,6 @@
 resource "kubernetes_namespace" "clickhouse" {
 	metadata {
-		name = "clickhouse"
+		name = "rivet-clickhouse"
 	}
 }
 

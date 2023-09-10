@@ -16,7 +16,7 @@ resource "kubectl_manifest" "ingress_tls" {
 
 		metadata = {
 			name = "ingress-tls"
-			namespace = "traefik"
+			namespace = kubernetes_namespace.traefik.metadata.0.name
 		}
 
 		spec = {
@@ -32,8 +32,10 @@ resource "kubectl_manifest" "ingress_tls" {
 
 # Must be created in every namespace it is used in
 resource "kubernetes_secret" "ingress_tls_cert" {
-	depends_on = [kubernetes_namespace.traefik, kubernetes_namespace.imagor]
-	for_each = toset([ "traefik", "imagor" ])
+	for_each = toset([
+		for x in [kubernetes_namespace.traefik, kubernetes_namespace.imagor]:
+		x.metadata.0.name
+	])
 
 	metadata {
 		name = "ingress-tls-cert"
@@ -49,11 +51,9 @@ resource "kubernetes_secret" "ingress_tls_cert" {
 }
 
 resource "kubernetes_secret" "ingress_tls_ca_cert" {
-	depends_on = [kubernetes_namespace.traefik]
-
 	metadata {
 		name = "ingress-tls-ca-cert"
-		namespace = "traefik"
+		namespace = kubernetes_namespace.traefik.metadata.0.name
 	}
 
 	data = {
@@ -62,11 +62,9 @@ resource "kubernetes_secret" "ingress_tls_ca_cert" {
 }
 
 resource "kubernetes_config_map" "health_checks" {
-	depends_on = [kubernetes_namespace.rivet_service]
-
 	metadata {
 		name = "health-checks"
-		namespace = "rivet-service"
+		namespace = kubernetes_namespace.rivet_service.metadata.0.name
 	}
 
 	data = {
@@ -150,9 +148,9 @@ module "docker_ghcr_secrets" {
 
 # NOTE: Needs to be created in every K8s namespace it is used in
 resource "kubernetes_secret" "docker_auth" {
-	depends_on = [kubernetes_namespace.redis, kubernetes_namespace.rivet_service]
 	for_each = toset([
-		for namespace in [ "redis", "rivet-service" ]: namespace
+		for x in [kubernetes_namespace.redis, kubernetes_namespace.rivet_service]:
+		x.metadata.0.name
 	])
 
 	metadata {
