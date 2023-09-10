@@ -191,13 +191,29 @@ async fn redis_from_env() -> Result<HashMap<String, RedisPool>, Error> {
 				existing.clone()
 			} else {
 				tracing::info!(%url, "redis connecting");
-				let conn = redis::Client::open(url.as_str())
-					.map_err(Error::BuildRedis)?
-					.get_tokio_connection_manager()
+				// let conn = redis::Client::open(url.as_str())
+				// 	.map_err(Error::BuildRedis)?
+				// 	.get_tokio_connection_manager()
+				// 	.await
+				// 	.map_err(Error::BuildRedis)?;
+
+				let tls_connector = create_tls_connector()?;
+				let tcp_stream = tokio::net::TcpStream::connect(url.as_str())
 					.await
-					.map_err(Error::BuildRedis)?;
+					.map_err(Error::BuildTcp)?;
+				let tls_stream = tls_connector.connect("", tcp_stream)
+					.await
+					.map_err(Error::BuildTls)?;
+				let conn = redis::aio::MultiplexedConnection::new(
+					&redis::RedisConnectionInfo::default(),
+					tls_stream
+				)
+				.await
+				.map_err(Error::BuildRedis)?;
+
 				tracing::info!(%url, "redis connected");
-				conn
+				todo!();
+				// conn
 			};
 
 			redis.insert(svc_name, pool.clone());
@@ -242,4 +258,16 @@ async fn runtime(pools: Pools, client_name: String) {
 			}
 		}
 	}
+}
+
+use redis::AsyncCommands;
+use tokio_native_tls::TlsStream;
+fn create_tls_connector() -> Result<tokio_native_tls::TlsConnector, Error> {
+    let builder = tokio_native_tls::native_tls::TlsConnector::builder()
+        // .danger_accept_invalid_certs(true)
+        // .danger_accept_invalid_hostnames(true);
+		.build()
+		.map_err(Error::BuildTls)?;
+    
+	Ok(builder.into())
 }

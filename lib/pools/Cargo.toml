@@ -16,6 +16,8 @@ thiserror = "1.0"
 tokio = { version = "1.29", features = ["tracing"] }
 tokio-util = "0.7"
 tracing = "0.1"
+tokio-native-tls = "0.3"
+native-tls = "0.2"
 
 [dependencies.sqlx]
 version = "0.7.1"

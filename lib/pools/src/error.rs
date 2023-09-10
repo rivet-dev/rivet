@@ -26,4 +26,10 @@ pub enum Error {
 
 	#[error("build sqlx: {0}")]
 	BuildSqlx(sqlx::Error),
+
+	#[error("build tcp: {0}")]
+	BuildTcp(std::io::Error),
+
+	#[error("build tls: {0}")]
+	BuildTls(tokio_native_tls::native_tls::Error),
 }

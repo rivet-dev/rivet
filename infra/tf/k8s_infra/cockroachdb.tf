@@ -19,6 +19,12 @@ resource "helm_release" "cockroachdb" {
 		}
 		tls = {
 			enabled = false
+
+			# certs = {
+			# 	provided = true
+			# 	clientRootSecret = ""
+			# 	nodeSecret = ""
+			# }
 		}
 	})]
 }
