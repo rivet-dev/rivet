@@ -399,7 +399,7 @@ async fn vars(ctx: &ProjectContext) {
 		"k8s_storage_class".into(),
 		json!(match ctx.ns().kubernetes.provider {
 			ns::KubernetesProvider::K3d { .. } => "local-path",
-			ns::KubernetesProvider::AwsEks { .. } => "efs-sc",
+			ns::KubernetesProvider::AwsEks { .. } => "ebs-sc",
 		}),
 	);
 	vars.insert("k8s_health_port".into(), json!(dep::k8s::gen::HEALTH_PORT));

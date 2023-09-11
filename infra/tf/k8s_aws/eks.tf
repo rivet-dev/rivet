@@ -45,9 +45,10 @@ module "eks" {
 				}
 			})
 		}
-		# aws-ebs-csi-driver = {
-		# 	addon_version = "v1.22.0-eksbuild.2"
-		# }
+		aws-ebs-csi-driver = {
+			addon_version = "v1.22.0-eksbuild.2"
+			service_account_role_arn = module.ebs_csi_irsa_role.iam_role_arn
+		}
 	}
 
 	vpc_id = module.vpc.vpc_id
