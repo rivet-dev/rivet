@@ -122,10 +122,10 @@ pub async fn up_services<T: AsRef<str>>(
 		config::ns::ClusterKind::Distributed { .. } => {
 			if let Some((repo, _)) = ctx.ns().docker.repository.split_once("/") {
 				let username = ctx
-					.read_secret(&["docker", "registry", "ghcr.io", "username"])
+					.read_secret(&["docker", "registry", "ghcr.io", "write", "username"])
 					.await?;
 				let password = ctx
-					.read_secret(&["docker", "registry", "ghcr.io", "password"])
+					.read_secret(&["docker", "registry", "ghcr.io", "write", "password"])
 					.await?;
 
 				let mut cmd = Command::new("sh");

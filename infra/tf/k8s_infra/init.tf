@@ -140,8 +140,8 @@ module "docker_ghcr_secrets" {
 	source = "../modules/secrets"
 
 	keys = flatten([
-        "docker/registry/ghcr.io/username",
-        "docker/registry/ghcr.io/password",
+        "docker/registry/ghcr.io/read/username",
+        "docker/registry/ghcr.io/read/password",
 	])
 
 	optional = true
@@ -174,9 +174,9 @@ resource "kubernetes_secret" "docker_auth" {
 						: null
 				)
 				"ghcr.io" = (
-					module.docker_ghcr_secrets.values["docker/registry/ghcr.io/username"] != null ?
+					module.docker_ghcr_secrets.values["docker/registry/ghcr.io/read/username"] != null ?
 					{
-						"auth" = base64encode("${module.secrets.values["docker/registry/ghcr.io/username"]}:${module.secrets.values["docker/registry/ghcr.io/password"]}")
+						"auth" = base64encode("${module.secrets.values["docker/registry/ghcr.io/read/username"]}:${module.secrets.values["docker/registry/ghcr.io/read/password"]}")
 					}
 					: null
 				)

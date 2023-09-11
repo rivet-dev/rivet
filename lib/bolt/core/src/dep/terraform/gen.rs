@@ -262,12 +262,6 @@ async fn vars(ctx: &ProjectContext) {
 	{
 		let mut extra_dns = Vec::new();
 
-		// Which pool of ingress servers the DNS record will be pointed at
-		let ing_pool = match &ctx.ns().cluster.kind {
-			ns::ClusterKind::SingleNode { .. } => "local",
-			ns::ClusterKind::Distributed { .. } => "ing-px",
-		};
-
 		// Add services
 		for svc_ctx in all_svc {
 			if let Some(router) = svc_ctx.config().kind.router() {
@@ -279,7 +273,6 @@ async fn vars(ctx: &ProjectContext) {
 					};
 
 					extra_dns.push(json!({
-						"pool": ing_pool,
 						"zone_name": zone_name,
 						"name": if let Some(subdomain) = &mount.subdomain {
 							format!("{}.{}", subdomain, domain)
@@ -295,7 +288,6 @@ async fn vars(ctx: &ProjectContext) {
 		let s3_providers = &ctx.ns().s3.providers;
 		if s3_providers.minio.is_some() {
 			extra_dns.push(json!({
-				"pool": ing_pool,
 				"zone_name": "base",
 				"name": format!("minio.{}", ctx.domain_main()),
 			}));

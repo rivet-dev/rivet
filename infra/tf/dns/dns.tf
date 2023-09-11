@@ -19,19 +19,12 @@ locals {
 	records = flatten([
 		# Extra DNS
 		flatten([
-			for server_id, server in local.servers:
-			[
-				flatten([
-					for record in var.extra_dns:
-					{
-							zone_id = local.cloudflare_zone_ids[record.zone_name]
-							name = record.name
-							server = server
-							proxied = true
-					}
-					if server.pool_id == record.pool
-				])
-			]
+			for record in var.extra_dns:
+			{
+					zone_id = local.cloudflare_zone_ids[record.zone_name]
+					name = record.name
+					proxied = true
+			}
 		]),
 
 		# CDN
@@ -81,6 +74,10 @@ locals {
 # Allow CLoudflare to serve TLS requests at the edge for our wildcard
 # subdomains.
 resource "cloudflare_certificate_pack" "rivet_gg" {
+	lifecycle {
+		create_before_destroy = true
+	}
+
 	certificate_authority = "digicert"
 	# The certificate must include the root domain in it.
 	#
@@ -133,10 +130,6 @@ resource "cloudflare_record" "rivet_gg" {
 	for_each = {
 		for record in local.records:
 		"${record.zone_id}:${record.name}:${try(record.server.name, "core")}" => record
-	}
-
-	lifecycle {
-		create_before_destroy = true
 	}
 
 	zone_id = each.value.zone_id
