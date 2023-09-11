@@ -3,7 +3,7 @@ module "karpenter" {
 	source = "terraform-aws-modules/eks/aws//modules/karpenter"
 	version = "19.16.0"
 
-	cluster_name           = module.eks.cluster_name
+	cluster_name = module.eks.cluster_name
 	irsa_oidc_provider_arn = module.eks.oidc_provider_arn
 
 	policies = {
@@ -15,42 +15,42 @@ module "karpenter" {
 
 resource "aws_iam_service_linked_role" "spot" {
 	aws_service_name = "spot.amazonaws.com"
-	description      = "A service-linked role for RDS"
+	description = "A service-linked role for RDS"
 }
 
 resource "helm_release" "karpenter" {
-	namespace        = "karpenter"
+	namespace = "karpenter"
 	create_namespace = true
 
-	name                = "karpenter"
-	repository          = "oci://public.ecr.aws/karpenter"
+	name = "karpenter"
+	repository = "oci://public.ecr.aws/karpenter"
 	# repository_username = data.aws_ecrpublic_authorization_token.token.user_name
 	# repository_password = data.aws_ecrpublic_authorization_token.token.password
-	chart               = "karpenter"
-	version             = "v0.30.0"
+	chart = "karpenter"
+	version = "v0.30.0"
 
 	set {
-		name  = "settings.aws.clusterName"
+		name = "settings.aws.clusterName"
 		value = module.eks.cluster_name
 	}
 
 	set {
-		name  = "settings.aws.clusterEndpoint"
+		name = "settings.aws.clusterEndpoint"
 		value = module.eks.cluster_endpoint
 	}
 
 	set {
-		name  = "serviceAccount.annotations.eks\\.amazonaws\\.com/role-arn"
+		name = "serviceAccount.annotations.eks\\.amazonaws\\.com/role-arn"
 		value = module.karpenter.irsa_arn
 	}
 
 	set {
-		name  = "settings.aws.defaultInstanceProfile"
+		name = "settings.aws.defaultInstanceProfile"
 		value = module.karpenter.instance_profile_name
 	}
 
 	set {
-		name  = "settings.aws.interruptionQueueName"
+		name = "settings.aws.interruptionQueueName"
 		value = module.karpenter.queue_name
 	}
 }
@@ -60,16 +60,16 @@ resource "kubectl_manifest" "karpenter_provisioner" {
 
 	yaml_body = yamlencode({
 		apiVersion = "karpenter.sh/v1alpha5"
-		kind       = "Provisioner"
+		kind = "Provisioner"
 		metadata = {
 			name = "default"
 		}
 		spec = {
 			requirements = [
 				{
-					key      = "karpenter.sh/capacity-type"
+					key = "karpenter.sh/capacity-type"
 					operator = "In"
-					values   = ["spot"]
+					values = ["spot"]
 				}
 			]
 			limits = {
@@ -90,7 +90,7 @@ resource "kubectl_manifest" "karpenter_node_template" {
 
 	yaml_body = yamlencode({
 		apiVersion = "karpenter.k8s.aws/v1alpha1"
-		kind       = "AWSNodeTemplate"
+		kind = "AWSNodeTemplate"
 		metadata = {
 			name = "default"
 		}
