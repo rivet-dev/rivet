@@ -25,7 +25,7 @@ groups:
         github:
           repository: rivet-gg/rivet-java
       - name: fernapi/fern-go-sdk
-        version: 0.3.0
+        version: 0.5.0
         config:
           module:
             path: github.com/rivet-gg/rivet-go
