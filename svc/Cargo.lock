@@ -912,9 +912,9 @@ checksum = "bddcadddf5e9015d310179a59bb28c4d4b9920ad0f11e8e14dbadf654890c9a6"
 
 [[package]]
 name = "async-nats"
-version = "0.31.0"
+version = "0.30.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8257238e2a3629ee5618502a75d1b91f8017c24638c75349fc8d2d80cf1f7c4c"
+checksum = "94e3e851ddf3b62be8a8085e1e453968df9cdbf990a37bbb589b5b4f587c68d7"
 dependencies = [
  "base64 0.21.3",
  "bytes",
@@ -6720,14 +6720,12 @@ dependencies = [
  "funty",
  "global-error",
  "lazy_static",
- "native-tls",
  "rand",
  "redis",
  "rivet-metrics",
  "sqlx",
  "thiserror",
  "tokio",
- "tokio-native-tls",
  "tokio-util 0.7.8",
  "tracing",
 ]
