@@ -2,28 +2,39 @@ use derive_builder::Builder;
 use maplit::hashmap;
 use std::collections::HashMap;
 
-use crate::context::ProjectContext;
+use crate::{config::ns, context::ProjectContext};
 
 /// Defines the dependency graph for the Terraform plans.
 ///
 /// This is used to automatically generate `terraform_remote_state` blocks
 /// for each Terraform plan with the correct state backend.
 pub fn dependency_graph(ctx: &ProjectContext) -> HashMap<&'static str, Vec<RemoteState>> {
+	// S3 plan
 	let (default_s3_provider, _) = ctx.default_s3_provider().unwrap();
-	let provider_plan_id = match default_s3_provider {
+	let s3_plan_id = match default_s3_provider {
 		s3_util::Provider::Minio => "s3_minio",
 		s3_util::Provider::Backblaze => "s3_backblaze",
 		s3_util::Provider::Aws => "s3_aws",
 	};
-
 	let s3 = RemoteStateBuilder::default()
-		.plan_id(provider_plan_id)
+		.plan_id(s3_plan_id)
 		.data_name("s3")
 		.build()
 		.unwrap();
 
+	// // K8S plan
+	// let k8s_plan_id = match ctx.ns().kubernetes.provider {
+	// 	ns::KubernetesProvider::K3d { .. } => "k8s_k3d",
+	// 	ns::KubernetesProvider::AwsEks { .. } => "k8s_aws",
+	// };
+	// let k8s = RemoteStateBuilder::default()
+	// 	.plan_id(k8s_plan_id)
+	// 	.data_name("k8s")
+	// 	.build()
+	// 	.unwrap();
+
 	hashmap! {
-		"dns" => vec![RemoteStateBuilder::default().plan_id("pools").build().unwrap()],
+		"dns" => vec![RemoteStateBuilder::default().plan_id("pools").build().unwrap(), RemoteStateBuilder::default().plan_id("k8s_infra").build().unwrap()],
 		"k8s_infra" => vec![
 			RemoteStateBuilder::default().plan_id("tls").build().unwrap(),
 			RemoteStateBuilder::default().plan_id("cloudflare_tunnels").build().unwrap()

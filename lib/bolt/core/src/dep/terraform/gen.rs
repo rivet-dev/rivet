@@ -157,18 +157,9 @@ async fn vars(ctx: &ProjectContext) {
 			vars.insert("public_ip".into(), json!(public_ip));
 			vars.insert("local_preferred_subnets".into(), json!(preferred_subnets));
 		}
-		ns::ClusterKind::Distributed {
-			salt_master_size,
-			nebula_lighthouse_size,
-		} => {
+		ns::ClusterKind::Distributed {} => {
 			vars.insert("deploy_method_local".into(), json!(false));
 			vars.insert("deploy_method_cluster".into(), json!(true));
-
-			vars.insert("salt_master_size".into(), json!(salt_master_size));
-			vars.insert(
-				"nebula_lighthouse_size".into(),
-				json!(nebula_lighthouse_size),
-			);
 		}
 	}
 

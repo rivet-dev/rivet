@@ -54,3 +54,12 @@ resource "helm_release" "traefik" {
 	})]
 }
 
+data "kubernetes_service" "traefik" {
+	depends_on = [helm_release.traefik]
+
+	metadata {
+		name = "traefik"
+		namespace = kubernetes_namespace.traefik.metadata.0.name
+	}
+}
+

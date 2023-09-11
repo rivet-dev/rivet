@@ -69,10 +69,7 @@ pub enum ClusterKind {
 		restrict_service_resources: bool,
 	},
 	#[serde(rename = "distributed")]
-	Distributed {
-		salt_master_size: String,
-		nebula_lighthouse_size: String,
-	},
+	Distributed {},
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]

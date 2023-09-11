@@ -35,30 +35,33 @@ locals {
 		]),
 
 		# CDN
-		flatten([
-			for server_id, server in local.servers:
-			[
-				{
-					zone_id = var.cloudflare_zone_id_rivet_game
-					name = "${var.domain_cdn}"
-					server = server
-					proxied = true
-				},
-				{
-					zone_id = var.cloudflare_zone_id_rivet_game
-					name = "fallback.${var.domain_cdn}"
-					server = server
-					proxied = true
-				},
-				{
-					zone_id = var.cloudflare_zone_id_rivet_game
-					name = "*.${var.domain_cdn}"
-					server = server
-					proxied = true
-				},
-			]
-			if server.pool_id == "ing-px" || server.pool_id == "local"
-		]),
+		[
+			{
+				zone_id = var.cloudflare_zone_id_rivet_game
+				name = "${var.domain_cdn}"
+				proxied = true
+			},
+			{
+				zone_id = var.cloudflare_zone_id_rivet_game
+				name = "fallback.${var.domain_cdn}"
+				proxied = true
+			},
+			{
+				zone_id = var.cloudflare_zone_id_rivet_game
+				name = "*.${var.domain_cdn}"
+				proxied = true
+			},
+			{
+				zone_id = var.cloudflare_zone_id_rivet_gg
+				name = "cdn.${var.domain_main}"
+				proxied = true
+			},
+			{
+				zone_id = var.cloudflare_zone_id_rivet_gg
+				name = "media.${var.domain_main}"
+				proxied = true
+			}
+		],
 
 		# Job. Matchmaker lobbies will point CNAME record at this.
 		[
@@ -72,39 +75,12 @@ locals {
 			if server.pool_id == "ing-job"
 		],
 
-		# Traffic Server
-		[
-			for server_id, server in local.servers:
-			{
-				zone_id = var.cloudflare_zone_id_rivet_gg
-				name = "cdn.${var.domain_main}"
-				server = server
-				proxied = true
-			}
-			if server.pool_id == "ing-px" || server.pool_id == "local"
-		],
-
-        # Imagor
-		[
-			for server_id, server in local.servers:
-			{
-				zone_id = var.cloudflare_zone_id_rivet_gg
-				name = "media.${var.domain_main}"
-				server = server
-				proxied = true
-			}
-			if server.pool_id == "ing-px" || server.pool_id == "local"
-		],
 	])
 }
 
 # Allow CLoudflare to serve TLS requests at the edge for our wildcard
 # subdomains.
 resource "cloudflare_certificate_pack" "rivet_gg" {
-	lifecycle {
-		create_before_destroy = true
-	}
-
 	certificate_authority = "digicert"
 	# The certificate must include the root domain in it.
 	#
@@ -156,7 +132,7 @@ resource "cloudflare_certificate_pack" "rivet_game" {
 resource "cloudflare_record" "rivet_gg" {
 	for_each = {
 		for record in local.records:
-		"${record.zone_id}:${record.name}:${record.server.name}" => record
+		"${record.zone_id}:${record.name}:${try(record.server.name, "core")}" => record
 	}
 
 	lifecycle {
@@ -166,8 +142,8 @@ resource "cloudflare_record" "rivet_gg" {
 	zone_id = each.value.zone_id
 	name = each.value.name
     # Use local node's public IP if in local region. Otherwise, look up server's IP.
-	value = each.value.server.region_id == "local" ? var.public_ip : data.terraform_remote_state.pools.outputs.servers[each.value.server.name].public_ipv4
-	type = "A"
+	value = try(data.terraform_remote_state.pools.outputs.servers[each.value.server.name].public_ipv4, data.terraform_remote_state.k8s_infra.outputs.traefik_external_ip)
+	type = can(each.value.server.public_ipv4) ? "A" : "CNAME"
 	# TODO: Increase the unproxied TTL once we have proper floating IP support on all providers
 	ttl = each.value.proxied ? 1 : 60  # 1 = automatic
 	proxied = each.value.proxied
