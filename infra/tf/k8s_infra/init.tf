@@ -130,8 +130,8 @@ module "docker_secrets" {
 
 	keys = flatten([
 		var.authenticate_all_docker_hub_pulls ? [
-			"docker/docker_io/username",
-			"docker/docker_io/password",
+			"docker/registry/docker.io/username",
+			"docker/registry/docker.io/password",
 		] : [],
 	])
 }
@@ -140,7 +140,8 @@ module "docker_ghcr_secrets" {
 	source = "../modules/secrets"
 
 	keys = flatten([
-		"docker/ghcr/token",
+        "docker/registry/ghcr.io/username",
+        "docker/registry/ghcr.io/password",
 	])
 
 	optional = true
@@ -166,22 +167,16 @@ resource "kubernetes_secret" "docker_auth" {
 				"https://index.docker.io/v1/" = (
 						var.authenticate_all_docker_hub_pulls ?
 						{
-							username = module.docker_secrets.values["docker/docker_io/username"]
-							password = module.docker_secrets.values["docker/docker_io/password"]
 							auth = base64encode(
-								"${module.docker_secrets.values["docker/docker_io/username"]}:${module.docker_secrets.values["docker/docker_io/password"]}"
+								"${module.docker_secrets.values["docker/registry/docker.io/username"]}:${module.docker_secrets.values["docker/registry/docker.io/password"]}"
 							)
 						}
 						: null
 				)
 				"ghcr.io" = (
-					module.docker_ghcr_secrets.values["docker/ghcr/token"] != null ?
+					module.docker_ghcr_secrets.values["docker/registry/ghcr.io/username"] != null ?
 					{
-						username = "$"
-						pasword = module.docker_ghcr_secrets.values["docker/ghcr/token"]
-						auth = base64encode(
-							"$:${module.docker_ghcr_secrets.values["docker/ghcr/token"]}"
-						)
+						"auth" = base64encode("${module.secrets.values["docker/registry/ghcr.io/username"]}:${module.secrets.values["docker/registry/ghcr.io/password"]}")
 					}
 					: null
 				)
