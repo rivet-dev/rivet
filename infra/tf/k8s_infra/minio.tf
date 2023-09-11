@@ -4,7 +4,7 @@ locals {
 
 resource "kubernetes_namespace" "minio" {
 	metadata {
-		name = "rivet-minio"
+		name = "minio"
 	}
 }
 

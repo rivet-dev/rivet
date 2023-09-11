@@ -36,7 +36,7 @@ module "redis_secrets" {
 
 resource "kubernetes_namespace" "redis_exporter" {
 	metadata {
-		name = "rivet-redis-exporter"
+		name = "redis-exporter"
 	}
 }
 

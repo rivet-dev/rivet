@@ -54,7 +54,7 @@ module "traffic_server_s3_secrets" {
 
 resource "kubernetes_namespace" "traffic_server" {
 	metadata {
-		name = "rivet-traffic-server"
+		name = "traffic-server"
 	}
 }
 
@@ -108,35 +108,6 @@ resource "kubernetes_service" "traffic_server" {
 			name = "http"
 			port = 8080
 			protocol = "TCP"
-		}
-	}
-}
-
-# TODO: Configure for k3d
-resource "kubernetes_persistent_volume" "traffic_server" {
-	count = local.traffic_server_count
-
-	metadata {
-		name = "traffic-server-${count.index}"
-		labels = {
-			app = "traffic-server"
-		}
-	}
-
-	spec {
-		capacity = {
-			storage = "${var.cdn_cache_size_gb}Gi"
-		}
-		volume_mode = "Filesystem"
-		access_modes = ["ReadWriteOnce"]
-		storage_class_name = var.k8s_storage_class
-		# TODO:
-		persistent_volume_reclaim_policy = "Recycle"
-		persistent_volume_source {
-			csi {
-				driver = "efs.csi.aws.com"
-				volume_handle = "fs-0846bd0690ee38e63:/traffic-server/instance-${count.index}"
-			}
 		}
 	}
 }
@@ -234,11 +205,6 @@ resource "kubernetes_stateful_set" "traffic_server" {
 				name = "traffic-server-cache"
 			}
 			spec {
-				selector {
-					match_labels = {
-						app = "traffic-server"
-					}
-				}
 				access_modes = ["ReadWriteOnce"]
 				resources {
 					requests = {

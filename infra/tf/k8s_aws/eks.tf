@@ -1,4 +1,4 @@
-# # See https://github.com/terraform-aws-modules/terraform-aws-eks/blob/666603b6e531140d5d8fbd777cd90a7fbb8247dd/examples/karpenter/main.tf
+# See https://github.com/terraform-aws-modules/terraform-aws-eks/blob/666603b6e531140d5d8fbd777cd90a7fbb8247dd/examples/karpenter/main.tf
 
 module "eks" {
 	source = "terraform-aws-modules/eks/aws"

@@ -4,7 +4,7 @@ locals {
 
 resource "kubernetes_namespace" "cloudflared" {
 	metadata {
-		name = "rivet-cloudflared"
+		name = "cloudflared"
 	}
 }
 

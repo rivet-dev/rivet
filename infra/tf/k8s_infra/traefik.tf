@@ -1,6 +1,6 @@
 resource "kubernetes_namespace" "traefik" {
 	metadata {
-		name = "rivet-traefik"
+		name = "traefik"
 	}
 }
 

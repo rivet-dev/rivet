@@ -1,6 +1,6 @@
 resource "kubernetes_namespace" "nats" {
 	metadata {
-		name = "rivet-nats"
+		name = "nats"
 	}
 }
 
