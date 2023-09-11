@@ -1,10 +1,14 @@
 terraform {
-  required_providers {
-    aws = {
-      source = "hashicorp/aws"
-      version = "5.16.0"
-    }
-  }
+	required_providers {
+		aws = {
+			source = "hashicorp/aws"
+			version = "5.16.0"
+		}
+		kubectl = {
+			source = "gavinbunney/kubectl"
+			version = "1.14.0"
+		}
+	}
 }
 
 locals {
@@ -20,6 +24,5 @@ locals {
 	}
 }
 
-data "aws_caller_identity" "current" {}
 data "aws_availability_zones" "available" {}
 

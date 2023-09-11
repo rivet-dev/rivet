@@ -11,11 +11,11 @@
 # 	}
 # }
 
-# resource "kubernetes_namespace" "test_ns" {
-# 	metadata {
-# 		name = "test-ns"
-# 	}
-# }
+resource "kubernetes_namespace" "my_ns" {
+	metadata {
+		name = "my-ns"
+	}
+}
 
 # # TODO: Storage class
 
@@ -58,29 +58,30 @@
 # 	}
 # }
 
-# # resource "kubernetes_pod" "example_pod" {
-# # 	metadata {
-# # 		name      = "hello-world-pod"
-# # 		namespace = kubernetes_namespace.test_ns.metadata[0].name
-# # 	}
-# # 	spec {
-# # 		container {
-# # 			image = "busybox"
-# # 			name  = "hello-container"
-# # 			command = ["/bin/sh", "-c", "echo Hello, World! > /mnt/hello_world.txt; sleep 999999"]
+resource "kubernetes_pod" "example_pod" {
+	metadata {
+		name      = "hello-world-pod"
+		namespace = kubernetes_namespace.my_ns.metadata[0].name
+	}
+	spec {
+		container {
+			image = "busybox"
+			name  = "hello-container"
+			# command = ["/bin/sh", "-c", "echo Hello, World! > /mnt/hello_world.txt; sleep 999999"]
+			command = ["/bin/sh", "-c", "echo Hello, World!; sleep 999999"]
 
-# # 			volume_mount {
-# # 				name       = "hello-world-storage"
-# # 				mount_path = "/mnt"
-# # 			}
-# # 		}
+			# volume_mount {
+			# 	name       = "hello-world-storage"
+			# 	mount_path = "/mnt"
+			# }
+		}
 
-# # 		volume {
-# # 			name = "hello-world-storage"
-# # 			persistent_volume_claim {
-# # 				claim_name = kubernetes_persistent_volume_claim.example_pvc.metadata[0].name
-# # 			}
-# # 		}
-# # 	}
-# # }
+		# volume {
+		# 	name = "hello-world-storage"
+		# 	persistent_volume_claim {
+		# 		claim_name = kubernetes_persistent_volume_claim.example_pvc.metadata[0].name
+		# 	}
+		# }
+	}
+}
 
