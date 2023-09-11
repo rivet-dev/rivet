@@ -24,13 +24,6 @@ pub fn dependency_graph(ctx: &ProjectContext) -> HashMap<&'static str, Vec<Remot
 
 	hashmap! {
 		"dns" => vec![RemoteStateBuilder::default().plan_id("pools").build().unwrap()],
-		"master_local" => vec![RemoteStateBuilder::default().plan_id("nebula").build().unwrap()],
-		"master_cluster" => vec![RemoteStateBuilder::default().plan_id("nebula").build().unwrap()],
-		"pools" => vec![
-			RemoteStateBuilder::default().plan_id("nebula").build().unwrap(),
-			RemoteStateBuilder::default().plan_id("master_local").condition("var.deploy_method_local").build().unwrap(),
-			RemoteStateBuilder::default().plan_id("master_cluster").condition("var.deploy_method_cluster").build().unwrap(),
-		],
 		"k8s_infra" => vec![
 			RemoteStateBuilder::default().plan_id("tls").build().unwrap(),
 			RemoteStateBuilder::default().plan_id("cloudflare_tunnels").build().unwrap()
