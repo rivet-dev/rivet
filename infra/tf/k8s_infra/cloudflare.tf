@@ -2,18 +2,16 @@ locals {
 	tunnel = data.terraform_remote_state.cloudflare_tunnels.outputs.k8s_output.tunnels["local"]
 }
 
-resource "kubernetes_namespace" "cloudflare" {
+resource "kubernetes_namespace" "cloudflared" {
 	metadata {
-		name = "cloudflare"
+		name = "cloudflared"
 	}
 }
 
-resource "kubernetes_deployment" "cloudflare" {
-	depends_on = [kubernetes_namespace.cloudflare]
-	
+resource "kubernetes_deployment" "cloudflared" {
 	metadata {
 		name = "cloudflared"
-		namespace = "cloudflare"
+		namespace = kubernetes_namespace.cloudflared.metadata.0.name
 	}
 
 	spec {
@@ -21,14 +19,14 @@ resource "kubernetes_deployment" "cloudflare" {
 
 		selector {
 			match_labels = {
-				"app.kubernetes.io/name" = "cloudflare"
+				"app.kubernetes.io/name" = "cloudflared"
 			}
 		}
 
 		template {
 			metadata {
 				labels = {
-					"app.kubernetes.io/name" = "cloudflare"
+					"app.kubernetes.io/name" = "cloudflared"
 				}
 			}
 
@@ -89,11 +87,9 @@ resource "kubernetes_deployment" "cloudflare" {
 }
 
 resource "kubernetes_secret" "tunnel_credentials" {
-	depends_on = [kubernetes_namespace.cloudflare]
-
 	metadata {
 		name = "tunnel-credentials"
-		namespace = "cloudflare"
+		namespace = kubernetes_namespace.cloudflared.metadata.0.name
 	}
 
 	data = {
@@ -102,11 +98,9 @@ resource "kubernetes_secret" "tunnel_credentials" {
 }
 
 resource "kubernetes_config_map" "cloudflared" {
-	depends_on = [kubernetes_namespace.cloudflare]
-
 	metadata {
 		name = "cloudflared"
-		namespace = "cloudflare"
+		namespace = kubernetes_namespace.cloudflared.metadata.0.name
 	}
 
 	data = {

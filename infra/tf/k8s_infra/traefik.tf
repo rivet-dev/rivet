@@ -15,7 +15,7 @@ module "traefik_secrets" {
 
 resource "helm_release" "traefik" {
 	name = "traefik"
-	namespace = "traefik"
+	namespace = kubernetes_namespace.traefik.metadata.0.name
 
 	repository = "https://traefik.github.io/charts"
 	chart = "traefik"
@@ -52,5 +52,14 @@ resource "helm_release" "traefik" {
 			}
 		}
 	})]
+}
+
+data "kubernetes_service" "traefik" {
+	depends_on = [helm_release.traefik]
+
+	metadata {
+		name = "traefik"
+		namespace = kubernetes_namespace.traefik.metadata.0.name
+	}
 }
 

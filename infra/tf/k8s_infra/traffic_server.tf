@@ -1,9 +1,8 @@
-# TODO: Add back body_factory
-
 locals {
 	traffic_server_count = 2
 	traffic_server_configmap_data = merge(
 		# Static files
+		# TODO: Add back body_factory. These use `#` in the file names, so it doesn't work in configmaps.
 		{
 			for f in fileset("${path.module}/files/traffic_server/etc/static", "**/*"):
 			f => file("${path.module}/files/traffic_server/etc/static/${f}")
@@ -14,7 +13,9 @@ locals {
 			f => templatefile("${path.module}/files/traffic_server/etc/dynamic/${f}", {
 				s3_providers = var.s3_providers
 				s3_default_provider = var.s3_default_provider
-				volume_size_cache = "${local.traffic_server_cache_size}G"
+				# G = k8s Gi
+				# https://docs.trafficserver.apache.org/admin-guide/files/storage.config.en.html#:~:text=As%20with%20standard%20records.config%20integers%2C%20human%20readable%20prefixes%20are%20also%20supported.%20They%20include
+				volume_size_cache = "${var.cdn_cache_size_gb}G"
 			})
 		},
 		# S3 providers
@@ -40,9 +41,6 @@ locals {
 
 	traffic_server_configmap_hash = sha256(jsonencode(local.traffic_server_configmap_data))
 	traffic_server_s3_auth_hash = sha256(jsonencode(local.traffic_server_s3_auth_data))
-
-	# TODO: Enable dynamic configuration
-	traffic_server_cache_size = 10
 }
 
 module "traffic_server_s3_secrets" {
@@ -149,10 +147,11 @@ resource "kubernetes_stateful_set" "traffic_server" {
 				image_pull_secrets {
 					name = kubernetes_secret.traffic_server_docker_config.metadata.0.name
 				}
+
 				container {
 					name = "traffic-server-instance"
 					# TODO: Use the git hash here
-					image = "ghcr.io/rivet-gg/apache-traffic-server:5e1d6e5"
+					image = "ghcr.io/rivet-gg/apache-traffic-server:378f44b"
 					image_pull_policy = "IfNotPresent"
 
 					port {
@@ -209,17 +208,17 @@ resource "kubernetes_stateful_set" "traffic_server" {
 				access_modes = ["ReadWriteOnce"]
 				resources {
 					requests = {
-						storage = "${local.traffic_server_cache_size}Gi"
+						storage = "${var.cdn_cache_size_gb}Gi"
 					}
 				}
-				storage_class_name = "local-path"
+				storage_class_name = var.k8s_storage_class
 			}
 		}
 	}
 }
 
 resource "kubectl_manifest" "traffic_server_traefik_service" {
-	depends_on = [kubernetes_namespace.traffic_server, helm_release.traefik]
+	depends_on = [helm_release.traefik]
 
 	yaml_body = yamlencode({
 		apiVersion = "traefik.containo.us/v1alpha1"
@@ -227,13 +226,13 @@ resource "kubectl_manifest" "traffic_server_traefik_service" {
 
 		metadata = {
 			name = "traffic-server"
-			namespace = "traffic-server"
+			namespace = kubernetes_namespace.traffic_server.metadata.0.name
 		}
 
 		spec = {
 			mirroring = {
 				name = "traffic-server"
-				namespace = "traffic-server"
+				namespace = kubernetes_namespace.traffic_server.metadata.0.name
 				port = 8080
 			}
 		}
@@ -260,7 +259,7 @@ locals {
 			chain = {
 				middlewares = [
 					for x in ["traffic-server-cdn-retry", "traffic-server-cdn-compress", "traffic-server-cdn-cache-control"]:
-					{ name = x, namespace = "traffic-server" }
+					{ name = x, namespace = kubernetes_namespace.traffic_server.metadata.0.name }
 				]
 			}
 		}
@@ -286,7 +285,7 @@ locals {
 }
 
 resource "kubectl_manifest" "traffic_server_middlewares" {
-	depends_on = [kubernetes_namespace.traffic_server, helm_release.traefik]
+	depends_on = [helm_release.traefik]
 
 	for_each = local.traffic_server_middlewares
 
@@ -296,7 +295,7 @@ resource "kubectl_manifest" "traffic_server_middlewares" {
 		
 		metadata = {
 			name = each.key
-			namespace = "traffic-server"
+			namespace = kubernetes_namespace.traffic_server.metadata.0.name
 		}
 
 		spec = each.value

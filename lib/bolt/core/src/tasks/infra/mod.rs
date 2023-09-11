@@ -129,6 +129,15 @@ pub fn build_plan(ctx: &ProjectContext, start_at: Option<String>) -> Result<Vec<
 		},
 	});
 
+	// Infra
+	plan.push(PlanStep {
+		name_id: "k8s-aws",
+		kind: PlanStepKind::Terraform {
+			plan_id: "k8s_aws".into(),
+			needs_destroy: true,
+		},
+	});
+
 	// Kubernetes
 	plan.push(PlanStep {
 		name_id: "k8s-infra",

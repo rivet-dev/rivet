@@ -50,6 +50,14 @@ variable "regions" {
 }
 
 # MARK: K8s
+variable "kubeconfig_path" {
+	type = string
+}
+
+variable "k8s_storage_class" {
+	type = string
+}
+
 variable "k8s_health_port" {
 	type = number
 }
@@ -69,4 +77,9 @@ variable "s3_providers" {
 
 variable "s3_buckets" {
 	type = map(any)
+}
+
+# MARK: Rivet
+variable "cdn_cache_size_gb" {
+	type = number
 }

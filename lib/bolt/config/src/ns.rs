@@ -69,10 +69,7 @@ pub enum ClusterKind {
 		restrict_service_resources: bool,
 	},
 	#[serde(rename = "distributed")]
-	Distributed {
-		salt_master_size: String,
-		nebula_lighthouse_size: String,
-	},
+	Distributed {},
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -368,14 +365,32 @@ impl Default for Nomad {
 #[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(deny_unknown_fields)]
 pub struct Kubernetes {
+	#[serde(flatten)]
+	pub provider: KubernetesProvider,
 	pub health_checks: Option<bool>,
 }
 
 impl Default for Kubernetes {
 	fn default() -> Self {
 		Self {
+			provider: KubernetesProvider::default(),
 			health_checks: None,
 		}
+	}
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+#[serde(deny_unknown_fields)]
+pub enum KubernetesProvider {
+	#[serde(rename = "k3d")]
+	K3d {},
+	#[serde(rename = "aws_eks")]
+	AwsEks {},
+}
+
+impl Default for KubernetesProvider {
+	fn default() -> Self {
+		Self::K3d {}
 	}
 }
 
@@ -425,6 +440,8 @@ pub struct Rivet {
 	pub upload: Upload,
 	#[serde(default)]
 	pub matchmaker: Matchmaker,
+	#[serde(default)]
+	pub cdn: Cdn,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, Default)]
@@ -483,6 +500,18 @@ pub enum MatchmakerLobbyDeliveryMethod {
 	#[serde(rename = "traffic_server")]
 	#[strum(serialize = "traffic_server")]
 	TrafficServer,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+#[serde(deny_unknown_fields)]
+pub struct Cdn {
+	pub cache_size_gb: usize,
+}
+
+impl Default for Cdn {
+	fn default() -> Self {
+		Cdn { cache_size_gb: 10 }
+	}
 }
 
 fn default_regions() -> HashMap<String, Region> {

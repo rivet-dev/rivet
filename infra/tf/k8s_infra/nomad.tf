@@ -185,7 +185,7 @@ resource "kubernetes_stateful_set" "nomad_server" {
 						storage = "1Gi"
 					}
 				}
-				storage_class_name = "local-path"
+				storage_class_name = var.k8s_storage_class
 			}
 		}
 	}

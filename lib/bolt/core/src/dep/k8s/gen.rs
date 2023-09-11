@@ -1,15 +1,45 @@
-use std::collections::HashMap;
-use std::path::{Path, PathBuf};
-
+use anyhow::Result;
+use duct::cmd;
 use serde_json::json;
+use std::{
+	collections::HashMap,
+	path::{Path, PathBuf},
+};
+use tokio::{fs, task::block_in_place};
 
 use crate::{
 	config::{
-		self,
+		self, ns,
 		service::{ServiceDomain, ServiceKind, ServiceRouter},
 	},
 	context::{ProjectContext, RunContext, ServiceContext},
 };
+
+pub async fn project(ctx: &ProjectContext) -> Result<()> {
+	// Read kubectl config
+	let config = match ctx.ns().kubernetes.provider {
+		ns::KubernetesProvider::K3d {} => {
+			block_in_place(move || cmd!("k3d", "kubeconfig", "get", ctx.k8s_cluster_name()).read())?
+		}
+		ns::KubernetesProvider::AwsEks {} => block_in_place(move || {
+			cmd!(
+				"aws",
+				"eks",
+				"update-kubeconfig",
+				"--dry-run",
+				"--name",
+				ctx.k8s_cluster_name()
+			)
+			.read()
+		})?,
+	};
+
+	// Write config path
+	fs::create_dir_all(ctx.gen_kubeconfig_path().parent().unwrap()).await?;
+	fs::write(ctx.gen_kubeconfig_path(), config).await?;
+
+	Ok(())
+}
 
 // Kubernetes requires a specific port for containers because they have their own networking namespace, the
 // port bound on the host is randomly generated.

@@ -23,9 +23,13 @@ in
 		name = "rivet";
 
 		buildInputs = with pkgs; [
+			# Kubernetes tools
 			k3d
 			kubectl
 			kubernetes-helm
+
+			# Clouds
+			awscli2
 
 			# Infrastructure
 			salt
@@ -66,6 +70,9 @@ in
 			# Autocomplete
 			bashInteractive
 			bash-completion
+
+			# Fixes "cannot change locale" warning
+			glibcLocales
 		] ++ (
 			pkgs.lib.optionals stdenv.isDarwin [
 				libiconv  # See https://stackoverflow.com/a/69732679
@@ -94,6 +101,8 @@ in
       		complete -C ${pkgs.consul}/bin/consul consul
       		# terraform -install-autocomplete
       		complete -C ${pkgs.terraform}/bin/terraform terraform
+			# awscli
+			complete -C aws_completer aws
 			# kubectl completion bash
 			source <(kubectl completion bash)
 

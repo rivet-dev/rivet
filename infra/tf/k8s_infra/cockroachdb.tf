@@ -26,5 +26,10 @@ resource "helm_release" "cockroachdb" {
 			# 	nodeSecret = ""
 			# }
 		}
+		storage = {
+			persistentVolume = {
+				storageClass = var.k8s_storage_class
+			}
+		}
 	})]
 }

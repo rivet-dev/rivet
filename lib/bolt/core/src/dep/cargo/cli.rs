@@ -105,8 +105,6 @@ pub async fn build<'a, T: AsRef<str>>(ctx: &ProjectContext, opts: BuildOpts<'a, 
 					let bin = bin.as_ref();
 					let image_tag = format!("{repo}{bin}:{source_hash}");
 
-					// TODO: Figure out what to tag images with
-
 					// Write docker file
 					let dockerfile_path = gen_path.join(format!("Dockerfile.{bin}"));
 					fs::write(

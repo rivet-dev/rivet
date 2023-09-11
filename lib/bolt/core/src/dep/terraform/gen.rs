@@ -6,7 +6,7 @@ use tokio::fs;
 
 use crate::{
 	config::{
-		self,
+		ns,
 		service::{RuntimeKind, ServiceDomain, UploadPolicy},
 	},
 	context::ProjectContext,
@@ -43,8 +43,8 @@ pub async fn project(ctx: &ProjectContext) {
 pub async fn gen_bolt_tf(ctx: &ProjectContext, plan_id: &str) -> Result<()> {
 	// Configure the backend
 	let backend = match ctx.ns().terraform.backend {
-		config::ns::TerraformBackend::Local {} => String::new(),
-		config::ns::TerraformBackend::Postgres {} => indoc!(
+		ns::TerraformBackend::Local {} => String::new(),
+		ns::TerraformBackend::Postgres {} => indoc!(
 			"
 			terraform {
 				backend \"pg\" {}
@@ -58,8 +58,8 @@ pub async fn gen_bolt_tf(ctx: &ProjectContext, plan_id: &str) -> Result<()> {
 	let remote_states =
 		if let Some(remote_states) = super::remote_states::dependency_graph(ctx).get(plan_id) {
 			let variables = match ctx.ns().terraform.backend {
-				config::ns::TerraformBackend::Local {} => String::new(),
-				config::ns::TerraformBackend::Postgres {} => indoc!(
+				ns::TerraformBackend::Local {} => String::new(),
+				ns::TerraformBackend::Postgres {} => indoc!(
 					"
 					variable \"remote_state_pg_conn_str\" {
 						type = string
@@ -106,7 +106,7 @@ fn gen_remote_state(
 	};
 
 	match ctx.ns().terraform.backend {
-		config::ns::TerraformBackend::Local {} => formatdoc!(
+		ns::TerraformBackend::Local {} => formatdoc!(
 			"
 			data \"terraform_remote_state\" \"{data_name}\" {{
 				{meta}
@@ -119,7 +119,7 @@ fn gen_remote_state(
 			}}
 			"
 		),
-		config::ns::TerraformBackend::Postgres {} => formatdoc!(
+		ns::TerraformBackend::Postgres {} => formatdoc!(
 			"
 			data \"terraform_remote_state\" \"{data_name}\" {{
 				{meta}
@@ -147,7 +147,7 @@ async fn vars(ctx: &ProjectContext) {
 	vars.insert("namespace".into(), json!(ns));
 
 	match &config.cluster.kind {
-		config::ns::ClusterKind::SingleNode {
+		ns::ClusterKind::SingleNode {
 			public_ip,
 			preferred_subnets,
 			..
@@ -157,25 +157,16 @@ async fn vars(ctx: &ProjectContext) {
 			vars.insert("public_ip".into(), json!(public_ip));
 			vars.insert("local_preferred_subnets".into(), json!(preferred_subnets));
 		}
-		config::ns::ClusterKind::Distributed {
-			salt_master_size,
-			nebula_lighthouse_size,
-		} => {
+		ns::ClusterKind::Distributed {} => {
 			vars.insert("deploy_method_local".into(), json!(false));
 			vars.insert("deploy_method_cluster".into(), json!(true));
-
-			vars.insert("salt_master_size".into(), json!(salt_master_size));
-			vars.insert(
-				"nebula_lighthouse_size".into(),
-				json!(nebula_lighthouse_size),
-			);
 		}
 	}
 
 	// Remote state
 	match ctx.ns().terraform.backend {
-		config::ns::TerraformBackend::Local {} => {}
-		config::ns::TerraformBackend::Postgres {} => {
+		ns::TerraformBackend::Local {} => {}
+		ns::TerraformBackend::Postgres {} => {
 			let remote_state_pg_conn_str = ctx
 				.read_secret(&["terraform", "pg_backend", "conn_str"])
 				.await
@@ -214,7 +205,7 @@ async fn vars(ctx: &ProjectContext) {
 
 	// Cloudflare
 	match &config.dns.provider {
-		config::ns::DnsProvider::Cloudflare {
+		ns::DnsProvider::Cloudflare {
 			account_id, zones, ..
 		} => {
 			vars.insert("cloudflare_account_id".into(), json!(account_id));
@@ -251,8 +242,8 @@ async fn vars(ctx: &ProjectContext) {
 				json!({
 					"count": service.count,
 					"resources": {
-						"cpu": if let config::ns::CpuResources::Cpu(x) = &service.resources.cpu { *x } else { 0 },
-						"cpu_cores": if let config::ns::CpuResources::CpuCores(x) = &service.resources.cpu { *x } else { 0 },
+						"cpu": if let ns::CpuResources::Cpu(x) = &service.resources.cpu { *x } else { 0 },
+						"cpu_cores": if let ns::CpuResources::CpuCores(x) = &service.resources.cpu { *x } else { 0 },
 						"memory": service.resources.memory,
 					}
 				}),
@@ -271,12 +262,6 @@ async fn vars(ctx: &ProjectContext) {
 	{
 		let mut extra_dns = Vec::new();
 
-		// Which pool of ingress servers the DNS record will be pointed at
-		let ing_pool = match &ctx.ns().cluster.kind {
-			config::ns::ClusterKind::SingleNode { .. } => "local",
-			config::ns::ClusterKind::Distributed { .. } => "ing-px",
-		};
-
 		// Add services
 		for svc_ctx in all_svc {
 			if let Some(router) = svc_ctx.config().kind.router() {
@@ -288,7 +273,6 @@ async fn vars(ctx: &ProjectContext) {
 					};
 
 					extra_dns.push(json!({
-						"pool": ing_pool,
 						"zone_name": zone_name,
 						"name": if let Some(subdomain) = &mount.subdomain {
 							format!("{}.{}", subdomain, domain)
@@ -304,7 +288,6 @@ async fn vars(ctx: &ProjectContext) {
 		let s3_providers = &ctx.ns().s3.providers;
 		if s3_providers.minio.is_some() {
 			extra_dns.push(json!({
-				"pool": ing_pool,
 				"zone_name": "base",
 				"name": format!("minio.{}", ctx.domain_main()),
 			}));
@@ -394,7 +377,20 @@ async fn vars(ctx: &ProjectContext) {
 			.collect::<Vec<_>>()),
 	);
 
+	vars.insert("kubeconfig_path".into(), json!(ctx.gen_kubeconfig_path()));
+	vars.insert(
+		"k8s_storage_class".into(),
+		json!(match ctx.ns().kubernetes.provider {
+			ns::KubernetesProvider::K3d { .. } => "local-path",
+			ns::KubernetesProvider::AwsEks { .. } => "ebs-sc",
+		}),
+	);
 	vars.insert("k8s_health_port".into(), json!(dep::k8s::gen::HEALTH_PORT));
+
+	vars.insert(
+		"cdn_cache_size_gb".into(),
+		json!(config.rivet.cdn.cache_size_gb),
+	);
 
 	let tf_gen_path = ctx.gen_tf_env_path();
 	let _ = fs::create_dir_all(&tf_gen_path.parent().unwrap()).await;

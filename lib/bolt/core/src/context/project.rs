@@ -457,6 +457,19 @@ impl ProjectContextData {
 }
 
 impl ProjectContextData {
+	pub fn k8s_cluster_name(&self) -> String {
+		format!("rivet-{}", self.ns_id())
+	}
+
+	pub fn gen_kubeconfig_path(&self) -> PathBuf {
+		self.gen_path()
+			.join("k8s")
+			.join("kubeconfig")
+			.join(format!("{}.yml", self.ns_id()))
+	}
+}
+
+impl ProjectContextData {
 	/// Origin used for building links to the Hub.
 	pub fn origin_hub(&self) -> String {
 		self.ns()
