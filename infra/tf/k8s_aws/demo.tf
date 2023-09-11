@@ -58,30 +58,74 @@ resource "kubernetes_namespace" "my_ns" {
 # 	}
 # }
 
-resource "kubernetes_pod" "example_pod" {
-	metadata {
-		name      = "hello-world-pod"
-		namespace = kubernetes_namespace.my_ns.metadata[0].name
-	}
-	spec {
-		container {
-			image = "busybox"
-			name  = "hello-container"
-			# command = ["/bin/sh", "-c", "echo Hello, World! > /mnt/hello_world.txt; sleep 999999"]
-			command = ["/bin/sh", "-c", "echo Hello, World!; sleep 999999"]
+# resource "kubernetes_pod" "example_pod" {
+# 	metadata {
+# 		name      = "hello-world-pod"
+# 		namespace = kubernetes_namespace.my_ns.metadata[0].name
+# 	}
+# 	spec {
+# 		container {
+# 			image = "busybox"
+# 			name  = "hello-container"
+# 			# command = ["/bin/sh", "-c", "echo Hello, World! > /mnt/hello_world.txt; sleep 999999"]
+# 			command = ["/bin/sh", "-c", "echo Hello, World!; sleep 999999"]
 
-			# volume_mount {
-			# 	name       = "hello-world-storage"
-			# 	mount_path = "/mnt"
-			# }
+# 			# volume_mount {
+# 			# 	name       = "hello-world-storage"
+# 			# 	mount_path = "/mnt"
+# 			# }
+# 		}
+
+# 		# volume {
+# 		# 	name = "hello-world-storage"
+# 		# 	persistent_volume_claim {
+# 		# 		claim_name = kubernetes_persistent_volume_claim.example_pvc.metadata[0].name
+# 		# 	}
+# 		# }
+# 	}
+# }
+
+
+# Example deployment using the [pause image](https://www.ianlewis.org/en/almighty-pause-container)
+# and starts with zero replicas
+resource "kubectl_manifest" "karpenter_example_deployment" {
+	depends_on = [helm_release.karpenter]
+
+	yaml_body = yamlencode({
+		apiVersion = "apps/v1"
+		kind       = "Deployment"
+		metadata = {
+			name = "inflate"
 		}
-
-		# volume {
-		# 	name = "hello-world-storage"
-		# 	persistent_volume_claim {
-		# 		claim_name = kubernetes_persistent_volume_claim.example_pvc.metadata[0].name
-		# 	}
-		# }
-	}
+		spec = {
+			replicas = 0
+			selector = {
+				matchLabels = {
+					app = "inflate"
+				}
+			}
+			template = {
+				metadata = {
+					labels = {
+						app = "inflate"
+					}
+				}
+				spec = {
+					terminationGracePeriodSeconds = 0
+					containers = [
+						{
+							name = "inflate"
+							image = "public.ecr.aws/eks-distro/kubernetes/pause:3.7"
+							resources = {
+								requests = {
+									cpu = 1
+								}
+							}
+						}
+					]
+				}
+			}
+		}
+	})
 }
 

@@ -1,3 +1,4 @@
+# TODO: Wait until fargate is up
 module "karpenter" {
 	source = "terraform-aws-modules/eks/aws//modules/karpenter"
 	version = "19.16.0"
@@ -10,6 +11,11 @@ module "karpenter" {
 	}
 
 	tags = local.tags
+}
+
+resource "aws_iam_service_linked_role" "spot" {
+	aws_service_name = "spot.amazonaws.com"
+	description      = "A service-linked role for RDS"
 }
 
 resource "helm_release" "karpenter" {
@@ -101,47 +107,3 @@ resource "kubectl_manifest" "karpenter_node_template" {
 		}
 	})
 }
-
-# Example deployment using the [pause image](https://www.ianlewis.org/en/almighty-pause-container)
-# and starts with zero replicas
-resource "kubectl_manifest" "karpenter_example_deployment" {
-	depends_on = [helm_release.karpenter]
-
-	yaml_body = yamlencode({
-		apiVersion = "apps/v1"
-		kind       = "Deployment"
-		metadata = {
-			name = "inflate"
-		}
-		spec = {
-			replicas = 0
-			selector = {
-				matchLabels = {
-					app = "inflate"
-				}
-			}
-			template = {
-				metadata = {
-					labels = {
-						app = "inflate"
-					}
-				}
-				spec = {
-					terminationGracePeriodSeconds = 0
-					containers = [
-						{
-							name = "inflate"
-							image = "public.ecr.aws/eks-distro/kubernetes/pause:3.7"
-							resources = {
-								requests = {
-									cpu = 1
-								}
-							}
-						}
-					]
-				}
-			}
-		}
-	})
-}
-

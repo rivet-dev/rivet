@@ -1,4 +1,4 @@
-# See https://github.com/terraform-aws-modules/terraform-aws-eks/blob/666603b6e531140d5d8fbd777cd90a7fbb8247dd/examples/karpenter/main.tf
+# # See https://github.com/terraform-aws-modules/terraform-aws-eks/blob/666603b6e531140d5d8fbd777cd90a7fbb8247dd/examples/karpenter/main.tf
 
 module "eks" {
 	source = "terraform-aws-modules/eks/aws"
@@ -8,6 +8,7 @@ module "eks" {
 	cluster_version = local.cluster_version
 	cluster_endpoint_public_access = true
 
+	# For the latest versions: aws eks describe-addon-versions
 	cluster_addons = {
 		kube-proxy = {
 			# https://docs.aws.amazon.com/eks/latest/userguide/managing-kube-proxy.html
@@ -44,6 +45,9 @@ module "eks" {
 				}
 			})
 		}
+		# aws-ebs-csi-driver = {
+		# 	addon_version = "v1.22.0-eksbuild.2"
+		# }
 	}
 
 	vpc_id = module.vpc.vpc_id
