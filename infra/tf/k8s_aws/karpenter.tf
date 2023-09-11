@@ -21,7 +21,7 @@ resource "helm_release" "karpenter" {
 	# repository_username = data.aws_ecrpublic_authorization_token.token.user_name
 	# repository_password = data.aws_ecrpublic_authorization_token.token.password
 	chart               = "karpenter"
-	version             = "v0.21.1"
+	version             = "v0.30.0"
 
 	set {
 		name  = "settings.aws.clusterName"
@@ -50,6 +50,8 @@ resource "helm_release" "karpenter" {
 }
 
 resource "kubectl_manifest" "karpenter_provisioner" {
+	depends_on = [helm_release.karpenter]
+
 	yaml_body = yamlencode({
 		apiVersion = "karpenter.sh/v1alpha5"
 		kind       = "Provisioner"
@@ -75,13 +77,11 @@ resource "kubectl_manifest" "karpenter_provisioner" {
 			ttlSecondsAfterEmpty = 30
 		}
 	})
-
-	depends_on = [
-		helm_release.karpenter
-	]
 }
 
 resource "kubectl_manifest" "karpenter_node_template" {
+	depends_on = [helm_release.karpenter]
+
 	yaml_body = yamlencode({
 		apiVersion = "karpenter.k8s.aws/v1alpha1"
 		kind       = "AWSNodeTemplate"
@@ -100,15 +100,13 @@ resource "kubectl_manifest" "karpenter_node_template" {
 			}
 		}
 	})
-
-	depends_on = [
-		helm_release.karpenter
-	]
 }
 
 # Example deployment using the [pause image](https://www.ianlewis.org/en/almighty-pause-container)
 # and starts with zero replicas
 resource "kubectl_manifest" "karpenter_example_deployment" {
+	depends_on = [helm_release.karpenter]
+
 	yaml_body = yamlencode({
 		apiVersion = "apps/v1"
 		kind       = "Deployment"
@@ -145,9 +143,5 @@ resource "kubectl_manifest" "karpenter_example_deployment" {
 			}
 		}
 	})
-
-	depends_on = [
-		helm_release.karpenter
-	]
 }
 
