@@ -178,6 +178,12 @@ async fn vars(ctx: &ProjectContext) {
 		}
 	}
 
+	// Project
+	vars.insert(
+		"project_root".into(),
+		json!(ctx.path().display().to_string()),
+	);
+
 	// Domains
 	vars.insert("domain_main".into(), json!(ctx.domain_main()));
 	vars.insert("domain_cdn".into(), json!(ctx.domain_cdn()));

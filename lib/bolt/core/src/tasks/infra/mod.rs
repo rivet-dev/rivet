@@ -2,7 +2,7 @@ use anyhow::*;
 use bolt_config::ns::ClusterKind;
 
 use crate::{
-	config,
+	config::{self, ns},
 	context::ProjectContext,
 	dep::{salt, terraform},
 	tasks,
@@ -130,13 +130,26 @@ pub fn build_plan(ctx: &ProjectContext, start_at: Option<String>) -> Result<Vec<
 	});
 
 	// Infra
-	plan.push(PlanStep {
-		name_id: "k8s-aws",
-		kind: PlanStepKind::Terraform {
-			plan_id: "k8s_aws".into(),
-			needs_destroy: true,
-		},
-	});
+	match ctx.ns().kubernetes.provider {
+		ns::KubernetesProvider::K3d { .. } => {
+			plan.push(PlanStep {
+				name_id: "k8s-k3d",
+				kind: PlanStepKind::Terraform {
+					plan_id: "k8s_k3d".into(),
+					needs_destroy: true,
+				},
+			});
+		}
+		ns::KubernetesProvider::AwsEks { .. } => {
+			plan.push(PlanStep {
+				name_id: "k8s-aws",
+				kind: PlanStepKind::Terraform {
+					plan_id: "k8s_aws".into(),
+					needs_destroy: true,
+				},
+			});
+		}
+	}
 
 	// Kubernetes
 	plan.push(PlanStep {
@@ -174,7 +187,7 @@ pub fn build_plan(ctx: &ProjectContext, start_at: Option<String>) -> Result<Vec<
 		},
 	});
 
-	if let config::ns::DnsProvider::Cloudflare {
+	if let ns::DnsProvider::Cloudflare {
 		access: Some(_), ..
 	} = ctx.ns().dns.provider
 	{
