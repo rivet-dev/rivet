@@ -27,3 +27,4 @@ resource "helm_release" "cockroachdb" {
 		}
 	})]
 }
+
