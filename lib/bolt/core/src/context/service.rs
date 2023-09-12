@@ -260,7 +260,13 @@ impl ServiceContextData {
 	}
 
 	pub fn redis_db_name(&self) -> String {
-		self.config().service.name.clone()
+		self.config()
+			.service
+			.name
+			.clone()
+			.strip_prefix("redis-")
+			.unwrap()
+			.to_string()
 	}
 
 	pub async fn s3_bucket_name(&self) -> String {

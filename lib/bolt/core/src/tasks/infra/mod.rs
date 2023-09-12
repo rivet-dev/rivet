@@ -179,9 +179,31 @@ pub fn build_plan(ctx: &ProjectContext, start_at: Option<String>) -> Result<Vec<
 				name_id: "cockroachdb-managed",
 				kind: PlanStepKind::Terraform {
 					plan_id: "cockroachdb_managed".into(),
+					needs_destroy: true,
+				},
+			});
+		}
+	}
+
+	// Redis
+	match ctx.ns().cockroachdb.provider {
+		ns::CockroachDBProvider::Kubernetes {} => {
+			plan.push(PlanStep {
+				name_id: "redis-k8s",
+				kind: PlanStepKind::Terraform {
+					plan_id: "redis_k8s".into(),
 					needs_destroy: false,
 				},
 			});
+		}
+		ns::CockroachDBProvider::Managed { .. } => {
+			// plan.push(PlanStep {
+			// 	name_id: "cockroachdb-managed",
+			// 	kind: PlanStepKind::Terraform {
+			// 		plan_id: "cockroachdb_managed".into(),
+			// 		needs_destroy: false,
+			// 	},
+			// });
 		}
 	}
 

@@ -338,7 +338,7 @@ async fn vars(ctx: &ProjectContext) {
 			}
 		}
 
-		vars.insert("redis_svcs".into(), json!(redis_svcs));
+		vars.insert("redis_dbs".into(), json!(redis_svcs));
 	}
 
 	// S3

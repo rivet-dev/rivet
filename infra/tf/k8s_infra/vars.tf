@@ -42,7 +42,7 @@ variable "imagor_presets" {
 }
 
 # MARK: Redis
-variable "redis_svcs" {
+variable "redis_dbs" {
 	type = map(object({
 		endpoint = string
 	}))
