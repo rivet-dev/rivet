@@ -23,6 +23,9 @@ resource "helm_release" "cockroachdb" {
 		conf = {
 			single-node = true
 		}
+		tls = {
+			enabled = true
+		}
 		storage = {
 			persistentVolume = {
 				storageClass = var.k8s_storage_class

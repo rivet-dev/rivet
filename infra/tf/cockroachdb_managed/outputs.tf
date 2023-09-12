@@ -1,12 +1,12 @@
-output "host"{
+output "host" {
 	value = cockroach_cluster.main.regions[0].sql_dns
 }
 
-output "port"{
+output "port" {
 	value = 26257
 }
 
-output "cluster_ca_crt"{
+output "cluster_ca_crt" {
 	value = data.cockroach_cluster_cert.main.cert
 }
 

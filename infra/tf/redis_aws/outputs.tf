@@ -1,18 +1,18 @@
-output "host"{
+output "host" {
 	value = {
 		for k, _ in var.redis_dbs:
 		k => split(":", aws_elasticache_replication_group.main[k].primary_endpoint_address)[0]
 	}
 }
 
-output "port"{
+output "port" {
 	value = {
 		for k, _ in var.redis_dbs:
 		k => tonumber(split(":", aws_elasticache_replication_group.main[k].primary_endpoint_address)[1])
 	}
 }
 
-output "cluster_ca_crt"{
+output "cluster_ca_crt" {
 	value = {
 		for k, _ in var.redis_dbs:
 		k => null

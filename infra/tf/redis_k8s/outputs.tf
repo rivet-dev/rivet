@@ -1,18 +1,18 @@
-output "host"{
+output "host" {
 	value = {
 		for k, _ in var.redis_dbs:
 		k => "redis-master.redis-${k}.svc.cluster.local"
 	}
 }
 
-output "port"{
+output "port" {
 	value = {
 		for k, _ in var.redis_dbs:
 		k => 6379
 	}
 }
 
-output "cluster_ca_crt"{
+output "cluster_ca_crt" {
 	value = {
 		for k, _ in var.redis_dbs:
 		k => data.kubernetes_config_map.root_ca[k].data["ca.crt"]
