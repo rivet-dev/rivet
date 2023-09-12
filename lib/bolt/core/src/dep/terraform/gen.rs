@@ -326,13 +326,14 @@ async fn vars(ctx: &ProjectContext) {
 		let mut redis_svcs = HashMap::<String, serde_json::Value>::new();
 
 		for svc_ctx in all_svc {
-			if matches!(svc_ctx.config().runtime, RuntimeKind::Redis { .. }) {
+			if let RuntimeKind::Redis { persistent } = svc_ctx.config().runtime {
 				let name = svc_ctx.name();
 
 				redis_svcs.insert(
 					svc_ctx.redis_db_name(),
 					json!({
 						"endpoint": format!("redis://redis-{name}.svc.cluster.local:6379"),
+						"persistent": persistent,
 					}),
 				);
 			}

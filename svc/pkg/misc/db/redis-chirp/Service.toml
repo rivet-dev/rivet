@@ -3,7 +3,6 @@ name = "redis-chirp"
 
 [runtime]
 kind = "redis"
-index = 3
 persistent = true
 
 [cache]

@@ -4,6 +4,5 @@ pub mod docker;
 pub mod fly;
 pub mod k8s;
 pub mod nomad;
-pub mod redis;
 pub mod salt;
 pub mod terraform;

@@ -156,13 +156,13 @@ async fn redis(ctx: &ProjectContext) -> Result<Value> {
 	let mut dbs = json!({});
 
 	for redis_dep in ctx.all_services().await {
-		let (persistent, index) = match redis_dep.config().runtime {
-			RuntimeKind::Redis { persistent, index } => (persistent, index),
+		let persistent = match redis_dep.config().runtime {
+			RuntimeKind::Redis { persistent } => persistent,
 			_ => continue,
 		};
 
 		dbs[redis_dep.name()] = json!({
-			"index": index,
+			"index": 0,
 			"port": 0,  // Removed
 			"persistent": persistent,
 		});
