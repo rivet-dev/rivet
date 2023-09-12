@@ -78,12 +78,8 @@ resource "kubernetes_deployment" "redis_exporter" {
 				priority_class_name = "redis-exporter-priority"
 				
 				# MARK: Docker auth
-				dynamic "image_pull_secrets" {
-					for_each = var.authenticate_all_docker_hub_pulls ? toset([1]) : toset([])
-
-					content {
-						name = "docker-auth"
-					}
+				image_pull_secrets {
+					name = "docker-auth"
 				}
 
 				container {

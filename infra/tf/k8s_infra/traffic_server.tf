@@ -101,6 +101,8 @@ resource "kubernetes_service" "traffic_server" {
 }
 
 resource "kubernetes_stateful_set" "traffic_server" {
+	depends_on = [kubernetes_secret.docker_auth]
+
 	metadata {
 		namespace = kubernetes_namespace.traffic_server.metadata.0.name
 		name = "traffic-server-statefulset"
@@ -133,7 +135,7 @@ resource "kubernetes_stateful_set" "traffic_server" {
 
 			spec {
 				image_pull_secrets {
-					name = kubernetes_secret.docker_auth[kubernetes_namespace.traffic_server].metadata.0.name
+					name = "docker-auth"
 				}
 
 				container {

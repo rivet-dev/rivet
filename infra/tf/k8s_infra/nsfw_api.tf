@@ -24,6 +24,8 @@ resource "kubernetes_priority_class" "nsfw_api_priority" {
 }
 
 resource "kubernetes_deployment" "nsfw_api" {
+	depends_on = [kubernetes_secret.docker_auth]
+
 	metadata {
 		name = "nsfw-api"
 		namespace = kubernetes_namespace.nsfw_api.metadata[0].name
@@ -49,12 +51,8 @@ resource "kubernetes_deployment" "nsfw_api" {
 				priority_class_name = "nsfw-api-priority"
 				
 				# MARK: Docker auth
-				dynamic "image_pull_secrets" {
-					for_each = var.authenticate_all_docker_hub_pulls ? toset([1]) : toset([])
-
-					content {
-						name = "docker-auth"
-					}
+				image_pull_secrets {
+					name = "docker-auth"
 				}
 
 				container {
