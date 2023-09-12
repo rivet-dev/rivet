@@ -58,18 +58,6 @@ resource "kubernetes_namespace" "traffic_server" {
 	}
 }
 
-resource "kubernetes_secret" "traffic_server_docker_config" {
-	metadata {
-		namespace = kubernetes_namespace.traffic_server.metadata.0.name
-		name = "ghcr-registry-credentials"
-	}
-
-	data = local.ghcr_registry_data
-
-	type = "kubernetes.io/dockerconfigjson"
-
-}
-
 resource "kubernetes_config_map" "traffic_server" {
 	metadata {
 		namespace = kubernetes_namespace.traffic_server.metadata.0.name
@@ -145,7 +133,7 @@ resource "kubernetes_stateful_set" "traffic_server" {
 
 			spec {
 				image_pull_secrets {
-					name = kubernetes_secret.traffic_server_docker_config.metadata.0.name
+					name = kubernetes_secret.docker_auth[kubernetes_namespace.traffic_server].metadata.0.name
 				}
 
 				container {

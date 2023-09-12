@@ -2,6 +2,10 @@ variable "namespace" {
 	type = string
 }
 
+variable "deploy_method_cluster" {
+	type = bool
+}
+
 # MARK: DNS
 variable "domain_main" {
 	type = string
