@@ -244,51 +244,8 @@ pub async fn gen_svc(exec_ctx: &ExecServiceContext) -> Vec<serde_json::Value> {
 	});
 
 	// Shared data between containers
-	let mut volumes = vec![];
-	let mut volume_mounts = vec![json!({
-		"name": "local",
-		"mountPath": "/local",
-		"readOnly": true
-	})];
-
-	// Add volumes
-	{
-		match driver {
-			// Mount the service binaries to execute directly in the container. See
-			// notes in salt/salt/nomad/files/nomad.d/client.hcl.j2.
-			ExecServiceDriver::LocalBinaryArtifact { .. } => {
-				// Volumes
-				volumes.push(json!({
-					"name": "rivet-src",
-					"hostPath": {
-						"path": "/rivet-src",
-						"type": "Directory"
-					}
-				}));
-				volumes.push(json!({
-					"name": "nix-store",
-					"hostPath": {
-						"path": "/nix/store",
-						"type": "Directory"
-					}
-				}));
-
-				// Mounts
-				volume_mounts.push(json!({
-					"name": "rivet-src",
-					"mountPath": "/rivet-src",
-					"readOnly": true
-				}));
-				volume_mounts.push(json!({
-					"name": "nix-store",
-					"mountPath": "/nix/store",
-					"readOnly": true
-				}));
-			}
-			ExecServiceDriver::Docker { .. } => {}
-		}
-
-		volumes.push(json!({
+	let mut volumes = vec![
+		json!({
 			"name": "local",
 			"projected": {
 				"defaultMode": 0o0777,
@@ -300,7 +257,64 @@ pub async fn gen_svc(exec_ctx: &ExecServiceContext) -> Vec<serde_json::Value> {
 					}
 				]
 			}
-		}));
+		}),
+		// Redis CA
+		json!({
+			"name": "redis-ca-cert",
+			"configMap": {
+				"defaultMode": 420,
+				"name": "redis-ca-cert"
+			}
+		}),
+	];
+	let mut volume_mounts = vec![
+		json!({
+			"name": "local",
+			"mountPath": "/local",
+			"readOnly": true
+		}),
+		// Redis CA
+		json!({
+			"name": "redis-ca-cert",
+			"mountPath": "/usr/local/share/ca-certificates/redis_ca.crt",
+			"subPath": "redis_ca.crt"
+		}),
+	];
+
+	// Add volumes based on exec service
+	match driver {
+		// Mount the service binaries to execute directly in the container. See
+		// notes in salt/salt/nomad/files/nomad.d/client.hcl.j2.
+		ExecServiceDriver::LocalBinaryArtifact { .. } => {
+			// Volumes
+			volumes.push(json!({
+				"name": "rivet-src",
+				"hostPath": {
+					"path": "/rivet-src",
+					"type": "Directory"
+				}
+			}));
+			volumes.push(json!({
+				"name": "nix-store",
+				"hostPath": {
+					"path": "/nix/store",
+					"type": "Directory"
+				}
+			}));
+
+			// Mounts
+			volume_mounts.push(json!({
+				"name": "rivet-src",
+				"mountPath": "/rivet-src",
+				"readOnly": true
+			}));
+			volume_mounts.push(json!({
+				"name": "nix-store",
+				"mountPath": "/nix/store",
+				"readOnly": true
+			}));
+		}
+		ExecServiceDriver::Docker { .. } => {}
 	}
 
 	// Create secret env vars
@@ -361,7 +375,15 @@ pub async fn gen_svc(exec_ctx: &ExecServiceContext) -> Vec<serde_json::Value> {
 			"volumeMounts": volume_mounts,
 			"ports": ports,
 			"livenessProbe": health_check,
-			"resources": resources
+			"resources": resources,
+			// MARK: Update certs after starting
+			"lifecycle": {
+				"postStart": {
+					"exec": {
+						"command": ["sh", "-c", "sleep 2; update-ca-certificates"]
+					}
+				}
+			}
 		}],
 		"volumes": volumes
 	});
