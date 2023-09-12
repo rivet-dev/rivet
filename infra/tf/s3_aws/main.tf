@@ -20,4 +20,11 @@ provider "aws" {
 	access_key = module.secrets.values["aws/terraform/key_id"]
 	secret_key = module.secrets.values["aws/terraform/key"]
 	region = "us-east-1"
+
+	default_tags {
+		tags = {
+			Namespace = var.namespace
+		}
+	}
 }
+

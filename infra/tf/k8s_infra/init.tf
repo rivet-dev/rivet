@@ -130,27 +130,26 @@ module "docker_secrets" {
 
 	keys = flatten([
 		var.authenticate_all_docker_hub_pulls ? [
-			"docker/registry/docker.io/username",
-			"docker/registry/docker.io/password",
+			"docker/registry/docker.io/read/username",
+			"docker/registry/docker.io/read/password",
 		] : [],
 	])
 }
 
 module "docker_ghcr_secrets" {
+	count = var.deploy_method_cluster ? 1 : 0
 	source = "../modules/secrets"
 
 	keys = flatten([
         "docker/registry/ghcr.io/read/username",
         "docker/registry/ghcr.io/read/password",
 	])
-
-	optional = true
 }
 
-# NOTE: Needs to be created in every K8s namespace it is used in
+# Create Docker auth secret in every namespace it's used in
 resource "kubernetes_secret" "docker_auth" {
 	for_each = toset([
-		for x in [kubernetes_namespace.redis, kubernetes_namespace.rivet_service]:
+		for x in [kubernetes_namespace.redis, kubernetes_namespace.traffic_server, kubernetes_namespace.rivet_service]:
 		x.metadata.0.name
 	])
 
@@ -168,15 +167,15 @@ resource "kubernetes_secret" "docker_auth" {
 						var.authenticate_all_docker_hub_pulls ?
 						{
 							auth = base64encode(
-								"${module.docker_secrets.values["docker/registry/docker.io/username"]}:${module.docker_secrets.values["docker/registry/docker.io/password"]}"
+								"${module.docker_secrets.values["docker/registry/docker.io/read/username"]}:${module.docker_secrets.values["docker/registry/docker.io/read/password"]}"
 							)
 						}
 						: null
 				)
 				"ghcr.io" = (
-					module.docker_ghcr_secrets.values["docker/registry/ghcr.io/read/username"] != null ?
+					var.deploy_method_cluster ?
 					{
-						"auth" = base64encode("${module.secrets.values["docker/registry/ghcr.io/read/username"]}:${module.secrets.values["docker/registry/ghcr.io/read/password"]}")
+						"auth" = base64encode("${module.docker_ghcr_secrets[0].values["docker/registry/ghcr.io/read/username"]}:${module.docker_ghcr_secrets[0].values["docker/registry/ghcr.io/read/password"]}")
 					}
 					: null
 				)

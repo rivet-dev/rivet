@@ -12,7 +12,7 @@ locals {
 	})
 	
 	redis_svcs = {
-		for k, v in var.redis_svcs:
+		for k, v in var.redis_dbs:
 		k => {
 			endpoint = v.endpoint
 			username = module.redis_secrets.values["redis/${k}/username"]
@@ -25,7 +25,7 @@ module "redis_secrets" {
 	source = "../modules/secrets"
 
 	keys = flatten([
-		for k, v in var.redis_svcs:
+		for k, v in var.redis_dbs:
 		[
 			"redis/${k}/username",
 			"redis/${k}/password",
@@ -78,12 +78,8 @@ resource "kubernetes_deployment" "redis_exporter" {
 				priority_class_name = "redis-exporter-priority"
 				
 				# MARK: Docker auth
-				dynamic "image_pull_secrets" {
-					for_each = var.authenticate_all_docker_hub_pulls ? toset([1]) : toset([])
-
-					content {
-						name = "docker-auth"
-					}
+				image_pull_secrets {
+					name = "docker-auth"
 				}
 
 				container {

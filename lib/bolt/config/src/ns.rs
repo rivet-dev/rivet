@@ -36,6 +36,10 @@ pub struct Namespace {
 	#[serde(default)]
 	pub kubernetes: Kubernetes,
 	#[serde(default)]
+	pub cockroachdb: CockroachDB,
+	#[serde(default)]
+	pub redis: Redis,
+	#[serde(default)]
 	pub traefik: Traefik,
 	#[serde(default)]
 	pub rust: Rust,
@@ -362,25 +366,16 @@ impl Default for Nomad {
 	}
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug, Default)]
 #[serde(deny_unknown_fields)]
 pub struct Kubernetes {
-	#[serde(flatten)]
+	#[serde(flatten, default)]
 	pub provider: KubernetesProvider,
+	#[serde(default)]
 	pub health_checks: Option<bool>,
 }
 
-impl Default for Kubernetes {
-	fn default() -> Self {
-		Self {
-			provider: KubernetesProvider::default(),
-			health_checks: None,
-		}
-	}
-}
-
 #[derive(Serialize, Deserialize, Clone, Debug)]
-#[serde(deny_unknown_fields)]
 pub enum KubernetesProvider {
 	#[serde(rename = "k3d")]
 	K3d {},
@@ -391,6 +386,60 @@ pub enum KubernetesProvider {
 impl Default for KubernetesProvider {
 	fn default() -> Self {
 		Self::K3d {}
+	}
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, Default)]
+#[serde(deny_unknown_fields)]
+pub struct CockroachDB {
+	#[serde(flatten, default)]
+	pub provider: CockroachDBProvider,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub enum CockroachDBProvider {
+	#[serde(rename = "kubernetes")]
+	Kubernetes {},
+	#[serde(rename = "managed")]
+	Managed {
+		// #[serde(flatten)]
+		// plan: CockroachDBManagedPlan,
+	},
+}
+
+impl Default for CockroachDBProvider {
+	fn default() -> Self {
+		Self::Kubernetes {}
+	}
+}
+
+// #[derive(Serialize, Deserialize, Clone, Debug)]
+// #[serde(deny_unknown_fields)]
+// pub enum CockroachDBManagedPlan {
+// 	#[serde(rename = "serverless")]
+// 	Serverless {},
+// 	// #[serde(rename = "dedicated")]
+// 	// Dedicated {},
+// }
+
+#[derive(Serialize, Deserialize, Clone, Debug, Default)]
+#[serde(deny_unknown_fields)]
+pub struct Redis {
+	#[serde(flatten, default)]
+	pub provider: RedisProvider,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub enum RedisProvider {
+	#[serde(rename = "kubernetes")]
+	Kubernetes {},
+	#[serde(rename = "aws")]
+	Aws {},
+}
+
+impl Default for RedisProvider {
+	fn default() -> Self {
+		Self::Kubernetes {}
 	}
 }
 

@@ -2,7 +2,7 @@ use anyhow::*;
 use bolt_config::ns::ClusterKind;
 
 use crate::{
-	config,
+	config::{self, ns},
 	context::ProjectContext,
 	dep::{salt, terraform},
 	tasks,
@@ -46,6 +46,9 @@ pub enum PlanStepKind {
 
 impl PlanStepKind {
 	async fn execute(&self, ctx: ProjectContext, opts: &ExecutePlanOpts) -> Result<()> {
+		// Generate the project before each step since things likely changed between steps
+		tasks::gen::generate_project(&ctx).await;
+
 		match self {
 			PlanStepKind::Terraform { plan_id, .. } => {
 				let varfile_path = ctx.gen_tf_env_path();
@@ -130,13 +133,26 @@ pub fn build_plan(ctx: &ProjectContext, start_at: Option<String>) -> Result<Vec<
 	});
 
 	// Infra
-	plan.push(PlanStep {
-		name_id: "k8s-aws",
-		kind: PlanStepKind::Terraform {
-			plan_id: "k8s_aws".into(),
-			needs_destroy: true,
-		},
-	});
+	match ctx.ns().kubernetes.provider {
+		ns::KubernetesProvider::K3d { .. } => {
+			plan.push(PlanStep {
+				name_id: "k8s-k3d",
+				kind: PlanStepKind::Terraform {
+					plan_id: "k8s_k3d".into(),
+					needs_destroy: true,
+				},
+			});
+		}
+		ns::KubernetesProvider::AwsEks { .. } => {
+			plan.push(PlanStep {
+				name_id: "k8s-aws",
+				kind: PlanStepKind::Terraform {
+					plan_id: "k8s_aws".into(),
+					needs_destroy: true,
+				},
+			});
+		}
+	}
 
 	// Kubernetes
 	plan.push(PlanStep {
@@ -146,6 +162,50 @@ pub fn build_plan(ctx: &ProjectContext, start_at: Option<String>) -> Result<Vec<
 			needs_destroy: false,
 		},
 	});
+
+	// CockroachDB
+	match ctx.ns().cockroachdb.provider {
+		ns::CockroachDBProvider::Kubernetes {} => {
+			plan.push(PlanStep {
+				name_id: "cockroachdb-k8s",
+				kind: PlanStepKind::Terraform {
+					plan_id: "cockroachdb_k8s".into(),
+					needs_destroy: false,
+				},
+			});
+		}
+		ns::CockroachDBProvider::Managed { .. } => {
+			plan.push(PlanStep {
+				name_id: "cockroachdb-managed",
+				kind: PlanStepKind::Terraform {
+					plan_id: "cockroachdb_managed".into(),
+					needs_destroy: true,
+				},
+			});
+		}
+	}
+
+	// Redis
+	match ctx.ns().redis.provider {
+		ns::RedisProvider::Kubernetes {} => {
+			plan.push(PlanStep {
+				name_id: "redis-k8s",
+				kind: PlanStepKind::Terraform {
+					plan_id: "redis_k8s".into(),
+					needs_destroy: false,
+				},
+			});
+		}
+		ns::RedisProvider::Aws { .. } => {
+			plan.push(PlanStep {
+				name_id: "redis-aws",
+				kind: PlanStepKind::Terraform {
+					plan_id: "redis_aws".into(),
+					needs_destroy: true,
+				},
+			});
+		}
+	}
 
 	// Pools
 	plan.push(PlanStep {
@@ -174,7 +234,7 @@ pub fn build_plan(ctx: &ProjectContext, start_at: Option<String>) -> Result<Vec<
 		},
 	});
 
-	if let config::ns::DnsProvider::Cloudflare {
+	if let ns::DnsProvider::Cloudflare {
 		access: Some(_), ..
 	} = ctx.ns().dns.provider
 	{

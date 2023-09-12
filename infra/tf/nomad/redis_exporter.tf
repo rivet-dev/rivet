@@ -16,7 +16,7 @@ module "redis_secrets" {
 	source = "../modules/secrets"
 
 	keys = flatten([
-		for k, v in var.redis_svcs:
+		for k, v in var.redis_dbs:
 		[
 			"redis/${k}/username",
 			"redis/${k}/password",
@@ -40,7 +40,7 @@ resource "nomad_job" "redis_exporter" {
 		resources = local.service_redis_exporter.resources
 
 		redis_svcs = {
-			for k, v in var.redis_svcs:
+			for k, v in var.redis_dbs:
 			k => {
 				endpoint = v.endpoint
 				username = module.redis_secrets.values["redis/${k}/username"]

@@ -2,6 +2,10 @@ variable "namespace" {
 	type = string
 }
 
+variable "deploy_method_cluster" {
+	type = bool
+}
+
 # MARK: DNS
 variable "domain_main" {
 	type = string
@@ -38,7 +42,7 @@ variable "imagor_presets" {
 }
 
 # MARK: Redis
-variable "redis_svcs" {
+variable "redis_dbs" {
 	type = map(object({
 		endpoint = string
 	}))
