@@ -433,8 +433,8 @@ pub struct Redis {
 pub enum RedisProvider {
 	#[serde(rename = "kubernetes")]
 	Kubernetes {},
-	#[serde(rename = "managed")]
-	AwsElasticache {},
+	#[serde(rename = "aws")]
+	Aws {},
 }
 
 impl Default for RedisProvider {

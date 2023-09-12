@@ -18,7 +18,7 @@ resource "cockroach_cluster" "main" {
 	name = "rivet-${var.namespace}"
 
 	regions = [{
-		name = "us-east-1"
+		name = data.terraform_remote_state.k8s_aws.outputs.region
 		primary = true
 	}]
 

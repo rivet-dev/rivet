@@ -7,7 +7,7 @@ resource "kubernetes_namespace" "redis" {
 	}
 }
 
-resource "random_password" "root_password" {
+resource "random_password" "password" {
 	for_each = var.redis_dbs
 
 	length = 32
@@ -26,7 +26,7 @@ resource "helm_release" "redis" {
 		global = {
 			storageClass = var.k8s_storage_class
 			redis = {
-				password = random_password.root_password[each.key].result
+				password = random_password.password[each.key].result
 			}
 		}
 		replica = {

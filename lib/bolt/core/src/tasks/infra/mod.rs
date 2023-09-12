@@ -186,8 +186,8 @@ pub fn build_plan(ctx: &ProjectContext, start_at: Option<String>) -> Result<Vec<
 	}
 
 	// Redis
-	match ctx.ns().cockroachdb.provider {
-		ns::CockroachDBProvider::Kubernetes {} => {
+	match ctx.ns().redis.provider {
+		ns::RedisProvider::Kubernetes {} => {
 			plan.push(PlanStep {
 				name_id: "redis-k8s",
 				kind: PlanStepKind::Terraform {
@@ -196,14 +196,14 @@ pub fn build_plan(ctx: &ProjectContext, start_at: Option<String>) -> Result<Vec<
 				},
 			});
 		}
-		ns::CockroachDBProvider::Managed { .. } => {
-			// plan.push(PlanStep {
-			// 	name_id: "cockroachdb-managed",
-			// 	kind: PlanStepKind::Terraform {
-			// 		plan_id: "cockroachdb_managed".into(),
-			// 		needs_destroy: false,
-			// 	},
-			// });
+		ns::RedisProvider::Aws { .. } => {
+			plan.push(PlanStep {
+				name_id: "redis-aws",
+				kind: PlanStepKind::Terraform {
+					plan_id: "redis_aws".into(),
+					needs_destroy: true,
+				},
+			});
 		}
 	}
 
