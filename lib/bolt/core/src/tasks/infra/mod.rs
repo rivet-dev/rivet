@@ -46,6 +46,9 @@ pub enum PlanStepKind {
 
 impl PlanStepKind {
 	async fn execute(&self, ctx: ProjectContext, opts: &ExecutePlanOpts) -> Result<()> {
+		// Generate the project before each step since things likely changed between steps
+		tasks::gen::generate_project(&ctx).await;
+
 		match self {
 			PlanStepKind::Terraform { plan_id, .. } => {
 				let varfile_path = ctx.gen_tf_env_path();

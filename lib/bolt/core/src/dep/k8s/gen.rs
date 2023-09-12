@@ -13,30 +13,45 @@ use crate::{
 		service::{ServiceDomain, ServiceKind, ServiceRouter},
 	},
 	context::{ProjectContext, RunContext, ServiceContext},
+	dep::terraform,
 };
 
 pub async fn project(ctx: &ProjectContext) -> Result<()> {
-	// Read kubectl config
-	let config = match ctx.ns().kubernetes.provider {
-		ns::KubernetesProvider::K3d {} => {
-			block_in_place(move || cmd!("k3d", "kubeconfig", "get", ctx.k8s_cluster_name()).read())?
-		}
-		ns::KubernetesProvider::AwsEks {} => block_in_place(move || {
-			cmd!(
-				"aws",
-				"eks",
-				"update-kubeconfig",
-				"--dry-run",
-				"--name",
-				ctx.k8s_cluster_name()
-			)
-			.read()
-		})?,
+	// Chek if the k8s provider has already applied
+	let plan_id = match ctx.ns().kubernetes.provider {
+		ns::KubernetesProvider::K3d { .. } => "k8s_k3d",
+		ns::KubernetesProvider::AwsEks { .. } => "k8s_aws",
 	};
 
-	// Write config path
-	fs::create_dir_all(ctx.gen_kubeconfig_path().parent().unwrap()).await?;
-	fs::write(ctx.gen_kubeconfig_path(), config).await?;
+	// TODO: has_applied is slow
+	if terraform::cli::has_applied(ctx, plan_id).await {
+		// Read kubectl config
+		let config = match ctx.ns().kubernetes.provider {
+			ns::KubernetesProvider::K3d {} => block_in_place(move || {
+				cmd!("k3d", "kubeconfig", "get", ctx.k8s_cluster_name()).read()
+			})?,
+			ns::KubernetesProvider::AwsEks {} => block_in_place(move || {
+				cmd!(
+					"aws",
+					"eks",
+					"update-kubeconfig",
+					"--dry-run",
+					"--name",
+					ctx.k8s_cluster_name()
+				)
+				.read()
+			})?,
+		};
+
+		// Write to file
+		fs::create_dir_all(ctx.gen_kubeconfig_path().parent().unwrap()).await?;
+		fs::write(ctx.gen_kubeconfig_path(), config).await?;
+	} else {
+		// Remove config
+		if fs::try_exists(ctx.gen_kubeconfig_path()).await? {
+			fs::remove_file(ctx.gen_kubeconfig_path()).await?;
+		}
+	}
 
 	Ok(())
 }

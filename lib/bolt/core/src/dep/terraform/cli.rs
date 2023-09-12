@@ -137,3 +137,20 @@ pub async fn output(ctx: &ProjectContext, plan_id: &str, quiet: bool) -> serde_j
 		.await
 		.unwrap()
 }
+
+pub async fn state_list(ctx: &ProjectContext, plan_id: &str) -> Vec<String> {
+	init_if_needed(ctx, plan_id).await;
+	let mut cmd = build_command(ctx, plan_id).await;
+	cmd.arg("state").arg("list");
+	cmd.exec_string()
+		.await
+		.unwrap()
+		.split('\n')
+		.filter(|x| !x.is_empty())
+		.map(|x| x.to_string())
+		.collect()
+}
+
+pub async fn has_applied(ctx: &ProjectContext, plan_id: &str) -> bool {
+	!state_list(ctx, plan_id).await.is_empty()
+}
