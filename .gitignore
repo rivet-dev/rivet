@@ -32,7 +32,6 @@ Bolt.local.toml
 gen/region-config.json
 gen/svc/
 gen/tf/
-gen/kubernetes/
 gen/docker/
 gen/k8s/
 

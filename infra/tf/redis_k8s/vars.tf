@@ -1,3 +1,7 @@
+variable "deploy_method_cluster" {
+	type = bool
+}
+
 variable "kubeconfig_path" {
 	type = string
 }
@@ -12,3 +16,7 @@ variable "redis_dbs" {
 	}))
 }
 
+# MARK: Docker
+variable "authenticate_all_docker_hub_pulls" {
+	type = bool
+}

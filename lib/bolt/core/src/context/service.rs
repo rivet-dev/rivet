@@ -1038,11 +1038,10 @@ impl ServiceContextData {
 
 		// Redis
 		for redis_dep in self.redis_dependencies(run_context).await {
-			let name = redis_dep.name();
 			let db_name = redis_dep.redis_db_name();
 
-			// TODO: Use name and port to connect to different redis instances
-			let host = "redis-master.redis.svc.cluster.local:6379";
+			// TODO: Use port to connect to different redis instances
+			let host = format!("redis-master.redis-{db_name}.svc.cluster.local:6379");
 
 			// Build URL with auth
 			let username = project_ctx
@@ -1052,9 +1051,9 @@ impl ServiceContextData {
 				.read_secret_opt(&["redis", &db_name, "password"])
 				.await?;
 			let url = if let Some(password) = password {
-				format!("redis://{}:{}@{host}", username, password)
+				format!("rediss://{}:{}@{host}", username, password)
 			} else {
-				format!("redis://{}@{host}", username)
+				format!("rediss://{}@{host}", username)
 			};
 
 			env.push((

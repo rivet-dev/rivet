@@ -438,7 +438,7 @@ pub async fn generate(project_path: &Path, ns_id: &str) -> Result<()> {
 		}
 
 		generator
-			.generate_secret(&["redis", &svc.name(), "username"], || async {
+			.generate_secret(&["redis", &svc.redis_db_name(), "username"], || async {
 				Ok(value("default"))
 			})
 			.await?;

@@ -101,7 +101,7 @@ resource "kubernetes_service" "traffic_server" {
 }
 
 resource "kubernetes_stateful_set" "traffic_server" {
-	depends_on = [kubernetes_secret.docker_auth]
+	depends_on = [module.docker_auth]
 
 	metadata {
 		namespace = kubernetes_namespace.traffic_server.metadata.0.name

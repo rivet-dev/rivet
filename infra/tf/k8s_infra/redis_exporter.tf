@@ -49,7 +49,7 @@ resource "kubernetes_priority_class" "redis_exporter_priority" {
 }
 
 resource "kubernetes_deployment" "redis_exporter" {
-	depends_on = [kubernetes_secret.docker_auth]
+	depends_on = [module.docker_auth]
 
 	for_each = local.redis_svcs
 	

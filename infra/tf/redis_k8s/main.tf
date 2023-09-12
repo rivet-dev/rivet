@@ -57,3 +57,25 @@ data "kubernetes_config_map" "root_ca" {
 	}
 }
 
+resource "kubernetes_config_map" "redis_ca" {
+	for_each = var.redis_dbs
+
+	metadata {
+		name = "redis-${each.key}-ca"
+		namespace = "rivet-service"
+		# namespace = kubernetes_namespace.rivet_service.metadata.0.name
+	}
+
+	data = data.kubernetes_config_map.root_ca[each.key].data
+}
+
+module "docker_auth" {
+	source = "../modules/k8s_auth"
+
+	namespaces = [
+		for k, v in var.redis_dbs:
+		kubernetes_namespace.redis[k].metadata.0.name
+	]
+	authenticate_all_docker_hub_pulls = var.authenticate_all_docker_hub_pulls
+	deploy_method_cluster = var.deploy_method_cluster
+}

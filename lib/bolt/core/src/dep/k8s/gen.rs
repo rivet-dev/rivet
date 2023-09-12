@@ -16,8 +16,42 @@ use crate::{
 	dep::terraform,
 };
 
+// Kubernetes requires a specific port for containers because they have their own networking namespace, the
+// port bound on the host is randomly generated.
+pub const HEALTH_PORT: usize = 1000;
+pub const METRICS_PORT: usize = 1001;
+pub const TOKIO_CONSOLE_PORT: usize = 1002;
+pub const HTTP_SERVER_PORT: usize = 1003;
+
+pub struct ExecServiceContext {
+	pub svc_ctx: ServiceContext,
+	pub run_context: RunContext,
+	pub driver: ExecServiceDriver,
+}
+
+pub enum ExecServiceDriver {
+	Docker {
+		image_tag: String,
+		force_pull: bool,
+	},
+	LocalBinaryArtifact {
+		/// Path to the executable relative to the project root.
+		exec_path: PathBuf,
+		// TODO: Remove?
+		args: Vec<String>,
+	},
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum SpecType {
+	Pod,
+	Deployment,
+	Job,
+	CronJob,
+}
+
 pub async fn project(ctx: &ProjectContext) -> Result<()> {
-	// Chek if the k8s provider has already applied
+	// Check if the k8s provider has already applied
 	let plan_id = match ctx.ns().kubernetes.provider {
 		ns::KubernetesProvider::K3d { .. } => "k8s_k3d",
 		ns::KubernetesProvider::AwsEks { .. } => "k8s_aws",
@@ -54,40 +88,6 @@ pub async fn project(ctx: &ProjectContext) -> Result<()> {
 	}
 
 	Ok(())
-}
-
-// Kubernetes requires a specific port for containers because they have their own networking namespace, the
-// port bound on the host is randomly generated.
-pub const HEALTH_PORT: usize = 1000;
-pub const METRICS_PORT: usize = 1001;
-pub const TOKIO_CONSOLE_PORT: usize = 1002;
-pub const HTTP_SERVER_PORT: usize = 1003;
-
-pub struct ExecServiceContext {
-	pub svc_ctx: ServiceContext,
-	pub run_context: RunContext,
-	pub driver: ExecServiceDriver,
-}
-
-pub enum ExecServiceDriver {
-	Docker {
-		image_tag: String,
-		force_pull: bool,
-	},
-	LocalBinaryArtifact {
-		/// Path to the executable relative to the project root.
-		exec_path: PathBuf,
-		// TODO: Remove?
-		args: Vec<String>,
-	},
-}
-
-#[derive(Clone, Copy, PartialEq, Eq)]
-enum SpecType {
-	Pod,
-	Deployment,
-	Job,
-	CronJob,
 }
 
 pub fn k8s_svc_name(exec_ctx: &ExecServiceContext) -> String {
@@ -259,42 +259,24 @@ pub async fn gen_svc(exec_ctx: &ExecServiceContext) -> Vec<serde_json::Value> {
 	});
 
 	// Shared data between containers
-	let mut volumes = vec![
-		json!({
-			"name": "local",
-			"projected": {
-				"defaultMode": 0o0777,
-				"sources": [
-					{
-						"configMap": {
-							"name": "health-checks"
-						}
+	let mut volumes = vec![json!({
+		"name": "local",
+		"projected": {
+			"defaultMode": 0o0777,
+			"sources": [
+				{
+					"configMap": {
+						"name": "health-checks"
 					}
-				]
-			}
-		}),
-		// Redis CA
-		json!({
-			"name": "redis-ca-cert",
-			"configMap": {
-				"defaultMode": 420,
-				"name": "redis-ca-cert"
-			}
-		}),
-	];
-	let mut volume_mounts = vec![
-		json!({
-			"name": "local",
-			"mountPath": "/local",
-			"readOnly": true
-		}),
-		// Redis CA
-		json!({
-			"name": "redis-ca-cert",
-			"mountPath": "/usr/local/share/ca-certificates/redis_ca.crt",
-			"subPath": "redis_ca.crt"
-		}),
-	];
+				}
+			]
+		}
+	})];
+	let mut volume_mounts = vec![json!({
+		"name": "local",
+		"mountPath": "/local",
+		"readOnly": true
+	})];
 
 	// Add volumes based on exec service
 	match driver {
@@ -330,6 +312,40 @@ pub async fn gen_svc(exec_ctx: &ExecServiceContext) -> Vec<serde_json::Value> {
 			}));
 		}
 		ExecServiceDriver::Docker { .. } => {}
+	}
+
+	// Add CA volumes
+	{
+		let redis_deps = svc_ctx
+			.redis_dependencies(run_context)
+			.await
+			.iter()
+			.map(|dep| dep.redis_db_name())
+			.collect::<Vec<_>>();
+
+		// Redis CA
+		volumes.extend(redis_deps.iter().map(|db| {
+			json!({
+				"name": format!("redis-{}-ca", db),
+				"configMap": {
+					"defaultMode": 420,
+					"name": format!("redis-{}-ca", db),
+					"items": [
+						{
+							"key": "ca.crt",
+							"path": format!("redis-{}-ca.crt", db)
+						}
+					]
+				}
+			})
+		}));
+		volume_mounts.extend(redis_deps.iter().map(|db| {
+			json!({
+				"name": format!("redis-{}-ca", db),
+				"mountPath": format!("/usr/local/share/ca-certificates/redis-{}-ca.crt", db),
+				"subPath": format!("redis-{}-ca.crt", db)
+			})
+		}));
 	}
 
 	// Create secret env vars
@@ -395,7 +411,7 @@ pub async fn gen_svc(exec_ctx: &ExecServiceContext) -> Vec<serde_json::Value> {
 			"lifecycle": {
 				"postStart": {
 					"exec": {
-						"command": ["sh", "-c", "sleep 2; update-ca-certificates"]
+						"command": ["sh", "-c", "apk update && apk add ca-certificates && update-ca-certificates > /allout.txt 2>&1"]
 					}
 				}
 			}
