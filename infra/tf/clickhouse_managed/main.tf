@@ -42,5 +42,12 @@ resource "clickhouse_service" "main" {
 	tier = "development"
 
 	password = random_password.default.result
+
+	# Bug in ClickHouse provider for the `development` tier leads to "inconsistent result" error
+	lifecycle {
+		ignore_changes = [
+			idle_scaling,
+		]
+	}
 }
 
