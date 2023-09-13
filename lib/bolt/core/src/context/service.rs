@@ -1027,10 +1027,10 @@ impl ServiceContextData {
 		let crdb_host = "cockroachdb.cockroachdb.svc.cluster.local:26257";
 		for crdb_dep in self.crdb_dependencies(run_context).await {
 			let username = "root"; // TODO:
-			let sslmode = "disable"; // TODO:
 
 			let uri = format!(
-				"postgres://{username}@{crdb_host}/{db_name}?sslmode={sslmode}",
+				"postgres://{}@{crdb_host}/{db_name}",
+				username,
 				db_name = crdb_dep.crdb_db_name(),
 			);
 			env.push((format!("CRDB_URL_{}", crdb_dep.name_screaming_snake()), uri));

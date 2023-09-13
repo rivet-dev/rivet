@@ -44,12 +44,22 @@ resource "helm_release" "cockroachdb" {
 	})]
 }
 
-data "kubernetes_config_map" "root_ca" {
+data "kubernetes_secret" "crdb_ca" {
 	depends_on = [helm_release.cockroachdb]
 
 	metadata {
-		name = "kube-root-ca.crt"
+		name = "cockroachdb-ca-secret"
 		namespace = kubernetes_namespace.cockroachdb.metadata.0.name
 	}
 }
 
+resource "kubernetes_config_map" "crdb_ca" {
+	metadata {
+		name = "crdb-ca"
+		namespace = "rivet-service"
+	}
+
+	data = {
+		"ca.crt" = data.kubernetes_secret.crdb_ca.data["ca.crt"]
+	}
+}

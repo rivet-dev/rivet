@@ -46,13 +46,13 @@ resource "helm_release" "redis" {
 	})]
 }
 
-data "kubernetes_config_map" "root_ca" {
+data "kubernetes_secret" "redis_ca" {
 	for_each = var.redis_dbs
 
 	depends_on = [helm_release.redis]
 
 	metadata {
-		name = "kube-root-ca.crt"
+		name = "redis-crt"
 		namespace = kubernetes_namespace.redis[each.key].metadata.0.name
 	}
 }
@@ -66,16 +66,7 @@ resource "kubernetes_config_map" "redis_ca" {
 		# namespace = kubernetes_namespace.rivet_service.metadata.0.name
 	}
 
-	data = data.kubernetes_config_map.root_ca[each.key].data
-}
-
-module "docker_auth" {
-	source = "../modules/k8s_auth"
-
-	namespaces = [
-		for k, v in var.redis_dbs:
-		kubernetes_namespace.redis[k].metadata.0.name
-	]
-	authenticate_all_docker_hub_pulls = var.authenticate_all_docker_hub_pulls
-	deploy_method_cluster = var.deploy_method_cluster
+	data = {
+		"ca.crt" = data.kubernetes_secret.redis_ca[each.key].data["ca.crt"]
+	}
 }

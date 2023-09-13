@@ -346,6 +346,26 @@ pub async fn gen_svc(exec_ctx: &ExecServiceContext) -> Vec<serde_json::Value> {
 				"subPath": format!("redis-{}-ca.crt", db)
 			})
 		}));
+
+		// CRDB CA
+		volumes.push(json!({
+			"name": "crdb-ca",
+			"configMap": {
+				"defaultMode": 420,
+				"name": "crdb-ca",
+				"items": [
+					{
+						"key": "ca.crt",
+						"path": "crdb-ca.crt"
+					}
+				]
+			}
+		}));
+		volume_mounts.push(json!({
+			"name": "crdb-ca",
+			"mountPath": "/usr/local/share/ca-certificates/crdb-ca.crt",
+			"subPath": "crdb-ca.crt"
+		}));
 	}
 
 	// Create secret env vars

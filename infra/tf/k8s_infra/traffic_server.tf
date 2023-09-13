@@ -291,4 +291,3 @@ resource "kubectl_manifest" "traffic_server_middlewares" {
 		spec = each.value
 	})
 }
-

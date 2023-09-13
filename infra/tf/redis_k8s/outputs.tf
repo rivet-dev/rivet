@@ -12,11 +12,12 @@ output "port" {
 	}
 }
 
-output "cluster_ca_crt" {
+output "ca_crt" {
 	value = {
 		for k, _ in var.redis_dbs:
-		k => data.kubernetes_config_map.root_ca[k].data["ca.crt"]
+		k => data.kubernetes_secret.redis_ca[k].data["ca.crt"]
 	}
+	sensitive = true
 }
 
 output "username" {
