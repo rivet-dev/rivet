@@ -1038,6 +1038,7 @@ impl ServiceContextData {
 
 		// Redis
 		for redis_dep in self.redis_dependencies(run_context).await {
+			let name = redis_dep.name();
 			let db_name = redis_dep.redis_db_name();
 
 			// TODO: Use port to connect to different redis instances
@@ -1051,13 +1052,13 @@ impl ServiceContextData {
 				.read_secret_opt(&["redis", &db_name, "password"])
 				.await?;
 			let url = if let Some(password) = password {
-				format!("rediss://{}:{}@{host}", username, password)
+				format!("rediss://{}:{}@{host}#insecure", username, password)
 			} else {
-				format!("rediss://{}@{host}", username)
+				format!("rediss://{}@{host}#insecure", username)
 			};
 
 			env.push((
-				format!("REDIS_URL_{}", db_name.to_uppercase().replace("-", "_")),
+				format!("REDIS_URL_{}", name.to_uppercase().replace("-", "_")),
 				url,
 			));
 		}

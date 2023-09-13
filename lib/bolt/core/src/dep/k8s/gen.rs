@@ -411,7 +411,10 @@ pub async fn gen_svc(exec_ctx: &ExecServiceContext) -> Vec<serde_json::Value> {
 			"lifecycle": {
 				"postStart": {
 					"exec": {
-						"command": ["sh", "-c", "apk update && apk add ca-certificates && update-ca-certificates > /allout.txt 2>&1"]
+						"command": [
+							"sh", "-c",
+							"apk update && apk add ca-certificates && update-ca-certificates > /var/log/poststart.txt 2>&1"
+						],
 					}
 				}
 			}
