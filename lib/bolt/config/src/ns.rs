@@ -36,9 +36,9 @@ pub struct Namespace {
 	#[serde(default)]
 	pub kubernetes: Kubernetes,
 	#[serde(default)]
-	pub cockroachdb: CockroachDB,
-	#[serde(default)]
 	pub redis: Redis,
+	#[serde(default)]
+	pub cockroachdb: CockroachDB,
 	#[serde(default)]
 	pub traefik: Traefik,
 	#[serde(default)]
@@ -391,6 +391,27 @@ impl Default for KubernetesProvider {
 
 #[derive(Serialize, Deserialize, Clone, Debug, Default)]
 #[serde(deny_unknown_fields)]
+pub struct Redis {
+	#[serde(flatten, default)]
+	pub provider: RedisProvider,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub enum RedisProvider {
+	#[serde(rename = "kubernetes")]
+	Kubernetes {},
+	#[serde(rename = "aws")]
+	Aws {},
+}
+
+impl Default for RedisProvider {
+	fn default() -> Self {
+		Self::Kubernetes {}
+	}
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, Default)]
+#[serde(deny_unknown_fields)]
 pub struct CockroachDB {
 	#[serde(flatten, default)]
 	pub provider: CockroachDBProvider,
@@ -421,27 +442,6 @@ impl Default for CockroachDBProvider {
 // 	// #[serde(rename = "dedicated")]
 // 	// Dedicated {},
 // }
-
-#[derive(Serialize, Deserialize, Clone, Debug, Default)]
-#[serde(deny_unknown_fields)]
-pub struct Redis {
-	#[serde(flatten, default)]
-	pub provider: RedisProvider,
-}
-
-#[derive(Serialize, Deserialize, Clone, Debug)]
-pub enum RedisProvider {
-	#[serde(rename = "kubernetes")]
-	Kubernetes {},
-	#[serde(rename = "aws")]
-	Aws {},
-}
-
-impl Default for RedisProvider {
-	fn default() -> Self {
-		Self::Kubernetes {}
-	}
-}
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(deny_unknown_fields)]
