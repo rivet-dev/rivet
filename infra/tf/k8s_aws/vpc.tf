@@ -5,13 +5,18 @@ module "vpc" {
 	name = local.name
 	cidr = local.vpc_cidr
 
-	azs             = local.azs
+	azs = local.azs
 	private_subnets = [for k, v in local.azs : cidrsubnet(local.vpc_cidr, 4, k)]
-	public_subnets  = [for k, v in local.azs : cidrsubnet(local.vpc_cidr, 8, k + 48)]
-	intra_subnets   = [for k, v in local.azs : cidrsubnet(local.vpc_cidr, 8, k + 52)]
+	public_subnets = [for k, v in local.azs : cidrsubnet(local.vpc_cidr, 8, k + 48)]
+	intra_subnets = [for k, v in local.azs : cidrsubnet(local.vpc_cidr, 8, k + 52)]
 
+	# Confugre one NAT gateway per AZ
+	#
+	# For a cheaper configuraiton, see "Single NAT Gateway":
+	# https://registry.terraform.io/modules/terraform-aws-modules/vpc/aws/latest#nat-gateway-scenarios
 	enable_nat_gateway = true
-	single_nat_gateway = true
+	single_nat_gateway = false
+	one_nat_gateway_per_az = true
 
 	public_subnet_tags = {
 		"kubernetes.io/role/elb" = 1
