@@ -18,3 +18,7 @@ output "intra_subnets" {
 	value = module.vpc.intra_subnets
 }
 
+output "nat_public_ips" {
+    value = toset(module.vpc.nat_public_ips)
+}
+

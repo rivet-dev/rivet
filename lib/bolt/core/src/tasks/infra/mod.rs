@@ -163,6 +163,28 @@ pub fn build_plan(ctx: &ProjectContext, start_at: Option<String>) -> Result<Vec<
 		},
 	});
 
+	// Redis
+	match ctx.ns().redis.provider {
+		ns::RedisProvider::Kubernetes {} => {
+			plan.push(PlanStep {
+				name_id: "redis-k8s",
+				kind: PlanStepKind::Terraform {
+					plan_id: "redis_k8s".into(),
+					needs_destroy: false,
+				},
+			});
+		}
+		ns::RedisProvider::Aws { .. } => {
+			plan.push(PlanStep {
+				name_id: "redis-aws",
+				kind: PlanStepKind::Terraform {
+					plan_id: "redis_aws".into(),
+					needs_destroy: true,
+				},
+			});
+		}
+	}
+
 	// CockroachDB
 	match ctx.ns().cockroachdb.provider {
 		ns::CockroachDBProvider::Kubernetes {} => {
@@ -185,22 +207,22 @@ pub fn build_plan(ctx: &ProjectContext, start_at: Option<String>) -> Result<Vec<
 		}
 	}
 
-	// Redis
-	match ctx.ns().redis.provider {
-		ns::RedisProvider::Kubernetes {} => {
+	// ClickHouse
+	match ctx.ns().clickhouse.provider {
+		ns::ClickHouseProvider::Kubernetes {} => {
 			plan.push(PlanStep {
-				name_id: "redis-k8s",
+				name_id: "clickhouse-k8s",
 				kind: PlanStepKind::Terraform {
-					plan_id: "redis_k8s".into(),
+					plan_id: "clickhouse_k8s".into(),
 					needs_destroy: false,
 				},
 			});
 		}
-		ns::RedisProvider::Aws { .. } => {
+		ns::ClickHouseProvider::Managed { .. } => {
 			plan.push(PlanStep {
-				name_id: "redis-aws",
+				name_id: "clickhouse-managed",
 				kind: PlanStepKind::Terraform {
-					plan_id: "redis_aws".into(),
+					plan_id: "clickhouse_managed".into(),
 					needs_destroy: true,
 				},
 			});

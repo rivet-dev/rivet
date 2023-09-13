@@ -126,11 +126,7 @@ pub enum RuntimeKind {
 	#[serde(rename = "clickhouse")]
 	ClickHouse {},
 	#[serde(rename = "redis")]
-	Redis {
-		// TODO: Validate index is unique
-		index: u16,
-		persistent: bool,
-	},
+	Redis { persistent: bool },
 	#[serde(rename = "s3")]
 	S3 { upload_policy: UploadPolicy },
 	#[serde(rename = "nats")]

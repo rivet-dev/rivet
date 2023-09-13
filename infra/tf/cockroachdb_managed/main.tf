@@ -10,7 +10,7 @@ terraform {
 module "secrets" {
 	source = "../modules/secrets"
 
-	keys = ["cockroachdb/api_key"]
+	keys = ["cockroachdb_cloud/api_key"]
 }
 
 resource "cockroach_cluster" "main" {
@@ -26,6 +26,16 @@ resource "cockroach_cluster" "main" {
 		# TODO: spend_limit
 		# TODO: uasge_limit
 	}
+}
+
+resource "cockroach_allow_list" "eks" {
+	for_each = data.terraform_remote_state.k8s_aws.outputs.nat_public_ips
+
+	cluster_id = cockroach_cluster.main.id
+	cidr_ip = each.value
+	cidr_mask = 32
+	sql = true
+	ui = false
 }
 
 # Generate password

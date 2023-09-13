@@ -22,27 +22,19 @@ pub fn dependency_graph(ctx: &ProjectContext) -> HashMap<&'static str, Vec<Remot
 		.build()
 		.unwrap();
 
-	// // K8S plan
-	// let k8s_plan_id = match ctx.ns().kubernetes.provider {
-	// 	ns::KubernetesProvider::K3d { .. } => "k8s_k3d",
-	// 	ns::KubernetesProvider::AwsEks { .. } => "k8s_aws",
-	// };
-	// let k8s = RemoteStateBuilder::default()
-	// 	.plan_id(k8s_plan_id)
-	// 	.data_name("k8s")
-	// 	.build()
-	// 	.unwrap();
-
 	hashmap! {
 		"dns" => vec![RemoteStateBuilder::default().plan_id("pools").build().unwrap(), RemoteStateBuilder::default().plan_id("k8s_infra").build().unwrap()],
 		"k8s_infra" => vec![
 			RemoteStateBuilder::default().plan_id("tls").build().unwrap(),
 			RemoteStateBuilder::default().plan_id("cloudflare_tunnels").build().unwrap()
 		],
+		"redis_aws" => vec![
+			RemoteStateBuilder::default().plan_id("k8s_aws").build().unwrap()
+		],
 		"cockroachdb_managed" => vec![
 			RemoteStateBuilder::default().plan_id("k8s_aws").build().unwrap()
 		],
-		"redis_aws" => vec![
+		"clickhouse_managed" => vec![
 			RemoteStateBuilder::default().plan_id("k8s_aws").build().unwrap()
 		],
 	}

@@ -19,6 +19,13 @@ output "cluster_ca_crt" {
 	}
 }
 
+output "username" {
+	value = {
+		for k, _ in var.redis_dbs:
+		k => "default"
+	}
+}
+
 output "password" {
 	value = {
 		for k, _ in var.redis_dbs:

@@ -3,7 +3,6 @@ name = "redis-mm"
 
 [runtime]
 kind = "redis"
-index = 4
 persistent = true
 
 [cache]
