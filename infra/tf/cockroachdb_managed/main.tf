@@ -28,6 +28,16 @@ resource "cockroach_cluster" "main" {
 	}
 }
 
+resource "cockroach_allow_list" "eks" {
+	for_each = data.terraform_remote_state.k8s_aws.outputs.nat_public_ips
+
+	cluster_id = cockroach_cluster.main.id
+	cidr_ip = each.value
+	cidr_mask = 32
+	sql = true
+	ui = false
+}
+
 # Generate password
 resource "random_password" "root_password" {
 	length = 32
