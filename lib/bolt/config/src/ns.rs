@@ -40,6 +40,8 @@ pub struct Namespace {
 	#[serde(default)]
 	pub cockroachdb: CockroachDB,
 	#[serde(default)]
+	pub clickhouse: ClickHouse,
+	#[serde(default)]
 	pub traefik: Traefik,
 	#[serde(default)]
 	pub rust: Rust,
@@ -429,6 +431,27 @@ pub enum CockroachDBProvider {
 }
 
 impl Default for CockroachDBProvider {
+	fn default() -> Self {
+		Self::Kubernetes {}
+	}
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, Default)]
+#[serde(deny_unknown_fields)]
+pub struct ClickHouse {
+	#[serde(flatten, default)]
+	pub provider: ClickHouseProvider,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub enum ClickHouseProvider {
+	#[serde(rename = "kubernetes")]
+	Kubernetes {},
+	#[serde(rename = "managed")]
+	Managed {},
+}
+
+impl Default for ClickHouseProvider {
 	fn default() -> Self {
 		Self::Kubernetes {}
 	}
