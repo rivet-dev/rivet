@@ -1,3 +1,3 @@
 provider "cockroach" {
-	apikey = module.secrets.values["cockroachdb/api_key"]
+	apikey = module.secrets.values["cockroachdb_coud/api_key"]
 }

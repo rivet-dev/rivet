@@ -10,7 +10,7 @@ terraform {
 module "secrets" {
 	source = "../modules/secrets"
 
-	keys = ["cockroachdb/api_key"]
+	keys = ["cockroachdb_cloud/api_key"]
 }
 
 resource "cockroach_cluster" "main" {
