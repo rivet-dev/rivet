@@ -8,7 +8,6 @@ pub mod infra;
 pub mod init;
 pub mod logs;
 pub mod output;
-pub mod salt;
 pub mod secret;
 pub mod ssh;
 pub mod terraform;

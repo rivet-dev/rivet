@@ -200,14 +200,6 @@ async fn vars(ctx: &ProjectContext) {
 	vars.insert("nebula_netmask_svc".into(), json!(net::nebula::NETMASK_SVC));
 	vars.insert("nebula_subnet_job".into(), json!(net::nebula::SUBNET_JOB));
 	vars.insert("nebula_netmask_job".into(), json!(net::nebula::NETMASK_JOB));
-	vars.insert(
-		"nebula_lighthouse_nebula_ip".into(),
-		json!(net::nebula::nebula_lighthouse_nebula_ip(&ctx)),
-	);
-	vars.insert(
-		"salt_master_nebula_ip".into(),
-		json!(net::nebula::salt_master_nebula_ip(&ctx)),
-	);
 
 	// Cloudflare
 	match &config.dns.provider {
