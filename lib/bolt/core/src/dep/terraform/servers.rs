@@ -12,16 +12,17 @@ use super::{net, pools::Pool, regions::Region};
 
 #[derive(Serialize, Clone)]
 pub struct Server {
-	region_id: String,
+	pub region_id: String,
 	pool_id: String,
 	version_id: String,
 	index: usize,
-	name: String,
+	pub name: String,
 	size: String,
 	netnum: usize,
-	vlan_ip: Ipv4Addr,
+	pub vlan_ip: Ipv4Addr,
 	volumes: HashMap<String, ServerVolume>,
 	tags: Vec<String>,
+	install_script: String,
 }
 
 #[derive(Serialize, Clone)]
@@ -79,7 +80,7 @@ pub fn build_servers(
 				.nth(i + 1)
 				.unwrap();
 
-			let server = Server {
+			let mut server = Server {
 				region_id: region_id.clone(),
 				pool_id: pool_id.clone(),
 				version_id: version_id.clone(),
@@ -87,6 +88,7 @@ pub fn build_servers(
 				name: name.clone(),
 				size: pool.size.clone(),
 				netnum: pool.netnum,
+				vlan_ip,
 				volumes,
 
 				// Tags that will be assigned to the servers.
@@ -99,8 +101,9 @@ pub fn build_servers(
 					format!("{ns}-{region_id}-{pool_id}-{version_id}"),
 				],
 
-				vlan_ip,
+				install_script: String::new(),
 			};
+			server.install_script = super::install_scripts::gen(&server)?;
 
 			servers.insert(name.to_string(), server);
 		}

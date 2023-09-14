@@ -79,7 +79,7 @@ pub async fn pool(ctx: &ProjectContext, pool: &str, command: Option<&str>) -> Re
 		.expect("failed to find server pool");
 
 	let ssh_key = TempSshKey::new(&ctx, "server").await?;
-	ip(ctx, server.public_ipv4, &ssh_key, command).await?;
+	ip(ctx, &server.public_ipv4, &ssh_key, command).await?;
 
 	Ok(())
 }

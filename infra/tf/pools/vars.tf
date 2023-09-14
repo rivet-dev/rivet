@@ -55,5 +55,6 @@ variable "servers" {
 			size = number
 		}))
 		tags = list(string)
+		install_script = string
 	}))
 }
