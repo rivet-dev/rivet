@@ -1,8 +1,6 @@
 ip_allow:
   - apply: in
     ip_addrs:
-      # Nebula
-      - 10.0.0.0/8
-      # Nomad, see https://developer.hashicorp.com/nomad/docs/networking/cni#nomad-s-bridge-configuration
-      - 172.26.64.0/20
+      # VLAN
+      - 10.0.0.0/16
     action: allow

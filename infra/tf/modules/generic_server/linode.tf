@@ -90,14 +90,14 @@ resource "linode_instance_config" "server_boot_config" {
 		}
 	}
 
-	interafce {
+	interface {
 		purpose = "public"
 	}
 
 	interface {
 		purpose = "vlan"
 		label = "vpc"
-		ipam_address = "${var.vpc.ip}/${var.region.netmask}"
+		ipam_address = "${var.vlan.ip}/${var.region.vlan.prefix_len}"
 	}
 }
 

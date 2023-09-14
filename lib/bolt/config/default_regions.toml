@@ -6,7 +6,6 @@ id = "54c60ee9-ae31-4a3f-b5ff-06aa5639310f"
 provider = "linode"
 provider_region = "us-southeast"
 netnum = 0
-supports_vlan = true
 
 [lnd-sfo]
 id = "19f1b737-0ff1-4676-a834-1af8c4e9890f"

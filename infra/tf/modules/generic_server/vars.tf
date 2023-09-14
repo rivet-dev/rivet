@@ -36,6 +36,12 @@ variable "backup" {
     default = false
 }
 
+variable "vlan" {
+    type = object({
+		ip = string
+	})
+}
+
 variable "volumes" {
     type = map(object({
 		size = number

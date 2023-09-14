@@ -450,10 +450,6 @@ impl ProjectContextData {
 	pub fn tf_path(&self) -> PathBuf {
 		self.path.join("infra").join("tf")
 	}
-
-	pub fn salt_path(&self) -> PathBuf {
-		self.path.join("infra").join("salt")
-	}
 }
 
 impl ProjectContextData {

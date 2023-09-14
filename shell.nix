@@ -32,7 +32,6 @@ in
 			awscli2
 
 			# Infrastructure
-			salt
 			consul
 			nomad
 			terraform

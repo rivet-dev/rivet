@@ -42,22 +42,6 @@ module "server" {
 			inbound_ipv4_cidr = ["0.0.0.0/0"]
 			inbound_ipv6_cidr = ["::/0"]
 		},
-
-		# TODO: Nebula IPv6 is theoretically supported (https://nebula.defined.net/docs/config/preferred-ranges/#how-nebula-orders-underlay-ip-addresses-it-learns-about), but seems to be problematic
-		{
-			label = "nebula-udp"
-			ports = "4242"
-			protocol = "udp"
-			inbound_ipv4_cidr = ["0.0.0.0/0"]
-			inbound_ipv6_cidr = []
-		},
-		{
-			label = "nebula-tcp"
-			ports = "4242"
-			protocol = "tcp"
-			inbound_ipv4_cidr = ["0.0.0.0/0"]
-			inbound_ipv6_cidr = []
-		},
 	]
 }
 

@@ -61,7 +61,7 @@ pub async fn name(ctx: &ProjectContext, name: &str, command: Option<&str>) -> Re
 		.context("failed to find server with name")?;
 
 	// TODO: Choose correct SSH key
-	let ssh_key = TempSshKey::new(&ctx, "salt_minion").await?;
+	let ssh_key = TempSshKey::new(&ctx, "server").await?;
 	ip(ctx, &server.public_ipv4, &ssh_key, command).await?;
 
 	Ok(())
@@ -78,11 +78,8 @@ pub async fn pool(ctx: &ProjectContext, pool: &str, command: Option<&str>) -> Re
 		.find(|x| x.pool_id == pool)
 		.expect("failed to find server pool");
 
-	let key_name = "salt_minion";
-	let server_ip = server.public_ipv4;
-
-	let ssh_key = TempSshKey::new(&ctx, key_name).await?;
-	ip(ctx, &server_ip, &ssh_key, command).await?;
+	let ssh_key = TempSshKey::new(&ctx, "server").await?;
+	ip(ctx, server.public_ipv4, &ssh_key, command).await?;
 
 	Ok(())
 }

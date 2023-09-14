@@ -19,12 +19,9 @@ pub struct Server {
 	name: String,
 	size: String,
 	netnum: usize,
-	volumes: HashMap<String, ServerVolume>,
-
-	// Tags that will be assgned to the servers.
-	tags: Vec<String>,
-
 	vlan_ip: Ipv4Addr,
+	volumes: HashMap<String, ServerVolume>,
+	tags: Vec<String>,
 }
 
 #[derive(Serialize, Clone)]

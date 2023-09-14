@@ -40,11 +40,9 @@ impl SubCommand {
 				command,
 				ssh_key,
 			} => {
-				let ssh_key = TempSshKey::new(
-					&ctx,
-					&ssh_key.map_or_else(|| "salt_minion".to_string(), |x| x),
-				)
-				.await?;
+				let ssh_key =
+					TempSshKey::new(&ctx, &ssh_key.map_or_else(|| "server".to_string(), |x| x))
+						.await?;
 				bolt_core::tasks::ssh::ip(
 					&ctx,
 					&ip,

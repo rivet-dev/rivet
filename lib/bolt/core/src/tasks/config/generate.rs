@@ -352,7 +352,7 @@ pub async fn generate(project_path: &Path, ns_id: &str) -> Result<()> {
 
 	// MARK: SSH
 	generator
-		.generate_secret(&["ssh", "salt_minion", "private_key_openssh"], || async {
+		.generate_secret(&["ssh", "server", "private_key_openssh"], || async {
 			let key = generate_private_key_openssh().await?;
 			Ok(value(key))
 		})

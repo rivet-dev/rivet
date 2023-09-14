@@ -4,7 +4,7 @@ module "servers" {
 	for_each = var.servers
 
 	namespace = var.namespace
-	private_key_openssh = module.secrets.values["ssh/salt_minion/private_key_openssh"]
+	private_key_openssh = module.secrets.values["ssh/server/private_key_openssh"]
 
 	region = var.regions[each.value.region_id]
 	size = each.value.size
