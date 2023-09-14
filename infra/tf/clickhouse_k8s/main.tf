@@ -38,11 +38,11 @@ resource "helm_release" "clickhouse" {
 }
 
 data "kubernetes_config_map" "root_ca" {
-	depends_on = [helm_release.cockroachdb]
+	depends_on = [helm_release.clickhouse]
 
 	metadata {
 		name = "kube-root-ca.crt"
-		namespace = kubernetes_namespace.cockroachdb.metadata.0.name
+		namespace = kubernetes_namespace.clickhouse.metadata.0.name
 	}
 }
 
