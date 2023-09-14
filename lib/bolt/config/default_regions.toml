@@ -6,7 +6,6 @@ id = "54c60ee9-ae31-4a3f-b5ff-06aa5639310f"
 provider = "linode"
 provider_region = "us-southeast"
 netnum = 0
-preferred_subnets = ["192.168.128.0/17"]
 supports_vlan = true
 
 [lnd-sfo]
@@ -14,74 +13,64 @@ id = "19f1b737-0ff1-4676-a834-1af8c4e9890f"
 provider = "linode"
 provider_region = "us-west"
 netnum = 1
-preferred_subnets = ["192.168.128.0/17"]
 
 [lnd-fra]
 id = "37aeb24a-12f6-45ea-ba7e-d2589588d7db"
 provider = "linode"
 provider_region = "eu-central"
 netnum = 2
-preferred_subnets = ["192.168.128.0/17"]
 
 [lnd-syd]
 id = "6041893e-7a35-4ab7-a31d-9fd4d6f9dee2"
 provider = "linode"
 provider_region = "ap-southeast"
 netnum = 3
-preferred_subnets = ["192.168.128.0/17"]
 
 [lnd-tok]
 id = "1f34955f-c0a5-472f-b1c6-1912698141eb"
 provider = "linode"
 provider_region = "ap-northeast"
 netnum = 4
-preferred_subnets = ["192.168.128.0/17"]
 
 [lnd-mba]
 id = "a699aff0-9d2d-4cad-bef4-b929a78d430e"
 provider = "linode"
 provider_region = "ap-west"
 netnum = 5
-preferred_subnets = ["192.168.128.0/17"]
 
 [lnd-tor]
 id = "33eaba37-0f06-4dc0-959a-2267481e63df"
 provider = "linode"
 provider_region = "ca-central"
 netnum = 6
-preferred_subnets = ["192.168.128.0/17"]
 
 [lnd-dca]
 id = "732757b5-51dd-464f-a673-6ae40502c832"
 provider = "linode"
 provider_region = "us-iad"
 netnum = 7
-preferred_subnets = ["192.168.128.0/17"]
 
 [lnd-dfw]
 id = "06e30e05-cd47-4cc7-adeb-8cb4a1a189b7"
 provider = "linode"
 provider_region = "us-central"
 netnum = 8
-preferred_subnets = ["192.168.128.0/17"]
 
 [lnd-ewr]
 id = "ed6dac28-c16d-4c03-8daa-98adfbae4758"
 provider = "linode"
 provider_region = "us-east"
 netnum = 9
-preferred_subnets = ["192.168.128.0/17"]
 
 [lnd-lon]
 id = "161e738d-f7ed-4d43-af64-7731e39835ef"
 provider = "linode"
 provider_region = "eu-west"
 netnum = 10
-preferred_subnets = ["192.168.128.0/17"]
 
 [lnd-sgp]
 id = "4baddf3d-3a70-4139-aed7-21e06a74b9f4"
 provider = "linode"
 provider_region = "ap-south"
 netnum = 11
-preferred_subnets = ["192.168.128.0/17"]
+

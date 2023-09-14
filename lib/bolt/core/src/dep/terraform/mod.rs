@@ -1,6 +1,5 @@
 pub mod cli;
 pub mod gen;
-pub mod nebula_firewall_rules;
 pub mod net;
 pub mod output;
 pub mod pools;

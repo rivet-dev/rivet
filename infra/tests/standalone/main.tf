@@ -20,7 +20,6 @@ module "server" {
 		provider = "linode"
 		provider_region = "us-southeast"
 		netnum = 0
-		supports_vlan = false
 	}
 
 	size = "g6-standard-4"

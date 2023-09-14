@@ -68,32 +68,18 @@ pub async fn name(ctx: &ProjectContext, name: &str, command: Option<&str>) -> Re
 }
 
 pub async fn pool(ctx: &ProjectContext, pool: &str, command: Option<&str>) -> Result<()> {
-	let (key_name, server_ip) = match pool {
-		"salt_master" => {
-			let tf_master_cluster = terraform::output::read_master_cluster(&ctx).await;
-			("salt_master", tf_master_cluster.salt_master_host.value)
-		}
-		"nebula_lighthouse" => {
-			let tf_master_cluster = terraform::output::read_master_cluster(&ctx).await;
-			(
-				"nebula_lighthouse",
-				tf_master_cluster.nebula_lighthouse_host.value,
-			)
-		}
-		_ => {
-			// Choose IP
-			let tf_pools = terraform::output::read_pools(&ctx).await;
-			let server = tf_pools
-				.servers
-				.value
-				.into_iter()
-				.map(|x| x.1)
-				.find(|x| x.pool_id == pool)
-				.expect("failed to find server pool");
+	// Choose IP
+	let tf_pools = terraform::output::read_pools(&ctx).await;
+	let server = tf_pools
+		.servers
+		.value
+		.into_iter()
+		.map(|x| x.1)
+		.find(|x| x.pool_id == pool)
+		.expect("failed to find server pool");
 
-			("salt_minion", server.public_ipv4)
-		}
-	};
+	let key_name = "salt_minion";
+	let server_ip = server.public_ipv4;
 
 	let ssh_key = TempSshKey::new(&ctx, key_name).await?;
 	ip(ctx, &server_ip, &ssh_key, command).await?;

@@ -33,9 +33,10 @@ variable "regions" {
 		id = string
 		provider = string
 		provider_region = string
-		netnum = number
-		supports_vlan = bool
-		preferred_subnets = list(string)
+		vlan = object({
+			address = string
+			prefix_len = number
+		})
 	}))
 }
 
@@ -43,7 +44,6 @@ variable "regions" {
 variable "pools" {
 	type = map(object({
 		roles = list(string)
-		vpc = bool
 		tunnels = map(object({
 			name = string
 			service = string
@@ -76,6 +76,9 @@ variable "servers" {
 		name = string
 		size = string
 		netnum = number
+		vlan = object({
+			ip = string
+		})
 		volumes = map(object({
 			size = number
 		}))

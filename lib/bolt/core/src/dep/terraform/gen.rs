@@ -147,15 +147,10 @@ async fn vars(ctx: &ProjectContext) {
 	vars.insert("namespace".into(), json!(ns));
 
 	match &config.cluster.kind {
-		ns::ClusterKind::SingleNode {
-			public_ip,
-			preferred_subnets,
-			..
-		} => {
+		ns::ClusterKind::SingleNode { public_ip, .. } => {
 			vars.insert("deploy_method_local".into(), json!(true));
 			vars.insert("deploy_method_cluster".into(), json!(false));
 			vars.insert("public_ip".into(), json!(public_ip));
-			vars.insert("local_preferred_subnets".into(), json!(preferred_subnets));
 		}
 		ns::ClusterKind::Distributed {} => {
 			vars.insert("deploy_method_local".into(), json!(false));
@@ -188,18 +183,6 @@ async fn vars(ctx: &ProjectContext) {
 	vars.insert("domain_main".into(), json!(ctx.domain_main()));
 	vars.insert("domain_cdn".into(), json!(ctx.domain_cdn()));
 	vars.insert("domain_job".into(), json!(ctx.domain_job()));
-
-	// Net
-	vars.insert("svc_region_netmask".into(), json!(net::svc::REGION_NETMASK));
-	vars.insert("svc_pool_netmask".into(), json!(net::svc::POOL_NETMASK));
-	vars.insert("vpc_subnet".into(), json!(net::vpc::SUBNET));
-	vars.insert("vpc_netmask".into(), json!(net::vpc::NETMASK));
-	vars.insert("nebula_subnet".into(), json!(net::nebula::SUBNET));
-	vars.insert("nebula_netmask".into(), json!(net::nebula::NETMASK));
-	vars.insert("nebula_subnet_svc".into(), json!(net::nebula::SUBNET_SVC));
-	vars.insert("nebula_netmask_svc".into(), json!(net::nebula::NETMASK_SVC));
-	vars.insert("nebula_subnet_job".into(), json!(net::nebula::SUBNET_JOB));
-	vars.insert("nebula_netmask_job".into(), json!(net::nebula::NETMASK_JOB));
 
 	// Cloudflare
 	match &config.dns.provider {

@@ -24,17 +24,7 @@ pub struct Server {
 	// Tags that will be assgned to the servers.
 	tags: Vec<String>,
 
-	/// IP addresses inside the VPC for all servers that belong to the VPC.
-	///
-	/// We add one to the hostnum in order to prevent trying to allocate the
-	/// network address.
-	vpc_ip: Option<Ipv4Addr>,
-
-	/// IP addresses inside the Nebula network.
-	///
-	/// We add one to the hostnum in order to prevent trying to allocate the
-	/// network address.
-	nebula_ip: Ipv4Addr,
+	vlan_ip: Ipv4Addr,
 }
 
 #[derive(Serialize, Clone)]
@@ -86,6 +76,12 @@ pub fn build_servers(
 				.map(|(id, volume)| (id.clone(), ServerVolume { size: volume.size }))
 				.collect::<HashMap<_, _>>();
 
+			let vlan_ip = Ipv4Net::new(pool_config.vlan_address, pool_config.vlan_prefix_len)?
+				.hosts()
+				// Add 1 so we don't interfere with the net address
+				.nth(i + 1)
+				.unwrap();
+
 			let server = Server {
 				region_id: region_id.clone(),
 				pool_id: pool_id.clone(),
@@ -106,24 +102,7 @@ pub fn build_servers(
 					format!("{ns}-{region_id}-{pool_id}-{version_id}"),
 				],
 
-				/// cidrhost(local.vpc_region_subnets[server.region_id], server.netnum * pow(2, 32 - local.svc_pool_netmask) + server.index + 1)
-				vpc_ip: if let (true, Some(vpc_subnet)) = (pool_config.vpc, &region.vpc_subnet) {
-					let n = pool.netnum * 2usize.pow(32 - net::svc::POOL_NETMASK as u32) + i + 1;
-					let ip = vpc_subnet.hosts().nth(n).unwrap();
-
-					Some(ip)
-				} else {
-					None
-				},
-
-				// cidrhost("${local.nebula_subnet}/${local.nebula_netmask}", var.regions[server.region_id].netnum * pow(2, 32 - local.svc_region_netmask) + server.netnum * pow(2, 32 - local.svc_pool_netmask) + server.index + 1)
-				nebula_ip: {
-					let subnet = Ipv4Net::new(net::nebula::SUBNET, net::nebula::NETMASK)?;
-					let n = region.netnum * 2usize.pow(32 - net::svc::REGION_NETMASK as u32)
-						+ pool.netnum * 2usize.pow(32 - net::svc::POOL_NETMASK as u32)
-						+ i + 1;
-					subnet.hosts().nth(n).unwrap()
-				},
+				vlan_ip,
 			};
 
 			servers.insert(name.to_string(), server);
