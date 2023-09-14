@@ -30,7 +30,7 @@ locals {
 			}
 		EOT
 	}
-	server_configmap_hash = sha256(jsonencode(local.server_configmap_data))
+	checksum_configmap = sha256(jsonencode(local.server_configmap_data))
 }
 
 resource "kubernetes_namespace" "nomad" {
@@ -43,7 +43,7 @@ resource "kubernetes_namespace" "nomad" {
 resource "kubernetes_config_map" "nomad_server" {
 	metadata {
 		namespace = kubernetes_namespace.nomad.metadata.0.name
-		name = "nomad-server-configmap-${local.server_configmap_hash}"
+		name = "nomad-server-configmap-${local.checksum_configmap}"
 		labels = {
 			app = "nomad-server"
 		}
@@ -104,7 +104,7 @@ resource "kubernetes_stateful_set" "nomad_server" {
 				}
 				annotations = {
 					# Trigger a rolling update on config chagne
-					"configmap-version" = local.server_configmap_hash
+					"checksum/configmap" = local.checksum_configmap
 				}
 			}
 

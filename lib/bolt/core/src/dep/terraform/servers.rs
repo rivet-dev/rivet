@@ -13,16 +13,16 @@ use super::{net, pools::Pool, regions::Region};
 #[derive(Serialize, Clone)]
 pub struct Server {
 	pub region_id: String,
-	pool_id: String,
-	version_id: String,
-	index: usize,
+	pub pool_id: String,
+	pub version_id: String,
+	pub index: usize,
 	pub name: String,
-	size: String,
-	netnum: usize,
+	pub size: String,
+	pub netnum: usize,
 	pub vlan_ip: Ipv4Addr,
-	volumes: HashMap<String, ServerVolume>,
-	tags: Vec<String>,
-	install_script: String,
+	pub volumes: HashMap<String, ServerVolume>,
+	pub tags: Vec<String>,
+	pub install_script: String,
 }
 
 #[derive(Serialize, Clone)]

@@ -39,8 +39,8 @@ locals {
 		})
 	}
 
-	traffic_server_configmap_hash = sha256(jsonencode(local.traffic_server_configmap_data))
-	traffic_server_s3_auth_hash = sha256(jsonencode(local.traffic_server_s3_auth_data))
+	checksum_traffic_server_configmap = sha256(jsonencode(local.traffic_server_configmap_data))
+	checksum_traffic_server_s3_auth = sha256(jsonencode(local.traffic_server_s3_auth_data))
 }
 
 module "traffic_server_s3_secrets" {
@@ -128,8 +128,8 @@ resource "kubernetes_stateful_set" "traffic_server" {
 				}
 				annotations = {
 					# Trigger a rolling update on config chagne
-					"configmap-version" = local.traffic_server_configmap_hash
-					"s3-auth-version" = local.traffic_server_s3_auth_hash
+					"checksum/configmap" = local.checksum_traffic_server_configmap
+					"checksum/s3-auth" = local.checksum_traffic_server_s3_auth
 				}
 			}
 

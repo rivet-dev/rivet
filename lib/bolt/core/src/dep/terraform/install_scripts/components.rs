@@ -40,3 +40,9 @@ pub fn nomad(server: &Server) -> String {
 				.join(", "),
 		)
 }
+
+pub fn traefik() -> String {
+	include_str!("files/traefik.sh").to_string()
+}
+
+// pub fn traefik_instance(name: &str, static_config: &str, dynamic_config: &str) -> String {}
