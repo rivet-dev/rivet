@@ -1,4 +1,7 @@
-use crate::dep::terraform::servers::Server;
+use indoc::formatdoc;
+use std::collections::HashMap;
+
+use crate::dep::terraform::{output::Cert, servers::Server};
 
 pub fn common() -> String {
 	vec![
@@ -41,8 +44,45 @@ pub fn nomad(server: &Server) -> String {
 		)
 }
 
+/// Installs Treafik, but does not create the Traefik service.
 pub fn traefik() -> String {
 	include_str!("files/traefik.sh").to_string()
 }
 
-// pub fn traefik_instance(name: &str, static_config: &str, dynamic_config: &str) -> String {}
+pub struct TraefikInstance {
+	pub name: String,
+	pub static_config: String,
+	pub dynamic_config: String,
+	pub tls_certs: HashMap<String, Cert>,
+}
+
+/// Creates a Traefik instance.
+///
+/// Requires `traefik()`.
+pub fn traefik_instance(config: TraefikInstance) -> String {
+	let mut script = include_str!("files/traefik_instance.sh")
+		.replace("__NAME__", &config.name)
+		.replace("__STATIC_CONFIG__", &config.static_config)
+		.replace("__DYNAMIC_CONFIG__", &config.dynamic_config);
+
+	// Add TLS certs
+	for (cert_id, cert) in config.tls_certs {
+		script.push_str(&formatdoc!(
+			"
+
+			cat << 'EOF' > /etc/{name}/tls/{cert_id}_cert.pem
+			{cert}
+			EOF
+
+			cat << 'EOF' > /etc/{name}/tls/{cert_id}_key.pem
+			{key}
+			EOF
+			",
+			name = config.name,
+			cert = cert.cert_pem,
+			key = cert.key_pem,
+		));
+	}
+
+	script
+}

@@ -214,6 +214,18 @@ async fn vars(ctx: &ProjectContext) {
 	let servers = super::servers::build_servers(&ctx, &regions, &pools).unwrap();
 	vars.insert("servers".into(), json!(servers));
 
+	let mut server_install_scripts = HashMap::new();
+	for (k, v) in &servers {
+		server_install_scripts.insert(
+			k.clone(),
+			super::install_scripts::gen(ctx, v).await.unwrap(),
+		);
+	}
+	vars.insert(
+		"server_install_scripts".into(),
+		json!(server_install_scripts),
+	);
+
 	// Services
 	{
 		let mut services = HashMap::new();

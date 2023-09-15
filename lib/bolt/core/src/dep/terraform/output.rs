@@ -42,13 +42,14 @@ pub struct Cert {
 #[derive(Debug, Clone, Deserialize)]
 pub struct Tls {
 	pub tls_cert_cloudflare_rivet_gg: TerraformOutputValue<Cert>,
+	pub tls_cert_letsencrypt_rivet_job: TerraformOutputValue<Cert>,
 }
 
 pub async fn read_pools(ctx: &ProjectContext) -> Pools {
 	read_plan::<Pools>(ctx, "pools").await
 }
 
-pub async fn read_tls_cert(ctx: &ProjectContext) -> Tls {
+pub async fn read_tls(ctx: &ProjectContext) -> Tls {
 	read_plan::<Tls>(ctx, "tls").await
 }
 

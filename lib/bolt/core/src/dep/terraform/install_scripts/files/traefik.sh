@@ -1,7 +1,7 @@
 version="2.10.4"
 
 # Create traefik user
-if ! id -u "node_exporter" &>/dev/null; then
+if ! id -u "traefik" &>/dev/null; then
 	useradd -r -s /bin/false traefik
 fi
 

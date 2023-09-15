@@ -55,6 +55,11 @@ variable "servers" {
 			size = number
 		}))
 		tags = list(string)
-		install_script = string
 	}))
 }
+
+variable "server_install_scripts" {
+	type = map(string)
+	sensitive = true
+}
+

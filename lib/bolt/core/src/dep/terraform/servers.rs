@@ -22,7 +22,6 @@ pub struct Server {
 	pub vlan_ip: Ipv4Addr,
 	pub volumes: HashMap<String, ServerVolume>,
 	pub tags: Vec<String>,
-	pub install_script: String,
 }
 
 #[derive(Serialize, Clone)]
@@ -100,10 +99,7 @@ pub fn build_servers(
 					format!("{ns}-{region_id}-{pool_id}"),
 					format!("{ns}-{region_id}-{pool_id}-{version_id}"),
 				],
-
-				install_script: String::new(),
 			};
-			server.install_script = super::install_scripts::gen(&server)?;
 
 			servers.insert(name.to_string(), server);
 		}

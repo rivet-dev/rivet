@@ -1,8 +1,8 @@
 resource "null_resource" "install" {
-	for_each = var.servers
+	for_each = nonsensitive(var.server_install_scripts)
 
 	triggers = {
-		install_script = md5(each.value.install_script)
+		install_script = md5(each.value)
 	}
 
 	connection {
@@ -14,7 +14,7 @@ resource "null_resource" "install" {
 
 	provisioner "remote-exec" {
 		inline = [
-			each.value.install_script
+			each.value
 		]
 	}
 }
