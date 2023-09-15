@@ -68,7 +68,7 @@ pub fn traefik_instance(config: TraefikInstance) -> String {
 	// Add TLS certs
 	for (cert_id, cert) in config.tls_certs {
 		script.push_str(&formatdoc!(
-			"
+			r#"
 
 			cat << 'EOF' > /etc/{name}/tls/{cert_id}_cert.pem
 			{cert}
@@ -77,7 +77,13 @@ pub fn traefik_instance(config: TraefikInstance) -> String {
 			cat << 'EOF' > /etc/{name}/tls/{cert_id}_key.pem
 			{key}
 			EOF
-			",
+
+			cat << 'EOF' > /etc/{name}/dynamic/tls/{cert_id}.toml
+			[[tls.certificates]]
+				certFile = "/etc/{name}/tls/{cert_id}_cert.pem"
+				keyFile = "/etc/{name}/tls/{cert_id}_key.pem"
+			EOF
+			"#,
 			name = config.name,
 			cert = cert.cert_pem,
 			key = cert.key_pem,

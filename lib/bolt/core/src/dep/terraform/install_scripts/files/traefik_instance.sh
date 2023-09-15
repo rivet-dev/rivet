@@ -1,11 +1,13 @@
-if ! id -u "__USER__" &>/dev/null; then
-	useradd -r -s /bin/false __USER__
+if ! id -u "__NAME__" &>/dev/null; then
+	useradd -r -s /bin/false __NAME__
 fi
 
-for x in /etc/__NAME__ /etc/__NAME__/dynamic /etc/__NAME__/tls /opt/__NAME__; do
+# taint
+
+for x in /etc/__NAME__ /etc/__NAME__/dynamic /etc/__NAME__/dynamic/tls /etc/__NAME__/tls /opt/__NAME__; do
 	mkdir -p $x
 	chmod 550 $x
-	chown -R __USER__:__USER__ $x
+	chown -R __NAME__:__NAME__ $x
 done
 
 # Static config
