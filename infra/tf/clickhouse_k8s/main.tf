@@ -37,12 +37,12 @@ resource "helm_release" "clickhouse" {
 	})]
 }
 
-data "kubernetes_config_map" "root_ca" {
-	depends_on = [helm_release.cockroachdb]
+# data "kubernetes_config_map" "clickhouse_ca" {
+# 	depends_on = [helm_release.cockroachdb]
 
-	metadata {
-		name = "kube-root-ca.crt"
-		namespace = kubernetes_namespace.cockroachdb.metadata.0.name
-	}
-}
+# 	metadata {
+# 		name = "clickhouse-crt"
+# 		namespace = kubernetes_namespace.cockroachdb.metadata.0.name
+# 	}
+# }
 

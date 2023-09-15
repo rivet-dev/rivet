@@ -72,14 +72,12 @@ resource "kubernetes_config_map" "health_checks" {
 			#!/bin/sh
 			set -uf
 
+			# Log to file
+			exec >> "/var/log/health-checks.txt" 2>&1
+
 			# Install curl
-			if ! [ -x "$(command -v curl)" ]; then
-				if ! [ -x "$(command -v apk)" ]; then
-					apt-get install -y curl
-				else
-					apk add --no-cache curl
-				fi
-			fi
+			apt-get update -y
+			apt-get install -y curl
 
 			curl 127.0.0.1:${var.k8s_health_port}/health/liveness
 			EXIT_STATUS=$?
@@ -121,6 +119,30 @@ resource "kubernetes_config_map" "health_checks" {
 
 			echo Ok
 			echo
+			EOF
+	}
+}
+
+resource "kubernetes_config_map" "install_ca" {
+	metadata {
+		name = "install-ca"
+		namespace = kubernetes_namespace.rivet_service.metadata.0.name
+	}
+
+	data = {
+		"install-ca.sh" = <<-EOF
+			set -euf
+
+			# Log to file
+			exec >> "/var/log/install-ca.txt" 2>&1
+
+			# Prevent apt from using the OpenSSL installation from /nix/store if mounted
+			export LD_LIBRARY_PATH=/lib:/usr/lib:/usr/local/lib
+			export DEBIAN_FRONTEND=noninteractive
+
+			apt-get update -y
+			apt-get install -y --no-install-recommends ca-certificates
+			update-ca-certificates
 			EOF
 	}
 }

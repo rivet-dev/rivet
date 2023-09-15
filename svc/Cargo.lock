@@ -9011,6 +9011,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "user-my-test"
+version = "0.0.1"
+dependencies = [
+ "chirp-client",
+ "chirp-worker",
+ "rivet-operation",
+ "sqlx",
+]
+
+[[package]]
 name = "user-notification-auth-register"
 version = "0.0.1"
 dependencies = [

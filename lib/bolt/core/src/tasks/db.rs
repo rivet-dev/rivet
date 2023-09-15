@@ -36,14 +36,28 @@ pub async fn shell(ctx: &ProjectContext, svc: &ServiceContext, query: Option<&st
 							port,
 							"--user",
 							username,
-							"--password",
-							password
+							"--tls",
+							"--cacert",
+							format!("/tmp/{}-ca.crt", svc.name()),
 						)
+						.env("REDISCLI_AUTH", password)
 						.run()
 					})?;
 				} else {
 					block_in_place(|| {
-						cmd!("redis-cli", "-h", hostname, "-p", port, "--user", username).run()
+						cmd!(
+							"redis-cli",
+							"-h",
+							hostname,
+							"-p",
+							port,
+							"--user",
+							username,
+							"--tls",
+							"--cacert",
+							format!("/tmp/{}-ca.crt", svc.name()),
+						)
+						.run()
 					})?;
 				}
 			}
@@ -51,19 +65,24 @@ pub async fn shell(ctx: &ProjectContext, svc: &ServiceContext, query: Option<&st
 		RuntimeKind::CRDB { .. } => {
 			let db_name = svc.crdb_db_name();
 			let host = conn.cockroach_host.as_ref().unwrap();
-			let (hostname, port) = host.split_once(":").unwrap();
+			let username = ctx.read_secret(&["crdb", "username"]).await?;
+			let password = ctx.read_secret(&["crdb", "password"]).await?;
+			let conn = format!(
+				"postgres://{}:{}@{}/{}?sslmode=verify-ca&sslrootcert=/tmp/crdb-ca.crt",
+				username, password, host, db_name
+			);
 
 			rivet_term::status::progress("Connecting to Cockroach", &db_name);
 			if let Some(query) = query {
 				block_in_place(|| {
-					cmd!("psql", "-h", hostname, "-p", port, "-U", "root", db_name, "-c", query,)
+					cmd!("psql", conn, "-c", query)
 						// See https://github.com/cockroachdb/cockroach/issues/37129#issuecomment-600115995
 						.env("PGCLIENTENCODING", "utf-8")
 						.run()
 				})?;
 			} else {
 				block_in_place(|| {
-					cmd!("psql", "-h", hostname, "-p", port, "-U", "root", db_name)
+					cmd!("psql", conn)
 						// See https://github.com/cockroachdb/cockroach/issues/37129#issuecomment-600115995
 						.env("PGCLIENTENCODING", "utf-8")
 						.run()

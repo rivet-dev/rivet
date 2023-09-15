@@ -1,3 +1,27 @@
+locals {
+	redis_svcs = {
+		for k, v in var.redis_dbs:
+		k => {
+			endpoint = v.endpoint
+			username = module.redis_secrets.values["redis/${k}/username"]
+			password = module.redis_secrets.values["redis/${k}/password"]
+		}
+	}
+}
+
+module "redis_secrets" {
+	source = "../modules/secrets"
+
+	keys = flatten([
+		for k, v in var.redis_dbs:
+		[
+			"redis/${k}/username",
+			"redis/${k}/password",
+		]
+	])
+	optional = true
+}
+
 # TODO:
 resource "kubernetes_namespace" "redis" {
 	for_each = var.redis_dbs
@@ -7,15 +31,8 @@ resource "kubernetes_namespace" "redis" {
 	}
 }
 
-resource "random_password" "password" {
-	for_each = var.redis_dbs
-
-	length = 32
-	special = false
-}
-
 resource "helm_release" "redis" {
-	for_each = var.redis_dbs
+	for_each = local.redis_svcs
 
 	name = "redis"
 	namespace = kubernetes_namespace.redis[each.key].metadata.0.name
@@ -26,7 +43,7 @@ resource "helm_release" "redis" {
 		global = {
 			storageClass = var.k8s_storage_class
 			redis = {
-				password = random_password.password[each.key].result
+				password = each.value.password
 			}
 		}
 		replica = {

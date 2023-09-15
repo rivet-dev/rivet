@@ -19,19 +19,3 @@ output "ca_crt" {
 	}
 	sensitive = true
 }
-
-output "username" {
-	value = {
-		for k, _ in var.redis_dbs:
-		k => "default"
-	}
-}
-
-output "password" {
-	value = {
-		for k, _ in var.redis_dbs:
-		k => random_password.password[k].result
-	}
-	sensitive = true
-}
-

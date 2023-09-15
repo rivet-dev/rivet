@@ -259,18 +259,18 @@ pub async fn up(ctx: &ProjectContext, services: &[ServiceContext]) -> Result<()>
 
 				let host = conn.cockroach_host.as_ref().unwrap();
 				let (hostname, port) = host.split_once(":").unwrap();
+				let username = ctx.read_secret(&["crdb", "username"]).await?;
+				let password = ctx.read_secret(&["crdb", "password"]).await?;
+				let conn = format!(
+					"postgres://{}:{}@{}/{}?sslmode=verify-ca&sslrootcert=/tmp/crdb-ca.crt",
+					username, password, host, db_name
+				);
 
 				rivet_term::status::progress("Creating database", &db_name);
 				block_in_place(|| {
 					cmd!(
 						"psql",
-						"-h",
-						hostname,
-						"-p",
-						port,
-						"-U",
-						"root",
-						"postgres",
+						conn,
 						"-c",
 						format!("CREATE DATABASE IF NOT EXISTS \"{db_name}\";"),
 					)

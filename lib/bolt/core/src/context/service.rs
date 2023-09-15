@@ -1026,11 +1026,14 @@ impl ServiceContextData {
 		// CRDB
 		let crdb_host = "cockroachdb.cockroachdb.svc.cluster.local:26257";
 		for crdb_dep in self.crdb_dependencies(run_context).await {
-			let username = "root"; // TODO:
+			let username = project_ctx.read_secret(&["crdb", "username"]).await?;
+			let password = project_ctx.read_secret(&["crdb", "password"]).await?;
+			let sslmode = "verify-ca";
 
 			let uri = format!(
-				"postgres://{}@{crdb_host}/{db_name}",
+				"postgres://{}:{}@{crdb_host}/{db_name}?sslmode={sslmode}",
 				username,
+				password,
 				db_name = crdb_dep.crdb_db_name(),
 			);
 			env.push((format!("CRDB_URL_{}", crdb_dep.name_screaming_snake()), uri));
@@ -1052,9 +1055,11 @@ impl ServiceContextData {
 				.read_secret_opt(&["redis", &db_name, "password"])
 				.await?;
 			let url = if let Some(password) = password {
-				format!("rediss://{}:{}@{host}#insecure", username, password)
+				// format!("rediss://{}:{}@{host}#insecure", username, password)
+				format!("rediss://{}:{}@{host}", username, password)
 			} else {
-				format!("rediss://{}@{host}#insecure", username)
+				// format!("rediss://{}@{host}#insecure", username)
+				format!("rediss://{}@{host}", username)
 			};
 
 			env.push((

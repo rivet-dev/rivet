@@ -442,7 +442,22 @@ pub async fn generate(project_path: &Path, ns_id: &str) -> Result<()> {
 				Ok(value("default"))
 			})
 			.await?;
+		generator
+			.generate_secret(&["redis", &svc.redis_db_name(), "password"], || async {
+				Ok(value(generate_password(32)))
+			})
+			.await?;
 	}
+
+	// MARK: CRDB
+	generator
+		.generate_secret(&["crdb", "username"], || async { Ok(value("rivet_root")) })
+		.await?;
+	generator
+		.generate_secret(&["crdb", "password"], || async {
+			Ok(value(generate_password(32)))
+		})
+		.await?;
 
 	// Write configs again with new secrets
 	generator.write().await?;
