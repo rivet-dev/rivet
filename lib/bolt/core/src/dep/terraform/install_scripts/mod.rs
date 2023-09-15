@@ -34,9 +34,10 @@ pub async fn gen(ctx: &ProjectContext, server: &Server) -> Result<String> {
 		script.push(components::nomad(server));
 	}
 
-	// if server.pool_id == "ats" {
-	// 	// script.push(components::ats());
-	// }
+	if server.pool_id == "ats" {
+		script.push(components::docker());
+		script.push(components::traffic_server(ctx).await?);
+	}
 
 	let joined = script.join("\n\necho \"======\"\n\n");
 	Ok(format!("#!/usr/bin/env bash\nset -eu\n\n{joined}"))

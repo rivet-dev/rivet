@@ -153,7 +153,13 @@ pub async fn build_pools(ctx: &ProjectContext) -> Result<HashMap<String, Pool>> 
 			.build()?,
 	);
 
-	// TODO: ATS
+	pools.insert(
+		"ats".into(),
+		PoolBuilder::default()
+			.vlan_address(net::ats::VLAN_ADDR)
+			.vlan_prefix_len(net::ats::VLAN_PREFIX_LEN)
+			.build()?,
+	);
 
 	Ok(pools)
 }

@@ -1,7 +1,11 @@
+use anyhow::Result;
 use indoc::formatdoc;
 use std::collections::HashMap;
 
-use crate::dep::terraform::{output::Cert, servers::Server};
+use crate::{
+	context::ProjectContext,
+	dep::terraform::{output::Cert, servers::Server},
+};
 
 pub fn common() -> String {
 	vec![
@@ -91,4 +95,23 @@ pub fn traefik_instance(config: TraefikInstance) -> String {
 	}
 
 	script
+}
+
+pub async fn traffic_server(ctx: &ProjectContext) -> Result<String> {
+	let username = ctx
+		.read_secret(&["docker", "registry", "ghcr.io", "write", "username"])
+		.await?;
+	let password = ctx
+		.read_secret(&["docker", "registry", "ghcr.io", "write", "password"])
+		.await?;
+
+	let script = include_str!("files/traffic_server.sh")
+		.replace("__GHCR_USERNAME__", &username)
+		.replace("__GHCR_PASSWORD__", &password)
+		.replace(
+			"__IMAGE__",
+			"ghcr.io/rivet-gg/apache-traffic-server:378f44b",
+		);
+
+	Ok(script)
 }
