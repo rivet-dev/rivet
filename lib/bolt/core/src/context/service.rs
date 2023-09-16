@@ -806,7 +806,7 @@ impl ServiceContextData {
 		if self.depends_on_clickhouse() {
 			env.push((
 				"CLICKHOUSE_URL".into(),
-				"clickhouse.clickhouse.svc.cluster.local:8123".into(),
+				"clickhouse.clickhouse.svc.cluster.local:9440".into(),
 			));
 		}
 

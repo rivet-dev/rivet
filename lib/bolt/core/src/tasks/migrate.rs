@@ -295,6 +295,8 @@ pub async fn up(ctx: &ProjectContext, services: &[ServiceContext]) -> Result<()>
 					cmd!(
 						"clickhouse",
 						"client",
+						"--config-file",
+						"/tmp/clickhouse-config.yml",
 						"--host",
 						hostname,
 						"--port",

@@ -20,7 +20,6 @@ resource "helm_release" "cockroachdb" {
 	values = [yamlencode({
 		statefulset = {
 			replicas = 1
-			# args = ["--accept-sql-without-tls"]
 		}
 		conf = {
 			single-node = true

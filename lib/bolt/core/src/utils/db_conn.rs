@@ -1,8 +1,9 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, path::Path};
 
 use anyhow::*;
 use duct::cmd;
 use indoc::{formatdoc, indoc};
+use tokio::fs;
 
 use crate::{
 	config::service::RuntimeKind,
@@ -92,10 +93,40 @@ impl DatabaseConnection {
 					if clickhouse_host.is_none() {
 						let port = utils::pick_port();
 						clickhouse_host = Some(format!("127.0.0.1:{port}"));
+
+						// Copy CA cert
+						cmd!(
+							"sh",
+							"-c",
+							indoc!(
+								"
+								kubectl get secret \
+								-n clickhouse clickhouse-crt \
+								-o jsonpath='{.data.ca\\.crt}' |
+								base64 --decode > /tmp/clickhouse-ca.crt
+								"
+							)
+						)
+						.run()?;
+
+						// Write clickhouse config file
+						fs::write(
+							Path::new("/tmp/clickhouse-config.yml"),
+							indoc!(
+								"
+								secure: true
+								openSSL:
+								  client:
+								    caConfig: '/tmp/clickhouse-ca.crt'
+								"
+							),
+						)
+						.await?;
+
 						handles.push(utils::kubectl_port_forward(
 							"clickhouse",
 							"clickhouse",
-							(port, 9000),
+							(port, 9440),
 						)?);
 					}
 				}
@@ -137,8 +168,11 @@ impl DatabaseConnection {
 					.read_secret(&["clickhouse", "users", "bolt", "password"])
 					.await?;
 				let host = self.clickhouse_host.as_ref().unwrap();
+
+				// TODO: Doesn't verify CA cert
+				// https://github.com/golang-migrate/migrate/issues/380
 				Ok(format!(
-					"clickhouse://{}/?database={}&username={}&password={}&x-multi-statement=true",
+					"clickhouse://{}/?database={}&username={}&password={}&x-multi-statement=true&secure=true&skip_verify=true",
 					host, db_name, clickhouse_user, clickhouse_password
 				))
 			}

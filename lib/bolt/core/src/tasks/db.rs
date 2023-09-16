@@ -104,6 +104,8 @@ pub async fn shell(ctx: &ProjectContext, svc: &ServiceContext, query: Option<&st
 				block_in_place(|| {
 					cmd!(
 						"clickhouse-client",
+						"--config-file",
+						"/tmp/clickhouse-config.yml",
 						"--host",
 						hostname,
 						"--port",
@@ -123,10 +125,14 @@ pub async fn shell(ctx: &ProjectContext, svc: &ServiceContext, query: Option<&st
 				block_in_place(|| {
 					cmd!(
 						"clickhouse-client",
+						"--config-file",
+						"/tmp/clickhouse-config.yml",
 						"--host",
 						hostname,
 						"--port",
 						port,
+						"--database",
+						db_name,
 						"--user",
 						clickhouse_user,
 						"--password",
