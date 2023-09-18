@@ -39,6 +39,8 @@ tests/                           Misc system tests
 
 ```
 infra/
-  salt/                          SaltStack configuration files
   tf/                            Terraform state files
+  docker/                        Docker images required for Rivet's infra
+  tests/                         Infra tests
+  nix/                           Shared Nix configs
 ```

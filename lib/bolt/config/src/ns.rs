@@ -66,8 +66,6 @@ pub enum ClusterKind {
 	#[serde(rename = "single_node")]
 	SingleNode {
 		public_ip: String,
-		#[serde(default)]
-		preferred_subnets: Vec<String>,
 
 		/// Restricts the resources of the core services so there are more resources availble for
 		/// compiling code.
@@ -100,10 +98,6 @@ pub struct Region {
 	pub provider: String,
 	pub provider_region: String,
 	pub netnum: usize,
-	#[serde(default)]
-	pub supports_vlan: bool,
-	#[serde(default)]
-	pub preferred_subnets: Vec<String>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]

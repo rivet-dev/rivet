@@ -10,7 +10,6 @@ use crate::{auth::Auth, route::traefik};
 #[serde(deny_unknown_fields)]
 pub struct ConfigQuery {
 	token: String,
-	pool: String,
 	region: String,
 }
 
@@ -18,11 +17,7 @@ pub struct ConfigQuery {
 pub async fn config(
 	ctx: Ctx<Auth>,
 	_watch_index: WatchIndexQuery,
-	ConfigQuery {
-		token,
-		pool,
-		region,
-	}: ConfigQuery,
+	ConfigQuery { token, region }: ConfigQuery,
 ) -> GlobalResult<super::TraefikConfigResponseNullified> {
 	assert_eq_with!(
 		token,
@@ -32,7 +27,7 @@ pub async fn config(
 	);
 
 	// Fetch configs and catch any errors
-	let config = build_job(&ctx, &pool, &region).await?;
+	let config = build_job(&ctx, &region).await?;
 
 	// tracing::info!(
 	// 	http_services = ?config.http.services.len(),
@@ -58,14 +53,9 @@ pub async fn config(
 #[tracing::instrument(skip(ctx))]
 pub async fn build_job(
 	ctx: &Ctx<Auth>,
-	pool: &str,
 	region: &str,
 ) -> GlobalResult<traefik::TraefikConfigResponse> {
 	let mut config = traefik::TraefikConfigResponse::default();
-
-	if pool != "ing-job" {
-		return Ok(config);
-	}
 
 	// TODO: Cache this
 	// Determine the region from the query

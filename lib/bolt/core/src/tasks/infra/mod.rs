@@ -4,7 +4,7 @@ use bolt_config::ns::ClusterKind;
 use crate::{
 	config::{self, ns},
 	context::ProjectContext,
-	dep::{salt, terraform},
+	dep::terraform,
 	tasks,
 	utils::command_helper::CommandHelper,
 };
@@ -34,12 +34,6 @@ pub enum PlanStepKind {
 		/// The purpose of this is to speed up the destroy step in CI.
 		needs_destroy: bool,
 	},
-	Salt {
-		filter: Option<String>,
-		/// Filter which SLS files to apply.
-		sls: Option<Vec<String>>,
-		config_opts: salt::config::BuildOpts,
-	},
 	Migrate,
 	Up,
 }
@@ -63,21 +57,6 @@ impl PlanStepKind {
 				cmd.exec().await?;
 
 				terraform::output::clear_cache(&ctx, &plan_id).await;
-			}
-			PlanStepKind::Salt {
-				filter,
-				sls,
-				config_opts,
-			} => {
-				let apply_opts = salt::cli::ApplyOpts {
-					sls: (*sls).clone(),
-					..Default::default()
-				};
-				if let Some(filter) = &filter {
-					salt::cli::apply(&ctx, filter, &apply_opts, config_opts).await?;
-				} else {
-					salt::cli::apply_all(&ctx, &apply_opts, config_opts).await?;
-				}
 			}
 			PlanStepKind::Migrate => {
 				tasks::migrate::up_all(&ctx).await?;
@@ -111,7 +90,7 @@ impl PlanStepKind {
 
 				terraform::output::clear_cache(&ctx, &plan_id).await;
 			}
-			PlanStepKind::Salt { .. } | PlanStepKind::Migrate | PlanStepKind::Up => {
+			PlanStepKind::Migrate | PlanStepKind::Up => {
 				// Do nothing
 			}
 		}

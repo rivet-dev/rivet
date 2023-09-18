@@ -17,12 +17,6 @@ impl<T> Deref for TerraformOutputValue<T> {
 }
 
 #[derive(Debug, Clone, Deserialize)]
-pub struct MasterCluster {
-	pub salt_master_host: TerraformOutputValue<String>,
-	pub nebula_lighthouse_host: TerraformOutputValue<String>,
-}
-
-#[derive(Debug, Clone, Deserialize)]
 pub struct Pools {
 	pub servers: TerraformOutputValue<HashMap<String, PoolServer>>,
 }
@@ -48,17 +42,14 @@ pub struct Cert {
 #[derive(Debug, Clone, Deserialize)]
 pub struct Tls {
 	pub tls_cert_cloudflare_rivet_gg: TerraformOutputValue<Cert>,
-}
-
-pub async fn read_master_cluster(ctx: &ProjectContext) -> MasterCluster {
-	read_plan::<MasterCluster>(ctx, "master_cluster").await
+	pub tls_cert_letsencrypt_rivet_job: TerraformOutputValue<Cert>,
 }
 
 pub async fn read_pools(ctx: &ProjectContext) -> Pools {
 	read_plan::<Pools>(ctx, "pools").await
 }
 
-pub async fn read_tls_cert(ctx: &ProjectContext) -> Tls {
+pub async fn read_tls(ctx: &ProjectContext) -> Tls {
 	read_plan::<Tls>(ctx, "tls").await
 }
 

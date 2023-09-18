@@ -16,7 +16,7 @@ pub enum Error {
 
 /// How to access the S3 service.
 pub enum EndpointKind {
-	/// Used for making calls within the cluster. Requires the Nebula network & Consul DNS.
+	/// Used for making calls within the core cluster using private DNS.
 	///
 	/// This should be used for all API calls.
 	Internal,
@@ -136,14 +136,12 @@ impl Client {
 		let endpoint = match endpoint_kind {
 			EndpointKind::Internal => std::env::var(format!(
 				"S3_{}_ENDPOINT_INTERNAL_{}",
-				provider_upper,
-				svc_screaming
+				provider_upper, svc_screaming
 			))?,
 			EndpointKind::InternalResolved => {
 				let mut endpoint = std::env::var(format!(
 					"S3_{}_ENDPOINT_INTERNAL_{}",
-					provider_upper,
-					svc_screaming
+					provider_upper, svc_screaming
 				))?;
 
 				// HACK: Resolve Minio Consul address to schedule the job with. We

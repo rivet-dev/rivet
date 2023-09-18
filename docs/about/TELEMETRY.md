@@ -74,17 +74,6 @@ Sent when running `bolt infra destroy` or `bolt terraform destroy`.
 }
 ```
 
-**bolt_salt_apply**
-
-Sent when running `bolt init`, `bolt infra up`, or `bolt salt apply`.
-
-```typescript
-{
-	"filter": string,
-	"sls": string[],
-}
-```
-
 **bolt_up**
 
 Sent when running `bolt init`, `bolt infra up`, or `bolt up`.

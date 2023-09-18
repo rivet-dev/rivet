@@ -70,9 +70,14 @@ pub async fn project(ctx: &ProjectContext) -> Result<()> {
 					"aws",
 					"eks",
 					"update-kubeconfig",
+					// Writes to stdout instead of user's kubeconfig
 					"--dry-run",
 					"--name",
-					ctx.k8s_cluster_name()
+					ctx.k8s_cluster_name(),
+					// Read from a non-existent kubeconfig to prevent it from merging the existing
+					// user's kubeconfig.
+					"--kubeconfig",
+					"THIS DOES NOT EXIST",
 				)
 				.read()
 			})?,

@@ -1,6 +1,4 @@
 exclude_path = [
-    # Contains a lot of unresolved links
-    "docs/getting_started/INTERNAL_DASHBOARDS.md",
     # Generated documentation
     "gen/",
 ]
