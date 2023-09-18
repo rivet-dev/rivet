@@ -16,12 +16,3 @@ At the moment, we use a simple IP counting system in the matchmaker that works w
 
 Traefik does not [natively support IP blocks](https://doc.traefik.io/traefik/middlewares/http/ratelimit/#sourcecriterionipstrategy) for rate limiting, which we utilize.
 
-## Internal
-
-We should be able to use IPv6 between nodes at the moment with Consul, Nomad, and Nebula without issue.
-
-### Nebula
-
-Nebula does not support IPv6 for communicating over the VPN, so we must stick with IPv4 for now. This is OK.
-
-It has no problem communicating between nodes using IPv6.

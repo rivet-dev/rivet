@@ -36,7 +36,7 @@ pub enum SubCommand {
 
 #[derive(Parser)]
 pub enum MigrateSubCommand {
-	BreakInfraTerraformMonolith,
+	// Placeholder
 }
 
 impl SubCommand {
@@ -63,9 +63,7 @@ impl SubCommand {
 				tasks::infra::destroy_plan(&ctx, &plan, ExecutePlanOpts { auto_approve }).await?;
 			}
 			Self::Migrate { command } => match command {
-				MigrateSubCommand::BreakInfraTerraformMonolith => {
-					tasks::infra::migrate::break_infra_terraform_monolith::run(&ctx).await?;
-				}
+				// Placeholder
 			},
 		}
 

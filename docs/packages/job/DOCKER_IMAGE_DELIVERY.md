@@ -30,7 +30,7 @@ When requesting a Docker build using just S3, it goes through these steps:
 Job run builds are hosted behind Apache Traffic Server within the data-center as a pull-through cache to S3.
 
 1. mm-lobby-create provides an internal URL to Apache Traffic Server
-1. Nomad makes HTTP request for the artifact over the Nebula network
+1. Nomad makes HTTP request for the artifact over VLAN
 1. Nomad unpacks the TAR
 1. The container starts
 

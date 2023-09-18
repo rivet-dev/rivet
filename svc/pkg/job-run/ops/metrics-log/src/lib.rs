@@ -54,8 +54,7 @@ async fn handle(
 		// Get all queries at once
 		//
 		// If you need to add new metrics, explicitly add then to the `keep`
-		// relabel action in
-		// `salt/salt/prometheus/files/prometheus.prm-job.yaml.j2`
+		// relabel action in the Kubernetes config.
 		let (mem_allocated, cpu_usage, mem_usage, mem_max_usage) = tokio::try_join!(
 			handle_request(
 				&prometheus_url,

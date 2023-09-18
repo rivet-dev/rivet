@@ -60,11 +60,6 @@ enum SubCommand {
 		#[clap(subcommand)]
 		command: terraform::SubCommand,
 	},
-	/// Manages SaltStack configs.
-	Salt {
-		#[clap(subcommand)]
-		command: salt::SubCommand,
-	},
 	/// Provides SSH access to provisioned servers.
 	Ssh {
 		#[clap(subcommand)]
@@ -122,7 +117,6 @@ async fn main() -> Result<std::process::ExitCode> {
 		SubCommand::Secret { command } => command.execute(ctx).await?,
 		SubCommand::Output { command } => command.execute(ctx).await?,
 		SubCommand::Terraform { command } => command.execute(ctx).await?,
-		SubCommand::Salt { command } => command.execute(ctx).await?,
 		SubCommand::Ssh { command } => command.execute(ctx).await?,
 		SubCommand::Database { command } => command.execute(ctx).await?,
 		SubCommand::Admin { command } => command.execute(ctx).await?,

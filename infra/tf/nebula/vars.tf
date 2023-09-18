@@ -1,3 +1,0 @@
-variable "namespace" {
-    type = string
-}

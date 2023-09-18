@@ -4,113 +4,34 @@ use anyhow::Result;
 use derive_builder::Builder;
 use maplit::hashmap;
 use serde::Serialize;
-use std::collections::{HashMap, HashSet};
+use std::{
+	collections::{HashMap, HashSet},
+	net::Ipv4Addr,
+};
+
+use super::net;
 
 use crate::{
 	config::service::RuntimeKind,
 	context::ProjectContext,
-	dep::{
-		self,
-		terraform::nebula_firewall_rules::{
-			self, Rule as NebulaFirewallRule, RuleProtocol as NebulaFirewallRuleProtocol,
-		},
-	},
+	dep::{self},
 };
-
-// https://www.cloudflare.com/ips-v4
-const CLOUDFLARE_IPV4_RANGES: &[&str] = &[
-	"173.245.48.0/20",
-	"103.21.244.0/22",
-	"103.22.200.0/22",
-	"103.31.4.0/22",
-	"141.101.64.0/18",
-	"108.162.192.0/18",
-	"190.93.240.0/20",
-	"188.114.96.0/20",
-	"197.234.240.0/22",
-	"198.41.128.0/17",
-	"162.158.0.0/15",
-	"104.16.0.0/13",
-	"104.24.0.0/14",
-	"172.64.0.0/13",
-	"131.0.72.0/22",
-];
-
-// https://www.cloudflare.com/ips-v6
-const CLOUDFLARE_IPV6_RANGES: &[&str] = &[
-	"2400:cb00::/32",
-	"2606:4700::/32",
-	"2803:f800::/32",
-	"2405:b500::/32",
-	"2405:8100::/32",
-	"2a06:98c0::/29",
-	"2c0f:f248::/32",
-];
-
-/// What to do with this pool when running locally.
-#[derive(Clone, PartialEq)]
-#[allow(unused)]
-pub enum PoolLocalMode {
-	/// Don't enable this pool when running locally.
-	Disable,
-
-	/// Run the pool locally on the main machine.
-	Locally,
-
-	/// Run this only when developing locally.
-	LocalOnly,
-
-	/// Run this locally and remotely when developing.
-	LocalAndRemote,
-
-	/// Treat the pool normally.
-	Keep,
-}
 
 #[derive(Serialize, Clone, Builder)]
 #[builder(setter(into))]
 pub struct Pool {
-	// TODO: Remove
-	/// Salt roles applied to this pool.
-	roles: Vec<&'static str>,
-
-	/// If this pool is part of the VPC.
-	pub vpc: bool,
-	#[serde(skip_serializing)]
-	local_mode: PoolLocalMode,
+	pub vlan_address: Ipv4Addr,
+	pub vlan_prefix_len: u8,
 
 	/// Volumes attached to this node.
 	#[builder(default)]
 	volumes: HashMap<String, PoolVolume>,
-
-	/// Cloudflare tunnels to expose for this node.
-	#[builder(default)]
-	tunnels: Option<HashMap<String, PoolTunnel>>,
 
 	/// Cloud-based firewall rules to apply to this node.
 	///
 	/// Additional firewall rules are applied by Terraform depending on the use case.
 	#[builder(default)]
 	firewall_inbound: Vec<FirewallRule>,
-
-	/// Nebula firewall rules to apply to this node.
-	nebula_firewall_inbound: Vec<NebulaFirewallRule>,
-
-	/// What redis databases to run on this instance.
-	///
-	/// This is defined in pools because some situations require multiple Redis instnaces to run on
-	/// one machine.
-	#[builder(default)]
-	redis_dbs: Vec<String>,
-}
-
-#[derive(Serialize, Clone)]
-pub struct PoolTunnel {
-	name: String,
-	service: String,
-	access_groups: Vec<String>,
-	service_tokens: Vec<String>,
-	app_launcher: bool,
 }
 
 #[derive(Serialize, Clone)]
@@ -126,115 +47,13 @@ pub struct FirewallRule {
 }
 
 pub async fn build_pools(ctx: &ProjectContext) -> Result<HashMap<String, Pool>> {
-	let access = match &ctx.ns().dns.provider {
-		bolt_config::ns::DnsProvider::Cloudflare { access, .. } => access.as_ref(),
-	};
-
 	let mut pools = HashMap::<String, Pool>::new();
 
 	pools.insert(
-		"leader".into(),
+		"gg".into(),
 		PoolBuilder::default()
-			.roles(vec!["nomad-server", "consul-server"])
-			.vpc(true)
-			.local_mode(PoolLocalMode::Locally)
-			.tunnels(hashmap! {
-				"consul".into() => PoolTunnel {
-					name: "Consul".into(),
-					service: "http://127.0.0.1:8500".into(),
-					access_groups: access.map(|x| vec![x.groups.engineering.clone()]).unwrap_or_default(),
-					service_tokens: access.map(|x| vec![x.services.bolt.clone()]).unwrap_or_default(),
-					app_launcher: true,
-				},
-				"nomad".into() => PoolTunnel {
-					name: "Nomad".into(),
-					service: "http://127.0.0.1:4646".into(),
-					access_groups: access.map(|x| vec![x.groups.engineering.clone()]).unwrap_or_default(),
-					service_tokens: access.map(|x| vec![x.services.terraform_nomad.clone(), x.services.bolt.clone()]).unwrap_or_default(),
-					app_launcher: true,
-				},
-			})
-			.nebula_firewall_inbound(
-				[
-					nebula_firewall_rules::common(),
-					nebula_firewall_rules::consul(),
-					nebula_firewall_rules::nomad(),
-					vec![
-						// Consul RPC
-						NebulaFirewallRule::group(
-							"role:consul-server",
-							NebulaFirewallRuleProtocol::TCP,
-							"8300",
-						),
-						NebulaFirewallRule::group(
-							"role:consul-client",
-							NebulaFirewallRuleProtocol::TCP,
-							"8300",
-						),
-						// Nomad RPC
-						NebulaFirewallRule::group(
-							"role:nomad-server",
-							NebulaFirewallRuleProtocol::TCP,
-							"4647",
-						),
-						NebulaFirewallRule::group(
-							"role:nomad-client",
-							NebulaFirewallRuleProtocol::TCP,
-							"4647",
-						),
-					],
-				]
-				.concat(),
-			)
-			.build()?,
-	);
-
-	let mut svc_roles = vec!["docker", "nomad-client", "consul-client"];
-	if ctx.ns().logging.is_some() {
-		svc_roles.extend(["traefik", "cloudflare-proxy", "docker-plugin-loki"]);
-	}
-	pools.insert(
-		"svc".into(),
-		PoolBuilder::default()
-			.roles(svc_roles)
-			.vpc(true)
-			.local_mode(PoolLocalMode::Locally)
-			.tunnels(hashmap! {
-				"loki".into() => PoolTunnel {
-					name: "Loki".into(),
-					service: "http://loki.loki.svc.cluster.local:3100".into(),
-					access_groups: access.map(|x| vec![x.groups.engineering.clone()]).unwrap_or_default(),
-					service_tokens: access.map(|x| vec![x.services.grafana_cloud.clone()]).unwrap_or_default(),
-					app_launcher: true,
-				},
-			})
-			.nebula_firewall_inbound(
-				[
-					nebula_firewall_rules::common(),
-					nebula_firewall_rules::consul(),
-					nebula_firewall_rules::nomad(),
-					nebula_firewall_rules::nomad_dynamic(),
-				]
-				.concat(),
-			)
-			.build()?,
-	);
-
-	pools.insert(
-		"ing-job".into(),
-		PoolBuilder::default()
-			.roles(vec!["traefik", "ingress-proxy"])
-			.vpc(false)
-			.local_mode(PoolLocalMode::Keep)
-			.tunnels(hashmap! {
-				"ing-job".into() => PoolTunnel {
-					name: "Traefik Job".into(),
-					service: "http://__NEBULA_IPV4__:9980".into(),
-					access_groups: access.map(|x| vec![x.groups.engineering.clone()]).unwrap_or_default(),
-					service_tokens: vec![],
-					app_launcher: true,
-				}
-			})
+			.vlan_address(net::gg::VLAN_ADDR)
+			.vlan_prefix_len(net::gg::VLAN_PREFIX_LEN)
 			.firewall_inbound(vec![
 				// HTTP(S)
 				FirewallRule {
@@ -282,23 +101,15 @@ pub async fn build_pools(ctx: &ProjectContext) -> Result<HashMap<String, Pool>> 
 					inbound_ipv6_cidr: vec!["::/0".into()],
 				},
 			])
-			.nebula_firewall_inbound(
-				[
-					nebula_firewall_rules::common(),
-					nebula_firewall_rules::consul(),
-					nebula_firewall_rules::traefik(),
-				]
-				.concat(),
-			)
 			.build()?,
 	);
 
 	pools.insert(
 		"job".into(),
 		PoolBuilder::default()
-			.roles(vec!["docker", "nomad-client"])
-			.vpc(false)
-			.local_mode(PoolLocalMode::Keep)
+			.vlan_address(net::job::VLAN_ADDR)
+			.vlan_prefix_len(net::job::VLAN_PREFIX_LEN)
+			// TODO: Add firewall rules for VLAN
 			.firewall_inbound(vec![
 				// TODO: See below why commented out
 				// var.is_prod ? [] : local.firewall_rules.nomad_dynamic_public,
@@ -339,131 +150,16 @@ pub async fn build_pools(ctx: &ProjectContext) -> Result<HashMap<String, Pool>> 
 					inbound_ipv6_cidr: vec!["::/0".into()],
 				},
 			])
-			.nebula_firewall_inbound(
-				[
-					nebula_firewall_rules::common(),
-					nebula_firewall_rules::nomad(),
-					vec![
-						NebulaFirewallRule::group(
-							"role:ing-job",
-							NebulaFirewallRuleProtocol::UDP,
-							"20000-31999",
-						),
-						NebulaFirewallRule::group(
-							"role:ing-job",
-							NebulaFirewallRuleProtocol::TCP,
-							"20000-31999",
-						),
-					],
-				]
-				.concat(),
-			)
 			.build()?,
 	);
 
-	let pools = filter_pools(ctx, pools)?;
+	pools.insert(
+		"ats".into(),
+		PoolBuilder::default()
+			.vlan_address(net::ats::VLAN_ADDR)
+			.vlan_prefix_len(net::ats::VLAN_PREFIX_LEN)
+			.build()?,
+	);
 
 	Ok(pools)
-}
-
-/// Processes pool map based on `PoolLocalMode` to create the final pool configs.
-///
-/// If running locally, will merge all pools in to a "local" pool.
-fn filter_pools(
-	ctx: &ProjectContext,
-	pools: HashMap<String, Pool>,
-) -> Result<HashMap<String, Pool>> {
-	// Apply filters
-	match &ctx.ns().cluster.kind {
-		// Return pools that run in a cluster
-		bolt_config::ns::ClusterKind::Distributed { .. } => Ok(pools
-			.into_iter()
-			.filter(|(_, x)| x.local_mode != PoolLocalMode::LocalOnly)
-			.collect()),
-
-		// Merge pools together to `local` node
-		bolt_config::ns::ClusterKind::SingleNode { .. } => {
-			let mut new_pools = HashMap::new();
-
-			// Include normal pools
-			new_pools.extend(
-				pools
-					.iter()
-					.filter(|(_, x)| {
-						x.local_mode == PoolLocalMode::Keep
-							|| x.local_mode == PoolLocalMode::LocalAndRemote
-					})
-					.map(|(k, v)| (k.clone(), v.clone())),
-			);
-
-			// Create local pool for the main node
-			let local_pools = pools
-				.iter()
-				.filter(|(_, x)| {
-					x.local_mode == PoolLocalMode::Locally
-						|| x.local_mode == PoolLocalMode::LocalOnly
-						|| x.local_mode == PoolLocalMode::LocalAndRemote
-				})
-				.map(|(_, x)| x)
-				.collect::<Vec<_>>();
-
-			// Build pool
-			let mut pool = Pool {
-				// Aggregate all roles and deduplicate them
-				roles: local_pools
-					.iter()
-					.flat_map(|x| x.roles.iter().cloned())
-					.collect::<HashSet<&str>>()
-					.into_iter()
-					.collect::<Vec<_>>(),
-				vpc: true,
-				local_mode: PoolLocalMode::Keep,
-				// Aggregate all volumes.
-				volumes: local_pools
-					.iter()
-					.flat_map(|x| x.volumes.iter())
-					.map(|(k, v)| (k.clone(), v.clone()))
-					.collect(),
-				// Aggregate all tunnels
-				tunnels: Some(
-					local_pools
-						.iter()
-						.filter_map(|x| x.tunnels.as_ref())
-						.flat_map(|x| x.iter())
-						.map(|(k, v)| (k.clone(), v.clone()))
-						.collect(),
-				),
-				// Aggregate all firewall rules
-				// TODO: Deduplicate rules
-				firewall_inbound: local_pools
-					.iter()
-					.flat_map(|x| x.firewall_inbound.iter())
-					.cloned()
-					.collect(),
-				// Aggregate all Nebula firewall rules
-				// TODO: Deduplicate rules
-				nebula_firewall_inbound: local_pools
-					.iter()
-					.flat_map(|x| x.nebula_firewall_inbound.iter())
-					.cloned()
-					.collect(),
-				// Aggregate all Redis databases
-				redis_dbs: local_pools
-					.iter()
-					.flat_map(|x| x.redis_dbs.iter())
-					.cloned()
-					.collect(),
-			};
-
-			// Sort the lists so the value is deterministic
-			pool.roles.sort();
-			pool.firewall_inbound.sort();
-			pool.nebula_firewall_inbound.sort();
-			pool.redis_dbs.sort();
-
-			new_pools.insert("local".into(), pool);
-
-			Ok(new_pools)
-		}
-	}
 }
