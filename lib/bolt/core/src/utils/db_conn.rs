@@ -169,8 +169,6 @@ impl DatabaseConnection {
 					.await?;
 				let host = self.clickhouse_host.as_ref().unwrap();
 
-				// TODO: Doesn't verify CA cert
-				// https://github.com/golang-migrate/migrate/issues/380
 				Ok(format!(
 					"clickhouse://{}/?database={}&username={}&password={}&x-multi-statement=true&secure=true&skip_verify=true",
 					host, db_name, clickhouse_user, clickhouse_password

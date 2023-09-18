@@ -10,7 +10,7 @@ terraform {
 module "secrets" {
 	source = "../modules/secrets"
 
-	keys = ["cockroachdb_cloud/api_key"]
+	keys = [ "crdb/username", "crdb/password", "cockroachdb_cloud/api_key" ]
 }
 
 resource "cockroach_cluster" "main" {
@@ -38,19 +38,24 @@ resource "cockroach_allow_list" "eks" {
 	ui = false
 }
 
-# Generate password
-resource "random_password" "root_password" {
-	length = 32
-	special = false
-}
-
 resource "cockroach_sql_user" "root" {
 	cluster_id = cockroach_cluster.main.id
-	name = "rivet-root"
-	password = random_password.root_password.result
+	name = module.crdb_secrets.values["crdb/username"]
+	password = module.crdb_secrets.values["crdb/password"]
 }
 
 
 data "cockroach_cluster_cert" "main" {
 	id = cockroach_cluster.main.id
+}
+
+resource "kubernetes_config_map" "crdb_ca" {
+	metadata {
+		name = "crdb-ca"
+		namespace = "rivet-service"
+	}
+
+	data = {
+		"ca.crt" = data.cockroach_cluster_cert.main.cert
+	}
 }

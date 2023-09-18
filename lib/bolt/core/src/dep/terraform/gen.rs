@@ -302,25 +302,6 @@ async fn vars(ctx: &ProjectContext) {
 		vars.insert("extra_dns".into(), json!(extra_dns));
 	}
 
-	// CRDB services
-	{
-		let mut crdb_svcs = HashMap::<String, serde_json::Value>::new();
-
-		for svc_ctx in all_svc {
-			if let RuntimeKind::CRDB {} = svc_ctx.config().runtime {
-				crdb_svcs.insert(
-					svc_ctx.name(),
-					json!({
-						"db_name": svc_ctx.crdb_db_name(),
-						"migrations_path": svc_ctx.relative_path().await.join("migrations"),  // TODO: This isn't compatible with Windows
-					}),
-				);
-			}
-		}
-
-		vars.insert("crdb_svcs".into(), json!(crdb_svcs));
-	}
-
 	// Redis services
 	{
 		let mut redis_svcs = HashMap::<String, serde_json::Value>::new();
