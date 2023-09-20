@@ -1,22 +1,3 @@
-terraform {
-	required_providers {
-		aws = {
-			source = "hashicorp/aws"
-			version = "5.16.0"
-		}
-	}
-}
-
-provider "aws" {
-	region = "us-east-1"
-
-	default_tags {
-		tags = {
-			Namespace = var.namespace
-		}
-	}
-}
-
 locals {
 	names = {
 		for k, _ in var.redis_dbs:
@@ -28,21 +9,32 @@ locals {
 
 	persistent_dbs = {
 		for k, v in var.redis_dbs:
-		k => v
+		k => {
+			username = module.secrets.values["redis/${local.names[k]}/username"]
+			password = module.secrets.values["redis/${local.names[k]}/password"]
+		}
 		if v.persistent
 	}
 	nonpersistent_dbs = {
 		for k, v in var.redis_dbs:
-		k => v
+		k => {
+			username = module.secrets.values["redis/${local.names[k]}/username"]
+			password = module.secrets.values["redis/${local.names[k]}/password"]
+		}
 		if !v.persistent
 	}
 }
 
-resource "random_password" "password" {
-	for_each = var.redis_dbs
+module "secrets" {
+	source = "../modules/secrets"
 
-	length = 32
-	special = false
+	keys = flatten([
+		for n in local.names:
+		[
+			"redis/${n}/username",
+			"redis/${n}/password",
+		]
+	])
 }
 
 # MARK: Non-persistent
@@ -102,11 +94,12 @@ resource "aws_elasticache_user" "default" {
 resource "aws_elasticache_user" "root" {
 	for_each = local.nonpersistent_dbs
 
-	user_id = "${local.names[each.key]}-root"
-	user_name = "${local.names[each.key]}-root"
+	user_id = each.value.username
+	user_name = each.value.username
 	access_string = "on ~* &* +@all"
 	engine = "REDIS"
-	passwords = [random_password.password[each.key].result]
+	
+	passwords = [each.value.password]
 }
 
 resource "aws_elasticache_user_group" "main" {
@@ -155,12 +148,12 @@ resource "aws_memorydb_subnet_group" "main" {
 resource "aws_memorydb_user" "root" {
 	for_each = local.persistent_dbs
 
-	user_name = "${local.names[each.key]}-root"
+	user_name = each.value.username
 	access_string = "on ~* &* +@all"
 
 	authentication_mode {
 		type = "password"
-		passwords = [random_password.password[each.key].result]
+		passwords = [each.value.password]
 	}
 }
 
@@ -170,4 +163,3 @@ resource "aws_memorydb_acl" "main" {
 	name = local.names[each.key]
 	user_names = [aws_memorydb_user.root[each.key].user_name]
 }
-

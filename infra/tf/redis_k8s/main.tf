@@ -2,14 +2,13 @@ locals {
 	redis_svcs = {
 		for k, v in var.redis_dbs:
 		k => {
-			endpoint = v.endpoint
-			username = module.redis_secrets.values["redis/${k}/username"]
-			password = module.redis_secrets.values["redis/${k}/password"]
+			username = module.secrets.values["redis/${k}/username"]
+			password = module.secrets.values["redis/${k}/password"]
 		}
 	}
 }
 
-module "redis_secrets" {
+module "secrets" {
 	source = "../modules/secrets"
 
 	keys = flatten([
@@ -19,7 +18,6 @@ module "redis_secrets" {
 			"redis/${k}/password",
 		]
 	])
-	optional = true
 }
 
 # TODO:
@@ -80,7 +78,6 @@ resource "kubernetes_config_map" "redis_ca" {
 	metadata {
 		name = "redis-${each.key}-ca"
 		namespace = "rivet-service"
-		# namespace = kubernetes_namespace.rivet_service.metadata.0.name
 	}
 
 	data = {

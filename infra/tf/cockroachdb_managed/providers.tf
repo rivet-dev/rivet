@@ -1,5 +1,5 @@
 provider "cockroach" {
-	apikey = module.secrets.values["cockroachdb_coud/api_key"]
+	apikey = module.secrets.values["cockroachdb_cloud/api_key"]
 }
 
 provider "kubernetes" {

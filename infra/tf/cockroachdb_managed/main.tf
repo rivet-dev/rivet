@@ -40,8 +40,8 @@ resource "cockroach_allow_list" "eks" {
 
 resource "cockroach_sql_user" "root" {
 	cluster_id = cockroach_cluster.main.id
-	name = module.crdb_secrets.values["crdb/username"]
-	password = module.crdb_secrets.values["crdb/password"]
+	name = module.secrets.values["crdb/username"]
+	password = module.secrets.values["crdb/password"]
 }
 
 

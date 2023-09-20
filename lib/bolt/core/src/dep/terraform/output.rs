@@ -1,7 +1,7 @@
 use serde::Deserialize;
 use std::{collections::HashMap, ops::Deref};
 
-use crate::context::ProjectContext;
+use crate::{config, context::ProjectContext};
 
 #[derive(Debug, Clone, Deserialize)]
 pub struct TerraformOutputValue<T> {
@@ -45,12 +45,42 @@ pub struct Tls {
 	pub tls_cert_letsencrypt_rivet_job: TerraformOutputValue<Cert>,
 }
 
+#[derive(Debug, Clone, Deserialize)]
+pub struct K8sConnection {
+	pub host: TerraformOutputValue<String>,
+	pub port: TerraformOutputValue<u32>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct Redis {
+	pub host: TerraformOutputValue<HashMap<String, String>>,
+	pub port: TerraformOutputValue<HashMap<String, u32>>,
+}
+
 pub async fn read_pools(ctx: &ProjectContext) -> Pools {
 	read_plan::<Pools>(ctx, "pools").await
 }
 
 pub async fn read_tls(ctx: &ProjectContext) -> Tls {
 	read_plan::<Tls>(ctx, "tls").await
+}
+
+pub async fn read_crdb(ctx: &ProjectContext) -> K8sConnection {
+	match &ctx.ns().cluster.kind {
+		config::ns::ClusterKind::SingleNode { .. } => {
+			read_plan::<K8sConnection>(ctx, "cockroachdb_k8s").await
+		}
+		config::ns::ClusterKind::Distributed { .. } => {
+			read_plan::<K8sConnection>(ctx, "cockroachdb_managed").await
+		}
+	}
+}
+
+pub async fn read_redis(ctx: &ProjectContext) -> Redis {
+	match &ctx.ns().cluster.kind {
+		config::ns::ClusterKind::SingleNode { .. } => read_plan::<Redis>(ctx, "redis_k8s").await,
+		config::ns::ClusterKind::Distributed { .. } => read_plan::<Redis>(ctx, "redis_aws").await,
+	}
 }
 
 /// Reads a Terraform plan's output and decodes in to type.

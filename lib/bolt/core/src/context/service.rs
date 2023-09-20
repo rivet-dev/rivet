@@ -15,7 +15,7 @@ use crate::{
 		service::{RuntimeKind, ServiceKind},
 	},
 	context::{self, BuildContext, ProjectContext, RunContext},
-	dep::{self, k8s},
+	dep::{self, k8s, terraform},
 	utils,
 };
 
@@ -1024,7 +1024,9 @@ impl ServiceContextData {
 		}
 
 		// CRDB
-		let crdb_host = "cockroachdb.cockroachdb.svc.cluster.local:26257";
+		// TODO: Function is expensive
+		let crdb_data = terraform::output::read_crdb(&project_ctx).await;
+		let crdb_host = format!("{}:{}", *crdb_data.host, *crdb_data.port);
 		for crdb_dep in self.crdb_dependencies(run_context).await {
 			let username = project_ctx.read_secret(&["crdb", "username"]).await?;
 			let password = project_ctx.read_secret(&["crdb", "password"]).await?;
@@ -1040,12 +1042,21 @@ impl ServiceContextData {
 		}
 
 		// Redis
+		// TODO: Function is expensive
+		let redis_data = terraform::output::read_redis(&project_ctx).await;
 		for redis_dep in self.redis_dependencies(run_context).await {
 			let name = redis_dep.name();
 			let db_name = redis_dep.redis_db_name();
 
-			// TODO: Use port to connect to different redis instances
-			let host = format!("redis-master.redis-{db_name}.svc.cluster.local:6379");
+			let hostname = redis_data
+				.host
+				.get(&db_name)
+				.expect("terraform output for redis db not found");
+			let port = redis_data
+				.port
+				.get(&db_name)
+				.expect("terraform output for redis db not found");
+			let host = format!("{}:{}", *hostname, *port);
 
 			// Build URL with auth
 			let username = project_ctx

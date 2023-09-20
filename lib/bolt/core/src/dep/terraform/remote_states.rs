@@ -51,7 +51,7 @@ pub struct RemoteState {
 	#[builder(setter(strip_option), default)]
 	pub data_name: Option<&'static str>,
 
-	/// Condition for whether or not to include the remote sate.
+	/// Condition for whether or not to include the remote state.
 	///
 	/// This will add a `count` under the hood.
 	#[builder(setter(strip_option), default)]

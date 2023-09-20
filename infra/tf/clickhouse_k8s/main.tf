@@ -1,12 +1,3 @@
-module "clickhouse_secrets" {
-	source = "../modules/secrets"
-
-	keys = [
-		for user in local.clickhouse_users:
-		"clickhouse/users/${user}/password"
-	]
-}
-
 locals {
 	clickhouse_users = ["bolt", "chirp", "grafana"]
 
@@ -17,6 +8,15 @@ locals {
 			readonly = user == "grafana"
 		}
 	}
+}
+
+module "clickhouse_secrets" {
+	source = "../modules/secrets"
+
+	keys = [
+		for user in local.clickhouse_users:
+		"clickhouse/users/${user}/password"
+	]
 }
 
 resource "kubernetes_namespace" "clickhouse" {

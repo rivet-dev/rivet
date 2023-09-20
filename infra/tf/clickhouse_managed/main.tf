@@ -7,7 +7,6 @@ terraform {
 	}
 }
 
-
 module "secrets" {
 	source = "../modules/secrets"
 
@@ -15,14 +14,8 @@ module "secrets" {
 		"clickhouse_cloud/organization_id",
 		"clickhouse_cloud/token_key",
 		"clickhouse_cloud/token_secret",
+		"clickhouse/users/bolt/password"
 	]
-}
-
-resource "random_password" "default" {
-	length = 32
-	special = true
-	min_special = 1
-	override_special = "-_"  # DNS-safe spial characters
 }
 
 resource "clickhouse_service" "main" {
@@ -41,7 +34,7 @@ resource "clickhouse_service" "main" {
 	# TODO:
 	tier = "development"
 
-	password = random_password.default.result
+	password = module.secrets.values["clickhouse/users/bolt/password"]
 
 	# Bug in ClickHouse provider for the `development` tier leads to "inconsistent result" error
 	lifecycle {
@@ -50,4 +43,3 @@ resource "clickhouse_service" "main" {
 		]
 	}
 }
-

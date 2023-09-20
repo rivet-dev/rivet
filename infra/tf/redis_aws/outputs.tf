@@ -27,34 +27,3 @@ output "port" {
 		}
 	)
 }
-
-output "cluster_ca_crt" {
-	value = {
-		for k, _ in var.redis_dbs:
-		k => null
-	}
-}
-
-output "username" {
-	value = merge(
-		{
-			for k, v in var.redis_dbs:
-			k => aws_elasticache_user.root[k].user_name
-			if !v.persistent
-		},
-		{
-			for k, v in var.redis_dbs:
-			k => aws_memorydb_user.root[k].user_name
-			if v.persistent
-		}
-	)
-}
-
-output "password" {
-	value = {
-		for k, _ in var.redis_dbs:
-		k => random_password.password[k].result
-	}
-	sensitive = true
-}
-
