@@ -12,7 +12,7 @@ use tokio::{fs, process::Command};
 use uuid::Uuid;
 
 use crate::{
-	config::service::RuntimeKind,
+	config::{ns, service::RuntimeKind},
 	context::{BuildContext, ProjectContext, RunContext, ServiceContext},
 	dep::{
 		self,
@@ -363,6 +363,14 @@ pub async fn test_all(ctx: &ProjectContext) -> Result<()> {
 pub async fn test_services<T: AsRef<str>>(ctx: &ProjectContext, svc_names: &[T]) -> Result<()> {
 	if ctx.ns().rivet.test.is_none() {
 		bail!("tests are disabled, enable them by setting rivet.test in the namespace config");
+	}
+
+	// TODO: implement tests for distributed clusters (must upload test build to docker)
+	match ctx.ns().cluster.kind {
+		ns::ClusterKind::SingleNode { .. } => {}
+		ns::ClusterKind::Distributed { .. } => {
+			bail!("tests not implemented for distributed clusters")
+		}
 	}
 
 	// Resolve services

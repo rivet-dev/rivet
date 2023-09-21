@@ -115,18 +115,18 @@ pub fn build_plan(ctx: &ProjectContext, start_at: Option<String>) -> Result<Vec<
 	match ctx.ns().kubernetes.provider {
 		ns::KubernetesProvider::K3d { .. } => {
 			plan.push(PlanStep {
-				name_id: "k8s-k3d",
+				name_id: "k8s-cluster-k3d",
 				kind: PlanStepKind::Terraform {
-					plan_id: "k8s_k3d".into(),
+					plan_id: "k8s_cluster_k3d".into(),
 					needs_destroy: true,
 				},
 			});
 		}
 		ns::KubernetesProvider::AwsEks { .. } => {
 			plan.push(PlanStep {
-				name_id: "k8s-aws",
+				name_id: "k8s-cluster-aws",
 				kind: PlanStepKind::Terraform {
-					plan_id: "k8s_aws".into(),
+					plan_id: "k8s_cluster_aws".into(),
 					needs_destroy: true,
 				},
 			});

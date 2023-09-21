@@ -18,7 +18,7 @@ resource "cockroach_cluster" "main" {
 	name = "rivet-${var.namespace}"
 
 	regions = [{
-		name = data.terraform_remote_state.k8s_aws.outputs.region
+		name = data.terraform_remote_state.k8s_cluster_aws.outputs.region
 		primary = true
 	}]
 
@@ -29,7 +29,7 @@ resource "cockroach_cluster" "main" {
 }
 
 resource "cockroach_allow_list" "eks" {
-	for_each = data.terraform_remote_state.k8s_aws.outputs.nat_public_ips
+	for_each = data.terraform_remote_state.k8s_cluster_aws.outputs.nat_public_ips
 
 	cluster_id = cockroach_cluster.main.id
 	cidr_ip = each.value

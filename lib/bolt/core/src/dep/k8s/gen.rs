@@ -54,8 +54,8 @@ enum SpecType {
 pub async fn project(ctx: &ProjectContext) -> Result<()> {
 	// Check if the k8s provider has already applied
 	let plan_id = match ctx.ns().kubernetes.provider {
-		ns::KubernetesProvider::K3d { .. } => "k8s_k3d",
-		ns::KubernetesProvider::AwsEks { .. } => "k8s_aws",
+		ns::KubernetesProvider::K3d { .. } => "k8s_cluster_k3d",
+		ns::KubernetesProvider::AwsEks { .. } => "k8s_cluster_aws",
 	};
 
 	// TODO: has_applied is slow
@@ -263,7 +263,7 @@ pub async fn gen_svc(exec_ctx: &ExecServiceContext) -> Vec<serde_json::Value> {
 			} else {
 				"IfNotPresent"
 			},
-			String::new(),
+			"bin/svc".to_string(),
 		),
 	};
 	let command = format!("/local/rivet/install-ca.sh && {exec}");
@@ -548,28 +548,28 @@ async fn build_volumes(
 			.collect::<Vec<_>>();
 
 		// Redis CA
-		volumes.extend(redis_deps.iter().map(|db| {
-			json!({
-				"name": format!("redis-{}-ca", db),
-				"configMap": {
-					"defaultMode": 420,
-					"name": format!("redis-{}-ca", db),
-					"items": [
-						{
-							"key": "ca.crt",
-							"path": format!("redis-{}-ca.crt", db)
-						}
-					]
-				}
-			})
-		}));
-		volume_mounts.extend(redis_deps.iter().map(|db| {
-			json!({
-				"name": format!("redis-{}-ca", db),
-				"mountPath": format!("/usr/local/share/ca-certificates/redis-{}-ca.crt", db),
-				"subPath": format!("redis-{}-ca.crt", db)
-			})
-		}));
+		// volumes.extend(redis_deps.iter().map(|db| {
+		// 	json!({
+		// 		"name": format!("redis-{}-ca", db),
+		// 		"configMap": {
+		// 			"defaultMode": 420,
+		// 			"name": format!("redis-{}-ca", db),
+		// 			"items": [
+		// 				{
+		// 					"key": "ca.crt",
+		// 					"path": format!("redis-{}-ca.crt", db)
+		// 				}
+		// 			]
+		// 		}
+		// 	})
+		// }));
+		// volume_mounts.extend(redis_deps.iter().map(|db| {
+		// 	json!({
+		// 		"name": format!("redis-{}-ca", db),
+		// 		"mountPath": format!("/usr/local/share/ca-certificates/redis-{}-ca.crt", db),
+		// 		"subPath": format!("redis-{}-ca.crt", db)
+		// 	})
+		// }));
 
 		// CRDB CA
 		volumes.push(json!({

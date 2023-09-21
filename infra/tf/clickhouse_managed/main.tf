@@ -21,10 +21,10 @@ module "secrets" {
 resource "clickhouse_service" "main" {
 	cloud_provider = "aws"
 	name = "rivet-${var.namespace}"
-	region = data.terraform_remote_state.k8s_aws.outputs.region
+	region = data.terraform_remote_state.k8s_cluster_aws.outputs.region
 
 	ip_access = [
-		for x in  data.terraform_remote_state.k8s_aws.outputs.nat_public_ips:
+		for x in  data.terraform_remote_state.k8s_cluster_aws.outputs.nat_public_ips:
 		{
 			source = x
 			description = "AWS NAT"

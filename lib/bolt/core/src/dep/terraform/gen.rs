@@ -300,6 +300,7 @@ async fn vars(ctx: &ProjectContext) {
 				redis_svcs.insert(
 					svc_ctx.redis_db_name(),
 					json!({
+						"endpoint": format!("redis://redis-{name}.svc.cluster.local:6379"),
 						"persistent": persistent,
 					}),
 				);

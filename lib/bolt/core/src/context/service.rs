@@ -1048,6 +1048,7 @@ impl ServiceContextData {
 			let name = redis_dep.name();
 			let db_name = redis_dep.redis_db_name();
 
+			// Read host and port from terraform
 			let hostname = redis_data
 				.host
 				.get(&db_name)
@@ -1058,13 +1059,30 @@ impl ServiceContextData {
 				.expect("terraform output for redis db not found");
 			let host = format!("{}:{}", *hostname, *port);
 
+			// Read auth secrets
+			let (username, password) = match project_ctx.ns().cluster.kind {
+				config::ns::ClusterKind::SingleNode { .. } => (
+					project_ctx
+						.read_secret(&["redis", &db_name, "username"])
+						.await?,
+					project_ctx
+						.read_secret_opt(&["redis", &db_name, "password"])
+						.await?,
+				),
+				config::ns::ClusterKind::Distributed { .. } => {
+					let db_name = format!("rivet-{}-{}", project_ctx.ns_id(), db_name);
+					let username = project_ctx
+						.read_secret(&["redis", &db_name, "username"])
+						.await?;
+					let password = project_ctx
+						.read_secret_opt(&["redis", &db_name, "password"])
+						.await?;
+
+					(username, password)
+				}
+			};
+
 			// Build URL with auth
-			let username = project_ctx
-				.read_secret(&["redis", &db_name, "username"])
-				.await?;
-			let password = project_ctx
-				.read_secret_opt(&["redis", &db_name, "password"])
-				.await?;
 			let url = if let Some(password) = password {
 				// format!("rediss://{}:{}@{host}#insecure", username, password)
 				format!("rediss://{}:{}@{host}", username, password)

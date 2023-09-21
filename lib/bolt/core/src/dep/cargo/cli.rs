@@ -125,8 +125,6 @@ pub async fn build<'a, T: AsRef<str>>(ctx: &ProjectContext, opts: BuildOpts<'a, 
 							COPY --from=build /usr/rivet/target/{optimization}/{bin} /bin/svc
 							RUN apt-get update
 							RUN apt-get -y install openssl
-
-							CMD ["bin/svc"]
 							"#
 						),
 					)
@@ -139,7 +137,7 @@ pub async fn build<'a, T: AsRef<str>>(ctx: &ProjectContext, opts: BuildOpts<'a, 
 					cmd.arg("--rm");
 					cmd.arg("-f").arg(dockerfile_path);
 					// Prints plain console output for debugging
-					cmd.arg("--progress=plain");
+					// cmd.arg("--progress=plain");
 					cmd.arg("-t").arg(image_tag);
 					cmd.arg(".");
 
