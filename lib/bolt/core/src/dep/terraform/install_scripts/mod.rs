@@ -13,6 +13,7 @@ pub async fn gen(ctx: &ProjectContext, server: &Server) -> Result<String> {
 	script.push(components::node_exporter());
 	script.push(components::sysctl());
 
+	println!("x {}", server.pool_id);
 	if server.pool_id == "gg" {
 		// TODO: Only do this if TLS plan applied
 		let tls = terraform::output::read_tls(ctx).await;

@@ -237,32 +237,34 @@ pub async fn generate(project_path: &Path, ns_id: &str) -> Result<()> {
 	if generator.ns.get("pools").is_none() {
 		let mut pools = toml_edit::ArrayOfTables::new();
 
-		for name_id in ["lnd-sfo", "lnd-fra"] {
+		for (i, name_id) in ["lnd-sfo", "lnd-fra"].iter().enumerate() {
+			let base_netnum = i as i64 * 3;
+
 			let mut job = toml_edit::Table::new();
 			job["pool"] = value("job");
 			job["version"] = value("01");
-			job["region"] = value(name_id);
+			job["region"] = value(*name_id);
 			job["count"] = value(1);
 			job["size"] = value("g6-standard-1");
-			job["netnum"] = value(1);
+			job["netnum"] = value(base_netnum + 1);
 			pools.push(job);
 
 			let mut gg = toml_edit::Table::new();
 			gg["pool"] = value("gg");
 			gg["version"] = value("01");
-			gg["region"] = value(name_id);
+			gg["region"] = value(*name_id);
 			gg["count"] = value(1);
 			gg["size"] = value("g6-standard-1");
-			gg["netnum"] = value(2);
+			gg["netnum"] = value(base_netnum + 2);
 			pools.push(gg);
 
 			let mut ats = toml_edit::Table::new();
 			ats["pool"] = value("ats");
 			ats["version"] = value("01");
-			ats["region"] = value(name_id);
+			ats["region"] = value(*name_id);
 			ats["count"] = value(1);
 			ats["size"] = value("g6-standard-1");
-			ats["netnum"] = value(3);
+			ats["netnum"] = value(base_netnum + 3);
 			pools.push(ats);
 		}
 

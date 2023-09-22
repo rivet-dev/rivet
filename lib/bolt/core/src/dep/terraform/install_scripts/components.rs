@@ -100,13 +100,6 @@ pub fn traefik_instance(config: TraefikInstance) -> String {
 }
 
 pub async fn traffic_server(ctx: &ProjectContext) -> Result<String> {
-	let username = ctx
-		.read_secret(&["docker", "registry", "ghcr.io", "write", "username"])
-		.await?;
-	let password = ctx
-		.read_secret(&["docker", "registry", "ghcr.io", "write", "password"])
-		.await?;
-
 	// Write config to files
 	let config = traffic_server_config(ctx).await?;
 	let config_script = config
@@ -116,8 +109,6 @@ pub async fn traffic_server(ctx: &ProjectContext) -> Result<String> {
 		.join("\n\n");
 
 	let script = include_str!("files/traffic_server.sh")
-		.replace("__GHCR_USERNAME__", &username)
-		.replace("__GHCR_PASSWORD__", &password)
 		.replace(
 			"__IMAGE__",
 			"ghcr.io/rivet-gg/apache-traffic-server:378f44b",
@@ -137,8 +128,7 @@ async fn traffic_server_config(ctx: &ProjectContext) -> Result<Vec<(String, Stri
 
 	// Static files
 	let mut config_files = Vec::<(String, String)>::new();
-	println!("reading {}", config_dir.join("etc/static").display());
-	let mut static_dir = fs::read_dir(config_dir.join("etc/static")).await?;
+	let mut static_dir = fs::read_dir(config_dir.join("etc")).await?;
 	while let Some(entry) = static_dir.next_entry().await? {
 		let meta = entry.metadata().await?;
 		if meta.is_file() {
@@ -149,7 +139,6 @@ async fn traffic_server_config(ctx: &ProjectContext) -> Result<Vec<(String, Stri
 				.to_str()
 				.context("as_str")?
 				.to_string();
-			println!("reading {}", entry.path().display());
 			let value = fs::read_to_string(entry.path()).await?;
 			config_files.push((key, value));
 		}
