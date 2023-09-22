@@ -43,7 +43,11 @@ resource "aws_elasticache_replication_group" "main" {
 
 	automatic_failover_enabled  = local.cluster_count > 1
 	# AZ count must match the cluster count
-	preferred_cache_cluster_azs = slice(data.terraform_remote_state.k8s_cluster_aws.outputs.azs, 0, local.cluster_count)
+	preferred_cache_cluster_azs = slice(
+		data.terraform_remote_state.k8s_cluster_aws.outputs.azs,
+		0,
+		local.cluster_count
+	)
 	replication_group_id = local.names[each.key]
 	description = local.names[each.key]
 	node_type = "cache.t4g.micro"
@@ -54,6 +58,7 @@ resource "aws_elasticache_replication_group" "main" {
 	parameter_group_name = "default.redis7"
 	subnet_group_name = aws_elasticache_subnet_group.main.name
 	user_group_ids = [aws_elasticache_user_group.main[each.key].id]
+	security_group_ids = [data.terraform_remote_state.k8s_cluster_aws.outputs.eks_cluster_security_group_id]
 
 	lifecycle {
 		ignore_changes = [num_cache_clusters]
@@ -73,7 +78,11 @@ resource "aws_elasticache_cluster" "main" {
 
 	cluster_id = each.key
 	replication_group_id = aws_elasticache_replication_group.main[each.value.db].id
-	transit_encryption_enabled = false
+
+	# TODO: Bugged property
+	lifecycle {
+		ignore_changes = [transit_encryption_enabled]
+	}
 }
 
 resource "aws_elasticache_subnet_group" "main" {
@@ -127,16 +136,15 @@ resource "aws_memorydb_cluster" "main" {
 
 	name = local.names[each.key]
 	node_type = "db.t4g.small"
-	num_shards = local.shard_count
+	# TODO: Our redis pools do not currently support redis cluster mode
+	# num_shards = local.shard_count
+	num_shards = 1
 	acl_name = aws_memorydb_acl.main[each.key].name
 	engine_version = "7.0"
 	parameter_group_name = "default.memorydb-redis7"
 	snapshot_retention_limit = 7
 	subnet_group_name = aws_memorydb_subnet_group.main.id
 	security_group_ids = [data.terraform_remote_state.k8s_cluster_aws.outputs.eks_cluster_security_group_id]
-
-	# acl_name = "open-access"
-	# tls_enabled = false
 }
 
 resource "aws_memorydb_subnet_group" "main" {

@@ -100,7 +100,7 @@ pub struct FindOutput {
 pub async fn find(
 	ctx: &OperationContext<mm::msg::lobby_find::Message>,
 	crdb: &CrdbPool,
-	redis_mm: &mut RedisConn,
+	redis_mm: &mut RedisPool,
 	FindOpts {
 		namespace_id,
 		query_id,

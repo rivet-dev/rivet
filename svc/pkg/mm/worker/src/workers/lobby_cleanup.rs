@@ -210,7 +210,7 @@ async fn worker(ctx: &OperationContext<mm::msg::lobby_cleanup::Message>) -> Glob
 
 /// Removes the lobby from the Redis database.
 async fn remove_from_redis(
-	redis_mm: &mut RedisConn,
+	redis_mm: &mut RedisPool,
 	namespace_id: Uuid,
 	region_id: Uuid,
 	lobby_group_id: Uuid,

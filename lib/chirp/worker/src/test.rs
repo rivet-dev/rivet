@@ -55,23 +55,23 @@ impl TestCtx {
 		self.op_ctx.crdb(key).await
 	}
 
-	pub async fn redis_cache(&self) -> Result<RedisConn, rivet_pools::Error> {
+	pub async fn redis_cache(&self) -> Result<RedisPool, rivet_pools::Error> {
 		self.op_ctx.redis_cache().await
 	}
 
-	pub async fn redis_cdn(&self) -> Result<RedisConn, rivet_pools::Error> {
+	pub async fn redis_cdn(&self) -> Result<RedisPool, rivet_pools::Error> {
 		self.op_ctx.redis_cdn().await
 	}
 
-	pub async fn redis_job(&self) -> Result<RedisConn, rivet_pools::Error> {
+	pub async fn redis_job(&self) -> Result<RedisPool, rivet_pools::Error> {
 		self.op_ctx.redis_job().await
 	}
 
-	pub async fn redis_mm(&self) -> Result<RedisConn, rivet_pools::Error> {
+	pub async fn redis_mm(&self) -> Result<RedisPool, rivet_pools::Error> {
 		self.op_ctx.redis_mm().await
 	}
 
-	pub async fn redis_user_presence(&self) -> Result<RedisConn, rivet_pools::Error> {
+	pub async fn redis_user_presence(&self) -> Result<RedisPool, rivet_pools::Error> {
 		self.op_ctx.redis_user_presence().await
 	}
 }

@@ -1084,10 +1084,8 @@ impl ServiceContextData {
 
 			// Build URL with auth
 			let url = if let Some(password) = password {
-				// format!("rediss://{}:{}@{host}#insecure", username, password)
 				format!("rediss://{}:{}@{host}", username, password)
 			} else {
-				// format!("rediss://{}@{host}#insecure", username)
 				format!("rediss://{}@{host}", username)
 			};
 

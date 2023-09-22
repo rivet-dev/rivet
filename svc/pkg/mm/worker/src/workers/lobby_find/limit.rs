@@ -12,7 +12,7 @@ use super::fail;
 #[tracing::instrument(skip(redis_mm))]
 pub async fn check_remote_addresses(
 	ctx: &OperationContext<mm::msg::lobby_find::Message>,
-	redis_mm: &mut RedisConn,
+	redis_mm: &mut RedisPool,
 	analytics_events: &mut Vec<analytics::msg::event_create::Event>,
 	namespace_id: Uuid,
 	query_id: Uuid,

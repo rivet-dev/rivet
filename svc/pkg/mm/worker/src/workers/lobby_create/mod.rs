@@ -408,7 +408,7 @@ async fn fetch_lobby_group_config(
 #[tracing::instrument(skip(redis_mm))]
 async fn validate_lobby_count(
 	ctx: &OperationContext<mm::msg::lobby_create::Message>,
-	mut redis_mm: RedisConn,
+	mut redis_mm: RedisPool,
 	lobby_id: Uuid,
 	mm_ns_config: &backend::matchmaker::NamespaceConfig,
 	namespace_id: Uuid,

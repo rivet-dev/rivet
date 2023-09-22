@@ -2221,7 +2221,7 @@ version = "0.1.0"
 dependencies = [
  "lazy_static",
  "prost 0.10.4",
- "redis",
+ "redis 0.23.3",
  "rivet-metrics",
  "rivet-pools",
  "thiserror",
@@ -2254,7 +2254,7 @@ dependencies = [
  "lazy_static",
  "prost 0.10.4",
  "rand",
- "redis",
+ "redis 0.23.3",
  "rivet-cache",
  "rivet-connection",
  "rivet-metrics",
@@ -2639,6 +2639,12 @@ name = "crc-catalog"
 version = "2.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9cace84e55f07e7301bae1c519df89cdad8cc3cd868413d3fdbdeca9ff3db484"
+
+[[package]]
+name = "crc16"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "338089f42c427b86394a5ee60ff321da23a5c89c9d89514c829687b26359fcff"
 
 [[package]]
 name = "crc32c"
@@ -6136,20 +6142,39 @@ version = "0.21.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "152f3863635cbb76b73bc247845781098302c6c9ad2060e1a9a7de56840346b6"
 dependencies = [
+ "async-trait",
+ "combine",
+ "itoa 1.0.9",
+ "percent-encoding",
+ "ryu",
+ "sha1 0.6.1",
+ "url",
+]
+
+[[package]]
+name = "redis"
+version = "0.23.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4f49cdc0bb3f412bf8e7d1bd90fe1d9eb10bc5c399ba90973c14662a27b3f8ba"
+dependencies = [
  "arc-swap",
  "async-trait",
  "bytes",
  "combine",
+ "crc16",
  "futures",
  "futures-util",
  "itoa 1.0.9",
+ "log",
  "native-tls",
  "percent-encoding",
  "pin-project-lite",
+ "rand",
  "ryu",
- "sha1 0.6.1",
+ "sha1_smol",
  "tokio",
  "tokio-native-tls",
+ "tokio-retry",
  "tokio-util 0.7.8",
  "url",
 ]
@@ -6159,7 +6184,7 @@ name = "redis-util"
 version = "0.1.0"
 dependencies = [
  "lazy_static",
- "redis",
+ "redis 0.21.7",
  "regex",
 ]
 
@@ -6385,7 +6410,7 @@ dependencies = [
  "global-error",
  "prost 0.10.4",
  "prost-types 0.10.1",
- "redis",
+ "redis 0.23.3",
  "rivet-cache-result",
  "rivet-pools",
  "rivet-util",
@@ -6721,7 +6746,7 @@ dependencies = [
  "global-error",
  "lazy_static",
  "rand",
- "redis",
+ "redis 0.23.3",
  "rivet-metrics",
  "sqlx",
  "thiserror",
