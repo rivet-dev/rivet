@@ -6,6 +6,12 @@ kind = "rust"
 
 [api]
 
+# New
+[[api.router.mounts]]
+path = "/kv"
+subdomain = "api"
+
+# Legacy
 [[api.router.mounts]]
 path = "/v1"
 subdomain = "kv.api"

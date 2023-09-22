@@ -5,6 +5,12 @@ essential = true
 [runtime]
 kind = "rust"
 
+# New
+[[api.router.mounts]]
+path = "/job"
+subdomain = "api"
+
+# Legacy
 [[api.router.mounts]]
 path = "/v1"
 subdomain = "job.api"

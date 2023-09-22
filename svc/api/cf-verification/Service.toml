@@ -4,6 +4,12 @@ name = "api-cf-verification"
 [runtime]
 kind = "rust"
 
+# New
+[[api.router.mounts]]
+path = "/cf-verification"
+subdomain = "api"
+
+# Legacy
 [[api.router.mounts]]
 path = "/v1"
 subdomain = "cf-verification.api"

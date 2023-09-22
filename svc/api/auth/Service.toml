@@ -3,6 +3,12 @@ name = "api-auth"
 [runtime]
 kind = "rust"
 
+# New
+[[api.router.mounts]]
+path = "/auth"
+subdomain = "api"
+
+# Legacy
 [[api.router.mounts]]
 path = "/v1"
 subdomain = "auth.api"

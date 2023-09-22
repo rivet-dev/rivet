@@ -8,5 +8,9 @@ kind = "rust"
 path = "/v1"
 subdomain = "admin.api"
 
+[[api.router.mounts]]
+path = "/admin"
+subdomain = "api"
+
 [secrets]
 "rivet/api_admin/token" = {}

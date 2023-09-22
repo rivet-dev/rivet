@@ -6,6 +6,12 @@ kind = "rust"
 
 [api]
 
+# New
+[[api.router.mounts]]
+path = "/identity"
+subdomain = "api"
+
+# Legacy
 [[api.router.mounts]]
 path = "/v1"
 subdomain = "identity.api"

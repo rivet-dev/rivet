@@ -4,6 +4,12 @@ name = "api-status"
 [runtime]
 kind = "rust"
 
+# New
+[[api.router.mounts]]
+path = "/status"
+subdomain = "api"
+
+# Legacy
 [[api.router.mounts]]
 path = "/v1"
 subdomain = "status.api"

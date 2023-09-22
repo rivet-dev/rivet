@@ -6,6 +6,13 @@ kind = "rust"
 
 [api]
 
+# New
+[[api.router.mounts]]
+path = "/cloud"
+subdomain = "api"
+
+# Legacy
 [[api.router.mounts]]
 path = "/v1"
 subdomain = "cloud.api"
+

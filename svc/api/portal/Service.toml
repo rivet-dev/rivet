@@ -4,6 +4,12 @@ name = "api-portal"
 [runtime]
 kind = "rust"
 
+# New
+[[api.router.mounts]]
+path = "/portal"
+subdomain = "api"
+
+# Legacy
 [[api.router.mounts]]
 path = "/v1"
 subdomain = "portal.api"

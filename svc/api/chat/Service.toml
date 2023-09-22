@@ -6,6 +6,12 @@ kind = "rust"
 
 [api]
 
+# New
+[[api.router.mounts]]
+path = "/chat"
+subdomain = "api"
+
+# Legacy
 [[api.router.mounts]]
 path = "/v1"
 subdomain = "chat.api"

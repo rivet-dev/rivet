@@ -54,7 +54,7 @@ impl ResizePreset {
 
 	fn path_regex(&self) -> String {
 		format!(
-			"/{name}/({UUID_V4_REGEXP}){file}",
+			"(?:/media)?/{name}/({UUID_V4_REGEXP}){file}",
 			name = self.name,
 			file = self.file_path
 		)

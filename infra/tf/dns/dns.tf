@@ -44,6 +44,7 @@ locals {
 				name = "*.${var.domain_cdn}"
 				proxied = true
 			},
+			# Legacy
 			{
 				zone_id = local.cloudflare_zone_id_main
 				name = "media.${var.domain_main}"

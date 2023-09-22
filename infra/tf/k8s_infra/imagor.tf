@@ -16,26 +16,47 @@ locals {
 	result_storage_s3_secret_access_key = module.imagor_secrets.values["s3/${var.s3_default_provider}/terraform/key"]
 	result_storage_s3_bucket = "${var.namespace}-bucket-imagor-result-storage"
 
-	imagor_presets = [
-		for preset in var.imagor_presets: {
-			key = preset.key
-			priority = preset.priority
-			game_cors = preset.game_cors
+	imagor_presets = flatten([
+		for preset in var.imagor_presets:
+		[
+			# Path
+			{
+				key = preset.key
+				priority = preset.priority
+				game_cors = preset.game_cors
 
-			rule = "(Host(`media.${var.domain_main}`) || HostRegexp(`media.{region:.+}.${var.domain_main}`)) && Path(`${preset.path}`)"
-			query = (
-				preset.query != null ?
-					"&& Query(${join(",", [for x in preset.query: "`${x[0]}=${x[1]}`"])})"
-					: ""
-			)
-			middlewares = (
-				preset.game_cors ?
-					["imagor-${preset.key}-path", "imagor-cors-game", "imagor-cdn"]
-					: ["imagor-${preset.key}-path", "imagor-cors", "imagor-cdn"]
-			)
-		}
-		
-	]
+				rule = "(Host(`${var.domain_main}`) || Path(`/media/${preset.path}`)"
+				query = (
+					preset.query != null ?
+						"&& Query(${join(",", [for x in preset.query: "`${x[0]}=${x[1]}`"])})"
+						: ""
+				)
+				middlewares = (
+					preset.game_cors ?
+						["imagor-${preset.key}-path", "imagor-cors-game", "imagor-cdn"]
+						: ["imagor-${preset.key}-path", "imagor-cors", "imagor-cdn"]
+				)
+			},
+			# Legacy subdomains
+			{
+				key = preset.key
+				priority = preset.priority
+				game_cors = preset.game_cors
+
+				rule = "(Host(`media.${var.domain_main}`) || HostRegexp(`media.{region:.+}.${var.domain_main}`)) && Path(`${preset.path}`)"
+				query = (
+					preset.query != null ?
+						"&& Query(${join(",", [for x in preset.query: "`${x[0]}=${x[1]}`"])})"
+						: ""
+				)
+				middlewares = (
+					preset.game_cors ?
+						["imagor-${preset.key}-path", "imagor-cors-game", "imagor-cdn"]
+						: ["imagor-${preset.key}-path", "imagor-cors", "imagor-cdn"]
+				)
+			}
+		]
+	])
 }
 
 module "imagor_secrets" {
