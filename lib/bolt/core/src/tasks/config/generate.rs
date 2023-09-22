@@ -269,7 +269,28 @@ pub async fn generate(project_path: &Path, ns_id: &str) -> Result<()> {
 		generator.ns["pools"] = toml_edit::Item::ArrayOfTables(pools);
 	}
 
-	// TODO: DNS
+	// MARK: DNS
+	generator
+		.prompt_config(
+			"Domain Main",
+			"doc/bolt/config/DNS.md",
+			&["dns", "domain", "main"],
+		)
+		.await?;
+	generator
+		.prompt_config(
+			"Domain CDN",
+			"doc/bolt/config/DNS.md",
+			&["dns", "domain", "cdn"],
+		)
+		.await?;
+	generator
+		.prompt_config(
+			"Domain Job",
+			"doc/bolt/config/DNS.md",
+			&["dns", "domain", "job"],
+		)
+		.await?;
 
 	// MARK: Cloudflare
 	generator
@@ -279,27 +300,6 @@ pub async fn generate(project_path: &Path, ns_id: &str) -> Result<()> {
 			&["dns", "cloudflare", "account_id"],
 		)
 		.await?;
-	// generator
-	// 	.prompt_config(
-	// 		"Cloudflare Zone (Root)",
-	// 		"doc/bolt/config/CLOUDFLARE.md",
-	// 		&["dns", "cloudflare", "zones", "root"],
-	// 	)
-	// 	.await?;
-	// generator
-	// 	.prompt_config(
-	// 		"Cloudflare Zone (Game)",
-	// 		"doc/bolt/config/CLOUDFLARE.md",
-	// 		&["dns", "cloudflare", "zones", "game"],
-	// 	)
-	// 	.await?;
-	// generator
-	// 	.prompt_config(
-	// 		"Cloudflare Zone, (Job)",
-	// 		"doc/bolt/config/CLOUDFLARE.md",
-	// 		&["dns", "cloudflare", "zones", "job"],
-	// 	)
-	// 	.await?;
 	generator
 		.prompt_secret_multiple(
 			"Cloudflare Auth Token",
