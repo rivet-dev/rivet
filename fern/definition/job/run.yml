@@ -2,8 +2,7 @@
 
 service:
   auth: true
-  url: Job
-  base-path: /runs/cleanup
+  base-path: /job/runs/cleanup
   endpoints:
     cleanup:
       path: ""

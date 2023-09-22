@@ -5,8 +5,7 @@ imports:
 
 service:
   auth: true
-  base-path: /games/{game_id}/matchmaker/lobbies
-  url: Cloud
+  base-path: /cloud/games/{game_id}/matchmaker/lobbies
   audiences:
     - public
   path-parameters:

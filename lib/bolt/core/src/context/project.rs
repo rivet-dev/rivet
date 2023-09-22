@@ -136,11 +136,14 @@ impl ProjectContextData {
 		if self.ns().grafana.is_some() {
 			assert!(
 				matches!(
-					self.ns().dns.provider,
-					config::ns::DnsProvider::Cloudflare {
-						access: Some(_),
+					self.ns().dns,
+					Some(config::ns::Dns {
+						provider: config::ns::DnsProvider::Cloudflare {
+							access: Some(_),
+							..
+						},
 						..
-					}
+					})
 				),
 				"cloudflare access must be enabled to use grafana"
 			);
@@ -468,22 +471,37 @@ impl ProjectContextData {
 impl ProjectContextData {
 	/// Origin used for building links to the Hub.
 	pub fn origin_hub(&self) -> String {
-		self.ns()
-			.dns
-			.hub_origin
-			.clone()
-			.unwrap_or_else(|| format!("https://hub.{}", self.ns().dns.domain.main.clone()))
+		if let Some(dns) = &self.ns().dns {
+			dns.hub_origin
+				.clone()
+				.unwrap_or_else(|| format!("https://hub.{}", dns.domain.main.clone()))
+		} else {
+			todo!()
+		}
 	}
+
 	pub fn domain_main(&self) -> String {
-		self.ns().dns.domain.main.clone()
+		if let Some(dns) = &self.ns().dns {
+			dns.domain.main.clone()
+		} else {
+			todo!()
+		}
 	}
 
 	pub fn domain_cdn(&self) -> String {
-		self.ns().dns.domain.cdn.clone()
+		if let Some(dns) = &self.ns().dns {
+			dns.domain.cdn.clone()
+		} else {
+			todo!()
+		}
 	}
 
 	pub fn domain_job(&self) -> String {
-		self.ns().dns.domain.job.clone()
+		if let Some(dns) = &self.ns().dns {
+			dns.domain.job.clone()
+		} else {
+			todo!()
+		}
 	}
 
 	pub async fn all_router_url_env(self: &Arc<Self>) -> Vec<(String, String)> {

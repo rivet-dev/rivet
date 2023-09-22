@@ -34,11 +34,14 @@ impl NomadCtx {
 			config::ns::ClusterKind::Distributed { .. } => {
 				assert!(
 					matches!(
-						ctx.ns().dns.provider,
-						config::ns::DnsProvider::Cloudflare {
-							access: Some(_),
+						ctx.ns().dns,
+						Some(config::ns::Dns {
+							provider: config::ns::DnsProvider::Cloudflare {
+								access: Some(_),
+								..
+							},
 							..
-						}
+						})
 					),
 					"cloudflare access not enabled"
 				);

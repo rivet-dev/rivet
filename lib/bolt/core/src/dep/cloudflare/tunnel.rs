@@ -211,11 +211,14 @@ impl Tunnel {
 	pub async fn open(ctx: &ProjectContext, tunnels: Vec<TunnelConfig>) -> Tunnel {
 		assert!(
 			matches!(
-				ctx.ns().dns.provider,
-				config::ns::DnsProvider::Cloudflare {
-					access: Some(_),
+				ctx.ns().dns,
+				Some(config::ns::Dns {
+					provider: config::ns::DnsProvider::Cloudflare {
+						access: Some(_),
+						..
+					},
 					..
-				}
+				})
 			),
 			"cloudflare access not enabled"
 		);

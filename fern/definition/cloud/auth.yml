@@ -5,8 +5,7 @@ imports:
 
 service:
   auth: true
-  base-path: /auth
-  url: Cloud
+  base-path: /cloud/auth
   audiences:
     - public
   endpoints:

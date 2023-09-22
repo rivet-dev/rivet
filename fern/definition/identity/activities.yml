@@ -8,8 +8,7 @@ imports:
 
 service:
   auth: true
-  url: Identity
-  base-path: /activities
+  base-path: /identity/activities
   endpoints:
     list:
       docs: Returns an overview of all players currently online or in game.

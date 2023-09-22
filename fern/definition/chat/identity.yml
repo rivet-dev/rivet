@@ -5,10 +5,9 @@ imports:
 
 service:
   auth: true
-  url: Chat
   audiences:
     - public
-  base-path: /identities
+  base-path: /chat/identities
   endpoints:
     getDirectThread:
       path: /{identity_id}/thread

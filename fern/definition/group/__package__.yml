@@ -7,10 +7,9 @@ imports:
 
 service:
   auth: true
-  url: Group
   audiences:
     - public
-  base-path: /groups
+  base-path: /group/groups
   endpoints:
     listSuggested:
       path: ""

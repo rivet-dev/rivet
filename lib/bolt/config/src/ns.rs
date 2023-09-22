@@ -17,7 +17,7 @@ pub struct Namespace {
 	pub pools: Vec<Pool>,
 	#[serde(default)]
 	pub terraform: Terraform,
-	pub dns: Dns,
+	pub dns: Option<Dns>,
 	pub s3: S3,
 	pub fly: Option<Fly>,
 	pub email: Option<Email>,
