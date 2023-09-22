@@ -172,18 +172,18 @@ pub enum DnsProvider {
 	#[serde(rename = "cloudflare")]
 	Cloudflare {
 		account_id: String,
-		zones: CloudflareZones,
+		// zones: CloudflareZones,
 		access: Option<CloudflareAccess>,
 	},
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug)]
-#[serde(deny_unknown_fields)]
-pub struct CloudflareZones {
-	pub root: String,
-	pub game: String,
-	pub job: String,
-}
+// #[derive(Serialize, Deserialize, Clone, Debug)]
+// #[serde(deny_unknown_fields)]
+// pub struct CloudflareZones {
+// 	pub root: String,
+// 	pub game: String,
+// 	pub job: String,
+// }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(deny_unknown_fields)]

@@ -770,10 +770,10 @@ impl ServiceContextData {
 		// for some services which don't have an explicit dependency.
 		env.extend(project_ctx.all_router_url_env().await);
 
-		let config::ns::DnsProvider::Cloudflare { zones, .. } = &project_ctx.ns().dns.provider;
-		env.push(("CLOUDFLARE_ZONE_ID_BASE".into(), zones.root.clone()));
-		env.push(("CLOUDFLARE_ZONE_ID_GAME".into(), zones.game.clone()));
-		env.push(("CLOUDFLARE_ZONE_ID_JOB".into(), zones.job.clone()));
+		todo!("read cloudflare zones");
+		// env.push(("CLOUDFLARE_ZONE_ID_BASE".into(), zones.root.clone()));
+		// env.push(("CLOUDFLARE_ZONE_ID_GAME".into(), zones.game.clone()));
+		// env.push(("CLOUDFLARE_ZONE_ID_JOB".into(), zones.job.clone()));
 
 		if let Some(hcaptcha) = &project_ctx.ns().captcha.hcaptcha {
 			if self.depends_on_hcaptcha() {

@@ -214,7 +214,7 @@ pub async fn generate(project_path: &Path, ns_id: &str) -> Result<()> {
 		})
 		.await?;
 
-	if generator.ns.get("cluster").is_none() && generator.ns["cluster"].get("distributed").is_none()
+	if generator.ns.get("cluster").is_none() || generator.ns["cluster"].get("distributed").is_none()
 	{
 		generator
 			.generate_config(&["cluster", "single_node", "public_ip"], || async {
@@ -247,17 +247,29 @@ pub async fn generate(project_path: &Path, ns_id: &str) -> Result<()> {
 			job["netnum"] = value(1);
 			pools.push(job);
 
-			let mut ing_job = toml_edit::Table::new();
-			ing_job["pool"] = value("ing-job");
-			ing_job["region"] = value(name_id);
-			ing_job["count"] = value(1);
-			ing_job["size"] = value("g6-standard-1");
-			ing_job["netnum"] = value(2);
-			pools.push(ing_job);
+			let mut gg = toml_edit::Table::new();
+			gg["pool"] = value("gg");
+			gg["version"] = value("01");
+			gg["region"] = value(name_id);
+			gg["count"] = value(1);
+			gg["size"] = value("g6-standard-1");
+			gg["netnum"] = value(2);
+			pools.push(gg);
+
+			let mut ats = toml_edit::Table::new();
+			ats["pool"] = value("ats");
+			ats["version"] = value("01");
+			ats["region"] = value(name_id);
+			ats["count"] = value(1);
+			ats["size"] = value("g6-standard-1");
+			ats["netnum"] = value(3);
+			pools.push(ats);
 		}
 
 		generator.ns["pools"] = toml_edit::Item::ArrayOfTables(pools);
 	}
+
+	// TODO: DNS
 
 	// MARK: Cloudflare
 	generator
@@ -267,27 +279,27 @@ pub async fn generate(project_path: &Path, ns_id: &str) -> Result<()> {
 			&["dns", "cloudflare", "account_id"],
 		)
 		.await?;
-	generator
-		.prompt_config(
-			"Cloudflare Zone (Root)",
-			"doc/bolt/config/CLOUDFLARE.md",
-			&["dns", "cloudflare", "zones", "root"],
-		)
-		.await?;
-	generator
-		.prompt_config(
-			"Cloudflare Zone (Game)",
-			"doc/bolt/config/CLOUDFLARE.md",
-			&["dns", "cloudflare", "zones", "game"],
-		)
-		.await?;
-	generator
-		.prompt_config(
-			"Cloudflare Zone, (Job)",
-			"doc/bolt/config/CLOUDFLARE.md",
-			&["dns", "cloudflare", "zones", "job"],
-		)
-		.await?;
+	// generator
+	// 	.prompt_config(
+	// 		"Cloudflare Zone (Root)",
+	// 		"doc/bolt/config/CLOUDFLARE.md",
+	// 		&["dns", "cloudflare", "zones", "root"],
+	// 	)
+	// 	.await?;
+	// generator
+	// 	.prompt_config(
+	// 		"Cloudflare Zone (Game)",
+	// 		"doc/bolt/config/CLOUDFLARE.md",
+	// 		&["dns", "cloudflare", "zones", "game"],
+	// 	)
+	// 	.await?;
+	// generator
+	// 	.prompt_config(
+	// 		"Cloudflare Zone, (Job)",
+	// 		"doc/bolt/config/CLOUDFLARE.md",
+	// 		&["dns", "cloudflare", "zones", "job"],
+	// 	)
+	// 	.await?;
 	generator
 		.prompt_secret_multiple(
 			"Cloudflare Auth Token",

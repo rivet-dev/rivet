@@ -42,18 +42,6 @@ variable "cloudflare_account_id" {
 	type = string
 }
 
-variable "cloudflare_zone_id_rivet_gg" {
-	type = string
-}
-
-variable "cloudflare_zone_id_rivet_game" {
-	type = string
-}
-
-variable "cloudflare_zone_id_rivet_job" {
-	type = string
-}
-
 # MARK: Servers
 variable "servers" {
 	type = map(object({

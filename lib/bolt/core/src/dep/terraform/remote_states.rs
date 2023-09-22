@@ -26,7 +26,6 @@ pub fn dependency_graph(ctx: &ProjectContext) -> HashMap<&'static str, Vec<Remot
 		"dns" => vec![RemoteStateBuilder::default().plan_id("pools").build().unwrap(), RemoteStateBuilder::default().plan_id("k8s_infra").build().unwrap()],
 		"k8s_infra" => vec![
 			RemoteStateBuilder::default().plan_id("tls").build().unwrap(),
-			RemoteStateBuilder::default().plan_id("cloudflare_tunnels").build().unwrap()
 		],
 		"redis_aws" => vec![
 			RemoteStateBuilder::default().plan_id("k8s_aws").build().unwrap()
@@ -36,6 +35,9 @@ pub fn dependency_graph(ctx: &ProjectContext) -> HashMap<&'static str, Vec<Remot
 		],
 		"clickhouse_managed" => vec![
 			RemoteStateBuilder::default().plan_id("k8s_aws").build().unwrap()
+		],
+		"cloudflare_workers" => vec![
+			RemoteStateBuilder::default().plan_id("dns").build().unwrap()
 		],
 	}
 }

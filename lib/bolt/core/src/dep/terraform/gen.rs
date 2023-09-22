@@ -186,14 +186,8 @@ async fn vars(ctx: &ProjectContext) {
 
 	// Cloudflare
 	match &config.dns.provider {
-		ns::DnsProvider::Cloudflare {
-			account_id, zones, ..
-		} => {
+		ns::DnsProvider::Cloudflare { account_id, .. } => {
 			vars.insert("cloudflare_account_id".into(), json!(account_id));
-
-			vars.insert("cloudflare_zone_id_rivet_gg".into(), json!(zones.root));
-			vars.insert("cloudflare_zone_id_rivet_game".into(), json!(zones.game));
-			vars.insert("cloudflare_zone_id_rivet_job".into(), json!(zones.job));
 		}
 	}
 
@@ -260,9 +254,9 @@ async fn vars(ctx: &ProjectContext) {
 			if let Some(router) = svc_ctx.config().kind.router() {
 				for mount in &router.mounts {
 					let (domain, zone_name) = match mount.domain {
-						ServiceDomain::Base => (ctx.domain_main(), "base"),
-						ServiceDomain::BaseGame => (ctx.domain_cdn(), "base_game"),
-						ServiceDomain::BaseJob => (ctx.domain_job(), "base_job"),
+						ServiceDomain::Base => (ctx.domain_main(), "main"),
+						ServiceDomain::BaseGame => (ctx.domain_cdn(), "cdn"),
+						ServiceDomain::BaseJob => (ctx.domain_job(), "job"),
 					};
 
 					extra_dns.push(json!({
@@ -281,7 +275,7 @@ async fn vars(ctx: &ProjectContext) {
 		let s3_providers = &ctx.ns().s3.providers;
 		if s3_providers.minio.is_some() {
 			extra_dns.push(json!({
-				"zone_name": "base",
+				"zone_name": "main",
 				"name": format!("minio.{}", ctx.domain_main()),
 			}));
 		}

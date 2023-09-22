@@ -6,6 +6,10 @@ variable "deploy_method_cluster" {
 	type = bool
 }
 
+variable "public_ip" {
+	type = string
+}
+
 # MARK: DNS
 variable "domain_main" {
 	type = string

@@ -31,12 +31,14 @@ resource "k3d_cluster" "main" {
 	}
 
 	port {
+		host = var.public_ip
 		host_port = 80
 		container_port = 80
 		node_filters = ["server:0"]
 	}
 
 	port {
+		host = var.public_ip
 		host_port = 443
 		container_port = 443
 		node_filters = ["server:0"]

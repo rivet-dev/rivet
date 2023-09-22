@@ -149,7 +149,7 @@ module "docker_ghcr_secrets" {
 # Create Docker auth secret in every namespace it's used in
 resource "kubernetes_secret" "docker_auth" {
 	for_each = toset([
-		for x in [kubernetes_namespace.redis, kubernetes_namespace.traffic_server, kubernetes_namespace.rivet_service]:
+		for x in [/*kubernetes_namespace.redis,*/ kubernetes_namespace.traffic_server, kubernetes_namespace.rivet_service]:
 		x.metadata.0.name
 	])
 
