@@ -139,6 +139,13 @@ impl ProjectContextData {
 				self.ns().pools.is_empty(),
 				"must have dns configured to provision servers"
 			);
+			assert!(
+				matches!(
+					self.ns().cluster.kind,
+					config::ns::ClusterKind::SingleNode { .. }
+				),
+				"must have dns if not using single node cluster"
+			);
 		}
 
 		// MARK: Grafana
@@ -495,8 +502,12 @@ impl ProjectContextData {
 	pub fn domain_main(&self) -> String {
 		if let Some(dns) = &self.ns().dns {
 			dns.domain.main.clone()
+		} else if let config::ns::ClusterKind::SingleNode { api_http_port, .. } =
+			&self.ns().cluster.kind
+		{
+			format!("127.0.0.1:{api_http_port}")
 		} else {
-			"127.0.0.1:8080".into()
+			unreachable!()
 		}
 	}
 
