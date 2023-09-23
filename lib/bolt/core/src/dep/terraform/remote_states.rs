@@ -24,9 +24,6 @@ pub fn dependency_graph(ctx: &ProjectContext) -> HashMap<&'static str, Vec<Remot
 
 	hashmap! {
 		"dns" => vec![RemoteStateBuilder::default().plan_id("pools").build().unwrap(), RemoteStateBuilder::default().plan_id("k8s_infra").build().unwrap()],
-		"k8s_infra" => vec![
-			RemoteStateBuilder::default().plan_id("tls").build().unwrap(),
-		],
 		"redis_aws" => vec![
 			RemoteStateBuilder::default().plan_id("k8s_aws").build().unwrap()
 		],

@@ -4,12 +4,11 @@ name = "api-matchmaker"
 [runtime]
 kind = "rust"
 
-# New
 [[api.router.mounts]]
 path = "/matchmaker"
 subdomain = "api"
 
-# Legacy
 [[api.router.mounts]]
+deprecated = true
 path = "/v1"
 subdomain = "matchmaker.api"

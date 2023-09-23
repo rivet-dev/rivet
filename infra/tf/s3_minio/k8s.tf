@@ -32,12 +32,14 @@ resource "helm_release" "minio" {
 			rootUser = module.minio_secrets.values["s3/minio/root/key_id"]
 			rootPassword = module.minio_secrets.values["s3/minio/root/key"]
 		}
+		service = {
+			# Expose as LB so it can be accessed from the host if needed
+			type = var.minio_port != null ? "LoadBalancer" : "ClusterIP"
+		}
 	})]
 }
 
 resource "kubectl_manifest" "minio_ingress_route" {
-	count = local.has_minio ? 1 : 0
-
 	depends_on = [helm_release.minio]
 
 	yaml_body = yamlencode({

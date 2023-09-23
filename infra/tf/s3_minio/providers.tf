@@ -9,7 +9,7 @@ provider "aws" {
 	skip_requesting_account_id = true
 	s3_use_path_style = true
 	endpoints {
-		s3 = "https://minio.${var.domain_main}"
+		s3 = var.s3_providers.minio.endpoint_external
 	}
 }
 

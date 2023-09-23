@@ -18,44 +18,23 @@ locals {
 
 	imagor_presets = flatten([
 		for preset in var.imagor_presets:
-		[
-			# Path
-			{
-				key = preset.key
-				priority = preset.priority
-				game_cors = preset.game_cors
+		{
+			key = preset.key
+			priority = preset.priority
+			game_cors = preset.game_cors
 
-				rule = "(Host(`${var.domain_main}`) || Path(`/media/${preset.path}`)"
-				query = (
-					preset.query != null ?
-						"&& Query(${join(",", [for x in preset.query: "`${x[0]}=${x[1]}`"])})"
-						: ""
-				)
-				middlewares = (
-					preset.game_cors ?
-						["imagor-${preset.key}-path", "imagor-cors-game", "imagor-cdn"]
-						: ["imagor-${preset.key}-path", "imagor-cors", "imagor-cdn"]
-				)
-			},
-			# Legacy subdomains
-			{
-				key = preset.key
-				priority = preset.priority
-				game_cors = preset.game_cors
-
-				rule = "(Host(`media.${var.domain_main}`) || HostRegexp(`media.{region:.+}.${var.domain_main}`)) && Path(`${preset.path}`)"
-				query = (
-					preset.query != null ?
-						"&& Query(${join(",", [for x in preset.query: "`${x[0]}=${x[1]}`"])})"
-						: ""
-				)
-				middlewares = (
-					preset.game_cors ?
-						["imagor-${preset.key}-path", "imagor-cors-game", "imagor-cdn"]
-						: ["imagor-${preset.key}-path", "imagor-cors", "imagor-cdn"]
-				)
-			}
-		]
+			rule = "Host(`api.${var.domain_main}`) && Path(`/media/${preset.path}`)"
+			query = (
+				preset.query != null ?
+					"&& Query(${join(",", [for x in preset.query: "`${x[0]}=${x[1]}`"])})"
+					: ""
+			)
+			middlewares = (
+				preset.game_cors ?
+					["imagor-${preset.key}-path", "imagor-cors-game", "imagor-cdn"]
+					: ["imagor-${preset.key}-path", "imagor-cors", "imagor-cdn"]
+			)
+		}
 	])
 }
 

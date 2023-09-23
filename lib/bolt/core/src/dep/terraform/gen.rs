@@ -147,10 +147,21 @@ async fn vars(ctx: &ProjectContext) {
 	vars.insert("namespace".into(), json!(ns));
 
 	match &config.cluster.kind {
-		ns::ClusterKind::SingleNode { public_ip, .. } => {
+		ns::ClusterKind::SingleNode {
+			public_ip,
+			api_http_port,
+			api_https_port,
+			minio_port,
+			..
+		} => {
 			vars.insert("deploy_method_local".into(), json!(true));
 			vars.insert("deploy_method_cluster".into(), json!(false));
 			vars.insert("public_ip".into(), json!(public_ip));
+			vars.insert("api_http_port".into(), json!(api_http_port));
+			vars.insert("api_https_port".into(), json!(api_https_port));
+			if config.s3.providers.minio.is_some() {
+				vars.insert("minio_port".into(), json!(minio_port));
+			}
 		}
 		ns::ClusterKind::Distributed {} => {
 			vars.insert("deploy_method_local".into(), json!(false));
@@ -183,6 +194,13 @@ async fn vars(ctx: &ProjectContext) {
 	vars.insert("domain_main".into(), json!(ctx.domain_main()));
 	vars.insert("domain_cdn".into(), json!(ctx.domain_cdn()));
 	vars.insert("domain_job".into(), json!(ctx.domain_job()));
+	vars.insert(
+		"dns_deprecated_subdomains".into(),
+		json!(config
+			.dns
+			.as_ref()
+			.map_or(false, |x| x.deprecated_subdomains)),
+	);
 
 	// Cloudflare
 	if let Some(dns) = &config.dns {
@@ -250,13 +268,17 @@ async fn vars(ctx: &ProjectContext) {
 	);
 
 	// Extra DNS
-	{
+	if let Some(dns) = &config.dns {
 		let mut extra_dns = Vec::new();
 
 		// Add services
 		for svc_ctx in all_svc {
 			if let Some(router) = svc_ctx.config().kind.router() {
 				for mount in &router.mounts {
+					if mount.deprecated && !dns.deprecated_subdomains {
+						continue;
+					}
+
 					let (domain, zone_name) = match mount.domain {
 						ServiceDomain::Base => (ctx.domain_main(), "main"),
 						ServiceDomain::BaseGame => (ctx.domain_cdn(), "cdn"),

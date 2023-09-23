@@ -6,13 +6,12 @@ kind = "rust"
 
 [api]
 
-# New
 [[api.router.mounts]]
 path = "/group"
 subdomain = "api"
 
-# Legacy
 [[api.router.mounts]]
+deprecated = true
 path = "/v1"
 subdomain = "group.api"
 

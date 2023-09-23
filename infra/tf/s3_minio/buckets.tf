@@ -3,7 +3,7 @@ resource "null_resource" "check_minio" {
 
 	provisioner "local-exec" {
 		command = <<EOL
-		until curl -sf https://minio.${var.domain_main}/minio/health/ready; do
+		until curl -sf ${var.s3_providers.minio.endpoint_external}/minio/health/ready; do
 			echo "Waiting for Minio to become reachable..."
 			sleep 1
 		done

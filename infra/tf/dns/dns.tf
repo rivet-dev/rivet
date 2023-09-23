@@ -21,9 +21,9 @@ locals {
 		flatten([
 			for record in var.extra_dns:
 			{
-					zone_id = local.cloudflare_zone_ids[record.zone_name]
-					name = record.name
-					proxied = true
+				zone_id = local.cloudflare_zone_ids[record.zone_name]
+				name = record.name
+				proxied = true
 			}
 		]),
 
@@ -44,13 +44,14 @@ locals {
 				name = "*.${var.domain_cdn}"
 				proxied = true
 			},
-			# Legacy
-			{
-				zone_id = local.cloudflare_zone_id_main
-				name = "media.${var.domain_main}"
-				proxied = true
-			}
 		],
+
+		# Deprecated
+		var.dns_deprecated_subdomains ? [{
+			zone_id = local.cloudflare_zone_id_main
+			name = "media.${var.domain_main}"
+			proxied = true
+		}] : [],
 
 		# Job. Matchmaker lobbies will point CNAME record at this.
 		[

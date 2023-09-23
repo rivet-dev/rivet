@@ -224,111 +224,113 @@ pub async fn generate(project_path: &Path, ns_id: &str) -> Result<()> {
 			.await?;
 	}
 
-	// MARK: Linode
-	generator
-		.prompt_secret(
-			"Linode Token",
-			"doc/bolt/config/LINODE.md",
-			&["linode", "terraform", "token"],
-		)
-		.await?;
+	// TODO: Prompt for provisioning servers
+	// // MARK: Linode
+	// generator
+	// 	.prompt_secret(
+	// 		"Linode Token",
+	// 		"doc/bolt/config/LINODE.md",
+	// 		&["linode", "terraform", "token"],
+	// 	)
+	// 	.await?;
 
-	// MARK: Pools
-	if generator.ns.get("pools").is_none() {
-		let mut pools = toml_edit::ArrayOfTables::new();
+	// // MARK: Pools
+	// if generator.ns.get("pools").is_none() {
+	// 	let mut pools = toml_edit::ArrayOfTables::new();
 
-		for (i, name_id) in ["lnd-sfo", "lnd-fra"].iter().enumerate() {
-			let base_netnum = i as i64 * 3;
+	// 	for (i, name_id) in ["lnd-sfo", "lnd-fra"].iter().enumerate() {
+	// 		let base_netnum = i as i64 * 3;
 
-			let mut job = toml_edit::Table::new();
-			job["pool"] = value("job");
-			job["version"] = value("01");
-			job["region"] = value(*name_id);
-			job["count"] = value(1);
-			job["size"] = value("g6-standard-1");
-			job["netnum"] = value(base_netnum + 1);
-			pools.push(job);
+	// 		let mut job = toml_edit::Table::new();
+	// 		job["pool"] = value("job");
+	// 		job["version"] = value("01");
+	// 		job["region"] = value(*name_id);
+	// 		job["count"] = value(1);
+	// 		job["size"] = value("g6-standard-1");
+	// 		job["netnum"] = value(base_netnum + 1);
+	// 		pools.push(job);
 
-			let mut gg = toml_edit::Table::new();
-			gg["pool"] = value("gg");
-			gg["version"] = value("01");
-			gg["region"] = value(*name_id);
-			gg["count"] = value(1);
-			gg["size"] = value("g6-standard-1");
-			gg["netnum"] = value(base_netnum + 2);
-			pools.push(gg);
+	// 		let mut gg = toml_edit::Table::new();
+	// 		gg["pool"] = value("gg");
+	// 		gg["version"] = value("01");
+	// 		gg["region"] = value(*name_id);
+	// 		gg["count"] = value(1);
+	// 		gg["size"] = value("g6-standard-1");
+	// 		gg["netnum"] = value(base_netnum + 2);
+	// 		pools.push(gg);
 
-			let mut ats = toml_edit::Table::new();
-			ats["pool"] = value("ats");
-			ats["version"] = value("01");
-			ats["region"] = value(*name_id);
-			ats["count"] = value(1);
-			ats["size"] = value("g6-standard-1");
-			ats["netnum"] = value(base_netnum + 3);
-			pools.push(ats);
-		}
+	// 		let mut ats = toml_edit::Table::new();
+	// 		ats["pool"] = value("ats");
+	// 		ats["version"] = value("01");
+	// 		ats["region"] = value(*name_id);
+	// 		ats["count"] = value(1);
+	// 		ats["size"] = value("g6-standard-1");
+	// 		ats["netnum"] = value(base_netnum + 3);
+	// 		pools.push(ats);
+	// 	}
 
-		generator.ns["pools"] = toml_edit::Item::ArrayOfTables(pools);
-	}
+	// 	generator.ns["pools"] = toml_edit::Item::ArrayOfTables(pools);
+	// }
 
-	// MARK: DNS
-	generator
-		.prompt_config(
-			"Domain Main",
-			"doc/bolt/config/DNS.md",
-			&["dns", "domain", "main"],
-		)
-		.await?;
-	generator
-		.prompt_config(
-			"Domain CDN",
-			"doc/bolt/config/DNS.md",
-			&["dns", "domain", "cdn"],
-		)
-		.await?;
-	generator
-		.prompt_config(
-			"Domain Job",
-			"doc/bolt/config/DNS.md",
-			&["dns", "domain", "job"],
-		)
-		.await?;
+	// TODO: Prompt for DNS
+	// // MARK: DNS
+	// generator
+	// 	.prompt_config(
+	// 		"Domain Main",
+	// 		"doc/bolt/config/DNS.md",
+	// 		&["dns", "domain", "main"],
+	// 	)
+	// 	.await?;
+	// generator
+	// 	.prompt_config(
+	// 		"Domain CDN",
+	// 		"doc/bolt/config/DNS.md",
+	// 		&["dns", "domain", "cdn"],
+	// 	)
+	// 	.await?;
+	// generator
+	// 	.prompt_config(
+	// 		"Domain Job",
+	// 		"doc/bolt/config/DNS.md",
+	// 		&["dns", "domain", "job"],
+	// 	)
+	// 	.await?;
 
-	// MARK: Cloudflare
-	generator
-		.prompt_config(
-			"Cloudflare Account ID",
-			"doc/bolt/config/CLOUDFLARE.md",
-			&["dns", "cloudflare", "account_id"],
-		)
-		.await?;
-	generator
-		.prompt_secret_multiple(
-			"Cloudflare Auth Token",
-			"doc/bolt/config/CLOUDFLARE.md",
-			&[
-				// Permissions:
-				// - Zone > DNS > Edit
-				//
-				// Zone Resources:
-				// - rivet.run
-				&["cloudflare", "persistent", "auth_token"],
-				// Permissions:
-				// - Account > Cloudflare Tunnel > Edit (if using access)
-				// - Account > Access: Apps and Policies > Edit (if using access)
-				// - Account > Worker Scripts > Edit
-				// - Zone > Workers Routes > Edit
-				// - Zone > SSL and Certificates > Edit
-				// - Zone > DNS > Edit
-				//
-				// Zone Resources:
-				// - rivet.gg
-				// - rivet.game
-				// - rivet.run
-				&["cloudflare", "terraform", "auth_token"],
-			],
-		)
-		.await?;
+	// // MARK: Cloudflare
+	// generator
+	// 	.prompt_config(
+	// 		"Cloudflare Account ID",
+	// 		"doc/bolt/config/CLOUDFLARE.md",
+	// 		&["dns", "cloudflare", "account_id"],
+	// 	)
+	// 	.await?;
+	// generator
+	// 	.prompt_secret_multiple(
+	// 		"Cloudflare Auth Token",
+	// 		"doc/bolt/config/CLOUDFLARE.md",
+	// 		&[
+	// 			// Permissions:
+	// 			// - Zone > DNS > Edit
+	// 			//
+	// 			// Zone Resources:
+	// 			// - rivet.run
+	// 			&["cloudflare", "persistent", "auth_token"],
+	// 			// Permissions:
+	// 			// - Account > Cloudflare Tunnel > Edit (if using access)
+	// 			// - Account > Access: Apps and Policies > Edit (if using access)
+	// 			// - Account > Worker Scripts > Edit
+	// 			// - Zone > Workers Routes > Edit
+	// 			// - Zone > SSL and Certificates > Edit
+	// 			// - Zone > DNS > Edit
+	// 			//
+	// 			// Zone Resources:
+	// 			// - rivet.gg
+	// 			// - rivet.game
+	// 			// - rivet.run
+	// 			&["cloudflare", "terraform", "auth_token"],
+	// 		],
+	// 	)
+	// 	.await?;
 
 	// MARK: S3
 	if generator.ns.get("s3").is_none() {
@@ -349,6 +351,8 @@ pub async fn generate(project_path: &Path, ns_id: &str) -> Result<()> {
 			toml_edit::Item::Table(x)
 		};
 	}
+
+	// TODO: Prompt login
 	if generator
 		.ns
 		.get("email")

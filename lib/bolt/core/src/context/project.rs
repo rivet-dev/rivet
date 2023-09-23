@@ -133,6 +133,15 @@ impl ProjectContextData {
 
 	/// Validates the namespace config.
 	fn validate_ns(&self) {
+		// MARK: Pools
+		if self.ns().dns.is_none() {
+			assert!(
+				self.ns().pools.is_empty(),
+				"must have dns configured to provision servers"
+			);
+		}
+
+		// MARK: Grafana
 		if self.ns().grafana.is_some() {
 			assert!(
 				matches!(
@@ -480,11 +489,13 @@ impl ProjectContextData {
 		}
 	}
 
+	// TODO: Rename this to "host_api", etc
+
 	pub fn domain_main(&self) -> String {
 		if let Some(dns) = &self.ns().dns {
 			dns.domain.main.clone()
 		} else {
-			todo!()
+			"127.0.0.1:8080".into()
 		}
 	}
 
@@ -492,7 +503,8 @@ impl ProjectContextData {
 		if let Some(dns) = &self.ns().dns {
 			dns.domain.cdn.clone()
 		} else {
-			todo!()
+			// TODO: Unimplemented
+			String::new()
 		}
 	}
 
@@ -500,7 +512,8 @@ impl ProjectContextData {
 		if let Some(dns) = &self.ns().dns {
 			dns.domain.job.clone()
 		} else {
-			todo!()
+			// TODO: Unimplemented
+			String::new()
 		}
 	}
 
@@ -638,7 +651,16 @@ impl ProjectContextData {
 			s3_util::Provider::Minio => {
 				Ok(S3Config {
 					endpoint_internal: "http://minio.minio.svc.cluster.local:9000".into(),
-					endpoint_external: format!("https://minio.{}", self.domain_main()),
+					// Use localhost if DNS is not configured
+					endpoint_external: if let (
+						config::ns::ClusterKind::SingleNode { minio_port, .. },
+						None,
+					) = (&self.ns().cluster.kind, &self.ns().dns)
+					{
+						format!("http://127.0.0.1:{minio_port}")
+					} else {
+						format!("https://minio.{}", self.domain_main())
+					},
 					// Minio defaults to us-east-1 region
 					// https://github.com/minio/minio/blob/0ec722bc5430ad768a263b8464675da67330ad7c/cmd/server-main.go#L739
 					region: "us-east-1".into(),

@@ -102,15 +102,6 @@ impl PlanStepKind {
 pub fn build_plan(ctx: &ProjectContext, start_at: Option<String>) -> Result<Vec<PlanStep>> {
 	let mut plan = Vec::new();
 
-	// TLS
-	plan.push(PlanStep {
-		name_id: "tf-tls",
-		kind: PlanStepKind::Terraform {
-			plan_id: "tls".into(),
-			needs_destroy: true,
-		},
-	});
-
 	// Infra
 	match ctx.ns().kubernetes.provider {
 		ns::KubernetesProvider::K3d { .. } => {
@@ -131,6 +122,17 @@ pub fn build_plan(ctx: &ProjectContext, start_at: Option<String>) -> Result<Vec<
 				},
 			});
 		}
+	}
+
+	if ctx.ns().dns.is_some() {
+		// TLS
+		plan.push(PlanStep {
+			name_id: "tf-tls",
+			kind: PlanStepKind::Terraform {
+				plan_id: "tls".into(),
+				needs_destroy: true,
+			},
+		});
 	}
 
 	// Kubernetes
@@ -209,13 +211,15 @@ pub fn build_plan(ctx: &ProjectContext, start_at: Option<String>) -> Result<Vec<
 	}
 
 	// Pools
-	plan.push(PlanStep {
-		name_id: "tf-pools",
-		kind: PlanStepKind::Terraform {
-			plan_id: "pools".into(),
-			needs_destroy: true,
-		},
-	});
+	if ctx.ns().dns.is_some() {
+		plan.push(PlanStep {
+			name_id: "tf-pools",
+			kind: PlanStepKind::Terraform {
+				plan_id: "pools".into(),
+				needs_destroy: true,
+			},
+		});
+	}
 
 	if let Some(dns) = &ctx.ns().dns {
 		// DNS

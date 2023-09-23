@@ -154,6 +154,8 @@ pub struct ServiceRouter {
 #[serde(rename_all = "kebab-case", deny_unknown_fields)]
 pub struct ServiceMount {
 	#[serde(default)]
+	pub deprecated: bool,
+	#[serde(default)]
 	pub domain: ServiceDomain,
 	#[serde(default)]
 	pub subdomain: Option<String>,

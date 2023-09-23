@@ -23,6 +23,10 @@ variable "domain_job" {
 	type = string
 }
 
+variable "dns_deprecated_subdomains" {
+	type = bool
+}
+
 # MARK: Services
 variable "services" {
 	type = map(object({
