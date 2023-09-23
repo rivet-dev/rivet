@@ -222,28 +222,30 @@ pub fn build_plan(ctx: &ProjectContext, start_at: Option<String>) -> Result<Vec<
 	}
 
 	if let Some(dns) = &ctx.ns().dns {
-		// DNS
-		plan.push(PlanStep {
-			name_id: "tf-dns",
-			kind: PlanStepKind::Terraform {
-				plan_id: "dns".into(),
-				needs_destroy: true,
-			},
-		});
+		// TODO: Allow manual DNS config
 
-		// Cloudflare
-		plan.push(PlanStep {
-			name_id: "tf-cf-workers",
-			kind: PlanStepKind::Terraform {
-				plan_id: "cloudflare_workers".into(),
-				needs_destroy: true,
-			},
-		});
-
-		if let ns::DnsProvider::Cloudflare {
+		if let Some(ns::DnsProvider::Cloudflare {
 			access: Some(_), ..
-		} = dns.provider
+		}) = &dns.provider
 		{
+			// DNS
+			plan.push(PlanStep {
+				name_id: "tf-dns",
+				kind: PlanStepKind::Terraform {
+					plan_id: "dns".into(),
+					needs_destroy: true,
+				},
+			});
+
+			// Cloudflare
+			plan.push(PlanStep {
+				name_id: "tf-cf-workers",
+				kind: PlanStepKind::Terraform {
+					plan_id: "cloudflare_workers".into(),
+					needs_destroy: true,
+				},
+			});
+
 			plan.push(PlanStep {
 				name_id: "tf-cf-tunnels",
 				kind: PlanStepKind::Terraform {

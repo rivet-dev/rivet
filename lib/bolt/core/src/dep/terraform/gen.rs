@@ -205,9 +205,10 @@ async fn vars(ctx: &ProjectContext) {
 	// Cloudflare
 	if let Some(dns) = &config.dns {
 		match &dns.provider {
-			ns::DnsProvider::Cloudflare { account_id, .. } => {
+			Some(ns::DnsProvider::Cloudflare { account_id, .. }) => {
 				vars.insert("cloudflare_account_id".into(), json!(account_id));
 			}
+			None => {}
 		}
 	}
 

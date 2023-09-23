@@ -169,8 +169,9 @@ pub struct Dns {
 	pub domain: DnsDomains,
 	#[serde(default)]
 	pub hub_origin: Option<String>,
+	/// Auto-provision DNS records.
 	#[serde(flatten)]
-	pub provider: DnsProvider,
+	pub provider: Option<DnsProvider>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]

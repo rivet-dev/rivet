@@ -213,10 +213,10 @@ impl Tunnel {
 			matches!(
 				ctx.ns().dns,
 				Some(config::ns::Dns {
-					provider: config::ns::DnsProvider::Cloudflare {
+					provider: Some(config::ns::DnsProvider::Cloudflare {
 						access: Some(_),
 						..
-					},
+					}),
 					..
 				})
 			),
