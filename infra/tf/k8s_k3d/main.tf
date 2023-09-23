@@ -32,7 +32,7 @@ resource "k3d_cluster" "main" {
 
 	# HTTP
 	port {
-		host = var.public_ip
+		host = "0.0.0.0"
 		host_port = var.api_http_port
 		container_port = 80
 		node_filters = ["server:0"]
@@ -43,7 +43,7 @@ resource "k3d_cluster" "main" {
 		for_each = var.api_https_port != null ? [null] : []
 
 		content {
-			host = var.public_ip
+			host = "0.0.0.0"
 			host_port = var.api_https_port
 			container_port = 443
 			node_filters = ["server:0"]
