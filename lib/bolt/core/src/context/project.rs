@@ -485,11 +485,12 @@ impl ProjectContextData {
 				.clone()
 				.unwrap_or_else(|| format!("https://hub.{}", dns.domain.main.clone()))
 		} else {
-			todo!()
+			// TODO: Unimplemented
+			String::new()
 		}
 	}
 
-	// TODO: Rename this to "host_api", etc
+	// TODO: Rename this to "api_host", etc
 
 	pub fn domain_main(&self) -> String {
 		if let Some(dns) = &self.ns().dns {

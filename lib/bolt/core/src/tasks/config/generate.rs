@@ -214,12 +214,16 @@ pub async fn generate(project_path: &Path, ns_id: &str) -> Result<()> {
 		})
 		.await?;
 
-	if generator.ns.get("cluster").is_none() || generator.ns["cluster"].get("distributed").is_none()
-	{
+	if generator.ns.get("cluster").is_none() {
 		generator
 			.generate_config(&["cluster", "single_node", "public_ip"], || async {
 				let public_ip = fetch_public_ip().await?;
 				Ok(value(public_ip).into())
+			})
+			.await?;
+		generator
+			.generate_config(&["cluster", "single_node", "api_http_port"], || async {
+				Ok(value(8080).into())
 			})
 			.await?;
 	}
@@ -456,7 +460,7 @@ pub async fn generate(project_path: &Path, ns_id: &str) -> Result<()> {
 		}
 
 		generator
-			.generate_secret(&["redis", &svc.name(), "username"], || async {
+			.generate_secret(&["redis", &svc.redis_db_name(), "username"], || async {
 				Ok(value("default"))
 			})
 			.await?;
