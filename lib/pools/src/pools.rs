@@ -7,8 +7,6 @@ pub type NatsPool = async_nats::Client;
 pub type CrdbPool = sqlx::PgPool;
 pub type RedisPool = redis::aio::ConnectionManager;
 
-pub type RedisConn = redis::aio::ConnectionManager;
-
 pub type Pools = Arc<PoolsInner>;
 
 pub struct PoolsInner {

@@ -183,7 +183,7 @@ where
 	#[tracing::instrument(skip(redis_chirp_conn))]
 	async fn worker_receiver(
 		self: Arc<Self>,
-		mut redis_chirp_conn: RedisConn,
+		mut redis_chirp_conn: RedisPool,
 		topic: String,
 		group: String,
 	) -> CleanExit {
@@ -210,7 +210,7 @@ where
 					break 'setup;
 				}
 				Err(err) => {
-					tracing::error!(?err, "failed to create group and stream, retrying");
+					tracing::error!(?err, err2=%err, "failed to create group and stream, retrying");
 					tokio::time::sleep(CONN_ERROR_THROTTLE).await;
 					continue 'setup;
 				}
@@ -254,7 +254,7 @@ where
 	#[tracing::instrument(skip(self, redis_chirp_conn))]
 	async fn pull_redis_stream_msgs(
 		self: Arc<Self>,
-		redis_chirp_conn: &mut RedisConn,
+		redis_chirp_conn: &mut RedisPool,
 		topic_key: &str,
 		group: &str,
 		consumer: &str,

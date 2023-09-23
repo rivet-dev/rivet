@@ -62,7 +62,7 @@ resource "kubernetes_priority_class" "imagor_priority" {
 }
 
 resource "kubernetes_deployment" "imagor" {
-	depends_on = [kubernetes_secret.docker_auth]
+	depends_on = [module.docker_auth]
 
 	metadata {
 		name = "imagor"

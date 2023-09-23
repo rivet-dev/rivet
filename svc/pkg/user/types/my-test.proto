@@ -1,0 +1,13 @@
+syntax = "proto3";
+
+package rivet.backend.pkg.user.my_test;
+
+import "proto/common.proto";
+
+message Request {
+
+}
+
+message Response {
+
+}

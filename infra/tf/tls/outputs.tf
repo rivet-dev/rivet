@@ -4,7 +4,7 @@ locals {
 		key_pem = tls_private_key.cf_origin_rivet_gg.private_key_pem
 	}
 
-	tls_cert_letsencrypt_rivet_gg ={
+	tls_cert_letsencrypt_rivet_gg = {
 		# Build full chain by concatenating the certificate with issuer.
 		#
 		# See

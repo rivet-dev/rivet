@@ -1,5 +1,6 @@
 use anyhow::Result;
 use duct::cmd;
+use indoc::formatdoc;
 use serde_json::json;
 use std::{
 	collections::HashMap,
@@ -15,46 +16,6 @@ use crate::{
 	context::{ProjectContext, RunContext, ServiceContext},
 	dep::terraform,
 };
-
-pub async fn project(ctx: &ProjectContext) -> Result<()> {
-	// Chek if the k8s provider has already applied
-	let plan_id = match ctx.ns().kubernetes.provider {
-		ns::KubernetesProvider::K3d { .. } => "k8s_k3d",
-		ns::KubernetesProvider::AwsEks { .. } => "k8s_aws",
-	};
-
-	// TODO: has_applied is slow
-	if terraform::cli::has_applied(ctx, plan_id).await {
-		// Read kubectl config
-		let config = match ctx.ns().kubernetes.provider {
-			ns::KubernetesProvider::K3d {} => block_in_place(move || {
-				cmd!("k3d", "kubeconfig", "get", ctx.k8s_cluster_name()).read()
-			})?,
-			ns::KubernetesProvider::AwsEks {} => block_in_place(move || {
-				cmd!(
-					"aws",
-					"eks",
-					"update-kubeconfig",
-					"--dry-run",
-					"--name",
-					ctx.k8s_cluster_name()
-				)
-				.read()
-			})?,
-		};
-
-		// Write to file
-		fs::create_dir_all(ctx.gen_kubeconfig_path().parent().unwrap()).await?;
-		fs::write(ctx.gen_kubeconfig_path(), config).await?;
-	} else {
-		// Remove config
-		if fs::try_exists(ctx.gen_kubeconfig_path()).await? {
-			fs::remove_file(ctx.gen_kubeconfig_path()).await?;
-		}
-	}
-
-	Ok(())
-}
 
 // Kubernetes requires a specific port for containers because they have their own networking namespace, the
 // port bound on the host is randomly generated.
@@ -88,6 +49,51 @@ enum SpecType {
 	Deployment,
 	Job,
 	CronJob,
+}
+
+pub async fn project(ctx: &ProjectContext) -> Result<()> {
+	// Check if the k8s provider has already applied
+	let plan_id = match ctx.ns().kubernetes.provider {
+		ns::KubernetesProvider::K3d { .. } => "k8s_cluster_k3d",
+		ns::KubernetesProvider::AwsEks { .. } => "k8s_cluster_aws",
+	};
+
+	// TODO: has_applied is slow
+	if terraform::cli::has_applied(ctx, plan_id).await {
+		// Read kubectl config
+		let config = match ctx.ns().kubernetes.provider {
+			ns::KubernetesProvider::K3d {} => block_in_place(move || {
+				cmd!("k3d", "kubeconfig", "get", ctx.k8s_cluster_name()).read()
+			})?,
+			ns::KubernetesProvider::AwsEks {} => block_in_place(move || {
+				cmd!(
+					"aws",
+					"eks",
+					"update-kubeconfig",
+					// Writes to stdout instead of user's kubeconfig
+					"--dry-run",
+					"--name",
+					ctx.k8s_cluster_name(),
+					// Read from a non-existent kubeconfig to prevent it from merging the existing
+					// user's kubeconfig.
+					"--kubeconfig",
+					"THIS DOES NOT EXIST",
+				)
+				.read()
+			})?,
+		};
+
+		// Write to file
+		fs::create_dir_all(ctx.gen_kubeconfig_path().parent().unwrap()).await?;
+		fs::write(ctx.gen_kubeconfig_path(), config).await?;
+	} else {
+		// Remove config
+		if fs::try_exists(ctx.gen_kubeconfig_path()).await? {
+			fs::remove_file(ctx.gen_kubeconfig_path()).await?;
+		}
+	}
+
+	Ok(())
 }
 
 pub fn k8s_svc_name(exec_ctx: &ExecServiceContext) -> String {
@@ -158,6 +164,22 @@ pub async fn gen_svc(exec_ctx: &ExecServiceContext) -> Vec<serde_json::Value> {
 		)
 		.collect::<Vec<_>>();
 
+	// Create secret env vars
+	let secret_env_name = format!("{}-secret-env", service_name);
+	let secret_data = secret_env
+		.into_iter()
+		.map(|(k, v)| (k, base64::encode(v)))
+		.collect::<HashMap<_, _>>();
+	specs.push(json!({
+		"apiVersion": "v1",
+		"kind": "Secret",
+		"metadata": {
+			"name": secret_env_name,
+			"namespace": "rivet-service"
+		},
+		"data": secret_data
+	}));
+
 	// Render ports
 	let ports = {
 		let mut ports = Vec::new();
@@ -204,9 +226,9 @@ pub async fn gen_svc(exec_ctx: &ExecServiceContext) -> Vec<serde_json::Value> {
 
 	let health_check = if has_health {
 		let cmd = if matches!(svc_ctx.config().kind, ServiceKind::Static { .. }) {
-			"/local/health-checks.sh --static"
+			"/local/rivet/health-checks.sh --static"
 		} else {
-			"/local/health-checks.sh"
+			"/local/rivet/health-checks.sh"
 		};
 
 		json!({
@@ -221,12 +243,15 @@ pub async fn gen_svc(exec_ctx: &ExecServiceContext) -> Vec<serde_json::Value> {
 		serde_json::Value::Null
 	};
 
-	let (image, image_pull_policy, command, args) = match &driver {
+	let (image, image_pull_policy, exec) = match &driver {
 		ExecServiceDriver::LocalBinaryArtifact { exec_path, args } => (
-			"alpine:3.8",
+			"debian:12.1-slim",
 			"IfNotPresent",
-			vec![Path::new("/rivet-src").join(exec_path)],
-			args.clone(),
+			format!(
+				"{} {}",
+				Path::new("/rivet-src").join(exec_path).display(),
+				args.join(" ")
+			),
 		),
 		ExecServiceDriver::Docker {
 			image_tag,
@@ -238,10 +263,10 @@ pub async fn gen_svc(exec_ctx: &ExecServiceContext) -> Vec<serde_json::Value> {
 			} else {
 				"IfNotPresent"
 			},
-			Vec::new(),
-			Vec::new(),
+			"bin/svc".to_string(),
 		),
 	};
+	let command = format!("/local/rivet/install-ca.sh && {exec}");
 
 	// Create resource limits
 	let ns_service_config = svc_ctx.ns_service_config().await;
@@ -258,81 +283,7 @@ pub async fn gen_svc(exec_ctx: &ExecServiceContext) -> Vec<serde_json::Value> {
 		// "requests": {}
 	});
 
-	// Shared data between containers
-	let mut volumes = vec![];
-	let mut volume_mounts = vec![json!({
-		"name": "local",
-		"mountPath": "/local",
-		"readOnly": true
-	})];
-
-	// Add volumes
-	{
-		match driver {
-			// Mount the service binaries to execute directly in the container. See
-			// notes in salt/salt/nomad/files/nomad.d/client.hcl.j2.
-			ExecServiceDriver::LocalBinaryArtifact { .. } => {
-				// Volumes
-				volumes.push(json!({
-					"name": "rivet-src",
-					"hostPath": {
-						"path": "/rivet-src",
-						"type": "Directory"
-					}
-				}));
-				volumes.push(json!({
-					"name": "nix-store",
-					"hostPath": {
-						"path": "/nix/store",
-						"type": "Directory"
-					}
-				}));
-
-				// Mounts
-				volume_mounts.push(json!({
-					"name": "rivet-src",
-					"mountPath": "/rivet-src",
-					"readOnly": true
-				}));
-				volume_mounts.push(json!({
-					"name": "nix-store",
-					"mountPath": "/nix/store",
-					"readOnly": true
-				}));
-			}
-			ExecServiceDriver::Docker { .. } => {}
-		}
-
-		volumes.push(json!({
-			"name": "local",
-			"projected": {
-				"defaultMode": 0o0777,
-				"sources": [
-					{
-						"configMap": {
-							"name": "health-checks"
-						}
-					}
-				]
-			}
-		}));
-	}
-
-	// Create secret env vars
-	let secret_env_name = format!("{}-secret-env", service_name);
-	let secret_data = secret_env
-		.into_iter()
-		.map(|(k, v)| (k, base64::encode(v)))
-		.collect::<HashMap<_, _>>();
-	specs.push(json!({
-		"apiVersion": "v1",
-		"kind": "Secret",
-		"metadata": {
-			"name": secret_env_name,
-			"namespace": "rivet-service"
-		},
-		"data": secret_data
-	}));
+	let (volumes, volume_mounts) = build_volumes(&exec_ctx).await;
 
 	// Create priority class
 	let priority_class_name = format!("{}-priority", service_name);
@@ -364,9 +315,9 @@ pub async fn gen_svc(exec_ctx: &ExecServiceContext) -> Vec<serde_json::Value> {
 			"name": "service",
 			"image": image,
 			"imagePullPolicy": image_pull_policy,
-			"command": command,
-			// "command": ["/bin/sh", "-c", "printenv && sleep 1000"],
-			"args": args,
+			"command": ["/bin/sh"],
+			"args": ["-c", command],
+			// "args": ["-c", "/local/rivet/install-ca.sh && printenv && sleep 1000"],
 			"env": env,
 			"envFrom": [{
 				"secretRef": {
@@ -375,8 +326,8 @@ pub async fn gen_svc(exec_ctx: &ExecServiceContext) -> Vec<serde_json::Value> {
 			}],
 			"volumeMounts": volume_mounts,
 			"ports": ports,
-			"livenessProbe": health_check,
-			"resources": resources
+			// "livenessProbe": health_check,
+			"resources": resources,
 		}],
 		"volumes": volumes
 	});
@@ -515,6 +466,133 @@ pub async fn gen_svc(exec_ctx: &ExecServiceContext) -> Vec<serde_json::Value> {
 	}
 
 	specs
+}
+
+async fn build_volumes(
+	exec_ctx: &ExecServiceContext,
+) -> (Vec<serde_json::Value>, Vec<serde_json::Value>) {
+	let ExecServiceContext {
+		svc_ctx,
+		run_context,
+		driver,
+	} = exec_ctx;
+
+	// Shared data between containers
+	let mut volumes = vec![json!({
+		"name": "local",
+		"projected": {
+			"defaultMode": 0o0777,
+			"sources": [
+				{
+					"configMap": {
+						"name": "health-checks"
+					}
+				},
+				{
+					"configMap": {
+						"name": "install-ca"
+					}
+				}
+			]
+		}
+	})];
+	let mut volume_mounts = vec![json!({
+		"name": "local",
+		"mountPath": "/local/rivet",
+		"readOnly": true
+	})];
+
+	// Add volumes based on exec service
+	match driver {
+		// Mount the service binaries to execute directly in the container. See
+		// notes in salt/salt/nomad/files/nomad.d/client.hcl.j2.
+		ExecServiceDriver::LocalBinaryArtifact { .. } => {
+			// Volumes
+			volumes.push(json!({
+				"name": "rivet-src",
+				"hostPath": {
+					"path": "/rivet-src",
+					"type": "Directory"
+				}
+			}));
+			volumes.push(json!({
+				"name": "nix-store",
+				"hostPath": {
+					"path": "/nix/store",
+					"type": "Directory"
+				}
+			}));
+
+			// Mounts
+			volume_mounts.push(json!({
+				"name": "rivet-src",
+				"mountPath": "/rivet-src",
+				"readOnly": true
+			}));
+			volume_mounts.push(json!({
+				"name": "nix-store",
+				"mountPath": "/nix/store",
+				"readOnly": true
+			}));
+		}
+		ExecServiceDriver::Docker { .. } => {}
+	}
+
+	// Add CA volumes
+	{
+		let redis_deps = svc_ctx
+			.redis_dependencies(run_context)
+			.await
+			.iter()
+			.map(|dep| dep.redis_db_name())
+			.collect::<Vec<_>>();
+
+		// Redis CA
+		// volumes.extend(redis_deps.iter().map(|db| {
+		// 	json!({
+		// 		"name": format!("redis-{}-ca", db),
+		// 		"configMap": {
+		// 			"defaultMode": 420,
+		// 			"name": format!("redis-{}-ca", db),
+		// 			"items": [
+		// 				{
+		// 					"key": "ca.crt",
+		// 					"path": format!("redis-{}-ca.crt", db)
+		// 				}
+		// 			]
+		// 		}
+		// 	})
+		// }));
+		// volume_mounts.extend(redis_deps.iter().map(|db| {
+		// 	json!({
+		// 		"name": format!("redis-{}-ca", db),
+		// 		"mountPath": format!("/usr/local/share/ca-certificates/redis-{}-ca.crt", db),
+		// 		"subPath": format!("redis-{}-ca.crt", db)
+		// 	})
+		// }));
+
+		// CRDB CA
+		volumes.push(json!({
+			"name": "crdb-ca",
+			"configMap": {
+				"defaultMode": 420,
+				"name": "crdb-ca",
+				"items": [
+					{
+						"key": "ca.crt",
+						"path": "crdb-ca.crt"
+					}
+				]
+			}
+		}));
+		volume_mounts.push(json!({
+			"name": "crdb-ca",
+			"mountPath": "/usr/local/share/ca-certificates/crdb-ca.crt",
+			"subPath": "crdb-ca.crt"
+		}));
+	}
+
+	(volumes, volume_mounts)
 }
 
 // Added for ease of use

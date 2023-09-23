@@ -7,6 +7,10 @@ provider "aws" {
 	}
 }
 
+# NOTE: This provider setup differs from the ones used everywhere else because this is a cluster service that
+# requires the kubernetes provisioner before the cluster itself is created. All other terraform configs can
+# simply read the kubeconfig file, but for this config it does not yet exist because this is config that
+# creates it.
 provider "kubernetes" {
 	host = module.eks.cluster_endpoint
 	cluster_ca_certificate = base64decode(module.eks.cluster_certificate_authority_data)

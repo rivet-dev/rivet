@@ -41,14 +41,12 @@ resource "kubernetes_config_map" "health_checks" {
 			#!/bin/sh
 			set -uf
 
+			# Log to file
+			exec >> "/var/log/health-checks.txt" 2>&1
+
 			# Install curl
-			if ! [ -x "$(command -v curl)" ]; then
-				if ! [ -x "$(command -v apk)" ]; then
-					apt-get install -y curl
-				else
-					apk add --no-cache curl
-				fi
-			fi
+			apt-get update -y
+			apt-get install -y curl
 
 			curl 127.0.0.1:${var.k8s_health_port}/health/liveness
 			EXIT_STATUS=$?
@@ -94,61 +92,43 @@ resource "kubernetes_config_map" "health_checks" {
 	}
 }
 
-module "docker_secrets" {
-	source = "../modules/secrets"
-
-	keys = flatten([
-		var.authenticate_all_docker_hub_pulls ? [
-			"docker/registry/docker.io/read/username",
-			"docker/registry/docker.io/read/password",
-		] : [],
-	])
-}
-
-module "docker_ghcr_secrets" {
-	count = var.deploy_method_cluster ? 1 : 0
-	source = "../modules/secrets"
-
-	keys = flatten([
-        "docker/registry/ghcr.io/read/username",
-        "docker/registry/ghcr.io/read/password",
-	])
-}
-
-# Create Docker auth secret in every namespace it's used in
-resource "kubernetes_secret" "docker_auth" {
-	for_each = toset([
-		for x in [/*kubernetes_namespace.redis,*/ kubernetes_namespace.traffic_server, kubernetes_namespace.rivet_service]:
-		x.metadata.0.name
-	])
-
+resource "kubernetes_config_map" "install_ca" {
 	metadata {
-		name = "docker-auth"
-		namespace = each.value
+		name = "install-ca"
+		namespace = kubernetes_namespace.rivet_service.metadata.0.name
 	}
-
-	type = "kubernetes.io/dockerconfigjson"
 
 	data = {
-		".dockerconfigjson" = jsonencode({
-			auths = {
-				"https://index.docker.io/v1/" = (
-						var.authenticate_all_docker_hub_pulls ?
-						{
-							auth = base64encode(
-								"${module.docker_secrets.values["docker/registry/docker.io/read/username"]}:${module.docker_secrets.values["docker/registry/docker.io/read/password"]}"
-							)
-						}
-						: null
-				)
-				"ghcr.io" = (
-					var.deploy_method_cluster ?
-					{
-						"auth" = base64encode("${module.docker_ghcr_secrets[0].values["docker/registry/ghcr.io/read/username"]}:${module.docker_ghcr_secrets[0].values["docker/registry/ghcr.io/read/password"]}")
-					}
-					: null
-				)
-			}
-		})
+		"install-ca.sh" = <<-EOF
+			set -euf
+
+			# Log to file
+			exec >> "/var/log/install-ca.txt" 2>&1
+
+			# Prevent apt from using the OpenSSL installation from /nix/store if mounted
+			export LD_LIBRARY_PATH=/lib:/usr/lib:/usr/local/lib
+			export DEBIAN_FRONTEND=noninteractive
+
+			apt-get update -y
+			apt-get install -y --no-install-recommends ca-certificates
+			update-ca-certificates
+			EOF
 	}
+}
+
+module "docker_auth" {
+	source = "../modules/k8s_auth"
+
+	namespaces = [
+		for x in [
+			kubernetes_namespace.traffic_server,
+			kubernetes_namespace.redis_exporter,
+			kubernetes_namespace.rivet_service,
+			kubernetes_namespace.imagor,
+			kubernetes_namespace.nsfw_api
+		]:
+		x.metadata.0.name
+	]
+	authenticate_all_docker_hub_pulls = var.authenticate_all_docker_hub_pulls
+	deploy_method_cluster = var.deploy_method_cluster
 }

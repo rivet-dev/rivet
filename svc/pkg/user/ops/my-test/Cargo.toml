@@ -1,5 +1,5 @@
 [package]
-name = "{{pkg}}-{{name}}"
+name = "user-my-test"
 version = "0.0.1"
 edition = "2018"
 authors = ["Rivet Gaming, LLC <developer@rivet.gg>"]

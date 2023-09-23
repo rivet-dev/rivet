@@ -1,6 +1,9 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, path::Path};
 
 use anyhow::*;
+use duct::cmd;
+use indoc::{formatdoc, indoc};
+use tokio::fs;
 
 use crate::{
 	config::service::RuntimeKind,
@@ -36,18 +39,49 @@ impl DatabaseConnection {
 						let port = utils::pick_port();
 						let host = format!("127.0.0.1:{port}");
 
-						redis_hosts.insert(name, host);
+						// Copy CA cert
+						cmd!(
+							"sh",
+							"-c",
+							formatdoc!(
+								"
+								kubectl get secret \
+								-n {name} redis-crt \
+								-o jsonpath='{{.data.ca\\.crt}}' |
+								base64 --decode > /tmp/{name}-ca.crt
+								"
+							)
+						)
+						.run()?;
+
 						handles.push(utils::kubectl_port_forward(
 							"redis-master",
-							"redis",
+							&name,
 							(port, 6379),
 						)?);
+						redis_hosts.insert(name, host);
 					}
 				}
 				RuntimeKind::CRDB { .. } => {
 					if cockroach_host.is_none() {
 						let port = utils::pick_port();
 						cockroach_host = Some(format!("127.0.0.1:{port}"));
+
+						// Copy CA cert
+						cmd!(
+							"sh",
+							"-c",
+							indoc!(
+								"
+								kubectl get secret \
+								-n cockroachdb cockroachdb-ca-secret \
+								-o jsonpath='{.data.ca\\.crt}' |
+								base64 --decode > /tmp/crdb-ca.crt
+								"
+							)
+						)
+						.run()?;
+
 						handles.push(utils::kubectl_port_forward(
 							"cockroachdb",
 							"cockroachdb",
@@ -59,10 +93,40 @@ impl DatabaseConnection {
 					if clickhouse_host.is_none() {
 						let port = utils::pick_port();
 						clickhouse_host = Some(format!("127.0.0.1:{port}"));
+
+						// Copy CA cert
+						cmd!(
+							"sh",
+							"-c",
+							indoc!(
+								"
+								kubectl get secret \
+								-n clickhouse clickhouse-crt \
+								-o jsonpath='{.data.ca\\.crt}' |
+								base64 --decode > /tmp/clickhouse-ca.crt
+								"
+							)
+						)
+						.run()?;
+
+						// Write clickhouse config file
+						fs::write(
+							Path::new("/tmp/clickhouse-config.yml"),
+							indoc!(
+								"
+								secure: true
+								openSSL:
+								  client:
+								    caConfig: '/tmp/clickhouse-ca.crt'
+								"
+							),
+						)
+						.await?;
+
 						handles.push(utils::kubectl_port_forward(
 							"clickhouse",
 							"clickhouse",
-							(port, 9000),
+							(port, 9440),
 						)?);
 					}
 				}
@@ -89,7 +153,13 @@ impl DatabaseConnection {
 			RuntimeKind::CRDB { .. } => {
 				let db_name = service.crdb_db_name();
 				let host = self.cockroach_host.as_ref().unwrap();
-				Ok(format!("cockroach://root@{host}/{db_name}?sslmode=disable"))
+				let username = project_ctx.read_secret(&["crdb", "username"]).await?;
+				let password = project_ctx.read_secret(&["crdb", "password"]).await?;
+
+				Ok(format!(
+					"cockroach://{}:{}@{}/{}?sslmode=verify-ca&sslrootcert=/tmp/crdb-ca.crt",
+					username, password, host, db_name
+				))
 			}
 			RuntimeKind::ClickHouse { .. } => {
 				let db_name = service.clickhouse_db_name();
@@ -98,7 +168,11 @@ impl DatabaseConnection {
 					.read_secret(&["clickhouse", "users", "bolt", "password"])
 					.await?;
 				let host = self.clickhouse_host.as_ref().unwrap();
-				Ok(format!("clickhouse://{host}/?database={db_name}&username={clickhouse_user}&password={clickhouse_password}&x-multi-statement=true"))
+
+				Ok(format!(
+					"clickhouse://{}/?database={}&username={}&password={}&x-multi-statement=true&secure=true&skip_verify=true",
+					host, db_name, clickhouse_user, clickhouse_password
+				))
 			}
 			x @ _ => bail!("cannot migrate this type of service: {x:?}"),
 		}

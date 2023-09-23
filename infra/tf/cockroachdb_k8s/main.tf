@@ -1,12 +1,13 @@
+module "crdb_secrets" {
+	source = "../modules/secrets"
+
+	keys = [ "crdb/username", "crdb/password" ]
+}
+
 resource "kubernetes_namespace" "cockroachdb" {
 	metadata {
 		name = "cockroachdb"
 	}
-}
-
-resource "random_password" "root_password" {
-	length = 32
-	special = false
 }
 
 # NOTE: Helm chart is no longer supported by CockroachDB. However, it's intended to be used only for development and it's the easiest to set up.
@@ -23,6 +24,9 @@ resource "helm_release" "cockroachdb" {
 		conf = {
 			single-node = true
 		}
+		tls = {
+			enabled = true
+		}
 		storage = {
 			persistentVolume = {
 				storageClass = var.k8s_storage_class
@@ -30,10 +34,12 @@ resource "helm_release" "cockroachdb" {
 		}
 		init = {
 			provisioning = {
+				enabled = true
 				users = [
 					{
-						user = "rivet-root"
-						password = random_password.root_password.result
+						name = module.crdb_secrets.values["crdb/username"]
+						password = module.crdb_secrets.values["crdb/password"]
+						options = ["CREATEDB"]
 					}
 				]
 			}
@@ -41,12 +47,22 @@ resource "helm_release" "cockroachdb" {
 	})]
 }
 
-data "kubernetes_config_map" "root_ca" {
+data "kubernetes_secret" "crdb_ca" {
 	depends_on = [helm_release.cockroachdb]
 
 	metadata {
-		name = "kube-root-ca.crt"
+		name = "cockroachdb-ca-secret"
 		namespace = kubernetes_namespace.cockroachdb.metadata.0.name
 	}
 }
 
+resource "kubernetes_config_map" "crdb_ca" {
+	metadata {
+		name = "crdb-ca"
+		namespace = "rivet-service"
+	}
+
+	data = {
+		"ca.crt" = data.kubernetes_secret.crdb_ca.data["ca.crt"]
+	}
+}

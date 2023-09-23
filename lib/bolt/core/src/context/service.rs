@@ -15,7 +15,7 @@ use crate::{
 		service::{RuntimeKind, ServiceKind},
 	},
 	context::{self, BuildContext, ProjectContext, RunContext},
-	dep::{self, k8s},
+	dep::{self, k8s, terraform},
 	utils,
 };
 
@@ -818,7 +818,7 @@ impl ServiceContextData {
 		if self.depends_on_clickhouse() {
 			env.push((
 				"CLICKHOUSE_URL".into(),
-				"clickhouse.clickhouse.svc.cluster.local:8123".into(),
+				"clickhouse.clickhouse.svc.cluster.local:9440".into(),
 			));
 		}
 
@@ -1027,41 +1027,73 @@ impl ServiceContextData {
 		}
 
 		// CRDB
-		let crdb_host = "cockroachdb.cockroachdb.svc.cluster.local:26257";
+		// TODO: Function is expensive
+		let crdb_data = terraform::output::read_crdb(&project_ctx).await;
+		let crdb_host = format!("{}:{}", *crdb_data.host, *crdb_data.port);
 		for crdb_dep in self.crdb_dependencies(run_context).await {
-			let username = "root"; // TODO:
-			let sslmode = "disable"; // TODO:
+			let username = project_ctx.read_secret(&["crdb", "username"]).await?;
+			let password = project_ctx.read_secret(&["crdb", "password"]).await?;
+			let sslmode = "verify-ca";
 
 			let uri = format!(
-				"postgres://{username}@{crdb_host}/{db_name}?sslmode={sslmode}",
+				"postgres://{}:{}@{crdb_host}/{db_name}?sslmode={sslmode}",
+				username,
+				password,
 				db_name = crdb_dep.crdb_db_name(),
 			);
 			env.push((format!("CRDB_URL_{}", crdb_dep.name_screaming_snake()), uri));
 		}
 
 		// Redis
+		// TODO: Function is expensive
+		let redis_data = terraform::output::read_redis(&project_ctx).await;
 		for redis_dep in self.redis_dependencies(run_context).await {
 			let name = redis_dep.name();
 			let db_name = redis_dep.redis_db_name();
 
-			// TODO: Use name and port to connect to different redis instances
-			let host = "redis-master.redis.svc.cluster.local:6379";
+			// Read host and port from terraform
+			let hostname = redis_data
+				.host
+				.get(&db_name)
+				.expect("terraform output for redis db not found");
+			let port = redis_data
+				.port
+				.get(&db_name)
+				.expect("terraform output for redis db not found");
+			let host = format!("{}:{}", *hostname, *port);
+
+			// Read auth secrets
+			let (username, password) = match project_ctx.ns().cluster.kind {
+				config::ns::ClusterKind::SingleNode { .. } => (
+					project_ctx
+						.read_secret(&["redis", &db_name, "username"])
+						.await?,
+					project_ctx
+						.read_secret_opt(&["redis", &db_name, "password"])
+						.await?,
+				),
+				config::ns::ClusterKind::Distributed { .. } => {
+					let db_name = format!("rivet-{}-{}", project_ctx.ns_id(), db_name);
+					let username = project_ctx
+						.read_secret(&["redis", &db_name, "username"])
+						.await?;
+					let password = project_ctx
+						.read_secret_opt(&["redis", &db_name, "password"])
+						.await?;
+
+					(username, password)
+				}
+			};
 
 			// Build URL with auth
-			let username = project_ctx
-				.read_secret(&["redis", &db_name, "username"])
-				.await?;
-			let password = project_ctx
-				.read_secret_opt(&["redis", &db_name, "password"])
-				.await?;
 			let url = if let Some(password) = password {
-				format!("redis://{}:{}@{host}", username, password)
+				format!("rediss://{}:{}@{host}", username, password)
 			} else {
-				format!("redis://{}@{host}", username)
+				format!("rediss://{}@{host}", username)
 			};
 
 			env.push((
-				format!("REDIS_URL_{}", db_name.to_uppercase().replace("-", "_")),
+				format!("REDIS_URL_{}", name.to_uppercase().replace("-", "_")),
 				url,
 			));
 		}

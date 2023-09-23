@@ -255,7 +255,7 @@ impl RequestConfig {
 		base_key: &str,
 		keys: &[Key],
 		redis_svc_keys: &[String],
-		conn: &mut RedisConn,
+		conn: &mut RedisPool,
 		pipe: &mut redis::Pipeline,
 	) -> Result<Vec<(Key, Value)>, Error>
 	where
@@ -435,7 +435,7 @@ impl RequestConfig {
 }
 
 #[tracing::instrument(skip(conn))]
-async fn unwatch_gracefully(conn: &mut RedisConn) {
+async fn unwatch_gracefully(conn: &mut RedisPool) {
 	tracing::debug!("unwatching");
 	match redis::cmd("UNWATCH").query_async::<_, ()>(conn).await {
 		Ok(_) => tracing::debug!("unwatched successfully"),

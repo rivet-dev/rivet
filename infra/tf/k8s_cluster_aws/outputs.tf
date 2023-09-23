@@ -22,3 +22,6 @@ output "nat_public_ips" {
     value = toset(module.vpc.nat_public_ips)
 }
 
+output "eks_cluster_security_group_id" {
+	value = module.eks.cluster_primary_security_group_id
+}

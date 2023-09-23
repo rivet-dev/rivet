@@ -49,8 +49,9 @@ pub async fn build<'a, T: AsRef<str>>(ctx: &ProjectContext, opts: BuildOpts<'a, 
 			// the target dir
 			formatdoc!(
 				"
-				if [ $? -eq 0 ]; then
-				(cd {path} && cargo build {jobs_flag} {format_flag} {release_flag} {bin_flags})
+				if [ $EXIT_CODE -eq 0 ]; then
+					(cd {path} && cargo build {jobs_flag} {format_flag} {release_flag} {bin_flags})
+					EXIT_CODE=$?
 				fi
 				"
 			)
@@ -69,9 +70,12 @@ pub async fn build<'a, T: AsRef<str>>(ctx: &ProjectContext, opts: BuildOpts<'a, 
 		# Used for debugging
 		# export CARGO_LOG=cargo::core::compiler::fingerprint=info
 
+		EXIT_CODE=0
+
 		{build_calls}
 
-		EXIT_CODE=$?
+		# Exit
+		exit $EXIT_CODE
 		"#,
 	);
 
@@ -81,28 +85,13 @@ pub async fn build<'a, T: AsRef<str>>(ctx: &ProjectContext, opts: BuildOpts<'a, 
 			let mut cmd = Command::new("sh");
 			cmd.current_dir(ctx.path());
 			cmd.arg("-c");
-			cmd.arg(formatdoc!(
-				r#"
-				{build_script}
-
-				# Exit
-				exit $EXIT_CODE
-				"#
-			));
+			cmd.arg(build_script);
 			let status = cmd.status().await?;
 
 			ensure!(status.success());
 		}
 		config::ns::ClusterKind::Distributed { .. } => {
 			let optimization = if opts.release { "release" } else { "debug" };
-			let build_script = formatdoc!(
-				r#"
-				{build_script}
-
-				# Exit
-				exit $EXIT_CODE
-				"#
-			);
 			let repo = &ctx.ns().docker.repository;
 			ensure!(repo.ends_with('/'), "docker repository must end with slash");
 			let source_hash = ctx.source_hash();
@@ -125,19 +114,17 @@ pub async fn build<'a, T: AsRef<str>>(ctx: &ProjectContext, opts: BuildOpts<'a, 
 							FROM rust:1.72-slim as build
 
 							RUN apt-get update
-							RUN apt-get install -y protobuf-compiler pkg-config libssl-dev
-				
+							RUN apt-get install -y protobuf-compiler pkg-config libssl-dev g++
+
 							WORKDIR /usr/rivet
 							COPY . .
 							RUN ["sh", "-c", {build_script:?}]
-				
+
 							FROM debian:12.1-slim as run
-							
+
 							COPY --from=build /usr/rivet/target/{optimization}/{bin} /bin/svc
 							RUN apt-get update
 							RUN apt-get -y install openssl
-							
-							CMD ["bin/svc"]
 							"#
 						),
 					)
@@ -149,6 +136,8 @@ pub async fn build<'a, T: AsRef<str>>(ctx: &ProjectContext, opts: BuildOpts<'a, 
 					cmd.arg("build");
 					cmd.arg("--rm");
 					cmd.arg("-f").arg(dockerfile_path);
+					// Prints plain console output for debugging
+					// cmd.arg("--progress=plain");
 					cmd.arg("-t").arg(image_tag);
 					cmd.arg(".");
 

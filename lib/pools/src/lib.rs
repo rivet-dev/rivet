@@ -14,7 +14,7 @@ pub mod prelude {
 	pub use redis;
 	pub use sqlx;
 
-	pub use crate::pools::{CrdbPool, NatsPool, RedisConn, RedisPool};
+	pub use crate::pools::{CrdbPool, NatsPool, RedisPool};
 }
 
 pub use crate::{error::Error, pools::Pools};

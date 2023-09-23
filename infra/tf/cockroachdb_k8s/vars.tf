@@ -5,4 +5,3 @@ variable "kubeconfig_path" {
 variable "k8s_storage_class" {
 	type = string
 }
-

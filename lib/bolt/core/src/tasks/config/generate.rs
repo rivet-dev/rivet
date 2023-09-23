@@ -10,7 +10,11 @@ use tokio::task::block_in_place;
 use toml_edit::value;
 use uuid::Uuid;
 
-use crate::{config::service::RuntimeKind, context::ProjectContextData, utils};
+use crate::{
+	config::{ns, service::RuntimeKind},
+	context::ProjectContextData,
+	utils,
+};
 
 /// Comment attached to the head of the namespace config.
 const NS_CONFIG_COMMENT: &str = r#"# Documentation: doc/bolt/config/NAMESPACE.md
@@ -459,12 +463,39 @@ pub async fn generate(project_path: &Path, ns_id: &str) -> Result<()> {
 			continue;
 		}
 
+		let (db_name, username) = match &ctx.ns().cluster.kind {
+			ns::ClusterKind::SingleNode { .. } => {
+				(svc.redis_db_name().clone(), "default".to_string())
+			}
+			ns::ClusterKind::Distributed {} => {
+				let db_name = format!("rivet-{}-{}", ctx.ns_id(), svc.redis_db_name());
+				let username = format!("{db_name}-root");
+
+				(db_name, username)
+			}
+		};
+
 		generator
-			.generate_secret(&["redis", &svc.redis_db_name(), "username"], || async {
-				Ok(value("default"))
+			.generate_secret(&["redis", &db_name, "username"], || async {
+				Ok(value(username))
+			})
+			.await?;
+		generator
+			.generate_secret(&["redis", &db_name, "password"], || async {
+				Ok(value(generate_password(32)))
 			})
 			.await?;
 	}
+
+	// MARK: CRDB
+	generator
+		.generate_secret(&["crdb", "username"], || async { Ok(value("rivet-root")) })
+		.await?;
+	generator
+		.generate_secret(&["crdb", "password"], || async {
+			Ok(value(generate_password(32)))
+		})
+		.await?;
 
 	// Write configs again with new secrets
 	generator.write().await?;
