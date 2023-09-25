@@ -14,18 +14,15 @@ pub enum LogStream {
 }
 
 pub async fn logs(ctx: &ProjectContext, service_name: &str, opts: &LogsOpts) -> Result<()> {
-	let primary_region = ctx.primary_region_or_local();
-
-	let mut cmd = Command::new("nomad");
-	cmd.arg("alloc").arg("logs");
+	let mut cmd = Command::new("kubectl");
+	cmd.arg("logs")
+		.arg("-n")
+		.arg("rivet-service")
+		.arg(format!("deployment/rivet-{service_name}"));
 	if opts.follow {
 		cmd.arg("-f");
 	}
-	if matches!(opts.stream, LogStream::StdErr) {
-		cmd.arg("-stderr");
-	}
-	cmd.arg("-job")
-		.arg(format!("rivet-{}:{}", service_name, primary_region));
+	cmd.env("KUBECONFIG", ctx.gen_kubeconfig_path());
 
 	cmd.exec().await
 }
