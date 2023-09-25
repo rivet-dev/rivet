@@ -560,13 +560,13 @@ async fn run_test(ctx: &ProjectContext, test_binary: TestBinary) -> Result<TestR
 	let pod_name = dep::k8s::gen::k8s_svc_name(&exec_ctx);
 
 	// Apply pod
-	dep::k8s::cli::apply_specs(specs).await?;
+	dep::k8s::cli::apply_specs(ctx, specs).await?;
 	let setup_duration = setup_start.elapsed();
 
 	// Tail pod
 	rivet_term::status::info("Running", format!("{display_name} [pod/{pod_name}]"));
 	let test_start_time = Instant::now();
-	let status = match tokio::time::timeout(TEST_TIMEOUT, tail_pod(&pod_name)).await {
+	let status = match tokio::time::timeout(TEST_TIMEOUT, tail_pod(ctx, &pod_name)).await {
 		Result::Ok(Result::Ok(x)) => x,
 		Result::Ok(Err(err)) => TestStatus::UnknownError(err.to_string()),
 		Err(_) => {
@@ -575,6 +575,7 @@ async fn run_test(ctx: &ProjectContext, test_binary: TestBinary) -> Result<TestR
 			// Kill pod
 			Command::new("kubectl")
 				.args(&["delete", "pod", &pod_name, "-n", "rivet-service"])
+				.env("KUBECONFIG", ctx.gen_kubeconfig_path())
 				.output()
 				.await?;
 
@@ -627,7 +628,7 @@ fn gen_test_id() -> String {
 		.collect()
 }
 
-async fn tail_pod(pod: &str) -> Result<TestStatus> {
+async fn tail_pod(ctx: &ProjectContext, pod: &str) -> Result<TestStatus> {
 	loop {
 		let output = Command::new("kubectl")
 			.args(&[
@@ -638,6 +639,7 @@ async fn tail_pod(pod: &str) -> Result<TestStatus> {
 				"rivet-service",
 				"-o=jsonpath={.status.phase}",
 			])
+			.env("KUBECONFIG", ctx.gen_kubeconfig_path())
 			.output()
 			.await?;
 
@@ -659,6 +661,7 @@ async fn tail_pod(pod: &str) -> Result<TestStatus> {
 						"rivet-service",
 						"-o=jsonpath={.status.containerStatuses[0].state.terminated.exitCode}",
 					])
+					.env("KUBECONFIG", ctx.gen_kubeconfig_path())
 					.output()
 					.await?;
 

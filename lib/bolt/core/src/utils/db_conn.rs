@@ -52,9 +52,11 @@ impl DatabaseConnection {
 								"
 							)
 						)
+						.env("KUBECONFIG", ctx.gen_kubeconfig_path())
 						.run()?;
 
 						handles.push(utils::kubectl_port_forward(
+							ctx,
 							"redis-master",
 							&name,
 							(port, 6379),
@@ -80,9 +82,11 @@ impl DatabaseConnection {
 								"
 							)
 						)
+						.env("KUBECONFIG", ctx.gen_kubeconfig_path())
 						.run()?;
 
 						handles.push(utils::kubectl_port_forward(
+							ctx,
 							"cockroachdb",
 							"cockroachdb",
 							(port, 26257),
@@ -107,6 +111,7 @@ impl DatabaseConnection {
 								"
 							)
 						)
+						.env("KUBECONFIG", ctx.gen_kubeconfig_path())
 						.run()?;
 
 						// Write clickhouse config file
@@ -124,6 +129,7 @@ impl DatabaseConnection {
 						.await?;
 
 						handles.push(utils::kubectl_port_forward(
+							ctx,
 							"clickhouse",
 							"clickhouse",
 							(port, 9440),

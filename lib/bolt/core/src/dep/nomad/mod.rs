@@ -56,7 +56,7 @@ impl NomadCtx {
 			}
 		};
 
-		let handle = utils::kubectl_port_forward("nomad-server", "nomad", (4646, 4646))?;
+		let handle = utils::kubectl_port_forward(ctx, "nomad-server", "nomad", (4646, 4646))?;
 
 		// Wait for port forward to open and check if successful
 		handle.check().await?;
