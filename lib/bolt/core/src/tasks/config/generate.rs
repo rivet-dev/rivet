@@ -218,7 +218,19 @@ pub async fn generate(project_path: &Path, ns_id: &str) -> Result<()> {
 		})
 		.await?;
 
-	if generator.ns.get("cluster").is_none() {
+	if generator
+		.ns
+		.get("cluster")
+		.unwrap()
+		.get("single_node")
+		.is_none()
+		&& generator
+			.ns
+			.get("cluster")
+			.unwrap()
+			.get("distributed")
+			.is_none()
+	{
 		generator
 			.generate_config(&["cluster", "single_node", "public_ip"], || async {
 				let public_ip = fetch_public_ip().await?;
