@@ -203,14 +203,6 @@ pub async fn generate(project_path: &Path, ns_id: &str) -> Result<()> {
 
 	let mut generator = ConfigGenerator::new(term, &project_path, ns_id).await?;
 
-	// MARK: Migrate
-	generator
-		.move_config(&["deploy", "local"], &["cluster", "single_node"])
-		.await?;
-	generator
-		.move_config(&["deploy", "cluster"], &["cluster", "distributed"])
-		.await?;
-
 	// MARK: Cluster
 	generator
 		.generate_config(&["cluster", "id"], || async {
@@ -501,7 +493,7 @@ pub async fn generate(project_path: &Path, ns_id: &str) -> Result<()> {
 
 	// MARK: CRDB
 	generator
-		.generate_secret(&["crdb", "username"], || async { Ok(value("rivet-root")) })
+		.generate_secret(&["crdb", "username"], || async { Ok(value("rivet_root")) })
 		.await?;
 	generator
 		.generate_secret(&["crdb", "password"], || async {
