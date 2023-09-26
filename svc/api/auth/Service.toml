@@ -5,7 +5,6 @@ kind = "rust"
 
 [[api.router.mounts]]
 path = "/auth"
-subdomain = "api"
 
 [[api.router.mounts]]
 deprecated = true

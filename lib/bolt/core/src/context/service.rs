@@ -738,9 +738,16 @@ impl ServiceContextData {
 		}
 
 		// Domains
-		env.push(("RIVET_DOMAIN_MAIN".into(), project_ctx.domain_main()));
-		env.push(("RIVET_DOMAIN_CDN".into(), project_ctx.domain_cdn()));
-		env.push(("RIVET_DOMAIN_JOB".into(), project_ctx.domain_job()));
+		if let Some(x) = project_ctx.domain_main() {
+			env.push(("RIVET_DOMAIN_MAIN".into(), x));
+		}
+		if let Some(x) = project_ctx.domain_cdn() {
+			env.push(("RIVET_DOMAIN_CDN".into(), x));
+		}
+		if let Some(x) = project_ctx.domain_job() {
+			env.push(("RIVET_DOMAIN_JOB".into(), x));
+		}
+		env.push(("RIVET_ORIGIN_API".into(), project_ctx.origin_api()));
 		env.push(("RIVET_ORIGIN_HUB".into(), project_ctx.origin_hub()));
 
 		// Regions
@@ -763,12 +770,6 @@ impl ServiceContextData {
 		if project_ctx.config().billing_enabled {
 			env.push(("IS_BILLING_ENABLED".to_owned(), "1".into()));
 		}
-
-		// Expose URLs to env
-		//
-		// We expose all services instead of just dependencies since we need to configure CORS
-		// for some services which don't have an explicit dependency.
-		env.extend(project_ctx.all_router_url_env().await);
 
 		if project_ctx.ns().dns.is_some() {
 			todo!("read cloudflare zones");
@@ -928,15 +929,7 @@ impl ServiceContextData {
 
 		env.push((
 			"RIVET_API_HUB_ORIGIN_REGEX".into(),
-			project_ctx
-				.ns()
-				.rivet
-				.api
-				.hub_origin_regex
-				.clone()
-				.unwrap_or_else(|| {
-					format!("^https://hub\\.{base}$", base = project_ctx.domain_main())
-				}),
+			project_ctx.origin_hub_regex(),
 		));
 		env.push((
 			"RIVET_API_ERROR_VERBOSE".into(),

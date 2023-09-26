@@ -167,8 +167,6 @@ pub struct Dns {
 	#[serde(default)]
 	pub deprecated_subdomains: bool,
 	pub domain: DnsDomains,
-	#[serde(default)]
-	pub hub_origin: Option<String>,
 	/// Auto-provision DNS records.
 	#[serde(flatten)]
 	pub provider: Option<DnsProvider>,
@@ -177,8 +175,18 @@ pub struct Dns {
 #[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(deny_unknown_fields)]
 pub struct DnsDomains {
+	/// Will create DNS records for:
+	/// - api.{domain.main}
 	pub main: String,
+	/// Will create DNS records for:
+	/// - *.lobby.{region}.{domain.job}
+	///
+	/// Can be the identical to `domain.main`.
 	pub job: String,
+	/// Will create DNS records for:
+	/// - **.{domain.cdn}
+	///
+	/// Cannot be the same as `domain.main` or `domain.job`.
 	pub cdn: String,
 }
 
@@ -553,6 +561,10 @@ pub struct RivetTest {}
 #[serde(deny_unknown_fields)]
 pub struct Api {
 	pub error_verbose: bool,
+	/// The origin used to build URLs for the hub in the API server.
+	#[serde(default)]
+	pub hub_origin: Option<String>,
+	/// Regexp used to validate requests from the hub.
 	pub hub_origin_regex: Option<String>,
 }
 
@@ -560,6 +572,7 @@ impl Default for Api {
 	fn default() -> Self {
 		Self {
 			error_verbose: false,
+			hub_origin: None,
 			hub_origin_regex: None,
 		}
 	}

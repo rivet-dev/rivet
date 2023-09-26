@@ -81,17 +81,18 @@ impl NomadCtx {
 				.request(method, format!("http://127.0.0.1:4646{path}")),
 
 			config::ns::ClusterKind::Distributed { .. } => {
-				let access_secret = self.access_secret.as_ref().unwrap();
-				self.client
-					.request(
-						method,
-						format!("https://nomad.{}{path}", self.project_ctx.domain_main()),
-					)
-					.header("CF-Access-Client-Id", access_secret.client_id.as_str())
-					.header(
-						"CF-Access-Client-Secret",
-						access_secret.client_secret.as_str(),
-					)
+				todo!()
+				// let access_secret = self.access_secret.as_ref().unwrap();
+				// self.client
+				// 	.request(
+				// 		method,
+				// 		format!("https://nomad.{}{path}", self.project_ctx.domain_main()),
+				// 	)
+				// 	.header("CF-Access-Client-Id", access_secret.client_id.as_str())
+				// 	.header(
+				// 		"CF-Access-Client-Secret",
+				// 		access_secret.client_secret.as_str(),
+				// 	)
 			}
 		}
 	}

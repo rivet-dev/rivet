@@ -7,7 +7,6 @@ kind = "rust"
 
 [[api.router.mounts]]
 path = "/job"
-subdomain = "api"
 
 [[api.router.mounts]]
 deprecated = true

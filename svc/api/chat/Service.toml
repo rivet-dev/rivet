@@ -8,7 +8,6 @@ kind = "rust"
 
 [[api.router.mounts]]
 path = "/chat"
-subdomain = "api"
 
 [[api.router.mounts]]
 deprecated = true

@@ -5,9 +5,14 @@ locals {
  	needs_cdn_cert_pack = data.cloudflare_zone.cdn.name != var.domain_cdn
 }
 
+# TODO: Only if we use deprecated subdomains
 # Allow CLoudflare to serve TLS requests at the edge for our wildcard
 # subdomains.
+#
+# This requires paying money for these certs.
 resource "cloudflare_certificate_pack" "main" {
+	count = var.dns_deprecated_subdomains ? 1 : 0
+	
 	lifecycle {
 		create_before_destroy = true
 	}

@@ -6,4 +6,3 @@ kind = "rust"
 
 [[api.router.mounts]]
 path = "/{{name}}"
-subdomain = "api"

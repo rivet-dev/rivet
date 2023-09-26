@@ -696,7 +696,6 @@ dependencies = [
  "rivet-connection",
  "rivet-convert",
  "rivet-health-checks",
- "rivet-matchmaker",
  "rivet-matchmaker-server",
  "rivet-operation",
  "rivet-pools",

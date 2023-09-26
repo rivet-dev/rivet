@@ -156,8 +156,6 @@ pub struct ServiceMount {
 	#[serde(default)]
 	pub deprecated: bool,
 	#[serde(default)]
-	pub domain: ServiceDomain,
-	#[serde(default)]
 	pub subdomain: Option<String>,
 	#[serde(default)]
 	pub path: Option<String>,

@@ -637,20 +637,25 @@ fn build_ingress_router(
 
 	// Register all mounts with Traefik
 	for (i, mount) in router.mounts.iter().enumerate() {
-		// Derive routing info
-		let domain = match mount.domain {
-			ServiceDomain::Base => project_ctx.domain_main(),
-			ServiceDomain::BaseGame => project_ctx.domain_cdn(),
-			ServiceDomain::BaseJob => project_ctx.domain_job(),
-		};
-		let host = if let Some(subdomain) = &mount.subdomain {
-			format!("{}.{}", subdomain, domain)
+		// Build host rule
+		let mut rule = String::new();
+
+		// Build host
+		if let Some(dns) = &project_ctx.ns().dns {
+			// Derive routing info
+			let domain = if let Some(subdomain) = &mount.subdomain {
+				format!("{}.{}", subdomain, project_ctx.domain_main().unwrap())
+			} else {
+				project_ctx.domain_main_api().unwrap()
+			};
+
+			rule.push_str(&format!("Host(`{domain}`)"));
 		} else {
-			domain
+			// Accept all hosts
+			rule.push_str(&format!("HostRegexp(`.*`)"));
 		};
 
-		// Build rule
-		let mut rule = format!("Host(`{host}`)");
+		// Build path
 		if let Some(path) = &mount.path {
 			rule.push_str(&format!(" && PathPrefix(`{path}`)"));
 		}

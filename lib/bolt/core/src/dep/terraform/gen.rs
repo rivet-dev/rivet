@@ -271,6 +271,8 @@ async fn vars(ctx: &ProjectContext) {
 	// Extra DNS
 	if let Some(dns) = &config.dns {
 		let mut extra_dns = Vec::new();
+		let domain_main = ctx.domain_main().unwrap();
+		let domain_main_api = ctx.domain_main_api().unwrap();
 
 		// Add services
 		for svc_ctx in all_svc {
@@ -280,19 +282,15 @@ async fn vars(ctx: &ProjectContext) {
 						continue;
 					}
 
-					let (domain, zone_name) = match mount.domain {
-						ServiceDomain::Base => (ctx.domain_main(), "main"),
-						ServiceDomain::BaseGame => (ctx.domain_cdn(), "cdn"),
-						ServiceDomain::BaseJob => (ctx.domain_job(), "job"),
+					let domain = if let Some(subdomain) = &mount.subdomain {
+						format!("{subdomain}.{domain_main}")
+					} else {
+						domain_main_api.clone()
 					};
 
 					extra_dns.push(json!({
-						"zone_name": zone_name,
-						"name": if let Some(subdomain) = &mount.subdomain {
-							format!("{}.{}", subdomain, domain)
-						} else {
-							domain
-						},
+						"zone_name": "main",
+						"name": domain,
 					}));
 				}
 			}
@@ -303,7 +301,7 @@ async fn vars(ctx: &ProjectContext) {
 		if s3_providers.minio.is_some() {
 			extra_dns.push(json!({
 				"zone_name": "main",
-				"name": format!("minio.{}", ctx.domain_main()),
+				"name": format!("minio.{}", domain_main),
 			}));
 		}
 

@@ -17,7 +17,7 @@ impl TunnelInstance {
 		config: TunnelConfig,
 		access_secret: &cloudflare::AccessSecret,
 	) -> Arc<Self> {
-		let tunnel_hostname = format!("{}.{}", config.tunnel_name, ctx.domain_main());
+		let tunnel_hostname = format!("{}.{}", config.tunnel_name, ctx.domain_main().unwrap());
 		let (child, tempfiles) = match config.protocol {
 			TunnelProtocol::Tcp => {
 				// Spawn forwarding process

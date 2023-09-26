@@ -6,7 +6,6 @@ kind = "rust"
 
 [[api.router.mounts]]
 path = "/matchmaker"
-subdomain = "api"
 
 [[api.router.mounts]]
 deprecated = true
