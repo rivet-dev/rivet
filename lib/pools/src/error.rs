@@ -1,5 +1,8 @@
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
+	#[error("{0}")]
+	Env(std::env::VarError),
+
 	#[error("missing nats pool")]
 	MissingNatsPool,
 

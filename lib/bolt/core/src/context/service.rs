@@ -797,6 +797,7 @@ impl ServiceContextData {
 		}
 
 		if self.depends_on_nomad_api() {
+			// TODO: Read host url from terraform
 			env.push((
 				"NOMAD_URL".into(),
 				"http://nomad-server.nomad.svc.cluster.local:4646".into(),
@@ -804,10 +805,13 @@ impl ServiceContextData {
 		}
 
 		if self.depends_on_clickhouse() {
-			env.push((
-				"CLICKHOUSE_URL".into(),
-				"clickhouse.clickhouse.svc.cluster.local:9440".into(),
-			));
+			let clickhouse_data = terraform::output::read_clickhouse(&project_ctx).await;
+			let clickhouse_host = format!(
+				"https://{}:{}",
+				*clickhouse_data.host, *clickhouse_data.port
+			);
+
+			env.push(("CLICKHOUSE_URL".into(), clickhouse_host));
 		}
 
 		// TODO:

@@ -1,13 +1,31 @@
+use std::{fmt, time::Duration};
+
 use anyhow::*;
 use bolt_config::service::RuntimeKind;
 use duct::cmd;
-use std::time::Duration;
+use indoc::formatdoc;
 use tokio::task::block_in_place;
 
 use crate::{
 	context::{ProjectContext, ServiceContext},
 	utils::{self, db_conn::DatabaseConnection},
 };
+
+enum ClickhouseRole {
+	Admin,
+	Write,
+	Readonly,
+}
+
+impl fmt::Display for ClickhouseRole {
+	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+		match self {
+			ClickhouseRole::Admin => write!(f, "admin"),
+			ClickhouseRole::Write => write!(f, "write"),
+			ClickhouseRole::Readonly => write!(f, "readonly"),
+		}
+	}
+}
 
 pub async fn create(
 	_ctx: &ProjectContext,
@@ -248,8 +266,6 @@ pub async fn up(ctx: &ProjectContext, services: &[ServiceContext]) -> Result<()>
 
 	// Run migrations
 	for svc in services {
-		let database_url = conn.migrate_db_url(svc).await?;
-
 		eprintln!();
 
 		match &svc.config().runtime {
@@ -283,12 +299,86 @@ pub async fn up(ctx: &ProjectContext, services: &[ServiceContext]) -> Result<()>
 				let db_name = svc.clickhouse_db_name();
 				rivet_term::status::progress("Migrating ClickHouse", &db_name);
 
-				let clickhouse_user = "bolt";
+				let clickhouse_user = "default";
 				let clickhouse_password = ctx
-					.read_secret(&["clickhouse", "users", "bolt", "password"])
+					.read_secret(&["clickhouse", "users", "default", "password"])
 					.await?;
 				let host = conn.clickhouse_host.as_ref().unwrap();
 				let (hostname, port) = host.split_once(":").unwrap();
+
+				rivet_term::status::progress("Creating roles", &db_name);
+				block_in_place(|| {
+					cmd!(
+						"clickhouse",
+						"client",
+						"--config-file",
+						"/tmp/clickhouse-config.yml",
+						"--host",
+						&hostname,
+						"--port",
+						&port,
+						"--user",
+						&clickhouse_user,
+						"--password",
+						&clickhouse_password,
+						"--multiquery",
+						formatdoc!(
+							"
+							CREATE ROLE IF NOT EXISTS admin;
+							GRANT CREATE DATABASE ON *.* TO admin;
+							GRANT CREATE TABLE ON {db_name}.* TO admin;
+							GRANT INSERT ON {db_name}.* TO admin;
+							GRANT SELECT ON {db_name}.* TO admin;
+
+							CREATE ROLE IF NOT EXISTS write;
+							GRANT INSERT ON {db_name}.* TO write;
+							GRANT SELECT ON {db_name}.* TO write;
+
+							CREATE ROLE IF NOT EXISTS readonly;
+							GRANT SELECT ON {db_name}.* TO readonly;
+							"
+						)
+					)
+					.run()
+				})?;
+
+				rivet_term::status::progress("Creating users", &db_name);
+				for (username, role) in [
+					("bolt", ClickhouseRole::Admin),
+					("chirp", ClickhouseRole::Write),
+					("grafana", ClickhouseRole::Readonly),
+				] {
+					let password = ctx
+						.read_secret(&["clickhouse", "users", username, "password"])
+						.await?;
+
+					block_in_place(|| {
+						cmd!(
+							"clickhouse",
+							"client",
+							"--config-file",
+							"/tmp/clickhouse-config.yml",
+							"--host",
+							&hostname,
+							"--port",
+							&port,
+							"--user",
+							&clickhouse_user,
+							"--password",
+							&clickhouse_password,
+							"--multiquery",
+							formatdoc!(
+								"
+								CREATE USER
+								IF NOT EXISTS {username}
+								IDENTIFIED WITH sha256_password BY '{password}';
+								GRANT {role} TO {username};
+								"
+							)
+						)
+						.run()
+					})?;
+				}
 
 				rivet_term::status::progress("Creating database", &db_name);
 				block_in_place(|| {
@@ -315,6 +405,7 @@ pub async fn up(ctx: &ProjectContext, services: &[ServiceContext]) -> Result<()>
 		}
 
 		rivet_term::status::progress("Running migrations", "");
+		let database_url = conn.migrate_db_url(svc).await?;
 		block_in_place(|| {
 			cmd!(
 				"migrate",

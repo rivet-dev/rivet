@@ -1,6 +1,5 @@
 use anyhow::Result;
 use duct::cmd;
-use indoc::formatdoc;
 use serde_json::json;
 use std::{
 	collections::HashMap,
@@ -283,7 +282,7 @@ pub async fn gen_svc(exec_ctx: &ExecServiceContext) -> Vec<serde_json::Value> {
 		// "requests": {}
 	});
 
-	let (volumes, volume_mounts) = build_volumes(&exec_ctx).await;
+	let (volumes, volume_mounts) = build_volumes(&project_ctx, &exec_ctx).await;
 
 	// Create priority class
 	let priority_class_name = format!("{}-priority", service_name);
@@ -469,6 +468,7 @@ pub async fn gen_svc(exec_ctx: &ExecServiceContext) -> Vec<serde_json::Value> {
 }
 
 async fn build_volumes(
+	project_ctx: &ProjectContext,
 	exec_ctx: &ExecServiceContext,
 ) -> (Vec<serde_json::Value>, Vec<serde_json::Value>) {
 	let ExecServiceContext {
@@ -539,7 +539,7 @@ async fn build_volumes(
 	}
 
 	// Add CA volumes
-	{
+	if let config::ns::ClusterKind::SingleNode { .. } = &project_ctx.ns().cluster.kind {
 		let redis_deps = svc_ctx
 			.redis_dependencies(run_context)
 			.await
@@ -548,28 +548,28 @@ async fn build_volumes(
 			.collect::<Vec<_>>();
 
 		// Redis CA
-		// volumes.extend(redis_deps.iter().map(|db| {
-		// 	json!({
-		// 		"name": format!("redis-{}-ca", db),
-		// 		"configMap": {
-		// 			"defaultMode": 420,
-		// 			"name": format!("redis-{}-ca", db),
-		// 			"items": [
-		// 				{
-		// 					"key": "ca.crt",
-		// 					"path": format!("redis-{}-ca.crt", db)
-		// 				}
-		// 			]
-		// 		}
-		// 	})
-		// }));
-		// volume_mounts.extend(redis_deps.iter().map(|db| {
-		// 	json!({
-		// 		"name": format!("redis-{}-ca", db),
-		// 		"mountPath": format!("/usr/local/share/ca-certificates/redis-{}-ca.crt", db),
-		// 		"subPath": format!("redis-{}-ca.crt", db)
-		// 	})
-		// }));
+		volumes.extend(redis_deps.iter().map(|db| {
+			json!({
+				"name": format!("redis-{}-ca", db),
+				"configMap": {
+					"defaultMode": 420,
+					"name": format!("redis-{}-ca", db),
+					"items": [
+						{
+							"key": "ca.crt",
+							"path": format!("redis-{}-ca.crt", db)
+						}
+					]
+				}
+			})
+		}));
+		volume_mounts.extend(redis_deps.iter().map(|db| {
+			json!({
+				"name": format!("redis-{}-ca", db),
+				"mountPath": format!("/usr/local/share/ca-certificates/redis-{}-ca.crt", db),
+				"subPath": format!("redis-{}-ca.crt", db)
+			})
+		}));
 
 		// CRDB CA
 		volumes.push(json!({

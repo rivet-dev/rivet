@@ -436,12 +436,12 @@ pub async fn test_services<T: AsRef<str>>(ctx: &ProjectContext, svc_names: &[T])
 	.await?;
 
 	// Print results
-	print_resuilts(&test_results);
+	print_results(&test_results);
 
 	Ok(())
 }
 
-fn print_resuilts(test_results: &[TestResult]) {
+fn print_results(test_results: &[TestResult]) {
 	eprintln!();
 	rivet_term::status::success("Complete", "");
 

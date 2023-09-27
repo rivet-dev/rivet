@@ -5,3 +5,7 @@ output "host" {
 output "port" {
 	value = 26257
 }
+
+output "cluster_identifier" {
+	value = cockroach_cluster.main.serverless.routing_id
+}
