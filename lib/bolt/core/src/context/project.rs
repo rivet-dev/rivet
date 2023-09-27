@@ -715,6 +715,11 @@ impl ProjectContextData {
 				origins
 			})
 	}
+
+	pub fn imagor_cors_allowed_origins(&self) -> Vec<String> {
+		// Mirror S3 CORS for now
+		self.s3_cors_allowed_origins()
+	}
 }
 
 impl ProjectContextData {

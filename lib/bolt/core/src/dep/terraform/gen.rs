@@ -194,6 +194,7 @@ async fn vars(ctx: &ProjectContext) {
 	vars.insert("domain_main".into(), json!(ctx.domain_main()));
 	vars.insert("domain_cdn".into(), json!(ctx.domain_cdn()));
 	vars.insert("domain_job".into(), json!(ctx.domain_job()));
+	vars.insert("domain_main_api".into(), json!(ctx.domain_main_api()));
 	vars.insert(
 		"dns_deprecated_subdomains".into(),
 		json!(config
@@ -369,6 +370,10 @@ async fn vars(ctx: &ProjectContext) {
 			.into_iter()
 			.map(media_resize::ResizePresetSerialize::from)
 			.collect::<Vec<_>>()),
+	);
+	vars.insert(
+		"imagor_cors_allowed_origins".into(),
+		json!(ctx.imagor_cors_allowed_origins()),
 	);
 
 	vars.insert("kubeconfig_path".into(), json!(ctx.gen_kubeconfig_path()));

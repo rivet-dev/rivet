@@ -23,12 +23,16 @@ locals {
 			priority = preset.priority
 			game_cors = preset.game_cors
 
-			rule = "Host(`api.${var.domain_main}`) && Path(`/media/${preset.path}`)"
-			query = (
+			match = "Path(`/media/${preset.path}`)${
+				var.domain_main_api != null ?
+					"&& Host(`${var.domain_main_api}`)" :
+					""
+			}${
 				preset.query != null ?
-					"&& Query(${join(",", [for x in preset.query: "`${x[0]}=${x[1]}`"])})"
-					: ""
-			)
+					" && Query(${join(",", [for x in preset.query: "`${x[0]}=${x[1]}`"])})" :
+					""
+			}"
+
 			middlewares = (
 				preset.game_cors ?
 					["imagor-${preset.key}-path", "imagor-cors-game", "imagor-cdn"]
@@ -238,7 +242,7 @@ resource "kubectl_manifest" "imagor_ingress" {
 				for index, preset in local.imagor_presets:
 				{
 					kind = "Rule"
-					match = "${preset.rule}${preset.query}"
+					match = preset.match
 					priority = preset.priority
 					middlewares = [
 						for mw in preset.middlewares: {
@@ -281,7 +285,7 @@ resource "kubectl_manifest" "imagor_cors" {
 		spec = {
 			headers = {
 				accessControlAllowMethods = [ "GET", "OPTIONS" ]
-				accessControlAllowOriginList = [ "https://${var.domain_main}" ]
+				accessControlAllowOriginList = var.imagor_cors_allowed_origins
 				accessControlMaxAge = 300
 			}
 		}

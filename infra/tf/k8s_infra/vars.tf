@@ -23,6 +23,11 @@ variable "domain_job" {
 	type = string
 }
 
+variable "domain_main_api" {
+	type = string
+	nullable = true
+}
+
 variable "dns_deprecated_subdomains" {
 	type = bool
 }
@@ -47,6 +52,10 @@ variable "authenticate_all_docker_hub_pulls" {
 # MARK: Imagor
 variable "imagor_presets" {
 	type = any
+}
+
+variable "imagor_cors_allowed_origins" {
+	type = list(string)
 }
 
 # MARK: Redis

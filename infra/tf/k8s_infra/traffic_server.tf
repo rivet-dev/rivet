@@ -231,20 +231,6 @@ resource "kubectl_manifest" "traffic_server_traefik_service" {
 
 locals {
 	traffic_server_middlewares = {
-		"traffic-server-cors" = {
-			headers = {
-				accessControlAllowMethods = [ "GET", "OPTIONS" ]
-				accessControlAllowOriginList = [ "https://${var.domain_main}" ]
-				accessControlMaxAge = 300
-			}
-		}
-		"traffic-server-cors-game" = {
-			headers = {
-				accessControlAllowMethods = [ "GET", "OPTIONS" ]
-				accessControlAllowOriginList = [ "*" ]
-				accessControlMaxAge = 300
-			}
-		}
 		"traffic-server-cdn" = {
 			chain = {
 				middlewares = [
