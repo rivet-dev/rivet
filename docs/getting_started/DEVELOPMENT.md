@@ -41,7 +41,6 @@ Open your project's folder and run:
 
 ```
 nix-shell
-./scripts/setup.sh
 ```
 
 _Run `nix-shell` in every new shell you create if you're not using [Lorri](/docs/infrastructure/nix/LORRI.md)._

@@ -1,12 +1,49 @@
 let
 	pkgs = import ../common/pkgs.nix;
+
+	# Upgrade Rust
+	rustPlatform = pkgs.makeRustPlatform {
+		rustc = pkgs.latest.rustChannels.stable.rust;
+		cargo = pkgs.latest.rustChannels.stable.rust;
+	};
+
+	# Filter file related to Bolt
+	projectRoot = ../../..;
+	includeDirs = [
+		"lib/bolt"
+		"lib/s3-util"
+		"proto"
+	];
+
+	includeFilter = path: type: let
+		relPath = pkgs.lib.removePrefix (toString projectRoot + "/") (toString path);
+	in
+		pkgs.lib.any
+			(dir: (pkgs.lib.hasPrefix (dir + "/") relPath) || (pkgs.lib.hasPrefix relPath dir))
+			includeDirs;
+
+	filteredSrc = pkgs.lib.cleanSourceWith {
+		src = projectRoot;
+		filter = includeFilter;
+	};
 in
-pkgs.rustPlatform.buildRustPackage rec {
+rustPlatform.buildRustPackage rec {
 	name = "bolt";
 	pname = "bolt";
+
+	src = filteredSrc;
+	sourceRoot = "source/lib/bolt";
 	cargoLock.lockFile = ../../../lib/bolt/Cargo.lock;
-	# src = pkgs.lib.cleanSource ../../../lib/bolt;
-	src = ../../../lib/bolt;
+
+	buildInputs = with pkgs; [
+		pkg-config
+		openssl
+	];
+	nativeBuildInputs = buildInputs;
+
+	shellHook = ''
+		export LD_LIBRARY_PATH="${pkgs.lib.strings.makeLibraryPath [ pkgs.openssl ]}"
+	'';
 
 	# See https://artemis.sh/2023/07/08/nix-rust-project-with-git-dependencies.html
 	cargoLock.outputHashes = {

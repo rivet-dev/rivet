@@ -12,6 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 -  **Bolt** Timeout for tests
 -  **Bolt** New summary view of test progress
 -  **Bolt** `config show` command
+-  **Dev** Bolt automatically builds with Nix shell
 
 ### Changed
 
@@ -23,6 +24,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 -  **Bolt** Remove  `skip_dependencies`, `force_build`, and `skip_generate` on `bolt up` and `bolt test` commands that are no longer relevant
 -  **api-route** Split up routes in to `/traefik/config/core` and `/traefik/config/game-guard`
 -  **Imagor** CORS now mirror the default CORS configured for S3
+-  **Dev** `git lfs install` automatically runs in `shellHook`
+-  **Dev** Removed `setup.sh` in lieu of `shellHook`
 
 ### Fixed
 

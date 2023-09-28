@@ -981,7 +981,7 @@ impl ServiceContextData {
 
 		// Write secrets
 		for (secret_key, secret_config) in self.required_secrets(run_context).await? {
-			let env_key = rivet_util::env::secret_env_var_key(&secret_key);
+			let env_key = secret_env_var_key(&secret_key);
 			if secret_config.optional {
 				if let Some(value) = project_ctx.read_secret_opt(&secret_key).await? {
 					env.push((env_key, value));
@@ -1259,4 +1259,12 @@ async fn add_s3_secret_env(
 	));
 
 	Ok(())
+}
+
+/// TODO: Reuse code with lib/util/env/src/lib.r
+pub fn secret_env_var_key(key: &[impl AsRef<str>]) -> String {
+	key.iter()
+		.map(|x| x.as_ref().to_uppercase())
+		.collect::<Vec<_>>()
+		.join("_")
 }

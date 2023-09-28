@@ -1,23 +1,11 @@
 # Cross-platofrm Rust Setup: https://zeroes.dev/p/nix-recipe-for-rust/
 
 let
-	# Include most recent Rust builds
-	moz_overlay = import (builtins.fetchTarball https://github.com/mozilla/nixpkgs-mozilla/archive/e6ca26fe8b9df914d4567604e426fbc185d9ef3e.tar.gz);
-
-	# If you need a newer version of packages, use unstablePkgs.
-	pkgs = import (fetchTarball {
-		url = "https://github.com/NixOS/nixpkgs/archive/refs/tags/23.05.tar.gz";
-	}) { overlays = [ moz_overlay ]; };
-
-	# Bleeding edge packages for those that need to be up to date with the
-	# latest. We pin this to a specific commit instead of using `master` so
-	# we're not building environments against a moving target & improves
-	# reproducability.
-	unstablePkgs = import (fetchTarball {
-		url = "https://github.com/NixOS/nixpkgs/archive/462f4a45aa5f988ae94156fdc9a61b7d3d0f7fbf.tar.gz";
-	}) { overlays = [ moz_overlay ]; };
+	pkgs = import ./infra/nix/common/pkgs.nix;
+	unstablePkgs = import ./infra/nix/common/unstable_pkgs.nix;
 
 	custom_clickhouse = import ./infra/nix/pkgs/clickhouse.nix { inherit (pkgs) stdenv fetchurl lib; };
+	custom_bolt = import ./infra/nix/bolt/default.nix;
 in
 	pkgs.mkShell {
 		name = "rivet";
@@ -37,6 +25,7 @@ in
 			terraform
 
 			# Tools
+			# custom_bolt
 			cloc
 			curl
 			docker-client
@@ -83,9 +72,10 @@ in
 			]
 		);
 		shellHook = ''
-			# Add binaries to path. Prefer debug builds over release builds
-			# since release builds are usually the default but debug builds are
-			# used for testing things locally.
+			# Setup Git LFS
+			git lfs install
+
+			# Add binaries to path so we can use a locally built copy of Bolt.
 			export PATH="$PATH:${toString ./target/debug/.}:${toString ./target/release/.}"
 
 			# See https://docs.rs/prost-build/0.8.0/prost_build/#sourcing-protoc
