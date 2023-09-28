@@ -11,6 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 -  **Bolt** Timeout for tests
 -  **Bolt** New summary view of test progress
+-  **Bolt** `config show` command
 
 ### Changed
 

@@ -139,6 +139,15 @@ pub async fn output(ctx: &ProjectContext, plan_id: &str, quiet: bool) -> serde_j
 }
 
 pub async fn state_list(ctx: &ProjectContext, plan_id: &str) -> Option<Vec<String>> {
+	// Don't return state if not enabled
+	if !crate::tasks::infra::all_terraform_plans(ctx)
+		.ok()
+		.map_or(false, |x| x.iter().any(|x| x.as_str() == plan_id))
+	{
+		return None;
+	}
+
+	// Return all resources
 	init_if_needed(ctx, plan_id).await;
 	let mut cmd = build_command(ctx, plan_id).await;
 	cmd.arg("state").arg("list");
