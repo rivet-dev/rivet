@@ -64,8 +64,8 @@ jobs:
           key = "TODO"
           EOF
 
-      # - name: Bolt Generate
-      #   run: nix-shell --pure --run "bolt init --yes ci"
+      - name: Bolt Generate
+        run: nix-shell --pure --run "bolt init --yes ci"
 
       # TODO: Run check in parallel
       # - name: Bolt Check
