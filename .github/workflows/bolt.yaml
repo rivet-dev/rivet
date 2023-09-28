@@ -16,8 +16,8 @@ env:
 
 jobs:
   check:
-    # runs-on: buildjet-8vcpu-ubuntu-2204
-    runs-on: ubuntu-22.04
+    runs-on: buildjet-8vcpu-ubuntu-2204
+    # runs-on: ubuntu-22.04
 
     steps:
       # MARK: Git
@@ -51,8 +51,8 @@ jobs:
 
       # MARK: Rust
       - name: Rust Cache
-        # uses: buildjet/cache@v3.3.1
-        uses: actions/cache@v3.3.1
+        uses: buildjet/cache@v3.3.1
+        # uses: actions/cache@v3.3.1
         with:
           key: ${{ runner.os }}-rust
           path: |
@@ -72,8 +72,8 @@ jobs:
       - name: Setup
         run: nix-shell --pure --run "SKIP_GIT_LFS=1 NPM_GLOBAL=1 ./scripts/setup.sh"
 
-      - name: Setup tmate session
-        uses: mxschmitt/action-tmate@v3
+      - name: Bolt Generate
+        run: nix-shell --pure --run "ls -l target/debug"
 
       - name: Bolt Generate
         run: nix-shell --pure --run "./target/debug/bolt init ci"
