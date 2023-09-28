@@ -31,6 +31,7 @@ jobs:
       - uses: cachix/install-nix-action@v22
         with:
           nix_path: nixpkgs=channel:nixos-23.05
+          # TODO: Add back
           # extra_nix_config: "store = ${{ env.store }}\n"
 
       - name: Nix Cache
@@ -43,9 +44,7 @@ jobs:
             ${{ runner.os }}-nix-
 
       - name: Build Shell
-        run: |
-          nix-store --verify --check-contents
-          nix-shell --pure --run "echo 'Built shell'"
+        run: nix-shell --pure --run "echo 'Built shell'"
 
       # MARK: Rust
       - name: Rust Cache
@@ -77,8 +76,11 @@ jobs:
       - name: Setup
         run: nix-shell --pure --run "SKIP_GIT_LFS=1 NPM_GLOBAL=1 ./scripts/setup.sh"
 
+      - name: Debug
+        run: nix-shell --pure --run "echo PATH=$PATH; ls target; ls target/debug; which bolt"
+
       - name: Bolt Generate
-        run: nix-shell --pure --run "bolt init ci"
+        run: nix-shell --pure --run "./target/debug/bolt init ci"
 
       # TODO: Run check in parallel
       # - name: Bolt Check
