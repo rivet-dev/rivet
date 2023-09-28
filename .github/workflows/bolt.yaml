@@ -46,7 +46,7 @@ jobs:
       - name: Build Shell
         run: |
           echo 'Add channel'
-          nix-channel --add https://nixos.org/channels/nixpkgs-23.05 nixpkgs
+          nix-channel --add https://nixos.org/channels/nixos-23.05 nixpkgs
           echo 'Update channel'
           nix-channel --update
           echo 'Nix shell'
