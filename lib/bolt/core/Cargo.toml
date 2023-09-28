@@ -13,6 +13,7 @@ async-trait = "0.1"
 base64 = "0.13"
 bolt-config = { path = "../config" }
 chrono = "0.4"
+cjson = "0.1"
 derive_builder = "0.12"
 duct = "0.13"
 futures-util = "0.3"

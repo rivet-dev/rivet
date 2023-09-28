@@ -30,6 +30,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 -  `LC_ALL: cannot change locale` error from glibc
+-  **Dev** Bolt uses `write_if_different` for auto-generated files to prevent cache purging
 
 ## [23.1.0-rc4] - 2023-09-02
 
