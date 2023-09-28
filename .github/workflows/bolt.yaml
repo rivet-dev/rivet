@@ -17,7 +17,7 @@ env:
 
 jobs:
   check:
-    runs-on: [self-hosted, linux, x64]
+    runs-on: buildjet-8vcpu-ubuntu-2204
 
     steps:
       # MARK: Git
@@ -35,7 +35,7 @@ jobs:
           install_url: https://releases.nixos.org/nix/nix-2.15.0/install
 
       - name: Nix Cache
-        uses: actions/cache@v3.3.1
+        uses: buildjet/cache@v3.3.1
         with:
           key: ${{ runner.os }}-nix-${{ hashfiles('./shell.nix', './nix/**/*.nix') }}
           path: ${{ env.store }}
@@ -48,7 +48,7 @@ jobs:
 
       # MARK: Rust
       - name: Rust Cache
-        uses: actions/cache@v3.3.1
+        uses: buildjet/cache@v3.3.1
         with:
           key: ${{ runner.os }}-rust
           path: |
@@ -58,7 +58,7 @@ jobs:
 
       # MARK: Bolt
       - name: Bolt Cache
-        uses: actions/cache@v3.3.1
+        uses: buildjet/cache@v3.3.1
         with:
           key: ${{ runner.os }}-cargo
           path: |
