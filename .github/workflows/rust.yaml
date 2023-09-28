@@ -1,7 +1,6 @@
 name: rust
 
-on:
-  - pull_request
+on: [pull_request]
 
 concurrency:
   group: rust-${{ github.ref }}
