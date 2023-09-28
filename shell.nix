@@ -23,9 +23,6 @@ in
 		name = "rivet";
 
 		buildInputs = with pkgs; [
-			# Shell
-			bash
-
 			# Kubernetes tools
 			k3d
 			kubectl
