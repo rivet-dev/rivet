@@ -25,7 +25,7 @@ in
 			terraform
 
 			# Tools
-			# custom_bolt
+			custom_bolt
 			cloc
 			curl
 			docker-client
@@ -106,3 +106,5 @@ in
 			export RUSTFLAGS="--cfg tokio_unstable"
 		'';
 	}
+
+
