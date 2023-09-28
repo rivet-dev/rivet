@@ -9,7 +9,7 @@ concurrency:
 defaults:
   run:
     # Enable fail-fast behavior
-    shell: bash -e {0}
+    shell: sh -e {0}
 
 env:
   store: /home/runner/nix
@@ -66,21 +66,11 @@ jobs:
 
       - name: Write Namespace Config
         run: |
-          # Write Namespace config
-          cat <<'EOF' > namespaces/ci.toml
-          [cluster]
-          id = "d0b2b70b-56e3-467a-82ba-8908ab409de9"
-
-          [cluster.single_node]
-          public_ip = "1.2.3.4"
-
-          [email.sendgrid]
-
-          [s3.minio]
+          # Write secrets so they're not prompted in `bolt init`
+          cat <<'EOF' > secrets/ci.toml
+          [sendgrid]
+          key = "TODO"
           EOF
-
-          # Empty secrets
-          touch secrets/ci.toml
 
       - name: Setup
         run: nix-shell --pure --run "SKIP_GIT_LFS=1 NPM_GLOBAL=1 ./scripts/setup.sh"
