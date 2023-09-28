@@ -44,8 +44,11 @@ jobs:
 
       - name: Build Shell
         run: |
-          nix-channel --add https://nixos.org/channels/nixpkgs-unstable nixos
+          echo 'Add channel'
+          nix-channel --add https://nixos.org/channels/nixpkgs-unstable nixpkgs
+          echo 'Update channel'
           nix-channel --update
+          echo 'Nix shell'
           nix-shell --pure --run "echo 'Built shell'"
 
       # MARK: Rust
