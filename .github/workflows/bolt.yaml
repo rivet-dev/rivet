@@ -33,17 +33,17 @@ jobs:
           # TODO: Add back
           extra_nix_config: "store = ${{ env.store }}\n"
 
-      # - name: Nix Cache
-      #   uses: actions/cache@v3.3.1
-      #   with:
-      #     key: ${{ runner.os }}-nix-${{ hashfiles('./shell.nix', './nix/**/*.nix') }}
-      #     path: ${{ env.store }}
-      #     restore-keys: |
-      #       ${{ runner.os }}-nix-${{ hashfiles('./shell.nix', './nix/**/*.nix') }}
-      #       ${{ runner.os }}-nix-
+      - name: Nix Cache
+        uses: actions/cache@v3.3.1
+        with:
+          key: ${{ runner.os }}-nix-${{ hashfiles('./shell.nix', './nix/**/*.nix') }}
+          path: ${{ env.store }}
+          restore-keys: |
+            ${{ runner.os }}-nix-${{ hashfiles('./shell.nix', './nix/**/*.nix') }}
+            ${{ runner.os }}-nix-
 
-      # - name: Build Shell
-      #   run: nix-shell --pure --run "echo 'Built shell'"
+      - name: Build Shell
+        run: nix-shell --pure --run "echo 'Built shell'"
 
       # MARK: Rust
       - name: Rust Cache
