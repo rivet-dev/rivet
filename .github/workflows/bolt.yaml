@@ -1,3 +1,6 @@
+# TODO: Get Bolt working with `--pure`, see:
+# nix-shell -p strace --pure --run "cd oss && RUST_BACKTRACE=1 strace -e open,openat target/debug/bolt init ci"
+
 name: bolt
 
 on: [push]
@@ -16,8 +19,7 @@ env:
 
 jobs:
   check:
-    runs-on: buildjet-8vcpu-ubuntu-2204
-    # runs-on: ubuntu-22.04
+    runs-on: [self-hosted, linux, x64]
 
     steps:
       # MARK: Git
@@ -28,26 +30,23 @@ jobs:
           submodules: recursive
 
       # MARK: Nix
-      # - uses: cachix/install-nix-action@v22
-      #   with:
-      #     nix_path: nixpkgs=channel:nixos-23.05
-      #     # TODO: Add back
-      #     # extra_nix_config: "store = ${{ env.store }}\n"
+      - uses: cachix/install-nix-action@v22
+        with:
+          nix_path: nixpkgs=channel:nixos-23.05
+          # TODO: Add back
+          extra_nix_config: "store = ${{ env.store }}\n"
 
-      # - name: Nix Cache
-      #   uses: buildjet/cache@v3.3.1
-      #   with:
-      #     key: ${{ runner.os }}-nix-${{ hashfiles('./shell.nix', './nix/**/*.nix') }}
-      #     path: ${{ env.store }}
-      #     restore-keys: |
-      #       ${{ runner.os }}-nix-${{ hashfiles('./shell.nix', './nix/**/*.nix') }}
-      #       ${{ runner.os }}-nix-
-
-      - uses: DeterminateSystems/nix-installer-action@main
-      - uses: DeterminateSystems/magic-nix-cache-action@main
+      - name: Nix Cache
+        uses: actions/cache@v3.3.1
+        with:
+          key: ${{ runner.os }}-nix-${{ hashfiles('./shell.nix', './nix/**/*.nix') }}
+          path: ${{ env.store }}
+          restore-keys: |
+            ${{ runner.os }}-nix-${{ hashfiles('./shell.nix', './nix/**/*.nix') }}
+            ${{ runner.os }}-nix-
 
       - name: Build Shell
-        run: nix-shell --pure --run "echo 'Built shell'"
+        run: nix-shell --run "echo 'Built shell'"
 
       # MARK: Rust
       - name: Rust Cache
@@ -70,19 +69,16 @@ jobs:
           EOF
 
       - name: Setup
-        run: nix-shell --pure --run "SKIP_GIT_LFS=1 NPM_GLOBAL=1 ./scripts/setup.sh"
+        run: nix-shell --run "SKIP_GIT_LFS=1 NPM_GLOBAL=1 ./scripts/setup.sh"
 
       - name: Bolt Generate
-        run: nix-shell --pure --run "ls -l target/debug"
-
-      - name: Bolt Generate
-        run: nix-shell --pure --run "./target/debug/bolt init ci"
+        run: nix-shell --run "bolt init ci"
 
       # TODO: Run check in parallel
       # - name: Bolt Check
-      #   run: nix-shell --pure --run "./target/debug/bolt check --validate-format"
+      #   run: nix-shell --run "bolt check --validate-format"
 
       # TODO: Make this run only whe migrations change
       # TODO: Broken for some reason
       # - name: Bolt Database Migrate Check
-      #   run: nix-shell --pure --run "BOLT_NAMESPACE=ci BOLT_IGNORE_TERRAFORM=1 bolt database migrate check"
+      #   run: nix-shell --run "BOLT_NAMESPACE=ci BOLT_IGNORE_TERRAFORM=1 bolt database migrate check"
