@@ -79,6 +79,9 @@ jobs:
       - name: Setup
         run: nix-shell --pure --run "SKIP_GIT_LFS=1 NPM_GLOBAL=1 ./scripts/setup.sh"
 
+      - name: Setup tmate session
+        uses: mxschmitt/action-tmate@v3
+
       - name: Bolt Generate
         run: nix-shell --pure --run "./target/debug/bolt init ci"
 
