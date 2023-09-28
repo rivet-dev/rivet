@@ -1,6 +1,6 @@
 name: bolt
 
-on: [pull_request]
+on: [push]
 
 concurrency:
   group: check-${{ github.ref }}
