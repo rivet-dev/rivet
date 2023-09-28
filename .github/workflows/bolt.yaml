@@ -56,12 +56,6 @@ jobs:
             target
 
 
-      # MARK: Bolt
-      - name: Inspect cache
-        run: echo 'target' && ls target && echo 'cargo' && ls ~/.cargo/registry
-      - name: Setup
-        run: nix-shell --pure --run "SKIP_GIT_LFS=1 NPM_GLOBAL=1 ./scripts/setup.sh"
-
       - name: Write Namespace Config
         run: |
           # Write secrets so they're not prompted in `bolt init`
@@ -70,8 +64,8 @@ jobs:
           key = "TODO"
           EOF
 
-      - name: Bolt Generate
-        run: nix-shell --pure --run "bolt init --yes ci"
+      # - name: Bolt Generate
+      #   run: nix-shell --pure --run "bolt init --yes ci"
 
       # TODO: Run check in parallel
       # - name: Bolt Check
@@ -81,3 +75,8 @@ jobs:
       # TODO: Broken for some reason
       # - name: Bolt Database Migrate Check
       #   run: nix-shell --pure --run "BOLT_NAMESPACE=ci BOLT_IGNORE_TERRAFORM=1 bolt database migrate check"
+
+      - name: K3D Cleanup
+        if: always()
+        run: nix-shell --pure --run "k3d cluster delete rivet-ci"
+

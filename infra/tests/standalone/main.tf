@@ -107,7 +107,6 @@ resource "null_resource" "repo_setup" {
 			"set -euf -o pipefail",
 			"source /root/.nix-profile/etc/profile.d/nix.sh",
 			"cd backend",
-			"nix-shell --run './scripts/setup.sh'",
 		]
 	}
 }
