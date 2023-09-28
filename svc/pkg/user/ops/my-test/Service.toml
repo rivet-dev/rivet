@@ -1,7 +1,0 @@
-[service]
-name = "user-my-test"
-
-[runtime]
-kind = "rust"
-
-[operation]

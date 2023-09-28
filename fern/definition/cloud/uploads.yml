@@ -2,8 +2,7 @@
 
 service:
   auth: true
-  base-path: /uploads
-  url: Cloud
+  base-path: /cloud/uploads
   audiences:
     - public
   endpoints:

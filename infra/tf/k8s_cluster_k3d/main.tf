@@ -30,16 +30,38 @@ resource "k3d_cluster" "main" {
 		node_filters = ["server:0"]
 	}
 
+	# HTTP
 	port {
-		host_port = 80
+		host = "0.0.0.0"
+		host_port = var.api_http_port
 		container_port = 80
 		node_filters = ["server:0"]
 	}
 
-	port {
-		host_port = 443
-		container_port = 443
-		node_filters = ["server:0"]
+	# HTTPS
+	dynamic "port" {
+		for_each = var.api_https_port != null ? [null] : []
+
+		content {
+			host = "0.0.0.0"
+			host_port = var.api_https_port
+			container_port = 443
+			node_filters = ["server:0"]
+		}
+
+	}
+
+	# Minio
+	dynamic "port" {
+		for_each = var.minio_port != null ? [null] : []
+
+		content {
+			host = "0.0.0.0"
+			host_port = var.minio_port
+			container_port = 9000
+			node_filters = ["server:0"]
+		}
+
 	}
 
 	k3s {

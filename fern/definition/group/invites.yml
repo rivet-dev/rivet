@@ -5,10 +5,9 @@ imports:
 
 service:
   auth: true
-  url: Group
   audiences:
     - public
-  base-path: ""
+  base-path: /group
   endpoints:
     getInvite:
       path: /invites/{group_invite_code}

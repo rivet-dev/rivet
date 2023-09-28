@@ -1,7 +1,6 @@
 name: bolt
 
-on:
-  - pull_request
+on: [push]
 
 concurrency:
   group: check-${{ github.ref }}
@@ -10,7 +9,7 @@ concurrency:
 defaults:
   run:
     # Enable fail-fast behavior
-    shell: bash
+    shell: bash -e {0}
 
 env:
   store: /home/runner/nix
@@ -28,11 +27,11 @@ jobs:
           submodules: recursive
 
       # MARK: Nix
-      - uses: cachix/install-nix-action@v13
+      - uses: cachix/install-nix-action@v22
         with:
-          nix_path: nixpkgs=channel:nixpkgs-23.05
+          nix_path: nixpkgs=channel:nixos-23.05
+          # TODO: Add back
           extra_nix_config: "store = ${{ env.store }}\n"
-          install_url: https://releases.nixos.org/nix/nix-2.15.0/install
 
       - name: Nix Cache
         uses: actions/cache@v3.3.1
@@ -48,7 +47,7 @@ jobs:
 
       # MARK: Rust
       - name: Rust Cache
-        uses: actions/cache@v3.3.1
+        uses: actions/cache@v3
         with:
           key: ${{ runner.os }}-rust
           path: |
@@ -56,58 +55,28 @@ jobs:
             ~/.cargo/git
             target
 
-      # MARK: Bolt
-      - name: Bolt Cache
-        uses: actions/cache@v3.3.1
-        with:
-          key: ${{ runner.os }}-cargo
-          path: |
-            .bolt-meta.json
-            gen/
 
       - name: Write Namespace Config
         run: |
-          # Write Namespace config
-          cat <<'EOF' > namespaces/ci.toml
-          pools = []
-
-          [cluster]
-          id = "d0b2b70b-56e3-467a-82ba-8908ab409de9"
-
-          [cluster.single_node]
-          public_ip = "1.2.3.4"
-
-          [dns.domain]
-          main = "ci.rivet.gg"
-          cdn = "ci.rivet.game"
-          job = "ci.rivet.run"
-
-          [dns.cloudflare]
-          account_id = "2a94c6a0ced8d35ea63cddc86c2681e7"
-
-          [dns.cloudflare.zones]
-          root = "d95c48588b898e7f3b96a2dedd2a19bd"
-          game = "a37fb47b921131c69db59551f7c281f6"
-          job = "f5d5af8267f87db85b6776f47e471fee"
-
-          [email.sendgrid]
-
-          [s3.minio]
+          # Write secrets so they're not prompted in `bolt init`
+          cat <<'EOF' > secrets/ci.toml
+          [sendgrid]
+          key = "TODO"
           EOF
 
-          # Empty secrets
-          touch secrets/ci.toml
-
-      - name: Setup
-        run: nix-shell --pure --run "SKIP_GIT_LFS=1 NPM_GLOBAL=1 ./scripts/setup.sh"
-
       - name: Bolt Generate
-        run: nix-shell --pure --run "BOLT_NAMESPACE=ci BOLT_IGNORE_TERRAFORM=1 bolt generate all"
+        run: nix-shell --pure --run "bolt init --yes ci"
 
-      - name: Bolt Check
-        run: nix-shell --pure --run "BOLT_NAMESPACE=ci BOLT_IGNORE_TERRAFORM=1 bolt check --validate-format"
+      # TODO: Run check in parallel
+      # - name: Bolt Check
+      #   run: nix-shell --pure --run "bolt check --validate-format"
 
       # TODO: Make this run only whe migrations change
       # TODO: Broken for some reason
       # - name: Bolt Database Migrate Check
       #   run: nix-shell --pure --run "BOLT_NAMESPACE=ci BOLT_IGNORE_TERRAFORM=1 bolt database migrate check"
+
+      - name: K3D Cleanup
+        if: always()
+        run: nix-shell --pure --run "k3d cluster delete rivet-ci"
+

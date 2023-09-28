@@ -5,8 +5,7 @@ imports:
 
 service:
   auth: true
-  url: Matchmaker
-  base-path: /regions
+  base-path: /matchmaker/regions
   audiences:
     - public
   endpoints:

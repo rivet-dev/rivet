@@ -738,9 +738,16 @@ impl ServiceContextData {
 		}
 
 		// Domains
-		env.push(("RIVET_DOMAIN_MAIN".into(), project_ctx.domain_main()));
-		env.push(("RIVET_DOMAIN_CDN".into(), project_ctx.domain_cdn()));
-		env.push(("RIVET_DOMAIN_JOB".into(), project_ctx.domain_job()));
+		if let Some(x) = project_ctx.domain_main() {
+			env.push(("RIVET_DOMAIN_MAIN".into(), x));
+		}
+		if let Some(x) = project_ctx.domain_cdn() {
+			env.push(("RIVET_DOMAIN_CDN".into(), x));
+		}
+		if let Some(x) = project_ctx.domain_job() {
+			env.push(("RIVET_DOMAIN_JOB".into(), x));
+		}
+		env.push(("RIVET_ORIGIN_API".into(), project_ctx.origin_api()));
 		env.push(("RIVET_ORIGIN_HUB".into(), project_ctx.origin_hub()));
 
 		// Regions
@@ -764,16 +771,22 @@ impl ServiceContextData {
 			env.push(("IS_BILLING_ENABLED".to_owned(), "1".into()));
 		}
 
-		// Expose URLs to env
-		//
-		// We expose all services instead of just dependencies since we need to configure CORS
-		// for some services which don't have an explicit dependency.
-		env.extend(project_ctx.all_router_url_env().await);
+		if project_ctx.ns().dns.is_some() {
+			todo!("read cloudflare zones");
 
-		let config::ns::DnsProvider::Cloudflare { zones, .. } = &project_ctx.ns().dns.provider;
-		env.push(("CLOUDFLARE_ZONE_ID_BASE".into(), zones.root.clone()));
-		env.push(("CLOUDFLARE_ZONE_ID_GAME".into(), zones.game.clone()));
-		env.push(("CLOUDFLARE_ZONE_ID_JOB".into(), zones.job.clone()));
+			// env.push(("CLOUDFLARE_ZONE_ID_BASE".into(), zones.root.clone()));
+			// env.push(("CLOUDFLARE_ZONE_ID_GAME".into(), zones.game.clone()));
+			// env.push(("CLOUDFLARE_ZONE_ID_JOB".into(), zones.job.clone()));
+
+			if self.depends_on_cloudflare() {
+				env.push((
+					"CLOUDFLARE_AUTH_TOKEN".into(),
+					project_ctx
+						.read_secret(&["cloudflare", "terraform", "auth_token"])
+						.await?,
+				));
+			}
+		}
 
 		if let Some(hcaptcha) = &project_ctx.ns().captcha.hcaptcha {
 			if self.depends_on_hcaptcha() {
@@ -920,15 +933,7 @@ impl ServiceContextData {
 
 		env.push((
 			"RIVET_API_HUB_ORIGIN_REGEX".into(),
-			project_ctx
-				.ns()
-				.rivet
-				.api
-				.hub_origin_regex
-				.clone()
-				.unwrap_or_else(|| {
-					format!("^https://hub\\.{base}$", base = project_ctx.domain_main())
-				}),
+			project_ctx.origin_hub_regex(),
 		));
 		env.push((
 			"RIVET_API_ERROR_VERBOSE".into(),
@@ -980,7 +985,7 @@ impl ServiceContextData {
 
 		// Write secrets
 		for (secret_key, secret_config) in self.required_secrets(run_context).await? {
-			let env_key = rivet_util::env::secret_env_var_key(&secret_key);
+			let env_key = secret_env_var_key(&secret_key);
 			if secret_config.optional {
 				if let Some(value) = project_ctx.read_secret_opt(&secret_key).await? {
 					env.push((env_key, value));
@@ -1016,15 +1021,6 @@ impl ServiceContextData {
 					project_ctx.read_secret(&["sendgrid", "key"]).await?,
 				));
 			}
-		}
-
-		if self.depends_on_cloudflare() {
-			env.push((
-				"CLOUDFLARE_AUTH_TOKEN".into(),
-				project_ctx
-					.read_secret(&["cloudflare", "terraform", "auth_token"])
-					.await?,
-			));
 		}
 
 		// CRDB
@@ -1267,4 +1263,12 @@ async fn add_s3_secret_env(
 	));
 
 	Ok(())
+}
+
+/// TODO: Reuse code with lib/util/env/src/lib.r
+pub fn secret_env_var_key(key: &[impl AsRef<str>]) -> String {
+	key.iter()
+		.map(|x| x.as_ref().to_uppercase())
+		.collect::<Vec<_>>()
+		.join("_")
 }

@@ -7,6 +7,10 @@ kind = "rust"
 [api]
 
 [[api.router.mounts]]
+path = "/identity"
+
+[[api.router.mounts]]
+deprecated = true
 path = "/v1"
 subdomain = "identity.api"
 

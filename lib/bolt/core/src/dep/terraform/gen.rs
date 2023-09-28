@@ -147,10 +147,23 @@ async fn vars(ctx: &ProjectContext) {
 	vars.insert("namespace".into(), json!(ns));
 
 	match &config.cluster.kind {
-		ns::ClusterKind::SingleNode { public_ip, .. } => {
+		ns::ClusterKind::SingleNode {
+			public_ip,
+			api_http_port,
+			api_https_port,
+			minio_port,
+			..
+		} => {
 			vars.insert("deploy_method_local".into(), json!(true));
 			vars.insert("deploy_method_cluster".into(), json!(false));
 			vars.insert("public_ip".into(), json!(public_ip));
+			vars.insert("api_http_port".into(), json!(api_http_port));
+			vars.insert("api_https_port".into(), json!(api_https_port));
+
+			// Expose Minio on a dedicated port if DNS not enabled
+			if config.dns.is_none() && config.s3.providers.minio.is_some() {
+				vars.insert("minio_port".into(), json!(minio_port));
+			}
 		}
 		ns::ClusterKind::Distributed {} => {
 			vars.insert("deploy_method_local".into(), json!(false));
@@ -183,17 +196,22 @@ async fn vars(ctx: &ProjectContext) {
 	vars.insert("domain_main".into(), json!(ctx.domain_main()));
 	vars.insert("domain_cdn".into(), json!(ctx.domain_cdn()));
 	vars.insert("domain_job".into(), json!(ctx.domain_job()));
+	vars.insert("domain_main_api".into(), json!(ctx.domain_main_api()));
+	vars.insert(
+		"dns_deprecated_subdomains".into(),
+		json!(config
+			.dns
+			.as_ref()
+			.map_or(false, |x| x.deprecated_subdomains)),
+	);
 
 	// Cloudflare
-	match &config.dns.provider {
-		ns::DnsProvider::Cloudflare {
-			account_id, zones, ..
-		} => {
-			vars.insert("cloudflare_account_id".into(), json!(account_id));
-
-			vars.insert("cloudflare_zone_id_rivet_gg".into(), json!(zones.root));
-			vars.insert("cloudflare_zone_id_rivet_game".into(), json!(zones.game));
-			vars.insert("cloudflare_zone_id_rivet_job".into(), json!(zones.job));
+	if let Some(dns) = &config.dns {
+		match &dns.provider {
+			Some(ns::DnsProvider::Cloudflare { account_id, .. }) => {
+				vars.insert("cloudflare_account_id".into(), json!(account_id));
+			}
+			None => {}
 		}
 	}
 
@@ -214,17 +232,19 @@ async fn vars(ctx: &ProjectContext) {
 	let servers = super::servers::build_servers(&ctx, &regions, &pools).unwrap();
 	vars.insert("servers".into(), json!(servers));
 
-	let mut server_install_scripts = HashMap::new();
-	for (k, v) in &servers {
-		server_install_scripts.insert(
-			k.clone(),
-			super::install_scripts::gen(ctx, v).await.unwrap(),
+	if dep::terraform::cli::has_applied(ctx, "tls").await {
+		let mut server_install_scripts = HashMap::new();
+		for (k, v) in &servers {
+			server_install_scripts.insert(
+				k.clone(),
+				super::install_scripts::gen(ctx, v).await.unwrap(),
+			);
+		}
+		vars.insert(
+			"server_install_scripts".into(),
+			json!(server_install_scripts),
 		);
 	}
-	vars.insert(
-		"server_install_scripts".into(),
-		json!(server_install_scripts),
-	);
 
 	// Services
 	{
@@ -252,26 +272,28 @@ async fn vars(ctx: &ProjectContext) {
 	);
 
 	// Extra DNS
-	{
+	if let Some(dns) = &config.dns {
 		let mut extra_dns = Vec::new();
+		let domain_main = ctx.domain_main().unwrap();
+		let domain_main_api = ctx.domain_main_api().unwrap();
 
 		// Add services
 		for svc_ctx in all_svc {
 			if let Some(router) = svc_ctx.config().kind.router() {
 				for mount in &router.mounts {
-					let (domain, zone_name) = match mount.domain {
-						ServiceDomain::Base => (ctx.domain_main(), "base"),
-						ServiceDomain::BaseGame => (ctx.domain_cdn(), "base_game"),
-						ServiceDomain::BaseJob => (ctx.domain_job(), "base_job"),
+					if mount.deprecated && !dns.deprecated_subdomains {
+						continue;
+					}
+
+					let domain = if let Some(subdomain) = &mount.subdomain {
+						format!("{subdomain}.{domain_main}")
+					} else {
+						domain_main_api.clone()
 					};
 
 					extra_dns.push(json!({
-						"zone_name": zone_name,
-						"name": if let Some(subdomain) = &mount.subdomain {
-							format!("{}.{}", subdomain, domain)
-						} else {
-							domain
-						},
+						"zone_name": "main",
+						"name": domain,
 					}));
 				}
 			}
@@ -281,8 +303,8 @@ async fn vars(ctx: &ProjectContext) {
 		let s3_providers = &ctx.ns().s3.providers;
 		if s3_providers.minio.is_some() {
 			extra_dns.push(json!({
-				"zone_name": "base",
-				"name": format!("minio.{}", ctx.domain_main()),
+				"zone_name": "main",
+				"name": format!("minio.{}", domain_main),
 			}));
 		}
 
@@ -350,6 +372,10 @@ async fn vars(ctx: &ProjectContext) {
 			.into_iter()
 			.map(media_resize::ResizePresetSerialize::from)
 			.collect::<Vec<_>>()),
+	);
+	vars.insert(
+		"imagor_cors_allowed_origins".into(),
+		json!(ctx.imagor_cors_allowed_origins()),
 	);
 
 	vars.insert("kubeconfig_path".into(), json!(ctx.gen_kubeconfig_path()));

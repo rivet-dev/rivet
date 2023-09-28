@@ -5,6 +5,10 @@ name = "api-portal"
 kind = "rust"
 
 [[api.router.mounts]]
+path = "/portal"
+
+[[api.router.mounts]]
+deprecated = true
 path = "/v1"
 subdomain = "portal.api"
 

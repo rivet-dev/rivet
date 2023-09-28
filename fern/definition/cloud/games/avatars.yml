@@ -6,8 +6,7 @@ imports:
 
 service:
   auth: true
-  base-path: /games/{game_id}
-  url: Cloud
+  base-path: /cloud/games/{game_id}
   audiences:
     - public
   path-parameters:

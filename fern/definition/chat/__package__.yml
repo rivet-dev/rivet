@@ -8,8 +8,7 @@ imports:
 
 service:
   auth: true
-  base-path: ""
-  url: Chat
+  base-path: /chat
   audiences:
     - public
   endpoints:

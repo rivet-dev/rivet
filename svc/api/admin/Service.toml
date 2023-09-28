@@ -5,6 +5,10 @@ name = "api-admin"
 kind = "rust"
 
 [[api.router.mounts]]
+path = "/admin"
+
+[[api.router.mounts]]
+deprecated = true
 path = "/v1"
 subdomain = "admin.api"
 

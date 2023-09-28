@@ -696,7 +696,6 @@ dependencies = [
  "rivet-connection",
  "rivet-convert",
  "rivet-health-checks",
- "rivet-matchmaker",
  "rivet-matchmaker-server",
  "rivet-operation",
  "rivet-pools",
@@ -2639,12 +2638,6 @@ name = "crc-catalog"
 version = "2.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9cace84e55f07e7301bae1c519df89cdad8cc3cd868413d3fdbdeca9ff3db484"
-
-[[package]]
-name = "crc16"
-version = "0.4.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "338089f42c427b86394a5ee60ff321da23a5c89c9d89514c829687b26359fcff"
 
 [[package]]
 name = "crc32c"
@@ -6146,15 +6139,12 @@ dependencies = [
  "async-trait",
  "bytes",
  "combine",
- "crc16",
  "futures",
  "futures-util",
  "itoa 1.0.9",
- "log",
  "native-tls",
  "percent-encoding",
  "pin-project-lite",
- "rand",
  "ryu",
  "sha1_smol",
  "socket2 0.4.9",
@@ -9013,16 +9003,6 @@ dependencies = [
  "rivet-operation",
  "sqlx",
  "user-follow-toggle",
-]
-
-[[package]]
-name = "user-my-test"
-version = "0.0.1"
-dependencies = [
- "chirp-client",
- "chirp-worker",
- "rivet-operation",
- "sqlx",
 ]
 
 [[package]]

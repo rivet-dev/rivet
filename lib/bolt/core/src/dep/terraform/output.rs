@@ -46,7 +46,7 @@ pub struct Tls {
 }
 
 #[derive(Debug, Clone, Deserialize)]
-pub struct Crdb {
+pub struct Cockroach {
 	pub host: TerraformOutputValue<String>,
 	pub port: TerraformOutputValue<u32>,
 	pub cluster_identifier: TerraformOutputValue<String>,
@@ -72,13 +72,13 @@ pub async fn read_tls(ctx: &ProjectContext) -> Tls {
 	read_plan::<Tls>(ctx, "tls").await
 }
 
-pub async fn read_crdb(ctx: &ProjectContext) -> Crdb {
+pub async fn read_crdb(ctx: &ProjectContext) -> Cockroach {
 	match &ctx.ns().cluster.kind {
 		config::ns::ClusterKind::SingleNode { .. } => {
-			read_plan::<Crdb>(ctx, "cockroachdb_k8s").await
+			read_plan::<Cockroach>(ctx, "cockroachdb_k8s").await
 		}
 		config::ns::ClusterKind::Distributed { .. } => {
-			read_plan::<Crdb>(ctx, "cockroachdb_managed").await
+			read_plan::<Cockroach>(ctx, "cockroachdb_managed").await
 		}
 	}
 }

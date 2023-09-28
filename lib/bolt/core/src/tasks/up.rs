@@ -301,7 +301,7 @@ pub async fn up_services<T: AsRef<str>>(
 	// Apply specs
 	eprintln!();
 	rivet_term::status::progress("Applying", "");
-	dep::k8s::cli::apply_specs(specs).await?;
+	dep::k8s::cli::apply_specs(ctx, specs).await?;
 
 	eprintln!();
 	rivet_term::status::success("Finished", "");

@@ -14,10 +14,12 @@ pub struct Namespace {
 	pub secrets: Secrets,
 	#[serde(default = "default_regions")]
 	pub regions: HashMap<String, Region>,
+	#[serde(default)]
 	pub pools: Vec<Pool>,
 	#[serde(default)]
 	pub terraform: Terraform,
-	pub dns: Dns,
+	pub dns: Option<Dns>,
+	#[serde(default)]
 	pub s3: S3,
 	pub fly: Option<Fly>,
 	pub email: Option<Email>,
@@ -66,6 +68,15 @@ pub enum ClusterKind {
 	#[serde(rename = "single_node")]
 	SingleNode {
 		public_ip: String,
+		/// Port to expose API HTTP interface. Exposed on public IP.
+		#[serde(default = "default_api_http_port")]
+		api_http_port: u16,
+		/// Port to expose API HTTPS interface. Expoed on public IP.
+		#[serde(default = "default_api_https_port")]
+		api_https_port: Option<u16>,
+		/// Port to expose Minio on. Exposed to localhost.
+		#[serde(default = "default_minio_port")]
+		minio_port: u16,
 
 		/// Restricts the resources of the core services so there are more resources availble for
 		/// compiling code.
@@ -151,18 +162,31 @@ impl Default for TerraformBackend {
 #[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(deny_unknown_fields)]
 pub struct Dns {
-	pub domain: DnsDomains,
+	/// If we should enable endpoints like `matchmaker.api.rivet.gg/v1`, which were replaced with
+	/// `api.rivet.gg/matchmaker`.
 	#[serde(default)]
-	pub hub_origin: Option<String>,
+	pub deprecated_subdomains: bool,
+	pub domain: DnsDomains,
+	/// Auto-provision DNS records.
 	#[serde(flatten)]
-	pub provider: DnsProvider,
+	pub provider: Option<DnsProvider>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(deny_unknown_fields)]
 pub struct DnsDomains {
+	/// Will create DNS records for:
+	/// - api.{domain.main}
 	pub main: String,
+	/// Will create DNS records for:
+	/// - *.lobby.{region}.{domain.job}
+	///
+	/// Can be the identical to `domain.main`.
 	pub job: String,
+	/// Will create DNS records for:
+	/// - **.{domain.cdn}
+	///
+	/// Cannot be the same as `domain.main` or `domain.job`.
 	pub cdn: String,
 }
 
@@ -172,18 +196,18 @@ pub enum DnsProvider {
 	#[serde(rename = "cloudflare")]
 	Cloudflare {
 		account_id: String,
-		zones: CloudflareZones,
+		// zones: CloudflareZones,
 		access: Option<CloudflareAccess>,
 	},
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug)]
-#[serde(deny_unknown_fields)]
-pub struct CloudflareZones {
-	pub root: String,
-	pub game: String,
-	pub job: String,
-}
+// #[derive(Serialize, Deserialize, Clone, Debug)]
+// #[serde(deny_unknown_fields)]
+// pub struct CloudflareZones {
+// 	pub root: String,
+// 	pub game: String,
+// 	pub job: String,
+// }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(deny_unknown_fields)]
@@ -206,14 +230,15 @@ pub struct CloudflareAccessServices {
 	pub grafana_cloud: String,
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug, Default)]
 #[serde(deny_unknown_fields)]
 pub struct S3 {
 	#[serde(default)]
 	pub cors: S3Cors,
-	pub backfill: Option<String>,
-	#[serde(flatten)]
+	#[serde(flatten, default)]
 	pub providers: S3Providers,
+	/// Used to migrate data from an old S3 provider to the new one.
+	pub backfill: Option<String>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, Default)]
@@ -222,12 +247,22 @@ pub struct S3Cors {
 	pub allowed_origins: Option<Vec<String>>,
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug, Default)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(deny_unknown_fields)]
 pub struct S3Providers {
 	pub minio: Option<S3Provider>,
 	pub backblaze: Option<S3Provider>,
 	pub aws: Option<S3Provider>,
+}
+
+impl Default for S3Providers {
+	fn default() -> Self {
+		Self {
+			minio: Some(S3Provider { default: true }),
+			backblaze: None,
+			aws: None,
+		}
+	}
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -247,7 +282,7 @@ pub struct Fly {
 #[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(deny_unknown_fields)]
 pub struct Email {
-	#[serde(flatten)]
+	#[serde(flatten, default)]
 	pub provider: EmailProvider,
 }
 
@@ -526,6 +561,10 @@ pub struct RivetTest {}
 #[serde(deny_unknown_fields)]
 pub struct Api {
 	pub error_verbose: bool,
+	/// The origin used to build URLs for the hub in the API server.
+	#[serde(default)]
+	pub hub_origin: Option<String>,
+	/// Regexp used to validate requests from the hub.
 	pub hub_origin_regex: Option<String>,
 }
 
@@ -533,6 +572,7 @@ impl Default for Api {
 	fn default() -> Self {
 		Self {
 			error_verbose: false,
+			hub_origin: None,
 			hub_origin_regex: None,
 		}
 	}
@@ -587,4 +627,16 @@ fn default_regions() -> HashMap<String, Region> {
 
 fn default_docker_repo() -> String {
 	"ghcr.io/rivet-gg/".to_string()
+}
+
+fn default_api_http_port() -> u16 {
+	80
+}
+
+fn default_api_https_port() -> Option<u16> {
+	Some(443)
+}
+
+fn default_minio_port() -> u16 {
+	9000
 }

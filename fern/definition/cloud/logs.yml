@@ -5,8 +5,7 @@ imports:
 
 service:
   auth: true
-  base-path: /rays
-  url: Cloud
+  base-path: /cloud/rays
   audiences:
     - public
   endpoints:

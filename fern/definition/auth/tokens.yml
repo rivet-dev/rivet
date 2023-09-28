@@ -2,8 +2,7 @@
 
 service:
   auth: true
-  url: Auth
-  base-path: /tokens/identity
+  base-path: /auth/tokens/identity
   endpoints:
     refreshIdentityToken:
       path: ""

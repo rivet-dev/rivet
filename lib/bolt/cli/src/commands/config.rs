@@ -32,6 +32,7 @@ pub enum SubCommand {
 		#[clap(long)]
 		test: bool,
 	},
+	Show,
 }
 
 impl SubCommand {
@@ -74,6 +75,14 @@ impl SubCommand {
 				for dep in deps {
 					println!("{}", dep.name());
 				}
+			}
+			Self::Show => {
+				let ctx = bolt_core::context::ProjectContextData::new(
+					std::env::var("BOLT_NAMESPACE").ok(),
+				)
+				.await;
+
+				println!("{:#?}", ctx.ns());
 			}
 		}
 

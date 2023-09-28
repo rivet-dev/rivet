@@ -1,8 +1,7 @@
-echo "__GHCR_PASSWORD__" | docker login ghcr.io --username "__GHCR_USERNAME__" --password-stdin 
+# echo "__GHCR_PASSWORD__" | docker login ghcr.io --username "__GHCR_USERNAME__" --password-stdin 
 
 # Create volumes
 mkdir -p /etc/trafficserver
-mkdir -p /etc/trafficserver-s3-auth
 mkdir -p /var/cache/trafficserver
 
 __CONFIG__

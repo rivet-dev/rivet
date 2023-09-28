@@ -2,10 +2,9 @@
 
 service:
   auth: true
-  url: Group
   audiences:
     - public
-  base-path: /groups/{group_id}/join-request
+  base-path: /group/groups/{group_id}/join-request
   path-parameters:
     group_id:
       type: uuid

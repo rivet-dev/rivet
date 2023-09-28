@@ -4,6 +4,7 @@ use std::collections::HashMap;
 use tokio::fs;
 
 use crate::{
+	config::ns,
 	context::ProjectContext,
 	dep::terraform::{output::Cert, servers::Server},
 };
@@ -99,13 +100,6 @@ pub fn traefik_instance(config: TraefikInstance) -> String {
 }
 
 pub async fn traffic_server(ctx: &ProjectContext) -> Result<String> {
-	let username = ctx
-		.read_secret(&["docker", "registry", "ghcr.io", "write", "username"])
-		.await?;
-	let password = ctx
-		.read_secret(&["docker", "registry", "ghcr.io", "write", "password"])
-		.await?;
-
 	// Write config to files
 	let config = traffic_server_config(ctx).await?;
 	let config_script = config
@@ -115,8 +109,6 @@ pub async fn traffic_server(ctx: &ProjectContext) -> Result<String> {
 		.join("\n\n");
 
 	let script = include_str!("files/traffic_server.sh")
-		.replace("__GHCR_USERNAME__", &username)
-		.replace("__GHCR_PASSWORD__", &password)
 		.replace(
 			"__IMAGE__",
 			"ghcr.io/rivet-gg/apache-traffic-server:378f44b",
@@ -135,36 +127,111 @@ async fn traffic_server_config(ctx: &ProjectContext) -> Result<Vec<(String, Stri
 		.join("traffic_server");
 
 	// Static files
-	let mut my_map = Vec::<(String, String)>::new();
-	// let mut static_dir = fs::read_dir(config_dir.join("etc/static")).await?;
-	// while let Some(entry) = static_dir.next_entry().await? {
-	// 	let key = entry
-	// 		.path()
-	// 		.file_name()
-	// 		.context("path.file_name")?
-	// 		.as_str()
-	// 		.context("as_str")?
-	// 		.to_string();
-	// 	let value = fs::read_to_string(entry.path()).await?;
-	// 	my_map.push((key, value));
-	// }
+	let mut config_files = Vec::<(String, String)>::new();
+	let mut static_dir = fs::read_dir(config_dir.join("etc")).await?;
+	while let Some(entry) = static_dir.next_entry().await? {
+		let meta = entry.metadata().await?;
+		if meta.is_file() {
+			let key = entry
+				.path()
+				.file_name()
+				.context("path.file_name")?
+				.to_str()
+				.context("as_str")?
+				.to_string();
+			let value = fs::read_to_string(entry.path()).await?;
+			config_files.push((key, value));
+		}
+	}
 
-	// // Storage
-	// my_map.push((
-	// 	"storage.config".to_string(),
-	// 	format!("/var/cache/trafficserver {volume_size}Gi"),
-	// ));
+	// Storage
+	let volume_size = 64; // TODO: Don't hardcode this
+	config_files.push((
+		"storage.config".to_string(),
+		format!("/var/cache/trafficserver {volume_size}G"),
+	));
 
-	// // Remap
-	// let mut remap = String::new();
-	// remap.push_str(&format!("map /s3-cache ${s3_providers[s3_default_provider].endpoint_internal} @plugin=s3_auth.so @pparam=--config @pparam=/etc/trafficserver-s3-auth/s3_auth_v4_${s3_default_provider}.config\n"));
-	// for (provider_name, provider) in s3_proviers {
-	// 	remap.push_str(&format!("map /s3-cache/${provider_name} ${provider.endpoint_internal} @plugin=s3_auth.so @pparam=--config @pparam=/etc/trafficserver-s3-auth/s3_auth_v4_${provider_name}.config"));
-	// }
+	// Remap & S3
+	let mut remap = String::new();
+	let (default_s3_provider, _) = ctx.default_s3_provider()?;
+	if let Some(p) = &ctx.ns().s3.providers.minio {
+		let output = gen_s3_provider(ctx, s3_util::Provider::Minio, default_s3_provider).await?;
+		remap.push_str(&output.append_remap);
+		config_files.extend(output.config_files);
+	}
+	if let Some(p) = &ctx.ns().s3.providers.backblaze {
+		let output =
+			gen_s3_provider(ctx, s3_util::Provider::Backblaze, default_s3_provider).await?;
+		remap.push_str(&output.append_remap);
+		config_files.extend(output.config_files);
+	}
+	if let Some(p) = &ctx.ns().s3.providers.aws {
+		let output = gen_s3_provider(ctx, s3_util::Provider::Aws, default_s3_provider).await?;
+		remap.push_str(&output.append_remap);
+		config_files.extend(output.config_files);
+	}
+	config_files.push(("remap.config".to_string(), remap));
 
-	// my_map.push(("remap.config".to_string(), remap));
+	Ok(config_files)
+}
 
-	// // TODO: S3
+struct GenRemapS3ProviderOutput {
+	/// Append to remap.config
+	append_remap: String,
 
-	Ok(my_map)
+	/// Concat with config files
+	config_files: Vec<(String, String)>,
+}
+
+async fn gen_s3_provider(
+	ctx: &ProjectContext,
+	provider: s3_util::Provider,
+	default_s3_provider: s3_util::Provider,
+) -> Result<GenRemapS3ProviderOutput> {
+	let mut remap = String::new();
+	let provider_name = provider.as_str();
+	let config = ctx.s3_config(provider).await?;
+	let creds = ctx.s3_credentials(provider).await?;
+
+	// Add remap
+	remap.push_str(&format!("map /s3-cache/{provider_name} {endpoint_internal} @plugin=s3_auth.so @pparam=--config @pparam=s3_auth_v4_{provider_name}.config\n", endpoint_internal = config.endpoint_internal));
+
+	// Add default route
+	if default_s3_provider == provider {
+		remap.push_str(&format!("map /s3-cache {endpoint_internal} @plugin=s3_auth.so @pparam=--config @pparam=s3_auth_v4_{provider_name}.config\n",
+			endpoint_internal = config.endpoint_internal,
+		));
+	}
+
+	// Add credentials
+	let mut config_files = Vec::<(String, String)>::new();
+	config_files.push((
+		format!("s3_auth_v4_{provider_name}.config"),
+		formatdoc!(
+			r#"
+			access_key={access_key}
+			secret_key={secret_key}
+			version=4
+			v4-region-map=s3_region_map_{provider_name}.config
+			"#,
+			access_key = creds.access_key_id,
+			secret_key = creds.access_key_secret,
+		),
+	));
+	config_files.push((
+		format!("s3_region_map_{provider_name}.config"),
+		formatdoc!(
+			r#"
+		# Default region
+		{s3_host}: {s3_region}
+		"#,
+			s3_host = config.endpoint_external,
+			s3_region = config.region,
+		),
+	));
+
+	Ok(GenRemapS3ProviderOutput {
+		append_remap: remap,
+		config_files,
+	})
 }

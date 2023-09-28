@@ -16,26 +16,30 @@ locals {
 	result_storage_s3_secret_access_key = module.imagor_secrets.values["s3/${var.s3_default_provider}/terraform/key"]
 	result_storage_s3_bucket = "${var.namespace}-bucket-imagor-result-storage"
 
-	imagor_presets = [
-		for preset in var.imagor_presets: {
+	imagor_presets = flatten([
+		for preset in var.imagor_presets:
+		{
 			key = preset.key
 			priority = preset.priority
 			game_cors = preset.game_cors
 
-			rule = "(Host(`media.${var.domain_main}`) || HostRegexp(`media.{region:.+}.${var.domain_main}`)) && Path(`${preset.path}`)"
-			query = (
+			match = "Path(`/media/${preset.path}`)${
+				var.domain_main_api != null ?
+					"&& Host(`${var.domain_main_api}`)" :
+					""
+			}${
 				preset.query != null ?
-					"&& Query(${join(",", [for x in preset.query: "`${x[0]}=${x[1]}`"])})"
-					: ""
-			)
+					" && Query(${join(",", [for x in preset.query: "`${x[0]}=${x[1]}`"])})" :
+					""
+			}"
+
 			middlewares = (
 				preset.game_cors ?
 					["imagor-${preset.key}-path", "imagor-cors-game", "imagor-cdn"]
 					: ["imagor-${preset.key}-path", "imagor-cors", "imagor-cdn"]
 			)
 		}
-		
-	]
+	])
 }
 
 module "imagor_secrets" {
@@ -238,7 +242,7 @@ resource "kubectl_manifest" "imagor_ingress" {
 				for index, preset in local.imagor_presets:
 				{
 					kind = "Rule"
-					match = "${preset.rule}${preset.query}"
+					match = preset.match
 					priority = preset.priority
 					middlewares = [
 						for mw in preset.middlewares: {
@@ -281,7 +285,7 @@ resource "kubectl_manifest" "imagor_cors" {
 		spec = {
 			headers = {
 				accessControlAllowMethods = [ "GET", "OPTIONS" ]
-				accessControlAllowOriginList = [ "https://${var.domain_main}" ]
+				accessControlAllowOriginList = var.imagor_cors_allowed_origins
 				accessControlMaxAge = 300
 			}
 		}

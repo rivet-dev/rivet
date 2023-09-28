@@ -35,12 +35,6 @@ gen/tf/
 gen/docker/
 gen/k8s/
 
-# Backend
-backend/Cargo.toml
-backend/api/**/Cargo.lock
-backend/api/Cargo.toml
-backend/pkg/**/Cargo.lock
-
 # Rust
 lib/**/Cargo.lock
 !lib/bolt/Cargo.lock

@@ -2,6 +2,7 @@ use std::{str::FromStr, sync::Once};
 
 use proto::backend::{self, pkg::*};
 use regex::Regex;
+use rivet_api::*;
 use rivet_claims::ClaimsDecode;
 use rivet_identity::{model, output};
 use rivet_operation::prelude::*;

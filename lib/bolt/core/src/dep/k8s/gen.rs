@@ -632,27 +632,32 @@ fn build_ingress_router(
 	router: &ServiceRouter,
 	specs: &mut Vec<serde_json::Value>,
 ) {
-	// Enable Traefik if there are mounts
-	if !router.mounts.is_empty() {}
-
 	// Register all mounts with Traefik
 	for (i, mount) in router.mounts.iter().enumerate() {
-		// Derive routing info
-		let domain = match mount.domain {
-			ServiceDomain::Base => project_ctx.domain_main(),
-			ServiceDomain::BaseGame => project_ctx.domain_cdn(),
-			ServiceDomain::BaseJob => project_ctx.domain_job(),
-		};
-		let host = if let Some(subdomain) = &mount.subdomain {
-			format!("{}.{}", subdomain, domain)
-		} else {
-			domain
-		};
+		// Build host rule
+		let mut rule = String::new();
 
-		// Build rule
-		let mut rule = format!("Host(`{host}`)");
+		// Build host
+		if let (Some(domain_main), Some(domain_main_api)) =
+			(project_ctx.domain_main(), project_ctx.domain_main_api())
+		{
+			// Derive routing info
+			let domain = if let Some(subdomain) = &mount.subdomain {
+				format!("{subdomain}.{domain_main}")
+			} else {
+				domain_main_api
+			};
+
+			rule.push_str(&format!("Host(`{domain}`)"));
+		}
+
+		// Build path
 		if let Some(path) = &mount.path {
-			rule.push_str(&format!(" && PathPrefix(`{path}`)"));
+			if !rule.is_empty() {
+				rule.push_str(" && ");
+			}
+
+			rule.push_str(&format!("PathPrefix(`{path}`)"));
 		}
 
 		// Build middlewares

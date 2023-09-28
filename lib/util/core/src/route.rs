@@ -38,7 +38,7 @@ pub fn user_avatar(user: &backend::user::User) -> String {
 		user.profile_provider,
 	) {
 		format!(
-			"https://media.{}{}/user-avatar/{}/{}",
+			"https://{}/media/{}/user-avatar/{}/{}",
 			domain_main(),
 			provider_str(provider),
 			upload_id,
@@ -51,7 +51,7 @@ pub fn user_avatar(user: &backend::user::User) -> String {
 
 pub fn custom_avatar(upload_id: Uuid, file_name: &str, provider: i32) -> String {
 	format!(
-		"https://media.{}/{}/user-avatar/{}/{}",
+		"https://{}/media/{}/user-avatar/{}/{}",
 		domain_main(),
 		provider_str(provider),
 		upload_id,
@@ -66,7 +66,7 @@ pub fn team_avatar(team: &backend::team::Team) -> Option<String> {
 		team.profile_provider,
 	) {
 		Some(format!(
-			"https://media.{}/{}/team-avatar/{}/{}",
+			"https://{}/media/{}/team-avatar/{}/{}",
 			domain_main(),
 			provider_str(provider),
 			upload_id,
@@ -84,7 +84,7 @@ pub fn game_logo(game: &backend::game::Game) -> Option<String> {
 		game.logo_provider,
 	) {
 		Some(format!(
-			"https://media.{}/{}/game-logo/{}/{}",
+			"https://{}/media/{}/game-logo/{}/{}",
 			domain_main(),
 			provider_str(provider),
 			upload_id,
@@ -102,7 +102,7 @@ pub fn game_banner(game: &backend::game::Game) -> Option<String> {
 		game.banner_provider,
 	) {
 		Some(format!(
-			"https://media.{}/{}/game-banner/{}/{}",
+			"https://{}/media/{}/game-banner/{}/{}",
 			domain_main(),
 			provider_str(provider),
 			upload_id,

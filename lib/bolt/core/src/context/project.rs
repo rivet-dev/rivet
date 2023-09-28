@@ -133,14 +133,49 @@ impl ProjectContextData {
 
 	/// Validates the namespace config.
 	fn validate_ns(&self) {
+		// MARK: Pools
+		if self.ns().dns.is_none() {
+			assert!(
+				self.ns().pools.is_empty(),
+				"must have dns configured to provision servers"
+			);
+			assert!(
+				matches!(
+					self.ns().cluster.kind,
+					config::ns::ClusterKind::SingleNode { .. }
+				),
+				"must have dns if not using single node cluster"
+			);
+		} else {
+			if let config::ns::ClusterKind::SingleNode {
+				api_http_port,
+				api_https_port,
+				minio_port,
+				..
+			} = self.ns().cluster.kind
+			{
+				assert_eq!(80, api_http_port, "api_http_port must be 80 if dns enabled");
+				assert_eq!(
+					Some(443),
+					api_https_port,
+					"api_https_port must be 443 if dns enabled"
+				);
+				assert_eq!(9000, minio_port, "minio_port must be 9000 if dns enabled")
+			}
+		}
+
+		// MARK: Grafana
 		if self.ns().grafana.is_some() {
 			assert!(
 				matches!(
-					self.ns().dns.provider,
-					config::ns::DnsProvider::Cloudflare {
-						access: Some(_),
+					self.ns().dns,
+					Some(config::ns::Dns {
+						provider: Some(config::ns::DnsProvider::Cloudflare {
+							access: Some(_),
+							..
+						}),
 						..
-					}
+					})
 				),
 				"cloudflare access must be enabled to use grafana"
 			);
@@ -466,58 +501,78 @@ impl ProjectContextData {
 }
 
 impl ProjectContextData {
+	pub fn domain_main(&self) -> Option<String> {
+		self.ns().dns.as_ref().map(|x| x.domain.main.clone())
+	}
+
+	pub fn domain_cdn(&self) -> Option<String> {
+		self.ns().dns.as_ref().map(|x| x.domain.cdn.clone())
+	}
+
+	pub fn domain_job(&self) -> Option<String> {
+		self.ns().dns.as_ref().map(|x| x.domain.job.clone())
+	}
+
+	/// Domain to host the API endpoint on. This is the default domain for all endpoints without a
+	/// specific subdomain.
+	pub fn domain_main_api(&self) -> Option<String> {
+		self.domain_main().map(|x| format!("api.{x}"))
+	}
+
+	/// Origin used for building links to the API endpoint.
+	pub fn origin_api(&self) -> String {
+		if let Some(domain_main_api) = self.domain_main_api() {
+			domain_main_api
+		} else if let config::ns::ClusterKind::SingleNode {
+			public_ip,
+			api_http_port,
+			..
+		} = &self.ns().cluster.kind
+		{
+			format!("http://{public_ip}:{api_http_port}")
+		} else {
+			unreachable!()
+		}
+	}
+
+	/// Origin used to access Minio. Only applicable if Minio provider is specified.
+	pub fn origin_minio(&self) -> String {
+		if let Some(domain_main) = self.domain_main() {
+			format!("minio.{domain_main}")
+		} else if let config::ns::ClusterKind::SingleNode {
+			public_ip,
+			minio_port,
+			..
+		} = &self.ns().cluster.kind
+		{
+			format!("http://{public_ip}:{minio_port}")
+		} else {
+			unreachable!()
+		}
+	}
+
 	/// Origin used for building links to the Hub.
 	pub fn origin_hub(&self) -> String {
+		self.ns().rivet.api.hub_origin.clone().unwrap_or_else(|| {
+			if let Some(domain_main) = self.domain_main() {
+				format!("https://hub.{domain_main}")
+			} else {
+				// Hub will be hosted at the root of the origin
+				self.origin_api()
+			}
+		})
+	}
+
+	pub fn origin_hub_regex(&self) -> String {
 		self.ns()
-			.dns
-			.hub_origin
+			.rivet
+			.api
+			.hub_origin_regex
 			.clone()
-			.unwrap_or_else(|| format!("https://hub.{}", self.ns().dns.domain.main.clone()))
-	}
-	pub fn domain_main(&self) -> String {
-		self.ns().dns.domain.main.clone()
-	}
-
-	pub fn domain_cdn(&self) -> String {
-		self.ns().dns.domain.cdn.clone()
-	}
-
-	pub fn domain_job(&self) -> String {
-		self.ns().dns.domain.job.clone()
-	}
-
-	pub async fn all_router_url_env(self: &Arc<Self>) -> Vec<(String, String)> {
-		self.all_services()
-			.await
-			.iter()
-			.filter_map(|svc| {
-				svc.config()
-					.kind
-					.router()
-					.and_then(|x| x.mounts.first())
-					.map(|x| (svc.clone(), x))
+			.unwrap_or_else(|| {
+				// Create regex pattern from the default hub origin
+				format!("^{}$", self.origin_hub().replace(".", "\\."))
 			})
-			.map(|(svc, mount)| {
-				let domain = match mount.domain {
-					ServiceDomain::Base => self.domain_main(),
-					ServiceDomain::BaseGame => self.domain_cdn(),
-					ServiceDomain::BaseJob => self.domain_job(),
-				};
-
-				(
-					format!("RIVET_{}_URL", svc.name_screaming_snake()),
-					format!(
-						"https://{domain}{path}",
-						domain = if let Some(subdomain) = &mount.subdomain {
-							format!("{}.{}", subdomain, domain)
-						} else {
-							domain
-						},
-						path = mount.path.clone().unwrap_or_default(),
-					),
-				)
-			})
-			.collect::<Vec<(String, String)>>()
 	}
 }
 
@@ -620,7 +675,8 @@ impl ProjectContextData {
 			s3_util::Provider::Minio => {
 				Ok(S3Config {
 					endpoint_internal: "http://minio.minio.svc.cluster.local:9000".into(),
-					endpoint_external: format!("https://minio.{}", self.domain_main()),
+					// Use localhost if DNS is not configured
+					endpoint_external: self.origin_minio(),
 					// Minio defaults to us-east-1 region
 					// https://github.com/minio/minio/blob/0ec722bc5430ad768a263b8464675da67330ad7c/cmd/server-main.go#L739
 					region: "us-east-1".into(),
@@ -653,7 +709,16 @@ impl ProjectContextData {
 			.cors
 			.allowed_origins
 			.clone()
-			.unwrap_or_else(|| vec![format!("https://{}", self.domain_main())])
+			.unwrap_or_else(|| {
+				let mut origins = Vec::new();
+				origins.push(self.origin_hub());
+				origins
+			})
+	}
+
+	pub fn imagor_cors_allowed_origins(&self) -> Vec<String> {
+		// Mirror S3 CORS for now
+		self.s3_cors_allowed_origins()
 	}
 }
 

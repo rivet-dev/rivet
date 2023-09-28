@@ -6,10 +6,9 @@ imports:
 
 service:
   auth: true
-  url: Identity
   audiences:
     - public
-  base-path: /events
+  base-path: /identity/events
   endpoints:
     watch:
       docs: Returns all events relative to the current identity.
