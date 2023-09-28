@@ -76,7 +76,7 @@ in
 			git lfs install
 
 			# Add binaries to path so we can use a locally built copy of Bolt.
-			export PATH="$PATH:${toString ./target/debug/.}:${toString ./target/release/.}"
+			export PATH="${toString ./target/debug/.}:${toString ./target/release/.}:$PATH"
 
 			# See https://docs.rs/prost-build/0.8.0/prost_build/#sourcing-protoc
 			export PROTOC="${pkgs.protobuf}/bin/protoc"
