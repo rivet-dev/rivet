@@ -5,7 +5,34 @@ use crate::Error;
 
 pub type NatsPool = async_nats::Client;
 pub type CrdbPool = sqlx::PgPool;
-pub type RedisPool = redis::aio::ConnectionManager;
+pub type RedisPool = redis::cluster_async::ClusterConnection;
+
+// #[derive(Clone)]
+// struct RedisPool {
+// 	connection: redis::cluster_async::ClusterConnection,
+// }
+
+// impl RedisPool {
+// 	pub async fn pipe<T, F>(&mut self, f: F) -> RedisResult<T> where F: FnOnce(redis::cluster::ClusterPipeline) -> redis::cluster::ClusterPipeline {
+// 		let mut pipe = redis::cluster::cluster_pipe();
+
+// 		f(pipe);
+
+// 		thread::spawn(|| async {
+// 			pipe.query(&mut self)
+// 		}).await
+// 	}
+
+// 	pub async fn cmd<T, F>(&mut self, cmd: &str, f: F) -> RedisResult<T> where F: FnOnce(redis::cluster::ClusterPipeline) -> redis::cluster::ClusterPipeline {
+// 		let mut cmd = redis::cluster::cmd(cmd);
+
+// 		f(cmd);
+
+// 		thread::spawn(|| async {
+// 			pipe.query(&mut self)
+// 		}).await
+// 	}
+// }
 
 pub type Pools = Arc<PoolsInner>;
 

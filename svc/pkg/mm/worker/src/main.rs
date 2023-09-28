@@ -24,8 +24,8 @@ fn main() -> Result<(), ManagerError> {
 			player_register,
 			player_remove,
 		]
-		.await;
+		.await?;
 
-		Result::<_, ManagerError>::Ok(())
+		Ok(())
 	})?
 }

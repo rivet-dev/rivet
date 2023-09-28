@@ -7,6 +7,6 @@ license = "Apache-2.0"
 
 [dependencies]
 lazy_static = "1.4"
-redis = "0.21"
+redis = "0.23"
 regex = "1.5"
 

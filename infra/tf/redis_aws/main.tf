@@ -41,7 +41,7 @@ module "secrets" {
 resource "aws_elasticache_replication_group" "main" {
 	for_each = local.nonpersistent_dbs
 
-	automatic_failover_enabled  = local.cluster_count > 1
+	automatic_failover_enabled = local.cluster_count > 1
 	# AZ count must match the cluster count
 	preferred_cache_cluster_azs = slice(
 		data.terraform_remote_state.k8s_cluster_aws.outputs.azs,
@@ -51,37 +51,19 @@ resource "aws_elasticache_replication_group" "main" {
 	replication_group_id = local.names[each.key]
 	description = local.names[each.key]
 	node_type = "cache.t4g.micro"
-	num_cache_clusters = local.cluster_count
+	# num_cache_clusters = local.cluster_count
+	num_node_groups = local.cluster_count
+	# replicas_per_node_group = 1
 	at_rest_encryption_enabled = true
 	transit_encryption_enabled = true
 	engine_version = "7.0"
-	parameter_group_name = "default.redis7"
+	parameter_group_name = "default.redis7.cluster.on"
 	subnet_group_name = aws_elasticache_subnet_group.main.name
 	user_group_ids = [aws_elasticache_user_group.main[each.key].id]
 	security_group_ids = [data.terraform_remote_state.k8s_cluster_aws.outputs.eks_cluster_security_group_id]
 
 	lifecycle {
 		ignore_changes = [num_cache_clusters]
-	}
-}
-
-resource "aws_elasticache_cluster" "main" {
-	for_each = merge([
-		for k, v in local.nonpersistent_dbs:
-		{
-			for i in range(local.cluster_count):
-			"${k}-${i}" => merge(v, {
-				db = k
-			})
-		}
-	]...)
-
-	cluster_id = each.key
-	replication_group_id = aws_elasticache_replication_group.main[each.value.db].id
-
-	# TODO: Bugged property
-	lifecycle {
-		ignore_changes = [transit_encryption_enabled]
 	}
 }
 
@@ -136,9 +118,7 @@ resource "aws_memorydb_cluster" "main" {
 
 	name = local.names[each.key]
 	node_type = "db.t4g.small"
-	# TODO: Our redis pools do not currently support redis cluster mode
-	# num_shards = local.shard_count
-	num_shards = 1
+	num_shards = local.shard_count
 	acl_name = aws_memorydb_acl.main[each.key].name
 	engine_version = "7.0"
 	parameter_group_name = "default.memorydb-redis7"

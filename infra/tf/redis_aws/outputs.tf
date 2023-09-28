@@ -1,8 +1,13 @@
+output "test" {
+	value = aws_elasticache_replication_group.main
+	sensitive = true
+}
+
 output "host" {
 	value = merge(
 		{
 			for k, v in var.redis_dbs:
-			k => split(":", aws_elasticache_replication_group.main[k].primary_endpoint_address)[0]
+			k => split(":", aws_elasticache_replication_group.main[k].configuration_endpoint_address)[0]
 			if !v.persistent
 		},
 		{

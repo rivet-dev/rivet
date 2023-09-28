@@ -1,4 +1,5 @@
 use std::{env, time::Duration};
+
 use hyper::client::connect::HttpConnector;
 use hyper_tls::HttpsConnector;
 
@@ -17,8 +18,7 @@ pub fn client() -> Result<clickhouse::Client, Error> {
 		.build(https);
 
 	let clickhouse_url = env::var("CLICKHOUSE_URL").map_err(Error::Env)?;
-	let client = clickhouse::Client::with_http_client(client)
-		.with_url(clickhouse_url);
+	let client = clickhouse::Client::with_http_client(client).with_url(clickhouse_url);
 
 	Ok(client)
 }
