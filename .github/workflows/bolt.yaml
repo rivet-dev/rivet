@@ -43,7 +43,9 @@ jobs:
             ${{ runner.os }}-nix-
 
       - name: Build Shell
-        run: nix-shell --pure --run "echo 'Built shell'"
+        run: |
+          nix-channel --update
+          nix-shell --pure --run "echo 'Built shell'"
 
       # MARK: Rust
       - name: Rust Cache
