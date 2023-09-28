@@ -1,5 +1,6 @@
 use anyhow::*;
 use bolt_config::ns::ClusterKind;
+use tokio::time::Instant;
 
 use crate::{
 	config::{self, ns},
@@ -346,11 +347,17 @@ pub async fn execute_plan(
 	for (i, step) in plan.iter().enumerate() {
 		eprintln!();
 		eprintln!();
+
 		rivet_term::status::info(
-			"Executing",
+			"Executing step",
 			format!("({}/{}) {}", i + 1, plan.len(), step.name_id),
 		);
+		let start = Instant::now();
 		step.kind.execute(ctx.clone(), &opts).await?;
+		rivet_term::status::progress(
+			"Step complete",
+			format!("{:.1}s", start.elapsed().as_secs_f32()),
+		);
 	}
 
 	Ok(())
