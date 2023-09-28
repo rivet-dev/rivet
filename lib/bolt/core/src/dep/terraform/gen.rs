@@ -159,7 +159,9 @@ async fn vars(ctx: &ProjectContext) {
 			vars.insert("public_ip".into(), json!(public_ip));
 			vars.insert("api_http_port".into(), json!(api_http_port));
 			vars.insert("api_https_port".into(), json!(api_https_port));
-			if config.s3.providers.minio.is_some() {
+
+			// Expose Minio on a dedicated port if DNS not enabled
+			if config.dns.is_none() && config.s3.providers.minio.is_some() {
 				vars.insert("minio_port".into(), json!(minio_port));
 			}
 		}

@@ -4,6 +4,7 @@ variable "domain_main" {
 
 variable "minio_port" {
 	type = string
+	nullable = true
 }
 
 # MARK: S3

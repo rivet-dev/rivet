@@ -40,6 +40,9 @@ resource "helm_release" "minio" {
 }
 
 resource "kubectl_manifest" "minio_ingress_route" {
+	# Expose via Traefik if not using Minio port
+	count = var.minio_port == null ? 1 : 0
+
 	depends_on = [helm_release.minio]
 
 	yaml_body = yamlencode({
