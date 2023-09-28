@@ -79,8 +79,8 @@ jobs:
       - name: Setup
         run: nix-shell --pure --run "SKIP_GIT_LFS=1 NPM_GLOBAL=1 ./scripts/setup.sh"
 
-      # - name: Bolt Generate
-      #   run: nix-shell --pure --run "./target/debug/bolt init ci"
+      - name: Bolt Generate
+        run: nix-shell --pure --run "./target/debug/bolt init ci"
 
       # TODO: Run check in parallel
       # - name: Bolt Check
