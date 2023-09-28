@@ -9,7 +9,7 @@ concurrency:
 defaults:
   run:
     # Enable fail-fast behavior
-    shell: bash
+    shell: bash -e {0}
 
 env:
   store: /home/runner/nix
