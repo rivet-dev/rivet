@@ -16,8 +16,8 @@ env:
 
 jobs:
   check:
-    runs-on: buildjet-8vcpu-ubuntu-2204
-    # runs-on: ubuntu-22.04
+    # runs-on: buildjet-8vcpu-ubuntu-2204
+    runs-on: ubuntu-22.04
 
     steps:
       # MARK: Git
@@ -51,7 +51,8 @@ jobs:
 
       # MARK: Rust
       - name: Rust Cache
-        uses: buildjet/cache@v3.3.1
+        # uses: buildjet/cache@v3.3.1
+        uses: actions/cache@v3.3.1
         with:
           key: ${{ runner.os }}-rust
           path: |
@@ -60,14 +61,6 @@ jobs:
             target
 
       # MARK: Bolt
-      - name: Bolt Cache
-        uses: buildjet/cache@v3.3.1
-        with:
-          key: ${{ runner.os }}-cargo
-          path: |
-            .bolt-meta.json
-            gen/
-
       - name: Write Namespace Config
         run: |
           # Write secrets so they're not prompted in `bolt init`
