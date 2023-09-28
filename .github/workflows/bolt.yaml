@@ -76,15 +76,12 @@ jobs:
       - name: Setup
         run: nix-shell --pure --run "SKIP_GIT_LFS=1 NPM_GLOBAL=1 ./scripts/setup.sh"
 
-      - name: Debug
-        run: nix-shell --pure --run "echo PATH=$PATH; ls target; ls target/debug; which bolt"
-
       - name: Bolt Generate
         run: nix-shell --pure --run "./target/debug/bolt init ci"
 
       # TODO: Run check in parallel
       # - name: Bolt Check
-      #   run: nix-shell --pure --run "bolt check --validate-format"
+      #   run: nix-shell --pure --run "./target/debug/bolt check --validate-format"
 
       # TODO: Make this run only whe migrations change
       # TODO: Broken for some reason
