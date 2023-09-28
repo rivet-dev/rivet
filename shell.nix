@@ -46,6 +46,7 @@ in
 			cloudflared
 			go-migrate
 			jq
+			openssh  # ssh-keygen
 			
 			# Databases
 			postgresql  # For psql

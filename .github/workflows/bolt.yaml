@@ -1,6 +1,3 @@
-# TODO: Get Bolt working with `--pure`, see:
-# nix-shell -p strace --pure --run "cd oss && RUST_BACKTRACE=1 strace -e open,openat target/debug/bolt init ci"
-
 name: bolt
 
 on: [push]
@@ -46,7 +43,7 @@ jobs:
             ${{ runner.os }}-nix-
 
       - name: Build Shell
-        run: nix-shell --run "echo 'Built shell'"
+        run: nix-shell --pure --run "echo 'Built shell'"
 
       # MARK: Rust
       - name: Rust Cache
@@ -58,7 +55,11 @@ jobs:
             ~/.cargo/git
             target
 
+
       # MARK: Bolt
+      - name: Setup
+        run: nix-shell --pure --run "SKIP_GIT_LFS=1 NPM_GLOBAL=1 ./scripts/setup.sh"
+
       - name: Write Namespace Config
         run: |
           # Write secrets so they're not prompted in `bolt init`
@@ -67,17 +68,14 @@ jobs:
           key = "TODO"
           EOF
 
-      - name: Setup
-        run: nix-shell --run "SKIP_GIT_LFS=1 NPM_GLOBAL=1 ./scripts/setup.sh"
-
       - name: Bolt Generate
-        run: nix-shell --run "bolt init --yes ci"
+        run: nix-shell --pure --run "bolt init --yes ci"
 
       # TODO: Run check in parallel
       # - name: Bolt Check
-      #   run: nix-shell --run "bolt check --validate-format"
+      #   run: nix-shell --pure --run "bolt check --validate-format"
 
       # TODO: Make this run only whe migrations change
       # TODO: Broken for some reason
       # - name: Bolt Database Migrate Check
-      #   run: nix-shell --run "BOLT_NAMESPACE=ci BOLT_IGNORE_TERRAFORM=1 bolt database migrate check"
+      #   run: nix-shell --pure --run "BOLT_NAMESPACE=ci BOLT_IGNORE_TERRAFORM=1 bolt database migrate check"
