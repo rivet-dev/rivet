@@ -44,6 +44,7 @@ jobs:
 
       - name: Build Shell
         run: |
+          nix-channel --add https://nixos.org/channels/nixpkgs-23.05 nixpkgs
           nix-channel --update
           nix-shell --pure --run "echo 'Built shell'"
 
