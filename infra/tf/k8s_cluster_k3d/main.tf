@@ -56,7 +56,7 @@ resource "k3d_cluster" "main" {
 		for_each = var.minio_port != null ? [null] : []
 
 		content {
-			host = "127.0.0.1"
+			host = "0.0.0.0"
 			host_port = var.minio_port
 			container_port = 9000
 			node_filters = ["server:0"]
