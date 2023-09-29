@@ -50,6 +50,10 @@ jobs:
           # Build the shell for the first time
           nix-shell --pure --run "echo 'Built shell'"
 
+          nix-shell --pure --run "bolt --help"
+
+          nix-shell --pure -p which --run "which bolt"
+
       # MARK: Rust
       - name: Rust Cache
         uses: actions/cache@v3
