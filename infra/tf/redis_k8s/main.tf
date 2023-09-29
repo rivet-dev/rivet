@@ -45,8 +45,9 @@ resource "helm_release" "redis" {
 			}
 		}
 		cluster = {
-			replicas = 1
 			# TODO:
+			nodes = 1
+			replicas = 1
 		}
 		auth = {
 			enable = true
