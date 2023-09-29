@@ -1,7 +1,7 @@
 use std::{str::FromStr, sync::Once};
 
 use proto::backend::{self, pkg::*};
-use rivet_api::apis::configuration::Configuration;
+use rivet_api::{apis::configuration::Configuration, models};
 use rivet_operation::prelude::*;
 
 pub const LOBBY_GROUP_NAME_ID_BRIDGE: &str = "test-bridge";
@@ -395,3 +395,238 @@ impl Ctx {
 		token_res.token.as_ref().unwrap().token.clone()
 	}
 }
+
+async fn assert_lobby_state(
+	ctx: &Ctx,
+	lobby: &models::MatchmakerJoinLobby,
+) -> backend::matchmaker::Lobby {
+	// Fetch lobby data
+	let lobby_res = op!([ctx] mm_lobby_get {
+		lobby_ids: vec![lobby.lobby_id.into()],
+		..Default::default()
+	})
+	.await
+	.unwrap();
+	let lobby_data = lobby_res.lobbies.first().expect("lobby not created");
+	assert!(lobby_data.ready_ts.is_some(), "lobby not ready");
+	assert!(lobby_data.run_id.is_some(), "no run id");
+
+	// Validate ports
+	{
+		let ports = &lobby.ports;
+		tracing::info!(?ports, "validating ports");
+		assert_eq!(6, ports.len());
+
+		{
+			let p = ports.get("test-80-http").unwrap();
+			assert_eq!(80, p.port.unwrap());
+			assert!(!p.is_tls);
+		}
+
+		{
+			let p = ports.get("test-80-https").unwrap();
+			assert_eq!(443, p.port.unwrap());
+			assert!(p.is_tls);
+		}
+
+		{
+			let p = ports.get("test-5050-https").unwrap();
+			assert_eq!(443, p.port.unwrap());
+			assert!(p.is_tls);
+		}
+
+		{
+			let p = ports.get("test-5051-tcp").unwrap();
+			assert!(
+				p.port.unwrap() >= util_job::consts::MIN_INGRESS_PORT_TCP as i32
+					&& p.port.unwrap() <= util_job::consts::MAX_INGRESS_PORT_TCP as i32
+			);
+			assert!(!p.is_tls);
+		}
+
+		{
+			let p = ports.get("test-5051-tls").unwrap();
+			assert!(
+				p.port.unwrap() >= util_job::consts::MIN_INGRESS_PORT_TCP as i32
+					&& p.port.unwrap() <= util_job::consts::MAX_INGRESS_PORT_TCP as i32
+			);
+			assert!(p.is_tls);
+		}
+
+		{
+			let p = ports.get("test-5052-udp").unwrap();
+			assert!(
+				p.port.unwrap() >= util_job::consts::MIN_INGRESS_PORT_UDP as i32
+					&& p.port.unwrap() <= util_job::consts::MAX_INGRESS_PORT_UDP as i32
+			);
+			assert!(!p.is_tls);
+		}
+	}
+
+	lobby_data.clone()
+}
+
+// fn captcha_config() -> model::CaptchaConfig {
+// 	model::CaptchaConfig::Hcaptcha(
+// 		model::captcha_config_hcaptcha::Builder::default()
+// 			.client_response("10000000-aaaa-bbbb-cccc-000000000001")
+// 			.build(),
+// 	)
+// }
+
+// async fn create_lobby(
+// 	ctx: &Ctx,
+// 	lobby_id: Uuid,
+// 	lobby_group_meta: &backend::matchmaker::LobbyGroupMeta,
+// ) {
+// 	msg!([ctx] mm::msg::lobby_create(lobby_id) -> mm::msg::lobby_create_complete {
+// 		lobby_id: Some(lobby_id.into()),
+// 		namespace_id: Some(ctx.namespace_id.into()),
+// 		lobby_group_id: lobby_group_meta.lobby_group_id,
+// 		region_id: Some(ctx.primary_region_id.into()),
+// 		create_ray_id: None,
+// 		preemptively_created: false,
+
+// 		creator_user_id: None,
+// 		is_custom: false,
+// 		publicity: None,
+// 		lobby_config_json: None,
+// 	})
+// 	.await
+// 	.unwrap();
+
+// 	msg!([ctx] @wait mm::msg::lobby_ready(lobby_id) {
+// 		lobby_id: Some(lobby_id.into()),
+// 	})
+// 	.await
+// 	.unwrap();
+// }
+
+// // TODO: Conflicts with other tests
+// // #[tokio::test(flavor = "multi_thread")]
+// // async fn find_rate_limit() {
+// // 	let ctx = Ctx::init().await;
+// // 	let http_client = ctx.http_client(ctx.ns_auth_token.clone());
+
+// // 	{
+// // 		tracing::info!("finding lobby");
+
+// // 		// Create lobby
+// // 		create_lobby(&ctx, Uuid::new_v4(), &ctx.mm_config_meta.lobby_groups[0]).await;
+
+// // 		const RATE_LIMIT: usize = 4 * 15; // rate * bucket minutes
+// // 		for i in 0..RATE_LIMIT {
+// // 			tracing::info!(i, "req");
+// // 			http_client.list_lobbies().send().await.unwrap();
+// // 		}
+
+// // 		let err = http_client.list_lobbies().send().await.unwrap_err();
+
+// // 		// Assert that rate limit happened
+// // 		if let aws_smithy_client::SdkError::ServiceError { err, .. } = err {
+// // 			assert_eq!(err.code().unwrap(), "API_RATE_LIMIT");
+// // 		} else {
+// // 			panic!("{}", err);
+// // 		}
+// // 	}
+// // }
+
+// // TODO: Validate both player & lobby deleted
+
+// // TODO:
+// // seek lobby
+// // > check lobby exists
+// // validate player
+// // delete player
+// // > check lobby and player deleted
+
+// // TODO: Test forbidden
+// // TODO: Seek with directly lobby deletion
+// // TODO: Seek multiple game modes
+
+// // TODO: Dev tokens
+
+// // TODO: Validate both player & lobby deleted
+
+// // TODO:
+// // seek lobby
+// // > check lobby exists
+// // validate player
+// // delete player
+// // > check lobby and player deleted
+
+// // TODO: Test forbidden
+// // TODO: Seek with directly lobby deletion
+// // TODO: Seek multiple game modes
+
+// // TODO: Dev tokens
+//
+// async fn assert_lobby_state_smithy(
+// 	ctx: &Ctx,
+// 	lobby: &model::MatchmakerLobbyJoinInfo,
+// ) -> backend::matchmaker::Lobby {
+// 	// Fetch lobby data
+// 	let lobby_res = op!([ctx] mm_lobby_get {
+// 		lobby_ids: vec![Uuid::from_str(lobby.lobby_id().unwrap()).unwrap().into()],
+// 		..Default::default()
+// 	})
+// 	.await
+// 	.unwrap();
+// 	let lobby_data = lobby_res.lobbies.first().expect("lobby not created");
+// 	assert!(lobby_data.ready_ts.is_some(), "lobby not ready");
+// 	assert!(lobby_data.run_id.is_some(), "no run id");
+
+// 	// Validate ports
+// 	{
+// 		let ports = lobby.ports().unwrap();
+// 		tracing::info!(?ports, "validating ports");
+// 		assert_eq!(6, ports.len());
+
+// 		{
+// 			let p = ports.get("test-80-http").unwrap();
+// 			assert_eq!(80, p.port().unwrap());
+// 			assert!(!p.is_tls().unwrap());
+// 		}
+
+// 		{
+// 			let p = ports.get("test-80-https").unwrap();
+// 			assert_eq!(443, p.port().unwrap());
+// 			assert!(p.is_tls().unwrap());
+// 		}
+
+// 		{
+// 			let p = ports.get("test-5050-https").unwrap();
+// 			assert_eq!(443, p.port().unwrap());
+// 			assert!(p.is_tls().unwrap());
+// 		}
+
+// 		{
+// 			let p = ports.get("test-5051-tcp").unwrap();
+// 			assert!(
+// 				p.port().unwrap() >= util_job::consts::MIN_INGRESS_PORT_TCP as i32
+// 					&& p.port().unwrap() <= util_job::consts::MAX_INGRESS_PORT_TCP as i32
+// 			);
+// 			assert!(!p.is_tls().unwrap());
+// 		}
+
+// 		{
+// 			let p = ports.get("test-5051-tls").unwrap();
+// 			assert!(
+// 				p.port().unwrap() >= util_job::consts::MIN_INGRESS_PORT_TCP as i32
+// 					&& p.port().unwrap() <= util_job::consts::MAX_INGRESS_PORT_TCP as i32
+// 			);
+// 			assert!(p.is_tls().unwrap());
+// 		}
+
+// 		{
+// 			let p = ports.get("test-5052-udp").unwrap();
+// 			assert!(
+// 				p.port().unwrap() >= util_job::consts::MIN_INGRESS_PORT_UDP as i32
+// 					&& p.port().unwrap() <= util_job::consts::MAX_INGRESS_PORT_UDP as i32
+// 			);
+// 			assert!(!p.is_tls().unwrap());
+// 		}
+// 	}
+
+// 	lobby_data.clone()
+// }
