@@ -26,7 +26,7 @@ use crate::{
 };
 
 const TEST_TIMEOUT: Duration = Duration::from_secs(60);
-const PARALLEL_TESTS: usize = 64;
+const PARALLEL_TESTS: usize = 16;
 
 struct TestCleanupManager {
 	project_ctx: ProjectContext,
@@ -646,7 +646,7 @@ async fn tail_pod(ctx: &ProjectContext, pod: &str) -> Result<TestStatus> {
 		let output_str = String::from_utf8_lossy(&output.stdout);
 		let output_str = output_str.trim();
 		match output_str {
-			"Pending" | "Running" => {
+			"Pending" | "Running" | "" => {
 				// Continue
 				tokio::time::sleep(Duration::from_millis(250)).await;
 			}
