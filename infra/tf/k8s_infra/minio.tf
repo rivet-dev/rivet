@@ -9,6 +9,8 @@ resource "kubernetes_namespace" "minio" {
 }
 
 module "minio_secrets" {
+	count = local.has_minio ? 1 : 0
+
 	source = "../modules/secrets"
 
 	keys = ["s3/minio/root/key_id", "s3/minio/root/key"]
@@ -29,8 +31,8 @@ resource "helm_release" "minio" {
 		}
 		replicaCount = 1
 		auth = {
-			rootUser = module.minio_secrets.values["s3/minio/root/key_id"]
-			rootPassword = module.minio_secrets.values["s3/minio/root/key"]
+			rootUser = module.minio_secrets[0].values["s3/minio/root/key_id"]
+			rootPassword = module.minio_secrets[0].values["s3/minio/root/key"]
 		}
 		service = {
 			# Expose as LB so it can be accessed from the host if needed

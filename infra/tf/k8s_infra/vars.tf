@@ -32,6 +32,11 @@ variable "dns_deprecated_subdomains" {
 	type = bool
 }
 
+variable "minio_port" {
+	type = string
+	nullable = true
+}
+
 # MARK: Services
 variable "services" {
 	type = map(object({
