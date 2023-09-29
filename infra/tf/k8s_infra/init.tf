@@ -122,7 +122,7 @@ module "docker_auth" {
 	namespaces = [
 		for x in [
 			kubernetes_namespace.traffic_server,
-			kubernetes_namespace.redis_exporter,
+			# kubernetes_namespace.redis_exporter,
 			kubernetes_namespace.rivet_service,
 			kubernetes_namespace.imagor,
 			kubernetes_namespace.nsfw_api

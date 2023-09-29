@@ -61,7 +61,6 @@ variable "imagor_cors_allowed_origins" {
 # MARK: Redis
 variable "redis_dbs" {
 	type = map(object({
-		endpoint = string
 	}))
 }
 

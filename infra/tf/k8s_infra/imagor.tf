@@ -157,9 +157,9 @@ resource "kubernetes_deployment" "imagor" {
 						limits = {
 							memory = "${local.service_imagor.resources.memory}Mi"
 							cpu = (
-								local.service_redis_exporter.resources.cpu_cores > 0 ?
-								"${local.service_redis_exporter.resources.cpu_cores * 1000}m"
-								: "${local.service_redis_exporter.resources.cpu}m"
+								local.service_imagor.resources.cpu_cores > 0 ?
+								"${local.service_imagor.resources.cpu_cores * 1000}m"
+								: "${local.service_imagor.resources.cpu}m"
 							)
 							"ephemeral-storage" = "${local.ephemeral_disk}M"
 						}
