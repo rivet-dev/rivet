@@ -238,7 +238,7 @@ async fn generate_regions(ctx: &ProjectContext) {
 /// This prevents needlessly updating the modify timestamp of a Cargo manifest, which triggers a
 /// rebuild.
 async fn write_if_different(path: &Path, new_content: &str) {
-	let current_content = fs::read_to_string(path).await.unwrap();
+	let current_content = fs::read_to_string(path).await.ok().unwrap_or_default();
 
 	if current_content != new_content {
 		fs::write(path, new_content).await.unwrap();
