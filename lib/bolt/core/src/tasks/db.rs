@@ -34,15 +34,29 @@ async fn redis_shell(
 	let db_name = svc.redis_db_name();
 	let host = conn.redis_hosts.get(&svc.name()).unwrap();
 	let (hostname, port) = host.split_once(":").unwrap();
-	let username = ctx.read_secret(&["redis", &db_name, "username"]).await?;
-	let password = ctx
-		.read_secret_opt(&["redis", &db_name, "password"])
-		.await?;
+
+	// Read auth secrets
+	let (username, password) = match ctx.ns().cluster.kind {
+		config::ns::ClusterKind::SingleNode { .. } => (
+			ctx.read_secret(&["redis", &db_name, "username"]).await?,
+			ctx.read_secret_opt(&["redis", &db_name, "password"])
+				.await?,
+		),
+		config::ns::ClusterKind::Distributed { .. } => {
+			let db_name = format!("rivet-{}-{}", ctx.ns_id(), db_name);
+			let username = ctx.read_secret(&["redis", &db_name, "username"]).await?;
+			let password = ctx
+				.read_secret_opt(&["redis", &db_name, "password"])
+				.await?;
+
+			(username, password)
+		}
+	};
 
 	rivet_term::status::progress("Connecting to Redis", &db_name);
 
 	if query.is_some() {
-		todo!("cannot pass query at the moment")
+		todo!("cannot pass query to redis shell at the moment");
 	}
 
 	let env = if let Some(password) = password {
@@ -54,20 +68,24 @@ async fn redis_shell(
 		Vec::new()
 	};
 	let cacert = if let config::ns::ClusterKind::Distributed { .. } = &ctx.ns().cluster.kind {
-		"--cacert /local/redis-ca.crt"
-	} else {
 		""
+	} else {
+		"--cacert /local/redis-ca.crt"
 	};
+	// TODO: Apt commands arent silenced for some reason
 	let cmd = formatdoc!(
 		"
-				sleep 2 &&
-				redis-cli \
-				-h {hostname} \
-				-p {port} \
-				--user {username} \
-				-c \
-				--tls {cacert}
-				"
+			sleep 2 &&
+			echo Installing certs... &&
+			apt update -q &&
+			apt install -qq -y ca-certificates &&
+			redis-cli \
+			-h {hostname} \
+			-p {port} \
+			--user {username} \
+			-c \
+			--tls {cacert}
+			"
 	);
 	let overrides = json!({
 		"apiVersion": "v1",

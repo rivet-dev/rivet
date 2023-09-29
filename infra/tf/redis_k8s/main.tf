@@ -2,7 +2,6 @@ locals {
 	redis_svcs = {
 		for k, v in var.redis_dbs:
 		k => {
-			username = module.secrets.values["redis/${k}/username"]
 			password = module.secrets.values["redis/${k}/password"]
 		}
 	}
@@ -11,13 +10,9 @@ locals {
 module "secrets" {
 	source = "../modules/secrets"
 
-	keys = flatten([
-		for k, v in var.redis_dbs:
-		[
-			"redis/${k}/username",
-			"redis/${k}/password",
-		]
-	])
+	keys = [
+		for k, v in var.redis_dbs: "redis/${k}/password"
+	]
 }
 
 # TODO:
