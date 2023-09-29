@@ -396,7 +396,7 @@ impl Ctx {
 	}
 }
 
-async fn assert_lobby_state(
+pub async fn assert_lobby_state(
 	ctx: &Ctx,
 	lobby: &models::MatchmakerJoinLobby,
 ) -> backend::matchmaker::Lobby {

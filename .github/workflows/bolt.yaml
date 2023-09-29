@@ -48,7 +48,7 @@ jobs:
           rm -f target/debug/bolt target/release/bolt
 
           # Build the shell for the first time
-          nix-shell --pure --run "echo 'Built shell'; echo 'bolt:'; which bolt"
+          nix-shell --pure -p which --run "echo 'Built shell'; echo 'bolt:'; which bolt"
 
       # MARK: Rust
       - name: Rust Cache
