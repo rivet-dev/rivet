@@ -12,7 +12,7 @@ variable "k8s_storage_class" {
 
 variable "redis_dbs" {
 	type = map(object({
-		endpoint = string
+		persistent =  bool
 	}))
 }
 
