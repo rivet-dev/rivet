@@ -70,7 +70,7 @@ data "kubernetes_secret" "redis_ca" {
 	depends_on = [helm_release.redis]
 
 	metadata {
-		name = "redis-crt"
+		name = "redis-redis-cluster-crt"
 		namespace = kubernetes_namespace.redis[each.key].metadata.0.name
 	}
 }
