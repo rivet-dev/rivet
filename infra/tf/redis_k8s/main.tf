@@ -68,20 +68,28 @@ data "kubernetes_secret" "redis_ca" {
 	depends_on = [helm_release.redis]
 
 	metadata {
-		name = "redis-crt"
+		name = "redis-redis-cluster-crt"
 		namespace = kubernetes_namespace.redis[each.key].metadata.0.name
 	}
 }
 
 resource "kubernetes_config_map" "redis_ca" {
-	for_each = var.redis_dbs
+	for_each = merge([
+		for ns in ["rivet-service", "bolt"]: {
+			for k, v in var.redis_dbs:
+				"${k}-${ns}" => {
+				db = k
+				namespace = ns
+			}
+		}
+	]...)
 
 	metadata {
-		name = "redis-${each.key}-ca"
-		namespace = "rivet-service"
+		name = "redis-${each.value.db}-ca"
+		namespace = each.value.namespace
 	}
 
 	data = {
-		"ca.crt" = data.kubernetes_secret.redis_ca[each.key].data["ca.crt"]
+		"ca.crt" = data.kubernetes_secret.redis_ca[each.value.db].data["ca.crt"]
 	}
 }

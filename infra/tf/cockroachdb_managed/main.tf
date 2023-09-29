@@ -50,9 +50,11 @@ data "cockroach_cluster_cert" "main" {
 }
 
 resource "kubernetes_config_map" "crdb_ca" {
+	for_each = toset(["rivet-service", "bolt"])
+
 	metadata {
 		name = "crdb-ca"
-		namespace = "rivet-service"
+		namespace = each.value
 	}
 
 	data = {

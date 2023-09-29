@@ -19,14 +19,14 @@ resource "helm_release" "k8s_dashboard" {
 	})]
 }
 
-resource "kubernetes_service_account" "example" {
+resource "kubernetes_service_account" "admin_user" {
 	metadata {
 		namespace = kubernetes_namespace.k8s_dashboard.metadata.0.name
 		name = "admin-user"
 	}
 }
 
-resource "kubernetes_cluster_role_binding" "example" {
+resource "kubernetes_cluster_role_binding" "admin_user" {
 	metadata {
 		name = "admin-user"
 	}

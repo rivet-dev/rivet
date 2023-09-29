@@ -66,7 +66,7 @@ resource "helm_release" "clickhouse" {
 
 		# Admin auth
 		auth = {
-			username = "bolt"
+			username = "default"
 			password = module.secrets.values["clickhouse/users/default/password"]
 		}
 	})]
@@ -82,9 +82,11 @@ data "kubernetes_secret" "clickhouse_ca" {
 }
 
 resource "kubernetes_config_map" "clickhouse_ca" {
+	for_each = toset(["rivet-service", "bolt"])
+
 	metadata {
 		name = "clickhouse-ca"
-		namespace = "rivet-service"
+		namespace = each.value
 	}
 
 	data = {

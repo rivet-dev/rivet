@@ -8,7 +8,7 @@ use tokio::task::block_in_place;
 
 use crate::{
 	context::{ProjectContext, ServiceContext},
-	utils::{self, db_conn::DatabaseConnection},
+	utils::{self, db_conn::DatabaseConnections},
 };
 
 enum ClickhouseRole {
@@ -262,7 +262,7 @@ pub async fn up_all(ctx: &ProjectContext) -> Result<()> {
 }
 
 pub async fn up(ctx: &ProjectContext, services: &[ServiceContext]) -> Result<()> {
-	let conn = DatabaseConnection::create(ctx, services).await?;
+	let conn = DatabaseConnections::create(ctx, services).await?;
 
 	// Run migrations
 	for svc in services {
@@ -425,7 +425,7 @@ pub async fn up(ctx: &ProjectContext, services: &[ServiceContext]) -> Result<()>
 }
 
 pub async fn down(ctx: &ProjectContext, service: &ServiceContext, num: usize) -> Result<()> {
-	let conn = DatabaseConnection::create(ctx, &[service.clone()]).await?;
+	let conn = DatabaseConnections::create(ctx, &[service.clone()]).await?;
 	let database_url = conn.migrate_db_url(service).await?;
 
 	block_in_place(|| {
@@ -445,7 +445,7 @@ pub async fn down(ctx: &ProjectContext, service: &ServiceContext, num: usize) ->
 }
 
 pub async fn force(ctx: &ProjectContext, service: &ServiceContext, num: usize) -> Result<()> {
-	let conn = DatabaseConnection::create(ctx, &[service.clone()]).await?;
+	let conn = DatabaseConnections::create(ctx, &[service.clone()]).await?;
 	let database_url = conn.migrate_db_url(service).await?;
 
 	block_in_place(|| {
@@ -465,7 +465,7 @@ pub async fn force(ctx: &ProjectContext, service: &ServiceContext, num: usize) -
 }
 
 pub async fn drop(ctx: &ProjectContext, service: &ServiceContext) -> Result<()> {
-	let conn = DatabaseConnection::create(ctx, &[service.clone()]).await?;
+	let conn = DatabaseConnections::create(ctx, &[service.clone()]).await?;
 	let database_url = conn.migrate_db_url(service).await?;
 
 	block_in_place(|| {
