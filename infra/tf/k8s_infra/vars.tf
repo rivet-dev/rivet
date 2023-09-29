@@ -58,9 +58,24 @@ variable "imagor_cors_allowed_origins" {
 	type = list(string)
 }
 
+# MARK: CockroachDB
+variable "cockroachdb_provider" {
+	type = string
+}
+
+# MARK: ClickHouse
+variable "clickhouse_provider" {
+	type = string
+}
+
 # MARK: Redis
+variable "redis_provider" {
+	type = string
+}
+
 variable "redis_dbs" {
 	type = map(object({
+		persistent =  bool
 	}))
 }
 

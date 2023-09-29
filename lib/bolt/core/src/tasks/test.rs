@@ -26,7 +26,7 @@ use crate::{
 };
 
 const TEST_TIMEOUT: Duration = Duration::from_secs(60);
-const PARALLEL_TESTS: usize = 8;
+const PARALLEL_TESTS: usize = 16;
 
 struct TestCleanupManager {
 	project_ctx: ProjectContext,
@@ -638,6 +638,7 @@ fn gen_test_id() -> String {
 
 async fn tail_pod(ctx: &ProjectContext, pod: &str) -> Result<TestStatus> {
 	loop {
+		// TODO: Use --wait for better performance
 		let output = Command::new("kubectl")
 			.args(&[
 				"get",
@@ -656,7 +657,8 @@ async fn tail_pod(ctx: &ProjectContext, pod: &str) -> Result<TestStatus> {
 		match output_str {
 			"Pending" | "Running" | "" => {
 				// Continue
-				tokio::time::sleep(Duration::from_millis(250)).await;
+				// tokio::time::sleep(Duration::from_millis(250)).await;
+				tokio::time::sleep(Duration::from_millis(2000)).await;
 			}
 			"Succeeded" | "Failed" => {
 				// Get the exit code of the pod

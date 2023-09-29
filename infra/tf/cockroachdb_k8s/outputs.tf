@@ -7,6 +7,6 @@ output "port" {
 }
 
 output "cluster_identifier" {
-	value = "TODO"
+	value = "default"
 }
 

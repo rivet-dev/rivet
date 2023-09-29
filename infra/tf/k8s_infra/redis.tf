@@ -1,15 +1,20 @@
 locals {
+	redis_k8s = var.redis_provider == "kubernetes"
+
 	redis_svcs = {
 		for k, v in var.redis_dbs:
 		k => {
 			persistent = v.persistent
-			username = module.secrets.values["redis/${k}/username"]
-			password = module.secrets.values["redis/${k}/password"]
+			username = module.redis_secrets[0].values["redis/${k}/username"]
+			password = module.redis_secrets[0].values["redis/${k}/password"]
 		}
+		if local.redis_k8s
 	}
 }
 
-module "secrets" {
+module "redis_secrets" {
+	count = local.redis_k8s ? 1 : 0
+
 	source = "../modules/secrets"
 
 	keys = flatten([
@@ -21,7 +26,6 @@ module "secrets" {
 	])
 }
 
-# TODO:
 resource "kubernetes_namespace" "redis" {
 	for_each = var.redis_dbs
 
@@ -90,3 +94,4 @@ resource "kubernetes_config_map" "redis_ca" {
 		"ca.crt" = data.kubernetes_secret.redis_ca[each.key].data["ca.crt"]
 	}
 }
+

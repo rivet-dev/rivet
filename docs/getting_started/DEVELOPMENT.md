@@ -35,22 +35,12 @@ nix-shell -p git -p git-lfs --command "git clone https://github.com/rivet-gg/riv
 >
 > Warp may have issues with the Nix installer since it does not use the default shell. [Read more.](https://docs.warp.dev/features/ssh)
 
-## Step 3: Setup environment
-
-Open your project's folder and run:
-
-```
-nix-shell
-```
-
-_Run `nix-shell` in every new shell you create if you're not using [Lorri](/docs/infrastructure/nix/LORRI.md)._
-
-## Step 4: Initiate new namespace
+## Step 3: Boot cluster
 
 Run:
 
 ```
-bolt init dev
+nix-shell --run "bolt init dev"
 ```
 
 This will:
@@ -68,23 +58,23 @@ Run this command any time you update to a new version of Rivet.
 >
 > You can create multiple namespaces with different configs. The active namespace is set in the `Bolt.local.toml` file. We use the name `dev` as a safe default.
 
-## Step 5: Boot the Rivet Hub
+## Step 4: Boot the Rivet Hub
 
 1. Clone the [Rivet Hub](https://github.com/rivet-gg/hub) with
 2. Set `BASE_URL=https://{your base domain}` in the Hub's `.env`
 3. Start the hub
 
-## Step 6: Create a group
+## Step 5: Create a group
 
 1. Open the hub (defaults to running at http://localhost:5080)
 2. Register your account
 3. Create a new group
 
-## Step 7: Convert the group to a developer group
+## Step 6: Convert the group to a developer group
 
 1. Copy the ID of your group from the URL
     - For example: `https://hub.rivet.gg/groups/d1f2e0b7-4c0d-48e1-8fae-309b98002b9f` would be `d1f2e0b7-4c0d-48e1-8fae-309b98002b9f`
-2. Run `bolt admin team-dev create <GROUP_ID>`
+2. Run `nix-shell --run "bolt admin team-dev create <GROUP_ID>"`
     - Replace `<GROUP_ID>` with the ID you just copied
 
 You should now see a `Developer` tab in the hub.
