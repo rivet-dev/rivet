@@ -110,7 +110,7 @@ where
 			WorkerKind::Consumer { topic, group } => {
 				// Create a dedicated connection for blocking Redis requests
 				// that won't block other requests in the pool.
-				let url = std::env::var("REDIS_URL_REDIS_CHIRP").expect("REDIS_URL_REDIS_CHIRP");
+				let url = std::env::var("REDIS_URL_CHIRP").expect("REDIS_URL_CHIRP");
 				let redis_chirp_conn = redis::cluster::ClusterClient::new(vec![url.as_str()])
 					.map_err(ManagerError::BuildRedis)?
 					.get_async_connection()

@@ -34,7 +34,7 @@ impl Connection {
 	) -> GlobalResult<Connection> {
 		// Not the same as the operation ctx's ts because this cannot be overridden by debug start ts
 		let ts = rivet_util::timestamp::now();
-		let redis_cache = self.pools.redis("redis-cache")?;
+		let redis_cache = self.pools.redis("cache")?;
 
 		Ok(Connection::new(
 			(*self.client).clone().wrap_with(
@@ -67,23 +67,23 @@ impl Connection {
 	}
 
 	pub async fn redis_cache(&self) -> Result<RedisPool, rivet_pools::Error> {
-		self.pools.redis("redis-cache")
+		self.pools.redis("cache")
 	}
 
 	pub async fn redis_cdn(&self) -> Result<RedisPool, rivet_pools::Error> {
-		self.pools.redis("redis-cdn")
+		self.pools.redis("cdn")
 	}
 
 	pub async fn redis_job(&self) -> Result<RedisPool, rivet_pools::Error> {
-		self.pools.redis("redis-job")
+		self.pools.redis("job")
 	}
 
 	pub async fn redis_mm(&self) -> Result<RedisPool, rivet_pools::Error> {
-		self.pools.redis("redis-mm")
+		self.pools.redis("mm")
 	}
 
 	pub async fn redis_user_presence(&self) -> Result<RedisPool, rivet_pools::Error> {
-		self.pools.redis("redis-user-presence")
+		self.pools.redis("user-presence")
 	}
 
 	pub fn perf(&self) -> &chirp_perf::PerfCtx {

@@ -11,7 +11,7 @@ const OLD_PLAYER_TIMEOUT: i64 = util::duration::hours(12);
 pub async fn run_from_env(ts: i64) -> GlobalResult<()> {
 	let pools = rivet_pools::from_env("mm-gc-full").await?;
 	let client = chirp_client::SharedClient::from_env(pools.clone())?.wrap_new("mm-gc");
-	let redis_mm = pools.redis("redis-mm")?;
+	let redis_mm = pools.redis("mm")?;
 	let crdb = pools.crdb("db-mm-state")?;
 
 	let old_players_ts = ts - OLD_PLAYER_TIMEOUT;

@@ -1090,7 +1090,10 @@ impl ServiceContextData {
 			};
 
 			env.push((
-				format!("REDIS_URL_{}", name.to_uppercase().replace("-", "_")),
+				format!(
+					"REDIS_URL_{}",
+					self.redis_db_name().to_uppercase().replace("-", "_")
+				),
 				url,
 			));
 		}

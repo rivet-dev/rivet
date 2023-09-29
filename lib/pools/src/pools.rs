@@ -93,11 +93,11 @@ impl PoolsInner {
 	}
 
 	pub fn redis_chirp(&self) -> Result<RedisPool, Error> {
-		self.redis("redis-chirp")
+		self.redis("chirp")
 	}
 
 	pub fn redis_cache(&self) -> Result<RedisPool, Error> {
-		self.redis("redis-cache")
+		self.redis("cache")
 	}
 }
 
