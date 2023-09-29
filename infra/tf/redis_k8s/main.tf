@@ -44,10 +44,11 @@ resource "helm_release" "redis" {
 				password = each.value.password
 			}
 		}
+		# TODO: Allow this to be configured
+		# Create minimal cluster
 		cluster = {
-			# TODO:
-			nodes = 1
-			replicas = 1
+			nodes = 3
+			replicas = 0
 		}
 		auth = {
 			enable = true
