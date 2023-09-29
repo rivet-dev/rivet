@@ -244,7 +244,7 @@ pub async fn gen_svc(exec_ctx: &ExecServiceContext) -> Vec<serde_json::Value> {
 
 	let (image, image_pull_policy, exec) = match &driver {
 		ExecServiceDriver::LocalBinaryArtifact { exec_path, args } => (
-			"ghcr.io/rivet-gg/rivet-local-binary-artifact-runner:77921a2",
+			"ghcr.io/rivet-gg/rivet-local-binary-artifact-runner:3fdc702",
 			"IfNotPresent",
 			format!(
 				"{} {}",
@@ -316,7 +316,6 @@ pub async fn gen_svc(exec_ctx: &ExecServiceContext) -> Vec<serde_json::Value> {
 			"imagePullPolicy": image_pull_policy,
 			"command": ["/bin/sh"],
 			"args": ["-c", command],
-			// "args": ["-c", "/local/rivet/install-ca.sh && printenv && sleep 1000"],
 			"env": env,
 			"envFrom": [{
 				"secretRef": {
