@@ -68,7 +68,7 @@ pub async fn build<'a, T: AsRef<str>>(ctx: &ProjectContext, opts: BuildOpts<'a, 
 		# Used for Tokio Console. See https://github.com/tokio-rs/console#using-it
 		export RUSTFLAGS="--cfg tokio_unstable"
 		# Used for debugging
-		# export CARGO_LOG=cargo::core::compiler::fingerprint=info
+		export CARGO_LOG=cargo::core::compiler::fingerprint=info
 
 		EXIT_CODE=0
 
