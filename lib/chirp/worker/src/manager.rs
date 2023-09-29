@@ -98,7 +98,7 @@ where
 	}
 
 	#[tracing::instrument]
-	pub async fn start(self: Arc<Self>) {
+	pub async fn start(self: Arc<Self>) -> Result<(), ManagerError> {
 		// Build the subscription
 		match &self.config.worker_kind {
 			WorkerKind::Rpc { group } => {
@@ -110,14 +110,12 @@ where
 			WorkerKind::Consumer { topic, group } => {
 				// Create a dedicated connection for blocking Redis requests
 				// that won't block other requests in the pool.
-				// TODO: Don't use unwraps here
-				let redis_chirp_conn = redis::Client::open(
-					std::env::var("REDIS_URL_REDIS_CHIRP").expect("REDIS_URL_REDIS_CHIRP"),
-				)
-				.expect("build redis client")
-				.get_tokio_connection_manager()
-				.await
-				.expect("build connection manager");
+				let url = std::env::var("REDIS_URL_REDIS_CHIRP").expect("REDIS_URL_REDIS_CHIRP");
+				let redis_chirp_conn = redis::cluster::ClusterClient::new(vec![url.as_str()])
+					.map_err(ManagerError::BuildRedis)?
+					.get_async_connection()
+					.await
+					.map_err(ManagerError::BuildRedis)?;
 
 				self.clone()
 					.worker_receiver(
@@ -128,6 +126,8 @@ where
 					.await;
 			}
 		}
+
+		Ok(())
 	}
 
 	#[tracing::instrument]
@@ -1040,20 +1040,20 @@ where
 		// 		return;
 		// 	}
 
-			// Acknowledge the messages
-			let mut redis_chirp = self.redis_chirp.clone();
-			match redis_chirp
-				.xack::<_, _, _, ()>(&msg_meta.topic_key, &msg_meta.group, &[&msg_meta.id])
-				.await
-			{
-				Ok(_) => {
-					tracing::info!(?msg_meta, "acknowledged stream message");
-					// break;
-				}
-				Err(err) => {
-					tracing::error!(?err, "failed to ack message");
-				}
+		// Acknowledge the messages
+		let mut redis_chirp = self.redis_chirp.clone();
+		match redis_chirp
+			.xack::<_, _, _, ()>(&msg_meta.topic_key, &msg_meta.group, &[&msg_meta.id])
+			.await
+		{
+			Ok(_) => {
+				tracing::info!(?msg_meta, "acknowledged stream message");
+				// break;
 			}
+			Err(err) => {
+				tracing::error!(?err, "failed to ack message");
+			}
+		}
 		// }
 	}
 }

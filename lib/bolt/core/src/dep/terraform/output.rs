@@ -49,6 +49,13 @@ pub struct Tls {
 pub struct Cockroach {
 	pub host: TerraformOutputValue<String>,
 	pub port: TerraformOutputValue<u32>,
+	pub cluster_identifier: TerraformOutputValue<String>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct Clickhouse {
+	pub host: TerraformOutputValue<String>,
+	pub port: TerraformOutputValue<u32>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -72,6 +79,17 @@ pub async fn read_crdb(ctx: &ProjectContext) -> Cockroach {
 		}
 		config::ns::ClusterKind::Distributed { .. } => {
 			read_plan::<Cockroach>(ctx, "cockroachdb_managed").await
+		}
+	}
+}
+
+pub async fn read_clickhouse(ctx: &ProjectContext) -> Clickhouse {
+	match &ctx.ns().cluster.kind {
+		config::ns::ClusterKind::SingleNode { .. } => {
+			read_plan::<Clickhouse>(ctx, "clickhouse_k8s").await
+		}
+		config::ns::ClusterKind::Distributed { .. } => {
+			read_plan::<Clickhouse>(ctx, "clickhouse_managed").await
 		}
 	}
 }

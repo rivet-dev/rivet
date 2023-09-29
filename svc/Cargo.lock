@@ -6147,6 +6147,7 @@ dependencies = [
  "pin-project-lite",
  "ryu",
  "sha1_smol",
+ "socket2 0.4.9",
  "tokio",
  "tokio-native-tls",
  "tokio-retry",
@@ -6717,8 +6718,11 @@ name = "rivet-pools"
 version = "0.1.0"
 dependencies = [
  "async-nats",
+ "clickhouse",
  "funty",
  "global-error",
+ "hyper",
+ "hyper-tls",
  "lazy_static",
  "rand",
  "redis",

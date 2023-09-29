@@ -421,10 +421,10 @@ pub async fn generate(project_path: &Path, ns_id: &str) -> Result<()> {
 		.await?;
 
 	// MARK: ClickHouse
-	for user in ["bolt", "chirp", "grafana"] {
+	for user in ["default", "bolt", "chirp", "grafana"] {
 		generator
 			.generate_secret(&["clickhouse", "users", user, "password"], || async {
-				Ok(value(generate_password(32)))
+				Ok(value(generate_clickhouse_password(32)))
 			})
 			.await?;
 	}
@@ -652,6 +652,20 @@ fn generate_password(length: usize) -> String {
 	rand::thread_rng()
 		.sample_iter(&Alphanumeric)
 		.take(length)
+		.map(char::from)
+		.collect()
+}
+
+/// Random password plus a special character in there somewhere.
+fn generate_clickhouse_password(length: usize) -> String {
+	let mut rng = rand::thread_rng();
+	let split = rng.gen_range(0..length);
+
+	rng.clone()
+		.sample_iter(&Alphanumeric)
+		.take(split)
+		.chain(std::iter::once(46))
+		.chain(rng.sample_iter(&Alphanumeric).take(length - split))
 		.map(char::from)
 		.collect()
 }

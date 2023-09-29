@@ -7,7 +7,7 @@ CREATE TABLE events (
   name LowCardinality(String),
   properties JSON DEFAULT properties_raw,
   properties_raw String EPHEMERAL
-) ENGINE = ReplacingMergeTree()
+) ENGINE = ReplicatedReplacingMergeTree
 PARTITION BY toYYYYMM(ts)
 SAMPLE BY cityHash64(event_id)
 ORDER BY (toDate(ts), name, cityHash64(event_id));

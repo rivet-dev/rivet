@@ -39,4 +39,7 @@ pub enum ManagerError {
 
 	#[error("missing nats reply")]
 	MissingNatsReply,
+
+	#[error("build redis: {0}")]
+	BuildRedis(redis::RedisError),
 }

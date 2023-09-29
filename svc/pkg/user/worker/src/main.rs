@@ -25,8 +25,8 @@ fn main() -> Result<(), ManagerError> {
 			updated_user_presence_update,
 			updated_user_update,
 		]
-		.await;
+		.await?;
 
-		Result::<_, ManagerError>::Ok(())
+		Ok(())
 	})?
 }

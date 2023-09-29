@@ -191,11 +191,17 @@ async fn redis_from_env() -> Result<HashMap<String, RedisPool>, Error> {
 				existing.clone()
 			} else {
 				tracing::info!(%url, "redis connecting");
-				let conn = redis::Client::open(url.as_str())
+				let conn = redis::cluster::ClusterClient::new(vec![url.as_str()])
 					.map_err(Error::BuildRedis)?
-					.get_tokio_connection_manager()
+					.get_async_connection()
 					.await
 					.map_err(Error::BuildRedis)?;
+
+				// let conn = redis::Client::open(url.as_str())
+				// 	.map_err(Error::BuildRedis)?
+				// 	.get_tokio_connection_manager()
+				// 	.await
+				// 	.map_err(Error::BuildRedis)?;
 				tracing::info!(%url, "redis connected");
 				conn
 			};

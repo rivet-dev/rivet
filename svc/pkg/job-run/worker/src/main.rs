@@ -15,8 +15,8 @@ fn main() -> Result<(), ManagerError> {
 			nomad_monitor_eval_update,
 			stop,
 		]
-		.await;
+		.await?;
 
-		Result::<_, ManagerError>::Ok(())
+		Ok(())
 	})?
 }

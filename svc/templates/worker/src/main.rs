@@ -10,8 +10,8 @@ fn main() -> Result<(), ManagerError> {
 		worker_group![
 			{{snake name}},
 		]
-		.await;
+		.await?;
 
-		Result::<_, ManagerError>::Ok(())
+		Ok(())
 	})?
 }

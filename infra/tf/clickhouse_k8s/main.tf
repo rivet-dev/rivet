@@ -1,21 +1,8 @@
-locals {
-	clickhouse_users = ["bolt", "chirp", "grafana"]
-
-	clickhouse_auth = {
-		for user in local.clickhouse_users:
-		user => {
-			password = module.clickhouse_secrets.values["clickhouse/users/${user}/password"]
-			readonly = user == "grafana"
-		}
-	}
-}
-
-module "clickhouse_secrets" {
+module "secrets" {
 	source = "../modules/secrets"
 
 	keys = [
-		for user in local.clickhouse_users:
-		"clickhouse/users/${user}/password"
+		"clickhouse/users/default/password"
 	]
 }
 
@@ -80,37 +67,8 @@ resource "helm_release" "clickhouse" {
 		# Admin auth
 		auth = {
 			username = "bolt"
-			password = local.clickhouse_auth["bolt"].password
+			password = module.secrets.values["clickhouse/users/default/password"]
 		}
-		# Additional users
-		usersExtraOverrides = <<-EOF
-			<?xml version="1.0"?>
-			<clickhouse>
-				<profiles>
-					<default>
-						<max_memory_usage>10000000000</max_memory_usage>
-						<load_balancing>random</load_balancing>
-					</default>
-
-					<readonly>
-						<readonly>1</readonly>
-					</readonly>
-				</profiles>
-
-				<users>
-					${join(",", [
-						for u, v in local.clickhouse_auth:
-						<<-EOT
-						<${u}>
-							<password>${v.password}</password>
-							${v.readonly ? "<profile>readonly</profile>" : ""}
-						</${u}>
-						EOT
-					])
-					}
-				</users>
-			</clickhouse>
-			EOF
 	})]
 }
 

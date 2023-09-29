@@ -20,8 +20,8 @@ fn main() -> Result<(), ManagerError> {
 			user_ban,
 			user_unban,
 		]
-		.await;
+		.await?;
 
-		Result::<_, ManagerError>::Ok(())
+		Ok(())
 	})?
 }

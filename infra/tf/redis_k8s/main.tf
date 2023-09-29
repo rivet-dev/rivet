@@ -35,8 +35,8 @@ resource "helm_release" "redis" {
 	name = "redis"
 	namespace = kubernetes_namespace.redis[each.key].metadata.0.name
 	repository = "https://charts.bitnami.com/bitnami"
-	chart = "redis"
-	version = "18.0.2"
+	chart = "redis-cluster"
+	version = "9.0.6"
 	values = [yamlencode({
 		global = {
 			storageClass = var.k8s_storage_class
@@ -44,8 +44,9 @@ resource "helm_release" "redis" {
 				password = each.value.password
 			}
 		}
-		replica = {
-			replicaCount = 1
+		cluster = {
+			replicas = 1
+			# TODO:
 		}
 		auth = {
 			enable = true

@@ -7,8 +7,8 @@ use workers::*;
 fn main() -> Result<(), ManagerError> {
 	// Start runtime
 	rivet_runtime::run(async move {
-		worker_group![export, write].await;
+		worker_group![export, write].await?;
 
-		Result::<_, ManagerError>::Ok(())
+		Ok(())
 	})?
 }

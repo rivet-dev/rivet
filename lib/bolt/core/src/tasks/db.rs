@@ -93,9 +93,9 @@ pub async fn shell(ctx: &ProjectContext, svc: &ServiceContext, query: Option<&st
 			let db_name = svc.clickhouse_db_name();
 			rivet_term::status::progress("Connecting to ClickHouse", &db_name);
 
-			let clickhouse_user = "bolt";
+			let clickhouse_user = "default";
 			let clickhouse_password = ctx
-				.read_secret(&["clickhouse", "users", "bolt", "password"])
+				.read_secret(&["clickhouse", "users", "default", "password"])
 				.await?;
 			let host = conn.clickhouse_host.as_ref().unwrap();
 			let (hostname, port) = host.split_once(":").unwrap();
