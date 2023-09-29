@@ -104,13 +104,6 @@ resource "kubernetes_config_map" "install_ca" {
 
 			# Log to file
 			exec >> "/var/log/install-ca.txt" 2>&1
-
-			# Prevent apt from using the OpenSSL installation from /nix/store if mounted
-			export LD_LIBRARY_PATH=/lib:/usr/lib:/usr/local/lib
-			export DEBIAN_FRONTEND=noninteractive
-
-			apt-get update -y
-			apt-get install -y --no-install-recommends ca-certificates
 			update-ca-certificates
 			EOF
 	}

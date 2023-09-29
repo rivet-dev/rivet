@@ -111,7 +111,7 @@ pub async fn build<'a, T: AsRef<str>>(ctx: &ProjectContext, opts: BuildOpts<'a, 
 						&dockerfile_path,
 						formatdoc!(
 							r#"
-							FROM rust:1.72-slim as build
+							FROM rust:1.72-slim AS build
 
 							RUN apt-get update
 							RUN apt-get install -y protobuf-compiler pkg-config libssl-dev g++
@@ -120,11 +120,9 @@ pub async fn build<'a, T: AsRef<str>>(ctx: &ProjectContext, opts: BuildOpts<'a, 
 							COPY . .
 							RUN ["sh", "-c", {build_script:?}]
 
-							FROM debian:12.1-slim as run
-
+							FROM debian:12.1-slim AS run
+							RUN DEBIAN_FRONTEND=noninteractive apt-get update -y && apt-get install -y --no-install-recommends ca-certificates openssl
 							COPY --from=build /usr/rivet/target/{optimization}/{bin} /bin/svc
-							RUN apt-get update
-							RUN apt-get -y install openssl
 							"#
 						),
 					)
