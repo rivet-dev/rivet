@@ -1,7 +1,7 @@
 output "host" {
 	value = {
 		for k, _ in var.redis_dbs:
-		k => "redis-master.redis-${k}.svc.cluster.local"
+		k => "redis-redis-cluster.redis-${k}.svc.cluster.local"
 	}
 }
 
