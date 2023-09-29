@@ -34,15 +34,14 @@ resource "helm_release" "redis" {
 
 	name = "redis"
 	namespace = kubernetes_namespace.redis[each.key].metadata.0.name
-	repository = "https://charts.bitnami.com/bitnami"
-	chart = "redis-cluster"
-	version = "9.0.6"
+	chart = "../../helm/redis-cluster"
+	# repository = "https://charts.bitnami.com/bitnami"
+	# chart = "redis-cluster"
+	# version = "9.0.6"
 	values = [yamlencode({
+		password = each.value.password
 		global = {
 			storageClass = var.k8s_storage_class
-			redis = {
-				password = each.value.password
-			}
 		}
 		# TODO: Allow this to be configured
 		# Create minimal cluster
