@@ -41,9 +41,11 @@ jobs:
         with:
           key: ${{ runner.os }}-rust
           path: |
-            ~/.cargo/registry
-            ~/.cargo/git
-            target
+            ~/.cargo/bin/
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            target/
 
       - uses: mxschmitt/action-tmate@v3
 

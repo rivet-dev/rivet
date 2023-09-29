@@ -657,8 +657,7 @@ async fn tail_pod(ctx: &ProjectContext, pod: &str) -> Result<TestStatus> {
 		match output_str {
 			"Pending" | "Running" | "" => {
 				// Continue
-				// tokio::time::sleep(Duration::from_millis(250)).await;
-				tokio::time::sleep(Duration::from_millis(2000)).await;
+				tokio::time::sleep(Duration::from_millis(500)).await;
 			}
 			"Succeeded" | "Failed" => {
 				// Get the exit code of the pod
