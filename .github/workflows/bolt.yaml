@@ -42,17 +42,9 @@ jobs:
             ${{ runner.os }}-nix-${{ hashfiles('./shell.nix', './nix/**/*.nix') }}
             ${{ runner.os }}-nix-
 
+            # Build the shell for the first time
       - name: Build Shell
-        run: |
-          # Delete old Bolt binaries in order to fall back to the Nix-built binary
-          rm -f target/debug/bolt target/release/bolt
-
-          # Build the shell for the first time
-          nix-shell --pure --run "echo 'Built shell'"
-
-          nix-shell --pure --run "bolt --help"
-
-          nix-shell --pure -p which --run "which bolt"
+        run: nix-shell --pure --run "echo 'Built shell'"
 
       # MARK: Rust
       - name: Rust Cache
@@ -64,6 +56,9 @@ jobs:
             ~/.cargo/git
             target
 
+      # Delete old Bolt binaries in order to fall back to the Nix-built binary
+      - name: Remove Old Bolt Builts
+        run: rm -f target/debug/bolt target/release/bolt
 
       - name: Write Namespace Config
         run: |
