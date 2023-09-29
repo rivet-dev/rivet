@@ -244,7 +244,7 @@ pub async fn gen_svc(exec_ctx: &ExecServiceContext) -> Vec<serde_json::Value> {
 
 	let (image, image_pull_policy, exec) = match &driver {
 		ExecServiceDriver::LocalBinaryArtifact { exec_path, args } => (
-			"debian:12.1-slim",
+			"ghcr.io/rivet-gg/rivet-local-binary-artifact-runner:77921a2",
 			"IfNotPresent",
 			format!(
 				"{} {}",
