@@ -532,7 +532,7 @@ async fn run_test(ctx: &ProjectContext, test_binary: TestBinary) -> Result<TestR
 	let display_name = format!("{}::{}", svc_ctx.name(), test_binary.target);
 
 	let setup_start = Instant::now();
-	rivet_term::status::info("Booting", &display_name);
+	// rivet_term::status::info("Booting", &display_name);
 
 	// Convert path relative to project
 	let relative_path = test_binary
@@ -570,11 +570,19 @@ async fn run_test(ctx: &ProjectContext, test_binary: TestBinary) -> Result<TestR
 		Result::Ok(Result::Ok(x)) => x,
 		Result::Ok(Err(err)) => TestStatus::UnknownError(err.to_string()),
 		Err(_) => {
-			// TODO: This delete the pod and its logs. Can we send a SIGKILL to the pod instead
-			// with `exec`?
-			// Kill pod
+			// Kill the process in the pod. Do this instead of running `kubectl delete` since we
+			// want to keep the logs for the pod.
 			Command::new("kubectl")
-				.args(&["delete", "pod", &pod_name, "-n", "rivet-service"])
+				.args(&[
+					"exec",
+					&pod_name,
+					"-n",
+					"rivet-service",
+					"--",
+					"/bin/sh",
+					"-c",
+					"kill -9 0",
+				])
 				.env("KUBECONFIG", ctx.gen_kubeconfig_path())
 				.output()
 				.await?;

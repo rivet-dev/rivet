@@ -15,7 +15,7 @@ pub async fn apply_specs(ctx: &ProjectContext, specs: Vec<serde_json::Value>) ->
 
 	// Apply kubectl from stdin
 	let mut cmd = tokio::process::Command::new("kubectl");
-	cmd.args(&["apply", "-f", "-"]);
+	cmd.args(&["apply", "--wait", "-f", "-"]);
 	cmd.env("KUBECONFIG", ctx.gen_kubeconfig_path());
 	cmd.stdin(std::process::Stdio::piped());
 	cmd.stdout(std::process::Stdio::null());
