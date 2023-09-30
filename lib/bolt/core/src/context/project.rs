@@ -574,13 +574,6 @@ impl ProjectContextData {
 				format!("^{}$", self.origin_hub().replace(".", "\\."))
 			})
 	}
-
-	pub fn tls_enabled(&self) -> bool {
-		match self.ns().cluster.kind {
-			config::ns::ClusterKind::SingleNode { api_https_port, .. } => api_https_port.is_some(),
-			config::ns::ClusterKind::Distributed { .. } => true,
-		}
-	}
 }
 
 impl ProjectContextData {

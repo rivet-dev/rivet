@@ -204,7 +204,6 @@ async fn vars(ctx: &ProjectContext) {
 			.as_ref()
 			.map_or(false, |x| x.deprecated_subdomains)),
 	);
-	vars.insert("tls_enabled".into(), json!(project_ctx.tls_enabled()));
 
 	// Cloudflare
 	if let Some(dns) = &config.dns {
