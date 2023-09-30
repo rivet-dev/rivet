@@ -184,7 +184,7 @@ impl DatabaseConnections {
 				};
 
 				Ok(format!(
-					"cockroach://{}:{}@{}/{}?sslmode=verify-ca&sslrootcert=/tmp/crdb-ca.crt",
+					"cockroach://{}:{}@{}/{}?sslmode=verify-ca&sslrootcert=/local/crdb-ca.crt",
 					username, password, host, full_db_name
 				))
 			}
@@ -196,9 +196,13 @@ impl DatabaseConnections {
 					.await?;
 				let host = self.clickhouse_host.as_ref().unwrap();
 
+				let query_other = format!(
+					"&x-multi-statement=true&x-migrations-table-engine=ReplicatedMergeTree&secure=true&skip_verify=true",
+				);
+
 				Ok(format!(
-					"clickhouse://{}/?database={}&username={}&password={}&x-multi-statement=true&x-migrations-table-engine=ReplicatedMergeTree&secure=true&skip_verify=true",
-					host, db_name, clickhouse_user, clickhouse_password
+					"clickhouse://{}/?database={}&username={}&password={}{}",
+					host, db_name, clickhouse_user, clickhouse_password, query_other
 				))
 			}
 			x @ _ => bail!("cannot migrate this type of service: {x:?}"),

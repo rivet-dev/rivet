@@ -40,6 +40,22 @@ resource "helm_release" "clickhouse" {
 				<tcp_port remove="remove"/>
 				<interserver_http_port remove="remove"/>
 				<interserver_https_port>9010</interserver_https_port>
+
+				# See https://clickhouse.com/docs/en/engines/table-engines/mergetree-family/replication#replicatedmergetree-parameters
+				<default_replica_path>/clickhouse/tables/{shard}/{database}/{table}</default_replica_path>
+				<default_replica_name>{replica}</default_replica_name>
+			</clickhouse>
+			EOF
+		
+		# Grant access to default user
+		usersExtraOverrides = <<-EOF
+			<?xml version="1.0"?>
+			<clickhouse>
+				<users>
+					<default>
+						<access_management>1</access_management>
+					</default>
+				</users>
 			</clickhouse>
 			EOF
 

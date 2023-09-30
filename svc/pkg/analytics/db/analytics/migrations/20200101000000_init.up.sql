@@ -11,4 +11,3 @@ CREATE TABLE events (
 PARTITION BY toYYYYMM(ts)
 SAMPLE BY cityHash64(event_id)
 ORDER BY (toDate(ts), name, cityHash64(event_id));
-

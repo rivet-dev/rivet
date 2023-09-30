@@ -12,25 +12,40 @@ use crate::{
 	utils::db_conn::DatabaseConnections,
 };
 
+pub struct ShellContext<'a> {
+	pub ctx: &'a ProjectContext,
+	pub svc: &'a ServiceContext,
+	pub query: Option<&'a str>,
+	pub conn: &'a DatabaseConnections,
+}
+
 pub async fn shell(ctx: &ProjectContext, svc: &ServiceContext, query: Option<&str>) -> Result<()> {
 	let conn = DatabaseConnections::create(ctx, &[svc.clone()]).await?;
+	let shell_ctx = ShellContext {
+		ctx,
+		svc,
+		query,
+		conn: &conn,
+	};
 
 	match &svc.config().runtime {
-		RuntimeKind::Redis { .. } => redis_shell(ctx, svc, query, conn).await?,
-		RuntimeKind::CRDB { .. } => crdb_shell(ctx, svc, query, conn).await?,
-		RuntimeKind::ClickHouse { .. } => clickhouse_shell(ctx, svc, query, conn).await?,
+		RuntimeKind::Redis { .. } => redis_shell(shell_ctx).await?,
+		RuntimeKind::CRDB { .. } => crdb_shell(shell_ctx).await?,
+		RuntimeKind::ClickHouse { .. } => clickhouse_shell(shell_ctx, false).await?,
 		x @ _ => bail!("cannot migrate this type of service: {x:?}"),
 	}
 
 	Ok(())
 }
 
-async fn redis_shell(
-	ctx: &ProjectContext,
-	svc: &ServiceContext,
-	query: Option<&str>,
-	conn: DatabaseConnections,
-) -> Result<()> {
+async fn redis_shell(shell_ctx: ShellContext<'_>) -> Result<()> {
+	let ShellContext {
+		ctx,
+		svc,
+		conn,
+		query,
+	} = shell_ctx;
+
 	let db_name = svc.redis_db_name();
 	let host = conn.redis_hosts.get(&svc.name()).unwrap();
 	let (hostname, port) = host.split_once(":").unwrap();
@@ -93,7 +108,6 @@ async fn redis_shell(
 			"namespace": "bolt",
 		},
 		"spec": {
-			"restartPolicy": "Never",
 			"containers": [
 				{
 					"name": "redis",
@@ -135,6 +149,7 @@ async fn redis_shell(
 			"run",
 			"-itq",
 			"--rm",
+			"--restart=Never",
 			"--image=redis",
 			"--namespace",
 			"bolt",
@@ -148,12 +163,14 @@ async fn redis_shell(
 	Ok(())
 }
 
-async fn crdb_shell(
-	ctx: &ProjectContext,
-	svc: &ServiceContext,
-	query: Option<&str>,
-	conn: DatabaseConnections,
-) -> Result<()> {
+pub async fn crdb_shell(shell_ctx: ShellContext<'_>) -> Result<()> {
+	let ShellContext {
+		ctx,
+		svc,
+		conn,
+		query,
+	} = shell_ctx;
+
 	let db_name = svc.crdb_db_name();
 	let conn = conn.cockroach_host.as_ref().unwrap();
 	let username = ctx.read_secret(&["crdb", "username"]).await?;
@@ -166,18 +183,17 @@ async fn crdb_shell(
 	rivet_term::status::progress("Connecting to Cockroach", &db_name);
 
 	let query = if let Some(query) = query {
-		format!("-c {query}")
+		format!("-c '{}'", query.replace('\'', "'\\''"))
 	} else {
 		"".to_string()
 	};
-	let cmd = format!("sleep 2 && psql {db_url:?} {query}");
+	let cmd = format!("sleep 2 && psql \"{db_url}\" {query}");
 	let overrides = json!({
 		"apiVersion": "v1",
 		"metadata": {
 			"namespace": "bolt",
 		},
 		"spec": {
-			"restartPolicy": "Never",
 			"containers": [
 				{
 					"name": "postgres",
@@ -185,6 +201,7 @@ async fn crdb_shell(
 					"command": ["sh", "-c"],
 					"args": [cmd],
 					"env": [
+						// See https://github.com/cockroachdb/cockroach/issues/37129#issuecomment-600115995
 						{
 							"name": "PGCLIENTENCODING",
 							"value": "utf-8",
@@ -222,6 +239,7 @@ async fn crdb_shell(
 			"run",
 			"-itq",
 			"--rm",
+			"--restart=Never",
 			"--image=postgres",
 			"--namespace",
 			"bolt",
@@ -235,12 +253,15 @@ async fn crdb_shell(
 	Ok(())
 }
 
-async fn clickhouse_shell(
-	ctx: &ProjectContext,
-	svc: &ServiceContext,
-	query: Option<&str>,
-	conn: DatabaseConnections,
-) -> Result<()> {
+// `no_db` connects without specifying a database
+pub async fn clickhouse_shell(shell_ctx: ShellContext<'_>, no_db: bool) -> Result<()> {
+	let ShellContext {
+		ctx,
+		svc,
+		conn,
+		query,
+	} = shell_ctx;
+
 	let db_name = svc.clickhouse_db_name();
 	rivet_term::status::progress("Connecting to ClickHouse", &db_name);
 
@@ -251,8 +272,13 @@ async fn clickhouse_shell(
 	let host = conn.clickhouse_host.as_ref().unwrap();
 	let (hostname, port) = host.split_once(":").unwrap();
 
+	let db_flag = if no_db {
+		"".to_string()
+	} else {
+		format!("--database {db_name}")
+	};
 	let query = if let Some(query) = query {
-		format!("--query {query}")
+		format!("--multiquery '{}'", query.replace('\'', "'\\''"))
 	} else {
 		"".to_string()
 	};
@@ -265,8 +291,7 @@ async fn clickhouse_shell(
 			--host {hostname} \
 			--port {port} \
 			--user {user} \
-			--database {db_name} \
-			--password {password} {query}
+			--password {password} {db_flag} {query}
 		"
 	);
 	let overrides = json!({
@@ -275,7 +300,6 @@ async fn clickhouse_shell(
 			"namespace": "bolt",
 		},
 		"spec": {
-			"restartPolicy": "Never",
 			"containers": [
 				{
 					"name": "clickhouse",
@@ -325,7 +349,7 @@ async fn clickhouse_shell(
 	});
 
 	// Apply clickhouse config to K8s
-	if let Some(config) = conn.clickhouse_config {
+	if let Some(config) = &conn.clickhouse_config {
 		let spec = serde_json::to_vec(&json!({
 			"kind": "ConfigMap",
 			"apiVersion": "v1",
@@ -360,6 +384,7 @@ async fn clickhouse_shell(
 			"run",
 			"-itq",
 			"--rm",
+			"--restart=Never",
 			"--image=clickhouse/clickhouse-server",
 			"--namespace",
 			"bolt",
@@ -374,7 +399,7 @@ async fn clickhouse_shell(
 }
 
 // Generates a pod name for the shell with a random hash at the end
-fn shell_name(name: &str) -> String {
+pub fn shell_name(name: &str) -> String {
 	let hash = rand::thread_rng().gen_range::<usize, _>(0..9999);
 
 	format!("{name}-sh-{hash}")
