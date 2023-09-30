@@ -25,8 +25,13 @@ use crate::{
 	utils::{self, command_helper::CommandHelper, DroppablePort},
 };
 
-const TEST_TIMEOUT: Duration = Duration::from_secs(60);
-const PARALLEL_TESTS: usize = 16;
+/// Timeout for tests.
+///
+/// Default Chirp timeout is 60 seconds, so this is 15 seconds longer to give a buffer for Chirp
+/// operations to time out first.
+const TEST_TIMEOUT: Duration = Duration::from_secs(75);
+
+const PARALLEL_TESTS: usize = 4;
 
 struct TestCleanupManager {
 	project_ctx: ProjectContext,

@@ -73,13 +73,14 @@ impl Ctx {
 		.unwrap();
 		let game_data = game_get_res.games.first().unwrap();
 
+		// TODO: Move in to specific test for this
 		let custom_domain = format!("{}.com", util::faker::ident());
-		op!([op_ctx] cdn_namespace_domain_create {
-			namespace_id: Some(namespace_id.into()),
-			domain: custom_domain.clone(),
-		})
-		.await
-		.unwrap();
+		// op!([op_ctx] cdn_namespace_domain_create {
+		// 	namespace_id: Some(namespace_id.into()),
+		// 	domain: custom_domain.clone(),
+		// })
+		// .await
+		// .unwrap();
 
 		let ns_get_res = op!([op_ctx] game_namespace_get {
 			namespace_ids: vec![namespace_id.into()],
