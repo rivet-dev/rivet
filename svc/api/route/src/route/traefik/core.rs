@@ -312,8 +312,8 @@ fn register_namespace(
 				middlewares: router_middlewares_cdn.clone(),
 				tls: Some(traefik::TraefikTls::build(vec![
 					traefik::TraefikTlsDomain {
-						main: util::env::domain_cdn().into(),
-						sans: vec![format!("*.{}", util::env::domain_cdn())],
+						main: domain_cdn.into(),
+						sans: vec![format!("*.{}", domain_cdn)],
 					},
 				])),
 			},
@@ -328,8 +328,8 @@ fn register_namespace(
 				middlewares: router_middlewares_html.clone(),
 				tls: Some(traefik::TraefikTls::build(vec![
 					traefik::TraefikTlsDomain {
-						main: util::env::domain_cdn().into(),
-						sans: vec![format!("*.{}", util::env::domain_cdn())],
+						main: domain_cdn.into(),
+						sans: vec![format!("*.{}", domain_cdn)],
 					},
 				])),
 			},
@@ -529,7 +529,7 @@ fn register_custom_cdn_route(
 						middlewares: custom_headers_router_middlewares_cdn.clone(),
 						tls: Some(traefik::TraefikTls::build(vec![
 							traefik::TraefikTlsDomain {
-								main: domain_cdn,
+								main: domain_cdn.into(),
 								sans: vec![format!("*.{domain_cdn}")],
 							},
 						])),
@@ -547,7 +547,7 @@ fn register_custom_cdn_route(
 						middlewares: custom_headers_router_middlewares_html.clone(),
 						tls: Some(traefik::TraefikTls::build(vec![
 							traefik::TraefikTlsDomain {
-								main: domain_cdn,
+								main: domain_cdn.into(),
 								sans: vec![format!("*.{domain_cdn}")],
 							},
 						])),

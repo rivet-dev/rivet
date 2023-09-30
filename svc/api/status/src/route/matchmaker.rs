@@ -18,6 +18,8 @@ pub async fn status(
 	_watch_index: WatchIndexQuery,
 	query: StatusQuery,
 ) -> GlobalResult<models::MatchmakerResponse> {
+	let domain_cdn = internal_unwrap_owned!(util::env::domain_cdn());
+
 	// Build client
 	let client = rivet_matchmaker::Config::builder()
 		.set_uri(util::env::svc_router_url("api-matchmaker"))
@@ -47,7 +49,7 @@ pub async fn status(
 	let token = internal_unwrap!(token_res.token).token.clone();
 
 	tracing::info!("finding lobby");
-	let origin = format!("https://test-game.{}/", util::env::domain_cdn());
+	let origin = format!("https://test-game.{domain_cdn}/");
 	client
 		.find_lobby()
 		.origin(origin)

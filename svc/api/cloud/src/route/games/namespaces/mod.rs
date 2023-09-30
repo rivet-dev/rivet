@@ -53,10 +53,11 @@ pub async fn get(
 					let client = client.clone();
 
 					async move {
+						let game_zone_id =
+							internal_unwrap_owned!(util::env::cloudflare::zone::game::id());
 						let res = client
 							.get(format!(
-							"https://api.cloudflare.com/client/v4/zones/{zone_id}/custom_hostnames/{identifier}",
-							zone_id = util::env::cloudflare::zone::game::id(),
+							"https://api.cloudflare.com/client/v4/zones/{game_zone_id}/custom_hostnames/{identifier}",
 							identifier = identifier,
 						))
 							.header(

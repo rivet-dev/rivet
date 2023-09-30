@@ -753,6 +753,18 @@ impl ServiceContextData {
 		env.push(("RIVET_ORIGIN_API".into(), project_ctx.origin_api()));
 		env.push(("RIVET_ORIGIN_HUB".into(), project_ctx.origin_hub()));
 
+		// DNS
+		if let Some(dns) = &project_ctx.ns().dns {
+			if let Some(provider) = &dns.provider {
+				env.push((
+					"RIVET_DNS_PROVIDER".into(),
+					match provider {
+						config::ns::DnsProvider::Cloudflare { .. } => "cloudflare".into(),
+					},
+				));
+			}
+		}
+
 		// Regions
 		env.push(("RIVET_REGION".into(), region_id.clone()));
 		env.push(("RIVET_PRIMARY_REGION".into(), project_ctx.primary_region()));

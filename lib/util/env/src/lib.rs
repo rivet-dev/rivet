@@ -65,6 +65,7 @@ lazy_static::lazy_static! {
 	static ref DOMAIN_MAIN_API: Option<String> = std::env::var("RIVET_DOMAIN_MAIN_API").ok();
 	static ref ORIGIN_API: Option<String> = std::env::var("RIVET_ORIGIN_API").ok();
 	static ref ORIGIN_HUB: Option<String> = std::env::var("RIVET_ORIGIN_HUB").ok();
+	static ref DNS_PROVIDER: Option<String> = std::env::var("RIVET_DNS_PROVIDER").ok();
 	static ref PRIMARY_REGION: Option<String> = std::env::var("RIVET_PRIMARY_REGION").ok();
 	static ref CHIRP_SERVICE_NAME: Option<String> = std::env::var("CHIRP_SERVICE_NAME").ok();
 	static ref IS_BILLING_ENABLED: bool = std::env::var("IS_BILLING_ENABLED")
@@ -140,6 +141,10 @@ pub fn origin_hub() -> &'static str {
 		Some(x) => x.as_str(),
 		None => panic!("RIVET_ORIGIN_HUB"),
 	}
+}
+
+pub fn dns_provider() -> Option<&'static str> {
+	DNS_PROVIDER.as_ref().map(|x| x.as_str())
 }
 
 pub fn primary_region() -> &'static str {
