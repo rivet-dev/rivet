@@ -201,11 +201,8 @@ pub mod cloudflare {
 				static ref ID: Option<String> = std::env::var("CLOUDFLARE_ZONE_ID_BASE").ok();
 			}
 
-			pub fn id() -> &'static str {
-				match &*ID {
-					Some(x) => x.as_str(),
-					None => panic!("CLOUDFLARE_ZONE_ID_BASE"),
-				}
+			pub fn id() -> Option<&'static str> {
+				ID.as_ref().map(|x| x.as_str())
 			}
 		}
 
@@ -214,11 +211,8 @@ pub mod cloudflare {
 				static ref ID: Option<String> = std::env::var("CLOUDFLARE_ZONE_ID_GAME").ok();
 			}
 
-			pub fn id() -> &'static str {
-				match &*ID {
-					Some(x) => x.as_str(),
-					None => panic!("CLOUDFLARE_ZONE_ID_GAME"),
-				}
+			pub fn id() -> Option<&'static str> {
+				ID.as_ref().map(|x| x.as_str())
 			}
 		}
 
@@ -227,11 +221,8 @@ pub mod cloudflare {
 				static ref ID: Option<String> = std::env::var("CLOUDFLARE_ZONE_ID_JOB").ok();
 			}
 
-			pub fn id() -> &'static str {
-				match &*ID {
-					Some(x) => x.as_str(),
-					None => panic!("CLOUDFLARE_ZONE_ID_JOB"),
-				}
+			pub fn id() -> Option<&'static str> {
+				ID.as_ref().map(|x| x.as_str())
 			}
 		}
 	}

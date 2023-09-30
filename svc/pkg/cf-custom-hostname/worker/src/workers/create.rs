@@ -53,6 +53,8 @@ async fn fail(
 async fn worker(
 	ctx: &OperationContext<cf_custom_hostname::msg::create::Message>,
 ) -> GlobalResult<()> {
+	let game_zone_id = internal_unwrap_owned!(util::env::cloudflare::zone::game::id());
+
 	let namespace_id = internal_unwrap!(ctx.namespace_id).as_uuid();
 
 	let games_res = op!([ctx] game_resolve_namespace_id {
@@ -129,8 +131,7 @@ async fn worker(
 	});
 	let res = reqwest::Client::new()
 		.post(format!(
-			"https://api.cloudflare.com/client/v4/zones/{zone_id}/custom_hostnames",
-			zone_id = util::env::cloudflare::zone::game::id(),
+			"https://api.cloudflare.com/client/v4/zones/{game_zone_id}/custom_hostnames",
 		))
 		.header(
 			reqwest::header::AUTHORIZATION,
