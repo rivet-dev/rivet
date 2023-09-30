@@ -1,8 +1,10 @@
 use anyhow::{ensure, Context, Result};
+use duct::cmd;
 use indoc::formatdoc;
+use regex::Regex;
 use serde_json::json;
 use std::path::{Path, PathBuf};
-use tokio::{fs, io::AsyncReadExt, process::Command};
+use tokio::{fs, io::AsyncReadExt, process::Command, task::block_in_place};
 
 use crate::{config, context::ProjectContext};
 
@@ -153,6 +155,7 @@ pub struct BuildTestOpts<'a, T: AsRef<str>> {
 	pub build_calls: Vec<BuildTestCall<'a, T>>,
 	/// How many threads to run in parallel when building.
 	pub jobs: Option<usize>,
+	pub test_filters: &'a [String],
 }
 
 pub struct BuildTestCall<'a, T: AsRef<str>> {
@@ -207,6 +210,7 @@ pub async fn build_tests<'a, T: AsRef<str>>(
 		ensure!(status.success(), "build test failed");
 
 		// Parse artifacts
+		let test_count_re = Regex::new(r"(?m)^(\d+) tests?, (\d+) benchmarks?$")?;
 		for line in stdout_str.lines() {
 			let v = serde_json::from_str::<serde_json::Value>(line).context("invalid json")?;
 			if v["reason"] == "compiler-artifact" && v["target"]["kind"] == json!(["test"]) {
@@ -223,11 +227,28 @@ pub async fn build_tests<'a, T: AsRef<str>>(
 						.as_str()
 						.context("missing target name")?;
 
-					test_binaries.push(TestBinary {
-						package: package.to_string(),
-						target: target.to_string(),
-						path: PathBuf::from(executable),
-					})
+					// Parse the test count from the binary
+					let test_list_args =
+						[&["--list".to_string()], opts.test_filters.clone()].concat();
+					let test_list_stdout =
+						block_in_place(|| duct::cmd(executable, &test_list_args).read())?;
+					let caps = test_count_re
+						.captures(&test_list_stdout)
+						.context("cannot match tests list")?;
+					let test_count = caps
+						.get(1)
+						.context("failed to parse captures")?
+						.as_str()
+						.parse::<usize>()?;
+
+					// Include the binary if it has tests
+					if test_count > 0 {
+						test_binaries.push(TestBinary {
+							package: package.to_string(),
+							target: target.to_string(),
+							path: PathBuf::from(executable),
+						})
+					}
 				}
 			}
 		}
