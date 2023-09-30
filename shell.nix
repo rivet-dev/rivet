@@ -6,6 +6,17 @@ let
 
 	custom_clickhouse = import ./infra/nix/pkgs/clickhouse.nix { inherit (pkgs) stdenv fetchurl lib; };
 	custom_bolt = import ./infra/nix/bolt/default.nix;
+
+	useSccache = builtins.getEnv "USE_SCCACHE" == "1";
+	extraInputs = if useSccache then [ unstablePkgs.sccache ] else [];
+	sccacheShellHook = if useSccache then ''
+		export RUSTC_WRAPPER=sccache
+		export SCCACHE_BUCKET=${builtins.getEnv "SCCACHE_BUCKET"}
+		export SCCACHE_ENDPOINT=${builtins.getEnv "SCCACHE_ENDPOINT"}
+		export SCCACHE_REGION=${builtins.getEnv "SCCACHE_REGION"}
+		export AWS_ACCESS_KEY_ID=${builtins.getEnv "AWS_ACCESS_KEY_ID"}
+		export AWS_SECRET_ACCESS_KEY=${builtins.getEnv "AWS_SECRET_ACCESS_KEY"}
+	'' else "";
 in
 	pkgs.mkShell {
 		name = "rivet";
@@ -62,7 +73,7 @@ in
 
 			# Fixes "cannot change locale" warning
 			glibcLocales
-		] ++ (
+		] ++ extraInputs ++ (
 			pkgs.lib.optionals stdenv.isDarwin [
 				libiconv  # See https://stackoverflow.com/a/69732679
 				darwin.apple_sdk.frameworks.Security
@@ -81,7 +92,6 @@ in
 			# See https://docs.rs/prost-build/0.8.0/prost_build/#sourcing-protoc
 			export PROTOC="${pkgs.protobuf}/bin/protoc"
 			export PROTOC_INCLUDE="${pkgs.protobuf}/include"
-
 			
 			# Install autocomplete
 			source ${pkgs.bash-completion}/share/bash-completion/bash_completion
@@ -104,6 +114,8 @@ in
 			#
 			# If these don't match, then the build cache is purged any time Rust is ran from Bolt.
 			export RUSTFLAGS="--cfg tokio_unstable"
+
+			${sccacheShellHook}
 		'';
 	}
 
