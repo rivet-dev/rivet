@@ -91,7 +91,7 @@ where
 		// TODO: Throw dedicated "timed out" error here
 		// Process the request
 		let req_op_ctx = self.wrap::<O>(body)?;
-		let timeout_fut = tokio::time::timeout(O::TIMEOUT, O::handle(req_op_ctx));
+		let timeout_fut = tokio::time::timeout(O::TIMEOUT, O::handle(req_op_ctx).in_current_span());
 		let res = tokio::task::Builder::new()
 			.name("operation::handle")
 			.spawn(timeout_fut)?

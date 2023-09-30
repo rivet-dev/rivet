@@ -636,7 +636,7 @@ impl Client {
 	/// finish publishing. This is done since there are very few cases where a
 	/// service should need to wait or fail if a message does not publish
 	/// successfully.
-	#[tracing::instrument(err, skip_all)]
+	#[tracing::instrument(err, skip_all, fields(message = M::NAME))]
 	pub async fn message<M>(
 		&self,
 		parameters: Vec<String>,
@@ -661,7 +661,7 @@ impl Client {
 						}
 					}
 				}
-				.instrument(tracing::info_span!("async_message")),
+				.in_current_span(),
 			);
 		if let Err(err) = spawn_res {
 			tracing::error!(?err, "failed to spawn message_async task");
