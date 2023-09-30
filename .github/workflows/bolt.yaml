@@ -59,7 +59,6 @@ jobs:
       - uses: cachix/install-nix-action@v22
         with:
           nix_path: nixpkgs=channel:nixos-23.05
-          # TODO: Add back
           extra_nix_config: "store = ${{ env.store }}\n"
 
       # Build initial shell, all future calls to nix-shell will be fast
