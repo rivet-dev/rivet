@@ -1,14 +1,14 @@
 locals {
 	redis_k8s = var.redis_provider == "kubernetes"
 
-	redis_svcs = {
+	redis_svcs = local.redis_k8s ? {
 		for k, v in var.redis_dbs:
 		k => {
 			persistent = v.persistent
-			password = module.secrets.values["redis/${k}/password"]
+			password = module.redis_secrets[0].values["redis/${k}/password"]
 		}
 		if local.redis_k8s
-	}
+	} : {}
 }
 
 module "redis_secrets" {

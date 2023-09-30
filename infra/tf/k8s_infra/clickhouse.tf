@@ -93,7 +93,7 @@ resource "helm_release" "clickhouse" {
 		# Admin auth
 		auth = {
 			username = "default"
-			password = module.secrets.values["clickhouse/users/default/password"]
+			password = module.clickhouse_secrets[0].values["clickhouse/users/default/password"]
 		}
 	})]
 }
