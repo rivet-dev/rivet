@@ -9199,6 +9199,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "user-test-msg"
+version = "0.0.1"
+dependencies = [
+ "chirp-client",
+ "chirp-worker",
+ "rivet-operation",
+ "sqlx",
+]
+
+[[package]]
 name = "user-thread-typing-status-set"
 version = "0.0.1"
 dependencies = [

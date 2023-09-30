@@ -13,6 +13,7 @@ use std::{
 	sync::Arc,
 	time::Duration,
 };
+use tokio::task::JoinSet;
 use tokio_util::sync::{CancellationToken, DropGuard};
 use tracing::Instrument;
 use types::rivet::chirp;
@@ -741,9 +742,10 @@ impl Client {
 		//
 		// It's important to write to the stream as fast as possible in order to
 		// ensure messages are handled quickly.
-		self.message_write_redis::<M>(&parameters, message_buf.as_slice(), req_id, ts)
+		let message_buf = Arc::new(message_buf);
+		self.message_write_redis::<M>(&parameters, message_buf.clone(), req_id, ts)
 			.await;
-		self.message_publish_nats::<M>(&nats_subject, message_buf.as_slice())
+		self.message_publish_nats::<M>(&nats_subject, message_buf)
 			.await;
 
 		Ok(())
@@ -754,7 +756,7 @@ impl Client {
 	async fn message_write_redis<M>(
 		&self,
 		parameters: &[String],
-		message_buf: &[u8],
+		message_buf: Arc<Vec<u8>>,
 		req_id: Uuid,
 		ts: i64,
 	) where
@@ -769,38 +771,52 @@ impl Client {
 			.iter()
 			.map(|x| escape_parameter_wildcards(x))
 			.collect::<Vec<String>>();
-		let permuted_wildcard_parameters =
-			generate_permuted_wildcard_parameters::<M>(&parameters_str);
 
-		// Write message to Redis stream
 		let span = self.perf().start(M::PERF_LABEL_WRITE_STREAM).await;
-		// let mut backoff = rivet_util::Backoff::default_infinite();
-		// loop {
-		// 	// Ignore for infinite backoff
-		// 	backoff.tick().await;
 
 		let mut conn = self.redis_chirp.clone();
 
-		let mut pipe = redis::pipe();
-		pipe.atomic();
+		let mut join_set = JoinSet::new();
 
 		// Write to stream
-		let topic_key = redis_keys::message_topic(M::NAME);
-		pipe.xadd_maxlen(
-			&topic_key,
-			redis::streams::StreamMaxlen::Approx(8192),
-			"*",
-			&[("m", &message_buf)],
-		)
-		.ignore();
+		{
+			let mut conn = conn.clone();
+			let message_buf = message_buf.clone();
+			join_set
+				.build_task()
+				.name("chirp_client::message_xadd")
+				.spawn(
+					async move {
+						let topic_key = redis_keys::message_topic(M::NAME);
+						match conn
+							.xadd_maxlen::<_, _, _, _, ()>(
+								&topic_key,
+								redis::streams::StreamMaxlen::Approx(8192),
+								"*",
+								&[("m", message_buf.as_slice())],
+							)
+							.await
+						{
+							Ok(_) => {
+								tracing::debug!("write to redis stream succeeded");
+							}
+							Err(err) => {
+								tracing::error!(?err, "failed to write to redis");
+							}
+						}
+					}
+					.in_current_span(),
+				);
+		}
 
 		// Write tails for all permuted parameters
-		for wildcard_parameters in &permuted_wildcard_parameters {
-			// Write tail
-			if let Some(ttl) = M::TAIL_TTL {
-				// Write single tail message
-
+		if let Some(ttl) = M::TAIL_TTL {
+			let permuted_wildcard_parameters =
+				generate_permuted_wildcard_parameters::<M>(&parameters_str);
+			for wildcard_parameters in &permuted_wildcard_parameters {
 				let tail_key = redis_keys::message_tail::<M, _>(wildcard_parameters);
+
+				let mut pipe = redis::pipe();
 
 				// Save message
 				pipe.hset(
@@ -811,8 +827,12 @@ impl Client {
 				.ignore();
 				pipe.hset(&tail_key, redis_keys::message_tail::TS, ts)
 					.ignore();
-				pipe.hset(&tail_key, redis_keys::message_tail::BODY, message_buf)
-					.ignore();
+				pipe.hset(
+					&tail_key,
+					redis_keys::message_tail::BODY,
+					message_buf.as_slice(),
+				)
+				.ignore();
 
 				// Automatically expire
 				pipe.expire(&tail_key, ttl as usize).ignore();
@@ -834,32 +854,39 @@ impl Client {
 					}
 
 					// Save message
-					pipe.zadd(&history_key, message_buf, ts).ignore();
+					pipe.zadd(&history_key, message_buf.as_slice(), ts).ignore();
 
 					// Automatically expire
 					pipe.expire(&history_key, ttl as usize).ignore();
-				} else {
+
+					let mut conn = conn.clone();
+					join_set
+						.build_task()
+						.name("chirp_client::message_write_tail")
+						.spawn(
+							async move {
+								match pipe.query_async::<_, ()>(&mut conn).await {
+									Ok(_) => {
+										tracing::debug!("write to redis tail succeeded");
+									}
+									Err(err) => {
+										tracing::error!(?err, "failed to write to redis tail");
+									}
+								}
+							}
+							.in_current_span(),
+						);
 				}
 			}
 		}
 
-		// Write to Redis
-		match pipe.query_async::<_, ()>(&mut conn).await {
-			Ok(_) => {
-				tracing::debug!("write to redis stream succeeded");
-				// break;
-			}
-			Err(err) => {
-				tracing::error!(?err, "failed to write to redis");
-			}
-		}
-		// }
-		span.end();
+		// Join futures
+		while let Some(_) = join_set.join_next().await {}
 	}
 
 	/// Publishes the message to NATS.
 	#[tracing::instrument(level = "debug", skip_all)]
-	async fn message_publish_nats<M>(&self, nats_subject: &str, message_buf: &[u8])
+	async fn message_publish_nats<M>(&self, nats_subject: &str, message_buf: Arc<Vec<u8>>)
 	where
 		M: Message,
 	{
@@ -875,7 +902,6 @@ impl Client {
 		// 	backoff.tick().await;
 
 		let nats_subject = nats_subject.to_owned();
-		let message_buf = message_buf.to_vec();
 
 		tracing::trace!(
 			?nats_subject,
@@ -884,7 +910,7 @@ impl Client {
 		);
 		if let Err(err) = self
 			.nats
-			.publish(nats_subject.clone(), message_buf.into())
+			.publish(nats_subject.clone(), (*message_buf).clone().into())
 			.await
 		{
 			tracing::warn!(?err, "publish message failed, trying again");
