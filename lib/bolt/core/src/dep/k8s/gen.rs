@@ -551,8 +551,8 @@ async fn build_volumes(
 			json!({
 				"name": format!("redis-{}-ca", db),
 				"configMap": {
-					"defaultMode": 420,
 					"name": format!("redis-{}-ca", db),
+					"defaultMode": 420,
 					"items": [
 						{
 							"key": "ca.crt",
@@ -574,8 +574,8 @@ async fn build_volumes(
 		volumes.push(json!({
 			"name": "crdb-ca",
 			"configMap": {
-				"defaultMode": 420,
 				"name": "crdb-ca",
+				"defaultMode": 420,
 				"items": [
 					{
 						"key": "ca.crt",
@@ -588,6 +588,26 @@ async fn build_volumes(
 			"name": "crdb-ca",
 			"mountPath": "/usr/local/share/ca-certificates/crdb-ca.crt",
 			"subPath": "crdb-ca.crt"
+		}));
+
+		// Clickhouse CA
+		volumes.push(json!({
+			"name": "clickhouse-ca",
+			"configMap": {
+				"name": "clickhouse-ca",
+				"defaultMode": 420,
+				"items": [
+					{
+						"key": "ca.crt",
+						"path": "clickhouse-ca.crt"
+					}
+				]
+			}
+		}));
+		volume_mounts.push(json!({
+			"name": "clickhouse-ca",
+			"mountPath": "/usr/local/share/ca-certificates/clickhouse-ca.crt",
+			"subPath": "clickhouse-ca.crt"
 		}));
 	}
 

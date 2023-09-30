@@ -69,11 +69,11 @@ data "kubernetes_secret" "crdb_ca" {
 }
 
 resource "kubernetes_config_map" "crdb_ca" {
-	count = local.cockroachdb_k8s ? 1 : 0
+	for_each = local.cockroachdb_k8s ? toset(["rivet-service", "bolt"]) : toset([])
 
 	metadata {
 		name = "crdb-ca"
-		namespace = "rivet-service"
+		namespace = each.value
 	}
 
 	data = {

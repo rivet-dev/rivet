@@ -5,8 +5,7 @@ locals {
 		for k, v in var.redis_dbs:
 		k => {
 			persistent = v.persistent
-			username = module.redis_secrets[0].values["redis/${k}/username"]
-			password = module.redis_secrets[0].values["redis/${k}/password"]
+			password = module.secrets.values["redis/${k}/password"]
 		}
 		if local.redis_k8s
 	}
@@ -17,13 +16,9 @@ module "redis_secrets" {
 
 	source = "../modules/secrets"
 
-	keys = flatten([
-		for k, v in var.redis_dbs:
-		[
-			"redis/${k}/username",
-			"redis/${k}/password",
-		]
-	])
+	keys = [
+		for k, v in var.redis_dbs: "redis/${k}/password"
+	]
 }
 
 resource "kubernetes_namespace" "redis" {
@@ -83,15 +78,23 @@ data "kubernetes_secret" "redis_ca" {
 }
 
 resource "kubernetes_config_map" "redis_ca" {
-	for_each = var.redis_dbs
+	for_each = merge([
+		for ns in ["rivet-service", "bolt"]: {
+			for k, v in var.redis_dbs:
+				"${k}-${ns}" => {
+				db = k
+				namespace = ns
+			}
+		}
+	]...)
 
 	metadata {
-		name = "redis-${each.key}-ca"
-		namespace = "rivet-service"
+		name = "redis-${each.value.db}-ca"
+		namespace = each.value.namespace
 	}
 
 	data = {
-		"ca.crt" = data.kubernetes_secret.redis_ca[each.key].data["ca.crt"]
+		"ca.crt" = data.kubernetes_secret.redis_ca[each.value.db].data["ca.crt"]
 	}
 }
 

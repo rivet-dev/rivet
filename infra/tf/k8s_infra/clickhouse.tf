@@ -50,6 +50,22 @@ resource "helm_release" "clickhouse" {
 				<tcp_port remove="remove"/>
 				<interserver_http_port remove="remove"/>
 				<interserver_https_port>9010</interserver_https_port>
+
+				# See https://clickhouse.com/docs/en/engines/table-engines/mergetree-family/replication#replicatedmergetree-parameters
+				<default_replica_path>/clickhouse/tables/{shard}/{database}/{table}</default_replica_path>
+				<default_replica_name>{replica}</default_replica_name>
+			</clickhouse>
+			EOF
+		
+		# Grant access to default user
+		usersExtraOverrides = <<-EOF
+			<?xml version="1.0"?>
+			<clickhouse>
+				<users>
+					<default>
+						<access_management>1</access_management>
+					</default>
+				</users>
 			</clickhouse>
 			EOF
 
@@ -76,8 +92,8 @@ resource "helm_release" "clickhouse" {
 
 		# Admin auth
 		auth = {
-			username = "bolt"
-			password = module.clickhouse_secrets[0].values["clickhouse/users/default/password"]
+			username = "default"
+			password = module.secrets.values["clickhouse/users/default/password"]
 		}
 	})]
 }
@@ -94,11 +110,11 @@ data "kubernetes_secret" "clickhouse_ca" {
 }
 
 resource "kubernetes_config_map" "clickhouse_ca" {
-	count = local.clickhouse_k8s ? 1 : 0
+	for_each = local.clickhouse_k8s ? toset(["rivet-service", "bolt"]) : toset([])
 
 	metadata {
 		name = "clickhouse-ca"
-		namespace = "rivet-service"
+		namespace = each.value
 	}
 
 	data = {
