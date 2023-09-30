@@ -24,4 +24,3 @@
 // 		let _res = http_client.list_regions().send().await.unwrap();
 // 	}
 // }
-

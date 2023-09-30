@@ -1,3 +1,5 @@
+use std::time::Duration;
+
 use api_helper::{
 	anchor::{WatchIndexQuery, WatchResponse},
 	ctx::Ctx,
@@ -88,13 +90,21 @@ pub async fn export_history(
 	.await?;
 	let _upload = internal_unwrap_owned!(upload_res.uploads.first(), "upload not found");
 
-	let url = format!(
-		"https://cdn.{}/lobby-history-export/{}/export.csv",
-		util::env::domain_main(),
-		upload_id,
-	);
+	let s3_client = s3_util::Client::from_env("bucket-lobby-history-export").await?;
+	let presigned_req = s3_client
+		.get_object()
+		.bucket(s3_client.bucket())
+		.key(format!("{upload_id}/export.csv"))
+		.presigned(
+			s3_util::aws_sdk_s3::presigning::config::PresigningConfig::builder()
+				.expires_in(Duration::from_secs(60 * 60))
+				.build()?,
+		)
+		.await?;
 
-	Ok(models::ExportMatchmakerLobbyHistoryResponse { url })
+	Ok(models::ExportMatchmakerLobbyHistoryResponse {
+		url: presigned_req.uri().to_string(),
+	})
 }
 
 // MARK: GET /games/{}/matchmaker/lobbies/{}/logs
@@ -244,12 +254,21 @@ pub async fn export_lobby_logs(
 		backend::nomad_log::StreamType::StdOut => "stdout.txt",
 		backend::nomad_log::StreamType::StdErr => "stderr.txt",
 	};
-	let url = format!(
-		"https://cdn.{}/nomad-log-export/{upload_id}/{filename}",
-		util::env::domain_main()
-	);
+	let s3_client = s3_util::Client::from_env("bucket-nomad-log-export").await?;
+	let presigned_req = s3_client
+		.get_object()
+		.bucket(s3_client.bucket())
+		.key(format!("{upload_id}/{filename}"))
+		.presigned(
+			s3_util::aws_sdk_s3::presigning::config::PresigningConfig::builder()
+				.expires_in(Duration::from_secs(60 * 60))
+				.build()?,
+		)
+		.await?;
 
-	Ok(models::ExportLobbyLogsResponse { url })
+	Ok(models::ExportLobbyLogsResponse {
+		url: presigned_req.uri().to_string(),
+	})
 }
 
 async fn get_alloc_id(

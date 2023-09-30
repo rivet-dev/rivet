@@ -56,28 +56,28 @@ async fn invalid_domain(ctx: TestCtx) {
 
 	op!([ctx] cdn_namespace_domain_create {
 		namespace_id: Some(namespace_id.into()),
-		domain: util::env::domain_main().to_owned(),
+		domain: util::env::domain_main().unwrap().to_owned(),
 	})
 	.await
 	.unwrap_err();
 
 	op!([ctx] cdn_namespace_domain_create {
 		namespace_id: Some(namespace_id.into()),
-		domain: util::env::domain_cdn().to_owned(),
+		domain: util::env::domain_cdn().unwrap().to_owned(),
 	})
 	.await
 	.unwrap_err();
 
 	op!([ctx] cdn_namespace_domain_create {
 		namespace_id: Some(namespace_id.into()),
-		domain: format!("test.{}", util::env::domain_main()),
+		domain: format!("test.{}", util::env::domain_main().unwrap()),
 	})
 	.await
 	.unwrap_err();
 
 	op!([ctx] cdn_namespace_domain_create {
 		namespace_id: Some(namespace_id.into()),
-		domain: format!("test.{}", util::env::domain_cdn()),
+		domain: format!("test.{}", util::env::domain_cdn().unwrap()),
 	})
 	.await
 	.unwrap_err();

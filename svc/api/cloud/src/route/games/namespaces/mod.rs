@@ -104,16 +104,13 @@ pub async fn get(
 					.iter()
 					.find(|res| res.hostname == domain.domain)
 				{
+					let domain_cdn = internal_unwrap_owned!(util::env::domain_cdn());
+
 					// Create CNAME url
 					let cname_url = if game_namespace.name_id.as_str() == "prod" {
-						format!("{}.{}", game.name_id, util::env::domain_cdn())
+						format!("{}.{domain_cdn}", game.name_id)
 					} else {
-						format!(
-							"{}--{}.{}",
-							game.name_id,
-							game_namespace.name_id,
-							util::env::domain_cdn()
-						)
+						format!("{}--{}.{domain_cdn}", game.name_id, game_namespace.name_id,)
 					};
 
 					Ok(models::CloudCdnNamespaceDomain {

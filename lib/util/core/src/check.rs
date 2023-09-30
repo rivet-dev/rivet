@@ -141,12 +141,17 @@ pub fn biography(s: impl AsRef<str>) -> bool {
 pub fn domain(s: impl AsRef<str>, is_external: bool) -> bool {
 	let s = s.as_ref();
 
-	if is_external {
-		if s.ends_with(&format!(".{}", crate::env::domain_main()))
-			|| s.ends_with(&format!(".{}", crate::env::domain_cdn()))
-			|| s == crate::env::domain_main()
-			|| s == crate::env::domain_cdn()
-			|| s == crate::env::domain_job()
+	if let (true, Some(domain_main), Some(domain_cdn), Some(domain_job)) = (
+		is_external,
+		crate::env::domain_main(),
+		crate::env::domain_cdn(),
+		crate::env::domain_job(),
+	) {
+		if s.ends_with(&format!(".{domain_main}"))
+			|| s.ends_with(&format!(".{domain_cdn}"))
+			|| s == domain_main
+			|| s == domain_cdn
+			|| s == domain_job
 		{
 			return false;
 		}

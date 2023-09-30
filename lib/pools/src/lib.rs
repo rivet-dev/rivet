@@ -122,7 +122,7 @@ fn crdb_from_env(client_name: String) -> Result<HashMap<String, CrdbPool>, Error
 
 			tracing::info!(%url, "crdb creating connection");
 
-			let client_name = client_name.clone();
+			// let client_name = client_name.clone();
 			let pool = sqlx::postgres::PgPoolOptions::new()
 				// The default connection timeout is too high
 				.acquire_timeout(Duration::from_secs(15))

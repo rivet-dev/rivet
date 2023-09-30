@@ -62,6 +62,8 @@ lazy_static::lazy_static! {
 	static ref DOMAIN_MAIN: Option<String> = std::env::var("RIVET_DOMAIN_MAIN").ok();
 	static ref DOMAIN_CDN: Option<String> = std::env::var("RIVET_DOMAIN_CDN").ok();
 	static ref DOMAIN_JOB: Option<String> = std::env::var("RIVET_DOMAIN_JOB").ok();
+	static ref DOMAIN_MAIN_API: Option<String> = std::env::var("RIVET_DOMAIN_MAIN_API").ok();
+	static ref ORIGIN_API: Option<String> = std::env::var("RIVET_ORIGIN_API").ok();
 	static ref ORIGIN_HUB: Option<String> = std::env::var("RIVET_ORIGIN_HUB").ok();
 	static ref PRIMARY_REGION: Option<String> = std::env::var("RIVET_PRIMARY_REGION").ok();
 	static ref CHIRP_SERVICE_NAME: Option<String> = std::env::var("CHIRP_SERVICE_NAME").ok();
@@ -103,26 +105,32 @@ pub fn source_hash() -> &'static str {
 }
 
 /// The base domain in which all subdomains are mounted.
-pub fn domain_main() -> &'static str {
-	match &*DOMAIN_MAIN {
-		Some(x) => x.as_str(),
-		None => panic!("RIVET_DOMAIN_MAIN"),
-	}
+pub fn domain_main() -> Option<&'static str> {
+	DOMAIN_MAIN.as_ref().map(|x| x.as_str())
 }
 
 /// The base domain in which all game subdomains are mounted.
-pub fn domain_cdn() -> &'static str {
-	match &*DOMAIN_CDN {
-		Some(x) => x.as_str(),
-		None => panic!("RIVET_DOMAIN_CDN"),
-	}
+pub fn domain_cdn() -> Option<&'static str> {
+	DOMAIN_CDN.as_ref().map(|x| x.as_str())
 }
 
 /// The base domain in which all job subdomains are mounted.
-pub fn domain_job() -> &'static str {
-	match &*DOMAIN_JOB {
+pub fn domain_job() -> Option<&'static str> {
+	DOMAIN_JOB.as_ref().map(|x| x.as_str())
+}
+
+/// Domain to host the API endpoint on. This is the default domain for all endpoints without a
+/// specific subdomain.
+pub fn domain_main_api() -> Option<&'static str> {
+	DOMAIN_MAIN_API.as_ref().map(|x| x.as_str())
+}
+
+///
+/// The base domain for the hub.
+pub fn origin_api() -> &'static str {
+	match &*ORIGIN_API {
 		Some(x) => x.as_str(),
-		None => panic!("RIVET_DOMAIN_JOB"),
+		None => panic!("RIVET_ORIGIN_API"),
 	}
 }
 

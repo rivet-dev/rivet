@@ -9,9 +9,6 @@ async fn handle(
 	let game::create::Request {
 		name_id,
 		display_name,
-		url,
-		tags,
-		description,
 		developer_team_id,
 		creator_user_id: _,
 	} = ctx.body();
@@ -76,21 +73,13 @@ async fn handle(
 	.bind(ctx.ts())
 	.bind(name_id)
 	.bind(display_name)
-	.bind(url)
-	.bind(description)
+	.bind("")
+	.bind("")
 	.bind(developer_team_id)
 	.bind(plan_code)
 	.bind(subscription_id)
 	.execute(&crdb)
 	.await?;
-
-	for tag in tags {
-		sqlx::query("INSERT INTO game_tags (game_id, tag) VALUES ($1, $2)")
-			.bind(game_id)
-			.bind(tag)
-			.execute(&crdb)
-			.await?;
-	}
 
 	// TODO: Add stripe subscription for game
 

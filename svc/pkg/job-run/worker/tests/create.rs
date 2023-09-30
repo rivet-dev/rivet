@@ -9,6 +9,8 @@ use std::{
 
 #[worker_test]
 async fn basic_http(ctx: TestCtx) {
+	let domain_job = util::env::domain_job();
+
 	let region_res = op!([ctx] faker_region {}).await.unwrap();
 	let region_id = region_res.region_id.as_ref().unwrap().as_uuid();
 	let region_name_id = &region_res.region.as_ref().unwrap().name_id;
@@ -30,14 +32,8 @@ async fn basic_http(ctx: TestCtx) {
 	let mut eval_sub = subscribe!([ctx] job_run::msg::eval_complete(run_id))
 		.await
 		.unwrap();
-	let ingress_hostname_http = format!(
-		"test-{run_id}-http.lobby.{region_name_id}.{}",
-		util::env::domain_job(),
-	);
-	let ingress_hostname_https = format!(
-		"test-{run_id}-https.lobby.{region_name_id}.{}",
-		util::env::domain_job(),
-	);
+	let ingress_hostname_http = format!("test-{run_id}-http.lobby.{region_name_id}.{domain_job}");
+	let ingress_hostname_https = format!("test-{run_id}-https.lobby.{region_name_id}.{domain_job}");
 	msg!([ctx] job_run::msg::create(run_id) {
 		run_id: Some(run_id.into()),
 		region_id: Some(region_id.into()),
@@ -125,14 +121,9 @@ async fn basic_tcp(ctx: TestCtx) {
 	let mut eval_sub = subscribe!([ctx] job_run::msg::eval_complete(run_id))
 		.await
 		.unwrap();
-	let ingress_hostname_tcp = format!(
-		"test-{run_id}-tcp.lobby.{region_name_id}.{}",
-		util::env::domain_job(),
-	);
-	let ingress_hostname_tcp_tls = format!(
-		"test-{run_id}-tcp-tls.lobby.{region_name_id}.{}",
-		util::env::domain_job(),
-	);
+	let ingress_hostname_tcp = format!("test-{run_id}-tcp.lobby.{region_name_id}.{domain_job}");
+	let ingress_hostname_tcp_tls =
+		format!("test-{run_id}-tcp-tls.lobby.{region_name_id}.{domain_job}");
 	msg!([ctx] job_run::msg::create(run_id) {
 		run_id: Some(run_id.into()),
 		region_id: Some(region_id.into()),
@@ -239,10 +230,7 @@ async fn basic_udp(ctx: TestCtx) {
 	let mut eval_sub = subscribe!([ctx] job_run::msg::eval_complete(run_id))
 		.await
 		.unwrap();
-	let ingress_hostname_udp = format!(
-		"test-{run_id}-udp.lobby.{region_name_id}.{}",
-		util::env::domain_job(),
-	);
+	let ingress_hostname_udp = format!("test-{run_id}-udp.lobby.{region_name_id}.{domain_job}");
 	msg!([ctx] job_run::msg::create(run_id) {
 		run_id: Some(run_id.into()),
 		region_id: Some(region_id.into()),

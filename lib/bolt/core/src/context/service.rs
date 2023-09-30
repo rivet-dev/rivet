@@ -747,6 +747,9 @@ impl ServiceContextData {
 		if let Some(x) = project_ctx.domain_job() {
 			env.push(("RIVET_DOMAIN_JOB".into(), x));
 		}
+		if let Some(x) = project_ctx.domain_main_api() {
+			env.push(("RIVET_DOMAIN_MAIN_API".into(), x));
+		}
 		env.push(("RIVET_ORIGIN_API".into(), project_ctx.origin_api()));
 		env.push(("RIVET_ORIGIN_HUB".into(), project_ctx.origin_hub()));
 

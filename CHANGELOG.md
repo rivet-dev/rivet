@@ -26,6 +26,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 -  **Imagor** CORS now mirror the default CORS configured for S3
 -  **Dev** `git lfs install` automatically runs in `shellHook`
 -  **Dev** Removed `setup.sh` in lieu of `shellHook`
+-  Replaced `cdn.rivet.gg` domains with presigned requests directly to the S3 provider
 
 ### Fixed
 

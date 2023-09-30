@@ -88,9 +88,6 @@ pub async fn create(
 		let create_game_res = op!([ctx] game_create {
 			name_id: body.name_id.clone(),
 			display_name: body.display_name.clone(),
-			url: format!("https://{}.{}", body.name_id, util::env::domain_cdn()),
-			tags: Vec::new(),
-			description: String::new(),
 			developer_team_id: Some(developer_group_id.into()),
 			creator_user_id: user_id.as_ref().map(|x| x.user_id.into()),
 		})

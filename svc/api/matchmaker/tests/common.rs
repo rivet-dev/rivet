@@ -107,7 +107,7 @@ impl Ctx {
 
 	pub fn config(&self, bearer_token: String) -> Configuration {
 		Configuration {
-			base_path: util::env::domain_main().into(),
+			base_path: util::env::origin_api().into(),
 			bearer_access_token: Some(bearer_token),
 			..Default::default()
 		}

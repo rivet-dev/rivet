@@ -456,7 +456,11 @@ mod cdn_suite {
 
 		CdnVersion {
 			namespace_id: *ns_create_res.namespace_id.unwrap(),
-			base: format!("https://{}.{}", game.name_id, util::env::domain_cdn()),
+			base: format!(
+				"https://{}.{}",
+				game.name_id,
+				util::env::domain_cdn().unwrap()
+			),
 			game,
 		}
 	}

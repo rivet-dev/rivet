@@ -629,7 +629,7 @@ async fn create_docker_job(
 					lobby_id,
 					port.label,
 					region.name_id,
-					util::env::domain_job(),
+					internal_unwrap_owned!(util::env::domain_job()),
 				)],
 				proxy_protocol: job_proxy_protocol,
 				ssl_domain_mode: backend::job::SslDomainMode::ParentWildcard as i32,
