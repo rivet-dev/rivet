@@ -107,7 +107,8 @@ impl Ctx {
 
 	pub fn config(&self, bearer_token: String) -> Configuration {
 		Configuration {
-			base_path: util::env::origin_api().into(),
+			// TODO: Use public address if DNS configured
+			base_path: "http://traefik.traefik.svc.cluster.local:80".into(),
 			bearer_access_token: Some(bearer_token),
 			..Default::default()
 		}

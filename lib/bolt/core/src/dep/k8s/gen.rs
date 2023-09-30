@@ -788,15 +788,6 @@ fn build_ingress_router(
 						"name": "ingress-tls",
 						"namespace": "traefik"
 					},
-					// "domains": [
-					// 	{
-					// 		"main": "example.net",
-					// 		"sans": [
-					// 			"a.example.net",
-					// 			"b.example.net"
-					// 		]
-					// 	}
-					// ]
 				}
 			}
 		}));

@@ -23,7 +23,7 @@ locals {
 			priority = preset.priority
 			game_cors = preset.game_cors
 
-			match = "Path(`/media/${preset.path}`)${
+			match = "Path(`/media${preset.path}`)${
 				var.domain_main_api != null ?
 					"&& Host(`${var.domain_main_api}`)" :
 					""
@@ -222,8 +222,12 @@ resource "kubectl_manifest" "imagor_traefik_service" {
 	})
 }
 
-# TODO: Create single traefik service
 resource "kubectl_manifest" "imagor_ingress" {
+	for_each = {
+		"web" = false,
+		"websecure" = true,
+	}
+
 	depends_on = [helm_release.traefik]
 
 	yaml_body = yamlencode({
@@ -231,12 +235,12 @@ resource "kubectl_manifest" "imagor_ingress" {
 		kind = "IngressRoute"
 
 		metadata = {
-			name = "imagor"
+			name = "imagor-${each.key}"
 			namespace = kubernetes_namespace.imagor.metadata[0].name
 		}
 
 		spec = {
-			entryPoints = [ "websecure" ]
+			entryPoints = [ each.key ]
 
 			routes = [
 				for index, preset in local.imagor_presets:
@@ -258,13 +262,13 @@ resource "kubectl_manifest" "imagor_ingress" {
 				}
 			]
 
-			tls = {
+			tls = each.value ? {
 				secretName = "ingress-tls-cert"
 				options = {
 					name = "ingress-tls"
 					namespace = kubernetes_namespace.traefik.metadata[0].name
 				}
-			}
+			} : null
 		}
 	})
 }
