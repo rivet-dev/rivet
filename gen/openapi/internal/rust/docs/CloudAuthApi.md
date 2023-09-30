@@ -1,10 +1,10 @@
 # \CloudAuthApi
 
-All URIs are relative to *http://localhost*
+All URIs are relative to *https://api.rivet.gg*
 
 Method | HTTP request | Description
 ------------- | ------------- | -------------
-[**cloud_auth_inspect**](CloudAuthApi.md#cloud_auth_inspect) | **GET** /auth/inspect | 
+[**cloud_auth_inspect**](CloudAuthApi.md#cloud_auth_inspect) | **GET** /cloud/auth/inspect | 
 
 
 

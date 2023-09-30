@@ -1,11 +1,11 @@
 # \GroupJoinRequestsApi
 
-All URIs are relative to *http://localhost*
+All URIs are relative to *https://api.rivet.gg*
 
 Method | HTTP request | Description
 ------------- | ------------- | -------------
-[**group_join_requests_create_join_request**](GroupJoinRequestsApi.md#group_join_requests_create_join_request) | **POST** /groups/{group_id}/join-request | 
-[**group_join_requests_resolve_join_request**](GroupJoinRequestsApi.md#group_join_requests_resolve_join_request) | **POST** /groups/{group_id}/join-request/{identity_id} | 
+[**group_join_requests_create_join_request**](GroupJoinRequestsApi.md#group_join_requests_create_join_request) | **POST** /group/groups/{group_id}/join-request | 
+[**group_join_requests_resolve_join_request**](GroupJoinRequestsApi.md#group_join_requests_resolve_join_request) | **POST** /group/groups/{group_id}/join-request/{identity_id} | 
 
 
 

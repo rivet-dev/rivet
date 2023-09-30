@@ -1,13 +1,13 @@
 # \CloudGamesMatchmakerApi
 
-All URIs are relative to *http://localhost*
+All URIs are relative to *https://api.rivet.gg*
 
 Method | HTTP request | Description
 ------------- | ------------- | -------------
-[**cloud_games_matchmaker_delete_matchmaker_lobby**](CloudGamesMatchmakerApi.md#cloud_games_matchmaker_delete_matchmaker_lobby) | **DELETE** /games/{game_id}/matchmaker/lobbies/{lobby_id} | 
-[**cloud_games_matchmaker_export_lobby_logs**](CloudGamesMatchmakerApi.md#cloud_games_matchmaker_export_lobby_logs) | **POST** /games/{game_id}/matchmaker/lobbies/{lobby_id}/logs/export | 
-[**cloud_games_matchmaker_export_matchmaker_lobby_history**](CloudGamesMatchmakerApi.md#cloud_games_matchmaker_export_matchmaker_lobby_history) | **POST** /games/{game_id}/matchmaker/lobbies/export-history | 
-[**cloud_games_matchmaker_get_lobby_logs**](CloudGamesMatchmakerApi.md#cloud_games_matchmaker_get_lobby_logs) | **GET** /games/{game_id}/matchmaker/lobbies/{lobby_id}/logs | 
+[**cloud_games_matchmaker_delete_matchmaker_lobby**](CloudGamesMatchmakerApi.md#cloud_games_matchmaker_delete_matchmaker_lobby) | **DELETE** /cloud/games/{game_id}/matchmaker/lobbies/{lobby_id} | 
+[**cloud_games_matchmaker_export_lobby_logs**](CloudGamesMatchmakerApi.md#cloud_games_matchmaker_export_lobby_logs) | **POST** /cloud/games/{game_id}/matchmaker/lobbies/{lobby_id}/logs/export | 
+[**cloud_games_matchmaker_export_matchmaker_lobby_history**](CloudGamesMatchmakerApi.md#cloud_games_matchmaker_export_matchmaker_lobby_history) | **POST** /cloud/games/{game_id}/matchmaker/lobbies/export-history | 
+[**cloud_games_matchmaker_get_lobby_logs**](CloudGamesMatchmakerApi.md#cloud_games_matchmaker_get_lobby_logs) | **GET** /cloud/games/{game_id}/matchmaker/lobbies/{lobby_id}/logs | 
 
 
 

@@ -1,10 +1,10 @@
 # \ChatIdentityApi
 
-All URIs are relative to *http://localhost*
+All URIs are relative to *https://api.rivet.gg*
 
 Method | HTTP request | Description
 ------------- | ------------- | -------------
-[**chat_identity_get_direct_thread**](ChatIdentityApi.md#chat_identity_get_direct_thread) | **GET** /identities/{identity_id}/thread | 
+[**chat_identity_get_direct_thread**](ChatIdentityApi.md#chat_identity_get_direct_thread) | **GET** /chat/identities/{identity_id}/thread | 
 
 
 

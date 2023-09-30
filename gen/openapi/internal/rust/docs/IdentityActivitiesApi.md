@@ -1,10 +1,10 @@
 # \IdentityActivitiesApi
 
-All URIs are relative to *http://localhost*
+All URIs are relative to *https://api.rivet.gg*
 
 Method | HTTP request | Description
 ------------- | ------------- | -------------
-[**identity_activities_list**](IdentityActivitiesApi.md#identity_activities_list) | **GET** /activities | 
+[**identity_activities_list**](IdentityActivitiesApi.md#identity_activities_list) | **GET** /identity/activities | 
 
 
 
