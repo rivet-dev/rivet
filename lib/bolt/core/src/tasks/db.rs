@@ -3,8 +3,7 @@ use duct::cmd;
 use indoc::formatdoc;
 use rand::Rng;
 use serde_json::json;
-use tokio::io::AsyncWriteExt;
-use tokio::task::block_in_place;
+use tokio::{io::AsyncWriteExt, task::block_in_place};
 
 use crate::{
 	config::{self, service::RuntimeKind},

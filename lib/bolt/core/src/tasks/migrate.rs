@@ -1,4 +1,5 @@
 use std::{
+	collections::HashMap,
 	fmt,
 	path::{Path, PathBuf},
 	time::Duration,
@@ -9,7 +10,7 @@ use bolt_config::service::RuntimeKind;
 use duct::cmd;
 use indoc::formatdoc;
 use serde_json::json;
-use tokio::task::block_in_place;
+use tokio::{fs, io::AsyncWriteExt, task::block_in_place};
 
 use super::db;
 use crate::{
@@ -369,7 +370,7 @@ pub async fn up(ctx: &ProjectContext, services: &[ServiceContext]) -> Result<()>
 
 		rivet_term::status::progress("Running migrations", "");
 		let database_url = conn.migrate_db_url(svc).await?;
-		migration(ctx, svc.migrations_path(), &["up"], database_url).await?;
+		migration(ctx, svc, &["up"], database_url).await?;
 
 		rivet_term::status::success("Migrated", "");
 	}
@@ -383,7 +384,7 @@ pub async fn down(ctx: &ProjectContext, service: &ServiceContext, num: usize) ->
 
 	migration(
 		ctx,
-		service.migrations_path(),
+		service,
 		&["down", num.to_string().as_str()],
 		database_url,
 	)
@@ -396,7 +397,7 @@ pub async fn force(ctx: &ProjectContext, service: &ServiceContext, num: usize) -
 
 	migration(
 		ctx,
-		service.migrations_path(),
+		service,
 		&["force", num.to_string().as_str()],
 		database_url,
 	)
@@ -407,20 +408,16 @@ pub async fn drop(ctx: &ProjectContext, service: &ServiceContext) -> Result<()> 
 	let conn = DatabaseConnections::create(ctx, &[service.clone()]).await?;
 	let database_url = conn.migrate_db_url(service).await?;
 
-	migration(ctx, service.migrations_path(), &["drop"], database_url).await
+	migration(ctx, service, &["drop"], database_url).await
 }
 
 pub async fn migration(
 	ctx: &ProjectContext,
-	migrations_path: PathBuf,
+	svc: &ServiceContext,
 	migration_cmd: &[&str],
 	database_url: String,
 ) -> Result<()> {
-	let migrations_path = Path::new("/rivet-src").join(
-		migrations_path
-			.strip_prefix(ctx.path())
-			.expect("strip path"),
-	);
+	upload_migrations(ctx, svc).await?;
 
 	let cmd = formatdoc!(
 		"
@@ -456,7 +453,7 @@ pub async fn migration(
 						{
 							"name": "migrations",
 							"mountPath": "/local/migrations",
-							"readOnly": true,
+							"readOnly": true
 						},
 						{
 							"name": "crdb-ca",
@@ -469,9 +466,9 @@ pub async fn migration(
 			"volumes": [
 				{
 					"name": "migrations",
-					"hostPath": {
-						"path": migrations_path,
-						"type": "Directory"
+					"configMap": {
+						"name": format!("{}-migrations", svc.name()),
+						"defaultMode": 420
 					}
 				},
 				{
@@ -496,7 +493,7 @@ pub async fn migration(
 			"kubectl",
 			"run",
 			"-itq",
-			// "--rm",
+			"--rm",
 			"--restart=Never",
 			"--image=migrate/migrate",
 			"--namespace",
@@ -507,6 +504,58 @@ pub async fn migration(
 		.env("KUBECONFIG", ctx.gen_kubeconfig_path())
 		.run()
 	})?;
+
+	Ok(())
+}
+
+async fn upload_migrations(ctx: &ProjectContext, svc: &ServiceContext) -> Result<()> {
+	let mut files = HashMap::new();
+
+	// Read all files in migrations directory
+	let mut dir = fs::read_dir(svc.migrations_path()).await?;
+	while let Some(entry) = dir.next_entry().await? {
+		let meta = entry.metadata().await?;
+		if !meta.is_file() {
+			bail!("subfolder not allowed in migrations folder");
+		}
+
+		let file_name = entry
+			.path()
+			.file_name()
+			.context("path.file_name")?
+			.to_str()
+			.context("as_str")?
+			.to_string();
+		let content = fs::read_to_string(entry.path()).await?;
+
+		files.insert(file_name, content);
+	}
+
+	// Create config map for all files
+	let spec = serde_json::to_vec(&json!({
+		"kind": "ConfigMap",
+		"apiVersion": "v1",
+		"metadata": {
+			"name": format!("{}-migrations", svc.name()),
+			"namespace": "bolt"
+		},
+		"data": files
+	}))?;
+
+	let mut cmd = tokio::process::Command::new("kubectl");
+	cmd.args(&["apply", "-f", "-"]);
+	cmd.env("KUBECONFIG", ctx.gen_kubeconfig_path());
+	cmd.stdin(std::process::Stdio::piped());
+	cmd.stdout(std::process::Stdio::null());
+	let mut child = cmd.spawn()?;
+
+	{
+		let mut stdin = child.stdin.take().context("missing stdin")?;
+		stdin.write_all(&spec).await?;
+	}
+
+	let status = child.wait().await?;
+	ensure!(status.success(), "kubectl apply failed");
 
 	Ok(())
 }
