@@ -1,16 +1,16 @@
 # \KvApi
 
-All URIs are relative to *http://localhost*
+All URIs are relative to *https://api.rivet.gg*
 
 Method | HTTP request | Description
 ------------- | ------------- | -------------
-[**kv_delete**](KvApi.md#kv_delete) | **DELETE** /entries | 
-[**kv_delete_batch**](KvApi.md#kv_delete_batch) | **DELETE** /entries/batch | 
-[**kv_get**](KvApi.md#kv_get) | **GET** /entries | 
-[**kv_get_batch**](KvApi.md#kv_get_batch) | **GET** /entries/batch | 
-[**kv_list**](KvApi.md#kv_list) | **GET** /entries/list | 
-[**kv_put**](KvApi.md#kv_put) | **PUT** /entries | 
-[**kv_put_batch**](KvApi.md#kv_put_batch) | **PUT** /entries/batch | 
+[**kv_delete**](KvApi.md#kv_delete) | **DELETE** /kv/entries | 
+[**kv_delete_batch**](KvApi.md#kv_delete_batch) | **DELETE** /kv/entries/batch | 
+[**kv_get**](KvApi.md#kv_get) | **GET** /kv/entries | 
+[**kv_get_batch**](KvApi.md#kv_get_batch) | **GET** /kv/entries/batch | 
+[**kv_list**](KvApi.md#kv_list) | **GET** /kv/entries/list | 
+[**kv_put**](KvApi.md#kv_put) | **PUT** /kv/entries | 
+[**kv_put_batch**](KvApi.md#kv_put_batch) | **PUT** /kv/entries/batch | 
 
 
 

@@ -60,7 +60,7 @@ pub async fn cloud_devices_links_complete(configuration: &configuration::Configu
 
     let local_var_client = &local_var_configuration.client;
 
-    let local_var_uri_str = format!("{}/devices/links/complete", local_var_configuration.base_path);
+    let local_var_uri_str = format!("{}/cloud/devices/links/complete", local_var_configuration.base_path);
     let mut local_var_req_builder = local_var_client.request(reqwest::Method::POST, local_var_uri_str.as_str());
 
     if let Some(ref local_var_user_agent) = local_var_configuration.user_agent {
@@ -88,7 +88,7 @@ pub async fn cloud_devices_links_get(configuration: &configuration::Configuratio
 
     let local_var_client = &local_var_configuration.client;
 
-    let local_var_uri_str = format!("{}/devices/links", local_var_configuration.base_path);
+    let local_var_uri_str = format!("{}/cloud/devices/links", local_var_configuration.base_path);
     let mut local_var_req_builder = local_var_client.request(reqwest::Method::GET, local_var_uri_str.as_str());
 
     local_var_req_builder = local_var_req_builder.query(&[("device_link_token", &device_link_token.to_string())]);
@@ -119,7 +119,7 @@ pub async fn cloud_devices_links_prepare(configuration: &configuration::Configur
 
     let local_var_client = &local_var_configuration.client;
 
-    let local_var_uri_str = format!("{}/devices/links", local_var_configuration.base_path);
+    let local_var_uri_str = format!("{}/cloud/devices/links", local_var_configuration.base_path);
     let mut local_var_req_builder = local_var_client.request(reqwest::Method::POST, local_var_uri_str.as_str());
 
     if let Some(ref local_var_user_agent) = local_var_configuration.user_agent {

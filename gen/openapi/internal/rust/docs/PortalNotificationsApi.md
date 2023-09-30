@@ -1,11 +1,11 @@
 # \PortalNotificationsApi
 
-All URIs are relative to *http://localhost*
+All URIs are relative to *https://api.rivet.gg*
 
 Method | HTTP request | Description
 ------------- | ------------- | -------------
-[**portal_notifications_register_notifications**](PortalNotificationsApi.md#portal_notifications_register_notifications) | **POST** /notifications/register | 
-[**portal_notifications_unregister_notifications**](PortalNotificationsApi.md#portal_notifications_unregister_notifications) | **DELETE** /notifications/register | 
+[**portal_notifications_register_notifications**](PortalNotificationsApi.md#portal_notifications_register_notifications) | **POST** /portal/notifications/register | 
+[**portal_notifications_unregister_notifications**](PortalNotificationsApi.md#portal_notifications_unregister_notifications) | **DELETE** /portal/notifications/register | 
 
 
 

@@ -126,7 +126,7 @@ pub async fn cloud_games_games_create_game(configuration: &configuration::Config
 
     let local_var_client = &local_var_configuration.client;
 
-    let local_var_uri_str = format!("{}/games", local_var_configuration.base_path);
+    let local_var_uri_str = format!("{}/cloud/games", local_var_configuration.base_path);
     let mut local_var_req_builder = local_var_client.request(reqwest::Method::POST, local_var_uri_str.as_str());
 
     if let Some(ref local_var_user_agent) = local_var_configuration.user_agent {
@@ -158,7 +158,7 @@ pub async fn cloud_games_games_game_banner_upload_complete(configuration: &confi
 
     let local_var_client = &local_var_configuration.client;
 
-    let local_var_uri_str = format!("{}/games/{game_id}/banner-upload/{upload_id}/complete", local_var_configuration.base_path, game_id=crate::apis::urlencode(game_id), upload_id=crate::apis::urlencode(upload_id));
+    let local_var_uri_str = format!("{}/cloud/games/{game_id}/banner-upload/{upload_id}/complete", local_var_configuration.base_path, game_id=crate::apis::urlencode(game_id), upload_id=crate::apis::urlencode(upload_id));
     let mut local_var_req_builder = local_var_client.request(reqwest::Method::POST, local_var_uri_str.as_str());
 
     if let Some(ref local_var_user_agent) = local_var_configuration.user_agent {
@@ -189,7 +189,7 @@ pub async fn cloud_games_games_game_banner_upload_prepare(configuration: &config
 
     let local_var_client = &local_var_configuration.client;
 
-    let local_var_uri_str = format!("{}/games/{game_id}/banner-upload/prepare", local_var_configuration.base_path, game_id=crate::apis::urlencode(game_id));
+    let local_var_uri_str = format!("{}/cloud/games/{game_id}/banner-upload/prepare", local_var_configuration.base_path, game_id=crate::apis::urlencode(game_id));
     let mut local_var_req_builder = local_var_client.request(reqwest::Method::POST, local_var_uri_str.as_str());
 
     if let Some(ref local_var_user_agent) = local_var_configuration.user_agent {
@@ -221,7 +221,7 @@ pub async fn cloud_games_games_game_logo_upload_complete(configuration: &configu
 
     let local_var_client = &local_var_configuration.client;
 
-    let local_var_uri_str = format!("{}/games/{game_id}/logo-upload/{upload_id}/complete", local_var_configuration.base_path, game_id=crate::apis::urlencode(game_id), upload_id=crate::apis::urlencode(upload_id));
+    let local_var_uri_str = format!("{}/cloud/games/{game_id}/logo-upload/{upload_id}/complete", local_var_configuration.base_path, game_id=crate::apis::urlencode(game_id), upload_id=crate::apis::urlencode(upload_id));
     let mut local_var_req_builder = local_var_client.request(reqwest::Method::POST, local_var_uri_str.as_str());
 
     if let Some(ref local_var_user_agent) = local_var_configuration.user_agent {
@@ -252,7 +252,7 @@ pub async fn cloud_games_games_game_logo_upload_prepare(configuration: &configur
 
     let local_var_client = &local_var_configuration.client;
 
-    let local_var_uri_str = format!("{}/games/{game_id}/logo-upload/prepare", local_var_configuration.base_path, game_id=crate::apis::urlencode(game_id));
+    let local_var_uri_str = format!("{}/cloud/games/{game_id}/logo-upload/prepare", local_var_configuration.base_path, game_id=crate::apis::urlencode(game_id));
     let mut local_var_req_builder = local_var_client.request(reqwest::Method::POST, local_var_uri_str.as_str());
 
     if let Some(ref local_var_user_agent) = local_var_configuration.user_agent {
@@ -284,7 +284,7 @@ pub async fn cloud_games_games_get_game_by_id(configuration: &configuration::Con
 
     let local_var_client = &local_var_configuration.client;
 
-    let local_var_uri_str = format!("{}/games/{game_id}", local_var_configuration.base_path, game_id=crate::apis::urlencode(game_id));
+    let local_var_uri_str = format!("{}/cloud/games/{game_id}", local_var_configuration.base_path, game_id=crate::apis::urlencode(game_id));
     let mut local_var_req_builder = local_var_client.request(reqwest::Method::GET, local_var_uri_str.as_str());
 
     if let Some(ref local_var_str) = watch_index {
@@ -318,7 +318,7 @@ pub async fn cloud_games_games_get_games(configuration: &configuration::Configur
 
     let local_var_client = &local_var_configuration.client;
 
-    let local_var_uri_str = format!("{}/games", local_var_configuration.base_path);
+    let local_var_uri_str = format!("{}/cloud/games", local_var_configuration.base_path);
     let mut local_var_req_builder = local_var_client.request(reqwest::Method::GET, local_var_uri_str.as_str());
 
     if let Some(ref local_var_str) = watch_index {
@@ -352,7 +352,7 @@ pub async fn cloud_games_games_validate_game(configuration: &configuration::Conf
 
     let local_var_client = &local_var_configuration.client;
 
-    let local_var_uri_str = format!("{}/games/validate", local_var_configuration.base_path);
+    let local_var_uri_str = format!("{}/cloud/games/validate", local_var_configuration.base_path);
     let mut local_var_req_builder = local_var_client.request(reqwest::Method::POST, local_var_uri_str.as_str());
 
     if let Some(ref local_var_user_agent) = local_var_configuration.user_agent {

@@ -35,7 +35,7 @@ pub async fn chat_identity_get_direct_thread(configuration: &configuration::Conf
 
     let local_var_client = &local_var_configuration.client;
 
-    let local_var_uri_str = format!("{}/identities/{identity_id}/thread", local_var_configuration.base_path, identity_id=crate::apis::urlencode(identity_id));
+    let local_var_uri_str = format!("{}/chat/identities/{identity_id}/thread", local_var_configuration.base_path, identity_id=crate::apis::urlencode(identity_id));
     let mut local_var_req_builder = local_var_client.request(reqwest::Method::GET, local_var_uri_str.as_str());
 
     if let Some(ref local_var_user_agent) = local_var_configuration.user_agent {

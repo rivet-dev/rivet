@@ -35,7 +35,7 @@ pub async fn cloud_uploads_complete_upload(configuration: &configuration::Config
 
     let local_var_client = &local_var_configuration.client;
 
-    let local_var_uri_str = format!("{}/uploads/{upload_id}/complete", local_var_configuration.base_path, upload_id=crate::apis::urlencode(upload_id));
+    let local_var_uri_str = format!("{}/cloud/uploads/{upload_id}/complete", local_var_configuration.base_path, upload_id=crate::apis::urlencode(upload_id));
     let mut local_var_req_builder = local_var_client.request(reqwest::Method::POST, local_var_uri_str.as_str());
 
     if let Some(ref local_var_user_agent) = local_var_configuration.user_agent {
