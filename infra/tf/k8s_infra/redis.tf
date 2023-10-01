@@ -64,10 +64,13 @@ resource "helm_release" "redis" {
 			enabled = true
 			serviceMonitor = {
 				enabled = true
+				namespace = kubernetes_namespace.redis[each.key].metadata.0.name
 			}
-			prometheusRule = {
-				enabled = true
-			}
+			# TODO:
+			# prometheusRule = {
+			# 	enabled = true
+			# 	namespace = kubernetes_namespace.redis[each.key].metadata.0.name
+			# }
 		}
 	})]
 }

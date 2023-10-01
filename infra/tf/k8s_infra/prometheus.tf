@@ -34,6 +34,17 @@ resource "helm_release" "prometheus" {
 		prometheus = {
 			prometheusSpec = {
 				storageSpec = local.prometheus_storage
+
+				# Monitor all namespaces
+				podMonitorNamespaceSelector = { any = true }
+				podMonitorSelector = {}
+				podMonitorSelectorNilUsesHelmValues = false
+				ruleNamespaceSelector = { any = true }
+				ruleSelector = {}
+				ruleSelectorNilUsesHelmValues = false
+				serviceMonitorNamespaceSelector = { any = true }
+				serviceMonitorSelector = {}
+				serviceMonitorSelectorNilUsesHelmValues = false
 			}
 		}
 	})]

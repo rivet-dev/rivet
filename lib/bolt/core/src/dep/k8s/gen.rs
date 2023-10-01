@@ -442,7 +442,10 @@ pub async fn gen_svc(exec_ctx: &ExecServiceContext) -> Vec<serde_json::Value> {
 				"kind": "Service",
 				"metadata": {
 					"name": service_name,
-					"namespace": "rivet-service"
+					"namespace": "rivet-service",
+					"labels": {
+						"app.kubernetes.io/name": service_name
+					}
 				},
 				"spec": {
 					"type": "ClusterIP",
@@ -454,6 +457,23 @@ pub async fn gen_svc(exec_ctx: &ExecServiceContext) -> Vec<serde_json::Value> {
 						"port": 80,
 						"targetPort": "http"
 					}]
+				}
+			}));
+
+			specs.push(json!({
+				"apiVersion": "monitoring.coreos.com/v1",
+				"kind": "ServiceMonitor",
+				"metadata": {
+					"name": service_name,
+					"namespace": "rivet-service"
+				},
+				"spec": {
+					"selector": {
+						"app.kubernetes.io/name": service_name
+					},
+					"entryPoints": [
+						{ "port": "http" }
+					],
 				}
 			}));
 		}

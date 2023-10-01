@@ -3,6 +3,8 @@ locals {
 }
 
 resource "kubernetes_namespace" "minio" {
+	count = local.has_minio ? 1 : 0
+
 	metadata {
 		name = "minio"
 	}
@@ -21,7 +23,7 @@ resource "helm_release" "minio" {
 	count = local.has_minio ? 1 : 0
 
 	name = "minio"
-	namespace = kubernetes_namespace.minio.metadata.0.name
+	namespace = kubernetes_namespace.minio[0].metadata.0.name
 	repository = "oci://registry-1.docker.io/bitnamicharts"
 	chart = "minio"
 	version = "12.8.3"
@@ -41,10 +43,14 @@ resource "helm_release" "minio" {
 		metrics = {
 			serviceMonitor = {
 				enabled = true
+				namespace = kubernetes_namespace.minio[0].metadata.0.name
 			}
-			prometheusRule = {
-				enabled = true
-			}
+
+			# TODO:
+			# prometheusRule = {
+			# 	enabled = true
+			# 	namespace = kubernetes_namespace.prometheus.metadata.0.name
+			# }
 		}
 	})]
 }
@@ -61,7 +67,7 @@ resource "kubectl_manifest" "minio_ingress_route" {
 
 		metadata = {
 			name = "minio"
-			namespace = kubernetes_namespace.minio.metadata.0.name
+			namespace = kubernetes_namespace.minio[0].metadata.0.name
 		}
 
 		spec = {
