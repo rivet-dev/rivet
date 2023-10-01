@@ -1,8 +1,9 @@
 terraform {
 	required_providers {
+		# TODO Revert to gavinbunney/kubectl once https://github.com/gavinbunney/terraform-provider-kubectl/issues/270 is resolved
 		kubectl = {
-			source = "gavinbunney/kubectl"
-			version = "1.14.0"
+			source = "alekc/kubectl"
+			version = ">= 2.0.2"
 		}
 	}
 }
