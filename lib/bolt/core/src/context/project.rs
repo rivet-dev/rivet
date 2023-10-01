@@ -574,6 +574,10 @@ impl ProjectContextData {
 				format!("^{}$", self.origin_hub().replace(".", "\\."))
 			})
 	}
+
+	pub fn tls_enabled(&self) -> bool {
+		self.ns().dns.is_some()
+	}
 }
 
 impl ProjectContextData {

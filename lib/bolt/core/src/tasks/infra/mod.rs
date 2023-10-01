@@ -125,7 +125,7 @@ pub fn build_plan(ctx: &ProjectContext, start_at: Option<String>) -> Result<Vec<
 		}
 	}
 
-	if ctx.ns().dns.is_some() {
+	if ctx.tls_enabled() {
 		// TLS
 		plan.push(PlanStep {
 			name_id: "tf-tls",

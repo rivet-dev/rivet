@@ -223,10 +223,7 @@ resource "kubectl_manifest" "imagor_traefik_service" {
 }
 
 resource "kubectl_manifest" "imagor_ingress" {
-	for_each = {
-		"web" = false,
-		"websecure" = true,
-	}
+	for_each = local.entrypoints
 
 	depends_on = [helm_release.traefik]
 
@@ -262,13 +259,7 @@ resource "kubectl_manifest" "imagor_ingress" {
 				}
 			]
 
-			tls = each.value ? {
-				secretName = "ingress-tls-cert"
-				options = {
-					name = "ingress-tls"
-					namespace = kubernetes_namespace.traefik.metadata[0].name
-				}
-			} : null
+			tls = each.value.tls
 		}
 	})
 }

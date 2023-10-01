@@ -43,10 +43,7 @@ resource "helm_release" "minio" {
 
 resource "kubectl_manifest" "minio_ingress_route" {
 	# Expose via Traefik if not using Minio port
-	for_each = var.minio_port == null ? {
-		"web" = false,
-		"websecure" = true,
-	} : {}
+	for_each = var.minio_port == null ? local.entrypoints : {}
 
 	depends_on = [helm_release.minio]
 
@@ -75,13 +72,7 @@ resource "kubectl_manifest" "minio_ingress_route" {
 				}
 			]
 
-			tls = each.value ? {
-				secretName = "ingress-tls-cert"
-				options = {
-					name = "ingress-tls"
-					namespace = "traefik"
-				}
-			} : null
+			tls = each.value.tls
 		}
 	})
 }

@@ -32,6 +32,10 @@ variable "dns_deprecated_subdomains" {
 	type = bool
 }
 
+variable "tls_enabled" {
+	type = bool
+}
+
 variable "minio_port" {
 	type = string
 	nullable = true

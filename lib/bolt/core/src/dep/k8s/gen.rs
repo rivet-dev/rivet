@@ -690,7 +690,7 @@ fn build_ingress_router(
 				"kind": "Middleware",
 				"metadata": {
 					"name": mw_name,
-					"namespace": "traefik"
+					"namespace": "rivet-service"
 				},
 				"spec": {
 					"stripPrefix": {
@@ -709,7 +709,7 @@ fn build_ingress_router(
 				"kind": "Middleware",
 				"metadata": {
 					"name": mw_name,
-					"namespace": "traefik"
+					"namespace": "rivet-service"
 				},
 				"spec": {
 					"compress": {}
@@ -725,7 +725,7 @@ fn build_ingress_router(
 				"kind": "Middleware",
 				"metadata": {
 					"name": mw_name,
-					"namespace": "traefik"
+					"namespace": "rivet-service"
 				},
 				"spec": {
 					"inFlightReq": {
@@ -755,7 +755,7 @@ fn build_ingress_router(
 			"kind": "IngressRoute",
 			"metadata": {
 				"name": format!("{}-{i}-insecure", svc_ctx.name()),
-				"namespace": "traefik"
+				"namespace": "rivet-service"
 			},
 			"spec": {
 				"entryPoints": [ "web" ],
@@ -778,39 +778,41 @@ fn build_ingress_router(
 		}));
 
 		// Build secure router
-		specs.push(json!({
-			"apiVersion": "traefik.containo.us/v1alpha1",
-			"kind": "IngressRoute",
-			"metadata": {
-				"name": format!("{}-{i}-secure", svc_ctx.name()),
-				"namespace": "traefik"
-			},
-			"spec": {
-				"entryPoints": [ "websecure" ],
-				"routes": [
-					{
-						"kind": "Rule",
-						"match": rule,
-						"middlewares": ingress_middlewares,
-						"services": [
-							{
-								"kind": "Service",
-								"name": service_name,
-								"namespace": "rivet-service",
-								"port": 80
-							}
-						]
+		if project_ctx.tls_enabled() {
+			specs.push(json!({
+				"apiVersion": "traefik.containo.us/v1alpha1",
+				"kind": "IngressRoute",
+				"metadata": {
+					"name": format!("{}-{i}-secure", svc_ctx.name()),
+					"namespace": "rivet-service"
+				},
+				"spec": {
+					"entryPoints": [ "websecure" ],
+					"routes": [
+						{
+							"kind": "Rule",
+							"match": rule,
+							"middlewares": ingress_middlewares,
+							"services": [
+								{
+									"kind": "Service",
+									"name": service_name,
+									"namespace": "rivet-service",
+									"port": 80
+								}
+							]
+						}
+					],
+					"tls": {
+						"secretName": "ingress-tls-cert",
+						"options": {
+							"name": "ingress-tls",
+							"namespace": "traefik"
+						},
 					}
-				],
-				"tls": {
-					"secretName": "ingress-tls-cert",
-					"options": {
-						"name": "ingress-tls",
-						"namespace": "traefik"
-					},
 				}
-			}
-		}));
+			}));
+		}
 
 		if svc_ctx.name() == "api-cf-verification" {
 			specs.push(json!({
@@ -818,7 +820,7 @@ fn build_ingress_router(
 				"kind": "IngressRoute",
 				"metadata": {
 					"name": "cf-verification-challenge",
-					"namespace": "traefik"
+					"namespace": "rivet-service"
 				},
 				"spec": {
 					"routes": [
