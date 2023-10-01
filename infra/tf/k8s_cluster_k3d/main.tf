@@ -70,9 +70,5 @@ resource "k3d_cluster" "main" {
 			node_filters = ["server:0"]
 		}
 	}
-
-	runtime {
-		servers_memory = "8g"
-	}
 }
 
