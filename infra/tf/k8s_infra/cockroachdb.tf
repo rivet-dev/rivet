@@ -54,6 +54,10 @@ resource "helm_release" "cockroachdb" {
 				]
 			}
 		}
+
+		serviceMonitor = {
+			enabled = true
+		}
 	})]
 }
 

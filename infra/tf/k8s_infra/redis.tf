@@ -52,9 +52,6 @@ resource "helm_release" "redis" {
 		auth = {
 			enable = true
 		}
-		metrics = {
-			enabled = true
-		}
 		tls = {
 			enabled = true
 			authClients = false
@@ -62,6 +59,15 @@ resource "helm_release" "redis" {
 		}
 		persistence = {
 			enabled = each.value.persistent
+		}
+		metrics = {
+			enabled = true
+			serviceMonitor = {
+				enabled = true
+			}
+			prometheusRule = {
+				enabled = true
+			}
 		}
 	})]
 }

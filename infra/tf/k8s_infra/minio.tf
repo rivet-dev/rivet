@@ -38,6 +38,14 @@ resource "helm_release" "minio" {
 			# Expose as LB so it can be accessed from the host if needed
 			type = var.minio_port != null ? "LoadBalancer" : "ClusterIP"
 		}
+		metrics = {
+			serviceMonitor = {
+				enabled = true
+			}
+			prometheusRule = {
+				enabled = true
+			}
+		}
 	})]
 }
 

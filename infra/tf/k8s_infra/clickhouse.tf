@@ -95,6 +95,10 @@ resource "helm_release" "clickhouse" {
 			username = "default"
 			password = module.clickhouse_secrets[0].values["clickhouse/users/default/password"]
 		}
+
+		metrics = {
+			enabled = true
+		}
 	})]
 }
 

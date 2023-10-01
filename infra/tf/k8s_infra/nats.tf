@@ -16,6 +16,9 @@ resource "helm_release" "nats" {
 				replicas = 1
 			}
 		}
+		promExporter = {
+			enabled = true
+		}
 	})]
 }
 
