@@ -446,7 +446,17 @@ pub async fn test_services<T: AsRef<str>>(
 	let test_results = futures_util::stream::iter(test_binaries.into_iter().map(|test_binary| {
 		let ctx = ctx.clone();
 		let tests_complete = tests_complete.clone();
-		async move { run_test(&ctx, test_binary, tests_complete.clone(), test_count).await }
+		let filters = filters.clone();
+		async move {
+			run_test(
+				&ctx,
+				test_binary,
+				tests_complete.clone(),
+				test_count,
+				filters,
+			)
+			.await
+		}
 	}))
 	.buffer_unordered(PARALLEL_TESTS)
 	.try_collect::<Vec<_>>()
@@ -544,6 +554,7 @@ async fn run_test(
 	test_binary: TestBinary,
 	tests_complete: Arc<AtomicUsize>,
 	test_count: usize,
+	filters: Vec<String>,
 ) -> Result<TestResult> {
 	let svc_ctx = ctx
 		.all_services()
@@ -571,9 +582,10 @@ async fn run_test(
 		},
 		driver: ExecServiceDriver::LocalBinaryArtifact {
 			exec_path: container_path,
-			// Only run one test at a time
+			// If you need to only run one test at a time:
 			// args: vec!["--test-threads".into(), "1".into()],
-			args: vec![],
+			// Filter the tests that get ran
+			args: filters,
 		},
 	};
 
