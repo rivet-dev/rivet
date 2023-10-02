@@ -306,7 +306,7 @@ where
 					tracing::trace!("no pending messages");
 					return PullRedisStatus::ClaimedPending;
 				}
-				tracing::info!(?msg_ids, "claiming pending messages");
+				tracing::trace!(?msg_ids, "claiming pending messages");
 				let claimed_msgs = match redis_chirp_conn
 					.xclaim::<_, _, _, _, _, redis::streams::StreamClaimReply>(
 						topic_key,
@@ -323,7 +323,7 @@ where
 						return PullRedisStatus::ConnErr;
 					}
 				};
-				tracing::info!(pending_len = ?pending_msgs.ids.len(), claimed_len = ?claimed_msgs.ids.len(), "claimed pending messages");
+				tracing::trace!(pending_len = ?pending_msgs.ids.len(), claimed_len = ?claimed_msgs.ids.len(), "claimed pending messages");
 
 				// Find and delete any messages that are in the PEL but already
 				// deleted from the stream. These are messages that have already
@@ -381,7 +381,7 @@ where
 					.await
 				{
 					Ok(_) => {
-						tracing::info!("successfully deleted message no longer in stream");
+						tracing::trace!("successfully deleted message no longer in stream");
 					}
 					Err(err) => {
 						tracing::error!(
@@ -470,7 +470,7 @@ where
 				return PullRedisStatus::PulledMessages;
 			};
 
-			tracing::info!(len = key.ids.len(), "read stream messages");
+			tracing::trace!(len = key.ids.len(), "read stream messages");
 			'read_id: for id in &key.ids {
 				let msg_value = if let Some(x) = id.map.get("m") {
 					x
@@ -528,7 +528,7 @@ where
 			WorkerKind::Consumer { group, .. } => format!("{}--{}", group, W::NAME),
 		};
 
-		tracing::info!(
+		tracing::trace!(
 			?worker_name,
 			bytes = raw_msg_buf.len(),
 			?nats_message,

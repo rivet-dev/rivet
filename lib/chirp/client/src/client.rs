@@ -1455,7 +1455,7 @@ where
 					async move {
 						token.cancelled().await;
 
-						tracing::info!("closing subscription");
+						tracing::trace!("closing subscription");
 
 						// End lifetime
 						lifetime_perf.end();
