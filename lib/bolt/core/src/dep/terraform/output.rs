@@ -95,10 +95,11 @@ pub async fn read_clickhouse(ctx: &ProjectContext) -> Clickhouse {
 }
 
 pub async fn read_redis(ctx: &ProjectContext) -> Redis {
-	match &ctx.ns().cluster.kind {
-		config::ns::ClusterKind::SingleNode { .. } => read_plan::<Redis>(ctx, "redis_k8s").await,
-		config::ns::ClusterKind::Distributed { .. } => read_plan::<Redis>(ctx, "redis_aws").await,
-	}
+	// match &ctx.ns().cluster.kind {
+	// 	config::ns::ClusterKind::SingleNode { .. } => read_plan::<Redis>(ctx, "redis_k8s").await,
+	// 	config::ns::ClusterKind::Distributed { .. } => read_plan::<Redis>(ctx, "redis_aws").await,
+	// }
+	read_plan::<Redis>(ctx, "redis_k8s").await
 }
 
 /// Reads a Terraform plan's output and decodes in to type.

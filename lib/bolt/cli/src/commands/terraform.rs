@@ -124,7 +124,7 @@ fn ensure_valid_plan(ctx: &ProjectContext, plan_id: &str) -> Result<()> {
 
 	ensure!(
 		all_plans.iter().any(|x| x == plan_id),
-		"terraform plan not in setup steps, see `bolt setup plan`"
+		"terraform plan not in setup steps, see `bolt infra plan`. Ensure that all providers in your namespace config are defined."
 	);
 
 	Ok(())

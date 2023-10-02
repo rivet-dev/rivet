@@ -467,17 +467,19 @@ pub async fn generate(project_path: &Path, ns_id: &str) -> Result<()> {
 			continue;
 		}
 
-		let (db_name, username) = match &ctx.ns().cluster.kind {
-			ns::ClusterKind::SingleNode { .. } => {
-				(svc.redis_db_name().clone(), "default".to_string())
-			}
-			ns::ClusterKind::Distributed {} => {
-				let db_name = format!("rivet-{}-{}", ctx.ns_id(), svc.redis_db_name());
-				let username = format!("{db_name}-root");
+		// let (db_name, username) = match &ctx.ns().cluster.kind {
+		// 	ns::ClusterKind::SingleNode { .. } => {
+		// 		(svc.redis_db_name().clone(), "default".to_string())
+		// 	}
+		// 	ns::ClusterKind::Distributed {} => {
+		// 		let db_name = format!("rivet-{}-{}", ctx.ns_id(), svc.redis_db_name());
+		// 		let username = format!("{db_name}-root");
 
-				(db_name, username)
-			}
-		};
+		// 		(db_name, username)
+		// 	}
+		// };
+		let db_name = svc.redis_db_name().clone();
+		let username = "default".to_string();
 
 		generator
 			.generate_secret(&["redis", &db_name, "username"], || async {
