@@ -47,6 +47,18 @@ resource "helm_release" "prometheus" {
 				serviceMonitorSelectorNilUsesHelmValues = false
 			}
 		}
+		grafana = {
+			additionalDataSources = [
+				{
+					name = "Loki"
+					type = "loki"
+					uid = "loki"
+					url = "http://loki-gateway.loki.svc.cluster.local:80/"
+					access = "proxy"
+					jsonData = {}
+				}
+			]
+		}
 	})]
 }
 

@@ -37,7 +37,7 @@ async fn handle(ctx: OperationContext<game::get::Request>) -> GlobalResult<game:
 			description,
 			array(
 				SELECT tag
-				FROM game_tags
+				FROM db_game.game_tags
 				WHERE game_tags.game_id = games.game_id
 			) AS tags,
 			logo_upload_id,

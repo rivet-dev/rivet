@@ -94,7 +94,7 @@ async fn fetch_files(
 		sqlx::query_as::<_, UploadRow>(indoc!(
 			"
 			SELECT bucket, provider, user_id
-			FROM uploads
+			FROM db_upload.uploads
 			WHERE upload_id = $1
 			"
 		))
@@ -103,7 +103,7 @@ async fn fetch_files(
 		sqlx::query_as::<_, FileRow>(indoc!(
 			"
 			SELECT path, content_length, nsfw_score_threshold, multipart_upload_id
-			FROM upload_files
+			FROM db_upload.upload_files
 			WHERE upload_id = $1
 			"
 		))
