@@ -2,6 +2,10 @@ use chirp_worker::prelude::*;
 
 #[worker_test]
 async fn upsert(ctx: TestCtx) {
+	if !util::feature::cf_custom_hostname() {
+		return;
+	}
+
 	let namespace_id = Uuid::new_v4();
 	let domain = format!("{}.com", util::faker::ident());
 
@@ -46,6 +50,10 @@ async fn upsert(ctx: TestCtx) {
 
 #[worker_test]
 async fn invalid_domain(ctx: TestCtx) {
+	if !util::feature::cf_custom_hostname() {
+		return;
+	}
+
 	let namespace_id = Uuid::new_v4();
 
 	op!([ctx] cdn_namespace_create {

@@ -2,6 +2,10 @@ use chirp_worker::prelude::*;
 
 #[worker_test]
 async fn empty(ctx: TestCtx) {
+	if !util::feature::cf_custom_hostname() {
+		return;
+	}
+
 	let namespace_id = Uuid::new_v4();
 	let domain = "test.com";
 

@@ -9,6 +9,10 @@ use std::{
 
 #[worker_test]
 async fn basic_http(ctx: TestCtx) {
+	if !util::feature::job_run() {
+		return;
+	}
+
 	let domain_job = util::env::domain_job().unwrap();
 
 	let region_res = op!([ctx] faker_region {}).await.unwrap();
@@ -95,6 +99,10 @@ async fn basic_http(ctx: TestCtx) {
 
 #[worker_test]
 async fn basic_tcp(ctx: TestCtx) {
+	if !util::feature::job_run() {
+		return;
+	}
+
 	let domain_job = util::env::domain_job().unwrap();
 
 	let region_res = op!([ctx] faker_region {}).await.unwrap();
@@ -200,6 +208,10 @@ async fn basic_tcp(ctx: TestCtx) {
 
 #[worker_test]
 async fn basic_udp(ctx: TestCtx) {
+	if !util::feature::job_run() {
+		return;
+	}
+
 	let domain_job = util::env::domain_job().unwrap();
 
 	let region_res = op!([ctx] faker_region {}).await.unwrap();
@@ -278,6 +290,10 @@ async fn basic_udp(ctx: TestCtx) {
 
 #[worker_test]
 async fn plan_fail(ctx: TestCtx) {
+	if !util::feature::job_run() {
+		return;
+	}
+
 	let region_res = op!([ctx] faker_region {}).await.unwrap();
 	let region_id = region_res.region_id.as_ref().unwrap().as_uuid();
 

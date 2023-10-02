@@ -410,6 +410,10 @@ impl Ctx {
 
 #[worker_test]
 async fn create_idle_lobbies(ctx: TestCtx) {
+	if !util::feature::job_run() {
+		return;
+	}
+
 	// Test context A
 	//
 	// Test initial idle lobby creation
@@ -476,6 +480,10 @@ async fn create_idle_lobbies(ctx: TestCtx) {
 
 #[worker_test]
 async fn test_find_idle_lobby(ctx: TestCtx) {
+	if !util::feature::job_run() {
+		return;
+	}
+
 	let test_ctx = Ctx::init(&ctx, None, 2, 4).await;
 	let lgi = test_ctx.lobby_group_id;
 

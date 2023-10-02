@@ -6,6 +6,8 @@ use serde_json::json;
 async fn handle(
 	ctx: OperationContext<cdn::namespace_domain_remove::Request>,
 ) -> GlobalResult<cdn::namespace_domain_remove::Response> {
+	internal_assert!(util::feature::cf_custom_hostname());
+
 	let namespace_id = internal_unwrap!(ctx.namespace_id).as_uuid();
 
 	let game_res = op!([ctx] game_resolve_namespace_id {

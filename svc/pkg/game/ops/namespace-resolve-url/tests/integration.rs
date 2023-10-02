@@ -43,6 +43,10 @@ async fn test_with_ns(ctx: TestCtx) {
 
 #[worker_test]
 async fn test_with_custom_domain(ctx: TestCtx) {
+	if !util::feature::cf_custom_hostname() {
+		return;
+	}
+
 	let game_data = prepare_game(&ctx).await;
 	let domain = format!("{}.com", util::faker::ident());
 

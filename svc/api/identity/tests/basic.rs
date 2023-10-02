@@ -53,14 +53,6 @@ impl Ctx {
 		let ns_dev_auth_token =
 			Self::setup_dev_token(&op_ctx, namespace_id, "127.0.0.1".to_owned(), Vec::new()).await;
 
-		let custom_domain = format!("{}.com", util::faker::ident());
-		op!([op_ctx] cdn_namespace_domain_create {
-			namespace_id: Some(namespace_id.into()),
-			domain: custom_domain.clone(),
-		})
-		.await
-		.unwrap();
-
 		Ctx {
 			op_ctx,
 			ns_dev_auth_token,

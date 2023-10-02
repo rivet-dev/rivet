@@ -183,6 +183,10 @@ async fn setup(ctx: &TestCtx) -> Setup {
 
 #[worker_test]
 async fn lobby_create(ctx: TestCtx) {
+	if !util::feature::job_run() {
+		return;
+	}
+
 	let setup = setup(&ctx).await;
 
 	let lobby_id = Uuid::new_v4();
@@ -220,6 +224,10 @@ async fn lobby_create(ctx: TestCtx) {
 
 #[worker_test]
 async fn custom_private_lobby_create(ctx: TestCtx) {
+	if !util::feature::job_run() {
+		return;
+	}
+
 	let setup = setup(&ctx).await;
 
 	let lobby_id = Uuid::new_v4();
@@ -260,6 +268,10 @@ async fn custom_private_lobby_create(ctx: TestCtx) {
 
 #[worker_test]
 async fn lobby_create_max_lobby_count(ctx: TestCtx) {
+	if !util::feature::job_run() {
+		return;
+	}
+
 	let setup = setup(&ctx).await;
 
 	let lobby_count_max = 3;
@@ -320,6 +332,10 @@ async fn lobby_create_max_lobby_count(ctx: TestCtx) {
 
 #[worker_test]
 async fn lobby_create_reuse_job_id(ctx: TestCtx) {
+	if !util::feature::job_run() {
+		return;
+	}
+
 	let setup = setup(&ctx).await;
 
 	let lobby_id_a = Uuid::new_v4();

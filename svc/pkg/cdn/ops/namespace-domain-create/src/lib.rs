@@ -6,6 +6,8 @@ use serde_json::json;
 async fn handle(
 	ctx: OperationContext<cdn::namespace_domain_create::Request>,
 ) -> GlobalResult<cdn::namespace_domain_create::Response> {
+	internal_assert!(util::feature::cf_custom_hostname());
+
 	let namespace_id = internal_unwrap!(ctx.namespace_id).as_uuid();
 	assert_with!(util::check::domain(&ctx.domain, true), CDN_INVALID_DOMAIN);
 

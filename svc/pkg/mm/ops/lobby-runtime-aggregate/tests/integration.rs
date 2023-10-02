@@ -2,6 +2,10 @@ use chirp_worker::prelude::*;
 
 #[worker_test]
 async fn default(ctx: TestCtx) {
+	if !util::feature::job_run() {
+		return;
+	}
+
 	let lobby_res = op!([ctx] faker_mm_lobby {
 		..Default::default()
 	})
@@ -32,6 +36,10 @@ async fn default(ctx: TestCtx) {
 
 #[worker_test]
 async fn missing_columns(ctx: TestCtx) {
+	if !util::feature::job_run() {
+		return;
+	}
+
 	// Create a valid row
 	let lobby_res = op!([ctx] faker_mm_lobby {
 		..Default::default()

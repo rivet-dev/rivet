@@ -2,6 +2,10 @@ use chirp_worker::prelude::*;
 
 #[worker_test]
 async fn empty(ctx: TestCtx) {
+	if !util::feature::job_run() {
+		return;
+	}
+
 	let user_id = Uuid::new_v4();
 	let lobby_res = op!([ctx] faker_mm_lobby {
 		creator_user_id: Some(user_id.into()),

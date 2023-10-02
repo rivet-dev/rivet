@@ -70,6 +70,10 @@ impl Ctx {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn cdn() {
+	if !util::feature::cf_custom_hostname() {
+		return;
+	}
+
 	struct Namespace {
 		namespace_id: Uuid,
 		domain: String,
