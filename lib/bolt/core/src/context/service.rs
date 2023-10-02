@@ -1040,20 +1040,18 @@ impl ServiceContextData {
 
 		// CRDB
 		// TODO: Function is expensive
-		let crdb_data = terraform::output::read_crdb(&project_ctx).await;
-		let crdb_host = format!("{}:{}", *crdb_data.host, *crdb_data.port);
-		for crdb_dep in self.crdb_dependencies(run_context).await {
+		{
+			let crdb_data = terraform::output::read_crdb(&project_ctx).await;
+			let crdb_host = format!("{}:{}", *crdb_data.host, *crdb_data.port);
 			let username = project_ctx.read_secret(&["crdb", "username"]).await?;
 			let password = project_ctx.read_secret(&["crdb", "password"]).await?;
 			let sslmode = "verify-ca";
 
 			let uri = format!(
-				"postgres://{}:{}@{crdb_host}/{db_name}?sslmode={sslmode}",
-				username,
-				password,
-				db_name = crdb_dep.crdb_db_name(),
+				"postgres://{}:{}@{crdb_host}/postgres?sslmode={sslmode}",
+				username, password,
 			);
-			env.push((format!("CRDB_URL_{}", crdb_dep.name_screaming_snake()), uri));
+			env.push(("CRDB_URL".into(), uri));
 		}
 
 		// Redis
