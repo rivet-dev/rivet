@@ -29,6 +29,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 -  Replaced `cdn.rivet.gg` domains with presigned requests directly to the S3 provider
 -  **api-matchmaker** Gracefully disable automatic region selection when coords not obtainable
 -  **Infra** Disabling DNS uses `X-Forwarded-For` header for the client IP
+-  **Infra** Pool connections are now created in parallel for faster tests & service start times
 
 ### Fixed
 

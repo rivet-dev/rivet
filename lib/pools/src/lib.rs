@@ -5,6 +5,7 @@ pub mod utils;
 
 use rand::prelude::SliceRandom;
 use std::{collections::HashMap, env, fmt::Debug, str::FromStr, sync::Arc, time::Duration};
+use tokio::task::JoinSet;
 use tokio_util::sync::CancellationToken;
 
 use crate::pools::{CrdbPool, NatsPool, PoolsInner, RedisPool};
@@ -24,11 +25,18 @@ pub use crate::{error::Error, pools::Pools};
 pub async fn from_env(client_name: impl ToString + Debug) -> Result<Pools, Error> {
 	let client_name = client_name.to_string();
 	let token = CancellationToken::new();
+
+	let (nats, crdb, redis) = tokio::try_join!(
+		nats_from_env(client_name.clone()),
+		crdb_from_env(client_name.clone()),
+		redis_from_env(),
+	)?;
+
 	let pool = Arc::new(PoolsInner {
 		_guard: token.clone().drop_guard(),
-		nats: nats_from_env(client_name.clone()).await?,
-		crdb: crdb_from_env(client_name.clone())?,
-		redis: redis_from_env().await?,
+		nats,
+		crdb,
+		redis,
 	});
 	pool.clone().start(token);
 
@@ -114,9 +122,9 @@ async fn nats_from_env(client_name: String) -> Result<Option<NatsPool>, Error> {
 }
 
 #[tracing::instrument]
-fn crdb_from_env(client_name: String) -> Result<Option<CrdbPool>, Error> {
+async fn crdb_from_env(client_name: String) -> Result<Option<CrdbPool>, Error> {
 	if let Some(url) = std::env::var("CRDB_URL").ok() {
-		tracing::info!(%url, "crdb creating connection");
+		tracing::info!(%url, "crdb connecting");
 
 		// let client_name = client_name.clone();
 		let pool = sqlx::postgres::PgPoolOptions::new()
@@ -151,7 +159,8 @@ fn crdb_from_env(client_name: String) -> Result<Option<CrdbPool>, Error> {
 					})
 				}
 			})
-			.connect_lazy(&url)
+			.connect(&url)
+			.await
 			.map_err(Error::BuildSqlx)?;
 
 		Ok(Some(pool))
@@ -162,31 +171,41 @@ fn crdb_from_env(client_name: String) -> Result<Option<CrdbPool>, Error> {
 
 #[tracing::instrument]
 async fn redis_from_env() -> Result<HashMap<String, RedisPool>, Error> {
-	let mut redis = HashMap::new();
-	let mut existing_pools = HashMap::<String, RedisPool>::new();
+	// Create Redis connections
+	let mut join_set = JoinSet::new();
 	for (key, url) in env::vars() {
 		if let Some(svc_name_screaming) = key.strip_prefix("REDIS_URL_") {
 			let svc_name = svc_name_screaming.to_lowercase().replace("_", "-");
 
-			// Some Redis pools have the same URL, so we share the connection
-			// between the pools.
-			let pool = if let Some(existing) = existing_pools.get(&url) {
-				existing.clone()
-			} else {
-				tracing::info!(%url, "redis connecting");
-				let conn = redis::cluster::ClusterClient::new(vec![url.as_str()])
-					.map_err(Error::BuildRedis)?
-					.get_async_connection()
-					.await
-					.map_err(Error::BuildRedis)?;
+			join_set
+				.build_task()
+				.name("redis_from_env")
+				.spawn(async move {
+					tracing::info!(%url, "redis connecting");
+					let conn = redis::cluster::ClusterClient::builder(vec![url.as_str()])
+						// Keep trying to reconnect indefinitely
+						.retries(u32::MAX)
+						.min_retry_wait(250)
+						.max_retry_wait(30_000)
+						.build()
+						.map_err(Error::BuildRedis)?
+						.get_async_connection()
+						.await
+						.map_err(Error::BuildRedis)?;
 
-				tracing::info!(%url, "redis connected");
-				conn
-			};
+					tracing::info!(%url, "redis connected");
 
-			redis.insert(svc_name, pool.clone());
-			existing_pools.insert(url, pool);
+					Ok((svc_name, conn))
+				})
+				.map_err(Error::TokioSpawn)?;
 		}
+	}
+
+	// Join connections
+	let mut redis = HashMap::new();
+	while let Some(res) = join_set.join_next().await {
+		let (svc_name, conn) = res.map_err(Error::TokioJoin)??;
+		redis.insert(svc_name, conn.clone());
 	}
 
 	Ok(redis)
@@ -194,36 +213,38 @@ async fn redis_from_env() -> Result<HashMap<String, RedisPool>, Error> {
 
 #[tracing::instrument(level = "trace", skip(pools))]
 async fn runtime(pools: Pools, client_name: String) {
+	// TODO: Delete this once confirmed this is no longer an issue
+
 	// We have to manually ping the Redis connection since `ConnectionManager`
 	// doesn't do this for us. If we don't make a request on a Redis connection
 	// for a long time, we'll get a broken pipe error, so this keeps the
 	// connection alive.
 
-	let mut interval = tokio::time::interval(Duration::from_secs(15));
-	loop {
-		interval.tick().await;
+	// let mut interval = tokio::time::interval(Duration::from_secs(15));
+	// loop {
+	// 	interval.tick().await;
 
-		// TODO: This will ping the same pool multiple times if it shares the
-		// same URL
-		for (db, conn) in &pools.redis {
-			// HACK: Instead of sending `PING`, we test the connection by
-			// updating the client's name. We do this because
-			// `ConnectionManager` doesn't let us hook in to new connections, so
-			// we have to manually update the client's name.
-			let mut conn = conn.clone();
-			let res = redis::cmd("CLIENT")
-				.arg("SETNAME")
-				.arg(&client_name)
-				.query_async::<_, ()>(&mut conn)
-				.await;
-			match res {
-				Ok(_) => {
-					tracing::trace!(%db, "ping success");
-				}
-				Err(err) => {
-					tracing::error!(%db, ?err, "redis ping failed");
-				}
-			}
-		}
-	}
+	// 	// TODO: This will ping the same pool multiple times if it shares the
+	// 	// same URL
+	// 	for (db, conn) in &pools.redis {
+	// 		// HACK: Instead of sending `PING`, we test the connection by
+	// 		// updating the client's name. We do this because
+	// 		// `ConnectionManager` doesn't let us hook in to new connections, so
+	// 		// we have to manually update the client's name.
+	// 		let mut conn = conn.clone();
+	// 		let res = redis::cmd("CLIENT")
+	// 			.arg("SETNAME")
+	// 			.arg(&client_name)
+	// 			.query_async::<_, ()>(&mut conn)
+	// 			.await;
+	// 		match res {
+	// 			Ok(_) => {
+	// 				tracing::trace!(%db, "ping success");
+	// 			}
+	// 			Err(err) => {
+	// 				tracing::error!(%db, ?err, "redis ping failed");
+	// 			}
+	// 		}
+	// 	}
+	// }
 }
