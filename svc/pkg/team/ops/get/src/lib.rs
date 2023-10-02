@@ -32,12 +32,12 @@ async fn handle(ctx: OperationContext<team::get::Request>) -> GlobalResult<team:
 			profile_id,
 			create_ts,
 			publicity
-		FROM teams
+		FROM db_team.teams
 		WHERE team_id = ANY($1)
 		"
 	))
 	.bind(team_ids)
-	.fetch_all(&ctx.crdb("db-team").await?)
+	.fetch_all(&ctx.crdb().await?)
 	.await?;
 
 	let upload_ids = teams

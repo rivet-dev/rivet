@@ -39,13 +39,13 @@ async fn handle(
 				let versions = sqlx::query_as::<_, GameVersion>(indoc!(
 					"
 					SELECT version_id, game_id, create_ts, display_name
-					FROM game_versions
+					FROM db_game.game_versions
 					WHERE version_id = ANY($1)
 					ORDER BY create_ts DESC
 					"
 				))
 				.bind(version_ids)
-				.fetch_all(&ctx.crdb("db-game").await?)
+				.fetch_all(&ctx.crdb().await?)
 				.await?
 				.into_iter()
 				.for_each(|row| {

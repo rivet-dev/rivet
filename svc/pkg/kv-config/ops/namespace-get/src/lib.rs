@@ -16,11 +16,11 @@ async fn handle(
 		.map(common::Uuid::as_uuid)
 		.collect::<Vec<_>>();
 
-	let sql_pool = ctx.crdb("db-kv-config").await?;
+	let sql_pool = ctx.crdb().await?;
 	let namespaces = sqlx::query_as::<_, GameNamespace>(indoc!(
 		"
 			SELECT namespace_id
-			FROM game_namespaces
+			FROM db_kv_config.game_namespaces
 			WHERE namespace_id = ANY($1)
 			"
 	))

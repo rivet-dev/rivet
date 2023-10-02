@@ -10,9 +10,9 @@ async fn empty(ctx: TestCtx) {
 	.await
 	.unwrap();
 
-	let (_,): (i64,) = sqlx::query_as("SELECT 1 FROM game_configs WHERE game_id = $1")
+	let (_,): (i64,) = sqlx::query_as("SELECT 1 FROM db_cloud.game_configs WHERE game_id = $1")
 		.bind(game_id)
-		.fetch_one(&ctx.crdb("db-cloud").await.unwrap())
+		.fetch_one(&ctx.crdb().await.unwrap())
 		.await
 		.unwrap();
 }

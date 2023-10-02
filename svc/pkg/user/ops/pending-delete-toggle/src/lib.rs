@@ -15,10 +15,10 @@ async fn handle(
 	let identities = &internal_unwrap!(identity.users.first()).identities;
 	assert_with!(!identities.is_empty(), IDENTITY_NOT_REGISTERED);
 
-	sqlx::query("UPDATE users SET delete_request_ts = $2 WHERE user_id = $1")
+	sqlx::query("UPDATE db_user.users SET delete_request_ts = $2 WHERE user_id = $1")
 		.bind(user_id)
 		.bind(ctx.active.then(util::timestamp::now))
-		.execute(&ctx.crdb("db-user").await?)
+		.execute(&ctx.crdb().await?)
 		.await?;
 
 	msg!([ctx] user::msg::update(user_id) {

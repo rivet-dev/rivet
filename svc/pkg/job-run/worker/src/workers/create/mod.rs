@@ -34,7 +34,7 @@ async fn fail(
 
 #[worker(name = "job-run-create")]
 async fn worker(ctx: &OperationContext<job_run::msg::create::Message>) -> GlobalResult<()> {
-	let crdb = ctx.crdb("db-job-state").await?;
+	let crdb = ctx.crdb().await?;
 
 	let run_id = internal_unwrap!(ctx.run_id).as_uuid();
 	let region_id = internal_unwrap!(ctx.region_id).as_uuid();
@@ -230,7 +230,7 @@ async fn write_to_db_before_run(
 ) -> GlobalResult<()> {
 	sqlx::query(indoc!(
 		"
-		INSERT INTO runs (run_id, region_id, create_ts, token_session_id)
+		INSERT INTO db_job_state.runs (run_id, region_id, create_ts, token_session_id)
 		VALUES ($1, $2, $3, $4)
 		"
 	))
@@ -241,10 +241,12 @@ async fn write_to_db_before_run(
 	.execute(&mut **tx)
 	.await?;
 
-	sqlx::query(indoc!("INSERT INTO run_meta_nomad (run_id) VALUES ($1)"))
-		.bind(run_id)
-		.execute(&mut **tx)
-		.await?;
+	sqlx::query(indoc!(
+		"INSERT INTO db_job_state.run_meta_nomad (run_id) VALUES ($1)"
+	))
+	.bind(run_id)
+	.execute(&mut **tx)
+	.await?;
 
 	// Validate that the proxied ports point to existing ports
 	for proxied_port in &req.proxied_ports {
@@ -270,7 +272,7 @@ async fn write_to_db_before_run(
 
 		sqlx::query(indoc!(
 			"
-					INSERT INTO run_proxied_ports (
+					INSERT INTO db_job_state.run_proxied_ports (
 						run_id,
 						target_nomad_port_label,
 						ingress_port,
@@ -302,7 +304,7 @@ async fn write_to_db_after_run(
 	run_id: Uuid,
 	dispatched_job_id: &str,
 ) -> GlobalResult<()> {
-	sqlx::query("UPDATE run_meta_nomad SET dispatched_job_id = $2 WHERE run_id = $1")
+	sqlx::query("UPDATE db_job_state.run_meta_nomad SET dispatched_job_id = $2 WHERE run_id = $1")
 		.bind(run_id)
 		.bind(dispatched_job_id)
 		.execute(crdb)

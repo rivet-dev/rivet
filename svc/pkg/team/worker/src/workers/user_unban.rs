@@ -9,14 +9,14 @@ async fn worker(ctx: &OperationContext<team::msg::user_unban::Message>) -> Globa
 
 	sqlx::query(indoc!(
 		"
-		DELETE FROM banned_users
+		DELETE FROM db_team.banned_users
 		WHERE team_id = $1
 		AND user_id = $2
 		"
 	))
 	.bind(team_id)
 	.bind(user_id)
-	.execute(&ctx.crdb("db-team").await?)
+	.execute(&ctx.crdb().await?)
 	.await?;
 
 	// TODO: Establish audit logs

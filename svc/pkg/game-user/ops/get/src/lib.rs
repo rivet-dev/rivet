@@ -30,7 +30,7 @@ impl From<GameUser> for game_user::get::response::GameUser {
 async fn handle(
 	ctx: OperationContext<game_user::get::Request>,
 ) -> GlobalResult<game_user::get::Response> {
-	let crdb = ctx.crdb("db-game-user").await?;
+	let crdb = ctx.crdb().await?;
 
 	let game_user_ids = ctx
 		.game_user_ids
@@ -41,7 +41,7 @@ async fn handle(
 	let game_users = sqlx::query_as::<_, GameUser>(indoc!(
 		"
 		SELECT gu.game_user_id, gu.user_id, gu.token_session_id, gu.namespace_id, gu.create_ts, l.link_id, gu.deleted_ts
-		FROM game_users AS gu
+		FROM db_game_user.game_users AS gu
 		LEFT JOIN links AS l ON l.new_game_user_id = gu.game_user_id
 		WHERE gu.game_user_id = ANY($1)
 		"

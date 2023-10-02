@@ -205,12 +205,12 @@ async fn lobby_create(ctx: TestCtx) {
 	let (sql_mpn, sql_mpd, sql_mpp) = sqlx::query_as::<_, (i64, i64, i64)>(indoc!(
 		"
 		SELECT max_players_normal, max_players_direct, max_players_party
-		FROM lobbies
+		FROM db_mm_state.lobbies
 		WHERE lobby_id = $1
 		"
 	))
 	.bind(lobby_id)
-	.fetch_one(&ctx.crdb("db-mm-state").await.unwrap())
+	.fetch_one(&ctx.crdb().await.unwrap())
 	.await
 	.unwrap();
 	assert_eq!(8, sql_mpn);
@@ -242,12 +242,12 @@ async fn custom_private_lobby_create(ctx: TestCtx) {
 	let (is_custom, publicity) = sqlx::query_as::<_, (bool, i64)>(indoc!(
 		"
 		SELECT is_custom, publicity 
-		FROM lobbies
+		FROM db_mm_state.lobbies
 		WHERE lobby_id = $1
 		"
 	))
 	.bind(lobby_id)
-	.fetch_one(&ctx.crdb("db-mm-state").await.unwrap())
+	.fetch_one(&ctx.crdb().await.unwrap())
 	.await
 	.unwrap();
 

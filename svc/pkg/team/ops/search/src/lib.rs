@@ -11,7 +11,7 @@ struct Team {
 async fn handle(
 	ctx: OperationContext<team::search::Request>,
 ) -> GlobalResult<team::search::Response> {
-	let crdb = ctx.crdb("db-team").await?;
+	let crdb = ctx.crdb().await?;
 	let limit = ctx.limit;
 
 	internal_assert!(limit != 0, "limit too low");
@@ -19,7 +19,7 @@ async fn handle(
 
 	let res = sqlx::query_as::<_, Team>(indoc!(
 		"
-		SELECT team_id, create_ts FROM teams@search_index
+		SELECT team_id, create_ts FROM db_team.teams@search_index
 		WHERE
 			display_name % $1 AND
 			is_searchable = TRUE AND

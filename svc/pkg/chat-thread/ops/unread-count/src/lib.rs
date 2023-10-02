@@ -5,7 +5,7 @@ use rivet_operation::prelude::*;
 async fn handle(
 	ctx: OperationContext<chat_thread::unread_count::Request>,
 ) -> GlobalResult<chat_thread::unread_count::Response> {
-	let crdb = ctx.crdb("db-chat").await?;
+	let crdb = ctx.crdb().await?;
 
 	let thread_ids = ctx
 		.thread_ids
@@ -63,7 +63,7 @@ async fn handle(
 		"
 		SELECT thread_id, (
 			SELECT COUNT(*)
-			FROM messages
+			FROM db_chat.messages
 			WHERE thread_id = query.thread_id AND send_ts > query.last_read_ts
 			LIMIT 100
 		)

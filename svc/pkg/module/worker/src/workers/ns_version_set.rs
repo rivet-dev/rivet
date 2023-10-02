@@ -21,7 +21,7 @@ struct NamespaceInstances {
 async fn worker(
 	ctx: &OperationContext<game::msg::ns_version_set_complete::Message>,
 ) -> Result<(), GlobalError> {
-	let crdb = ctx.crdb("db-module").await?;
+	let crdb = ctx.crdb().await?;
 
 	let namespace_id = internal_unwrap!(ctx.namespace_id).as_uuid();
 	let version_id = internal_unwrap!(ctx.version_id).as_uuid();
@@ -52,7 +52,7 @@ async fn worker(
 	let existing_instances = sqlx::query_as::<_, NamespaceInstances>(indoc!(
 		"
 		SELECT key, instance_id
-		FROM namespace_instances
+		FROM db_module.namespace_instances
 		WHERE namespace_id = $1
 		"
 	))
@@ -158,7 +158,7 @@ async fn create_instances(
 	// Insert instance
 	sqlx::query(indoc!(
 		"
-		INSERT INTO namespace_instances (namespace_id, key, instance_id)
+		INSERT INTO db_module.namespace_instances (namespace_id, key, instance_id)
 		VALUES ($1, $2, $3)
 		"
 	))

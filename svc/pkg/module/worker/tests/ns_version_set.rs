@@ -4,7 +4,7 @@ use std::collections::HashMap;
 
 #[worker_test]
 async fn ns_version_set(ctx: TestCtx) {
-	let crdb = ctx.crdb("db-module").await.unwrap();
+	let crdb = ctx.crdb().await.unwrap();
 
 	let module_id = Uuid::new_v4();
 
@@ -231,7 +231,7 @@ async fn get_namespace_module_version(
 	let versions = sqlx::query_as::<_, (String, Uuid, Uuid)>(indoc!(
 		"
 		SELECT ni.key, ni.instance_id, i.version_id
-		FROM namespace_instances AS ni
+		FROM db_module.namespace_instances AS ni
 		INNER JOIN instances AS i ON i.instance_id = ni.instance_id
 		WHERE ni.namespace_id = $1
 		"

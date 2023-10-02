@@ -53,12 +53,13 @@ async fn empty(ctx: TestCtx) {
 
 	assert_eq!(1, player_count, "registered player count not updated");
 
-	let (register_ts,) =
-		sqlx::query_as::<_, (Option<i64>,)>("SELECT register_ts FROM players WHERE player_id = $1")
-			.bind(player_id)
-			.fetch_one(&ctx.crdb("db-mm-state").await.unwrap())
-			.await
-			.unwrap();
+	let (register_ts,) = sqlx::query_as::<_, (Option<i64>,)>(
+		"SELECT register_ts FROM db_mm_state.players WHERE player_id = $1",
+	)
+	.bind(player_id)
+	.fetch_one(&ctx.crdb().await.unwrap())
+	.await
+	.unwrap();
 	assert!(register_ts.is_some());
 
 	// Attempt to register again

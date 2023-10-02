@@ -31,13 +31,13 @@ async fn empty(ctx: TestCtx) {
 	let (delete_request_ts,): (Option<i64>,) = sqlx::query_as(indoc!(
 		"
 		SELECT delete_request_ts
-			FROM users
+			FROM db_user.users
 			WHERE
 				user_id = $1
 		",
 	))
 	.bind(user_id)
-	.fetch_one(&ctx.crdb("db-user").await.unwrap())
+	.fetch_one(&ctx.crdb().await.unwrap())
 	.await
 	.unwrap();
 
@@ -53,13 +53,13 @@ async fn empty(ctx: TestCtx) {
 	let (delete_request_ts,): (Option<i64>,) = sqlx::query_as(indoc!(
 		"
 		SELECT delete_request_ts
-			FROM users
+			FROM db_user.users
 			WHERE
 				user_id = $1
 		",
 	))
 	.bind(user_id)
-	.fetch_one(&ctx.crdb("db-user").await.unwrap())
+	.fetch_one(&ctx.crdb().await.unwrap())
 	.await
 	.unwrap();
 

@@ -9,12 +9,12 @@ async fn handle(
 
 	sqlx::query(indoc!(
 		"
-		INSERT INTO game_namespaces (namespace_id)
+		INSERT INTO db_kv_config.game_namespaces (namespace_id)
 		VALUES ($1)
 		"
 	))
 	.bind(namespace_id)
-	.execute(&ctx.crdb("db-kv-config").await?)
+	.execute(&ctx.crdb().await?)
 	.await?;
 
 	Ok(kv_config::namespace_create::Response {})

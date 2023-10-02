@@ -10,12 +10,12 @@ async fn handle(
 	let site_ids = sqlx::query_as::<_, (Uuid,)>(indoc!(
 		"
 		SELECT site_id
-		FROM sites
+		FROM db_cdn.sites
 		WHERE game_id = $1
 		"
 	))
 	.bind(game_id)
-	.fetch_all(&ctx.crdb("db-cdn").await?)
+	.fetch_all(&ctx.crdb().await?)
 	.await?
 	.into_iter()
 	.map(|(id,)| common::Uuid::from(id))

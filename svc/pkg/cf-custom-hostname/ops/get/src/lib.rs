@@ -32,12 +32,12 @@ async fn handle(
 			create_ts,
 			status,
 			subscription_id
-		FROM custom_hostnames
+		FROM db_cf_custom_hostname.custom_hostnames
 		WHERE identifier = ANY($1)
 		"
 	))
 	.bind(identifiers)
-	.fetch_all(&ctx.crdb("db-cf-custom-hostname").await?)
+	.fetch_all(&ctx.crdb().await?)
 	.await?;
 
 	Ok(cf_custom_hostname::get::Response {

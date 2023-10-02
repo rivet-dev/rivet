@@ -34,14 +34,14 @@ pub async fn handle(
 			idd.instance_id IS NOT NULL AS driver_dummy,
 			idv.instance_id IS NOT NULL AS driver_fly,
 			idv.fly_app_id AS driver_fly_app_id
-		FROM instances AS i
-		LEFT JOIN instances_driver_dummy AS idd ON idd.instance_id = i.instance_id
-		LEFT JOIN instances_driver_fly AS idv ON idv.instance_id = i.instance_id
+		FROM db_module.instances AS i
+		LEFT JOIN db_module.instances_driver_dummy AS idd ON idd.instance_id = i.instance_id
+		LEFT JOIN db_module.instances_driver_fly AS idv ON idv.instance_id = i.instance_id
 		WHERE i.instance_id = ANY($1)
 		"
 	))
 	.bind(&instance_ids)
-	.fetch_all(&ctx.crdb("db-module").await?)
+	.fetch_all(&ctx.crdb().await?)
 	.await?;
 
 	Ok(module::instance_get::Response {

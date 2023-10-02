@@ -46,7 +46,7 @@ async fn fail(
 
 #[worker(name = "mm-lobby-create")]
 async fn worker(ctx: &OperationContext<mm::msg::lobby_create::Message>) -> GlobalResult<()> {
-	let crdb = ctx.crdb("db-mm-state").await?;
+	let crdb = ctx.crdb().await?;
 
 	let lobby_id = internal_unwrap!(ctx.lobby_id).as_uuid();
 	let namespace_id = internal_unwrap!(ctx.namespace_id).as_uuid();
@@ -483,7 +483,7 @@ async fn update_db(
 	//
 	// This will lock the lobby for the duration of the transaction
 	let lobby_row = sqlx::query_as::<_, (Option<i64>, Option<i64>)>(
-		"SELECT stop_ts, preemptive_create_ts FROM lobbies WHERE lobby_id = $1 FOR UPDATE",
+		"SELECT stop_ts, preemptive_create_ts FROM db_mm_state.lobbies WHERE lobby_id = $1 FOR UPDATE",
 	)
 	.bind(opts.lobby_id)
 	.fetch_optional(&mut **tx)
@@ -503,7 +503,7 @@ async fn update_db(
 	// mm-lobby-find.
 	sqlx::query(indoc!(
 		"
-		UPSERT INTO lobbies (
+		UPSERT INTO db_mm_state.lobbies (
 			lobby_id,
 			namespace_id,
 			region_id,

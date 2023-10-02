@@ -17,13 +17,13 @@ pub async fn run_from_env(ts: i64) -> GlobalResult<()> {
 		(),
 		Vec::new(),
 	);
-	let crdb_pool = ctx.crdb("db-team-dev").await?;
+	let crdb_pool = ctx.crdb().await?;
 
 	let cutoff_ts = ts - util::billing::CUTOFF_DURATION;
 	let team_ids = sqlx::query_as::<_, (Uuid,)>(indoc!(
 		"
 		SELECT team_id
-		FROM dev_teams
+		FROM db_team_dev.dev_teams
 		WHERE payment_failed_ts < $1
 		"
 	))

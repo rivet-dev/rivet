@@ -49,7 +49,10 @@ async fn worker(ctx: &OperationContext<user::msg::profile_set::Message>) -> Glob
 
 	// Build query
 	let built_query = query_components.join(",");
-	let query_string = format!("UPDATE users SET {} WHERE user_id = $1", built_query);
+	let query_string = format!(
+		"UPDATE db_user.users SET {} WHERE user_id = $1",
+		built_query
+	);
 
 	let query = sqlx::query(&query_string).bind(**user_id);
 
@@ -74,7 +77,7 @@ async fn worker(ctx: &OperationContext<user::msg::profile_set::Message>) -> Glob
 		query
 	};
 
-	query.execute(&ctx.crdb("db-user").await?).await?;
+	query.execute(&ctx.crdb().await?).await?;
 
 	msg!([ctx] user::msg::update(user_id) {
 		user_id: Some(*user_id),

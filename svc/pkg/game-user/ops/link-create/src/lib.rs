@@ -8,7 +8,7 @@ pub const TOKEN_TTL: i64 = util::duration::minutes(15);
 async fn handle(
 	ctx: OperationContext<game_user::link_create::Request>,
 ) -> GlobalResult<game_user::link_create::Response> {
-	let crdb = ctx.crdb("db-game-user").await?;
+	let crdb = ctx.crdb().await?;
 
 	let game_user_id = internal_unwrap!(ctx.game_user_id).as_uuid();
 	let link_id = Uuid::new_v4();
@@ -48,7 +48,7 @@ async fn handle(
 
 	sqlx::query(indoc!(
 		"
-		INSERT INTO links (link_id, namespace_id, token_session_id, current_game_user_id, create_ts)
+		INSERT INTO db_game_user.links (link_id, namespace_id, token_session_id, current_game_user_id, create_ts)
 		VALUES ($1, $2, $3, $4, $5)
 		"
 	))

@@ -9,9 +9,9 @@ async fn handle(
 	let _config = internal_unwrap!(ctx.config);
 	let _config_ctx = internal_unwrap!(ctx.config_ctx);
 
-	sqlx::query("INSERT INTO game_versions (version_id) VALUES ($1)")
+	sqlx::query("INSERT INTO db_kv_config.game_versions (version_id) VALUES ($1)")
 		.bind(version_id)
-		.execute(&ctx.crdb("db-kv-config").await?)
+		.execute(&ctx.crdb().await?)
 		.await?;
 
 	Ok(kv_config::version_publish::Response {})

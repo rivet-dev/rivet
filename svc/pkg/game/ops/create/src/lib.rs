@@ -49,13 +49,13 @@ async fn handle(
 		);
 	}
 
-	let crdb = ctx.crdb("db-game").await?;
+	let crdb = ctx.crdb().await?;
 	let game_id = Uuid::new_v4();
 	let plan_code = "free";
 	let subscription_id = Uuid::new_v4();
 	sqlx::query(indoc!(
 		"
-		INSERT INTO games (
+		INSERT INTO db_game.games (
 			game_id,
 			create_ts,
 			name_id,

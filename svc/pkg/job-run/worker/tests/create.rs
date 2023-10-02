@@ -9,7 +9,7 @@ use std::{
 
 #[worker_test]
 async fn basic_http(ctx: TestCtx) {
-	let domain_job = util::env::domain_job();
+	let domain_job = util::env::domain_job().unwrap();
 
 	let region_res = op!([ctx] faker_region {}).await.unwrap();
 	let region_id = region_res.region_id.as_ref().unwrap().as_uuid();
@@ -80,13 +80,8 @@ async fn basic_http(ctx: TestCtx) {
 		}
 	}
 
-	let ValidateJobOutput { ip, port, .. } = validate_job(
-		ctx.crdb("db-job-state").await.unwrap(),
-		run_id,
-		region_id,
-		"http",
-	)
-	.await;
+	let ValidateJobOutput { ip, port, .. } =
+		validate_job(ctx.crdb().await.unwrap(), run_id, region_id, "http").await;
 
 	// Test against origin
 	compare_test_id_http(&format!("http://{}:{}", ip, port), &test_id).await;
@@ -174,13 +169,7 @@ async fn basic_tcp(ctx: TestCtx) {
 		ip,
 		port,
 		proxied_ports,
-	} = validate_job(
-		ctx.crdb("db-job-state").await.unwrap(),
-		run_id,
-		region_id,
-		"tcp",
-	)
-	.await;
+	} = validate_job(ctx.crdb().await.unwrap(), run_id, region_id, "tcp").await;
 	let ingress_port_tcp = proxied_ports
 		.iter()
 		.find(|x| x.proxy_protocol == backend::job::ProxyProtocol::Tcp as i64)
@@ -273,13 +262,7 @@ async fn basic_udp(ctx: TestCtx) {
 		ip,
 		port,
 		proxied_ports,
-	} = validate_job(
-		ctx.crdb("db-job-state").await.unwrap(),
-		run_id,
-		region_id,
-		"udp",
-	)
-	.await;
+	} = validate_job(ctx.crdb().await.unwrap(), run_id, region_id, "udp").await;
 	let ingress_port_udp = proxied_ports.first().unwrap().ingress_port;
 
 	// Test against origin
@@ -535,20 +518,20 @@ async fn validate_job(
 	let nomad_config = nomad_util::config_from_env().unwrap();
 
 	let (cql_region_id,) =
-		sqlx::query_as::<_, (Uuid,)>("SELECT region_id FROM runs WHERE run_id = $1")
+		sqlx::query_as::<_, (Uuid,)>("SELECT region_id FROM db_job_state.runs WHERE run_id = $1")
 			.bind(run_id)
 			.fetch_one(&crdb)
 			.await
 			.unwrap();
 	let (dispatched_job_id,) = sqlx::query_as::<_, (String,)>(
-		"SELECT dispatched_job_id FROM run_meta_nomad WHERE run_id = $1",
+		"SELECT dispatched_job_id FROM db_job_state.run_meta_nomad WHERE run_id = $1",
 	)
 	.bind(run_id)
 	.fetch_one(&crdb)
 	.await
 	.unwrap();
 	let proxied_ports = sqlx::query_as::<_, RunProxiedPort>(
-		"SELECT ingress_port, proxy_protocol FROM run_proxied_ports WHERE run_id = $1",
+		"SELECT ingress_port, proxy_protocol FROM db_job_state.run_proxied_ports WHERE run_id = $1",
 	)
 	.bind(run_id)
 	.fetch_all(&crdb)

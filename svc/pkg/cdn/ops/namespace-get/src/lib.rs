@@ -32,12 +32,12 @@ async fn handle(
 		.map(common::Uuid::as_uuid)
 		.collect::<Vec<_>>();
 
-	let sql_pool = ctx.crdb("db-cdn").await?;
+	let sql_pool = ctx.crdb().await?;
 	let (namespace_domains, auth_users, namespaces) = tokio::try_join!(
 		sqlx::query_as::<_, GameNamespaceDomain>(indoc!(
 			"
 			SELECT namespace_id, domain, create_ts
-			FROM game_namespace_domains
+			FROM db_cdn.game_namespace_domains
 			WHERE namespace_id = ANY($1)
 			"
 		))
@@ -46,7 +46,7 @@ async fn handle(
 		sqlx::query_as::<_, GameNamespaceAuthUser>(indoc!(
 			"
 			SELECT namespace_id, user_name, password
-			FROM game_namespace_auth_users
+			FROM db_cdn.game_namespace_auth_users
 			WHERE namespace_id = ANY($1)
 			"
 		))
@@ -55,7 +55,7 @@ async fn handle(
 		sqlx::query_as::<_, GameNamespace>(indoc!(
 			"
 			SELECT namespace_id, enable_domain_public_auth, auth_type
-			FROM game_namespaces
+			FROM db_cdn.game_namespaces
 			WHERE namespace_id = ANY($1)
 			"
 		))

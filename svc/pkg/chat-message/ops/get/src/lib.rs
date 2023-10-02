@@ -13,7 +13,7 @@ struct ChatMessage {
 async fn handle(
 	ctx: OperationContext<chat_message::get::Request>,
 ) -> GlobalResult<chat_message::get::Response> {
-	let crdb = ctx.crdb("db-chat").await?;
+	let crdb = ctx.crdb().await?;
 
 	let chat_message_ids = ctx
 		.chat_message_ids
@@ -24,7 +24,7 @@ async fn handle(
 	let messages = sqlx::query_as::<_, ChatMessage>(indoc!(
 		"
 		SELECT message_id, thread_id, send_ts, body 
-		FROM messages
+		FROM db_chat.messages
 		WHERE message_id = ANY($1)
 		"
 	))

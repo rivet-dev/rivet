@@ -31,14 +31,14 @@ async fn upsert(ctx: TestCtx) {
 		"
 		SELECT EXISTS (
 			SELECT 1
-			FROM game_namespace_domains
+			FROM db_cdn.game_namespace_domains
 			WHERE namespace_id = $1 AND domain = $2
 		)
 		"
 	))
 	.bind(namespace_id)
 	.bind(domain)
-	.fetch_one(&ctx.crdb("db-cdn").await.unwrap())
+	.fetch_one(&ctx.crdb().await.unwrap())
 	.await
 	.unwrap();
 	assert!(sql_exists);

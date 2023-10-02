@@ -21,13 +21,13 @@ async fn empty(ctx: TestCtx) {
 		"
 		SELECT EXISTS (
 			SELECT 1
-			FROM game_namespaces
+			FROM db_cdn.game_namespaces
 			WHERE namespace_id = $1 AND enable_domain_public_auth = FALSE
 		)
 		"
 	))
 	.bind(namespace_id)
-	.fetch_one(&ctx.crdb("db-cdn").await.unwrap())
+	.fetch_one(&ctx.crdb().await.unwrap())
 	.await
 	.unwrap();
 

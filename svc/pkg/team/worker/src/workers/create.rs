@@ -28,7 +28,7 @@ async fn worker(ctx: &OperationContext<team::msg::create::Message>) -> GlobalRes
 	// Create the team
 	sqlx::query(indoc!(
 		"
-		INSERT INTO teams (team_id, owner_user_id, display_name, create_ts)
+		INSERT INTO db_team.teams (team_id, owner_user_id, display_name, create_ts)
 		VALUES ($1, $2, $3, $4)
 	",
 	))
@@ -36,7 +36,7 @@ async fn worker(ctx: &OperationContext<team::msg::create::Message>) -> GlobalRes
 	.bind(owner_user_id)
 	.bind(&ctx.display_name)
 	.bind(util::timestamp::now())
-	.execute(&ctx.crdb("db-team").await?)
+	.execute(&ctx.crdb().await?)
 	.await?;
 
 	// Wait for message to ensure it sends before team member creation

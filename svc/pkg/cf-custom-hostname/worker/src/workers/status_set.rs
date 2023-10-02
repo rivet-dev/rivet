@@ -13,14 +13,14 @@ async fn worker(
 
 	sqlx::query(indoc!(
 		"
-		UPDATE custom_hostnames
+		UPDATE db_cf_custom_hostname.custom_hostnames
 		SET status = $1
 		WHERE identifier = $2
 		"
 	))
 	.bind(ctx.status)
 	.bind(identifier)
-	.execute(&ctx.crdb("db-cf-custom-hostname").await?)
+	.execute(&ctx.crdb().await?)
 	.await?;
 
 	Ok(())

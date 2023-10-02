@@ -179,7 +179,7 @@ async fn worker(
 
 	sqlx::query(indoc!(
 		"
-		INSERT INTO custom_hostnames (
+		INSERT INTO db_cf_custom_hostname.custom_hostnames (
 			identifier, namespace_id, hostname, challenge, create_ts, status, subscription_id
 		)
 		VALUES ($1, $2, $3, $4, $5, $6, $7)
@@ -192,7 +192,7 @@ async fn worker(
 	.bind(ctx.ts())
 	.bind(backend::cf::custom_hostname::Status::Pending as i32)
 	.bind(subscription_id)
-	.execute(&ctx.crdb("db-cf-custom-hostname").await?)
+	.execute(&ctx.crdb().await?)
 	.await?;
 
 	// TODO: Add stripe subscription for hostname

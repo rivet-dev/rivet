@@ -16,22 +16,24 @@ async fn empty(ctx: TestCtx) {
 	.await
 	.unwrap();
 
-	let crdb = ctx.crdb("db-mm-state").await.unwrap();
+	let crdb = ctx.crdb().await.unwrap();
 
-	let (stop_ts,) =
-		sqlx::query_as::<_, (Option<i64>,)>("SELECT stop_ts FROM lobbies WHERE lobby_id = $1")
-			.bind(lobby_id)
-			.fetch_one(&crdb)
-			.await
-			.unwrap();
+	let (stop_ts,) = sqlx::query_as::<_, (Option<i64>,)>(
+		"SELECT stop_ts FROM db_mm_state.lobbies WHERE lobby_id = $1",
+	)
+	.bind(lobby_id)
+	.fetch_one(&crdb)
+	.await
+	.unwrap();
 	assert!(stop_ts.is_some(), "lobby not removed");
 
-	let players =
-		sqlx::query_as::<_, (Option<i64>,)>("SELECT remove_ts FROM players WHERE lobby_id = $1")
-			.bind(lobby_id)
-			.fetch_all(&crdb)
-			.await
-			.unwrap();
+	let players = sqlx::query_as::<_, (Option<i64>,)>(
+		"SELECT remove_ts FROM db_mm_state.players WHERE lobby_id = $1",
+	)
+	.bind(lobby_id)
+	.fetch_all(&crdb)
+	.await
+	.unwrap();
 	for (remove_ts,) in players {
 		assert!(remove_ts.is_some(), "player not removed");
 	}

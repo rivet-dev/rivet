@@ -24,7 +24,7 @@ struct BucketDeletions {
 
 #[worker(name = "upload-delete")]
 async fn worker(ctx: &OperationContext<upload::msg::delete::Message>) -> GlobalResult<()> {
-	let crdb = ctx.crdb("db-upload").await?;
+	let crdb = ctx.crdb().await?;
 
 	let request_id = internal_unwrap!(ctx.request_id).as_uuid();
 	let upload_ids = ctx
@@ -36,7 +36,7 @@ async fn worker(ctx: &OperationContext<upload::msg::delete::Message>) -> GlobalR
 	let uploads = sqlx::query_as::<_, UploadRow>(indoc!(
 		"
 		SELECT upload_id, bucket, provider
-		FROM uploads
+		FROM db_upload.uploads
 		WHERE upload_id = ANY($1)
 		"
 	))
@@ -47,7 +47,7 @@ async fn worker(ctx: &OperationContext<upload::msg::delete::Message>) -> GlobalR
 	let upload_files = sqlx::query_as::<_, FileRow>(indoc!(
 		"
 		SELECT upload_id, path
-		FROM upload_files
+		FROM db_upload.upload_files
 		WHERE upload_id = ANY($1)
 		"
 	))
@@ -127,7 +127,7 @@ async fn worker(ctx: &OperationContext<upload::msg::delete::Message>) -> GlobalR
 	// Mark upload as deleted
 	sqlx::query(indoc!(
 		"
-		UPDATE uploads
+		UPDATE db_upload.uploads
 		SET deleted_ts = $2
 		WHERE upload_id = ANY($1)
 		"

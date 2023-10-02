@@ -14,12 +14,12 @@ async fn handle(
 	let users = sqlx::query_as::<_, EmailRow>(indoc!(
 		"
 		SELECT email, user_id
-		FROM emails
+		FROM db_user_identity.emails
 		WHERE email = ANY($1)
 	"
 	))
 	.bind(&ctx.emails)
-	.fetch_all(&ctx.crdb("db-user-identity").await?)
+	.fetch_all(&ctx.crdb().await?)
 	.await?
 	.into_iter()
 	.map(|row| user::resolve_email::response::User {

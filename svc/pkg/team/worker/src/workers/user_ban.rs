@@ -9,14 +9,14 @@ async fn worker(ctx: &OperationContext<team::msg::user_ban::Message>) -> GlobalR
 
 	sqlx::query(indoc!(
 		"
-		INSERT INTO banned_users (team_id, user_id, ban_ts)
+		INSERT INTO db_team.banned_users (team_id, user_id, ban_ts)
 		VALUES ($1, $2, $3)
 		"
 	))
 	.bind(team_id)
 	.bind(user_id)
 	.bind(util::timestamp::now())
-	.execute(&ctx.crdb("db-team").await?)
+	.execute(&ctx.crdb().await?)
 	.await?;
 
 	// TODO: Establish audit logs

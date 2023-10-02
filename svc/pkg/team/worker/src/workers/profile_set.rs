@@ -53,7 +53,7 @@ async fn worker(ctx: &OperationContext<team::msg::profile_set::Message>) -> Glob
 	// Build query
 	let built_query = query_components.into_iter().collect::<String>();
 	let query_string = format!(
-		"UPDATE teams SET {} WHERE team_id = $1",
+		"UPDATE db_team.teams SET {} WHERE team_id = $1",
 		built_query.trim_end_matches(',')
 	);
 
@@ -80,7 +80,7 @@ async fn worker(ctx: &OperationContext<team::msg::profile_set::Message>) -> Glob
 		query
 	};
 
-	query.execute(&ctx.crdb("db-team").await?).await?;
+	query.execute(&ctx.crdb().await?).await?;
 
 	// Accept all group join requests when publicity is set to open
 	if let Some(publicity) = publicity {

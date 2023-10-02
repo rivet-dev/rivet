@@ -14,14 +14,14 @@ async fn handle(
 
 	sqlx::query(indoc!(
 		"
-		UPDATE game_namespaces
+		UPDATE db_cdn.game_namespaces
 		SET auth_type = $2
 		WHERE namespace_id = $1
 		"
 	))
 	.bind(namespace_id)
 	.bind(ctx.auth_type)
-	.execute(&ctx.crdb("db-cdn").await?)
+	.execute(&ctx.crdb().await?)
 	.await?;
 
 	msg!([ctx] cdn::msg::ns_config_update(namespace_id) {

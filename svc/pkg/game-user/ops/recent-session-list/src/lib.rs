@@ -12,7 +12,7 @@ struct Session {
 async fn handle(
 	ctx: OperationContext<game_user::recent_session_list::Request>,
 ) -> GlobalResult<game_user::recent_session_list::Response> {
-	let crdb = ctx.crdb("db-game-user").await?;
+	let crdb = ctx.crdb().await?;
 
 	let user_ids = ctx
 		.user_ids
@@ -26,12 +26,12 @@ async fn handle(
 		SELECT gu.user_id, gu.namespace_id, max(s.start_ts) AS start_ts
 		FROM (
 			SELECT game_user_id, user_id, namespace_id
-			FROM game_users
+			FROM db_game_user.game_users
 			WHERE user_id = ANY($1)
 		) gu
 		INNER JOIN LATERAL (
 			SELECT start_ts
-			FROM sessions AS s
+			FROM db_game_user.sessions AS s
 			WHERE s.game_user_id = gu.game_user_id
 			ORDER BY start_ts DESC
 			LIMIT 1

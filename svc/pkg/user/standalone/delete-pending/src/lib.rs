@@ -8,12 +8,12 @@ pub async fn run_from_env(ts: i64) -> GlobalResult<()> {
 	let pools = rivet_pools::from_env("user-delete-pending").await?;
 	let client =
 		chirp_client::SharedClient::from_env(pools.clone())?.wrap_new("user-delete-pending");
-	let crdb_pool = pools.crdb("db-user")?;
+	let crdb_pool = pools.crdb()?;
 
 	let user_ids = sqlx::query_as::<_, (Uuid,)>(indoc!(
 		"
 		SELECT user_id
-		FROM users
+		FROM db_user.users
 		WHERE delete_request_ts < $1
 		"
 	))

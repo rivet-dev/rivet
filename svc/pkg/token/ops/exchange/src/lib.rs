@@ -5,13 +5,13 @@ use rivet_operation::prelude::*;
 async fn handle(
 	ctx: OperationContext<token::exchange::Request>,
 ) -> GlobalResult<token::exchange::Response> {
-	let crdb = ctx.crdb("db-token").await?;
+	let crdb = ctx.crdb().await?;
 
 	let jti = internal_unwrap!(ctx.jti).as_uuid();
 
 	let update_query = sqlx::query(indoc!(
 		"
-		UPDATE tokens
+		UPDATE db_token.tokens
 		SET revoke_ts = $2
 		WHERE jti = $1 AND revoke_ts IS NULL AND exp > $2
 		"

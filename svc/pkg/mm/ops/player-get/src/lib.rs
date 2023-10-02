@@ -30,7 +30,7 @@ impl From<PlayerRow> for backend::matchmaker::Player {
 async fn handle(
 	ctx: OperationContext<mm::player_get::Request>,
 ) -> GlobalResult<mm::player_get::Response> {
-	let crdb = ctx.crdb("db-mm-state").await?;
+	let crdb = ctx.crdb().await?;
 
 	let player_ids = ctx
 		.player_ids
@@ -41,7 +41,7 @@ async fn handle(
 	let players = sqlx::query_as::<_, PlayerRow>(indoc!(
 		"
 		SELECT player_id, lobby_id, create_ts, register_ts, remove_ts, token_session_id, create_ray_id
-		FROM players
+		FROM db_mm_state.players
 		WHERE player_id = ANY($1)
 		"
 	))

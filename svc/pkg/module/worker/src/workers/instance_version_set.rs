@@ -7,7 +7,7 @@ use serde_json::json;
 async fn worker(
 	ctx: &OperationContext<module::msg::instance_version_set::Message>,
 ) -> Result<(), GlobalError> {
-	let crdb = ctx.crdb("db-module").await?;
+	let crdb = ctx.crdb().await?;
 
 	let instance_id = internal_unwrap!(ctx.instance_id).as_uuid();
 	let version_id = internal_unwrap!(ctx.version_id).as_uuid();
@@ -44,7 +44,7 @@ async fn worker(
 	// Update database
 	sqlx::query(indoc!(
 		"
-		UPDATE instances
+		UPDATE db_module.instances
 		SET version_id = $2
 		WHERE instance_id = $1
 		"

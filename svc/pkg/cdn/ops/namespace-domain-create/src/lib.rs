@@ -23,9 +23,9 @@ async fn handle(
 	let game = internal_unwrap_owned!(game_res.games.first());
 	let developer_team_id = internal_unwrap!(game.developer_team_id).as_uuid();
 
-	let crdb = ctx.crdb("db-cdn").await?;
+	let crdb = ctx.crdb().await?;
 	let (domain_count,) = sqlx::query_as::<_, (i64,)>(
-		"SELECT COUNT(*) FROM game_namespace_domains WHERE namespace_id = $1",
+		"SELECT COUNT(*) FROM db_cdn.game_namespace_domains WHERE namespace_id = $1",
 	)
 	.bind(namespace_id)
 	.fetch_one(&crdb)
@@ -35,7 +35,7 @@ async fn handle(
 
 	sqlx::query(indoc!(
 		"
-		INSERT INTO game_namespace_domains (namespace_id, domain, create_ts)
+		INSERT INTO db_cdn.game_namespace_domains (namespace_id, domain, create_ts)
 		VALUES ($1, $2, $3)
 		"
 	))
@@ -101,11 +101,13 @@ async fn handle(
 
 async fn rollback(crdb: &CrdbPool, namespace_id: Uuid, domain: &str) -> GlobalResult<()> {
 	// Rollback
-	sqlx::query("DELETE FROM game_namespace_domains WHERE namespace_id = $1 AND domain = $2")
-		.bind(namespace_id)
-		.bind(domain)
-		.execute(crdb)
-		.await?;
+	sqlx::query(
+		"DELETE FROM db_cdn.game_namespace_domains WHERE namespace_id = $1 AND domain = $2",
+	)
+	.bind(namespace_id)
+	.bind(domain)
+	.execute(crdb)
+	.await?;
 
 	Ok(())
 }

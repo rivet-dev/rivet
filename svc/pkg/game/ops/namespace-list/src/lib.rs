@@ -20,12 +20,12 @@ async fn handle(
 	let namespace_rows = sqlx::query_as::<_, NamespaceRow>(indoc!(
 		"
 		SELECT namespace_id, game_id
-		FROM game_namespaces
+		FROM db_game.game_namespaces
 		WHERE game_id = ANY($1)
 		"
 	))
 	.bind(&game_ids)
-	.fetch_all(&ctx.crdb("db-game").await?)
+	.fetch_all(&ctx.crdb().await?)
 	.await?;
 
 	let games = game_ids

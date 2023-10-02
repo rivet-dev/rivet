@@ -19,12 +19,13 @@ async fn empty(ctx: TestCtx) {
 	.await
 	.expect("set user profile");
 
-	let (sql_display_name, sql_account_number, sql_bio): (String, i64, String) =
-		sqlx::query_as("SELECT display_name, account_number, bio FROM users WHERE user_id = $1")
-			.bind(*user_id)
-			.fetch_one(&ctx.crdb("db-user").await.unwrap())
-			.await
-			.unwrap();
+	let (sql_display_name, sql_account_number, sql_bio): (String, i64, String) = sqlx::query_as(
+		"SELECT display_name, account_number, bio FROM db_user.users WHERE user_id = $1",
+	)
+	.bind(*user_id)
+	.fetch_one(&ctx.crdb().await.unwrap())
+	.await
+	.unwrap();
 
 	assert_eq!(display_name, sql_display_name);
 	assert_eq!(account_number as i64, sql_account_number);

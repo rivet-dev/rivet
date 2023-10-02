@@ -17,13 +17,13 @@ async fn handle(
 	// Set avatar id
 	sqlx::query(indoc!(
 		"
-		UPDATE users set profile_id = $2
+		UPDATE db_user.users set profile_id = $2
 		WHERE user_id = $1
 		"
 	))
 	.bind(user_id)
 	.bind(upload_id)
-	.execute(&ctx.crdb("db-user").await?)
+	.execute(&ctx.crdb().await?)
 	.await?;
 
 	msg!([ctx] user::msg::update(user_id) {

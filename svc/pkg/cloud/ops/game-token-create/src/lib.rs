@@ -33,11 +33,13 @@ async fn handle(
 	let token = internal_unwrap!(token_res.token);
 	let token_session_id = internal_unwrap!(token_res.session_id).as_uuid();
 
-	sqlx::query("INSERT INTO game_cloud_tokens (game_id, token_session_id) VALUES ($1, $2)")
-		.bind(game_id)
-		.bind(token_session_id)
-		.execute(&ctx.crdb("db-cloud").await?)
-		.await?;
+	sqlx::query(
+		"INSERT INTO db_cloud.game_cloud_tokens (game_id, token_session_id) VALUES ($1, $2)",
+	)
+	.bind(game_id)
+	.bind(token_session_id)
+	.execute(&ctx.crdb().await?)
+	.await?;
 
 	Ok(cloud::game_token_create::Response {
 		token: token.token.clone(),

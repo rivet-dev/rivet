@@ -31,12 +31,12 @@ async fn handle(
 					uf.follower_user_id, uf.following_user_id, create_ts,
 					EXISTS (
 						SELECT 1
-						FROM user_follows AS uf2
+						FROM db_user_follow.user_follows AS uf2
 						WHERE
 							uf2.follower_user_id = uf.following_user_id AND
 							uf2.following_user_id = uf.follower_user_id
 					) AS is_mutual_ac
-				FROM user_follows AS uf
+				FROM db_user_follow.user_follows AS uf
 				WHERE uf.following_user_id = $1
 			) AS q
 			WHERE is_mutual_ac AND create_ts > $3
@@ -49,12 +49,12 @@ async fn handle(
 					uf.follower_user_id, uf.following_user_id, create_ts,
 					EXISTS (
 						SELECT 1
-						FROM user_follows AS uf2
+						FROM db_user_follow.user_follows AS uf2
 						WHERE
 							uf2.follower_user_id = uf.following_user_id AND
 							uf2.following_user_id = uf.follower_user_id
 					) AS is_mutual_bc
-				FROM user_follows AS uf
+				FROM db_user_follow.user_follows AS uf
 				WHERE uf.following_user_id = $2
 			) AS q
 			WHERE is_mutual_bc AND create_ts > $3
@@ -68,12 +68,12 @@ async fn handle(
 					uf.follower_user_id, uf.following_user_id, create_ts,
 					EXISTS (
 						SELECT 1
-						FROM user_follows AS uf2
+						FROM db_user_follow.user_follows AS uf2
 						WHERE
 							uf2.follower_user_id = uf.following_user_id AND
 							uf2.following_user_id = uf.follower_user_id
 					) AS is_mutual_ab
-				FROM user_follows AS uf
+				FROM db_user_follow.user_follows AS uf
 				WHERE uf.follower_user_id = $1 AND uf.following_user_id = $2
 			) AS q
 			WHERE is_mutual_ab AND create_ts > $3
@@ -87,7 +87,7 @@ async fn handle(
 	.bind(user_b_id)
 	.bind(ctx.anchor.unwrap_or_default())
 	.bind(limit as i64)
-	.fetch_all(&ctx.crdb("db-user-follow").await?)
+	.fetch_all(&ctx.crdb().await?)
 	.await?;
 
 	let anchor = mutual_friends

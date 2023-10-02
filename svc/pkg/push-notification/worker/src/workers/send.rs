@@ -26,14 +26,13 @@ async fn worker(
 		backend::notification::NotificationService::Firebase => {
 			let row = sqlx::query_as::<_, (Option<String>,)>(indoc!(
 				"
-				SELECT
-				firebase_access_key
-				FROM users
+				SELECT firebase_access_key
+				FROM db_user_notification_auth.users
 				WHERE user_id = $1
 				"
 			))
 			.bind(user_id)
-			.fetch_optional(&ctx.crdb("db-user-notification-auth").await?)
+			.fetch_optional(&ctx.crdb().await?)
 			.await?;
 
 			// Only send notification if registered for Firebase

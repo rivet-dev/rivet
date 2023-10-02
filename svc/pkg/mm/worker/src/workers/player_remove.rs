@@ -32,7 +32,7 @@ struct LobbyRow {}
 async fn worker(ctx: &OperationContext<mm::msg::player_remove::Message>) -> GlobalResult<()> {
 	// NOTE: Idempotent
 
-	let crdb = ctx.crdb("db-mm-state").await?;
+	let crdb = ctx.crdb().await?;
 
 	let player_id = internal_unwrap!(ctx.player_id).as_uuid();
 	let lobby_id = ctx.lobby_id.map(|x| x.as_uuid());
@@ -54,12 +54,12 @@ async fn worker(ctx: &OperationContext<mm::msg::player_remove::Message>) -> Glob
 					lobbies.stop_ts AS lobby_stop_ts,
 					lobbies.max_players_normal,
 					lobbies.max_players_party
-				FROM players
+				FROM db_mm_state.players
 				INNER JOIN lobbies ON lobbies.lobby_id = players.lobby_id
 				WHERE players.player_id = $1
 			),
 			_update AS (
-				UPDATE players
+				UPDATE db_mm_state.players
 				SET remove_ts = $3
 				WHERE
 					player_id = $1 AND

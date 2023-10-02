@@ -8,12 +8,12 @@ async fn handle(
 	let teams = sqlx::query_as::<_, (String, Uuid)>(indoc!(
 		"
 		SELECT display_name, team_id
-		FROM teams
+		FROM db_team.teams
 		WHERE display_name = ANY($1)
 	"
 	))
 	.bind(&ctx.display_names)
-	.fetch_all(&ctx.crdb("db-team").await?)
+	.fetch_all(&ctx.crdb().await?)
 	.await?
 	.into_iter()
 	.map(

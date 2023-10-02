@@ -54,15 +54,16 @@ pub async fn run_from_env() -> GlobalResult<()> {
 		(),
 		Vec::new(),
 	);
-	let crdb_pool = ctx.crdb("db-build").await?;
+	let crdb_pool = ctx.crdb().await?;
 
 	for build in DEFAULT_BUILDS {
 		// Check if this default build is already set
-		let old_default_build =
-			sqlx::query_as::<_, (String,)>("SELECT image_tag FROM default_builds WHERE kind = $1")
-				.bind(build.kind)
-				.fetch_optional(&crdb_pool)
-				.await?;
+		let old_default_build = sqlx::query_as::<_, (String,)>(
+			"SELECT image_tag FROM db_build.default_builds WHERE kind = $1",
+		)
+		.bind(build.kind)
+		.fetch_optional(&crdb_pool)
+		.await?;
 		if old_default_build
 			.as_ref()
 			.map_or(false, |(old_image_tag,)| old_image_tag == build.tag)
@@ -82,7 +83,7 @@ pub async fn run_from_env() -> GlobalResult<()> {
 		tracing::info!(tag = %build.tag, ?upload_id, "setting default build");
 		sqlx::query(indoc!(
 			"
-			UPSERT INTO default_builds (kind, image_tag, upload_id)
+			UPSERT INTO db_build.default_builds (kind, image_tag, upload_id)
 			VALUES ($1, $2, $3)
 			"
 		))

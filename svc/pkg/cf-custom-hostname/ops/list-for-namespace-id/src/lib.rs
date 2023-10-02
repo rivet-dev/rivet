@@ -21,24 +21,24 @@ async fn handle(
 		sqlx::query_as::<_, CustomHostname>(indoc!(
 			"
 		SELECT identifier, namespace_id
-		FROM custom_hostnames
+		FROM db_cf_custom_hostname.custom_hostnames
 		WHERE namespace_id = ANY($1) AND status = $2
 		"
 		))
 		.bind(&namespace_ids)
 		.bind(backend::cf::custom_hostname::Status::Pending as i32)
-		.fetch_all(&ctx.crdb("db-cf-custom-hostname").await?)
+		.fetch_all(&ctx.crdb().await?)
 		.await?
 	} else {
 		sqlx::query_as::<_, CustomHostname>(indoc!(
 			"
 		SELECT identifier, namespace_id
-		FROM custom_hostnames
+		FROM db_cf_custom_hostname.custom_hostnames
 		WHERE namespace_id = ANY($1)
 		"
 		))
 		.bind(&namespace_ids)
-		.fetch_all(&ctx.crdb("db-cf-custom-hostname").await?)
+		.fetch_all(&ctx.crdb().await?)
 		.await?
 	};
 

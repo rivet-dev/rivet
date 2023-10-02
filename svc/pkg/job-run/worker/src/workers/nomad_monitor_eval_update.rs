@@ -30,7 +30,7 @@ struct RunRow {
 async fn worker(
 	ctx: &OperationContext<job_run::msg::nomad_monitor_eval_update::Message>,
 ) -> GlobalResult<()> {
-	let crdb = ctx.crdb("db-job-state").await?;
+	let crdb = ctx.crdb().await?;
 
 	let payload_value = serde_json::from_str::<serde_json::Value>(&ctx.payload_json)?;
 	let PlanResult { evaluation: eval } = serde_json::from_str::<PlanResult>(&ctx.payload_json)?;
@@ -77,14 +77,14 @@ async fn worker(
 		WITH
 			select_run AS (
 				SELECT runs.run_id, runs.region_id, run_meta_nomad.eval_plan_ts
-				FROM run_meta_nomad
+				FROM db_job_state.run_meta_nomad
 				INNER JOIN runs ON runs.run_id = run_meta_nomad.run_id
 				WHERE dispatched_job_id = $1
 			),
 			_update AS (
 				UPDATE run_meta_nomad
 				SET eval_plan_ts = $2
-				FROM select_run
+				FROM db_job_state.select_run
 				WHERE
 					run_meta_nomad.run_id = select_run.run_id AND
 					run_meta_nomad.eval_plan_ts IS NULL

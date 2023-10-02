@@ -32,7 +32,7 @@ impl From<UploadRow> for backend::upload::Upload {
 async fn handle(
 	ctx: OperationContext<upload::get::Request>,
 ) -> GlobalResult<upload::get::Response> {
-	let crdb = ctx.crdb("db-upload").await?;
+	let crdb = ctx.crdb().await?;
 
 	let upload_ids = ctx
 		.upload_ids
@@ -51,7 +51,7 @@ async fn handle(
 			deleted_ts,
 			user_id,
 			provider
-		FROM uploads
+		FROM db_upload.uploads
 		WHERE upload_id = ANY($1)
 		"
 	))

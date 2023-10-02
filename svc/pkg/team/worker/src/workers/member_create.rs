@@ -17,12 +17,12 @@ async fn worker(ctx: &OperationContext<team::msg::member_create::Message>) -> Gl
 	let (team_size,) = sqlx::query_as::<_, (i64,)>(indoc!(
 		"
 		SELECT COUNT(*)
-		FROM team_members
+		FROM db_team.team_members
 		WHERE team_id = $1
 	"
 	))
 	.bind(team_id)
-	.fetch_one(&ctx.crdb("db-team").await?)
+	.fetch_one(&ctx.crdb().await?)
 	.await?;
 	if team_size >= MAX_TEAM_SIZE {
 		return fail(ctx.chirp(), team_id, user_id, ctx.invitation.as_ref()).await;
@@ -30,7 +30,7 @@ async fn worker(ctx: &OperationContext<team::msg::member_create::Message>) -> Gl
 
 	let insert_query = sqlx::query(indoc!(
 		"
-		INSERT INTO team_members (team_id, user_id, join_ts)
+		INSERT INTO db_team.team_members (team_id, user_id, join_ts)
 		VALUES ($1, $2, $3)
 		ON CONFLICT DO NOTHING
 	"
@@ -38,7 +38,7 @@ async fn worker(ctx: &OperationContext<team::msg::member_create::Message>) -> Gl
 	.bind(team_id)
 	.bind(user_id)
 	.bind(util::timestamp::now())
-	.execute(&ctx.crdb("db-team").await?)
+	.execute(&ctx.crdb().await?)
 	.await?;
 	if insert_query.rows_affected() == 0 {
 		tracing::info!("member already inserted");

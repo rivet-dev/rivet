@@ -29,13 +29,13 @@ async fn handle(
 					uf.follower_user_id,
 					EXISTS(
 						SELECT 1
-						FROM user_follows AS uf2
+						FROM db_user_follow.user_follows AS uf2
 						WHERE
 							uf2.follower_user_id = uf.following_user_id AND
 							uf2.following_user_id = uf.follower_user_id
 					) AS is_mutual
 				FROM UNNEST($1::UUID[]) AS q
-				INNER JOIN user_follows AS uf
+				INNER JOIN db_user_follow.user_follows AS uf
 				ON uf.follower_user_id = q
 				) as f
 				WHERE is_mutual
@@ -43,14 +43,14 @@ async fn handle(
 				"
 			))
 			.bind(&user_ids)
-			.fetch_all(&ctx.crdb("db-user-follow").await?)
+			.fetch_all(&ctx.crdb().await?)
 			.await?
 		}
 		_ => {
 			sqlx::query_as::<_, FollowCount>(&formatdoc!(
 				"
 				SELECT {join_column} as user_id, COUNT(*)
-				FROM user_follows
+				FROM db_user_follow.user_follows
 				WHERE {join_column} = ANY($1)
 				GROUP BY {join_column}
 				",
@@ -62,7 +62,7 @@ async fn handle(
 				},
 			))
 			.bind(&user_ids)
-			.fetch_all(&ctx.crdb("db-user-follow").await?)
+			.fetch_all(&ctx.crdb().await?)
 			.await?
 		}
 	};

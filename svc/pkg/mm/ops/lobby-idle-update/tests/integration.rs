@@ -259,13 +259,13 @@ impl Ctx {
 
 	#[tracing::instrument(skip(self))]
 	async fn fetch_idle_lobby_ids(&self) -> HashSet<Uuid> {
-		let crdb = self.test_ctx.crdb("db-mm-state").await.unwrap();
+		let crdb = self.test_ctx.crdb().await.unwrap();
 
 		// Find lobbies without any players
 		let ili_crdb = sqlx::query_as::<_, (Uuid,)>(indoc!(
 			"
 			SELECT lobby_id
-			FROM lobbies
+			FROM db_mm_state.lobbies
 			WHERE
 				namespace_id = $1 AND
 				region_id = $2 AND

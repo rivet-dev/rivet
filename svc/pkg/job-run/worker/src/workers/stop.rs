@@ -22,7 +22,7 @@ struct RunMetaNomadRow {
 async fn worker(ctx: &OperationContext<job_run::msg::stop::Message>) -> GlobalResult<()> {
 	// NOTE: Idempotent
 
-	let crdb = ctx.crdb("db-job-state").await?;
+	let crdb = ctx.crdb().await?;
 
 	let run_id = internal_unwrap!(ctx.run_id).as_uuid();
 
@@ -94,7 +94,7 @@ async fn update_db(
 	let run_row = sqlx::query_as::<_, RunRow>(indoc!(
 		"
 		SELECT region_id, create_ts, stop_ts
-		FROM runs
+		FROM db_job_state.runs
 		WHERE run_id = $1
 		FOR UPDATE
 		"
@@ -111,7 +111,7 @@ async fn update_db(
 	let run_meta_nomad_row = sqlx::query_as::<_, RunMetaNomadRow>(indoc!(
 		"
 		SELECT dispatched_job_id
-		FROM run_meta_nomad
+		FROM db_job_state.run_meta_nomad
 		WHERE run_id = $1
 		FOR UPDATE
 		"
@@ -141,7 +141,7 @@ async fn update_db(
 	// We can't assume that started has been called here, so we can't fetch the alloc ID.
 
 	if run_row.stop_ts.is_none() {
-		sqlx::query("UPDATE runs SET stop_ts = $2 WHERE run_id = $1")
+		sqlx::query("UPDATE db_job_state.runs SET stop_ts = $2 WHERE run_id = $1")
 			.bind(run_id)
 			.bind(now)
 			.execute(&mut **tx)

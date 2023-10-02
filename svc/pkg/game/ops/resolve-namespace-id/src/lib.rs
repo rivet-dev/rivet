@@ -22,12 +22,12 @@ async fn handle(
 	let game_rows = sqlx::query_as::<_, GameRow>(indoc!(
 		"
 		SELECT game_id, namespace_id
-		FROM game_namespaces
+		FROM db_game.game_namespaces
 		WHERE namespace_id = ANY($1)
 		"
 	))
 	.bind(&namespace_ids)
-	.fetch_all(&ctx.crdb("db-game").await?)
+	.fetch_all(&ctx.crdb().await?)
 	.await?;
 
 	let mut games = HashMap::<Uuid, Vec<Uuid>>::new();

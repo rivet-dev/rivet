@@ -21,7 +21,7 @@ async fn handle(
 	let query_string = formatdoc!(
 		"
 		SELECT team_id, user_id, join_ts
-		FROM team_members
+		FROM db_team.team_members
 		WHERE
 			team_id = ANY($1)
 			{join}
@@ -53,7 +53,7 @@ async fn handle(
 	tracing::info!(anchor=?ctx.anchor, limit=?ctx.limit, query_string);
 
 	// Fetch all members
-	let members: Vec<TeamMember> = query.fetch_all(&ctx.crdb("db-team").await?).await?;
+	let members: Vec<TeamMember> = query.fetch_all(&ctx.crdb().await?).await?;
 
 	// Group in to teams
 	let teams = team_ids

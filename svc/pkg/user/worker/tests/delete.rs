@@ -177,9 +177,9 @@ async fn empty(ctx: TestCtx) {
 	// Verify user record
 	{
 		let (delete_complete_ts,): (Option<i64>,) =
-			sqlx::query_as("SELECT delete_complete_ts FROM users WHERE user_id = $1")
+			sqlx::query_as("SELECT delete_complete_ts FROM db_user.users WHERE user_id = $1")
 				.bind(user_id)
-				.fetch_one(&ctx.crdb("db-user").await.unwrap())
+				.fetch_one(&ctx.crdb().await.unwrap())
 				.await
 				.unwrap();
 		assert!(delete_complete_ts.is_some(), "user not deleted");

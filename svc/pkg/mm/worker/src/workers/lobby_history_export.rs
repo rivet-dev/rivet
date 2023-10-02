@@ -51,7 +51,7 @@ struct LobbyGroupCache {
 async fn worker(
 	ctx: &OperationContext<mm::msg::lobby_history_export::Message>,
 ) -> GlobalResult<()> {
-	let crdb = ctx.crdb("db-mm-state").await?;
+	let crdb = ctx.crdb().await?;
 
 	let request_id = internal_unwrap!(ctx.request_id).as_uuid();
 	let namespace_ids = ctx
@@ -67,7 +67,7 @@ async fn worker(
 	let mut all_lobbies = sqlx::query_as::<_, LobbyRow>(indoc!(
 		"
 		SELECT namespace_id, lobby_id, region_id, lobby_group_id, create_ts, stop_ts
-		FROM lobbies AS OF SYSTEM TIME '-5s'
+		FROM db_mm_state.lobbies AS OF SYSTEM TIME '-5s'
 		WHERE namespace_id = ANY($1) AND (
 			-- Lobbies stopped during the query window
 			(stop_ts > $2 AND stop_ts <= $3) OR

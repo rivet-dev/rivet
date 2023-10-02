@@ -13,12 +13,12 @@ async fn handle(
 
 	internal_assert!(follower_user_id != following_user_id, "cannot follow self");
 
-	let crdb = ctx.crdb("db-user-follow").await?;
+	let crdb = ctx.crdb().await?;
 	let mutual = if ctx.active {
 		tokio::try_join!(
 			sqlx::query(indoc!(
 				"
-				INSERT INTO user_follows
+				INSERT INTO db_user_follow.user_follows
 				(follower_user_id, following_user_id, create_ts, ignored)
 				VALUES ($1, $2, $3, false)
 				"
@@ -35,7 +35,7 @@ async fn handle(
 			// list again.
 			sqlx::query(indoc!(
 				"
-				UPDATE user_follows
+				UPDATE db_user_follow.user_follows
 				SET ignored = TRUE
 				WHERE
 					follower_user_id = $1 AND
@@ -55,7 +55,7 @@ async fn handle(
 		let mutual = check_mutual(&crdb, follower_user_id, following_user_id).await?;
 
 		sqlx::query(
-			"DELETE FROM user_follows WHERE follower_user_id = $1 AND following_user_id = $2",
+			"DELETE FROM db_user_follow.user_follows WHERE follower_user_id = $1 AND following_user_id = $2",
 		)
 		.bind(follower_user_id)
 		.bind(following_user_id)
@@ -147,7 +147,7 @@ async fn check_mutual(
 	let res = sqlx::query_as::<_, (i64,)>(indoc!(
 		"
 		SELECT 1
-			FROM user_follows
+			FROM db_user_follow.user_follows
 			WHERE
 				(follower_user_id = $1 AND following_user_id = $2) OR
 				(follower_user_id = $2 AND following_user_id = $1)

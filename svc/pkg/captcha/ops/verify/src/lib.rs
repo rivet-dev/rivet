@@ -6,7 +6,7 @@ use serde_json::json;
 async fn handle(
 	ctx: OperationContext<captcha::verify::Request>,
 ) -> GlobalResult<captcha::verify::Response> {
-	let crdb = ctx.crdb("db-captcha").await?;
+	let crdb = ctx.crdb().await?;
 
 	let captcha_config = internal_unwrap!(ctx.captcha_config);
 	let client_response = internal_unwrap!(ctx.client_response);
@@ -41,7 +41,7 @@ async fn handle(
 			// Insert verification
 			sqlx::query(indoc!(
 				"
-				INSERT INTO captcha_verifications (
+				INSERT INTO db_captcha.captcha_verifications (
 					verification_id, topic, topic_str, remote_address, complete_ts, expire_ts, provider, success, user_id, namespace_id
 				)
 				VALUES ($1, $2, $3, $4, $5, to_timestamp($6::float / 1000), $7, $8, $9, $10)
@@ -96,7 +96,7 @@ async fn handle(
 			// Insert verification
 			sqlx::query(indoc!(
 				"
-				INSERT INTO captcha_verifications (
+				INSERT INTO db_captcha.captcha_verifications (
 					verification_id, topic, topic_str, remote_address, complete_ts, expire_ts, provider, success, user_id, namespace_id
 				)
 				VALUES ($1, $2, $3, $4, $5, to_timestamp($6::float / 1000), $7, $8, $9, $10)

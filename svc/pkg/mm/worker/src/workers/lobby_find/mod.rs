@@ -75,7 +75,7 @@ async fn worker(ctx: &OperationContext<mm::msg::lobby_find::Message>) -> GlobalR
 	// TODO: Fetch all sessions for the current IP
 	// TODO: Map to all players matching the given sessions
 
-	let crdb = ctx.crdb("db-mm-state").await?;
+	let crdb = ctx.crdb().await?;
 	let mut redis_mm = ctx.redis_mm().await?;
 
 	let mut analytics_events = Vec::new();
@@ -579,7 +579,7 @@ async fn insert_to_crdb(
 		// Insert lobby if needed
 		sqlx::query(indoc!(
 			"
-			INSERT INTO lobbies (
+			INSERT INTO db_mm_state.lobbies (
 				lobby_id,
 				namespace_id,
 				region_id,
@@ -614,7 +614,7 @@ async fn insert_to_crdb(
 	// Insert query
 	sqlx::query(indoc!(
 		"
-		INSERT INTO find_queries (
+		INSERT INTO db_mm_state.find_queries (
 			query_id,
 			namespace_id,
 			join_kind,
@@ -638,7 +638,7 @@ async fn insert_to_crdb(
 	for player in players {
 		sqlx::query(indoc!(
 			"
-			INSERT INTO players (
+			INSERT INTO db_mm_state.players (
 				player_id,
 				lobby_id,
 				find_query_id,
