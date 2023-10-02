@@ -12,6 +12,10 @@ terraform {
 	}
 }
 
+data "aws_availability_zones" "available" {}
+data "aws_caller_identity" "current" {}
+data "aws_partition" "current" {}
+
 locals {
 	name = "rivet-${var.namespace}"
 	cluster_version = "1.27"
@@ -20,10 +24,11 @@ locals {
 	vpc_cidr = "10.0.0.0/16"
 	azs = slice(data.aws_availability_zones.available.names, 0, 3)
 
+	account_id = data.aws_caller_identity.current.account_id
+	partition  = data.aws_partition.current.partition
+
 	tags = {
 		Namespace = var.namespace
 	}
 }
-
-data "aws_availability_zones" "available" {}
 

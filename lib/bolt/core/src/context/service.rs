@@ -1095,11 +1095,11 @@ impl ServiceContextData {
 			// 	}
 			// };
 			let username = project_ctx
-			.read_secret(&["redis", &db_name, "username"])
-			.await?;
+				.read_secret(&["redis", &db_name, "username"])
+				.await?;
 			let password = project_ctx
-			.read_secret_opt(&["redis", &db_name, "password"])
-			.await?;
+				.read_secret_opt(&["redis", &db_name, "password"])
+				.await?;
 
 			// Build URL with auth
 			let url = if let Some(password) = password {

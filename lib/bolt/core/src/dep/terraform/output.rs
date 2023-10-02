@@ -46,6 +46,11 @@ pub struct Tls {
 }
 
 #[derive(Debug, Clone, Deserialize)]
+pub struct KubernetesClusterAws {
+	pub eks_admin_role_arn: TerraformOutputValue<String>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
 pub struct Cockroach {
 	pub host: TerraformOutputValue<String>,
 	pub port: TerraformOutputValue<u32>,
@@ -70,6 +75,10 @@ pub async fn read_pools(ctx: &ProjectContext) -> Pools {
 
 pub async fn read_tls(ctx: &ProjectContext) -> Tls {
 	read_plan::<Tls>(ctx, "tls").await
+}
+
+pub async fn read_k8s_cluster_aws(ctx: &ProjectContext) -> KubernetesClusterAws {
+	read_plan::<KubernetesClusterAws>(ctx, "k8s_cluster_aws").await
 }
 
 pub async fn read_crdb(ctx: &ProjectContext) -> Cockroach {

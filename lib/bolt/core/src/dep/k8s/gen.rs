@@ -13,7 +13,7 @@ use crate::{
 		service::{ServiceDomain, ServiceKind, ServiceRouter},
 	},
 	context::{ProjectContext, RunContext, ServiceContext},
-	dep::terraform,
+	dep::terraform::{self, output::read_k8s_cluster_aws},
 };
 
 // Kubernetes requires a specific port for containers because they have their own networking namespace, the
@@ -64,22 +64,29 @@ pub async fn project(ctx: &ProjectContext) -> Result<()> {
 			ns::KubernetesProvider::K3d {} => block_in_place(move || {
 				cmd!("k3d", "kubeconfig", "get", ctx.k8s_cluster_name()).read()
 			})?,
-			ns::KubernetesProvider::AwsEks {} => block_in_place(move || {
-				cmd!(
-					"aws",
-					"eks",
-					"update-kubeconfig",
-					// Writes to stdout instead of user's kubeconfig
-					"--dry-run",
-					"--name",
-					ctx.k8s_cluster_name(),
-					// Read from a non-existent kubeconfig to prevent it from merging the existing
-					// user's kubeconfig.
-					"--kubeconfig",
-					"THIS DOES NOT EXIST",
-				)
-				.read()
-			})?,
+			ns::KubernetesProvider::AwsEks {} => {
+				let output = read_k8s_cluster_aws(ctx).await;
+				block_in_place(move || {
+					cmd!(
+						"aws",
+						"eks",
+						"update-kubeconfig",
+						// Writes to stdout instead of user's kubeconfig
+						"--dry-run",
+						"--region",
+						"us-east-1",
+						"--name",
+						ctx.k8s_cluster_name(),
+						// Read from a non-existent kubeconfig to prevent it from merging the existing
+						// user's kubeconfig.
+						"--kubeconfig",
+						"THIS DOES NOT EXIST",
+						"--role-arn",
+						output.eks_admin_role_arn.as_str(),
+					)
+					.read()
+				})?
+			}
 		};
 
 		// Write to file
