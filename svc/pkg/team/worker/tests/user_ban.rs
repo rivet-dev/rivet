@@ -2,7 +2,7 @@ use chirp_worker::prelude::*;
 use proto::backend::pkg::*;
 
 #[worker_test]
-async fn empty(ctx: TestCtx) {
+async fn ban(ctx: TestCtx) {
 	let team_id = Uuid::new_v4();
 	let user_id = Uuid::new_v4();
 	let banner_user_id = Uuid::new_v4();

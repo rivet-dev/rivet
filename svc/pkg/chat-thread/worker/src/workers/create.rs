@@ -29,7 +29,7 @@ async fn worker(ctx: &OperationContext<chat_thread::msg::create::Message>) -> Gl
 						DO NOTHING
 						RETURNING thread_id
 					)
-				SELECT thread_id FROM db_chat.insert
+				SELECT thread_id FROM insert
 				UNION
 				SELECT thread_id FROM db_chat.threads WHERE team_team_id = $3
 				LIMIT 1

@@ -3,7 +3,7 @@ use proto::backend::{self, pkg::*};
 
 // TODO: Verify user identity is deleted
 #[worker_test]
-async fn empty(ctx: TestCtx) {
+async fn delete(ctx: TestCtx) {
 	let user_id = Uuid::new_v4();
 	tracing::info!(%user_id);
 

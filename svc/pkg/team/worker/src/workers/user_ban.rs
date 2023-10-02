@@ -11,6 +11,8 @@ async fn worker(ctx: &OperationContext<team::msg::user_ban::Message>) -> GlobalR
 		"
 		INSERT INTO db_team.banned_users (team_id, user_id, ban_ts)
 		VALUES ($1, $2, $3)
+		ON CONFLICT
+		DO NOTHING
 		"
 	))
 	.bind(team_id)
