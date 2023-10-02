@@ -231,7 +231,6 @@ impl Client {
 		ts: i64,
 		drop_fn: Option<DropFn>,
 	) -> Client {
-		let token = CancellationToken::new();
 		metrics::CHIRP_CLIENT_ACTIVE.inc();
 
 		Client {
@@ -263,6 +262,12 @@ impl Client {
 
 	pub fn ts(&self) -> i64 {
 		self.ts
+	}
+}
+
+impl Drop for Client {
+	fn drop(&mut self) {
+		metrics::CHIRP_CLIENT_ACTIVE.dec();
 	}
 }
 
