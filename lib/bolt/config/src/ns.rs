@@ -437,10 +437,7 @@ pub enum CockroachDBProvider {
 	#[serde(rename = "kubernetes")]
 	Kubernetes {},
 	#[serde(rename = "managed")]
-	Managed {
-		// #[serde(flatten)]
-		// plan: CockroachDBManagedPlan,
-	},
+	Managed {},
 }
 
 impl Default for CockroachDBProvider {
@@ -469,15 +466,6 @@ impl Default for ClickHouseProvider {
 		Self::Kubernetes {}
 	}
 }
-
-// #[derive(Serialize, Deserialize, Clone, Debug)]
-// #[serde(deny_unknown_fields)]
-// pub enum CockroachDBManagedPlan {
-// 	#[serde(rename = "serverless")]
-// 	Serverless {},
-// 	// #[serde(rename = "dedicated")]
-// 	// Dedicated {},
-// }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(deny_unknown_fields)]
