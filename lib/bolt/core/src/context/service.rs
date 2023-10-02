@@ -1072,28 +1072,34 @@ impl ServiceContextData {
 				.expect("terraform output for redis db not found");
 			let host = format!("{}:{}", *hostname, *port);
 
-			// Read auth secrets
-			let (username, password) = match project_ctx.ns().cluster.kind {
-				config::ns::ClusterKind::SingleNode { .. } => (
-					project_ctx
-						.read_secret(&["redis", &db_name, "username"])
-						.await?,
-					project_ctx
-						.read_secret_opt(&["redis", &db_name, "password"])
-						.await?,
-				),
-				config::ns::ClusterKind::Distributed { .. } => {
-					let db_name = format!("rivet-{}-{}", project_ctx.ns_id(), db_name);
-					let username = project_ctx
-						.read_secret(&["redis", &db_name, "username"])
-						.await?;
-					let password = project_ctx
-						.read_secret_opt(&["redis", &db_name, "password"])
-						.await?;
+			// // Read auth secrets
+			// let (username, password) = match project_ctx.ns().cluster.kind {
+			// 	config::ns::ClusterKind::SingleNode { .. } => (
+			// 		project_ctx
+			// 			.read_secret(&["redis", &db_name, "username"])
+			// 			.await?,
+			// 		project_ctx
+			// 			.read_secret_opt(&["redis", &db_name, "password"])
+			// 			.await?,
+			// 	),
+			// 	config::ns::ClusterKind::Distributed { .. } => {
+			// 		let db_name = format!("rivet-{}-{}", project_ctx.ns_id(), db_name);
+			// 		let username = project_ctx
+			// 			.read_secret(&["redis", &db_name, "username"])
+			// 			.await?;
+			// 		let password = project_ctx
+			// 			.read_secret_opt(&["redis", &db_name, "password"])
+			// 			.await?;
 
-					(username, password)
-				}
-			};
+			// 		(username, password)
+			// 	}
+			// };
+			let username = project_ctx
+			.read_secret(&["redis", &db_name, "username"])
+			.await?;
+			let password = project_ctx
+			.read_secret_opt(&["redis", &db_name, "password"])
+			.await?;
 
 			// Build URL with auth
 			let url = if let Some(password) = password {
