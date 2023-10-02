@@ -180,25 +180,44 @@ pub async fn gen_svc(exec_ctx: &ExecServiceContext) -> Vec<serde_json::Value> {
 	}));
 
 	// Render ports
-	let ports = {
-		let mut ports = Vec::new();
+	let (pod_ports, service_ports) = {
+		let mut pod_ports = Vec::new();
+		let mut service_ports = Vec::new();
 
-		ports.push(json!({
+		pod_ports.push(json!({
 			"name": "health",
 			"containerPort": HEALTH_PORT,
 		}));
+		service_ports.push(json!({
+			"name": "health",
+			"protocol": "TCP",
+			"port": HEALTH_PORT,
+			"targetPort": "health"
+		}));
 
 		if has_metrics {
-			ports.push(json!({
+			pod_ports.push(json!({
 				"name": "metrics",
 				"containerPort": METRICS_PORT,
+			}));
+			service_ports.push(json!({
+				"name": "metrics",
+				"protocol": "TCP",
+				"port": METRICS_PORT,
+				"targetPort": "metrics"
 			}));
 		};
 
 		if svc_ctx.enable_tokio_console() {
-			ports.push(json!({
+			pod_ports.push(json!({
 				"name": "tokio-console",
 				"containerPort": TOKIO_CONSOLE_PORT,
+			}));
+			service_ports.push(json!({
+				"name": "tokio-console",
+				"protocol": "TCP",
+				"port": TOKIO_CONSOLE_PORT,
+				"targetPort": "tokio-console"
 			}));
 		}
 
@@ -207,40 +226,52 @@ pub async fn gen_svc(exec_ctx: &ExecServiceContext) -> Vec<serde_json::Value> {
 				port: Some(port), ..
 			} = svc_ctx.config().kind
 			{
-				ports.push(json!({
+				pod_ports.push(json!({
 					"name": "http",
 					"containerPort": port,
 					"hostPort": port
 				}));
+				service_ports.push(json!({
+					"name": "http",
+					"protocol": "TCP",
+					"port": port,
+					"targetPort": "http"
+				}));
 			} else {
-				ports.push(json!({
+				pod_ports.push(json!({
 					"name": "http",
 					"containerPort": HTTP_SERVER_PORT,
+				}));
+				service_ports.push(json!({
+					"name": "http",
+					"protocol": "TCP",
+					"port": HTTP_SERVER_PORT,
+					"targetPort": "http"
 				}));
 			}
 		}
 
-		ports
+		(pod_ports, service_ports)
 	};
 
-	let health_check = if has_health {
-		let cmd = if matches!(svc_ctx.config().kind, ServiceKind::Static { .. }) {
-			"/local/rivet/health-checks.sh --static"
-		} else {
-			"/local/rivet/health-checks.sh"
-		};
+	// let health_check = if has_health {
+	// 	let cmd = if matches!(svc_ctx.config().kind, ServiceKind::Static { .. }) {
+	// 		"/local/rivet/health-checks.sh --static"
+	// 	} else {
+	// 		"/local/rivet/health-checks.sh"
+	// 	};
 
-		json!({
-			"exec": {
-				"command": ["/bin/sh", "-c", cmd],
-			},
-			"initialDelaySeconds": 1,
-			"periodSeconds": 5,
-			"timeoutSeconds": 5
-		})
-	} else {
-		serde_json::Value::Null
-	};
+	// 	json!({
+	// 		"exec": {
+	// 			"command": ["/bin/sh", "-c", cmd],
+	// 		},
+	// 		"initialDelaySeconds": 1,
+	// 		"periodSeconds": 5,
+	// 		"timeoutSeconds": 5
+	// 	})
+	// } else {
+	// 	serde_json::Value::Null
+	// };
 
 	let (image, image_pull_policy, exec) = match &driver {
 		ExecServiceDriver::LocalBinaryArtifact { exec_path, args } => (
@@ -323,7 +354,7 @@ pub async fn gen_svc(exec_ctx: &ExecServiceContext) -> Vec<serde_json::Value> {
 				}
 			}],
 			"volumeMounts": volume_mounts,
-			"ports": ports,
+			"ports": pod_ports,
 			// "livenessProbe": health_check,
 			"resources": resources,
 		}],
@@ -434,50 +465,48 @@ pub async fn gen_svc(exec_ctx: &ExecServiceContext) -> Vec<serde_json::Value> {
 		}
 	}
 
-	// Network the service
-	if matches!(run_context, RunContext::Service { .. }) {
-		if svc_ctx.config().kind.has_server() {
-			specs.push(json!({
-				"apiVersion": "v1",
-				"kind": "Service",
-				"metadata": {
-					"name": service_name,
-					"namespace": "rivet-service",
-					"labels": {
-						"app.kubernetes.io/name": service_name
-					}
-				},
-				"spec": {
-					"type": "ClusterIP",
-					"selector": {
-						"app.kubernetes.io/name": service_name
-					},
-					"ports": [{
-						"protocol": "TCP",
-						"port": 80,
-						"targetPort": "http"
-					}]
-				}
-			}));
-
-			specs.push(json!({
-				"apiVersion": "monitoring.coreos.com/v1",
-				"kind": "ServiceMonitor",
-				"metadata": {
-					"name": service_name,
-					"namespace": "rivet-service"
-				},
-				"spec": {
-					"selector": {
-						"app.kubernetes.io/name": service_name
-					},
-					"entryPoints": [
-						{ "port": "http" }
-					],
-				}
-			}));
+	// Expose service
+	specs.push(json!({
+		"apiVersion": "v1",
+		"kind": "Service",
+		"metadata": {
+			"name": service_name,
+			"namespace": "rivet-service",
+			"labels": {
+				"app.kubernetes.io/name": service_name
+			}
+		},
+		"spec": {
+			"type": "ClusterIP",
+			"selector": {
+				"app.kubernetes.io/name": service_name
+			},
+			"ports": service_ports
 		}
+	}));
 
+	// Monitor the service
+	specs.push(json!({
+		"apiVersion": "monitoring.coreos.com/v1",
+		"kind": "ServiceMonitor",
+		"metadata": {
+			"name": service_name,
+			"namespace": "rivet-service"
+		},
+		"spec": {
+			"selector": {
+				"matchLabels": {
+					"app.kubernetes.io/name": service_name
+				},
+			},
+			"endpoints": [
+				{ "port": "metrics" }
+			],
+		}
+	}));
+
+	// Build ingress router
+	if matches!(run_context, RunContext::Service { .. }) {
 		if let Some(router) = svc_ctx.config().kind.router() {
 			build_ingress_router(&project_ctx, svc_ctx, &service_name, &router, &mut specs);
 		}
