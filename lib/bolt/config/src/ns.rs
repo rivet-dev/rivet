@@ -25,8 +25,6 @@ pub struct Namespace {
 	pub email: Option<Email>,
 	#[serde(default)]
 	pub captcha: Captcha,
-	/// Where to ship logs to. Will default to using built-in K8s logging if not provided.
-	pub logging: Option<Logging>,
 	#[serde(default)]
 	pub services: HashMap<String, Service>,
 	#[serde(default)]
@@ -313,20 +311,6 @@ pub struct HcaptchaSiteKeys {
 	pub moderate: String,
 	pub difficult: String,
 	pub always_on: String,
-}
-
-#[derive(Serialize, Deserialize, Clone, Debug)]
-#[serde(deny_unknown_fields)]
-pub struct Logging {
-	#[serde(flatten)]
-	pub provider: LoggingProvider,
-}
-
-#[derive(Serialize, Deserialize, Clone, Debug)]
-#[serde(deny_unknown_fields)]
-pub enum LoggingProvider {
-	#[serde(rename = "loki")]
-	Loki { endpoint: String },
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
