@@ -35,7 +35,7 @@ use crate::{
 /// operations to time out first.
 const TEST_TIMEOUT: Duration = Duration::from_secs(75);
 
-const PARALLEL_TESTS: usize = 16;
+const PARALLEL_TESTS: usize = 8;
 
 struct TestCleanupManager {
 	project_ctx: ProjectContext,
