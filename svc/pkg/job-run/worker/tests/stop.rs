@@ -3,6 +3,10 @@ use proto::backend::pkg::*;
 
 #[worker_test]
 async fn empty(ctx: TestCtx) {
+	if !util::feature::job_run() {
+		return;
+	}
+
 	let nomad_config = nomad_util::config_from_env().unwrap();
 
 	let run_res = op!([ctx] faker_job_run {
