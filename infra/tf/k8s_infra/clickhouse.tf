@@ -1,4 +1,10 @@
-module "secrets" {
+locals {
+	clickhouse_k8s = var.clickhouse_provider == "kubernetes"
+}
+
+module "clickhouse_secrets" {
+	count = local.clickhouse_k8s ? 1 : 0
+
 	source = "../modules/secrets"
 
 	keys = [
@@ -7,14 +13,18 @@ module "secrets" {
 }
 
 resource "kubernetes_namespace" "clickhouse" {
+	count = local.clickhouse_k8s ? 1 : 0
+
 	metadata {
 		name = "clickhouse"
 	}
 }
 
 resource "helm_release" "clickhouse" {
+	count = local.clickhouse_k8s ? 1 : 0
+
 	name = "clickhouse"
-	namespace = kubernetes_namespace.clickhouse.metadata.0.name
+	namespace = kubernetes_namespace.clickhouse[0].metadata.0.name
 	repository = "oci://registry-1.docker.io/bitnamicharts"
 	chart = "clickhouse"
 	version = "3.6.3"
@@ -83,22 +93,39 @@ resource "helm_release" "clickhouse" {
 		# Admin auth
 		auth = {
 			username = "default"
-			password = module.secrets.values["clickhouse/users/default/password"]
+			password = module.clickhouse_secrets[0].values["clickhouse/users/default/password"]
+		}
+
+		metrics = {
+			enabled = true
+
+			serviceMonitor = {
+				enabled = true
+				namespace = kubernetes_namespace.clickhouse[0].metadata.0.name
+			}
+
+			# TOOD:
+			# prometheusRule = {
+			# 	enabled = true
+			# 	namespace = kubernetes_namespace.prometheus.metadata.0.name
+			# }
 		}
 	})]
 }
 
 data "kubernetes_secret" "clickhouse_ca" {
+	count = local.clickhouse_k8s ? 1 : 0
+
 	depends_on = [helm_release.clickhouse]
 
 	metadata {
 		name = "clickhouse-crt"
-		namespace = kubernetes_namespace.clickhouse.metadata.0.name
+		namespace = kubernetes_namespace.clickhouse[0].metadata.0.name
 	}
 }
 
 resource "kubernetes_config_map" "clickhouse_ca" {
-	for_each = toset(["rivet-service", "bolt"])
+	for_each = local.clickhouse_k8s ? toset(["rivet-service", "bolt"]) : toset([])
 
 	metadata {
 		name = "clickhouse-ca"
@@ -106,6 +133,7 @@ resource "kubernetes_config_map" "clickhouse_ca" {
 	}
 
 	data = {
-		"ca.crt" = data.kubernetes_secret.clickhouse_ca.data["ca.crt"]
+		"ca.crt" = data.kubernetes_secret.clickhouse_ca[0].data["ca.crt"]
 	}
 }
+

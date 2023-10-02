@@ -48,7 +48,7 @@ pub async fn group_join_requests_create_join_request(configuration: &configurati
 
     let local_var_client = &local_var_configuration.client;
 
-    let local_var_uri_str = format!("{}/groups/{group_id}/join-request", local_var_configuration.base_path, group_id=crate::apis::urlencode(group_id));
+    let local_var_uri_str = format!("{}/group/groups/{group_id}/join-request", local_var_configuration.base_path, group_id=crate::apis::urlencode(group_id));
     let mut local_var_req_builder = local_var_client.request(reqwest::Method::POST, local_var_uri_str.as_str());
 
     if let Some(ref local_var_user_agent) = local_var_configuration.user_agent {
@@ -79,7 +79,7 @@ pub async fn group_join_requests_resolve_join_request(configuration: &configurat
 
     let local_var_client = &local_var_configuration.client;
 
-    let local_var_uri_str = format!("{}/groups/{group_id}/join-request/{identity_id}", local_var_configuration.base_path, group_id=crate::apis::urlencode(group_id), identity_id=crate::apis::urlencode(identity_id));
+    let local_var_uri_str = format!("{}/group/groups/{group_id}/join-request/{identity_id}", local_var_configuration.base_path, group_id=crate::apis::urlencode(group_id), identity_id=crate::apis::urlencode(identity_id));
     let mut local_var_req_builder = local_var_client.request(reqwest::Method::POST, local_var_uri_str.as_str());
 
     if let Some(ref local_var_user_agent) = local_var_configuration.user_agent {

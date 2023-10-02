@@ -12,7 +12,7 @@ async fn handle(ctx: OperationContext<kv::list::Request>) -> GlobalResult<kv::li
 	// much more expensive. We only use this for the developer dashboard and not
 	// production games.
 
-	let crdb = ctx.crdb("db-kv").await?;
+	let crdb = ctx.crdb().await?;
 
 	let namespace_id = internal_unwrap!(ctx.namespace_id).as_uuid();
 	let limit = ctx.limit.map(|x| x as i64).unwrap_or(DEFAULT_LIMIT);
@@ -24,7 +24,7 @@ async fn handle(ctx: OperationContext<kv::list::Request>) -> GlobalResult<kv::li
 		sqlx::query_as::<_, (String, String)>(indoc!(
 			"
 			SELECT key, value::TEXT
-			FROM kv AS OF SYSTEM TIME '-1s'
+			FROM db_kv.kv AS OF SYSTEM TIME '-1s'
 			WHERE namespace_id = $1 AND directory = $2
 			LIMIT $3
 			"
@@ -44,7 +44,7 @@ async fn handle(ctx: OperationContext<kv::list::Request>) -> GlobalResult<kv::li
 		sqlx::query_as::<_, (String,)>(indoc!(
 			"
 			SELECT key
-			FROM kv AS OF SYSTEM TIME '-1s'
+			FROM db_kv.kv AS OF SYSTEM TIME '-1s'
 			WHERE namespace_id = $1 AND directory = $2
 			LIMIT $3
 			"

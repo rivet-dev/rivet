@@ -49,7 +49,7 @@ async fn empty(ctx: TestCtx) {
 	}
 
 	let thread_ids = threads.iter().flat_map(|t| t.thread_id).collect::<Vec<_>>();
-	let crdb = ctx.crdb("db-chat").await.unwrap();
+	let crdb = ctx.crdb().await.unwrap();
 	let crdb_threads = sqlx::query_as::<_, Thread>(indoc!(
 		"
 		SELECT
@@ -57,7 +57,7 @@ async fn empty(ctx: TestCtx) {
 			team_team_id,
 			direct_user_a_id,
 			direct_user_b_id
-		FROM threads
+		FROM db_chat.threads
 		WHERE thread_id = ANY($1)
 		"
 	))

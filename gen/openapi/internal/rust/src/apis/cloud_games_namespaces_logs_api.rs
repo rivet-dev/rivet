@@ -48,7 +48,7 @@ pub async fn cloud_games_namespaces_logs_get_namespace_lobby(configuration: &con
 
     let local_var_client = &local_var_configuration.client;
 
-    let local_var_uri_str = format!("{}/games/{game_id}/namespaces/{namespace_id}/logs/lobbies/{lobby_id}", local_var_configuration.base_path, game_id=crate::apis::urlencode(game_id), namespace_id=crate::apis::urlencode(namespace_id), lobby_id=crate::apis::urlencode(lobby_id));
+    let local_var_uri_str = format!("{}/cloud/games/{game_id}/namespaces/{namespace_id}/logs/lobbies/{lobby_id}", local_var_configuration.base_path, game_id=crate::apis::urlencode(game_id), namespace_id=crate::apis::urlencode(namespace_id), lobby_id=crate::apis::urlencode(lobby_id));
     let mut local_var_req_builder = local_var_client.request(reqwest::Method::GET, local_var_uri_str.as_str());
 
     if let Some(ref local_var_user_agent) = local_var_configuration.user_agent {
@@ -79,7 +79,7 @@ pub async fn cloud_games_namespaces_logs_list_namespace_lobbies(configuration: &
 
     let local_var_client = &local_var_configuration.client;
 
-    let local_var_uri_str = format!("{}/games/{game_id}/namespaces/{namespace_id}/logs/lobbies", local_var_configuration.base_path, game_id=crate::apis::urlencode(game_id), namespace_id=crate::apis::urlencode(namespace_id));
+    let local_var_uri_str = format!("{}/cloud/games/{game_id}/namespaces/{namespace_id}/logs/lobbies", local_var_configuration.base_path, game_id=crate::apis::urlencode(game_id), namespace_id=crate::apis::urlencode(namespace_id));
     let mut local_var_req_builder = local_var_client.request(reqwest::Method::GET, local_var_uri_str.as_str());
 
     if let Some(ref local_var_str) = before_create_ts {

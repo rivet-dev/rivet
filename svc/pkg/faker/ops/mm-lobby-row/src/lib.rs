@@ -5,7 +5,7 @@ use rivet_operation::prelude::*;
 async fn handle(
 	ctx: OperationContext<faker::mm_lobby_row::Request>,
 ) -> GlobalResult<faker::mm_lobby_row::Response> {
-	let crdb = ctx.crdb("db-mm-state").await?;
+	let crdb = ctx.crdb().await?;
 	let mut redis = ctx.redis_mm().await?;
 
 	let lobby_id = internal_unwrap!(ctx.lobby_id).as_uuid();
@@ -43,7 +43,7 @@ async fn handle(
 		.await?;
 	sqlx::query(indoc!(
 		"
-		INSERT INTO lobbies (
+		INSERT INTO db_mm_state.lobbies (
 			lobby_id,
 			namespace_id,
 			lobby_group_id,

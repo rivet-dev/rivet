@@ -19,10 +19,7 @@ async fn handle(
 	let game_create_res = op!([ctx] game_create {
 		name_id: util::faker::ident(),
 		display_name: util::faker::display_name(),
-		url: format!("https://{}.io", util::faker::ident()),
 		developer_team_id: Some(dev_team_id),
-		description: "test".to_owned(),
-		tags: vec![util::faker::ident(), util::faker::ident(), util::faker::ident()],
 	})
 	.await?;
 

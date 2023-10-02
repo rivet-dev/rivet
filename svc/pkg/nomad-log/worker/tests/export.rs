@@ -39,33 +39,28 @@ async fn basic(ctx: TestCtx) {
 	.unwrap();
 
 	// Fetch logs
-	let url = format!(
-		"https://cdn.{}/nomad-log-export/{}/stdout.txt",
-		util::env::domain_main(),
-		res.upload_id.unwrap().as_uuid(),
+	let s3_client = s3_util::Client::from_env("bucket-nomad-log-export")
+		.await
+		.unwrap();
+	let get_object = s3_client
+		.get_object()
+		.bucket(s3_client.bucket())
+		.key(format!("{}/stdout.txt", res.upload_id.unwrap().as_uuid()))
+		.send()
+		.await
+		.unwrap();
+	let actual_buf = get_object.body.collect().await.unwrap().to_vec();
+
+	// Compare buffer
+	let expected_buf = messages
+		.iter()
+		.flat_map(|x| x.iter().cloned().chain([b'\n']))
+		.collect::<Vec<u8>>();
+	assert_eq!(
+		expected_buf,
+		&actual_buf[..],
+		"mismatching logs:\n\nexpected:\n{expected}\n\nactual:\n{actual}",
+		expected = String::from_utf8_lossy(&expected_buf),
+		actual = String::from_utf8_lossy(&actual_buf)
 	);
-	loop {
-		tracing::info!(?url, "fetching log export");
-		let res = reqwest::get(&url).await.unwrap();
-		if res.status() == 502 {
-			tracing::info!("bad gateway, trying again");
-			tokio::time::sleep(Duration::from_secs(1)).await;
-			continue;
-		}
-
-		let actual_buf = res.bytes().await.unwrap();
-
-		let expected_buf = messages
-			.iter()
-			.flat_map(|x| x.iter().cloned().chain([b'\n']))
-			.collect::<Vec<u8>>();
-		assert_eq!(
-			expected_buf,
-			&actual_buf[..],
-			"mismatching logs:\n\nexpected:\n{expected}\n\nactual:\n{actual}",
-			expected = String::from_utf8_lossy(&expected_buf),
-			actual = String::from_utf8_lossy(&actual_buf)
-		);
-		break;
-	}
 }

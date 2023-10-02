@@ -40,6 +40,7 @@ rustPlatform.buildRustPackage rec {
 		openssl
 	];
 	nativeBuildInputs = buildInputs;
+	doCheck = false;
 
 	shellHook = ''
 		export LD_LIBRARY_PATH="${pkgs.lib.strings.makeLibraryPath [ pkgs.openssl ]}"

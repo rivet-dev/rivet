@@ -9,7 +9,7 @@ async fn test_no_ns(ctx: TestCtx) {
 		format!(
 			"http://{}.{}/hello-world",
 			game_data.name_id,
-			util::env::domain_cdn()
+			util::env::domain_cdn().unwrap()
 		),
 	)
 	.await
@@ -31,7 +31,7 @@ async fn test_with_ns(ctx: TestCtx) {
 				"http://{}--{}.{}/hello-world",
 				game_data.name_id,
 				ns.name_id,
-				util::env::domain_cdn()
+				util::env::domain_cdn().unwrap()
 			),
 		)
 		.await
@@ -43,6 +43,10 @@ async fn test_with_ns(ctx: TestCtx) {
 
 #[worker_test]
 async fn test_with_custom_domain(ctx: TestCtx) {
+	if !util::feature::cf_custom_hostname() {
+		return;
+	}
+
 	let game_data = prepare_game(&ctx).await;
 	let domain = format!("{}.com", util::faker::ident());
 

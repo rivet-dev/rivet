@@ -17,14 +17,14 @@ async fn handle(
 
 			sqlx::query(indoc!(
 				"
-				INSERT INTO emails (email, user_id, create_ts)
+				INSERT INTO db_user_identity.emails (email, user_id, create_ts)
 				VALUES ($1, $2, $3)
 				"
 			))
 			.bind(&email.email)
 			.bind(user_id)
 			.bind(ctx.ts())
-			.execute(&ctx.crdb("db-user-identity").await?)
+			.execute(&ctx.crdb().await?)
 			.await?;
 
 			msg!([ctx] analytics::msg::event_create() {

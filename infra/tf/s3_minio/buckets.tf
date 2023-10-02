@@ -1,6 +1,5 @@
+# Check if Minio has bootstrapped yet
 resource "null_resource" "check_minio" {
-	depends_on = [helm_release.minio, kubectl_manifest.minio_ingress_route]
-
 	provisioner "local-exec" {
 		command = <<EOL
 		until curl -sf ${var.s3_providers.minio.endpoint_external}/minio/health/ready; do

@@ -38,10 +38,10 @@ async fn handle(
 	let refresh_token = internal_unwrap!(token_res.refresh_token);
 	let token_session_id = internal_unwrap!(token_res.session_id).as_uuid();
 
-	sqlx::query("INSERT INTO user_tokens (user_id, token_session_id) VALUES ($1, $2)")
+	sqlx::query("INSERT INTO db_user.user_tokens (user_id, token_session_id) VALUES ($1, $2)")
 		.bind(user_id)
 		.bind(token_session_id)
-		.execute(&ctx.crdb("db-user").await?)
+		.execute(&ctx.crdb().await?)
 		.await?;
 
 	Ok(user::token_create::Response {

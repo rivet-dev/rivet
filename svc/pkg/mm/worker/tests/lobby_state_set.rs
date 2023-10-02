@@ -3,6 +3,10 @@ use proto::backend::pkg::*;
 
 #[worker_test]
 async fn set_lobby_state(ctx: TestCtx) {
+	if !util::feature::job_run() {
+		return;
+	}
+
 	let lobby = op!([ctx] faker_mm_lobby {
 		..Default::default()
 	})

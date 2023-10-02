@@ -16,7 +16,7 @@ async fn handle(
 		"incorrect lobby group ctx count"
 	);
 
-	let mut tx = ctx.crdb("db-mm-config").await?.begin().await?;
+	let mut tx = ctx.crdb().await?.begin().await?;
 
 	// Encode captcha data
 	let captcha_buf = config
@@ -32,7 +32,7 @@ async fn handle(
 
 	// Save version
 	sqlx::query(indoc!(
-		"INSERT INTO game_versions (
+		"INSERT INTO db_mm_config.game_versions (
 			version_id,
 			captcha_config,
 			migrations
@@ -107,7 +107,7 @@ async fn handle(
 
 		sqlx::query(indoc!(
 			"
-			INSERT INTO lobby_groups (
+			INSERT INTO db_mm_config.lobby_groups (
 				lobby_group_id, 
 				version_id,
 
@@ -146,7 +146,7 @@ async fn handle(
 			let region_id = internal_unwrap!(region.region_id).as_uuid();
 			sqlx::query(indoc!(
 				"
-				INSERT INTO lobby_group_regions (
+				INSERT INTO db_mm_config.lobby_group_regions (
 					lobby_group_id, region_id, tier_name_id
 				)
 				VALUES ($1, $2, $3)
@@ -161,7 +161,7 @@ async fn handle(
 			if let Some(idle_lobbies) = &region.idle_lobbies {
 				sqlx::query(indoc!(
 					"
-				INSERT INTO lobby_group_idle_lobbies (
+				INSERT INTO db_mm_config.lobby_group_idle_lobbies (
 					lobby_group_id, region_id, min_idle_lobbies, max_idle_lobbies
 				)
 				VALUES ($1, $2, $3, $4)

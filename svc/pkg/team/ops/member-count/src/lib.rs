@@ -14,13 +14,13 @@ async fn handle(
 	let member_counts = sqlx::query_as::<_, (Uuid, i64)>(indoc!(
 		"
 		SELECT team_id, COUNT(*)
-		FROM team_members
+		FROM db_team.team_members
 		WHERE team_id = ANY($1::UUID[])
 		GROUP BY team_id
 		"
 	))
 	.bind(&team_ids)
-	.fetch_all(&ctx.crdb("db-team").await?)
+	.fetch_all(&ctx.crdb().await?)
 	.await?;
 
 	Ok(team::member_count::Response {

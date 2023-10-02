@@ -180,25 +180,44 @@ pub async fn gen_svc(exec_ctx: &ExecServiceContext) -> Vec<serde_json::Value> {
 	}));
 
 	// Render ports
-	let ports = {
-		let mut ports = Vec::new();
+	let (pod_ports, service_ports) = {
+		let mut pod_ports = Vec::new();
+		let mut service_ports = Vec::new();
 
-		ports.push(json!({
+		pod_ports.push(json!({
 			"name": "health",
 			"containerPort": HEALTH_PORT,
 		}));
+		service_ports.push(json!({
+			"name": "health",
+			"protocol": "TCP",
+			"port": HEALTH_PORT,
+			"targetPort": "health"
+		}));
 
 		if has_metrics {
-			ports.push(json!({
+			pod_ports.push(json!({
 				"name": "metrics",
 				"containerPort": METRICS_PORT,
+			}));
+			service_ports.push(json!({
+				"name": "metrics",
+				"protocol": "TCP",
+				"port": METRICS_PORT,
+				"targetPort": "metrics"
 			}));
 		};
 
 		if svc_ctx.enable_tokio_console() {
-			ports.push(json!({
+			pod_ports.push(json!({
 				"name": "tokio-console",
 				"containerPort": TOKIO_CONSOLE_PORT,
+			}));
+			service_ports.push(json!({
+				"name": "tokio-console",
+				"protocol": "TCP",
+				"port": TOKIO_CONSOLE_PORT,
+				"targetPort": "tokio-console"
 			}));
 		}
 
@@ -207,44 +226,56 @@ pub async fn gen_svc(exec_ctx: &ExecServiceContext) -> Vec<serde_json::Value> {
 				port: Some(port), ..
 			} = svc_ctx.config().kind
 			{
-				ports.push(json!({
+				pod_ports.push(json!({
 					"name": "http",
 					"containerPort": port,
 					"hostPort": port
 				}));
+				service_ports.push(json!({
+					"name": "http",
+					"protocol": "TCP",
+					"port": port,
+					"targetPort": "http"
+				}));
 			} else {
-				ports.push(json!({
+				pod_ports.push(json!({
 					"name": "http",
 					"containerPort": HTTP_SERVER_PORT,
+				}));
+				service_ports.push(json!({
+					"name": "http",
+					"protocol": "TCP",
+					"port": HTTP_SERVER_PORT,
+					"targetPort": "http"
 				}));
 			}
 		}
 
-		ports
+		(pod_ports, service_ports)
 	};
 
-	let health_check = if has_health {
-		let cmd = if matches!(svc_ctx.config().kind, ServiceKind::Static { .. }) {
-			"/local/rivet/health-checks.sh --static"
-		} else {
-			"/local/rivet/health-checks.sh"
-		};
+	// let health_check = if has_health {
+	// 	let cmd = if matches!(svc_ctx.config().kind, ServiceKind::Static { .. }) {
+	// 		"/local/rivet/health-checks.sh --static"
+	// 	} else {
+	// 		"/local/rivet/health-checks.sh"
+	// 	};
 
-		json!({
-			"exec": {
-				"command": ["/bin/sh", "-c", cmd],
-			},
-			"initialDelaySeconds": 1,
-			"periodSeconds": 5,
-			"timeoutSeconds": 5
-		})
-	} else {
-		serde_json::Value::Null
-	};
+	// 	json!({
+	// 		"exec": {
+	// 			"command": ["/bin/sh", "-c", cmd],
+	// 		},
+	// 		"initialDelaySeconds": 1,
+	// 		"periodSeconds": 5,
+	// 		"timeoutSeconds": 5
+	// 	})
+	// } else {
+	// 	serde_json::Value::Null
+	// };
 
 	let (image, image_pull_policy, exec) = match &driver {
 		ExecServiceDriver::LocalBinaryArtifact { exec_path, args } => (
-			"debian:12.1-slim",
+			"ghcr.io/rivet-gg/rivet-local-binary-artifact-runner:3fdc702",
 			"IfNotPresent",
 			format!(
 				"{} {}",
@@ -316,7 +347,6 @@ pub async fn gen_svc(exec_ctx: &ExecServiceContext) -> Vec<serde_json::Value> {
 			"imagePullPolicy": image_pull_policy,
 			"command": ["/bin/sh"],
 			"args": ["-c", command],
-			// "args": ["-c", "/local/rivet/install-ca.sh && printenv && sleep 1000"],
 			"env": env,
 			"envFrom": [{
 				"secretRef": {
@@ -324,7 +354,7 @@ pub async fn gen_svc(exec_ctx: &ExecServiceContext) -> Vec<serde_json::Value> {
 				}
 			}],
 			"volumeMounts": volume_mounts,
-			"ports": ports,
+			"ports": pod_ports,
 			// "livenessProbe": health_check,
 			"resources": resources,
 		}],
@@ -435,30 +465,48 @@ pub async fn gen_svc(exec_ctx: &ExecServiceContext) -> Vec<serde_json::Value> {
 		}
 	}
 
-	// Network the service
-	if matches!(run_context, RunContext::Service { .. }) {
-		if svc_ctx.config().kind.has_server() {
-			specs.push(json!({
-				"apiVersion": "v1",
-				"kind": "Service",
-				"metadata": {
-					"name": service_name,
-					"namespace": "rivet-service"
-				},
-				"spec": {
-					"type": "ClusterIP",
-					"selector": {
-						"app.kubernetes.io/name": service_name
-					},
-					"ports": [{
-						"protocol": "TCP",
-						"port": 80,
-						"targetPort": "http"
-					}]
-				}
-			}));
+	// Expose service
+	specs.push(json!({
+		"apiVersion": "v1",
+		"kind": "Service",
+		"metadata": {
+			"name": service_name,
+			"namespace": "rivet-service",
+			"labels": {
+				"app.kubernetes.io/name": service_name
+			}
+		},
+		"spec": {
+			"type": "ClusterIP",
+			"selector": {
+				"app.kubernetes.io/name": service_name
+			},
+			"ports": service_ports
 		}
+	}));
 
+	// Monitor the service
+	specs.push(json!({
+		"apiVersion": "monitoring.coreos.com/v1",
+		"kind": "ServiceMonitor",
+		"metadata": {
+			"name": service_name,
+			"namespace": "rivet-service"
+		},
+		"spec": {
+			"selector": {
+				"matchLabels": {
+					"app.kubernetes.io/name": service_name
+				},
+			},
+			"endpoints": [
+				{ "port": "metrics" }
+			],
+		}
+	}));
+
+	// Build ingress router
+	if matches!(run_context, RunContext::Service { .. }) {
 		if let Some(router) = svc_ctx.config().kind.router() {
 			build_ingress_router(&project_ctx, svc_ctx, &service_name, &router, &mut specs);
 		}
@@ -691,7 +739,7 @@ fn build_ingress_router(
 				"kind": "Middleware",
 				"metadata": {
 					"name": mw_name,
-					"namespace": "traefik"
+					"namespace": "rivet-service"
 				},
 				"spec": {
 					"stripPrefix": {
@@ -710,7 +758,7 @@ fn build_ingress_router(
 				"kind": "Middleware",
 				"metadata": {
 					"name": mw_name,
-					"namespace": "traefik"
+					"namespace": "rivet-service"
 				},
 				"spec": {
 					"compress": {}
@@ -726,7 +774,7 @@ fn build_ingress_router(
 				"kind": "Middleware",
 				"metadata": {
 					"name": mw_name,
-					"namespace": "traefik"
+					"namespace": "rivet-service"
 				},
 				"spec": {
 					"inFlightReq": {
@@ -756,7 +804,7 @@ fn build_ingress_router(
 			"kind": "IngressRoute",
 			"metadata": {
 				"name": format!("{}-{i}-insecure", svc_ctx.name()),
-				"namespace": "traefik"
+				"namespace": "rivet-service"
 			},
 			"spec": {
 				"entryPoints": [ "web" ],
@@ -779,48 +827,41 @@ fn build_ingress_router(
 		}));
 
 		// Build secure router
-		specs.push(json!({
-			"apiVersion": "traefik.containo.us/v1alpha1",
-			"kind": "IngressRoute",
-			"metadata": {
-				"name": format!("{}-{i}-secure", svc_ctx.name()),
-				"namespace": "traefik"
-			},
-			"spec": {
-				"entryPoints": [ "websecure" ],
-				"routes": [
-					{
-						"kind": "Rule",
-						"match": rule,
-						"middlewares": ingress_middlewares,
-						"services": [
-							{
-								"kind": "Service",
-								"name": service_name,
-								"namespace": "rivet-service",
-								"port": 80
-							}
-						]
+		if project_ctx.tls_enabled() {
+			specs.push(json!({
+				"apiVersion": "traefik.containo.us/v1alpha1",
+				"kind": "IngressRoute",
+				"metadata": {
+					"name": format!("{}-{i}-secure", svc_ctx.name()),
+					"namespace": "rivet-service"
+				},
+				"spec": {
+					"entryPoints": [ "websecure" ],
+					"routes": [
+						{
+							"kind": "Rule",
+							"match": rule,
+							"middlewares": ingress_middlewares,
+							"services": [
+								{
+									"kind": "Service",
+									"name": service_name,
+									"namespace": "rivet-service",
+									"port": 80
+								}
+							]
+						}
+					],
+					"tls": {
+						"secretName": "ingress-tls-cert",
+						"options": {
+							"name": "ingress-tls",
+							"namespace": "traefik"
+						},
 					}
-				],
-				"tls": {
-					"secretName": "ingress-tls-cert",
-					"options": {
-						"name": "ingress-tls",
-						"namespace": "traefik"
-					},
-					// "domains": [
-					// 	{
-					// 		"main": "example.net",
-					// 		"sans": [
-					// 			"a.example.net",
-					// 			"b.example.net"
-					// 		]
-					// 	}
-					// ]
 				}
-			}
-		}));
+			}));
+		}
 
 		if svc_ctx.name() == "api-cf-verification" {
 			specs.push(json!({
@@ -828,7 +869,7 @@ fn build_ingress_router(
 				"kind": "IngressRoute",
 				"metadata": {
 					"name": "cf-verification-challenge",
-					"namespace": "traefik"
+					"namespace": "rivet-service"
 				},
 				"spec": {
 					"routes": [

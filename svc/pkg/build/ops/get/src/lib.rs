@@ -22,12 +22,12 @@ async fn handle(ctx: OperationContext<build::get::Request>) -> GlobalResult<buil
 	let builds = sqlx::query_as::<_, BuildRow>(indoc!(
 		"
 		SELECT build_id, game_id, upload_id, display_name, image_tag, create_ts
-		FROM builds
+		FROM db_build.builds
 		WHERE build_id = ANY($1)
 		"
 	))
 	.bind(build_ids)
-	.fetch_all(&ctx.crdb("db-build").await?)
+	.fetch_all(&ctx.crdb().await?)
 	.await?
 	.into_iter()
 	.map(|build| build::get::response::Build {

@@ -73,9 +73,9 @@ resource "kubernetes_deployment" "nsfw_api" {
 						limits = {
 							memory = "${local.service_nsfw_api.resources.memory}Mi"
 							cpu = (
-								local.service_redis_exporter.resources.cpu_cores > 0 ?
-								"${local.service_redis_exporter.resources.cpu_cores * 1000}m"
-								: "${local.service_redis_exporter.resources.cpu}m"
+								local.service_nsfw_api.resources.cpu_cores > 0 ?
+								"${local.service_nsfw_api.resources.cpu_cores * 1000}m"
+								: "${local.service_nsfw_api.resources.cpu}m"
 							)
 						}
 					}

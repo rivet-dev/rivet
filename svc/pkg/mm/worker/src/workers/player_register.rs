@@ -13,7 +13,7 @@ struct PlayerRow {
 
 #[worker(name = "mm-player-register")]
 async fn worker(ctx: &OperationContext<mm::msg::player_register::Message>) -> GlobalResult<()> {
-	let crdb = ctx.crdb("db-mm-state").await?;
+	let crdb = ctx.crdb().await?;
 
 	let player_id = internal_unwrap!(ctx.player_id).as_uuid();
 	let lobby_id = ctx.lobby_id.map(|x| x.as_uuid());
@@ -30,12 +30,12 @@ async fn worker(ctx: &OperationContext<mm::msg::player_register::Message>) -> Gl
 					players.register_ts,
 					players.remove_ts,
 					lobbies.namespace_id
-				FROM players
+				FROM db_mm_state.players
 				INNER JOIN lobbies ON lobbies.lobby_id = players.lobby_id
 				WHERE player_id = $1
 			),
 			_update AS (
-				UPDATE players
+				UPDATE db_mm_state.players
 				SET register_ts = $3
 				WHERE
 					player_id = $1 AND

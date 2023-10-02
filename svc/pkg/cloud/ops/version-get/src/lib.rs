@@ -20,12 +20,12 @@ async fn handle(
 	let cloud_versions = sqlx::query_as::<_, GameVersion>(indoc!(
 		"
 		SELECT version_id
-		FROM game_versions
+		FROM db_cloud.game_versions
 		WHERE version_id = ANY($1)
 	"
 	))
 	.bind(req_version_ids)
-	.fetch_all(&ctx.crdb("db-cloud").await?)
+	.fetch_all(&ctx.crdb().await?)
 	.await?;
 
 	// Get all version IDs that exist. If a row doesn't exist in `game_configs`, then this version

@@ -21,9 +21,9 @@ async fn empty(ctx: TestCtx) {
 	.unwrap();
 
 	let (owner_user_id,): (Uuid,) =
-		sqlx::query_as("SELECT owner_user_id FROM teams WHERE team_id = $1")
+		sqlx::query_as("SELECT owner_user_id FROM db_team.teams WHERE team_id = $1")
 			.bind(team_id)
-			.fetch_one(&ctx.crdb("db-team").await.unwrap())
+			.fetch_one(&ctx.crdb().await.unwrap())
 			.await
 			.unwrap();
 	assert_eq!(new_owner_user_id, owner_user_id);

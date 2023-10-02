@@ -4,7 +4,7 @@ use crate::message;
 
 /// STREAM
 pub fn message_topic(name: &str) -> String {
-	format!("chirp:topic:{}", name)
+	format!("{{topic:{name}}}:topic")
 }
 
 /// HASH
@@ -14,7 +14,7 @@ where
 	S: AsRef<str>,
 {
 	format!(
-		"chirp:tail:{}:{}",
+		"{{topic:{}:{}}}:tail",
 		M::NAME,
 		message::serialize_message_params(parameters, ":")
 	)
@@ -33,7 +33,7 @@ where
 	S: AsRef<str>,
 {
 	format!(
-		"chirp:history:{}:{}",
+		"{{topic:{}:{}}}:history",
 		M::NAME,
 		message::serialize_message_params(parameters, ":")
 	)

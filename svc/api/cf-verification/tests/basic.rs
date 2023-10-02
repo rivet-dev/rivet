@@ -12,7 +12,6 @@ impl Ctx {
 			.pretty()
 			.with_max_level(tracing::Level::INFO)
 			.with_target(false)
-			.without_time()
 			.try_init();
 
 		let pools = rivet_pools::from_env("api-cf-verification-test")
@@ -60,6 +59,10 @@ impl Ctx {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn custom_hostname_verification() {
+	if !util::feature::cf_custom_hostname() {
+		return;
+	};
+
 	let ctx = Ctx::init().await;
 
 	// MARK: GET /.well-known/cf-custom-hostname-challenge/{}

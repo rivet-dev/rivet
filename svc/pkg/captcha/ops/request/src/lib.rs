@@ -8,7 +8,7 @@ async fn handle(
 ) -> GlobalResult<captcha::request::Response> {
 	// TODO: This service is pretty slow, optimize by using counters, Redis, and/or ClickHouse
 
-	let crdb = ctx.crdb("db-captcha").await?;
+	let crdb = ctx.crdb().await?;
 
 	let captcha_config = internal_unwrap!(ctx.captcha_config);
 	let user_id = ctx.user_id.as_ref().map(common::Uuid::as_uuid);
@@ -21,7 +21,7 @@ async fn handle(
 	let success_res = sqlx::query_as::<_, (i64,)>(indoc!(
 		"
 		SELECT complete_ts
-		FROM captcha_verifications
+		FROM db_captcha.captcha_verifications
 		WHERE topic_str = $1 AND remote_address = $2 AND success = true
 		ORDER BY complete_ts DESC
 		LIMIT 1
@@ -51,8 +51,8 @@ async fn handle(
 			// by O(n) with every request.
 			let (req_count,) = sqlx::query_as::<_, (i64,)>(indoc!(
 				"
-				SELECT count(*)
-				FROM captcha_requests
+				SELECT COUNT(*)
+				FROM db_captcha.captcha_requests
 				WHERE topic_str = $1 AND remote_address = $2 AND create_ts > $3
 				LIMIT $4
 				"
@@ -83,7 +83,7 @@ async fn handle(
 	// Insert a request
 	sqlx::query(indoc!(
 		"
-		INSERT INTO captcha_requests (request_id, topic, topic_str, remote_address, create_ts, expire_ts, user_id, namespace_id)
+		INSERT INTO db_captcha.captcha_requests (request_id, topic, topic_str, remote_address, create_ts, expire_ts, user_id, namespace_id)
 		VALUES ($1, $2, $3, $4, $5, to_timestamp($6::float / 1000), $7, $8)
 		"
 	))

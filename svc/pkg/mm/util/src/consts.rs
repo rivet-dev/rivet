@@ -1,7 +1,6 @@
 use rivet_util as util;
 
-// TODO: Lower this again
-pub const LOBBY_READY_TIMEOUT: i64 = util::duration::minutes(10); // Also see mm-gc.LOBBY_READY_TIMEOUT
+pub const LOBBY_READY_TIMEOUT: i64 = util::duration::minutes(5); // Also see mm-gc.LOBBY_READY_TIMEOUT
 pub const PLAYER_READY_TIMEOUT: i64 = util::duration::minutes(2); // Also see mm-gc.LOBBY_READY_TIMEOUT
 
 pub const MIN_HOST_PORT: u16 = 26000;

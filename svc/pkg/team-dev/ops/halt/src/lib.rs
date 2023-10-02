@@ -16,12 +16,12 @@ async fn handle(
 	let game_ids = sqlx::query_as::<_, (Uuid,)>(indoc!(
 		"
 		SELECT game_id
-		FROM games
+		FROM db_game.games
 		WHERE developer_team_id = ANY($1)
 		"
 	))
 	.bind(team_ids)
-	.fetch_all(&ctx.crdb("db-game").await?)
+	.fetch_all(&ctx.crdb().await?)
 	.await?
 	.into_iter()
 	.map(|(game_id,)| Into::<common::Uuid>::into(game_id))

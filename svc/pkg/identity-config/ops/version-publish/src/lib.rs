@@ -9,23 +9,23 @@ async fn handle(
 	let config = internal_unwrap!(ctx.config);
 	let _config_ctx = internal_unwrap!(ctx.config_ctx);
 
-	sqlx::query("INSERT INTO game_versions (version_id) VALUES ($1)")
+	sqlx::query("INSERT INTO db_identity_config.game_versions (version_id) VALUES ($1)")
 		.bind(version_id)
-		.execute(&ctx.crdb("db-identity-config").await?)
+		.execute(&ctx.crdb().await?)
 		.await?;
 
 	// TODO: Parallelize all futures in this for loop
 	for custom_display_name in &config.custom_display_names {
 		sqlx::query(indoc!(
 			"
-			INSERT INTO custom_display_names
+			INSERT INTO db_identity_config.custom_display_names
 			(version_id, display_name)
 			VALUES ($1, $2)
 			"
 		))
 		.bind(version_id)
 		.bind(&custom_display_name.display_name)
-		.execute(&ctx.crdb("db-identity-config").await?)
+		.execute(&ctx.crdb().await?)
 		.await?;
 	}
 
@@ -33,14 +33,14 @@ async fn handle(
 		let upload_id = internal_unwrap!(custom_avatar.upload_id).as_uuid();
 		sqlx::query(indoc!(
 			"
-			INSERT INTO custom_avatars
+			INSERT INTO db_identity_config.custom_avatars
 			(version_id, upload_id)
 			VALUES ($1, $2)
 			"
 		))
 		.bind(version_id)
 		.bind(upload_id)
-		.execute(&ctx.crdb("db-identity-config").await?)
+		.execute(&ctx.crdb().await?)
 		.await?;
 	}
 

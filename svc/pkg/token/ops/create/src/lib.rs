@@ -14,7 +14,7 @@ lazy_static::lazy_static! {
 async fn handle(
 	ctx: OperationContext<token::create::Request>,
 ) -> GlobalResult<token::create::Response> {
-	let crdb = ctx.crdb("db-token").await?;
+	let crdb = ctx.crdb().await?;
 
 	internal_assert!(!ctx.issuer.is_empty());
 	let token_config = internal_unwrap!(ctx.token_config);
@@ -51,11 +51,12 @@ async fn handle(
 
 			// Check if revoked
 			// TODO: This is a race condition, es no bueno. See note in token-revoke
-			let rf_token_row =
-				sqlx::query_as::<_, (Option<i64>,)>("SELECT revoke_ts FROM tokens WHERE jti = $1")
-					.bind(refresh_jti)
-					.fetch_optional(&crdb)
-					.await?;
+			let rf_token_row = sqlx::query_as::<_, (Option<i64>,)>(
+				"SELECT revoke_ts FROM db_token.tokens WHERE jti = $1",
+			)
+			.bind(refresh_jti)
+			.fetch_optional(&crdb)
+			.await?;
 			if let Some((revoke_ts,)) = rf_token_row {
 				if revoke_ts.is_some() {
 					panic_with!(TOKEN_REVOKED);
@@ -67,7 +68,7 @@ async fn handle(
 
 			// Fetch entitlements to create the token with
 			let session_row = sqlx::query_as::<_, (Vec<Vec<u8>>,)>(
-				"SELECT entitlements FROM sessions WHERE session_id = $1",
+				"SELECT db_token.entitlements FROM sessions WHERE session_id = $1",
 			)
 			.bind(refresh_ent.session_id)
 			.fetch_optional(&crdb)
@@ -86,7 +87,7 @@ async fn handle(
 				// Revoke the refresh token
 				let update_query = sqlx::query(
 					"
-					UPDATE tokens
+					UPDATE db_token.tokens
 					SET revoke_ts = $1
 					WHERE jti = $2 AND revoke_ts IS NULL AND exp > $1
 					",
@@ -148,7 +149,7 @@ async fn handle(
 				.flat_map(|x| x.tag().map(|x| x as i64))
 				.collect::<Vec<_>>();
 			sqlx::query(
-				"INSERT INTO sessions (session_id, entitlements, entitlement_tags, exp) VALUES ($1, $2, $3, $4)"
+				"INSERT INTO db_token.sessions (session_id, entitlements, entitlement_tags, exp) VALUES ($1, $2, $3, $4)"
 			)
 			.bind(new_session_id)
 			.bind(ent_bufs)
@@ -277,7 +278,7 @@ async fn create_token(
 			"
 			WITH
 				_insert AS (
-					INSERT INTO tokens (
+					INSERT INTO db_token.tokens (
 						jti,
 						exp,
 						iat,
@@ -291,7 +292,7 @@ async fn create_token(
 					RETURNING 1
 				),
 				_update_session AS (
-					UPDATE sessions
+					UPDATE db_token.sessions
 					SET exp  = $2
 					WHERE session_id = $5 AND exp < $2
 					RETURNING 1

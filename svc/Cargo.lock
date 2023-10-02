@@ -1906,19 +1906,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "cf-turnstile-verify"
-version = "0.0.1"
-dependencies = [
- "chirp-client",
- "chirp-worker",
- "prost 0.10.4",
- "reqwest",
- "rivet-operation",
- "serde",
-]
-
-[[package]]
-name = "cf-worker"
+name = "cf-custom-hostname-worker"
 version = "0.0.1"
 dependencies = [
  "cf-custom-hostname-get",
@@ -1936,6 +1924,18 @@ dependencies = [
  "rivet-runtime",
  "serde",
  "team-dev-game-list",
+]
+
+[[package]]
+name = "cf-turnstile-verify"
+version = "0.0.1"
+dependencies = [
+ "chirp-client",
+ "chirp-worker",
+ "prost 0.10.4",
+ "reqwest",
+ "rivet-operation",
+ "serde",
 ]
 
 [[package]]
@@ -5516,6 +5516,7 @@ dependencies = [
  "rivet-health-checks",
  "rivet-metrics",
  "rivet-runtime",
+ "s3-util",
  "serde",
  "upload-complete",
  "upload-prepare",

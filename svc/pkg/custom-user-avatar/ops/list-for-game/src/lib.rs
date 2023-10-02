@@ -15,12 +15,12 @@ async fn handle(
 	let custom_avatars = sqlx::query_as::<_, CustomAvatar>(indoc!(
 		"
 		SELECT upload_id
-		FROM custom_avatars
+		FROM db_game_custom_avatar.custom_avatars
 		WHERE game_id = $1
 		"
 	))
 	.bind(game_id)
-	.fetch_all(&ctx.crdb("db-game-custom-avatar").await?)
+	.fetch_all(&ctx.crdb().await?)
 	.await?;
 
 	Ok(custom_user_avatar::list_for_game::Response {

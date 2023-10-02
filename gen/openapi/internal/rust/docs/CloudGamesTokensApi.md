@@ -1,10 +1,10 @@
 # \CloudGamesTokensApi
 
-All URIs are relative to *http://localhost*
+All URIs are relative to *https://api.rivet.gg*
 
 Method | HTTP request | Description
 ------------- | ------------- | -------------
-[**cloud_games_tokens_create_cloud_token**](CloudGamesTokensApi.md#cloud_games_tokens_create_cloud_token) | **POST** /games/{game_id}/tokens/cloud | 
+[**cloud_games_tokens_create_cloud_token**](CloudGamesTokensApi.md#cloud_games_tokens_create_cloud_token) | **POST** /cloud/games/{game_id}/tokens/cloud | 
 
 
 

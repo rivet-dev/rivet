@@ -23,12 +23,12 @@ async fn handle(
 	let sites = sqlx::query_as::<_, SiteRow>(indoc!(
 		"
 		SELECT site_id, game_id, upload_id, display_name, create_ts
-		FROM sites
+		FROM db_cdn.sites
 		WHERE site_id = ANY($1)
 		"
 	))
 	.bind(site_ids)
-	.fetch_all(&ctx.crdb("db-cdn").await?)
+	.fetch_all(&ctx.crdb().await?)
 	.await?
 	.into_iter()
 	.map(|site| cdn::site_get::response::Site {

@@ -1,12 +1,12 @@
 # \CloudGamesAvatarsApi
 
-All URIs are relative to *http://localhost*
+All URIs are relative to *https://api.rivet.gg*
 
 Method | HTTP request | Description
 ------------- | ------------- | -------------
-[**cloud_games_avatars_complete_custom_avatar_upload**](CloudGamesAvatarsApi.md#cloud_games_avatars_complete_custom_avatar_upload) | **POST** /games/{game_id}/avatar-upload/{upload_id}/complete | 
-[**cloud_games_avatars_list_game_custom_avatars**](CloudGamesAvatarsApi.md#cloud_games_avatars_list_game_custom_avatars) | **GET** /games/{game_id}/avatars | 
-[**cloud_games_avatars_prepare_custom_avatar_upload**](CloudGamesAvatarsApi.md#cloud_games_avatars_prepare_custom_avatar_upload) | **POST** /games/{game_id}/prepare | 
+[**cloud_games_avatars_complete_custom_avatar_upload**](CloudGamesAvatarsApi.md#cloud_games_avatars_complete_custom_avatar_upload) | **POST** /cloud/games/{game_id}/avatar-upload/{upload_id}/complete | 
+[**cloud_games_avatars_list_game_custom_avatars**](CloudGamesAvatarsApi.md#cloud_games_avatars_list_game_custom_avatars) | **GET** /cloud/games/{game_id}/avatars | 
+[**cloud_games_avatars_prepare_custom_avatar_upload**](CloudGamesAvatarsApi.md#cloud_games_avatars_prepare_custom_avatar_upload) | **POST** /cloud/games/{game_id}/prepare | 
 
 
 

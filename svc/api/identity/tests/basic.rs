@@ -23,7 +23,6 @@ impl Ctx {
 				.pretty()
 				.with_max_level(tracing::Level::INFO)
 				.with_target(false)
-				.without_time()
 				.init();
 		});
 
@@ -53,14 +52,6 @@ impl Ctx {
 		let (_, _, namespace_id, _, _) = Self::setup_game(&op_ctx, primary_region_id).await;
 		let ns_dev_auth_token =
 			Self::setup_dev_token(&op_ctx, namespace_id, "127.0.0.1".to_owned(), Vec::new()).await;
-
-		let custom_domain = format!("{}.com", util::faker::ident());
-		op!([op_ctx] cdn_namespace_domain_create {
-			namespace_id: Some(namespace_id.into()),
-			domain: custom_domain.clone(),
-		})
-		.await
-		.unwrap();
 
 		Ctx {
 			op_ctx,

@@ -1,12 +1,3 @@
-variable "domain_main" {
-	type = string
-}
-
-variable "minio_port" {
-	type = string
-	nullable = true
-}
-
 # MARK: S3
 variable "s3_buckets" {
 	type = map(object({
@@ -23,13 +14,4 @@ variable "s3_providers" {
 	}))
 }
 
-
-# MARK: K8s
-variable "kubeconfig_path" {
-	type = string
-}
-
-variable "k8s_storage_class" {
-	type = string
-}
 

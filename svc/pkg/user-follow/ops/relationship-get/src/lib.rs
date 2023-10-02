@@ -29,14 +29,14 @@ async fn handle(
 		SELECT 
 			exists(
 				SELECT 1
-				FROM user_follows AS uf
+				FROM db_user_follow.user_follows AS uf
 				WHERE
 					uf.follower_user_id = (q->>0)::UUID AND
 					uf.following_user_id = (q->>1)::UUID
 			) AS is_follower,
 			exists(
 				SELECT 1
-				FROM user_follows AS uf
+				FROM db_user_follow.user_follows AS uf
 				WHERE
 					uf.follower_user_id = (q->>1)::UUID AND
 					uf.following_user_id = (q->>0)::UUID
@@ -45,7 +45,7 @@ async fn handle(
 		"
 	))
 	.bind(serde_json::to_string(&query_users)?)
-	.fetch_all(&ctx.crdb("db-user-follow").await?)
+	.fetch_all(&ctx.crdb().await?)
 	.await?;
 
 	let users = relationships

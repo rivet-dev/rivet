@@ -56,7 +56,7 @@ async fn worker(ctx: &OperationContext<user::msg::create::Message>) -> GlobalRes
 	};
 
 	// Attempt to create a unique handle 3 times
-	let crdb = ctx.crdb("db-user").await?;
+	let crdb = ctx.crdb().await?;
 	let mut attempts = 3u32;
 	let (display_name, account_number) = loop {
 		if attempts == 0 {
@@ -121,7 +121,7 @@ async fn insert_user(
 	let res = if let Some(avatar_upload_id) = avatar_upload_id {
 		sqlx::query(indoc!(
 			"
-			INSERT INTO users (
+			INSERT INTO db_user.users (
 				user_id,
 				display_name,
 				account_number,
@@ -143,7 +143,7 @@ async fn insert_user(
 	} else {
 		sqlx::query(indoc!(
 			"
-			INSERT INTO users (
+			INSERT INTO db_user.users (
 				user_id,
 				display_name,
 				account_number,

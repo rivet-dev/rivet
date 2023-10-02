@@ -3,12 +3,16 @@ locals {
 }
 
 resource "kubernetes_namespace" "minio" {
+	count = local.has_minio ? 1 : 0
+
 	metadata {
 		name = "minio"
 	}
 }
 
 module "minio_secrets" {
+	count = local.has_minio ? 1 : 0
+
 	source = "../modules/secrets"
 
 	keys = ["s3/minio/root/key_id", "s3/minio/root/key"]
@@ -19,7 +23,7 @@ resource "helm_release" "minio" {
 	count = local.has_minio ? 1 : 0
 
 	name = "minio"
-	namespace = kubernetes_namespace.minio.metadata.0.name
+	namespace = kubernetes_namespace.minio[0].metadata.0.name
 	repository = "oci://registry-1.docker.io/bitnamicharts"
 	chart = "minio"
 	version = "12.8.3"
@@ -29,19 +33,31 @@ resource "helm_release" "minio" {
 		}
 		replicaCount = 1
 		auth = {
-			rootUser = module.minio_secrets.values["s3/minio/root/key_id"]
-			rootPassword = module.minio_secrets.values["s3/minio/root/key"]
+			rootUser = module.minio_secrets[0].values["s3/minio/root/key_id"]
+			rootPassword = module.minio_secrets[0].values["s3/minio/root/key"]
 		}
 		service = {
 			# Expose as LB so it can be accessed from the host if needed
 			type = var.minio_port != null ? "LoadBalancer" : "ClusterIP"
+		}
+		metrics = {
+			serviceMonitor = {
+				enabled = true
+				namespace = kubernetes_namespace.minio[0].metadata.0.name
+			}
+
+			# TODO:
+			# prometheusRule = {
+			# 	enabled = true
+			# 	namespace = kubernetes_namespace.prometheus.metadata.0.name
+			# }
 		}
 	})]
 }
 
 resource "kubectl_manifest" "minio_ingress_route" {
 	# Expose via Traefik if not using Minio port
-	count = var.minio_port == null ? 1 : 0
+	for_each = var.minio_port == null ? local.entrypoints : {}
 
 	depends_on = [helm_release.minio]
 
@@ -51,11 +67,11 @@ resource "kubectl_manifest" "minio_ingress_route" {
 
 		metadata = {
 			name = "minio"
-			namespace = kubernetes_namespace.minio.metadata.0.name
+			namespace = kubernetes_namespace.minio[0].metadata.0.name
 		}
 
 		spec = {
-			entryPoints = [ "websecure" ]
+			entryPoints = [ each.key ]
 
 			routes = [
 				{
@@ -70,13 +86,7 @@ resource "kubectl_manifest" "minio_ingress_route" {
 				}
 			]
 
-			tls = {
-				secretName = "ingress-tls-cert"
-				options = {
-					name = "ingress-tls"
-					namespace = "traefik"
-				}
-			}
+			tls = each.value.tls
 		}
 	})
 }

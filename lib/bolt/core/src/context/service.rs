@@ -747,8 +747,23 @@ impl ServiceContextData {
 		if let Some(x) = project_ctx.domain_job() {
 			env.push(("RIVET_DOMAIN_JOB".into(), x));
 		}
+		if let Some(x) = project_ctx.domain_main_api() {
+			env.push(("RIVET_DOMAIN_MAIN_API".into(), x));
+		}
 		env.push(("RIVET_ORIGIN_API".into(), project_ctx.origin_api()));
 		env.push(("RIVET_ORIGIN_HUB".into(), project_ctx.origin_hub()));
+
+		// DNS
+		if let Some(dns) = &project_ctx.ns().dns {
+			if let Some(provider) = &dns.provider {
+				env.push((
+					"RIVET_DNS_PROVIDER".into(),
+					match provider {
+						config::ns::DnsProvider::Cloudflare { .. } => "cloudflare".into(),
+					},
+				));
+			}
+		}
 
 		// Regions
 		env.push(("RIVET_REGION".into(), region_id.clone()));
@@ -1025,20 +1040,18 @@ impl ServiceContextData {
 
 		// CRDB
 		// TODO: Function is expensive
-		let crdb_data = terraform::output::read_crdb(&project_ctx).await;
-		let crdb_host = format!("{}:{}", *crdb_data.host, *crdb_data.port);
-		for crdb_dep in self.crdb_dependencies(run_context).await {
+		{
+			let crdb_data = terraform::output::read_crdb(&project_ctx).await;
+			let crdb_host = format!("{}:{}", *crdb_data.host, *crdb_data.port);
 			let username = project_ctx.read_secret(&["crdb", "username"]).await?;
 			let password = project_ctx.read_secret(&["crdb", "password"]).await?;
 			let sslmode = "verify-ca";
 
 			let uri = format!(
-				"postgres://{}:{}@{crdb_host}/{db_name}?sslmode={sslmode}",
-				username,
-				password,
-				db_name = crdb_dep.crdb_db_name(),
+				"postgres://{}:{}@{crdb_host}/postgres?sslmode={sslmode}",
+				username, password,
 			);
-			env.push((format!("CRDB_URL_{}", crdb_dep.name_screaming_snake()), uri));
+			env.push(("CRDB_URL".into(), uri));
 		}
 
 		// Redis
@@ -1096,7 +1109,7 @@ impl ServiceContextData {
 			};
 
 			env.push((
-				format!("REDIS_URL_{}", name.to_uppercase().replace("-", "_")),
+				format!("REDIS_URL_{}", db_name.to_uppercase().replace("-", "_")),
 				url,
 			));
 		}

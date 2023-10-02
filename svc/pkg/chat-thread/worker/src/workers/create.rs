@@ -4,7 +4,7 @@ use serde_json::json;
 
 #[worker(name = "chat-thread-create")]
 async fn worker(ctx: &OperationContext<chat_thread::msg::create::Message>) -> GlobalResult<()> {
-	let crdb = ctx.crdb("db-chat").await?;
+	let crdb = ctx.crdb().await?;
 
 	let request_id = internal_unwrap!(ctx.request_id).as_uuid();
 	let kind = internal_unwrap!(internal_unwrap!(ctx.topic).kind);
@@ -23,7 +23,7 @@ async fn worker(ctx: &OperationContext<chat_thread::msg::create::Message>) -> Gl
 				"
 				WITH
 					insert AS (
-						INSERT INTO threads (thread_id, create_ts, team_team_id)
+						INSERT INTO db_chat.threads (thread_id, create_ts, team_team_id)
 						VALUES ($1, $2, $3)
 						ON CONFLICT (team_team_id)
 						DO NOTHING
@@ -31,7 +31,7 @@ async fn worker(ctx: &OperationContext<chat_thread::msg::create::Message>) -> Gl
 					)
 				SELECT thread_id FROM insert
 				UNION
-				SELECT thread_id FROM threads WHERE team_team_id = $3
+				SELECT thread_id FROM db_chat.threads WHERE team_team_id = $3
 				LIMIT 1
 				"
 			))
@@ -55,7 +55,7 @@ async fn worker(ctx: &OperationContext<chat_thread::msg::create::Message>) -> Gl
 				"
 				WITH
 					insert AS (
-						INSERT INTO threads (thread_id, create_ts, direct_user_a_id, direct_user_b_id)
+						INSERT INTO db_chat.threads (thread_id, create_ts, direct_user_a_id, direct_user_b_id)
 						VALUES ($1, $2, $3, $4)
 						ON CONFLICT (direct_user_a_id, direct_user_b_id)
 						DO NOTHING
@@ -63,7 +63,7 @@ async fn worker(ctx: &OperationContext<chat_thread::msg::create::Message>) -> Gl
 					)
 				SELECT thread_id FROM insert
 				UNION
-				SELECT thread_id FROM threads WHERE direct_user_a_id = $3 AND direct_user_b_id = $4
+				SELECT thread_id FROM db_chat.threads WHERE direct_user_a_id = $3 AND direct_user_b_id = $4
 				LIMIT 1
 				"
 			))

@@ -11,7 +11,7 @@ struct LobbyRow {
 async fn worker(ctx: &OperationContext<mm::msg::lobby_stop::Message>) -> GlobalResult<()> {
 	let lobby_id = internal_unwrap!(ctx.lobby_id).as_uuid();
 
-	let crdb = ctx.crdb("db-mm-state").await?;
+	let crdb = ctx.crdb().await?;
 
 	if ctx.req_dt() > util::duration::minutes(5) {
 		tracing::error!(?lobby_id, "discarding stale message");
@@ -27,11 +27,11 @@ async fn worker(ctx: &OperationContext<mm::msg::lobby_stop::Message>) -> GlobalR
 		WITH
 			select_lobby AS (
 				SELECT stop_ts, run_id
-				FROM lobbies
+				FROM db_mm_state.lobbies
 				WHERE lobby_id = $1
 			),
 			_update AS (
-				UPDATE lobbies
+				UPDATE db_mm_state.lobbies
 				SET stop_ts = $2
 				WHERE lobby_id = $1 AND stop_ts IS NULL
 				RETURNING 1

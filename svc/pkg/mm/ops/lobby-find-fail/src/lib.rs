@@ -8,7 +8,7 @@ use serde_json::json;
 async fn handle(
 	ctx: OperationContext<mm::lobby_find_fail::Request>,
 ) -> GlobalResult<mm::lobby_find_fail::Response> {
-	let crdb = ctx.crdb("db-mm-state").await?;
+	let crdb = ctx.crdb().await?;
 	let redis = ctx.redis_mm().await?;
 
 	// Complete all queries in parallel
@@ -55,7 +55,7 @@ async fn fail_query(
 	// Update query status in database if pending
 	let query_row = sqlx::query_as::<_, (Uuid,)>(indoc!(
 		"
-		UPDATE find_queries
+		UPDATE db_mm_state.find_queries
 		SET
 			status = $3,
 			error_code = $4

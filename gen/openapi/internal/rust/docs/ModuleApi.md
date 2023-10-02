@@ -1,10 +1,10 @@
 # \ModuleApi
 
-All URIs are relative to *http://localhost*
+All URIs are relative to *https://api.rivet.gg*
 
 Method | HTTP request | Description
 ------------- | ------------- | -------------
-[**module_call**](ModuleApi.md#module_call) | **POST** /modules/{module}/scripts/{script}/call | 
+[**module_call**](ModuleApi.md#module_call) | **POST** /module/modules/{module}/scripts/{script}/call | 
 
 
 

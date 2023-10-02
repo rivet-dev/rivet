@@ -15,14 +15,14 @@ struct InvitationRow {
 async fn handle(
 	ctx: OperationContext<team_invite::get::Request>,
 ) -> GlobalResult<team_invite::get::Response> {
-	let crdb = ctx.crdb("db-team-invite").await?;
+	let crdb = ctx.crdb().await?;
 
 	// Find the invitation
 	let invitations = sqlx::query_as::<_, InvitationRow>(indoc!(
 		"
 		SELECT
 			code, team_id, create_ts, expire_ts, max_use_count, revoke_ts
-		FROM invitations
+		FROM db_team_invite.invitations
 		WHERE code = ANY($1)
 		"
 	))

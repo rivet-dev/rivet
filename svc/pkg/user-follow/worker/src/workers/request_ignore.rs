@@ -12,7 +12,7 @@ async fn worker(
 
 	sqlx::query(indoc!(
 		"
-		UPDATE user_follows
+		UPDATE db_user_follow.user_follows
 		SET ignored = TRUE
 		WHERE
 			follower_user_id = $1 AND
@@ -21,7 +21,7 @@ async fn worker(
 	))
 	.bind(follower_user_id)
 	.bind(following_user_id)
-	.execute(&ctx.crdb("db-user-follow").await?)
+	.execute(&ctx.crdb().await?)
 	.await?;
 
 	msg!([ctx] user_follow::msg::request_ignore_complete(follower_user_id, following_user_id) {

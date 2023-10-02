@@ -15,7 +15,7 @@ struct ThreadRow {
 async fn handle(
 	ctx: OperationContext<chat_thread::list_for_participant::Request>,
 ) -> GlobalResult<chat_thread::list_for_participant::Response> {
-	let crdb = ctx.crdb("db-chat").await?;
+	let crdb = ctx.crdb().await?;
 
 	let user_id = internal_unwrap!(ctx.user_id).as_uuid();
 
@@ -35,13 +35,13 @@ async fn handle(
 	let threads = sqlx::query_as::<_, ThreadRow>(indoc!(
 		"
 		SELECT thread_id, create_ts, team_team_id, NULL AS direct_user_a_id, NULL AS direct_user_b_id
-		FROM threads
+		FROM db_chat.threads
 		WHERE team_team_id = ANY($1)
 
 		UNION
 
 		SELECT thread_id, create_ts, NULL, direct_user_a_id, direct_user_b_id
-		FROM threads
+		FROM db_chat.threads
 		WHERE
 			direct_user_a_id = $2 OR
 			direct_user_b_id = $2

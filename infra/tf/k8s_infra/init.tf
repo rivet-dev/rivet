@@ -112,13 +112,10 @@ resource "kubernetes_config_map" "install_ca" {
 			# Log to file
 			exec >> "/var/log/install-ca.txt" 2>&1
 
-			# Prevent apt from using the OpenSSL installation from /nix/store if mounted
-			export LD_LIBRARY_PATH=/lib:/usr/lib:/usr/local/lib
-			export DEBIAN_FRONTEND=noninteractive
-
-			apt-get update -y
-			apt-get install -y --no-install-recommends ca-certificates
-			update-ca-certificates
+			# Merge CA certificates provided from other config maps for self-signed TLS connections to databases
+			#
+			# Overriding LD_LIBRARY_PATH prevents apt from using the OpenSSL installation from /nix/store (if mounted).
+			LD_LIBRARY_PATH=/lib:/usr/lib:/usr/local/lib update-ca-certificates
 			EOF
 	}
 }
@@ -129,7 +126,7 @@ module "docker_auth" {
 	namespaces = [
 		for x in [
 			kubernetes_namespace.traffic_server,
-			kubernetes_namespace.redis_exporter,
+			# kubernetes_namespace.redis_exporter,
 			kubernetes_namespace.rivet_service,
 			kubernetes_namespace.imagor,
 			kubernetes_namespace.nsfw_api

@@ -96,7 +96,7 @@ struct CheckStatus {
 async fn worker(
 	ctx: &OperationContext<module::msg::instance_create::Message>,
 ) -> Result<(), GlobalError> {
-	let crdb = ctx.crdb("db-module").await?;
+	let crdb = ctx.crdb().await?;
 
 	let (Ok(fly_org), Ok(fly_region)) = (
 		std::env::var("FLY_ORGANIZATION_ID"),
@@ -145,7 +145,7 @@ async fn worker(
 		// Update app ID
 		sqlx::query(indoc!(
 			"
-			UPDATE instances_driver_fly
+			UPDATE db_module.instances_driver_fly
 			SET fly_app_id = $2
 			WHERE instance_id = $1
 			"
@@ -192,7 +192,7 @@ async fn insert_instance(
 
 	sqlx::query(indoc!(
 		"
-		INSERT INTO instances (instance_id, version_id, create_ts)
+		INSERT INTO db_module.instances (instance_id, version_id, create_ts)
 		VALUES ($1, $2, $3)
 		"
 	))
@@ -206,7 +206,7 @@ async fn insert_instance(
 		module::msg::instance_create::message::Driver::Dummy(_) => {
 			sqlx::query(indoc!(
 				"
-                INSERT INTO instances_driver_dummy (instance_id)
+                INSERT INTO db_module.instances_driver_dummy (instance_id)
                 VALUES ($1)
                 "
 			))
@@ -217,7 +217,7 @@ async fn insert_instance(
 		module::msg::instance_create::message::Driver::Fly(_) => {
 			sqlx::query(indoc!(
 				"
-                INSERT INTO instances_driver_fly (instance_id)
+                INSERT INTO db_module.instances_driver_fly (instance_id)
                 VALUES ($1)
                 "
 			))

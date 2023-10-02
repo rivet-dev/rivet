@@ -3,12 +3,12 @@ use proto::backend::pkg::*;
 
 #[worker(name = "user-search-update")]
 async fn worker(ctx: &OperationContext<user::msg::search_update::Message>) -> GlobalResult<()> {
-	let crdb = ctx.crdb("db-user").await?;
+	let crdb = ctx.crdb().await?;
 	let user_id = internal_unwrap_owned!(ctx.user_id).as_uuid();
 
 	sqlx::query(indoc!(
 		"
-		UPDATE users
+		UPDATE db_user.users
 		SET
 			is_searchable = TRUE,
 			update_ts = $1

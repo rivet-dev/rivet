@@ -1,10 +1,10 @@
 # \CloudTiersApi
 
-All URIs are relative to *http://localhost*
+All URIs are relative to *https://api.rivet.gg*
 
 Method | HTTP request | Description
 ------------- | ------------- | -------------
-[**cloud_tiers_get_region_tiers**](CloudTiersApi.md#cloud_tiers_get_region_tiers) | **GET** /region-tiers | 
+[**cloud_tiers_get_region_tiers**](CloudTiersApi.md#cloud_tiers_get_region_tiers) | **GET** /cloud/region-tiers | 
 
 
 

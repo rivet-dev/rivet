@@ -15,12 +15,12 @@ async fn handle(
 		"
 		SELECT g.game_id, g.developer_team_id
 		FROM unnest($1::UUID[]) AS q
-		INNER JOIN games AS g
+		INNER JOIN db_game.games AS g
 		ON g.developer_team_id = q
 	"
 	))
 	.bind(&team_ids)
-	.fetch_all(&ctx.crdb("db-game").await?)
+	.fetch_all(&ctx.crdb().await?)
 	.await?;
 
 	let teams = team_ids

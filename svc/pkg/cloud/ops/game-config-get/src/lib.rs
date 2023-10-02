@@ -28,12 +28,12 @@ async fn handle(
 	let game_configs = sqlx::query_as::<_, Game>(indoc!(
 		"
 		SELECT game_id
-		FROM game_configs
+		FROM db_cloud.game_configs
 		WHERE game_id = ANY($1)
 		"
 	))
 	.bind(game_ids)
-	.fetch_all(&ctx.crdb("db-cloud").await?)
+	.fetch_all(&ctx.crdb().await?)
 	.await?
 	.into_iter()
 	.map(Into::<backend::cloud::Game>::into)

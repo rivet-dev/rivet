@@ -29,7 +29,6 @@ Bolt.local.toml
 !/secrets/README.md
 
 # Generated code
-gen/region-config.json
 gen/svc/
 gen/tf/
 gen/docker/

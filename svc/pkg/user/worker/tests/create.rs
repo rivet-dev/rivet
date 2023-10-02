@@ -13,9 +13,9 @@ async fn create(ctx: TestCtx) {
 	.unwrap();
 
 	let (exists,): (bool,) =
-		sqlx::query_as("SELECT EXISTS (SELECT 1 FROM users WHERE user_id = $1)")
+		sqlx::query_as("SELECT EXISTS (SELECT 1 FROM db_user.users WHERE user_id = $1)")
 			.bind(user_id)
-			.fetch_one(&ctx.crdb("db-user").await.unwrap())
+			.fetch_one(&ctx.crdb().await.unwrap())
 			.await
 			.unwrap();
 	assert!(exists, "user not created");

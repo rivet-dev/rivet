@@ -3,6 +3,10 @@ use futures_util::{StreamExt, TryStreamExt};
 use rand::{distributions::Alphanumeric, seq::SliceRandom, thread_rng, Rng};
 use rivet_term::console::style;
 use serde_json::{json, Value};
+use std::sync::{
+	atomic::{AtomicUsize, Ordering},
+	Arc,
+};
 use std::{
 	collections::{HashMap, HashSet},
 	path::Path,
@@ -25,8 +29,13 @@ use crate::{
 	utils::{self, command_helper::CommandHelper, DroppablePort},
 };
 
-const TEST_TIMEOUT: Duration = Duration::from_secs(60);
-const PARALLEL_TESTS: usize = 64;
+/// Timeout for tests.
+///
+/// Default Chirp timeout is 60 seconds, so this is 15 seconds longer to give a buffer for Chirp
+/// operations to time out first.
+const TEST_TIMEOUT: Duration = Duration::from_secs(75);
+
+const PARALLEL_TESTS: usize = 8;
 
 struct TestCleanupManager {
 	project_ctx: ProjectContext,
@@ -355,12 +364,16 @@ pub async fn test_all(ctx: &ProjectContext) -> Result<()> {
 		.iter()
 		.map(|svc| svc.name())
 		.collect::<Vec<_>>();
-	test_services(ctx, &all_svc_names).await?;
+	test_services(ctx, &all_svc_names, Vec::new()).await?;
 
 	Ok(())
 }
 
-pub async fn test_services<T: AsRef<str>>(ctx: &ProjectContext, svc_names: &[T]) -> Result<()> {
+pub async fn test_services<T: AsRef<str>>(
+	ctx: &ProjectContext,
+	svc_names: &[T],
+	filters: Vec<String>,
+) -> Result<()> {
 	if ctx.ns().rivet.test.is_none() {
 		bail!("tests are disabled, enable them by setting rivet.test in the namespace config");
 	}
@@ -416,6 +429,7 @@ pub async fn test_services<T: AsRef<str>>(ctx: &ProjectContext, svc_names: &[T])
 					})
 					.collect::<Vec<_>>(),
 				jobs: ctx.config_local().rust.num_jobs,
+				test_filters: &filters,
 			},
 		)
 		.await
@@ -427,9 +441,12 @@ pub async fn test_services<T: AsRef<str>>(ctx: &ProjectContext, svc_names: &[T])
 	// Run tests
 	eprintln!();
 	rivet_term::status::progress("Running tests", "");
+	let tests_complete = Arc::new(AtomicUsize::new(0));
+	let test_count = test_binaries.len();
 	let test_results = futures_util::stream::iter(test_binaries.into_iter().map(|test_binary| {
 		let ctx = ctx.clone();
-		async move { run_test(&ctx, test_binary).await }
+		let tests_complete = tests_complete.clone();
+		async move { run_test(&ctx, test_binary, tests_complete.clone(), test_count).await }
 	}))
 	.buffer_unordered(PARALLEL_TESTS)
 	.try_collect::<Vec<_>>()
@@ -522,7 +539,12 @@ struct TestResult {
 	pod_name: String,
 }
 
-async fn run_test(ctx: &ProjectContext, test_binary: TestBinary) -> Result<TestResult> {
+async fn run_test(
+	ctx: &ProjectContext,
+	test_binary: TestBinary,
+	tests_complete: Arc<AtomicUsize>,
+	test_count: usize,
+) -> Result<TestResult> {
 	let svc_ctx = ctx
 		.all_services()
 		.await
@@ -532,7 +554,7 @@ async fn run_test(ctx: &ProjectContext, test_binary: TestBinary) -> Result<TestR
 	let display_name = format!("{}::{}", svc_ctx.name(), test_binary.target);
 
 	let setup_start = Instant::now();
-	rivet_term::status::info("Booting", &display_name);
+	// rivet_term::status::info("Booting", &display_name);
 
 	// Convert path relative to project
 	let relative_path = test_binary
@@ -570,11 +592,19 @@ async fn run_test(ctx: &ProjectContext, test_binary: TestBinary) -> Result<TestR
 		Result::Ok(Result::Ok(x)) => x,
 		Result::Ok(Err(err)) => TestStatus::UnknownError(err.to_string()),
 		Err(_) => {
-			// TODO: This delete the pod and its logs. Can we send a SIGKILL to the pod instead
-			// with `exec`?
-			// Kill pod
+			// Kill the process in the pod. Do this instead of running `kubectl delete` since we
+			// want to keep the logs for the pod.
 			Command::new("kubectl")
-				.args(&["delete", "pod", &pod_name, "-n", "rivet-service"])
+				.args(&[
+					"exec",
+					&pod_name,
+					"-n",
+					"rivet-service",
+					"--",
+					"/bin/sh",
+					"-c",
+					"kill -9 0",
+				])
 				.env("KUBECONFIG", ctx.gen_kubeconfig_path())
 				.output()
 				.await?;
@@ -585,8 +615,9 @@ async fn run_test(ctx: &ProjectContext, test_binary: TestBinary) -> Result<TestR
 
 	// Print status
 	let test_duration = test_start_time.elapsed();
+	let complete_count = tests_complete.fetch_add(1, Ordering::SeqCst) + 1;
 	let run_info = format!(
-		"{display_name} [pod/{pod_name}] [{td:.1}s]",
+		"{display_name} ({complete_count}/{test_count}) [pod/{pod_name}] [{td:.1}s]",
 		td = test_duration.as_secs_f32()
 	);
 	match &status {
@@ -630,6 +661,7 @@ fn gen_test_id() -> String {
 
 async fn tail_pod(ctx: &ProjectContext, pod: &str) -> Result<TestStatus> {
 	loop {
+		// TODO: Use --wait for better performance
 		let output = Command::new("kubectl")
 			.args(&[
 				"get",
@@ -646,9 +678,9 @@ async fn tail_pod(ctx: &ProjectContext, pod: &str) -> Result<TestStatus> {
 		let output_str = String::from_utf8_lossy(&output.stdout);
 		let output_str = output_str.trim();
 		match output_str {
-			"Pending" | "Running" => {
+			"Pending" | "Running" | "" => {
 				// Continue
-				tokio::time::sleep(Duration::from_millis(250)).await;
+				tokio::time::sleep(Duration::from_millis(500)).await;
 			}
 			"Succeeded" | "Failed" => {
 				// Get the exit code of the pod

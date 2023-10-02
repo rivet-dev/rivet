@@ -48,7 +48,7 @@ pub async fn portal_notifications_register_notifications(configuration: &configu
 
     let local_var_client = &local_var_configuration.client;
 
-    let local_var_uri_str = format!("{}/notifications/register", local_var_configuration.base_path);
+    let local_var_uri_str = format!("{}/portal/notifications/register", local_var_configuration.base_path);
     let mut local_var_req_builder = local_var_client.request(reqwest::Method::POST, local_var_uri_str.as_str());
 
     if let Some(ref local_var_user_agent) = local_var_configuration.user_agent {
@@ -80,7 +80,7 @@ pub async fn portal_notifications_unregister_notifications(configuration: &confi
 
     let local_var_client = &local_var_configuration.client;
 
-    let local_var_uri_str = format!("{}/notifications/register", local_var_configuration.base_path);
+    let local_var_uri_str = format!("{}/portal/notifications/register", local_var_configuration.base_path);
     let mut local_var_req_builder = local_var_client.request(reqwest::Method::DELETE, local_var_uri_str.as_str());
 
     local_var_req_builder = local_var_req_builder.query(&[("service", &service.to_string())]);

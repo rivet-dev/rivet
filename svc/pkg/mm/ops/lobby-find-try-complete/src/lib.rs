@@ -14,7 +14,7 @@ struct FindQuery {
 async fn handle(
 	ctx: OperationContext<mm::lobby_find_try_complete::Request>,
 ) -> GlobalResult<mm::lobby_find_try_complete::Response> {
-	let crdb = ctx.crdb("db-mm-state").await?;
+	let crdb = ctx.crdb().await?;
 	let redis = ctx.redis_mm().await?;
 
 	util::inject_latency!();
@@ -133,7 +133,7 @@ async fn complete_query(
 	// Update query status in database
 	let should_update = sqlx::query_as::<_, (i64,)>(indoc!(
 		"
-		UPDATE find_queries
+		UPDATE db_mm_state.find_queries
 		SET status = $3
 		WHERE query_id = $1 AND status = $2
 		RETURNING 1

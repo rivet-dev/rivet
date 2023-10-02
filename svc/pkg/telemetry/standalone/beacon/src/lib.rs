@@ -41,10 +41,10 @@ pub async fn run_from_env(ts: i64) -> GlobalResult<()> {
 	let team_ids = sqlx::query_as::<_, (Uuid,)>(indoc!(
 		"
 		SELECT team_id
-		FROM dev_teams
+		FROM db_team_dev.dev_teams
 		"
 	))
-	.fetch_all(&ctx.crdb("db-team-dev").await?)
+	.fetch_all(&ctx.crdb().await?)
 	.await?
 	.into_iter()
 	.map(|(team_id,)| Into::<common::Uuid>::into(team_id))
@@ -56,21 +56,21 @@ pub async fn run_from_env(ts: i64) -> GlobalResult<()> {
 			gu.namespace_id,
 			count(DISTINCT gu.user_id) FILTER (WHERE l.link_id IS NULL) AS total_users,
 			count(DISTINCT gu.user_id) FILTER (WHERE l.link_id IS NOT NULL) AS linked_users
-		FROM game_users AS gu
-		LEFT JOIN links AS l ON l.new_game_user_id = gu.game_user_id
+		FROM db_game_user.game_users AS gu
+		LEFT JOIN db_game_user.links AS l ON l.new_game_user_id = gu.game_user_id
 		GROUP BY gu.namespace_id
 		"
 	))
-	.fetch_all(&ctx.crdb("db-game-user").await?)
+	.fetch_all(&ctx.crdb().await?)
 	.await?;
 
 	let namespaces = sqlx::query_as::<_, (Uuid, Uuid)>(indoc!(
 		"
 		SELECT namespace_id, game_id
-		FROM game_namespaces
+		FROM db_game.game_namespaces
 		"
 	))
-	.fetch_all(&ctx.crdb("db-game").await?)
+	.fetch_all(&ctx.crdb().await?)
 	.await?;
 
 	let game_ids = namespaces

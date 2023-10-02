@@ -13,7 +13,7 @@ struct GameVersion {
 async fn handle(
 	ctx: OperationContext<module::game_version_get::Request>,
 ) -> GlobalResult<module::game_version_get::Response> {
-	let crdb = ctx.crdb("db-module").await?;
+	let crdb = ctx.crdb().await?;
 
 	let version_ids = ctx
 		.version_ids
@@ -24,7 +24,7 @@ async fn handle(
 	let versions = sqlx::query_as::<_, GameVersion>(indoc!(
 		"
 		SELECT version_id, config
-		FROM game_versions
+		FROM db_module.game_versions
 		WHERE version_id = ANY($1)
 		"
 	))

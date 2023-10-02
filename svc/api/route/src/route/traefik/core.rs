@@ -204,6 +204,10 @@ fn register_namespace(
 	config: &mut traefik::TraefikConfigResponse,
 	s3_client: &s3_util::Client,
 ) -> GlobalResult<()> {
+	let Some(domain_cdn) = util::env::domain_cdn() else {
+		return Ok(());
+	};
+
 	let ns_id = **internal_unwrap!(ns.namespace_id);
 	let ns_auth = internal_unwrap_owned!(backend::cdn::namespace_config::AuthType::from_i32(
 		ns.auth_type
@@ -216,19 +220,17 @@ fn register_namespace(
 		// Match namespace
 		write!(
 			&mut router_rule,
-			"Host(`{game_name_id}--{ns_name_id}.{base}`)",
+			"Host(`{game_name_id}--{ns_name_id}.{domain_cdn}`)",
 			game_name_id = ns.game_name_id,
 			ns_name_id = ns.namespace_name_id,
-			base = util::env::domain_cdn(),
 		)?;
 
 		// Match all production domains
 		if ns.namespace_name_id == "prod" {
 			write!(
 				&mut router_rule,
-				" || Host(`{game_name_id}.{base}`)",
+				" || Host(`{game_name_id}.{domain_cdn}`)",
 				game_name_id = ns.game_name_id,
-				base = util::env::domain_cdn(),
 			)?;
 		}
 
@@ -310,8 +312,8 @@ fn register_namespace(
 				middlewares: router_middlewares_cdn.clone(),
 				tls: Some(traefik::TraefikTls::build(vec![
 					traefik::TraefikTlsDomain {
-						main: util::env::domain_cdn().into(),
-						sans: vec![format!("*.{}", util::env::domain_cdn())],
+						main: domain_cdn.into(),
+						sans: vec![format!("*.{}", domain_cdn)],
 					},
 				])),
 			},
@@ -326,8 +328,8 @@ fn register_namespace(
 				middlewares: router_middlewares_html.clone(),
 				tls: Some(traefik::TraefikTls::build(vec![
 					traefik::TraefikTlsDomain {
-						main: util::env::domain_cdn().into(),
-						sans: vec![format!("*.{}", util::env::domain_cdn())],
+						main: domain_cdn.into(),
+						sans: vec![format!("*.{}", domain_cdn)],
 					},
 				])),
 			},
@@ -397,6 +399,10 @@ fn register_custom_cdn_route(
 	router_middlewares_html: Vec<String>,
 	route: &backend::cdn::Route,
 ) -> GlobalResult<()> {
+	let Some(domain_cdn) = util::env::domain_cdn() else {
+		return Ok(());
+	};
+
 	let ns_id = **internal_unwrap!(ns.namespace_id);
 
 	if let Some(glob) = route.glob.clone() {
@@ -414,19 +420,17 @@ fn register_custom_cdn_route(
 				let router_rule = {
 					// Match all domains
 					let mut router_rule = format!(
-						"Host(`{game_name_id}--{ns_name_id}.{base}`",
+						"Host(`{game_name_id}--{ns_name_id}.{domain_cdn}`",
 						game_name_id = ns.game_name_id,
 						ns_name_id = ns.namespace_name_id,
-						base = util::env::domain_cdn(),
 					);
 
 					// Match all production domains
 					if ns.namespace_name_id == "prod" {
 						write!(
 							&mut router_rule,
-							", `{game_name_id}.{base}`",
+							", `{game_name_id}.{domain_cdn}`",
 							game_name_id = ns.game_name_id,
-							base = util::env::domain_cdn(),
 						)?;
 					}
 
@@ -525,8 +529,8 @@ fn register_custom_cdn_route(
 						middlewares: custom_headers_router_middlewares_cdn.clone(),
 						tls: Some(traefik::TraefikTls::build(vec![
 							traefik::TraefikTlsDomain {
-								main: util::env::domain_cdn().into(),
-								sans: vec![format!("*.{}", util::env::domain_cdn())],
+								main: domain_cdn.into(),
+								sans: vec![format!("*.{domain_cdn}")],
 							},
 						])),
 					},
@@ -543,8 +547,8 @@ fn register_custom_cdn_route(
 						middlewares: custom_headers_router_middlewares_html.clone(),
 						tls: Some(traefik::TraefikTls::build(vec![
 							traefik::TraefikTlsDomain {
-								main: util::env::domain_cdn().into(),
-								sans: vec![format!("*.{}", util::env::domain_cdn())],
+								main: domain_cdn.into(),
+								sans: vec![format!("*.{domain_cdn}")],
 							},
 						])),
 					},

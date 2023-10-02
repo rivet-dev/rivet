@@ -1,10 +1,10 @@
 # \JobRunApi
 
-All URIs are relative to *http://localhost*
+All URIs are relative to *https://api.rivet.gg*
 
 Method | HTTP request | Description
 ------------- | ------------- | -------------
-[**job_run_cleanup**](JobRunApi.md#job_run_cleanup) | **POST** /runs/cleanup | 
+[**job_run_cleanup**](JobRunApi.md#job_run_cleanup) | **POST** /job/runs/cleanup | 
 
 
 

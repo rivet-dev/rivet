@@ -13,7 +13,7 @@ struct InvitationRow {
 
 #[worker(name = "team-invite-consume")]
 async fn worker(ctx: &OperationContext<team_invite::msg::consume::Message>) -> GlobalResult<()> {
-	let crdb = ctx.crdb("db-team-invite").await?;
+	let crdb = ctx.crdb().await?;
 
 	let user_id = internal_unwrap!(ctx.user_id).as_uuid();
 
@@ -105,7 +105,7 @@ async fn update_db(
 	let invitation_row = sqlx::query_as::<_, InvitationRow>(
 		"
 		SELECT team_id, expire_ts, max_use_count, use_counter, revoke_ts
-		FROM invitations
+		FROM db_team_invite.invitations
 		WHERE code = $1
 		FOR UPDATE
 		",
@@ -186,16 +186,20 @@ async fn update_db(
 	}
 
 	// Insert consumption
-	sqlx::query("UPDATE invitations SET use_counter = use_counter + 1 WHERE code = $1")
-		.bind(&code)
-		.execute(&mut **tx)
-		.await?;
-	sqlx::query("INSERT INTO invitation_uses (code, user_id, create_ts) VALUES ($1, $2, $3)")
-		.bind(&code)
-		.bind(user_id)
-		.bind(now)
-		.execute(&mut **tx)
-		.await?;
+	sqlx::query(
+		"UPDATE db_team_invite.invitations SET use_counter = use_counter + 1 WHERE code = $1",
+	)
+	.bind(&code)
+	.execute(&mut **tx)
+	.await?;
+	sqlx::query(
+		"INSERT INTO db_team_invite.invitation_uses (code, user_id, create_ts) VALUES ($1, $2, $3)",
+	)
+	.bind(&code)
+	.bind(user_id)
+	.bind(now)
+	.execute(&mut **tx)
+	.await?;
 
 	Ok(DbOutput::Success { invitation_row })
 }

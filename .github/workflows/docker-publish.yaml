@@ -22,15 +22,22 @@ jobs:
         username: ${{github.actor}}
         password: ${{secrets.GITHUB_TOKEN}}
 
-    - name: Build Docker image using Nix
+    - name: Build rivet-local-binary-artifact-runner
       run: |
+        GHCR_TAG="ghcr.io/rivet-gg/rivet-local-binary-artifact-runner:$(git rev-parse --short HEAD)"
+        cd infra/docker/rivet_local_binary_artifact_runner
+        docker build -t "$GHCR_TAG" .
+        docker push "$GHCR_TAG"
+
+    - name: Build apache-traffic-server
+      run: |
+        # Build
         . /home/runner/.nix-profile/etc/profile.d/nix.sh
         cd infra/docker/traffic_server
         nix-build docker.nix --option system-features kvm
         docker load < result
 
-    - name: Push Docker image
-      run: |
+        # Push
         GHCR_TAG="ghcr.io/rivet-gg/apache-traffic-server:$(git rev-parse --short HEAD)"
         echo "Tagging: $GHCR_TAG"
         docker tag apache-traffic-server:latest "$GHCR_TAG"

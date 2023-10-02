@@ -32,7 +32,7 @@ async fn handle(
 
 	sqlx::query(indoc!(
 		"
-		UPDATE game_namespaces
+		UPDATE db_mm_config.game_namespaces
 		SET 
 			lobby_count_max = $2,
 			max_players_per_client = $3,
@@ -50,7 +50,7 @@ async fn handle(
 	.bind(ctx.max_players_per_client_proxy as i64)
 	.bind(ctx.max_players_per_client_tor as i64)
 	.bind(ctx.max_players_per_client_hosting as i64)
-	.execute(&ctx.crdb("db-mm-config").await?)
+	.execute(&ctx.crdb().await?)
 	.await?;
 
 	Ok(mm_config::namespace_config_set::Response {})

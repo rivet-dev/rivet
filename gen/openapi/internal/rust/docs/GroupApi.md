@@ -1,26 +1,26 @@
 # \GroupApi
 
-All URIs are relative to *http://localhost*
+All URIs are relative to *https://api.rivet.gg*
 
 Method | HTTP request | Description
 ------------- | ------------- | -------------
-[**group_ban_identity**](GroupApi.md#group_ban_identity) | **POST** /groups/{group_id}/bans/{identity_id} | 
-[**group_complete_avatar_upload**](GroupApi.md#group_complete_avatar_upload) | **POST** /groups/{group_id}/avatar-upload/{upload_id}/complete | 
-[**group_create**](GroupApi.md#group_create) | **POST** /groups | 
-[**group_get_bans**](GroupApi.md#group_get_bans) | **GET** /groups/{group_id}/bans | 
-[**group_get_join_requests**](GroupApi.md#group_get_join_requests) | **GET** /groups/{group_id}/join-requests | 
-[**group_get_members**](GroupApi.md#group_get_members) | **GET** /groups/{group_id}/members | 
-[**group_get_profile**](GroupApi.md#group_get_profile) | **GET** /groups/{group_id}/profile | 
-[**group_get_summary**](GroupApi.md#group_get_summary) | **GET** /groups/{group_id}/summary | 
-[**group_kick_member**](GroupApi.md#group_kick_member) | **POST** /groups/{group_id}/kick/{identity_id} | 
-[**group_leave**](GroupApi.md#group_leave) | **POST** /groups/{group_id}/leave | 
-[**group_list_suggested**](GroupApi.md#group_list_suggested) | **GET** /groups | 
-[**group_prepare_avatar_upload**](GroupApi.md#group_prepare_avatar_upload) | **POST** /groups/avatar-upload/prepare | 
-[**group_search**](GroupApi.md#group_search) | **GET** /groups/search | 
-[**group_transfer_ownership**](GroupApi.md#group_transfer_ownership) | **POST** /groups/{group_id}/transfer-owner | 
-[**group_unban_identity**](GroupApi.md#group_unban_identity) | **DELETE** /groups/{group_id}/bans/{identity_id} | 
-[**group_update_profile**](GroupApi.md#group_update_profile) | **POST** /groups/{group_id}/profile | 
-[**group_validate_profile**](GroupApi.md#group_validate_profile) | **POST** /groups/profile/validate | 
+[**group_ban_identity**](GroupApi.md#group_ban_identity) | **POST** /group/groups/{group_id}/bans/{identity_id} | 
+[**group_complete_avatar_upload**](GroupApi.md#group_complete_avatar_upload) | **POST** /group/groups/{group_id}/avatar-upload/{upload_id}/complete | 
+[**group_create**](GroupApi.md#group_create) | **POST** /group/groups | 
+[**group_get_bans**](GroupApi.md#group_get_bans) | **GET** /group/groups/{group_id}/bans | 
+[**group_get_join_requests**](GroupApi.md#group_get_join_requests) | **GET** /group/groups/{group_id}/join-requests | 
+[**group_get_members**](GroupApi.md#group_get_members) | **GET** /group/groups/{group_id}/members | 
+[**group_get_profile**](GroupApi.md#group_get_profile) | **GET** /group/groups/{group_id}/profile | 
+[**group_get_summary**](GroupApi.md#group_get_summary) | **GET** /group/groups/{group_id}/summary | 
+[**group_kick_member**](GroupApi.md#group_kick_member) | **POST** /group/groups/{group_id}/kick/{identity_id} | 
+[**group_leave**](GroupApi.md#group_leave) | **POST** /group/groups/{group_id}/leave | 
+[**group_list_suggested**](GroupApi.md#group_list_suggested) | **GET** /group/groups | 
+[**group_prepare_avatar_upload**](GroupApi.md#group_prepare_avatar_upload) | **POST** /group/groups/avatar-upload/prepare | 
+[**group_search**](GroupApi.md#group_search) | **GET** /group/groups/search | 
+[**group_transfer_ownership**](GroupApi.md#group_transfer_ownership) | **POST** /group/groups/{group_id}/transfer-owner | 
+[**group_unban_identity**](GroupApi.md#group_unban_identity) | **DELETE** /group/groups/{group_id}/bans/{identity_id} | 
+[**group_update_profile**](GroupApi.md#group_update_profile) | **POST** /group/groups/{group_id}/profile | 
+[**group_validate_profile**](GroupApi.md#group_validate_profile) | **POST** /group/groups/profile/validate | 
 
 
 

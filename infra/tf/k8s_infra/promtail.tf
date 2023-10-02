@@ -125,6 +125,13 @@ resource "helm_release" "promtail" {
 					    {{- end }}
 					EOF
 			}
+			serviceMonitor = {
+				enabled = true
+
+				prometheusRule = {
+					enabled = true
+				}
+			}
 		}
 
 		extraArgs = [

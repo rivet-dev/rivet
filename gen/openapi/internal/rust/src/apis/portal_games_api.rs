@@ -35,7 +35,7 @@ pub async fn portal_games_get_game_profile(configuration: &configuration::Config
 
     let local_var_client = &local_var_configuration.client;
 
-    let local_var_uri_str = format!("{}/games/{game_name_id}/profile", local_var_configuration.base_path, game_name_id=crate::apis::urlencode(game_name_id));
+    let local_var_uri_str = format!("{}/portal/games/{game_name_id}/profile", local_var_configuration.base_path, game_name_id=crate::apis::urlencode(game_name_id));
     let mut local_var_req_builder = local_var_client.request(reqwest::Method::GET, local_var_uri_str.as_str());
 
     if let Some(ref local_var_str) = watch_index {

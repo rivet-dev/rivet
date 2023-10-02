@@ -37,19 +37,19 @@ async fn handle(ctx: OperationContext<game::get::Request>) -> GlobalResult<game:
 			description,
 			array(
 				SELECT tag
-				FROM game_tags
+				FROM db_game.game_tags
 				WHERE game_tags.game_id = games.game_id
 			) AS tags,
 			logo_upload_id,
 			banner_upload_id,
 			plan_code,
 			subscription_id
-		FROM games
+		FROM db_game.games
 		WHERE game_id = ANY($1)
 		"
 	))
 	.bind(game_ids)
-	.fetch_all(&ctx.crdb("db-game").await?)
+	.fetch_all(&ctx.crdb().await?)
 	.await?;
 
 	let upload_ids = games

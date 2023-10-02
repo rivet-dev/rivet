@@ -5,8 +5,8 @@ use rivet_operation::prelude::*;
 async fn handle(
 	ctx: OperationContext<game::recommend::Request>,
 ) -> GlobalResult<game::recommend::Response> {
-	let game_ids = sqlx::query_as::<_, (Uuid,)>("SELECT game_id FROM games")
-		.fetch_all(&ctx.crdb("db-game").await?)
+	let game_ids = sqlx::query_as::<_, (Uuid,)>("SELECT game_id FROM db_game.games")
+		.fetch_all(&ctx.crdb().await?)
 		.await?
 		.into_iter()
 		.map(|row| row.0.into())

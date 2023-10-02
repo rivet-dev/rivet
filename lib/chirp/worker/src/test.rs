@@ -51,8 +51,8 @@ impl TestCtx {
 		&self.op_ctx
 	}
 
-	pub async fn crdb(&self, key: &str) -> Result<CrdbPool, rivet_pools::Error> {
-		self.op_ctx.crdb(key).await
+	pub async fn crdb(&self) -> Result<CrdbPool, rivet_pools::Error> {
+		self.op_ctx.crdb().await
 	}
 
 	pub async fn redis_cache(&self) -> Result<RedisPool, rivet_pools::Error> {

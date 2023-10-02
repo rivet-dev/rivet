@@ -6,7 +6,7 @@ use serde_json::json;
 async fn worker(
 	ctx: &OperationContext<game_user::msg::link_complete::Message>,
 ) -> GlobalResult<()> {
-	let crdb = ctx.crdb("db-game-user").await?;
+	let crdb = ctx.crdb().await?;
 
 	let user_id = internal_unwrap!(ctx.user_id).as_uuid();
 	let link_id = internal_unwrap!(ctx.link_id).as_uuid();
@@ -34,7 +34,7 @@ async fn worker(
 	let (old_game_user_id, namespace_id) = sqlx::query_as::<_, (Uuid, Uuid)>(indoc!(
 		"
 		SELECT current_game_user_id, namespace_id
-		FROM links
+		FROM db_game_user.links
 		WHERE link_id = $1
 		"
 	))
@@ -79,13 +79,13 @@ async fn worker(
 				"
 				WITH
 					update_links AS (
-						UPDATE links
+						UPDATE db_game_user.links
 						SET complete_ts = $1, new_game_user_id = $3, new_game_user_token = $4
 						WHERE link_id = $2 AND complete_ts IS NULL AND cancelled_ts IS NULL
 						RETURNING 1
 					),
 					insert_users AS (
-						INSERT INTO game_users (game_user_id, user_id, token_session_id, namespace_id, create_ts)
+						INSERT INTO db_game_user.game_users (game_user_id, user_id, token_session_id, namespace_id, create_ts)
 						SELECT $5, $6, $7, $8, $1
 						WHERE EXISTS (SELECT 1 FROM update_links)
 						RETURNING 1
@@ -145,7 +145,7 @@ async fn worker(
 			// Flag as cancelled
 			let update_query = sqlx::query(indoc!(
 				"
-				UPDATE links
+				UPDATE db_game_user.links
 				SET cancelled_ts = $2
 				WHERE link_id = $1 AND complete_ts IS NULL AND cancelled_ts IS NULL
 				"

@@ -209,8 +209,8 @@ impl EndpointRouter {
 					// This url doesn't actually represent the url of the request, it's just put here so that the
 					// URI can be parsed by url::Url::parse
 					let __url = format!(
-						"https://{}{}",
-						rivet_operation::prelude::util::env::domain_main(), request.uri()
+						"{}{}",
+						rivet_operation::prelude::util::env::origin_api(), request.uri()
 					);
 					let __route = url::Url::parse(__url.as_str())?;
 					let __path_segments = __route

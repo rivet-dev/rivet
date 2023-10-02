@@ -20,8 +20,8 @@ async fn handle(
 
 	let site_id = internal_unwrap!(config.site_id);
 
-	let crdb = ctx.crdb("db-cdn").await?;
-	sqlx::query("INSERT INTO game_versions (version_id, site_id) VALUES ($1, $2)")
+	let crdb = ctx.crdb().await?;
+	sqlx::query("INSERT INTO db_cdn.game_versions (version_id, site_id) VALUES ($1, $2)")
 		.bind(**version_id)
 		.bind(**site_id)
 		.execute(&crdb)
@@ -82,7 +82,7 @@ async fn handle(
 
 		sqlx::query(indoc!(
 			"
-			INSERT INTO game_version_custom_headers (
+			INSERT INTO db_cdn.game_version_custom_headers (
 				version_id, glob, priority, header_name, header_value
 			)
 			SELECT * FROM UNNEST($1, $2, $3, $4, $5)

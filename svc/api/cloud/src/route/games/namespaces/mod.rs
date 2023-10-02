@@ -53,37 +53,43 @@ pub async fn get(
 					let client = client.clone();
 
 					async move {
-						let res = client
-							.get(format!(
-							"https://api.cloudflare.com/client/v4/zones/{zone_id}/custom_hostnames/{identifier}",
-							zone_id = util::env::cloudflare::zone::game::id(),
+						if util::feature::cf_custom_hostname() {
+							let game_zone_id =
+								internal_unwrap_owned!(util::env::cloudflare::zone::game::id());
+							let res = client
+								.get(format!(
+							"https://api.cloudflare.com/client/v4/zones/{game_zone_id}/custom_hostnames/{identifier}",
 							identifier = identifier,
 						))
-							.header(
-								reqwest::header::AUTHORIZATION,
-								format!("Bearer {}", util::env::cloudflare::auth_token()),
-							)
-							.send()
-							.await?;
-						let status = res.status();
+								.header(
+									reqwest::header::AUTHORIZATION,
+									format!("Bearer {}", util::env::cloudflare::auth_token()),
+								)
+								.send()
+								.await?;
+							let status = res.status();
 
-						if status.is_success() {
-							let res = res
-								.json::<rivet_convert::cloud::cloudflare::CloudflareResponse>()
+							if status.is_success() {
+								let res = res
+									.json::<rivet_convert::cloud::cloudflare::CloudflareResponse>()
+									.await?;
+
+								// Send message to update the hostname's status in our DB
+								msg!([chirp] cf_custom_hostname::msg::status_set(identifier) {
+									identifier: Some(identifier),
+									status: ApiInto::<backend::cf::custom_hostname::Status>::api_into(res.result.status.clone()) as i32,
+								})
 								.await?;
 
-							// Send message to update the hostname's status in our DB
-							msg!([chirp] cf_custom_hostname::msg::status_set(identifier) {
-								identifier: Some(identifier),
-								status: ApiInto::<backend::cf::custom_hostname::Status>::api_into(res.result.status.clone()) as i32,
-							})
-							.await?;
-
-							GlobalResult::Ok(Some(res.result))
+								GlobalResult::Ok(Some(res.result))
+							} else {
+								let body = res.text().await?;
+								tracing::error!(?body, ?status, "failed to fetch custom hostname");
+								Ok(None)
+							}
 						} else {
-							let body = res.text().await?;
-							tracing::error!(?body, ?status, "failed to fetch custom hostname");
-							GlobalResult::Ok(None)
+							tracing::trace!("custom hostnames disabled");
+							Ok(None)
 						}
 					}
 				},
@@ -104,16 +110,13 @@ pub async fn get(
 					.iter()
 					.find(|res| res.hostname == domain.domain)
 				{
+					let domain_cdn = internal_unwrap_owned!(util::env::domain_cdn());
+
 					// Create CNAME url
 					let cname_url = if game_namespace.name_id.as_str() == "prod" {
-						format!("{}.{}", game.name_id, util::env::domain_cdn())
+						format!("{}.{domain_cdn}", game.name_id)
 					} else {
-						format!(
-							"{}--{}.{}",
-							game.name_id,
-							game_namespace.name_id,
-							util::env::domain_cdn()
-						)
+						format!("{}--{}.{domain_cdn}", game.name_id, game_namespace.name_id,)
 					};
 
 					Ok(models::CloudCdnNamespaceDomain {

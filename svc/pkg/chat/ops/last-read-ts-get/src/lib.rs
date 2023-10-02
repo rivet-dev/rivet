@@ -20,7 +20,7 @@ impl From<Thread> for chat::last_read_ts_get::response::Thread {
 async fn handle(
 	ctx: OperationContext<chat::last_read_ts_get::Request>,
 ) -> GlobalResult<chat::last_read_ts_get::Response> {
-	let crdb = ctx.crdb("db-chat").await?;
+	let crdb = ctx.crdb().await?;
 
 	let user_id = internal_unwrap!(ctx.user_id).as_uuid();
 	let thread_ids = ctx
@@ -32,7 +32,7 @@ async fn handle(
 	let threads = sqlx::query_as::<_, Thread>(indoc!(
 		"
 		SELECT thread_id, last_read_ts
-		FROM thread_user_settings
+		FROM db_chat.thread_user_settings
 		WHERE user_id = $1 AND thread_id = ANY($2)
 		"
 	))

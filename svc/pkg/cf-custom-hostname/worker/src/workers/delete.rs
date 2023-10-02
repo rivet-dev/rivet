@@ -17,8 +17,10 @@ struct CloudflareErrorEntry {
 async fn worker(
 	ctx: &OperationContext<cf_custom_hostname::msg::delete::Message>,
 ) -> GlobalResult<()> {
+	let game_zone_id = internal_unwrap_owned!(util::env::cloudflare::zone::game::id());
+
 	let namespace_id = internal_unwrap!(ctx.namespace_id).as_uuid();
-	let crdb = ctx.crdb("db-cf-custom-hostname").await?;
+	let crdb = ctx.crdb().await?;
 
 	let custom_hostnames_res = op!([ctx] cf_custom_hostname_resolve_hostname {
 		hostnames: vec![ctx.hostname.clone()],
@@ -42,8 +44,7 @@ async fn worker(
 
 	let res = reqwest::Client::new()
 		.delete(format!(
-			"https://api.cloudflare.com/client/v4/zones/{zone_id}/custom_hostnames/{identifier}",
-			zone_id = util::env::cloudflare::zone::game::id(),
+			"https://api.cloudflare.com/client/v4/zones/{game_zone_id}/custom_hostnames/{identifier}",
 			identifier = identifier,
 		))
 		.header(
@@ -79,7 +80,7 @@ async fn worker(
 	let (subscription_id,) = sqlx::query_as::<_, (Uuid,)>(indoc!(
 		"
 		SELECT subscription_id
-		FROM custom_hostnames
+		FROM db_cf_custom_hostname.custom_hostnames
 		WHERE identifier = $1
 		"
 	))
@@ -91,7 +92,7 @@ async fn worker(
 
 	sqlx::query(indoc!(
 		"
-		DELETE FROM custom_hostnames
+		DELETE FROM db_cf_custom_hostname.custom_hostnames
 		WHERE identifier = $1
 		"
 	))

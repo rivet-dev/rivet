@@ -8,7 +8,7 @@ use serde_json::json;
 async fn handle(
 	ctx: OperationContext<email_verification::create::Request>,
 ) -> GlobalResult<email_verification::create::Response> {
-	let crdb = ctx.crdb("db-email-verification").await?;
+	let crdb = ctx.crdb().await?;
 
 	let email_parse = EmailAddress::parse(&ctx.email, None);
 	let email = internal_unwrap!(email_parse);
@@ -22,7 +22,7 @@ async fn handle(
 	let expire_ts = ctx.ts() + util::duration::minutes(15);
 	sqlx::query(indoc!(
 		"
-		INSERT INTO verifications (
+		INSERT INTO db_email_verification.verifications (
 			verification_id,
 			email,
 			code,

@@ -11,8 +11,8 @@ const OLD_PLAYER_TIMEOUT: i64 = util::duration::hours(12);
 pub async fn run_from_env(ts: i64) -> GlobalResult<()> {
 	let pools = rivet_pools::from_env("mm-gc-full").await?;
 	let client = chirp_client::SharedClient::from_env(pools.clone())?.wrap_new("mm-gc");
-	let redis_mm = pools.redis("redis-mm")?;
-	let crdb = pools.crdb("db-mm-state")?;
+	let redis_mm = pools.redis("mm")?;
+	let crdb = pools.crdb()?;
 
 	let old_players_ts = ts - OLD_PLAYER_TIMEOUT;
 
@@ -20,7 +20,7 @@ pub async fn run_from_env(ts: i64) -> GlobalResult<()> {
 	let lobbies_online = sqlx::query_as::<_, (Uuid,)>(indoc!(
 		"
 		SELECT lobby_id
-		FROM lobbies AS OF SYSTEM TIME '-5s'
+		FROM db_mm_state.lobbies AS OF SYSTEM TIME '-5s'
 		WHERE stop_ts IS NULL
 		"
 	))
@@ -35,7 +35,7 @@ pub async fn run_from_env(ts: i64) -> GlobalResult<()> {
 	let players_online = sqlx::query_as::<_, (Uuid,)>(indoc!(
 		"
 		SELECT player_id
-		FROM players AS OF SYSTEM TIME '-5s'
+		FROM db_mm_state.players AS OF SYSTEM TIME '-5s'
 		WHERE remove_ts IS NULL
 		"
 	))
@@ -244,7 +244,7 @@ async fn check_for_zombie_configs(mut redis_mm: RedisPool, crdb: CrdbPool) -> Gl
 		let crdb_lobby_ids = sqlx::query_as::<_, (Uuid,)>(indoc!(
 			"
 			SELECT lobby_id
-			FROM lobbies
+			FROM db_mm_state.lobbies
 			WHERE lobby_id = ANY($1)
 			"
 		))
@@ -271,7 +271,7 @@ async fn check_for_zombie_configs(mut redis_mm: RedisPool, crdb: CrdbPool) -> Gl
 		let crdb_player_ids = sqlx::query_as::<_, (Uuid,)>(indoc!(
 			"
 			SELECT player_id
-			FROM players
+			FROM db_mm_state.players
 			WHERE player_id = ANY($1)
 			"
 		))

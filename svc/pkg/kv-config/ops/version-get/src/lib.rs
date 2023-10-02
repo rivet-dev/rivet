@@ -19,12 +19,12 @@ async fn handle(
 	let versions = sqlx::query_as::<_, GameVersion>(indoc!(
 		"
 			SELECT version_id
-			FROM game_versions
+			FROM db_kv_config.game_versions
 			WHERE version_id = ANY($1)
 		"
 	))
 	.bind(version_ids)
-	.fetch_all(&ctx.crdb("db-kv-config").await?)
+	.fetch_all(&ctx.crdb().await?)
 	.await?
 	.into_iter()
 	.map(|version| kv_config::version_get::response::Version {

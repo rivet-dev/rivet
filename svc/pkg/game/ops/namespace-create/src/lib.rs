@@ -32,7 +32,7 @@ async fn handle(
 
 	sqlx::query(indoc!(
 		"
-		INSERT INTO game_namespaces (namespace_id, game_id, create_ts, display_name, version_id, name_id)
+		INSERT INTO db_game.game_namespaces (namespace_id, game_id, create_ts, display_name, version_id, name_id)
 		VALUES ($1, $2, $3, $4, $5, $6)
 		"
 	))
@@ -42,7 +42,7 @@ async fn handle(
 	.bind(&ctx.display_name)
 	.bind(version_id)
 	.bind(&ctx.name_id)
-	.execute(&ctx.crdb("db-game").await?)
+	.execute(&ctx.crdb().await?)
 	.await?;
 
 	msg!([ctx] cdn::msg::ns_config_update(namespace_id) {

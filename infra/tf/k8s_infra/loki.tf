@@ -12,6 +12,7 @@ resource "helm_release" "loki" {
 	version = "5.18.0"
 	values = [yamlencode({
 		loki = {
+			auth_enabled = false
 			commonConfig = {
 				replication_factor = 1
 			}

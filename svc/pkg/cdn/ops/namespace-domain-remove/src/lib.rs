@@ -6,6 +6,8 @@ use serde_json::json;
 async fn handle(
 	ctx: OperationContext<cdn::namespace_domain_remove::Request>,
 ) -> GlobalResult<cdn::namespace_domain_remove::Response> {
+	internal_assert!(util::feature::cf_custom_hostname());
+
 	let namespace_id = internal_unwrap!(ctx.namespace_id).as_uuid();
 
 	let game_res = op!([ctx] game_resolve_namespace_id {
@@ -22,11 +24,13 @@ async fn handle(
 	let game = internal_unwrap_owned!(game_res.games.first());
 	let developer_team_id = internal_unwrap!(game.developer_team_id).as_uuid();
 
-	sqlx::query("DELETE FROM game_namespace_domains WHERE namespace_id = $1 AND domain = $2")
-		.bind(namespace_id)
-		.bind(&ctx.domain)
-		.execute(&ctx.crdb("db-cdn").await?)
-		.await?;
+	sqlx::query(
+		"DELETE FROM db_cdn.game_namespace_domains WHERE namespace_id = $1 AND domain = $2",
+	)
+	.bind(namespace_id)
+	.bind(&ctx.domain)
+	.execute(&ctx.crdb().await?)
+	.await?;
 
 	// Remove cloudflare hostname
 	msg!([ctx] cf_custom_hostname::msg::delete(namespace_id, &ctx.domain) -> cf_custom_hostname::msg::delete_complete {

@@ -204,6 +204,7 @@ async fn vars(ctx: &ProjectContext) {
 			.as_ref()
 			.map_or(false, |x| x.deprecated_subdomains)),
 	);
+	vars.insert("tls_enabled".into(), json!(ctx.tls_enabled()));
 
 	// Cloudflare
 	if let Some(dns) = &config.dns {
@@ -311,6 +312,24 @@ async fn vars(ctx: &ProjectContext) {
 		vars.insert("extra_dns".into(), json!(extra_dns));
 	}
 
+	// CockroachDB
+	vars.insert(
+		"cockroachdb_provider".into(),
+		json!(match ctx.ns().cockroachdb.provider {
+			ns::CockroachDBProvider::Kubernetes { .. } => "kubernetes",
+			ns::CockroachDBProvider::Managed { .. } => "managed",
+		}),
+	);
+
+	// ClickHouse
+	vars.insert(
+		"clickhouse_provider".into(),
+		json!(match ctx.ns().clickhouse.provider {
+			ns::ClickHouseProvider::Kubernetes { .. } => "kubernetes",
+			ns::ClickHouseProvider::Managed { .. } => "managed",
+		}),
+	);
+
 	// Redis services
 	{
 		let mut redis_svcs = HashMap::<String, serde_json::Value>::new();
@@ -322,13 +341,19 @@ async fn vars(ctx: &ProjectContext) {
 				redis_svcs.insert(
 					svc_ctx.redis_db_name(),
 					json!({
-						"endpoint": format!("redis://redis-{name}.svc.cluster.local:6379"),
 						"persistent": persistent,
 					}),
 				);
 			}
 		}
 
+		vars.insert(
+			"redis_provider".into(),
+			json!(match ctx.ns().redis.provider {
+				ns::RedisProvider::Kubernetes { .. } => "kubernetes",
+				ns::RedisProvider::Aws { .. } => "aws",
+			}),
+		);
 		vars.insert("redis_dbs".into(), json!(redis_svcs));
 	}
 
