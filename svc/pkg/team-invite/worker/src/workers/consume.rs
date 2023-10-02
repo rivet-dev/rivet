@@ -193,7 +193,7 @@ async fn update_db(
 	.execute(&mut **tx)
 	.await?;
 	sqlx::query(
-		"INSERT INTO db_team_inite.invitation_uses (code, user_id, create_ts) VALUES ($1, $2, $3)",
+		"INSERT INTO db_team_invite.invitation_uses (code, user_id, create_ts) VALUES ($1, $2, $3)",
 	)
 	.bind(&code)
 	.bind(user_id)

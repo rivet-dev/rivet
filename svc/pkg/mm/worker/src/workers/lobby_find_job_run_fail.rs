@@ -18,7 +18,7 @@ async fn worker(ctx: &OperationContext<job_run::msg::fail::Message>) -> GlobalRe
 		"
 		SELECT find_queries.query_id
 		FROM db_mm_state.lobbies
-		INNER JOIN find_queries ON find_queries.lobby_id = lobbies.lobby_id
+		INNER JOIN db_mm_state.find_queries ON find_queries.lobby_id = lobbies.lobby_id
 		WHERE lobbies.run_id = $1
 		",
 	)
