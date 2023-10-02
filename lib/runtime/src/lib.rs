@@ -45,8 +45,6 @@ impl RunConfig {
 				tracing_subscriber::fmt()
 					.pretty()
 					.with_max_level(tracing::Level::INFO)
-					.with_target(false)
-					.without_time()
 					.init();
 			} else {
 				let fmt_filter = tracing_subscriber::filter::LevelFilter::INFO;

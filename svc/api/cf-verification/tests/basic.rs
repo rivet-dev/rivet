@@ -12,7 +12,6 @@ impl Ctx {
 			.pretty()
 			.with_max_level(tracing::Level::INFO)
 			.with_target(false)
-			.without_time()
 			.try_init();
 
 		let pools = rivet_pools::from_env("api-cf-verification-test")
