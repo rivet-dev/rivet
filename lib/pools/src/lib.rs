@@ -132,26 +132,20 @@ fn crdb_from_env(client_name: String) -> Result<HashMap<String, CrdbPool>, Error
 				.idle_timeout(Some(Duration::from_secs(60)))
 				// Open a connection
 				// immediately on startup
-				.min_connections(0)
+				.min_connections(1)
 				// Raise the cap, since this is effectively the amount of
 				// simultaneous requests we can handle. See
 				// https://www.cockroachlabs.com/docs/stable/connection-pooling.html
-				.max_connections(20_000)
+				.max_connections(1024)
 				// Speeds up requests at the expense of potential
 				// failures
-				// .test_before_acquire(false)
-				// .after_connect(|conn, _meta| {
-				// 	Box::pin(async move {
-				// 		tracing::info!("pg connected");
-				// 		Ok(())
-				// 	})
-				// })
-				// .after_release(|conn, meta| {
-				// 	Box::pin(async move {
-				// 		tracing::info!("pg released");
-				// 		Ok(false)
-				// 	})
-				// })
+				.test_before_acquire(false)
+				.after_connect(|conn, _meta| {
+					Box::pin(async move {
+						tracing::info!("pg connected");
+						Ok(())
+					})
+				})
 				// .after_connect({
 				// 	let url = url.clone();
 				// 	move |conn, _| {
@@ -197,11 +191,6 @@ async fn redis_from_env() -> Result<HashMap<String, RedisPool>, Error> {
 					.await
 					.map_err(Error::BuildRedis)?;
 
-				// let conn = redis::Client::open(url.as_str())
-				// 	.map_err(Error::BuildRedis)?
-				// 	.get_tokio_connection_manager()
-				// 	.await
-				// 	.map_err(Error::BuildRedis)?;
 				tracing::info!(%url, "redis connected");
 				conn
 			};

@@ -130,19 +130,6 @@ where
 				.observe(dt);
 		}
 
-		// TODO: Add back
-		// // Submit perf
-		// let chirp = self.conn.chirp().clone();
-		// tokio::task::Builder::new().name("operation::perf").spawn(
-		// 	async move {
-		// 		// HACK: Force submit performance metrics after delay in order to ensure
-		// 		// all spans have ended appropriately
-		// 		tokio::time::sleep(Duration::from_secs(5)).await;
-		// 		chirp.perf().submit().await;
-		// 	}
-		// 	.instrument(tracing::info_span!("operation_perf")),
-		// )?;
-
 		res
 	}
 

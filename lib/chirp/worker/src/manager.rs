@@ -797,11 +797,6 @@ where
 				.with_label_values(&[&worker_name, error_code_str.as_str()])
 				.observe(dt);
 		}
-
-		// HACK: Force submit performance metrics after delay in order to ensure
-		// all spans have ended appropriately
-		tokio::time::sleep(Duration::from_secs(5)).await;
-		client.perf().submit().await;
 	}
 
 	#[tracing::instrument(level = "trace", err, skip_all)]

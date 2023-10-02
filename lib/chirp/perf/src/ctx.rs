@@ -117,9 +117,6 @@ pub struct PerfCtxInner {
 	ts: i64,
 	req_id: Uuid,
 	ray_id: Uuid,
-
-	#[allow(unused_imports, dead_code)]
-	submitted: AtomicBool,
 }
 
 impl Debug for PerfCtxInner {
@@ -142,7 +139,6 @@ impl PerfCtxInner {
 			ts,
 			req_id,
 			ray_id,
-			submitted: AtomicBool::new(false),
 		}
 	}
 
@@ -246,57 +242,5 @@ impl PerfCtxInner {
 		if let Err(err) = spawn_res {
 			tracing::error!(?err, "failed to spawn perf_mark_rpc_async task");
 		}
-	}
-
-	/// Submits all chirp performance monitoring information to Redis.
-	#[tracing::instrument]
-	pub async fn submit(&self) {
-		// Disabled for now.
-		return;
-
-		// // TODO: Compare perf data to see if there's any new data to submit for
-		// // spans that ended after the first submit
-		// if self.submitted.swap(true, Ordering::SeqCst) {
-		// 	tracing::trace!("already submitted perf");
-		// 	return;
-		// }
-
-		// let mut redis_conn = self.redis_conn.clone();
-		// let perf_data = self.perf_data(self.ts, self.req_id).await;
-		// match perf_data {
-		// 	Ok(perf_data) => {
-		// 		// Don't upload anything if no data was collected
-		// 		if perf_data.spans.is_empty() && perf_data.marks.is_empty() {
-		// 			tracing::trace!("no perf data to submit");
-		// 			return;
-		// 		}
-
-		// 		tracing::trace!(
-		// 			spans_len = %perf_data.spans.len(),
-		// 			marks_len = %perf_data.marks.len(),
-		// 			"submitting perf data"
-		// 		);
-
-		// 		// Encode the message
-		// 		let mut buf = Vec::with_capacity(perf_data.encoded_len());
-
-		// 		if let Err(err) = perf_data.encode(&mut buf) {
-		// 			tracing::warn!(?err, "failed to encode perf data");
-		// 		} else {
-		// 			let key = format!("chirp-perf:ray:{}", self.ray_id);
-		// 			let mut pipe = redis::pipe();
-		// 			pipe.atomic();
-
-		// 			pipe.hset(&key, self.req_id.to_string(), buf);
-		// 			pipe.pexpire(&key, rivet_util::duration::days(3) as usize)
-		// 				.ignore();
-
-		// 			if let Err(err) = pipe.query_async::<_, ()>(&mut redis_conn).await {
-		// 				tracing::warn!(?err, "failed to upload to redis");
-		// 			}
-		// 		}
-		// 	}
-		// 	Err(err) => tracing::warn!(?err, "failed to get perf entry list"),
-		// }
 	}
 }

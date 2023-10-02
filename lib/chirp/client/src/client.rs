@@ -66,12 +66,12 @@ impl SharedClient {
 		redis_cache: RedisPool,
 		region: String,
 	) -> SharedClientHandle {
-		// let spawn_res = tokio::task::Builder::new()
-		// 	.name("chirp_client::metrics_update_update")
-		// 	.spawn(metrics::start_update_uptime());
-		// if let Err(err) = spawn_res {
-		// 	tracing::error!(?err, "failed to spawn user_presence_touch task");
-		// }
+		let spawn_res = tokio::task::Builder::new()
+			.name("chirp_client::metrics::start_update_uptime")
+			.spawn(metrics::start_update_uptime());
+		if let Err(err) = spawn_res {
+			tracing::error!(?err, "failed to spawn start_update_uptime task");
+		}
 
 		Arc::new(SharedClient {
 			nats,
@@ -173,8 +173,6 @@ type DropFn = Box<dyn Fn() + Send>;
 /// necessary context.
 #[derive(Clone)]
 pub struct Client {
-	_guard: Arc<DropGuard>,
-
 	inner: SharedClientHandle,
 
 	/// Request ID of the Chirp request that created this client.
@@ -234,35 +232,9 @@ impl Client {
 		drop_fn: Option<DropFn>,
 	) -> Client {
 		let token = CancellationToken::new();
-
-		// Submit performance on drop
-		{
-			let token = token.clone();
-			let perf_ctx = perf_ctx.clone();
-			let spawn_res = tokio::task::Builder::new()
-				.name("chirp_client::client_wait_drop")
-				.spawn(
-					async move {
-						token.cancelled().await;
-						perf_ctx.submit().await;
-
-						metrics::CHIRP_CLIENT_ACTIVE.dec();
-
-						if let Some(drop_fn) = drop_fn {
-							drop_fn();
-						}
-					}
-					.instrument(tracing::info_span!("client_wait_drop")),
-				);
-			if let Err(err) = spawn_res {
-				tracing::error!(?err, "failed to spawn client_wait_drop task");
-			}
-		}
-
 		metrics::CHIRP_CLIENT_ACTIVE.inc();
 
 		Client {
-			_guard: Arc::new(token.drop_guard()),
 			inner,
 			parent_req_id,
 			ray_id,
