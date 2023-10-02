@@ -114,61 +114,50 @@ async fn nats_from_env(client_name: String) -> Result<Option<NatsPool>, Error> {
 }
 
 #[tracing::instrument]
-fn crdb_from_env(client_name: String) -> Result<HashMap<String, CrdbPool>, Error> {
-	let mut crdb = HashMap::new();
-	for (key, url) in env::vars() {
-		if let Some(svc_name_screaming) = key.strip_prefix("CRDB_URL_") {
-			let svc_name = svc_name_screaming.to_lowercase().replace("_", "-");
+fn crdb_from_env(client_name: String) -> Result<Option<CrdbPool>, Error> {
+	if let Some(url) = std::env::var("CRDB_URL").ok() {
+		tracing::info!(%url, "crdb creating connection");
 
-			tracing::info!(%url, "crdb creating connection");
-
-			// let client_name = client_name.clone();
-			let pool = sqlx::postgres::PgPoolOptions::new()
-				// The default connection timeout is too high
-				.acquire_timeout(Duration::from_secs(15))
-				.max_lifetime(Duration::from_secs(60 * 5))
-				// Remove connections after a while in order to reduce load
-				// on CRDB after bursts
-				.idle_timeout(Some(Duration::from_secs(60)))
-				// Open a connection
-				// immediately on startup
-				.min_connections(1)
-				// Raise the cap, since this is effectively the amount of
-				// simultaneous requests we can handle. See
-				// https://www.cockroachlabs.com/docs/stable/connection-pooling.html
-				.max_connections(1024)
-				// Speeds up requests at the expense of potential
-				// failures
-				.test_before_acquire(false)
-				.after_connect(|conn, _meta| {
+		// let client_name = client_name.clone();
+		let pool = sqlx::postgres::PgPoolOptions::new()
+			// The default connection timeout is too high
+			.acquire_timeout(Duration::from_secs(15))
+			.max_lifetime(Duration::from_secs(60 * 5))
+			// Remove connections after a while in order to reduce load
+			// on CRDB after bursts
+			.idle_timeout(Some(Duration::from_secs(60)))
+			// Open a connection
+			// immediately on startup
+			.min_connections(1)
+			// Raise the cap, since this is effectively the amount of
+			// simultaneous requests we can handle. See
+			// https://www.cockroachlabs.com/docs/stable/connection-pooling.html
+			.max_connections(1024)
+			// Speeds up requests at the expense of potential
+			// failures
+			.test_before_acquire(false)
+			.after_connect({
+				let url = url.clone();
+				move |conn, _| {
+					let client_name = client_name.clone();
+					let url = url.clone();
 					Box::pin(async move {
-						tracing::info!("pg connected");
+						tracing::info!(%url, "crdb connected");
+						sqlx::query("SET application_name = $1;")
+							.bind(&client_name)
+							.execute(conn)
+							.await?;
 						Ok(())
 					})
-				})
-				// .after_connect({
-				// 	let url = url.clone();
-				// 	move |conn, _| {
-				// 		let client_name = client_name.clone();
-				// 		let url = url.clone();
-				// 		Box::pin(async move {
-				// 			tracing::info!(%url, "crdb connected");
-				// 			sqlx::query("SET application_name = $1;")
-				// 				.bind(&client_name)
-				// 				.execute(conn)
-				// 				.await?;
-				// 			Ok(())
-				// 		})
-				// 	}
-				// })
-				.connect_lazy(&url)
-				.map_err(Error::BuildSqlx)?;
+				}
+			})
+			.connect_lazy(&url)
+			.map_err(Error::BuildSqlx)?;
 
-			crdb.insert(svc_name, pool);
-		}
+		Ok(Some(pool))
+	} else {
+		Ok(None)
 	}
-
-	Ok(crdb)
 }
 
 #[tracing::instrument]

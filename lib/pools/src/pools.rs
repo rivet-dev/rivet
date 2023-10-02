@@ -39,7 +39,7 @@ pub type Pools = Arc<PoolsInner>;
 pub struct PoolsInner {
 	pub(crate) _guard: DropGuard,
 	pub(crate) nats: Option<NatsPool>,
-	pub(crate) crdb: HashMap<String, CrdbPool>,
+	pub(crate) crdb: Option<CrdbPool>,
 	pub(crate) redis: HashMap<String, RedisPool>,
 }
 
@@ -61,10 +61,6 @@ impl PoolsInner {
 		&self.nats
 	}
 
-	pub fn crdb_map(&self) -> &HashMap<String, CrdbPool> {
-		&self.crdb
-	}
-
 	pub fn redis_map(&self) -> &HashMap<String, RedisPool> {
 		&self.redis
 	}
@@ -74,13 +70,8 @@ impl PoolsInner {
 		self.nats.clone().ok_or(Error::MissingNatsPool)
 	}
 
-	pub fn crdb(&self, key: &str) -> Result<CrdbPool, Error> {
-		self.crdb
-			.get(key)
-			.cloned()
-			.ok_or_else(|| Error::MissingCrdbPool {
-				key: Some(key.to_owned()),
-			})
+	pub fn crdb(&self) -> Result<CrdbPool, Error> {
+		self.crdb.clone().ok_or(Error::MissingCrdbPool)
 	}
 
 	pub fn redis(&self, key: &str) -> Result<RedisPool, Error> {
@@ -125,15 +116,9 @@ impl PoolsInner {
 	async fn record_metrics(&self) {
 		use crate::metrics::*;
 
-		// CRDB
-		for (db_name, pool) in self.crdb_map() {
-			let label = &[db_name.as_str()];
-			CRDB_POOL_SIZE
-				.with_label_values(label)
-				.set(pool.size() as i64);
-			CRDB_POOL_NUM_IDLE
-				.with_label_values(label)
-				.set(pool.num_idle() as i64);
+		if let Some(pool) = &self.crdb {
+			CRDB_POOL_SIZE.set(pool.size() as i64);
+			CRDB_POOL_NUM_IDLE.set(pool.num_idle() as i64);
 		}
 	}
 }

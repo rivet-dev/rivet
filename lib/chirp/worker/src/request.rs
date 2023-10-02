@@ -1,13 +1,8 @@
 use rivet_connection::Connection;
 use rivet_operation::OperationContext;
 use rivet_pools::prelude::*;
-use std::{
-	fmt::{self, Debug},
-	sync::Arc,
-};
+use std::fmt::{self, Debug};
 use uuid::Uuid;
-
-use crate::config::Config;
 
 #[derive(Debug)]
 pub(crate) struct RedisMessageMeta {
@@ -31,7 +26,6 @@ pub struct Request<B>
 where
 	B: Debug + Clone,
 {
-	pub(crate) config: Arc<Config>,
 	pub(crate) conn: Connection,
 
 	pub(crate) nats_message: Option<nats::Message>,

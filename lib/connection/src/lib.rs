@@ -43,7 +43,6 @@ impl Connection {
 				ts,
 				trace,
 				chirp_perf::PerfCtxInner::new(redis_cache, ts, parent_req_id, ray_id),
-				None,
 			),
 			self.pools.clone(),
 			self.cache.clone(),
@@ -62,8 +61,8 @@ impl Connection {
 		self.cache.clone()
 	}
 
-	pub async fn crdb(&self, key: &str) -> Result<CrdbPool, rivet_pools::Error> {
-		self.pools.crdb(key)
+	pub async fn crdb(&self) -> Result<CrdbPool, rivet_pools::Error> {
+		self.pools.crdb()
 	}
 
 	pub async fn redis_cache(&self) -> Result<RedisPool, rivet_pools::Error> {

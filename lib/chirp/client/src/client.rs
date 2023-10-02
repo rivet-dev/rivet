@@ -136,7 +136,6 @@ impl SharedClient {
 				ray_id,
 			)),
 			ts,
-			None,
 		)
 	}
 
@@ -147,25 +146,14 @@ impl SharedClient {
 		ts: i64,
 		trace: Vec<chirp::TraceEntry>,
 		perf_ctx: chirp_perf::PerfCtxInner,
-		drop_fn: Option<DropFn>,
 	) -> Client {
-		Client::new(
-			self,
-			parent_req_id,
-			ray_id,
-			trace,
-			Arc::new(perf_ctx),
-			ts,
-			drop_fn,
-		)
+		Client::new(self, parent_req_id, ray_id, trace, Arc::new(perf_ctx), ts)
 	}
 
 	pub fn region(&self) -> &str {
 		&self.region
 	}
 }
-
-type DropFn = Box<dyn Fn() + Send>;
 
 /// Used to communicate with other Chirp clients.
 ///
@@ -229,7 +217,6 @@ impl Client {
 		trace: Vec<chirp::TraceEntry>,
 		perf_ctx: chirp_perf::PerfCtx,
 		ts: i64,
-		drop_fn: Option<DropFn>,
 	) -> Client {
 		metrics::CHIRP_CLIENT_ACTIVE.inc();
 
@@ -749,21 +736,19 @@ impl Client {
 			.map(|x| escape_parameter_wildcards(x))
 			.collect::<Vec<String>>();
 
-		let span = self.perf().start(M::PERF_LABEL_WRITE_STREAM).await;
-
-		let mut conn = self.redis_chirp.clone();
-
 		let mut join_set = JoinSet::new();
 
 		// Write to stream
 		{
-			let mut conn = conn.clone();
+			let perf = self.perf().clone();
+			let mut conn = self.redis_chirp.clone();
 			let message_buf = message_buf.clone();
-			join_set
+			let spawn_res = join_set
 				.build_task()
 				.name("chirp_client::message_xadd")
 				.spawn(
 					async move {
+						let span = perf.start(M::PERF_LABEL_WRITE_STREAM).await;
 						let topic_key = redis_keys::message_topic(M::NAME);
 						match conn
 							.xadd_maxlen::<_, _, _, _, ()>(
@@ -781,9 +766,13 @@ impl Client {
 								tracing::error!(?err, "failed to write to redis");
 							}
 						}
+						span.end();
 					}
 					.in_current_span(),
 				);
+			if let Err(err) = spawn_res {
+				tracing::error!(?err, "failed to spawn message_xadd task");
+			}
 		}
 
 		// Write tails for all permuted parameters
@@ -836,12 +825,14 @@ impl Client {
 					// Automatically expire
 					pipe.expire(&history_key, ttl as usize).ignore();
 
-					let mut conn = conn.clone();
-					join_set
+					let perf = self.perf().clone();
+					let mut conn = self.redis_chirp.clone();
+					let spawn_res = join_set
 						.build_task()
 						.name("chirp_client::message_write_tail")
 						.spawn(
 							async move {
+								let span = perf.start(M::PERF_LABEL_WRITE_TAIL).await;
 								match pipe.query_async::<_, ()>(&mut conn).await {
 									Ok(_) => {
 										tracing::debug!("write to redis tail succeeded");
@@ -850,9 +841,13 @@ impl Client {
 										tracing::error!(?err, "failed to write to redis tail");
 									}
 								}
+								span.end();
 							}
 							.in_current_span(),
 						);
+					if let Err(err) = spawn_res {
+						tracing::error!(?err, "failed to spawn message_write_tail task");
+					}
 				}
 			}
 		}

@@ -686,7 +686,6 @@ where
 					x
 				},
 				chirp_perf::PerfCtxInner::new(self.redis_cache.clone(), ts, req_id, ray_id),
-				None,
 			);
 			let conn = Connection::new(client, self.pools.clone(), self.cache.clone());
 
@@ -703,7 +702,6 @@ where
 
 			// Build request
 			Request {
-				config: self.config.clone(),
 				conn: conn.clone(),
 				nats_message,
 				redis_message_meta,
@@ -739,7 +737,6 @@ where
 		)
 	)]
 	async fn handle_req(self: Arc<Self>, req: Request<W::Request>) {
-		let client = req.chirp().clone();
 		let worker_name = req.op_ctx.name().to_string();
 
 		// Record metrics
@@ -1028,7 +1025,7 @@ where
 	/// Acknowledges the Redis message from a consumer worker.
 	#[tracing::instrument]
 	async fn consumer_ack(self: Arc<Self>, msg_meta: RedisMessageMeta) {
-		let mut backoff = rivet_util::Backoff::default();
+		// let mut backoff = rivet_util::Backoff::default();
 		// loop {
 		// 	if backoff.tick().await {
 		// 		tracing::error!("acking stream message failed too many times, aborting");

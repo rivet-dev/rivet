@@ -256,8 +256,8 @@ where
 		self.conn.cache_handle()
 	}
 
-	pub async fn crdb(&self, key: &str) -> Result<CrdbPool, rivet_pools::Error> {
-		self.conn.crdb(key).await
+	pub async fn crdb(&self) -> Result<CrdbPool, rivet_pools::Error> {
+		self.conn.crdb().await
 	}
 
 	pub async fn redis_cache(&self) -> Result<RedisPool, rivet_pools::Error> {

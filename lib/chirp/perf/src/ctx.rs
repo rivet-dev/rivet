@@ -2,7 +2,7 @@ use rivet_pools::prelude::*;
 use std::{
 	env,
 	sync::{
-		atomic::{AtomicBool, AtomicI64, Ordering},
+		atomic::{AtomicI64, Ordering},
 		Arc,
 	},
 };
