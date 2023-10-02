@@ -39,14 +39,17 @@ async fn basic(ctx: TestCtx) {
 	.unwrap();
 
 	// Fetch logs
-	let s3_client = s3_util::Client::from_env("bucket-nomad-log-export").await?;
+	let s3_client = s3_util::Client::from_env("bucket-nomad-log-export")
+		.await
+		.unwrap();
 	let get_object = s3_client
 		.get_object()
 		.bucket(s3_client.bucket())
-		.key(format!("{upload_id}/stdout.txt"))
+		.key(format!("{}/stdout.txt", res.upload_id.unwrap().as_uuid()))
 		.send()
-		.await?;
-	let actual_buf = get_object.body().unwrap().collect().await.unwrap().to_vec();
+		.await
+		.unwrap();
+	let actual_buf = get_object.body.collect().await.unwrap().to_vec();
 
 	// Compare buffer
 	let expected_buf = messages

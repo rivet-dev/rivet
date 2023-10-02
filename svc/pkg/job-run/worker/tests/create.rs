@@ -95,6 +95,8 @@ async fn basic_http(ctx: TestCtx) {
 
 #[worker_test]
 async fn basic_tcp(ctx: TestCtx) {
+	let domain_job = util::env::domain_job().unwrap();
+
 	let region_res = op!([ctx] faker_region {}).await.unwrap();
 	let region_id = region_res.region_id.as_ref().unwrap().as_uuid();
 	let region_name_id = &region_res.region.as_ref().unwrap().name_id;
@@ -198,6 +200,8 @@ async fn basic_tcp(ctx: TestCtx) {
 
 #[worker_test]
 async fn basic_udp(ctx: TestCtx) {
+	let domain_job = util::env::domain_job().unwrap();
+
 	let region_res = op!([ctx] faker_region {}).await.unwrap();
 	let region_id = region_res.region_id.as_ref().unwrap().as_uuid();
 	let region_name_id = &region_res.region.as_ref().unwrap().name_id;

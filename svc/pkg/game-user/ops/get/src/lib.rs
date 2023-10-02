@@ -42,7 +42,7 @@ async fn handle(
 		"
 		SELECT gu.game_user_id, gu.user_id, gu.token_session_id, gu.namespace_id, gu.create_ts, l.link_id, gu.deleted_ts
 		FROM db_game_user.game_users AS gu
-		LEFT JOIN links AS l ON l.new_game_user_id = gu.game_user_id
+		LEFT JOIN db_game_user.links AS l ON l.new_game_user_id = gu.game_user_id
 		WHERE gu.game_user_id = ANY($1)
 		"
 	))

@@ -5516,6 +5516,7 @@ dependencies = [
  "rivet-health-checks",
  "rivet-metrics",
  "rivet-runtime",
+ "s3-util",
  "serde",
  "upload-complete",
  "upload-prepare",
@@ -9194,16 +9195,6 @@ dependencies = [
  "chirp-client",
  "chirp-worker",
  "prost 0.10.4",
- "rivet-operation",
- "sqlx",
-]
-
-[[package]]
-name = "user-test-msg"
-version = "0.0.1"
-dependencies = [
- "chirp-client",
- "chirp-worker",
  "rivet-operation",
  "sqlx",
 ]

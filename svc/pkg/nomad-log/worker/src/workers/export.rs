@@ -1,5 +1,4 @@
 use chirp_worker::prelude::*;
-use futures_util::stream::StreamExt;
 use proto::backend::{self, pkg::*};
 
 #[derive(clickhouse::Row, serde::Deserialize)]
