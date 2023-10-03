@@ -8,7 +8,7 @@ use proto::{
 use rivet_api::{apis::configuration::Configuration, models};
 use rivet_operation::prelude::*;
 use serde_json::json;
-use tokio::time::{interval, Duration};
+use tokio::time::{interval, Duration, Instant};
 
 #[tracing::instrument(skip_all)]
 pub async fn run_from_env(ts: i64) -> GlobalResult<()> {
@@ -127,16 +127,21 @@ pub async fn run_from_env(ts: i64) -> GlobalResult<()> {
 		..Default::default()
 	};
 
-	let rps = 150;
-	let duration = 600_000;
+	let start = Instant::now();
+	let mut next_log = Instant::now();
+	let mut elapsed = 0.0;
+	loop {
+		// Delay
+		let Some(delay) = calc_delay(elapsed) else {
+			break;
+		};
+		elapsed += delay;
+		tokio::time::sleep_until(start + Duration::from_secs_f64(elapsed)).await;
 
-	let mut interval = interval(Duration::from_millis(1000 / rps));
-	let count = duration * rps / 1_000;
-	for i in 0..count {
-		interval.tick().await;
-
-		if i % rps == 0 {
-			tracing::info!("{i}/{count}");
+		// Log
+		if Instant::now() > next_log {
+			tracing::info!(?elapsed, rps = ?(1.0 / delay), "sending request");
+			next_log += Duration::from_secs(1);
 		}
 
 		let config = config.clone();
@@ -152,4 +157,21 @@ pub async fn run_from_env(ts: i64) -> GlobalResult<()> {
 	}
 
 	Ok(())
+}
+
+fn calc_delay(elapsed: f64) -> Option<f64> {
+	let start_rps = 1.0;
+	let finish_rps = 200.0;
+	let duration = 120.0;
+
+	if elapsed > duration {
+		return None;
+	}
+
+	let lerp = elapsed / duration;
+
+	let rps = (finish_rps - start_rps) * lerp + start_rps;
+	let delay = 1.0 / rps;
+
+	Some(delay)
 }

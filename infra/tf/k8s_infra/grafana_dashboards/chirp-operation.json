@@ -80,6 +80,7 @@
       "hideZeroBuckets": true,
       "highlightCards": true,
       "id": 2,
+      "interval": "15s",
       "legend": {
         "show": false
       },
@@ -225,6 +226,7 @@
         "y": 1
       },
       "id": 5,
+      "interval": "15s",
       "options": {
         "legend": {
           "calcs": [],
@@ -319,6 +321,7 @@
         "y": 10
       },
       "id": 4,
+      "interval": "15s",
       "options": {
         "legend": {
           "calcs": [],
@@ -414,6 +417,7 @@
         "y": 10
       },
       "id": 9,
+      "interval": "15s",
       "options": {
         "legend": {
           "calcs": [],
@@ -494,6 +498,7 @@
       "hideZeroBuckets": true,
       "highlightCards": true,
       "id": 6,
+      "interval": "15s",
       "legend": {
         "show": false
       },
@@ -638,6 +643,7 @@
         "y": 20
       },
       "id": 19,
+      "interval": "15s",
       "options": {
         "legend": {
           "calcs": [],
@@ -667,7 +673,7 @@
       "type": "timeseries"
     }
   ],
-  "refresh": "",
+  "refresh": false,
   "schemaVersion": 38,
   "style": "dark",
   "tags": [],
@@ -707,7 +713,7 @@
     ]
   },
   "time": {
-    "from": "now-24h",
+    "from": "now-5m",
     "to": "now"
   },
   "timepicker": {},
