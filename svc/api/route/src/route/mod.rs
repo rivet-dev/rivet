@@ -31,6 +31,6 @@ define_router! {
 				internal_endpoint: true,
 				opt_auth: true,
 			),
-		},
+		}
 	}
 }

@@ -61,6 +61,25 @@ resource "kubernetes_secret" "ingress_tls_ca_cert" {
 	}
 }
 
+resource "kubernetes_secret" "ingress_tls_cert_tunnel_server" {
+	for_each = toset([
+		for x in [kubernetes_namespace.traefik_tunnel]:
+		x.metadata.0.name
+	])
+
+	metadata {
+		name = "ingress-tls-cert-tunnel-server"
+		namespace = each.value
+	}
+
+	type = "kubernetes.io/tls"
+
+	data = {
+		"tls.crt" = data.terraform_remote_state.tls.outputs.tls_cert_locally_signed_tunnel_server.cert_pem
+		"tls.key" = data.terraform_remote_state.tls.outputs.tls_cert_locally_signed_tunnel_server.key_pem
+	}
+} 
+
 resource "kubernetes_config_map" "health_checks" {
 	metadata {
 		name = "health-checks"
@@ -149,7 +168,7 @@ module "docker_ghcr_secrets" {
 # Create Docker auth secret in every namespace it's used in
 resource "kubernetes_secret" "docker_auth" {
 	for_each = toset([
-		for x in [kubernetes_namespace.redis, kubernetes_namespace.traffic_server, kubernetes_namespace.rivet_service]:
+		for x in [kubernetes_namespace.traffic_server, kubernetes_namespace.rivet_service]:
 		x.metadata.0.name
 	])
 
