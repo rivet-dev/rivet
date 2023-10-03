@@ -842,17 +842,12 @@ impl ServiceContextData {
 			env.push(("CLICKHOUSE_URL".into(), clickhouse_host));
 		}
 
-		// TODO:
-		// if self.depends_on_prometheus_api() {
-		// 	// Add all prometheus regions to env
-		// 	//
-		// 	// We don't run Prometheus regionally at the moment, but we can add
-		// 	// that later.
-		// 	env.push((
-		// 		format!("PROMETHEUS_URL"),
-		// 		"prometheus.prometheus.svc.cluster.local:9090".into(),
-		// 	));
-		// }
+		if self.depends_on_prometheus_api() {
+			env.push((
+				format!("PROMETHEUS_URL"),
+				"prometheus-operated.prometheus.svc.cluster.local:9090".into(),
+			));
+		}
 
 		// NATS
 		env.push((

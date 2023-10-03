@@ -1,10 +1,12 @@
-use anyhow::Result;
-use duct::cmd;
-use serde_json::json;
 use std::{
 	collections::HashMap,
 	path::{Path, PathBuf},
 };
+
+use anyhow::Result;
+use duct::cmd;
+use serde_json::json;
+use sha2::{Digest, Sha256};
 use tokio::{fs, task::block_in_place};
 
 use crate::{
@@ -162,6 +164,10 @@ pub async fn gen_svc(exec_ctx: &ExecServiceContext) -> Vec<serde_json::Value> {
 				.map(|(k, v)| json!({ "name": k, "value": v })),
 		)
 		.collect::<Vec<_>>();
+	let env_checksum = {
+		let bytes = serde_json::to_vec(&env).unwrap();
+		hex::encode(Sha256::digest(&bytes))
+	};
 
 	// Create secret env vars
 	let secret_env_name = format!("{}-secret-env", service_name);
@@ -169,6 +175,10 @@ pub async fn gen_svc(exec_ctx: &ExecServiceContext) -> Vec<serde_json::Value> {
 		.into_iter()
 		.map(|(k, v)| (k, base64::encode(v)))
 		.collect::<HashMap<_, _>>();
+	let secret_env_checksum = {
+		let bytes = serde_json::to_vec(&secret_data).unwrap();
+		hex::encode(Sha256::digest(&bytes))
+	};
 	specs.push(json!({
 		"apiVersion": "v1",
 		"kind": "Secret",
@@ -254,24 +264,24 @@ pub async fn gen_svc(exec_ctx: &ExecServiceContext) -> Vec<serde_json::Value> {
 		(pod_ports, service_ports)
 	};
 
-	// let health_check = if has_health {
-	// 	let cmd = if matches!(svc_ctx.config().kind, ServiceKind::Static { .. }) {
-	// 		"/local/rivet/health-checks.sh --static"
-	// 	} else {
-	// 		"/local/rivet/health-checks.sh"
-	// 	};
+	let health_check = if has_health {
+		let cmd = if matches!(svc_ctx.config().kind, ServiceKind::Static { .. }) {
+			"/local/rivet/health-checks.sh --static"
+		} else {
+			"/local/rivet/health-checks.sh"
+		};
 
-	// 	json!({
-	// 		"exec": {
-	// 			"command": ["/bin/sh", "-c", cmd],
-	// 		},
-	// 		"initialDelaySeconds": 1,
-	// 		"periodSeconds": 5,
-	// 		"timeoutSeconds": 5
-	// 	})
-	// } else {
-	// 	serde_json::Value::Null
-	// };
+		json!({
+			"exec": {
+				"command": ["/bin/sh", "-c", cmd],
+			},
+			"initialDelaySeconds": 1,
+			"periodSeconds": 5,
+			"timeoutSeconds": 5
+		})
+	} else {
+		serde_json::Value::Null
+	};
 
 	let (image, image_pull_policy, exec) = match &driver {
 		ExecServiceDriver::LocalBinaryArtifact { exec_path, args } => (
@@ -301,16 +311,15 @@ pub async fn gen_svc(exec_ctx: &ExecServiceContext) -> Vec<serde_json::Value> {
 	// Create resource limits
 	let ns_service_config = svc_ctx.ns_service_config().await;
 	let resources = json!({
-		// TODO: Disabled for now
-		// "limits": {
-		// 	"memory": format!("{}Mi", ns_service_config.resources.memory),
-		// 	"cpu": match ns_service_config.resources.cpu {
-		// 		config::ns::CpuResources::Cpu(x) => format!("{x}m"),
-		// 		config::ns::CpuResources::CpuCores(x) => format!("{}m", x * 1000),
-		// 	},
-		// 	"ephemeral-storage": format!("{}M", ns_service_config.resources.ephemeral_disk)
-		// },
-		// "requests": {}
+		"limits": {
+			"memory": format!("{}Mi", ns_service_config.resources.memory),
+			"cpu": match ns_service_config.resources.cpu {
+				config::ns::CpuResources::Cpu(x) => format!("{x}m"),
+				config::ns::CpuResources::CpuCores(x) => format!("{}m", x * 1000),
+			},
+			"ephemeral-storage": format!("{}M", ns_service_config.resources.ephemeral_disk)
+		},
+		"requests": {}
 	});
 
 	let (volumes, volume_mounts) = build_volumes(&project_ctx, &exec_ctx).await;
@@ -326,6 +335,18 @@ pub async fn gen_svc(exec_ctx: &ExecServiceContext) -> Vec<serde_json::Value> {
 		},
 		"value": svc_ctx.config().service.priority()
 	}));
+
+	let metadata = json!({
+		"name": service_name,
+		"namespace": "rivet-service",
+		"labels": {
+			"app.kubernetes.io/name": service_name
+		},
+		"annotations": {
+			"checksum/env": env_checksum,
+			"checksum/secret-env": secret_env_checksum
+		}
+	});
 
 	// Create pod template
 	let pod_spec = json!({
@@ -346,7 +367,8 @@ pub async fn gen_svc(exec_ctx: &ExecServiceContext) -> Vec<serde_json::Value> {
 			"image": image,
 			"imagePullPolicy": image_pull_policy,
 			"command": ["/bin/sh"],
-			"args": ["-c", command],
+			// "args": ["-c", command],
+			"args": ["-c", "sleep 1000"],
 			"env": env,
 			"envFrom": [{
 				"secretRef": {
@@ -355,7 +377,7 @@ pub async fn gen_svc(exec_ctx: &ExecServiceContext) -> Vec<serde_json::Value> {
 			}],
 			"volumeMounts": volume_mounts,
 			"ports": pod_ports,
-			// "livenessProbe": health_check,
+			"livenessProbe": health_check,
 			"resources": resources,
 		}],
 		"volumes": volumes
@@ -374,13 +396,7 @@ pub async fn gen_svc(exec_ctx: &ExecServiceContext) -> Vec<serde_json::Value> {
 			specs.push(json!({
 				"apiVersion": "v1",
 				"kind": "Pod",
-				"metadata": {
-					"name": service_name,
-					"namespace": "rivet-service",
-					"labels": {
-						"app.kubernetes.io/name": service_name
-					}
-				},
+				"metadata": metadata,
 				"spec": pod_spec
 			}));
 		}
@@ -388,13 +404,7 @@ pub async fn gen_svc(exec_ctx: &ExecServiceContext) -> Vec<serde_json::Value> {
 			specs.push(json!({
 				"apiVersion": "apps/v1",
 				"kind": "Deployment",
-				"metadata": {
-					"name": service_name,
-					"namespace": "rivet-service",
-					"labels": {
-						"app.kubernetes.io/name": service_name
-					}
-				},
+				"metadata": metadata,
 				"spec": {
 					"replicas": ns_service_config.count,
 					"selector": {
@@ -410,13 +420,7 @@ pub async fn gen_svc(exec_ctx: &ExecServiceContext) -> Vec<serde_json::Value> {
 			specs.push(json!({
 				"apiVersion": "batch/v1",
 				"kind": "Job",
-				"metadata": {
-					"name": service_name,
-					"namespace": "rivet-service",
-					"labels": {
-						"app.kubernetes.io/name": service_name
-					}
-				},
+				"metadata": metadata,
 				"spec": {
 					"completions": 1,
 					// "parallelism": ns_service_config.count,
@@ -439,13 +443,7 @@ pub async fn gen_svc(exec_ctx: &ExecServiceContext) -> Vec<serde_json::Value> {
 			specs.push(json!({
 				"apiVersion": "batch/v1",
 				"kind": "CronJob",
-				"metadata": {
-					"name": service_name,
-					"namespace": "rivet-service",
-					"labels": {
-						"app.kubernetes.io/name": service_name
-					}
-				},
+				"metadata": metadata,
 				"spec": {
 					"schedule": cron,
 					// Timezones are in alpha
