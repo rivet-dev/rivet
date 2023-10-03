@@ -36,3 +36,22 @@ resource "kubernetes_secret" "ingress_tls_ca_cert" {
 		"tls.ca" = data.terraform_remote_state.tls.outputs.tls_cert_cloudflare_ca
 	}
 }
+
+resource "kubernetes_secret" "ingress_tls_cert_tunnel_server" {
+	for_each = toset([
+		for x in [kubernetes_namespace.traefik_tunnel]:
+		x.metadata.0.name
+	])
+
+	metadata {
+		name = "ingress-tls-cert-tunnel-server"
+		namespace = each.value
+	}
+
+	type = "kubernetes.io/tls"
+
+	data = {
+		"tls.crt" = data.terraform_remote_state.tls.outputs.tls_cert_locally_signed_tunnel_server.cert_pem
+		"tls.key" = data.terraform_remote_state.tls.outputs.tls_cert_locally_signed_tunnel_server.key_pem
+	}
+} 
