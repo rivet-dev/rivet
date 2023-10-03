@@ -1,5 +1,5 @@
 locals {
-	tunnel = data.terraform_remote_state.cloudflare_tunnels.outputs.k8s_output.tunnels["local"]
+	tunnel = module.cloudflare_tunnels["local"]
 }
 
 resource "kubernetes_namespace" "cloudflared" {

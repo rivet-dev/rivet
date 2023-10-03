@@ -146,6 +146,8 @@ async fn vars(ctx: &ProjectContext) {
 	// Namespace
 	vars.insert("namespace".into(), json!(ns));
 
+	vars.insert("minio_port".into(), json!(null));
+
 	match &config.cluster.kind {
 		ns::ClusterKind::SingleNode {
 			public_ip,
@@ -278,6 +280,12 @@ async fn vars(ctx: &ProjectContext) {
 		let domain_main = ctx.domain_main().unwrap();
 		let domain_main_api = ctx.domain_main_api().unwrap();
 
+		// Default API domain
+		extra_dns.push(json!({
+			"zone_name": "main",
+			"name": domain_main_api,
+		}));
+
 		// Add services
 		for svc_ctx in all_svc {
 			if let Some(router) = svc_ctx.config().kind.router() {
@@ -286,16 +294,12 @@ async fn vars(ctx: &ProjectContext) {
 						continue;
 					}
 
-					let domain = if let Some(subdomain) = &mount.subdomain {
-						format!("{subdomain}.{domain_main}")
-					} else {
-						domain_main_api.clone()
-					};
-
-					extra_dns.push(json!({
-						"zone_name": "main",
-						"name": domain,
-					}));
+					if let Some(subdomain) = &mount.subdomain {
+						extra_dns.push(json!({
+							"zone_name": "main",
+							"name": format!("{subdomain}.{domain_main}"),
+						}));
+					}
 				}
 			}
 		}

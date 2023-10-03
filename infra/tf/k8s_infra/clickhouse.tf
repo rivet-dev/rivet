@@ -21,6 +21,7 @@ resource "kubernetes_namespace" "clickhouse" {
 }
 
 resource "helm_release" "clickhouse" {
+	depends_on = [helm_release.prometheus]
 	count = local.clickhouse_k8s ? 1 : 0
 
 	name = "clickhouse"

@@ -30,6 +30,7 @@ resource "kubernetes_namespace" "redis" {
 }
 
 resource "helm_release" "redis" {
+	depends_on = [helm_release.prometheus]
 	for_each = local.redis_svcs
 
 	name = "redis"

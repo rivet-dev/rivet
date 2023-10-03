@@ -27,3 +27,7 @@ variable "pools" {
 		}))
 	}))
 }
+
+variable "kubeconfig_path" {
+	type = string
+}
