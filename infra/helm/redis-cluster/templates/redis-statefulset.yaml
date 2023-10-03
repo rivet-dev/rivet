@@ -314,18 +314,24 @@ spec:
             - /bin/bash
             - -c
             - |
+              pod_index=($(echo "$POD_NAME" | tr "-" "\n"))
+              pod_index="${pod_index[-1]}"
+              export REDIS_ADDR="rediss://redis-redis-cluster-${pod_index}.redis-redis-cluster-headless.redis-chirp.svc.cluster.local:6379"
+
               {{- if .Values.usePasswordFile }}
               export REDIS_PASSWORD="$(< "${REDIS_PASSWORD_FILE}")"
               {{- end }}
               redis_exporter{{- range $key, $value := .Values.metrics.extraArgs }} --{{ $key }}={{ $value }}{{- end }}
           {{- end }}
           env:
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
             - name: BITNAMI_DEBUG
               value: {{ ternary "true" "false" (or .Values.image.debug .Values.diagnosticMode.enabled) | quote }}
             - name: REDIS_ALIAS
               value: {{ template "common.names.fullname" . }}
-            - name: REDIS_ADDR
-              value: {{ printf "%s://127.0.0.1:%g" (ternary "rediss" "redis" .Values.tls.enabled) .Values.redis.containerPorts.redis | quote }}
             {{- if and .Values.usePassword (not .Values.usePasswordFile) }}
             - name: REDIS_PASSWORD
               valueFrom:

@@ -7,7 +7,9 @@ pub trait CacheKey: Clone + Debug + PartialEq {
 
 impl<'a> CacheKey for &'a str {
 	fn cache_key(&self) -> String {
-		self.replace("\\", "\\\\").replace(":", "\\")
+		let escaped = self.replace("\\", "\\\\").replace(":", "\\");
+
+		format!("{{global}}:{escaped}")
 	}
 }
 
@@ -25,14 +27,14 @@ impl<V0: CacheKey> CacheKey for (V0,) {
 
 impl<V0: CacheKey, V1: CacheKey> CacheKey for (V0, V1) {
 	fn cache_key(&self) -> String {
-		format!("{}:{}", self.0.cache_key(), self.1.cache_key())
+		format!("{{global}}:{}:{}", self.0.cache_key(), self.1.cache_key())
 	}
 }
 
 impl<V0: CacheKey, V1: CacheKey, V2: CacheKey> CacheKey for (V0, V1, V2) {
 	fn cache_key(&self) -> String {
 		format!(
-			"{}:{}:{}",
+			"{{global}}:{}:{}:{}",
 			self.0.cache_key(),
 			self.1.cache_key(),
 			self.2.cache_key()
@@ -43,7 +45,7 @@ impl<V0: CacheKey, V1: CacheKey, V2: CacheKey> CacheKey for (V0, V1, V2) {
 impl<V0: CacheKey, V1: CacheKey, V2: CacheKey, V3: CacheKey> CacheKey for (V0, V1, V2, V3) {
 	fn cache_key(&self) -> String {
 		format!(
-			"{}:{}:{}:{}",
+			"{{global}}:{}:{}:{}:{}",
 			self.0.cache_key(),
 			self.1.cache_key(),
 			self.2.cache_key(),
@@ -56,7 +58,7 @@ macro_rules! impl_to_string {
 	($type_name:ty) => {
 		impl CacheKey for $type_name {
 			fn cache_key(&self) -> String {
-				self.to_string()
+				format!("{{global}}:{self}")
 			}
 		}
 	};

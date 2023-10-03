@@ -68,6 +68,10 @@ locals {
 	])
 }
 
+output "test" {
+	value = local.records
+}
+
 resource "cloudflare_record" "main" {
 	for_each = {
 		for record in local.records:

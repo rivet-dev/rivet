@@ -52,6 +52,8 @@ pub struct Service {
 	/// If this service should only be used for tests.
 	#[serde(default)]
 	pub test_only: bool,
+	#[serde(default)]
+	pub load_test: bool,
 }
 
 #[derive(Deserialize, Clone, Debug)]

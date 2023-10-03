@@ -453,10 +453,11 @@ impl ServiceContextData {
 		for dep in &dep_ctxs {
 			if matches!(run_context, RunContext::Service { .. })
 				&& !self.config().service.test_only
+				&& !self.config().service.load_test
 				&& dep.config().service.test_only
 			{
 				panic!(
-					"{} -> {}: cannot depend on a `service.test-only` service outside of `test-dependencies`",
+					"{} -> {}: cannot depend on a `service.test-only` service outside of `test-dependencies` or if `service.load-test = true`",
 					self.name(),
 					dep.name()
 				);
@@ -842,17 +843,12 @@ impl ServiceContextData {
 			env.push(("CLICKHOUSE_URL".into(), clickhouse_host));
 		}
 
-		// TODO:
-		// if self.depends_on_prometheus_api() {
-		// 	// Add all prometheus regions to env
-		// 	//
-		// 	// We don't run Prometheus regionally at the moment, but we can add
-		// 	// that later.
-		// 	env.push((
-		// 		format!("PROMETHEUS_URL"),
-		// 		"prometheus.prometheus.svc.cluster.local:9090".into(),
-		// 	));
-		// }
+		if self.depends_on_prometheus_api() {
+			env.push((
+				format!("PROMETHEUS_URL"),
+				"http://prometheus-operated.prometheus.svc.cluster.local:9090".into(),
+			));
+		}
 
 		// NATS
 		env.push((

@@ -1,9 +1,4 @@
 locals {
-	tls_cert_cloudflare_rivet_gg = {
-		cert_pem = cloudflare_origin_ca_certificate.rivet_gg.certificate
-		key_pem = tls_private_key.cf_origin_rivet_gg.private_key_pem
-	}
-
 	tls_cert_letsencrypt_rivet_gg = {
 		# Build full chain by concatenating the certificate with issuer.
 		#
@@ -41,11 +36,6 @@ locals {
 	}
 }
 
-output "tls_cert_cloudflare_rivet_gg" {
-	value = local.tls_cert_cloudflare_rivet_gg
-	sensitive = true
-}
-
 # MARK: Write secrets
 output "tls_cert_letsencrypt_rivet_gg" {
 	value = local.tls_cert_letsencrypt_rivet_gg
@@ -62,11 +52,6 @@ output "tls_cert_letsencrypt_rivet_job" {
 	sensitive = true
 }
 
-output "tls_cert_cloudflare_ca" {
-	value = local.cloudflare_ca_cert
-	sensitive = true
-}
-
 output "tls_cert_locally_signed_tunnel_server" {
 	value = local.tls_cert_locally_signed_tunnel_server
 	sensitive = true
@@ -76,3 +61,4 @@ output "tls_cert_locally_signed_nomad_client" {
 	value = local.tls_cert_locally_signed_nomad_client
 	sensitive = true
 }
+

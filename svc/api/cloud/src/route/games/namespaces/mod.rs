@@ -1,7 +1,7 @@
 use api_helper::{anchor::WatchIndexQuery, ctx::Ctx};
 use futures_util::{StreamExt, TryStreamExt};
 use proto::backend::{self, pkg::*};
-use rivet_api::models;
+use rivet_api::{apis::*, models};
 use rivet_claims::ClaimsDecode;
 use rivet_convert::{ApiInto, ApiTryInto};
 use rivet_operation::prelude::*;

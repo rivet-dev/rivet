@@ -20,6 +20,7 @@ resource "kubernetes_namespace" "cockroachdb" {
 
 # NOTE: Helm chart is no longer supported by CockroachDB. However, it's intended to be used only for development and it's the easiest to set up.
 resource "helm_release" "cockroachdb" {
+	depends_on = [helm_release.prometheus]
 	count = local.cockroachdb_k8s ? 1 : 0
 
 	name = "cockroachdb"

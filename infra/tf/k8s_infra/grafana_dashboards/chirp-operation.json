@@ -24,7 +24,7 @@
   "editable": true,
   "fiscalYearStartMonth": 0,
   "graphTooltip": 0,
-  "id": 1,
+  "id": 32,
   "links": [],
   "liveNow": false,
   "panels": [
@@ -36,9 +36,9 @@
         "x": 0,
         "y": 0
       },
-      "id": 24,
+      "id": 13,
       "panels": [],
-      "title": "API",
+      "title": "Worker",
       "type": "row"
     },
     {
@@ -79,7 +79,8 @@
       "heatmap": {},
       "hideZeroBuckets": true,
       "highlightCards": true,
-      "id": 26,
+      "id": 2,
+      "interval": "15s",
       "legend": {
         "show": false
       },
@@ -133,131 +134,14 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "sum(increase(rivet_api_request_duration_bucket{watch=\"0\",exported_service=~\"[[service]]\",path=~\"[[path]]\",method=~\"[[method]]\"} [$__rate_interval])) by (le)",
+          "expr": "sum(increase(rivet_chirp_request_duration_bucket{error_code!=\"1004\",context_name=~\"[[context]]\"} [$__rate_interval])) by (le)",
           "format": "heatmap",
           "legendFormat": "{{le}}",
           "range": true,
           "refId": "A"
         }
       ],
-      "title": "Request Duration (Normal)",
-      "tooltip": {
-        "show": true,
-        "showHistogram": true
-      },
-      "type": "heatmap",
-      "xAxis": {
-        "show": true
-      },
-      "yAxis": {
-        "format": "s",
-        "logBase": 2,
-        "max": "60",
-        "min": "0",
-        "show": true
-      },
-      "yBucketBound": "auto"
-    },
-    {
-      "cards": {},
-      "color": {
-        "cardColor": "#b4ff00",
-        "colorScale": "sqrt",
-        "colorScheme": "interpolateOranges",
-        "exponent": 0.5,
-        "mode": "spectrum"
-      },
-      "dataFormat": "tsbuckets",
-      "datasource": {
-        "type": "prometheus",
-        "uid": "prometheus"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "custom": {
-            "hideFrom": {
-              "legend": false,
-              "tooltip": false,
-              "viz": false
-            },
-            "scaleDistribution": {
-              "type": "linear"
-            }
-          }
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 9,
-        "w": 12,
-        "x": 12,
-        "y": 1
-      },
-      "heatmap": {},
-      "hideZeroBuckets": true,
-      "highlightCards": true,
-      "id": 30,
-      "legend": {
-        "show": false
-      },
-      "options": {
-        "calculate": false,
-        "calculation": {
-          "xBuckets": {
-            "mode": "size"
-          }
-        },
-        "cellGap": 0,
-        "color": {
-          "exponent": 0.5,
-          "fill": "dark-orange",
-          "mode": "scheme",
-          "reverse": false,
-          "scale": "exponential",
-          "scheme": "RdBu",
-          "steps": 64
-        },
-        "exemplars": {
-          "color": "rgba(255,0,255,0.7)"
-        },
-        "filterValues": {
-          "le": 1e-9
-        },
-        "legend": {
-          "show": true
-        },
-        "rowsFrame": {
-          "layout": "auto"
-        },
-        "tooltip": {
-          "show": true,
-          "yHistogram": true
-        },
-        "yAxis": {
-          "axisPlacement": "left",
-          "max": "60",
-          "min": 0,
-          "reverse": false,
-          "unit": "s"
-        }
-      },
-      "pluginVersion": "10.1.2",
-      "reverseYBuckets": false,
-      "targets": [
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
-          "editorMode": "code",
-          "expr": "sum(increase(rivet_api_request_duration_bucket{watch=\"1\",exported_service=~\"[[service]]\",path=~\"[[path]]\",method=~\"[[method]]\"} [$__rate_interval])) by (le)",
-          "format": "heatmap",
-          "legendFormat": "{{le}}",
-          "range": true,
-          "refId": "A"
-        }
-      ],
-      "title": "Request Duration (Watch)",
+      "title": "Request Duration",
       "tooltip": {
         "show": true,
         "showHistogram": true
@@ -317,6 +201,7 @@
             }
           },
           "mappings": [],
+          "min": 0,
           "thresholds": {
             "mode": "absolute",
             "steps": [
@@ -337,18 +222,17 @@
       "gridPos": {
         "h": 9,
         "w": 12,
-        "x": 0,
-        "y": 10
+        "x": 12,
+        "y": 1
       },
-      "id": 25,
+      "id": 5,
+      "interval": "15s",
       "options": {
         "legend": {
-          "calcs": [
-            "mean"
-          ],
+          "calcs": [],
           "displayMode": "list",
           "placement": "bottom",
-          "showLegend": true
+          "showLegend": false
         },
         "tooltip": {
           "mode": "single",
@@ -362,8 +246,8 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "sum(rate(rivet_api_request_total{exported_service=~\"[[service]]\",path=~\"[[path]]\",method=~\"[[method]]\"}[$__rate_interval])) by (exported_service, method, path)",
-          "legendFormat": "{{method}} {{service}}{{path}}",
+          "expr": "sum(rate(rivet_chirp_request_total{context_name=~\"[[context]]\"}[$__rate_interval])) by (context_name)",
+          "legendFormat": "{{service}}",
           "range": true,
           "refId": "A"
         }
@@ -413,6 +297,102 @@
             }
           },
           "mappings": [],
+          "min": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 9,
+        "w": 12,
+        "x": 0,
+        "y": 10
+      },
+      "id": 4,
+      "interval": "15s",
+      "options": {
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": false
+        },
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "editorMode": "code",
+          "expr": "sum(max_over_time(rivet_chirp_request_pending{context_name=~\"[[context]]\"}[$__interval])) by (context_name)",
+          "legendFormat": "{{service}}",
+          "range": true,
+          "refId": "A"
+        }
+      ],
+      "title": "Requests Pending",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "drawStyle": "line",
+            "fillOpacity": 0,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "auto",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "min": 0,
           "thresholds": {
             "mode": "absolute",
             "steps": [
@@ -436,20 +416,17 @@
         "x": 12,
         "y": 10
       },
-      "id": 28,
+      "id": 9,
+      "interval": "15s",
       "options": {
         "legend": {
-          "calcs": [
-            "mean"
-          ],
-          "displayMode": "table",
+          "calcs": [],
+          "displayMode": "list",
           "placement": "bottom",
-          "showLegend": true,
-          "sortBy": "Mean",
-          "sortDesc": true
+          "showLegend": false
         },
         "tooltip": {
-          "mode": "multi",
+          "mode": "single",
           "sort": "none"
         }
       },
@@ -460,8 +437,8 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "sum(rate(rivet_api_request_errors{exported_service=~\"[[service]]\",path=~\"[[path]]\",method=~\"[[method]]\",error_code!=\"API_CANCELLED\",error_code!=\"CAPTCHA_CAPTCHA_REQUIRED\"}[$__rate_interval])) by (exported_service, method, path, status, error_code)",
-          "legendFormat": "{{method}} {{service}}{{path}}: {{status}} ({{error_code}})",
+          "expr": "sum(rate(rivet_chirp_request_errors{context_name=~\"[[context]]\"}[$__rate_interval])) by (context_name, error_type)",
+          "legendFormat": "{{service}}: {{error_type}}",
           "range": true,
           "refId": "A"
         }
@@ -470,83 +447,104 @@
       "type": "timeseries"
     },
     {
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 19
+      },
+      "id": 8,
+      "panels": [],
+      "title": "Consumer",
+      "type": "row"
+    },
+    {
+      "cards": {},
+      "color": {
+        "cardColor": "#b4ff00",
+        "colorScale": "sqrt",
+        "colorScheme": "interpolateOranges",
+        "exponent": 0.5,
+        "mode": "spectrum"
+      },
+      "dataFormat": "tsbuckets",
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
       },
       "fieldConfig": {
         "defaults": {
-          "color": {
-            "mode": "palette-classic"
-          },
           "custom": {
-            "axisCenteredZero": false,
-            "axisColorMode": "text",
-            "axisLabel": "",
-            "axisPlacement": "auto",
-            "barAlignment": 0,
-            "drawStyle": "line",
-            "fillOpacity": 0,
-            "gradientMode": "none",
             "hideFrom": {
               "legend": false,
               "tooltip": false,
               "viz": false
             },
-            "insertNulls": false,
-            "lineInterpolation": "linear",
-            "lineWidth": 1,
-            "pointSize": 5,
             "scaleDistribution": {
               "type": "linear"
-            },
-            "showPoints": "auto",
-            "spanNulls": false,
-            "stacking": {
-              "group": "A",
-              "mode": "none"
-            },
-            "thresholdsStyle": {
-              "mode": "off"
             }
-          },
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              },
-              {
-                "color": "red",
-                "value": 80
-              }
-            ]
-          },
-          "unit": "none"
+          }
         },
         "overrides": []
       },
       "gridPos": {
-        "h": 9,
+        "h": 8,
         "w": 12,
         "x": 0,
-        "y": 19
+        "y": 20
       },
-      "id": 27,
+      "heatmap": {},
+      "hideZeroBuckets": true,
+      "highlightCards": true,
+      "id": 6,
+      "interval": "15s",
+      "legend": {
+        "show": false
+      },
       "options": {
+        "calculate": false,
+        "calculation": {
+          "xBuckets": {
+            "mode": "size"
+          }
+        },
+        "cellGap": 0,
+        "color": {
+          "exponent": 0.5,
+          "fill": "dark-orange",
+          "mode": "scheme",
+          "reverse": false,
+          "scale": "exponential",
+          "scheme": "RdBu",
+          "steps": 64
+        },
+        "exemplars": {
+          "color": "rgba(255,0,255,0.7)"
+        },
+        "filterValues": {
+          "le": 1e-9
+        },
         "legend": {
-          "calcs": [],
-          "displayMode": "list",
-          "placement": "bottom",
-          "showLegend": false
+          "show": true
+        },
+        "rowsFrame": {
+          "layout": "auto"
         },
         "tooltip": {
-          "mode": "single",
-          "sort": "none"
+          "show": true,
+          "yHistogram": true
+        },
+        "yAxis": {
+          "axisPlacement": "left",
+          "max": "60",
+          "min": 0,
+          "reverse": false,
+          "unit": "s"
         }
       },
+      "pluginVersion": "10.1.2",
+      "reverseYBuckets": false,
       "targets": [
         {
           "datasource": {
@@ -554,14 +552,30 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "sum(max_over_time(rivet_api_request_pending{watch=\"0\",exported_service=~\"[[service]]\",path=~\"[[path]]\",method=~\"[[method]]\"}[$__interval])) by (exported_service, path)",
-          "legendFormat": "{{method}} {{service}}{{path}}",
+          "expr": "sum(increase(rivet_chirp_message_recv_lag_bucket{context_name=~\"[[context]]\"} [$__rate_interval])) by (le)",
+          "format": "heatmap",
+          "legendFormat": "{{le}}",
           "range": true,
           "refId": "A"
         }
       ],
-      "title": "Requests Pending (Normal)",
-      "type": "timeseries"
+      "title": "Receive Lag",
+      "tooltip": {
+        "show": true,
+        "showHistogram": true
+      },
+      "type": "heatmap",
+      "xAxis": {
+        "show": true
+      },
+      "yAxis": {
+        "format": "s",
+        "logBase": 2,
+        "max": "60",
+        "min": "0",
+        "show": true
+      },
+      "yBucketBound": "auto"
     },
     {
       "datasource": {
@@ -605,6 +619,7 @@
             }
           },
           "mappings": [],
+          "min": 0,
           "thresholds": {
             "mode": "absolute",
             "steps": [
@@ -617,18 +632,18 @@
                 "value": 80
               }
             ]
-          },
-          "unit": "none"
+          }
         },
         "overrides": []
       },
       "gridPos": {
-        "h": 9,
+        "h": 8,
         "w": 12,
         "x": 12,
-        "y": 19
+        "y": 20
       },
-      "id": 29,
+      "id": 19,
+      "interval": "15s",
       "options": {
         "legend": {
           "calcs": [],
@@ -648,22 +663,20 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "sum(max_over_time(rivet_api_request_pending{watch=\"1\",exported_service=~\"[[service]]\",path=~\"[[path]]\",method=~\"[[method]]\"}[$__interval])) by (exported_service, path)",
-          "legendFormat": "{{method}} {{service}}{{path}}",
+          "expr": "max(redis_stream_group_messages_pending{group=~\"[[context]]\"}) by (group, streamm)",
+          "legendFormat": "{{stream}}: {{group}}",
           "range": true,
           "refId": "A"
         }
       ],
-      "title": "Requests Pending (Watch)",
+      "title": "Messages Pending",
       "type": "timeseries"
     }
   ],
-  "refresh": "",
+  "refresh": false,
   "schemaVersion": 38,
   "style": "dark",
-  "tags": [
-    "chirp"
-  ],
+  "tags": [],
   "templating": {
     "list": [
       {
@@ -680,87 +693,33 @@
           "type": "prometheus",
           "uid": "prometheus"
         },
-        "definition": "label_values(rivet_chirp_uptime,exported_service)",
+        "definition": "label_values(rivet_chirp_request_total,context_name)",
         "hide": 0,
         "includeAll": true,
         "label": "Service",
         "multi": true,
-        "name": "service",
+        "name": "context",
         "options": [],
         "query": {
-          "query": "label_values(rivet_chirp_uptime,exported_service)",
-          "refId": "PrometheusVariableQueryEditor-VariableQuery"
-        },
-        "refresh": 1,
-        "regex": "^api-.*",
-        "skipUrlSync": false,
-        "sort": 1,
-        "type": "query"
-      },
-      {
-        "current": {
-          "selected": false,
-          "text": "All",
-          "value": "$__all"
-        },
-        "datasource": {
-          "type": "prometheus",
-          "uid": "prometheus"
-        },
-        "definition": "label_values(rivet_api_request_total{exported_service=~\"[[service]]\"},path)",
-        "hide": 0,
-        "includeAll": true,
-        "label": "Path",
-        "multi": true,
-        "name": "path",
-        "options": [],
-        "query": {
-          "query": "label_values(rivet_api_request_total{exported_service=~\"[[service]]\"},path)",
+          "query": "label_values(rivet_chirp_request_total,context_name)",
           "refId": "PrometheusVariableQueryEditor-VariableQuery"
         },
         "refresh": 1,
         "regex": "",
         "skipUrlSync": false,
         "sort": 1,
-        "type": "query"
-      },
-      {
-        "current": {
-          "selected": false,
-          "text": "All",
-          "value": "$__all"
-        },
-        "datasource": {
-          "type": "prometheus",
-          "uid": "prometheus"
-        },
-        "definition": "label_values(rivet_api_request_total{exported_service=~\"[[service]]\", path=~\"[[path]]\"},method)",
-        "hide": 0,
-        "includeAll": true,
-        "label": "Method",
-        "multi": true,
-        "name": "method",
-        "options": [],
-        "query": {
-          "query": "label_values(rivet_api_request_total{exported_service=~\"[[service]]\", path=~\"[[path]]\"},method)",
-          "refId": "PrometheusVariableQueryEditor-VariableQuery"
-        },
-        "refresh": 1,
-        "regex": "",
-        "skipUrlSync": false,
-        "sort": 0,
         "type": "query"
       }
     ]
   },
   "time": {
-    "from": "now-24h",
+    "from": "now-5m",
     "to": "now"
   },
   "timepicker": {},
   "timezone": "",
-  "title": "Chirp / API",
-  "uid": "KxlcrbpVk",
-  "version": 1,
+  "title": "Chirp / Operation",
+  "uid": "c6345ab8-9146-499f-ab0b-7fb10fe5b9e1",
+  "version": 3,
   "weekStart": ""
 }

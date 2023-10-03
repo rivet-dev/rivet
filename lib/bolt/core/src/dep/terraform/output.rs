@@ -61,7 +61,7 @@ pub struct Cockroach {
 }
 
 #[derive(Debug, Clone, Deserialize)]
-pub struct Clickhouse {
+pub struct ClickHouse {
 	pub host: TerraformOutputValue<String>,
 	pub port: TerraformOutputValue<u32>,
 }
@@ -95,13 +95,13 @@ pub async fn read_crdb(ctx: &ProjectContext) -> Cockroach {
 	}
 }
 
-pub async fn read_clickhouse(ctx: &ProjectContext) -> Clickhouse {
+pub async fn read_clickhouse(ctx: &ProjectContext) -> ClickHouse {
 	match &ctx.ns().cluster.kind {
 		config::ns::ClusterKind::SingleNode { .. } => {
-			read_plan::<Clickhouse>(ctx, "clickhouse_k8s").await
+			read_plan::<ClickHouse>(ctx, "clickhouse_k8s").await
 		}
 		config::ns::ClusterKind::Distributed { .. } => {
-			read_plan::<Clickhouse>(ctx, "clickhouse_managed").await
+			read_plan::<ClickHouse>(ctx, "clickhouse_managed").await
 		}
 	}
 }

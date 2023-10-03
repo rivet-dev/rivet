@@ -63,20 +63,19 @@ data "kubernetes_service" "traefik" {
 	}
 }
 
+resource "kubernetes_namespace" "traefik_tunnel" {
+	metadata {
+		name = "traefik-tunnel"
+	}
+}
+
+
 data "kubernetes_service" "traefik_tunnel" {
 	depends_on = [helm_release.traefik_tunnel]
 
 	metadata {
 		name = "traefik-tunnel"
 		namespace = kubernetes_namespace.traefik_tunnel.metadata.0.name
-	}
-}
-
-# Separate instance of Traefik for tunneling?? or re-use? 
-
-resource "kubernetes_namespace" "traefik_tunnel" {
-	metadata {
-		name = "traefik-tunnel"
 	}
 }
 
@@ -122,25 +121,25 @@ resource "helm_release" "traefik_tunnel" {
 			"--providers.http.pollInterval=2.5s",
 		]
 
-		logs = {
-			# general = {
-			# 	level = "DEBUG"
-			# }
-			# NOTE: Do not enable on prod
-			# access = {
-			# 	enabled = true
-			# }
-		}
+# 		logs = {
+# 			# general = {
+# 			# 	level = "DEBUG"
+# 			# }
+# 			# NOTE: Do not enable on prod
+# 			# access = {
+# 			# 	enabled = true
+# 			# }
+# 		}
 
-		metrics = {
-			prometheus = {
-				addEntryPointsLabels = true
-				addRoutersLabels = true
-				addServicesLabels = true
-				# See lib/chirp/metrics/src/buckets.rs
-				buckets = "0.001,0.0025,0.005,0.01,0.025,0.05,0.1,0.25,0.5,1.0,2.5,5.0,10.0,25.0,50.0,100.0"
-			}
-		}
+# 		metrics = {
+# 			prometheus = {
+# 				addEntryPointsLabels = true
+# 				addRoutersLabels = true
+# 				addServicesLabels = true
+# 				# See lib/chirp/metrics/src/buckets.rs
+# 				buckets = "0.001,0.0025,0.005,0.01,0.025,0.05,0.1,0.25,0.5,1.0,2.5,5.0,10.0,25.0,50.0,100.0"
+# 			}
+# 		}
 	})]
 }
 
