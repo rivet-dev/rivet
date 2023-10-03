@@ -133,7 +133,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "sum(increase(rivet_chirp_request_duration_bucket{error_code!=\"1004\",context_name=~\"[[context]]\"} [$__interval])) by (le)",
+          "expr": "sum(increase(rivet_chirp_request_duration_bucket{error_code!=\"1004\",context_name=~\"[[context]]\"} [$__rate_interval])) by (le)",
           "format": "heatmap",
           "legendFormat": "{{le}}",
           "range": true,
@@ -547,7 +547,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "sum(increase(rivet_chirp_message_recv_lag_bucket{context_name=~\"[[context]]\"} [$__interval])) by (le)",
+          "expr": "sum(increase(rivet_chirp_message_recv_lag_bucket{context_name=~\"[[context]]\"} [$__rate_interval])) by (le)",
           "format": "heatmap",
           "legendFormat": "{{le}}",
           "range": true,
@@ -714,6 +714,6 @@
   "timezone": "",
   "title": "Chirp / Operation",
   "uid": "c6345ab8-9146-499f-ab0b-7fb10fe5b9e1",
-  "version": 2,
+  "version": 3,
   "weekStart": ""
 }

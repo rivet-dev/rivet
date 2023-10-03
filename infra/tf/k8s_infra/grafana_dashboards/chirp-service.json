@@ -198,7 +198,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "sum(increase(rivet_chirp_request_duration_bucket{error_code!=\"1004\",exported_service=~\"[[service]]\"} [$__interval])) by (le)",
+          "expr": "sum(increase(rivet_chirp_request_duration_bucket{error_code!=\"1004\",exported_service=~\"[[service]]\"} [$__rate_interval])) by (le)",
           "format": "heatmap",
           "legendFormat": "{{le}}",
           "range": true,
@@ -612,7 +612,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "sum(increase(rivet_chirp_message_recv_lag_bucket{exported_service=~\"[[service]]\"} [$__interval])) by (le)",
+          "expr": "sum(increase(rivet_chirp_message_recv_lag_bucket{exported_service=~\"[[service]]\"} [$__rate_interval])) by (le)",
           "format": "heatmap",
           "legendFormat": "{{le}}",
           "range": true,
@@ -722,7 +722,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "max(redis_stream_group_messages_pending{group=~\"[[service]]\"}) by (group, streamm)",
+          "expr": "max(redis_stream_group_messages_pending{group=~\"[[service]]--.*\"}) by (group, streamm)",
           "legendFormat": "{{stream}}: {{group}}",
           "range": true,
           "refId": "A"
@@ -888,6 +888,6 @@
   "timezone": "",
   "title": "Chirp / Service",
   "uid": "adE28xt4k",
-  "version": 1,
+  "version": 2,
   "weekStart": ""
 }
