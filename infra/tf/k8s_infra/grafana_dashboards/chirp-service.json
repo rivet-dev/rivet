@@ -24,7 +24,7 @@
   "editable": true,
   "fiscalYearStartMonth": 0,
   "graphTooltip": 0,
-  "id": 30,
+  "id": 3,
   "links": [],
   "liveNow": false,
   "panels": [
@@ -84,7 +84,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "count(rivet_chirp_uptime{service=~\"[[service]]\"})",
+          "expr": "count(rivet_chirp_uptime{exported_service=~\"[[service]]\"})",
           "legendFormat": "__auto",
           "range": true,
           "refId": "A"
@@ -198,7 +198,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "sum(increase(rivet_chirp_request_duration_bucket{error_code!=\"1004\",service=~\"[[service]]\"} [$__interval])) by (le)",
+          "expr": "sum(increase(rivet_chirp_request_duration_bucket{error_code!=\"1004\",exported_service=~\"[[service]]\"} [$__interval])) by (le)",
           "format": "heatmap",
           "legendFormat": "{{le}}",
           "range": true,
@@ -309,7 +309,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "sum(rate(rivet_chirp_request_total{service=~\"[[service]]\"}[$__rate_interval])) by (service)",
+          "expr": "sum(rate(rivet_chirp_request_total{exported_service=~\"[[service]]\"}[$__rate_interval])) by (exported_service)",
           "legendFormat": "{{service}}",
           "range": true,
           "refId": "A"
@@ -403,7 +403,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "sum(max_over_time(rivet_chirp_request_pending{service=~\"[[service]]\"}[$__interval])) by (service)",
+          "expr": "sum(max_over_time(rivet_chirp_request_pending{exported_service=~\"[[service]]\"}[$__interval])) by (exported_service)",
           "legendFormat": "{{service}}",
           "range": true,
           "refId": "A"
@@ -498,7 +498,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "sum(rate(rivet_chirp_request_errors{service=~\"[[service]]\"}[$__rate_interval])) by (service, error_type)",
+          "expr": "sum(rate(rivet_chirp_request_errors{exported_service=~\"[[service]]\"}[$__rate_interval])) by (exported_service, error_type)",
           "legendFormat": "{{service}}: {{error_type}}",
           "range": true,
           "refId": "A"
@@ -612,7 +612,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "sum(increase(rivet_chirp_message_recv_lag_bucket{service=~\"[[service]]\"} [$__interval])) by (le)",
+          "expr": "sum(increase(rivet_chirp_message_recv_lag_bucket{exported_service=~\"[[service]]\"} [$__interval])) by (le)",
           "format": "heatmap",
           "legendFormat": "{{le}}",
           "range": true,
@@ -791,7 +791,8 @@
             "mode": "absolute",
             "steps": [
               {
-                "color": "green"
+                "color": "green",
+                "value": null
               },
               {
                 "color": "red",
@@ -828,7 +829,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "sum(max_over_time(rivet_chirp_client_active{service=~\"[[service]]\"}[$__interval])) by (service)",
+          "expr": "sum(max_over_time(rivet_chirp_client_active{exported_service=~\"[[service]]\"}[$__interval])) by (exported_service)",
           "legendFormat": "__auto",
           "range": true,
           "refId": "A"
@@ -860,7 +861,7 @@
           "type": "prometheus",
           "uid": "prometheus"
         },
-        "definition": "label_values(rivet_chirp_uptime,service)",
+        "definition": "label_values(rivet_chirp_uptime,exported_service)",
         "hide": 0,
         "includeAll": true,
         "label": "Service",
@@ -868,7 +869,7 @@
         "name": "service",
         "options": [],
         "query": {
-          "query": "label_values(rivet_chirp_uptime,service)",
+          "query": "label_values(rivet_chirp_uptime,exported_service)",
           "refId": "PrometheusVariableQueryEditor-VariableQuery"
         },
         "refresh": 1,
