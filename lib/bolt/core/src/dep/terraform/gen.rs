@@ -165,6 +165,8 @@ async fn vars(ctx: &ProjectContext) {
 			// Expose Minio on a dedicated port if DNS not enabled
 			if config.dns.is_none() && config.s3.providers.minio.is_some() {
 				vars.insert("minio_port".into(), json!(minio_port));
+			} else {
+				vars.insert("minio_port".into(), json!(null));
 			}
 		}
 		ns::ClusterKind::Distributed {} => {

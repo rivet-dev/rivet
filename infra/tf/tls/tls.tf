@@ -32,6 +32,124 @@ resource "cloudflare_origin_ca_certificate" "rivet_gg" {
 	requested_validity = 15 * 365
 }
 
+# for creating locally signed certs
+resource "tls_private_key" "root_ca" {
+  algorithm = "RSA"
+}
+
+# create self-signed root certificate, which acts as local CA 
+resource "tls_self_signed_cert" "root_ca" {
+	key_algorithm   = "RSA"
+  	private_key_pem = tls_private_key.root_ca.private_key_pem
+  	is_ca_certificate = true
+
+  	subject {
+    	common_name  = ""
+    	organization = "Rivet Gaming, LLC"
+  	}
+
+	validity_period_hours = 8760 # 1 year
+
+	allowed_uses = [
+		"key_encipherment",
+    	"digital_signature",
+    	"cert_signing",
+    	"crl_signing"
+  	]
+}
+
+resource "tls_private_key" "locally_signed_tunnel_server" {
+	algorithm = "RSA"
+}
+
+resource "tls_cert_request" "locally_signed_tunnel_server" {
+	private_key_pem = tls_private_key.locally_signed_tunnel_server.private_key_pem
+
+	subject {
+		common_name  = ""
+		organization = "Rivet Gaming, LLC"
+	}
+}
+
+resource "tls_locally_signed_cert" "locally_signed_tunnel_server" {
+	cert_request_pem = tls_cert_request.locally_signed_tunnel_server.cert_request_pem
+  
+	ca_key_algorithm   = "RSA"
+	ca_private_key_pem = tls_private_key.root_ca.private_key_pem
+	ca_cert_pem        = tls_self_signed_cert.root_ca.cert_pem
+  
+	validity_period_hours = 8760 # 1 year
+  
+	allowed_uses = [
+    	"key_encipherment",
+    	"digital_signature",
+    	"server_auth"
+  	]
+}
+
+# for nomad clients
+resource "tls_private_key" "locally_signed_nomad_client" {
+	algorithm = "RSA"
+}
+
+resource "tls_cert_request" "locally_signed_nomad_client" {
+	private_key_pem = tls_private_key.locally_signed_nomad_client.private_key_pem
+
+	subject {
+		common_name  = ""
+		organization = "Rivet Gaming, LLC"
+	}
+}
+
+resource "tls_locally_signed_cert" "locally_signed_nomad_client" {
+	cert_request_pem = tls_cert_request.locally_signed_nomad_client.cert_request_pem
+  
+	ca_key_algorithm   = "RSA"
+	ca_private_key_pem = tls_private_key.root_ca.private_key_pem
+	ca_cert_pem        = tls_self_signed_cert.root_ca.cert_pem
+  
+	validity_period_hours = 8760 # 1 year
+  
+	allowed_uses = [
+    	"key_encipherment",
+    	"digital_signature",
+    	"server_auth"
+  	]
+}
+
+# for game guard nodes
+resource "tls_private_key" "locally_signed_game_guard" {
+	algorithm = "RSA"
+}
+
+resource "tls_cert_request" "locally_signed_game_guard" {
+	private_key_pem = tls_private_key.locally_signed_game_guard.private_key_pem
+
+	subject {
+		common_name  = ""
+		organization = "Rivet Gaming, LLC"
+	}
+}
+
+resource "tls_locally_signed_cert" "locally_signed_game_guard" {
+	cert_request_pem = tls_cert_request.locally_signed_game_guard.cert_request_pem
+  
+	ca_key_algorithm   = "RSA"
+	ca_private_key_pem = tls_private_key.root_ca.private_key_pem
+	ca_cert_pem        = tls_self_signed_cert.root_ca.cert_pem
+  
+	validity_period_hours = 8760 # 1 year
+  
+	allowed_uses = [
+    	"key_encipherment",
+    	"digital_signature",
+    	"server_auth"
+  	]
+}
+
+# for game guard
+# TODO add once get the nomad client talking to the core cluster
+
 locals {
 	# Cloudflare client cert used for mTLS. See
 	# https://developers.cloudflare.com/ssl/origin-configuration/authenticated-origin-pull#zone-level--cloudflare-certificate

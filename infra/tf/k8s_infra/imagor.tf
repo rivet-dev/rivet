@@ -259,7 +259,7 @@ resource "kubectl_manifest" "imagor_ingress" {
 				}
 			]
 
-			tls = each.value.tls
+			tls = lookup(each.value, "tls", null)
 		}
 	})
 }

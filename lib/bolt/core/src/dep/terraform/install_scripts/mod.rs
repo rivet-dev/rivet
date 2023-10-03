@@ -22,13 +22,29 @@ pub async fn gen(ctx: &ProjectContext, server: &Server) -> Result<String> {
 			static_config: gg_traefik_static_config(),
 			dynamic_config: String::new(),
 			tls_certs: hashmap! {
-				"letsencrypt_rivet_job".into() => (*tls.tls_cert_letsencrypt_rivet_job).clone(),
+				"letsencrypt_rivet_job".into() => (*tls.tls_cert_letsencrypt_rivet_job).clone(), // TODO fix
+				// "letsencrypt_rivet_job".into() => (*tls.tls_cert_letsencrypt_rivet_gg).clone(),  // should be rivet_gg instead of rivet_job?
 			},
 		}));
 	}
 
 	if server.pool_id == "job" {
-		script.push(components::docker());
+		// want to also install traefik. copied from gg above. q: what do we need to tweak?
+		// TODO: Only do this if TLS plan applied
+		// the tls plan should generate the certs??
+		let tls = terraform::output::read_tls(ctx).await;
+
+		script.push(components::traefik());
+		script.push(components::traefik_instance(components::TraefikInstance {
+			name: "game-guard".into(),
+			static_config: gg_traefik_static_config(),
+			dynamic_config: String::new(),
+			tls_certs: hashmap! {
+				"letsencrypt_rivet_job".into() => (*tls.tls_cert_locally_signed_nomad_client).clone(), // this cert is for the tunnel running on the nomad client. all nomad clients will use this cert
+			},
+		}));
+
+		script.push(components::docker()); // why do we need to install docker and cni plugins?
 		script.push(components::cni_plugins());
 		script.push(components::nomad(server));
 	}
@@ -43,7 +59,7 @@ pub async fn gen(ctx: &ProjectContext, server: &Server) -> Result<String> {
 }
 
 fn gg_traefik_static_config() -> String {
-	let http_provider_endpoint = "foo bar";
+	let http_provider_endpoint = "foo bar"; // should point to the api-route in the core cluster for exposing game guard dynamic config. this should already exist!
 
 	let mut config = formatdoc!(
 		r#"

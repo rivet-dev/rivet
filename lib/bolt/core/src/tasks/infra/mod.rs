@@ -125,6 +125,15 @@ pub fn build_plan(ctx: &ProjectContext, start_at: Option<String>) -> Result<Vec<
 		}
 	}
 
+	// Kubernetes
+	plan.push(PlanStep {
+		name_id: "k8s-infra",
+		kind: PlanStepKind::Terraform {
+			plan_id: "k8s_infra".into(),
+			needs_destroy: false,
+		},
+	});
+
 	if ctx.tls_enabled() {
 		// TLS
 		plan.push(PlanStep {
@@ -135,15 +144,6 @@ pub fn build_plan(ctx: &ProjectContext, start_at: Option<String>) -> Result<Vec<
 			},
 		});
 	}
-
-	// Kubernetes
-	plan.push(PlanStep {
-		name_id: "k8s-infra",
-		kind: PlanStepKind::Terraform {
-			plan_id: "k8s_infra".into(),
-			needs_destroy: false,
-		},
-	});
 
 	// Redis
 	match ctx.ns().redis.provider {

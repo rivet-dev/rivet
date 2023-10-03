@@ -31,8 +31,11 @@ pub fn cni_plugins() -> String {
 	include_str!("files/cni_plugins.sh").to_string()
 }
 
+// Q: is this running in server or client mode?
 pub fn nomad(server: &Server) -> String {
-	let servers = &["foo", "bar"];
+	// just do one for now -> refers to load balancer.
+
+	let servers = &["foo", "bar"]; // TODO how will these be populated? are these the nomad leader servers? or just need to know about the load balancer?
 
 	include_str!("files/nomad.sh")
 		.replace("__REGION_ID__", &server.region_id)

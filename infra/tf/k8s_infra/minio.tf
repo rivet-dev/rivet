@@ -88,7 +88,7 @@ resource "kubectl_manifest" "minio_ingress_route" {
 				}
 			]
 
-			tls = each.value.tls
+			tls = lookup(each.value, "tls", null)
 		}
 	})
 }
