@@ -68,7 +68,7 @@ resource "helm_release" "redis" {
 				namespace = kubernetes_namespace.redis[each.key].metadata.0.name
 			}
 			extraArgs = each.key == "chirp" ? {
-				"check-streams" = "{topic:*}:topic"
+				"check-streams" = "'{topic:*}:topic'"
 			} : {}
 
 			# TODO:
