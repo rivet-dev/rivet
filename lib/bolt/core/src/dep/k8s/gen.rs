@@ -53,28 +53,6 @@ enum SpecType {
 	CronJob,
 }
 
-impl fmt::Display for SpecType {
-	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-		match self {
-			SpecType::Pod => write!(f, "Pod"),
-			SpecType::Deployment => write!(f, "Deployment"),
-			SpecType::Job => write!(f, "Job"),
-			SpecType::CronJob => write!(f, "CronJob"),
-		}
-	}
-}
-
-impl SpecType {
-	fn api_version(&self) -> &'static str {
-		match self {
-			SpecType::Pod => "v1",
-			SpecType::Deployment => "apps/v1",
-			SpecType::Job => "batch/v1",
-			SpecType::CronJob => "batch/v1",
-		}
-	}
-}
-
 pub async fn project(ctx: &ProjectContext) -> Result<()> {
 	// Check if the k8s provider has already applied
 	let plan_id = match ctx.ns().kubernetes.provider {
@@ -347,18 +325,6 @@ pub async fn gen_svc(exec_ctx: &ExecServiceContext) -> Vec<serde_json::Value> {
 
 	let (volumes, volume_mounts) = build_volumes(&project_ctx, &exec_ctx).await;
 
-	// Create priority class
-	let priority_class_name = format!("{}-priority", service_name);
-	specs.push(json!({
-		"apiVersion": "scheduling.k8s.io/v1",
-		"kind": "PriorityClass",
-		"metadata": {
-			"name": priority_class_name,
-			"namespace": "rivet-service"
-		},
-		"value": svc_ctx.config().service.priority()
-	}));
-
 	let metadata = json!({
 		"name": service_name,
 		"namespace": "rivet-service",
@@ -371,17 +337,30 @@ pub async fn gen_svc(exec_ctx: &ExecServiceContext) -> Vec<serde_json::Value> {
 		}
 	});
 
+	// Create priority class
+	let priority_class_name = format!("{}-priority", service_name);
+	specs.push(json!({
+		"apiVersion": "scheduling.k8s.io/v1",
+		"kind": "PriorityClass",
+		"metadata": {
+			"name": priority_class_name,
+			"namespace": "rivet-service"
+		},
+		"value": svc_ctx.config().service.priority()
+	}));
+
+	let restart_policy = if matches!(run_context, RunContext::Test { .. }) {
+		"Never"
+	} else if spec_type == SpecType::Deployment {
+		"Always"
+	} else {
+		"OnFailure"
+	};
+
 	// Create pod template
 	let pod_spec = json!({
 		"priorityClassName": priority_class_name,
-		// TODO: `OnFailure` Doesn't work with deployments
-		"restartPolicy": if matches!(run_context, RunContext::Test { .. }) {
-			"Never"
-		} else if spec_type == SpecType::Deployment {
-			"Always"
-		} else {
-			"OnFailure"
-		},
+		"restartPolicy": restart_policy,
 		"imagePullSecrets": [{
 			"name": "docker-auth"
 		}],
@@ -390,8 +369,7 @@ pub async fn gen_svc(exec_ctx: &ExecServiceContext) -> Vec<serde_json::Value> {
 			"image": image,
 			"imagePullPolicy": image_pull_policy,
 			"command": ["/bin/sh"],
-			// "args": ["-c", command],
-			"args": ["-c", "sleep 1000"],
+			"args": ["-c", command],
 			"env": env,
 			"envFrom": [{
 				"secretRef": {
@@ -447,8 +425,8 @@ pub async fn gen_svc(exec_ctx: &ExecServiceContext) -> Vec<serde_json::Value> {
 				"spec": {
 					"completions": 1,
 					// "parallelism": ns_service_config.count,
-					// Deletes job after it is finished
-					"ttlSecondsAfterFinished": 1,
+					// // Deletes job after it is finished
+					// "ttlSecondsAfterFinished": 1,
 					"template": pod_template
 				}
 			}));
@@ -487,8 +465,7 @@ pub async fn gen_svc(exec_ctx: &ExecServiceContext) -> Vec<serde_json::Value> {
 	}
 
 	// Horizontal Pod Autoscaler
-	if !matches!(spec_type, SpecType::Pod) {
-		eprintln!("\nHPA {}\n", spec_type);
+	if let SpecType::Deployment = spec_type {
 		specs.push(json!({
 			"apiVersion": "autoscaling/v2",
 			"kind": "HorizontalPodAutoscaler",
@@ -501,8 +478,8 @@ pub async fn gen_svc(exec_ctx: &ExecServiceContext) -> Vec<serde_json::Value> {
 			},
 			"spec": {
 				"scaleTargetRef": {
-					"apiVersion": spec_type.api_version(),
-					"kind": spec_type.to_string(),
+					"apiVersion": "apps/v1",
+					"kind": "Deployment",
 					"name": service_name
 				},
 				"minReplicas": 1,

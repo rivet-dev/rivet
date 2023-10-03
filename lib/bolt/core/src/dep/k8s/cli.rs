@@ -1,9 +1,48 @@
 use anyhow::{ensure, Context, Result};
 use tokio::io::AsyncWriteExt;
 
-use crate::context::ProjectContext;
+use crate::{context::ProjectContext, utils};
 
 pub async fn apply_specs(ctx: &ProjectContext, specs: Vec<serde_json::Value>) -> Result<()> {
+	let jobs = specs
+		.iter()
+		.filter_map(|spec| {
+			(spec["kind"] == "Job").then(|| {
+				(
+					spec["metadata"]["name"].as_str().unwrap().to_string(),
+					spec["metadata"]["namespace"].as_str().unwrap().to_string(),
+				)
+			})
+		})
+		.collect::<Vec<_>>();
+
+	// Delete jobs (pod specs are immutable)
+	if !jobs.is_empty() {
+		eprintln!();
+		rivet_term::status::progress("Deleting jobs", "");
+
+		let pb = utils::progress_bar(jobs.len());
+		for (name, namespace) in jobs {
+			pb.set_message(name.clone());
+
+			let mut cmd = tokio::process::Command::new("kubectl");
+			cmd.arg("delete")
+				.arg("-n")
+				.arg(namespace)
+				.arg("--ignore-not-found=true")
+				.arg(format!("Job/{name}"));
+			cmd.env("KUBECONFIG", ctx.gen_kubeconfig_path());
+			cmd.stdout(std::process::Stdio::null());
+
+			let status = cmd.status().await?;
+			ensure!(status.success(), "failed to delete job {name}");
+
+			pb.inc(1);
+		}
+
+		pb.finish();
+	}
+
 	// Build YAML
 	let mut full_yaml = String::new();
 	for spec in &specs {
