@@ -20,6 +20,7 @@ module "minio_secrets" {
 }
 
 resource "helm_release" "minio" {
+	depends_on = [helm_release.prometheus]
 	count = local.has_minio ? 1 : 0
 
 	name = "minio"
@@ -55,6 +56,7 @@ resource "helm_release" "minio" {
 	})]
 }
 
+# TODO: Errors if minio isn't enabled in namespace config
 resource "kubectl_manifest" "minio_ingress_route" {
 	# Expose via Traefik if not using Minio port
 	for_each = var.minio_port == null ? local.entrypoints : {}

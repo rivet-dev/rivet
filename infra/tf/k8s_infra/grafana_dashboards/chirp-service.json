@@ -24,7 +24,7 @@
   "editable": true,
   "fiscalYearStartMonth": 0,
   "graphTooltip": 0,
-  "id": 29,
+  "id": 30,
   "links": [],
   "liveNow": false,
   "panels": [
@@ -58,7 +58,6 @@
       "gridPos": {
         "h": 4,
         "w": 12,
-
         "x": 0,
         "y": 0
       },
@@ -376,7 +375,6 @@
             ]
           }
         },
-
         "overrides": []
       },
       "gridPos": {
@@ -384,7 +382,6 @@
         "w": 12,
         "x": 0,
         "y": 14
-
       },
       "id": 4,
       "options": {
@@ -661,7 +658,6 @@
             "gradientMode": "none",
             "hideFrom": {
               "legend": false,
-
               "tooltip": false,
               "viz": false
             },
@@ -670,12 +666,10 @@
             "lineWidth": 1,
             "pointSize": 5,
             "scaleDistribution": {
-
               "type": "linear"
             },
             "showPoints": "auto",
             "spanNulls": false,
-
             "stacking": {
               "group": "A",
               "mode": "none"
@@ -854,24 +848,27 @@
     "list": [
       {
         "current": {
-          "selected": false,
-          "text": "All",
-          "value": "$__all"
+          "selected": true,
+          "text": [
+            "All"
+          ],
+          "value": [
+            "$__all"
+          ]
         },
         "datasource": {
           "type": "prometheus",
           "uid": "prometheus"
         },
-        "definition": "label_values(rivet_chirp_request_total,context_name)",
+        "definition": "label_values(rivet_chirp_uptime,service)",
         "hide": 0,
         "includeAll": true,
         "label": "Service",
         "multi": true,
         "name": "service",
-
         "options": [],
         "query": {
-          "query": "label_values(rivet_chirp_request_total,context_name)",
+          "query": "label_values(rivet_chirp_uptime,service)",
           "refId": "PrometheusVariableQueryEditor-VariableQuery"
         },
         "refresh": 1,
@@ -883,7 +880,7 @@
     ]
   },
   "time": {
-    "from": "now-15m",
+    "from": "now-24h",
     "to": "now"
   },
   "timepicker": {},

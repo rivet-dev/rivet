@@ -9,7 +9,7 @@ resource "kubernetes_namespace" "infra" {
 # Must be created in every namespace it is used in
 resource "kubernetes_secret" "ingress_tls_cert" {
 	for_each = toset([
-		for x in [kubernetes_namespace.infra]:
+		for x in kubernetes_namespace.infra:
 		x.metadata.0.name
 	])
 
@@ -21,8 +21,8 @@ resource "kubernetes_secret" "ingress_tls_cert" {
 	type = "kubernetes.io/tls"
 
 	data = {
-		"tls.crt" = data.terraform_remote_state.tls.outputs.tls_cert_cloudflare_rivet_gg.cert_pem
-		"tls.key" = data.terraform_remote_state.tls.outputs.tls_cert_cloudflare_rivet_gg.key_pem
+		"tls.crt" = cloudflare_origin_ca_certificate.rivet_gg.certificate
+		"tls.key" = tls_private_key.cf_origin_rivet_gg.private_key_pem
 	}
 }
 
@@ -33,6 +33,6 @@ resource "kubernetes_secret" "ingress_tls_ca_cert" {
 	}
 
 	data = {
-		"tls.ca" = data.terraform_remote_state.tls.outputs.tls_cert_cloudflare_ca
+		"tls.ca" = local.cloudflare_ca_cert
 	}
 }

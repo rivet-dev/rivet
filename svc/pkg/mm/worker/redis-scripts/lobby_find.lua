@@ -124,7 +124,7 @@ end
 -- This is not a concern for now since we're not sharding the Redis servers.
 
 -- Read lobby config
-local key_lobby_config = 'mm:lobby:' .. lobby_id .. ':config'
+local key_lobby_config = '{global}:mm:lobby:' .. lobby_id .. ':config'
 local namespace_id = redis.call('HGET', key_lobby_config, 'ns')
 local region_id = redis.call('HGET', key_lobby_config, 'r')
 local lobby_group_id = redis.call('HGET', key_lobby_config, 'lg')
@@ -132,15 +132,15 @@ local max_players_normal = tonumber(redis.call('HGET', key_lobby_config, 'mpn'))
 local max_players_party = tonumber(redis.call('HGET', key_lobby_config, 'mpp'))
 
 -- Build keys for the given lobby ID
-local key_lobby_find_queries = 'mm:lobby:' .. lobby_id .. ':find_queries'
-local key_lobby_player_ids = 'mm:lobby:' .. lobby_id .. ':player_ids'
-local key_lobby_available_spots_normal = 'mm:ns:' ..
+local key_lobby_find_queries = '{global}:mm:lobby:' .. lobby_id .. ':find_queries'
+local key_lobby_player_ids = '{global}:mm:lobby:' .. lobby_id .. ':player_ids'
+local key_lobby_available_spots_normal = '{global}:mm:ns:' ..
 namespace_id .. ':region:' .. region_id .. ':lg:' .. lobby_group_id .. ':lobby:available_spots:normal'
-local key_lobby_available_spots_party = 'mm:ns:' ..
+local key_lobby_available_spots_party = '{global}:mm:ns:' ..
 namespace_id .. ':region:' .. region_id .. ':lg:' .. lobby_group_id .. ':lobby:available_spots:party'
-local key_idle_lobby_ids = 'mm:ns:' ..
+local key_idle_lobby_ids = '{global}:mm:ns:' ..
 namespace_id .. ':region:' .. region_id .. ':lg:' .. lobby_group_id .. ':idle_lobby_ids'
-local key_idle_lobby_lobby_group_ids = 'mm:ns:' ..
+local key_idle_lobby_lobby_group_ids = '{global}:mm:ns:' ..
 namespace_id .. ':region:' .. region_id .. ':lobby:idle:lobby_group_ids'
 
 -- Assert lobby state

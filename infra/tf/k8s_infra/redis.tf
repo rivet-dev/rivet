@@ -30,6 +30,7 @@ resource "kubernetes_namespace" "redis" {
 }
 
 resource "helm_release" "redis" {
+	depends_on = [helm_release.prometheus]
 	for_each = local.redis_svcs
 
 	name = "redis"
@@ -66,6 +67,10 @@ resource "helm_release" "redis" {
 				enabled = true
 				namespace = kubernetes_namespace.redis[each.key].metadata.0.name
 			}
+			extraArgs = each.key == "chirp" ? {
+				"check-streams" = "{topic:*}:topic"
+			} : {}
+
 			# TODO:
 			# prometheusRule = {
 			# 	enabled = true

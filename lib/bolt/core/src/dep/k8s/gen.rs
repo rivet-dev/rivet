@@ -773,26 +773,27 @@ fn build_ingress_router(
 			}));
 		}
 
+		// TODO: Add back
 		// In flight
-		{
-			let mw_name = format!("{}-{i}-inflight", svc_ctx.name());
-			middlewares.push(json!({
-				"apiVersion": "traefik.containo.us/v1alpha1",
-				"kind": "Middleware",
-				"metadata": {
-					"name": mw_name,
-					"namespace": "rivet-service"
-				},
-				"spec": {
-					"inFlightReq": {
-						"amount": 64,
-						"sourceCriterion": {
-							"requestHeaderName": "cf-connecting-ip"
-						}
-					}
-				}
-			}));
-		}
+		// {
+		// 	let mw_name = format!("{}-{i}-inflight", svc_ctx.name());
+		// 	middlewares.push(json!({
+		// 		"apiVersion": "traefik.containo.us/v1alpha1",
+		// 		"kind": "Middleware",
+		// 		"metadata": {
+		// 			"name": mw_name,
+		// 			"namespace": "rivet-service"
+		// 		},
+		// 		"spec": {
+		// 			"inFlightReq": {
+		// 				"amount": 64,
+		// 				"sourceCriterion": {
+		// 					"requestHeaderName": "cf-connecting-ip"
+		// 				}
+		// 			}
+		// 		}
+		// 	}));
+		// }
 
 		let ingress_middlewares = middlewares
 			.iter()
@@ -825,7 +826,7 @@ fn build_ingress_router(
 								"kind": "Service",
 								"name": service_name,
 								"namespace": "rivet-service",
-								"port": 80
+								"port": "http"
 							}
 						]
 					}
@@ -854,7 +855,7 @@ fn build_ingress_router(
 									"kind": "Service",
 									"name": service_name,
 									"namespace": "rivet-service",
-									"port": 80
+									"port": "http"
 								}
 							]
 						}
