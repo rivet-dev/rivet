@@ -108,9 +108,7 @@ where
 								Ok(res) => res,
 								Err(req) => {
 									let mut response =
-										handle(shared_client, pools, cache, ray_id, req)
-											.instrument(tracing::info_span!("request_handle"))
-											.await?;
+										handle(shared_client, pools, cache, ray_id, req).await?;
 									response
 										.headers_mut()
 										.insert("rvt-ray-id", ray_id.to_string().parse()?);
