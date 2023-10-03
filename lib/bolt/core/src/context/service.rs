@@ -786,22 +786,22 @@ impl ServiceContextData {
 			env.push(("IS_BILLING_ENABLED".to_owned(), "1".into()));
 		}
 
-		if project_ctx.ns().dns.is_some() {
-			todo!("read cloudflare zones");
+		// if project_ctx.ns().dns.is_some() {
+		// 	todo!("read cloudflare zones");
 
-			// env.push(("CLOUDFLARE_ZONE_ID_BASE".into(), zones.root.clone()));
-			// env.push(("CLOUDFLARE_ZONE_ID_GAME".into(), zones.game.clone()));
-			// env.push(("CLOUDFLARE_ZONE_ID_JOB".into(), zones.job.clone()));
+		// 	// env.push(("CLOUDFLARE_ZONE_ID_BASE".into(), zones.root.clone()));
+		// 	// env.push(("CLOUDFLARE_ZONE_ID_GAME".into(), zones.game.clone()));
+		// 	// env.push(("CLOUDFLARE_ZONE_ID_JOB".into(), zones.job.clone()));
 
-			if self.depends_on_cloudflare() {
-				env.push((
-					"CLOUDFLARE_AUTH_TOKEN".into(),
-					project_ctx
-						.read_secret(&["cloudflare", "terraform", "auth_token"])
-						.await?,
-				));
-			}
-		}
+		// 	if self.depends_on_cloudflare() {
+		// 		env.push((
+		// 			"CLOUDFLARE_AUTH_TOKEN".into(),
+		// 			project_ctx
+		// 				.read_secret(&["cloudflare", "terraform", "auth_token"])
+		// 				.await?,
+		// 		));
+		// 	}
+		// }
 
 		if let Some(hcaptcha) = &project_ctx.ns().captcha.hcaptcha {
 			if self.depends_on_hcaptcha() {
