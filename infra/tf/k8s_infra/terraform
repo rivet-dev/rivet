@@ -1,0 +1,15 @@
+{
+  "version": 4,
+  "terraform_version": "1.4.6",
+  "serial": 73,
+  "lineage": "289a087e-9304-e450-4ac1-97d2de22adec",
+  "outputs": {
+    "traefik_external_ip": {
+      "value": "",
+      "type": "string"
+    }
+  },
+  "resources": [],
+  "check_results": null
+}
+

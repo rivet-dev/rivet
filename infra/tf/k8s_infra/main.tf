@@ -10,7 +10,7 @@ terraform {
 
 locals {
 	entrypoints = var.tls_enabled ? {
-		"web" = { tls = null }
+		"web" = {}
 		"websecure" = {
 			tls = {
 				secretName = "ingress-tls-cert"
@@ -21,7 +21,7 @@ locals {
 			}
 		}
 	} : {
-		"web" = { tls = null }
+		"web" = {}
 	}
 }
 

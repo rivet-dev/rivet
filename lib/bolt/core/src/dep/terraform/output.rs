@@ -45,8 +45,7 @@ pub struct Tls {
 	pub tls_cert_letsencrypt_rivet_job: TerraformOutputValue<Cert>,
 	pub tls_cert_locally_signed_tunnel_server: TerraformOutputValue<Cert>,
 	pub tls_cert_locally_signed_nomad_client: TerraformOutputValue<Cert>,
-	pub tls_cert_locally_signed_game_guard: TerraformOutputValue<Cert>,
-
+	// pub tls_cert_locally_signed_game_guard: TerraformOutputValue<Cert>,
 }
 
 #[derive(Debug, Clone, Deserialize)]

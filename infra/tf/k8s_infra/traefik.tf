@@ -101,6 +101,8 @@ resource "helm_release" "traefik_tunnel" {
 		# TODO: specify static config here? or specify it using yaml? 
 		additionalArguments = [
 			"--entryPoints.nomad.address=:4646",
+			# "--entryPoints.nomad.address=:5000",
+			# "--entryPoints.api-route.address=:5001",
 		#	"--providers.http.endpoint=http://rivet-api-route.rivet-service.svc.cluster.local/traefik/config/core?token=${module.traefik_secrets.values["rivet/api_route/token"]}", # TODO change this to point to a different endpoint?
 			"--providers.http.pollInterval=2.5s",
 		]
@@ -151,6 +153,7 @@ resource "kubectl_manifest" "traefik_tunnel" { # changed from data to resource -
 	})
 }
 
+# TODO: Create 2 instances of this for each service
 # TODO: Create single traefik service
 resource "kubectl_manifest" "tunnel_ingress" {
 	depends_on = [helm_release.traefik_tunnel]
@@ -166,7 +169,7 @@ resource "kubectl_manifest" "tunnel_ingress" {
 
 
 		spec = {
-			entryPoints = [ "websecure", "nomad" ]
+			entryPoints = [ "nomad" ]
 
 			# TODO: how to port the dynamic config for api-route to static config? 
 
@@ -175,12 +178,11 @@ resource "kubectl_manifest" "tunnel_ingress" {
 			routes = [
 				{
 					kind = "Rule"
-					match = "HostSNI(`*`)" # Match any SNI. This is a catch-all since we're using port mapping.
+					match = "HostSNI(`*`)" # TODO change to port mapping. 
 					services = [
 						{
-							name: "nomad-server"
-							port: 4646
-
+							name = "nomad-server"
+							port = 4646
 						}
 					]
 				}

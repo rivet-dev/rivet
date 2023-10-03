@@ -22,6 +22,7 @@ module "redis_secrets" {
 }
 
 resource "kubernetes_namespace" "redis" {
+	depends_on = [ helm_release.prometheus ]
 	for_each = var.redis_dbs
 
 	metadata {
