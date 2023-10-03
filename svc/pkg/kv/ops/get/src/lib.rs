@@ -20,7 +20,7 @@ impl From<KvPair> for kv::get::response::Key {
 
 #[operation(name = "kv-get")]
 async fn handle(ctx: OperationContext<kv::get::Request>) -> GlobalResult<kv::get::Response> {
-	let crdb = ctx.crdb("db-kv").await?;
+	let crdb = ctx.crdb().await?;
 
 	// Collect keys into a hashmap of <namespace id, keys>
 	let mut namespace_ids = Vec::new();
@@ -34,7 +34,7 @@ async fn handle(ctx: OperationContext<kv::get::Request>) -> GlobalResult<kv::get
 		"
 		SELECT kv.namespace_id, kv.key, kv.value::STRING
 		FROM unnest($1, $2) AS q (namespace_id, key)
-		INNER JOIN kv ON kv.namespace_id = q.namespace_id AND kv.key = q.key
+		INNER JOIN db_kv.kv ON kv.namespace_id = q.namespace_id AND kv.key = q.key
 		"
 	))
 	.bind(&namespace_ids)

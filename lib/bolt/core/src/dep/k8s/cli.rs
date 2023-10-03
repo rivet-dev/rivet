@@ -1,7 +1,9 @@
 use anyhow::{ensure, Context, Result};
 use tokio::io::AsyncWriteExt;
 
-pub async fn apply_specs(specs: Vec<serde_json::Value>) -> Result<()> {
+use crate::context::ProjectContext;
+
+pub async fn apply_specs(ctx: &ProjectContext, specs: Vec<serde_json::Value>) -> Result<()> {
 	// Build YAML
 	let mut full_yaml = String::new();
 	for spec in &specs {
@@ -13,9 +15,10 @@ pub async fn apply_specs(specs: Vec<serde_json::Value>) -> Result<()> {
 
 	// Apply kubectl from stdin
 	let mut cmd = tokio::process::Command::new("kubectl");
+	cmd.args(&["apply", "--wait", "-f", "-"]);
+	cmd.env("KUBECONFIG", ctx.gen_kubeconfig_path());
 	cmd.stdin(std::process::Stdio::piped());
 	cmd.stdout(std::process::Stdio::null());
-	cmd.args(&["apply", "-f", "-"]);
 	let mut child = cmd.spawn()?;
 
 	{

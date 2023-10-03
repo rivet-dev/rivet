@@ -1,7 +1,7 @@
 use types::rivet::backend;
 use uuid::Uuid;
 
-use crate::env::{domain_main, origin_hub};
+use crate::env::{origin_api, origin_hub};
 
 pub fn user_settings() -> String {
 	format!("{}/settings", origin_hub())
@@ -38,8 +38,8 @@ pub fn user_avatar(user: &backend::user::User) -> String {
 		user.profile_provider,
 	) {
 		format!(
-			"https://media.{}{}/user-avatar/{}/{}",
-			domain_main(),
+			"{}/media/{}/user-avatar/{}/{}",
+			origin_api(),
 			provider_str(provider),
 			upload_id,
 			file_name
@@ -51,8 +51,8 @@ pub fn user_avatar(user: &backend::user::User) -> String {
 
 pub fn custom_avatar(upload_id: Uuid, file_name: &str, provider: i32) -> String {
 	format!(
-		"https://media.{}/{}/user-avatar/{}/{}",
-		domain_main(),
+		"{}/media/{}/user-avatar/{}/{}",
+		origin_api(),
 		provider_str(provider),
 		upload_id,
 		file_name
@@ -66,8 +66,8 @@ pub fn team_avatar(team: &backend::team::Team) -> Option<String> {
 		team.profile_provider,
 	) {
 		Some(format!(
-			"https://media.{}/{}/team-avatar/{}/{}",
-			domain_main(),
+			"{}/media/{}/team-avatar/{}/{}",
+			origin_api(),
 			provider_str(provider),
 			upload_id,
 			file_name
@@ -84,8 +84,8 @@ pub fn game_logo(game: &backend::game::Game) -> Option<String> {
 		game.logo_provider,
 	) {
 		Some(format!(
-			"https://media.{}/{}/game-logo/{}/{}",
-			domain_main(),
+			"{}/media/{}/game-logo/{}/{}",
+			origin_api(),
 			provider_str(provider),
 			upload_id,
 			file_name
@@ -102,8 +102,8 @@ pub fn game_banner(game: &backend::game::Game) -> Option<String> {
 		game.banner_provider,
 	) {
 		Some(format!(
-			"https://media.{}/{}/game-banner/{}/{}",
-			domain_main(),
+			"{}/media/{}/game-banner/{}/{}",
+			origin_api(),
 			provider_str(provider),
 			upload_id,
 			file_name

@@ -3,7 +3,7 @@ use proto::backend::pkg::*;
 
 #[worker(name = "kv-write")]
 async fn worker(ctx: &OperationContext<kv::msg::write::Message>) -> GlobalResult<()> {
-	let crdb = ctx.crdb("db-kv").await?;
+	let crdb = ctx.crdb().await?;
 
 	let namespace_id = internal_unwrap!(ctx.namespace_id).as_uuid();
 
@@ -57,7 +57,7 @@ async fn upsert_value(
 ) -> GlobalResult<bool> {
 	let query = sqlx::query(indoc!(
 		"
-		UPSERT INTO kv (namespace_id, key, value, update_ts, directory)
+		UPSERT INTO db_kv.kv (namespace_id, key, value, update_ts, directory)
 		VALUES ($1, $2, $3, $4, $5)
 		"
 	))
@@ -75,7 +75,7 @@ async fn upsert_value(
 async fn delete_value(crdb: &CrdbPool, namespace_id: Uuid, key: &str) -> GlobalResult<bool> {
 	let query = sqlx::query(indoc!(
 		"
-		DELETE FROM kv
+		DELETE FROM db_kv.kv
 		WHERE namespace_id = $1 AND key = $2
 		"
 	))

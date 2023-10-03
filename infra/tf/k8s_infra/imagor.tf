@@ -16,26 +16,30 @@ locals {
 	result_storage_s3_secret_access_key = module.imagor_secrets.values["s3/${var.s3_default_provider}/terraform/key"]
 	result_storage_s3_bucket = "${var.namespace}-bucket-imagor-result-storage"
 
-	imagor_presets = [
-		for preset in var.imagor_presets: {
+	imagor_presets = flatten([
+		for preset in var.imagor_presets:
+		{
 			key = preset.key
 			priority = preset.priority
 			game_cors = preset.game_cors
 
-			rule = "(Host(`media.${var.domain_main}`) || HostRegexp(`media.{region:.+}.${var.domain_main}`)) && Path(`${preset.path}`)"
-			query = (
+			match = "Path(`/media${preset.path}`)${
+				var.domain_main_api != null ?
+					"&& Host(`${var.domain_main_api}`)" :
+					""
+			}${
 				preset.query != null ?
-					"&& Query(${join(",", [for x in preset.query: "`${x[0]}=${x[1]}`"])})"
-					: ""
-			)
+					" && Query(${join(",", [for x in preset.query: "`${x[0]}=${x[1]}`"])})" :
+					""
+			}"
+
 			middlewares = (
 				preset.game_cors ?
 					["imagor-${preset.key}-path", "imagor-cors-game", "imagor-cdn"]
 					: ["imagor-${preset.key}-path", "imagor-cors", "imagor-cdn"]
 			)
 		}
-		
-	]
+	])
 }
 
 module "imagor_secrets" {
@@ -62,7 +66,7 @@ resource "kubernetes_priority_class" "imagor_priority" {
 }
 
 resource "kubernetes_deployment" "imagor" {
-	depends_on = [kubernetes_secret.docker_auth]
+	depends_on = [module.docker_auth]
 
 	metadata {
 		name = "imagor"
@@ -153,9 +157,9 @@ resource "kubernetes_deployment" "imagor" {
 						limits = {
 							memory = "${local.service_imagor.resources.memory}Mi"
 							cpu = (
-								local.service_redis_exporter.resources.cpu_cores > 0 ?
-								"${local.service_redis_exporter.resources.cpu_cores * 1000}m"
-								: "${local.service_redis_exporter.resources.cpu}m"
+								local.service_imagor.resources.cpu_cores > 0 ?
+								"${local.service_imagor.resources.cpu_cores * 1000}m"
+								: "${local.service_imagor.resources.cpu}m"
 							)
 							"ephemeral-storage" = "${local.ephemeral_disk}M"
 						}
@@ -218,8 +222,9 @@ resource "kubectl_manifest" "imagor_traefik_service" {
 	})
 }
 
-# TODO: Create single traefik service
 resource "kubectl_manifest" "imagor_ingress" {
+	for_each = local.entrypoints
+
 	depends_on = [helm_release.traefik]
 
 	yaml_body = yamlencode({
@@ -227,18 +232,18 @@ resource "kubectl_manifest" "imagor_ingress" {
 		kind = "IngressRoute"
 
 		metadata = {
-			name = "imagor"
+			name = "imagor-${each.key}"
 			namespace = kubernetes_namespace.imagor.metadata[0].name
 		}
 
 		spec = {
-			entryPoints = [ "websecure" ]
+			entryPoints = [ each.key ]
 
 			routes = [
 				for index, preset in local.imagor_presets:
 				{
 					kind = "Rule"
-					match = "${preset.rule}${preset.query}"
+					match = preset.match
 					priority = preset.priority
 					middlewares = [
 						for mw in preset.middlewares: {
@@ -254,13 +259,7 @@ resource "kubectl_manifest" "imagor_ingress" {
 				}
 			]
 
-			tls = {
-				secretName = "ingress-tls-cert"
-				options = {
-					name = "ingress-tls"
-					namespace = kubernetes_namespace.traefik.metadata[0].name
-				}
-			}
+			tls = each.value.tls
 		}
 	})
 }
@@ -281,7 +280,7 @@ resource "kubectl_manifest" "imagor_cors" {
 		spec = {
 			headers = {
 				accessControlAllowMethods = [ "GET", "OPTIONS" ]
-				accessControlAllowOriginList = [ "https://${var.domain_main}" ]
+				accessControlAllowOriginList = var.imagor_cors_allowed_origins
 				accessControlMaxAge = 300
 			}
 		}

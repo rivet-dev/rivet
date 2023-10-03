@@ -13,6 +13,7 @@ async-trait = "0.1"
 base64 = "0.13"
 bolt-config = { path = "../config" }
 chrono = "0.4"
+cjson = "0.1"
 derive_builder = "0.12"
 duct = "0.13"
 futures-util = "0.3"
@@ -29,7 +30,6 @@ rand = "0.8"
 regex = "1.5"
 reqwest = { version = "0.11", features = ["json"] }
 rivet-term = { git = "https://github.com/rivet-gg/rivet-term.git", rev = "7cf60c225f00eb40d212cec673f09ac47d13d295" }
-rivet-util = { path = "../../util/core" }
 s3-util = { path = "../../s3-util" }
 serde = { version ="1.0", features = ["derive"] }
 serde_json = "1.0"
@@ -39,7 +39,6 @@ thiserror = "1.0"
 tokio = { version = "1.29", features = ["full"] }
 toml = "0.7"
 toml_edit = "0.19"
-types = { path = "../../types/core" }
 url = "2.3"
 urlencoding = "2.1"
 uuid = { version = "1", features = ["v4"] }

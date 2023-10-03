@@ -20,7 +20,7 @@ async fn worker(ctx: &OperationContext<mm::msg::lobby_cleanup::Message>) -> Glob
 
 	let lobby_id = internal_unwrap!(ctx.lobby_id).as_uuid();
 
-	let crdb = ctx.crdb("db-mm-state").await?;
+	let crdb = ctx.crdb().await?;
 
 	// TODO: Wrap this in a MULTI/WATCH
 	// Remove from Redis before attempting to remove from database.
@@ -73,11 +73,11 @@ async fn worker(ctx: &OperationContext<mm::msg::lobby_cleanup::Message>) -> Glob
 		WITH
 			select_lobby AS (
 				SELECT namespace_id, region_id, lobby_group_id, run_id, create_ts, stop_ts
-				FROM lobbies
+				FROM db_mm_state.lobbies
 				WHERE lobby_id = $1
 			),
 			_update AS (
-				UPDATE lobbies
+				UPDATE db_mm_state.lobbies
 				SET stop_ts = $2
 				WHERE lobby_id = $1 AND stop_ts IS NULL
 				RETURNING 1
@@ -106,7 +106,7 @@ async fn worker(ctx: &OperationContext<mm::msg::lobby_cleanup::Message>) -> Glob
 	let players_to_remove = sqlx::query_as::<_, (Uuid,)>(indoc!(
 		"
 		SELECT player_id
-		FROM players
+		FROM db_mm_state.players
 		WHERE lobby_id = $1 AND remove_ts IS NULL
 		"
 	))
@@ -210,7 +210,7 @@ async fn worker(ctx: &OperationContext<mm::msg::lobby_cleanup::Message>) -> Glob
 
 /// Removes the lobby from the Redis database.
 async fn remove_from_redis(
-	redis_mm: &mut RedisConn,
+	redis_mm: &mut RedisPool,
 	namespace_id: Uuid,
 	region_id: Uuid,
 	lobby_group_id: Uuid,

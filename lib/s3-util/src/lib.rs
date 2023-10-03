@@ -33,7 +33,7 @@ pub enum EndpointKind {
 	External,
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Provider {
 	Minio,
 	Backblaze,

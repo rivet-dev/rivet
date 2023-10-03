@@ -42,7 +42,7 @@ impl From<GameUserLink> for game_user::link_get::response::GameUserLink {
 async fn handle(
 	ctx: OperationContext<game_user::link_get::Request>,
 ) -> GlobalResult<game_user::link_get::Response> {
-	let crdb = ctx.crdb("db-game-user").await?;
+	let crdb = ctx.crdb().await?;
 
 	let link_ids = ctx
 		.link_ids
@@ -62,7 +62,7 @@ async fn handle(
 			create_ts,
 			complete_ts,
 			cancelled_ts
-		FROM links
+		FROM db_game_user.links
 		WHERE link_id = ANY($1)
 		"
 	))

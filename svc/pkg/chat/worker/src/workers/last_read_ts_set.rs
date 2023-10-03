@@ -3,14 +3,14 @@ use proto::backend::pkg::*;
 
 #[worker(name = "chat-last-read-ts-set")]
 async fn worker(ctx: &OperationContext<chat::msg::last_read_ts_set::Message>) -> GlobalResult<()> {
-	let crdb = ctx.crdb("db-chat").await?;
+	let crdb = ctx.crdb().await?;
 
 	let user_id = internal_unwrap!(ctx.user_id).as_uuid();
 	let thread_id = internal_unwrap!(ctx.thread_id).as_uuid();
 
 	let res = sqlx::query(indoc!(
 		"
-		INSERT INTO thread_user_settings (user_id, thread_id, last_read_ts)
+		INSERT INTO db_chat.thread_user_settings (user_id, thread_id, last_read_ts)
 		VALUES ($1, $2, $3)
 		ON CONFLICT (user_id, thread_id) DO UPDATE
 		SET last_read_ts = $3

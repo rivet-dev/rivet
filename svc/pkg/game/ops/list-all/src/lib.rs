@@ -8,10 +8,10 @@ async fn handle(
 	let game_ids = sqlx::query_as::<_, (Uuid,)>(indoc!(
 		"
 		SELECT game_id
-		FROM games
+		FROM db_game.games
 		"
 	))
-	.fetch_all(&ctx.crdb("db-game").await?)
+	.fetch_all(&ctx.crdb().await?)
 	.await?
 	.into_iter()
 	.map(|(game_id,)| common::Uuid::from(game_id))

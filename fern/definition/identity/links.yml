@@ -7,8 +7,7 @@ imports:
 
 service:
   auth: true
-  url: Identity
-  base-path: /game-links
+  base-path: /identity/game-links
   endpoints:
     prepare:
       docs: |

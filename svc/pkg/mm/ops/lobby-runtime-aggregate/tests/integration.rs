@@ -2,6 +2,10 @@ use chirp_worker::prelude::*;
 
 #[worker_test]
 async fn default(ctx: TestCtx) {
+	if !util::feature::job_run() {
+		return;
+	}
+
 	let lobby_res = op!([ctx] faker_mm_lobby {
 		..Default::default()
 	})
@@ -32,6 +36,10 @@ async fn default(ctx: TestCtx) {
 
 #[worker_test]
 async fn missing_columns(ctx: TestCtx) {
+	if !util::feature::job_run() {
+		return;
+	}
+
 	// Create a valid row
 	let lobby_res = op!([ctx] faker_mm_lobby {
 		..Default::default()
@@ -51,7 +59,7 @@ async fn missing_columns(ctx: TestCtx) {
 	let now = util::timestamp::now();
 	sqlx::query(indoc!(
 		"
-		UPDATE lobbies
+		UPDATE db_mm_state.lobbies
 		SET stop_ts = $1
 		WHERE namespace_id = $2 AND create_ts = $3 AND lobby_id = $4
 		"
@@ -60,7 +68,7 @@ async fn missing_columns(ctx: TestCtx) {
 	.bind(fake_namespace_id)
 	.bind(now - 1000)
 	.bind(Uuid::new_v4())
-	.execute(&ctx.crdb("db-mm-state").await.unwrap())
+	.execute(&ctx.crdb().await.unwrap())
 	.await
 	.unwrap();
 

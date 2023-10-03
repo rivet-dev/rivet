@@ -8,7 +8,7 @@ lazy_static::lazy_static! {
 
 #[worker(name = "chat-message-create")]
 async fn worker(ctx: &OperationContext<chat_message::msg::create::Message>) -> GlobalResult<()> {
-	let crdb = ctx.crdb("db-chat").await?;
+	let crdb = ctx.crdb().await?;
 
 	let chat_message_id = internal_unwrap!(ctx.chat_message_id).as_uuid();
 	let thread_id = internal_unwrap!(ctx.thread_id).as_uuid();
@@ -21,7 +21,7 @@ async fn worker(ctx: &OperationContext<chat_message::msg::create::Message>) -> G
 
 	sqlx::query(indoc!(
 		"
-		INSERT INTO messages (
+		INSERT INTO db_chat.messages (
 			message_id,
 			thread_id,
 			send_ts,

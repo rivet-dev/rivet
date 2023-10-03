@@ -90,7 +90,7 @@ pub async fn find(
 	ctx: Ctx<Auth>,
 	body: models::MatchmakerLobbiesFindRequest,
 ) -> GlobalResult<models::MatchmakerFindLobbyResponse> {
-	let (lat, long) = internal_unwrap_owned!(ctx.coords());
+	let coords = ctx.coords();
 
 	// Mock response
 	if let Some(ns_dev_ent) = ctx.auth().game_ns_dev_option()? {
@@ -139,8 +139,7 @@ pub async fn find(
 		.collect::<GlobalResult<Vec<_>>>()?;
 
 	// Resolve region IDs
-	let region_ids =
-		resolve_region_ids(&ctx, lat, long, body.regions.as_ref(), &lobby_groups).await?;
+	let region_ids = resolve_region_ids(&ctx, coords, body.regions.as_ref(), &lobby_groups).await?;
 
 	// Validate that there is a lobby group and region pair that is valid.
 	//
@@ -230,7 +229,7 @@ pub async fn create(
 	ctx: Ctx<Auth>,
 	body: models::MatchmakerLobbiesCreateRequest,
 ) -> GlobalResult<models::MatchmakerCreateLobbyResponse> {
-	let (lat, long) = internal_unwrap_owned!(ctx.coords());
+	let coords = ctx.coords();
 
 	// Mock response
 	if let Some(ns_dev_ent) = ctx.auth().game_ns_dev_option()? {
@@ -314,8 +313,7 @@ pub async fn create(
 	// Resolve region IDs
 	let region_ids = resolve_region_ids(
 		&ctx,
-		lat,
-		long,
+		coords,
 		body.region.map(|r| vec![r]).as_ref(),
 		&[(lobby_group, lobby_group_meta)],
 	)
@@ -385,7 +383,7 @@ pub async fn list(
 	_watch_index: WatchIndexQuery,
 	query: ListQuery,
 ) -> GlobalResult<models::MatchmakerListLobbiesResponse> {
-	let (lat, long) = internal_unwrap_owned!(ctx.coords());
+	let coords = ctx.coords();
 
 	// Mock response
 	if let Some(ns_dev_ent) = ctx.auth().game_ns_dev_option()? {
@@ -398,14 +396,14 @@ pub async fn list(
 
 	// Fetch version config and lobbies
 	let (meta, lobbies) = tokio::try_join!(
-		fetch_lobby_list_meta(ctx.op_ctx(), game_ns.namespace_id, lat, long),
+		fetch_lobby_list_meta(ctx.op_ctx(), game_ns.namespace_id, coords),
 		fetch_lobby_list(ctx.op_ctx(), game_ns.namespace_id, query.include_state),
 	)?;
 
 	let regions = meta
 		.regions
 		.iter()
-		.map(|(region, recommend)| utils::build_region_openapi(region, recommend))
+		.map(|(region, recommend)| utils::build_region_openapi(region, recommend.as_ref()))
 		.collect();
 
 	let game_modes = meta
@@ -498,15 +496,17 @@ struct FetchLobbyListMeta {
 		backend::matchmaker::LobbyGroup,
 		backend::matchmaker::LobbyGroupMeta,
 	)>,
-	regions: Vec<(backend::region::Region, region::recommend::response::Region)>,
+	regions: Vec<(
+		backend::region::Region,
+		Option<region::recommend::response::Region>,
+	)>,
 }
 
 /// Fetches lobby group & region data in order to build the lobby list response.
 async fn fetch_lobby_list_meta(
 	ctx: &OperationContext<()>,
 	namespace_id: Uuid,
-	lat: f64,
-	long: f64,
+	coords: Option<(f64, f64)>,
 ) -> GlobalResult<FetchLobbyListMeta> {
 	let ns_res = op!([ctx] game_namespace_get {
 		namespace_ids: vec![namespace_id.into()],
@@ -547,15 +547,25 @@ async fn fetch_lobby_list_meta(
 		.map(Into::<common::Uuid>::into)
 		.collect::<Vec<_>>();
 	let (region_res, recommend_res) = tokio::try_join!(
+		// List regions
 		op!([ctx] region_get {
 			region_ids: region_ids_proto.clone(),
 		}),
-		op!([ctx] region_recommend {
-			region_ids: region_ids_proto.clone(),
-			latitude: Some(lat),
-			longitude: Some(long),
-			..Default::default()
-		}),
+		// Fetch recommended region if coords are provided
+		async {
+			if let Some((lat, long)) = coords {
+				let res = op!([ctx] region_recommend {
+					region_ids: region_ids_proto.clone(),
+					latitude: Some(lat),
+					longitude: Some(long),
+					..Default::default()
+				})
+				.await?;
+				GlobalResult::Ok(Some(res))
+			} else {
+				Ok(None)
+			}
+		}
 	)?;
 
 	Ok(FetchLobbyListMeta {
@@ -564,11 +574,16 @@ async fn fetch_lobby_list_meta(
 			.regions
 			.iter()
 			.map(|region| {
-				let recommend_region = internal_unwrap_owned!(recommend_res
-					.regions
-					.iter()
-					.find(|r| r.region_id == region.region_id));
-				GlobalResult::Ok((region.clone(), recommend_region.clone()))
+				let recommend_region = if let Some(res) = &recommend_res {
+					Some(internal_unwrap_owned!(res
+						.regions
+						.iter()
+						.find(|recommend| recommend.region_id == region.region_id)))
+				} else {
+					None
+				};
+
+				GlobalResult::Ok((region.clone(), recommend_region.cloned()))
 			})
 			.collect::<GlobalResult<Vec<_>>>()?,
 	})
@@ -1027,8 +1042,7 @@ async fn find_inner(
 
 async fn resolve_region_ids(
 	ctx: &Ctx<Auth>,
-	lat: f64,
-	long: f64,
+	coords: Option<(f64, f64)>,
 	regions: Option<&Vec<String>>,
 	lobby_groups: &[(
 		&backend::matchmaker::LobbyGroup,
@@ -1059,7 +1073,7 @@ async fn resolve_region_ids(
 		region_ids
 	} else {
 		// Find all enabled region IDs in all requested lobby groups
-		let enabled_region_ids = lobby_groups
+		let mut enabled_region_ids = lobby_groups
 			.iter()
 			.flat_map(|(lg, _)| {
 				lg.regions
@@ -1068,23 +1082,29 @@ async fn resolve_region_ids(
 					.map(common::Uuid::as_uuid)
 					.collect::<Vec<_>>()
 			})
-			.collect::<HashSet<Uuid>>()
+			.collect::<Vec<Uuid>>();
+		enabled_region_ids.sort();
+		let enabled_region_ids = enabled_region_ids
 			.into_iter()
 			.map(Into::<common::Uuid>::into)
 			.collect::<Vec<_>>();
 
 		// Auto-select the closest region
-		let recommend_res = op!([ctx] region_recommend {
-			latitude: Some(lat),
-			longitude: Some(long),
-			region_ids: enabled_region_ids,
-			..Default::default()
-		})
-		.await?;
-		let primary_region = internal_unwrap_owned!(recommend_res.regions.first());
-		let primary_region_id = internal_unwrap!(primary_region.region_id).as_uuid();
-
-		vec![primary_region_id]
+		if let Some((lat, long)) = coords {
+			let recommend_res = op!([ctx] region_recommend {
+				latitude: Some(lat),
+				longitude: Some(long),
+				region_ids: enabled_region_ids,
+				..Default::default()
+			})
+			.await?;
+			let primary_region = internal_unwrap_owned!(recommend_res.regions.first());
+			let primary_region_id = internal_unwrap!(primary_region.region_id).as_uuid();
+			vec![primary_region_id]
+		} else {
+			tracing::warn!("coords not provided to select region");
+			vec![internal_unwrap_owned!(enabled_region_ids.first()).as_uuid()]
+		}
 	};
 
 	Ok(region_ids)

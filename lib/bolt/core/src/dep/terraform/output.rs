@@ -1,7 +1,7 @@
 use serde::Deserialize;
 use std::{collections::HashMap, ops::Deref};
 
-use crate::context::ProjectContext;
+use crate::{config, context::ProjectContext};
 
 #[derive(Debug, Clone, Deserialize)]
 pub struct TerraformOutputValue<T> {
@@ -49,12 +49,70 @@ pub struct Tls {
 
 }
 
+#[derive(Debug, Clone, Deserialize)]
+pub struct KubernetesClusterAws {
+	pub eks_admin_role_arn: TerraformOutputValue<String>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct Cockroach {
+	pub host: TerraformOutputValue<String>,
+	pub port: TerraformOutputValue<u32>,
+	pub cluster_identifier: TerraformOutputValue<String>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct Clickhouse {
+	pub host: TerraformOutputValue<String>,
+	pub port: TerraformOutputValue<u32>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct Redis {
+	pub host: TerraformOutputValue<HashMap<String, String>>,
+	pub port: TerraformOutputValue<HashMap<String, u32>>,
+}
+
 pub async fn read_pools(ctx: &ProjectContext) -> Pools {
 	read_plan::<Pools>(ctx, "pools").await
 }
 
 pub async fn read_tls(ctx: &ProjectContext) -> Tls {
 	read_plan::<Tls>(ctx, "tls").await
+}
+
+pub async fn read_k8s_cluster_aws(ctx: &ProjectContext) -> KubernetesClusterAws {
+	read_plan::<KubernetesClusterAws>(ctx, "k8s_cluster_aws").await
+}
+
+pub async fn read_crdb(ctx: &ProjectContext) -> Cockroach {
+	match &ctx.ns().cluster.kind {
+		config::ns::ClusterKind::SingleNode { .. } => {
+			read_plan::<Cockroach>(ctx, "cockroachdb_k8s").await
+		}
+		config::ns::ClusterKind::Distributed { .. } => {
+			read_plan::<Cockroach>(ctx, "cockroachdb_managed").await
+		}
+	}
+}
+
+pub async fn read_clickhouse(ctx: &ProjectContext) -> Clickhouse {
+	match &ctx.ns().cluster.kind {
+		config::ns::ClusterKind::SingleNode { .. } => {
+			read_plan::<Clickhouse>(ctx, "clickhouse_k8s").await
+		}
+		config::ns::ClusterKind::Distributed { .. } => {
+			read_plan::<Clickhouse>(ctx, "clickhouse_managed").await
+		}
+	}
+}
+
+pub async fn read_redis(ctx: &ProjectContext) -> Redis {
+	// match &ctx.ns().cluster.kind {
+	// 	config::ns::ClusterKind::SingleNode { .. } => read_plan::<Redis>(ctx, "redis_k8s").await,
+	// 	config::ns::ClusterKind::Distributed { .. } => read_plan::<Redis>(ctx, "redis_aws").await,
+	// }
+	read_plan::<Redis>(ctx, "redis_k8s").await
 }
 
 /// Reads a Terraform plan's output and decodes in to type.

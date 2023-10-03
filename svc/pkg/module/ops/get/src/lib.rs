@@ -28,12 +28,12 @@ pub async fn handle(
 			team_id,
 			create_ts,
 			publicity
-		FROM modules
+		FROM db_module.modules
 		WHERE module_id = ANY($1)
 		"
 	))
 	.bind(module_ids)
-	.fetch_all(&ctx.crdb("db-module").await?)
+	.fetch_all(&ctx.crdb().await?)
 	.await?;
 
 	Ok(module::get::Response {

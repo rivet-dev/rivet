@@ -59,8 +59,13 @@ macro_rules! worker_group {
         async {
 			// Add select branch for each worker
             tokio::select! {
-                $(  _ = $worker.start() => {} )*
+                $(  res = $worker.start() => {
+					// TODO: Should the error just be logged instead?
+					res?;
+				} )*
             }
+
+			Result::<_, ManagerError>::Ok(())
         }
     }}
 }

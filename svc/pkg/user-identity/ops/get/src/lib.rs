@@ -21,12 +21,12 @@ async fn handle(
 	let identity_rows = sqlx::query_as::<_, IdentityRow>(indoc!(
 		"
 		SELECT user_id, email
-		FROM emails
+		FROM db_user_identity.emails
 		WHERE user_id = ANY($1)
 	"
 	))
 	.bind(&user_ids)
-	.fetch_all(&ctx.crdb("db-user-identity").await?)
+	.fetch_all(&ctx.crdb().await?)
 	.await?;
 
 	let users = user_ids

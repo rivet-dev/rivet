@@ -15,8 +15,8 @@ fn main() -> Result<(), ManagerError> {
 			instance_version_set,
 			instance_destroy
 		]
-		.await;
+		.await?;
 
-		Result::<_, ManagerError>::Ok(())
+		Ok(())
 	})?
 }

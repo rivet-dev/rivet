@@ -23,7 +23,7 @@ struct FileRow {
 async fn handle(
 	ctx: OperationContext<upload::complete::Request>,
 ) -> GlobalResult<upload::complete::Response> {
-	let crdb = ctx.crdb("db-upload").await?;
+	let crdb = ctx.crdb().await?;
 
 	let upload_id = internal_unwrap!(ctx.upload_id).as_uuid();
 
@@ -44,7 +44,7 @@ async fn handle(
 	// Mark as complete
 	sqlx::query(indoc!(
 		"
-		UPDATE uploads
+		UPDATE db_upload.uploads
 		SET complete_ts = $2
 		WHERE upload_id = $1
 		"
@@ -94,7 +94,7 @@ async fn fetch_files(
 		sqlx::query_as::<_, UploadRow>(indoc!(
 			"
 			SELECT bucket, provider, user_id
-			FROM uploads
+			FROM db_upload.uploads
 			WHERE upload_id = $1
 			"
 		))
@@ -103,7 +103,7 @@ async fn fetch_files(
 		sqlx::query_as::<_, FileRow>(indoc!(
 			"
 			SELECT path, content_length, nsfw_score_threshold, multipart_upload_id
-			FROM upload_files
+			FROM db_upload.upload_files
 			WHERE upload_id = $1
 			"
 		))

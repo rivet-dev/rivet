@@ -18,9 +18,7 @@ struct Event {
 async fn worker(ctx: &OperationContext<analytics::msg::event_create::Message>) -> GlobalResult<()> {
 	let ray_id = ctx.ray_id();
 
-	let clickhouse_url = std::env::var("CLICKHOUSE_URL")?;
-	let client = clickhouse::Client::default()
-		.with_url(clickhouse_url)
+	let client = rivet_pools::utils::clickhouse::client()?
 		.with_user("chirp")
 		.with_password(util::env::read_secret(&["clickhouse", "users", "chirp", "password"]).await?)
 		.with_database("db_analytics");

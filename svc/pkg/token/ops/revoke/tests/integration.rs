@@ -36,9 +36,9 @@ async fn empty(ctx: TestCtx) {
 	.unwrap();
 
 	let (revoke_ts,) =
-		sqlx::query_as::<_, (Option<i64>,)>("SELECT revoke_ts FROM tokens WHERE jti = $1")
+		sqlx::query_as::<_, (Option<i64>,)>("SELECT revoke_ts FROM db_token.tokens WHERE jti = $1")
 			.bind(jti)
-			.fetch_one(&ctx.crdb("db-token").await.unwrap())
+			.fetch_one(&ctx.crdb().await.unwrap())
 			.await
 			.unwrap();
 	assert!(revoke_ts.is_some());

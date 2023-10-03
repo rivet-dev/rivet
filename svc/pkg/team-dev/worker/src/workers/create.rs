@@ -61,10 +61,10 @@ async fn worker(ctx: &OperationContext<team_dev::msg::create::Message>) -> Globa
 	};
 
 	// Create the dev team
-	let crdb = ctx.crdb("db-team-dev").await?;
+	let crdb = ctx.crdb().await?;
 	sqlx::query(indoc!(
 		"
-		INSERT INTO dev_teams (team_id, create_ts, stripe_customer_id)
+		INSERT INTO db_team_dev.dev_teams (team_id, create_ts, stripe_customer_id)
 		VALUES ($1, $2, $3)
 		"
 	))

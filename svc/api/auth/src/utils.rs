@@ -27,10 +27,12 @@ fn build_cookie_header(origin: &Url, refresh_token: &str, max_age: i64) -> Globa
 	};
 
 	// Build base header
-	let domain = util::env::domain_main();
-	let header = format!(
-		"{USER_REFRESH_TOKEN_COOKIE}={refresh_token}; Max-Age={max_age}; HttpOnly; Path=/; SameSite={same_site}; Secure; Domain={domain}",
+	let mut header = format!(
+		"{USER_REFRESH_TOKEN_COOKIE}={refresh_token}; Max-Age={max_age}; HttpOnly; Path=/; SameSite={same_site}",
 	);
+	if let Some(domain_api) = util::env::domain_main_api() {
+		header.push_str(&format!("; Secure; Domain={domain_api}"))
+	}
 
 	tracing::info!(?host, ?is_hub, ?same_site, ?header, "built cookie header");
 

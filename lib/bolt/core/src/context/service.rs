@@ -15,7 +15,7 @@ use crate::{
 		service::{RuntimeKind, ServiceKind},
 	},
 	context::{self, BuildContext, ProjectContext, RunContext},
-	dep::{self, k8s},
+	dep::{self, k8s, terraform},
 	utils,
 };
 
@@ -738,10 +738,32 @@ impl ServiceContextData {
 		}
 
 		// Domains
-		env.push(("RIVET_DOMAIN_MAIN".into(), project_ctx.domain_main()));
-		env.push(("RIVET_DOMAIN_CDN".into(), project_ctx.domain_cdn()));
-		env.push(("RIVET_DOMAIN_JOB".into(), project_ctx.domain_job()));
+		if let Some(x) = project_ctx.domain_main() {
+			env.push(("RIVET_DOMAIN_MAIN".into(), x));
+		}
+		if let Some(x) = project_ctx.domain_cdn() {
+			env.push(("RIVET_DOMAIN_CDN".into(), x));
+		}
+		if let Some(x) = project_ctx.domain_job() {
+			env.push(("RIVET_DOMAIN_JOB".into(), x));
+		}
+		if let Some(x) = project_ctx.domain_main_api() {
+			env.push(("RIVET_DOMAIN_MAIN_API".into(), x));
+		}
+		env.push(("RIVET_ORIGIN_API".into(), project_ctx.origin_api()));
 		env.push(("RIVET_ORIGIN_HUB".into(), project_ctx.origin_hub()));
+
+		// DNS
+		if let Some(dns) = &project_ctx.ns().dns {
+			if let Some(provider) = &dns.provider {
+				env.push((
+					"RIVET_DNS_PROVIDER".into(),
+					match provider {
+						config::ns::DnsProvider::Cloudflare { .. } => "cloudflare".into(),
+					},
+				));
+			}
+		}
 
 		// Regions
 		env.push(("RIVET_REGION".into(), region_id.clone()));
@@ -764,16 +786,22 @@ impl ServiceContextData {
 			env.push(("IS_BILLING_ENABLED".to_owned(), "1".into()));
 		}
 
-		// Expose URLs to env
-		//
-		// We expose all services instead of just dependencies since we need to configure CORS
-		// for some services which don't have an explicit dependency.
-		env.extend(project_ctx.all_router_url_env().await);
+		if project_ctx.ns().dns.is_some() {
+			todo!("read cloudflare zones");
 
-		let config::ns::DnsProvider::Cloudflare { zones, .. } = &project_ctx.ns().dns.provider;
-		env.push(("CLOUDFLARE_ZONE_ID_BASE".into(), zones.root.clone()));
-		env.push(("CLOUDFLARE_ZONE_ID_GAME".into(), zones.game.clone()));
-		env.push(("CLOUDFLARE_ZONE_ID_JOB".into(), zones.job.clone()));
+			// env.push(("CLOUDFLARE_ZONE_ID_BASE".into(), zones.root.clone()));
+			// env.push(("CLOUDFLARE_ZONE_ID_GAME".into(), zones.game.clone()));
+			// env.push(("CLOUDFLARE_ZONE_ID_JOB".into(), zones.job.clone()));
+
+			if self.depends_on_cloudflare() {
+				env.push((
+					"CLOUDFLARE_AUTH_TOKEN".into(),
+					project_ctx
+						.read_secret(&["cloudflare", "terraform", "auth_token"])
+						.await?,
+				));
+			}
+		}
 
 		if let Some(hcaptcha) = &project_ctx.ns().captcha.hcaptcha {
 			if self.depends_on_hcaptcha() {
@@ -797,6 +825,7 @@ impl ServiceContextData {
 		}
 
 		if self.depends_on_nomad_api() {
+			// TODO: Read host url from terraform
 			env.push((
 				"NOMAD_URL".into(),
 				"http://nomad-server.nomad.svc.cluster.local:4646".into(),
@@ -804,10 +833,13 @@ impl ServiceContextData {
 		}
 
 		if self.depends_on_clickhouse() {
-			env.push((
-				"CLICKHOUSE_URL".into(),
-				"clickhouse.clickhouse.svc.cluster.local:8123".into(),
-			));
+			let clickhouse_data = terraform::output::read_clickhouse(&project_ctx).await;
+			let clickhouse_host = format!(
+				"https://{}:{}",
+				*clickhouse_data.host, *clickhouse_data.port
+			);
+
+			env.push(("CLICKHOUSE_URL".into(), clickhouse_host));
 		}
 
 		// TODO:
@@ -916,15 +948,7 @@ impl ServiceContextData {
 
 		env.push((
 			"RIVET_API_HUB_ORIGIN_REGEX".into(),
-			project_ctx
-				.ns()
-				.rivet
-				.api
-				.hub_origin_regex
-				.clone()
-				.unwrap_or_else(|| {
-					format!("^https://hub\\.{base}$", base = project_ctx.domain_main())
-				}),
+			project_ctx.origin_hub_regex(),
 		));
 		env.push((
 			"RIVET_API_ERROR_VERBOSE".into(),
@@ -976,7 +1000,7 @@ impl ServiceContextData {
 
 		// Write secrets
 		for (secret_key, secret_config) in self.required_secrets(run_context).await? {
-			let env_key = rivet_util::env::secret_env_var_key(&secret_key);
+			let env_key = secret_env_var_key(&secret_key);
 			if secret_config.optional {
 				if let Some(value) = project_ctx.read_secret_opt(&secret_key).await? {
 					env.push((env_key, value));
@@ -1014,47 +1038,74 @@ impl ServiceContextData {
 			}
 		}
 
-		if self.depends_on_cloudflare() {
-			env.push((
-				"CLOUDFLARE_AUTH_TOKEN".into(),
-				project_ctx
-					.read_secret(&["cloudflare", "terraform", "auth_token"])
-					.await?,
-			));
-		}
-
 		// CRDB
-		let crdb_host = "cockroachdb.cockroachdb.svc.cluster.local:26257";
-		for crdb_dep in self.crdb_dependencies(run_context).await {
-			let username = "root"; // TODO:
-			let sslmode = "disable"; // TODO:
+		// TODO: Function is expensive
+		{
+			let crdb_data = terraform::output::read_crdb(&project_ctx).await;
+			let crdb_host = format!("{}:{}", *crdb_data.host, *crdb_data.port);
+			let username = project_ctx.read_secret(&["crdb", "username"]).await?;
+			let password = project_ctx.read_secret(&["crdb", "password"]).await?;
+			let sslmode = "verify-ca";
 
 			let uri = format!(
-				"postgres://{username}@{crdb_host}/{db_name}?sslmode={sslmode}",
-				db_name = crdb_dep.crdb_db_name(),
+				"postgres://{}:{}@{crdb_host}/postgres?sslmode={sslmode}",
+				username, password,
 			);
-			env.push((format!("CRDB_URL_{}", crdb_dep.name_screaming_snake()), uri));
+			env.push(("CRDB_URL".into(), uri));
 		}
 
 		// Redis
+		// TODO: Function is expensive
+		let redis_data = terraform::output::read_redis(&project_ctx).await;
 		for redis_dep in self.redis_dependencies(run_context).await {
 			let name = redis_dep.name();
 			let db_name = redis_dep.redis_db_name();
 
-			// TODO: Use name and port to connect to different redis instances
-			let host = "redis-master.redis.svc.cluster.local:6379";
+			// Read host and port from terraform
+			let hostname = redis_data
+				.host
+				.get(&db_name)
+				.expect("terraform output for redis db not found");
+			let port = redis_data
+				.port
+				.get(&db_name)
+				.expect("terraform output for redis db not found");
+			let host = format!("{}:{}", *hostname, *port);
 
-			// Build URL with auth
+			// // Read auth secrets
+			// let (username, password) = match project_ctx.ns().cluster.kind {
+			// 	config::ns::ClusterKind::SingleNode { .. } => (
+			// 		project_ctx
+			// 			.read_secret(&["redis", &db_name, "username"])
+			// 			.await?,
+			// 		project_ctx
+			// 			.read_secret_opt(&["redis", &db_name, "password"])
+			// 			.await?,
+			// 	),
+			// 	config::ns::ClusterKind::Distributed { .. } => {
+			// 		let db_name = format!("rivet-{}-{}", project_ctx.ns_id(), db_name);
+			// 		let username = project_ctx
+			// 			.read_secret(&["redis", &db_name, "username"])
+			// 			.await?;
+			// 		let password = project_ctx
+			// 			.read_secret_opt(&["redis", &db_name, "password"])
+			// 			.await?;
+
+			// 		(username, password)
+			// 	}
+			// };
 			let username = project_ctx
 				.read_secret(&["redis", &db_name, "username"])
 				.await?;
 			let password = project_ctx
 				.read_secret_opt(&["redis", &db_name, "password"])
 				.await?;
+
+			// Build URL with auth
 			let url = if let Some(password) = password {
-				format!("redis://{}:{}@{host}", username, password)
+				format!("rediss://{}:{}@{host}", username, password)
 			} else {
-				format!("redis://{}@{host}", username)
+				format!("rediss://{}@{host}", username)
 			};
 
 			env.push((
@@ -1231,4 +1282,12 @@ async fn add_s3_secret_env(
 	));
 
 	Ok(())
+}
+
+/// TODO: Reuse code with lib/util/env/src/lib.r
+pub fn secret_env_var_key(key: &[impl AsRef<str>]) -> String {
+	key.iter()
+		.map(|x| x.as_ref().to_uppercase())
+		.collect::<Vec<_>>()
+		.join("_")
 }

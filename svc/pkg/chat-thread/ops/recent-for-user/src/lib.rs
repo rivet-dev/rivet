@@ -101,7 +101,7 @@ async fn handle(
 	// 4. Map to Protobuf.
 
 	let mut redis = ctx.redis_cache().await?;
-	let crdb = ctx.crdb("db-chat").await?;
+	let crdb = ctx.crdb().await?;
 
 	let user_id = internal_unwrap!(ctx.user_id).as_uuid();
 	let after_ts = ctx.after_ts;
@@ -251,10 +251,10 @@ async fn fetch_missing_tails(
 	let thread_with_tails = sqlx::query_as::<_, TailMessageRow>(indoc!(
 		"
 		SELECT messages.*
-		FROM threads
+		FROM db_chat.threads
 		LEFT JOIN LATERAL (
 			SELECT messages.thread_id, message_id, send_ts, body
-			FROM messages
+			FROM db_chat.messages
 			WHERE messages.thread_id = threads.thread_id
 			ORDER BY send_ts DESC, message_id DESC
 			LIMIT 1

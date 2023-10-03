@@ -39,12 +39,12 @@ async fn handle(
 					sqlx::query_as::<_, Version>(indoc!(
 						"
 					SELECT version_id, lobby_group_id
-					FROM lobby_groups
+					FROM db_mm_config.lobby_groups
 					WHERE lobby_group_id = ANY($1)
 				"
 					))
 					.bind(lobby_group_ids)
-					.fetch_all(&ctx.crdb("db-mm-config").await?)
+					.fetch_all(&ctx.crdb().await?)
 					.await?
 					.into_iter()
 					.for_each(|version| {

@@ -29,7 +29,7 @@ struct MultipartUpdate {
 async fn handle(
 	ctx: OperationContext<upload::prepare::Request>,
 ) -> GlobalResult<upload::prepare::Response> {
-	let crdb = ctx.crdb("db-upload").await?;
+	let crdb = ctx.crdb().await?;
 	let provider = if let Some(provider) = ctx.provider {
 		let proto_provider = internal_unwrap_owned!(
 			backend::upload::Provider::from_i32(provider),
@@ -117,12 +117,12 @@ async fn handle(
 		"
 		WITH
 			_insert_upload AS (
-				INSERT INTO uploads (upload_id, create_ts, content_length, bucket, user_id, provider)
+				INSERT INTO db_upload.uploads (upload_id, create_ts, content_length, bucket, user_id, provider)
 				VALUES ($1, $2, $3, $4, $5, $6)
 				RETURNING 1
 			),
 			_insert_files AS (
-				INSERT INTO upload_files (upload_id, path, mime, content_length, nsfw_score_threshold)
+				INSERT INTO db_upload.upload_files (upload_id, path, mime, content_length, nsfw_score_threshold)
 				SELECT $1, rows.*
 				FROM unnest($7, $8, $9, $10) AS rows
 				RETURNING 1
@@ -181,7 +181,7 @@ async fn handle(
 		async {
 			sqlx::query(indoc!(
 				"
-				UPDATE upload_files
+				UPDATE db_upload.upload_files
 				SET multipart_upload_id = v.multipart_upload_id
 				FROM (
 					SELECT unnest($2) AS path,

@@ -24,6 +24,10 @@ async fn all() {
 }
 
 async fn test_kill_orphaned_job(ctx: TestCtx) {
+	if !util::feature::job_run() {
+		return;
+	}
+
 	let pools = rivet_pools::from_env("job-gc-test").await.unwrap();
 
 	// Run the job

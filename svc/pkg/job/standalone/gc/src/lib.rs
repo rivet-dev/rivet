@@ -17,7 +17,7 @@ pub const CHECK_ORPHANED_JOB_THRESHOLD: i64 = util::duration::hours(1);
 #[tracing::instrument(skip_all)]
 pub async fn run_from_env(ts: i64, pools: rivet_pools::Pools) -> GlobalResult<()> {
 	let client = chirp_client::SharedClient::from_env(pools.clone())?.wrap_new("job-gc");
-	let crdb = pools.crdb("db-job-state")?;
+	let crdb = pools.crdb()?;
 	let check_orphaned_ts = ts - CHECK_ORPHANED_JOB_THRESHOLD;
 
 	// In the situation that nomad-monitor fails to receive a Nomad event (i.e.
@@ -52,7 +52,7 @@ pub async fn run_from_env(ts: i64, pools: rivet_pools::Pools) -> GlobalResult<()
 	let mut runs_iter = sqlx::query_as::<_, (Uuid, Option<i64>, Option<String>)>(indoc!(
 		"
 		SELECT runs.run_id, runs.stop_ts, run_meta_nomad.dispatched_job_id
-		FROM runs
+		FROM db_job_state.runs
 		INNER JOIN run_meta_nomad ON run_meta_nomad.run_id = runs.run_id
 		AS OF SYSTEM TIME '-5s'
 		WHERE stop_ts IS NULL AND start_ts < $1

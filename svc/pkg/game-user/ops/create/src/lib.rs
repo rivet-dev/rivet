@@ -5,7 +5,7 @@ use rivet_operation::prelude::*;
 async fn handle(
 	ctx: OperationContext<game_user::create::Request>,
 ) -> GlobalResult<game_user::create::Response> {
-	let crdb = ctx.crdb("db-game-user").await?;
+	let crdb = ctx.crdb().await?;
 
 	let game_user_id = Uuid::new_v4();
 	let namespace_id = internal_unwrap!(ctx.namespace_id).as_uuid();
@@ -40,7 +40,7 @@ async fn handle(
 
 	sqlx::query(indoc!(
 		"
-		INSERT INTO game_users (game_user_id, user_id, token_session_id, namespace_id, create_ts)
+		INSERT INTO db_game_user.game_users (game_user_id, user_id, token_session_id, namespace_id, create_ts)
 		VALUES ($1, $2, $3, $4, $5)
 		"
 	))

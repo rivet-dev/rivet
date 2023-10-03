@@ -29,7 +29,7 @@ struct ProxiedPort {
 async fn worker(
 	ctx: &OperationContext<job_run::msg::nomad_monitor_alloc_plan::Message>,
 ) -> GlobalResult<()> {
-	let crdb = ctx.crdb("db-job-state").await?;
+	let crdb = ctx.crdb().await?;
 	let mut redis_job = ctx.redis_job().await?;
 
 	let PlanResult { allocation: alloc } = serde_json::from_str::<PlanResult>(&ctx.payload_json)?;
@@ -193,8 +193,8 @@ async fn update_db(
 	let run_row = sqlx::query_as::<_, RunRow>(indoc!(
 		"
 		SELECT runs.run_id, runs.region_id, run_meta_nomad.alloc_plan_ts
-		FROM run_meta_nomad
-		INNER JOIN runs ON runs.run_id = run_meta_nomad.run_id
+		FROM db_job_state.run_meta_nomad
+		INNER JOIN db_job_state.runs ON runs.run_id = run_meta_nomad.run_id
 		WHERE dispatched_job_id = $1
 		FOR UPDATE OF run_meta_nomad
 		"
@@ -217,7 +217,7 @@ async fn update_db(
 		// Write alloc information
 		sqlx::query(indoc!(
 			"
-			UPDATE run_meta_nomad
+			UPDATE db_job_state.run_meta_nomad
 			SET alloc_id = $2, alloc_plan_ts = $3, node_id = $4
 			WHERE run_id = $1
 			"
@@ -234,7 +234,7 @@ async fn update_db(
 			tracing::info!(%run_id, mode = %network.mode, ip = %network.ip, "inserting network");
 			sqlx::query(indoc!(
 				"
-				INSERT INTO run_networks (run_id, mode, ip)
+				INSERT INTO db_job_state.run_networks (run_id, mode, ip)
 				VALUES ($1, $2, $3)
 				"
 			))
@@ -250,7 +250,7 @@ async fn update_db(
 			tracing::info!(%run_id, label = %port.label, source = port.source, target = port.target, ip = %port.ip, "inserting port");
 			sqlx::query(indoc!(
 				"
-				INSERT INTO run_ports (run_id, label, source, target, ip)
+				INSERT INTO db_job_state.run_ports (run_id, label, source, target, ip)
 				VALUES ($1, $2, $3, $4, $5)
 				"
 			))
@@ -268,7 +268,7 @@ async fn update_db(
 	let proxied_ports = sqlx::query_as::<_, ProxiedPort>(indoc!(
 		"
 		SELECT target_nomad_port_label, ingress_port, ingress_hostnames, proxy_protocol, ssl_domain_mode
-		FROM run_proxied_ports
+		FROM db_job_state.run_proxied_ports
 		WHERE run_id = $1
 		"
 	))

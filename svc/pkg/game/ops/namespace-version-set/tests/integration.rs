@@ -24,9 +24,9 @@ async fn empty(ctx: TestCtx) {
 	.unwrap();
 
 	let (sql_version_id,): (Uuid,) =
-		sqlx::query_as("SELECT version_id FROM game_namespaces WHERE namespace_id = $1")
+		sqlx::query_as("SELECT version_id FROM db_game.game_namespaces WHERE namespace_id = $1")
 			.bind(namespace_id)
-			.fetch_one(&ctx.crdb("db-game").await.unwrap())
+			.fetch_one(&ctx.crdb().await.unwrap())
 			.await
 			.unwrap();
 	assert_eq!(

@@ -104,12 +104,12 @@ async fn handle(
 	// Create the cloud version
 	sqlx::query(indoc!(
 		"
-		INSERT INTO game_versions (version_id)
+		INSERT INTO db_cloud.game_versions (version_id)
 		VALUES ($1)
 	"
 	))
 	.bind(version_id)
-	.execute(&ctx.crdb("db-cloud").await?)
+	.execute(&ctx.crdb().await?)
 	.await?;
 
 	// Create the cloud versions

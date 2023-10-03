@@ -138,19 +138,29 @@ pub async fn output(ctx: &ProjectContext, plan_id: &str, quiet: bool) -> serde_j
 		.unwrap()
 }
 
-pub async fn state_list(ctx: &ProjectContext, plan_id: &str) -> Vec<String> {
+pub async fn state_list(ctx: &ProjectContext, plan_id: &str) -> Option<Vec<String>> {
+	// Don't return state if not enabled
+	if !crate::tasks::infra::all_terraform_plans(ctx)
+		.ok()
+		.map_or(false, |x| x.iter().any(|x| x.as_str() == plan_id))
+	{
+		return None;
+	}
+
+	// Return all resources
 	init_if_needed(ctx, plan_id).await;
 	let mut cmd = build_command(ctx, plan_id).await;
 	cmd.arg("state").arg("list");
-	cmd.exec_string()
-		.await
-		.unwrap()
-		.split('\n')
-		.filter(|x| !x.is_empty())
-		.map(|x| x.to_string())
-		.collect()
+	cmd.exec_string().await.ok().map(|x| {
+		x.split('\n')
+			.filter(|x| !x.is_empty())
+			.map(|x| x.to_string())
+			.collect()
+	})
 }
 
 pub async fn has_applied(ctx: &ProjectContext, plan_id: &str) -> bool {
-	!state_list(ctx, plan_id).await.is_empty()
+	state_list(ctx, plan_id)
+		.await
+		.map_or(false, |x| !x.is_empty())
 }

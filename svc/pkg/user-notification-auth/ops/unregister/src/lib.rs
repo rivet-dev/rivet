@@ -11,9 +11,9 @@ async fn handle(
 		user_notification_auth::unregister::request::Service::from_i32(ctx.service)
 	) {
 		user_notification_auth::unregister::request::Service::Firebase => {
-			sqlx::query("DELETE FROM users WHERE user_id = $1")
+			sqlx::query("DELETE FROM db_user_notification_auth.users WHERE user_id = $1")
 				.bind(user_id)
-				.execute(&ctx.crdb("db-user-notification-auth").await?)
+				.execute(&ctx.crdb().await?)
 				.await?;
 		}
 	}

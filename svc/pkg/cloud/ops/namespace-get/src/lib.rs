@@ -20,12 +20,12 @@ async fn handle(
 	let cloud_namespaces = sqlx::query_as::<_, GameNamespace>(indoc!(
 		"
 		SELECT namespace_id
-		FROM game_namespaces
+		FROM db_cloud.game_namespaces
 		WHERE namespace_id = ANY($1)
 		"
 	))
 	.bind(namespace_ids)
-	.fetch_all(&ctx.crdb("db-cloud").await?)
+	.fetch_all(&ctx.crdb().await?)
 	.await?;
 
 	let all_namespace_ids_proto = cloud_namespaces

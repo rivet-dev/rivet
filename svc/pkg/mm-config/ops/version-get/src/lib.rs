@@ -78,7 +78,7 @@ async fn handle(
 	// 	.map(|(_, v)| v)
 	// 	.collect::<Vec<_>>();
 
-	let versions = fetch_versions(&ctx.crdb("db-mm-config").await?, req_version_ids)
+	let versions = fetch_versions(&ctx.crdb().await?, req_version_ids)
 		.await?
 		.into_iter()
 		.map(|x| x.1)
@@ -94,7 +94,7 @@ async fn fetch_versions(
 	let (versions, lobby_groups) = tokio::try_join!(
 		sqlx::query_as::<_, GameVersion>(indoc!(
 			"
-			SELECT version_id, captcha_config FROM game_versions WHERE version_id = ANY($1)
+			SELECT version_id, captcha_config FROM db_mm_config.game_versions WHERE version_id = ANY($1)
 			"
 		))
 		.bind(&req_version_ids)
@@ -107,7 +107,7 @@ async fn fetch_versions(
 				max_players_normal, max_players_direct, max_players_party, listable,
 				runtime, runtime_meta,
 				find_config, join_config, create_config
-			FROM lobby_groups
+			FROM db_mm_config.lobby_groups
 			WHERE version_id = ANY($1)
 			"
 		))
@@ -123,7 +123,7 @@ async fn fetch_versions(
 		sqlx::query_as::<_, LobbyGroupRegion>(indoc!(
 			"
 			SELECT lobby_group_id, region_id, tier_name_id
-			FROM lobby_group_regions
+			FROM db_mm_config.lobby_group_regions
 			WHERE lobby_group_id = ANY($1)
 			"
 		))
@@ -132,7 +132,7 @@ async fn fetch_versions(
 		sqlx::query_as::<_, LobbyGroupIdleLobbies>(indoc!(
 			"
 			SELECT lobby_group_id, region_id, min_idle_lobbies, max_idle_lobbies
-			FROM lobby_group_idle_lobbies
+			FROM db_mm_config.lobby_group_idle_lobbies
 			WHERE lobby_group_id = ANY($1)
 			"
 		))

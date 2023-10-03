@@ -2,6 +2,10 @@ use chirp_worker::prelude::*;
 
 #[worker_test]
 async fn empty(ctx: TestCtx) {
+	if !util::feature::cf_custom_hostname() {
+		return;
+	}
+
 	let namespace_id = Uuid::new_v4();
 	let domain = "test.com";
 
@@ -29,7 +33,7 @@ async fn empty(ctx: TestCtx) {
 		"
 		SELECT EXISTS (
 			SELECT 1
-			FROM game_namespace_domains
+			FROM db_cdn.game_namespace_domains
 			WHERE
 				namespace_id = $1 AND
 				domain = $2
@@ -38,7 +42,7 @@ async fn empty(ctx: TestCtx) {
 	))
 	.bind(namespace_id)
 	.bind(domain)
-	.fetch_one(&ctx.crdb("db-cdn").await.unwrap())
+	.fetch_one(&ctx.crdb().await.unwrap())
 	.await
 	.unwrap();
 	assert!(!sql_exists);

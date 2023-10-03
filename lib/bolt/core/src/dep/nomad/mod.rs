@@ -34,11 +34,14 @@ impl NomadCtx {
 			config::ns::ClusterKind::Distributed { .. } => {
 				assert!(
 					matches!(
-						ctx.ns().dns.provider,
-						config::ns::DnsProvider::Cloudflare {
-							access: Some(_),
+						ctx.ns().dns,
+						Some(config::ns::Dns {
+							provider: Some(config::ns::DnsProvider::Cloudflare {
+								access: Some(_),
+								..
+							}),
 							..
-						}
+						})
 					),
 					"cloudflare access not enabled"
 				);
@@ -53,7 +56,7 @@ impl NomadCtx {
 			}
 		};
 
-		let handle = utils::kubectl_port_forward("nomad-server", "nomad", (4646, 4646))?;
+		let handle = utils::kubectl_port_forward(ctx, "nomad-server", "nomad", (4646, 4646))?;
 
 		// Wait for port forward to open and check if successful
 		handle.check().await?;
@@ -78,17 +81,18 @@ impl NomadCtx {
 				.request(method, format!("http://127.0.0.1:4646{path}")),
 
 			config::ns::ClusterKind::Distributed { .. } => {
-				let access_secret = self.access_secret.as_ref().unwrap();
-				self.client
-					.request(
-						method,
-						format!("https://nomad.{}{path}", self.project_ctx.domain_main()),
-					)
-					.header("CF-Access-Client-Id", access_secret.client_id.as_str())
-					.header(
-						"CF-Access-Client-Secret",
-						access_secret.client_secret.as_str(),
-					)
+				todo!()
+				// let access_secret = self.access_secret.as_ref().unwrap();
+				// self.client
+				// 	.request(
+				// 		method,
+				// 		format!("https://nomad.{}{path}", self.project_ctx.domain_main()),
+				// 	)
+				// 	.header("CF-Access-Client-Id", access_secret.client_id.as_str())
+				// 	.header(
+				// 		"CF-Access-Client-Secret",
+				// 		access_secret.client_secret.as_str(),
+				// 	)
 			}
 		}
 	}

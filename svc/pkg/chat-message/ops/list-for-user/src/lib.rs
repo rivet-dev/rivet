@@ -13,7 +13,7 @@ struct ChatMessage {
 async fn handle(
 	ctx: OperationContext<chat_message::list_for_user::Request>,
 ) -> GlobalResult<chat_message::list_for_user::Response> {
-	let crdb = ctx.crdb("db-chat").await?;
+	let crdb = ctx.crdb().await?;
 
 	let user_id = internal_unwrap!(ctx.user_id).as_uuid();
 	let direction = internal_unwrap_owned!(
@@ -25,7 +25,7 @@ async fn handle(
 			let mut msgs = sqlx::query_as::<_, ChatMessage>(indoc!(
 				"
 				SELECT message_id, thread_id, send_ts, body
-				FROM messages
+				FROM db_chat.messages
 				WHERE sender_user_id = $1 AND send_ts < $2
 				ORDER BY send_ts DESC, message_id DESC
 				LIMIT $3
@@ -44,7 +44,7 @@ async fn handle(
 				"
 				SELECT * FROM (
 					SELECT message_id, thread_id, send_ts, body
-					FROM messages
+					FROM db_chat.messages
 					WHERE sender_user_id = $1 AND send_ts <= $2
 					ORDER BY send_ts DESC, message_id DESC
 					LIMIT $3
@@ -54,7 +54,7 @@ async fn handle(
 
 				SELECT * FROM (
 					SELECT message_id, thread_id, send_ts, body
-					FROM messages
+					FROM db_chat.messages
 					WHERE sender_user_id = $1 AND send_ts > $2
 					ORDER BY send_ts ASC, message_id ASC
 					LIMIT $3
@@ -73,7 +73,7 @@ async fn handle(
 			sqlx::query_as::<_, ChatMessage>(indoc!(
 				"
 				SELECT message_id, thread_id, send_ts, body
-				FROM messages
+				FROM db_chat.messages
 				WHERE sender_user_id = $1 AND send_ts > $2
 				ORDER BY send_ts ASC, message_id ASC
 				LIMIT $3

@@ -31,7 +31,6 @@ impl Ctx {
 				.pretty()
 				.with_max_level(tracing::Level::INFO)
 				.with_target(false)
-				.without_time()
 				.init();
 		});
 
@@ -71,6 +70,10 @@ impl Ctx {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn cdn() {
+	if !util::feature::cf_custom_hostname() {
+		return;
+	}
+
 	struct Namespace {
 		namespace_id: Uuid,
 		domain: String,
@@ -456,7 +459,11 @@ mod cdn_suite {
 
 		CdnVersion {
 			namespace_id: *ns_create_res.namespace_id.unwrap(),
-			base: format!("https://{}.{}", game.name_id, util::env::domain_cdn()),
+			base: format!(
+				"https://{}.{}",
+				game.name_id,
+				util::env::domain_cdn().unwrap()
+			),
 			game,
 		}
 	}

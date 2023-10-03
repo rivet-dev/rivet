@@ -1,8 +1,10 @@
 use anyhow::{ensure, Context, Result};
+use duct::cmd;
 use indoc::formatdoc;
+use regex::Regex;
 use serde_json::json;
 use std::path::{Path, PathBuf};
-use tokio::{fs, io::AsyncReadExt, process::Command};
+use tokio::{fs, io::AsyncReadExt, process::Command, task::block_in_place};
 
 use crate::{config, context::ProjectContext};
 
@@ -49,8 +51,9 @@ pub async fn build<'a, T: AsRef<str>>(ctx: &ProjectContext, opts: BuildOpts<'a, 
 			// the target dir
 			formatdoc!(
 				"
-				if [ $? -eq 0 ]; then
-				(cd {path} && cargo build {jobs_flag} {format_flag} {release_flag} {bin_flags})
+				if [ $EXIT_CODE -eq 0 ]; then
+					(cd {path} && cargo build {jobs_flag} {format_flag} {release_flag} {bin_flags})
+					EXIT_CODE=$?
 				fi
 				"
 			)
@@ -67,11 +70,14 @@ pub async fn build<'a, T: AsRef<str>>(ctx: &ProjectContext, opts: BuildOpts<'a, 
 		# Used for Tokio Console. See https://github.com/tokio-rs/console#using-it
 		export RUSTFLAGS="--cfg tokio_unstable"
 		# Used for debugging
-		# export CARGO_LOG=cargo::core::compiler::fingerprint=info
+		export CARGO_LOG=cargo::core::compiler::fingerprint=info
+
+		EXIT_CODE=0
 
 		{build_calls}
 
-		EXIT_CODE=$?
+		# Exit
+		exit $EXIT_CODE
 		"#,
 	);
 
@@ -81,28 +87,13 @@ pub async fn build<'a, T: AsRef<str>>(ctx: &ProjectContext, opts: BuildOpts<'a, 
 			let mut cmd = Command::new("sh");
 			cmd.current_dir(ctx.path());
 			cmd.arg("-c");
-			cmd.arg(formatdoc!(
-				r#"
-				{build_script}
-
-				# Exit
-				exit $EXIT_CODE
-				"#
-			));
+			cmd.arg(build_script);
 			let status = cmd.status().await?;
 
 			ensure!(status.success());
 		}
 		config::ns::ClusterKind::Distributed { .. } => {
 			let optimization = if opts.release { "release" } else { "debug" };
-			let build_script = formatdoc!(
-				r#"
-				{build_script}
-
-				# Exit
-				exit $EXIT_CODE
-				"#
-			);
 			let repo = &ctx.ns().docker.repository;
 			ensure!(repo.ends_with('/'), "docker repository must end with slash");
 			let source_hash = ctx.source_hash();
@@ -122,22 +113,18 @@ pub async fn build<'a, T: AsRef<str>>(ctx: &ProjectContext, opts: BuildOpts<'a, 
 						&dockerfile_path,
 						formatdoc!(
 							r#"
-							FROM rust:1.72-slim as build
+							FROM rust:1.72-slim AS build
 
 							RUN apt-get update
-							RUN apt-get install -y protobuf-compiler pkg-config libssl-dev
-				
+							RUN apt-get install -y protobuf-compiler pkg-config libssl-dev g++
+
 							WORKDIR /usr/rivet
 							COPY . .
 							RUN ["sh", "-c", {build_script:?}]
-				
-							FROM debian:12.1-slim as run
-							
+
+							FROM debian:12.1-slim AS run
+							RUN DEBIAN_FRONTEND=noninteractive apt-get update -y && apt-get install -y --no-install-recommends ca-certificates openssl
 							COPY --from=build /usr/rivet/target/{optimization}/{bin} /bin/svc
-							RUN apt-get update
-							RUN apt-get -y install openssl
-							
-							CMD ["bin/svc"]
 							"#
 						),
 					)
@@ -149,6 +136,8 @@ pub async fn build<'a, T: AsRef<str>>(ctx: &ProjectContext, opts: BuildOpts<'a, 
 					cmd.arg("build");
 					cmd.arg("--rm");
 					cmd.arg("-f").arg(dockerfile_path);
+					// Prints plain console output for debugging
+					// cmd.arg("--progress=plain");
 					cmd.arg("-t").arg(image_tag);
 					cmd.arg(".");
 
@@ -166,6 +155,7 @@ pub struct BuildTestOpts<'a, T: AsRef<str>> {
 	pub build_calls: Vec<BuildTestCall<'a, T>>,
 	/// How many threads to run in parallel when building.
 	pub jobs: Option<usize>,
+	pub test_filters: &'a [String],
 }
 
 pub struct BuildTestCall<'a, T: AsRef<str>> {
@@ -220,6 +210,7 @@ pub async fn build_tests<'a, T: AsRef<str>>(
 		ensure!(status.success(), "build test failed");
 
 		// Parse artifacts
+		let test_count_re = Regex::new(r"(?m)^(\d+) tests?, (\d+) benchmarks?$")?;
 		for line in stdout_str.lines() {
 			let v = serde_json::from_str::<serde_json::Value>(line).context("invalid json")?;
 			if v["reason"] == "compiler-artifact" && v["target"]["kind"] == json!(["test"]) {
@@ -236,11 +227,28 @@ pub async fn build_tests<'a, T: AsRef<str>>(
 						.as_str()
 						.context("missing target name")?;
 
-					test_binaries.push(TestBinary {
-						package: package.to_string(),
-						target: target.to_string(),
-						path: PathBuf::from(executable),
-					})
+					// Parse the test count from the binary
+					let test_list_args =
+						[&["--list".to_string()], opts.test_filters.clone()].concat();
+					let test_list_stdout =
+						block_in_place(|| duct::cmd(executable, &test_list_args).read())?;
+					let caps = test_count_re
+						.captures(&test_list_stdout)
+						.context("cannot match tests list")?;
+					let test_count = caps
+						.get(1)
+						.context("failed to parse captures")?
+						.as_str()
+						.parse::<usize>()?;
+
+					// Include the binary if it has tests
+					if test_count > 0 {
+						test_binaries.push(TestBinary {
+							package: package.to_string(),
+							target: target.to_string(),
+							path: PathBuf::from(executable),
+						})
+					}
 				}
 			}
 		}

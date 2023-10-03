@@ -27,9 +27,9 @@ async fn empty(ctx: TestCtx) {
 	.unwrap();
 
 	let (sql_display_name, sql_bio, sql_publicity): (String, String, i64) =
-		sqlx::query_as("SELECT display_name, bio, publicity FROM teams WHERE team_id = $1")
+		sqlx::query_as("SELECT display_name, bio, publicity FROM db_team.teams WHERE team_id = $1")
 			.bind(team_id)
-			.fetch_one(&ctx.crdb("db-team").await.unwrap())
+			.fetch_one(&ctx.crdb().await.unwrap())
 			.await
 			.unwrap();
 

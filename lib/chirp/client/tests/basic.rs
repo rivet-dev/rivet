@@ -268,7 +268,6 @@ async fn basic_client() {
 // Set test env vars to mimic actual env
 async fn set_env_vars() {
 	std::env::set_var("RIVET_SOURCE_HASH", "00000000");
-	std::env::set_var("RIVET_DOMAIN_MAIN", "127.0.0.1:8080");
 
 	std::env::set_var("CHIRP_SERVICE_NAME", "chirp-test");
 	std::env::set_var("CHIRP_REGION", &*TEST_REGION);
@@ -277,11 +276,11 @@ async fn set_env_vars() {
 	std::env::set_var("NATS_USERNAME", "chirp");
 	std::env::set_var("NATS_PASSWORD", "password");
 	std::env::set_var(
-		"REDIS_URL_REDIS_CHIRP",
+		"REDIS_URL_CHIRP",
 		"redis://listen.redis.service.consul:6379",
 	);
 	std::env::set_var(
-		"REDIS_URL_REDIS_CACHE",
+		"REDIS_URL_CACHE",
 		"redis://listen.redis.service.consul:6379",
 	);
 }

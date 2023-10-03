@@ -166,9 +166,7 @@ async fn generate_root(path: &Path) {
 			"#,
 		workspace_members.join(", "),
 	);
-	fs::write(&cargo_toml_path, cargo_project_manifest)
-		.await
-		.unwrap();
+	write_if_different(&cargo_toml_path, &cargo_project_manifest).await;
 
 	update_libs(&path.join("lib")).await;
 }
@@ -207,7 +205,7 @@ async fn set_license(path: &Path) {
 
 	doc["package"]["license"] = value("Apache-2.0");
 
-	fs::write(path, doc.to_string()).await.unwrap();
+	write_if_different(path, &doc.to_string()).await;
 }
 
 pub async fn generate_all_services(ctx: &ProjectContext) {
@@ -230,7 +228,19 @@ async fn generate_regions(ctx: &ProjectContext) {
 	// Make gen dir
 	fs::create_dir_all(gen_path).await.unwrap();
 
-	// Write config
-	let regions_json = serde_json::to_vec(&ctx.ns().regions).unwrap();
-	fs::write(gen_config_path, &regions_json).await.unwrap();
+	// Write config. Use cjson in order to get deterministic output.
+	let regions_json = cjson::to_string(&ctx.ns().regions).unwrap();
+	write_if_different(&gen_config_path, &regions_json).await;
+}
+
+/// Writes to a file if the contents are different.
+///
+/// This prevents needlessly updating the modify timestamp of a Cargo manifest, which triggers a
+/// rebuild.
+async fn write_if_different(path: &Path, new_content: &str) {
+	let current_content = fs::read_to_string(path).await.ok().unwrap_or_default();
+
+	if current_content != new_content {
+		fs::write(path, new_content).await.unwrap();
+	}
 }

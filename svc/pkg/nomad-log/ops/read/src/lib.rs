@@ -12,9 +12,7 @@ struct LogEntry {
 async fn handle(
 	ctx: OperationContext<nomad_log::read::Request>,
 ) -> GlobalResult<nomad_log::read::Response> {
-	let clickhouse_url = std::env::var("CLICKHOUSE_URL")?;
-	let clickhouse = clickhouse::Client::default()
-		.with_url(clickhouse_url)
+	let clickhouse = rivet_pools::utils::clickhouse::client()?
 		.with_user("chirp")
 		.with_password(util::env::read_secret(&["clickhouse", "users", "chirp", "password"]).await?)
 		.with_database("db_nomad_logs");

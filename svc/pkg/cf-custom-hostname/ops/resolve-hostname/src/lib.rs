@@ -16,12 +16,12 @@ async fn handle(
 		SELECT
 			identifier,
 			hostname
-		FROM custom_hostnames
+		FROM db_cf_custom_hostname.custom_hostnames
 		WHERE hostname = ANY($1)
 		"
 	))
 	.bind(&ctx.hostnames)
-	.fetch_all(&ctx.crdb("db-cf-custom-hostname").await?)
+	.fetch_all(&ctx.crdb().await?)
 	.await?;
 
 	Ok(cf_custom_hostname::resolve_hostname::Response {

@@ -35,12 +35,12 @@ pub async fn run_from_env(ts: i64) -> GlobalResult<()> {
 		(),
 		Vec::new(),
 	);
-	let crdb_pool = ctx.crdb("db-team-dev").await?;
+	let crdb_pool = ctx.crdb().await?;
 
 	let dev_teams = sqlx::query_as::<_, DevTeam>(indoc!(
 		"
 		SELECT team_id, last_collection_ts
-		FROM dev_teams
+		FROM db_team_dev.dev_teams
 		"
 	))
 	.fetch_all(&crdb_pool)
@@ -137,7 +137,7 @@ async fn process_metrics(billing_ctx: Arc<BillingCtx>, dev_team: DevTeam) -> Glo
 			if has_metrics {
 				sqlx::query(indoc!(
 					"
-					UPDATE dev_teams
+					UPDATE db_team_dev.dev_teams
 					SET last_collection_ts = $2
 					WHERE team_id = $1
 					"

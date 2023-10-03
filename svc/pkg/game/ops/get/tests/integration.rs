@@ -46,9 +46,6 @@ async fn fetch(ctx: TestCtx) {
 		let res = op!([ctx] game_create {
 			name_id: game.name_id.clone(),
 			display_name: game.display_name.clone(),
-			url: game.url.clone(),
-			tags: game.tags.clone(),
-			description: game.description.clone(),
 			developer_team_id: Some(game.developer_team_id.into()),
 		})
 		.await
@@ -104,9 +101,6 @@ async fn fetch(ctx: TestCtx) {
 // 	let game_res = op!([ctx] game_create {
 // 		name_id: util::faker::ident(),
 // 		display_name: util::faker::display_name(),
-// 		url: "https://test.io".into(),
-// 		tags: vec!["a".into(), "b".into(), "c".into()],
-// 		description: "test".into(),
 // 		developer_team_id: Some(team_id.clone()),
 // 	})
 // 	.await
@@ -157,9 +151,6 @@ async fn fetch(ctx: TestCtx) {
 // 	let game_res = op!([ctx] game_create {
 // 		name_id: util::faker::ident(),
 // 		display_name: util::faker::display_name(),
-// 		url: "https://test.io".into(),
-// 		tags: vec!["a".into(), "b".into(), "c".into()],
-// 		description: "test".into(),
 // 		developer_team_id: Some(team_id.clone()),
 // 	})
 // 	.await

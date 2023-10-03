@@ -1,34 +1,34 @@
 # \IdentityApi
 
-All URIs are relative to *http://localhost*
+All URIs are relative to *https://api.rivet.gg*
 
 Method | HTTP request | Description
 ------------- | ------------- | -------------
-[**identity_complete_avatar_upload**](IdentityApi.md#identity_complete_avatar_upload) | **POST** /identities/avatar-upload/{upload_id}/complete | 
-[**identity_follow**](IdentityApi.md#identity_follow) | **POST** /identities/{identity_id}/follow | 
-[**identity_get_handles**](IdentityApi.md#identity_get_handles) | **GET** /identities/batch/handle | 
-[**identity_get_profile**](IdentityApi.md#identity_get_profile) | **GET** /identities/{identity_id}/profile | 
-[**identity_get_self_profile**](IdentityApi.md#identity_get_self_profile) | **GET** /identities/self/profile | 
-[**identity_get_summaries**](IdentityApi.md#identity_get_summaries) | **GET** /identities/batch/summary | 
-[**identity_ignore_recent_follower**](IdentityApi.md#identity_ignore_recent_follower) | **POST** /identities/self/recent-followers/{identity_id}/ignore | 
-[**identity_list_followers**](IdentityApi.md#identity_list_followers) | **GET** /identities/{identity_id}/followers | 
-[**identity_list_following**](IdentityApi.md#identity_list_following) | **GET** /identities/{identity_id}/following | 
-[**identity_list_friends**](IdentityApi.md#identity_list_friends) | **GET** /identities/self/friends | 
-[**identity_list_mutual_friends**](IdentityApi.md#identity_list_mutual_friends) | **GET** /identities/{identity_id}/mutual-friends | 
-[**identity_list_recent_followers**](IdentityApi.md#identity_list_recent_followers) | **GET** /identities/self/recent-followers | 
-[**identity_mark_deletion**](IdentityApi.md#identity_mark_deletion) | **POST** /identities/self/delete-request | 
-[**identity_prepare_avatar_upload**](IdentityApi.md#identity_prepare_avatar_upload) | **POST** /identities/avatar-upload/prepare | 
-[**identity_remove_game_activity**](IdentityApi.md#identity_remove_game_activity) | **DELETE** /identities/self/activity | 
-[**identity_report**](IdentityApi.md#identity_report) | **POST** /identities/{identity_id}/report | 
-[**identity_search**](IdentityApi.md#identity_search) | **GET** /identities/search | 
-[**identity_set_game_activity**](IdentityApi.md#identity_set_game_activity) | **POST** /identities/self/activity | 
-[**identity_setup**](IdentityApi.md#identity_setup) | **POST** /identities | 
-[**identity_signup_for_beta**](IdentityApi.md#identity_signup_for_beta) | **POST** /identities/self/beta-signup | 
-[**identity_unfollow**](IdentityApi.md#identity_unfollow) | **DELETE** /identities/{identity_id}/follow | 
-[**identity_unmark_deletion**](IdentityApi.md#identity_unmark_deletion) | **DELETE** /identities/self/delete-request | 
-[**identity_update_profile**](IdentityApi.md#identity_update_profile) | **POST** /identities/self/profile | 
-[**identity_update_status**](IdentityApi.md#identity_update_status) | **POST** /identities/identities/self/status | 
-[**identity_validate_profile**](IdentityApi.md#identity_validate_profile) | **POST** /identities/self/profile/validate | 
+[**identity_complete_avatar_upload**](IdentityApi.md#identity_complete_avatar_upload) | **POST** /identity/identities/avatar-upload/{upload_id}/complete | 
+[**identity_follow**](IdentityApi.md#identity_follow) | **POST** /identity/identities/{identity_id}/follow | 
+[**identity_get_handles**](IdentityApi.md#identity_get_handles) | **GET** /identity/identities/batch/handle | 
+[**identity_get_profile**](IdentityApi.md#identity_get_profile) | **GET** /identity/identities/{identity_id}/profile | 
+[**identity_get_self_profile**](IdentityApi.md#identity_get_self_profile) | **GET** /identity/identities/self/profile | 
+[**identity_get_summaries**](IdentityApi.md#identity_get_summaries) | **GET** /identity/identities/batch/summary | 
+[**identity_ignore_recent_follower**](IdentityApi.md#identity_ignore_recent_follower) | **POST** /identity/identities/self/recent-followers/{identity_id}/ignore | 
+[**identity_list_followers**](IdentityApi.md#identity_list_followers) | **GET** /identity/identities/{identity_id}/followers | 
+[**identity_list_following**](IdentityApi.md#identity_list_following) | **GET** /identity/identities/{identity_id}/following | 
+[**identity_list_friends**](IdentityApi.md#identity_list_friends) | **GET** /identity/identities/self/friends | 
+[**identity_list_mutual_friends**](IdentityApi.md#identity_list_mutual_friends) | **GET** /identity/identities/{identity_id}/mutual-friends | 
+[**identity_list_recent_followers**](IdentityApi.md#identity_list_recent_followers) | **GET** /identity/identities/self/recent-followers | 
+[**identity_mark_deletion**](IdentityApi.md#identity_mark_deletion) | **POST** /identity/identities/self/delete-request | 
+[**identity_prepare_avatar_upload**](IdentityApi.md#identity_prepare_avatar_upload) | **POST** /identity/identities/avatar-upload/prepare | 
+[**identity_remove_game_activity**](IdentityApi.md#identity_remove_game_activity) | **DELETE** /identity/identities/self/activity | 
+[**identity_report**](IdentityApi.md#identity_report) | **POST** /identity/identities/{identity_id}/report | 
+[**identity_search**](IdentityApi.md#identity_search) | **GET** /identity/identities/search | 
+[**identity_set_game_activity**](IdentityApi.md#identity_set_game_activity) | **POST** /identity/identities/self/activity | 
+[**identity_setup**](IdentityApi.md#identity_setup) | **POST** /identity/identities | 
+[**identity_signup_for_beta**](IdentityApi.md#identity_signup_for_beta) | **POST** /identity/identities/self/beta-signup | 
+[**identity_unfollow**](IdentityApi.md#identity_unfollow) | **DELETE** /identity/identities/{identity_id}/follow | 
+[**identity_unmark_deletion**](IdentityApi.md#identity_unmark_deletion) | **DELETE** /identity/identities/self/delete-request | 
+[**identity_update_profile**](IdentityApi.md#identity_update_profile) | **POST** /identity/identities/self/profile | 
+[**identity_update_status**](IdentityApi.md#identity_update_status) | **POST** /identity/identities/identities/self/status | 
+[**identity_validate_profile**](IdentityApi.md#identity_validate_profile) | **POST** /identity/identities/self/profile/validate | 
 
 
 

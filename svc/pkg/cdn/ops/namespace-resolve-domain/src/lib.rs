@@ -8,12 +8,12 @@ async fn handle(
 	let namespaces = sqlx::query_as::<_, (Uuid, String)>(indoc!(
 		"
 		SELECT namespace_id, domain
-		FROM game_namespace_domains
+		FROM db_cdn.game_namespace_domains
 		WHERE domain = ANY($1)
 		"
 	))
 	.bind(&ctx.domains)
-	.fetch_all(&ctx.crdb("db-cdn").await?)
+	.fetch_all(&ctx.crdb().await?)
 	.await?
 	.into_iter()
 	.map(

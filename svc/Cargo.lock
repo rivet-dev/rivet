@@ -696,7 +696,6 @@ dependencies = [
  "rivet-connection",
  "rivet-convert",
  "rivet-health-checks",
- "rivet-matchmaker",
  "rivet-matchmaker-server",
  "rivet-operation",
  "rivet-pools",
@@ -1125,7 +1124,7 @@ dependencies = [
  "http-body",
  "md-5",
  "pin-project-lite",
- "sha1 0.10.5",
+ "sha1",
  "sha2",
  "tracing",
 ]
@@ -1907,19 +1906,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "cf-turnstile-verify"
-version = "0.0.1"
-dependencies = [
- "chirp-client",
- "chirp-worker",
- "prost 0.10.4",
- "reqwest",
- "rivet-operation",
- "serde",
-]
-
-[[package]]
-name = "cf-worker"
+name = "cf-custom-hostname-worker"
 version = "0.0.1"
 dependencies = [
  "cf-custom-hostname-get",
@@ -1937,6 +1924,18 @@ dependencies = [
  "rivet-runtime",
  "serde",
  "team-dev-game-list",
+]
+
+[[package]]
+name = "cf-turnstile-verify"
+version = "0.0.1"
+dependencies = [
+ "chirp-client",
+ "chirp-worker",
+ "prost 0.10.4",
+ "reqwest",
+ "rivet-operation",
+ "serde",
 ]
 
 [[package]]
@@ -2639,6 +2638,12 @@ name = "crc-catalog"
 version = "2.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9cace84e55f07e7301bae1c519df89cdad8cc3cd868413d3fdbdeca9ff3db484"
+
+[[package]]
+name = "crc16"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "338089f42c427b86394a5ee60ff321da23a5c89c9d89514c829687b26359fcff"
 
 [[package]]
 name = "crc32c"
@@ -3998,7 +4003,7 @@ dependencies = [
  "http",
  "httpdate",
  "mime",
- "sha1 0.10.5",
+ "sha1",
 ]
 
 [[package]]
@@ -5511,6 +5516,7 @@ dependencies = [
  "rivet-health-checks",
  "rivet-metrics",
  "rivet-runtime",
+ "s3-util",
  "serde",
  "upload-complete",
  "upload-prepare",
@@ -6132,24 +6138,28 @@ dependencies = [
 
 [[package]]
 name = "redis"
-version = "0.21.7"
+version = "0.23.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "152f3863635cbb76b73bc247845781098302c6c9ad2060e1a9a7de56840346b6"
+checksum = "4f49cdc0bb3f412bf8e7d1bd90fe1d9eb10bc5c399ba90973c14662a27b3f8ba"
 dependencies = [
  "arc-swap",
  "async-trait",
  "bytes",
  "combine",
+ "crc16",
  "futures",
  "futures-util",
  "itoa 1.0.9",
+ "log",
  "native-tls",
  "percent-encoding",
  "pin-project-lite",
+ "rand",
  "ryu",
- "sha1 0.6.1",
+ "sha1_smol",
  "tokio",
  "tokio-native-tls",
+ "tokio-retry",
  "tokio-util 0.7.8",
  "url",
 ]
@@ -6717,8 +6727,11 @@ name = "rivet-pools"
 version = "0.1.0"
 dependencies = [
  "async-nats",
+ "clickhouse",
  "funty",
  "global-error",
+ "hyper",
+ "hyper-tls",
  "lazy_static",
  "rand",
  "redis",
@@ -7281,15 +7294,6 @@ dependencies = [
 
 [[package]]
 name = "sha1"
-version = "0.6.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c1da05c97445caa12d05e848c4a4fcbbea29e748ac28f7e80e9b010392063770"
-dependencies = [
- "sha1_smol",
-]
-
-[[package]]
-name = "sha1"
 version = "0.10.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f04293dc80c3993519f2d7f6f511707ee7094fe0c6d3406feb330cdb3540eba3"
@@ -7575,7 +7579,7 @@ dependencies = [
  "rand",
  "rsa",
  "serde",
- "sha1 0.10.5",
+ "sha1",
  "sha2",
  "smallvec",
  "sqlx-core",
@@ -7616,7 +7620,7 @@ dependencies = [
  "rand",
  "serde",
  "serde_json",
- "sha1 0.10.5",
+ "sha1",
  "sha2",
  "smallvec",
  "sqlx-core",

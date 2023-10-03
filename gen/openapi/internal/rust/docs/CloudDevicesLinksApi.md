@@ -1,12 +1,12 @@
 # \CloudDevicesLinksApi
 
-All URIs are relative to *http://localhost*
+All URIs are relative to *https://api.rivet.gg*
 
 Method | HTTP request | Description
 ------------- | ------------- | -------------
-[**cloud_devices_links_complete**](CloudDevicesLinksApi.md#cloud_devices_links_complete) | **POST** /devices/links/complete | 
-[**cloud_devices_links_get**](CloudDevicesLinksApi.md#cloud_devices_links_get) | **GET** /devices/links | 
-[**cloud_devices_links_prepare**](CloudDevicesLinksApi.md#cloud_devices_links_prepare) | **POST** /devices/links | 
+[**cloud_devices_links_complete**](CloudDevicesLinksApi.md#cloud_devices_links_complete) | **POST** /cloud/devices/links/complete | 
+[**cloud_devices_links_get**](CloudDevicesLinksApi.md#cloud_devices_links_get) | **GET** /cloud/devices/links | 
+[**cloud_devices_links_prepare**](CloudDevicesLinksApi.md#cloud_devices_links_prepare) | **POST** /cloud/devices/links | 
 
 
 

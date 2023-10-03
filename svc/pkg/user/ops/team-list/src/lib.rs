@@ -14,12 +14,12 @@ async fn handle(
 	let team_members = sqlx::query_as::<_, (Uuid, Uuid)>(indoc!(
 		"
 		SELECT user_id, team_id
-		FROM team_members
+		FROM db_team.team_members
 		WHERE user_id = ANY($1)
 		"
 	))
 	.bind(&user_ids)
-	.fetch_all(&ctx.crdb("db-team").await?)
+	.fetch_all(&ctx.crdb().await?)
 	.await?;
 
 	let users = user_ids

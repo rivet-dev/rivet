@@ -9,7 +9,7 @@ async fn worker(ctx: &OperationContext<user_report::msg::create::Message>) -> Gl
 
 	sqlx::query(indoc!(
 		"
-		INSERT INTO user_reports (
+		INSERT INTO db_user_report.user_reports (
 			reporter_user_id,
 			subject_user_id,
 			namespace_id,
@@ -24,7 +24,7 @@ async fn worker(ctx: &OperationContext<user_report::msg::create::Message>) -> Gl
 	.bind(namespace_id)
 	.bind(ctx.ts())
 	.bind(ctx.reason.as_ref())
-	.execute(&ctx.crdb("db-user-report").await?)
+	.execute(&ctx.crdb().await?)
 	.await?;
 
 	Ok(())

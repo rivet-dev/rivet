@@ -18,11 +18,12 @@ async fn empty(ctx: TestCtx) {
 
 	tokio::time::sleep(std::time::Duration::from_secs(2)).await;
 
-	let (exists,): (bool,) =
-		sqlx::query_as("SELECT EXISTS (SELECT 1 FROM user_reports WHERE reporter_user_id = $1)")
-			.bind(reporter_user_id)
-			.fetch_one(&ctx.crdb("db-user-report").await.unwrap())
-			.await
-			.unwrap();
+	let (exists,): (bool,) = sqlx::query_as(
+		"SELECT EXISTS (SELECT 1 FROM db_user_report.user_reports WHERE reporter_user_id = $1)",
+	)
+	.bind(reporter_user_id)
+	.fetch_one(&ctx.crdb().await.unwrap())
+	.await
+	.unwrap();
 	assert!(exists, "user report not created");
 }

@@ -5,10 +5,9 @@ imports:
 
 service:
   auth: true
-  url: Cloud
   audiences:
     - public
-  base-path: /games/{game_id}/namespaces/{namespace_id}
+  base-path: /cloud/games/{game_id}/namespaces/{namespace_id}
   path-parameters:
     game_id:
       type: uuid

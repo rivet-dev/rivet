@@ -7,7 +7,7 @@ use std::convert::TryInto;
 async fn worker(
 	ctx: &OperationContext<module::msg::version_create::Message>,
 ) -> Result<(), GlobalError> {
-	let crdb = ctx.crdb("db-module").await?;
+	let crdb = ctx.crdb().await?;
 
 	let version_id = internal_unwrap!(ctx.version_id).as_uuid();
 
@@ -50,7 +50,7 @@ async fn update_db(
 
 	sqlx::query(indoc!(
 		"
-		INSERT INTO versions (version_id, module_id, create_ts, creator_user_id, major, minor, patch)
+		INSERT INTO db_module.versions (version_id, module_id, create_ts, creator_user_id, major, minor, patch)
 		VALUES ($1, $2, $3, $4, $5, $6, $7)
 		"
 	))
@@ -68,7 +68,7 @@ async fn update_db(
 		module::msg::version_create::message::Image::Docker(docker) => {
 			sqlx::query(indoc!(
 				"
-                INSERT INTO versions_image_docker (version_id, image_tag)
+                INSERT INTO db_module.versions_image_docker (version_id, image_tag)
                 VALUES ($1, $2)
                 "
 			))
@@ -82,7 +82,7 @@ async fn update_db(
 	for script in msg.scripts {
 		sqlx::query(indoc!(
 			"
-            INSERT INTO scripts (version_id, name, request_schema, response_schema)
+            INSERT INTO db_module.scripts (version_id, name, request_schema, response_schema)
             VALUES ($1, $2, $3, $4)
             "
 		))
@@ -96,7 +96,7 @@ async fn update_db(
 		if script.callable.is_some() {
 			sqlx::query(indoc!(
 				"
-                INSERT INTO scripts_callable (version_id, name)
+                INSERT INTO db_module.scripts_callable (version_id, name)
                 VALUES ($1, $2)
             "
 			))

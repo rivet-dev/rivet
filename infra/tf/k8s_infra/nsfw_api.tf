@@ -24,7 +24,7 @@ resource "kubernetes_priority_class" "nsfw_api_priority" {
 }
 
 resource "kubernetes_deployment" "nsfw_api" {
-	depends_on = [kubernetes_secret.docker_auth]
+	depends_on = [module.docker_auth]
 
 	metadata {
 		name = "nsfw-api"
@@ -73,9 +73,9 @@ resource "kubernetes_deployment" "nsfw_api" {
 						limits = {
 							memory = "${local.service_nsfw_api.resources.memory}Mi"
 							cpu = (
-								local.service_redis_exporter.resources.cpu_cores > 0 ?
-								"${local.service_redis_exporter.resources.cpu_cores * 1000}m"
-								: "${local.service_redis_exporter.resources.cpu}m"
+								local.service_nsfw_api.resources.cpu_cores > 0 ?
+								"${local.service_nsfw_api.resources.cpu_cores * 1000}m"
+								: "${local.service_nsfw_api.resources.cpu}m"
 							)
 						}
 					}

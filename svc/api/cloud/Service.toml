@@ -7,5 +7,10 @@ kind = "rust"
 [api]
 
 [[api.router.mounts]]
+path = "/cloud"
+
+[[api.router.mounts]]
+deprecated = true
 path = "/v1"
 subdomain = "cloud.api"
+

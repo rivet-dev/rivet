@@ -79,7 +79,7 @@ async fn handle(
 	ctx: OperationContext<mm::lobby_runtime_aggregate::Request>,
 ) -> GlobalResult<mm::lobby_runtime_aggregate::Response> {
 	let _redis = ctx.redis_mm().await?;
-	let crdb = ctx.crdb("db-mm-state").await?;
+	let crdb = ctx.crdb().await?;
 
 	let namespace_ids = ctx
 		.namespace_ids
@@ -108,7 +108,7 @@ async fn handle(
 	let mut lobby_rows = sqlx::query_as::<_, LobbyRow>(indoc!(
 		"
 		SELECT namespace_id, lobby_id, region_id, lobby_group_id, create_ts, stop_ts
-		FROM lobbies AS OF SYSTEM TIME '-5s'
+		FROM db_mm_state.lobbies AS OF SYSTEM TIME '-5s'
 		WHERE namespace_id = ANY($1) AND (
 			-- Lobbies stopped during the query window
 			(stop_ts > $2 AND stop_ts <= $3) OR

@@ -485,11 +485,11 @@ async fn set_env_vars() {
 	std::env::set_var("NATS_USERNAME", "chirp");
 	std::env::set_var("NATS_PASSWORD", "password");
 	std::env::set_var(
-		"REDIS_URL_REDIS_CHIRP",
+		"REDIS_URL_CHIRP",
 		"redis://listen.redis.service.consul:6379",
 	);
 	std::env::set_var(
-		"REDIS_URL_REDIS_CACHE",
+		"REDIS_URL_CACHE",
 		"redis://listen.redis.service.consul:6379",
 	);
 }

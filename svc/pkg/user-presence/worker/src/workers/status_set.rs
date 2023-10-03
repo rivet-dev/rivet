@@ -12,7 +12,7 @@ enum Error {
 async fn worker(
 	ctx: &OperationContext<user_presence::msg::status_set::Message>,
 ) -> GlobalResult<()> {
-	let crdb = ctx.crdb("db-user-presence").await?;
+	let crdb = ctx.crdb().await?;
 
 	let user_id = internal_unwrap!(ctx.user_id).as_uuid();
 
@@ -36,7 +36,7 @@ async fn worker(
 	if ctx.user_set_status {
 		sqlx::query(indoc!(
 			"
-			UPSERT INTO user_presences (user_id, user_set_status)
+			UPSERT INTO db_user_presence.user_presences (user_id, user_set_status)
 			VALUES ($1, $2)
 			"
 		))

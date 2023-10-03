@@ -21,7 +21,7 @@ enum Error {
 async fn handle(
 	ctx: OperationContext<user::search::Request>,
 ) -> GlobalResult<user::search::Response> {
-	let crdb = ctx.crdb("db-user").await?;
+	let crdb = ctx.crdb().await?;
 	let limit = ctx.limit;
 
 	internal_assert!(limit != 0, "limit too low");
@@ -54,7 +54,7 @@ async fn handle(
 
 	let res = sqlx::query_as::<_, User>(indoc!(
 		"
-		SELECT user_id, join_ts FROM users@search_index
+		SELECT user_id, join_ts FROM db_user.users@search_index
 		WHERE
 			display_name % $1 AND
 			account_number >= $2 AND

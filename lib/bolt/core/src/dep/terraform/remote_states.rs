@@ -24,18 +24,17 @@ pub fn dependency_graph(ctx: &ProjectContext) -> HashMap<&'static str, Vec<Remot
 
 	hashmap! {
 		"dns" => vec![RemoteStateBuilder::default().plan_id("pools").build().unwrap(), RemoteStateBuilder::default().plan_id("k8s_infra").build().unwrap()],
-		"k8s_infra" => vec![
-			RemoteStateBuilder::default().plan_id("tls").build().unwrap(),
-			RemoteStateBuilder::default().plan_id("cloudflare_tunnels").build().unwrap()
-		],
 		"redis_aws" => vec![
-			RemoteStateBuilder::default().plan_id("k8s_aws").build().unwrap()
+			RemoteStateBuilder::default().plan_id("k8s_cluster_aws").build().unwrap()
 		],
 		"cockroachdb_managed" => vec![
-			RemoteStateBuilder::default().plan_id("k8s_aws").build().unwrap()
+			RemoteStateBuilder::default().plan_id("k8s_cluster_aws").build().unwrap()
 		],
 		"clickhouse_managed" => vec![
-			RemoteStateBuilder::default().plan_id("k8s_aws").build().unwrap()
+			RemoteStateBuilder::default().plan_id("k8s_cluster_aws").build().unwrap()
+		],
+		"cloudflare_workers" => vec![
+			RemoteStateBuilder::default().plan_id("dns").build().unwrap()
 		],
 	}
 }
@@ -51,7 +50,7 @@ pub struct RemoteState {
 	#[builder(setter(strip_option), default)]
 	pub data_name: Option<&'static str>,
 
-	/// Condition for whether or not to include the remote sate.
+	/// Condition for whether or not to include the remote state.
 	///
 	/// This will add a `count` under the hood.
 	#[builder(setter(strip_option), default)]

@@ -336,24 +336,23 @@ pub async fn mutual_follows(
 	current_user_id: Uuid,
 	raw_user_ids: Vec<Uuid>,
 ) -> GlobalResult<user_follow::get::Response> {
-	return Ok(user_follow::get::Response { follows: vec![] });
-	// // Converts to hashmap to remove duplicate queries
-	// let queries = raw_user_ids
-	// 	.clone()
-	// 	.into_iter()
-	// 	.flat_map(|user_id| [(current_user_id, user_id), (user_id, current_user_id)])
-	// 	.collect::<HashSet<_>>()
-	// 	.into_iter()
-	// 	.map(|(user_a_id, user_b_id)| user_follow::get::request::Query {
-	// 		follower_user_id: Some(user_a_id.into()),
-	// 		following_user_id: Some(user_b_id.into()),
-	// 	})
-	// 	.collect::<Vec<_>>();
+	// Converts to hashmap to remove duplicate queries
+	let queries = raw_user_ids
+		.clone()
+		.into_iter()
+		.flat_map(|user_id| [(current_user_id, user_id), (user_id, current_user_id)])
+		.collect::<HashSet<_>>()
+		.into_iter()
+		.map(|(user_a_id, user_b_id)| user_follow::get::request::Query {
+			follower_user_id: Some(user_a_id.into()),
+			following_user_id: Some(user_b_id.into()),
+		})
+		.collect::<Vec<_>>();
 
-	// op!([ctx] user_follow_get {
-	// 	queries: queries,
-	// })
-	// .await
+	op!([ctx] user_follow_get {
+		queries: queries,
+	})
+	.await
 }
 
 async fn linked_accounts(

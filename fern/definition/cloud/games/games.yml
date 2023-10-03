@@ -8,8 +8,7 @@ imports:
 
 service:
   auth: true
-  base-path: /games
-  url: Cloud
+  base-path: /cloud/games
   audiences:
     - public
   endpoints:

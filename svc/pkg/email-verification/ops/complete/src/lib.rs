@@ -67,7 +67,7 @@ async fn handle(
 ) -> GlobalResult<email_verification::complete::Response> {
 	// TODO: Use a CRDB transaction
 
-	let crdb = ctx.crdb("db-email-verification").await?;
+	let crdb = ctx.crdb().await?;
 
 	let verification_id = internal_unwrap!(ctx.verification_id).as_uuid();
 
@@ -75,7 +75,7 @@ async fn handle(
 	let verification = sqlx::query_as::<_, VerificationRow>(indoc!(
 		"
 		SELECT email, code, expire_ts, complete_ts
-		FROM verifications
+		FROM db_email_verification.verifications
 		WHERE verification_id = $1
 		"
 	))
@@ -107,12 +107,12 @@ async fn handle(
 	let (attempt_count,) = sqlx::query_as::<_, (i64,)>(indoc!(
 		"
 		WITH ins AS (
-			INSERT INTO verification_attempts (verification_id, attempt_id, create_ts)
+			INSERT INTO db_email_verification.verification_attempts (verification_id, attempt_id, create_ts)
 			VALUES ($1, $2, $3)
 			RETURNING 1
 		)
 		SELECT COUNT(*)
-		FROM verification_attempts
+		FROM db_email_verification.verification_attempts
 		WHERE verification_id = $1
 		LIMIT $4
 		"
@@ -150,7 +150,7 @@ async fn handle(
 	// Complete verification
 	let complete_res = sqlx::query(indoc!(
 		"
-		UPDATE verifications
+		UPDATE db_email_verification.verifications
 		SET complete_ts = $2
 		WHERE verification_id = $1 AND complete_ts IS NULL
 		"

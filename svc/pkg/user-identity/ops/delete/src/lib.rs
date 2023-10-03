@@ -13,12 +13,12 @@ async fn handle(
 
 	sqlx::query(indoc!(
 		"
-		DELETE FROM emails
+		DELETE FROM db_user_identity.emails
 		WHERE user_id = ANY($1)
 		"
 	))
 	.bind(&user_ids)
-	.execute(&ctx.crdb("db-user-identity").await?)
+	.execute(&ctx.crdb().await?)
 	.await?;
 
 	Ok(user_identity::delete::Response {})

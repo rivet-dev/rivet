@@ -11,13 +11,13 @@ async fn handle(
 	let team_ids = sqlx::query_as::<_, (Uuid,)>(indoc!(
 		"
 		SELECT team_id
-		FROM teams
+		FROM db_team.teams
 		ORDER BY create_ts DESC
 		LIMIT $1
 		"
 	))
 	.bind(count as i64)
-	.fetch_all(&ctx.crdb("db-team").await?)
+	.fetch_all(&ctx.crdb().await?)
 	.await?
 	.into_iter()
 	.map(|row| row.0.into())

@@ -5,6 +5,10 @@ name = "api-status"
 kind = "rust"
 
 [[api.router.mounts]]
+path = "/status"
+
+[[api.router.mounts]]
+deprecated = true
 path = "/v1"
 subdomain = "status.api"
 

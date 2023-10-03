@@ -10,7 +10,7 @@ terraform {
 module "secrets" {
 	source = "../modules/secrets"
 
-	keys = ["cockroachdb_cloud/api_key"]
+	keys = [ "crdb/username", "crdb/password", "cockroachdb_cloud/api_key" ]
 }
 
 resource "cockroach_cluster" "main" {
@@ -18,7 +18,7 @@ resource "cockroach_cluster" "main" {
 	name = "rivet-${var.namespace}"
 
 	regions = [{
-		name = data.terraform_remote_state.k8s_aws.outputs.region
+		name = data.terraform_remote_state.k8s_cluster_aws.outputs.region
 		primary = true
 	}]
 
@@ -29,7 +29,7 @@ resource "cockroach_cluster" "main" {
 }
 
 resource "cockroach_allow_list" "eks" {
-	for_each = data.terraform_remote_state.k8s_aws.outputs.nat_public_ips
+	for_each = data.terraform_remote_state.k8s_cluster_aws.outputs.nat_public_ips
 
 	cluster_id = cockroach_cluster.main.id
 	cidr_ip = each.value
@@ -38,19 +38,26 @@ resource "cockroach_allow_list" "eks" {
 	ui = false
 }
 
-# Generate password
-resource "random_password" "root_password" {
-	length = 32
-	special = false
-}
-
 resource "cockroach_sql_user" "root" {
 	cluster_id = cockroach_cluster.main.id
-	name = "rivet-root"
-	password = random_password.root_password.result
+	name = module.secrets.values["crdb/username"]
+	password = module.secrets.values["crdb/password"]
 }
 
 
 data "cockroach_cluster_cert" "main" {
 	id = cockroach_cluster.main.id
+}
+
+resource "kubernetes_config_map" "crdb_ca" {
+	for_each = toset(["rivet-service", "bolt"])
+
+	metadata {
+		name = "crdb-ca"
+		namespace = each.value
+	}
+
+	data = {
+		"ca.crt" = data.cockroach_cluster_cert.main.cert
+	}
 }

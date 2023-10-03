@@ -1,23 +1,22 @@
 # Cross-platofrm Rust Setup: https://zeroes.dev/p/nix-recipe-for-rust/
 
 let
-	# Include most recent Rust builds
-	moz_overlay = import (builtins.fetchTarball https://github.com/mozilla/nixpkgs-mozilla/archive/e6ca26fe8b9df914d4567604e426fbc185d9ef3e.tar.gz);
-
-	# If you need a newer version of packages, use unstablePkgs.
-	pkgs = import (fetchTarball {
-		url = "https://github.com/NixOS/nixpkgs/archive/refs/tags/23.05.tar.gz";
-	}) { overlays = [ moz_overlay ]; };
-
-	# Bleeding edge packages for those that need to be up to date with the
-	# latest. We pin this to a specific commit instead of using `master` so
-	# we're not building environments against a moving target & improves
-	# reproducability.
-	unstablePkgs = import (fetchTarball {
-		url = "https://github.com/NixOS/nixpkgs/archive/462f4a45aa5f988ae94156fdc9a61b7d3d0f7fbf.tar.gz";
-	}) { overlays = [ moz_overlay ]; };
+	pkgs = import ./infra/nix/common/pkgs.nix;
+	unstablePkgs = import ./infra/nix/common/unstable_pkgs.nix;
 
 	custom_clickhouse = import ./infra/nix/pkgs/clickhouse.nix { inherit (pkgs) stdenv fetchurl lib; };
+	custom_bolt = import ./infra/nix/bolt/default.nix;
+
+	useSccache = builtins.getEnv "USE_SCCACHE" == "1";
+	extraInputs = if useSccache then [ unstablePkgs.sccache ] else [];
+	sccacheShellHook = if useSccache then ''
+		export RUSTC_WRAPPER=sccache
+		export SCCACHE_BUCKET=${builtins.getEnv "SCCACHE_BUCKET"}
+		export SCCACHE_ENDPOINT=${builtins.getEnv "SCCACHE_ENDPOINT"}
+		export SCCACHE_REGION=${builtins.getEnv "SCCACHE_REGION"}
+		export AWS_ACCESS_KEY_ID=${builtins.getEnv "AWS_ACCESS_KEY_ID"}
+		export AWS_SECRET_ACCESS_KEY=${builtins.getEnv "AWS_SECRET_ACCESS_KEY"}
+	'' else "";
 in
 	pkgs.mkShell {
 		name = "rivet";
@@ -37,6 +36,7 @@ in
 			terraform
 
 			# Tools
+			custom_bolt
 			cloc
 			curl
 			docker-client
@@ -46,6 +46,7 @@ in
 			cloudflared
 			go-migrate
 			jq
+			openssh  # ssh-keygen
 			
 			# Databases
 			postgresql  # For psql
@@ -72,7 +73,7 @@ in
 
 			# Fixes "cannot change locale" warning
 			glibcLocales
-		] ++ (
+		] ++ extraInputs ++ (
 			pkgs.lib.optionals stdenv.isDarwin [
 				libiconv  # See https://stackoverflow.com/a/69732679
 				darwin.apple_sdk.frameworks.Security
@@ -82,15 +83,15 @@ in
 			]
 		);
 		shellHook = ''
-			# Add binaries to path. Prefer debug builds over release builds
-			# since release builds are usually the default but debug builds are
-			# used for testing things locally.
-			export PATH="$PATH:${toString ./target/debug/.}:${toString ./target/release/.}"
+			# Setup Git LFS
+			git lfs install
+
+			# Add binaries to path so we can use a locally built copy of Bolt.
+			export PATH="${toString ./target/debug/.}:${toString ./target/release/.}:$PATH"
 
 			# See https://docs.rs/prost-build/0.8.0/prost_build/#sourcing-protoc
 			export PROTOC="${pkgs.protobuf}/bin/protoc"
 			export PROTOC_INCLUDE="${pkgs.protobuf}/include"
-
 			
 			# Install autocomplete
 			source ${pkgs.bash-completion}/share/bash-completion/bash_completion
@@ -113,5 +114,9 @@ in
 			#
 			# If these don't match, then the build cache is purged any time Rust is ran from Bolt.
 			export RUSTFLAGS="--cfg tokio_unstable"
+
+			${sccacheShellHook}
 		'';
 	}
+
+

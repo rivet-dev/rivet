@@ -11,7 +11,7 @@ struct LobbyRow {
 async fn handle(
 	ctx: OperationContext<mm::lobby_list_for_user_id::Request>,
 ) -> GlobalResult<mm::lobby_list_for_user_id::Response> {
-	let crdb = ctx.crdb("db-mm-state").await?;
+	let crdb = ctx.crdb().await?;
 	let user_ids = ctx
 		.user_ids
 		.iter()
@@ -23,7 +23,7 @@ async fn handle(
 		SELECT
 			lobby_id,
 			creator_user_id
-		FROM lobbies
+		FROM db_mm_state.lobbies
 		WHERE creator_user_id = ANY($1)
 		"
 	))

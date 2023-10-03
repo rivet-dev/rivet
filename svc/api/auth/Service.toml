@@ -4,6 +4,10 @@ name = "api-auth"
 kind = "rust"
 
 [[api.router.mounts]]
+path = "/auth"
+
+[[api.router.mounts]]
+deprecated = true
 path = "/v1"
 subdomain = "auth.api"
 

@@ -1,12 +1,12 @@
 # \CloudGamesVersionsApi
 
-All URIs are relative to *http://localhost*
+All URIs are relative to *https://api.rivet.gg*
 
 Method | HTTP request | Description
 ------------- | ------------- | -------------
-[**cloud_games_versions_create_game_version**](CloudGamesVersionsApi.md#cloud_games_versions_create_game_version) | **POST** /games/{game_id}/versions | 
-[**cloud_games_versions_get_game_version_by_id**](CloudGamesVersionsApi.md#cloud_games_versions_get_game_version_by_id) | **GET** /games/{game_id}/versions/{version_id} | 
-[**cloud_games_versions_validate_game_version**](CloudGamesVersionsApi.md#cloud_games_versions_validate_game_version) | **POST** /games/{game_id}/versions/validate | 
+[**cloud_games_versions_create_game_version**](CloudGamesVersionsApi.md#cloud_games_versions_create_game_version) | **POST** /cloud/games/{game_id}/versions | 
+[**cloud_games_versions_get_game_version_by_id**](CloudGamesVersionsApi.md#cloud_games_versions_get_game_version_by_id) | **GET** /cloud/games/{game_id}/versions/{version_id} | 
+[**cloud_games_versions_validate_game_version**](CloudGamesVersionsApi.md#cloud_games_versions_validate_game_version) | **POST** /cloud/games/{game_id}/versions/validate | 
 
 
 

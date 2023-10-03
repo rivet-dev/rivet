@@ -5,14 +5,14 @@ use proto::backend::pkg::*;
 async fn worker(
 	ctx: &OperationContext<game_user::msg::session_create::Message>,
 ) -> GlobalResult<()> {
-	let crdb = ctx.crdb("db-game-user").await?;
+	let crdb = ctx.crdb().await?;
 
 	let game_user_id = internal_unwrap!(ctx.game_user_id).as_uuid();
 	let refresh_jti = internal_unwrap!(ctx.refresh_jti).as_uuid();
 
 	sqlx::query(indoc!(
 		"
-		INSERT INTO sessions (session_id, game_user_id, refresh_jti, start_ts)
+		INSERT INTO db_game_user.sessions (session_id, game_user_id, refresh_jti, start_ts)
 		VALUES ($1, $2, $3, $4)
 		"
 	))

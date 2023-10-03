@@ -1,31 +1,48 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, path::Path};
 
 use anyhow::*;
+use duct::cmd;
+use indoc::{formatdoc, indoc};
+use tokio::fs;
 
 use crate::{
-	config::service::RuntimeKind,
+	config::{self, service::RuntimeKind},
 	context::{ProjectContext, ServiceContext},
-	dep,
+	dep::{self, terraform},
 	utils::{self, DroppablePort},
 };
 
-pub struct DatabaseConnection {
+// TODO: Deprecate
+pub struct DatabaseConnections {
 	pub redis_hosts: HashMap<String, String>,
 	pub cockroach_host: Option<String>,
 	pub clickhouse_host: Option<String>,
-
-	_handles: Vec<DroppablePort>,
+	pub clickhouse_config: Option<String>,
 }
 
-impl DatabaseConnection {
+impl DatabaseConnections {
 	pub async fn create(
 		ctx: &ProjectContext,
 		services: &[ServiceContext],
-	) -> Result<DatabaseConnection> {
-		let mut handles = Vec::new();
+	) -> Result<DatabaseConnections> {
+		match &ctx.ns().cluster.kind {
+			config::ns::ClusterKind::SingleNode { .. } => {
+				DatabaseConnections::create_local(ctx, services).await
+			}
+			config::ns::ClusterKind::Distributed { .. } => {
+				DatabaseConnections::create_distributed(ctx, services).await
+			}
+		}
+	}
+
+	async fn create_local(
+		ctx: &ProjectContext,
+		services: &[ServiceContext],
+	) -> Result<DatabaseConnections> {
 		let mut redis_hosts = HashMap::new();
 		let mut cockroach_host = None;
 		let mut clickhouse_host = None;
+		let mut clickhouse_config = None;
 
 		for svc in services {
 			match &svc.config().runtime {
@@ -33,51 +50,115 @@ impl DatabaseConnection {
 					let name = svc.name();
 
 					if !redis_hosts.contains_key(&name) {
-						let port = utils::pick_port();
-						let host = format!("127.0.0.1:{port}");
-
+						let host = format!("redis-redis-cluster.{name}.svc.cluster.local:6379");
 						redis_hosts.insert(name, host);
-						handles.push(utils::kubectl_port_forward(
-							"redis-master",
-							"redis",
-							(port, 6379),
-						)?);
 					}
 				}
 				RuntimeKind::CRDB { .. } => {
 					if cockroach_host.is_none() {
-						let port = utils::pick_port();
-						cockroach_host = Some(format!("127.0.0.1:{port}"));
-						handles.push(utils::kubectl_port_forward(
-							"cockroachdb",
-							"cockroachdb",
-							(port, 26257),
-						)?);
+						cockroach_host =
+							Some("cockroachdb.cockroachdb.svc.cluster.local:26257".to_string());
 					}
 				}
 				RuntimeKind::ClickHouse { .. } => {
 					if clickhouse_host.is_none() {
-						let port = utils::pick_port();
-						clickhouse_host = Some(format!("127.0.0.1:{port}"));
-						handles.push(utils::kubectl_port_forward(
-							"clickhouse",
-							"clickhouse",
-							(port, 9000),
-						)?);
+						clickhouse_host =
+							Some("clickhouse.clickhouse.svc.cluster.local:9440".to_string());
+						clickhouse_config = Some(
+							indoc!(
+								"
+								openSSL:
+								  client:
+								    caConfig: '/local/clickhouse-ca.crt'
+								"
+							)
+							.to_string(),
+						);
 					}
 				}
 				x => bail!("cannot connect to this type of service: {x:?}"),
 			}
 		}
 
-		// Wait for port forwards to open and check if successful
-		DroppablePort::check_all(&handles).await?;
-
-		Ok(DatabaseConnection {
+		Ok(DatabaseConnections {
 			redis_hosts,
 			cockroach_host,
 			clickhouse_host,
-			_handles: handles,
+			clickhouse_config,
+		})
+	}
+
+	async fn create_distributed(
+		ctx: &ProjectContext,
+		services: &[ServiceContext],
+	) -> Result<DatabaseConnections> {
+		let mut redis_hosts = HashMap::new();
+		let mut cockroach_host = None;
+		let mut clickhouse_host = None;
+		let clickhouse_config = None;
+
+		let redis_data = terraform::output::read_redis(ctx).await;
+
+		for svc in services {
+			match &svc.config().runtime {
+				RuntimeKind::Redis { .. } => {
+					let name = svc.name();
+
+					if !redis_hosts.contains_key(&name) {
+						let db_name = svc.redis_db_name();
+
+						// Read host and port from terraform
+						let hostname = redis_data
+							.host
+							.get(&db_name)
+							.expect("terraform output for redis db not found");
+						let port = redis_data
+							.port
+							.get(&db_name)
+							.expect("terraform output for redis db not found");
+						let host = format!("{}:{}", *hostname, *port);
+
+						redis_hosts.insert(name, host);
+					}
+				}
+				RuntimeKind::CRDB { .. } => {
+					if cockroach_host.is_none() {
+						let ca_cert = cmd!(
+							"sh",
+							"-c",
+							indoc!(
+								"
+								kubectl get configmap \
+								-n rivet-service crdb-ca \
+								-o jsonpath='{.data.ca\\.crt}'
+								"
+							)
+						)
+						.read()?;
+
+						let crdb_data = terraform::output::read_crdb(ctx).await;
+						cockroach_host = Some(format!("{}:{}", *crdb_data.host, *crdb_data.port));
+					}
+				}
+				RuntimeKind::ClickHouse { .. } => {
+					if clickhouse_host.is_none() {
+						let clickhouse_data = terraform::output::read_clickhouse(ctx).await;
+
+						clickhouse_host = Some(format!(
+							"{}:{}",
+							*clickhouse_data.host, *clickhouse_data.port
+						));
+					}
+				}
+				x => bail!("cannot connect to this type of service: {x:?}"),
+			}
+		}
+
+		Ok(DatabaseConnections {
+			redis_hosts,
+			cockroach_host,
+			clickhouse_host,
+			clickhouse_config,
 		})
 	}
 
@@ -89,7 +170,23 @@ impl DatabaseConnection {
 			RuntimeKind::CRDB { .. } => {
 				let db_name = service.crdb_db_name();
 				let host = self.cockroach_host.as_ref().unwrap();
-				Ok(format!("cockroach://root@{host}/{db_name}?sslmode=disable"))
+				let username = project_ctx.read_secret(&["crdb", "username"]).await?;
+				let password = project_ctx.read_secret(&["crdb", "password"]).await?;
+
+				// Serverless clusters require a cluster identifier
+				let full_db_name = match &project_ctx.ns().cluster.kind {
+					config::ns::ClusterKind::SingleNode { .. } => db_name,
+					config::ns::ClusterKind::Distributed { .. } => {
+						let crdb_data = terraform::output::read_crdb(&project_ctx).await;
+
+						format!("{}.{}", *crdb_data.cluster_identifier, db_name)
+					}
+				};
+
+				Ok(format!(
+					"cockroach://{}:{}@{}/{}?sslmode=verify-ca&sslrootcert=/local/crdb-ca.crt",
+					username, password, host, full_db_name
+				))
 			}
 			RuntimeKind::ClickHouse { .. } => {
 				let db_name = service.clickhouse_db_name();
@@ -98,7 +195,15 @@ impl DatabaseConnection {
 					.read_secret(&["clickhouse", "users", "bolt", "password"])
 					.await?;
 				let host = self.clickhouse_host.as_ref().unwrap();
-				Ok(format!("clickhouse://{host}/?database={db_name}&username={clickhouse_user}&password={clickhouse_password}&x-multi-statement=true"))
+
+				let query_other = format!(
+					"&x-multi-statement=true&x-migrations-table-engine=ReplicatedMergeTree&secure=true&skip_verify=true",
+				);
+
+				Ok(format!(
+					"clickhouse://{}/?database={}&username={}&password={}{}",
+					host, db_name, clickhouse_user, clickhouse_password, query_other
+				))
 			}
 			x @ _ => bail!("cannot migrate this type of service: {x:?}"),
 		}

@@ -56,7 +56,7 @@ async fn handle(
 		.map(common::Uuid::as_uuid)
 		.collect::<Vec<_>>();
 
-	let crdb = ctx.crdb("db-job-state").await?;
+	let crdb = ctx.crdb().await?;
 
 	// Query the run data
 	let (runs, run_networks, run_ports, run_meta_nomad, run_proxied_ports) = tokio::try_join!(
@@ -66,7 +66,7 @@ async fn handle(
 				sqlx::query_as::<_, Run>(indoc!(
 					"
 					SELECT run_id, region_id, create_ts, start_ts, stop_ts, cleanup_ts
-					FROM runs
+					FROM db_job_state.runs
 					WHERE run_id = ANY($1)
 					"
 				))
@@ -81,7 +81,7 @@ async fn handle(
 				sqlx::query_as::<_, RunNetwork>(indoc!(
 					"
 					SELECT run_id, ip, mode
-					FROM run_networks
+					FROM db_job_state.run_networks
 					WHERE run_id = ANY($1)
 					"
 				))
@@ -96,7 +96,7 @@ async fn handle(
 				sqlx::query_as::<_, RunPort>(indoc!(
 					"
 					SELECT run_id, label, ip, source, target
-					FROM run_ports
+					FROM db_job_state.run_ports
 					WHERE run_id = ANY($1)
 					"
 				))
@@ -108,7 +108,7 @@ async fn handle(
 		// run_meta_nomad
 		async {
 			GlobalResult::Ok(
-				sqlx::query_as::<_, RunMetaNomad>("SELECT run_id, dispatched_job_id, alloc_id, node_id, alloc_state FROM run_meta_nomad WHERE run_id = ANY($1)")
+				sqlx::query_as::<_, RunMetaNomad>("SELECT run_id, dispatched_job_id, alloc_id, node_id, alloc_state FROM db_job_state.run_meta_nomad WHERE run_id = ANY($1)")
 					.bind(&run_ids)
 					.fetch_all(&crdb)
 					.await?
@@ -120,7 +120,7 @@ async fn handle(
 				sqlx::query_as::<_, RunProxiedPort>(indoc!(
 					"
 					SELECT run_id, target_nomad_port_label, ingress_port, ingress_hostnames, proxy_protocol, ssl_domain_mode
-					FROM run_proxied_ports
+					FROM db_job_state.run_proxied_ports
 					WHERE run_id = ANY($1)
 					"
 				))

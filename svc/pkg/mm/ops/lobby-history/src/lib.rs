@@ -5,7 +5,7 @@ use rivet_operation::prelude::*;
 async fn handle(
 	ctx: OperationContext<mm::lobby_history::Request>,
 ) -> GlobalResult<mm::lobby_history::Response> {
-	let crdb = ctx.crdb("db-mm-state").await?;
+	let crdb = ctx.crdb().await?;
 
 	let namespace_id = internal_unwrap!(ctx.namespace_id).as_uuid();
 
@@ -14,7 +14,7 @@ async fn handle(
 	let lobby_ids = sqlx::query_as::<_, (Uuid,)>(indoc!(
 		"
 		SELECT lobby_id
-		FROM lobbies AS OF SYSTEM TIME '-5s'
+		FROM db_mm_state.lobbies AS OF SYSTEM TIME '-5s'
 		WHERE namespace_id = $1 AND create_ts < $2
 		ORDER BY create_ts DESC
 		LIMIT $3

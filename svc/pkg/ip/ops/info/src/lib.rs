@@ -21,7 +21,7 @@ enum IpInfoParsed {
 
 #[operation(name = "ip-info")]
 async fn handle(ctx: OperationContext<ip::info::Request>) -> GlobalResult<ip::info::Response> {
-	let crdb = ctx.crdb("db-ip-info").await?;
+	let crdb = ctx.crdb().await?;
 
 	// TODO: Handle situation where we can't find the location
 
@@ -46,7 +46,7 @@ async fn fetch_ip_info_io(
 ) -> GlobalResult<Option<backend::net::IpInfo>> {
 	// Read cached IP data if already exists
 	let res = sqlx::query_as::<_, (Option<serde_json::Value>,)>(
-		"SELECT ip_info_io_data FROM ips WHERE ip = $1",
+		"SELECT db_ip_info.ip_info_io_data FROM ips WHERE ip = $1",
 	)
 	.bind(ip_str)
 	.fetch_optional(crdb)
@@ -75,7 +75,7 @@ async fn fetch_ip_info_io(
 		// prevents us from having to consume our ipinfo.io API quota once the
 		// Redis cache expires.
 		sqlx::query(
-			"UPSERT INTO ips (ip, ip_info_io_data, ip_info_io_fetch_ts) VALUES ($1, $2, $3)",
+			"UPSERT INTO db_ip_info.ips (ip, ip_info_io_data, ip_info_io_fetch_ts) VALUES ($1, $2, $3)",
 		)
 		.bind(ip_str)
 		.bind(&ip_info_raw)

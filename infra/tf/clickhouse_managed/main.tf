@@ -7,7 +7,6 @@ terraform {
 	}
 }
 
-
 module "secrets" {
 	source = "../modules/secrets"
 
@@ -15,23 +14,17 @@ module "secrets" {
 		"clickhouse_cloud/organization_id",
 		"clickhouse_cloud/token_key",
 		"clickhouse_cloud/token_secret",
+		"clickhouse/users/default/password"
 	]
-}
-
-resource "random_password" "default" {
-	length = 32
-	special = true
-	min_special = 1
-	override_special = "-_"  # DNS-safe spial characters
 }
 
 resource "clickhouse_service" "main" {
 	cloud_provider = "aws"
 	name = "rivet-${var.namespace}"
-	region = data.terraform_remote_state.k8s_aws.outputs.region
+	region = data.terraform_remote_state.k8s_cluster_aws.outputs.region
 
 	ip_access = [
-		for x in  data.terraform_remote_state.k8s_aws.outputs.nat_public_ips:
+		for x in data.terraform_remote_state.k8s_cluster_aws.outputs.nat_public_ips:
 		{
 			source = x
 			description = "AWS NAT"
@@ -41,7 +34,7 @@ resource "clickhouse_service" "main" {
 	# TODO:
 	tier = "development"
 
-	password = random_password.default.result
+	password = module.secrets.values["clickhouse/users/default/password"]
 
 	# Bug in ClickHouse provider for the `development` tier leads to "inconsistent result" error
 	lifecycle {
@@ -50,4 +43,3 @@ resource "clickhouse_service" "main" {
 		]
 	}
 }
-

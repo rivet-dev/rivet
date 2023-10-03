@@ -106,6 +106,10 @@ async fn create_lobby_group(ctx: &TestCtx, image: Option<faker::build::Image>) -
 
 #[worker_test]
 async fn direct(ctx: TestCtx) {
+	if !util::feature::job_run() {
+		return;
+	}
+
 	let lobby_res = op!([ctx] faker_mm_lobby {
 		..Default::default()
 	})
@@ -135,6 +139,10 @@ async fn direct(ctx: TestCtx) {
 
 #[worker_test]
 async fn lobby_group_existing(ctx: TestCtx) {
+	if !util::feature::job_run() {
+		return;
+	}
+
 	let lobby_res = op!([ctx] faker_mm_lobby {
 		..Default::default()
 	})
@@ -169,6 +177,10 @@ async fn lobby_group_existing(ctx: TestCtx) {
 
 #[worker_test]
 async fn direct_closed(ctx: TestCtx) {
+	if !util::feature::job_run() {
+		return;
+	}
+
 	let lobby_res = op!([ctx] faker_mm_lobby {
 		..Default::default()
 	})
@@ -209,6 +221,10 @@ async fn direct_closed(ctx: TestCtx) {
 
 #[worker_test]
 async fn lobby_group_closed(ctx: TestCtx) {
+	if !util::feature::job_run() {
+		return;
+	}
+
 	let lobby_res = op!([ctx] faker_mm_lobby {
 		..Default::default()
 	})
@@ -281,6 +297,10 @@ async fn lobby_group_closed(ctx: TestCtx) {
 
 #[worker_test]
 async fn lobby_group_closed_auto_create(ctx: TestCtx) {
+	if !util::feature::job_run() {
+		return;
+	}
+
 	let lobby_res = op!([ctx] faker_mm_lobby {
 		..Default::default()
 	})
@@ -322,6 +342,10 @@ async fn lobby_group_closed_auto_create(ctx: TestCtx) {
 
 #[worker_test]
 async fn lobby_crash_immediate(ctx: TestCtx) {
+	if !util::feature::job_run() {
+		return;
+	}
+
 	let lobby_group = create_lobby_group(&ctx, Some(faker::build::Image::FailImmediately)).await;
 
 	let err = find(
@@ -355,6 +379,10 @@ async fn lobby_crash_immediate(ctx: TestCtx) {
 
 #[worker_test]
 async fn max_players_per_client(ctx: TestCtx) {
+	if !util::feature::job_run() {
+		return;
+	}
+
 	let lobby_res = op!([ctx] faker_mm_lobby {
 		..Default::default()
 	})
@@ -417,6 +445,10 @@ async fn max_players_per_client(ctx: TestCtx) {
 
 #[worker_test]
 async fn lobby_group_auto_create(ctx: TestCtx) {
+	if !util::feature::job_run() {
+		return;
+	}
+
 	let lobby_group = create_lobby_group(&ctx, None).await;
 
 	find(
@@ -445,6 +477,10 @@ async fn lobby_group_auto_create(ctx: TestCtx) {
 
 #[worker_test]
 async fn lobby_group_no_auto_create(ctx: TestCtx) {
+	if !util::feature::job_run() {
+		return;
+	}
+
 	let lobby_group = create_lobby_group(&ctx, None).await;
 
 	let err = find(
@@ -475,6 +511,10 @@ async fn lobby_group_no_auto_create(ctx: TestCtx) {
 
 #[worker_test]
 async fn join_disabled(ctx: TestCtx) {
+	if !util::feature::job_run() {
+		return;
+	}
+
 	let user_id = Uuid::new_v4();
 
 	let (namespace_id, lobby_id) = gen_disabled_lobby(&ctx).await;
@@ -505,6 +545,10 @@ async fn join_disabled(ctx: TestCtx) {
 
 #[worker_test]
 async fn guest_verification(ctx: TestCtx) {
+	if !util::feature::job_run() {
+		return;
+	}
+
 	let user_id = Uuid::new_v4();
 
 	let (namespace_id, lobby_id) =

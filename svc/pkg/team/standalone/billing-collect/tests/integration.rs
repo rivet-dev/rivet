@@ -16,7 +16,7 @@ async fn all() {
 		.init();
 
 	let ctx = TestCtx::from_env("all").await.unwrap();
-	let crdb_pool = ctx.crdb("db-team-dev").await.unwrap();
+	let crdb_pool = ctx.crdb().await.unwrap();
 
 	test(ctx.clone(), crdb_pool.clone()).await;
 }
@@ -56,7 +56,7 @@ async fn test(ctx: TestCtx, crdb: CrdbPool) {
 	let (last_collection_ts,) = sqlx::query_as::<_, (i64,)>(indoc!(
 		"
 		SELECT last_collection_ts
-		FROM dev_teams
+		FROM db_team_dev.dev_teams
 		WHERE team_id = $1
 		"
 	))

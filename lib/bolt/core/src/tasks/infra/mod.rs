@@ -1,5 +1,6 @@
 use anyhow::*;
 use bolt_config::ns::ClusterKind;
+use tokio::time::Instant;
 
 use crate::{
 	config::{self, ns},
@@ -102,35 +103,37 @@ impl PlanStepKind {
 pub fn build_plan(ctx: &ProjectContext, start_at: Option<String>) -> Result<Vec<PlanStep>> {
 	let mut plan = Vec::new();
 
-	// TLS
-	plan.push(PlanStep {
-		name_id: "tf-tls",
-		kind: PlanStepKind::Terraform {
-			plan_id: "tls".into(),
-			needs_destroy: true,
-		},
-	});
-
 	// Infra
 	match ctx.ns().kubernetes.provider {
 		ns::KubernetesProvider::K3d { .. } => {
 			plan.push(PlanStep {
-				name_id: "k8s-k3d",
+				name_id: "k8s-cluster-k3d",
 				kind: PlanStepKind::Terraform {
-					plan_id: "k8s_k3d".into(),
+					plan_id: "k8s_cluster_k3d".into(),
 					needs_destroy: true,
 				},
 			});
 		}
 		ns::KubernetesProvider::AwsEks { .. } => {
 			plan.push(PlanStep {
-				name_id: "k8s-aws",
+				name_id: "k8s-cluster-aws",
 				kind: PlanStepKind::Terraform {
-					plan_id: "k8s_aws".into(),
+					plan_id: "k8s_cluster_aws".into(),
 					needs_destroy: true,
 				},
 			});
 		}
+	}
+
+	if ctx.tls_enabled() {
+		// TLS
+		plan.push(PlanStep {
+			name_id: "tf-tls",
+			kind: PlanStepKind::Terraform {
+				plan_id: "tls".into(),
+				needs_destroy: true,
+			},
+		});
 	}
 
 	// Kubernetes
@@ -209,43 +212,49 @@ pub fn build_plan(ctx: &ProjectContext, start_at: Option<String>) -> Result<Vec<
 	}
 
 	// Pools
-	plan.push(PlanStep {
-		name_id: "tf-pools",
-		kind: PlanStepKind::Terraform {
-			plan_id: "pools".into(),
-			needs_destroy: true,
-		},
-	});
-
-	// DNS
-	plan.push(PlanStep {
-		name_id: "tf-dns",
-		kind: PlanStepKind::Terraform {
-			plan_id: "dns".into(),
-			needs_destroy: true,
-		},
-	});
-
-	// Cloudflare
-	plan.push(PlanStep {
-		name_id: "tf-cf-workers",
-		kind: PlanStepKind::Terraform {
-			plan_id: "cloudflare_workers".into(),
-			needs_destroy: true,
-		},
-	});
-
-	if let ns::DnsProvider::Cloudflare {
-		access: Some(_), ..
-	} = ctx.ns().dns.provider
-	{
+	if ctx.ns().dns.is_some() {
 		plan.push(PlanStep {
-			name_id: "tf-cf-tunnels",
+			name_id: "tf-pools",
 			kind: PlanStepKind::Terraform {
-				plan_id: "cloudflare_tunnels".into(),
+				plan_id: "pools".into(),
 				needs_destroy: true,
 			},
 		});
+	}
+
+	if let Some(dns) = &ctx.ns().dns {
+		// TODO: Allow manual DNS config
+
+		if let Some(ns::DnsProvider::Cloudflare {
+			access: Some(_), ..
+		}) = &dns.provider
+		{
+			// DNS
+			plan.push(PlanStep {
+				name_id: "tf-dns",
+				kind: PlanStepKind::Terraform {
+					plan_id: "dns".into(),
+					needs_destroy: true,
+				},
+			});
+
+			// Cloudflare
+			plan.push(PlanStep {
+				name_id: "tf-cf-workers",
+				kind: PlanStepKind::Terraform {
+					plan_id: "cloudflare_workers".into(),
+					needs_destroy: true,
+				},
+			});
+
+			plan.push(PlanStep {
+				name_id: "tf-cf-tunnels",
+				kind: PlanStepKind::Terraform {
+					plan_id: "cloudflare_tunnels".into(),
+					needs_destroy: true,
+				},
+			});
+		}
 	}
 
 	// S3
@@ -338,11 +347,17 @@ pub async fn execute_plan(
 	for (i, step) in plan.iter().enumerate() {
 		eprintln!();
 		eprintln!();
+
 		rivet_term::status::info(
-			"Executing",
+			"Executing step",
 			format!("({}/{}) {}", i + 1, plan.len(), step.name_id),
 		);
+		let start = Instant::now();
 		step.kind.execute(ctx.clone(), &opts).await?;
+		rivet_term::status::progress(
+			"Step complete",
+			format!("{:.1}s", start.elapsed().as_secs_f32()),
+		);
 	}
 
 	Ok(())

@@ -30,10 +30,10 @@ async fn correct(ctx: TestCtx) {
 	);
 
 	let (sql_complete_ts,) = sqlx::query_as::<_, (Option<i64>,)>(
-		"SELECT complete_ts FROM verifications WHERE verification_id = $1",
+		"SELECT complete_ts FROM db_email_verification.verifications WHERE verification_id = $1",
 	)
 	.bind(verification_id)
-	.fetch_one(&ctx.crdb("db-email-verification").await.unwrap())
+	.fetch_one(&ctx.crdb().await.unwrap())
 	.await
 	.unwrap();
 	assert!(sql_complete_ts.is_some(), "not flagged as complete");

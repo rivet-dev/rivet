@@ -7,7 +7,7 @@ const MAX_UPLOAD_SIZE: u64 = util::file_size::gigabytes(8);
 async fn handle(
 	ctx: OperationContext<build::create::Request>,
 ) -> GlobalResult<build::create::Response> {
-	let crdb = ctx.crdb("db-build").await?;
+	let crdb = ctx.crdb().await?;
 
 	let game_id = **internal_unwrap!(ctx.game_id);
 	internal_assert!(
@@ -26,7 +26,7 @@ async fn handle(
 	let (image_tag, upload_id, image_presigned_requests) =
 		if let Some(build_kind) = &ctx.default_build_kind {
 			let (image_tag, upload_id) = sqlx::query_as::<_, (String, Uuid)>(
-				"SELECT image_tag, upload_id FROM default_builds WHERE kind = $1",
+				"SELECT image_tag, upload_id FROM db_build.default_builds WHERE kind = $1",
 			)
 			.bind(build_kind)
 			.fetch_one(&crdb)
@@ -52,7 +52,7 @@ async fn handle(
 
 			// Check if build is unique
 			let (build_exists,) = sqlx::query_as::<_, (bool,)>(
-				"SELECT EXISTS (SELECT 1 FROM builds WHERE image_tag = $1)",
+				"SELECT EXISTS (SELECT 1 FROM db_build.builds WHERE image_tag = $1)",
 			)
 			.bind(image_tag)
 			.fetch_one(&crdb)
@@ -91,7 +91,7 @@ async fn handle(
 	let build_id = Uuid::new_v4();
 	sqlx::query(indoc!(
 		"
-		INSERT INTO builds (build_id, game_id, upload_id, display_name, image_tag, create_ts)
+		INSERT INTO db_build.builds (build_id, game_id, upload_id, display_name, image_tag, create_ts)
 		VALUES ($1, $2, $3, $4, $5, $6)
 		"
 	))

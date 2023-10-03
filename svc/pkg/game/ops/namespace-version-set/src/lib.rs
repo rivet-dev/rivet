@@ -24,14 +24,14 @@ async fn handle(
 	let game = internal_unwrap_owned!(game_res.games.first());
 	let developer_team_id = internal_unwrap!(game.developer_team_id).as_uuid();
 
-	let crdb = ctx.crdb("db-game").await?;
+	let crdb = ctx.crdb().await?;
 
 	{
 		let tx = crdb.begin().await?;
 
 		let update_query = sqlx::query(indoc!(
 			"
-			UPDATE game_namespaces
+			UPDATE db_game.game_namespaces
 			SET version_id = $2
 			WHERE namespace_id = $1
 			"
@@ -44,8 +44,7 @@ async fn handle(
 
 		sqlx::query(indoc!(
 			"
-			INSERT
-			INTO game_namespace_version_history (
+			INSERT INTO db_game.game_namespace_version_history (
 				namespace_id, version_id, deploy_ts
 			)
 			VALUES ($1, $2, $3)

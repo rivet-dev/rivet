@@ -10,12 +10,12 @@ async fn handle(
 	let build_ids = sqlx::query_as::<_, (Uuid,)>(indoc!(
 		"
 		SELECT build_id
-		FROM builds
+		FROM db_build.builds
 		WHERE game_id = $1
 		"
 	))
 	.bind(game_id)
-	.fetch_all(&ctx.crdb("db-build").await?)
+	.fetch_all(&ctx.crdb().await?)
 	.await?
 	.into_iter()
 	.map(|(id,)| common::Uuid::from(id))

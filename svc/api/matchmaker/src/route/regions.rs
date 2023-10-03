@@ -10,7 +10,7 @@ pub async fn list(
 	ctx: Ctx<Auth>,
 	_watch_index: WatchIndexQuery,
 ) -> GlobalResult<models::ListRegionsResponse> {
-	let (lat, long) = internal_unwrap_owned!(ctx.coords());
+	let coords = ctx.coords();
 
 	// Mock response
 	if ctx.auth().game_ns_dev_option()?.is_some() {
@@ -59,27 +59,41 @@ pub async fn list(
 		.map(Into::<common::Uuid>::into)
 		.collect::<Vec<_>>();
 
-	// List regions
 	let (region_res, recommend_res) = tokio::try_join!(
+		// List regions
 		op!([ctx] region_get {
 			region_ids: enabled_region_ids.clone(),
 		}),
-		op!([ctx] region_recommend {
-			region_ids: enabled_region_ids.clone(),
-			latitude: Some(lat),
-			longitude: Some(long),
-			..Default::default()
-		}),
+		// Fetch recommended region if coords are provided
+		async {
+			if let Some((lat, long)) = coords {
+				let res = op!([ctx] region_recommend {
+					region_ids: enabled_region_ids.clone(),
+					latitude: Some(lat),
+					longitude: Some(long),
+					..Default::default()
+				})
+				.await?;
+				GlobalResult::Ok(Some(res))
+			} else {
+				Ok(None)
+			}
+		}
 	)?;
 
 	let regions = region_res
 		.regions
 		.iter()
 		.map(|region| {
-			let recommend = internal_unwrap_owned!(recommend_res
-				.regions
-				.iter()
-				.find(|recommend| recommend.region_id == region.region_id));
+			let recommend = if let Some(res) = &recommend_res {
+				Some(internal_unwrap_owned!(res
+					.regions
+					.iter()
+					.find(|recommend| recommend.region_id == region.region_id)))
+			} else {
+				None
+			};
+
 			Ok(utils::build_region(region, recommend))
 		})
 		.collect::<GlobalResult<Vec<_>>>()?;

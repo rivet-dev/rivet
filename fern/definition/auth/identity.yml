@@ -6,8 +6,7 @@ imports:
 
 service:
   auth: true
-  url: Auth
-  base-path: /identity/email
+  base-path: /auth/identity/email
   endpoints:
     completeEmailVerification:
       path: /complete-verification

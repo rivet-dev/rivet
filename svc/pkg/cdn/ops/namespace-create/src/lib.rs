@@ -9,12 +9,12 @@ async fn handle(
 
 	sqlx::query(indoc!(
 		"
-		INSERT INTO game_namespaces (namespace_id)
+		INSERT INTO db_cdn.game_namespaces (namespace_id)
 		VALUES ($1)
 		"
 	))
 	.bind(namespace_id)
-	.execute(&ctx.crdb("db-cdn").await?)
+	.execute(&ctx.crdb().await?)
 	.await?;
 
 	Ok(cdn::namespace_create::Response {})

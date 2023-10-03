@@ -19,7 +19,7 @@ enum TaskState {
 async fn worker(
 	ctx: &OperationContext<job_run::msg::nomad_monitor_alloc_update::Message>,
 ) -> GlobalResult<()> {
-	let crdb = ctx.crdb("db-job-state").await?;
+	let crdb = ctx.crdb().await?;
 
 	let AllocationUpdated { allocation: alloc } = serde_json::from_str(&ctx.payload_json)?;
 	let alloc_state_json = serde_json::to_value(&alloc)?;
@@ -71,7 +71,7 @@ async fn worker(
 
 			let run_row = sqlx::query_as::<_, (Uuid,)>(indoc!(
 				"
-				UPDATE run_meta_nomad
+				UPDATE db_job_state.run_meta_nomad
 				SET alloc_state = $2
 				WHERE dispatched_job_id = $1
 				RETURNING run_id
@@ -99,14 +99,14 @@ async fn worker(
 				WITH
 					select_run AS (
 						SELECT runs.run_id, runs.start_ts
-						FROM run_meta_nomad
+						FROM db_job_state.run_meta_nomad
 						INNER JOIN runs ON runs.run_id = run_meta_nomad.run_id
 						WHERE dispatched_job_id = $1
 					),
 					_update_runs AS (
 						UPDATE runs
 						SET start_ts = $2
-						FROM select_run
+						FROM db_job_state.select_run
 						WHERE
 							runs.run_id = select_run.run_id AND
 							runs.start_ts IS NULL
@@ -115,7 +115,7 @@ async fn worker(
 					_update_run_meta_nomad AS (
 						UPDATE run_meta_nomad
 						SET alloc_state = $3
-						FROM select_run
+						FROM db_job_state.select_run
 						WHERE run_meta_nomad.run_id = select_run.run_id
 						RETURNING 1
 					)
@@ -158,21 +158,21 @@ async fn worker(
 				WITH
 					select_run AS (
 						SELECT runs.run_id, runs.finish_ts
-						FROM run_meta_nomad
+						FROM db_job_state.run_meta_nomad
 						INNER JOIN runs ON runs.run_id = run_meta_nomad.run_id
 						WHERE dispatched_job_id = $1
 					),
 					_update_runs AS (
 						UPDATE runs
 						SET finish_ts = $2
-						FROM select_run
+						FROM db_job_state.select_run
 						WHERE
 							runs.run_id = select_run.run_id AND
 							runs.finish_ts IS NULL
 						RETURNING 1
 					),
 					_update_run_meta_nomad AS (
-						UPDATE run_meta_nomad
+						UPDATE db_job_state.run_meta_nomad
 						SET alloc_state = $3
 						FROM select_run
 						WHERE run_meta_nomad.run_id = select_run.run_id

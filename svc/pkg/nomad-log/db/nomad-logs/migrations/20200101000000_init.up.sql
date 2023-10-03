@@ -7,9 +7,8 @@ CREATE TABLE IF NOT EXISTS logs
 	idx UInt32,  -- Index of the message sent within the same timestamp
 	message String
 )
-ENGINE = MergeTree()
+ENGINE = ReplicatedMergeTree()
 PARTITION BY toStartOfHour(ts)
 ORDER BY (ts, idx, alloc, task, stream_type)
 TTL toDate(ts + toIntervalDay(2))
 SETTINGS index_granularity = 32768;
-

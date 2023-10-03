@@ -20,9 +20,9 @@ async fn empty(ctx: TestCtx) {
 	.unwrap();
 	assert!(real_res.ip_info.is_some());
 
-	let rows_num = sqlx::query("SELECT ip FROM ips WHERE ip = $1")
+	let rows_num = sqlx::query("SELECT ip FROM db_ip_info.ips WHERE ip = $1")
 		.bind(&real_ip)
-		.fetch_all(&ctx.crdb("db-ip-info").await.unwrap())
+		.fetch_all(&ctx.crdb().await.unwrap())
 		.await
 		.unwrap()
 		.len();

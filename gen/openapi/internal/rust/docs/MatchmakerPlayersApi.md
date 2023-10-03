@@ -1,12 +1,12 @@
 # \MatchmakerPlayersApi
 
-All URIs are relative to *http://localhost*
+All URIs are relative to *https://api.rivet.gg*
 
 Method | HTTP request | Description
 ------------- | ------------- | -------------
-[**matchmaker_players_connected**](MatchmakerPlayersApi.md#matchmaker_players_connected) | **POST** /players/connected | 
-[**matchmaker_players_disconnected**](MatchmakerPlayersApi.md#matchmaker_players_disconnected) | **POST** /players/disconnected | 
-[**matchmaker_players_get_statistics**](MatchmakerPlayersApi.md#matchmaker_players_get_statistics) | **GET** /players/statistics | 
+[**matchmaker_players_connected**](MatchmakerPlayersApi.md#matchmaker_players_connected) | **POST** /matchmaker/players/connected | 
+[**matchmaker_players_disconnected**](MatchmakerPlayersApi.md#matchmaker_players_disconnected) | **POST** /matchmaker/players/disconnected | 
+[**matchmaker_players_get_statistics**](MatchmakerPlayersApi.md#matchmaker_players_get_statistics) | **GET** /matchmaker/players/statistics | 
 
 
 

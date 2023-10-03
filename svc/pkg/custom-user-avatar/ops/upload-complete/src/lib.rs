@@ -16,14 +16,14 @@ async fn handle(
 
 	sqlx::query(indoc!(
 		"
-		INSERT INTO custom_avatars (game_id, upload_id, create_ts)
+		INSERT INTO db_game_custom_avatar.custom_avatars (game_id, upload_id, create_ts)
 		VALUES ($1, $2, $3)
 		"
 	))
 	.bind(game_id)
 	.bind(upload_id)
 	.bind(ctx.ts())
-	.execute(&ctx.crdb("db-game-custom-avatar").await?)
+	.execute(&ctx.crdb().await?)
 	.await?;
 
 	msg!([ctx] game::msg::update(game_id) {

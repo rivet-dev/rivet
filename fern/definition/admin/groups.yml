@@ -5,8 +5,7 @@ imports:
 
 service:
   auth: true
-  url: Admin
-  base-path: /groups
+  base-path: /admin/groups
   endpoints:
     convertDeveloper:
       path: /{group_id}/developer

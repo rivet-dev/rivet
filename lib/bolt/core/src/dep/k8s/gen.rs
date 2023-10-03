@@ -13,48 +13,8 @@ use crate::{
 		service::{ServiceDomain, ServiceKind, ServiceRouter},
 	},
 	context::{ProjectContext, RunContext, ServiceContext},
-	dep::terraform,
+	dep::terraform::{self, output::read_k8s_cluster_aws},
 };
-
-pub async fn project(ctx: &ProjectContext) -> Result<()> {
-	// Chek if the k8s provider has already applied
-	let plan_id = match ctx.ns().kubernetes.provider {
-		ns::KubernetesProvider::K3d { .. } => "k8s_k3d",
-		ns::KubernetesProvider::AwsEks { .. } => "k8s_aws",
-	};
-
-	// TODO: has_applied is slow
-	if terraform::cli::has_applied(ctx, plan_id).await {
-		// Read kubectl config
-		let config = match ctx.ns().kubernetes.provider {
-			ns::KubernetesProvider::K3d {} => block_in_place(move || {
-				cmd!("k3d", "kubeconfig", "get", ctx.k8s_cluster_name()).read()
-			})?,
-			ns::KubernetesProvider::AwsEks {} => block_in_place(move || {
-				cmd!(
-					"aws",
-					"eks",
-					"update-kubeconfig",
-					"--dry-run",
-					"--name",
-					ctx.k8s_cluster_name()
-				)
-				.read()
-			})?,
-		};
-
-		// Write to file
-		fs::create_dir_all(ctx.gen_kubeconfig_path().parent().unwrap()).await?;
-		fs::write(ctx.gen_kubeconfig_path(), config).await?;
-	} else {
-		// Remove config
-		if fs::try_exists(ctx.gen_kubeconfig_path()).await? {
-			fs::remove_file(ctx.gen_kubeconfig_path()).await?;
-		}
-	}
-
-	Ok(())
-}
 
 // Kubernetes requires a specific port for containers because they have their own networking namespace, the
 // port bound on the host is randomly generated.
@@ -88,6 +48,58 @@ enum SpecType {
 	Deployment,
 	Job,
 	CronJob,
+}
+
+pub async fn project(ctx: &ProjectContext) -> Result<()> {
+	// Check if the k8s provider has already applied
+	let plan_id = match ctx.ns().kubernetes.provider {
+		ns::KubernetesProvider::K3d { .. } => "k8s_cluster_k3d",
+		ns::KubernetesProvider::AwsEks { .. } => "k8s_cluster_aws",
+	};
+
+	// TODO: has_applied is slow
+	if terraform::cli::has_applied(ctx, plan_id).await {
+		// Read kubectl config
+		let config = match ctx.ns().kubernetes.provider {
+			ns::KubernetesProvider::K3d {} => block_in_place(move || {
+				cmd!("k3d", "kubeconfig", "get", ctx.k8s_cluster_name()).read()
+			})?,
+			ns::KubernetesProvider::AwsEks {} => {
+				let output = read_k8s_cluster_aws(ctx).await;
+				block_in_place(move || {
+					cmd!(
+						"aws",
+						"eks",
+						"update-kubeconfig",
+						// Writes to stdout instead of user's kubeconfig
+						"--dry-run",
+						"--region",
+						"us-east-1",
+						"--name",
+						ctx.k8s_cluster_name(),
+						// Read from a non-existent kubeconfig to prevent it from merging the existing
+						// user's kubeconfig.
+						"--kubeconfig",
+						"THIS DOES NOT EXIST",
+						"--role-arn",
+						output.eks_admin_role_arn.as_str(),
+					)
+					.read()
+				})?
+			}
+		};
+
+		// Write to file
+		fs::create_dir_all(ctx.gen_kubeconfig_path().parent().unwrap()).await?;
+		fs::write(ctx.gen_kubeconfig_path(), config).await?;
+	} else {
+		// Remove config
+		if fs::try_exists(ctx.gen_kubeconfig_path()).await? {
+			fs::remove_file(ctx.gen_kubeconfig_path()).await?;
+		}
+	}
+
+	Ok(())
 }
 
 pub fn k8s_svc_name(exec_ctx: &ExecServiceContext) -> String {
@@ -158,26 +170,61 @@ pub async fn gen_svc(exec_ctx: &ExecServiceContext) -> Vec<serde_json::Value> {
 		)
 		.collect::<Vec<_>>();
 
-	// Render ports
-	let ports = {
-		let mut ports = Vec::new();
+	// Create secret env vars
+	let secret_env_name = format!("{}-secret-env", service_name);
+	let secret_data = secret_env
+		.into_iter()
+		.map(|(k, v)| (k, base64::encode(v)))
+		.collect::<HashMap<_, _>>();
+	specs.push(json!({
+		"apiVersion": "v1",
+		"kind": "Secret",
+		"metadata": {
+			"name": secret_env_name,
+			"namespace": "rivet-service"
+		},
+		"data": secret_data
+	}));
 
-		ports.push(json!({
+	// Render ports
+	let (pod_ports, service_ports) = {
+		let mut pod_ports = Vec::new();
+		let mut service_ports = Vec::new();
+
+		pod_ports.push(json!({
 			"name": "health",
 			"containerPort": HEALTH_PORT,
 		}));
+		service_ports.push(json!({
+			"name": "health",
+			"protocol": "TCP",
+			"port": HEALTH_PORT,
+			"targetPort": "health"
+		}));
 
 		if has_metrics {
-			ports.push(json!({
+			pod_ports.push(json!({
 				"name": "metrics",
 				"containerPort": METRICS_PORT,
+			}));
+			service_ports.push(json!({
+				"name": "metrics",
+				"protocol": "TCP",
+				"port": METRICS_PORT,
+				"targetPort": "metrics"
 			}));
 		};
 
 		if svc_ctx.enable_tokio_console() {
-			ports.push(json!({
+			pod_ports.push(json!({
 				"name": "tokio-console",
 				"containerPort": TOKIO_CONSOLE_PORT,
+			}));
+			service_ports.push(json!({
+				"name": "tokio-console",
+				"protocol": "TCP",
+				"port": TOKIO_CONSOLE_PORT,
+				"targetPort": "tokio-console"
 			}));
 		}
 
@@ -186,47 +233,62 @@ pub async fn gen_svc(exec_ctx: &ExecServiceContext) -> Vec<serde_json::Value> {
 				port: Some(port), ..
 			} = svc_ctx.config().kind
 			{
-				ports.push(json!({
+				pod_ports.push(json!({
 					"name": "http",
 					"containerPort": port,
 					"hostPort": port
 				}));
+				service_ports.push(json!({
+					"name": "http",
+					"protocol": "TCP",
+					"port": port,
+					"targetPort": "http"
+				}));
 			} else {
-				ports.push(json!({
+				pod_ports.push(json!({
 					"name": "http",
 					"containerPort": HTTP_SERVER_PORT,
+				}));
+				service_ports.push(json!({
+					"name": "http",
+					"protocol": "TCP",
+					"port": HTTP_SERVER_PORT,
+					"targetPort": "http"
 				}));
 			}
 		}
 
-		ports
+		(pod_ports, service_ports)
 	};
 
-	let health_check = if has_health {
-		let cmd = if matches!(svc_ctx.config().kind, ServiceKind::Static { .. }) {
-			"/local/health-checks.sh --static"
-		} else {
-			"/local/health-checks.sh"
-		};
+	// let health_check = if has_health {
+	// 	let cmd = if matches!(svc_ctx.config().kind, ServiceKind::Static { .. }) {
+	// 		"/local/rivet/health-checks.sh --static"
+	// 	} else {
+	// 		"/local/rivet/health-checks.sh"
+	// 	};
 
-		json!({
-			"exec": {
-				"command": ["/bin/sh", "-c", cmd],
-			},
-			"initialDelaySeconds": 1,
-			"periodSeconds": 5,
-			"timeoutSeconds": 5
-		})
-	} else {
-		serde_json::Value::Null
-	};
+	// 	json!({
+	// 		"exec": {
+	// 			"command": ["/bin/sh", "-c", cmd],
+	// 		},
+	// 		"initialDelaySeconds": 1,
+	// 		"periodSeconds": 5,
+	// 		"timeoutSeconds": 5
+	// 	})
+	// } else {
+	// 	serde_json::Value::Null
+	// };
 
-	let (image, image_pull_policy, command, args) = match &driver {
+	let (image, image_pull_policy, exec) = match &driver {
 		ExecServiceDriver::LocalBinaryArtifact { exec_path, args } => (
-			"alpine:3.8",
+			"ghcr.io/rivet-gg/rivet-local-binary-artifact-runner:3fdc702",
 			"IfNotPresent",
-			vec![Path::new("/rivet-src").join(exec_path)],
-			args.clone(),
+			format!(
+				"{} {}",
+				Path::new("/rivet-src").join(exec_path).display(),
+				args.join(" ")
+			),
 		),
 		ExecServiceDriver::Docker {
 			image_tag,
@@ -238,10 +300,10 @@ pub async fn gen_svc(exec_ctx: &ExecServiceContext) -> Vec<serde_json::Value> {
 			} else {
 				"IfNotPresent"
 			},
-			Vec::new(),
-			Vec::new(),
+			"bin/svc".to_string(),
 		),
 	};
+	let command = format!("/local/rivet/install-ca.sh && {exec}");
 
 	// Create resource limits
 	let ns_service_config = svc_ctx.ns_service_config().await;
@@ -258,81 +320,7 @@ pub async fn gen_svc(exec_ctx: &ExecServiceContext) -> Vec<serde_json::Value> {
 		// "requests": {}
 	});
 
-	// Shared data between containers
-	let mut volumes = vec![];
-	let mut volume_mounts = vec![json!({
-		"name": "local",
-		"mountPath": "/local",
-		"readOnly": true
-	})];
-
-	// Add volumes
-	{
-		match driver {
-			// Mount the service binaries to execute directly in the container. See
-			// notes in salt/salt/nomad/files/nomad.d/client.hcl.j2.
-			ExecServiceDriver::LocalBinaryArtifact { .. } => {
-				// Volumes
-				volumes.push(json!({
-					"name": "rivet-src",
-					"hostPath": {
-						"path": "/rivet-src",
-						"type": "Directory"
-					}
-				}));
-				volumes.push(json!({
-					"name": "nix-store",
-					"hostPath": {
-						"path": "/nix/store",
-						"type": "Directory"
-					}
-				}));
-
-				// Mounts
-				volume_mounts.push(json!({
-					"name": "rivet-src",
-					"mountPath": "/rivet-src",
-					"readOnly": true
-				}));
-				volume_mounts.push(json!({
-					"name": "nix-store",
-					"mountPath": "/nix/store",
-					"readOnly": true
-				}));
-			}
-			ExecServiceDriver::Docker { .. } => {}
-		}
-
-		volumes.push(json!({
-			"name": "local",
-			"projected": {
-				"defaultMode": 0o0777,
-				"sources": [
-					{
-						"configMap": {
-							"name": "health-checks"
-						}
-					}
-				]
-			}
-		}));
-	}
-
-	// Create secret env vars
-	let secret_env_name = format!("{}-secret-env", service_name);
-	let secret_data = secret_env
-		.into_iter()
-		.map(|(k, v)| (k, base64::encode(v)))
-		.collect::<HashMap<_, _>>();
-	specs.push(json!({
-		"apiVersion": "v1",
-		"kind": "Secret",
-		"metadata": {
-			"name": secret_env_name,
-			"namespace": "rivet-service"
-		},
-		"data": secret_data
-	}));
+	let (volumes, volume_mounts) = build_volumes(&project_ctx, &exec_ctx).await;
 
 	// Create priority class
 	let priority_class_name = format!("{}-priority", service_name);
@@ -364,9 +352,8 @@ pub async fn gen_svc(exec_ctx: &ExecServiceContext) -> Vec<serde_json::Value> {
 			"name": "service",
 			"image": image,
 			"imagePullPolicy": image_pull_policy,
-			"command": command,
-			// "command": ["/bin/sh", "-c", "printenv && sleep 1000"],
-			"args": args,
+			"command": ["/bin/sh"],
+			"args": ["-c", command],
 			"env": env,
 			"envFrom": [{
 				"secretRef": {
@@ -374,9 +361,9 @@ pub async fn gen_svc(exec_ctx: &ExecServiceContext) -> Vec<serde_json::Value> {
 				}
 			}],
 			"volumeMounts": volume_mounts,
-			"ports": ports,
-			"livenessProbe": health_check,
-			"resources": resources
+			"ports": pod_ports,
+			// "livenessProbe": health_check,
+			"resources": resources,
 		}],
 		"volumes": volumes
 	});
@@ -485,36 +472,202 @@ pub async fn gen_svc(exec_ctx: &ExecServiceContext) -> Vec<serde_json::Value> {
 		}
 	}
 
-	// Network the service
-	if matches!(run_context, RunContext::Service { .. }) {
-		if svc_ctx.config().kind.has_server() {
-			specs.push(json!({
-				"apiVersion": "v1",
-				"kind": "Service",
-				"metadata": {
-					"name": service_name,
-					"namespace": "rivet-service"
-				},
-				"spec": {
-					"type": "ClusterIP",
-					"selector": {
-						"app.kubernetes.io/name": service_name
-					},
-					"ports": [{
-						"protocol": "TCP",
-						"port": 80,
-						"targetPort": "http"
-					}]
-				}
-			}));
+	// Expose service
+	specs.push(json!({
+		"apiVersion": "v1",
+		"kind": "Service",
+		"metadata": {
+			"name": service_name,
+			"namespace": "rivet-service",
+			"labels": {
+				"app.kubernetes.io/name": service_name
+			}
+		},
+		"spec": {
+			"type": "ClusterIP",
+			"selector": {
+				"app.kubernetes.io/name": service_name
+			},
+			"ports": service_ports
 		}
+	}));
 
+	// Monitor the service
+	specs.push(json!({
+		"apiVersion": "monitoring.coreos.com/v1",
+		"kind": "ServiceMonitor",
+		"metadata": {
+			"name": service_name,
+			"namespace": "rivet-service"
+		},
+		"spec": {
+			"selector": {
+				"matchLabels": {
+					"app.kubernetes.io/name": service_name
+				},
+			},
+			"endpoints": [
+				{ "port": "metrics" }
+			],
+		}
+	}));
+
+	// Build ingress router
+	if matches!(run_context, RunContext::Service { .. }) {
 		if let Some(router) = svc_ctx.config().kind.router() {
 			build_ingress_router(&project_ctx, svc_ctx, &service_name, &router, &mut specs);
 		}
 	}
 
 	specs
+}
+
+async fn build_volumes(
+	project_ctx: &ProjectContext,
+	exec_ctx: &ExecServiceContext,
+) -> (Vec<serde_json::Value>, Vec<serde_json::Value>) {
+	let ExecServiceContext {
+		svc_ctx,
+		run_context,
+		driver,
+	} = exec_ctx;
+
+	// Shared data between containers
+	let mut volumes = vec![json!({
+		"name": "local",
+		"projected": {
+			"defaultMode": 0o0777,
+			"sources": [
+				{
+					"configMap": {
+						"name": "health-checks"
+					}
+				},
+				{
+					"configMap": {
+						"name": "install-ca"
+					}
+				}
+			]
+		}
+	})];
+	let mut volume_mounts = vec![json!({
+		"name": "local",
+		"mountPath": "/local/rivet",
+		"readOnly": true
+	})];
+
+	// Add volumes based on exec service
+	match driver {
+		// Mount the service binaries to execute directly in the container. See
+		// notes in salt/salt/nomad/files/nomad.d/client.hcl.j2.
+		ExecServiceDriver::LocalBinaryArtifact { .. } => {
+			// Volumes
+			volumes.push(json!({
+				"name": "rivet-src",
+				"hostPath": {
+					"path": "/rivet-src",
+					"type": "Directory"
+				}
+			}));
+			volumes.push(json!({
+				"name": "nix-store",
+				"hostPath": {
+					"path": "/nix/store",
+					"type": "Directory"
+				}
+			}));
+
+			// Mounts
+			volume_mounts.push(json!({
+				"name": "rivet-src",
+				"mountPath": "/rivet-src",
+				"readOnly": true
+			}));
+			volume_mounts.push(json!({
+				"name": "nix-store",
+				"mountPath": "/nix/store",
+				"readOnly": true
+			}));
+		}
+		ExecServiceDriver::Docker { .. } => {}
+	}
+
+	// Add CA volumes
+	if let config::ns::ClusterKind::SingleNode { .. } = &project_ctx.ns().cluster.kind {
+		let redis_deps = svc_ctx
+			.redis_dependencies(run_context)
+			.await
+			.iter()
+			.map(|dep| dep.redis_db_name())
+			.collect::<Vec<_>>();
+
+		// Redis CA
+		volumes.extend(redis_deps.iter().map(|db| {
+			json!({
+				"name": format!("redis-{}-ca", db),
+				"configMap": {
+					"name": format!("redis-{}-ca", db),
+					"defaultMode": 420,
+					"items": [
+						{
+							"key": "ca.crt",
+							"path": format!("redis-{}-ca.crt", db)
+						}
+					]
+				}
+			})
+		}));
+		volume_mounts.extend(redis_deps.iter().map(|db| {
+			json!({
+				"name": format!("redis-{}-ca", db),
+				"mountPath": format!("/usr/local/share/ca-certificates/redis-{}-ca.crt", db),
+				"subPath": format!("redis-{}-ca.crt", db)
+			})
+		}));
+
+		// CRDB CA
+		volumes.push(json!({
+			"name": "crdb-ca",
+			"configMap": {
+				"name": "crdb-ca",
+				"defaultMode": 420,
+				"items": [
+					{
+						"key": "ca.crt",
+						"path": "crdb-ca.crt"
+					}
+				]
+			}
+		}));
+		volume_mounts.push(json!({
+			"name": "crdb-ca",
+			"mountPath": "/usr/local/share/ca-certificates/crdb-ca.crt",
+			"subPath": "crdb-ca.crt"
+		}));
+
+		// Clickhouse CA
+		volumes.push(json!({
+			"name": "clickhouse-ca",
+			"configMap": {
+				"name": "clickhouse-ca",
+				"defaultMode": 420,
+				"items": [
+					{
+						"key": "ca.crt",
+						"path": "clickhouse-ca.crt"
+					}
+				]
+			}
+		}));
+		volume_mounts.push(json!({
+			"name": "clickhouse-ca",
+			"mountPath": "/usr/local/share/ca-certificates/clickhouse-ca.crt",
+			"subPath": "clickhouse-ca.crt"
+		}));
+	}
+
+	(volumes, volume_mounts)
 }
 
 // Added for ease of use
@@ -554,27 +707,32 @@ fn build_ingress_router(
 	router: &ServiceRouter,
 	specs: &mut Vec<serde_json::Value>,
 ) {
-	// Enable Traefik if there are mounts
-	if !router.mounts.is_empty() {}
-
 	// Register all mounts with Traefik
 	for (i, mount) in router.mounts.iter().enumerate() {
-		// Derive routing info
-		let domain = match mount.domain {
-			ServiceDomain::Base => project_ctx.domain_main(),
-			ServiceDomain::BaseGame => project_ctx.domain_cdn(),
-			ServiceDomain::BaseJob => project_ctx.domain_job(),
-		};
-		let host = if let Some(subdomain) = &mount.subdomain {
-			format!("{}.{}", subdomain, domain)
-		} else {
-			domain
-		};
+		// Build host rule
+		let mut rule = String::new();
 
-		// Build rule
-		let mut rule = format!("Host(`{host}`)");
+		// Build host
+		if let (Some(domain_main), Some(domain_main_api)) =
+			(project_ctx.domain_main(), project_ctx.domain_main_api())
+		{
+			// Derive routing info
+			let domain = if let Some(subdomain) = &mount.subdomain {
+				format!("{subdomain}.{domain_main}")
+			} else {
+				domain_main_api
+			};
+
+			rule.push_str(&format!("Host(`{domain}`)"));
+		}
+
+		// Build path
 		if let Some(path) = &mount.path {
-			rule.push_str(&format!(" && PathPrefix(`{path}`)"));
+			if !rule.is_empty() {
+				rule.push_str(" && ");
+			}
+
+			rule.push_str(&format!("PathPrefix(`{path}`)"));
 		}
 
 		// Build middlewares
@@ -588,7 +746,7 @@ fn build_ingress_router(
 				"kind": "Middleware",
 				"metadata": {
 					"name": mw_name,
-					"namespace": "traefik"
+					"namespace": "rivet-service"
 				},
 				"spec": {
 					"stripPrefix": {
@@ -607,7 +765,7 @@ fn build_ingress_router(
 				"kind": "Middleware",
 				"metadata": {
 					"name": mw_name,
-					"namespace": "traefik"
+					"namespace": "rivet-service"
 				},
 				"spec": {
 					"compress": {}
@@ -623,7 +781,7 @@ fn build_ingress_router(
 				"kind": "Middleware",
 				"metadata": {
 					"name": mw_name,
-					"namespace": "traefik"
+					"namespace": "rivet-service"
 				},
 				"spec": {
 					"inFlightReq": {
@@ -653,7 +811,7 @@ fn build_ingress_router(
 			"kind": "IngressRoute",
 			"metadata": {
 				"name": format!("{}-{i}-insecure", svc_ctx.name()),
-				"namespace": "traefik"
+				"namespace": "rivet-service"
 			},
 			"spec": {
 				"entryPoints": [ "web" ],
@@ -676,48 +834,41 @@ fn build_ingress_router(
 		}));
 
 		// Build secure router
-		specs.push(json!({
-			"apiVersion": "traefik.containo.us/v1alpha1",
-			"kind": "IngressRoute",
-			"metadata": {
-				"name": format!("{}-{i}-secure", svc_ctx.name()),
-				"namespace": "traefik"
-			},
-			"spec": {
-				"entryPoints": [ "websecure" ],
-				"routes": [
-					{
-						"kind": "Rule",
-						"match": rule,
-						"middlewares": ingress_middlewares,
-						"services": [
-							{
-								"kind": "Service",
-								"name": service_name,
-								"namespace": "rivet-service",
-								"port": 80
-							}
-						]
+		if project_ctx.tls_enabled() {
+			specs.push(json!({
+				"apiVersion": "traefik.containo.us/v1alpha1",
+				"kind": "IngressRoute",
+				"metadata": {
+					"name": format!("{}-{i}-secure", svc_ctx.name()),
+					"namespace": "rivet-service"
+				},
+				"spec": {
+					"entryPoints": [ "websecure" ],
+					"routes": [
+						{
+							"kind": "Rule",
+							"match": rule,
+							"middlewares": ingress_middlewares,
+							"services": [
+								{
+									"kind": "Service",
+									"name": service_name,
+									"namespace": "rivet-service",
+									"port": 80
+								}
+							]
+						}
+					],
+					"tls": {
+						"secretName": "ingress-tls-cert",
+						"options": {
+							"name": "ingress-tls",
+							"namespace": "traefik"
+						},
 					}
-				],
-				"tls": {
-					"secretName": "ingress-tls-cert",
-					"options": {
-						"name": "ingress-tls",
-						"namespace": "traefik"
-					},
-					// "domains": [
-					// 	{
-					// 		"main": "example.net",
-					// 		"sans": [
-					// 			"a.example.net",
-					// 			"b.example.net"
-					// 		]
-					// 	}
-					// ]
 				}
-			}
-		}));
+			}));
+		}
 
 		if svc_ctx.name() == "api-cf-verification" {
 			specs.push(json!({
@@ -725,7 +876,7 @@ fn build_ingress_router(
 				"kind": "IngressRoute",
 				"metadata": {
 					"name": "cf-verification-challenge",
-					"namespace": "traefik"
+					"namespace": "rivet-service"
 				},
 				"spec": {
 					"routes": [

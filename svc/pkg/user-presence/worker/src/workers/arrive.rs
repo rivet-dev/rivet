@@ -5,12 +5,12 @@ const DEFAULT_USER_SET_STATUS: i32 = backend::user::Status::Online as i32;
 
 #[worker(name = "user-presence-arrive")]
 async fn worker(ctx: &OperationContext<user_presence::msg::arrive::Message>) -> GlobalResult<()> {
-	let crdb = ctx.crdb("db-user-presence").await?;
+	let crdb = ctx.crdb().await?;
 
 	let user_id = internal_unwrap!(ctx.user_id).as_uuid();
 
 	let user_set_status = sqlx::query_as::<_, (Option<i64>,)>(
-		"SELECT user_set_status FROM user_presences WHERE user_id = $1",
+		"SELECT user_set_status FROM db_user_presence.user_presences WHERE user_id = $1",
 	)
 	.bind(user_id)
 	.fetch_optional(&crdb)

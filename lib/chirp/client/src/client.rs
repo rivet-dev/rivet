@@ -13,6 +13,7 @@ use std::{
 	sync::Arc,
 	time::Duration,
 };
+use tokio::task::JoinSet;
 use tokio_util::sync::{CancellationToken, DropGuard};
 use tracing::Instrument;
 use types::rivet::chirp;
@@ -65,12 +66,12 @@ impl SharedClient {
 		redis_cache: RedisPool,
 		region: String,
 	) -> SharedClientHandle {
-		// let spawn_res = tokio::task::Builder::new()
-		// 	.name("chirp_client::metrics_update_update")
-		// 	.spawn(metrics::start_update_uptime());
-		// if let Err(err) = spawn_res {
-		// 	tracing::error!(?err, "failed to spawn user_presence_touch task");
-		// }
+		let spawn_res = tokio::task::Builder::new()
+			.name("chirp_client::metrics::start_update_uptime")
+			.spawn(metrics::start_update_uptime());
+		if let Err(err) = spawn_res {
+			tracing::error!(?err, "failed to spawn start_update_uptime task");
+		}
 
 		Arc::new(SharedClient {
 			nats,
@@ -135,7 +136,6 @@ impl SharedClient {
 				ray_id,
 			)),
 			ts,
-			None,
 		)
 	}
 
@@ -146,17 +146,8 @@ impl SharedClient {
 		ts: i64,
 		trace: Vec<chirp::TraceEntry>,
 		perf_ctx: chirp_perf::PerfCtxInner,
-		drop_fn: Option<DropFn>,
 	) -> Client {
-		Client::new(
-			self,
-			parent_req_id,
-			ray_id,
-			trace,
-			Arc::new(perf_ctx),
-			ts,
-			drop_fn,
-		)
+		Client::new(self, parent_req_id, ray_id, trace, Arc::new(perf_ctx), ts)
 	}
 
 	pub fn region(&self) -> &str {
@@ -164,16 +155,12 @@ impl SharedClient {
 	}
 }
 
-type DropFn = Box<dyn Fn() + Send>;
-
 /// Used to communicate with other Chirp clients.
 ///
 /// This should be built from `SharedClient::wrap` in order to create the
 /// necessary context.
 #[derive(Clone)]
 pub struct Client {
-	_guard: Arc<DropGuard>,
-
 	inner: SharedClientHandle,
 
 	/// Request ID of the Chirp request that created this client.
@@ -230,38 +217,10 @@ impl Client {
 		trace: Vec<chirp::TraceEntry>,
 		perf_ctx: chirp_perf::PerfCtx,
 		ts: i64,
-		drop_fn: Option<DropFn>,
 	) -> Client {
-		let token = CancellationToken::new();
-
-		// Submit performance on drop
-		{
-			let token = token.clone();
-			let perf_ctx = perf_ctx.clone();
-			let spawn_res = tokio::task::Builder::new()
-				.name("chirp_client::client_wait_drop")
-				.spawn(
-					async move {
-						token.cancelled().await;
-						perf_ctx.submit().await;
-
-						metrics::CHIRP_CLIENT_ACTIVE.dec();
-
-						if let Some(drop_fn) = drop_fn {
-							drop_fn();
-						}
-					}
-					.instrument(tracing::info_span!("client_wait_drop")),
-				);
-			if let Err(err) = spawn_res {
-				tracing::error!(?err, "failed to spawn client_wait_drop task");
-			}
-		}
-
 		metrics::CHIRP_CLIENT_ACTIVE.inc();
 
 		Client {
-			_guard: Arc::new(token.drop_guard()),
 			inner,
 			parent_req_id,
 			ray_id,
@@ -290,6 +249,12 @@ impl Client {
 
 	pub fn ts(&self) -> i64 {
 		self.ts
+	}
+}
+
+impl Drop for Client {
+	fn drop(&mut self) {
+		metrics::CHIRP_CLIENT_ACTIVE.dec();
 	}
 }
 
@@ -636,7 +601,7 @@ impl Client {
 	/// finish publishing. This is done since there are very few cases where a
 	/// service should need to wait or fail if a message does not publish
 	/// successfully.
-	#[tracing::instrument(err, skip_all)]
+	#[tracing::instrument(err, skip_all, fields(message = M::NAME))]
 	pub async fn message<M>(
 		&self,
 		parameters: Vec<String>,
@@ -661,7 +626,7 @@ impl Client {
 						}
 					}
 				}
-				.instrument(tracing::info_span!("async_message")),
+				.in_current_span(),
 			);
 		if let Err(err) = spawn_res {
 			tracing::error!(?err, "failed to spawn message_async task");
@@ -741,9 +706,10 @@ impl Client {
 		//
 		// It's important to write to the stream as fast as possible in order to
 		// ensure messages are handled quickly.
-		self.message_write_redis::<M>(&parameters, message_buf.as_slice(), req_id, ts)
+		let message_buf = Arc::new(message_buf);
+		self.message_write_redis::<M>(&parameters, message_buf.clone(), req_id, ts)
 			.await;
-		self.message_publish_nats::<M>(&nats_subject, message_buf.as_slice())
+		self.message_publish_nats::<M>(&nats_subject, message_buf)
 			.await;
 
 		Ok(())
@@ -754,7 +720,7 @@ impl Client {
 	async fn message_write_redis<M>(
 		&self,
 		parameters: &[String],
-		message_buf: &[u8],
+		message_buf: Arc<Vec<u8>>,
 		req_id: Uuid,
 		ts: i64,
 	) where
@@ -769,38 +735,54 @@ impl Client {
 			.iter()
 			.map(|x| escape_parameter_wildcards(x))
 			.collect::<Vec<String>>();
-		let permuted_wildcard_parameters =
-			generate_permuted_wildcard_parameters::<M>(&parameters_str);
 
-		// Write message to Redis stream
-		let span = self.perf().start(M::PERF_LABEL_WRITE_STREAM).await;
-		// let mut backoff = rivet_util::Backoff::default_infinite();
-		// loop {
-		// 	// Ignore for infinite backoff
-		// 	backoff.tick().await;
-
-		let mut conn = self.redis_chirp.clone();
-
-		let mut pipe = redis::pipe();
-		pipe.atomic();
+		let mut join_set = JoinSet::new();
 
 		// Write to stream
-		let topic_key = redis_keys::message_topic(M::NAME);
-		pipe.xadd_maxlen(
-			&topic_key,
-			redis::streams::StreamMaxlen::Approx(8192),
-			"*",
-			&[("m", &message_buf)],
-		)
-		.ignore();
+		{
+			let perf = self.perf().clone();
+			let mut conn = self.redis_chirp.clone();
+			let message_buf = message_buf.clone();
+			let spawn_res = join_set
+				.build_task()
+				.name("chirp_client::message_xadd")
+				.spawn(
+					async move {
+						let span = perf.start(M::PERF_LABEL_WRITE_STREAM).await;
+						let topic_key = redis_keys::message_topic(M::NAME);
+						match conn
+							.xadd_maxlen::<_, _, _, _, ()>(
+								&topic_key,
+								redis::streams::StreamMaxlen::Approx(8192),
+								"*",
+								&[("m", message_buf.as_slice())],
+							)
+							.await
+						{
+							Ok(_) => {
+								tracing::debug!("write to redis stream succeeded");
+							}
+							Err(err) => {
+								tracing::error!(?err, "failed to write to redis");
+							}
+						}
+						span.end();
+					}
+					.in_current_span(),
+				);
+			if let Err(err) = spawn_res {
+				tracing::error!(?err, "failed to spawn message_xadd task");
+			}
+		}
 
 		// Write tails for all permuted parameters
-		for wildcard_parameters in &permuted_wildcard_parameters {
-			// Write tail
-			if let Some(ttl) = M::TAIL_TTL {
-				// Write single tail message
-
+		if let Some(ttl) = M::TAIL_TTL {
+			let permuted_wildcard_parameters =
+				generate_permuted_wildcard_parameters::<M>(&parameters_str);
+			for wildcard_parameters in &permuted_wildcard_parameters {
 				let tail_key = redis_keys::message_tail::<M, _>(wildcard_parameters);
+
+				let mut pipe = redis::pipe();
 
 				// Save message
 				pipe.hset(
@@ -811,8 +793,12 @@ impl Client {
 				.ignore();
 				pipe.hset(&tail_key, redis_keys::message_tail::TS, ts)
 					.ignore();
-				pipe.hset(&tail_key, redis_keys::message_tail::BODY, message_buf)
-					.ignore();
+				pipe.hset(
+					&tail_key,
+					redis_keys::message_tail::BODY,
+					message_buf.as_slice(),
+				)
+				.ignore();
 
 				// Automatically expire
 				pipe.expire(&tail_key, ttl as usize).ignore();
@@ -834,32 +820,45 @@ impl Client {
 					}
 
 					// Save message
-					pipe.zadd(&history_key, message_buf, ts).ignore();
+					pipe.zadd(&history_key, message_buf.as_slice(), ts).ignore();
 
 					// Automatically expire
 					pipe.expire(&history_key, ttl as usize).ignore();
-				} else {
+
+					let perf = self.perf().clone();
+					let mut conn = self.redis_chirp.clone();
+					let spawn_res = join_set
+						.build_task()
+						.name("chirp_client::message_write_tail")
+						.spawn(
+							async move {
+								let span = perf.start(M::PERF_LABEL_WRITE_TAIL).await;
+								match pipe.query_async::<_, ()>(&mut conn).await {
+									Ok(_) => {
+										tracing::debug!("write to redis tail succeeded");
+									}
+									Err(err) => {
+										tracing::error!(?err, "failed to write to redis tail");
+									}
+								}
+								span.end();
+							}
+							.in_current_span(),
+						);
+					if let Err(err) = spawn_res {
+						tracing::error!(?err, "failed to spawn message_write_tail task");
+					}
 				}
 			}
 		}
 
-		// Write to Redis
-		match pipe.query_async::<_, ()>(&mut conn).await {
-			Ok(_) => {
-				tracing::debug!("write to redis stream succeeded");
-				// break;
-			}
-			Err(err) => {
-				tracing::error!(?err, "failed to write to redis");
-			}
-		}
-		// }
-		span.end();
+		// Join futures
+		while let Some(_) = join_set.join_next().await {}
 	}
 
 	/// Publishes the message to NATS.
 	#[tracing::instrument(level = "debug", skip_all)]
-	async fn message_publish_nats<M>(&self, nats_subject: &str, message_buf: &[u8])
+	async fn message_publish_nats<M>(&self, nats_subject: &str, message_buf: Arc<Vec<u8>>)
 	where
 		M: Message,
 	{
@@ -875,7 +874,6 @@ impl Client {
 		// 	backoff.tick().await;
 
 		let nats_subject = nats_subject.to_owned();
-		let message_buf = message_buf.to_vec();
 
 		tracing::trace!(
 			?nats_subject,
@@ -884,7 +882,7 @@ impl Client {
 		);
 		if let Err(err) = self
 			.nats
-			.publish(nats_subject.clone(), message_buf.into())
+			.publish(nats_subject.clone(), (*message_buf).clone().into())
 			.await
 		{
 			tracing::warn!(?err, "publish message failed, trying again");
@@ -1457,7 +1455,7 @@ where
 					async move {
 						token.cancelled().await;
 
-						tracing::info!("closing subscription");
+						tracing::trace!("closing subscription");
 
 						// End lifetime
 						lifetime_perf.end();

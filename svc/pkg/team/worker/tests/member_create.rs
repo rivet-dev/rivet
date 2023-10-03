@@ -17,10 +17,10 @@ async fn empty(ctx: TestCtx) {
 	.unwrap();
 
 	let (_,): (i64,) =
-		sqlx::query_as("SELECT 1 FROM team_members WHERE team_id = $1 AND user_id = $2")
+		sqlx::query_as("SELECT 1 FROM db_team.team_members WHERE team_id = $1 AND user_id = $2")
 			.bind(team_id)
 			.bind(user_id)
-			.fetch_one(&ctx.crdb("db-team").await.unwrap())
+			.fetch_one(&ctx.crdb().await.unwrap())
 			.await
 			.unwrap();
 }

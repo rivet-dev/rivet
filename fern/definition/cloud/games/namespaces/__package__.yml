@@ -8,10 +8,9 @@ imports:
 
 service:
   auth: true
-  url: Cloud
   audiences:
     - public
-  base-path: ""
+  base-path: /cloud
   endpoints:
     createGameNamespace:
       path: /games/{game_id}/namespaces

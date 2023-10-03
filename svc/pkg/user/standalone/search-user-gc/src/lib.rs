@@ -20,7 +20,7 @@ pub async fn run_from_env(ts: i64) -> GlobalResult<()> {
 		(),
 		Vec::new(),
 	);
-	let crdb = ctx.crdb("db-user").await?;
+	let crdb = ctx.crdb().await?;
 
 	let mut total_removed = 0;
 	let start = std::time::Instant::now();
@@ -29,7 +29,7 @@ pub async fn run_from_env(ts: i64) -> GlobalResult<()> {
 	let mut query = sqlx::query_as::<_, (Uuid,)>(indoc!(
 		"
 		SELECT user_id
-		FROM users AS OF SYSTEM TIME '-5s'
+		FROM db_user.users AS OF SYSTEM TIME '-5s'
 		WHERE
 			is_searchable = TRUE AND
 			update_ts < $1

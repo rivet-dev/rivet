@@ -7,6 +7,8 @@ use indicatif::{ProgressBar, ProgressStyle};
 use indoc::formatdoc;
 use tokio::{net::TcpStream, sync::Mutex};
 
+use crate::context::ProjectContext;
+
 pub mod command_helper;
 pub mod db_conn;
 pub mod media_resize;
@@ -258,6 +260,7 @@ impl Drop for DroppablePort {
 }
 
 pub fn kubectl_port_forward(
+	ctx: &ProjectContext,
 	service_name: &str,
 	namespace: &str,
 	(local_port, remote_port): (u16, u16),
@@ -274,6 +277,7 @@ pub fn kubectl_port_forward(
 		namespace,
 		format!("{local_port}:{remote_port}")
 	)
+	.env("KUBECONFIG", ctx.gen_kubeconfig_path())
 	.stdout_capture()
 	.stderr_capture()
 	.start()?;

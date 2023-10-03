@@ -13,9 +13,9 @@ async fn handle(
 		CDN_INVALID_AUTH_USER_PASSWORD
 	);
 
-	let crdb = ctx.crdb("db-cdn").await?;
+	let crdb = ctx.crdb().await?;
 	let (auth_user_count,) = sqlx::query_as::<_, (i64,)>(
-		"SELECT COUNT(*) FROM game_namespace_auth_users WHERE namespace_id = $1",
+		"SELECT COUNT(*) FROM db_cdn.game_namespace_auth_users WHERE namespace_id = $1",
 	)
 	.bind(namespace_id)
 	.fetch_one(&crdb)
@@ -24,7 +24,7 @@ async fn handle(
 	assert_with!(auth_user_count < CDN_AUTH_USER_MAX, CDN_TOO_MANY_AUTH_USERS);
 
 	sqlx::query(
-		"UPSERT INTO game_namespace_auth_users (namespace_id, user_name, password) VALUES ($1, $2, $3)",
+		"UPSERT INTO db_cdn.game_namespace_auth_users (namespace_id, user_name, password) VALUES ($1, $2, $3)",
 	)
 	.bind(namespace_id)
 	.bind(&ctx.user)

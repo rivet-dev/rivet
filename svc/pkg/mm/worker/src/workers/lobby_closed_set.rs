@@ -16,13 +16,13 @@ struct LobbyRow {
 
 #[worker(name = "mm-lobby-closed-set")]
 async fn worker(ctx: &OperationContext<mm::msg::lobby_closed_set::Message>) -> GlobalResult<()> {
-	let crdb = ctx.crdb("db-mm-state").await?;
+	let crdb = ctx.crdb().await?;
 
 	let lobby_id = internal_unwrap!(ctx.lobby_id).as_uuid();
 
 	let lobby_row = sqlx::query_as::<_, LobbyRow>(indoc!(
 		"
-		UPDATE lobbies
+		UPDATE db_mm_state.lobbies
 		SET is_closed = $2
 		WHERE lobby_id = $1
 		RETURNING namespace_id, region_id, lobby_group_id, max_players_normal, max_players_party

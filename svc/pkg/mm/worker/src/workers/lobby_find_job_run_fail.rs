@@ -9,7 +9,7 @@ struct LobbyRow {
 
 #[worker(name = "mm-lobby-find-job-run-fail")]
 async fn worker(ctx: &OperationContext<job_run::msg::fail::Message>) -> GlobalResult<()> {
-	let crdb = ctx.crdb("db-mm-state").await?;
+	let crdb = ctx.crdb().await?;
 
 	let run_id = internal_unwrap!(ctx.run_id).as_uuid();
 
@@ -17,8 +17,8 @@ async fn worker(ctx: &OperationContext<job_run::msg::fail::Message>) -> GlobalRe
 	let query_rows = sqlx::query_as::<_, (Uuid,)>(
 		"
 		SELECT find_queries.query_id
-		FROM lobbies
-		INNER JOIN find_queries ON find_queries.lobby_id = lobbies.lobby_id
+		FROM db_mm_state.lobbies
+		INNER JOIN db_mm_state.find_queries ON find_queries.lobby_id = lobbies.lobby_id
 		WHERE lobbies.run_id = $1
 		",
 	)

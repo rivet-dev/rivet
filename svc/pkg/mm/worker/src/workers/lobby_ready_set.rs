@@ -17,7 +17,7 @@ struct LobbyRow {
 
 #[worker(name = "mm-lobby-ready-set")]
 async fn worker(ctx: &OperationContext<mm::msg::lobby_ready::Message>) -> GlobalResult<()> {
-	let crdb = ctx.crdb("db-mm-state").await?;
+	let crdb = ctx.crdb().await?;
 	let mut redis_mm = ctx.redis_mm().await?;
 
 	let lobby_id = internal_unwrap!(ctx.lobby_id).as_uuid();
@@ -27,11 +27,11 @@ async fn worker(ctx: &OperationContext<mm::msg::lobby_ready::Message>) -> Global
 		WITH
 			select_lobby AS (
 				SELECT namespace_id, region_id, lobby_group_id, create_ts, ready_ts
-				FROM lobbies
+				FROM db_mm_state.lobbies
 				WHERE lobby_id = $1
 			),
 			_update AS (
-				UPDATE lobbies SET ready_ts = $2
+				UPDATE db_mm_state.lobbies SET ready_ts = $2
 				WHERE lobby_id = $1 AND ready_ts IS NULL
 				RETURNING 1
 			)

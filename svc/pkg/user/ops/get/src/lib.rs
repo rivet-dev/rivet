@@ -38,12 +38,12 @@ pub async fn handle(
 			is_admin,
 			delete_request_ts,
 			delete_complete_ts
-		FROM users
+		FROM db_user.users
 		WHERE user_id = ANY($1)
 		"
 	))
 	.bind(user_ids)
-	.fetch_all(&ctx.crdb("db-user").await?)
+	.fetch_all(&ctx.crdb().await?)
 	.await?;
 
 	let upload_ids = users

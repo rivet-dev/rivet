@@ -31,15 +31,15 @@ async fn resolve_rivet_game_subdomain(
 	ctx: &OperationContext<game::namespace_resolve_url::Request>,
 	domain: &str,
 ) -> GlobalResult<Option<game::namespace_resolve_url::response::Resolution>> {
-	let strip_suffix = format!(".{}", util::env::domain_cdn());
+	let domain_cdn = internal_unwrap_owned!(util::env::domain_cdn());
+	let strip_suffix = format!(".{domain_cdn}");
 	tracing::info!(%domain, %strip_suffix, "attempting to strip base domain");
 	let specifier = if let Some(x) = domain.strip_suffix(&strip_suffix) {
 		x
 	} else {
 		tracing::info!(
 			%domain,
-			"base component is not {base} or {{ns}}.{base}",
-			base = util::env::domain_cdn(),
+			"base component is not {domain_cdn} or {{ns}}.{domain_cdn}",
 		);
 		return Ok(None);
 	};

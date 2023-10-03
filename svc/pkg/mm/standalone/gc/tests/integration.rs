@@ -17,7 +17,7 @@ async fn all() {
 		.init();
 
 	let ctx = TestCtx::from_env("all").await.unwrap();
-	let crdb = ctx.crdb("db-mm-state").await.unwrap();
+	let crdb = ctx.crdb().await.unwrap();
 
 	remove_unready_lobbies(ctx.clone(), crdb.clone()).await;
 	remove_unregistered_players(ctx.clone(), crdb.clone()).await;
@@ -123,7 +123,7 @@ async fn remove_unregistered_players(ctx: TestCtx, crdb: CrdbPool) {
 		let (crdb_remove_ts,) = sqlx::query_as::<_, (Option<i64>,)>(indoc!(
 			"
 			SELECT remove_ts
-			FROM players
+			FROM db_mm_state.players
 			WHERE player_id = $1
 			"
 		))
@@ -155,7 +155,7 @@ async fn remove_unregistered_players(ctx: TestCtx, crdb: CrdbPool) {
 		player_remove_sub.next().await.unwrap();
 
 		let crdb_player_exists = sqlx::query_as::<_, (Option<i64>,)>(
-			"SELECT remove_ts FROM players WHERE player_id = $1",
+			"SELECT remove_ts FROM db_mm_state.players WHERE player_id = $1",
 		)
 		.bind(player_id)
 		.fetch_one(&crdb)

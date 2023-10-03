@@ -26,7 +26,7 @@ impl From<FileRow> for backend::upload::UploadFile {
 pub async fn handle(
 	ctx: OperationContext<upload::file_list::Request>,
 ) -> GlobalResult<upload::file_list::Response> {
-	let crdb = ctx.crdb("db-upload").await?;
+	let crdb = ctx.crdb().await?;
 
 	let upload_ids = ctx
 		.upload_ids
@@ -37,7 +37,7 @@ pub async fn handle(
 	let files = sqlx::query_as::<_, FileRow>(indoc!(
 		"
 		SELECT upload_id, path, mime, content_length, multipart_upload_id
-		FROM upload_files
+		FROM db_upload.upload_files
 		WHERE upload_id = ANY($1)
 		"
 	))

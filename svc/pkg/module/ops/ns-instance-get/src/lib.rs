@@ -10,13 +10,13 @@ pub async fn handle(
 	let instance = sqlx::query_as::<_, (Uuid,)>(indoc!(
 		"
 		SELECT instance_id
-		FROM namespace_instances
+		FROM db_module.namespace_instances
 		WHERE namespace_id = $1 AND key = $2
 		"
 	))
 	.bind(namespace_id)
 	.bind(&ctx.key)
-	.fetch_optional(&ctx.crdb("db-module").await?)
+	.fetch_optional(&ctx.crdb().await?)
 	.await?;
 
 	Ok(module::ns_instance_get::Response {

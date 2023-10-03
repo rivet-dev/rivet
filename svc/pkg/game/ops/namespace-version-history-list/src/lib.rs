@@ -22,7 +22,7 @@ async fn handle(
 	let versions: Vec<Version> = sqlx::query_as(indoc!(
 		"
 		SELECT namespace_id, version_id, deploy_ts
-		FROM game_namespace_version_history
+		FROM db_game.game_namespace_version_history
 		WHERE namespace_id = ANY($1)
 		ORDER BY deploy_ts DESC
 		LIMIT $2
@@ -30,7 +30,7 @@ async fn handle(
 	))
 	.bind(&namespace_ids)
 	.bind(ctx.limit as i32)
-	.fetch_all(&ctx.crdb("db-game").await?)
+	.fetch_all(&ctx.crdb().await?)
 	.await?;
 
 	// Group in to namespaces

@@ -4,7 +4,7 @@ use serde_json::json;
 
 #[worker(name = "module-create")]
 async fn worker(ctx: &OperationContext<module::msg::create::Message>) -> Result<(), GlobalError> {
-	let crdb = ctx.crdb("db-module").await?;
+	let crdb = ctx.crdb().await?;
 
 	let module_id = internal_unwrap!(ctx.module_id).as_uuid();
 	let team_id = internal_unwrap!(ctx.team_id).as_uuid();
@@ -12,7 +12,7 @@ async fn worker(ctx: &OperationContext<module::msg::create::Message>) -> Result<
 
 	sqlx::query(indoc!(
 		"
-		INSERT INTO modules (module_id, name_id, team_id, create_ts, creator_user_id)
+		INSERT INTO db_module.modules (module_id, name_id, team_id, create_ts, creator_user_id)
 		VALUES ($1, $2, $3, $4, $5)
 		"
 	))
