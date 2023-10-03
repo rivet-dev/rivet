@@ -1,5 +1,6 @@
 use std::{
 	collections::HashMap,
+	fmt,
 	path::{Path, PathBuf},
 };
 
@@ -50,6 +51,28 @@ enum SpecType {
 	Deployment,
 	Job,
 	CronJob,
+}
+
+impl fmt::Display for SpecType {
+	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+		match self {
+			SpecType::Pod => write!(f, "Pod"),
+			SpecType::Deployment => write!(f, "Deployment"),
+			SpecType::Job => write!(f, "Job"),
+			SpecType::CronJob => write!(f, "CronJob"),
+		}
+	}
+}
+
+impl SpecType {
+	fn api_version(&self) -> &'static str {
+		match self {
+			SpecType::Pod => "v1",
+			SpecType::Deployment => "apps/v1",
+			SpecType::Job => "batch/v1",
+			SpecType::CronJob => "batch/v1",
+		}
+	}
 }
 
 pub async fn project(ctx: &ProjectContext) -> Result<()> {
@@ -461,6 +484,43 @@ pub async fn gen_svc(exec_ctx: &ExecServiceContext) -> Vec<serde_json::Value> {
 				}
 			}));
 		}
+	}
+
+	// Horizontal Pod Autoscaler
+	if !matches!(spec_type, SpecType::Pod) {
+		eprintln!("\nHPA {}\n", spec_type);
+		specs.push(json!({
+			"apiVersion": "autoscaling/v2",
+			"kind": "HorizontalPodAutoscaler",
+			"metadata": {
+				"name": service_name,
+				"namespace": "rivet-service",
+				"labels": {
+					"app.kubernetes.io/name": service_name
+				}
+			},
+			"spec": {
+				"scaleTargetRef": {
+					"apiVersion": spec_type.api_version(),
+					"kind": spec_type.to_string(),
+					"name": service_name
+				},
+				"minReplicas": 1,
+				"maxReplicas": 5,
+				"metrics": [
+					{
+						"type": "Resource",
+						"resource": {
+							"name": "cpu",
+							"target": {
+								"type": "Utilization",
+								"averageUtilization": 80
+							}
+						}
+					}
+				]
+			}
+		}));
 	}
 
 	// Expose service
