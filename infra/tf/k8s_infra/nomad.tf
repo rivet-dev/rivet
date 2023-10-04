@@ -3,10 +3,22 @@
 # TODO: Figure out how to recover from a hard server crash (won't be able to notify other servers of leaving)
 # TODO: Scope locals
 
+# Run the Nomad servers used to orchestrate jobs on the Nomad game servers.
+#
+# Servers talk to each (i.e. Nomad Serf) to each other via a sidecar proxy (i.e. TCP + UDP) which has a consistent
+# IP + port. We do this because each server needs to have a consistent IP address it can be access at so nodes know
+# how to find eachother after restarting. If the IP address changed (as it would if using CoreDNS with the pod's IP),
+# then the cluster would fail to bootstrap after starting at the new pod's IP address.
+#
+# If we used CoreDNS instsead (i.e. directly connect to `nomad-server-statefulset-${i}.nomad-server.nomad.svc.cluster.local`),
+# the servers would resolve the IP address from the DNS record and store that. When moving the server to a new pod's IP, the server
+# would fail to connect to the other servers because their IP changed.
+
 locals {
 	count = 3
 	server_service_name = "nomad-server"
-	server_addrs = formatlist("nomad-server-statefulset-%d.${local.server_service_name}.${kubernetes_namespace.nomad.metadata.0.name}.svc.cluster.local", range(0, local.count))
+
+	server_addrs = [for i in range(0, i): "127.0.0.1:${6000 + i}"]
 	server_addrs_escaped = [for addr in local.server_addrs : "\"${addr}\""]
 	server_configmap_data = {
 		# We don't use Consul for server discovery because we don't want to depend on Consul for Nomad to work
@@ -17,14 +29,19 @@ locals {
 			disable_update_check = true
 
 			# The Nomad server IP changes, so we need to leave the cluster when terminating
-			leave_on_terminate = true
+			# leave_on_terminate = true
+
+			advertise {
+				rpc = "127.0.0.1:__LOCAL_PORT_RPC__"
+				serf = "127.0.0.1:__LOCAL_PORT_SERF__"
+			}
 
 			server {
 				enabled = true
 				bootstrap_expect = ${local.count}
 
 				server_join {
-					retry_join = [${join(",", local.server_addrs_escaped)}]
+					retry_join = [${local.server_addrs_escaped}]
 					retry_interval = "10s"
 				}
 			}
@@ -32,6 +49,10 @@ locals {
 	}
 	checksum_configmap = sha256(jsonencode(local.server_configmap_data))
 }
+
+# resource "random_uuid" "nomad_server_node_id" {
+# 	count = local.count
+# }
 
 resource "kubernetes_namespace" "nomad" {
 	metadata {
@@ -78,6 +99,72 @@ resource "kubernetes_service" "nomad_server" {
 	}
 }
 
+resource "kubernetes_config_map" "traefik_config" {
+	metadata {
+		name = "traefik-dynamic-config"
+		namespace = "nomad"
+	}
+
+	data = {
+		for i in range(0, local.count):
+		"nomad-${i}.yaml" => yamlencode({
+			tcp = {
+				routers = {
+					"nomad-${i}-rpc" = {
+						entryPoints = ["nomad-${i}-rpc-tcp"]
+						rule = "HostSNI(`*`)"
+						service = "nomad-${i}-rpc"
+					}
+					"nomad-${i}-serf" = {
+						entryPoints = ["nomad-${i}-serf-tcp"]
+						rule = "HostSNI(`*`)"
+						service = "nomad-${i}-serf"
+					}
+				}
+				services = {
+					"nomad-${i}-rpc" = {
+						loadBalancer = {
+							servers = [
+								{
+									address = "nomad-server-statefulset-${i}.nomad-server.nomad.svc.cluster.local:4647"
+								}
+							]
+						}
+					}
+					"nomad-${i}-serf" = {
+						loadBalancer = {
+							servers = [
+								{
+									address = "nomad-server-statefulset-${i}.nomad-server.nomad.svc.cluster.local:4648"
+								}
+							]
+						}
+					}
+				}
+			}
+			udp = {
+				routers = {
+					"nomad-${i}-serf" = {
+						entryPoints = ["nomad-${i}-serf-udp"]
+						service = "nomad-${i}-serf"
+					}
+				}
+				services = {
+					"nomad-${i}-serf" = {
+						loadBalancer = {
+							servers = [
+								{
+									address = "nomad-server-statefulset-${i}.nomad-server.nomad.svc.cluster.local:4648"
+								}
+							]
+						}
+					}
+				}
+			}
+		})
+	}
+}
+
 resource "kubernetes_stateful_set" "nomad_server" {
 	metadata {
 		namespace = kubernetes_namespace.nomad.metadata.0.name
@@ -110,15 +197,44 @@ resource "kubernetes_stateful_set" "nomad_server" {
 
 			spec {
 				security_context {
-					run_as_user   = 100
-					run_as_group  = 999
-					fs_group      = 999
+					run_as_user   = 0
 				}
+
 				container {
 					name = "nomad-instance"
 					image = "hashicorp/nomad:1.6.0"
 					image_pull_policy = "IfNotPresent"
-					args = ["agent", "-config=/etc/nomad/nomad.d/server.hcl"]
+
+					# args = ["agent", "-config=/etc/nomad/nomad.d/server.hcl"]
+
+					command = ["/bin/sh", "-c"]
+					args = [
+						<<-EOF
+						# Calculate the local port
+						POD_INDEX=$(echo $POD_NAME | awk -F'-' '{print $NF}')
+						echo "Pod index: $POD_INDEX"
+						LOCAL_PORT_RPC=$((5000 + POD_INDEX))
+						echo "Port rpc: $LOCAL_PORT_RPC"
+						LOCAL_PORT_SERF=$((6000 + POD_INDEX))
+						echo "Port serf: $LOCAL_PORT_SERF"
+
+						# Template the config
+						mkdir -p /etc/nomad/nomad.d/
+						sed -e "s/__LOCAL_PORT_RPC__/$${LOCAL_PORT_RPC}/g; s/__LOCAL_PORT_SERF__/$${LOCAL_PORT_SERF}/g" /tpl/etc/nomad/nomad.d/server.hcl > /etc/nomad/nomad.d/server.hcl
+
+						# Start agent
+						nomad agent -config=/etc/nomad/nomad.d/server.hcl
+						EOF
+					]
+
+					env {
+						name = "POD_NAME"
+						value_from {
+							field_ref {
+								field_path = "metadata.name"
+							}
+						}
+					}
 
 					port {
 						name = "http"
@@ -157,11 +273,73 @@ resource "kubernetes_stateful_set" "nomad_server" {
 
 					volume_mount {
 						name = "nomad-config"
-						mount_path = "/etc/nomad/nomad.d"
+						mount_path = "/tpl/etc/nomad/nomad.d"
 					}
 					volume_mount {
 						name = "nomad-data"
 						mount_path = "/opt/nomad/data"
+					}
+				}
+
+				# Proxy Nomad clients
+				container {
+					name  = "traefik-sidecar"
+					image = "traefik:v2.10"
+					args = flatten([
+						# Generic config
+						[
+							"--providers.file.directory=/etc/traefik",
+							"--providers.file.watch=true"
+						],
+
+						# Entrypoints
+						flatten([
+							for i in range(0, local.count):
+							[
+								"--entryPoints.nomad-${i}-rpc-tcp.address=:${5000 + i}/tcp",
+								"--entryPoints.nomad-${i}-serf-tcp.address=:${6000 + i}/tcp",
+								"--entryPoints.nomad-${i}-serf-udp.address=:${6000 + i}/udp",
+							]
+						]),
+					])
+
+					dynamic "port" {
+						for_each = [for i in range(0, local.count) : i]
+						content {
+							name = "n-${port.value}-rpc-tcp"
+							container_port = 5000 + port.value
+							protocol = "TCP"
+						}
+					}
+
+					dynamic "port" {
+						for_each = [for i in range(0, local.count) : i]
+						content {
+							name = "n-${port.value}-serf-tcp"
+							container_port = 6000 + port.value
+							protocol = "TCP"
+						}
+					}
+
+					dynamic "port" {
+						for_each = [for i in range(0, local.count) : i]
+						content {
+							name = "n-${port.value}-serf-udp"
+							container_port = 6000 + port.value
+							protocol = "UDP"
+						}
+					}
+
+					volume_mount {
+						name       = "config-volume"
+						mount_path = "/etc/traefik"
+					}
+				}
+
+				volume {
+					name = "config-volume"
+					config_map {
+						name = kubernetes_config_map.traefik_config.metadata[0].name
 					}
 				}
 
