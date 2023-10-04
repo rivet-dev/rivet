@@ -1,8 +1,3 @@
-# TODO: Document why we don't use the Consul provider for server discovery like https://www.linode.com/docs/guides/nomad-alongside-kubernetes/
-# TODO: Attempt to invalidate this cluster by killing random pods
-# TODO: Figure out how to recover from a hard server crash (won't be able to notify other servers of leaving)
-# TODO: Scope locals
-
 # Run the Nomad servers used to orchestrate jobs on the Nomad game servers.
 #
 # Servers talk to each (i.e. Nomad Serf) to each other via a sidecar proxy (i.e. TCP + UDP) which has a consistent
@@ -13,14 +8,15 @@
 # If we used CoreDNS instsead (i.e. directly connect to `nomad-server-statefulset-${i}.nomad-server.nomad.svc.cluster.local`),
 # the servers would resolve the IP address from the DNS record and store that. When moving the server to a new pod's IP, the server
 # would fail to connect to the other servers because their IP changed.
+#
+# We don't use Consul for Nomad server service discvoery because (a) it's unnecesary complecity and (b) it doesn't fix the
+# problem with Nomad server addresses changing.
 
 locals {
-	count = 3
-	server_service_name = "nomad-server"
-
-	server_addrs = [for i in range(0, i): "127.0.0.1:${6000 + i}"]
-	server_addrs_escaped = [for addr in local.server_addrs : "\"${addr}\""]
-	server_configmap_data = {
+	nomad_server_count = 3
+	nomad_server_addrs = [for i in range(0, i): "127.0.0.1:${6000 + i}"]
+	nomad_server_addrs_escaped = [for addr in local.nomad_server_addrs : "\"${addr}\""]
+	nomad_server_configmap_data = {
 		# We don't use Consul for server discovery because we don't want to depend on Consul for Nomad to work
 		"server.hcl" = <<-EOT
 			datacenter = "global"
@@ -38,21 +34,17 @@ locals {
 
 			server {
 				enabled = true
-				bootstrap_expect = ${local.count}
+				bootstrap_expect = ${local.nomad_server_count}
 
 				server_join {
-					retry_join = [${local.server_addrs_escaped}]
+					retry_join = [${local.nomad_server_addrs_escaped}]
 					retry_interval = "10s"
 				}
 			}
 		EOT
 	}
-	checksum_configmap = sha256(jsonencode(local.server_configmap_data))
+	nomad_checksum_configmap = sha256(jsonencode(local.nomad_server_configmap_data))
 }
-
-# resource "random_uuid" "nomad_server_node_id" {
-# 	count = local.count
-# }
 
 resource "kubernetes_namespace" "nomad" {
 	metadata {
@@ -64,7 +56,7 @@ resource "kubernetes_namespace" "nomad" {
 resource "kubernetes_config_map" "nomad_server" {
 	metadata {
 		namespace = kubernetes_namespace.nomad.metadata.0.name
-		name = "nomad-server-configmap-${local.checksum_configmap}"
+		name = "nomad-server-configmap-${local.nomad_checksum_configmap}"
 		labels = {
 			app = "nomad-server"
 		}
@@ -73,10 +65,11 @@ resource "kubernetes_config_map" "nomad_server" {
 	data = local.server_configmap_data
 }
 
+# Expose service
 resource "kubernetes_service" "nomad_server" {
 	metadata {
 		namespace = kubernetes_namespace.nomad.metadata.0.name
-		name = local.server_service_name
+		name = "nomad-server"
 		labels = {
 			name = "nomad-server"
 			"app.kubernetes.io/name" = "nomad-server"
@@ -86,11 +79,13 @@ resource "kubernetes_service" "nomad_server" {
 		selector = {
 			app = "nomad-server"
 		}
+
 		port {
 			name = "http"
 			port = 4646
 			protocol = "TCP"
 		}
+
 		port {
 			name = "rpc"
 			port = 4647
@@ -99,14 +94,220 @@ resource "kubernetes_service" "nomad_server" {
 	}
 }
 
-resource "kubernetes_config_map" "traefik_config" {
+resource "kubernetes_stateful_set" "nomad_server" {
 	metadata {
-		name = "traefik-dynamic-config"
+		namespace = kubernetes_namespace.nomad.metadata.0.name
+		name = "nomad-server-statefulset"
+		labels = {
+			app = "nomad-server"
+		}
+	}
+	spec {
+		replicas = local.nomad_server_count
+
+		selector {
+			match_labels = {
+				app = "nomad-server"
+			}
+		}
+
+		service_name = kubernetes_service.nomad_server.metadata.0.name
+
+		template {
+			metadata {
+				labels = {
+					app = "nomad-server"
+				}
+				annotations = {
+					# Trigger a rolling update on config chagne
+					"checksum/configmap" = local.nomad_checksum_configmap
+				}
+			}
+
+			spec {
+				security_context {
+					run_as_user   = 0
+				}
+
+				container {
+					name = "nomad-instance"
+					# IMPORTANT: Do not upgrade past 1.6.0. This is the last MPL-licensed version.
+					image = "hashicorp/nomad:1.6.0"
+					image_pull_policy = "IfNotPresent"
+
+					command = ["/bin/sh", "-c"]
+					args = [
+						<<-EOF
+						# Calculate the local ports
+						POD_INDEX=$(echo $POD_NAME | awk -F'-' '{print $NF}')
+						LOCAL_PORT_RPC=$((5000 + POD_INDEX))
+						LOCAL_PORT_SERF=$((6000 + POD_INDEX))
+						echo "Pod index: $POD_INDEX"
+						echo "Port RPC: $LOCAL_PORT_RPC"
+						echo "Port Serf: $LOCAL_PORT_SERF"
+
+						# Template the config
+						mkdir -p /etc/nomad/nomad.d/
+						cat /tpl/etc/nomad/nomad.d/server.hcl | sed -e "s/__LOCAL_PORT_RPC__/$${LOCAL_PORT_RPC}/g; s/__LOCAL_PORT_SERF__/$${LOCAL_PORT_SERF}/g"  > /etc/nomad/nomad.d/server.hcl
+
+						# Start agent
+						nomad agent -config=/etc/nomad/nomad.d/server.hcl
+						EOF
+					]
+
+					env {
+						name = "POD_NAME"
+						value_from {
+							field_ref {
+								field_path = "metadata.name"
+							}
+						}
+					}
+
+					port {
+						name = "http"
+						container_port = 4646
+						protocol = "TCP"
+					}
+					port {
+						name = "rpc"
+						container_port = 4647
+						protocol = "TCP"
+					}
+					port {
+						name = "serf-tcp"
+						container_port = 4648
+						protocol = "TCP"
+					}
+					port {
+						name = "serf-udp"
+						container_port = 4648
+						protocol = "UDP"
+					}
+
+					# We don't use a readiness probe for `/v1/status/leader` because
+					# we need all three nodes to boot successfully and bootstrap.
+					# The load balancer itself should prevent routing traffic to
+					# nodes that don't have a leader.
+					readiness_probe {
+						http_get {
+							path = "/v1/agent/self"
+							port = "http"
+						}
+
+						initial_delay_seconds = 5
+						period_seconds = 5
+					}
+
+					volume_mount {
+						name = "nomad-config"
+						mount_path = "/tpl/etc/nomad/nomad.d"
+					}
+
+					volume_mount {
+						name = "nomad-data"
+						mount_path = "/opt/nomad/data"
+					}
+				}
+
+				# Sidecar that proxies traffic to other Nomad clients.
+				container {
+					name  = "traefik-sidecar"
+					image = "traefik:v2.10"
+					args = flatten([
+						# Generic config
+						[
+							"--providers.file.directory=/etc/traefik",
+							"--providers.file.watch=true"
+						],
+
+						# Entrypoints
+						flatten([
+							for i in range(0, local.nomad_server_count):
+							[
+								"--entryPoints.nomad-${i}-rpc-tcp.address=:${5000 + i}/tcp",
+								"--entryPoints.nomad-${i}-serf-tcp.address=:${6000 + i}/tcp",
+								"--entryPoints.nomad-${i}-serf-udp.address=:${6000 + i}/udp",
+							]
+						]),
+					])
+
+					dynamic "port" {
+						for_each = [for i in range(0, local.nomad_server_count) : i]
+						content {
+							name = "n-${port.value}-rpc-tcp"
+							container_port = 5000 + port.value
+							protocol = "TCP"
+						}
+					}
+
+					dynamic "port" {
+						for_each = [for i in range(0, local.nomad_server_count) : i]
+						content {
+							name = "n-${port.value}-serf-tcp"
+							container_port = 6000 + port.value
+							protocol = "TCP"
+						}
+					}
+
+					dynamic "port" {
+						for_each = [for i in range(0, local.nomad_server_count) : i]
+						content {
+							name = "n-${port.value}-serf-udp"
+							container_port = 6000 + port.value
+							protocol = "UDP"
+						}
+					}
+
+					volume_mount {
+						name       = "traefik-config"
+						mount_path = "/etc/traefik"
+					}
+				}
+
+				volume {
+					name = "nomad-config"
+					config_map {
+						name = kubernetes_config_map.nomad_server.metadata.0.name
+					}
+				}
+
+				volume {
+					name = "traefik-config"
+					config_map {
+						name = kubernetes_config_map.nomad_server_sidecar_traefik_config.metadata[0].name
+					}
+				}
+			}
+		}
+
+		volume_claim_template {
+			metadata {
+				name = "nomad-data"
+			}
+
+			spec {
+				access_modes = ["ReadWriteOnce"]
+				resources {
+					requests = {
+						storage = "1Gi"
+					}
+				}
+				storage_class_name = var.k8s_storage_class
+			}
+		}
+	}
+}
+
+# Build Traefik config for the sidecar that forwards traffic to other Nomad leaders.
+resource "kubernetes_config_map" "nomad_server_sidecar_traefik_config" {
+	metadata {
+		name = "nomad-server-sidecar-traefik"
 		namespace = "nomad"
 	}
 
 	data = {
-		for i in range(0, local.count):
+		for i in range(0, local.nomad_server_count):
 		"nomad-${i}.yaml" => yamlencode({
 			tcp = {
 				routers = {
@@ -164,208 +365,3 @@ resource "kubernetes_config_map" "traefik_config" {
 		})
 	}
 }
-
-resource "kubernetes_stateful_set" "nomad_server" {
-	metadata {
-		namespace = kubernetes_namespace.nomad.metadata.0.name
-		name = "nomad-server-statefulset"
-		labels = {
-			app = "nomad-server"
-		}
-	}
-	spec {
-		replicas = local.count
-
-		selector {
-			match_labels = {
-				app = "nomad-server"
-			}
-		}
-
-		service_name = kubernetes_service.nomad_server.metadata.0.name
-
-		template {
-			metadata {
-				labels = {
-					app = "nomad-server"
-				}
-				annotations = {
-					# Trigger a rolling update on config chagne
-					"checksum/configmap" = local.checksum_configmap
-				}
-			}
-
-			spec {
-				security_context {
-					run_as_user   = 0
-				}
-
-				container {
-					name = "nomad-instance"
-					image = "hashicorp/nomad:1.6.0"
-					image_pull_policy = "IfNotPresent"
-
-					# args = ["agent", "-config=/etc/nomad/nomad.d/server.hcl"]
-
-					command = ["/bin/sh", "-c"]
-					args = [
-						<<-EOF
-						# Calculate the local port
-						POD_INDEX=$(echo $POD_NAME | awk -F'-' '{print $NF}')
-						echo "Pod index: $POD_INDEX"
-						LOCAL_PORT_RPC=$((5000 + POD_INDEX))
-						echo "Port rpc: $LOCAL_PORT_RPC"
-						LOCAL_PORT_SERF=$((6000 + POD_INDEX))
-						echo "Port serf: $LOCAL_PORT_SERF"
-
-						# Template the config
-						mkdir -p /etc/nomad/nomad.d/
-						sed -e "s/__LOCAL_PORT_RPC__/$${LOCAL_PORT_RPC}/g; s/__LOCAL_PORT_SERF__/$${LOCAL_PORT_SERF}/g" /tpl/etc/nomad/nomad.d/server.hcl > /etc/nomad/nomad.d/server.hcl
-
-						# Start agent
-						nomad agent -config=/etc/nomad/nomad.d/server.hcl
-						EOF
-					]
-
-					env {
-						name = "POD_NAME"
-						value_from {
-							field_ref {
-								field_path = "metadata.name"
-							}
-						}
-					}
-
-					port {
-						name = "http"
-						container_port = 4646
-						protocol = "TCP"
-					}
-					port {
-						name = "rpc"
-						container_port = 4647
-						protocol = "TCP"
-					}
-					port {
-						name = "serf-tcp"
-						container_port = 4648
-						protocol = "TCP"
-					}
-					port {
-						name = "serf-udp"
-						container_port = 4648
-						protocol = "UDP"
-					}
-
-					# We don't use a readiness probe for `/v1/status/leader` because
-					# we need all three nodes to boot successfully and bootstrap.
-					# The load balancer itself should prevent routing traffic to
-					# nodes that don't have a leader.
-					readiness_probe {
-						http_get {
-							path = "/v1/agent/self"
-							port = "http"
-						}
-
-						initial_delay_seconds = 5
-						period_seconds = 5
-					}
-
-					volume_mount {
-						name = "nomad-config"
-						mount_path = "/tpl/etc/nomad/nomad.d"
-					}
-					volume_mount {
-						name = "nomad-data"
-						mount_path = "/opt/nomad/data"
-					}
-				}
-
-				# Proxy Nomad clients
-				container {
-					name  = "traefik-sidecar"
-					image = "traefik:v2.10"
-					args = flatten([
-						# Generic config
-						[
-							"--providers.file.directory=/etc/traefik",
-							"--providers.file.watch=true"
-						],
-
-						# Entrypoints
-						flatten([
-							for i in range(0, local.count):
-							[
-								"--entryPoints.nomad-${i}-rpc-tcp.address=:${5000 + i}/tcp",
-								"--entryPoints.nomad-${i}-serf-tcp.address=:${6000 + i}/tcp",
-								"--entryPoints.nomad-${i}-serf-udp.address=:${6000 + i}/udp",
-							]
-						]),
-					])
-
-					dynamic "port" {
-						for_each = [for i in range(0, local.count) : i]
-						content {
-							name = "n-${port.value}-rpc-tcp"
-							container_port = 5000 + port.value
-							protocol = "TCP"
-						}
-					}
-
-					dynamic "port" {
-						for_each = [for i in range(0, local.count) : i]
-						content {
-							name = "n-${port.value}-serf-tcp"
-							container_port = 6000 + port.value
-							protocol = "TCP"
-						}
-					}
-
-					dynamic "port" {
-						for_each = [for i in range(0, local.count) : i]
-						content {
-							name = "n-${port.value}-serf-udp"
-							container_port = 6000 + port.value
-							protocol = "UDP"
-						}
-					}
-
-					volume_mount {
-						name       = "config-volume"
-						mount_path = "/etc/traefik"
-					}
-				}
-
-				volume {
-					name = "config-volume"
-					config_map {
-						name = kubernetes_config_map.traefik_config.metadata[0].name
-					}
-				}
-
-				volume {
-					name = "nomad-config"
-					config_map {
-						name = kubernetes_config_map.nomad_server.metadata.0.name
-					}
-				}
-			}
-		}
-
-		volume_claim_template {
-			metadata {
-				name = "nomad-data"
-			}
-			spec {
-				access_modes = ["ReadWriteOnce"]
-				resources {
-					requests = {
-						storage = "1Gi"
-					}
-				}
-				storage_class_name = var.k8s_storage_class
-			}
-		}
-	}
-}
-
