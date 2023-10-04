@@ -87,22 +87,22 @@ data "kubernetes_service" "traefik" {
 	}
 }
 
-data "kubernetes_service" "traefik_tunnel" {
-	depends_on = [helm_release.traefik_tunnel]
+# data "kubernetes_service" "traefik_tunnel" {
+# 	depends_on = [helm_release.traefik_tunnel]
 
-	metadata {
-		name = "traefik-tunnel"
-		namespace = kubernetes_namespace.traefik_tunnel.metadata.0.name
-	}
-}
+# 	metadata {
+# 		name = "traefik-tunnel"
+# 		namespace = kubernetes_namespace.traefik_tunnel.metadata.0.name
+# 	}
+# }
 
-# Separate instance of Traefik for tunneling?? or re-use? 
+# # Separate instance of Traefik for tunneling?? or re-use? 
 
-resource "kubernetes_namespace" "traefik_tunnel" {
-	metadata {
-		name = "traefik-tunnel"
-	}
-}
+# resource "kubernetes_namespace" "traefik_tunnel" {
+# 	metadata {
+# 		name = "traefik-tunnel"
+# 	}
+# }
 
 # reuse secrets from existing Traefik instance - no need to re-define
 
