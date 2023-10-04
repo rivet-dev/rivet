@@ -142,11 +142,14 @@ where
 		self.get_key_for_resolve(&key, |key| key.value = Some(value));
 	}
 
-	pub fn resolve_with_topic<T>(&mut self, key: &K, value: V, (topic_base_key, topic): (&str, &T))
-	where
+	pub fn resolve_with_topic<T>(
+		&mut self,
+		key: &K,
+		value: V,
+		(_topic_base_key, _topic): (&str, &T),
+	) where
 		T: CacheKey,
 	{
-		todo!()
 		// let redis_key = self
 		// 	.config
 		// 	.cache
@@ -155,6 +158,8 @@ where
 		// 	key.value = Some(value);
 		// 	key.redis_topic_keys = Some(vec![redis_key]);
 		// });
+
+		self.resolve(key, value);
 	}
 
 	// TODO: Add multiple topics with multiple T types using dyn
