@@ -438,7 +438,7 @@
           },
           "editorMode": "code",
           "expr": "sum(rate(rivet_chirp_request_errors{context_name=~\"[[context]]\"}[$__rate_interval])) by (context_name, error_type)",
-          "legendFormat": "{{service}}: {{error_type}}",
+          "legendFormat": "{{context_name}}: {{error_type}}",
           "range": true,
           "refId": "A"
         }
@@ -673,7 +673,7 @@
       "type": "timeseries"
     }
   ],
-  "refresh": false,
+  "refresh": "",
   "schemaVersion": 38,
   "style": "dark",
   "tags": [],
@@ -713,13 +713,13 @@
     ]
   },
   "time": {
-    "from": "now-5m",
+    "from": "now-30m",
     "to": "now"
   },
   "timepicker": {},
   "timezone": "",
   "title": "Chirp / Operation",
   "uid": "c6345ab8-9146-499f-ab0b-7fb10fe5b9e1",
-  "version": 3,
+  "version": 2,
   "weekStart": ""
 }
