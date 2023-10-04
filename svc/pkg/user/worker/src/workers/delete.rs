@@ -165,6 +165,8 @@ async fn worker(ctx: &OperationContext<user::msg::delete::Message>) -> GlobalRes
 		.bind(util::timestamp::now())
 		.execute(&crdb)
 		.await?;
+
+		ctx.cache().purge("user", [user_id]).await?;
 	}
 
 	msg!([ctx] user::msg::delete_complete(user_id) {
