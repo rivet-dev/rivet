@@ -174,7 +174,7 @@ resource "kubectl_manifest" "traefik_nomad_router" {
 
 	yaml_body = yamlencode({
 		apiVersion = "traefik.containo.us/v1alpha1"
-		kind = "IngressRouteTCP" # q: what other diff parameters do we need to configure for tcp (vs http)? 
+		kind = "IngressRouteTCP"
 
 		metadata = {
 			name = "traefik-nomad-router"
@@ -260,6 +260,32 @@ resource "kubectl_manifest" "traefik_api_route_router" {
 					name = "ingress-tls-cert-tunnel-server"
 					namespace = kubernetes_namespace.traefik_tunnel.metadata[0].name
 				}
+			}
+		}
+	})
+}
+
+# NOTE: Must use kubectl_manifest because kubernetes_manifest doesn't work with CRDs. If this stops working
+# correctly replace with a raw helm chart: https://artifacthub.io/packages/helm/wikimedia/raw
+# https://github.com/hashicorp/terraform-provider-kubernetes/issues/1367#
+resource "kubectl_manifest" "ingress_tls_tunnel" {
+	depends_on = [helm_release.traefik_tunnel, kubernetes_namespace.traefik_tunnel]
+
+	yaml_body = yamlencode({
+		apiVersion = "traefik.containo.us/v1alpha1"
+		kind = "TLSOption"
+
+		metadata = {
+			name = "ingress-tls-tunnel-server"
+			namespace = kubernetes_namespace.traefik_tunnel.metadata.0.name
+		}
+
+		spec = {
+			curvePreferences = [ "CurveP384" ]
+
+			clientAuth = {
+				secretNames = [ "ingress_tls_cert_tunnel_server" ]
+				clientAuthType = "RequireAndVerifyClientCert"
 			}
 		}
 	})

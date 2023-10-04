@@ -51,6 +51,23 @@ resource "k3d_cluster" "main" {
 
 	}
 
+	# Nomad (TCP)
+	port {
+		host = "0.0.0.0"
+		host_port = var.nomad_port
+		container_port = 5000
+		node_filters = ["server:0"]
+	}
+
+	# api-route (TCP)
+	port {
+		host = "0.0.0.0"
+		host_port = var.api_route_port
+		container_port = 5001
+		node_filters = ["server:0"]
+	}
+
+
 	# Minio
 	dynamic "port" {
 		for_each = var.minio_port != null ? [null] : []

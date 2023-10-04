@@ -69,12 +69,18 @@ pub enum ClusterKind {
 		/// Port to expose API HTTP interface. Exposed on public IP.
 		#[serde(default = "default_api_http_port")]
 		api_http_port: u16,
-		/// Port to expose API HTTPS interface. Expoed on public IP.
+		/// Port to expose API HTTPS interface. Exposed on public IP.
 		#[serde(default = "default_api_https_port")]
 		api_https_port: Option<u16>,
 		/// Port to expose Minio on. Exposed to localhost.
 		#[serde(default = "default_minio_port")]
 		minio_port: u16,
+		/// Port to expose the Nomad server on. Exposed to localhost.
+		#[serde(default = "default_nomad_port")]
+		nomad_port: u16,
+		/// Port to expose api-route on. Exposed to localhost.
+		#[serde(default = "default_api_route_port")]
+		api_route_port: u16,
 
 		/// Restricts the resources of the core services so there are more resources availble for
 		/// compiling code.
@@ -611,4 +617,12 @@ fn default_api_https_port() -> Option<u16> {
 
 fn default_minio_port() -> u16 {
 	9000
+}
+
+fn default_nomad_port() -> u16 {
+	5000
+}
+
+fn default_api_route_port() -> u16 {
+	5001
 }

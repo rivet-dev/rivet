@@ -24,3 +24,12 @@ variable "minio_port" {
 	nullable = true
 }
 
+variable "nomad_port" {
+	type = number
+	nullable = true
+}
+
+variable "api_route_port" {
+	type = number
+	nullable = true
+}

@@ -234,6 +234,16 @@ pub async fn generate(project_path: &Path, ns_id: &str) -> Result<()> {
 				Ok(value(8080).into())
 			})
 			.await?;
+		generator
+			.generate_config(&["cluster", "single_node", "nomad_port"], || async {
+				Ok(value(5000).into())
+			})
+			.await?;
+		generator
+			.generate_config(&["cluster", "single_node", "api_route_port"], || async {
+				Ok(value(5001).into())
+			})
+			.await?;
 	}
 
 	// TODO: Prompt for provisioning servers
