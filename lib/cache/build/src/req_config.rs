@@ -173,7 +173,7 @@ impl RequestConfig {
 				);
 
 				// Create the getter ctx and resolve the cached values
-				let mut ctx = GetterCtx::new(self.clone(), base_key.clone().into(), keys.to_vec());
+				let mut ctx = GetterCtx::new(base_key.clone().into(), keys.to_vec());
 				for (i, value) in cached_values.into_iter().enumerate() {
 					if let Some(value) = value {
 						let value = decoder(&value)?;
@@ -243,7 +243,7 @@ impl RequestConfig {
 				// Fall back to the getter since we can't fetch the value from
 				// the cache
 				let ctx = getter(
-					GetterCtx::new(self.clone(), base_key.into(), keys.to_vec()),
+					GetterCtx::new(base_key.into(), keys.to_vec()),
 					keys.to_vec(),
 				)
 				.await

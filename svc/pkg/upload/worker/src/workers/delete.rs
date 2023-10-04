@@ -55,6 +55,11 @@ async fn worker(ctx: &OperationContext<upload::msg::delete::Message>) -> GlobalR
 	.fetch_all(&crdb)
 	.await?;
 
+	ctx.cache().purge("upload", upload_ids.clone()).await?;
+	ctx.cache()
+		.purge("upload_files", upload_ids.clone())
+		.await?;
+
 	// Compile uploads into hashmap by bucket
 	let mut deletions: HashMap<String, BucketDeletions> =
 		HashMap::with_capacity(upload_files.len());

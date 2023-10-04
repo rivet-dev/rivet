@@ -33,8 +33,6 @@ pub struct GetterCtx<K, V>
 where
 	K: CacheKey,
 {
-	config: RequestConfig,
-
 	/// The name of the service-specific key to write this cached value to. For
 	/// example, a team get service would use the "team_profile" key to store
 	/// the profile a "team_members" to store a cache of members.
@@ -51,9 +49,8 @@ impl<K, V> GetterCtx<K, V>
 where
 	K: CacheKey,
 {
-	pub(super) fn new(config: RequestConfig, base_key: String, keys: Vec<K>) -> Self {
+	pub(super) fn new(base_key: String, keys: Vec<K>) -> Self {
 		GetterCtx {
-			config,
 			base_key,
 			keys: {
 				// Create deduplicated ctx keys
