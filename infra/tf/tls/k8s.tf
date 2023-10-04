@@ -1,11 +1,3 @@
-resource "kubernetes_namespace" "infra" {
-	for_each = toset(["traefik", "imagor"])
-
-	metadata {
-		name = each.key
-	}
-}
-
 # Must be created in every namespace it is used in
 # resource "kubernetes_secret" "ingress_tls_cert" {
 # 	for_each = toset([
