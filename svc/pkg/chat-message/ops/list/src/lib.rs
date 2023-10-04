@@ -53,7 +53,7 @@ async fn handle(
 
 				SELECT * FROM (
 					SELECT message_id, send_ts, body
-					FROM messages
+					FROM db_chat.messages
 					WHERE thread_id = $1 AND send_ts > $2
 					ORDER BY send_ts ASC, message_id ASC
 					LIMIT $3

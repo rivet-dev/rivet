@@ -12,6 +12,16 @@ module "traefik_secrets" {
 	]
 }
 
+locals {
+	service_traefik = lookup(var.services, "traefik", {
+		count = 1
+		resources = {
+			cpu = 50
+			cpu_cores = 0
+			memory = 200
+		}
+	})
+}
 
 resource "helm_release" "traefik" {
 	name = "traefik"
@@ -27,9 +37,23 @@ resource "helm_release" "traefik" {
 			}
 		}
 
+		resources = {
+			limits = {
+				memory = "${local.service_traefik.resources.memory}Mi"
+				cpu = (
+					local.service_traefik.resources.cpu_cores > 0 ?
+					"${local.service_traefik.resources.cpu_cores * 1000}m"
+					: "${local.service_traefik.resources.cpu}m"
+				)
+			}
+		}
+
 		additionalArguments = [
 			"--providers.http.endpoint=http://rivet-api-route.rivet-service.svc.cluster.local/traefik/config/core?token=${module.traefik_secrets.values["rivet/api_route/token"]}",
 			"--providers.http.pollInterval=2.5s",
+			# 60s for the long polling requests to gracefully exit + 30s for padding
+			"--entryPoints.web.transport.lifeCycle.graceTimeOut=90s",
+			"--entryPoints.websecure.transport.lifeCycle.graceTimeOut=90s",
 		]
 
 		logs = {

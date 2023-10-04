@@ -18,7 +18,7 @@ if redis.call('GET', key_user_thread_history_loaded) == '1' then
 
 	-- Get tail messages
 	for _, thread_id in ipairs(thread_ids) do
-		local key_thread_tail_message = string.format('chat:thread:%s:tail_message', thread_id)
+		local key_thread_tail_message = string.format('{global}:chat:thread:%s:tail_message', thread_id)
 
 		local tail_message = redis.call('HGET', key_thread_tail_message, 'mb')
 		if tail_message then

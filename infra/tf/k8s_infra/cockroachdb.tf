@@ -1,5 +1,13 @@
 locals {
 	cockroachdb_k8s = var.cockroachdb_provider == "kubernetes"
+	service_cockroachdb = lookup(var.services, "cockroachdb", {
+		count = 1
+		resources = {
+			cpu = 300
+			cpu_cores = 0
+			memory = 1500
+		}
+	})
 }
 
 module "crdb_secrets" {
@@ -30,7 +38,18 @@ resource "helm_release" "cockroachdb" {
 	version = "11.1.5"  # v23.1.9
 	values = [yamlencode({
 		statefulset = {
-			replicas = 1
+			replicas = local.service_cockroachdb.count
+
+			resources = {
+				limits = {
+					memory = "${local.service_cockroachdb.resources.memory}Mi"
+					cpu = (
+						local.service_cockroachdb.resources.cpu_cores > 0 ?
+						"${local.service_cockroachdb.resources.cpu_cores * 1000}m"
+						: "${local.service_cockroachdb.resources.cpu}m"
+					)
+				}
+			}
 		}
 		conf = {
 			single-node = true

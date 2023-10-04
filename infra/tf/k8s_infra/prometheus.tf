@@ -12,6 +12,14 @@ locals {
 			}
 		}
 	}
+	service_prometheus = lookup(var.services, "prometheus", {
+		count = 1
+		resources = {
+			cpu = 50
+			cpu_cores = 0
+			memory = 2000
+		}
+	})
 }
 resource "kubernetes_namespace" "prometheus" {
 	metadata {
@@ -37,6 +45,17 @@ resource "helm_release" "prometheus" {
 				evaluationInterval = "15s"
 
 				storageSpec = local.prometheus_storage
+			
+				resources = {
+					limits = {
+						memory = "${local.service_prometheus.resources.memory}Mi"
+						cpu = (
+							local.service_prometheus.resources.cpu_cores > 0 ?
+							"${local.service_prometheus.resources.cpu_cores * 1000}m"
+							: "${local.service_prometheus.resources.cpu}m"
+						)
+					}
+				}
 
 				# Monitor all namespaces
 				podMonitorNamespaceSelector = { any = true }

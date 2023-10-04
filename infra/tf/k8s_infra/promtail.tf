@@ -6,6 +6,14 @@ locals {
 		for key, value in local.labels:
 		"${key}=${value}"
 	])
+	service_promtail = lookup(var.services, "promtail", {
+		count = 1
+		resources = {
+			cpu = 50
+			cpu_cores = 0
+			memory = 200
+		}
+	})
 }
 
 resource "kubernetes_namespace" "promtail" {
@@ -131,6 +139,17 @@ resource "helm_release" "promtail" {
 				prometheusRule = {
 					enabled = true
 				}
+			}
+		}
+
+		resources = {
+			limits = {
+				memory = "${local.service_promtail.resources.memory}Mi"
+				cpu = (
+					local.service_promtail.resources.cpu_cores > 0 ?
+					"${local.service_promtail.resources.cpu_cores * 1000}m"
+					: "${local.service_promtail.resources.cpu}m"
+				)
 			}
 		}
 
