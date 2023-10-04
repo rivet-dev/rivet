@@ -1,17 +1,6 @@
-resource "kubernetes_namespace" "infra" {
-	for_each = toset(["traefik", "imagor"])
-
-	metadata {
-		name = each.key
-	}
-}
-
 # Must be created in every namespace it is used in
 resource "kubernetes_secret" "ingress_tls_cert" {
-	for_each = toset([
-		for x in kubernetes_namespace.infra:
-		x.metadata.0.name
-	])
+	for_each = toset(["traefik", "imagor"])
 
 	metadata {
 		name = "ingress-tls-cert"
@@ -29,7 +18,7 @@ resource "kubernetes_secret" "ingress_tls_cert" {
 resource "kubernetes_secret" "ingress_tls_ca_cert" {
 	metadata {
 		name = "ingress-tls-ca-cert"
-		namespace = kubernetes_namespace.infra["traefik"].metadata.0.name
+		namespace = "traefik"
 	}
 
 	data = {
@@ -37,10 +26,11 @@ resource "kubernetes_secret" "ingress_tls_ca_cert" {
 	}
 }
 
+
 resource "kubernetes_secret" "ingress_tls_cert_tunnel_server" {
 	metadata {
 		name = "ingress-tls-cert-tunnel-server"
-		namespace = kubernetes_namespace.infra["traefik"].metadata.0.name
+		namespace = "traefik"
 	}
 
 	type = "kubernetes.io/tls"

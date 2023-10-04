@@ -41,7 +41,6 @@ pub struct Cert {
 
 #[derive(Debug, Clone, Deserialize)]
 pub struct Tls {
-	pub tls_cert_cloudflare_rivet_gg: TerraformOutputValue<Cert>,
 	pub tls_cert_letsencrypt_rivet_job: TerraformOutputValue<Cert>,
 	pub tls_cert_locally_signed_tunnel_server: TerraformOutputValue<Cert>,
 	pub tls_cert_locally_signed_nomad_client: TerraformOutputValue<Cert>,
