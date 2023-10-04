@@ -54,6 +54,8 @@ async fn handle(
 	.execute(&crdb)
 	.await?;
 
+	ctx.cache().purge("upload", [upload_id]).await?;
+
 	msg!([ctx] upload::msg::complete_complete(upload_id) {
 		upload_id: Some(upload_id.into()),
 	})

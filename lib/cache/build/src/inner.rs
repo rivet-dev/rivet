@@ -46,22 +46,29 @@ impl CacheInner {
 		self.redis_conn.clone()
 	}
 
-	pub(crate) fn build_redis_svc_key<K>(&self, base_key: &str, key: &K) -> String
+	pub(crate) fn build_redis_cache_key<K>(&self, base_key: &str, key: &K) -> String
 	where
 		K: CacheKey,
 	{
-		format!(
-			"cache:svc:{}:{}:{}:{}",
-			self.service_name,
-			self.service_source_hash,
-			base_key,
-			key.cache_key()
-		)
+		format!("{{key:{}}}:{}", base_key, key.cache_key())
 	}
 
-	pub(crate) fn build_redis_topic_key(&self, base_key: &str, key: &impl CacheKey) -> String {
-		format!("cache:topic:{}:{}:keys", base_key, key.cache_key())
-	}
+	// pub(crate) fn build_redis_svc_key<K>(&self, base_key: &str, key: &K) -> String
+	// where
+	// 	K: CacheKey,
+	// {
+	// 	format!(
+	// 		"svc:{}:{}:{}:{}",
+	// 		self.service_name,
+	// 		self.service_source_hash,
+	// 		base_key,
+	// 		key.cache_key()
+	// 	)
+	// }
+
+	// pub(crate) fn build_redis_topic_key(&self, base_key: &str, key: &impl CacheKey) -> String {
+	// 	format!("{{topic:{}}}:{}:keys", base_key, key.cache_key())
+	// }
 
 	pub(crate) fn build_redis_rate_limit_key(
 		&self,

@@ -211,8 +211,8 @@ async fn redis_from_env() -> Result<HashMap<String, RedisPool>, Error> {
 	Ok(redis)
 }
 
-#[tracing::instrument(level = "trace", skip(pools))]
-async fn runtime(pools: Pools, client_name: String) {
+#[tracing::instrument(level = "trace", skip(_pools))]
+async fn runtime(_pools: Pools, client_name: String) {
 	// TODO: Delete this once confirmed this is no longer an issue
 
 	// We have to manually ping the Redis connection since `ConnectionManager`

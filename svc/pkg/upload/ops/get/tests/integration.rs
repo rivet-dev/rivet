@@ -26,5 +26,11 @@ async fn empty(ctx: TestCtx) {
 	.await
 	.unwrap();
 
+	let res = op!([ctx] upload_get {
+		upload_ids: vec![upload_id],
+	})
+	.await
+	.unwrap();
+
 	assert_eq!(1, res.uploads.len());
 }

@@ -15,17 +15,16 @@ pub(super) struct GetterCtxKey<K, V> {
 	/// then this value was read from the getter and will be written to the
 	/// cache.
 	from_cache: bool,
-
-	/// List of Redis keys for topics associated with this key.
-	///
-	/// Topics are handles used to purge multiple other cached values at once.
-	///
-	/// The topics almost always match the primary keys of the given table.
-	///
-	/// For example: if you cache both the display name of a game and the
-	/// description in two separate keys, you can purge the game's topic to
-	/// remove both of those cached values.
-	pub(super) redis_topic_keys: Option<Vec<String>>,
+	// /// List of Redis keys for topics associated with this key.
+	// ///
+	// /// Topics are handles used to purge multiple other cached values at once.
+	// ///
+	// /// The topics almost always match the primary keys of the given table.
+	// ///
+	// /// For example: if you cache both the display name of a game and the
+	// /// description in two separate keys, you can purge the game's topic to
+	// /// remove both of those cached values.
+	// pub(super) redis_topic_keys: Option<Vec<String>>,
 }
 
 /// Context passed to the getter function. This is used to resolve and configure
@@ -65,7 +64,7 @@ where
 							key,
 							value: None,
 							from_cache: false,
-							redis_topic_keys: None,
+							// redis_topic_keys: None,
 						});
 					}
 				}
@@ -146,19 +145,19 @@ where
 		self.get_key_for_resolve(&key, |key| key.value = Some(value));
 	}
 
-	pub fn resolve_with_topic<T>(&mut self, key: &K, value: V, (topic_base_key, topic): (&str, &T))
-	where
-		T: CacheKey,
-	{
-		let redis_key = self
-			.config
-			.cache
-			.build_redis_topic_key(topic_base_key, topic);
-		self.get_key_for_resolve(&key, |key| {
-			key.value = Some(value);
-			key.redis_topic_keys = Some(vec![redis_key]);
-		});
-	}
+	// pub fn resolve_with_topic<T>(&mut self, key: &K, value: V, (topic_base_key, topic): (&str, &T))
+	// where
+	// 	T: CacheKey,
+	// {
+	// 	let redis_key = self
+	// 		.config
+	// 		.cache
+	// 		.build_redis_topic_key(topic_base_key, topic);
+	// 	self.get_key_for_resolve(&key, |key| {
+	// 		key.value = Some(value);
+	// 		key.redis_topic_keys = Some(vec![redis_key]);
+	// 	});
+	// }
 
 	// TODO: Add multiple topics with multiple T types using dyn
 }
