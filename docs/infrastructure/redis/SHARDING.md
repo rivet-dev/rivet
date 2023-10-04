@@ -1,6 +1,6 @@
 # Redis Sharding
 
-When running Redis in [cluster mode](https://redis.io/docs/management/scaling/), managing which key ends up on which shard becomes important for piped commands<sup>†</sup>.
+When running Redis in [cluster mode](https://redis.io/docs/management/scaling/), managing which key ends up on which shard becomes important for piped commands<sup>†</sup> and Redis scripts.
 
 Redis Cluster comes with a feature known as [hash tags](https://redis.io/docs/reference/cluster-spec/#hash-tags) which allow the user to dictate where keys end up in relation to each other. Keys with the same hash tag (for example, `{foo}.bar` and `{foo}.baz`) will end up on the same shard.
 
