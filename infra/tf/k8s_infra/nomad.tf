@@ -14,7 +14,7 @@
 
 locals {
 	nomad_server_count = 3
-	nomad_server_addrs = [for i in range(0, i): "127.0.0.1:${6000 + i}"]
+	nomad_server_addrs = [for i in range(0, local.nomad_server_count): "127.0.0.1:${6000 + i}"]
 	nomad_server_addrs_escaped = [for addr in local.nomad_server_addrs : "\"${addr}\""]
 	nomad_server_configmap_data = {
 		# We don't use Consul for server discovery because we don't want to depend on Consul for Nomad to work
@@ -37,7 +37,7 @@ locals {
 				bootstrap_expect = ${local.nomad_server_count}
 
 				server_join {
-					retry_join = [${local.nomad_server_addrs_escaped}]
+					retry_join = [${join(", ", local.nomad_server_addrs_escaped)}]
 					retry_interval = "10s"
 				}
 			}
@@ -62,7 +62,7 @@ resource "kubernetes_config_map" "nomad_server" {
 		}
 	}
 
-	data = local.server_configmap_data
+	data = local.nomad_server_configmap_data
 }
 
 # Expose service
