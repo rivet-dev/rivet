@@ -9,7 +9,7 @@ async fn test_no_ns(ctx: TestCtx) {
 		format!(
 			"http://{}.{}/hello-world",
 			game_data.name_id,
-			util::env::domain_cdn().unwrap()
+			util::env::domain_cdn().expect("no domain cdn")
 		),
 	)
 	.await

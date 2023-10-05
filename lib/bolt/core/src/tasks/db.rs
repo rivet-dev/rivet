@@ -298,6 +298,7 @@ pub async fn clickhouse_shell(shell_ctx: ShellContext<'_>, no_db: bool) -> Resul
 			--password {password} {db_flag} {query}
 		"
 	);
+
 	let overrides = json!({
 		"apiVersion": "v1",
 		"metadata": {

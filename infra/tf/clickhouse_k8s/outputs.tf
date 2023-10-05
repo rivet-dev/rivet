@@ -3,5 +3,5 @@ output "host" {
 }
 
 output "port" {
-	value = 443
+	value = 9440
 }

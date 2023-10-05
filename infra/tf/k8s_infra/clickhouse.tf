@@ -5,7 +5,7 @@ locals {
 		resources = {
 			cpu = 100
 			cpu_cores = 0
-			memory = 512
+			memory = 1500
 		}
 	})
 }
@@ -64,11 +64,11 @@ resource "helm_release" "clickhouse" {
 		}
 
 		# Disable insecure ports
+		# See: https://clickhouse.com/docs/en/guides/sre/configuring-ssl#5-configure-ssl-tls-interfaces-on-clickhouse-nodes
 		extraOverrides = <<-EOF
 			<?xml version="1.0"?>
 			<clickhouse>
 				<http_port remove="remove"/>
-				<tcp_port remove="remove"/>
 				<interserver_http_port remove="remove"/>
 				<interserver_https_port>9010</interserver_https_port>
 

@@ -16,6 +16,7 @@ default-features = false
 
 [dev-dependencies]
 chirp-worker = { path = "../../../../../lib/chirp/worker" }
+reqwest = "0.11"
 
 custom-user-avatar-upload-complete = { path = "../upload-complete" }
 faker-game = { path = "../../../faker/ops/game" }

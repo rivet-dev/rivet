@@ -12,7 +12,7 @@ async fn handle(
 		namespace_ids: vec![namespace_id.into()],
 	})
 	.await?;
-	let ns = internal_unwrap_owned!(ns_res.namespaces.first());
+	let ns = internal_unwrap_owned!(ns_res.namespaces.first(), "game namespace not found for cloud namespace");
 	let game_id = internal_unwrap!(ns.game_id).as_uuid();
 
 	let game_res = op!([ctx] game_get {

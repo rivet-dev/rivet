@@ -1025,13 +1025,11 @@ impl ServiceContextData {
 			));
 		}
 
-		if matches!(run_context, RunContext::Service { .. }) {
-			if self.depends_on_sendgrid_key() {
-				env.push((
-					"SENDGRID_KEY".into(),
-					project_ctx.read_secret(&["sendgrid", "key"]).await?,
-				));
-			}
+		if self.depends_on_sendgrid_key() {
+			env.push((
+				"SENDGRID_KEY".into(),
+				project_ctx.read_secret(&["sendgrid", "key"]).await?,
+			));
 		}
 
 		// CRDB
