@@ -53,6 +53,12 @@ resource "helm_release" "redis" {
 		global = {
 			storageClass = var.k8s_storage_class
 		}
+		redis = {
+			# Use allkeys-lru instead of volatile-lru because we don't want the cache nodes to crash
+			defaultConfigOverride = <<-EOF
+			maxmemory-policy ${each.value.persistent ? "noeviction" : "allkeys-lru"}
+			EOF
+		}
 		# Create minimal cluster
 		cluster = {
 			nodes = local.service_redis.count
