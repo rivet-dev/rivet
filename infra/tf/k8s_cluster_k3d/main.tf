@@ -67,7 +67,6 @@ resource "k3d_cluster" "main" {
 		node_filters = ["server:0"]
 	}
 
-
 	# Minio
 	dynamic "port" {
 		for_each = var.minio_port != null ? [null] : []

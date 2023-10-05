@@ -26,10 +26,8 @@ variable "minio_port" {
 
 variable "nomad_port" {
 	type = number
-	nullable = true
 }
 
 variable "api_route_port" {
 	type = number
-	nullable = true
 }

@@ -26,11 +26,21 @@ resource "kubernetes_secret" "ingress_tls_ca_cert" {
 	}
 }
 
+resource "kubernetes_secret" "ingress_tls_ca_cert_locally_signed" {
+	metadata {
+		name = "ingress-tls-ca-cert-locally-signed"
+		namespace = "traefik-tunnel"
+	}
+
+	data = {
+		"tls.ca" = tls_self_signed_cert.root_ca.cert_pem
+	}
+}
 
 resource "kubernetes_secret" "ingress_tls_cert_tunnel_server" {
 	metadata {
 		name = "ingress-tls-cert-tunnel-server"
-		namespace = "traefik"
+		namespace = "traefik-tunnel"
 	}
 
 	type = "kubernetes.io/tls"

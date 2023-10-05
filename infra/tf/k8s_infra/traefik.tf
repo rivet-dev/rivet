@@ -205,7 +205,7 @@ resource "kubectl_manifest" "traefik_nomad_router" {
 			# do we need certResolver, domains, and passthrough?
 			# is this the config for mtls? 
 			tls = {
-				secretName = "ingress_tls_cert_tunnel_server"
+				secretName = "ingress-tls-cert-tunnel-server"
 				options = {
 					name = "ingress-tls-cert-tunnel-server"
 					namespace = kubernetes_namespace.traefik_tunnel.metadata[0].name # TODO rename the secret 
