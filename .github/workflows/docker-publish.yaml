@@ -29,6 +29,13 @@ jobs:
         docker build -t "$GHCR_TAG" .
         docker push "$GHCR_TAG"
 
+    - name: Build golang-migrate
+      run: |
+        GHCR_TAG="ghcr.io/rivet-gg/golang-migrate:$(git rev-parse --short HEAD)"
+        cd infra/docker/golang_migrate
+        docker build -t "$GHCR_TAG" .
+        docker push "$GHCR_TAG"
+
     - name: Build apache-traffic-server
       run: |
         # Build
