@@ -12,6 +12,8 @@ cargo deny --manifest-path svc/Cargo.toml list
 
 ## Infrastructure
 
+_Loosely follows [SPDX](https://spdx.org/licenses/) format._
+
 | Software             | License                            |
 |----------------------|------------------------------------|
 | Apache Traffic Server | Apache-2.0                         |
