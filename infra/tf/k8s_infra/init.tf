@@ -116,11 +116,7 @@ resource "kubernetes_config_map" "install_ca" {
 			# Merge CA certificates provided from other config maps for self-signed TLS connections to databases
 			#
 			# Overriding LD_LIBRARY_PATH prevents apt from using the OpenSSL installation from /nix/store (if mounted).
-			LD_LIBRARY_PATH=/lib:/usr/lib:/usr/local/lib
-			
-			apt-get update -y
-			apt-get install -y --no-install-recommends ca-certificates
-			update-ca-certificates
+			LD_LIBRARY_PATH=/lib:/usr/lib:/usr/local/lib update-ca-certificates
 			EOF
 	}
 }
