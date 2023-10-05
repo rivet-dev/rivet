@@ -56,6 +56,9 @@ resource "kubectl_manifest" "karpenter_provisioner" {
 		}
 		spec = {
 			requirements = [
+				# See how Karpenter selects instance types:
+				# https://karpenter.sh/v0.31/faq/#how-does-karpenter-dynamically-select-instance-types
+
 				{
 					key = "topology.kubernetes.io/zone"
 					operator = "In"
