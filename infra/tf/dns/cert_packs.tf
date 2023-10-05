@@ -1,4 +1,9 @@
 locals {
+ 	# If main domain is not at the root of the zone, we need to provide a cert pack for the domain.
+	#
+	# Also required if using the old `{service}.api.{domain}` format, which requires two levels of subdomains.
+ 	needs_main_cert_pack = var.dns_deprecated_subdomains || data.cloudflare_zone.main.name != var.domain_main
+
  	# If CDN is not at the root of the zone, we need to provide a cert pack for the CDN.
  	# 
  	# If the CDN domain is already at the root of the zone, then Cloudflare exposes a cert back by default and we don't need to create a new one.
@@ -11,7 +16,7 @@ locals {
 #
 # This requires paying money for these certs.
 resource "cloudflare_certificate_pack" "main" {
-	count = var.dns_deprecated_subdomains ? 1 : 0
+	count = local.needs_main_cert_pack ? 1 : 0
 	
 	lifecycle {
 		create_before_destroy = true
