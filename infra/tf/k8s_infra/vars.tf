@@ -78,6 +78,10 @@ variable "clickhouse_provider" {
 }
 
 # MARK: Redis
+variable "redis_replicas" {
+	type = number
+}
+
 variable "redis_provider" {
 	type = string
 }

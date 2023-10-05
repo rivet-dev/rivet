@@ -55,14 +55,14 @@ resource "helm_release" "redis" {
 		}
 		redis = {
 			# Use allkeys-lru instead of volatile-lru because we don't want the cache nodes to crash
-			defaultConfigOverride = <<-EOF
-			maxmemory-policy ${each.value.persistent ? "noeviction" : "allkeys-lru"}
-			EOF
+			extraEnvVars = [
+				{ name = "REDIS_MAXMEMORY_POLICY", value = each.value.persistent ? "noeviction" : "allkeys-lru" }
+			]
 		}
 		# Create minimal cluster
 		cluster = {
-			nodes = local.service_redis.count
-			replicas = 0
+			nodes = local.service_redis.count + var.redis_replicas * local.service_redis.count
+			replicas = var.redis_replicas
 		}
 		master = {
 			resources = {

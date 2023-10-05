@@ -407,6 +407,8 @@ impl Default for KubernetesProvider {
 #[derive(Serialize, Deserialize, Clone, Debug, Default)]
 #[serde(deny_unknown_fields)]
 pub struct Redis {
+	#[serde(default)]
+	pub replicas: usize,
 	#[serde(flatten, default)]
 	pub provider: RedisProvider,
 }
