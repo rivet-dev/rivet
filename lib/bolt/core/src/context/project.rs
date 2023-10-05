@@ -160,7 +160,10 @@ impl ProjectContextData {
 					api_https_port,
 					"api_https_port must be 443 if dns enabled"
 				);
-				assert_eq!(9000, minio_port, "minio_port must be 9000 if dns enabled")
+				assert_eq!(
+					9000, minio_port,
+					"minio_port must not be changed if dns enabled"
+				)
 			}
 		}
 
