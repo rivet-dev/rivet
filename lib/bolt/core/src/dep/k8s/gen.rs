@@ -414,6 +414,7 @@ pub async fn gen_svc(exec_ctx: &ExecServiceContext) -> Vec<serde_json::Value> {
 				"kind": "Deployment",
 				"metadata": metadata,
 				"spec": {
+					// TODO: Does specifying this cause issues with HAP?
 					"replicas": ns_service_config.count,
 					"selector": {
 						"matchLabels": {
@@ -499,7 +500,7 @@ pub async fn gen_svc(exec_ctx: &ExecServiceContext) -> Vec<serde_json::Value> {
 					"kind": "Deployment",
 					"name": service_name
 				},
-				"minReplicas": 1,
+				"minReplicas": ns_service_config.count,
 				"maxReplicas": 5,
 				"metrics": [
 					{
