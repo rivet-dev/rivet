@@ -49,6 +49,7 @@ async fn handle(
 		);
 	}
 
+	// TODO: Deprecate `url` and `description` columns
 	let crdb = ctx.crdb().await?;
 	let game_id = Uuid::new_v4();
 	let plan_code = "free";

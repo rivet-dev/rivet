@@ -23,3 +23,7 @@ default-features = false
 
 [dev-dependencies]
 chirp-worker = { path = "../../../../../lib/chirp/worker" }
+
+faker-game = { path = "../../../faker/ops/game" }
+game-namespace-create = { path = "../../../game/ops/namespace-create" }
+game-version-create = { path = "../../../game/ops/version-create" }

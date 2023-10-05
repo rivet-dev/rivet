@@ -323,6 +323,8 @@ pub async fn up(ctx: &ProjectContext, services: &[ServiceContext]) -> Result<()>
 				.await?;
 
 				rivet_term::status::progress("Creating users", &db_name);
+
+				let mut query = String::new();
 				for (username, role) in [
 					("bolt", ClickhouseRole::Admin),
 					("chirp", ClickhouseRole::Write),
@@ -332,25 +334,26 @@ pub async fn up(ctx: &ProjectContext, services: &[ServiceContext]) -> Result<()>
 						.read_secret(&["clickhouse", "users", username, "password"])
 						.await?;
 
-					let query = formatdoc!(
+					query.push_str(&formatdoc!(
 						"
 						CREATE USER
 						IF NOT EXISTS {username}
 						IDENTIFIED WITH sha256_password BY '{password}';
 						GRANT {role} TO {username};
 						"
-					);
-					db::clickhouse_shell(
-						db::ShellContext {
-							ctx,
-							svc,
-							conn: &conn,
-							query: Some(&query),
-						},
-						true,
-					)
-					.await?;
+					));
 				}
+
+				db::clickhouse_shell(
+					db::ShellContext {
+						ctx,
+						svc,
+						conn: &conn,
+						query: Some(&query),
+					},
+					true,
+				)
+				.await?;
 
 				rivet_term::status::progress("Creating database", &db_name);
 				let query = format!("CREATE DATABASE IF NOT EXISTS \"{db_name}\";");

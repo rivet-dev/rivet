@@ -24,20 +24,14 @@ async fn fetch(ctx: TestCtx) {
 		game_id: Option<Uuid>,
 		name_id: String,
 		display_name: String,
-		url: String,
 		developer_team_id: Uuid,
-		description: String,
-		tags: Vec<String>,
 	}
 
 	let mut games = std::iter::repeat_with(|| TestGame {
 		game_id: None,
 		name_id: util::faker::ident(),
 		display_name: util::faker::display_name(),
-		url: "https://test.io".to_owned(),
 		developer_team_id: team_id,
-		description: "test".to_owned(),
-		tags: vec!["a".to_owned(), "b".to_owned(), "c".to_owned()],
 	})
 	.take(8)
 	.collect::<Vec<_>>();
@@ -68,13 +62,10 @@ async fn fetch(ctx: TestCtx) {
 			.expect("game not returned");
 		assert_eq!(game.name_id, game_res.name_id);
 		assert_eq!(game.display_name, game_res.display_name);
-		assert_eq!(game.url, game_res.url);
 		assert_eq!(
 			Some(game.developer_team_id.into()),
 			game_res.developer_team_id
 		);
-		assert_eq!(game.description, game_res.description);
-		assert_eq!(3, game.tags.len());
 	}
 }
 

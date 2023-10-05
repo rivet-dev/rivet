@@ -23,3 +23,6 @@ default-features = false
 chirp-worker = { path = "../../../../../lib/chirp/worker" }
 
 cloud-namespace-create = { path = "../namespace-create" }
+faker-game = { path = "../../../faker/ops/game" }
+game-namespace-create = { path = "../../../game/ops/namespace-create" }
+game-version-create = { path = "../../../game/ops/version-create" }
