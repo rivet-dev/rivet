@@ -792,7 +792,7 @@ async fn resolve_image_artifact_url(
 
 			let upload_id = internal_unwrap!(upload.upload_id).as_uuid();
 			let addr = format!(
-				"http://{ats_url}:9300/s3-cache/{provider}/{namespace}-bucket-build/{upload_id}/image.tar",
+				"http://{ats_url}:8080/s3-cache/{provider}/{namespace}-bucket-build/{upload_id}/image.tar",
 				ats_url = ats_url,
 				provider = heck::KebabCase::to_kebab_case(provider.as_str()),
 				namespace = util::env::namespace(),
