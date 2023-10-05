@@ -114,7 +114,7 @@ pub fn k8s_svc_name(exec_ctx: &ExecServiceContext) -> String {
 	}
 }
 
-/// Generates a job definition for services for the development Nomad cluster.
+/// Generates a job definition for services for the development Kubernetes cluster.
 pub async fn gen_svc(exec_ctx: &ExecServiceContext) -> Vec<serde_json::Value> {
 	let service_name = k8s_svc_name(exec_ctx);
 
@@ -594,8 +594,7 @@ async fn build_volumes(
 
 	// Add volumes based on exec service
 	match driver {
-		// Mount the service binaries to execute directly in the container. See
-		// notes in salt/salt/nomad/files/nomad.d/client.hcl.j2.
+		// Mount the service binaries to execute directly in the container.
 		ExecServiceDriver::LocalBinaryArtifact { .. } => {
 			// Volumes
 			volumes.push(json!({
