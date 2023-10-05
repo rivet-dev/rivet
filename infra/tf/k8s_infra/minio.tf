@@ -1,5 +1,13 @@
 locals {
 	has_minio = can(var.s3_providers["minio"])
+	service_minio = lookup(var.services, "minio", {
+		count = 1
+		resources = {
+			cpu = 50
+			cpu_cores = 0
+			memory = 400
+		}
+	})
 }
 
 resource "kubernetes_namespace" "minio" {
@@ -32,7 +40,18 @@ resource "helm_release" "minio" {
 		global = {
 			storageClass = var.k8s_storage_class
 		}
-		replicaCount = 1
+		replicaCount = local.service_minio.count
+		resources = {
+			limits = {
+				memory = "${local.service_minio.resources.memory}Mi"
+				cpu = (
+					local.service_minio.resources.cpu_cores > 0 ?
+					"${local.service_minio.resources.cpu_cores * 1000}m"
+					: "${local.service_minio.resources.cpu}m"
+				)
+			}
+		}
+
 		auth = {
 			rootUser = module.minio_secrets[0].values["s3/minio/root/key_id"]
 			rootPassword = module.minio_secrets[0].values["s3/minio/root/key"]
@@ -64,7 +83,7 @@ resource "kubectl_manifest" "minio_ingress_route" {
 	depends_on = [helm_release.minio]
 
 	yaml_body = yamlencode({
-		apiVersion = "traefik.containo.us/v1alpha1"
+		apiVersion = "traefik.io/v1alpha1"
 		kind = "IngressRoute"
 
 		metadata = {

@@ -787,12 +787,22 @@ impl ServiceContextData {
 			env.push(("IS_BILLING_ENABLED".to_owned(), "1".into()));
 		}
 
-		// if project_ctx.ns().dns.is_some() {
-		// 	todo!("read cloudflare zones");
-
-		// 	// env.push(("CLOUDFLARE_ZONE_ID_BASE".into(), zones.root.clone()));
-		// 	// env.push(("CLOUDFLARE_ZONE_ID_GAME".into(), zones.game.clone()));
-		// 	// env.push(("CLOUDFLARE_ZONE_ID_JOB".into(), zones.job.clone()));
+		if project_ctx.ns().dns.is_some() {
+			if terraform::cli::has_applied(&project_ctx, "dns").await {
+				let dns = terraform::output::read_dns(&project_ctx).await;
+				env.push((
+					"CLOUDFLARE_ZONE_ID_BASE".into(),
+					(*dns.cloudflare_zone_ids).main.clone(),
+				));
+				env.push((
+					"CLOUDFLARE_ZONE_ID_GAME".into(),
+					(*dns.cloudflare_zone_ids).cdn.clone(),
+				));
+				env.push((
+					"CLOUDFLARE_ZONE_ID_JOB".into(),
+					(*dns.cloudflare_zone_ids).job.clone(),
+				));
+			}
 
 		// 	if self.depends_on_cloudflare() {
 		// 		env.push((
@@ -1025,13 +1035,11 @@ impl ServiceContextData {
 			));
 		}
 
-		if matches!(run_context, RunContext::Service { .. }) {
-			if self.depends_on_sendgrid_key() {
-				env.push((
-					"SENDGRID_KEY".into(),
-					project_ctx.read_secret(&["sendgrid", "key"]).await?,
-				));
-			}
+		if self.depends_on_sendgrid_key() {
+			env.push((
+				"SENDGRID_KEY".into(),
+				project_ctx.read_secret(&["sendgrid", "key"]).await?,
+			));
 		}
 
 		// CRDB

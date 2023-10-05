@@ -21,6 +21,8 @@ async fn handle(
 		.execute(&ctx.crdb().await?)
 		.await?;
 
+	ctx.cache().purge("user", [user_id]).await?;
+
 	msg!([ctx] user::msg::update(user_id) {
 		user_id: ctx.user_id,
 	})

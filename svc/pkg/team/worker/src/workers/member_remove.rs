@@ -13,6 +13,8 @@ async fn worker(ctx: &OperationContext<team::msg::member_remove::Message>) -> Gl
 		.execute(&ctx.crdb().await?)
 		.await?;
 
+	ctx.cache().purge("user_team_list", [user_id]).await?;
+
 	// Dispatch events
 	tokio::try_join!(
 		async {

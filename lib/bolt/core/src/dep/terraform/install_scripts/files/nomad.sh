@@ -58,7 +58,7 @@ telemetry {
 	publish_node_metrics = true
 }
 
-# Needed for Prometheus rate limiting and consul-template
+# Needed for Prometheus rate limiting
 limits {
 	http_max_conns_per_client = 4096
 	rpc_max_conns_per_client = 4096

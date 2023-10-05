@@ -31,7 +31,6 @@ in
 			awscli2
 
 			# Infrastructure
-			consul
 			nomad
 			terraform
 
@@ -97,8 +96,6 @@ in
 			source ${pkgs.bash-completion}/share/bash-completion/bash_completion
       		# nomad -autocomplete-install
       		complete -C ${pkgs.nomad}/bin/nomad nomad
-      		# consul -autocomplete-install
-      		complete -C ${pkgs.consul}/bin/consul consul
       		# terraform -install-autocomplete
       		complete -C ${pkgs.terraform}/bin/terraform terraform
 			# awscli

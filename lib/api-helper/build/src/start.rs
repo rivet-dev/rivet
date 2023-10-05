@@ -100,24 +100,26 @@ where
 
 				let res = tokio::task::Builder::new()
 					.name("api_helper::handle")
-					.spawn(async move {
-						let res = match rivet_health_checks::handle(&*health_check_config, req)
-							.await
-						{
-							Ok(res) => res,
-							Err(req) => {
-								let mut response = handle(shared_client, pools, cache, ray_id, req)
-									.instrument(tracing::info_span!("request_handle"))
-									.await?;
-								response
-									.headers_mut()
-									.insert("rvt-ray-id", ray_id.to_string().parse()?);
-								response
-							}
-						};
+					.spawn(
+						async move {
+							let res = match rivet_health_checks::handle(&*health_check_config, req)
+								.await
+							{
+								Ok(res) => res,
+								Err(req) => {
+									let mut response =
+										handle(shared_client, pools, cache, ray_id, req).await?;
+									response
+										.headers_mut()
+										.insert("rvt-ray-id", ray_id.to_string().parse()?);
+									response
+								}
+							};
 
-						Result::<Response<Body>, http::Error>::Ok(res)
-					});
+							Result::<Response<Body>, http::Error>::Ok(res)
+						}
+						.in_current_span(),
+					);
 				let res = match res {
 					Ok(res) => match res.await {
 						Ok(res) => match res {

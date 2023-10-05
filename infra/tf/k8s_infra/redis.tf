@@ -1,5 +1,13 @@
 locals {
 	redis_k8s = var.redis_provider == "kubernetes"
+	service_redis = lookup(var.services, "redis", {
+		count = 3
+		resources = {
+			cpu = 50
+			cpu_cores = 0
+			memory = 200
+		}
+	})
 
 	redis_svcs = local.redis_k8s ? {
 		for k, v in var.redis_dbs:
@@ -45,11 +53,28 @@ resource "helm_release" "redis" {
 		global = {
 			storageClass = var.k8s_storage_class
 		}
-		# TODO: Allow this to be configured
+		redis = {
+			# Use allkeys-lru instead of volatile-lru because we don't want the cache nodes to crash
+			extraEnvVars = [
+				{ name = "REDIS_MAXMEMORY_POLICY", value = each.value.persistent ? "noeviction" : "allkeys-lru" }
+			]
+		}
 		# Create minimal cluster
 		cluster = {
-			nodes = 3
-			replicas = 0
+			nodes = local.service_redis.count + var.redis_replicas * local.service_redis.count
+			replicas = var.redis_replicas
+		}
+		master = {
+			resources = {
+				limits = {
+					memory = "${local.service_redis.resources.memory}Mi"
+					cpu = (
+						local.service_redis.resources.cpu_cores > 0 ?
+						"${local.service_redis.resources.cpu_cores * 1000}m"
+						: "${local.service_redis.resources.cpu}m"
+					)
+				}
+			}
 		}
 		auth = {
 			enable = true

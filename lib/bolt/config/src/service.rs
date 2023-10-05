@@ -104,8 +104,6 @@ pub enum ServiceKind {
 		#[serde(default = "defaults::singleton")]
 		singleton: bool,
 		router: Option<ServiceRouter>,
-		#[serde(default)]
-		consul_connect: bool,
 	},
 
 	#[serde(rename = "static", rename_all = "kebab-case")]

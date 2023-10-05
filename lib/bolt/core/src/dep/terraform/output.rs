@@ -48,6 +48,18 @@ pub struct Tls {
 }
 
 #[derive(Debug, Clone, Deserialize)]
+pub struct Dns {
+	pub cloudflare_zone_ids: TerraformOutputValue<DnsZones>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct DnsZones {
+	pub main: String,
+	pub cdn: String,
+	pub job: String,
+}
+
+#[derive(Debug, Clone, Deserialize)]
 pub struct KubernetesClusterAws {
 	pub eks_admin_role_arn: TerraformOutputValue<String>,
 }
@@ -77,6 +89,10 @@ pub async fn read_pools(ctx: &ProjectContext) -> Pools {
 
 pub async fn read_tls(ctx: &ProjectContext) -> Tls {
 	read_plan::<Tls>(ctx, "tls").await
+}
+
+pub async fn read_dns(ctx: &ProjectContext) -> Dns {
+	read_plan::<Dns>(ctx, "dns").await
 }
 
 pub async fn read_k8s_cluster_aws(ctx: &ProjectContext) -> KubernetesClusterAws {

@@ -36,7 +36,7 @@ async fn handle(
 		.fetch_all_proto("version_ids", version_ids, |mut cache, version_ids| {
 			let ctx = ctx.base();
 			async move {
-				let versions = sqlx::query_as::<_, GameVersion>(indoc!(
+				sqlx::query_as::<_, GameVersion>(indoc!(
 					"
 					SELECT version_id, game_id, create_ts, display_name
 					FROM db_game.game_versions
@@ -59,10 +59,7 @@ async fn handle(
 				Ok(cache)
 			}
 		})
-		.await?
-		.into_iter()
-		.map(|(_, x)| x)
-		.collect();
+		.await?;
 
 	Ok(game::version_get::Response { versions })
 }

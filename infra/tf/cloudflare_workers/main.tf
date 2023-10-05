@@ -32,7 +32,7 @@ resource "cloudflare_worker_script" "request_meta" {
 resource "cloudflare_worker_route" "request_meta_route" {
 	for_each = local.cf_request_meta_routes
 
-	zone_id = data.terraform_remote_state.dns.outputs.zone_ids.main
+	zone_id = data.terraform_remote_state.dns.outputs.cloudflare_zone_ids.main
 	pattern = each.value
 	script_name = cloudflare_worker_script.request_meta.name
 }

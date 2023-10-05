@@ -56,6 +56,8 @@ async fn worker(ctx: &OperationContext<user::msg::profile_set::Message>) -> Glob
 
 	let query = sqlx::query(&query_string).bind(**user_id);
 
+	ctx.cache().purge("user", [user_id.as_uuid()]).await?;
+
 	// Bind display name
 	let query = if let Some(display_name) = display_name {
 		query.bind(display_name)

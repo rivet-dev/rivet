@@ -72,7 +72,7 @@ pub enum ClusterKind {
 		/// Port to expose API HTTPS interface. Exposed on public IP.
 		#[serde(default = "default_api_https_port")]
 		api_https_port: Option<u16>,
-		/// Port to expose Minio on. Exposed to localhost.
+		/// Port to expose Minio on. Exposed to localhost. Not used if DNS is enabled.
 		#[serde(default = "default_minio_port")]
 		minio_port: u16,
 		/// Port to expose the Nomad server on. Exposed to localhost.
@@ -413,6 +413,8 @@ impl Default for KubernetesProvider {
 #[derive(Serialize, Deserialize, Clone, Debug, Default)]
 #[serde(deny_unknown_fields)]
 pub struct Redis {
+	#[serde(default)]
+	pub replicas: usize,
 	#[serde(flatten, default)]
 	pub provider: RedisProvider,
 }

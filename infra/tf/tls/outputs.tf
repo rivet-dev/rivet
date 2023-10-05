@@ -26,13 +26,13 @@ locals {
 	}
 
 	tls_cert_locally_signed_nomad_client = {
-		cert_pem = tls_locally_signed_cert.locally_signed_nomad_client.ca_cert_pem
-		key_pem = tls_locally_signed_cert.locally_signed_nomad_client.ca_private_key_pem
+		cert_pem = tls_locally_signed_cert.locally_signed_client["nomad_client"].ca_cert_pem
+		key_pem = tls_locally_signed_cert.locally_signed_client["nomad_client"].ca_private_key_pem
 	}
 
 	tls_cert_locally_signed_game_guard = {
-		cert_pem = tls_locally_signed_cert.locally_signed_game_guard.ca_cert_pem
-		key_pem = tls_locally_signed_cert.locally_signed_game_guard.ca_private_key_pem
+		cert_pem = tls_locally_signed_cert.locally_signed_client["game_guard"].ca_cert_pem
+		key_pem = tls_locally_signed_cert.locally_signed_client["game_guard"].ca_private_key_pem
 	}
 }
 

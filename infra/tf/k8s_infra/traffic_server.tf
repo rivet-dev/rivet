@@ -1,5 +1,13 @@
 locals {
-	traffic_server_count = 2
+	service_traffic_server = lookup(var.services, "traffic_server", {
+		count = 2
+		resources = {
+			cpu = 50
+			cpu_cores = 0
+			memory = 00
+		}
+	})
+
 	traffic_server_configmap_data = merge(
 		# Static files
 		# TODO: Add back body_factory. These use `#` in the file names, so it doesn't work in configmaps.
@@ -111,7 +119,7 @@ resource "kubernetes_stateful_set" "traffic_server" {
 		}
 	}
 	spec {
-		replicas = local.traffic_server_count
+		replicas = local.service_traffic_server.count
 
 		selector {
 			match_labels = {
@@ -158,6 +166,17 @@ resource "kubernetes_stateful_set" "traffic_server" {
 						initial_delay_seconds = 1
 						period_seconds = 5
 						timeout_seconds = 2
+					}
+
+					resources {
+						limits = {
+							memory = "${local.service_traffic_server.resources.memory}Mi"
+							cpu = (
+								local.service_traffic_server.resources.cpu_cores > 0 ?
+								"${local.service_traffic_server.resources.cpu_cores * 1000}m"
+								: "${local.service_traffic_server.resources.cpu}m"
+							)
+						}
 					}
 
 					volume_mount {
@@ -211,7 +230,7 @@ resource "kubectl_manifest" "traffic_server_traefik_service" {
 	depends_on = [helm_release.traefik]
 
 	yaml_body = yamlencode({
-		apiVersion = "traefik.containo.us/v1alpha1"
+		apiVersion = "traefik.io/v1alpha1"
 		kind = "TraefikService"
 
 		metadata = {

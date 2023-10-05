@@ -54,6 +54,14 @@ pub async fn run_from_env(ts: i64) -> GlobalResult<()> {
 		(team_id, primary_user_id)
 	};
 
+	// Create games
+	for _ in 0..4 {
+		op!([ctx] faker_game {
+			dev_team_id: Some(team_id.into()),
+		})
+		.await?;
+	}
+
 	// Encode user token
 	let auth_token = {
 		let token_res = op!([ctx] token_create {

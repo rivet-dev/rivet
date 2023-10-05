@@ -42,7 +42,9 @@ async fn handle(
 			sqlx::query(indoc!(
 				"
 				INSERT INTO db_captcha.captcha_verifications (
-					verification_id, topic, topic_str, remote_address, complete_ts, expire_ts, provider, success, user_id, namespace_id
+					verification_id, topic, topic_str, remote_address,
+					complete_ts, expire_ts, provider, success, user_id,
+					namespace_id
 				)
 				VALUES ($1, $2, $3, $4, $5, to_timestamp($6::float / 1000), $7, $8, $9, $10)
 				"

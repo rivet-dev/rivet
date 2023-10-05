@@ -140,7 +140,7 @@ async fn crdb_from_env(client_name: String) -> Result<Option<CrdbPool>, Error> {
 			// Raise the cap, since this is effectively the amount of
 			// simultaneous requests we can handle. See
 			// https://www.cockroachlabs.com/docs/stable/connection-pooling.html
-			.max_connections(1024)
+			.max_connections(4096)
 			// Speeds up requests at the expense of potential
 			// failures
 			.test_before_acquire(false)
@@ -211,8 +211,8 @@ async fn redis_from_env() -> Result<HashMap<String, RedisPool>, Error> {
 	Ok(redis)
 }
 
-#[tracing::instrument(level = "trace", skip(pools))]
-async fn runtime(pools: Pools, client_name: String) {
+#[tracing::instrument(level = "trace", skip(_pools))]
+async fn runtime(_pools: Pools, client_name: String) {
 	// TODO: Delete this once confirmed this is no longer an issue
 
 	// We have to manually ping the Redis connection since `ConnectionManager`

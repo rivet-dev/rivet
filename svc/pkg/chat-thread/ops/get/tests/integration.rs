@@ -69,7 +69,7 @@ async fn empty(ctx: TestCtx) {
 	.unwrap();
 
 	// Validate the threads
-	assert_eq!(2, res.threads.len(), "wrong thread count");
+	assert_eq!(1, res.threads.len(), "wrong thread count");
 	let team_thread = res
 		.threads
 		.iter()

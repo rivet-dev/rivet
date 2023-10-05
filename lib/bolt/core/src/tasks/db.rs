@@ -11,6 +11,8 @@ use crate::{
 	utils::db_conn::DatabaseConnections,
 };
 
+const REDIS_IMAGE: &str = "ghcr.io/rivet-gg/redis:cc3241e";
+
 pub struct ShellContext<'a> {
 	pub ctx: &'a ProjectContext,
 	pub svc: &'a ServiceContext,
@@ -85,26 +87,16 @@ async fn redis_shell(shell_ctx: ShellContext<'_>) -> Result<()> {
 	} else {
 		Vec::new()
 	};
-	// let cacert = if let config::ns::ClusterKind::Distributed { .. } = &ctx.ns().cluster.kind {
-	// 	""
-	// } else {
-	// 	"--cacert /local/redis-ca.crt"
-	// };
-	let cacert = "--cacert /local/redis-ca.crt";
-	// TODO: Apt commands arent silenced for some reason
 	let cmd = formatdoc!(
 		"
-			sleep 2 &&
-			echo Installing certs... &&
-			apt update -q &&
-			apt install -qq -y ca-certificates &&
-			redis-cli \
-			-h {hostname} \
-			-p {port} \
-			--user {username} \
-			-c \
-			--tls {cacert}
-			"
+		sleep 1;
+		redis-cli \
+		-h {hostname} \
+		-p {port} \
+		--user {username} \
+		-c \
+		--tls --cacert /local/redis-ca.crt
+		"
 	);
 	let overrides = json!({
 		"apiVersion": "v1",
@@ -115,7 +107,16 @@ async fn redis_shell(shell_ctx: ShellContext<'_>) -> Result<()> {
 			"containers": [
 				{
 					"name": "redis",
-					"image": "redis",
+					"image": REDIS_IMAGE,
+					// "command": ["redis-cli"],
+					// "args": [
+					// 	"-h", hostname,
+					// 	"-p", port,
+					// 	"--user", username,
+					// 	"-c",
+					// 	"--tls",
+					// 	"--cacert", "/local/redis-ca.crt"
+					// ],
 					"command": ["sh", "-c"],
 					"args": [cmd],
 					"env": env,
@@ -154,7 +155,7 @@ async fn redis_shell(shell_ctx: ShellContext<'_>) -> Result<()> {
 			"-itq",
 			"--rm",
 			"--restart=Never",
-			"--image=redis",
+			format!("--image={REDIS_IMAGE}"),
 			"--namespace",
 			"bolt",
 			format!("--overrides={overrides}"),
@@ -191,7 +192,7 @@ pub async fn crdb_shell(shell_ctx: ShellContext<'_>) -> Result<()> {
 	} else {
 		"".to_string()
 	};
-	let cmd = format!("sleep 2 && psql \"{db_url}\" {query}");
+	let cmd = format!("psql \"{db_url}\" {query}");
 	let overrides = json!({
 		"apiVersion": "v1",
 		"metadata": {
@@ -288,7 +289,7 @@ pub async fn clickhouse_shell(shell_ctx: ShellContext<'_>, no_db: bool) -> Resul
 	};
 	let cmd = formatdoc!(
 		"
-		sleep 2 &&
+		sleep 1;
 		clickhouse-client \
 			--secure \
 			--config-file /local/config.yml \
@@ -298,6 +299,7 @@ pub async fn clickhouse_shell(shell_ctx: ShellContext<'_>, no_db: bool) -> Resul
 			--password {password} {db_flag} {query}
 		"
 	);
+
 	let overrides = json!({
 		"apiVersion": "v1",
 		"metadata": {

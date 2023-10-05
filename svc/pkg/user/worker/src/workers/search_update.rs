@@ -20,5 +20,7 @@ async fn worker(ctx: &OperationContext<user::msg::search_update::Message>) -> Gl
 	.execute(&crdb)
 	.await?;
 
+	ctx.cache().purge("user", [user_id]).await?;
+
 	Ok(())
 }

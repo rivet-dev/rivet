@@ -14,13 +14,6 @@ use ::api_helper::{
 	util::{verify_cors, CorsConfigBuilder, CorsResponse},
 };
 
-#[derive(Debug, serde::Deserialize)]
-#[serde(rename_all = "PascalCase")]
-struct ConsulService {
-	address: String,
-	service_port: u16,
-}
-
 // Simulated ctx auth
 pub struct Auth {
 	claims: Option<String>,
@@ -481,15 +474,9 @@ async fn set_env_vars() {
 	std::env::set_var("CHIRP_SERVICE_NAME", &*SERVICE_NAME);
 	std::env::set_var("CHIRP_REGION", "local-lcl");
 
-	std::env::set_var("NATS_URL", "nats://nats-0.nats.service.consul:21200");
+	std::env::set_var("NATS_URL", todo!());
 	std::env::set_var("NATS_USERNAME", "chirp");
 	std::env::set_var("NATS_PASSWORD", "password");
-	std::env::set_var(
-		"REDIS_URL_CHIRP",
-		"redis://listen.redis.service.consul:6379",
-	);
-	std::env::set_var(
-		"REDIS_URL_CACHE",
-		"redis://listen.redis.service.consul:6379",
-	);
+	std::env::set_var("REDIS_URL_CHIRP", todo!());
+	std::env::set_var("REDIS_URL_CACHE", todo!());
 }

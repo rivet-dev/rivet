@@ -357,6 +357,7 @@ async fn vars(ctx: &ProjectContext) {
 			}
 		}
 
+		vars.insert("redis_replicas".into(), json!(ctx.ns().redis.replicas));
 		vars.insert(
 			"redis_provider".into(),
 			json!(match ctx.ns().redis.provider {
