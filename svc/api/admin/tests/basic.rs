@@ -6,13 +6,6 @@ static GLOBAL_INIT: Once = Once::new();
 
 const TOKEN: &str = "ZfGFOIALpu3vj1r2qO";
 
-#[derive(Debug, serde::Deserialize)]
-#[serde(rename_all = "PascalCase")]
-struct ConsulService {
-	address: String,
-	service_port: u16,
-}
-
 struct Ctx {
 	op_ctx: OperationContext<()>,
 }

@@ -272,15 +272,9 @@ async fn set_env_vars() {
 	std::env::set_var("CHIRP_SERVICE_NAME", "chirp-test");
 	std::env::set_var("CHIRP_REGION", &*TEST_REGION);
 
-	std::env::set_var("NATS_URL", "listen.nats.service.consul");
+	std::env::set_var("NATS_URL", todo!());
 	std::env::set_var("NATS_USERNAME", "chirp");
 	std::env::set_var("NATS_PASSWORD", "password");
-	std::env::set_var(
-		"REDIS_URL_CHIRP",
-		"redis://listen.redis.service.consul:6379",
-	);
-	std::env::set_var(
-		"REDIS_URL_CACHE",
-		"redis://listen.redis.service.consul:6379",
-	);
+	std::env::set_var("REDIS_URL_CHIRP", todo!());
+	std::env::set_var("REDIS_URL_CACHE", todo!());
 }

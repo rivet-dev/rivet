@@ -4,13 +4,6 @@ use rivet_operation::prelude::*;
 
 static GLOBAL_INIT: Once = Once::new();
 
-#[derive(Debug, serde::Deserialize)]
-#[serde(rename_all = "PascalCase")]
-struct ConsulService {
-	address: String,
-	service_port: u16,
-}
-
 struct Ctx {
 	op_ctx: OperationContext<()>,
 	http_client: rivet_status::ClientWrapper,

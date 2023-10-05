@@ -9,15 +9,14 @@
 # the servers would resolve the IP address from the DNS record and store that. When moving the server to a new pod's IP, the server
 # would fail to connect to the other servers because their IP changed.
 #
-# We don't use Consul for Nomad server service discvoery because (a) it's unnecesary complecity and (b) it doesn't fix the
-# problem with Nomad server addresses changing.
+# We don't use Consul for Nomad server service discvoery because (a) we'd have to _also_ run a Consul cluster which is unnecesarily
+# complicated + adds another point of failure and (b) it doesn't fix the problem with Nomad server addresses changing.
 
 locals {
 	nomad_server_count = 3
 	nomad_server_addrs = [for i in range(0, local.nomad_server_count): "127.0.0.1:${6000 + i}"]
 	nomad_server_addrs_escaped = [for addr in local.nomad_server_addrs : "\"${addr}\""]
 	nomad_server_configmap_data = {
-		# We don't use Consul for server discovery because we don't want to depend on Consul for Nomad to work
 		"server.hcl" = <<-EOT
 			datacenter = "global"
 			data_dir = "/opt/nomad/data"

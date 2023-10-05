@@ -5,13 +5,6 @@ use rivet_operation::prelude::*;
 
 static GLOBAL_INIT: Once = Once::new();
 
-#[derive(Debug, serde::Deserialize)]
-#[serde(rename_all = "PascalCase")]
-struct ConsulService {
-	address: String,
-	service_port: u16,
-}
-
 struct Ctx {
 	op_ctx: OperationContext<()>,
 	nomad_config: nomad_client::apis::configuration::Configuration,

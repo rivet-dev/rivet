@@ -17,8 +17,6 @@ cargo deny --manifest-path svc/Cargo.toml list
 -   ClickHouse: Apache-2.0
 -   Cloudflared
 -   Cockraoch: Apache-2.0
--   Consul Exporter: Apache-2.0
--   Consul: MPL-2.0
 -   Docker: Apache-2.0
 -   Imagor: Apache-2.0
 -   Minio: AGPL-3.0 (non-derivative, used in development)

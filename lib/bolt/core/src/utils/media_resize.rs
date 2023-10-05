@@ -95,7 +95,7 @@ impl ResizePreset {
 		}
 		url.push_str("/");
 		url.push_str(&urlencoding::encode(&format!(
-			"http://proxy.traffic-server.service.consul:9300/s3-cache/{ns}-{bucket}/",
+			"http://traffic-server.traffic-server.svc.cluster.local:8080/s3-cache/{ns}-{bucket}/",
 			ns = self.ns,
 			bucket = self.bucket
 		)));
