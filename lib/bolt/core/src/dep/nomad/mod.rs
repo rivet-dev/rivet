@@ -17,7 +17,7 @@ pub struct NomadCtx {
 	project_ctx: ProjectContext,
 	client: reqwest::Client,
 
-	/// Nomad & Consul datacenter to deploy to.
+	/// Nomad datacenter to deploy to.
 	pub region: String,
 
 	/// Secret used to connect to the Cloudflare tunnel.

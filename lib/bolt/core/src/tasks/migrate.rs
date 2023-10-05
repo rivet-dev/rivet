@@ -18,6 +18,8 @@ use crate::{
 	utils::{self, db_conn::DatabaseConnections},
 };
 
+const MIGRATE_IMAGE: &str = "ghcr.io/rivet-gg/golang-migrate:ea4c84e";
+
 enum ClickhouseRole {
 	Admin,
 	Write,
@@ -425,19 +427,6 @@ pub async fn migration(
 ) -> Result<()> {
 	upload_migrations(ctx, svc).await?;
 
-	let cmd = formatdoc!(
-		"
-		sleep 2 &&
-		apk update -q &&
-		apk add -q tzdata &&
-		migrate \
-		-database \"{database_url}\" \
-		-path /local/migrations \
-		{}
-		",
-		migration_cmd.join(" ")
-	);
-	// let cmd = "sleep 2000";
 	let overrides = json!({
 		"apiVersion": "v1",
 		"metadata": {
@@ -447,9 +436,9 @@ pub async fn migration(
 			"containers": [
 				{
 					"name": "migrate",
-					"image": "migrate/migrate",
-					"command": ["sh", "-c"],
-					"args": [cmd],
+					"image": MIGRATE_IMAGE,
+					"command": ["migrate", "-database", database_url, "-path", "/local/migrations"],
+					"args": migration_cmd,
 					// // See https://github.com/golang-migrate/migrate/issues/494
 					// "env": [{
 					// 	"name": "TZ",
@@ -501,7 +490,7 @@ pub async fn migration(
 			"-itq",
 			"--rm",
 			"--restart=Never",
-			"--image=migrate/migrate",
+			format!("--image={MIGRATE_IMAGE}"),
 			"--namespace",
 			"bolt",
 			format!("--overrides={overrides}"),

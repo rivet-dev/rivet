@@ -1,37 +1,3 @@
-resource "tls_private_key" "main" {
-	lifecycle {
-		# Prevent destruction since our server leaders can't gracefully transfer
-		# ownership without being able to SSH and stop the old services.
-		# TODO: SVC-2459
-		# prevent_destroy = true
-	}
-
-	algorithm = "ECDSA"
-	ecdsa_curve = "P384"
-}
-
-# MARK: Cloudflare origin cert (rivet.gg)
-# See https://developers.cloudflare.com/ssl/origin-configuration/authenticated-origin-pull#zone-level--cloudflare-certificate
-resource "tls_private_key" "cf_origin_rivet_gg" {
-	algorithm = "RSA"
-}
-
-resource "tls_cert_request" "cf_origin_rivet_gg" {
-	private_key_pem = tls_private_key.cf_origin_rivet_gg.private_key_pem
-
-	subject {
-		common_name  = ""
-		organization = "Rivet Gaming, LLC"
-	}
-}
-
-resource "cloudflare_origin_ca_certificate" "rivet_gg" {
-	csr = tls_cert_request.cf_origin_rivet_gg.cert_request_pem
-	hostnames = ["*.${var.domain_main}", "${var.domain_main}", "*.api.${var.domain_main}", "api.${var.domain_main}"]
-	request_type = "origin-rsa"
-	requested_validity = 15 * 365
-}
-
 locals {
 	# Cloudflare client cert used for mTLS. See
 	# https://developers.cloudflare.com/ssl/origin-configuration/authenticated-origin-pull#zone-level--cloudflare-certificate
@@ -73,3 +39,57 @@ locals {
 		-----END CERTIFICATE-----
 		EOF
 }
+
+# MARK: Cloudflare origin cert (rivet.gg)
+# See https://developers.cloudflare.com/ssl/origin-configuration/authenticated-origin-pull#zone-level--cloudflare-certificate
+resource "tls_private_key" "cf_origin_rivet_gg" {
+	algorithm = "RSA"
+}
+
+resource "tls_cert_request" "cf_origin_rivet_gg" {
+	private_key_pem = tls_private_key.cf_origin_rivet_gg.private_key_pem
+
+	subject {
+		common_name  = ""
+		organization = "Rivet Gaming, LLC"
+	}
+}
+
+resource "cloudflare_origin_ca_certificate" "rivet_gg" {
+	csr = tls_cert_request.cf_origin_rivet_gg.cert_request_pem
+	hostnames = ["*.${var.domain_main}", "${var.domain_main}", "*.api.${var.domain_main}", "api.${var.domain_main}"]
+	request_type = "origin-rsa"
+	requested_validity = 15 * 365
+}
+
+
+# Must be created in every namespace it is used in
+resource "kubernetes_secret" "ingress_tls_cert" {
+	for_each = toset(["traefik", "imagor", "rivet-service"])
+
+	metadata {
+		name = "ingress-tls-cloudflare-cert"
+		namespace = each.value
+	}
+
+	type = "kubernetes.io/tls"
+
+	data = {
+		"tls.crt" = cloudflare_origin_ca_certificate.rivet_gg.certificate
+		"tls.key" = tls_private_key.cf_origin_rivet_gg.private_key_pem
+	}
+}
+
+resource "kubernetes_secret" "ingress_tls_ca_cert" {
+	for_each = toset(["traefik", "imagor", "rivet-service"])
+
+	metadata {
+		name = "ingress-tls-cloudflare-ca-cert"
+		namespace = each.value
+	}
+
+	data = {
+		"tls.ca" = local.cloudflare_ca_cert
+	}
+}
+

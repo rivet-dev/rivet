@@ -42,6 +42,26 @@ pub struct Cert {
 #[derive(Debug, Clone, Deserialize)]
 pub struct Tls {
 	pub tls_cert_letsencrypt_rivet_job: TerraformOutputValue<Cert>,
+	pub tls_cert_locally_signed_tunnel_server: TerraformOutputValue<Cert>,
+	pub tls_cert_locally_signed_nomad_client: TerraformOutputValue<Cert>,
+	// pub tls_cert_locally_signed_game_guard: TerraformOutputValue<Cert>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct Dns {
+	pub cloudflare_zone_ids: TerraformOutputValue<DnsZones>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct DnsZones {
+	pub main: String,
+	pub cdn: String,
+	pub job: String,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct KubernetesClusterAws {
+	pub eks_admin_role_arn: TerraformOutputValue<String>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -52,7 +72,7 @@ pub struct Cockroach {
 }
 
 #[derive(Debug, Clone, Deserialize)]
-pub struct Clickhouse {
+pub struct ClickHouse {
 	pub host: TerraformOutputValue<String>,
 	pub port: TerraformOutputValue<u32>,
 }
@@ -71,6 +91,14 @@ pub async fn read_tls(ctx: &ProjectContext) -> Tls {
 	read_plan::<Tls>(ctx, "tls").await
 }
 
+pub async fn read_dns(ctx: &ProjectContext) -> Dns {
+	read_plan::<Dns>(ctx, "dns").await
+}
+
+pub async fn read_k8s_cluster_aws(ctx: &ProjectContext) -> KubernetesClusterAws {
+	read_plan::<KubernetesClusterAws>(ctx, "k8s_cluster_aws").await
+}
+
 pub async fn read_crdb(ctx: &ProjectContext) -> Cockroach {
 	match &ctx.ns().cluster.kind {
 		config::ns::ClusterKind::SingleNode { .. } => {
@@ -82,13 +110,13 @@ pub async fn read_crdb(ctx: &ProjectContext) -> Cockroach {
 	}
 }
 
-pub async fn read_clickhouse(ctx: &ProjectContext) -> Clickhouse {
+pub async fn read_clickhouse(ctx: &ProjectContext) -> ClickHouse {
 	match &ctx.ns().cluster.kind {
 		config::ns::ClusterKind::SingleNode { .. } => {
-			read_plan::<Clickhouse>(ctx, "clickhouse_k8s").await
+			read_plan::<ClickHouse>(ctx, "clickhouse_k8s").await
 		}
 		config::ns::ClusterKind::Distributed { .. } => {
-			read_plan::<Clickhouse>(ctx, "clickhouse_managed").await
+			read_plan::<ClickHouse>(ctx, "clickhouse_managed").await
 		}
 	}
 }

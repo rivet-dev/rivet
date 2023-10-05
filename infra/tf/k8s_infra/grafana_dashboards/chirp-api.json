@@ -15,7 +15,6 @@
           "limit": 100,
           "matchAny": false,
           "tags": [],
-
           "type": "dashboard"
         },
         "type": "dashboard"
@@ -25,7 +24,7 @@
   "editable": true,
   "fiscalYearStartMonth": 0,
   "graphTooltip": 0,
-  "id": 30,
+  "id": 1,
   "links": [],
   "liveNow": false,
   "panels": [
@@ -134,7 +133,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "sum(increase(rivet_api_request_duration_bucket{watch=\"0\",service=~\"[[service]]\",path=~\"[[path]]\",method=~\"[[method]]\"} [$__interval])) by (le)",
+          "expr": "sum(increase(rivet_api_request_duration_bucket{watch=\"0\",exported_service=~\"[[service]]\",path=~\"[[path]]\",method=~\"[[method]]\"} [$__rate_interval])) by (le)",
           "format": "heatmap",
           "legendFormat": "{{le}}",
           "range": true,
@@ -251,7 +250,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "sum(increase(rivet_api_request_duration_bucket{watch=\"1\",service=~\"[[service]]\",path=~\"[[path]]\",method=~\"[[method]]\"} [$__interval])) by (le)",
+          "expr": "sum(increase(rivet_api_request_duration_bucket{watch=\"1\",exported_service=~\"[[service]]\",path=~\"[[path]]\",method=~\"[[method]]\"} [$__rate_interval])) by (le)",
           "format": "heatmap",
           "legendFormat": "{{le}}",
           "range": true,
@@ -329,7 +328,6 @@
                 "color": "red",
                 "value": 80
               }
-
             ]
           },
           "unit": "reqps"
@@ -364,7 +362,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "sum(rate(rivet_api_request_total{service=~\"[[service]]\",path=~\"[[path]]\",method=~\"[[method]]\"}[$__rate_interval])) by (service, method, path)",
+          "expr": "sum(rate(rivet_api_request_total{exported_service=~\"[[service]]\",path=~\"[[path]]\",method=~\"[[method]]\"}[$__rate_interval])) by (exported_service, method, path)",
           "legendFormat": "{{method}} {{service}}{{path}}",
           "range": true,
           "refId": "A"
@@ -377,7 +375,6 @@
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
-
       },
       "fieldConfig": {
         "defaults": {
@@ -457,14 +454,13 @@
         }
       },
       "targets": [
-
         {
           "datasource": {
             "type": "prometheus",
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "sum(rate(rivet_api_request_errors{service=~\"[[service]]\",path=~\"[[path]]\",method=~\"[[method]]\",error_code!=\"API_CANCELLED\",error_code!=\"CAPTCHA_CAPTCHA_REQUIRED\"}[$__rate_interval])) by (service, method, path, status, error_code)",
+          "expr": "sum(rate(rivet_api_request_errors{exported_service=~\"[[service]]\",path=~\"[[path]]\",method=~\"[[method]]\",error_code!=\"API_CANCELLED\",error_code!=\"CAPTCHA_CAPTCHA_REQUIRED\"}[$__rate_interval])) by (exported_service, method, path, status, error_code)",
           "legendFormat": "{{method}} {{service}}{{path}}: {{status}} ({{error_code}})",
           "range": true,
           "refId": "A"
@@ -549,7 +545,6 @@
         "tooltip": {
           "mode": "single",
           "sort": "none"
-
         }
       },
       "targets": [
@@ -559,7 +554,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "sum(max_over_time(rivet_api_request_pending{watch=\"0\",service=~\"[[service]]\",path=~\"[[path]]\",method=~\"[[method]]\"}[$__interval])) by (service, path)",
+          "expr": "sum(max_over_time(rivet_api_request_pending{watch=\"0\",exported_service=~\"[[service]]\",path=~\"[[path]]\",method=~\"[[method]]\"}[$__interval])) by (exported_service, path)",
           "legendFormat": "{{method}} {{service}}{{path}}",
           "range": true,
           "refId": "A"
@@ -653,7 +648,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "sum(max_over_time(rivet_api_request_pending{watch=\"1\",service=~\"[[service]]\",path=~\"[[path]]\",method=~\"[[method]]\"}[$__interval])) by (service, path)",
+          "expr": "sum(max_over_time(rivet_api_request_pending{watch=\"1\",exported_service=~\"[[service]]\",path=~\"[[path]]\",method=~\"[[method]]\"}[$__interval])) by (exported_service, path)",
           "legendFormat": "{{method}} {{service}}{{path}}",
           "range": true,
           "refId": "A"
@@ -661,14 +656,14 @@
       ],
       "title": "Requests Pending (Watch)",
       "type": "timeseries"
-
     }
   ],
   "refresh": "",
-
   "schemaVersion": 38,
   "style": "dark",
-  "tags": ["chirp"],
+  "tags": [
+    "chirp"
+  ],
   "templating": {
     "list": [
       {
@@ -685,7 +680,7 @@
           "type": "prometheus",
           "uid": "prometheus"
         },
-        "definition": "label_values(rivet_chirp_uptime{}, service)",
+        "definition": "label_values(rivet_chirp_uptime,exported_service)",
         "hide": 0,
         "includeAll": true,
         "label": "Service",
@@ -693,8 +688,8 @@
         "name": "service",
         "options": [],
         "query": {
-          "query": "label_values(rivet_chirp_uptime{}, service)",
-          "refId": "StandardVariableQuery"
+          "query": "label_values(rivet_chirp_uptime,exported_service)",
+          "refId": "PrometheusVariableQueryEditor-VariableQuery"
         },
         "refresh": 1,
         "regex": "^api-.*",
@@ -712,7 +707,7 @@
           "type": "prometheus",
           "uid": "prometheus"
         },
-        "definition": "label_values(rivet_api_request_total{service=~\"[[service]]\"},path)",
+        "definition": "label_values(rivet_api_request_total{exported_service=~\"[[service]]\"},path)",
         "hide": 0,
         "includeAll": true,
         "label": "Path",
@@ -720,8 +715,8 @@
         "name": "path",
         "options": [],
         "query": {
-          "query": "label_values(rivet_api_request_total{service=~\"[[service]]\"},path)",
-          "refId": "StandardVariableQuery"
+          "query": "label_values(rivet_api_request_total{exported_service=~\"[[service]]\"},path)",
+          "refId": "PrometheusVariableQueryEditor-VariableQuery"
         },
         "refresh": 1,
         "regex": "",
@@ -736,11 +731,10 @@
           "value": "$__all"
         },
         "datasource": {
-
           "type": "prometheus",
           "uid": "prometheus"
         },
-        "definition": "label_values(rivet_api_request_total{service=~\"[[service]]\",path=~\"[[path]]\"},method)",
+        "definition": "label_values(rivet_api_request_total{exported_service=~\"[[service]]\", path=~\"[[path]]\"},method)",
         "hide": 0,
         "includeAll": true,
         "label": "Method",
@@ -748,8 +742,8 @@
         "name": "method",
         "options": [],
         "query": {
-          "query": "label_values(rivet_api_request_total{service=~\"[[service]]\",path=~\"[[path]]\"},method)",
-          "refId": "StandardVariableQuery"
+          "query": "label_values(rivet_api_request_total{exported_service=~\"[[service]]\", path=~\"[[path]]\"},method)",
+          "refId": "PrometheusVariableQueryEditor-VariableQuery"
         },
         "refresh": 1,
         "regex": "",
@@ -760,13 +754,13 @@
     ]
   },
   "time": {
-    "from": "now-2d",
+    "from": "now-24h",
     "to": "now"
   },
   "timepicker": {},
   "timezone": "",
   "title": "Chirp / API",
   "uid": "KxlcrbpVk",
-  "version": 4,
+  "version": 1,
   "weekStart": ""
 }

@@ -129,7 +129,7 @@ async fn handle_request(
 
 	let query_string = serde_urlencoded::to_string(query_pairs)?;
 	let req_url = format!(
-		"http://{}/api/v1/query{}?{}",
+		"{}/api/v1/query{}?{}",
 		url,
 		if timing.is_some() { "_range" } else { "" },
 		query_string

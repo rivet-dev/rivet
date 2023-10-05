@@ -125,6 +125,15 @@ pub fn build_plan(ctx: &ProjectContext, start_at: Option<String>) -> Result<Vec<
 		}
 	}
 
+	// Kubernetes
+	plan.push(PlanStep {
+		name_id: "k8s-infra",
+		kind: PlanStepKind::Terraform {
+			plan_id: "k8s_infra".into(),
+			needs_destroy: false,
+		},
+	});
+
 	if ctx.tls_enabled() {
 		// TLS
 		plan.push(PlanStep {
@@ -135,15 +144,6 @@ pub fn build_plan(ctx: &ProjectContext, start_at: Option<String>) -> Result<Vec<
 			},
 		});
 	}
-
-	// Kubernetes
-	plan.push(PlanStep {
-		name_id: "k8s-infra",
-		kind: PlanStepKind::Terraform {
-			plan_id: "k8s_infra".into(),
-			needs_destroy: false,
-		},
-	});
 
 	// Redis
 	match ctx.ns().redis.provider {
@@ -225,10 +225,7 @@ pub fn build_plan(ctx: &ProjectContext, start_at: Option<String>) -> Result<Vec<
 	if let Some(dns) = &ctx.ns().dns {
 		// TODO: Allow manual DNS config
 
-		if let Some(ns::DnsProvider::Cloudflare {
-			access: Some(_), ..
-		}) = &dns.provider
-		{
+		if let Some(ns::DnsProvider::Cloudflare { access, .. }) = &dns.provider {
 			// DNS
 			plan.push(PlanStep {
 				name_id: "tf-dns",
@@ -247,13 +244,15 @@ pub fn build_plan(ctx: &ProjectContext, start_at: Option<String>) -> Result<Vec<
 				},
 			});
 
-			plan.push(PlanStep {
-				name_id: "tf-cf-tunnels",
-				kind: PlanStepKind::Terraform {
-					plan_id: "cloudflare_tunnels".into(),
-					needs_destroy: true,
-				},
-			});
+			if access.is_some() {
+				plan.push(PlanStep {
+					name_id: "tf-cf-tunnels",
+					kind: PlanStepKind::Terraform {
+						plan_id: "cloudflare_tunnels".into(),
+						needs_destroy: true,
+					},
+				});
+			}
 		}
 	}
 

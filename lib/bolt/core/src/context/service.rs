@@ -453,10 +453,11 @@ impl ServiceContextData {
 		for dep in &dep_ctxs {
 			if matches!(run_context, RunContext::Service { .. })
 				&& !self.config().service.test_only
+				&& !self.config().service.load_test
 				&& dep.config().service.test_only
 			{
 				panic!(
-					"{} -> {}: cannot depend on a `service.test-only` service outside of `test-dependencies`",
+					"{} -> {}: cannot depend on a `service.test-only` service outside of `test-dependencies` or if `service.load-test = true`",
 					self.name(),
 					dep.name()
 				);
@@ -792,11 +793,21 @@ impl ServiceContextData {
 		}
 
 		if project_ctx.ns().dns.is_some() {
-			todo!("read cloudflare zones");
-
-			// env.push(("CLOUDFLARE_ZONE_ID_BASE".into(), zones.root.clone()));
-			// env.push(("CLOUDFLARE_ZONE_ID_GAME".into(), zones.game.clone()));
-			// env.push(("CLOUDFLARE_ZONE_ID_JOB".into(), zones.job.clone()));
+			if terraform::cli::has_applied(&project_ctx, "dns").await {
+				let dns = terraform::output::read_dns(&project_ctx).await;
+				env.push((
+					"CLOUDFLARE_ZONE_ID_BASE".into(),
+					(*dns.cloudflare_zone_ids).main.clone(),
+				));
+				env.push((
+					"CLOUDFLARE_ZONE_ID_GAME".into(),
+					(*dns.cloudflare_zone_ids).cdn.clone(),
+				));
+				env.push((
+					"CLOUDFLARE_ZONE_ID_JOB".into(),
+					(*dns.cloudflare_zone_ids).job.clone(),
+				));
+			}
 
 			if self.depends_on_cloudflare() {
 				env.push((
@@ -850,7 +861,7 @@ impl ServiceContextData {
 		if self.depends_on_prometheus_api() {
 			env.push((
 				format!("PROMETHEUS_URL"),
-				"prometheus-operated.prometheus.svc.cluster.local:9090".into(),
+				"http://prometheus-operated.prometheus.svc.cluster.local:9090".into(),
 			));
 		}
 

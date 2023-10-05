@@ -741,10 +741,10 @@ where
 
 		// Record metrics
 		metrics::CHIRP_REQUEST_PENDING
-			.with_label_values(&[req.op_ctx.name()])
+			.with_label_values(&[&worker_name])
 			.inc();
 		metrics::CHIRP_REQUEST_TOTAL
-			.with_label_values(&[req.op_ctx.name()])
+			.with_label_values(&[&worker_name])
 			.inc();
 
 		let start_instant = Instant::now();

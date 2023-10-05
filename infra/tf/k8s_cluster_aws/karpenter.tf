@@ -15,7 +15,7 @@ module "karpenter" {
 
 resource "aws_iam_service_linked_role" "spot" {
 	aws_service_name = "spot.amazonaws.com"
-	description = "A service-linked role for RDS"
+	description = "A service-linked role for EC2 Spot"
 }
 
 resource "helm_release" "karpenter" {
@@ -25,31 +25,23 @@ resource "helm_release" "karpenter" {
 	name = "karpenter"
 	repository = "oci://public.ecr.aws/karpenter"
 	chart = "karpenter"
-	version = "v0.30.0"
+	version = "v0.31.0"
 
-	set {
-		name = "settings.aws.clusterName"
-		value = module.eks.cluster_name
-	}
+	values = {
+		serviceAccount = {
+			annotations = {
+				"eks.amazonaws.com/role-arn" = module.karpenter.irsa_arn
+			}
+		}
 
-	set {
-		name = "settings.aws.clusterEndpoint"
-		value = module.eks.cluster_endpoint
-	}
-
-	set {
-		name = "serviceAccount.annotations.eks\\.amazonaws\\.com/role-arn"
-		value = module.karpenter.irsa_arn
-	}
-
-	set {
-		name = "settings.aws.defaultInstanceProfile"
-		value = module.karpenter.instance_profile_name
-	}
-
-	set {
-		name = "settings.aws.interruptionQueueName"
-		value = module.karpenter.queue_name
+		settings = {
+			aws = {
+				clusterName = module.eks.cluster_name
+				clusterEndpoint = module.eks.cluster_endpoint
+				defaultInstanceProfile = module.karpenter.instance_profile_name
+				interruptionQueueName = module.karpenter.queue_name
+			}
+		}
 	}
 }
 
@@ -64,19 +56,36 @@ resource "kubectl_manifest" "karpenter_provisioner" {
 		}
 		spec = {
 			requirements = [
+				# See how Karpenter selects instance types:
+				# https://karpenter.sh/v0.31/faq/#how-does-karpenter-dynamically-select-instance-types
+
+				{
+					key = "topology.kubernetes.io/zone"
+					operator = "In"
+					values = local.azs
+				},
+				{
+					key = "topology.kubernetes.io/os"
+					operator = "In"
+					values = ["linux"]
+				},
 				{
 					key = "karpenter.sh/capacity-type"
 					operator = "In"
-					values = ["spot"]
-				}
+					values = ["on-demand"]
+				},
 			]
 			limits = {
 				resources = {
 					cpu = 1000
+					memory = "1000Gi"
 				}
 			}
 			providerRef = {
 				name = "default"
+			}
+			consolidation = {
+				enabled = true
 			}
 			ttlSecondsAfterEmpty = 30
 		}

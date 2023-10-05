@@ -80,10 +80,10 @@ where
 
 		// Record metrics
 		metrics::CHIRP_REQUEST_PENDING
-			.with_label_values(&[&self.name])
+			.with_label_values(&[O::NAME])
 			.inc();
 		metrics::CHIRP_REQUEST_TOTAL
-			.with_label_values(&[&self.name])
+			.with_label_values(&[O::NAME])
 			.inc();
 
 		let start_instant = Instant::now();
@@ -105,14 +105,14 @@ where
 				Err(GlobalError::Internal { ty, code, .. }) => {
 					let error_code_str = code.as_str_name();
 					metrics::CHIRP_REQUEST_ERRORS
-						.with_label_values(&[&self.name, error_code_str, &ty])
+						.with_label_values(&[O::NAME, error_code_str, &ty])
 						.inc();
 
 					error_code_str.to_string()
 				}
 				Err(GlobalError::BadRequest { code, .. }) => {
 					metrics::CHIRP_REQUEST_ERRORS
-						.with_label_values(&[&self.name, &code, "bad_request"])
+						.with_label_values(&[O::NAME, &code, "bad_request"])
 						.inc();
 
 					code.clone()
@@ -123,10 +123,10 @@ where
 			// Other request metrics
 			let dt = start_instant.elapsed().as_secs_f64();
 			metrics::CHIRP_REQUEST_PENDING
-				.with_label_values(&[&self.name])
+				.with_label_values(&[O::NAME])
 				.dec();
 			metrics::CHIRP_REQUEST_DURATION
-				.with_label_values(&[&self.name, error_code_str.as_str()])
+				.with_label_values(&[O::NAME, error_code_str.as_str()])
 				.observe(dt);
 		}
 

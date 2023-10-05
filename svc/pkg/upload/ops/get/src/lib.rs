@@ -40,27 +40,38 @@ async fn handle(
 		.map(common::Uuid::as_uuid)
 		.collect::<Vec<_>>();
 
-	let uploads = sqlx::query_as::<_, UploadRow>(indoc!(
-		"
-		SELECT
-			bucket,
-			upload_id,
-			create_ts,
-			content_length,
-			complete_ts,
-			deleted_ts,
-			user_id,
-			provider
-		FROM db_upload.uploads
-		WHERE upload_id = ANY($1)
-		"
-	))
-	.bind(upload_ids)
-	.fetch_all(&crdb)
-	.await?
-	.into_iter()
-	.map(Into::<backend::upload::Upload>::into)
-	.collect::<Vec<_>>();
+	let uploads = ctx
+		.cache()
+		.fetch_all_proto("upload", upload_ids, move |mut cache, upload_ids| {
+			let crdb = crdb.clone();
+			async move {
+				let uploads = sqlx::query_as::<_, UploadRow>(indoc!(
+					"
+					SELECT
+						bucket,
+						upload_id,
+						create_ts,
+						content_length,
+						complete_ts,
+						deleted_ts,
+						user_id,
+						provider
+					FROM db_upload.uploads
+					WHERE upload_id = ANY($1)
+					"
+				))
+				.bind(upload_ids)
+				.fetch_all(&crdb)
+				.await?;
+
+				for row in uploads {
+					cache.resolve(&row.upload_id.clone(), row.into());
+				}
+
+				Ok(cache)
+			}
+		})
+		.await?;
 
 	Ok(upload::get::Response { uploads })
 }

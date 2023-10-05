@@ -61,6 +61,14 @@ module "eks" {
 
 	manage_aws_auth_configmap = true
 	aws_auth_roles = [
+		# Allow users to assume the admin role
+		{
+			rolearn = aws_iam_role.eks_admin.arn
+			username = local.eks_admin_username
+			groups = [
+				"system:masters"
+			]
+		},
 		# We need to add in the Karpenter node IAM role for nodes launched by Karpenter
 		{
 			rolearn = module.karpenter.role_arn
@@ -71,6 +79,9 @@ module "eks" {
 			]
 		},
 	]
+
+	# Enable root account to manage KMS
+	kms_key_enable_default_policy = true
 
 	fargate_profiles = {
 		karpenter = {

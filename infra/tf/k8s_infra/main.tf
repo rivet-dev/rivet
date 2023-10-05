@@ -10,17 +10,11 @@ terraform {
 
 locals {
 	entrypoints = var.tls_enabled ? {
-		"web" = { tls = null }
+		"web" = {}
 		"websecure" = {
-			tls = {
-				secretName = "ingress-tls-cert"
-				options = {
-					name = "ingress-tls"
-					namespace = kubernetes_namespace.traefik.metadata[0].name
-				}
-			}
+			tls = {}
 		}
 	} : {
-		"web" = { tls = null }
+		"web" = {}
 	}
 }

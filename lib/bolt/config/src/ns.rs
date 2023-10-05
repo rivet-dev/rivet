@@ -25,8 +25,6 @@ pub struct Namespace {
 	pub email: Option<Email>,
 	#[serde(default)]
 	pub captcha: Captcha,
-	/// Where to ship logs to. Will default to using built-in K8s logging if not provided.
-	pub logging: Option<Logging>,
 	#[serde(default)]
 	pub services: HashMap<String, Service>,
 	#[serde(default)]
@@ -71,12 +69,18 @@ pub enum ClusterKind {
 		/// Port to expose API HTTP interface. Exposed on public IP.
 		#[serde(default = "default_api_http_port")]
 		api_http_port: u16,
-		/// Port to expose API HTTPS interface. Expoed on public IP.
+		/// Port to expose API HTTPS interface. Exposed on public IP.
 		#[serde(default = "default_api_https_port")]
 		api_https_port: Option<u16>,
-		/// Port to expose Minio on. Exposed to localhost.
+		/// Port to expose Minio on. Exposed to localhost. Not used if DNS is enabled.
 		#[serde(default = "default_minio_port")]
 		minio_port: u16,
+		/// Port to expose the Nomad server on. Exposed to localhost.
+		#[serde(default = "default_nomad_port")]
+		nomad_port: u16,
+		/// Port to expose api-route on. Exposed to localhost.
+		#[serde(default = "default_api_route_port")]
+		api_route_port: u16,
 
 		/// Restricts the resources of the core services so there are more resources availble for
 		/// compiling code.
@@ -317,20 +321,6 @@ pub struct HcaptchaSiteKeys {
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(deny_unknown_fields)]
-pub struct Logging {
-	#[serde(flatten)]
-	pub provider: LoggingProvider,
-}
-
-#[derive(Serialize, Deserialize, Clone, Debug)]
-#[serde(deny_unknown_fields)]
-pub enum LoggingProvider {
-	#[serde(rename = "loki")]
-	Loki { endpoint: String },
-}
-
-#[derive(Serialize, Deserialize, Clone, Debug)]
-#[serde(deny_unknown_fields)]
 pub struct Service {
 	pub count: usize,
 	pub resources: ServiceResources,
@@ -423,6 +413,8 @@ impl Default for KubernetesProvider {
 #[derive(Serialize, Deserialize, Clone, Debug, Default)]
 #[serde(deny_unknown_fields)]
 pub struct Redis {
+	#[serde(default)]
+	pub replicas: usize,
 	#[serde(flatten, default)]
 	pub provider: RedisProvider,
 }
@@ -453,10 +445,7 @@ pub enum CockroachDBProvider {
 	#[serde(rename = "kubernetes")]
 	Kubernetes {},
 	#[serde(rename = "managed")]
-	Managed {
-		// #[serde(flatten)]
-		// plan: CockroachDBManagedPlan,
-	},
+	Managed {},
 }
 
 impl Default for CockroachDBProvider {
@@ -485,15 +474,6 @@ impl Default for ClickHouseProvider {
 		Self::Kubernetes {}
 	}
 }
-
-// #[derive(Serialize, Deserialize, Clone, Debug)]
-// #[serde(deny_unknown_fields)]
-// pub enum CockroachDBManagedPlan {
-// 	#[serde(rename = "serverless")]
-// 	Serverless {},
-// 	// #[serde(rename = "dedicated")]
-// 	// Dedicated {},
-// }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(deny_unknown_fields)]
@@ -639,4 +619,12 @@ fn default_api_https_port() -> Option<u16> {
 
 fn default_minio_port() -> u16 {
 	9000
+}
+
+fn default_nomad_port() -> u16 {
+	5000
+}
+
+fn default_api_route_port() -> u16 {
+	5001
 }

@@ -41,6 +41,9 @@ resource "helm_release" "prometheus" {
 		}
 		prometheus = {
 			prometheusSpec = {
+				scrapeInterval = "15s"
+				evaluationInterval = "15s"
+
 				storageSpec = local.prometheus_storage
 			
 				resources = {

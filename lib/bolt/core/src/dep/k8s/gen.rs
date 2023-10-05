@@ -16,15 +16,15 @@ use crate::{
 		service::{ServiceDomain, ServiceKind, ServiceRouter},
 	},
 	context::{ProjectContext, RunContext, ServiceContext},
-	dep::terraform,
+	dep::terraform::{self, output::read_k8s_cluster_aws},
 };
 
 // Kubernetes requires a specific port for containers because they have their own networking namespace, the
 // port bound on the host is randomly generated.
-pub const HEALTH_PORT: usize = 1000;
-pub const METRICS_PORT: usize = 1001;
-pub const TOKIO_CONSOLE_PORT: usize = 1002;
-pub const HTTP_SERVER_PORT: usize = 1003;
+pub const HEALTH_PORT: usize = 8000;
+pub const METRICS_PORT: usize = 8001;
+pub const TOKIO_CONSOLE_PORT: usize = 8002;
+pub const HTTP_SERVER_PORT: usize = 80;
 
 pub struct ExecServiceContext {
 	pub svc_ctx: ServiceContext,
@@ -67,22 +67,29 @@ pub async fn project(ctx: &ProjectContext) -> Result<()> {
 			ns::KubernetesProvider::K3d {} => block_in_place(move || {
 				cmd!("k3d", "kubeconfig", "get", ctx.k8s_cluster_name()).read()
 			})?,
-			ns::KubernetesProvider::AwsEks {} => block_in_place(move || {
-				cmd!(
-					"aws",
-					"eks",
-					"update-kubeconfig",
-					// Writes to stdout instead of user's kubeconfig
-					"--dry-run",
-					"--name",
-					ctx.k8s_cluster_name(),
-					// Read from a non-existent kubeconfig to prevent it from merging the existing
-					// user's kubeconfig.
-					"--kubeconfig",
-					"THIS DOES NOT EXIST",
-				)
-				.read()
-			})?,
+			ns::KubernetesProvider::AwsEks {} => {
+				let output = read_k8s_cluster_aws(ctx).await;
+				block_in_place(move || {
+					cmd!(
+						"aws",
+						"eks",
+						"update-kubeconfig",
+						// Writes to stdout instead of user's kubeconfig
+						"--dry-run",
+						"--region",
+						"us-east-1",
+						"--name",
+						ctx.k8s_cluster_name(),
+						// Read from a non-existent kubeconfig to prevent it from merging the existing
+						// user's kubeconfig.
+						"--kubeconfig",
+						"THIS DOES NOT EXIST",
+						"--role-arn",
+						output.eks_admin_role_arn.as_str(),
+					)
+					.read()
+				})?
+			}
 		};
 
 		// Write to file
@@ -107,7 +114,7 @@ pub fn k8s_svc_name(exec_ctx: &ExecServiceContext) -> String {
 	}
 }
 
-/// Generates a job definition for services for the development Nomad cluster.
+/// Generates a job definition for services for the development Kubernetes cluster.
 pub async fn gen_svc(exec_ctx: &ExecServiceContext) -> Vec<serde_json::Value> {
 	let service_name = k8s_svc_name(exec_ctx);
 
@@ -407,6 +414,7 @@ pub async fn gen_svc(exec_ctx: &ExecServiceContext) -> Vec<serde_json::Value> {
 				"kind": "Deployment",
 				"metadata": metadata,
 				"spec": {
+					// TODO: Does specifying this cause issues with HAP?
 					"replicas": ns_service_config.count,
 					"selector": {
 						"matchLabels": {
@@ -465,7 +473,20 @@ pub async fn gen_svc(exec_ctx: &ExecServiceContext) -> Vec<serde_json::Value> {
 	}
 
 	// Horizontal Pod Autoscaler
-	if let SpecType::Deployment = spec_type {
+	if matches!(
+		project_ctx.ns().cluster.kind,
+		config::ns::ClusterKind::Distributed { .. }
+	) && matches!(
+		svc_ctx.config().kind,
+		ServiceKind::Headless {
+			singleton: false,
+			..
+		} | ServiceKind::Consumer { .. }
+			| ServiceKind::Api {
+				singleton: false,
+				..
+			}
+	) {
 		specs.push(json!({
 			"apiVersion": "autoscaling/v2",
 			"kind": "HorizontalPodAutoscaler",
@@ -482,7 +503,7 @@ pub async fn gen_svc(exec_ctx: &ExecServiceContext) -> Vec<serde_json::Value> {
 					"kind": "Deployment",
 					"name": service_name
 				},
-				"minReplicas": 1,
+				"minReplicas": ns_service_config.count,
 				"maxReplicas": 5,
 				"metrics": [
 					{
@@ -491,10 +512,21 @@ pub async fn gen_svc(exec_ctx: &ExecServiceContext) -> Vec<serde_json::Value> {
 							"name": "cpu",
 							"target": {
 								"type": "Utilization",
-								"averageUtilization": 80
+								// Keep this low because the server is IO bound
+								"averageUtilization": 50
 							}
 						}
-					}
+					},
+					{
+						"type": "Resource",
+						"resource": {
+							"name": "memory",
+							"target": {
+								"type": "Utilization",
+								"averageUtilization": 75
+							}
+						}
+					},
 				]
 			}
 		}));
@@ -587,8 +619,7 @@ async fn build_volumes(
 
 	// Add volumes based on exec service
 	match driver {
-		// Mount the service binaries to execute directly in the container. See
-		// notes in salt/salt/nomad/files/nomad.d/client.hcl.j2.
+		// Mount the service binaries to execute directly in the container.
 		ExecServiceDriver::LocalBinaryArtifact { .. } => {
 			// Volumes
 			volumes.push(json!({
@@ -770,7 +801,7 @@ fn build_ingress_router(
 		if let Some(path) = &mount.path {
 			let mw_name = format!("{}-{i}-strip-prefix", svc_ctx.name());
 			middlewares.push(json!({
-				"apiVersion": "traefik.containo.us/v1alpha1",
+				"apiVersion": "traefik.io/v1alpha1",
 				"kind": "Middleware",
 				"metadata": {
 					"name": mw_name,
@@ -789,7 +820,7 @@ fn build_ingress_router(
 		{
 			let mw_name = format!("{}-{i}-compress", svc_ctx.name());
 			middlewares.push(json!({
-				"apiVersion": "traefik.containo.us/v1alpha1",
+				"apiVersion": "traefik.io/v1alpha1",
 				"kind": "Middleware",
 				"metadata": {
 					"name": mw_name,
@@ -801,26 +832,27 @@ fn build_ingress_router(
 			}));
 		}
 
+		// TODO: Add back
 		// In flight
-		{
-			let mw_name = format!("{}-{i}-inflight", svc_ctx.name());
-			middlewares.push(json!({
-				"apiVersion": "traefik.containo.us/v1alpha1",
-				"kind": "Middleware",
-				"metadata": {
-					"name": mw_name,
-					"namespace": "rivet-service"
-				},
-				"spec": {
-					"inFlightReq": {
-						"amount": 64,
-						"sourceCriterion": {
-							"requestHeaderName": "cf-connecting-ip"
-						}
-					}
-				}
-			}));
-		}
+		// {
+		// 	let mw_name = format!("{}-{i}-inflight", svc_ctx.name());
+		// 	middlewares.push(json!({
+		// 		"apiVersion": "traefik.io/v1alpha1",
+		// 		"kind": "Middleware",
+		// 		"metadata": {
+		// 			"name": mw_name,
+		// 			"namespace": "rivet-service"
+		// 		},
+		// 		"spec": {
+		// 			"inFlightReq": {
+		// 				"amount": 64,
+		// 				"sourceCriterion": {
+		// 					"requestHeaderName": "cf-connecting-ip"
+		// 				}
+		// 			}
+		// 		}
+		// 	}));
+		// }
 
 		let ingress_middlewares = middlewares
 			.iter()
@@ -835,7 +867,7 @@ fn build_ingress_router(
 
 		// Build insecure router
 		specs.push(json!({
-			"apiVersion": "traefik.containo.us/v1alpha1",
+			"apiVersion": "traefik.io/v1alpha1",
 			"kind": "IngressRoute",
 			"metadata": {
 				"name": format!("{}-{i}-insecure", svc_ctx.name()),
@@ -853,7 +885,7 @@ fn build_ingress_router(
 								"kind": "Service",
 								"name": service_name,
 								"namespace": "rivet-service",
-								"port": 80
+								"port": "http"
 							}
 						]
 					}
@@ -864,7 +896,7 @@ fn build_ingress_router(
 		// Build secure router
 		if project_ctx.tls_enabled() {
 			specs.push(json!({
-				"apiVersion": "traefik.containo.us/v1alpha1",
+				"apiVersion": "traefik.io/v1alpha1",
 				"kind": "IngressRoute",
 				"metadata": {
 					"name": format!("{}-{i}-secure", svc_ctx.name()),
@@ -882,15 +914,15 @@ fn build_ingress_router(
 									"kind": "Service",
 									"name": service_name,
 									"namespace": "rivet-service",
-									"port": 80
+									"port": "http"
 								}
 							]
 						}
 					],
 					"tls": {
-						"secretName": "ingress-tls-cert",
+						"secretName": "ingress-tls-cloudflare-cert",
 						"options": {
-							"name": "ingress-tls",
+							"name": "ingress-cloudflare",
 							"namespace": "traefik"
 						},
 					}
@@ -900,13 +932,14 @@ fn build_ingress_router(
 
 		if svc_ctx.name() == "api-cf-verification" {
 			specs.push(json!({
-				"apiVersion": "traefik.containo.us/v1alpha1",
+				"apiVersion": "traefik.io/v1alpha1",
 				"kind": "IngressRoute",
 				"metadata": {
 					"name": "cf-verification-challenge",
 					"namespace": "rivet-service"
 				},
 				"spec": {
+					"entryPoints": [ "web" ],
 					"routes": [
 						{
 							"kind": "Rule",
@@ -916,6 +949,34 @@ fn build_ingress_router(
 					]
 				}
 			}));
+
+			if project_ctx.tls_enabled() {
+				specs.push(json!({
+					"apiVersion": "traefik.io/v1alpha1",
+					"kind": "IngressRoute",
+					"metadata": {
+						"name": "cf-verification-challenge",
+						"namespace": "rivet-service"
+					},
+					"spec": {
+						"entryPoints": [ "websecure" ],
+						"routes": [
+							{
+								"kind": "Rule",
+								"match": "PathPrefix(`/.well-known/cf-custom-hostname-challenge/`)",
+								"priority": 90
+							}
+						],
+						"tls": {
+							"secretName": "ingress-tls-cloudflare-cert",
+							"options": {
+								"name": "ingress-cloudflare",
+								"namespace": "traefik"
+							},
+						}
+					}
+				}));
+			}
 		}
 	}
 }

@@ -204,7 +204,7 @@ resource "kubectl_manifest" "imagor_traefik_service" {
 	depends_on = [helm_release.traefik]
 
 	yaml_body = yamlencode({
-		apiVersion = "traefik.containo.us/v1alpha1"
+		apiVersion = "traefik.io/v1alpha1"
 		kind = "TraefikService"
 
 		metadata = {
@@ -228,7 +228,7 @@ resource "kubectl_manifest" "imagor_ingress" {
 	depends_on = [helm_release.traefik]
 
 	yaml_body = yamlencode({
-		apiVersion = "traefik.containo.us/v1alpha1"
+		apiVersion = "traefik.io/v1alpha1"
 		kind = "IngressRoute"
 
 		metadata = {
@@ -259,7 +259,7 @@ resource "kubectl_manifest" "imagor_ingress" {
 				}
 			]
 
-			tls = each.value.tls
+			tls = lookup(each.value, "tls", null)
 		}
 	})
 }
@@ -269,7 +269,7 @@ resource "kubectl_manifest" "imagor_cors" {
 	depends_on = [helm_release.traefik]
 
 	yaml_body = yamlencode({
-		apiVersion = "traefik.containo.us/v1alpha1"
+		apiVersion = "traefik.io/v1alpha1"
 		kind = "Middleware"
 		
 		metadata = {
@@ -291,7 +291,7 @@ resource "kubectl_manifest" "imagor_cors_game" {
 	depends_on = [helm_release.traefik]
 
 	yaml_body = yamlencode({
-		apiVersion = "traefik.containo.us/v1alpha1"
+		apiVersion = "traefik.io/v1alpha1"
 		kind = "Middleware"
 		
 		metadata = {
@@ -313,7 +313,7 @@ resource "kubectl_manifest" "imagor_cdn_retry" {
 	depends_on = [helm_release.traefik]
 
 	yaml_body = yamlencode({
-		apiVersion = "traefik.containo.us/v1alpha1"
+		apiVersion = "traefik.io/v1alpha1"
 		kind = "Middleware"
 		
 		metadata = {
@@ -334,7 +334,7 @@ resource "kubectl_manifest" "imagor_cdn_cache_control" {
 	depends_on = [helm_release.traefik]
 
 	yaml_body = yamlencode({
-		apiVersion = "traefik.containo.us/v1alpha1"
+		apiVersion = "traefik.io/v1alpha1"
 		kind = "Middleware"
 		
 		metadata = {
@@ -356,7 +356,7 @@ resource "kubectl_manifest" "imagor_cdn" {
 	depends_on = [helm_release.traefik]
 
 	yaml_body = yamlencode({
-		apiVersion = "traefik.containo.us/v1alpha1"
+		apiVersion = "traefik.io/v1alpha1"
 		kind = "Middleware"
 		
 		metadata = {
@@ -389,7 +389,7 @@ resource "kubectl_manifest" "imagor_preset_middlewares" {
 	}
 
 	yaml_body = yamlencode({
-		apiVersion = "traefik.containo.us/v1alpha1"
+		apiVersion = "traefik.io/v1alpha1"
 		kind = "Middleware"
 		
 		metadata = {

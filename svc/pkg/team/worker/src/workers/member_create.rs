@@ -50,6 +50,8 @@ async fn worker(ctx: &OperationContext<team::msg::member_create::Message>) -> Gl
 		return Ok(());
 	}
 
+	ctx.cache().purge("user_team_list", [user_id]).await?;
+
 	// Dispatch events
 	msg!([ctx] team::msg::member_create_complete(team_id, user_id) {
 		team_id: Some(team_id.into()),

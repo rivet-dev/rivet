@@ -7,7 +7,7 @@ use std::{
 use uuid::Uuid;
 
 async fn build_cache() -> rivet_cache::Cache {
-	let redis_conn = redis::Client::open("redis://listen.redis.service.consul:6379")
+	let redis_conn = redis::Client::open(todo!())
 		.unwrap()
 		.get_tokio_connection_manager()
 		.await

@@ -30,6 +30,7 @@ module "redis_secrets" {
 }
 
 resource "kubernetes_namespace" "redis" {
+	depends_on = [ helm_release.prometheus ]
 	for_each = var.redis_dbs
 
 	metadata {
@@ -52,10 +53,16 @@ resource "helm_release" "redis" {
 		global = {
 			storageClass = var.k8s_storage_class
 		}
+		redis = {
+			# Use allkeys-lru instead of volatile-lru because we don't want the cache nodes to crash
+			extraEnvVars = [
+				{ name = "REDIS_MAXMEMORY_POLICY", value = each.value.persistent ? "noeviction" : "allkeys-lru" }
+			]
+		}
 		# Create minimal cluster
 		cluster = {
-			nodes = local.service_redis.count
-			replicas = 0
+			nodes = local.service_redis.count + var.redis_replicas * local.service_redis.count
+			replicas = var.redis_replicas
 		}
 		master = {
 			resources = {
@@ -86,6 +93,10 @@ resource "helm_release" "redis" {
 				enabled = true
 				namespace = kubernetes_namespace.redis[each.key].metadata.0.name
 			}
+			extraArgs = each.key == "chirp" ? {
+				"check-streams" = "'{topic:*}:topic'"
+			} : {}
+
 			# TODO:
 			# prometheusRule = {
 			# 	enabled = true

@@ -21,10 +21,10 @@ pub enum EndpointKind {
 	/// This should be used for all API calls.
 	Internal,
 
-	/// Used for making calls within the cluster, but without access to Consul DNS. This will
-	/// resolve the Consul DNS IP address.
+	/// Used for making calls within the cluster, but without access to the internal DNS server. This will
+	/// resolve the IP address on the machine building the presigned request.
 	///
-	/// Should be used sparingly.
+	/// Should be used sparingly, incredibly hacky.
 	InternalResolved,
 
 	/// Used for making calls from outside of the cluster.
@@ -144,9 +144,9 @@ impl Client {
 					provider_upper, svc_screaming
 				))?;
 
-				// HACK: Resolve Minio Consul address to schedule the job with. We
-				// do this since the job servers don't have Consul clients
-				// running on them to resolve Consul address to.
+				// HACK: Resolve Minio DNS address to schedule the job with. We
+				// do this since the job servers don't have the internal DNS servers
+				// to resolve the Minio endpoint.
 				//
 				// This has issues if there's a race condition with changing the
 				// Minio address.

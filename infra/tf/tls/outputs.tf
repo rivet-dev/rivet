@@ -19,6 +19,21 @@ locals {
 		cert_pem = "${acme_certificate.rivet_job.certificate_pem}${acme_certificate.rivet_job.issuer_pem}"
 		key_pem = acme_certificate.rivet_job.private_key_pem
 	}
+
+	tls_cert_locally_signed_tunnel_server = {
+		cert_pem = tls_locally_signed_cert.locally_signed_tunnel_server.ca_cert_pem
+		key_pem = tls_locally_signed_cert.locally_signed_tunnel_server.ca_private_key_pem
+	}
+
+	tls_cert_locally_signed_nomad_client = {
+		cert_pem = tls_locally_signed_cert.locally_signed_client["nomad_client"].ca_cert_pem
+		key_pem = tls_locally_signed_cert.locally_signed_client["nomad_client"].ca_private_key_pem
+	}
+
+	tls_cert_locally_signed_game_guard = {
+		cert_pem = tls_locally_signed_cert.locally_signed_client["game_guard"].ca_cert_pem
+		key_pem = tls_locally_signed_cert.locally_signed_client["game_guard"].ca_private_key_pem
+	}
 }
 
 # MARK: Write secrets
@@ -36,3 +51,14 @@ output "tls_cert_letsencrypt_rivet_job" {
 	value = local.tls_cert_letsencrypt_rivet_job
 	sensitive = true
 }
+
+output "tls_cert_locally_signed_tunnel_server" {
+	value = local.tls_cert_locally_signed_tunnel_server
+	sensitive = true
+}
+
+output "tls_cert_locally_signed_nomad_client" {
+	value = local.tls_cert_locally_signed_nomad_client
+	sensitive = true
+}
+

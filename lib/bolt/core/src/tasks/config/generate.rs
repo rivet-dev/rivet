@@ -229,6 +229,8 @@ pub async fn generate(project_path: &Path, ns_id: &str) -> Result<()> {
 				Ok(value(public_ip).into())
 			})
 			.await?;
+
+		// Default to port 8080 since default port 80 is not suitable for most dev environments
 		generator
 			.generate_config(&["cluster", "single_node", "api_http_port"], || async {
 				Ok(value(8080).into())

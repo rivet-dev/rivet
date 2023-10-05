@@ -2,7 +2,7 @@ use proto::backend::{self, pkg::*};
 use rivet_operation::prelude::*;
 
 #[derive(sqlx::FromRow)]
-struct User {
+struct UserRow {
 	user_id: Uuid,
 	display_name: String,
 	account_number: i64,
@@ -15,40 +15,73 @@ struct User {
 	delete_complete_ts: Option<i64>,
 }
 
+impl From<UserRow> for user::get::CacheUser {
+	fn from(val: UserRow) -> Self {
+		Self {
+			user_id: Some(val.user_id.into()),
+			display_name: val.display_name,
+			account_number: val.account_number,
+			avatar_id: val.avatar_id,
+			profile_id: val.profile_id.map(Into::into),
+			join_ts: val.join_ts,
+			bio: val.bio,
+			is_admin: val.is_admin,
+			delete_request_ts: val.delete_request_ts,
+			delete_complete_ts: val.delete_complete_ts,
+		}
+	}
+}
+
 #[operation(name = "user-get")]
 pub async fn handle(
 	ctx: OperationContext<user::get::Request>,
 ) -> GlobalResult<user::get::Response> {
+	let crdb = ctx.crdb().await?;
+
 	let user_ids = ctx
 		.user_ids
 		.iter()
 		.map(common::Uuid::as_uuid)
 		.collect::<Vec<_>>();
 
-	let users = sqlx::query_as::<_, User>(indoc!(
-		"
-		SELECT
-			user_id,
-			display_name,
-			account_number,
-			avatar_id,
-			profile_id,
-			join_ts,
-			bio,
-			is_admin,
-			delete_request_ts,
-			delete_complete_ts
-		FROM db_user.users
-		WHERE user_id = ANY($1)
-		"
-	))
-	.bind(user_ids)
-	.fetch_all(&ctx.crdb().await?)
-	.await?;
+	let users = ctx
+		.cache()
+		.fetch_all_proto("user", user_ids, move |mut cache, user_ids| {
+			let crdb = crdb.clone();
+			async move {
+				let users = sqlx::query_as::<_, UserRow>(indoc!(
+					"
+					SELECT
+						user_id,
+						display_name,
+						account_number,
+						avatar_id,
+						profile_id,
+						join_ts,
+						bio,
+						is_admin,
+						delete_request_ts,
+						delete_complete_ts
+					FROM db_user.users
+					WHERE user_id = ANY($1)
+					"
+				))
+				.bind(user_ids)
+				.fetch_all(&crdb)
+				.await?;
+
+				for row in users {
+					cache.resolve(&row.user_id.clone(), user::get::CacheUser::from(row));
+				}
+
+				Ok(cache)
+			}
+		})
+		.await?;
 
 	let upload_ids = users
 		.iter()
-		.filter_map(|user| user.profile_id.map(Into::into))
+		.filter_map(|x| x.profile_id)
 		.collect::<Vec<_>>();
 
 	let (upload_res, files_res) = tokio::try_join!(
@@ -90,7 +123,7 @@ pub async fn handle(
 				};
 
 				backend::user::User {
-					user_id: Some(user.user_id.into()),
+					user_id: user.user_id,
 					display_name: user.display_name,
 					account_number: user.account_number as u32,
 					avatar_id: user.avatar_id,

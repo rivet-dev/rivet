@@ -14,28 +14,28 @@ resource "kubernetes_namespace" "bolt" {
 # NOTE: Must use kubectl_manifest because kubernetes_manifest doesn't work with CRDs. If this stops working
 # correctly replace with a raw helm chart: https://artifacthub.io/packages/helm/wikimedia/raw
 # https://github.com/hashicorp/terraform-provider-kubernetes/issues/1367#
-resource "kubectl_manifest" "ingress_tls" {
-	depends_on = [helm_release.traefik, kubernetes_namespace.traefik, kubernetes_namespace.imagor]
+# resource "kubectl_manifest" "ingress_tls" {
+# 	depends_on = [helm_release.traefik, kubernetes_namespace.traefik, kubernetes_namespace.imagor]
 
-	yaml_body = yamlencode({
-		apiVersion = "traefik.containo.us/v1alpha1"
-		kind = "TLSOption"
+# 	yaml_body = yamlencode({
+# 		apiVersion = "traefik.io/v1alpha1"
+# 		kind = "TLSOption"
 
-		metadata = {
-			name = "ingress-tls"
-			namespace = kubernetes_namespace.traefik.metadata.0.name
-		}
+# 		metadata = {
+# 			name = "ingress-cloudflare"
+# 			namespace = kubernetes_namespace.traefik.metadata[0].name
+# 		}
 
-		spec = {
-			curvePreferences = [ "CurveP384" ]
+# 		spec = {
+# 			curvePreferences = [ "CurveP384" ]
 
-			clientAuth = {
-				secretNames = [ "ingress-tls-ca-cert" ]
-				clientAuthType = "RequireAndVerifyClientCert"
-			}
-		}
-	})
-}
+# 			clientAuth = {
+# 				secretNames = [ "ingress-tls-cloudflare-ca-cert" ]
+# 				clientAuthType = "RequireAndVerifyClientCert"
+# 			}
+# 		}
+# 	})
+# }
 
 # TODO: These configmaps mounted to pods don't update the pods when changed
 resource "kubernetes_config_map" "health_checks" {
@@ -116,11 +116,7 @@ resource "kubernetes_config_map" "install_ca" {
 			# Merge CA certificates provided from other config maps for self-signed TLS connections to databases
 			#
 			# Overriding LD_LIBRARY_PATH prevents apt from using the OpenSSL installation from /nix/store (if mounted).
-			LD_LIBRARY_PATH=/lib:/usr/lib:/usr/local/lib
-			
-			apt-get update -y
-			apt-get install -y --no-install-recommends ca-certificates
-			update-ca-certificates
+			LD_LIBRARY_PATH=/lib:/usr/lib:/usr/local/lib update-ca-certificates
 			EOF
 	}
 }

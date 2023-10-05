@@ -29,11 +29,13 @@ resource "helm_release" "traefik" {
 
 	repository = "https://traefik.github.io/charts"
 	chart = "traefik"
+	version = "24.0.0"
 	values = [yamlencode({
 		# Allows referencing services outside of the traefik namespace
 		providers = {
 			kubernetesCRD = {
 				allowCrossNamespace = true
+				labelSelector = "traefik-instance=main"
 			}
 		}
 
@@ -64,6 +66,26 @@ resource "helm_release" "traefik" {
 			# access = {
 			# 	enabled = true
 			# }
+		}
+
+		ports = {
+			websecure = {
+				tls = {
+					enabled = true
+					options = "ingress-cloudflare"
+				}
+			}
+		}
+
+		tlsOptions = {
+			"ingress-cloudflare" = {
+				curvePreferences = [ "CurveP384" ]
+
+				clientAuth = {
+					secretNames = [ "ingress-tls-cloudflare-ca-cert" ]
+					clientAuthType = "RequireAndVerifyClientCert"
+				}
+			}
 		}
 
 		metrics = {

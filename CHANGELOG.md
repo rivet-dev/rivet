@@ -13,6 +13,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 -  **Bolt** New summary view of test progress
 -  **Bolt** `config show` command
 -  **Dev** Bolt automatically builds with Nix shell
+-  **Infra** Autoscale non-singleton services based on CPU & memory
+-  **Infra** Dynamically provisioned core cluster using Karpenter
 
 ### Changed
 
