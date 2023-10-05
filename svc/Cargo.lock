@@ -66,7 +66,6 @@ dependencies = [
  "faker-user",
  "lazy_static",
  "prost 0.10.4",
- "reqwest",
  "rivet-health-checks",
  "rivet-metrics",
  "rivet-runtime",

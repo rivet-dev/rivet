@@ -69,6 +69,7 @@ resource "helm_release" "clickhouse" {
 			<?xml version="1.0"?>
 			<clickhouse>
 				<http_port remove="remove"/>
+				<tcp_port remove="remove"/>
 				<interserver_http_port remove="remove"/>
 				<interserver_https_port>9010</interserver_https_port>
 
