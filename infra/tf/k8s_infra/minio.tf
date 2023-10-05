@@ -83,7 +83,7 @@ resource "kubectl_manifest" "minio_ingress_route" {
 	depends_on = [helm_release.minio]
 
 	yaml_body = yamlencode({
-		apiVersion = "traefik.containo.us/v1alpha1"
+		apiVersion = "traefik.io/v1alpha1"
 		kind = "IngressRoute"
 
 		metadata = {

@@ -230,7 +230,7 @@ resource "kubectl_manifest" "traffic_server_traefik_service" {
 	depends_on = [helm_release.traefik]
 
 	yaml_body = yamlencode({
-		apiVersion = "traefik.containo.us/v1alpha1"
+		apiVersion = "traefik.io/v1alpha1"
 		kind = "TraefikService"
 
 		metadata = {

@@ -66,6 +66,26 @@ resource "helm_release" "traefik" {
 			# }
 		}
 
+		ports = {
+			websecure = {
+				tls = {
+					enabled = true
+					options = "ingress-cloudflare"
+				}
+			}
+		}
+
+		tlsOptions = {
+			"ingress-cloudflare" = {
+				curvePreferences = [ "CurveP384" ]
+
+				clientAuth = {
+					secretNames = [ "ingress-tls-cloudflare-ca-cert" ]
+					clientAuthType = "RequireAndVerifyClientCert"
+				}
+			}
+		}
+
 		metrics = {
 			prometheus = {
 				addEntryPointsLabels = true
@@ -159,7 +179,7 @@ data "kubernetes_service" "traefik" {
 # 	depends_on = [helm_release.traefik_tunnel]
 
 # 	yaml_body = yamlencode({
-# 		apiVersion = "traefik.containo.us/v1alpha1"
+# 		apiVersion = "traefik.io/v1alpha1"
 # 		kind = "TraefikService"
 
 # 		metadata = {
@@ -183,7 +203,7 @@ data "kubernetes_service" "traefik" {
 # 	depends_on = [helm_release.traefik_tunnel]
 
 # 	yaml_body = yamlencode({
-# 		apiVersion = "traefik.containo.us/v1alpha1"
+# 		apiVersion = "traefik.io/v1alpha1"
 # 		kind = "IngressRouteTCP" # q: what other diff parameters do we need to configure for tcp (vs http)? 
 
 # 		metadata = {

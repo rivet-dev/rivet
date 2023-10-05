@@ -801,7 +801,7 @@ fn build_ingress_router(
 		if let Some(path) = &mount.path {
 			let mw_name = format!("{}-{i}-strip-prefix", svc_ctx.name());
 			middlewares.push(json!({
-				"apiVersion": "traefik.containo.us/v1alpha1",
+				"apiVersion": "traefik.io/v1alpha1",
 				"kind": "Middleware",
 				"metadata": {
 					"name": mw_name,
@@ -820,7 +820,7 @@ fn build_ingress_router(
 		{
 			let mw_name = format!("{}-{i}-compress", svc_ctx.name());
 			middlewares.push(json!({
-				"apiVersion": "traefik.containo.us/v1alpha1",
+				"apiVersion": "traefik.io/v1alpha1",
 				"kind": "Middleware",
 				"metadata": {
 					"name": mw_name,
@@ -837,7 +837,7 @@ fn build_ingress_router(
 		// {
 		// 	let mw_name = format!("{}-{i}-inflight", svc_ctx.name());
 		// 	middlewares.push(json!({
-		// 		"apiVersion": "traefik.containo.us/v1alpha1",
+		// 		"apiVersion": "traefik.io/v1alpha1",
 		// 		"kind": "Middleware",
 		// 		"metadata": {
 		// 			"name": mw_name,
@@ -867,7 +867,7 @@ fn build_ingress_router(
 
 		// Build insecure router
 		specs.push(json!({
-			"apiVersion": "traefik.containo.us/v1alpha1",
+			"apiVersion": "traefik.io/v1alpha1",
 			"kind": "IngressRoute",
 			"metadata": {
 				"name": format!("{}-{i}-insecure", svc_ctx.name()),
@@ -896,7 +896,7 @@ fn build_ingress_router(
 		// Build secure router
 		if project_ctx.tls_enabled() {
 			specs.push(json!({
-				"apiVersion": "traefik.containo.us/v1alpha1",
+				"apiVersion": "traefik.io/v1alpha1",
 				"kind": "IngressRoute",
 				"metadata": {
 					"name": format!("{}-{i}-secure", svc_ctx.name()),
@@ -920,9 +920,9 @@ fn build_ingress_router(
 						}
 					],
 					"tls": {
-						"secretName": "ingress-tls-cert",
+						"secretName": "ingress-tls-cloudflare-cert",
 						"options": {
-							"name": "ingress-tls",
+							"name": "ingress-cloudflare",
 							"namespace": "traefik"
 						},
 					}
@@ -932,13 +932,14 @@ fn build_ingress_router(
 
 		if svc_ctx.name() == "api-cf-verification" {
 			specs.push(json!({
-				"apiVersion": "traefik.containo.us/v1alpha1",
+				"apiVersion": "traefik.io/v1alpha1",
 				"kind": "IngressRoute",
 				"metadata": {
 					"name": "cf-verification-challenge",
 					"namespace": "rivet-service"
 				},
 				"spec": {
+					"entryPoints": [ "web" ],
 					"routes": [
 						{
 							"kind": "Rule",
@@ -948,6 +949,34 @@ fn build_ingress_router(
 					]
 				}
 			}));
+
+			if project_ctx.tls_enabled() {
+				specs.push(json!({
+					"apiVersion": "traefik.io/v1alpha1",
+					"kind": "IngressRoute",
+					"metadata": {
+						"name": "cf-verification-challenge",
+						"namespace": "rivet-service"
+					},
+					"spec": {
+						"entryPoints": [ "websecure" ],
+						"routes": [
+							{
+								"kind": "Rule",
+								"match": "PathPrefix(`/.well-known/cf-custom-hostname-challenge/`)",
+								"priority": 90
+							}
+						],
+						"tls": {
+							"secretName": "ingress-tls-cloudflare-cert",
+							"options": {
+								"name": "ingress-cloudflare",
+								"namespace": "traefik"
+							},
+						}
+					}
+				}));
+			}
 		}
 	}
 }

@@ -13,9 +13,9 @@ locals {
 		"web" = {}
 		"websecure" = {
 			tls = {
-				secretName = "ingress-tls-cert"
+				secretName = "ingress-tls-cloudflare-cert"
 				options = {
-					name = "ingress-tls"
+					name = "ingress-cloudflare"
 					namespace = kubernetes_namespace.traefik.metadata[0].name
 				}
 			}
