@@ -1,3 +1,21 @@
+locals {
+	# Specify what services to expose via the tunnel server
+	tunnel_services = {
+		nomad = {
+			port = 5000
+			service = "nomad-server"
+			service_port = 4647
+			namespace = "nomad"
+		}
+		api_route = {
+			port = 5001
+			service = "rivet-api-route"
+			service_port = 80
+			namespace = "rivet-service"
+		}
+	}
+}
+
 resource "kubernetes_namespace" "traefik_tunnel" {
 	metadata {
 		name = "traefik-tunnel"
@@ -11,21 +29,43 @@ resource "helm_release" "traefik_tunnel" {
 
 	repository = "https://traefik.github.io/charts"
 	chart = "traefik"
+	version = "24.0.0"
 	values = [yamlencode({
-		ports = {
-			web = {
-				expose = false
+		ports = merge(
+			# Disable default ports
+			{
+				web = {
+					expose = false
+				},
+				websecure = {
+					expose = false
+				},
 			},
-			websecure = {
-				expose = false
-			},
-			nomad = {
-				port = 5000
-				expose = true
-			},
-			api-route = {
-				port = 5001
-				expose = true
+			# Expose tunnel ports
+			{
+				for k, v in local.tunnel_services:
+				replace(k, "_", "-") => {
+					port = v.port
+					expose = true
+					exposedPort = v.port
+					protocol = "TCP"
+					tls = {
+						enabled = true
+						options = "ingress-${replace(k, "_", "-")}"
+					}
+				}
+			}
+		)
+
+		tlsOptions = {
+			for k, v in local.tunnel_services:
+			"ingress-${replace(k, "_", "-")}" => {
+				curvePreferences = [ "CurveP384" ]
+
+				clientAuth = {
+					secretNames = [ "ingress-tls-cert-tunnel-server" ]
+					clientAuthType = "RequireAndVerifyClientCert"
+				}
 			}
 		}
 
@@ -34,15 +74,9 @@ resource "helm_release" "traefik_tunnel" {
 		providers = {
 			kubernetesCRD = {
 				allowCrossNamespace = true
+				labelSelector = "traefik-instance=tunnel"
 			}
 		}
-
-		# TODO: specify static config here? or specify it using yaml? 
-		additionalArguments = [
-			"--entryPoints.nomad.address=:5000",
-			"--entryPoints.api-route.address=:5001",
-			"--providers.http.pollInterval=2.5s",
-		]
 
 # 		logs = {
 # 			# general = {
@@ -54,15 +88,15 @@ resource "helm_release" "traefik_tunnel" {
 # 			# }
 # 		}
 
-# 		metrics = {
-# 			prometheus = {
-# 				addEntryPointsLabels = true
-# 				addRoutersLabels = true
-# 				addServicesLabels = true
-# 				# See lib/chirp/metrics/src/buckets.rs
-# 				buckets = "0.001,0.0025,0.005,0.01,0.025,0.05,0.1,0.25,0.5,1.0,2.5,5.0,10.0,25.0,50.0,100.0"
-# 			}
-# 		}
+		metrics = {
+			prometheus = {
+				addEntryPointsLabels = true
+				addRoutersLabels = true
+				addServicesLabels = true
+				# See lib/chirp/metrics/src/buckets.rs
+				buckets = "0.001,0.0025,0.005,0.01,0.025,0.05,0.1,0.25,0.5,1.0,2.5,5.0,10.0,25.0,50.0,100.0"
+			}
+		}
 	})]
 }
 
@@ -79,6 +113,9 @@ resource "kubectl_manifest" "traefik_tunnel" { # changed from data to resource -
 		metadata = {
 			name = "traefik-tunnel"
 			namespace = kubernetes_namespace.traefik_tunnel.metadata[0].name
+			labels = {
+				"traefik-instance" = "tunnel"
+			}
 		}
 
 		spec = { # do we need to do traffic mirroring? if so, what port to use? 
@@ -102,6 +139,9 @@ resource "kubectl_manifest" "traefik_nomad_router" {
 		metadata = {
 			name = "traefik-nomad-router"
 			namespace = kubernetes_namespace.traefik_tunnel.metadata[0].name
+			labels = {
+				"traefik-instance" = "tunnel"
+			}
 		}
 
 
@@ -119,7 +159,7 @@ resource "kubectl_manifest" "traefik_nomad_router" {
 					services = [
 						{
 							name = "nomad-server"
-							port = 4646
+							port = 4647
 						}
 					]
 				}
@@ -128,11 +168,11 @@ resource "kubectl_manifest" "traefik_nomad_router" {
 			# do we need certResolver, domains, and passthrough?
 			# is this the config for mtls? 
 			tls = {
-				secretName = "ingress-tls-cert-tunnel-server"
-				options = {
-					name = "ingress-tls-cert-tunnel-server"
-					namespace = kubernetes_namespace.traefik_tunnel.metadata[0].name # TODO rename the secret 
-				}
+				# secretName = "ingress-tls-cert-tunnel-server"
+				# options = {
+				# 	name = "ingress-tls-cert-tunnel-server"
+				# 	namespace = kubernetes_namespace.traefik_tunnel.metadata[0].name # TODO rename the secret 
+				# }
 			}
 		}
 	})
@@ -153,6 +193,9 @@ resource "kubectl_manifest" "traefik_api_route_router" {
 		metadata = {
 			name = "traefik-api-route-router"
 			namespace = kubernetes_namespace.traefik_tunnel.metadata[0].name
+			labels = {
+				"traefik-instance" = "tunnel"
+			}
 		}
 
 
@@ -170,7 +213,7 @@ resource "kubectl_manifest" "traefik_api_route_router" {
 					services = [
 						{
 							name = "nomad-server"
-							port = 4646
+							port = 4647
 						}
 					]
 				}
@@ -178,11 +221,11 @@ resource "kubectl_manifest" "traefik_api_route_router" {
 
 			# do we need certResolver, domains, and passthrough?
 			tls = {
-				secretName = "ingress_tls_cert_tunnel_server"
-				options = {
-					name = "ingress-tls-cert-tunnel-server"
-					namespace = kubernetes_namespace.traefik_tunnel.metadata[0].name
-				}
+				# secretName = "ingress_tls_cert_tunnel_server"
+				# options = {
+				# 	name = "ingress-tls-cert-tunnel-server"
+				# 	namespace = kubernetes_namespace.traefik_tunnel.metadata[0].name
+				# }
 			}
 		}
 	})
@@ -191,26 +234,26 @@ resource "kubectl_manifest" "traefik_api_route_router" {
 # NOTE: Must use kubectl_manifest because kubernetes_manifest doesn't work with CRDs. If this stops working
 # correctly replace with a raw helm chart: https://artifacthub.io/packages/helm/wikimedia/raw
 # https://github.com/hashicorp/terraform-provider-kubernetes/issues/1367#
-resource "kubectl_manifest" "ingress_tls_tunnel" {
-	depends_on = [helm_release.traefik_tunnel, kubernetes_namespace.traefik_tunnel]
+# resource "kubectl_manifest" "ingress_tls_tunnel" {
+# 	depends_on = [helm_release.traefik_tunnel, kubernetes_namespace.traefik_tunnel]
 
-	yaml_body = yamlencode({
-		apiVersion = "traefik.containo.us/v1alpha1"
-		kind = "TLSOption"
+# 	yaml_body = yamlencode({
+# 		apiVersion = "traefik.containo.us/v1alpha1"
+# 		kind = "TLSOption"
 
-		metadata = {
-			name = "ingress-tls-tunnel-server"
-			namespace = kubernetes_namespace.traefik_tunnel.metadata.0.name
-		}
+# 		metadata = {
+# 			name = "ingress-tls-tunnel-server"
+# 			namespace = kubernetes_namespace.traefik_tunnel.metadata.0.name
+# 		}
 
-		spec = {
-			curvePreferences = [ "CurveP384" ]
+# 		spec = {
+# 			curvePreferences = [ "CurveP384" ]
 
-			clientAuth = {
-				secretNames = [ "ingress_tls_cert_tunnel_server" ]
-				clientAuthType = "RequireAndVerifyClientCert"
-			}
-		}
-	})
-}
+# 			clientAuth = {
+# 				secretNames = [ "ingress_tls_cert_tunnel_server" ]
+# 				clientAuthType = "RequireAndVerifyClientCert"
+# 			}
+# 		}
+# 	})
+# }
 

@@ -21,10 +21,10 @@ use crate::{
 
 // Kubernetes requires a specific port for containers because they have their own networking namespace, the
 // port bound on the host is randomly generated.
-pub const HEALTH_PORT: usize = 1000;
-pub const METRICS_PORT: usize = 1001;
-pub const TOKIO_CONSOLE_PORT: usize = 1002;
-pub const HTTP_SERVER_PORT: usize = 1003;
+pub const HEALTH_PORT: usize = 8000;
+pub const METRICS_PORT: usize = 8001;
+pub const TOKIO_CONSOLE_PORT: usize = 8002;
+pub const HTTP_SERVER_PORT: usize = 80;
 
 pub struct ExecServiceContext {
 	pub svc_ctx: ServiceContext,

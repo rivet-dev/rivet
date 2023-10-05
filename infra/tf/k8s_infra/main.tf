@@ -12,31 +12,7 @@ locals {
 	entrypoints = var.tls_enabled ? {
 		"web" = {}
 		"websecure" = {
-			tls = {
-				secretName = "ingress-tls-cloudflare-cert"
-				options = {
-					name = "ingress-cloudflare"
-					namespace = kubernetes_namespace.traefik.metadata[0].name
-				}
-			}
-		}
-		"nomad" = {
-			tls = {
-				secretName = "ingress-tls-cert-tunnel-server"
-				options = {
-					name = "ingress-tls-tunnel-server"
-					namespace = kubernetes_namespace.traefik_tunnel.metadata[0].name
-				}
-			}
-		}
-		"api-route" = {
-			tls = {
-				secretName = "ingress-tls-cert-tunnel-server"
-				options = {
-					name = "ingress-tls-tunnel-server"
-					namespace = kubernetes_namespace.traefik_tunnel.metadata[0].name
-				}
-			}
+			tls = {}
 		}
 	} : {
 		"web" = {}

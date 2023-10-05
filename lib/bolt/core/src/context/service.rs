@@ -804,15 +804,15 @@ impl ServiceContextData {
 				));
 			}
 
-		// 	if self.depends_on_cloudflare() {
-		// 		env.push((
-		// 			"CLOUDFLARE_AUTH_TOKEN".into(),
-		// 			project_ctx
-		// 				.read_secret(&["cloudflare", "terraform", "auth_token"])
-		// 				.await?,
-		// 		));
-		// 	}
-		// }
+			if self.depends_on_cloudflare() {
+				env.push((
+					"CLOUDFLARE_AUTH_TOKEN".into(),
+					project_ctx
+						.read_secret(&["cloudflare", "terraform", "auth_token"])
+						.await?,
+				));
+			}
+		}
 
 		if let Some(hcaptcha) = &project_ctx.ns().captcha.hcaptcha {
 			if self.depends_on_hcaptcha() {

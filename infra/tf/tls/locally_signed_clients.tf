@@ -1,8 +1,8 @@
 locals {
-	# Specify what client certs to generate
+	# Name of the pools that can access tunnels
 	locally_signed_client_certs = {
-		nomad_client = {}
-		game_guard = {}
+		job = {}
+		gg = {}
 	}
 }
 
