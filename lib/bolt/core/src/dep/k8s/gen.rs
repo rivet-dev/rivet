@@ -498,10 +498,21 @@ pub async fn gen_svc(exec_ctx: &ExecServiceContext) -> Vec<serde_json::Value> {
 							"name": "cpu",
 							"target": {
 								"type": "Utilization",
-								"averageUtilization": 80
+								// Keep this low because the server is IO bound
+								"averageUtilization": 50
 							}
 						}
-					}
+					},
+					{
+						"type": "Resource",
+						"resource": {
+							"name": "memory",
+							"target": {
+								"type": "Utilization",
+								"averageUtilization": 75
+							}
+						}
+					},
 				]
 			}
 		}));
