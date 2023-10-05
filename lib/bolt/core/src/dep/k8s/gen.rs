@@ -474,6 +474,9 @@ pub async fn gen_svc(exec_ctx: &ExecServiceContext) -> Vec<serde_json::Value> {
 
 	// Horizontal Pod Autoscaler
 	if matches!(
+		project_ctx.ns().cluster.kind,
+		config::ns::ClusterKind::Distributed { .. }
+	) && matches!(
 		svc_ctx.config().kind,
 		ServiceKind::Headless {
 			singleton: false,
