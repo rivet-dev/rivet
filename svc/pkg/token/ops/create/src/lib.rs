@@ -68,7 +68,7 @@ async fn handle(
 
 			// Fetch entitlements to create the token with
 			let session_row = sqlx::query_as::<_, (Vec<Vec<u8>>,)>(
-				"SELECT db_token.entitlements FROM sessions WHERE session_id = $1",
+				"SELECT entitlements FROM db_token.sessions WHERE session_id = $1",
 			)
 			.bind(refresh_ent.session_id)
 			.fetch_optional(&crdb)

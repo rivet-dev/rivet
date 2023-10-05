@@ -36,7 +36,7 @@ resource "helm_release" "clickhouse" {
 	namespace = kubernetes_namespace.clickhouse[0].metadata.0.name
 	repository = "oci://registry-1.docker.io/bitnamicharts"
 	chart = "clickhouse"
-	version = "3.6.3"
+	version = "4.0.4"
 	values = [yamlencode({
 		global = {
 			storageClass = var.k8s_storage_class

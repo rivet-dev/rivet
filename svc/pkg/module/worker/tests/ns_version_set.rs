@@ -4,6 +4,10 @@ use std::collections::HashMap;
 
 #[worker_test]
 async fn ns_version_set(ctx: TestCtx) {
+	if !util::feature::job_run() {
+		return;
+	}
+
 	let crdb = ctx.crdb().await.unwrap();
 
 	let module_id = Uuid::new_v4();

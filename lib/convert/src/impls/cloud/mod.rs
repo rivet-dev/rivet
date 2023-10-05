@@ -64,10 +64,8 @@ impl ApiTryFrom<backend::game::Game> for models::GameHandle {
 			game_id: internal_unwrap!(value.game_id).to_string(),
 			name_id: value.name_id.to_owned(),
 			display_name: value.display_name.to_owned(),
-			logo_url: util::route::game_logo(
-				&value),
-			banner_url: util::route::game_banner(
-				&value),
+			logo_url: util::route::game_logo(&value),
+			banner_url: util::route::game_banner(&value),
 		})
 	}
 }

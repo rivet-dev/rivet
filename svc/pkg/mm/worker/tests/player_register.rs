@@ -81,6 +81,10 @@ async fn empty(ctx: TestCtx) {
 
 #[worker_test]
 async fn wrong_lobby(ctx: TestCtx) {
+	if !util::feature::job_run() {
+		return;
+	}
+
 	let lobby_res = op!([ctx] faker_mm_lobby {
 		..Default::default()
 	})

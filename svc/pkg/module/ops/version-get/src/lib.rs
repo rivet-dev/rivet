@@ -59,7 +59,7 @@ pub async fn handle(
 			f.response_schema,
 			fc.version_id IS NOT NULL AS callable
 		FROM db_module.scripts AS f
-		LEFT JOIN scripts_callable AS fc ON fc.version_id = f.version_id AND fc.name = f.name
+		LEFT JOIN db_module.scripts_callable AS fc ON fc.version_id = f.version_id AND fc.name = f.name
 		WHERE f.version_id = ANY($1)
 		"
 	))

@@ -299,16 +299,19 @@ pub async fn up(ctx: &ProjectContext, services: &[ServiceContext]) -> Result<()>
 					"
 					CREATE ROLE IF NOT EXISTS admin;
 					GRANT CREATE DATABASE ON *.* TO admin;
-					GRANT CREATE TABLE ON {db_name}.* TO admin;
-					GRANT INSERT ON {db_name}.* TO admin;
-					GRANT SELECT ON {db_name}.* TO admin;
+					GRANT
+						CREATE TABLE, DROP TABLE, INSERT, SELECT
+					ON {db_name}.* TO admin;
 
 					CREATE ROLE IF NOT EXISTS write;
-					GRANT INSERT ON {db_name}.* TO write;
-					GRANT SELECT ON {db_name}.* TO write;
+					GRANT
+						INSERT, SELECT
+					ON {db_name}.* TO write;
 
 					CREATE ROLE IF NOT EXISTS readonly;
-					GRANT SELECT ON {db_name}.* TO readonly;
+					GRANT
+						SELECT
+					ON {db_name}.* TO readonly;
 					"
 				);
 				db::clickhouse_shell(
@@ -411,7 +414,7 @@ pub async fn drop(ctx: &ProjectContext, service: &ServiceContext) -> Result<()> 
 	let conn = DatabaseConnections::create(ctx, &[service.clone()]).await?;
 	let database_url = conn.migrate_db_url(service).await?;
 
-	migration(ctx, service, &["drop"], database_url).await
+	migration(ctx, service, &["drop", "-f"], database_url).await
 }
 
 pub async fn migration(
