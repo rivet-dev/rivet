@@ -50,6 +50,7 @@ pub struct Tls {
 	pub tls_cert_locally_signed_tunnel_server: TerraformOutputValue<Cert>,
 	pub tls_cert_locally_signed_job: TerraformOutputValue<Cert>,
 	pub tls_cert_locally_signed_gg: TerraformOutputValue<Cert>,
+	pub root_ca_cert_pem: TerraformOutputValue<String>,
 }
 
 #[derive(Debug, Clone, Deserialize)]

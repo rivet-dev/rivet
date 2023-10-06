@@ -18,7 +18,7 @@ pub async fn gen(ctx: &ProjectContext, server: &Server) -> Result<String> {
 
 	if server.pool_id == "gg" {
 		script.push(components::traefik());
-
+		script.push(components::traefik_tunnel(ctx, &k8s_infra, &tls));
 		script.push(components::traefik_instance(components::TraefikInstance {
 			name: "game_guard".into(),
 			static_config: gg_traefik_static_config(),
@@ -28,39 +28,11 @@ pub async fn gen(ctx: &ProjectContext, server: &Server) -> Result<String> {
 			},
 			tcp_server_transports: Default::default(),
 		}));
-
-		script.push(components::traefik_instance(components::TraefikInstance {
-			name: "tunnel".into(),
-			static_config: tunnel_traefik_static_config(),
-			dynamic_config: tunnel_traefik_dynamic_config(&*k8s_infra.traefik_tunnel_external_ip),
-			tls_certs: Default::default(),
-			tcp_server_transports: hashmap! {
-				"tunnel".into() => components::ServerTransport {
-					certs: vec![
-						(*tls.tls_cert_locally_signed_job).clone()
-					]
-				}
-			},
-		}));
 	}
 
 	if server.pool_id == "job" {
 		script.push(components::traefik());
-
-		script.push(components::traefik_instance(components::TraefikInstance {
-			name: "tunnel".into(),
-			static_config: tunnel_traefik_static_config(),
-			dynamic_config: tunnel_traefik_dynamic_config(&*k8s_infra.traefik_tunnel_external_ip),
-			tls_certs: Default::default(),
-			tcp_server_transports: hashmap! {
-				"tunnel".into() => components::ServerTransport {
-					certs: vec![
-						(*tls.tls_cert_locally_signed_job).clone()
-					]
-				}
-			},
-		}));
-
+		script.push(components::traefik_tunnel(ctx, &k8s_infra, &tls));
 		script.push(components::docker()); // why do we need to install docker and cni plugins?
 		script.push(components::cni_plugins());
 		script.push(components::nomad(server));
@@ -134,48 +106,4 @@ fn gg_traefik_static_config() -> String {
 	}
 
 	config
-}
-
-fn tunnel_traefik_static_config() -> String {
-	formatdoc!(
-		r#"
-		[entryPoints.nomad]
-			address = "127.0.0.1:5000"
-
-		[entryPoints.api_route]
-			address = "127.0.0.1:5001"
-
-		[providers]
-			[providers.file]
-				directory = "/etc/tunnel/dynamic"
-		"#
-	)
-}
-
-fn tunnel_traefik_dynamic_config(tunnel_external_ip: &str) -> String {
-	formatdoc!(
-		r#"
-		[tcp.routers.nomad]
-			entryPoints = ["nomad"]
-			rule = "HostSNI(`*`)"
-			service = "nomad"
-
-		[tcp.routers.api_route]
-			entryPoints = ["api_route"]
-			rule = "HostSNI(`*`)"
-			service = "api_route"
-
-		[tcp.services.nomad.loadBalancer]
-			serversTransport = "tunnel"
-
-			[[tcp.services.nomad.loadBalancer.servers]]
-				address = "{tunnel_external_ip}:5000"
-
-		[tcp.services.api_route.loadBalancer]
-			serversTransport = "tunnel"
-
-			[[tcp.services.api_route.loadBalancer.servers]]
-				address = "{tunnel_external_ip}:5001"
-		"#,
-	)
 }

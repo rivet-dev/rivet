@@ -67,3 +67,7 @@ output "tls_cert_locally_signed_gg" {
 	sensitive = true
 }
 
+output "root_ca_cert_pem" {
+	value = tls_self_signed_cert.root_ca.cert_pem
+}
+

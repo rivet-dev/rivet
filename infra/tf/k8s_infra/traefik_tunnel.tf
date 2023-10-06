@@ -124,33 +124,6 @@ data "kubernetes_service" "traefik_tunnel" {
 	}
 }
 
-# resource "kubectl_manifest" "traefik_tunnel" {
-# 	depends_on = [helm_release.traefik_tunnel]
-
-# 	for_each = local.tunnel_services
-
-# 	yaml_body = yamlencode({
-# 		apiVersion = "traefik.io/v1alpha1"
-# 		kind = "TraefikServiceTCP"
-
-# 		metadata = {
-# 			name = each.key
-# 			namespace = kubernetes_namespace.traefik_tunnel.metadata[0].name
-# 			labels = {
-# 				"traefik-instance" = "tunnel"
-# 			}
-# 		}
-
-# 		spec = {
-# 			mirroring = {
-# 				name = each.value.service
-# 				namespace = each.value.service_namespace
-# 				port = each.value.service_port
-# 			}
-# 		}
-# 	})
-# }
-
 resource "kubectl_manifest" "traefik_nomad_router" {
 	depends_on = [helm_release.traefik_tunnel]
 
