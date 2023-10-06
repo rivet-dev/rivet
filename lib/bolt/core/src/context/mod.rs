@@ -12,7 +12,7 @@ pub enum RunContext {
 	/// Being ran as a standalone binary service.
 	Service {},
 	/// Being ran as a test.
-	Test { test_id: String },
+	Test {},
 }
 
 impl RunContext {

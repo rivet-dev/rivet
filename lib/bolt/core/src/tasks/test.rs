@@ -546,7 +546,7 @@ struct TestResult {
 	status: TestStatus,
 	setup_duration: Duration,
 	test_duration: Duration,
-	pod_name: String,
+	svc_name: String,
 }
 
 async fn run_test(
@@ -577,9 +577,7 @@ async fn run_test(
 	// Build exec ctx
 	let exec_ctx = ExecServiceContext {
 		svc_ctx: svc_ctx.clone(),
-		run_context: RunContext::Test {
-			test_id: gen_test_id(),
-		},
+		run_context: RunContext::Test {},
 		driver: ExecServiceDriver::LocalBinaryArtifact {
 			exec_path: container_path,
 			// If you need to only run one test at a time:
@@ -591,32 +589,21 @@ async fn run_test(
 
 	// Build specs
 	let specs = dep::k8s::gen::gen_svc(&exec_ctx).await;
-	let pod_name = dep::k8s::gen::k8s_svc_name(&exec_ctx);
+	let svc_name = dep::k8s::gen::k8s_svc_name(&exec_ctx);
 
 	// Apply pod
 	dep::k8s::cli::apply_specs(ctx, specs).await?;
 	let setup_duration = setup_start.elapsed();
 
 	// Tail pod
-	rivet_term::status::info("Running", format!("{display_name} [pod/{pod_name}]"));
+	rivet_term::status::info("Running", format!("{display_name} [job/{svc_name}]"));
 	let test_start_time = Instant::now();
-	let status = match tokio::time::timeout(TEST_TIMEOUT, tail_pod(ctx, &pod_name)).await {
+	let status = match tokio::time::timeout(TEST_TIMEOUT, tail_pod(ctx, &svc_name)).await {
 		Result::Ok(Result::Ok(x)) => x,
 		Result::Ok(Err(err)) => TestStatus::UnknownError(err.to_string()),
 		Err(_) => {
-			// Kill the process in the pod. Do this instead of running `kubectl delete` since we
-			// want to keep the logs for the pod.
 			Command::new("kubectl")
-				.args(&[
-					"exec",
-					&pod_name,
-					"-n",
-					"rivet-service",
-					"--",
-					"/bin/sh",
-					"-c",
-					"kill -9 0",
-				])
+				.args(&["delete", "job", &svc_name, "-n", "rivet-service"])
 				.env("KUBECONFIG", ctx.gen_kubeconfig_path())
 				.output()
 				.await?;
@@ -629,7 +616,7 @@ async fn run_test(
 	let test_duration = test_start_time.elapsed();
 	let complete_count = tests_complete.fetch_add(1, Ordering::SeqCst) + 1;
 	let run_info = format!(
-		"{display_name} ({complete_count}/{test_count}) [pod/{pod_name}] [{td:.1}s]",
+		"{display_name} ({complete_count}/{test_count}) [job/{svc_name}] [{td:.1}s]",
 		td = test_duration.as_secs_f32()
 	);
 	match &status {
@@ -656,32 +643,24 @@ async fn run_test(
 		status,
 		setup_duration,
 		test_duration,
-		pod_name,
+		svc_name,
 	})
 }
 
-fn gen_test_id() -> String {
-	let mut rng = thread_rng();
-	(0..8)
-		.map(|_| {
-			let mut chars = ('a'..='z').chain('0'..='9').collect::<Vec<_>>();
-			chars.shuffle(&mut rng);
-			chars[0]
-		})
-		.collect()
-}
+async fn tail_pod(ctx: &ProjectContext, svc_name: &str) -> Result<TestStatus> {
+	let label = format!("app.kubernetes.io/name={svc_name}");
 
-async fn tail_pod(ctx: &ProjectContext, pod: &str) -> Result<TestStatus> {
 	loop {
 		// TODO: Use --wait for better performance
 		let output = Command::new("kubectl")
 			.args(&[
 				"get",
 				"pod",
-				pod,
+				"--selector",
+				&label,
 				"-n",
 				"rivet-service",
-				"-o=jsonpath={.status.phase}",
+				"-o=jsonpath={.items[0].status.phase}",
 			])
 			.env("KUBECONFIG", ctx.gen_kubeconfig_path())
 			.output()
@@ -700,10 +679,11 @@ async fn tail_pod(ctx: &ProjectContext, pod: &str) -> Result<TestStatus> {
 					.args(&[
 						"get",
 						"pod",
-						pod,
+						"--selector",
+						&label,
 						"-n",
 						"rivet-service",
-						"-o=jsonpath={.status.containerStatuses[0].state.terminated.exitCode}",
+						"-o=jsonpath={.items[0].status.containerStatuses[0].state.terminated.exitCode}",
 					])
 					.env("KUBECONFIG", ctx.gen_kubeconfig_path())
 					.output()
