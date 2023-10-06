@@ -12,7 +12,14 @@ locals {
 	entrypoints = var.tls_enabled ? {
 		"web" = {}
 		"websecure" = {
-			tls = {}
+			tls = {
+				secretName = "ingress-tls-cloudflare-cert"
+				options = {
+					name = "ingress-cloudflare",
+					namespace = "traefik"
+				}
+
+			}
 		}
 	} : {
 		"web" = {}

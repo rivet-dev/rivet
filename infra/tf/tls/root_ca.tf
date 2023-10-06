@@ -25,9 +25,11 @@ resource "tls_self_signed_cert" "root_ca" {
 }
 
 resource "kubernetes_secret" "ingress_tls_ca_cert_locally_signed" {
+	for_each = toset(["traefik-tunnel"])
+
 	metadata {
 		name = "ingress-tls-ca-cert-locally-signed"
-		namespace = "traefik-tunnel"
+		namespace = each.value
 	}
 
 	data = {

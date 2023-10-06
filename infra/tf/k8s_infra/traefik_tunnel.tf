@@ -67,7 +67,7 @@ resource "helm_release" "traefik_tunnel" {
 				curvePreferences = [ "CurveP384" ]
 
 				clientAuth = {
-					secretNames = [ "ingress-tls-cert-tunnel-server" ]
+					secretNames = [ "ingress-tls-ca-cert-locally-signed" ]
 					clientAuthType = "RequireAndVerifyClientCert"
 				}
 			}
@@ -82,6 +82,10 @@ resource "helm_release" "traefik_tunnel" {
 			}
 		}
 
+		commonLabels = {
+			"traefik-instance" = "tunnel"
+		}
+
 		ingressRoute = {
 			dashboard = {
 				labels = {
@@ -90,15 +94,14 @@ resource "helm_release" "traefik_tunnel" {
 			}
 		}
 
-# 		logs = {
-# 			# general = {
-# 			# 	level = "DEBUG"
-# 			# }
-# 			# NOTE: Do not enable on prod
-# 			# access = {
-# 			# 	enabled = true
-# 			# }
-# 		}
+		logs = {
+			general = {
+				level = "DEBUG"
+			}
+			access = {
+				enabled = true
+			}
+		}
 
 		metrics = {
 			prometheus = {
@@ -183,7 +186,14 @@ resource "kubectl_manifest" "traefik_nomad_router" {
 				}
 			]
 
-			tls = {}
+			tls = {
+				secretName = "ingress-tls-cert-tunnel-server"
+				options = {
+					name = "ingress-${each.key}",
+					namespace = "traefik-tunnel"
+				}
+
+			}
 		}
 	})
 }
