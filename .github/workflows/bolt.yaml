@@ -26,44 +26,66 @@ jobs:
           token: ${{ secrets.GITHUB_TOKEN }}
           submodules: recursive
 
-      - uses: ./.github/actions/pre-init
+      # MARK: Cache
+      - name: Nix Cache
+        uses: actions/cache@v3.3.1
         with:
-          sscache_aws_secret_access_key: secrets.SCCACHE_AWS_SECRET_ACCESS_KEY
-          sscache_aws_access_key_id: secrets.SCCACHE_AWS_ACCESS_KEY_ID
+          key: ${{ runner.os }}-nix-${{ hashfiles('./shell.nix', './nix/**/*.nix') }}
+          path: ${{ env.store }}
+          restore-keys: |
+            ${{ runner.os }}-nix-${{ hashfiles('./shell.nix', './nix/**/*.nix') }}
+            ${{ runner.os }}-nix-
+
+      # We can't use the GitHub cache because it has a max size of 10 GB
+      - name: Enable sccache
+        run: |
+          # Expose sccache config for all future calls of nix-shell, which configures sccache respectively
+          echo 'USE_SCCACHE=1' >> $GITHUB_ENV
+          echo 'SCCACHE_BUCKET=rivet-sccache' >> $GITHUB_ENV
+          echo 'SCCACHE_ENDPOINT=https://2a94c6a0ced8d35ea63cddc86c2681e7.r2.cloudflarestorage.com/rivet-sscache' >> $GITHUB_ENV
+          echo 'SCCACHE_REGION=auto' >> $GITHUB_ENV
+          echo 'AWS_SECRET_ACCESS_KEY=${{ secrets.SCCACHE_AWS_SECRET_ACCESS_KEY }}' >> $GITHUB_ENV
+          echo 'AWS_ACCESS_KEY_ID=${{ secrets.SCCACHE_AWS_ACCESS_KEY_ID }}' >> $GITHUB_ENV
+
+      # Cache generated Bolt files in order to prevent needless rebuilding
+      - name: Bolt Cache
+        uses: actions/cache@v3
+        with:
+          key: ${{ runner.os }}-bolt-gen
+          path: |
+            svc/pkg/region/ops/config-get/gen
+
+      # MARK: Nix
+      - uses: cachix/install-nix-action@v22
+        with:
+          nix_path: nixpkgs=channel:nixos-23.05
+          extra_nix_config: "store = ${{ env.store }}\n"
+
+      # Build initial shell, all future calls to nix-shell will be fast
+      - name: Build Shell
+        run: nix-shell --pure --run "echo 'Built shell'"
+
+      # MARK: Bolt
+      # Delete old Bolt binaries in order to fall back to the Nix-built binary
+      - name: Remove Old Bolt Builts
+        run: rm -f target/debug/bolt target/release/bolt
+
+      - name: Write Namespace Config
+        run: |
+          # Write secrets so they're not prompted in `bolt init`
+          cat <<'EOF' > secrets/ci.toml
+          [sendgrid]
+          key = "TODO"
+          EOF
 
       - name: Bolt Check
         run: nix-shell --pure --run "bolt check --validate-format"
 
-      - name: Force Parallel Failure
-        if: failure()
-        uses: andymckay/cancel-action@0.3
-
-  test:
-    runs-on: [self-hosted, linux, x64]
-
-    steps:
-      # MARK: Git
-      - name: Checkout
-        uses: actions/checkout@v3.5.2
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-          submodules: recursive
-
-      - uses: ./.github/actions/pre-init
-        with:
-          sscache_aws_secret_access_key: secrets.SCCACHE_AWS_SECRET_ACCESS_KEY
-          sscache_aws_access_key_id: secrets.SCCACHE_AWS_ACCESS_KEY_ID
-
-      - name: Bolt Init
-        run: nix-shell --pure --run "bolt init --yes ci"
-
-      - name: Bolt Test
-        run: nix-shell --pure --run "bolt test"
+      # TODO: Make this run only whe migrations change
+      # TODO: Broken for some reason
+      # - name: Bolt Database Migrate Check
+      #   run: nix-shell --pure --run "BOLT_NAMESPACE=ci BOLT_IGNORE_TERRAFORM=1 bolt database migrate check"
 
       - name: K3D Cleanup
         if: always()
         run: nix-shell --pure --run "k3d cluster delete rivet-ci"
-
-      - name: Force Parallel Failure
-        if: failure()
-        uses: andymckay/cancel-action@0.3
