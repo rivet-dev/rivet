@@ -23,6 +23,10 @@ async fn all() {
 
 // NACK: The balance will always be 1 in this case since it rounds up from a sub 1 cent value
 async fn test(ctx: TestCtx, crdb: CrdbPool) {
+	if !util::feature::job_run() {
+		return;
+	}
+
 	let lobby_res = op!([ctx] faker_mm_lobby {
 		..Default::default()
 	})

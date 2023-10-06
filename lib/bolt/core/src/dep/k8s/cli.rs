@@ -16,7 +16,7 @@ pub async fn apply_specs(ctx: &ProjectContext, specs: Vec<serde_json::Value>) ->
 		})
 		.collect::<Vec<_>>();
 
-	// Delete jobs (pod specs are immutable)
+	// Delete previous jobs (must delete because pod specs are immutable)
 	if !jobs.is_empty() {
 		eprintln!();
 		rivet_term::status::progress("Deleting jobs", "");
@@ -41,6 +41,8 @@ pub async fn apply_specs(ctx: &ProjectContext, specs: Vec<serde_json::Value>) ->
 		}
 
 		pb.finish();
+
+		eprintln!();
 	}
 
 	// Build YAML

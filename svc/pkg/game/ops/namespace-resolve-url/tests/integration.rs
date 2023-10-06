@@ -2,6 +2,10 @@ use chirp_worker::prelude::*;
 
 #[worker_test]
 async fn test_no_ns(ctx: TestCtx) {
+	if !util::feature::dns() {
+		return;
+	}
+
 	let game_data = prepare_game(&ctx).await;
 
 	let domain_main_res = test_url(

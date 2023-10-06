@@ -108,8 +108,8 @@ pub async fn project(ctx: &ProjectContext) -> Result<()> {
 pub fn k8s_svc_name(exec_ctx: &ExecServiceContext) -> String {
 	match &exec_ctx.run_context {
 		RunContext::Service { .. } => format!("rivet-{}", exec_ctx.svc_ctx.name()),
-		RunContext::Test { test_id } => {
-			format!("rivet-{}-test-{test_id}", exec_ctx.svc_ctx.name())
+		RunContext::Test {} => {
+			format!("rivet-{}-test", exec_ctx.svc_ctx.name())
 		}
 	}
 }
@@ -141,7 +141,7 @@ pub async fn gen_svc(exec_ctx: &ExecServiceContext) -> Vec<serde_json::Value> {
 				unreachable!()
 			}
 		},
-		RunContext::Test { .. } => SpecType::Pod,
+		RunContext::Test { .. } => SpecType::Job,
 	};
 
 	let has_health = matches!(run_context, RunContext::Service { .. })
@@ -433,17 +433,27 @@ pub async fn gen_svc(exec_ctx: &ExecServiceContext) -> Vec<serde_json::Value> {
 			}));
 		}
 		SpecType::Job => {
+			let spec = if matches!(run_context, RunContext::Test { .. }) {
+				json!({
+					"ttlSecondsAfterFinished": 3,
+					"completions": 1,
+					"backoffLimit": 0,
+					"template": pod_template
+				})
+			} else {
+				json!({
+					"completions": 1,
+					// TODO: Needed?
+					// "parallelism": ns_service_config.count,
+					"template": pod_template
+				})
+			};
+
 			specs.push(json!({
 				"apiVersion": "batch/v1",
 				"kind": "Job",
 				"metadata": metadata,
-				"spec": {
-					"completions": 1,
-					// "parallelism": ns_service_config.count,
-					// // Deletes job after it is finished
-					// "ttlSecondsAfterFinished": 1,
-					"template": pod_template
-				}
+				"spec": spec
 			}));
 		}
 		SpecType::CronJob => {

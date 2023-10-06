@@ -36,7 +36,7 @@ resource "helm_release" "clickhouse" {
 	namespace = kubernetes_namespace.clickhouse[0].metadata.0.name
 	repository = "oci://registry-1.docker.io/bitnamicharts"
 	chart = "clickhouse"
-	version = "3.6.3"
+	version = "4.0.4"
 	values = [yamlencode({
 		global = {
 			storageClass = var.k8s_storage_class
@@ -69,6 +69,7 @@ resource "helm_release" "clickhouse" {
 			<?xml version="1.0"?>
 			<clickhouse>
 				<http_port remove="remove"/>
+				<tcp_port remove="remove"/>
 				<interserver_http_port remove="remove"/>
 				<interserver_https_port>9010</interserver_https_port>
 

@@ -3,6 +3,10 @@ use proto::backend::pkg::*;
 
 #[worker_test]
 async fn empty(ctx: TestCtx) {
+	if !util::feature::job_run() {
+		return;
+	}
+
 	let region_res = op!([ctx] faker_region {}).await.unwrap();
 	let region_id = region_res.region_id.unwrap();
 

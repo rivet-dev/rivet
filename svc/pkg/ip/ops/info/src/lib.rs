@@ -46,7 +46,7 @@ async fn fetch_ip_info_io(
 ) -> GlobalResult<Option<backend::net::IpInfo>> {
 	// Read cached IP data if already exists
 	let res = sqlx::query_as::<_, (Option<serde_json::Value>,)>(
-		"SELECT db_ip_info.ip_info_io_data FROM ips WHERE ip = $1",
+		"SELECT ip_info_io_data FROM db_ip_info.ips WHERE ip = $1",
 	)
 	.bind(ip_str)
 	.fetch_optional(crdb)

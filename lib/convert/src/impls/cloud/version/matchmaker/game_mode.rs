@@ -540,7 +540,7 @@ impl ApiTryFrom<models::CloudVersionMatchmakerGameModeCreateConfig>
 				error = "`create_config.max_lobbies_per_identity` out of bounds"
 			);
 		}
-		
+
 		Ok(backend::matchmaker::CreateConfig {
 			identity_requirement: ApiInto::<backend::matchmaker::IdentityRequirement>::api_into(
 				value.identity_requirement,
@@ -551,7 +551,10 @@ impl ApiTryFrom<models::CloudVersionMatchmakerGameModeCreateConfig>
 				.transpose()?,
 			enable_public: value.enable_public,
 			enable_private: value.enable_private,
-			max_lobbies_per_identity: value.max_lobbies_per_identity.map(ApiTryInto::try_into).transpose()?,
+			max_lobbies_per_identity: value
+				.max_lobbies_per_identity
+				.map(ApiTryInto::try_into)
+				.transpose()?,
 		})
 	}
 }
@@ -575,7 +578,10 @@ impl ApiTryFrom<backend::matchmaker::CreateConfig>
 				.map(Box::new),
 			enable_public: value.enable_public,
 			enable_private: value.enable_private,
-			max_lobbies_per_identity: value.max_lobbies_per_identity.map(ApiTryInto::try_into).transpose()?,
+			max_lobbies_per_identity: value
+				.max_lobbies_per_identity
+				.map(ApiTryInto::try_into)
+				.transpose()?,
 		})
 	}
 }

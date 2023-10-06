@@ -53,7 +53,7 @@ impl SubCommand {
 				test,
 			} => {
 				let run_context = if test {
-					RunContext::Test { test_id: "".into() }
+					RunContext::Test {}
 				} else {
 					RunContext::Service {}
 				};

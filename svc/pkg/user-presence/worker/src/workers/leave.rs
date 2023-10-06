@@ -44,7 +44,9 @@ async fn worker(ctx: &OperationContext<user_presence::msg::leave::Message>) -> G
 	})
 	.await?;
 
-	// No changes need to be made if user set themselves as invisible
+	// No changes need to be made if user previously set themselves as invisible. Although we delete the user
+	// presence data from redis prior to this point (effectively making the user appear offline), this
+	// block of code sends out a status set event which other subscribers can pick up on for event-based code.
 	if !matches!(
 		internal_unwrap!(backend::user::Status::from_i32(user_set_status)),
 		backend::user::Status::Offline

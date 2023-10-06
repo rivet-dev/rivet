@@ -598,6 +598,10 @@ async fn guest_verification(ctx: TestCtx) {
 
 #[worker_test]
 async fn registered_verification(ctx: TestCtx) {
+	if !util::feature::job_run() {
+		return;
+	}
+
 	let user_res = op!([ctx] faker_user {}).await.unwrap();
 	let user_id = user_res.user_id.unwrap().as_uuid();
 
@@ -689,6 +693,10 @@ async fn registered_verification(ctx: TestCtx) {
 
 #[worker_test]
 async fn bypass_verification(ctx: TestCtx) {
+	if !util::feature::job_run() {
+		return;
+	}
+
 	let user_id = Uuid::new_v4();
 
 	let (namespace_id, lobby_id) = gen_verification_lobby(
@@ -720,6 +728,10 @@ async fn bypass_verification(ctx: TestCtx) {
 // TODO: Find way to actually verify user data
 #[worker_test]
 async fn external_verification(ctx: TestCtx) {
+	if !util::feature::job_run() {
+		return;
+	}
+
 	let user_id = Uuid::new_v4();
 
 	let (namespace_id, lobby_id) = gen_verification_lobby(

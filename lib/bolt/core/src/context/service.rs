@@ -766,6 +766,11 @@ impl ServiceContextData {
 			}
 		}
 
+		// Pools
+		if !project_ctx.ns().pools.is_empty() {
+			env.push(("RIVET_HAS_POOLS".into(), "1".into()));
+		}
+
 		// Regions
 		env.push(("RIVET_REGION".into(), region_id.clone()));
 		env.push(("RIVET_PRIMARY_REGION".into(), project_ctx.primary_region()));
