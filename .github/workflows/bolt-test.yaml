@@ -1,4 +1,4 @@
-name: bolt
+name: bolt-test
 
 on:
   workflow_dispatch:
