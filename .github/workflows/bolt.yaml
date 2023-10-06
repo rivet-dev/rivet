@@ -38,32 +38,32 @@ jobs:
         if: failure()
         uses: andymckay/cancel-action@0.3
 
-  # test:
-  #   runs-on: [self-hosted, linux, x64]
+  test:
+    runs-on: [self-hosted, linux, x64]
 
-  #   steps:
-  #     # MARK: Git
-  #     - name: Checkout
-  #       uses: actions/checkout@v3.5.2
-  #       with:
-  #         token: ${{ secrets.GITHUB_TOKEN }}
-  #         submodules: recursive
+    steps:
+      # MARK: Git
+      - name: Checkout
+        uses: actions/checkout@v3.5.2
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          submodules: recursive
 
-  #     - uses: ./.github/actions/pre-init
-  #       with:
-  #         sscache_aws_secret_access_key: secrets.SCCACHE_AWS_SECRET_ACCESS_KEY
-  #         sscache_aws_access_key_id: secrets.SCCACHE_AWS_ACCESS_KEY_ID
+      - uses: ./.github/actions/pre-init
+        with:
+          sscache_aws_secret_access_key: ${{ secrets.SCCACHE_AWS_SECRET_ACCESS_KEY }}
+          sscache_aws_access_key_id: ${{ secrets.SCCACHE_AWS_ACCESS_KEY_ID }}
 
-  #     - name: Bolt Init
-  #       run: nix-shell --pure --run "bolt init --yes ci"
+      - name: Bolt Init
+        run: nix-shell --pure --run "bolt init --yes ci"
 
-  #     - name: Bolt Test
-  #       run: nix-shell --pure --run "bolt test"
+      - name: Bolt Test
+        run: nix-shell --pure --run "bolt test"
 
-  #     - name: K3D Cleanup
-  #       if: always()
-  #       run: nix-shell --pure --run "k3d cluster delete rivet-ci"
+      - name: K3D Cleanup
+        if: always()
+        run: nix-shell --pure --run "k3d cluster delete rivet-ci"
 
-  #     - name: Force Parallel Failure
-  #       if: failure()
-  #       uses: andymckay/cancel-action@0.3
+      - name: Force Parallel Failure
+        if: failure()
+        uses: andymckay/cancel-action@0.3
