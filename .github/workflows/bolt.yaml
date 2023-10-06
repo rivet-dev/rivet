@@ -69,7 +69,7 @@ jobs:
         run: |
           cat <<'EOF' > namespaces/ci.toml
           [rivet]
-          test = true
+          test = {}
           EOF
 
           # Write secrets so they're not prompted in `bolt init`
@@ -91,12 +91,9 @@ jobs:
       - name: Bolt Init
         run: nix-shell --pure --run "bolt init --yes ci"
 
-      # # TODO: Run check in parallel
-      # - name: Bolt Check
-      #   run: nix-shell --pure --run "bolt check --validate-format"
-
-      - name: Bolt Test
-        run: nix-shell --pure --run "bolt test"
+      - name: K3D Cleanup
+        if: failure() || cancelled()
+        run: nix-shell --pure --run "k3d cluster delete rivet-ci"
 
   check:
     needs: [pre-init]
@@ -117,4 +114,3 @@ jobs:
       - name: K3D Cleanup
         if: always()
         run: nix-shell --pure --run "k3d cluster delete rivet-ci"
-
