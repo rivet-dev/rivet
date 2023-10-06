@@ -793,21 +793,19 @@ impl ServiceContextData {
 		}
 
 		if project_ctx.ns().dns.is_some() {
-			if terraform::cli::has_applied(&project_ctx, "dns").await {
-				let dns = terraform::output::read_dns(&project_ctx).await;
-				env.push((
-					"CLOUDFLARE_ZONE_ID_BASE".into(),
-					(*dns.cloudflare_zone_ids).main.clone(),
-				));
-				env.push((
-					"CLOUDFLARE_ZONE_ID_GAME".into(),
-					(*dns.cloudflare_zone_ids).cdn.clone(),
-				));
-				env.push((
-					"CLOUDFLARE_ZONE_ID_JOB".into(),
-					(*dns.cloudflare_zone_ids).job.clone(),
-				));
-			}
+			let dns = terraform::output::read_dns(&project_ctx).await;
+			env.push((
+				"CLOUDFLARE_ZONE_ID_BASE".into(),
+				(*dns.cloudflare_zone_ids).main.clone(),
+			));
+			env.push((
+				"CLOUDFLARE_ZONE_ID_GAME".into(),
+				(*dns.cloudflare_zone_ids).cdn.clone(),
+			));
+			env.push((
+				"CLOUDFLARE_ZONE_ID_JOB".into(),
+				(*dns.cloudflare_zone_ids).job.clone(),
+			));
 
 			if self.depends_on_cloudflare() {
 				env.push((
@@ -1216,7 +1214,7 @@ impl ServiceContextData {
 					count: 1,
 					resources: config::ns::ServiceResources {
 						cpu: config::ns::CpuResources::Cpu(100),
-						memory: 512,
+						memory: 128,
 						ephemeral_disk: 128,
 					},
 				},

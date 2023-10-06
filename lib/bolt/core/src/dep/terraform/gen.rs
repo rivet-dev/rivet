@@ -241,12 +241,19 @@ async fn vars(ctx: &ProjectContext) {
 	let servers = super::servers::build_servers(&ctx, &regions, &pools).unwrap();
 	vars.insert("servers".into(), json!(servers));
 
-	if dep::terraform::cli::has_applied(ctx, "tls").await {
+	if dep::terraform::cli::has_applied(ctx, "k8s_infra").await
+		&& dep::terraform::cli::has_applied(ctx, "tls").await
+	{
+		let k8s_infra = dep::terraform::output::read_k8s_infra(ctx).await;
+		let tls = dep::terraform::output::read_tls(ctx).await;
+
 		let mut server_install_scripts = HashMap::new();
 		for (k, v) in &servers {
 			server_install_scripts.insert(
 				k.clone(),
-				super::install_scripts::gen(ctx, v).await.unwrap(),
+				super::install_scripts::gen(ctx, v, &k8s_infra, &tls)
+					.await
+					.unwrap(),
 			);
 		}
 		vars.insert(

@@ -53,7 +53,9 @@ impl SubCommand {
 				test,
 			} => {
 				let run_context = if test {
-					RunContext::Test {}
+					RunContext::Test {
+						test_id: String::new(),
+					}
 				} else {
 					RunContext::Service {}
 				};

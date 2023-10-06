@@ -39,6 +39,14 @@ resource "helm_release" "traefik" {
 			}
 		}
 
+		ingressRoute = {
+			dashboard = {
+				labels = {
+					"traefik-instance" = "main"
+				}
+			}
+		}
+
 		resources = {
 			limits = {
 				memory = "${local.service_traefik.resources.memory}Mi"

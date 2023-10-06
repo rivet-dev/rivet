@@ -108,8 +108,8 @@ pub async fn project(ctx: &ProjectContext) -> Result<()> {
 pub fn k8s_svc_name(exec_ctx: &ExecServiceContext) -> String {
 	match &exec_ctx.run_context {
 		RunContext::Service { .. } => format!("rivet-{}", exec_ctx.svc_ctx.name()),
-		RunContext::Test {} => {
-			format!("rivet-{}-test", exec_ctx.svc_ctx.name())
+		RunContext::Test { test_id } => {
+			format!("rivet-{}-test-{test_id}", exec_ctx.svc_ctx.name())
 		}
 	}
 }
@@ -319,7 +319,7 @@ pub async fn gen_svc(exec_ctx: &ExecServiceContext) -> Vec<serde_json::Value> {
 	// Create resource limits
 	let ns_service_config = svc_ctx.ns_service_config().await;
 	let resources = json!({
-		"limits": {
+		"requests": {
 			"memory": format!("{}Mi", ns_service_config.resources.memory),
 			"cpu": match ns_service_config.resources.cpu {
 				config::ns::CpuResources::Cpu(x) => format!("{x}m"),
@@ -327,7 +327,14 @@ pub async fn gen_svc(exec_ctx: &ExecServiceContext) -> Vec<serde_json::Value> {
 			},
 			"ephemeral-storage": format!("{}M", ns_service_config.resources.ephemeral_disk)
 		},
-		"requests": {}
+		"limits": {
+			"memory": format!("{}Mi", ns_service_config.resources.memory * 2),
+			"cpu": match ns_service_config.resources.cpu {
+				config::ns::CpuResources::Cpu(x) => format!("{}m", x * 2),
+				config::ns::CpuResources::CpuCores(x) => format!("{}m", x * 1000 * 2),
+			},
+			"ephemeral-storage": format!("{}M", ns_service_config.resources.ephemeral_disk * 2)
+		},
 	});
 
 	let (volumes, volume_mounts) = build_volumes(&project_ctx, &exec_ctx).await;

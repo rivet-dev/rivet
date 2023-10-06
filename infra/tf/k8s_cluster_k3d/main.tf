@@ -85,6 +85,11 @@ resource "k3d_cluster" "main" {
 			arg = "--disable=traefik"
 			node_filters = ["server:0"]
 		}
+
+		extra_args {
+			arg = "--kubelet-arg=max-pods=256"
+			node_filters = ["server:0"]
+		}
 	}
 }
 

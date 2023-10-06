@@ -1,10 +1,10 @@
 use anyhow::{Context, Result};
 use indoc::formatdoc;
+use maplit::hashmap;
 use std::collections::HashMap;
 use tokio::fs;
 
 use crate::{
-	config::ns,
 	context::ProjectContext,
 	dep::terraform::{output::Cert, servers::Server},
 };
@@ -31,11 +31,8 @@ pub fn cni_plugins() -> String {
 	include_str!("files/cni_plugins.sh").to_string()
 }
 
-// Q: is this running in server or client mode?
 pub fn nomad(server: &Server) -> String {
-	// just do one for now -> refers to load balancer.
-
-	let servers = &["foo", "bar"]; // TODO how will these be populated? are these the nomad leader servers? or just need to know about the load balancer?
+	let servers = &["127.0.0.1:5000"];
 
 	include_str!("files/nomad.sh")
 		.replace("__REGION_ID__", &server.region_id)
@@ -63,12 +60,20 @@ pub struct TraefikInstance {
 	pub static_config: String,
 	pub dynamic_config: String,
 	pub tls_certs: HashMap<String, Cert>,
+	pub tcp_server_transports: HashMap<String, ServerTransport>,
+}
+
+pub struct ServerTransport {
+	pub root_cas: Vec<String>,
+	pub certs: Vec<Cert>,
 }
 
 /// Creates a Traefik instance.
 ///
 /// Requires `traefik()`.
 pub fn traefik_instance(config: TraefikInstance) -> String {
+	let config_name = &config.name;
+
 	let mut script = include_str!("files/traefik_instance.sh")
 		.replace("__NAME__", &config.name)
 		.replace("__STATIC_CONFIG__", &config.static_config)
@@ -78,28 +83,159 @@ pub fn traefik_instance(config: TraefikInstance) -> String {
 	for (cert_id, cert) in config.tls_certs {
 		script.push_str(&formatdoc!(
 			r#"
-
-			cat << 'EOF' > /etc/{name}/tls/{cert_id}_cert.pem
+			cat << 'EOF' > /etc/{config_name}/tls/{cert_id}_cert.pem
 			{cert}
 			EOF
 
-			cat << 'EOF' > /etc/{name}/tls/{cert_id}_key.pem
+			cat << 'EOF' > /etc/{config_name}/tls/{cert_id}_key.pem
 			{key}
 			EOF
 
-			cat << 'EOF' > /etc/{name}/dynamic/tls/{cert_id}.toml
+			cat << 'EOF' > /etc/{config_name}/dynamic/tls/{cert_id}.toml
 			[[tls.certificates]]
-				certFile = "/etc/{name}/tls/{cert_id}_cert.pem"
-				keyFile = "/etc/{name}/tls/{cert_id}_key.pem"
+				certFile = "/etc/{config_name}/tls/{cert_id}_cert.pem"
+				keyFile = "/etc/{config_name}/tls/{cert_id}_key.pem"
 			EOF
 			"#,
-			name = config.name,
 			cert = cert.cert_pem,
 			key = cert.key_pem,
 		));
 	}
 
+	for (transport_id, transport) in config.tcp_server_transports {
+		// Build config
+		let root_cas = transport
+			.root_cas
+			.iter()
+			.enumerate()
+			.map(|(i, _)| {
+				format!("\"/etc/{config_name}/tls/transport_{transport_id}_root_ca_{i}_cert.pem\"",)
+			})
+			.collect::<Vec<_>>()
+			.join(", ");
+		let mut transport_config = formatdoc!(
+			r#"
+			[tcp.serversTransports.{transport_id}.tls]
+				serverName = "tunnel.rivet.gg"
+				rootCAs = [{root_cas}]
+			"#,
+		);
+
+		// Write root CAs
+		for (i, cert) in transport.root_cas.iter().enumerate() {
+			script.push_str(&formatdoc!(
+				r#"
+				cat << 'EOF' > /etc/{config_name}/tls/transport_{transport_id}_root_ca_{i}_cert.pem
+				{cert}
+				EOF
+				"#,
+			));
+		}
+
+		// Write certs
+		for (i, cert) in transport.certs.iter().enumerate() {
+			script.push_str(&formatdoc!(
+				r#"
+				cat << 'EOF' > /etc/{config_name}/tls/transport_{transport_id}_cert_{i}_cert.pem
+				{cert}
+				EOF
+
+				cat << 'EOF' > /etc/{config_name}/tls/transport_{transport_id}_cert_{i}_key.pem
+				{key}
+				EOF
+				"#,
+				cert = cert.cert_pem,
+				key = cert.key_pem,
+			));
+			transport_config.push_str(&formatdoc!(
+				r#"
+				[[tcp.serversTransports.{transport_id}.tls.certificates]]
+					certFile = "/etc/{config_name}/tls/transport_{transport_id}_cert_{i}_cert.pem"
+					keyFile = "/etc/{config_name}/tls/transport_{transport_id}_cert_{i}_key.pem"
+				"#
+			))
+		}
+
+		// Write config
+		script.push_str(&formatdoc!(
+			r#"
+			cat << 'EOF' > /etc/{config_name}/dynamic/transport_{transport_id}.toml
+			{transport_config}
+			EOF
+			"#
+		));
+	}
+
 	script
+}
+
+pub fn traefik_tunnel(
+	ctx: &ProjectContext,
+	k8s_infra: &crate::dep::terraform::output::K8sInfra,
+	tls: &crate::dep::terraform::output::Tls,
+) -> String {
+	traefik_instance(TraefikInstance {
+		name: "tunnel".into(),
+		static_config: tunnel_traefik_static_config(),
+		dynamic_config: tunnel_traefik_dynamic_config(&*k8s_infra.traefik_tunnel_external_ip),
+		tls_certs: Default::default(),
+		tcp_server_transports: hashmap! {
+			"tunnel".into() => ServerTransport {
+				root_cas: vec![
+					(*tls.root_ca_cert_pem).clone()
+				],
+				certs: vec![
+					(*tls.tls_cert_locally_signed_job).clone()
+				]
+			}
+		},
+	})
+}
+
+fn tunnel_traefik_static_config() -> String {
+	formatdoc!(
+		r#"
+		[entryPoints.nomad]
+			address = "127.0.0.1:5000"
+
+		[entryPoints.api_route]
+			address = "127.0.0.1:5001"
+
+		[providers]
+			[providers.file]
+				directory = "/etc/tunnel/dynamic"
+		"#
+	)
+}
+
+fn tunnel_traefik_dynamic_config(tunnel_external_ip: &str) -> String {
+	formatdoc!(
+		r#"
+		[tcp.routers.nomad]
+			entryPoints = ["nomad"]
+			rule = "HostSNI(`*`)"
+			service = "nomad"
+
+		[tcp.routers.api_route]
+			entryPoints = ["api_route"]
+			rule = "HostSNI(`*`)"
+			service = "api_route"
+
+		[tcp.services.nomad.loadBalancer]
+			serversTransport = "tunnel"
+
+			[[tcp.services.nomad.loadBalancer.servers]]
+				address = "{tunnel_external_ip}:5000"
+				tls = true
+
+		[tcp.services.api_route.loadBalancer]
+			serversTransport = "tunnel"
+
+			[[tcp.services.api_route.loadBalancer.servers]]
+				address = "{tunnel_external_ip}:5001"
+				tls = true
+		"#,
+	)
 }
 
 pub async fn traffic_server(ctx: &ProjectContext) -> Result<String> {
@@ -225,9 +361,9 @@ async fn gen_s3_provider(
 		format!("s3_region_map_{provider_name}.config"),
 		formatdoc!(
 			r#"
-		# Default region
-		{s3_host}: {s3_region}
-		"#,
+			# Default region
+			{s3_host}: {s3_region}
+			"#,
 			s3_host = config.endpoint_external,
 			s3_region = config.region,
 		),

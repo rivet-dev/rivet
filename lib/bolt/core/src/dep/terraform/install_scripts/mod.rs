@@ -7,43 +7,37 @@ use crate::dep::terraform;
 
 pub mod components;
 
-pub async fn gen(ctx: &ProjectContext, server: &Server) -> Result<String> {
+pub async fn gen(
+	ctx: &ProjectContext,
+	server: &Server,
+	k8s_infra: &terraform::output::K8sInfra,
+	tls: &terraform::output::Tls,
+) -> Result<String> {
 	let mut script = Vec::new();
 	script.push(components::common());
 	script.push(components::node_exporter());
 	script.push(components::sysctl());
 
 	if server.pool_id == "gg" {
-		let tls = terraform::output::read_tls(ctx).await;
-
 		script.push(components::traefik());
+		script.push(components::traefik_tunnel(ctx, &k8s_infra, &tls));
 		script.push(components::traefik_instance(components::TraefikInstance {
-			name: "game-guard".into(),
-			static_config: gg_traefik_static_config(),
+			name: "game_guard".into(),
+			static_config: gg_traefik_static_config(
+				server,
+				&ctx.read_secret(&["rivet", "api_route", "token"]).await?,
+			),
 			dynamic_config: String::new(),
 			tls_certs: hashmap! {
-				"letsencrypt_rivet_job".into() => (*tls.tls_cert_letsencrypt_rivet_job).clone(), // TODO fix
-				// "letsencrypt_rivet_job".into() => (*tls.tls_cert_letsencrypt_rivet_gg).clone(),  // should be rivet_gg instead of rivet_job?
+				"letsencrypt_rivet_job".into() => (*tls.tls_cert_letsencrypt_rivet_job).clone(),
 			},
+			tcp_server_transports: Default::default(),
 		}));
 	}
 
 	if server.pool_id == "job" {
-		// want to also install traefik. copied from gg above. q: what do we need to tweak?
-		// TODO: Only do this if TLS plan applied
-		// the tls plan should generate the certs??
-		let tls = terraform::output::read_tls(ctx).await;
-
 		script.push(components::traefik());
-		script.push(components::traefik_instance(components::TraefikInstance {
-			name: "game-guard".into(),
-			static_config: gg_traefik_static_config(),
-			dynamic_config: String::new(),
-			tls_certs: hashmap! {
-				"letsencrypt_rivet_job".into() => (*tls.tls_cert_locally_signed_nomad_client).clone(), // this cert is for the tunnel running on the nomad client. all nomad clients will use this cert
-			},
-		}));
-
+		script.push(components::traefik_tunnel(ctx, &k8s_infra, &tls));
 		script.push(components::docker()); // why do we need to install docker and cni plugins?
 		script.push(components::cni_plugins());
 		script.push(components::nomad(server));
@@ -58,8 +52,11 @@ pub async fn gen(ctx: &ProjectContext, server: &Server) -> Result<String> {
 	Ok(format!("#!/usr/bin/env bash\nset -eu\n\n{joined}"))
 }
 
-fn gg_traefik_static_config() -> String {
-	let http_provider_endpoint = "foo bar"; // should point to the api-route in the core cluster for exposing game guard dynamic config. this should already exist!
+fn gg_traefik_static_config(server: &Server, api_route_token: &str) -> String {
+	let http_provider_endpoint = format!(
+		"http://127.0.0.1:5001/traefik/config/core?token={api_route_token}&region={region}",
+		region = server.region_id
+	);
 
 	let mut config = formatdoc!(
 		r#"
@@ -79,7 +76,7 @@ fn gg_traefik_static_config() -> String {
 
 		[providers]
 			[providers.file]
-				directory = "/etc/ingress_proxy/dynamic"
+				directory = "/etc/game_guard/dynamic"
 
 			[providers.http]
 				endpoint = "{http_provider_endpoint}"

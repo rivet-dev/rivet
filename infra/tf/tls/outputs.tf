@@ -21,18 +21,18 @@ locals {
 	}
 
 	tls_cert_locally_signed_tunnel_server = {
-		cert_pem = tls_locally_signed_cert.locally_signed_tunnel_server.ca_cert_pem
-		key_pem = tls_locally_signed_cert.locally_signed_tunnel_server.ca_private_key_pem
+		cert_pem = tls_locally_signed_cert.locally_signed_tunnel_server.cert_pem
+		key_pem = tls_private_key.locally_signed_tunnel_server.private_key_pem
 	}
 
-	tls_cert_locally_signed_nomad_client = {
-		cert_pem = tls_locally_signed_cert.locally_signed_client["nomad_client"].ca_cert_pem
-		key_pem = tls_locally_signed_cert.locally_signed_client["nomad_client"].ca_private_key_pem
+	tls_cert_locally_signed_job = {
+		cert_pem = tls_locally_signed_cert.locally_signed_client["job"].cert_pem
+		key_pem = tls_private_key.locally_signed_client["job"].private_key_pem
 	}
 
-	tls_cert_locally_signed_game_guard = {
-		cert_pem = tls_locally_signed_cert.locally_signed_client["game_guard"].ca_cert_pem
-		key_pem = tls_locally_signed_cert.locally_signed_client["game_guard"].ca_private_key_pem
+	tls_cert_locally_signed_gg = {
+		cert_pem = tls_locally_signed_cert.locally_signed_client["gg"].cert_pem
+		key_pem = tls_private_key.locally_signed_client["gg"].private_key_pem
 	}
 }
 
@@ -57,8 +57,17 @@ output "tls_cert_locally_signed_tunnel_server" {
 	sensitive = true
 }
 
-output "tls_cert_locally_signed_nomad_client" {
-	value = local.tls_cert_locally_signed_nomad_client
+output "tls_cert_locally_signed_job" {
+	value = local.tls_cert_locally_signed_job
 	sensitive = true
+}
+
+output "tls_cert_locally_signed_gg" {
+	value = local.tls_cert_locally_signed_gg
+	sensitive = true
+}
+
+output "root_ca_cert_pem" {
+	value = tls_self_signed_cert.root_ca.cert_pem
 }
 

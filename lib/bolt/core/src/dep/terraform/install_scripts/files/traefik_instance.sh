@@ -2,8 +2,6 @@ if ! id -u "__NAME__" &>/dev/null; then
 	useradd -r -s /bin/false __NAME__
 fi
 
-# taint
-
 for x in /etc/__NAME__ /etc/__NAME__/dynamic /etc/__NAME__/dynamic/tls /etc/__NAME__/tls /opt/__NAME__; do
 	mkdir -p $x
 	chmod 550 $x
