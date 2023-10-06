@@ -58,9 +58,13 @@ runs:
       shell: bash -e {0}
       run: nix-shell --pure --run "echo 'Built shell'"
 
-    - name: Write Namespace and Secrets Config
+    - name: Write Configs
       shell: bash -e {0}
       run: |
+        cat <<'EOF' > Bolt.local.toml
+        namespace = "ci"
+        EOF
+
         cat <<'EOF' > namespaces/ci.toml
         [rivet]
         test = {}
