@@ -15,7 +15,7 @@ env:
   store: /home/runner/nix
 
 jobs:
-  check:
+  pre-init:
     runs-on: [self-hosted, linux, x64]
 
     steps:
@@ -65,29 +65,56 @@ jobs:
       - name: Build Shell
         run: nix-shell --pure --run "echo 'Built shell'"
 
-      # MARK: Bolt
-      # Delete old Bolt binaries in order to fall back to the Nix-built binary
-      - name: Remove Old Bolt Builts
-        run: rm -f target/debug/bolt target/release/bolt
-
-      - name: Write Namespace Config
+      - name: Write Namespace and Secrets Config
         run: |
+          cat <<'EOF' > namespaces/ci.toml
+          [rivet]
+          test = true
+          EOF
+
           # Write secrets so they're not prompted in `bolt init`
           cat <<'EOF' > secrets/ci.toml
           [sendgrid]
           key = "TODO"
           EOF
 
+      # MARK: Bolt
+      # Delete old Bolt binaries in order to fall back to the Nix-built binary
+      - name: Remove Old Bolt Builds
+        run: rm -f target/debug/bolt target/release/bolt
+
+  init:
+    needs: [pre-init]
+    runs-on: [self-hosted, linux, x64]
+
+    steps:
       - name: Bolt Init
         run: nix-shell --pure --run "bolt init --yes ci"
 
-      # TODO: Run check in parallel
+      # # TODO: Run check in parallel
+      # - name: Bolt Check
+      #   run: nix-shell --pure --run "bolt check --validate-format"
+
+      - name: Bolt Test
+        run: nix-shell --pure --run "bolt test"
+
+  check:
+    needs: [pre-init]
+    runs-on: [self-hosted, linux, x64]
+
+    steps:
       - name: Bolt Check
         run: nix-shell --pure --run "bolt check --validate-format"
 
+  test:
+    needs: [init]
+    runs-on: [self-hosted, linux, x64]
+
+    steps:
       - name: Bolt Test
         run: nix-shell --pure --run "bolt test"
 
       - name: K3D Cleanup
         if: always()
         run: nix-shell --pure --run "k3d cluster delete rivet-ci"
+
