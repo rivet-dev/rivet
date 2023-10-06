@@ -15,6 +15,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 -  **Dev** Bolt automatically builds with Nix shell
 -  **Infra** Autoscale non-singleton services based on CPU & memory
 -  **Infra** Dynamically provisioned core cluster using Karpenter
+-  **Infra** Support for running ClickHouse on ClickHouse Cloud
+-  **Infra** Support for running CockroachDB on Cockroach Cloud
+-  **Infra** Support for running Redis on AWS ElastiCache & MemoryDB
 
 ### Changed
 
@@ -32,6 +35,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 -  **api-matchmaker** Gracefully disable automatic region selection when coords not obtainable
 -  **Infra** Disabling DNS uses `X-Forwarded-For` header for the client IP
 -  **Infra** Pool connections are now created in parallel for faster tests & service start times
+-  **Infra** Connections from edge <-> core services are now done over mTLS with Treafik instead of cloudflared
+-  **Infra** ClickHouse database connections now use TLS
+-  **Infra** CockroachDB database connections now use TLS
+-  **Infra** Redis database connections now use TLS
+-  **Infra** Redis now uses Redis Cluster for everything
 
 ### Fixed
 

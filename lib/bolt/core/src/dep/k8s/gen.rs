@@ -108,8 +108,8 @@ pub async fn project(ctx: &ProjectContext) -> Result<()> {
 pub fn k8s_svc_name(exec_ctx: &ExecServiceContext) -> String {
 	match &exec_ctx.run_context {
 		RunContext::Service { .. } => format!("rivet-{}", exec_ctx.svc_ctx.name()),
-		RunContext::Test {} => {
-			format!("rivet-{}-test", exec_ctx.svc_ctx.name())
+		RunContext::Test { test_id } => {
+			format!("rivet-{}-test-{test_id}", exec_ctx.svc_ctx.name())
 		}
 	}
 }

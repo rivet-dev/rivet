@@ -577,7 +577,9 @@ async fn run_test(
 	// Build exec ctx
 	let exec_ctx = ExecServiceContext {
 		svc_ctx: svc_ctx.clone(),
-		run_context: RunContext::Test {},
+		run_context: RunContext::Test {
+			test_id: gen_test_id(),
+		},
 		driver: ExecServiceDriver::LocalBinaryArtifact {
 			exec_path: container_path,
 			// If you need to only run one test at a time:
@@ -703,4 +705,15 @@ async fn tail_pod(ctx: &ProjectContext, svc_name: &str) -> Result<TestStatus> {
 			_ => bail!("unexpected pod status: {}", output_str),
 		}
 	}
+}
+
+fn gen_test_id() -> String {
+	let mut rng = thread_rng();
+	(0..8)
+		.map(|_| {
+			let mut chars = ('a'..='z').chain('0'..='9').collect::<Vec<_>>();
+			chars.shuffle(&mut rng);
+			chars[0]
+		})
+		.collect()
 }

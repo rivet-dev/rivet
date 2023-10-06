@@ -18,13 +18,7 @@ pub async fn apply_specs(ctx: &ProjectContext, specs: Vec<serde_json::Value>) ->
 
 	// Delete previous jobs (must delete because pod specs are immutable)
 	if !jobs.is_empty() {
-		eprintln!();
-		rivet_term::status::progress("Deleting jobs", "");
-
-		let pb = utils::progress_bar(jobs.len());
 		for (name, namespace) in jobs {
-			pb.set_message(name.clone());
-
 			let mut cmd = tokio::process::Command::new("kubectl");
 			cmd.arg("delete")
 				.arg("-n")
@@ -36,13 +30,7 @@ pub async fn apply_specs(ctx: &ProjectContext, specs: Vec<serde_json::Value>) ->
 
 			let status = cmd.status().await?;
 			ensure!(status.success(), "failed to delete job {name}");
-
-			pb.inc(1);
 		}
-
-		pb.finish();
-
-		eprintln!();
 	}
 
 	// Build YAML
