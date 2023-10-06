@@ -236,6 +236,9 @@ resource "kubectl_manifest" "traffic_server_traefik_service" {
 		metadata = {
 			name = "traffic-server"
 			namespace = kubernetes_namespace.traffic_server.metadata.0.name
+			labels = {
+				"traefik-instance" = "main"
+			}
 		}
 
 		spec = {

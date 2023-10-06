@@ -86,14 +86,6 @@ resource "helm_release" "traefik_tunnel" {
 			"traefik-instance" = "tunnel"
 		}
 
-		ingressRoute = {
-			dashboard = {
-				labels = {
-					"traefik-instance" = "tunnel"
-				}
-			}
-		}
-
 		logs = {
 			general = {
 				level = "DEBUG"

@@ -39,12 +39,8 @@ resource "helm_release" "traefik" {
 			}
 		}
 
-		ingressRoute = {
-			dashboard = {
-				labels = {
-					"traefik-instance" = "main"
-				}
-			}
+		commonLabels = {
+			"traefik-instance" = "main"
 		}
 
 		resources = {
