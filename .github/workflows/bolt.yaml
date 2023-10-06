@@ -32,7 +32,7 @@ jobs:
           sscache_aws_access_key_id: secrets.SCCACHE_AWS_ACCESS_KEY_ID
 
       - name: Bolt Check
-        run: nix-shell --pure --run "bolt check --validate-format"
+        run: nix-shell --pure --run "bolt check -g --validate-format"
 
       - name: Force Parallel Failure
         if: failure()
