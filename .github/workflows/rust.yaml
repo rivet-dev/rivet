@@ -1,6 +1,6 @@
 name: rust
 
-on: [push]
+on: push
 
 concurrency:
   group: rust-${{ github.ref }}
