@@ -78,6 +78,9 @@ jobs:
           key = "TODO"
           EOF
 
+      - name: Bolt Init
+        run: nix-shell --pure --run "bolt init --yes ci"
+
       - name: Bolt Check
         run: nix-shell --pure --run "bolt check --validate-format"
 
