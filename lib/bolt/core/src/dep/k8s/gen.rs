@@ -822,7 +822,10 @@ fn build_ingress_router(
 				"kind": "Middleware",
 				"metadata": {
 					"name": mw_name,
-					"namespace": "rivet-service"
+					"namespace": "rivet-service",
+					"labels": {
+						"traefik-instance": "main"
+					}
 				},
 				"spec": {
 					"stripPrefix": {
@@ -841,7 +844,10 @@ fn build_ingress_router(
 				"kind": "Middleware",
 				"metadata": {
 					"name": mw_name,
-					"namespace": "rivet-service"
+					"namespace": "rivet-service",
+					"labels": {
+						"traefik-instance": "main"
+					}
 				},
 				"spec": {
 					"compress": {}
@@ -873,7 +879,9 @@ fn build_ingress_router(
 
 		let ingress_middlewares = middlewares
 			.iter()
-			.map(|mw| mw["metadata"].clone())
+			.map(
+				|mw| json!({ "name": mw["metadata"]["name"], "namespace": mw["metadata"]["namespace"] }),
+			)
 			.collect::<Vec<_>>();
 
 		specs.push(json!({
@@ -888,7 +896,10 @@ fn build_ingress_router(
 			"kind": "IngressRoute",
 			"metadata": {
 				"name": format!("{}-{i}-insecure", svc_ctx.name()),
-				"namespace": "rivet-service"
+				"namespace": "rivet-service",
+				"labels": {
+					"traefik-instance": "main"
+				}
 			},
 			"spec": {
 				"entryPoints": [ "web" ],
@@ -917,7 +928,10 @@ fn build_ingress_router(
 				"kind": "IngressRoute",
 				"metadata": {
 					"name": format!("{}-{i}-secure", svc_ctx.name()),
-					"namespace": "rivet-service"
+					"namespace": "rivet-service",
+					"labels": {
+						"traefik-instance": "main"
+					}
 				},
 				"spec": {
 					"entryPoints": [ "websecure" ],
@@ -952,8 +966,11 @@ fn build_ingress_router(
 				"apiVersion": "traefik.io/v1alpha1",
 				"kind": "IngressRoute",
 				"metadata": {
-					"name": "cf-verification-challenge",
-					"namespace": "rivet-service"
+					"name": "cf-verification-challenge-insecure",
+					"namespace": "rivet-service",
+					"labels": {
+						"traefik-instance": "main"
+					}
 				},
 				"spec": {
 					"entryPoints": [ "web" ],
@@ -961,7 +978,15 @@ fn build_ingress_router(
 						{
 							"kind": "Rule",
 							"match": "PathPrefix(`/.well-known/cf-custom-hostname-challenge/`)",
-							"priority": 90
+							"priority": 90,
+							"services": [
+								{
+									"kind": "Service",
+									"name": service_name,
+									"namespace": "rivet-service",
+									"port": "http"
+								}
+							]
 						}
 					]
 				}
@@ -972,8 +997,11 @@ fn build_ingress_router(
 					"apiVersion": "traefik.io/v1alpha1",
 					"kind": "IngressRoute",
 					"metadata": {
-						"name": "cf-verification-challenge",
-						"namespace": "rivet-service"
+						"name": "cf-verification-challenge-secure",
+						"namespace": "rivet-service",
+						"labels": {
+							"traefik-instance": "main"
+						}
 					},
 					"spec": {
 						"entryPoints": [ "websecure" ],
@@ -981,7 +1009,15 @@ fn build_ingress_router(
 							{
 								"kind": "Rule",
 								"match": "PathPrefix(`/.well-known/cf-custom-hostname-challenge/`)",
-								"priority": 90
+								"priority": 90,
+								"services": [
+									{
+										"kind": "Service",
+										"name": service_name,
+										"namespace": "rivet-service",
+										"port": "http"
+									}
+								]
 							}
 						],
 						"tls": {
