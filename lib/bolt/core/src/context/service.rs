@@ -1211,7 +1211,7 @@ impl ServiceContextData {
 					count: 1,
 					resources: config::ns::ServiceResources {
 						cpu: config::ns::CpuResources::Cpu(100),
-						memory: 512,
+						memory: 128,
 						ephemeral_disk: 128,
 					},
 				},
