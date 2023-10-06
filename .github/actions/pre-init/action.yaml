@@ -81,3 +81,7 @@ runs:
     - name: Remove Old Bolt Builds
       shell: bash -e {0}
       run: rm -f target/debug/bolt target/release/bolt
+
+    - name: Generate Bolt Config
+      shell: bash -e {0}
+      run: nix-shell --pure --run "bolt config generate ci"
