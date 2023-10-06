@@ -19,6 +19,13 @@ jobs:
     runs-on: [self-hosted, linux, x64]
 
     steps:
+      # MARK: Git
+      - name: Checkout
+        uses: actions/checkout@v3.5.2
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          submodules: recursive
+
       - uses: ./.github/actions/pre-init
 
       - name: Bolt Check
@@ -28,6 +35,13 @@ jobs:
     runs-on: [self-hosted, linux, x64]
 
     steps:
+      # MARK: Git
+      - name: Checkout
+        uses: actions/checkout@v3.5.2
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          submodules: recursive
+
       - uses: ./.github/actions/pre-init
 
       - name: Bolt Init
