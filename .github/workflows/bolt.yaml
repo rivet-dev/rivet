@@ -28,8 +28,8 @@ jobs:
 
       - uses: ./.github/actions/pre-init
         with:
-          sscache_aws_secret_access_key: secrets.SCCACHE_AWS_SECRET_ACCESS_KEY
-          sscache_aws_access_key_id: secrets.SCCACHE_AWS_ACCESS_KEY_ID
+          sscache_aws_secret_access_key: ${{ secrets.SCCACHE_AWS_SECRET_ACCESS_KEY }}
+          sscache_aws_access_key_id: ${{ secrets.SCCACHE_AWS_ACCESS_KEY_ID }}
 
       - name: Bolt Check
         run: nix-shell --pure --run "bolt check -g --validate-format"
