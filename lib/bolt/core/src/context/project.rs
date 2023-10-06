@@ -543,7 +543,7 @@ impl ProjectContextData {
 	/// Origin used to access Minio. Only applicable if Minio provider is specified.
 	pub fn origin_minio(&self) -> String {
 		if let Some(domain_main) = self.domain_main() {
-			format!("minio.{domain_main}")
+			format!("https://minio.{domain_main}")
 		} else if let config::ns::ClusterKind::SingleNode {
 			public_ip,
 			minio_port,
