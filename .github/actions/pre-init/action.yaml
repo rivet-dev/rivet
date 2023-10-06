@@ -1,10 +1,17 @@
 name: "Pre-Init"
 description: "Set up Nix and Bolt"
+
+defaults:
+  run:
+    # Enable fail-fast behavior
+    shell: bash -e {0}
+
 inputs:
   sscache_aws_secret_access_key:
     required: true
   sscache_aws_access_key_id:
     required: true
+
 runs:
   using: "composite"
 
