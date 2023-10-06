@@ -1,6 +1,12 @@
 name: "Pre-Init"
 description: "Set up Nix and Bolt"
 
+# TODO: Composite actions don't support defaults
+# defaults:
+#   run:
+#     # Enable fail-fast behavior
+#     shell: bash -e {0}
+
 inputs:
   sscache_aws_secret_access_key:
     required: true
@@ -8,12 +14,7 @@ inputs:
     required: true
 
 runs:
-  using: "composite"
-
-  defaults:
-    run:
-      # Enable fail-fast behavior
-      shell: bash -e {0}
+  using: composite
 
   steps:
     # MARK: Cache
@@ -28,6 +29,7 @@ runs:
 
     # We can't use the GitHub cache because it has a max size of 10 GB
     - name: Enable sccache
+      shell: bash -e {0}
       run: |
         # Expose sccache config for all future calls of nix-shell, which configures sccache respectively
         echo 'USE_SCCACHE=1' >> $GITHUB_ENV
@@ -53,9 +55,11 @@ runs:
 
     # Build initial shell, all future calls to nix-shell will be fast
     - name: Build Shell
+      shell: bash -e {0}
       run: nix-shell --pure --run "echo 'Built shell'"
 
     - name: Write Namespace and Secrets Config
+      shell: bash -e {0}
       run: |
         cat <<'EOF' > namespaces/ci.toml
         [rivet]
@@ -71,4 +75,5 @@ runs:
     # MARK: Bolt
     # Delete old Bolt binaries in order to fall back to the Nix-built binary
     - name: Remove Old Bolt Builds
+      shell: bash -e {0}
       run: rm -f target/debug/bolt target/release/bolt
