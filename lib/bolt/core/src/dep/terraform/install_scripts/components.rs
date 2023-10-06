@@ -63,6 +63,11 @@ pub struct TraefikInstance {
 	pub static_config: String,
 	pub dynamic_config: String,
 	pub tls_certs: HashMap<String, Cert>,
+	pub tcp_server_transports: HashMap<String, ServerTransport>,
+}
+
+pub struct ServerTransport {
+	pub certs: Vec<Cert>,
 }
 
 /// Creates a Traefik instance.
@@ -78,7 +83,6 @@ pub fn traefik_instance(config: TraefikInstance) -> String {
 	for (cert_id, cert) in config.tls_certs {
 		script.push_str(&formatdoc!(
 			r#"
-
 			cat << 'EOF' > /etc/{name}/tls/{cert_id}_cert.pem
 			{cert}
 			EOF
@@ -97,6 +101,31 @@ pub fn traefik_instance(config: TraefikInstance) -> String {
 			cert = cert.cert_pem,
 			key = cert.key_pem,
 		));
+	}
+
+	for (transport_id, transport) in config.tcp_server_transports {
+		for (i, cert) in transport.certs.iter().enumerate() {
+			script.push_str(&formatdoc!(
+				r#"
+				cat << 'EOF' > /etc/{name}/tls/transport_{transport_id}_{i}_cert.pem
+				{cert}
+				EOF
+
+				cat << 'EOF' > /etc/{name}/tls/transport_{transport_id}_{i}_key.pem
+				{key}
+				EOF
+
+				cat << 'EOF' > /etc/{name}/dynamic/transport_{transport_id}.toml
+				[[tcp.serversTransports.tunnel_nomad_client.certificates]]
+					certFile = "/etc/{name}/tls/transport_{transport_id}_{i}_cert.pem"
+					keyFile = "/etc/{name}/tls/transport_{transport_id}_{i}_key.pem"
+				EOF
+				"#,
+				name = config.name,
+				cert = cert.cert_pem,
+				key = cert.key_pem,
+			));
+		}
 	}
 
 	script

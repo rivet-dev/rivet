@@ -31,6 +31,10 @@ resource "helm_release" "traefik_tunnel" {
 	chart = "traefik"
 	version = "24.0.0"
 	values = [yamlencode({
+		# Use Traefik v3 beta for TLS servers transport support
+		image = {
+			tag = "v3.0.0-beta3"
+		}
 		ports = merge(
 			# Disable default ports
 			{
@@ -98,6 +102,15 @@ resource "helm_release" "traefik_tunnel" {
 			}
 		}
 	})]
+}
+
+data "kubernetes_service" "traefik_tunnel" {
+	depends_on = [helm_release.traefik_tunnel]
+
+	metadata {
+		name = "traefik"
+		namespace = kubernetes_namespace.traefik_tunnel.metadata.0.name
+	}
 }
 
 # Q: why define it this way as opposed to defining it using yaml? 

@@ -8,39 +8,56 @@ use crate::dep::terraform;
 pub mod components;
 
 pub async fn gen(ctx: &ProjectContext, server: &Server) -> Result<String> {
+	let k8s_infra = terraform::output::read_k8s_infra(ctx).await;
+	let tls = terraform::output::read_tls(ctx).await;
+
 	let mut script = Vec::new();
 	script.push(components::common());
 	script.push(components::node_exporter());
 	script.push(components::sysctl());
 
 	if server.pool_id == "gg" {
-		let tls = terraform::output::read_tls(ctx).await;
-
 		script.push(components::traefik());
+
 		script.push(components::traefik_instance(components::TraefikInstance {
-			name: "game-guard".into(),
+			name: "game_guard".into(),
 			static_config: gg_traefik_static_config(),
 			dynamic_config: String::new(),
 			tls_certs: hashmap! {
-				"letsencrypt_rivet_job".into() => (*tls.tls_cert_letsencrypt_rivet_job).clone(), // TODO fix
-				// "letsencrypt_rivet_job".into() => (*tls.tls_cert_letsencrypt_rivet_gg).clone(),  // should be rivet_gg instead of rivet_job?
+				"letsencrypt_rivet_job".into() => (*tls.tls_cert_letsencrypt_rivet_job).clone(),
+			},
+			tcp_server_transports: Default::default(),
+		}));
+
+		script.push(components::traefik_instance(components::TraefikInstance {
+			name: "tunnel".into(),
+			static_config: tunnel_traefik_static_config(),
+			dynamic_config: tunnel_traefik_dynamic_config(&*k8s_infra.traefik_tunnel_external_ip),
+			tls_certs: Default::default(),
+			tcp_server_transports: hashmap! {
+				"tunnel".into() => components::ServerTransport {
+					certs: vec![
+						(*tls.tls_cert_locally_signed_job).clone()
+					]
+				}
 			},
 		}));
 	}
 
 	if server.pool_id == "job" {
-		// want to also install traefik. copied from gg above. q: what do we need to tweak?
-		// TODO: Only do this if TLS plan applied
-		// the tls plan should generate the certs??
-		let tls = terraform::output::read_tls(ctx).await;
-
 		script.push(components::traefik());
+
 		script.push(components::traefik_instance(components::TraefikInstance {
-			name: "game-guard".into(),
-			static_config: gg_traefik_static_config(),
-			dynamic_config: String::new(),
-			tls_certs: hashmap! {
-				"letsencrypt_rivet_job".into() => (*tls.tls_cert_locally_signed_nomad_client).clone(), // this cert is for the tunnel running on the nomad client. all nomad clients will use this cert
+			name: "tunnel".into(),
+			static_config: tunnel_traefik_static_config(),
+			dynamic_config: tunnel_traefik_dynamic_config(&*k8s_infra.traefik_tunnel_external_ip),
+			tls_certs: Default::default(),
+			tcp_server_transports: hashmap! {
+				"tunnel".into() => components::ServerTransport {
+					certs: vec![
+						(*tls.tls_cert_locally_signed_job).clone()
+					]
+				}
 			},
 		}));
 
@@ -79,7 +96,7 @@ fn gg_traefik_static_config() -> String {
 
 		[providers]
 			[providers.file]
-				directory = "/etc/ingress_proxy/dynamic"
+				directory = "/etc/game_guard/dynamic"
 
 			[providers.http]
 				endpoint = "{http_provider_endpoint}"
@@ -117,4 +134,41 @@ fn gg_traefik_static_config() -> String {
 	}
 
 	config
+}
+
+fn tunnel_traefik_static_config() -> String {
+	formatdoc!(
+		r#"
+		[entryPoints]
+			[entryPoints.lb-5000]
+				address = ":5000"
+
+		[providers]
+			[providers.file]
+				directory = "/etc/tunnel/dynamic"
+		"#
+	)
+}
+
+fn tunnel_traefik_dynamic_config(tunnel_external_ip: &str) -> String {
+	formatdoc!(
+		r#"
+		[tcp.services.nomad.loadBalancer]
+		serversTransport = "tunnel"
+
+		[tcp.routers.nomad]
+			rule = "HostSNI(`*`)"
+			service = "nomad"
+
+		[tcp.routers.api_route]
+			rule = "HostSNI(`*`)"
+			service = "api_route"
+
+		[[tcp.services.nomad.loadBalancer.servers]]
+			address = "{tunnel_external_ip}:5000"
+
+		[[tcp.services.api_route.loadBalancer.servers]]
+			address = "{tunnel_external_ip}:5001"
+		"#,
+	)
 }
