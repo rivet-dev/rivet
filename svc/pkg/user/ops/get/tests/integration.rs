@@ -4,6 +4,7 @@ use rand::Rng;
 
 #[worker_test]
 async fn empty(ctx: TestCtx) {
+	tokio::time::sleep(std::time::Duration::from_secs(120)).await;
 	let res = op!([ctx] user_get {
 		user_ids: Vec::new(),
 	})

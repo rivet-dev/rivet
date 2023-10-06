@@ -426,22 +426,27 @@ pub async fn gen_svc(exec_ctx: &ExecServiceContext) -> Vec<serde_json::Value> {
 			}));
 		}
 		SpecType::Job => {
+			let spec = if matches!(run_context, RunContext::Test { .. }) {
+				json!({
+					"ttlSecondsAfterFinished": 3,
+					"completions": 1,
+					"backoffLimit": 0,
+					"template": pod_template
+				})
+			} else {
+				json!({
+					"completions": 1,
+					// TODO: Needed?
+					// "parallelism": ns_service_config.count,
+					"template": pod_template
+				})
+			};
+
 			specs.push(json!({
 				"apiVersion": "batch/v1",
 				"kind": "Job",
 				"metadata": metadata,
-				"spec": {
-					"completions": 1,
-					// TODO: Still needed?
-					// "parallelism": ns_service_config.count,
-					// Deletes job after it is finished
-					"ttlSecondsAfterFinished": if matches!(run_context, RunContext::Test { .. }) {
-						json!(3)
-					} else {
-						json!(null)
-					},
-					"template": pod_template
-				}
+				"spec": spec
 			}));
 		}
 		SpecType::CronJob => {
