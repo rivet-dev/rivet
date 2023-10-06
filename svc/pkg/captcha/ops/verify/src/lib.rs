@@ -49,7 +49,7 @@ async fn handle(
 				VALUES ($1, $2, $3, $4, $5, to_timestamp($6::float / 1000), $7, $8, $9, $10)
 				"
 			))
-				.bind(Uuid::new_v4())
+			.bind(Uuid::new_v4())
 			.bind(&topic_value)
 			.bind(&topic_str)
 			.bind(ctx.remote_address.as_str())

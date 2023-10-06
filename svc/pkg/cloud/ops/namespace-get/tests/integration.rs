@@ -24,7 +24,7 @@ async fn empty(ctx: TestCtx) {
 	.await
 	.unwrap();
 	let namespace_id = res.namespace_id.unwrap().as_uuid();
-	
+
 	op!([ctx] cloud_namespace_create {
 		namespace_id: Some(namespace_id.into()),
 	})

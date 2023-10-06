@@ -11,7 +11,7 @@ async fn all() {
 	if !util::feature::job_run() {
 		return;
 	}
-	
+
 	tracing_subscriber::fmt()
 		.json()
 		.with_max_level(tracing::Level::INFO)
@@ -20,7 +20,7 @@ async fn all() {
 
 	let ctx = TestCtx::from_env("all").await.unwrap();
 	let crdb = ctx.crdb().await.unwrap();
-		
+
 	// Run tests sequentially so the gc's don't interfere with each other
 	remove_unready_lobbies(ctx.clone(), crdb.clone()).await;
 	remove_unregistered_players(ctx.clone(), crdb.clone()).await;

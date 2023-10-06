@@ -85,13 +85,8 @@ jobs:
       - name: Bolt Check
         run: nix-shell --pure --run "bolt check --validate-format"
 
-      # TODO: Make this run only when migrations change
-      # TODO: Broken for some reason
-      # - name: Bolt Database Migrate Check
-      #   run: nix-shell --pure --run "BOLT_NAMESPACE=ci BOLT_IGNORE_TERRAFORM=1 bolt database migrate check"
-
       - name: Bolt Test
-        run: nix-shell --pure --run "bolt test --validate-format"
+        run: nix-shell --pure --run "bolt test"
 
       - name: K3D Cleanup
         if: always()
