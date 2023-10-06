@@ -4,7 +4,6 @@ use std::collections::HashMap;
 use tokio::fs;
 
 use crate::{
-	config::ns,
 	context::ProjectContext,
 	dep::terraform::{output::Cert, servers::Server},
 };
@@ -31,11 +30,8 @@ pub fn cni_plugins() -> String {
 	include_str!("files/cni_plugins.sh").to_string()
 }
 
-// Q: is this running in server or client mode?
 pub fn nomad(server: &Server) -> String {
-	// just do one for now -> refers to load balancer.
-
-	let servers = &["foo", "bar"]; // TODO how will these be populated? are these the nomad leader servers? or just need to know about the load balancer?
+	let servers = &["127.0.0.1:5000"];
 
 	include_str!("files/nomad.sh")
 		.replace("__REGION_ID__", &server.region_id)
@@ -116,7 +112,7 @@ pub fn traefik_instance(config: TraefikInstance) -> String {
 				EOF
 
 				cat << 'EOF' > /etc/{name}/dynamic/transport_{transport_id}.toml
-				[[tcp.serversTransports.tunnel_nomad_client.certificates]]
+				[[tcp.serversTransports.{transport_id}.tls.certificates]]
 					certFile = "/etc/{name}/tls/transport_{transport_id}_{i}_cert.pem"
 					keyFile = "/etc/{name}/tls/transport_{transport_id}_{i}_key.pem"
 				EOF
@@ -254,9 +250,9 @@ async fn gen_s3_provider(
 		format!("s3_region_map_{provider_name}.config"),
 		formatdoc!(
 			r#"
-		# Default region
-		{s3_host}: {s3_region}
-		"#,
+			# Default region
+			{s3_host}: {s3_region}
+			"#,
 			s3_host = config.endpoint_external,
 			s3_region = config.region,
 		),

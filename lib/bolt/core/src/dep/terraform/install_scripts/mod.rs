@@ -139,9 +139,11 @@ fn gg_traefik_static_config() -> String {
 fn tunnel_traefik_static_config() -> String {
 	formatdoc!(
 		r#"
-		[entryPoints]
-			[entryPoints.lb-5000]
-				address = ":5000"
+		[entryPoints.nomad]
+			address = "127.0.0.1:5000"
+
+		[entryPoints.api_route]
+			address = "127.0.0.1:5001"
 
 		[providers]
 			[providers.file]
@@ -153,22 +155,27 @@ fn tunnel_traefik_static_config() -> String {
 fn tunnel_traefik_dynamic_config(tunnel_external_ip: &str) -> String {
 	formatdoc!(
 		r#"
-		[tcp.services.nomad.loadBalancer]
-		serversTransport = "tunnel"
-
 		[tcp.routers.nomad]
+			entryPoints = ["nomad"]
 			rule = "HostSNI(`*`)"
 			service = "nomad"
 
 		[tcp.routers.api_route]
+			entryPoints = ["api_route"]
 			rule = "HostSNI(`*`)"
 			service = "api_route"
 
-		[[tcp.services.nomad.loadBalancer.servers]]
-			address = "{tunnel_external_ip}:5000"
+		[tcp.services.nomad.loadBalancer]
+			serversTransport = "tunnel"
 
-		[[tcp.services.api_route.loadBalancer.servers]]
-			address = "{tunnel_external_ip}:5001"
+			[[tcp.services.nomad.loadBalancer.servers]]
+				address = "{tunnel_external_ip}:5000"
+
+		[tcp.services.api_route.loadBalancer]
+			serversTransport = "tunnel"
+
+			[[tcp.services.api_route.loadBalancer.servers]]
+				address = "{tunnel_external_ip}:5001"
 		"#,
 	)
 }
