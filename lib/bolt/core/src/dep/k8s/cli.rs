@@ -9,9 +9,8 @@ use crate::{
 };
 
 pub async fn apply_specs(ctx: &ProjectContext, specs: Vec<serde_json::Value>) -> Result<()> {
-	let has_job = specs.iter().any(|spec| spec["kind"] == "Job");
-
 	// Handle job redeployment
+	let has_job = specs.iter().any(|spec| spec["kind"] == "Job");
 	let specs = if has_job {
 		// Get all job names
 		let output = Command::new("kubectl")
@@ -30,12 +29,14 @@ pub async fn apply_specs(ctx: &ProjectContext, specs: Vec<serde_json::Value>) ->
 		let running_jobs = output_str.trim().split(' ').collect::<Vec<_>>();
 
 		// Filter out all jobs
-		let specs_len = specs.len();
-		let (filtered_specs, job_specs) = specs.into_iter().partition::<Vec<_>, _>(|spec| {
-			!running_jobs
-				.iter()
-				.any(|j| &spec["metadata"]["name"].as_str().unwrap() == j)
-		});
+		let (filtered_specs, job_specs) = specs
+			.into_iter()
+			.filter(|x| !x["metadata"].is_null())
+			.partition::<Vec<_>, _>(|spec| {
+				!running_jobs
+					.iter()
+					.any(|j| &spec["metadata"]["name"].as_str().unwrap() == j)
+			});
 
 		if !job_specs.is_empty() {
 			let filtered_jobs = job_specs
