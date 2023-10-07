@@ -165,12 +165,6 @@ pub fn is_billing_enabled() -> bool {
 	*IS_BILLING_ENABLED
 }
 
-/// Attempts to read a service's public URL from the environment.
-pub fn svc_router_url(svc_name: &str) -> String {
-	let key = format!("RIVET_{}_URL", svc_name.replace("-", "_").to_uppercase());
-	std::env::var(&key).expect(&key)
-}
-
 /// The current stripe API token.
 pub async fn stripe_token() -> Result<String, std::env::VarError> {
 	read_secret(&["stripe", "token"]).await

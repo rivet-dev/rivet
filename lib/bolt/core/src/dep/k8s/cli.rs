@@ -1,36 +1,61 @@
-use anyhow::{ensure, Context, Result};
-use tokio::io::AsyncWriteExt;
+use std::collections::HashSet;
 
-use crate::{context::ProjectContext, utils};
+use anyhow::{ensure, Context, Result};
+use tokio::{io::AsyncWriteExt, process::Command};
+
+use crate::{
+	context::ProjectContext,
+	utils::{self, command_helper::CommandHelper},
+};
 
 pub async fn apply_specs(ctx: &ProjectContext, specs: Vec<serde_json::Value>) -> Result<()> {
-	let jobs = specs
-		.iter()
-		.filter_map(|spec| {
-			(spec["kind"] == "Job").then(|| {
-				(
-					spec["metadata"]["name"].as_str().unwrap().to_string(),
-					spec["metadata"]["namespace"].as_str().unwrap().to_string(),
-				)
-			})
-		})
-		.collect::<Vec<_>>();
+	let has_job = specs.iter().any(|spec| spec["kind"] == "Job");
 
-	// Delete previous jobs (must delete because pod specs are immutable)
-	if !jobs.is_empty() {
-		for (name, namespace) in jobs {
-			let mut cmd = tokio::process::Command::new("kubectl");
-			cmd.arg("delete")
-				.arg("-n")
-				.arg(namespace)
-				.arg("--ignore-not-found=true")
-				.arg(format!("Job/{name}"));
-			cmd.env("KUBECONFIG", ctx.gen_kubeconfig_path());
-			cmd.stdout(std::process::Stdio::null());
+	// Handle job redeployment
+	let specs = if has_job {
+		// Get all job names
+		let output = Command::new("kubectl")
+			.args(&[
+				"get",
+				"job",
+				"-n",
+				"rivet-service",
+				"-o",
+				"jsonpath={.items[*].metadata.name}",
+			])
+			.env("KUBECONFIG", ctx.gen_kubeconfig_path())
+			.output()
+			.await?;
+		let output_str = String::from_utf8_lossy(&output.stdout);
+		let running_jobs = output_str.trim().split(' ').collect::<Vec<_>>();
 
-			let status = cmd.status().await?;
-			ensure!(status.success(), "failed to delete job {name}");
+		// Filter out all jobs
+		let specs_len = specs.len();
+		let (filtered_specs, job_specs) = specs.into_iter().partition::<Vec<_>, _>(|spec| {
+			!running_jobs
+				.iter()
+				.any(|j| &spec["metadata"]["name"].as_str().unwrap() == j)
+		});
+
+		if !job_specs.is_empty() {
+			let filtered_jobs = job_specs
+				.into_iter()
+				.map(|spec| spec["metadata"]["name"].as_str().unwrap().to_string())
+				.collect::<HashSet<_>>()
+				.into_iter()
+				.collect::<Vec<_>>()
+				.join(", ");
+
+			rivet_term::status::progress("Skipping existing jobs", filtered_jobs);
 		}
+
+		filtered_specs
+	} else {
+		specs
+	};
+
+	if specs.is_empty() {
+		return Ok(());
 	}
 
 	// Build YAML

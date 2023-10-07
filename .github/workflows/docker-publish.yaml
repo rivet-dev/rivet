@@ -1,85 +1,84 @@
 name: docker-publish
 
-on: [push]
+on: push
 
 jobs:
   rivet-local-binary-artifact-runner:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v2
-    - uses: docker/login-action@v2
-      with:
-        registry: ghcr.io
-        username: ${{github.actor}}
-        password: ${{secrets.GITHUB_TOKEN}}
-    - name: Build rivet-local-binary-artifact-runner
-      run: |
-        GHCR_TAG="ghcr.io/rivet-gg/rivet-local-binary-artifact-runner:$(git rev-parse --short HEAD)"
-        cd infra/docker/rivet_local_binary_artifact_runner
-        docker build -t "$GHCR_TAG" .
-        docker push "$GHCR_TAG"
+      - uses: actions/checkout@v2
+      - uses: docker/login-action@v2
+        with:
+          registry: ghcr.io
+          username: ${{github.actor}}
+          password: ${{secrets.GITHUB_TOKEN}}
+      - name: Build rivet-local-binary-artifact-runner
+        run: |
+          GHCR_TAG="ghcr.io/rivet-gg/rivet-local-binary-artifact-runner:$(git rev-parse --short HEAD)"
+          cd infra/docker/rivet_local_binary_artifact_runner
+          docker build -t "$GHCR_TAG" .
+          docker push "$GHCR_TAG"
 
   golang-migrate:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v2
-    - uses: docker/login-action@v2
-      with:
-        registry: ghcr.io
-        username: ${{github.actor}}
-        password: ${{secrets.GITHUB_TOKEN}}
-    - name: Build golang-migrate
-      run: |
-        GHCR_TAG="ghcr.io/rivet-gg/golang-migrate:$(git rev-parse --short HEAD)"
-        cd infra/docker/golang_migrate
-        docker build -t "$GHCR_TAG" .
-        docker push "$GHCR_TAG"
+      - uses: actions/checkout@v2
+      - uses: docker/login-action@v2
+        with:
+          registry: ghcr.io
+          username: ${{github.actor}}
+          password: ${{secrets.GITHUB_TOKEN}}
+      - name: Build golang-migrate
+        run: |
+          GHCR_TAG="ghcr.io/rivet-gg/golang-migrate:$(git rev-parse --short HEAD)"
+          cd infra/docker/golang_migrate
+          docker build -t "$GHCR_TAG" .
+          docker push "$GHCR_TAG"
 
   redis:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v2
-    - uses: docker/login-action@v2
-      with:
-        registry: ghcr.io
-        username: ${{github.actor}}
-        password: ${{secrets.GITHUB_TOKEN}}
-    - name: Build redis
-      run: |
-        GHCR_TAG="ghcr.io/rivet-gg/redis:$(git rev-parse --short HEAD)"
-        cd infra/docker/redis
-        docker build -t "$GHCR_TAG" .
-        docker push "$GHCR_TAG"
+      - uses: actions/checkout@v2
+      - uses: docker/login-action@v2
+        with:
+          registry: ghcr.io
+          username: ${{github.actor}}
+          password: ${{secrets.GITHUB_TOKEN}}
+      - name: Build redis
+        run: |
+          GHCR_TAG="ghcr.io/rivet-gg/redis:$(git rev-parse --short HEAD)"
+          cd infra/docker/redis
+          docker build -t "$GHCR_TAG" .
+          docker push "$GHCR_TAG"
 
   apache-traffic-server:
     runs-on: ubuntu-latest
 
     steps:
-    - name: Install Nix
-      run: |
-        curl -L https://nixos.org/nix/install | sh
-        . /home/runner/.nix-profile/etc/profile.d/nix.sh
+      - name: Install Nix
+        run: |
+          curl -L https://nixos.org/nix/install | sh
+          . /home/runner/.nix-profile/etc/profile.d/nix.sh
 
-    - uses: actions/checkout@v2
+      - uses: actions/checkout@v2
 
-    - name: Login to GitHub Container Registry
-      uses: docker/login-action@v2
-      with:
-        registry: ghcr.io
-        username: ${{github.actor}}
-        password: ${{secrets.GITHUB_TOKEN}}
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v2
+        with:
+          registry: ghcr.io
+          username: ${{github.actor}}
+          password: ${{secrets.GITHUB_TOKEN}}
 
-    - name: Build apache-traffic-server
-      run: |
-        # Build
-        . /home/runner/.nix-profile/etc/profile.d/nix.sh
-        cd infra/docker/traffic_server
-        nix-build docker.nix --option system-features kvm
-        docker load < result
+      - name: Build apache-traffic-server
+        run: |
+          # Build
+          . /home/runner/.nix-profile/etc/profile.d/nix.sh
+          cd infra/docker/traffic_server
+          nix-build docker.nix --option system-features kvm
+          docker load < result
 
-        # Push
-        GHCR_TAG="ghcr.io/rivet-gg/apache-traffic-server:$(git rev-parse --short HEAD)"
-        echo "Tagging: $GHCR_TAG"
-        docker tag apache-traffic-server:latest "$GHCR_TAG"
-        docker push "$GHCR_TAG"
-
+          # Push
+          GHCR_TAG="ghcr.io/rivet-gg/apache-traffic-server:$(git rev-parse --short HEAD)"
+          echo "Tagging: $GHCR_TAG"
+          docker tag apache-traffic-server:latest "$GHCR_TAG"
+          docker push "$GHCR_TAG"
