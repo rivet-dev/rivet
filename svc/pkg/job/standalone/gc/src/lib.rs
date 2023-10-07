@@ -53,7 +53,7 @@ pub async fn run_from_env(ts: i64, pools: rivet_pools::Pools) -> GlobalResult<()
 		"
 		SELECT runs.run_id, runs.stop_ts, run_meta_nomad.dispatched_job_id
 		FROM db_job_state.runs
-		INNER JOIN run_meta_nomad ON run_meta_nomad.run_id = runs.run_id
+		INNER JOIN db_job_state.run_meta_nomad ON run_meta_nomad.run_id = runs.run_id
 		AS OF SYSTEM TIME '-5s'
 		WHERE stop_ts IS NULL AND start_ts < $1
 		"
