@@ -132,7 +132,12 @@ pub fn gen_lobby_docker_job(
 				("RIVET_MATCHMAKER_API_URL", "api-matchmaker"),
 			]
 			.iter()
-			.map(|(env, service)| (env.to_string(), util::env::svc_router_url(service))),
+			.map(|(env, service)| {
+				(
+					env.to_string(),
+					format!("{}/{service}", util::env::origin_api()),
+				)
+			}),
 		)
 		.chain(
 			[

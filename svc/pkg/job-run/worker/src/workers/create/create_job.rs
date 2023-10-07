@@ -169,7 +169,6 @@ fn gen_cleanup_task() -> nomad_client::models::Task {
 					import ssl
 					import urllib.request, json, os, mimetypes, sys
 
-					API_JOB_URL = '{api_job_url}'
 					BEARER = '{{{{env "NOMAD_META_JOB_RUN_TOKEN"}}}}'
 
 					ctx = ssl.create_default_context()
@@ -197,7 +196,7 @@ fn gen_cleanup_task() -> nomad_client::models::Task {
 					print(f'\n> Cleaning up job')
 
 					res_json = None
-					with req('POST', f'{{API_JOB_URL}}/runs/cleanup',
+					with req('POST', f'{origin_api}/job/runs/cleanup',
 						data = json.dumps({{}}).encode(),
 						headers = {{
 							'Authorization': f'Bearer {{BEARER}}',
@@ -209,7 +208,7 @@ fn gen_cleanup_task() -> nomad_client::models::Task {
 
 					print('\n> Finished')
 					"#,
-				api_job_url = util::env::svc_router_url("api-job"),
+				origin_api = util::env::origin_api(),
 			)),
 			..Template::new()
 		}]),

@@ -52,7 +52,7 @@ impl Ctx {
 
 	fn http_client(&self, bearer_token: String) -> rivet_job::ClientWrapper {
 		rivet_job::Config::builder()
-			.set_uri(util::env::svc_router_url("api-job"))
+			.set_uri("http://traefik.traefik.svc.cluster.local:80/job")
 			.set_bearer_token(bearer_token)
 			.build_client()
 	}

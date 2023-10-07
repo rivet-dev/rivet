@@ -50,7 +50,7 @@ impl Ctx {
 		let (user_id, user_token) = Self::issue_user_token(&op_ctx).await;
 
 		let http_client = rivet_auth::Config::builder()
-			.set_uri(util::env::svc_router_url("api-auth"))
+			.set_uri("http://traefik.traefik.svc.cluster.local:80/auth")
 			.set_bearer_token(user_token)
 			.build_client();
 

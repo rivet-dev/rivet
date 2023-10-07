@@ -42,7 +42,7 @@ impl Ctx {
 		);
 
 		let http_client = rivet_status::Config::builder()
-			.set_uri(util::env::svc_router_url("api-status"))
+			.set_uri("http://traefik.traefik.svc.cluster.local:80/status")
 			.set_bearer_token(
 				util::env::read_secret(&["rivet", "api_status", "token"])
 					.await
