@@ -10,9 +10,17 @@
 -   [Cloudflare website](https://developers.cloudflare.com/fundamentals/get-started/setup/add-site/) (free)
 -   [Linode account](https://login.linode.com/signup) (more providers coming soon)
 
-## Step 1: Install [Nix package manager](https://nixos.org/download.html)
+## Step 1: Install dependencies
 
-Nix is required to set up the development environment.
+### [Docker](https://docs.docker.com/engine/install/)
+
+_Docker is required to run Rivet services._
+
+See [here](https://docs.docker.com/engine/install/) for install instructions.
+
+### [Nix package manager](https://nixos.org/download.html)
+
+_Nix is required to set up the development environment._
 
 Run:
 
@@ -20,15 +28,16 @@ Run:
 sh <(curl -L https://nixos.org/nix/install) --daemon
 ```
 
-## Step 2: Clone repository
+### [Git](https://git-scm.com/)
 
-This will use Nix to install Git, then clone the repository to `/root/rivet`. You can clone the repository any place you like.
+See [here](https://git-scm.com/book/en/v2/Getting-Started-Installing-Git) for install instructions.
+
+## Step 2: Clone repository
 
 Run:
 
 ```
-nix-env -i git -i git-lfs
-nix-shell -p git -p git-lfs --command "git clone https://github.com/rivet-gg/rivet.git /root/rivet"
+git clone https://github.com/rivet-gg/rivet.git
 ```
 
 > **Warp compatibility**
@@ -40,7 +49,7 @@ nix-shell -p git -p git-lfs --command "git clone https://github.com/rivet-gg/riv
 Run:
 
 ```
-nix-shell --run "bolt init dev"
+nix-shell --run "bolt init dev --yes"
 ```
 
 This will:
@@ -53,10 +62,6 @@ Run this command any time you update to a new version of Rivet.
 > **Tip**
 >
 > See the `namespaces/dev.toml` and `secrets/dev.toml` file to see the generated namespace configs.
-
-> **Tip**
->
-> You can create multiple namespaces with different configs. The active namespace is set in the `Bolt.local.toml` file. We use the name `dev` as a safe default.
 
 ## Step 4: Boot the Rivet Hub
 
