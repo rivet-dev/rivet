@@ -40,6 +40,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 -  **Infra** CockroachDB database connections now use TLS
 -  **Infra** Redis database connections now use TLS
 -  **Infra** Redis now uses Redis Cluster for everything
+-  **Infra** Cloudflare certificate authority from DigitCert to Lets Encrypt
 
 ### Fixed
 
