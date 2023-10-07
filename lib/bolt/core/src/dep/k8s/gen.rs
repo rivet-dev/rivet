@@ -550,49 +550,52 @@ pub async fn gen_svc(exec_ctx: &ExecServiceContext) -> Vec<serde_json::Value> {
 	}
 
 	// Expose service
-	specs.push(json!({
-		"apiVersion": "v1",
-		"kind": "Service",
-		"metadata": {
-			"name": service_name,
-			"namespace": "rivet-service",
-			"labels": {
-				"app.kubernetes.io/name": service_name
-			}
-		},
-		"spec": {
-			"type": "ClusterIP",
-			"selector": {
-				"app.kubernetes.io/name": service_name
+	if matches!(run_context, RunContext::Service { .. }) {
+		// Expose service
+		specs.push(json!({
+			"apiVersion": "v1",
+			"kind": "Service",
+			"metadata": {
+				"name": service_name,
+				"namespace": "rivet-service",
+				"labels": {
+					"app.kubernetes.io/name": service_name
+				}
 			},
-			"ports": service_ports
-		}
-	}));
-
-	// Monitor the service
-	specs.push(json!({
-		"apiVersion": "monitoring.coreos.com/v1",
-		"kind": "ServiceMonitor",
-		"metadata": {
-			"name": service_name,
-			"namespace": "rivet-service"
-		},
-		"spec": {
-			"selector": {
-				"matchLabels": {
+			"spec": {
+				"type": "ClusterIP",
+				"selector": {
 					"app.kubernetes.io/name": service_name
 				},
-			},
-			"endpoints": [
-				{ "port": "metrics" }
-			],
-		}
-	}));
+				"ports": service_ports
+			}
+		}));
 
-	// Build ingress router
-	if matches!(run_context, RunContext::Service { .. }) {
-		if let Some(router) = svc_ctx.config().kind.router() {
-			build_ingress_router(&project_ctx, svc_ctx, &service_name, &router, &mut specs);
+		// Monitor the service
+		specs.push(json!({
+			"apiVersion": "monitoring.coreos.com/v1",
+			"kind": "ServiceMonitor",
+			"metadata": {
+				"name": service_name,
+				"namespace": "rivet-service"
+			},
+			"spec": {
+				"selector": {
+					"matchLabels": {
+						"app.kubernetes.io/name": service_name
+					},
+				},
+				"endpoints": [
+					{ "port": "metrics" }
+				],
+			}
+		}));
+
+		// Build ingress router
+		if matches!(run_context, RunContext::Service { .. }) {
+			if let Some(router) = svc_ctx.config().kind.router() {
+				build_ingress_router(&project_ctx, svc_ctx, &service_name, &router, &mut specs);
+			}
 		}
 	}
 
