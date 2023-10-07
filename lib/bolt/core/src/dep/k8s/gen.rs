@@ -551,7 +551,7 @@ pub async fn gen_svc(exec_ctx: &ExecServiceContext) -> Vec<serde_json::Value> {
 
 	// Expose service
 	if matches!(run_context, RunContext::Service { .. }) {
-		// Expose service
+		// Create service
 		specs.push(json!({
 			"apiVersion": "v1",
 			"kind": "Service",
