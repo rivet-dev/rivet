@@ -887,11 +887,7 @@ fn build_ingress_router(
 			)
 			.collect::<Vec<_>>();
 
-		specs.push(json!({
-			"apiVersion": "v1",
-			"kind": "List",
-			"items": middlewares
-		}));
+		specs.extend(middlewares);
 
 		// Build insecure router
 		specs.push(json!({
