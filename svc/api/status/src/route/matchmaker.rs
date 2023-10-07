@@ -22,7 +22,7 @@ pub async fn status(
 
 	// Build client
 	let client = rivet_matchmaker::Config::builder()
-		.set_uri("http://traefik.traefik.svc.cluster.local:80/matchmaker".into())
+		.set_uri("http://traefik.traefik.svc.cluster.local:80/matchmaker")
 		.build_client();
 
 	// Create bypass token
