@@ -662,7 +662,8 @@ async fn tail_pod(ctx: &ProjectContext, svc_name: &str) -> Result<TestStatus> {
 				&label,
 				"-n",
 				"rivet-service",
-				"-o=jsonpath={.items[0].status.phase}",
+				"-o",
+				"jsonpath={.items[0].status.phase}",
 			])
 			.env("KUBECONFIG", ctx.gen_kubeconfig_path())
 			.output()
@@ -685,7 +686,8 @@ async fn tail_pod(ctx: &ProjectContext, svc_name: &str) -> Result<TestStatus> {
 						&label,
 						"-n",
 						"rivet-service",
-						"-o=jsonpath={.items[0].status.containerStatuses[0].state.terminated.exitCode}",
+						"-o",
+						"jsonpath={.items[0].status.containerStatuses[0].state.terminated.exitCode}",
 					])
 					.env("KUBECONFIG", ctx.gen_kubeconfig_path())
 					.output()

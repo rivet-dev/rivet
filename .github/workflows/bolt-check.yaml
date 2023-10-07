@@ -1,0 +1,39 @@
+name: bolt-check
+
+on: push
+
+concurrency:
+  group: check-${{ github.ref }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    # Enable fail-fast behavior
+    shell: bash -e {0}
+
+env:
+  store: /home/runner/nix
+
+jobs:
+  check:
+    runs-on: [self-hosted, linux, x64]
+
+    steps:
+      # MARK: Git
+      - name: Checkout
+        uses: actions/checkout@v3.5.2
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          submodules: recursive
+
+      - uses: ./.github/actions/pre-init
+        with:
+          sscache_aws_secret_access_key: ${{ secrets.SCCACHE_AWS_SECRET_ACCESS_KEY }}
+          sscache_aws_access_key_id: ${{ secrets.SCCACHE_AWS_ACCESS_KEY_ID }}
+
+      - name: Bolt Check
+        run: nix-shell --pure --run "bolt check -g --validate-format"
+
+      - name: Force Parallel Failure
+        if: failure()
+        uses: andymckay/cancel-action@0.3
