@@ -22,7 +22,7 @@ resource "cloudflare_certificate_pack" "main" {
 		create_before_destroy = true
 	}
 
-	certificate_authority = "digicert"
+	certificate_authority = "lets_encrypt"
 	# The certificate must include the root domain in it.
 	#
 	# We convert to set then back to list to remove potential duplicates of the root zoon.
@@ -52,7 +52,7 @@ resource "cloudflare_certificate_pack" "cdn" {
 		create_before_destroy = true
 	}
 
-	certificate_authority = "digicert"
+	certificate_authority = "lets_encrypt"
 	# The certificate must include the root domain in it.
 	#
 	# We convert to set then back to list to remove potential duplicates of the root zoon.
