@@ -43,7 +43,7 @@ resource "helm_release" "traefik" {
 			"traefik-instance" = "main"
 		}
 
-		resources = {
+		resources = var.limit_resources ? {
 			limits = {
 				memory = "${local.service_traefik.resources.memory}Mi"
 				cpu = (
@@ -52,7 +52,7 @@ resource "helm_release" "traefik" {
 					: "${local.service_traefik.resources.cpu}m"
 				)
 			}
-		}
+		} : null
 
 		additionalArguments = [
 			"--providers.http.endpoint=http://rivet-api-route.rivet-service.svc.cluster.local/traefik/config/core?token=${module.traefik_secrets.values["rivet/api_route/token"]}",

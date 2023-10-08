@@ -82,10 +82,11 @@ pub enum ClusterKind {
 		#[serde(default = "default_api_route_port")]
 		api_route_port: u16,
 
-		/// Restricts the resources of the core services so there are more resources availble for
-		/// compiling code.
+		/// Enable restricting the resources for Kubernetes services.
+		///
+		/// Disabled by default since this doesn't play well with development machines.
 		#[serde(default)]
-		restrict_service_resources: bool,
+		limit_resources: bool,
 	},
 	#[serde(rename = "distributed")]
 	Distributed {},

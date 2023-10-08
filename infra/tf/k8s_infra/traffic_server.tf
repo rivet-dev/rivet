@@ -168,14 +168,18 @@ resource "kubernetes_stateful_set" "traffic_server" {
 						timeout_seconds = 2
 					}
 
-					resources {
-						limits = {
-							memory = "${local.service_traffic_server.resources.memory}Mi"
-							cpu = (
+					dynamic "resources" {
+						for_each = var.limit_resources ? [0] : []
+
+						content {
+							limits = {
+								memory = "${local.service_traffic_server.resources.memory}Mi"
+								cpu = (
 								local.service_traffic_server.resources.cpu_cores > 0 ?
 								"${local.service_traffic_server.resources.cpu_cores * 1000}m"
 								: "${local.service_traffic_server.resources.cpu}m"
-							)
+								)
+							}
 						}
 					}
 

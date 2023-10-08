@@ -3,12 +3,12 @@ locals {
 		volumeClaimTemplate = {
 			spec = {
 				storageClassName = var.k8s_storage_class
-				resources = {
+				resources = var.limit_resources ? {
 					requests = {
 						# TODO: Allow configuring
 						storage = "10Gi"
 					}
-				}
+				} : null
 			}
 		}
 	}
@@ -46,7 +46,7 @@ resource "helm_release" "prometheus" {
 
 				storageSpec = local.prometheus_storage
 			
-				resources = {
+				resources = var.limit_resources ? {
 					limits = {
 						memory = "${local.service_prometheus.resources.memory}Mi"
 						cpu = (
@@ -55,7 +55,7 @@ resource "helm_release" "prometheus" {
 							: "${local.service_prometheus.resources.cpu}m"
 						)
 					}
-				}
+				} : null
 
 				# Monitor all namespaces
 				podMonitorNamespaceSelector = { any = true }

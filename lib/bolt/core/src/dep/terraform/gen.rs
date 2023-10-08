@@ -430,6 +430,7 @@ async fn vars(ctx: &ProjectContext) {
 		}),
 	);
 	vars.insert("k8s_health_port".into(), json!(dep::k8s::gen::HEALTH_PORT));
+	vars.insert("limit_resources".into(), json!(ctx.limit_resources()));
 
 	vars.insert(
 		"cdn_cache_size_gb".into(),

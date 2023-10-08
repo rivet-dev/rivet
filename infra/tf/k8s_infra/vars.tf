@@ -110,6 +110,10 @@ variable "k8s_health_port" {
 	type = number
 }
 
+variable "limit_resources" {
+	type = bool
+}
+
 # MARK: S3
 variable "s3_default_provider" {
 	type = string

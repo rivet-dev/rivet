@@ -153,15 +153,19 @@ resource "kubernetes_deployment" "imagor" {
 						timeout_seconds = 2
 					}
 
-					resources {
-						limits = {
-							memory = "${local.service_imagor.resources.memory}Mi"
-							cpu = (
-								local.service_imagor.resources.cpu_cores > 0 ?
-								"${local.service_imagor.resources.cpu_cores * 1000}m"
-								: "${local.service_imagor.resources.cpu}m"
-							)
-							"ephemeral-storage" = "${local.ephemeral_disk}M"
+					dynamic "resources" {
+						for_each = var.limit_resources ? [0] : []
+
+						content {
+							limits = {
+								memory = "${local.service_imagor.resources.memory}Mi"
+								cpu = (
+									local.service_imagor.resources.cpu_cores > 0 ?
+									"${local.service_imagor.resources.cpu_cores * 1000}m"
+									: "${local.service_imagor.resources.cpu}m"
+								)
+								"ephemeral-storage" = "${local.ephemeral_disk}M"
+							}
 						}
 					}
 				}

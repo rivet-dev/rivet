@@ -47,7 +47,7 @@ resource "helm_release" "clickhouse" {
 			replicaCount = 1
 		}
 
-		resources = {
+		resources = var.limit_resources ? {
 			limits = {
 				memory = "${local.service_clickhouse.resources.memory}Mi"
 				cpu = (
@@ -56,7 +56,7 @@ resource "helm_release" "clickhouse" {
 					: "${local.service_clickhouse.resources.cpu}m"
 				)
 			}
-		}
+		} : null
 
 		tls = {
 			enabled = true

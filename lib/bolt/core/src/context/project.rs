@@ -503,6 +503,16 @@ impl ProjectContextData {
 			.join("kubeconfig")
 			.join(format!("{}.yml", self.ns_id()))
 	}
+
+	/// If the Kubernetes pods have resource limits imposed.
+	pub fn limit_resources(&self) -> bool {
+		match self.ns().cluster.kind {
+			config::ns::ClusterKind::SingleNode {
+				limit_resources, ..
+			} => limit_resources,
+			config::ns::ClusterKind::Distributed { .. } => true,
+		}
+	}
 }
 
 impl ProjectContextData {

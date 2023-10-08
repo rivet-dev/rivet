@@ -75,12 +75,12 @@ resource "kubectl_manifest" "karpenter_provisioner" {
 					values = ["on-demand"]
 				},
 			]
-			limits = {
+			limits = var.limit_resources ? {
 				resources = {
 					cpu = 1000
 					memory = "1000Gi"
 				}
-			}
+			} : null
 			providerRef = {
 				name = "default"
 			}
