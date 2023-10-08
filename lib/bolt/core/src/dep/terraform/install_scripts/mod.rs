@@ -54,7 +54,7 @@ pub async fn gen(
 
 fn gg_traefik_static_config(server: &Server, api_route_token: &str) -> String {
 	let http_provider_endpoint = format!(
-		"http://127.0.0.1:5001/traefik/config/core?token={api_route_token}&region={region}",
+		"http://127.0.0.1:5001/traefik/config/game-guard?token={api_route_token}&region={region}",
 		region = server.region_id
 	);
 
