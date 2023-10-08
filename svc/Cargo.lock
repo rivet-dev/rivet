@@ -4524,6 +4524,8 @@ dependencies = [
  "nomad-client",
  "nomad-util",
  "prost 0.10.4",
+ "region-get",
+ "reqwest",
  "rivet-operation",
  "rivet-util-job",
  "sqlx",
