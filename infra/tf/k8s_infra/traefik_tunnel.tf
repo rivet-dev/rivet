@@ -2,17 +2,20 @@ locals {
 	# Specify what services to expose via the tunnel server
 	tunnel_services = {
 		"nomad" = {
-			exposed_port = 5000
 			service = "nomad-server"
-			service_namespace = "nomad"
+			service_namespace = kubernetes_namespace.nomad.metadata[0].name
 			service_port = 4647
 		}
 		"api-route" = {
-			exposed_port = 5001
 			service = "rivet-api-route"
-			service_namespace = "rivet-service"
+			service_namespace = kubernetes_namespace.rivet_service.metadata[0].name
 			service_port = 80
 		}
+		# "vector" = {
+		# 	service = "vector"
+		# 	service_namespace = kubernetes_namespace.vector.metadata[0].name
+		# 	service_port = 80
+		# }
 	}
 }
 
@@ -35,35 +38,30 @@ resource "helm_release" "traefik_tunnel" {
 		image = {
 			tag = "v3.0.0-beta3"
 		}
-		ports = merge(
+		ports = {
 			# Disable default ports
-			{
-				web = {
-					expose = false
-				},
-				websecure = {
-					expose = false
-				},
+			web = {
+				expose = false
 			},
-			# Expose tunnel ports
-			{
-				for k, v in local.tunnel_services:
-				k => {
-					port = v.exposed_port
-					expose = true
-					exposedPort = v.exposed_port
-					protocol = "TCP"
-					tls = {
-						enabled = true
-						options = "ingress-${k}"
-					}
+			websecure = {
+				expose = false
+			},
+
+			# Expose tunnel
+			tunnel = {
+				port = 5000
+				expose = true
+				exposedPort = 5000
+				protocol = "TCP"
+				tls = {
+					enabled = true
+					options = "ingress-tunnel"
 				}
 			}
-		)
+		}
 
 		tlsOptions = {
-			for k, v in local.tunnel_services:
-			"ingress-${k}" => {
+			"ingress-tunnel" = {
 				curvePreferences = [ "CurveP384" ]
 
 				clientAuth = {
@@ -134,12 +132,12 @@ resource "kubectl_manifest" "traefik_nomad_router" {
 		}
 
 		spec = {
-			entryPoints = [each.key]
+			entryPoints = ["tunnel"]
 
 			routes = [
 				{
 					kind = "Rule"
-					match = "HostSNI(`*`)"
+					match = "HostSNI(`${each.key}.tunnel.rivet.gg`)"
 					services = [
 						{
 							name = each.value.service
@@ -154,7 +152,7 @@ resource "kubectl_manifest" "traefik_nomad_router" {
 			tls = {
 				secretName = "ingress-tls-cert-tunnel-server"
 				options = {
-					name = "ingress-${each.key}",
+					name = "ingress-tunnel",
 					namespace = "traefik-tunnel"
 				}
 

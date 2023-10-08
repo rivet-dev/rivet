@@ -64,6 +64,7 @@ pub struct TraefikInstance {
 }
 
 pub struct ServerTransport {
+	pub server_name: String,
 	pub root_cas: Vec<String>,
 	pub certs: Vec<Cert>,
 }
@@ -116,9 +117,10 @@ pub fn traefik_instance(config: TraefikInstance) -> String {
 		let mut transport_config = formatdoc!(
 			r#"
 			[tcp.serversTransports.{transport_id}.tls]
-				serverName = "tunnel.rivet.gg"
+				serverName = "{server_name}"
 				rootCAs = [{root_cas}]
 			"#,
+			server_name = transport.server_name
 		);
 
 		// Write root CAs
@@ -169,73 +171,78 @@ pub fn traefik_instance(config: TraefikInstance) -> String {
 	script
 }
 
+const TUNNEL_SERVICES: &[&'static str] = &["nomad", "api-route", "vector"];
+
 pub fn traefik_tunnel(
 	ctx: &ProjectContext,
 	k8s_infra: &crate::dep::terraform::output::K8sInfra,
 	tls: &crate::dep::terraform::output::Tls,
 ) -> String {
+	// Build transports for each service
+	let mut tcp_server_transports = HashMap::new();
+	for service in TUNNEL_SERVICES {
+		tcp_server_transports.insert(
+			service.to_string(),
+			ServerTransport {
+				server_name: format!("{service}.tunnel.rivet.gg"),
+				root_cas: vec![(*tls.root_ca_cert_pem).clone()],
+				certs: vec![(*tls.tls_cert_locally_signed_job).clone()],
+			},
+		);
+	}
+
 	traefik_instance(TraefikInstance {
 		name: "tunnel".into(),
 		static_config: tunnel_traefik_static_config(),
 		dynamic_config: tunnel_traefik_dynamic_config(&*k8s_infra.traefik_tunnel_external_ip),
 		tls_certs: Default::default(),
-		tcp_server_transports: hashmap! {
-			"tunnel".into() => ServerTransport {
-				root_cas: vec![
-					(*tls.root_ca_cert_pem).clone()
-				],
-				certs: vec![
-					(*tls.tls_cert_locally_signed_job).clone()
-				]
-			}
-		},
+		tcp_server_transports,
 	})
 }
 
 fn tunnel_traefik_static_config() -> String {
-	formatdoc!(
+	let mut config = formatdoc!(
 		r#"
-		[entryPoints.nomad]
-			address = "127.0.0.1:5000"
-
-		[entryPoints.api_route]
-			address = "127.0.0.1:5001"
-
 		[providers]
 			[providers.file]
 				directory = "/etc/tunnel/dynamic"
 		"#
-	)
+	);
+
+	for (i, service) in TUNNEL_SERVICES.iter().enumerate() {
+		config.push_str(&formatdoc!(
+			r#"
+			[entryPoints.{service}]
+				address = "127.0.0.1:{port}"
+			"#,
+			port = 5000 + i
+		))
+	}
+
+	config
 }
 
 fn tunnel_traefik_dynamic_config(tunnel_external_ip: &str) -> String {
-	formatdoc!(
-		r#"
-		[tcp.routers.nomad]
-			entryPoints = ["nomad"]
-			rule = "HostSNI(`*`)"
-			service = "nomad"
+	let mut config = String::new();
+	for (i, service) in TUNNEL_SERVICES.iter().enumerate() {
+		config.push_str(&formatdoc!(
+			r#"
+			[tcp.routers.{service}]
+				entryPoints = ["{service}"]
+				rule = "HostSNI(`*`)"  # Match all ingress, unrelated to the outbound TLS
+				service = "{service}"
 
-		[tcp.routers.api_route]
-			entryPoints = ["api_route"]
-			rule = "HostSNI(`*`)"
-			service = "api_route"
+			[tcp.services.{service}.loadBalancer]
+				serversTransport = "{service}"
 
-		[tcp.services.nomad.loadBalancer]
-			serversTransport = "tunnel"
+				[[tcp.services.{service}.loadBalancer.servers]]
+					address = "{tunnel_external_ip}:5000"
+					tls = true
+			"#
+		))
+	}
 
-			[[tcp.services.nomad.loadBalancer.servers]]
-				address = "{tunnel_external_ip}:5000"
-				tls = true
-
-		[tcp.services.api_route.loadBalancer]
-			serversTransport = "tunnel"
-
-			[[tcp.services.api_route.loadBalancer.servers]]
-				address = "{tunnel_external_ip}:5001"
-				tls = true
-		"#,
-	)
+	config
 }
 
 pub async fn traffic_server(ctx: &ProjectContext) -> Result<String> {

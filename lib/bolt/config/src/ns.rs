@@ -75,12 +75,9 @@ pub enum ClusterKind {
 		/// Port to expose Minio on. Exposed to localhost. Not used if DNS is enabled.
 		#[serde(default = "default_minio_port")]
 		minio_port: u16,
-		/// Port to expose the Nomad server on. Exposed to localhost.
-		#[serde(default = "default_nomad_port")]
-		nomad_port: u16,
-		/// Port to expose api-route on. Exposed to localhost.
-		#[serde(default = "default_api_route_port")]
-		api_route_port: u16,
+		/// Port to expose the tunnel on. Exposed to localhost.
+		#[serde(default = "default_tunnel_port")]
+		tunnel_port: u16,
 
 		/// Enable restricting the resources for Kubernetes services.
 		///
@@ -622,10 +619,6 @@ fn default_minio_port() -> u16 {
 	9000
 }
 
-fn default_nomad_port() -> u16 {
+fn default_tunnel_port() -> u16 {
 	5000
-}
-
-fn default_api_route_port() -> u16 {
-	5001
 }

@@ -302,7 +302,7 @@ resource "kubernetes_stateful_set" "nomad_server" {
 resource "kubernetes_config_map" "nomad_server_sidecar_traefik_config" {
 	metadata {
 		name = "nomad-server-sidecar-traefik"
-		namespace = "nomad"
+		namespace = kubernetes_namespace.nomad.metadata[0].name
 	}
 
 	data = {

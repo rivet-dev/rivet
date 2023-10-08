@@ -154,8 +154,7 @@ async fn vars(ctx: &ProjectContext) {
 			api_http_port,
 			api_https_port,
 			minio_port,
-			nomad_port,
-			api_route_port,
+			tunnel_port,
 			..
 		} => {
 			vars.insert("deploy_method_local".into(), json!(true));
@@ -163,8 +162,7 @@ async fn vars(ctx: &ProjectContext) {
 			vars.insert("public_ip".into(), json!(public_ip));
 			vars.insert("api_http_port".into(), json!(api_http_port));
 			vars.insert("api_https_port".into(), json!(api_https_port));
-			vars.insert("nomad_port".into(), json!(nomad_port));
-			vars.insert("api_route_port".into(), json!(api_route_port));
+			vars.insert("tunnel_port".into(), json!(tunnel_port));
 
 			// Expose Minio on a dedicated port if DNS not enabled
 			if config.dns.is_none() && config.s3.providers.minio.is_some() {

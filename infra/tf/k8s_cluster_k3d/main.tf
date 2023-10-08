@@ -51,19 +51,11 @@ resource "k3d_cluster" "main" {
 
 	}
 
-	# Nomad (TCP)
+	# Tunnel
 	port {
 		host = "0.0.0.0"
-		host_port = var.nomad_port
+		host_port = var.tunnel_port
 		container_port = 5000
-		node_filters = ["server:0"]
-	}
-
-	# api-route (TCP)
-	port {
-		host = "0.0.0.0"
-		host_port = var.api_route_port
-		container_port = 5001
 		node_filters = ["server:0"]
 	}
 

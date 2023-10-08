@@ -151,8 +151,7 @@ impl ProjectContextData {
 				api_http_port,
 				api_https_port,
 				minio_port,
-				nomad_port,
-				api_route_port,
+				tunnel_port,
 				..
 			} = self.ns().cluster.kind
 			{
