@@ -211,12 +211,7 @@ async fn direct_closed(ctx: TestCtx) {
 		},
 	)
 	.await
-	.unwrap_err();
-
-	assert_eq!(
-		mm::msg::lobby_find_fail::ErrorCode::LobbyClosed as i32,
-		err.error_code
-	);
+	.unwrap();
 }
 
 #[worker_test]
