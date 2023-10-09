@@ -13,20 +13,33 @@ use crate::{
 
 const REDIS_IMAGE: &str = "ghcr.io/rivet-gg/redis:cc3241e";
 
+pub enum LogType {
+	Default,
+	Migration,
+}
+
+pub struct ShellQuery {
+	pub svc: ServiceContext,
+	pub query: Option<String>,
+}
+
 pub struct ShellContext<'a> {
 	pub ctx: &'a ProjectContext,
-	pub svc: &'a ServiceContext,
-	pub query: Option<&'a str>,
 	pub conn: &'a DatabaseConnections,
+	pub queries: &'a [ShellQuery],
+	pub log_type: LogType,
 }
 
 pub async fn shell(ctx: &ProjectContext, svc: &ServiceContext, query: Option<&str>) -> Result<()> {
 	let conn = DatabaseConnections::create(ctx, &[svc.clone()]).await?;
 	let shell_ctx = ShellContext {
 		ctx,
-		svc,
-		query,
 		conn: &conn,
+		queries: &[ShellQuery {
+			svc: svc.clone(),
+			query: query.map(|s| s.to_string()),
+		}],
+		log_type: LogType::Default,
 	};
 
 	match &svc.config().runtime {
@@ -42,10 +55,13 @@ pub async fn shell(ctx: &ProjectContext, svc: &ServiceContext, query: Option<&st
 async fn redis_shell(shell_ctx: ShellContext<'_>) -> Result<()> {
 	let ShellContext {
 		ctx,
-		svc,
 		conn,
-		query,
+		queries,
+		log_type,
 	} = shell_ctx;
+
+	// TODO: Implement multiple queries
+	let ShellQuery { svc, query } = queries.first().unwrap();
 
 	let db_name = svc.redis_db_name();
 	let host = conn.redis_hosts.get(&svc.name()).unwrap();
@@ -73,7 +89,9 @@ async fn redis_shell(shell_ctx: ShellContext<'_>) -> Result<()> {
 		.read_secret_opt(&["redis", &db_name, "password"])
 		.await?;
 
-	rivet_term::status::progress("Connecting to Redis", &db_name);
+	if let LogType::Default = log_type {
+		rivet_term::status::progress("Connecting to Redis", &db_name);
+	}
 
 	if query.is_some() {
 		todo!("cannot pass query to redis shell at the moment");
@@ -89,7 +107,7 @@ async fn redis_shell(shell_ctx: ShellContext<'_>) -> Result<()> {
 	};
 	let cmd = formatdoc!(
 		"
-		sleep 1;
+		sleep 1 &&
 		redis-cli \
 		-h {hostname} \
 		-p {port} \
@@ -171,28 +189,49 @@ async fn redis_shell(shell_ctx: ShellContext<'_>) -> Result<()> {
 pub async fn crdb_shell(shell_ctx: ShellContext<'_>) -> Result<()> {
 	let ShellContext {
 		ctx,
-		svc,
 		conn,
-		query,
+		queries,
+		log_type,
 	} = shell_ctx;
 
-	let db_name = svc.crdb_db_name();
-	let conn = conn.cockroach_host.as_ref().unwrap();
-	let username = ctx.read_secret(&["crdb", "username"]).await?;
-	let password = ctx.read_secret(&["crdb", "password"]).await?;
-	let db_url = format!(
-		"postgres://{}:{}@{}/{}?sslmode=verify-ca&sslrootcert=/local/crdb-ca.crt",
-		username, password, conn, db_name
-	);
+	if let LogType::Default = log_type {
+		rivet_term::status::progress("Connecting to Cockroach", "");
+	}
 
-	rivet_term::status::progress("Connecting to Cockroach", &db_name);
+	// Combine all queries into one command
+	let mut query_cmd = String::new();
+	for ShellQuery { svc, query } in queries {
+		let db_name = svc.crdb_db_name();
+		let conn = conn.cockroach_host.as_ref().unwrap();
+		let username = ctx.read_secret(&["crdb", "username"]).await?;
+		let password = ctx.read_secret(&["crdb", "password"]).await?;
+		let db_url = format!(
+			"postgres://{}:{}@{}/{}?sslmode=verify-ca&sslrootcert=/local/crdb-ca.crt",
+			username, password, conn, db_name
+		);
 
-	let query = if let Some(query) = query {
-		format!("-c '{}'", query.replace('\'', "'\\''"))
-	} else {
-		"".to_string()
-	};
-	let cmd = format!("psql \"{db_url}\" {query}");
+		let query = if let Some(query) = query {
+			format!("-c '{}'", query.replace('\'', "'\\''"))
+		} else {
+			"".to_string()
+		};
+		let cmd = format!("psql \"{db_url}\" {query}");
+
+		if let LogType::Migration = log_type {
+			// Append command
+			if !query_cmd.is_empty() {
+				query_cmd.push_str(" && ");
+			}
+			query_cmd.push_str(&format!("echo Querying {}", svc.name()));
+		}
+
+		// Append command
+		if !query_cmd.is_empty() {
+			query_cmd.push_str(" && ");
+		}
+		query_cmd.push_str(&cmd);
+	}
+
 	let overrides = json!({
 		"apiVersion": "v1",
 		"metadata": {
@@ -204,7 +243,7 @@ pub async fn crdb_shell(shell_ctx: ShellContext<'_>) -> Result<()> {
 					"name": "postgres",
 					"image": "postgres",
 					"command": ["sh", "-c"],
-					"args": [cmd],
+					"args": [query_cmd],
 					"env": [
 						// See https://github.com/cockroachdb/cockroach/issues/37129#issuecomment-600115995
 						{
@@ -262,43 +301,62 @@ pub async fn crdb_shell(shell_ctx: ShellContext<'_>) -> Result<()> {
 pub async fn clickhouse_shell(shell_ctx: ShellContext<'_>, no_db: bool) -> Result<()> {
 	let ShellContext {
 		ctx,
-		svc,
 		conn,
-		query,
+		queries,
+		log_type,
 	} = shell_ctx;
 
-	let db_name = svc.clickhouse_db_name();
-	rivet_term::status::progress("Connecting to ClickHouse", &db_name);
+	if let LogType::Default = log_type {
+		rivet_term::status::progress("Connecting to ClickHouse", "");
+	}
 
-	let user = "default";
-	let password = ctx
-		.read_secret(&["clickhouse", "users", "default", "password"])
-		.await?;
-	let host = conn.clickhouse_host.as_ref().unwrap();
-	let (hostname, port) = host.split_once(":").unwrap();
+	// Combine all queries into one command
+	let mut query_cmd = "sleep 1".to_string();
+	for ShellQuery { svc, query } in queries {
+		let db_name = svc.clickhouse_db_name();
+		let user = "default";
+		let password = ctx
+			.read_secret(&["clickhouse", "users", "default", "password"])
+			.await?;
+		let host = conn.clickhouse_host.as_ref().unwrap();
+		let (hostname, port) = host.split_once(":").unwrap();
 
-	let db_flag = if no_db {
-		"".to_string()
-	} else {
-		format!("--database {db_name}")
-	};
-	let query = if let Some(query) = query {
-		format!("--multiquery '{}'", query.replace('\'', "'\\''"))
-	} else {
-		"".to_string()
-	};
-	let cmd = formatdoc!(
-		"
-		sleep 1;
-		clickhouse-client \
-			--secure \
-			--config-file /local/config.yml \
-			--host {hostname} \
-			--port {port} \
-			--user {user} \
-			--password {password} {db_flag} {query}
-		"
-	);
+		let db_flag = if no_db {
+			"".to_string()
+		} else {
+			format!("--database {db_name}")
+		};
+		let query = if let Some(query) = query {
+			format!("--multiquery '{}'", query.replace('\'', "'\\''"))
+		} else {
+			"".to_string()
+		};
+		let cmd = formatdoc!(
+			"
+			clickhouse-client \
+				--secure \
+				--config-file /local/config.yml \
+				--host {hostname} \
+				--port {port} \
+				--user {user} \
+				--password {password} {db_flag} {query}
+			"
+		);
+
+		if let LogType::Migration = log_type {
+			// Append command
+			if !query_cmd.is_empty() {
+				query_cmd.push_str(" && ");
+			}
+			query_cmd.push_str(&format!("echo Querying {}", svc.name()));
+		}
+
+		// Append command
+		if !query_cmd.is_empty() {
+			query_cmd.push_str(" && ");
+		}
+		query_cmd.push_str(cmd.trim());
+	}
 
 	let overrides = json!({
 		"apiVersion": "v1",
@@ -311,7 +369,7 @@ pub async fn clickhouse_shell(shell_ctx: ShellContext<'_>, no_db: bool) -> Resul
 					"name": "clickhouse",
 					"image": "clickhouse/clickhouse-server",
 					"command": ["sh", "-c"],
-					"args": [cmd],
+					"args": [query_cmd],
 					"stdin": true,
 					"stdinOnce": true,
 					"tty": true,

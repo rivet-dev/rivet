@@ -1,4 +1,4 @@
-use std::{collections::HashMap, path::Path};
+use std::{collections::HashMap, path::Path, sync::Arc};
 
 use anyhow::*;
 use duct::cmd;
@@ -12,7 +12,6 @@ use crate::{
 	utils::{self, DroppablePort},
 };
 
-// TODO: Deprecate
 pub struct DatabaseConnections {
 	pub redis_hosts: HashMap<String, String>,
 	pub cockroach_host: Option<String>,
@@ -24,7 +23,7 @@ impl DatabaseConnections {
 	pub async fn create(
 		ctx: &ProjectContext,
 		services: &[ServiceContext],
-	) -> Result<DatabaseConnections> {
+	) -> Result<Arc<DatabaseConnections>> {
 		match &ctx.ns().cluster.kind {
 			config::ns::ClusterKind::SingleNode { .. } => {
 				DatabaseConnections::create_local(ctx, services).await
@@ -38,7 +37,7 @@ impl DatabaseConnections {
 	async fn create_local(
 		ctx: &ProjectContext,
 		services: &[ServiceContext],
-	) -> Result<DatabaseConnections> {
+	) -> Result<Arc<DatabaseConnections>> {
 		let mut redis_hosts = HashMap::new();
 		let mut cockroach_host = None;
 		let mut clickhouse_host = None;
@@ -80,18 +79,18 @@ impl DatabaseConnections {
 			}
 		}
 
-		Ok(DatabaseConnections {
+		Ok(Arc::new(DatabaseConnections {
 			redis_hosts,
 			cockroach_host,
 			clickhouse_host,
 			clickhouse_config,
-		})
+		}))
 	}
 
 	async fn create_distributed(
 		ctx: &ProjectContext,
 		services: &[ServiceContext],
-	) -> Result<DatabaseConnections> {
+	) -> Result<Arc<DatabaseConnections>> {
 		let mut redis_hosts = HashMap::new();
 		let mut cockroach_host = None;
 		let mut clickhouse_host = None;
@@ -154,12 +153,12 @@ impl DatabaseConnections {
 			}
 		}
 
-		Ok(DatabaseConnections {
+		Ok(Arc::new(DatabaseConnections {
 			redis_hosts,
 			cockroach_host,
 			clickhouse_host,
 			clickhouse_config,
-		})
+		}))
 	}
 
 	/// Returns the URL to use for database migrations.
