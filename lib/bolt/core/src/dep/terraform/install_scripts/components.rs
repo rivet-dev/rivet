@@ -245,6 +245,57 @@ fn tunnel_traefik_dynamic_config(tunnel_external_ip: &str) -> String {
 	config
 }
 
+pub struct VectorConfig {
+	pub prometheus_targets: HashMap<String, VectorPrometheusTarget>,
+}
+
+pub struct VectorPrometheusTarget {
+	pub endpoint: String,
+	pub scrape_interval: usize,
+}
+
+pub fn vector(config: &VectorConfig) -> String {
+	let sources = config
+		.prometheus_targets
+		.keys()
+		.map(|x| format!("\"prometheus_{x}\""))
+		.collect::<Vec<_>>()
+		.join(", ");
+
+	let mut config_str = formatdoc!(
+		r#"
+		[api]
+			enabled = true
+
+		[sinks.vector_sink]
+			type = "vector"
+			inputs = [{sources}]
+			address = "127.0.0.1:5002"
+			healthcheck.enabled = false
+		"#
+	);
+
+	for (
+		key,
+		VectorPrometheusTarget {
+			endpoint,
+			scrape_interval,
+		},
+	) in &config.prometheus_targets
+	{
+		config_str.push_str(&formatdoc!(
+			r#"
+			[sources.prometheus_{key}]
+				type = "prometheus_scrape"
+				endpoints = ["{endpoint}"]
+				scrape_interval_secs = {scrape_interval}
+			"#
+		));
+	}
+
+	include_str!("files/vector.sh").replace("__VECTOR_CONFIG__", &config_str)
+}
+
 pub async fn traffic_server(ctx: &ProjectContext) -> Result<String> {
 	// Write config to files
 	let config = traffic_server_config(ctx).await?;

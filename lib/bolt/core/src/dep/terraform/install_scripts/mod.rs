@@ -1,9 +1,9 @@
-use crate::{context::ProjectContext, dep::terraform::servers::Server};
 use anyhow::Result;
 use indoc::formatdoc;
 use maplit::hashmap;
+use std::collections::HashMap;
 
-use crate::dep::terraform;
+use crate::{context::ProjectContext, dep::terraform, dep::terraform::servers::Server};
 
 pub mod components;
 
@@ -14,13 +14,27 @@ pub async fn gen(
 	tls: &terraform::output::Tls,
 ) -> Result<String> {
 	let mut script = Vec::new();
+
+	let mut prometheus_targets = HashMap::new();
+
+	// MARK: Common (pre)
 	script.push(components::common());
 	script.push(components::node_exporter());
 	script.push(components::sysctl());
+	script.push(components::traefik());
+	script.push(components::traefik_tunnel(ctx, &k8s_infra, &tls));
 
+	prometheus_targets.insert(
+		"node_exporter".into(),
+		components::VectorPrometheusTarget {
+			endpoint: "http://127.0.0.1:9100/metrics".into(),
+			scrape_interval: 15,
+		},
+	);
+
+	// MARK: Game Guard
 	if server.pool_id == "gg" {
 		script.push(components::traefik());
-		script.push(components::traefik_tunnel(ctx, &k8s_infra, &tls));
 		script.push(components::traefik_instance(components::TraefikInstance {
 			name: "game_guard".into(),
 			static_config: gg_traefik_static_config(
@@ -33,19 +47,42 @@ pub async fn gen(
 			},
 			tcp_server_transports: Default::default(),
 		}));
+
+		prometheus_targets.insert(
+			"game_guard".into(),
+			components::VectorPrometheusTarget {
+				endpoint: "http://127.0.0.1:9980/metrics".into(),
+				scrape_interval: 15,
+			},
+		);
 	}
 
+	// MARK: Job
 	if server.pool_id == "job" {
-		script.push(components::traefik());
-		script.push(components::traefik_tunnel(ctx, &k8s_infra, &tls));
 		script.push(components::docker()); // why do we need to install docker and cni plugins?
 		script.push(components::cni_plugins());
 		script.push(components::nomad(server));
+
+		prometheus_targets.insert(
+			"nomad".into(),
+			components::VectorPrometheusTarget {
+				endpoint: "http://127.0.0.1:4646/v1/metrics?format=prometheus".into(),
+				scrape_interval: 15,
+			},
+		);
 	}
 
+	// MARK: ATS
 	if server.pool_id == "ats" {
 		script.push(components::docker());
 		script.push(components::traffic_server(ctx).await?);
+	}
+
+	// MARK: Common (post)
+	if !prometheus_targets.is_empty() {
+		script.push(components::vector(&components::VectorConfig {
+			prometheus_targets,
+		}));
 	}
 
 	let joined = script.join("\n\necho \"======\"\n\n");
@@ -61,11 +98,17 @@ fn gg_traefik_static_config(server: &Server, api_route_token: &str) -> String {
 	let mut config = formatdoc!(
 		r#"
 		[entryPoints]
+			[entryPoints.traefik]
+				address = ":9980"
+
 			[entryPoints.lb-80]
 				address = ":80"
 
 			[entryPoints.lb-443]
 				address = ":443"
+
+		[api]
+			insecure = true
 
 		[metrics.prometheus]
 			# See lib/chirp/metrics/src/buckets.rs

@@ -3,12 +3,12 @@ locals {
 		volumeClaimTemplate = {
 			spec = {
 				storageClassName = var.k8s_storage_class
-				resources = var.limit_resources ? {
+				resources = {
 					requests = {
 						# TODO: Allow configuring
 						storage = "10Gi"
 					}
-				} : null
+				}
 			}
 		}
 	}

@@ -11,11 +11,11 @@ locals {
 			service_namespace = kubernetes_namespace.rivet_service.metadata[0].name
 			service_port = 80
 		}
-		# "vector" = {
-		# 	service = "vector"
-		# 	service_namespace = kubernetes_namespace.vector.metadata[0].name
-		# 	service_port = 80
-		# }
+		"vector" = {
+			service = "vector"
+			service_namespace = kubernetes_namespace.vector.metadata[0].name
+			service_port = 6000
+		}
 	}
 }
 
