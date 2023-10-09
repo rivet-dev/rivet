@@ -63,6 +63,10 @@ lazy_static::lazy_static! {
 	static ref DOMAIN_CDN: Option<String> = std::env::var("RIVET_DOMAIN_CDN").ok();
 	static ref DOMAIN_JOB: Option<String> = std::env::var("RIVET_DOMAIN_JOB").ok();
 	static ref DOMAIN_MAIN_API: Option<String> = std::env::var("RIVET_DOMAIN_MAIN_API").ok();
+	static ref SUPPORT_DEPRECATED_SUBDOMAINS: bool = std::env::var("RIVET_SUPPORT_DEPRECATED_SUBDOMAINS")
+		.ok()
+		.map(|s| s == "1")
+		.unwrap_or_default();
 	static ref ORIGIN_API: Option<String> = std::env::var("RIVET_ORIGIN_API").ok();
 	static ref ORIGIN_HUB: Option<String> = std::env::var("RIVET_ORIGIN_HUB").ok();
 	static ref DNS_PROVIDER: Option<String> = std::env::var("RIVET_DNS_PROVIDER").ok();
@@ -124,6 +128,10 @@ pub fn domain_job() -> Option<&'static str> {
 /// specific subdomain.
 pub fn domain_main_api() -> Option<&'static str> {
 	DOMAIN_MAIN_API.as_ref().map(|x| x.as_str())
+}
+
+pub fn support_deprecated_subdomains() -> bool {
+	*SUPPORT_DEPRECATED_SUBDOMAINS
 }
 
 ///
