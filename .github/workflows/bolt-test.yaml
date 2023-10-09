@@ -1,11 +1,6 @@
 name: bolt-test
 
-on:
-  workflow_dispatch:
-    inputs:
-      version:
-        description: "What's your favorite color?"
-        required: false
+on: push
 
 concurrency:
   group: check-${{ github.ref }}
