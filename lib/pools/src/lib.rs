@@ -150,7 +150,7 @@ async fn crdb_from_env(client_name: String) -> Result<Option<CrdbPool>, Error> {
 					// let client_name = client_name.clone();
 					let url = url.clone();
 					Box::pin(async move {
-						tracing::info!(%url, "crdb connected");
+						tracing::trace!(%url, "crdb connected");
 						// sqlx::query("SET application_name = $1;")
 						// 	.bind(&client_name)
 						// 	.execute(conn)
