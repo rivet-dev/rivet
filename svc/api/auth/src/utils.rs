@@ -28,10 +28,10 @@ fn build_cookie_header(origin: &Url, refresh_token: &str, max_age: i64) -> Globa
 
 	// Build base header
 	let mut header = format!(
-		"{USER_REFRESH_TOKEN_COOKIE}={refresh_token}; Max-Age={max_age}; HttpOnly; Path=/; SameSite={same_site}",
+		"{USER_REFRESH_TOKEN_COOKIE}={refresh_token}; Max-Age={max_age}; HttpOnly; Path=/; SameSite={same_site}; Secure",
 	);
 	if let Some(domain_api) = util::env::domain_main_api() {
-		header.push_str(&format!("; Secure; Domain={domain_api}"))
+		header.push_str(&format!("; Domain={domain_api}"));
 	}
 
 	tracing::info!(?host, ?is_hub, ?same_site, ?header, "built cookie header");
@@ -60,7 +60,7 @@ pub fn refresh_token_header(
 pub fn delete_refresh_token_header(origin: &Url) -> GlobalResult<(HeaderName, HeaderValue)> {
 	Ok((
 		header::SET_COOKIE,
-		header::HeaderValue::from_str(&build_cookie_header(origin, "null", 0)?)
+		header::HeaderValue::from_str(&build_cookie_header(origin, "", 0)?)
 			.map_err(Into::<GlobalError>::into)?,
 	))
 }
