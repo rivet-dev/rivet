@@ -56,11 +56,6 @@ resource "helm_release" "vector" {
 					inputs = ["vector"]
 					address = "0.0.0.0:9598"
 				}
-				stdout = {
-					type = "console"
-					inputs = ["vector"]
-					encoding = { codec = "json" }
-				}
 			}
 		}
 	})]
