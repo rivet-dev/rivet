@@ -744,39 +744,35 @@ async fn resolve_image_artifact_url(
 	)
 	.as_str()
 	{
-		// "s3_direct" => {
-		// 	tracing::info!("using s3 direct delivery");
+		"s3_direct" => {
+			tracing::info!("using s3 direct delivery");
 
-		// 	let bucket = "bucket-build";
-		// 	let bucket_screaming = bucket.to_uppercase().replace('-', "_");
+			let bucket = "bucket-build";
 
-		// 	// Build client
-		// 	let s3_client = s3_util::Client::from_env_opt(
-		// 		bucket,
-		// 		provider,
-		// 		s3_util::EndpointKind::InternalResolved,
-		// 	)
-		// 	.await?;
+			// Build client
+			let s3_client =
+				s3_util::Client::from_env_opt(bucket, provider, s3_util::EndpointKind::External)
+					.await?;
 
-		// 	let upload_id = internal_unwrap!(upload.upload_id).as_uuid();
-		// 	let presigned_req = s3_client
-		// 		.get_object()
-		// 		.bucket(s3_client.bucket())
-		// 		.key(format!("{upload_id}/image.tar"))
-		// 		.presigned(
-		// 			s3_util::aws_sdk_s3::presigning::config::PresigningConfig::builder()
-		// 				.expires_in(std::time::Duration::from_secs(15 * 60))
-		// 				.build()?,
-		// 		)
-		// 		.await?;
+			let upload_id = internal_unwrap!(upload.upload_id).as_uuid();
+			let presigned_req = s3_client
+				.get_object()
+				.bucket(s3_client.bucket())
+				.key(format!("{upload_id}/image.tar"))
+				.presigned(
+					s3_util::aws_sdk_s3::presigning::config::PresigningConfig::builder()
+						.expires_in(std::time::Duration::from_secs(15 * 60))
+						.build()?,
+				)
+				.await?;
 
-		// 	let addr = presigned_req.uri().clone();
+			let addr = presigned_req.uri().clone();
 
-		// 	let addr_str = addr.to_string();
-		// 	tracing::info!(addr = %addr_str, "resolved artifact s3 presigned request");
+			let addr_str = addr.to_string();
+			tracing::info!(addr = %addr_str, "resolved artifact s3 presigned request");
 
-		// 	Ok(addr_str)
-		// }
+			Ok(addr_str)
+		}
 		"traffic_server" => {
 			tracing::info!("using traffic server delivery");
 
