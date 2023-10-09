@@ -751,6 +751,14 @@ impl ServiceContextData {
 		if let Some(x) = project_ctx.domain_main_api() {
 			env.push(("RIVET_DOMAIN_MAIN_API".into(), x));
 		}
+		if let Some(true) = project_ctx
+			.ns()
+			.dns
+			.as_ref()
+			.map(|x| x.deprecated_subdomains)
+		{
+			env.push(("RIVET_SUPPORT_DEPRECATED_SUBDOMAINS".into(), "1".into()));
+		}
 		env.push(("RIVET_ORIGIN_API".into(), project_ctx.origin_api()));
 		env.push(("RIVET_ORIGIN_HUB".into(), project_ctx.origin_hub()));
 

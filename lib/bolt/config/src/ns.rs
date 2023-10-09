@@ -577,13 +577,13 @@ pub struct Matchmaker {
 
 #[derive(Serialize, Deserialize, Clone, Debug, Default, strum_macros::Display)]
 pub enum MatchmakerLobbyDeliveryMethod {
-	#[serde(rename = "s3_direct")]
-	#[strum(serialize = "s3_direct")]
-	#[default]
-	S3Direct,
 	#[serde(rename = "traffic_server")]
 	#[strum(serialize = "traffic_server")]
+	#[default]
 	TrafficServer,
+	#[serde(rename = "s3_direct")]
+	#[strum(serialize = "s3_direct")]
+	S3Direct,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
