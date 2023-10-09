@@ -583,7 +583,7 @@ async fn run_test(
 		driver: ExecServiceDriver::LocalBinaryArtifact {
 			exec_path: container_path,
 			// Limit test running in parallel & filter the tests that get ran
-			args: ["--test-threads".into(), "4".into(), filters].concat(),
+			args: [vec!["--test-threads".to_string(), "2".to_string()], filters].concat(),
 		},
 	};
 
