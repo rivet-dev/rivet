@@ -1,7 +1,8 @@
 name: bolt-test
 
 on:
-  workflow_dispatch:
+  - push: {}
+  - workflow_dispatch:
     inputs:
       version:
         description: "What's your favorite color?"
