@@ -40,6 +40,15 @@ locals {
 					retry_interval = "10s"
 				}
 			}
+
+			limits {
+				# Increase max connections for Prometheus monitors
+				http_max_conns_per_client = 4096
+
+				# All Nomad clients come from the same IP address, so we need to
+				# disable the max RPC connections per IP
+				rpc_max_conns_per_client = 0
+			}
 		EOT
 	}
 	nomad_checksum_configmap = sha256(jsonencode(local.nomad_server_configmap_data))
