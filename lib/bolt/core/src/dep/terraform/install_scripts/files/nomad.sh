@@ -167,7 +167,7 @@ cat << 'EOF' > /opt/cni/config/rivet-job.conflist
 		},
 		{
 			"type": "portmap",
-			"capabilities": {"portMappings": true},
+			"capabilities": { "portMappings": true },
 			"snat": true
 		}
 	]
