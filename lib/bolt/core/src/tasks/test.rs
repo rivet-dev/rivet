@@ -1,17 +1,19 @@
-use anyhow::*;
-use futures_util::{StreamExt, TryStreamExt};
-use rand::{distributions::Alphanumeric, seq::SliceRandom, thread_rng, Rng};
-use rivet_term::console::style;
-use serde_json::{json, Value};
-use std::sync::{
-	atomic::{AtomicUsize, Ordering},
-	Arc,
-};
 use std::{
 	collections::{HashMap, HashSet},
 	path::Path,
+	sync::{
+		atomic::{AtomicUsize, Ordering},
+		Arc,
+	},
 	time::{Duration, Instant},
 };
+
+use anyhow::*;
+use futures_util::{StreamExt, TryStreamExt};
+use indoc::indoc;
+use rand::{distributions::Alphanumeric, seq::SliceRandom, thread_rng, Rng};
+use rivet_term::console::style;
+use serde_json::{json, Value};
 use tokio::{fs, process::Command};
 use uuid::Uuid;
 
@@ -36,112 +38,6 @@ use crate::{
 const TEST_TIMEOUT: Duration = Duration::from_secs(75);
 
 const PARALLEL_TESTS: usize = 8;
-
-struct TestCleanupManager {
-	project_ctx: ProjectContext,
-	nomad_ctx: NomadCtx,
-
-	/// List of dispatched job names that already before the test starts. Used
-	/// to diff with the new dispatched jobs to stop jobs that were dispatched
-	/// in a test.
-	existing_dispatched_jobs: Vec<nomad::api::JobSummary>,
-
-	/// List of Fly apps that already exist before the test starts. Used to diff with apps created
-	/// afterwares to know what apps to clean up.
-	existing_fly_apps: Option<HashSet<String>>,
-}
-
-impl TestCleanupManager {
-	async fn setup(project_ctx: ProjectContext, nomad_ctx: NomadCtx) -> Result<TestCleanupManager> {
-		let existing_dispatched_jobs = nomad::api::list_jobs_with_prefix(&nomad_ctx, "job-")
-			.await?
-			.into_iter()
-			.filter(|x| x.id.contains("/dispatch-") || x.id.contains("/periodic-"))
-			.collect::<Vec<_>>();
-
-		let existing_fly_apps = if project_ctx.ns().fly.is_some() {
-			Some(
-				fly::api::list_apps(&project_ctx)
-					.await?
-					.into_iter()
-					.map(|x| x.name)
-					.collect::<HashSet<_>>(),
-			)
-		} else {
-			None
-		};
-
-		Ok(TestCleanupManager {
-			project_ctx,
-			nomad_ctx,
-			existing_dispatched_jobs,
-			existing_fly_apps,
-		})
-	}
-
-	async fn run(self) -> Result<()> {
-		self.cleanup_nomad().await?;
-		self.cleanup_fly().await?;
-
-		Ok(())
-	}
-
-	async fn cleanup_nomad(&self) -> Result<()> {
-		// Fetch list of current dispatched jobs
-		let new_dispatched_jobs = nomad::api::list_jobs_with_prefix(&self.nomad_ctx, "job-")
-			.await?
-			.into_iter()
-			.filter(|x| x.id.contains("/dispatch-") || x.id.contains("/periodic-"))
-			.collect::<Vec<_>>();
-
-		// Diff the jobs
-		let old_ids = self
-			.existing_dispatched_jobs
-			.iter()
-			.map(|x| x.id.as_str())
-			.collect::<HashSet<&str>>();
-		let current_ids = new_dispatched_jobs
-			.iter()
-			.map(|x| x.id.as_str())
-			.collect::<HashSet<&str>>();
-		let created_ids = &current_ids - &old_ids;
-
-		if !created_ids.is_empty() {
-			rivet_term::status::info("Cleaning up jobs", format!("{} jobs", created_ids.len()));
-			for id in &created_ids {
-				nomad::api::stop_job(&self.nomad_ctx, id).await?;
-			}
-		}
-
-		Ok(())
-	}
-
-	async fn cleanup_fly(&self) -> Result<()> {
-		let Some(existing_apps) = &self.existing_fly_apps else {
-			return Ok(());
-		};
-
-		// Fetch list of existing apps
-		let current_apps = fly::api::list_apps(&self.project_ctx)
-			.await?
-			.into_iter()
-			.map(|x| x.name)
-			.collect::<HashSet<_>>();
-
-		// Diff the apps
-		let created_apps = &current_apps - existing_apps;
-
-		if !created_apps.is_empty() {
-			rivet_term::status::info("Cleaning up apps", format!("{} apps", created_apps.len()));
-			for name in &created_apps {
-				// Delete app
-				fly::api::delete_app(&self.project_ctx, &name).await?;
-			}
-		}
-
-		Ok(())
-	}
-}
 
 // pub async fn test_all(
 // 	_ctx: &ProjectContext,
@@ -465,69 +361,36 @@ pub async fn test_services<T: AsRef<str>>(
 	// Print results
 	print_results(&test_results);
 
+	// Cleanup jobs
+	{
+		eprintln!();
+		rivet_term::status::progress("Cleaning up jobs", "");
+		let cleanup_cmd = indoc!(
+			r#"
+			nomad job status |
+			grep -v -e "ID" -e "No running jobs" |
+			cut -f1 -d ' ' |
+			xargs -I {} nomad job stop -purge -detach {}
+			"#
+		);
+		let mut cmd = Command::new("kubectl");
+		cmd.args(&[
+			"exec",
+			"service/nomad-server",
+			"-n",
+			"nomad",
+			"--",
+			"sh",
+			"-c",
+			&cleanup_cmd,
+		]);
+		cmd.env("KUBECONFIG", ctx.gen_kubeconfig_path());
+
+		let status = cmd.status().await?;
+		ensure!(status.success());
+	}
+
 	Ok(())
-}
-
-fn print_results(test_results: &[TestResult]) {
-	eprintln!();
-	rivet_term::status::success("Complete", "");
-
-	let passed_count = test_results
-		.iter()
-		.filter(|test_result| matches!(test_result.status, TestStatus::Pass))
-		.count();
-	if passed_count > 0 {
-		eprintln!(
-			"  {}: {}/{}",
-			style("PASS").italic().green(),
-			passed_count,
-			test_results.len()
-		);
-	}
-
-	let failed_count = test_results
-		.iter()
-		.filter(|test_result| matches!(test_result.status, TestStatus::TestFailed))
-		.count();
-	if failed_count > 0 {
-		eprintln!(
-			"  {}: {}/{}",
-			style("FAIL").italic().red(),
-			failed_count,
-			test_results.len()
-		);
-	}
-
-	let timeout_count = test_results
-		.iter()
-		.filter(|test_result| matches!(test_result.status, TestStatus::Timeout))
-		.count();
-	if timeout_count > 0 {
-		eprintln!(
-			"  {}: {}/{}",
-			style("TIMEOUT").italic().red(),
-			timeout_count,
-			test_results.len()
-		);
-	}
-
-	let unknown_count = test_results
-		.iter()
-		.filter(|test_result| {
-			matches!(
-				test_result.status,
-				TestStatus::UnknownExitCode(_) | TestStatus::UnknownError(_)
-			)
-		})
-		.count();
-	if unknown_count > 0 {
-		eprintln!(
-			"  {}: {}/{}",
-			style("UNKNOWN").italic().red(),
-			unknown_count,
-			test_results.len()
-		);
-	}
 }
 
 #[derive(Debug)]
@@ -706,6 +569,68 @@ async fn tail_pod(ctx: &ProjectContext, svc_name: &str) -> Result<TestStatus> {
 			}
 			_ => bail!("unexpected pod status: {}", output_str),
 		}
+	}
+}
+
+fn print_results(test_results: &[TestResult]) {
+	eprintln!();
+	rivet_term::status::success("Complete", "");
+
+	let passed_count = test_results
+		.iter()
+		.filter(|test_result| matches!(test_result.status, TestStatus::Pass))
+		.count();
+	if passed_count > 0 {
+		eprintln!(
+			"  {}: {}/{}",
+			style("PASS").italic().green(),
+			passed_count,
+			test_results.len()
+		);
+	}
+
+	let failed_count = test_results
+		.iter()
+		.filter(|test_result| matches!(test_result.status, TestStatus::TestFailed))
+		.count();
+	if failed_count > 0 {
+		eprintln!(
+			"  {}: {}/{}",
+			style("FAIL").italic().red(),
+			failed_count,
+			test_results.len()
+		);
+	}
+
+	let timeout_count = test_results
+		.iter()
+		.filter(|test_result| matches!(test_result.status, TestStatus::Timeout))
+		.count();
+	if timeout_count > 0 {
+		eprintln!(
+			"  {}: {}/{}",
+			style("TIMEOUT").italic().red(),
+			timeout_count,
+			test_results.len()
+		);
+	}
+
+	let unknown_count = test_results
+		.iter()
+		.filter(|test_result| {
+			matches!(
+				test_result.status,
+				TestStatus::UnknownExitCode(_) | TestStatus::UnknownError(_)
+			)
+		})
+		.count();
+	if unknown_count > 0 {
+		eprintln!(
+			"  {}: {}/{}",
+			style("UNKNOWN").italic().red(),
+			unknown_count,
+			test_results.len()
+		);
 	}
 }
 
