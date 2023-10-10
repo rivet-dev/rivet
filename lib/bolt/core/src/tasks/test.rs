@@ -465,6 +465,13 @@ pub async fn test_services<T: AsRef<str>>(
 	// Print results
 	print_results(&test_results);
 
+	let all_succeeded = test_results
+		.iter()
+		.all(|res| matches!(res.status, TestStatus::Pass));
+	if !all_succeeded {
+		bail!("at least one test failure occurred");
+	}
+
 	Ok(())
 }
 
