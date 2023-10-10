@@ -23,9 +23,6 @@ locals {
 			bind_addr = "0.0.0.0"
 			disable_update_check = true
 
-			# The Nomad server IP changes, so we need to leave the cluster when terminating
-			# leave_on_terminate = true
-
 			advertise {
 				rpc = "127.0.0.1:__LOCAL_PORT_RPC__"
 				serf = "127.0.0.1:__LOCAL_PORT_SERF__"
