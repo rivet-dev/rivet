@@ -1,7 +1,8 @@
 use anyhow::*;
 use duct::cmd;
-use std::path::Path;
+use futures_util::StreamExt;
 use std::{io::Write, os::unix::fs::PermissionsExt};
+use std::{path::Path, sync::Arc};
 use tokio::task::block_in_place;
 
 use crate::{context::ProjectContext, dep::terraform};
@@ -80,6 +81,33 @@ pub async fn pool(ctx: &ProjectContext, pool: &str, command: Option<&str>) -> Re
 
 	let ssh_key = TempSshKey::new(&ctx, "server").await?;
 	ip(ctx, &server.public_ipv4, &ssh_key, command).await?;
+
+	Ok(())
+}
+
+pub async fn pool_all(ctx: &ProjectContext, pool: &str, command: &str) -> Result<()> {
+	let ssh_key = Arc::new(TempSshKey::new(&ctx, "server").await?);
+
+	let tf_pools = terraform::output::read_pools(&ctx).await;
+
+	futures_util::stream::iter(
+		tf_pools
+			.servers
+			.value
+			.into_iter()
+			.filter(|x| x.1.pool_id == pool),
+	)
+	.map(|(name, server)| {
+		let ctx = ctx.clone();
+		let ssh_key = ssh_key.clone();
+		async move {
+			let res = ip(&ctx, &server.public_ipv4, &ssh_key, Some(command)).await;
+			println!("{name}: {res:?}");
+		}
+	})
+	.buffer_unordered(32)
+	.collect::<Vec<_>>()
+	.await;
 
 	Ok(())
 }
