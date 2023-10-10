@@ -3,13 +3,14 @@ use futures_util::{StreamExt, TryStreamExt};
 use rand::{seq::SliceRandom, thread_rng};
 use rivet_term::console::style;
 
-use std::sync::{
-	atomic::{AtomicUsize, Ordering},
-	Arc,
-};
+use indoc::indoc;
 use std::{
 	collections::{HashMap, HashSet},
 	path::Path,
+	sync::{
+		atomic::{AtomicUsize, Ordering},
+		Arc,
+	},
 	time::{Duration, Instant},
 };
 use tokio::process::Command;
@@ -140,6 +141,36 @@ pub async fn test_services<T: AsRef<str>>(
 	// Print results
 	print_results(&test_results);
 
+	// Cleanup jobs
+	{
+		eprintln!();
+		rivet_term::status::progress("Cleaning up jobs", "");
+		let cleanup_cmd = indoc!(
+			r#"
+			nomad job status |
+				grep -v -e "ID" -e "No running jobs" |
+				cut -f1 -d ' ' |
+				xargs -I {} nomad job stop -detach {}
+			"#
+		);
+		let mut cmd = Command::new("kubectl");
+		cmd.args(&[
+			"exec",
+			"service/nomad-server",
+			"-n",
+			"nomad",
+			"--",
+			"sh",
+			"-c",
+			&cleanup_cmd,
+		]);
+		cmd.env("KUBECONFIG", ctx.gen_kubeconfig_path());
+
+		let status = cmd.status().await?;
+		ensure!(status.success());
+	}
+
+	// Error on failure
 	let all_succeeded = test_results
 		.iter()
 		.all(|res| matches!(res.status, TestStatus::Pass));
@@ -148,68 +179,6 @@ pub async fn test_services<T: AsRef<str>>(
 	}
 
 	Ok(())
-}
-
-fn print_results(test_results: &[TestResult]) {
-	eprintln!();
-	rivet_term::status::success("Complete", "");
-
-	let passed_count = test_results
-		.iter()
-		.filter(|test_result| matches!(test_result.status, TestStatus::Pass))
-		.count();
-	if passed_count > 0 {
-		eprintln!(
-			"  {}: {}/{}",
-			style("PASS").italic().green(),
-			passed_count,
-			test_results.len()
-		);
-	}
-
-	let failed_count = test_results
-		.iter()
-		.filter(|test_result| matches!(test_result.status, TestStatus::TestFailed))
-		.count();
-	if failed_count > 0 {
-		eprintln!(
-			"  {}: {}/{}",
-			style("FAIL").italic().red(),
-			failed_count,
-			test_results.len()
-		);
-	}
-
-	let timeout_count = test_results
-		.iter()
-		.filter(|test_result| matches!(test_result.status, TestStatus::Timeout))
-		.count();
-	if timeout_count > 0 {
-		eprintln!(
-			"  {}: {}/{}",
-			style("TIMEOUT").italic().red(),
-			timeout_count,
-			test_results.len()
-		);
-	}
-
-	let unknown_count = test_results
-		.iter()
-		.filter(|test_result| {
-			matches!(
-				test_result.status,
-				TestStatus::UnknownExitCode(_) | TestStatus::UnknownError(_)
-			)
-		})
-		.count();
-	if unknown_count > 0 {
-		eprintln!(
-			"  {}: {}/{}",
-			style("UNKNOWN").italic().red(),
-			unknown_count,
-			test_results.len()
-		);
-	}
 }
 
 #[derive(Debug)]
@@ -370,6 +339,68 @@ async fn tail_pod(ctx: &ProjectContext, svc_name: &str) -> Result<TestStatus> {
 			}
 			_ => bail!("unexpected pod status: {}", output_str),
 		}
+	}
+}
+
+fn print_results(test_results: &[TestResult]) {
+	eprintln!();
+	rivet_term::status::success("Complete", "");
+
+	let passed_count = test_results
+		.iter()
+		.filter(|test_result| matches!(test_result.status, TestStatus::Pass))
+		.count();
+	if passed_count > 0 {
+		eprintln!(
+			"  {}: {}/{}",
+			style("PASS").italic().green(),
+			passed_count,
+			test_results.len()
+		);
+	}
+
+	let failed_count = test_results
+		.iter()
+		.filter(|test_result| matches!(test_result.status, TestStatus::TestFailed))
+		.count();
+	if failed_count > 0 {
+		eprintln!(
+			"  {}: {}/{}",
+			style("FAIL").italic().red(),
+			failed_count,
+			test_results.len()
+		);
+	}
+
+	let timeout_count = test_results
+		.iter()
+		.filter(|test_result| matches!(test_result.status, TestStatus::Timeout))
+		.count();
+	if timeout_count > 0 {
+		eprintln!(
+			"  {}: {}/{}",
+			style("TIMEOUT").italic().red(),
+			timeout_count,
+			test_results.len()
+		);
+	}
+
+	let unknown_count = test_results
+		.iter()
+		.filter(|test_result| {
+			matches!(
+				test_result.status,
+				TestStatus::UnknownExitCode(_) | TestStatus::UnknownError(_)
+			)
+		})
+		.count();
+	if unknown_count > 0 {
+		eprintln!(
+			"  {}: {}/{}",
+			style("UNKNOWN").italic().red(),
+			unknown_count,
+			test_results.len()
+		);
 	}
 }
 
