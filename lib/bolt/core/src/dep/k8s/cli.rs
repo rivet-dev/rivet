@@ -83,3 +83,29 @@ pub async fn apply_specs(ctx: &ProjectContext, specs: Vec<serde_json::Value>) ->
 
 	Ok(())
 }
+
+pub struct LogsOpts {
+	pub follow: bool,
+	pub stream: LogStream,
+}
+
+pub enum LogStream {
+	StdOut,
+	StdErr,
+}
+
+pub async fn logs(ctx: &ProjectContext, service_name: &str, opts: &LogsOpts) -> Result<()> {
+	let mut cmd = tokio::process::Command::new("kubectl");
+	cmd.arg("logs")
+		.arg("-n")
+		.arg("rivet-service")
+		.arg(format!("deployment/rivet-{service_name}"));
+	if opts.follow {
+		cmd.arg("-f");
+	}
+	cmd.env("KUBECONFIG", ctx.gen_kubeconfig_path());
+
+	cmd.output().await?;
+
+	Ok(())
+}

@@ -8,7 +8,7 @@ use crate::context::ProjectContext;
 ///
 /// This is used to automatically generate `terraform_remote_state` blocks
 /// for each Terraform plan with the correct state backend.
-pub fn dependency_graph(ctx: &ProjectContext) -> HashMap<&'static str, Vec<RemoteState>> {
+pub fn dependency_graph(_ctx: &ProjectContext) -> HashMap<&'static str, Vec<RemoteState>> {
 	hashmap! {
 		"dns" => vec![RemoteStateBuilder::default().plan_id("pools").build().unwrap(), RemoteStateBuilder::default().plan_id("k8s_infra").build().unwrap()],
 		"redis_aws" => vec![

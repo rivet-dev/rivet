@@ -46,7 +46,6 @@ pub enum ExecServiceDriver {
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum SpecType {
-	Pod,
 	Deployment,
 	Job,
 	CronJob,
@@ -410,14 +409,6 @@ pub async fn gen_svc(exec_ctx: &ExecServiceContext) -> Vec<serde_json::Value> {
 	});
 
 	match spec_type {
-		SpecType::Pod => {
-			specs.push(json!({
-				"apiVersion": "v1",
-				"kind": "Pod",
-				"metadata": metadata,
-				"spec": pod_spec
-			}));
-		}
 		SpecType::Deployment => {
 			specs.push(json!({
 				"apiVersion": "apps/v1",
