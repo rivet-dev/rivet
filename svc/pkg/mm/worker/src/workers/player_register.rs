@@ -31,7 +31,7 @@ async fn worker(ctx: &OperationContext<mm::msg::player_register::Message>) -> Gl
 					players.remove_ts,
 					lobbies.namespace_id
 				FROM db_mm_state.players
-				INNER JOIN lobbies ON lobbies.lobby_id = players.lobby_id
+				INNER JOIN db_mm_state.lobbies ON lobbies.lobby_id = players.lobby_id
 				WHERE player_id = $1
 			),
 			_update AS (
