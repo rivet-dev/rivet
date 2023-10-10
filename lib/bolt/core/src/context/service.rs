@@ -245,9 +245,7 @@ impl ServiceContextData {
 	pub fn has_migrations(&self) -> bool {
 		matches!(
 			self.config().runtime,
-			// TODO: Add back ClickHouse
-			// RuntimeKind::CRDB { .. } | RuntimeKind::ClickHouse { .. }
-			RuntimeKind::CRDB { .. }
+			RuntimeKind::CRDB { .. } | RuntimeKind::ClickHouse { .. }
 		)
 	}
 

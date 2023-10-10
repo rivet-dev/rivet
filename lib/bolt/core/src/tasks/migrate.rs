@@ -1,5 +1,5 @@
 use std::{
-	collections::HashMap,
+	collections::{HashMap, HashSet},
 	fmt,
 	path::{Path, PathBuf},
 	time::Duration,
@@ -8,6 +8,7 @@ use std::{
 use anyhow::*;
 use bolt_config::service::RuntimeKind;
 use duct::cmd;
+use futures_util::{StreamExt, TryStreamExt};
 use indoc::formatdoc;
 use serde_json::json;
 use tokio::{fs, io::AsyncWriteExt, task::block_in_place};
@@ -34,6 +35,12 @@ impl fmt::Display for ClickhouseRole {
 			ClickhouseRole::Readonly => write!(f, "readonly"),
 		}
 	}
+}
+
+struct MigrateCmd {
+	service: ServiceContext,
+	database_url: String,
+	cmd: String,
 }
 
 pub async fn create(
@@ -272,31 +279,24 @@ pub async fn up_all(ctx: &ProjectContext) -> Result<()> {
 
 pub async fn up(ctx: &ProjectContext, services: &[ServiceContext]) -> Result<()> {
 	let conn = DatabaseConnections::create(ctx, services).await?;
+	let mut crdb_queries = Vec::new();
+	let mut clickhouse_queries = Vec::new();
 
 	// Run migrations
 	for svc in services {
-		eprintln!();
-
 		match &svc.config().runtime {
 			RuntimeKind::CRDB { .. } => {
 				let db_name = svc.crdb_db_name();
-				rivet_term::status::progress("Migrating Cockroach", &db_name);
-
-				rivet_term::status::progress("Creating database", &db_name);
 				let query = format!("CREATE DATABASE IF NOT EXISTS \"{db_name}\";");
-				db::crdb_shell(db::ShellContext {
-					ctx,
-					svc,
-					conn: &conn,
-					query: Some(&query),
-				})
-				.await?;
+
+				crdb_queries.push(db::ShellQuery {
+					svc: svc.clone(),
+					query: Some(query),
+				});
 			}
 			RuntimeKind::ClickHouse { .. } => {
 				let db_name = svc.clickhouse_db_name();
-				rivet_term::status::progress("Migrating ClickHouse", &db_name);
 
-				rivet_term::status::progress("Creating roles", &db_name);
 				let query = formatdoc!(
 					"
 					CREATE ROLE IF NOT EXISTS admin;
@@ -316,20 +316,11 @@ pub async fn up(ctx: &ProjectContext, services: &[ServiceContext]) -> Result<()>
 					ON {db_name}.* TO readonly;
 					"
 				);
-				db::clickhouse_shell(
-					db::ShellContext {
-						ctx,
-						svc,
-						conn: &conn,
-						query: Some(&query),
-					},
-					true,
-				)
-				.await?;
+				clickhouse_queries.push(db::ShellQuery {
+					svc: svc.clone(),
+					query: Some(query),
+				});
 
-				rivet_term::status::progress("Creating users", &db_name);
-
-				let mut query = String::new();
 				for (username, role) in [
 					("bolt", ClickhouseRole::Admin),
 					("chirp", ClickhouseRole::Write),
@@ -339,49 +330,85 @@ pub async fn up(ctx: &ProjectContext, services: &[ServiceContext]) -> Result<()>
 						.read_secret(&["clickhouse", "users", username, "password"])
 						.await?;
 
-					query.push_str(&formatdoc!(
+					let query = formatdoc!(
 						"
 						CREATE USER
 						IF NOT EXISTS {username}
 						IDENTIFIED WITH sha256_password BY '{password}';
 						GRANT {role} TO {username};
 						"
-					));
+					);
+					clickhouse_queries.push(db::ShellQuery {
+						svc: svc.clone(),
+						query: Some(query),
+					});
 				}
 
-				db::clickhouse_shell(
-					db::ShellContext {
-						ctx,
-						svc,
-						conn: &conn,
-						query: Some(&query),
-					},
-					true,
-				)
-				.await?;
-
-				rivet_term::status::progress("Creating database", &db_name);
 				let query = format!("CREATE DATABASE IF NOT EXISTS \"{db_name}\";");
+				clickhouse_queries.push(db::ShellQuery {
+					svc: svc.clone(),
+					query: Some(query),
+				});
+			}
+			x @ _ => bail!("cannot migrate this type of service: {x:?}"),
+		}
+	}
+
+	// Run pre-migration queries in parallel
+	rivet_term::status::progress("Running pre-migrations", "");
+	tokio::try_join!(
+		async {
+			if !crdb_queries.is_empty() {
+				db::crdb_shell(db::ShellContext {
+					ctx,
+					conn: &conn,
+					queries: &crdb_queries,
+					log_type: db::LogType::Migration,
+				})
+				.await?;
+			}
+			Ok(())
+		},
+		async {
+			if !clickhouse_queries.is_empty() {
 				db::clickhouse_shell(
 					db::ShellContext {
 						ctx,
-						svc,
 						conn: &conn,
-						query: Some(&query),
+						queries: &clickhouse_queries,
+						log_type: db::LogType::Migration,
 					},
 					true,
 				)
 				.await?;
 			}
-			x @ _ => bail!("cannot migrate this type of service: {x:?}"),
+
+			Ok(())
 		}
+	)?;
 
-		rivet_term::status::progress("Running migrations", "");
-		let database_url = conn.migrate_db_url(svc).await?;
-		migration(ctx, svc, &["up"], database_url).await?;
+	eprintln!();
+	rivet_term::status::progress("Running migrations", "");
+	let migrations = futures_util::stream::iter(services.iter())
+		.map(|svc| {
+			let conn = conn.clone();
 
-		rivet_term::status::success("Migrated", "");
-	}
+			async move {
+				let database_url = conn.migrate_db_url(svc).await?;
+
+				Ok(MigrateCmd {
+					service: svc.clone(),
+					database_url,
+					cmd: "up".to_string(),
+				})
+			}
+		})
+		.buffer_unordered(8)
+		.try_collect::<Vec<_>>()
+		.await?;
+	migration(ctx, &migrations).await?;
+
+	rivet_term::status::success("Migrated", "");
 
 	Ok(())
 }
@@ -392,9 +419,11 @@ pub async fn down(ctx: &ProjectContext, service: &ServiceContext, num: usize) ->
 
 	migration(
 		ctx,
-		service,
-		&["down", num.to_string().as_str()],
-		database_url,
+		&[MigrateCmd {
+			service: service.clone(),
+			database_url,
+			cmd: format!("down {}", num.to_string().as_str()),
+		}],
 	)
 	.await
 }
@@ -405,9 +434,11 @@ pub async fn force(ctx: &ProjectContext, service: &ServiceContext, num: usize) -
 
 	migration(
 		ctx,
-		service,
-		&["force", num.to_string().as_str()],
-		database_url,
+		&[MigrateCmd {
+			service: service.clone(),
+			database_url,
+			cmd: format!("force {}", num.to_string().as_str()),
+		}],
 	)
 	.await
 }
@@ -416,16 +447,78 @@ pub async fn drop(ctx: &ProjectContext, service: &ServiceContext) -> Result<()> 
 	let conn = DatabaseConnections::create(ctx, &[service.clone()]).await?;
 	let database_url = conn.migrate_db_url(service).await?;
 
-	migration(ctx, service, &["drop", "-f"], database_url).await
+	migration(
+		ctx,
+		&[MigrateCmd {
+			service: service.clone(),
+			database_url,
+			cmd: "drop -f".to_string(),
+		}],
+	)
+	.await
 }
 
-pub async fn migration(
-	ctx: &ProjectContext,
-	svc: &ServiceContext,
-	migration_cmd: &[&str],
-	database_url: String,
-) -> Result<()> {
-	upload_migrations(ctx, svc).await?;
+async fn migration(ctx: &ProjectContext, migration_cmds: &[MigrateCmd]) -> Result<()> {
+	// Combine all commands into one
+	let migration_cmd = migration_cmds
+		.iter()
+		.map(|cmd| {
+			let name = cmd.service.name();
+
+			format!(
+				"echo Migrating {name} && migrate -database \"{}\" -path /local/migrations/{name} {}",
+				cmd.database_url, cmd.cmd
+			)
+		})
+		.collect::<Vec<_>>()
+		.join(" && ");
+	let mut mounts = vec![json!({
+		"name": "crdb-ca",
+		"mountPath": "/local/crdb-ca.crt",
+		"subPath": "crdb-ca.crt"
+	})];
+	let mut volumes = vec![json!({
+		"name": "crdb-ca",
+		"configMap": {
+			"name": "crdb-ca",
+			"defaultMode": 420,
+			"items": [
+				{
+					"key": "ca.crt",
+					"path": "crdb-ca.crt"
+				}
+			]
+		}
+	})];
+
+	// Upload all migration files as config maps
+	futures_util::stream::iter(
+		migration_cmds
+			.iter()
+			.map(|cmd| upload_migrations(ctx, &cmd.service)),
+	)
+	.buffer_unordered(8)
+	.try_collect::<Vec<_>>()
+	.await?;
+
+	// Add volumes
+	for cmd in migration_cmds {
+		let svc = &cmd.service;
+		let label = format!("{}-migrations", svc.name());
+
+		mounts.push(json!({
+			"name": label,
+			"mountPath": format!("/local/migrations/{}", svc.name()),
+			"readOnly": true
+		}));
+		volumes.push(json!({
+			"name": label,
+			"configMap": {
+				"name": label,
+				"defaultMode": 420
+			}
+		}));
+	}
 
 	let overrides = json!({
 		"apiVersion": "v1",
@@ -437,49 +530,16 @@ pub async fn migration(
 				{
 					"name": "migrate",
 					"image": MIGRATE_IMAGE,
-					"command": ["migrate", "-database", database_url, "-path", "/local/migrations"],
-					"args": migration_cmd,
+					"command": ["sh", "-c", migration_cmd],
 					// // See https://github.com/golang-migrate/migrate/issues/494
 					// "env": [{
 					// 	"name": "TZ",
 					// 	"value": "UTC"
 					// }],
-					"volumeMounts": [
-						{
-							"name": "migrations",
-							"mountPath": "/local/migrations",
-							"readOnly": true
-						},
-						{
-							"name": "crdb-ca",
-							"mountPath": "/local/crdb-ca.crt",
-							"subPath": "crdb-ca.crt"
-						}
-					]
+					"volumeMounts": mounts
 				}
 			],
-			"volumes": [
-				{
-					"name": "migrations",
-					"configMap": {
-						"name": format!("{}-migrations", svc.name()),
-						"defaultMode": 420
-					}
-				},
-				{
-					"name": "crdb-ca",
-					"configMap": {
-						"name": "crdb-ca",
-						"defaultMode": 420,
-						"items": [
-							{
-								"key": "ca.crt",
-								"path": "crdb-ca.crt"
-							}
-						]
-					}
-				}
-			]
+			"volumes": volumes
 		}
 	});
 
