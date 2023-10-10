@@ -7,14 +7,12 @@ use tokio::fs;
 use crate::{
 	config::{
 		ns,
-		service::{RuntimeKind, ServiceDomain, UploadPolicy},
+		service::{RuntimeKind, UploadPolicy},
 	},
 	context::ProjectContext,
 	dep,
 	utils::media_resize,
 };
-
-use super::net;
 
 pub async fn project(ctx: &ProjectContext) {
 	// Init all Terraform projects in parallel
@@ -351,8 +349,6 @@ async fn vars(ctx: &ProjectContext) {
 
 		for svc_ctx in all_svc {
 			if let RuntimeKind::Redis { persistent } = svc_ctx.config().runtime {
-				let name = svc_ctx.name();
-
 				redis_svcs.insert(
 					svc_ctx.redis_db_name(),
 					json!({

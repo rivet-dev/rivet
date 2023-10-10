@@ -1,6 +1,6 @@
 use anyhow::{Context, Result};
 use indoc::formatdoc;
-use maplit::hashmap;
+
 use std::collections::HashMap;
 use tokio::fs;
 
@@ -174,7 +174,7 @@ pub fn traefik_instance(config: TraefikInstance) -> String {
 const TUNNEL_SERVICES: &[&'static str] = &["nomad", "api-route", "vector"];
 
 pub fn traefik_tunnel(
-	ctx: &ProjectContext,
+	_ctx: &ProjectContext,
 	k8s_infra: &crate::dep::terraform::output::K8sInfra,
 	tls: &crate::dep::terraform::output::Tls,
 ) -> String {
@@ -224,7 +224,7 @@ fn tunnel_traefik_static_config() -> String {
 
 fn tunnel_traefik_dynamic_config(tunnel_external_ip: &str) -> String {
 	let mut config = String::new();
-	for (i, service) in TUNNEL_SERVICES.iter().enumerate() {
+	for service in TUNNEL_SERVICES.iter() {
 		config.push_str(&formatdoc!(
 			r#"
 			[tcp.routers.{service}]
@@ -351,18 +351,18 @@ async fn traffic_server_config(ctx: &ProjectContext) -> Result<Vec<(String, Stri
 	// Remap & S3
 	let mut remap = String::new();
 	let (default_s3_provider, _) = ctx.default_s3_provider()?;
-	if let Some(p) = &ctx.ns().s3.providers.minio {
+	if ctx.ns().s3.providers.minio.is_some() {
 		let output = gen_s3_provider(ctx, s3_util::Provider::Minio, default_s3_provider).await?;
 		remap.push_str(&output.append_remap);
 		config_files.extend(output.config_files);
 	}
-	if let Some(p) = &ctx.ns().s3.providers.backblaze {
+	if ctx.ns().s3.providers.backblaze.is_some() {
 		let output =
 			gen_s3_provider(ctx, s3_util::Provider::Backblaze, default_s3_provider).await?;
 		remap.push_str(&output.append_remap);
 		config_files.extend(output.config_files);
 	}
-	if let Some(p) = &ctx.ns().s3.providers.aws {
+	if ctx.ns().s3.providers.aws.is_some() {
 		let output = gen_s3_provider(ctx, s3_util::Provider::Aws, default_s3_provider).await?;
 		remap.push_str(&output.append_remap);
 		config_files.extend(output.config_files);

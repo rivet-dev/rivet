@@ -7,9 +7,9 @@ use std::{
 use tokio::{fs, sync::Mutex};
 
 use crate::{
-	config::{self, service::ServiceDomain},
+	config::{self},
 	context,
-	dep::{self, terraform},
+	dep::{self},
 	utils,
 };
 
@@ -151,7 +151,6 @@ impl ProjectContextData {
 				api_http_port,
 				api_https_port,
 				minio_port,
-				tunnel_port,
 				..
 			} = self.ns().cluster.kind
 			{

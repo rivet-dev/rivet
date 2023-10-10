@@ -1,5 +1,5 @@
 use anyhow::*;
-use ipnet::Ipv4Net;
+
 use serde::Serialize;
 use std::{collections::HashMap, net::Ipv4Addr};
 

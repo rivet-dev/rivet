@@ -10,11 +10,7 @@ use tokio::task::block_in_place;
 use toml_edit::value;
 use uuid::Uuid;
 
-use crate::{
-	config::{ns, service::RuntimeKind},
-	context::ProjectContextData,
-	utils,
-};
+use crate::{config::service::RuntimeKind, context::ProjectContextData, utils};
 
 /// Comment attached to the head of the namespace config.
 const NS_CONFIG_COMMENT: &str = r#"# Documentation: doc/bolt/config/NAMESPACE.md

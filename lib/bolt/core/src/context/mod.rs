@@ -1,5 +1,3 @@
-use uuid::Uuid;
-
 mod project;
 mod service;
 

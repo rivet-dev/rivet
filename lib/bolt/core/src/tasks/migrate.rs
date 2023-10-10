@@ -1,9 +1,4 @@
-use std::{
-	collections::{HashMap, HashSet},
-	fmt,
-	path::{Path, PathBuf},
-	time::Duration,
-};
+use std::{collections::HashMap, fmt, time::Duration};
 
 use anyhow::*;
 use bolt_config::service::RuntimeKind;

@@ -8,7 +8,7 @@ use std::{
 
 use crate::context::ProjectContext;
 
-use super::{net, pools::Pool, regions::Region};
+use super::{pools::Pool, regions::Region};
 
 #[derive(Serialize, Clone)]
 pub struct Server {
@@ -43,7 +43,7 @@ pub fn build_servers(
 		let pool_id = &pool.pool;
 		let version_id = &pool.version;
 
-		let region = regions
+		let _region = regions
 			.get(region_id)
 			.expect(&format!("missing region: {region_id}"));
 		let pool_config = pools
@@ -79,7 +79,7 @@ pub fn build_servers(
 				.nth(i + 1)
 				.unwrap();
 
-			let mut server = Server {
+			let server = Server {
 				region_id: region_id.clone(),
 				pool_id: pool_id.clone(),
 				version_id: version_id.clone(),

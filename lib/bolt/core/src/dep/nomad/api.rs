@@ -1,14 +1,8 @@
 use anyhow::*;
 use reqwest::Method;
 use serde::Deserialize;
-use std::sync::Arc;
-use tokio::sync::Mutex;
 
-use crate::{
-	context::ProjectContext,
-	dep::nomad::{self, NomadCtx},
-	utils,
-};
+use crate::dep::nomad::NomadCtx;
 
 #[derive(Debug, Deserialize)]
 pub struct JobSummary {

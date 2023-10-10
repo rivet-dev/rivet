@@ -1,15 +1,13 @@
-use std::{collections::HashMap, path::Path, sync::Arc};
+use std::{collections::HashMap, sync::Arc};
 
 use anyhow::*;
 use duct::cmd;
-use indoc::{formatdoc, indoc};
-use tokio::fs;
+use indoc::indoc;
 
 use crate::{
 	config::{self, service::RuntimeKind},
 	context::{ProjectContext, ServiceContext},
-	dep::{self, terraform},
-	utils::{self, DroppablePort},
+	dep::terraform,
 };
 
 pub struct DatabaseConnections {
@@ -35,7 +33,7 @@ impl DatabaseConnections {
 	}
 
 	async fn create_local(
-		ctx: &ProjectContext,
+		_ctx: &ProjectContext,
 		services: &[ServiceContext],
 	) -> Result<Arc<DatabaseConnections>> {
 		let mut redis_hosts = HashMap::new();
@@ -122,19 +120,6 @@ impl DatabaseConnections {
 				}
 				RuntimeKind::CRDB { .. } => {
 					if cockroach_host.is_none() {
-						let ca_cert = cmd!(
-							"sh",
-							"-c",
-							indoc!(
-								"
-								kubectl get configmap \
-								-n rivet-service crdb-ca \
-								-o jsonpath='{.data.ca\\.crt}'
-								"
-							)
-						)
-						.read()?;
-
 						let crdb_data = terraform::output::read_crdb(ctx).await;
 						cockroach_host = Some(format!("{}:{}", *crdb_data.host, *crdb_data.port));
 					}

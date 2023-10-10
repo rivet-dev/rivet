@@ -1,6 +1,5 @@
 use std::{
 	collections::HashMap,
-	fmt,
 	path::{Path, PathBuf},
 };
 
@@ -13,7 +12,7 @@ use tokio::{fs, task::block_in_place};
 use crate::{
 	config::{
 		self, ns,
-		service::{ServiceDomain, ServiceKind, ServiceRouter},
+		service::{ServiceKind, ServiceRouter},
 	},
 	context::{ProjectContext, RunContext, ServiceContext},
 	dep::terraform::{self, output::read_k8s_cluster_aws},

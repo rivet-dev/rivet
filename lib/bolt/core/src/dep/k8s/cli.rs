@@ -3,10 +3,7 @@ use std::collections::HashSet;
 use anyhow::{ensure, Context, Result};
 use tokio::{io::AsyncWriteExt, process::Command};
 
-use crate::{
-	context::ProjectContext,
-	utils::{self, command_helper::CommandHelper},
-};
+use crate::context::ProjectContext;
 
 pub async fn apply_specs(ctx: &ProjectContext, specs: Vec<serde_json::Value>) -> Result<()> {
 	// Handle job redeployment

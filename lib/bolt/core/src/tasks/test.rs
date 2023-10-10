@@ -1,8 +1,8 @@
 use anyhow::*;
 use futures_util::{StreamExt, TryStreamExt};
-use rand::{distributions::Alphanumeric, seq::SliceRandom, thread_rng, Rng};
+use rand::{seq::SliceRandom, thread_rng};
 use rivet_term::console::style;
-use serde_json::{json, Value};
+
 use std::sync::{
 	atomic::{AtomicUsize, Ordering},
 	Arc,
@@ -12,12 +12,11 @@ use std::{
 	path::Path,
 	time::{Duration, Instant},
 };
-use tokio::{fs, process::Command};
-use uuid::Uuid;
+use tokio::process::Command;
 
 use crate::{
 	config::{ns, service::RuntimeKind},
-	context::{BuildContext, ProjectContext, RunContext, ServiceContext},
+	context::{ProjectContext, RunContext},
 	dep::{
 		self,
 		cargo::{self, cli::TestBinary},
@@ -25,8 +24,6 @@ use crate::{
 		k8s::gen::{ExecServiceContext, ExecServiceDriver},
 		nomad::{self, NomadCtx},
 	},
-	tasks,
-	utils::{self, command_helper::CommandHelper, DroppablePort},
 };
 
 /// Timeout for tests.

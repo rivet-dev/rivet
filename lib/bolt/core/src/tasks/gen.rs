@@ -45,7 +45,6 @@ pub async fn generate_project(ctx: &ProjectContext) {
 async fn generate_root(path: &Path) {
 	// Generate Cargo files
 	let cargo_toml_path = path.join("svc").join("Cargo.toml");
-	let cargo_lock_path = path.join("svc").join("Cargo.lock");
 	let api_path = path.join("svc").join("api");
 	let pkg_path = path.join("svc").join("pkg");
 
