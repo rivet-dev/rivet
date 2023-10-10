@@ -95,7 +95,9 @@ net.ipv4.tcp_syn_retries = 2
 net.ipv4.tcp_synack_retries = 2
 vm.min_free_kbytes = 65536
 EOF
-
 chown root:root /etc/sysctl.d/10-rivet.conf
 chmod 644 /etc/sysctl.d/10-rivet.conf
+
+# Reload settings
+sysctl --system
 

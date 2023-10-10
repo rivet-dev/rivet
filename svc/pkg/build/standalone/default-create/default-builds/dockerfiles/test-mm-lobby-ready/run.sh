@@ -30,7 +30,8 @@ nc -z -v -w5 $hostname_resolved $parsed_port || exit 1
 
 READY_URL="$RIVET_API_URL/matchmaker/lobbies/ready"
 echo "Sending ready to $READY_URL"
-curl --verbose --fail --insecure --request POST --header "Content-Type: application/json" --header "Authorization: Bearer $RIVET_TOKEN" --data "{}" "$READY_URL"
+# Force IPv6 to test the CNI configuration
+curl -6 --verbose --fail --insecure --request POST --header "Content-Type: application/json" --header "Authorization: Bearer $RIVET_TOKEN" --data "{}" "$READY_URL"
 
 echo "Success, waiting indefinitely"
 tail -f /dev/null

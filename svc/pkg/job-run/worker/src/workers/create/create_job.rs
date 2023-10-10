@@ -321,7 +321,7 @@ mod tests {
 				name: Some("test".into()),
 				networks: Some(vec![NetworkResource {
 					// So we can access it from the test
-					mode: Some("bridge".into()),
+					mode: Some("cni/rivet-job".into()),
 					dynamic_ports: Some(vec![Port {
 						label: Some("http".into()),
 						value: None,

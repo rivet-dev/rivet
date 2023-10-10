@@ -269,7 +269,7 @@ pub fn gen_lobby_docker_job(
 			})),
 			networks: Some(vec![NetworkResource {
 				mode: match network_mode {
-					LobbyRuntimeNetworkMode::Bridge => Some("bridge".into()),
+					LobbyRuntimeNetworkMode::Bridge => Some("cni/rivet-job".into()),
 					LobbyRuntimeNetworkMode::Host => Some("host".into()),
 				},
 				dynamic_ports: Some(dynamic_ports),

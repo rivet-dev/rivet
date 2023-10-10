@@ -9,6 +9,19 @@
 # !!!!!!!!!!!!!!!!!!!!!!
 version="1.6.0"
 
+# Allow container traffic to be routed through IP tables
+#
+# See https://developer.hashicorp.com/nomad/docs/install#post-installation-steps
+cat << 'EOF' > /etc/sysctl.d/20-nomad.conf
+net.bridge.bridge-nf-call-arptables = 1
+net.bridge.bridge-nf-call-ip6tables = 1
+net.bridge.bridge-nf-call-iptables = 1
+EOF
+chown root:root /etc/sysctl.d/10-rivet.conf
+chmod 644 /etc/sysctl.d/10-rivet.conf
+
+sysctl --system
+
 # Download and unzip nomad
 mkdir -p /opt/nomad-$version
 curl -L -o /tmp/nomad.zip https://releases.hashicorp.com/nomad/$version/nomad_${version}_linux_amd64.zip
@@ -112,6 +125,54 @@ plugin "docker" {
 EOF
 
 chmod 640 /etc/nomad.d/*.hcl
+
+# Dual-stack CNI config
+#
+# Modified from default Nomad configuration: https://developer.hashicorp.com/nomad/docs/networking/cni#nomad-s-bridge-configuration
+cat << 'EOF' > /opt/cni/config/rivet-job.conflist
+{
+	"cniVersion": "0.4.0",
+	"name": "rivet-job",
+	"plugins": [
+		{
+			"type": "loopback"
+		},
+		{
+			"type": "bridge",
+			"bridge": "nomad",
+			"ipMasq": true,
+			"isGateway": true,
+			"forceAddress": true,
+			"hairpinMode": false,
+			"ipam": {
+				"type": "host-local",
+				"ranges": [
+					[
+						{ "subnet": "172.26.64.0/20" }
+					],
+					[
+						{ "subnet": "fd00:db8:2::/64" }
+					]
+				],
+				"routes": [
+					{ "dst": "0.0.0.0/0" },
+					{ "dst": "::/0" }
+				]
+			}
+		},
+		{
+			"type": "firewall",
+			"backend": "iptables",
+			"iptablesAdminChainName": "RIVET-ADMIN"
+		},
+		{
+			"type": "portmap",
+			"capabilities": {"portMappings": true},
+			"snat": true
+		}
+	]
+}
+EOF
 
 # Systemd service
 cat << 'EOF' > /etc/systemd/system/nomad.service

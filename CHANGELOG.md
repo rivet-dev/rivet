@@ -18,6 +18,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 -  **Infra** Support for running ClickHouse on ClickHouse Cloud
 -  **Infra** Support for running CockroachDB on Cockroach Cloud
 -  **Infra** Support for running Redis on AWS ElastiCache & MemoryDB
+-  **Infra** Dual-stack CNI configuration for game containers
 
 ### Changed
 
