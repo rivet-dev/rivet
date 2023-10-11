@@ -87,7 +87,7 @@ resource "kubectl_manifest" "minio_ingress_route" {
 		kind = "IngressRoute"
 
 		metadata = {
-			name = "minio"
+			name = "minio-${each.key}"
 			namespace = kubernetes_namespace.minio[0].metadata.0.name
 			labels = {
 				"traefik-instance" = "main"
