@@ -308,7 +308,7 @@ pub async fn traffic_server(ctx: &ProjectContext) -> Result<String> {
 	let script = include_str!("files/traffic_server.sh")
 		.replace(
 			"__IMAGE__",
-			"ghcr.io/rivet-gg/apache-traffic-server:378f44b",
+			"ghcr.io/rivet-gg/apache-traffic-server:44ef76a",
 		)
 		.replace("__CONFIG__", &config_script);
 
