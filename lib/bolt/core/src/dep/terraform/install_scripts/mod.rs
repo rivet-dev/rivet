@@ -123,7 +123,7 @@ fn gg_traefik_static_config(server: &Server, api_route_token: &str) -> String {
 
 			[providers.http]
 				endpoint = "{http_provider_endpoint}"
-				pollInterval = "1s"
+				pollInterval = "0.25s"
 		"#
 	);
 
