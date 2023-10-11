@@ -148,68 +148,68 @@ async fn validate_build(
 		backend::upload::Provider::Aws => s3_util::Provider::Aws,
 	};
 
-	// prewarm ATS cache
-	let path = format!(
-		"/s3-cache/{provider}/{namespace}-bucket-build/{upload_id}/image.tar",
-		provider = heck::KebabCase::to_kebab_case(provider.to_string().as_str()),
-		namespace = util::env::namespace(),
-	);
-	prewarm_ats_cache(&path).await;
+	// // prewarm ATS cache
+	// let path = format!(
+	// 	"/s3-cache/{provider}/{namespace}-bucket-build/{upload_id}/image.tar",
+	// 	provider = heck::KebabCase::to_kebab_case(provider.to_string().as_str()),
+	// 	namespace = util::env::namespace(),
+	// );
+	// prewarm_ats_cache(&path).await;
 
 	Ok((upload_id, build.image_tag.clone()))
 }
 
-// TODO: Validate ports are within a given range and don't use our reserved ports, since we need a reserved port range for Rivet sidecars to run
+// // TODO: Validate ports are within a given range and don't use our reserved ports, since we need a reserved port range for Rivet sidecars to run
 
-/// Prewarms the ATS cache with the given resources in order to make the future requests faster.
-#[tracing::instrument]
-async fn prewarm_ats_cache(path: &str) {
-	// TODO: This is hardcoded
-	let ats_urls = vec!["10.0.25.2", "10.0.50.2"];
-	for ats_url in &ats_urls {
-		let url = format!("http://{ats_url}:9300{path}");
-		let spawn_res = tokio::task::Builder::new()
-			.name("mm_config_version_prepare::prewarm_ats_cache")
-			.spawn(
-				async move {
-					match prewarm_ats_cache_inner(&url).await {
-						Ok(_) => {}
-						Err(err) => {
-							tracing::error!(%err, "failed to prewarm ats cache");
-						}
-					}
-				}
-				.in_current_span(),
-			);
-		if let Err(err) = spawn_res {
-			tracing::error!(?err, "failed to spawn prewarm_ats_cache_inner task");
-		}
-	}
-}
+// /// Prewarms the ATS cache with the given resources in order to make the future requests faster.
+// #[tracing::instrument]
+// async fn prewarm_ats_cache(path: &str) {
+// 	// TODO: This is hardcoded
+// 	let ats_urls = vec!["10.0.25.2", "10.0.50.2"];
+// 	for ats_url in &ats_urls {
+// 		let url = format!("http://{ats_url}:9300{path}");
+// 		let spawn_res = tokio::task::Builder::new()
+// 			.name("mm_config_version_prepare::prewarm_ats_cache")
+// 			.spawn(
+// 				async move {
+// 					match prewarm_ats_cache_inner(&url).await {
+// 						Ok(_) => {}
+// 						Err(err) => {
+// 							tracing::error!(%err, "failed to prewarm ats cache");
+// 						}
+// 					}
+// 				}
+// 				.in_current_span(),
+// 			);
+// 		if let Err(err) = spawn_res {
+// 			tracing::error!(?err, "failed to spawn prewarm_ats_cache_inner task");
+// 		}
+// 	}
+// }
 
-/// Prewarm a specific ATS server with a resource.
-#[tracing::instrument]
-async fn prewarm_ats_cache_inner(url: &str) -> GlobalResult<()> {
-	tracing::info!(?url, "populating ats build cache");
+// /// Prewarm a specific ATS server with a resource.
+// #[tracing::instrument]
+// async fn prewarm_ats_cache_inner(url: &str) -> GlobalResult<()> {
+// 	tracing::info!(?url, "populating ats build cache");
 
-	let client = reqwest::Client::new();
+// 	let client = reqwest::Client::new();
 
-	// Check if cache already prewarmed
-	let start = Instant::now();
-	let resp = client.head(url).send().await?;
-	let age = internal_unwrap!(resp.headers().get("Age"))
-		.to_str()?
-		.parse::<u64>()?;
-	if age > 0 {
-		tracing::info!(?age, "object already cached");
-		return Ok(());
-	}
-	tracing::info!(head_duration = ?start.elapsed(), "fetching object");
+// 	// Check if cache already prewarmed
+// 	let start = Instant::now();
+// 	let resp = client.head(url).send().await?;
+// 	let age = internal_unwrap!(resp.headers().get("Age"))
+// 		.to_str()?
+// 		.parse::<u64>()?;
+// 	if age > 0 {
+// 		tracing::info!(?age, "object already cached");
+// 		return Ok(());
+// 	}
+// 	tracing::info!(head_duration = ?start.elapsed(), "fetching object");
 
-	// Make a GET request to prewarm the cache and do nothing with the response
-	let start = Instant::now();
-	let resp = client.get(url).send().await?.error_for_status()?;
-	tracing::info!(get_duration = ?start.elapsed(), "cache prewarmd");
+// 	// Make a GET request to prewarm the cache and do nothing with the response
+// 	let start = Instant::now();
+// 	let resp = client.get(url).send().await?.error_for_status()?;
+// 	tracing::info!(get_duration = ?start.elapsed(), "cache prewarmd");
 
-	Ok(())
-}
+// 	Ok(())
+// }
