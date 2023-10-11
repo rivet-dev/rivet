@@ -362,7 +362,7 @@ pub async fn create(
 	.await?;
 
 	// TODO: Remove this hack to give Treafik time to update
-	tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+	tokio::time::sleep(std::time::Duration::from_secs(2)).await;
 
 	// TODO: Cleanup lobby if find failed
 
