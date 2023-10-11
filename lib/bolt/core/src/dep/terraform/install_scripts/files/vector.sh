@@ -60,6 +60,7 @@ WantedBy=multi-user.target
 EOF
 
 # Start and enable the service
+systemctl daemon-reload
 systemctl enable vector
 systemctl start vector
 

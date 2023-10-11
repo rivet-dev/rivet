@@ -62,6 +62,8 @@ pub async fn gen(
 		script.push(components::docker()); // why do we need to install docker and cni plugins?
 		script.push(components::cni_plugins());
 		script.push(components::nomad(server));
+		script.push(components::envoy());
+		script.push(components::outbound_proxy()?);
 
 		prometheus_targets.insert(
 			"nomad".into(),

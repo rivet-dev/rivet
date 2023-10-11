@@ -201,6 +201,7 @@ WantedBy=multi-user.target
 EOF
 
 # Start and enable the service
+systemctl daemon-reload
 systemctl enable nomad
 systemctl start nomad
 

@@ -48,6 +48,7 @@ EOF
 
 
 # Start and enable the service
+systemctl daemon-reload
 systemctl enable __NAME__
 systemctl start __NAME__
 

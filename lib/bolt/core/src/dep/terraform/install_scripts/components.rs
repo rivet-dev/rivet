@@ -1,6 +1,6 @@
 use anyhow::{Context, Result};
 use indoc::formatdoc;
-
+use serde_json::json;
 use std::collections::HashMap;
 use tokio::fs;
 
@@ -431,4 +431,108 @@ async fn gen_s3_provider(
 		append_remap: remap,
 		config_files,
 	})
+}
+
+pub fn envoy() -> String {
+	include_str!("files/envoy.sh").to_string()
+}
+
+pub fn outbound_proxy() -> Result<String> {
+	let config = json!({
+		"static_resources": {
+			"listeners": [
+			{
+				"name": "listener_0",
+				"address": {
+					"socket_address": {
+						"address": "0.0.0.0",
+						"port_value": 10000
+					}
+				},
+				"filter_chains": [
+					{
+						"filters": [
+							{
+								"name": "envoy.filters.network.http_connection_manager",
+								"typed_config": {
+									"@type": "type.googleapis.com/envoy.extensions.filters.network.http_connection_manager.v3.HttpConnectionManager",
+									"stat_prefix": "ingress_http",
+									"route_config": {
+										"name": "local_route",
+										"virtual_hosts": [
+											{
+												"name": "backend",
+												"domains": ["*"],
+												"routes": [
+													{
+														"match": { "prefix": "/" },
+														"route": {
+															"cluster": "service_backend",
+															"hash_policy": [
+																{
+																	"header": { "header_name": ":path" }
+																}
+															]
+														}
+													}
+												]
+											}
+										]
+									},
+									"http_filters": [
+										{
+											"name": "envoy.filters.http.router",
+											"typed_config": {
+												"@type": "type.googleapis.com/envoy.extensions.filters.http.router.v3.Router"
+											}
+										}
+									]
+								}
+							}
+						]
+					}
+				]
+			}
+			],
+			"clusters": [
+			{
+				"name": "service_backend",
+				"connect_timeout": "0.25s",
+				"lb_policy": "RING_HASH",
+				"load_assignment": {
+				"cluster_name": "service_backend",
+				"endpoints": [
+					{
+					"lb_endpoints": [
+						{
+						"endpoint": {
+							"address": {
+							"socket_address": {
+								"address": "10.0.0.1",
+								"port_value": 8080
+							}
+							}
+						}
+						},
+						{
+						"endpoint": {
+							"address": {
+							"socket_address": {
+								"address": "10.0.0.2",
+								"port_value": 8080
+							}
+							}
+						}
+						}
+					]
+					}
+				]
+				}
+			}
+			]
+		}
+	});
+
+	let yaml_config = serde_yaml::to_string(&config)?;
+	Ok(include_str!("files/outbound_proxy.sh").replace("__ENVOY_CONFIG__", &yaml_config))
 }
