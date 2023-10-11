@@ -4950,10 +4950,13 @@ dependencies = [
  "faker-build",
  "faker-game",
  "faker-region",
+ "heck 0.3.3",
  "prost 0.10.4",
  "region-get",
+ "reqwest",
  "rivet-operation",
  "rivet-util-mm",
+ "s3-util",
  "tier-list",
  "upload-get",
 ]
