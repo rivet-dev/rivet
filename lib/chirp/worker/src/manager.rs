@@ -849,8 +849,8 @@ where
 		self: Arc<Self>,
 		req: &Request<W::Request>,
 	) -> GlobalResult<W::Response> {
-		// Will retry 3 times. This will take a maximum of ~7 seconds.
-		let mut backoff = rivet_util::Backoff::new(5, Some(3), 1_000, 1_000);
+		// Will retry 3 times. This will take a maximum of ~2 seconds.
+		let mut backoff = rivet_util::Backoff::new(5, Some(3), 250, 100);
 		loop {
 			let res = self
 				.worker

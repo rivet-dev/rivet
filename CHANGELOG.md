@@ -19,6 +19,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 -  **Infra** Support for running CockroachDB on Cockroach Cloud
 -  **Infra** Support for running Redis on AWS ElastiCache & MemoryDB
 -  **Infra** Dual-stack CNI configuration for game containers
+-  **Infra** Prewarm the Traffic Server cache when a game version is published for faster cold start times on the first booted lobby in each region
 
 ### Changed
 

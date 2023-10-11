@@ -99,18 +99,19 @@ fn modify_job_spec(
 	let networks = internal_unwrap_owned!(task_group.networks.as_mut());
 	internal_assert_eq!(1, networks.len(), "must have exactly 1 network");
 	let network = internal_unwrap_owned!(networks.first_mut());
+	// Disable IPv6 DNS since Docker doesn't support IPv6 yet
 	network.DNS = Some(Box::new(nomad_client::models::NetworkDns {
 		servers: Some(vec![
 			// Cloudflare
 			"1.1.1.1".into(),
 			"1.0.0.1".into(),
-			"2606:4700:4700::1111".into(),
-			"2606:4700:4700::1001".into(),
+			// "2606:4700:4700::1111".into(),
+			// "2606:4700:4700::1001".into(),
 			// Google
 			"8.8.8.8".into(),
 			"8.8.4.4".into(),
-			"2001:4860:4860::8888".into(),
-			"2001:4860:4860::8844".into(),
+			// "2001:4860:4860::8888".into(),
+			// "2001:4860:4860::8844".into(),
 		]),
 		..nomad_client::models::NetworkDns::new()
 	}));
