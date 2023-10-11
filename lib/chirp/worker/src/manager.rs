@@ -857,42 +857,36 @@ where
 		self: Arc<Self>,
 		req: &Request<W::Request>,
 	) -> GlobalResult<W::Response> {
-		self.worker
-			.handle(req.op_ctx())
-			.instrument(tracing::info_span!("handle", name = %W::NAME))
-			.await
+		// Will retry 4 times. This will take a maximum of 15 seconds.
+		let mut backoff = rivet_util::Backoff::new(5, Some(4), 250, 250);
+		loop {
+			let res = self
+				.worker
+				.handle(req.op_ctx())
+				.instrument(tracing::info_span!("handle", name = %W::NAME))
+				.await;
 
-		// // TODO: Add back
-		// // Will retry 4 times. This will take a maximum of 15 seconds.
-		// let mut backoff = rivet_util::Backoff::new(5, Some(4), 1_000, 1_000);
-		// loop {
-		// 	let res = self
-		// 		.worker
-		// 		.handle(req.op_ctx())
-		// 		.instrument(tracing::info_span!("handle", name = %W::NAME))
-		// 		.await;
+			// Attempt to retry the request with backoff
+			if matches!(
+				res,
+				Err(GlobalError::Internal {
+					retry_immediately: true,
+					..
+				})
+			) {
+				tracing::info!("ticking request retry backoff");
 
-		// 	// Attempt to retry the request with backoff
-		// 	if matches!(
-		// 		res,
-		// 		Err(GlobalError::Internal {
-		// 			retry_immediately: true,
-		// 			..
-		// 		})
-		// 	) {
-		// 		tracing::info!("ticking request retry backoff");
-
-		// 		if backoff.tick().await {
-		// 			tracing::warn!("retry request failed too many times");
-		// 			return res;
-		// 		} else {
-		// 			tracing::info!("retrying request");
-		// 		}
-		// 	} else {
-		// 		// Return result immediately
-		// 		return res;
-		// 	}
-		// }
+				if backoff.tick().await {
+					tracing::warn!("retry request failed too many times");
+					return res;
+				} else {
+					tracing::info!("retrying request");
+				}
+			} else {
+				// Return result immediately
+				return res;
+			}
+		}
 	}
 
 	#[tracing::instrument(level = "trace", skip_all)]
@@ -1040,20 +1034,20 @@ where
 		// 		return;
 		// 	}
 
-			// Acknowledge the messages
-			let mut redis_chirp = self.redis_chirp.clone();
-			match redis_chirp
-				.xack::<_, _, _, ()>(&msg_meta.topic_key, &msg_meta.group, &[&msg_meta.id])
-				.await
-			{
-				Ok(_) => {
-					tracing::info!(?msg_meta, "acknowledged stream message");
-					// break;
-				}
-				Err(err) => {
-					tracing::error!(?err, "failed to ack message");
-				}
+		// Acknowledge the messages
+		let mut redis_chirp = self.redis_chirp.clone();
+		match redis_chirp
+			.xack::<_, _, _, ()>(&msg_meta.topic_key, &msg_meta.group, &[&msg_meta.id])
+			.await
+		{
+			Ok(_) => {
+				tracing::info!(?msg_meta, "acknowledged stream message");
+				// break;
 			}
+			Err(err) => {
+				tracing::error!(?err, "failed to ack message");
+			}
+		}
 		// }
 	}
 }
