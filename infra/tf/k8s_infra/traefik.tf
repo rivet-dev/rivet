@@ -83,10 +83,10 @@ resource "helm_release" "traefik" {
 
 		tlsOptions = {
 			"ingress-cloudflare" = {
-				curvePreferences = [ "CurveP384" ]
+				curvePreferences = ["CurveP384"]
 
 				clientAuth = {
-					secretNames = [ "ingress-tls-cloudflare-ca-cert" ]
+					secretNames = ["ingress-tls-cloudflare-ca-cert"]
 					clientAuthType = "RequireAndVerifyClientCert"
 				}
 			}
