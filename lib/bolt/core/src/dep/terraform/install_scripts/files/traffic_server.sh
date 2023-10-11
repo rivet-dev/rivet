@@ -1,12 +1,22 @@
 # echo "__GHCR_PASSWORD__" | docker login ghcr.io --username "__GHCR_USERNAME__" --password-stdin 
 
+# Create trafficserver user
+if ! id -u "trafficserver" &>/dev/null; then
+	useradd -r -s /bin/false trafficserver
+fi
+
 # Create volumes
-mkdir -p /etc/trafficserver
-mkdir -p /var/cache/trafficserver
+for x in /etc/trafficserver /var/cache/trafficserver /var/log/trafficserver; do
+	mkdir -p $x
+	chown -R trafficserver:trafficserver $x
+	chmod -R 770 $x
+done
 
 __CONFIG__
 
-cat << 'EOF' > /etc/systemd/system/trafficserver.service
+chmod -R 770 /etc/trafficserver
+
+cat << EOF > /etc/systemd/system/trafficserver.service
 [Unit]
 Description=Apache Traffic Server
 After=docker.service
@@ -18,9 +28,11 @@ ExecStartPre=-/usr/bin/docker kill trafficserver
 ExecStartPre=-/usr/bin/docker rm trafficserver
 ExecStartPre=/usr/bin/docker pull "__IMAGE__"
 ExecStart=/usr/bin/docker run --rm --name trafficserver \
+	--user "$(id -u trafficserver):$(id -g trafficserver)" \
 	--volume=/etc/trafficserver:/etc/trafficserver \
 	--volume=/var/cache/trafficserver:/var/cache/trafficserver \
-	--publish 8080:8080/tcp \
+	--volume=/var/log/trafficserver:/var/log/trafficserver \
+	--network host \
 	"__IMAGE__"
 ExecStop=/usr/bin/docker stop trafficserver
 
