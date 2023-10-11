@@ -438,10 +438,25 @@ pub fn envoy() -> String {
 }
 
 pub fn outbound_proxy() -> Result<String> {
+	// Build ATS endpoints
+	let mut endpoints = Vec::new();
+	for x in 0..3 {
+		endpoints.push(json!({
+			"endpoint": {
+				"address": {
+					"socket_address": {
+						"address": "10.0.0.1",
+						"port_value": 8080
+					}
+				}
+			}
+		}));
+	}
+
+	// Build config
 	let config = json!({
 		"static_resources": {
-			"listeners": [
-			{
+			"listeners": [{
 				"name": "listener_0",
 				"address": {
 					"socket_address": {
@@ -449,87 +464,55 @@ pub fn outbound_proxy() -> Result<String> {
 						"port_value": 10000
 					}
 				},
-				"filter_chains": [
-					{
-						"filters": [
-							{
-								"name": "envoy.filters.network.http_connection_manager",
-								"typed_config": {
-									"@type": "type.googleapis.com/envoy.extensions.filters.network.http_connection_manager.v3.HttpConnectionManager",
-									"stat_prefix": "ingress_http",
-									"route_config": {
-										"name": "local_route",
-										"virtual_hosts": [
-											{
-												"name": "backend",
-												"domains": ["*"],
-												"routes": [
-													{
-														"match": { "prefix": "/" },
-														"route": {
-															"cluster": "service_backend",
-															"hash_policy": [
-																{
-																	"header": { "header_name": ":path" }
-																}
-															]
-														}
-													}
-												]
+				"filter_chains": [{
+					"filters": [{
+						"name": "envoy.filters.network.http_connection_manager",
+						"typed_config": {
+							"@type": "type.googleapis.com/envoy.extensions.filters.network.http_connection_manager.v3.HttpConnectionManager",
+							"stat_prefix": "ingress_http",
+							"route_config": {
+								"name": "local_route",
+								"virtual_hosts": [
+									{
+										"name": "backend",
+										"domains": ["*"],
+										"routes": [{
+											"match": { "prefix": "/" },
+											"route": {
+												"cluster": "service_backend",
+												"hash_policy": [{
+													"header": { "header_name": ":path" }
+												}]
 											}
-										]
-									},
-									"http_filters": [
-										{
-											"name": "envoy.filters.http.router",
-											"typed_config": {
-												"@type": "type.googleapis.com/envoy.extensions.filters.http.router.v3.Router"
-											}
-										}
-									]
+										}]
+									}
+								]
+							},
+							"http_filters": [
+								{
+									"name": "envoy.filters.http.router",
+									"typed_config": {
+										"@type": "type.googleapis.com/envoy.extensions.filters.http.router.v3.Router"
+									}
 								}
-							}
-						]
-					}
-				]
-			}
-			],
-			"clusters": [
-			{
+							]
+						}
+					}]
+				}]
+			}],
+			"clusters": [{
 				"name": "service_backend",
 				"connect_timeout": "0.25s",
 				"lb_policy": "RING_HASH",
 				"load_assignment": {
-				"cluster_name": "service_backend",
-				"endpoints": [
-					{
-					"lb_endpoints": [
+					"cluster_name": "service_backend",
+					"endpoints": [
 						{
-						"endpoint": {
-							"address": {
-							"socket_address": {
-								"address": "10.0.0.1",
-								"port_value": 8080
-							}
-							}
-						}
-						},
-						{
-						"endpoint": {
-							"address": {
-							"socket_address": {
-								"address": "10.0.0.2",
-								"port_value": 8080
-							}
-							}
-						}
+							"lb_endpoints": endpoints
 						}
 					]
-					}
-				]
 				}
-			}
-			]
+			}]
 		}
 	});
 
