@@ -68,7 +68,7 @@ push_etc_ingress_proxy:
           {%- if pool == 'ing-px' %}
           poll_interval: '2.5s'
           {%- else %}
-          poll_interval: '1s'
+          poll_interval: '0.25s'
           {%- endif %}
         namespace: {{ pillar['rivet']['namespace'] }}
         pool: {{ pool }}
