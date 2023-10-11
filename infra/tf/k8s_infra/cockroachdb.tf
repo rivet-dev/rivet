@@ -77,7 +77,11 @@ resource "helm_release" "cockroachdb" {
 
 		serviceMonitor = {
 			enabled = true
-			namespace = kubernetes_namespace.cockroachdb[0].metadata.0.name
+			namespaced = true
+
+			tlsConfig = {
+				insecureSkipVerify = true
+			}
 		}
 	})]
 }

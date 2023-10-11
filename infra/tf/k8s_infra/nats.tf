@@ -1,3 +1,14 @@
+locals {
+	service_nats = lookup(var.services, "nats", {
+		count = 1
+		resources = {
+			cpu = 100
+			cpu_cores = 0
+			memory = 1000
+		}
+	})
+}
+
 resource "kubernetes_namespace" "nats" {
 	metadata {
 		name = "nats"
@@ -13,7 +24,7 @@ resource "helm_release" "nats" {
 	values = [yamlencode({
 		config = {
 			cluster = {
-				replicas = 1
+				replicas = local.service_nats.count
 			}
 		}
 		promExporter = {
