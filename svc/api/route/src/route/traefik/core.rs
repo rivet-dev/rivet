@@ -310,12 +310,7 @@ fn register_namespace(
 				priority: Some(BASE_ROUTER_PRIORITY),
 				service: service.to_owned(),
 				middlewares: router_middlewares_cdn.clone(),
-				tls: Some(traefik::TraefikTls::build(vec![
-					traefik::TraefikTlsDomain {
-						main: domain_cdn.into(),
-						sans: vec![format!("*.{}", domain_cdn)],
-					},
-				])),
+				tls: Some(traefik::TraefikTls::build_cloudflare()),
 			},
 		);
 		config.http.routers.insert(
@@ -326,12 +321,7 @@ fn register_namespace(
 				priority: Some(HTML_ROUTER_PRIORITY),
 				service: service.to_owned(),
 				middlewares: router_middlewares_html.clone(),
-				tls: Some(traefik::TraefikTls::build(vec![
-					traefik::TraefikTlsDomain {
-						main: domain_cdn.into(),
-						sans: vec![format!("*.{}", domain_cdn)],
-					},
-				])),
+				tls: Some(traefik::TraefikTls::build_cloudflare()),
 			},
 		);
 	}
@@ -527,12 +517,7 @@ fn register_custom_cdn_route(
 						),
 						service: service.to_owned(),
 						middlewares: custom_headers_router_middlewares_cdn.clone(),
-						tls: Some(traefik::TraefikTls::build(vec![
-							traefik::TraefikTlsDomain {
-								main: domain_cdn.into(),
-								sans: vec![format!("*.{domain_cdn}")],
-							},
-						])),
+						tls: Some(traefik::TraefikTls::build_cloudflare()),
 					},
 				);
 				config.http.routers.insert(
@@ -545,12 +530,7 @@ fn register_custom_cdn_route(
 						),
 						service: service.to_owned(),
 						middlewares: custom_headers_router_middlewares_html.clone(),
-						tls: Some(traefik::TraefikTls::build(vec![
-							traefik::TraefikTlsDomain {
-								main: domain_cdn.into(),
-								sans: vec![format!("*.{domain_cdn}")],
-							},
-						])),
+						tls: Some(traefik::TraefikTls::build_cloudflare()),
 					},
 				);
 			}

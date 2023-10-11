@@ -128,6 +128,8 @@ pub struct TraefikTls {
 	cert_resolver: Option<String>,
 	#[serde(skip_serializing_if = "Option::is_none")]
 	domains: Option<Vec<TraefikTlsDomain>>,
+	#[serde(skip_serializing_if = "Option::is_none")]
+	options: Option<String>,
 }
 
 impl TraefikTls {
@@ -139,6 +141,15 @@ impl TraefikTls {
 		TraefikTls {
 			cert_resolver: None,
 			domains: Some(domains),
+			options: None,
+		}
+	}
+
+	fn build_cloudflare() -> TraefikTls {
+		TraefikTls {
+			cert_resolver: None,
+			domains: None,
+			options: Some("traefik-ingress-cloudflare@kubernetescrd".into()),
 		}
 	}
 }

@@ -4,7 +4,7 @@ use anyhow::*;
 use duct::cmd;
 use futures_util::future::{BoxFuture, FutureExt};
 use indicatif::{ProgressBar, ProgressStyle};
-use indoc::formatdoc;
+
 use tokio::{net::TcpStream, sync::Mutex};
 
 use crate::context::ProjectContext;

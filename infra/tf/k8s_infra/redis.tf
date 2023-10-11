@@ -65,7 +65,7 @@ resource "helm_release" "redis" {
 			replicas = var.redis_replicas
 		}
 		master = {
-			resources = {
+			resources = var.limit_resources ? {
 				limits = {
 					memory = "${local.service_redis.resources.memory}Mi"
 					cpu = (
@@ -74,7 +74,7 @@ resource "helm_release" "redis" {
 						: "${local.service_redis.resources.cpu}m"
 					)
 				}
-			}
+			} : null
 		}
 		auth = {
 			enable = true

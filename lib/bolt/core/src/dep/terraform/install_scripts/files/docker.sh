@@ -8,10 +8,21 @@ echo 'deb [arch=amd64] https://download.docker.com/linux/debian bullseye stable'
 apt-get update -y
 apt-get install -y docker-ce docker-ce-cli containerd.io
 
-# Add daemon.json (Replace with actual path)
+# Add daemon.json
+# 
+# Enable live restore in order to ensure that container stay alive
+# if we update Docker.
+#
+# Enable IPv6 on the default bridge network.
 cat << 'EOF' > /etc/docker/daemon.json
 {
-	"live-restore": true
+	"experimental": true,
+
+	"live-restore": true,
+
+	"ipv6": true,
+	"fixed-cidr-v6": "2001:db8:1::/64",
+	"ip6tables": true
 }
 EOF
 chmod 440 /etc/docker/daemon.json

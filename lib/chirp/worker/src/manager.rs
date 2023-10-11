@@ -849,42 +849,38 @@ where
 		self: Arc<Self>,
 		req: &Request<W::Request>,
 	) -> GlobalResult<W::Response> {
-		self.worker
-			.handle(req.op_ctx())
-			.instrument(tracing::info_span!("handle", name = %W::NAME))
-			.await
+		// Will retry 3 times. This will take a maximum of ~2 seconds.
+		let mut backoff = rivet_util::Backoff::new(5, Some(3), 250, 100);
+		loop {
+			let res = self
+				.worker
+				.handle(req.op_ctx())
+				.instrument(
+					tracing::info_span!("handle", name = %W::NAME, tick_index = backoff.tick_index()),
+				)
+				.await;
 
-		// // TODO: Add back
-		// // Will retry 4 times. This will take a maximum of 15 seconds.
-		// let mut backoff = rivet_util::Backoff::new(5, Some(4), 1_000, 1_000);
-		// loop {
-		// 	let res = self
-		// 		.worker
-		// 		.handle(req.op_ctx())
-		// 		.instrument(tracing::info_span!("handle", name = %W::NAME))
-		// 		.await;
+			// Attempt to retry the request with backoff
+			if matches!(
+				res,
+				Err(GlobalError::Internal {
+					retry_immediately: true,
+					..
+				})
+			) {
+				tracing::info!("ticking request retry backoff");
 
-		// 	// Attempt to retry the request with backoff
-		// 	if matches!(
-		// 		res,
-		// 		Err(GlobalError::Internal {
-		// 			retry_immediately: true,
-		// 			..
-		// 		})
-		// 	) {
-		// 		tracing::info!("ticking request retry backoff");
-
-		// 		if backoff.tick().await {
-		// 			tracing::warn!("retry request failed too many times");
-		// 			return res;
-		// 		} else {
-		// 			tracing::info!("retrying request");
-		// 		}
-		// 	} else {
-		// 		// Return result immediately
-		// 		return res;
-		// 	}
-		// }
+				if backoff.tick().await {
+					tracing::warn!("retry request failed too many times");
+					return res;
+				} else {
+					tracing::info!("retrying request");
+				}
+			} else {
+				// Return result immediately
+				return res;
+			}
+		}
 	}
 
 	#[tracing::instrument(level = "trace", skip_all)]

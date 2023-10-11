@@ -7,9 +7,9 @@ use std::{
 use tokio::{fs, sync::Mutex};
 
 use crate::{
-	config::{self, service::ServiceDomain},
+	config::{self},
 	context,
-	dep::{self, terraform},
+	dep::{self},
 	utils,
 };
 
@@ -151,8 +151,6 @@ impl ProjectContextData {
 				api_http_port,
 				api_https_port,
 				minio_port,
-				nomad_port,
-				api_route_port,
 				..
 			} = self.ns().cluster.kind
 			{
@@ -503,6 +501,16 @@ impl ProjectContextData {
 			.join("kubeconfig")
 			.join(format!("{}.yml", self.ns_id()))
 	}
+
+	/// If the Kubernetes pods have resource limits imposed.
+	pub fn limit_resources(&self) -> bool {
+		match self.ns().cluster.kind {
+			config::ns::ClusterKind::SingleNode {
+				limit_resources, ..
+			} => limit_resources,
+			config::ns::ClusterKind::Distributed { .. } => true,
+		}
+	}
 }
 
 impl ProjectContextData {
@@ -527,7 +535,7 @@ impl ProjectContextData {
 	/// Origin used for building links to the API endpoint.
 	pub fn origin_api(&self) -> String {
 		if let Some(domain_main_api) = self.domain_main_api() {
-			domain_main_api
+			format!("https://{domain_main_api}")
 		} else if let config::ns::ClusterKind::SingleNode {
 			public_ip,
 			api_http_port,
@@ -543,7 +551,7 @@ impl ProjectContextData {
 	/// Origin used to access Minio. Only applicable if Minio provider is specified.
 	pub fn origin_minio(&self) -> String {
 		if let Some(domain_main) = self.domain_main() {
-			format!("minio.{domain_main}")
+			format!("https://minio.{domain_main}")
 		} else if let config::ns::ClusterKind::SingleNode {
 			public_ip,
 			minio_port,

@@ -25,8 +25,7 @@ resource "tls_cert_request" "locally_signed_client" {
 		organization = "Rivet Gaming, Inc."
 	}
 
-	# TODO:
-	dns_names = ["tunnel.rivet.gg"]
+	dns_names = ["*.tunnel.rivet.gg"]
 }
 
 resource "tls_locally_signed_cert" "locally_signed_client" {

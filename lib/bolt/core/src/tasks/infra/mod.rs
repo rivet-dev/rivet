@@ -1,12 +1,9 @@
 use anyhow::*;
-use bolt_config::ns::ClusterKind;
+
 use tokio::time::Instant;
 
 use crate::{
-	config::{self, ns},
-	context::ProjectContext,
-	dep::terraform,
-	tasks,
+	config::ns, context::ProjectContext, dep::terraform, tasks,
 	utils::command_helper::CommandHelper,
 };
 

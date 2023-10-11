@@ -323,7 +323,7 @@ pub async fn find(
 				let lobby_id = internal_unwrap!(lobby_id).as_uuid();
 
 				if let Some((Some(_),)) = sqlx::query_as::<_, (Option<i64>,)>(
-					"SELECT stop_ts FROM lobbies WHERE lobby_id = $1",
+					"SELECT stop_ts FROM db_mm_state.lobbies WHERE lobby_id = $1",
 				)
 				.bind(lobby_id)
 				.fetch_optional(crdb)

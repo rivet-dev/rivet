@@ -6,7 +6,7 @@ use serde_json::json;
 use tokio::{io::AsyncWriteExt, task::block_in_place};
 
 use crate::{
-	config::{self, service::RuntimeKind},
+	config::service::RuntimeKind,
 	context::{ProjectContext, ServiceContext},
 	utils::db_conn::DatabaseConnections,
 };

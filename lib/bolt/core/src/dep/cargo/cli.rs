@@ -1,5 +1,5 @@
 use anyhow::{ensure, Context, Result};
-use duct::cmd;
+
 use indoc::formatdoc;
 use regex::Regex;
 use serde_json::json;
@@ -228,8 +228,7 @@ pub async fn build_tests<'a, T: AsRef<str>>(
 						.context("missing target name")?;
 
 					// Parse the test count from the binary
-					let test_list_args =
-						[&["--list".to_string()], opts.test_filters.clone()].concat();
+					let test_list_args = [&["--list".to_string()], opts.test_filters].concat();
 					let test_list_stdout =
 						block_in_place(|| duct::cmd(executable, &test_list_args).read())?;
 					let caps = test_count_re

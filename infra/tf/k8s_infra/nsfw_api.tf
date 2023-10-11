@@ -69,14 +69,18 @@ resource "kubernetes_deployment" "nsfw_api" {
 						container_port = 21900
 					}
 					
-					resources {
-						limits = {
-							memory = "${local.service_nsfw_api.resources.memory}Mi"
-							cpu = (
-								local.service_nsfw_api.resources.cpu_cores > 0 ?
-								"${local.service_nsfw_api.resources.cpu_cores * 1000}m"
-								: "${local.service_nsfw_api.resources.cpu}m"
-							)
+					dynamic "resources" {
+						for_each = var.limit_resources ? [0] : []
+
+						content {
+							limits = {
+								memory = "${local.service_nsfw_api.resources.memory}Mi"
+								cpu = (
+									local.service_nsfw_api.resources.cpu_cores > 0 ?
+									"${local.service_nsfw_api.resources.cpu_cores * 1000}m"
+									: "${local.service_nsfw_api.resources.cpu}m"
+								)
+							}
 						}
 					}
 				}

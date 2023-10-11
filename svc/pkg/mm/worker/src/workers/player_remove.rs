@@ -55,7 +55,7 @@ async fn worker(ctx: &OperationContext<mm::msg::player_remove::Message>) -> Glob
 					lobbies.max_players_normal,
 					lobbies.max_players_party
 				FROM db_mm_state.players
-				INNER JOIN lobbies ON lobbies.lobby_id = players.lobby_id
+				INNER JOIN db_mm_state.lobbies ON lobbies.lobby_id = players.lobby_id
 				WHERE players.player_id = $1
 			),
 			_update AS (

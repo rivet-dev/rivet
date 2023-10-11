@@ -7,14 +7,12 @@ use tokio::fs;
 use crate::{
 	config::{
 		ns,
-		service::{RuntimeKind, ServiceDomain, UploadPolicy},
+		service::{RuntimeKind, UploadPolicy},
 	},
 	context::ProjectContext,
 	dep,
 	utils::media_resize,
 };
-
-use super::net;
 
 pub async fn project(ctx: &ProjectContext) {
 	// Init all Terraform projects in parallel
@@ -154,8 +152,7 @@ async fn vars(ctx: &ProjectContext) {
 			api_http_port,
 			api_https_port,
 			minio_port,
-			nomad_port,
-			api_route_port,
+			tunnel_port,
 			..
 		} => {
 			vars.insert("deploy_method_local".into(), json!(true));
@@ -163,8 +160,7 @@ async fn vars(ctx: &ProjectContext) {
 			vars.insert("public_ip".into(), json!(public_ip));
 			vars.insert("api_http_port".into(), json!(api_http_port));
 			vars.insert("api_https_port".into(), json!(api_https_port));
-			vars.insert("nomad_port".into(), json!(nomad_port));
-			vars.insert("api_route_port".into(), json!(api_route_port));
+			vars.insert("tunnel_port".into(), json!(tunnel_port));
 
 			// Expose Minio on a dedicated port if DNS not enabled
 			if config.dns.is_none() && config.s3.providers.minio.is_some() {
@@ -353,8 +349,6 @@ async fn vars(ctx: &ProjectContext) {
 
 		for svc_ctx in all_svc {
 			if let RuntimeKind::Redis { persistent } = svc_ctx.config().runtime {
-				let name = svc_ctx.name();
-
 				redis_svcs.insert(
 					svc_ctx.redis_db_name(),
 					json!({
@@ -430,6 +424,7 @@ async fn vars(ctx: &ProjectContext) {
 		}),
 	);
 	vars.insert("k8s_health_port".into(), json!(dep::k8s::gen::HEALTH_PORT));
+	vars.insert("limit_resources".into(), json!(ctx.limit_resources()));
 
 	vars.insert(
 		"cdn_cache_size_gb".into(),

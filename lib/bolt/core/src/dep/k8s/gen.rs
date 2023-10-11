@@ -1,6 +1,5 @@
 use std::{
 	collections::HashMap,
-	fmt,
 	path::{Path, PathBuf},
 };
 
@@ -13,7 +12,7 @@ use tokio::{fs, task::block_in_place};
 use crate::{
 	config::{
 		self, ns,
-		service::{ServiceDomain, ServiceKind, ServiceRouter},
+		service::{ServiceKind, ServiceRouter},
 	},
 	context::{ProjectContext, RunContext, ServiceContext},
 	dep::terraform::{self, output::read_k8s_cluster_aws},
@@ -47,7 +46,6 @@ pub enum ExecServiceDriver {
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum SpecType {
-	Pod,
 	Deployment,
 	Job,
 	CronJob,
@@ -318,24 +316,28 @@ pub async fn gen_svc(exec_ctx: &ExecServiceContext) -> Vec<serde_json::Value> {
 
 	// Create resource limits
 	let ns_service_config = svc_ctx.ns_service_config().await;
-	let resources = json!({
-		"requests": {
-			"memory": format!("{}Mi", ns_service_config.resources.memory),
-			"cpu": match ns_service_config.resources.cpu {
-				config::ns::CpuResources::Cpu(x) => format!("{x}m"),
-				config::ns::CpuResources::CpuCores(x) => format!("{}m", x * 1000),
+	let resources = if project_ctx.limit_resources() {
+		json!({
+			"requests": {
+				"memory": format!("{}Mi", ns_service_config.resources.memory),
+				"cpu": match ns_service_config.resources.cpu {
+					config::ns::CpuResources::Cpu(x) => format!("{x}m"),
+					config::ns::CpuResources::CpuCores(x) => format!("{}m", x * 1000),
+				},
+				"ephemeral-storage": format!("{}M", ns_service_config.resources.ephemeral_disk)
 			},
-			"ephemeral-storage": format!("{}M", ns_service_config.resources.ephemeral_disk)
-		},
-		"limits": {
-			"memory": format!("{}Mi", ns_service_config.resources.memory * 2),
-			"cpu": match ns_service_config.resources.cpu {
-				config::ns::CpuResources::Cpu(x) => format!("{}m", x * 2),
-				config::ns::CpuResources::CpuCores(x) => format!("{}m", x * 1000 * 2),
+			"limits": {
+				"memory": format!("{}Mi", ns_service_config.resources.memory * 2),
+				"cpu": match ns_service_config.resources.cpu {
+					config::ns::CpuResources::Cpu(x) => format!("{}m", x * 2),
+					config::ns::CpuResources::CpuCores(x) => format!("{}m", x * 1000 * 2),
+				},
+				"ephemeral-storage": format!("{}M", ns_service_config.resources.ephemeral_disk * 2)
 			},
-			"ephemeral-storage": format!("{}M", ns_service_config.resources.ephemeral_disk * 2)
-		},
-	});
+		})
+	} else {
+		json!(null)
+	};
 
 	let (volumes, volume_mounts) = build_volumes(&project_ctx, &exec_ctx).await;
 
@@ -407,14 +409,6 @@ pub async fn gen_svc(exec_ctx: &ExecServiceContext) -> Vec<serde_json::Value> {
 	});
 
 	match spec_type {
-		SpecType::Pod => {
-			specs.push(json!({
-				"apiVersion": "v1",
-				"kind": "Pod",
-				"metadata": metadata,
-				"spec": pod_spec
-			}));
-		}
 		SpecType::Deployment => {
 			specs.push(json!({
 				"apiVersion": "apps/v1",
@@ -550,49 +544,52 @@ pub async fn gen_svc(exec_ctx: &ExecServiceContext) -> Vec<serde_json::Value> {
 	}
 
 	// Expose service
-	specs.push(json!({
-		"apiVersion": "v1",
-		"kind": "Service",
-		"metadata": {
-			"name": service_name,
-			"namespace": "rivet-service",
-			"labels": {
-				"app.kubernetes.io/name": service_name
-			}
-		},
-		"spec": {
-			"type": "ClusterIP",
-			"selector": {
-				"app.kubernetes.io/name": service_name
+	if matches!(run_context, RunContext::Service { .. }) {
+		// Create service
+		specs.push(json!({
+			"apiVersion": "v1",
+			"kind": "Service",
+			"metadata": {
+				"name": service_name,
+				"namespace": "rivet-service",
+				"labels": {
+					"app.kubernetes.io/name": service_name
+				}
 			},
-			"ports": service_ports
-		}
-	}));
-
-	// Monitor the service
-	specs.push(json!({
-		"apiVersion": "monitoring.coreos.com/v1",
-		"kind": "ServiceMonitor",
-		"metadata": {
-			"name": service_name,
-			"namespace": "rivet-service"
-		},
-		"spec": {
-			"selector": {
-				"matchLabels": {
+			"spec": {
+				"type": "ClusterIP",
+				"selector": {
 					"app.kubernetes.io/name": service_name
 				},
-			},
-			"endpoints": [
-				{ "port": "metrics" }
-			],
-		}
-	}));
+				"ports": service_ports
+			}
+		}));
 
-	// Build ingress router
-	if matches!(run_context, RunContext::Service { .. }) {
-		if let Some(router) = svc_ctx.config().kind.router() {
-			build_ingress_router(&project_ctx, svc_ctx, &service_name, &router, &mut specs);
+		// Monitor the service
+		specs.push(json!({
+			"apiVersion": "monitoring.coreos.com/v1",
+			"kind": "ServiceMonitor",
+			"metadata": {
+				"name": service_name,
+				"namespace": "rivet-service"
+			},
+			"spec": {
+				"selector": {
+					"matchLabels": {
+						"app.kubernetes.io/name": service_name
+					},
+				},
+				"endpoints": [
+					{ "port": "metrics" }
+				],
+			}
+		}));
+
+		// Build ingress router
+		if matches!(run_context, RunContext::Service { .. }) {
+			if let Some(router) = svc_ctx.config().kind.router() {
+				build_ingress_router(&project_ctx, svc_ctx, &service_name, &router, &mut specs);
+			}
 		}
 	}
 
@@ -822,7 +819,10 @@ fn build_ingress_router(
 				"kind": "Middleware",
 				"metadata": {
 					"name": mw_name,
-					"namespace": "rivet-service"
+					"namespace": "rivet-service",
+					"labels": {
+						"traefik-instance": "main"
+					}
 				},
 				"spec": {
 					"stripPrefix": {
@@ -841,7 +841,10 @@ fn build_ingress_router(
 				"kind": "Middleware",
 				"metadata": {
 					"name": mw_name,
-					"namespace": "rivet-service"
+					"namespace": "rivet-service",
+					"labels": {
+						"traefik-instance": "main"
+					}
 				},
 				"spec": {
 					"compress": {}
@@ -873,14 +876,12 @@ fn build_ingress_router(
 
 		let ingress_middlewares = middlewares
 			.iter()
-			.map(|mw| mw["metadata"].clone())
+			.map(
+				|mw| json!({ "name": mw["metadata"]["name"], "namespace": mw["metadata"]["namespace"] }),
+			)
 			.collect::<Vec<_>>();
 
-		specs.push(json!({
-			"apiVersion": "v1",
-			"kind": "List",
-			"items": middlewares
-		}));
+		specs.extend(middlewares);
 
 		// Build insecure router
 		specs.push(json!({
@@ -888,7 +889,10 @@ fn build_ingress_router(
 			"kind": "IngressRoute",
 			"metadata": {
 				"name": format!("{}-{i}-insecure", svc_ctx.name()),
-				"namespace": "rivet-service"
+				"namespace": "rivet-service",
+				"labels": {
+					"traefik-instance": "main"
+				}
 			},
 			"spec": {
 				"entryPoints": [ "web" ],
@@ -917,7 +921,10 @@ fn build_ingress_router(
 				"kind": "IngressRoute",
 				"metadata": {
 					"name": format!("{}-{i}-secure", svc_ctx.name()),
-					"namespace": "rivet-service"
+					"namespace": "rivet-service",
+					"labels": {
+						"traefik-instance": "main"
+					}
 				},
 				"spec": {
 					"entryPoints": [ "websecure" ],
@@ -952,8 +959,11 @@ fn build_ingress_router(
 				"apiVersion": "traefik.io/v1alpha1",
 				"kind": "IngressRoute",
 				"metadata": {
-					"name": "cf-verification-challenge",
-					"namespace": "rivet-service"
+					"name": "cf-verification-challenge-insecure",
+					"namespace": "rivet-service",
+					"labels": {
+						"traefik-instance": "main"
+					}
 				},
 				"spec": {
 					"entryPoints": [ "web" ],
@@ -961,7 +971,15 @@ fn build_ingress_router(
 						{
 							"kind": "Rule",
 							"match": "PathPrefix(`/.well-known/cf-custom-hostname-challenge/`)",
-							"priority": 90
+							"priority": 90,
+							"services": [
+								{
+									"kind": "Service",
+									"name": service_name,
+									"namespace": "rivet-service",
+									"port": "http"
+								}
+							]
 						}
 					]
 				}
@@ -972,8 +990,11 @@ fn build_ingress_router(
 					"apiVersion": "traefik.io/v1alpha1",
 					"kind": "IngressRoute",
 					"metadata": {
-						"name": "cf-verification-challenge",
-						"namespace": "rivet-service"
+						"name": "cf-verification-challenge-secure",
+						"namespace": "rivet-service",
+						"labels": {
+							"traefik-instance": "main"
+						}
 					},
 					"spec": {
 						"entryPoints": [ "websecure" ],
@@ -981,7 +1002,15 @@ fn build_ingress_router(
 							{
 								"kind": "Rule",
 								"match": "PathPrefix(`/.well-known/cf-custom-hostname-challenge/`)",
-								"priority": 90
+								"priority": 90,
+								"services": [
+									{
+										"kind": "Service",
+										"name": service_name,
+										"namespace": "rivet-service",
+										"port": "http"
+									}
+								]
 							}
 						],
 						"tls": {

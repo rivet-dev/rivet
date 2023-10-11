@@ -27,7 +27,7 @@ use crate::{
 		k8s::gen::{ExecServiceContext, ExecServiceDriver},
 	},
 	tasks,
-	utils::{self, command_helper::CommandHelper},
+	utils::{self},
 };
 
 pub async fn up_all(ctx: &ProjectContext) -> Result<()> {
@@ -55,7 +55,7 @@ pub async fn up_services<T: AsRef<str>>(
 	};
 
 	// Add essential services
-	let mut svc_names = svc_names
+	let svc_names = svc_names
 		.iter()
 		.map(|x| x.as_ref().to_string())
 		.collect::<HashSet<_>>();

@@ -1,5 +1,5 @@
 #!/bin/sh
-set -euf -o pipefail
+set -euf
 
 tag=$(date -u +%s)
 

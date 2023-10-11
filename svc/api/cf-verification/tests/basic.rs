@@ -39,7 +39,7 @@ impl Ctx {
 		);
 
 		let http_client = rivet_cf_verification::Config::builder()
-			.set_uri(util::env::svc_router_url("api-cf-verification"))
+			.set_uri("http://traefik.traefik.svc.cluster.local:80/cf-verification")
 			.build_client();
 
 		Ctx {

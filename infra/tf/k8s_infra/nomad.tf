@@ -23,9 +23,6 @@ locals {
 			bind_addr = "0.0.0.0"
 			disable_update_check = true
 
-			# The Nomad server IP changes, so we need to leave the cluster when terminating
-			# leave_on_terminate = true
-
 			advertise {
 				rpc = "127.0.0.1:__LOCAL_PORT_RPC__"
 				serf = "127.0.0.1:__LOCAL_PORT_SERF__"
@@ -39,6 +36,15 @@ locals {
 					retry_join = [${join(", ", local.nomad_server_addrs_escaped)}]
 					retry_interval = "10s"
 				}
+			}
+
+			limits {
+				# Increase max connections for Prometheus monitors
+				http_max_conns_per_client = 4096
+
+				# All Nomad clients come from the same IP address, so we need to
+				# disable the max RPC connections per IP
+				rpc_max_conns_per_client = 0
 			}
 		EOT
 	}
@@ -302,7 +308,7 @@ resource "kubernetes_stateful_set" "nomad_server" {
 resource "kubernetes_config_map" "nomad_server_sidecar_traefik_config" {
 	metadata {
 		name = "nomad-server-sidecar-traefik"
-		namespace = "nomad"
+		namespace = kubernetes_namespace.nomad.metadata[0].name
 	}
 
 	data = {

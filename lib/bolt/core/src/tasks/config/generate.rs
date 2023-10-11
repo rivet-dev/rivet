@@ -10,11 +10,7 @@ use tokio::task::block_in_place;
 use toml_edit::value;
 use uuid::Uuid;
 
-use crate::{
-	config::{ns, service::RuntimeKind},
-	context::ProjectContextData,
-	utils,
-};
+use crate::{config::service::RuntimeKind, context::ProjectContextData, utils};
 
 /// Comment attached to the head of the namespace config.
 const NS_CONFIG_COMMENT: &str = r#"# Documentation: doc/bolt/config/NAMESPACE.md
@@ -95,21 +91,21 @@ impl ConfigGenerator {
 	}
 
 	/// Moves a value's location. Useful for updating schemas.
-	async fn move_config(&mut self, from_path: &[&str], to_path: &[&str]) -> Result<()> {
-		// Read the parent
-		if let Some(parent_value) =
-			get_value_mut(self.ns.as_item_mut(), &from_path[0..(from_path.len() - 1)])
-				.and_then(|x| x.as_table_mut())
-		{
-			// Remove the item
-			if let Some(value) = parent_value.remove(from_path.last().unwrap()) {
-				// Write to the new path
-				write_value(self.ns.as_item_mut(), to_path, value);
-			}
-		}
+	// async fn move_config(&mut self, from_path: &[&str], to_path: &[&str]) -> Result<()> {
+	// 	// Read the parent
+	// 	if let Some(parent_value) =
+	// 		get_value_mut(self.ns.as_item_mut(), &from_path[0..(from_path.len() - 1)])
+	// 			.and_then(|x| x.as_table_mut())
+	// 	{
+	// 		// Remove the item
+	// 		if let Some(value) = parent_value.remove(from_path.last().unwrap()) {
+	// 			// Write to the new path
+	// 			write_value(self.ns.as_item_mut(), to_path, value);
+	// 		}
+	// 	}
 
-		Ok(())
-	}
+	// 	Ok(())
+	// }
 
 	/// Inserts a config value if does not exist.
 	async fn generate_config<Fut>(
@@ -130,20 +126,20 @@ impl ConfigGenerator {
 	}
 
 	/// Prompts user for config value if does not exist.
-	async fn prompt_config(&mut self, message: &str, docs: &str, path: &[&str]) -> Result<()> {
-		// Check if item already exists
-		if get_value(self.ns.as_item(), path).is_none() {
-			let x = rivet_term::prompt::PromptBuilder::default()
-				.message(message)
-				.docs_url(docs)
-				.build()?
-				.string(&self.term)
-				.await?;
-			write_value(self.ns.as_item_mut(), path, value(x));
-		}
+	// async fn prompt_config(&mut self, message: &str, docs: &str, path: &[&str]) -> Result<()> {
+	// 	// Check if item already exists
+	// 	if get_value(self.ns.as_item(), path).is_none() {
+	// 		let x = rivet_term::prompt::PromptBuilder::default()
+	// 			.message(message)
+	// 			.docs_url(docs)
+	// 			.build()?
+	// 			.string(&self.term)
+	// 			.await?;
+	// 		write_value(self.ns.as_item_mut(), path, value(x));
+	// 	}
 
-		Ok(())
-	}
+	// 	Ok(())
+	// }
 
 	/// Inserts a secret value if does not exist.
 	async fn generate_secret<Fut>(
@@ -535,20 +531,20 @@ fn get_value<'a>(mut item: &'a toml_edit::Item, path: &[&str]) -> Option<&'a tom
 }
 
 /// Returns a mutable value at a given path.
-fn get_value_mut<'a>(
-	mut item: &'a mut toml_edit::Item,
-	path: &[&str],
-) -> Option<&'a mut toml_edit::Item> {
-	for key in path {
-		if let Some(x) = item.get_mut(key).filter(|x| !x.is_none()) {
-			item = x;
-		} else {
-			return None;
-		}
-	}
+// fn get_value_mut<'a>(
+// 	mut item: &'a mut toml_edit::Item,
+// 	path: &[&str],
+// ) -> Option<&'a mut toml_edit::Item> {
+// 	for key in path {
+// 		if let Some(x) = item.get_mut(key).filter(|x| !x.is_none()) {
+// 			item = x;
+// 		} else {
+// 			return None;
+// 		}
+// 	}
 
-	Some(item)
-}
+// 	Some(item)
+// }
 
 /// Writes a value to a path in a TOML item.
 fn write_value(item: &mut toml_edit::Item, path: &[&str], value: toml_edit::Item) {

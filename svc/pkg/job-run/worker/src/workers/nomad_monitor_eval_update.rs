@@ -78,13 +78,13 @@ async fn worker(
 			select_run AS (
 				SELECT runs.run_id, runs.region_id, run_meta_nomad.eval_plan_ts
 				FROM db_job_state.run_meta_nomad
-				INNER JOIN runs ON runs.run_id = run_meta_nomad.run_id
+				INNER JOIN db_job_state.runs ON runs.run_id = run_meta_nomad.run_id
 				WHERE dispatched_job_id = $1
 			),
 			_update AS (
-				UPDATE run_meta_nomad
+				UPDATE db_job_state.run_meta_nomad
 				SET eval_plan_ts = $2
-				FROM db_job_state.select_run
+				FROM select_run
 				WHERE
 					run_meta_nomad.run_id = select_run.run_id AND
 					run_meta_nomad.eval_plan_ts IS NULL

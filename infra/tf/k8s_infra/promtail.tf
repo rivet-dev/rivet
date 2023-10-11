@@ -142,7 +142,7 @@ resource "helm_release" "promtail" {
 			}
 		}
 
-		resources = {
+		resources = var.limit_resources ? {
 			limits = {
 				memory = "${local.service_promtail.resources.memory}Mi"
 				cpu = (
@@ -151,7 +151,7 @@ resource "helm_release" "promtail" {
 					: "${local.service_promtail.resources.cpu}m"
 				)
 			}
-		}
+		} : null
 
 		extraArgs = [
 			"-client.external-labels=${local.external_labels}"

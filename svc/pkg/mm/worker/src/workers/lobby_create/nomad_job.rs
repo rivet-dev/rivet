@@ -123,16 +123,27 @@ pub fn gen_lobby_docker_job(
 				config.replace('$', "$$"),
 			)
 		}))
+		.chain([(
+			"RIVET_API_URL".to_string(),
+			util::env::origin_api().to_string(),
+		)])
 		.chain(
+			// DEPRECATED:
 			[
-				("RIVET_CHAT_API_URL", "api-chat"),
-				("RIVET_GROUP_API_URL", "api-group"),
-				("RIVET_IDENTITY_API_URL", "api-identity"),
-				("RIVET_KV_API_URL", "api-kv"),
-				("RIVET_MATCHMAKER_API_URL", "api-matchmaker"),
+				("RIVET_CHAT_API_URL", "chat"),
+				("RIVET_GROUP_API_URL", "group"),
+				("RIVET_IDENTITY_API_URL", "identity"),
+				("RIVET_KV_API_URL", "kv"),
+				("RIVET_MATCHMAKER_API_URL", "matchmaker"),
 			]
 			.iter()
-			.map(|(env, service)| (env.to_string(), util::env::svc_router_url(service))),
+			.filter(|_| util::env::support_deprecated_subdomains())
+			.map(|(env, service)| {
+				(
+					env.to_string(),
+					util::env::origin_api().replace("://", &format!("://{}.", service)),
+				)
+			}),
 		)
 		.chain(
 			[
@@ -258,7 +269,7 @@ pub fn gen_lobby_docker_job(
 			})),
 			networks: Some(vec![NetworkResource {
 				mode: match network_mode {
-					LobbyRuntimeNetworkMode::Bridge => Some("bridge".into()),
+					LobbyRuntimeNetworkMode::Bridge => Some("cni/rivet-job".into()),
 					LobbyRuntimeNetworkMode::Host => Some("host".into()),
 				},
 				dynamic_ports: Some(dynamic_ports),

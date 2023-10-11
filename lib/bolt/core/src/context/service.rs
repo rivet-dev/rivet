@@ -11,11 +11,10 @@ use tokio::{fs, process::Command, sync::RwLock};
 use crate::{
 	config::{
 		self,
-		ns::S3Provider,
 		service::{RuntimeKind, ServiceKind},
 	},
 	context::{self, BuildContext, ProjectContext, RunContext},
-	dep::{self, k8s, terraform},
+	dep::{k8s, terraform},
 	utils,
 };
 
@@ -749,6 +748,14 @@ impl ServiceContextData {
 		if let Some(x) = project_ctx.domain_main_api() {
 			env.push(("RIVET_DOMAIN_MAIN_API".into(), x));
 		}
+		if let Some(true) = project_ctx
+			.ns()
+			.dns
+			.as_ref()
+			.map(|x| x.deprecated_subdomains)
+		{
+			env.push(("RIVET_SUPPORT_DEPRECATED_SUBDOMAINS".into(), "1".into()));
+		}
 		env.push(("RIVET_ORIGIN_API".into(), project_ctx.origin_api()));
 		env.push(("RIVET_ORIGIN_HUB".into(), project_ctx.origin_hub()));
 
@@ -1063,7 +1070,7 @@ impl ServiceContextData {
 		// TODO: Function is expensive
 		let redis_data = terraform::output::read_redis(&project_ctx).await;
 		for redis_dep in self.redis_dependencies(run_context).await {
-			let name = redis_dep.name();
+			let _name = redis_dep.name();
 			let db_name = redis_dep.redis_db_name();
 
 			// Read host and port from terraform

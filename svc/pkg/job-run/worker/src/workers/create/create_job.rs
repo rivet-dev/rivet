@@ -99,18 +99,19 @@ fn modify_job_spec(
 	let networks = internal_unwrap_owned!(task_group.networks.as_mut());
 	internal_assert_eq!(1, networks.len(), "must have exactly 1 network");
 	let network = internal_unwrap_owned!(networks.first_mut());
+	// Disable IPv6 DNS since Docker doesn't support IPv6 yet
 	network.DNS = Some(Box::new(nomad_client::models::NetworkDns {
 		servers: Some(vec![
 			// Cloudflare
 			"1.1.1.1".into(),
 			"1.0.0.1".into(),
-			"2606:4700:4700::1111".into(),
-			"2606:4700:4700::1001".into(),
+			// "2606:4700:4700::1111".into(),
+			// "2606:4700:4700::1001".into(),
 			// Google
 			"8.8.8.8".into(),
 			"8.8.4.4".into(),
-			"2001:4860:4860::8888".into(),
-			"2001:4860:4860::8844".into(),
+			// "2001:4860:4860::8888".into(),
+			// "2001:4860:4860::8844".into(),
 		]),
 		..nomad_client::models::NetworkDns::new()
 	}));
@@ -169,7 +170,6 @@ fn gen_cleanup_task() -> nomad_client::models::Task {
 					import ssl
 					import urllib.request, json, os, mimetypes, sys
 
-					API_JOB_URL = '{api_job_url}'
 					BEARER = '{{{{env "NOMAD_META_JOB_RUN_TOKEN"}}}}'
 
 					ctx = ssl.create_default_context()
@@ -197,7 +197,7 @@ fn gen_cleanup_task() -> nomad_client::models::Task {
 					print(f'\n> Cleaning up job')
 
 					res_json = None
-					with req('POST', f'{{API_JOB_URL}}/runs/cleanup',
+					with req('POST', f'{origin_api}/job/runs/cleanup',
 						data = json.dumps({{}}).encode(),
 						headers = {{
 							'Authorization': f'Bearer {{BEARER}}',
@@ -209,7 +209,7 @@ fn gen_cleanup_task() -> nomad_client::models::Task {
 
 					print('\n> Finished')
 					"#,
-				api_job_url = util::env::svc_router_url("api-job"),
+				origin_api = util::env::origin_api(),
 			)),
 			..Template::new()
 		}]),
@@ -322,7 +322,7 @@ mod tests {
 				name: Some("test".into()),
 				networks: Some(vec![NetworkResource {
 					// So we can access it from the test
-					mode: Some("bridge".into()),
+					mode: Some("cni/rivet-job".into()),
 					dynamic_ports: Some(vec![Port {
 						label: Some("http".into()),
 						value: None,

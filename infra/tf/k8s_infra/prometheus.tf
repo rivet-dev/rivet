@@ -154,7 +154,7 @@ resource "helm_release" "prometheus" {
 
 				storageSpec = local.prometheus_storage
 			
-				resources = {
+				resources = var.limit_resources ? {
 					limits = {
 						memory = "${local.service_prometheus.resources.memory}Mi"
 						cpu = (
@@ -163,7 +163,7 @@ resource "helm_release" "prometheus" {
 							: "${local.service_prometheus.resources.cpu}m"
 						)
 					}
-				}
+				} : null
 
 				# Monitor all namespaces
 				podMonitorNamespaceSelector = { any = true }

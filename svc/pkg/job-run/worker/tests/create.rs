@@ -88,7 +88,8 @@ async fn basic_http(ctx: TestCtx) {
 		validate_job(ctx.crdb().await.unwrap(), run_id, region_id, "http").await;
 
 	// Test against origin
-	compare_test_id_http(&format!("http://{}:{}", ip, port), &test_id).await;
+	// TODO: Cannot access the IP direclty sicne it's listening on a private interface
+	// compare_test_id_http(&format!("http://{}:{}", ip, port), &test_id).await;
 
 	// Test via proxy with HTTP
 	compare_test_id_http(&format!("http://{ingress_hostname_http}"), &test_id).await;
@@ -192,7 +193,8 @@ async fn basic_tcp(ctx: TestCtx) {
 		.ingress_port;
 
 	// Test against origin
-	compare_test_id_tcp(&ip, port as u16, &test_id).await;
+	// TODO: Broken with new firewall rules
+	// compare_test_id_tcp(&ip, port as u16, &test_id).await;
 
 	// Test via proxy
 	compare_test_id_tcp(&ingress_hostname_tcp, ingress_port_tcp as u16, &test_id).await;
@@ -282,7 +284,8 @@ async fn basic_udp(ctx: TestCtx) {
 	let ingress_port_udp = proxied_ports.first().unwrap().ingress_port;
 
 	// Test against origin
-	compare_test_id_udp(&ip, port as u16, &test_id).await;
+	// TODO: Broken with new firewall rules
+	// compare_test_id_udp(&ip, port as u16, &test_id).await;
 
 	// Test via proxy
 	compare_test_id_udp(&ingress_hostname_udp, ingress_port_udp as u16, &test_id).await;

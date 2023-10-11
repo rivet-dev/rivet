@@ -37,7 +37,7 @@ fn gen_job(
 		task_groups: Some(vec![TaskGroup {
 			name: Some("test".into()),
 			networks: Some(vec![NetworkResource {
-				mode: Some("bridge".into()),
+				mode: Some("cni/rivet-job".into()),
 				dynamic_ports: Some(ports),
 				..NetworkResource::new()
 			}]),

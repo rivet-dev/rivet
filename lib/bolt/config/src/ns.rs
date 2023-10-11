@@ -75,17 +75,15 @@ pub enum ClusterKind {
 		/// Port to expose Minio on. Exposed to localhost. Not used if DNS is enabled.
 		#[serde(default = "default_minio_port")]
 		minio_port: u16,
-		/// Port to expose the Nomad server on. Exposed to localhost.
-		#[serde(default = "default_nomad_port")]
-		nomad_port: u16,
-		/// Port to expose api-route on. Exposed to localhost.
-		#[serde(default = "default_api_route_port")]
-		api_route_port: u16,
+		/// Port to expose the tunnel on. Exposed to localhost.
+		#[serde(default = "default_tunnel_port")]
+		tunnel_port: u16,
 
-		/// Restricts the resources of the core services so there are more resources availble for
-		/// compiling code.
+		/// Enable restricting the resources for Kubernetes services.
+		///
+		/// Disabled by default since this doesn't play well with development machines.
 		#[serde(default)]
-		restrict_service_resources: bool,
+		limit_resources: bool,
 	},
 	#[serde(rename = "distributed")]
 	Distributed {},
@@ -579,13 +577,13 @@ pub struct Matchmaker {
 
 #[derive(Serialize, Deserialize, Clone, Debug, Default, strum_macros::Display)]
 pub enum MatchmakerLobbyDeliveryMethod {
-	#[serde(rename = "s3_direct")]
-	#[strum(serialize = "s3_direct")]
-	#[default]
-	S3Direct,
 	#[serde(rename = "traffic_server")]
 	#[strum(serialize = "traffic_server")]
+	#[default]
 	TrafficServer,
+	#[serde(rename = "s3_direct")]
+	#[strum(serialize = "s3_direct")]
+	S3Direct,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -621,10 +619,6 @@ fn default_minio_port() -> u16 {
 	9000
 }
 
-fn default_nomad_port() -> u16 {
+fn default_tunnel_port() -> u16 {
 	5000
-}
-
-fn default_api_route_port() -> u16 {
-	5001
 }

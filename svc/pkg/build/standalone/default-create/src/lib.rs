@@ -72,7 +72,7 @@ pub async fn run_from_env() -> GlobalResult<()> {
 				?old_default_build,
 				"build already matches the given tag, skipping"
 			);
-			return Ok(());
+			continue;
 		}
 
 		// Upload the build

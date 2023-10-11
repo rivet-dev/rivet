@@ -24,10 +24,7 @@ variable "minio_port" {
 	nullable = true
 }
 
-variable "nomad_port" {
+variable "tunnel_port" {
 	type = number
 }
 
-variable "api_route_port" {
-	type = number
-}

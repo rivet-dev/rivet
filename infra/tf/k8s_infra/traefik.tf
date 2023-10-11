@@ -39,15 +39,11 @@ resource "helm_release" "traefik" {
 			}
 		}
 
-		ingressRoute = {
-			dashboard = {
-				labels = {
-					"traefik-instance" = "main"
-				}
-			}
+		commonLabels = {
+			"traefik-instance" = "main"
 		}
 
-		resources = {
+		resources = var.limit_resources ? {
 			limits = {
 				memory = "${local.service_traefik.resources.memory}Mi"
 				cpu = (
@@ -56,7 +52,7 @@ resource "helm_release" "traefik" {
 					: "${local.service_traefik.resources.cpu}m"
 				)
 			}
-		}
+		} : null
 
 		additionalArguments = [
 			"--providers.http.endpoint=http://rivet-api-route.rivet-service.svc.cluster.local/traefik/config/core?token=${module.traefik_secrets.values["rivet/api_route/token"]}",
@@ -87,10 +83,10 @@ resource "helm_release" "traefik" {
 
 		tlsOptions = {
 			"ingress-cloudflare" = {
-				curvePreferences = [ "CurveP384" ]
+				curvePreferences = ["CurveP384"]
 
 				clientAuth = {
-					secretNames = [ "ingress-tls-cloudflare-ca-cert" ]
+					secretNames = ["ingress-tls-cloudflare-ca-cert"]
 					clientAuthType = "RequireAndVerifyClientCert"
 				}
 			}

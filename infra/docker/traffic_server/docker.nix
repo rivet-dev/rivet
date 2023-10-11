@@ -13,16 +13,12 @@ let
 		runAsRoot = ''
 			#!${pkgs.runtimeShell}
 			${pkgs.dockerTools.shadowSetup}
-
-			groupadd -r trafficserver
-			useradd -r -g trafficserver trafficserver
 			mkdir -p /var/log/trafficserver /run/trafficserver /etc/trafficserver
-			chown -R trafficserver:trafficserver /var/log/trafficserver /run/trafficserver /etc/trafficserver
+			chmod 777 /var/log/trafficserver /run/trafficserver /etc/trafficserver
 		'';
 
 		config = {
 			Entrypoint = [ "${pkgs.trafficserver}/bin/traffic_server" ];
-			User = "trafficserver:trafficserver";
 		};
 	};
 in image

@@ -40,7 +40,7 @@ resource "helm_release" "cockroachdb" {
 		statefulset = {
 			replicas = local.service_cockroachdb.count
 
-			resources = {
+			resources = var.limit_resources ? {
 				limits = {
 					memory = "${local.service_cockroachdb.resources.memory}Mi"
 					cpu = (
@@ -49,7 +49,7 @@ resource "helm_release" "cockroachdb" {
 						: "${local.service_cockroachdb.resources.cpu}m"
 					)
 				}
-			}
+			} : null
 		}
 		conf = {
 			single-node = true

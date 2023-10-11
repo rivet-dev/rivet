@@ -2,20 +2,13 @@
 
 use anyhow::Result;
 use derive_builder::Builder;
-use maplit::hashmap;
+
 use serde::Serialize;
-use std::{
-	collections::{HashMap, HashSet},
-	net::Ipv4Addr,
-};
+use std::{collections::HashMap, net::Ipv4Addr};
 
 use super::net;
 
-use crate::{
-	config::service::RuntimeKind,
-	context::ProjectContext,
-	dep::{self},
-};
+use crate::context::ProjectContext;
 
 #[derive(Serialize, Clone, Builder)]
 #[builder(setter(into))]
@@ -46,7 +39,7 @@ pub struct FirewallRule {
 	inbound_ipv6_cidr: Vec<String>,
 }
 
-pub async fn build_pools(ctx: &ProjectContext) -> Result<HashMap<String, Pool>> {
+pub async fn build_pools(_ctx: &ProjectContext) -> Result<HashMap<String, Pool>> {
 	let mut pools = HashMap::<String, Pool>::new();
 
 	pools.insert(

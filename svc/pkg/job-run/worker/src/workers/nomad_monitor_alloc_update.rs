@@ -100,22 +100,22 @@ async fn worker(
 					select_run AS (
 						SELECT runs.run_id, runs.start_ts
 						FROM db_job_state.run_meta_nomad
-						INNER JOIN runs ON runs.run_id = run_meta_nomad.run_id
+						INNER JOIN db_job_state.runs ON runs.run_id = run_meta_nomad.run_id
 						WHERE dispatched_job_id = $1
 					),
 					_update_runs AS (
-						UPDATE runs
+						UPDATE db_job_state.runs
 						SET start_ts = $2
-						FROM db_job_state.select_run
+						FROM select_run
 						WHERE
 							runs.run_id = select_run.run_id AND
 							runs.start_ts IS NULL
 						RETURNING 1
 					),
 					_update_run_meta_nomad AS (
-						UPDATE run_meta_nomad
+						UPDATE db_job_state.run_meta_nomad
 						SET alloc_state = $3
-						FROM db_job_state.select_run
+						FROM select_run
 						WHERE run_meta_nomad.run_id = select_run.run_id
 						RETURNING 1
 					)
@@ -159,13 +159,13 @@ async fn worker(
 					select_run AS (
 						SELECT runs.run_id, runs.finish_ts
 						FROM db_job_state.run_meta_nomad
-						INNER JOIN runs ON runs.run_id = run_meta_nomad.run_id
+						INNER JOIN db_job_state.runs ON runs.run_id = run_meta_nomad.run_id
 						WHERE dispatched_job_id = $1
 					),
 					_update_runs AS (
-						UPDATE runs
+						UPDATE db_job_state.runs
 						SET finish_ts = $2
-						FROM db_job_state.select_run
+						FROM select_run
 						WHERE
 							runs.run_id = select_run.run_id AND
 							runs.finish_ts IS NULL

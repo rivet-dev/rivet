@@ -499,7 +499,7 @@
           },
           "editorMode": "code",
           "expr": "sum(rate(rivet_chirp_request_errors{exported_service=~\"[[service]]\"}[$__rate_interval])) by (exported_service, error_type)",
-          "legendFormat": "{{service}}: {{error_type}}",
+          "legendFormat": "{{exported_service}}: {{error_type}}",
           "range": true,
           "refId": "A"
         }
@@ -722,8 +722,8 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "max(redis_stream_group_messages_pending{group=~\"[[service]]--.*\"}) by (group, streamm)",
-          "legendFormat": "{{stream}}: {{group}}",
+          "expr": "max(redis_stream_group_messages_pending{group=~\"[[service]]--.*\"}) by (group, stream)",
+          "legendFormat": "{{group}}",
           "range": true,
           "refId": "A"
         }
@@ -888,6 +888,6 @@
   "timezone": "",
   "title": "Chirp / Service",
   "uid": "adE28xt4k",
-  "version": 2,
+  "version": 1,
   "weekStart": ""
 }

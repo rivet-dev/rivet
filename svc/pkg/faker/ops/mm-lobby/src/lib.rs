@@ -54,10 +54,10 @@ async fn handle(
 			image: if let Some(image) = ctx.image {
 				image
 			} else if ctx.skip_set_ready {
-					   faker::build::Image::HangIndefinitely as i32
-				   } else {
-					   faker::build::Image::MmLobbyAutoReady as i32
-				   },
+				faker::build::Image::HangIndefinitely as i32
+			} else {
+				faker::build::Image::MmLobbyAutoReady as i32
+			},
 		})
 		.await?;
 
@@ -147,12 +147,14 @@ async fn handle(
 		.await?;
 	let run_id = internal_unwrap!(complete_msg.run_id).as_uuid();
 
-	if !ctx.skip_set_ready {
-		msg!([ctx] mm::msg::lobby_ready(lobby_id) {
-			lobby_id: Some(lobby_id.into()),
-		})
-		.await?;
-	}
+	// TODO: Allow enabling fast-ready instead of waiting for the lobby itself to call ready
+	// endpoint
+	// if !ctx.skip_set_ready {
+	// 	msg!([ctx] mm::msg::lobby_ready(lobby_id) {
+	// 		lobby_id: Some(lobby_id.into()),
+	// 	})
+	// 	.await?;
+	// }
 
 	if let Some((mut ready_sub, mut fail_sub, mut cleanup_sub)) = subs {
 		tokio::select! {

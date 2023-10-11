@@ -1,5 +1,7 @@
 use proto::backend::{self, pkg::*};
 use rivet_operation::prelude::*;
+use std::time::Instant;
+use tracing::Instrument;
 
 #[operation(name = "mm-config-version-prepare")]
 async fn handle(
@@ -135,7 +137,79 @@ async fn validate_build(
 	let upload_id = internal_unwrap!(upload.upload_id).as_uuid();
 	internal_assert!(upload.complete_ts.is_some(), "build upload is not complete");
 
+	// Parse provider
+	let proto_provider = internal_unwrap_owned!(
+		backend::upload::Provider::from_i32(upload.provider),
+		"invalid upload provider"
+	);
+	let provider = match proto_provider {
+		backend::upload::Provider::Minio => s3_util::Provider::Minio,
+		backend::upload::Provider::Backblaze => s3_util::Provider::Backblaze,
+		backend::upload::Provider::Aws => s3_util::Provider::Aws,
+	};
+
+	// // prewarm ATS cache
+	// let path = format!(
+	// 	"/s3-cache/{provider}/{namespace}-bucket-build/{upload_id}/image.tar",
+	// 	provider = heck::KebabCase::to_kebab_case(provider.to_string().as_str()),
+	// 	namespace = util::env::namespace(),
+	// );
+	// prewarm_ats_cache(&path).await;
+
 	Ok((upload_id, build.image_tag.clone()))
 }
 
-// TODO: Validate ports are within a given range and don't use our reserved ports, since we need a reserved port range for Rivet sidecars to run
+// // TODO: Validate ports are within a given range and don't use our reserved ports, since we need a reserved port range for Rivet sidecars to run
+
+// /// Prewarms the ATS cache with the given resources in order to make the future requests faster.
+// #[tracing::instrument]
+// async fn prewarm_ats_cache(path: &str) {
+// 	// TODO: This is hardcoded
+// 	let ats_urls = vec!["10.0.25.2", "10.0.50.2"];
+// 	for ats_url in &ats_urls {
+// 		let url = format!("http://{ats_url}:9300{path}");
+// 		let spawn_res = tokio::task::Builder::new()
+// 			.name("mm_config_version_prepare::prewarm_ats_cache")
+// 			.spawn(
+// 				async move {
+// 					match prewarm_ats_cache_inner(&url).await {
+// 						Ok(_) => {}
+// 						Err(err) => {
+// 							tracing::error!(%err, "failed to prewarm ats cache");
+// 						}
+// 					}
+// 				}
+// 				.in_current_span(),
+// 			);
+// 		if let Err(err) = spawn_res {
+// 			tracing::error!(?err, "failed to spawn prewarm_ats_cache_inner task");
+// 		}
+// 	}
+// }
+
+// /// Prewarm a specific ATS server with a resource.
+// #[tracing::instrument]
+// async fn prewarm_ats_cache_inner(url: &str) -> GlobalResult<()> {
+// 	tracing::info!(?url, "populating ats build cache");
+
+// 	let client = reqwest::Client::new();
+
+// 	// Check if cache already prewarmed
+// 	let start = Instant::now();
+// 	let resp = client.head(url).send().await?;
+// 	let age = internal_unwrap!(resp.headers().get("Age"))
+// 		.to_str()?
+// 		.parse::<u64>()?;
+// 	if age > 0 {
+// 		tracing::info!(?age, "object already cached");
+// 		return Ok(());
+// 	}
+// 	tracing::info!(head_duration = ?start.elapsed(), "fetching object");
+
+// 	// Make a GET request to prewarm the cache and do nothing with the response
+// 	let start = Instant::now();
+// 	let resp = client.get(url).send().await?.error_for_status()?;
+// 	tracing::info!(get_duration = ?start.elapsed(), "cache prewarmd");
+
+// 	Ok(())
+// }

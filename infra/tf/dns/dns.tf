@@ -46,13 +46,6 @@ locals {
 			},
 		],
 
-		# Deprecated
-		var.dns_deprecated_subdomains ? [{
-			zone_id = local.cloudflare_zone_id_main
-			name = "media.${var.domain_main}"
-			proxied = true
-		}] : [],
-
 		# Job. Matchmaker lobbies will point CNAME record at this.
 		[
 			for server_id, server in local.servers:
@@ -62,9 +55,15 @@ locals {
 				server = server
 				proxied = false
 			}
-			if server.pool_id == "ing-job"
+			if server.pool_id == "gg"
 		],
 
+		# Deprecated
+		var.dns_deprecated_subdomains ? [{
+			zone_id = local.cloudflare_zone_id_main
+			name = "media.${var.domain_main}"
+			proxied = true
+		}] : [],
 	])
 }
 

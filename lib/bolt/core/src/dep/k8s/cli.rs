@@ -3,15 +3,11 @@ use std::collections::HashSet;
 use anyhow::{ensure, Context, Result};
 use tokio::{io::AsyncWriteExt, process::Command};
 
-use crate::{
-	context::ProjectContext,
-	utils::{self, command_helper::CommandHelper},
-};
+use crate::context::ProjectContext;
 
 pub async fn apply_specs(ctx: &ProjectContext, specs: Vec<serde_json::Value>) -> Result<()> {
-	let has_job = specs.iter().any(|spec| spec["kind"] == "Job");
-
 	// Handle job redeployment
+	let has_job = specs.iter().any(|spec| spec["kind"] == "Job");
 	let specs = if has_job {
 		// Get all job names
 		let output = Command::new("kubectl")
@@ -30,12 +26,14 @@ pub async fn apply_specs(ctx: &ProjectContext, specs: Vec<serde_json::Value>) ->
 		let running_jobs = output_str.trim().split(' ').collect::<Vec<_>>();
 
 		// Filter out all jobs
-		let specs_len = specs.len();
-		let (filtered_specs, job_specs) = specs.into_iter().partition::<Vec<_>, _>(|spec| {
-			!running_jobs
-				.iter()
-				.any(|j| &spec["metadata"]["name"].as_str().unwrap() == j)
-		});
+		let (filtered_specs, job_specs) = specs
+			.into_iter()
+			.filter(|x| !x["metadata"].is_null())
+			.partition::<Vec<_>, _>(|spec| {
+				!running_jobs
+					.iter()
+					.any(|j| &spec["metadata"]["name"].as_str().unwrap() == j)
+			});
 
 		if !job_specs.is_empty() {
 			let filtered_jobs = job_specs
@@ -82,6 +80,32 @@ pub async fn apply_specs(ctx: &ProjectContext, specs: Vec<serde_json::Value>) ->
 
 	let status = child.wait().await?;
 	ensure!(status.success(), "kubectl apply failed");
+
+	Ok(())
+}
+
+pub struct LogsOpts {
+	pub follow: bool,
+	pub stream: LogStream,
+}
+
+pub enum LogStream {
+	StdOut,
+	StdErr,
+}
+
+pub async fn logs(ctx: &ProjectContext, service_name: &str, opts: &LogsOpts) -> Result<()> {
+	let mut cmd = tokio::process::Command::new("kubectl");
+	cmd.arg("logs")
+		.arg("-n")
+		.arg("rivet-service")
+		.arg(format!("deployment/rivet-{service_name}"));
+	if opts.follow {
+		cmd.arg("-f");
+	}
+	cmd.env("KUBECONFIG", ctx.gen_kubeconfig_path());
+
+	cmd.output().await?;
 
 	Ok(())
 }

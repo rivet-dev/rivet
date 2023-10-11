@@ -2,26 +2,13 @@ use derive_builder::Builder;
 use maplit::hashmap;
 use std::collections::HashMap;
 
-use crate::{config::ns, context::ProjectContext};
+use crate::context::ProjectContext;
 
 /// Defines the dependency graph for the Terraform plans.
 ///
 /// This is used to automatically generate `terraform_remote_state` blocks
 /// for each Terraform plan with the correct state backend.
-pub fn dependency_graph(ctx: &ProjectContext) -> HashMap<&'static str, Vec<RemoteState>> {
-	// S3 plan
-	let (default_s3_provider, _) = ctx.default_s3_provider().unwrap();
-	let s3_plan_id = match default_s3_provider {
-		s3_util::Provider::Minio => "s3_minio",
-		s3_util::Provider::Backblaze => "s3_backblaze",
-		s3_util::Provider::Aws => "s3_aws",
-	};
-	let s3 = RemoteStateBuilder::default()
-		.plan_id(s3_plan_id)
-		.data_name("s3")
-		.build()
-		.unwrap();
-
+pub fn dependency_graph(_ctx: &ProjectContext) -> HashMap<&'static str, Vec<RemoteState>> {
 	hashmap! {
 		"dns" => vec![RemoteStateBuilder::default().plan_id("pools").build().unwrap(), RemoteStateBuilder::default().plan_id("k8s_infra").build().unwrap()],
 		"redis_aws" => vec![

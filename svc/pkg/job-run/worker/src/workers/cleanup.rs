@@ -108,7 +108,7 @@ async fn update_db(
 			//
 			// There is a situation where the Nomad API returns an error and the
 			// job ID is never written to the database.
-			internal_panic!("potential race condition with starting nomad job")
+			retry_panic!("potential race condition with starting nomad job")
 		}
 	}
 

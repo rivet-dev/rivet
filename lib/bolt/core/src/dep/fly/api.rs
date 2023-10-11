@@ -17,7 +17,7 @@ pub struct App {
 }
 
 pub async fn list_apps(ctx: &ProjectContext) -> Result<Vec<App>> {
-	let fly = ctx.ns().fly.as_ref().context("missing fly")?;
+	let _fly = ctx.ns().fly.as_ref().context("missing fly")?;
 
 	#[derive(Deserialize, Debug)]
 	pub struct Response {

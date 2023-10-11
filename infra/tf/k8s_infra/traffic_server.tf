@@ -142,6 +142,12 @@ resource "kubernetes_stateful_set" "traffic_server" {
 			}
 
 			spec {
+				security_context {
+					run_as_user = 1000
+					run_as_group = 1000
+					fs_group = 1000
+				}
+
 				image_pull_secrets {
 					name = "docker-auth"
 				}
@@ -149,7 +155,7 @@ resource "kubernetes_stateful_set" "traffic_server" {
 				container {
 					name = "traffic-server-instance"
 					# TODO: Use the git hash here
-					image = "ghcr.io/rivet-gg/apache-traffic-server:378f44b"
+					image = "ghcr.io/rivet-gg/apache-traffic-server:44ef76a"
 					image_pull_policy = "IfNotPresent"
 
 					port {
@@ -168,14 +174,18 @@ resource "kubernetes_stateful_set" "traffic_server" {
 						timeout_seconds = 2
 					}
 
-					resources {
-						limits = {
-							memory = "${local.service_traffic_server.resources.memory}Mi"
-							cpu = (
+					dynamic "resources" {
+						for_each = var.limit_resources ? [0] : []
+
+						content {
+							limits = {
+								memory = "${local.service_traffic_server.resources.memory}Mi"
+								cpu = (
 								local.service_traffic_server.resources.cpu_cores > 0 ?
 								"${local.service_traffic_server.resources.cpu_cores * 1000}m"
 								: "${local.service_traffic_server.resources.cpu}m"
-							)
+								)
+							}
 						}
 					}
 
@@ -190,6 +200,22 @@ resource "kubernetes_stateful_set" "traffic_server" {
 					volume_mount {
 						name = "traffic-server-cache"
 						mount_path = "/var/cache/trafficserver"
+					}
+					volume_mount {
+						name = "traffic-server-log"
+						mount_path = "/var/log/trafficserver"
+					}
+				}
+
+				container {
+					name = "debug"
+					image = "alpine"
+					image_pull_policy = "IfNotPresent"
+					command = ["sleep", "infinity"]
+
+					volume_mount {
+						name = "traffic-server-log"
+						mount_path = "/var/log/trafficserver"
 					}
 				}
 
@@ -223,6 +249,21 @@ resource "kubernetes_stateful_set" "traffic_server" {
 				storage_class_name = var.k8s_storage_class
 			}
 		}
+
+		volume_claim_template {
+			metadata {
+				name = "traffic-server-log"
+			}
+			spec {
+				access_modes = ["ReadWriteOnce"]
+				resources {
+					requests = {
+						storage = "10Gi"
+					}
+				}
+				storage_class_name = var.k8s_storage_class
+			}
+		}
 	}
 }
 
@@ -236,6 +277,9 @@ resource "kubectl_manifest" "traffic_server_traefik_service" {
 		metadata = {
 			name = "traffic-server"
 			namespace = kubernetes_namespace.traffic_server.metadata.0.name
+			labels = {
+				"traefik-instance" = "main"
+			}
 		}
 
 		spec = {

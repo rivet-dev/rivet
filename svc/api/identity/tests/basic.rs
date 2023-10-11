@@ -61,7 +61,7 @@ impl Ctx {
 
 	fn http_client(&self, bearer_token: String) -> rivet_identity::ClientWrapper {
 		rivet_identity::Config::builder()
-			.set_uri(util::env::svc_router_url("api-identity"))
+			.set_uri("http://traefik.traefik.svc.cluster.local:80/identity")
 			.set_bearer_token(bearer_token)
 			.build_client()
 	}

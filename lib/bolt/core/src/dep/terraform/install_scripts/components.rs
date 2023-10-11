@@ -1,6 +1,6 @@
 use anyhow::{Context, Result};
 use indoc::formatdoc;
-use maplit::hashmap;
+
 use std::collections::HashMap;
 use tokio::fs;
 
@@ -64,6 +64,7 @@ pub struct TraefikInstance {
 }
 
 pub struct ServerTransport {
+	pub server_name: String,
 	pub root_cas: Vec<String>,
 	pub certs: Vec<Cert>,
 }
@@ -116,9 +117,10 @@ pub fn traefik_instance(config: TraefikInstance) -> String {
 		let mut transport_config = formatdoc!(
 			r#"
 			[tcp.serversTransports.{transport_id}.tls]
-				serverName = "tunnel.rivet.gg"
+				serverName = "{server_name}"
 				rootCAs = [{root_cas}]
 			"#,
+			server_name = transport.server_name
 		);
 
 		// Write root CAs
@@ -169,73 +171,129 @@ pub fn traefik_instance(config: TraefikInstance) -> String {
 	script
 }
 
+const TUNNEL_SERVICES: &[&'static str] = &["nomad", "api-route", "vector"];
+
 pub fn traefik_tunnel(
-	ctx: &ProjectContext,
+	_ctx: &ProjectContext,
 	k8s_infra: &crate::dep::terraform::output::K8sInfra,
 	tls: &crate::dep::terraform::output::Tls,
 ) -> String {
+	// Build transports for each service
+	let mut tcp_server_transports = HashMap::new();
+	for service in TUNNEL_SERVICES {
+		tcp_server_transports.insert(
+			service.to_string(),
+			ServerTransport {
+				server_name: format!("{service}.tunnel.rivet.gg"),
+				root_cas: vec![(*tls.root_ca_cert_pem).clone()],
+				certs: vec![(*tls.tls_cert_locally_signed_job).clone()],
+			},
+		);
+	}
+
 	traefik_instance(TraefikInstance {
 		name: "tunnel".into(),
 		static_config: tunnel_traefik_static_config(),
 		dynamic_config: tunnel_traefik_dynamic_config(&*k8s_infra.traefik_tunnel_external_ip),
 		tls_certs: Default::default(),
-		tcp_server_transports: hashmap! {
-			"tunnel".into() => ServerTransport {
-				root_cas: vec![
-					(*tls.root_ca_cert_pem).clone()
-				],
-				certs: vec![
-					(*tls.tls_cert_locally_signed_job).clone()
-				]
-			}
-		},
+		tcp_server_transports,
 	})
 }
 
 fn tunnel_traefik_static_config() -> String {
-	formatdoc!(
+	let mut config = formatdoc!(
 		r#"
-		[entryPoints.nomad]
-			address = "127.0.0.1:5000"
-
-		[entryPoints.api_route]
-			address = "127.0.0.1:5001"
-
 		[providers]
 			[providers.file]
 				directory = "/etc/tunnel/dynamic"
 		"#
-	)
+	);
+
+	for (i, service) in TUNNEL_SERVICES.iter().enumerate() {
+		config.push_str(&formatdoc!(
+			r#"
+			[entryPoints.{service}]
+				address = "127.0.0.1:{port}"
+			"#,
+			port = 5000 + i
+		))
+	}
+
+	config
 }
 
 fn tunnel_traefik_dynamic_config(tunnel_external_ip: &str) -> String {
-	formatdoc!(
+	let mut config = String::new();
+	for service in TUNNEL_SERVICES.iter() {
+		config.push_str(&formatdoc!(
+			r#"
+			[tcp.routers.{service}]
+				entryPoints = ["{service}"]
+				rule = "HostSNI(`*`)"  # Match all ingress, unrelated to the outbound TLS
+				service = "{service}"
+
+			[tcp.services.{service}.loadBalancer]
+				serversTransport = "{service}"
+
+				[[tcp.services.{service}.loadBalancer.servers]]
+					address = "{tunnel_external_ip}:5000"
+					tls = true
+			"#
+		))
+	}
+
+	config
+}
+
+pub struct VectorConfig {
+	pub prometheus_targets: HashMap<String, VectorPrometheusTarget>,
+}
+
+pub struct VectorPrometheusTarget {
+	pub endpoint: String,
+	pub scrape_interval: usize,
+}
+
+pub fn vector(config: &VectorConfig) -> String {
+	let sources = config
+		.prometheus_targets
+		.keys()
+		.map(|x| format!("\"prometheus_{x}\""))
+		.collect::<Vec<_>>()
+		.join(", ");
+
+	let mut config_str = formatdoc!(
 		r#"
-		[tcp.routers.nomad]
-			entryPoints = ["nomad"]
-			rule = "HostSNI(`*`)"
-			service = "nomad"
+		[api]
+			enabled = true
 
-		[tcp.routers.api_route]
-			entryPoints = ["api_route"]
-			rule = "HostSNI(`*`)"
-			service = "api_route"
+		[sinks.vector_sink]
+			type = "vector"
+			inputs = [{sources}]
+			address = "127.0.0.1:5002"
+			healthcheck.enabled = false
+		"#
+	);
 
-		[tcp.services.nomad.loadBalancer]
-			serversTransport = "tunnel"
+	for (
+		key,
+		VectorPrometheusTarget {
+			endpoint,
+			scrape_interval,
+		},
+	) in &config.prometheus_targets
+	{
+		config_str.push_str(&formatdoc!(
+			r#"
+			[sources.prometheus_{key}]
+				type = "prometheus_scrape"
+				endpoints = ["{endpoint}"]
+				scrape_interval_secs = {scrape_interval}
+			"#
+		));
+	}
 
-			[[tcp.services.nomad.loadBalancer.servers]]
-				address = "{tunnel_external_ip}:5000"
-				tls = true
-
-		[tcp.services.api_route.loadBalancer]
-			serversTransport = "tunnel"
-
-			[[tcp.services.api_route.loadBalancer.servers]]
-				address = "{tunnel_external_ip}:5001"
-				tls = true
-		"#,
-	)
+	include_str!("files/vector.sh").replace("__VECTOR_CONFIG__", &config_str)
 }
 
 pub async fn traffic_server(ctx: &ProjectContext) -> Result<String> {
@@ -250,7 +308,7 @@ pub async fn traffic_server(ctx: &ProjectContext) -> Result<String> {
 	let script = include_str!("files/traffic_server.sh")
 		.replace(
 			"__IMAGE__",
-			"ghcr.io/rivet-gg/apache-traffic-server:378f44b",
+			"ghcr.io/rivet-gg/apache-traffic-server:44ef76a",
 		)
 		.replace("__CONFIG__", &config_script);
 
@@ -293,18 +351,18 @@ async fn traffic_server_config(ctx: &ProjectContext) -> Result<Vec<(String, Stri
 	// Remap & S3
 	let mut remap = String::new();
 	let (default_s3_provider, _) = ctx.default_s3_provider()?;
-	if let Some(p) = &ctx.ns().s3.providers.minio {
+	if ctx.ns().s3.providers.minio.is_some() {
 		let output = gen_s3_provider(ctx, s3_util::Provider::Minio, default_s3_provider).await?;
 		remap.push_str(&output.append_remap);
 		config_files.extend(output.config_files);
 	}
-	if let Some(p) = &ctx.ns().s3.providers.backblaze {
+	if ctx.ns().s3.providers.backblaze.is_some() {
 		let output =
 			gen_s3_provider(ctx, s3_util::Provider::Backblaze, default_s3_provider).await?;
 		remap.push_str(&output.append_remap);
 		config_files.extend(output.config_files);
 	}
-	if let Some(p) = &ctx.ns().s3.providers.aws {
+	if ctx.ns().s3.providers.aws.is_some() {
 		let output = gen_s3_provider(ctx, s3_util::Provider::Aws, default_s3_provider).await?;
 		remap.push_str(&output.append_remap);
 		config_files.extend(output.config_files);

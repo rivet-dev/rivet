@@ -153,15 +153,19 @@ resource "kubernetes_deployment" "imagor" {
 						timeout_seconds = 2
 					}
 
-					resources {
-						limits = {
-							memory = "${local.service_imagor.resources.memory}Mi"
-							cpu = (
-								local.service_imagor.resources.cpu_cores > 0 ?
-								"${local.service_imagor.resources.cpu_cores * 1000}m"
-								: "${local.service_imagor.resources.cpu}m"
-							)
-							"ephemeral-storage" = "${local.ephemeral_disk}M"
+					dynamic "resources" {
+						for_each = var.limit_resources ? [0] : []
+
+						content {
+							limits = {
+								memory = "${local.service_imagor.resources.memory}Mi"
+								cpu = (
+									local.service_imagor.resources.cpu_cores > 0 ?
+									"${local.service_imagor.resources.cpu_cores * 1000}m"
+									: "${local.service_imagor.resources.cpu}m"
+								)
+								"ephemeral-storage" = "${local.ephemeral_disk}M"
+							}
 						}
 					}
 				}
@@ -210,6 +214,9 @@ resource "kubectl_manifest" "imagor_traefik_service" {
 		metadata = {
 			name = "imagor"
 			namespace = kubernetes_namespace.imagor.metadata[0].name
+			labels = {
+				"traefik-instance" = "main"
+			}
 		}
 
 		spec = {
@@ -234,6 +241,9 @@ resource "kubectl_manifest" "imagor_ingress" {
 		metadata = {
 			name = "imagor-${each.key}"
 			namespace = kubernetes_namespace.imagor.metadata[0].name
+			labels = {
+				"traefik-instance" = "main"
+			}
 		}
 
 		spec = {
@@ -275,6 +285,9 @@ resource "kubectl_manifest" "imagor_cors" {
 		metadata = {
 			name = "imagor-cors"
 			namespace = kubernetes_namespace.imagor.metadata[0].name
+			labels = {
+				"traefik-instance" = "main"
+			}
 		}
 
 		spec = {
@@ -297,6 +310,9 @@ resource "kubectl_manifest" "imagor_cors_game" {
 		metadata = {
 			name = "imagor-cors-game"
 			namespace = kubernetes_namespace.imagor.metadata[0].name
+			labels = {
+				"traefik-instance" = "main"
+			}
 		}
 
 		spec = {
@@ -319,6 +335,9 @@ resource "kubectl_manifest" "imagor_cdn_retry" {
 		metadata = {
 			name = "imagor-cdn-retry"
 			namespace = kubernetes_namespace.imagor.metadata[0].name
+			labels = {
+				"traefik-instance" = "main"
+			}
 		}
 
 		spec = {
@@ -340,6 +359,9 @@ resource "kubectl_manifest" "imagor_cdn_cache_control" {
 		metadata = {
 			name = "imagor-cdn-cache-control"
 			namespace = kubernetes_namespace.imagor.metadata[0].name
+			labels = {
+				"traefik-instance" = "main"
+			}
 		}
 
 		spec = {
@@ -362,6 +384,9 @@ resource "kubectl_manifest" "imagor_cdn" {
 		metadata = {
 			name = "imagor-cdn"
 			namespace = kubernetes_namespace.imagor.metadata[0].name
+			labels = {
+				"traefik-instance" = "main"
+			}
 		}
 
 		spec = {
@@ -395,6 +420,9 @@ resource "kubectl_manifest" "imagor_preset_middlewares" {
 		metadata = {
 			name = "imagor-${each.key}-path"
 			namespace = kubernetes_namespace.imagor.metadata[0].name
+			labels = {
+				"traefik-instance" = "main"
+			}
 		}
 
 		spec = {
