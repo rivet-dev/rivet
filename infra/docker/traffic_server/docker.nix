@@ -14,6 +14,7 @@ let
 			#!${pkgs.runtimeShell}
 			${pkgs.dockerTools.shadowSetup}
 			mkdir -p /var/log/trafficserver /run/trafficserver /etc/trafficserver
+			chmod 777 /var/log/trafficserver /run/trafficserver /etc/trafficserver
 		'';
 
 		config = {
