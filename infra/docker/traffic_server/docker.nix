@@ -18,7 +18,6 @@ let
 
 		config = {
 			Entrypoint = [ "${pkgs.trafficserver}/bin/traffic_server" ];
-			User = "trafficserver:trafficserver";
 		};
 	};
 in image

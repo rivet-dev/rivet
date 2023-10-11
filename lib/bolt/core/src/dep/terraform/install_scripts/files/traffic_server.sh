@@ -6,10 +6,9 @@ if ! id -u "trafficserver" &>/dev/null; then
 fi
 
 # Create volumes
-for x in /etc/trafficserver /var/cache/trafficserver /var/log/trafficserver; do
+for x in /etc/trafficserver /var/cache/trafficserver /run/trafficserver /var/log/trafficserver; do
 	mkdir -p $x
 	chown -R trafficserver:trafficserver $x
-	chmod -R 770 $x
 done
 
 __CONFIG__
@@ -31,6 +30,7 @@ ExecStart=/usr/bin/docker run --rm --name trafficserver \
 	--user "$(id -u trafficserver):$(id -g trafficserver)" \
 	--volume=/etc/trafficserver:/etc/trafficserver \
 	--volume=/var/cache/trafficserver:/var/cache/trafficserver \
+	--volume=/run/trafficserver:/run/trafficserver \
 	--volume=/var/log/trafficserver:/var/log/trafficserver \
 	--network host \
 	"__IMAGE__"
