@@ -114,23 +114,6 @@ push_etc_trafficserver_dynamic_{{provider}}:
       - user: create_trafficserver_user
 {%- endfor %}
 
-reload_traffic_server_config:
-  cmd.run:
-    - name: /var/rivet-nix/result/traffic_server/bin/traffic_ctl config reload
-    - require:
-      - cmd: start_trafficserver_service
-      - file: push_etc_trafficserver_static
-      - file: push_etc_trafficserver_dynamic
-      {%- for provider, _ in pillar['s3']['config'].items() %}
-      - push_etc_trafficserver_dynamic_{{provider}}
-      {%- endfor %}
-    - onchanges:
-      - file: push_etc_trafficserver_static
-      - file: push_etc_trafficserver_dynamic
-      {%- for provider, _ in pillar['s3']['config'].items() %}
-      - push_etc_trafficserver_dynamic_{{provider}}
-      {%- endfor %}
-
 push_etc_consul_traffic_server_hcl:
   file.managed:
     - name: /etc/consul.d/traffic_server.hcl

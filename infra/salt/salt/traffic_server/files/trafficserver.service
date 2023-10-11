@@ -3,17 +3,19 @@ Description=Apache Traffic Server
 After=network-online.target
 
 [Service]
-Type=simple
-User=trafficserver
-Group=trafficserver
-Environment="TM_START=yes"
-PIDFile=/run/trafficserver/manager.lock
-ExecStart=/var/rivet-nix/result/traffic_server/bin/traffic_manager $TM_DAEMON_ARGS
-ExecReload=/var/rivet-nix/result/traffic_server/bin/traffic_manager config reload
-{% if 'local' in pillar.rivet.deploy and pillar.rivet.deploy.local.restrict_service_resources %}
-Nice=10
-CPUAffinity=0
-{% endif %}
+[Service]
+TimeoutStartSec=0
+ExecStartPre=-/usr/bin/docker kill trafficserver
+ExecStartPre=-/usr/bin/docker rm trafficserver
+ExecStartPre=/usr/bin/docker pull "ghcr.io/rivet-gg/apache-traffic-server:378f44b"
+ExecStart=/usr/bin/docker run --rm --name trafficserver -u 994:994 \
+        --volume=/etc/trafficserver:/etc/trafficserver \
+        --volume=/var/log/trafficserver:/var/log/trafficserver \
+        --volume=/mnt/trafficserver:/var/cache/trafficserver \
+        --volume=/run/trafficserver:/run/trafficserver \
+        --network host \
+        "ghcr.io/rivet-gg/apache-traffic-server:6a4173c"
+ExecStop=/usr/bin/docker stop trafficserver
 
 [Install]
 WantedBy=multi-user.target

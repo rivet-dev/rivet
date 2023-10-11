@@ -14,7 +14,7 @@ base:
     - nomad
   'G@roles:docker or G@roles:nomad-client':
     - cni_plugins
-  'G@roles:docker':
+  'G@roles:docker or G@roles:traffic-server':
     - docker
   'G@roles:nats-server':
     - nats
