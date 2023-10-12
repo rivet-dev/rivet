@@ -20,6 +20,7 @@ resource "kubectl_manifest" "pod_rules" {
 								summary = "Pod High Memory usage ({{ $labels.namespace }}/{{ $labels.pod }})"
 								description = "Pod Memory usage has been above 80% for over 2 minutes\n  VALUE = {{ printf \"%.2f%%\" $value }}\n  LABELS = {{ $labels }}"
 							}
+							# TODO: Maybe use kube_pod_container_resource_limits{resource="memory"} instead?
 							expr = "(sum(container_memory_working_set_bytes{name!=\"\"}) BY (namespace, pod) / sum(container_spec_memory_limit_bytes > 0) BY (namespace, pod) * 100) > 80"
 							"for" = "2m"
 							labels = {
