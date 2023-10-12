@@ -46,6 +46,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 -  **Infra** Redis database connections now use TLS
 -  **Infra** Redis now uses Redis Cluster for everything
 -  **Infra** Cloudflare certificate authority from DigitCert to Lets Encrypt
+-  **Infra** Removed 1.1.1.1 & 1.0.0.1 as resolvers from Nomad jobs due to reliability issues
+-  **Infra** Added IPv6 DNS resolvers to Nomad jobs
 
 ### Fixed
 
