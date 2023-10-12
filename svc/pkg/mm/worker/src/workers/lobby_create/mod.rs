@@ -776,20 +776,9 @@ async fn resolve_image_artifact_url(
 		"traffic_server" => {
 			tracing::info!("using traffic server delivery");
 
-			// HACK: Hardcode ATS IP since this will be replaced shortly
-			let ats_url = if region.name_id == "lnd-atl" {
-				"10.0.25.2"
-			} else if region.name_id == "lnd-fra" {
-				"10.0.50.2"
-			} else {
-				tracing::info!(?region.name_id);
-				internal_panic!("invalid region");
-			};
-
 			let upload_id = internal_unwrap!(upload.upload_id).as_uuid();
 			let addr = format!(
-				"http://{ats_url}:8080/s3-cache/{provider}/{namespace}-bucket-build/{upload_id}/image.tar",
-				ats_url = ats_url,
+				"http://127.0.0.1:8080/s3-cache/{provider}/{namespace}-bucket-build/{upload_id}/image.tar",
 				provider = heck::KebabCase::to_kebab_case(provider.as_str()),
 				namespace = util::env::namespace(),
 				upload_id = upload_id,

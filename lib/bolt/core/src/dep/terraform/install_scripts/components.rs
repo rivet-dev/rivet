@@ -391,12 +391,12 @@ async fn gen_s3_provider(
 	let creds = ctx.s3_credentials(provider).await?;
 
 	// Add remap
-	remap.push_str(&format!("map /s3-cache/{provider_name} {endpoint_internal} @plugin=s3_auth.so @pparam=--config @pparam=s3_auth_v4_{provider_name}.config\n", endpoint_internal = config.endpoint_internal));
+	remap.push_str(&format!("map /s3-cache/{provider_name} {endpoint_external} @plugin=s3_auth.so @pparam=--config @pparam=s3_auth_v4_{provider_name}.config\n", endpoint_external = config.endpoint_external));
 
 	// Add default route
 	if default_s3_provider == provider {
-		remap.push_str(&format!("map /s3-cache {endpoint_internal} @plugin=s3_auth.so @pparam=--config @pparam=s3_auth_v4_{provider_name}.config\n",
-			endpoint_internal = config.endpoint_internal,
+		remap.push_str(&format!("map /s3-cache {endpoint_external} @plugin=s3_auth.so @pparam=--config @pparam=s3_auth_v4_{provider_name}.config\n",
+			endpoint_external = config.endpoint_external,
 		));
 	}
 
