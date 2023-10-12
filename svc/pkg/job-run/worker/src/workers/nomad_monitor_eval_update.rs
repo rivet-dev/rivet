@@ -46,7 +46,7 @@ async fn worker(
 		return Ok(());
 	}
 
-	// HACK: Serde isn't deserialize this correctly for some reason so
+	// HACK: Serde isn't deserializing this correctly for some reason so
 	// we use raw JSON
 	// Filter out data we need from the event. Ignore events we don't care about
 	// before we touch the database.

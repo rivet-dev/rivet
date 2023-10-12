@@ -8,6 +8,9 @@ pub struct TestOpts {
 	service_names: Vec<String>,
 	#[clap(long)]
 	filter: Vec<String>,
+	/// Amount of parallel tests to run simultaneously.
+	#[clap(long, short = 'c')]
+	parallel_tests: Option<usize>,
 }
 
 impl TestOpts {
@@ -15,11 +18,16 @@ impl TestOpts {
 		let TestOpts {
 			service_names,
 			filter,
+			parallel_tests,
 		} = self;
+
+		if let Some(parallel_tests) = parallel_tests {
+			ensure!(parallel_tests <= 100, "too many parallel tests (> 100)");
+		}
 
 		// Test services
 		if !service_names.is_empty() {
-			tasks::test::test_services(&ctx, &service_names, filter).await?;
+			tasks::test::test_services(&ctx, &service_names, filter, parallel_tests).await?;
 		} else {
 			ensure!(
 				filter.is_empty(),

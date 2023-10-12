@@ -20,6 +20,37 @@ locals {
 			memory = 2500
 		}
 	})
+
+	has_slack_receiver = (
+		module.alertmanager_secrets.values["alertmanager/slack/url"] != null &&
+		module.alertmanager_secrets.values["alertmanager/slack/channel"] != null
+	)
+	receivers = local.has_slack_receiver ? [
+		{
+			name = "null"
+		},
+		{
+			name = "slack"
+			slack_configs = [
+				{
+					channel = module.alertmanager_secrets.values["alertmanager/slack/channel"]
+					api_url = module.alertmanager_secrets.values["alertmanager/slack/url"]
+				}
+			]
+		}
+	] : [
+		{
+			name = "null"
+		},
+		null
+	]
+}
+
+module "alertmanager_secrets" {
+	source = "../modules/secrets"
+
+	keys = ["alertmanager/slack/url", "alertmanager/slack/channel"]
+	optional = true
 }
 
 resource "kubernetes_namespace" "prometheus" {
@@ -94,7 +125,7 @@ resource "helm_release" "prometheus" {
 					group_wait = "15s"
 					group_interval = "1m"
 					repeat_interval = "4h"
-					receiver = "slack"
+					receiver = local.has_slack_receiver ? "slack" : "null"
 					routes = [
 						{
 							receiver = "null"
@@ -104,20 +135,7 @@ resource "helm_release" "prometheus" {
 						}
 					]
 				}
-				receivers = [
-					{
-						name = "null"
-					},
-					{
-						name = "slack"
-						slack_configs = [
-							{
-								channel = "C060NE3S536"
-								api_url = "https://hooks.slack.com/services/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"
-							}
-						]
-					}
-				]
+				receivers = local.receivers
 				templates = [
 					"/etc/alertmanager/config/*.tmpl"
 				]
@@ -196,52 +214,3 @@ resource "helm_release" "prometheus" {
 		}
 	})]
 }
-
-# resource "kubectl_manifest" "test_rule" {
-# 	depends_on = [helm_release.prometheus]
-
-# 	yaml_body = yamlencode({
-# 		apiVersion = "monitoring.coreos.com/v1"
-# 		kind = "PrometheusRule"
-# 		metadata = {
-# 			name = "prometheus-example-rules"
-# 			namespace = kubernetes_namespace.prometheus.metadata.0.name
-# 		}
-# 		spec = {
-# 			groups = [
-# 				{
-# 					name = "test-group2"
-# 					interval = "1s"
-# 					rules = [
-# 						{
-# 							alert = "ExampleAlert2"
-# 							annotations = {
-# 								message = "test message {{ $value }}"
-# 								# message = <<-EOF
-# 								# {{ $labels.job }} {{ $labels.route }} is experiencing {{ printf
-# 								# "%.2f" $value }}% errors.
-# 								# EOF
-# 							}
-# 							# expr = <<-EOF
-# 							# 	sum by (service)
-# 							# 	(increase(rivet_chirp_request_duration_count{error_code!="",error_code!~"(1002|VALIDATION_ERROR)"}
-# 							# 	[2m]))
-
-# 							# 	/
-
-# 							# 	sum by (service)
-# 							# 	(clamp_min(increase(rivet_chirp_request_duration_count{error_code!~"(1002|VALIDATION_ERROR)"}
-# 							# 	[2m]), 1))
-# 							# 	EOF
-# 							expr = "vector(1)"
-# 							# for = "15m"
-# 							labels = {
-# 								severity = "critical"
-# 							}
-# 						}
-# 					]
-# 				}
-# 			]
-# 		}
-# 	})
-# }

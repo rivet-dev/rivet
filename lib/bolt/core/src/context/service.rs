@@ -811,15 +811,6 @@ impl ServiceContextData {
 				"CLOUDFLARE_ZONE_ID_JOB".into(),
 				(*dns.cloudflare_zone_ids).job.clone(),
 			));
-
-			if self.depends_on_cloudflare() {
-				env.push((
-					"CLOUDFLARE_AUTH_TOKEN".into(),
-					project_ctx
-						.read_secret(&["cloudflare", "terraform", "auth_token"])
-						.await?,
-				));
-			}
 		}
 
 		if let Some(hcaptcha) = &project_ctx.ns().captcha.hcaptcha {
@@ -1155,6 +1146,15 @@ impl ServiceContextData {
 			if providers.aws.is_some() {
 				add_s3_secret_env(&project_ctx, &mut env, &s3_dep, s3_util::Provider::Aws).await?;
 			}
+		}
+
+		if project_ctx.ns().dns.is_some() && self.depends_on_cloudflare() {
+			env.push((
+				"CLOUDFLARE_AUTH_TOKEN".into(),
+				project_ctx
+					.read_secret(&["cloudflare", "terraform", "auth_token"])
+					.await?,
+			));
 		}
 
 		Ok(env)

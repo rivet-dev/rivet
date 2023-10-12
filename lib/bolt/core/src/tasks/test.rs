@@ -31,7 +31,7 @@ use crate::{
 /// operations to time out first.
 const TEST_TIMEOUT: Duration = Duration::from_secs(75);
 
-const PARALLEL_TESTS: usize = 8;
+const DEFAULT_PARALLEL_TESTS: usize = 8;
 
 pub async fn test_all(ctx: &ProjectContext) -> Result<()> {
 	let all_svc_names = ctx
@@ -40,7 +40,7 @@ pub async fn test_all(ctx: &ProjectContext) -> Result<()> {
 		.iter()
 		.map(|svc| svc.name())
 		.collect::<Vec<_>>();
-	test_services(ctx, &all_svc_names, Vec::new()).await?;
+	test_services(ctx, &all_svc_names, Vec::new(), None).await?;
 
 	Ok(())
 }
@@ -49,6 +49,7 @@ pub async fn test_services<T: AsRef<str>>(
 	ctx: &ProjectContext,
 	svc_names: &[T],
 	filters: Vec<String>,
+	parallel_tests: Option<usize>,
 ) -> Result<()> {
 	if ctx.ns().rivet.test.is_none() {
 		bail!("tests are disabled, enable them by setting rivet.test in the namespace config");
@@ -134,7 +135,7 @@ pub async fn test_services<T: AsRef<str>>(
 			.await
 		}
 	}))
-	.buffer_unordered(PARALLEL_TESTS)
+	.buffer_unordered(parallel_tests.unwrap_or(DEFAULT_PARALLEL_TESTS))
 	.try_collect::<Vec<_>>()
 	.await?;
 
@@ -159,6 +160,8 @@ pub async fn test_services<T: AsRef<str>>(
 			"service/nomad-server",
 			"-n",
 			"nomad",
+			"--container",
+			"nomad-instance",
 			"--",
 			"sh",
 			"-c",
@@ -175,6 +178,7 @@ pub async fn test_services<T: AsRef<str>>(
 		.iter()
 		.all(|res| matches!(res.status, TestStatus::Pass));
 	if !all_succeeded {
+		eprintln!();
 		bail!("at least one test failure occurred");
 	}
 

@@ -77,23 +77,6 @@ resource "helm_release" "promtail" {
 
 				# Remove default relabel config (see helm chart values.yaml)
 				common = [
-					# {
-					# 	action = "replace"
-					# 	source_labels = ["__meta_kubernetes_namespace"]
-					# 	target_label = "namespace"
-					# },
-					# {
-					# 	action = "replace"
-					# 	replacement = "$1"
-					# 	separator = "/"
-					# 	source_labels = ["namespace", "app"]
-					# 	target_label = "job"
-					# },
-					# {
-					# 	action = "replace"
-					# 	source_labels = ["__meta_kubernetes_pod_container_name"]
-					# 	target_label = "container"
-					# },
 					{
 						action = "replace"
 						replacement = "/var/log/pods/*$1/*.log"

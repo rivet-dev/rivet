@@ -76,12 +76,13 @@ resource "helm_release" "cockroachdb" {
 		}
 
 		serviceMonitor = {
-			enabled = true
+			# TODO: Doesn't work without insecure TLS
+			enabled = false
 			namespaced = true
 
-			tlsConfig = {
-				insecureSkipVerify = true
-			}
+			# tlsConfig = {
+			# 	insecureSkipVerify = true
+			# }
 		}
 	})]
 }
