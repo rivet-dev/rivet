@@ -437,31 +437,39 @@ pub fn envoy() -> String {
 	include_str!("files/envoy.sh").to_string()
 }
 
-pub fn outbound_proxy() -> Result<String> {
+pub fn outbound_proxy(server: &Server, all_servers: &HashMap<String, Server>) -> Result<String> {
 	// Build ATS endpoints
-	let mut endpoints = Vec::new();
-	for x in 0..3 {
-		endpoints.push(json!({
-			"endpoint": {
-				"address": {
-					"socket_address": {
-						"address": "10.0.0.1",
-						"port_value": 8080
+	let mut ats_servers = all_servers
+		.values()
+		.filter(|x| server.region_id == x.region_id && x.pool_id == "ats")
+		.collect::<Vec<_>>();
+	// Use the same sorting as ATS for consistent Maglev hashing
+	ats_servers.sort_by_key(|x| x.index);
+	let ats_endpoints = ats_servers
+		.iter()
+		.map(|x| {
+			json!({
+				"endpoint": {
+					"address": {
+						"socket_address": {
+							"address": x.vlan_ip.to_string(),
+							"port_value": 8080
+						}
 					}
 				}
-			}
-		}));
-	}
+			})
+		})
+		.collect::<Vec<_>>();
 
 	// Build config
 	let config = json!({
 		"static_resources": {
 			"listeners": [{
-				"name": "listener_0",
+				"name": "ats",
 				"address": {
 					"socket_address": {
 						"address": "0.0.0.0",
-						"port_value": 10000
+						"port_value": 8080
 					}
 				},
 				"filter_chains": [{
@@ -479,7 +487,7 @@ pub fn outbound_proxy() -> Result<String> {
 										"routes": [{
 											"match": { "prefix": "/" },
 											"route": {
-												"cluster": "service_backend",
+												"cluster": "ats_backend",
 												"hash_policy": [{
 													"header": { "header_name": ":path" }
 												}]
@@ -501,14 +509,26 @@ pub fn outbound_proxy() -> Result<String> {
 				}]
 			}],
 			"clusters": [{
-				"name": "service_backend",
+				"name": "ats_backend",
 				"connect_timeout": "0.25s",
-				"lb_policy": "RING_HASH",
+				// Use consistent hashing to reliably send the same request to the same server
+				//
+				// In order for this to work, the load balancer must be configured with the same:
+				// - Table size
+				// - List of backend nodes (in the same order)
+				// - Hash key for each endpoint (uses the host by default)
+				//
+				// See https://www.envoyproxy.io/docs/envoy/latest/intro/arch_overview/upstream/load_balancing/load_balancers#arch-overview-load-balancing-types-maglev
+				"lb_policy": "MAGLEV",
+				"maglev_lb_config": {
+					// Ensure the same table size for consistent hashing across load balancers
+					"table_size": 65537
+				},
 				"load_assignment": {
-					"cluster_name": "service_backend",
+					"cluster_name": "ats_backend",
 					"endpoints": [
 						{
-							"lb_endpoints": endpoints
+							"lb_endpoints": ats_endpoints
 						}
 					]
 				}

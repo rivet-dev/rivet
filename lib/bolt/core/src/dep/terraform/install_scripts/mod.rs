@@ -10,6 +10,7 @@ pub mod components;
 pub async fn gen(
 	ctx: &ProjectContext,
 	server: &Server,
+	all_servers: &HashMap<String, Server>,
 	k8s_infra: &terraform::output::K8sInfra,
 	tls: &terraform::output::Tls,
 ) -> Result<String> {
@@ -63,7 +64,7 @@ pub async fn gen(
 		script.push(components::cni_plugins());
 		script.push(components::nomad(server));
 		script.push(components::envoy());
-		script.push(components::outbound_proxy()?);
+		script.push(components::outbound_proxy(server, all_servers)?);
 
 		prometheus_targets.insert(
 			"nomad".into(),
