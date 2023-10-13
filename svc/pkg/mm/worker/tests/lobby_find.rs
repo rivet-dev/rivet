@@ -846,7 +846,10 @@ async fn gen_verification_lobby(
 					.map(|region_id| backend::matchmaker::lobby_group::Region {
 						region_id: Some(region_id),
 						tier_name_id: util_mm::test::TIER_NAME_ID.to_owned(),
-						idle_lobbies: None,
+						idle_lobbies: Some(backend::matchmaker::lobby_group::IdleLobbies {
+							min_idle_lobbies: 0,
+							max_idle_lobbies: 2,
+						}),
 					})
 					.collect(),
 
@@ -933,7 +936,10 @@ async fn gen_disabled_lobby(ctx: &TestCtx) -> (Uuid, Uuid) {
 					.map(|region_id| backend::matchmaker::lobby_group::Region {
 						region_id: Some(region_id),
 						tier_name_id: util_mm::test::TIER_NAME_ID.to_owned(),
-						idle_lobbies: None,
+						idle_lobbies: Some(backend::matchmaker::lobby_group::IdleLobbies {
+							min_idle_lobbies: 0,
+							max_idle_lobbies: 2,
+						}),
 					})
 					.collect(),
 

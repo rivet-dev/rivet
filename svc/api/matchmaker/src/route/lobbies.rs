@@ -355,11 +355,13 @@ pub async fn create(
 		find_query,
 		Some(version_config.clone()),
 		body.captcha,
+		// Bypassing join verification because this user created the lobby (create verification
+		// already happened)
 		VerificationType::Bypass,
 	)
 	.await?;
 
-	// TODO: Remove this hack to give Treafik time to update
+	// TODO: Remove this hack to give Traefik time to update
 	tokio::time::sleep(std::time::Duration::from_secs(1)).await;
 
 	// TODO: Cleanup lobby if find failed

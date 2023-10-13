@@ -88,7 +88,7 @@ async fn basic_http(ctx: TestCtx) {
 		validate_job(ctx.crdb().await.unwrap(), run_id, region_id, "http").await;
 
 	// Test against origin
-	// TODO: Cannot access the IP direclty sicne it's listening on a private interface
+	// TODO: Cannot access the IP directly since it's listening on a private interface
 	// compare_test_id_http(&format!("http://{}:{}", ip, port), &test_id).await;
 
 	// Test via proxy with HTTP

@@ -102,17 +102,15 @@ fn modify_job_spec(
 	// Disable IPv6 DNS since Docker doesn't support IPv6 yet
 	network.DNS = Some(Box::new(nomad_client::models::NetworkDns {
 		servers: Some(vec![
-			// Cloudflare
-			"1.1.1.1".into(),
-			"1.0.0.1".into(),
-			// "2606:4700:4700::1111".into(),
-			// "2606:4700:4700::1001".into(),
 			// Google
 			"8.8.8.8".into(),
 			"8.8.4.4".into(),
-			// "2001:4860:4860::8888".into(),
-			// "2001:4860:4860::8844".into(),
+			"2001:4860:4860::8888".into(),
+			"2001:4860:4860::8844".into(),
 		]),
+        // Disable default search from the host
+        searches: Some(Vec::new()),
+        options: Some(vec!["rotate".into(), "edns0".into(), "attempts:2".into()]),
 		..nomad_client::models::NetworkDns::new()
 	}));
 

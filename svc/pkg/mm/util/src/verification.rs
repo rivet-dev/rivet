@@ -50,8 +50,8 @@ pub struct VerifyConfigOpts<'a> {
 	pub namespace_id: Uuid,
 	pub user_id: Option<Uuid>,
 
-	pub lobby_group: &'a backend::matchmaker::LobbyGroup,
-	pub lobby_group_meta: &'a backend::matchmaker::LobbyGroupMeta,
+	pub lobby_groups: &'a [backend::matchmaker::LobbyGroup],
+	pub lobby_group_meta: &'a [backend::matchmaker::LobbyGroupMeta],
 	pub lobby_info: Option<&'a backend::matchmaker::Lobby>,
 	pub lobby_state_json: Option<&'a str>,
 
@@ -60,118 +60,153 @@ pub struct VerifyConfigOpts<'a> {
 	pub custom_lobby_publicity: Option<backend::matchmaker::lobby::Publicity>,
 }
 
+struct ExternalRequestConfigAndLobby<'a> {
+	pub lobby_group: &'a backend::matchmaker::LobbyGroup,
+	pub lobby_group_meta: &'a backend::matchmaker::LobbyGroupMeta,
+	external_request_config: backend::net::ExternalRequestConfig,
+}
+
 /// Verifies everything required to make a find request or create a custom lobby.
 pub async fn verify_config(
 	ctx: &OperationContext<()>,
 	opts: &VerifyConfigOpts<'_>,
 ) -> GlobalResult<()> {
-	// Get required verifications
-	let (identity_requirement, external_request_config) = match (
-		opts.kind,
-		opts.lobby_group.find_config.as_ref(),
-		opts.lobby_group.join_config.as_ref(),
-		opts.lobby_group.create_config.as_ref(),
-	) {
-		(ConnectionKind::Find, Some(find_config), _, _) => {
-			if !find_config.enabled {
-				panic_with!(MATCHMAKER_FIND_DISABLED);
-			}
+	let mut highest_identity_requirement = backend::matchmaker::IdentityRequirement::None;
+	let mut external_request_configs = Vec::new();
 
-			(
-				internal_unwrap_owned!(
-					backend::matchmaker::IdentityRequirement::from_i32(
-						find_config.identity_requirement
+	// Collect all external request configs and identity requirement
+	for (lobby_group, lobby_group_meta) in opts.lobby_groups.iter().zip(opts.lobby_group_meta) {
+		let (identity_requirement, external_request_config) = match (
+			opts.kind,
+			lobby_group.find_config.as_ref(),
+			lobby_group.join_config.as_ref(),
+			lobby_group.create_config.as_ref(),
+		) {
+			(ConnectionKind::Find, Some(find_config), _, _) => {
+				if !find_config.enabled {
+					panic_with!(MATCHMAKER_FIND_DISABLED);
+				}
+
+				(
+					internal_unwrap_owned!(
+						backend::matchmaker::IdentityRequirement::from_i32(
+							find_config.identity_requirement
+						),
+						"invalid identity requirement variant"
 					),
-					"invalid identity requirement variant"
-				),
-				find_config.verification_config.as_ref().map(|config| {
-					backend::net::ExternalRequestConfig {
-						url: config.url.clone(),
-						method: backend::net::HttpMethod::Post as i32,
-						headers: config.headers.clone(),
-					}
-				}),
-			)
-		}
-		(ConnectionKind::Join, _, Some(join_config), _) => {
-			if !join_config.enabled {
-				panic_with!(MATCHMAKER_JOIN_DISABLED);
+					find_config.verification_config.as_ref().map(|config| {
+						backend::net::ExternalRequestConfig {
+							url: config.url.clone(),
+							method: backend::net::HttpMethod::Post as i32,
+							headers: config.headers.clone(),
+						}
+					}),
+				)
 			}
+			(ConnectionKind::Join, _, Some(join_config), _) => {
+				if !join_config.enabled {
+					panic_with!(MATCHMAKER_JOIN_DISABLED);
+				}
 
-			(
-				internal_unwrap_owned!(
-					backend::matchmaker::IdentityRequirement::from_i32(
-						join_config.identity_requirement
+				(
+					internal_unwrap_owned!(
+						backend::matchmaker::IdentityRequirement::from_i32(
+							join_config.identity_requirement
+						),
+						"invalid identity requirement variant"
 					),
-					"invalid identity requirement variant"
-				),
-				join_config.verification_config.as_ref().map(|config| {
-					backend::net::ExternalRequestConfig {
-						url: config.url.clone(),
-						method: backend::net::HttpMethod::Post as i32,
-						headers: config.headers.clone(),
-					}
-				}),
-			)
-		}
-		(ConnectionKind::Create, _, _, Some(create_config)) => {
-			let publicity = internal_unwrap_owned!(opts.custom_lobby_publicity);
+					join_config.verification_config.as_ref().map(|config| {
+						backend::net::ExternalRequestConfig {
+							url: config.url.clone(),
+							method: backend::net::HttpMethod::Post as i32,
+							headers: config.headers.clone(),
+						}
+					}),
+				)
+			}
+			(ConnectionKind::Create, _, _, Some(create_config)) => {
+				let publicity = internal_unwrap_owned!(opts.custom_lobby_publicity);
 
-			// Verify publicity
-			match (
-				publicity,
-				create_config.enable_public,
-				create_config.enable_private,
-			) {
-				(backend::matchmaker::lobby::Publicity::Public, true, _) => {}
-				(backend::matchmaker::lobby::Publicity::Private, _, true) => {}
-				_ => {
-					panic_with!(
-						MATCHMAKER_CUSTOM_LOBBY_CONFIG_INVALID,
-						reason = "given publicity not allowed"
+				// Verify publicity
+				match (
+					publicity,
+					create_config.enable_public,
+					create_config.enable_private,
+				) {
+					(backend::matchmaker::lobby::Publicity::Public, true, _) => {}
+					(backend::matchmaker::lobby::Publicity::Private, _, true) => {}
+					_ => {
+						panic_with!(
+							MATCHMAKER_CUSTOM_LOBBY_CONFIG_INVALID,
+							reason = "given publicity not allowed"
+						);
+					}
+				}
+
+				// Verify lobby count
+				if let (Some(max_lobbies_per_identity), Some(user_id)) =
+					(create_config.max_lobbies_per_identity, opts.user_id)
+				{
+					let lobbies_res = op!([ctx] mm_lobby_list_for_user_id {
+						user_ids: vec![user_id.into()],
+					})
+					.await?;
+					let user = internal_unwrap_owned!(lobbies_res.users.first());
+					assert_with!(
+						(user.lobby_ids.len() as u64) < max_lobbies_per_identity,
+						MATCHMAKER_CUSTOM_LOBBY_LIMIT_REACHED
 					);
 				}
-			}
 
-			// Verify lobby count
-			if let (Some(max_lobbies_per_identity), Some(user_id)) =
-				(create_config.max_lobbies_per_identity, opts.user_id)
-			{
-				let lobbies_res = op!([ctx] mm_lobby_list_for_user_id {
-					user_ids: vec![user_id.into()],
-				})
-				.await?;
-				let user = internal_unwrap_owned!(lobbies_res.users.first());
-				assert_with!(
-					(user.lobby_ids.len() as u64) < max_lobbies_per_identity,
-					MATCHMAKER_CUSTOM_LOBBY_LIMIT_REACHED
-				);
-			}
-
-			(
-				internal_unwrap_owned!(
-					backend::matchmaker::IdentityRequirement::from_i32(
-						create_config.identity_requirement
+				(
+					internal_unwrap_owned!(
+						backend::matchmaker::IdentityRequirement::from_i32(
+							create_config.identity_requirement
+						),
+						"invalid identity requirement variant"
 					),
-					"invalid identity requirement variant"
-				),
-				create_config.verification_config.as_ref().map(|config| {
-					backend::net::ExternalRequestConfig {
-						url: config.url.clone(),
-						method: backend::net::HttpMethod::Post as i32,
-						headers: config.headers.clone(),
-					}
-				}),
-			)
+					create_config.verification_config.as_ref().map(|config| {
+						backend::net::ExternalRequestConfig {
+							url: config.url.clone(),
+							method: backend::net::HttpMethod::Post as i32,
+							headers: config.headers.clone(),
+						}
+					}),
+				)
+			}
+			(ConnectionKind::Create, _, _, None) => {
+				panic_with!(MATCHMAKER_CUSTOM_LOBBIES_DISABLED);
+			}
+			_ => (backend::matchmaker::IdentityRequirement::None, None),
+		};
+
+		// Updated highest requirement
+		match highest_identity_requirement {
+			backend::matchmaker::IdentityRequirement::None => {
+				highest_identity_requirement = identity_requirement;
+			}
+			backend::matchmaker::IdentityRequirement::Guest => {
+				if matches!(
+					identity_requirement,
+					backend::matchmaker::IdentityRequirement::Registered
+				) {
+					highest_identity_requirement = identity_requirement;
+				}
+			}
+			backend::matchmaker::IdentityRequirement::Registered => {}
 		}
-		(ConnectionKind::Create, _, _, None) => {
-			panic_with!(MATCHMAKER_CUSTOM_LOBBIES_DISABLED);
+
+		if let Some(external_request_config) = external_request_config {
+			external_request_configs.push(ExternalRequestConfigAndLobby {
+				lobby_group,
+				lobby_group_meta,
+				external_request_config,
+			});
 		}
-		_ => (backend::matchmaker::IdentityRequirement::None, None),
-	};
+	}
 
 	// Verify identity requirement
-	match (identity_requirement, opts.user_id) {
+	match (highest_identity_requirement, opts.user_id) {
 		(backend::matchmaker::IdentityRequirement::Registered, Some(user_id)) => {
 			let user_identities_res = op!([ctx] user_identity_get {
 				user_ids: vec![user_id.into()],
@@ -207,7 +242,13 @@ pub async fn verify_config(
 	}
 
 	// Verify user data externally
-	if external_request_config.is_some() {
+	for external_request_config_and_lobby in external_request_configs {
+		let ExternalRequestConfigAndLobby {
+			lobby_group,
+			lobby_group_meta,
+			external_request_config,
+		} = external_request_config_and_lobby;
+
 		// Build lobby info
 		let lobby_info = if let Some(l) = &opts.lobby_info {
 			// Fetch region data for readable name
@@ -237,8 +278,8 @@ pub async fn verify_config(
 				.map(|json| serde_json::from_str::<serde_json::Value>(json))
 				.transpose()?,
 			lobby: Lobby {
-				game_mode_id: internal_unwrap!(opts.lobby_group_meta.lobby_group_id).as_uuid(),
-				game_mode_name_id: opts.lobby_group.name_id.clone(),
+				game_mode_id: internal_unwrap!(lobby_group_meta.lobby_group_id).as_uuid(),
+				game_mode_name_id: lobby_group.name_id.clone(),
 				namespace_id: opts.namespace_id,
 
 				info: lobby_info,
@@ -263,7 +304,7 @@ pub async fn verify_config(
 		-> Result<external::msg::request_call_complete, external::msg::request_call_fail>
 		{
 			request_id: Some(request_id.into()),
-			config: external_request_config,
+			config: Some(external_request_config),
 			timeout: util::duration::seconds(10) as u64,
 			body: Some(serde_json::to_vec(&body)?),
 			..Default::default()

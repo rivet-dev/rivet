@@ -165,12 +165,12 @@ async fn worker(ctx: &OperationContext<mm::msg::player_remove::Message>) -> Glob
 		))
 		.key(if let Some(remote_address) = &player_row.remote_address {
 			if remote_address.is_empty() {
-				String::new()
+				util_mm::key::empty()
 			} else {
 				util_mm::key::ns_remote_address_player_ids(player_row.namespace_id, remote_address)
 			}
 		} else {
-			String::new()
+			util_mm::key::empty()
 		})
 		.key(util_mm::key::idle_lobby_ids(
 			player_row.namespace_id,

@@ -250,7 +250,6 @@ async fn remove_from_redis(
 			util_mm::key::idle_lobby_lobby_group_ids(namespace_id, region_id),
 			lobby_id.to_string(),
 		)
-		.unlink(util_mm::key::lobby_find_queries(lobby_id))
 		.query_async(redis_mm)
 		.await?;
 
