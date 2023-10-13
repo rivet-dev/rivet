@@ -3,6 +3,7 @@
 use anyhow::Result;
 use derive_builder::Builder;
 
+use ipnet::Ipv4AddrRange;
 use serde::Serialize;
 use std::{collections::HashMap, net::Ipv4Addr};
 
@@ -13,8 +14,8 @@ use crate::context::ProjectContext;
 #[derive(Serialize, Clone, Builder)]
 #[builder(setter(into))]
 pub struct Pool {
-	pub vlan_address: Ipv4Addr,
-	pub vlan_prefix_len: u8,
+	#[serde(skip)]
+	pub vlan_addr_range: Ipv4AddrRange,
 
 	/// Volumes attached to this node.
 	#[builder(default)]
@@ -45,8 +46,7 @@ pub async fn build_pools(_ctx: &ProjectContext) -> Result<HashMap<String, Pool>>
 	pools.insert(
 		"gg".into(),
 		PoolBuilder::default()
-			.vlan_address(net::gg::VLAN_ADDR)
-			.vlan_prefix_len(net::gg::VLAN_PREFIX_LEN)
+			.vlan_addr_range(net::gg::vlan_addr_range())
 			.firewall_inbound(vec![
 				// HTTP(S)
 				FirewallRule {
@@ -100,8 +100,7 @@ pub async fn build_pools(_ctx: &ProjectContext) -> Result<HashMap<String, Pool>>
 	pools.insert(
 		"job".into(),
 		PoolBuilder::default()
-			.vlan_address(net::job::VLAN_ADDR)
-			.vlan_prefix_len(net::job::VLAN_PREFIX_LEN)
+			.vlan_addr_range(net::job::vlan_addr_range())
 			// TODO: Add firewall rules for VLAN
 			.firewall_inbound(vec![
 				// TODO: See below why commented out
@@ -149,8 +148,7 @@ pub async fn build_pools(_ctx: &ProjectContext) -> Result<HashMap<String, Pool>>
 	pools.insert(
 		"ats".into(),
 		PoolBuilder::default()
-			.vlan_address(net::ats::VLAN_ADDR)
-			.vlan_prefix_len(net::ats::VLAN_PREFIX_LEN)
+			.vlan_addr_range(net::ats::vlan_addr_range())
 			.build()?,
 	);
 

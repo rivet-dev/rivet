@@ -17,8 +17,6 @@ net.bridge.bridge-nf-call-arptables = 1
 net.bridge.bridge-nf-call-ip6tables = 1
 net.bridge.bridge-nf-call-iptables = 1
 EOF
-chown root:root /etc/sysctl.d/10-rivet.conf
-chmod 644 /etc/sysctl.d/10-rivet.conf
 
 sysctl --system
 
@@ -31,8 +29,6 @@ unzip -o /tmp/nomad.zip -d /opt/nomad-$version/
 
 # Create symlink in /usr/local/bin
 ln -sf /opt/nomad-$version/nomad /usr/local/bin/nomad
-chown root:root /usr/local/bin/nomad
-chmod 755 /usr/local/bin/nomad
 
 # Test nomad installation
 if ! nomad version | grep -q "Nomad v$version"; then
@@ -42,13 +38,8 @@ fi
 
 # Create directories
 mkdir -p /opt/nomad/data
-chmod 700 /opt/nomad/data
-
-mkdir -p /opt/vector/data
-chmod 700 /opt/vector/data
 
 mkdir -p /etc/nomad.d
-chmod 700 /etc/nomad.d
 
 # Copy HCL files
 cat << EOF > /etc/nomad.d/common.hcl
@@ -57,10 +48,10 @@ datacenter = "__REGION_ID__"
 data_dir = "/opt/nomad/data"
 name = "__NODE_NAME__"
 
-bind_addr = "__VLAN_ADDR__"
+bind_addr = "__VLAN_IP__"
 
 addresses {
-	http = "__VLAN_ADDR__ 127.0.0.1"
+	http = "__VLAN_IP__ 127.0.0.1"
 }
 
 telemetry {
@@ -124,7 +115,6 @@ plugin "docker" {
 }
 EOF
 
-chmod 640 /etc/nomad.d/*.hcl
 
 # Dual-stack CNI config
 #

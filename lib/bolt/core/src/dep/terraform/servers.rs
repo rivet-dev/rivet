@@ -73,11 +73,7 @@ pub fn build_servers(
 				.map(|(id, volume)| (id.clone(), ServerVolume { size: volume.size }))
 				.collect::<HashMap<_, _>>();
 
-			let vlan_ip = Ipv4Net::new(pool_config.vlan_address, pool_config.vlan_prefix_len)?
-				.hosts()
-				// Add 1 so we don't interfere with the net address
-				.nth(i + 1)
-				.unwrap();
+			let vlan_ip = pool_config.vlan_addr_range.clone().nth(i).unwrap();
 
 			let server = Server {
 				region_id: region_id.clone(),

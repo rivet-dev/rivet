@@ -78,7 +78,7 @@ pub async fn gen(
 	// MARK: ATS
 	if server.pool_id == "ats" {
 		script.push(components::docker());
-		script.push(components::traffic_server(ctx).await?);
+		script.push(components::traffic_server(ctx, server).await?);
 	}
 
 	// MARK: Common (post)

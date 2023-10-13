@@ -2,11 +2,7 @@ if ! id -u "__NAME__" &>/dev/null; then
 	useradd -r -s /bin/false __NAME__
 fi
 
-for x in /etc/__NAME__ /etc/__NAME__/dynamic /etc/__NAME__/dynamic/tls /etc/__NAME__/tls /opt/__NAME__; do
-	mkdir -p $x
-	chmod 550 $x
-	chown -R __NAME__:__NAME__ $x
-done
+mkdir -p __NAME__:__NAME__ /etc/__NAME__ /etc/__NAME__/dynamic /etc/__NAME__/dynamic/tls /etc/__NAME__/tls /opt/__NAME__
 
 # Static config
 cat << 'EOF' > /etc/__NAME__/traefik.toml
@@ -17,6 +13,8 @@ EOF
 cat << 'EOF' > /etc/__NAME__/dynamic/common.toml
 __DYNAMIC_CONFIG__
 EOF
+
+chown -R __NAME__:__NAME__ /etc/__NAME__ /etc/__NAME__/dynamic /etc/__NAME__/dynamic/tls /etc/__NAME__/tls /opt/__NAME__
 
 # Systemd service
 #

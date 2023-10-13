@@ -37,7 +37,7 @@ pub fn nomad(server: &Server) -> String {
 	include_str!("files/nomad.sh")
 		.replace("__REGION_ID__", &server.region_id)
 		.replace("__NODE_NAME__", &server.name)
-		.replace("__VLAN_ADDR__", &server.vlan_ip.to_string())
+		.replace("__VLAN_IP__", &server.vlan_ip.to_string())
 		// Hardcoded to Linode
 		.replace("__PUBLIC_IFACE__", "eth1")
 		.replace(
@@ -296,9 +296,9 @@ pub fn vector(config: &VectorConfig) -> String {
 	include_str!("files/vector.sh").replace("__VECTOR_CONFIG__", &config_str)
 }
 
-pub async fn traffic_server(ctx: &ProjectContext) -> Result<String> {
+pub async fn traffic_server(ctx: &ProjectContext, server: &Server) -> Result<String> {
 	// Write config to files
-	let config = traffic_server_config(ctx).await?;
+	let config = traffic_server_config(ctx, server).await?;
 	let config_script = config
 		.into_iter()
 		.map(|(k, v)| format!("cat << 'EOF' > /etc/trafficserver/{k}\n{v}\nEOF\n"))
@@ -315,7 +315,10 @@ pub async fn traffic_server(ctx: &ProjectContext) -> Result<String> {
 	Ok(script)
 }
 
-async fn traffic_server_config(ctx: &ProjectContext) -> Result<Vec<(String, String)>> {
+async fn traffic_server_config(
+	ctx: &ProjectContext,
+	server: &Server,
+) -> Result<Vec<(String, String)>> {
 	let config_dir = ctx
 		.path()
 		.join("infra")
@@ -337,6 +340,7 @@ async fn traffic_server_config(ctx: &ProjectContext) -> Result<Vec<(String, Stri
 				.context("as_str")?
 				.to_string();
 			let value = fs::read_to_string(entry.path()).await?;
+			let value = value.replace("__VLAN_IP__", &server.vlan_ip.to_string());
 			config_files.push((key, value));
 		}
 	}
