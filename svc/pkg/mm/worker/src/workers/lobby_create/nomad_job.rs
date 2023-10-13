@@ -124,7 +124,7 @@ pub fn gen_lobby_docker_job(
 			)
 		}))
 		.chain([(
-			"RIVET_API_URL".to_string(),
+			"RIVET_API_ENDPOINT".to_string(),
 			util::env::origin_api().to_string(),
 		)])
 		.chain(
