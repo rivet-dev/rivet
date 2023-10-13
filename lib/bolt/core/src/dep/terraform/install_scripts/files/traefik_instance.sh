@@ -2,7 +2,7 @@ if ! id -u "__NAME__" &>/dev/null; then
 	useradd -r -s /bin/false __NAME__
 fi
 
-mkdir -p __NAME__:__NAME__ /etc/__NAME__ /etc/__NAME__/dynamic /etc/__NAME__/dynamic/tls /etc/__NAME__/tls /opt/__NAME__
+mkdir -p /etc/__NAME__ /etc/__NAME__/dynamic /etc/__NAME__/dynamic/tls /etc/__NAME__/tls /opt/__NAME__
 
 # Static config
 cat << 'EOF' > /etc/__NAME__/traefik.toml
