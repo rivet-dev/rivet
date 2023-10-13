@@ -16,7 +16,7 @@ pub struct TestOpts {
 	parallel_tests: Option<usize>,
 	/// Don't purge Nomad jobs after test completion.
 	#[clap(long)]
-	dont_purge: bool,
+	no_purge: bool,
 }
 
 impl TestOpts {
@@ -26,7 +26,7 @@ impl TestOpts {
 			filter,
 			timeout,
 			parallel_tests,
-			dont_purge,
+			no_purge,
 		} = self;
 
 		if let Some(parallel_tests) = parallel_tests {
@@ -42,7 +42,7 @@ impl TestOpts {
 					filters: filter,
 					timeout,
 					parallel_tests,
-					dont_purge,
+					no_purge,
 				},
 			)
 			.await?;
