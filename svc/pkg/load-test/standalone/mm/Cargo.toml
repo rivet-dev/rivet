@@ -1,5 +1,5 @@
 [package]
-name = "load-test-api-cloud"
+name = "load-test-mm"
 version = "0.0.1"
 edition = "2018"
 authors = ["Rivet Gaming, LLC <developer@rivet.gg>"]
