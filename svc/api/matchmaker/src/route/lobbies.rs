@@ -287,8 +287,8 @@ pub async fn create(
 			kind: util_mm::verification::ConnectionKind::Create,
 			namespace_id: ns_data.namespace_id,
 			user_id,
-			lobby_group,
-			lobby_group_meta,
+			lobby_groups: &[lobby_group.clone()],
+			lobby_group_meta: &[lobby_group_meta.clone()],
 			lobby_info: None,
 			lobby_state_json: None,
 			verification_data_json: body
