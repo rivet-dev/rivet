@@ -1,22 +1,15 @@
 use chirp_worker::prelude::*;
 
-use ::mm_gc_full::run_from_env;
+use ::load_test_api_cloud::run_from_env;
 
 #[tokio::test(flavor = "multi_thread")]
-async fn all() {
-	// TODO: interferes with other mm tests
-	return;
-
-	if !util::feature::job_run() {
-		return;
-	}
-
+async fn basic() {
 	tracing_subscriber::fmt()
 		.json()
 		.with_max_level(tracing::Level::INFO)
 		.with_span_events(tracing_subscriber::fmt::format::FmtSpan::NONE)
 		.init();
 
-	// Run tests sequentially so the gc's don't interfere with each other
+	// TODO:
 	run_from_env(util::timestamp::now()).await.unwrap();
 }

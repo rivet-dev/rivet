@@ -8,9 +8,15 @@ pub struct TestOpts {
 	service_names: Vec<String>,
 	#[clap(long)]
 	filter: Vec<String>,
+	/// Amount of time until forced test timeout (in seconds).
+	#[clap(long, short = 't')]
+	timeout: Option<u64>,
 	/// Amount of parallel tests to run simultaneously.
 	#[clap(long, short = 'c')]
 	parallel_tests: Option<usize>,
+	/// Don't purge Nomad jobs after test completion.
+	#[clap(long)]
+	dont_purge: bool,
 }
 
 impl TestOpts {
@@ -18,7 +24,9 @@ impl TestOpts {
 		let TestOpts {
 			service_names,
 			filter,
+			timeout,
 			parallel_tests,
+			dont_purge,
 		} = self;
 
 		if let Some(parallel_tests) = parallel_tests {
@@ -27,7 +35,17 @@ impl TestOpts {
 
 		// Test services
 		if !service_names.is_empty() {
-			tasks::test::test_services(&ctx, &service_names, filter, parallel_tests).await?;
+			tasks::test::test_services(
+				&ctx,
+				tasks::test::TestCtx {
+					svc_names: &service_names,
+					filters: filter,
+					timeout,
+					parallel_tests,
+					dont_purge,
+				},
+			)
+			.await?;
 		} else {
 			ensure!(
 				filter.is_empty(),

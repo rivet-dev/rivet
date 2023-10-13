@@ -178,6 +178,16 @@ resource "helm_release" "prometheus" {
 			}
 		}
 
+		defaultRules = {
+			disabled = {
+				KubeProxyDown = true
+				KubeControllerManagerDown = true
+				KubeSchedulerDown = true
+				CPUThrottlingHigh = true
+				KubeJobNotCompleted = true
+			}
+		}
+
 		grafana = {
 			additionalDataSources = [
 				{
@@ -201,15 +211,6 @@ resource "helm_release" "prometheus" {
 				scrapeTimeout = "15s"
 
 				relabelings = []
-			}
-		}
-
-		defaultRules = {
-			disabled = {
-				KubeProxyDown = true
-				KubeControllerManagerDown = true
-				KubeSchedulerDown = true
-				CPUThrottlingHigh = true
 			}
 		}
 	})]

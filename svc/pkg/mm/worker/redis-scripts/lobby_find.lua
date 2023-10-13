@@ -11,6 +11,8 @@ local key_find_query_player_ids = KEYS[2]
 local key_ns_player_ids = KEYS[3]
 local key_player_unregistered = KEYS[4]
 
+redis.call('SET', '{global}:STATE', 1)
+
 -- MARK: Find
 local lobby_id = nil
 local lobby_auto_created = false
@@ -20,10 +22,14 @@ if query.kind.direct ~= nil then
 	local key_direct_lobby_config = KEYS[query_kind_key_idx + 1]
 	local key_direct_lobby_player_ids = KEYS[query_kind_key_idx + 2]
 
+	redis.call('SET', '{global}:STATE', 2)
+
 	-- Check lobby exists
 	if redis.call('EXISTS', key_direct_lobby_config) == 0 then
 		return { 'err', 'LOBBY_NOT_FOUND' }
 	end
+
+	redis.call('SET', '{global}:STATE', 3)
 
 	-- Check lobby is not closed
 	-- local is_closed = redis.call('HGET', key_direct_lobby_config, 'c') == '1'
@@ -41,15 +47,21 @@ if query.kind.direct ~= nil then
 		return redis.error_reply('Invalid join kind')
 	end
 
+	redis.call('SET', '{global}:STATE', 4)
+
 	-- Validate player count
 	local player_count = redis.call('ZCARD', key_direct_lobby_player_ids)
 	if player_count + table.getn(query.players) > max_player_count then
 		return { 'err', 'LOBBY_FULL' }
 	end
 
+	redis.call('SET', '{global}:STATE', 5)
+
 	lobby_id = query.kind.direct.lobby_id
 elseif query.kind.lobby_group ~= nil then
 	-- MARK: Lobby group
+
+	redis.call('SET', '{global}:STATE', 6)
 
 	-- Iterate over all lobby ranked keys to find the most optimal lobby
 	local best_lobby_id = nil
@@ -77,6 +89,8 @@ elseif query.kind.lobby_group ~= nil then
 		end
 	end
 
+	redis.call('SET', '{global}:STATE', 7)
+
 	-- Preemptively create a new lobby. The available spots will be updated
 	-- with the preemptive players later in this script, but we call this just
 	-- for consistency.
@@ -90,15 +104,23 @@ elseif query.kind.lobby_group ~= nil then
 		local key_auto_create_lobby_available_spots_normal = KEYS[query_kind_key_idx + 4]
 		local key_auto_create_lobby_available_spots_party = KEYS[query_kind_key_idx + 5]
 
+		redis.call('SET', '{global}:STATE', 8)
+
+
 		for k, v in pairs(auto_create.lobby_config) do
 			redis.call('HSET', key_auto_create_lobby_config, k, tostring(v))
 		end
+
+		redis.call('SET', '{global}:STATE', 9)
+
 		redis.call('ZADD', key_auto_create_ns_lobby_ids, ts, auto_create.lobby_id)
 		redis.call('ZADD', key_auto_create_lobby_available_spots_normal, auto_create.lobby_config['mpn'],
 			auto_create.lobby_id)
 		redis.call('ZADD', key_auto_create_lobby_available_spots_party, auto_create.lobby_config['mpp'],
 			auto_create.lobby_id)
 		redis.call('ZADD', key_lobby_unready, tonumber(auto_create.ready_expire_ts), auto_create.lobby_id)
+		
+		redis.call('SET', '{global}:STATE', 10)
 	end
 
 	-- Determine lobby ID to use
@@ -109,9 +131,13 @@ elseif query.kind.lobby_group ~= nil then
 	else
 		return { 'err', 'NO_AVAILABLE_LOBBIES' }
 	end
+
+	redis.call('SET', '{global}:STATE', 11)
 else
 	return redis.error_reply('Invalid query kind')
 end
+
+redis.call('SET', '{global}:STATE', 12)
 
 -- MARK: Lobby validation
 -- Fetching `lobby:{}:config` and updating the player counts might break the
@@ -131,6 +157,8 @@ local lobby_group_id = redis.call('HGET', key_lobby_config, 'lg')
 local max_players_normal = tonumber(redis.call('HGET', key_lobby_config, 'mpn'))
 local max_players_party = tonumber(redis.call('HGET', key_lobby_config, 'mpp'))
 
+redis.call('SET', '{global}:STATE', 13)
+
 -- Build keys for the given lobby ID
 local key_lobby_find_queries = '{global}:mm:lobby:' .. lobby_id .. ':find_queries'
 local key_lobby_player_ids = '{global}:mm:lobby:' .. lobby_id .. ':player_ids'
@@ -142,6 +170,8 @@ local key_idle_lobby_ids = '{global}:mm:ns:' ..
 namespace_id .. ':region:' .. region_id .. ':lg:' .. lobby_group_id .. ':idle_lobby_ids'
 local key_idle_lobby_lobby_group_ids = '{global}:mm:ns:' ..
 namespace_id .. ':region:' .. region_id .. ':lobby:idle:lobby_group_ids'
+
+redis.call('SET', '{global}:STATE', 14)
 
 -- Assert lobby state
 if #lobby_id ~= 36 then
@@ -166,6 +196,8 @@ if redis.call('EXISTS', key_lobby_config) == 0 then
 	return redis.error_reply('Chosen lobby does not exist')
 end
 
+redis.call('SET', '{global}:STATE', 15)
+
 -- MARK: Create players
 -- Register the players
 for i, player in ipairs(query.players) do
@@ -185,27 +217,41 @@ for i, player in ipairs(query.players) do
 	end
 end
 
+redis.call('SET', '{global}:STATE', 16)
+
 -- Update the available spots
 local lobby_player_count = redis.call('ZCARD', key_lobby_player_ids)
 redis.call('ZADD', key_lobby_available_spots_normal, max_players_normal - lobby_player_count, lobby_id)
 redis.call('ZADD', key_lobby_available_spots_party, max_players_party - lobby_player_count, lobby_id)
 
+redis.call('SET', '{global}:STATE', 17)
+
 -- Remove idle lobby if needed
 redis.call('ZREM', key_idle_lobby_ids, lobby_id)
 redis.call('HDEL', key_idle_lobby_lobby_group_ids, lobby_id)
+
+redis.call('SET', '{global}:STATE', 18)
 
 -- MARK: Create query
 for k, v in pairs(query.find_query_state) do
 	redis.call('HSET', key_find_query_state, k, tostring(v))
 end
+redis.call('SET', '{global}:STATE', 19)
+
 redis.call('HSET', key_find_query_state, 'l', lobby_id)
 redis.call('HSET', key_find_query_state, 'lac', lobby_auto_created and '1' or '0')
 
+redis.call('SET', '{global}:STATE', 20)
+
 redis.call('ZADD', key_lobby_find_queries, ts, query.query_id)
+
+redis.call('SET', '{global}:STATE', 21)
 
 for _, player in ipairs(query.players) do
 	redis.call('SADD', key_find_query_player_ids, player.player_id)
 end
+
+redis.call('SET', '{global}:STATE', 22)
 
 
 return { 'ok', { lobby_id, region_id, lobby_group_id } }

@@ -192,3 +192,8 @@ pub fn lobby_unready() -> String {
 pub fn player_unregistered() -> String {
 	format!("{{global}}:mm:player:unregistered")
 }
+
+// Placeholder key
+pub fn empty() -> String {
+	"{global}".to_string()
+}

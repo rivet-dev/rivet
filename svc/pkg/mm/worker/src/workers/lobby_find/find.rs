@@ -156,6 +156,7 @@ pub async fn find(
 			let auto_create = if let Some(auto_create) = auto_create {
 				let region_id = internal_unwrap!(auto_create.region_id).as_uuid();
 				let lobby_group_id = internal_unwrap!(auto_create.lobby_group_id).as_uuid();
+				let lobby_group = internal_unwrap_owned!(lobby_group_config.lobby_groups.first());
 
 				// Add keys for auto creating lobby
 				query_kind_keys.extend([
@@ -183,9 +184,9 @@ pub async fn find(
 						namespace_id,
 						region_id,
 						lobby_group_id,
-						max_players_normal: lobby_group_config.lobby_group.max_players_normal,
-						max_players_party: lobby_group_config.lobby_group.max_players_party,
-						max_players_direct: lobby_group_config.lobby_group.max_players_direct,
+						max_players_normal: lobby_group.max_players_normal,
+						max_players_party: lobby_group.max_players_party,
+						max_players_direct: lobby_group.max_players_direct,
 						preemptive: true,
 						ready_ts: None,
 						is_closed: false,
@@ -244,7 +245,7 @@ pub async fn find(
 		ns_remote_address_player_ids_keys.push(if let Some(remote_address) = remote_address {
 			util_mm::key::ns_remote_address_player_ids(namespace_id, remote_address)
 		} else {
-			String::new()
+			util_mm::key::empty()
 		});
 	}
 

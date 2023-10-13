@@ -1,9 +1,11 @@
 use chirp_worker::prelude::*;
 use proto::backend::pkg::{mm::msg::lobby_find_fail::ErrorCode, *};
+use redis::AsyncCommands;
 
 #[worker(name = "mm-lobby-find-lobby-cleanup")]
 async fn worker(ctx: &OperationContext<mm::msg::lobby_cleanup::Message>) -> GlobalResult<()> {
 	let lobby_id = internal_unwrap!(ctx.lobby_id).as_uuid();
+	let mut redis_mm = ctx.redis_mm().await?;
 
 	// TODO: Is there a race condition here for new queries?
 
@@ -11,7 +13,7 @@ async fn worker(ctx: &OperationContext<mm::msg::lobby_cleanup::Message>) -> Glob
 	// mm-lobby-find-job-run-fail, but the error code (i.e.
 	// LobbyStoppedPrematurely) will match regardless.
 	let query_list = op!([ctx] mm_lobby_find_lobby_query_list {
-		lobby_id: Some(lobby_id.into())
+		lobby_id: Some(lobby_id.into()),
 	})
 	.await?;
 	op!([ctx] mm_lobby_find_fail {
@@ -20,6 +22,9 @@ async fn worker(ctx: &OperationContext<mm::msg::lobby_cleanup::Message>) -> Glob
 		..Default::default()
 	})
 	.await?;
+
+	// Remove queries
+	redis_mm.unlink(util_mm::key::lobby_find_queries(lobby_id)).await?;
 
 	Ok(())
 }

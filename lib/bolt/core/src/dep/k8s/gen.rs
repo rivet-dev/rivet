@@ -377,6 +377,7 @@ pub async fn gen_svc(exec_ctx: &ExecServiceContext) -> Vec<serde_json::Value> {
 	let pod_spec = json!({
 		"priorityClassName": priority_class_name,
 		"restartPolicy": restart_policy,
+		"terminationGracePeriodSeconds": 5,
 		"imagePullSecrets": [{
 			"name": "docker-auth"
 		}],

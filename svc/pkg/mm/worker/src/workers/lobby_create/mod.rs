@@ -738,12 +738,11 @@ async fn resolve_image_artifact_url(
 		backend::upload::Provider::Aws => s3_util::Provider::Aws,
 	};
 
-	match internal_unwrap_owned!(
+	let mm_lobby_delivery_method = internal_unwrap_owned!(
 		std::env::var("RIVET_MM_LOBBY_DELIVERY_METHOD").ok(),
 		"missing RIVET_MM_LOBBY_DELIVERY_METHOD"
-	)
-	.as_str()
-	{
+	);
+	match mm_lobby_delivery_method.as_str() {
 		"s3_direct" => {
 			tracing::info!("using s3 direct delivery");
 

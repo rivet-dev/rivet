@@ -3,7 +3,7 @@ use futures_util::{StreamExt, TryStreamExt};
 use rand::{seq::SliceRandom, thread_rng};
 use rivet_term::console::style;
 
-use indoc::indoc;
+use indoc::formatdoc;
 use std::{
 	collections::{HashMap, HashSet},
 	path::Path,
@@ -29,9 +29,17 @@ use crate::{
 ///
 /// Default Chirp timeout is 60 seconds, so this is 15 seconds longer to give a buffer for Chirp
 /// operations to time out first.
-const TEST_TIMEOUT: Duration = Duration::from_secs(75);
+const DEFAULT_TEST_TIMEOUT: Duration = Duration::from_secs(75);
 
 const DEFAULT_PARALLEL_TESTS: usize = 8;
+
+pub struct TestCtx<'a, T: AsRef<str>> {
+	pub svc_names: &'a [T],
+	pub filters: Vec<String>,
+	pub timeout: Option<u64>,
+	pub parallel_tests: Option<usize>,
+	pub dont_purge: bool,
+}
 
 pub async fn test_all(ctx: &ProjectContext) -> Result<()> {
 	let all_svc_names = ctx
@@ -40,16 +48,24 @@ pub async fn test_all(ctx: &ProjectContext) -> Result<()> {
 		.iter()
 		.map(|svc| svc.name())
 		.collect::<Vec<_>>();
-	test_services(ctx, &all_svc_names, Vec::new(), None).await?;
+	test_services(
+		ctx,
+		TestCtx {
+			svc_names: &all_svc_names,
+			filters: Vec::new(),
+			timeout: None,
+			parallel_tests: None,
+			dont_purge: false,
+		},
+	)
+	.await?;
 
 	Ok(())
 }
 
 pub async fn test_services<T: AsRef<str>>(
 	ctx: &ProjectContext,
-	svc_names: &[T],
-	filters: Vec<String>,
-	parallel_tests: Option<usize>,
+	test_ctx: TestCtx<'_, T>,
 ) -> Result<()> {
 	if ctx.ns().rivet.test.is_none() {
 		bail!("tests are disabled, enable them by setting rivet.test in the namespace config");
@@ -64,7 +80,8 @@ pub async fn test_services<T: AsRef<str>>(
 	}
 
 	// Resolve services
-	let svc_names = svc_names
+	let svc_names = test_ctx
+		.svc_names
 		.iter()
 		.map(|x| x.as_ref().to_string())
 		.collect::<HashSet<_>>()
@@ -106,7 +123,7 @@ pub async fn test_services<T: AsRef<str>>(
 					})
 					.collect::<Vec<_>>(),
 				jobs: ctx.config_local().rust.num_jobs,
-				test_filters: &filters,
+				test_filters: &test_ctx.filters,
 			},
 		)
 		.await
@@ -123,7 +140,8 @@ pub async fn test_services<T: AsRef<str>>(
 	let test_results = futures_util::stream::iter(test_binaries.into_iter().map(|test_binary| {
 		let ctx = ctx.clone();
 		let tests_complete = tests_complete.clone();
-		let filters = filters.clone();
+		let filters = test_ctx.filters.clone();
+		let timeout = test_ctx.timeout;
 		async move {
 			run_test(
 				&ctx,
@@ -131,11 +149,12 @@ pub async fn test_services<T: AsRef<str>>(
 				tests_complete.clone(),
 				test_count,
 				filters,
+				timeout,
 			)
 			.await
 		}
 	}))
-	.buffer_unordered(parallel_tests.unwrap_or(DEFAULT_PARALLEL_TESTS))
+	.buffer_unordered(test_ctx.parallel_tests.unwrap_or(DEFAULT_PARALLEL_TESTS))
 	.try_collect::<Vec<_>>()
 	.await?;
 
@@ -146,14 +165,17 @@ pub async fn test_services<T: AsRef<str>>(
 	{
 		eprintln!();
 		rivet_term::status::progress("Cleaning up jobs", "");
-		let cleanup_cmd = indoc!(
+
+		let purge = if test_ctx.dont_purge { "" } else { "-purge" };
+		let cleanup_cmd = formatdoc!(
 			r#"
 			nomad job status |
 				grep -v -e "ID" -e "No running jobs" |
 				cut -f1 -d ' ' |
-				xargs -I {} nomad job stop -detach {}
+				xargs -I {{}} nomad job stop {purge} -detach {{}}
 			"#
 		);
+
 		let mut cmd = Command::new("kubectl");
 		cmd.args(&[
 			"exec",
@@ -205,6 +227,7 @@ async fn run_test(
 	tests_complete: Arc<AtomicUsize>,
 	test_count: usize,
 	filters: Vec<String>,
+	timeout: Option<u64>,
 ) -> Result<TestResult> {
 	let svc_ctx = ctx
 		.all_services()
@@ -242,9 +265,12 @@ async fn run_test(
 	dep::k8s::cli::apply_specs(ctx, specs).await?;
 
 	// Tail pod
-	rivet_term::status::info("Running", format!("{display_name} [job/{svc_name}]"));
+	rivet_term::status::info("Running", format!("{display_name} [{svc_name}]"));
 	let test_start_time = Instant::now();
-	let status = match tokio::time::timeout(TEST_TIMEOUT, tail_pod(ctx, &svc_name)).await {
+	let timeout = timeout
+		.map(Duration::from_secs)
+		.unwrap_or(DEFAULT_TEST_TIMEOUT);
+	let status = match tokio::time::timeout(timeout, tail_pod(ctx, &svc_name)).await {
 		Result::Ok(Result::Ok(x)) => x,
 		Result::Ok(Err(err)) => TestStatus::UnknownError(err.to_string()),
 		Err(_) => {
@@ -262,7 +288,7 @@ async fn run_test(
 	let test_duration = test_start_time.elapsed();
 	let complete_count = tests_complete.fetch_add(1, Ordering::SeqCst) + 1;
 	let run_info = format!(
-		"{display_name} ({complete_count}/{test_count}) [job/{svc_name}] [{td:.1}s]",
+		"{display_name} ({complete_count}/{test_count}) [{svc_name}] [{td:.1}s]",
 		td = test_duration.as_secs_f32()
 	);
 	match &status {
@@ -331,7 +357,11 @@ async fn tail_pod(ctx: &ProjectContext, svc_name: &str) -> Result<TestStatus> {
 					.await?;
 
 				let exit_code_str = String::from_utf8_lossy(&output.stdout);
-				let exit_code: i32 = exit_code_str.trim().parse()?;
+				let exit_code = exit_code_str.trim().parse::<i32>();
+				if exit_code.is_err() {
+					eprintln!("\n-------- {exit_code_str}\n");
+				}
+				let exit_code = exit_code?;
 
 				let test_status = match exit_code {
 					0 => TestStatus::Pass,

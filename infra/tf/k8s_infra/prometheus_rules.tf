@@ -1,3 +1,4 @@
+# Useful: https://github.com/kubernetes/kube-state-metrics/blob/main/docs/pod-metrics.md
 resource "kubectl_manifest" "pod_rules" {
 	depends_on = [helm_release.prometheus]
 

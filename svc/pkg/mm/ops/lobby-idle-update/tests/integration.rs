@@ -272,7 +272,7 @@ impl Ctx {
 				lobby_group_id = $3 AND
 				stop_ts IS NULL AND
 				NOT EXISTS (
-					SELECT 1 FROM players WHERE players.lobby_id = lobbies.lobby_id
+					SELECT 1 FROM db_mm_state.players WHERE players.lobby_id = lobbies.lobby_id
 				)
 			"
 		))
