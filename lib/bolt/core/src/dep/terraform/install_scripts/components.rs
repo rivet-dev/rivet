@@ -308,7 +308,7 @@ pub async fn traffic_server(ctx: &ProjectContext, server: &Server) -> Result<Str
 	let script = include_str!("files/traffic_server.sh")
 		.replace(
 			"__IMAGE__",
-			"ghcr.io/rivet-gg/apache-traffic-server:44ef76a",
+			"ghcr.io/rivet-gg/apache-traffic-server:9934dc2",
 		)
 		.replace("__CONFIG__", &config_script);
 
@@ -394,12 +394,19 @@ async fn gen_s3_provider(
 	let config = ctx.s3_config(provider).await?;
 	let creds = ctx.s3_credentials(provider).await?;
 
+	// Build plugin chain
+	let plugins = format!("@plugin=tslua.so @pparam=/etc/trafficserver/strip_headers.lua @plugin=s3_auth.so @pparam=--config @pparam=s3_auth_v4_{provider_name}.config");
+
 	// Add remap
-	remap.push_str(&format!("map /s3-cache/{provider_name} {endpoint_external} @plugin=s3_auth.so @pparam=--config @pparam=s3_auth_v4_{provider_name}.config\n", endpoint_external = config.endpoint_external));
+	remap.push_str(&format!(
+		"map /s3-cache/{provider_name} {endpoint_external} {plugins}\n",
+		endpoint_external = config.endpoint_external
+	));
 
 	// Add default route
 	if default_s3_provider == provider {
-		remap.push_str(&format!("map /s3-cache {endpoint_external} @plugin=s3_auth.so @pparam=--config @pparam=s3_auth_v4_{provider_name}.config\n",
+		remap.push_str(&format!(
+			"map /s3-cache {endpoint_external} {plugins}\n",
 			endpoint_external = config.endpoint_external,
 		));
 	}
