@@ -11,9 +11,12 @@ async fn handle(
 	let game_id = internal_unwrap!(ctx.game_id).as_uuid();
 	let config = internal_unwrap!(ctx.config);
 
-	// Deduplicated list of build paths that will be used to prewarm the ATS cache
-	let mut all_region_ids = HashSet::new();
-	let mut prewarm_ats_paths = HashSet::new();
+	// List of build paths that will be used to prewarm the ATS cache
+	let mut prewarm_ctx = PrewarmAtsContext {
+		region_ids: HashSet::new(),
+		paths: HashSet::new(),
+		total_size: 0,
+	};
 
 	let mut lobby_group_ctxs = Vec::new();
 	for lobby_group in &config.lobby_groups {
@@ -24,7 +27,9 @@ async fn handle(
 			.iter()
 			.flat_map(|r| r.region_id)
 			.collect::<Vec<_>>();
-		all_region_ids.extend(region_ids.iter().map(common::Uuid::as_uuid));
+		prewarm_ctx
+			.region_ids
+			.extend(region_ids.iter().map(common::Uuid::as_uuid));
 
 		// Resolve region name IDs
 		let (regions_res, tier_res) = tokio::try_join!(
@@ -66,7 +71,7 @@ async fn handle(
 			&lobby_group.regions,
 			&regions_res.regions,
 			&tier_res.regions,
-			&mut prewarm_ats_paths,
+			&mut prewarm_ctx,
 			needs_ats_prewarm,
 		)
 		.await?;
@@ -76,7 +81,7 @@ async fn handle(
 		});
 	}
 
-	prewarm_ats_cache(ctx.chirp(), all_region_ids, prewarm_ats_paths).await?;
+	prewarm_ats_cache(ctx.chirp(), prewarm_ctx).await?;
 
 	Ok(mm_config::version_prepare::Response {
 		config_ctx: Some(backend::matchmaker::VersionConfigCtx {
@@ -85,7 +90,7 @@ async fn handle(
 	})
 }
 
-#[tracing::instrument]
+#[tracing::instrument(skip(prewarm_ctx))]
 async fn prepare_runtime(
 	ctx: &OperationContext<mm_config::version_prepare::Request>,
 	game_id: Uuid,
@@ -93,15 +98,14 @@ async fn prepare_runtime(
 	lg_regions: &[backend::matchmaker::lobby_group::Region],
 	regions_data: &[backend::region::Region],
 	tier_regions: &[tier::list::response::Region],
-	prewarm_ats_paths: &mut HashSet<String>,
+	prewarm_ctx: &mut PrewarmAtsContext,
 	needs_ats_prewarm: bool,
 ) -> GlobalResult<backend::matchmaker::LobbyRuntimeCtx> {
 	let runtime: backend::matchmaker::LobbyRuntimeCtx = match runtime {
 		backend::matchmaker::lobby_runtime::Runtime::Docker(runtime) => {
 			// Validate the build
 			let build_id = internal_unwrap!(runtime.build_id).as_uuid();
-			let _ = validate_build(ctx, game_id, build_id, prewarm_ats_paths, needs_ats_prewarm)
-				.await?;
+			let _ = validate_build(ctx, game_id, build_id, prewarm_ctx, needs_ats_prewarm).await?;
 
 			// Validate regions
 			for lg_region in lg_regions {
@@ -137,12 +141,12 @@ async fn prepare_runtime(
 	Ok(runtime)
 }
 
-#[tracing::instrument]
+#[tracing::instrument(skip(prewarm_ctx))]
 async fn validate_build(
 	ctx: &OperationContext<mm_config::version_prepare::Request>,
 	game_id: Uuid,
 	build_id: Uuid,
-	prewarm_ats_paths: &mut HashSet<String>,
+	prewarm_ctx: &mut PrewarmAtsContext,
 	needs_ats_prewarm: bool,
 ) -> GlobalResult<(Uuid, String)> {
 	// Validate build exists and belongs to this game
@@ -184,27 +188,37 @@ async fn validate_build(
 			provider = heck::KebabCase::to_kebab_case(provider.as_str()),
 			namespace = util::env::namespace(),
 		);
-		prewarm_ats_paths.insert(path.clone());
+		if prewarm_ctx.paths.insert(path.clone()) {
+			prewarm_ctx.total_size += upload.content_length;
+		}
 	}
 
 	Ok((upload_id, build.image_tag.clone()))
 }
 
+#[derive(Debug)]
+struct PrewarmAtsContext {
+	region_ids: HashSet<Uuid>,
+	paths: HashSet<String>,
+	#[allow(unused)]
+	total_size: u64,
+}
+
 #[tracing::instrument]
 async fn prewarm_ats_cache(
 	client: &chirp_client::Client,
-	region_ids: HashSet<Uuid>,
-	prewarm_ats_paths: HashSet<String>,
+	prewarm_ctx: PrewarmAtsContext,
 ) -> GlobalResult<()> {
-	if prewarm_ats_paths.is_empty() {
+	if prewarm_ctx.paths.is_empty() {
 		return Ok(());
 	}
 
-	let job_spec_json = serde_json::to_string(&gen_prewarm_job(prewarm_ats_paths.len())?)?;
+	let job_spec_json = serde_json::to_string(&gen_prewarm_job(prewarm_ctx.paths.len())?)?;
 
-	for region_id in region_ids {
+	for region_id in prewarm_ctx.region_ids {
 		// Pass artifact URLs to the job
-		let parameters = prewarm_ats_paths
+		let parameters = prewarm_ctx
+			.paths
 			.iter()
 			.enumerate()
 			.map(|(i, path)| job_run::msg::create::Parameter {
@@ -271,18 +285,21 @@ fn gen_prewarm_job(artifact_count: usize) -> GlobalResult<nomad_client::models::
 				..NetworkResource::new()
 			}]),
 			ephemeral_disk: Some(Box::new(EphemeralDisk {
-				// TODO: Fix this size
+				// This is only used for scheduling, not enforced for download size
+				//
+				// https://developer.hashicorp.com/nomad/docs/job-specification/ephemeral_disk#size
 				size_mb: Some(2048),
 				..EphemeralDisk::new()
 			})),
+			// This task will do nothing and exit immediately. The artifacts are prewarming the
+			// cache for us.
 			tasks: Some(vec![Task {
 				name: Some("prewarm".into()),
-				driver: Some("docker".into()),
+				driver: Some("exec".into()),
 				config: Some({
-					// TODO: Make this a null exec driver
 					let mut config = HashMap::new();
-					config.insert("image".into(), json!("alpine"));
-					config.insert("entrypoint".into(), json!(["true"]));
+					config.insert("command".into(), json!("/bin/sh"));
+					config.insert("args".into(), json!(["-c", "exit 0"]));
 					config
 				}),
 				resources: Some(Box::new(Resources {
