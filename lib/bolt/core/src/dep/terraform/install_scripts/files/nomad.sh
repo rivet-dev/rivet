@@ -53,8 +53,26 @@ else
     echo "Chain already exists: $ADMIN_CHAIN"
 fi
 
-RULE="-d $SUBNET -s __GG_VLAN_SUBNET__ -j ACCEPT"
+# Accept ingress traffic from GG subnet
+RULE="-s __GG_VLAN_SUBNET__ -d $SUBNET -j ACCEPT"
+if ! iptables -C $ADMIN_CHAIN \$RULE &>/dev/null; then
+    iptables -A $ADMIN_CHAIN \$RULE
+    echo "Added iptables rule: \$RULE"
+else
+    echo "Rule already exists: \$RULE"
+fi
 
+# Allow egress traffic to eth0 (public iface)
+RULE="-s $SUBNET -o eth0 -j ACCEPT"
+if ! iptables -C $ADMIN_CHAIN \$RULE &>/dev/null; then
+    iptables -A $ADMIN_CHAIN \$RULE
+    echo "Added iptables rule: \$RULE"
+else
+    echo "Rule already exists: \$RULE"
+fi
+
+# Deny all other egress traffic (i.e. any traffic trying to reach a private interface)
+RULE="-s $SUBNET -j DROP"
 if ! iptables -C $ADMIN_CHAIN \$RULE &>/dev/null; then
     iptables -A $ADMIN_CHAIN \$RULE
     echo "Added iptables rule: \$RULE"
