@@ -33,6 +33,8 @@ resource "clickhouse_service" "main" {
 
 	# TODO:
 	tier = "development"
+	idle_scaling = true
+	idle_timeout_minutes = 5
 
 	password = module.secrets.values["clickhouse/users/default/password"]
 
