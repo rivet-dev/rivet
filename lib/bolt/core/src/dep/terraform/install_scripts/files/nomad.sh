@@ -40,45 +40,57 @@ fi
 #
 # See Nomad equivalent: https://github.com/hashicorp/nomad/blob/a8f0f2612ef9d283ed903721f8453a0c0c3f51c5/client/allocrunner/networking_bridge_linux.go#L73
 ADMIN_CHAIN="RIVET-ADMIN"
-SUBNET="172.26.64.0/20"
+SUBNET_IPV4="172.26.64.0/20"
+SUBNET_IPV6="fd00:db8:2::/64"
 
 cat << EOF > /usr/local/bin/setup_nomad_networking.sh
 #!/bin/bash
 set -euf
 
-if ! iptables -t filter -L $ADMIN_CHAIN &>/dev/null; then
-    iptables -t filter -N $ADMIN_CHAIN
-    echo "Created iptables chain: $ADMIN_CHAIN"
-else
-    echo "Chain already exists: $ADMIN_CHAIN"
-fi
+for ipt in iptables ip6tables; do
+	if [ "\$ipt" == "iptables" ]; then
+        SUBNET_VAR="$SUBNET_IPV4"
+    else
+        SUBNET_VAR="$SUBNET_IPV6"
+    fi
 
-# Accept ingress traffic from GG subnet
-RULE="-s __GG_VLAN_SUBNET__ -d $SUBNET -j ACCEPT"
-if ! iptables -C $ADMIN_CHAIN \$RULE &>/dev/null; then
-    iptables -A $ADMIN_CHAIN \$RULE
-    echo "Added iptables rule: \$RULE"
-else
-    echo "Rule already exists: \$RULE"
-fi
 
-# Allow egress traffic to eth0 (public iface)
-RULE="-s $SUBNET -o eth0 -j ACCEPT"
-if ! iptables -C $ADMIN_CHAIN \$RULE &>/dev/null; then
-    iptables -A $ADMIN_CHAIN \$RULE
-    echo "Added iptables rule: \$RULE"
-else
-    echo "Rule already exists: \$RULE"
-fi
+    if ! \$ipt -t filter -L $ADMIN_CHAIN &>/dev/null; then
+        \$ipt -t filter -N $ADMIN_CHAIN
+        echo "Created \$ipt chain: $ADMIN_CHAIN"
+    else
+        echo "Chain already exists in \$ipt: $ADMIN_CHAIN"
+    fi
 
-# Deny all other egress traffic (i.e. any traffic trying to reach a private interface)
-RULE="-s $SUBNET -j DROP"
-if ! iptables -C $ADMIN_CHAIN \$RULE &>/dev/null; then
-    iptables -A $ADMIN_CHAIN \$RULE
-    echo "Added iptables rule: \$RULE"
-else
-    echo "Rule already exists: \$RULE"
-fi
+    # Accept ingress traffic from GG subnet. Only applicable to IPv4.
+	if [ "\$ipt" == "iptables" ]; then
+		RULE="-s __GG_VLAN_SUBNET__ -d \$SUBNET_VAR -j ACCEPT"
+		if ! \$ipt -C $ADMIN_CHAIN \$RULE &>/dev/null; then
+			\$ipt -A $ADMIN_CHAIN \$RULE
+			echo "Added \$ipt rule: \$RULE"
+		else
+			echo "Rule already exists in \$ipt: \$RULE"
+		fi
+	fi
+
+    # Allow egress traffic to eth0 (public iface)
+    RULE="-s \$SUBNET_VAR -o eth0 -j ACCEPT"
+    if ! \$ipt -C $ADMIN_CHAIN \$RULE &>/dev/null; then
+        \$ipt -A $ADMIN_CHAIN \$RULE
+        echo "Added \$ipt rule: \$RULE"
+    else
+        echo "Rule already exists in \$ipt: \$RULE"
+    fi
+
+    # Deny all other egress traffic
+    RULE="-s \$SUBNET_VAR -j DROP"
+    if ! \$ipt -C $ADMIN_CHAIN \$RULE &>/dev/null; then
+        \$ipt -A $ADMIN_CHAIN \$RULE
+        echo "Added \$ipt rule: \$RULE"
+    else
+        echo "Rule already exists in \$ipt: \$RULE"
+    fi
+done
 EOF
 
 chmod +x /usr/local/bin/setup_nomad_networking.sh
@@ -120,10 +132,10 @@ cat << EOF > /opt/cni/config/rivet-job.conflist
 				"type": "host-local",
 				"ranges": [
 					[
-						{ "subnet": "$SUBNET" }
+						{ "subnet": "$SUBNET_IPV4" }
 					],
 					[
-						{ "subnet": "fd00:db8:2::/64" }
+						{ "subnet": "$SUBNET_IPV6" }
 					]
 				],
 				"routes": [
