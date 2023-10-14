@@ -25,7 +25,6 @@ cat << 'EOF' > /etc/docker/daemon.json
 	"ip6tables": true
 }
 EOF
-chmod 440 /etc/docker/daemon.json
 
 # Test Docker installation
 docker run hello-world

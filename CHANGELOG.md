@@ -12,6 +12,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 -  **Bolt** Timeout for tests
 -  **Bolt** New summary view of test progress
 -  **Bolt** `config show` command
+-  **Bolt** `ssh pool --all <COMMAND>` command
+-  **Bolt** Validation that the correct pools exist in th enamespace
+-  **Bolt** Validation that the matchmaker delivery method is configured correctly depending on wether ATS servers exist
 -  **Dev** Bolt automatically builds with Nix shell
 -  **Infra** Autoscale non-singleton services based on CPU & memory
 -  **Infra** Dynamically provisioned core cluster using Karpenter
@@ -19,7 +22,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 -  **Infra** Support for running CockroachDB on Cockroach Cloud
 -  **Infra** Support for running Redis on AWS ElastiCache & MemoryDB
 -  **Infra** Dual-stack CNI configuration for game containers
+-  **Infra** job iptables firewall to job pool to whitelist inbound traffic from Game Guard to the container
 -  **Infra** Prewarm the Traffic Server cache when a game version is published for faster cold start times on the first booted lobby in each region
+-  **Infra** Envoy Maglev load balancing for traffic to edge Traffic Server instances to maximize cache hits
+-  **Bolt** `--no-purge` flag to `test` to prevent purging Nomad jobs
 
 ### Changed
 
@@ -43,6 +49,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 -  **Infra** Redis database connections now use TLS
 -  **Infra** Redis now uses Redis Cluster for everything
 -  **Infra** Cloudflare certificate authority from DigitCert to Lets Encrypt
+-  **Infra** Removed 1.1.1.1 & 1.0.0.1 as resolvers from Nomad jobs due to reliability issues
+-  **Infra** Added IPv6 DNS resolvers to Nomad jobs
+-  **Infra** CNI network for jobs from bridge to ptp for isolation & performance
+-  **Matchmaker** Expose API origin to `RIVET_API_ENDPOINT` env var to lobby containers
 
 ### Fixed
 

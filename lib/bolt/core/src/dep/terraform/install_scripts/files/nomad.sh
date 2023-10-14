@@ -17,8 +17,6 @@ net.bridge.bridge-nf-call-arptables = 1
 net.bridge.bridge-nf-call-ip6tables = 1
 net.bridge.bridge-nf-call-iptables = 1
 EOF
-chown root:root /etc/sysctl.d/10-rivet.conf
-chmod 644 /etc/sysctl.d/10-rivet.conf
 
 sysctl --system
 
@@ -31,8 +29,6 @@ unzip -o /tmp/nomad.zip -d /opt/nomad-$version/
 
 # Create symlink in /usr/local/bin
 ln -sf /opt/nomad-$version/nomad /usr/local/bin/nomad
-chown root:root /usr/local/bin/nomad
-chmod 755 /usr/local/bin/nomad
 
 # Test nomad installation
 if ! nomad version | grep -q "Nomad v$version"; then
@@ -40,15 +36,102 @@ if ! nomad version | grep -q "Nomad v$version"; then
   exit 1
 fi
 
+# Create admin chain that only accepts traffic from the GG subnet
+#
+# See Nomad equivalent: https://github.com/hashicorp/nomad/blob/a8f0f2612ef9d283ed903721f8453a0c0c3f51c5/client/allocrunner/networking_bridge_linux.go#L73
+ADMIN_CHAIN="RIVET-ADMIN"
+SUBNET="172.26.64.0/20"
+
+cat << EOF > /usr/local/bin/setup_nomad_networking.sh
+#!/bin/bash
+set -euf
+
+if ! iptables -t filter -L $ADMIN_CHAIN &>/dev/null; then
+    iptables -t filter -N $ADMIN_CHAIN
+    echo "Created iptables chain: $ADMIN_CHAIN"
+else
+    echo "Chain already exists: $ADMIN_CHAIN"
+fi
+
+RULE="-d $SUBNET -s __GG_VLAN_SUBNET__ -j ACCEPT"
+
+if ! iptables -C $ADMIN_CHAIN \$RULE &>/dev/null; then
+    iptables -A $ADMIN_CHAIN \$RULE
+    echo "Added iptables rule: \$RULE"
+else
+    echo "Rule already exists: \$RULE"
+fi
+EOF
+
+chmod +x /usr/local/bin/setup_nomad_networking.sh
+
+cat << 'EOF' > /etc/systemd/system/setup_nomad_networking.service
+[Unit]
+Description=Setup Nomad Networking
+After=network.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/setup_nomad_networking.sh
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+systemctl daemon-reload
+systemctl enable setup_nomad_networking
+systemctl start setup_nomad_networking
+
+# Dual-stack CNI config
+#
+# We use ptp instead of bridge networking in order to isolate the pod's traffic. It's also more performant than bridge networking.
+#
+# See default Nomad configuration: https://github.com/hashicorp/nomad/blob/a8f0f2612ef9d283ed903721f8453a0c0c3f51c5/client/allocrunner/networking_bridge_linux.go#L152
+cat << EOF > /opt/cni/config/rivet-job.conflist
+{
+	"cniVersion": "0.4.0",
+	"name": "rivet-job",
+	"plugins": [
+		{
+			"type": "loopback"
+		},
+		{
+			"type": "ptp",
+			"ipMasq": true,
+			"ipam": {
+				"type": "host-local",
+				"ranges": [
+					[
+						{ "subnet": "$SUBNET" }
+					],
+					[
+						{ "subnet": "fd00:db8:2::/64" }
+					]
+				],
+				"routes": [
+					{ "dst": "0.0.0.0/0" },
+					{ "dst": "::/0" }
+				]
+			}
+		},
+		{
+			"type": "firewall",
+			"backend": "iptables",
+			"iptablesAdminChainName": "$ADMIN_CHAIN"
+		},
+		{
+			"type": "portmap",
+			"capabilities": { "portMappings": true },
+			"snat": true
+		}
+	]
+}
+EOF
+
 # Create directories
 mkdir -p /opt/nomad/data
-chmod 700 /opt/nomad/data
-
-mkdir -p /opt/vector/data
-chmod 700 /opt/vector/data
 
 mkdir -p /etc/nomad.d
-chmod 700 /etc/nomad.d
 
 # Copy HCL files
 cat << EOF > /etc/nomad.d/common.hcl
@@ -57,10 +140,10 @@ datacenter = "__REGION_ID__"
 data_dir = "/opt/nomad/data"
 name = "__NODE_NAME__"
 
-bind_addr = "__VLAN_ADDR__"
+bind_addr = "__VLAN_IP__"
 
 addresses {
-	http = "__VLAN_ADDR__ 127.0.0.1"
+	http = "__VLAN_IP__ 127.0.0.1"
 }
 
 telemetry {
@@ -84,8 +167,8 @@ client {
 
 	node_class = "job"
 
-	# Expose services running on job nodes publicly
-	network_interface = "__PUBLIC_IFACE__"
+	# Expose services running on job nodes internally to GG
+	network_interface = "__VLAN_IFACE__"
 
 	# See tf/infra/firewall_rules.tf
 	min_dynamic_port = 20000
@@ -124,64 +207,14 @@ plugin "docker" {
 }
 EOF
 
-chmod 640 /etc/nomad.d/*.hcl
-
-# Dual-stack CNI config
-#
-# Modified from default Nomad configuration: https://developer.hashicorp.com/nomad/docs/networking/cni#nomad-s-bridge-configuration
-cat << 'EOF' > /opt/cni/config/rivet-job.conflist
-{
-	"cniVersion": "0.4.0",
-	"name": "rivet-job",
-	"plugins": [
-		{
-			"type": "loopback"
-		},
-		{
-			"type": "bridge",
-			"bridge": "nomad",
-			"ipMasq": true,
-			"isGateway": true,
-			"forceAddress": true,
-			"hairpinMode": false,
-			"ipam": {
-				"type": "host-local",
-				"ranges": [
-					[
-						{ "subnet": "172.26.64.0/20" }
-					],
-					[
-						{ "subnet": "fd00:db8:2::/64" }
-					]
-				],
-				"routes": [
-					{ "dst": "0.0.0.0/0" },
-					{ "dst": "::/0" }
-				]
-			}
-		},
-		{
-			"type": "firewall",
-			"backend": "iptables",
-			"iptablesAdminChainName": "RIVET-ADMIN"
-		},
-		{
-			"type": "portmap",
-			"capabilities": { "portMappings": true },
-			"snat": true
-		}
-	]
-}
-EOF
-
 # Systemd service
 cat << 'EOF' > /etc/systemd/system/nomad.service
 # See https://developer.hashicorp.com/nomad/tutorials/enterprise/production-deployment-guide-vm-with-consul#configure-systemd
 
 [Unit]
 Description=Nomad
-Wants=network-online.target
-After=network-online.target
+Wants=network-online.target setup_nomad_networking.service
+After=network-online.target setup_nomad_networking.service
 ConditionDirectoryNotEmpty=/etc/nomad.d/
 
 [Service]
@@ -200,7 +233,7 @@ OOMScoreAdjust=-1000
 WantedBy=multi-user.target
 EOF
 
-# Start and enable the service
+systemctl daemon-reload
 systemctl enable nomad
 systemctl start nomad
 

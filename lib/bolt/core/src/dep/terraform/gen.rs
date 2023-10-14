@@ -247,7 +247,7 @@ async fn vars(ctx: &ProjectContext) {
 		for (k, v) in &servers {
 			server_install_scripts.insert(
 				k.clone(),
-				super::install_scripts::gen(ctx, v, &k8s_infra, &tls)
+				super::install_scripts::gen(ctx, v, &servers, &k8s_infra, &tls)
 					.await
 					.unwrap(),
 			);

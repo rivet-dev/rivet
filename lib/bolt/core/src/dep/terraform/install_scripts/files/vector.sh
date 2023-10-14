@@ -20,16 +20,13 @@ else
 fi
 
 # Write config
-for x in /etc/vector /var/lib/vector; do
-	mkdir -p $x
-	chown -R vector:vector $x
-done
-chmod 550 -R /etc/vector
-chmod 750 -R /var/lib/vector
+mkdir -p /etc/vector /var/lib/vector
 
 cat << 'EOF' > /etc/vector/vector.toml
 __VECTOR_CONFIG__
 EOF
+
+chown -R vector:vector /etc/vector /var/lib/vector
 
 # Systemd service
 #
@@ -60,6 +57,7 @@ WantedBy=multi-user.target
 EOF
 
 # Start and enable the service
+systemctl daemon-reload
 systemctl enable vector
 systemctl start vector
 

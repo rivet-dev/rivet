@@ -1,19 +1,16 @@
-# echo "__GHCR_PASSWORD__" | docker login ghcr.io --username "__GHCR_USERNAME__" --password-stdin 
-
 # Create trafficserver user
 if ! id -u "trafficserver" &>/dev/null; then
 	useradd -r -s /bin/false trafficserver
 fi
 
-# Create volumes
-for x in /etc/trafficserver /var/cache/trafficserver /run/trafficserver /var/log/trafficserver; do
-	mkdir -p $x
-	chown -R trafficserver:trafficserver $x
-done
+# Create required dirs
+mkdir -p /etc/trafficserver /var/cache/trafficserver /run/trafficserver /var/log/trafficserver
 
+# Write config
 __CONFIG__
 
-chmod -R 770 /etc/trafficserver
+# Change owner
+chown -R trafficserver:trafficserver /etc/trafficserver /var/cache/trafficserver /run/trafficserver /var/log/trafficserver
 
 cat << EOF > /etc/systemd/system/trafficserver.service
 [Unit]

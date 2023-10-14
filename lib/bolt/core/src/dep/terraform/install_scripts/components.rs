@@ -1,12 +1,12 @@
 use anyhow::{Context, Result};
 use indoc::formatdoc;
-
+use serde_json::json;
 use std::collections::HashMap;
 use tokio::fs;
 
 use crate::{
 	context::ProjectContext,
-	dep::terraform::{output::Cert, servers::Server},
+	dep::terraform::{net, output::Cert, servers::Server},
 };
 
 pub fn common() -> String {
@@ -37,9 +37,9 @@ pub fn nomad(server: &Server) -> String {
 	include_str!("files/nomad.sh")
 		.replace("__REGION_ID__", &server.region_id)
 		.replace("__NODE_NAME__", &server.name)
-		.replace("__VLAN_ADDR__", &server.vlan_ip.to_string())
+		.replace("__VLAN_IP__", &server.vlan_ip.to_string())
 		// Hardcoded to Linode
-		.replace("__PUBLIC_IFACE__", "eth1")
+		.replace("__VLAN_IFACE__", "eth1")
 		.replace(
 			"__SERVER_JOIN__",
 			&servers
@@ -48,6 +48,7 @@ pub fn nomad(server: &Server) -> String {
 				.collect::<Vec<_>>()
 				.join(", "),
 		)
+		.replace("__GG_VLAN_SUBNET__", &net::gg::vlan_ip_net().to_string())
 }
 
 /// Installs Treafik, but does not create the Traefik service.
@@ -296,9 +297,9 @@ pub fn vector(config: &VectorConfig) -> String {
 	include_str!("files/vector.sh").replace("__VECTOR_CONFIG__", &config_str)
 }
 
-pub async fn traffic_server(ctx: &ProjectContext) -> Result<String> {
+pub async fn traffic_server(ctx: &ProjectContext, server: &Server) -> Result<String> {
 	// Write config to files
-	let config = traffic_server_config(ctx).await?;
+	let config = traffic_server_config(ctx, server).await?;
 	let config_script = config
 		.into_iter()
 		.map(|(k, v)| format!("cat << 'EOF' > /etc/trafficserver/{k}\n{v}\nEOF\n"))
@@ -308,14 +309,17 @@ pub async fn traffic_server(ctx: &ProjectContext) -> Result<String> {
 	let script = include_str!("files/traffic_server.sh")
 		.replace(
 			"__IMAGE__",
-			"ghcr.io/rivet-gg/apache-traffic-server:44ef76a",
+			"ghcr.io/rivet-gg/apache-traffic-server:9934dc2",
 		)
 		.replace("__CONFIG__", &config_script);
 
 	Ok(script)
 }
 
-async fn traffic_server_config(ctx: &ProjectContext) -> Result<Vec<(String, String)>> {
+async fn traffic_server_config(
+	ctx: &ProjectContext,
+	server: &Server,
+) -> Result<Vec<(String, String)>> {
 	let config_dir = ctx
 		.path()
 		.join("infra")
@@ -337,6 +341,7 @@ async fn traffic_server_config(ctx: &ProjectContext) -> Result<Vec<(String, Stri
 				.context("as_str")?
 				.to_string();
 			let value = fs::read_to_string(entry.path()).await?;
+			let value = value.replace("__VLAN_IP__", &server.vlan_ip.to_string());
 			config_files.push((key, value));
 		}
 	}
@@ -390,13 +395,20 @@ async fn gen_s3_provider(
 	let config = ctx.s3_config(provider).await?;
 	let creds = ctx.s3_credentials(provider).await?;
 
+	// Build plugin chain
+	let plugins = format!("@plugin=tslua.so @pparam=/etc/trafficserver/strip_headers.lua @plugin=s3_auth.so @pparam=--config @pparam=s3_auth_v4_{provider_name}.config");
+
 	// Add remap
-	remap.push_str(&format!("map /s3-cache/{provider_name} {endpoint_internal} @plugin=s3_auth.so @pparam=--config @pparam=s3_auth_v4_{provider_name}.config\n", endpoint_internal = config.endpoint_internal));
+	remap.push_str(&format!(
+		"map /s3-cache/{provider_name} {endpoint_external} {plugins}\n",
+		endpoint_external = config.endpoint_external
+	));
 
 	// Add default route
 	if default_s3_provider == provider {
-		remap.push_str(&format!("map /s3-cache {endpoint_internal} @plugin=s3_auth.so @pparam=--config @pparam=s3_auth_v4_{provider_name}.config\n",
-			endpoint_internal = config.endpoint_internal,
+		remap.push_str(&format!(
+			"map /s3-cache {endpoint_external} {plugins}\n",
+			endpoint_external = config.endpoint_external,
 		));
 	}
 
@@ -422,7 +434,7 @@ async fn gen_s3_provider(
 			# Default region
 			{s3_host}: {s3_region}
 			"#,
-			s3_host = config.endpoint_external,
+			s3_host = config.endpoint_external.split_once("://").unwrap().1,
 			s3_region = config.region,
 		),
 	));
@@ -431,4 +443,111 @@ async fn gen_s3_provider(
 		append_remap: remap,
 		config_files,
 	})
+}
+
+pub fn envoy() -> String {
+	include_str!("files/envoy.sh").to_string()
+}
+
+pub fn outbound_proxy(server: &Server, all_servers: &HashMap<String, Server>) -> Result<String> {
+	// Build ATS endpoints
+	let mut ats_servers = all_servers
+		.values()
+		.filter(|x| server.region_id == x.region_id && x.pool_id == "ats")
+		.collect::<Vec<_>>();
+	// Use the same sorting as ATS for consistent Maglev hashing
+	ats_servers.sort_by_key(|x| x.index);
+	let ats_endpoints = ats_servers
+		.iter()
+		.map(|x| {
+			json!({
+				"endpoint": {
+					"address": {
+						"socket_address": {
+							"address": x.vlan_ip.to_string(),
+							"port_value": 8080
+						}
+					}
+				}
+			})
+		})
+		.collect::<Vec<_>>();
+
+	// Build config
+	let config = json!({
+		"static_resources": {
+			"listeners": [{
+				"name": "ats",
+				"address": {
+					"socket_address": {
+						"address": "0.0.0.0",
+						"port_value": 8080
+					}
+				},
+				"filter_chains": [{
+					"filters": [{
+						"name": "envoy.filters.network.http_connection_manager",
+						"typed_config": {
+							"@type": "type.googleapis.com/envoy.extensions.filters.network.http_connection_manager.v3.HttpConnectionManager",
+							"stat_prefix": "ingress_http",
+							"route_config": {
+								"name": "local_route",
+								"virtual_hosts": [
+									{
+										"name": "backend",
+										"domains": ["*"],
+										"routes": [{
+											"match": { "prefix": "/" },
+											"route": {
+												"cluster": "ats_backend",
+												"hash_policy": [{
+													"header": { "header_name": ":path" }
+												}]
+											}
+										}]
+									}
+								]
+							},
+							"http_filters": [
+								{
+									"name": "envoy.filters.http.router",
+									"typed_config": {
+										"@type": "type.googleapis.com/envoy.extensions.filters.http.router.v3.Router"
+									}
+								}
+							]
+						}
+					}]
+				}]
+			}],
+			"clusters": [{
+				"name": "ats_backend",
+				"connect_timeout": "0.25s",
+				// Use consistent hashing to reliably send the same request to the same server
+				//
+				// In order for this to work, the load balancer must be configured with the same:
+				// - Table size
+				// - List of backend nodes (in the same order)
+				// - Hash key for each endpoint (uses the host by default)
+				//
+				// See https://www.envoyproxy.io/docs/envoy/latest/intro/arch_overview/upstream/load_balancing/load_balancers#arch-overview-load-balancing-types-maglev
+				"lb_policy": "MAGLEV",
+				"maglev_lb_config": {
+					// Ensure the same table size for consistent hashing across load balancers
+					"table_size": 65537
+				},
+				"load_assignment": {
+					"cluster_name": "ats_backend",
+					"endpoints": [
+						{
+							"lb_endpoints": ats_endpoints
+						}
+					]
+				}
+			}]
+		}
+	});
+
+	let yaml_config = serde_yaml::to_string(&config)?;
+	Ok(include_str!("files/outbound_proxy.sh").replace("__ENVOY_CONFIG__", &yaml_config))
 }

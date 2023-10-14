@@ -46,8 +46,8 @@ pub fn build_regions(ctx: &ProjectContext) -> Result<HashMap<String, Region>> {
 				provider_region: region.provider_region.clone(),
 				netnum: region.netnum,
 				vlan: RegionVlan {
-					address: net::region::VLAN_ADDR,
-					prefix_len: net::region::VLAN_PREFIX_LEN,
+					address: net::region::vlan_ip_net().addr(),
+					prefix_len: net::region::vlan_ip_net().prefix_len(),
 				},
 			},
 		);

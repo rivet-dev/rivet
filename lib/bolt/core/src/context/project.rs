@@ -183,6 +183,59 @@ impl ProjectContextData {
 				"cloudflare access must be enabled to use grafana"
 			);
 		}
+
+		// MARK: Matchmaker
+		let ats_count = self.ns().pools.iter().filter(|p| p.pool == "ats").count();
+		match self.ns().rivet.matchmaker.lobby_delivery_method {
+			config::ns::MatchmakerLobbyDeliveryMethod::TrafficServer => {
+				assert_ne!(ats_count, 0, "TrafficServer delivery method will not work without ats servers in each region");
+			}
+			config::ns::MatchmakerLobbyDeliveryMethod::S3Direct => {
+				assert_eq!(
+					ats_count, 0,
+					"S3Direct delivery method should not be used if ats servers are available"
+				);
+			}
+		}
+
+		// MARK: Pools
+		for region_id in self.ns().regions.keys() {
+			// Skip empty regions
+			if !self.ns().pools.iter().any(|p| p.region == *region_id) {
+				continue;
+			}
+
+			// Validate all required pools exist
+			assert!(
+				self.ns()
+					.pools
+					.iter()
+					.any(|p| p.pool == "gg" && p.region == *region_id),
+				"missing gg pool for region {region_id}",
+				region_id = region_id
+			);
+			assert!(
+				self.ns()
+					.pools
+					.iter()
+					.any(|p| p.pool == "job" && p.region == *region_id),
+				"missing job pool for region {region_id}",
+				region_id = region_id
+			);
+			if matches!(
+				self.ns().rivet.matchmaker.lobby_delivery_method,
+				config::ns::MatchmakerLobbyDeliveryMethod::TrafficServer
+			) {
+				assert!(
+					self.ns()
+						.pools
+						.iter()
+						.any(|p| p.pool == "ats" && p.region == *region_id),
+					"missing ats pool for region {region_id}",
+					region_id = region_id
+				);
+			}
+		}
 	}
 
 	// Traverses from FS root to CWD, returns first directory with Bolt.toml

@@ -108,9 +108,9 @@ fn modify_job_spec(
 			"2001:4860:4860::8888".into(),
 			"2001:4860:4860::8844".into(),
 		]),
-        // Disable default search from the host
-        searches: Some(Vec::new()),
-        options: Some(vec!["rotate".into(), "edns0".into(), "attempts:2".into()]),
+		// Disable default search from the host
+		searches: Some(Vec::new()),
+		options: Some(vec!["rotate".into(), "edns0".into(), "attempts:2".into()]),
 		..nomad_client::models::NetworkDns::new()
 	}));
 

@@ -38,7 +38,7 @@ pub struct TestCtx<'a, T: AsRef<str>> {
 	pub filters: Vec<String>,
 	pub timeout: Option<u64>,
 	pub parallel_tests: Option<usize>,
-	pub dont_purge: bool,
+	pub no_purge: bool,
 }
 
 pub async fn test_all(ctx: &ProjectContext) -> Result<()> {
@@ -55,7 +55,7 @@ pub async fn test_all(ctx: &ProjectContext) -> Result<()> {
 			filters: Vec::new(),
 			timeout: None,
 			parallel_tests: None,
-			dont_purge: false,
+			no_purge: false,
 		},
 	)
 	.await?;
@@ -166,7 +166,7 @@ pub async fn test_services<T: AsRef<str>>(
 		eprintln!();
 		rivet_term::status::progress("Cleaning up jobs", "");
 
-		let purge = if test_ctx.dont_purge { "" } else { "-purge" };
+		let purge = if test_ctx.no_purge { "" } else { "-purge" };
 		let cleanup_cmd = formatdoc!(
 			r#"
 			nomad job status |

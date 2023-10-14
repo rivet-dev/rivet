@@ -13,7 +13,7 @@ pub const DEV_REGION_NAME: &str = "Local";
 
 // Also see svc/mm-lobby-create/src/nomad_job.rs
 pub const DEFAULT_ENV_KEYS: &[&str] = &[
-	"RIVET_API_URL",
+	"RIVET_API_ENDPOINT",
 	"RIVET_CHAT_API_URL",
 	"RIVET_GROUP_API_URL",
 	"RIVET_IDENTITY_API_URL",

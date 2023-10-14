@@ -10,8 +10,6 @@ mkdir -p /opt/node_exporter-$version/
 wget -O /tmp/node_exporter.tar.gz https://github.com/prometheus/node_exporter/releases/download/v$version/node_exporter-$version.linux-amd64.tar.gz
 tar -zxvf /tmp/node_exporter.tar.gz -C /opt/node_exporter-$version/ --strip-components=1
 install -o node_exporter -g node_exporter /opt/node_exporter-$version/node_exporter /usr/bin/
-chown node_exporter:node_exporter /usr/bin/node_exporter
-chmod 755 /usr/bin/node_exporter
 
 # TODO: Verify hash
 
