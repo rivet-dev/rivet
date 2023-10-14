@@ -39,7 +39,7 @@ pub fn nomad(server: &Server) -> String {
 		.replace("__NODE_NAME__", &server.name)
 		.replace("__VLAN_IP__", &server.vlan_ip.to_string())
 		// Hardcoded to Linode
-		.replace("__PUBLIC_IFACE__", "eth1")
+		.replace("__VLAN_IFACE__", "eth1")
 		.replace(
 			"__SERVER_JOIN__",
 			&servers

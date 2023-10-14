@@ -75,8 +75,8 @@ client {
 
 	node_class = "job"
 
-	# Expose services running on job nodes publicly
-	network_interface = "__PUBLIC_IFACE__"
+	# Expose services running on job nodes internally to GG
+	network_interface = "__VLAN_IFACE__"
 
 	# See tf/infra/firewall_rules.tf
 	min_dynamic_port = 20000
@@ -115,6 +115,12 @@ plugin "docker" {
 }
 EOF
 
+# TODO: Run on boot
+# TODO: Don't run if already created
+# Create a bridge for the CNI to use
+# ip link add name rivet type bridge
+# ip addr add 172.28.64.1/20 dev rivet
+# ip link set dev rivet up
 
 # Dual-stack CNI config
 #
@@ -129,7 +135,7 @@ cat << 'EOF' > /opt/cni/config/rivet-job.conflist
 		},
 		{
 			"type": "bridge",
-			"bridge": "nomad",
+			"bridge": "rivet",
 			"ipMasq": true,
 			"isGateway": true,
 			"forceAddress": true,
@@ -138,7 +144,7 @@ cat << 'EOF' > /opt/cni/config/rivet-job.conflist
 				"type": "host-local",
 				"ranges": [
 					[
-						{ "subnet": "172.26.64.0/20" }
+						{ "subnet": "172.28.64.0/20" }
 					],
 					[
 						{ "subnet": "fd00:db8:2::/64" }
