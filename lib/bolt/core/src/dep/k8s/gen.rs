@@ -346,10 +346,6 @@ pub async fn gen_svc(exec_ctx: &ExecServiceContext) -> Vec<serde_json::Value> {
 		"namespace": "rivet-service",
 		"labels": {
 			"app.kubernetes.io/name": service_name
-		},
-		"annotations": {
-			"checksum/env": env_checksum,
-			"checksum/secret-env": secret_env_checksum
 		}
 	});
 
@@ -404,7 +400,11 @@ pub async fn gen_svc(exec_ctx: &ExecServiceContext) -> Vec<serde_json::Value> {
 		"metadata": {
 			"labels": {
 				"app.kubernetes.io/name": service_name
-			}
+			},
+			"annotations": {
+				"checksum/env": env_checksum,
+				"checksum/secret-env": secret_env_checksum
+			},
 		},
 		"spec": pod_spec,
 	});
