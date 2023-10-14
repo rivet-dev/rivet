@@ -1,6 +1,7 @@
 use proto::backend::{self, pkg::*};
 use rivet_operation::prelude::*;
-use std::time::Instant;
+use serde_json::json;
+use std::collections::{HashMap, HashSet};
 use tracing::Instrument;
 
 #[operation(name = "mm-config-version-prepare")]
@@ -9,6 +10,10 @@ async fn handle(
 ) -> GlobalResult<mm_config::version_prepare::Response> {
 	let game_id = internal_unwrap!(ctx.game_id).as_uuid();
 	let config = internal_unwrap!(ctx.config);
+
+	// Deduplicated list of build paths that will be used to prewarm the ATS cache
+	let mut all_region_ids = HashSet::new();
+	let mut prewarm_ats_paths = HashSet::new();
 
 	let mut lobby_group_ctxs = Vec::new();
 	for lobby_group in &config.lobby_groups {
@@ -19,6 +24,7 @@ async fn handle(
 			.iter()
 			.flat_map(|r| r.region_id)
 			.collect::<Vec<_>>();
+		all_region_ids.extend(region_ids.iter().map(common::Uuid::as_uuid));
 
 		// Resolve region name IDs
 		let (regions_res, tier_res) = tokio::try_join!(
@@ -49,6 +55,7 @@ async fn handle(
 			&lobby_group.regions,
 			&regions_res.regions,
 			&tier_res.regions,
+			&mut prewarm_ats_paths,
 		)
 		.await?;
 
@@ -57,6 +64,8 @@ async fn handle(
 		});
 	}
 
+	prewarm_ats_cache(ctx.chirp(), all_region_ids, prewarm_ats_paths).await?;
+
 	Ok(mm_config::version_prepare::Response {
 		config_ctx: Some(backend::matchmaker::VersionConfigCtx {
 			lobby_groups: lobby_group_ctxs,
@@ -64,6 +73,7 @@ async fn handle(
 	})
 }
 
+#[tracing::instrument]
 async fn prepare_runtime(
 	ctx: &OperationContext<mm_config::version_prepare::Request>,
 	game_id: Uuid,
@@ -71,11 +81,12 @@ async fn prepare_runtime(
 	lg_regions: &[backend::matchmaker::lobby_group::Region],
 	regions_data: &[backend::region::Region],
 	tier_regions: &[tier::list::response::Region],
+	prewarm_ats_paths: &mut HashSet<String>,
 ) -> GlobalResult<backend::matchmaker::LobbyRuntimeCtx> {
 	let runtime: backend::matchmaker::LobbyRuntimeCtx = match runtime {
 		backend::matchmaker::lobby_runtime::Runtime::Docker(runtime) => {
 			let build_id = internal_unwrap!(runtime.build_id).as_uuid();
-			let _ = validate_build(ctx, game_id, build_id).await?;
+			let _ = validate_build(ctx, game_id, build_id, prewarm_ats_paths).await?;
 
 			// Validate regions
 			for lg_region in lg_regions {
@@ -111,10 +122,12 @@ async fn prepare_runtime(
 	Ok(runtime)
 }
 
+#[tracing::instrument]
 async fn validate_build(
 	ctx: &OperationContext<mm_config::version_prepare::Request>,
 	game_id: Uuid,
 	build_id: Uuid,
+	prewarm_ats_paths: &mut HashSet<String>,
 ) -> GlobalResult<(Uuid, String)> {
 	// Validate build exists and belongs to this game
 	let build_get = op!([ctx] build_get {
@@ -148,68 +161,122 @@ async fn validate_build(
 		backend::upload::Provider::Aws => s3_util::Provider::Aws,
 	};
 
-	// // prewarm ATS cache
-	// let path = format!(
-	// 	"/s3-cache/{provider}/{namespace}-bucket-build/{upload_id}/image.tar",
-	// 	provider = heck::KebabCase::to_kebab_case(provider.to_string().as_str()),
-	// 	namespace = util::env::namespace(),
-	// );
-	// prewarm_ats_cache(&path).await;
+	// Generate path used to request the image
+	let path = format!(
+		"/s3-cache/{provider}/{namespace}-bucket-build/{upload_id}/image.tar",
+		provider = heck::KebabCase::to_kebab_case(provider.as_str()),
+		namespace = util::env::namespace(),
+	);
+	prewarm_ats_paths.insert(path.clone());
 
 	Ok((upload_id, build.image_tag.clone()))
 }
 
-// // TODO: Validate ports are within a given range and don't use our reserved ports, since we need a reserved port range for Rivet sidecars to run
+#[tracing::instrument]
+async fn prewarm_ats_cache(
+	client: &chirp_client::Client,
+	region_ids: HashSet<Uuid>,
+	prewarm_ats_paths: HashSet<String>,
+) -> GlobalResult<()> {
+	if prewarm_ats_paths.is_empty() {
+		return Ok(());
+	}
 
-// /// Prewarms the ATS cache with the given resources in order to make the future requests faster.
-// #[tracing::instrument]
-// async fn prewarm_ats_cache(path: &str) {
-// 	// TODO: This is hardcoded
-// 	let ats_urls = vec!["10.0.25.2", "10.0.50.2"];
-// 	for ats_url in &ats_urls {
-// 		let url = format!("http://{ats_url}:9300{path}");
-// 		let spawn_res = tokio::task::Builder::new()
-// 			.name("mm_config_version_prepare::prewarm_ats_cache")
-// 			.spawn(
-// 				async move {
-// 					match prewarm_ats_cache_inner(&url).await {
-// 						Ok(_) => {}
-// 						Err(err) => {
-// 							tracing::error!(%err, "failed to prewarm ats cache");
-// 						}
-// 					}
-// 				}
-// 				.in_current_span(),
-// 			);
-// 		if let Err(err) = spawn_res {
-// 			tracing::error!(?err, "failed to spawn prewarm_ats_cache_inner task");
-// 		}
-// 	}
-// }
+	let job_spec_json = serde_json::to_string(&gen_prewarm_job(prewarm_ats_paths.len())?)?;
 
-// /// Prewarm a specific ATS server with a resource.
-// #[tracing::instrument]
-// async fn prewarm_ats_cache_inner(url: &str) -> GlobalResult<()> {
-// 	tracing::info!(?url, "populating ats build cache");
+	for region_id in region_ids {
+		// Pass artifact URLs to the job
+		let parameters = prewarm_ats_paths
+			.iter()
+			.enumerate()
+			.map(|(i, path)| job_run::msg::create::Parameter {
+				key: format!("artifact_url_{i}"),
+				value: format!("http://127.0.0.1:8080{path}"),
+			})
+			.collect::<Vec<_>>();
 
-// 	let client = reqwest::Client::new();
+		// Run the job and forget about it
+		let run_id = Uuid::new_v4();
+		msg!([client] job_run::msg::create(run_id) {
+			run_id: Some(run_id.into()),
+			region_id: Some(region_id.into()),
+			parameters: parameters,
+			job_spec_json: job_spec_json.clone(),
+			..Default::default()
+		})
+		.await
+		.unwrap();
+	}
 
-// 	// Check if cache already prewarmed
-// 	let start = Instant::now();
-// 	let resp = client.head(url).send().await?;
-// 	let age = internal_unwrap!(resp.headers().get("Age"))
-// 		.to_str()?
-// 		.parse::<u64>()?;
-// 	if age > 0 {
-// 		tracing::info!(?age, "object already cached");
-// 		return Ok(());
-// 	}
-// 	tracing::info!(head_duration = ?start.elapsed(), "fetching object");
+	Ok(())
+}
 
-// 	// Make a GET request to prewarm the cache and do nothing with the response
-// 	let start = Instant::now();
-// 	let resp = client.get(url).send().await?.error_for_status()?;
-// 	tracing::info!(get_duration = ?start.elapsed(), "cache prewarmd");
+/// Generates a Nomad job that will fetch the required assets then exit immediately.
+///
+/// This uses our job-run infrastructure to reuse dispatched jobs. This will generate a unique job
+/// for every requrested artifact count.
+fn gen_prewarm_job(artifact_count: usize) -> GlobalResult<nomad_client::models::Job> {
+	use nomad_client::models::*;
 
-// 	Ok(())
-// }
+	// Build artifact metadata
+	let mut meta_required = Vec::new();
+	let mut artifacts = Vec::new();
+	for i in 0..artifact_count {
+		meta_required.push(format!("artifact_url_{i}"));
+		artifacts.push(TaskArtifact {
+			getter_source: Some(format!("${{NOMAD_META_ARTIFACT_URL_{i}}}")),
+			getter_mode: Some("file".into()),
+			getter_options: Some({
+				let mut opts = HashMap::new();
+				opts.insert("archive".into(), "false".into());
+				opts
+			}),
+			relative_dest: Some(format!("local/artifact_{i}")),
+		});
+	}
+
+	Ok(Job {
+		_type: Some("batch".into()),
+		constraints: Some(vec![Constraint {
+			l_target: Some("${node.class}".into()),
+			r_target: Some("job".into()),
+			operand: Some("=".into()),
+		}]),
+		parameterized_job: Some(Box::new(ParameterizedJobConfig {
+			meta_required: Some(meta_required),
+			..ParameterizedJobConfig::new()
+		})),
+		task_groups: Some(vec![TaskGroup {
+			name: Some("prewarm".into()),
+			networks: Some(vec![NetworkResource {
+				mode: Some("host".into()),
+				..NetworkResource::new()
+			}]),
+			ephemeral_disk: Some(Box::new(EphemeralDisk {
+				// TODO: Fix this size
+				size_mb: Some(2048),
+				..EphemeralDisk::new()
+			})),
+			tasks: Some(vec![Task {
+				name: Some("prewarm".into()),
+				driver: Some("docker".into()),
+				config: Some({
+					// TODO: Make this a null exec driver
+					let mut config = HashMap::new();
+					config.insert("image".into(), json!("alpine"));
+					config.insert("entrypoint".into(), json!(["true"]));
+					config
+				}),
+				resources: Some(Box::new(Resources {
+					CPU: Some(100),
+					memory_mb: Some(64),
+					..Resources::new()
+				})),
+				artifacts: Some(artifacts),
+				..Task::new()
+			}]),
+			..TaskGroup::new()
+		}]),
+		..Job::new()
+	})
+}
