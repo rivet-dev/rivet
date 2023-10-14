@@ -426,7 +426,7 @@ async fn gen_s3_provider(
 			# Default region
 			{s3_host}: {s3_region}
 			"#,
-			s3_host = config.endpoint_external,
+			s3_host = config.endpoint_external.split_once("://").unwrap().1,
 			s3_region = config.region,
 		),
 	));
