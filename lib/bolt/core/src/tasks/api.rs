@@ -18,7 +18,7 @@ pub async fn convert_team(project_ctx: &ProjectContext, team_id: String) -> Resu
 		.await?;
 	let response = reqwest::Client::new()
 		.post(format!(
-			"https://api.{}/admin/groups/{}/developer",
+			"{}/admin/groups/{}/developer",
 			project_ctx.origin_api(),
 			team_id,
 		))
