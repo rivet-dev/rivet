@@ -4759,6 +4759,30 @@ dependencies = [
 ]
 
 [[package]]
+name = "load-test-mm"
+version = "0.0.1"
+dependencies = [
+ "chirp-client",
+ "chirp-worker",
+ "cloud-namespace-token-public-create",
+ "faker-build",
+ "faker-game",
+ "faker-game-namespace",
+ "faker-game-version",
+ "faker-region",
+ "region-get",
+ "reqwest",
+ "rivet-api",
+ "rivet-connection",
+ "rivet-operation",
+ "rivet-runtime",
+ "token-create",
+ "tokio",
+ "tracing",
+ "tracing-subscriber",
+]
+
+[[package]]
 name = "lock_api"
 version = "0.4.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"

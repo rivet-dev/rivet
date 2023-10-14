@@ -5,7 +5,7 @@ fn main() -> GlobalResult<()> {
 }
 
 async fn start() -> GlobalResult<()> {
-	load_test_api_cloud::run_from_env(util::timestamp::now()).await?;
+	load_test_mm::run_from_env(util::timestamp::now()).await?;
 
 	tracing::info!("finished");
 

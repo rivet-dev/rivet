@@ -1,5 +1,5 @@
 [service]
-name = "load-test-api-cloud"
+name = "load-test-mm"
 load-test = true
 
 [runtime]
