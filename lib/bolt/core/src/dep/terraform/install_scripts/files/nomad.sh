@@ -106,10 +106,14 @@ cat << EOF > /opt/cni/config/rivet-job.conflist
 				"ranges": [
 					[
 						{ "subnet": "$SUBNET" }
+					],
+					[
+						{ "subnet": "fd00:db8:2::/64" }
 					]
 				],
 				"routes": [
-					{ "dst": "0.0.0.0/0" }
+					{ "dst": "0.0.0.0/0" },
+					{ "dst": "::/0" }
 				]
 			}
 		},
