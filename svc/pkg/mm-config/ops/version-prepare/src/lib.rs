@@ -45,6 +45,17 @@ async fn handle(
 			internal_assert!(has_region, "invalid region id");
 		}
 
+		// Check if we need to prewarm the ATS cache for this Docker build
+		//
+		// We only need to prewarm the cache if _not_ using idle lobbies or if using custom lobbies. If there are idle
+		// lobbies, then we'll start a lobby immediately, so the prewarm is redundant.
+		let needs_ats_prewarm = lobby_group.create_config.is_some()
+			|| lobby_group.regions.iter().any(|x| {
+				x.idle_lobbies
+					.as_ref()
+					.map_or(true, |y| y.min_idle_lobbies == 0)
+			});
+
 		// Prepare runtime
 		let runtime = internal_unwrap!(lobby_group.runtime);
 		let runtime = internal_unwrap!(runtime.runtime);
@@ -56,6 +67,7 @@ async fn handle(
 			&regions_res.regions,
 			&tier_res.regions,
 			&mut prewarm_ats_paths,
+			needs_ats_prewarm,
 		)
 		.await?;
 
@@ -82,11 +94,14 @@ async fn prepare_runtime(
 	regions_data: &[backend::region::Region],
 	tier_regions: &[tier::list::response::Region],
 	prewarm_ats_paths: &mut HashSet<String>,
+	needs_ats_prewarm: bool,
 ) -> GlobalResult<backend::matchmaker::LobbyRuntimeCtx> {
 	let runtime: backend::matchmaker::LobbyRuntimeCtx = match runtime {
 		backend::matchmaker::lobby_runtime::Runtime::Docker(runtime) => {
+			// Validate the build
 			let build_id = internal_unwrap!(runtime.build_id).as_uuid();
-			let _ = validate_build(ctx, game_id, build_id, prewarm_ats_paths).await?;
+			let _ = validate_build(ctx, game_id, build_id, prewarm_ats_paths, needs_ats_prewarm)
+				.await?;
 
 			// Validate regions
 			for lg_region in lg_regions {
@@ -128,6 +143,7 @@ async fn validate_build(
 	game_id: Uuid,
 	build_id: Uuid,
 	prewarm_ats_paths: &mut HashSet<String>,
+	needs_ats_prewarm: bool,
 ) -> GlobalResult<(Uuid, String)> {
 	// Validate build exists and belongs to this game
 	let build_get = op!([ctx] build_get {
@@ -162,12 +178,14 @@ async fn validate_build(
 	};
 
 	// Generate path used to request the image
-	let path = format!(
-		"/s3-cache/{provider}/{namespace}-bucket-build/{upload_id}/image.tar",
-		provider = heck::KebabCase::to_kebab_case(provider.as_str()),
-		namespace = util::env::namespace(),
-	);
-	prewarm_ats_paths.insert(path.clone());
+	if needs_ats_prewarm {
+		let path = format!(
+			"/s3-cache/{provider}/{namespace}-bucket-build/{upload_id}/image.tar",
+			provider = heck::KebabCase::to_kebab_case(provider.as_str()),
+			namespace = util::env::namespace(),
+		);
+		prewarm_ats_paths.insert(path.clone());
+	}
 
 	Ok((upload_id, build.image_tag.clone()))
 }
