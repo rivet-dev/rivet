@@ -6,7 +6,7 @@ use tokio::fs;
 
 use crate::{
 	context::ProjectContext,
-	dep::terraform::{output::Cert, servers::Server},
+	dep::terraform::{net, output::Cert, servers::Server},
 };
 
 pub fn common() -> String {
@@ -48,6 +48,7 @@ pub fn nomad(server: &Server) -> String {
 				.collect::<Vec<_>>()
 				.join(", "),
 		)
+		.replace("__GG_VLAN_SUBNET__", &net::gg::vlan_ip_net().to_string())
 }
 
 /// Installs Treafik, but does not create the Traefik service.

@@ -5,7 +5,7 @@ use derive_builder::Builder;
 
 use ipnet::Ipv4AddrRange;
 use serde::Serialize;
-use std::{collections::HashMap, net::Ipv4Addr};
+use std::collections::HashMap;
 
 use super::net;
 

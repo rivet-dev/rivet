@@ -13,10 +13,12 @@ pub mod gg {
 
 	use ipnet::{Ipv4AddrRange, Ipv4Net};
 
+	pub fn vlan_ip_net() -> Ipv4Net {
+		Ipv4Net::new(Ipv4Addr::new(10, 0, 0, 0), 26).unwrap()
+	}
+
 	pub fn vlan_addr_range() -> Ipv4AddrRange {
-		Ipv4Net::new(Ipv4Addr::new(10, 0, 0, 0), 26)
-			.unwrap()
-			.hosts()
+		vlan_ip_net().hosts()
 	}
 }
 
@@ -25,10 +27,12 @@ pub mod ats {
 
 	use ipnet::{Ipv4AddrRange, Ipv4Net};
 
+	pub fn vlan_ip_net() -> Ipv4Net {
+		Ipv4Net::new(Ipv4Addr::new(10, 0, 0, 64), 26).unwrap()
+	}
+
 	pub fn vlan_addr_range() -> Ipv4AddrRange {
-		Ipv4Net::new(Ipv4Addr::new(10, 0, 0, 64), 26)
-			.unwrap()
-			.hosts()
+		vlan_ip_net().hosts()
 	}
 }
 
