@@ -7,7 +7,7 @@ async fn handle(
 ) -> GlobalResult<faker::game_version::Response> {
 	let game_id = internal_unwrap!(ctx.game_id);
 
-	let region_list_res = op!([ctx] region_list {
+	let region_res = op!([ctx] faker_region {
 		..Default::default()
 	})
 	.await?;
@@ -76,22 +76,17 @@ async fn handle(
 								vec![backend::matchmaker::LobbyGroup {
 								name_id: "test-1".into(),
 
-								regions: region_list_res
-									.region_ids
-									.iter()
-									.cloned()
-									.map(|region_id| backend::matchmaker::lobby_group::Region {
-										region_id: Some(region_id),
-										tier_name_id: util_mm::test::TIER_NAME_ID.to_owned(),
-										idle_lobbies: Some(backend::matchmaker::lobby_group::IdleLobbies {
-											min_idle_lobbies: 0,
-											// Set a high max lobby count in case this is
-											// coming from a test that test mm-lobby-create
-											// without creating an associated player
-											max_idle_lobbies: 32,
-										}),
-									})
-									.collect(),
+								regions: vec![backend::matchmaker::lobby_group::Region {
+									region_id: region_res.region_id,
+									tier_name_id: util_mm::test::TIER_NAME_ID.to_owned(),
+									idle_lobbies: Some(backend::matchmaker::lobby_group::IdleLobbies {
+										min_idle_lobbies: 0,
+										// Set a high max lobby count in case this is
+										// coming from a test that test mm-lobby-create
+										// without creating an associated player
+										max_idle_lobbies: 32,
+									}),
+								}],
 
 								max_players_normal: 8,
 								max_players_direct: 10,
