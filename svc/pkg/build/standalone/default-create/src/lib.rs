@@ -26,6 +26,11 @@ const DEFAULT_BUILDS: &[DefaultBuildConfig] = &[
 		tag: include_str!("../default-builds/outputs/test-mm-lobby-ready-tag.txt"),
 		tar: include_bytes!("../default-builds/outputs/test-mm-lobby-ready.tar"),
 	},
+	DefaultBuildConfig {
+		kind: "test-mm-player-connect",
+		tag: include_str!("../default-builds/outputs/test-mm-player-connect-tag.txt"),
+		tar: include_bytes!("../default-builds/outputs/test-mm-player-connect.tar"),
+	},
 ];
 
 struct DefaultBuildConfig {
