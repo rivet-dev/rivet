@@ -538,6 +538,7 @@ pub struct RivetTest {}
 #[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(deny_unknown_fields)]
 pub struct Api {
+	#[serde(default)]
 	pub error_verbose: bool,
 	/// The origin used to build URLs for the hub in the API server.
 	#[serde(default)]
