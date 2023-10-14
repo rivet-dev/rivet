@@ -1,4 +1,4 @@
-use proto::backend::{self, pkg::*};
+use proto::backend::pkg::*;
 use rivet_operation::prelude::*;
 use serde_json::json;
 use std::collections::{HashMap, HashSet};
