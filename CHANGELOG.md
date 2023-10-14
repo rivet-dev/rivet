@@ -51,6 +51,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 -  **Infra** Cloudflare certificate authority from DigitCert to Lets Encrypt
 -  **Infra** Removed 1.1.1.1 & 1.0.0.1 as resolvers from Nomad jobs due to reliability issues
 -  **Infra** Added IPv6 DNS resolvers to Nomad jobs
+-  **Infra** CNI network for jobs from bridge to ptp for isolation & performance
 -  **Matchmaker** Expose API origin to `RIVET_API_ENDPOINT` env var to lobby containers
 
 ### Fixed

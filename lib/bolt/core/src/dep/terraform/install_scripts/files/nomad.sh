@@ -41,7 +41,6 @@ fi
 # See Nomad equivalent: https://github.com/hashicorp/nomad/blob/a8f0f2612ef9d283ed903721f8453a0c0c3f51c5/client/allocrunner/networking_bridge_linux.go#L73
 ADMIN_CHAIN="RIVET-ADMIN"
 SUBNET="172.26.64.0/20"
-BRIDGE="nomad"
 
 cat << EOF > /usr/local/bin/setup_nomad_networking.sh
 #!/bin/bash
@@ -54,7 +53,7 @@ else
     echo "Chain already exists: $ADMIN_CHAIN"
 fi
 
-RULE="-o nomad -d $SUBNET -s __GG_VLAN_SUBNET__ -j ACCEPT"
+RULE="-d $SUBNET -s __GG_VLAN_SUBNET__ -j ACCEPT"
 
 if ! iptables -C $ADMIN_CHAIN \$RULE &>/dev/null; then
     iptables -A $ADMIN_CHAIN \$RULE
@@ -85,7 +84,9 @@ systemctl start setup_nomad_networking
 
 # Dual-stack CNI config
 #
-# Modified from default Nomad configuration: https://github.com/hashicorp/nomad/blob/a8f0f2612ef9d283ed903721f8453a0c0c3f51c5/client/allocrunner/networking_bridge_linux.go#L152
+# We use ptp instead of bridge networking in order to isolate the pod's traffic. It's also more performant than bridge networking.
+#
+# See default Nomad configuration: https://github.com/hashicorp/nomad/blob/a8f0f2612ef9d283ed903721f8453a0c0c3f51c5/client/allocrunner/networking_bridge_linux.go#L152
 cat << EOF > /opt/cni/config/rivet-job.conflist
 {
 	"cniVersion": "0.4.0",
@@ -95,12 +96,8 @@ cat << EOF > /opt/cni/config/rivet-job.conflist
 			"type": "loopback"
 		},
 		{
-			"type": "bridge",
-			"bridge": "$BRIDGE",
+			"type": "ptp",
 			"ipMasq": true,
-			"isGateway": true,
-			"forceAddress": true,
-			"hairpinMode": false,
 			"ipam": {
 				"type": "host-local",
 				"ranges": [
