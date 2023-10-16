@@ -44,8 +44,7 @@ jq "
 " local/oci-bundle-config.base.json > local/oci-bundle/config.json
 
 echo '=== Finished ==='
-# TODO: Generate container name
-(cd local/oci-bundle && /usr/bin/runc run rivet-job)
+(cd local/oci-bundle && /usr/bin/runc run "$NOMAD_ALLOC_ID")
 
 EOF
         ]
@@ -65,19 +64,12 @@ EOF
 {
         "ociVersion": "1.0.2-dev",
         "process": {
+				"user": {},
+                "args": [],
+                "env": {},
+                "cwd": "",
+
                 "terminal": false,
-                "user": {
-                        "uid": 0,
-                        "gid": 0
-                },
-                "args": [
-                        "sh"
-                ],
-                "env": [
-                        "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
-                        "TERM=xterm"
-                ],
-                "cwd": "/",
                 "capabilities": {
                         "bounding": [
                                 "CAP_AUDIT_WRITE",
@@ -113,7 +105,7 @@ EOF
                 "path": "rootfs",
                 "readonly": true
         },
-        "hostname": "runc",
+        "hostname": "rivet-job",
         "mounts": [
                 {
                         "destination": "/proc",
