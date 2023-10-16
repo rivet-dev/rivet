@@ -16,37 +16,7 @@ job "runc-example" {
         command = "/bin/bash"
         args = [
           "-euf", "-c",
-          <<EOF
-echo "$(pwd)"
-
-# BEGIN custom loader
-echo '=== Convert ==='
-time skopeo copy "docker-archive:local/docker-image/image.tar" "oci:local/oci-image:default"
-
-echo '=== Install ==='
-
-echo '=== Unpack ==='
-curl -Lf -o umoci 'https://github.com/opencontainers/umoci/releases/download/v0.4.7/umoci.amd64'
-chmod +x umoci
-time ./umoci unpack --image "local/oci-image:default" "local/oci-bundle/"
-# END custom loader
-
-# Copy the Docker-specific values from the OCI bundle config.json to the base config
-#
-# This way, we enforce our own capabilities on the container
-override_config="local/oci-bundle-config.overrides.json"
-mv "local/oci-bundle/config.json" "$override_config"
-jq "
-.process.args = $(jq '.process.args' $override_config) |
-.process.env = $(jq '.process.env' $override_config) |
-.process.user = $(jq '.process.user' $override_config) |
-.process.cwd = $(jq '.process.cwd' $override_config)
-" local/oci-bundle-config.base.json > local/oci-bundle/config.json
-
-echo '=== Finished ==='
-(cd local/oci-bundle && /usr/bin/runc run "$NOMAD_ALLOC_ID")
-
-EOF
+          file("./run.sh")
         ]
       }
       
@@ -194,9 +164,6 @@ EOF
                 "namespaces": [
                         {
                                 "type": "pid"
-                        },
-                        {
-                                "type": "network"
                         },
                         {
                                 "type": "ipc"
