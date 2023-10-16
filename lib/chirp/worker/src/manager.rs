@@ -840,7 +840,9 @@ where
 		Ok(summary)
 	}
 
-	/// Enables requests to be retried immediately if needed.
+	/// Enables requests to be retried immediately if the worker throws an error that needs to be
+	/// retried. This is helpful for situations with optimistic locking that need to be retried on
+	/// fail.
 	///
 	/// This is executed within a timeout, so the overall timeout is not restarted
 	/// when retrying the request.
