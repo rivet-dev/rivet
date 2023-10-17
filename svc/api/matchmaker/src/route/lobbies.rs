@@ -106,6 +106,11 @@ pub async fn find(
 		});
 	}
 
+	assert_with!(
+		!body.game_modes.is_empty(),
+		MATCHMAKER_NO_GAME_MODE_PROVIDED
+	);
+
 	let game_ns = ctx.auth().game_ns(&ctx).await?;
 	let ns_data = fetch_ns(&ctx, &game_ns).await?;
 
@@ -1090,6 +1095,7 @@ async fn resolve_region_ids(
 			.into_iter()
 			.map(Into::<common::Uuid>::into)
 			.collect::<Vec<_>>();
+		tracing::info!(?lobby_groups, ?enabled_region_ids, "---------------------");
 
 		// Auto-select the closest region
 		if let Some((lat, long)) = coords {

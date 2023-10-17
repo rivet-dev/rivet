@@ -6953,6 +6953,7 @@ version = "0.1.0"
 dependencies = [
  "bit-vec",
  "chirp-client",
+ "heck 0.3.3",
  "http",
  "mm-lobby-list-for-user-id",
  "region-get",

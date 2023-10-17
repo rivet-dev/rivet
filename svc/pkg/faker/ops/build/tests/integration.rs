@@ -13,6 +13,7 @@ async fn empty(ctx: TestCtx) {
 		faker::build::Image::HangIndefinitely,
 		faker::build::Image::MmLobbyAutoReady,
 		faker::build::Image::FailImmediately,
+		faker::build::Image::MmPlayerConnect,
 	];
 
 	// Build all images in parallel

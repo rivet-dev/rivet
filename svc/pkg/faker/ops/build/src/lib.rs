@@ -16,6 +16,8 @@ async fn handle(
 		"test-mm-lobby-ready"
 	} else if ctx.image == faker::build::Image::FailImmediately as i32 {
 		"test-fail-immediately"
+	} else if ctx.image == faker::build::Image::MmPlayerConnect as i32 {
+		"test-mm-player-connect"
 	} else {
 		internal_panic!("invalid image");
 	};

@@ -177,8 +177,10 @@ pub fn gen_lobby_docker_job(
 		// Ports
 		.chain(decoded_ports.iter().filter_map(|port| {
 			if port.target.get_nomad_port().is_some() {
+				let snake_port_label = heck::SnakeCase::to_snake_case(port.label.as_str());
+
 				Some((
-					format!("PORT_{}", port.label),
+					format!("PORT_{}", snake_port_label),
 					format!("${{NOMAD_PORT_{}}}", port.nomad_port_label),
 				))
 			} else {
@@ -191,9 +193,11 @@ pub fn gen_lobby_docker_job(
 				.iter()
 				.filter_map(|port| {
 					if let PortTarget::Range { min, max } = &port.target {
+						let snake_port_label = heck::SnakeCase::to_snake_case(port.label.as_str());
+
 						Some([
-							(format!("PORT_RANGE_MIN_{}", port.label), min.to_string()),
-							(format!("PORT_RANGE_MAX_{}", port.label), max.to_string()),
+							(format!("PORT_RANGE_MIN_{}", snake_port_label), min.to_string()),
+							(format!("PORT_RANGE_MAX_{}", snake_port_label), max.to_string()),
 						])
 					} else {
 						None

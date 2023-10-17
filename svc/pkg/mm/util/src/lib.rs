@@ -38,5 +38,6 @@ pub enum FindQueryStatus {
 /// Prefixing this port ensure that the user defined port names don't interfere
 /// with other ports.
 pub fn format_nomad_port_label(port_label: &str) -> String {
-	format!("game-{port_label}")
+	let snake_port_label = heck::SnakeCase::to_snake_case(port_label);
+	format!("game_{snake_port_label}")
 }

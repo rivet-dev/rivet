@@ -9,6 +9,7 @@ enum Image {
 	HANG_INDEFINITELY = 0;
 	MM_LOBBY_AUTO_READY = 1;
 	FAIL_IMMEDIATELY = 2;
+	MM_PLAYER_CONNECT = 3;
 }
 
 message Request {

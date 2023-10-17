@@ -113,28 +113,41 @@ async fn upload_build(
 				path: "image.tar".into(),
 				mime: Some(CONTENT_TYPE.into()),
 				content_length: build.tar.len() as u64,
+				multipart: true,
 				..Default::default()
 			},
 		],
 	})
 	.await?;
 	let upload_id = internal_unwrap!(upload_prepare_res.upload_id).as_uuid();
-	let req = internal_unwrap_owned!(upload_prepare_res.presigned_requests.first());
 
-	let url = &req.url;
-	tracing::info!(%url, "uploading file");
-	let res = reqwest::Client::new()
-		.put(url)
-		.header(reqwest::header::CONTENT_TYPE, CONTENT_TYPE)
-		.header(reqwest::header::CONTENT_LENGTH, build.tar.len() as u64)
-		.body(reqwest::Body::from(build.tar))
-		.send()
-		.await?;
-	if res.status().is_success() {
-		tracing::info!("successfully uploaded");
-	} else {
-		tracing::warn!(status = ?res.status(), "failure uploading");
+	for req in &upload_prepare_res.presigned_requests {
+		let start = upload_prepare::CHUNK_SIZE as usize * (req.part_number as usize - 1);
+		let end = upload_prepare::CHUNK_SIZE as usize * req.part_number as usize;
+
+		let part = &build.tar[start..end.min(build.tar.len())];
+
+		let url = &req.url;
+		tracing::info!(%url, part=%req.part_number, "uploading file");
+		let res = reqwest::Client::new()
+			.put(url)
+			.header(reqwest::header::CONTENT_TYPE, CONTENT_TYPE)
+			.header(reqwest::header::CONTENT_LENGTH, part.len() as u64)
+			.body(reqwest::Body::from(part))
+			.send()
+			.await?;
+
+		if !res.status().is_success() {
+			let headers = res.headers();
+			tracing::info!(?headers);
+			let status = res.status();
+			let body = res.text().await?;
+			tracing::warn!(?status, ?body, "failure uploading");
+			internal_panic!("failure uploading");
+		}
 	}
+
+	tracing::info!("successfully uploaded");
 
 	// Complete the upload
 	op!([ctx] upload_complete {

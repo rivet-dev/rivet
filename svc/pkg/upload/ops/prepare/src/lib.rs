@@ -6,7 +6,7 @@ use proto::backend::{self, pkg::*};
 use rivet_operation::prelude::*;
 use serde_json::json;
 
-const CHUNK_SIZE: u64 = util::file_size::mebibytes(100);
+pub const CHUNK_SIZE: u64 = util::file_size::mebibytes(100);
 const MAX_UPLOAD_SIZE: u64 = util::file_size::gigabytes(10);
 const MAX_MULTIPART_UPLOAD_SIZE: u64 = util::file_size::gigabytes(100);
 
@@ -299,13 +299,15 @@ async fn handle_multipart_upload(
 
 			let fut = async move {
 				// Sign an upload request
+				let offset = (part_number - 1) * CHUNK_SIZE;
+				let content_length = (file.content_length - offset).min(CHUNK_SIZE) as i64;
+				tracing::info!(?part_number, ?content_length);
+				
 				let upload_part_builder = s3_client
 					.upload_part()
 					.bucket(s3_client.bucket())
 					.key(format!("{}/{}", upload_id, file.path))
-					.content_length(
-						(file.content_length - part_number * CHUNK_SIZE).min(CHUNK_SIZE) as i64,
-					)
+					.content_length(content_length)
 					.upload_id(multipart_upload_id2)
 					.part_number(part_number as i32);
 

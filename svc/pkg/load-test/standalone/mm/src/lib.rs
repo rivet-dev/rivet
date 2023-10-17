@@ -13,8 +13,10 @@ use rivet_operation::prelude::*;
 use serde_json::json;
 use tokio::time::{interval, Duration, Instant};
 
-pub const LOBBY_GROUP_NAME_ID_BRIDGE: &str = "test-bridge";
-pub const LOBBY_GROUP_NAME_ID_HOST: &str = "test-host";
+const LOBBY_GROUP_NAME_ID_BRIDGE: &str = "test-bridge";
+const LOBBY_GROUP_NAME_ID_HOST: &str = "test-host";
+const PLAYER_CHUNK_SIZE: usize = 64;
+const LOBBY_CHUNK_SIZE: usize = 16;
 
 struct Ctx {
 	pub op_ctx: OperationContext<()>,
@@ -63,18 +65,18 @@ pub async fn run_from_env(ts: i64) -> GlobalResult<()> {
 	let create_lobbies = std::iter::repeat_with(|| async {
 		let res = create_lobby(&test_ctx).await?;
 		let (_, port) = internal_unwrap_owned!(res.ports.iter().next());
-		connect_socket(port).await
+		connect_socket(&res.player.token, port).await
 	})
-	.take(64);
+	.take(PLAYER_CHUNK_SIZE);
 	let new_sockets = futures_util::stream::iter(create_lobbies)
-		.buffer_unordered(16)
+		.buffer_unordered(LOBBY_CHUNK_SIZE)
 		.try_collect::<Vec<_>>()
 		.await?;
 	sockets.extend(new_sockets);
 
 	tracing::info!("============ Sequential create ==============");
 
-	for _ in 0..64 {
+	for _ in 0..PLAYER_CHUNK_SIZE {
 		let res = create_lobby(&test_ctx).await?;
 		let (_, port) = internal_unwrap_owned!(res.ports.iter().next());
 		let socket = connect_socket(port).await?;
@@ -87,15 +89,15 @@ pub async fn run_from_env(ts: i64) -> GlobalResult<()> {
 		let (_, port) = internal_unwrap_owned!(res.ports.iter().next());
 		connect_socket(port).await
 	})
-	.take(64);
+	.take(PLAYER_CHUNK_SIZE);
 	let new_sockets = futures_util::stream::iter(find_lobbies)
-		.buffer_unordered(16)
+		.buffer_unordered(LOBBY_CHUNK_SIZE)
 		.try_collect::<Vec<_>>()
 		.await?;
 	sockets.extend(new_sockets);
 
 	tracing::info!("============ Sequential find ==============");
-	for _ in 0..64 {
+	for _ in 0..PLAYER_CHUNK_SIZE {
 		let res = find_lobby(&test_ctx).await?;
 		let (_, port) = internal_unwrap_owned!(res.ports.iter().next());
 		let socket = connect_socket(port).await?;
@@ -153,6 +155,10 @@ async fn setup_config(
 				"cf-connecting-ip",
 				reqwest::header::HeaderValue::from_str("127.0.0.1")?,
 			);
+			headers.insert(
+				"x-coords",
+				reqwest::header::HeaderValue::from_str("0.0,0.0")?,
+			);
 			headers
 		})
 		.build()?;
@@ -197,7 +203,7 @@ async fn setup_game(
 
 	let build_res = op!([ctx] faker_build {
 		game_id: game_res.game_id,
-		image: faker::build::Image::MmLobbyAutoReady as i32,
+		image: faker::build::Image::MmPlayerConnect as i32,
 	})
 	.await?;
 
@@ -286,6 +292,8 @@ async fn setup_public_token(
 }
 
 async fn create_lobby(ctx: &Ctx) -> GlobalResult<models::MatchmakerCreateLobbyResponse> {
+	tracing::info!("creating lobby");
+
 	let res = matchmaker_lobbies_api::matchmaker_lobbies_create(
 		&ctx.config,
 		models::MatchmakerLobbiesCreateRequest {
@@ -311,7 +319,7 @@ async fn find_lobby(ctx: &Ctx) -> GlobalResult<models::MatchmakerFindLobbyRespon
 	let res = matchmaker_lobbies_api::matchmaker_lobbies_find(
 		&ctx.config,
 		models::MatchmakerLobbiesFindRequest {
-			game_modes: Vec::new(),
+			game_modes: vec![LOBBY_GROUP_NAME_ID_BRIDGE.to_string()],
 			prevent_auto_create_lobby: None,
 			regions: None,
 			verification_data: None,
@@ -329,17 +337,18 @@ async fn find_lobby(ctx: &Ctx) -> GlobalResult<models::MatchmakerFindLobbyRespon
 	Ok(res)
 }
 
-async fn connect_socket(mm_port: &models::MatchmakerJoinPort) -> GlobalResult<TcpStream> {
+async fn connect_socket(player_token: &str, mm_port: &models::MatchmakerJoinPort) -> GlobalResult<TcpStream> {
 	let socket_id = util::faker::ident();
+	tracing::info!("connecting {}", socket_id);
 
 	let hostname = mm_port.hostname.as_str();
 	let port = internal_unwrap_owned!(mm_port.port) as u16;
 
+	tracing::info!(?mm_port);
 	let mut stream = TcpStream::connect((hostname, port))?;
 	tracing::info!("connected {}", socket_id);
 
-	// Write an empty package to get the response
-	stream.write_all(b"Hello, world!")?;
+	stream.write_all(player_token.as_bytes())?;
 	stream.flush()?;
 	tracing::info!("written {}", socket_id);
 

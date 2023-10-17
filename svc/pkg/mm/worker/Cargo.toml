@@ -10,6 +10,8 @@ chirp-client = { path = "../../../../lib/chirp/client" }
 chirp-worker = { path = "../../../../lib/chirp/worker" }
 chrono = "0.4"
 csv = "1.1"
+heck = "0.3"
+http = "0.2"
 lazy_static = "1.4.0"
 nomad-client = "0.0.9"
 nomad-util = { path = "../../../../lib/nomad-util" }
@@ -22,8 +24,6 @@ s3-util = { path = "../../../../lib/s3-util" }
 serde = { version = "1.0", features = ["derive"] }
 util-job = { package = "rivet-util-job", path = "../../job/util" }
 util-mm = { package = "rivet-util-mm", path = "../../mm/util" }
-http = "0.2"
-heck = "0.3"
 
 build-get = { path = "../../build/ops/get" }
 game-get = { path = "../../game/ops/get" }
