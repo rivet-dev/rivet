@@ -324,6 +324,12 @@ pub fn gen_lobby_docker_job(
 						..Template::new()
 					},
 					Template {
+						embedded_tmpl: Some(include_str!("./scripts/setup.sh").into()),
+						dest_path: Some("${NOMAD_TASK_DIR}/setup.sh".into()),
+						perms: Some("744".into()),
+						..Template::new()
+					},
+					Template {
 						embedded_tmpl: Some(gen_oci_bundle_config(env)?),
 						dest_path: Some("${NOMAD_TASK_DIR}/oci-bundle-config.base.json".into()),
 						..Template::new()
