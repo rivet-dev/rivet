@@ -82,6 +82,15 @@ for ipt in iptables ip6tables; do
         echo "Rule already exists in \$ipt: \$RULE"
     fi
 
+    # Enable conntrack to allow traffic to flow back to the GG subnet
+    RULE="-s \$SUBNET_VAR -m conntrack --ctstate NEW,ESTABLISHED -j ACCEPT"
+    if ! \$ipt -C $ADMIN_CHAIN \$RULE &>/dev/null; then
+        \$ipt -A $ADMIN_CHAIN \$RULE
+        echo "Added \$ipt rule: \$RULE"
+    else
+        echo "Rule already exists in \$ipt: \$RULE"
+    fi
+
     # Deny all other egress traffic
     RULE="-s \$SUBNET_VAR -j DROP"
     if ! \$ipt -C $ADMIN_CHAIN \$RULE &>/dev/null; then
