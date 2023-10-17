@@ -86,17 +86,28 @@ pub fn gen_lobby_docker_job(
 	let dynamic_ports = decoded_ports
 		.iter()
 		.filter_map(|port| {
-			port.target.get_nomad_port().map(|target_port| Port {
+			port.target.get_nomad_port().map(|_| Port {
 				label: Some(port.nomad_port_label.clone()),
 				..Port::new()
 			})
 		})
 		.collect::<Vec<_>>();
 
-	let docker_ports = decoded_ports
+	// Port mappings to pass to the container. Only used in bridge networking.
+	let cni_port_mappings = decoded_ports
 		.iter()
-		.filter(|port| port.target.get_nomad_port().is_some())
-		.map(|port| port.nomad_port_label.clone())
+		.filter_map(|port| {
+			port.target.get_nomad_port().map(|target_port| {
+				json!({
+					"HostPort": template_env_var_int(&nomad_host_port_env_var(&port.nomad_port_label)),
+					"ContainerPort": target_port,
+					"Protocol": match port.proxy_protocol {
+						ProxyProtocol::Http | ProxyProtocol::Https | ProxyProtocol::Tcp | ProxyProtocol::TcpTls => "tcp",
+						ProxyProtocol::Udp => "udp",
+					},
+				})
+			})
+		})
 		.collect::<Vec<_>>();
 
 	// Also see util_mm:consts::DEFAULT_ENV_KEYS
@@ -190,21 +201,30 @@ pub fn gen_lobby_docker_job(
 			.map(|(k, v)| (k.to_string(), v.to_string())),
 		)
 		// Ports
-		.chain(decoded_ports.iter().filter_map(|port| {
-			if port.target.get_nomad_port().is_some() {
-				Some((
-					format!("PORT_{}", port.label),
-					// TODO: This is only valid for host networking. Switch this out with the ports
-					// native to the container.
-					format!(
-						"{{{{ env \"NOMAD_HOST_PORT_{}\" }}}}",
-						port.nomad_port_label.replace("-", "_")
-					),
-				))
-			} else {
-				None
-			}
-		}))
+		.chain(
+			decoded_ports
+				.iter()
+				.filter_map(|port| {
+					if let Some(target_port) = port.target.get_nomad_port() {
+						let port_value = match network_mode {
+							// CNI will handle mapping the host port to the container port
+							LobbyRuntimeNetworkMode::Bridge => target_port.to_string(),
+							// The container needs to listen on the correct port
+							LobbyRuntimeNetworkMode::Host => {
+								template_env_var(&nomad_host_port_env_var(&port.nomad_port_label))
+							}
+						};
+
+						// Port with the kebab case port key. Included for backward compatabiilty & for
+						// less confusion.
+						Some((format!("PORT_{}", port.label), port_value))
+					} else {
+						None
+					}
+				})
+				// Port with snake case key. This is the recommended key to use.
+				.flat_map(|(k, v)| [(k.replace("-", "_"), v.clone()), (k, v)]),
+		)
 		// Port ranges
 		.chain(
 			decoded_ports
@@ -337,6 +357,13 @@ pub fn gen_lobby_docker_job(
 					Template {
 						embedded_tmpl: Some(gen_oci_bundle_config(env)?),
 						dest_path: Some("${NOMAD_TASK_DIR}/oci-bundle-config.base.json".into()),
+						..Template::new()
+					},
+					Template {
+						embedded_tmpl: Some(inject_consul_env_template(&serde_json::to_string(
+							&cni_port_mappings,
+						)?)?),
+						dest_path: Some("${NOMAD_TASK_DIR}/cni-port-mappings.json".into()),
 						..Template::new()
 					},
 				]),
@@ -542,20 +569,9 @@ fn gen_oci_bundle_config(env: Vec<String>) -> GlobalResult<String> {
 	let config_str = serde_json::to_string(&config)?;
 
 	// Escape Go template syntax
-	let config_str = escape_go_template(&config_str);
+	let config_str = inject_consul_env_template(&escape_go_template(&config_str))?;
 
-	// Replace env vars with Consul template syntax
-	let re = Regex::new(r"###ENV:(\w+)###")?;
-	// let config_str = re.replace_all(
-	// 	&config_str,
-	// 	r#"{{ env "$1" | regexReplaceAll "\"" "\\\"" }}"#,
-	// );
-	let config_str = re.replace_all(
-		&config_str,
-		r#"{{ env "$1" | regexReplaceAll "\"" "\\\"" }}"#,
-	);
-
-	Ok(config_str.to_string())
+	Ok(config_str)
 }
 
 // TODO: Escape uses of `###`
@@ -568,7 +584,37 @@ fn escape_go_template(input: &str) -> String {
 /// Generates a template string that we can substitute with the real environment variable
 ///
 /// This must be safe to inject in to a JSON string so it can be substituted after rendering the
-/// JSON object.
+/// JSON object. Intended to be used from within JSON.
+///
+/// See inject_consul_env_template.
 fn template_env_var(name: &str) -> String {
 	format!("###ENV:{name}###")
+}
+
+/// Like template_env_var, but removes surrounding quotes.
+fn template_env_var_int(name: &str) -> String {
+	format!("###ENV_INT:{name}###")
+}
+
+/// Substitutes env vars generated from template_env_var with Consul template syntax.
+///
+/// Intended to be used from within JSON.
+fn inject_consul_env_template(input: &str) -> GlobalResult<String> {
+	// Regular strings
+	let re = Regex::new(r"###ENV:(\w+)###")?;
+	let output = re
+		.replace_all(input, r#"{{ env "$1" | regexReplaceAll "\"" "\\\"" }}"#)
+		.to_string();
+
+	// Integers
+	let re = Regex::new(r####""###ENV_INT:(\w+)###""####)?;
+	let output = re
+		.replace_all(&output, r#"{{ env "$1" | regexReplaceAll "\"" "\\\"" }}"#)
+		.to_string();
+
+	Ok(output)
+}
+
+fn nomad_host_port_env_var(port_label: &str) -> String {
+	format!("NOMAD_HOST_PORT_{}", port_label.replace("-", "_"))
 }

@@ -24,7 +24,7 @@ echo -n "$CONTAINER_ID" > "$NOMAD_TASK_DIR/container-id"
 echo "Converting Docker image -> OCI image"
 time skopeo copy "docker-archive:$DOCKER_IMAGE_PATH" "oci:$OCI_IMAGE_PATH:default"
 
-# TODO: Remov hjke
+# TODO: Remove
 # Install umoci
 curl -Lf -o umoci 'https://github.com/opencontainers/umoci/releases/download/v0.4.7/umoci.amd64'
 chmod +x umoci
@@ -36,40 +36,27 @@ time ./umoci unpack --image "$OCI_IMAGE_PATH:default" "$OCI_BUNDLE_PATH"
 
 # MARK: Create network
 #
-# Network manager:
-# https://github.com/hashicorp/nomad/blob/6dcc4021882fcaecb7ee73655bd46eb84e4671d4/client/allocrunner/network_manager_linux.go#L120
-#
-# CNI:
-# https://github.com/hashicorp/nomad/blob/6dcc4021882fcaecb7ee73655bd46eb84e4671d4/client/allocrunner/networking_cni.go
-#
-# Allco hook:
-# https://github.com/hashicorp/nomad/blob/6dcc4021882fcaecb7ee73655bd46eb84e4671d4/client/allocrunner/network_hook.go#L107
-#
-# Go CNI (implements args):
-# https://github.com/containerd/go-cni/blob/6603d5bd8941d7f2026bb5627f6aa4ff434f859a/namespace_opts.go#L22
-#
-# CNI:
-# https://github.com/containernetworking/cni
+# See Nomad network creation:
+# https://github.com/hashicorp/nomad/blob/a8f0f2612ef9d283ed903721f8453a0c0c3f51c5/client/allocrunner/network_manager_linux.go#L119
+
 # Name of the network in /opt/cni/config/$NETWORK_NAME.conflist
 NETWORK_NAME="rivet-job"
 # Path to the created namespace
 NETNS_PATH="/var/run/netns/$CONTAINER_ID"
 
-# export CNI_IFNAME="eth"
-
-
-# https://github.com/hashicorp/nomad/blob/6dcc4021882fcaecb7ee73655bd46eb84e4671d4/client/allocrunner/networking_cni.go#L347
-# export CAP_ARGS=$(cat <<EOF
-# {
-# 	"portMappings": [
-# 		"HostPort": $NOMAD_HOST_PORT_http,
-# 		"ContainerPort": 8080,
-# 		"Protocol": "tcp"
-# 	]
-# }
-# EOF
-# )
+# See Nomad capabilities equivalent:
+# https://github.com/hashicorp/nomad/blob/a8f0f2612ef9d283ed903721f8453a0c0c3f51c5/client/allocrunner/networking_cni.go#L105C46-L105C46
+#
+# See supported args:
+# https://github.com/containerd/go-cni/blob/6603d5bd8941d7f2026bb5627f6aa4ff434f859a/namespace_opts.go#L22
+export CAP_ARGS=$(jq -c <<EOF
+{
+	"portMappings": $(cat "$NOMAD_TASK_DIR/cni-port-mappings.json")
+}
+EOF
+)
 export CNI_IFNAME="eth0"
+echo "CAP_ARGS: $CAP_ARGS"
 
 echo "Creating network $NETWORK_NAME"
 ip netns add "$CONTAINER_ID"
@@ -77,6 +64,7 @@ ip netns add "$CONTAINER_ID"
 echo "Adding network $NETWORK_NAME to namespace $NETNS_PATH"
 cnitool add "$NETWORK_NAME" "$NETNS_PATH" > $NOMAD_TASK_DIR/cni.json
 
+# resolv.conf
 cat <<EOF > $NOMAD_TASK_DIR/resolv.conf
 nameserver 8.8.8.8
 nameserver 8.8.4.4
