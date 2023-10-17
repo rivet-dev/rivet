@@ -8,23 +8,46 @@ const CONTENT_TYPE: &str = "application/x-tar";
 const DEFAULT_BUILDS: &[DefaultBuildConfig] = &[
 	DefaultBuildConfig {
 		kind: "game-multiplayer",
-		tag: include_str!("../default-builds/outputs/game-multiplayer-tag.txt"),
-		tar: include_bytes!("../default-builds/outputs/game-multiplayer.tar"),
+		tag: include_str!(
+			"../../../../../../infra/default-builds/outputs/game-multiplayer-tag.txt"
+		),
+		tar: include_bytes!("../../../../../../infra/default-builds/outputs/game-multiplayer.tar"),
 	},
 	DefaultBuildConfig {
 		kind: "test-fail-immediately",
-		tag: include_str!("../default-builds/outputs/test-fail-immediately-tag.txt"),
-		tar: include_bytes!("../default-builds/outputs/test-fail-immediately.tar"),
+		tag: include_str!(
+			"../../../../../../infra/default-builds/outputs/test-fail-immediately-tag.txt"
+		),
+		tar: include_bytes!(
+			"../../../../../../infra/default-builds/outputs/test-fail-immediately.tar"
+		),
 	},
 	DefaultBuildConfig {
 		kind: "test-hang-indefinitely",
-		tag: include_str!("../default-builds/outputs/test-hang-indefinitely-tag.txt"),
-		tar: include_bytes!("../default-builds/outputs/test-hang-indefinitely.tar"),
+		tag: include_str!(
+			"../../../../../../infra/default-builds/outputs/test-hang-indefinitely-tag.txt"
+		),
+		tar: include_bytes!(
+			"../../../../../../infra/default-builds/outputs/test-hang-indefinitely.tar"
+		),
 	},
 	DefaultBuildConfig {
 		kind: "test-mm-lobby-ready",
-		tag: include_str!("../default-builds/outputs/test-mm-lobby-ready-tag.txt"),
-		tar: include_bytes!("../default-builds/outputs/test-mm-lobby-ready.tar"),
+		tag: include_str!(
+			"../../../../../../infra/default-builds/outputs/test-mm-lobby-ready-tag.txt"
+		),
+		tar: include_bytes!(
+			"../../../../../../infra/default-builds/outputs/test-mm-lobby-ready.tar"
+		),
+	},
+	DefaultBuildConfig {
+		kind: "test-mm-lobby-echo",
+		tag: include_str!(
+			"../../../../../../infra/default-builds/outputs/test-mm-lobby-echo-tag.txt"
+		),
+		tar: include_bytes!(
+			"../../../../../../infra/default-builds/outputs/test-mm-lobby-echo.tar"
+		),
 	},
 ];
 

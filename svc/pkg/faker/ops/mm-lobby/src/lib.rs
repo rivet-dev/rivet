@@ -56,7 +56,7 @@ async fn handle(
 			} else if ctx.skip_set_ready {
 				faker::build::Image::HangIndefinitely as i32
 			} else {
-				faker::build::Image::MmLobbyAutoReady as i32
+				faker::build::Image::MmLobbyAutoEcho as i32
 			},
 		})
 		.await?;
