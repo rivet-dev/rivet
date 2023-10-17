@@ -5,7 +5,7 @@ use common::*;
 use proto::backend::pkg::*;
 use std::{
 	io::{Read, Write},
-	net::TcpStream,
+	net::{TcpStream, UdpSocket},
 };
 
 #[worker_test]
@@ -60,6 +60,34 @@ async fn lobby_connectivity_tcp(ctx: TestCtx) {
 	assert_eq!(
 		random_body.as_ref(),
 		response.as_slice(),
+		"echoed wrong response"
+	);
+}
+
+#[worker_test]
+async fn lobby_connectivity_udp(ctx: TestCtx) {
+	if !util::feature::job_run() {
+		return;
+	}
+
+	let setup = Setup::init(&ctx).await;
+
+	let lobby_id = setup.create_lobby(&ctx).await;
+
+	let (hostname, port) = get_lobby_addr(&ctx, lobby_id, "test-udp").await;
+
+	// Echo body
+	let random_body = Uuid::new_v4();
+	let socket = UdpSocket::bind(("0.0.0.0", 0)).unwrap();
+	socket.connect((hostname, port)).unwrap();
+	socket.send(random_body.as_ref()).unwrap();
+
+	let mut response = [0; 2048];
+	let recv_len = socket.recv(&mut response).unwrap();
+
+	assert_eq!(
+		random_body.as_ref(),
+		&response[..recv_len],
 		"echoed wrong response"
 	);
 }
