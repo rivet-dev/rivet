@@ -2,7 +2,11 @@ mod common;
 
 use chirp_worker::prelude::*;
 use common::*;
-use proto::backend::{self, pkg::*};
+use proto::backend::pkg::*;
+use std::{
+	io::{Read, Write},
+	net::TcpStream,
+};
 
 #[worker_test]
 async fn lobby_connectivity_http(ctx: TestCtx) {
@@ -12,35 +16,15 @@ async fn lobby_connectivity_http(ctx: TestCtx) {
 
 	let setup = Setup::init(&ctx).await;
 
-	// Create lobby
-	let lobby_id = Uuid::new_v4();
-	msg!([ctx] @notrace mm::msg::lobby_create(lobby_id) -> mm::msg::lobby_ready_complete(lobby_id) {
-		lobby_id: Some(lobby_id.into()),
-		namespace_id: Some(setup.namespace_id.into()),
-		lobby_group_id: Some(setup.lobby_group_id.into()),
-		region_id: Some(setup.region_id.into()),
-		create_ray_id: None,
-		preemptively_created: false,
+	let lobby_id = setup.create_lobby(&ctx).await;
 
-		creator_user_id: None,
-		is_custom: false,
-		publicity: None,
-		lobby_config_json: None,
-	})
-	.await
-	.unwrap();
-
-	let ingress_hostname_http = format!(
-		"http://{lobby_id}-test-http.lobby.{}.{}",
-		setup.region.name_id,
-		util::env::domain_job().unwrap(),
-	);
+	let (hostname, _) = get_lobby_addr(&ctx, lobby_id, "test-http").await;
 
 	// Echo body
 	let random_body = Uuid::new_v4().to_string();
 	let client = reqwest::Client::new();
 	let res = client
-		.post(ingress_hostname_http)
+		.post(format!("http://{hostname}"))
 		.body(random_body.clone())
 		.send()
 		.await
@@ -48,5 +32,59 @@ async fn lobby_connectivity_http(ctx: TestCtx) {
 		.error_for_status()
 		.unwrap();
 	let res_text = res.text().await.unwrap();
-	assert_eq!(random_body, res_text);
+	assert_eq!(random_body, res_text, "echoed wrong response");
+}
+
+#[worker_test]
+async fn lobby_connectivity_tcp(ctx: TestCtx) {
+	if !util::feature::job_run() {
+		return;
+	}
+
+	let setup = Setup::init(&ctx).await;
+
+	let lobby_id = setup.create_lobby(&ctx).await;
+
+	let (hostname, port) = get_lobby_addr(&ctx, lobby_id, "test-tcp").await;
+
+	// Echo body
+	let random_body = Uuid::new_v4();
+	let mut stream = TcpStream::connect((hostname, port)).unwrap();
+
+	stream.write_all(random_body.as_ref()).unwrap();
+	stream.flush().unwrap();
+
+	let mut response = Vec::new();
+	stream.read_to_end(&mut response).unwrap();
+
+	assert_eq!(
+		random_body.as_ref(),
+		response.as_slice(),
+		"echoed wrong response"
+	);
+}
+
+/// Fetches the address to get the lobby from.
+async fn get_lobby_addr(ctx: &TestCtx, lobby_id: Uuid, port: &str) -> (String, u16) {
+	let lobby_res = op!([ctx] mm_lobby_get { lobby_ids: vec![lobby_id.into()] })
+		.await
+		.unwrap();
+	let lobby = lobby_res.lobbies.first().unwrap();
+	let run_id = lobby.run_id.unwrap();
+
+	let run_res = op!([ctx] job_run_get { run_ids: vec![run_id] })
+		.await
+		.unwrap();
+	let run = run_res.runs.first().unwrap();
+
+	let port = run
+		.proxied_ports
+		.iter()
+		.find(|x| x.target_nomad_port_label == Some(util_mm::format_nomad_port_label(port)))
+		.unwrap();
+
+	(
+		port.ingress_hostnames.first().unwrap().clone(),
+		port.ingress_port as u16,
+	)
 }

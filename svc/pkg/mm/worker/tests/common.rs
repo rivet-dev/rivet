@@ -205,4 +205,25 @@ impl Setup {
 			region: region_res.region.clone().unwrap(),
 		}
 	}
+
+	pub async fn create_lobby(&self, ctx: &TestCtx) -> Uuid {
+		let lobby_id = Uuid::new_v4();
+		msg!([ctx] @notrace mm::msg::lobby_create(lobby_id) -> mm::msg::lobby_ready_complete(lobby_id) {
+			lobby_id: Some(lobby_id.into()),
+			namespace_id: Some(self.namespace_id.into()),
+			lobby_group_id: Some(self.lobby_group_id.into()),
+			region_id: Some(self.region_id.into()),
+			create_ray_id: None,
+			preemptively_created: false,
+
+			creator_user_id: None,
+			is_custom: false,
+			publicity: None,
+			lobby_config_json: None,
+		})
+		.await
+		.unwrap();
+
+		lobby_id
+	}
 }

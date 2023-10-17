@@ -24,7 +24,9 @@ async fn worker(ctx: &OperationContext<mm::msg::lobby_cleanup::Message>) -> Glob
 	.await?;
 
 	// Remove queries
-	redis_mm.unlink(util_mm::key::lobby_find_queries(lobby_id)).await?;
+	redis_mm
+		.unlink(util_mm::key::lobby_find_queries(lobby_id))
+		.await?;
 
 	Ok(())
 }
