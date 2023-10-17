@@ -1,7 +1,9 @@
 #!/usr/bin/env bash
 set -euf -o pipefail
 
-echo "NOMAD_TASK_DIR: $NOMAD_TASK_DIR"
+echo 'Env:'
+env
+echo
 
 # TODO: Update NETCONF_PATH to /opt/cni/net.d
 export CNI_PATH="/opt/cni/bin"

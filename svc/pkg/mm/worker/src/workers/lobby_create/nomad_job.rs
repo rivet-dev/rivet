@@ -194,7 +194,12 @@ pub fn gen_lobby_docker_job(
 			if port.target.get_nomad_port().is_some() {
 				Some((
 					format!("PORT_{}", port.label),
-					format!("{{{{ env \"NOMAD_PORT_{}\" }}}}", port.nomad_port_label),
+					// TODO: This is only valid for host networking. Switch this out with the ports
+					// native to the container.
+					format!(
+						"{{{{ env \"NOMAD_HOST_PORT_{}\" }}}}",
+						port.nomad_port_label.replace("-", "_")
+					),
 				))
 			} else {
 				None
@@ -285,7 +290,7 @@ pub fn gen_lobby_docker_job(
 				..ReschedulePolicy::new()
 			})),
 			networks: Some(vec![NetworkResource {
-				// The container will set up a CNI network if using bridge networking
+				// The setup.sh script will set up a CNI network if using bridge networking
 				mode: Some("host".into()),
 				dynamic_ports: Some(dynamic_ports),
 				..NetworkResource::new()
@@ -541,6 +546,10 @@ fn gen_oci_bundle_config(env: Vec<String>) -> GlobalResult<String> {
 
 	// Replace env vars with Consul template syntax
 	let re = Regex::new(r"###ENV:(\w+)###")?;
+	// let config_str = re.replace_all(
+	// 	&config_str,
+	// 	r#"{{ env "$1" | regexReplaceAll "\"" "\\\"" }}"#,
+	// );
 	let config_str = re.replace_all(
 		&config_str,
 		r#"{{ env "$1" | regexReplaceAll "\"" "\\\"" }}"#,
@@ -552,9 +561,8 @@ fn gen_oci_bundle_config(env: Vec<String>) -> GlobalResult<String> {
 // TODO: Escape uses of `###`
 /// Makes user-generated string safe to inject in to a Go template.
 fn escape_go_template(input: &str) -> String {
-	input
-		.replace("{{", r#"{{"{{"}}"#)
-		.replace("}}", r#"{{"}}"}}"#)
+	let re = Regex::new(r"(\{\{|\}\})").unwrap();
+	re.replace_all(input, r#"{{"$1"}}"#).to_string().to_string()
 }
 
 /// Generates a template string that we can substitute with the real environment variable

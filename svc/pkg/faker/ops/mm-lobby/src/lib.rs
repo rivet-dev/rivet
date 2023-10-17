@@ -56,7 +56,7 @@ async fn handle(
 			} else if ctx.skip_set_ready {
 				faker::build::Image::HangIndefinitely as i32
 			} else {
-				faker::build::Image::MmLobbyAutoEcho as i32
+				faker::build::Image::MmLobbyEcho as i32
 			},
 		})
 		.await?;
@@ -88,7 +88,29 @@ async fn handle(
 						args: Vec::new(),
 						env_vars: Vec::new(),
 						network_mode: backend::matchmaker::lobby_runtime::NetworkMode::Bridge as i32,
-						ports: Vec::new(),
+						ports: vec![
+							backend::matchmaker::lobby_runtime::Port {
+								label: "test-http".into(),
+								target_port: Some(8001),
+								port_range: None,
+								proxy_protocol: backend::matchmaker::lobby_runtime::ProxyProtocol::Http as i32,
+								proxy_kind: backend::matchmaker::lobby_runtime::ProxyKind::GameGuard as i32,
+							},
+							backend::matchmaker::lobby_runtime::Port {
+								label: "test-tcp".into(),
+								target_port: Some(8002),
+								port_range: None,
+								proxy_protocol: backend::matchmaker::lobby_runtime::ProxyProtocol::Tcp as i32,
+								proxy_kind: backend::matchmaker::lobby_runtime::ProxyKind::GameGuard as i32,
+							},
+							backend::matchmaker::lobby_runtime::Port {
+								label: "test-udp".into(),
+								target_port: Some(8002),
+								port_range: None,
+								proxy_protocol: backend::matchmaker::lobby_runtime::ProxyProtocol::Udp as i32,
+								proxy_kind: backend::matchmaker::lobby_runtime::ProxyKind::GameGuard as i32,
+							},
+						],
 					}.into()),
 
 					find_config: None,
