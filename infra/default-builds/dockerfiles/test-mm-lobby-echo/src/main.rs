@@ -85,10 +85,10 @@ async fn echo_http_server(port: u16) {
 }
 
 async fn echo_tcp_server(port: u16) {
-	let addr = format!("0.0.0.0:{}", port);
-	let listener = TcpListener::bind(&addr).await.expect("bind failed");
+	let addr = SocketAddr::from(([0, 0, 0, 0], port));
 	println!("TCP: {}", port);
 
+	let listener = TcpListener::bind(&addr).await.expect("bind failed");
 	loop {
 		let (mut socket, _) = listener.accept().await.expect("accept failed");
 		tokio::spawn(async move {
@@ -105,10 +105,10 @@ async fn echo_tcp_server(port: u16) {
 }
 
 async fn echo_udp_server(port: u16) -> Result<()> {
-	let addr = format!("0.0.0.0:{}", port);
-	let socket = UdpSocket::bind(&addr).await?;
+	let addr = SocketAddr::from(([0, 0, 0, 0], port));
 	println!("UDP: {}", port);
 
+	let socket = UdpSocket::bind(&addr).await?;
 	let mut buf = vec![0u8; 1024];
 	loop {
 		let (size, src) = socket.recv_from(&mut buf).await?;
