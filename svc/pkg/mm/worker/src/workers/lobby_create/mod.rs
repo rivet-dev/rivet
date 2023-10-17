@@ -325,13 +325,10 @@ async fn fetch_mm_namespace_config(
 	})
 	.await?;
 
-	let namespace = internal_unwrap!(
-		internal_unwrap_owned!(get_res.namespaces.first(), "namespace not found").config
-	)
-	.deref()
-	.clone();
+	let namespace = internal_unwrap_owned!(get_res.namespaces.first(), "namespace not found");
+	let namespace_config = internal_unwrap!(namespace.config).clone();
 
-	Ok(namespace)
+	Ok(namespace_config)
 }
 
 #[tracing::instrument]
@@ -344,9 +341,7 @@ async fn fetch_version(
 	})
 	.await?;
 
-	let version = internal_unwrap!(get_res.versions.first(), "version not found")
-		.deref()
-		.clone();
+	let version = internal_unwrap_owned!(get_res.versions.first(), "version not found").clone();
 
 	Ok(version)
 }

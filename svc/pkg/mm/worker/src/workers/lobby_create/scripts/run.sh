@@ -94,7 +94,7 @@ OVERRIDE_CONFIG="$NOMAD_TASK_DIR/oci-bundle-config.overrides.json"
 mv "$OCI_BUNDLE_PATH/config.json" "$OVERRIDE_CONFIG"
 jq "
 .process.args = $(jq '.process.args' $OVERRIDE_CONFIG) |
-.process.env = $(jq '.process.env' $OVERRIDE_CONFIG) |
+.process.env = $(jq '.process.env' $OVERRIDE_CONFIG) + .process.env |
 .process.user = $(jq '.process.user' $OVERRIDE_CONFIG) |
 .process.cwd = $(jq '.process.cwd' $OVERRIDE_CONFIG) |
 .linux.namespaces += [{\"type\": \"network\", \"path\": \"$NETNS_PATH\"}] |

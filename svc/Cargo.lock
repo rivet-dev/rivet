@@ -5305,6 +5305,7 @@ dependencies = [
  "nomad-client",
  "nomad-util",
  "redis-util",
+ "regex",
  "region-get",
  "region-list",
  "reqwest",
