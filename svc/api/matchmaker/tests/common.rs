@@ -355,10 +355,6 @@ impl Ctx {
 		token_res.token
 	}
 
-	pub fn chirp(&self) -> &chirp_client::Client {
-		self.op_ctx.chirp()
-	}
-
 	pub fn op_ctx(&self) -> &OperationContext<()> {
 		&self.op_ctx
 	}
