@@ -321,79 +321,135 @@ pub fn gen_lobby_docker_job(
 				size_mb: Some(tier.disk as i32),
 				..EphemeralDisk::new()
 			})),
-			tasks: Some(vec![Task {
-				name: Some("game".into()),
-				driver: Some("raw_exec".into()),
-				config: Some({
-					let mut x = HashMap::new();
-					x.insert("command".into(), json!("${NOMAD_TASK_DIR}/run.sh"));
-					x
-				}),
-				artifacts: Some(vec![TaskArtifact {
-					getter_source: Some("${NOMAD_META_IMAGE_ARTIFACT_URL}".into()),
-					getter_mode: Some("file".into()),
-					getter_options: Some({
-						let mut opts = HashMap::new();
-						// Disable automatic unarchiving since the Docker archive needs to be
-						// consumed in the original tar format
-						opts.insert("archive".into(), "false".into());
-						opts
+			tasks: Some(vec![
+				Task {
+					name: Some("runc-setup".into()),
+					lifecycle: Some(Box::new(TaskLifecycle {
+						hook: Some("prestart".into()),
+						sidecar: Some(false),
+					})),
+					driver: Some("raw_exec".into()),
+					config: Some({
+						let mut x = HashMap::new();
+						x.insert("command".into(), json!("${NOMAD_TASK_DIR}/setup.sh"));
+						x
 					}),
-					relative_dest: Some("${NOMAD_TASK_DIR}/docker-image.tar".into()),
-				}]),
-				templates: Some(vec![
-					Template {
+					templates: Some(vec![
+						Template {
+							embedded_tmpl: Some(include_str!("./scripts/setup.sh").into()),
+							dest_path: Some("${NOMAD_TASK_DIR}/setup.sh".into()),
+							perms: Some("744".into()),
+							..Template::new()
+						},
+						Template {
+							embedded_tmpl: Some(gen_oci_bundle_config(env)?),
+							dest_path: Some(
+								"${NOMAD_ALLOC_DIR}/oci-bundle-config.base.json".into(),
+							),
+							..Template::new()
+						},
+						Template {
+							embedded_tmpl: Some(inject_consul_env_template(
+								&serde_json::to_string(&cni_port_mappings)?,
+							)?),
+							dest_path: Some("${NOMAD_ALLOC_DIR}/cni-port-mappings.json".into()),
+							..Template::new()
+						},
+					]),
+					artifacts: Some(vec![TaskArtifact {
+						getter_source: Some("${NOMAD_META_IMAGE_ARTIFACT_URL}".into()),
+						getter_mode: Some("file".into()),
+						getter_options: Some({
+							let mut opts = HashMap::new();
+							// Disable automatic unarchiving since the Docker archive needs to be
+							// consumed in the original tar format
+							opts.insert("archive".into(), "false".into());
+							opts
+						}),
+						relative_dest: Some("${NOMAD_ALLOC_DIR}/docker-image.tar".into()),
+					}]),
+					resources: Some(Box::new(Resources {
+						CPU: Some(util_mm::RUNC_SETUP_CPU),
+						memory_mb: Some(util_mm::RUNC_SETUP_MEMORY),
+						..Resources::new()
+					})),
+					log_config: Some(Box::new(LogConfig {
+						max_files: Some(4),
+						max_file_size_mb: Some(2),
+					})),
+					..Task::new()
+				},
+				Task {
+					name: Some("game".into()),
+					driver: Some("raw_exec".into()),
+					config: Some({
+						let mut x = HashMap::new();
+						x.insert("command".into(), json!("${NOMAD_TASK_DIR}/run.sh"));
+						x
+					}),
+					templates: Some(vec![Template {
 						embedded_tmpl: Some(include_str!("./scripts/run.sh").into()),
 						dest_path: Some("${NOMAD_TASK_DIR}/run.sh".into()),
 						perms: Some("744".into()),
 						..Template::new()
-					},
-					Template {
-						embedded_tmpl: Some(include_str!("./scripts/setup.sh").into()),
-						dest_path: Some("${NOMAD_TASK_DIR}/setup.sh".into()),
+					}]),
+					resources: Some(Box::new(Resources {
+						// TODO: Configure this per-provider
+						CPU: if tier.rivet_cores_numerator < tier.rivet_cores_denominator {
+							Some(tier.cpu as i32 - util_job::TASK_CLEANUP_CPU)
+						} else {
+							None
+						},
+						cores: if tier.rivet_cores_numerator >= tier.rivet_cores_denominator {
+							Some((tier.rivet_cores_numerator / tier.rivet_cores_denominator) as i32)
+						} else {
+							None
+						},
+						memory_mb: Some(tier.memory as i32 - util_job::TASK_CLEANUP_MEMORY),
+						// Allow oversubscribing memory by 50% of the reserved
+						// memory if using less than the node's total memory
+						memory_max_mb: Some(tier.memory_max as i32 - util_job::TASK_CLEANUP_MEMORY),
+						disk_mb: Some(tier.disk as i32), // TODO: Is this deprecated?
+						..Resources::new()
+					})),
+					// Gives the game processes time to shut down gracefully.
+					kill_timeout: Some(60 * 1_000_000_000),
+					log_config: Some(Box::new(LogConfig {
+						max_files: Some(4),
+						max_file_size_mb: Some(4),
+					})),
+					..Task::new()
+				},
+				Task {
+					name: Some("runc-cleanup".into()),
+					lifecycle: Some(Box::new(TaskLifecycle {
+						hook: Some("poststop".into()),
+						sidecar: Some(false),
+					})),
+					driver: Some("raw_exec".into()),
+					config: Some({
+						let mut x = HashMap::new();
+						x.insert("command".into(), json!("${NOMAD_TASK_DIR}/cleanup.sh"));
+						x
+					}),
+					templates: Some(vec![Template {
+						embedded_tmpl: Some(include_str!("./scripts/cleanup.sh").into()),
+						dest_path: Some("${NOMAD_TASK_DIR}/cleanup.sh".into()),
 						perms: Some("744".into()),
 						..Template::new()
-					},
-					Template {
-						embedded_tmpl: Some(gen_oci_bundle_config(env)?),
-						dest_path: Some("${NOMAD_TASK_DIR}/oci-bundle-config.base.json".into()),
-						..Template::new()
-					},
-					Template {
-						embedded_tmpl: Some(inject_consul_env_template(&serde_json::to_string(
-							&cni_port_mappings,
-						)?)?),
-						dest_path: Some("${NOMAD_TASK_DIR}/cni-port-mappings.json".into()),
-						..Template::new()
-					},
-				]),
-				resources: Some(Box::new(Resources {
-					// TODO: Configure this per-provider
-					CPU: if tier.rivet_cores_numerator < tier.rivet_cores_denominator {
-						Some(tier.cpu as i32 - util_job::TASK_CLEANUP_CPU)
-					} else {
-						None
-					},
-					cores: if tier.rivet_cores_numerator >= tier.rivet_cores_denominator {
-						Some((tier.rivet_cores_numerator / tier.rivet_cores_denominator) as i32)
-					} else {
-						None
-					},
-					memory_mb: Some(tier.memory as i32 - util_job::TASK_CLEANUP_MEMORY),
-					// Allow oversubscribing memory by 50% of the reserved
-					// memory if using less than the node's total memory
-					memory_max_mb: Some(tier.memory_max as i32 - util_job::TASK_CLEANUP_MEMORY),
-					disk_mb: Some(tier.disk as i32), // TODO: Is this deprecated?
-					..Resources::new()
-				})),
-				// Gives the game processes time to shut down gracefully.
-				kill_timeout: Some(60 * 1_000_000_000),
-				log_config: Some(Box::new(LogConfig {
-					max_files: Some(4),
-					max_file_size_mb: Some(4),
-				})),
-				..Task::new()
-			}]),
+					}]),
+					resources: Some(Box::new(Resources {
+						CPU: Some(util_mm::RUNC_CLEANUP_CPU),
+						memory_mb: Some(util_mm::RUNC_CLEANUP_MEMORY),
+						..Resources::new()
+					})),
+					log_config: Some(Box::new(LogConfig {
+						max_files: Some(4),
+						max_file_size_mb: Some(2),
+					})),
+					..Task::new()
+				},
+			]),
 			..TaskGroup::new()
 		}]),
 		..Job::new()

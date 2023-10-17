@@ -101,7 +101,7 @@ impl Setup {
 							},
 							backend::matchmaker::lobby_runtime::Port {
 								label: "test-udp".into(),
-								target_port: Some(8002),
+								target_port: Some(8003),
 								port_range: None,
 								proxy_protocol: backend::matchmaker::lobby_runtime::ProxyProtocol::Udp as i32,
 								proxy_kind: backend::matchmaker::lobby_runtime::ProxyKind::GameGuard as i32,

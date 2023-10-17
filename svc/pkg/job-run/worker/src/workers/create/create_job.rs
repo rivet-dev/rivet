@@ -165,48 +165,48 @@ fn gen_cleanup_task() -> nomad_client::models::Task {
 			dest_path: Some("local/cleanup.py".into()),
 			embedded_tmpl: Some(formatdoc!(
 				r#"
-					import ssl
-					import urllib.request, json, os, mimetypes, sys
+				import ssl
+				import urllib.request, json, os, mimetypes, sys
 
-					BEARER = '{{{{env "NOMAD_META_JOB_RUN_TOKEN"}}}}'
+				BEARER = '{{{{env "NOMAD_META_JOB_RUN_TOKEN"}}}}'
 
-					ctx = ssl.create_default_context()
+				ctx = ssl.create_default_context()
 
-					def eprint(*args, **kwargs):
-    					print(*args, file=sys.stderr, **kwargs)
+				def eprint(*args, **kwargs):
+					print(*args, file=sys.stderr, **kwargs)
 
-					def req(method, url, data = None, headers = {{}}):
-						request = urllib.request.Request(
-							url=url,
-							data=data,
-							method=method,
-							headers=headers
-						)
+				def req(method, url, data = None, headers = {{}}):
+					request = urllib.request.Request(
+						url=url,
+						data=data,
+						method=method,
+						headers=headers
+					)
 
-						try:
-							res = urllib.request.urlopen(request, context=ctx)
-							assert res.status == 200, f"Received non-200 status: {{res.status}}"
-							return res
-						except urllib.error.HTTPError as err:
-							eprint(f"HTTP Error ({{err.code}} {{err.reason}}):\n\nBODY:\n{{err.read().decode()}}\n\nHEADERS:\n{{err.headers}}")
+					try:
+						res = urllib.request.urlopen(request, context=ctx)
+						assert res.status == 200, f"Received non-200 status: {{res.status}}"
+						return res
+					except urllib.error.HTTPError as err:
+						eprint(f"HTTP Error ({{err.code}} {{err.reason}}):\n\nBODY:\n{{err.read().decode()}}\n\nHEADERS:\n{{err.headers}}")
 
-							raise err
+						raise err
 
-					print(f'\n> Cleaning up job')
+				print(f'\n> Cleaning up job')
 
-					res_json = None
-					with req('POST', f'{origin_api}/job/runs/cleanup',
-						data = json.dumps({{}}).encode(),
-						headers = {{
-							'Authorization': f'Bearer {{BEARER}}',
-							'Content-Type': 'application/json'
-						}}
-					) as res:
-						res_json = json.load(res)
+				res_json = None
+				with req('POST', f'{origin_api}/job/runs/cleanup',
+					data = json.dumps({{}}).encode(),
+					headers = {{
+						'Authorization': f'Bearer {{BEARER}}',
+						'Content-Type': 'application/json'
+					}}
+				) as res:
+					res_json = json.load(res)
 
 
-					print('\n> Finished')
-					"#,
+				print('\n> Finished')
+				"#,
 				origin_api = util::env::origin_api(),
 			)),
 			..Template::new()

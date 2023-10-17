@@ -9,15 +9,15 @@ echo
 export CNI_PATH="/opt/cni/bin"
 export NETCONFPATH="/opt/cni/config"
 
-DOCKER_IMAGE_PATH="$NOMAD_TASK_DIR/docker-image.tar"
-OCI_IMAGE_PATH="$NOMAD_TASK_DIR/oci-image"
-OCI_BUNDLE_PATH="$NOMAD_TASK_DIR/oci-bundle"
+DOCKER_IMAGE_PATH="$NOMAD_ALLOC_DIR/docker-image.tar"
+OCI_IMAGE_PATH="$NOMAD_ALLOC_DIR/oci-image"
+OCI_BUNDLE_PATH="$NOMAD_ALLOC_DIR/oci-bundle"
 
 # Need to prefix with "rivet-" in order to not interfere with any
 # auto-generated resources that Nomad creates for the given alloc ID
 CONTAINER_ID="rivet-$NOMAD_ALLOC_ID"
 echo "CONTAINER_ID: $CONTAINER_ID"
-echo -n "$CONTAINER_ID" > "$NOMAD_TASK_DIR/container-id"
+echo -n "$CONTAINER_ID" > "$NOMAD_ALLOC_DIR/container-id"
 
 
 # MARK: Load container
@@ -51,21 +51,21 @@ NETNS_PATH="/var/run/netns/$CONTAINER_ID"
 # https://github.com/containerd/go-cni/blob/6603d5bd8941d7f2026bb5627f6aa4ff434f859a/namespace_opts.go#L22
 export CAP_ARGS=$(jq -c <<EOF
 {
-	"portMappings": $(cat "$NOMAD_TASK_DIR/cni-port-mappings.json")
+	"portMappings": $(cat "$NOMAD_ALLOC_DIR/cni-port-mappings.json")
 }
 EOF
 )
 export CNI_IFNAME="eth0"
 echo "CAP_ARGS: $CAP_ARGS"
 
-echo "Creating network $NETWORK_NAME"
+echo "Creating network $CONTAINER_ID"
 ip netns add "$CONTAINER_ID"
 
 echo "Adding network $NETWORK_NAME to namespace $NETNS_PATH"
-cnitool add "$NETWORK_NAME" "$NETNS_PATH" > $NOMAD_TASK_DIR/cni.json
+cnitool add "$NETWORK_NAME" "$NETNS_PATH" > $NOMAD_ALLOC_DIR/cni.json
 
 # resolv.conf
-cat <<EOF > $NOMAD_TASK_DIR/resolv.conf
+cat <<EOF > $NOMAD_ALLOC_DIR/resolv.conf
 nameserver 8.8.8.8
 nameserver 8.8.4.4
 nameserver 2001:4860:4860::8888
@@ -81,7 +81,7 @@ EOF
 # This way, we enforce our own capabilities on the container instead of trusting the
 # provided config.json
 echo "Templating config.json"
-OVERRIDE_CONFIG="$NOMAD_TASK_DIR/oci-bundle-config.overrides.json"
+OVERRIDE_CONFIG="$NOMAD_ALLOC_DIR/oci-bundle-config.overrides.json"
 mv "$OCI_BUNDLE_PATH/config.json" "$OVERRIDE_CONFIG"
 jq "
 .process.args = $(jq '.process.args' $OVERRIDE_CONFIG) |
@@ -92,8 +92,8 @@ jq "
 .mounts += [{
 	\"destination\": \"/etc/resolv.conf\",
 	\"type\": \"bind\",
-	\"source\": \"$NOMAD_TASK_DIR/resolv.conf\",
+	\"source\": \"$NOMAD_ALLOC_DIR/resolv.conf\",
 	\"options\": [\"bind\", \"ro\"]
 }]
-" "$NOMAD_TASK_DIR/oci-bundle-config.base.json" > "$OCI_BUNDLE_PATH/config.json"
+" "$NOMAD_ALLOC_DIR/oci-bundle-config.base.json" > "$OCI_BUNDLE_PATH/config.json"
 

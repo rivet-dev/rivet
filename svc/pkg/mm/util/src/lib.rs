@@ -40,3 +40,8 @@ pub enum FindQueryStatus {
 pub fn format_nomad_port_label(port_label: &str) -> String {
 	format!("game-{port_label}")
 }
+
+pub const RUNC_SETUP_CPU: i32 = 50;
+pub const RUNC_SETUP_MEMORY: i32 = 32;
+pub const RUNC_CLEANUP_CPU: i32 = 50;
+pub const RUNC_CLEANUP_MEMORY: i32 = 32;
