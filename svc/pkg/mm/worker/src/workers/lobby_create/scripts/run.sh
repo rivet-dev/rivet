@@ -1,11 +1,15 @@
+#!/usr/bin/env bash
+set -euf -o pipefail
+
 echo "$(pwd)"
 
 # TODO: Update NETCONF_PATH to /opt/cni/net.d
 export CNI_PATH="/opt/cni/bin"
 export NETCONFPATH="/opt/cni/config"
 
-OCI_IMAGE_PATH="$(pwd)/local/oci-image"
-OCI_BUNDLE_PATH="$(pwd)/local/oci-bundle"
+DOCKER_IMAGE_PATH="$NOMAD_TASK_DIR/docker-image.tar"
+OCI_IMAGE_PATH="$NOMAD_TASK_DIR/oci-image"
+OCI_BUNDLE_PATH="$NOMAD_TASK_DIR/oci-bundle"
 
 # Need to prefix with "rivet-" in order to not interfere with any
 # auto-generated resources that Nomad creates for the given alloc ID
@@ -15,7 +19,7 @@ echo "CONTAINER_ID: $CONTAINER_ID"
 
 # MARK: Load container
 echo "Converting Docker image -> OCI image"
-time skopeo copy "docker-archive:local/docker-image.tar" "oci:$OCI_IMAGE_PATH:default"
+time skopeo copy "docker-archive:$DOCKER_IMAGE_PATH" "oci:$OCI_IMAGE_PATH:default"
 
 # TODO: Remov hjke
 # Install umoci
@@ -52,24 +56,33 @@ NETNS_PATH="/var/run/netns/$CONTAINER_ID"
 
 
 # https://github.com/hashicorp/nomad/blob/6dcc4021882fcaecb7ee73655bd46eb84e4671d4/client/allocrunner/networking_cni.go#L347
-export CAP_ARGS=$(cat <<EOF
-{
-	"portMappings": [
-		"HostPort": $NOMAD_HOST_PORT_http,
-		"ContainerPort": 8080,
-		"Protocol": "tcp"
-	]
-}
-EOF
-)
+# export CAP_ARGS=$(cat <<EOF
+# {
+# 	"portMappings": [
+# 		"HostPort": $NOMAD_HOST_PORT_http,
+# 		"ContainerPort": 8080,
+# 		"Protocol": "tcp"
+# 	]
+# }
+# EOF
+# )
 export CNI_IFNAME="eth0"
 
 echo "Creating network $NETWORK_NAME"
 ip netns add "$CONTAINER_ID"
 
 echo "Adding network $NETWORK_NAME to namespace $NETNS_PATH"
-cnitool add "$NETWORK_NAME" "$NETNS_PATH"
+cnitool add "$NETWORK_NAME" "$NETNS_PATH" > $NOMAD_TASK_DIR/cni.json
 
+cat <<EOF > $NOMAD_TASK_DIR/resolv.conf
+nameserver 8.8.8.8
+nameserver 8.8.4.4
+nameserver 2001:4860:4860::8888
+nameserver 2001:4860:4860::8844
+options rotate
+options edns0
+options attempts:2
+EOF
 
 # MARK: Config
 # Copy the Docker-specific values from the OCI bundle config.json to the base config
@@ -77,15 +90,21 @@ cnitool add "$NETWORK_NAME" "$NETNS_PATH"
 # This way, we enforce our own capabilities on the container instead of trusting the
 # provided config.json
 echo "Templating config.json"
-OVERRIDE_CONFIG="local/oci-bundle-config.overrides.json"
+OVERRIDE_CONFIG="$NOMAD_TASK_DIR/oci-bundle-config.overrides.json"
 mv "$OCI_BUNDLE_PATH/config.json" "$OVERRIDE_CONFIG"
 jq "
 .process.args = $(jq '.process.args' $OVERRIDE_CONFIG) |
 .process.env = $(jq '.process.env' $OVERRIDE_CONFIG) |
 .process.user = $(jq '.process.user' $OVERRIDE_CONFIG) |
 .process.cwd = $(jq '.process.cwd' $OVERRIDE_CONFIG) |
-.linux.namespaces += [{\"type\": \"network\", \"path\": \"$NETNS_PATH\"}]
-" local/oci-bundle-config.base.json > "$OCI_BUNDLE_PATH/config.json"
+.linux.namespaces += [{\"type\": \"network\", \"path\": \"$NETNS_PATH\"}] |
+.mounts += [{
+	\"destination\": \"/etc/resolv.conf\",
+	\"type\": \"bind\",
+	\"source\": \"$NOMAD_TASK_DIR/resolv.conf\",
+	\"options\": [\"bind\", \"ro\"]
+}]
+" "$NOMAD_TASK_DIR/oci-bundle-config.base.json" > "$OCI_BUNDLE_PATH/config.json"
 
 
 # MARK: Run container
