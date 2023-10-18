@@ -89,7 +89,8 @@ options attempts:2
 EOF
 
 # MARK: Config
-# Copy the Docker-specific values from the OCI bundle config.json to the base config
+#
+# Sanitize the config.json by copying safe properties from the provided bundle in to our base config.
 #
 # This way, we enforce our own capabilities on the container instead of trusting the
 # provided config.json
