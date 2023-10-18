@@ -1495,6 +1495,7 @@ dependencies = [
  "prost 0.10.4",
  "reqwest",
  "rivet-operation",
+ "rivet-util-build",
  "sqlx",
  "upload-complete",
  "upload-get",
@@ -5011,6 +5012,7 @@ dependencies = [
  "region-get",
  "reqwest",
  "rivet-operation",
+ "rivet-util-build",
  "rivet-util-mm",
  "s3-util",
  "tier-list",
@@ -5312,6 +5314,7 @@ dependencies = [
  "rivet-health-checks",
  "rivet-metrics",
  "rivet-runtime",
+ "rivet-util-build",
  "rivet-util-job",
  "rivet-util-mm",
  "s3-util",
@@ -6889,6 +6892,13 @@ dependencies = [
  "tokio",
  "types",
  "uuid",
+]
+
+[[package]]
+name = "rivet-util-build"
+version = "0.1.0"
+dependencies = [
+ "rivet-operation",
 ]
 
 [[package]]

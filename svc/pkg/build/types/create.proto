@@ -4,6 +4,7 @@ package rivet.backend.pkg.build.create;
 
 import "proto/common.proto";
 import "proto/backend/upload.proto";
+import "proto/backend/build.proto";
 
 message Request {
 	rivet.common.Uuid game_id = 1;
@@ -11,8 +12,11 @@ message Request {
 	optional string image_tag = 4;
 	optional rivet.backend.upload.PrepareFile image_file = 3;
 	bool multipart = 6;
+	rivet.backend.build.BuildKind kind = 7;
+	rivet.backend.build.BuildCompression compression = 8;
 
-	// If provided, will look up the pre-uploaded upload ID for a given kind.
+	// If provided, will look up the pre-uploaded upload ID for a given default
+	// build kind. This is used to create builds from reusable pre-built images.
 	optional string default_build_kind = 5;
 }
 

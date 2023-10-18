@@ -1,0 +1,27 @@
+syntax = "proto3";
+
+package rivet.backend.build;
+
+import "proto/common.proto";
+
+enum BuildKind {
+	DOCKER_IMAGE = 0;
+	OCI_BUNDLE = 1;
+}
+
+enum BuildCompression {
+	NONE = 0;
+	LZ4 = 1;
+}
+
+message Build {
+	rivet.common.Uuid build_id = 1;
+	rivet.common.Uuid game_id = 2;
+	rivet.common.Uuid upload_id = 3;
+	string display_name = 4;
+	string image_tag = 6;
+	int64 create_ts = 5;
+	BuildKind kind = 7;
+	BuildCompression compression = 8;
+}
+

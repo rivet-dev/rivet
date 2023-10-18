@@ -714,6 +714,10 @@ async fn resolve_image_artifact_url(
 	.await?;
 	let build = build_res.builds.first();
 	let build = internal_unwrap!(build);
+	let build_kind = internal_unwrap_owned!(backend::build::BuildKind::from_i32(build.kind));
+	let build_compression = internal_unwrap_owned!(backend::build::BuildCompression::from_i32(
+		build.compression
+	));
 	let upload_id_proto = internal_unwrap!(build.upload_id);
 
 	let upload_res = op!([ctx] upload_get {
@@ -732,6 +736,8 @@ async fn resolve_image_artifact_url(
 		backend::upload::Provider::Backblaze => s3_util::Provider::Backblaze,
 		backend::upload::Provider::Aws => s3_util::Provider::Aws,
 	};
+
+	let file_name = util_build::file_name(build_kind, build_compression);
 
 	let mm_lobby_delivery_method = internal_unwrap_owned!(
 		std::env::var("RIVET_MM_LOBBY_DELIVERY_METHOD").ok(),
@@ -752,7 +758,7 @@ async fn resolve_image_artifact_url(
 			let presigned_req = s3_client
 				.get_object()
 				.bucket(s3_client.bucket())
-				.key(format!("{upload_id}/image.tar"))
+				.key(format!("{upload_id}/{file_name}"))
 				.presigned(
 					s3_util::aws_sdk_s3::presigning::config::PresigningConfig::builder()
 						.expires_in(std::time::Duration::from_secs(15 * 60))
@@ -772,7 +778,7 @@ async fn resolve_image_artifact_url(
 
 			let upload_id = internal_unwrap!(upload.upload_id).as_uuid();
 			let addr = format!(
-				"http://127.0.0.1:8080/s3-cache/{provider}/{namespace}-bucket-build/{upload_id}/image.tar",
+				"http://127.0.0.1:8080/s3-cache/{provider}/{namespace}-bucket-build/{upload_id}/{file_name}",
 				provider = heck::KebabCase::to_kebab_case(provider.as_str()),
 				namespace = util::env::namespace(),
 				upload_id = upload_id,

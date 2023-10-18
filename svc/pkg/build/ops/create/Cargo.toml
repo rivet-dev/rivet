@@ -9,6 +9,7 @@ license = "Apache-2.0"
 rivet-operation = { path = "../../../../../lib/operation/core" }
 chirp-client = { path = "../../../../../lib/chirp/client" }
 prost = "0.10"
+util-build = { package = "rivet-util-build", path = "../../util" }
 
 game-get = { path = "../../../game/ops/get" }
 upload-prepare = { path = "../../../upload/ops/prepare" }
