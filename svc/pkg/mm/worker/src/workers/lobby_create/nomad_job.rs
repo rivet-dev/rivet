@@ -196,8 +196,14 @@ pub fn gen_lobby_docker_job(
 						let snake_port_label = heck::SnakeCase::to_snake_case(port.label.as_str());
 
 						Some([
-							(format!("PORT_RANGE_MIN_{}", snake_port_label), min.to_string()),
-							(format!("PORT_RANGE_MAX_{}", snake_port_label), max.to_string()),
+							(
+								format!("PORT_RANGE_MIN_{}", snake_port_label),
+								min.to_string(),
+							),
+							(
+								format!("PORT_RANGE_MAX_{}", snake_port_label),
+								max.to_string(),
+							),
 						])
 					} else {
 						None

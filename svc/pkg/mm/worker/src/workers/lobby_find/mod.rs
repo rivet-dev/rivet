@@ -114,6 +114,52 @@ async fn worker(ctx: &OperationContext<mm::msg::lobby_find::Message>) -> GlobalR
 		return complete_request(ctx.chirp(), analytics_events).await;
 	}
 
+	// Create players
+	let players = ctx
+		.players
+		.iter()
+		.map(|player| {
+			GlobalResult::Ok(Player {
+				player_id: internal_unwrap!(player.player_id).as_uuid(),
+				token_session_id: internal_unwrap!(player.token_session_id).as_uuid(),
+				client_info: player.client_info.clone(),
+			})
+		})
+		.collect::<GlobalResult<Vec<_>>>()?;
+
+	// Dispatch find create event. We don't use the shared `analytics_events`
+	// because those will not be published if the find fails.
+	msg!([ctx] analytics::msg::event_create() {
+		events: vec![
+			analytics::msg::event_create::Event {
+				name: "mm.find.create".into(),
+				properties_json: Some(serde_json::to_string(&json!({
+					"namespace_id": namespace_id,
+				}))?),
+				..Default::default()
+			}
+		],
+	})
+	.await?;
+
+	// Do this as early in the function as possible in order to reduce the
+	// resources used by malicious requests
+	let validate_perf = ctx.perf().start("validate-player-limit").await;
+	if !limit::check_remote_addresses(
+		ctx,
+		&mut redis_mm,
+		&mut analytics_events,
+		namespace_id,
+		query_id,
+		&mm_ns_config,
+		&players,
+	)
+	.await?
+	{
+		return complete_request(ctx.chirp(), analytics_events).await;
+	}
+	validate_perf.end();
+
 	// Verify user data
 	if !ctx.bypass_verification {
 		let verification_res = util_mm::verification::verify_config(
@@ -161,52 +207,6 @@ async fn worker(ctx: &OperationContext<mm::msg::lobby_find::Message>) -> GlobalR
 			return res;
 		}
 	}
-
-	// Create players
-	let players = ctx
-		.players
-		.iter()
-		.map(|player| {
-			GlobalResult::Ok(Player {
-				player_id: internal_unwrap!(player.player_id).as_uuid(),
-				token_session_id: internal_unwrap!(player.token_session_id).as_uuid(),
-				client_info: player.client_info.clone(),
-			})
-		})
-		.collect::<GlobalResult<Vec<_>>>()?;
-
-	// Dispatch find create event. We don't use the shared `analytics_events`
-	// because those will not be published if the find fails.
-	msg!([ctx] analytics::msg::event_create() {
-		events: vec![
-			analytics::msg::event_create::Event {
-				name: "mm.find.create".into(),
-				properties_json: Some(serde_json::to_string(&json!({
-					"namespace_id": namespace_id,
-				}))?),
-				..Default::default()
-			}
-		],
-	})
-	.await?;
-
-	// Do this as early in the function as possible in order to reduce the
-	// resources used by malicious requests
-	let validate_perf = ctx.perf().start("validate-player-limit").await;
-	if !limit::check_remote_addresses(
-		ctx,
-		&mut redis_mm,
-		&mut analytics_events,
-		namespace_id,
-		query_id,
-		&mm_ns_config,
-		&players,
-	)
-	.await?
-	{
-		return complete_request(ctx.chirp(), analytics_events).await;
-	}
-	validate_perf.end();
 
 	// Find the lobby to join
 	let auto_create_lobby_id = Uuid::new_v4();
@@ -435,14 +435,11 @@ async fn fetch_ns_config_and_dev_team(
 		}),
 	)?;
 
-	Ok((
-		ns,
-		internal_unwrap!(
-			internal_unwrap_owned!(get_mm_res.namespaces.first(), "mm namespace not found").config
-		)
-		.clone(),
-		dev_team,
-	))
+	let mm_config = internal_unwrap!(
+		internal_unwrap_owned!(get_mm_res.namespaces.first(), "mm namespace not found").config
+	);
+
+	Ok((ns, mm_config.clone(), dev_team))
 }
 
 #[derive(Debug, Clone)]

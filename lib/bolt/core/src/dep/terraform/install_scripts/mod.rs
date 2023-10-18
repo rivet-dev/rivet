@@ -138,9 +138,9 @@ fn gg_traefik_static_config(server: &Server, api_route_token: &str) -> String {
 				address = ":{port}/tcp"
 
 			[entryPoints.lb-{port}.transport.respondingTimeouts]
-				readTimeout = "15s"
-				writeTimeout = "15s"
-				idleTimeout = "15s"
+				readTimeout = "12h"
+				writeTimeout = "12h"
+				idleTimeout = "30s"
 
 			"#
 		));

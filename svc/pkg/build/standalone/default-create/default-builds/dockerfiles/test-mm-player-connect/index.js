@@ -3,7 +3,7 @@ import { RivetClient } from "@rivet-gg/api";
 
 console.log(process.env);
 
-const PORT = 5051;
+const PORT = process.env.PORT;
 
 let client = new RivetClient({
 	token: process.env.RIVET_TOKEN,
@@ -50,53 +50,64 @@ class Conn {
 		this.id = id;
 		this.playerToken = null;
 		this.connected = false;
+		this.start = process.hrtime.bigint();
 
 		console.log(`${this.id} connect`);
 
-		socket.on("data", this.onData.bind(this));
+		this.socket.on("data", this.onData.bind(this));
 
-		socket.on("error", () => {
+		this.socket.on("error", () => {
 			console.error("socket error:");
 			console.error(err);
 
 			this.disconnect(err.message);
 		});
 
-		socket.on("close", () => {
+		this.socket.on("close", () => {
 			this.disconnect("close");
 		});
 
-		socket.on("end", () => {
-			this.disconnect("end");
+		this.socket.on("end", () => {
+			this.disconnect("client disconnect");
 		});
 
 		// Send ID
 		let buffer = Buffer.allocUnsafe(4);
 		buffer.writeUInt32LE(this.id, 0);
-		socket.write(buffer);
+		this.socket.write(buffer);
 	}
 
 	async onData(data) {
-		this.playerToken = data.toString().trim();
-		console.log(`${this.id} init`, this.playerToken);
+		if (this.connected) {
+			console.log(`${this.id} data`, data.toString());
+			console.log(process.hrtime.bigint() - this.start);
 
-		try {
-			await client.matchmaker.players.connected({ playerToken: this.playerToken });
-			this.connected = true;
+			this.socket.write(data);
+		} else {
+			this.playerToken = data.toString();
+			console.log(`${this.id} init`, this.playerToken);
 
-			console.log(`${this.id} rivet connect`);
-		} catch (e) {
-			console.error("failed to connect to rivet:");
-			console.error(e);
+			try {
+				await client.matchmaker.players.connected({ playerToken: this.playerToken });
+				this.connected = true;
 
-			this.disconnect("failed auth");
+				console.log(`${this.id} rivet connect`);
+			} catch (e) {
+				console.error("failed to connect to rivet:");
+				console.error(e);
+
+				this.disconnect("failed auth");
+			}
 		}
 	}
 
 	async disconnect(reason) {
-		console.log(`${this.id} disconnect`, reason);
-
 		if (this.connected) {
+			this.connected = false;
+
+			console.log(`${this.id} disconnect`, reason);
+			console.log(process.hrtime.bigint() - this.start);
+
 			try {
 				await client.matchmaker.players.disconnected({ playerToken: this.playerToken });
 

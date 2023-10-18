@@ -138,8 +138,6 @@ async fn upload_build(
 			.await?;
 
 		if !res.status().is_success() {
-			let headers = res.headers();
-			tracing::info!(?headers);
 			let status = res.status();
 			let body = res.text().await?;
 			tracing::warn!(?status, ?body, "failure uploading");

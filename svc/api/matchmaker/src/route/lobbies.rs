@@ -1095,7 +1095,6 @@ async fn resolve_region_ids(
 			.into_iter()
 			.map(Into::<common::Uuid>::into)
 			.collect::<Vec<_>>();
-		tracing::info!(?lobby_groups, ?enabled_region_ids, "---------------------");
 
 		// Auto-select the closest region
 		if let Some((lat, long)) = coords {

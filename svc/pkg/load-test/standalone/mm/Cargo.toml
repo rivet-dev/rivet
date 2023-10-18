@@ -22,6 +22,9 @@ faker-game = { path = "../../../faker/ops/game" }
 faker-game-namespace = { path = "../../../faker/ops/game-namespace" }
 faker-game-version = { path = "../../../faker/ops/game-version" }
 faker-region = { path = "../../../faker/ops/region" }
+mm-config-namespace-config-set = { path = '../../../mm-config/ops/namespace-config-set' }
+mm-lobby-list-for-namespace = { path = '../../../mm/ops/lobby-list-for-namespace' }
+mm-player-count-for-namespace = { path = '../../../mm/ops/player-count-for-namespace' }
 region-get = { path = "../../../region/ops/get" }
 token-create = { path = "../../../token/ops/create" }
 
