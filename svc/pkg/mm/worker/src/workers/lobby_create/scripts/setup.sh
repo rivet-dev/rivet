@@ -5,6 +5,12 @@ echo 'Env:'
 env
 echo
 
+# Need to prefix with "rivet-" in order to not interfere with any
+# auto-generated resources that Nomad creates for the given alloc ID
+CONTAINER_ID="rivet-$NOMAD_ALLOC_ID"
+echo "CONTAINER_ID: $CONTAINER_ID"
+echo -n "$CONTAINER_ID" > "$NOMAD_ALLOC_DIR/container-id"
+
 export CNI_PATH="/opt/cni/bin"
 export NETCONFPATH="/opt/cni/config"
 
@@ -12,20 +18,33 @@ DOCKER_IMAGE_PATH="$NOMAD_ALLOC_DIR/docker-image.tar"
 OCI_IMAGE_PATH="$NOMAD_ALLOC_DIR/oci-image"
 OCI_BUNDLE_PATH="$NOMAD_ALLOC_DIR/oci-bundle"
 
-# Need to prefix with "rivet-" in order to not interfere with any
-# auto-generated resources that Nomad creates for the given alloc ID
-CONTAINER_ID="rivet-$NOMAD_ALLOC_ID"
-echo "CONTAINER_ID: $CONTAINER_ID"
-echo -n "$CONTAINER_ID" > "$NOMAD_ALLOC_DIR/container-id"
+# MARK: Genreate OCI bundle
+case "__BUILD_KIND__" in
+	"docker-image")
+		# We need to conver the Docker image to an OCI bundle in order to run it.
 
+		echo "Downloading Docker image"
+		time (__DOWNLOAD_CMD__ > "$DOCKER_IMAGE_PATH")
 
-# MARK: Load container
-echo "Converting Docker image -> OCI image"
-time skopeo copy "docker-archive:$DOCKER_IMAGE_PATH" "oci:$OCI_IMAGE_PATH:default"
+		# Allows us to work with the build with umoci
+		echo "Converting Docker image -> OCI image"
+		time skopeo copy "docker-archive:$DOCKER_IMAGE_PATH" "oci:$OCI_IMAGE_PATH:default"
 
-# This allows us to run the bundle natively with runc
-echo "Converting OCI image -> OCI bundle"
-time umoci unpack --image "$OCI_IMAGE_PATH:default" "$OCI_BUNDLE_PATH"
+		# Allows us to run the bundle natively with runc
+		echo "Converting OCI image -> OCI bundle"
+		time umoci unpack --image "$OCI_IMAGE_PATH:default" "$OCI_BUNDLE_PATH"
+
+		;;
+	"oci-bundle")
+		echo "Downloading OCI bundle"
+		time (__DOWNLOAD_CMD__ | tar -x -C "$OCI_BUNDLE_PATH")
+
+		;;
+	*)
+		echo "Unknown build kind"
+		exit 1
+		;;
+esac
 
 
 # MARK: Create network

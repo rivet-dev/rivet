@@ -575,6 +575,10 @@ async fn create_docker_job(
 	})
 	.await?;
 	let build = internal_unwrap_owned!(build_get.builds.first());
+	let build_kind = internal_unwrap_owned!(backend::build::BuildKind::from_i32(build.kind));
+	let build_compression = internal_unwrap_owned!(backend::build::BuildCompression::from_i32(
+		build.compression
+	));
 
 	// Generate the Docker job
 	let job_spec = nomad_job::gen_lobby_docker_job(
@@ -582,6 +586,8 @@ async fn create_docker_job(
 		&build.image_tag,
 		tier,
 		ctx.lobby_config_json.as_ref(),
+		build_kind,
+		build_compression,
 	)?;
 	let job_spec_json = serde_json::to_string(&job_spec)?;
 

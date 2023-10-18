@@ -46,6 +46,8 @@ pub fn gen_lobby_docker_job(
 	image_tag: &str,
 	tier: &backend::region::Tier,
 	lobby_config_json: Option<&String>,
+	build_kind: backend::build::BuildKind,
+	build_compression: backend::build::BuildCompression,
 ) -> GlobalResult<nomad_client::models::Job> {
 	// IMPORTANT: This job spec must be deterministic. Do not pass in parameters
 	// that change with every run, such as the lobby ID. Ensure the
@@ -265,6 +267,15 @@ pub fn gen_lobby_docker_job(
 		.filter_map(|x| x.transpose())
 		.collect::<GlobalResult<Vec<_>>>()?;
 
+	// Generate the command to download and decompress the file
+	let mut download_cmd = format!(r#"curl -Lf "$NOMAD_META_IMAGE_ARTIFACT_URL""#);
+	match build_compression {
+		backend::build::BuildCompression::None => {}
+		backend::build::BuildCompression::Lz4 => {
+			download_cmd.push_str(" | lz4 -d -");
+		}
+	}
+
 	Ok(Job {
 		_type: Some("batch".into()),
 		constraints: Some(vec![Constraint {
@@ -336,7 +347,19 @@ pub fn gen_lobby_docker_job(
 					}),
 					templates: Some(vec![
 						Template {
-							embedded_tmpl: Some(include_str!("./scripts/setup.sh").into()),
+							embedded_tmpl: Some(
+								include_str!("./scripts/setup.sh")
+									.replace("__DOWNLOAD_CMD__", &download_cmd)
+									.replace(
+										"__BUILD_KIND__",
+										match build_kind {
+											backend::build::BuildKind::DockerImage => {
+												"docker-image"
+											}
+											backend::build::BuildKind::OciBundle => "oci-bundle",
+										},
+									),
+							),
 							dest_path: Some("${NOMAD_TASK_DIR}/setup.sh".into()),
 							perms: Some("744".into()),
 							..Template::new()

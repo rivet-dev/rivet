@@ -27,6 +27,10 @@ pub fn docker() -> String {
 	include_str!("files/docker.sh").to_string()
 }
 
+pub fn lz4() -> String {
+	format!("apt-get install -y lz4")
+}
+
 pub fn skopeo() -> String {
 	format!("apt-get install -y skopeo")
 }
