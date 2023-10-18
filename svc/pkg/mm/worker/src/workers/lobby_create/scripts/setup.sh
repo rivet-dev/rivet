@@ -5,7 +5,6 @@ echo 'Env:'
 env
 echo
 
-# TODO: Update NETCONF_PATH to /opt/cni/net.d
 export CNI_PATH="/opt/cni/bin"
 export NETCONFPATH="/opt/cni/config"
 
@@ -24,14 +23,9 @@ echo -n "$CONTAINER_ID" > "$NOMAD_ALLOC_DIR/container-id"
 echo "Converting Docker image -> OCI image"
 time skopeo copy "docker-archive:$DOCKER_IMAGE_PATH" "oci:$OCI_IMAGE_PATH:default"
 
-# TODO: Remove
-# Install umoci
-curl -Lf -o umoci 'https://github.com/opencontainers/umoci/releases/download/v0.4.7/umoci.amd64'
-chmod +x umoci
-
 # This allows us to run the bundle natively with runc
 echo "Converting OCI image -> OCI bundle"
-time ./umoci unpack --image "$OCI_IMAGE_PATH:default" "$OCI_BUNDLE_PATH"
+time umoci unpack --image "$OCI_IMAGE_PATH:default" "$OCI_BUNDLE_PATH"
 
 
 # MARK: Create network
