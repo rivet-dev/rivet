@@ -96,7 +96,7 @@ async fn handle(
 	sqlx::query(indoc!(
 		"
 		INSERT INTO db_build.builds (build_id, game_id, upload_id, display_name, image_tag, create_ts, kind, compression)
-		VALUES ($1, $2, $3, $4, $5, $6)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
 		"
 	))
 	.bind(build_id)
