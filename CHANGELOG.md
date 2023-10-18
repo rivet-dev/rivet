@@ -9,6 +9,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+-  **Bolt** Development cluster can now be booted without any external services (i.e. no Linode & Cloudflare account required, does not require LetsEncrypt cert)
+-  **Infra** Autoscale non-singleton services based on CPU & memory
+-  **Infra** Support for running ClickHouse on ClickHouse Cloud
+-  **Infra** Support for running CockroachDB on Cockroach Cloud
+-  **Infra** Support for running Redis on AWS ElastiCache & MemoryDB
+-  **Infra** Dynamically provisioned core cluster using Karpenter
+-  **Infra** Dual-stack CNI configuration for game containers
+-  **Infra** job iptables firewall to job pool that whitelists inbound traffic from Game Guard to the container
+-  **Infra** Prewarm the Traffic Server cache when a game version is published for faster cold start times on the first booted lobby in each region
+-  **Infra** Envoy Maglev load balancing for traffic to edge Traffic Server instances to maximize cache hits
 -  **Bolt** Timeout for tests
 -  **Bolt** New summary view of test progress
 -  **Bolt** `config show` command
@@ -16,15 +26,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 -  **Bolt** Validation that the correct pools exist in th enamespace
 -  **Bolt** Validation that the matchmaker delivery method is configured correctly depending on wether ATS servers exist
 -  **Dev** Bolt automatically builds with Nix shell
--  **Infra** Autoscale non-singleton services based on CPU & memory
--  **Infra** Dynamically provisioned core cluster using Karpenter
--  **Infra** Support for running ClickHouse on ClickHouse Cloud
--  **Infra** Support for running CockroachDB on Cockroach Cloud
--  **Infra** Support for running Redis on AWS ElastiCache & MemoryDB
--  **Infra** Dual-stack CNI configuration for game containers
--  **Infra** job iptables firewall to job pool that whitelists inbound traffic from Game Guard to the container
--  **Infra** Prewarm the Traffic Server cache when a game version is published for faster cold start times on the first booted lobby in each region
--  **Infra** Envoy Maglev load balancing for traffic to edge Traffic Server instances to maximize cache hits
 -  **Bolt** `--no-purge` flag to `test` to prevent purging Nomad jobs
 
 ### Changed
