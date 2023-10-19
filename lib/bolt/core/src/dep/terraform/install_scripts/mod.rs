@@ -131,7 +131,7 @@ fn gg_traefik_static_config(server: &Server, api_route_token: &str) -> String {
 	);
 
 	// TCP ports
-	for port in 20000..20512 {
+	for port in 20000..25999 {
 		config.push_str(&formatdoc!(
 			r#"
 			[entryPoints.lb-{port}]
@@ -147,7 +147,7 @@ fn gg_traefik_static_config(server: &Server, api_route_token: &str) -> String {
 	}
 
 	// UDP ports
-	for port in 26000..26512 {
+	for port in 26000..31999 {
 		config.push_str(&formatdoc!(
 			r#"
 			[entryPoints.lb-{port}]

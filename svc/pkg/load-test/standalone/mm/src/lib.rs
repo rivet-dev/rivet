@@ -1,25 +1,64 @@
 use futures_util::{StreamExt, TryStreamExt};
-use proto::{
-	backend::{self, pkg::*},
-	common,
-};
+use proto::backend::{self, pkg::*};
 use rivet_api::{
 	apis::{configuration::Configuration, matchmaker_lobbies_api},
 	models,
 };
+use rivet_claims::ClaimsDecode;
 use rivet_operation::prelude::*;
 use serde_json::json;
 use tokio::{io::AsyncWriteExt, net::TcpStream, time::Duration};
 
 const LOBBY_GROUP_NAME_ID: &str = "test";
-const CHUNK_SIZE: usize = 1;
-const BUFFER_SIZE: usize = 2;
+const CHUNK_SIZE: usize = 64;
+const BUFFER_SIZE: usize = 16;
 
 struct Ctx {
-	pub op_ctx: OperationContext<()>,
-	pub primary_region_id: Uuid,
-	pub primary_region_name_id: String,
+	op_ctx: OperationContext<()>,
+	conns: Vec<Conn>,
+	namespace_id: Uuid,
+	primary_region_name_id: String,
 	config: Configuration,
+}
+
+struct Conn {
+	id: Uuid,
+	socket: TcpStream,
+}
+
+impl Conn {
+	async fn new(id: Uuid, host: String) -> GlobalResult<Self> {
+		tracing::info!("connecting {} {}", id, host);
+
+		let stream = TcpStream::connect(host).await?;
+		stream.set_nodelay(true)?;
+		tracing::info!("connected {}", id);
+
+		stream.readable().await?;
+
+		Ok(Conn {
+			id,
+			socket: stream,
+		})
+	}
+
+	async fn write(&mut self, data: &[u8]) -> GlobalResult<()> {
+		self.socket.write_all(data).await?;
+		self.socket.flush().await?;
+		tracing::info!("written {}", self.id);
+
+		Ok(())
+	}
+
+	// Read 4 bytes
+	fn read(&self) -> GlobalResult<[u8; 4]> {
+		let mut buffer = [0u8; 4];
+
+		self.socket.try_read(&mut buffer)?;
+		tracing::info!("read {} {:?}", self.id, buffer);
+
+		Ok(buffer)
+	}
 }
 
 #[tracing::instrument(skip_all)]
@@ -41,14 +80,15 @@ pub async fn run_from_env(ts: i64) -> GlobalResult<()> {
 
 	// Setup
 	let (primary_region_id, primary_region_name_id) = setup_region(&ctx).await?;
-	let (game_id, version_id, namespace_id, mm_config, mm_config_meta) =
+	let (_game_id, version_id, namespace_id, _mm_config, _mm_config_meta) =
 		setup_game(&ctx, primary_region_id).await?;
 	let ns_auth_token = setup_public_token(&ctx, namespace_id).await?;
 	let config = setup_config(&ctx, ns_auth_token).await?;
 
-	let test_ctx = Ctx {
+	let mut test_ctx = Ctx {
 		op_ctx: ctx,
-		primary_region_id,
+		conns: Vec::new(),
+		namespace_id,
 		primary_region_name_id,
 		config,
 	};
@@ -56,102 +96,149 @@ pub async fn run_from_env(ts: i64) -> GlobalResult<()> {
 	// Tests
 	tracing::info!("============ Starting tests ==============");
 
-	let mut sockets = Vec::new();
-
 	tracing::info!("============ Batch create ==============");
+
 	let create_lobbies = std::iter::repeat_with(|| async {
 		let res = create_lobby(&test_ctx).await?;
 		let (_, port) = internal_unwrap_owned!(res.ports.iter().next());
-		connect_socket(&res.player.token, port).await
+		connect_to_lobby(&res.player.token, port).await
 	})
 	.take(CHUNK_SIZE);
-	let new_sockets = futures_util::stream::iter(create_lobbies)
+	let new_conns = futures_util::stream::iter(create_lobbies)
 		.buffer_unordered(BUFFER_SIZE)
 		.try_collect::<Vec<_>>()
 		.await?;
-	sockets.extend(new_sockets);
+	test_ctx.conns.extend(new_conns);
 
-	for i in 0..16 {
-		tokio::time::sleep(Duration::from_secs(1)).await;
+	// // Need to manually chunk the creation of lobbies so that we can prevent idle cleanup periodically
+	// for _ in 0..(CHUNK_SIZE / BUFFER_SIZE) {
+	// 	// Prevent idle cleanup
+	// 	for conn in &mut test_ctx.conns {
+	// 		// conn.write("active".as_bytes()).await?;
+	// 	}
 
-		for (id, socket) in &mut sockets {
-			tracing::info!("writing");
-			socket
-				.write_all(format!("test{i}").as_str().as_bytes())
-				.await?;
-			socket.flush().await?;
-			tracing::info!("written {}", id);
-
-			let mut buffer = [0u8; 64];
-			tracing::info!("reading");
-			let read = socket.try_read(&mut buffer);
-			tracing::info!("read {:?} {:?}", read, buffer);
-		}
-	}
-
-	// TODO: Very slow
-	// tracing::info!("============ Sequential create ==============");
-	// for _ in 0..CHUNK_SIZE {
-	// 	let res = create_lobby(&test_ctx).await?;
-	// 	let (_, port) = internal_unwrap_owned!(res.ports.iter().next());
-	// 	let socket = connect_socket(&res.player.token, port).await?;
-	// 	sockets.push(socket);
+	// 	let create_lobbies = std::iter::repeat_with(|| async {
+	// 		let res = create_lobby(&test_ctx).await?;
+	// 		let (_, port) = internal_unwrap_owned!(res.ports.iter().next());
+	// 		connect_to_lobby(&res.player.token, port).await
+	// 	})
+	// 	.take(BUFFER_SIZE);
+	// 	let new_conns = futures_util::stream::iter(create_lobbies)
+	// 		.buffer_unordered(BUFFER_SIZE)
+	// 		.try_collect::<Vec<_>>()
+	// 		.await?;
+	// 	test_ctx.conns.extend(new_conns);
 	// }
 
-    return Ok(());
-
-	tracing::info!("============ Batch find ==============");
-	let find_lobbies = std::iter::repeat_with(|| async {
-		let res = find_lobby(&test_ctx).await?;
-		let (_, port) = internal_unwrap_owned!(res.ports.iter().next());
-		connect_socket(&res.player.token, port).await
-	})
-	.take(CHUNK_SIZE * 2);
-	let new_sockets = futures_util::stream::iter(find_lobbies)
-		.buffer_unordered(BUFFER_SIZE)
-		.try_collect::<Vec<_>>()
-		.await?;
-	sockets.extend(new_sockets);
-
-	// tracing::info!("============ Sequential find ==============");
-	// for _ in 0..CHUNK_SIZE {
+	// tracing::info!("============ Batch find ==============");
+	// let find_lobbies = std::iter::repeat_with(|| async {
 	// 	let res = find_lobby(&test_ctx).await?;
 	// 	let (_, port) = internal_unwrap_owned!(res.ports.iter().next());
-	// 	let socket = connect_socket(&res.player.token, port).await?;
-	// 	sockets.push(socket);
-	// }
+	// 	connect_to_lobby(&res.player.token, port).await
+	// })
+	// .take(CHUNK_SIZE);
+	// let new_conns = futures_util::stream::iter(find_lobbies)
+	// 	.buffer_unordered(BUFFER_SIZE)
+	// 	.try_collect::<Vec<_>>()
+	// 	.await?;
+	// test_ctx.conns.extend(new_conns);
 
-	tracing::info!(?sockets);
+	// tracing::info!("============ Batch find (no connection) ==============");
+	// let find_no_connect_lobbies = std::iter::repeat_with(|| find_lobby(&test_ctx)).take(CHUNK_SIZE);
+	// futures_util::stream::iter(find_no_connect_lobbies)
+	// 	.buffer_unordered(BUFFER_SIZE)
+	// 	.try_collect::<Vec<_>>()
+	// 	.await?;
 
 	tracing::info!("============ Waiting ==============");
-	tokio::time::sleep(Duration::from_secs(30)).await;
 
-	for (id, socket) in &mut sockets {
-		socket.write_all("test2".as_bytes()).await?;
-		tracing::info!("written {}", id);
+	// Prevent idle cleanup
+	for _ in 0..2 {
+		for conn in &mut test_ctx.conns {
+			// conn.write("active".as_bytes()).await?;
+		}
+
+		tokio::time::sleep(Duration::from_secs(15)).await;
 	}
 
-	// TODO: Write test for mm-gc cleaning up unregistered players
+	verify_state(&test_ctx, CHUNK_SIZE, CHUNK_SIZE * 3, CHUNK_SIZE * 2).await?;
 
-	// Read mm state, verify player and lobby count
+	tracing::info!("============ Waiting for MM GC ==============");
+
+	// Prevent idle cleanup
+	for _ in 0..7 {
+		for conn in &mut test_ctx.conns {
+			// conn.write("active".as_bytes()).await?;
+		}
+
+		tokio::time::sleep(Duration::from_secs(15)).await;
+	}
+
+	verify_state(&test_ctx, CHUNK_SIZE, CHUNK_SIZE * 2, CHUNK_SIZE * 2).await?;
+
+	Ok(())
+}
+
+// Read mm state, verify player and lobby count
+async fn verify_state(
+	test_ctx: &Ctx,
+	expected_lobby_count: usize,
+	expected_player_count: usize,
+	expected_registered_player_count: usize,
+) -> GlobalResult<()> {
+	tracing::info!("============ Verifying State ==============");
+
 	let lobby_list_res = op!([test_ctx.op_ctx] mm_lobby_list_for_namespace {
-		namespace_ids: vec![namespace_id.into()],
+		namespace_ids: vec![test_ctx.namespace_id.into()],
 	})
 	.await?;
-	let lobby_count = internal_unwrap_owned!(lobby_list_res.namespaces.first())
-		.lobby_ids
-		.len();
+	let lobby_ids = &internal_unwrap_owned!(lobby_list_res.namespaces.first()).lobby_ids;
+
+	let lobby_players_res = op!([test_ctx.op_ctx] mm_lobby_player_count {
+		lobby_ids: lobby_ids.clone(),
+	})
+	.await?;
+	let lobby_player_count = lobby_players_res
+		.lobbies
+		.iter()
+		.fold(0, |a, l| a + l.total_player_count);
+	let registered_player_count = lobby_players_res
+		.lobbies
+		.iter()
+		.fold(0, |a, l| a + l.registered_player_count);
+
 	let player_count_res = op!([test_ctx.op_ctx] mm_player_count_for_namespace {
-		namespace_ids: vec![namespace_id.into()],
+		namespace_ids: vec![test_ctx.namespace_id.into()],
 	})
 	.await?;
 	let player_count = internal_unwrap_owned!(player_count_res.namespaces.first()).player_count;
 
-	internal_assert_eq!(CHUNK_SIZE, lobby_count as usize, "wrong number of lobbies");
+	tracing::info!(?expected_registered_player_count, ?registered_player_count, ?lobby_player_count, conns=?test_ctx.conns.len());
+
 	internal_assert_eq!(
-		CHUNK_SIZE * 2,
+		expected_lobby_count,
+		lobby_ids.len(),
+		"wrong number of lobbies"
+	);
+	internal_assert_eq!(
+		expected_player_count,
 		player_count as usize,
 		"wrong number of players"
+	);
+	internal_assert_eq!(
+		expected_registered_player_count,
+		registered_player_count as usize,
+		"wrong number of registered players"
+	);
+	internal_assert_eq!(
+		lobby_player_count,
+		player_count,
+		"player counts don't match"
+	);
+	internal_assert_eq!(
+		test_ctx.conns.len(),
+		registered_player_count as usize,
+		"registered player count doesn't match connection count"
 	);
 
 	Ok(())
@@ -265,7 +352,7 @@ async fn setup_game(
 						tier_name_id: "basic-1d16".into(),
 						idle_lobbies: Some(backend::matchmaker::lobby_group::IdleLobbies {
 							min_idle_lobbies: 0,
-							max_idle_lobbies: CHUNK_SIZE as u32 * 2,
+							max_idle_lobbies: 32,
 						}),
 					}],
 					max_players_normal: 4,
@@ -399,32 +486,22 @@ async fn find_lobby(ctx: &Ctx) -> GlobalResult<models::MatchmakerFindLobbyRespon
 	Ok(res)
 }
 
-async fn connect_socket(
-	player_token: &str,
-	mm_port: &models::MatchmakerJoinPort,
-) -> GlobalResult<(String, TcpStream)> {
-	let socket_id = util::faker::ident();
-	tracing::info!("connecting {}", socket_id);
-
+async fn connect_to_lobby(token: &str, mm_port: &models::MatchmakerJoinPort) -> GlobalResult<Conn> {
 	let hostname = mm_port.hostname.as_str();
 	let port = internal_unwrap_owned!(mm_port.port) as u16;
 	let host = format!("{hostname}:{port}");
 
-	tracing::info!(?host);
+	// Get player id
+	let player_claims = rivet_claims::decode(token)
+		.map_err(|_| err_code!(TOKEN_ERROR, error = "Malformed player token"))?
+		.map_err(|_| err_code!(TOKEN_ERROR, error = "Invalid player token"))?;
+	let player_ent = player_claims.as_matchmaker_player()?;
+	let id = player_ent.player_id;
+	// let id = util::faker::ident();
 
-	let mut stream = TcpStream::connect(host).await?;
-	stream.set_nodelay(true)?;
-	tracing::info!("connected {}", socket_id);
+	let mut conn = Conn::new(id, host).await?;
+	conn.write(token.as_bytes()).await?;
+	conn.read()?;
 
-	stream.write_all(player_token.as_bytes()).await?;
-	stream.flush().await?;
-	tracing::info!("written {}", socket_id);
-
-	stream.readable().await?;
-
-	let mut buffer = [0u8; 4];
-	stream.try_read(&mut buffer)?;
-	tracing::info!("read {} {:?}", socket_id, buffer);
-
-	Ok((socket_id, stream))
+	Ok(conn)
 }

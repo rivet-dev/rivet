@@ -248,6 +248,7 @@ async fn write_to_db_before_run(
 	.execute(&mut **tx)
 	.await?;
 
+	// TODO: Use future streams?
 	// Validate that the proxied ports point to existing ports
 	for proxied_port in &req.proxied_ports {
 		internal_assert!(
@@ -263,7 +264,7 @@ async fn write_to_db_before_run(
 			);
 		}
 
-		let ingress_port = choose_ingress_port(proxied_port)?;
+		let ingress_port = choose_ingress_port(tx, proxied_port).await?;
 
 		tracing::info!(?run_id, ?proxied_port, "inserting run proxied port");
 
@@ -272,17 +273,17 @@ async fn write_to_db_before_run(
 
 		sqlx::query(indoc!(
 			"
-					INSERT INTO db_job_state.run_proxied_ports (
-						run_id,
-						target_nomad_port_label,
-						ingress_port,
-						ingress_hostnames,
-						ingress_hostnames_str,
-						proxy_protocol,
-						ssl_domain_mode
-					)
-					VALUES ($1, $2, $3, $4, $5, $6, $7)
-					"
+			INSERT INTO db_job_state.run_proxied_ports (
+				run_id,
+				target_nomad_port_label,
+				ingress_port,
+				ingress_hostnames,
+				ingress_hostnames_str,
+				proxy_protocol,
+				ssl_domain_mode
+			)
+			VALUES ($1, $2, $3, $4, $5, $6, $7)
+			"
 		))
 		.bind(run_id)
 		.bind(proxied_port.target_nomad_port_label.clone())
@@ -321,9 +322,12 @@ async fn write_to_db_after_run(
 /// - TCP/TLS: random
 /// - UDP: random
 ///
-/// This is very poorly written for TCP & UDP ports and will bite us in the ass
+/// This is somewhat poorly written for TCP & UDP ports and may bite us in the ass
 /// some day. See https://linear.app/rivet-gg/issue/RIV-1799
-fn choose_ingress_port(proxied_port: &job_run::msg::create::ProxiedPort) -> GlobalResult<i32> {
+async fn choose_ingress_port(
+	tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+	proxied_port: &job_run::msg::create::ProxiedPort,
+) -> GlobalResult<i32> {
 	use backend::job::ProxyProtocol;
 
 	let ingress_port = if let Some(ingress_port) = proxied_port.ingress_port {
@@ -334,16 +338,63 @@ fn choose_ingress_port(proxied_port: &job_run::msg::create::ProxiedPort) -> Glob
 		)) {
 			ProxyProtocol::Http => 80_i32,
 			ProxyProtocol::Https => 443,
-			// TODO: https://linear.app/rivet-gg/issue/RIV-1799
-			ProxyProtocol::Tcp | ProxyProtocol::TcpTls => rand::thread_rng().gen_range(
-				util_job::consts::MIN_INGRESS_PORT_TCP..=util_job::consts::MAX_INGRESS_PORT_TCP,
-			) as i32,
-			// TODO: https://linear.app/rivet-gg/issue/RIV-1799
-			ProxyProtocol::Udp => rand::thread_rng().gen_range(
-				util_job::consts::MIN_INGRESS_PORT_UDP..=util_job::consts::MAX_INGRESS_PORT_UDP,
-			) as i32,
+			ProxyProtocol::Tcp | ProxyProtocol::TcpTls => {
+				bind_with_retries(
+					tx,
+					proxied_port.proxy_protocol,
+					util_job::consts::MIN_INGRESS_PORT_TCP..=util_job::consts::MAX_INGRESS_PORT_TCP,
+				)
+				.await?
+			}
+			ProxyProtocol::Udp => {
+				bind_with_retries(
+					tx,
+					proxied_port.proxy_protocol,
+					util_job::consts::MIN_INGRESS_PORT_UDP..=util_job::consts::MAX_INGRESS_PORT_UDP,
+				)
+				.await?
+			}
 		}
 	};
 
 	Ok(ingress_port)
+}
+
+async fn bind_with_retries(
+	tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+	proxy_protocol: i32,
+	range: std::ops::RangeInclusive<u16>,
+) -> GlobalResult<i32> {
+	let mut attempts = 3u32;
+
+	// Try to bind to a random port, verifying that it is not already bound
+	loop {
+		if attempts == 0 {
+			internal_panic!("failed all attempts to bind to unique port");
+		}
+		attempts -= 1;
+
+		let port = rand::thread_rng().gen_range(range.clone()) as i32;
+
+		let (already_exists,) = sqlx::query_as::<_, (bool,)>(indoc!(
+			"
+			SELECT EXISTS(
+				SELECT 1
+				FROM db_state.run_proxied_ports
+				where
+					stop_ts IS NULL AND
+					ingress_port = $1 AND
+					proxy_protocol = $2
+			)
+			"
+		))
+		.bind(port)
+		.bind(proxy_protocol)
+		.fetch_one(&mut **tx)
+		.await?;
+
+		if !already_exists {
+			break Ok(port);
+		}
+	}
 }

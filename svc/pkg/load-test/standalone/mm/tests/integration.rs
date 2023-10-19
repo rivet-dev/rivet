@@ -10,6 +10,9 @@ async fn basic() {
 		.with_span_events(tracing_subscriber::fmt::format::FmtSpan::NONE)
 		.init();
 
-	// TODO:
+	if !util::feature::job_run() {
+		return;
+	}
+
 	run_from_env(util::timestamp::now()).await.unwrap();
 }

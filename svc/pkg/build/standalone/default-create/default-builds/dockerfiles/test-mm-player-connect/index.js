@@ -49,7 +49,7 @@ class Conn {
 		this.socket = socket;
 		this.id = id;
 		this.playerToken = null;
-		this.connected = false;
+		this.state = "init";
 		this.start = process.hrtime.bigint();
 
 		console.log(`${this.id} connect`);
@@ -78,18 +78,21 @@ class Conn {
 	}
 
 	async onData(data) {
-		if (this.connected) {
+		if (this.state == "connecting" || this.state == "connected") {
 			console.log(`${this.id} data`, data.toString());
 			console.log(process.hrtime.bigint() - this.start);
 
+			// Echo
 			this.socket.write(data);
-		} else {
+		} else if (this.state == "init") {
+			this.state = "connecting";
+
 			this.playerToken = data.toString();
 			console.log(`${this.id} init`, this.playerToken);
 
 			try {
 				await client.matchmaker.players.connected({ playerToken: this.playerToken });
-				this.connected = true;
+				this.state = "connected";
 
 				console.log(`${this.id} rivet connect`);
 			} catch (e) {
@@ -102,8 +105,8 @@ class Conn {
 	}
 
 	async disconnect(reason) {
-		if (this.connected) {
-			this.connected = false;
+		if (this.state == "connected") {
+			this.state = "disconnected";
 
 			console.log(`${this.id} disconnect`, reason);
 			console.log(process.hrtime.bigint() - this.start);

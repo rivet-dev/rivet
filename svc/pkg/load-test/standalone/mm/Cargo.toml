@@ -7,6 +7,7 @@ license = "Apache-2.0"
 
 [dependencies]
 chirp-client = { path = "../../../../../lib/chirp/client" }
+rivet-claims = { path = "../../../../../lib/claims" }
 rivet-operation = { path = "../../../../../lib/operation/core" }
 rivet-connection = { path = "../../../../../lib/connection" }
 rivet-runtime = { path = "../../../../../lib/runtime" }
@@ -25,8 +26,10 @@ faker-region = { path = "../../../faker/ops/region" }
 mm-config-namespace-config-set = { path = '../../../mm-config/ops/namespace-config-set' }
 mm-lobby-list-for-namespace = { path = '../../../mm/ops/lobby-list-for-namespace' }
 mm-player-count-for-namespace = { path = '../../../mm/ops/player-count-for-namespace' }
+mm-lobby-player-count = { path = '../../../mm/ops/lobby-player-count' }
 region-get = { path = "../../../region/ops/get" }
 token-create = { path = "../../../token/ops/create" }
+
 
 [dev-dependencies]
 chirp-worker = { path = "../../../../../lib/chirp/worker" }

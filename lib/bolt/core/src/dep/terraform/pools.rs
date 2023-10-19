@@ -80,7 +80,7 @@ pub async fn build_pools(_ctx: &ProjectContext) -> Result<HashMap<String, Pool>>
 				// Dynamic TCP
 				FirewallRule {
 					label: "dynamic-tcp".into(),
-					ports: "20000-20512".into(),
+					ports: "20000-25999".into(),
 					protocol: "tcp".into(),
 					inbound_ipv4_cidr: vec!["0.0.0.0/0".into()],
 					inbound_ipv6_cidr: vec!["::/0".into()],
@@ -88,7 +88,7 @@ pub async fn build_pools(_ctx: &ProjectContext) -> Result<HashMap<String, Pool>>
 				// Dynamic UDP
 				FirewallRule {
 					label: "dynamic-udp".into(),
-					ports: "26000-26512".into(),
+					ports: "26000-31999".into(),
 					protocol: "udp".into(),
 					inbound_ipv4_cidr: vec!["0.0.0.0/0".into()],
 					inbound_ipv6_cidr: vec!["::/0".into()],

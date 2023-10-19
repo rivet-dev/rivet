@@ -1107,10 +1107,13 @@ async fn resolve_region_ids(
 			.await?;
 			let primary_region = internal_unwrap_owned!(recommend_res.regions.first());
 			let primary_region_id = internal_unwrap!(primary_region.region_id).as_uuid();
+			
 			vec![primary_region_id]
 		} else {
 			tracing::warn!("coords not provided to select region");
-			vec![internal_unwrap_owned!(enabled_region_ids.first()).as_uuid()]
+			let region_id = internal_unwrap_owned!(enabled_region_ids.first()).as_uuid();
+
+			vec![region_id]
 		}
 	};
 
