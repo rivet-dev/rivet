@@ -211,7 +211,7 @@ client {
 
 	# Nomad port range for GG-routed traffic.
 	#
-	# See firewall rules in lib/bolt/core/src/dep/terraform/install_scripts/files/nomad.sh
+	# See firewall rules in docs/infrastructure/networking/EDGE_CLUSTER_NETWORKING.md
 	min_dynamic_port = 20000
 	max_dynamic_port = 25999
 
