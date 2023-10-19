@@ -3,8 +3,6 @@ use proto::backend;
 use rivet_operation::prelude::*;
 use uuid::Uuid;
 
-const CONTENT_TYPE: &str = "application/x-tar";
-
 const DEFAULT_BUILDS: &[DefaultBuildConfig] = &[
 	DefaultBuildConfig {
 		kind: "game-multiplayer",
@@ -129,7 +127,6 @@ async fn upload_build(
 		files: vec![
 			backend::upload::PrepareFile {
 				path: "image.tar".into(),
-				mime: Some(CONTENT_TYPE.into()),
 				content_length: build.tar.len() as u64,
 				..Default::default()
 			},
@@ -143,7 +140,6 @@ async fn upload_build(
 	tracing::info!(%url, "uploading file");
 	let res = reqwest::Client::new()
 		.put(url)
-		.header(reqwest::header::CONTENT_TYPE, CONTENT_TYPE)
 		.header(reqwest::header::CONTENT_LENGTH, build.tar.len() as u64)
 		.body(reqwest::Body::from(build.tar))
 		.send()
