@@ -110,69 +110,38 @@ pub async fn run_from_env(ts: i64) -> GlobalResult<()> {
 		.await?;
 	test_ctx.conns.extend(new_conns);
 
-	// // Need to manually chunk the creation of lobbies so that we can prevent idle cleanup periodically
-	// for _ in 0..(CHUNK_SIZE / BUFFER_SIZE) {
-	// 	// Prevent idle cleanup
-	// 	for conn in &mut test_ctx.conns {
-	// 		// conn.write("active".as_bytes()).await?;
-	// 	}
+	tracing::info!("============ Batch find ==============");
+	let find_lobbies = std::iter::repeat_with(|| async {
+		let res = find_lobby(&test_ctx).await?;
+		let (_, port) = internal_unwrap_owned!(res.ports.iter().next());
+		connect_to_lobby(&res.player.token, port).await
+	})
+	.take(CHUNK_SIZE);
+	let new_conns = futures_util::stream::iter(find_lobbies)
+		.buffer_unordered(BUFFER_SIZE)
+		.try_collect::<Vec<_>>()
+		.await?;
+	test_ctx.conns.extend(new_conns);
 
-	// 	let create_lobbies = std::iter::repeat_with(|| async {
-	// 		let res = create_lobby(&test_ctx).await?;
-	// 		let (_, port) = internal_unwrap_owned!(res.ports.iter().next());
-	// 		connect_to_lobby(&res.player.token, port).await
-	// 	})
-	// 	.take(BUFFER_SIZE);
-	// 	let new_conns = futures_util::stream::iter(create_lobbies)
-	// 		.buffer_unordered(BUFFER_SIZE)
-	// 		.try_collect::<Vec<_>>()
-	// 		.await?;
-	// 	test_ctx.conns.extend(new_conns);
-	// }
-
-	// tracing::info!("============ Batch find ==============");
-	// let find_lobbies = std::iter::repeat_with(|| async {
-	// 	let res = find_lobby(&test_ctx).await?;
-	// 	let (_, port) = internal_unwrap_owned!(res.ports.iter().next());
-	// 	connect_to_lobby(&res.player.token, port).await
-	// })
-	// .take(CHUNK_SIZE);
-	// let new_conns = futures_util::stream::iter(find_lobbies)
-	// 	.buffer_unordered(BUFFER_SIZE)
-	// 	.try_collect::<Vec<_>>()
-	// 	.await?;
-	// test_ctx.conns.extend(new_conns);
-
-	// tracing::info!("============ Batch find (no connection) ==============");
-	// let find_no_connect_lobbies = std::iter::repeat_with(|| find_lobby(&test_ctx)).take(CHUNK_SIZE);
-	// futures_util::stream::iter(find_no_connect_lobbies)
-	// 	.buffer_unordered(BUFFER_SIZE)
-	// 	.try_collect::<Vec<_>>()
-	// 	.await?;
+	tracing::info!("============ Batch find (no connection) ==============");
+	let find_no_connect_lobbies = std::iter::repeat_with(|| find_lobby(&test_ctx)).take(CHUNK_SIZE);
+	futures_util::stream::iter(find_no_connect_lobbies)
+		.buffer_unordered(BUFFER_SIZE)
+		.try_collect::<Vec<_>>()
+		.await?;
 
 	tracing::info!("============ Waiting ==============");
+	tokio::time::sleep(Duration::from_secs(30)).await;
 
 	// Prevent idle cleanup
-	for _ in 0..2 {
-		for conn in &mut test_ctx.conns {
-			// conn.write("active".as_bytes()).await?;
-		}
-
-		tokio::time::sleep(Duration::from_secs(15)).await;
+	for conn in &mut test_ctx.conns {
+		conn.write("active".as_bytes()).await?;
 	}
 
 	verify_state(&test_ctx, CHUNK_SIZE, CHUNK_SIZE * 3, CHUNK_SIZE * 2).await?;
 
 	tracing::info!("============ Waiting for MM GC ==============");
-
-	// Prevent idle cleanup
-	for _ in 0..7 {
-		for conn in &mut test_ctx.conns {
-			// conn.write("active".as_bytes()).await?;
-		}
-
-		tokio::time::sleep(Duration::from_secs(15)).await;
-	}
+	tokio::time::sleep(Duration::from_secs(105)).await;
 
 	verify_state(&test_ctx, CHUNK_SIZE, CHUNK_SIZE * 2, CHUNK_SIZE * 2).await?;
 

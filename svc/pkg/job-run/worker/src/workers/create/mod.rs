@@ -380,11 +380,13 @@ async fn bind_with_retries(
 			"
 			SELECT EXISTS(
 				SELECT 1
-				FROM db_state.run_proxied_ports
-				where
-					stop_ts IS NULL AND
-					ingress_port = $1 AND
-					proxy_protocol = $2
+				FROM db_job_state.runs as r
+				JOIN db_job_state.run_proxied_ports as p
+				ON r.run_id = p.run_id
+				WHERE
+					r.cleanup_ts IS NULL AND
+					p.ingress_port = $1 AND
+					p.proxy_protocol = $2
 			)
 			"
 		))
@@ -396,5 +398,7 @@ async fn bind_with_retries(
 		if !already_exists {
 			break Ok(port);
 		}
+
+		tracing::info!(?port, ?attempts, "port collision, retrying");
 	}
 }
