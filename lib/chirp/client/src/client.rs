@@ -868,38 +868,38 @@ impl Client {
 		//
 		// Infinite backoff since we want to wait until the service reboots.
 		let span = self.perf().start(M::PERF_LABEL_PUBLISH).await;
-		// let mut backoff = rivet_util::Backoff::default_infinite();
-		// loop {
-		// 	// Ignore for infinite backoff
-		// 	backoff.tick().await;
+		let mut backoff = rivet_util::Backoff::default_infinite();
+		loop {
+			// Ignore for infinite backoff
+			backoff.tick().await;
 
-		let nats_subject = nats_subject.to_owned();
+			let nats_subject = nats_subject.to_owned();
 
-		tracing::trace!(
-			?nats_subject,
-			message_len = message_buf.len(),
-			"publishing message to nats"
-		);
-		if let Err(err) = self
-			.nats
-			.publish(nats_subject.clone(), (*message_buf).clone().into())
-			.await
-		{
-			tracing::warn!(?err, "publish message failed, trying again");
-			// continue;
+			tracing::trace!(
+				?nats_subject,
+				message_len = message_buf.len(),
+				"publishing message to nats"
+			);
+			if let Err(err) = self
+				.nats
+				.publish(nats_subject.clone(), (*message_buf).clone().into())
+				.await
+			{
+				tracing::warn!(?err, "publish message failed, trying again");
+				continue;
+			}
+
+			// TODO: Most messages don't need to be flushed immediately. We
+			// should add an option to enable high performance message
+			// publishing to enable flushing immediately after publishing.
+			// if let Err(err) = self.nats.flush().await {
+			// 	tracing::error!(?err, "flush message failed, the message probably sent");
+			// 	break;
+			// }
+
+			tracing::debug!("publish nats message succeeded");
+			break;
 		}
-
-		// 	// TODO: Most messages don't need to be flushed immediately. We
-		// 	// should add an option to enable high performance message
-		// 	// publishing to enable flushing immediately after publishing.
-		// 	// if let Err(err) = self.nats.flush().await {
-		// 	// 	tracing::error!(?err, "flush message failed, the message probably sent");
-		// 	// 	break;
-		// 	// }
-
-		// 	tracing::debug!("publish nats message succeeded");
-		// 	break;
-		// }
 		span.end();
 	}
 
