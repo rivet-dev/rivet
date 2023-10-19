@@ -101,42 +101,18 @@ pub async fn build_pools(_ctx: &ProjectContext) -> Result<HashMap<String, Pool>>
 		"job".into(),
 		PoolBuilder::default()
 			.vlan_addr_range(net::job::vlan_addr_range())
-			// TODO: Add firewall rules for VLAN
 			.firewall_inbound(vec![
-				// TODO: See below why commented out
-				// var.is_prod ? [] : local.firewall_rules.nomad_dynamic_public,
-
-				// TODO: See below why commented out
 				// Ports available to Nomad jobs using the host network
-				// [
-				// 	{
-				// 		label = "nomad-host-tcp"
-				// 		proto = "tcp"
-				// 		ports = [26000, 31999]
-				// 		ipv4 = local.firewall_sources.vpc.ipv4
-				// 		ipv6 = local.firewall_sources.vpc.ipv6
-				// 	},
-				// 	{
-				// 		label = "nomad-host-udp"
-				// 		proto = "udp"
-				// 		ports = [26000, 31999]
-				// 		ipv4 = local.firewall_sources.vpc.ipv4
-				// 		ipv6 = local.firewall_sources.vpc.ipv6
-				// 	},
-				// ],
-
-				// TODO: Remove this once we have correct firewall rules
-				// Allow all dynamic ports from any origin so our ing-job servers can forward these ports
 				FirewallRule {
-					label: "nomad-dynamic-tcp".into(),
-					ports: "20000-31999".into(),
+					label: "nomad-host-tcp".into(),
+					ports: "26000-31999".into(),
 					protocol: "tcp".into(),
 					inbound_ipv4_cidr: vec!["0.0.0.0/0".into()],
 					inbound_ipv6_cidr: vec!["::/0".into()],
 				},
 				FirewallRule {
-					label: "nomad-dynamic-udp".into(),
-					ports: "20000-31999".into(),
+					label: "nomad-host-udp".into(),
+					ports: "26000-31999".into(),
 					protocol: "udp".into(),
 					inbound_ipv4_cidr: vec!["0.0.0.0/0".into()],
 					inbound_ipv6_cidr: vec!["::/0".into()],

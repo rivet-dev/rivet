@@ -209,7 +209,9 @@ client {
 	# Expose services running on job nodes internally to GG
 	network_interface = "__VLAN_IFACE__"
 
-	# See tf/infra/firewall_rules.tf
+	# Nomad port range for GG-routed traffic.
+	#
+	# See firewall rules in lib/bolt/core/src/dep/terraform/install_scripts/files/nomad.sh
 	min_dynamic_port = 20000
 	max_dynamic_port = 25999
 
