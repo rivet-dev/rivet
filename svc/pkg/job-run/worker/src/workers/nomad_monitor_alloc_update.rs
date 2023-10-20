@@ -43,7 +43,6 @@ async fn worker(
 		.next();
 	let main_task = internal_unwrap_owned!(main_task, "could not find main task");
 	let main_task_state_raw = internal_unwrap!(main_task.state);
-	let main_task_events = internal_unwrap!(main_task.events);
 
 	tracing::info!(
 		?client_status,
@@ -51,7 +50,7 @@ async fn worker(
 		?eval_id,
 		?job_id,
 		?main_task_state_raw,
-		?main_task_events,
+		main_task_events = ?main_task.events,
 		"alloc updated"
 	);
 
