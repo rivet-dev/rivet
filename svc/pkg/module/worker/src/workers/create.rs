@@ -6,8 +6,8 @@ use serde_json::json;
 async fn worker(ctx: &OperationContext<module::msg::create::Message>) -> Result<(), GlobalError> {
 	let crdb = ctx.crdb().await?;
 
-	let module_id = internal_unwrap!(ctx.module_id).as_uuid();
-	let team_id = internal_unwrap!(ctx.team_id).as_uuid();
+	let module_id = unwrap_ref!(ctx.module_id).as_uuid();
+	let team_id = unwrap_ref!(ctx.team_id).as_uuid();
 	let creator_user_id = ctx.creator_user_id.map(|x| x.as_uuid());
 
 	sqlx::query(indoc!(

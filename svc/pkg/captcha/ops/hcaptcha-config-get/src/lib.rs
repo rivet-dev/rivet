@@ -5,13 +5,12 @@ use rivet_operation::prelude::*;
 async fn handle(
 	ctx: OperationContext<captcha::hcaptcha_config_get::Request>,
 ) -> GlobalResult<captcha::hcaptcha_config_get::Response> {
-	let config = internal_unwrap!(ctx.config);
-	let level = internal_unwrap_owned!(
-		backend::captcha::captcha_config::hcaptcha::Level::from_i32(config.level)
-	);
+	let config = unwrap_ref!(ctx.config);
+	let level = unwrap!(backend::captcha::captcha_config::hcaptcha::Level::from_i32(
+		config.level
+	));
 
-	let site_key =
-		internal_unwrap_owned!(get_hcaptcha_site_key(level), "missing hcaptcha site key");
+	let site_key = unwrap!(get_hcaptcha_site_key(level), "missing hcaptcha site key");
 
 	Ok(captcha::hcaptcha_config_get::Response { site_key })
 }

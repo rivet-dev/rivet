@@ -19,7 +19,7 @@ async fn handle(
 		.regions
 		.iter()
 		.find(|x| x.name_id == util::env::primary_region());
-	let region = internal_unwrap_owned!(region, "primary region not listed in region list");
+	let region = unwrap!(region, "primary region not listed in region list");
 
 	Ok(faker::region::Response {
 		region_id: region.region_id,

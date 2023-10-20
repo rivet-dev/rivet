@@ -4,7 +4,7 @@ use redis::AsyncCommands;
 
 #[worker(name = "mm-lobby-find-lobby-cleanup")]
 async fn worker(ctx: &OperationContext<mm::msg::lobby_cleanup::Message>) -> GlobalResult<()> {
-	let lobby_id = internal_unwrap!(ctx.lobby_id).as_uuid();
+	let lobby_id = unwrap_ref!(ctx.lobby_id).as_uuid();
 	let mut redis_mm = ctx.redis_mm().await?;
 
 	// TODO: Is there a race condition here for new queries?

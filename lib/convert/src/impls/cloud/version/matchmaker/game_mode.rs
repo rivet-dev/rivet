@@ -34,17 +34,17 @@ pub fn game_mode_to_proto(
 		.unwrap_or(max_players_normal);
 
 	// TODO: Make this return a 400 error instead
-	assert_with!(
+	ensure_with!(
 		max_players_normal >= 0,
 		MATCHMAKER_INVALID_VERSION_CONFIG,
 		error = "`max_players` out of bounds"
 	);
-	assert_with!(
+	ensure_with!(
 		max_players_direct >= 0,
 		MATCHMAKER_INVALID_VERSION_CONFIG,
 		error = "`max_players_direct` out of bounds"
 	);
-	assert_with!(
+	ensure_with!(
 		max_players_party >= 0,
 		MATCHMAKER_INVALID_VERSION_CONFIG,
 		error = "`max_players_party` out of bounds"
@@ -100,7 +100,7 @@ pub fn game_mode_to_proto(
 									target_port: value
 										.port
 										.map(|x| {
-											assert_with!(
+											ensure_with!(
 												x >= 0,
 												MATCHMAKER_INVALID_VERSION_CONFIG,
 												error = "`port` out of bounds"
@@ -165,13 +165,13 @@ pub fn game_mode_to_openapi(
 	value: backend::matchmaker::LobbyGroup,
 	regions_data: &[backend::region::Region],
 ) -> GlobalResult<(String, models::CloudVersionMatchmakerGameMode)> {
-	let docker = match internal_unwrap_owned!(
+	let docker = match unwrap!(
 		value.runtime.as_ref().and_then(|x| x.runtime.as_ref()),
 		"unknown runtime"
 	) {
 		backend::matchmaker::lobby_runtime::Runtime::Docker(runtime) => {
 			models::CloudVersionMatchmakerGameModeRuntimeDocker {
-				image_id: Some(internal_unwrap!(runtime.build_id).as_uuid()),
+				image_id: Some(unwrap_ref!(runtime.build_id).as_uuid()),
 				args: Some(runtime.args.clone()),
 				env: Some(
 					runtime
@@ -182,7 +182,7 @@ pub fn game_mode_to_openapi(
 						.collect(),
 				),
 				network_mode: Some(
-					internal_unwrap_owned!(
+					unwrap!(
 						backend::matchmaker::lobby_runtime::NetworkMode::from_i32(
 							runtime.network_mode,
 						)
@@ -205,7 +205,7 @@ pub fn game_mode_to_openapi(
 										.transpose()?
 										.map(Box::new),
 									protocol: Some(
-										internal_unwrap_owned!(
+										unwrap!(
 										backend::matchmaker::lobby_runtime::ProxyProtocol::from_i32(
 											x.proxy_protocol
 										)
@@ -213,7 +213,7 @@ pub fn game_mode_to_openapi(
 										.api_into(),
 									),
 									proxy: Some(
-										internal_unwrap_owned!(
+										unwrap!(
 											backend::matchmaker::lobby_runtime::ProxyKind::from_i32(
 												x.proxy_kind
 											)
@@ -320,7 +320,7 @@ fn region_to_openapi(
 	region: backend::matchmaker::lobby_group::Region,
 	regions_data: &[backend::region::Region],
 ) -> GlobalResult<(String, models::CloudVersionMatchmakerGameModeRegion)> {
-	let region_data = internal_unwrap_owned!(
+	let region_data = unwrap!(
 		regions_data
 			.iter()
 			.find(|x| x.region_id == region.region_id),
@@ -348,12 +348,12 @@ impl ApiTryFrom<models::CloudVersionMatchmakerGameModeIdleLobbiesConfig>
 	fn try_from(
 		value: models::CloudVersionMatchmakerGameModeIdleLobbiesConfig,
 	) -> GlobalResult<Self> {
-		assert_with!(
+		ensure_with!(
 			value.min >= 0,
 			MATCHMAKER_INVALID_VERSION_CONFIG,
 			error = "`idle_lobbies.min` out of bounds"
 		);
-		assert_with!(
+		ensure_with!(
 			value.max >= 0,
 			MATCHMAKER_INVALID_VERSION_CONFIG,
 			error = "`idle_lobbies.max` out of bounds"
@@ -472,7 +472,7 @@ impl ApiTryFrom<backend::matchmaker::FindConfig>
 	fn try_from(value: backend::matchmaker::FindConfig) -> GlobalResult<Self> {
 		Ok(models::CloudVersionMatchmakerGameModeFindConfig {
 			enabled: value.enabled,
-			identity_requirement: internal_unwrap_owned!(
+			identity_requirement: unwrap!(
 				backend::matchmaker::IdentityRequirement::from_i32(value.identity_requirement),
 				"invalid identity requirement variant"
 			)
@@ -513,7 +513,7 @@ impl ApiTryFrom<backend::matchmaker::JoinConfig>
 	fn try_from(value: backend::matchmaker::JoinConfig) -> GlobalResult<Self> {
 		Ok(models::CloudVersionMatchmakerGameModeJoinConfig {
 			enabled: value.enabled,
-			identity_requirement: internal_unwrap_owned!(
+			identity_requirement: unwrap!(
 				backend::matchmaker::IdentityRequirement::from_i32(value.identity_requirement),
 				"invalid identity requirement variant"
 			)
@@ -534,7 +534,7 @@ impl ApiTryFrom<models::CloudVersionMatchmakerGameModeCreateConfig>
 
 	fn try_from(value: models::CloudVersionMatchmakerGameModeCreateConfig) -> GlobalResult<Self> {
 		if let Some(max_lobbies_per_identity) = value.max_lobbies_per_identity {
-			assert_with!(
+			ensure_with!(
 				max_lobbies_per_identity >= 0,
 				MATCHMAKER_INVALID_VERSION_CONFIG,
 				error = "`create_config.max_lobbies_per_identity` out of bounds"
@@ -566,7 +566,7 @@ impl ApiTryFrom<backend::matchmaker::CreateConfig>
 
 	fn try_from(value: backend::matchmaker::CreateConfig) -> GlobalResult<Self> {
 		Ok(models::CloudVersionMatchmakerGameModeCreateConfig {
-			identity_requirement: internal_unwrap_owned!(
+			identity_requirement: unwrap!(
 				backend::matchmaker::IdentityRequirement::from_i32(value.identity_requirement),
 				"invalid identity requirement variant"
 			)

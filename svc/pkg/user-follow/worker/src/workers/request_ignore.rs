@@ -5,10 +5,10 @@ use proto::backend::pkg::*;
 async fn worker(
 	ctx: &OperationContext<user_follow::msg::request_ignore::Message>,
 ) -> GlobalResult<()> {
-	let follower_user_id = internal_unwrap!(ctx.follower_user_id).as_uuid();
-	let following_user_id = internal_unwrap!(ctx.following_user_id).as_uuid();
+	let follower_user_id = unwrap_ref!(ctx.follower_user_id).as_uuid();
+	let following_user_id = unwrap_ref!(ctx.following_user_id).as_uuid();
 
-	internal_assert!(follower_user_id != following_user_id, "cannot follow self");
+	ensure!(follower_user_id != following_user_id, "cannot follow self");
 
 	sqlx::query(indoc!(
 		"

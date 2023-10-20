@@ -8,10 +8,10 @@ use serde_json::json;
 async fn handle(
 	ctx: OperationContext<user_follow::toggle::Request>,
 ) -> GlobalResult<user_follow::toggle::Response> {
-	let follower_user_id = internal_unwrap!(ctx.follower_user_id).as_uuid();
-	let following_user_id = internal_unwrap!(ctx.following_user_id).as_uuid();
+	let follower_user_id = unwrap_ref!(ctx.follower_user_id).as_uuid();
+	let following_user_id = unwrap_ref!(ctx.following_user_id).as_uuid();
 
-	internal_assert!(follower_user_id != following_user_id, "cannot follow self");
+	ensure!(follower_user_id != following_user_id, "cannot follow self");
 
 	let crdb = ctx.crdb().await?;
 	let mutual = if ctx.active {

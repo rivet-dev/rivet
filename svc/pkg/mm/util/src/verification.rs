@@ -84,11 +84,11 @@ pub async fn verify_config(
 		) {
 			(ConnectionKind::Find, Some(find_config), _, _) => {
 				if !find_config.enabled {
-					panic_with!(MATCHMAKER_FIND_DISABLED);
+					bail_with!(MATCHMAKER_FIND_DISABLED);
 				}
 
 				(
-					internal_unwrap_owned!(
+					unwrap!(
 						backend::matchmaker::IdentityRequirement::from_i32(
 							find_config.identity_requirement
 						),
@@ -105,11 +105,11 @@ pub async fn verify_config(
 			}
 			(ConnectionKind::Join, _, Some(join_config), _) => {
 				if !join_config.enabled {
-					panic_with!(MATCHMAKER_JOIN_DISABLED);
+					bail_with!(MATCHMAKER_JOIN_DISABLED);
 				}
 
 				(
-					internal_unwrap_owned!(
+					unwrap!(
 						backend::matchmaker::IdentityRequirement::from_i32(
 							join_config.identity_requirement
 						),
@@ -125,7 +125,7 @@ pub async fn verify_config(
 				)
 			}
 			(ConnectionKind::Create, _, _, Some(create_config)) => {
-				let publicity = internal_unwrap_owned!(opts.custom_lobby_publicity);
+				let publicity = unwrap!(opts.custom_lobby_publicity);
 
 				// Verify publicity
 				match (
@@ -136,7 +136,7 @@ pub async fn verify_config(
 					(backend::matchmaker::lobby::Publicity::Public, true, _) => {}
 					(backend::matchmaker::lobby::Publicity::Private, _, true) => {}
 					_ => {
-						panic_with!(
+						bail_with!(
 							MATCHMAKER_CUSTOM_LOBBY_CONFIG_INVALID,
 							reason = "given publicity not allowed"
 						);
@@ -151,15 +151,15 @@ pub async fn verify_config(
 						user_ids: vec![user_id.into()],
 					})
 					.await?;
-					let user = internal_unwrap_owned!(lobbies_res.users.first());
-					assert_with!(
+					let user = unwrap!(lobbies_res.users.first());
+					ensure_with!(
 						(user.lobby_ids.len() as u64) < max_lobbies_per_identity,
 						MATCHMAKER_CUSTOM_LOBBY_LIMIT_REACHED
 					);
 				}
 
 				(
-					internal_unwrap_owned!(
+					unwrap!(
 						backend::matchmaker::IdentityRequirement::from_i32(
 							create_config.identity_requirement
 						),
@@ -175,7 +175,7 @@ pub async fn verify_config(
 				)
 			}
 			(ConnectionKind::Create, _, _, None) => {
-				panic_with!(MATCHMAKER_CUSTOM_LOBBIES_DISABLED);
+				bail_with!(MATCHMAKER_CUSTOM_LOBBIES_DISABLED);
 			}
 			_ => (backend::matchmaker::IdentityRequirement::None, None),
 		};
@@ -212,14 +212,14 @@ pub async fn verify_config(
 				user_ids: vec![user_id.into()],
 			})
 			.await?;
-			let user = internal_unwrap_owned!(
+			let user = unwrap!(
 				user_identities_res.users.first(),
 				"could not find user identities"
 			);
 			let is_registered = !user.identities.is_empty();
 
 			if !is_registered {
-				panic_with!(MATCHMAKER_REGISTRATION_REQUIRED);
+				bail_with!(MATCHMAKER_REGISTRATION_REQUIRED);
 			}
 		}
 		(
@@ -227,14 +227,14 @@ pub async fn verify_config(
 			| backend::matchmaker::IdentityRequirement::Registered,
 			None,
 		) => {
-			panic_with!(MATCHMAKER_IDENTITY_REQUIRED);
+			bail_with!(MATCHMAKER_IDENTITY_REQUIRED);
 		}
 		_ => {}
 	}
 
 	// Verify lobby config
 	if let Some(lobby_config_json) = opts.lobby_config_json {
-		assert_with!(
+		ensure_with!(
 			lobby_config_json.len() as u64 <= util::file_size::kibibytes(16),
 			MATCHMAKER_CUSTOM_LOBBY_CONFIG_INVALID,
 			reason = "too large (> 16KiB)"
@@ -252,15 +252,15 @@ pub async fn verify_config(
 		// Build lobby info
 		let lobby_info = if let Some(l) = &opts.lobby_info {
 			// Fetch region data for readable name
-			let region_id = internal_unwrap_owned!(l.region_id);
+			let region_id = unwrap!(l.region_id);
 			let regions_res = op!([ctx] region_get {
 				region_ids: vec![region_id],
 			})
 			.await?;
-			let region = internal_unwrap_owned!(regions_res.regions.first());
+			let region = unwrap!(regions_res.regions.first());
 
 			Some(LobbyInfo {
-				lobby_id: internal_unwrap!(l.lobby_id).as_uuid(),
+				lobby_id: unwrap_ref!(l.lobby_id).as_uuid(),
 				region_id: region_id.as_uuid(),
 				region_name_id: region.name_id.clone(),
 				create_ts: util::timestamp::to_string(l.create_ts)?,
@@ -278,7 +278,7 @@ pub async fn verify_config(
 				.map(|json| serde_json::from_str::<serde_json::Value>(json))
 				.transpose()?,
 			lobby: Lobby {
-				game_mode_id: internal_unwrap!(lobby_group_meta.lobby_group_id).as_uuid(),
+				game_mode_id: unwrap_ref!(lobby_group_meta.lobby_group_id).as_uuid(),
 				game_mode_name_id: lobby_group.name_id.clone(),
 				namespace_id: opts.namespace_id,
 
@@ -318,10 +318,10 @@ pub async fn verify_config(
 			tracing::info!(?status, "user verification response");
 
 			if !status.is_success() {
-				panic_with!(MATCHMAKER_VERIFICATION_FAILED);
+				bail_with!(MATCHMAKER_VERIFICATION_FAILED);
 			}
 		} else {
-			panic_with!(MATCHMAKER_VERIFICATION_REQUEST_FAILED);
+			bail_with!(MATCHMAKER_VERIFICATION_REQUEST_FAILED);
 		}
 	}
 

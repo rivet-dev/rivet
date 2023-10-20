@@ -12,7 +12,7 @@ fn build_cookie_header(origin: &Url, refresh_token: &str, max_age: i64) -> Globa
 	//
 	// These local domains are considered secure, so we can leave `Secure`
 	// enabled.
-	let host = internal_unwrap_owned!(origin.host_str());
+	let host = unwrap!(origin.host_str());
 	let is_localhost = host == "127.0.0.1"
 		|| host == "localhost"
 		|| host.ends_with(".localhost")

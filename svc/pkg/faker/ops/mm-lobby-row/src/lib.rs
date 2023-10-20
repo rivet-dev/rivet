@@ -8,27 +8,27 @@ async fn handle(
 	let crdb = ctx.crdb().await?;
 	let mut redis = ctx.redis_mm().await?;
 
-	let lobby_id = internal_unwrap!(ctx.lobby_id).as_uuid();
-	let namespace_id = internal_unwrap!(ctx.namespace_id).as_uuid();
-	let lobby_group_id = internal_unwrap!(ctx.lobby_group_id).as_uuid();
-	let region_id = internal_unwrap!(ctx.region_id).as_uuid();
-	let run_id = internal_unwrap!(ctx.run_id).as_uuid();
+	let lobby_id = unwrap_ref!(ctx.lobby_id).as_uuid();
+	let namespace_id = unwrap_ref!(ctx.namespace_id).as_uuid();
+	let lobby_group_id = unwrap_ref!(ctx.lobby_group_id).as_uuid();
+	let region_id = unwrap_ref!(ctx.region_id).as_uuid();
+	let run_id = unwrap_ref!(ctx.run_id).as_uuid();
 
 	// let version_res = op!([ctx] mm_config_lobby_group_resolve_version {
 	// 	lobby_group_ids: vec![lobby_group_id.into()],
 	// })
 	// .await?;
-	// let version_id = internal_unwrap!(
-	// 	internal_unwrap_owned!(version_res.versions.first()).lobby_group_id
+	// let version_id = unwrap_ref!(
+	// 	unwrap!(version_res.versions.first()).lobby_group_id
 	// );
 
 	// let version_res = op!([ctx] mm_config_version_get {
 	// 	version_ids: vec![version_id.clone()],
 	// })
 	// .await?;
-	// let version = internal_unwrap_owned!(version_res.versions.first());
+	// let version = unwrap!(version_res.versions.first());
 	// let lobby_group =
-	// 	internal_unwrap_owned!(internal_unwrap!(version.config).lobby_groups.first());
+	// 	unwrap!(unwrap_ref!(version.config).lobby_groups.first());
 
 	// We don't insert all required lobby information. This can be added to on
 	// an as-needed basis.

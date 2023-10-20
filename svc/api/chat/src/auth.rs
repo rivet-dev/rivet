@@ -48,17 +48,17 @@ impl Auth {
 			user_ids: vec![user_ent.user_id.into()],
 		})
 		.await?;
-		let user = internal_unwrap_owned!(user_res.users.first());
+		let user = unwrap!(user_res.users.first());
 
 		// Verify user is not deleted
 		if user.delete_complete_ts.is_some() {
-			let jti = internal_unwrap_owned!(claims.jti);
+			let jti = unwrap!(claims.jti);
 			op!([ctx] token_revoke {
 				jtis: vec![jti],
 			})
 			.await?;
 
-			panic_with!(TOKEN_REVOKED);
+			bail_with!(TOKEN_REVOKED);
 		}
 
 		Ok(user_ent)
@@ -72,20 +72,20 @@ impl Auth {
 			game_user_ids: vec![game_user_ent.game_user_id.into()]
 		})
 		.await?;
-		let game_user = internal_unwrap_owned!(game_user_res.game_users.first());
+		let game_user = unwrap!(game_user_res.game_users.first());
 
 		// Verify that game user is not deleted
 		if game_user.deleted_ts.is_some() {
-			let jti = internal_unwrap_owned!(claims.jti);
+			let jti = unwrap!(claims.jti);
 			op!([ctx] token_revoke {
 				jtis: vec![jti],
 			})
 			.await?;
 
-			panic_with!(TOKEN_REVOKED);
+			bail_with!(TOKEN_REVOKED);
 		}
 
-		Ok(internal_unwrap!(game_user.user_id).as_uuid())
+		Ok(unwrap_ref!(game_user.user_id).as_uuid())
 	}
 
 	pub async fn dual_user(&self, ctx: &OperationContext<()>) -> GlobalResult<Uuid> {
@@ -100,7 +100,7 @@ impl Auth {
 
 			Ok(game_user_id)
 		} else {
-			panic_with!(
+			bail_with!(
 				API_UNAUTHORIZED,
 				reason = "token is missing one of the following entitlements: user, game_user"
 			);

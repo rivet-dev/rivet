@@ -125,7 +125,7 @@ pub async fn find(
 
 	let (redis_query_kind, join_kind) = match query {
 		Query::Direct(backend::matchmaker::query::Direct { lobby_id }) => {
-			let lobby_id = internal_unwrap!(lobby_id).as_uuid();
+			let lobby_id = unwrap_ref!(lobby_id).as_uuid();
 
 			// Add keys for lobby
 			query_kind_keys.extend([key::lobby_config(lobby_id), key::lobby_player_ids(lobby_id)]);
@@ -154,9 +154,9 @@ pub async fn find(
 
 			// Update config for auto create lobbies
 			let auto_create = if let Some(auto_create) = auto_create {
-				let region_id = internal_unwrap!(auto_create.region_id).as_uuid();
-				let lobby_group_id = internal_unwrap!(auto_create.lobby_group_id).as_uuid();
-				let lobby_group = internal_unwrap_owned!(lobby_group_config.lobby_groups.first());
+				let region_id = unwrap_ref!(auto_create.region_id).as_uuid();
+				let lobby_group_id = unwrap_ref!(auto_create.lobby_group_id).as_uuid();
+				let lobby_group = unwrap!(lobby_group_config.lobby_groups.first());
 
 				// Add keys for auto creating lobby
 				query_kind_keys.extend([
@@ -321,7 +321,7 @@ pub async fn find(
 		Err("LOBBY_NOT_FOUND") => {
 			// Check if lobby was already stopped when joining directly
 			if let Query::Direct(backend::matchmaker::query::Direct { lobby_id }) = query {
-				let lobby_id = internal_unwrap!(lobby_id).as_uuid();
+				let lobby_id = unwrap_ref!(lobby_id).as_uuid();
 
 				if let Some((Some(_),)) = sqlx::query_as::<_, (Option<i64>,)>(
 					"SELECT stop_ts FROM db_mm_state.lobbies WHERE lobby_id = $1",
@@ -341,7 +341,7 @@ pub async fn find(
 		Err("LOBBY_CLOSED") => ErrorCode::LobbyClosed,
 		Err("LOBBY_FULL") => ErrorCode::LobbyFull,
 		Err("NO_AVAILABLE_LOBBIES") => ErrorCode::NoAvailableLobbies,
-		Err(_) => internal_panic!("unknown redis error"),
+		Err(_) => bail!("unknown redis error"),
 	};
 
 	fail(ctx, namespace_id, query_id, error_code, true)

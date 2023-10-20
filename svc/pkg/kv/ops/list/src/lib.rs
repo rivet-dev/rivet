@@ -14,7 +14,7 @@ async fn handle(ctx: OperationContext<kv::list::Request>) -> GlobalResult<kv::li
 
 	let crdb = ctx.crdb().await?;
 
-	let namespace_id = internal_unwrap!(ctx.namespace_id).as_uuid();
+	let namespace_id = unwrap_ref!(ctx.namespace_id).as_uuid();
 	let limit = ctx.limit.map(|x| x as i64).unwrap_or(DEFAULT_LIMIT);
 
 	// Query keys.

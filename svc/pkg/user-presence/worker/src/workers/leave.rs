@@ -10,7 +10,7 @@ async fn worker(ctx: &OperationContext<user_presence::msg::leave::Message>) -> G
 
 	let mut redis = ctx.redis_user_presence().await?;
 
-	let user_id = internal_unwrap!(ctx.user_id).as_uuid();
+	let user_id = unwrap_ref!(ctx.user_id).as_uuid();
 
 	let user_set_status = sqlx::query_as::<_, (Option<i64>,)>(
 		"SELECT user_set_status FROM db_user_presence.user_presences WHERE user_id = $1",
@@ -48,7 +48,7 @@ async fn worker(ctx: &OperationContext<user_presence::msg::leave::Message>) -> G
 	// presence data from redis prior to this point (effectively making the user appear offline), this
 	// block of code sends out a status set event which other subscribers can pick up on for event-based code.
 	if !matches!(
-		internal_unwrap!(backend::user::Status::from_i32(user_set_status)),
+		unwrap_ref!(backend::user::Status::from_i32(user_set_status)),
 		backend::user::Status::Offline
 	) {
 		msg!([ctx] user_presence::msg::status_set(user_id) {

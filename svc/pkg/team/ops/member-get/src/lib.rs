@@ -17,8 +17,8 @@ async fn handle(
 		.iter()
 		.map(|members| {
 			Ok((
-				internal_unwrap!(members.team_id).as_uuid(),
-				internal_unwrap!(members.user_id).as_uuid(),
+				unwrap_ref!(members.team_id).as_uuid(),
+				unwrap_ref!(members.user_id).as_uuid(),
 			))
 		})
 		.collect::<GlobalResult<Vec<(Uuid, Uuid)>>>()?;

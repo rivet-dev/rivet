@@ -23,7 +23,7 @@ impl ApiTryFrom<models::CaptchaConfig> for backend::captcha::CaptchaClientRespon
 				},
 			)
 		} else {
-			internal_panic!("unknown captcha kind")
+			bail!("unknown captcha kind")
 		};
 
 		Ok(backend::captcha::CaptchaClientResponse { kind: Some(kind) })

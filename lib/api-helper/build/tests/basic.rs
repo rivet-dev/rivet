@@ -446,7 +446,7 @@ mod test_endpoint {
 		_ctx: Ctx<Auth>,
 		_watch_index_query: WatchIndexQuery,
 	) -> GlobalResult<TestResponse> {
-		panic_with!(API_UNAUTHORIZED);
+		bail_with!(API_UNAUTHORIZED);
 	}
 
 	// MARK: GET /forbidden
@@ -454,7 +454,7 @@ mod test_endpoint {
 		_ctx: Ctx<Auth>,
 		_watch_index_query: WatchIndexQuery,
 	) -> GlobalResult<TestResponse> {
-		panic_with!(API_FORBIDDEN, reason = "forbidden");
+		bail_with!(API_FORBIDDEN, reason = "forbidden");
 	}
 
 	// MARK: GET /bad_request
@@ -462,7 +462,7 @@ mod test_endpoint {
 		_ctx: Ctx<Auth>,
 		_watch_index_query: WatchIndexQuery,
 	) -> GlobalResult<TestResponse> {
-		panic_with!(API_BAD_QUERY, error = "something");
+		bail_with!(API_BAD_QUERY, error = "something");
 	}
 }
 

@@ -103,7 +103,7 @@ async fn handle(
 	let mut redis = ctx.redis_cache().await?;
 	let crdb = ctx.crdb().await?;
 
-	let user_id = internal_unwrap!(ctx.user_id).as_uuid();
+	let user_id = unwrap_ref!(ctx.user_id).as_uuid();
 	let after_ts = ctx.after_ts;
 
 	// Get rows from Redis cache
@@ -156,7 +156,7 @@ async fn handle(
 		// Convert to proto
 		.map(|(thread_id, tail_message)| {
 			let thread_id = Into::<common::Uuid>::into(thread_id);
-			let thread = internal_unwrap_owned!(threads_res
+			let thread = unwrap!(threads_res
 				.threads
 				.iter()
 				.find(|t| t.thread_id.as_ref() == Some(&thread_id)));
@@ -220,7 +220,7 @@ async fn fetch_recent_threads(
 			.iter()
 			.map(|thread| {
 				Ok(ThreadWithTail {
-					thread_id: internal_unwrap!(thread.thread_id).as_uuid(),
+					thread_id: unwrap_ref!(thread.thread_id).as_uuid(),
 					tail_message: None,
 				})
 			})

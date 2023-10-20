@@ -69,7 +69,7 @@ async fn handle(
 
 	let crdb = ctx.crdb().await?;
 
-	let verification_id = internal_unwrap!(ctx.verification_id).as_uuid();
+	let verification_id = unwrap_ref!(ctx.verification_id).as_uuid();
 
 	// Fetch metadata
 	let verification = sqlx::query_as::<_, VerificationRow>(indoc!(

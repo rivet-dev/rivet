@@ -5,7 +5,7 @@ use rivet_operation::prelude::*;
 async fn handle(
 	ctx: OperationContext<faker::build::Request>,
 ) -> GlobalResult<faker::build::Response> {
-	let game_id = internal_unwrap!(ctx.game_id).as_uuid();
+	let game_id = unwrap_ref!(ctx.game_id).as_uuid();
 
 	// Determine image name
 	//
@@ -19,7 +19,7 @@ async fn handle(
 	} else if ctx.image == faker::build::Image::MmPlayerConnect as i32 {
 		"test-mm-player-connect"
 	} else {
-		internal_panic!("invalid image");
+		bail!("invalid image");
 	};
 
 	let create_res = op!([ctx] build_create {
@@ -29,7 +29,7 @@ async fn handle(
 		..Default::default()
 	})
 	.await?;
-	let build_id = internal_unwrap!(create_res.build_id).as_uuid();
+	let build_id = unwrap_ref!(create_res.build_id).as_uuid();
 
 	Ok(faker::build::Response {
 		build_id: Some(build_id.into()),

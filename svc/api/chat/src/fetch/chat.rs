@@ -38,27 +38,27 @@ fn prefetch_messages(messages: &[backend::chat::Message]) -> GlobalResult<ChatMe
 	// Prefetch all user ids and party ids
 	for message in messages {
 		// Read body message
-		let backend_body_kind = internal_unwrap!(message.body);
-		let backend_body_kind = internal_unwrap!(backend_body_kind.kind);
+		let backend_body_kind = unwrap_ref!(message.body);
+		let backend_body_kind = unwrap_ref!(backend_body_kind.kind);
 
 		match backend_body_kind {
 			backend_body::Kind::Custom(backend_body::Custom { sender_user_id, .. }) => {
-				user_ids.push(*internal_unwrap!(sender_user_id));
+				user_ids.push(*unwrap_ref!(sender_user_id));
 			}
 			backend_body::Kind::Text(backend_body::Text { sender_user_id, .. }) => {
-				user_ids.push(*internal_unwrap!(sender_user_id));
+				user_ids.push(*unwrap_ref!(sender_user_id));
 			}
 			backend_body::Kind::Deleted(backend_body::Deleted { sender_user_id }) => {
-				user_ids.push(*internal_unwrap!(sender_user_id));
+				user_ids.push(*unwrap_ref!(sender_user_id));
 			}
 			backend_body::Kind::TeamJoin(backend_body::TeamJoin { user_id }) => {
-				user_ids.push(*internal_unwrap!(user_id));
+				user_ids.push(*unwrap_ref!(user_id));
 			}
 			backend_body::Kind::TeamLeave(backend_body::TeamLeave { user_id }) => {
-				user_ids.push(*internal_unwrap!(user_id));
+				user_ids.push(*unwrap_ref!(user_id));
 			}
 			backend_body::Kind::TeamMemberKick(backend_body::TeamMemberKick { user_id }) => {
-				user_ids.push(*internal_unwrap!(user_id));
+				user_ids.push(*unwrap_ref!(user_id));
 			}
 			backend_body::Kind::ChatCreate(_) | backend_body::Kind::UserFollow(_) => {}
 		}

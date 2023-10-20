@@ -16,7 +16,7 @@ pub async fn list_tiers(
 	})
 	.await?;
 
-	let region = internal_unwrap_owned!(res.regions.first());
+	let region = unwrap!(res.regions.first());
 
 	Ok(models::GetRegionTiersResponse {
 		tiers: region

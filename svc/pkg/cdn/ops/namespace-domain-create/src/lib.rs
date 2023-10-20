@@ -6,24 +6,24 @@ use serde_json::json;
 async fn handle(
 	ctx: OperationContext<cdn::namespace_domain_create::Request>,
 ) -> GlobalResult<cdn::namespace_domain_create::Response> {
-	internal_assert!(util::feature::cf_custom_hostname());
+	ensure!(util::feature::cf_custom_hostname());
 
-	let namespace_id = internal_unwrap!(ctx.namespace_id).as_uuid();
-	assert_with!(util::check::domain(&ctx.domain, true), CDN_INVALID_DOMAIN);
+	let namespace_id = unwrap_ref!(ctx.namespace_id).as_uuid();
+	ensure_with!(util::check::domain(&ctx.domain, true), CDN_INVALID_DOMAIN);
 
 	let game_res = op!([ctx] game_resolve_namespace_id {
 		namespace_ids: vec![namespace_id.into()],
 	})
 	.await?;
-	let game = internal_unwrap_owned!(game_res.games.first());
-	let game_id = internal_unwrap!(game.game_id).as_uuid();
+	let game = unwrap!(game_res.games.first());
+	let game_id = unwrap_ref!(game.game_id).as_uuid();
 
 	let game_res = op!([ctx] game_get {
 		game_ids: vec![game_id.into()],
 	})
 	.await?;
-	let game = internal_unwrap_owned!(game_res.games.first());
-	let developer_team_id = internal_unwrap!(game.developer_team_id).as_uuid();
+	let game = unwrap!(game_res.games.first());
+	let developer_team_id = unwrap_ref!(game.developer_team_id).as_uuid();
 
 	let crdb = ctx.crdb().await?;
 	let (domain_count,) = sqlx::query_as::<_, (i64,)>(
@@ -33,7 +33,7 @@ async fn handle(
 	.fetch_one(&crdb)
 	.await?;
 
-	assert_with!(domain_count < 10, CDN_TOO_MANY_DOMAINS);
+	ensure_with!(domain_count < 10, CDN_TOO_MANY_DOMAINS);
 
 	sqlx::query(indoc!(
 		"
@@ -62,15 +62,15 @@ async fn handle(
 
 				let code =
 					cf_custom_hostname::msg::create_fail::ErrorCode::from_i32(msg.error_code);
-				match internal_unwrap_owned!(code) {
-					Unknown => internal_panic!("unknown custom hostname create error code"),
+				match unwrap!(code) {
+					Unknown => bail!("unknown custom hostname create error code"),
 					AlreadyExists => {
 						rollback(&crdb, namespace_id, &ctx.domain).await?;
-						panic_with!(CLOUD_HOSTNAME_TAKEN)
+						bail_with!(CLOUD_HOSTNAME_TAKEN)
 					}
 					TooManyPendingHostnames => {
 						rollback(&crdb, namespace_id, &ctx.domain).await?;
-						panic_with!(CLOUD_TOO_MANY_PENDING_HOSTNAMES_FOR_GROUP)
+						bail_with!(CLOUD_TOO_MANY_PENDING_HOSTNAMES_FOR_GROUP)
 					}
 				}
 			}

@@ -37,10 +37,10 @@ async fn handle(
 
 	let limit = ctx.limit;
 
-	internal_assert!(limit != 0, "limit too low");
-	internal_assert!(limit <= 32, "limit too high");
+	ensure!(limit != 0, "limit too low");
+	ensure!(limit <= 32, "limit too high");
 
-	let req_kind = internal_unwrap_owned!(RequestKind::from_i32(ctx.kind));
+	let req_kind = unwrap!(RequestKind::from_i32(ctx.kind));
 
 	let follows = match req_kind {
 		RequestKind::Mutual => {

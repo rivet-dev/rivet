@@ -10,9 +10,9 @@ lazy_static::lazy_static! {
 async fn worker(ctx: &OperationContext<chat_message::msg::create::Message>) -> GlobalResult<()> {
 	let crdb = ctx.crdb().await?;
 
-	let chat_message_id = internal_unwrap!(ctx.chat_message_id).as_uuid();
-	let thread_id = internal_unwrap!(ctx.thread_id).as_uuid();
-	let body = internal_unwrap!(ctx.body);
+	let chat_message_id = unwrap_ref!(ctx.chat_message_id).as_uuid();
+	let thread_id = unwrap_ref!(ctx.thread_id).as_uuid();
+	let body = unwrap_ref!(ctx.body);
 	let sender_user_id = get_sender_user_id(body)?;
 
 	// Encode body
@@ -63,7 +63,7 @@ async fn worker(ctx: &OperationContext<chat_message::msg::create::Message>) -> G
 		thread_ids: vec![thread_id.into()],
 	})
 	.await?;
-	let thread_participants = internal_unwrap_owned!(thread_participants_res.threads.first());
+	let thread_participants = unwrap!(thread_participants_res.threads.first());
 
 	// Initiate redis script
 	let mut script = REDIS_SCRIPT.prepare_invoke();
@@ -78,13 +78,13 @@ async fn worker(ctx: &OperationContext<chat_message::msg::create::Message>) -> G
 
 	// Thread update event
 	for participant in &thread_participants.participants {
-		let user_id = internal_unwrap!(participant.user_id).as_uuid();
+		let user_id = unwrap_ref!(participant.user_id).as_uuid();
 
 		// Add this message to each thread participant's thread history in redis
 		script.key(util_chat::key::user_thread_history_loaded(user_id));
 		script.key(util_chat::key::user_thread_history(user_id));
 
-		match internal_unwrap!(body.kind) {
+		match unwrap_ref!(body.kind) {
 			// Don't send "chat created" notification
 			backend::chat::message_body::Kind::ChatCreate(_) => {}
 			_ => {
@@ -118,7 +118,7 @@ async fn worker(ctx: &OperationContext<chat_message::msg::create::Message>) -> G
 		.invoke_async::<_, ()>(&mut ctx.redis_cache().await?)
 		.await?;
 
-	let analytics_body = match internal_unwrap!(body.kind) {
+	let analytics_body = match unwrap_ref!(body.kind) {
 		// TODO: Implement custom messages
 		backend::chat::message_body::Kind::Custom(_) => json!({ "custom": {} }),
 		backend::chat::message_body::Kind::Text(body) => {
@@ -150,12 +150,12 @@ async fn worker(ctx: &OperationContext<chat_message::msg::create::Message>) -> G
 }
 
 fn get_sender_user_id(body: &backend::chat::MessageBody) -> GlobalResult<Option<Uuid>> {
-	let kind = internal_unwrap!(body.kind);
+	let kind = unwrap_ref!(body.kind);
 
 	use backend::chat::message_body as backend_body;
 	let sender_user_id = match kind {
-		backend_body::Kind::Custom(body) => Some(internal_unwrap!(body.sender_user_id).as_uuid()),
-		backend_body::Kind::Text(body) => Some(internal_unwrap!(body.sender_user_id).as_uuid()),
+		backend_body::Kind::Custom(body) => Some(unwrap_ref!(body.sender_user_id).as_uuid()),
+		backend_body::Kind::Text(body) => Some(unwrap_ref!(body.sender_user_id).as_uuid()),
 		_ => None,
 	};
 

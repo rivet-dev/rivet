@@ -15,8 +15,8 @@ async fn handle(
 ) -> GlobalResult<chat_message::list_for_user::Response> {
 	let crdb = ctx.crdb().await?;
 
-	let user_id = internal_unwrap!(ctx.user_id).as_uuid();
-	let direction = internal_unwrap_owned!(
+	let user_id = unwrap_ref!(ctx.user_id).as_uuid();
+	let direction = unwrap!(
 		chat_message::list_for_user::request::QueryDirection::from_i32(ctx.query_direction)
 	);
 

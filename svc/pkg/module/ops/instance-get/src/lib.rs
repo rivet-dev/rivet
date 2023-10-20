@@ -55,7 +55,7 @@ pub async fn handle(
 						fly_app_id: instance.driver_fly_app_id,
 					})
 				} else {
-					internal_panic!("instance has no driver")
+					bail!("instance has no driver")
 				};
 
 				GlobalResult::Ok(backend::module::Instance {

@@ -63,7 +63,7 @@ impl<T> GraphQLResponse<T> {
 			GraphQLResponse::Data(data) => Ok(data),
 			GraphQLResponse::Errors(errors) => {
 				tracing::error!(?errors, "graphql errors");
-				internal_panic!("graphql errors")
+				bail!("graphql errors")
 			}
 		}
 	}
@@ -102,20 +102,20 @@ async fn worker(
 		std::env::var("FLY_ORGANIZATION_ID"),
 		std::env::var("FLY_REGION"),
 	) else {
-		internal_panic!("fly not enabled")
+		bail!("fly not enabled")
 	};
 	let fly_auth_token = util::env::read_secret(&["fly", "auth_token"]).await?;
 
-	let instance_id = internal_unwrap!(ctx.instance_id).as_uuid();
-	let version_id = internal_unwrap!(ctx.module_version_id).as_uuid();
+	let instance_id = unwrap_ref!(ctx.instance_id).as_uuid();
+	let version_id = unwrap_ref!(ctx.module_version_id).as_uuid();
 
 	// Read module version
 	let versions = op!([ctx] module_version_get {
 		version_ids: vec![version_id.into()],
 	})
 	.await?;
-	let version = internal_unwrap_owned!(versions.versions.first());
-	let module_id = internal_unwrap_owned!(version.module_id).as_uuid();
+	let version = unwrap!(versions.versions.first());
+	let module_id = unwrap!(version.module_id).as_uuid();
 
 	// Create transaction
 	rivet_pools::utils::crdb::tx(&crdb, |tx| {
@@ -130,7 +130,7 @@ async fn worker(
 	) {
 		// Create app
 		// TODO: Handle failure
-		let image = match internal_unwrap!(version.image) {
+		let image = match unwrap_ref!(version.image) {
 			backend::module::version::Image::Docker(docker) => docker.image_tag.clone(),
 		};
 		let app_id = launch_app(LaunchAppOpts {
@@ -169,8 +169,8 @@ async fn worker(
 				name: "module.create".into(),
 				properties_json: Some(serde_json::to_string(&json!({
 					"module_id": module_id,
-					"module_instance_id": internal_unwrap!(ctx.instance_id).as_uuid(),
-					"module_version_id": internal_unwrap!(ctx.module_version_id).as_uuid(),
+					"module_instance_id": unwrap_ref!(ctx.instance_id).as_uuid(),
+					"module_version_id": unwrap_ref!(ctx.module_version_id).as_uuid(),
 				}))?),
 				..Default::default()
 			},
@@ -187,8 +187,8 @@ async fn insert_instance(
 	now: i64,
 	msg: module::msg::instance_create::Message,
 ) -> GlobalResult<()> {
-	let instance_id = internal_unwrap!(msg.instance_id).as_uuid();
-	let version_id = internal_unwrap!(msg.module_version_id).as_uuid();
+	let instance_id = unwrap_ref!(msg.instance_id).as_uuid();
+	let version_id = unwrap_ref!(msg.module_version_id).as_uuid();
 
 	sqlx::query(indoc!(
 		"
@@ -202,7 +202,7 @@ async fn insert_instance(
 	.execute(&mut **tx)
 	.await?;
 
-	match internal_unwrap!(msg.driver) {
+	match unwrap_ref!(msg.driver) {
 		module::msg::instance_create::message::Driver::Dummy(_) => {
 			sqlx::query(indoc!(
 				"

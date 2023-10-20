@@ -27,7 +27,7 @@ async fn handle(
 		.collect::<Vec<_>>();
 	let missing_read_ts_res = if !missing_read_ts.is_empty() {
 		op!([ctx] chat_last_read_ts_get {
-			user_id: Some(*internal_unwrap!(ctx.user_id)),
+			user_id: Some(*unwrap_ref!(ctx.user_id)),
 			thread_ids: missing_read_ts,
 		})
 		.await?

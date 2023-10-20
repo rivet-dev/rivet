@@ -21,7 +21,7 @@ async fn handle(
 		let redis = redis.clone();
 
 		if let Some(force_fail) = &ctx.force_fail {
-			let namespace_id = internal_unwrap!(force_fail.namespace_id).as_uuid();
+			let namespace_id = unwrap_ref!(force_fail.namespace_id).as_uuid();
 
 			tracing::info!("forcing fail event");
 			futs.push(publish_fail_event(client, namespace_id, query_id, ctx.error_code).boxed());

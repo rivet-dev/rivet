@@ -8,7 +8,7 @@ use rivet_operation::prelude::*;
 async fn handle(
 	ctx: OperationContext<external::request_validate::Request>,
 ) -> GlobalResult<external::request_validate::Response> {
-	let config = internal_unwrap!(ctx.config);
+	let config = unwrap_ref!(ctx.config);
 	let mut errors = Vec::new();
 
 	// Parse URL

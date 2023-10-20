@@ -18,8 +18,8 @@ async fn handle(
 		.iter()
 		.map(|query| {
 			Ok((
-				internal_unwrap!(query.follower_user_id).as_uuid(),
-				internal_unwrap!(query.following_user_id).as_uuid(),
+				unwrap_ref!(query.follower_user_id).as_uuid(),
+				unwrap_ref!(query.following_user_id).as_uuid(),
 			))
 		})
 		.collect::<GlobalResult<Vec<(Uuid, Uuid)>>>()?;

@@ -6,24 +6,24 @@ use serde_json::json;
 async fn handle(
 	ctx: OperationContext<cloud::namespace_create::Request>,
 ) -> GlobalResult<cloud::namespace_create::Response> {
-	let namespace_id = internal_unwrap!(ctx.namespace_id).as_uuid();
+	let namespace_id = unwrap_ref!(ctx.namespace_id).as_uuid();
 
 	let ns_res = op!([ctx] game_namespace_get {
 		namespace_ids: vec![namespace_id.into()],
 	})
 	.await?;
-	let ns = internal_unwrap_owned!(
+	let ns = unwrap!(
 		ns_res.namespaces.first(),
 		"game namespace not found for cloud namespace"
 	);
-	let game_id = internal_unwrap!(ns.game_id).as_uuid();
+	let game_id = unwrap_ref!(ns.game_id).as_uuid();
 
 	let game_res = op!([ctx] game_get {
 		game_ids: vec![game_id.into()],
 	})
 	.await?;
-	let game = internal_unwrap_owned!(game_res.games.first());
-	let developer_team_id = internal_unwrap!(game.developer_team_id).as_uuid();
+	let game = unwrap!(game_res.games.first());
+	let developer_team_id = unwrap_ref!(game.developer_team_id).as_uuid();
 
 	tokio::try_join!(
 		op!([ctx] cdn_namespace_create {

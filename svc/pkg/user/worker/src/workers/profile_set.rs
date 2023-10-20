@@ -10,7 +10,7 @@ async fn worker(ctx: &OperationContext<user::msg::profile_set::Message>) -> Glob
 		account_number,
 		bio,
 	} = body;
-	let user_id = internal_unwrap!(user_id);
+	let user_id = unwrap_ref!(user_id);
 
 	let mut query_components = Vec::new();
 
@@ -25,7 +25,7 @@ async fn worker(ctx: &OperationContext<user::msg::profile_set::Message>) -> Glob
 		query_components.push(format!("bio = ${}", query_components.len() + 2));
 	}
 
-	internal_assert!(!query_components.is_empty());
+	ensure!(!query_components.is_empty());
 
 	// Validate profile
 	let validation_res = op!([ctx] user_profile_validate {
@@ -44,7 +44,7 @@ async fn worker(ctx: &OperationContext<user::msg::profile_set::Message>) -> Glob
 			.map(|err| err.path.join("."))
 			.collect::<Vec<_>>()
 			.join(", ");
-		panic_with!(VALIDATION_ERROR, error = readable_errors);
+		bail_with!(VALIDATION_ERROR, error = readable_errors);
 	}
 
 	// Build query

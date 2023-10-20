@@ -80,13 +80,13 @@ async fn worker(ctx: &OperationContext<mm::msg::lobby_find::Message>) -> GlobalR
 
 	let mut analytics_events = Vec::new();
 
-	let namespace_id = internal_unwrap!(ctx.namespace_id).as_uuid();
-	let query_id = internal_unwrap!(ctx.query_id).as_uuid();
-	let join_kind = internal_unwrap_owned!(backend::matchmaker::query::JoinKind::from_i32(
+	let namespace_id = unwrap_ref!(ctx.namespace_id).as_uuid();
+	let query_id = unwrap_ref!(ctx.query_id).as_uuid();
+	let join_kind = unwrap!(backend::matchmaker::query::JoinKind::from_i32(
 		ctx.join_kind
 	));
-	let query = internal_unwrap!(ctx.query, "invalid query");
-	internal_assert!(!ctx.players.is_empty(), "must have 1 player");
+	let query = unwrap_ref!(ctx.query, "invalid query");
+	ensure!(!ctx.players.is_empty(), "must have 1 player");
 
 	// Check for stale message
 	if ctx.req_dt() > util::duration::seconds(60) {
@@ -120,8 +120,8 @@ async fn worker(ctx: &OperationContext<mm::msg::lobby_find::Message>) -> GlobalR
 		.iter()
 		.map(|player| {
 			GlobalResult::Ok(Player {
-				player_id: internal_unwrap!(player.player_id).as_uuid(),
-				token_session_id: internal_unwrap!(player.token_session_id).as_uuid(),
+				player_id: unwrap_ref!(player.player_id).as_uuid(),
+				token_session_id: unwrap_ref!(player.token_session_id).as_uuid(),
 				client_info: player.client_info.clone(),
 			})
 		})
@@ -298,8 +298,8 @@ async fn worker(ctx: &OperationContext<mm::msg::lobby_find::Message>) -> GlobalR
 		{
 			let auto_create_perf = ctx.perf().start("auto-create-lobby").await;
 
-			let auto_create_lobby_group_id = internal_unwrap!(auto_create.lobby_group_id).as_uuid();
-			let auto_create_region_id = internal_unwrap!(auto_create.region_id).as_uuid();
+			let auto_create_lobby_group_id = unwrap_ref!(auto_create.lobby_group_id).as_uuid();
+			let auto_create_region_id = unwrap_ref!(auto_create.region_id).as_uuid();
 
 			tracing::info!(%auto_create_lobby_id, %auto_create_lobby_group_id, %auto_create_region_id, "auto-creating lobby");
 
@@ -323,7 +323,7 @@ async fn worker(ctx: &OperationContext<mm::msg::lobby_find::Message>) -> GlobalR
 
 			auto_create_perf.end();
 		} else {
-			internal_panic!("attempted to auto create lobby for invalid query")
+			bail!("attempted to auto create lobby for invalid query")
 		}
 
 		false
@@ -406,26 +406,24 @@ async fn fetch_ns_config_and_dev_team(
 					namespace_ids: vec![namespace_id.into()],
 				})
 				.await?;
-				let namespace = internal_unwrap_owned!(
-					namespace_get_res.namespaces.first(),
-					"namespace not found"
-				);
-				let game_id = internal_unwrap_owned!(namespace.game_id);
+				let namespace =
+					unwrap!(namespace_get_res.namespaces.first(), "namespace not found");
+				let game_id = unwrap!(namespace.game_id);
 
 				// Game
 				let game_get_res = op!([ctx] game_get {
 					game_ids: vec![game_id],
 				})
 				.await?;
-				let game = internal_unwrap_owned!(game_get_res.games.first());
-				let team_id = internal_unwrap_owned!(game.developer_team_id);
+				let game = unwrap!(game_get_res.games.first());
+				let team_id = unwrap!(game.developer_team_id);
 
 				// Dev team
 				let team_dev_get_res = op!([ctx] team_dev_get {
 					team_ids: vec![team_id],
 				})
 				.await?;
-				let dev_team = internal_unwrap_owned!(team_dev_get_res.teams.first());
+				let dev_team = unwrap!(team_dev_get_res.teams.first());
 
 				Ok((namespace.clone(), dev_team.clone()))
 			}
@@ -435,9 +433,8 @@ async fn fetch_ns_config_and_dev_team(
 		}),
 	)?;
 
-	let mm_config = internal_unwrap!(
-		internal_unwrap_owned!(get_mm_res.namespaces.first(), "mm namespace not found").config
-	);
+	let mm_config =
+		unwrap_ref!(unwrap!(get_mm_res.namespaces.first(), "mm namespace not found").config);
 
 	Ok((ns, mm_config.clone(), dev_team))
 }
@@ -466,7 +463,7 @@ async fn fetch_lobby_group_config(
 			..
 		}) => {
 			let lobby_group_ids = if let Some(auto_create) = auto_create {
-				vec![internal_unwrap_owned!(auto_create.lobby_group_id)]
+				vec![unwrap!(auto_create.lobby_group_id)]
 			} else {
 				lobby_group_ids.clone()
 			};
@@ -474,7 +471,7 @@ async fn fetch_lobby_group_config(
 			(lobby_group_ids, None, None)
 		}
 		Query::Direct(backend::matchmaker::query::Direct { lobby_id, .. }) => {
-			let lobby_id = internal_unwrap_owned!(*lobby_id);
+			let lobby_id = unwrap!(*lobby_id);
 
 			let (lobbies_res, lobby_states_res) = tokio::try_join!(
 				op!([ctx] mm_lobby_get {
@@ -485,10 +482,9 @@ async fn fetch_lobby_group_config(
 					lobby_ids: vec![lobby_id],
 				}),
 			)?;
-			let lobby =
-				internal_unwrap_owned!(lobbies_res.lobbies.into_iter().next(), "lobby not found");
-			let lobby_group_id = internal_unwrap_owned!(lobby.lobby_group_id);
-			let lobby_state = internal_unwrap_owned!(lobby_states_res.lobbies.into_iter().next());
+			let lobby = unwrap!(lobbies_res.lobbies.into_iter().next(), "lobby not found");
+			let lobby_group_id = unwrap!(lobby.lobby_group_id);
+			let lobby_state = unwrap!(lobby_states_res.lobbies.into_iter().next());
 
 			(vec![lobby_group_id], Some(lobby), lobby_state.state_json)
 		}
@@ -499,8 +495,8 @@ async fn fetch_lobby_group_config(
 		lobby_group_ids: lobby_group_ids.clone(),
 	})
 	.await?;
-	let version_id = internal_unwrap!(
-		internal_unwrap_owned!(
+	let version_id = unwrap_ref!(
+		unwrap!(
 			resolve_version_res.versions.first(),
 			"lobby group version not found"
 		)
@@ -515,9 +511,9 @@ async fn fetch_lobby_group_config(
 	.await?;
 
 	let version = config_get_res.versions.first();
-	let version = internal_unwrap!(version, "version config not found");
-	let version_config = internal_unwrap!(version.config);
-	let version_config_meta = internal_unwrap!(version.config_meta);
+	let version = unwrap_ref!(version, "version config not found");
+	let version_config = unwrap_ref!(version.config);
+	let version_config_meta = unwrap_ref!(version.config_meta);
 
 	// Find the matching lobby groups
 	let (lobby_groups, lobby_group_meta) = lobby_group_ids
@@ -528,10 +524,9 @@ async fn fetch_lobby_group_config(
 				.iter()
 				.enumerate()
 				.find(|(_, lg)| lg.lobby_group_id == Some(*id));
-			let (lg_idx, lobby_group_meta) =
-				internal_unwrap_owned!(lobby_group_meta, "lobby group not found");
+			let (lg_idx, lobby_group_meta) = unwrap!(lobby_group_meta, "lobby group not found");
 			let lobby_group = version_config.lobby_groups.get(lg_idx);
-			let lobby_group = internal_unwrap_owned!(lobby_group);
+			let lobby_group = unwrap!(lobby_group);
 
 			Ok((lobby_group.clone(), lobby_group_meta.clone()))
 		})
@@ -585,7 +580,7 @@ async fn insert_to_crdb(
 	// Insert preemptive lobby row if needed
 	if auto_create_lobby {
 		// Lobby group will exist if the lobby was auto created
-		let lobby_group = internal_unwrap_owned!(lobby_group_config.lobby_groups.first());
+		let lobby_group = unwrap!(lobby_group_config.lobby_groups.first());
 
 		// Insert lobby if needed
 		sqlx::query(indoc!(

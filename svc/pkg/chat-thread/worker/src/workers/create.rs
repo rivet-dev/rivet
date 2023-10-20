@@ -6,15 +6,15 @@ use serde_json::json;
 async fn worker(ctx: &OperationContext<chat_thread::msg::create::Message>) -> GlobalResult<()> {
 	let crdb = ctx.crdb().await?;
 
-	let request_id = internal_unwrap!(ctx.request_id).as_uuid();
-	let kind = internal_unwrap!(internal_unwrap!(ctx.topic).kind);
+	let request_id = unwrap_ref!(ctx.request_id).as_uuid();
+	let kind = unwrap_ref!(unwrap_ref!(ctx.topic).kind);
 	let create_ts = ctx.override_create_ts.unwrap_or(ctx.ts());
 
 	// Insert the thread
 	let preliminary_thread_id = Uuid::new_v4();
 	let (thread_id, analytics_topic) = match kind {
 		backend::chat::topic::Kind::Team(team) => {
-			let team_id = internal_unwrap!(team.team_id).as_uuid();
+			let team_id = unwrap_ref!(team.team_id).as_uuid();
 			tracing::info!(?team_id, "creating team thread");
 
 			// Insert new thread or return existing thread ID if created in race
@@ -45,8 +45,8 @@ async fn worker(ctx: &OperationContext<chat_thread::msg::create::Message>) -> Gl
 		}
 		backend::chat::topic::Kind::Direct(direct) => {
 			let (user_a_id, user_b_id) = util::sort::id_pair(
-				internal_unwrap!(direct.user_a_id).as_uuid(),
-				internal_unwrap!(direct.user_b_id).as_uuid(),
+				unwrap_ref!(direct.user_a_id).as_uuid(),
+				unwrap_ref!(direct.user_b_id).as_uuid(),
 			);
 			tracing::info!(?user_a_id, ?user_b_id, "creating direct thread");
 

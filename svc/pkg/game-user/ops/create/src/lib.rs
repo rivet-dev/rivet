@@ -8,8 +8,8 @@ async fn handle(
 	let crdb = ctx.crdb().await?;
 
 	let game_user_id = Uuid::new_v4();
-	let namespace_id = internal_unwrap!(ctx.namespace_id).as_uuid();
-	let user_id = internal_unwrap!(ctx.user_id).as_uuid();
+	let namespace_id = unwrap_ref!(ctx.namespace_id).as_uuid();
+	let user_id = unwrap_ref!(ctx.user_id).as_uuid();
 
 	let token_res = op!([ctx] token_create {
 		issuer: Self::NAME.into(),
@@ -35,8 +35,8 @@ async fn handle(
 	})
 	.await?;
 
-	let game_user_token = internal_unwrap_owned!(token_res.token.clone());
-	let token_session_id = internal_unwrap!(token_res.session_id).as_uuid();
+	let game_user_token = unwrap!(token_res.token.clone());
+	let token_session_id = unwrap_ref!(token_res.session_id).as_uuid();
 
 	sqlx::query(indoc!(
 		"

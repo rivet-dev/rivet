@@ -12,8 +12,8 @@ pub fn message(
 	users: &[backend::user::User],
 ) -> GlobalResult<models::ChatMessage> {
 	// Read body message
-	let backend_body_kind = internal_unwrap!(message.body);
-	let backend_body_kind = internal_unwrap!(backend_body_kind.kind);
+	let backend_body_kind = unwrap_ref!(message.body);
+	let backend_body_kind = unwrap_ref!(backend_body_kind.kind);
 
 	// Build message body
 	let msg_body = {
@@ -25,13 +25,13 @@ pub fn message(
 				plugin_id: _,
 				body: _,
 			}) => {
-				internal_panic!("Unimplemented");
+				bail!("Unimplemented");
 			}
 			backend_body::Kind::Text(backend_body::Text {
 				sender_user_id,
 				body,
 			}) => {
-				let sender = internal_unwrap_owned!(users
+				let sender = unwrap!(users
 					.iter()
 					.find(|user| &user.user_id == sender_user_id));
 
@@ -53,7 +53,7 @@ pub fn message(
 				}
 			}
 			backend_body::Kind::Deleted(backend_body::Deleted { sender_user_id }) => {
-				let sender = internal_unwrap_owned!(users
+				let sender = unwrap!(users
 					.iter()
 					.find(|user| &user.user_id == sender_user_id));
 
@@ -75,7 +75,7 @@ pub fn message(
 			}
 			backend_body::Kind::TeamJoin(backend_body::TeamJoin { user_id }) => {
 				let user =
-					internal_unwrap_owned!(users.iter().find(|user| &user.user_id == user_id));
+					unwrap!(users.iter().find(|user| &user.user_id == user_id));
 
 				models::ChatMessageBody {
 					group_join: Some(Box::new(models::ChatMessageBodyGroupJoin {
@@ -89,7 +89,7 @@ pub fn message(
 			}
 			backend_body::Kind::TeamLeave(backend_body::TeamLeave { user_id }) => {
 				let user =
-					internal_unwrap_owned!(users.iter().find(|user| &user.user_id == user_id));
+					unwrap!(users.iter().find(|user| &user.user_id == user_id));
 
 				models::ChatMessageBody {
 					group_leave: Some(Box::new(models::ChatMessageBodyGroupLeave {
@@ -103,7 +103,7 @@ pub fn message(
 			}
 			backend_body::Kind::TeamMemberKick(backend_body::TeamMemberKick { user_id }) => {
 				let user =
-					internal_unwrap_owned!(users.iter().find(|user| &user.user_id == user_id));
+					unwrap!(users.iter().find(|user| &user.user_id == user_id));
 
 				models::ChatMessageBody {
 					group_member_kick: Some(Box::new(models::ChatMessageBodyGroupMemberKick {
@@ -119,8 +119,8 @@ pub fn message(
 	};
 
 	Ok(models::ChatMessage {
-		chat_message_id: internal_unwrap!(message.chat_message_id).as_uuid(),
-		thread_id: internal_unwrap!(message.thread_id).as_uuid(),
+		chat_message_id: unwrap_ref!(message.chat_message_id).as_uuid(),
+		thread_id: unwrap_ref!(message.thread_id).as_uuid(),
 		send_ts: util::timestamp::to_string(message.send_ts)?,
 		body: Box::new(msg_body),
 	})
@@ -138,7 +138,7 @@ pub fn thread(
 	last_read_threads: &[chat::last_read_ts_get::response::Thread],
 	unread_count_threads: &[chat_thread::unread_count::response::ThreadTail],
 ) -> GlobalResult<Option<models::ChatThread>> {
-	let thread = internal_unwrap_owned!(threads
+	let thread = unwrap!(threads
 		.iter()
 		.find(|t| t.thread_id == tail_message.thread_id));
 
@@ -148,12 +148,12 @@ pub fn thread(
 		teams,
 		dev_teams,
 		games,
-		internal_unwrap!(thread.topic),
+		unwrap_ref!(thread.topic),
 	)?;
 
 	topic
 		.map(|topic| {
-			let thread_id = internal_unwrap!(thread.thread_id).as_uuid();
+			let thread_id = unwrap_ref!(thread.thread_id).as_uuid();
 
 			Ok(models::ChatThread {
 				thread_id,
@@ -190,11 +190,11 @@ fn topic_context(
 	games: &[convert::GameWithNamespaceIds],
 	topic: &backend::chat::Topic,
 ) -> GlobalResult<Option<models::ChatTopic>> {
-	let topic_kind = internal_unwrap!(topic.kind);
+	let topic_kind = unwrap_ref!(topic.kind);
 
 	let topic_context = match topic_kind {
 		backend::chat::topic::Kind::Team(team) => {
-			let _team_id = internal_unwrap!(team.team_id).as_uuid();
+			let _team_id = unwrap_ref!(team.team_id).as_uuid();
 
 			let team = teams.iter().find(|ug| ug.team_id == team.team_id);
 

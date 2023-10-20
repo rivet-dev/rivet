@@ -119,7 +119,7 @@ async fn upload_build(
 		],
 	})
 	.await?;
-	let upload_id = internal_unwrap!(upload_prepare_res.upload_id).as_uuid();
+	let upload_id = unwrap_ref!(upload_prepare_res.upload_id).as_uuid();
 
 	for req in &upload_prepare_res.presigned_requests {
 		let start = upload_prepare::CHUNK_SIZE as usize * (req.part_number as usize - 1);
@@ -141,7 +141,7 @@ async fn upload_build(
 			let status = res.status();
 			let body = res.text().await?;
 			tracing::warn!(?status, ?body, "failure uploading");
-			internal_panic!("failure uploading");
+			bail!("failure uploading");
 		}
 	}
 

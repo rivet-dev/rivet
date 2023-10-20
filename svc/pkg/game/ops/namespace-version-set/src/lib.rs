@@ -7,22 +7,22 @@ use tracing::Instrument;
 async fn handle(
 	ctx: OperationContext<game::namespace_version_set::Request>,
 ) -> GlobalResult<game::namespace_version_set::Response> {
-	let namespace_id = internal_unwrap!(ctx.namespace_id).as_uuid();
-	let version_id = internal_unwrap!(ctx.version_id).as_uuid();
+	let namespace_id = unwrap_ref!(ctx.namespace_id).as_uuid();
+	let version_id = unwrap_ref!(ctx.version_id).as_uuid();
 
 	let game_res = op!([ctx] game_resolve_namespace_id {
 		namespace_ids: vec![namespace_id.into()],
 	})
 	.await?;
-	let game = internal_unwrap_owned!(game_res.games.first());
-	let game_id = internal_unwrap!(game.game_id).as_uuid();
+	let game = unwrap!(game_res.games.first());
+	let game_id = unwrap_ref!(game.game_id).as_uuid();
 
 	let game_res = op!([ctx] game_get {
 		game_ids: vec![game_id.into()],
 	})
 	.await?;
-	let game = internal_unwrap_owned!(game_res.games.first());
-	let developer_team_id = internal_unwrap!(game.developer_team_id).as_uuid();
+	let game = unwrap!(game_res.games.first());
+	let developer_team_id = unwrap_ref!(game.developer_team_id).as_uuid();
 
 	let crdb = ctx.crdb().await?;
 
@@ -40,7 +40,7 @@ async fn handle(
 		.bind(version_id)
 		.execute(&crdb)
 		.await?;
-		internal_assert_eq!(1, update_query.rows_affected(), "invalid namespace id");
+		ensure_eq!(1, update_query.rows_affected(), "invalid namespace id");
 
 		sqlx::query(indoc!(
 			"

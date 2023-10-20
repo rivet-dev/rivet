@@ -8,7 +8,7 @@ async fn handle(
 ) -> GlobalResult<user_presence::touch::Response> {
 	let mut redis = ctx.redis_user_presence().await?;
 
-	let user_id = internal_unwrap!(ctx.user_id).as_uuid();
+	let user_id = unwrap_ref!(ctx.user_id).as_uuid();
 
 	let elements_added: i64 = redis
 		.zadd(

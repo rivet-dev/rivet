@@ -5,7 +5,7 @@ use rivet_operation::prelude::*;
 async fn handle(
 	ctx: OperationContext<cdn::ns_enable_domain_public_auth_set::Request>,
 ) -> GlobalResult<cdn::ns_enable_domain_public_auth_set::Response> {
-	let namespace_id = internal_unwrap!(ctx.namespace_id).as_uuid();
+	let namespace_id = unwrap_ref!(ctx.namespace_id).as_uuid();
 
 	sqlx::query(indoc!(
 		"

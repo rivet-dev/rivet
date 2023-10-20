@@ -86,16 +86,16 @@ async fn handle(
 			)),
 		)?;
 
-		let (_, mem_allocated) = internal_unwrap_owned!(mem_allocated.value);
-		let cpu_usage = internal_unwrap_owned!(cpu_usage.values)
+		let (_, mem_allocated) = unwrap!(mem_allocated.value);
+		let cpu_usage = unwrap!(cpu_usage.values)
 			.into_iter()
 			.map(|(_, v)| v.parse::<f32>())
 			.collect::<Result<Vec<_>, _>>()?;
-		let mem_usage = internal_unwrap_owned!(mem_usage.values)
+		let mem_usage = unwrap!(mem_usage.values)
 			.into_iter()
 			.map(|(_, v)| v.parse::<u64>())
 			.collect::<Result<Vec<_>, _>>()?;
-		let mem_max_usage = internal_unwrap_owned!(mem_max_usage.values)
+		let mem_max_usage = unwrap!(mem_max_usage.values)
 			.into_iter()
 			.map(|(_, v)| v.parse::<u64>())
 			.collect::<Result<Vec<_>, _>>()?;
@@ -150,5 +150,5 @@ async fn handle_request(
 		.into());
 	}
 
-	Ok(internal_unwrap_owned!(res.json::<PrometheusResponse>().await?.data.result.first()).clone())
+	Ok(unwrap!(res.json::<PrometheusResponse>().await?.data.result.first()).clone())
 }

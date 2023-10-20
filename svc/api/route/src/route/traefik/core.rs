@@ -28,7 +28,7 @@ pub async fn config(
 	_watch_index: WatchIndexQuery,
 	ConfigQuery { token }: ConfigQuery,
 ) -> GlobalResult<super::TraefikConfigResponseNullified> {
-	assert_eq_with!(
+	ensure_eq_with!(
 		token,
 		util::env::read_secret(&["rivet", "api_route", "token"]).await?,
 		API_FORBIDDEN,
@@ -208,8 +208,8 @@ fn register_namespace(
 		return Ok(());
 	};
 
-	let ns_id = **internal_unwrap!(ns.namespace_id);
-	let ns_auth = internal_unwrap_owned!(backend::cdn::namespace_config::AuthType::from_i32(
+	let ns_id = **unwrap_ref!(ns.namespace_id);
+	let ns_auth = unwrap!(backend::cdn::namespace_config::AuthType::from_i32(
 		ns.auth_type
 	));
 
@@ -274,7 +274,7 @@ fn register_namespace(
 	]
 	.concat();
 
-	let upload_id = internal_unwrap!(ns.upload_id);
+	let upload_id = unwrap_ref!(ns.upload_id);
 	let service = "traffic-server-traffic-server@kubernetescrd";
 	let path_prefix = format!("/s3-cache/{}/{}", s3_client.bucket(), *upload_id);
 
@@ -393,7 +393,7 @@ fn register_custom_cdn_route(
 		return Ok(());
 	};
 
-	let ns_id = **internal_unwrap!(ns.namespace_id);
+	let ns_id = **unwrap_ref!(ns.namespace_id);
 
 	if let Some(glob) = route.glob.clone() {
 		match TryInto::<util::glob::Glob>::try_into(glob) {

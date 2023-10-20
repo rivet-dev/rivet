@@ -33,9 +33,9 @@ pub async fn summaries(
 		.games
 		.iter()
 		.map(|game| {
-			let game_id = internal_unwrap!(game.game_id).as_uuid();
-			let cdn_config = internal_unwrap_owned!(configs.get(&game_id));
-			let dev_team = internal_unwrap_owned!(dev_teams.get(&game_id));
+			let game_id = unwrap_ref!(game.game_id).as_uuid();
+			let cdn_config = unwrap!(configs.get(&game_id));
+			let dev_team = unwrap!(dev_teams.get(&game_id));
 
 			convert::game::summary(game, cdn_config, dev_team)
 		})
@@ -55,7 +55,7 @@ pub async fn games_and_dev_teams(
 		team_ids: games_res
 			.games
 			.iter()
-			.map(|g| Ok(internal_unwrap_owned!(g.developer_team_id)))
+			.map(|g| Ok(unwrap!(g.developer_team_id)))
 			.collect::<GlobalResult<_>>()?,
 	})
 	.await?;
@@ -64,11 +64,11 @@ pub async fn games_and_dev_teams(
 		.games
 		.iter()
 		.map(|game| {
-			let team = internal_unwrap_owned!(dev_teams_res
+			let team = unwrap!(dev_teams_res
 				.teams
 				.iter()
 				.find(|team| team.team_id == game.developer_team_id));
-			let game_id = internal_unwrap!(game.game_id).as_uuid();
+			let game_id = unwrap_ref!(game.game_id).as_uuid();
 
 			Ok((game_id, team.clone()))
 		})
@@ -97,8 +97,8 @@ pub async fn cdn_config(
 	let mut prod_namespaces = HashMap::new();
 	for namespace in &game_namespaces_res.namespaces {
 		if &namespace.name_id == "prod" {
-			let game_id = internal_unwrap!(namespace.game_id).as_uuid();
-			let namespace_id = internal_unwrap_owned!(namespace.namespace_id).as_uuid();
+			let game_id = unwrap_ref!(namespace.game_id).as_uuid();
+			let namespace_id = unwrap!(namespace.namespace_id).as_uuid();
 
 			prod_namespaces.insert(namespace_id, game_id);
 		}
@@ -117,9 +117,9 @@ pub async fn cdn_config(
 		.namespaces
 		.iter()
 		.map(|ns| {
-			let namespace_id = internal_unwrap!(ns.namespace_id).as_uuid();
-			let game_id = internal_unwrap_owned!(prod_namespaces.get(&namespace_id));
-			let config = internal_unwrap!(ns.config).clone();
+			let namespace_id = unwrap_ref!(ns.namespace_id).as_uuid();
+			let game_id = unwrap!(prod_namespaces.get(&namespace_id));
+			let config = unwrap_ref!(ns.config).clone();
 
 			Ok((*game_id, config))
 		})

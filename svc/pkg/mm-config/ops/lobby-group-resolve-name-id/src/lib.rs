@@ -20,7 +20,7 @@ impl From<LobbyGroup> for mm_config::lobby_group_resolve_name_id::response::Lobb
 async fn handle(
 	ctx: OperationContext<mm_config::lobby_group_resolve_name_id::Request>,
 ) -> GlobalResult<mm_config::lobby_group_resolve_name_id::Response> {
-	let version_id = internal_unwrap!(ctx.version_id).as_uuid();
+	let version_id = unwrap_ref!(ctx.version_id).as_uuid();
 
 	let lobby_groups = sqlx::query_as::<_, LobbyGroup>(indoc!(
 		"

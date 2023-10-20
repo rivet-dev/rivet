@@ -11,7 +11,7 @@ async fn handle(
 	let crdb = ctx.crdb().await?;
 
 	let email_parse = EmailAddress::parse(&ctx.email, None);
-	let email = internal_unwrap!(email_parse);
+	let email = unwrap_ref!(email_parse);
 
 	// Combine the email parts together and make the entire email lowercase
 	let email = format!("{}@{}", email.get_local_part(), email.get_domain()).to_lowercase();
@@ -45,7 +45,7 @@ async fn handle(
 			game_ids: vec![game_id],
 		})
 		.await?;
-		let game = unwrap_with_owned!(games_res.games.first(), GAME_NOT_FOUND);
+		let game = unwrap_with!(games_res.games.first(), GAME_NOT_FOUND);
 
 		(
 			"d-a742c54153a6436694516fc58cb6eabf".to_string(),

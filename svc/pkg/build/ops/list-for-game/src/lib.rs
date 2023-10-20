@@ -5,7 +5,7 @@ use rivet_operation::prelude::*;
 async fn handle(
 	ctx: OperationContext<build::list_for_game::Request>,
 ) -> GlobalResult<build::list_for_game::Response> {
-	let game_id = internal_unwrap!(ctx.game_id).as_uuid();
+	let game_id = unwrap_ref!(ctx.game_id).as_uuid();
 
 	let build_ids = sqlx::query_as::<_, (Uuid,)>(indoc!(
 		"

@@ -23,7 +23,7 @@ pub async fn script_call(
 	})
 	.await?;
 	let Some(instance) = instance_res.instance else {
-		panic_with!(MODULE_KEY_NOT_FOUND, key = module);
+		bail_with!(MODULE_KEY_NOT_FOUND, key = module);
 	};
 
 	// Get the module

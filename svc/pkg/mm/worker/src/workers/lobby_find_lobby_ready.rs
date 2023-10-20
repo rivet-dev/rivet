@@ -5,7 +5,7 @@ use proto::backend::pkg::*;
 async fn worker(
 	ctx: &OperationContext<mm::msg::lobby_ready_complete::Message>,
 ) -> GlobalResult<()> {
-	let lobby_id = internal_unwrap!(ctx.lobby_id).as_uuid();
+	let lobby_id = unwrap_ref!(ctx.lobby_id).as_uuid();
 
 	// TODO: Is there a race condition here for new queries?
 

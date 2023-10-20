@@ -10,7 +10,7 @@ async fn handle(
 
 	let crdb = ctx.crdb().await?;
 
-	let captcha_config = internal_unwrap!(ctx.captcha_config);
+	let captcha_config = unwrap_ref!(ctx.captcha_config);
 	let user_id = ctx.user_id.as_ref().map(common::Uuid::as_uuid);
 	let namespace_id = ctx.namespace_id.as_ref().map(common::Uuid::as_uuid);
 

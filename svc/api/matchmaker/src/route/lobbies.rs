@@ -106,7 +106,7 @@ pub async fn find(
 		});
 	}
 
-	assert_with!(
+	ensure_with!(
 		!body.game_modes.is_empty(),
 		MATCHMAKER_NO_GAME_MODE_PROVIDED
 	);
@@ -119,9 +119,9 @@ pub async fn find(
 		version_ids: vec![ns_data.version_id.into()],
 	})
 	.await?;
-	let version_data = internal_unwrap_owned!(version_res.versions.first());
-	let version_config = internal_unwrap!(version_data.config);
-	let version_meta = internal_unwrap!(version_data.config_meta);
+	let version_data = unwrap!(version_res.versions.first());
+	let version_config = unwrap_ref!(version_data.config);
+	let version_meta = unwrap_ref!(version_data.config_meta);
 
 	// Find lobby groups that match the requested game modes. This matches the
 	// same order as `body.game_modes`.
@@ -132,7 +132,7 @@ pub async fn find(
 		.game_modes
 		.iter()
 		.map(|name_id| {
-			Ok(unwrap_with_owned!(
+			Ok(unwrap_with!(
 				version_config
 					.lobby_groups
 					.iter()
@@ -187,7 +187,7 @@ pub async fn find(
 	let auto_create = if let Some(auto_create) = auto_create {
 		auto_create
 	} else {
-		panic_with!(MATCHMAKER_AUTO_CREATE_FAILED);
+		bail_with!(MATCHMAKER_AUTO_CREATE_FAILED);
 	};
 
 	// Build query and find lobby
@@ -262,12 +262,12 @@ pub async fn create(
 		version_ids: vec![ns_data.version_id.into()],
 	})
 	.await?;
-	let version_data = internal_unwrap_owned!(version_config_res.versions.first());
-	let version_config = internal_unwrap!(version_data.config);
-	let version_meta = internal_unwrap!(version_data.config_meta);
+	let version_data = unwrap!(version_config_res.versions.first());
+	let version_config = unwrap_ref!(version_data.config);
+	let version_meta = unwrap_ref!(version_data.config_meta);
 
 	// Find lobby groups that match the requested game mode
-	let (lobby_group, lobby_group_meta) = unwrap_with_owned!(
+	let (lobby_group, lobby_group_meta) = unwrap_with!(
 		version_config
 			.lobby_groups
 			.iter()
@@ -323,7 +323,7 @@ pub async fn create(
 		&[(lobby_group, lobby_group_meta)],
 	)
 	.await?;
-	let region_id = *unwrap_with_owned!(region_ids.first(), MATCHMAKER_REGION_NOT_FOUND);
+	let region_id = *unwrap_with!(region_ids.first(), MATCHMAKER_REGION_NOT_FOUND);
 
 	let lobby_id = Uuid::new_v4();
 	let lobby_create_res =
@@ -424,7 +424,7 @@ pub async fn list(
 	// Count lobbies by lobby group id
 	let mut lobbies_by_lobby_group_id: HashMap<Uuid, usize> = HashMap::new();
 	for lobby in &lobbies {
-		let lobby_group_id = internal_unwrap!(lobby.lobby.lobby_group_id).as_uuid();
+		let lobby_group_id = unwrap_ref!(lobby.lobby.lobby_group_id).as_uuid();
 		let entry = lobbies_by_lobby_group_id.entry(lobby_group_id).or_default();
 		*entry += 1;
 	}
@@ -471,7 +471,7 @@ pub async fn list(
 		})
 		// Build response model
 		.map(|(lobby, lobby_group)| {
-			let (region, _) = internal_unwrap_owned!(meta
+			let (region, _) = unwrap!(meta
 				.regions
 				.iter()
 				.find(|(r, _)| r.region_id == lobby.lobby.region_id));
@@ -479,7 +479,7 @@ pub async fn list(
 			GlobalResult::Ok(models::MatchmakerLobbyInfo {
 				region_id: region.name_id.clone(),
 				game_mode_id: lobby_group.name_id.clone(),
-				lobby_id: internal_unwrap!(lobby.lobby.lobby_id).as_uuid(),
+				lobby_id: unwrap_ref!(lobby.lobby.lobby_id).as_uuid(),
 				max_players_normal: ApiTryInto::try_into(lobby.lobby.max_players_normal)?,
 				max_players_direct: ApiTryInto::try_into(lobby.lobby.max_players_direct)?,
 				max_players_party: ApiTryInto::try_into(lobby.lobby.max_players_party)?,
@@ -519,20 +519,20 @@ async fn fetch_lobby_list_meta(
 		namespace_ids: vec![namespace_id.into()],
 	})
 	.await?;
-	let ns_data = internal_unwrap_owned!(ns_res.namespaces.first());
-	let version_id = internal_unwrap!(ns_data.version_id).as_uuid();
+	let ns_data = unwrap!(ns_res.namespaces.first());
+	let version_id = unwrap_ref!(ns_data.version_id).as_uuid();
 
 	// Read the version config
 	let version_res = op!([ctx] mm_config_version_get {
 		version_ids: vec![version_id.into()],
 	})
 	.await?;
-	let version = internal_unwrap_owned!(
+	let version = unwrap!(
 		version_res.versions.first(),
 		"no matchmaker config for namespace"
 	);
-	let version_config = internal_unwrap!(version.config);
-	let version_meta = internal_unwrap!(version.config_meta);
+	let version_config = unwrap_ref!(version.config);
+	let version_meta = unwrap_ref!(version.config_meta);
 	let lobby_groups = version_config
 		.lobby_groups
 		.iter()
@@ -582,7 +582,7 @@ async fn fetch_lobby_list_meta(
 			.iter()
 			.map(|region| {
 				let recommend_region = if let Some(res) = &recommend_res {
-					Some(internal_unwrap_owned!(res
+					Some(unwrap!(res
 						.regions
 						.iter()
 						.find(|recommend| recommend.region_id == region.region_id)))
@@ -614,7 +614,7 @@ async fn fetch_lobby_list(
 			namespace_ids: vec![namespace_id.into()],
 		})
 		.await?;
-		let lobby_ids = internal_unwrap_owned!(lobby_list_res.namespaces.first());
+		let lobby_ids = unwrap!(lobby_list_res.namespaces.first());
 
 		lobby_ids.lobby_ids.clone()
 	};
@@ -744,7 +744,7 @@ pub async fn get_state(
 		lobby_ids: vec![lobby_id.into()],
 	})
 	.await?;
-	let lobby = internal_unwrap_owned!(lobbies_res.lobbies.first());
+	let lobby = unwrap!(lobbies_res.lobbies.first());
 
 	let state = lobby
 		.state_json
@@ -788,8 +788,8 @@ async fn find_inner(
 				})
 				.await?;
 
-				let version_config = internal_unwrap_owned!(version_config_res.versions.first());
-				Ok(internal_unwrap!(version_config.config).clone())
+				let version_config = unwrap!(version_config_res.versions.first());
+				Ok(unwrap_ref!(version_config.config).clone())
 			}
 		},
 		ctx.auth().fetch_game_user_option(ctx.op_ctx()),
@@ -803,7 +803,7 @@ async fn find_inner(
 				topic: HashMap::<String, String>::from([
 					("kind".into(), "mm:find".into()),
 				]),
-				remote_address: internal_unwrap!(ctx.remote_address()).to_string(),
+				remote_address: unwrap_ref!(ctx.remote_address()).to_string(),
 				origin_host: ctx
 					.origin()
 					.and_then(|origin| origin.host_str())
@@ -819,7 +819,7 @@ async fn find_inner(
 					("kind".into(), "mm:find".into()),
 				]),
 				captcha_config: Some(captcha_config.clone()),
-				remote_address: internal_unwrap!(ctx.remote_address()).to_string(),
+				remote_address: unwrap_ref!(ctx.remote_address()).to_string(),
 				namespace_id: Some(game_ns.namespace_id.into()),
 			})
 			.await?;
@@ -830,7 +830,7 @@ async fn find_inner(
 				})
 				.await?;
 
-				assert_with!(
+				ensure_with!(
 					!required_res.needs_verification,
 					CAPTCHA_CAPTCHA_REQUIRED {
 						metadata: json!({
@@ -841,7 +841,7 @@ async fn find_inner(
 					}
 				);
 			} else if let Some(_turnstile_config) = &captcha_config.turnstile {
-				assert_with!(
+				ensure_with!(
 					!required_res.needs_verification,
 					CAPTCHA_CAPTCHA_REQUIRED {
 						metadata: json!({
@@ -850,7 +850,7 @@ async fn find_inner(
 					}
 				);
 			} else {
-				internal_panic!("invalid captcha config for version");
+				bail!("invalid captcha config for version");
 			}
 		}
 	}
@@ -881,8 +881,8 @@ async fn find_inner(
 		..Default::default()
 	})
 	.await?;
-	let token = internal_unwrap!(token_res.token);
-	let token_session_id = internal_unwrap!(token_res.session_id).as_uuid();
+	let token = unwrap_ref!(token_res.token);
+	let token_session_id = unwrap_ref!(token_res.session_id).as_uuid();
 
 	// Find lobby
 	let query_id = Uuid::new_v4();
@@ -913,34 +913,34 @@ async fn find_inner(
 	let lobby_id = match find_res
 		.map_err(|msg| mm::msg::lobby_find_fail::ErrorCode::from_i32(msg.error_code))
 	{
-		Ok(res) => internal_unwrap!(res.lobby_id).as_uuid(),
+		Ok(res) => unwrap_ref!(res.lobby_id).as_uuid(),
 		Err(Some(code)) => {
 			use mm::msg::lobby_find_fail::ErrorCode::*;
 
 			match code {
-				Unknown => internal_panic!("unknown find error code"),
-				StaleMessage => panic_with!(CHIRP_STALE_MESSAGE),
-				TooManyPlayersFromSource => panic_with!(MATCHMAKER_TOO_MANY_PLAYERS_FROM_SOURCE),
+				Unknown => bail!("unknown find error code"),
+				StaleMessage => bail_with!(CHIRP_STALE_MESSAGE),
+				TooManyPlayersFromSource => bail_with!(MATCHMAKER_TOO_MANY_PLAYERS_FROM_SOURCE),
 
-				LobbyStopped | LobbyStoppedPrematurely => panic_with!(MATCHMAKER_LOBBY_STOPPED),
-				LobbyClosed => panic_with!(MATCHMAKER_LOBBY_CLOSED),
-				LobbyNotFound => panic_with!(MATCHMAKER_LOBBY_NOT_FOUND),
-				NoAvailableLobbies => panic_with!(MATCHMAKER_NO_AVAILABLE_LOBBIES),
-				LobbyFull => panic_with!(MATCHMAKER_LOBBY_FULL),
-				LobbyCountOverMax => panic_with!(MATCHMAKER_TOO_MANY_LOBBIES),
-				RegionNotEnabled => panic_with!(MATCHMAKER_REGION_NOT_ENABLED_FOR_GAME_MODE),
+				LobbyStopped | LobbyStoppedPrematurely => bail_with!(MATCHMAKER_LOBBY_STOPPED),
+				LobbyClosed => bail_with!(MATCHMAKER_LOBBY_CLOSED),
+				LobbyNotFound => bail_with!(MATCHMAKER_LOBBY_NOT_FOUND),
+				NoAvailableLobbies => bail_with!(MATCHMAKER_NO_AVAILABLE_LOBBIES),
+				LobbyFull => bail_with!(MATCHMAKER_LOBBY_FULL),
+				LobbyCountOverMax => bail_with!(MATCHMAKER_TOO_MANY_LOBBIES),
+				RegionNotEnabled => bail_with!(MATCHMAKER_REGION_NOT_ENABLED_FOR_GAME_MODE),
 
-				DevTeamInvalidStatus => panic_with!(GROUP_INVALID_DEVELOPER_STATUS),
+				DevTeamInvalidStatus => bail_with!(GROUP_INVALID_DEVELOPER_STATUS),
 
-				FindDisabled => panic_with!(MATCHMAKER_FIND_DISABLED),
-				JoinDisabled => panic_with!(MATCHMAKER_JOIN_DISABLED),
-				VerificationFailed => panic_with!(MATCHMAKER_VERIFICATION_FAILED),
-				VerificationRequestFailed => panic_with!(MATCHMAKER_VERIFICATION_REQUEST_FAILED),
-				IdentityRequired => panic_with!(MATCHMAKER_IDENTITY_REQUIRED),
-				RegistrationRequired => panic_with!(MATCHMAKER_REGISTRATION_REQUIRED),
+				FindDisabled => bail_with!(MATCHMAKER_FIND_DISABLED),
+				JoinDisabled => bail_with!(MATCHMAKER_JOIN_DISABLED),
+				VerificationFailed => bail_with!(MATCHMAKER_VERIFICATION_FAILED),
+				VerificationRequestFailed => bail_with!(MATCHMAKER_VERIFICATION_REQUEST_FAILED),
+				IdentityRequired => bail_with!(MATCHMAKER_IDENTITY_REQUIRED),
+				RegistrationRequired => bail_with!(MATCHMAKER_REGISTRATION_REQUIRED),
 			};
 		}
-		Err(None) => internal_panic!("failed to parse find error code"),
+		Err(None) => bail!("failed to parse find error code"),
 	};
 
 	// Fetch lobby data
@@ -958,11 +958,11 @@ async fn find_inner(
 		// This will only happen if the lobby manually stops/exits in the middle
 		// of a find request.
 		tracing::error!("lobby not found in race condition");
-		internal_panic!("lobby not found");
+		bail!("lobby not found");
 	};
-	let region_id = internal_unwrap!(lobby.region_id);
-	let lobby_group_id = internal_unwrap!(lobby.lobby_group_id);
-	let run_id = internal_unwrap!(lobby.run_id);
+	let region_id = unwrap_ref!(lobby.region_id);
+	let lobby_group_id = unwrap_ref!(lobby.lobby_group_id);
+	let run_id = unwrap_ref!(lobby.run_id);
 
 	// Fetch lobby run data
 	let (run_res, version) = tokio::try_join!(
@@ -982,34 +982,34 @@ async fn find_inner(
 			.await?;
 
 			// NOTE: The matchmaker config is fetched again to account for outdated lobbies
-			let version_id = internal_unwrap_owned!(version_res.versions.first());
-			let version_id = internal_unwrap!(version_id.version_id);
+			let version_id = unwrap!(version_res.versions.first());
+			let version_id = unwrap_ref!(version_id.version_id);
 			let version_res = op!([ctx] mm_config_version_get {
 				version_ids: vec![*version_id],
 			})
 			.await?;
-			let version = internal_unwrap_owned!(version_res.versions.first());
+			let version = unwrap!(version_res.versions.first());
 
 			GlobalResult::Ok(version.clone())
 		}
 	)?;
 
 	// Match the version
-	let version_config = internal_unwrap!(version.config);
-	let version_meta = internal_unwrap!(version.config_meta);
-	let (lobby_group_config, _lobby_group_meta) = internal_unwrap_owned!(version_config
+	let version_config = unwrap_ref!(version.config);
+	let version_meta = unwrap_ref!(version.config_meta);
+	let (lobby_group_config, _lobby_group_meta) = unwrap!(version_config
 		.lobby_groups
 		.iter()
 		.zip(version_meta.lobby_groups.iter())
 		.find(|(_, meta)| meta.lobby_group_id.as_ref() == Some(lobby_group_id)));
-	let lobby_runtime = internal_unwrap!(lobby_group_config.runtime);
+	let lobby_runtime = unwrap_ref!(lobby_group_config.runtime);
 	#[allow(clippy::infallible_destructuring_match)]
-	let docker_runtime = match internal_unwrap!(lobby_runtime.runtime) {
+	let docker_runtime = match unwrap_ref!(lobby_runtime.runtime) {
 		backend::matchmaker::lobby_runtime::Runtime::Docker(x) => x,
 	};
 
 	// Convert the ports to client-friendly ports
-	let run = internal_unwrap_owned!(run_res.runs.first());
+	let run = unwrap!(run_res.runs.first());
 	let ports = docker_runtime
 		.ports
 		.iter()
@@ -1022,7 +1022,7 @@ async fn find_inner(
 		region_ids: vec![*region_id],
 	})
 	.await?;
-	let region_proto = internal_unwrap_owned!(region_res.regions.first());
+	let region_proto = unwrap!(region_res.regions.first());
 	let region = Box::new(models::MatchmakerJoinRegion {
 		region_id: region_proto.name_id.clone(),
 		display_name: region_proto.region_display_name.clone(),
@@ -1068,10 +1068,10 @@ async fn resolve_region_ids(
 		let region_ids = resolve_res
 			.regions
 			.iter()
-			.map(|r| Ok(internal_unwrap!(r.region_id).as_uuid()))
+			.map(|r| Ok(unwrap_ref!(r.region_id).as_uuid()))
 			.collect::<GlobalResult<Vec<_>>>()?;
 
-		assert_eq_with!(
+		ensure_eq_with!(
 			region_ids.len(),
 			region_name_ids.len(),
 			MATCHMAKER_REGION_NOT_FOUND
@@ -1105,13 +1105,13 @@ async fn resolve_region_ids(
 				..Default::default()
 			})
 			.await?;
-			let primary_region = internal_unwrap_owned!(recommend_res.regions.first());
-			let primary_region_id = internal_unwrap!(primary_region.region_id).as_uuid();
-			
+			let primary_region = unwrap!(recommend_res.regions.first());
+			let primary_region_id = unwrap_ref!(primary_region.region_id).as_uuid();
+
 			vec![primary_region_id]
 		} else {
 			tracing::warn!("coords not provided to select region");
-			let region_id = internal_unwrap_owned!(enabled_region_ids.first()).as_uuid();
+			let region_id = unwrap!(enabled_region_ids.first()).as_uuid();
 
 			vec![region_id]
 		}
@@ -1196,18 +1196,18 @@ async fn dev_mock_lobby_list(
 		namespace_ids: vec![ns_dev_ent.namespace_id.into()],
 	})
 	.await?;
-	let ns_data = internal_unwrap_owned!(ns_res.namespaces.first());
-	let version_id = internal_unwrap!(ns_data.version_id).as_uuid();
+	let ns_data = unwrap!(ns_res.namespaces.first());
+	let version_id = unwrap_ref!(ns_data.version_id).as_uuid();
 
 	let version_res = op!([ctx] mm_config_version_get {
 		version_ids: vec![version_id.into()],
 	})
 	.await?;
-	let version = internal_unwrap_owned!(
+	let version = unwrap!(
 		version_res.versions.first(),
 		"no matchmaker config for namespace"
 	);
-	let version_config = internal_unwrap!(version.config);
+	let version_config = unwrap_ref!(version.config);
 
 	// Create fake region
 	let region = models::MatchmakerRegionInfo {
@@ -1268,8 +1268,8 @@ fn build_port(
 		ProxyKind as MmProxyKind, ProxyProtocol as MmProxyProtocol,
 	};
 
-	let proxy_kind = internal_unwrap_owned!(MmProxyKind::from_i32(port.proxy_kind));
-	let mm_proxy_protocol = internal_unwrap_owned!(MmProxyProtocol::from_i32(port.proxy_protocol));
+	let proxy_kind = unwrap!(MmProxyKind::from_i32(port.proxy_kind));
+	let mm_proxy_protocol = unwrap!(MmProxyProtocol::from_i32(port.proxy_protocol));
 
 	let join_info_port = match (proxy_kind, mm_proxy_protocol) {
 		(
@@ -1322,9 +1322,9 @@ fn build_port(
 				.transpose()?
 		}
 		(MmProxyKind::None, MmProxyProtocol::Tcp | MmProxyProtocol::Udp) => {
-			let port_range = internal_unwrap!(port.port_range);
+			let port_range = unwrap_ref!(port.port_range);
 
-			let network = internal_unwrap_owned!(
+			let network = unwrap!(
 				run.networks.iter().find(|x| x.mode == "host"),
 				"missing host network"
 			);
@@ -1344,7 +1344,7 @@ fn build_port(
 			MmProxyKind::None,
 			MmProxyProtocol::Http | MmProxyProtocol::Https | MmProxyProtocol::TcpTls,
 		) => {
-			internal_panic!("invalid http proxy protocol with host network")
+			bail!("invalid http proxy protocol with host network")
 		}
 	};
 

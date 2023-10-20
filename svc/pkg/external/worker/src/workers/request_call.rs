@@ -24,13 +24,13 @@ async fn fail(
 
 #[worker(name = "external-request-call")]
 async fn worker(ctx: &OperationContext<external::msg::request_call::Message>) -> GlobalResult<()> {
-	let request_id = internal_unwrap!(ctx.request_id).as_uuid();
-	let config = internal_unwrap!(ctx.config);
+	let request_id = unwrap_ref!(ctx.request_id).as_uuid();
+	let config = unwrap_ref!(ctx.config);
 
 	let req = reqwest::Client::new();
 
 	// Add method
-	let method = internal_unwrap_owned!(HttpMethod::from_i32(config.method), "invalid http method");
+	let method = unwrap!(HttpMethod::from_i32(config.method), "invalid http method");
 	let req = match method {
 		HttpMethod::Get => req.get(&config.url),
 		HttpMethod::Post => req.post(&config.url),

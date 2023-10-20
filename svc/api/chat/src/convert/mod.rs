@@ -15,7 +15,7 @@ pub struct GameWithNamespaceIds {
 
 pub fn game_handle(game: &backend::game::Game) -> GlobalResult<models::GameHandle> {
 	Ok(models::GameHandle {
-		game_id: internal_unwrap!(game.game_id).as_uuid().to_string(),
+		game_id: unwrap_ref!(game.game_id).as_uuid().to_string(),
 		name_id: game.name_id.to_owned(),
 		display_name: game.display_name.to_owned(),
 		logo_url: util::route::game_logo(&game),

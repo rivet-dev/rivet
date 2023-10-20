@@ -10,7 +10,7 @@ struct CustomAvatar {
 async fn handle(
 	ctx: OperationContext<custom_user_avatar::list_for_game::Request>,
 ) -> GlobalResult<custom_user_avatar::list_for_game::Response> {
-	let game_id = internal_unwrap!(ctx.game_id).as_uuid();
+	let game_id = unwrap_ref!(ctx.game_id).as_uuid();
 
 	let custom_avatars = sqlx::query_as::<_, CustomAvatar>(indoc!(
 		"

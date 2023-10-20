@@ -49,7 +49,7 @@ where
 		}
 	}
 
-	internal_panic!("transaction failed with retry too many times");
+	bail!("transaction failed with retry too many times");
 }
 
 // TODO: This seems to leak connections on retries, even though it matches the
@@ -95,7 +95,7 @@ where
 //		}
 //	}
 
-//	internal_panic!("transaction failed with retry too many times");
+//	bail!("transaction failed with retry too many times");
 //}
 
 ///// Executes the transaction inside of `tx. Anything in this function can throw

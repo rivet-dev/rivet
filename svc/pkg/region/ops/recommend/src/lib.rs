@@ -41,7 +41,7 @@ async fn handle(
 	} else if let Some(origin_ip) = &ctx.origin_ip {
 		OriginKind::Ip(origin_ip.clone())
 	} else {
-		internal_panic!("lat & long or origin ip not provided")
+		bail!("lat & long or origin ip not provided")
 	};
 
 	let regions = list_regions(&ctx, &origin, &region_ids).await?;
@@ -66,7 +66,7 @@ async fn list_regions(
 					})
 					.await?;
 					let ip_info =
-						internal_unwrap!(res.ip_info, "cannot recommend regions to a bogon ip");
+						unwrap_ref!(res.ip_info, "cannot recommend regions to a bogon ip");
 					GlobalResult::Ok((ip_info.latitude, ip_info.longitude))
 				}
 			}
@@ -81,7 +81,7 @@ async fn list_regions(
 		})
 		.map_err(Into::<GlobalError>::into),
 	)?;
-	internal_assert!(
+	ensure!(
 		regions_res.regions.len() == region_ids.len(),
 		"region not found"
 	);
@@ -94,14 +94,14 @@ async fn list_regions(
 		.map(|region| {
 			Ok((
 				(region.latitude, region.longitude),
-				internal_unwrap_owned!(
+				unwrap!(
 					geoutils::Location::new(region.latitude, region.longitude)
 						.distance_to(&origin_location)
 						.ok(),
 					"failed to calculate distance to region"
 				)
 				.meters(),
-				internal_unwrap!(region.region_id).as_uuid(),
+				unwrap_ref!(region.region_id).as_uuid(),
 			))
 		})
 		.collect::<GlobalResult<Vec<_>>>()?;

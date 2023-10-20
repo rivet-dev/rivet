@@ -46,7 +46,7 @@ pub async fn profile(
 		}),
 	)?;
 
-	let team = internal_unwrap_owned!(teams.teams.first()).clone();
+	let team = unwrap!(teams.teams.first()).clone();
 	let is_developer = !dev_teams.teams.is_empty();
 
 	// Wait for an update if needed
@@ -116,7 +116,7 @@ pub async fn profile(
 				})
 				.await?;
 
-				Ok(internal_unwrap_owned!(teams_res.teams.first()).clone())
+				Ok(unwrap!(teams_res.teams.first()).clone())
 			} else {
 				Ok(team)
 			}
@@ -137,7 +137,7 @@ pub async fn profile(
 			}],
 		}),
 	)?;
-	let team_members_res = internal_unwrap_owned!(team_members_res.teams.first());
+	let team_members_res = unwrap!(team_members_res.teams.first());
 	let team_chat_thread = team_chat_threads_res.threads.first().cloned();
 
 	let is_current_identity_member = team_members_res
@@ -145,17 +145,16 @@ pub async fn profile(
 		.iter()
 		.flat_map(|u| u.user_id.as_ref().map(common::Uuid::as_uuid))
 		.any(|id| id == user_ent.user_id);
-	let is_current_identity_requesting_join =
-		internal_unwrap_owned!(team_join_requests_res.teams.first())
-			.join_requests
-			.iter()
-			.flat_map(|u| u.user_id.as_ref().map(common::Uuid::as_uuid))
-			.any(|id| id == user_ent.user_id);
+	let is_current_identity_requesting_join = unwrap!(team_join_requests_res.teams.first())
+		.join_requests
+		.iter()
+		.flat_map(|u| u.user_id.as_ref().map(common::Uuid::as_uuid))
+		.any(|id| id == user_ent.user_id);
 
 	// TODO:
 	let _admin_role_id = Uuid::default();
-	let owner_user_id = internal_unwrap!(team.owner_user_id).as_uuid();
-	let team_id = internal_unwrap!(team.team_id).as_uuid();
+	let owner_user_id = unwrap_ref!(team.owner_user_id).as_uuid();
+	let team_id = unwrap_ref!(team.team_id).as_uuid();
 
 	Ok(models::GetGroupProfileResponse {
 		group: models::GroupProfile {
@@ -169,8 +168,7 @@ pub async fn profile(
 			},
 
 			is_current_identity_member,
-			publicity: internal_unwrap_owned!(backend::team::Publicity::from_i32(team.publicity))
-				.api_into(),
+			publicity: unwrap!(backend::team::Publicity::from_i32(team.publicity)).api_into(),
 			member_count: team_members_res.members.len() as i32,
 			is_developer,
 
@@ -179,9 +177,7 @@ pub async fn profile(
 			is_current_identity_requesting_join,
 			owner_identity_id: owner_user_id.to_string(),
 			thread_id: team_chat_thread
-				.map(|thread| {
-					GlobalResult::Ok(internal_unwrap!(thread.thread_id).as_uuid().to_string())
-				})
+				.map(|thread| GlobalResult::Ok(unwrap_ref!(thread.thread_id).as_uuid().to_string()))
 				.transpose()?,
 		},
 		watch: convert::watch_response(WatchResponse::new(update_ts + 1)),
@@ -217,12 +213,12 @@ pub async fn members(
 			.transpose()?,
 	})
 	.await?;
-	let team_members = internal_unwrap_owned!(team_members_res.teams.first());
+	let team_members = unwrap!(team_members_res.teams.first());
 
 	let mut user_ids = team_members
 		.members
 		.iter()
-		.map(|member| Ok(internal_unwrap_owned!(member.user_id)))
+		.map(|member| Ok(unwrap!(member.user_id)))
 		.collect::<GlobalResult<Vec<_>>>()?;
 
 	// Wait for an update if needed
@@ -370,12 +366,12 @@ pub async fn join_requests(
 			// 	.transpose()?,
 		}),
 	)?;
-	let team = unwrap_with_owned!(teams_res.teams.first(), GROUP_NOT_FOUND);
-	let team_join_requests = internal_unwrap_owned!(team_join_requests_res.teams.first()).clone();
-	let owner_user_id = internal_unwrap!(team.owner_user_id).as_uuid();
+	let team = unwrap_with!(teams_res.teams.first(), GROUP_NOT_FOUND);
+	let team_join_requests = unwrap!(team_join_requests_res.teams.first()).clone();
+	let owner_user_id = unwrap_ref!(team.owner_user_id).as_uuid();
 
 	// Verify request user's permissions
-	assert_eq_with!(
+	ensure_eq_with!(
 		user_ent.user_id,
 		owner_user_id,
 		GROUP_INSUFFICIENT_PERMISSIONS
@@ -384,7 +380,7 @@ pub async fn join_requests(
 	let mut user_ids = team_join_requests
 		.join_requests
 		.iter()
-		.map(|join_request| Ok(internal_unwrap_owned!(join_request.user_id)))
+		.map(|join_request| Ok(unwrap!(join_request.user_id)))
 		.collect::<GlobalResult<Vec<_>>>()?;
 
 	// Wait for an update if needed
@@ -527,11 +523,11 @@ pub async fn update_profile(
 	.await?;
 
 	// Validate the team exists
-	let team = internal_unwrap_owned!(res.teams.first());
-	let owner_user_id = internal_unwrap!(team.owner_user_id).as_uuid();
+	let team = unwrap!(res.teams.first());
+	let owner_user_id = unwrap_ref!(team.owner_user_id).as_uuid();
 
 	// Verify user's permissions
-	assert_eq_with!(
+	ensure_eq_with!(
 		user_ent.user_id,
 		owner_user_id,
 		GROUP_INSUFFICIENT_PERMISSIONS
@@ -550,9 +546,9 @@ pub async fn update_profile(
 			use team::msg::profile_set_fail::ErrorCode::*;
 
 			let code = team::msg::profile_set_fail::ErrorCode::from_i32(msg.error_code);
-			match internal_unwrap_owned!(code) {
-				Unknown => internal_panic!("unknown team profile set fail error code"),
-				ValidationFailed => panic_with!(VALIDATION_ERROR),
+			match unwrap!(code) {
+				Unknown => bail!("unknown team profile set fail error code"),
+				ValidationFailed => bail_with!(VALIDATION_ERROR),
 			}
 		}
 	}
@@ -601,7 +597,7 @@ pub async fn leave(
 		team_ids: vec![group_id.into()],
 	})
 	.await?;
-	assert_with!(!teams_res.teams.is_empty(), GROUP_NOT_FOUND);
+	ensure_with!(!teams_res.teams.is_empty(), GROUP_NOT_FOUND);
 
 	// Remove the team member
 	msg!([ctx] team::msg::member_remove(group_id, user_ent.user_id) -> team::msg::member_remove_complete {
@@ -634,10 +630,10 @@ pub async fn create(
 			use team::msg::create_fail::ErrorCode::*;
 
 			let code = team::msg::create_fail::ErrorCode::from_i32(msg.error_code);
-			match internal_unwrap_owned!(code) {
-				Unknown => internal_panic!("unknown team create error code"),
+			match unwrap!(code) {
+				Unknown => bail!("unknown team create error code"),
 
-				ValidationFailed => panic_with!(VALIDATION_ERROR),
+				ValidationFailed => bail_with!(VALIDATION_ERROR),
 			}
 		}
 	};
@@ -660,11 +656,11 @@ pub async fn request_join(
 		team_ids: vec![group_id.into()],
 	})
 	.await?;
-	let team = unwrap_with_owned!(teams_res.teams.first(), GROUP_NOT_FOUND);
+	let team = unwrap_with!(teams_res.teams.first(), GROUP_NOT_FOUND);
 
 	// Validate team publicity
-	let publicity = internal_unwrap_owned!(backend::team::Publicity::from_i32(team.publicity));
-	assert_eq_with!(
+	let publicity = unwrap!(backend::team::Publicity::from_i32(team.publicity));
+	ensure_eq_with!(
 		publicity,
 		backend::team::Publicity::Open,
 		GROUP_CANNOT_REQUEST_JOIN
@@ -678,7 +674,7 @@ pub async fn request_join(
 		}],
 	})
 	.await?;
-	assert_with!(
+	ensure_with!(
 		banned_users_res.banned_users.is_empty(),
 		GROUP_MEMBER_BANNED
 	);
@@ -695,13 +691,13 @@ pub async fn request_join(
 	.await?;
 
 	if let Err(res) = res {
-		let error_code = internal_unwrap_owned!(
-			team::msg::join_request_create_fail::ErrorCode::from_i32(res.error_code)
-		);
+		let error_code = unwrap!(team::msg::join_request_create_fail::ErrorCode::from_i32(
+			res.error_code
+		));
 
 		match error_code {
 			team::msg::join_request_create_fail::ErrorCode::RequestAlreadyExists => {
-				panic_with!(GROUP_JOIN_REQUEST_ALREADY_EXISTS)
+				bail_with!(GROUP_JOIN_REQUEST_ALREADY_EXISTS)
 			}
 		}
 	}
@@ -723,11 +719,11 @@ pub async fn resolve_join_request(
 		team_ids: vec![group_id.into()],
 	})
 	.await?;
-	let team = unwrap_with_owned!(teams_res.teams.first(), GROUP_NOT_FOUND);
-	let owner_user_id = internal_unwrap!(team.owner_user_id).as_uuid();
+	let team = unwrap_with!(teams_res.teams.first(), GROUP_NOT_FOUND);
+	let owner_user_id = unwrap_ref!(team.owner_user_id).as_uuid();
 
 	// Verify user's permissions
-	assert_eq_with!(
+	ensure_eq_with!(
 		user_ent.user_id,
 		owner_user_id,
 		GROUP_INSUFFICIENT_PERMISSIONS
@@ -759,7 +755,7 @@ pub async fn search(
 ) -> GlobalResult<models::SearchGroupsResponse> {
 	let _user_ent = ctx.auth().user(ctx.op_ctx()).await?;
 
-	assert_with!(
+	ensure_with!(
 		query.limit.map(|v| v != 0).unwrap_or(true),
 		API_BAD_QUERY_PARAMETER,
 		parameter = "count",
@@ -836,7 +832,7 @@ pub async fn transfer_owner(
 	let new_owner_user_id = Uuid::from_str(body.new_owner_identity_id.as_str())?;
 
 	// Verify user is not self
-	assert_with!(
+	ensure_with!(
 		user_ent.user_id != new_owner_user_id,
 		API_FORBIDDEN,
 		reason = "Invalid user"
@@ -847,18 +843,18 @@ pub async fn transfer_owner(
 		team_ids: vec![group_id.into()],
 	})
 	.await?;
-	let team = unwrap_with_owned!(teams_res.teams.first(), GROUP_NOT_FOUND);
-	let owner_user_id = internal_unwrap!(team.owner_user_id).as_uuid();
+	let team = unwrap_with!(teams_res.teams.first(), GROUP_NOT_FOUND);
+	let owner_user_id = unwrap_ref!(team.owner_user_id).as_uuid();
 
 	// Verify request user's permissions
-	assert_eq_with!(
+	ensure_eq_with!(
 		user_ent.user_id,
 		owner_user_id,
 		GROUP_INSUFFICIENT_PERMISSIONS
 	);
 
 	// Verify that new owner is a group member
-	assert_with!(
+	ensure_with!(
 		utils::group_member(&ctx, group_id, new_owner_user_id).await?,
 		GROUP_NOT_MEMBER
 	);
@@ -884,8 +880,8 @@ pub async fn prepare_avatar_upload(
 	let user_ent = ctx.auth().user(ctx.op_ctx()).await?;
 	assert::user_registered(&ctx, user_ent.user_id).await?;
 
-	internal_assert!(body.content_length >= 0, "Upload invalid");
-	assert_with!(
+	ensure!(body.content_length >= 0, "Upload invalid");
+	ensure_with!(
 		body.content_length < MAX_AVATAR_UPLOAD_SIZE,
 		UPLOAD_TOO_LARGE
 	);
@@ -895,7 +891,7 @@ pub async fn prepare_avatar_upload(
 	} else if body.path.ends_with(".jpg") || body.path.ends_with(".jpeg") {
 		"jpeg"
 	} else {
-		internal_panic!("invalid file type (allowed: .png, .jpg)");
+		bail!("invalid file type (allowed: .png, .jpg)");
 	};
 
 	// Create the upload
@@ -914,8 +910,8 @@ pub async fn prepare_avatar_upload(
 	})
 	.await?;
 
-	let upload_id = internal_unwrap!(upload_prepare_res.upload_id).as_uuid();
-	let presigned_request = internal_unwrap_owned!(upload_prepare_res.presigned_requests.first());
+	let upload_id = unwrap_ref!(upload_prepare_res.upload_id).as_uuid();
+	let presigned_request = unwrap!(upload_prepare_res.presigned_requests.first());
 
 	Ok(models::PrepareGroupAvatarUploadResponse {
 		upload_id: upload_id.to_string(),
@@ -937,11 +933,11 @@ pub async fn complete_avatar_upload(
 		team_ids: vec![group_id.into()],
 	})
 	.await?;
-	let team = unwrap_with_owned!(teams_res.teams.first(), GROUP_NOT_FOUND);
-	let owner_user_id = internal_unwrap!(team.owner_user_id).as_uuid();
+	let team = unwrap_with!(teams_res.teams.first(), GROUP_NOT_FOUND);
+	let owner_user_id = unwrap_ref!(team.owner_user_id).as_uuid();
 
 	// Verify user's permissions
-	assert_eq_with!(
+	ensure_eq_with!(
 		user_ent.user_id,
 		owner_user_id,
 		GROUP_INSUFFICIENT_PERMISSIONS
@@ -969,19 +965,19 @@ pub async fn create_invite(
 		team_ids: vec![group_id.into()],
 	})
 	.await?;
-	let _team = unwrap_with_owned!(teams_res.teams.first(), GROUP_NOT_FOUND);
-	assert_with!(
+	let _team = unwrap_with!(teams_res.teams.first(), GROUP_NOT_FOUND);
+	ensure_with!(
 		utils::group_member(&ctx, group_id, user_ent.user_id).await?,
 		GROUP_NOT_FOUND
 	);
 
 	if let Some(ttl) = body.ttl {
-		internal_assert!(ttl >= 0, "invalid parameter `ttl`");
-		internal_assert!(ttl <= util::duration::days(30), "parameter `ttl` too large");
+		ensure!(ttl >= 0, "invalid parameter `ttl`");
+		ensure!(ttl <= util::duration::days(30), "parameter `ttl` too large");
 	}
 	if let Some(use_count) = body.use_count {
-		internal_assert!(use_count >= 0, "invalid parameter `use_count`");
-		internal_assert!(use_count <= 5000, "parameter `use_count` too large");
+		ensure!(use_count >= 0, "invalid parameter `use_count`");
+		ensure!(use_count <= 5000, "parameter `use_count` too large");
 	}
 
 	let res = msg!([ctx] team_invite::msg::create(group_id) -> team_invite::msg::create_complete {
@@ -1004,7 +1000,7 @@ pub async fn consume_invite(
 ) -> GlobalResult<models::ConsumeGroupInviteResponse> {
 	let user_ent = ctx.auth().user(ctx.op_ctx()).await?;
 
-	internal_assert_eq!(code.len(), 8, "invalid code");
+	ensure_eq!(code.len(), 8, "invalid code");
 
 	let (mut create_sub, mut fail_sub) = tokio::try_join!(
 		subscribe!([ctx] team::msg::member_create("*", user_ent.user_id)),
@@ -1022,7 +1018,7 @@ pub async fn consume_invite(
 			let event = event?;
 
 			(
-				Some(internal_unwrap_owned!(
+				Some(unwrap!(
 					team_invite::msg::consume_fail::ErrorCode::from_i32(event.error_code)
 				)),
 				event.team_id.as_ref().map(common::Uuid::as_uuid),
@@ -1033,7 +1029,7 @@ pub async fn consume_invite(
 
 			(
 				None,
-				Some(internal_unwrap!(event.team_id).as_uuid()),
+				Some(unwrap_ref!(event.team_id).as_uuid()),
 			)
 		}
 	});
@@ -1047,25 +1043,25 @@ pub async fn consume_invite(
 		use team_invite::msg::consume_fail::ErrorCode;
 
 		match failure {
-			ErrorCode::Unknown => panic_with!(GROUP_FAILED_TO_CONSUME_INVITE),
-			ErrorCode::InviteCodeInvalid => panic_with!(GROUP_INVITE_CODE_INVALID),
+			ErrorCode::Unknown => bail_with!(GROUP_FAILED_TO_CONSUME_INVITE),
+			ErrorCode::InviteCodeInvalid => bail_with!(GROUP_INVITE_CODE_INVALID),
 			ErrorCode::InviteExpired => {
-				panic_with!(GROUP_INVITE_CODE_EXPIRED)
+				bail_with!(GROUP_INVITE_CODE_EXPIRED)
 			}
 			ErrorCode::InviteRevoked => {
-				panic_with!(GROUP_INVITE_CODE_REVOKED)
+				bail_with!(GROUP_INVITE_CODE_REVOKED)
 			}
-			ErrorCode::InviteAlreadyUsed => panic_with!(GROUP_INVITE_CODE_ALREADY_USED),
+			ErrorCode::InviteAlreadyUsed => bail_with!(GROUP_INVITE_CODE_ALREADY_USED),
 			ErrorCode::UserAlreadyTeamMember => {
-				panic_with!(GROUP_ALREADY_MEMBER {
+				bail_with!(GROUP_ALREADY_MEMBER {
 					metadata: json!({ "group_id": team_id })
 				})
 			}
 			ErrorCode::TeamFull => {
-				panic_with!(GROUP_FULL)
+				bail_with!(GROUP_FULL)
 			}
 			ErrorCode::UserBanned => {
-				panic_with!(GROUP_MEMBER_BANNED);
+				bail_with!(GROUP_MEMBER_BANNED);
 			}
 		}
 	};
@@ -1083,7 +1079,7 @@ pub async fn get_invite(
 ) -> GlobalResult<models::GetGroupInviteResponse> {
 	let _user_ent = ctx.auth().user(ctx.op_ctx()).await?;
 
-	internal_assert_eq!(code.len(), 8, "invalid code");
+	ensure_eq!(code.len(), 8, "invalid code");
 
 	let invite_res = op!([ctx] team_invite_get {
 		codes: vec![code.clone()],
@@ -1096,18 +1092,18 @@ pub async fn get_invite(
 			.map(|ts| util::timestamp::now() >= ts)
 			.unwrap_or_default()
 		{
-			panic_with!(GROUP_INVITE_CODE_EXPIRED);
+			bail_with!(GROUP_INVITE_CODE_EXPIRED);
 		} else if invite.revoke_ts.is_some() {
-			panic_with!(GROUP_INVITE_CODE_REVOKED);
+			bail_with!(GROUP_INVITE_CODE_REVOKED);
 		}
 
-		let team_id = internal_unwrap_owned!(invite.team_id);
+		let team_id = unwrap!(invite.team_id);
 
 		let team_res = op!([ctx] team_get {
 			team_ids: vec![team_id],
 		})
 		.await?;
-		let team = internal_unwrap_owned!(team_res.teams.first());
+		let team = unwrap!(team_res.teams.first());
 
 		Ok(models::GetGroupInviteResponse {
 			// Argument `is_developer` is false here because that information is not needed in the context
@@ -1115,7 +1111,7 @@ pub async fn get_invite(
 			group: convert::group::handle(team, false)?,
 		})
 	} else {
-		panic_with!(GROUP_INVITE_CODE_INVALID);
+		bail_with!(GROUP_INVITE_CODE_INVALID);
 	}
 }
 
@@ -1129,7 +1125,7 @@ pub async fn kick_member(
 	let user_ent = ctx.auth().user(ctx.op_ctx()).await?;
 
 	// Verify user is not self
-	assert_with!(
+	ensure_with!(
 		user_ent.user_id != identity_id,
 		API_FORBIDDEN,
 		reason = "Invalid user"
@@ -1140,18 +1136,18 @@ pub async fn kick_member(
 		team_ids: vec![group_id.into()],
 	})
 	.await?;
-	let team = unwrap_with_owned!(teams_res.teams.first(), GROUP_NOT_FOUND);
-	let owner_user_id = internal_unwrap!(team.owner_user_id).as_uuid();
+	let team = unwrap_with!(teams_res.teams.first(), GROUP_NOT_FOUND);
+	let owner_user_id = unwrap_ref!(team.owner_user_id).as_uuid();
 
 	// Verify request user's permissions
-	assert_eq_with!(
+	ensure_eq_with!(
 		user_ent.user_id,
 		owner_user_id,
 		GROUP_INSUFFICIENT_PERMISSIONS
 	);
 
 	// Verify that user is a group member
-	assert_with!(
+	ensure_with!(
 		utils::group_member(&ctx, group_id, identity_id).await?,
 		GROUP_NOT_MEMBER
 	);
@@ -1177,7 +1173,7 @@ pub async fn ban(
 	let user_ent = ctx.auth().user(ctx.op_ctx()).await?;
 
 	// Verify user is not self
-	assert_with!(
+	ensure_with!(
 		user_ent.user_id != identity_id,
 		API_FORBIDDEN,
 		reason = "Invalid user"
@@ -1188,11 +1184,11 @@ pub async fn ban(
 		team_ids: vec![group_id.into()],
 	})
 	.await?;
-	let team = unwrap_with_owned!(teams_res.teams.first(), GROUP_NOT_FOUND);
-	let owner_user_id = internal_unwrap!(team.owner_user_id).as_uuid();
+	let team = unwrap_with!(teams_res.teams.first(), GROUP_NOT_FOUND);
+	let owner_user_id = unwrap_ref!(team.owner_user_id).as_uuid();
 
 	// Verify request user's permissions
-	assert_eq_with!(
+	ensure_eq_with!(
 		user_ent.user_id,
 		owner_user_id,
 		GROUP_INSUFFICIENT_PERMISSIONS
@@ -1218,7 +1214,7 @@ pub async fn unban(
 	let user_ent = ctx.auth().user(ctx.op_ctx()).await?;
 
 	// Verify user is not self
-	assert_with!(
+	ensure_with!(
 		user_ent.user_id != identity_id,
 		API_FORBIDDEN,
 		reason = "Invalid user"
@@ -1229,11 +1225,11 @@ pub async fn unban(
 		team_ids: vec![group_id.into()],
 	})
 	.await?;
-	let team = unwrap_with_owned!(teams_res.teams.first(), GROUP_NOT_FOUND);
-	let owner_user_id = internal_unwrap!(team.owner_user_id).as_uuid();
+	let team = unwrap_with!(teams_res.teams.first(), GROUP_NOT_FOUND);
+	let owner_user_id = unwrap_ref!(team.owner_user_id).as_uuid();
 
 	// Verify request user's permissions
-	assert_eq_with!(
+	ensure_eq_with!(
 		user_ent.user_id,
 		owner_user_id,
 		GROUP_INSUFFICIENT_PERMISSIONS
@@ -1284,12 +1280,12 @@ pub async fn bans(
 			// 	.transpose()?,
 		}),
 	)?;
-	let team = unwrap_with_owned!(teams_res.teams.first(), GROUP_NOT_FOUND);
-	let team_bans = internal_unwrap_owned!(team_bans_res.teams.first()).clone();
-	let owner_user_id = internal_unwrap!(team.owner_user_id).as_uuid();
+	let team = unwrap_with!(teams_res.teams.first(), GROUP_NOT_FOUND);
+	let team_bans = unwrap!(team_bans_res.teams.first()).clone();
+	let owner_user_id = unwrap_ref!(team.owner_user_id).as_uuid();
 
 	// Verify request user's permissions
-	assert_eq_with!(
+	ensure_eq_with!(
 		user_ent.user_id,
 		owner_user_id,
 		GROUP_INSUFFICIENT_PERMISSIONS
@@ -1298,7 +1294,7 @@ pub async fn bans(
 	let mut user_ids = team_bans
 		.banned_users
 		.iter()
-		.map(|ban| Ok(internal_unwrap_owned!(ban.user_id)))
+		.map(|ban| Ok(unwrap!(ban.user_id)))
 		.collect::<GlobalResult<Vec<_>>>()?;
 
 	// Wait for an update if needed
@@ -1397,7 +1393,7 @@ pub async fn bans(
 			let ban_ts = if let Some(TeamBanConsumerUpdate::Ban(_)) = update {
 				update_ts
 			} else {
-				internal_unwrap_owned!(team_bans
+				unwrap!(team_bans
 					.banned_users
 					.iter()
 					.find(|ban| user.user_id == ban.user_id))

@@ -61,7 +61,7 @@ async fn handle_inner(
 	PlanResult { allocation: alloc }: &PlanResult,
 	payload_json: String,
 ) -> GlobalResult<()> {
-	let job_id = internal_unwrap!(alloc.job_id, "alloc has no job id");
+	let job_id = unwrap_ref!(alloc.job_id, "alloc has no job id");
 
 	if !util_job::is_nomad_job_run(job_id) {
 		tracing::info!(%job_id, "disregarding event");

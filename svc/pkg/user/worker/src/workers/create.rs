@@ -15,7 +15,7 @@ lazy_static! {
 
 #[worker(name = "user-create")]
 async fn worker(ctx: &OperationContext<user::msg::create::Message>) -> GlobalResult<()> {
-	let user_id = internal_unwrap!(ctx.user_id).as_uuid();
+	let user_id = unwrap_ref!(ctx.user_id).as_uuid();
 
 	let join_ts = ctx.ts();
 
@@ -25,16 +25,13 @@ async fn worker(ctx: &OperationContext<user::msg::create::Message>) -> GlobalRes
 			namespace_ids: vec![namespace_id],
 		})
 		.await?;
-		let version_id = internal_unwrap_owned!(
-			internal_unwrap_owned!(namespace_res.namespaces.first()).version_id
-		);
+		let version_id = unwrap!(unwrap!(namespace_res.namespaces.first()).version_id);
 
 		let identity_config_res = op!([ctx] identity_config_version_get {
 			version_ids: vec![version_id],
 		})
 		.await?;
-		let identity_config =
-			internal_unwrap!(internal_unwrap_owned!(identity_config_res.versions.first()).config);
+		let identity_config = unwrap_ref!(unwrap!(identity_config_res.versions.first()).config);
 
 		let mut rng = rand::thread_rng();
 		let display_name = identity_config
@@ -60,7 +57,7 @@ async fn worker(ctx: &OperationContext<user::msg::create::Message>) -> GlobalRes
 	let mut attempts = 3u32;
 	let (display_name, account_number) = loop {
 		if attempts == 0 {
-			internal_panic!("failed all attempts to create unique user handle");
+			bail!("failed all attempts to create unique user handle");
 		}
 		attempts -= 1;
 
@@ -166,8 +163,7 @@ async fn insert_user(
 		Ok(_) => Ok(Some((display_name, account_number))),
 		// https://www.postgresql.org/docs/current/errcodes-appendix.html
 		Err(sqlx::Error::Database(err)) => {
-			let pg_err =
-				internal_unwrap_owned!(err.try_downcast_ref::<sqlx::postgres::PgDatabaseError>());
+			let pg_err = unwrap!(err.try_downcast_ref::<sqlx::postgres::PgDatabaseError>());
 
 			if pg_err.code() == "23505"
 				&& !pg_err
