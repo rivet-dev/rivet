@@ -78,10 +78,10 @@ export CNI_IFNAME="eth0"
 log "CAP_ARGS: $CAP_ARGS"
 
 log "Creating network $CONTAINER_ID"
-time ip netns add "$CONTAINER_ID"
+ip netns add "$CONTAINER_ID"
 
 log "Adding network $NETWORK_NAME to namespace $NETNS_PATH"
-time cnitool add "$NETWORK_NAME" "$NETNS_PATH" > $NOMAD_ALLOC_DIR/cni.json
+cnitool add "$NETWORK_NAME" "$NETNS_PATH" > $NOMAD_ALLOC_DIR/cni.json
 
 # resolv.conf
 cat <<EOF > $NOMAD_ALLOC_DIR/resolv.conf
