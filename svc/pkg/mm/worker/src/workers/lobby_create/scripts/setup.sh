@@ -32,11 +32,12 @@ case "__BUILD_KIND__" in
 
 		# Allows us to run the bundle natively with runc
 		echo "Converting OCI image -> OCI bundle"
-		time umoci unpack --image "$OCI_IMAGE_PATH:default" "$OCI_BUNDLE_PATH"
 
+		time umoci unpack --image "$OCI_IMAGE_PATH:default" "$OCI_BUNDLE_PATH"
 		;;
 	"oci-bundle")
 		echo "Downloading OCI bundle"
+		mkdir "$OCI_BUNDLE_PATH"
 		time (__DOWNLOAD_CMD__ | tar -x -C "$OCI_BUNDLE_PATH")
 
 		;;
