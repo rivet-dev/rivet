@@ -26,7 +26,7 @@ async fn handle(ctx: OperationContext<ip::info::Request>) -> GlobalResult<ip::in
 	// TODO: Handle situation where we can't find the location
 
 	// Parse IP address
-	let provider = internal_unwrap_owned!(ip::info::Provider::from_i32(ctx.provider));
+	let provider = unwrap!(ip::info::Provider::from_i32(ctx.provider));
 	let ip = ctx.ip.parse::<std::net::IpAddr>()?;
 	let ip_str = ip.to_string();
 	tracing::info!(?ip, "looking up ip");
@@ -66,7 +66,7 @@ async fn fetch_ip_info_io(
 		if !ip_info_res.status().is_success() {
 			tracing::error!(status = ?ip_info_res.status(), "failed to fetch ip info, using fallback");
 
-			internal_panic!("ip info error")
+			bail!("ip info error")
 		};
 
 		let ip_info_raw = ip_info_res.json::<serde_json::Value>().await?;
@@ -93,8 +93,7 @@ async fn fetch_ip_info_io(
 		IpInfoParsed::Normal { loc } => {
 			// Parse latitude and longitude
 			let loc_split = loc.split_once(',');
-			let (latitude_raw, longitude_raw) =
-				internal_unwrap!(loc_split, "failed to parse location");
+			let (latitude_raw, longitude_raw) = unwrap_ref!(loc_split, "failed to parse location");
 			let latitude = latitude_raw.parse::<f64>()?;
 			let longitude = longitude_raw.parse::<f64>()?;
 

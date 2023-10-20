@@ -7,7 +7,7 @@ async fn handle(
 ) -> GlobalResult<mm::lobby_history::Response> {
 	let crdb = ctx.crdb().await?;
 
-	let namespace_id = internal_unwrap!(ctx.namespace_id).as_uuid();
+	let namespace_id = unwrap_ref!(ctx.namespace_id).as_uuid();
 
 	// Use AS OF SYSTEM TIME to reduce contention.
 	// https://www.cockroachlabs.com/docs/v22.2/performance-best-practices-overview#use-as-of-system-time-to-decrease-conflicts-with-long-running-queries

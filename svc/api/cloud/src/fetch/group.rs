@@ -27,7 +27,7 @@ pub async fn summaries(
 				})
 				.await?;
 
-				Ok(internal_unwrap_owned!(user_team_list_res.users.first())
+				Ok(unwrap!(user_team_list_res.users.first())
 					.teams
 					.clone())
 			} else {

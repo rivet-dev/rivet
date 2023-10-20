@@ -5,7 +5,7 @@ use proto::backend::pkg::*;
 async fn worker(ctx: &OperationContext<kv::msg::write::Message>) -> GlobalResult<()> {
 	let crdb = ctx.crdb().await?;
 
-	let namespace_id = internal_unwrap!(ctx.namespace_id).as_uuid();
+	let namespace_id = unwrap_ref!(ctx.namespace_id).as_uuid();
 
 	let directory_str = util_kv::key_directory(&ctx.key);
 

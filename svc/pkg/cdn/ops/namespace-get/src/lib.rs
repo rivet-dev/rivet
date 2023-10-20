@@ -78,7 +78,7 @@ async fn handle(
 							create_ts: domain.create_ts,
 						})
 						.collect(),
-					auth_type: internal_unwrap_owned!(
+					auth_type: unwrap!(
 						backend::cdn::namespace_config::AuthType::from_i32(ns.auth_type as i32),
 						"unknown cdn auth type"
 					) as i32,

@@ -6,8 +6,8 @@ use serde_json::json;
 async fn worker(
 	ctx: &OperationContext<team::msg::join_request_resolve::Message>,
 ) -> GlobalResult<()> {
-	let team_id: Uuid = internal_unwrap!(ctx.team_id).as_uuid();
-	let user_id: Uuid = internal_unwrap!(ctx.user_id).as_uuid();
+	let team_id: Uuid = unwrap_ref!(ctx.team_id).as_uuid();
+	let user_id: Uuid = unwrap_ref!(ctx.user_id).as_uuid();
 
 	sqlx::query("DELETE FROM db_team.join_requests WHERE team_id = $1 AND user_id = $2")
 		.bind(team_id)

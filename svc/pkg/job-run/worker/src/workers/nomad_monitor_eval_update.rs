@@ -35,11 +35,11 @@ async fn worker(
 	let payload_value = serde_json::from_str::<serde_json::Value>(&ctx.payload_json)?;
 	let PlanResult { evaluation: eval } = serde_json::from_str::<PlanResult>(&ctx.payload_json)?;
 
-	let job_id = internal_unwrap!(eval.job_id, "eval has no job id");
-	let eval_status_raw = internal_unwrap!(eval.status).as_str();
+	let job_id = unwrap_ref!(eval.job_id, "eval has no job id");
+	let eval_status_raw = unwrap_ref!(eval.status).as_str();
 
 	// We can't decode this with serde, so manually deserialize the response
-	let eval_value = internal_unwrap_owned!(payload_value.get("Evaluation"));
+	let eval_value = unwrap!(payload_value.get("Evaluation"));
 
 	if !util_job::is_nomad_job_run(job_id) {
 		tracing::info!(%job_id, "disregarding event");
@@ -104,7 +104,7 @@ async fn worker(
 			tracing::error!("discarding stale message");
 			return Ok(());
 		} else {
-			retry_panic!("run not found, may be race condition with insertion");
+			retry_bail!("run not found, may be race condition with insertion");
 		}
 	};
 	let run_id = run_row.run_id;
@@ -133,7 +133,7 @@ async fn worker(
 				region_ids: vec![run_row.region_id.into()],
 			})
 			.await?;
-			let region = internal_unwrap_owned!(region_res.regions.first());
+			let region = unwrap!(region_res.regions.first());
 
 			// Stop the job from attempting to run on another node. This will
 			// be called in job-run-stop too, but we want to catch this earlier.

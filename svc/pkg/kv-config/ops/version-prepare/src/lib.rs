@@ -5,8 +5,8 @@ use rivet_operation::prelude::*;
 async fn handle(
 	ctx: OperationContext<kv_config::version_prepare::Request>,
 ) -> GlobalResult<kv_config::version_prepare::Response> {
-	let _game_id = internal_unwrap!(ctx.game_id).as_uuid();
-	let _config = internal_unwrap!(ctx.config);
+	let _game_id = unwrap_ref!(ctx.game_id).as_uuid();
+	let _config = unwrap_ref!(ctx.config);
 
 	Ok(kv_config::version_prepare::Response {
 		config_ctx: Some(backend::kv::VersionConfigCtx {}),

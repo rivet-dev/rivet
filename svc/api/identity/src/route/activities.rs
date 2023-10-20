@@ -45,9 +45,7 @@ pub async fn activities(
 		anchor: None,
 	})
 	.await?;
-	let follows = internal_unwrap_owned!(followers_res.follows.first())
-		.follows
-		.clone();
+	let follows = unwrap!(followers_res.follows.first()).follows.clone();
 
 	// Fetch user presences
 	let mut user_ids = follows
@@ -114,7 +112,7 @@ pub async fn activities(
 	user_ids.extend(
 		suggested_players
 			.iter()
-			.map(|game_user| Ok(**internal_unwrap!(game_user.user_id)))
+			.map(|game_user| Ok(**unwrap_ref!(game_user.user_id)))
 			.collect::<GlobalResult<Vec<_>>>()?
 			.into_iter(),
 	);
@@ -138,11 +136,7 @@ pub async fn activities(
 					.await
 					.map_err(Into::<GlobalError>::into)?;
 
-					GlobalResult::Ok(
-						internal_unwrap_owned!(followers_res.follows.first())
-							.follows
-							.clone(),
-					)
+					GlobalResult::Ok(unwrap!(followers_res.follows.first()).follows.clone())
 				}
 				_ => Ok(follows),
 			}
@@ -165,9 +159,8 @@ pub async fn activities(
 			}
 		})
 		.map(|follow| {
-			let user =
-				internal_unwrap_owned!(users.users.iter().find(|u| u.user_id == follow.user_id));
-			let presence = internal_unwrap_owned!(presences_ctx
+			let user = unwrap!(users.users.iter().find(|u| u.user_id == follow.user_id));
+			let presence = unwrap!(presences_ctx
 				.res
 				.users
 				.iter()
@@ -230,7 +223,7 @@ async fn fetch_recent_games(
 		user_ids: vec![current_user_id.into()],
 	})
 	.await?;
-	let user = internal_unwrap_owned!(recent_session_res.users.first());
+	let user = unwrap!(recent_session_res.users.first());
 
 	// Fetch game IDs
 	let ns_ids = user
@@ -287,7 +280,7 @@ async fn fetch_suggested_players(
 
 	// Remove self from list if present (game user)
 	let game_user_ids = if let Some(game_user) = game_user {
-		let game_user_id = internal_unwrap!(game_user.game_user_id);
+		let game_user_id = unwrap_ref!(game_user.game_user_id);
 
 		recommended_game_user_res
 			.game_user_ids

@@ -17,8 +17,8 @@ pub async fn fetch_ns(
 		namespace_ids: vec![game_ns.namespace_id.into()],
 	})
 	.await?;
-	let ns_data = internal_unwrap_owned!(ns_res.namespaces.first());
-	let version_id = internal_unwrap!(ns_data.version_id).as_uuid();
+	let ns_data = unwrap!(ns_res.namespaces.first());
+	let version_id = unwrap_ref!(ns_data.version_id).as_uuid();
 
 	Ok(NamespaceData {
 		namespace_id: game_ns.namespace_id,

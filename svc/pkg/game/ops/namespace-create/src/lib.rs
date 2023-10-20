@@ -5,9 +5,9 @@ use rivet_operation::prelude::*;
 async fn handle(
 	ctx: OperationContext<game::namespace_create::Request>,
 ) -> GlobalResult<game::namespace_create::Response> {
-	let req_game_id = internal_unwrap!(ctx.game_id);
+	let req_game_id = unwrap_ref!(ctx.game_id);
 	let game_id = req_game_id.as_uuid();
-	let version_id = internal_unwrap!(ctx.version_id).as_uuid();
+	let version_id = unwrap_ref!(ctx.version_id).as_uuid();
 
 	// Validate namespace
 	let validation_res = op!([ctx] game_namespace_validate {
@@ -25,7 +25,7 @@ async fn handle(
 			.map(|err| err.path.join("."))
 			.collect::<Vec<_>>()
 			.join(", ");
-		panic_with!(VALIDATION_ERROR, error = readable_errors);
+		bail_with!(VALIDATION_ERROR, error = readable_errors);
 	}
 
 	let namespace_id = Uuid::new_v4();

@@ -21,20 +21,20 @@ pub async fn profile(
 		name_ids: vec![game_name_id.to_owned()],
 	})
 	.await?;
-	let game_id = internal_unwrap!(game_resolve_res.games.first()).game_id;
-	let game_id = internal_unwrap!(game_id).as_uuid();
+	let game_id = unwrap_ref!(game_resolve_res.games.first()).game_id;
+	let game_id = unwrap_ref!(game_id).as_uuid();
 
 	// Fetch game data
 	let game_res = op!([ctx] game_get {
 		game_ids: vec![game_id.into()],
 	})
 	.await?;
-	let game = internal_unwrap_owned!(game_res.games.first());
-	let team_id = internal_unwrap!(game.developer_team_id);
+	let game = unwrap!(game_res.games.first());
+	let team_id = unwrap_ref!(game.developer_team_id);
 
 	// Fetch developer team
 	let developer_team = build::group_summaries(&ctx, user_ent.user_id.into(), &[*team_id]).await?;
-	let developer_team = internal_unwrap_owned!(developer_team.first());
+	let developer_team = unwrap!(developer_team.first());
 
 	Ok(models::GetGameProfileResponse {
 		game: models::GameProfile {

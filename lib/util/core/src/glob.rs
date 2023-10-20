@@ -66,7 +66,7 @@ impl Glob {
 						match c {
 							'*' => {
 								if previous_was_star {
-									panic_with!(
+									bail_with!(
 										GLOB_INVALID,
 										error = "segments that contain two stars (**) cannot contain any other characters"
 									);
@@ -184,9 +184,9 @@ impl TryFrom<common::glob::Token> for GlobToken {
 	type Error = GlobalError;
 
 	fn try_from(value: common::glob::Token) -> GlobalResult<Self> {
-		match internal_unwrap!(value.kind) {
+		match unwrap_ref!(value.kind) {
 			common::glob::token::Kind::Char(c) => {
-				Ok(GlobToken::Char(*internal_unwrap!(c.chars().next())))
+				Ok(GlobToken::Char(*unwrap_ref!(c.chars().next())))
 			}
 			common::glob::token::Kind::AnySequence(_) => Ok(GlobToken::AnySequence),
 			common::glob::token::Kind::AnyRecursiveSequence(_) => {

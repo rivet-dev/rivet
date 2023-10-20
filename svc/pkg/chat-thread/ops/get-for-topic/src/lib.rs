@@ -23,16 +23,16 @@ async fn handle(
 	let mut direct_user_b_ids = Vec::new();
 
 	for topic in &ctx.topics {
-		let kind = internal_unwrap!(topic.kind);
+		let kind = unwrap_ref!(topic.kind);
 
 		match kind {
 			backend::chat::topic::Kind::Team(team) => {
-				team_ids.push(internal_unwrap!(team.team_id).as_uuid())
+				team_ids.push(unwrap_ref!(team.team_id).as_uuid())
 			}
 			backend::chat::topic::Kind::Direct(direct) => {
 				let (user_a_id, user_b_id) = util::sort::id_pair(
-					internal_unwrap!(direct.user_a_id).as_uuid(),
-					internal_unwrap!(direct.user_b_id).as_uuid(),
+					unwrap_ref!(direct.user_a_id).as_uuid(),
+					unwrap_ref!(direct.user_b_id).as_uuid(),
 				);
 
 				direct_user_a_ids.push(user_a_id);
@@ -80,7 +80,7 @@ async fn handle(
 						user_b_id: Some(user_b_id.into()),
 					})
 				} else {
-					internal_panic!("missing thread kind data")
+					bail!("missing thread kind data")
 				}),
 			}),
 		})

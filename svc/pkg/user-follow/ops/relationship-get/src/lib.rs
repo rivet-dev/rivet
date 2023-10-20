@@ -17,8 +17,8 @@ async fn handle(
 		.iter()
 		.map(|x| -> GlobalResult<(Uuid, Uuid)> {
 			Ok((
-				internal_unwrap!(x.this_user_id).as_uuid(),
-				internal_unwrap!(x.other_user_id).as_uuid(),
+				unwrap_ref!(x.this_user_id).as_uuid(),
+				unwrap_ref!(x.other_user_id).as_uuid(),
 			))
 		})
 		.collect::<GlobalResult<Vec<(Uuid, Uuid)>>>()?;

@@ -36,8 +36,8 @@ async fn fail(
 async fn worker(ctx: &OperationContext<job_run::msg::create::Message>) -> GlobalResult<()> {
 	let crdb = ctx.crdb().await?;
 
-	let run_id = internal_unwrap!(ctx.run_id).as_uuid();
-	let region_id = internal_unwrap!(ctx.region_id).as_uuid();
+	let run_id = unwrap_ref!(ctx.run_id).as_uuid();
+	let region_id = unwrap_ref!(ctx.region_id).as_uuid();
 
 	// Check for stale message
 	if ctx.req_dt() > util::duration::seconds(60) {
@@ -53,11 +53,11 @@ async fn worker(ctx: &OperationContext<job_run::msg::create::Message>) -> Global
 
 	// Validate the parameter data lengths
 	for parameter in &ctx.parameters {
-		internal_assert!(
+		ensure!(
 			parameter.key.len() <= MAX_PARAMETER_KEY_LEN,
 			"parameter key too long"
 		);
-		internal_assert!(
+		ensure!(
 			parameter.value.len() <= MAX_PARAMETER_VALUE_LEN,
 			"parameter value too long"
 		);
@@ -68,7 +68,7 @@ async fn worker(ctx: &OperationContext<job_run::msg::create::Message>) -> Global
 		region_ids: vec![region_id.into()],
 	})
 	.await?;
-	let region = internal_unwrap_owned!(region_res.regions.first());
+	let region = unwrap!(region_res.regions.first());
 
 	// Create the job
 	let create_job_perf = ctx.perf().start("create-job").await;
@@ -175,7 +175,7 @@ async fn run_job(
 		Ok(dispatch_res) => {
 			// We will use the dispatched job ID to identify this allocation for the future. We can't use
 			// eval ID, since that changes if we mutate the allocation (i.e. try to stop it).
-			let nomad_dispatched_job_id = internal_unwrap!(dispatch_res.dispatched_job_id);
+			let nomad_dispatched_job_id = unwrap_ref!(dispatch_res.dispatched_job_id);
 			Ok(Some(nomad_dispatched_job_id.clone()))
 		}
 		Err(err) => {
@@ -214,8 +214,8 @@ async fn create_run_token(
 	})
 	.await?;
 
-	let token = internal_unwrap!(token_res.token).token.clone();
-	let token_session_id = internal_unwrap!(token_res.session_id).as_uuid();
+	let token = unwrap_ref!(token_res.token).token.clone();
+	let token_session_id = unwrap_ref!(token_res.session_id).as_uuid();
 	Ok((token, token_session_id))
 }
 
@@ -251,13 +251,13 @@ async fn write_to_db_before_run(
 	// TODO: Use future streams?
 	// Validate that the proxied ports point to existing ports
 	for proxied_port in &req.proxied_ports {
-		internal_assert!(
+		ensure!(
 			!proxied_port.ingress_hostnames.is_empty(),
 			"ingress host not provided"
 		);
 
 		for host in &proxied_port.ingress_hostnames {
-			internal_assert!(
+			ensure!(
 				host.chars()
 					.all(|x| x.is_alphanumeric() || x == '.' || x == '-'),
 				"invalid ingress host"
@@ -333,7 +333,7 @@ async fn choose_ingress_port(
 	let ingress_port = if let Some(ingress_port) = proxied_port.ingress_port {
 		ingress_port as i32
 	} else {
-		match internal_unwrap_owned!(backend::job::ProxyProtocol::from_i32(
+		match unwrap!(backend::job::ProxyProtocol::from_i32(
 			proxied_port.proxy_protocol
 		)) {
 			ProxyProtocol::Http => 80_i32,
@@ -370,7 +370,7 @@ async fn bind_with_retries(
 	// Try to bind to a random port, verifying that it is not already bound
 	loop {
 		if attempts == 0 {
-			internal_panic!("failed all attempts to bind to unique port");
+			bail!("failed all attempts to bind to unique port");
 		}
 		attempts -= 1;
 

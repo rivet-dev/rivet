@@ -17,14 +17,14 @@ async fn handle(
 ) -> GlobalResult<chat_thread::list_for_participant::Response> {
 	let crdb = ctx.crdb().await?;
 
-	let user_id = internal_unwrap!(ctx.user_id).as_uuid();
+	let user_id = unwrap_ref!(ctx.user_id).as_uuid();
 
 	// Fetch teams the user participates in
 	let team_list_res = op!([ctx] user_team_list {
 		user_ids: vec![user_id.into()],
 	})
 	.await?;
-	let team_ids = internal_unwrap_owned!(team_list_res.users.first())
+	let team_ids = unwrap!(team_list_res.users.first())
 		.teams
 		.iter()
 		.flat_map(|x| x.team_id)
@@ -69,7 +69,7 @@ async fn handle(
 						user_b_id: Some(user_b_id.into()),
 					})
 				} else {
-					internal_panic!("missing thread kind data")
+					bail!("missing thread kind data")
 				}),
 			}),
 		})

@@ -98,7 +98,7 @@ async fn games(
 		game_ids: game_resolve_res
 			.games
 			.iter()
-			.map(|game| Ok(internal_unwrap_owned!(game.game_id)))
+			.map(|game| Ok(unwrap!(game.game_id)))
 			.collect::<GlobalResult<Vec<_>>>()?
 			.into_iter()
 			.chain(game_ids)

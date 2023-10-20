@@ -5,7 +5,7 @@ use rivet_operation::prelude::*;
 async fn handle(
 	ctx: OperationContext<cloud::game_config_create::Request>,
 ) -> GlobalResult<cloud::game_config_create::Response> {
-	let game_id = internal_unwrap!(ctx.game_id).as_uuid();
+	let game_id = unwrap_ref!(ctx.game_id).as_uuid();
 
 	sqlx::query("INSERT INTO db_cloud.game_configs (game_id) VALUES ($1)")
 		.bind(game_id)

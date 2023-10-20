@@ -25,13 +25,13 @@ async fn handle(
 ) -> GlobalResult<upload::complete::Response> {
 	let crdb = ctx.crdb().await?;
 
-	let upload_id = internal_unwrap!(ctx.upload_id).as_uuid();
+	let upload_id = unwrap_ref!(ctx.upload_id).as_uuid();
 
 	let (bucket, provider, files, user_id) = fetch_files(&crdb, upload_id).await?;
 	let files_len = files.len();
 
 	if let Some(req_bucket) = &ctx.bucket {
-		assert_eq_with!(&bucket, req_bucket, DB_INVALID_BUCKET);
+		ensure_eq_with!(&bucket, req_bucket, DB_INVALID_BUCKET);
 	}
 
 	let s3_client = s3_util::Client::from_env_with_provider(&bucket, provider).await?;
@@ -114,7 +114,7 @@ async fn fetch_files(
 	)?;
 
 	// Parse provider
-	let proto_provider = internal_unwrap_owned!(
+	let proto_provider = unwrap!(
 		backend::upload::Provider::from_i32(upload.provider as i32),
 		"invalid upload provider"
 	);
@@ -173,7 +173,7 @@ async fn validate_profanity_scores(
 
 		// Validate the images fall within the approved scores
 		for score in &score_res.scores {
-			let required_score = internal_unwrap_owned!(nsfw_required_scores.get(&score.url));
+			let required_score = unwrap!(nsfw_required_scores.get(&score.url));
 			if score.score >= *required_score {
 				msg!([ctx] analytics::msg::event_create() {
 					events: vec![
@@ -198,7 +198,7 @@ async fn validate_profanity_scores(
 						.ok()
 						.map_or(false, |x| x == "1")
 				{
-					panic_with!(UPLOAD_NSFW_CONTENT_DETECTED {
+					bail_with!(UPLOAD_NSFW_CONTENT_DETECTED {
 						metadata: serde_json::json!({
 							"url": score.url,
 							"score": score.score,
@@ -207,7 +207,7 @@ async fn validate_profanity_scores(
 				} else {
 					// Don't expose the score in production to prevent
 					// exploitation
-					panic_with!(UPLOAD_NSFW_CONTENT_DETECTED);
+					bail_with!(UPLOAD_NSFW_CONTENT_DETECTED);
 				}
 			}
 		}
@@ -243,7 +243,7 @@ async fn validate_files(
 					.upload_id(multipart_upload_id.clone())
 					.send()
 					.await?;
-				let parts = internal_unwrap_owned!(parts_res.parts());
+				let parts = unwrap!(parts_res.parts());
 
 				s3_client
 					.complete_multipart_upload()
@@ -291,7 +291,7 @@ async fn validate_files(
 
 			// This should never be triggered since we use prepared uploads, but
 			// we validate it regardless
-			internal_assert_eq!(
+			ensure_eq!(
 				file_row.content_length,
 				head_obj.content_length,
 				"incorrect content length"

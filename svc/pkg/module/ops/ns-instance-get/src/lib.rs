@@ -5,7 +5,7 @@ use rivet_operation::prelude::*;
 pub async fn handle(
 	ctx: OperationContext<module::ns_instance_get::Request>,
 ) -> GlobalResult<module::ns_instance_get::Response> {
-	let namespace_id = internal_unwrap!(ctx.namespace_id).as_uuid();
+	let namespace_id = unwrap_ref!(ctx.namespace_id).as_uuid();
 
 	let instance = sqlx::query_as::<_, (Uuid,)>(indoc!(
 		"

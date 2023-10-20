@@ -51,8 +51,7 @@ pub fn gen_lobby_docker_job(
 	// `reuse_job_id` test passes when changing this function.
 	use nomad_client::models::*;
 
-	let network_mode =
-		internal_unwrap_owned!(LobbyRuntimeNetworkMode::from_i32(runtime.network_mode));
+	let network_mode = unwrap!(LobbyRuntimeNetworkMode::from_i32(runtime.network_mode));
 
 	let decoded_ports = runtime
 		.ports
@@ -66,16 +65,14 @@ pub fn gen_lobby_docker_job(
 					max: port_range.max as u16,
 				}
 			} else {
-				internal_panic!("must have either target_port or port_range");
+				bail!("must have either target_port or port_range");
 			};
 
 			GlobalResult::Ok(DecodedPort {
 				label: port.label.clone(),
 				nomad_port_label: util_mm::format_nomad_port_label(&port.label),
 				target,
-				proxy_protocol: internal_unwrap_owned!(ProxyProtocol::from_i32(
-					port.proxy_protocol
-				)),
+				proxy_protocol: unwrap!(ProxyProtocol::from_i32(port.proxy_protocol)),
 			})
 		})
 		.collect::<GlobalResult<Vec<DecodedPort>>>()?;

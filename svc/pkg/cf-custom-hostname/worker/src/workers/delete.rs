@@ -17,9 +17,9 @@ struct CloudflareErrorEntry {
 async fn worker(
 	ctx: &OperationContext<cf_custom_hostname::msg::delete::Message>,
 ) -> GlobalResult<()> {
-	let game_zone_id = internal_unwrap_owned!(util::env::cloudflare::zone::game::id());
+	let game_zone_id = unwrap!(util::env::cloudflare::zone::game::id());
 
-	let namespace_id = internal_unwrap!(ctx.namespace_id).as_uuid();
+	let namespace_id = unwrap_ref!(ctx.namespace_id).as_uuid();
 	let crdb = ctx.crdb().await?;
 
 	let custom_hostnames_res = op!([ctx] cf_custom_hostname_resolve_hostname {
@@ -40,7 +40,7 @@ async fn worker(
 
 			return Ok(());
 		};
-	let identifier = internal_unwrap_owned!(custom_hostname.identifier).as_uuid();
+	let identifier = unwrap!(custom_hostname.identifier).as_uuid();
 
 	let res = reqwest::Client::new()
 		.delete(format!(
@@ -68,12 +68,12 @@ async fn worker(
 				}
 				Err(err) => {
 					tracing::warn!(?err, %text, "failed to decode error");
-					internal_panic!("failed to delete custom hostname");
+					bail!("failed to delete custom hostname");
 				}
 			}
 		} else {
 			tracing::error!(hostname=?ctx.hostname, ?status, "failed to delete custom hostname");
-			internal_panic!("failed to delete custom hostname");
+			bail!("failed to delete custom hostname");
 		}
 	}
 

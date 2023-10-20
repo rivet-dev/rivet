@@ -22,7 +22,7 @@ async fn handle(
 			})
 			.await?;
 
-			if *internal_unwrap_owned!(profanity_res.results.first()) {
+			if *unwrap!(profanity_res.results.first()) {
 				errors.push(util::err_path!["display-name", "invalid"]);
 			}
 		} else {
@@ -53,7 +53,7 @@ async fn handle(
 		// If either the display name or account number are missing, fetch them from the given user
 		let (display_name, account_number) =
 			if ctx.display_name.is_none() || ctx.account_number.is_none() {
-				let user_id = internal_unwrap!(ctx.user_id);
+				let user_id = unwrap_ref!(ctx.user_id);
 
 				let users_res = op!([ctx] user_get {
 					user_ids: vec![*user_id],
@@ -61,7 +61,7 @@ async fn handle(
 				.await?;
 
 				let user = users_res.users.first();
-				let user = internal_unwrap!(user, "user not found");
+				let user = unwrap_ref!(user, "user not found");
 
 				(
 					ctx.display_name
@@ -71,8 +71,8 @@ async fn handle(
 				)
 			} else {
 				(
-					internal_unwrap!(ctx.display_name).clone(),
-					*internal_unwrap!(ctx.account_number),
+					unwrap_ref!(ctx.display_name).clone(),
+					*unwrap_ref!(ctx.account_number),
 				)
 			};
 

@@ -19,8 +19,8 @@ async fn handle(
 		.collect::<Vec<_>>();
 	let limit = ctx.limit;
 
-	internal_assert!(limit != 0, "limit too low");
-	internal_assert!(limit <= 32, "limit too high");
+	ensure!(limit != 0, "limit too low");
+	ensure!(limit <= 32, "limit too high");
 
 	let follows = sqlx::query_as::<_, Follow>(indoc!(
 		"

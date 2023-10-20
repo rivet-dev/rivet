@@ -30,8 +30,7 @@ async fn handle(
 			errors.push(util::err_path!["ports", port_index, "label-invalid"]);
 		}
 
-		let proxy_protocol =
-			internal_unwrap_owned!(LobbyRuntimeProxyProtocol::from_i32(port.proxy_protocol));
+		let proxy_protocol = unwrap!(LobbyRuntimeProxyProtocol::from_i32(port.proxy_protocol));
 
 		// Validate ports unique
 		if let Some(target_port) = port.target_port {

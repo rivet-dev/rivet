@@ -10,7 +10,7 @@ impl ApiTryFrom<backend::user_identity::Identity> for models::IdentityLinkedAcco
 	fn try_from(
 		value: backend::user_identity::Identity,
 	) -> GlobalResult<models::IdentityLinkedAccount> {
-		match internal_unwrap!(value.kind) {
+		match unwrap_ref!(value.kind) {
 			backend::user_identity::identity::Kind::Email(email_ident) => {
 				Ok(models::IdentityLinkedAccount {
 					email: Some(Box::new(models::IdentityEmailLinkedAccount {

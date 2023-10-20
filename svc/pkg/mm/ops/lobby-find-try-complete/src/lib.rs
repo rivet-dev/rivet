@@ -96,7 +96,7 @@ async fn complete_query(
 					.collect::<Vec<_>>(),
 			}
 		} else {
-			internal_panic!("failed to fetch all find query properties")
+			bail!("failed to fetch all find query properties")
 		}
 	};
 

@@ -4,7 +4,7 @@ use rivet_convert::ApiInto;
 
 #[worker(name = "user-event-user-presence-update")]
 async fn worker(ctx: &OperationContext<user_presence::msg::update::Message>) -> GlobalResult<()> {
-	let user_id = internal_unwrap!(ctx.user_id);
+	let user_id = unwrap_ref!(ctx.user_id);
 
 	msg!([ctx] user::msg::event(user_id) {
 		user_id: ctx.user_id,

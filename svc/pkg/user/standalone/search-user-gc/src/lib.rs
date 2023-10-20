@@ -79,7 +79,7 @@ async fn process_batch(
 			.await?
 			.users
 			.iter()
-			.map(|user| Ok(internal_unwrap!(user.user_id).as_uuid()))
+			.map(|user| Ok(unwrap_ref!(user.user_id).as_uuid()))
 			.collect::<GlobalResult<HashSet<_>>>()
 		},
 		async {
@@ -90,7 +90,7 @@ async fn process_batch(
 			.follows
 			.iter()
 			.filter(|follows| follows.count != 0)
-			.map(|follows| Ok(internal_unwrap!(follows.user_id).as_uuid()))
+			.map(|follows| Ok(unwrap_ref!(follows.user_id).as_uuid()))
 			.collect::<GlobalResult<HashSet<_>>>()
 		},
 	)?;

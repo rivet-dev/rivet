@@ -13,16 +13,16 @@ pub fn handle(
 	presences_ctx: &fetch::identity::PresencesCtx,
 	is_mutual_following: bool,
 ) -> GlobalResult<models::IdentityHandle> {
-	let user_id = internal_unwrap!(user.user_id).as_uuid();
+	let user_id = unwrap_ref!(user.user_id).as_uuid();
 	let is_self = user_id == current_user_id;
 
-	let user_presence = internal_unwrap_owned!(presences_ctx
+	let user_presence = unwrap!(presences_ctx
 		.res
 		.users
 		.iter()
 		.find(|presence| presence.user_id == user.user_id));
-	let user_presence = internal_unwrap!(user_presence.presence);
-	let status = internal_unwrap_owned!(backend::user::Status::from_i32(user_presence.status));
+	let user_presence = unwrap_ref!(user_presence.presence);
+	let status = unwrap!(backend::user::Status::from_i32(user_presence.status));
 
 	Ok(models::IdentityHandle {
 		identity_id: user_id,
@@ -47,7 +47,7 @@ pub fn handle_without_presence(
 	current_user_id: Uuid,
 	user: &backend::user::User,
 ) -> GlobalResult<models::IdentityHandle> {
-	let user_id = internal_unwrap!(user.user_id).as_uuid();
+	let user_id = unwrap_ref!(user.user_id).as_uuid();
 	let is_self = user_id == current_user_id;
 
 	Ok(models::IdentityHandle {
@@ -71,16 +71,16 @@ pub fn summary(
 	presences_ctx: &fetch::identity::PresencesCtx,
 	mutual_follows: &[user_follow::get::response::Follow],
 ) -> GlobalResult<models::IdentitySummary> {
-	let user_id_proto = internal_unwrap_owned!(user.user_id);
+	let user_id_proto = unwrap!(user.user_id);
 	let user_id = user_id_proto.as_uuid();
 	let is_self = user_id == current_user_id;
 
-	let user_presence = internal_unwrap_owned!(presences_ctx
+	let user_presence = unwrap!(presences_ctx
 		.res
 		.users
 		.iter()
 		.find(|presence| presence.user_id == user.user_id));
-	let user_presence = internal_unwrap!(user_presence.presence);
+	let user_presence = unwrap_ref!(user_presence.presence);
 
 	let current_user_id = Into::<common::Uuid>::into(current_user_id);
 	let following = mutual_follows.iter().any(|follow| {
@@ -132,12 +132,12 @@ pub fn profile(
 	user: &backend::user::User,
 	pctx: ProfileCtx,
 ) -> GlobalResult<models::IdentityProfile> {
-	let user_id_proto = internal_unwrap_owned!(user.user_id);
+	let user_id_proto = unwrap!(user.user_id);
 	let user_id = user_id_proto.as_uuid();
 
 	let is_self = user_id == current_user_id;
 
-	let identities = internal_unwrap_owned!(pctx
+	let identities = unwrap!(pctx
 		.linked_accounts
 		.iter()
 		.find(|identity| identity.user_id == user.user_id));
@@ -147,7 +147,7 @@ pub fn profile(
 
 	// Get user's groups
 	let user_groups = {
-		let user = internal_unwrap_owned!(pctx
+		let user = unwrap!(pctx
 			.teams_ctx
 			.user_teams
 			.users
@@ -156,7 +156,7 @@ pub fn profile(
 		let team_ids = user
 			.teams
 			.iter()
-			.map(|t| Ok(internal_unwrap_owned!(t.team_id)))
+			.map(|t| Ok(unwrap!(t.team_id)))
 			.collect::<GlobalResult<Vec<_>>>()?;
 
 		pctx.teams_ctx
@@ -181,14 +181,14 @@ pub fn profile(
 			.collect::<GlobalResult<Vec<_>>>()?
 	};
 
-	let user_presence = internal_unwrap_owned!(pctx
+	let user_presence = unwrap!(pctx
 		.presences_ctx
 		.res
 		.users
 		.iter()
 		.find(|presence| presence.user_id == user.user_id));
-	let user_presence = internal_unwrap!(user_presence.presence);
-	let status = internal_unwrap_owned!(backend::user::Status::from_i32(user_presence.status));
+	let user_presence = unwrap_ref!(user_presence.presence);
+	let status = unwrap!(backend::user::Status::from_i32(user_presence.status));
 
 	let current_user_id = Into::<common::Uuid>::into(current_user_id);
 	let following = pctx.mutual_follows.iter().any(|follow| {
@@ -263,12 +263,12 @@ pub fn presence(
 	games: &[backend::game::Game],
 	is_mutual_following: bool,
 ) -> GlobalResult<models::IdentityPresence> {
-	let status = internal_unwrap_owned!(backend::user::Status::from_i32(presence.status));
+	let status = unwrap!(backend::user::Status::from_i32(presence.status));
 
 	let game_activity = if let Some(game_activity) = &presence.game_activity {
-		let game_id = internal_unwrap!(game_activity.game_id);
+		let game_id = unwrap_ref!(game_activity.game_id);
 
-		let game = internal_unwrap_owned!(games
+		let game = unwrap!(games
 			.iter()
 			.find(|game| game.game_id.as_ref() == Some(game_id)));
 

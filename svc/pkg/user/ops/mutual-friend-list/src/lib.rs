@@ -12,13 +12,13 @@ struct Follow {
 async fn handle(
 	ctx: OperationContext<user::mutual_friend_list::Request>,
 ) -> GlobalResult<user::mutual_friend_list::Response> {
-	let user_a_id = internal_unwrap!(ctx.user_a_id).as_uuid();
-	let user_b_id = internal_unwrap!(ctx.user_b_id).as_uuid();
+	let user_a_id = unwrap_ref!(ctx.user_a_id).as_uuid();
+	let user_b_id = unwrap_ref!(ctx.user_b_id).as_uuid();
 
 	let limit = ctx.limit;
 
-	internal_assert!(limit != 0, "limit too low");
-	internal_assert!(limit <= 32, "limit too high");
+	ensure!(limit != 0, "limit too low");
+	ensure!(limit <= 32, "limit too high");
 
 	let mutual_friends = sqlx::query_as::<_, Follow>(indoc!(
 		"

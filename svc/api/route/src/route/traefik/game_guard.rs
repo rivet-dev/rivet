@@ -19,7 +19,7 @@ pub async fn config(
 	_watch_index: WatchIndexQuery,
 	ConfigQuery { token, region }: ConfigQuery,
 ) -> GlobalResult<super::TraefikConfigResponseNullified> {
-	assert_eq_with!(
+	ensure_eq_with!(
 		token,
 		util::env::read_secret(&["rivet", "api_route", "token"]).await?,
 		API_FORBIDDEN,
@@ -63,8 +63,7 @@ pub async fn build_job(
 		name_ids: vec![region.to_string()],
 	})
 	.await?;
-	let region_id =
-		internal_unwrap!(internal_unwrap!(region_resolve_res.regions.first()).region_id);
+	let region_id = unwrap_ref!(unwrap_ref!(region_resolve_res.regions.first()).region_id);
 
 	let redis_job = ctx.op_ctx().redis_job().await?;
 	let job_runs_fetch = fetch_job_runs(redis_job, region_id.as_uuid()).await?;
@@ -99,7 +98,7 @@ pub async fn build_job(
 
 	// Process proxied ports
 	for run_proxied_ports in &job_runs_fetch {
-		let run_id = internal_unwrap!(run_proxied_ports.run_id);
+		let run_id = unwrap_ref!(run_proxied_ports.run_id);
 		tracing::info!(proxied_ports_len = ?run_proxied_ports.proxied_ports.len(), "adding job run");
 		for proxied_port in &run_proxied_ports.proxied_ports {
 			let register_res = register_proxied_port(**run_id, proxied_port, &mut config);
@@ -161,9 +160,9 @@ fn register_proxied_port(
 	use backend::job::ProxyProtocol;
 
 	let ingress_port = proxied_port.ingress_port;
-	let target_nomad_port_label = internal_unwrap!(proxied_port.target_nomad_port_label);
+	let target_nomad_port_label = unwrap_ref!(proxied_port.target_nomad_port_label);
 	let service_id = format!("job-run:{}:{}", run_id, target_nomad_port_label);
-	let proxy_protocol = internal_unwrap_owned!(backend::job::ProxyProtocol::from_i32(
+	let proxy_protocol = unwrap!(backend::job::ProxyProtocol::from_i32(
 		proxied_port.proxy_protocol
 	));
 
@@ -308,7 +307,7 @@ fn build_tls_domains(
 	//
 	// A parent wildcard SSL mode will use the parent domain as the SSL
 	// name.
-	let ssl_domain_mode = internal_unwrap_owned!(backend::job::SslDomainMode::from_i32(
+	let ssl_domain_mode = unwrap!(backend::job::SslDomainMode::from_i32(
 		proxied_port.ssl_domain_mode,
 	));
 	let mut domains = Vec::new();
@@ -323,7 +322,7 @@ fn build_tls_domains(
 		}
 		backend::job::SslDomainMode::ParentWildcard => {
 			for host in &proxied_port.ingress_hostnames {
-				let (_, parent_host) = internal_unwrap_owned!(host.split_once('.'));
+				let (_, parent_host) = unwrap!(host.split_once('.'));
 				domains.push(traefik::TraefikTlsDomain {
 					main: parent_host.to_owned(),
 					sans: vec![format!("*.{}", parent_host)],

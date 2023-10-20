@@ -243,7 +243,7 @@ async fn games(
 		game_ids: game_resolve_res
 			.games
 			.iter()
-			.map(|game| Ok(internal_unwrap_owned!(game.game_id)))
+			.map(|game| Ok(unwrap!(game.game_id)))
 			.collect::<GlobalResult<Vec<_>>>()?
 			.into_iter()
 			.chain(game_ids)
@@ -288,7 +288,7 @@ async fn teams(ctx: &OperationContext<()>, user_ids: Vec<common::Uuid>) -> Globa
 		.map(|user| {
 			user.teams
 				.iter()
-				.map(|t| Ok(internal_unwrap_owned!(t.team_id)))
+				.map(|t| Ok(unwrap!(t.team_id)))
 				.collect::<GlobalResult<Vec<_>>>()
 		})
 		.collect::<GlobalResult<Vec<_>>>()?
@@ -376,7 +376,7 @@ async fn is_game_linked(
 			game_user_ids: vec![game_user_id.into()],
 		})
 		.await?;
-		let game_user = internal_unwrap_owned!(game_user_res.game_users.first());
+		let game_user = unwrap!(game_user_res.game_users.first());
 
 		Ok(game_user.link_id.is_some())
 	} else {

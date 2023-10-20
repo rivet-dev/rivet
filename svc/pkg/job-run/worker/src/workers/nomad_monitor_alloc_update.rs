@@ -24,11 +24,11 @@ async fn worker(
 	let AllocationUpdated { allocation: alloc } = serde_json::from_str(&ctx.payload_json)?;
 	let alloc_state_json = serde_json::to_value(&alloc)?;
 
-	let alloc_id = internal_unwrap!(alloc.ID);
-	let eval_id = internal_unwrap!(alloc.eval_id, "alloc has no eval");
-	let job_id = internal_unwrap!(alloc.job_id);
-	let client_status = internal_unwrap!(alloc.client_status);
-	let task_states = internal_unwrap!(alloc.task_states);
+	let alloc_id = unwrap_ref!(alloc.ID);
+	let eval_id = unwrap_ref!(alloc.eval_id, "alloc has no eval");
+	let job_id = unwrap_ref!(alloc.job_id);
+	let client_status = unwrap_ref!(alloc.client_status);
+	let task_states = unwrap_ref!(alloc.task_states);
 
 	if !util_job::is_nomad_job_run(job_id) {
 		tracing::info!(%job_id, "disregarding event");
@@ -41,9 +41,9 @@ async fn worker(
 		.filter(|(k, _)| k.as_str() != util_job::RUN_CLEANUP_TASK_NAME)
 		.map(|(_, v)| v)
 		.next();
-	let main_task = internal_unwrap_owned!(main_task, "could not find main task");
-	let main_task_state_raw = internal_unwrap!(main_task.state);
-	let main_task_events = internal_unwrap!(main_task.events);
+	let main_task = unwrap!(main_task, "could not find main task");
+	let main_task_state_raw = unwrap_ref!(main_task.state);
+	let main_task_events = unwrap_ref!(main_task.events);
 
 	tracing::info!(
 		?client_status,
@@ -87,7 +87,7 @@ async fn worker(
 					tracing::error!("discarding stale message");
 					return Ok(());
 				} else {
-					retry_panic!("run not found, may be race condition with insertion");
+					retry_bail!("run not found, may be race condition with insertion");
 				}
 			};
 
@@ -133,7 +133,7 @@ async fn worker(
 					tracing::error!("discarding stale message");
 					return Ok(());
 				} else {
-					retry_panic!("run not found, may be race condition with insertion");
+					retry_bail!("run not found, may be race condition with insertion");
 				}
 			};
 
@@ -192,7 +192,7 @@ async fn worker(
 					tracing::error!("discarding stale message");
 					return Ok(());
 				} else {
-					retry_panic!("run not found, may be race condition with insertion");
+					retry_bail!("run not found, may be race condition with insertion");
 				}
 			};
 

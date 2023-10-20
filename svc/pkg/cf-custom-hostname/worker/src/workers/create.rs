@@ -53,23 +53,23 @@ async fn fail(
 async fn worker(
 	ctx: &OperationContext<cf_custom_hostname::msg::create::Message>,
 ) -> GlobalResult<()> {
-	let game_zone_id = internal_unwrap_owned!(util::env::cloudflare::zone::game::id());
+	let game_zone_id = unwrap!(util::env::cloudflare::zone::game::id());
 
-	let namespace_id = internal_unwrap!(ctx.namespace_id).as_uuid();
+	let namespace_id = unwrap_ref!(ctx.namespace_id).as_uuid();
 
 	let games_res = op!([ctx] game_resolve_namespace_id {
 		namespace_ids: vec![namespace_id.into()],
 	})
 	.await?;
-	let game = internal_unwrap_owned!(games_res.games.first());
-	let game_id = internal_unwrap_owned!(game.game_id);
+	let game = unwrap!(games_res.games.first());
+	let game_id = unwrap!(game.game_id);
 
 	let games_res = op!([ctx] game_get {
 		game_ids: vec![game_id],
 	})
 	.await?;
-	let game = internal_unwrap_owned!(games_res.games.first());
-	let developer_team_id = internal_unwrap_owned!(game.developer_team_id);
+	let game = unwrap!(games_res.games.first());
+	let developer_team_id = unwrap!(game.developer_team_id);
 
 	// Count current pending hostnames in team
 	if !ctx.bypass_pending_cap {
@@ -77,7 +77,7 @@ async fn worker(
 			team_ids: vec![developer_team_id],
 		})
 		.await?;
-		let team = internal_unwrap_owned!(teams_res.teams.first());
+		let team = unwrap!(teams_res.teams.first());
 
 		let namespaces_res = op!([ctx] game_namespace_list {
 			game_ids: team.game_ids.clone(),
@@ -168,7 +168,7 @@ async fn worker(
 		}
 
 		tracing::error!(hostname=?ctx.hostname, ?status, "failed to create custom hostname");
-		internal_panic!("failed to create custom hostname");
+		bail!("failed to create custom hostname");
 	}
 
 	let res = res.json::<CloudflareResponse>().await?;

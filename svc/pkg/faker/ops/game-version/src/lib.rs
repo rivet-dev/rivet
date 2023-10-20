@@ -5,7 +5,7 @@ use rivet_operation::prelude::*;
 async fn handle(
 	ctx: OperationContext<faker::game_version::Request>,
 ) -> GlobalResult<faker::game_version::Response> {
-	let game_id = internal_unwrap!(ctx.game_id);
+	let game_id = unwrap_ref!(ctx.game_id);
 
 	let region_list_res = op!([ctx] region_list {
 		..Default::default()
@@ -24,7 +24,7 @@ async fn handle(
 						game_id: Some(*game_id),
 					})
 					.await?;
-					let site_id = internal_unwrap!(cdn_site_res.site_id);
+					let site_id = unwrap_ref!(cdn_site_res.site_id);
 
 					Some(VersionConfig {
 						site_id: Some(*site_id),
@@ -68,7 +68,7 @@ async fn handle(
 						image: faker::build::Image::MmLobbyAutoReady as i32,
 					})
 					.await?;
-					let build_id = internal_unwrap!(build_res.build_id);
+					let build_id = unwrap_ref!(build_res.build_id);
 
 					Some(backend::matchmaker::VersionConfig {
 						lobby_groups: ctx.override_lobby_groups.clone().map_or_else(

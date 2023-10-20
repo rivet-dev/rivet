@@ -8,17 +8,17 @@ impl ApiTryFrom<models::CloudVersionMatchmakerLobbyGroup> for backend::matchmake
 	type Error = GlobalError;
 
 	fn try_from(value: models::CloudVersionMatchmakerLobbyGroup) -> GlobalResult<Self> {
-		assert_with!(
+		ensure_with!(
 			value.max_players_normal >= 0,
 			MATCHMAKER_INVALID_VERSION_CONFIG,
 			error = "`max_players` out of bounds"
 		);
-		assert_with!(
+		ensure_with!(
 			value.max_players_direct >= 0,
 			MATCHMAKER_INVALID_VERSION_CONFIG,
 			error = "`max_players_direct` out of bounds"
 		);
-		assert_with!(
+		ensure_with!(
 			value.max_players_party >= 0,
 			MATCHMAKER_INVALID_VERSION_CONFIG,
 			error = "`max_players_party` out of bounds"
@@ -62,7 +62,7 @@ impl ApiTryFrom<backend::matchmaker::LobbyGroup> for models::CloudVersionMatchma
 			max_players_direct: value.max_players_direct.try_into()?,
 			max_players_party: value.max_players_party.try_into()?,
 
-			runtime: Box::new(internal_unwrap_owned!(value.runtime).try_into()?),
+			runtime: Box::new(unwrap!(value.runtime).try_into()?),
 		})
 	}
 }
@@ -88,7 +88,7 @@ impl ApiTryFrom<backend::matchmaker::lobby_group::Region>
 
 	fn try_from(value: backend::matchmaker::lobby_group::Region) -> GlobalResult<Self> {
 		Ok(models::CloudVersionMatchmakerLobbyGroupRegion {
-			region_id: internal_unwrap_owned!(value.region_id).as_uuid(),
+			region_id: unwrap!(value.region_id).as_uuid(),
 			tier_name_id: value.tier_name_id.to_owned(),
 			idle_lobbies: value
 				.idle_lobbies
@@ -107,12 +107,12 @@ impl ApiTryFrom<models::CloudVersionMatchmakerLobbyGroupIdleLobbiesConfig>
 	fn try_from(
 		value: models::CloudVersionMatchmakerLobbyGroupIdleLobbiesConfig,
 	) -> GlobalResult<Self> {
-		assert_with!(
+		ensure_with!(
 			value.min_idle_lobbies >= 0,
 			MATCHMAKER_INVALID_VERSION_CONFIG,
 			error = "`min_idle_lobbies` out of bounds"
 		);
-		assert_with!(
+		ensure_with!(
 			value.max_idle_lobbies >= 0,
 			MATCHMAKER_INVALID_VERSION_CONFIG,
 			error = "`max_idle_lobbies` out of bounds"
@@ -182,14 +182,14 @@ impl ApiTryFrom<backend::matchmaker::LobbyRuntime>
 	type Error = GlobalError;
 
 	fn try_from(value: backend::matchmaker::LobbyRuntime) -> GlobalResult<Self> {
-		let runtime = internal_unwrap_owned!(value.runtime);
+		let runtime = unwrap!(value.runtime);
 
 		Ok(match runtime {
 			backend::matchmaker::lobby_runtime::Runtime::Docker(runtime) => {
 				models::CloudVersionMatchmakerLobbyGroupRuntime {
 					docker: Some(Box::new(
 						models::CloudVersionMatchmakerLobbyGroupRuntimeDocker {
-							build_id: Some(internal_unwrap!(runtime.build_id).as_uuid()),
+							build_id: Some(unwrap_ref!(runtime.build_id).as_uuid()),
 							args: runtime.args,
 							env_vars: runtime
 								.env_vars
@@ -197,7 +197,7 @@ impl ApiTryFrom<backend::matchmaker::LobbyRuntime>
 								.map(ApiTryFrom::try_from)
 								.collect::<Result<Vec<_>, _>>()?,
 							network_mode: Some(
-								internal_unwrap_owned!(
+								unwrap!(
 									backend::matchmaker::lobby_runtime::NetworkMode::from_i32(
 										runtime.network_mode,
 									)
@@ -226,7 +226,7 @@ impl ApiTryFrom<models::CloudVersionMatchmakerLobbyGroupRuntimeDockerPort>
 		value: models::CloudVersionMatchmakerLobbyGroupRuntimeDockerPort,
 	) -> GlobalResult<Self> {
 		if let Some(target_port) = value.target_port {
-			internal_assert!(target_port >= 0);
+			ensure!(target_port >= 0);
 		}
 
 		let proxy_kind = if value.port_range.is_some() {
@@ -240,7 +240,7 @@ impl ApiTryFrom<models::CloudVersionMatchmakerLobbyGroupRuntimeDockerPort>
 			target_port: value
 				.target_port
 				.map(|x| {
-					assert_with!(
+					ensure_with!(
 						x >= 0,
 						MATCHMAKER_INVALID_VERSION_CONFIG,
 						error = "`target_port` out of bounds"
@@ -272,7 +272,7 @@ impl ApiTryFrom<backend::matchmaker::lobby_runtime::Port>
 				.map(ApiTryInto::try_into)
 				.transpose()?
 				.map(Box::new),
-			proxy_protocol: internal_unwrap_owned!(
+			proxy_protocol: unwrap!(
 				backend::matchmaker::lobby_runtime::ProxyProtocol::from_i32(value.proxy_protocol)
 			)
 			.api_into(),

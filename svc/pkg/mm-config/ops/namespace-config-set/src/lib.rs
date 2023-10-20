@@ -5,7 +5,7 @@ use rivet_operation::prelude::*;
 async fn handle(
 	ctx: OperationContext<mm_config::namespace_config_set::Request>,
 ) -> GlobalResult<mm_config::namespace_config_set::Response> {
-	let namespace_id = internal_unwrap!(ctx.namespace_id).as_uuid();
+	let namespace_id = unwrap_ref!(ctx.namespace_id).as_uuid();
 
 	// Validate game
 	let validation_res = op!([ctx] mm_config_namespace_config_validate {
@@ -27,7 +27,7 @@ async fn handle(
 			.map(|err| err.path.join("."))
 			.collect::<Vec<_>>()
 			.join(", ");
-		panic_with!(VALIDATION_ERROR, error = readable_errors);
+		bail_with!(VALIDATION_ERROR, error = readable_errors);
 	}
 
 	sqlx::query(indoc!(

@@ -36,10 +36,7 @@ impl Conn {
 
 		stream.readable().await?;
 
-		Ok(Conn {
-			id,
-			socket: stream,
-		})
+		Ok(Conn { id, socket: stream })
 	}
 
 	async fn write(&mut self, data: &[u8]) -> GlobalResult<()> {
@@ -100,7 +97,7 @@ pub async fn run_from_env(ts: i64) -> GlobalResult<()> {
 
 	let create_lobbies = std::iter::repeat_with(|| async {
 		let res = create_lobby(&test_ctx).await?;
-		let (_, port) = internal_unwrap_owned!(res.ports.iter().next());
+		let (_, port) = unwrap!(res.ports.iter().next());
 		connect_to_lobby(&res.player.token, port).await
 	})
 	.take(CHUNK_SIZE);
@@ -113,7 +110,7 @@ pub async fn run_from_env(ts: i64) -> GlobalResult<()> {
 	tracing::info!("============ Batch find ==============");
 	let find_lobbies = std::iter::repeat_with(|| async {
 		let res = find_lobby(&test_ctx).await?;
-		let (_, port) = internal_unwrap_owned!(res.ports.iter().next());
+		let (_, port) = unwrap!(res.ports.iter().next());
 		connect_to_lobby(&res.player.token, port).await
 	})
 	.take(CHUNK_SIZE);
@@ -161,7 +158,7 @@ async fn verify_state(
 		namespace_ids: vec![test_ctx.namespace_id.into()],
 	})
 	.await?;
-	let lobby_ids = &internal_unwrap_owned!(lobby_list_res.namespaces.first()).lobby_ids;
+	let lobby_ids = &unwrap!(lobby_list_res.namespaces.first()).lobby_ids;
 
 	let lobby_players_res = op!([test_ctx.op_ctx] mm_lobby_player_count {
 		lobby_ids: lobby_ids.clone(),
@@ -180,31 +177,31 @@ async fn verify_state(
 		namespace_ids: vec![test_ctx.namespace_id.into()],
 	})
 	.await?;
-	let player_count = internal_unwrap_owned!(player_count_res.namespaces.first()).player_count;
+	let player_count = unwrap!(player_count_res.namespaces.first()).player_count;
 
 	tracing::info!(?expected_registered_player_count, ?registered_player_count, ?lobby_player_count, conns=?test_ctx.conns.len());
 
-	internal_assert_eq!(
+	ensure_eq!(
 		expected_lobby_count,
 		lobby_ids.len(),
 		"wrong number of lobbies"
 	);
-	internal_assert_eq!(
+	ensure_eq!(
 		expected_player_count,
 		player_count as usize,
 		"wrong number of players"
 	);
-	internal_assert_eq!(
+	ensure_eq!(
 		expected_registered_player_count,
 		registered_player_count as usize,
 		"wrong number of registered players"
 	);
-	internal_assert_eq!(
+	ensure_eq!(
 		lobby_player_count,
 		player_count,
 		"player counts don't match"
 	);
-	internal_assert_eq!(
+	ensure_eq!(
 		test_ctx.conns.len(),
 		registered_player_count as usize,
 		"registered player count doesn't match connection count"
@@ -238,7 +235,7 @@ async fn setup_config(
 			..Default::default()
 		})
 		.await?;
-		internal_unwrap!(token_res.token).token.clone()
+		unwrap_ref!(token_res.token).token.clone()
 	};
 
 	let client = reqwest::Client::builder()
@@ -276,13 +273,13 @@ async fn setup_region(ctx: &OperationContext<()>) -> GlobalResult<(Uuid, String)
 	tracing::info!("setup region");
 
 	let region_res = op!([ctx] faker_region {}).await?;
-	let region_id = internal_unwrap!(region_res.region_id).as_uuid();
+	let region_id = unwrap_ref!(region_res.region_id).as_uuid();
 
 	let get_res = op!([ctx] region_get {
 		region_ids: vec![region_id.into()],
 	})
 	.await?;
-	let region_data = internal_unwrap_owned!(get_res.regions.first());
+	let region_data = unwrap!(get_res.regions.first());
 
 	Ok((region_id, region_data.name_id.clone()))
 }
@@ -375,7 +372,7 @@ async fn setup_game(
 		..Default::default()
 	})
 	.await?;
-	let namespace_id = internal_unwrap!(namespace_res.namespace_id);
+	let namespace_id = unwrap_ref!(namespace_res.namespace_id);
 
 	op!([ctx] mm_config_namespace_config_set {
 		namespace_id: Some(*namespace_id),
@@ -389,11 +386,11 @@ async fn setup_game(
 	.await?;
 
 	Ok((
-		internal_unwrap!(game_res.game_id).as_uuid(),
-		internal_unwrap!(game_version_res.version_id).as_uuid(),
+		unwrap_ref!(game_res.game_id).as_uuid(),
+		unwrap_ref!(game_version_res.version_id).as_uuid(),
 		namespace_id.as_uuid(),
-		internal_unwrap!(game_version_res.mm_config).clone(),
-		internal_unwrap!(game_version_res.mm_config_meta).clone(),
+		unwrap_ref!(game_version_res.mm_config).clone(),
+		unwrap_ref!(game_version_res.mm_config_meta).clone(),
 	))
 }
 
@@ -457,7 +454,7 @@ async fn find_lobby(ctx: &Ctx) -> GlobalResult<models::MatchmakerFindLobbyRespon
 
 async fn connect_to_lobby(token: &str, mm_port: &models::MatchmakerJoinPort) -> GlobalResult<Conn> {
 	let hostname = mm_port.hostname.as_str();
-	let port = internal_unwrap_owned!(mm_port.port) as u16;
+	let port = unwrap!(mm_port.port) as u16;
 	let host = format!("{hostname}:{port}");
 
 	// Get player id

@@ -112,12 +112,12 @@ impl ApiTryFrom<models::CloudVersionMatchmakerPortRange>
 	type Error = GlobalError;
 
 	fn try_from(value: models::CloudVersionMatchmakerPortRange) -> GlobalResult<Self> {
-		assert_with!(
+		ensure_with!(
 			value.min >= 0,
 			MATCHMAKER_INVALID_VERSION_CONFIG,
 			error = "`port_range.min` out of bounds"
 		);
-		assert_with!(
+		ensure_with!(
 			value.max >= 0,
 			MATCHMAKER_INVALID_VERSION_CONFIG,
 			error = "`port_range.max` out of bounds"
@@ -261,12 +261,12 @@ impl ApiTryFrom<models::CloudVersionMatchmakerCaptcha> for backend::captcha::Cap
 	type Error = GlobalError;
 
 	fn try_from(value: models::CloudVersionMatchmakerCaptcha) -> GlobalResult<Self> {
-		assert_with!(
+		ensure_with!(
 			value.requests_before_reverify >= 0,
 			MATCHMAKER_INVALID_VERSION_CONFIG,
 			error = "`requests_before_reverify` out of bounds"
 		);
-		assert_with!(
+		ensure_with!(
 			value.verification_ttl >= 0,
 			MATCHMAKER_INVALID_VERSION_CONFIG,
 			error = "`verification_ttl` out of bounds"
@@ -323,7 +323,7 @@ impl ApiTryFrom<backend::captcha::captcha_config::Hcaptcha>
 
 	fn try_from(value: backend::captcha::captcha_config::Hcaptcha) -> GlobalResult<Self> {
 		Ok(models::CloudVersionMatchmakerCaptchaHcaptcha {
-			level: internal_unwrap_owned!(
+			level: unwrap!(
 				backend::captcha::captcha_config::hcaptcha::Level::from_i32(value.level)
 			)
 			.api_into(),

@@ -17,7 +17,7 @@ pub async fn register(
 	match body.service {
 		models::NotificationRegisterService::Firebase(registration) => {
 			// TODO: Validate access key JWT
-			internal_assert!(registration.access_key.len() <= 256, "access key too long");
+			ensure!(registration.access_key.len() <= 256, "access key too long");
 
 			op!([ctx] user_notification_auth_register {
 				user_id: Some(user_ent.user_id.into()),

@@ -23,8 +23,8 @@ async fn worker(
 ) -> Result<(), GlobalError> {
 	let crdb = ctx.crdb().await?;
 
-	let namespace_id = internal_unwrap!(ctx.namespace_id).as_uuid();
-	let version_id = internal_unwrap!(ctx.version_id).as_uuid();
+	let namespace_id = unwrap_ref!(ctx.namespace_id).as_uuid();
+	let version_id = unwrap_ref!(ctx.version_id).as_uuid();
 
 	// TODO: Transaction
 
@@ -80,7 +80,7 @@ async fn worker(
 			&crdb,
 			namespace_id,
 			dep_key,
-			internal_unwrap_owned!(version_id),
+			unwrap!(version_id),
 		)
 		.await?;
 	}
@@ -101,12 +101,7 @@ async fn worker(
 			.and_then(|x| x.module_version_id)
 			.map(|x| x.as_uuid());
 
-		update_instance(
-			ctx.chirp(),
-			internal_unwrap_owned!(instance_id),
-			internal_unwrap_owned!(version_id),
-		)
-		.await?;
+		update_instance(ctx.chirp(), unwrap!(instance_id), unwrap!(version_id)).await?;
 	}
 
 	// Delete instances
@@ -124,7 +119,7 @@ async fn worker(
 			&crdb,
 			namespace_id,
 			dep_key,
-			internal_unwrap_owned!(instance_id),
+			unwrap!(instance_id),
 		)
 		.await?;
 	}

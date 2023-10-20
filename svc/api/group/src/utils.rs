@@ -14,11 +14,11 @@ pub async fn group_member(ctx: &Ctx<Auth>, group_id: Uuid, user_id: Uuid) -> Glo
 	.await?;
 
 	// Check if member
-	let team = internal_unwrap_owned!(members_res.teams.first()).clone();
+	let team = unwrap!(members_res.teams.first()).clone();
 	let is_member = team
 		.members
 		.iter()
-		.map(|m| Ok(internal_unwrap!(m.user_id).as_uuid()))
+		.map(|m| Ok(unwrap_ref!(m.user_id).as_uuid()))
 		.collect::<GlobalResult<Vec<_>>>()?
 		.contains(&user_id);
 

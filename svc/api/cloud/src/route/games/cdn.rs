@@ -46,8 +46,8 @@ pub async fn get_sites(
 			}
 
 			GlobalResult::Ok(models::CdnSiteSummary {
-				site_id: internal_unwrap!(site.site_id).as_uuid().to_string(),
-				upload_id: internal_unwrap!(site.upload_id).as_uuid().to_string(),
+				site_id: unwrap_ref!(site.site_id).as_uuid().to_string(),
+				upload_id: unwrap_ref!(site.upload_id).as_uuid().to_string(),
 				display_name: site.display_name.clone(),
 				create_ts: util::timestamp::to_chrono(site.create_ts)?,
 				content_length: upload
@@ -85,8 +85,8 @@ pub async fn create_site(
 	.await?;
 
 	Ok(models::CreateGameCdnSiteResponse {
-		site_id: internal_unwrap!(create_res.site_id).as_uuid().to_string(),
-		upload_id: internal_unwrap!(create_res.upload_id).as_uuid().to_string(),
+		site_id: unwrap_ref!(create_res.site_id).as_uuid().to_string(),
+		upload_id: unwrap_ref!(create_res.upload_id).as_uuid().to_string(),
 		presigned_requests: create_res
 			.presigned_requests
 			.clone()

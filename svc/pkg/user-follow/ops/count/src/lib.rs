@@ -17,7 +17,7 @@ async fn handle(
 		.map(common::Uuid::as_uuid)
 		.collect::<Vec<_>>();
 
-	let req_kind = internal_unwrap_owned!(RequestKind::from_i32(ctx.kind));
+	let req_kind = unwrap!(RequestKind::from_i32(ctx.kind));
 
 	let follows = match req_kind {
 		RequestKind::Mutual => {

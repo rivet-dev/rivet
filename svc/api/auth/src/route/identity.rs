@@ -31,7 +31,7 @@ pub async fn start(
 					topic: HashMap::<String, String>::from([
 						("kind".into(), "auth:verification-start".into()),
 					]),
-					remote_address: internal_unwrap!(ctx.remote_address()).to_string(),
+					remote_address: unwrap_ref!(ctx.remote_address()).to_string(),
 					origin_host: Some("rivet.gg".to_string()),
 					captcha_config: Some(backend::captcha::CaptchaConfig {
 						requests_before_reverify: 0,
@@ -51,7 +51,7 @@ pub async fn start(
 				})
 				.await?;
 			}
-			_ => panic_with!(CAPTCHA_CAPTCHA_INVALID),
+			_ => bail_with!(CAPTCHA_CAPTCHA_INVALID),
 		};
 	}
 
@@ -64,7 +64,7 @@ pub async fn start(
 	})
 	.await?;
 
-	let verification_id = internal_unwrap!(res.verification_id).as_uuid();
+	let verification_id = unwrap_ref!(res.verification_id).as_uuid();
 
 	Ok(models::StartEmailVerificationResponse {
 		verification_id: verification_id.to_string(),
@@ -79,7 +79,7 @@ pub async fn complete(
 ) -> GlobalResult<models::CompleteEmailVerificationResponse> {
 	let user_ent = ctx.auth().user(ctx.op_ctx()).await?;
 
-	let origin = internal_unwrap_owned!(ctx.origin());
+	let origin = unwrap!(ctx.origin());
 
 	let res = op!([ctx] email_verification_complete {
 		verification_id: Some(Into::into(
@@ -89,7 +89,7 @@ pub async fn complete(
 	})
 	.await?;
 
-	let status = internal_unwrap_owned!(StatusProto::from_i32(res.status));
+	let status = unwrap!(StatusProto::from_i32(res.status));
 
 	// Handle error statuses
 	let err = match status {
@@ -113,7 +113,7 @@ pub async fn complete(
 
 	// Switch to new user
 	if let Some(new_user) = email_res.users.first() {
-		let new_user_id = internal_unwrap!(new_user.user_id).as_uuid();
+		let new_user_id = unwrap_ref!(new_user.user_id).as_uuid();
 
 		tracing::info!(old_user_id = %user_ent.user_id, %new_user_id, "identity found, switching user");
 
@@ -126,7 +126,7 @@ pub async fn complete(
 		// Set refresh token
 		{
 			let (k, v) = refresh_token_header(origin, token_res.refresh_token)?;
-			internal_unwrap_owned!(response.headers_mut()).insert(k, v);
+			unwrap!(response.headers_mut()).insert(k, v);
 		}
 
 		Ok(models::CompleteEmailVerificationResponse {

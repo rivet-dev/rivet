@@ -5,7 +5,7 @@ use proto::backend::{self, pkg::*};
 async fn worker(
 	ctx: &OperationContext<chat::msg::last_read_ts_update::Message>,
 ) -> GlobalResult<()> {
-	let user_id = internal_unwrap!(ctx.user_id).as_uuid();
+	let user_id = unwrap_ref!(ctx.user_id).as_uuid();
 
 	msg!([ctx] user::msg::event(user_id) {
 		user_id: Some(user_id.into()),

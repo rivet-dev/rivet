@@ -9,12 +9,12 @@ async fn handle(
 
 	for _ in 0..2usize {
 		let user_create_res = op!([ctx] faker_user {}).await?;
-		let user_id = internal_unwrap!(user_create_res.user_id);
+		let user_id = unwrap_ref!(user_create_res.user_id);
 
 		member_user_ids.push(*user_id);
 	}
 
-	let owner_user_id = internal_unwrap_owned!(member_user_ids.first());
+	let owner_user_id = unwrap!(member_user_ids.first());
 
 	let team_id = ctx
 		.team_id
@@ -39,8 +39,8 @@ async fn handle(
 				team_ids: vec![team_id.into()],
 			})
 			.await?;
-			let dev_team = internal_unwrap_owned!(team_dev_get_res.teams.first());
-			let stripe_customer_id = internal_unwrap!(dev_team.stripe_customer_id).clone();
+			let dev_team = unwrap!(team_dev_get_res.teams.first());
+			let stripe_customer_id = unwrap_ref!(dev_team.stripe_customer_id).clone();
 
 			msg!([ctx] team_dev::msg::status_update(&stripe_customer_id) -> team_dev::msg::status_update_complete {
 				stripe_customer_id: stripe_customer_id,

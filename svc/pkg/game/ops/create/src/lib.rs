@@ -12,7 +12,7 @@ async fn handle(
 		developer_team_id,
 		creator_user_id: _,
 	} = ctx.body();
-	let developer_team_id_proto = *internal_unwrap_owned!(developer_team_id);
+	let developer_team_id_proto = *unwrap!(developer_team_id);
 	let developer_team_id = developer_team_id_proto.as_uuid();
 
 	// Validate game
@@ -30,7 +30,7 @@ async fn handle(
 			.map(|err| err.path.join("."))
 			.collect::<Vec<_>>()
 			.join(", ");
-		panic_with!(VALIDATION_ERROR, error = readable_errors);
+		bail_with!(VALIDATION_ERROR, error = readable_errors);
 	}
 
 	// Check if team can create a game
@@ -39,11 +39,11 @@ async fn handle(
 			team_ids: vec![developer_team_id_proto]
 		})
 		.await?;
-		let dev_team = unwrap_with_owned!(dev_team_res.teams.first(), GROUP_NOT_DEVELOPER_GROUP);
-		let status = internal_unwrap_owned!(backend::team::dev_team::DevStatus::from_i32(
+		let dev_team = unwrap_with!(dev_team_res.teams.first(), GROUP_NOT_DEVELOPER_GROUP);
+		let status = unwrap!(backend::team::dev_team::DevStatus::from_i32(
 			dev_team.status
 		));
-		assert_with!(
+		ensure_with!(
 			matches!(status, backend::team::dev_team::DevStatus::Active),
 			GROUP_INVALID_DEVELOPER_STATUS
 		);

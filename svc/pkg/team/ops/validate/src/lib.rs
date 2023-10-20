@@ -30,7 +30,7 @@ async fn handle(
 		})
 		.await?;
 
-		if *internal_unwrap_owned!(profanity_res.results.first()) {
+		if *unwrap!(profanity_res.results.first()) {
 			errors.push(util::err_path!["display-name-invalid"]);
 		}
 	} else {

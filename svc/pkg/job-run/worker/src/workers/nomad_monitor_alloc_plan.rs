@@ -34,9 +34,9 @@ async fn worker(
 
 	let PlanResult { allocation: alloc } = serde_json::from_str::<PlanResult>(&ctx.payload_json)?;
 
-	let job_id = internal_unwrap!(alloc.job_id, "alloc has no job id");
-	let alloc_id = internal_unwrap!(alloc.ID);
-	let nomad_node_id = internal_unwrap!(alloc.node_id, "alloc has no node id");
+	let job_id = unwrap_ref!(alloc.job_id, "alloc has no job id");
+	let alloc_id = unwrap_ref!(alloc.ID);
+	let nomad_node_id = unwrap_ref!(alloc.node_id, "alloc has no node id");
 
 	if !util_job::is_nomad_job_run(job_id) {
 		tracing::info!(%job_id, "disregarding event");
@@ -46,11 +46,11 @@ async fn worker(
 	// Read ports
 	let mut run_networks = Vec::new();
 	let mut ports = Vec::new();
-	let alloc_resources = internal_unwrap!(alloc.resources);
+	let alloc_resources = unwrap_ref!(alloc.resources);
 	if let Some(networks) = &alloc_resources.networks {
 		for network in networks {
-			let network_mode = internal_unwrap!(network.mode);
-			let network_ip = internal_unwrap!(network.IP);
+			let network_mode = unwrap_ref!(network.mode);
+			let network_ip = unwrap_ref!(network.IP);
 
 			run_networks.push(backend::job::Network {
 				mode: network_mode.clone(),
@@ -60,11 +60,11 @@ async fn worker(
 			if let Some(dynamic_ports) = &network.dynamic_ports {
 				for port in dynamic_ports {
 					// Don't share connect proxy ports
-					let label = internal_unwrap!(port.label);
+					let label = unwrap_ref!(port.label);
 					ports.push(backend::job::Port {
 						label: label.clone(),
-						source: *internal_unwrap!(port.value) as u32,
-						target: *internal_unwrap!(port.to) as u32,
+						source: *unwrap_ref!(port.value) as u32,
+						target: *unwrap_ref!(port.to) as u32,
 						ip: network_ip.clone(),
 					});
 				}
@@ -111,7 +111,7 @@ async fn worker(
 			tracing::error!("discarding stale message");
 			return Ok(());
 		} else {
-			retry_panic!("run not found, may be race condition with insertion");
+			retry_bail!("run not found, may be race condition with insertion");
 		}
 	};
 
@@ -279,7 +279,7 @@ async fn update_db(
 
 	// Validate ports match proxied ports
 	for proxied_port in &proxied_ports {
-		internal_assert!(
+		ensure!(
 			ports
 				.iter()
 				.any(|port| Some(&port.label) == proxied_port.target_nomad_port_label.as_ref()),

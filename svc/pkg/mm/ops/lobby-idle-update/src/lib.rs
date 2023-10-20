@@ -16,8 +16,8 @@ struct LobbyGroupConfig {
 async fn handle(
 	ctx: OperationContext<mm::lobby_idle_update::Request>,
 ) -> GlobalResult<mm::lobby_idle_update::Response> {
-	let namespace_id = internal_unwrap!(ctx.namespace_id).as_uuid();
-	let region_id = internal_unwrap!(ctx.region_id).as_uuid();
+	let namespace_id = unwrap_ref!(ctx.namespace_id).as_uuid();
+	let region_id = unwrap_ref!(ctx.region_id).as_uuid();
 
 	let lobby_configs = fetch_lobby_configs(&ctx, namespace_id, region_id).await?;
 
@@ -59,7 +59,7 @@ async fn handle(
 	let mut create_futs = Vec::new();
 	for lobby_group_id in create_lobby_group_ids {
 		let lobby_group_id = util::uuid::parse(&lobby_group_id)?;
-		let lobby_config = internal_unwrap_owned!(
+		let lobby_config = unwrap!(
 			lobby_configs
 				.iter()
 				.find(|x| x.lobby_group_id == lobby_group_id),
@@ -115,16 +115,16 @@ async fn fetch_lobby_configs(
 		namespace_ids: vec![namespace_id.into()],
 	})
 	.await?;
-	let ns = internal_unwrap_owned!(ns_res.namespaces.first());
-	let version_id = internal_unwrap!(ns.version_id).as_uuid();
+	let ns = unwrap!(ns_res.namespaces.first());
+	let version_id = unwrap_ref!(ns.version_id).as_uuid();
 
 	let mm_versions_res = op!([ctx] @dont_log_body mm_config_version_get {
 		version_ids: vec![version_id.into()],
 	})
 	.await?;
-	let version = internal_unwrap_owned!(mm_versions_res.versions.first());
-	let version_config = internal_unwrap!(version.config);
-	let version_meta = internal_unwrap!(version.config_meta);
+	let version = unwrap!(mm_versions_res.versions.first());
+	let version_config = unwrap_ref!(version.config);
+	let version_meta = unwrap_ref!(version.config_meta);
 
 	// Iterate through each of the lobby groups looking for matching idle
 	// lobby configs
@@ -146,7 +146,7 @@ async fn fetch_lobby_configs(
 		};
 
 		idle_lobbies_configs.push(LobbyGroupConfig {
-			lobby_group_id: internal_unwrap!(lobby_group_meta.lobby_group_id).as_uuid(),
+			lobby_group_id: unwrap_ref!(lobby_group_meta.lobby_group_id).as_uuid(),
 			min_idle_lobbies: region
 				.idle_lobbies
 				.as_ref()

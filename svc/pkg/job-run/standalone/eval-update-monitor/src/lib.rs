@@ -70,9 +70,9 @@ async fn handle_inner(
 	PlanResult { evaluation: eval }: &PlanResult,
 	payload_json: String,
 ) -> GlobalResult<()> {
-	let job_id = internal_unwrap!(eval.job_id, "eval has no job id");
-	let triggered_by = internal_unwrap!(eval.triggered_by).as_str();
-	let eval_status_raw = internal_unwrap!(eval.status).as_str();
+	let job_id = unwrap_ref!(eval.job_id, "eval has no job id");
+	let triggered_by = unwrap_ref!(eval.triggered_by).as_str();
+	let eval_status_raw = unwrap_ref!(eval.status).as_str();
 
 	// Ignore jobs we don't care about
 	if !util_job::is_nomad_job_run(job_id) || triggered_by != "job-register" {

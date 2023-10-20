@@ -5,7 +5,7 @@ use rivet_operation::prelude::*;
 async fn handle(
 	ctx: OperationContext<faker::cdn_site::Request>,
 ) -> GlobalResult<faker::cdn_site::Response> {
-	let game_id = internal_unwrap!(ctx.game_id).as_uuid();
+	let game_id = unwrap_ref!(ctx.game_id).as_uuid();
 
 	let index_html = format!("Hello, {}!", Uuid::new_v4());
 	let hello_index_html = format!("/hello/index.html {}", Uuid::new_v4());
@@ -35,10 +35,10 @@ async fn handle(
 			.collect(),
 	})
 	.await?;
-	let site_id = internal_unwrap!(create_res.site_id).as_uuid();
+	let site_id = unwrap_ref!(create_res.site_id).as_uuid();
 
 	for (path, body, mime) in &files {
-		let presigned_req = internal_unwrap_owned!(create_res
+		let presigned_req = unwrap!(create_res
 			.presigned_requests
 			.iter()
 			.find(|x| x.path == *path));
@@ -56,7 +56,7 @@ async fn handle(
 		let res_status = res.status();
 		let res_text = res.text().await;
 		tracing::info!(status = %res_status, body = ?res_text, "upload response");
-		internal_assert!(res_status.is_success(), "failed to upload site");
+		ensure!(res_status.is_success(), "failed to upload site");
 	}
 
 	// Complete the upload

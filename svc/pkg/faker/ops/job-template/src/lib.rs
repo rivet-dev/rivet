@@ -77,7 +77,7 @@ fn gen_task(ctx: &OperationContext<faker::job_template::Request>) -> GlobalResul
 		..Task::new()
 	};
 
-	Ok(match internal_unwrap!(ctx.kind) {
+	Ok(match unwrap_ref!(ctx.kind) {
 		faker::job_template::request::Kind::EchoServer(_) => GenTaskOutput {
 			ports: vec![Port {
 				label: Some("http".into()),

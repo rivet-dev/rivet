@@ -12,8 +12,8 @@ pub fn message(
 	games: &[convert::GameWithNamespaceIds],
 ) -> GlobalResult<models::ChatMessage> {
 	// Read body message
-	let backend_body_kind = internal_unwrap!(message.body);
-	let backend_body_kind = internal_unwrap!(backend_body_kind.kind);
+	let backend_body_kind = unwrap_ref!(message.body);
+	let backend_body_kind = unwrap_ref!(backend_body_kind.kind);
 
 	// Build message body
 	let msg_body = {
@@ -25,15 +25,13 @@ pub fn message(
 				plugin_id: _,
 				body: _,
 			}) => {
-				internal_panic!("Unimplemented");
+				bail!("Unimplemented");
 			}
 			backend_body::Kind::Text(backend_body::Text {
 				sender_user_id,
 				body,
 			}) => {
-				let sender = internal_unwrap_owned!(users
-					.iter()
-					.find(|user| &user.user_id == sender_user_id));
+				let sender = unwrap!(users.iter().find(|user| &user.user_id == sender_user_id));
 
 				models::ChatMessageBody::Text(models::ChatMessageBodyText {
 					sender: convert::identity::handle_without_presence(current_user_id, sender)?,
@@ -44,9 +42,7 @@ pub fn message(
 				models::ChatMessageBody::ChatCreate(models::ChatMessageBodyChatCreate {})
 			}
 			backend_body::Kind::Deleted(backend_body::Deleted { sender_user_id }) => {
-				let sender = internal_unwrap_owned!(users
-					.iter()
-					.find(|user| &user.user_id == sender_user_id));
+				let sender = unwrap!(users.iter().find(|user| &user.user_id == sender_user_id));
 
 				models::ChatMessageBody::Deleted(models::ChatMessageBodyDeleted {
 					sender: convert::identity::handle_without_presence(current_user_id, sender)?,
@@ -56,24 +52,21 @@ pub fn message(
 				models::ChatMessageBody::IdentityFollow(models::ChatMessageBodyIdentityFollow {})
 			}
 			backend_body::Kind::TeamJoin(backend_body::TeamJoin { user_id }) => {
-				let user =
-					internal_unwrap_owned!(users.iter().find(|user| &user.user_id == user_id));
+				let user = unwrap!(users.iter().find(|user| &user.user_id == user_id));
 
 				models::ChatMessageBody::GroupJoin(models::ChatMessageBodyGroupJoin {
 					identity: convert::identity::handle_without_presence(current_user_id, user)?,
 				})
 			}
 			backend_body::Kind::TeamLeave(backend_body::TeamLeave { user_id }) => {
-				let user =
-					internal_unwrap_owned!(users.iter().find(|user| &user.user_id == user_id));
+				let user = unwrap!(users.iter().find(|user| &user.user_id == user_id));
 
 				models::ChatMessageBody::GroupLeave(models::ChatMessageBodyGroupLeave {
 					identity: convert::identity::handle_without_presence(current_user_id, user)?,
 				})
 			}
 			backend_body::Kind::TeamMemberKick(backend_body::TeamMemberKick { user_id }) => {
-				let user =
-					internal_unwrap_owned!(users.iter().find(|user| &user.user_id == user_id));
+				let user = unwrap!(users.iter().find(|user| &user.user_id == user_id));
 
 				models::ChatMessageBody::GroupMemberKick(models::ChatMessageBodyGroupMemberKick {
 					identity: convert::identity::handle_without_presence(current_user_id, user)?,
@@ -83,10 +76,8 @@ pub fn message(
 	};
 
 	Ok(models::ChatMessage {
-		chat_message_id: internal_unwrap!(message.chat_message_id)
-			.as_uuid()
-			.to_string(),
-		thread_id: internal_unwrap!(message.thread_id).as_uuid().to_string(),
+		chat_message_id: unwrap_ref!(message.chat_message_id).as_uuid().to_string(),
+		thread_id: unwrap_ref!(message.thread_id).as_uuid().to_string(),
 		send_ts: util::timestamp::to_chrono(message.send_ts)?,
 		body: msg_body,
 	})

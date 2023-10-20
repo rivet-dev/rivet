@@ -61,7 +61,7 @@ async fn handle_inner(
 	AllocationUpdated { allocation: alloc }: &AllocationUpdated,
 	payload_json: String,
 ) -> GlobalResult<()> {
-	let job_id = internal_unwrap!(alloc.job_id);
+	let job_id = unwrap_ref!(alloc.job_id);
 
 	if !util_job::is_nomad_job_run(job_id) {
 		tracing::info!(%job_id, "disregarding event");

@@ -11,9 +11,9 @@ pub fn summary(
 	dev_teams: &[backend::team::DevTeam],
 	is_current_identity_member: bool,
 ) -> GlobalResult<models::GroupSummary> {
-	let team_id_proto = internal_unwrap!(team.team_id);
+	let team_id_proto = unwrap_ref!(team.team_id);
 
-	let member_count = internal_unwrap_owned!(team_member_counts
+	let member_count = unwrap!(team_member_counts
 		.iter()
 		.find(|t| t.team_id.as_ref() == Some(team_id_proto)))
 	.member_count;
@@ -22,7 +22,7 @@ pub fn summary(
 		.any(|dev_team| dev_team.team_id == team.team_id);
 
 	let team_id = team_id_proto.as_uuid();
-	let owner_user_id = internal_unwrap!(team.owner_user_id).as_uuid();
+	let owner_user_id = unwrap_ref!(team.owner_user_id).as_uuid();
 
 	Ok(models::GroupSummary {
 		group_id: team_id.to_string(),
@@ -35,7 +35,7 @@ pub fn summary(
 		},
 
 		is_current_identity_member,
-		publicity: internal_unwrap_owned!(backend::team::Publicity::from_i32(team.publicity))
+		publicity: unwrap!(backend::team::Publicity::from_i32(team.publicity))
 			.api_into(),
 		member_count: member_count.try_into()?,
 		owner_identity_id: owner_user_id.to_string(),

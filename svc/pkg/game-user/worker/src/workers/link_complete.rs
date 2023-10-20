@@ -8,8 +8,8 @@ async fn worker(
 ) -> GlobalResult<()> {
 	let crdb = ctx.crdb().await?;
 
-	let user_id = internal_unwrap!(ctx.user_id).as_uuid();
-	let link_id = internal_unwrap!(ctx.link_id).as_uuid();
+	let user_id = unwrap_ref!(ctx.user_id).as_uuid();
+	let link_id = unwrap_ref!(ctx.link_id).as_uuid();
 
 	// Exchange token
 	let exchange_res = op!([ctx] token_exchange {
@@ -42,7 +42,7 @@ async fn worker(
 	.fetch_one(&crdb)
 	.await?;
 
-	let game_user_token = match internal_unwrap!(
+	let game_user_token = match unwrap_ref!(
 		game_user::msg::link_complete::GameUserLinkCompleteResolution::from_i32(ctx.resolution)
 	) {
 		game_user::msg::link_complete::GameUserLinkCompleteResolution::Complete => {
@@ -71,8 +71,8 @@ async fn worker(
 				..Default::default()
 			})
 			.await?;
-			let game_user_token = internal_unwrap_owned!(token_res.token.clone());
-			let game_user_token_session_id = internal_unwrap!(token_res.session_id).as_uuid();
+			let game_user_token = unwrap!(token_res.token.clone());
+			let game_user_token_session_id = unwrap_ref!(token_res.session_id).as_uuid();
 
 			// Flag as linked
 			let (updated,) = sqlx::query_as::<_, (bool,)>(indoc!(
@@ -115,7 +115,7 @@ async fn worker(
 				})
 				.await?;
 
-				panic_with!(GAME_USER_LINK_FAILED);
+				bail_with!(GAME_USER_LINK_FAILED);
 			}
 
 			msg!([ctx] game_user::msg::switch(old_game_user_id, new_game_user_id) {
@@ -159,7 +159,7 @@ async fn worker(
 			if update_query.rows_affected() == 0 {
 				tracing::info!("game link complete in race condition");
 
-				panic_with!(GAME_USER_LINK_FAILED);
+				bail_with!(GAME_USER_LINK_FAILED);
 			}
 
 			msg!([ctx] analytics::msg::event_create() {

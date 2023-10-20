@@ -8,8 +8,8 @@ async fn handle(
 ) -> GlobalResult<module::game_version_publish::Response> {
 	let crdb = ctx.crdb().await?;
 
-	let version_id = internal_unwrap!(ctx.version_id).as_uuid();
-	let config = internal_unwrap!(ctx.config);
+	let version_id = unwrap_ref!(ctx.version_id).as_uuid();
+	let config = unwrap_ref!(ctx.config);
 
 	let mut config_buf = Vec::with_capacity(config.encoded_len());
 	config.encode(&mut config_buf)?;

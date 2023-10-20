@@ -8,9 +8,9 @@ async fn handle(
 ) -> GlobalResult<captcha::verify::Response> {
 	let crdb = ctx.crdb().await?;
 
-	let captcha_config = internal_unwrap!(ctx.captcha_config);
-	let client_response = internal_unwrap!(ctx.client_response);
-	let client_response_kind = internal_unwrap!(client_response.kind);
+	let captcha_config = unwrap_ref!(ctx.captcha_config);
+	let client_response = unwrap_ref!(ctx.client_response);
+	let client_response_kind = unwrap_ref!(client_response.kind);
 
 	let topic_value = serde_json::to_value(&ctx.topic)?;
 	let topic_str = util_captcha::serialize_topic_str(&ctx.topic)?;
@@ -71,7 +71,7 @@ async fn handle(
 			},
 			backend::captcha::captcha_client_response::Kind::Turnstile(turnstile_client_res),
 		) => {
-			let origin_host = internal_unwrap!(ctx.origin_host, "no origin");
+			let origin_host = unwrap_ref!(ctx.origin_host, "no origin");
 
 			// Check for "rivet.game" host
 			let secret_key = if "rivet.game" == origin_host || origin_host.ends_with(".rivet.game")
@@ -86,7 +86,7 @@ async fn handle(
 					.then(|| domain.secret_key.clone())
 				})
 			};
-			let secret_key = unwrap_with_owned!(secret_key, CAPTCHA_CAPTCHA_ORIGIN_NOT_ALLOWED);
+			let secret_key = unwrap_with!(secret_key, CAPTCHA_CAPTCHA_ORIGIN_NOT_ALLOWED);
 
 			let res = op!([ctx] cf_turnstile_verify {
 				client_response: turnstile_client_res.client_response.clone(),
@@ -119,10 +119,10 @@ async fn handle(
 
 			(res.success, "turnstile")
 		}
-		_ => internal_panic!("invalid request"),
+		_ => bail!("invalid request"),
 	};
 
-	assert_with!(success, CAPTCHA_CAPTCHA_FAILED);
+	ensure_with!(success, CAPTCHA_CAPTCHA_FAILED);
 
 	msg!([ctx] analytics::msg::event_create() {
 		events: vec![

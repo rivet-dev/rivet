@@ -14,7 +14,7 @@ pub async fn convert(
 	_body: models::ConvertGroupRequest,
 ) -> GlobalResult<models::ConvertGroupResponse> {
 	// Disabled until we go public
-	panic_with!(API_FORBIDDEN, reason = "Closed beta");
+	bail_with!(API_FORBIDDEN, reason = "Closed beta");
 
 	// ctx.auth().check_team_owner(ctx.op_ctx(), group_id).await?;
 

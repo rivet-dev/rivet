@@ -7,8 +7,8 @@ const CDN_AUTH_USER_MAX: i64 = 32;
 async fn handle(
 	ctx: OperationContext<cdn::namespace_auth_user_update::Request>,
 ) -> GlobalResult<cdn::namespace_auth_user_update::Response> {
-	let namespace_id = internal_unwrap!(ctx.namespace_id).as_uuid();
-	assert_with!(
+	let namespace_id = unwrap_ref!(ctx.namespace_id).as_uuid();
+	ensure_with!(
 		util::check::bcrypt(&ctx.password),
 		CDN_INVALID_AUTH_USER_PASSWORD
 	);
@@ -21,7 +21,7 @@ async fn handle(
 	.fetch_one(&crdb)
 	.await?;
 
-	assert_with!(auth_user_count < CDN_AUTH_USER_MAX, CDN_TOO_MANY_AUTH_USERS);
+	ensure_with!(auth_user_count < CDN_AUTH_USER_MAX, CDN_TOO_MANY_AUTH_USERS);
 
 	sqlx::query(
 		"UPSERT INTO db_cdn.game_namespace_auth_users (namespace_id, user_name, password) VALUES ($1, $2, $3)",

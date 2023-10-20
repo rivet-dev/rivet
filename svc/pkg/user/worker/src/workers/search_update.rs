@@ -4,7 +4,7 @@ use proto::backend::pkg::*;
 #[worker(name = "user-search-update")]
 async fn worker(ctx: &OperationContext<user::msg::search_update::Message>) -> GlobalResult<()> {
 	let crdb = ctx.crdb().await?;
-	let user_id = internal_unwrap_owned!(ctx.user_id).as_uuid();
+	let user_id = unwrap!(ctx.user_id).as_uuid();
 
 	sqlx::query(indoc!(
 		"

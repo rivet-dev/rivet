@@ -5,10 +5,10 @@ use rivet_operation::prelude::*;
 async fn handle(
 	ctx: OperationContext<game::version_create::Request>,
 ) -> GlobalResult<game::version_create::Response> {
-	let game_id = internal_unwrap!(ctx.game_id).as_uuid();
+	let game_id = unwrap_ref!(ctx.game_id).as_uuid();
 
 	// TODO: Replace all asserts with xxx-version-validate after it is split into multiple services
-	internal_assert!(
+	ensure!(
 		util::check::display_name_long(&ctx.display_name),
 		"invalid display name"
 	);
@@ -22,14 +22,14 @@ async fn handle(
 		.await?;
 
 		let version_list = version_list_res.games.first();
-		let version_list = internal_unwrap!(version_list);
+		let version_list = unwrap_ref!(version_list);
 
 		let versions_res = op!([ctx] game_version_get {
 			version_ids: version_list.version_ids.clone(),
 		})
 		.await?;
 
-		internal_assert!(
+		ensure!(
 			!versions_res
 				.versions
 				.iter()

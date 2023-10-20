@@ -90,7 +90,7 @@ fn build_event(
 			serialize_prop(
 				&mut properties,
 				"presence_game_id",
-				internal_unwrap!(game_activity.game_id).as_uuid(),
+				unwrap_ref!(game_activity.game_id).as_uuid(),
 			)?;
 			// TODO: Add back when Serde decoding is fixed (RIV-2278)
 			// if let Some(public_metadata) = &game_activity.public_metadata {

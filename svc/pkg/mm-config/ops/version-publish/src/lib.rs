@@ -6,11 +6,11 @@ use rivet_operation::prelude::*;
 async fn handle(
 	ctx: OperationContext<mm_config::version_publish::Request>,
 ) -> GlobalResult<mm_config::version_publish::Response> {
-	let version_id = internal_unwrap!(ctx.version_id).as_uuid();
-	let config = internal_unwrap!(ctx.config);
-	let config_ctx = internal_unwrap!(ctx.config_ctx);
+	let version_id = unwrap_ref!(ctx.version_id).as_uuid();
+	let config = unwrap_ref!(ctx.config);
+	let config_ctx = unwrap_ref!(ctx.config_ctx);
 
-	internal_assert_eq!(
+	ensure_eq!(
 		config.lobby_groups.len(),
 		config_ctx.lobby_groups.len(),
 		"incorrect lobby group ctx count"
@@ -46,7 +46,7 @@ async fn handle(
 	.await?;
 
 	// Save lobby groups
-	internal_assert_eq!(config.lobby_groups.len(), config_ctx.lobby_groups.len());
+	ensure_eq!(config.lobby_groups.len(), config_ctx.lobby_groups.len());
 	for (lobby_group, lobby_group_ctx) in config
 		.lobby_groups
 		.iter()
@@ -55,11 +55,11 @@ async fn handle(
 		let lobby_group_id = Uuid::new_v4();
 
 		// Build runtime meta
-		let runtime = internal_unwrap!(lobby_group.runtime);
-		let runtime_ctx = internal_unwrap!(lobby_group_ctx.runtime);
+		let runtime = unwrap_ref!(lobby_group.runtime);
+		let runtime_ctx = unwrap_ref!(lobby_group_ctx.runtime);
 		let (runtime, runtime_meta) = publish_runtime(
-			internal_unwrap!(runtime.runtime),
-			internal_unwrap!(runtime_ctx.runtime),
+			unwrap_ref!(runtime.runtime),
+			unwrap_ref!(runtime_ctx.runtime),
 		)?;
 
 		// Encode runtime data
@@ -143,7 +143,7 @@ async fn handle(
 		.await?;
 
 		for region in &lobby_group.regions {
-			let region_id = internal_unwrap!(region.region_id).as_uuid();
+			let region_id = unwrap_ref!(region.region_id).as_uuid();
 			sqlx::query(indoc!(
 				"
 				INSERT INTO db_mm_config.lobby_group_regions (

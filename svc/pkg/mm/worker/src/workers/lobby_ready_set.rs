@@ -20,7 +20,7 @@ async fn worker(ctx: &OperationContext<mm::msg::lobby_ready::Message>) -> Global
 	let crdb = ctx.crdb().await?;
 	let mut redis_mm = ctx.redis_mm().await?;
 
-	let lobby_id = internal_unwrap!(ctx.lobby_id).as_uuid();
+	let lobby_id = unwrap_ref!(ctx.lobby_id).as_uuid();
 
 	let lobby_row = sqlx::query_as::<_, LobbyRow>(indoc!(
 		"
@@ -49,7 +49,7 @@ async fn worker(ctx: &OperationContext<mm::msg::lobby_ready::Message>) -> Global
 			tracing::error!("discarding stale message");
 			return Ok(());
 		} else {
-			retry_panic!("lobby not found, may be race condition with insertion");
+			retry_bail!("lobby not found, may be race condition with insertion");
 		}
 	};
 
