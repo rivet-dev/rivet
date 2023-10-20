@@ -1,14 +1,19 @@
 #!/usr/bin/env bash
 set -euf -o pipefail
 
-echo 'Env:'
+log() {
+    local timestamp=$(date +"%Y-%m-%d %H:%M:%S.%3N")
+    echo "[$timestamp] $@"
+}
+
+log 'Env:'
 env
 echo
 
 # Need to prefix with "rivet-" in order to not interfere with any
 # auto-generated resources that Nomad creates for the given alloc ID
 CONTAINER_ID="rivet-$NOMAD_ALLOC_ID"
-echo "CONTAINER_ID: $CONTAINER_ID"
+log "CONTAINER_ID: $CONTAINER_ID"
 echo -n "$CONTAINER_ID" > "$NOMAD_ALLOC_DIR/container-id"
 
 export CNI_PATH="/opt/cni/bin"
@@ -23,26 +28,26 @@ case "__BUILD_KIND__" in
 	"docker-image")
 		# We need to conver the Docker image to an OCI bundle in order to run it.
 
-		echo "Downloading Docker image"
-		time (__DOWNLOAD_CMD__ > "$DOCKER_IMAGE_PATH")
+		log "Downloading Docker image"
+		__DOWNLOAD_CMD__ > "$DOCKER_IMAGE_PATH"
 
 		# Allows us to work with the build with umoci
-		echo "Converting Docker image -> OCI image"
-		time skopeo copy "docker-archive:$DOCKER_IMAGE_PATH" "oci:$OCI_IMAGE_PATH:default"
+		log "Converting Docker image -> OCI image"
+		skopeo copy "docker-archive:$DOCKER_IMAGE_PATH" "oci:$OCI_IMAGE_PATH:default"
 
 		# Allows us to run the bundle natively with runc
-		echo "Converting OCI image -> OCI bundle"
+		log "Converting OCI image -> OCI bundle"
 
-		time umoci unpack --image "$OCI_IMAGE_PATH:default" "$OCI_BUNDLE_PATH"
+		umoci unpack --image "$OCI_IMAGE_PATH:default" "$OCI_BUNDLE_PATH"
 		;;
 	"oci-bundle")
-		echo "Downloading OCI bundle"
+		log "Downloading OCI bundle"
 		mkdir "$OCI_BUNDLE_PATH"
-		time (__DOWNLOAD_CMD__ | tar -x -C "$OCI_BUNDLE_PATH")
+		__DOWNLOAD_CMD__ | tar -x -C "$OCI_BUNDLE_PATH"
 
 		;;
 	*)
-		echo "Unknown build kind"
+		log "Unknown build kind"
 		exit 1
 		;;
 esac
@@ -70,13 +75,13 @@ export CAP_ARGS=$(jq -c <<EOF
 EOF
 )
 export CNI_IFNAME="eth0"
-echo "CAP_ARGS: $CAP_ARGS"
+log "CAP_ARGS: $CAP_ARGS"
 
-echo "Creating network $CONTAINER_ID"
-ip netns add "$CONTAINER_ID"
+log "Creating network $CONTAINER_ID"
+time ip netns add "$CONTAINER_ID"
 
-echo "Adding network $NETWORK_NAME to namespace $NETNS_PATH"
-cnitool add "$NETWORK_NAME" "$NETNS_PATH" > $NOMAD_ALLOC_DIR/cni.json
+log "Adding network $NETWORK_NAME to namespace $NETNS_PATH"
+time cnitool add "$NETWORK_NAME" "$NETNS_PATH" > $NOMAD_ALLOC_DIR/cni.json
 
 # resolv.conf
 cat <<EOF > $NOMAD_ALLOC_DIR/resolv.conf
@@ -95,7 +100,7 @@ EOF
 #
 # This way, we enforce our own capabilities on the container instead of trusting the
 # provided config.json
-echo "Templating config.json"
+log "Templating config.json"
 OVERRIDE_CONFIG="$NOMAD_ALLOC_DIR/oci-bundle-config.overrides.json"
 mv "$OCI_BUNDLE_PATH/config.json" "$OVERRIDE_CONFIG"
 jq "
@@ -111,4 +116,6 @@ jq "
 	\"options\": [\"bind\", \"ro\"]
 }]
 " "$NOMAD_ALLOC_DIR/oci-bundle-config.base.json" > "$OCI_BUNDLE_PATH/config.json"
+
+log "Finished"
 
