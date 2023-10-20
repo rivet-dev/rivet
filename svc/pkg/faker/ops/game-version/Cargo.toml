@@ -13,6 +13,7 @@ util-mm = { package = "rivet-util-mm", path = "../../../mm/util" }
 
 faker-build = { path = "../build" }
 faker-cdn-site = { path = "../cdn-site" }
+faker-region = { path = "../region" }
 region-list = { path = "../../../region/ops/list" }
 cloud-version-publish = { path = "../../../cloud/ops/version-publish" }
 mm-config-version-get = { path = "../../../mm-config/ops/version-get" }

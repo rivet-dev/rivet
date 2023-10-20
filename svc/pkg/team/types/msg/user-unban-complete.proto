@@ -5,6 +5,7 @@ package rivet.backend.pkg.team.msg.user_unban_complete;
 import "proto/common.proto";
 
 /// name = "msg-team-user-unban-complete"
+/// tail-ttl = 300
 /// parameters = [
 /// 	{ name = "team_id" },
 /// 	{ name = "user_id", wildcard = true },

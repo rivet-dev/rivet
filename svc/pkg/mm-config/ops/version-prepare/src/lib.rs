@@ -1,7 +1,10 @@
+mod prewarm_ats;
+
 use proto::backend::{self, pkg::*};
 use rivet_operation::prelude::*;
-use std::time::Instant;
-use tracing::Instrument;
+use std::collections::HashSet;
+
+use crate::prewarm_ats::PrewarmAtsContext;
 
 #[operation(name = "mm-config-version-prepare")]
 async fn handle(
@@ -9,6 +12,13 @@ async fn handle(
 ) -> GlobalResult<mm_config::version_prepare::Response> {
 	let game_id = internal_unwrap!(ctx.game_id).as_uuid();
 	let config = internal_unwrap!(ctx.config);
+
+	// List of build paths that will be used to prewarm the ATS cache
+	let mut prewarm_ctx = PrewarmAtsContext {
+		region_ids: HashSet::new(),
+		paths: HashSet::new(),
+		total_size: 0,
+	};
 
 	let mut lobby_group_ctxs = Vec::new();
 	for lobby_group in &config.lobby_groups {
@@ -19,6 +29,9 @@ async fn handle(
 			.iter()
 			.flat_map(|r| r.region_id)
 			.collect::<Vec<_>>();
+		prewarm_ctx
+			.region_ids
+			.extend(region_ids.iter().map(common::Uuid::as_uuid));
 
 		// Resolve region name IDs
 		let (regions_res, tier_res) = tokio::try_join!(
@@ -39,6 +52,17 @@ async fn handle(
 			internal_assert!(has_region, "invalid region id");
 		}
 
+		// Check if we need to prewarm the ATS cache for this Docker build
+		//
+		// We only need to prewarm the cache if _not_ using idle lobbies or if using custom lobbies. If there are idle
+		// lobbies, then we'll start a lobby immediately, so the prewarm is redundant.
+		let needs_ats_prewarm = lobby_group.create_config.is_some()
+			|| lobby_group.regions.iter().any(|x| {
+				x.idle_lobbies
+					.as_ref()
+					.map_or(true, |y| y.min_idle_lobbies == 0)
+			});
+
 		// Prepare runtime
 		let runtime = internal_unwrap!(lobby_group.runtime);
 		let runtime = internal_unwrap!(runtime.runtime);
@@ -49,6 +73,8 @@ async fn handle(
 			&lobby_group.regions,
 			&regions_res.regions,
 			&tier_res.regions,
+			&mut prewarm_ctx,
+			needs_ats_prewarm,
 		)
 		.await?;
 
@@ -57,6 +83,8 @@ async fn handle(
 		});
 	}
 
+	crate::prewarm_ats::prewarm_ats_cache(ctx.chirp(), prewarm_ctx).await?;
+
 	Ok(mm_config::version_prepare::Response {
 		config_ctx: Some(backend::matchmaker::VersionConfigCtx {
 			lobby_groups: lobby_group_ctxs,
@@ -64,6 +92,7 @@ async fn handle(
 	})
 }
 
+#[tracing::instrument(skip(prewarm_ctx))]
 async fn prepare_runtime(
 	ctx: &OperationContext<mm_config::version_prepare::Request>,
 	game_id: Uuid,
@@ -71,11 +100,14 @@ async fn prepare_runtime(
 	lg_regions: &[backend::matchmaker::lobby_group::Region],
 	regions_data: &[backend::region::Region],
 	tier_regions: &[tier::list::response::Region],
+	prewarm_ctx: &mut PrewarmAtsContext,
+	needs_ats_prewarm: bool,
 ) -> GlobalResult<backend::matchmaker::LobbyRuntimeCtx> {
 	let runtime: backend::matchmaker::LobbyRuntimeCtx = match runtime {
 		backend::matchmaker::lobby_runtime::Runtime::Docker(runtime) => {
+			// Validate the build
 			let build_id = internal_unwrap!(runtime.build_id).as_uuid();
-			let _ = validate_build(ctx, game_id, build_id).await?;
+			let _ = validate_build(ctx, game_id, build_id, prewarm_ctx, needs_ats_prewarm).await?;
 
 			// Validate regions
 			for lg_region in lg_regions {
@@ -111,10 +143,13 @@ async fn prepare_runtime(
 	Ok(runtime)
 }
 
+#[tracing::instrument(skip(prewarm_ctx))]
 async fn validate_build(
 	ctx: &OperationContext<mm_config::version_prepare::Request>,
 	game_id: Uuid,
 	build_id: Uuid,
+	prewarm_ctx: &mut PrewarmAtsContext,
+	needs_ats_prewarm: bool,
 ) -> GlobalResult<(Uuid, String)> {
 	// Validate build exists and belongs to this game
 	let build_get = op!([ctx] build_get {
@@ -148,68 +183,17 @@ async fn validate_build(
 		backend::upload::Provider::Aws => s3_util::Provider::Aws,
 	};
 
-	// // prewarm ATS cache
-	// let path = format!(
-	// 	"/s3-cache/{provider}/{namespace}-bucket-build/{upload_id}/image.tar",
-	// 	provider = heck::KebabCase::to_kebab_case(provider.to_string().as_str()),
-	// 	namespace = util::env::namespace(),
-	// );
-	// prewarm_ats_cache(&path).await;
+	// Generate path used to request the image
+	if needs_ats_prewarm {
+		let path = format!(
+			"/s3-cache/{provider}/{namespace}-bucket-build/{upload_id}/image.tar",
+			provider = heck::KebabCase::to_kebab_case(provider.as_str()),
+			namespace = util::env::namespace(),
+		);
+		if prewarm_ctx.paths.insert(path.clone()) {
+			prewarm_ctx.total_size += upload.content_length;
+		}
+	}
 
 	Ok((upload_id, build.image_tag.clone()))
 }
-
-// // TODO: Validate ports are within a given range and don't use our reserved ports, since we need a reserved port range for Rivet sidecars to run
-
-// /// Prewarms the ATS cache with the given resources in order to make the future requests faster.
-// #[tracing::instrument]
-// async fn prewarm_ats_cache(path: &str) {
-// 	// TODO: This is hardcoded
-// 	let ats_urls = vec!["10.0.25.2", "10.0.50.2"];
-// 	for ats_url in &ats_urls {
-// 		let url = format!("http://{ats_url}:9300{path}");
-// 		let spawn_res = tokio::task::Builder::new()
-// 			.name("mm_config_version_prepare::prewarm_ats_cache")
-// 			.spawn(
-// 				async move {
-// 					match prewarm_ats_cache_inner(&url).await {
-// 						Ok(_) => {}
-// 						Err(err) => {
-// 							tracing::error!(%err, "failed to prewarm ats cache");
-// 						}
-// 					}
-// 				}
-// 				.in_current_span(),
-// 			);
-// 		if let Err(err) = spawn_res {
-// 			tracing::error!(?err, "failed to spawn prewarm_ats_cache_inner task");
-// 		}
-// 	}
-// }
-
-// /// Prewarm a specific ATS server with a resource.
-// #[tracing::instrument]
-// async fn prewarm_ats_cache_inner(url: &str) -> GlobalResult<()> {
-// 	tracing::info!(?url, "populating ats build cache");
-
-// 	let client = reqwest::Client::new();
-
-// 	// Check if cache already prewarmed
-// 	let start = Instant::now();
-// 	let resp = client.head(url).send().await?;
-// 	let age = internal_unwrap!(resp.headers().get("Age"))
-// 		.to_str()?
-// 		.parse::<u64>()?;
-// 	if age > 0 {
-// 		tracing::info!(?age, "object already cached");
-// 		return Ok(());
-// 	}
-// 	tracing::info!(head_duration = ?start.elapsed(), "fetching object");
-
-// 	// Make a GET request to prewarm the cache and do nothing with the response
-// 	let start = Instant::now();
-// 	let resp = client.get(url).send().await?.error_for_status()?;
-// 	tracing::info!(get_duration = ?start.elapsed(), "cache prewarmd");
-
-// 	Ok(())
-// }

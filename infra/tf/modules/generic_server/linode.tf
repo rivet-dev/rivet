@@ -96,7 +96,7 @@ resource "linode_instance_config" "server_boot_config" {
 
 	interface {
 		purpose = "vlan"
-		label = "vpc"
+		label = "${var.namespace}-vlan"
 		ipam_address = "${var.vlan.ip}/${var.region.vlan.prefix_len}"
 	}
 }
