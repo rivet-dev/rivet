@@ -248,7 +248,7 @@ fn register_proxied_port(
 			config.tcp.routers.insert(
 				format!("job-run:{}:{}:tcp", run_id, target_nomad_port_label),
 				traefik::TraefikRouter {
-					entry_points: vec![format!("lb-{ingress_port}")],
+					entry_points: vec![format!("lb-{ingress_port}-tcp")],
 					rule: Some("HostSNI(`*`)".into()),
 					priority: None,
 					service: service_id,
@@ -261,7 +261,7 @@ fn register_proxied_port(
 			config.tcp.routers.insert(
 				format!("job-run:{}:{}:tcp-tls", run_id, target_nomad_port_label),
 				traefik::TraefikRouter {
-					entry_points: vec![format!("lb-{ingress_port}")],
+					entry_points: vec![format!("lb-{ingress_port}-tcp")],
 					rule: Some("HostSNI(`*`)".into()),
 					priority: None,
 					service: service_id,
@@ -274,7 +274,7 @@ fn register_proxied_port(
 			config.udp.routers.insert(
 				format!("job-run:{}:{}:udp", run_id, target_nomad_port_label),
 				traefik::TraefikRouter {
-					entry_points: vec![format!("lb-{ingress_port}")],
+					entry_points: vec![format!("lb-{ingress_port}-udp")],
 					rule: None,
 					priority: None,
 					service: service_id,

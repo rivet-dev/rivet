@@ -131,13 +131,13 @@ fn gg_traefik_static_config(server: &Server, api_route_token: &str) -> String {
 	);
 
 	// TCP ports
-	for port in 20000..=25999 {
+	for port in 20000..=31999 {
 		config.push_str(&formatdoc!(
 			r#"
-			[entryPoints.lb-{port}]
+			[entryPoints.lb-{port}-tcp]
 				address = ":{port}/tcp"
 
-			[entryPoints.lb-{port}.transport.respondingTimeouts]
+			[entryPoints.lb-{port}-tcp.transport.respondingTimeouts]
 				readTimeout = "12h"
 				writeTimeout = "12h"
 				idleTimeout = "30s"
@@ -147,13 +147,13 @@ fn gg_traefik_static_config(server: &Server, api_route_token: &str) -> String {
 	}
 
 	// UDP ports
-	for port in 26000..=31999 {
+	for port in 20000..=31999 {
 		config.push_str(&formatdoc!(
 			r#"
-			[entryPoints.lb-{port}]
+			[entryPoints.lb-{port}-udp]
 				address = ":{port}/udp"
 
-			[entryPoints.lb-{port}.udp]
+			[entryPoints.lb-{port}-udp.udp]
 				timeout = "15s"
 			"#
 		));
