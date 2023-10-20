@@ -1,7 +1,9 @@
+use std::collections::HashMap;
+
 use anyhow::{Context, Result};
 use indoc::formatdoc;
+use indoc::indoc;
 use serde_json::json;
-use std::collections::HashMap;
 use tokio::fs;
 
 use crate::{
@@ -300,18 +302,29 @@ pub fn vector(config: &VectorConfig) -> String {
 pub async fn traffic_server(ctx: &ProjectContext, server: &Server) -> Result<String> {
 	// Write config to files
 	let config = traffic_server_config(ctx, server).await?;
-	let config_script = config
+	let mut config_scripts = config
 		.into_iter()
 		.map(|(k, v)| format!("cat << 'EOF' > /etc/trafficserver/{k}\n{v}\nEOF\n"))
-		.collect::<Vec<_>>()
-		.join("\n\n");
+		.collect::<Vec<_>>();
+
+	// Update default storage config size to be entire filesystem size
+	config_scripts.push(
+		indoc!(
+			"
+		df -h / |
+		awk 'NR==2 {print $2}' |
+		xargs -I {} sed -i 's/64G/{}/' /etc/trafficserver/storage.config
+		"
+		)
+		.to_string(),
+	);
 
 	let script = include_str!("files/traffic_server.sh")
 		.replace(
 			"__IMAGE__",
 			"ghcr.io/rivet-gg/apache-traffic-server:9934dc2",
 		)
-		.replace("__CONFIG__", &config_script);
+		.replace("__CONFIG__", &config_scripts.join("\n\n"));
 
 	Ok(script)
 }
@@ -346,8 +359,8 @@ async fn traffic_server_config(
 		}
 	}
 
-	// Storage
-	let volume_size = 64; // TODO: Don't hardcode this
+	// Storage (default value of 64 gets overwritten in config script)
+	let volume_size = 64;
 	config_files.push((
 		"storage.config".to_string(),
 		format!("/var/cache/trafficserver {volume_size}G"),
