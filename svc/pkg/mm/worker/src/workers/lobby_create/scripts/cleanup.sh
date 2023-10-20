@@ -3,8 +3,11 @@ set -euf -o pipefail
 
 log() {
     local timestamp=$(date +"%Y-%m-%d %H:%M:%S.%3N")
-    echo "[$timestamp] $@"
+    echo "[$timestamp] [cleanup] $@"
 }
+
+export CNI_PATH="/opt/cni/bin"
+export NETCONFPATH="/opt/cni/config"
 
 # Every step in this script gracefully fails so everything gets cleaned up no matter what.
 

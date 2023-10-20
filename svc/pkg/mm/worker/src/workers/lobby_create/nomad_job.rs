@@ -347,8 +347,14 @@ pub fn gen_lobby_docker_job(
 					}),
 					templates: Some(vec![
 						Template {
+							embedded_tmpl: Some(include_str!("./scripts/setup.sh").into()),
+							dest_path: Some("${NOMAD_TASK_DIR}/setup.sh".into()),
+							perms: Some("744".into()),
+							..Template::new()
+						},
+						Template {
 							embedded_tmpl: Some(
-								include_str!("./scripts/setup.sh")
+								include_str!("./scripts/setup_oci_bundle.sh")
 									.replace("__DOWNLOAD_CMD__", &download_cmd)
 									.replace(
 										"__BUILD_KIND__",
@@ -360,7 +366,15 @@ pub fn gen_lobby_docker_job(
 										},
 									),
 							),
-							dest_path: Some("${NOMAD_TASK_DIR}/setup.sh".into()),
+							dest_path: Some("${NOMAD_TASK_DIR}/setup_oci_bundle.sh".into()),
+							perms: Some("744".into()),
+							..Template::new()
+						},
+						Template {
+							embedded_tmpl: Some(
+								include_str!("./scripts/setup_cni_network.sh").into(),
+							),
+							dest_path: Some("${NOMAD_TASK_DIR}/setup_cni_network.sh".into()),
 							perms: Some("744".into()),
 							..Template::new()
 						},

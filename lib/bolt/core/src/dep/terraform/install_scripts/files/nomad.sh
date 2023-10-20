@@ -246,6 +246,12 @@ plugin "docker" {
 		extra_labels = ["job_name", "task_group_name", "task_name", "node_name"]
 	}
 }
+
+plugin "raw_exec" {
+	config {
+		enabled = true
+	}
+}
 EOF
 
 # Systemd service
