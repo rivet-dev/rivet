@@ -9828,6 +9828,10 @@ components:
           $ref: '#/components/schemas/UploadPrepareFile'
         multipart_upload:
           type: boolean
+        kind:
+          $ref: '#/components/schemas/CloudGamesBuildKind'
+        compression:
+          $ref: '#/components/schemas/CloudGamesBuildCompression'
       required:
         - display_name
         - image_tag
@@ -9850,6 +9854,16 @@ components:
       required:
         - build_id
         - upload_id
+    CloudGamesBuildKind:
+      type: string
+      enum:
+        - docker_image
+        - oci_bundle
+    CloudGamesBuildCompression:
+      type: string
+      enum:
+        - none
+        - lz4
     CloudGamesListGameCdnSitesResponse:
       type: object
       properties:

@@ -67,6 +67,8 @@ docs/CloudDevicesPrepareDeviceLinkResponse.md
 docs/CloudGameFull.md
 docs/CloudGameLobbyExpenses.md
 docs/CloudGamesAvatarsApi.md
+docs/CloudGamesBuildCompression.md
+docs/CloudGamesBuildKind.md
 docs/CloudGamesBuildsApi.md
 docs/CloudGamesCdnApi.md
 docs/CloudGamesCreateCloudTokenResponse.md
@@ -447,6 +449,8 @@ src/models/cloud_devices_get_device_link_response.rs
 src/models/cloud_devices_prepare_device_link_response.rs
 src/models/cloud_game_full.rs
 src/models/cloud_game_lobby_expenses.rs
+src/models/cloud_games_build_compression.rs
+src/models/cloud_games_build_kind.rs
 src/models/cloud_games_create_cloud_token_response.rs
 src/models/cloud_games_create_game_build_request.rs
 src/models/cloud_games_create_game_build_response.rs

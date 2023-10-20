@@ -1,4 +1,5 @@
 use api_helper::{anchor::WatchIndexQuery, ctx::Ctx};
+use proto::backend;
 use rivet_api::models as new_models;
 use rivet_cloud_server::models;
 use rivet_convert::ApiTryInto;
@@ -78,12 +79,28 @@ pub async fn create_build(
 
 	let multipart_upload = body.multipart_upload.unwrap_or(false);
 
+	let kind = match body.kind {
+		None | Some(new_models::CloudGamesBuildKind::DockerImage) => {
+			backend::build::BuildKind::DockerImage
+		}
+		Some(new_models::CloudGamesBuildKind::OciBundle) => backend::build::BuildKind::OciBundle,
+	};
+
+	let compression = match body.compression {
+		None | Some(new_models::CloudGamesBuildCompression::None) => {
+			backend::build::BuildCompression::None
+		}
+		Some(new_models::CloudGamesBuildCompression::Lz4) => backend::build::BuildCompression::Lz4,
+	};
+
 	let create_res = op!([ctx] build_create {
 		game_id: Some(game_id.into()),
 		display_name: body.display_name,
 		image_tag: Some(body.image_tag),
 		image_file: Some((*body.image_file).try_into()?),
 		multipart: multipart_upload,
+		kind: kind as i32,
+		compression: compression as i32,
 		..Default::default()
 	})
 	.await?;
