@@ -55,6 +55,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 -  **Infra** CNI network for jobs from bridge to ptp for isolation & performance
 -  **Infra** Remove requirement of `Content-Type: application/x-tar` for builds because of new compression types
 -  **Matchmaker** Expose API origin to `RIVET_API_ENDPOINT` env var to lobby containers
+-  **[BREAKING]** **Infra** Removed undocumented environment variables exposed by Nomad (i.e. anything prefixed with `NOMAD_`)
 
 ### Fixed
 
