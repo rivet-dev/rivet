@@ -19,11 +19,19 @@ log "CONTAINER_ID: $CONTAINER_ID"
 echo -n "$CONTAINER_ID" > "$NOMAD_ALLOC_DIR/container-id"
 
 # Path to the created namespace
-export NETNS_PATH="/var/run/netns/$CONTAINER_ID"
+if __HOST_NETWORK__; then
+	# Host network
+	export NETNS_PATH="/proc/1/ns/net"
+else
+	# CNI network that will be created
+	export NETNS_PATH="/var/run/netns/$CONTAINER_ID"
+fi
 
 # Run setup scripts
 "$NOMAD_TASK_DIR/setup_oci_bundle.sh" &
-"$NOMAD_TASK_DIR/setup_cni_network.sh" &
+if __HOST_NETWORK__; then
+	"$NOMAD_TASK_DIR/setup_cni_network.sh" &
+fi
 wait
 
 log "Setup finished"
