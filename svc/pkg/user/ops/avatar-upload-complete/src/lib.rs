@@ -5,8 +5,8 @@ use rivet_operation::prelude::*;
 async fn handle(
 	ctx: OperationContext<user::avatar_upload_complete::Request>,
 ) -> GlobalResult<user::avatar_upload_complete::Response> {
-	let user_id = internal_unwrap!(ctx.user_id).as_uuid();
-	let upload_id = internal_unwrap!(ctx.upload_id).as_uuid();
+	let user_id = unwrap_ref!(ctx.user_id).as_uuid();
+	let upload_id = unwrap_ref!(ctx.upload_id).as_uuid();
 
 	op!([ctx] upload_complete {
 		upload_id: ctx.upload_id,

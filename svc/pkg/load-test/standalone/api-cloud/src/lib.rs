@@ -36,7 +36,7 @@ pub async fn run_from_env(ts: i64) -> GlobalResult<()> {
 			..Default::default()
 		})
 		.await?;
-		let team_id = internal_unwrap!(create_res.team_id).as_uuid();
+		let team_id = unwrap_ref!(create_res.team_id).as_uuid();
 		let primary_user_id = create_res.member_user_ids[0].as_uuid();
 
 		// Register user
@@ -115,7 +115,7 @@ pub async fn run_from_env(ts: i64) -> GlobalResult<()> {
 			..Default::default()
 		})
 		.await?;
-		internal_unwrap!(token_res.token).token.clone()
+		unwrap_ref!(token_res.token).token.clone()
 	};
 
 	let client = reqwest::Client::builder()

@@ -18,7 +18,7 @@ struct LobbyRow {
 async fn worker(ctx: &OperationContext<mm::msg::lobby_cleanup::Message>) -> GlobalResult<()> {
 	// NOTE: Idempotent
 
-	let lobby_id = internal_unwrap!(ctx.lobby_id).as_uuid();
+	let lobby_id = unwrap_ref!(ctx.lobby_id).as_uuid();
 
 	let crdb = ctx.crdb().await?;
 
@@ -96,7 +96,7 @@ async fn worker(ctx: &OperationContext<mm::msg::lobby_cleanup::Message>) -> Glob
 			tracing::error!("discarding stale message");
 			return Ok(());
 		} else {
-			retry_panic!("lobby not found, may be race condition with insertion");
+			retry_bail!("lobby not found, may be race condition with insertion");
 		}
 	};
 

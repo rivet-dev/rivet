@@ -11,7 +11,7 @@ struct LobbyRow {
 async fn worker(ctx: &OperationContext<job_run::msg::fail::Message>) -> GlobalResult<()> {
 	let crdb = ctx.crdb().await?;
 
-	let run_id = internal_unwrap!(ctx.run_id).as_uuid();
+	let run_id = unwrap_ref!(ctx.run_id).as_uuid();
 
 	// Find the associated lobby
 	let query_rows = sqlx::query_as::<_, (Uuid,)>(

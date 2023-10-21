@@ -15,7 +15,7 @@ struct InvitationRow {
 async fn worker(ctx: &OperationContext<team_invite::msg::consume::Message>) -> GlobalResult<()> {
 	let crdb = ctx.crdb().await?;
 
-	let user_id = internal_unwrap!(ctx.user_id).as_uuid();
+	let user_id = unwrap_ref!(ctx.user_id).as_uuid();
 
 	let db_output = rivet_pools::utils::crdb::tx(&crdb, |tx| {
 		let code = ctx.code.clone();
@@ -131,7 +131,7 @@ async fn update_db(
 		anchor: None,
 	})
 	.await?;
-	let team = internal_unwrap_owned!(members_res.teams.first());
+	let team = unwrap!(members_res.teams.first());
 	let is_member = team
 		.members
 		.iter()

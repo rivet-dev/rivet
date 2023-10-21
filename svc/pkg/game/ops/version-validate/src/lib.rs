@@ -32,8 +32,8 @@ async fn handle(
 ) -> GlobalResult<game::version_validate::Response> {
 	let mut errors = Vec::new();
 
-	let game_id = internal_unwrap!(ctx.game_id);
-	let proto_config = internal_unwrap!(ctx.config);
+	let game_id = unwrap_ref!(ctx.game_id);
+	let proto_config = unwrap_ref!(ctx.config);
 
 	// Display name validation
 	if ctx.display_name.is_empty() {
@@ -53,8 +53,7 @@ async fn handle(
 		})
 		.await?;
 
-		let version_list =
-			internal_unwrap_owned!(version_list_res.games.first(), "version list not found");
+		let version_list = unwrap!(version_list_res.games.first(), "version list not found");
 
 		let versions_res = op!([ctx] game_version_get {
 			version_ids: version_list.version_ids.clone(),
@@ -84,9 +83,7 @@ async fn handle(
 
 		let mut unique_globs = HashSet::<util::glob::Glob>::new();
 		for (route_index, route) in cdn.routes.iter().take(32).enumerate() {
-			let glob =
-				TryInto::<util::glob::Glob>::try_into(internal_unwrap_owned!(route.glob.clone()))
-					.unwrap();
+			let glob = TryInto::<util::glob::Glob>::try_into(unwrap!(route.glob.clone())).unwrap();
 
 			if glob.tokens.is_empty() {
 				errors.push(util::err_path![
@@ -143,7 +140,7 @@ async fn handle(
 
 			let mut middleware_counter = MiddlewareCounter::default();
 			for (middleware_index, middleware) in route.middlewares.iter().take(32).enumerate() {
-				match internal_unwrap!(middleware.kind) {
+				match unwrap_ref!(middleware.kind) {
 					backend::cdn::middleware::Kind::CustomHeaders(custom_headers) => {
 						if middleware_counter.custom_headers > 1 {
 							errors.push(util::err_path![
@@ -743,7 +740,7 @@ async fn handle(
 					let mut unique_port_labels = HashSet::<String>::new();
 					let mut unique_ports = HashSet::<(u32, i32)>::new();
 					let mut ranges = Vec::<(u32, u32)>::new();
-					let network_mode = internal_unwrap_owned!(LobbyRuntimeNetworkMode::from_i32(
+					let network_mode = unwrap!(LobbyRuntimeNetworkMode::from_i32(
 						docker_config.network_mode
 					));
 
@@ -786,12 +783,9 @@ async fn handle(
 							]);
 						}
 
-						let proxy_protocol = internal_unwrap_owned!(
-							LobbyRuntimeProxyProtocol::from_i32(port.proxy_protocol)
-						);
-						let proxy_kind = internal_unwrap_owned!(LobbyRuntimeProxyKind::from_i32(
-							port.proxy_kind
-						));
+						let proxy_protocol =
+							unwrap!(LobbyRuntimeProxyProtocol::from_i32(port.proxy_protocol));
+						let proxy_kind = unwrap!(LobbyRuntimeProxyKind::from_i32(port.proxy_kind));
 
 						// Validate ports unique
 						if let Some(target_port) = port.target_port {
@@ -1097,7 +1091,7 @@ async fn handle(
 	// 			})
 	// 			.await?;
 
-	// 			if *internal_unwrap_owned!(profanity_res.results.first()) {
+	// 			if *unwrap!(profanity_res.results.first()) {
 	// 				errors.push(util::err_path![
 	// 					"config",
 	// 					"identity",
@@ -1143,7 +1137,7 @@ async fn handle(
 
 	// TODO: Validate upload ids belong to the given game
 	// for (avatar_index, custom_avatar) in identity.custom_avatars.iter().take(32).enumerate() {
-	// 	let upload_id = internal_unwrap!(custom_avatar.upload_id);
+	// 	let upload_id = unwrap_ref!(custom_avatar.upload_id);
 	// }
 	// }
 
@@ -1159,7 +1153,7 @@ async fn handle(
 		}
 
 		for (i, dependency) in module.dependencies.iter().enumerate() {
-			let version_id = internal_unwrap!(dependency.module_version_id).as_uuid();
+			let version_id = unwrap_ref!(dependency.module_version_id).as_uuid();
 
 			// Validate ident
 			if util::check::ident(&dependency.key) {

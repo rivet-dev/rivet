@@ -15,7 +15,7 @@ pub async fn game_handle_fetch_one(
 		.await?
 		.into_iter()
 		.next();
-	Ok(internal_unwrap_owned!(game))
+	Ok(unwrap!(game))
 }
 
 pub async fn game_handle_fetch(
@@ -92,17 +92,17 @@ pub async fn game_summary_fetch(
 	let mut games = Vec::new();
 	for game_config in &game_configs_res.game_configs {
 		// Get game data
-		let game_id = internal_unwrap!(game_config.game_id).as_uuid();
-		let namespace_ids_proto = internal_unwrap_owned!(ns_list_res
+		let game_id = unwrap_ref!(game_config.game_id).as_uuid();
+		let namespace_ids_proto = unwrap!(ns_list_res
 			.games
 			.iter()
 			.find(|game| game.game_id == game_config.game_id));
 		let namespace_ids_proto = &namespace_ids_proto.namespace_ids;
-		let game = internal_unwrap_owned!(games_res
+		let game = unwrap!(games_res
 			.games
 			.iter()
 			.find(|g| g.game_id == game_config.game_id));
-		let developer_team_id = internal_unwrap!(game.developer_team_id).as_uuid();
+		let developer_team_id = unwrap_ref!(game.developer_team_id).as_uuid();
 
 		// Get the total player count across all namespaces
 		let total_player_count = player_count_res
@@ -152,7 +152,7 @@ pub async fn region_summary_fetch_all(
 		.iter()
 		.map(|r| {
 			GlobalResult::Ok(models::RegionSummary {
-				region_id: internal_unwrap!(r.region_id).as_uuid().to_string(),
+				region_id: unwrap_ref!(r.region_id).as_uuid().to_string(),
 				region_name_id: r.name_id.clone(),
 				provider: r.provider.clone(),
 				universal_region: r.universal_region as i16,

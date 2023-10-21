@@ -48,17 +48,17 @@ impl Auth {
 			user_ids: vec![user_ent.user_id.into()],
 		})
 		.await?;
-		let user = internal_unwrap_owned!(user_res.users.first());
+		let user = unwrap!(user_res.users.first());
 
 		// Verify user is not deleted
 		if user.delete_complete_ts.is_some() {
-			let jti = internal_unwrap_owned!(claims.jti);
+			let jti = unwrap!(claims.jti);
 			op!([ctx] token_revoke {
 				jtis: vec![jti],
 			})
 			.await?;
 
-			panic_with!(TOKEN_REVOKED);
+			bail_with!(TOKEN_REVOKED);
 		}
 
 		Ok(user_ent)
@@ -74,9 +74,9 @@ impl Auth {
 		})
 		.await?;
 
-		let user = internal_unwrap_owned!(user_res.users.first(), "user not found");
+		let user = unwrap!(user_res.users.first(), "user not found");
 
-		assert_with!(user.is_admin, IDENTITY_NOT_ADMIN);
+		ensure_with!(user.is_admin, IDENTITY_NOT_ADMIN);
 
 		Ok(())
 	}

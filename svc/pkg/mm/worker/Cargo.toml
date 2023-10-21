@@ -10,6 +10,8 @@ chirp-client = { path = "../../../../lib/chirp/client" }
 chirp-worker = { path = "../../../../lib/chirp/worker" }
 chrono = "0.4"
 csv = "1.1"
+heck = "0.3"
+http = "0.2"
 lazy_static = "1.4.0"
 nomad-client = "0.0.9"
 nomad-util = { path = "../../../../lib/nomad-util" }

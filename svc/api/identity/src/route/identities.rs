@@ -62,8 +62,8 @@ pub async fn setup_identity(
 
 		// Decode the tokens for the expiration ts
 		let user_token_claims = rivet_claims::decode(&game_user_res.token)??;
-		let game_user_id = *internal_unwrap_owned!(game_user_res.game_user_id);
-		let refresh_jti = internal_unwrap_owned!(user_token_claims.jti);
+		let game_user_id = *unwrap!(game_user_res.game_user_id);
+		let refresh_jti = unwrap!(user_token_claims.jti);
 
 		// Create a game session row
 		msg!([ctx] game_user::msg::session_create(game_user_id) {
@@ -79,10 +79,8 @@ pub async fn setup_identity(
 				namespace_ids: vec![namespace_id],
 			})
 		)?;
-		let identity = internal_unwrap_owned!(identities.into_iter().next());
-		let game_id =
-			internal_unwrap_owned!(internal_unwrap_owned!(game_resolve_res.games.first()).game_id)
-				.as_uuid();
+		let identity = unwrap!(identities.into_iter().next());
+		let game_id = unwrap!(unwrap!(game_resolve_res.games.first()).game_id).as_uuid();
 
 		Ok(models::IdentitySetupResponse {
 			identity_token: game_user_res.token.clone(),
@@ -121,7 +119,7 @@ async fn attempt_setup_existing_identity_token(
 	};
 
 	// Check if the token is revoked
-	let req_user_token_jti = internal_unwrap_owned!(req_user_token_claims.jti);
+	let req_user_token_jti = unwrap!(req_user_token_claims.jti);
 	let req_token_res = op!([ctx] token_get {
 		jtis: vec![req_user_token_jti],
 	})
@@ -133,7 +131,7 @@ async fn attempt_setup_existing_identity_token(
 		);
 	}
 	// TODO: Add back
-	// let req_token = internal_unwrap_owned!(
+	// let req_token = unwrap!(
 	// 	req_token_res.tokens.first(),
 	// 	"token that we've signed should exist in the database"
 	// );
@@ -184,7 +182,7 @@ async fn attempt_setup_existing_identity_token(
 			}
 		};
 
-		let user_token = internal_unwrap!(token_create_res.token);
+		let user_token = unwrap_ref!(token_create_res.token);
 
 		// Decode the token
 		let user_token_claims = rivet_claims::decode(&user_token.token)??;
@@ -196,7 +194,7 @@ async fn attempt_setup_existing_identity_token(
 
 	tracing::info!(?user_token_claims, "fetching user");
 	let game_user_ent = user_token_claims.as_game_user()?;
-	let refresh_jti = internal_unwrap_owned!(user_token_claims.jti);
+	let refresh_jti = unwrap!(user_token_claims.jti);
 
 	// Create a game session row
 	msg!([ctx] game_user::msg::session_create(game_user_ent.game_user_id) {
@@ -225,10 +223,8 @@ async fn attempt_setup_existing_identity_token(
 			namespace_ids: vec![namespace_id],
 		})
 	)?;
-	let identity = internal_unwrap_owned!(identities.into_iter().next());
-	let game_id =
-		internal_unwrap_owned!(internal_unwrap_owned!(game_resolve_res.games.first()).game_id)
-			.as_uuid();
+	let identity = unwrap!(identities.into_iter().next());
+	let game_id = unwrap!(unwrap!(game_resolve_res.games.first()).game_id).as_uuid();
 
 	Ok(Some(models::IdentitySetupResponse {
 		identity_token: user_token.clone(),
@@ -310,7 +306,7 @@ async fn get_profile(
 	.await?;
 
 	Ok((
-		unwrap_with_owned!(identities.into_iter().next(), IDENTITY_NOT_FOUND),
+		unwrap_with!(identities.into_iter().next(), IDENTITY_NOT_FOUND),
 		update_ts,
 	))
 }
@@ -327,13 +323,13 @@ pub async fn handles(
 ) -> GlobalResult<models::IdentityGetHandlesResponse> {
 	let (current_user_id, _) = ctx.auth().dual_user(ctx.op_ctx()).await?;
 
-	assert_with!(
+	ensure_with!(
 		!query.identity_ids.is_empty(),
 		API_BAD_QUERY_PARAMETER,
 		parameter = "identity_ids",
 		error = "cannot be empty",
 	);
-	assert_with!(
+	ensure_with!(
 		query.identity_ids.len() <= 64,
 		API_BAD_QUERY_PARAMETER,
 		parameter = "identity_ids",
@@ -378,13 +374,13 @@ pub async fn summaries(
 ) -> GlobalResult<models::IdentityGetSummariesResponse> {
 	let (current_user_id, _) = ctx.auth().dual_user(ctx.op_ctx()).await?;
 
-	assert_with!(
+	ensure_with!(
 		!query.identity_ids.is_empty(),
 		API_BAD_QUERY_PARAMETER,
 		parameter = "identity_ids",
 		error = "cannot be empty",
 	);
-	assert_with!(
+	ensure_with!(
 		query.identity_ids.len() <= 64,
 		API_BAD_QUERY_PARAMETER,
 		parameter = "identity_ids",
@@ -428,7 +424,7 @@ pub async fn update_profile(
 	let user_ent = ctx.auth().user(ctx.op_ctx()).await?;
 	assert::user_registered(&ctx, user_ent.user_id).await?;
 
-	internal_assert!(
+	ensure!(
 		body.account_number.unwrap_or_default() >= 0,
 		"invalid parameter account_number`"
 	);
@@ -459,7 +455,7 @@ pub async fn search(
 ) -> GlobalResult<models::IdentitySearchResponse> {
 	let (current_user_id, _) = ctx.auth().dual_user(ctx.op_ctx()).await?;
 
-	assert_with!(
+	ensure_with!(
 		query.limit.map(|v| v != 0).unwrap_or(true),
 		API_BAD_QUERY_PARAMETER,
 		parameter = "limit",
@@ -592,7 +588,7 @@ pub async fn validate_profile(
 ) -> GlobalResult<models::IdentityValidateProfileResponse> {
 	let user_ent = ctx.auth().user(ctx.op_ctx()).await?;
 
-	internal_assert!(
+	ensure!(
 		body.account_number.unwrap_or_default() >= 0,
 		"invalid parameter account_number`"
 	);
@@ -625,8 +621,8 @@ pub async fn prepare_avatar_upload(
 	let user_ent = ctx.auth().user(ctx.op_ctx()).await?;
 	assert::user_registered(&ctx, user_ent.user_id).await?;
 
-	internal_assert!(body.content_length >= 0, "upload invalid");
-	assert_with!(
+	ensure!(body.content_length >= 0, "upload invalid");
+	ensure_with!(
 		body.content_length < MAX_AVATAR_UPLOAD_SIZE,
 		UPLOAD_TOO_LARGE
 	);
@@ -636,7 +632,7 @@ pub async fn prepare_avatar_upload(
 	} else if body.path.ends_with(".jpg") || body.path.ends_with(".jpeg") {
 		"jpeg"
 	} else {
-		internal_panic!("invalid file type (allowed: .png, .jpg)");
+		bail!("invalid file type (allowed: .png, .jpg)");
 	};
 
 	// Create the upload
@@ -655,8 +651,8 @@ pub async fn prepare_avatar_upload(
 	})
 	.await?;
 
-	let upload_id = internal_unwrap!(upload_prepare_res.upload_id).as_uuid();
-	let presigned_request = internal_unwrap_owned!(upload_prepare_res.presigned_requests.first());
+	let upload_id = unwrap_ref!(upload_prepare_res.upload_id).as_uuid();
+	let presigned_request = unwrap!(upload_prepare_res.presigned_requests.first());
 
 	Ok(models::IdentityPrepareAvatarUploadResponse {
 		upload_id,
@@ -688,7 +684,7 @@ pub async fn beta_signup(
 ) -> GlobalResult<serde_json::Value> {
 	let _user_ent = ctx.auth().user(ctx.op_ctx()).await?;
 
-	panic_with!(ERROR, error = "deprecated");
+	bail_with!(ERROR, error = "deprecated");
 }
 
 // MARK: POST /identities/{}/report
@@ -700,7 +696,7 @@ pub async fn report_identity(
 	let game_user = ctx.auth().fetch_game_user(ctx.op_ctx()).await?;
 
 	if let Some(reason) = &body.reason {
-		internal_assert!(reason.len() <= 300, "`reason` too long");
+		ensure!(reason.len() <= 300, "`reason` too long");
 	}
 
 	msg!([ctx] user_report::msg::create(identity_id) {
@@ -744,7 +740,7 @@ pub async fn followers(
 			.transpose()?,
 	})
 	.await?;
-	let followers_res = internal_unwrap_owned!(followers_res.follows.first());
+	let followers_res = unwrap!(followers_res.follows.first());
 	let follows = &followers_res.follows;
 
 	// Get user ids
@@ -837,7 +833,7 @@ pub async fn following(
 			.transpose()?,
 	})
 	.await?;
-	let followers_res = &internal_unwrap_owned!(followers_res.follows.first());
+	let followers_res = &unwrap!(followers_res.follows.first());
 	let follows = &followers_res.follows;
 
 	// Get user ids
@@ -929,7 +925,7 @@ pub async fn friends(
 			.transpose()?,
 	})
 	.await?;
-	let followers_res = &internal_unwrap_owned!(followers_res.follows.first());
+	let followers_res = &unwrap!(followers_res.follows.first());
 	let follows = &followers_res.follows;
 
 	// Get user ids
@@ -1030,7 +1026,7 @@ pub async fn mutual_friends(
 	let user_ids = mutual_friends_res
 		.mutual_friends
 		.iter()
-		.map(|f| Ok(internal_unwrap!(f.user_id).as_uuid()))
+		.map(|f| Ok(unwrap_ref!(f.user_id).as_uuid()))
 		.collect::<GlobalResult<Vec<_>>>()?;
 
 	let identities = fetch::identity::handles(ctx.op_ctx(), current_user_id, user_ids).await?;
@@ -1060,7 +1056,7 @@ pub async fn recent_followers(
 			.transpose()?,
 	})
 	.await?;
-	let follow_requests_res = &internal_unwrap_owned!(follow_requests_res.follows.first());
+	let follow_requests_res = &unwrap!(follow_requests_res.follows.first());
 	let follows = &follow_requests_res.follows;
 
 	// Get user ids

@@ -8,8 +8,8 @@ const MAX_TEAM_SIZE: i64 = 256;
 async fn worker(ctx: &OperationContext<team::msg::member_create::Message>) -> GlobalResult<()> {
 	// Idempotent
 
-	let team_id: Uuid = internal_unwrap!(ctx.team_id).as_uuid();
-	let user_id: Uuid = internal_unwrap!(ctx.user_id).as_uuid();
+	let team_id: Uuid = unwrap_ref!(ctx.team_id).as_uuid();
+	let user_id: Uuid = unwrap_ref!(ctx.user_id).as_uuid();
 
 	// TODO: Race condition can allow brute force to create larger teams than
 	// expected

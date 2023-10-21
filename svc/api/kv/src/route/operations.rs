@@ -92,7 +92,7 @@ pub async fn put(ctx: Ctx<Auth>, body: models::KvPutRequest) -> GlobalResult<ser
 	let key = body.key;
 	utils::validate_keys(&[&key], false)?;
 	let value = serde_json::to_vec(&body.value)?;
-	assert_with!(value.len() <= util_kv::MAX_VALUE_LEN, KV_VALUE_TOO_LONG);
+	ensure_with!(value.len() <= util_kv::MAX_VALUE_LEN, KV_VALUE_TOO_LONG);
 
 	msg!([ctx] kv::msg::write(&namespace_id, &key) {
 		namespace_id: Some(namespace_id.into()),

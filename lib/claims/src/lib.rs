@@ -96,7 +96,7 @@ pub mod ent {
 
 		fn try_from(value: &schema::entitlement::Refresh) -> GlobalResult<Self> {
 			Ok(Refresh {
-				session_id: internal_unwrap_owned!(value.session_id).as_uuid(),
+				session_id: unwrap!(value.session_id).as_uuid(),
 			})
 		}
 	}
@@ -111,7 +111,7 @@ pub mod ent {
 
 		fn try_from(value: &schema::entitlement::User) -> GlobalResult<Self> {
 			Ok(User {
-				user_id: internal_unwrap_owned!(value.user_id).as_uuid(),
+				user_id: unwrap!(value.user_id).as_uuid(),
 			})
 		}
 	}
@@ -126,7 +126,7 @@ pub mod ent {
 
 		fn try_from(value: &schema::entitlement::GameNamespacePublic) -> GlobalResult<Self> {
 			Ok(GameNamespacePublic {
-				namespace_id: internal_unwrap_owned!(value.namespace_id).as_uuid(),
+				namespace_id: unwrap!(value.namespace_id).as_uuid(),
 			})
 		}
 	}
@@ -141,7 +141,7 @@ pub mod ent {
 
 		fn try_from(value: &schema::entitlement::MatchmakerLobby) -> GlobalResult<Self> {
 			Ok(MatchmakerLobby {
-				lobby_id: internal_unwrap_owned!(value.lobby_id).as_uuid(),
+				lobby_id: unwrap!(value.lobby_id).as_uuid(),
 			})
 		}
 	}
@@ -156,7 +156,7 @@ pub mod ent {
 
 		fn try_from(value: &schema::entitlement::MatchmakerPlayer) -> GlobalResult<Self> {
 			Ok(MatchmakerPlayer {
-				player_id: internal_unwrap_owned!(value.player_id).as_uuid(),
+				player_id: unwrap!(value.player_id).as_uuid(),
 			})
 		}
 	}
@@ -171,7 +171,7 @@ pub mod ent {
 
 		fn try_from(value: &schema::entitlement::JobRun) -> GlobalResult<Self> {
 			Ok(JobRun {
-				run_id: internal_unwrap_owned!(value.run_id).as_uuid(),
+				run_id: unwrap!(value.run_id).as_uuid(),
 			})
 		}
 	}
@@ -186,7 +186,7 @@ pub mod ent {
 
 		fn try_from(value: &schema::entitlement::GameCloud) -> GlobalResult<Self> {
 			Ok(GameCloud {
-				game_id: internal_unwrap_owned!(value.game_id).as_uuid(),
+				game_id: unwrap!(value.game_id).as_uuid(),
 			})
 		}
 	}
@@ -214,7 +214,7 @@ pub mod ent {
 				label: value.label,
 				target_port: value.target_port,
 				port_range: value.port_range.map(TryInto::try_into).transpose()?,
-				proxy_protocol: internal_unwrap_owned!(
+				proxy_protocol: unwrap!(
 					schema::backend::matchmaker::lobby_runtime::ProxyProtocol::from_i32(
 						value.proxy_protocol,
 					)
@@ -279,7 +279,7 @@ pub mod ent {
 
 		fn try_from(value: &schema::entitlement::GameNamespaceDevelopment) -> GlobalResult<Self> {
 			Ok(GameNamespaceDevelopment {
-				namespace_id: internal_unwrap_owned!(value.namespace_id).as_uuid(),
+				namespace_id: unwrap!(value.namespace_id).as_uuid(),
 				hostname: value.hostname.to_owned(),
 				lobby_ports: value
 					.lobby_ports
@@ -304,8 +304,8 @@ pub mod ent {
 			value: &schema::entitlement::MatchmakerDevelopmentPlayer,
 		) -> GlobalResult<Self> {
 			Ok(MatchmakerDevelopmentPlayer {
-				namespace_id: internal_unwrap_owned!(value.namespace_id).as_uuid(),
-				player_id: internal_unwrap_owned!(value.player_id).as_uuid(),
+				namespace_id: unwrap!(value.namespace_id).as_uuid(),
+				player_id: unwrap!(value.player_id).as_uuid(),
 			})
 		}
 	}
@@ -320,7 +320,7 @@ pub mod ent {
 
 		fn try_from(value: &schema::entitlement::GameUser) -> GlobalResult<Self> {
 			Ok(GameUser {
-				game_user_id: internal_unwrap_owned!(value.game_user_id).as_uuid(),
+				game_user_id: unwrap!(value.game_user_id).as_uuid(),
 			})
 		}
 	}
@@ -335,7 +335,7 @@ pub mod ent {
 
 		fn try_from(value: &schema::entitlement::GameUserLink) -> GlobalResult<Self> {
 			Ok(GameUserLink {
-				link_id: internal_unwrap_owned!(value.link_id).as_uuid(),
+				link_id: unwrap!(value.link_id).as_uuid(),
 			})
 		}
 	}
@@ -352,7 +352,7 @@ pub mod ent {
 
 		fn try_from(value: &schema::entitlement::UploadFile) -> GlobalResult<Self> {
 			Ok(UploadFile {
-				upload_id: internal_unwrap_owned!(value.upload_id).as_uuid(),
+				upload_id: unwrap!(value.upload_id).as_uuid(),
 				path: value.path.clone(),
 				content_length: value.content_length,
 			})
@@ -369,7 +369,7 @@ pub mod ent {
 
 		fn try_from(value: &schema::entitlement::CloudDeviceLink) -> GlobalResult<Self> {
 			Ok(CloudDeviceLink {
-				device_link_id: internal_unwrap_owned!(value.device_link_id).as_uuid(),
+				device_link_id: unwrap!(value.device_link_id).as_uuid(),
 			})
 		}
 	}
@@ -728,7 +728,7 @@ fn decode_proto(
 		// No label, do nothing
 		token
 	} else {
-		panic_with!(TOKEN_INVALID, reason = "invalid separator count");
+		bail_with!(TOKEN_INVALID, reason = "invalid separator count");
 	};
 
 	// Split up parts
@@ -759,7 +759,7 @@ fn validate(claims: &schema::Claims) -> GlobalResult<()> {
 	let claims_exp = claims.exp.unwrap_or_default();
 
 	// Validate claims
-	assert_with!(claims_exp == 0 || now <= claims_exp, TOKEN_EXPIRED);
+	ensure_with!(claims_exp == 0 || now <= claims_exp, TOKEN_EXPIRED);
 
 	Ok(())
 }

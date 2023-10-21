@@ -1,3 +1,45 @@
+locals {
+	pod_rules = [
+		{
+			alert = "PodHighMemoryUsage"
+			annotations = {
+				summary = "Pod High Memory usage ({{ $labels.namespace }}/{{ $labels.pod }})"
+				description = "Pod Memory usage has been above 80% for over 2 minutes\n  VALUE = {{ printf \"%.2f%%\" $value }}\n  LABELS = {{ $labels }}"
+			}
+			# TODO: Maybe use kube_pod_container_resource_limits{resource="memory"} instead?
+			expr = "(sum(container_memory_working_set_bytes{name!=\"\"}) BY (namespace, pod) / sum(container_spec_memory_limit_bytes > 0) BY (namespace, pod) * 100) > 80"
+			"for" = "2m"
+			labels = {
+				severity = "warning"
+			}
+		},
+		{
+			alert = "PodHighThrottleRate"
+			annotations = {
+				summary = "Pod high throttle rate ({{ $labels.namespace }}/{{ $labels.pod }})"
+				description = "Pod is being throttled\n  VALUE = {{ $value }}\n  LABELS = {{ $labels }}"
+			}
+			expr = "rate(container_cpu_cfs_throttled_seconds_total{job!=\"\"}[3m]) > 1"
+			"for" = "2m"
+			labels = {
+				severity = "warning"
+			}
+		},
+		{
+			alert = "PodLowMemoryUsage"
+			annotations = {
+				summary = "Pod Low Memory usage ({{ $labels.namespace }}/{{ $labels.pod }})"
+				description = "Pod Memory usage is under 20% for 1 week. Consider reducing the allocated memory.\n  VALUE = {{ printf \"%.2f%%\" $value }}\n  LABELS = {{ $labels }}"
+			}
+			expr = "(sum(container_memory_working_set_bytes{name!=\"\"}) BY (namespace, pod) / sum(container_spec_memory_limit_bytes > 0) BY (namespace, pod) * 100) < 20"
+			"for" = "7d"
+			labels = {
+				severity = "info"
+			}
+		}
+	]
+}
+
 # Useful: https://github.com/kubernetes/kube-state-metrics/blob/main/docs/pod-metrics.md
 resource "kubectl_manifest" "pod_rules" {
 	depends_on = [helm_release.prometheus]
@@ -14,33 +56,9 @@ resource "kubectl_manifest" "pod_rules" {
 				{
 					name = "pod-health"
 					interval = "15s"
-					rules = [
-						{
-							alert = "PodHighMemoryUsage"
-							annotations = {
-								summary = "Pod High Memory usage ({{ $labels.namespace }}/{{ $labels.pod }})"
-								description = "Pod Memory usage has been above 80% for over 2 minutes\n  VALUE = {{ printf \"%.2f%%\" $value }}\n  LABELS = {{ $labels }}"
-							}
-							# TODO: Maybe use kube_pod_container_resource_limits{resource="memory"} instead?
-							expr = "(sum(container_memory_working_set_bytes{name!=\"\"}) BY (namespace, pod) / sum(container_spec_memory_limit_bytes > 0) BY (namespace, pod) * 100) > 80"
-							"for" = "2m"
-							labels = {
-								severity = "warning"
-							}
-						},
-						{
-							alert = "PodHighThrottleRate"
-							annotations = {
-								summary = "Pod high throttle rate ({{ $labels.namespace }}/{{ $labels.pod }})"
-								description = "Pod is being throttled\n  VALUE = {{ $value }}\n  LABELS = {{ $labels }}"
-							}
-							expr = "rate(container_cpu_cfs_throttled_seconds_total{job!=\"\"}[3m]) > 1"
-							"for" = "2m"
-							labels = {
-								severity = "warning"
-							}
-						},
-						{
+					rules = (var.deploy_method_cluster ?
+						local.pod_rules :
+						concat(local.pod_rules, [{
 							alert = "PodLowCpuUtilization"
 							annotations = {
 								summary = "Pod Low CPU utilization ({{ $labels.namespace }}/{{ $labels.pod }})"
@@ -51,20 +69,8 @@ resource "kubectl_manifest" "pod_rules" {
 							labels = {
 								severity = "info"
 							}
-						},
-						{
-							alert = "PodLowMemoryUsage"
-							annotations = {
-								summary = "Pod Low Memory usage ({{ $labels.namespace }}/{{ $labels.pod }})"
-								description = "Pod Memory usage is under 20% for 1 week. Consider reducing the allocated memory.\n  VALUE = {{ printf \"%.2f%%\" $value }}\n  LABELS = {{ $labels }}"
-							}
-							expr = "(sum(container_memory_working_set_bytes{name!=\"\"}) BY (namespace, pod) / sum(container_spec_memory_limit_bytes > 0) BY (namespace, pod) * 100) < 20"
-							"for" = "7d"
-							labels = {
-								severity = "info"
-							}
-						}
-					]
+						}])
+					)
 				}
 			]
 		}

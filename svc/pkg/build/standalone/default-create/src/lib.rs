@@ -47,6 +47,11 @@ const DEFAULT_BUILDS: &[DefaultBuildConfig] = &[
 			"../../../../../../infra/default-builds/outputs/test-mm-lobby-echo.tar"
 		),
 	},
+	DefaultBuildConfig {
+		kind: "test-mm-player-connect",
+		tag: include_str!("../default-builds/outputs/test-mm-player-connect-tag.txt"),
+		tar: include_bytes!("../default-builds/outputs/test-mm-player-connect.tar"),
+	},
 ];
 
 struct DefaultBuildConfig {
@@ -128,27 +133,38 @@ async fn upload_build(
 			backend::upload::PrepareFile {
 				path: "image.tar".into(),
 				content_length: build.tar.len() as u64,
+				multipart: true,
 				..Default::default()
 			},
 		],
 	})
 	.await?;
-	let upload_id = internal_unwrap!(upload_prepare_res.upload_id).as_uuid();
-	let req = internal_unwrap_owned!(upload_prepare_res.presigned_requests.first());
+	let upload_id = unwrap_ref!(upload_prepare_res.upload_id).as_uuid();
 
-	let url = &req.url;
-	tracing::info!(%url, "uploading file");
-	let res = reqwest::Client::new()
-		.put(url)
-		.header(reqwest::header::CONTENT_LENGTH, build.tar.len() as u64)
-		.body(reqwest::Body::from(build.tar))
-		.send()
-		.await?;
-	if res.status().is_success() {
-		tracing::info!("successfully uploaded");
-	} else {
-		tracing::warn!(status = ?res.status(), "failure uploading");
+	for req in &upload_prepare_res.presigned_requests {
+		let start = upload_prepare::CHUNK_SIZE as usize * (req.part_number as usize - 1);
+		let end = upload_prepare::CHUNK_SIZE as usize * req.part_number as usize;
+
+		let part = &build.tar[start..end.min(build.tar.len())];
+
+		let url = &req.url;
+		tracing::info!(%url, part=%req.part_number, "uploading file");
+		let res = reqwest::Client::new()
+			.put(url)
+			.header(reqwest::header::CONTENT_LENGTH, part.len() as u64)
+			.body(reqwest::Body::from(part))
+			.send()
+			.await?;
+
+		if !res.status().is_success() {
+			let status = res.status();
+			let body = res.text().await?;
+			tracing::warn!(?status, ?body, "failure uploading");
+			bail!("failure uploading");
+		}
 	}
+
+	tracing::info!("successfully uploaded");
 
 	// Complete the upload
 	op!([ctx] upload_complete {

@@ -14,8 +14,8 @@ async fn handle(
 	let crdb = ctx.crdb().await?;
 	let limit = ctx.limit;
 
-	internal_assert!(limit != 0, "limit too low");
-	internal_assert!(limit <= 32, "limit too high");
+	ensure!(limit != 0, "limit too low");
+	ensure!(limit <= 32, "limit too high");
 
 	let res = sqlx::query_as::<_, Team>(indoc!(
 		"

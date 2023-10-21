@@ -6,7 +6,7 @@ pub fn handle_without_presence(
 	current_user_id: Uuid,
 	user: &backend::user::User,
 ) -> GlobalResult<models::IdentityHandle> {
-	let user_id = internal_unwrap!(user.user_id).as_uuid();
+	let user_id = unwrap_ref!(user.user_id).as_uuid();
 	let is_self = user_id == current_user_id;
 
 	Ok(models::IdentityHandle {

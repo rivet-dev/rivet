@@ -31,7 +31,7 @@ async fn handle(
 		..Default::default()
 	})
 	.await?;
-	let token = internal_unwrap_owned!(token_res.token);
+	let token = unwrap!(token_res.token);
 
 	Ok(cloud::device_link_create::Response {
 		device_link_id: Some(link_id.into()),

@@ -16,11 +16,11 @@ async fn handle(
 ) -> GlobalResult<token::create::Response> {
 	let crdb = ctx.crdb().await?;
 
-	internal_assert!(!ctx.issuer.is_empty());
-	let token_config = internal_unwrap!(ctx.token_config);
-	let kind = internal_unwrap!(ctx.kind);
+	ensure!(!ctx.issuer.is_empty());
+	let token_config = unwrap_ref!(ctx.token_config);
+	let kind = unwrap_ref!(ctx.kind);
 	if ctx.combine_refresh_token {
-		internal_assert!(
+		ensure!(
 			ctx.refresh_token_config.is_none(),
 			"cannot use combined refresh token with separate refresh token config"
 		);
@@ -46,7 +46,7 @@ async fn handle(
 
 			// Validate the token
 			let refresh_token_claims = rivet_claims::decode(refresh_token)??;
-			let refresh_jti = internal_unwrap_owned!(refresh_token_claims.jti).as_uuid();
+			let refresh_jti = unwrap!(refresh_token_claims.jti).as_uuid();
 			let refresh_ent = refresh_token_claims.as_refresh()?;
 
 			// Check if revoked
@@ -59,11 +59,11 @@ async fn handle(
 			.await?;
 			if let Some((revoke_ts,)) = rf_token_row {
 				if revoke_ts.is_some() {
-					panic_with!(TOKEN_REVOKED);
+					bail_with!(TOKEN_REVOKED);
 				}
 			} else {
 				// TODO: The token may have expired here because of the TTL
-				panic_with!(TOKEN_REFRESH_NOT_FOUND);
+				bail_with!(TOKEN_REFRESH_NOT_FOUND);
 			}
 
 			// Fetch entitlements to create the token with
@@ -73,7 +73,7 @@ async fn handle(
 			.bind(refresh_ent.session_id)
 			.fetch_optional(&crdb)
 			.await?;
-			let ent = internal_unwrap_owned!(session_row, "token session not found").0;
+			let ent = unwrap!(session_row, "token session not found").0;
 
 			// Decode entitlements
 			let ent = ent
@@ -99,7 +99,7 @@ async fn handle(
 
 				if update_query.rows_affected() == 0 {
 					tracing::info!("token revoked in race condition");
-					panic_with!(TOKEN_REVOKED);
+					bail_with!(TOKEN_REVOKED);
 				}
 
 				None

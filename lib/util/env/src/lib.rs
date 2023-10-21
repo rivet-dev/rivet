@@ -56,6 +56,7 @@ lazy_static::lazy_static! {
 		.ok()
 		.and_then(|ctx| RunContext::from_str(&ctx));
 	static ref REGION: Option<String> = std::env::var("RIVET_REGION").ok();
+	static ref PRIMARY_REGION: Option<String> = std::env::var("RIVET_PRIMARY_REGION").ok();
 	static ref NAMESPACE: Option<String> = std::env::var("RIVET_NAMESPACE").ok();
 	static ref CLUSTER_ID: Option<String> = std::env::var("RIVET_CLUSTER_ID").ok();
 	static ref SOURCE_HASH: Option<String> = std::env::var("RIVET_SOURCE_HASH").ok();
@@ -70,7 +71,6 @@ lazy_static::lazy_static! {
 	static ref ORIGIN_API: Option<String> = std::env::var("RIVET_ORIGIN_API").ok();
 	static ref ORIGIN_HUB: Option<String> = std::env::var("RIVET_ORIGIN_HUB").ok();
 	static ref DNS_PROVIDER: Option<String> = std::env::var("RIVET_DNS_PROVIDER").ok();
-	static ref PRIMARY_REGION: Option<String> = std::env::var("RIVET_PRIMARY_REGION").ok();
 	static ref CHIRP_SERVICE_NAME: Option<String> = std::env::var("CHIRP_SERVICE_NAME").ok();
 	static ref IS_BILLING_ENABLED: bool = std::env::var("IS_BILLING_ENABLED")
 		.ok()

@@ -162,7 +162,7 @@ async fn handle(
 		version_ids: version_ids.clone(),
 	})
 	.await?;
-	internal_assert_eq!(
+	ensure_eq!(
 		version_ids.len(),
 		version_res.versions.len(),
 		"missing version ids"
@@ -186,7 +186,7 @@ async fn handle(
 			tracing::warn!(%lobby_group_id, "could not find matching version for lobby group");
 			continue;
 		};
-		let version_id = internal_unwrap!(version_id_proto).as_uuid();
+		let version_id = unwrap_ref!(version_id_proto).as_uuid();
 
 		// Find the matching version config
 		let version_res = if let Some(x) = version_res
@@ -199,11 +199,11 @@ async fn handle(
 			tracing::warn!(%lobby_group_id, %version_id, "could not find matching version config for version id");
 			continue;
 		};
-		let version_config = internal_unwrap!(version_res.config);
-		let version_meta = internal_unwrap!(version_res.config_meta);
+		let version_config = unwrap_ref!(version_res.config);
+		let version_meta = unwrap_ref!(version_res.config_meta);
 
 		// Resolve the configured tier name ID
-		let lobby_group_idx = internal_unwrap_owned!(
+		let lobby_group_idx = unwrap!(
 			version_meta
 				.lobby_groups
 				.iter()
@@ -212,9 +212,8 @@ async fn handle(
 			"could not find matching tier"
 		)
 		.0;
-		let lobby_group_config =
-			internal_unwrap_owned!(version_config.lobby_groups.get(lobby_group_idx));
-		let lobby_group_region = internal_unwrap_owned!(
+		let lobby_group_config = unwrap!(version_config.lobby_groups.get(lobby_group_idx));
+		let lobby_group_region = unwrap!(
 			lobby_group_config
 				.regions
 				.iter()

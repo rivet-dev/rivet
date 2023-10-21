@@ -42,7 +42,7 @@ fn build_job(
 		Ok(x) => x,
 		Err(err) => {
 			tracing::error!(?err, "cjson serialization failed");
-			internal_panic!("cjson serialization failed")
+			bail!("cjson serialization failed")
 		}
 	};
 	let job_hash = Sha256::digest(job_cjson_str.as_bytes());
@@ -68,9 +68,9 @@ fn modify_job_spec(
 	// deterministic job spec.
 	override_job_id("__PLACEHOLDER__", &mut job);
 
-	internal_assert_eq!(
+	ensure_eq!(
 		"batch",
-		internal_unwrap!(job._type).as_str(),
+		unwrap_ref!(job._type).as_str(),
 		"only the batch job type is supported"
 	);
 
@@ -79,8 +79,7 @@ fn modify_job_spec(
 	job.datacenters = Some(vec![region.nomad_datacenter.clone()]);
 
 	// Validate that the job is parameterized
-	let parameters =
-		internal_unwrap_owned!(job.parameterized_job.as_mut(), "job not parameterized");
+	let parameters = unwrap!(job.parameterized_job.as_mut(), "job not parameterized");
 
 	// Add run parameters
 	parameters.meta_required = Some({
@@ -91,14 +90,14 @@ fn modify_job_spec(
 	});
 
 	// Get task group
-	let task_groups = internal_unwrap_owned!(job.task_groups.as_mut());
-	internal_assert_eq!(1, task_groups.len(), "must have exactly 1 task group");
-	let task_group = internal_unwrap_owned!(task_groups.first_mut());
+	let task_groups = unwrap!(job.task_groups.as_mut());
+	ensure_eq!(1, task_groups.len(), "must have exactly 1 task group");
+	let task_group = unwrap!(task_groups.first_mut());
 
 	// Configure networks
-	let networks = internal_unwrap_owned!(task_group.networks.as_mut());
-	internal_assert_eq!(1, networks.len(), "must have exactly 1 network");
-	let network = internal_unwrap_owned!(networks.first_mut());
+	let networks = unwrap!(task_group.networks.as_mut());
+	ensure_eq!(1, networks.len(), "must have exactly 1 network");
+	let network = unwrap!(networks.first_mut());
 	// Disable IPv6 DNS since Docker doesn't support IPv6 yet
 	network.DNS = Some(Box::new(nomad_client::models::NetworkDns {
 		servers: Some(vec![
@@ -130,7 +129,7 @@ fn modify_job_spec(
 	}));
 
 	// Add cleanup task
-	let tasks = internal_unwrap_owned!(task_group.tasks.as_mut());
+	let tasks = unwrap!(task_group.tasks.as_mut());
 	tasks.push(gen_cleanup_task());
 
 	Ok(job)

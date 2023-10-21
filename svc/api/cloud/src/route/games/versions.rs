@@ -20,8 +20,8 @@ pub async fn get(
 		version_ids: vec![version_id.into()],
 	})
 	.await?;
-	let cloud_version = internal_unwrap_owned!(cloud_version_res.versions.first());
-	let cloud_version_config = internal_unwrap!(cloud_version.config);
+	let cloud_version = unwrap!(cloud_version_res.versions.first());
+	let cloud_version_config = unwrap_ref!(cloud_version.config);
 
 	let summary = models::CloudVersionSummary::try_from(game_version)?;
 	let openapi_version = rivet_convert::cloud::version::config_to_openapi(
@@ -60,7 +60,7 @@ pub async fn create(
 		creator_user_id: user_id.as_ref().map(|x| x.user_id.into()),
 	})
 	.await?;
-	let version_id = internal_unwrap!(publish_res.version_id).as_uuid();
+	let version_id = unwrap_ref!(publish_res.version_id).as_uuid();
 
 	Ok(models::CloudGamesCreateGameVersionResponse { version_id })
 }

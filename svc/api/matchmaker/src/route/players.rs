@@ -38,20 +38,20 @@ pub async fn connected(
 
 			match ErrorCode::from_i32(msg.error_code) {
 				Some(ErrorCode::PlayerAlreadyRegistered) => {
-					panic_with!(MATCHMAKER_PLAYER_ALREADY_CONNECTED);
+					bail_with!(MATCHMAKER_PLAYER_ALREADY_CONNECTED);
 				}
 				Some(ErrorCode::PlayerRemoved) => {
-					panic_with!(MATCHMAKER_PLAYER_REMOVED);
+					bail_with!(MATCHMAKER_PLAYER_REMOVED);
 				}
 				Some(ErrorCode::RegistrationExpired) => {
-					panic_with!(MATCHMAKER_PLAYER_REGISTRATION_EXPIRED);
+					bail_with!(MATCHMAKER_PLAYER_REGISTRATION_EXPIRED);
 				}
 				Some(ErrorCode::PlayerInDifferentLobby) => {
-					panic_with!(MATCHMAKER_PLAYER_IN_DIFFERENT_LOBBY);
+					bail_with!(MATCHMAKER_PLAYER_IN_DIFFERENT_LOBBY);
 				}
 				Some(ErrorCode::DeprecatedPlayerNotFound) | Some(ErrorCode::Unknown) | None => {
 					tracing::error!("unknown player register error {:?}", msg);
-					internal_panic!("unknown player register error");
+					bail!("unknown player register error");
 				}
 			}
 		}
@@ -86,11 +86,11 @@ pub async fn disconnected(
 
 			match ErrorCode::from_i32(msg.error_code) {
 				Some(ErrorCode::PlayerInDifferentLobby) => {
-					panic_with!(MATCHMAKER_PLAYER_IN_DIFFERENT_LOBBY);
+					bail_with!(MATCHMAKER_PLAYER_IN_DIFFERENT_LOBBY);
 				}
 				Some(ErrorCode::DeprecatedPlayerNotFound) | Some(ErrorCode::Unknown) | None => {
 					tracing::error!("unknown player remove error {:?}", msg);
-					internal_panic!("unknown player remove error");
+					bail!("unknown player remove error");
 				}
 			}
 		}
@@ -150,11 +150,9 @@ pub async fn statistics(
 			namespace_ids: vec![namespace_id.into()],
 		}),
 	)?;
-	let namespace = internal_unwrap_owned!(namespaces_res.namespaces.first());
-	let lobby_ids = internal_unwrap_owned!(lobbies_res.namespaces.first())
-		.lobby_ids
-		.clone();
-	let latest_version_id = internal_unwrap_owned!(namespace.version_id);
+	let namespace = unwrap!(namespaces_res.namespaces.first());
+	let lobby_ids = unwrap!(lobbies_res.namespaces.first()).lobby_ids.clone();
+	let latest_version_id = unwrap!(namespace.version_id);
 
 	// Fetch lobby info, player counts, and version configs (if needed)
 	let (lobbies_res, lobby_player_counts_res) = tokio::try_join!(
@@ -177,7 +175,7 @@ pub async fn statistics(
 		let all_lobby_group_ids = lobbies_res
 			.lobbies
 			.iter()
-			.map(|lobby| Ok(internal_unwrap_owned!(lobby.lobby_group_id).as_uuid()))
+			.map(|lobby| Ok(unwrap!(lobby.lobby_group_id).as_uuid()))
 			.collect::<GlobalResult<HashSet<_>>>()?
 			.into_iter()
 			.map(Into::into)
@@ -190,7 +188,7 @@ pub async fn statistics(
 		op!([ctx] mm_config_version_get {
 			version_ids: lobby_group_versions_res.versions
 				.iter()
-				.map(|v| Ok(internal_unwrap_owned!(v.version_id)))
+				.map(|v| Ok(unwrap!(v.version_id)))
 				.collect::<GlobalResult<Vec<_>>>()?,
 		})
 		.await?
@@ -199,18 +197,18 @@ pub async fn statistics(
 	let all_lobby_groups = versions_res
 		.versions
 		.iter()
-		.map(|v| Ok((internal_unwrap!(v.config), internal_unwrap!(v.config_meta))))
+		.map(|v| Ok((unwrap_ref!(v.config), unwrap_ref!(v.config_meta))))
 		.collect::<GlobalResult<Vec<_>>>()?
 		.iter()
 		.flat_map(|(v, v_meta)| v.lobby_groups.iter().zip(v_meta.lobby_groups.iter()))
-		.map(|(lg, lgm)| Ok((internal_unwrap!(lgm.lobby_group_id).as_uuid(), lg)))
+		.map(|(lg, lgm)| Ok((unwrap_ref!(lgm.lobby_group_id).as_uuid(), lg)))
 		.collect::<GlobalResult<HashMap<_, _>>>()?;
 
 	// Fetch all region configs
 	let all_region_ids = all_lobby_groups
 		.iter()
 		.flat_map(|(_, lg)| lg.regions.iter())
-		.map(|r| Ok(internal_unwrap!(r.region_id).as_uuid()))
+		.map(|r| Ok(unwrap_ref!(r.region_id).as_uuid()))
 		.collect::<GlobalResult<HashSet<_>>>()?
 		.into_iter()
 		.map(Into::into)
@@ -243,15 +241,15 @@ pub async fn statistics(
 		}
 
 		let player_count = TryInto::<i64>::try_into(
-			internal_unwrap_owned!(lobby_player_counts_res
+			unwrap!(lobby_player_counts_res
 				.lobbies
 				.iter()
 				.find(|l| l.lobby_id == lobby.lobby_id))
 			.total_player_count,
 		)?;
-		let lobby_group_id = internal_unwrap!(lobby.lobby_group_id).as_uuid();
-		let lobby_group = internal_unwrap_owned!(all_lobby_groups.get(&lobby_group_id));
-		let region = internal_unwrap_owned!(regions_res
+		let lobby_group_id = unwrap_ref!(lobby.lobby_group_id).as_uuid();
+		let lobby_group = unwrap!(all_lobby_groups.get(&lobby_group_id));
+		let region = unwrap!(regions_res
 			.regions
 			.iter()
 			.find(|lg| lg.region_id == lobby.region_id));

@@ -8,6 +8,7 @@ license = "Apache-2.0"
 [dependencies]
 bit-vec = "0.6"
 chirp-client = { path = "../../../../lib/chirp/client" }
+heck = "0.3"
 http = "0.2"
 rivet-operation = { path = "../../../../lib/operation/core" }
 rivet-util = { path = "../../../../lib/util/core" }

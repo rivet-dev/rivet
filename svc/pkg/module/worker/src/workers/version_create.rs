@@ -9,7 +9,7 @@ async fn worker(
 ) -> Result<(), GlobalError> {
 	let crdb = ctx.crdb().await?;
 
-	let version_id = internal_unwrap!(ctx.version_id).as_uuid();
+	let version_id = unwrap_ref!(ctx.version_id).as_uuid();
 
 	rivet_pools::utils::crdb::tx(&crdb, |tx| {
 		Box::pin(update_db(tx, ctx.ts(), (**ctx).clone()))
@@ -27,8 +27,8 @@ async fn worker(
 				name: "module.create".into(),
 				properties_json: Some(serde_json::to_string(&json!({
 					"user_id": ctx.creator_user_id.map(|x| x.as_uuid()),
-					"module_id": internal_unwrap!(ctx.module_id).as_uuid(),
-					"module_version_id": internal_unwrap!(ctx.version_id).as_uuid(),
+					"module_id": unwrap_ref!(ctx.module_id).as_uuid(),
+					"module_version_id": unwrap_ref!(ctx.version_id).as_uuid(),
 				}))?),
 				..Default::default()
 			},
@@ -45,8 +45,8 @@ async fn update_db(
 	now: i64,
 	msg: module::msg::version_create::Message,
 ) -> GlobalResult<()> {
-	let version_id = internal_unwrap!(msg.version_id).as_uuid();
-	let module_id = internal_unwrap!(msg.module_id).as_uuid();
+	let version_id = unwrap_ref!(msg.version_id).as_uuid();
+	let module_id = unwrap_ref!(msg.module_id).as_uuid();
 
 	sqlx::query(indoc!(
 		"
@@ -64,7 +64,7 @@ async fn update_db(
 	.execute(&mut **tx)
 	.await?;
 
-	match internal_unwrap!(msg.image) {
+	match unwrap_ref!(msg.image) {
 		module::msg::version_create::message::Image::Docker(docker) => {
 			sqlx::query(indoc!(
 				"

@@ -21,7 +21,7 @@ async fn handle(
 	} else {
 		let region_res = op!([ctx] faker_region {}).await?;
 
-		internal_unwrap!(region_res.region_id).as_uuid()
+		unwrap_ref!(region_res.region_id).as_uuid()
 	};
 
 	let run_id = if let Some(run_id) = ctx.run_id.as_ref() {
@@ -72,7 +72,7 @@ async fn handle(
 		res = fail_sub.next() => {
 			let msg = res?;
 			tracing::error!(?msg, "run failed");
-			rivet_operation::prelude::internal_panic!("run failed");
+			rivet_operation::prelude::bail!("run failed");
 		}
 
 	}
@@ -81,9 +81,9 @@ async fn handle(
 		run_ids: vec![run_id.into()],
 	})
 	.await?;
-	let run = internal_unwrap_owned!(job_res.runs.first());
-	internal_assert_eq!(1, run.ports.len(), "wrong port count");
-	let test_server_port = internal_unwrap!(run.ports.first()).source;
+	let run = unwrap!(job_res.runs.first());
+	ensure_eq!(1, run.ports.len(), "wrong port count");
+	let test_server_port = unwrap_ref!(run.ports.first()).source;
 
 	Ok(faker::job_run::Response {
 		run_id: Some(run_id.into()),

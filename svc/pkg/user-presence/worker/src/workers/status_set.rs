@@ -14,7 +14,7 @@ async fn worker(
 ) -> GlobalResult<()> {
 	let crdb = ctx.crdb().await?;
 
-	let user_id = internal_unwrap!(ctx.user_id).as_uuid();
+	let user_id = unwrap_ref!(ctx.user_id).as_uuid();
 
 	if backend::user::Status::from_i32(ctx.status).is_none() {
 		return Err(Error::InvalidStatus.into());

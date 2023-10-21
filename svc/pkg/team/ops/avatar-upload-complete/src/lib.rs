@@ -6,8 +6,8 @@ use serde_json::json;
 async fn handle(
 	ctx: OperationContext<team::avatar_upload_complete::Request>,
 ) -> GlobalResult<team::avatar_upload_complete::Response> {
-	let team_id = internal_unwrap!(ctx.team_id).as_uuid();
-	let upload_id = internal_unwrap!(ctx.upload_id).as_uuid();
+	let team_id = unwrap_ref!(ctx.team_id).as_uuid();
+	let upload_id = unwrap_ref!(ctx.upload_id).as_uuid();
 
 	op!([ctx] upload_complete {
 		upload_id: ctx.upload_id,

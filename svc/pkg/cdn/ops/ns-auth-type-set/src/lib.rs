@@ -5,9 +5,9 @@ use rivet_operation::prelude::*;
 async fn handle(
 	ctx: OperationContext<cdn::ns_auth_type_set::Request>,
 ) -> GlobalResult<cdn::ns_auth_type_set::Response> {
-	let namespace_id = internal_unwrap!(ctx.namespace_id).as_uuid();
+	let namespace_id = unwrap_ref!(ctx.namespace_id).as_uuid();
 
-	internal_assert!(
+	ensure!(
 		backend::cdn::namespace_config::AuthType::from_i32(ctx.auth_type).is_some(),
 		"invalid auth type"
 	);

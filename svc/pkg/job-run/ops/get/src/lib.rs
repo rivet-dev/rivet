@@ -226,7 +226,7 @@ struct NomadTaskState {
 fn derive_nomad_task_state(alloc_state_json: &serde_json::Value) -> GlobalResult<NomadTaskState> {
 	let alloc =
 		serde_json::from_value::<nomad_client::models::Allocation>(alloc_state_json.clone())?;
-	let task_states = internal_unwrap!(alloc.task_states);
+	let task_states = unwrap_ref!(alloc.task_states);
 
 	// Get the main task by finding the task that is not the run cleanup task
 	let main_task = task_states
@@ -234,8 +234,8 @@ fn derive_nomad_task_state(alloc_state_json: &serde_json::Value) -> GlobalResult
 		.filter(|(k, _)| k.as_str() != util_job::RUN_CLEANUP_TASK_NAME)
 		.map(|(_, v)| v)
 		.next();
-	let main_task = internal_unwrap_owned!(main_task, "could not find main task");
-	let main_task_state = internal_unwrap!(main_task.state);
+	let main_task = unwrap!(main_task, "could not find main task");
+	let main_task_state = unwrap_ref!(main_task.state);
 
 	if main_task_state == "dead" {
 		if main_task.failed == Some(true) {

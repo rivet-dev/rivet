@@ -40,11 +40,11 @@ pub async fn get_batch(
 		.namespace(ctx.op_ctx(), query.namespace_id, true)
 		.await?;
 
-	assert_with!(!query.keys.is_empty(), KV_KEYS_MISSING);
+	ensure_with!(!query.keys.is_empty(), KV_KEYS_MISSING);
 	if watch_index.has_watch_index() {
-		assert_with!(query.keys.len() <= WATCH_BATCH_MAX, KV_BATCH_TOO_LARGE);
+		ensure_with!(query.keys.len() <= WATCH_BATCH_MAX, KV_BATCH_TOO_LARGE);
 	} else {
-		assert_with!(query.keys.len() <= GET_BATCH_MAX, KV_BATCH_TOO_LARGE);
+		ensure_with!(query.keys.len() <= GET_BATCH_MAX, KV_BATCH_TOO_LARGE);
 	}
 
 	let keys = query.keys;
@@ -106,8 +106,8 @@ pub async fn put_batch(
 		.namespace(ctx.op_ctx(), body.namespace_id, false)
 		.await?;
 
-	assert_with!(!body.entries.is_empty(), KV_ENTRIES_MISSING);
-	assert_with!(
+	ensure_with!(!body.entries.is_empty(), KV_ENTRIES_MISSING);
+	ensure_with!(
 		body.entries.len() <= PUT_AND_DELETE_BATCH_MAX,
 		KV_BATCH_TOO_LARGE
 	);
@@ -121,7 +121,7 @@ pub async fn put_batch(
 
 			let value = entry.value.unwrap_or_else(|| json!(null));
 			let value_buf = serde_json::to_vec(&value)?;
-			assert_with!(value_buf.len() <= util_kv::MAX_VALUE_LEN, KV_VALUE_TOO_LONG);
+			ensure_with!(value_buf.len() <= util_kv::MAX_VALUE_LEN, KV_VALUE_TOO_LONG);
 
 			Ok(NewEntry {
 				key: entry.key,
@@ -157,8 +157,8 @@ pub async fn delete_batch(ctx: Ctx<Auth>, query: BatchQuery) -> GlobalResult<ser
 		.namespace(ctx.op_ctx(), query.namespace_id, false)
 		.await?;
 
-	assert_with!(!query.keys.is_empty(), KV_KEYS_MISSING);
-	assert_with!(
+	ensure_with!(!query.keys.is_empty(), KV_KEYS_MISSING);
+	ensure_with!(
 		query.keys.len() <= PUT_AND_DELETE_BATCH_MAX,
 		KV_BATCH_TOO_LARGE
 	);
@@ -254,7 +254,7 @@ async fn watch_batch_immediate(
 			})
 			.collect::<Vec<_>>();
 		entries.sort_by_key(|x| x.msg_ts);
-		let latest_update_ts = internal_unwrap_owned!(entries.last()).msg_ts;
+		let latest_update_ts = unwrap!(entries.last()).msg_ts;
 
 		Ok(ImmediateResult::Complete((
 			entries

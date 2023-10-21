@@ -14,7 +14,7 @@ impl ApiTryFrom<backend::game::Version> for models::CloudVersionSummary {
 
 	fn try_from(value: backend::game::Version) -> GlobalResult<Self> {
 		Ok(models::CloudVersionSummary {
-			version_id: internal_unwrap_owned!(value.version_id).as_uuid(),
+			version_id: unwrap!(value.version_id).as_uuid(),
 			create_ts: util::timestamp::to_string(value.create_ts)?,
 			display_name: value.display_name,
 		})

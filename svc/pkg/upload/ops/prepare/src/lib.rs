@@ -6,7 +6,7 @@ use proto::backend::{self, pkg::*};
 use rivet_operation::prelude::*;
 use serde_json::json;
 
-const CHUNK_SIZE: u64 = util::file_size::mebibytes(100);
+pub const CHUNK_SIZE: u64 = util::file_size::mebibytes(100);
 const MAX_UPLOAD_SIZE: u64 = util::file_size::gigabytes(10);
 const MAX_MULTIPART_UPLOAD_SIZE: u64 = util::file_size::gigabytes(100);
 
@@ -31,7 +31,7 @@ async fn handle(
 ) -> GlobalResult<upload::prepare::Response> {
 	let crdb = ctx.crdb().await?;
 	let provider = if let Some(provider) = ctx.provider {
-		let proto_provider = internal_unwrap_owned!(
+		let proto_provider = unwrap!(
 			backend::upload::Provider::from_i32(provider),
 			"invalid upload provider"
 		);
@@ -67,11 +67,11 @@ async fn handle(
 		.filter(|file| file.multipart)
 		.fold(0, |acc, x| acc + x.content_length);
 	tracing::info!(len=%ctx.files.len(), %total_content_length, %total_multipart_content_length, "file info");
-	internal_assert!(
+	ensure!(
 		total_content_length < MAX_UPLOAD_SIZE,
 		"upload size must be < 10 gb"
 	);
-	internal_assert!(
+	ensure!(
 		total_content_length < MAX_MULTIPART_UPLOAD_SIZE,
 		"multipart uploads must be < 100 gb"
 	);
@@ -83,7 +83,7 @@ async fn handle(
 	for file in &ctx.files {
 		tracing::info!(?file, "signing url");
 
-		internal_assert!(
+		ensure!(
 			registered_paths.insert(file.path.clone()),
 			"duplicate file path"
 		);
@@ -269,7 +269,7 @@ async fn handle_multipart_upload(
 ) -> GlobalResult<Vec<PrepareResult>> {
 	// NOTE: https://docs.aws.amazon.com/AmazonS3/latest/API/API_CompleteMultipartUpload.html. See error
 	// code `EntityTooSmall`
-	assert_with!(
+	ensure_with!(
 		file.content_length >= util::file_size::mebibytes(5),
 		UPLOAD_INVALID,
 		reason = "upload too small for multipart (< 5MiB)"
@@ -285,10 +285,10 @@ async fn handle_multipart_upload(
 	}
 
 	let multipart = multipart_builder.send().await?;
-	let multipart_upload_id = internal_unwrap_owned!(multipart.upload_id()).to_string();
+	let multipart_upload_id = unwrap!(multipart.upload_id()).to_string();
 
 	let part_count = util::div_up!(file.content_length, CHUNK_SIZE);
-	internal_assert!(part_count <= 10000, "too many parts");
+	ensure!(part_count <= 10000, "too many parts");
 
 	Ok((1..=part_count)
 		.map(|part_number| {
@@ -299,13 +299,15 @@ async fn handle_multipart_upload(
 
 			let fut = async move {
 				// Sign an upload request
+				let offset = (part_number - 1) * CHUNK_SIZE;
+				let content_length = (file.content_length - offset).min(CHUNK_SIZE) as i64;
+				tracing::info!(?part_number, ?content_length);
+
 				let upload_part_builder = s3_client
 					.upload_part()
 					.bucket(s3_client.bucket())
 					.key(format!("{}/{}", upload_id, file.path))
-					.content_length(
-						(file.content_length - part_number * CHUNK_SIZE).min(CHUNK_SIZE) as i64,
-					)
+					.content_length(content_length)
 					.upload_id(multipart_upload_id2)
 					.part_number(part_number as i32);
 

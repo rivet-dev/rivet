@@ -5,8 +5,8 @@ use proto::backend::pkg::*;
 async fn worker(ctx: &OperationContext<chat::msg::last_read_ts_set::Message>) -> GlobalResult<()> {
 	let crdb = ctx.crdb().await?;
 
-	let user_id = internal_unwrap!(ctx.user_id).as_uuid();
-	let thread_id = internal_unwrap!(ctx.thread_id).as_uuid();
+	let user_id = unwrap_ref!(ctx.user_id).as_uuid();
+	let thread_id = unwrap_ref!(ctx.thread_id).as_uuid();
 
 	let res = sqlx::query(indoc!(
 		"

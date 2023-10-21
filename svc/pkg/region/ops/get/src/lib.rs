@@ -175,7 +175,7 @@ async fn handle(
 ) -> GlobalResult<region::get::Response> {
 	let res = op!([ctx] region_config_get {}).await?;
 	let regions = &res.regions;
-	let primary_region = internal_unwrap_owned!(
+	let primary_region = unwrap!(
 		regions.get(util::env::primary_region()),
 		"missing primary region"
 	);
@@ -187,11 +187,7 @@ async fn handle(
 				.map_or(false, |id| ctx.region_ids.contains(id))
 		})
 		.map(|(name_id, region)| {
-			convert_region(
-				name_id,
-				region,
-				internal_unwrap!(primary_region.id).as_uuid(),
-			)
+			convert_region(name_id, region, unwrap_ref!(primary_region.id).as_uuid())
 		})
 		.collect::<GlobalResult<Vec<backend::region::Region>>>()?;
 

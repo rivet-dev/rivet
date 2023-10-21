@@ -7,8 +7,8 @@ async fn worker(
 ) -> GlobalResult<()> {
 	let crdb = ctx.crdb().await?;
 
-	let game_user_id = internal_unwrap!(ctx.game_user_id).as_uuid();
-	let refresh_jti = internal_unwrap!(ctx.refresh_jti).as_uuid();
+	let game_user_id = unwrap_ref!(ctx.game_user_id).as_uuid();
+	let refresh_jti = unwrap_ref!(ctx.refresh_jti).as_uuid();
 
 	sqlx::query(indoc!(
 		"

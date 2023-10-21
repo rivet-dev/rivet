@@ -38,8 +38,8 @@ async fn worker(
 	ctx: &OperationContext<team::msg::join_request_create::Message>,
 ) -> GlobalResult<()> {
 	let crdb = ctx.crdb().await?;
-	let team_id: Uuid = internal_unwrap!(ctx.team_id).as_uuid();
-	let user_id: Uuid = internal_unwrap!(ctx.user_id).as_uuid();
+	let team_id: Uuid = unwrap_ref!(ctx.team_id).as_uuid();
+	let user_id: Uuid = unwrap_ref!(ctx.user_id).as_uuid();
 
 	let (sql_exists,): (bool,) = sqlx::query_as(
 		"SELECT EXISTS (SELECT 1 FROM db_team.join_requests WHERE team_id = $1 AND user_id = $2)",

@@ -6,7 +6,7 @@ async fn handle(
 	ctx: OperationContext<debug::email_res::Request>,
 ) -> GlobalResult<debug::email_res::Response> {
 	let crdb = ctx.crdb().await?;
-	let verification_id = internal_unwrap!(ctx.verification_id).as_uuid();
+	let verification_id = unwrap_ref!(ctx.verification_id).as_uuid();
 
 	let (code,) = sqlx::query_as::<_, (String,)>(indoc!(
 		"

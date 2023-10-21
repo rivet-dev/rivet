@@ -36,8 +36,8 @@ async fn fail(
 async fn worker(ctx: &OperationContext<job_run::msg::create::Message>) -> GlobalResult<()> {
 	let crdb = ctx.crdb().await?;
 
-	let run_id = internal_unwrap!(ctx.run_id).as_uuid();
-	let region_id = internal_unwrap!(ctx.region_id).as_uuid();
+	let run_id = unwrap_ref!(ctx.run_id).as_uuid();
+	let region_id = unwrap_ref!(ctx.region_id).as_uuid();
 
 	// Check for stale message
 	if ctx.req_dt() > util::duration::seconds(60) {
@@ -53,11 +53,11 @@ async fn worker(ctx: &OperationContext<job_run::msg::create::Message>) -> Global
 
 	// Validate the parameter data lengths
 	for parameter in &ctx.parameters {
-		internal_assert!(
+		ensure!(
 			parameter.key.len() <= MAX_PARAMETER_KEY_LEN,
 			"parameter key too long"
 		);
-		internal_assert!(
+		ensure!(
 			parameter.value.len() <= MAX_PARAMETER_VALUE_LEN,
 			"parameter value too long"
 		);
@@ -68,7 +68,7 @@ async fn worker(ctx: &OperationContext<job_run::msg::create::Message>) -> Global
 		region_ids: vec![region_id.into()],
 	})
 	.await?;
-	let region = internal_unwrap_owned!(region_res.regions.first());
+	let region = unwrap!(region_res.regions.first());
 
 	// Create the job
 	let create_job_perf = ctx.perf().start("create-job").await;
@@ -175,7 +175,7 @@ async fn run_job(
 		Ok(dispatch_res) => {
 			// We will use the dispatched job ID to identify this allocation for the future. We can't use
 			// eval ID, since that changes if we mutate the allocation (i.e. try to stop it).
-			let nomad_dispatched_job_id = internal_unwrap!(dispatch_res.dispatched_job_id);
+			let nomad_dispatched_job_id = unwrap_ref!(dispatch_res.dispatched_job_id);
 			Ok(Some(nomad_dispatched_job_id.clone()))
 		}
 		Err(err) => {
@@ -214,8 +214,8 @@ async fn create_run_token(
 	})
 	.await?;
 
-	let token = internal_unwrap!(token_res.token).token.clone();
-	let token_session_id = internal_unwrap!(token_res.session_id).as_uuid();
+	let token = unwrap_ref!(token_res.token).token.clone();
+	let token_session_id = unwrap_ref!(token_res.session_id).as_uuid();
 	Ok((token, token_session_id))
 }
 
@@ -248,22 +248,23 @@ async fn write_to_db_before_run(
 	.execute(&mut **tx)
 	.await?;
 
+	// TODO: Use future streams?
 	// Validate that the proxied ports point to existing ports
 	for proxied_port in &req.proxied_ports {
-		internal_assert!(
+		ensure!(
 			!proxied_port.ingress_hostnames.is_empty(),
 			"ingress host not provided"
 		);
 
 		for host in &proxied_port.ingress_hostnames {
-			internal_assert!(
+			ensure!(
 				host.chars()
 					.all(|x| x.is_alphanumeric() || x == '.' || x == '-'),
 				"invalid ingress host"
 			);
 		}
 
-		let ingress_port = choose_ingress_port(proxied_port)?;
+		let ingress_port = choose_ingress_port(tx, proxied_port).await?;
 
 		tracing::info!(?run_id, ?proxied_port, "inserting run proxied port");
 
@@ -272,17 +273,17 @@ async fn write_to_db_before_run(
 
 		sqlx::query(indoc!(
 			"
-					INSERT INTO db_job_state.run_proxied_ports (
-						run_id,
-						target_nomad_port_label,
-						ingress_port,
-						ingress_hostnames,
-						ingress_hostnames_str,
-						proxy_protocol,
-						ssl_domain_mode
-					)
-					VALUES ($1, $2, $3, $4, $5, $6, $7)
-					"
+			INSERT INTO db_job_state.run_proxied_ports (
+				run_id,
+				target_nomad_port_label,
+				ingress_port,
+				ingress_hostnames,
+				ingress_hostnames_str,
+				proxy_protocol,
+				ssl_domain_mode
+			)
+			VALUES ($1, $2, $3, $4, $5, $6, $7)
+			"
 		))
 		.bind(run_id)
 		.bind(proxied_port.target_nomad_port_label.clone())
@@ -321,29 +322,83 @@ async fn write_to_db_after_run(
 /// - TCP/TLS: random
 /// - UDP: random
 ///
-/// This is very poorly written for TCP & UDP ports and will bite us in the ass
+/// This is somewhat poorly written for TCP & UDP ports and may bite us in the ass
 /// some day. See https://linear.app/rivet-gg/issue/RIV-1799
-fn choose_ingress_port(proxied_port: &job_run::msg::create::ProxiedPort) -> GlobalResult<i32> {
+async fn choose_ingress_port(
+	tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+	proxied_port: &job_run::msg::create::ProxiedPort,
+) -> GlobalResult<i32> {
 	use backend::job::ProxyProtocol;
 
 	let ingress_port = if let Some(ingress_port) = proxied_port.ingress_port {
 		ingress_port as i32
 	} else {
-		match internal_unwrap_owned!(backend::job::ProxyProtocol::from_i32(
+		match unwrap!(backend::job::ProxyProtocol::from_i32(
 			proxied_port.proxy_protocol
 		)) {
 			ProxyProtocol::Http => 80_i32,
 			ProxyProtocol::Https => 443,
-			// TODO: https://linear.app/rivet-gg/issue/RIV-1799
-			ProxyProtocol::Tcp | ProxyProtocol::TcpTls => rand::thread_rng().gen_range(
-				util_job::consts::MIN_INGRESS_PORT_TCP..=util_job::consts::MAX_INGRESS_PORT_TCP,
-			) as i32,
-			// TODO: https://linear.app/rivet-gg/issue/RIV-1799
-			ProxyProtocol::Udp => rand::thread_rng().gen_range(
-				util_job::consts::MIN_INGRESS_PORT_UDP..=util_job::consts::MAX_INGRESS_PORT_UDP,
-			) as i32,
+			ProxyProtocol::Tcp | ProxyProtocol::TcpTls => {
+				bind_with_retries(
+					tx,
+					proxied_port.proxy_protocol,
+					util_job::consts::MIN_INGRESS_PORT_TCP..=util_job::consts::MAX_INGRESS_PORT_TCP,
+				)
+				.await?
+			}
+			ProxyProtocol::Udp => {
+				bind_with_retries(
+					tx,
+					proxied_port.proxy_protocol,
+					util_job::consts::MIN_INGRESS_PORT_UDP..=util_job::consts::MAX_INGRESS_PORT_UDP,
+				)
+				.await?
+			}
 		}
 	};
 
 	Ok(ingress_port)
+}
+
+async fn bind_with_retries(
+	tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+	proxy_protocol: i32,
+	range: std::ops::RangeInclusive<u16>,
+) -> GlobalResult<i32> {
+	let mut attempts = 3u32;
+
+	// Try to bind to a random port, verifying that it is not already bound
+	loop {
+		if attempts == 0 {
+			bail!("failed all attempts to bind to unique port");
+		}
+		attempts -= 1;
+
+		let port = rand::thread_rng().gen_range(range.clone()) as i32;
+
+		let (already_exists,) = sqlx::query_as::<_, (bool,)>(indoc!(
+			"
+			SELECT EXISTS(
+				SELECT 1
+				FROM db_job_state.runs as r
+				JOIN db_job_state.run_proxied_ports as p
+				ON r.run_id = p.run_id
+				WHERE
+					r.cleanup_ts IS NULL AND
+					p.ingress_port = $1 AND
+					p.proxy_protocol = $2
+			)
+			"
+		))
+		.bind(port)
+		.bind(proxy_protocol)
+		.fetch_one(&mut **tx)
+		.await?;
+
+		if !already_exists {
+			break Ok(port);
+		}
+
+		tracing::info!(?port, ?attempts, "port collision, retrying");
+	}
 }

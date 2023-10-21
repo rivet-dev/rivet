@@ -69,6 +69,12 @@ pub async fn check_remote_addresses(
 			..Default::default()
 		});
 
+		tracing::info!(
+			?namespace_id,
+			?player_count,
+			?max_players_per_client,
+			"---------------------------------"
+		);
 		if player_count >= max_players_per_client {
 			tracing::warn!(
 				%remote_address,

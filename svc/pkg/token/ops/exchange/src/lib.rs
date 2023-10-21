@@ -7,7 +7,7 @@ async fn handle(
 ) -> GlobalResult<token::exchange::Response> {
 	let crdb = ctx.crdb().await?;
 
-	let jti = internal_unwrap!(ctx.jti).as_uuid();
+	let jti = unwrap_ref!(ctx.jti).as_uuid();
 
 	let update_query = sqlx::query(indoc!(
 		"
@@ -21,7 +21,7 @@ async fn handle(
 	.execute(&crdb)
 	.await?;
 
-	assert_with!(update_query.rows_affected() > 0, TOKEN_EXCHANGE_FAILED);
+	ensure_with!(update_query.rows_affected() > 0, TOKEN_EXCHANGE_FAILED);
 
 	Ok(token::exchange::Response {})
 }

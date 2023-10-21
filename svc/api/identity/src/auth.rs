@@ -76,7 +76,7 @@ impl Auth {
 			tracing::info!(res = ?resolve_res, "resolution");
 
 			if let Some(resolution) = &resolve_res.resolution {
-				let namespace_id = internal_unwrap!(resolution.namespace_id).as_uuid();
+				let namespace_id = unwrap_ref!(resolution.namespace_id).as_uuid();
 
 				// Validate that this namespace can be authenticated by domain
 				let ns_res = op!([ctx] cdn_namespace_get {
@@ -84,8 +84,8 @@ impl Auth {
 				})
 				.await?;
 
-				let cdn_ns = internal_unwrap_owned!(ns_res.namespaces.first());
-				let cdn_ns_config = internal_unwrap!(cdn_ns.config);
+				let cdn_ns = unwrap!(ns_res.namespaces.first());
+				let cdn_ns_config = unwrap_ref!(cdn_ns.config);
 
 				if cdn_ns_config.enable_domain_public_auth {
 					return Ok(rivet_claims::ent::GameNamespacePublic { namespace_id });
@@ -94,7 +94,7 @@ impl Auth {
 		}
 
 		// Return default error
-		panic_with!(
+		bail_with!(
 			CLAIMS_MISSING_ENTITLEMENT,
 			entitlement = "GameNamespacePublic"
 		)
@@ -118,17 +118,17 @@ impl Auth {
 			user_ids: vec![user_ent.user_id.into()],
 		})
 		.await?;
-		let user = internal_unwrap_owned!(user_res.users.first());
+		let user = unwrap!(user_res.users.first());
 
 		// Verify user is not deleted
 		if user.delete_complete_ts.is_some() {
-			let jti = internal_unwrap_owned!(claims.jti);
+			let jti = unwrap!(claims.jti);
 			op!([ctx] token_revoke {
 				jtis: vec![jti],
 			})
 			.await?;
 
-			panic_with!(TOKEN_REVOKED);
+			bail_with!(TOKEN_REVOKED);
 		}
 
 		Ok(user_ent)
@@ -144,7 +144,7 @@ impl Auth {
 		let game_user_link_ent = claims
 			.as_game_user_link()
 			.map_err(|_| err_code!(API_FORBIDDEN, reason = "Decode error"))?;
-		let token_jti = internal_unwrap_owned!(claims.jti).as_uuid();
+		let token_jti = unwrap!(claims.jti).as_uuid();
 
 		Ok((game_user_link_ent, token_jti))
 	}
@@ -160,32 +160,32 @@ impl Auth {
 			game_user_ids: vec![game_user_ent.game_user_id.into()]
 		})
 		.await?;
-		let game_user = internal_unwrap_owned!(game_user_res.game_users.first());
+		let game_user = unwrap!(game_user_res.game_users.first());
 
 		// Verify that game user is not deleted
 		if game_user.deleted_ts.is_some() {
-			let jti = internal_unwrap_owned!(claims.jti);
+			let jti = unwrap!(claims.jti);
 			op!([ctx] token_revoke {
 				jtis: vec![jti],
 			})
 			.await?;
 
-			panic_with!(TOKEN_REVOKED);
+			bail_with!(TOKEN_REVOKED);
 		}
 
-		let namespace_id = internal_unwrap!(game_user.namespace_id);
+		let namespace_id = unwrap_ref!(game_user.namespace_id);
 
 		let namespace_res = op!([ctx] game_namespace_get {
 			namespace_ids: vec![*namespace_id]
 		})
 		.await?;
-		let namespace = internal_unwrap_owned!(namespace_res.namespaces.first());
+		let namespace = unwrap!(namespace_res.namespaces.first());
 
 		Ok(ResolvedGameUser {
 			game_user_id: game_user_ent.game_user_id,
-			user_id: internal_unwrap!(game_user.user_id).as_uuid(),
+			user_id: unwrap_ref!(game_user.user_id).as_uuid(),
 			namespace_id: namespace_id.as_uuid(),
-			game_id: internal_unwrap!(namespace.game_id).as_uuid(),
+			game_id: unwrap_ref!(namespace.game_id).as_uuid(),
 		})
 	}
 
@@ -204,25 +204,25 @@ impl Auth {
 				game_user_ids: vec![game_user_ent.game_user_id.into()]
 			})
 			.await?;
-			let game_user = internal_unwrap_owned!(game_user_res.game_users.first());
+			let game_user = unwrap!(game_user_res.game_users.first());
 
 			// Verify that game user is not deleted
 			if game_user.deleted_ts.is_some() {
-				let jti = internal_unwrap_owned!(claims.jti);
+				let jti = unwrap!(claims.jti);
 				op!([ctx] token_revoke {
 					jtis: vec![jti],
 				})
 				.await?;
 
-				panic_with!(TOKEN_REVOKED);
+				bail_with!(TOKEN_REVOKED);
 			}
 
 			Ok((
-				internal_unwrap!(game_user.user_id).as_uuid(),
+				unwrap_ref!(game_user.user_id).as_uuid(),
 				Some(game_user.clone()),
 			))
 		} else {
-			panic_with!(
+			bail_with!(
 				API_UNAUTHORIZED,
 				reason = "Token is missing one of the following entitlements: user, game_user"
 			);
@@ -239,9 +239,9 @@ impl Auth {
 		})
 		.await?;
 
-		let user = internal_unwrap_owned!(user_res.users.first(), "user not found");
+		let user = unwrap!(user_res.users.first(), "user not found");
 
-		assert_with!(user.is_admin, IDENTITY_NOT_ADMIN);
+		ensure_with!(user.is_admin, IDENTITY_NOT_ADMIN);
 
 		Ok(())
 	}

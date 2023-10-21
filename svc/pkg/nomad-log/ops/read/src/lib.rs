@@ -17,7 +17,7 @@ async fn handle(
 		.with_password(util::env::read_secret(&["clickhouse", "users", "chirp", "password"]).await?)
 		.with_database("db_nomad_logs");
 
-	let req_query = internal_unwrap!(ctx.query);
+	let req_query = unwrap_ref!(ctx.query);
 
 	let entries = match req_query {
 		nomad_log::read::request::Query::All(_) => query_all(ctx.body(), &clickhouse).await?,

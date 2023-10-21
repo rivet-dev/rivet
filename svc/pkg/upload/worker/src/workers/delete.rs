@@ -26,7 +26,7 @@ struct BucketDeletions {
 async fn worker(ctx: &OperationContext<upload::msg::delete::Message>) -> GlobalResult<()> {
 	let crdb = ctx.crdb().await?;
 
-	let request_id = internal_unwrap!(ctx.request_id).as_uuid();
+	let request_id = unwrap_ref!(ctx.request_id).as_uuid();
 	let upload_ids = ctx
 		.upload_ids
 		.iter()
@@ -64,7 +64,7 @@ async fn worker(ctx: &OperationContext<upload::msg::delete::Message>) -> GlobalR
 	let mut deletions: HashMap<String, BucketDeletions> =
 		HashMap::with_capacity(upload_files.len());
 	for upload_file in upload_files {
-		let upload = internal_unwrap_owned!(uploads
+		let upload = unwrap!(uploads
 			.iter()
 			.find(|upload| upload.upload_id == upload_file.upload_id));
 		let key = format!("{}/{}", upload_file.upload_id, upload_file.path);
@@ -73,7 +73,7 @@ async fn worker(ctx: &OperationContext<upload::msg::delete::Message>) -> GlobalR
 			x.keys.push(key);
 		} else {
 			// Parse provider
-			let proto_provider = internal_unwrap_owned!(
+			let proto_provider = unwrap!(
 				backend::upload::Provider::from_i32(upload.provider as i32),
 				"invalid upload provider"
 			);

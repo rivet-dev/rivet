@@ -34,7 +34,7 @@ async fn worker(ctx: &OperationContext<mm::msg::player_remove::Message>) -> Glob
 
 	let crdb = ctx.crdb().await?;
 
-	let player_id = internal_unwrap!(ctx.player_id).as_uuid();
+	let player_id = unwrap_ref!(ctx.player_id).as_uuid();
 	let lobby_id = ctx.lobby_id.map(|x| x.as_uuid());
 
 	// Fetch player
@@ -84,7 +84,7 @@ async fn worker(ctx: &OperationContext<mm::msg::player_remove::Message>) -> Glob
 			tracing::error!("discarding stale message");
 			return Ok(());
 		} else {
-			retry_panic!("player not found, may be race condition with insertion");
+			retry_bail!("player not found, may be race condition with insertion");
 		}
 	};
 

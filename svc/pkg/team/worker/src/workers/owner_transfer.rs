@@ -4,9 +4,9 @@ use serde_json::json;
 
 #[worker(name = "team-owner-transfer")]
 async fn worker(ctx: &OperationContext<team::msg::owner_transfer::Message>) -> GlobalResult<()> {
-	let raw_team_id = internal_unwrap!(ctx.team_id);
+	let raw_team_id = unwrap_ref!(ctx.team_id);
 	let team_id = raw_team_id.as_uuid();
-	let new_owner_user_id = internal_unwrap!(ctx.new_owner_user_id).as_uuid();
+	let new_owner_user_id = unwrap_ref!(ctx.new_owner_user_id).as_uuid();
 
 	let crdb = ctx.crdb().await?;
 	let (old_owner_user_id,) =

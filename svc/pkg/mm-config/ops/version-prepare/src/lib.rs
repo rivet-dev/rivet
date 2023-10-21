@@ -10,8 +10,8 @@ use crate::prewarm_ats::PrewarmAtsContext;
 async fn handle(
 	ctx: OperationContext<mm_config::version_prepare::Request>,
 ) -> GlobalResult<mm_config::version_prepare::Response> {
-	let game_id = internal_unwrap!(ctx.game_id).as_uuid();
-	let config = internal_unwrap!(ctx.config);
+	let game_id = unwrap_ref!(ctx.game_id).as_uuid();
+	let config = unwrap_ref!(ctx.config);
 
 	// List of build paths that will be used to prewarm the ATS cache
 	let mut prewarm_ctx = PrewarmAtsContext {
@@ -23,7 +23,7 @@ async fn handle(
 	let mut lobby_group_ctxs = Vec::new();
 	for lobby_group in &config.lobby_groups {
 		// Validate regions
-		internal_assert!(!lobby_group.regions.is_empty(), "no regions provided");
+		ensure!(!lobby_group.regions.is_empty(), "no regions provided");
 		let region_ids = lobby_group
 			.regions
 			.iter()
@@ -49,7 +49,7 @@ async fn handle(
 				.regions
 				.iter()
 				.any(|x| x.region_id == region.region_id);
-			internal_assert!(has_region, "invalid region id");
+			ensure!(has_region, "invalid region id");
 		}
 
 		// Check if we need to prewarm the ATS cache for this Docker build
@@ -64,8 +64,8 @@ async fn handle(
 			});
 
 		// Prepare runtime
-		let runtime = internal_unwrap!(lobby_group.runtime);
-		let runtime = internal_unwrap!(runtime.runtime);
+		let runtime = unwrap_ref!(lobby_group.runtime);
+		let runtime = unwrap_ref!(runtime.runtime);
 		let runtime_ctx = prepare_runtime(
 			&ctx,
 			game_id,
@@ -106,13 +106,13 @@ async fn prepare_runtime(
 	let runtime: backend::matchmaker::LobbyRuntimeCtx = match runtime {
 		backend::matchmaker::lobby_runtime::Runtime::Docker(runtime) => {
 			// Validate the build
-			let build_id = internal_unwrap!(runtime.build_id).as_uuid();
+			let build_id = unwrap_ref!(runtime.build_id).as_uuid();
 			let _ = validate_build(ctx, game_id, build_id, prewarm_ctx, needs_ats_prewarm).await?;
 
 			// Validate regions
 			for lg_region in lg_regions {
 				// Validate region
-				internal_assert!(
+				ensure!(
 					regions_data
 						.iter()
 						.any(|x| x.region_id == lg_region.region_id),
@@ -120,10 +120,10 @@ async fn prepare_runtime(
 				);
 
 				// Validate tier
-				let tier_region = internal_unwrap_owned!(tier_regions
+				let tier_region = unwrap!(tier_regions
 					.iter()
 					.find(|x| x.region_id == lg_region.region_id));
-				internal_assert!(
+				ensure!(
 					tier_region
 						.tiers
 						.iter()
@@ -156,14 +156,14 @@ async fn validate_build(
 		build_ids: vec![build_id.into()],
 	})
 	.await?;
-	let build = internal_unwrap_owned!(build_get.builds.first(), "build not found");
-	let build_upload_id = internal_unwrap!(build.upload_id).as_uuid();
-	let build_game_id = internal_unwrap!(build.game_id).as_uuid();
-	let build_kind = internal_unwrap_owned!(backend::build::BuildKind::from_i32(build.kind));
-	let build_compression = internal_unwrap_owned!(backend::build::BuildCompression::from_i32(
+	let build = unwrap!(build_get.builds.first(), "build not found");
+	let build_upload_id = unwrap_ref!(build.upload_id).as_uuid();
+	let build_game_id = unwrap_ref!(build.game_id).as_uuid();
+	let build_kind = unwrap!(backend::build::BuildKind::from_i32(build.kind));
+	let build_compression = unwrap!(backend::build::BuildCompression::from_i32(
 		build.compression
 	));
-	internal_assert_eq!(game_id, build_game_id);
+	ensure_eq!(game_id, build_game_id);
 
 	tracing::info!(?build);
 
@@ -172,12 +172,12 @@ async fn validate_build(
 		upload_ids: vec![build_upload_id.into()],
 	})
 	.await?;
-	let upload = internal_unwrap_owned!(upload_res.uploads.first(), "build upload not found");
-	let upload_id = internal_unwrap!(upload.upload_id).as_uuid();
-	internal_assert!(upload.complete_ts.is_some(), "build upload is not complete");
+	let upload = unwrap!(upload_res.uploads.first(), "build upload not found");
+	let upload_id = unwrap_ref!(upload.upload_id).as_uuid();
+	ensure!(upload.complete_ts.is_some(), "build upload is not complete");
 
 	// Parse provider
-	let proto_provider = internal_unwrap_owned!(
+	let proto_provider = unwrap!(
 		backend::upload::Provider::from_i32(upload.provider),
 		"invalid upload provider"
 	);

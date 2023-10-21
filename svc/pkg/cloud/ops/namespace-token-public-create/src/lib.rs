@@ -5,14 +5,14 @@ use rivet_operation::prelude::*;
 async fn handle(
 	ctx: OperationContext<cloud::namespace_token_public_create::Request>,
 ) -> GlobalResult<cloud::namespace_token_public_create::Response> {
-	let namespace_id = internal_unwrap!(ctx.namespace_id).as_uuid();
+	let namespace_id = unwrap_ref!(ctx.namespace_id).as_uuid();
 
 	let ns_res = op!([ctx] game_namespace_get {
 		namespace_ids: vec![namespace_id.into()],
 	})
 	.await?;
 	let ns_data = ns_res.namespaces.first();
-	let ns_data = internal_unwrap!(ns_data, "namespace not found");
+	let ns_data = unwrap_ref!(ns_data, "namespace not found");
 
 	let token_res = op!([ctx] token_create {
 		issuer: Self::NAME.into(),
@@ -37,8 +37,8 @@ async fn handle(
 	})
 	.await?;
 
-	let token = internal_unwrap!(token_res.token);
-	let token_session_id = internal_unwrap!(token_res.session_id).as_uuid();
+	let token = unwrap_ref!(token_res.token);
+	let token_session_id = unwrap_ref!(token_res.session_id).as_uuid();
 
 	sqlx::query(indoc!(
 		"

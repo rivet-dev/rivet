@@ -21,7 +21,7 @@ async fn worker(ctx: &OperationContext<job_run::msg::cleanup::Message>) -> Globa
 
 	let crdb = ctx.crdb().await?;
 
-	let run_id = internal_unwrap!(ctx.run_id).as_uuid();
+	let run_id = unwrap_ref!(ctx.run_id).as_uuid();
 
 	let Some((run_row, run_meta_nomad_row)) =
 		rivet_pools::utils::crdb::tx(&crdb, |tx| Box::pin(update_db(ctx.ts(), run_id, tx))).await?
@@ -30,7 +30,7 @@ async fn worker(ctx: &OperationContext<job_run::msg::cleanup::Message>) -> Globa
 			tracing::error!("discarding stale message");
 			return Ok(());
 		} else {
-			retry_panic!("run not found, may be race condition with insertion");
+			retry_bail!("run not found, may be race condition with insertion");
 		}
 	};
 
@@ -108,7 +108,7 @@ async fn update_db(
 			//
 			// There is a situation where the Nomad API returns an error and the
 			// job ID is never written to the database.
-			retry_panic!("potential race condition with starting nomad job")
+			retry_bail!("potential race condition with starting nomad job")
 		}
 	}
 

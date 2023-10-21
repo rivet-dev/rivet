@@ -40,7 +40,7 @@ macro_rules! err_code {
 pub use err_code;
 
 #[macro_export]
-macro_rules! internal_panic {
+macro_rules! bail {
 	($msg:expr) => {{
 		return Err(Into::into($crate::ext::AssertionError::Panic {
 			message: $msg,
@@ -48,10 +48,10 @@ macro_rules! internal_panic {
 		}));
 	}};
 }
-pub use internal_panic;
+pub use bail;
 
 #[macro_export]
-macro_rules! retry_panic {
+macro_rules! retry_bail {
 	($msg:expr) => {{
 		let mut err = GlobalError::from($crate::ext::RetryError {
 			message: $msg,
@@ -68,10 +68,10 @@ macro_rules! retry_panic {
 		return Err(err);
 	}};
 }
-pub use retry_panic;
+pub use retry_bail;
 
 #[macro_export]
-macro_rules! internal_assert {
+macro_rules! ensure {
 	($expr:expr, $msg:expr) => {{
 		let val = $expr;
 		if !val {
@@ -83,13 +83,13 @@ macro_rules! internal_assert {
 		}
 	}};
 	($expr:expr $(,)?) => {{
-		$crate::internal_assert!($expr, "assertion failed")
+		$crate::ensure!($expr, "assertion failed")
 	}};
 }
-pub use internal_assert;
+pub use ensure;
 
 #[macro_export]
-macro_rules! internal_assert_eq {
+macro_rules! ensure_eq {
 	($left:expr, $right:expr, $msg:expr) => {{
 		match (&$left, &$right) {
 			(val_left, val_right) => {
@@ -105,24 +105,24 @@ macro_rules! internal_assert_eq {
 		}
 	}};
 	($left:expr, $right:expr $(,)?) => {{
-		$crate::internal_assert_eq!($left, $right, "assertion failed")
+		$crate::ensure_eq!($left, $right, "assertion failed")
 	}};
 }
-pub use internal_assert_eq;
+pub use ensure_eq;
 
 #[macro_export]
-macro_rules! internal_unwrap {
+macro_rules! unwrap_ref {
 	($expr:expr, $msg:expr) => {{
-		$crate::internal_unwrap_owned!(&$expr, $msg)
+		$crate::unwrap!(&$expr, $msg)
 	}};
 	($expr:expr $(,)?) => {{
-		$crate::internal_unwrap_owned!(&$expr)
+		$crate::unwrap!(&$expr)
 	}};
 }
-pub use internal_unwrap;
+pub use unwrap_ref;
 
 #[macro_export]
-macro_rules! internal_unwrap_owned {
+macro_rules! unwrap {
 	($expr:expr, $msg:expr) => {{
 		#[allow(match_result_ok)]
 		if let Some(val) = $expr {
@@ -135,13 +135,13 @@ macro_rules! internal_unwrap_owned {
 		}
 	}};
 	($expr:expr $(,)?) => {{
-		$crate::internal_unwrap_owned!($expr, "attempt to unwrap null value")
+		$crate::unwrap!($expr, "attempt to unwrap null value")
 	}};
 }
-pub use internal_unwrap_owned;
+pub use unwrap;
 
 #[macro_export]
-macro_rules! panic_with {
+macro_rules! bail_with {
 	($code:ident $body:tt, $($key:ident = $value:expr),+ $(,)?) => {{
 		return Err($crate::err_code!($code $body, $($key = $value),+));
 	}};
@@ -155,10 +155,10 @@ macro_rules! panic_with {
 		return Err($crate::err_code!($code));
 	}};
 }
-pub use panic_with;
+pub use bail_with;
 
 #[macro_export]
-macro_rules! assert_with {
+macro_rules! ensure_with {
 	($code:ident $body:tt, $($key:ident = $value:expr),+ $(,)?) => {{
 		let val = $expr;
 		if !val {
@@ -184,10 +184,10 @@ macro_rules! assert_with {
 		}
 	}};
 }
-pub use assert_with;
+pub use ensure_with;
 
 #[macro_export]
-macro_rules! assert_eq_with {
+macro_rules! ensure_eq_with {
 	($left:expr, $right:expr, $code:ident $body:tt, $($key:ident = $value:expr),+ $(,)?) => {{
 		match (&$left, &$right) {
 			(val_left, val_right) => {
@@ -225,69 +225,28 @@ macro_rules! assert_eq_with {
 		}
 	}};
 }
-pub use assert_eq_with;
+pub use ensure_eq_with;
 
 #[macro_export]
-macro_rules! assert_ne_with {
-	($left:expr, $right:expr, $code:ident $body:tt, $($key:ident = $value:expr),+ $(,)?) => {{
-		match (&$left, &$right) {
-			(val_left, val_right) => {
-				if !(*val_left != *val_right) {
-					return Err($crate::err_code!($code $body, $($key = $value),+));
-				}
-			}
-		}
-	}};
-	($left:expr, $right:expr, $code:ident $body:tt) => {{
-		match (&$left, &$right) {
-			(val_left, val_right) => {
-				if !(*val_left != *val_right) {
-					return Err($crate::err_code!($code $body));
-				}
-			}
-		}
-	}};
-	($left:expr, $right:expr, $code:ident, $($key:ident = $value:expr),+ $(,)?) => {{
-		match (&$left, &$right) {
-			(val_left, val_right) => {
-				if !(*val_left != *val_right) {
-					return Err($crate::err_code!($code, $($key = $value),+));
-				}
-			}
-		}
-	}};
-	($left:expr, $right:expr, $code:ident) => {{
-		match (&$left, &$right) {
-			(val_left, val_right) => {
-				if !(*val_left != *val_right) {
-					return Err($crate::err_code!($code));
-				}
-			}
-		}
-	}};
-}
-pub use assert_ne_with;
-
-#[macro_export]
-macro_rules! unwrap_with {
+macro_rules! unwrap_with_ref {
 	($expr:expr, $code:ident $body:tt, $($key:ident = $value:expr),+ $(,)?) => {{
-		$crate::unwrap_with_owned!(&$expr, $code $body, $code, $($key = $value),+)
+		$crate::unwrap_with!(&$expr, $code $body, $code, $($key = $value),+)
 	}};
 	($expr:expr, $code:ident $body:tt) => {{
-		$crate::unwrap_with_owned!(&$expr, $code $body)
+		$crate::unwrap_with!(&$expr, $code $body)
 	}};
 	($expr:expr, $code:ident, $($key:ident = $value:expr),+ $(,)?) => {{
-		$crate::unwrap_with_owned!(&$expr, $code, $($key = $value),+)
+		$crate::unwrap_with!(&$expr, $code, $($key = $value),+)
 
 	}};
 	($expr:expr, $code:ident) => {{
-		$crate::unwrap_with_owned!(&$expr, $code)
+		$crate::unwrap_with!(&$expr, $code)
 	}};
 }
-pub use unwrap_with;
+pub use unwrap_with_ref;
 
 #[macro_export]
-macro_rules! unwrap_with_owned {
+macro_rules! unwrap_with {
 	($expr:expr, $code:ident $body:tt, $($key:ident = $value:expr),+ $(,)?) => {{
 		#[allow(match_result_ok)]
 		if let Some(val) = $expr {
@@ -321,4 +280,4 @@ macro_rules! unwrap_with_owned {
 		}
 	}};
 }
-pub use unwrap_with_owned;
+pub use unwrap_with;

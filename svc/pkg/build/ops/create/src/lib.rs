@@ -13,8 +13,8 @@ async fn handle(
 	let compression =
 		internal_unwrap_owned!(backend::build::BuildCompression::from_i32(ctx.compression));
 
-	let game_id = **internal_unwrap!(ctx.game_id);
-	internal_assert!(
+	let game_id = **unwrap_ref!(ctx.game_id);
+	ensure!(
 		util::check::display_name_long(&ctx.display_name),
 		"invalid display name"
 	);
@@ -25,7 +25,7 @@ async fn handle(
 	})
 	.await?;
 	let game = game_res.games.first();
-	internal_assert!(game.is_some(), "game not found");
+	ensure!(game.is_some(), "game not found");
 
 	let (image_tag, upload_id, image_presigned_requests) =
 		if let Some(build_kind) = &ctx.default_build_kind {
@@ -38,18 +38,18 @@ async fn handle(
 
 			(image_tag, upload_id, Vec::new())
 		} else {
-			let image_file = internal_unwrap!(ctx.image_file);
-			let image_tag = internal_unwrap!(ctx.image_tag);
+			let image_file = unwrap_ref!(ctx.image_file);
+			let image_tag = unwrap_ref!(ctx.image_tag);
 
 			let tag_split = image_tag.split_once(':');
-			let (tag_base, tag_tag) = internal_unwrap!(tag_split, "missing separator in image tag");
-			internal_assert!(
+			let (tag_base, tag_tag) = unwrap_ref!(tag_split, "missing separator in image tag");
+			ensure!(
 				util::check::docker_ident(tag_base),
 				"invalid image tag base"
 			);
-			internal_assert!(util::check::docker_ident(tag_tag), "invalid image tag tag");
+			ensure!(util::check::docker_ident(tag_tag), "invalid image tag tag");
 
-			assert_with!(
+			ensure_with!(
 				image_file.content_length < MAX_UPLOAD_SIZE,
 				UPLOAD_TOO_LARGE
 			);
@@ -63,7 +63,7 @@ async fn handle(
 			.await?;
 			if build_exists {
 				tracing::info!(?image_tag, "build image is not unique");
-				internal_panic!("build image tag not unique");
+				bail!("build image tag not unique");
 			} else {
 				tracing::info!(?image_tag, "build image is unique");
 			}
@@ -82,7 +82,7 @@ async fn handle(
 				],
 			})
 			.await?;
-			let upload_id = **internal_unwrap!(upload_prepare_res.upload_id);
+			let upload_id = **unwrap_ref!(upload_prepare_res.upload_id);
 
 			(
 				image_tag.clone(),

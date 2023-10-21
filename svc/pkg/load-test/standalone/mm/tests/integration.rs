@@ -1,6 +1,6 @@
 use chirp_worker::prelude::*;
 
-use ::load_test_api_cloud::run_from_env;
+use ::load_test_mm::run_from_env;
 
 #[tokio::test(flavor = "multi_thread")]
 async fn basic() {
@@ -10,6 +10,9 @@ async fn basic() {
 		.with_span_events(tracing_subscriber::fmt::format::FmtSpan::NONE)
 		.init();
 
-	// TODO:
+	if !util::feature::job_run() {
+		return;
+	}
+
 	run_from_env(util::timestamp::now()).await.unwrap();
 }

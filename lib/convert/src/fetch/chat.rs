@@ -45,7 +45,7 @@ pub async fn threads(
 ) -> GlobalResult<(Vec<models::ChatThread>, user::get::Response)> {
 	let thread_ids = threads
 		.iter()
-		.map(|t| Ok(internal_unwrap_owned!(t.thread_id)))
+		.map(|t| Ok(unwrap!(t.thread_id)))
 		.collect::<GlobalResult<Vec<_>>>()?;
 
 	// Fetch thread metadata
@@ -150,27 +150,27 @@ fn prefetch_messages(messages: &[backend::chat::Message]) -> GlobalResult<ChatMe
 	// Prefetch all user ids and party ids
 	for message in messages {
 		// Read body message
-		let backend_body_kind = internal_unwrap!(message.body);
-		let backend_body_kind = internal_unwrap!(backend_body_kind.kind);
+		let backend_body_kind = unwrap_ref!(message.body);
+		let backend_body_kind = unwrap_ref!(backend_body_kind.kind);
 
 		match backend_body_kind {
 			backend_body::Kind::Custom(backend_body::Custom { sender_user_id, .. }) => {
-				user_ids.push(*internal_unwrap!(sender_user_id));
+				user_ids.push(*unwrap_ref!(sender_user_id));
 			}
 			backend_body::Kind::Text(backend_body::Text { sender_user_id, .. }) => {
-				user_ids.push(*internal_unwrap!(sender_user_id));
+				user_ids.push(*unwrap_ref!(sender_user_id));
 			}
 			backend_body::Kind::Deleted(backend_body::Deleted { sender_user_id }) => {
-				user_ids.push(*internal_unwrap!(sender_user_id));
+				user_ids.push(*unwrap_ref!(sender_user_id));
 			}
 			backend_body::Kind::TeamJoin(backend_body::TeamJoin { user_id }) => {
-				user_ids.push(*internal_unwrap!(user_id));
+				user_ids.push(*unwrap_ref!(user_id));
 			}
 			backend_body::Kind::TeamLeave(backend_body::TeamLeave { user_id }) => {
-				user_ids.push(*internal_unwrap!(user_id));
+				user_ids.push(*unwrap_ref!(user_id));
 			}
 			backend_body::Kind::TeamMemberKick(backend_body::TeamMemberKick { user_id }) => {
-				user_ids.push(*internal_unwrap!(user_id));
+				user_ids.push(*unwrap_ref!(user_id));
 			}
 			backend_body::Kind::ChatCreate(_) | backend_body::Kind::UserFollow(_) => {}
 		}
@@ -191,15 +191,15 @@ fn prefetch_threads(
 
 	// Prefetch all required data for building thread
 	for thread in threads {
-		let topic = internal_unwrap!(thread.topic);
+		let topic = unwrap_ref!(thread.topic);
 
-		match internal_unwrap!(topic.kind) {
+		match unwrap_ref!(topic.kind) {
 			backend::chat::topic::Kind::Team(team) => {
-				team_ids.push(internal_unwrap_owned!(team.team_id));
+				team_ids.push(unwrap!(team.team_id));
 			}
 			backend::chat::topic::Kind::Direct(direct) => {
-				user_ids.push(internal_unwrap_owned!(direct.user_a_id));
-				user_ids.push(internal_unwrap_owned!(direct.user_b_id));
+				user_ids.push(unwrap!(direct.user_a_id));
+				user_ids.push(unwrap!(direct.user_b_id));
 			}
 		}
 	}

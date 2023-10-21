@@ -22,7 +22,7 @@ async fn handle(
 ) -> GlobalResult<chat::last_read_ts_get::Response> {
 	let crdb = ctx.crdb().await?;
 
-	let user_id = internal_unwrap!(ctx.user_id).as_uuid();
+	let user_id = unwrap_ref!(ctx.user_id).as_uuid();
 	let thread_ids = ctx
 		.thread_ids
 		.iter()

@@ -33,7 +33,7 @@ async fn basic_http(ctx: TestCtx) {
 		.await
 		.unwrap();
 	let mut fail_sub = subscribe!([ctx] job_run::msg::fail(run_id)).await.unwrap();
-	let mut eval_sub = subscribe!([ctx] job_run::msg::eval_complete(run_id))
+	let mut started_sub = subscribe!([ctx] job_run::msg::started(run_id))
 		.await
 		.unwrap();
 	let ingress_hostname_http = format!("test-{run_id}-http.lobby.{region_name_id}.{domain_job}");
@@ -73,7 +73,7 @@ async fn basic_http(ctx: TestCtx) {
 	tokio::select! {
 		_ = async {
 			planned_sub.next().await.unwrap();
-			eval_sub.next().await.unwrap();
+			started_sub.next().await.unwrap();
 		} => {
 			tracing::info!("started");
 		}
@@ -124,7 +124,7 @@ async fn basic_tcp(ctx: TestCtx) {
 		.await
 		.unwrap();
 	let mut fail_sub = subscribe!([ctx] job_run::msg::fail(run_id)).await.unwrap();
-	let mut eval_sub = subscribe!([ctx] job_run::msg::eval_complete(run_id))
+	let mut started_sub = subscribe!([ctx] job_run::msg::started(run_id))
 		.await
 		.unwrap();
 	let ingress_hostname_tcp = format!("test-{run_id}-tcp.lobby.{region_name_id}.{domain_job}");
@@ -165,7 +165,7 @@ async fn basic_tcp(ctx: TestCtx) {
 	tokio::select! {
 		_ = async {
 			planned_sub.next().await.unwrap();
-			eval_sub.next().await.unwrap();
+			started_sub.next().await.unwrap();
 		} => {
 			tracing::info!("started");
 		}
@@ -234,7 +234,7 @@ async fn basic_udp(ctx: TestCtx) {
 		.await
 		.unwrap();
 	let mut fail_sub = subscribe!([ctx] job_run::msg::fail(run_id)).await.unwrap();
-	let mut eval_sub = subscribe!([ctx] job_run::msg::eval_complete(run_id))
+	let mut started_sub = subscribe!([ctx] job_run::msg::started(run_id))
 		.await
 		.unwrap();
 	let ingress_hostname_udp = format!("test-{run_id}-udp.lobby.{region_name_id}.{domain_job}");
@@ -265,7 +265,7 @@ async fn basic_udp(ctx: TestCtx) {
 	tokio::select! {
 		_ = async {
 			planned_sub.next().await.unwrap();
-			eval_sub.next().await.unwrap();
+			started_sub.next().await.unwrap();
 		} => {
 			tracing::info!("started");
 		}

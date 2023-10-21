@@ -4766,10 +4766,20 @@ version = "0.0.1"
 dependencies = [
  "chirp-client",
  "chirp-worker",
+ "cloud-namespace-token-public-create",
+ "faker-build",
  "faker-game",
- "faker-team",
+ "faker-game-namespace",
+ "faker-game-version",
+ "faker-region",
+ "mm-config-namespace-config-set",
+ "mm-lobby-list-for-namespace",
+ "mm-lobby-player-count",
+ "mm-player-count-for-namespace",
+ "region-get",
  "reqwest",
  "rivet-api",
+ "rivet-claims",
  "rivet-connection",
  "rivet-operation",
  "rivet-runtime",
@@ -4777,7 +4787,6 @@ dependencies = [
  "tokio",
  "tracing",
  "tracing-subscriber",
- "user-identity-create",
 ]
 
 [[package]]
@@ -6962,6 +6971,7 @@ version = "0.1.0"
 dependencies = [
  "bit-vec",
  "chirp-client",
+ "heck 0.3.3",
  "http",
  "mm-lobby-list-for-user-id",
  "region-get",

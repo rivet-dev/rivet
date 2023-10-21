@@ -5,7 +5,7 @@ use rivet_operation::prelude::*;
 async fn handle(
 	ctx: OperationContext<faker::mm_player::Request>,
 ) -> GlobalResult<faker::mm_player::Response> {
-	let namespace_id = internal_unwrap!(ctx.namespace_id).as_uuid();
+	let namespace_id = unwrap_ref!(ctx.namespace_id).as_uuid();
 
 	let fake_ip = util::faker::ip_addr_v4();
 	let client = backend::net::ClientInfo {
@@ -39,8 +39,8 @@ async fn handle(
 		..Default::default()
 	})
 	.await?;
-	let token = internal_unwrap!(token_res.token);
-	let token_session_id = internal_unwrap!(token_res.session_id).as_uuid();
+	let token = unwrap_ref!(token_res.token);
+	let token_session_id = unwrap_ref!(token_res.session_id).as_uuid();
 
 	// Find lobby
 	let query_id = Uuid::new_v4();
@@ -69,29 +69,29 @@ async fn handle(
 			use mm::msg::lobby_find_fail::ErrorCode::*;
 
 			match code {
-				Unknown => internal_panic!("unknown find error code"),
-				StaleMessage => panic_with!(CHIRP_STALE_MESSAGE),
-				TooManyPlayersFromSource => panic_with!(MATCHMAKER_TOO_MANY_PLAYERS_FROM_SOURCE),
+				Unknown => bail!("unknown find error code"),
+				StaleMessage => bail_with!(CHIRP_STALE_MESSAGE),
+				TooManyPlayersFromSource => bail_with!(MATCHMAKER_TOO_MANY_PLAYERS_FROM_SOURCE),
 
-				LobbyStopped | LobbyStoppedPrematurely => panic_with!(MATCHMAKER_LOBBY_STOPPED),
-				LobbyClosed => panic_with!(MATCHMAKER_LOBBY_CLOSED),
-				LobbyNotFound => panic_with!(MATCHMAKER_LOBBY_NOT_FOUND),
-				NoAvailableLobbies => panic_with!(MATCHMAKER_NO_AVAILABLE_LOBBIES),
-				LobbyFull => panic_with!(MATCHMAKER_LOBBY_FULL),
-				LobbyCountOverMax => panic_with!(MATCHMAKER_TOO_MANY_LOBBIES),
-				RegionNotEnabled => panic_with!(MATCHMAKER_REGION_NOT_ENABLED_FOR_GAME_MODE),
+				LobbyStopped | LobbyStoppedPrematurely => bail_with!(MATCHMAKER_LOBBY_STOPPED),
+				LobbyClosed => bail_with!(MATCHMAKER_LOBBY_CLOSED),
+				LobbyNotFound => bail_with!(MATCHMAKER_LOBBY_NOT_FOUND),
+				NoAvailableLobbies => bail_with!(MATCHMAKER_NO_AVAILABLE_LOBBIES),
+				LobbyFull => bail_with!(MATCHMAKER_LOBBY_FULL),
+				LobbyCountOverMax => bail_with!(MATCHMAKER_TOO_MANY_LOBBIES),
+				RegionNotEnabled => bail_with!(MATCHMAKER_REGION_NOT_ENABLED_FOR_GAME_MODE),
 
-				DevTeamInvalidStatus => panic_with!(GROUP_INVALID_DEVELOPER_STATUS),
+				DevTeamInvalidStatus => bail_with!(GROUP_INVALID_DEVELOPER_STATUS),
 
-				FindDisabled => panic_with!(MATCHMAKER_FIND_DISABLED),
-				JoinDisabled => panic_with!(MATCHMAKER_JOIN_DISABLED),
-				VerificationFailed => panic_with!(MATCHMAKER_VERIFICATION_FAILED),
-				VerificationRequestFailed => panic_with!(MATCHMAKER_VERIFICATION_REQUEST_FAILED),
-				IdentityRequired => panic_with!(MATCHMAKER_IDENTITY_REQUIRED),
-				RegistrationRequired => panic_with!(MATCHMAKER_REGISTRATION_REQUIRED),
+				FindDisabled => bail_with!(MATCHMAKER_FIND_DISABLED),
+				JoinDisabled => bail_with!(MATCHMAKER_JOIN_DISABLED),
+				VerificationFailed => bail_with!(MATCHMAKER_VERIFICATION_FAILED),
+				VerificationRequestFailed => bail_with!(MATCHMAKER_VERIFICATION_REQUEST_FAILED),
+				IdentityRequired => bail_with!(MATCHMAKER_IDENTITY_REQUIRED),
+				RegistrationRequired => bail_with!(MATCHMAKER_REGISTRATION_REQUIRED),
 			};
 		}
-		Err(None) => internal_panic!("failed to parse find error code"),
+		Err(None) => bail!("failed to parse find error code"),
 	}
 
 	Ok(faker::mm_player::Response {

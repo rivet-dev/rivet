@@ -26,7 +26,7 @@ async fn handle(ctx: OperationContext<kv::get::Request>) -> GlobalResult<kv::get
 	let mut namespace_ids = Vec::new();
 	let mut key_strs = Vec::new();
 	for key in &ctx.keys {
-		namespace_ids.push(internal_unwrap!(key.namespace_id).as_uuid());
+		namespace_ids.push(unwrap_ref!(key.namespace_id).as_uuid());
 		key_strs.push(key.key.as_str());
 	}
 

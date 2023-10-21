@@ -11,7 +11,7 @@ async fn worker(ctx: &OperationContext<team::msg::profile_set::Message>) -> Glob
 		bio,
 		publicity,
 	} = ctx.body();
-	let raw_team_id = internal_unwrap!(team_id);
+	let raw_team_id = unwrap_ref!(team_id);
 	let team_id: Uuid = raw_team_id.as_uuid();
 
 	let mut query_components = Vec::new();
@@ -84,14 +84,14 @@ async fn worker(ctx: &OperationContext<team::msg::profile_set::Message>) -> Glob
 
 	// Accept all group join requests when publicity is set to open
 	if let Some(publicity) = publicity {
-		let publicity = internal_unwrap_owned!(backend::team::Publicity::from_i32(*publicity));
+		let publicity = unwrap!(backend::team::Publicity::from_i32(*publicity));
 
 		if publicity == backend::team::Publicity::Open {
 			let join_request_res = op!([ctx] team_join_request_list {
 				team_ids: vec![*raw_team_id],
 			})
 			.await?;
-			let join_requests = internal_unwrap_owned!(join_request_res.teams.first())
+			let join_requests = unwrap!(join_request_res.teams.first())
 				.join_requests
 				.clone();
 
@@ -100,7 +100,7 @@ async fn worker(ctx: &OperationContext<team::msg::profile_set::Message>) -> Glob
 				let raw_team_id = *raw_team_id;
 
 				async move {
-					let user_id = internal_unwrap!(join_request.user_id).as_uuid();
+					let user_id = unwrap_ref!(join_request.user_id).as_uuid();
 
 					msg!([ctx] team::msg::join_request_resolve(team_id, user_id) -> team::msg::join_request_resolve_complete {
 						team_id: Some(raw_team_id),

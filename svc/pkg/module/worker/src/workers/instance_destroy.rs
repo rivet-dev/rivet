@@ -7,19 +7,19 @@ async fn worker(
 ) -> Result<(), GlobalError> {
 	let crdb = ctx.crdb().await?;
 
-	let instance_id = internal_unwrap!(ctx.instance_id).as_uuid();
+	let instance_id = unwrap_ref!(ctx.instance_id).as_uuid();
 
 	let instances = op!([ctx] module_instance_get {
 		instance_ids: vec![instance_id.into()],
 
 	})
 	.await?;
-	let instance = internal_unwrap_owned!(instances.instances.first());
+	let instance = unwrap!(instances.instances.first());
 
 	// Delete app
-	match internal_unwrap!(instance.driver) {
+	match unwrap_ref!(instance.driver) {
 		backend::module::instance::Driver::Fly(fly) => {
-			let app_id = internal_unwrap!(fly.fly_app_id, "fly machine not started yet");
+			let app_id = unwrap_ref!(fly.fly_app_id, "fly machine not started yet");
 
 			delete_fly_app(app_id).await?;
 		}

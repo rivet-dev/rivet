@@ -5,9 +5,9 @@ use rivet_operation::prelude::*;
 async fn handle(
 	ctx: OperationContext<identity_config::version_publish::Request>,
 ) -> GlobalResult<identity_config::version_publish::Response> {
-	let version_id = internal_unwrap!(ctx.version_id).as_uuid();
-	let config = internal_unwrap!(ctx.config);
-	let _config_ctx = internal_unwrap!(ctx.config_ctx);
+	let version_id = unwrap_ref!(ctx.version_id).as_uuid();
+	let config = unwrap_ref!(ctx.config);
+	let _config_ctx = unwrap_ref!(ctx.config_ctx);
 
 	sqlx::query("INSERT INTO db_identity_config.game_versions (version_id) VALUES ($1)")
 		.bind(version_id)
@@ -30,7 +30,7 @@ async fn handle(
 	}
 
 	for custom_avatar in &config.custom_avatars {
-		let upload_id = internal_unwrap!(custom_avatar.upload_id).as_uuid();
+		let upload_id = unwrap_ref!(custom_avatar.upload_id).as_uuid();
 		sqlx::query(indoc!(
 			"
 			INSERT INTO db_identity_config.custom_avatars

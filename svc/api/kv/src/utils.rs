@@ -14,7 +14,7 @@ pub fn validate_keys(keys: &[impl AsRef<str>], directory: bool) -> GlobalResult<
 		let key = key.as_ref();
 
 		if !directory {
-			assert_with!(
+			ensure_with!(
 				!key.is_empty(),
 				KV_KEY_VALIDATION_ERROR,
 				index = i,
@@ -22,7 +22,7 @@ pub fn validate_keys(keys: &[impl AsRef<str>], directory: bool) -> GlobalResult<
 			);
 		}
 
-		assert_with!(
+		ensure_with!(
 			key.len() < 512,
 			KV_KEY_VALIDATION_ERROR,
 			index = i,
@@ -41,16 +41,16 @@ pub async fn validate_config(
 		namespace_ids: vec![namespace_id],
 	})
 	.await?;
-	let namespace = internal_unwrap_owned!(namespaces_res.namespaces.first());
+	let namespace = unwrap!(namespaces_res.namespaces.first());
 
-	let version_id = internal_unwrap!(namespace.version_id);
+	let version_id = unwrap_ref!(namespace.version_id);
 	let config_res = op!([ctx] kv_config_version_get {
 		version_ids: vec![*version_id],
 	})
 	.await?;
 
 	if config_res.versions.first().is_none() {
-		panic_with!(
+		bail_with!(
 			API_FORBIDDEN,
 			reason = "KV service not enabled for this namespace"
 		);

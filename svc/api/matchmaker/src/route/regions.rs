@@ -40,8 +40,8 @@ pub async fn list(
 		version_ids: vec![ns_data.version_id.into()],
 	})
 	.await?;
-	let version_data = internal_unwrap_owned!(version_res.versions.first());
-	let version_config = internal_unwrap!(version_data.config);
+	let version_data = unwrap!(version_res.versions.first());
+	let version_config = unwrap_ref!(version_data.config);
 
 	// Find all enabled region IDs in all requested lobby groups
 	let enabled_region_ids = version_config
@@ -86,7 +86,7 @@ pub async fn list(
 		.iter()
 		.map(|region| {
 			let recommend = if let Some(res) = &recommend_res {
-				Some(internal_unwrap_owned!(res
+				Some(unwrap!(res
 					.regions
 					.iter()
 					.find(|recommend| recommend.region_id == region.region_id)))
