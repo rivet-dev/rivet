@@ -676,7 +676,11 @@ fn gen_oci_bundle_config(env: Vec<String>) -> GlobalResult<String> {
 /// Makes user-generated string safe to inject in to a Go template.
 fn escape_go_template(input: &str) -> String {
 	let re = Regex::new(r"(\{\{|\}\})").unwrap();
-	re.replace_all(input, r#"{{"$1"}}"#).to_string().to_string()
+	re.replace_all(input, r#"{{"$1"}}"#)
+		.to_string()
+		// TODO: This removes exploits to inject env vars (see below)
+		// SVC-3307
+		.replace("###", "")
 }
 
 /// Generates a template string that we can substitute with the real environment variable
