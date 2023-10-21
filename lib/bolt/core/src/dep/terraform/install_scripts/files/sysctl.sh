@@ -94,6 +94,9 @@ net.ipv4.tcp_no_metrics_save = 1
 net.ipv4.tcp_syn_retries = 2
 net.ipv4.tcp_synack_retries = 2
 vm.min_free_kbytes = 65536
+
+# Increase conntrack
+net.netfilter.nf_conntrack_max=262144
 EOF
 
 # Reload settings

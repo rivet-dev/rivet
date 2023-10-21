@@ -24,6 +24,8 @@ util-job = { package = "rivet-util-job", path = "../../job/util" }
 util-mm = { package = "rivet-util-mm", path = "../../mm/util" }
 http = "0.2"
 heck = "0.3"
+regex = "1.4"
+util-build = { package = "rivet-util-build", path = "../../build/util" }
 
 build-get = { path = "../../build/ops/get" }
 game-get = { path = "../../game/ops/get" }

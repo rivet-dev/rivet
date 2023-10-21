@@ -10,6 +10,9 @@ struct FindQuery {
 	player_ids: Vec<Uuid>,
 }
 
+/// Idempotent operation to complete the given queries if all required conditions have completed.
+///
+/// Will be called multiple times to check if the find is complete.
 #[operation(name = "mm-lobby-find-try-complete")]
 async fn handle(
 	ctx: OperationContext<mm::lobby_find_try_complete::Request>,

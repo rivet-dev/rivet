@@ -27,6 +27,32 @@ pub fn docker() -> String {
 	include_str!("files/docker.sh").to_string()
 }
 
+pub fn lz4() -> String {
+	format!("apt-get install -y lz4")
+}
+
+pub fn skopeo() -> String {
+	format!("apt-get install -y skopeo")
+}
+
+pub fn umoci() -> String {
+	formatdoc!(
+		r#"
+		curl -Lf -o /usr/bin/umoci "https://github.com/opencontainers/umoci/releases/download/v0.4.7/umoci.amd64"
+		chmod +x /usr/bin/umoci
+		"#
+	)
+}
+
+pub fn cnitool() -> String {
+	formatdoc!(
+		r#"
+		curl -Lf -o /usr/bin/cnitool "https://github.com/rivet-gg/cni/releases/download/v1.1.2-build3/cnitool"
+		chmod +x /usr/bin/cnitool
+		"#
+	)
+}
+
 pub fn cni_plugins() -> String {
 	include_str!("files/cni_plugins.sh").to_string()
 }

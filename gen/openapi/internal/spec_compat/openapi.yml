@@ -734,6 +734,16 @@ components:
       - namespaces
       - expenses
       type: object
+    CloudGamesBuildCompression:
+      enum:
+      - none
+      - lz4
+      type: string
+    CloudGamesBuildKind:
+      enum:
+      - docker_image
+      - oci_bundle
+      type: string
     CloudGamesCreateCloudTokenResponse:
       properties:
         token:
@@ -748,6 +758,8 @@ components:
       type: object
     CloudGamesCreateGameBuildRequest:
       properties:
+        compression:
+          $ref: '#/components/schemas/CloudGamesBuildCompression'
         display_name:
           description: Represent a resource's readable display name.
           type: string
@@ -756,6 +768,8 @@ components:
         image_tag:
           description: A tag given to the game build.
           type: string
+        kind:
+          $ref: '#/components/schemas/CloudGamesBuildKind'
         multipart_upload:
           type: boolean
       required:

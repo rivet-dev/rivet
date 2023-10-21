@@ -13,11 +13,6 @@ async fn worker(ctx: &OperationContext<mm::msg::lobby_stop::Message>) -> GlobalR
 
 	let crdb = ctx.crdb().await?;
 
-	if ctx.req_dt() > util::duration::minutes(5) {
-		tracing::error!(?lobby_id, "discarding stale message");
-		return Ok(());
-	}
-
 	// Fetch the lobby.
 	//
 	// This also ensures that mm-lobby-find or mm-lobby-create

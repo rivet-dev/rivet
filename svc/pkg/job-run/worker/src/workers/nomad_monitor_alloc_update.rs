@@ -43,7 +43,6 @@ async fn worker(
 		.next();
 	let main_task = internal_unwrap_owned!(main_task, "could not find main task");
 	let main_task_state_raw = internal_unwrap!(main_task.state);
-	let main_task_events = internal_unwrap!(main_task.events);
 
 	tracing::info!(
 		?client_status,
@@ -51,16 +50,16 @@ async fn worker(
 		?eval_id,
 		?job_id,
 		?main_task_state_raw,
-		?main_task_events,
+		main_task_events = ?main_task.events,
 		"alloc updated"
 	);
 
-	let main_task_state = match main_task_state_raw.as_str() {
-		"pending" => TaskState::Pending,
-		"running" => TaskState::Running,
-		"dead" => TaskState::Dead,
+	let main_task_state = match (main_task_state_raw.as_str(), client_status.as_str()) {
+		("pending", _) => TaskState::Pending,
+		("running", _) => TaskState::Running,
+		("dead", _) | (_, "failed" | "lost") => TaskState::Dead,
 		_ => {
-			tracing::error!(?main_task_state_raw, "unknown task state");
+			tracing::error!(?main_task_state_raw, ?client_status, "unknown task state");
 			return Ok(());
 		}
 	};

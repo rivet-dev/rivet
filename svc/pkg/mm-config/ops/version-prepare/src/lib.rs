@@ -159,6 +159,10 @@ async fn validate_build(
 	let build = internal_unwrap_owned!(build_get.builds.first(), "build not found");
 	let build_upload_id = internal_unwrap!(build.upload_id).as_uuid();
 	let build_game_id = internal_unwrap!(build.game_id).as_uuid();
+	let build_kind = internal_unwrap_owned!(backend::build::BuildKind::from_i32(build.kind));
+	let build_compression = internal_unwrap_owned!(backend::build::BuildCompression::from_i32(
+		build.compression
+	));
 	internal_assert_eq!(game_id, build_game_id);
 
 	tracing::info!(?build);
@@ -186,9 +190,10 @@ async fn validate_build(
 	// Generate path used to request the image
 	if needs_ats_prewarm {
 		let path = format!(
-			"/s3-cache/{provider}/{namespace}-bucket-build/{upload_id}/image.tar",
+			"/s3-cache/{provider}/{namespace}-bucket-build/{upload_id}/{file_name}",
 			provider = heck::KebabCase::to_kebab_case(provider.as_str()),
 			namespace = util::env::namespace(),
+			file_name = util_build::file_name(build_kind, build_compression),
 		);
 		if prewarm_ctx.paths.insert(path.clone()) {
 			prewarm_ctx.total_size += upload.content_length;

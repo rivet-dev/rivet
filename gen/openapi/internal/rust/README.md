@@ -224,6 +224,8 @@ Class | Method | HTTP request | Description
  - [CloudDevicesPrepareDeviceLinkResponse](docs/CloudDevicesPrepareDeviceLinkResponse.md)
  - [CloudGameFull](docs/CloudGameFull.md)
  - [CloudGameLobbyExpenses](docs/CloudGameLobbyExpenses.md)
+ - [CloudGamesBuildCompression](docs/CloudGamesBuildCompression.md)
+ - [CloudGamesBuildKind](docs/CloudGamesBuildKind.md)
  - [CloudGamesCreateCloudTokenResponse](docs/CloudGamesCreateCloudTokenResponse.md)
  - [CloudGamesCreateGameBuildRequest](docs/CloudGamesCreateGameBuildRequest.md)
  - [CloudGamesCreateGameBuildResponse](docs/CloudGamesCreateGameBuildResponse.md)

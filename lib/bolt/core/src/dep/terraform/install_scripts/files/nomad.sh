@@ -82,6 +82,15 @@ for ipt in iptables ip6tables; do
         echo "Rule already exists in \$ipt: \$RULE"
     fi
 
+    # Enable conntrack to allow traffic to flow back to the GG subnet
+    RULE="-s \$SUBNET_VAR -m conntrack --ctstate NEW,ESTABLISHED -j ACCEPT"
+    if ! \$ipt -C $ADMIN_CHAIN \$RULE &>/dev/null; then
+        \$ipt -A $ADMIN_CHAIN \$RULE
+        echo "Added \$ipt rule: \$RULE"
+    else
+        echo "Rule already exists in \$ipt: \$RULE"
+    fi
+
     # Deny all other egress traffic
     RULE="-s \$SUBNET_VAR -j DROP"
     if ! \$ipt -C $ADMIN_CHAIN \$RULE &>/dev/null; then
@@ -177,7 +186,7 @@ addresses {
 }
 
 telemetry {
-	collection_interval = "1s"
+	collection_interval = "5s"
 	disable_hostname = true
 	prometheus_metrics = true
 	publish_allocation_metrics = true
@@ -200,7 +209,9 @@ client {
 	# Expose services running on job nodes internally to GG
 	network_interface = "__VLAN_IFACE__"
 
-	# See tf/infra/firewall_rules.tf
+	# Nomad port range for GG-routed traffic.
+	#
+	# See firewall rules in docs/infrastructure/networking/EDGE_CLUSTER_NETWORKING.md
 	min_dynamic_port = 20000
 	max_dynamic_port = 25999
 
@@ -233,6 +244,12 @@ client {
 plugin "docker" {
 	config {
 		extra_labels = ["job_name", "task_group_name", "task_name", "node_name"]
+	}
+}
+
+plugin "raw_exec" {
+	config {
+		enabled = true
 	}
 }
 EOF

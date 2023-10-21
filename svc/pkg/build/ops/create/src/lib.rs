@@ -9,6 +9,10 @@ async fn handle(
 ) -> GlobalResult<build::create::Response> {
 	let crdb = ctx.crdb().await?;
 
+	let kind = internal_unwrap_owned!(backend::build::BuildKind::from_i32(ctx.kind));
+	let compression =
+		internal_unwrap_owned!(backend::build::BuildCompression::from_i32(ctx.compression));
+
 	let game_id = **internal_unwrap!(ctx.game_id);
 	internal_assert!(
 		util::check::display_name_long(&ctx.display_name),
@@ -65,12 +69,12 @@ async fn handle(
 			}
 
 			// Create the upload
+			let file_name = util_build::file_name(kind, compression);
 			let upload_prepare_res = op!([ctx] upload_prepare {
 				bucket: "bucket-build".into(),
 				files: vec![
 					backend::upload::PrepareFile {
-						path: "image.tar".into(),
-						mime: Some("application/x-tar".into()),
+						path: file_name,
 						content_length: image_file.content_length,
 						multipart: ctx.multipart,
 						..Default::default()
@@ -91,8 +95,8 @@ async fn handle(
 	let build_id = Uuid::new_v4();
 	sqlx::query(indoc!(
 		"
-		INSERT INTO db_build.builds (build_id, game_id, upload_id, display_name, image_tag, create_ts)
-		VALUES ($1, $2, $3, $4, $5, $6)
+		INSERT INTO db_build.builds (build_id, game_id, upload_id, display_name, image_tag, create_ts, kind, compression)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
 		"
 	))
 	.bind(build_id)
@@ -101,6 +105,8 @@ async fn handle(
 	.bind(&ctx.display_name)
 	.bind(image_tag)
 	.bind(ctx.ts())
+	.bind(kind as i32)
+	.bind(compression as i32)
 	.execute(&crdb)
 	.await?;
 

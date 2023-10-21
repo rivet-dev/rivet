@@ -6,9 +6,10 @@ import "proto/common.proto";
 import "google/protobuf/empty.proto";
 
 enum Image {
-	HANG_INDEFINITELY = 0;
-	MM_LOBBY_AUTO_READY = 1;
-	FAIL_IMMEDIATELY = 2;
+	FAIL_IMMEDIATELY = 0;
+	HANG_INDEFINITELY = 1;
+	MM_LOBBY_AUTO_READY = 2;
+	MM_LOBBY_ECHO = 3;
 }
 
 message Request {

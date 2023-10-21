@@ -276,7 +276,7 @@ where
 					.arg(pending_retry_time.as_millis() as i64)
 					.arg("-")
 					.arg("+")
-					.arg(1usize)
+					.arg(16usize)
 					.query_async::<_, redis::streams::StreamPendingCountReply>(redis_chirp_conn)
 					.await
 				{
@@ -451,7 +451,7 @@ where
 			let read_options = redis::streams::StreamReadOptions::default()
 				.group(&group, &consumer)
 				.block(30_000)
-				.count(1);
+				.count(16);
 			let res = match redis_chirp_conn
 				.xread_options::<_, _, redis::streams::StreamReadReply>(keys, &[">"], &read_options)
 				.await
@@ -840,7 +840,9 @@ where
 		Ok(summary)
 	}
 
-	/// Enables requests to be retried immediately if needed.
+	/// Enables requests to be retried immediately if the worker throws an error that needs to be
+	/// retried. This is helpful for situations with optimistic locking that need to be retried on
+	/// fail.
 	///
 	/// This is executed within a timeout, so the overall timeout is not restarted
 	/// when retrying the request.

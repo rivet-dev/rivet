@@ -60,7 +60,11 @@ pub async fn gen(
 
 	// MARK: Job
 	if server.pool_id == "job" {
-		script.push(components::docker()); // why do we need to install docker and cni plugins?
+		script.push(components::docker());
+		script.push(components::lz4());
+		script.push(components::skopeo());
+		script.push(components::umoci());
+		script.push(components::cnitool());
 		script.push(components::cni_plugins());
 		script.push(components::nomad(server));
 		script.push(components::envoy());

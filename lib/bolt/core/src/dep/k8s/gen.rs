@@ -370,10 +370,19 @@ pub async fn gen_svc(exec_ctx: &ExecServiceContext) -> Vec<serde_json::Value> {
 	};
 
 	// Create pod template
+	let termination_grace_period = match project_ctx.ns().cluster.kind {
+		// TODO: Allow configuring this
+		// Kill pod immediately since we need workers to terminate immediately for tests
+		//
+		// i.e. `bolt up mm-worker && bolt test mm-worker` would cause requests to go to the old
+		// worker if the old worker doesn't terminate immediately.
+		config::ns::ClusterKind::SingleNode { .. } => 0,
+		config::ns::ClusterKind::Distributed { .. } => 30,
+	};
 	let pod_spec = json!({
 		"priorityClassName": priority_class_name,
 		"restartPolicy": restart_policy,
-		"terminationGracePeriodSeconds": 5,
+		"terminationGracePeriodSeconds": termination_grace_period,
 		"imagePullSecrets": [{
 			"name": "docker-auth"
 		}],

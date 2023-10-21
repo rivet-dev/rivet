@@ -3,6 +3,7 @@ use proto::backend::{
 	self,
 	matchmaker::lobby_runtime::{NetworkMode as LobbyRuntimeNetworkMode, ProxyProtocol},
 };
+use regex::Regex;
 use serde_json::json;
 use std::collections::HashMap;
 
@@ -45,6 +46,8 @@ pub fn gen_lobby_docker_job(
 	image_tag: &str,
 	tier: &backend::region::Tier,
 	lobby_config_json: Option<&String>,
+	build_kind: backend::build::BuildKind,
+	build_compression: backend::build::BuildCompression,
 ) -> GlobalResult<nomad_client::models::Job> {
 	// IMPORTANT: This job spec must be deterministic. Do not pass in parameters
 	// that change with every run, such as the lobby ID. Ensure the
@@ -80,49 +83,41 @@ pub fn gen_lobby_docker_job(
 		})
 		.collect::<GlobalResult<Vec<DecodedPort>>>()?;
 
+	// The container will set up port forwarding manually from the Nomad-defined ports on the host
+	// to the CNI container
 	let dynamic_ports = decoded_ports
 		.iter()
 		.filter_map(|port| {
-			port.target.get_nomad_port().map(|target_port| Port {
+			port.target.get_nomad_port().map(|_| Port {
 				label: Some(port.nomad_port_label.clone()),
-				to: match network_mode {
-					// Networks are isolated in bridge networking, so we can
-					// depend on a consistent target port.
-					LobbyRuntimeNetworkMode::Bridge => Some(target_port as i32),
-
-					// We can't use a target port with host networking.
-					// Services need to use `PORT_<label>`.
-					LobbyRuntimeNetworkMode::Host => None,
-				},
 				..Port::new()
 			})
 		})
 		.collect::<Vec<_>>();
 
-	let docker_ports = decoded_ports
+	// Port mappings to pass to the container. Only used in bridge networking.
+	let cni_port_mappings = decoded_ports
 		.iter()
-		.filter(|port| port.target.get_nomad_port().is_some())
-		.map(|port| port.nomad_port_label.clone())
+		.filter_map(|port| {
+			port.target.get_nomad_port().map(|target_port| {
+				json!({
+					"HostPort": template_env_var_int(&nomad_host_port_env_var(&port.nomad_port_label)),
+					"ContainerPort": target_port,
+					"Protocol": match port.proxy_protocol {
+						ProxyProtocol::Http | ProxyProtocol::Https | ProxyProtocol::Tcp | ProxyProtocol::TcpTls => "tcp",
+						ProxyProtocol::Udp => "udp",
+					},
+				})
+			})
+		})
 		.collect::<Vec<_>>();
 
 	// Also see util_mm:consts::DEFAULT_ENV_KEYS
-	let env = runtime
+	let mut env = runtime
 		.env_vars
 		.iter()
-		.map(|v| {
-			(
-				v.key.clone(),
-				// Escape all interpolation
-				v.value.replace('$', "$$"),
-			)
-		})
-		.chain(lobby_config_json.map(|config| {
-			(
-				"RIVET_LOBBY_CONFIG".to_string(),
-				// Escape all interpolation
-				config.replace('$', "$$"),
-			)
-		}))
+		.map(|v| (v.key.clone(), v.value.clone()))
+		.chain(lobby_config_json.map(|config| ("RIVET_LOBBY_CONFIG".to_string(), config.clone())))
 		.chain([(
 			"RIVET_API_ENDPOINT".to_string(),
 			util::env::origin_api().to_string(),
@@ -147,44 +142,91 @@ pub fn gen_lobby_docker_job(
 		)
 		.chain(
 			[
-				("RIVET_NAMESPACE_NAME", "${NOMAD_META_NAMESPACE_NAME}"),
-				("RIVET_NAMESPACE_ID", "${NOMAD_META_NAMESPACE_ID}"),
-				("RIVET_VERSION_NAME", "${NOMAD_META_VERSION_NAME}"),
-				("RIVET_VERSION_ID", "${NOMAD_META_VERSION_ID}"),
-				("RIVET_GAME_MODE_ID", "${NOMAD_META_LOBBY_GROUP_ID}"),
-				("RIVET_GAME_MODE_NAME", "${NOMAD_META_LOBBY_GROUP_NAME}"),
-				("RIVET_LOBBY_ID", "${NOMAD_META_LOBBY_ID}"),
-				("RIVET_TOKEN", "${NOMAD_META_LOBBY_TOKEN}"),
-				("RIVET_REGION_ID", "${NOMAD_META_REGION_ID}"),
-				("RIVET_REGION_NAME", "${NOMAD_META_REGION_NAME}"),
+				(
+					"RIVET_NAMESPACE_NAME",
+					template_env_var("NOMAD_META_NAMESPACE_NAME"),
+				),
+				(
+					"RIVET_NAMESPACE_ID",
+					template_env_var("NOMAD_META_NAMESPACE_ID"),
+				),
+				(
+					"RIVET_VERSION_NAME",
+					template_env_var("NOMAD_META_VERSION_NAME"),
+				),
+				(
+					"RIVET_VERSION_ID",
+					template_env_var("NOMAD_META_VERSION_ID"),
+				),
+				(
+					"RIVET_GAME_MODE_ID",
+					template_env_var("NOMAD_META_LOBBY_GROUP_ID"),
+				),
+				(
+					"RIVET_GAME_MODE_NAME",
+					template_env_var("NOMAD_META_LOBBY_GROUP_NAME"),
+				),
+				("RIVET_LOBBY_ID", template_env_var("NOMAD_META_LOBBY_ID")),
+				("RIVET_TOKEN", template_env_var("NOMAD_META_LOBBY_TOKEN")),
+				("RIVET_REGION_ID", template_env_var("NOMAD_META_REGION_ID")),
+				(
+					"RIVET_REGION_NAME",
+					template_env_var("NOMAD_META_REGION_NAME"),
+				),
 				(
 					"RIVET_MAX_PLAYERS_NORMAL",
-					"${NOMAD_META_MAX_PLAYERS_NORMAL}",
+					template_env_var("NOMAD_META_MAX_PLAYERS_NORMAL"),
 				),
 				(
 					"RIVET_MAX_PLAYERS_DIRECT",
-					"${NOMAD_META_MAX_PLAYERS_DIRECT}",
+					template_env_var("NOMAD_META_MAX_PLAYERS_DIRECT"),
 				),
-				("RIVET_MAX_PLAYERS_PARTY", "${NOMAD_META_MAX_PLAYERS_PARTY}"),
+				(
+					"RIVET_MAX_PLAYERS_PARTY",
+					template_env_var("NOMAD_META_MAX_PLAYERS_PARTY"),
+				),
 				// DEPRECATED:
-				("RIVET_LOBBY_TOKEN", "${NOMAD_META_LOBBY_TOKEN}"),
-				("RIVET_LOBBY_GROUP_ID", "${NOMAD_META_LOBBY_GROUP_ID}"),
-				("RIVET_LOBBY_GROUP_NAME", "${NOMAD_META_LOBBY_GROUP_NAME}"),
+				(
+					"RIVET_LOBBY_TOKEN",
+					template_env_var("NOMAD_META_LOBBY_TOKEN"),
+				),
+				(
+					"RIVET_LOBBY_GROUP_ID",
+					template_env_var("NOMAD_META_LOBBY_GROUP_ID"),
+				),
+				(
+					"RIVET_LOBBY_GROUP_NAME",
+					template_env_var("NOMAD_META_LOBBY_GROUP_NAME"),
+				),
 			]
 			.iter()
 			.map(|(k, v)| (k.to_string(), v.to_string())),
 		)
 		// Ports
-		.chain(decoded_ports.iter().filter_map(|port| {
-			if port.target.get_nomad_port().is_some() {
-				Some((
-					format!("PORT_{}", port.label),
-					format!("${{NOMAD_PORT_{}}}", port.nomad_port_label),
-				))
-			} else {
-				None
-			}
-		}))
+		.chain(
+			decoded_ports
+				.iter()
+				.filter_map(|port| {
+					if let Some(target_port) = port.target.get_nomad_port() {
+						let port_value = match network_mode {
+							// CNI will handle mapping the host port to the container port
+							LobbyRuntimeNetworkMode::Bridge => target_port.to_string(),
+							// The container needs to listen on the correct port
+							LobbyRuntimeNetworkMode::Host => {
+								template_env_var(&nomad_host_port_env_var(&port.nomad_port_label))
+							}
+						};
+
+						// Port with the kebab case port key. Included for backward compatabiilty & for
+						// less confusion.
+						Some((format!("PORT_{}", port.label), port_value))
+					} else {
+						None
+					}
+				})
+				// Port with snake case key. This is the recommended key to use.
+				.flat_map(|(k, v)| [(k.replace("-", "_"), v.clone()), (k, v)]),
+		)
 		// Port ranges
 		.chain(
 			decoded_ports
@@ -201,7 +243,9 @@ pub fn gen_lobby_docker_job(
 				})
 				.flatten(),
 		)
-		.collect::<HashMap<String, String>>();
+		.map(|(k, v)| format!("{k}={v}"))
+		.collect::<Vec<String>>();
+	env.sort();
 
 	let services = decoded_ports
 		.iter()
@@ -222,6 +266,15 @@ pub fn gen_lobby_docker_job(
 		})
 		.filter_map(|x| x.transpose())
 		.collect::<GlobalResult<Vec<_>>>()?;
+
+	// Generate the command to download and decompress the file
+	let mut download_cmd = format!(r#"curl -Lf "$NOMAD_META_IMAGE_ARTIFACT_URL""#);
+	match build_compression {
+		backend::build::BuildCompression::None => {}
+		backend::build::BuildCompression::Lz4 => {
+			download_cmd.push_str(" | lz4 -d -");
+		}
+	}
 
 	Ok(Job {
 		_type: Some("batch".into()),
@@ -268,82 +321,393 @@ pub fn gen_lobby_docker_job(
 				..ReschedulePolicy::new()
 			})),
 			networks: Some(vec![NetworkResource {
-				mode: match network_mode {
-					LobbyRuntimeNetworkMode::Bridge => Some("cni/rivet-job".into()),
-					LobbyRuntimeNetworkMode::Host => Some("host".into()),
-				},
+				// The setup.sh script will set up a CNI network if using bridge networking
+				mode: Some("host".into()),
 				dynamic_ports: Some(dynamic_ports),
 				..NetworkResource::new()
 			}]),
+			services: Some(services),
 			// Configure ephemeral disk for logs
 			ephemeral_disk: Some(Box::new(EphemeralDisk {
 				size_mb: Some(tier.disk as i32),
 				..EphemeralDisk::new()
 			})),
-			tasks: Some(vec![Task {
-				name: Some("game".into()),
-				driver: Some("docker".into()),
-				config: Some({
-					let mut config = HashMap::new();
-					config.insert("load".into(), json!("image.tar"));
-					config.insert("image".into(), json!(image_tag));
-					config.insert("args".into(), json!(runtime.args));
-					config.insert("ports".into(), json!(docker_ports));
-					match network_mode {
-						LobbyRuntimeNetworkMode::Bridge => {
-							// Don't change this property when using bridge
-							// networking, see:
-							// https://developer.hashicorp.com/nomad/docs/drivers/docker?optInFrom=nomad-io#network_mode
-						}
-						LobbyRuntimeNetworkMode::Host => {
-							config.insert("network_mode".into(), json!("host"));
-						}
-					}
-
-					config
-				}),
-				artifacts: Some(vec![TaskArtifact {
-					getter_source: Some("${NOMAD_META_IMAGE_ARTIFACT_URL}".into()),
-					getter_mode: Some("file".into()),
-					getter_options: Some({
-						let mut opts = HashMap::new();
-						// Disable automatic unarchiving, see https://www.nomadproject.io/docs/job-specification/artifact#download-and-unarchive
-						opts.insert("archive".into(), "false".into());
-						opts
+			tasks: Some(vec![
+				Task {
+					name: Some("runc-setup".into()),
+					lifecycle: Some(Box::new(TaskLifecycle {
+						hook: Some("prestart".into()),
+						sidecar: Some(false),
+					})),
+					driver: Some("raw_exec".into()),
+					config: Some({
+						let mut x = HashMap::new();
+						x.insert("command".into(), json!("${NOMAD_TASK_DIR}/setup.sh"));
+						x
 					}),
-					relative_dest: Some("local/image.tar".into()),
-				}]),
-				env: Some(env),
-				services: Some(services),
-				resources: Some(Box::new(Resources {
-					// TODO: Configure this per-provider
-					CPU: if tier.rivet_cores_numerator < tier.rivet_cores_denominator {
-						Some(tier.cpu as i32 - util_job::TASK_CLEANUP_CPU)
-					} else {
-						None
-					},
-					cores: if tier.rivet_cores_numerator >= tier.rivet_cores_denominator {
-						Some((tier.rivet_cores_numerator / tier.rivet_cores_denominator) as i32)
-					} else {
-						None
-					},
-					memory_mb: Some(tier.memory as i32 - util_job::TASK_CLEANUP_MEMORY),
-					// Allow oversubscribing memory by 50% of the reserved
-					// memory if using less than the node's total memory
-					memory_max_mb: Some(tier.memory_max as i32 - util_job::TASK_CLEANUP_MEMORY),
-					disk_mb: Some(tier.disk as i32), // TODO: Is this deprecated?
-					..Resources::new()
-				})),
-				// Gives the game processes time to shut down gracefully.
-				kill_timeout: Some(60 * 1_000_000_000),
-				log_config: Some(Box::new(LogConfig {
-					max_files: Some(4),
-					max_file_size_mb: Some(4),
-				})),
-				..Task::new()
-			}]),
+					templates: Some(vec![
+						Template {
+							embedded_tmpl: Some(include_str!("./scripts/setup.sh").into()),
+							dest_path: Some("${NOMAD_TASK_DIR}/setup.sh".into()),
+							perms: Some("744".into()),
+							..Template::new()
+						},
+						Template {
+							embedded_tmpl: Some(
+								include_str!("./scripts/setup_oci_bundle.sh")
+									.replace("__DOWNLOAD_CMD__", &download_cmd)
+									.replace(
+										"__BUILD_KIND__",
+										match build_kind {
+											backend::build::BuildKind::DockerImage => {
+												"docker-image"
+											}
+											backend::build::BuildKind::OciBundle => "oci-bundle",
+										},
+									),
+							),
+							dest_path: Some("${NOMAD_TASK_DIR}/setup_oci_bundle.sh".into()),
+							perms: Some("744".into()),
+							..Template::new()
+						},
+						Template {
+							embedded_tmpl: Some(
+								include_str!("./scripts/setup_cni_network.sh").into(),
+							),
+							dest_path: Some("${NOMAD_TASK_DIR}/setup_cni_network.sh".into()),
+							perms: Some("744".into()),
+							..Template::new()
+						},
+						Template {
+							embedded_tmpl: Some(gen_oci_bundle_config(env)?),
+							dest_path: Some(
+								"${NOMAD_ALLOC_DIR}/oci-bundle-config.base.json".into(),
+							),
+							..Template::new()
+						},
+						Template {
+							embedded_tmpl: Some(inject_consul_env_template(
+								&serde_json::to_string(&cni_port_mappings)?,
+							)?),
+							dest_path: Some("${NOMAD_ALLOC_DIR}/cni-port-mappings.json".into()),
+							..Template::new()
+						},
+					]),
+					artifacts: Some(vec![TaskArtifact {
+						getter_source: Some("${NOMAD_META_IMAGE_ARTIFACT_URL}".into()),
+						getter_mode: Some("file".into()),
+						getter_options: Some({
+							let mut opts = HashMap::new();
+							// Disable automatic unarchiving since the Docker archive needs to be
+							// consumed in the original tar format
+							opts.insert("archive".into(), "false".into());
+							opts
+						}),
+						relative_dest: Some("${NOMAD_ALLOC_DIR}/docker-image.tar".into()),
+					}]),
+					resources: Some(Box::new(Resources {
+						CPU: Some(util_mm::RUNC_SETUP_CPU),
+						memory_mb: Some(util_mm::RUNC_SETUP_MEMORY),
+						..Resources::new()
+					})),
+					log_config: Some(Box::new(LogConfig {
+						max_files: Some(4),
+						max_file_size_mb: Some(2),
+					})),
+					..Task::new()
+				},
+				Task {
+					name: Some("game".into()),
+					driver: Some("raw_exec".into()),
+					config: Some({
+						let mut x = HashMap::new();
+						x.insert("command".into(), json!("${NOMAD_TASK_DIR}/run.sh"));
+						x
+					}),
+					templates: Some(vec![Template {
+						embedded_tmpl: Some(include_str!("./scripts/run.sh").into()),
+						dest_path: Some("${NOMAD_TASK_DIR}/run.sh".into()),
+						perms: Some("744".into()),
+						..Template::new()
+					}]),
+					resources: Some(Box::new(Resources {
+						// TODO: Configure this per-provider
+						CPU: if tier.rivet_cores_numerator < tier.rivet_cores_denominator {
+							Some(tier.cpu as i32 - util_job::TASK_CLEANUP_CPU)
+						} else {
+							None
+						},
+						cores: if tier.rivet_cores_numerator >= tier.rivet_cores_denominator {
+							Some((tier.rivet_cores_numerator / tier.rivet_cores_denominator) as i32)
+						} else {
+							None
+						},
+						memory_mb: Some(tier.memory as i32 - util_job::TASK_CLEANUP_MEMORY),
+						// Allow oversubscribing memory by 50% of the reserved
+						// memory if using less than the node's total memory
+						memory_max_mb: Some(tier.memory_max as i32 - util_job::TASK_CLEANUP_MEMORY),
+						disk_mb: Some(tier.disk as i32), // TODO: Is this deprecated?
+						..Resources::new()
+					})),
+					// Gives the game processes time to shut down gracefully.
+					kill_timeout: Some(60 * 1_000_000_000),
+					log_config: Some(Box::new(LogConfig {
+						max_files: Some(4),
+						max_file_size_mb: Some(4),
+					})),
+					..Task::new()
+				},
+				Task {
+					name: Some("runc-cleanup".into()),
+					lifecycle: Some(Box::new(TaskLifecycle {
+						hook: Some("poststop".into()),
+						sidecar: Some(false),
+					})),
+					driver: Some("raw_exec".into()),
+					config: Some({
+						let mut x = HashMap::new();
+						x.insert("command".into(), json!("${NOMAD_TASK_DIR}/cleanup.sh"));
+						x
+					}),
+					templates: Some(vec![Template {
+						embedded_tmpl: Some(include_str!("./scripts/cleanup.sh").into()),
+						dest_path: Some("${NOMAD_TASK_DIR}/cleanup.sh".into()),
+						perms: Some("744".into()),
+						..Template::new()
+					}]),
+					resources: Some(Box::new(Resources {
+						CPU: Some(util_mm::RUNC_CLEANUP_CPU),
+						memory_mb: Some(util_mm::RUNC_CLEANUP_MEMORY),
+						..Resources::new()
+					})),
+					log_config: Some(Box::new(LogConfig {
+						max_files: Some(4),
+						max_file_size_mb: Some(2),
+					})),
+					..Task::new()
+				},
+			]),
 			..TaskGroup::new()
 		}]),
 		..Job::new()
 	})
+}
+
+/// Build base config used to generate the OCI bundle's config.json.
+fn gen_oci_bundle_config(env: Vec<String>) -> GlobalResult<String> {
+	// This is a modified version of the default config.json generated by containerd
+	//
+	// Some values will be overridden at runtime by the values in the OCI bundle's config.json.
+	let config = json!({
+		"ociVersion": "1.0.2-dev",
+		"process": {
+			// user, args, and cwd will be injected at runtime
+
+			// Will be merged with the OCI bundle's env
+			//
+			// These will take priority over the OCI bundle's env
+			"env": env,
+
+			"terminal": false,
+			"capabilities": {
+				"bounding": [
+					"CAP_AUDIT_WRITE",
+					"CAP_KILL",
+					"CAP_NET_BIND_SERVICE"
+				],
+				"effective": [
+					"CAP_AUDIT_WRITE",
+					"CAP_KILL",
+					"CAP_NET_BIND_SERVICE"
+				],
+				"permitted": [
+					"CAP_AUDIT_WRITE",
+					"CAP_KILL",
+					"CAP_NET_BIND_SERVICE"
+				],
+				"ambient": [
+					"CAP_AUDIT_WRITE",
+					"CAP_KILL",
+					"CAP_NET_BIND_SERVICE"
+				]
+			},
+			"rlimits": [
+				{
+					"type": "RLIMIT_NOFILE",
+					"hard": 1024,
+					"soft": 1024
+				}
+			],
+			"noNewPrivileges": true
+		},
+		"root": {
+			"path": "rootfs",
+			"readonly": true
+		},
+		"hostname": "rivet-job",
+		"mounts": [
+			{
+				"destination": "/proc",
+				"type": "proc",
+				"source": "proc"
+			},
+			{
+				"destination": "/dev",
+				"type": "tmpfs",
+				"source": "tmpfs",
+				"options": [
+					"nosuid",
+					"strictatime",
+					"mode=755",
+					"size=65536k"
+				]
+			},
+			{
+				"destination": "/dev/pts",
+				"type": "devpts",
+				"source": "devpts",
+				"options": [
+					"nosuid",
+					"noexec",
+					"newinstance",
+					"ptmxmode=0666",
+					"mode=0620",
+					"gid=5"
+				]
+			},
+			{
+				"destination": "/dev/shm",
+				"type": "tmpfs",
+				"source": "shm",
+				"options": [
+					"nosuid",
+					"noexec",
+					"nodev",
+					"mode=1777",
+					"size=65536k"
+				]
+			},
+			{
+				"destination": "/dev/mqueue",
+				"type": "mqueue",
+				"source": "mqueue",
+				"options": [
+					"nosuid",
+					"noexec",
+					"nodev"
+				]
+			},
+			{
+				"destination": "/sys",
+				"type": "sysfs",
+				"source": "sysfs",
+				"options": [
+					"nosuid",
+					"noexec",
+					"nodev",
+					"ro"
+				]
+			},
+			{
+				"destination": "/sys/fs/cgroup",
+				"type": "cgroup",
+				"source": "cgroup",
+				"options": [
+					"nosuid",
+					"noexec",
+					"nodev",
+					"relatime",
+					"ro"
+				]
+			}
+		],
+		"linux": {
+			"resources": {
+				"devices": [
+					{
+						"allow": false,
+						"access": "rwm"
+					}
+				]
+			},
+			// `network` namespace will be added at runitme including the CNI namespace
+			"namespaces": [
+				{ "type": "pid" },
+				{ "type": "ipc" },
+				{ "type": "uts" },
+				{ "type": "mount" },
+				{ "type": "cgroup" }
+			],
+			"maskedPaths": [
+				"/proc/acpi",
+				"/proc/asound",
+				"/proc/kcore",
+				"/proc/keys",
+				"/proc/latency_stats",
+				"/proc/timer_list",
+				"/proc/timer_stats",
+				"/proc/sched_debug",
+				"/sys/firmware",
+				"/proc/scsi"
+			],
+			"readonlyPaths": [
+				"/proc/bus",
+				"/proc/fs",
+				"/proc/irq",
+				"/proc/sys",
+				"/proc/sysrq-trigger"
+			]
+		}
+	});
+	let config_str = serde_json::to_string(&config)?;
+
+	// Escape Go template syntax
+	let config_str = inject_consul_env_template(&escape_go_template(&config_str))?;
+
+	Ok(config_str)
+}
+
+// TODO: Escape uses of `###`
+/// Makes user-generated string safe to inject in to a Go template.
+fn escape_go_template(input: &str) -> String {
+	let re = Regex::new(r"(\{\{|\}\})").unwrap();
+	re.replace_all(input, r#"{{"$1"}}"#).to_string().to_string()
+}
+
+/// Generates a template string that we can substitute with the real environment variable
+///
+/// This must be safe to inject in to a JSON string so it can be substituted after rendering the
+/// JSON object. Intended to be used from within JSON.
+///
+/// See inject_consul_env_template.
+fn template_env_var(name: &str) -> String {
+	format!("###ENV:{name}###")
+}
+
+/// Like template_env_var, but removes surrounding quotes.
+fn template_env_var_int(name: &str) -> String {
+	format!("###ENV_INT:{name}###")
+}
+
+/// Substitutes env vars generated from template_env_var with Consul template syntax.
+///
+/// Intended to be used from within JSON.
+fn inject_consul_env_template(input: &str) -> GlobalResult<String> {
+	// Regular strings
+	let re = Regex::new(r"###ENV:(\w+)###")?;
+	let output = re
+		.replace_all(input, r#"{{ env "$1" | regexReplaceAll "\"" "\\\"" }}"#)
+		.to_string();
+
+	// Integers
+	let re = Regex::new(r####""###ENV_INT:(\w+)###""####)?;
+	let output = re
+		.replace_all(&output, r#"{{ env "$1" | regexReplaceAll "\"" "\\\"" }}"#)
+		.to_string();
+
+	Ok(output)
+}
+
+fn nomad_host_port_env_var(port_label: &str) -> String {
+	format!("NOMAD_HOST_PORT_{}", port_label.replace("-", "_"))
 }
