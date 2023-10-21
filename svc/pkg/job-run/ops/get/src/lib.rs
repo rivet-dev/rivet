@@ -231,7 +231,7 @@ fn derive_nomad_task_state(alloc_state_json: &serde_json::Value) -> GlobalResult
 	// Get the main task by finding the task that is not the run cleanup task
 	let main_task = task_states
 		.iter()
-		.filter(|(k, _)| k.as_str() != util_job::RUN_CLEANUP_TASK_NAME)
+		.filter(|(k, _)| k.as_str() == util_job::RUN_MAIN_TASK_NAME)
 		.map(|(_, v)| v)
 		.next();
 	let main_task = unwrap!(main_task, "could not find main task");

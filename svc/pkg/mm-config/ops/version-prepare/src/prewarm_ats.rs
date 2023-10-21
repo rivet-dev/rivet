@@ -102,7 +102,7 @@ fn gen_prewarm_job(artifact_count: usize) -> GlobalResult<nomad_client::models::
 			..ParameterizedJobConfig::new()
 		})),
 		task_groups: Some(vec![TaskGroup {
-			name: Some("prewarm".into()),
+			name: Some(util_job::RUN_MAIN_TASK_NAME.into()),
 			networks: Some(vec![NetworkResource {
 				mode: Some("host".into()),
 				..NetworkResource::new()
@@ -117,7 +117,7 @@ fn gen_prewarm_job(artifact_count: usize) -> GlobalResult<nomad_client::models::
 			// This task will do nothing and exit immediately. The artifacts are prewarming the
 			// cache for us.
 			tasks: Some(vec![Task {
-				name: Some("prewarm".into()),
+				name: Some(util_job::RUN_MAIN_TASK_NAME.into()),
 				driver: Some("exec".into()),
 				config: Some({
 					let mut config = HashMap::new();

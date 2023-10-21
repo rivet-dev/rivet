@@ -93,6 +93,28 @@ fn modify_job_spec(
 	let task_groups = unwrap!(job.task_groups.as_mut());
 	ensure_eq!(1, task_groups.len(), "must have exactly 1 task group");
 	let task_group = unwrap!(task_groups.first_mut());
+	ensure_eq!(
+		task_group.name.as_deref(),
+		Some(util_job::RUN_MAIN_TASK_NAME),
+		"must have main task group"
+	);
+
+	// Ensure has main task
+	let main_task = unwrap!(
+		task_group
+			.tasks
+			.iter()
+			.flatten()
+			.find(|x| x.name.as_deref() == Some(util_job::RUN_MAIN_TASK_NAME)),
+		"must have main task"
+	);
+	ensure!(
+		main_task
+			.lifecycle
+			.as_ref()
+			.map_or(true, |x| x.hook.is_none()),
+		"main task must not have a lifecycle hook"
+	);
 
 	// Configure networks
 	let networks = unwrap!(task_group.networks.as_mut());
@@ -316,7 +338,7 @@ mod tests {
 				..ParameterizedJobConfig::new()
 			})),
 			task_groups: Some(vec![TaskGroup {
-				name: Some("test".into()),
+				name: Some(util_job::RUN_MAIN_TASK_NAME.into()),
 				networks: Some(vec![NetworkResource {
 					// So we can access it from the test
 					mode: Some("cni/rivet-job".into()),
@@ -335,7 +357,7 @@ mod tests {
 					..Service::new()
 				}]),
 				tasks: Some(vec![Task {
-					name: Some("test".into()),
+					name: Some(util_job::RUN_MAIN_TASK_NAME.into()),
 					driver: Some("docker".into()),
 					config: Some({
 						let mut config = HashMap::new();

@@ -3170,6 +3170,7 @@ dependencies = [
  "nomad-client",
  "prost 0.10.4",
  "rivet-operation",
+ "rivet-util-job",
 ]
 
 [[package]]
@@ -5022,6 +5023,7 @@ dependencies = [
  "reqwest",
  "rivet-operation",
  "rivet-util-build",
+ "rivet-util-job",
  "rivet-util-mm",
  "s3-util",
  "tier-list",

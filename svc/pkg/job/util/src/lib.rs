@@ -20,6 +20,5 @@ pub const TASK_CLEANUP_CPU: i32 = 50;
 // 13.5 MB baseline, 29 MB highest peak
 pub const TASK_CLEANUP_MEMORY: i32 = 32;
 
-pub const GAME_TASK_NAME: &str = "game";
-
+pub const RUN_MAIN_TASK_NAME: &str = "main";
 pub const RUN_CLEANUP_TASK_NAME: &str = "run-cleanup";

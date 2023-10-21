@@ -35,7 +35,7 @@ fn gen_job(
 			..ParameterizedJobConfig::new()
 		})),
 		task_groups: Some(vec![TaskGroup {
-			name: Some("test".into()),
+			name: Some(util_job::RUN_MAIN_TASK_NAME.into()),
 			networks: Some(vec![NetworkResource {
 				mode: Some("cni/rivet-job".into()),
 				dynamic_ports: Some(ports),
@@ -86,7 +86,7 @@ fn gen_task(ctx: &OperationContext<faker::job_template::Request>) -> GlobalResul
 			}],
 			meta_required: Some(vec!["test_id".into()]),
 			task: Task {
-				name: Some("test-server".into()),
+				name: Some(util_job::RUN_MAIN_TASK_NAME.into()),
 				driver: Some("docker".into()),
 				config: Some({
 					let mut config = HashMap::new();
@@ -131,7 +131,7 @@ fn gen_task(ctx: &OperationContext<faker::job_template::Request>) -> GlobalResul
 			}],
 			meta_required: Some(vec!["test_id".into()]),
 			task: Task {
-				name: Some("test-server".into()),
+				name: Some(util_job::RUN_MAIN_TASK_NAME.into()),
 				driver: Some("docker".into()),
 				config: Some({
 					let mut config = HashMap::new();
@@ -182,7 +182,7 @@ fn gen_task(ctx: &OperationContext<faker::job_template::Request>) -> GlobalResul
 			}],
 			meta_required: Some(vec!["test_id".into()]),
 			task: Task {
-				name: Some("test-server".into()),
+				name: Some(util_job::RUN_MAIN_TASK_NAME.into()),
 				driver: Some("docker".into()),
 				config: Some({
 					let mut config = HashMap::new();
@@ -229,7 +229,7 @@ fn gen_task(ctx: &OperationContext<faker::job_template::Request>) -> GlobalResul
 			ports: vec![],
 			meta_required: None,
 			task: Task {
-				name: Some("test-log".into()),
+				name: Some(util_job::RUN_MAIN_TASK_NAME.into()),
 				driver: Some("docker".into()),
 				config: Some({
 					let mut config = HashMap::new();
@@ -274,7 +274,7 @@ fn gen_task(ctx: &OperationContext<faker::job_template::Request>) -> GlobalResul
 			ports: vec![],
 			meta_required: None,
 			task: Task {
-				name: Some("test-exit".into()),
+				name: Some(util_job::RUN_MAIN_TASK_NAME.into()),
 				driver: Some("docker".into()),
 				config: Some({
 					let mut config = HashMap::new();
@@ -306,7 +306,7 @@ fn gen_task(ctx: &OperationContext<faker::job_template::Request>) -> GlobalResul
 			ports: vec![],
 			meta_required: None,
 			task: Task {
-				name: Some("test-counter".into()),
+				name: Some(util_job::RUN_MAIN_TASK_NAME.into()),
 				driver: Some("docker".into()),
 				config: Some({
 					let mut config = HashMap::new();

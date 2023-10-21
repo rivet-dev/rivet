@@ -148,7 +148,7 @@ pub async fn get_lobby_logs(
 			backend::nomad_log::StreamType::StdOut => "stdout",
 			backend::nomad_log::StreamType::StdErr => "stderr",
 		};
-		let log_tail = tail_all!([ctx, anchor, chirp_client::TailAllConfig::wait()] nomad_log::msg::entries(&alloc_id, util_job::GAME_TASK_NAME, stream_type_param)).await?;
+		let log_tail = tail_all!([ctx, anchor, chirp_client::TailAllConfig::wait()] nomad_log::msg::entries(&alloc_id, util_job::RUN_MAIN_TASK_NAME, stream_type_param)).await?;
 
 		// Sort entries by timestamp
 		let mut entries = log_tail
@@ -183,7 +183,7 @@ pub async fn get_lobby_logs(
 	let before_ts = util::timestamp::now();
 	let logs_res = op!([ctx] @dont_log_body nomad_log_read {
 		alloc: alloc_id.clone(),
-		task: util_job::GAME_TASK_NAME.into(),
+		task: util_job::RUN_MAIN_TASK_NAME.into(),
 		stream_type: stream_type as i32,
 		count: 256,
 		query: Some(nomad_log::read::request::Query::BeforeTs(nomad_log::read::request::TimestampQuery {
@@ -238,7 +238,7 @@ pub async fn export_lobby_logs(
 	let res = msg!([ctx] nomad_log::msg::export(request_id) -> nomad_log::msg::export_complete {
 		request_id: Some(request_id.into()),
 		alloc: alloc_id,
-		task: util_job::GAME_TASK_NAME.into(),
+		task: util_job::RUN_MAIN_TASK_NAME.into(),
 		stream_type: stream_type as i32,
 	})
 	.await?;

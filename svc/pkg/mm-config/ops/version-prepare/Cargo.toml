@@ -14,6 +14,7 @@ rivet-operation = { path = "../../../../../lib/operation/core" }
 s3-util = { path = "../../../../../lib/s3-util" }
 nomad-client = "0.0.9"
 util-build = { package = "rivet-util-build", path = "../../../build/util" }
+util-job = { package = "rivet-util-job", path = "../../../job/util" }
 
 build-get = { path = "../../../build/ops/get" }
 upload-get = { path = "../../../upload/ops/get" }

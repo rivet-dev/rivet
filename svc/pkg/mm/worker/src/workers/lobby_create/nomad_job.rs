@@ -309,7 +309,7 @@ pub fn gen_lobby_docker_job(
 			meta_optional: None,
 		})),
 		task_groups: Some(vec![TaskGroup {
-			name: Some(util_job::GAME_TASK_NAME.into()),
+			name: Some(util_job::RUN_MAIN_TASK_NAME.into()),
 			constraints: None, // TODO: Use parameter meta to specify the hardware
 			affinities: None,  // TODO:
 			// Allows for jobs to keep running and receiving players in the
@@ -422,7 +422,7 @@ pub fn gen_lobby_docker_job(
 					..Task::new()
 				},
 				Task {
-					name: Some("game".into()),
+					name: Some(util_job::RUN_MAIN_TASK_NAME.into()),
 					driver: Some("raw_exec".into()),
 					config: Some({
 						let mut x = HashMap::new();
