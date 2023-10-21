@@ -49,8 +49,12 @@ const DEFAULT_BUILDS: &[DefaultBuildConfig] = &[
 	},
 	DefaultBuildConfig {
 		kind: "test-mm-player-connect",
-		tag: include_str!("../default-builds/outputs/test-mm-player-connect-tag.txt"),
-		tar: include_bytes!("../default-builds/outputs/test-mm-player-connect.tar"),
+		tag: include_str!(
+			"../../../../../../infra/default-builds/outputs/test-mm-player-connect-tag.txt"
+		),
+		tar: include_bytes!(
+			"../../../../../../infra/default-builds/outputs/test-mm-player-connect.tar"
+		),
 	},
 ];
 

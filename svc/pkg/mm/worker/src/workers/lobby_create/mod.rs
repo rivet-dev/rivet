@@ -324,9 +324,10 @@ async fn fetch_mm_namespace_config(
 	})
 	.await?;
 
-	let namespace = unwrap_ref!(unwrap!(get_res.namespaces.first(), "namespace not found").config)
+	let namespace = unwrap!(get_res.namespaces.first(), "namespace not found")
 		.deref()
 		.clone();
+	let namespace_config = unwrap_ref!(namespace.config).clone();
 
 	Ok(namespace_config)
 }
