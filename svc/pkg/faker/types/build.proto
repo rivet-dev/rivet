@@ -6,7 +6,6 @@ import "proto/common.proto";
 import "google/protobuf/empty.proto";
 
 enum Image {
-<<<<<<< HEAD
 	FAIL_IMMEDIATELY = 0;
 	HANG_INDEFINITELY = 1;
 	MM_LOBBY_AUTO_READY = 2;

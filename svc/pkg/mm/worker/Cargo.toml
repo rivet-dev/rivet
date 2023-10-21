@@ -16,18 +16,16 @@ lazy_static = "1.4.0"
 nomad-client = "0.0.9"
 nomad-util = { path = "../../../../lib/nomad-util" }
 redis-util = { path = "../../../../lib/redis-util" }
+regex = "1.4"
 reqwest = "0.11"
 rivet-health-checks = { path = "../../../../lib/health-checks" }
 rivet-metrics = { path = "../../../../lib/metrics" }
 rivet-runtime = { path = "../../../../lib/runtime" }
 s3-util = { path = "../../../../lib/s3-util" }
 serde = { version = "1.0", features = ["derive"] }
+util-build = { package = "rivet-util-build", path = "../../build/util" }
 util-job = { package = "rivet-util-job", path = "../../job/util" }
 util-mm = { package = "rivet-util-mm", path = "../../mm/util" }
-http = "0.2"
-heck = "0.3"
-regex = "1.4"
-util-build = { package = "rivet-util-build", path = "../../build/util" }
 
 build-get = { path = "../../build/ops/get" }
 game-get = { path = "../../game/ops/get" }

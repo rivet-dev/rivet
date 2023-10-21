@@ -9,9 +9,8 @@ async fn handle(
 ) -> GlobalResult<build::create::Response> {
 	let crdb = ctx.crdb().await?;
 
-	let kind = internal_unwrap_owned!(backend::build::BuildKind::from_i32(ctx.kind));
-	let compression =
-		internal_unwrap_owned!(backend::build::BuildCompression::from_i32(ctx.compression));
+	let kind = unwrap!(backend::build::BuildKind::from_i32(ctx.kind));
+	let compression = unwrap!(backend::build::BuildCompression::from_i32(ctx.compression));
 
 	let game_id = **unwrap_ref!(ctx.game_id);
 	ensure!(

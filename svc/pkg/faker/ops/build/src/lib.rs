@@ -10,12 +10,12 @@ async fn handle(
 	// Determine image name
 	//
 	// These are built in `bin/runtime_docker_builds/`
-	let build_kind = match internal_unwrap_owned!(faker::build::Image::from_i32(ctx.image)) {
+	let build_kind = match unwrap!(faker::build::Image::from_i32(ctx.image)) {
 		faker::build::Image::FailImmediately => "test-fail-immediately",
 		faker::build::Image::HangIndefinitely => "test-hang-indefinitely",
 		faker::build::Image::MmLobbyAutoReady => "test-mm-lobby-ready",
 		faker::build::Image::MmLobbyEcho => "test-mm-lobby-echo",
-		faker::build::Image::MmLobbyEcho => "test-mm-player-connect",
+		faker::build::Image::MmPlayerConnect => "test-mm-player-connect",
 	};
 
 	let create_res = op!([ctx] build_create {
