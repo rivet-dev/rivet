@@ -561,7 +561,7 @@ pub fn outbound_proxy(server: &Server, all_servers: &HashMap<String, Server>) ->
 			}],
 			"clusters": [{
 				"name": "ats_backend",
-				"connect_timeout": "0.25s",
+				"connect_timeout": "1s",
 				// Use consistent hashing to reliably send the same request to the same server
 				//
 				// In order for this to work, the load balancer must be configured with the same:

@@ -366,9 +366,6 @@ pub async fn create(
 	)
 	.await?;
 
-	// TODO: Remove this hack to give Traefik time to update
-	tokio::time::sleep(std::time::Duration::from_secs(1)).await;
-
 	// TODO: Cleanup lobby if find failed
 
 	Ok(models::MatchmakerCreateLobbyResponse {
