@@ -5083,25 +5083,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "mm-gc-full"
-version = "0.0.1"
-dependencies = [
- "chirp-client",
- "chirp-worker",
- "chrono",
- "indoc",
- "prost 0.10.4",
- "rivet-connection",
- "rivet-operation",
- "rivet-pools",
- "rivet-runtime",
- "rivet-util-mm",
- "sqlx",
- "tracing",
- "tracing-subscriber",
-]
-
-[[package]]
 name = "mm-lobby-find-fail"
 version = "0.0.1"
 dependencies = [
