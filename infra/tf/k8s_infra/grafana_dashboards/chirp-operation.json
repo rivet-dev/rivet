@@ -24,7 +24,7 @@
   "editable": true,
   "fiscalYearStartMonth": 0,
   "graphTooltip": 0,
-  "id": 32,
+  "id": 5,
   "links": [],
   "liveNow": false,
   "panels": [
@@ -125,7 +125,7 @@
           "unit": "s"
         }
       },
-      "pluginVersion": "10.1.2",
+      "pluginVersion": "10.1.4",
       "reverseYBuckets": false,
       "targets": [
         {
@@ -247,7 +247,7 @@
           },
           "editorMode": "code",
           "expr": "sum(rate(rivet_chirp_request_total{context_name=~\"[[context]]\"}[$__rate_interval])) by (context_name)",
-          "legendFormat": "{{service}}",
+          "legendFormat": "{{context_name}}",
           "range": true,
           "refId": "A"
         }
@@ -342,7 +342,7 @@
           },
           "editorMode": "code",
           "expr": "sum(max_over_time(rivet_chirp_request_pending{context_name=~\"[[context]]\"}[$__interval])) by (context_name)",
-          "legendFormat": "{{service}}",
+          "legendFormat": "{{context_name}}",
           "range": true,
           "refId": "A"
         }
@@ -447,12 +447,303 @@
       "type": "timeseries"
     },
     {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "drawStyle": "line",
+            "fillOpacity": 0,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "auto",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          },
+          "unit": "s"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 9,
+        "w": 8,
+        "x": 0,
+        "y": 19
+      },
+      "id": 20,
+      "interval": "15s",
+      "options": {
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": false
+        },
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "pluginVersion": "10.1.4",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "editorMode": "code",
+          "expr": "sum(rate(rivet_chirp_request_duration_sum{error_code!=\"1004\",context_name=~\"[[context]]\"} [$__rate_interval])) by (context_name) /\r\nsum(rate(rivet_chirp_request_duration_count{error_code!=\"1004\",context_name=~\"[[context]]\"} [$__rate_interval])) by (context_name)",
+          "format": "heatmap",
+          "legendFormat": "{{context_name}}",
+          "range": true,
+          "refId": "A"
+        }
+      ],
+      "title": "Request Duration (avg)",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "drawStyle": "line",
+            "fillOpacity": 0,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "auto",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          },
+          "unit": "s"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 9,
+        "w": 8,
+        "x": 8,
+        "y": 19
+      },
+      "id": 21,
+      "interval": "15s",
+      "options": {
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": false
+        },
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "pluginVersion": "10.1.4",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "editorMode": "code",
+          "expr": "histogram_quantile(0.95, \r\n  sum(rate(rivet_chirp_request_duration_bucket{error_code!=\"1004\",context_name=~\"[[context]]\"} [$__rate_interval])) \r\n  by (le, context_name)\r\n)\r\n",
+          "format": "heatmap",
+          "legendFormat": "{{context_name}}",
+          "range": true,
+          "refId": "A"
+        }
+      ],
+      "title": "Request Duration (p95)",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "drawStyle": "line",
+            "fillOpacity": 0,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "auto",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          },
+          "unit": "seconds"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 9,
+        "w": 8,
+        "x": 16,
+        "y": 19
+      },
+      "id": 22,
+      "interval": "15s",
+      "options": {
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": false
+        },
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "pluginVersion": "10.1.4",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "editorMode": "code",
+          "expr": "histogram_quantile(0.99, \r\n  sum(rate(rivet_chirp_request_duration_bucket{error_code!=\"1004\",context_name=~\"[[context]]\"} [$__rate_interval])) \r\n  by (le, context_name)\r\n)\r\n",
+          "format": "heatmap",
+          "legendFormat": "{{context_name}}",
+          "range": true,
+          "refId": "A"
+        }
+      ],
+      "title": "Request Duration (p99)",
+      "type": "timeseries"
+    },
+    {
       "collapsed": false,
       "gridPos": {
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 19
+        "y": 28
       },
       "id": 8,
       "panels": [],
@@ -492,7 +783,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 20
+        "y": 29
       },
       "heatmap": {},
       "hideZeroBuckets": true,
@@ -543,7 +834,7 @@
           "unit": "s"
         }
       },
-      "pluginVersion": "10.1.2",
+      "pluginVersion": "10.1.4",
       "reverseYBuckets": false,
       "targets": [
         {
@@ -640,7 +931,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 20
+        "y": 29
       },
       "id": 19,
       "interval": "15s",
@@ -696,7 +987,7 @@
         "definition": "label_values(rivet_chirp_request_total,context_name)",
         "hide": 0,
         "includeAll": true,
-        "label": "Service",
+        "label": "Context",
         "multi": true,
         "name": "context",
         "options": [],
@@ -720,6 +1011,6 @@
   "timezone": "",
   "title": "Chirp / Operation",
   "uid": "c6345ab8-9146-499f-ab0b-7fb10fe5b9e1",
-  "version": 2,
+  "version": 1,
   "weekStart": ""
 }
