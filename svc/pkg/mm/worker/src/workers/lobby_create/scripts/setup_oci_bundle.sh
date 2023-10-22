@@ -40,6 +40,8 @@ case "__BUILD_KIND__" in
 esac
 
 # resolv.conf
+#
+# See also rivet-job.conflist in lib/bolt/core/src/dep/terraform/install_scripts/files/nomad.sh
 cat <<EOF > $NOMAD_ALLOC_DIR/resolv.conf
 nameserver 8.8.8.8
 nameserver 8.8.4.4

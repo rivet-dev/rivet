@@ -151,6 +151,15 @@ cat << EOF > /opt/cni/config/rivet-job.conflist
 					{ "dst": "0.0.0.0/0" },
 					{ "dst": "::/0" }
 				]
+			},
+			"dns": {
+				"nameservers": [
+					"8.8.8.8",
+					"8.8.4.4",
+					"2001:4860:4860::8888",
+					"2001:4860:4860::8844"
+				],
+				"options": ["rotate", "edns0", "attempts:2"]
 			}
 		},
 		{
