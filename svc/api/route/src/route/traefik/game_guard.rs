@@ -95,6 +95,19 @@ pub async fn build_job(
 			),
 		},
 	);
+	config.tcp.middlewares.insert(
+		"job-in-flight".to_owned(),
+		traefik::TraefikMiddleware::InFlightReq {
+			// This number needs to be high to allow for parallel requests
+			amount: 4,
+			source_criterion: traefik::InFlightReqSourceCriterion::IpStrategy(
+				traefik::IpStrategy {
+					depth: 0,
+					exclude_ips: None,
+				},
+			),
+		},
+	);
 
 	// Process proxied ports
 	for run_proxied_ports in &job_runs_fetch {
@@ -251,7 +264,7 @@ fn register_proxied_port(
 					rule: Some("HostSNI(`*`)".into()),
 					priority: None,
 					service: service_id,
-					middlewares: vec![],
+					middlewares: vec!["job-in-flight".into()],
 					tls: None,
 				},
 			);
