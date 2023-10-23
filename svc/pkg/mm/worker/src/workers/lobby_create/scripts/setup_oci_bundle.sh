@@ -71,7 +71,7 @@ jq "
 	\"destination\": \"/etc/resolv.conf\",
 	\"type\": \"bind\",
 	\"source\": \"$NOMAD_ALLOC_DIR/resolv.conf\",
-	\"options\": [\"bind\", \"ro\"]
+	\"options\": [\"rbind\", \"rprivate\"]
 }]
 " "$NOMAD_ALLOC_DIR/oci-bundle-config.base.json" > "$OCI_BUNDLE_PATH/config.json"
 
