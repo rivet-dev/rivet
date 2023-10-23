@@ -43,118 +43,148 @@ ADMIN_CHAIN="RIVET-ADMIN"
 SUBNET_IPV4="172.26.64.0/20"
 SUBNET_IPV6="fd00:db8:2::/64"
 
-# TODO: Prioritize TOS?  It can be added to the tc filter
-#
-# https://linux.die.net/man/8/tc-prio#:~:text=TOS%20%20%20%20%20Bits%20%20Means%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20Linux%20Priority%20%20%20%20Band
-# https://man7.org/linux/man-pages/man8/tc-prio.8.html
-
-# Create queuing discipline (qdisc)
+# MARK: Linux Traffic Control
 for iface in __PUBLIC_IFACE__ __VLAN_IFACE__; do
-	# Check if the prio qdisc already exists
-	if ! tc qdisc show dev $iface | grep -q "prio 1:"; then
-		# TODO: Theoretically saturating the link with game traffic could cause issues with the background traffic.  This could be fixed by using a CBQ qdisc instead of prio.
+    # Check if the HTB qdisc already exists
+    if ! tc qdisc show dev $iface | grep -q "htb 1:"; then
 
-		# Set up an priority queuing discipline.
+        # Set up a HTB queuing discipline.
 		#
-		# This includes 3 classes: 0 = highest priority, 2 = lowest priority. These classes correspond to flow IDs 1:1, 1:2, and 1:3, representing highest to lowest priority, respectively.
+		# This will help prioritize traffic in the case of congestion.
 		#
-		# 1:2 will be used for game traffic and 1:3 for less important background traffic (i.e. downloading from ATS).
+		# HTB was chosen over QCB because it allows for more flexibility in the future.
+		# 
+		# See all classes with: tc -s class show dev $iface
 		#
-		# Read more about PRIO qdisc: https://lartc.org/howto/lartc.qdisc.classful.html#AEN899:~:text=9.5.3.%20The%20PRIO%20qdisc
-		#
-		# Manual (less helpful): https://man7.org/linux/man-pages/man8/tc-prio.8.html
-		#
-		# See all availble flows by running: tc -s class show dev $iface
-		tc qdisc add dev $iface root handle 1: prio
+		# Read more: https://lartc.org/howto/lartc.qdisc.classful.html#AEN1071
+        tc qdisc add dev $iface \
+			root \
+			handle 1: \
+			htb \
+			default 10
 
-		# Forward packets with different marks to the appropriate flows.
+        # Create a root class with a max bandwidth
+        tc class add dev $iface \
+			parent 1: \
+			classid 1:1 \
+			htb \
+			rate 10Gbit
+
+        # Game traffic class with high priority
 		#
+		# Low bandwidth limit = game servers are not expected to use much bandwidth
+		# High priority = packets take priority in the case of congestion
+        tc class add dev $iface \
+			parent 1:1 \
+			classid 1:10 \
+			htb \
+			rate 100Mbit \
+			prio 0
+
+        # Background traffic class with lower priority
+		#
+		# High bandwidth = peak performance when there is no network congestion
+		# Low priority = packets are dropped first in the case of congestion
+        tc class add dev $iface \
+			parent 1:1 \
+			classid 1:20 \
+			htb \
+			rate 1000Mbit \
+			prio 1
+
+        # Forward packets with different marks to the appropriate classes.
+		#
+		# prio x = sets filter priority
 		# handle x = handle packets marked x by iptables
-		# fw flowid x = send matched packets to the given flow
-		tc filter add dev $iface \
-			parent 1: \
+		# fw classid x = send matched packets to class x
+        tc filter add dev $iface \
 			protocol ip \
+			parent 1:0 \
+			prio 1 \
 			handle 1 \
-			fw flowid 1:1
-		tc filter add dev $iface \
-			parent 1: \
+			fw classid 1:10
+        tc filter add dev $iface \
 			protocol ip \
+			parent 1:0 \
+			prio 2 \
 			handle 2 \
-			fw flowid 1:2
+			fw classid 1:20
 
-	    echo "Prio qdisc and filter rules added."
-	else
-		echo "Prio qdisc and filter rules already exist."
-	fi
+        echo "HTB qdisc and class rules added."
+
+    else
+        echo "HTB qdisc and class rules already exist."
+    fi
 done
 
+# MARK: iptables
 cat << EOF > /usr/local/bin/setup_nomad_networking.sh
 #!/bin/bash
 set -euf
 
 add_ipt_rule() {
-    local ipt="$1"
-    local admin_chain="$2"
-    local rule="$3"
+    local ipt="\$1"
+    local rule="\$2"
 
-    if ! "$ipt" -t filter -L "$admin_chain" &>/dev/null; then
-        "$ipt" -t filter -N "$admin_chain"
-        echo "Created $ipt chain: $admin_chain"
+    if ! "\$ipt" -t filter -C "$ADMIN_CHAIN" \$rule &>/dev/null; then
+        "\$ipt" -t filter -A "$ADMIN_CHAIN" \$rule
+        echo "Added \$ipt rule: \$rule"
     else
-        echo "Chain already exists in $ipt: $admin_chain"
-    fi
-
-    if ! "$ipt" -t filter -C "$admin_chain" "$rule" &>/dev/null; then
-        "$ipt" -t filter -A "$admin_chain" "$rule"
-        echo "Added $ipt rule: $rule"
-    else
-        echo "Rule already exists in $ipt: $rule"
+        echo "Rule already exists in \$ipt: \$rule"
     fi
 }
 
 for ipt in iptables ip6tables; do
 	# Define SUBNET_VAR based on iptables version
-	if [ "$ipt" == "iptables" ]; then
+	if [ "\$ipt" == "iptables" ]; then
 		SUBNET_VAR="$SUBNET_IPV4"
 	else
 		SUBNET_VAR="$SUBNET_IPV6"
 	fi
 
+	# MARK: Create chain
+    if ! "\$ipt" -t filter -L "$ADMIN_CHAIN" &>/dev/null; then
+        "\$ipt" -t filter -N "$ADMIN_CHAIN"
+        echo "Created \$ipt chain: $ADMIN_CHAIN"
+    else
+        echo "Chain already exists in \$ipt: $ADMIN_CHAIN"
+    fi
+
 	# MARK: GG ingress
 	# Prioritize traffic
-	add_ipt_rule "$ipt" "$ADMIN_CHAIN" "-s __GG_VLAN_SUBNET__ -d \$SUBNET_VAR -j MARK --set-mark 1"
+	add_ipt_rule "\$ipt" "-s __GG_VLAN_SUBNET__ -d \$SUBNET_VAR -j MARK --set-mark 1"
     # Change TOS to minimize delay
-	add_ipt_rule "$ipt" "$ADMIN_CHAIN" "-s __GG_VLAN_SUBNET__ -d \$SUBNET_VAR -j TOS --set-tos 0x10"
+	add_ipt_rule "\$ipt" "-s __GG_VLAN_SUBNET__ -d \$SUBNET_VAR -j TOS --set-tos 0x10"
 	# Accept traffic
-	add_ipt_rule "$ipt" "$ADMIN_CHAIN" "-s __GG_VLAN_SUBNET__ -d \$SUBNET_VAR -j ACCEPT"
+	add_ipt_rule "\$ipt" "-s __GG_VLAN_SUBNET__ -d \$SUBNET_VAR -j ACCEPT"
 
 	# MARK: GG egress
     # Prioritize resopnse traffic
-	add_ipt_rule "$ipt" "$ADMIN_CHAIN" "-s \$SUBNET_VAR -m conntrack --ctstate NEW,ESTABLISHED -j MARK --set-mark 1"
+	add_ipt_rule "\$ipt" "-s \$SUBNET_VAR -m conntrack --ctstate NEW,ESTABLISHED -j MARK --set-mark 1"
     # Change TOS to minimize delay
-	add_ipt_rule "$ipt" "$ADMIN_CHAIN" "-s \$SUBNET_VAR -m conntrack --ctstate NEW,ESTABLISHED -j TOS --set-tos 0x10"
+	add_ipt_rule "\$ipt" "-s \$SUBNET_VAR -m conntrack --ctstate NEW,ESTABLISHED -j TOS --set-tos 0x10"
     # Enable conntrack to allow traffic to flow back to the GG subnet
-	add_ipt_rule "$ipt" "$ADMIN_CHAIN" "-s \$SUBNET_VAR -m conntrack --ctstate NEW,ESTABLISHED -j ACCEPT"
+	add_ipt_rule "\$ipt" "-s \$SUBNET_VAR -m conntrack --ctstate NEW,ESTABLISHED -j ACCEPT"
 
 	# MARK: Public egress
 	# Prioritize traffic
-	add_ipt_rule "$ipt" "$ADMIN_CHAIN" "-s \$SUBNET_VAR -o __PUBLIC_IFACE__ -j MARK --set-mark 1"
+	add_ipt_rule "\$ipt" "-s \$SUBNET_VAR -o __PUBLIC_IFACE__ -j MARK --set-mark 1"
 	# Change TOS to minimize delay
-	add_ipt_rule "$ipt" "$ADMIN_CHAIN" "-s \$SUBNET_VAR -o __PUBLIC_IFACE__ -j TOS --set-tos 0x10"
+	add_ipt_rule "\$ipt" "-s \$SUBNET_VAR -o __PUBLIC_IFACE__ -j TOS --set-tos 0x10"
     # Allow egress traffic
-	add_ipt_rule "$ipt" "$ADMIN_CHAIN" "-s \$SUBNET_VAR -o __PUBLIC_IFACE__ -j ACCEPT"
+	add_ipt_rule "\$ipt" "-s \$SUBNET_VAR -o __PUBLIC_IFACE__ -j ACCEPT"
 
 	# MARK: ATS ingress
-	if [ "$ipt" == "iptables" ]; then
+	if [ "\$ipt" == "iptables" ]; then
 		# Deprioritize traffic so game traffic takes priority
-		add_ipt_rule "$ipt" "$ADMIN_CHAIN" "-s __ATS_VLAN_SUBNET__ -j MARK --set-mark 2"
+		add_ipt_rule "\$ipt" "-s __ATS_VLAN_SUBNET__ -j MARK --set-mark 2"
 		# Change TOS to maximize throughput
-		add_ipt_rule "$ipt" "$ADMIN_CHAIN" "-s \$SUBNET_VAR -o __PUBLIC_IFACE__ -j TOS --set-tos 0x8"
+		add_ipt_rule "\$ipt" "-s \$SUBNET_VAR -o __PUBLIC_IFACE__ -j TOS --set-tos 0x8"
 	fi
 
 	# MARK: Deny
     # Deny all other egress traffic
-	add_ipt_rule "$ipt" "$ADMIN_CHAIN" "-s \$SUBNET_VAR -j DROP"
+	add_ipt_rule "\$ipt" "-s \$SUBNET_VAR -j DROP"
 done
 EOF
 
