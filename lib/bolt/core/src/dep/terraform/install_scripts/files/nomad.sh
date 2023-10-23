@@ -60,7 +60,8 @@ for iface in __PUBLIC_IFACE__ __VLAN_IFACE__; do
 		#
 		# HTB was chosen over QCB because it allows for more flexibility in the future.
 		# 
-		# See all classes with: tc -s class show dev \$iface
+		# Manually test that traffic is getting routed correctly by running:
+		# tc -s class show dev eth1
 		#
 		# Read more: https://lartc.org/howto/lartc.qdisc.classful.html#AEN1071
         tc qdisc add dev \$iface \

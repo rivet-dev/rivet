@@ -54,8 +54,29 @@ pub fn gen_lobby_docker_job(
 	// `reuse_job_id` test passes when changing this function.
 	use nomad_client::models::*;
 
+	let resources = Resources {
+		// TODO: Configure this per-provider
+		CPU: if tier.rivet_cores_numerator < tier.rivet_cores_denominator {
+			Some(tier.cpu as i32 - util_job::TASK_CLEANUP_CPU)
+		} else {
+			None
+		},
+		cores: if tier.rivet_cores_numerator >= tier.rivet_cores_denominator {
+			Some((tier.rivet_cores_numerator / tier.rivet_cores_denominator) as i32)
+		} else {
+			None
+		},
+		memory_mb: Some(tier.memory as i32 - util_job::TASK_CLEANUP_MEMORY),
+		// Allow oversubscribing memory by 50% of the reserved
+		// memory if using less than the node's total memory
+		memory_max_mb: Some(tier.memory_max as i32 - util_job::TASK_CLEANUP_MEMORY),
+		disk_mb: Some(tier.disk as i32), // TODO: Is this deprecated?
+		..Resources::new()
+	};
+
 	let network_mode = unwrap!(LobbyRuntimeNetworkMode::from_i32(runtime.network_mode));
 
+	// Read ports
 	let decoded_ports = runtime
 		.ports
 		.iter()
@@ -113,8 +134,13 @@ pub fn gen_lobby_docker_job(
 	let mut env = runtime
 		.env_vars
 		.iter()
-		.map(|v| (v.key.clone(), v.value.clone()))
-		.chain(lobby_config_json.map(|config| ("RIVET_LOBBY_CONFIG".to_string(), config.clone())))
+		.map(|v| (v.key.clone(), escape_go_template(&v.value)))
+		.chain(lobby_config_json.map(|config| {
+			(
+				"RIVET_LOBBY_CONFIG".to_string(),
+				escape_go_template(&config),
+			)
+		}))
 		.chain([(
 			"RIVET_API_ENDPOINT".to_string(),
 			util::env::origin_api().to_string(),
@@ -384,7 +410,7 @@ pub fn gen_lobby_docker_job(
 							..Template::new()
 						},
 						Template {
-							embedded_tmpl: Some(gen_oci_bundle_config(env)?),
+							embedded_tmpl: Some(gen_oci_bundle_config(&resources, env)?),
 							dest_path: Some(
 								"${NOMAD_ALLOC_DIR}/oci-bundle-config.base.json".into(),
 							),
@@ -435,25 +461,7 @@ pub fn gen_lobby_docker_job(
 						perms: Some("744".into()),
 						..Template::new()
 					}]),
-					resources: Some(Box::new(Resources {
-						// TODO: Configure this per-provider
-						CPU: if tier.rivet_cores_numerator < tier.rivet_cores_denominator {
-							Some(tier.cpu as i32 - util_job::TASK_CLEANUP_CPU)
-						} else {
-							None
-						},
-						cores: if tier.rivet_cores_numerator >= tier.rivet_cores_denominator {
-							Some((tier.rivet_cores_numerator / tier.rivet_cores_denominator) as i32)
-						} else {
-							None
-						},
-						memory_mb: Some(tier.memory as i32 - util_job::TASK_CLEANUP_MEMORY),
-						// Allow oversubscribing memory by 50% of the reserved
-						// memory if using less than the node's total memory
-						memory_max_mb: Some(tier.memory_max as i32 - util_job::TASK_CLEANUP_MEMORY),
-						disk_mb: Some(tier.disk as i32), // TODO: Is this deprecated?
-						..Resources::new()
-					})),
+					resources: Some(Box::new(resources.clone())),
 					// Gives the game processes time to shut down gracefully.
 					kill_timeout: Some(60 * 1_000_000_000),
 					log_config: Some(Box::new(LogConfig {
@@ -499,7 +507,33 @@ pub fn gen_lobby_docker_job(
 }
 
 /// Build base config used to generate the OCI bundle's config.json.
-fn gen_oci_bundle_config(env: Vec<String>) -> GlobalResult<String> {
+fn gen_oci_bundle_config(
+	resources: &nomad_client::models::Resources,
+	env: Vec<String>,
+) -> GlobalResult<String> {
+	let oci_resources = json!({
+		// TODO: network
+		// TODO: pids
+		// TODO: hugepageLimits
+		// TODO: blockIO
+		// Docker: https://github.com/moby/moby/blob/777e9f271095685543f30df0ff7a12397676f938/daemon/daemon_unix.go#L126
+		"cpu": {
+			"shares": resources.CPU,
+			"cpus": resources.cores,
+		},
+		// Docker: https://github.com/moby/moby/blob/777e9f271095685543f30df0ff7a12397676f938/daemon/daemon_unix.go#L75
+		"memory": {
+			"reservation": resources.memory_mb,
+			"limit": resources.memory_max_mb,
+		},
+		"devices": [
+			{
+				"allow": false,
+				"access": "rwm"
+			}
+		],
+	});
+
 	// Default Docker capabilities: https://github.com/moby/moby/blob/777e9f271095685543f30df0ff7a12397676f938/oci/caps/defaults.go#L4
 	let default_capabilities = vec![
 		"CAP_CHOWN",
@@ -545,7 +579,7 @@ fn gen_oci_bundle_config(env: Vec<String>) -> GlobalResult<String> {
 			"apparmorProfile": "rivet-job",
 			"noNewPrivileges": true,
 			// TODO:
-			"oomSocreAdj": 0,
+			// "oomSocreAdj": 0,
 			// TODO: scheduler
 			// TODO: iopriority
 			// TODO: rlimit?
@@ -600,28 +634,7 @@ fn gen_oci_bundle_config(env: Vec<String>) -> GlobalResult<String> {
 			}
 		],
 		"linux": {
-			"resources": {
-				// TODO: network
-				// TODO: pids
-				// TODO: hugepageLimits
-				// TODO: blockIO
-				// Docker: https://github.com/moby/moby/blob/777e9f271095685543f30df0ff7a12397676f938/daemon/daemon_unix.go#L75
-				"memory": {
-					"reservation": template_env_var_int("NOMAD_MEMORY_MAX_LIMIT"),
-					"limit": template_env_var_int("NOMAD_MEMORY_LIMIT"),
-				},
-				// Docker: https://github.com/moby/moby/blob/777e9f271095685543f30df0ff7a12397676f938/daemon/daemon_unix.go#L126
-				"cpu": {
-					"shares": template_env_var_int("NOMAD_CPU_LIMIT"),
-					"cpus": template_env_var("NOMAD_CPU_CORES"),
-				},
-				"devices": [
-					{
-						"allow": false,
-						"access": "rwm"
-					}
-				],
-			},
+			"resources": oci_resources,
 			"maskedPaths": [
 				"/proc/asound",
 				"/proc/acpi",
@@ -654,7 +667,7 @@ fn gen_oci_bundle_config(env: Vec<String>) -> GlobalResult<String> {
 	let config_str = serde_json::to_string(&config)?;
 
 	// Escape Go template syntax
-	let config_str = inject_consul_env_template(&escape_go_template(&config_str))?;
+	let config_str = inject_consul_env_template(&config_str)?;
 
 	Ok(config_str)
 }
