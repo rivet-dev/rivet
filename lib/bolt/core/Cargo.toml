@@ -22,6 +22,7 @@ heck = "0.3"
 hex = "0.4"
 indicatif = "0.16"
 indoc = "1.0"
+indexmap = "2.0"
 ipnet = { version = "2.7", features = ["serde"] }
 lazy_static = "1.4"
 maplit = "1.0"

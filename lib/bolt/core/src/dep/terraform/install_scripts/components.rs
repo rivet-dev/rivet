@@ -1,8 +1,8 @@
 use std::collections::HashMap;
 
 use anyhow::{Context, Result};
-use indoc::formatdoc;
-use indoc::indoc;
+use indexmap::IndexMap;
+use indoc::{formatdoc, indoc};
 use serde_json::json;
 use tokio::fs;
 
@@ -53,7 +53,7 @@ pub fn nomad(server: &Server) -> String {
 		.replace("__GG_VLAN_SUBNET__", &net::gg::vlan_ip_net().to_string())
 }
 
-/// Installs Treafik, but does not create the Traefik service.
+/// Installs Traefik, but does not create the Traefik service.
 pub fn traefik() -> String {
 	include_str!("files/traefik.sh").to_string()
 }
@@ -62,8 +62,8 @@ pub struct TraefikInstance {
 	pub name: String,
 	pub static_config: String,
 	pub dynamic_config: String,
-	pub tls_certs: HashMap<String, Cert>,
-	pub tcp_server_transports: HashMap<String, ServerTransport>,
+	pub tls_certs: IndexMap<String, Cert>,
+	pub tcp_server_transports: IndexMap<String, ServerTransport>,
 }
 
 pub struct ServerTransport {
@@ -182,7 +182,7 @@ pub fn traefik_tunnel(
 	tls: &crate::dep::terraform::output::Tls,
 ) -> String {
 	// Build transports for each service
-	let mut tcp_server_transports = HashMap::new();
+	let mut tcp_server_transports = IndexMap::new();
 	for service in TUNNEL_SERVICES {
 		tcp_server_transports.insert(
 			service.to_string(),
@@ -249,7 +249,7 @@ fn tunnel_traefik_dynamic_config(tunnel_external_ip: &str) -> String {
 }
 
 pub struct VectorConfig {
-	pub prometheus_targets: HashMap<String, VectorPrometheusTarget>,
+	pub prometheus_targets: IndexMap<String, VectorPrometheusTarget>,
 }
 
 pub struct VectorPrometheusTarget {
