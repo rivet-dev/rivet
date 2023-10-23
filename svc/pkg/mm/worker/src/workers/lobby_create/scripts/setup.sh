@@ -29,7 +29,7 @@ fi
 
 # Run setup scripts
 "$NOMAD_TASK_DIR/setup_oci_bundle.sh" &
-if __HOST_NETWORK__; then
+if ! __HOST_NETWORK__; then
 	"$NOMAD_TASK_DIR/setup_cni_network.sh" &
 fi
 wait
