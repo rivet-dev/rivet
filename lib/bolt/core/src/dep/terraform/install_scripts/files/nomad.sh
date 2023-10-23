@@ -43,6 +43,50 @@ ADMIN_CHAIN="RIVET-ADMIN"
 SUBNET_IPV4="172.26.64.0/20"
 SUBNET_IPV6="fd00:db8:2::/64"
 
+# TODO: Prioritize TOS?  It can be added to the tc filter
+#
+# https://linux.die.net/man/8/tc-prio#:~:text=TOS%20%20%20%20%20Bits%20%20Means%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20Linux%20Priority%20%20%20%20Band
+# https://man7.org/linux/man-pages/man8/tc-prio.8.html
+
+# Create queuing discipline (qdisc)
+for iface in __PUBLIC_IFACE__ __VLAN_IFACE__; do
+	# Check if the prio qdisc already exists
+	if ! tc qdisc show dev $iface | grep -q "prio 1:"; then
+
+		# Set up an priority queuing discipline.
+		#
+		# This includes 3 classes: 0 = highest priority, 2 = lowest priority. These classes correspond to flow IDs 1:1, 1:2, and 1:3, representing highest to lowest priority, respectively.
+		#
+		# 1:2 will be used for game traffic and 1:3 for less important background traffic (i.e. downloading from ATS).
+		#
+		# Read more about PRIO qdisc: https://lartc.org/howto/lartc.qdisc.classful.html#AEN899:~:text=9.5.3.%20The%20PRIO%20qdisc
+		#
+		# Manual (less helpful): https://man7.org/linux/man-pages/man8/tc-prio.8.html
+		#
+		# See all availble flows by running: tc -s class show dev $iface
+		tc qdisc add dev $iface root handle 1: prio
+
+		# Forward packets with different marks to the appropriate flows.
+		#
+		# handle x = handle packets marked x by iptables
+		# fw flowid x = send matched packets to the given flow
+		tc filter add dev $iface \
+			parent 1: \
+			protocol ip \
+			handle 1 \
+			fw flowid 1:1
+		tc filter add dev $iface \
+			parent 1: \
+			protocol ip \
+			handle 2 \
+			fw flowid 1:2
+
+	    echo "Prio qdisc and filter rules added."
+	else
+		echo "Prio qdisc and filter rules already exist."
+	fi
+done
+
 cat << EOF > /usr/local/bin/setup_nomad_networking.sh
 #!/bin/bash
 set -euf
@@ -62,8 +106,27 @@ for ipt in iptables ip6tables; do
         echo "Chain already exists in \$ipt: $ADMIN_CHAIN"
     fi
 
-    # Accept ingress traffic from GG subnet. Only applicable to IPv4.
+	# MARK: GG ingress
 	if [ "\$ipt" == "iptables" ]; then
+		# Prioritize traffic
+		RULE="-s __GG_VLAN_SUBNET__ -d \$SUBNET_VAR -j MARK --set-mark 1"
+		if ! \$ipt -C $ADMIN_CHAIN \$RULE &>/dev/null; then
+			\$ipt -A $ADMIN_CHAIN \$RULE
+			echo "Added \$ipt rule: \$RULE"
+		else
+			echo "Rule already exists in \$ipt: \$RULE"
+		fi
+
+		# Change TOS to minimize delay
+		RULE="-s __GG_VLAN_SUBNET__ -d \$SUBNET_VAR -j TOS --set-tos 0x10"
+		if ! \$ipt -C $ADMIN_CHAIN \$RULE &>/dev/null; then
+			\$ipt -A $ADMIN_CHAIN \$RULE
+			echo "Added \$ipt rule: \$RULE"
+		else
+			echo "Rule already exists in \$ipt: \$RULE"
+		fi
+
+		# Accept traffic
 		RULE="-s __GG_VLAN_SUBNET__ -d \$SUBNET_VAR -j ACCEPT"
 		if ! \$ipt -C $ADMIN_CHAIN \$RULE &>/dev/null; then
 			\$ipt -A $ADMIN_CHAIN \$RULE
@@ -73,8 +136,18 @@ for ipt in iptables ip6tables; do
 		fi
 	fi
 
-    # Allow egress traffic to eth0 (public iface)
-    RULE="-s \$SUBNET_VAR -o eth0 -j ACCEPT"
+	# MARK: GG egress
+    # Prioritize resopnse traffic
+    RULE="-s \$SUBNET_VAR -m conntrack --ctstate NEW,ESTABLISHED -j MARK --set-mark 1"
+    if ! \$ipt -C $ADMIN_CHAIN \$RULE &>/dev/null; then
+        \$ipt -A $ADMIN_CHAIN \$RULE
+        echo "Added \$ipt rule: \$RULE"
+    else
+        echo "Rule already exists in \$ipt: \$RULE"
+    fi
+
+    # Change TOS to minimize delay
+    RULE="-s \$SUBNET_VAR -m conntrack --ctstate NEW,ESTABLISHED -j TOS --set-tos 0x10"
     if ! \$ipt -C $ADMIN_CHAIN \$RULE &>/dev/null; then
         \$ipt -A $ADMIN_CHAIN \$RULE
         echo "Added \$ipt rule: \$RULE"
@@ -91,6 +164,56 @@ for ipt in iptables ip6tables; do
         echo "Rule already exists in \$ipt: \$RULE"
     fi
 
+	# MARK: Public egress
+	# Prioritize traffic
+    RULE="-s \$SUBNET_VAR -o __PUBLIC_IFACE__ -j MARK --set-mark 1"
+    if ! \$ipt -C $ADMIN_CHAIN \$RULE &>/dev/null; then
+        \$ipt -A $ADMIN_CHAIN \$RULE
+        echo "Added \$ipt rule: \$RULE"
+    else
+        echo "Rule already exists in \$ipt: \$RULE"
+    fi
+
+	# Change TOS to minimize delay
+    RULE="-s \$SUBNET_VAR -o __PUBLIC_IFACE__ -j TOS --set-tos 0x10"
+	if ! \$ipt -C $ADMIN_CHAIN \$RULE &>/dev/null; then
+		\$ipt -A $ADMIN_CHAIN \$RULE
+		echo "Added \$ipt rule: \$RULE"
+	else
+		echo "Rule already exists in \$ipt: \$RULE"
+	fi
+
+    # Allow egress traffic
+    RULE="-s \$SUBNET_VAR -o __PUBLIC_IFACE__ -j ACCEPT"
+    if ! \$ipt -C $ADMIN_CHAIN \$RULE &>/dev/null; then
+        \$ipt -A $ADMIN_CHAIN \$RULE
+        echo "Added \$ipt rule: \$RULE"
+    else
+        echo "Rule already exists in \$ipt: \$RULE"
+    fi
+
+	# MARK: ATS ingress
+	if [ "\$ipt" == "iptables" ]; then
+		# Deprioritize traffic so game traffic takes priority
+		RULE="-s __ATS_VLAN_SUBNET__ -j MARK --set-mark 2"
+		if ! \$ipt -C $ADMIN_CHAIN \$RULE &>/dev/null; then
+			\$ipt -A $ADMIN_CHAIN \$RULE
+			echo "Added \$ipt rule: \$RULE"
+		else
+			echo "Rule already exists in \$ipt: \$RULE"
+		fi
+
+		# Change TOS to maximize throughput
+		RULE="-s \$SUBNET_VAR -o __PUBLIC_IFACE__ -j TOS --set-tos 0x8"
+		if ! \$ipt -C $ADMIN_CHAIN \$RULE &>/dev/null; then
+			\$ipt -A $ADMIN_CHAIN \$RULE
+			echo "Added \$ipt rule: \$RULE"
+		else
+			echo "Rule already exists in \$ipt: \$RULE"
+		fi
+	fi
+
+	# MARK: Deny
     # Deny all other egress traffic
     RULE="-s \$SUBNET_VAR -j DROP"
     if ! \$ipt -C $ADMIN_CHAIN \$RULE &>/dev/null; then
@@ -173,6 +296,46 @@ cat << EOF > /opt/cni/config/rivet-job.conflist
 			"snat": true
 		}
 	]
+}
+EOF
+
+# AppArmor config
+#
+# See default Docker config: https://github.com/moby/moby/blob/777e9f271095685543f30df0ff7a12397676f938/profiles/apparmor/template.go
+cat << EOF > /etc/apparmor.d/rivet-job
+#include <tunables/global>
+#@{PROC}=/proc/
+
+profile rivet-job flags=(attach_disconnected,mediate_deleted) {
+  #include <abstractions/base>
+
+  network,
+  capability,
+  file,
+  umount,
+  # Host privilaged processes may send signals to container processes. (i.e. Nomad)
+  signal (receive) peer=unconfined,
+
+  deny @{PROC}/* w,   # deny write for all files directly in /proc (not in a subdir)
+  # deny write to files not in /proc/<number>/** or /proc/sys/**
+  deny @{PROC}/{[^1-9],[^1-9][^0-9],[^1-9s][^0-9y][^0-9s],[^1-9][^0-9][^0-9][^0-9/]*}/** w,
+  deny @{PROC}/sys/[^k]** w,  # deny /proc/sys except /proc/sys/k* (effectively /proc/sys/kernel)
+  deny @{PROC}/sys/kernel/{?,??,[^s][^h][^m]**} w,  # deny everything except shm* in /proc/sys/kernel/
+  deny @{PROC}/sysrq-trigger rwklx,
+  deny @{PROC}/kcore rwklx,
+
+  deny mount,
+
+  deny /sys/[^f]*/** wklx,
+  deny /sys/f[^s]*/** wklx,
+  deny /sys/fs/[^c]*/** wklx,
+  deny /sys/fs/c[^g]*/** wklx,
+  deny /sys/fs/cg[^r]*/** wklx,
+  deny /sys/firmware/** rwklx,
+  deny /sys/kernel/security/** rwklx,
+
+  # suppress ptrace denials when using 'docker ps' or using 'ps' inside a container
+  ptrace (trace,read,tracedby,readby) peer=rivet-job,
 }
 EOF
 

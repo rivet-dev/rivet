@@ -65,8 +65,10 @@ pub fn nomad(server: &Server) -> String {
 	include_str!("files/nomad.sh")
 		.replace("__REGION_ID__", &server.region_id)
 		.replace("__NODE_NAME__", &server.name)
+		// HACK: Hardcoded to Linode
+		.replace("__PUBLIC_IFACE__", "eth0")
 		.replace("__VLAN_IP__", &server.vlan_ip.to_string())
-		// Hardcoded to Linode
+		// HACK: Hardcoded to Linode
 		.replace("__VLAN_IFACE__", "eth1")
 		.replace(
 			"__SERVER_JOIN__",
@@ -77,6 +79,7 @@ pub fn nomad(server: &Server) -> String {
 				.join(", "),
 		)
 		.replace("__GG_VLAN_SUBNET__", &net::gg::vlan_ip_net().to_string())
+		.replace("__ATS_VLAN_SUBNET__", &net::ats::vlan_ip_net().to_string())
 }
 
 /// Installs Treafik, but does not create the Traefik service.
