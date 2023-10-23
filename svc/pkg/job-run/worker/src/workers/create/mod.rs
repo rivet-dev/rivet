@@ -126,6 +126,10 @@ async fn worker(ctx: &OperationContext<job_run::msg::create::Message>) -> Global
 	write_to_db_after_run(&crdb, run_id, &nomad_dispatched_job_id).await?;
 	db_write_perf.end();
 
+	// HACK: Wait for Treafik to pick up the new job. 500 ms is the polling interval for the
+	// Traefik HTTP provider.
+	tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+
 	msg!([ctx] job_run::msg::create_complete(run_id) {
 		run_id: Some(run_id.into()),
 	})
