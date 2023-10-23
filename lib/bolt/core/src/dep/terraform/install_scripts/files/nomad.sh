@@ -109,15 +109,13 @@ for iface in __PUBLIC_IFACE__ __VLAN_IFACE__; do
 			parent 1:0 \
 			prio 1 \
 			handle 1 \
-			fw classid 1:10 \
-			action change dsfield set 0x10
+			fw classid 1:10
 		tc filter add dev \$iface \
 			protocol ip \
 			parent 1:0 \
 			prio 2 \
 			handle 2 \
-			fw classid 1:20 \
-			action change dsfield set 0x8
+			fw classid 1:20
 
         echo "HTB qdisc and class rules added."
 
@@ -129,13 +127,15 @@ done
 # MARK: iptables
 add_ipt_rule() {
     local ipt="\$1"
-    local rule="\$2"
+    local table="\$2"
+    local chain="\$3"
+    local rule="\$4"
 
-    if ! "\$ipt" -t filter -C "$ADMIN_CHAIN" \$rule &>/dev/null; then
-        "\$ipt" -t filter -A "$ADMIN_CHAIN" \$rule
-        echo "Added \$ipt rule: \$rule"
+    if ! "\$ipt" -t \$table -C "\$chain" \$rule &>/dev/null; then
+        "\$ipt" -t \$table -A "\$chain" \$rule
+        echo "Added \$ipt \$table \$chain rule: \$rule"
     else
-        echo "Rule already exists in \$ipt: \$rule"
+        echo "Rule already exists in \$ipt \$table \$chain: \$rule"
     fi
 }
 
@@ -147,7 +147,7 @@ for ipt in iptables ip6tables; do
 		SUBNET_VAR="$SUBNET_IPV6"
 	fi
 
-	# MARK: Create chain
+	# MARK: Create filter chain
     if ! "\$ipt" -t filter -L "$ADMIN_CHAIN" &>/dev/null; then
         "\$ipt" -t filter -N "$ADMIN_CHAIN"
         echo "Created \$ipt chain: $ADMIN_CHAIN"
@@ -155,36 +155,61 @@ for ipt in iptables ip6tables; do
         echo "Chain already exists in \$ipt: $ADMIN_CHAIN"
     fi
 
+	# MARK: Create mangle chain
+    if ! "\$ipt" -t mangle -L "RIVET-FORWARD" &>/dev/null; then
+        "\$ipt" -t mangle -N "RIVET-FORWARD"
+        echo "Created \$ipt chain: RIVET-FORWARD"
+    else
+        echo "Chain already exists in \$ipt: RIVET-FORWARD"
+    fi
+	add_ipt_rule "\$ipt" "mangle" "FORWARD" "-j RIVET-FORWARD"
+
+	# MARK: Create GG TOS
+	#
+	# Sets the TOS to minimize delay if not already set.
+    if ! "\$ipt" -t mangle -L "RIVET-TOS-GG" &>/dev/null; then
+        "\$ipt" -t mangle -N "RIVET-TOS-GG"
+        echo "Created \$ipt chain: RIVET-TOS-GG"
+    else
+        echo "Chain already exists in \$ipt: RIVET-TOS-GG"
+    fi
+	add_ipt_rule "\$ipt" "mangle" "RIVET-TOS-GG" "-m tos ! --tos 0x0 -j RETURN"
+	add_ipt_rule "\$ipt" "mangle" "RIVET-TOS-GG" "-j TOS --set-tos 0x10"
+
 	# VLAN only applicable ot IPv4
 	if [ "\$ipt" == "iptables" ]; then
+		# MARK: GG TOS
+		add_ipt_rule "\$ipt" "mangle" "RIVET-FORWARD" "-s __GG_VLAN_SUBNET__ -d \$SUBNET_VAR -j RIVET-TOS-GG"
+		add_ipt_rule "\$ipt" "mangle" "RIVET-FORWARD" "-s \$SUBNET_VAR -d __GG_VLAN_SUBNET__ -j RIVET-TOS-GG"
+
 		# MARK: GG ingress
 		# Prioritize traffic
-		add_ipt_rule "\$ipt" "-s __GG_VLAN_SUBNET__ -d \$SUBNET_VAR -j MARK --set-mark 1"
+		add_ipt_rule "\$ipt" "filter" "$ADMIN_CHAIN" "-s __GG_VLAN_SUBNET__ -d \$SUBNET_VAR -j MARK --set-mark 1"
 		# Accept traffic
-		add_ipt_rule "\$ipt" "-s __GG_VLAN_SUBNET__ -d \$SUBNET_VAR -j ACCEPT"
+		add_ipt_rule "\$ipt" "filter" "$ADMIN_CHAIN" "-s __GG_VLAN_SUBNET__ -d \$SUBNET_VAR -j ACCEPT"
 
 		# MARK: GG egress
 		# Prioritize resopnse traffic
-		add_ipt_rule "\$ipt" "-s \$SUBNET_VAR -m conntrack --ctstate NEW,ESTABLISHED -j MARK --set-mark 1"
+		add_ipt_rule "\$ipt" "filter" "$ADMIN_CHAIN" "-s \$SUBNET_VAR -m conntrack --ctstate NEW,ESTABLISHED -j MARK --set-mark 1"
 		# Enable conntrack to allow traffic to flow back to the GG subnet
-		add_ipt_rule "\$ipt" "-s \$SUBNET_VAR -m conntrack --ctstate NEW,ESTABLISHED -j ACCEPT"
+		add_ipt_rule "\$ipt" "filter" "$ADMIN_CHAIN" "-s \$SUBNET_VAR -m conntrack --ctstate NEW,ESTABLISHED -j ACCEPT"
 
 		# MARK: ATS ingress
-		if [ "\$ipt" == "iptables" ]; then
-			# Deprioritize traffic so game traffic takes priority
-			add_ipt_rule "\$ipt" "-s __ATS_VLAN_SUBNET__ -j MARK --set-mark 2"
-		fi
+		# Maximize throughput from ATS
+		add_ipt_rule "\$ipt" "mangle" "RIVET-FORWARD" "-s __ATS_VLAN_SUBNET__ -j TOS --set-tos Maximize-Throughput"
+		# Deprioritize traffic so game traffic takes priority
+		add_ipt_rule "\$ipt" "filter" "$ADMIN_CHAIN" "-s __ATS_VLAN_SUBNET__ -j MARK --set-mark 2"
 	fi
 
 	# MARK: Public egress
 	# Prioritize traffic
-	add_ipt_rule "\$ipt" "-s \$SUBNET_VAR -o __PUBLIC_IFACE__ -j MARK --set-mark 1"
+	add_ipt_rule "\$ipt" "filter" "$ADMIN_CHAIN" "-s \$SUBNET_VAR -o __PUBLIC_IFACE__ -j MARK --set-mark 1"
     # Allow egress traffic
-	add_ipt_rule "\$ipt" "-s \$SUBNET_VAR -o __PUBLIC_IFACE__ -j ACCEPT"
+	add_ipt_rule "\$ipt" "filter" "$ADMIN_CHAIN" "-s \$SUBNET_VAR -o __PUBLIC_IFACE__ -j ACCEPT"
 
 	# MARK: Deny
     # Deny all other egress traffic
-	add_ipt_rule "\$ipt" "-s \$SUBNET_VAR -j DROP"
+	add_ipt_rule "\$ipt" "filter" "$ADMIN_CHAIN" "-s \$SUBNET_VAR -j DROP"
 done
 EOF
 

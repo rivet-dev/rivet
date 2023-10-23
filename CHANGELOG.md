@@ -17,7 +17,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 -  **Infra** Dynamically provisioned core cluster using Karpenter
 -  **Infra** Dual-stack CNI configuration for game containers
 -  **Infra** job iptables firewall to job pool that whitelists inbound traffic from Game Guard to the container
--  **Infra** job Linux traffic control filters to prioritize game traffic over other background traffic & specify TOS for game traffic
+-  **Infra** job iptables rules to configure minimize delay TOS for traffic without a TOS
+-  **Infra** job iptables rules to configure maximize throughput TOS for traffic from ATS
+-  **Infra** job Linux traffic control filters to prioritize game traffic over other background traffic
 -  **Infra** Prewarm the Traffic Server cache when a game version is published for faster cold start times on the first booted lobby in each region
 -  **Infra** Envoy Maglev load balancing for traffic to edge Traffic Server instances to maximize cache hits
 -  **Bolt** Timeout for tests
