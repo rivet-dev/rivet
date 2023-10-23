@@ -43,10 +43,16 @@ ADMIN_CHAIN="RIVET-ADMIN"
 SUBNET_IPV4="172.26.64.0/20"
 SUBNET_IPV6="fd00:db8:2::/64"
 
+
+# MARK: iptables
+cat << EOF > /usr/local/bin/setup_nomad_networking.sh
+#!/bin/bash
+set -euf
+
 # MARK: Linux Traffic Control
 for iface in __PUBLIC_IFACE__ __VLAN_IFACE__; do
     # Check if the HTB qdisc already exists
-    if ! tc qdisc show dev $iface | grep -q "htb 1:"; then
+    if ! tc qdisc show dev \$iface | grep -q "htb 1:"; then
 
         # Set up a HTB queuing discipline.
 		#
@@ -54,17 +60,17 @@ for iface in __PUBLIC_IFACE__ __VLAN_IFACE__; do
 		#
 		# HTB was chosen over QCB because it allows for more flexibility in the future.
 		# 
-		# See all classes with: tc -s class show dev $iface
+		# See all classes with: tc -s class show dev \$iface
 		#
 		# Read more: https://lartc.org/howto/lartc.qdisc.classful.html#AEN1071
-        tc qdisc add dev $iface \
+        tc qdisc add dev \$iface \
 			root \
 			handle 1: \
 			htb \
 			default 10
 
-        # Create a root class with a max bandwidth
-        tc class add dev $iface \
+		# Create a root class with a max bandwidth
+		tc class add dev \$iface \
 			parent 1: \
 			classid 1:1 \
 			htb \
@@ -74,7 +80,7 @@ for iface in __PUBLIC_IFACE__ __VLAN_IFACE__; do
 		#
 		# Low bandwidth limit = game servers are not expected to use much bandwidth
 		# High priority = packets take priority in the case of congestion
-        tc class add dev $iface \
+		tc class add dev \$iface \
 			parent 1:1 \
 			classid 1:10 \
 			htb \
@@ -85,7 +91,7 @@ for iface in __PUBLIC_IFACE__ __VLAN_IFACE__; do
 		#
 		# High bandwidth = peak performance when there is no network congestion
 		# Low priority = packets are dropped first in the case of congestion
-        tc class add dev $iface \
+		tc class add dev \$iface \
 			parent 1:1 \
 			classid 1:20 \
 			htb \
@@ -97,18 +103,21 @@ for iface in __PUBLIC_IFACE__ __VLAN_IFACE__; do
 		# prio x = sets filter priority
 		# handle x = handle packets marked x by iptables
 		# fw classid x = send matched packets to class x
-        tc filter add dev $iface \
+		# action change dsfield set x = set the packet's TOS (0x10 = low delay, 0x8 = high throughput)
+		tc filter add dev \$iface \
 			protocol ip \
 			parent 1:0 \
 			prio 1 \
 			handle 1 \
-			fw classid 1:10
-        tc filter add dev $iface \
+			fw classid 1:10 \
+			action change dsfield set 0x10
+		tc filter add dev \$iface \
 			protocol ip \
 			parent 1:0 \
 			prio 2 \
 			handle 2 \
-			fw classid 1:20
+			fw classid 1:20 \
+			action change dsfield set 0x8
 
         echo "HTB qdisc and class rules added."
 
@@ -118,10 +127,6 @@ for iface in __PUBLIC_IFACE__ __VLAN_IFACE__; do
 done
 
 # MARK: iptables
-cat << EOF > /usr/local/bin/setup_nomad_networking.sh
-#!/bin/bash
-set -euf
-
 add_ipt_rule() {
     local ipt="\$1"
     local rule="\$2"
@@ -150,37 +155,32 @@ for ipt in iptables ip6tables; do
         echo "Chain already exists in \$ipt: $ADMIN_CHAIN"
     fi
 
-	# MARK: GG ingress
-	# Prioritize traffic
-	add_ipt_rule "\$ipt" "-s __GG_VLAN_SUBNET__ -d \$SUBNET_VAR -j MARK --set-mark 1"
-    # Change TOS to minimize delay
-	add_ipt_rule "\$ipt" "-s __GG_VLAN_SUBNET__ -d \$SUBNET_VAR -j TOS --set-tos 0x10"
-	# Accept traffic
-	add_ipt_rule "\$ipt" "-s __GG_VLAN_SUBNET__ -d \$SUBNET_VAR -j ACCEPT"
+	# VLAN only applicable ot IPv4
+	if [ "\$ipt" == "iptables" ]; then
+		# MARK: GG ingress
+		# Prioritize traffic
+		add_ipt_rule "\$ipt" "-s __GG_VLAN_SUBNET__ -d \$SUBNET_VAR -j MARK --set-mark 1"
+		# Accept traffic
+		add_ipt_rule "\$ipt" "-s __GG_VLAN_SUBNET__ -d \$SUBNET_VAR -j ACCEPT"
 
-	# MARK: GG egress
-    # Prioritize resopnse traffic
-	add_ipt_rule "\$ipt" "-s \$SUBNET_VAR -m conntrack --ctstate NEW,ESTABLISHED -j MARK --set-mark 1"
-    # Change TOS to minimize delay
-	add_ipt_rule "\$ipt" "-s \$SUBNET_VAR -m conntrack --ctstate NEW,ESTABLISHED -j TOS --set-tos 0x10"
-    # Enable conntrack to allow traffic to flow back to the GG subnet
-	add_ipt_rule "\$ipt" "-s \$SUBNET_VAR -m conntrack --ctstate NEW,ESTABLISHED -j ACCEPT"
+		# MARK: GG egress
+		# Prioritize resopnse traffic
+		add_ipt_rule "\$ipt" "-s \$SUBNET_VAR -m conntrack --ctstate NEW,ESTABLISHED -j MARK --set-mark 1"
+		# Enable conntrack to allow traffic to flow back to the GG subnet
+		add_ipt_rule "\$ipt" "-s \$SUBNET_VAR -m conntrack --ctstate NEW,ESTABLISHED -j ACCEPT"
+
+		# MARK: ATS ingress
+		if [ "\$ipt" == "iptables" ]; then
+			# Deprioritize traffic so game traffic takes priority
+			add_ipt_rule "\$ipt" "-s __ATS_VLAN_SUBNET__ -j MARK --set-mark 2"
+		fi
+	fi
 
 	# MARK: Public egress
 	# Prioritize traffic
 	add_ipt_rule "\$ipt" "-s \$SUBNET_VAR -o __PUBLIC_IFACE__ -j MARK --set-mark 1"
-	# Change TOS to minimize delay
-	add_ipt_rule "\$ipt" "-s \$SUBNET_VAR -o __PUBLIC_IFACE__ -j TOS --set-tos 0x10"
     # Allow egress traffic
 	add_ipt_rule "\$ipt" "-s \$SUBNET_VAR -o __PUBLIC_IFACE__ -j ACCEPT"
-
-	# MARK: ATS ingress
-	if [ "\$ipt" == "iptables" ]; then
-		# Deprioritize traffic so game traffic takes priority
-		add_ipt_rule "\$ipt" "-s __ATS_VLAN_SUBNET__ -j MARK --set-mark 2"
-		# Change TOS to maximize throughput
-		add_ipt_rule "\$ipt" "-s \$SUBNET_VAR -o __PUBLIC_IFACE__ -j TOS --set-tos 0x8"
-	fi
 
 	# MARK: Deny
     # Deny all other egress traffic
