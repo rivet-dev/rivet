@@ -52,6 +52,7 @@ SUBNET_IPV6="fd00:db8:2::/64"
 for iface in __PUBLIC_IFACE__ __VLAN_IFACE__; do
 	# Check if the prio qdisc already exists
 	if ! tc qdisc show dev $iface | grep -q "prio 1:"; then
+		# TODO: Theoretically saturating the link with game traffic could cause issues with the background traffic.  This could be fixed by using a CBQ qdisc instead of prio.
 
 		# Set up an priority queuing discipline.
 		#
@@ -91,137 +92,69 @@ cat << EOF > /usr/local/bin/setup_nomad_networking.sh
 #!/bin/bash
 set -euf
 
+add_ipt_rule() {
+    local ipt="$1"
+    local admin_chain="$2"
+    local rule="$3"
+
+    if ! "$ipt" -t filter -L "$admin_chain" &>/dev/null; then
+        "$ipt" -t filter -N "$admin_chain"
+        echo "Created $ipt chain: $admin_chain"
+    else
+        echo "Chain already exists in $ipt: $admin_chain"
+    fi
+
+    if ! "$ipt" -t filter -C "$admin_chain" "$rule" &>/dev/null; then
+        "$ipt" -t filter -A "$admin_chain" "$rule"
+        echo "Added $ipt rule: $rule"
+    else
+        echo "Rule already exists in $ipt: $rule"
+    fi
+}
+
 for ipt in iptables ip6tables; do
-	if [ "\$ipt" == "iptables" ]; then
-        SUBNET_VAR="$SUBNET_IPV4"
-    else
-        SUBNET_VAR="$SUBNET_IPV6"
-    fi
-
-
-    if ! \$ipt -t filter -L $ADMIN_CHAIN &>/dev/null; then
-        \$ipt -t filter -N $ADMIN_CHAIN
-        echo "Created \$ipt chain: $ADMIN_CHAIN"
-    else
-        echo "Chain already exists in \$ipt: $ADMIN_CHAIN"
-    fi
+	# Define SUBNET_VAR based on iptables version
+	if [ "$ipt" == "iptables" ]; then
+		SUBNET_VAR="$SUBNET_IPV4"
+	else
+		SUBNET_VAR="$SUBNET_IPV6"
+	fi
 
 	# MARK: GG ingress
-	if [ "\$ipt" == "iptables" ]; then
-		# Prioritize traffic
-		RULE="-s __GG_VLAN_SUBNET__ -d \$SUBNET_VAR -j MARK --set-mark 1"
-		if ! \$ipt -C $ADMIN_CHAIN \$RULE &>/dev/null; then
-			\$ipt -A $ADMIN_CHAIN \$RULE
-			echo "Added \$ipt rule: \$RULE"
-		else
-			echo "Rule already exists in \$ipt: \$RULE"
-		fi
-
-		# Change TOS to minimize delay
-		RULE="-s __GG_VLAN_SUBNET__ -d \$SUBNET_VAR -j TOS --set-tos 0x10"
-		if ! \$ipt -C $ADMIN_CHAIN \$RULE &>/dev/null; then
-			\$ipt -A $ADMIN_CHAIN \$RULE
-			echo "Added \$ipt rule: \$RULE"
-		else
-			echo "Rule already exists in \$ipt: \$RULE"
-		fi
-
-		# Accept traffic
-		RULE="-s __GG_VLAN_SUBNET__ -d \$SUBNET_VAR -j ACCEPT"
-		if ! \$ipt -C $ADMIN_CHAIN \$RULE &>/dev/null; then
-			\$ipt -A $ADMIN_CHAIN \$RULE
-			echo "Added \$ipt rule: \$RULE"
-		else
-			echo "Rule already exists in \$ipt: \$RULE"
-		fi
-	fi
+	# Prioritize traffic
+	add_ipt_rule "$ipt" "$ADMIN_CHAIN" "-s __GG_VLAN_SUBNET__ -d \$SUBNET_VAR -j MARK --set-mark 1"
+    # Change TOS to minimize delay
+	add_ipt_rule "$ipt" "$ADMIN_CHAIN" "-s __GG_VLAN_SUBNET__ -d \$SUBNET_VAR -j TOS --set-tos 0x10"
+	# Accept traffic
+	add_ipt_rule "$ipt" "$ADMIN_CHAIN" "-s __GG_VLAN_SUBNET__ -d \$SUBNET_VAR -j ACCEPT"
 
 	# MARK: GG egress
     # Prioritize resopnse traffic
-    RULE="-s \$SUBNET_VAR -m conntrack --ctstate NEW,ESTABLISHED -j MARK --set-mark 1"
-    if ! \$ipt -C $ADMIN_CHAIN \$RULE &>/dev/null; then
-        \$ipt -A $ADMIN_CHAIN \$RULE
-        echo "Added \$ipt rule: \$RULE"
-    else
-        echo "Rule already exists in \$ipt: \$RULE"
-    fi
-
+	add_ipt_rule "$ipt" "$ADMIN_CHAIN" "-s \$SUBNET_VAR -m conntrack --ctstate NEW,ESTABLISHED -j MARK --set-mark 1"
     # Change TOS to minimize delay
-    RULE="-s \$SUBNET_VAR -m conntrack --ctstate NEW,ESTABLISHED -j TOS --set-tos 0x10"
-    if ! \$ipt -C $ADMIN_CHAIN \$RULE &>/dev/null; then
-        \$ipt -A $ADMIN_CHAIN \$RULE
-        echo "Added \$ipt rule: \$RULE"
-    else
-        echo "Rule already exists in \$ipt: \$RULE"
-    fi
-
+	add_ipt_rule "$ipt" "$ADMIN_CHAIN" "-s \$SUBNET_VAR -m conntrack --ctstate NEW,ESTABLISHED -j TOS --set-tos 0x10"
     # Enable conntrack to allow traffic to flow back to the GG subnet
-    RULE="-s \$SUBNET_VAR -m conntrack --ctstate NEW,ESTABLISHED -j ACCEPT"
-    if ! \$ipt -C $ADMIN_CHAIN \$RULE &>/dev/null; then
-        \$ipt -A $ADMIN_CHAIN \$RULE
-        echo "Added \$ipt rule: \$RULE"
-    else
-        echo "Rule already exists in \$ipt: \$RULE"
-    fi
+	add_ipt_rule "$ipt" "$ADMIN_CHAIN" "-s \$SUBNET_VAR -m conntrack --ctstate NEW,ESTABLISHED -j ACCEPT"
 
 	# MARK: Public egress
 	# Prioritize traffic
-    RULE="-s \$SUBNET_VAR -o __PUBLIC_IFACE__ -j MARK --set-mark 1"
-    if ! \$ipt -C $ADMIN_CHAIN \$RULE &>/dev/null; then
-        \$ipt -A $ADMIN_CHAIN \$RULE
-        echo "Added \$ipt rule: \$RULE"
-    else
-        echo "Rule already exists in \$ipt: \$RULE"
-    fi
-
+	add_ipt_rule "$ipt" "$ADMIN_CHAIN" "-s \$SUBNET_VAR -o __PUBLIC_IFACE__ -j MARK --set-mark 1"
 	# Change TOS to minimize delay
-    RULE="-s \$SUBNET_VAR -o __PUBLIC_IFACE__ -j TOS --set-tos 0x10"
-	if ! \$ipt -C $ADMIN_CHAIN \$RULE &>/dev/null; then
-		\$ipt -A $ADMIN_CHAIN \$RULE
-		echo "Added \$ipt rule: \$RULE"
-	else
-		echo "Rule already exists in \$ipt: \$RULE"
-	fi
-
+	add_ipt_rule "$ipt" "$ADMIN_CHAIN" "-s \$SUBNET_VAR -o __PUBLIC_IFACE__ -j TOS --set-tos 0x10"
     # Allow egress traffic
-    RULE="-s \$SUBNET_VAR -o __PUBLIC_IFACE__ -j ACCEPT"
-    if ! \$ipt -C $ADMIN_CHAIN \$RULE &>/dev/null; then
-        \$ipt -A $ADMIN_CHAIN \$RULE
-        echo "Added \$ipt rule: \$RULE"
-    else
-        echo "Rule already exists in \$ipt: \$RULE"
-    fi
+	add_ipt_rule "$ipt" "$ADMIN_CHAIN" "-s \$SUBNET_VAR -o __PUBLIC_IFACE__ -j ACCEPT"
 
 	# MARK: ATS ingress
-	if [ "\$ipt" == "iptables" ]; then
+	if [ "$ipt" == "iptables" ]; then
 		# Deprioritize traffic so game traffic takes priority
-		RULE="-s __ATS_VLAN_SUBNET__ -j MARK --set-mark 2"
-		if ! \$ipt -C $ADMIN_CHAIN \$RULE &>/dev/null; then
-			\$ipt -A $ADMIN_CHAIN \$RULE
-			echo "Added \$ipt rule: \$RULE"
-		else
-			echo "Rule already exists in \$ipt: \$RULE"
-		fi
-
+		add_ipt_rule "$ipt" "$ADMIN_CHAIN" "-s __ATS_VLAN_SUBNET__ -j MARK --set-mark 2"
 		# Change TOS to maximize throughput
-		RULE="-s \$SUBNET_VAR -o __PUBLIC_IFACE__ -j TOS --set-tos 0x8"
-		if ! \$ipt -C $ADMIN_CHAIN \$RULE &>/dev/null; then
-			\$ipt -A $ADMIN_CHAIN \$RULE
-			echo "Added \$ipt rule: \$RULE"
-		else
-			echo "Rule already exists in \$ipt: \$RULE"
-		fi
+		add_ipt_rule "$ipt" "$ADMIN_CHAIN" "-s \$SUBNET_VAR -o __PUBLIC_IFACE__ -j TOS --set-tos 0x8"
 	fi
 
 	# MARK: Deny
     # Deny all other egress traffic
-    RULE="-s \$SUBNET_VAR -j DROP"
-    if ! \$ipt -C $ADMIN_CHAIN \$RULE &>/dev/null; then
-        \$ipt -A $ADMIN_CHAIN \$RULE
-        echo "Added \$ipt rule: \$RULE"
-    else
-        echo "Rule already exists in \$ipt: \$RULE"
-    fi
+	add_ipt_rule "$ipt" "$ADMIN_CHAIN" "-s \$SUBNET_VAR -j DROP"
 done
 EOF
 
