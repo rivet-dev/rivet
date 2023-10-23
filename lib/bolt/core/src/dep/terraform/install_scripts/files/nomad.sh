@@ -288,46 +288,6 @@ cat << EOF > /opt/cni/config/rivet-job.conflist
 }
 EOF
 
-# AppArmor config
-#
-# See default Docker config: https://github.com/moby/moby/blob/777e9f271095685543f30df0ff7a12397676f938/profiles/apparmor/template.go
-cat << EOF > /etc/apparmor.d/rivet-job
-#include <tunables/global>
-#@{PROC}=/proc/
-
-profile rivet-job flags=(attach_disconnected,mediate_deleted) {
-  #include <abstractions/base>
-
-  network,
-  capability,
-  file,
-  umount,
-  # Host privilaged processes may send signals to container processes. (i.e. Nomad)
-  signal (receive) peer=unconfined,
-
-  deny @{PROC}/* w,   # deny write for all files directly in /proc (not in a subdir)
-  # deny write to files not in /proc/<number>/** or /proc/sys/**
-  deny @{PROC}/{[^1-9],[^1-9][^0-9],[^1-9s][^0-9y][^0-9s],[^1-9][^0-9][^0-9][^0-9/]*}/** w,
-  deny @{PROC}/sys/[^k]** w,  # deny /proc/sys except /proc/sys/k* (effectively /proc/sys/kernel)
-  deny @{PROC}/sys/kernel/{?,??,[^s][^h][^m]**} w,  # deny everything except shm* in /proc/sys/kernel/
-  deny @{PROC}/sysrq-trigger rwklx,
-  deny @{PROC}/kcore rwklx,
-
-  deny mount,
-
-  deny /sys/[^f]*/** wklx,
-  deny /sys/f[^s]*/** wklx,
-  deny /sys/fs/[^c]*/** wklx,
-  deny /sys/fs/c[^g]*/** wklx,
-  deny /sys/fs/cg[^r]*/** wklx,
-  deny /sys/firmware/** rwklx,
-  deny /sys/kernel/security/** rwklx,
-
-  # suppress ptrace denials when using 'docker ps' or using 'ps' inside a container
-  ptrace (trace,read,tracedby,readby) peer=rivet-job,
-}
-EOF
-
 # Create directories
 mkdir -p /opt/nomad/data
 

@@ -378,7 +378,13 @@ pub fn gen_lobby_docker_job(
 					}),
 					templates: Some(vec![
 						Template {
-							embedded_tmpl: Some(include_str!("./scripts/setup.sh").into()),
+							embedded_tmpl: Some(include_str!("./scripts/setup.sh").replace(
+								"__HOST_NETWORK__",
+								match network_mode {
+									LobbyRuntimeNetworkMode::Bridge => "true",
+									LobbyRuntimeNetworkMode::Host => "false",
+								},
+							)),
 							dest_path: Some("${NOMAD_TASK_DIR}/setup.sh".into()),
 							perms: Some("744".into()),
 							..Template::new()
@@ -519,12 +525,13 @@ fn gen_oci_bundle_config(
 		// Docker: https://github.com/moby/moby/blob/777e9f271095685543f30df0ff7a12397676f938/daemon/daemon_unix.go#L126
 		"cpu": {
 			"shares": resources.CPU,
-			"cpus": resources.cores,
+			// Use the env var for the CPU since Nomad handles assigning CPUs to each task
+			"cpus": resources.cores.map(|_| template_env_var_int("NOMAD_CPU_CORES")),
 		},
 		// Docker: https://github.com/moby/moby/blob/777e9f271095685543f30df0ff7a12397676f938/daemon/daemon_unix.go#L75
 		"memory": {
-			"reservation": resources.memory_mb,
-			"limit": resources.memory_max_mb,
+			"reservation": resources.memory_mb.map(|x| x * 1000),
+			"limit": resources.memory_max_mb.map(|x| x * 1000)
 		},
 		"devices": [
 			{
@@ -576,10 +583,8 @@ fn gen_oci_bundle_config(
 				"permitted": json!(&default_capabilities),
 				"ambient": json!(&default_capabilities),
 			},
-			"apparmorProfile": "rivet-job",
 			"noNewPrivileges": true,
-			// TODO:
-			// "oomSocreAdj": 0,
+			// TODO: oomScoreAdj
 			// TODO: scheduler
 			// TODO: iopriority
 			// TODO: rlimit?
