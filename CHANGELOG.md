@@ -30,6 +30,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 -  **Bolt** Validation that the matchmaker delivery method is configured correctly depending on wether ATS servers exist
 -  **Dev** Bolt automatically builds with Nix shell
 -  **Bolt** `--no-purge` flag to `test` to prevent purging Nomad jobs
+-  **Matchmaker** Expose hardware metrics to container with `RIVET_CPU`, `RIVET_MEMORY`, and `RIVET_MEMORY_OVERSUBSCRIBE`
 
 ### Changed
 

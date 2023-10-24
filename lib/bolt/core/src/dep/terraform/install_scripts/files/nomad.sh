@@ -371,6 +371,8 @@ plugin "docker" {
 plugin "raw_exec" {
 	config {
 		enabled = true
+		# Disable cgroups because we need to spawn child cgroups without constraints.
+		no_cgroups = true
 	}
 }
 EOF

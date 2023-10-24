@@ -54,8 +54,17 @@ pub fn gen_lobby_docker_job(
 	// `reuse_job_id` test passes when changing this function.
 	use nomad_client::models::*;
 
+	// runc-compatible resources
+	let cpu =
+		tier.rivet_cores_numerator as u64 * 1_000 / tier.rivet_cores_denominator as u64 * 1_000; // Millicore (1/1000 of a core)
+	let memory = tier.memory as u64 * (1024 * 1024); // bytes
+	let memory_max = tier.memory_max as u64 * (1024 * 1024); // bytes
+
+	// Nomad-compatbile resources
 	let resources = Resources {
 		// TODO: Configure this per-provider
+		// Nomad configures CPU based on MHz, not millicores. We havel to calculate the CPU share
+		// by knowing how many MHz are on the client.
 		CPU: if tier.rivet_cores_numerator < tier.rivet_cores_denominator {
 			Some(tier.cpu as i32 - util_job::TASK_CLEANUP_CPU)
 		} else {
@@ -66,10 +75,10 @@ pub fn gen_lobby_docker_job(
 		} else {
 			None
 		},
-		memory_mb: Some(tier.memory as i32 - util_job::TASK_CLEANUP_MEMORY),
+		memory_mb: Some(memory as i32 / (1024 * 1024) - util_job::TASK_CLEANUP_MEMORY),
 		// Allow oversubscribing memory by 50% of the reserved
 		// memory if using less than the node's total memory
-		memory_max_mb: Some(tier.memory_max as i32 - util_job::TASK_CLEANUP_MEMORY),
+		memory_max_mb: Some(memory_max as i32 / (1024 * 1024) - util_job::TASK_CLEANUP_MEMORY),
 		disk_mb: Some(tier.disk as i32), // TODO: Is this deprecated?
 		..Resources::new()
 	};
@@ -208,6 +217,15 @@ pub fn gen_lobby_docker_job(
 					"RIVET_MAX_PLAYERS_PARTY",
 					template_env_var("NOMAD_META_MAX_PLAYERS_PARTY"),
 				),
+				// CPU in millishares
+				//
+				// < 1000 is for fractional CPU
+				// > 1000 is for whole CPU, will always be 1000 increments
+				("RIVET_CPU", cpu.to_string()),
+				// Memory in bytes
+				("RIVET_MEMORY", memory.to_string()),
+				// Memory in bytes for oversubscription
+				("RIVET_MEMORY_OVERSUBSCRIBE", memory_max.to_string()),
 				// DEPRECATED:
 				(
 					"RIVET_LOBBY_TOKEN",
@@ -416,7 +434,9 @@ pub fn gen_lobby_docker_job(
 							..Template::new()
 						},
 						Template {
-							embedded_tmpl: Some(gen_oci_bundle_config(&resources, env)?),
+							embedded_tmpl: Some(gen_oci_bundle_config(
+								cpu, memory, memory_max, env,
+							)?),
 							dest_path: Some(
 								"${NOMAD_ALLOC_DIR}/oci-bundle-config.base.json".into(),
 							),
@@ -514,10 +534,13 @@ pub fn gen_lobby_docker_job(
 
 /// Build base config used to generate the OCI bundle's config.json.
 fn gen_oci_bundle_config(
-	resources: &nomad_client::models::Resources,
+	cpu: u64,
+	memory: u64,
+	memory_max: u64,
 	env: Vec<String>,
 ) -> GlobalResult<String> {
-	let config_str = serde_json::to_string(&super::oci_config::config(resources, env))?;
+	let config_str =
+		serde_json::to_string(&super::oci_config::config(cpu, memory, memory_max, env))?;
 
 	// Escape Go template syntax
 	let config_str = inject_consul_env_template(&config_str)?;
