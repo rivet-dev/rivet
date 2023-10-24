@@ -11,8 +11,8 @@ pub fn config(resources: &nomad_client::models::Resources, env: Vec<String>) -> 
 	//
 	// Default Docker spec: https://github.com/moby/moby/blob/777e9f271095685543f30df0ff7a12397676f938/oci/defaults.go#L49
 	//
-	// Read generated spec from containerd with:
-	// ctr run --rm -t docker.io/library/debian:latest debian-container-id /bin/bash
+	// Generate config.json with containerd:
+	// ctr run --rm -t --seccomp docker.io/library/debian:latest debian-container-id /bin/bash
 	// cat /run/containerd/io.containerd.runtime.v2.task/default/debian-container-id/config.json | jq
 	json!({
 		"ociVersion": "1.0.2-dev",
@@ -101,8 +101,8 @@ pub fn config(resources: &nomad_client::models::Resources, env: Vec<String>) -> 
 				"/proc/irq",
 				"/proc/sys",
 				"/proc/sysrq-trigger"
-			]
-			// TODO: Seccomp
+			],
+			"seccomp": super::seccomp::seccomp()
 		}
 	})
 }

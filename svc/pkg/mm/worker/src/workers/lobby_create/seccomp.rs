@@ -2,7 +2,131 @@ use chirp_worker::prelude::*;
 use serde_json::json;
 
 pub fn seccomp() -> serde_json::Value {
-	let allow_syscall_names = vec![
+	// Copied from auto-generated containerd
+	//
+	// See comment in super::oci_conifg::config on how to generate this
+	json!({
+		"defaultAction": "SCMP_ACT_ERRNO",
+		"architectures": [
+			"SCMP_ARCH_X86_64",
+			"SCMP_ARCH_X86",
+			"SCMP_ARCH_X32"
+		],
+		"syscalls": [
+			{
+				"names": syscall_names(),
+				"action": "SCMP_ACT_ALLOW"
+			},
+			{
+				"names": [
+					"personality"
+				],
+				"action": "SCMP_ACT_ALLOW",
+				"args": [
+					{
+						"index": 0,
+						"value": 0,
+						"op": "SCMP_CMP_EQ"
+					}
+				]
+			},
+			{
+				"names": [
+					"personality"
+				],
+				"action": "SCMP_ACT_ALLOW",
+				"args": [
+					{
+						"index": 0,
+						"value": 8,
+						"op": "SCMP_CMP_EQ"
+					}
+				]
+			},
+			{
+				"names": [
+					"personality"
+				],
+				"action": "SCMP_ACT_ALLOW",
+				"args": [
+					{
+						"index": 0,
+						"value": 131072,
+						"op": "SCMP_CMP_EQ"
+					}
+				]
+			},
+			{
+				"names": [
+					"personality"
+				],
+				"action": "SCMP_ACT_ALLOW",
+				"args": [
+					{
+						"index": 0,
+						"value": 131080,
+						"op": "SCMP_CMP_EQ"
+					}
+				]
+			},
+			{
+				"names": [
+					"personality"
+				],
+				"action": "SCMP_ACT_ALLOW",
+				"args": [
+					{
+						"index": 0,
+						"value": 4294967295u32,
+						"op": "SCMP_CMP_EQ"
+					}
+				]
+			},
+			{
+				"names": [
+					"ptrace"
+				],
+				"action": "SCMP_ACT_ALLOW"
+			},
+			{
+				"names": [
+					"arch_prctl",
+					"modify_ldt"
+				],
+				"action": "SCMP_ACT_ALLOW"
+			},
+			{
+				"names": [
+					"chroot"
+				],
+				"action": "SCMP_ACT_ALLOW"
+			},
+			{
+				"names": [
+					"clone"
+				],
+				"action": "SCMP_ACT_ALLOW",
+				"args": [
+					{
+						"index": 0,
+						"value": 2114060288,
+						"op": "SCMP_CMP_MASKED_EQ"
+					}
+				]
+			},
+			{
+				"names": [
+					"clone3"
+				],
+				"action": "SCMP_ACT_ERRNO",
+				"errnoRet": 38
+			}
+		]
+	})
+}
+
+fn syscall_names() -> Vec<&'static str> {
+	vec![
 		"accept",
 		"accept4",
 		"access",
@@ -303,6 +427,7 @@ pub fn seccomp() -> serde_json::Value {
 		"signalfd4",
 		"sigprocmask",
 		"sigreturn",
+		"socket",
 		"socketcall",
 		"socketpair",
 		"splice",
@@ -352,62 +477,5 @@ pub fn seccomp() -> serde_json::Value {
 		"waitpid",
 		"write",
 		"writev",
-	];
-
-	json!({
-	  "defaultAction": "SCMP_ACT_ERRNO",
-	  "defaultErrnoRet": 1,
-	  "architectures": ["SCMP_ARCH_X86_64"],
-	  "syscalls": [
-		{
-		  "names": allow_syscall_names,
-		  "action": "SCMP_ACT_ALLOW"
-		},
-		{
-		  "names": ["process_vm_readv", "process_vm_writev", "ptrace"],
-		  "action": "SCMP_ACT_ALLOW"
-		},
-		{
-		  "names": ["socket"],
-		  "action": "SCMP_ACT_ALLOW",
-		  "args": [{ "index": 0, "value": 40, "op": "SCMP_CMP_NE" }]
-		},
-		{
-		  "names": ["personality"],
-		  "action": "SCMP_ACT_ALLOW",
-		  "args": [{ "index": 0, "value": 0, "op": "SCMP_CMP_EQ" }]
-		},
-		{
-		  "names": ["personality"],
-		  "action": "SCMP_ACT_ALLOW",
-		  "args": [{ "index": 0, "value": 8, "op": "SCMP_CMP_EQ" }]
-		},
-		{
-		  "names": ["personality"],
-		  "action": "SCMP_ACT_ALLOW",
-		  "args": [{ "index": 0, "value": 131072, "op": "SCMP_CMP_EQ" }]
-		},
-		{
-		  "names": ["personality"],
-		  "action": "SCMP_ACT_ALLOW",
-		  "args": [{ "index": 0, "value": 131080, "op": "SCMP_CMP_EQ" }]
-		},
-		{
-		  "names": ["personality"],
-		  "action": "SCMP_ACT_ALLOW",
-		  "args": [{ "index": 0, "value": 4294967295u32, "op": "SCMP_CMP_EQ" }]
-		},
-		{ "names": ["arch_prctl"], "action": "SCMP_ACT_ALLOW" },
-		{ "names": ["modify_ldt"], "action": "SCMP_ACT_ALLOW" },
-		{
-		  "names": ["clone"],
-		  "action": "SCMP_ACT_ALLOW",
-		  "args": [
-			{ "index": 0, "value": 2114060288, "op": "SCMP_CMP_MASKED_EQ" }
-		  ]
-		},
-		{ "names": ["clone3"], "action": "SCMP_ACT_ERRNO", "errnoRet": 38 },
-		{ "names": ["chroot"], "action": "SCMP_ACT_ALLOW" }
-	  ]
-	})
+	]
 }
