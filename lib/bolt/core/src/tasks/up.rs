@@ -30,14 +30,14 @@ use crate::{
 	utils::{self},
 };
 
-pub async fn up_all(ctx: &ProjectContext) -> Result<()> {
+pub async fn up_all(ctx: &ProjectContext, load_tests: bool) -> Result<()> {
 	let all_svc_names = ctx
 		.all_services()
 		.await
 		.iter()
 		.map(|svc| svc.name())
 		.collect::<Vec<_>>();
-	up_services(ctx, &all_svc_names).await?;
+	up_services(ctx, &all_svc_names, load_tests).await?;
 
 	Ok(())
 }
@@ -45,6 +45,7 @@ pub async fn up_all(ctx: &ProjectContext) -> Result<()> {
 pub async fn up_services<T: AsRef<str>>(
 	ctx: &ProjectContext,
 	svc_names: &[T],
+	load_tests: bool,
 ) -> Result<Vec<ServiceContext>> {
 	let event = utils::telemetry::build_event(ctx, "bolt_up").await?;
 	utils::telemetry::capture_event(ctx, event)?;
@@ -63,13 +64,21 @@ pub async fn up_services<T: AsRef<str>>(
 
 	// Find all services and their dependencies
 	let all_svcs = ctx.services_with_patterns(&svc_names).await;
+	ensure!(!all_svcs.is_empty(), "input matched no services");
 
 	// Find all services that are executables
 	let all_exec_svcs = all_svcs
 		.iter()
 		.filter(|svc| svc.config().kind.component_class() == ComponentClass::Executable)
+		.filter(|svc| load_tests || !svc.config().service.load_test)
 		.cloned()
 		.collect::<Vec<_>>();
+
+	ensure!(
+		!all_exec_svcs.is_empty(),
+		"no services to bring up (to bring up load tests, use the `--load-tests` flag)"
+	);
+
 	eprintln!();
 	rivet_term::status::progress("Preparing", format!("{} services", all_exec_svcs.len()));
 
