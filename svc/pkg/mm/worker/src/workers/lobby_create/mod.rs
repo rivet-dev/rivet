@@ -5,6 +5,8 @@ use serde_json::json;
 use std::ops::Deref;
 
 mod nomad_job;
+mod oci_config;
+mod seccomp;
 
 lazy_static::lazy_static! {
 	static ref NOMAD_CONFIG: nomad_client::apis::configuration::Configuration =
