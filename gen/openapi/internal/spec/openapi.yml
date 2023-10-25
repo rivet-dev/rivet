@@ -10076,23 +10076,6 @@ components:
         - cpu
         - memory
         - memory_max
-    CloudUploadPrepareFile:
-      type: object
-      description: A file being prepared to upload.
-      properties:
-        path:
-          type: string
-          description: The path/filename of the file.
-        content_type:
-          type: string
-          description: The MIME type of the file.
-        content_length:
-          type: integer
-          format: int64
-          description: Unsigned 64 bit integer.
-      required:
-        - path
-        - content_length
     CloudAuthAgent:
       type: object
       description: The current authenticated agent.
@@ -13190,7 +13173,7 @@ components:
     UploadPresignedRequest:
       type: object
       description: >
-        A presigned request used to upload files.  Upload your file to the given
+        A presigned request used to upload files. Upload your file to the given
         URL via a PUT request.
       properties:
         path:
@@ -13202,9 +13185,21 @@ components:
           type: string
           description: |
             The URL of the presigned request for which to upload your file to.
+        byte_offset:
+          type: integer
+          format: int64
+          description: >-
+            The byte offset for this multipart chunk. Always 0 if not a
+            multipart upload.
+        content_length:
+          type: integer
+          format: int64
+          description: Expected size of this upload.
       required:
         - path
         - url
+        - byte_offset
+        - content_length
     UploadPrepareFile:
       type: object
       description: A file being prepared to upload.

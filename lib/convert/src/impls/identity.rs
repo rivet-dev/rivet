@@ -34,6 +34,8 @@ impl ApiFrom<backend::upload::PresignedUploadRequest> for models::UploadPresigne
 		models::UploadPresignedRequest {
 			path: value.path.to_owned(),
 			url: value.url,
+			byte_offset: value.byte_offset as i64,
+			content_length: value.content_length as i64,
 		}
 	}
 }

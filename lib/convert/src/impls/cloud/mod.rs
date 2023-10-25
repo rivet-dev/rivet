@@ -168,6 +168,8 @@ impl ApiTryFrom<backend::upload::PresignedUploadRequest> for new_models::UploadP
 		Ok(new_models::UploadPresignedRequest {
 			path: value.path,
 			url: value.url,
+			byte_offset: value.byte_offset as i64,
+			content_length: value.content_length as i64,
 		})
 	}
 }

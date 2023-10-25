@@ -2052,23 +2052,6 @@ components:
       - spans
       - marks
       type: object
-    CloudUploadPrepareFile:
-      description: A file being prepared to upload.
-      properties:
-        content_length:
-          description: Unsigned 64 bit integer.
-          format: int64
-          type: integer
-        content_type:
-          description: The MIME type of the file.
-          type: string
-        path:
-          description: The path/filename of the file.
-          type: string
-      required:
-      - path
-      - content_length
-      type: object
     CloudValidateGroupRequest:
       properties:
         display_name:
@@ -4486,11 +4469,20 @@ components:
       - content_length
       type: object
     UploadPresignedRequest:
-      description: 'A presigned request used to upload files.  Upload your file to
+      description: 'A presigned request used to upload files. Upload your file to
         the given URL via a PUT request.
 
         '
       properties:
+        byte_offset:
+          description: The byte offset for this multipart chunk. Always 0 if not a
+            multipart upload.
+          format: int64
+          type: integer
+        content_length:
+          description: Expected size of this upload.
+          format: int64
+          type: integer
         path:
           description: 'The name of the file to upload.  This is the same as the one
             given in the upload prepare file.
@@ -4506,6 +4498,8 @@ components:
       required:
       - path
       - url
+      - byte_offset
+      - content_length
       type: object
     ValidationError:
       description: An error given by failed content validation.

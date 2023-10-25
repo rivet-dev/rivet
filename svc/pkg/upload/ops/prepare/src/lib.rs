@@ -252,6 +252,8 @@ async fn handle_upload(
 			path: file.path.clone(),
 			url: presigned_upload_req.uri().to_string(),
 			part_number: 0,
+			byte_offset: 0,
+			content_length: file.content_length,
 		})
 	}
 	.boxed();
@@ -300,14 +302,13 @@ async fn handle_multipart_upload(
 			let fut = async move {
 				// Sign an upload request
 				let offset = (part_number - 1) * CHUNK_SIZE;
-				let content_length = (file.content_length - offset).min(CHUNK_SIZE) as i64;
-				tracing::info!(?part_number, ?content_length);
+				let content_length = (file.content_length - offset).min(CHUNK_SIZE);
 
 				let upload_part_builder = s3_client
 					.upload_part()
 					.bucket(s3_client.bucket())
 					.key(format!("{}/{}", upload_id, file.path))
-					.content_length(content_length)
+					.content_length(content_length as i64)
 					.upload_id(multipart_upload_id2)
 					.part_number(part_number as i32);
 
@@ -323,6 +324,8 @@ async fn handle_multipart_upload(
 					path: file.path.clone(),
 					url: presigned_upload_req.uri().to_string(),
 					part_number: part_number as u32,
+					byte_offset: offset,
+					content_length,
 				})
 			}
 			.boxed();
