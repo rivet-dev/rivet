@@ -6,14 +6,14 @@ use rivet_term::console::style;
 use indoc::formatdoc;
 use std::{
 	collections::{HashMap, HashSet},
-	path::Path,
+	path::{Path, PathBuf},
 	sync::{
 		atomic::{AtomicUsize, Ordering},
 		Arc,
 	},
 	time::{Duration, Instant},
 };
-use tokio::process::Command;
+use tokio::{io::AsyncWriteExt, process::Command};
 
 use crate::{
 	config::{ns, service::RuntimeKind},
@@ -132,18 +132,23 @@ pub async fn test_services<T: AsRef<str>>(
 		test_binaries
 	};
 
+	// Generate test ID
+
 	// Run tests
 	eprintln!();
-	rivet_term::status::progress("Running tests", "");
+	let test_suite_id = gen_test_id();
+	rivet_term::status::progress("Running tests", &test_suite_id);
 	let tests_complete = Arc::new(AtomicUsize::new(0));
 	let test_count = test_binaries.len();
 	let test_results = futures_util::stream::iter(test_binaries.into_iter().map(|test_binary| {
 		let ctx = ctx.clone();
+		let test_suite_id = test_suite_id.clone();
 		let tests_complete = tests_complete.clone();
 		let timeout = test_ctx.timeout;
 		async move {
 			run_test(
 				&ctx,
+				test_suite_id,
 				test_binary,
 				tests_complete.clone(),
 				test_count,
@@ -221,6 +226,7 @@ struct TestResult {
 
 async fn run_test(
 	ctx: &ProjectContext,
+	test_suite_id: String,
 	test_binary: TestBinary,
 	tests_complete: Arc<AtomicUsize>,
 	test_count: usize,
@@ -232,7 +238,12 @@ async fn run_test(
 		.into_iter()
 		.find(|x| x.cargo_name() == Some(&test_binary.package))
 		.context("svc not found for package")?;
-	let display_name = format!("{}::{}", svc_ctx.name(), test_binary.target);
+	let display_name = format!(
+		"{}::{}::{}",
+		svc_ctx.name(),
+		test_binary.target,
+		test_binary.test_name
+	);
 
 	// Convert path relative to project
 	let relative_path = test_binary
@@ -250,43 +261,60 @@ async fn run_test(
 		driver: ExecServiceDriver::LocalBinaryArtifact {
 			exec_path: container_path,
 			// Limit test running in parallel & filter the tests that get ran
-			args: vec!["--exact".to_string(), test_binary.test_name],
+			args: vec!["--exact".to_string(), test_binary.test_name.clone()],
 		},
 	};
 
 	// Build specs
 	let specs = dep::k8s::gen::gen_svc(&exec_ctx).await;
-	let svc_name = dep::k8s::gen::k8s_svc_name(&exec_ctx);
+	let k8s_svc_name = dep::k8s::gen::k8s_svc_name(&exec_ctx);
 
 	// Apply pod
 	dep::k8s::cli::apply_specs(ctx, specs).await?;
 
-	// Tail pod
-	rivet_term::status::info("Running", format!("{display_name} [{svc_name}]"));
+	// Build path to logs
+	let logs_dir = Path::new("/tmp")
+		.join(test_suite_id)
+		.join(svc_ctx.name())
+		.join(test_binary.target);
+	tokio::fs::create_dir_all(&logs_dir).await?;
+	let logs_path = logs_dir.join(format!("{}.log", test_binary.test_name));
+
+	// Watch pod
+	rivet_term::status::info(
+		"Running",
+		format!(
+			"{display_name} [{k8s_svc_name}] [{logs_path}]",
+			logs_path = logs_path.display()
+		),
+	);
 	let test_start_time = Instant::now();
 	let timeout = timeout
 		.map(Duration::from_secs)
 		.unwrap_or(DEFAULT_TEST_TIMEOUT);
-	let status = match tokio::time::timeout(timeout, tail_pod(ctx, &svc_name)).await {
-		Result::Ok(Result::Ok(x)) => x,
-		Result::Ok(Err(err)) => TestStatus::UnknownError(err.to_string()),
-		Err(_) => {
-			Command::new("kubectl")
-				.args(&["delete", "job", &svc_name, "-n", "rivet-service"])
-				.env("KUBECONFIG", ctx.gen_kubeconfig_path())
-				.output()
-				.await?;
+	let status =
+		match tokio::time::timeout(timeout, watch_pod(ctx, &k8s_svc_name, logs_path.clone())).await
+		{
+			Result::Ok(Result::Ok(x)) => x,
+			Result::Ok(Err(err)) => TestStatus::UnknownError(err.to_string()),
+			Err(_) => {
+				Command::new("kubectl")
+					.args(&["delete", "job", &k8s_svc_name, "-n", "rivet-service"])
+					.env("KUBECONFIG", ctx.gen_kubeconfig_path())
+					.output()
+					.await?;
 
-			TestStatus::Timeout
-		}
-	};
+				TestStatus::Timeout
+			}
+		};
 
 	// Print status
 	let test_duration = test_start_time.elapsed();
 	let complete_count = tests_complete.fetch_add(1, Ordering::SeqCst) + 1;
 	let run_info = format!(
-		"{display_name} ({complete_count}/{test_count}) [{svc_name}] [{td:.1}s]",
-		td = test_duration.as_secs_f32()
+		"{display_name} ({complete_count}/{test_count}) [{k8s_svc_name}] [{logs_path}] [{td:.1}s]",
+		td = test_duration.as_secs_f32(),
+		logs_path = logs_path.display()
 	);
 	match &status {
 		TestStatus::Pass => {
@@ -309,9 +337,42 @@ async fn run_test(
 	Ok(TestResult { status })
 }
 
-async fn tail_pod(ctx: &ProjectContext, svc_name: &str) -> Result<TestStatus> {
-	let label = format!("app.kubernetes.io/name={svc_name}");
+/// Follow the pod logs and write them to a file.
+async fn pipe_pod_logs(
+	ctx: ProjectContext,
+	k8s_svc_name: String,
+	logs_path: PathBuf,
+) -> Result<()> {
+	let label = format!("app.kubernetes.io/name={k8s_svc_name}");
 
+	// Write logs to file
+	let file = tokio::task::block_in_place(|| std::fs::File::create(&logs_path))?;
+	let mut logs_child = Command::new("kubectl")
+		.args(&["logs", "-f", "--selector", &label, "-n", "rivet-service"])
+		.env("KUBECONFIG", ctx.gen_kubeconfig_path())
+		.stdout(file)
+		.spawn()?;
+	logs_child.wait().await?;
+
+	// Write end of file
+	let mut file = tokio::fs::OpenOptions::new()
+		.append(true)
+		.open(&logs_path)
+		.await?;
+	file.write_all(b"\n=== POD STOPPED ===\n").await?;
+
+	Ok(())
+}
+
+/// Watch the pod to look for copmetion or failure.
+async fn watch_pod(
+	ctx: &ProjectContext,
+	k8s_svc_name: &str,
+	logs_path: PathBuf,
+) -> Result<TestStatus> {
+	let label = format!("app.kubernetes.io/name={k8s_svc_name}");
+
+	let mut spawned_pipe_logs_task = false;
 	loop {
 		// TODO: Use --wait for better performance
 		let output = Command::new("kubectl")
@@ -331,6 +392,18 @@ async fn tail_pod(ctx: &ProjectContext, svc_name: &str) -> Result<TestStatus> {
 
 		let output_str = String::from_utf8_lossy(&output.stdout);
 		let output_str = output_str.trim();
+
+		// Start piping logs to a file once the container has started
+		if !spawned_pipe_logs_task && matches!(output_str, "Running" | "Succeeded" | "Failed") {
+			spawned_pipe_logs_task = true;
+			tokio::spawn(pipe_pod_logs(
+				ctx.clone(),
+				k8s_svc_name.to_string(),
+				logs_path.clone(),
+			));
+		}
+
+		// Wait for container to finish
 		match output_str {
 			"Pending" | "Running" | "" => {
 				// Continue
