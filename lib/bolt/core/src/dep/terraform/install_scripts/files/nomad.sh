@@ -9,6 +9,8 @@
 # !!!!!!!!!!!!!!!!!!!!!!
 version="1.6.0"
 
+PUBLIC_IP=$(ip -4 route get 1.0.0.0 | awk '{print $7; exit}')
+
 # Allow container traffic to be routed through IP tables
 #
 # See https://developer.hashicorp.com/nomad/docs/install#post-installation-steps
@@ -349,6 +351,8 @@ client {
 		"connect.sidecar_image" = "envoyproxy/envoy:v1.18.3"
 
 		"pool-id" = "job"
+		"network-vlan-ipv4" = "__VLAN_IP__"
+		"network-public-ipv4" = "${PUBLIC_IP}"
 	}
 
 	# TODO: This is disabled on job nodes for now because this prevents

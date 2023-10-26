@@ -644,14 +644,15 @@ fn build_port(
 		(MmProxyKind::None, MmProxyProtocol::Tcp | MmProxyProtocol::Udp) => {
 			let port_range = unwrap_ref!(port.port_range);
 
-			let network = unwrap!(
-				run.networks.iter().find(|x| x.mode == "host"),
-				"missing host network"
-			);
+			let run_meta = unwrap_ref!(run.run_meta);
+			let Some(backend::job::run_meta::Kind::Nomad(run_meta_nomad)) = &run_meta.kind else {
+				bail!("invalid nomad run meta kind")
+			};
+			let node_public_ipv4 = unwrap_ref!(run_meta_nomad.node_public_ipv4);
 
 			Some(models::MatchmakerJoinPort {
 				host: None,
-				hostname: network.ip.clone(),
+				hostname: node_public_ipv4.clone(),
 				port: None,
 				port_range: Some(Box::new(models::MatchmakerJoinPortRange {
 					min: port_range.min.try_into()?,

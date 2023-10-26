@@ -3,6 +3,11 @@ use proto::backend::{self, pkg::*};
 use redis::AsyncCommands;
 use serde::Deserialize;
 
+lazy_static::lazy_static! {
+	static ref NOMAD_CONFIG: nomad_client::apis::configuration::Configuration =
+		nomad_util::config_from_env().unwrap();
+}
+
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "PascalCase")]
 struct PlanResult {
@@ -25,6 +30,18 @@ struct ProxiedPort {
 	ssl_domain_mode: i64,
 }
 
+#[derive(Clone)]
+struct RunData {
+	job_id: String,
+	alloc_id: String,
+	nomad_node_id: String,
+	nomad_node_name: String,
+	nomad_node_public_ipv4: String,
+	nomad_node_vlan_ipv4: String,
+	run_networks: Vec<backend::job::Network>,
+	ports: Vec<backend::job::Port>,
+}
+
 #[worker(name = "job-run-nomad-monitor-alloc-plan")]
 async fn worker(
 	ctx: &OperationContext<job_run::msg::nomad_monitor_alloc_plan::Message>,
@@ -37,11 +54,24 @@ async fn worker(
 	let job_id = unwrap_ref!(alloc.job_id, "alloc has no job id");
 	let alloc_id = unwrap_ref!(alloc.ID);
 	let nomad_node_id = unwrap_ref!(alloc.node_id, "alloc has no node id");
+	let nomad_node_name = unwrap_ref!(alloc.node_id, "alloc has no node name");
 
 	if !util_job::is_nomad_job_run(job_id) {
 		tracing::info!(%job_id, "disregarding event");
 		return Ok(());
 	}
+
+	// Fetch node metadata
+	let node = nomad_client::apis::nodes_api::get_node(
+		&NOMAD_CONFIG,
+		&nomad_node_id,
+		None,
+		None,
+		None,
+		None,
+	)
+	.await?;
+	let mut meta = unwrap!(node.meta);
 
 	// Read ports
 	let mut run_networks = Vec::new();
@@ -78,25 +108,20 @@ async fn worker(
 	//
 	// Backoff mitigates race condition with job-run-create not having inserted
 	// the dispatched_job_id yet.
+	let run_data = RunData {
+		job_id: job_id.clone(),
+		alloc_id: alloc_id.clone(),
+		nomad_node_id: nomad_node_id.clone(),
+		nomad_node_name: unwrap!(node.name),
+		nomad_node_public_ipv4: unwrap!(meta.remove("network-public-ipv4")),
+		nomad_node_vlan_ipv4: unwrap!(meta.remove("network-vlan-ipv4")),
+		run_networks: run_networks.clone(),
+		ports: ports.clone(),
+	};
 	let db_output = rivet_pools::utils::crdb::tx(&crdb, |tx| {
 		let now = ctx.ts();
-		let job_id = job_id.clone();
-		let alloc_id = alloc_id.clone();
-		let nomad_node_id = nomad_node_id.clone();
-		let run_networks = run_networks.clone();
-		let ports = ports.clone();
-		Box::pin(async move {
-			update_db(
-				tx,
-				now,
-				job_id,
-				alloc_id,
-				nomad_node_id,
-				run_networks,
-				ports,
-			)
-			.await
-		})
+		let run_data = run_data.clone();
+		Box::pin(async move { update_db(tx, now, run_data).await })
 	})
 	.await?;
 
@@ -184,11 +209,16 @@ struct DbOutput {
 async fn update_db(
 	tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
 	now: i64,
-	job_id: String,
-	alloc_id: String,
-	nomad_node_id: String,
-	run_networks: Vec<backend::job::Network>,
-	ports: Vec<backend::job::Port>,
+	RunData {
+		job_id,
+		alloc_id,
+		nomad_node_id,
+		nomad_node_name,
+		nomad_node_public_ipv4,
+		nomad_node_vlan_ipv4,
+		run_networks,
+		ports,
+	}: RunData,
 ) -> GlobalResult<Option<DbOutput>> {
 	let run_row = sqlx::query_as::<_, RunRow>(indoc!(
 		"
@@ -218,7 +248,7 @@ async fn update_db(
 		sqlx::query(indoc!(
 			"
 			UPDATE db_job_state.run_meta_nomad
-			SET alloc_id = $2, alloc_plan_ts = $3, node_id = $4
+			SET alloc_id = $2, alloc_plan_ts = $3, node_id = $4, name = $5, public_ipv4 = $6, vlan_ipv4 = $7
 			WHERE run_id = $1
 			"
 		))
@@ -226,6 +256,9 @@ async fn update_db(
 		.bind(&alloc_id)
 		.bind(now)
 		.bind(&nomad_node_id)
+		.bind(&nomad_node_name)
+		.bind(&nomad_node_public_ipv4)
+		.bind(&nomad_node_vlan_ipv4)
 		.execute(&mut **tx)
 		.await?;
 

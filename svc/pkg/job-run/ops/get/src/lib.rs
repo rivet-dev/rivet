@@ -33,6 +33,9 @@ struct RunMetaNomad {
 	dispatched_job_id: Option<String>,
 	alloc_id: Option<String>,
 	node_id: Option<String>,
+	node_name: Option<String>,
+	node_public_ipv4: Option<String>,
+	node_vlan_ipv4: Option<String>,
 	alloc_state: Option<serde_json::Value>,
 }
 
@@ -108,7 +111,7 @@ async fn handle(
 		// run_meta_nomad
 		async {
 			GlobalResult::Ok(
-				sqlx::query_as::<_, RunMetaNomad>("SELECT run_id, dispatched_job_id, alloc_id, node_id, alloc_state FROM db_job_state.run_meta_nomad WHERE run_id = ANY($1)")
+				sqlx::query_as::<_, RunMetaNomad>("SELECT run_id, dispatched_job_id, alloc_id, node_id, node_name, node_public_ipv4, node_vlan_ipv4, alloc_state FROM db_job_state.run_meta_nomad WHERE run_id = ANY($1)")
 					.bind(&run_ids)
 					.fetch_all(&crdb)
 					.await?
@@ -157,6 +160,9 @@ async fn handle(
 					dispatched_job_id: run_meta_nomad.dispatched_job_id.clone(),
 					alloc_id: run_meta_nomad.alloc_id.clone(),
 					node_id: run_meta_nomad.node_id.clone(),
+					node_name: run_meta_nomad.node_name.clone(),
+					node_public_ipv4: run_meta_nomad.node_public_ipv4.clone(),
+					node_vlan_ipv4: run_meta_nomad.node_vlan_ipv4.clone(),
 					failed: task_state.failed,
 					exit_code: task_state.exit_code,
 				})
