@@ -168,6 +168,7 @@ pub struct TestBinary {
 	pub package: String,
 	pub target: String,
 	pub path: PathBuf,
+	pub test_name: String,
 }
 
 pub async fn build_tests<'a, T: AsRef<str>>(
@@ -210,7 +211,7 @@ pub async fn build_tests<'a, T: AsRef<str>>(
 		ensure!(status.success(), "build test failed");
 
 		// Parse artifacts
-		let test_count_re = Regex::new(r"(?m)^(\d+) tests?, (\d+) benchmarks?$")?;
+		let test_count_re = Regex::new(r"(?m)^(.*): test$").unwrap();
 		for line in stdout_str.lines() {
 			let v = serde_json::from_str::<serde_json::Value>(line).context("invalid json")?;
 			if v["reason"] == "compiler-artifact" && v["target"]["kind"] == json!(["test"]) {
@@ -228,24 +229,22 @@ pub async fn build_tests<'a, T: AsRef<str>>(
 						.context("missing target name")?;
 
 					// Parse the test count from the binary
-					let test_list_args = [&["--list".to_string()], opts.test_filters].concat();
+					let test_list_args = [
+						&["--list".to_string(), "--format".into(), "terse".into()],
+						opts.test_filters,
+					]
+					.concat();
 					let test_list_stdout =
 						block_in_place(|| duct::cmd(executable, &test_list_args).read())?;
-					let caps = test_count_re
-						.captures(&test_list_stdout)
-						.context("cannot match tests list")?;
-					let test_count = caps
-						.get(1)
-						.context("failed to parse captures")?
-						.as_str()
-						.parse::<usize>()?;
 
-					// Include the binary if it has tests
-					if test_count > 0 {
+					// Run a test container for every test in the binary
+					for cap in test_count_re.captures_iter(&test_list_stdout) {
+						let test_name = &cap[1];
 						test_binaries.push(TestBinary {
 							package: package.to_string(),
 							target: target.to_string(),
 							path: PathBuf::from(executable),
+							test_name: test_name.to_string(),
 						})
 					}
 				}

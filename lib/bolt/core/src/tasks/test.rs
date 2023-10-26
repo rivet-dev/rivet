@@ -140,7 +140,6 @@ pub async fn test_services<T: AsRef<str>>(
 	let test_results = futures_util::stream::iter(test_binaries.into_iter().map(|test_binary| {
 		let ctx = ctx.clone();
 		let tests_complete = tests_complete.clone();
-		let filters = test_ctx.filters.clone();
 		let timeout = test_ctx.timeout;
 		async move {
 			run_test(
@@ -148,7 +147,6 @@ pub async fn test_services<T: AsRef<str>>(
 				test_binary,
 				tests_complete.clone(),
 				test_count,
-				filters,
 				timeout,
 			)
 			.await
@@ -226,7 +224,6 @@ async fn run_test(
 	test_binary: TestBinary,
 	tests_complete: Arc<AtomicUsize>,
 	test_count: usize,
-	filters: Vec<String>,
 	timeout: Option<u64>,
 ) -> Result<TestResult> {
 	let svc_ctx = ctx
@@ -253,7 +250,7 @@ async fn run_test(
 		driver: ExecServiceDriver::LocalBinaryArtifact {
 			exec_path: container_path,
 			// Limit test running in parallel & filter the tests that get ran
-			args: [vec!["--test-threads".to_string(), "2".to_string()], filters].concat(),
+			args: vec!["--exact".to_string(), test_binary.test_name],
 		},
 	};
 
