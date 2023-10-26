@@ -49,15 +49,37 @@ resource "helm_release" "vector" {
 					type = "vector"
 					address = "0.0.0.0:6000"
 				}
+				
+				vector_metrics = {
+					type = "internal_metrics"
+				}
+				vector_logs = {
+					type = "internal_logs"
+				}
 			}
 			sinks = {
 				prom-exporter = {
 					type = "prometheus_exporter"
-					inputs = ["vector"]
+					inputs = ["vector", "vector_metrics"]
 					address = "0.0.0.0:9598"
+				}
+
+				console = {
+					type = "console"
+					inputs = ["vector_logs"]
+					encoding = {
+						codec = "text"
+					}
 				}
 			}
 		}
+
+		# env = [
+		# 	{
+		# 		name = "VECTOR_LOG"
+		# 		value = "debug"
+		# 	}
+		# ]
 	})]
 }
 

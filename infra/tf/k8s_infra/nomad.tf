@@ -13,7 +13,7 @@
 # complicated + adds another point of failure and (b) it doesn't fix the problem with Nomad server addresses changing.
 
 locals {
-	nomad_server_count = 3
+	nomad_server_count = 2
 	nomad_server_addrs = [for i in range(0, local.nomad_server_count): "127.0.0.1:${6000 + i}"]
 	nomad_server_addrs_escaped = [for addr in local.nomad_server_addrs : "\"${addr}\""]
 	nomad_server_configmap_data = {
@@ -36,6 +36,10 @@ locals {
 					retry_join = [${join(", ", local.nomad_server_addrs_escaped)}]
 					retry_interval = "10s"
 				}
+			}
+
+			telemetry {
+				prometheus_metrics = true
 			}
 
 			limits {
@@ -97,6 +101,37 @@ resource "kubernetes_service" "nomad_server" {
 			protocol = "TCP"
 		}
 	}
+}
+
+resource "kubectl_manifest" "nomad_server_monitor" {
+	depends_on = [helm_release.traefik]
+
+	yaml_body = yamlencode({
+		apiVersion = "monitoring.coreos.com/v1"
+		kind = "ServiceMonitor"
+
+		metadata = {
+			name = "nomad-server-service-monitor"
+			namespace = kubernetes_namespace.nomad.metadata.0.name
+		}
+
+		spec = {
+			selector = {
+				matchLabels = {
+					"app.kubernetes.io/name": "nomad-server"
+				}
+			}
+			endpoints = [
+				{
+					port = "http"
+					path = "/v1/metrics"
+					params = {
+						format = ["prometheus"]
+					}
+				}
+			]
+		}
+	})
 }
 
 resource "kubernetes_stateful_set" "nomad_server" {
