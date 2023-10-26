@@ -238,12 +238,7 @@ async fn run_test(
 		.into_iter()
 		.find(|x| x.cargo_name() == Some(&test_binary.package))
 		.context("svc not found for package")?;
-	let display_name = format!(
-		"{}::{}::{}",
-		svc_ctx.name(),
-		test_binary.target,
-		test_binary.test_name
-	);
+	let display_name = format!("{}:{}", svc_ctx.name(), test_binary.test_name);
 
 	// Convert path relative to project
 	let relative_path = test_binary
@@ -284,7 +279,7 @@ async fn run_test(
 	rivet_term::status::info(
 		"Running",
 		format!(
-			"{display_name} [{k8s_svc_name}] [{logs_path}]",
+			"{display_name} [{logs_path}]",
 			logs_path = logs_path.display()
 		),
 	);
@@ -312,7 +307,7 @@ async fn run_test(
 	let test_duration = test_start_time.elapsed();
 	let complete_count = tests_complete.fetch_add(1, Ordering::SeqCst) + 1;
 	let run_info = format!(
-		"{display_name} ({complete_count}/{test_count}) [{k8s_svc_name}] [{logs_path}] [{td:.1}s]",
+		"{display_name} ({complete_count}/{test_count}) [{logs_path}] [{td:.1}s]",
 		td = test_duration.as_secs_f32(),
 		logs_path = logs_path.display()
 	);
