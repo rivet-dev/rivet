@@ -238,7 +238,7 @@ async fn run_test(
 		.into_iter()
 		.find(|x| x.cargo_name() == Some(&test_binary.package))
 		.context("svc not found for package")?;
-	let display_name = format!("{}:{}", svc_ctx.name(), test_binary.test_name);
+	let display_name = format!("{}::{}", svc_ctx.name(), test_binary.test_name);
 
 	// Convert path relative to project
 	let relative_path = test_binary
