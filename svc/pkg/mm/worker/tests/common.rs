@@ -4,9 +4,13 @@ use proto::backend::{self, pkg::*};
 
 pub struct Setup {
 	pub namespace_id: Uuid,
-	pub lobby_group_id: Uuid,
+	pub lobby_group_id_bridge: Uuid,
+	pub lobby_group_id_host: Uuid,
 	pub region_id: Uuid,
 	pub region: backend::region::Region,
+	pub host_port_http: u16,
+	pub host_port_tcp: u16,
+	pub host_port_udp: u16,
 }
 
 impl Setup {
@@ -27,6 +31,11 @@ impl Setup {
 		})
 		.await
 		.unwrap();
+
+		// Pick host ports to connect to
+		let host_port_http = rand::thread_rng().gen_range(26000..27000);
+		let host_port_tcp = rand::thread_rng().gen_range(26000..27000);
+		let host_port_udp = rand::thread_rng().gen_range(26000..27000);
 
 		let game_version_res = op!([ctx] faker_game_version {
 			game_id: game_res.game_id,
@@ -51,40 +60,14 @@ impl Setup {
 					runtime: Some(backend::matchmaker::lobby_runtime::Docker {
 						build_id: build_res.build_id,
 						args: Vec::new(),
-						env_vars: vec![backend::matchmaker::lobby_runtime::EnvVar {
-							key: "HELLO".into(),
-							value: "world".into(),
-						}],
+						env_vars: vec![
+							backend::matchmaker::lobby_runtime::EnvVar {
+								key: "HELLO".into(),
+								value: "world".into(),
+							},
+						],
 						network_mode: backend::matchmaker::lobby_runtime::NetworkMode::Bridge as i32,
 						ports: vec![
-							backend::matchmaker::lobby_runtime::Port {
-								label: "1234".into(),
-								target_port: Some(1234),
-								port_range: None,
-								proxy_protocol: backend::matchmaker::lobby_runtime::ProxyProtocol::Http as i32,
-								proxy_kind: backend::matchmaker::lobby_runtime::ProxyKind::GameGuard as i32,
-							},
-							backend::matchmaker::lobby_runtime::Port {
-								label: "1235".into(),
-								target_port: Some(1235),
-								port_range: None,
-								proxy_protocol: backend::matchmaker::lobby_runtime::ProxyProtocol::Https as i32,
-								proxy_kind: backend::matchmaker::lobby_runtime::ProxyKind::GameGuard as i32,
-							},
-							backend::matchmaker::lobby_runtime::Port {
-								label: "1236".into(),
-								target_port: Some(1236),
-								port_range: None,
-								proxy_protocol: backend::matchmaker::lobby_runtime::ProxyProtocol::Tcp as i32,
-								proxy_kind: backend::matchmaker::lobby_runtime::ProxyKind::GameGuard as i32,
-							},
-							backend::matchmaker::lobby_runtime::Port {
-								label: "1237".into(),
-								target_port: Some(1237),
-								port_range: None,
-								proxy_protocol: backend::matchmaker::lobby_runtime::ProxyProtocol::TcpTls as i32,
-								proxy_kind: backend::matchmaker::lobby_runtime::ProxyKind::GameGuard as i32,
-							},
 							backend::matchmaker::lobby_runtime::Port {
 								label: "test-http".into(),
 								target_port: Some(8001),
@@ -134,21 +117,62 @@ impl Setup {
 					runtime: Some(backend::matchmaker::lobby_runtime::Docker {
 						build_id: build_res.build_id,
 						args: Vec::new(),
-						env_vars: vec![backend::matchmaker::lobby_runtime::EnvVar {
-							key: "HELLO".into(),
-							value: "world".into(),
-						}],
+						env_vars: vec![
+							backend::matchmaker::lobby_runtime::EnvVar {
+								key: "HELLO".into(),
+								value: "world".into(),
+							},
+							backend::matchmaker::lobby_runtime::EnvVar {
+								key: "HOST_PORT_HTTP".into(),
+								value: host_port_http.to_string(),
+							},
+							backend::matchmaker::lobby_runtime::EnvVar {
+								key: "HOST_PORT_TCP".into(),
+								value: host_port_tcp.to_string(),
+							},
+							backend::matchmaker::lobby_runtime::EnvVar {
+								key: "HOST_PORT_UDP".into(),
+								value: host_port_udp.to_string(),
+							},
+						],
 						network_mode: backend::matchmaker::lobby_runtime::NetworkMode::Host as i32,
 						ports: vec![
+							// Game Guard
 							backend::matchmaker::lobby_runtime::Port {
-								label: "1234".into(),
-								target_port: Some(1234),
+								label: "test-http".into(),
+								target_port: Some(8001),
 								port_range: None,
 								proxy_protocol: backend::matchmaker::lobby_runtime::ProxyProtocol::Http as i32,
 								proxy_kind: backend::matchmaker::lobby_runtime::ProxyKind::GameGuard as i32,
 							},
 							backend::matchmaker::lobby_runtime::Port {
-								label: "26000-27000".into(),
+								label: "test-tcp".into(),
+								target_port: Some(8002),
+								port_range: None,
+								proxy_protocol: backend::matchmaker::lobby_runtime::ProxyProtocol::Tcp as i32,
+								proxy_kind: backend::matchmaker::lobby_runtime::ProxyKind::GameGuard as i32,
+							},
+							backend::matchmaker::lobby_runtime::Port {
+								label: "test-udp".into(),
+								target_port: Some(8003),
+								port_range: None,
+								proxy_protocol: backend::matchmaker::lobby_runtime::ProxyProtocol::Udp as i32,
+								proxy_kind: backend::matchmaker::lobby_runtime::ProxyKind::GameGuard as i32,
+							},
+
+							// Host
+							backend::matchmaker::lobby_runtime::Port {
+								label: "test-range-tcp".into(),
+								target_port: None,
+								port_range: Some(backend::matchmaker::lobby_runtime::PortRange {
+									min: 26000,
+									max: 27000,
+								}),
+								proxy_protocol: backend::matchmaker::lobby_runtime::ProxyProtocol::Tcp as i32,
+								proxy_kind: backend::matchmaker::lobby_runtime::ProxyKind::None as i32,
+							},
+							backend::matchmaker::lobby_runtime::Port {
+								label: "test-range-udp".into(),
 								target_port: None,
 								port_range: Some(backend::matchmaker::lobby_runtime::PortRange {
 									min: 26000,
@@ -176,20 +200,14 @@ impl Setup {
 		})
 		.await
 		.unwrap();
-		let lobby_group_id = version_get_res
+		let lobby_groups = &version_get_res
 			.versions
 			.first()
 			.unwrap()
 			.config_meta
 			.as_ref()
 			.unwrap()
-			.lobby_groups
-			.first()
-			.unwrap()
-			.lobby_group_id
-			.as_ref()
-			.unwrap()
-			.as_uuid();
+			.lobby_groups;
 
 		op!([ctx] game_namespace_version_set {
 			namespace_id: Some(namespace_id.into()),
@@ -200,18 +218,29 @@ impl Setup {
 
 		Setup {
 			namespace_id,
-			lobby_group_id,
+			lobby_group_id_bridge: lobby_groups[0].lobby_group_id.as_ref().unwrap().as_uuid(),
+			lobby_group_id_host: lobby_groups[1].lobby_group_id.as_ref().unwrap().as_uuid(),
 			region_id,
 			region: region_res.region.clone().unwrap(),
+			host_port_http,
+			host_port_tcp,
+			host_port_udp,
 		}
 	}
 
+	/// Create bridge lobby
 	pub async fn create_lobby(&self, ctx: &TestCtx) -> Uuid {
+		self.create_lobby_with_lgi(ctx, self.lobby_group_id_bridge)
+			.await
+	}
+
+	/// Create lobby with LGI
+	pub async fn create_lobby_with_lgi(&self, ctx: &TestCtx, lgi: Uuid) -> Uuid {
 		let lobby_id = Uuid::new_v4();
 		msg!([ctx] @notrace mm::msg::lobby_create(lobby_id) -> mm::msg::lobby_ready_complete(lobby_id) {
 			lobby_id: Some(lobby_id.into()),
 			namespace_id: Some(self.namespace_id.into()),
-			lobby_group_id: Some(self.lobby_group_id.into()),
+			lobby_group_id: Some(lgi.into()),
 			region_id: Some(self.region_id.into()),
 			create_ray_id: None,
 			preemptively_created: false,
