@@ -1,6 +1,10 @@
 FROM clux/muslrust:1.73.0 AS build
+RUN cargo new --bin /app
 WORKDIR /app
-COPY . .
+COPY Cargo.toml ./
+RUN cargo build --release
+RUN rm -r src
+COPY ./src ./src
 RUN cargo build --release \
     && strip target/x86_64-unknown-linux-musl/release/test-mm-lobby-echo
 
