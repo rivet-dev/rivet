@@ -27,6 +27,7 @@ done
 
 echo
 echo "Deleting old job"
+kubectl delete jobs.batch -n rivet-service rivet-build-default-create
 
 echo
 echo "Applying to cluster"
