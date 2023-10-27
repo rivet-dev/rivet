@@ -45,6 +45,30 @@ ADMIN_CHAIN="RIVET-ADMIN"
 SUBNET_IPV4="172.26.64.0/20"
 SUBNET_IPV6="fd00:db8:2::/64"
 
+# !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+#
+# DO NOT CHANGE NETWORKING CONFIGS WITHOUT MANUALLY RE-TESTING RULES
+#
+# There are no automated tests to validate that iptables
+# and tc correctly marks traffic priorities. Manually
+# check the following if you change this file.
+#
+# 1. Restart the game node(s) to make sure there are
+#    fresh iptables & tc rules.
+# 2. Run `tc -s class show dev eth1` and start a lobby.
+#    Make sure packets are passing through 1:10 (Game
+#    Guard traffic) and 1:20 (ATS traffic).
+# 3. Run `iptables -L -v` and validate that packets are
+#    flowing through *ALL* rules in the RIVET-ADMIN chain
+#    (for game traffic) and the RIVET-INPUT chain (for ATS
+#    traffic).
+# 4. Run `iptables -L -v -t mangle` and validate that
+#    packets are flowing through *ALL* the rules in 
+#    RIVET-ADMIN and RIVET-INPUT.
+# 5. Obviously, make sure both bridge and host networking
+#    works. The lobby connectivity tests cover this.
+#
+# !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
 # MARK: iptables
 cat << EOF > /usr/local/bin/setup_nomad_networking.sh
@@ -128,6 +152,19 @@ for iface in __PUBLIC_IFACE__ __VLAN_IFACE__; do
 done
 
 # MARK: iptables
+add_ipt_chain() {
+    local ipt="\$1"
+    local table="\$2"
+    local chain="\$3"
+
+    if ! "\$ipt" -t "\$table" -L "\$chain" &>/dev/null; then
+        "\$ipt" -t "\$table" -N "\$chain"
+        echo "Created \$ipt \$table chain: \$chain"
+    else
+        echo "Chain already exists in \$ipt \$table: \$chain"
+    fi
+}
+
 add_ipt_rule() {
     local ipt="\$1"
     local table="\$2"
@@ -150,22 +187,17 @@ for ipt in iptables ip6tables; do
 		SUBNET_VAR="$SUBNET_IPV6"
 	fi
 
-	# MARK: Create filter chain
-    if ! "\$ipt" -t filter -L "$ADMIN_CHAIN" &>/dev/null; then
-        "\$ipt" -t filter -N "$ADMIN_CHAIN"
-        echo "Created \$ipt chain: $ADMIN_CHAIN"
-    else
-        echo "Chain already exists in \$ipt: $ADMIN_CHAIN"
-    fi
+	# MARK: Chains
+	add_ipt_chain "\$ipt" "filter" "$ADMIN_CHAIN"
 
-	# MARK: Create mangle chain
-    if ! "\$ipt" -t mangle -L "RIVET-FORWARD" &>/dev/null; then
-        "\$ipt" -t mangle -N "RIVET-FORWARD"
-        echo "Created \$ipt chain: RIVET-FORWARD"
-    else
-        echo "Chain already exists in \$ipt: RIVET-FORWARD"
-    fi
+	add_ipt_chain "\$ipt" "mangle" "RIVET-FORWARD"
 	add_ipt_rule "\$ipt" "mangle" "FORWARD" "-j RIVET-FORWARD"
+
+	add_ipt_chain "\$ipt" "filter" "RIVET-INPUT"
+	add_ipt_rule "\$ipt" "filter" "INPUT" "-j RIVET-INPUT"
+
+	add_ipt_chain "\$ipt" "mangle" "RIVET-INPUT"
+	add_ipt_rule "\$ipt" "mangle" "INPUT" "-j RIVET-INPUT"
 
 	# MARK: Create GG TOS
 	#
@@ -199,9 +231,9 @@ for ipt in iptables ip6tables; do
 
 		# MARK: ATS ingress
 		# Maximize throughput from ATS
-		add_ipt_rule "\$ipt" "mangle" "RIVET-FORWARD" "-s __ATS_VLAN_SUBNET__ -j TOS --set-tos Maximize-Throughput"
+		add_ipt_rule "\$ipt" "mangle" "RIVET-INPUT" "-s __ATS_VLAN_SUBNET__ -j TOS --set-tos Maximize-Throughput"
 		# Deprioritize traffic so game traffic takes priority
-		add_ipt_rule "\$ipt" "filter" "$ADMIN_CHAIN" "-s __ATS_VLAN_SUBNET__ -j MARK --set-mark 2"
+		add_ipt_rule "\$ipt" "filter" "RIVET-INPUT" "-s __ATS_VLAN_SUBNET__ -j MARK --set-mark 2"
 	fi
 
 	# MARK: Public egress
