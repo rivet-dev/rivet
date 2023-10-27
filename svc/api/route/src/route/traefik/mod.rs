@@ -34,7 +34,7 @@ pub struct TraefikConfigResponseNullified {
 pub struct TraefikHttp {
 	pub services: HashMap<String, TraefikService>,
 	pub routers: HashMap<String, TraefikRouter>,
-	pub middlewares: HashMap<String, TraefikMiddleware>,
+	pub middlewares: HashMap<String, TraefikMiddlewareHttp>,
 }
 
 /// See above.
@@ -46,7 +46,7 @@ pub struct TraefikHttpNullified {
 	#[serde(skip_serializing_if = "Option::is_none")]
 	pub routers: Option<HashMap<String, TraefikRouter>>,
 	#[serde(skip_serializing_if = "Option::is_none")]
-	pub middlewares: Option<HashMap<String, TraefikMiddleware>>,
+	pub middlewares: Option<HashMap<String, TraefikMiddlewareHttp>>,
 }
 
 impl TraefikHttp {
@@ -163,7 +163,7 @@ pub struct TraefikTlsDomain {
 
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
-pub enum TraefikMiddleware {
+pub enum TraefikMiddlewareHttp {
 	#[serde(rename = "chain", rename_all = "camelCase")]
 	Chain { middlewares: Vec<String> },
 	#[serde(rename = "ipWhiteList", rename_all = "camelCase")]

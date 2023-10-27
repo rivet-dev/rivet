@@ -82,7 +82,7 @@ pub async fn build_cdn(ctx: &Ctx<Auth>) -> GlobalResult<traefik::TraefikConfigRe
 	// file configuration.
 	config.http.middlewares.insert(
 		"cdn-rate-limit".to_owned(),
-		traefik::TraefikMiddleware::RateLimit {
+		traefik::TraefikMiddlewareHttp::RateLimit {
 			average: 2048,
 			period: "5m".into(),
 			burst: 256,
@@ -96,7 +96,7 @@ pub async fn build_cdn(ctx: &Ctx<Auth>) -> GlobalResult<traefik::TraefikConfigRe
 	);
 	config.http.middlewares.insert(
 		"cdn-in-flight".to_owned(),
-		traefik::TraefikMiddleware::InFlightReq {
+		traefik::TraefikMiddlewareHttp::InFlightReq {
 			// This number needs to be high to allow for parallel requests
 			amount: 128,
 			source_criterion: traefik::InFlightReqSourceCriterion::IpStrategy(
@@ -109,14 +109,14 @@ pub async fn build_cdn(ctx: &Ctx<Auth>) -> GlobalResult<traefik::TraefikConfigRe
 	);
 	config.http.middlewares.insert(
 		"cdn-retry".to_owned(),
-		traefik::TraefikMiddleware::Retry {
+		traefik::TraefikMiddlewareHttp::Retry {
 			attempts: 4,
 			initial_interval: "1s".into(),
 		},
 	);
 	config.http.middlewares.insert(
 		"cdn-compress".to_owned(),
-		traefik::TraefikMiddleware::Compress {},
+		traefik::TraefikMiddlewareHttp::Compress {},
 	);
 
 	let base_headers = {
@@ -130,7 +130,7 @@ pub async fn build_cdn(ctx: &Ctx<Auth>) -> GlobalResult<traefik::TraefikConfigRe
 
 	config.http.middlewares.insert(
 		"cdn-cache-control".to_owned(),
-		traefik::TraefikMiddleware::Headers(traefik::TraefikMiddlewareHeaders {
+		traefik::TraefikMiddlewareHttp::Headers(traefik::TraefikMiddlewareHeaders {
 			custom_response_headers: Some({
 				let mut x = base_headers.clone();
 				// See https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Cache-Control#caching_static_assets
@@ -147,7 +147,7 @@ pub async fn build_cdn(ctx: &Ctx<Auth>) -> GlobalResult<traefik::TraefikConfigRe
 
 	config.http.middlewares.insert(
 		"cdn-cache-control-html".to_owned(),
-		traefik::TraefikMiddleware::Headers(traefik::TraefikMiddlewareHeaders {
+		traefik::TraefikMiddlewareHttp::Headers(traefik::TraefikMiddlewareHeaders {
 			custom_response_headers: Some({
 				let mut x = base_headers;
 				// See above
@@ -160,7 +160,7 @@ pub async fn build_cdn(ctx: &Ctx<Auth>) -> GlobalResult<traefik::TraefikConfigRe
 
 	config.http.middlewares.insert(
 		"cdn-append-index".to_owned(),
-		traefik::TraefikMiddleware::ReplacePathRegex {
+		traefik::TraefikMiddlewareHttp::ReplacePathRegex {
 			regex: "(.*)/$".into(),
 			replacement: "${1}/index.html".into(),
 		},
@@ -329,7 +329,7 @@ fn register_namespace(
 	// Create middleware
 	config.http.middlewares.insert(
 		rewrite_middleware_key,
-		traefik::TraefikMiddleware::AddPrefix {
+		traefik::TraefikMiddlewareHttp::AddPrefix {
 			prefix: path_prefix,
 		},
 	);
@@ -342,7 +342,7 @@ fn register_namespace(
 			// when attempting to request a resource with cached auth headers.
 			// This can happen immediately after signing in, disabling ns
 			// authorization, then visiting the site again.
-			traefik::TraefikMiddleware::Headers(traefik::TraefikMiddlewareHeaders {
+			traefik::TraefikMiddlewareHttp::Headers(traefik::TraefikMiddlewareHeaders {
 				custom_request_headers: Some({
 					let mut x = HashMap::new();
 					x.insert("Authorization".to_owned(), String::new());
@@ -351,15 +351,17 @@ fn register_namespace(
 				..Default::default()
 			})
 		}
-		backend::cdn::namespace_config::AuthType::Basic => traefik::TraefikMiddleware::BasicAuth {
-			users: ns
-				.auth_user_list
-				.iter()
-				.map(|user| format!("{}:{}", user.user, user.password))
-				.collect::<Vec<_>>(),
-			realm: Some("RivetCdn".to_string()),
-			remove_header: true,
-		},
+		backend::cdn::namespace_config::AuthType::Basic => {
+			traefik::TraefikMiddlewareHttp::BasicAuth {
+				users: ns
+					.auth_user_list
+					.iter()
+					.map(|user| format!("{}:{}", user.user, user.password))
+					.collect::<Vec<_>>(),
+				realm: Some("RivetCdn".to_string()),
+				remove_header: true,
+			}
+		}
 	};
 	config
 		.http
@@ -455,7 +457,7 @@ fn register_custom_cdn_route(
 								format!("ns-custom-headers:{}:{}", ns_id, glob_hash);
 
 							// Create headers middleware
-							let headers = traefik::TraefikMiddleware::Headers(
+							let headers = traefik::TraefikMiddlewareHttp::Headers(
 								traefik::TraefikMiddlewareHeaders {
 									custom_response_headers: Some(
 										custom_headers

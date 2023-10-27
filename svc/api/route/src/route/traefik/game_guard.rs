@@ -70,7 +70,7 @@ pub async fn build_job(
 
 	config.http.middlewares.insert(
 		"job-rate-limit".to_owned(),
-		traefik::TraefikMiddleware::RateLimit {
+		traefik::TraefikMiddlewareHttp::RateLimit {
 			average: 100,
 			period: "5m".into(),
 			burst: 256,
@@ -84,20 +84,7 @@ pub async fn build_job(
 	);
 	config.http.middlewares.insert(
 		"job-in-flight".to_owned(),
-		traefik::TraefikMiddleware::InFlightReq {
-			// This number needs to be high to allow for parallel requests
-			amount: 4,
-			source_criterion: traefik::InFlightReqSourceCriterion::IpStrategy(
-				traefik::IpStrategy {
-					depth: 0,
-					exclude_ips: None,
-				},
-			),
-		},
-	);
-	config.tcp.middlewares.insert(
-		"job-in-flight".to_owned(),
-		traefik::TraefikMiddleware::InFlightReq {
+		traefik::TraefikMiddlewareHttp::InFlightReq {
 			// This number needs to be high to allow for parallel requests
 			amount: 4,
 			source_criterion: traefik::InFlightReqSourceCriterion::IpStrategy(
@@ -264,7 +251,7 @@ fn register_proxied_port(
 					rule: Some("HostSNI(`*`)".into()),
 					priority: None,
 					service: service_id,
-					middlewares: vec!["job-in-flight".into()],
+					middlewares: vec![],
 					tls: None,
 				},
 			);
