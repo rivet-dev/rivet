@@ -21,7 +21,7 @@ async fn main() -> Result<()> {
 		String::from_utf8_lossy(&output.stdout)
 	);
 
-	// Echo servers
+	// Echo servers (bridge networking)
 	if let Ok(http_port) = env::var("PORT_test_http") {
 		let http_port: u16 = http_port.parse()?;
 		tokio::spawn(echo_http_server(http_port));
@@ -33,6 +33,22 @@ async fn main() -> Result<()> {
 	}
 
 	if let Ok(udp_port) = env::var("PORT_test_udp") {
+		let udp_port: u16 = udp_port.parse()?;
+		tokio::spawn(echo_udp_server(udp_port));
+	}
+
+	// Echo servers (host networking)
+	if let Ok(http_port) = env::var("HOST_PORT_HTTP") {
+		let http_port: u16 = http_port.parse()?;
+		tokio::spawn(echo_http_server(http_port));
+	}
+
+	if let Ok(tcp_port) = env::var("HOST_PORT_TCP") {
+		let tcp_port: u16 = tcp_port.parse()?;
+		tokio::spawn(echo_tcp_server(tcp_port));
+	}
+
+	if let Ok(udp_port) = env::var("HOST_PORT_UDP") {
 		let udp_port: u16 = udp_port.parse()?;
 		tokio::spawn(echo_udp_server(udp_port));
 	}
