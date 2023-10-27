@@ -4,7 +4,7 @@ use chirp_worker::prelude::*;
 use common::*;
 use proto::backend::{self, pkg::*};
 use std::{
-	io::{Read, Write},
+	io::{BufRead, BufReader, Read, Write},
 	net::{TcpStream, UdpSocket},
 };
 
@@ -101,18 +101,20 @@ async fn lobby_connectivity_tcp(ctx: TestCtx) {
 	tracing::info!("testing tcp to {}:{}", hostname, port);
 
 	// Echo body
-	let random_body = Uuid::new_v4();
+	let random_body = Uuid::new_v4().to_string();
 	let mut stream = TcpStream::connect((hostname, port)).unwrap();
 
 	stream.write_all(random_body.as_ref()).unwrap();
+	stream.write_all(b"\n").unwrap();
 	stream.flush().unwrap();
 
-	let mut response = Vec::new();
-	stream.read_to_end(&mut response).unwrap();
+	let mut reader = BufReader::new(&stream);
+	let mut response = String::new();
+	reader.read_line(&mut response).expect("read line");
 
 	assert_eq!(
-		random_body.as_ref(),
-		response.as_slice(),
+		&random_body,
+		&response[..response.len() - 1],
 		"echoed wrong response"
 	);
 }
@@ -135,18 +137,20 @@ async fn lobby_connectivity_tcp_host(ctx: TestCtx) {
 		tracing::info!("testing tcp to {}:{}", hostname, port);
 
 		// Echo body
-		let random_body = Uuid::new_v4();
+		let random_body = Uuid::new_v4().to_string();
 		let mut stream = TcpStream::connect((hostname, port)).unwrap();
 
 		stream.write_all(random_body.as_ref()).unwrap();
+		stream.write_all(b"\n").unwrap();
 		stream.flush().unwrap();
 
-		let mut response = Vec::new();
-		stream.read_to_end(&mut response).unwrap();
+		let mut reader = BufReader::new(&stream);
+		let mut response = String::new();
+		reader.read_line(&mut response).expect("read line");
 
 		assert_eq!(
-			random_body.as_ref(),
-			response.as_slice(),
+			&random_body,
+			&response[..response.len() - 1],
 			"echoed wrong response"
 		);
 	}
@@ -156,18 +160,20 @@ async fn lobby_connectivity_tcp_host(ctx: TestCtx) {
 		let host_ip = get_lobby_host_ip(&ctx, lobby_id).await;
 		tracing::info!("testing tcp to {}:{}", host_ip, setup.host_port_tcp);
 
-		let random_body = Uuid::new_v4();
+		let random_body = Uuid::new_v4().to_string();
 		let mut stream = TcpStream::connect((host_ip, setup.host_port_tcp)).unwrap();
 
 		stream.write_all(random_body.as_ref()).unwrap();
+		stream.write_all(b"\n").unwrap();
 		stream.flush().unwrap();
 
-		let mut response = Vec::new();
-		stream.read_to_end(&mut response).unwrap();
+		let mut reader = BufReader::new(&stream);
+		let mut response = String::new();
+		reader.read_line(&mut response).expect("read line");
 
 		assert_eq!(
-			random_body.as_ref(),
-			response.as_slice(),
+			&random_body,
+			&response[..response.len() - 1],
 			"echoed wrong response"
 		);
 	}
