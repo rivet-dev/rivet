@@ -26,6 +26,18 @@ struct MiddlewareCounter {
 	custom_headers: usize,
 }
 
+#[derive(PartialEq, Eq, Hash)]
+enum PortRangeProtocol {
+	Tcp,
+	Udp,
+}
+
+struct PortRange {
+	proto: PortRangeProtocol,
+	min: u32,
+	max: u32,
+}
+
 #[operation(name = "game-version-validate")]
 async fn handle(
 	ctx: OperationContext<game::version_validate::Request>,
@@ -712,7 +724,7 @@ async fn handle(
 							.any(|x| *x == env_var.key);
 						let conflicts_port = docker_config.ports.iter().any(|port| {
 							if port.target_port.is_some() {
-								env_var.key == format!("PORT_{}", port.label)
+								env_var.key == format!("PORT_{}", port.label.replace("-", "_"))
 							} else if port.port_range.is_some() {
 								env_var.key == format!("PORT_RANGE_{}_MIN", port.label)
 									|| env_var.key == format!("PORT_RANGE_{}_MAX", port.label)
@@ -739,7 +751,7 @@ async fn handle(
 				{
 					let mut unique_port_labels = HashSet::<String>::new();
 					let mut unique_ports = HashSet::<(u32, i32)>::new();
-					let mut ranges = Vec::<(u32, u32)>::new();
+					let mut ranges = Vec::<PortRange>::new();
 					let network_mode = unwrap!(LobbyRuntimeNetworkMode::from_i32(
 						docker_config.network_mode
 					));
@@ -819,6 +831,16 @@ async fn handle(
 								None,
 								Some(port_range),
 							) => {
+								let this_range = PortRange {
+									proto: match proxy_protocol {
+										LobbyRuntimeProxyProtocol::Tcp => PortRangeProtocol::Tcp,
+										LobbyRuntimeProxyProtocol::Udp => PortRangeProtocol::Udp,
+										_ => unreachable!(),
+									},
+									min: port_range.min,
+									max: port_range.max,
+								};
+
 								// Validate port range
 								if port_range.min > port_range.max {
 									errors.push(util::err_path![
@@ -845,8 +867,10 @@ async fn handle(
 										port_label,
 										"port-out-of-range",
 									]);
-								} else if ranges.iter().any(|(min, max)| {
-									port_range.max >= *min && port_range.min <= *max
+								} else if ranges.iter().any(|other_range| {
+									this_range.proto == other_range.proto
+										&& this_range.max >= other_range.min && this_range.min
+										<= other_range.max
 								}) {
 									errors.push(util::err_path![
 										"config",
@@ -859,7 +883,7 @@ async fn handle(
 									]);
 								}
 
-								ranges.push((port_range.min, port_range.max));
+								ranges.push(this_range);
 							}
 
 							// === Game Guard ===
