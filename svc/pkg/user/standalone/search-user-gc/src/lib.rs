@@ -106,7 +106,7 @@ async fn process_batch(
 
 	let res = sqlx::query(indoc!(
 		"
-		UPDATE users
+		UPDATE db_user.users
 		SET is_searchable = FALSE
 		WHERE user_id = ANY($1)
 		"
