@@ -1,7 +1,7 @@
 use anyhow::{Context, Result};
 use std::{convert::Infallible, env, net::SocketAddr, process::Command};
 use tokio::{
-	io::{AsyncReadExt, AsyncWriteExt},
+	io::{AsyncBufReadExt, AsyncWriteExt},
 	net::{TcpListener, UdpSocket},
 };
 
@@ -106,15 +106,24 @@ async fn echo_tcp_server(port: u16) {
 
 	let listener = TcpListener::bind(&addr).await.expect("bind failed");
 	loop {
-		let (mut socket, _) = listener.accept().await.expect("accept failed");
+		let (socket, _) = listener.accept().await.expect("accept failed");
 		tokio::spawn(async move {
-			let mut buf = [0u8; 1024];
+			let mut reader = tokio::io::BufReader::new(socket);
+			let mut line = String::new();
 			loop {
-				let n = socket.read(&mut buf).await.expect("read failed");
-				if n == 0 {
+				let bytes_read = reader.read_line(&mut line).await.expect("read line failed");
+				if bytes_read == 0 {
 					break;
 				}
-				socket.write_all(&buf[0..n]).await.expect("write failed");
+
+				// Echo the line
+				reader
+					.get_mut()
+					.write_all(format!("{line}\n").as_bytes())
+					.await
+					.expect("write failed");
+				reader.get_mut().flush().await.expect("flush failed");
+				line.clear();
 			}
 		});
 	}
