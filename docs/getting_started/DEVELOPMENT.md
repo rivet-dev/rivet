@@ -66,7 +66,7 @@ Run this command any time you update to a new version of Rivet.
 ## Step 4: Boot the Rivet Hub
 
 1. Clone the [Rivet Hub](https://github.com/rivet-gg/hub) with
-2. Set `BASE_URL=https://{your base domain}` in the Hub's `.env`
+2. Set `RIVET_API_ENDPOINT=https://{your base domain}` in the Hub's `.env`
 3. Start the hub
 
 ## Step 5: Create a group
