@@ -244,37 +244,31 @@ pub fn gen_lobby_docker_job(
 			.map(|(k, v)| (k.to_string(), v.to_string())),
 		)
 		// Ports
-		.chain(
-			decoded_ports
-				.iter()
-				.filter_map(|port| {
-					if let Some(target_port) = port.target.get_nomad_port() {
-						let port_value = match network_mode {
-							// CNI will handle mapping the host port to the container port
-							LobbyRuntimeNetworkMode::Bridge => target_port.to_string(),
-							// The container needs to listen on the correct port
-							LobbyRuntimeNetworkMode::Host => {
-								template_env_var(&nomad_host_port_env_var(&port.nomad_port_label))
-							}
-						};
-
-						// Port with the kebab case port key. Included for backward compatabiilty & for
-						// less confusion.
-						Some((format!("PORT_{}", port.label), port_value))
-					} else {
-						None
+		.chain(decoded_ports.iter().filter_map(|port| {
+			if let Some(target_port) = port.target.get_nomad_port() {
+				let port_value = match network_mode {
+					// CNI will handle mapping the host port to the container port
+					LobbyRuntimeNetworkMode::Bridge => target_port.to_string(),
+					// The container needs to listen on the correct port
+					LobbyRuntimeNetworkMode::Host => {
+						template_env_var(&nomad_host_port_env_var(&port.nomad_port_label))
 					}
-				})
-				// Port with snake case key. This is the recommended key to use.
-				.flat_map(|(k, v)| [(k.replace("-", "_"), v.clone()), (k, v)]),
-		)
+				};
+
+				// Port with the kebab case port key. Included for backward compatabiilty & for
+				// less confusion.
+				Some((format!("PORT_{}", port.label.replace("-", "_")), port_value))
+			} else {
+				None
+			}
+		}))
 		// Port ranges
 		.chain(
 			decoded_ports
 				.iter()
 				.filter_map(|port| {
 					if let PortTarget::Range { min, max } = &port.target {
-						let snake_port_label = heck::SnakeCase::to_snake_case(port.label.as_str());
+						let snake_port_label = port.label.replace("-", "_");
 
 						Some([
 							(
@@ -399,8 +393,8 @@ pub fn gen_lobby_docker_job(
 							embedded_tmpl: Some(include_str!("./scripts/setup.sh").replace(
 								"__HOST_NETWORK__",
 								match network_mode {
-									LobbyRuntimeNetworkMode::Bridge => "true",
-									LobbyRuntimeNetworkMode::Host => "false",
+									LobbyRuntimeNetworkMode::Bridge => "false",
+									LobbyRuntimeNetworkMode::Host => "true",
 								},
 							)),
 							dest_path: Some("${NOMAD_TASK_DIR}/setup.sh".into()),

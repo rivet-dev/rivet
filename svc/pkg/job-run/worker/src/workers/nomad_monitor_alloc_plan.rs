@@ -248,7 +248,7 @@ async fn update_db(
 		sqlx::query(indoc!(
 			"
 			UPDATE db_job_state.run_meta_nomad
-			SET alloc_id = $2, alloc_plan_ts = $3, node_id = $4, name = $5, public_ipv4 = $6, vlan_ipv4 = $7
+			SET alloc_id = $2, alloc_plan_ts = $3, node_id = $4, node_name = $5, node_public_ipv4 = $6, node_vlan_ipv4 = $7
 			WHERE run_id = $1
 			"
 		))
