@@ -73,7 +73,9 @@ async fn handle(
 			handle_request(
 				&prometheus_url,
 				query_timing.as_ref(),
-				format!("max(nomad_client_allocs_memory_rss{{exported_job=\"{nomad_job_id}\",task=\"{task}\"}}) or vector(0)",
+				// Fall back to `nomad_client_allocs_memory_rss` since `nomadusage_memory_usage` is
+				// not available in `raw_exec`.
+				format!("max(nomad_client_allocs_memory_usage{{exported_job=\"{nomad_job_id}\",task=\"{task}\"}}) or max(nomad_client_allocs_memory_rss{{exported_job=\"{nomad_job_id}\",task=\"{task}\"}}) or vector(0)",
 					nomad_job_id = metric.job,
 					task = metric.task
 			)),

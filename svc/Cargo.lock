@@ -4539,10 +4539,12 @@ dependencies = [
  "chirp-client",
  "chirp-worker",
  "faker-job-run",
+ "faker-job-template",
  "job-run-get",
  "prost 0.10.4",
  "reqwest",
  "rivet-operation",
+ "rivet-util-job",
  "serde",
  "serde_urlencoded",
 ]

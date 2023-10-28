@@ -337,5 +337,42 @@ fn gen_task(ctx: &OperationContext<faker::job_template::Request>) -> GlobalResul
 				..base_task
 			},
 		},
+		faker::job_template::request::Kind::Stress(stress) => GenTaskOutput {
+			ports: vec![Port {
+				label: Some("http".into()),
+				value: None,
+				to: Some(80),
+			}],
+			meta_required: Some(vec!["test_id".into()]),
+			task: Task {
+				name: Some(util_job::RUN_MAIN_TASK_NAME.into()),
+				driver: Some("docker".into()),
+				config: Some({
+					let mut config = HashMap::new();
+					config.insert("image".into(), json!("debian:12.1-slim"));
+					config.insert("args".into(), json!(["sh", "${NOMAD_TASK_DIR}/run.sh"]));
+					config
+				}),
+				templates: Some(vec![Template {
+					dest_path: Some("local/run.sh".into()),
+					embedded_tmpl: Some(formatdoc!(
+						r#"
+						#!/bin/sh
+						apt update -y
+						apt install -y stress-ng
+						echo 'Stressing with {flags}'
+						stress-ng {flags}
+						"#,
+						flags = stress.flags
+					)),
+					..Template::new()
+				}]),
+				log_config: Some(Box::new(LogConfig {
+					max_files: Some(1),
+					max_file_size_mb: Some(4),
+				})),
+				..base_task
+			},
+		},
 	})
 }

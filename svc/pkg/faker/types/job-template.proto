@@ -31,6 +31,10 @@ message Request {
 		uint32 exit_code = 2;
 	}
 
+	message Stress {
+		string flags = 1;
+	}
+
 	oneof kind {
 		EchoServer echo_server = 1;
 		EchoServer echo_server_tcp = 5;
@@ -38,6 +42,7 @@ message Request {
 		Log log = 2;
 		Exit exit = 3;
 		Counter counter = 4;
+		Stress stress = 7;
 	};
 
 	optional uint32 cpu = 101;

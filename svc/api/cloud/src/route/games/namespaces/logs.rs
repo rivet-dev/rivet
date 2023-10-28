@@ -86,7 +86,7 @@ pub async fn get_lobby(
 				step: 15000,
 				metrics: vec![job_run::metrics_log::request::Metric {
 					job: dispatched_job_id.clone(),
-					task: "game".to_owned(),
+					task: util_job::RUN_MAIN_TASK_NAME.to_owned(),
 				}],
 			})
 			.await;
