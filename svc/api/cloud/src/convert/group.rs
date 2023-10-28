@@ -35,8 +35,7 @@ pub fn summary(
 		},
 
 		is_current_identity_member,
-		publicity: unwrap!(backend::team::Publicity::from_i32(team.publicity))
-			.api_into(),
+		publicity: unwrap!(backend::team::Publicity::from_i32(team.publicity)).api_into(),
 		member_count: member_count.try_into()?,
 		owner_identity_id: owner_user_id.to_string(),
 		is_developer,

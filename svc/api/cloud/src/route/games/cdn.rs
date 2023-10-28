@@ -32,12 +32,11 @@ pub async fn get_sites(
 	})
 	.await?;
 
-	let mut sites = sites_res
-		.sites.iter().collect::<Vec<_>>();
+	let mut sites = sites_res.sites.iter().collect::<Vec<_>>();
 
 	// Sort by date desc
 	sites.sort_by_key(|u| u.create_ts);
-	sites.reverse();	
+	sites.reverse();
 
 	// Convert the site data structures
 	let sites = sites

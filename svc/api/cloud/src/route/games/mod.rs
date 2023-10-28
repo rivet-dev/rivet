@@ -358,8 +358,7 @@ pub async fn get(
 	};
 	let update_ts = update_ts.unwrap_or_else(util::timestamp::now);
 
-	let summary =
-		unwrap!(fetch::game_summary_fetch_one(ctx.op_ctx(), game_id).await?);
+	let summary = unwrap!(fetch::game_summary_fetch_one(ctx.op_ctx(), game_id).await?);
 
 	let (ns_list_res, version_list_res) = tokio::try_join!(
 		op!([ctx] game_namespace_list {

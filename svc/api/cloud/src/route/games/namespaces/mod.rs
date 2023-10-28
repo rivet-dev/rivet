@@ -42,8 +42,7 @@ pub async fn get(
 	let cdn_ns_config = {
 		let cdn = unwrap_ref!(ns_config.cdn).clone();
 		let game = unwrap!(games_res.games.first());
-		let custom_hostname_namespace =
-			unwrap!(custom_hostnames_res.namespaces.first());
+		let custom_hostname_namespace = unwrap!(custom_hostnames_res.namespaces.first());
 		let client = reqwest::Client::new();
 
 		let hostnames_res =
@@ -54,8 +53,7 @@ pub async fn get(
 
 					async move {
 						if util::feature::cf_custom_hostname() {
-							let game_zone_id =
-								unwrap!(util::env::cloudflare::zone::game::id());
+							let game_zone_id = unwrap!(util::env::cloudflare::zone::game::id());
 							let res = client
 								.get(format!(
 							"https://api.cloudflare.com/client/v4/zones/{game_zone_id}/custom_hostnames/{identifier}",

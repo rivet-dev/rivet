@@ -27,9 +27,7 @@ pub async fn summaries(
 				})
 				.await?;
 
-				Ok(unwrap!(user_team_list_res.users.first())
-					.teams
-					.clone())
+				Ok(unwrap!(user_team_list_res.users.first()).teams.clone())
 			} else {
 				Ok(Vec::new())
 			}
