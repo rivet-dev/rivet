@@ -1,7 +1,5 @@
 [advisories]
 ignore = [
-	# chrono depends on time 0.1, which is not patched
-    "RUSTSEC-2020-0071",
 	# webpki 0.21.4 only used by aws-smithy-client 0.41.0 in our deprecated
 	# generated clients. This is used only for type ser/de and old tests.
 	"RUSTSEC-2023-0052",
