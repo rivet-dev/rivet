@@ -190,7 +190,7 @@ impl ProjectContextData {
 			let ats_count = self.ns().pools.iter().filter(|p| p.pool == "ats").count();
 			match self.ns().rivet.dynamic_servers.build_delivery_method {
 				config::ns::DynamicServersBuildDeliveryMethod::TrafficServer => {
-					assert_ne!(ats_count, 0, "TrafficServer delivery method will not work without ats servers in each region");
+					assert_ne!(ats_count, 0, "TrafficServer delivery method will not work without ats servers in each region. either set rivet.dynamic_servers.build_delivery_method = \"S3Direct\" to download builds directly from S3 or add an ATS pool to each region.");
 				}
 				config::ns::DynamicServersBuildDeliveryMethod::S3Direct => {
 					assert_eq!(
