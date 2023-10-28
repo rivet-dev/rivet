@@ -201,13 +201,14 @@ async fn host_e2e(ctx: TestCtx) {
 
 	tokio::time::sleep(Duration::from_secs(5)).await;
 
-	let player_count_res = op!([test_ctx.op_ctx] mm_player_count_for_namespace {
+	let player_count_res = op!([ctx] mm_player_count_for_namespace {
 		namespace_ids: vec![namespace_id.into()],
 	})
-	.await?;
-	let player_count = unwrap!(player_count_res.namespaces.first()).player_count;
+	.await
+	.unwrap();
+	let player_count = player_count_res.namespaces.first().unwrap().player_count;
 
-	assert!(1, player_count, "player not registered");
+	assert_eq!(1, player_count, "player not registered");
 }
 
 async fn setup_config(

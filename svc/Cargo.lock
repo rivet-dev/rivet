@@ -5300,6 +5300,7 @@ dependencies = [
  "mm-lobby-idle-update",
  "mm-lobby-player-count",
  "mm-lobby-state-get",
+ "mm-player-count-for-namespace",
  "nomad-client",
  "nomad-util",
  "redis-util",
