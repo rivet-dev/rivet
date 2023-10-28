@@ -751,8 +751,8 @@ async fn resolve_image_artifact_url(
 	let file_name = util_build::file_name(build_kind, build_compression);
 
 	let mm_lobby_delivery_method = unwrap!(
-		std::env::var("RIVET_MM_LOBBY_DELIVERY_METHOD").ok(),
-		"missing RIVET_MM_LOBBY_DELIVERY_METHOD"
+		std::env::var("RIVET_DS_BUILD_DELIVERY_METHOD").ok(),
+		"missing RIVET_DS_BUILD_DELIVERY_METHOD"
 	);
 	match mm_lobby_delivery_method.as_str() {
 		"s3_direct" => {
@@ -800,7 +800,7 @@ async fn resolve_image_artifact_url(
 			Ok(addr)
 		}
 		_ => {
-			bail!("invalid RIVET_MM_LOBBY_DELIVERY_METHOD")
+			bail!("invalid RIVET_DS_BUILD_DELIVERY_METHOD")
 		}
 	}
 }

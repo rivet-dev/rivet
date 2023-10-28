@@ -983,12 +983,12 @@ impl ServiceContextData {
 			.into(),
 		));
 		env.push((
-			"RIVET_MM_LOBBY_DELIVERY_METHOD".into(),
+			"RIVET_DS_BUILD_DELIVERY_METHOD".into(),
 			project_ctx
 				.ns()
 				.rivet
-				.matchmaker
-				.lobby_delivery_method
+				.dynamic_servers
+				.build_delivery_method
 				.to_string(),
 		));
 

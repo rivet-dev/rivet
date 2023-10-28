@@ -226,8 +226,8 @@ impl ProjectContextData {
 				region_id = region_id
 			);
 			if matches!(
-				self.ns().rivet.matchmaker.lobby_delivery_method,
-				config::ns::MatchmakerLobbyDeliveryMethod::TrafficServer
+				self.ns().rivet.dynamic_servers.build_delivery_method,
+				config::ns::DynamicServersBuildDeliveryMethod::TrafficServer
 			) {
 				assert!(
 					self.ns()
