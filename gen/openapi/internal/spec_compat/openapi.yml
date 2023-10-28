@@ -2020,17 +2020,10 @@ components:
             format: double
             type: number
           type: array
-        memory_max:
-          description: Peak memory metrics.
-          items:
-            format: double
-            type: number
-          type: array
       required:
       - job
       - cpu
       - memory
-      - memory_max
       type: object
     CloudSvcPerf:
       description: A service performance summary.

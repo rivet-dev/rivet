@@ -26,20 +26,16 @@ pub struct CloudSvcMetrics {
     /// Memory metrics.
     #[serde(rename = "memory")]
     pub memory: Vec<f64>,
-    /// Peak memory metrics.
-    #[serde(rename = "memory_max")]
-    pub memory_max: Vec<f64>,
 }
 
 impl CloudSvcMetrics {
     /// Metrics relating to a job service.
-    pub fn new(cpu: Vec<f64>, job: String, memory: Vec<f64>, memory_max: Vec<f64>) -> CloudSvcMetrics {
+    pub fn new(cpu: Vec<f64>, job: String, memory: Vec<f64>) -> CloudSvcMetrics {
         CloudSvcMetrics {
             allocated_memory: None,
             cpu,
             job,
             memory,
-            memory_max,
         }
     }
 }

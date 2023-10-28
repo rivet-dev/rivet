@@ -107,11 +107,7 @@ impl ApiTryFrom<job_run::metrics_log::response::Metrics> for models::SvcMetrics 
 				.into_iter()
 				.map(|v| v.try_into())
 				.collect::<Result<Vec<_>, _>>()?,
-			memory_max: value
-				.memory_max
-				.into_iter()
-				.map(|v| v.try_into())
-				.collect::<Result<Vec<_>, _>>()?,
+			memory_max: Vec::new(),
 			allocated_memory: value.allocated_memory.try_into()?,
 		})
 	}

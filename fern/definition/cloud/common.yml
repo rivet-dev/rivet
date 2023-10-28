@@ -164,9 +164,6 @@ types:
       memory:
         docs: Memory metrics.
         type: list<double>
-      memory_max:
-        docs: Peak memory metrics.
-        type: list<double>
       allocated_memory:
         docs: Total allocated memory (MB).
         type: optional<double>

@@ -55,7 +55,7 @@ async fn handle(
 		//
 		// If you need to add new metrics, explicitly add then to the `keep`
 		// relabel action in the Kubernetes config.
-		let (mem_allocated, cpu_usage, mem_usage, mem_max_usage) = tokio::try_join!(
+		let (mem_allocated, cpu_usage, mem_usage) = tokio::try_join!(
 			handle_request(
 				&prometheus_url,
 				None,
@@ -73,14 +73,7 @@ async fn handle(
 			handle_request(
 				&prometheus_url,
 				query_timing.as_ref(),
-				format!("max(nomad_client_allocs_memory_usage{{exported_job=\"{nomad_job_id}\",task=\"{task}\"}}) or vector(0)",
-					nomad_job_id = metric.job,
-					task = metric.task
-			)),
-			handle_request(
-				&prometheus_url,
-				query_timing.as_ref(),
-				format!("max(nomad_client_allocs_memory_max_usage{{exported_job=\"{nomad_job_id}\",task=\"{task}\"}}) or vector(0)",
+				format!("max(nomad_client_allocs_memory_rss{{exported_job=\"{nomad_job_id}\",task=\"{task}\"}}) or vector(0)",
 					nomad_job_id = metric.job,
 					task = metric.task
 			)),
@@ -95,16 +88,11 @@ async fn handle(
 			.into_iter()
 			.map(|(_, v)| v.parse::<u64>())
 			.collect::<Result<Vec<_>, _>>()?;
-		let mem_max_usage = unwrap!(mem_max_usage.values)
-			.into_iter()
-			.map(|(_, v)| v.parse::<u64>())
-			.collect::<Result<Vec<_>, _>>()?;
 
 		metrics.push(job_run::metrics_log::response::Metrics {
 			job: metric.job.clone(),
 			cpu: cpu_usage,
 			memory: mem_usage,
-			memory_max: mem_max_usage,
 			allocated_memory: mem_allocated.parse::<u64>()?,
 		})
 	}

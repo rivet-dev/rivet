@@ -9235,12 +9235,6 @@ components:
             type: number
             format: double
           description: Memory metrics.
-        memory_max:
-          type: array
-          items:
-            type: number
-            format: double
-          description: Peak memory metrics.
         allocated_memory:
           type: number
           format: double
@@ -9249,7 +9243,6 @@ components:
         - job
         - cpu
         - memory
-        - memory_max
     CloudAuthAgent:
       type: object
       description: The current authenticated agent.
