@@ -68,6 +68,9 @@ runs:
         cat <<'EOF' > namespaces/ci.toml
         [rivet]
         test = {}
+
+        [rivet.matchmaker]
+        lobby_delivery_method = "S3Direct"
         EOF
 
         # Write secrets so they're not prompted in `bolt init`
