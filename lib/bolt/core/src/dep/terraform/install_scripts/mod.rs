@@ -1,6 +1,6 @@
 use anyhow::Result;
+use indexmap::{indexmap, IndexMap};
 use indoc::formatdoc;
-use maplit::hashmap;
 use std::collections::HashMap;
 
 use crate::{context::ProjectContext, dep::terraform, dep::terraform::servers::Server};
@@ -16,7 +16,7 @@ pub async fn gen(
 ) -> Result<String> {
 	let mut script = Vec::new();
 
-	let mut prometheus_targets = HashMap::new();
+	let mut prometheus_targets = IndexMap::new();
 
 	// MARK: Common (pre)
 	script.push(components::common());
@@ -43,7 +43,7 @@ pub async fn gen(
 				&ctx.read_secret(&["rivet", "api_route", "token"]).await?,
 			),
 			dynamic_config: String::new(),
-			tls_certs: hashmap! {
+			tls_certs: indexmap! {
 				"letsencrypt_rivet_job".into() => (*tls.tls_cert_letsencrypt_rivet_job).clone(),
 			},
 			tcp_server_transports: Default::default(),

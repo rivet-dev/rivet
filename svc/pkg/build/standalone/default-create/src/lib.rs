@@ -146,10 +146,10 @@ async fn upload_build(
 	let upload_id = unwrap_ref!(upload_prepare_res.upload_id).as_uuid();
 
 	for req in &upload_prepare_res.presigned_requests {
-		let start = upload_prepare::CHUNK_SIZE as usize * (req.part_number as usize - 1);
-		let end = upload_prepare::CHUNK_SIZE as usize * req.part_number as usize;
+		let start = req.byte_offset as usize;
+		let end = (req.byte_offset + req.content_length) as usize;
 
-		let part = &build.tar[start..end.min(build.tar.len())];
+		let part = &build.tar[start..end];
 
 		let url = &req.url;
 		tracing::info!(%url, part=%req.part_number, "uploading file");

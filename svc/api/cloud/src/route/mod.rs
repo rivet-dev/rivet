@@ -120,7 +120,7 @@ define_router! {
 		},
 		"games" / Uuid / "cdn" / "sites": {
 			GET: games::cdn::get_sites(),
-			POST: games::cdn::create_site(body: models::CreateGameCdnSiteRequest),
+			POST: games::cdn::create_site(body: new_models::CloudGamesCreateGameCdnSiteRequest),
 		},
 		"games" / Uuid / "builds": {
 			GET: games::builds::get_builds(),

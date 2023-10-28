@@ -478,6 +478,7 @@ dependencies = [
  "handlebars",
  "heck 0.3.3",
  "hex",
+ "indexmap 2.0.0",
  "indicatif",
  "indoc",
  "ipnet",

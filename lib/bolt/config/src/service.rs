@@ -43,7 +43,7 @@ pub struct Service {
 	/// If this service needs to be booted no matter what service is running.
 	#[serde(default)]
 	pub essential: bool,
-	/// The Nomad job prioirty.
+	/// The Nomad job priority.
 	///
 	/// Used if nodes start failing and some services need to be shut down because of capacity
 	/// constraints.

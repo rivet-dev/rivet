@@ -168,19 +168,6 @@ types:
         docs: Total allocated memory (MB).
         type: optional<double>
 
-  UploadPrepareFile:
-    docs: A file being prepared to upload.
-    properties:
-      path:
-        docs: The path/filename of the file.
-        type: string
-      content_type:
-        docs: The MIME type of the file.
-        type: optional<string>
-      content_length:
-        docs: Unsigned 64 bit integer.
-        type: long
-
   AuthAgent:
     docs: The current authenticated agent.
     properties:

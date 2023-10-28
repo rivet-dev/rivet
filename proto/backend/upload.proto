@@ -45,4 +45,7 @@ message PresignedUploadRequest {
 	string path = 1;
 	string url = 2;
 	uint32 part_number = 3;
+
+	uint64 byte_offset = 4;
+	uint64 content_length = 5;
 }
