@@ -518,7 +518,7 @@ pub struct Rivet {
 	#[serde(default)]
 	pub upload: Upload,
 	#[serde(default)]
-	pub matchmaker: Matchmaker,
+	pub dynamic_servers: DynamicServers,
 	#[serde(default)]
 	pub cdn: Cdn,
 }
@@ -571,13 +571,13 @@ pub struct Upload {
 
 #[derive(Serialize, Deserialize, Clone, Debug, Default)]
 #[serde(deny_unknown_fields)]
-pub struct Matchmaker {
+pub struct DynamicServers {
 	#[serde(default)]
-	pub lobby_delivery_method: MatchmakerLobbyDeliveryMethod,
+	pub build_delivery_method: DynamicServersBuildDeliveryMethod,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, Default, strum_macros::Display)]
-pub enum MatchmakerLobbyDeliveryMethod {
+pub enum DynamicServersBuildDeliveryMethod {
 	#[serde(rename = "traffic_server")]
 	#[strum(serialize = "traffic_server")]
 	#[default]

@@ -184,17 +184,20 @@ impl ProjectContextData {
 			);
 		}
 
-		// MARK: Matchmaker
-		let ats_count = self.ns().pools.iter().filter(|p| p.pool == "ats").count();
-		match self.ns().rivet.matchmaker.lobby_delivery_method {
-			config::ns::MatchmakerLobbyDeliveryMethod::TrafficServer => {
-				assert_ne!(ats_count, 0, "TrafficServer delivery method will not work without ats servers in each region");
-			}
-			config::ns::MatchmakerLobbyDeliveryMethod::S3Direct => {
-				assert_eq!(
-					ats_count, 0,
-					"S3Direct delivery method should not be used if ats servers are available"
-				);
+		// MARK: Dynamic Servers
+		// Validate the build delivery method
+		if !self.ns().pools.is_empty() {
+			let ats_count = self.ns().pools.iter().filter(|p| p.pool == "ats").count();
+			match self.ns().rivet.dynamic_servers.build_delivery_method {
+				config::ns::DynamicServersBuildDeliveryMethod::TrafficServer => {
+					assert_ne!(ats_count, 0, "TrafficServer delivery method will not work without ats servers in each region");
+				}
+				config::ns::DynamicServersBuildDeliveryMethod::S3Direct => {
+					assert_eq!(
+						ats_count, 0,
+						"S3Direct delivery method should not be used if ats servers are available"
+					);
+				}
 			}
 		}
 
