@@ -19,4 +19,3 @@ Run `kubectl describe` on the pod. Your machine likely ran out of storage or mem
 Once you have cleaned up disk space, run `kubectl describe nodes` to see if the node show the error stil.
 
 If you see `Unschedulable: true`, fix it by running: `kubectl uncordon <node name>`
-

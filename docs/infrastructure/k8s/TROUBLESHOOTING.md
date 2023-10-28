@@ -11,4 +11,3 @@ K3D is not configured with a memory cap at the moment, so this is constrained by
 ### Situation 2: Heavy load from crash loops
 
 If a lot of services are frequently crashing, the K3D server will use a lot of resources to restart those services until the `CrashLoopBackOff` state is reached.
-

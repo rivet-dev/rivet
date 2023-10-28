@@ -9,62 +9,62 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
--  **Bolt** Development cluster can now be booted without any external services (i.e. no Linode & Cloudflare account required, does not require LetsEncrypt cert)
--  **Infra** Autoscale non-singleton services based on CPU & memory
--  **Infra** Support for running ClickHouse on ClickHouse Cloud
--  **Infra** Support for running CockroachDB on Cockroach Cloud
--  **Infra** Support for running Redis on AWS ElastiCache & MemoryDB
--  **Infra** Dynamically provisioned core cluster using Karpenter
--  **Infra** Dual-stack CNI configuration for game containers
--  **Infra** job iptables firewall to job pool that whitelists inbound traffic from Game Guard to the container
--  **Infra** job iptables rules to configure minimize delay TOS for traffic without a TOS
--  **Infra** job iptables rules to configure maximize throughput TOS for traffic from ATS
--  **Infra** job Linux traffic control filters to prioritize game traffic over other background traffic
--  **Infra** Prewarm the Traffic Server cache when a game version is published for faster cold start times on the first booted lobby in each region
--  **Infra** Envoy Maglev load balancing for traffic to edge Traffic Server instances to maximize cache hits
--  **Bolt** Timeout for tests
--  **Bolt** New summary view of test progress
--  **Bolt** `config show` command
--  **Bolt** `ssh pool --all <COMMAND>` command
--  **Bolt** Validation that the correct pools exist in th enamespace
--  **Bolt** Validation that the matchmaker delivery method is configured correctly depending on wether ATS servers exist
--  **Dev** Bolt automatically builds with Nix shell
--  **Bolt** `--no-purge` flag to `test` to prevent purging Nomad jobs
--  **Matchmaker** Expose hardware metrics to container with `RIVET_CPU`, `RIVET_MEMORY`, and `RIVET_MEMORY_OVERSUBSCRIBE`
+-   **Bolt** Development cluster can now be booted without any external services (i.e. no Linode & Cloudflare account required, does not require LetsEncrypt cert)
+-   **Infra** Autoscale non-singleton services based on CPU & memory
+-   **Infra** Support for running ClickHouse on ClickHouse Cloud
+-   **Infra** Support for running CockroachDB on Cockroach Cloud
+-   **Infra** Support for running Redis on AWS ElastiCache & MemoryDB
+-   **Infra** Dynamically provisioned core cluster using Karpenter
+-   **Infra** Dual-stack CNI configuration for game containers
+-   **Infra** job iptables firewall to job pool that whitelists inbound traffic from Game Guard to the container
+-   **Infra** job iptables rules to configure minimize delay TOS for traffic without a TOS
+-   **Infra** job iptables rules to configure maximize throughput TOS for traffic from ATS
+-   **Infra** job Linux traffic control filters to prioritize game traffic over other background traffic
+-   **Infra** Prewarm the Traffic Server cache when a game version is published for faster cold start times on the first booted lobby in each region
+-   **Infra** Envoy Maglev load balancing for traffic to edge Traffic Server instances to maximize cache hits
+-   **Bolt** Timeout for tests
+-   **Bolt** New summary view of test progress
+-   **Bolt** `config show` command
+-   **Bolt** `ssh pool --all <COMMAND>` command
+-   **Bolt** Validation that the correct pools exist in th enamespace
+-   **Bolt** Validation that the matchmaker delivery method is configured correctly depending on wether ATS servers exist
+-   **Dev** Bolt automatically builds with Nix shell
+-   **Bolt** `--no-purge` flag to `test` to prevent purging Nomad jobs
+-   **Matchmaker** Expose hardware metrics to container with `RIVET_CPU`, `RIVET_MEMORY`, and `RIVET_MEMORY_OVERSUBSCRIBE`
 
 ### Changed
 
--  **Infra** Moved default API routes from `{service}.api.rivet.gg/v1` to `api.rivet.gg/{service}`
--  **Infra** Removed version flat from API request paths
--  **Bolt** Tests are built in batch and binaries are ran in parallel in order to speed up test times
--  **Bolt** Run tests inside of Kubernetes pod inside cluster, removing the need for port forwarding for tests
--  **Bolt** Remove `disable_cargo_workspace` flag since it is seldom used
--  **Bolt** Remove  `skip_dependencies`, `force_build`, and `skip_generate` on `bolt up` and `bolt test` commands that are no longer relevant
--  **api-route** Split up routes in to `/traefik/config/core` and `/traefik/config/game-guard`
--  **Imagor** CORS now mirror the default CORS configured for S3
--  **Dev** `git lfs install` automatically runs in `shellHook`
--  **Dev** Removed `setup.sh` in lieu of `shellHook`
--  Replaced `cdn.rivet.gg` domains with presigned requests directly to the S3 provider
--  **api-matchmaker** Gracefully disable automatic region selection when coords not obtainable
--  **Infra** Disabling DNS uses `X-Forwarded-For` header for the client IP
--  **Infra** Pool connections are now created in parallel for faster tests & service start times
--  **Infra** Connections from edge <-> core services are now done over mTLS with Treafik instead of cloudflared
--  **Infra** ClickHouse database connections now use TLS
--  **Infra** CockroachDB database connections now use TLS
--  **Infra** Redis database connections now use TLS
--  **Infra** Redis now uses Redis Cluster for everything
--  **Infra** Cloudflare certificate authority from DigitCert to Lets Encrypt
--  **Infra** Removed 1.1.1.1 & 1.0.0.1 as resolvers from Nomad jobs due to reliability issues
--  **Infra** Added IPv6 DNS resolvers to Nomad jobs
--  **Infra** CNI network for jobs from bridge to ptp for isolation & performance
--  **Infra** Remove requirement of `Content-Type: application/x-tar` for builds because of new compression types
--  **Matchmaker** Expose API origin to `RIVET_API_ENDPOINT` env var to lobby containers
--  **[BREAKING]** **Infra** Removed undocumented environment variables exposed by Nomad (i.e. anything prefixed with `NOMAD_`)
+-   **Infra** Moved default API routes from `{service}.api.rivet.gg/v1` to `api.rivet.gg/{service}`
+-   **Infra** Removed version flat from API request paths
+-   **Bolt** Tests are built in batch and binaries are ran in parallel in order to speed up test times
+-   **Bolt** Run tests inside of Kubernetes pod inside cluster, removing the need for port forwarding for tests
+-   **Bolt** Remove `disable_cargo_workspace` flag since it is seldom used
+-   **Bolt** Remove `skip_dependencies`, `force_build`, and `skip_generate` on `bolt up` and `bolt test` commands that are no longer relevant
+-   **api-route** Split up routes in to `/traefik/config/core` and `/traefik/config/game-guard`
+-   **Imagor** CORS now mirror the default CORS configured for S3
+-   **Dev** `git lfs install` automatically runs in `shellHook`
+-   **Dev** Removed `setup.sh` in lieu of `shellHook`
+-   Replaced `cdn.rivet.gg` domains with presigned requests directly to the S3 provider
+-   **api-matchmaker** Gracefully disable automatic region selection when coords not obtainable
+-   **Infra** Disabling DNS uses `X-Forwarded-For` header for the client IP
+-   **Infra** Pool connections are now created in parallel for faster tests & service start times
+-   **Infra** Connections from edge <-> core services are now done over mTLS with Treafik instead of cloudflared
+-   **Infra** ClickHouse database connections now use TLS
+-   **Infra** CockroachDB database connections now use TLS
+-   **Infra** Redis database connections now use TLS
+-   **Infra** Redis now uses Redis Cluster for everything
+-   **Infra** Cloudflare certificate authority from DigitCert to Lets Encrypt
+-   **Infra** Removed 1.1.1.1 & 1.0.0.1 as resolvers from Nomad jobs due to reliability issues
+-   **Infra** Added IPv6 DNS resolvers to Nomad jobs
+-   **Infra** CNI network for jobs from bridge to ptp for isolation & performance
+-   **Infra** Remove requirement of `Content-Type: application/x-tar` for builds because of new compression types
+-   **Matchmaker** Expose API origin to `RIVET_API_ENDPOINT` env var to lobby containers
+-   **[BREAKING]** **Infra** Removed undocumented environment variables exposed by Nomad (i.e. anything prefixed with `NOMAD_`)
 
 ### Fixed
 
--  `LC_ALL: cannot change locale` error from glibc
--  **Dev** Bolt uses `write_if_different` for auto-generated files to prevent cache purging
+-   `LC_ALL: cannot change locale` error from glibc
+-   **Dev** Bolt uses `write_if_different` for auto-generated files to prevent cache purging
 
 ## [23.1.0-rc4] - 2023-09-02
 

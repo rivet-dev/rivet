@@ -17,4 +17,3 @@ Validate all pod are ready with:
 ```
 kubectl get all -n my-cluster-name
 ```
-

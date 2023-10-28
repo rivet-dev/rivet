@@ -70,4 +70,3 @@ types:
         docs: None compression.
       - value: lz4
         docs: LZ4 compression. Use the minimum compression level.
-

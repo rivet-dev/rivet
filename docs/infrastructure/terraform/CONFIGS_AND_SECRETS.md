@@ -10,4 +10,3 @@ To pass a configuration from Bolt -> Terraform plan, it goes through these steps
 ## Secrets
 
 _TODO_
-

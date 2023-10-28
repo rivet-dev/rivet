@@ -15,4 +15,3 @@ At the moment, we use a simple IP counting system in the matchmaker that works w
 ### Traefik rate limiting
 
 Traefik does not [natively support IP blocks](https://doc.traefik.io/traefik/middlewares/http/ratelimit/#sourcecriterionipstrategy) for rate limiting, which we utilize.
-

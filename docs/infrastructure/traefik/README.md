@@ -15,4 +15,3 @@ We run three main Treafik pools:
 ## How is Traefik configured?
 
 _TODO_
-
