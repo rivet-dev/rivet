@@ -40,6 +40,7 @@ in
 			curl
 			docker-client
 			git  # Bolt relies functionality only available in newer versions of Bolt
+			git-lfs
 			rsync
 			traefik  # Used to proxy requests in Bolt
 			cloudflared
