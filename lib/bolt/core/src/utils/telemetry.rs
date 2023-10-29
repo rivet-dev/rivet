@@ -97,7 +97,9 @@ pub fn capture_event(ctx: &ProjectContext, event: async_posthog::Event) -> Resul
 		tokio::spawn(async move {
 			match build_client().capture(event).await {
 				Ok(_) => {}
-				Err(err) => println!("Failed to capture event: {err:?}"),
+				Err(_) => {
+					// Fail silently
+				}
 			}
 		});
 	}
