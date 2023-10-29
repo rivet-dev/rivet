@@ -13,11 +13,6 @@ module "karpenter" {
 	tags = local.tags
 }
 
-resource "aws_iam_service_linked_role" "spot" {
-	aws_service_name = "spot.amazonaws.com"
-	description = "A service-linked role for EC2 Spot"
-}
-
 resource "helm_release" "karpenter" {
 	namespace = "karpenter"
 	create_namespace = true
