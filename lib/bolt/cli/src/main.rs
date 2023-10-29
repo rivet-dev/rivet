@@ -122,6 +122,8 @@ async fn main() -> Result<std::process::ExitCode> {
 		SubCommand::Admin { command } => command.execute(ctx).await?,
 	}
 
+	bolt_core::utils::telemetry::wait_for_telemetry().await;
+
 	Ok(std::process::ExitCode::SUCCESS)
 }
 

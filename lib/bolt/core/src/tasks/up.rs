@@ -48,21 +48,14 @@ pub async fn up_services<T: AsRef<str>>(
 	load_tests: bool,
 ) -> Result<Vec<ServiceContext>> {
 	let event = utils::telemetry::build_event(ctx, "bolt_up").await?;
-	utils::telemetry::capture_event(ctx, event)?;
+	utils::telemetry::capture_event(ctx, event).await?;
 
 	// let run_context = RunContext::Service;
 	let build_context = BuildContext::Bin {
 		optimization: ctx.build_optimization(),
 	};
 
-	// Add essential services
-	let svc_names = svc_names
-		.iter()
-		.map(|x| x.as_ref().to_string())
-		.collect::<HashSet<_>>();
-	let svc_names = svc_names.into_iter().collect::<Vec<_>>();
-
-	// Find all services and their dependencies
+	// Find all matching services
 	let all_svcs = ctx.services_with_patterns(&svc_names).await;
 	ensure!(!all_svcs.is_empty(), "input matched no services");
 
@@ -78,6 +71,14 @@ pub async fn up_services<T: AsRef<str>>(
 		!all_exec_svcs.is_empty(),
 		"no services to bring up (to bring up load tests, use the `--load-tests` flag)"
 	);
+
+	// Telemetry
+	let mut event = utils::telemetry::build_event(ctx, "bolt_up").await?;
+	event.insert_prop(
+		"svc_names",
+		all_exec_svcs.iter().map(|x| x.name()).collect::<Vec<_>>(),
+	)?;
+	utils::telemetry::capture_event(ctx, event).await?;
 
 	eprintln!();
 	rivet_term::status::progress("Preparing", format!("{} services", all_exec_svcs.len()));

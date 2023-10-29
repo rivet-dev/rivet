@@ -23,6 +23,7 @@ use crate::{
 		cargo::{self, cli::TestBinary},
 		k8s::gen::{ExecServiceContext, ExecServiceDriver},
 	},
+	utils,
 };
 
 /// Timeout for tests.
@@ -96,6 +97,15 @@ pub async fn test_services<T: AsRef<str>>(
 		.collect::<Vec<_>>();
 	eprintln!();
 	rivet_term::status::progress("Preparing", format!("{} services", rust_svcs.len()));
+
+	// Telemetry
+	let mut event = utils::telemetry::build_event(ctx, "bolt_test").await?;
+	event.insert_prop(
+		"svc_names",
+		&rust_svcs.iter().map(|x| x.name()).collect::<Vec<_>>(),
+	)?;
+	event.insert_prop("filters", &test_ctx.filters)?;
+	utils::telemetry::capture_event(ctx, event).await?;
 
 	// Run batch commands for all given services
 	eprintln!();
