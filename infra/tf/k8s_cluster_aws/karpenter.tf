@@ -27,7 +27,7 @@ resource "helm_release" "karpenter" {
 	chart = "karpenter"
 	version = "v0.31.0"
 
-	values = {
+	values = [yamlencode({
 		serviceAccount = {
 			annotations = {
 				"eks.amazonaws.com/role-arn" = module.karpenter.irsa_arn
@@ -42,7 +42,7 @@ resource "helm_release" "karpenter" {
 				interruptionQueueName = module.karpenter.queue_name
 			}
 		}
-	}
+	})]
 }
 
 resource "kubectl_manifest" "karpenter_provisioner" {
@@ -75,12 +75,12 @@ resource "kubectl_manifest" "karpenter_provisioner" {
 					values = ["on-demand"]
 				},
 			]
-			limits = var.limit_resources ? {
+			limits = {
 				resources = {
 					cpu = 1000
 					memory = "1000Gi"
 				}
-			} : null
+			}
 			providerRef = {
 				name = "default"
 			}
