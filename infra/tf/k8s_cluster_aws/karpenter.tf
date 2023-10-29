@@ -55,14 +55,14 @@ resource "kubectl_manifest" "karpenter_provisioner" {
 				# https://karpenter.sh/v0.31/faq/#how-does-karpenter-dynamically-select-instance-types
 
 				{
+					key = "kubernetes.io/os"
+					operator = "In"
+					values = ["linux"]
+				},
+				{
 					key = "topology.kubernetes.io/zone"
 					operator = "In"
 					values = local.azs
-				},
-				{
-					key = "topology.kubernetes.io/os"
-					operator = "In"
-					values = ["linux"]
 				},
 				{
 					key = "karpenter.sh/capacity-type"
@@ -82,7 +82,6 @@ resource "kubectl_manifest" "karpenter_provisioner" {
 			consolidation = {
 				enabled = true
 			}
-			ttlSecondsAfterEmpty = 30
 		}
 	})
 }
