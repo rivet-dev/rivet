@@ -1,8 +1,4 @@
-use std::{
-	collections::{HashMap, HashSet},
-	path::PathBuf,
-	sync::Arc,
-};
+use std::{collections::HashMap, path::PathBuf, sync::Arc};
 
 use anyhow::*;
 use futures_util::stream::StreamExt;

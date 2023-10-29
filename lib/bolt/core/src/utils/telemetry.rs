@@ -20,7 +20,7 @@ async fn join_set() -> &'static Mutex<JoinSet<()>> {
 }
 
 /// Waits for all telemetry events to finish.
-pub async fn wait_for_telemetry() {
+pub async fn wait_all() {
 	let mut join_set = join_set().await.lock().await;
 	match tokio::time::timeout(Duration::from_secs(15), async move {
 		while join_set.join_next().await.is_some() {}
