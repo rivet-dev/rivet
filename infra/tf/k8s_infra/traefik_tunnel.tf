@@ -109,7 +109,7 @@ data "kubernetes_service" "traefik_tunnel" {
 	depends_on = [helm_release.traefik_tunnel]
 
 	metadata {
-		name = "traefik"
+		name = "traefik-tunnel"
 		namespace = kubernetes_namespace.traefik_tunnel.metadata.0.name
 	}
 }

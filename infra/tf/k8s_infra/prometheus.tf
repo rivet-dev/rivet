@@ -59,6 +59,14 @@ resource "kubernetes_namespace" "prometheus" {
 	}
 }
 
+# Set a high priority for Node Exporter so it can run on all nodes
+resource "kubernetes_priority_class" "node_exporter_priority" {
+	metadata {
+		name = "node-exporter-priority"
+	}
+	value = 90
+}
+
 resource "helm_release" "prometheus" {
 	name = "prometheus"
 	namespace = kubernetes_namespace.prometheus.metadata.0.name
@@ -66,6 +74,22 @@ resource "helm_release" "prometheus" {
 	chart = "kube-prometheus-stack"
 	version = "51.5.1"
 	values = [yamlencode({
+		prometheus-node-exporter = {
+			priorityClassName = kubernetes_priority_class.node_exporter_priority.metadata.0.name
+			affinity = {
+				nodeAffinity = {
+					requiredDuringSchedulingIgnoredDuringExecution = {
+						nodeSelectorTerms = [{
+							matchExpressions = [{
+								key = "eks.amazonaws.com/compute-type"
+								operator = "NotIn"
+								values = ["fargate"]
+							}]
+						}]
+					}
+				}
+			}
+		}
 		alertmanager = {
 			alertmanagerSpec = {
 				storage = local.prometheus_storage

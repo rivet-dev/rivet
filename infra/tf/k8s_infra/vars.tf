@@ -8,6 +8,8 @@ variable "deploy_method_cluster" {
 
 variable "public_ip" {
 	type = string
+	nullable = true
+	default = null
 }
 
 # MARK: DNS

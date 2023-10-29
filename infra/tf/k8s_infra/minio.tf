@@ -78,7 +78,7 @@ resource "helm_release" "minio" {
 # TODO: Errors if minio isn't enabled in namespace config
 resource "kubectl_manifest" "minio_ingress_route" {
 	# Expose via Traefik if not using Minio port
-	for_each = var.minio_port == null ? local.entrypoints : {}
+	for_each = (local.has_minio && var.minio_port == null) ? local.entrypoints : {}
 
 	depends_on = [helm_release.minio]
 
