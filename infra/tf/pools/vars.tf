@@ -49,7 +49,6 @@ variable "servers" {
 		index = number
 		name = string
 		size = string
-		netnum = number
 		vlan_ip = string
 		volumes = map(object({
 			size = number

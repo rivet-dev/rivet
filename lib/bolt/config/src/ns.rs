@@ -121,7 +121,6 @@ pub struct Pool {
 	pub region: String,
 	pub count: usize,
 	pub size: String,
-	pub netnum: usize,
 	#[serde(default)]
 	pub volumes: HashMap<String, Volume>,
 }

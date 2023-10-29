@@ -1,9 +1,6 @@
 use anyhow::*;
 use serde::Serialize;
-use std::{
-	collections::{HashMap, HashSet},
-	net::Ipv4Addr,
-};
+use std::{collections::HashMap, net::Ipv4Addr};
 
 use crate::context::ProjectContext;
 
@@ -17,7 +14,6 @@ pub struct Server {
 	pub index: usize,
 	pub name: String,
 	pub size: String,
-	pub netnum: usize,
 	pub vlan_ip: Ipv4Addr,
 	pub volumes: HashMap<String, ServerVolume>,
 	pub tags: Vec<String>,
@@ -36,7 +32,6 @@ pub fn build_servers(
 	let ns = ctx.ns_id();
 
 	let mut servers = HashMap::<String, Server>::new();
-	let mut used_netnums = HashSet::new();
 	for pool in &ctx.ns().pools {
 		let region_id = &pool.region;
 		let pool_id = &pool.pool;
@@ -48,20 +43,6 @@ pub fn build_servers(
 		let pool_config = pools
 			.get(pool_id.as_str())
 			.expect(&format!("missing pool: {pool_id}"));
-
-		// Validate netnum is within range
-		assert!(
-			pool.netnum > 0,
-			"netnum 0 is reserved for misc services and cannot be used by a pool"
-		);
-
-		// Validate netnum is unique
-		let netnum_already_used = used_netnums.insert(pool.netnum);
-		assert!(
-			netnum_already_used,
-			"netnum {} is already used",
-			pool.netnum
-		);
 
 		for i in 0..pool.count {
 			let name = format!("{ns}-{region_id}-{pool_id}-{version_id}-{i}");
@@ -81,7 +62,6 @@ pub fn build_servers(
 				index: i,
 				name: name.clone(),
 				size: pool.size.clone(),
-				netnum: pool.netnum,
 				vlan_ip,
 				volumes,
 
