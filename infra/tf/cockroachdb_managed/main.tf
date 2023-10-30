@@ -23,8 +23,11 @@ resource "cockroach_cluster" "main" {
 	}]
 
 	serverless = {
-		# TODO: spend_limit
-		# TODO: uasge_limit
+		spend_limit = var.cockroachdb_spend_limit
+		uasge_limits = {
+			request_unit_limit = var.cockroachdb_request_unit_limit
+			storage_mib_limit = var.cockroachdb_storage_limit
+		}
 	}
 }
 

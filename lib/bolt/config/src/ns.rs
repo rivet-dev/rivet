@@ -442,7 +442,15 @@ pub enum CockroachDBProvider {
 	#[serde(rename = "kubernetes")]
 	Kubernetes {},
 	#[serde(rename = "managed")]
-	Managed {},
+	Managed {
+		/// USD cents.
+		spend_limit: u32,
+		/// CRDB Request Units.
+		/// https://www.cockroachlabs.com/docs/cockroachcloud/architecture#request-unit-ru
+		request_unit_limit: u32,
+		/// Storage limit in MiB.
+		storage_limit: u32,
+	},
 }
 
 impl Default for CockroachDBProvider {

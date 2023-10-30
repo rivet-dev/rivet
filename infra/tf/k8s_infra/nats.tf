@@ -1,6 +1,6 @@
 locals {
 	service_nats = lookup(var.services, "nats", {
-		count = 1
+		count = var.deploy_method_cluster ? 3 : 1
 		resources = {
 			cpu = 100
 			cpu_cores = 0

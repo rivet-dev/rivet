@@ -326,13 +326,24 @@ async fn vars(ctx: &ProjectContext) {
 	}
 
 	// CockroachDB
-	vars.insert(
-		"cockroachdb_provider".into(),
-		json!(match ctx.ns().cockroachdb.provider {
-			ns::CockroachDBProvider::Kubernetes { .. } => "kubernetes",
-			ns::CockroachDBProvider::Managed { .. } => "managed",
-		}),
-	);
+	match ctx.ns().cockroachdb.provider {
+		ns::CockroachDBProvider::Kubernetes { .. } => {
+			vars.insert("cockroachdb_provider".into(), json!("kubernetes"));
+		}
+		ns::CockroachDBProvider::Managed {
+			spend_limit,
+			request_unit_limit,
+			storage_limit,
+		} => {
+			vars.insert("cockroachdb_provider".into(), json!("managed"));
+			vars.insert("cockroachdb_spend_limit".into(), json!(spend_limit));
+			vars.insert(
+				"cockroachdb_request_unit_limit".into(),
+				json!(request_unit_limit),
+			);
+			vars.insert("cockroachdb_storage_limit".into(), json!(storage_limit));
+		}
+	}
 
 	// ClickHouse
 	match &ctx.ns().clickhouse.provider {
