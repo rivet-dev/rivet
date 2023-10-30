@@ -400,7 +400,7 @@ pub async fn gen_svc(exec_ctx: &ExecServiceContext) -> Vec<serde_json::Value> {
 			}],
 			"volumeMounts": volume_mounts,
 			"ports": pod_ports,
-			"livenessProbe": health_check,
+			"readinessProbe": health_check,
 			"resources": resources,
 		}],
 		"volumes": volumes
