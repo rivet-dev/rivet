@@ -676,78 +676,96 @@ async fn build_volumes(
 		ExecServiceDriver::Docker { .. } => {}
 	}
 
-	// Add CA volumes
-	if let config::ns::ClusterKind::SingleNode { .. } = &project_ctx.ns().cluster.kind {
-		let redis_deps = svc_ctx
-			.redis_dependencies(run_context)
-			.await
-			.iter()
-			.map(|dep| dep.redis_db_name())
-			.collect::<Vec<_>>();
+	// Add Redis CA
+	match project_ctx.ns().redis.provider {
+		config::ns::RedisProvider::Kubernetes {} => {
+			let redis_deps = svc_ctx
+				.redis_dependencies(run_context)
+				.await
+				.iter()
+				.map(|dep| dep.redis_db_name())
+				.collect::<Vec<_>>();
 
-		// Redis CA
-		volumes.extend(redis_deps.iter().map(|db| {
-			json!({
-				"name": format!("redis-{}-ca", db),
-				"configMap": {
+			volumes.extend(redis_deps.iter().map(|db| {
+				json!({
 					"name": format!("redis-{}-ca", db),
+					"configMap": {
+						"name": format!("redis-{}-ca", db),
+						"defaultMode": 420,
+						"items": [
+							{
+								"key": "ca.crt",
+								"path": format!("redis-{}-ca.crt", db)
+							}
+						]
+					}
+				})
+			}));
+			volume_mounts.extend(redis_deps.iter().map(|db| {
+				json!({
+					"name": format!("redis-{}-ca", db),
+					"mountPath": format!("/usr/local/share/ca-certificates/redis-{}-ca.crt", db),
+					"subPath": format!("redis-{}-ca.crt", db)
+				})
+			}));
+		}
+		config::ns::RedisProvider::Aws { .. } => {
+			// Uses publicly signed cert
+		}
+	}
+
+	// Add CRDB CA
+	match project_ctx.ns().cockroachdb.provider {
+		config::ns::CockroachDBProvider::Kubernetes {} => {
+			volumes.push(json!({
+				"name": "crdb-ca",
+				"configMap": {
+					"name": "crdb-ca",
 					"defaultMode": 420,
 					"items": [
 						{
 							"key": "ca.crt",
-							"path": format!("redis-{}-ca.crt", db)
+							"path": "crdb-ca.crt"
 						}
 					]
 				}
-			})
-		}));
-		volume_mounts.extend(redis_deps.iter().map(|db| {
-			json!({
-				"name": format!("redis-{}-ca", db),
-				"mountPath": format!("/usr/local/share/ca-certificates/redis-{}-ca.crt", db),
-				"subPath": format!("redis-{}-ca.crt", db)
-			})
-		}));
-
-		// CRDB CA
-		volumes.push(json!({
-			"name": "crdb-ca",
-			"configMap": {
+			}));
+			volume_mounts.push(json!({
 				"name": "crdb-ca",
-				"defaultMode": 420,
-				"items": [
-					{
-						"key": "ca.crt",
-						"path": "crdb-ca.crt"
-					}
-				]
-			}
-		}));
-		volume_mounts.push(json!({
-			"name": "crdb-ca",
-			"mountPath": "/usr/local/share/ca-certificates/crdb-ca.crt",
-			"subPath": "crdb-ca.crt"
-		}));
+				"mountPath": "/usr/local/share/ca-certificates/crdb-ca.crt",
+				"subPath": "crdb-ca.crt"
+			}));
+		}
+		config::ns::CockroachDBProvider::Managed {} => {
+			// Uses publicly signed cert
+		}
+	}
 
-		// Clickhouse CA
-		volumes.push(json!({
-			"name": "clickhouse-ca",
-			"configMap": {
+	// Add ClickHouse CA
+	match project_ctx.ns().clickhouse.provider {
+		config::ns::ClickHouseProvider::Kubernetes {} => {
+			volumes.push(json!({
 				"name": "clickhouse-ca",
-				"defaultMode": 420,
-				"items": [
-					{
-						"key": "ca.crt",
-						"path": "clickhouse-ca.crt"
-					}
-				]
-			}
-		}));
-		volume_mounts.push(json!({
-			"name": "clickhouse-ca",
-			"mountPath": "/usr/local/share/ca-certificates/clickhouse-ca.crt",
-			"subPath": "clickhouse-ca.crt"
-		}));
+				"configMap": {
+					"name": "clickhouse-ca",
+					"defaultMode": 420,
+					"items": [
+						{
+							"key": "ca.crt",
+							"path": "clickhouse-ca.crt"
+						}
+					]
+				}
+			}));
+			volume_mounts.push(json!({
+				"name": "clickhouse-ca",
+				"mountPath": "/usr/local/share/ca-certificates/clickhouse-ca.crt",
+				"subPath": "clickhouse-ca.crt"
+			}));
+		}
+		config::ns::ClickHouseProvider::Managed { .. } => {
+			// Uses publicly signed cert
+		}
 	}
 
 	(volumes, volume_mounts)
