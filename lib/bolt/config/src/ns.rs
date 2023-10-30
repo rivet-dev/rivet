@@ -463,13 +463,25 @@ pub enum ClickHouseProvider {
 	#[serde(rename = "kubernetes")]
 	Kubernetes {},
 	#[serde(rename = "managed")]
-	Managed {},
+	Managed { tier: ClickHouseManagedTier },
 }
 
 impl Default for ClickHouseProvider {
 	fn default() -> Self {
 		Self::Kubernetes {}
 	}
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+#[serde(deny_unknown_fields, rename_all = "snake_case")]
+pub enum ClickHouseManagedTier {
+	#[serde(rename = "development")]
+	Development {},
+	#[serde(rename = "production")]
+	Production {
+		min_total_memory_gb: usize,
+		max_total_memory_gb: usize,
+	},
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]

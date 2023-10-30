@@ -335,13 +335,33 @@ async fn vars(ctx: &ProjectContext) {
 	);
 
 	// ClickHouse
-	vars.insert(
-		"clickhouse_provider".into(),
-		json!(match ctx.ns().clickhouse.provider {
-			ns::ClickHouseProvider::Kubernetes { .. } => "kubernetes",
-			ns::ClickHouseProvider::Managed { .. } => "managed",
-		}),
-	);
+	match &ctx.ns().clickhouse.provider {
+		ns::ClickHouseProvider::Kubernetes {} => {
+			vars.insert("clickhouse_provider".into(), json!("kubernetes"));
+		}
+		ns::ClickHouseProvider::Managed { tier } => {
+			vars.insert("clickhouse_provider".into(), json!("managed"));
+			match tier {
+				ns::ClickHouseManagedTier::Development {} => {
+					vars.insert("clickhouse_tier".into(), json!("development"));
+				}
+				ns::ClickHouseManagedTier::Production {
+					min_total_memory_gb,
+					max_total_memory_gb,
+				} => {
+					vars.insert("clickhouse_tier".into(), json!("production"));
+					vars.insert(
+						"clickhouse_min_total_memory_gb".into(),
+						json!(min_total_memory_gb),
+					);
+					vars.insert(
+						"clickhouse_max_total_memory_gb".into(),
+						json!(max_total_memory_gb),
+					);
+				}
+			}
+		}
+	}
 
 	// Redis services
 	{

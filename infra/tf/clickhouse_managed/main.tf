@@ -31,10 +31,12 @@ resource "clickhouse_service" "main" {
 		}
 	]
 
-	# TODO:
-	tier = "development"
-	idle_scaling = true
-	idle_timeout_minutes = 5
+	tier = var.clickhouse_tier
+	min_total_memory_gb = var.clickhouse_min_total_memory_gb
+	max_total_memory_gb = var.clickhouse_max_total_memory_gb
+	idle_scaling = var.clickhouse_tier == "production" ? false : null
+	idle_timeout_minutes = var.clickhouse_tier == "production" ? 5 : null
+
 
 	password = module.secrets.values["clickhouse/users/default/password"]
 
