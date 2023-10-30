@@ -81,7 +81,7 @@ resource "cloudflare_record" "main" {
 	name = each.value.name
     # Use local node's public IP if in local region. Otherwise, look up server's IP.
 	value = try(data.terraform_remote_state.pools.outputs.servers[each.value.server.name].public_ipv4, data.terraform_remote_state.k8s_infra.outputs.traefik_external_ip)
-	type = (can(each.value.server.public_ipv4) || var.deploy_method_local) ? "A" : "CNAME"
+	type = (can(each.value.server) || var.deploy_method_local) ? "A" : "CNAME"
 	# TODO: Increase the unproxied TTL once we have proper floating IP support on all providers
 	ttl = each.value.proxied ? 1 : 60  # 1 = automatic
 	proxied = each.value.proxied
