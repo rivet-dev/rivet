@@ -102,9 +102,10 @@ resource "helm_release" "promtail" {
 					  # Limits logs to only the "rivet-service" k8s namespace
 					  kubernetes_sd_configs:
 					    - role: pod
-					      namespaces:
-					        names:
-					          - rivet-service
+					    # Namespace scrape filter (disabled)
+					    # namespaces:
+					    #   names:
+					    #     - rivet-service
 					  relabel_configs:
 					    {{- if .Values.config.snippets.addScrapeJobLabel }}
 					    - replacement: kubernetes-pods
