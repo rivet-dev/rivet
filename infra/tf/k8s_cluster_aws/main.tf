@@ -18,7 +18,7 @@ data "aws_partition" "current" {}
 
 locals {
 	name = "rivet-${var.namespace}"
-	cluster_version = "1.27"
+	cluster_version = "1.28"
 	region = "us-east-1"
 
 	vpc_cidr = "10.0.0.0/16"
