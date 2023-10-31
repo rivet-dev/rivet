@@ -64,7 +64,7 @@ resource "helm_release" "redis" {
 			nodes = local.service_redis.count + var.redis_replicas * local.service_redis.count
 			replicas = var.redis_replicas
 		}
-		master = {
+		redis = {
 			resources = var.limit_resources ? {
 				limits = {
 					memory = "${local.service_redis.resources.memory}Mi"
