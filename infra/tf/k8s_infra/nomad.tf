@@ -134,6 +134,14 @@ resource "kubectl_manifest" "nomad_server_monitor" {
 	})
 }
 
+resource "kubernetes_priority_class" "nomad_priority" {
+	metadata {
+		name = "nomad-priority"
+	}
+
+	value = 40
+}
+
 resource "kubernetes_stateful_set" "nomad_server" {
 	metadata {
 		namespace = kubernetes_namespace.nomad.metadata.0.name
@@ -165,8 +173,10 @@ resource "kubernetes_stateful_set" "nomad_server" {
 			}
 
 			spec {
+				priority_class_name = kubernetes_priority_class.nomad_priority.metadata.0.name
+
 				security_context {
-					run_as_user   = 0
+					run_as_user = 0
 				}
 
 				container {

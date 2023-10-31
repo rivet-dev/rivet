@@ -48,7 +48,7 @@ resource "kubernetes_deployment" "nsfw_api" {
 			}
 
 			spec {
-				priority_class_name = "nsfw-api-priority"
+				priority_class_name = kubernetes_priority_class.nsfw_api_priority.metadata.0.name
 				
 				# MARK: Docker auth
 				image_pull_secrets {

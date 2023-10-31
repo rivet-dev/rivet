@@ -27,6 +27,14 @@ module "minio_secrets" {
 	optional = true
 }
 
+resource "kubernetes_priority_class" "minio_priority" {
+	metadata {
+		name = "minio-priority"
+	}
+
+	value = 40
+}
+
 resource "helm_release" "minio" {
 	depends_on = [helm_release.prometheus]
 	count = local.has_minio ? 1 : 0
@@ -41,6 +49,7 @@ resource "helm_release" "minio" {
 			storageClass = var.k8s_storage_class
 		}
 		replicaCount = local.service_minio.count
+		priorityClassName = kubernetes_priority_class.minio_priority.metadata.0.name
 		resources = var.limit_resources ? {
 			limits = {
 				memory = "${local.service_minio.resources.memory}Mi"

@@ -15,6 +15,14 @@ resource "kubernetes_namespace" "nats" {
 	}
 }
 
+resource "kubernetes_priority_class" "nats_priority" {
+	metadata {
+		name = "nats-priority"
+	}
+
+	value = 40
+}
+
 resource "helm_release" "nats" {
 	name = "nats"
 	namespace = kubernetes_namespace.nats.metadata.0.name
@@ -25,6 +33,11 @@ resource "helm_release" "nats" {
 		config = {
 			cluster = {
 				replicas = local.service_nats.count
+			}
+		}
+		podTemplate = {
+			merge = {
+				priorityClassName = kubernetes_priority_class.nats_priority.metadata.0.name
 			}
 		}
 		promExporter = {
