@@ -442,7 +442,6 @@ async fn vars(ctx: &ProjectContext) {
 			ns::KubernetesProvider::AwsEks { .. } => "ebs-sc",
 		}),
 	);
-	vars.insert("k8s_health_port".into(), json!(dep::k8s::gen::HEALTH_PORT));
 	vars.insert("limit_resources".into(), json!(ctx.limit_resources()));
 
 	vars.insert(

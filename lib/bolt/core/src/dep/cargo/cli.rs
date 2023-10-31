@@ -148,6 +148,18 @@ pub async fn build<'a, T: AsRef<str>>(ctx: &ProjectContext, opts: BuildOpts<'a, 
 				for bin in call.bins {
 					let bin = bin.as_ref();
 
+					// Resolve the symlink for the svc_scripts dir since Docker does not resolve
+					// symlinks in COPY commands
+					let infra_path = ctx.path().join("infra");
+					let infra_path_resolved = tokio::fs::read_link(&infra_path)
+						.await
+						.map_or_else(|_| infra_path.clone(), |path| ctx.path().join(path));
+					let svc_scripts_path = infra_path_resolved.join("misc").join("svc_scripts");
+					let svc_scripts_path_relative = svc_scripts_path
+						.strip_prefix(ctx.path())
+						.context("failed to strip prefix")?;
+
+					// Build the final image
 					let image_tag = format!("{repo}{bin}:{source_hash}");
 					let dockerfile_path = gen_path.join(format!("Dockerfile.{bin}"));
 					fs::write(
@@ -157,9 +169,18 @@ pub async fn build<'a, T: AsRef<str>>(ctx: &ProjectContext, opts: BuildOpts<'a, 
 							FROM {build_image_tag} AS build
 
 							FROM debian:12.1-slim AS run
-							RUN DEBIAN_FRONTEND=noninteractive apt-get update -y && apt-get install -y --no-install-recommends ca-certificates openssl
-							COPY --from=build /usr/rivet/target/{optimization}/{bin} /bin/svc
-							"#
+
+							# Update ca-certificates. Install curl for health checks.
+							RUN DEBIAN_FRONTEND=noninteractive apt-get update -y && apt-get install -y --no-install-recommends ca-certificates openssl curl
+
+							# Copy supporting scripts
+							COPY {svc_scripts_path}/health_check.sh {svc_scripts_path}/install_ca.sh /usr/bin/
+							RUN chmod +x /usr/bin/health_check.sh /usr/bin/install_ca.sh
+
+							# Copy final binary
+							COPY --from=build /usr/rivet/target/{optimization}/{bin} /usr/bin/{bin}
+							"#,
+							svc_scripts_path = svc_scripts_path_relative.display(),
 						),
 					)
 					.await?;

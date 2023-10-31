@@ -3,7 +3,7 @@ set -uf
 # Log to file
 exec >> "/var/log/health-checks.txt" 2>&1
 
-endpoint='127.0.0.1:${var.k8s_health_port}/health/liveness'
+endpoint='127.0.0.1:8000/health/liveness'
 echo "Checking $endpoint"
 curl --fail -v "$endpoint"
 EXIT_STATUS=$?

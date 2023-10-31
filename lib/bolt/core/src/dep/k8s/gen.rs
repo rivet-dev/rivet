@@ -271,15 +271,9 @@ pub async fn gen_svc(exec_ctx: &ExecServiceContext) -> Vec<serde_json::Value> {
 	};
 
 	let health_check = if has_health {
-		let cmd = if matches!(svc_ctx.config().kind, ServiceKind::Static { .. }) {
-			"/local/rivet/health-checks.sh --static"
-		} else {
-			"/local/rivet/health-checks.sh"
-		};
-
 		json!({
 			"exec": {
-				"command": ["/bin/sh", "-c", cmd],
+				"command": ["/bin/sh", "-c", "/usr/bin/health_check.sh"],
 			},
 			"initialDelaySeconds": 1,
 			"periodSeconds": 5,
@@ -291,7 +285,7 @@ pub async fn gen_svc(exec_ctx: &ExecServiceContext) -> Vec<serde_json::Value> {
 
 	let (image, image_pull_policy, exec) = match &driver {
 		ExecServiceDriver::LocalBinaryArtifact { exec_path, args } => (
-			"ghcr.io/rivet-gg/rivet-local-binary-artifact-runner:3fdc702",
+			"ghcr.io/rivet-gg/rivet-local-binary-artifact-runner:07e8de0",
 			"IfNotPresent",
 			format!(
 				"{} {}",
@@ -309,10 +303,10 @@ pub async fn gen_svc(exec_ctx: &ExecServiceContext) -> Vec<serde_json::Value> {
 			} else {
 				"IfNotPresent"
 			},
-			"bin/svc".to_string(),
+			format!("/usr/bin/{}", svc_ctx.cargo_name().unwrap()),
 		),
 	};
-	let command = format!("/local/rivet/install-ca.sh && {exec}");
+	let command = format!("/usr/bin/install_ca.sh && {exec}");
 
 	// Create resource limits
 	let ns_service_config = svc_ctx.ns_service_config().await;
@@ -610,29 +604,8 @@ async fn build_volumes(
 	} = exec_ctx;
 
 	// Shared data between containers
-	let mut volumes = vec![json!({
-		"name": "local",
-		"projected": {
-			"defaultMode": 0o0777,
-			"sources": [
-				{
-					"configMap": {
-						"name": "health-checks"
-					}
-				},
-				{
-					"configMap": {
-						"name": "install-ca"
-					}
-				}
-			]
-		}
-	})];
-	let mut volume_mounts = vec![json!({
-		"name": "local",
-		"mountPath": "/local/rivet",
-		"readOnly": true
-	})];
+	let mut volumes = Vec::<serde_json::Value>::new();
+	let mut volume_mounts = Vec::<serde_json::Value>::new();
 
 	// Add volumes based on exec service
 	match driver {

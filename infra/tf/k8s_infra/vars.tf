@@ -107,10 +107,6 @@ variable "k8s_storage_class" {
 	type = string
 }
 
-variable "k8s_health_port" {
-	type = number
-}
-
 variable "limit_resources" {
 	type = bool
 }
