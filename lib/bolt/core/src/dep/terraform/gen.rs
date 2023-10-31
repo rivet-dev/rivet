@@ -233,6 +233,29 @@ async fn vars(ctx: &ProjectContext) {
 	let pools = super::pools::build_pools(&ctx).await.unwrap();
 	vars.insert("pools".into(), json!(&pools));
 
+	// Tunnels
+	if let Some(dns) = &config.dns {
+		if let Some(ns::DnsProvider::Cloudflare { access, .. }) = &dns.provider {
+			let mut tunnels = HashMap::new();
+			let grafana_cloud_token = ctx
+				.read_secret(&["cloudflare", "access", "grafana_cloud", "client_secret"])
+				.await
+				.unwrap();
+
+			tunnels.insert(
+				"grafana",
+				json!({
+					"name": "Loki",
+					"service": "http://prometheus-grafana.prometheus.svc.cluster.local:80",
+					"access_groups": access.as_ref().map(|x| vec![x.groups.engineering.clone()]).unwrap_or_default(),
+					"service_tokens": vec![grafana_cloud_token],
+				}),
+			);
+
+			vars.insert("tunnels".into(), json!(&tunnels));
+		}
+	}
+
 	// Servers
 	let servers = super::servers::build_servers(&ctx, &regions, &pools).unwrap();
 	vars.insert("servers".into(), json!(servers));
@@ -280,7 +303,7 @@ async fn vars(ctx: &ProjectContext) {
 	// Docker
 	vars.insert(
 		"authenticate_all_docker_hub_pulls".into(),
-		json!(ctx.ns().docker.authenticate_all_docker_hub_pulls),
+		json!(config.docker.authenticate_all_docker_hub_pulls),
 	);
 
 	// Extra DNS
@@ -314,7 +337,7 @@ async fn vars(ctx: &ProjectContext) {
 		}
 
 		// Add Minio
-		let s3_providers = &ctx.ns().s3.providers;
+		let s3_providers = &config.s3.providers;
 		if s3_providers.minio.is_some() {
 			extra_dns.push(json!({
 				"zone_name": "main",
@@ -326,7 +349,7 @@ async fn vars(ctx: &ProjectContext) {
 	}
 
 	// CockroachDB
-	match ctx.ns().cockroachdb.provider {
+	match config.cockroachdb.provider {
 		ns::CockroachDBProvider::Kubernetes { .. } => {
 			vars.insert("cockroachdb_provider".into(), json!("kubernetes"));
 		}
@@ -346,7 +369,7 @@ async fn vars(ctx: &ProjectContext) {
 	}
 
 	// ClickHouse
-	match &ctx.ns().clickhouse.provider {
+	match &config.clickhouse.provider {
 		ns::ClickHouseProvider::Kubernetes {} => {
 			vars.insert("clickhouse_provider".into(), json!("kubernetes"));
 		}
@@ -389,10 +412,10 @@ async fn vars(ctx: &ProjectContext) {
 			}
 		}
 
-		vars.insert("redis_replicas".into(), json!(ctx.ns().redis.replicas));
+		vars.insert("redis_replicas".into(), json!(config.redis.replicas));
 		vars.insert(
 			"redis_provider".into(),
-			json!(match ctx.ns().redis.provider {
+			json!(match config.redis.provider {
 				ns::RedisProvider::Kubernetes { .. } => "kubernetes",
 				ns::RedisProvider::Aws { .. } => "aws",
 			}),
@@ -449,7 +472,7 @@ async fn vars(ctx: &ProjectContext) {
 	vars.insert("kubeconfig_path".into(), json!(ctx.gen_kubeconfig_path()));
 	vars.insert(
 		"k8s_storage_class".into(),
-		json!(match ctx.ns().kubernetes.provider {
+		json!(match config.kubernetes.provider {
 			ns::KubernetesProvider::K3d { .. } => "local-path",
 			ns::KubernetesProvider::AwsEks { .. } => "ebs-sc",
 		}),

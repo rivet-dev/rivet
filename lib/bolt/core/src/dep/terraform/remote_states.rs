@@ -23,6 +23,9 @@ pub fn dependency_graph(_ctx: &ProjectContext) -> HashMap<&'static str, Vec<Remo
 		"cloudflare_workers" => vec![
 			RemoteStateBuilder::default().plan_id("dns").build().unwrap()
 		],
+		"cloudflare_tunnels" => vec![
+			RemoteStateBuilder::default().plan_id("dns").build().unwrap()
+		],
 	}
 }
 

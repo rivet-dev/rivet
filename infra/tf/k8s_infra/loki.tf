@@ -34,5 +34,13 @@ resource "helm_release" "loki" {
 		singleBinary = {
 			replicas = 1
 		}
+		monitoring = {
+			dashboards = {
+				namespace = kubernetes_namespace.prometheus.metadata.0.name
+			}
+			rules = {
+				namespace = kubernetes_namespace.prometheus.metadata.0.name
+			}
+		}
 	})]
 }

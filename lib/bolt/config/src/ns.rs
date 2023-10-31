@@ -30,8 +30,6 @@ pub struct Namespace {
 	#[serde(default)]
 	pub docker: Docker,
 	#[serde(default)]
-	pub grafana: Option<Grafana>,
-	#[serde(default)]
 	pub nomad: Nomad,
 	#[serde(default)]
 	pub kubernetes: Kubernetes,
@@ -214,21 +212,12 @@ pub enum DnsProvider {
 #[serde(deny_unknown_fields)]
 pub struct CloudflareAccess {
 	pub groups: CloudflareAccessGroups,
-	pub services: CloudflareAccessServices,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(deny_unknown_fields)]
 pub struct CloudflareAccessGroups {
 	pub engineering: String,
-}
-
-#[derive(Serialize, Deserialize, Clone, Debug)]
-#[serde(deny_unknown_fields)]
-pub struct CloudflareAccessServices {
-	pub terraform_nomad: String,
-	pub bolt: String,
-	pub grafana_cloud: String,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, Default)]
@@ -365,10 +354,6 @@ impl Default for Docker {
 		}
 	}
 }
-
-#[derive(Serialize, Deserialize, Clone, Debug)]
-#[serde(deny_unknown_fields)]
-pub struct Grafana {}
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(deny_unknown_fields)]
