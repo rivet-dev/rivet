@@ -23,6 +23,18 @@ resource "helm_release" "karpenter" {
 	version = "v0.31.0"
 
 	values = [yamlencode({
+		controller = {
+			resources = {
+				# Must be compatible with Fargate pod sizes:
+				# 
+				# https://docs.aws.amazon.com/eks/latest/userguide/fargate-pod-configuration.html
+				limits = {
+					cpu = "0.5"
+					memory = "512M"
+				}
+			}
+		}
+
 		serviceAccount = {
 			annotations = {
 				"eks.amazonaws.com/role-arn" = module.karpenter.irsa_arn

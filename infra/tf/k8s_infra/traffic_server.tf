@@ -3,7 +3,6 @@ locals {
 		count = 2
 		resources = {
 			cpu = 50
-			cpu_cores = 0
 			memory = 00
 		}
 	})
@@ -180,11 +179,7 @@ resource "kubernetes_stateful_set" "traffic_server" {
 						content {
 							limits = {
 								memory = "${local.service_traffic_server.resources.memory}Mi"
-								cpu = (
-								local.service_traffic_server.resources.cpu_cores > 0 ?
-								"${local.service_traffic_server.resources.cpu_cores * 1000}m"
-								: "${local.service_traffic_server.resources.cpu}m"
-								)
+								cpu = "${local.service_traffic_server.resources.cpu}m"
 							}
 						}
 					}

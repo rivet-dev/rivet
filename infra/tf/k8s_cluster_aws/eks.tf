@@ -13,10 +13,34 @@ module "eks" {
 		kube-proxy = {
 			# https://docs.aws.amazon.com/eks/latest/userguide/managing-kube-proxy.html
 			addon_version = "v1.27.4-eksbuild.2"
+			configuration_values = jsonencode({
+				resources = {
+					limits = {
+						cpu = "100m"
+						memory = "128M"
+					}
+					requests = {
+						cpu = "50m"
+						memory = "64M"
+					}
+				}
+			})
 		}
 		vpc-cni = {
 			# https://docs.aws.amazon.com/eks/latest/userguide/managing-vpc-cni.html
 			addon_version = "v1.14.0-eksbuild.3"
+			configuration_values = jsonencode({
+				resources = {
+					limits = {
+						cpu = "0.5"
+						memory = "512M"
+					}
+					requests = {
+						cpu = "0.5"
+						memory = "512M"
+					}
+				}
+			})
 		}
 		coredns = {
 			# https://docs.aws.amazon.com/eks/latest/userguide/managing-coredns.html

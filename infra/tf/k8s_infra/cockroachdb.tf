@@ -4,7 +4,6 @@ locals {
 		count = 1
 		resources = {
 			cpu = 300
-			cpu_cores = 0
 			memory = 1500
 		}
 	})
@@ -43,11 +42,7 @@ resource "helm_release" "cockroachdb" {
 			resources = var.limit_resources ? {
 				limits = {
 					memory = "${local.service_cockroachdb.resources.memory}Mi"
-					cpu = (
-						local.service_cockroachdb.resources.cpu_cores > 0 ?
-						"${local.service_cockroachdb.resources.cpu_cores * 1000}m"
-						: "${local.service_cockroachdb.resources.cpu}m"
-					)
+					cpu = "${local.service_cockroachdb.resources.cpu}m"
 				}
 			} : null
 		}

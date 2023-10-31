@@ -326,20 +326,8 @@ pub struct Service {
 #[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(deny_unknown_fields)]
 pub struct ServiceResources {
-	#[serde(flatten)]
-	pub cpu: CpuResources,
+	pub cpu: usize,
 	pub memory: usize,
-	pub ephemeral_disk: usize,
-}
-
-#[derive(Serialize, Deserialize, Clone, Debug)]
-#[serde(deny_unknown_fields)]
-pub enum CpuResources {
-	#[serde(rename = "cpu_cores")]
-	CpuCores(usize),
-	/// MHz
-	#[serde(rename = "cpu")]
-	Cpu(usize),
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]

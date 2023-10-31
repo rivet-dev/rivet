@@ -3,7 +3,6 @@ locals {
 		count = 1
 		resources = {
 			cpu = 250
-			cpu_cores = 0
 			memory = 512
 		}
 	})
@@ -74,12 +73,8 @@ resource "kubernetes_deployment" "nsfw_api" {
 
 						content {
 							limits = {
+								cpu = "${local.service_nsfw_api.resources.cpu}m"
 								memory = "${local.service_nsfw_api.resources.memory}Mi"
-								cpu = (
-									local.service_nsfw_api.resources.cpu_cores > 0 ?
-									"${local.service_nsfw_api.resources.cpu_cores * 1000}m"
-									: "${local.service_nsfw_api.resources.cpu}m"
-								)
 							}
 						}
 					}

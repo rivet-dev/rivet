@@ -49,7 +49,6 @@ variable "services" {
 		count = number
 		resources = object({
 			cpu = number
-			cpu_cores = number
 			memory = number
 		})
 	}))

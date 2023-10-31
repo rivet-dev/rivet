@@ -3,7 +3,6 @@ locals {
 		count = 1
 		resources = {
 			cpu = 50
-			cpu_cores = 0
 			memory = 2000
 		}
 	})
@@ -27,11 +26,7 @@ resource "helm_release" "vector" {
 		resources = var.limit_resources ? {
 			limits = {
 				memory = "${local.service_vector.resources.memory}Mi"
-				cpu = (
-					local.service_vector.resources.cpu_cores > 0 ?
-					"${local.service_vector.resources.cpu_cores * 1000}m"
-					: "${local.service_vector.resources.cpu}m"
-				)
+				cpu = "${local.service_vector.resources.cpu}m"
 			}
 		} : null
 		podMonitor = {

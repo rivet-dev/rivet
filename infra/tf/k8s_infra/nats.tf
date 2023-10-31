@@ -2,9 +2,8 @@ locals {
 	service_nats = lookup(var.services, "nats", {
 		count = 1
 		resources = {
-			cpu = 100
-			cpu_cores = 0
-			memory = 1000
+			cpu = 1000
+			memory = 1024
 		}
 	})
 }
@@ -25,6 +24,20 @@ resource "helm_release" "nats" {
 		config = {
 			cluster = {
 				replicas = local.service_nats.count
+			}
+		}
+		container = {
+			env = {
+				# See https://artifacthub.io/packages/helm/grafana/grafana#nats-container-resources
+				GOMEMLIMIT = "${floor(local.service_nats.resources.memory * 0.9)}MiB"
+			}
+			merge = {
+				resources = var.limit_resources ? {
+					limits = {
+						cpu = "${local.service_nats.resources.cpu}m"
+						memory = "${local.service_nats.resources.memory}Mi"
+					}
+				} : null
 			}
 		}
 		promExporter = {

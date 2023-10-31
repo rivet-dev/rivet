@@ -320,19 +320,12 @@ pub async fn gen_svc(exec_ctx: &ExecServiceContext) -> Vec<serde_json::Value> {
 		json!({
 			"requests": {
 				"memory": format!("{}Mi", ns_service_config.resources.memory),
-				"cpu": match ns_service_config.resources.cpu {
-					config::ns::CpuResources::Cpu(x) => format!("{x}m"),
-					config::ns::CpuResources::CpuCores(x) => format!("{}m", x * 1000),
-				},
-				"ephemeral-storage": format!("{}M", ns_service_config.resources.ephemeral_disk)
+				"cpu": format!("{}m", ns_service_config.resources.cpu),
 			},
 			"limits": {
+				// Allow oversubscribing memory
 				"memory": format!("{}Mi", ns_service_config.resources.memory * 2),
-				"cpu": match ns_service_config.resources.cpu {
-					config::ns::CpuResources::Cpu(x) => format!("{}m", x * 2),
-					config::ns::CpuResources::CpuCores(x) => format!("{}m", x * 1000 * 2),
-				},
-				"ephemeral-storage": format!("{}M", ns_service_config.resources.ephemeral_disk * 2)
+				"cpu": format!("{}m", ns_service_config.resources.cpu),
 			},
 		})
 	} else {

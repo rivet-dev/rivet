@@ -702,9 +702,10 @@ impl ServiceContextData {
 		let ns_service_config = self.ns_service_config().await;
 		env.push((
 			"TOKIO_WORKER_THREADS".into(),
-			match ns_service_config.resources.cpu {
-				config::ns::CpuResources::CpuCores(cores) => cores.max(cores),
-				config::ns::CpuResources::Cpu(_) => 2,
+			if ns_service_config.resources.cpu >= 1000 {
+				(ns_service_config.resources.cpu / 1000).max(2)
+			} else {
+				2
 			}
 			.to_string(),
 		));
@@ -1218,17 +1219,15 @@ impl ServiceContextData {
 				config::ns::ClusterKind::SingleNode { .. } => config::ns::Service {
 					count: 1,
 					resources: config::ns::ServiceResources {
-						cpu: config::ns::CpuResources::Cpu(100),
+						cpu: 100,
 						memory: 128,
-						ephemeral_disk: 128,
 					},
 				},
 				config::ns::ClusterKind::Distributed { .. } => config::ns::Service {
 					count: 2,
 					resources: config::ns::ServiceResources {
-						cpu: config::ns::CpuResources::Cpu(250),
+						cpu: 250,
 						memory: 256,
-						ephemeral_disk: 128,
 					},
 				},
 			});

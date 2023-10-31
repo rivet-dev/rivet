@@ -4,7 +4,6 @@ locals {
 		count = 1
 		resources = {
 			cpu = 50
-			cpu_cores = 0
 			memory = 400
 		}
 	})
@@ -44,11 +43,7 @@ resource "helm_release" "minio" {
 		resources = var.limit_resources ? {
 			limits = {
 				memory = "${local.service_minio.resources.memory}Mi"
-				cpu = (
-					local.service_minio.resources.cpu_cores > 0 ?
-					"${local.service_minio.resources.cpu_cores * 1000}m"
-					: "${local.service_minio.resources.cpu}m"
-				)
+				cpu = "${local.service_minio.resources.cpu}m"
 			}
 		} : null
 

@@ -4,7 +4,6 @@ locals {
 		count = 1
 		resources = {
 			cpu = 300
-			cpu_cores = 0
 			memory = 1500
 		}
 	})
@@ -50,11 +49,7 @@ resource "helm_release" "clickhouse" {
 		resources = var.limit_resources ? {
 			limits = {
 				memory = "${local.service_clickhouse.resources.memory}Mi"
-				cpu = (
-					local.service_clickhouse.resources.cpu_cores > 0 ?
-					"${local.service_clickhouse.resources.cpu_cores * 1000}m"
-					: "${local.service_clickhouse.resources.cpu}m"
-				)
+				cpu = "${local.service_clickhouse.resources.cpu}m"
 			}
 		} : null
 
