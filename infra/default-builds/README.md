@@ -8,14 +8,14 @@ These builds are stored as Git LFS blobs.
 
 These builds are included with the `build-default-create` oneoff service. When this service gets deployed, it automatically uploads it & registers the default builds in the registry.
 
-Note that this is not build to support _large_ builds by the nature of how big the `build-default-create` binary would baloon to be.
+Note that this is not built to support _large_ builds by the nature of how big the `build-default-create` binary would balloon to be.
 
 ## Building
 
 To rebuild all builds, run:
 
 ```
-./scripts/default_builds/build.sh`
+./scripts/default_builds/build.sh
 ```
 
 To rebuild a specific build, run:

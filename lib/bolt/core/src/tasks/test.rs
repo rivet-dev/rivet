@@ -258,10 +258,11 @@ async fn run_test(
 	let container_path = Path::new("/rivet-src").join(relative_path);
 
 	// Build exec ctx
+	let test_id = gen_test_id();
 	let exec_ctx = ExecServiceContext {
 		svc_ctx: svc_ctx.clone(),
 		run_context: RunContext::Test {
-			test_id: gen_test_id(),
+			test_id: test_id.clone(),
 		},
 		driver: ExecServiceDriver::LocalBinaryArtifact {
 			exec_path: container_path,
@@ -289,7 +290,7 @@ async fn run_test(
 	rivet_term::status::info(
 		"Running",
 		format!(
-			"{display_name} [{logs_path}]",
+			"{display_name} [{test_id}] [{logs_path}]",
 			logs_path = logs_path.display()
 		),
 	);
@@ -317,7 +318,7 @@ async fn run_test(
 	let test_duration = test_start_time.elapsed();
 	let complete_count = tests_complete.fetch_add(1, Ordering::SeqCst) + 1;
 	let run_info = format!(
-		"{display_name} ({complete_count}/{test_count}) [{logs_path}] [{td:.1}s]",
+		"{display_name} ({complete_count}/{test_count}) [{test_id}] [{logs_path}] [{td:.1}s]",
 		td = test_duration.as_secs_f32(),
 		logs_path = logs_path.display()
 	);
@@ -369,7 +370,7 @@ async fn pipe_pod_logs(
 	Ok(())
 }
 
-/// Watch the pod to look for copmetion or failure.
+/// Watch the pod to look for completion or failure.
 async fn watch_pod(
 	ctx: &ProjectContext,
 	k8s_svc_name: &str,

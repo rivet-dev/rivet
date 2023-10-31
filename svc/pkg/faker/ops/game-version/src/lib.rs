@@ -63,56 +63,58 @@ async fn handle(
 				matchmaker: if let Some(config) = ctx.override_mm_config.clone() {
 					config.config
 				} else {
-					let build_res = op!([ctx] faker_build {
-						game_id: Some(*game_id),
-						image: faker::build::Image::MmLobbyAutoReady as i32,
-					})
-					.await?;
-					let build_id = unwrap_ref!(build_res.build_id);
+					let lobby_groups = if let Some(lobby_groups) = &ctx.override_lobby_groups {
+						lobby_groups.lobby_groups.clone()
+					}
+					else {
+						let build_res = op!([ctx] faker_build {
+							game_id: Some(*game_id),
+							image: faker::build::Image::MmLobbyAutoReady as i32,
+						})
+						.await?;
+						let build_id = unwrap_ref!(build_res.build_id);
+
+						vec![backend::matchmaker::LobbyGroup {
+							name_id: "test-1".into(),
+
+							regions: vec![backend::matchmaker::lobby_group::Region {
+								region_id: region_res.region_id,
+								tier_name_id: util_mm::test::TIER_NAME_ID.to_owned(),
+								idle_lobbies: Some(backend::matchmaker::lobby_group::IdleLobbies {
+									min_idle_lobbies: 0,
+									// Set a high max lobby count in case this is
+									// coming from a test that test mm-lobby-create
+									// without creating an associated player
+									max_idle_lobbies: 32,
+								}),
+							}],
+
+							max_players_normal: 8,
+							max_players_direct: 10,
+							max_players_party: 12,
+							listable: true,
+
+							runtime: Some(
+								backend::matchmaker::lobby_runtime::Docker {
+									build_id: Some(*build_id),
+									args: Vec::new(),
+									env_vars: Vec::new(),
+									network_mode:
+										backend::matchmaker::lobby_runtime::NetworkMode::Bridge
+											as i32,
+									ports: Vec::new(),
+								}
+								.into(),
+							),
+
+							find_config: None,
+							join_config: None,
+							create_config: None,
+						}]
+					};
 
 					Some(backend::matchmaker::VersionConfig {
-						lobby_groups: ctx.override_lobby_groups.clone().map_or_else(
-							|| {
-								vec![backend::matchmaker::LobbyGroup {
-								name_id: "test-1".into(),
-
-								regions: vec![backend::matchmaker::lobby_group::Region {
-									region_id: region_res.region_id,
-									tier_name_id: util_mm::test::TIER_NAME_ID.to_owned(),
-									idle_lobbies: Some(backend::matchmaker::lobby_group::IdleLobbies {
-										min_idle_lobbies: 0,
-										// Set a high max lobby count in case this is
-										// coming from a test that test mm-lobby-create
-										// without creating an associated player
-										max_idle_lobbies: 32,
-									}),
-								}],
-
-								max_players_normal: 8,
-								max_players_direct: 10,
-								max_players_party: 12,
-								listable: true,
-
-								runtime: Some(
-									backend::matchmaker::lobby_runtime::Docker {
-										build_id: Some(*build_id),
-										args: Vec::new(),
-										env_vars: Vec::new(),
-										network_mode:
-											backend::matchmaker::lobby_runtime::NetworkMode::Bridge
-												as i32,
-										ports: Vec::new(),
-									}
-									.into(),
-								),
-
-								find_config: None,
-								join_config: None,
-								create_config: None,
-							}]
-							},
-							|v| v.lobby_groups,
-						),
+						lobby_groups,
 						captcha: ctx
 							.override_captcha
 							.clone()
