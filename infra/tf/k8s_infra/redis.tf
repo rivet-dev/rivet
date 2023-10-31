@@ -3,8 +3,8 @@ locals {
 	service_redis = lookup(var.services, "redis", {
 		count = 3
 		resources = {
-			cpu = 50
-			memory = 200
+			cpu = 1000
+			memory = 2000
 		}
 	})
 
