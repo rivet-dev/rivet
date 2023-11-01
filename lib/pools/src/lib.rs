@@ -16,6 +16,10 @@ pub mod prelude {
 	pub use sqlx;
 
 	pub use crate::pools::{CrdbPool, NatsPool, RedisPool};
+	pub use crate::{
+		sql_fetch, sql_fetch_all, sql_fetch_many, sql_fetch_one, sql_fetch_optional, sql_query,
+		sql_query_as,
+	};
 }
 
 pub use crate::{error::Error, pools::Pools};

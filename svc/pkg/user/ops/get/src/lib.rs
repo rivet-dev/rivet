@@ -1,5 +1,6 @@
 use proto::backend::{self, pkg::*};
 use rivet_operation::prelude::*;
+use rivet_pools::prelude::*;
 
 #[derive(sqlx::FromRow)]
 struct UserRow {
@@ -46,35 +47,37 @@ pub async fn handle(
 
 	let users = ctx
 		.cache()
-		.fetch_all_proto("user", user_ids, move |mut cache, user_ids| {
-			let crdb = crdb.clone();
-			async move {
-				let users = sqlx::query_as::<_, UserRow>(indoc!(
-					"
-					SELECT
-						user_id,
-						display_name,
-						account_number,
-						avatar_id,
-						profile_id,
-						join_ts,
-						bio,
-						is_admin,
-						delete_request_ts,
-						delete_complete_ts
-					FROM db_user.users
-					WHERE user_id = ANY($1)
-					"
-				))
-				.bind(user_ids)
-				.fetch_all(&crdb)
-				.await?;
+		.fetch_all_proto("user", user_ids, {
+			let ctx = ctx.clone();
+			move |mut cache, user_ids| {
+				let ctx = ctx.clone();
+				async move {
+					let users = sql_fetch_all!(
+						[ctx, UserRow]
+						"
+						SELECT
+							user_id,
+							display_name,
+							account_number,
+							avatar_id,
+							profile_id,
+							join_ts,
+							bio,
+							is_admin,
+							delete_request_ts,
+							delete_complete_ts
+						FROM db_user.users
+						WHERE user_id = ANY($1)
+						",
+						user_ids
+					)?;
 
-				for row in users {
-					cache.resolve(&row.user_id.clone(), user::get::CacheUser::from(row));
+					for row in users {
+						cache.resolve(&row.user_id.clone(), user::get::CacheUser::from(row));
+					}
+
+					Ok(cache)
 				}
-
-				Ok(cache)
 			}
 		})
 		.await?;
