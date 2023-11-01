@@ -9,8 +9,10 @@ macro_rules! sql_query {
         .await
     };
     ([$ctx:expr] $sql:expr, $($bind:expr),*) => {
-		let crdb = $ctx.crdb().await?;
-		sql_query!([ctx, &crdb] $sql, $($bind),*).await
+		{
+			let crdb = $ctx.crdb().await?;
+			sql_query!([ctx, &crdb] $sql, $($bind),*)
+		}
     };
 }
 
