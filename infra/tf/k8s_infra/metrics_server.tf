@@ -1,11 +1,11 @@
-resource "kubernetes_namespace" "loki" {
+resource "kubernetes_namespace" "metrics_server" {
 	metadata {
 		name = "metrics-server"
 	}
 }
 
 # Deploy metrics server for distributed clusters.
-#
+# 
 # K3d comes with metrics-server preinstalled.
 # 
 # We don't run this in the kube-system namespace because EKS runs
@@ -15,7 +15,7 @@ resource "helm_release" "metrics_server" {
 	count = var.deploy_method_cluster ? 1 : 0
 
 	name = "metrics-server"
-	namespace = kubernetes_namespace.loki.metadata.0.name
+	namespace = kubernetes_namespace.metrics_server.metadata.0.name
 	repository = "https://kubernetes-sigs.github.io/metrics-server/"
 	chart = "metrics-server"
 	version = "3.11.0"
