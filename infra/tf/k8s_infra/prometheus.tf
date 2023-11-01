@@ -221,6 +221,16 @@ resource "helm_release" "prometheus" {
 		}
 
 		grafana = {
+			"grafana.ini" = {
+				auth = {
+					disable_login_form = true
+				}
+				"auth.anonymous" = {
+					enabled = true
+					org_role = "Admin"
+				}
+			}
+
 			additionalDataSources = [
 				{
 					name = "Loki"

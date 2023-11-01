@@ -72,22 +72,21 @@ resource "cloudflare_access_policy" "allow" {
 	}
 }
 
-# TODO: Not working
-# resource "cloudflare_access_policy" "service_auth" {
-# 	for_each = {
-# 		for k, v in local.ingress_with_apps:
-# 		k => v
-# 		if try(length(v.service_tokens) > 0, false)
-# 	}
+resource "cloudflare_access_policy" "service_auth" {
+	for_each = {
+		for k, v in local.ingress_with_apps:
+		k => v
+		if try(length(v.service_tokens) > 0, false)
+	}
 
-# 	application_id = cloudflare_access_application.tunnel[each.key].id
-# 	zone_id = each.value.cloudflare_zone_id
-# 	name = "Service"
-# 	precedence = 20
-# 	decision = "non_identity"
+	application_id = cloudflare_access_application.tunnel[each.key].id
+	zone_id = each.value.cloudflare_zone_id
+	name = "Service"
+	precedence = 20
+	decision = "non_identity"
 
-# 	include {
-# 		service_token = each.value.service_tokens
-# 	}
-# }
+	include {
+		service_token = each.value.service_tokens
+	}
+}
 

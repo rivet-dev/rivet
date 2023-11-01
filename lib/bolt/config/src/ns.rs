@@ -212,6 +212,13 @@ pub enum DnsProvider {
 #[serde(deny_unknown_fields)]
 pub struct CloudflareAccess {
 	pub groups: CloudflareAccessGroups,
+	pub services: CloudflareAccessServices,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+#[serde(deny_unknown_fields)]
+pub struct CloudflareAccessServices {
+	pub grafana: String,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]

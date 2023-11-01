@@ -234,26 +234,25 @@ async fn vars(ctx: &ProjectContext) {
 	vars.insert("pools".into(), json!(&pools));
 
 	// Tunnels
-	if let Some(dns) = &config.dns {
-		if let Some(ns::DnsProvider::Cloudflare { access, .. }) = &dns.provider {
-			let mut tunnels = HashMap::new();
-			let grafana_cloud_token = ctx
-				.read_secret(&["cloudflare", "access", "grafana_cloud", "client_secret"])
-				.await
-				.unwrap();
+	if let Some(ns::Dns {
+		provider: Some(ns::DnsProvider::Cloudflare { access, .. }),
+		..
+	}) = &config.dns
+	{
+		let mut tunnels = HashMap::new();
 
-			tunnels.insert(
-				"grafana",
-				json!({
-					"name": "Loki",
-					"service": "http://prometheus-grafana.prometheus.svc.cluster.local:80",
-					"access_groups": access.as_ref().map(|x| vec![x.groups.engineering.clone()]).unwrap_or_default(),
-					"service_tokens": vec![grafana_cloud_token],
-				}),
-			);
+		// Grafana tunnel
+		tunnels.insert(
+			"grafana",
+			json!({
+				"name": "Grafana",
+				"service": "http://prometheus-grafana.prometheus.svc.cluster.local:80",
+				"access_groups": access.as_ref().map(|x| vec![x.groups.engineering.clone()]).unwrap_or_default(),
+				"service_tokens": access.as_ref().map(|x| vec![x.services.grafana.clone()]).unwrap_or_default(),
+			}),
+		);
 
-			vars.insert("tunnels".into(), json!(&tunnels));
-		}
+		vars.insert("tunnels".into(), json!(&tunnels));
 	}
 
 	// Servers
