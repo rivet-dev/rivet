@@ -7,11 +7,13 @@ async fn worker(ctx: &OperationContext<team::msg::member_remove::Message>) -> Gl
 	let team_id: Uuid = unwrap_ref!(ctx.team_id).as_uuid();
 	let user_id: Uuid = unwrap_ref!(ctx.user_id).as_uuid();
 
-	sqlx::query("DELETE FROM db_team.team_members WHERE team_id = $1 AND user_id = $2")
-		.bind(team_id)
-		.bind(user_id)
-		.execute(&ctx.crdb().await?)
-		.await?;
+	sql_query!(
+		[ctx]
+		"DELETE FROM db_team.team_members WHERE team_id = $1 AND user_id = $2",
+		team_id,
+		user_id,
+	)
+	.await?;
 
 	ctx.cache().purge("user_team_list", [user_id]).await?;
 

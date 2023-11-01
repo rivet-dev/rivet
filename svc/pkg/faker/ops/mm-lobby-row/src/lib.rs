@@ -41,7 +41,8 @@ async fn handle(
 		)
 		.query_async(&mut redis)
 		.await?;
-	sqlx::query(indoc!(
+	sql_query!(
+		[ctx]
 		"
 		INSERT INTO db_mm_state.lobbies (
 			lobby_id,
@@ -61,21 +62,20 @@ async fn handle(
 			is_closed
 		)
 		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, false)
-		"
-	))
-	.bind(lobby_id)
-	.bind(namespace_id)
-	.bind(lobby_group_id)
-	.bind(region_id)
-	.bind(Uuid::new_v4())
-	.bind(ctx.create_ts.unwrap_or(ctx.ts()))
-	.bind(ctx.stop_ts)
-	.bind(run_id)
-	.bind(Uuid::new_v4())
-	.bind(8)
-	.bind(8)
-	.bind(8)
-	.execute(&crdb)
+		",
+		lobby_id,
+		namespace_id,
+		lobby_group_id,
+		region_id,
+		Uuid::new_v4(),
+		ctx.create_ts.unwrap_or(ctx.ts()),
+		ctx.stop_ts,
+		run_id,
+		Uuid::new_v4(),
+		8,
+		8,
+		8,
+	)
 	.await?;
 
 	Ok(faker::mm_lobby_row::Response {})

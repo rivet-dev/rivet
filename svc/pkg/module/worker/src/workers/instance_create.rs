@@ -143,16 +143,16 @@ async fn worker(
 		.await?;
 
 		// Update app ID
-		sqlx::query(indoc!(
+		sql_query!(
+			[ctx]
 			"
 			UPDATE db_module.instances_driver_fly
 			SET fly_app_id = $2
 			WHERE instance_id = $1
-			"
-		))
-		.bind(instance_id)
-		.bind(app_id)
-		.execute(&crdb)
+			",
+			instance_id,
+			app_id,
+		)
 		.await?;
 	}
 
@@ -190,39 +190,39 @@ async fn insert_instance(
 	let instance_id = unwrap_ref!(msg.instance_id).as_uuid();
 	let version_id = unwrap_ref!(msg.module_version_id).as_uuid();
 
-	sqlx::query(indoc!(
+	sql_query!(
+		[ctx, &mut **tx]
 		"
 		INSERT INTO db_module.instances (instance_id, version_id, create_ts)
 		VALUES ($1, $2, $3)
-		"
-	))
-	.bind(instance_id)
-	.bind(version_id)
-	.bind(now)
-	.execute(&mut **tx)
+		",
+		instance_id,
+		version_id,
+		now,
+	)
 	.await?;
 
 	match unwrap_ref!(msg.driver) {
 		module::msg::instance_create::message::Driver::Dummy(_) => {
-			sqlx::query(indoc!(
+			sql_query!(
+				[ctx, &mut **tx]
 				"
                 INSERT INTO db_module.instances_driver_dummy (instance_id)
                 VALUES ($1)
-                "
-			))
-			.bind(instance_id)
-			.execute(&mut **tx)
+                ",
+				instance_id,
+			)
 			.await?;
 		}
 		module::msg::instance_create::message::Driver::Fly(_) => {
-			sqlx::query(indoc!(
+			sql_query!(
+				[ctx, &mut **tx]
 				"
                 INSERT INTO db_module.instances_driver_fly (instance_id)
                 VALUES ($1)
-                "
-			))
-			.bind(instance_id)
-			.execute(&mut **tx)
+                ",
+				instance_id,
+			)
 			.await?;
 		}
 	}

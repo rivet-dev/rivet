@@ -148,16 +148,16 @@ async fn handle(
 	}
 
 	// Complete verification
-	let complete_res = sqlx::query(indoc!(
+	let complete_res = sql_query!(
+		[ctx]
 		"
 		UPDATE db_email_verification.verifications
 		SET complete_ts = $2
 		WHERE verification_id = $1 AND complete_ts IS NULL
-		"
-	))
-	.bind(verification_id)
-	.bind(ctx.ts())
-	.execute(&crdb)
+		",
+		verification_id,
+		ctx.ts(),
+	)
 	.await?;
 	if complete_res.rows_affected() > 0 {
 		return verification

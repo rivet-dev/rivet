@@ -34,15 +34,15 @@ async fn worker(
 
 	// Update the default status
 	if ctx.user_set_status {
-		sqlx::query(indoc!(
+		sql_query!(
+			[ctx]
 			"
 			UPSERT INTO db_user_presence.user_presences (user_id, user_set_status)
 			VALUES ($1, $2)
-			"
-		))
-		.bind(user_id)
-		.bind(ctx.user_set_status)
-		.execute(&crdb)
+			",
+			user_id,
+			ctx.user_set_status,
+		)
 		.await?;
 	}
 

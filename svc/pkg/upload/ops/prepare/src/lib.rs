@@ -113,7 +113,8 @@ async fn handle(
 		.collect::<Vec<_>>();
 
 	// Insert in to database
-	sqlx::query(indoc!(
+	sql_query!(
+		[ctx]
 		"
 		WITH
 			_insert_upload AS (
@@ -128,21 +129,18 @@ async fn handle(
 				RETURNING 1
 			)
 		SELECT 1
-		"
-	))
-	// Upload
-	.bind(upload_id)
-	.bind(ctx.ts())
-	.bind(total_content_length as i64)
-	.bind(&ctx.bucket)
-	.bind(user_id)
-	.bind(proto_provider as i32 as i64)
-	// Files
-	.bind(paths)
-	.bind(mimes)
-	.bind(content_lengths)
-	.bind(nsfw_score_thresholds)
-	.execute(&crdb)
+		",
+		upload_id,
+		ctx.ts(),
+		total_content_length as i64,
+		&ctx.bucket,
+		user_id,
+		proto_provider as i32 as i64,
+		paths,
+		mimes,
+		content_lengths,
+		nsfw_score_thresholds,
+	)
 	.await?;
 
 	// Create iterators to be joined later
@@ -179,7 +177,8 @@ async fn handle(
 			.try_collect::<Vec<_>>(),
 		// Set multipart upload ids
 		async {
-			sqlx::query(indoc!(
+			sql_query!(
+				[ctx]
 				"
 				UPDATE db_upload.upload_files
 				SET multipart_upload_id = v.multipart_upload_id
@@ -190,12 +189,11 @@ async fn handle(
 				WHERE
 					upload_files.upload_id = $1 AND
 					upload_files.path = v.path
-				"
-			))
-			.bind(upload_id)
-			.bind(multipart_paths)
-			.bind(multipart_upload_ids)
-			.execute(&crdb)
+				",
+				upload_id,
+				multipart_paths,
+				multipart_upload_ids,
+			)
 			.await
 			.map_err(Into::<GlobalError>::into)
 		},

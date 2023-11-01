@@ -23,8 +23,10 @@ async fn worker(ctx: &OperationContext<job_run::msg::cleanup::Message>) -> Globa
 
 	let run_id = unwrap_ref!(ctx.run_id).as_uuid();
 
-	let Some((run_row, run_meta_nomad_row)) =
-		rivet_pools::utils::crdb::tx(&crdb, |tx| Box::pin(update_db(ctx.ts(), run_id, tx))).await?
+	let Some((run_row, run_meta_nomad_row)) = rivet_pools::utils::crdb::tx(&crdb, |tx| {
+		Box::pin(update_db(ctx.clone(), ctx.ts(), run_id, tx))
+	})
+	.await?
 	else {
 		if ctx.req_dt() > util::duration::minutes(5) {
 			tracing::error!("discarding stale message");
@@ -61,6 +63,7 @@ async fn worker(ctx: &OperationContext<job_run::msg::cleanup::Message>) -> Globa
 
 #[tracing::instrument(skip_all)]
 async fn update_db(
+	ctx: OperationContext<job_run::msg::cleanup::Message>,
 	now: i64,
 	run_id: Uuid,
 	tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
@@ -114,11 +117,13 @@ async fn update_db(
 
 	tracing::info!("deleting run");
 	if run_row.cleanup_ts.is_none() {
-		sqlx::query("UPDATE db_job_state.runs SET cleanup_ts = $2 WHERE run_id = $1")
-			.bind(run_id)
-			.bind(now)
-			.execute(&mut **tx)
-			.await?;
+		sql_query!(
+			[ctx]
+			"UPDATE db_job_state.runs SET cleanup_ts = $2 WHERE run_id = $1",
+			run_id,
+			now,
+		)
+		.await?;
 	}
 
 	Ok(Some((run_row, run_meta_nomad_row)))

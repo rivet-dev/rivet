@@ -33,12 +33,12 @@ async fn handle(
 	let token = unwrap_ref!(token_res.token);
 	let token_session_id = unwrap_ref!(token_res.session_id).as_uuid();
 
-	sqlx::query(
+	sql_query!(
+		[ctx]
 		"INSERT INTO db_cloud.game_cloud_tokens (game_id, token_session_id) VALUES ($1, $2)",
+		game_id,
+		token_session_id,
 	)
-	.bind(game_id)
-	.bind(token_session_id)
-	.execute(&ctx.crdb().await?)
 	.await?;
 
 	Ok(cloud::game_token_create::Response {

@@ -21,11 +21,13 @@ async fn handle(
 	let site_id = unwrap_ref!(config.site_id);
 
 	let crdb = ctx.crdb().await?;
-	sqlx::query("INSERT INTO db_cdn.game_versions (version_id, site_id) VALUES ($1, $2)")
-		.bind(**version_id)
-		.bind(**site_id)
-		.execute(&crdb)
-		.await?;
+	sql_query!(
+		[ctx]
+		"INSERT INTO db_cdn.game_versions (version_id, site_id) VALUES ($1, $2)",
+		**version_id,
+		**site_id,
+	)
+	.await?;
 
 	// Funky batch insert. Cannot be joined with the above future because it relies on it to create foreign
 	// row first.
@@ -80,20 +82,20 @@ async fn handle(
 			.into_iter()
 			.unzip_n_vec();
 
-		sqlx::query(indoc!(
+		sql_query!(
+			[ctx]
 			"
 			INSERT INTO db_cdn.game_version_custom_headers (
 				version_id, glob, priority, header_name, header_value
 			)
 			SELECT * FROM UNNEST($1, $2, $3, $4, $5)
-			"
-		))
-		.bind(version_ids)
-		.bind(globs)
-		.bind(priorities)
-		.bind(header_names)
-		.bind(header_values)
-		.execute(&crdb)
+			",
+			version_ids,
+			globs,
+			priorities,
+			header_names,
+			header_values,
+		)
 		.await?;
 	}
 

@@ -23,13 +23,13 @@ async fn handle(
 
 	ensure_with!(auth_user_count < CDN_AUTH_USER_MAX, CDN_TOO_MANY_AUTH_USERS);
 
-	sqlx::query(
+	sql_query!(
+		[ctx]
 		"UPSERT INTO db_cdn.game_namespace_auth_users (namespace_id, user_name, password) VALUES ($1, $2, $3)",
+		namespace_id,
+		&ctx.user,
+		&ctx.password,
 	)
-	.bind(namespace_id)
-	.bind(&ctx.user)
-	.bind(&ctx.password)
-	.execute(&crdb)
 	.await?;
 
 	msg!([ctx] cdn::msg::ns_config_update(namespace_id) {

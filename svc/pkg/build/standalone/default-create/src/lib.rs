@@ -111,16 +111,16 @@ pub async fn run_from_env() -> GlobalResult<()> {
 
 		// Update default build
 		tracing::info!(tag = %build.tag, ?upload_id, "setting default build");
-		sqlx::query(indoc!(
+		sql_query!(
+			[ctx]
 			"
 			UPSERT INTO db_build.default_builds (kind, image_tag, upload_id)
 			VALUES ($1, $2, $3)
-			"
-		))
-		.bind(build.kind)
-		.bind(build.tag)
-		.bind(upload_id)
-		.execute(&crdb_pool)
+			",
+			build.kind,
+			build.tag,
+			upload_id,
+		)
 		.await?;
 	}
 

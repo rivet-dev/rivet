@@ -12,16 +12,16 @@ async fn handle(
 		"invalid auth type"
 	);
 
-	sqlx::query(indoc!(
+	sql_query!(
+		[ctx]
 		"
 		UPDATE db_cdn.game_namespaces
 		SET auth_type = $2
 		WHERE namespace_id = $1
-		"
-	))
-	.bind(namespace_id)
-	.bind(ctx.auth_type)
-	.execute(&ctx.crdb().await?)
+		",
+		namespace_id,
+		ctx.auth_type,
+	)
 	.await?;
 
 	msg!([ctx] cdn::msg::ns_config_update(namespace_id) {

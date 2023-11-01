@@ -39,7 +39,8 @@ async fn handle(
 			.await?;
 
 			// Insert verification
-			sqlx::query(indoc!(
+			sql_query!(
+				[ctx]
 				"
 				INSERT INTO db_captcha.captcha_verifications (
 					verification_id, topic, topic_str, remote_address,
@@ -47,19 +48,18 @@ async fn handle(
 					namespace_id
 				)
 				VALUES ($1, $2, $3, $4, $5, to_timestamp($6::float / 1000), $7, $8, $9, $10)
-				"
-			))
-			.bind(Uuid::new_v4())
-			.bind(&topic_value)
-			.bind(&topic_str)
-			.bind(ctx.remote_address.as_str())
-			.bind(ctx.ts())
-			.bind(ctx.ts() + captcha_config.verification_ttl)
-			.bind(backend::captcha::CaptchaProvider::Hcaptcha as i64)
-			.bind(res.success)
-			.bind(user_id)
-			.bind(namespace_id)
-			.execute(&crdb)
+				",
+				Uuid::new_v4(),
+				&topic_value,
+				&topic_str,
+				ctx.remote_address.as_str(),
+				ctx.ts(),
+				ctx.ts() + captcha_config.verification_ttl,
+				backend::captcha::CaptchaProvider::Hcaptcha as i64,
+				res.success,
+				user_id,
+				namespace_id,
+			)
 			.await?;
 
 			(res.success, "hcaptcha")
@@ -97,25 +97,25 @@ async fn handle(
 			.await?;
 
 			// Insert verification
-			sqlx::query(indoc!(
+			sql_query!(
+				[ctx]
 				"
 				INSERT INTO db_captcha.captcha_verifications (
 					verification_id, topic, topic_str, remote_address, complete_ts, expire_ts, provider, success, user_id, namespace_id
 				)
 				VALUES ($1, $2, $3, $4, $5, to_timestamp($6::float / 1000), $7, $8, $9, $10)
-				"
-			))
-			.bind(Uuid::new_v4())
-			.bind(&topic_value)
-			.bind(&topic_str)
-			.bind(ctx.remote_address.as_str())
-			.bind(ctx.ts())
-			.bind(ctx.ts() + captcha_config.verification_ttl)
-			.bind(backend::captcha::CaptchaProvider::Turnstile as i64)
-			.bind(res.success)
-			.bind(user_id)
-			.bind(namespace_id)
-			.execute(&crdb)
+				",
+				Uuid::new_v4(),
+				&topic_value,
+				&topic_str,
+				ctx.remote_address.as_str(),
+				ctx.ts(),
+				ctx.ts() + captcha_config.verification_ttl,
+				backend::captcha::CaptchaProvider::Turnstile as i64,
+				res.success,
+				user_id,
+				namespace_id,
+			)
 			.await?;
 
 			(res.success, "turnstile")

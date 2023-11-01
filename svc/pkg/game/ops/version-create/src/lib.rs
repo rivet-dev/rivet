@@ -40,12 +40,14 @@ async fn handle(
 
 	let version_id = Uuid::new_v4();
 
-	sqlx::query("INSERT INTO db_game.game_versions (version_id, game_id, create_ts, display_name) VALUES ($1, $2, $3, $4)")
-		.bind(version_id)
-		.bind(game_id)
-		.bind(ctx.ts())
-		.bind(&ctx.display_name)
-		.execute(&ctx.crdb().await?)
+	sql_query!(
+		[ctx]
+		"INSERT INTO db_game.game_versions (version_id, game_id, create_ts, display_name) VALUES ($1, $2, $3, $4)",
+		version_id,
+		game_id,
+		ctx.ts(),
+		&ctx.display_name,
+	)
 		.await?;
 
 	Ok(game::version_create::Response {

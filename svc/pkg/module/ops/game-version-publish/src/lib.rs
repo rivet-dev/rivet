@@ -14,11 +14,13 @@ async fn handle(
 	let mut config_buf = Vec::with_capacity(config.encoded_len());
 	config.encode(&mut config_buf)?;
 
-	sqlx::query("INSERT INTO db_module.game_versions (version_id, config) VALUES ($1, $2)")
-		.bind(version_id)
-		.bind(config_buf)
-		.execute(&crdb)
-		.await?;
+	sql_query!(
+		[ctx]
+		"INSERT INTO db_module.game_versions (version_id, config) VALUES ($1, $2)",
+		version_id,
+		config_buf,
+	)
+	.await?;
 
 	Ok(module::game_version_publish::Response {})
 }

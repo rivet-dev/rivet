@@ -16,22 +16,24 @@ async fn worker(ctx: &OperationContext<team::msg::owner_transfer::Message>) -> G
 			.await?;
 
 	tokio::try_join!(
-		sqlx::query("UPDATE db_team.teams SET owner_user_id = $2 WHERE team_id = $1",)
-			.bind(team_id)
-			.bind(new_owner_user_id)
-			.execute(&crdb),
-		sqlx::query(indoc!(
+		sql_query!(
+			[ctx, &crdb]
+			"UPDATE db_team.teams SET owner_user_id = $2 WHERE team_id = $1",
+			team_id,
+			new_owner_user_id,
+		),
+		sql_query!(
+			[ctx, &crdb]
 			"
 			INSERT INTO db_team.team_owner_transfer_logs
 			(team_id, old_owner_user_id, new_owner_user_id, transfer_ts)
 			VALUES ($1, $2, $3, $4)
 			",
-		))
-		.bind(team_id)
-		.bind(old_owner_user_id)
-		.bind(new_owner_user_id)
-		.bind(util::timestamp::now())
-		.execute(&crdb),
+			team_id,
+			old_owner_user_id,
+			new_owner_user_id,
+			util::timestamp::now(),
+		),
 	)?;
 
 	let teams_res = op!([ctx] team_dev_get {

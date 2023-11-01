@@ -282,7 +282,8 @@ async fn worker(ctx: &OperationContext<mm::msg::lobby_find::Message>) -> GlobalR
 		ray_id: ctx.ray_id(),
 	};
 	rivet_pools::utils::crdb::tx(&crdb, |tx| {
-		Box::pin(insert_to_crdb(tx, insert_opts.clone()))
+		let ctx = ctx.clone();
+		Box::pin(insert_to_crdb(ctx, tx, insert_opts.clone()))
 	})
 	.await?;
 
@@ -561,6 +562,7 @@ struct InsertCrdbOpts {
 
 #[tracing::instrument]
 async fn insert_to_crdb(
+	ctx: OperationContext<mm::msg::lobby_find::Message>,
 	tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
 	InsertCrdbOpts {
 		namespace_id,
@@ -583,7 +585,8 @@ async fn insert_to_crdb(
 		let lobby_group = unwrap!(lobby_group_config.lobby_groups.first());
 
 		// Insert lobby if needed
-		sqlx::query(indoc!(
+		sql_query!(
+			[ctx, &mut **tx]
 			"
 			INSERT INTO db_mm_state.lobbies (
 				lobby_id,
@@ -601,24 +604,24 @@ async fn insert_to_crdb(
 				is_closed
 			)
 			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, false)
-			"
-		))
-		.bind(lobby_id)
-		.bind(namespace_id)
-		.bind(region_id)
-		.bind(lobby_group_id)
-		.bind(now_ts)
-		.bind(now_ts)
-		.bind(ray_id)
-		.bind(lobby_group.max_players_normal as i64)
-		.bind(lobby_group.max_players_direct as i64)
-		.bind(lobby_group.max_players_party as i64)
-		.execute(&mut **tx)
+			",
+			lobby_id,
+			namespace_id,
+			region_id,
+			lobby_group_id,
+			now_ts,
+			now_ts,
+			ray_id,
+			lobby_group.max_players_normal as i64,
+			lobby_group.max_players_direct as i64,
+			lobby_group.max_players_party as i64,
+		)
 		.await?;
 	}
 
 	// Insert query
-	sqlx::query(indoc!(
+	sql_query!(
+		[ctx, &mut **tx]
 		"
 		INSERT INTO db_mm_state.find_queries (
 			query_id,
@@ -629,20 +632,20 @@ async fn insert_to_crdb(
 			status
 		)
 		VALUES ($1, $2, $3, $4, $5, $6)
-		"
-	))
-	.bind(query_id)
-	.bind(namespace_id)
-	.bind(join_kind as i64)
-	.bind(lobby_id)
-	.bind(auto_create_lobby)
-	.bind(util_mm::FindQueryStatus::Pending as i64)
-	.execute(&mut **tx)
+		",
+		query_id,
+		namespace_id,
+		join_kind as i64,
+		lobby_id,
+		auto_create_lobby,
+		util_mm::FindQueryStatus::Pending as i64,
+	)
 	.await?;
 
 	// Insert players
 	for player in players {
-		sqlx::query(indoc!(
+		sql_query!(
+			[ctx, &mut **tx]
 			"
 			INSERT INTO db_mm_state.players (
 				player_id,
@@ -654,21 +657,18 @@ async fn insert_to_crdb(
 				create_ray_id
 			)
 			VALUES ($1, $2, $3, $4, $5, $6, $7)
-			"
-		))
-		.bind(player.player_id)
-		.bind(lobby_id)
-		.bind(query_id)
-		.bind(player.token_session_id)
-		.bind(
+			",
+			player.player_id,
+			lobby_id,
+			query_id,
+			player.token_session_id,
 			player
 				.client_info
 				.as_ref()
 				.and_then(|ci| ci.remote_address.clone()),
+			now_ts,
+			ray_id,
 		)
-		.bind(now_ts)
-		.bind(ray_id)
-		.execute(&mut **tx)
 		.await?;
 	}
 

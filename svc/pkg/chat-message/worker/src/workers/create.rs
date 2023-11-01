@@ -19,7 +19,8 @@ async fn worker(ctx: &OperationContext<chat_message::msg::create::Message>) -> G
 	let mut body_buf = Vec::with_capacity(body.encoded_len());
 	body.encode(&mut body_buf)?;
 
-	sqlx::query(indoc!(
+	sql_query!(
+		[ctx]
 		"
 		INSERT INTO db_chat.messages (
 			message_id,
@@ -29,14 +30,13 @@ async fn worker(ctx: &OperationContext<chat_message::msg::create::Message>) -> G
 			sender_user_id
 		)
 		VALUES ($1, $2, $3, $4, $5)
-		"
-	))
-	.bind(chat_message_id)
-	.bind(thread_id)
-	.bind(ctx.send_ts)
-	.bind(&body_buf)
-	.bind(sender_user_id)
-	.execute(&crdb)
+		",
+		chat_message_id,
+		thread_id,
+		ctx.send_ts,
+		&body_buf,
+		sender_user_id,
+	)
 	.await?;
 
 	// Build chat message

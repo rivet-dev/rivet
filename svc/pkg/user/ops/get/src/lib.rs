@@ -70,7 +70,8 @@ pub async fn handle(
 						WHERE user_id = ANY($1)
 						",
 						user_ids
-					)?;
+					)
+					.await?;
 
 					for row in users {
 						cache.resolve(&row.user_id.clone(), user::get::CacheUser::from(row));

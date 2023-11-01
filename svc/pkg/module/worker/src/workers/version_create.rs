@@ -48,61 +48,61 @@ async fn update_db(
 	let version_id = unwrap_ref!(msg.version_id).as_uuid();
 	let module_id = unwrap_ref!(msg.module_id).as_uuid();
 
-	sqlx::query(indoc!(
+	sql_query!(
+		[ctx, &mut **tx]
 		"
 		INSERT INTO db_module.versions (version_id, module_id, create_ts, creator_user_id, major, minor, patch)
 		VALUES ($1, $2, $3, $4, $5, $6, $7)
-		"
-	))
-	.bind(version_id)
-	.bind(module_id)
-	.bind(now)
-	.bind(msg.creator_user_id.map(|x| x.as_uuid()))
-	.bind(TryInto::<i64>::try_into(msg.major)?)
-	.bind(TryInto::<i64>::try_into(msg.minor)?)
-	.bind(TryInto::<i64>::try_into(msg.patch)?)
-	.execute(&mut **tx)
+		",
+		version_id,
+		module_id,
+		now,
+		msg.creator_user_id.map(|x| x.as_uuid()),
+		TryInto::<i64>::try_into(msg.major)?,
+		TryInto::<i64>::try_into(msg.minor)?,
+		TryInto::<i64>::try_into(msg.patch)?,
+	)
 	.await?;
 
 	match unwrap_ref!(msg.image) {
 		module::msg::version_create::message::Image::Docker(docker) => {
-			sqlx::query(indoc!(
+			sql_query!(
+				[ctx, &mut **tx]
 				"
                 INSERT INTO db_module.versions_image_docker (version_id, image_tag)
                 VALUES ($1, $2)
-                "
-			))
-			.bind(version_id)
-			.bind(&docker.image_tag)
-			.execute(&mut **tx)
+                ",
+				version_id,
+				&docker.image_tag,
+			)
 			.await?;
 		}
 	}
 
 	for script in msg.scripts {
-		sqlx::query(indoc!(
+		sql_query!(
+			[ctx, &mut **tx]
 			"
             INSERT INTO db_module.scripts (version_id, name, request_schema, response_schema)
             VALUES ($1, $2, $3, $4)
-            "
-		))
-		.bind(version_id)
-		.bind(&script.name)
-		.bind(&script.request_schema)
-		.bind(&script.response_schema)
-		.execute(&mut **tx)
+            ",
+			version_id,
+			&script.name,
+			&script.request_schema,
+			&script.response_schema,
+		)
 		.await?;
 
 		if script.callable.is_some() {
-			sqlx::query(indoc!(
+			sql_query!(
+				[ctx, &mut **tx]
 				"
                 INSERT INTO db_module.scripts_callable (version_id, name)
                 VALUES ($1, $2)
-            "
-			))
-			.bind(version_id)
-			.bind(&script.name)
-			.execute(&mut **tx)
+            ",
+				version_id,
+				&script.name,
+			)
 			.await?;
 		}
 	}

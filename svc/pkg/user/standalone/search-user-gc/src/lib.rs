@@ -104,15 +104,15 @@ async fn process_batch(
 		.cloned()
 		.collect::<Vec<_>>();
 
-	let res = sqlx::query(indoc!(
+	let res = sql_query!(
+		[ctx]
 		"
 		UPDATE db_user.users
 		SET is_searchable = FALSE
 		WHERE user_id = ANY($1)
-		"
-	))
-	.bind(deletions)
-	.execute(crdb)
+		",
+		deletions,
+	)
 	.await?;
 
 	Ok(res.rows_affected())

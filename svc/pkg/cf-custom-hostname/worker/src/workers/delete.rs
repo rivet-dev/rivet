@@ -90,14 +90,14 @@ async fn worker(
 
 	// TODO: Delete stripe subscription for hostname
 
-	sqlx::query(indoc!(
+	sql_query!(
+		[ctx]
 		"
 		DELETE FROM db_cf_custom_hostname.custom_hostnames
 		WHERE identifier = $1
-		"
-	))
-	.bind(identifier)
-	.execute(&crdb)
+		",
+		identifier,
+	)
 	.await?;
 
 	msg!([ctx] cf_custom_hostname::msg::delete_complete(namespace_id, &ctx.hostname) {

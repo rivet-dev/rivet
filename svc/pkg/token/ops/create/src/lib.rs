@@ -85,16 +85,16 @@ async fn handle(
 			let issue_new_refresh = true; // TODO: Change this once we have unit tests to handle auto-refresh
 			let current_refresh_token = if issue_new_refresh {
 				// Revoke the refresh token
-				let update_query = sqlx::query(
+				let update_query = sql_query!(
+					[ctx]
 					"
 					UPDATE db_token.tokens
 					SET revoke_ts = $1
 					WHERE jti = $2 AND revoke_ts IS NULL AND exp > $1
 					",
+					ctx.ts(),
+					refresh_jti,
 				)
-				.bind(ctx.ts())
-				.bind(refresh_jti)
-				.execute(&crdb)
 				.await?;
 
 				if update_query.rows_affected() == 0 {
@@ -148,14 +148,14 @@ async fn handle(
 				.iter()
 				.flat_map(|x| x.tag().map(|x| x as i64))
 				.collect::<Vec<_>>();
-			sqlx::query(
-				"INSERT INTO db_token.sessions (session_id, entitlements, entitlement_tags, exp) VALUES ($1, $2, $3, $4)"
-			)
-			.bind(new_session_id)
-			.bind(ent_bufs)
-			.bind(&tags)
-			.bind(ctx.ts() + token_config.ttl)
-			.execute(&crdb).await?;
+			sql_query!(
+				[ctx]
+				"INSERT INTO db_token.sessions (session_id, entitlements, entitlement_tags, exp) VALUES ($1, $2, $3, $4)",
+				new_session_id,
+				ent_bufs,
+				&tags,
+				ctx.ts() + token_config.ttl,
+			).await?;
 		}
 
 		new_session_id
@@ -274,7 +274,8 @@ async fn create_token(
 	tracing::info!(buf_len = %claims_buf.len(), "writing claims");
 	if !ephemeral {
 		// Create the token and update the session expiration as needed
-		sqlx::query(indoc!(
+		sql_query!(
+			[ctx]
 			"
 			WITH
 				_insert AS (
@@ -298,17 +299,16 @@ async fn create_token(
 					RETURNING 1
 				)
 			SELECT 1
-			"
-		))
-		.bind(jti)
-		.bind(claims.exp)
-		.bind(claims.iat)
-		.bind(refresh_jti)
-		.bind(session_id)
-		.bind(&ctx.issuer)
-		.bind(ctx.client.as_ref().map(|x| &x.user_agent))
-		.bind(ctx.client.as_ref().map(|x| &x.remote_address))
-		.execute(crdb)
+			",
+			jti,
+			claims.exp,
+			claims.iat,
+			refresh_jti,
+			session_id,
+			&ctx.issuer,
+			ctx.client.as_ref().map(|x| &x.user_agent),
+			ctx.client.as_ref().map(|x| &x.remote_address),
+		)
 		.await?;
 	}
 

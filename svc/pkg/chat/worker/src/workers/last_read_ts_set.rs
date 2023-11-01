@@ -8,19 +8,19 @@ async fn worker(ctx: &OperationContext<chat::msg::last_read_ts_set::Message>) ->
 	let user_id = unwrap_ref!(ctx.user_id).as_uuid();
 	let thread_id = unwrap_ref!(ctx.thread_id).as_uuid();
 
-	let res = sqlx::query(indoc!(
+	let res = sql_query!(
+		[ctx]
 		"
 		INSERT INTO db_chat.thread_user_settings (user_id, thread_id, last_read_ts)
 		VALUES ($1, $2, $3)
 		ON CONFLICT (user_id, thread_id) DO UPDATE
 		SET last_read_ts = $3
 		WHERE EXCLUDED.last_read_ts < $3
-		"
-	))
-	.bind(user_id)
-	.bind(thread_id)
-	.bind(ctx.last_read_ts)
-	.execute(&crdb)
+		",
+		user_id,
+		thread_id,
+		ctx.last_read_ts,
+	)
 	.await?;
 
 	// Send chat read event if the new timestamp is after the stored timestamp

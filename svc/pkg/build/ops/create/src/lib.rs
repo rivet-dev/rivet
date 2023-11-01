@@ -92,21 +92,21 @@ async fn handle(
 
 	// Create build
 	let build_id = Uuid::new_v4();
-	sqlx::query(indoc!(
+	sql_query!(
+		[ctx]
 		"
 		INSERT INTO db_build.builds (build_id, game_id, upload_id, display_name, image_tag, create_ts, kind, compression)
 		VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-		"
-	))
-	.bind(build_id)
-	.bind(game_id)
-	.bind(upload_id)
-	.bind(&ctx.display_name)
-	.bind(image_tag)
-	.bind(ctx.ts())
-	.bind(kind as i32)
-	.bind(compression as i32)
-	.execute(&crdb)
+		",
+		build_id,
+		game_id,
+		upload_id,
+		&ctx.display_name,
+		image_tag,
+		ctx.ts(),
+		kind as i32,
+		compression as i32,
+	)
 	.await?;
 
 	Ok(build::create::Response {

@@ -31,18 +31,18 @@ async fn handle(
 		.transpose()?;
 
 	// Save version
-	sqlx::query(indoc!(
+	sql_query!(
+		[ctx]
 		"INSERT INTO db_mm_config.game_versions (
 			version_id,
 			captcha_config,
 			migrations
 		)
-		VALUES ($1, $2, $3)"
-	))
-	.bind(version_id)
-	.bind(captcha_buf)
-	.bind(util_mm::version_migrations::all())
-	.execute(&mut *tx)
+		VALUES ($1, $2, $3)",
+		version_id,
+		captcha_buf,
+		util_mm::version_migrations::all(),
+	)
 	.await?;
 
 	// Save lobby groups
@@ -105,7 +105,8 @@ async fn handle(
 			})
 			.transpose()?;
 
-		sqlx::query(indoc!(
+		sql_query!(
+			[ctx]
 			"
 			INSERT INTO db_mm_config.lobby_groups (
 				lobby_group_id, 
@@ -125,53 +126,52 @@ async fn handle(
 				create_config
 			)
 			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
-			"
-		))
-		.bind(lobby_group_id)
-		.bind(version_id)
-		.bind(&lobby_group.name_id)
-		.bind(lobby_group.max_players_normal as i64)
-		.bind(lobby_group.max_players_direct as i64)
-		.bind(lobby_group.max_players_party as i64)
-		.bind(lobby_group.listable)
-		.bind(&runtime_buf)
-		.bind(&runtime_meta_buf)
-		.bind(&find_config_buf)
-		.bind(&join_config_buf)
-		.bind(&create_config_buf)
-		.execute(&mut *tx)
+			",
+			lobby_group_id,
+			version_id,
+			&lobby_group.name_id,
+			lobby_group.max_players_normal as i64,
+			lobby_group.max_players_direct as i64,
+			lobby_group.max_players_party as i64,
+			lobby_group.listable,
+			&runtime_buf,
+			&runtime_meta_buf,
+			&find_config_buf,
+			&join_config_buf,
+			&create_config_buf,
+		)
 		.await?;
 
 		for region in &lobby_group.regions {
 			let region_id = unwrap_ref!(region.region_id).as_uuid();
-			sqlx::query(indoc!(
+			sql_query!(
+				[ctx]
 				"
 				INSERT INTO db_mm_config.lobby_group_regions (
 					lobby_group_id, region_id, tier_name_id
 				)
 				VALUES ($1, $2, $3)
-				"
-			))
-			.bind(lobby_group_id)
-			.bind(region_id)
-			.bind(&region.tier_name_id)
-			.execute(&mut *tx)
+				",
+				lobby_group_id,
+				region_id,
+				&region.tier_name_id,
+			)
 			.await?;
 
 			if let Some(idle_lobbies) = &region.idle_lobbies {
-				sqlx::query(indoc!(
+				sql_query!(
+					[ctx]
 					"
 				INSERT INTO db_mm_config.lobby_group_idle_lobbies (
 					lobby_group_id, region_id, min_idle_lobbies, max_idle_lobbies
 				)
 				VALUES ($1, $2, $3, $4)
-				"
-				))
-				.bind(lobby_group_id)
-				.bind(region_id)
-				.bind(idle_lobbies.min_idle_lobbies as i64)
-				.bind(idle_lobbies.max_idle_lobbies as i64)
-				.execute(&mut *tx)
+				",
+					lobby_group_id,
+					region_id,
+					idle_lobbies.min_idle_lobbies as i64,
+					idle_lobbies.max_idle_lobbies as i64,
+				)
 				.await?;
 			}
 		}

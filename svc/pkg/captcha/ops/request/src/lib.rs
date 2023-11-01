@@ -81,21 +81,21 @@ async fn handle(
 	};
 
 	// Insert a request
-	sqlx::query(indoc!(
+	sql_query!(
+		[ctx]
 		"
 		INSERT INTO db_captcha.captcha_requests (request_id, topic, topic_str, remote_address, create_ts, expire_ts, user_id, namespace_id)
 		VALUES ($1, $2, $3, $4, $5, to_timestamp($6::float / 1000), $7, $8)
-		"
-	))
-	.bind(Uuid::new_v4())
-	.bind(&topic_value)
-	.bind(&topic_str)
-	.bind(&ctx.remote_address)
-	.bind(ctx.ts())
-	.bind(ctx.ts() + captcha_config.verification_ttl)
-	.bind(user_id)
-	.bind(namespace_id)
-	.execute(&crdb)
+		",
+		Uuid::new_v4(),
+		&topic_value,
+		&topic_str,
+		&ctx.remote_address,
+		ctx.ts(),
+		ctx.ts() + captcha_config.verification_ttl,
+		user_id,
+		namespace_id,
+	)
 	.await?;
 
 	if needs_verification {

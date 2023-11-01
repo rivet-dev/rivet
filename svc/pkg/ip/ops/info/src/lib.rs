@@ -33,14 +33,14 @@ async fn handle(ctx: OperationContext<ip::info::Request>) -> GlobalResult<ip::in
 
 	// Fetch info
 	let ip_info = match provider {
-		ip::info::Provider::IpInfoIo => fetch_ip_info_io(&crdb, ctx.ts(), &ip_str).await?,
+		ip::info::Provider::IpInfoIo => fetch_ip_info_io(&ctx, ctx.ts(), &ip_str).await?,
 	};
 
 	Ok(ip::info::Response { ip_info })
 }
 
 async fn fetch_ip_info_io(
-	crdb: &CrdbPool,
+	ctx: &OperationContext<ip::info::Request>,
 	ts: i64,
 	ip_str: &str,
 ) -> GlobalResult<Option<backend::net::IpInfo>> {
@@ -49,7 +49,7 @@ async fn fetch_ip_info_io(
 		"SELECT ip_info_io_data FROM db_ip_info.ips WHERE ip = $1",
 	)
 	.bind(ip_str)
-	.fetch_optional(crdb)
+	.fetch_optional(&ctx.crdb().await?)
 	.await?;
 	let ip_info_raw = if let Some(ip_info_raw) = res.and_then(|x| x.0) {
 		tracing::info!("found cached ip info");
@@ -74,13 +74,13 @@ async fn fetch_ip_info_io(
 		// Cache the IP info. This will be cached in Redis too, but this
 		// prevents us from having to consume our ipinfo.io API quota once the
 		// Redis cache expires.
-		sqlx::query(
+		sql_query!(
+			[ctx]
 			"UPSERT INTO db_ip_info.ips (ip, ip_info_io_data, ip_info_io_fetch_ts) VALUES ($1, $2, $3)",
+			ip_str,
+			&ip_info_raw,
+			ts,
 		)
-		.bind(ip_str)
-		.bind(&ip_info_raw)
-		.bind(ts)
-		.execute(crdb)
 		.await?;
 
 		ip_info_raw

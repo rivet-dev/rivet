@@ -75,14 +75,7 @@ async fn worker(
 			.find(|x| x.key == **dep_key)
 			.and_then(|x| x.module_version_id)
 			.map(|x| x.as_uuid());
-		create_instances(
-			ctx.chirp(),
-			&crdb,
-			namespace_id,
-			dep_key,
-			unwrap!(version_id),
-		)
-		.await?;
+		create_instances(&ctx, namespace_id, dep_key, unwrap!(version_id)).await?;
 	}
 
 	// Update instances
@@ -114,14 +107,7 @@ async fn worker(
 			.find(|x| x.key == **dep_key)
 			.map(|x| x.instance_id);
 
-		delete_instance(
-			ctx.chirp(),
-			&crdb,
-			namespace_id,
-			dep_key,
-			unwrap!(instance_id),
-		)
-		.await?;
+		delete_instance(&ctx, namespace_id, dep_key, unwrap!(instance_id)).await?;
 	}
 
 	msg!([ctx] module::msg::ns_version_set_complete(namespace_id) {
@@ -134,15 +120,14 @@ async fn worker(
 }
 
 async fn create_instances(
-	client: &chirp_client::Client,
-	crdb: &CrdbPool,
+	ctx: &OperationContext<game::msg::ns_version_set_complete::Message>,
 	namespace_id: Uuid,
 	dep_key: &str,
 	version_id: Uuid,
 ) -> Result<(), GlobalError> {
 	// Create instance
 	let instance_id = Uuid::new_v4();
-	msg!([client] module::msg::instance_create(instance_id) -> module::msg::instance_create_complete {
+	msg!([ctx] module::msg::instance_create(instance_id) -> module::msg::instance_create_complete {
 		instance_id: Some(instance_id.into()),
 		module_version_id: Some(version_id.into()),
 		driver: Some(module::msg::instance_create::message::Driver::Fly(module::msg::instance_create::message::Fly {})),
@@ -151,16 +136,16 @@ async fn create_instances(
 	.unwrap();
 
 	// Insert instance
-	sqlx::query(indoc!(
+	sql_query!(
+		[ctx]
 		"
 		INSERT INTO db_module.namespace_instances (namespace_id, key, instance_id)
 		VALUES ($1, $2, $3)
-		"
-	))
-	.bind(namespace_id)
-	.bind(dep_key)
-	.bind(instance_id)
-	.execute(crdb)
+		",
+		namespace_id,
+		dep_key,
+		instance_id,
+	)
 	.await?;
 
 	Ok(())
@@ -183,30 +168,29 @@ async fn update_instance(
 }
 
 async fn delete_instance(
-	client: &chirp_client::Client,
-	crdb: &CrdbPool,
+	ctx: &OperationContext<game::msg::ns_version_set_complete::Message>,
 	namespace_id: Uuid,
 	dep_key: &str,
 	instance_id: Uuid,
 ) -> Result<(), GlobalError> {
 	// Delete instance
-	msg!([client] module::msg::instance_destroy(instance_id) -> module::msg::instance_destroy_complete {
+	msg!([ctx] module::msg::instance_destroy(instance_id) -> module::msg::instance_destroy_complete {
 		instance_id: Some(instance_id.into()),
 	})
 	.await
 	.unwrap();
 
 	// Remove instance
-	sqlx::query(indoc!(
+	sql_query!(
+		[ctx]
 		"
 		DELETE FROM namespace_instances
 		WHERE namespace_id = $1 AND key = $2 AND instance_id = $3
-		"
-	))
-	.bind(namespace_id)
-	.bind(dep_key)
-	.bind(instance_id)
-	.execute(crdb)
+		",
+		namespace_id,
+		dep_key,
+		instance_id,
+	)
 	.await?;
 
 	Ok(())

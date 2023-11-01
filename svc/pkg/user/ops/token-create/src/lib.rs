@@ -38,11 +38,13 @@ async fn handle(
 	let refresh_token = unwrap_ref!(token_res.refresh_token);
 	let token_session_id = unwrap_ref!(token_res.session_id).as_uuid();
 
-	sqlx::query("INSERT INTO db_user.user_tokens (user_id, token_session_id) VALUES ($1, $2)")
-		.bind(user_id)
-		.bind(token_session_id)
-		.execute(&ctx.crdb().await?)
-		.await?;
+	sql_query!(
+		[ctx]
+		"INSERT INTO db_user.user_tokens (user_id, token_session_id) VALUES ($1, $2)",
+		user_id,
+		token_session_id,
+	)
+	.await?;
 
 	Ok(user::token_create::Response {
 		token: token.token.clone(),

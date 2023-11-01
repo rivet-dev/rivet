@@ -165,7 +165,8 @@ async fn worker(ctx: &OperationContext<mm::msg::lobby_create::Message>) -> Globa
 			.and_then(backend::matchmaker::lobby::Publicity::from_i32),
 	};
 	rivet_pools::utils::crdb::tx(&crdb, |tx| {
-		Box::pin(update_db(ctx.ts(), tx, insert_opts.clone()))
+		let ctx = ctx.clone();
+		Box::pin(update_db(ctx, tx, insert_opts.clone()))
 	})
 	.await?;
 
@@ -472,10 +473,12 @@ struct UpdateDbOpts {
 
 #[tracing::instrument(skip_all)]
 async fn update_db(
-	now: i64,
+	ctx: OperationContext<mm::msg::lobby_create::Message>,
 	tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
 	opts: UpdateDbOpts,
 ) -> GlobalResult<()> {
+	let now = ctx.ts();
+
 	// Check the lobby was created preemptively created and already stopped.
 	//
 	// This can happen when preemptively created in mm-lobby-find then
@@ -501,7 +504,8 @@ async fn update_db(
 
 	// Upsert lobby. May have already been inserted preemptively in
 	// mm-lobby-find.
-	sqlx::query(indoc!(
+	sql_query!(
+		[ctx, &mut **tx]
 		"
 		UPSERT INTO db_mm_state.lobbies (
 			lobby_id,
@@ -523,26 +527,23 @@ async fn update_db(
 			publicity
 		)
 		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, false, $12, $13, $14)
-		"
-	))
-	.bind(opts.lobby_id)
-	.bind(opts.namespace_id)
-	.bind(opts.region_id)
-	.bind(opts.lobby_group_id)
-	.bind(opts.token_session_id)
-	.bind(now)
-	.bind(opts.run_id)
-	.bind(opts.create_ray_id)
-	.bind(opts.lobby_group.max_players_normal as i64)
-	.bind(opts.lobby_group.max_players_direct as i64)
-	.bind(opts.lobby_group.max_players_party as i64)
-	.bind(opts.creator_user_id)
-	.bind(opts.is_custom)
-	.bind(
+		",
+		opts.lobby_id,
+		opts.namespace_id,
+		opts.region_id,
+		opts.lobby_group_id,
+		opts.token_session_id,
+		now,
+		opts.run_id,
+		opts.create_ray_id,
+		opts.lobby_group.max_players_normal as i64,
+		opts.lobby_group.max_players_direct as i64,
+		opts.lobby_group.max_players_party as i64,
+		opts.creator_user_id,
+		opts.is_custom,
 		opts.publicity
 			.unwrap_or(backend::matchmaker::lobby::Publicity::Public) as i32 as i64,
 	)
-	.execute(&mut **tx)
 	.await?;
 
 	Ok(())

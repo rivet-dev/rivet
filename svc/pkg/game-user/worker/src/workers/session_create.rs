@@ -10,17 +10,17 @@ async fn worker(
 	let game_user_id = unwrap_ref!(ctx.game_user_id).as_uuid();
 	let refresh_jti = unwrap_ref!(ctx.refresh_jti).as_uuid();
 
-	sqlx::query(indoc!(
+	sql_query!(
+		[ctx]
 		"
 		INSERT INTO db_game_user.sessions (session_id, game_user_id, refresh_jti, start_ts)
 		VALUES ($1, $2, $3, $4)
-		"
-	))
-	.bind(Uuid::new_v4())
-	.bind(game_user_id)
-	.bind(refresh_jti)
-	.bind(ctx.ts())
-	.execute(&crdb)
+		",
+		Uuid::new_v4(),
+		game_user_id,
+		refresh_jti,
+		ctx.ts(),
+	)
 	.await?;
 
 	Ok(())

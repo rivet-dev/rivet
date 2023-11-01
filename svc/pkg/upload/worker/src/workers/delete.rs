@@ -130,16 +130,16 @@ async fn worker(ctx: &OperationContext<upload::msg::delete::Message>) -> GlobalR
 		.await?;
 
 	// Mark upload as deleted
-	sqlx::query(indoc!(
+	sql_query!(
+		[ctx]
 		"
 		UPDATE db_upload.uploads
 		SET deleted_ts = $2
 		WHERE upload_id = ANY($1)
-		"
-	))
-	.bind(&upload_ids)
-	.bind(ctx.ts())
-	.execute(&crdb)
+		",
+		&upload_ids,
+		ctx.ts(),
+	)
 	.await?;
 
 	msg!([ctx] upload::msg::delete_complete(request_id) {

@@ -54,6 +54,7 @@ async fn worker(ctx: &OperationContext<user::msg::profile_set::Message>) -> Glob
 		built_query
 	);
 
+	// TODO: Convert this to sql_query! macro
 	let query = sqlx::query(&query_string).bind(**user_id);
 
 	ctx.cache().purge("user", [user_id.as_uuid()]).await?;

@@ -6,18 +6,18 @@ async fn worker(ctx: &OperationContext<user::msg::search_update::Message>) -> Gl
 	let crdb = ctx.crdb().await?;
 	let user_id = unwrap!(ctx.user_id).as_uuid();
 
-	sqlx::query(indoc!(
+	sql_query!(
+		[ctx]
 		"
 		UPDATE db_user.users
 		SET
 			is_searchable = TRUE,
 			update_ts = $1
 		WHERE user_id = $2
-		"
-	))
-	.bind(ctx.ts())
-	.bind(user_id)
-	.execute(&crdb)
+		",
+		ctx.ts(),
+		user_id,
+	)
 	.await?;
 
 	ctx.cache().purge("user", [user_id]).await?;

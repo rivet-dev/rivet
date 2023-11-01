@@ -30,19 +30,19 @@ async fn handle(
 
 	let namespace_id = Uuid::new_v4();
 
-	sqlx::query(indoc!(
+	sql_query!(
+		[ctx]
 		"
 		INSERT INTO db_game.game_namespaces (namespace_id, game_id, create_ts, display_name, version_id, name_id)
 		VALUES ($1, $2, $3, $4, $5, $6)
-		"
-	))
-	.bind(namespace_id)
-	.bind(game_id)
-	.bind(ctx.ts())
-	.bind(&ctx.display_name)
-	.bind(version_id)
-	.bind(&ctx.name_id)
-	.execute(&ctx.crdb().await?)
+		",
+		namespace_id,
+		game_id,
+		ctx.ts(),
+		&ctx.display_name,
+		version_id,
+		&ctx.name_id,
+	)
 	.await?;
 
 	msg!([ctx] cdn::msg::ns_config_update(namespace_id) {

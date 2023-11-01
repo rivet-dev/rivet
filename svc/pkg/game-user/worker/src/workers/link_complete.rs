@@ -143,16 +143,16 @@ async fn worker(
 		}
 		game_user::msg::link_complete::GameUserLinkCompleteResolution::Cancel => {
 			// Flag as cancelled
-			let update_query = sqlx::query(indoc!(
+			let update_query = sql_query!(
+				[ctx]
 				"
 				UPDATE db_game_user.links
 				SET cancelled_ts = $2
 				WHERE link_id = $1 AND complete_ts IS NULL AND cancelled_ts IS NULL
-				"
-			))
-			.bind(link_id)
-			.bind(ctx.ts())
-			.execute(&crdb)
+				",
+				link_id,
+				ctx.ts(),
+			)
 			.await?;
 
 			// Catch race condition

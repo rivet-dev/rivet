@@ -42,16 +42,16 @@ async fn worker(
 	}
 
 	// Update database
-	sqlx::query(indoc!(
+	sql_query!(
+		[ctx]
 		"
 		UPDATE db_module.instances
 		SET version_id = $2
 		WHERE instance_id = $1
-		"
-	))
-	.bind(instance_id)
-	.bind(version_id)
-	.execute(&crdb)
+		",
+		instance_id,
+		version_id,
+	)
 	.await?;
 
 	msg!([ctx] module::msg::instance_version_set_complete(instance_id) {

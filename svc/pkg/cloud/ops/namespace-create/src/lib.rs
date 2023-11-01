@@ -40,14 +40,14 @@ async fn handle(
 		}),
 	)?;
 
-	sqlx::query(indoc!(
+	sql_query!(
+		[ctx]
 		"
 		INSERT INTO db_cloud.game_namespaces (namespace_id)
 		VALUES ($1)
-		"
-	))
-	.bind(namespace_id)
-	.execute(&ctx.crdb().await?)
+		",
+		namespace_id,
+	)
 	.await?;
 
 	// Send game update

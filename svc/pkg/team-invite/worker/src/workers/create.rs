@@ -17,13 +17,15 @@ async fn worker(ctx: &OperationContext<team_invite::msg::create::Message>) -> Gl
 
 	let expire_ts = ctx.ttl.map(|ttl| Some(ctx.ts() + ttl));
 
-	sqlx::query("INSERT INTO db_team_invite.invitations (code, team_id, create_ts, expire_ts, max_use_count) VALUES ($1, $2, $3, $4, $5)")
-		.bind(&code)
-		.bind(team_id)
-		.bind(ctx.ts())
-		.bind(expire_ts)
-		.bind(ctx.max_use_count.map(|x| x as i64))
-		.execute(&crdb)
+	sql_query!(
+		[ctx]
+		"INSERT INTO db_team_invite.invitations (code, team_id, create_ts, expire_ts, max_use_count) VALUES ($1, $2, $3, $4, $5)",
+		&code,
+		team_id,
+		ctx.ts(),
+		expire_ts,
+		ctx.max_use_count.map(|x| x as i64),
+	)
 		.await?;
 
 	msg!([ctx] team_invite::msg::create_complete(team_id) {

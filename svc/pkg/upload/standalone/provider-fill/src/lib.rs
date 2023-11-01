@@ -33,15 +33,15 @@ pub async fn run_from_env() -> GlobalResult<()> {
 		s3_util::Provider::Aws => backend::upload::Provider::Aws,
 	};
 
-	sqlx::query(indoc!(
+	sql_query!(
+		[ctx]
 		"
 		UPDATE db_upload.uploads
 		SET provider = $1
 		WHERE provider IS NULL 
-		"
-	))
-	.bind(proto_provider as i32 as i64)
-	.execute(&crdb_pool)
+		",
+		proto_provider as i32 as i64,
+	)
 	.await?;
 
 	Ok(())

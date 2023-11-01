@@ -7,14 +7,14 @@ async fn handle(
 ) -> GlobalResult<cdn::namespace_create::Response> {
 	let namespace_id = unwrap_ref!(ctx.namespace_id).as_uuid();
 
-	sqlx::query(indoc!(
+	sql_query!(
+		[ctx]
 		"
 		INSERT INTO db_cdn.game_namespaces (namespace_id)
 		VALUES ($1)
-		"
-	))
-	.bind(namespace_id)
-	.execute(&ctx.crdb().await?)
+		",
+		namespace_id,
+	)
 	.await?;
 
 	Ok(cdn::namespace_create::Response {})

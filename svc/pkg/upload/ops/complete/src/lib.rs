@@ -42,16 +42,16 @@ async fn handle(
 	validate_files(&s3_client, upload_id, files).await?;
 
 	// Mark as complete
-	sqlx::query(indoc!(
+	sql_query!(
+		[ctx]
 		"
 		UPDATE db_upload.uploads
 		SET complete_ts = $2
 		WHERE upload_id = $1
-		"
-	))
-	.bind(upload_id)
-	.bind(ctx.ts())
-	.execute(&crdb)
+		",
+		upload_id,
+		ctx.ts(),
+	)
 	.await?;
 
 	ctx.cache().purge("upload", [upload_id]).await?;
