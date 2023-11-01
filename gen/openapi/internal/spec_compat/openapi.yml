@@ -441,6 +441,27 @@ components:
       required:
       - identity_id
       type: object
+    CloudBootstrapCaptcha:
+      properties:
+        turnstile:
+          $ref: '#/components/schemas/CloudBootstrapCaptchaTurnstile'
+      required:
+      - turnstile
+      type: object
+    CloudBootstrapCaptchaTurnstile:
+      properties:
+        site_key:
+          type: string
+      required:
+      - site_key
+      type: object
+    CloudBootstrapResponse:
+      properties:
+        captcha:
+          $ref: '#/components/schemas/CloudBootstrapCaptcha'
+      required:
+      - captcha
+      type: object
     CloudBuildSummary:
       description: A build summary.
       properties:
@@ -5257,6 +5278,57 @@ paths:
       security: *id001
       tags:
       - CloudAuth
+  /cloud/bootstrap:
+    get:
+      description: Returns the basic information required to use the cloud APIs.
+      operationId: cloud_bootstrap
+      parameters: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CloudBootstrapResponse'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+          description: ''
+        '408':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+          description: ''
+        '429':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+          description: ''
+        '500':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+          description: ''
+      security: *id001
+      tags:
+      - Cloud
   /cloud/devices/links:
     get:
       operationId: cloud_devices_links_get

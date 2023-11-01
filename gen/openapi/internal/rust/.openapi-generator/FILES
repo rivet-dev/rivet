@@ -46,10 +46,14 @@ docs/ChatTopicDirect.md
 docs/ChatTopicGroup.md
 docs/ChatTypingStatus.md
 docs/ChatWatchThreadResponse.md
+docs/CloudApi.md
 docs/CloudAuthAgent.md
 docs/CloudAuthAgentGameCloud.md
 docs/CloudAuthAgentIdentity.md
 docs/CloudAuthApi.md
+docs/CloudBootstrapCaptcha.md
+docs/CloudBootstrapCaptchaTurnstile.md
+docs/CloudBootstrapResponse.md
 docs/CloudBuildSummary.md
 docs/CloudCdnAuthType.md
 docs/CloudCdnNamespaceAuthUser.md
@@ -358,6 +362,7 @@ src/apis/auth_identity_api.rs
 src/apis/auth_tokens_api.rs
 src/apis/chat_api.rs
 src/apis/chat_identity_api.rs
+src/apis/cloud_api.rs
 src/apis/cloud_auth_api.rs
 src/apis/cloud_devices_links_api.rs
 src/apis/cloud_games_avatars_api.rs
@@ -433,6 +438,9 @@ src/models/chat_watch_thread_response.rs
 src/models/cloud_auth_agent.rs
 src/models/cloud_auth_agent_game_cloud.rs
 src/models/cloud_auth_agent_identity.rs
+src/models/cloud_bootstrap_captcha.rs
+src/models/cloud_bootstrap_captcha_turnstile.rs
+src/models/cloud_bootstrap_response.rs
 src/models/cloud_build_summary.rs
 src/models/cloud_cdn_auth_type.rs
 src/models/cloud_cdn_namespace_auth_user.rs
