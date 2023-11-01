@@ -28,6 +28,7 @@ resource "cockroach_cluster" "main" {
 	}
 }
 
+# TODO: This does not delete the 0.0.0.0/0 entrypoint
 resource "cockroach_allow_list" "eks" {
 	for_each = data.terraform_remote_state.k8s_cluster_aws.outputs.nat_public_ips
 
