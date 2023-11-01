@@ -299,6 +299,8 @@ pub enum EmailProvider {
 pub struct Captcha {
 	#[serde(default)]
 	pub hcaptcha: Option<Hcaptcha>,
+	#[serde(default)]
+	pub turnstile: Option<Turnstile>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -314,6 +316,13 @@ pub struct HcaptchaSiteKeys {
 	pub moderate: String,
 	pub difficult: String,
 	pub always_on: String,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+#[serde(deny_unknown_fields)]
+pub struct Turnstile {
+	pub site_key_main: String,
+	pub site_key_cdn: String,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]

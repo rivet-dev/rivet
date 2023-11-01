@@ -12,4 +12,4 @@ path = "/v1"
 subdomain = "auth.api"
 
 [secrets]
-"turnstile/rivet_gg/secret_key" = { optional = true }
+"turnstile/main/secret_key" = { optional = true }
