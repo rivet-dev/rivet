@@ -10,7 +10,6 @@ locals {
 		count = 1
 		resources = {
 			cpu = 50
-			cpu_cores = 0
 			memory = 200
 		}
 	})
@@ -137,11 +136,7 @@ resource "helm_release" "promtail" {
 		resources = var.limit_resources ? {
 			limits = {
 				memory = "${local.service_promtail.resources.memory}Mi"
-				cpu = (
-					local.service_promtail.resources.cpu_cores > 0 ?
-					"${local.service_promtail.resources.cpu_cores * 1000}m"
-					: "${local.service_promtail.resources.cpu}m"
-				)
+				cpu = "${local.service_promtail.resources.cpu}m"
 			}
 		} : null
 

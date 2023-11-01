@@ -323,7 +323,7 @@ impl ServiceContextData {
 		// 	|| self.name() == "api-cloud"
 	}
 
-	pub fn depends_on_hcaptcha(&self) -> bool {
+	pub fn depends_on_captcha(&self) -> bool {
 		// TODO:
 		true
 	}
@@ -702,9 +702,10 @@ impl ServiceContextData {
 		let ns_service_config = self.ns_service_config().await;
 		env.push((
 			"TOKIO_WORKER_THREADS".into(),
-			match ns_service_config.resources.cpu {
-				config::ns::CpuResources::CpuCores(cores) => cores.max(cores),
-				config::ns::CpuResources::Cpu(_) => 2,
+			if ns_service_config.resources.cpu >= 1000 {
+				(ns_service_config.resources.cpu / 1000).max(2)
+			} else {
+				2
 			}
 			.to_string(),
 		));
@@ -813,8 +814,8 @@ impl ServiceContextData {
 			));
 		}
 
-		if let Some(hcaptcha) = &project_ctx.ns().captcha.hcaptcha {
-			if self.depends_on_hcaptcha() {
+		if self.depends_on_captcha() {
+			if let Some(hcaptcha) = &project_ctx.ns().captcha.hcaptcha {
 				env.push((
 					"HCAPTCHA_SITE_KEY_EASY".into(),
 					hcaptcha.site_keys.easy.clone(),
@@ -830,6 +831,17 @@ impl ServiceContextData {
 				env.push((
 					"HCAPTCHA_SITE_KEY_ALWAYS_ON".into(),
 					hcaptcha.site_keys.always_on.clone(),
+				));
+			}
+
+			if let Some(turnstile) = &project_ctx.ns().captcha.turnstile {
+				env.push((
+					"TURNSTILE_SITE_KEY_MAIN".into(),
+					turnstile.site_key_main.clone(),
+				));
+				env.push((
+					"TURNSTILE_SITE_KEY_CDN".into(),
+					turnstile.site_key_cdn.clone(),
 				));
 			}
 		}
@@ -1218,17 +1230,15 @@ impl ServiceContextData {
 				config::ns::ClusterKind::SingleNode { .. } => config::ns::Service {
 					count: 1,
 					resources: config::ns::ServiceResources {
-						cpu: config::ns::CpuResources::Cpu(100),
+						cpu: 100,
 						memory: 128,
-						ephemeral_disk: 128,
 					},
 				},
 				config::ns::ClusterKind::Distributed { .. } => config::ns::Service {
 					count: 2,
 					resources: config::ns::ServiceResources {
-						cpu: config::ns::CpuResources::Cpu(250),
+						cpu: 250,
 						memory: 256,
-						ephemeral_disk: 128,
 					},
 				},
 			});

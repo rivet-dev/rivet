@@ -271,15 +271,9 @@ pub async fn gen_svc(exec_ctx: &ExecServiceContext) -> Vec<serde_json::Value> {
 	};
 
 	let health_check = if has_health {
-		let cmd = if matches!(svc_ctx.config().kind, ServiceKind::Static { .. }) {
-			"/local/rivet/health-checks.sh --static"
-		} else {
-			"/local/rivet/health-checks.sh"
-		};
-
 		json!({
 			"exec": {
-				"command": ["/bin/sh", "-c", cmd],
+				"command": ["/bin/sh", "-c", "/usr/bin/health_check.sh"],
 			},
 			"initialDelaySeconds": 1,
 			"periodSeconds": 5,
@@ -291,7 +285,7 @@ pub async fn gen_svc(exec_ctx: &ExecServiceContext) -> Vec<serde_json::Value> {
 
 	let (image, image_pull_policy, exec) = match &driver {
 		ExecServiceDriver::LocalBinaryArtifact { exec_path, args } => (
-			"ghcr.io/rivet-gg/rivet-local-binary-artifact-runner:3fdc702",
+			"ghcr.io/rivet-gg/rivet-local-binary-artifact-runner:07e8de0",
 			"IfNotPresent",
 			format!(
 				"{} {}",
@@ -309,10 +303,10 @@ pub async fn gen_svc(exec_ctx: &ExecServiceContext) -> Vec<serde_json::Value> {
 			} else {
 				"IfNotPresent"
 			},
-			"bin/svc".to_string(),
+			format!("/usr/bin/{}", svc_ctx.cargo_name().unwrap()),
 		),
 	};
-	let command = format!("/local/rivet/install-ca.sh && {exec}");
+	let command = format!("/usr/bin/install_ca.sh && {exec}");
 
 	// Create resource limits
 	let ns_service_config = svc_ctx.ns_service_config().await;
@@ -320,19 +314,12 @@ pub async fn gen_svc(exec_ctx: &ExecServiceContext) -> Vec<serde_json::Value> {
 		json!({
 			"requests": {
 				"memory": format!("{}Mi", ns_service_config.resources.memory),
-				"cpu": match ns_service_config.resources.cpu {
-					config::ns::CpuResources::Cpu(x) => format!("{x}m"),
-					config::ns::CpuResources::CpuCores(x) => format!("{}m", x * 1000),
-				},
-				"ephemeral-storage": format!("{}M", ns_service_config.resources.ephemeral_disk)
+				"cpu": format!("{}m", ns_service_config.resources.cpu),
 			},
 			"limits": {
+				// Allow oversubscribing memory
 				"memory": format!("{}Mi", ns_service_config.resources.memory * 2),
-				"cpu": match ns_service_config.resources.cpu {
-					config::ns::CpuResources::Cpu(x) => format!("{}m", x * 2),
-					config::ns::CpuResources::CpuCores(x) => format!("{}m", x * 1000 * 2),
-				},
-				"ephemeral-storage": format!("{}M", ns_service_config.resources.ephemeral_disk * 2)
+				"cpu": format!("{}m", ns_service_config.resources.cpu),
 			},
 		})
 	} else {
@@ -400,7 +387,7 @@ pub async fn gen_svc(exec_ctx: &ExecServiceContext) -> Vec<serde_json::Value> {
 			}],
 			"volumeMounts": volume_mounts,
 			"ports": pod_ports,
-			"livenessProbe": health_check,
+			"readinessProbe": health_check,
 			"resources": resources,
 		}],
 		"volumes": volumes
@@ -617,29 +604,8 @@ async fn build_volumes(
 	} = exec_ctx;
 
 	// Shared data between containers
-	let mut volumes = vec![json!({
-		"name": "local",
-		"projected": {
-			"defaultMode": 0o0777,
-			"sources": [
-				{
-					"configMap": {
-						"name": "health-checks"
-					}
-				},
-				{
-					"configMap": {
-						"name": "install-ca"
-					}
-				}
-			]
-		}
-	})];
-	let mut volume_mounts = vec![json!({
-		"name": "local",
-		"mountPath": "/local/rivet",
-		"readOnly": true
-	})];
+	let mut volumes = Vec::<serde_json::Value>::new();
+	let mut volume_mounts = Vec::<serde_json::Value>::new();
 
 	// Add volumes based on exec service
 	match driver {
@@ -676,78 +642,96 @@ async fn build_volumes(
 		ExecServiceDriver::Docker { .. } => {}
 	}
 
-	// Add CA volumes
-	if let config::ns::ClusterKind::SingleNode { .. } = &project_ctx.ns().cluster.kind {
-		let redis_deps = svc_ctx
-			.redis_dependencies(run_context)
-			.await
-			.iter()
-			.map(|dep| dep.redis_db_name())
-			.collect::<Vec<_>>();
+	// Add Redis CA
+	match project_ctx.ns().redis.provider {
+		config::ns::RedisProvider::Kubernetes {} => {
+			let redis_deps = svc_ctx
+				.redis_dependencies(run_context)
+				.await
+				.iter()
+				.map(|dep| dep.redis_db_name())
+				.collect::<Vec<_>>();
 
-		// Redis CA
-		volumes.extend(redis_deps.iter().map(|db| {
-			json!({
-				"name": format!("redis-{}-ca", db),
-				"configMap": {
+			volumes.extend(redis_deps.iter().map(|db| {
+				json!({
 					"name": format!("redis-{}-ca", db),
+					"configMap": {
+						"name": format!("redis-{}-ca", db),
+						"defaultMode": 420,
+						"items": [
+							{
+								"key": "ca.crt",
+								"path": format!("redis-{}-ca.crt", db)
+							}
+						]
+					}
+				})
+			}));
+			volume_mounts.extend(redis_deps.iter().map(|db| {
+				json!({
+					"name": format!("redis-{}-ca", db),
+					"mountPath": format!("/usr/local/share/ca-certificates/redis-{}-ca.crt", db),
+					"subPath": format!("redis-{}-ca.crt", db)
+				})
+			}));
+		}
+		config::ns::RedisProvider::Aws { .. } => {
+			// Uses publicly signed cert
+		}
+	}
+
+	// Add CRDB CA
+	match project_ctx.ns().cockroachdb.provider {
+		config::ns::CockroachDBProvider::Kubernetes {} => {
+			volumes.push(json!({
+				"name": "crdb-ca",
+				"configMap": {
+					"name": "crdb-ca",
 					"defaultMode": 420,
 					"items": [
 						{
 							"key": "ca.crt",
-							"path": format!("redis-{}-ca.crt", db)
+							"path": "crdb-ca.crt"
 						}
 					]
 				}
-			})
-		}));
-		volume_mounts.extend(redis_deps.iter().map(|db| {
-			json!({
-				"name": format!("redis-{}-ca", db),
-				"mountPath": format!("/usr/local/share/ca-certificates/redis-{}-ca.crt", db),
-				"subPath": format!("redis-{}-ca.crt", db)
-			})
-		}));
-
-		// CRDB CA
-		volumes.push(json!({
-			"name": "crdb-ca",
-			"configMap": {
+			}));
+			volume_mounts.push(json!({
 				"name": "crdb-ca",
-				"defaultMode": 420,
-				"items": [
-					{
-						"key": "ca.crt",
-						"path": "crdb-ca.crt"
-					}
-				]
-			}
-		}));
-		volume_mounts.push(json!({
-			"name": "crdb-ca",
-			"mountPath": "/usr/local/share/ca-certificates/crdb-ca.crt",
-			"subPath": "crdb-ca.crt"
-		}));
+				"mountPath": "/usr/local/share/ca-certificates/crdb-ca.crt",
+				"subPath": "crdb-ca.crt"
+			}));
+		}
+		config::ns::CockroachDBProvider::Managed {} => {
+			// Uses publicly signed cert
+		}
+	}
 
-		// Clickhouse CA
-		volumes.push(json!({
-			"name": "clickhouse-ca",
-			"configMap": {
+	// Add ClickHouse CA
+	match project_ctx.ns().clickhouse.provider {
+		config::ns::ClickHouseProvider::Kubernetes {} => {
+			volumes.push(json!({
 				"name": "clickhouse-ca",
-				"defaultMode": 420,
-				"items": [
-					{
-						"key": "ca.crt",
-						"path": "clickhouse-ca.crt"
-					}
-				]
-			}
-		}));
-		volume_mounts.push(json!({
-			"name": "clickhouse-ca",
-			"mountPath": "/usr/local/share/ca-certificates/clickhouse-ca.crt",
-			"subPath": "clickhouse-ca.crt"
-		}));
+				"configMap": {
+					"name": "clickhouse-ca",
+					"defaultMode": 420,
+					"items": [
+						{
+							"key": "ca.crt",
+							"path": "clickhouse-ca.crt"
+						}
+					]
+				}
+			}));
+			volume_mounts.push(json!({
+				"name": "clickhouse-ca",
+				"mountPath": "/usr/local/share/ca-certificates/clickhouse-ca.crt",
+				"subPath": "clickhouse-ca.crt"
+			}));
+		}
+		config::ns::ClickHouseProvider::Managed { .. } => {
+			// Uses publicly signed cert
+		}
 	}
 
 	(volumes, volume_mounts)

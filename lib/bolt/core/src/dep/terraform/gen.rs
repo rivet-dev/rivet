@@ -289,8 +289,7 @@ async fn vars(ctx: &ProjectContext) {
 				json!({
 					"count": service.count,
 					"resources": {
-						"cpu": if let ns::CpuResources::Cpu(x) = &service.resources.cpu { *x } else { 0 },
-						"cpu_cores": if let ns::CpuResources::CpuCores(x) = &service.resources.cpu { *x } else { 0 },
+						"cpu": service.resources.cpu,
 						"memory": service.resources.memory,
 					}
 				}),
@@ -476,7 +475,6 @@ async fn vars(ctx: &ProjectContext) {
 			ns::KubernetesProvider::AwsEks { .. } => "ebs-sc",
 		}),
 	);
-	vars.insert("k8s_health_port".into(), json!(dep::k8s::gen::HEALTH_PORT));
 	vars.insert("limit_resources".into(), json!(ctx.limit_resources()));
 
 	vars.insert(

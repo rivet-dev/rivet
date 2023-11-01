@@ -10,6 +10,7 @@ use crate::{config, context::ProjectContext};
 
 pub struct BuildOpts<'a, T: AsRef<str>> {
 	pub build_calls: Vec<BuildCall<'a, T>>,
+	/// Builds for release mode.
 	pub release: bool,
 	/// How many threads to run in parallel when building.
 	pub jobs: Option<usize>,
@@ -103,17 +104,19 @@ pub async fn build<'a, T: AsRef<str>>(ctx: &ProjectContext, opts: BuildOpts<'a, 
 			fs::create_dir_all(&gen_path).await?;
 
 			for call in &opts.build_calls {
-				for bin in call.bins {
-					let bin = bin.as_ref();
-					let image_tag = format!("{repo}{bin}:{source_hash}");
-
-					// Write docker file
-					let dockerfile_path = gen_path.join(format!("Dockerfile.{bin}"));
+				// Build all of the base binaries in batch to optimize build speed
+				//
+				// We could do this as a single multi-stage Docker container, but it requires
+				// re-hashing the entire project every time to check the build layers and can be
+				// faulty sometimes.
+				let build_image_tag = {
+					let image_tag = format!("{repo}build:{source_hash}");
+					let dockerfile_path = gen_path.join(format!("Dockerfile.build"));
 					fs::write(
 						&dockerfile_path,
 						formatdoc!(
 							r#"
-							FROM rust:1.72-slim AS build
+							FROM rust:1.72-slim
 
 							RUN apt-get update
 							RUN apt-get install -y protobuf-compiler pkg-config libssl-dev g++
@@ -121,20 +124,71 @@ pub async fn build<'a, T: AsRef<str>>(ctx: &ProjectContext, opts: BuildOpts<'a, 
 							WORKDIR /usr/rivet
 							COPY . .
 							RUN ["sh", "-c", {build_script:?}]
-
-							FROM debian:12.1-slim AS run
-							RUN DEBIAN_FRONTEND=noninteractive apt-get update -y && apt-get install -y --no-install-recommends ca-certificates openssl
-							COPY --from=build /usr/rivet/target/{optimization}/{bin} /bin/svc
 							"#
 						),
 					)
 					.await?;
 
-					// Build docker image for each binary needed
+					// Build image
 					let mut cmd = Command::new("docker");
 					cmd.current_dir(ctx.path());
 					cmd.arg("build");
-					cmd.arg("--rm");
+					cmd.arg("-f").arg(dockerfile_path);
+					// Prints plain console output for debugging
+					// cmd.arg("--progress=plain");
+					cmd.arg("-t").arg(&image_tag);
+					cmd.arg(".");
+
+					let status = cmd.status().await?;
+					ensure!(status.success());
+
+					image_tag
+				};
+
+				for bin in call.bins {
+					let bin = bin.as_ref();
+
+					// Resolve the symlink for the svc_scripts dir since Docker does not resolve
+					// symlinks in COPY commands
+					let infra_path = ctx.path().join("infra");
+					let infra_path_resolved = tokio::fs::read_link(&infra_path)
+						.await
+						.map_or_else(|_| infra_path.clone(), |path| ctx.path().join(path));
+					let svc_scripts_path = infra_path_resolved.join("misc").join("svc_scripts");
+					let svc_scripts_path_relative = svc_scripts_path
+						.strip_prefix(ctx.path())
+						.context("failed to strip prefix")?;
+
+					// Build the final image
+					let image_tag = format!("{repo}{bin}:{source_hash}");
+					let dockerfile_path = gen_path.join(format!("Dockerfile.{bin}"));
+					fs::write(
+						&dockerfile_path,
+						formatdoc!(
+							r#"
+							FROM {build_image_tag} AS build
+
+							FROM debian:12.1-slim AS run
+
+							# Update ca-certificates. Install curl for health checks.
+							RUN DEBIAN_FRONTEND=noninteractive apt-get update -y && apt-get install -y --no-install-recommends ca-certificates openssl curl
+
+							# Copy supporting scripts
+							COPY {svc_scripts_path}/health_check.sh {svc_scripts_path}/install_ca.sh /usr/bin/
+							RUN chmod +x /usr/bin/health_check.sh /usr/bin/install_ca.sh
+
+							# Copy final binary
+							COPY --from=build /usr/rivet/target/{optimization}/{bin} /usr/bin/{bin}
+							"#,
+							svc_scripts_path = svc_scripts_path_relative.display(),
+						),
+					)
+					.await?;
+
+					// Build image
+					let mut cmd = Command::new("docker");
+					cmd.current_dir(ctx.path());
+					cmd.arg("build");
 					cmd.arg("-f").arg(dockerfile_path);
 					// Prints plain console output for debugging
 					// cmd.arg("--progress=plain");

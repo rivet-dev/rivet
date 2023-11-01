@@ -3,12 +3,9 @@ locals {
 		count = 1
 		resources = {
 			cpu = 250
-			cpu_cores = 0
 			memory = 512
 		}
 	})
-
-	ephemeral_disk = 8000
 
 	result_storage_s3_endpoint = var.s3_providers[var.s3_default_provider].endpoint_internal
 	result_storage_s3_region = var.s3_providers[var.s3_default_provider].region
@@ -159,12 +156,8 @@ resource "kubernetes_deployment" "imagor" {
 						content {
 							limits = {
 								memory = "${local.service_imagor.resources.memory}Mi"
-								cpu = (
-									local.service_imagor.resources.cpu_cores > 0 ?
-									"${local.service_imagor.resources.cpu_cores * 1000}m"
-									: "${local.service_imagor.resources.cpu}m"
-								)
-								"ephemeral-storage" = "${local.ephemeral_disk}M"
+								cpu = "${local.service_imagor.resources.cpu}m"
+								"ephemeral-storage" = "8Gi"
 							}
 						}
 					}

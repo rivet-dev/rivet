@@ -15,8 +15,7 @@ jobs:
       - name: Build rivet-local-binary-artifact-runner
         run: |
           GHCR_TAG="ghcr.io/rivet-gg/rivet-local-binary-artifact-runner:$(git rev-parse --short HEAD)"
-          cd infra/docker/rivet_local_binary_artifact_runner
-          docker build -t "$GHCR_TAG" .
+          docker build -t "$GHCR_TAG" -f infra/docker/rivet_local_binary_artifact_runner/Dockerfile .
           docker push "$GHCR_TAG"
 
   golang-migrate:

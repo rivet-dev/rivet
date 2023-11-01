@@ -1,0 +1,27 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/fern-api/fern/main/fern.schema.json
+
+service:
+  auth: true
+  base-path: /cloud
+  audiences:
+    - public
+  endpoints:
+    bootstrap:
+      path: /bootstrap
+      method: GET
+      docs: Returns the basic information required to use the cloud APIs.
+      response: BootstrapResponse
+
+types:
+  BootstrapResponse:
+    properties:
+      captcha: BootstrapCaptcha
+
+  BootstrapCaptcha:
+    properties:
+      turnstile: BootstrapCaptchaTurnstile
+
+  BootstrapCaptchaTurnstile:
+    properties:
+      site_key: string
+

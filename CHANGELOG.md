@@ -31,6 +31,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 -   **Dev** Bolt automatically builds with Nix shell
 -   **Bolt** `--no-purge` flag to `test` to prevent purging Nomad jobs
 -   **Matchmaker** Expose hardware metrics to container with `RIVET_CPU`, `RIVET_MEMORY`, and `RIVET_MEMORY_OVERSUBSCRIBE`
+-   **api-cloud** `GET /cloud/bootstrapp` to provide intiial config data to the hub
+-   **api-cloud** Dynamically send Turnstile site key to hub
 
 ### Changed
 

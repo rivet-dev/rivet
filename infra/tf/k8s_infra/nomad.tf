@@ -53,6 +53,13 @@ locals {
 		EOT
 	}
 	nomad_checksum_configmap = sha256(jsonencode(local.nomad_server_configmap_data))
+	service_nomad = lookup(var.services, "nomad", {
+		count = 1
+		resources = {
+			cpu = 2000
+			memory = 2048
+		}
+	})
 }
 
 resource "kubernetes_namespace" "nomad" {
@@ -312,6 +319,17 @@ resource "kubernetes_stateful_set" "nomad_server" {
 					volume_mount {
 						name       = "traefik-config"
 						mount_path = "/etc/traefik"
+					}
+
+					dynamic "resources" {
+						for_each = var.limit_resources ? [0] : []
+
+						content {
+							limits = {
+								cpu = "${local.service_nomad.resources.cpu}m"
+								memory = "${local.service_nomad.resources.memory}Mi"
+							}
+						}
 					}
 				}
 

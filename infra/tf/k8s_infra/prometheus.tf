@@ -1,4 +1,12 @@
 locals {
+	service_prometheus = lookup(var.services, "prometheus", {
+		count = 1
+		resources = {
+			cpu = 500
+			memory = 2500
+		}
+	})
+
 	prometheus_storage = {
 		volumeClaimTemplate = {
 			spec = {
@@ -12,12 +20,58 @@ locals {
 			}
 		}
 	}
-	service_prometheus = lookup(var.services, "prometheus", {
+
+	service_alertmanager = lookup(var.services, "alertmanager", {
+		count = 1
+		resources = {
+			cpu = 250
+			memory = 250
+		}
+	})
+
+	alertmanager_storage = {
+		volumeClaimTemplate = {
+			spec = {
+				storageClassName = var.k8s_storage_class
+				resources = {
+					requests = {
+						# TODO: Allow configuring
+						storage = "10Gi"
+					}
+				}
+			}
+		}
+	}
+
+	service_prometheus_operator = lookup(var.services, "prometheus-operator", {
+		count = 1
+		resources = {
+			cpu = 200
+			memory = 200
+		}
+	})
+
+	service_node_exporter = lookup(var.services, "node-exporter", {
+		count = 1
+		resources = {
+			cpu = 200
+			memory = 50
+		}
+	})
+
+	service_kube_state_metrics = lookup(var.services, "kube-state-metrics", {
+		count = 1
+		resources = {
+			cpu = 100
+			memory = 64
+		}
+	})
+
+	service_grafana = lookup(var.services, "grafana", {
 		count = 1
 		resources = {
 			cpu = 500
-			cpu_cores = 0
-			memory = 2500
+			memory = 512
 		}
 	})
 
@@ -82,6 +136,12 @@ resource "helm_release" "prometheus" {
 	version = "51.5.1"
 	values = [yamlencode({
 		prometheus-node-exporter = {
+			resources = var.limit_resources ? {
+				limits = {
+					memory = "${local.service_node_exporter.resources.memory}Mi"
+					cpu = "${local.service_node_exporter.resources.cpu}m"
+				}
+			} : null
 			priorityClassName = kubernetes_priority_class.node_exporter_priority.metadata.0.name
 			affinity = {
 				nodeAffinity = {
@@ -97,9 +157,24 @@ resource "helm_release" "prometheus" {
 				}
 			}
 		}
+		kube-state-metrics = {
+			resources = var.limit_resources ? {
+				limits = {
+					memory = "${local.service_kube_state_metrics.resources.memory}Mi"
+					cpu = "${local.service_kube_state_metrics.resources.cpu}m"
+				}
+			} : null
+		}
 		alertmanager = {
 			alertmanagerSpec = {
-				storage = local.prometheus_storage
+				storage = local.alertmanager_storage
+
+				resources = var.limit_resources ? {
+					limits = {
+						memory = "${local.service_prometheus.resources.memory}Mi"
+						cpu = "${local.service_prometheus.resources.cpu}m"
+					}
+				} : null
 
 				# Need to downgrade the alertmanager version from 0.26.0
 				# https://github.com/grafana/grafana/issues/71364
@@ -189,11 +264,7 @@ resource "helm_release" "prometheus" {
 				resources = var.limit_resources ? {
 					limits = {
 						memory = "${local.service_prometheus.resources.memory}Mi"
-						cpu = (
-							local.service_prometheus.resources.cpu_cores > 0 ?
-							"${local.service_prometheus.resources.cpu_cores * 1000}m"
-							: "${local.service_prometheus.resources.cpu}m"
-						)
+						cpu = "${local.service_prometheus.resources.cpu}m"
 					}
 				} : null
 
@@ -208,6 +279,15 @@ resource "helm_release" "prometheus" {
 				serviceMonitorSelector = {}
 				serviceMonitorSelectorNilUsesHelmValues = false
 			}
+		}
+
+		prometheusOperator = {
+			resources = var.limit_resources ? {
+				limits = {
+					memory = "${local.service_prometheus_operator.resources.memory}Mi"
+					cpu = "${local.service_prometheus_operator.resources.cpu}m"
+				}
+			} : null
 		}
 
 		defaultRules = {
@@ -230,6 +310,13 @@ resource "helm_release" "prometheus" {
 					org_role = "Admin"
 				}
 			}
+
+			resources = var.limit_resources ? {
+				limits = {
+					memory = "${local.service_grafana.resources.memory}Mi"
+					cpu = "${local.service_grafana.resources.cpu}m"
+				}
+			} : null
 
 			additionalDataSources = [
 				{

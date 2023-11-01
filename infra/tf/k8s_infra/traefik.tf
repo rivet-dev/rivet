@@ -17,7 +17,6 @@ locals {
 		count = 1
 		resources = {
 			cpu = 50
-			cpu_cores = 0
 			memory = 200
 		}
 	})
@@ -54,11 +53,7 @@ resource "helm_release" "traefik" {
 		resources = var.limit_resources ? {
 			limits = {
 				memory = "${local.service_traefik.resources.memory}Mi"
-				cpu = (
-					local.service_traefik.resources.cpu_cores > 0 ?
-					"${local.service_traefik.resources.cpu_cores * 1000}m"
-					: "${local.service_traefik.resources.cpu}m"
-				)
+				cpu = "${local.service_traefik.resources.cpu}m"
 			}
 		} : null
 

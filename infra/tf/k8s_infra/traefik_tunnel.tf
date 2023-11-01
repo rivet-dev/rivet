@@ -17,6 +17,14 @@ locals {
 			service_port = 6000
 		}
 	}
+
+	service_traefik_tunnel = lookup(var.services, "traefik-tunnel", {
+		count = 1
+		resources = {
+			cpu = 50
+			memory = 200
+		}
+	})
 }
 
 resource "kubernetes_namespace" "traefik_tunnel" {
@@ -92,6 +100,13 @@ resource "helm_release" "traefik_tunnel" {
 		commonLabels = {
 			"traefik-instance" = "tunnel"
 		}
+
+		resources = var.limit_resources ? {
+			limits = {
+				memory = "${local.service_traefik.resources.memory}Mi"
+				cpu = "${local.service_traefik.resources.cpu}m"
+			}
+		} : null
 
 		logs = {
 			general = {

@@ -386,6 +386,57 @@ paths:
           application/json:
             schema:
               $ref: '#/components/schemas/ChatSetTypingStatusRequest'
+  /cloud/bootstrap:
+    get:
+      description: Returns the basic information required to use the cloud APIs.
+      operationId: cloud_bootstrap
+      tags:
+        - Cloud
+      parameters: []
+      responses:
+        '200':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CloudBootstrapResponse'
+        '400':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '403':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '404':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '408':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '429':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '500':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+      security: *ref_0
   /cloud/games/{game_id}/namespaces:
     post:
       description: Creates a new namespace for the given game.
@@ -7947,6 +7998,27 @@ components:
           $ref: '#/components/schemas/ChatTypingStatus'
       required:
         - status
+    CloudBootstrapResponse:
+      type: object
+      properties:
+        captcha:
+          $ref: '#/components/schemas/CloudBootstrapCaptcha'
+      required:
+        - captcha
+    CloudBootstrapCaptcha:
+      type: object
+      properties:
+        turnstile:
+          $ref: '#/components/schemas/CloudBootstrapCaptchaTurnstile'
+      required:
+        - turnstile
+    CloudBootstrapCaptchaTurnstile:
+      type: object
+      properties:
+        site_key:
+          type: string
+      required:
+        - site_key
     CloudGamesNamespacesCreateGameNamespaceRequest:
       type: object
       properties:

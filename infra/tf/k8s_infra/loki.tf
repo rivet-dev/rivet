@@ -17,7 +17,7 @@ resource "helm_release" "loki" {
 	namespace = kubernetes_namespace.loki.metadata.0.name
 	repository = "https://grafana.github.io/helm-charts"
 	chart = "loki"
-	version = "5.18.0"
+	version = "5.36.0"
 	values = [yamlencode({
 		global = {
 			priorityClassName = kubernetes_priority_class.loki_priority.metadata.0.name
@@ -33,6 +33,31 @@ resource "helm_release" "loki" {
 		}
 		singleBinary = {
 			replicas = 1
+			resources = var.limit_resources ? {
+				limits = {
+					cpu = "4"
+					memory = "8192Mi"
+				}
+			} : null
+		}
+		monitoring = {
+			lokiCanary = {
+				enabled = true
+				resources = var.limit_resources ? {
+					limits = {
+						cpu = "100m"
+						memory = "200Mi"
+					}
+				} : null
+			}
+		}
+		grafana-agent-operator = {
+			resources = {
+				limits = {
+					cpu = "100m"
+					memory = "200Mi"
+				}
+			}
 		}
 		monitoring = {
 			dashboards = {

@@ -49,7 +49,6 @@ variable "services" {
 		count = number
 		resources = object({
 			cpu = number
-			cpu_cores = number
 			memory = number
 		})
 	}))
@@ -106,10 +105,6 @@ variable "kubeconfig_path" {
 
 variable "k8s_storage_class" {
 	type = string
-}
-
-variable "k8s_health_port" {
-	type = number
 }
 
 variable "limit_resources" {

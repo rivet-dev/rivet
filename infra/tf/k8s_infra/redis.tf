@@ -3,9 +3,8 @@ locals {
 	service_redis = lookup(var.services, "redis", {
 		count = 3
 		resources = {
-			cpu = 50
-			cpu_cores = 0
-			memory = 200
+			cpu = 1000
+			memory = 2000
 		}
 	})
 
@@ -72,15 +71,11 @@ resource "helm_release" "redis" {
 			nodes = local.service_redis.count + var.redis_replicas * local.service_redis.count
 			replicas = var.redis_replicas
 		}
-		master = {
+		redis = {
 			resources = var.limit_resources ? {
 				limits = {
 					memory = "${local.service_redis.resources.memory}Mi"
-					cpu = (
-						local.service_redis.resources.cpu_cores > 0 ?
-						"${local.service_redis.resources.cpu_cores * 1000}m"
-						: "${local.service_redis.resources.cpu}m"
-					)
+					cpu = "${local.service_redis.resources.cpu}m"
 				}
 			} : null
 		}

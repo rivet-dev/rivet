@@ -5,6 +5,7 @@ use rivet_cloud_server::models;
 use uuid::Uuid;
 
 mod auth;
+mod bootstrap;
 mod devices;
 mod games;
 mod groups;
@@ -28,6 +29,10 @@ pub async fn handle(
 define_router! {
 	cors: CorsConfigBuilder::hub().build(),
 	routes: {
+		"bootstrap": {
+			GET: bootstrap::get(),
+		},
+
 		// Auth
 		"auth" / "inspect": {
 			GET: auth::inspect(),

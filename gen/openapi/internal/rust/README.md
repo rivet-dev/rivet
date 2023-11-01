@@ -36,6 +36,7 @@ Class | Method | HTTP request | Description
 *ChatApi* | [**chat_set_typing_status**](docs/ChatApi.md#chat_set_typing_status) | **PUT** /chat/threads/{thread_id}/typing-status | 
 *ChatApi* | [**chat_watch_thread**](docs/ChatApi.md#chat_watch_thread) | **GET** /chat/threads/{thread_id}/live | 
 *ChatIdentityApi* | [**chat_identity_get_direct_thread**](docs/ChatIdentityApi.md#chat_identity_get_direct_thread) | **GET** /chat/identities/{identity_id}/thread | 
+*CloudApi* | [**cloud_bootstrap**](docs/CloudApi.md#cloud_bootstrap) | **GET** /cloud/bootstrap | 
 *CloudAuthApi* | [**cloud_auth_inspect**](docs/CloudAuthApi.md#cloud_auth_inspect) | **GET** /cloud/auth/inspect | 
 *CloudDevicesLinksApi* | [**cloud_devices_links_complete**](docs/CloudDevicesLinksApi.md#cloud_devices_links_complete) | **POST** /cloud/devices/links/complete | 
 *CloudDevicesLinksApi* | [**cloud_devices_links_get**](docs/CloudDevicesLinksApi.md#cloud_devices_links_get) | **GET** /cloud/devices/links | 
@@ -209,6 +210,9 @@ Class | Method | HTTP request | Description
  - [CloudAuthAgent](docs/CloudAuthAgent.md)
  - [CloudAuthAgentGameCloud](docs/CloudAuthAgentGameCloud.md)
  - [CloudAuthAgentIdentity](docs/CloudAuthAgentIdentity.md)
+ - [CloudBootstrapCaptcha](docs/CloudBootstrapCaptcha.md)
+ - [CloudBootstrapCaptchaTurnstile](docs/CloudBootstrapCaptchaTurnstile.md)
+ - [CloudBootstrapResponse](docs/CloudBootstrapResponse.md)
  - [CloudBuildSummary](docs/CloudBuildSummary.md)
  - [CloudCdnAuthType](docs/CloudCdnAuthType.md)
  - [CloudCdnNamespaceAuthUser](docs/CloudCdnNamespaceAuthUser.md)

@@ -295,6 +295,8 @@ pub enum EmailProvider {
 pub struct Captcha {
 	#[serde(default)]
 	pub hcaptcha: Option<Hcaptcha>,
+	#[serde(default)]
+	pub turnstile: Option<Turnstile>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -314,6 +316,13 @@ pub struct HcaptchaSiteKeys {
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(deny_unknown_fields)]
+pub struct Turnstile {
+	pub site_key_main: String,
+	pub site_key_cdn: String,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+#[serde(deny_unknown_fields)]
 pub struct Service {
 	pub count: usize,
 	pub resources: ServiceResources,
@@ -322,20 +331,8 @@ pub struct Service {
 #[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(deny_unknown_fields)]
 pub struct ServiceResources {
-	#[serde(flatten)]
-	pub cpu: CpuResources,
+	pub cpu: usize,
 	pub memory: usize,
-	pub ephemeral_disk: usize,
-}
-
-#[derive(Serialize, Deserialize, Clone, Debug)]
-#[serde(deny_unknown_fields)]
-pub enum CpuResources {
-	#[serde(rename = "cpu_cores")]
-	CpuCores(usize),
-	/// MHz
-	#[serde(rename = "cpu")]
-	Cpu(usize),
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
