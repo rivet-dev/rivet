@@ -16,36 +16,36 @@ async fn handle(
 	let crdb = ctx.crdb().await?;
 	let mutual = if ctx.active {
 		tokio::try_join!(
-			sqlx::query(indoc!(
+			sql_query!(
+				[ctx, &crdb]
 				"
 				INSERT INTO db_user_follow.user_follows
 				(follower_user_id, following_user_id, create_ts, ignored)
 				VALUES ($1, $2, $3, false)
-				"
-			))
-			.bind(follower_user_id)
-			.bind(following_user_id)
-			.bind(util::timestamp::now())
-			.execute(&crdb),
+				",
+				follower_user_id,
+				following_user_id,
+				util::timestamp::now(),
+			),
 			// Along with creating a new follow, ignore the following user's follow (if it exists). This
 			// ensures that:
 			// - if the following user has followed the follower user first,
 			// - and the follower user follows then unfollows,
 			// the original following user's follow won't show up in the follower user's "recent follows"
 			// list again.
-			sqlx::query(indoc!(
+			sql_query!(
+				[ctx, &crdb]
 				"
 				UPDATE db_user_follow.user_follows
 				SET ignored = TRUE
 				WHERE
 					follower_user_id = $1 AND
 					following_user_id = $2
-				"
-			))
-			.bind(following_user_id)
-			.bind(follower_user_id)
-			.bind(util::timestamp::now())
-			.execute(&crdb),
+				",
+				following_user_id,
+				follower_user_id,
+				util::timestamp::now(),
+			),
 		)?;
 
 		// Check for mutuality after creating record
@@ -54,12 +54,12 @@ async fn handle(
 		// Check for mutuality before deleting record
 		let mutual = check_mutual(&crdb, follower_user_id, following_user_id).await?;
 
-		sqlx::query(
+		sql_query!(
+			[ctx]
 			"DELETE FROM db_user_follow.user_follows WHERE follower_user_id = $1 AND following_user_id = $2",
+			follower_user_id,
+			following_user_id,
 		)
-		.bind(follower_user_id)
-		.bind(following_user_id)
-		.execute(&crdb)
 		.await?;
 
 		mutual
