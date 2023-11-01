@@ -702,7 +702,7 @@ async fn build_volumes(
 				"subPath": "crdb-ca.crt"
 			}));
 		}
-		config::ns::CockroachDBProvider::Managed {} => {
+		config::ns::CockroachDBProvider::Managed { .. } => {
 			// Uses publicly signed cert
 		}
 	}
