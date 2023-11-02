@@ -8,7 +8,7 @@ struct CustomHostname {
 	hostname: String,
 	challenge: Uuid,
 	create_ts: i64,
-	status: i32,
+	status: i64,
 	subscription_id: Uuid,
 }
 
@@ -49,7 +49,7 @@ async fn handle(
 				hostname: ch.hostname,
 				challenge: Some(ch.challenge.into()),
 				create_ts: ch.create_ts,
-				status: ch.status,
+				status: ch.status as i32,
 				subscription_id: Some(ch.subscription_id.into()),
 			})
 			.collect::<Vec<_>>(),

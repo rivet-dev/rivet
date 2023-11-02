@@ -42,7 +42,12 @@ pub struct TestCtx<'a, T: AsRef<str>> {
 	pub no_purge: bool,
 }
 
-pub async fn test_all(ctx: &ProjectContext) -> Result<()> {
+pub async fn test_all(
+	ctx: &ProjectContext,
+	timeout: Option<u64>,
+	parallel_tests: Option<usize>,
+	no_purge: bool,
+) -> Result<()> {
 	let all_svc_names = ctx
 		.all_services()
 		.await
@@ -54,9 +59,9 @@ pub async fn test_all(ctx: &ProjectContext) -> Result<()> {
 		TestCtx {
 			svc_names: &all_svc_names,
 			filters: Vec::new(),
-			timeout: None,
-			parallel_tests: None,
-			no_purge: false,
+			timeout,
+			parallel_tests,
+			no_purge,
 		},
 	)
 	.await?;
@@ -433,11 +438,11 @@ async fn watch_pod(
 					.await?;
 
 				let exit_code_str = String::from_utf8_lossy(&output.stdout);
-				let exit_code = exit_code_str.trim().parse::<i32>();
-				if exit_code.is_err() {
-					eprintln!("\n-------- {exit_code_str}\n");
-				}
-				let exit_code = exit_code?;
+				let Result::Ok(exit_code) = exit_code_str.trim().parse::<i32>() else {
+					return Ok(TestStatus::UnknownError(format!(
+						"Could not parse exit code: {exit_code_str:?}"
+					)));
+				};
 
 				let test_status = match exit_code {
 					0 => TestStatus::Pass,
