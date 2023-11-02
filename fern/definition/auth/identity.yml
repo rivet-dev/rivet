@@ -40,7 +40,7 @@ types:
   StartEmailVerificationRequest:
     properties:
       email: string
-      captcha: captchaConfig.Config
+      captcha: optional<captchaConfig.Config>
       game_id:
         type: optional<uuid>
 

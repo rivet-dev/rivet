@@ -9599,7 +9599,6 @@ components:
           format: uuid
       required:
         - email
-        - captcha
     AuthStartEmailVerificationResponse:
       type: object
       properties:

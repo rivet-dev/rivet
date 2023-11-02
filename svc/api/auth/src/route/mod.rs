@@ -1,6 +1,7 @@
 use api_helper::{define_router, util::CorsConfigBuilder};
 use hyper::{Body, Request, Response};
-use rivet_auth_server::models;
+use rivet_api::models;
+use rivet_auth_server::models as models_old;
 
 pub mod identity;
 pub mod tokens;
@@ -23,7 +24,7 @@ define_router! {
 	routes: {
 		"tokens" / "identity": {
 			POST: tokens::identity(
-				body: models::RefreshIdentityTokenRequest,
+				body: models_old::RefreshIdentityTokenRequest,
 				with_response: true,
 				opt_cookie: tokens::USER_REFRESH_TOKEN_COOKIE,
 				opt_auth: true,
@@ -31,7 +32,7 @@ define_router! {
 		},
 		"identity" / "email" / "start-verification": {
 			POST: identity::start(
-				body: models::StartEmailVerificationRequest,
+				body: models::AuthStartEmailVerificationRequest,
 				rate_limit: {
 					buckets: [
 						{ count: 2 },
@@ -42,7 +43,7 @@ define_router! {
 		"identity" / "email" / "complete-verification": {
 			POST: identity::complete(
 				with_response: true,
-				body: models::CompleteEmailVerificationRequest,
+				body: models_old::CompleteEmailVerificationRequest,
 				rate_limit: {
 					buckets: [
 						{ count: 2 },

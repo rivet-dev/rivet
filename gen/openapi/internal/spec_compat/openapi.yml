@@ -70,7 +70,6 @@ components:
           type: string
       required:
       - email
-      - captcha
       type: object
     AuthStartEmailVerificationResponse:
       properties:
