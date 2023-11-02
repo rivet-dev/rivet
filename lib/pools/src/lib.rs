@@ -1,5 +1,5 @@
 mod error;
-mod metrics;
+pub mod metrics;
 mod pools;
 pub mod utils;
 

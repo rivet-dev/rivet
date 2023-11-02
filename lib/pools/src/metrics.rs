@@ -14,4 +14,12 @@ lazy_static::lazy_static! {
 		*REGISTRY,
 	)
 	.unwrap();
+
+	// MARK: SQL
+	pub static ref SQL_QUERY_TOTAL: IntCounterVec = register_int_counter_vec_with_registry!(
+		"sql_query_total",
+		"Total number of queries.",
+		&["action", "context_name", "location"],
+		*REGISTRY,
+	).unwrap();
 }
