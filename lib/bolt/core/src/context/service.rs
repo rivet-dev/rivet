@@ -834,7 +834,7 @@ impl ServiceContextData {
 				));
 			}
 
-			if let Some(turnstile) = &project_ctx.ns().captcha.turnstile {
+			if let Some(site_key_cdn) = &project_ctx.ns().captcha.turnstile {
 				env.push((
 					"TURNSTILE_SITE_KEY_MAIN".into(),
 					turnstile.site_key_main.clone(),

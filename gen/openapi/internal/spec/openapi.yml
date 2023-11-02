@@ -8730,8 +8730,6 @@ components:
       properties:
         turnstile:
           $ref: '#/components/schemas/CloudBootstrapCaptchaTurnstile'
-      required:
-        - turnstile
     CloudBootstrapCaptchaTurnstile:
       type: object
       properties:

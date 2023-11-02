@@ -13,14 +13,14 @@
 
 #[derive(Clone, Debug, PartialEq, Default, Serialize, Deserialize)]
 pub struct CloudBootstrapCaptcha {
-    #[serde(rename = "turnstile")]
-    pub turnstile: Box<crate::models::CloudBootstrapCaptchaTurnstile>,
+    #[serde(rename = "turnstile", skip_serializing_if = "Option::is_none")]
+    pub turnstile: Option<Box<crate::models::CloudBootstrapCaptchaTurnstile>>,
 }
 
 impl CloudBootstrapCaptcha {
-    pub fn new(turnstile: crate::models::CloudBootstrapCaptchaTurnstile) -> CloudBootstrapCaptcha {
+    pub fn new() -> CloudBootstrapCaptcha {
         CloudBootstrapCaptcha {
-            turnstile: Box::new(turnstile),
+            turnstile: None,
         }
     }
 }
