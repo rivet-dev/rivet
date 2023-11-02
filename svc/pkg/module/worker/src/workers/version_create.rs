@@ -11,10 +11,8 @@ async fn worker(
 
 	let version_id = unwrap_ref!(ctx.version_id).as_uuid();
 
-	rivet_pools::utils::crdb::tx(&crdb, |tx| {
-		Box::pin(update_db(tx, ctx.ts(), (**ctx).clone()))
-	})
-	.await?;
+	rivet_pools::utils::crdb::tx(&crdb, |tx| Box::pin(update_db(ctx.clone(), tx, ctx.ts())))
+		.await?;
 
 	msg!([ctx] module::msg::version_create_complete(version_id) {
 		version_id: ctx.version_id,
@@ -41,12 +39,12 @@ async fn worker(
 
 #[tracing::instrument(skip_all)]
 async fn update_db(
+	ctx: OperationContext<module::msg::version_create::Message>,
 	tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
 	now: i64,
-	msg: module::msg::version_create::Message,
 ) -> GlobalResult<()> {
-	let version_id = unwrap_ref!(msg.version_id).as_uuid();
-	let module_id = unwrap_ref!(msg.module_id).as_uuid();
+	let version_id = unwrap_ref!(ctx.version_id).as_uuid();
+	let module_id = unwrap_ref!(ctx.module_id).as_uuid();
 
 	sql_query!(
 		[ctx, &mut **tx]
@@ -57,14 +55,14 @@ async fn update_db(
 		version_id,
 		module_id,
 		now,
-		msg.creator_user_id.map(|x| x.as_uuid()),
-		TryInto::<i64>::try_into(msg.major)?,
-		TryInto::<i64>::try_into(msg.minor)?,
-		TryInto::<i64>::try_into(msg.patch)?,
+		ctx.creator_user_id.map(|x| x.as_uuid()),
+		TryInto::<i64>::try_into(ctx.major)?,
+		TryInto::<i64>::try_into(ctx.minor)?,
+		TryInto::<i64>::try_into(ctx.patch)?,
 	)
 	.await?;
 
-	match unwrap_ref!(msg.image) {
+	match unwrap_ref!(ctx.image) {
 		module::msg::version_create::message::Image::Docker(docker) => {
 			sql_query!(
 				[ctx, &mut **tx]
@@ -79,7 +77,7 @@ async fn update_db(
 		}
 	}
 
-	for script in msg.scripts {
+	for script in &ctx.scripts {
 		sql_query!(
 			[ctx, &mut **tx]
 			"

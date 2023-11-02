@@ -119,7 +119,7 @@ async fn worker(
 
 	// Create transaction
 	rivet_pools::utils::crdb::tx(&crdb, |tx| {
-		Box::pin(insert_instance(tx, ctx.ts(), (**ctx).clone()))
+		Box::pin(insert_instance(ctx.clone(), tx, ctx.ts()))
 	})
 	.await?;
 
@@ -183,12 +183,12 @@ async fn worker(
 
 #[tracing::instrument(skip_all)]
 async fn insert_instance(
+	ctx: OperationContext<module::msg::instance_create::Message>,
 	tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
 	now: i64,
-	msg: module::msg::instance_create::Message,
 ) -> GlobalResult<()> {
-	let instance_id = unwrap_ref!(msg.instance_id).as_uuid();
-	let version_id = unwrap_ref!(msg.module_version_id).as_uuid();
+	let instance_id = unwrap_ref!(ctx.instance_id).as_uuid();
+	let version_id = unwrap_ref!(ctx.module_version_id).as_uuid();
 
 	sql_query!(
 		[ctx, &mut **tx]
@@ -202,7 +202,7 @@ async fn insert_instance(
 	)
 	.await?;
 
-	match unwrap_ref!(msg.driver) {
+	match unwrap_ref!(ctx.driver) {
 		module::msg::instance_create::message::Driver::Dummy(_) => {
 			sql_query!(
 				[ctx, &mut **tx]

@@ -270,7 +270,7 @@ async fn write_to_db_before_run(
 			);
 		}
 
-		let ingress_port = choose_ingress_port(tx, proxied_port).await?;
+		let ingress_port = choose_ingress_port(ctx.clone(), tx, proxied_port).await?;
 
 		tracing::info!(?run_id, ?proxied_port, "inserting run proxied port");
 
@@ -333,6 +333,7 @@ async fn write_to_db_after_run(
 /// This is somewhat poorly written for TCP & UDP ports and may bite us in the ass
 /// some day. See https://linear.app/rivet-gg/issue/RIV-1799
 async fn choose_ingress_port(
+	ctx: OperationContext<job_run::msg::create::Message>,
 	tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
 	proxied_port: &job_run::msg::create::ProxiedPort,
 ) -> GlobalResult<i32> {
@@ -348,6 +349,7 @@ async fn choose_ingress_port(
 			ProxyProtocol::Https => 443,
 			ProxyProtocol::Tcp | ProxyProtocol::TcpTls => {
 				bind_with_retries(
+					ctx,
 					tx,
 					proxied_port.proxy_protocol,
 					util_job::consts::MIN_INGRESS_PORT_TCP..=util_job::consts::MAX_INGRESS_PORT_TCP,
@@ -356,6 +358,7 @@ async fn choose_ingress_port(
 			}
 			ProxyProtocol::Udp => {
 				bind_with_retries(
+					ctx,
 					tx,
 					proxied_port.proxy_protocol,
 					util_job::consts::MIN_INGRESS_PORT_UDP..=util_job::consts::MAX_INGRESS_PORT_UDP,
@@ -369,6 +372,7 @@ async fn choose_ingress_port(
 }
 
 async fn bind_with_retries(
+	ctx: OperationContext<job_run::msg::create::Message>,
 	tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
 	proxy_protocol: i32,
 	range: std::ops::RangeInclusive<u16>,

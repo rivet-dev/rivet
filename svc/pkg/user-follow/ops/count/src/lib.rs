@@ -46,19 +46,35 @@ async fn handle(
 			)
 			.await?
 		}
-		_ => {
-			sql_fetch_all!(
-				[ctx, FollowCount]
-				"
-				SELECT {join_column} as user_id, COUNT(*)
-				FROM db_user_follow.user_follows
-				WHERE {join_column} = ANY($1)
-				GROUP BY {join_column}
-				",
-				&user_ids,
-			)
-			.await?
-		}
+		_ => match req_kind {
+			RequestKind::Follower => {
+				sql_fetch_all!(
+					[ctx, FollowCount]
+					"
+						SELECT following_user_id as user_id, COUNT(*)
+						FROM db_user_follow.user_follows
+						WHERE following_user_id = ANY($1)
+						GROUP BY following_user_id
+						",
+					&user_ids,
+				)
+				.await?
+			}
+			RequestKind::Following => {
+				sql_fetch_all!(
+					[ctx, FollowCount]
+					"
+						SELECT follower_user_id as user_id, COUNT(*)
+						FROM db_user_follow.user_follows
+						WHERE follower_user_id = ANY($1)
+						GROUP BY follower_user_id
+						",
+					&user_ids,
+				)
+				.await?
+			}
+			RequestKind::Mutual => unreachable!(),
+		},
 	};
 
 	let follows = user_ids

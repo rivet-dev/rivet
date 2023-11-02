@@ -18,42 +18,24 @@ async fn handle(
 		.map(common::Uuid::as_uuid)
 		.collect::<Vec<_>>();
 
-	let query_string = formatdoc!(
+	tracing::info!(anchor=?ctx.anchor, limit=?ctx.limit);
+
+	let members = sql_fetch_all!(
+		[ctx, TeamMember]
 		"
 		SELECT team_id, user_id, join_ts
 		FROM db_team.team_members
 		WHERE
 			team_id = ANY($1)
-			{join}
+			AND join_ts < $2
 		ORDER BY join_ts ASC
-		{limit}
+		LIMIT $3
 		",
-		join = ctx.anchor.map(|_| "AND join_ts < $2").unwrap_or_default(),
-		limit = ctx
-			.limit
-			.map(|_| format!("LIMIT ${}", if ctx.anchor.is_some() { 3 } else { 2 }))
-			.unwrap_or_default()
-	);
-	let query = sqlx::query_as(&query_string).bind(&team_ids);
-
-	// Bind offset anchor
-	let query = if let Some(offset) = ctx.anchor {
-		query.bind(offset)
-	} else {
-		query
-	};
-
-	// Bind limit
-	let query = if let Some(limit) = ctx.limit {
-		query.bind(limit as i64)
-	} else {
-		query
-	};
-
-	tracing::info!(anchor=?ctx.anchor, limit=?ctx.limit, query_string);
-
-	// Fetch all members
-	let members: Vec<TeamMember> = query.fetch_all(&ctx.crdb().await?).await?;
+		&team_ids,
+		ctx.anchor.unwrap_or(i64::MAX),
+		ctx.limit.unwrap_or(128) as i64,
+	)
+	.await?;
 
 	// Group in to teams
 	let teams = team_ids
