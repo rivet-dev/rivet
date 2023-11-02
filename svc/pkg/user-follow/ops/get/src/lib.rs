@@ -24,7 +24,8 @@ async fn handle(
 		})
 		.collect::<GlobalResult<Vec<(Uuid, Uuid)>>>()?;
 
-	let follows = sqlx::query_as::<_, Follow>(indoc!(
+	let follows = sql_fetch_all!(
+		[ctx, Follow]
 		"
 		SELECT 
 			uf.follower_user_id, uf.following_user_id, uf.create_ts,
@@ -43,10 +44,9 @@ async fn handle(
 		ON 
 			uf.follower_user_id = q.follower_user_id AND
 			uf.following_user_id = q.following_user_id
-		"
-	))
-	.bind(serde_json::to_value(queries)?)
-	.fetch_all(&ctx.crdb().await?)
+		",
+		serde_json::to_value(queries)?,
+	)
 	.await?;
 
 	Ok(user_follow::get::Response {

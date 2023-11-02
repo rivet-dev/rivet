@@ -51,11 +51,11 @@ async fn handle(
 
 			// Check if revoked
 			// TODO: This is a race condition, es no bueno. See note in token-revoke
-			let rf_token_row = sqlx::query_as::<_, (Option<i64>,)>(
+			let rf_token_row = sql_fetch_optional!(
+				[ctx, (Option<i64>,)]
 				"SELECT revoke_ts FROM db_token.tokens WHERE jti = $1",
+				refresh_jti,
 			)
-			.bind(refresh_jti)
-			.fetch_optional(&crdb)
 			.await?;
 			if let Some((revoke_ts,)) = rf_token_row {
 				if revoke_ts.is_some() {
@@ -67,11 +67,11 @@ async fn handle(
 			}
 
 			// Fetch entitlements to create the token with
-			let session_row = sqlx::query_as::<_, (Vec<Vec<u8>>,)>(
+			let session_row = sql_fetch_optional!(
+				[ctx, (Vec<Vec<u8>>,)]
 				"SELECT entitlements FROM db_token.sessions WHERE session_id = $1",
+				refresh_ent.session_id,
 			)
-			.bind(refresh_ent.session_id)
-			.fetch_optional(&crdb)
 			.await?;
 			let ent = unwrap!(session_row, "token session not found").0;
 

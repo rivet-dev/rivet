@@ -24,7 +24,8 @@ pub async fn handle(
 		.map(common::Uuid::as_uuid)
 		.collect::<Vec<_>>();
 
-	let instances = sqlx::query_as::<_, Instance>(indoc!(
+	let instances = sql_fetch_all!(
+		[ctx, Instance]
 		"
 		SELECT
 			i.instance_id,
@@ -38,10 +39,9 @@ pub async fn handle(
 		LEFT JOIN db_module.instances_driver_dummy AS idd ON idd.instance_id = i.instance_id
 		LEFT JOIN db_module.instances_driver_fly AS idv ON idv.instance_id = i.instance_id
 		WHERE i.instance_id = ANY($1)
-		"
-	))
-	.bind(&instance_ids)
-	.fetch_all(&ctx.crdb().await?)
+		",
+		&instance_ids,
+	)
 	.await?;
 
 	Ok(module::instance_get::Response {

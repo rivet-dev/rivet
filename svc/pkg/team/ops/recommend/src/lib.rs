@@ -8,16 +8,16 @@ async fn handle(
 	let count = ctx.count;
 
 	// TODO: Find teams with the most friends in it, then order by member count
-	let team_ids = sqlx::query_as::<_, (Uuid,)>(indoc!(
+	let team_ids = sql_fetch_all!(
+		[ctx, (Uuid,)]
 		"
 		SELECT team_id
 		FROM db_team.teams
 		ORDER BY create_ts DESC
 		LIMIT $1
-		"
-	))
-	.bind(count as i64)
-	.fetch_all(&ctx.crdb().await?)
+		",
+		count as i64,
+	)
 	.await?
 	.into_iter()
 	.map(|row| row.0.into())

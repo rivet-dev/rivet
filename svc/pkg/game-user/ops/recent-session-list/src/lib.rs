@@ -21,7 +21,8 @@ async fn handle(
 		.collect::<Vec<_>>();
 
 	// Fetch all recent sessions for users
-	let session_rows = sqlx::query_as::<_, Session>(indoc!(
+	let session_rows = sql_fetch_all!(
+		[ctx, Session]
 		"
 		SELECT gu.user_id, gu.namespace_id, max(s.start_ts) AS start_ts
 		FROM (
@@ -37,10 +38,9 @@ async fn handle(
 			LIMIT 1
 		) s ON true
 		GROUP BY gu.user_id, gu.namespace_id
-		"
-	))
-	.bind(&user_ids)
-	.fetch_all(&crdb)
+		",
+		&user_ids,
+	)
 	.await?;
 
 	// Aggregate by user

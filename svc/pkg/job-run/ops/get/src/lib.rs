@@ -66,69 +66,71 @@ async fn handle(
 		// runs
 		async {
 			GlobalResult::Ok(
-				sqlx::query_as::<_, Run>(indoc!(
+				sql_fetch_all!(
+					[ctx, Run]
 					"
 					SELECT run_id, region_id, create_ts, start_ts, stop_ts, cleanup_ts
 					FROM db_job_state.runs
 					WHERE run_id = ANY($1)
-					"
-				))
-				.bind(&run_ids)
-				.fetch_all(&crdb)
+					",
+					&run_ids,
+				)
 				.await?,
 			)
 		},
 		// run_networks
 		async {
 			GlobalResult::Ok(
-				sqlx::query_as::<_, RunNetwork>(indoc!(
+				sql_fetch_all!(
+					[ctx, RunNetwork]
 					"
 					SELECT run_id, ip, mode
 					FROM db_job_state.run_networks
 					WHERE run_id = ANY($1)
-					"
-				))
-				.bind(&run_ids)
-				.fetch_all(&crdb)
+					",
+					&run_ids,
+				)
 				.await?,
 			)
 		},
 		// run_ports
 		async {
 			GlobalResult::Ok(
-				sqlx::query_as::<_, RunPort>(indoc!(
+				sql_fetch_all!(
+					[ctx, RunPort]
 					"
 					SELECT run_id, label, ip, source, target
 					FROM db_job_state.run_ports
 					WHERE run_id = ANY($1)
-					"
-				))
-				.bind(&run_ids)
-				.fetch_all(&crdb)
+					",
+					&run_ids,
+				)
 				.await?,
 			)
 		},
 		// run_meta_nomad
 		async {
 			GlobalResult::Ok(
-				sqlx::query_as::<_, RunMetaNomad>("SELECT run_id, dispatched_job_id, alloc_id, node_id, node_name, node_public_ipv4, node_vlan_ipv4, alloc_state FROM db_job_state.run_meta_nomad WHERE run_id = ANY($1)")
-					.bind(&run_ids)
-					.fetch_all(&crdb)
+				sql_fetch_all!(
+					[ctx, RunMetaNomad]
+					"SELECT run_id, dispatched_job_id, alloc_id, node_id, node_name, node_public_ipv4, node_vlan_ipv4, alloc_state FROM db_job_state.run_meta_nomad WHERE run_id = ANY($1)",
+					&run_ids,
+				)
 					.await?
 			)
 		},
 		// run_proxied_ports
 		async {
 			GlobalResult::Ok(
-				sqlx::query_as::<_, RunProxiedPort>(indoc!(
+				sql_fetch_all!(
+					[ctx, RunProxiedPort]
 					"
 					SELECT run_id, target_nomad_port_label, ingress_port, ingress_hostnames, proxy_protocol, ssl_domain_mode
 					FROM db_job_state.run_proxied_ports
 					WHERE run_id = ANY($1)
-					"
-				))
-				.bind(&run_ids)
-				.fetch_all(&crdb)
+					",
+					&run_ids,
+				)
 				.await?,
 			)
 		},

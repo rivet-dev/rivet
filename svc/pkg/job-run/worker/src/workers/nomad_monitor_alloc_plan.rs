@@ -222,17 +222,17 @@ async fn update_db(
 		ports,
 	}: RunData,
 ) -> GlobalResult<Option<DbOutput>> {
-	let run_row = sqlx::query_as::<_, RunRow>(indoc!(
+	let run_row = sql_fetch_optional!(
+		[ctx, RunRow]
 		"
 		SELECT runs.run_id, runs.region_id, run_meta_nomad.alloc_plan_ts
 		FROM db_job_state.run_meta_nomad
 		INNER JOIN db_job_state.runs ON runs.run_id = run_meta_nomad.run_id
 		WHERE dispatched_job_id = $1
 		FOR UPDATE OF run_meta_nomad
-		"
-	))
-	.bind(&job_id)
-	.fetch_optional(&mut **tx)
+		",
+		&job_id,
+	)
 	.await?;
 
 	// Check if run found
@@ -300,15 +300,15 @@ async fn update_db(
 	}
 
 	// Update the run ports
-	let proxied_ports = sqlx::query_as::<_, ProxiedPort>(indoc!(
+	let proxied_ports = sql_fetch_all!(
+		[ctx, ProxiedPort]
 		"
 		SELECT target_nomad_port_label, ingress_port, ingress_hostnames, proxy_protocol, ssl_domain_mode
 		FROM db_job_state.run_proxied_ports
 		WHERE run_id = $1
-		"
-	))
-	.bind(run_id)
-	.fetch_all(&mut **tx)
+		",
+		run_id,
+	)
 	.await?;
 	tracing::info!(?proxied_ports, "fetched proxied ports");
 

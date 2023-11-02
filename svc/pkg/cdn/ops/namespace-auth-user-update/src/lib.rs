@@ -14,11 +14,11 @@ async fn handle(
 	);
 
 	let crdb = ctx.crdb().await?;
-	let (auth_user_count,) = sqlx::query_as::<_, (i64,)>(
+	let (auth_user_count,) = sql_fetch_one!(
+		[ctx, (i64,)]
 		"SELECT COUNT(*) FROM db_cdn.game_namespace_auth_users WHERE namespace_id = $1",
+		namespace_id,
 	)
-	.bind(namespace_id)
-	.fetch_one(&crdb)
 	.await?;
 
 	ensure_with!(auth_user_count < CDN_AUTH_USER_MAX, CDN_TOO_MANY_AUTH_USERS);

@@ -30,16 +30,16 @@ async fn handle(ctx: OperationContext<kv::get::Request>) -> GlobalResult<kv::get
 		key_strs.push(key.key.as_str());
 	}
 
-	let values = sqlx::query_as::<_, KvPair>(indoc!(
+	let values = sql_fetch_all!(
+		[ctx, KvPair]
 		"
 		SELECT kv.namespace_id, kv.key, kv.value::STRING
 		FROM unnest($1, $2) AS q (namespace_id, key)
 		INNER JOIN db_kv.kv ON kv.namespace_id = q.namespace_id AND kv.key = q.key
-		"
-	))
-	.bind(&namespace_ids)
-	.bind(&key_strs)
-	.fetch_all(&crdb)
+		",
+		&namespace_ids,
+		&key_strs,
+	)
 	.await?
 	.into_iter()
 	.map(Into::<kv::get::response::Key>::into)

@@ -42,7 +42,8 @@ async fn handle(ctx: OperationContext<token::get::Request>) -> GlobalResult<toke
 		.map(common::Uuid::as_uuid)
 		.collect::<Vec<_>>();
 
-	let tokens = sqlx::query_as::<_, TokenRow>(indoc!(
+	let tokens = sql_fetch_all!(
+		[ctx, TokenRow]
 		"
 		SELECT
 			jti,
@@ -56,10 +57,9 @@ async fn handle(ctx: OperationContext<token::get::Request>) -> GlobalResult<toke
 			revoke_ts
 		FROM db_token.tokens
 		WHERE jti = ANY($1)
-		"
-	))
-	.bind(&jtis)
-	.fetch_all(&crdb)
+		",
+		&jtis,
+	)
 	.await?
 	.into_iter()
 	.map(Into::<token::get::Token>::into)

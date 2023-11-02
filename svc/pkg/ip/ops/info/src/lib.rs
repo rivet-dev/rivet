@@ -45,11 +45,11 @@ async fn fetch_ip_info_io(
 	ip_str: &str,
 ) -> GlobalResult<Option<backend::net::IpInfo>> {
 	// Read cached IP data if already exists
-	let res = sqlx::query_as::<_, (Option<serde_json::Value>,)>(
+	let res = sql_fetch_optional!(
+		[ctx, (Option<serde_json::Value>,)]
 		"SELECT ip_info_io_data FROM db_ip_info.ips WHERE ip = $1",
+		ip_str,
 	)
-	.bind(ip_str)
-	.fetch_optional(&ctx.crdb().await?)
 	.await?;
 	let ip_info_raw = if let Some(ip_info_raw) = res.and_then(|x| x.0) {
 		tracing::info!("found cached ip info");

@@ -24,7 +24,8 @@ async fn handle(
 		.collect::<GlobalResult<Vec<(Uuid, Uuid)>>>()?;
 
 	// Query relationships
-	let relationships = sqlx::query_as::<_, Relationship>(&formatdoc!(
+	let relationships = sql_fetch_all!(
+		[ctx, Relationship]
 		"
 		SELECT 
 			exists(
@@ -42,10 +43,9 @@ async fn handle(
 					uf.following_user_id = (q->>0)::UUID
 			) AS is_following
 		FROM jsonb_array_elements($1::JSONB) AS q
-		"
-	))
-	.bind(serde_json::to_string(&query_users)?)
-	.fetch_all(&ctx.crdb().await?)
+		",
+		serde_json::to_string(&query_users)?,
+	)
 	.await?;
 
 	let users = relationships

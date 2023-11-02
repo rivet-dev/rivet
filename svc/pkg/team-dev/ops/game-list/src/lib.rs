@@ -11,16 +11,16 @@ async fn handle(
 		.map(|id| id.as_uuid())
 		.collect::<Vec<_>>();
 
-	let games = sqlx::query_as::<_, (Uuid, Uuid)>(indoc!(
+	let games = sql_fetch_all!(
+		[ctx, (Uuid, Uuid)]
 		"
 		SELECT g.game_id, g.developer_team_id
 		FROM unnest($1::UUID[]) AS q
 		INNER JOIN db_game.games AS g
 		ON g.developer_team_id = q
-	"
-	))
-	.bind(&team_ids)
-	.fetch_all(&ctx.crdb().await?)
+	",
+		&team_ids,
+	)
 	.await?;
 
 	let teams = team_ids

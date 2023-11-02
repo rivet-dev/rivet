@@ -26,11 +26,11 @@ async fn handle(
 	let developer_team_id = unwrap_ref!(game.developer_team_id).as_uuid();
 
 	let crdb = ctx.crdb().await?;
-	let (domain_count,) = sqlx::query_as::<_, (i64,)>(
+	let (domain_count,) = sql_fetch_one!(
+		[ctx, (i64,)]
 		"SELECT COUNT(*) FROM db_cdn.game_namespace_domains WHERE namespace_id = $1",
+		namespace_id,
 	)
-	.bind(namespace_id)
-	.fetch_one(&crdb)
 	.await?;
 
 	ensure_with!(domain_count < 10, CDN_TOO_MANY_DOMAINS);

@@ -384,7 +384,8 @@ async fn bind_with_retries(
 
 		let port = rand::thread_rng().gen_range(range.clone()) as i32;
 
-		let (already_exists,) = sqlx::query_as::<_, (bool,)>(indoc!(
+		let (already_exists,) = sql_fetch_one!(
+			[ctx, (bool,), &mut **tx]
 			"
 			SELECT EXISTS(
 				SELECT 1
@@ -396,11 +397,10 @@ async fn bind_with_retries(
 					p.ingress_port = $1 AND
 					p.proxy_protocol = $2
 			)
-			"
-		))
-		.bind(port)
-		.bind(proxy_protocol)
-		.fetch_one(&mut **tx)
+			",
+			port,
+			proxy_protocol,
+		)
 		.await?;
 
 		if !already_exists {

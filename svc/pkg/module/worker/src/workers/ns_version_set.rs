@@ -49,15 +49,15 @@ async fn worker(
 		.collect::<HashSet<&str>>();
 
 	// Find all existing instances for ns
-	let existing_instances = sqlx::query_as::<_, NamespaceInstances>(indoc!(
+	let existing_instances = sql_fetch_all!(
+		[ctx, NamespaceInstances]
 		"
 		SELECT key, instance_id
 		FROM db_module.namespace_instances
 		WHERE namespace_id = $1
-		"
-	))
-	.bind(namespace_id)
-	.fetch_all(&crdb)
+		",
+		namespace_id,
+	)
 	.await?;
 	let current_version_keys = existing_instances
 		.iter()

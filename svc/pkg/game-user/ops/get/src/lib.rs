@@ -38,16 +38,16 @@ async fn handle(
 		.map(common::Uuid::as_uuid)
 		.collect::<Vec<_>>();
 
-	let game_users = sqlx::query_as::<_, GameUser>(indoc!(
+	let game_users = sql_fetch_all!(
+		[ctx, GameUser]
 		"
 		SELECT gu.game_user_id, gu.user_id, gu.token_session_id, gu.namespace_id, gu.create_ts, l.link_id, gu.deleted_ts
 		FROM db_game_user.game_users AS gu
 		LEFT JOIN db_game_user.links AS l ON l.new_game_user_id = gu.game_user_id
 		WHERE gu.game_user_id = ANY($1)
-		"
-	))
-	.bind(game_user_ids)
-	.fetch_all(&crdb)
+		",
+		game_user_ids,
+	)
 	.await?
 	.into_iter()
 	.map(Into::into)

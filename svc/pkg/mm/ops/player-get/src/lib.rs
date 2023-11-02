@@ -38,15 +38,15 @@ async fn handle(
 		.map(common::Uuid::as_uuid)
 		.collect::<Vec<_>>();
 
-	let players = sqlx::query_as::<_, PlayerRow>(indoc!(
+	let players = sql_fetch_all!(
+		[ctx, PlayerRow]
 		"
 		SELECT player_id, lobby_id, create_ts, register_ts, remove_ts, token_session_id, create_ray_id
 		FROM db_mm_state.players
 		WHERE player_id = ANY($1)
-		"
-	))
-	.bind(player_ids)
-	.fetch_all(&crdb)
+		",
+		player_ids,
+	)
 	.await?
 	.into_iter()
 	.map(Into::<backend::matchmaker::Player>::into)

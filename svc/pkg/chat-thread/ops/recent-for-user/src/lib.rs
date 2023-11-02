@@ -128,7 +128,7 @@ async fn handle(
 		.map(|x| x.thread_id)
 		.collect::<Vec<_>>();
 	let missing_tails =
-		fetch_missing_tails(&crdb, &mut redis, user_id, &threads_without_tail).await?;
+		fetch_missing_tails(&ctx, &mut redis, user_id, &threads_without_tail).await?;
 
 	// Fill in tail messages with those fetched from Cockroach
 	for (row, msg_proto) in missing_tails {
@@ -239,7 +239,7 @@ struct TailMessageRow {
 }
 
 async fn fetch_missing_tails(
-	crdb: &CrdbPool,
+	ctx: &OperationContext<chat_thread::recent_for_user::Request>,
 	redis: &mut RedisPool,
 	user_id: Uuid,
 	threads_without_tail: &[Uuid],
@@ -248,7 +248,8 @@ async fn fetch_missing_tails(
 		return Ok(Vec::new());
 	}
 
-	let thread_with_tails = sqlx::query_as::<_, TailMessageRow>(indoc!(
+	let thread_with_tails = sql_fetch_all!(
+		[ctx, TailMessageRow]
 		"
 		SELECT messages.*
 		FROM db_chat.threads
@@ -260,10 +261,9 @@ async fn fetch_missing_tails(
 			LIMIT 1
 		) AS messages ON true
 		WHERE threads.thread_id = ANY($1)
-		"
-	))
-	.bind(threads_without_tail)
-	.fetch_all(crdb)
+		",
+		threads_without_tail,
+	)
 	.await?
 	.into_iter()
 	.map(|row| {

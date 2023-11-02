@@ -38,7 +38,8 @@ async fn worker(ctx: &OperationContext<mm::msg::player_remove::Message>) -> Glob
 	let lobby_id = ctx.lobby_id.map(|x| x.as_uuid());
 
 	// Fetch player
-	let player_row = sqlx::query_as::<_, PlayerRow>(indoc!(
+	let player_row = sql_fetch_optional!(
+		[ctx, PlayerRow]
 		"
 		WITH
 			select_player AS (
@@ -70,12 +71,11 @@ async fn worker(ctx: &OperationContext<mm::msg::player_remove::Message>) -> Glob
 				RETURNING 1
 			)
 		SELECT * FROM select_player
-		"
-	))
-	.bind(player_id)
-	.bind(lobby_id)
-	.bind(ctx.ts())
-	.fetch_optional(&crdb)
+		",
+		player_id,
+		lobby_id,
+		ctx.ts(),
+	)
 	.await?;
 	tracing::info!(?player_row, "player row");
 

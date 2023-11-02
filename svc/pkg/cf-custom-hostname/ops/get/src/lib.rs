@@ -22,7 +22,8 @@ async fn handle(
 		.map(common::Uuid::as_uuid)
 		.collect::<Vec<_>>();
 
-	let custom_hostnames = sqlx::query_as::<_, CustomHostname>(indoc!(
+	let custom_hostnames = sql_fetch_all!(
+		[ctx, CustomHostname]
 		"
 		SELECT
 			identifier,
@@ -34,10 +35,9 @@ async fn handle(
 			subscription_id
 		FROM db_cf_custom_hostname.custom_hostnames
 		WHERE identifier = ANY($1)
-		"
-	))
-	.bind(identifiers)
-	.fetch_all(&ctx.crdb().await?)
+		",
+		identifiers,
+	)
 	.await?;
 
 	Ok(cf_custom_hostname::get::Response {

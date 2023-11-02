@@ -102,16 +102,16 @@ async fn update_db(
 	user_id: Uuid,
 ) -> GlobalResult<DbOutput> {
 	// Find the invitation
-	let invitation_row = sqlx::query_as::<_, InvitationRow>(
+	let invitation_row = sql_fetch_optional!(
+		[ctx, InvitationRow]
 		"
 		SELECT team_id, expire_ts, max_use_count, use_counter, revoke_ts
 		FROM db_team_invite.invitations
 		WHERE code = $1
 		FOR UPDATE
 		",
+		&code,
 	)
-	.bind(&code)
-	.fetch_optional(&mut **tx)
 	.await?;
 	let invitation_row = if let Some(invitation) = invitation_row {
 		tracing::info!(?invitation, "found invitation");

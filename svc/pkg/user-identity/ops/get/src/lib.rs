@@ -18,15 +18,15 @@ async fn handle(
 		.map(common::Uuid::as_uuid)
 		.collect::<Vec<_>>();
 
-	let identity_rows = sqlx::query_as::<_, IdentityRow>(indoc!(
+	let identity_rows = sql_fetch_all!(
+		[ctx, IdentityRow]
 		"
 		SELECT user_id, email
 		FROM db_user_identity.emails
 		WHERE user_id = ANY($1)
-	"
-	))
-	.bind(&user_ids)
-	.fetch_all(&ctx.crdb().await?)
+	",
+		&user_ids,
+	)
 	.await?;
 
 	let users = user_ids

@@ -59,7 +59,8 @@ async fn handle(
 		.iter()
 		.map(|x| x.last_read_ts)
 		.collect::<Vec<_>>();
-	let threads = sqlx::query_as::<_, (Uuid, i64)>(indoc!(
+	let threads = sql_fetch_all!(
+		[ctx, (Uuid, i64)]
 		"
 		SELECT thread_id, (
 			SELECT COUNT(*)
@@ -68,11 +69,10 @@ async fn handle(
 			LIMIT 100
 		)
 		FROM unnest($1::UUID[], $2::INT[]) query (thread_id, last_read_ts)
-		"
-	))
-	.bind(query_thread_ids)
-	.bind(query_read_ts)
-	.fetch_all(&crdb)
+		",
+		query_thread_ids,
+		query_read_ts,
+	)
 	.await?
 	.into_iter()
 	.map(

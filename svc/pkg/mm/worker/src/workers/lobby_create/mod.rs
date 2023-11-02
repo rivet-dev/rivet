@@ -485,11 +485,11 @@ async fn update_db(
 	// mm-lobby-cleanup is called.
 	//
 	// This will lock the lobby for the duration of the transaction
-	let lobby_row = sqlx::query_as::<_, (Option<i64>, Option<i64>)>(
+	let lobby_row = sql_fetch_optional!(
+		[ctx, (Option<i64>, Option<i64>)]
 		"SELECT stop_ts, preemptive_create_ts FROM db_mm_state.lobbies WHERE lobby_id = $1 FOR UPDATE",
+		opts.lobby_id,
 	)
-	.bind(opts.lobby_id)
-	.fetch_optional(&mut **tx)
 	.await?;
 	if let Some((stop_ts, preemptive_create_ts)) = lobby_row {
 		if preemptive_create_ts.is_none() {

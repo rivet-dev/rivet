@@ -18,7 +18,8 @@ async fn handle(
 	let topic_str = util_captcha::serialize_topic_str(&ctx.topic)?;
 
 	// Fetch last successful query
-	let success_res = sqlx::query_as::<_, (i64,)>(indoc!(
+	let success_res = sql_fetch_optional!(
+		[ctx, (i64,)]
 		"
 		SELECT complete_ts
 		FROM db_captcha.captcha_verifications
@@ -26,11 +27,10 @@ async fn handle(
 		ORDER BY complete_ts DESC
 		LIMIT 1
 		FOR SHARE SKIP LOCKED
-		"
-	))
-	.bind(&topic_str)
-	.bind(&ctx.remote_address)
-	.fetch_optional(&crdb)
+		",
+		&topic_str,
+		&ctx.remote_address,
+	)
 	.await?;
 
 	tracing::info!(?success_res, "fetched captcha verifications");
@@ -49,19 +49,19 @@ async fn handle(
 			// don't need to get an exact count beyond the max requests.
 			// Otherwise, abusers could spam requests to make this query slower
 			// by O(n) with every request.
-			let (req_count,) = sqlx::query_as::<_, (i64,)>(indoc!(
+			let (req_count,) = sql_fetch_one!(
+				[ctx, (i64,)]
 				"
 				SELECT COUNT(*)
 				FROM db_captcha.captcha_requests
 				WHERE topic_str = $1 AND remote_address = $2 AND create_ts > $3
 				LIMIT $4
-				"
-			))
-			.bind(&topic_str)
-			.bind(&ctx.remote_address)
-			.bind(success_complete_ts)
-			.bind(captcha_config.requests_before_reverify as i64)
-			.fetch_one(&crdb)
+				",
+				&topic_str,
+				&ctx.remote_address,
+				success_complete_ts,
+				captcha_config.requests_before_reverify as i64,
+			)
 			.await?;
 			tracing::info!(?req_count, ts = ?ctx.ts(), "fetched request count");
 

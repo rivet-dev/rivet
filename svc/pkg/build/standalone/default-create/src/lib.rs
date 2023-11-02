@@ -88,11 +88,11 @@ pub async fn run_from_env() -> GlobalResult<()> {
 
 	for build in DEFAULT_BUILDS {
 		// Check if this default build is already set
-		let old_default_build = sqlx::query_as::<_, (String,)>(
+		let old_default_build = sql_fetch_optional!(
+			[ctx, (String,)]
 			"SELECT image_tag FROM db_build.default_builds WHERE kind = $1",
+			build.kind,
 		)
-		.bind(build.kind)
-		.fetch_optional(&crdb_pool)
 		.await?;
 		if old_default_build
 			.as_ref()

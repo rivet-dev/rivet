@@ -18,17 +18,17 @@ async fn handle(
 		.map(common::Uuid::as_uuid)
 		.collect::<Vec<_>>();
 
-	let lobbies = sqlx::query_as::<_, LobbyRow>(indoc!(
+	let lobbies = sql_fetch_all!(
+		[ctx, LobbyRow]
 		"
 		SELECT
 			lobby_id,
 			creator_user_id
 		FROM db_mm_state.lobbies
 		WHERE creator_user_id = ANY($1)
-		"
-	))
-	.bind(&user_ids)
-	.fetch_all(&crdb)
+		",
+		&user_ids,
+	)
 	.await?;
 
 	Ok(mm::lobby_list_for_user_id::Response {

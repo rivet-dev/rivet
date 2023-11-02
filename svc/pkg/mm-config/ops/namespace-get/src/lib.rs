@@ -22,7 +22,8 @@ async fn handle(
 		.map(common::Uuid::as_uuid)
 		.collect::<Vec<_>>();
 
-	let namespaces = sqlx::query_as::<_, GameNamespace>(indoc!(
+	let namespaces = sql_fetch_all!(
+		[ctx, GameNamespace]
 		"
 		SELECT
 			namespace_id,
@@ -34,10 +35,9 @@ async fn handle(
 			max_players_per_client_hosting
 		FROM db_mm_config.game_namespaces
 		WHERE namespace_id = ANY($1)
-		"
-	))
-	.bind(namespace_ids)
-	.fetch_all(&ctx.crdb().await?)
+		",
+		namespace_ids,
+	)
 	.await?
 	.into_iter()
 	.map(|ns| mm_config::namespace_get::response::Namespace {

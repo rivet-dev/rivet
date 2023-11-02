@@ -8,17 +8,28 @@ pub async fn run_from_env(ts: i64) -> GlobalResult<()> {
 	let pools = rivet_pools::from_env("user-delete-pending").await?;
 	let client =
 		chirp_client::SharedClient::from_env(pools.clone())?.wrap_new("user-delete-pending");
-	let crdb_pool = pools.crdb()?;
+	let cache = rivet_cache::CacheInner::from_env(pools.clone())?;
+	let ctx = OperationContext::new(
+		"user-delete-pending".into(),
+		std::time::Duration::from_secs(60),
+		rivet_connection::Connection::new(client, pools, cache),
+		Uuid::new_v4(),
+		Uuid::new_v4(),
+		util::timestamp::now(),
+		util::timestamp::now(),
+		(),
+		Vec::new(),
+	);
 
-	let user_ids = sqlx::query_as::<_, (Uuid,)>(indoc!(
+	let user_ids = sql_fetch_all!(
+		[ctx, (Uuid,)]
 		"
 		SELECT user_id
 		FROM db_user.users
 		WHERE delete_request_ts < $1
-		"
-	))
-	.bind(ts - util::duration::days(30))
-	.fetch_all(&crdb_pool)
+		",
+		ts - util::duration::days(30),
+	)
 	.await?
 	.into_iter()
 	.map(|(user_id,)| user_id)
@@ -28,7 +39,7 @@ pub async fn run_from_env(ts: i64) -> GlobalResult<()> {
 
 	futures_util::stream::iter(user_ids.into_iter())
 		.map(|user_id| {
-			msg!([client] user::msg::delete(user_id) -> user::msg::delete_complete {
+			msg!([ctx] user::msg::delete(user_id) -> user::msg::delete_complete {
 				user_id: Some(user_id.into()),
 			})
 		})

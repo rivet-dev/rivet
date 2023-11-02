@@ -20,15 +20,15 @@ pub async fn run_from_env(ts: i64) -> GlobalResult<()> {
 	let crdb_pool = ctx.crdb().await?;
 
 	let cutoff_ts = ts - util::billing::CUTOFF_DURATION;
-	let team_ids = sqlx::query_as::<_, (Uuid,)>(indoc!(
+	let team_ids = sql_fetch_all!(
+		[ctx, (Uuid,)]
 		"
 		SELECT team_id
 		FROM db_team_dev.dev_teams
 		WHERE payment_failed_ts < $1
-		"
-	))
-	.bind(cutoff_ts)
-	.fetch_all(&crdb_pool)
+		",
+		cutoff_ts,
+	)
 	.await?
 	.into_iter()
 	.map(|(team_id,)| team_id.into())

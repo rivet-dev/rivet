@@ -26,8 +26,6 @@ impl From<FileRow> for backend::upload::UploadFile {
 pub async fn handle(
 	ctx: OperationContext<upload::file_list::Request>,
 ) -> GlobalResult<upload::file_list::Response> {
-	let crdb = ctx.crdb().await?;
-
 	let upload_ids = ctx
 		.upload_ids
 		.iter()
@@ -37,17 +35,17 @@ pub async fn handle(
 	let files = ctx
 		.cache()
 		.fetch_all_proto("upload_files", upload_ids, move |mut cache, upload_ids| {
-			let crdb = crdb.clone();
+			let ctx = ctx.clone();
 			async move {
-				let rows = sqlx::query_as::<_, FileRow>(indoc!(
+				let rows = sql_fetch_all!(
+					[ctx, FileRow]
 					"
 					SELECT upload_id, path, mime, content_length, multipart_upload_id
 					FROM db_upload.upload_files
 					WHERE upload_id = ANY($1)
-					"
-				))
-				.bind(&upload_ids)
-				.fetch_all(&crdb)
+					",
+					&upload_ids,
+				)
 				.await?;
 
 				// Cache the file list for each upload ID

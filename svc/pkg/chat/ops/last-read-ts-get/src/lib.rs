@@ -29,16 +29,16 @@ async fn handle(
 		.map(common::Uuid::as_uuid)
 		.collect::<Vec<_>>();
 
-	let threads = sqlx::query_as::<_, Thread>(indoc!(
+	let threads = sql_fetch_all!(
+		[ctx, Thread]
 		"
 		SELECT thread_id, last_read_ts
 		FROM db_chat.thread_user_settings
 		WHERE user_id = $1 AND thread_id = ANY($2)
-		"
-	))
-	.bind(user_id)
-	.bind(&thread_ids)
-	.fetch_all(&crdb)
+		",
+		user_id,
+		&thread_ids,
+	)
 	.await?;
 
 	Ok(chat::last_read_ts_get::Response {

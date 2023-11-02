@@ -36,13 +36,13 @@ pub async fn run_from_env(ts: i64) -> GlobalResult<()> {
 	);
 	let crdb_pool = ctx.crdb().await?;
 
-	let dev_teams = sqlx::query_as::<_, DevTeam>(indoc!(
+	let dev_teams = sql_fetch_all!(
+		[ctx, DevTeam]
 		"
 		SELECT team_id, last_collection_ts
 		FROM db_team_dev.dev_teams
-		"
-	))
-	.fetch_all(&crdb_pool)
+		",
+	)
 	.await?
 	.into_iter()
 	.collect::<Vec<_>>();

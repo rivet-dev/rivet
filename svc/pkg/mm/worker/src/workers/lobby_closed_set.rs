@@ -20,17 +20,17 @@ async fn worker(ctx: &OperationContext<mm::msg::lobby_closed_set::Message>) -> G
 
 	let lobby_id = unwrap_ref!(ctx.lobby_id).as_uuid();
 
-	let lobby_row = sqlx::query_as::<_, LobbyRow>(indoc!(
+	let lobby_row = sql_fetch_optional!(
+		[ctx, LobbyRow]
 		"
 		UPDATE db_mm_state.lobbies
 		SET is_closed = $2
 		WHERE lobby_id = $1
 		RETURNING namespace_id, region_id, lobby_group_id, max_players_normal, max_players_party
-		"
-	))
-	.bind(lobby_id)
-	.bind(ctx.is_closed)
-	.fetch_optional(&crdb)
+		",
+		lobby_id,
+		ctx.is_closed,
+	)
 	.await?;
 	tracing::info!(?lobby_row, "lobby row");
 

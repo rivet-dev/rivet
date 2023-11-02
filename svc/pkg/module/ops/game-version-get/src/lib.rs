@@ -21,15 +21,15 @@ async fn handle(
 		.map(common::Uuid::as_uuid)
 		.collect::<Vec<_>>();
 
-	let versions = sqlx::query_as::<_, GameVersion>(indoc!(
+	let versions = sql_fetch_all!(
+		[ctx, GameVersion]
 		"
 		SELECT version_id, config
 		FROM db_module.game_versions
 		WHERE version_id = ANY($1)
-		"
-	))
-	.bind(&version_ids)
-	.fetch_all(&crdb)
+		",
+		&version_ids,
+	)
 	.await?
 	.into_iter()
 	.map(|x| -> GlobalResult<_> {

@@ -9,11 +9,12 @@ async fn worker(ctx: &OperationContext<team::msg::owner_transfer::Message>) -> G
 	let new_owner_user_id = unwrap_ref!(ctx.new_owner_user_id).as_uuid();
 
 	let crdb = ctx.crdb().await?;
-	let (old_owner_user_id,) =
-		sqlx::query_as::<_, (Uuid,)>("SELECT owner_user_id FROM db_team.teams WHERE team_id = $1")
-			.bind(team_id)
-			.fetch_one(&crdb)
-			.await?;
+	let (old_owner_user_id,) = sql_fetch_one!(
+		[ctx, (Uuid,)]
+		"SELECT owner_user_id FROM db_team.teams WHERE team_id = $1",
+		team_id,
+	)
+	.await?;
 
 	tokio::try_join!(
 		sql_query!(

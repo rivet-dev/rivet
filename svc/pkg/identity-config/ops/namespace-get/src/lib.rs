@@ -17,15 +17,15 @@ async fn handle(
 		.collect::<Vec<_>>();
 
 	let sql_pool = ctx.crdb().await?;
-	let namespaces = sqlx::query_as::<_, GameNamespace>(indoc!(
+	let namespaces = sql_fetch_all!(
+		[ctx, GameNamespace]
 		"
 			SELECT namespace_id
 			FROM db_identity_config.game_namespaces
 			WHERE namespace_id = ANY($1)
-			"
-	))
-	.bind(&namespace_ids)
-	.fetch_all(&sql_pool)
+			",
+		&namespace_ids,
+	)
 	.await?;
 
 	let namespace_proto = namespaces

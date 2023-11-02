@@ -68,16 +68,16 @@ async fn update_db(
 	run_id: Uuid,
 	tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
 ) -> GlobalResult<Option<(RunRow, Option<RunMetaNomadRow>)>> {
-	let run_row = sqlx::query_as::<_, RunRow>(indoc!(
+	let run_row = sql_fetch_optional!(
+		[ctx, RunRow]
 		"
 		SELECT region_id, create_ts, cleanup_ts
 		FROM db_job_state.runs
 		WHERE run_id = $1
 		FOR UPDATE
-		"
-	))
-	.bind(run_id)
-	.fetch_optional(&mut **tx)
+		",
+		run_id,
+	)
 	.await?;
 	tracing::info!(?run_row, "run row");
 
@@ -85,16 +85,16 @@ async fn update_db(
 		return Ok(None);
 	};
 
-	let run_meta_nomad_row = sqlx::query_as::<_, RunMetaNomadRow>(indoc!(
+	let run_meta_nomad_row = sql_fetch_optional!(
+		[ctx, RunMetaNomadRow]
 		"
 		SELECT dispatched_job_id, node_id
 		FROM db_job_state.run_meta_nomad
 		WHERE run_id = $1
 		FOR UPDATE
-		"
-	))
-	.bind(run_id)
-	.fetch_optional(&mut **tx)
+		",
+		run_id,
+	)
 	.await?;
 	tracing::info!(?run_meta_nomad_row, "run meta row");
 

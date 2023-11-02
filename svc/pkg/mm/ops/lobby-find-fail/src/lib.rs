@@ -16,18 +16,19 @@ async fn handle(
 	for query_id in &ctx.query_ids {
 		let query_id = query_id.as_uuid();
 
-		let client = ctx.chirp().clone();
-		let crdb = crdb.clone();
+		let ctx = ctx.clone();
 		let redis = redis.clone();
 
 		if let Some(force_fail) = &ctx.force_fail {
 			let namespace_id = unwrap_ref!(force_fail.namespace_id).as_uuid();
 
 			tracing::info!("forcing fail event");
-			futs.push(publish_fail_event(client, namespace_id, query_id, ctx.error_code).boxed());
+			futs.push(
+				publish_fail_event(ctx.clone(), namespace_id, query_id, ctx.error_code).boxed(),
+			);
 		} else {
 			tracing::info!(?query_id, "failing query");
-			futs.push(fail_query(client, crdb, redis, query_id, ctx.error_code).boxed());
+			futs.push(fail_query(ctx.clone(), redis, query_id, ctx.error_code).boxed());
 		}
 	}
 	futures_util::future::try_join_all(futs).await?;
@@ -36,10 +37,9 @@ async fn handle(
 }
 
 // TODO: Break this down in to batch statements for each phase
-#[tracing::instrument(skip(crdb, redis))]
+#[tracing::instrument(skip(ctx, redis))]
 async fn fail_query(
-	client: chirp_client::Client,
-	crdb: CrdbPool,
+	ctx: OperationContext<mm::lobby_find_fail::Request>,
 	mut redis: RedisPool,
 	query_id: Uuid,
 	error_code: i32,
@@ -53,7 +53,8 @@ async fn fail_query(
 		.await?;
 
 	// Update query status in database if pending
-	let query_row = sqlx::query_as::<_, (Uuid,)>(indoc!(
+	let query_row = sql_fetch_optional!(
+		[ctx, (Uuid,)]
 		"
 		UPDATE db_mm_state.find_queries
 		SET
@@ -61,19 +62,18 @@ async fn fail_query(
 			error_code = $4
 		WHERE query_id = $1 AND status = $2
 		RETURNING namespace_id
-		"
-	))
-	.bind(query_id)
-	.bind(util_mm::FindQueryStatus::Pending as i64)
-	.bind(util_mm::FindQueryStatus::Fail as i64)
-	.bind(error_code as i64)
-	.fetch_optional(&crdb)
+		",
+		query_id,
+		util_mm::FindQueryStatus::Pending as i64,
+		util_mm::FindQueryStatus::Fail as i64,
+		error_code as i64,
+	)
 	.await?;
 
 	// Update query status if the status hasn't already been completed
 	if let Some((namespace_id,)) = query_row {
 		// Publish the fail event
-		publish_fail_event(client, namespace_id, query_id, error_code).await?;
+		publish_fail_event(ctx.clone(), namespace_id, query_id, error_code).await?;
 	} else {
 		tracing::info!("find query was not updated");
 	}
@@ -82,20 +82,20 @@ async fn fail_query(
 }
 
 async fn publish_fail_event(
-	client: chirp_client::Client,
+	ctx: OperationContext<mm::lobby_find_fail::Request>,
 	namespace_id: Uuid,
 	query_id: Uuid,
 	error_code: i32,
 ) -> GlobalResult<()> {
 	// Publish fail message
-	msg!([client] mm::msg::lobby_find_fail(namespace_id, query_id) {
+	msg!([ctx] mm::msg::lobby_find_fail(namespace_id, query_id) {
 		namespace_id: Some(namespace_id.into()),
 		query_id: Some(query_id.into()),
 		error_code: error_code,
 	})
 	.await?;
 
-	msg!([client] analytics::msg::event_create() {
+	msg!([ctx] analytics::msg::event_create() {
 		events: vec![
 			analytics::msg::event_create::Event {
 				name: "mm.query.fail".into(),

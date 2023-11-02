@@ -105,7 +105,8 @@ async fn handle(
 	//
 	// Use AS OF SYSTEM TIME to reduce contention.
 	// https://www.cockroachlabs.com/docs/v22.2/performance-best-practices-overview#use-as-of-system-time-to-decrease-conflicts-with-long-running-queries
-	let mut lobby_rows = sqlx::query_as::<_, LobbyRow>(indoc!(
+	let mut lobby_rows = sql_fetch!(
+		[ctx, LobbyRow, &crdb]
 		"
 		SELECT namespace_id, lobby_id, region_id, lobby_group_id, create_ts, stop_ts
 		FROM db_mm_state.lobbies AS OF SYSTEM TIME '-5s'
@@ -117,12 +118,11 @@ async fn handle(
 			-- Lobbies still running that overlap with the query window
 			(stop_ts IS NULL AND create_ts <= $3)
 		)
-		"
-	))
-	.bind(&namespace_ids)
-	.bind(ctx.query_start)
-	.bind(ctx.query_end)
-	.fetch(&crdb);
+		",
+		&namespace_ids,
+		ctx.query_start,
+		ctx.query_end,
+	);
 	while let Some(lobby_row) = lobby_rows.next().await {
 		let lobby_row = lobby_row?;
 		lobby_aggregate.process_lobby(&lobby_row);

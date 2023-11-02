@@ -44,7 +44,8 @@ async fn handle(
 
 	let follows = match req_kind {
 		RequestKind::Mutual => {
-			sqlx::query_as::<_, Follow>(indoc!(
+			sql_fetch_all!(
+				[ctx, Follow]
 				"
 				SELECT follower_user_id, following_user_id, create_ts, is_mutual
 				FROM (
@@ -64,16 +65,16 @@ async fn handle(
 				WHERE is_mutual AND create_ts > $2
 				ORDER BY create_ts DESC
 				LIMIT $3
-				"
-			))
-			.bind(&user_ids)
-			.bind(ctx.anchor.unwrap_or_default())
-			.bind(limit as i64)
-			.fetch_all(&ctx.crdb().await?)
+				",
+				&user_ids,
+				ctx.anchor.unwrap_or_default(),
+				limit as i64,
+			)
 			.await?
 		}
 		_ => {
-			sqlx::query_as::<_, Follow>(&formatdoc!(
+			sql_fetch_all!(
+				[ctx, Follow]
 				"
 				SELECT follower_user_id, following_user_id, create_ts, is_mutual
 				FROM (
@@ -94,16 +95,10 @@ async fn handle(
 				ORDER BY is_mutual DESC, create_ts DESC
 				LIMIT $3
 				",
-				join_column = match req_kind {
-					RequestKind::Follower => "follower_user_id",
-					RequestKind::Following => "following_user_id",
-					RequestKind::Mutual => unreachable!(),
-				},
-			))
-			.bind(&user_ids)
-			.bind(ctx.anchor.unwrap_or_default())
-			.bind(limit as i64)
-			.fetch_all(&ctx.crdb().await?)
+				&user_ids,
+				ctx.anchor.unwrap_or_default(),
+				limit as i64,
+			)
 			.await?
 		}
 	};

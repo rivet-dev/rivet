@@ -11,16 +11,16 @@ async fn handle(
 		.map(|id| id.as_uuid())
 		.collect::<Vec<_>>();
 
-	let member_counts = sqlx::query_as::<_, (Uuid, i64)>(indoc!(
+	let member_counts = sql_fetch_all!(
+		[ctx, (Uuid, i64)]
 		"
 		SELECT team_id, COUNT(*)
 		FROM db_team.team_members
 		WHERE team_id = ANY($1::UUID[])
 		GROUP BY team_id
-		"
-	))
-	.bind(&team_ids)
-	.fetch_all(&ctx.crdb().await?)
+		",
+		&team_ids,
+	)
 	.await?;
 
 	Ok(team::member_count::Response {

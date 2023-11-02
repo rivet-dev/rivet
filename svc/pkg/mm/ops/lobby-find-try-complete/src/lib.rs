@@ -27,10 +27,9 @@ async fn handle(
 	for query_id in &ctx.query_ids {
 		let query_id = query_id.as_uuid();
 
-		let client = ctx.chirp().clone();
-		let crdb = crdb.clone();
+		let ctx = ctx.clone();
 		let redis = redis.clone();
-		futs.push(complete_query(client, crdb, redis, query_id));
+		futs.push(complete_query(ctx, redis, query_id));
 	}
 	futures_util::future::try_join_all(futs).await?;
 
@@ -38,10 +37,9 @@ async fn handle(
 }
 
 // TODO: Break this down in to batch statements for each phase
-#[tracing::instrument(skip(crdb, redis))]
+#[tracing::instrument(skip(ctx, redis))]
 async fn complete_query(
-	client: chirp_client::Client,
-	crdb: CrdbPool,
+	ctx: OperationContext<mm::lobby_find_try_complete::Request>,
 	mut redis: RedisPool,
 	query_id: Uuid,
 ) -> GlobalResult<()> {
@@ -134,25 +132,25 @@ async fn complete_query(
 		.await?;
 
 	// Update query status in database
-	let should_update = sqlx::query_as::<_, (i64,)>(indoc!(
+	let should_update = sql_fetch_optional!(
+		[ctx, (i64,)]
 		"
 		UPDATE db_mm_state.find_queries
 		SET status = $3
 		WHERE query_id = $1 AND status = $2
 		RETURNING 1
-		"
-	))
-	.bind(query_id)
-	.bind(FindQueryStatus::Pending as i64)
-	.bind(FindQueryStatus::Complete as i64)
-	.fetch_optional(&crdb)
+		",
+		query_id,
+		FindQueryStatus::Pending as i64,
+		FindQueryStatus::Complete as i64,
+	)
 	.await?
 	.is_some();
 
 	// Publish resulting messages
 	if should_update {
 		// Publish complete message
-		msg!([client] mm::msg::lobby_find_complete(find_query.namespace_id, query_id) {
+		msg!([ctx] mm::msg::lobby_find_complete(find_query.namespace_id, query_id) {
 			namespace_id: Some(find_query.namespace_id.into()),
 			query_id: Some(query_id.into()),
 			lobby_id: Some(find_query.lobby_id.into()),
@@ -160,7 +158,7 @@ async fn complete_query(
 		})
 		.await?;
 
-		msg!([client] analytics::msg::event_create() {
+		msg!([ctx] analytics::msg::event_create() {
 			events: vec![
 				analytics::msg::event_create::Event {
 					name: "mm.query.complete".into(),

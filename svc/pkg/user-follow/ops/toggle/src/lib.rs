@@ -49,10 +49,10 @@ async fn handle(
 		)?;
 
 		// Check for mutuality after creating record
-		check_mutual(&crdb, follower_user_id, following_user_id).await?
+		check_mutual(&ctx, follower_user_id, following_user_id).await?
 	} else {
 		// Check for mutuality before deleting record
-		let mutual = check_mutual(&crdb, follower_user_id, following_user_id).await?;
+		let mutual = check_mutual(&ctx, follower_user_id, following_user_id).await?;
 
 		sql_query!(
 			[ctx]
@@ -140,11 +140,12 @@ async fn handle(
 }
 
 async fn check_mutual(
-	crdb: &CrdbPool,
+	ctx: &OperationContext<user_follow::toggle::Request>,
 	follower_user_id: Uuid,
 	following_user_id: Uuid,
 ) -> GlobalResult<bool> {
-	let res = sqlx::query_as::<_, (i64,)>(indoc!(
+	let res = sql_fetch_all!(
+		[ctx, (i64,)]
 		"
 		SELECT 1
 			FROM db_user_follow.user_follows
@@ -152,11 +153,10 @@ async fn check_mutual(
 				(follower_user_id = $1 AND following_user_id = $2) OR
 				(follower_user_id = $2 AND following_user_id = $1)
 		LIMIT 2
-		"
-	))
-	.bind(follower_user_id)
-	.bind(following_user_id)
-	.fetch_all(crdb)
+		",
+		follower_user_id,
+		following_user_id,
+	)
 	.await?;
 
 	Ok(res.len() == 2)

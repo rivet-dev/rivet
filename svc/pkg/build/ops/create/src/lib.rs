@@ -28,11 +28,11 @@ async fn handle(
 
 	let (image_tag, upload_id, image_presigned_requests) =
 		if let Some(build_kind) = &ctx.default_build_kind {
-			let (image_tag, upload_id) = sqlx::query_as::<_, (String, Uuid)>(
+			let (image_tag, upload_id) = sql_fetch_one!(
+				[ctx, (String, Uuid)]
 				"SELECT image_tag, upload_id FROM db_build.default_builds WHERE kind = $1",
+				build_kind,
 			)
-			.bind(build_kind)
-			.fetch_one(&crdb)
 			.await?;
 
 			(image_tag, upload_id, Vec::new())
@@ -54,11 +54,11 @@ async fn handle(
 			);
 
 			// Check if build is unique
-			let (build_exists,) = sqlx::query_as::<_, (bool,)>(
+			let (build_exists,) = sql_fetch_one!(
+				[ctx, (bool,)]
 				"SELECT EXISTS (SELECT 1 FROM db_build.builds WHERE image_tag = $1)",
+				image_tag,
 			)
-			.bind(image_tag)
-			.fetch_one(&crdb)
 			.await?;
 			if build_exists {
 				tracing::info!(?image_tag, "build image is not unique");

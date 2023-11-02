@@ -25,7 +25,8 @@ async fn handle(ctx: OperationContext<game::get::Request>) -> GlobalResult<game:
 		.map(|id| id.as_uuid())
 		.collect::<Vec<_>>();
 
-	let games = sqlx::query_as::<_, Game>(indoc!(
+	let games = sql_fetch_all!(
+		[ctx, Game]
 		"
 		SELECT
 			game_id,
@@ -46,10 +47,9 @@ async fn handle(ctx: OperationContext<game::get::Request>) -> GlobalResult<game:
 			subscription_id
 		FROM db_game.games
 		WHERE game_id = ANY($1)
-		"
-	))
-	.bind(game_ids)
-	.fetch_all(&ctx.crdb().await?)
+		",
+		game_ids,
+	)
 	.await?;
 
 	let upload_ids = games

@@ -32,35 +32,35 @@ async fn handle(
 		.map(common::Uuid::as_uuid)
 		.collect::<Vec<_>>();
 
-	let sql_pool = ctx.crdb().await?;
+	let crdb = ctx.crdb().await?;
 	let (namespace_domains, auth_users, namespaces) = tokio::try_join!(
-		sqlx::query_as::<_, GameNamespaceDomain>(indoc!(
+		sql_fetch_all!(
+			[ctx, GameNamespaceDomain, &crdb]
 			"
 			SELECT namespace_id, domain, create_ts
 			FROM db_cdn.game_namespace_domains
 			WHERE namespace_id = ANY($1)
-			"
-		))
-		.bind(&namespace_ids)
-		.fetch_all(&sql_pool),
-		sqlx::query_as::<_, GameNamespaceAuthUser>(indoc!(
+			",
+			&namespace_ids,
+		),
+		sql_fetch_all!(
+			[ctx, GameNamespaceAuthUser, &crdb]
 			"
 			SELECT namespace_id, user_name, password
 			FROM db_cdn.game_namespace_auth_users
 			WHERE namespace_id = ANY($1)
-			"
-		))
-		.bind(&namespace_ids)
-		.fetch_all(&sql_pool),
-		sqlx::query_as::<_, GameNamespace>(indoc!(
+			",
+			&namespace_ids,
+		),
+		sql_fetch_all!(
+			[ctx, GameNamespace, &crdb]
 			"
 			SELECT namespace_id, enable_domain_public_auth, auth_type
 			FROM db_cdn.game_namespaces
 			WHERE namespace_id = ANY($1)
-			"
-		))
-		.bind(&namespace_ids)
-		.fetch_all(&sql_pool),
+			",
+			&namespace_ids,
+		),
 	)?;
 
 	let namespace_proto = namespaces

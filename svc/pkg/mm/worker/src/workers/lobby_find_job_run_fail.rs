@@ -14,16 +14,16 @@ async fn worker(ctx: &OperationContext<job_run::msg::fail::Message>) -> GlobalRe
 	let run_id = unwrap_ref!(ctx.run_id).as_uuid();
 
 	// Find the associated lobby
-	let query_rows = sqlx::query_as::<_, (Uuid,)>(
+	let query_rows = sql_fetch_all!(
+		[ctx, (Uuid,)]
 		"
 		SELECT find_queries.query_id
 		FROM db_mm_state.lobbies
 		INNER JOIN db_mm_state.find_queries ON find_queries.lobby_id = lobbies.lobby_id
 		WHERE lobbies.run_id = $1
 		",
+		run_id,
 	)
-	.bind(run_id)
-	.fetch_all(&crdb)
 	.await?;
 	if query_rows.is_empty() {
 		tracing::info!(?run_id, "no find queries for run id");

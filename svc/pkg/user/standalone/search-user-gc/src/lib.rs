@@ -20,23 +20,23 @@ pub async fn run_from_env(ts: i64) -> GlobalResult<()> {
 		(),
 		Vec::new(),
 	);
-	let crdb = ctx.crdb().await?;
 
 	let mut total_removed = 0;
 	let start = std::time::Instant::now();
 
 	// Filters out users who have been updated in the last 14 days
-	let mut query = sqlx::query_as::<_, (Uuid,)>(indoc!(
+	let crdb = ctx.crdb().await?;
+	let mut query = sql_fetch!(
+		[ctx, (Uuid,), &crdb]
 		"
 		SELECT user_id
 		FROM db_user.users AS OF SYSTEM TIME '-5s'
 		WHERE
 			is_searchable = TRUE AND
 			update_ts < $1
-		"
-	))
-	.bind(ts - util::duration::days(14))
-	.fetch(&crdb);
+		",
+		ts - util::duration::days(14),
+	);
 
 	let mut batch_user_ids = Vec::with_capacity(1024);
 	while let Some(row) = query.next().await {

@@ -36,16 +36,16 @@ async fn handle(
 		.fetch_all_proto("version_ids", version_ids, |mut cache, version_ids| {
 			let ctx = ctx.base();
 			async move {
-				sqlx::query_as::<_, GameVersion>(indoc!(
+				sql_fetch_all!(
+					[ctx, GameVersion]
 					"
 					SELECT version_id, game_id, create_ts, display_name
 					FROM db_game.game_versions
 					WHERE version_id = ANY($1)
 					ORDER BY create_ts DESC
-					"
-				))
-				.bind(version_ids)
-				.fetch_all(&ctx.crdb().await?)
+					",
+					version_ids,
+				)
 				.await?
 				.into_iter()
 				.for_each(|row| {

@@ -13,15 +13,15 @@ async fn handle(
 		.collect::<Vec<_>>();
 
 	// Fetch games
-	let game_ids = sqlx::query_as::<_, (Uuid,)>(indoc!(
+	let game_ids = sql_fetch_all!(
+		[ctx, (Uuid,)]
 		"
 		SELECT game_id
 		FROM db_game.games
 		WHERE developer_team_id = ANY($1)
-		"
-	))
-	.bind(team_ids)
-	.fetch_all(&ctx.crdb().await?)
+		",
+		team_ids,
+	)
 	.await?
 	.into_iter()
 	.map(|(game_id,)| Into::<common::Uuid>::into(game_id))

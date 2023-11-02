@@ -26,15 +26,15 @@ async fn handle(
 		.map(common::Uuid::as_uuid)
 		.collect::<Vec<_>>();
 
-	let lobby_groups = sqlx::query_as::<_, LobbyGroup>(indoc!(
+	let lobby_groups = sql_fetch_all!(
+		[ctx, LobbyGroup]
 		"
 		SELECT name_id, lobby_group_id
 		FROM db_mm_config.lobby_groups AS lg
 		WHERE lobby_group_id = ANY($1)
-		"
-	))
-	.bind(lobby_group_ids)
-	.fetch_all(&ctx.crdb().await?)
+		",
+		lobby_group_ids,
+	)
 	.await?;
 
 	Ok(mm_config::lobby_group_get::Response {

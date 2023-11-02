@@ -22,25 +22,23 @@ macro_rules! sql_query_as {
         .$action($crdb)
     };
     ([$ctx:expr, $rv:ty, $action:ident] $sql:expr, $($bind:expr),* $(,)?) => {
-		{
-			sql_query_as!([ctx, $rv, $action, &$ctx.crdb().await?] $sql, $($bind),*)
-		}
+		sql_query_as!([ctx, $rv, $action, &$ctx.crdb().await?] $sql, $($bind),*)
     };
 }
 
 #[macro_export]
 macro_rules! sql_fetch {
-    ([$ctx:expr, $rv:ty, $crdb:ident] $sql:expr, $($bind:expr),* $(,)?) => {
+    ([$ctx:expr, $rv:ty, $crdb:expr] $sql:expr, $($bind:expr),* $(,)?) => {
 		sql_query_as!([$ctx, $rv, fetch, $crdb] $sql, $($bind),*)
     };
-    ([$ctx:expr, $rv:ty, $action:ident] $sql:expr, $($bind:expr),* $(,)?) => {
+    ([$ctx:expr, $rv:ty] $sql:expr, $($bind:expr),* $(,)?) => {
 		sql_query_as!([$ctx, $rv, fetch] $sql, $($bind),*)
     };
 }
 
 #[macro_export]
 macro_rules! sql_fetch_all {
-    ([$ctx:expr, $rv:ty, $crdb:ident] $sql:expr, $($bind:expr),* $(,)?) => {
+    ([$ctx:expr, $rv:ty, $crdb:expr] $sql:expr, $($bind:expr),* $(,)?) => {
 		sql_query_as!([$ctx, $rv, fetch_all, $crdb] $sql, $($bind),*)
     };
     ([$ctx:expr, $rv:ty] $sql:expr, $($bind:expr),* $(,)?) => {
@@ -50,7 +48,7 @@ macro_rules! sql_fetch_all {
 
 #[macro_export]
 macro_rules! sql_fetch_many {
-    ([$ctx:expr, $rv:ty, $crdb:ident] $sql:expr, $($bind:expr),* $(,)?) => {
+    ([$ctx:expr, $rv:ty, $crdb:expr] $sql:expr, $($bind:expr),* $(,)?) => {
 		sql_query_as!([$ctx, $rv, fetch_many, $crdb] $sql, $($bind),*)
     };
     ([$ctx:expr, $rv:ty] $sql:expr, $($bind:expr),* $(,)?) => {
@@ -60,7 +58,7 @@ macro_rules! sql_fetch_many {
 
 #[macro_export]
 macro_rules! sql_fetch_one {
-    ([$ctx:expr, $rv:ty, $crdb:ident] $sql:expr, $($bind:expr),* $(,)?) => {
+    ([$ctx:expr, $rv:ty, $crdb:expr] $sql:expr, $($bind:expr),* $(,)?) => {
 		sql_query_as!([$ctx, $rv, fetch_one, $crdb] $sql, $($bind),*)
     };
     ([$ctx:expr, $rv:ty] $sql:expr, $($bind:expr),* $(,)?) => {
@@ -70,7 +68,7 @@ macro_rules! sql_fetch_one {
 
 #[macro_export]
 macro_rules! sql_fetch_optional {
-    ([$ctx:expr, $rv:ty, $crdb:ident] $sql:expr, $($bind:expr),* $(,)?) => {
+    ([$ctx:expr, $rv:ty, $crdb:expr] $sql:expr, $($bind:expr),* $(,)?) => {
 		sql_query_as!([$ctx, $rv, fetch_optional, $crdb] $sql, $($bind),*)
     };
     ([$ctx:expr, $rv:ty] $sql:expr, $($bind:expr),* $(,)?) => {

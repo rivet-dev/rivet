@@ -77,15 +77,15 @@ async fn worker(
 		}
 	}
 
-	let (subscription_id,) = sqlx::query_as::<_, (Uuid,)>(indoc!(
+	let (subscription_id,) = sql_fetch_one!(
+		[ctx, (Uuid,)]
 		"
 		SELECT subscription_id
 		FROM db_cf_custom_hostname.custom_hostnames
 		WHERE identifier = $1
-		"
-	))
-	.bind(identifier)
-	.fetch_one(&crdb)
+		",
+		identifier,
+	)
 	.await?;
 
 	// TODO: Delete stripe subscription for hostname
