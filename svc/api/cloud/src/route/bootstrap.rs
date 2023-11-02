@@ -12,7 +12,8 @@ pub async fn get(
 	Ok(models::CloudBootstrapResponse {
 		captcha: Box::new(models::CloudBootstrapCaptcha {
 			turnstile: Box::new(models::CloudBootstrapCaptchaTurnstile {
-				site_key: std::env::var("TURNSTILE_SITE_KEY_MAIN")?,
+				// TODO: Find a better way of cleanly disabling Turnstile
+				site_key: std::env::var("TURNSTILE_SITE_KEY_MAIN").unwrap_or_default(),
 			}),
 		}),
 	})
