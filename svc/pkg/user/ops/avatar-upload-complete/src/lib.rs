@@ -15,15 +15,15 @@ async fn handle(
 	.await?;
 
 	// Set avatar id
-	sqlx::query(indoc!(
+	sql_query!(
+		[ctx]
 		"
 		UPDATE db_user.users set profile_id = $2
 		WHERE user_id = $1
-		"
-	))
-	.bind(user_id)
-	.bind(upload_id)
-	.execute(&ctx.crdb().await?)
+		",
+		user_id,
+		upload_id,
+	)
 	.await?;
 
 	ctx.cache().purge("user", [user_id]).await?;

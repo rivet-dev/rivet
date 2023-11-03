@@ -33,26 +33,26 @@ async fn worker(ctx: &OperationContext<upload::msg::delete::Message>) -> GlobalR
 		.map(common::Uuid::as_uuid)
 		.collect::<Vec<_>>();
 
-	let uploads = sqlx::query_as::<_, UploadRow>(indoc!(
+	let uploads = sql_fetch_all!(
+		[ctx, UploadRow]
 		"
 		SELECT upload_id, bucket, provider
 		FROM db_upload.uploads
 		WHERE upload_id = ANY($1)
-		"
-	))
-	.bind(&upload_ids)
-	.fetch_all(&crdb)
+		",
+		&upload_ids,
+	)
 	.await?;
 
-	let upload_files = sqlx::query_as::<_, FileRow>(indoc!(
+	let upload_files = sql_fetch_all!(
+		[ctx, FileRow]
 		"
 		SELECT upload_id, path
 		FROM db_upload.upload_files
 		WHERE upload_id = ANY($1)
-		"
-	))
-	.bind(&upload_ids)
-	.fetch_all(&crdb)
+		",
+		&upload_ids,
+	)
 	.await?;
 
 	ctx.cache().purge("upload", upload_ids.clone()).await?;
@@ -130,16 +130,16 @@ async fn worker(ctx: &OperationContext<upload::msg::delete::Message>) -> GlobalR
 		.await?;
 
 	// Mark upload as deleted
-	sqlx::query(indoc!(
+	sql_query!(
+		[ctx]
 		"
 		UPDATE db_upload.uploads
 		SET deleted_ts = $2
 		WHERE upload_id = ANY($1)
-		"
-	))
-	.bind(&upload_ids)
-	.bind(ctx.ts())
-	.execute(&crdb)
+		",
+		&upload_ids,
+		ctx.ts(),
+	)
 	.await?;
 
 	msg!([ctx] upload::msg::delete_complete(request_id) {

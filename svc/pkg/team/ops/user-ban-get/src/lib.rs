@@ -24,16 +24,16 @@ async fn handle(
 		})
 		.collect::<GlobalResult<Vec<(Uuid, Uuid)>>>()?;
 
-	let banned_users = sqlx::query_as::<_, BannedUser>(&formatdoc!(
+	let banned_users = sql_fetch_all!(
+		[ctx, BannedUser]
 		"
 		SELECT team_id, user_id, ban_ts
 		FROM db_team.banned_users
 		INNER JOIN jsonb_array_elements($1::JSONB) AS q
 		ON team_id = (q->>0)::UUID AND user_id = (q->>1)::UUID
-		"
-	))
-	.bind(serde_json::to_string(&queries)?)
-	.fetch_all(&ctx.crdb().await?)
+		",
+		serde_json::to_string(&queries)?,
+	)
 	.await?;
 
 	Ok(team::user_ban_get::Response {

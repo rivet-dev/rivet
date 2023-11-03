@@ -88,11 +88,11 @@ pub async fn run_from_env() -> GlobalResult<()> {
 
 	for build in DEFAULT_BUILDS {
 		// Check if this default build is already set
-		let old_default_build = sqlx::query_as::<_, (String,)>(
+		let old_default_build = sql_fetch_optional!(
+			[ctx, (String,)]
 			"SELECT image_tag FROM db_build.default_builds WHERE kind = $1",
+			build.kind,
 		)
-		.bind(build.kind)
-		.fetch_optional(&crdb_pool)
 		.await?;
 		if old_default_build
 			.as_ref()
@@ -111,16 +111,16 @@ pub async fn run_from_env() -> GlobalResult<()> {
 
 		// Update default build
 		tracing::info!(tag = %build.tag, ?upload_id, "setting default build");
-		sqlx::query(indoc!(
+		sql_query!(
+			[ctx]
 			"
 			UPSERT INTO db_build.default_builds (kind, image_tag, upload_id)
 			VALUES ($1, $2, $3)
-			"
-		))
-		.bind(build.kind)
-		.bind(build.tag)
-		.bind(upload_id)
-		.execute(&crdb_pool)
+			",
+			build.kind,
+			build.tag,
+			upload_id,
+		)
 		.await?;
 	}
 

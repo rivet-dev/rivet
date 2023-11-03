@@ -52,7 +52,8 @@ async fn handle(
 			(ctx.query.to_owned(), 0, 10000)
 		};
 
-	let res = sqlx::query_as::<_, User>(indoc!(
+	let res = sql_fetch_all!(
+		[ctx, User]
 		"
 		SELECT user_id, join_ts FROM db_user.users@search_index
 		WHERE
@@ -63,14 +64,13 @@ async fn handle(
 			join_ts < $4
 			ORDER BY join_ts DESC
 			LIMIT $5
-		"
-	))
-	.bind(query)
-	.bind(lower)
-	.bind(upper)
-	.bind(ctx.anchor.unwrap_or_else(util::timestamp::now))
-	.bind(limit as i64)
-	.fetch_all(&crdb)
+		",
+		query,
+		lower,
+		upper,
+		ctx.anchor.unwrap_or_else(util::timestamp::now),
+		limit as i64,
+	)
 	.await?;
 
 	let anchor = res.last().map(|user| user.join_ts);

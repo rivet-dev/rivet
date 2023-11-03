@@ -22,7 +22,8 @@ async fn handle(
 	ensure!(limit != 0, "limit too low");
 	ensure!(limit <= 32, "limit too high");
 
-	let follows = sqlx::query_as::<_, Follow>(indoc!(
+	let follows = sql_fetch_all!(
+		[ctx, Follow]
 		"
 		SELECT follower_user_id, following_user_id, create_ts, ignored, is_mutual
 		FROM (
@@ -46,11 +47,10 @@ async fn handle(
 		ORDER BY create_ts DESC
 		LIMIT $3
 		",
-	))
-	.bind(&user_ids)
-	.bind(ctx.anchor.unwrap_or_default())
-	.bind(limit as i64)
-	.fetch_all(&ctx.crdb().await?)
+		&user_ids,
+		ctx.anchor.unwrap_or_default(),
+		limit as i64,
+	)
 	.await?;
 
 	let follows = user_ids

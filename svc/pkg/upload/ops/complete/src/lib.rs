@@ -27,7 +27,7 @@ async fn handle(
 
 	let upload_id = unwrap_ref!(ctx.upload_id).as_uuid();
 
-	let (bucket, provider, files, user_id) = fetch_files(&crdb, upload_id).await?;
+	let (bucket, provider, files, user_id) = fetch_files(&ctx, upload_id).await?;
 	let files_len = files.len();
 
 	if let Some(req_bucket) = &ctx.bucket {
@@ -42,16 +42,16 @@ async fn handle(
 	validate_files(&s3_client, upload_id, files).await?;
 
 	// Mark as complete
-	sqlx::query(indoc!(
+	sql_query!(
+		[ctx]
 		"
 		UPDATE db_upload.uploads
 		SET complete_ts = $2
 		WHERE upload_id = $1
-		"
-	))
-	.bind(upload_id)
-	.bind(ctx.ts())
-	.execute(&crdb)
+		",
+		upload_id,
+		ctx.ts(),
+	)
 	.await?;
 
 	ctx.cache().purge("upload", [upload_id]).await?;
@@ -89,28 +89,29 @@ async fn handle(
 }
 
 async fn fetch_files(
-	crdb: &CrdbPool,
+	ctx: &OperationContext<upload::complete::Request>,
 	upload_id: Uuid,
 ) -> GlobalResult<(String, s3_util::Provider, Vec<FileRow>, Option<Uuid>)> {
+	let crdb = ctx.crdb().await?;
 	let (upload, files) = tokio::try_join!(
-		sqlx::query_as::<_, UploadRow>(indoc!(
+		sql_fetch_one!(
+			[ctx, UploadRow, &crdb]
 			"
 			SELECT bucket, provider, user_id
 			FROM db_upload.uploads
 			WHERE upload_id = $1
-			"
-		))
-		.bind(upload_id)
-		.fetch_one(crdb),
-		sqlx::query_as::<_, FileRow>(indoc!(
+			",
+			upload_id,
+		),
+		sql_fetch_all!(
+			[ctx, FileRow, &crdb]
 			"
 			SELECT path, content_length, nsfw_score_threshold, multipart_upload_id
 			FROM db_upload.upload_files
 			WHERE upload_id = $1
-			"
-		))
-		.bind(upload_id)
-		.fetch_all(crdb)
+			",
+			upload_id,
+		)
 	)?;
 
 	// Parse provider

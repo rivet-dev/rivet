@@ -38,18 +38,18 @@ async fn handle(
 	let game_user_token = unwrap!(token_res.token.clone());
 	let token_session_id = unwrap_ref!(token_res.session_id).as_uuid();
 
-	sqlx::query(indoc!(
+	sql_query!(
+		[ctx]
 		"
 		INSERT INTO db_game_user.game_users (game_user_id, user_id, token_session_id, namespace_id, create_ts)
 		VALUES ($1, $2, $3, $4, $5)
-		"
-	))
-	.bind(game_user_id)
-	.bind(user_id)
-	.bind(token_session_id)
-	.bind(namespace_id)
-	.bind(ctx.ts())
-	.execute(&crdb)
+		",
+		game_user_id,
+		user_id,
+		token_session_id,
+		namespace_id,
+		ctx.ts(),
+	)
 	.await?;
 
 	Ok(game_user::create::Response {

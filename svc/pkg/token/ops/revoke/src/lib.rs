@@ -13,16 +13,16 @@ async fn handle(
 		.map(common::Uuid::as_uuid)
 		.collect::<Vec<_>>();
 
-	sqlx::query(indoc!(
+	sql_query!(
+		[ctx]
 		"
 		UPDATE db_token.tokens
 		SET revoke_ts = $2
 		WHERE jti = ANY($1)
-		"
-	))
-	.bind(&jtis)
-	.bind(ctx.ts())
-	.execute(&crdb)
+		",
+		&jtis,
+		ctx.ts(),
+	)
 	.await?;
 
 	Ok(token::revoke::Response {})

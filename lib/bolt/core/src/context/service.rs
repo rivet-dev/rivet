@@ -736,6 +736,14 @@ impl ServiceContextData {
 			));
 		}
 
+		env.push((
+			"RIVET_ACCESS_KIND".into(),
+			match project_ctx.ns().rivet.access {
+				config::ns::RivetAccess::Private {} => "private".into(),
+				config::ns::RivetAccess::Public {} => "public".into(),
+			},
+		));
+
 		// Domains
 		if let Some(x) = project_ctx.domain_main() {
 			env.push(("RIVET_DOMAIN_MAIN".into(), x));

@@ -20,7 +20,8 @@ async fn handle(
 	let verification_id = Uuid::new_v4();
 	let code = gen_code();
 	let expire_ts = ctx.ts() + util::duration::minutes(15);
-	sqlx::query(indoc!(
+	sql_query!(
+		[ctx]
 		"
 		INSERT INTO db_email_verification.verifications (
 			verification_id,
@@ -30,14 +31,13 @@ async fn handle(
 			expire_ts
 		)
 		VALUES ($1, $2, $3, $4, $5)
-		"
-	))
-	.bind(verification_id)
-	.bind(&email)
-	.bind(&code)
-	.bind(ctx.ts())
-	.bind(expire_ts)
-	.execute(&crdb)
+		",
+		verification_id,
+		&email,
+		&code,
+		ctx.ts(),
+		expire_ts,
+	)
 	.await?;
 
 	let (template_id, dynamic_template_data) = if let Some(game_id) = ctx.game_id {

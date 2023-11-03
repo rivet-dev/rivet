@@ -21,25 +21,26 @@ async fn handle(
 
 	let messages = match direction {
 		chat_message::list::request::QueryDirection::Before => {
-			let mut msgs = sqlx::query_as::<_, ChatMessage>(indoc!(
+			let mut msgs = sql_fetch_all!(
+				[ctx, ChatMessage]
 				"
 				SELECT message_id, send_ts, body
 				FROM db_chat.messages
 				WHERE thread_id = $1 AND send_ts < $2
 				ORDER BY send_ts DESC, message_id DESC
 				LIMIT $3
-				"
-			))
-			.bind(thread_id)
-			.bind(ctx.ts)
-			.bind(ctx.count as i64)
-			.fetch_all(&crdb)
+				",
+				thread_id,
+				ctx.ts,
+				ctx.count as i64,
+			)
 			.await?;
 			msgs.reverse();
 			msgs
 		}
 		chat_message::list::request::QueryDirection::BeforeAndAfter => {
-			sqlx::query_as::<_, ChatMessage>(indoc!(
+			sql_fetch_all!(
+				[ctx, ChatMessage]
 				"
 				SELECT * FROM (
 					SELECT message_id, send_ts, body
@@ -60,28 +61,27 @@ async fn handle(
 				)
 
 				ORDER BY send_ts ASC, message_id ASC
-				"
-			))
-			.bind(thread_id)
-			.bind(ctx.ts)
-			.bind(ctx.count as i64)
-			.fetch_all(&crdb)
+				",
+				thread_id,
+				ctx.ts,
+				ctx.count as i64,
+			)
 			.await?
 		}
 		chat_message::list::request::QueryDirection::After => {
-			sqlx::query_as::<_, ChatMessage>(indoc!(
+			sql_fetch_all!(
+				[ctx, ChatMessage]
 				"
 				SELECT message_id, send_ts, body
 				FROM db_chat.messages
 				WHERE thread_id = $1 AND send_ts > $2
 				ORDER BY send_ts ASC, message_id ASC
 				LIMIT $3
-				"
-			))
-			.bind(thread_id)
-			.bind(ctx.ts)
-			.bind(ctx.count as i64)
-			.fetch_all(&crdb)
+				",
+				thread_id,
+				ctx.ts,
+				ctx.count as i64,
+			)
 			.await?
 		}
 	};

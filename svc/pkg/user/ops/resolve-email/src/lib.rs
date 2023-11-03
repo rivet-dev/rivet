@@ -11,15 +11,15 @@ struct EmailRow {
 async fn handle(
 	ctx: OperationContext<user::resolve_email::Request>,
 ) -> GlobalResult<user::resolve_email::Response> {
-	let users = sqlx::query_as::<_, EmailRow>(indoc!(
+	let users = sql_fetch_all!(
+		[ctx, EmailRow]
 		"
 		SELECT email, user_id
 		FROM db_user_identity.emails
 		WHERE email = ANY($1)
-	"
-	))
-	.bind(&ctx.emails)
-	.fetch_all(&ctx.crdb().await?)
+	",
+		&ctx.emails,
+	)
 	.await?
 	.into_iter()
 	.map(|row| user::resolve_email::response::User {

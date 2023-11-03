@@ -36,6 +36,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+-   Cleaned up onboarding experience for open source users, see _docs/getting_started/DEVELOPMENT.md_
 -   **Infra** Moved default API routes from `{service}.api.rivet.gg/v1` to `api.rivet.gg/{service}`
 -   **Infra** Removed version flat from API request paths
 -   **Bolt** Tests are built in batch and binaries are ran in parallel in order to speed up test times

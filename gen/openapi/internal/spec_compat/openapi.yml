@@ -70,7 +70,6 @@ components:
           type: string
       required:
       - email
-      - captcha
       type: object
     AuthStartEmailVerificationResponse:
       properties:
@@ -445,8 +444,6 @@ components:
       properties:
         turnstile:
           $ref: '#/components/schemas/CloudBootstrapCaptchaTurnstile'
-      required:
-      - turnstile
       type: object
     CloudBootstrapCaptchaTurnstile:
       properties:

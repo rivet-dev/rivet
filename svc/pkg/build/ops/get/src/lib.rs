@@ -21,15 +21,15 @@ async fn handle(ctx: OperationContext<build::get::Request>) -> GlobalResult<buil
 		.map(common::Uuid::as_uuid)
 		.collect::<Vec<_>>();
 
-	let builds = sqlx::query_as::<_, BuildRow>(indoc!(
+	let builds = sql_fetch_all!(
+		[ctx, BuildRow]
 		"
 		SELECT build_id, game_id, upload_id, display_name, image_tag, create_ts, kind, compression
 		FROM db_build.builds
 		WHERE build_id = ANY($1)
-		"
-	))
-	.bind(build_ids)
-	.fetch_all(&ctx.crdb().await?)
+		",
+		build_ids,
+	)
 	.await?
 	.into_iter()
 	.map(|build| backend::build::Build {

@@ -31,15 +31,15 @@ async fn worker(
 		}
 	}
 
-	let (old_game_user_id, namespace_id) = sqlx::query_as::<_, (Uuid, Uuid)>(indoc!(
+	let (old_game_user_id, namespace_id) = sql_fetch_one!(
+		[ctx, (Uuid, Uuid)]
 		"
 		SELECT current_game_user_id, namespace_id
 		FROM db_game_user.links
 		WHERE link_id = $1
-		"
-	))
-	.bind(link_id)
-	.fetch_one(&crdb)
+		",
+		link_id,
+	)
 	.await?;
 
 	let game_user_token = match unwrap_ref!(
@@ -75,7 +75,8 @@ async fn worker(
 			let game_user_token_session_id = unwrap_ref!(token_res.session_id).as_uuid();
 
 			// Flag as linked
-			let (updated,) = sqlx::query_as::<_, (bool,)>(indoc!(
+			let (updated,) = sql_fetch_one!(
+				[ctx, (bool,)]
 				"
 				WITH
 					update_links AS (
@@ -91,19 +92,16 @@ async fn worker(
 						RETURNING 1
 					)
 				SELECT EXISTS (SELECT 1 FROM update_links)
-				"
-			))
-			.bind(ctx.ts())
-			// links
-			.bind(link_id)
-			.bind(new_game_user_id)
-			.bind(&game_user_token.token)
-			// game_users
-			.bind(new_game_user_id)
-			.bind(user_id)
-			.bind(game_user_token_session_id)
-			.bind(namespace_id)
-			.fetch_one(&crdb)
+				",
+				ctx.ts(),
+				link_id,
+				new_game_user_id,
+				&game_user_token.token,
+				new_game_user_id,
+				user_id,
+				game_user_token_session_id,
+				namespace_id,
+			)
 			.await?;
 
 			// Catch race condition
@@ -143,16 +141,16 @@ async fn worker(
 		}
 		game_user::msg::link_complete::GameUserLinkCompleteResolution::Cancel => {
 			// Flag as cancelled
-			let update_query = sqlx::query(indoc!(
+			let update_query = sql_query!(
+				[ctx]
 				"
 				UPDATE db_game_user.links
 				SET cancelled_ts = $2
 				WHERE link_id = $1 AND complete_ts IS NULL AND cancelled_ts IS NULL
-				"
-			))
-			.bind(link_id)
-			.bind(ctx.ts())
-			.execute(&crdb)
+				",
+				link_id,
+				ctx.ts(),
+			)
 			.await?;
 
 			// Catch race condition

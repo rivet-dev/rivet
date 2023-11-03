@@ -26,25 +26,25 @@ async fn handle(
 	let developer_team_id = unwrap_ref!(game.developer_team_id).as_uuid();
 
 	let crdb = ctx.crdb().await?;
-	let (domain_count,) = sqlx::query_as::<_, (i64,)>(
+	let (domain_count,) = sql_fetch_one!(
+		[ctx, (i64,)]
 		"SELECT COUNT(*) FROM db_cdn.game_namespace_domains WHERE namespace_id = $1",
+		namespace_id,
 	)
-	.bind(namespace_id)
-	.fetch_one(&crdb)
 	.await?;
 
 	ensure_with!(domain_count < 10, CDN_TOO_MANY_DOMAINS);
 
-	sqlx::query(indoc!(
+	sql_query!(
+		[ctx]
 		"
 		INSERT INTO db_cdn.game_namespace_domains (namespace_id, domain, create_ts)
 		VALUES ($1, $2, $3)
-		"
-	))
-	.bind(namespace_id)
-	.bind(&ctx.domain)
-	.bind(ctx.ts())
-	.execute(&crdb)
+		",
+		namespace_id,
+		&ctx.domain,
+		ctx.ts(),
+	)
 	.await?;
 
 	// Create a cloudflare custom hostname
@@ -65,11 +65,11 @@ async fn handle(
 				match unwrap!(code) {
 					Unknown => bail!("unknown custom hostname create error code"),
 					AlreadyExists => {
-						rollback(&crdb, namespace_id, &ctx.domain).await?;
+						rollback(&ctx, namespace_id, &ctx.domain).await?;
 						bail_with!(CLOUD_HOSTNAME_TAKEN)
 					}
 					TooManyPendingHostnames => {
-						rollback(&crdb, namespace_id, &ctx.domain).await?;
+						rollback(&ctx, namespace_id, &ctx.domain).await?;
 						bail_with!(CLOUD_TOO_MANY_PENDING_HOSTNAMES_FOR_GROUP)
 					}
 				}
@@ -101,14 +101,18 @@ async fn handle(
 	Ok(cdn::namespace_domain_create::Response {})
 }
 
-async fn rollback(crdb: &CrdbPool, namespace_id: Uuid, domain: &str) -> GlobalResult<()> {
+async fn rollback(
+	ctx: &OperationContext<cdn::namespace_domain_create::Request>,
+	namespace_id: Uuid,
+	domain: &str,
+) -> GlobalResult<()> {
 	// Rollback
-	sqlx::query(
+	sql_query!(
+		[ctx]
 		"DELETE FROM db_cdn.game_namespace_domains WHERE namespace_id = $1 AND domain = $2",
+		namespace_id,
+		domain,
 	)
-	.bind(namespace_id)
-	.bind(domain)
-	.execute(crdb)
 	.await?;
 
 	Ok(())

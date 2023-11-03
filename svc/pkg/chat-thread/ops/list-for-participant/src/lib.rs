@@ -32,7 +32,8 @@ async fn handle(
 		.collect::<Vec<_>>();
 
 	// Query threads
-	let threads = sqlx::query_as::<_, ThreadRow>(indoc!(
+	let threads = sql_fetch_all!(
+		[ctx, ThreadRow]
 		"
 		SELECT thread_id, create_ts, team_team_id, NULL AS direct_user_a_id, NULL AS direct_user_b_id
 		FROM db_chat.threads
@@ -45,11 +46,10 @@ async fn handle(
 		WHERE
 			direct_user_a_id = $2 OR
 			direct_user_b_id = $2
-		"
-	))
-	.bind(team_ids)
-	.bind(user_id)
-	.fetch_all(&crdb)
+		",
+		team_ids,
+		user_id,
+	)
 	.await?
 	.into_iter()
 	.map(|thread| {

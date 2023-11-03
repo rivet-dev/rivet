@@ -54,7 +54,8 @@ async fn handle(
 	let game_id = Uuid::new_v4();
 	let plan_code = "free";
 	let subscription_id = Uuid::new_v4();
-	sqlx::query(indoc!(
+	sql_query!(
+		[ctx]
 		"
 		INSERT INTO db_game.games (
 			game_id,
@@ -68,18 +69,17 @@ async fn handle(
 			subscription_id
 		)
 		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-		"
-	))
-	.bind(game_id)
-	.bind(ctx.ts())
-	.bind(name_id)
-	.bind(display_name)
-	.bind("")
-	.bind("")
-	.bind(developer_team_id)
-	.bind(plan_code)
-	.bind(subscription_id)
-	.execute(&crdb)
+		",
+		game_id,
+		ctx.ts(),
+		name_id,
+		display_name,
+		"",
+		"",
+		developer_team_id,
+		plan_code,
+		subscription_id,
+	)
 	.await?;
 
 	// TODO: Add stripe subscription for game

@@ -20,7 +20,8 @@ async fn handle(
 	ensure!(limit != 0, "limit too low");
 	ensure!(limit <= 32, "limit too high");
 
-	let mutual_friends = sqlx::query_as::<_, Follow>(indoc!(
+	let mutual_friends = sql_fetch_all!(
+		[ctx, Follow]
 		"
 		-- Mutual check A-C
 		SELECT aa.follower_user_id, aa.following_user_id, aa.create_ts
@@ -81,13 +82,12 @@ async fn handle(
 		ON bb.following_user_id = cc.follower_user_id OR bb.following_user_id = cc.following_user_id
 		ORDER BY create_ts DESC
 		LIMIT $4
-		"
-	))
-	.bind(user_a_id)
-	.bind(user_b_id)
-	.bind(ctx.anchor.unwrap_or_default())
-	.bind(limit as i64)
-	.fetch_all(&ctx.crdb().await?)
+		",
+		user_a_id,
+		user_b_id,
+		ctx.anchor.unwrap_or_default(),
+		limit as i64,
+	)
 	.await?;
 
 	let anchor = mutual_friends

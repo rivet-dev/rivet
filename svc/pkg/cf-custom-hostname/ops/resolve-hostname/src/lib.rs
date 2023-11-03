@@ -11,17 +11,17 @@ struct CustomHostname {
 async fn handle(
 	ctx: OperationContext<cf_custom_hostname::resolve_hostname::Request>,
 ) -> GlobalResult<cf_custom_hostname::resolve_hostname::Response> {
-	let custom_hostnames = sqlx::query_as::<_, CustomHostname>(indoc!(
+	let custom_hostnames = sql_fetch_all!(
+		[ctx, CustomHostname]
 		"
 		SELECT
 			identifier,
 			hostname
 		FROM db_cf_custom_hostname.custom_hostnames
 		WHERE hostname = ANY($1)
-		"
-	))
-	.bind(&ctx.hostnames)
-	.fetch_all(&ctx.crdb().await?)
+		",
+		&ctx.hostnames,
+	)
 	.await?;
 
 	Ok(cf_custom_hostname::resolve_hostname::Response {

@@ -31,7 +31,8 @@ async fn handle(
 
 	tracing::info!(?thread_ids, "querying thread ids");
 
-	let threads = sqlx::query_as::<_, Thread>(indoc!(
+	let threads = sql_fetch_all!(
+		[ctx, Thread]
 		"
 		SELECT 
 			thread_id,
@@ -41,10 +42,9 @@ async fn handle(
 			direct_user_b_id
 		FROM db_chat.threads
 		WHERE thread_id = ANY($1)
-		"
-	))
-	.bind(&thread_ids)
-	.fetch_all(&crdb)
+		",
+		&thread_ids,
+	)
 	.await?
 	.into_iter()
 	.map(|thread| {

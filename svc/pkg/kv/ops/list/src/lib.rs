@@ -21,18 +21,18 @@ async fn handle(ctx: OperationContext<kv::list::Request>) -> GlobalResult<kv::li
 	//
 	// Uses `AS OF SYSTEM TIME` to improve performance and avoid locking.
 	let mut entries = if ctx.with_values {
-		sqlx::query_as::<_, (String, String)>(indoc!(
+		sql_fetch_all!(
+			[ctx, (String, String)]
 			"
 			SELECT key, value::TEXT
 			FROM db_kv.kv AS OF SYSTEM TIME '-1s'
 			WHERE namespace_id = $1 AND directory = $2
 			LIMIT $3
-			"
-		))
-		.bind(namespace_id)
-		.bind(&ctx.directory)
-		.bind(limit)
-		.fetch_all(&crdb)
+			",
+			namespace_id,
+			&ctx.directory,
+			limit,
+		)
 		.await?
 		.into_iter()
 		.map(|(key, value)| kv::list::response::Entry {
@@ -41,18 +41,18 @@ async fn handle(ctx: OperationContext<kv::list::Request>) -> GlobalResult<kv::li
 		})
 		.collect::<Vec<_>>()
 	} else {
-		sqlx::query_as::<_, (String,)>(indoc!(
+		sql_fetch_all!(
+			[ctx, (String,)]
 			"
 			SELECT key
 			FROM db_kv.kv AS OF SYSTEM TIME '-1s'
 			WHERE namespace_id = $1 AND directory = $2
 			LIMIT $3
-			"
-		))
-		.bind(namespace_id)
-		.bind(&ctx.directory)
-		.bind(limit)
-		.fetch_all(&crdb)
+			",
+			namespace_id,
+			&ctx.directory,
+			limit,
+		)
 		.await?
 		.into_iter()
 		.map(|(key,)| kv::list::response::Entry { key, value: None })

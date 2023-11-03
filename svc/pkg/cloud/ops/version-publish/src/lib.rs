@@ -102,14 +102,14 @@ async fn handle(
 	let version_id = unwrap_ref!(version_create_res.version_id).as_uuid();
 
 	// Create the cloud version
-	sqlx::query(indoc!(
+	sql_query!(
+		[ctx]
 		"
 		INSERT INTO db_cloud.game_versions (version_id)
 		VALUES ($1)
-	"
-	))
-	.bind(version_id)
-	.execute(&ctx.crdb().await?)
+	",
+		version_id,
+	)
 	.await?;
 
 	// Create the cloud versions

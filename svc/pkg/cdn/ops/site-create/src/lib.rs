@@ -39,18 +39,18 @@ async fn handle(
 
 	// Create site
 	let site_id = Uuid::new_v4();
-	sqlx::query(indoc!(
+	sql_query!(
+		[ctx]
 		"
 		INSERT INTO db_cdn.sites (site_id, game_id, upload_id, display_name, create_ts)
 		VALUES ($1, $2, $3, $4, $5)
-		"
-	))
-	.bind(site_id)
-	.bind(game_id)
-	.bind(upload_id)
-	.bind(&ctx.display_name)
-	.bind(ctx.ts())
-	.execute(&ctx.crdb().await?)
+		",
+		site_id,
+		game_id,
+		upload_id,
+		&ctx.display_name,
+		ctx.ts(),
+	)
 	.await?;
 
 	Ok(cdn::site_create::Response {

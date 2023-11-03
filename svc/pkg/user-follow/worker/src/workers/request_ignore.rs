@@ -10,18 +10,18 @@ async fn worker(
 
 	ensure!(follower_user_id != following_user_id, "cannot follow self");
 
-	sqlx::query(indoc!(
+	sql_query!(
+		[ctx]
 		"
 		UPDATE db_user_follow.user_follows
 		SET ignored = TRUE
 		WHERE
 			follower_user_id = $1 AND
 			following_user_id = $2
-		"
-	))
-	.bind(follower_user_id)
-	.bind(following_user_id)
-	.execute(&ctx.crdb().await?)
+		",
+		follower_user_id,
+		following_user_id,
+	)
 	.await?;
 
 	msg!([ctx] user_follow::msg::request_ignore_complete(follower_user_id, following_user_id) {

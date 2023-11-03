@@ -51,8 +51,6 @@ struct LobbyGroupCache {
 async fn worker(
 	ctx: &OperationContext<mm::msg::lobby_history_export::Message>,
 ) -> GlobalResult<()> {
-	let crdb = ctx.crdb().await?;
-
 	let request_id = unwrap_ref!(ctx.request_id).as_uuid();
 	let namespace_ids = ctx
 		.namespace_ids
@@ -64,7 +62,9 @@ async fn worker(
 	// TODO: This will iterate over all lobbies regardless of stop timestamp
 	// Use AS OF SYSTEM TIME to reduce contention.
 	// https://www.cockroachlabs.com/docs/v22.2/performance-best-practices-overview#use-as-of-system-time-to-decrease-conflicts-with-long-running-queries
-	let mut all_lobbies = sqlx::query_as::<_, LobbyRow>(indoc!(
+	let crdb = ctx.crdb().await?;
+	let mut all_lobbies = sql_fetch!(
+		[ctx, LobbyRow, &crdb]
 		"
 		SELECT namespace_id, lobby_id, region_id, lobby_group_id, create_ts, stop_ts
 		FROM db_mm_state.lobbies AS OF SYSTEM TIME '-5s'
@@ -77,12 +77,11 @@ async fn worker(
 			(stop_ts IS NULL AND create_ts <= $3)
 		)
 		ORDER BY create_ts DESC
-		"
-	))
-	.bind(&namespace_ids)
-	.bind(ctx.query_start)
-	.bind(ctx.query_end)
-	.fetch(&crdb);
+		",
+		&namespace_ids,
+		ctx.query_start,
+		ctx.query_end,
+	);
 
 	// Cached metadata
 	let mut regions = HashMap::<Uuid, RegionCache>::new();

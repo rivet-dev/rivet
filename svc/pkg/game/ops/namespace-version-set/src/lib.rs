@@ -29,34 +29,36 @@ async fn handle(
 	{
 		let tx = crdb.begin().await?;
 
-		let update_query = sqlx::query(indoc!(
+		let update_query = sql_query!(
+			[ctx]
 			"
 			UPDATE db_game.game_namespaces
 			SET version_id = $2
 			WHERE namespace_id = $1
-			"
-		))
-		.bind(namespace_id)
-		.bind(version_id)
-		.execute(&crdb)
+			",
+			namespace_id,
+			version_id,
+		)
 		.await?;
 		ensure_eq!(1, update_query.rows_affected(), "invalid namespace id");
 
-		sqlx::query(indoc!(
+		sql_query!(
+			[ctx]
 			"
 			INSERT INTO db_game.game_namespace_version_history (
 				namespace_id, version_id, deploy_ts
 			)
 			VALUES ($1, $2, $3)
-			"
-		))
-		.bind(namespace_id)
-		.bind(version_id)
-		.bind(ctx.ts())
-		.execute(&crdb)
+			",
+			namespace_id,
+			version_id,
+			ctx.ts(),
+		)
 		.await?;
 
 		tx.commit().await?;
+
+		ctx.cache().purge("game", [game_id]).await?;
 	}
 
 	// Update idle lobbies in all regions in the background

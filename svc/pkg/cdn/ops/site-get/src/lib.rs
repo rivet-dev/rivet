@@ -20,15 +20,15 @@ async fn handle(
 		.map(common::Uuid::as_uuid)
 		.collect::<Vec<_>>();
 
-	let sites = sqlx::query_as::<_, SiteRow>(indoc!(
+	let sites = sql_fetch_all!(
+		[ctx, SiteRow]
 		"
 		SELECT site_id, game_id, upload_id, display_name, create_ts
 		FROM db_cdn.sites
 		WHERE site_id = ANY($1)
-		"
-	))
-	.bind(site_ids)
-	.fetch_all(&ctx.crdb().await?)
+		",
+		site_ids,
+	)
 	.await?
 	.into_iter()
 	.map(|site| cdn::site_get::response::Site {

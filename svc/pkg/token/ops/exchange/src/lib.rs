@@ -9,16 +9,16 @@ async fn handle(
 
 	let jti = unwrap_ref!(ctx.jti).as_uuid();
 
-	let update_query = sqlx::query(indoc!(
+	let update_query = sql_query!(
+		[ctx]
 		"
 		UPDATE db_token.tokens
 		SET revoke_ts = $2
 		WHERE jti = $1 AND revoke_ts IS NULL AND exp > $2
-		"
-	))
-	.bind(jti)
-	.bind(ctx.ts())
-	.execute(&crdb)
+		",
+		jti,
+		ctx.ts(),
+	)
 	.await?;
 
 	ensure_with!(update_query.rows_affected() > 0, TOKEN_EXCHANGE_FAILED);

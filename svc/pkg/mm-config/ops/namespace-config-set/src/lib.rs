@@ -30,7 +30,8 @@ async fn handle(
 		bail_with!(VALIDATION_ERROR, error = readable_errors);
 	}
 
-	sqlx::query(indoc!(
+	sql_query!(
+		[ctx]
 		"
 		UPDATE db_mm_config.game_namespaces
 		SET 
@@ -41,16 +42,15 @@ async fn handle(
 			max_players_per_client_tor = $6,
 			max_players_per_client_hosting = $7
 		WHERE namespace_id = $1
-		"
-	))
-	.bind(namespace_id)
-	.bind(ctx.lobby_count_max as i64)
-	.bind(ctx.max_players_per_client as i64)
-	.bind(ctx.max_players_per_client_vpn as i64)
-	.bind(ctx.max_players_per_client_proxy as i64)
-	.bind(ctx.max_players_per_client_tor as i64)
-	.bind(ctx.max_players_per_client_hosting as i64)
-	.execute(&ctx.crdb().await?)
+		",
+		namespace_id,
+		ctx.lobby_count_max as i64,
+		ctx.max_players_per_client as i64,
+		ctx.max_players_per_client_vpn as i64,
+		ctx.max_players_per_client_proxy as i64,
+		ctx.max_players_per_client_tor as i64,
+		ctx.max_players_per_client_hosting as i64,
+	)
 	.await?;
 
 	Ok(mm_config::namespace_config_set::Response {})

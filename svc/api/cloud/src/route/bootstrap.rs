@@ -11,9 +11,13 @@ pub async fn get(
 ) -> GlobalResult<models::CloudBootstrapResponse> {
 	Ok(models::CloudBootstrapResponse {
 		captcha: Box::new(models::CloudBootstrapCaptcha {
-			turnstile: Box::new(models::CloudBootstrapCaptchaTurnstile {
-				site_key: std::env::var("TURNSTILE_SITE_KEY_MAIN")?,
-			}),
+			turnstile: if let Some(site_key) = std::env::var("TURNSTILE_SITE_KEY_MAIN").ok() {
+				Some(Box::new(models::CloudBootstrapCaptchaTurnstile {
+					site_key,
+				}))
+			} else {
+				None
+			},
 		}),
 	})
 }

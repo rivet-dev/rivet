@@ -18,7 +18,8 @@ async fn handle(
 		.collect::<GlobalResult<Vec<(Uuid, Uuid)>>>()?;
 
 	// Query relationships
-	let relationships = sqlx::query_as::<_, (Vec<Uuid>,)>(&formatdoc!(
+	let relationships = sql_fetch_all!(
+		[ctx, (Vec<Uuid>,)]
 		"
 		SELECT
 			ARRAY(
@@ -28,10 +29,9 @@ async fn handle(
 				WHERE this_tm.user_id = (q->>0)::UUID AND other_tm.user_id = (q->>1)::UUID
 			) AS mutual_team_ids
 		FROM jsonb_array_elements($1::JSONB) AS q
-		"
-	))
-	.bind(serde_json::to_string(&query_users)?)
-	.fetch_all(&ctx.crdb().await?)
+		",
+		serde_json::to_string(&query_users)?,
+	)
 	.await?;
 
 	let users = relationships

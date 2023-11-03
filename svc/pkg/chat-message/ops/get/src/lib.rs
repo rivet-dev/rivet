@@ -21,15 +21,15 @@ async fn handle(
 		.map(common::Uuid::as_uuid)
 		.collect::<Vec<_>>();
 
-	let messages = sqlx::query_as::<_, ChatMessage>(indoc!(
+	let messages = sql_fetch_all!(
+		[ctx, ChatMessage]
 		"
 		SELECT message_id, thread_id, send_ts, body 
 		FROM db_chat.messages
 		WHERE message_id = ANY($1)
-		"
-	))
-	.bind(&chat_message_ids)
-	.fetch_all(&crdb)
+		",
+		&chat_message_ids,
+	)
 	.await?
 	.into_iter()
 	.map(|message| {

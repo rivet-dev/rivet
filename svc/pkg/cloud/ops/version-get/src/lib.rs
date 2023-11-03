@@ -17,15 +17,15 @@ async fn handle(
 		.map(common::Uuid::as_uuid)
 		.collect::<Vec<_>>();
 
-	let cloud_versions = sqlx::query_as::<_, GameVersion>(indoc!(
+	let cloud_versions = sql_fetch_all!(
+		[ctx, GameVersion]
 		"
 		SELECT version_id
 		FROM db_cloud.game_versions
 		WHERE version_id = ANY($1)
-	"
-	))
-	.bind(req_version_ids)
-	.fetch_all(&ctx.crdb().await?)
+	",
+		req_version_ids,
+	)
 	.await?;
 
 	// Get all version IDs that exist. If a row doesn't exist in `game_configs`, then this version

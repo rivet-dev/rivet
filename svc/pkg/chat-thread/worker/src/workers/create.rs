@@ -19,7 +19,8 @@ async fn worker(ctx: &OperationContext<chat_thread::msg::create::Message>) -> Gl
 
 			// Insert new thread or return existing thread ID if created in race
 			// condition
-			let (thread_id,) = sqlx::query_as::<_, (Uuid,)>(indoc!(
+			let (thread_id,) = sql_fetch_one!(
+				[ctx, (Uuid,)]
 				"
 				WITH
 					insert AS (
@@ -33,12 +34,11 @@ async fn worker(ctx: &OperationContext<chat_thread::msg::create::Message>) -> Gl
 				UNION
 				SELECT thread_id FROM db_chat.threads WHERE team_team_id = $3
 				LIMIT 1
-				"
-			))
-			.bind(preliminary_thread_id)
-			.bind(create_ts)
-			.bind(team_id)
-			.fetch_one(&crdb)
+				",
+				preliminary_thread_id,
+				create_ts,
+				team_id,
+			)
 			.await?;
 
 			(thread_id, json!({ "team": { "team_id": team_id } }))
@@ -51,7 +51,8 @@ async fn worker(ctx: &OperationContext<chat_thread::msg::create::Message>) -> Gl
 			tracing::info!(?user_a_id, ?user_b_id, "creating direct thread");
 
 			// See above
-			let (thread_id,) = sqlx::query_as::<_, (Uuid,)>(indoc!(
+			let (thread_id,) = sql_fetch_one!(
+				[ctx, (Uuid,)]
 				"
 				WITH
 					insert AS (
@@ -65,13 +66,12 @@ async fn worker(ctx: &OperationContext<chat_thread::msg::create::Message>) -> Gl
 				UNION
 				SELECT thread_id FROM db_chat.threads WHERE direct_user_a_id = $3 AND direct_user_b_id = $4
 				LIMIT 1
-				"
-			))
-			.bind(preliminary_thread_id)
-			.bind(create_ts)
-			.bind(user_a_id)
-			.bind(user_b_id)
-			.fetch_one(&crdb)
+				",
+				preliminary_thread_id,
+				create_ts,
+				user_a_id,
+				user_b_id,
+			)
 			.await?;
 
 			(

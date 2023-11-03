@@ -8,10 +8,12 @@ async fn worker(ctx: &OperationContext<team::msg::member_kick::Message>) -> Glob
 	let user_id = unwrap_ref!(ctx.user_id).as_uuid();
 
 	// TODO: Establish audit logs
-	// sqlx::query("INSERT INTO team_audit_logs WHERE team_id = $1")
-	// 	.bind(team_id)
-	// 	.bind(user_id)
-	// 	.execute(&ctx.crdb("db-team").await?)
+	// sql_query!(
+	// 	[ctx]
+	// 	"INSERT INTO team_audit_logs WHERE team_id = $1",
+	// 	team_id,
+	// 	user_id,
+	// )
 	// 	.await?;
 
 	// Dispatch events

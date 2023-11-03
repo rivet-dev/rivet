@@ -102,16 +102,16 @@ async fn update_db(
 	user_id: Uuid,
 ) -> GlobalResult<DbOutput> {
 	// Find the invitation
-	let invitation_row = sqlx::query_as::<_, InvitationRow>(
+	let invitation_row = sql_fetch_optional!(
+		[ctx, InvitationRow]
 		"
 		SELECT team_id, expire_ts, max_use_count, use_counter, revoke_ts
 		FROM db_team_invite.invitations
 		WHERE code = $1
 		FOR UPDATE
 		",
+		&code,
 	)
-	.bind(&code)
-	.fetch_optional(&mut **tx)
 	.await?;
 	let invitation_row = if let Some(invitation) = invitation_row {
 		tracing::info!(?invitation, "found invitation");
@@ -186,19 +186,19 @@ async fn update_db(
 	}
 
 	// Insert consumption
-	sqlx::query(
+	sql_query!(
+		[ctx]
 		"UPDATE db_team_invite.invitations SET use_counter = use_counter + 1 WHERE code = $1",
+		&code,
 	)
-	.bind(&code)
-	.execute(&mut **tx)
 	.await?;
-	sqlx::query(
+	sql_query!(
+		[ctx]
 		"INSERT INTO db_team_invite.invitation_uses (code, user_id, create_ts) VALUES ($1, $2, $3)",
+		&code,
+		user_id,
+		now,
 	)
-	.bind(&code)
-	.bind(user_id)
-	.bind(now)
-	.execute(&mut **tx)
 	.await?;
 
 	Ok(DbOutput::Success { invitation_row })

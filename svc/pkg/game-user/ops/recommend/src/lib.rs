@@ -15,16 +15,16 @@ async fn handle(
 
 	// 	// TODO: This is very slow, we should use a hash shard for this
 	// 	// Selects X newest game users
-	// 	let game_user_ids = sqlx::query_as::<_, (Uuid,)>(indoc!(
+	// 	let game_user_ids = sql_fetch_all!(
+	// 		[ctx, (Uuid,)]
 	// 		"
 	// 		SELECT game_user_id
 	// 		FROM game_users
 	// 		ORDER BY create_ts DESC
 	// 		LIMIT $1
-	// 		"
-	// 	))
-	// 	.bind(count)
-	// 	.fetch_all(&crdb)
+	// 		",
+	// 		count,
+	// 	)
 	// 	.await?;
 
 	// 	Ok(game_user_recommend::Response {

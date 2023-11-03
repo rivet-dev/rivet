@@ -35,8 +35,10 @@ async fn worker(ctx: &OperationContext<job_run::msg::stop::Message>) -> GlobalRe
 	})
 	.await?;
 
-	let Some((run_row, run_meta_nomad_row)) =
-		rivet_pools::utils::crdb::tx(&crdb, |tx| Box::pin(update_db(ctx.ts(), run_id, tx))).await?
+	let Some((run_row, run_meta_nomad_row)) = rivet_pools::utils::crdb::tx(&crdb, |tx| {
+		Box::pin(update_db(ctx.clone(), ctx.ts(), run_id, tx))
+	})
+	.await?
 	else {
 		if ctx.req_dt() > util::duration::minutes(5) {
 			tracing::error!("discarding stale message");
@@ -87,20 +89,21 @@ async fn worker(ctx: &OperationContext<job_run::msg::stop::Message>) -> GlobalRe
 
 #[tracing::instrument(skip_all)]
 async fn update_db(
+	ctx: OperationContext<job_run::msg::stop::Message>,
 	now: i64,
 	run_id: Uuid,
 	tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
 ) -> GlobalResult<Option<(RunRow, Option<RunMetaNomadRow>)>> {
-	let run_row = sqlx::query_as::<_, RunRow>(indoc!(
+	let run_row = sql_fetch_optional!(
+		[ctx, RunRow]
 		"
 		SELECT region_id, create_ts, stop_ts
 		FROM db_job_state.runs
 		WHERE run_id = $1
 		FOR UPDATE
-		"
-	))
-	.bind(run_id)
-	.fetch_optional(&mut **tx)
+		",
+		run_id,
+	)
 	.await?;
 	tracing::info!(?run_row, "fetched run");
 
@@ -108,16 +111,16 @@ async fn update_db(
 		return Ok(None);
 	};
 
-	let run_meta_nomad_row = sqlx::query_as::<_, RunMetaNomadRow>(indoc!(
+	let run_meta_nomad_row = sql_fetch_optional!(
+		[ctx, RunMetaNomadRow]
 		"
 		SELECT dispatched_job_id
 		FROM db_job_state.run_meta_nomad
 		WHERE run_id = $1
 		FOR UPDATE
-		"
-	))
-	.bind(run_id)
-	.fetch_optional(&mut **tx)
+		",
+		run_id,
+	)
 	.await?;
 	tracing::info!(?run_meta_nomad_row, "fetched run meta nomad");
 
@@ -141,11 +144,13 @@ async fn update_db(
 	// We can't assume that started has been called here, so we can't fetch the alloc ID.
 
 	if run_row.stop_ts.is_none() {
-		sqlx::query("UPDATE db_job_state.runs SET stop_ts = $2 WHERE run_id = $1")
-			.bind(run_id)
-			.bind(now)
-			.execute(&mut **tx)
-			.await?;
+		sql_query!(
+			[ctx, &mut **tx]
+			"UPDATE db_job_state.runs SET stop_ts = $2 WHERE run_id = $1",
+			run_id,
+			now,
+		)
+		.await?;
 	}
 
 	Ok(Some((run_row, run_meta_nomad_row)))

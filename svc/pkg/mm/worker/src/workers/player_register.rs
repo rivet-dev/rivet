@@ -20,7 +20,8 @@ async fn worker(ctx: &OperationContext<mm::msg::player_register::Message>) -> Gl
 
 	// Get the player
 	let expired_create_ts = ctx.ts() - util_mm::consts::PLAYER_READY_TIMEOUT;
-	let player_row = sqlx::query_as::<_, PlayerRow>(indoc!(
+	let player_row = sql_fetch_optional!(
+		[ctx, PlayerRow]
 		"
 		WITH
 			select_player AS (
@@ -45,12 +46,11 @@ async fn worker(ctx: &OperationContext<mm::msg::player_register::Message>) -> Gl
 				RETURNING 1
 			)
 		SELECT * FROM select_player
-		"
-	))
-	.bind(player_id)
-	.bind(expired_create_ts)
-	.bind(ctx.ts())
-	.fetch_optional(&crdb)
+		",
+		player_id,
+		expired_create_ts,
+		ctx.ts(),
+	)
 	.await?;
 	tracing::info!(?player_row, "player row");
 

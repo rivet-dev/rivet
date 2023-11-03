@@ -7,25 +7,27 @@ async fn worker(ctx: &OperationContext<team::msg::user_ban::Message>) -> GlobalR
 	let team_id = unwrap_ref!(ctx.team_id).as_uuid();
 	let user_id = unwrap_ref!(ctx.user_id).as_uuid();
 
-	sqlx::query(indoc!(
+	sql_query!(
+		[ctx]
 		"
 		INSERT INTO db_team.banned_users (team_id, user_id, ban_ts)
 		VALUES ($1, $2, $3)
 		ON CONFLICT
 		DO NOTHING
-		"
-	))
-	.bind(team_id)
-	.bind(user_id)
-	.bind(util::timestamp::now())
-	.execute(&ctx.crdb().await?)
+		",
+		team_id,
+		user_id,
+		util::timestamp::now(),
+	)
 	.await?;
 
 	// TODO: Establish audit logs
-	// sqlx::query("INSERT INTO team_audit_logs WHERE team_id = $1")
-	// 	.bind(team_id)
-	// 	.bind(user_id)
-	// 	.execute(&ctx.crdb("db-team").await?)
+	// sql_query!(
+	// 	[ctx]
+	// 	"INSERT INTO team_audit_logs WHERE team_id = $1",
+	// 	team_id,
+	// 	user_id,
+	// )
 	// 	.await?;
 
 	// Dispatch events

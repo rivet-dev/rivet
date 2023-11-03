@@ -177,22 +177,22 @@ async fn worker(
 	let challenge = res.result.ownership_verification_http.http_body;
 	let subscription_id = Uuid::new_v4();
 
-	sqlx::query(indoc!(
+	sql_query!(
+		[ctx]
 		"
 		INSERT INTO db_cf_custom_hostname.custom_hostnames (
 			identifier, namespace_id, hostname, challenge, create_ts, status, subscription_id
 		)
 		VALUES ($1, $2, $3, $4, $5, $6, $7)
-		"
-	))
-	.bind(identifier)
-	.bind(namespace_id)
-	.bind(&hostname)
-	.bind(challenge)
-	.bind(ctx.ts())
-	.bind(backend::cf::custom_hostname::Status::Pending as i32)
-	.bind(subscription_id)
-	.execute(&ctx.crdb().await?)
+		",
+		identifier,
+		namespace_id,
+		&hostname,
+		challenge,
+		ctx.ts(),
+		backend::cf::custom_hostname::Status::Pending as i32,
+		subscription_id,
+	)
 	.await?;
 
 	// TODO: Add stripe subscription for hostname

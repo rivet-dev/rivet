@@ -7,16 +7,16 @@ pub async fn handle(
 ) -> GlobalResult<module::ns_instance_get::Response> {
 	let namespace_id = unwrap_ref!(ctx.namespace_id).as_uuid();
 
-	let instance = sqlx::query_as::<_, (Uuid,)>(indoc!(
+	let instance = sql_fetch_optional!(
+		[ctx, (Uuid,)]
 		"
 		SELECT instance_id
 		FROM db_module.namespace_instances
 		WHERE namespace_id = $1 AND key = $2
-		"
-	))
-	.bind(namespace_id)
-	.bind(&ctx.key)
-	.fetch_optional(&ctx.crdb().await?)
+		",
+		namespace_id,
+		&ctx.key,
+	)
 	.await?;
 
 	Ok(module::ns_instance_get::Response {

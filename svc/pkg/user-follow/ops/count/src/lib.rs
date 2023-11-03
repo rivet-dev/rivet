@@ -21,7 +21,8 @@ async fn handle(
 
 	let follows = match req_kind {
 		RequestKind::Mutual => {
-			sqlx::query_as::<_, FollowCount>(indoc!(
+			sql_fetch_all!(
+				[ctx, FollowCount]
 				"
 				SELECT follower_user_id as user_id, COUNT(*)
 				FROM (
@@ -40,31 +41,40 @@ async fn handle(
 				) as f
 				WHERE is_mutual
 				GROUP BY follower_user_id
-				"
-			))
-			.bind(&user_ids)
-			.fetch_all(&ctx.crdb().await?)
-			.await?
-		}
-		_ => {
-			sqlx::query_as::<_, FollowCount>(&formatdoc!(
-				"
-				SELECT {join_column} as user_id, COUNT(*)
-				FROM db_user_follow.user_follows
-				WHERE {join_column} = ANY($1)
-				GROUP BY {join_column}
 				",
-				// Columns are inverted
-				join_column = match req_kind {
-					RequestKind::Follower => "following_user_id",
-					RequestKind::Following => "follower_user_id",
-					RequestKind::Mutual => unreachable!(),
-				},
-			))
-			.bind(&user_ids)
-			.fetch_all(&ctx.crdb().await?)
+				&user_ids,
+			)
 			.await?
 		}
+		_ => match req_kind {
+			RequestKind::Follower => {
+				sql_fetch_all!(
+					[ctx, FollowCount]
+					"
+						SELECT following_user_id as user_id, COUNT(*)
+						FROM db_user_follow.user_follows
+						WHERE following_user_id = ANY($1)
+						GROUP BY following_user_id
+						",
+					&user_ids,
+				)
+				.await?
+			}
+			RequestKind::Following => {
+				sql_fetch_all!(
+					[ctx, FollowCount]
+					"
+						SELECT follower_user_id as user_id, COUNT(*)
+						FROM db_user_follow.user_follows
+						WHERE follower_user_id = ANY($1)
+						GROUP BY follower_user_id
+						",
+					&user_ids,
+				)
+				.await?
+			}
+			RequestKind::Mutual => unreachable!(),
+		},
 	};
 
 	let follows = user_ids

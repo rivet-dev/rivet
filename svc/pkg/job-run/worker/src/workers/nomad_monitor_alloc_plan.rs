@@ -119,9 +119,10 @@ async fn worker(
 		ports: ports.clone(),
 	};
 	let db_output = rivet_pools::utils::crdb::tx(&crdb, |tx| {
+		let ctx = ctx.clone();
 		let now = ctx.ts();
 		let run_data = run_data.clone();
-		Box::pin(async move { update_db(tx, now, run_data).await })
+		Box::pin(async move { update_db(ctx, tx, now, run_data).await })
 	})
 	.await?;
 
@@ -207,6 +208,7 @@ struct DbOutput {
 /// Returns `None` if the run could not be found.
 #[tracing::instrument(skip_all)]
 async fn update_db(
+	ctx: OperationContext<job_run::msg::nomad_monitor_alloc_plan::Message>,
 	tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
 	now: i64,
 	RunData {
@@ -220,17 +222,17 @@ async fn update_db(
 		ports,
 	}: RunData,
 ) -> GlobalResult<Option<DbOutput>> {
-	let run_row = sqlx::query_as::<_, RunRow>(indoc!(
+	let run_row = sql_fetch_optional!(
+		[ctx, RunRow]
 		"
 		SELECT runs.run_id, runs.region_id, run_meta_nomad.alloc_plan_ts
 		FROM db_job_state.run_meta_nomad
 		INNER JOIN db_job_state.runs ON runs.run_id = run_meta_nomad.run_id
 		WHERE dispatched_job_id = $1
 		FOR UPDATE OF run_meta_nomad
-		"
-	))
-	.bind(&job_id)
-	.fetch_optional(&mut **tx)
+		",
+		&job_id,
+	)
 	.await?;
 
 	// Check if run found
@@ -245,68 +247,68 @@ async fn update_db(
 	// Write run meta on first plan
 	if run_row.alloc_plan_ts.is_none() {
 		// Write alloc information
-		sqlx::query(indoc!(
+		sql_query!(
+			[ctx, &mut **tx]
 			"
 			UPDATE db_job_state.run_meta_nomad
 			SET alloc_id = $2, alloc_plan_ts = $3, node_id = $4, node_name = $5, node_public_ipv4 = $6, node_vlan_ipv4 = $7
 			WHERE run_id = $1
-			"
-		))
-		.bind(run_row.run_id)
-		.bind(&alloc_id)
-		.bind(now)
-		.bind(&nomad_node_id)
-		.bind(&nomad_node_name)
-		.bind(&nomad_node_public_ipv4)
-		.bind(&nomad_node_vlan_ipv4)
-		.execute(&mut **tx)
+			",
+			run_row.run_id,
+			&alloc_id,
+			now,
+			&nomad_node_id,
+			&nomad_node_name,
+			&nomad_node_public_ipv4,
+			&nomad_node_vlan_ipv4,
+		)
 		.await?;
 
 		// Save the ports to the db
 		for network in &run_networks {
 			tracing::info!(%run_id, mode = %network.mode, ip = %network.ip, "inserting network");
-			sqlx::query(indoc!(
+			sql_query!(
+				[ctx, &mut **tx]
 				"
 				INSERT INTO db_job_state.run_networks (run_id, mode, ip)
 				VALUES ($1, $2, $3)
-				"
-			))
-			.bind(run_id)
-			.bind(&network.mode)
-			.bind(&network.ip)
-			.execute(&mut **tx)
+				",
+				run_id,
+				&network.mode,
+				&network.ip,
+			)
 			.await?;
 		}
 
 		// Save the ports to the db
 		for port in &ports {
 			tracing::info!(%run_id, label = %port.label, source = port.source, target = port.target, ip = %port.ip, "inserting port");
-			sqlx::query(indoc!(
+			sql_query!(
+				[ctx, &mut **tx]
 				"
 				INSERT INTO db_job_state.run_ports (run_id, label, source, target, ip)
 				VALUES ($1, $2, $3, $4, $5)
-				"
-			))
-			.bind(run_id)
-			.bind(&port.label)
-			.bind(port.source as i64)
-			.bind(port.target as i64)
-			.bind(&port.ip)
-			.execute(&mut **tx)
+				",
+				run_id,
+				&port.label,
+				port.source as i64,
+				port.target as i64,
+				&port.ip,
+			)
 			.await?;
 		}
 	}
 
 	// Update the run ports
-	let proxied_ports = sqlx::query_as::<_, ProxiedPort>(indoc!(
+	let proxied_ports = sql_fetch_all!(
+		[ctx, ProxiedPort]
 		"
 		SELECT target_nomad_port_label, ingress_port, ingress_hostnames, proxy_protocol, ssl_domain_mode
 		FROM db_job_state.run_proxied_ports
 		WHERE run_id = $1
-		"
-	))
-	.bind(run_id)
-	.fetch_all(&mut **tx)
+		",
+		run_id,
+	)
 	.await?;
 	tracing::info!(?proxied_ports, "fetched proxied ports");
 

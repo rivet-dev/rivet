@@ -11,16 +11,16 @@ async fn worker(
 		bail!("invalid hostname status");
 	}
 
-	sqlx::query(indoc!(
+	sql_query!(
+		[ctx]
 		"
 		UPDATE db_cf_custom_hostname.custom_hostnames
 		SET status = $1
 		WHERE identifier = $2
-		"
-	))
-	.bind(ctx.status)
-	.bind(identifier)
-	.execute(&ctx.crdb().await?)
+		",
+		ctx.status,
+		identifier,
+	)
 	.await?;
 
 	Ok(())

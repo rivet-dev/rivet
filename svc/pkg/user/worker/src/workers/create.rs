@@ -64,7 +64,7 @@ async fn worker(ctx: &OperationContext<user::msg::create::Message>) -> GlobalRes
 		let display_name = gen_display_name(display_name.as_deref().unwrap_or("Guest"));
 
 		if let Some(x) = insert_user(
-			&crdb,
+			&ctx,
 			user_id,
 			display_name.clone(),
 			avatar_upload_id,
@@ -106,7 +106,7 @@ async fn worker(ctx: &OperationContext<user::msg::create::Message>) -> GlobalRes
 
 // Handles unique constraint violations
 async fn insert_user(
-	crdb: &CrdbPool,
+	ctx: &OperationContext<user::msg::create::Message>,
 	user_id: Uuid,
 	display_name: String,
 	avatar_upload_id: Option<Uuid>,
@@ -116,7 +116,8 @@ async fn insert_user(
 	tracing::info!(%display_name, %account_number, "attempt");
 
 	let res = if let Some(avatar_upload_id) = avatar_upload_id {
-		sqlx::query(indoc!(
+		sql_query!(
+			[ctx]
 			"
 			INSERT INTO db_user.users (
 				user_id,
@@ -127,18 +128,18 @@ async fn insert_user(
 				join_ts
 			)
 			VALUES ($1, $2, $3, $4, $5, $6)
-			"
-		))
-		.bind(user_id)
-		.bind(&display_name)
-		.bind(account_number)
-		.bind(gen_avatar_id())
-		.bind(avatar_upload_id)
-		.bind(join_ts)
-		.execute(crdb)
+			",
+			user_id,
+			&display_name,
+			account_number,
+			gen_avatar_id(),
+			avatar_upload_id,
+			join_ts,
+		)
 		.await
 	} else {
-		sqlx::query(indoc!(
+		sql_query!(
+			[ctx]
 			"
 			INSERT INTO db_user.users (
 				user_id,
@@ -148,14 +149,13 @@ async fn insert_user(
 				join_ts
 			)
 			VALUES ($1, $2, $3, $4, $5)
-			"
-		))
-		.bind(user_id)
-		.bind(&display_name)
-		.bind(gen_account_number())
-		.bind(gen_avatar_id())
-		.bind(join_ts)
-		.execute(crdb)
+			",
+			user_id,
+			&display_name,
+			gen_account_number(),
+			gen_avatar_id(),
+			join_ts,
+		)
 		.await
 	};
 

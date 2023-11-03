@@ -19,7 +19,7 @@ types:
 
   BootstrapCaptcha:
     properties:
-      turnstile: BootstrapCaptchaTurnstile
+      turnstile: optional<BootstrapCaptchaTurnstile>
 
   BootstrapCaptchaTurnstile:
     properties:

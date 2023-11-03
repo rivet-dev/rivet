@@ -59,12 +59,14 @@ async fn worker(
 		.await;
 	}
 
-	sqlx::query("INSERT INTO db_team.join_requests (team_id, user_id, ts) VALUES ($1, $2, $3)")
-		.bind(team_id)
-		.bind(user_id)
-		.bind(ctx.ts())
-		.execute(&crdb)
-		.await?;
+	sql_query!(
+		[ctx]
+		"INSERT INTO db_team.join_requests (team_id, user_id, ts) VALUES ($1, $2, $3)",
+		team_id,
+		user_id,
+		ctx.ts(),
+	)
+	.await?;
 
 	msg!([ctx] team::msg::join_request_create_complete(team_id, user_id) {
 		team_id: Some(team_id.into()),

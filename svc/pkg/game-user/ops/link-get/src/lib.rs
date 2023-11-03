@@ -50,7 +50,8 @@ async fn handle(
 		.map(common::Uuid::as_uuid)
 		.collect::<Vec<_>>();
 
-	let game_user_links = sqlx::query_as::<_, GameUserLink>(indoc!(
+	let game_user_links = sql_fetch_all!(
+		[ctx, GameUserLink]
 		"
 		SELECT
 			link_id,
@@ -64,10 +65,9 @@ async fn handle(
 			cancelled_ts
 		FROM db_game_user.links
 		WHERE link_id = ANY($1)
-		"
-	))
-	.bind(link_ids)
-	.fetch_all(&crdb)
+		",
+		link_ids,
+	)
 	.await?
 	.into_iter()
 	.map(Into::into)

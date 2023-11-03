@@ -1,5 +1,4 @@
 pub mod api;
-pub mod auth;
 pub mod chat;
 pub mod cloud;
 pub mod group;

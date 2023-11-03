@@ -11,10 +11,9 @@ struct DevTeam {
 }
 
 struct BillingCtx {
-	client: chirp_client::Client,
+	ctx: OperationContext<()>,
 	billing_teams: Vec<team::billing_aggregate::response::TeamBillingMetrics>,
 	games: Vec<backend::game::Game>,
-	crdb_pool: CrdbPool,
 	current_collection_ts: i64,
 }
 
@@ -37,13 +36,13 @@ pub async fn run_from_env(ts: i64) -> GlobalResult<()> {
 	);
 	let crdb_pool = ctx.crdb().await?;
 
-	let dev_teams = sqlx::query_as::<_, DevTeam>(indoc!(
+	let dev_teams = sql_fetch_all!(
+		[ctx, DevTeam]
 		"
 		SELECT team_id, last_collection_ts
 		FROM db_team_dev.dev_teams
-		"
-	))
-	.fetch_all(&crdb_pool)
+		",
+	)
 	.await?
 	.into_iter()
 	.collect::<Vec<_>>();
@@ -72,10 +71,9 @@ pub async fn run_from_env(ts: i64) -> GlobalResult<()> {
 	.await?;
 
 	let billing_ctx = Arc::new(BillingCtx {
-		client: ctx.chirp().clone(),
+		ctx: ctx.clone(),
 		billing_teams: billing_res.teams.clone(),
 		games: games_res.games.clone(),
-		crdb_pool: crdb_pool.clone(),
 		current_collection_ts: now,
 	});
 
@@ -118,9 +116,6 @@ async fn process_metrics(billing_ctx: Arc<BillingCtx>, dev_team: DevTeam) -> Glo
 			let subscription_id = unwrap!(game_info.subscription_id);
 
 			futures_util::stream::iter(non_zero_metrics.into_iter().map(|rt_metrics| {
-				let client = billing_ctx.client.clone();
-				let team_id = dev_team.team_id;
-
 				async move {
 					// TODO: Send send metrics to stripe
 					GlobalResult::Ok(())
@@ -132,16 +127,16 @@ async fn process_metrics(billing_ctx: Arc<BillingCtx>, dev_team: DevTeam) -> Glo
 
 			// Update collection ts so we don't get collection overlap
 			if has_metrics {
-				sqlx::query(indoc!(
+				sql_query!(
+					[billing_ctx.ctx]
 					"
 					UPDATE db_team_dev.dev_teams
 					SET last_collection_ts = $2
 					WHERE team_id = $1
-					"
-				))
-				.bind(dev_team.team_id)
-				.bind(billing_ctx.current_collection_ts)
-				.execute(&billing_ctx.crdb_pool)
+					",
+					dev_team.team_id,
+					billing_ctx.current_collection_ts,
+				)
 				.await?;
 			}
 		}

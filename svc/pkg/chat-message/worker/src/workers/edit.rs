@@ -18,17 +18,17 @@ async fn worker(ctx: &OperationContext<chat_message::msg::edit::Message>) -> Glo
 	body.encode(&mut body_buf)?;
 
 	// Update message
-	let (thread_id, send_ts) = sqlx::query_as::<_, (Uuid, i64)>(indoc!(
+	let (thread_id, send_ts) = sql_fetch_one!(
+		[ctx, (Uuid, i64)]
 		"
 		UPDATE db_chat.messages
 		SET body = $2
 		WHERE message_id = $1
 		RETURNING thread_id, send_ts
-		"
-	))
-	.bind(chat_message_id)
-	.bind(&body_buf)
-	.fetch_one(&crdb)
+		",
+		chat_message_id,
+		&body_buf,
+	)
 	.await?;
 
 	// Build chat message

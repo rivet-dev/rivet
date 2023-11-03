@@ -42,11 +42,14 @@ async fn handle(
 
 	let uploads = ctx
 		.cache()
-		.fetch_all_proto("upload", upload_ids, move |mut cache, upload_ids| {
-			let crdb = crdb.clone();
-			async move {
-				let uploads = sqlx::query_as::<_, UploadRow>(indoc!(
-					"
+		.fetch_all_proto("upload", upload_ids, {
+			let ctx = ctx.clone();
+			move |mut cache, upload_ids| {
+				let ctx = ctx.clone();
+				async move {
+					let uploads = sql_fetch_all!(
+						[ctx, UploadRow]
+						"
 					SELECT
 						bucket,
 						upload_id,
@@ -58,17 +61,17 @@ async fn handle(
 						provider
 					FROM db_upload.uploads
 					WHERE upload_id = ANY($1)
-					"
-				))
-				.bind(upload_ids)
-				.fetch_all(&crdb)
-				.await?;
+					",
+						upload_ids,
+					)
+					.await?;
 
-				for row in uploads {
-					cache.resolve(&row.upload_id.clone(), row.into());
+					for row in uploads {
+						cache.resolve(&row.upload_id.clone(), row.into());
+					}
+
+					Ok(cache)
 				}
-
-				Ok(cache)
 			}
 		})
 		.await?;

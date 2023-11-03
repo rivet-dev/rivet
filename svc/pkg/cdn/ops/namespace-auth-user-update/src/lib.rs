@@ -14,22 +14,22 @@ async fn handle(
 	);
 
 	let crdb = ctx.crdb().await?;
-	let (auth_user_count,) = sqlx::query_as::<_, (i64,)>(
+	let (auth_user_count,) = sql_fetch_one!(
+		[ctx, (i64,)]
 		"SELECT COUNT(*) FROM db_cdn.game_namespace_auth_users WHERE namespace_id = $1",
+		namespace_id,
 	)
-	.bind(namespace_id)
-	.fetch_one(&crdb)
 	.await?;
 
 	ensure_with!(auth_user_count < CDN_AUTH_USER_MAX, CDN_TOO_MANY_AUTH_USERS);
 
-	sqlx::query(
+	sql_query!(
+		[ctx]
 		"UPSERT INTO db_cdn.game_namespace_auth_users (namespace_id, user_name, password) VALUES ($1, $2, $3)",
+		namespace_id,
+		&ctx.user,
+		&ctx.password,
 	)
-	.bind(namespace_id)
-	.bind(&ctx.user)
-	.bind(&ctx.password)
-	.execute(&crdb)
 	.await?;
 
 	msg!([ctx] cdn::msg::ns_config_update(namespace_id) {

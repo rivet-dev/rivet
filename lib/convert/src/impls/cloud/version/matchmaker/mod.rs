@@ -323,9 +323,9 @@ impl ApiTryFrom<backend::captcha::captcha_config::Hcaptcha>
 
 	fn try_from(value: backend::captcha::captcha_config::Hcaptcha) -> GlobalResult<Self> {
 		Ok(models::CloudVersionMatchmakerCaptchaHcaptcha {
-			level: unwrap!(
-				backend::captcha::captcha_config::hcaptcha::Level::from_i32(value.level)
-			)
+			level: unwrap!(backend::captcha::captcha_config::hcaptcha::Level::from_i32(
+				value.level
+			))
 			.api_into(),
 		})
 	}

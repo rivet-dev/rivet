@@ -12,15 +12,15 @@ async fn handle(
 ) -> GlobalResult<custom_user_avatar::list_for_game::Response> {
 	let game_id = unwrap_ref!(ctx.game_id).as_uuid();
 
-	let custom_avatars = sqlx::query_as::<_, CustomAvatar>(indoc!(
+	let custom_avatars = sql_fetch_all!(
+		[ctx, CustomAvatar]
 		"
 		SELECT upload_id
 		FROM db_game_custom_avatar.custom_avatars
 		WHERE game_id = $1
-		"
-	))
-	.bind(game_id)
-	.fetch_all(&ctx.crdb().await?)
+		",
+		game_id,
+	)
 	.await?;
 
 	Ok(custom_user_avatar::list_for_game::Response {

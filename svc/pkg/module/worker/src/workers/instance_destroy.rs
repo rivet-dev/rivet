@@ -29,16 +29,16 @@ async fn worker(
 	}
 
 	// Update database
-	sqlx::query(indoc!(
+	sql_query!(
+		[ctx]
 		"
 		UPDATE db_module.instances
 		SET destroy_ts = $2
 		WHERE instance_id = $1
-		"
-	))
-	.bind(instance_id)
-	.bind(ctx.ts())
-	.execute(&crdb)
+		",
+		instance_id,
+		ctx.ts(),
+	)
 	.await?;
 
 	msg!([ctx] module::msg::instance_destroy_complete(instance_id) {

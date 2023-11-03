@@ -7,12 +7,12 @@ async fn handle(
 ) -> GlobalResult<cdn::namespace_auth_user_remove::Response> {
 	let namespace_id = unwrap_ref!(ctx.namespace_id).as_uuid();
 
-	sqlx::query(
+	sql_query!(
+		[ctx]
 		"DELETE FROM db_cdn.game_namespace_auth_users WHERE namespace_id = $1 AND user_name = $2",
+		namespace_id,
+		&ctx.user,
 	)
-	.bind(namespace_id)
-	.bind(&ctx.user)
-	.execute(&ctx.crdb().await?)
 	.await?;
 
 	msg!([ctx] cdn::msg::ns_config_update(namespace_id) {

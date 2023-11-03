@@ -22,7 +22,8 @@ async fn handle(
 	let limit = ctx.limit as i64;
 
 	let uploads = if let Some(anchor) = ctx.anchor {
-		sqlx::query_as::<_, UploadRow>(indoc!(
+		sql_fetch_all!(
+			[ctx, UploadRow]
 			"
 			SELECT user_id, upload_id, create_ts
 			FROM db_upload.uploads
@@ -31,15 +32,15 @@ async fn handle(
 				create_ts > $2
 			ORDER BY create_ts DESC
 			LIMIT $3
-			"
-		))
-		.bind(&user_ids)
-		.bind(anchor)
-		.bind(limit)
-		.fetch_all(&crdb)
+			",
+			&user_ids,
+			anchor,
+			limit,
+		)
 		.await?
 	} else {
-		sqlx::query_as::<_, UploadRow>(indoc!(
+		sql_fetch_all!(
+			[ctx, UploadRow]
 			"
 			SELECT user_id, upload_id, create_ts
 			FROM db_upload.uploads
@@ -47,11 +48,10 @@ async fn handle(
 				user_id = ANY($1)
 			ORDER BY create_ts DESC
 			LIMIT $2
-			"
-		))
-		.bind(&user_ids)
-		.bind(limit)
-		.fetch_all(&crdb)
+			",
+			&user_ids,
+			limit,
+		)
 		.await?
 	};
 

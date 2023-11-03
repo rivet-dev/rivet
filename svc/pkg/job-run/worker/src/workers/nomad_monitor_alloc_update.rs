@@ -68,17 +68,17 @@ async fn worker(
 		TaskState::Pending => {
 			tracing::info!("run pending");
 
-			let run_row = sqlx::query_as::<_, (Uuid,)>(indoc!(
+			let run_row = sql_fetch_optional!(
+				[ctx, (Uuid,)]
 				"
 				UPDATE db_job_state.run_meta_nomad
 				SET alloc_state = $2
 				WHERE dispatched_job_id = $1
 				RETURNING run_id
-				"
-			))
-			.bind(job_id)
-			.bind(&alloc_state_json)
-			.fetch_optional(&crdb)
+				",
+				job_id,
+				&alloc_state_json,
+			)
 			.await?;
 
 			if run_row.is_none() {
@@ -93,7 +93,8 @@ async fn worker(
 			Ok(())
 		}
 		TaskState::Running => {
-			let run_row = sqlx::query_as::<_, (Uuid, Option<i64>)>(indoc!(
+			let run_row = sql_fetch_optional!(
+				[ctx, (Uuid, Option<i64>)]
 				"
 				WITH
 					select_run AS (
@@ -119,12 +120,11 @@ async fn worker(
 						RETURNING 1
 					)
 				SELECT * FROM select_run
-				"
-			))
-			.bind(job_id)
-			.bind(ctx.ts())
-			.bind(&alloc_state_json)
-			.fetch_optional(&crdb)
+				",
+				job_id,
+				ctx.ts(),
+				&alloc_state_json,
+			)
 			.await?;
 
 			let Some((run_id, start_ts)) = run_row else {
@@ -152,7 +152,8 @@ async fn worker(
 			}
 		}
 		TaskState::Dead => {
-			let run_row = sqlx::query_as::<_, (Uuid, Option<i64>)>(indoc!(
+			let run_row = sql_fetch_optional!(
+				[ctx, (Uuid, Option<i64>)]
 				"
 				WITH
 					select_run AS (
@@ -178,12 +179,11 @@ async fn worker(
 						RETURNING 1
 					)
 				SELECT * FROM select_run
-				"
-			))
-			.bind(job_id)
-			.bind(ctx.ts())
-			.bind(&alloc_state_json)
-			.fetch_optional(&crdb)
+				",
+				job_id,
+				ctx.ts(),
+				&alloc_state_json,
+			)
 			.await?;
 
 			let Some((run_id, finish_ts)) = run_row else {

@@ -60,7 +60,8 @@ async fn handle(
 		.map(common::Uuid::as_uuid)
 		.collect::<Vec<_>>();
 
-	let lobbies = sqlx::query_as::<_, LobbyRow>(indoc!(
+	let lobbies = sql_fetch_all!(
+		[ctx, LobbyRow]
 		"
 		SELECT
 			lobby_id,
@@ -83,10 +84,9 @@ async fn handle(
 			max_players_party
 		FROM db_mm_state.lobbies
 		WHERE lobby_id = ANY($1)
-		"
-	))
-	.bind(lobby_ids)
-	.fetch_all(&crdb)
+		",
+		lobby_ids,
+	)
 	.await?
 	.into_iter()
 	.filter(|x| x.stop_ts.is_none() || ctx.include_stopped)

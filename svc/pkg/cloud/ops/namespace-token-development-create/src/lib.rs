@@ -60,15 +60,15 @@ async fn handle(
 	let token = unwrap_ref!(token_res.token);
 	let token_session_id = unwrap_ref!(token_res.session_id).as_uuid();
 
-	sqlx::query(indoc!(
+	sql_query!(
+		[ctx]
 		"
 		INSERT INTO db_cloud.game_namespace_development_tokens (namespace_id, token_session_id)
 		VALUES ($1, $2)
-		"
-	))
-	.bind(namespace_id)
-	.bind(token_session_id)
-	.execute(&ctx.crdb().await?)
+		",
+		namespace_id,
+		token_session_id,
+	)
 	.await?;
 
 	Ok(cloud::namespace_token_development_create::Response {

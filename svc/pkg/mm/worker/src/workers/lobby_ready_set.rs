@@ -22,7 +22,8 @@ async fn worker(ctx: &OperationContext<mm::msg::lobby_ready::Message>) -> Global
 
 	let lobby_id = unwrap_ref!(ctx.lobby_id).as_uuid();
 
-	let lobby_row = sqlx::query_as::<_, LobbyRow>(indoc!(
+	let lobby_row = sql_fetch_optional!(
+		[ctx, LobbyRow]
 		"
 		WITH
 			select_lobby AS (
@@ -36,11 +37,10 @@ async fn worker(ctx: &OperationContext<mm::msg::lobby_ready::Message>) -> Global
 				RETURNING 1
 			)
 		SELECT * FROM select_lobby
-		"
-	))
-	.bind(lobby_id)
-	.bind(ctx.ts())
-	.fetch_optional(&crdb)
+		",
+		lobby_id,
+		ctx.ts(),
+	)
 	.await?;
 	tracing::info!(?lobby_row, "lobby row");
 

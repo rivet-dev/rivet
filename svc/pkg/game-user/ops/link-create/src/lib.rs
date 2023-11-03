@@ -46,18 +46,18 @@ async fn handle(
 	let user_link_token = unwrap!(token_res.token.clone());
 	let token_session_id = unwrap_ref!(token_res.session_id).as_uuid();
 
-	sqlx::query(indoc!(
+	sql_query!(
+		[ctx]
 		"
 		INSERT INTO db_game_user.links (link_id, namespace_id, token_session_id, current_game_user_id, create_ts)
 		VALUES ($1, $2, $3, $4, $5)
-		"
-	))
-	.bind(link_id)
-	.bind(namespace_id)
-	.bind(token_session_id)
-	.bind(game_user_id)
-	.bind(ctx.ts())
-	.execute(&crdb)
+		",
+		link_id,
+		namespace_id,
+		token_session_id,
+		game_user_id,
+		ctx.ts(),
+	)
 	.await?;
 
 	msg!([ctx] analytics::msg::event_create() {

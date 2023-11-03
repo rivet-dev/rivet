@@ -72,7 +72,8 @@ async fn worker(
 	};
 
 	// Fetch and update the run
-	let run_row = sqlx::query_as::<_, RunRow>(indoc!(
+	let run_row = sql_fetch_optional!(
+		[ctx, RunRow]
 		"
 		WITH
 			select_run AS (
@@ -91,11 +92,10 @@ async fn worker(
 				RETURNING 1
 			)
 		SELECT * FROM select_run
-		"
-	))
-	.bind(job_id)
-	.bind(ctx.ts())
-	.fetch_optional(&crdb)
+		",
+		job_id,
+		ctx.ts(),
+	)
 	.await?;
 
 	// Check if run found

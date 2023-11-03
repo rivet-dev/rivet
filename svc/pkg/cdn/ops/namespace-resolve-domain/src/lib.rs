@@ -5,15 +5,15 @@ use rivet_operation::prelude::*;
 async fn handle(
 	ctx: OperationContext<cdn::namespace_resolve_domain::Request>,
 ) -> GlobalResult<cdn::namespace_resolve_domain::Response> {
-	let namespaces = sqlx::query_as::<_, (Uuid, String)>(indoc!(
+	let namespaces = sql_fetch_all!(
+		[ctx, (Uuid, String)]
 		"
 		SELECT namespace_id, domain
 		FROM db_cdn.game_namespace_domains
 		WHERE domain = ANY($1)
-		"
-	))
-	.bind(&ctx.domains)
-	.fetch_all(&ctx.crdb().await?)
+		",
+		&ctx.domains,
+	)
 	.await?
 	.into_iter()
 	.map(

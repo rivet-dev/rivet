@@ -4,7 +4,7 @@
 
 Name | Type | Description | Notes
 ------------ | ------------- | ------------- | -------------
-**captcha** | [**crate::models::CaptchaConfig**](CaptchaConfig.md) |  | 
+**captcha** | Option<[**crate::models::CaptchaConfig**](CaptchaConfig.md)> |  | [optional]
 **email** | **String** |  | 
 **game_id** | Option<[**uuid::Uuid**](uuid::Uuid.md)> |  | [optional]
 

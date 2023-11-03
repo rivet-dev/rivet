@@ -9,11 +9,13 @@ async fn worker(
 	let team_id: Uuid = unwrap_ref!(ctx.team_id).as_uuid();
 	let user_id: Uuid = unwrap_ref!(ctx.user_id).as_uuid();
 
-	sqlx::query("DELETE FROM db_team.join_requests WHERE team_id = $1 AND user_id = $2")
-		.bind(team_id)
-		.bind(user_id)
-		.execute(&ctx.crdb().await?)
-		.await?;
+	sql_query!(
+		[ctx]
+		"DELETE FROM db_team.join_requests WHERE team_id = $1 AND user_id = $2",
+		team_id,
+		user_id,
+	)
+	.await?;
 
 	if ctx.resolution {
 		// Create the team member

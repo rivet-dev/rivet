@@ -15,16 +15,16 @@ async fn handle(
 		backend::user_identity::identity::Kind::Email(email) => {
 			ensure!(EmailAddress::is_valid(&email.email, None), "invalid email");
 
-			sqlx::query(indoc!(
+			sql_query!(
+				[ctx]
 				"
 				INSERT INTO db_user_identity.emails (email, user_id, create_ts)
 				VALUES ($1, $2, $3)
-				"
-			))
-			.bind(&email.email)
-			.bind(user_id)
-			.bind(ctx.ts())
-			.execute(&ctx.crdb().await?)
+				",
+				&email.email,
+				user_id,
+				ctx.ts(),
+			)
 			.await?;
 
 			msg!([ctx] analytics::msg::event_create() {

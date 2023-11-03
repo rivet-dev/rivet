@@ -68,7 +68,8 @@ async fn worker(ctx: &OperationContext<mm::msg::lobby_cleanup::Message>) -> Glob
 	//
 	// This also locks the lobby row in case there is a race condition with
 	// mm-lobby-create.
-	let lobby_row = sqlx::query_as::<_, LobbyRow>(indoc!(
+	let lobby_row = sql_fetch_optional!(
+		[ctx, LobbyRow]
 		"
 		WITH
 			select_lobby AS (
@@ -83,11 +84,10 @@ async fn worker(ctx: &OperationContext<mm::msg::lobby_cleanup::Message>) -> Glob
 				RETURNING 1
 			)
 		SELECT * FROM select_lobby
-		"
-	))
-	.bind(lobby_id)
-	.bind(ctx.ts())
-	.fetch_optional(&crdb)
+		",
+		lobby_id,
+		ctx.ts(),
+	)
 	.await?;
 	tracing::info!(?lobby_row, "lobby row");
 
@@ -103,15 +103,15 @@ async fn worker(ctx: &OperationContext<mm::msg::lobby_cleanup::Message>) -> Glob
 	// TODO: Handle race condition here where mm-lobby-find will insert players on a stopped lobby. This can be fixed by checking the lobby stop_ts in the mm-lobby-find trans.
 	// Find players to remove. This is idempotent, so we do this regardless of
 	// if the lobby was already stopped.
-	let players_to_remove = sqlx::query_as::<_, (Uuid,)>(indoc!(
+	let players_to_remove = sql_fetch_all!(
+		[ctx, (Uuid,)]
 		"
 		SELECT player_id
 		FROM db_mm_state.players
 		WHERE lobby_id = $1 AND remove_ts IS NULL
-		"
-	))
-	.bind(lobby_id)
-	.fetch_all(&crdb)
+		",
+		lobby_id,
+	)
 	.await?
 	.into_iter()
 	.map(|x| x.0)

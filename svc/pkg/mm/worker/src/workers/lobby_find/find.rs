@@ -323,11 +323,11 @@ pub async fn find(
 			if let Query::Direct(backend::matchmaker::query::Direct { lobby_id }) = query {
 				let lobby_id = unwrap_ref!(lobby_id).as_uuid();
 
-				if let Some((Some(_),)) = sqlx::query_as::<_, (Option<i64>,)>(
+				if let Some((Some(_),)) = sql_fetch_optional!(
+					[ctx, (Option<i64>,)]
 					"SELECT stop_ts FROM db_mm_state.lobbies WHERE lobby_id = $1",
+					lobby_id,
 				)
-				.bind(lobby_id)
-				.fetch_optional(crdb)
 				.await?
 				{
 					ErrorCode::LobbyStopped

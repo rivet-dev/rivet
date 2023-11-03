@@ -147,6 +147,7 @@ dependencies = [
  "hyper",
  "lazy_static",
  "prost 0.10.4",
+ "rivet-api",
  "rivet-auth",
  "rivet-auth-server",
  "rivet-cache",

@@ -24,12 +24,12 @@ async fn handle(
 	let game = unwrap!(game_res.games.first());
 	let developer_team_id = unwrap_ref!(game.developer_team_id).as_uuid();
 
-	sqlx::query(
+	sql_query!(
+		[ctx]
 		"DELETE FROM db_cdn.game_namespace_domains WHERE namespace_id = $1 AND domain = $2",
+		namespace_id,
+		&ctx.domain,
 	)
-	.bind(namespace_id)
-	.bind(&ctx.domain)
-	.execute(&ctx.crdb().await?)
 	.await?;
 
 	// Remove cloudflare hostname

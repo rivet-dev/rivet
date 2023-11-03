@@ -42,7 +42,8 @@ async fn handle(
 	}
 
 	// Query threads
-	let threads = sqlx::query_as::<_, ThreadRow>(indoc!(
+	let threads = sql_fetch_all!(
+		[ctx, ThreadRow]
 		"
 		SELECT thread_id, create_ts, team_team_id, NULL AS direct_user_a_id, NULL AS direct_user_b_id
 		FROM db_chat.threads
@@ -55,12 +56,11 @@ async fn handle(
 		INNER JOIN db_chat.threads ON
 			direct_user_a_id = direct.user_a_id AND
 			direct_user_b_id = direct.user_b_id
-		"
-	))
-	.bind(team_ids)
-	.bind(direct_user_a_ids)
-	.bind(direct_user_b_ids)
-	.fetch_all(&crdb)
+		",
+		team_ids,
+		direct_user_a_ids,
+		direct_user_b_ids,
+	)
 	.await?
 	.into_iter()
 	.map(|thread| {

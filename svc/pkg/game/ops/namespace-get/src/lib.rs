@@ -34,16 +34,16 @@ async fn handle(
 		.map(common::Uuid::as_uuid)
 		.collect::<Vec<_>>();
 
-	let namespaces = sqlx::query_as::<_, Namespace>(indoc!(
+	let namespaces = sql_fetch_all!(
+		[ctx, Namespace]
 		"
 		SELECT namespace_id, game_id, create_ts, display_name, version_id, name_id
 		FROM db_game.game_namespaces
 		WHERE namespace_id = ANY($1)
 		ORDER BY display_name
-		"
-	))
-	.bind(&namespace_ids)
-	.fetch_all(&ctx.crdb().await?)
+		",
+		&namespace_ids,
+	)
 	.await?
 	.into_iter()
 	.map(Into::<backend::game::Namespace>::into)

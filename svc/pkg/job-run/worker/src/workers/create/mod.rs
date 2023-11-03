@@ -82,6 +82,7 @@ async fn worker(ctx: &OperationContext<job_run::msg::create::Message>) -> Global
 	let db_write_perf = ctx.perf().start("write-to-db-before-run").await;
 	rivet_pools::utils::crdb::tx(&crdb, |tx| {
 		Box::pin(write_to_db_before_run(
+			ctx.clone(),
 			tx,
 			ctx.body().clone(),
 			ctx.ts(),
@@ -123,7 +124,7 @@ async fn worker(ctx: &OperationContext<job_run::msg::create::Message>) -> Global
 	run_job_perf.end();
 
 	let db_write_perf = ctx.perf().start("write-to-db-after-run").await;
-	write_to_db_after_run(&crdb, run_id, &nomad_dispatched_job_id).await?;
+	write_to_db_after_run(&ctx, run_id, &nomad_dispatched_job_id).await?;
 	db_write_perf.end();
 
 	// HACK: Wait for Treafik to pick up the new job. 500 ms is the polling interval for the
@@ -225,6 +226,7 @@ async fn create_run_token(
 
 #[tracing::instrument(skip_all)]
 async fn write_to_db_before_run(
+	ctx: OperationContext<job_run::msg::create::Message>,
 	tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
 	req: job_run::msg::create::Message,
 	ts: i64,
@@ -232,24 +234,24 @@ async fn write_to_db_before_run(
 	run_id: Uuid,
 	token_session_id: Uuid,
 ) -> GlobalResult<()> {
-	sqlx::query(indoc!(
+	sql_query!(
+		[ctx]
 		"
 		INSERT INTO db_job_state.runs (run_id, region_id, create_ts, token_session_id)
 		VALUES ($1, $2, $3, $4)
-		"
-	))
-	.bind(run_id)
-	.bind(region_id)
-	.bind(ts)
-	.bind(token_session_id)
-	.execute(&mut **tx)
+		",
+		run_id,
+		region_id,
+		ts,
+		token_session_id,
+	)
 	.await?;
 
-	sqlx::query(indoc!(
-		"INSERT INTO db_job_state.run_meta_nomad (run_id) VALUES ($1)"
-	))
-	.bind(run_id)
-	.execute(&mut **tx)
+	sql_query!(
+		[ctx]
+		"INSERT INTO db_job_state.run_meta_nomad (run_id) VALUES ($1)",
+		run_id,
+	)
 	.await?;
 
 	// TODO: Use future streams?
@@ -268,14 +270,15 @@ async fn write_to_db_before_run(
 			);
 		}
 
-		let ingress_port = choose_ingress_port(tx, proxied_port).await?;
+		let ingress_port = choose_ingress_port(ctx.clone(), tx, proxied_port).await?;
 
 		tracing::info!(?run_id, ?proxied_port, "inserting run proxied port");
 
 		let mut ingress_hostnames_sorted = proxied_port.ingress_hostnames.clone();
 		ingress_hostnames_sorted.sort();
 
-		sqlx::query(indoc!(
+		sql_query!(
+			[ctx]
 			"
 			INSERT INTO db_job_state.run_proxied_ports (
 				run_id,
@@ -287,33 +290,34 @@ async fn write_to_db_before_run(
 				ssl_domain_mode
 			)
 			VALUES ($1, $2, $3, $4, $5, $6, $7)
-			"
-		))
-		.bind(run_id)
-		.bind(proxied_port.target_nomad_port_label.clone())
-		.bind(ingress_port)
-		.bind(&ingress_hostnames_sorted)
-		.bind(ingress_hostnames_sorted.join(","))
-		.bind(proxied_port.proxy_protocol)
-		.bind(proxied_port.ssl_domain_mode)
-		.execute(&mut **tx)
+			",
+			run_id,
+			proxied_port.target_nomad_port_label.clone(),
+			ingress_port,
+			&ingress_hostnames_sorted,
+			ingress_hostnames_sorted.join(","),
+			proxied_port.proxy_protocol,
+			proxied_port.ssl_domain_mode,
+		)
 		.await?;
 	}
 
 	Ok(())
 }
 
-#[tracing::instrument(skip(crdb))]
+#[tracing::instrument]
 async fn write_to_db_after_run(
-	crdb: &CrdbPool,
+	ctx: &OperationContext<job_run::msg::create::Message>,
 	run_id: Uuid,
 	dispatched_job_id: &str,
 ) -> GlobalResult<()> {
-	sqlx::query("UPDATE db_job_state.run_meta_nomad SET dispatched_job_id = $2 WHERE run_id = $1")
-		.bind(run_id)
-		.bind(dispatched_job_id)
-		.execute(crdb)
-		.await?;
+	sql_query!(
+		[ctx]
+		"UPDATE db_job_state.run_meta_nomad SET dispatched_job_id = $2 WHERE run_id = $1",
+		run_id,
+		dispatched_job_id,
+	)
+	.await?;
 
 	Ok(())
 }
@@ -329,6 +333,7 @@ async fn write_to_db_after_run(
 /// This is somewhat poorly written for TCP & UDP ports and may bite us in the ass
 /// some day. See https://linear.app/rivet-gg/issue/RIV-1799
 async fn choose_ingress_port(
+	ctx: OperationContext<job_run::msg::create::Message>,
 	tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
 	proxied_port: &job_run::msg::create::ProxiedPort,
 ) -> GlobalResult<i32> {
@@ -344,6 +349,7 @@ async fn choose_ingress_port(
 			ProxyProtocol::Https => 443,
 			ProxyProtocol::Tcp | ProxyProtocol::TcpTls => {
 				bind_with_retries(
+					ctx,
 					tx,
 					proxied_port.proxy_protocol,
 					util_job::consts::MIN_INGRESS_PORT_TCP..=util_job::consts::MAX_INGRESS_PORT_TCP,
@@ -352,6 +358,7 @@ async fn choose_ingress_port(
 			}
 			ProxyProtocol::Udp => {
 				bind_with_retries(
+					ctx,
 					tx,
 					proxied_port.proxy_protocol,
 					util_job::consts::MIN_INGRESS_PORT_UDP..=util_job::consts::MAX_INGRESS_PORT_UDP,
@@ -365,6 +372,7 @@ async fn choose_ingress_port(
 }
 
 async fn bind_with_retries(
+	ctx: OperationContext<job_run::msg::create::Message>,
 	tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
 	proxy_protocol: i32,
 	range: std::ops::RangeInclusive<u16>,
@@ -380,7 +388,8 @@ async fn bind_with_retries(
 
 		let port = rand::thread_rng().gen_range(range.clone()) as i32;
 
-		let (already_exists,) = sqlx::query_as::<_, (bool,)>(indoc!(
+		let (already_exists,) = sql_fetch_one!(
+			[ctx, (bool,), &mut **tx]
 			"
 			SELECT EXISTS(
 				SELECT 1
@@ -392,11 +401,10 @@ async fn bind_with_retries(
 					p.ingress_port = $1 AND
 					p.proxy_protocol = $2
 			)
-			"
-		))
-		.bind(port)
-		.bind(proxy_protocol)
-		.fetch_one(&mut **tx)
+			",
+			port,
+			proxy_protocol,
+		)
 		.await?;
 
 		if !already_exists {

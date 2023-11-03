@@ -77,18 +77,18 @@ async fn handle(
 			};
 
 		// Find user by handle
-		let (user_exists,) = sqlx::query_as::<_, (bool,)>(indoc!(
+		let (user_exists,) = sql_fetch_one!(
+			[ctx, (bool,)]
 			"
 			SELECT EXISTS (
 				SELECT 1
 				FROM db_user.users
 				WHERE display_name = $1 and account_number = $2
 			)
-			"
-		))
-		.bind(display_name)
-		.bind(account_number as i64)
-		.fetch_one(&ctx.crdb().await?)
+			",
+			display_name,
+			account_number as i64,
+		)
 		.await?;
 
 		// Validate handle uniqueness

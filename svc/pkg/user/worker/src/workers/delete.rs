@@ -149,7 +149,8 @@ async fn worker(ctx: &OperationContext<user::msg::delete::Message>) -> GlobalRes
 	{
 		tracing::info!(?user_id, "removing user record");
 
-		sqlx::query(indoc!(
+		sql_query!(
+			[ctx]
 			"
 			UPDATE db_user.users
 			SET
@@ -158,12 +159,11 @@ async fn worker(ctx: &OperationContext<user::msg::delete::Message>) -> GlobalRes
 				bio = '',
 				delete_complete_ts = $3
 			WHERE user_id = $1
-			"
-		))
-		.bind(user_id)
-		.bind(gen_display_name())
-		.bind(util::timestamp::now())
-		.execute(&crdb)
+			",
+			user_id,
+			gen_display_name(),
+			util::timestamp::now(),
+		)
 		.await?;
 
 		ctx.cache().purge("user", [user_id]).await?;
