@@ -139,7 +139,7 @@ impl Auth {
 		&self,
 		ctx: &OperationContext<()>,
 		team_id: Uuid,
-	) -> GlobalResult<()> {
+	) -> GlobalResult<Uuid> {
 		let claims = self.claims()?;
 
 		if claims.as_user().is_ok() {
@@ -163,7 +163,7 @@ impl Auth {
 				GROUP_INSUFFICIENT_PERMISSIONS
 			);
 
-			Ok(())
+			Ok(user_ent.user_id)
 		} else {
 			bail_with!(
 				API_UNAUTHORIZED,

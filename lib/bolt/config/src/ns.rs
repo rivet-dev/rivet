@@ -518,6 +518,8 @@ pub struct Rivet {
 	#[serde(default)]
 	pub telemetry: Telemetry,
 	#[serde(default)]
+	pub access: RivetAccess,
+	#[serde(default)]
 	pub test: Option<RivetTest>,
 	#[serde(default)]
 	pub api: Api,
@@ -537,6 +539,21 @@ pub struct Telemetry {
 	/// Disables sending telemetry to Rivet.
 	#[serde(default)]
 	pub disable: bool,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+#[serde(deny_unknown_fields)]
+pub enum RivetAccess {
+	#[serde(rename = "private")]
+	Private {},
+	#[serde(rename = "public")]
+	Public {},
+}
+
+impl Default for RivetAccess {
+	fn default() -> Self {
+		RivetAccess::Private {}
+	}
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, Default)]
