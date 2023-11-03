@@ -235,7 +235,8 @@ impl ProjectContextData {
 			}
 		}
 
-		panic!("Could not find project root.");
+		eprintln!("Could not find project root.");
+		std::process::exit(1);
 	}
 }
 

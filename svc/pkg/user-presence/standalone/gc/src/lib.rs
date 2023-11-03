@@ -5,7 +5,7 @@ use rivet_operation::prelude::*;
 #[tracing::instrument(skip_all)]
 pub async fn run_from_env(ts: i64, pools: rivet_pools::Pools) -> GlobalResult<()> {
 	let client = chirp_client::SharedClient::from_env(pools.clone())?.wrap_new("user-presence-gc");
-	let mut redis = pools.redis("user-presence")?;
+	let mut redis = pools.redis("ephemeral")?;
 
 	let expire_ts = ts - util_user_presence::USER_PRESENCE_TTL;
 	let (user_ids,) = redis::pipe()

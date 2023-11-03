@@ -7,7 +7,7 @@ fn main() -> GlobalResult<()> {
 async fn start() -> GlobalResult<()> {
 	let pools = rivet_pools::from_env("job-run-eval-update-monitor").await?;
 	let shared_client = chirp_client::SharedClient::from_env(pools.clone())?;
-	let redis_job = pools.redis("job")?;
+	let redis_job = pools.redis("persistent")?;
 
 	tokio::task::Builder::new()
 		.name("job_run_eval_update_monitor::health_checks")

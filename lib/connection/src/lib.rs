@@ -34,7 +34,7 @@ impl Connection {
 	) -> GlobalResult<Connection> {
 		// Not the same as the operation ctx's ts because this cannot be overridden by debug start ts
 		let ts = rivet_util::timestamp::now();
-		let redis_cache = self.pools.redis("cache")?;
+		let redis_cache = self.pools.redis("ephemeral")?;
 
 		Ok(Connection::new(
 			(*self.client).clone().wrap_with(

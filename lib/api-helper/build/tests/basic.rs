@@ -477,6 +477,4 @@ async fn set_env_vars() {
 	std::env::set_var("NATS_URL", todo!());
 	std::env::set_var("NATS_USERNAME", "chirp");
 	std::env::set_var("NATS_PASSWORD", "password");
-	std::env::set_var("REDIS_URL_CHIRP", todo!());
-	std::env::set_var("REDIS_URL_CACHE", todo!());
 }
