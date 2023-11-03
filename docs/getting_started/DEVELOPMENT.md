@@ -99,7 +99,7 @@ Now, you have to start the hub frontend.
 ## Step 5: Promote yourself to admin
 
 ```
-bolt db sh db-user --query 'UPDATE users SET is_admin = true'
+nix-shell --run "bolt db sh db-user --query 'UPDATE users SET is_admin = true'"
 ```
 
 You  may need to site site storage to clear the local cache for this change to appear. ([Related issue](https://github.com/rivet-gg/rivet/issues/152))
