@@ -1,8 +1,8 @@
 # Developing
 
-> 🚨 **READ THIS FIRST** 🚨
+> 🚨 **READ BEFORE PROCEEDING** 🚨
 > 
-> We encourage developers to try the self-hosted version of Rivet, but we're
+> We encourage developers to use the self-hosted version of Rivet, but we're
 > still working on improving the self-hosted developer experience.
 >
 > At the moment, all the services need to be built from scratch and deployed
