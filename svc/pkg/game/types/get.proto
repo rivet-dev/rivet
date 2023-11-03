@@ -12,3 +12,18 @@ message Request {
 message Response {
 	repeated rivet.backend.game.Game games = 1;
 }
+
+message CacheGame {
+	rivet.common.Uuid game_id = 1;
+	int64 create_ts = 2;
+	string name_id = 3;
+	string display_name = 4;
+	string url = 5;
+	rivet.common.Uuid developer_team_id = 6;
+	string description = 7;
+	repeated string tags = 8;
+	optional rivet.common.Uuid logo_upload_id = 9;
+	optional rivet.common.Uuid banner_upload_id = 10;
+	optional string plan_code = 11;
+	optional rivet.common.Uuid subscription_id = 12;
+}

@@ -27,6 +27,8 @@ async fn handle(
 	)
 	.await?;
 
+	ctx.cache().purge("game", [game_id]).await?;
+
 	msg!([ctx] game::msg::update(game_id) {
 		game_id: ctx.game_id,
 	})

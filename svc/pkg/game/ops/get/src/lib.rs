@@ -17,6 +17,25 @@ struct Game {
 	subscription_id: Option<Uuid>,
 }
 
+impl From<Game> for game::get::CacheGame {
+	fn from(val: Game) -> Self {
+		game::get::CacheGame {
+			game_id: Some(val.game_id.into()),
+			create_ts: val.create_ts,
+			name_id: val.name_id,
+			display_name: val.display_name,
+			url: val.url,
+			developer_team_id: Some(val.developer_team_id.into()),
+			description: val.description,
+			tags: val.tags,
+			logo_upload_id: val.logo_upload_id.map(Into::into),
+			banner_upload_id: val.banner_upload_id.map(Into::into),
+			plan_code: val.plan_code,
+			subscription_id: val.subscription_id.map(Into::into),
+		}
+	}
+}
+
 #[operation(name = "game-get")]
 async fn handle(ctx: OperationContext<game::get::Request>) -> GlobalResult<game::get::Response> {
 	let game_ids = ctx
@@ -25,32 +44,49 @@ async fn handle(ctx: OperationContext<game::get::Request>) -> GlobalResult<game:
 		.map(|id| id.as_uuid())
 		.collect::<Vec<_>>();
 
-	let games = sql_fetch_all!(
-		[ctx, Game]
-		"
-		SELECT
-			game_id,
-			create_ts,
-			name_id,
-			display_name,
-			url,
-			developer_team_id,
-			description,
-			array(
-				SELECT tag
-				FROM db_game.game_tags
-				WHERE game_tags.game_id = games.game_id
-			) AS tags,
-			logo_upload_id,
-			banner_upload_id,
-			plan_code,
-			subscription_id
-		FROM db_game.games
-		WHERE game_id = ANY($1)
-		",
-		game_ids,
-	)
-	.await?;
+	let games = ctx
+		.cache()
+		.fetch_all_proto("game", game_ids, {
+			let ctx = ctx.clone();
+			move |mut cache, game_ids| {
+				let ctx = ctx.clone();
+				async move {
+					let games = sql_fetch_all!(
+						[ctx, Game]
+						"
+						SELECT
+							game_id,
+							create_ts,
+							name_id,
+							display_name,
+							url,
+							developer_team_id,
+							description,
+							array(
+								SELECT tag
+								FROM db_game.game_tags
+								WHERE game_tags.game_id = games.game_id
+							) AS tags,
+							logo_upload_id,
+							banner_upload_id,
+							plan_code,
+							subscription_id
+						FROM db_game.games
+						WHERE game_id = ANY($1)
+						",
+						game_ids,
+					)
+					.await?;
+
+					for row in games {
+						cache.resolve(&row.game_id.clone(), game::get::CacheGame::from(row));
+					}
+
+					Ok(cache)
+				}
+			}
+		})
+		.await?;
 
 	let upload_ids = games
 		.iter()
@@ -125,12 +161,12 @@ async fn handle(ctx: OperationContext<game::get::Request>) -> GlobalResult<game:
 				};
 
 				backend::game::Game {
-					game_id: Some(game.game_id.into()),
+					game_id: game.game_id,
 					create_ts: game.create_ts,
 					name_id: game.name_id,
 					display_name: game.display_name,
 					url: game.url,
-					developer_team_id: Some(game.developer_team_id.into()),
+					developer_team_id: game.developer_team_id,
 					description: game.description,
 					tags: game.tags,
 

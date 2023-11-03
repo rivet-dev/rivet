@@ -57,6 +57,8 @@ async fn handle(
 		.await?;
 
 		tx.commit().await?;
+
+		ctx.cache().purge("game", [game_id]).await?;
 	}
 
 	// Update idle lobbies in all regions in the background
