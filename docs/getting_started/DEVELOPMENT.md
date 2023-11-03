@@ -1,6 +1,6 @@
 # Developing
 
-> 🚨 Read before proceeding 🚨
+> 🚨 **READ THIS FIRST** 🚨
 > 
 > We encourage developers to try the self-hosted version of Rivet, but we're
 > still working on improving the self-hosted developer experience.
