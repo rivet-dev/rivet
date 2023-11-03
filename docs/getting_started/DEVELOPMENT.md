@@ -102,9 +102,9 @@ Now, you have to start the hub frontend.
 nix-shell --run "bolt db sh db-user --query 'UPDATE users SET is_admin = true'"
 ```
 
-You  may need to site site storage to clear the local cache for this change to appear. ([Related issue](https://github.com/rivet-gg/rivet/issues/152))
+You  may need to clear the local cache for this change to appear. ([Related issue](https://github.com/rivet-gg/rivet/issues/152))
 
-_This command sets all users to admin. We're assuming you're the only user in the cluster._
+_This command sets all users to admin. We're assuming you're the only user in the cluster. Do not run this command again._
 
 ## Step 6: Create a developer group
 
