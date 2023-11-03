@@ -84,6 +84,10 @@ impl PoolsInner {
 	}
 
 	pub fn redis_chirp(&self) -> Result<RedisPool, Error> {
+		self.redis("persistent")
+	}
+
+	pub fn redis_chirp_ephemeral(&self) -> Result<RedisPool, Error> {
 		self.redis("ephemeral")
 	}
 

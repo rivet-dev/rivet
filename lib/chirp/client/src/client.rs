@@ -48,6 +48,9 @@ pub struct SharedClient {
 	/// Used for writing to durable streams. This cache is persistent.
 	redis_chirp: RedisPool,
 
+	/// Used for writing to message tails. This cache is ephemeral.
+	redis_chirp_ephemeral: RedisPool,
+
 	/// Used for caching values. This cache is ephemeral.
 	redis_cache: RedisPool,
 
@@ -63,6 +66,7 @@ impl SharedClient {
 	pub fn new(
 		nats: NatsPool,
 		redis_chirp: RedisPool,
+		redis_chirp_ephemeral: RedisPool,
 		redis_cache: RedisPool,
 		region: String,
 	) -> SharedClientHandle {
@@ -76,6 +80,7 @@ impl SharedClient {
 		Arc::new(SharedClient {
 			nats,
 			redis_chirp,
+			redis_chirp_ephemeral,
 			redis_cache,
 			region,
 		})
@@ -89,6 +94,7 @@ impl SharedClient {
 		Ok(SharedClient::new(
 			pools.nats()?,
 			pools.redis_chirp()?,
+			pools.redis_chirp_ephemeral()?,
 			pools.redis_cache()?,
 			region,
 		))
@@ -826,7 +832,7 @@ impl Client {
 					pipe.expire(&history_key, ttl as usize).ignore();
 
 					let perf = self.perf().clone();
-					let mut conn = self.redis_chirp.clone();
+					let mut conn = self.redis_chirp_ephemeral.clone();
 					let spawn_res = join_set
 						.build_task()
 						.name("chirp_client::message_write_tail")
@@ -1067,7 +1073,7 @@ impl Client {
 
 		let lifetime_perf = self.perf().start(M::PERF_LABEL_TAIL_READ).await;
 
-		let mut conn = self.redis_chirp.clone();
+		let mut conn = self.redis_chirp_ephemeral.clone();
 
 		// Fetch message
 		let tail_key = redis_keys::message_tail::<M, _>(&parameters);
@@ -1223,7 +1229,7 @@ impl Client {
 		};
 
 		// Read the recent messages from all parameters
-		let mut conn = self.redis_chirp.clone();
+		let mut conn = self.redis_chirp_ephemeral.clone();
 		let mut messages = Vec::new();
 		for params in &parameters {
 			// TODO: Do this in a batch

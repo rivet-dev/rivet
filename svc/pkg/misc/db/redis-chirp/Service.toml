@@ -3,7 +3,7 @@ name = "redis-chirp"
 
 [runtime]
 kind = "redis"
-persistent = false
+persistent = true
 
 [cache]
 
