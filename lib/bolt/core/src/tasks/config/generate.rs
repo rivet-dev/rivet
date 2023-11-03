@@ -10,7 +10,11 @@ use tokio::task::block_in_place;
 use toml_edit::value;
 use uuid::Uuid;
 
-use crate::{config::service::RuntimeKind, context::ProjectContextData, utils};
+use crate::{
+	config::{self, service::RuntimeKind},
+	context::ProjectContextData,
+	utils,
+};
 
 /// Comment attached to the head of the namespace config.
 const NS_CONFIG_COMMENT: &str = r#"# Documentation: doc/bolt/config/NAMESPACE.md
@@ -461,23 +465,26 @@ pub async fn generate(project_path: &Path, ns_id: &str) -> Result<()> {
 
 	// MARK: Redis
 	for svc in ctx.all_services().await {
-		if !matches!(svc.config().runtime, RuntimeKind::Redis { .. }) {
+		let RuntimeKind::Redis { persistent } = svc.config().runtime else {
 			continue;
-		}
+		};
 
-		// let (db_name, username) = match &ctx.ns().cluster.kind {
-		// 	ns::ClusterKind::SingleNode { .. } => {
-		// 		(svc.redis_db_name().clone(), "default".to_string())
-		// 	}
-		// 	ns::ClusterKind::Distributed {} => {
-		// 		let db_name = format!("rivet-{}-{}", ctx.ns_id(), svc.redis_db_name());
-		// 		let username = format!("{db_name}-root");
+		let db_name = if persistent {
+			"persistent"
+		} else {
+			"ephemeral"
+		};
+		let (db_name, username) = match &ctx.ns().redis.provider {
+			config::ns::RedisProvider::Kubernetes {} => {
+				(db_name.to_string(), "default".to_string())
+			}
+			config::ns::RedisProvider::Aws {} => {
+				let db_name = format!("rivet-{}-{}", ctx.ns_id(), db_name);
+				let username = format!("{db_name}-root");
 
-		// 		(db_name, username)
-		// 	}
-		// };
-		let db_name = svc.redis_db_name().clone();
-		let username = "default".to_string();
+				(db_name, username)
+			}
+		};
 
 		generator
 			.generate_secret(&["redis", &db_name, "username"], || async {

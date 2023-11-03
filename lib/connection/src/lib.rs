@@ -66,23 +66,23 @@ impl Connection {
 	}
 
 	pub async fn redis_cache(&self) -> Result<RedisPool, rivet_pools::Error> {
-		self.pools.redis("cache")
+		self.pools.redis_cache()
 	}
 
 	pub async fn redis_cdn(&self) -> Result<RedisPool, rivet_pools::Error> {
-		self.pools.redis("cdn")
+		self.pools.redis("persistent")
 	}
 
 	pub async fn redis_job(&self) -> Result<RedisPool, rivet_pools::Error> {
-		self.pools.redis("job")
+		self.pools.redis("persistent")
 	}
 
 	pub async fn redis_mm(&self) -> Result<RedisPool, rivet_pools::Error> {
-		self.pools.redis("mm")
+		self.pools.redis("persistent")
 	}
 
 	pub async fn redis_user_presence(&self) -> Result<RedisPool, rivet_pools::Error> {
-		self.pools.redis("user-presence")
+		self.pools.redis("ephemeral")
 	}
 
 	pub fn perf(&self) -> &chirp_perf::PerfCtx {

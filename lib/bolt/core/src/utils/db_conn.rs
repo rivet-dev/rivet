@@ -43,11 +43,17 @@ impl DatabaseConnections {
 
 		for svc in services {
 			match &svc.config().runtime {
-				RuntimeKind::Redis { .. } => {
+				RuntimeKind::Redis { persistent } => {
 					let name = svc.name();
 
 					if !redis_hosts.contains_key(&name) {
-						let host = format!("redis-redis-cluster.{name}.svc.cluster.local:6379");
+						let db_name = if *persistent {
+							"persistent"
+						} else {
+							"ephemeral"
+						};
+
+						let host = format!("redis-redis-cluster.{db_name}.svc.cluster.local:6379");
 						redis_hosts.insert(name, host);
 					}
 				}
@@ -98,11 +104,15 @@ impl DatabaseConnections {
 
 		for svc in services {
 			match &svc.config().runtime {
-				RuntimeKind::Redis { .. } => {
+				RuntimeKind::Redis { persistent } => {
 					let name = svc.name();
 
 					if !redis_hosts.contains_key(&name) {
-						let db_name = svc.redis_db_name();
+						let db_name = if *persistent {
+							"persistent".to_string()
+						} else {
+							"ephemeral".to_string()
+						};
 
 						// Read host and port from terraform
 						let hostname = redis_data

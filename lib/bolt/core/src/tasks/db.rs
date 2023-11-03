@@ -6,7 +6,7 @@ use serde_json::json;
 use tokio::{io::AsyncWriteExt, task::block_in_place};
 
 use crate::{
-	config::service::RuntimeKind,
+	config::{self, service::RuntimeKind},
 	context::{ProjectContext, ServiceContext},
 	utils::db_conn::DatabaseConnections,
 };
@@ -63,31 +63,36 @@ async fn redis_shell(shell_ctx: ShellContext<'_>) -> Result<()> {
 	// TODO: Implement multiple queries
 	let ShellQuery { svc, query } = queries.first().unwrap();
 
-	let db_name = svc.redis_db_name();
+	let db_name = if let RuntimeKind::Redis { persistent } = svc.config().runtime {
+		if persistent {
+			"persistent"
+		} else {
+			"ephemeral"
+		}
+	} else {
+		// In `redis_shell`
+		unreachable!();
+	};
 	let host = conn.redis_hosts.get(&svc.name()).unwrap();
 	let (hostname, port) = host.split_once(":").unwrap();
 
 	// Read auth secrets
-	// let (username, password) = match ctx.ns().cluster.kind {
-	// 	config::ns::ClusterKind::SingleNode { .. } => (
-	// 		ctx.read_secret(&["redis", &db_name, "username"]).await?,
-	// 		ctx.read_secret_opt(&["redis", &db_name, "password"])
-	// 			.await?,
-	// 	),
-	// 	config::ns::ClusterKind::Distributed { .. } => {
-	// 		let db_name = format!("rivet-{}-{}", ctx.ns_id(), db_name);
-	// 		let username = ctx.read_secret(&["redis", &db_name, "username"]).await?;
-	// 		let password = ctx
-	// 			.read_secret_opt(&["redis", &db_name, "password"])
-	// 			.await?;
+	let (username, password) = match ctx.ns().redis.provider {
+		config::ns::RedisProvider::Kubernetes {} => (
+			ctx.read_secret(&["redis", &db_name, "username"]).await?,
+			ctx.read_secret_opt(&["redis", &db_name, "password"])
+				.await?,
+		),
+		config::ns::RedisProvider::Aws {} => {
+			let db_name = format!("rivet-{}-{}", ctx.ns_id(), db_name);
+			let username = ctx.read_secret(&["redis", &db_name, "username"]).await?;
+			let password = ctx
+				.read_secret_opt(&["redis", &db_name, "password"])
+				.await?;
 
-	// 		(username, password)
-	// 	}
-	// };
-	let username = ctx.read_secret(&["redis", &db_name, "username"]).await?;
-	let password = ctx
-		.read_secret_opt(&["redis", &db_name, "password"])
-		.await?;
+			(username, password)
+		}
+	};
 
 	if let LogType::Default = log_type {
 		rivet_term::status::progress("Connecting to Redis", &db_name);

@@ -397,16 +397,30 @@ async fn vars(ctx: &ProjectContext) {
 
 	// Redis services
 	{
-		let mut redis_svcs = HashMap::<String, serde_json::Value>::new();
+		let mut redis_dbs = HashMap::new();
 
+		// Generate persistent and ephemeral databases
 		for svc_ctx in all_svc {
 			if let RuntimeKind::Redis { persistent } = svc_ctx.config().runtime {
-				redis_svcs.insert(
-					svc_ctx.redis_db_name(),
-					json!({
-						"persistent": persistent,
-					}),
-				);
+				if persistent {
+					redis_dbs.insert(
+						"persistent",
+						json!({
+							"persistent": true,
+						}),
+					);
+				} else {
+					redis_dbs.insert(
+						"ephemeral",
+						json!({
+							"persistent": false,
+						}),
+					);
+				}
+
+				if redis_dbs.len() == 2 {
+					break;
+				}
 			}
 		}
 
@@ -418,7 +432,7 @@ async fn vars(ctx: &ProjectContext) {
 				ns::RedisProvider::Aws { .. } => "aws",
 			}),
 		);
-		vars.insert("redis_dbs".into(), json!(redis_svcs));
+		vars.insert("redis_dbs".into(), json!(redis_dbs));
 	}
 
 	// S3

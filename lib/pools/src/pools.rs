@@ -84,11 +84,11 @@ impl PoolsInner {
 	}
 
 	pub fn redis_chirp(&self) -> Result<RedisPool, Error> {
-		self.redis("chirp")
+		self.redis("ephemeral")
 	}
 
 	pub fn redis_cache(&self) -> Result<RedisPool, Error> {
-		self.redis("cache")
+		self.redis("ephemeral")
 	}
 }
 
