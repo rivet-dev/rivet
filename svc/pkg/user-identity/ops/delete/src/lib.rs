@@ -21,5 +21,7 @@ async fn handle(
 	)
 	.await?;
 
+	ctx.cache().purge("user_identity.emails", user_ids).await?;
+
 	Ok(user_identity::delete::Response {})
 }

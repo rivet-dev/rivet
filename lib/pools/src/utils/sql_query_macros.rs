@@ -6,7 +6,7 @@ macro_rules! __sql_query_telemetry {
 
 			// Log query
 			let location = concat!(file!(), ":", line!(), ":", column!());
-			tracing::info!(%location, ty = %stringify!($rv), concat!("sql ", stringify!($action)));
+			tracing::info!(%location, ty = %stringify!($rv), concat!("sql query ", stringify!($action)));
 
 			// Count metric
 			rivet_pools::metrics::SQL_QUERY_TOTAL

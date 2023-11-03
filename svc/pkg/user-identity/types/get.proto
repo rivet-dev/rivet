@@ -17,3 +17,8 @@ message Response {
 
 	repeated User users = 1;
 }
+
+message CacheUserIdentity {
+	rivet.common.Uuid user_id = 1;
+	optional string email = 2;
+}
