@@ -74,7 +74,7 @@ async fn fetch_ip_info_io(
 		// Cache the IP info. This will be cached in Redis too, but this
 		// prevents us from having to consume our ipinfo.io API quota once the
 		// Redis cache expires.
-		sql_query!(
+		sql_execute!(
 			[ctx]
 			"UPSERT INTO db_ip_info.ips (ip, ip_info_io_data, ip_info_io_fetch_ts) VALUES ($1, $2, $3)",
 			ip_str,

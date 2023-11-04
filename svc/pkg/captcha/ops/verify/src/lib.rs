@@ -39,7 +39,7 @@ async fn handle(
 			.await?;
 
 			// Insert verification
-			sql_query!(
+			sql_execute!(
 				[ctx]
 				"
 				INSERT INTO db_captcha.captcha_verifications (
@@ -97,7 +97,7 @@ async fn handle(
 			.await?;
 
 			// Insert verification
-			sql_query!(
+			sql_execute!(
 				[ctx]
 				"
 				INSERT INTO db_captcha.captcha_verifications (

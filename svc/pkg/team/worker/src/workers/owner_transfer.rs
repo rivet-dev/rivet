@@ -17,13 +17,13 @@ async fn worker(ctx: &OperationContext<team::msg::owner_transfer::Message>) -> G
 	.await?;
 
 	tokio::try_join!(
-		sql_query!(
+		sql_execute!(
 			[ctx, &crdb]
 			"UPDATE db_team.teams SET owner_user_id = $2 WHERE team_id = $1",
 			team_id,
 			new_owner_user_id,
 		),
-		sql_query!(
+		sql_execute!(
 			[ctx, &crdb]
 			"
 			INSERT INTO db_team.team_owner_transfer_logs

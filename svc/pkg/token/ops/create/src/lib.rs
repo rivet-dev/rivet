@@ -85,7 +85,7 @@ async fn handle(
 			let issue_new_refresh = true; // TODO: Change this once we have unit tests to handle auto-refresh
 			let current_refresh_token = if issue_new_refresh {
 				// Revoke the refresh token
-				let update_query = sql_query!(
+				let update_query = sql_execute!(
 					[ctx]
 					"
 					UPDATE db_token.tokens
@@ -148,7 +148,7 @@ async fn handle(
 				.iter()
 				.flat_map(|x| x.tag().map(|x| x as i64))
 				.collect::<Vec<_>>();
-			sql_query!(
+			sql_execute!(
 				[ctx]
 				"INSERT INTO db_token.sessions (session_id, entitlements, entitlement_tags, exp) VALUES ($1, $2, $3, $4)",
 				new_session_id,
@@ -274,7 +274,7 @@ async fn create_token(
 	tracing::info!(buf_len = %claims_buf.len(), "writing claims");
 	if !ephemeral {
 		// Create the token and update the session expiration as needed
-		sql_query!(
+		sql_execute!(
 			[ctx]
 			"
 			WITH

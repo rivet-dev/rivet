@@ -40,7 +40,7 @@ async fn handle(
 		}),
 	)?;
 
-	sql_query!(
+	sql_execute!(
 		[ctx]
 		"
 		INSERT INTO db_cloud.game_namespaces (namespace_id)

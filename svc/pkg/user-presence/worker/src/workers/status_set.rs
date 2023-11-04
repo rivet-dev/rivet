@@ -34,7 +34,7 @@ async fn worker(
 
 	// Update the default status
 	if ctx.user_set_status {
-		sql_query!(
+		sql_execute!(
 			[ctx]
 			"
 			UPSERT INTO db_user_presence.user_presences (user_id, user_set_status)

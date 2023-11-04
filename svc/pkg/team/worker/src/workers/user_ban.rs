@@ -7,7 +7,7 @@ async fn worker(ctx: &OperationContext<team::msg::user_ban::Message>) -> GlobalR
 	let team_id = unwrap_ref!(ctx.team_id).as_uuid();
 	let user_id = unwrap_ref!(ctx.user_id).as_uuid();
 
-	sql_query!(
+	sql_execute!(
 		[ctx]
 		"
 		INSERT INTO db_team.banned_users (team_id, user_id, ban_ts)
@@ -22,7 +22,7 @@ async fn worker(ctx: &OperationContext<team::msg::user_ban::Message>) -> GlobalR
 	.await?;
 
 	// TODO: Establish audit logs
-	// sql_query!(
+	// sql_execute!(
 	// 	[ctx]
 	// 	"INSERT INTO team_audit_logs WHERE team_id = $1",
 	// 	team_id,

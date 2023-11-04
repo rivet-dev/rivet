@@ -42,7 +42,7 @@ async fn worker(
 	}
 
 	// Update database
-	sql_query!(
+	sql_execute!(
 		[ctx]
 		"
 		UPDATE db_module.instances

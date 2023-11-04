@@ -39,7 +39,7 @@ async fn handle(
 
 	// Create site
 	let site_id = Uuid::new_v4();
-	sql_query!(
+	sql_execute!(
 		[ctx]
 		"
 		INSERT INTO db_cdn.sites (site_id, game_id, upload_id, display_name, create_ts)

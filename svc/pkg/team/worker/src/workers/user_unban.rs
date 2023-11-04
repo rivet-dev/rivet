@@ -7,7 +7,7 @@ async fn worker(ctx: &OperationContext<team::msg::user_unban::Message>) -> Globa
 	let team_id = unwrap_ref!(ctx.team_id).as_uuid();
 	let user_id = unwrap_ref!(ctx.user_id).as_uuid();
 
-	sql_query!(
+	sql_execute!(
 		[ctx]
 		"
 		DELETE FROM db_team.banned_users
@@ -20,7 +20,7 @@ async fn worker(ctx: &OperationContext<team::msg::user_unban::Message>) -> Globa
 	.await?;
 
 	// TODO: Establish audit logs
-	// sql_query!(
+	// sql_execute!(
 	// 	[ctx]
 	// 	"INSERT INTO team_audit_logs WHERE team_id = $1",
 	// 	team_id,

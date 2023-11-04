@@ -127,7 +127,7 @@ async fn process_metrics(billing_ctx: Arc<BillingCtx>, dev_team: DevTeam) -> Glo
 
 			// Update collection ts so we don't get collection overlap
 			if has_metrics {
-				sql_query!(
+				sql_execute!(
 					[billing_ctx.ctx]
 					"
 					UPDATE db_team_dev.dev_teams

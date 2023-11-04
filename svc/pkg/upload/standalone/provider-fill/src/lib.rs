@@ -33,7 +33,7 @@ pub async fn run_from_env() -> GlobalResult<()> {
 		s3_util::Provider::Aws => backend::upload::Provider::Aws,
 	};
 
-	sql_query!(
+	sql_execute!(
 		[ctx]
 		"
 		UPDATE db_upload.uploads

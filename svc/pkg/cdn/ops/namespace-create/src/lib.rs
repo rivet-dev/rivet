@@ -7,7 +7,7 @@ async fn handle(
 ) -> GlobalResult<cdn::namespace_create::Response> {
 	let namespace_id = unwrap_ref!(ctx.namespace_id).as_uuid();
 
-	sql_query!(
+	sql_execute!(
 		[ctx]
 		"
 		INSERT INTO db_cdn.game_namespaces (namespace_id)

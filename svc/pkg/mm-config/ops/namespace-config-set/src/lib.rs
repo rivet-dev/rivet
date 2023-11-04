@@ -30,7 +30,7 @@ async fn handle(
 		bail_with!(VALIDATION_ERROR, error = readable_errors);
 	}
 
-	sql_query!(
+	sql_execute!(
 		[ctx]
 		"
 		UPDATE db_mm_config.game_namespaces

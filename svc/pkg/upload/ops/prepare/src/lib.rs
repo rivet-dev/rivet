@@ -113,7 +113,7 @@ async fn handle(
 		.collect::<Vec<_>>();
 
 	// Insert in to database
-	sql_query!(
+	sql_execute!(
 		[ctx]
 		"
 		WITH
@@ -177,7 +177,7 @@ async fn handle(
 			.try_collect::<Vec<_>>(),
 		// Set multipart upload ids
 		async {
-			sql_query!(
+			sql_execute!(
 				[ctx]
 				"
 				UPDATE db_upload.upload_files

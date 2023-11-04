@@ -12,7 +12,7 @@ async fn handle(
 		"invalid auth type"
 	);
 
-	sql_query!(
+	sql_execute!(
 		[ctx]
 		"
 		UPDATE db_cdn.game_namespaces

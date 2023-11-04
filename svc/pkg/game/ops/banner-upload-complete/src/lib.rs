@@ -15,7 +15,7 @@ async fn handle(
 	.await?;
 
 	// Set avatar id
-	sql_query!(
+	sql_execute!(
 		[ctx]
 		"
 		UPDATE db_game.games set banner_upload_id = $2

@@ -47,7 +47,7 @@ async fn upsert_value(
 	value: serde_json::Value,
 	directory: &str,
 ) -> GlobalResult<bool> {
-	let query = sql_query!(
+	let query = sql_execute!(
 		[ctx]
 		"
 		UPSERT INTO db_kv.kv (namespace_id, key, value, update_ts, directory)
@@ -69,7 +69,7 @@ async fn delete_value(
 	namespace_id: Uuid,
 	key: &str,
 ) -> GlobalResult<bool> {
-	let query = sql_query!(
+	let query = sql_execute!(
 		[ctx]
 		"
 		DELETE FROM db_kv.kv

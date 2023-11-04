@@ -10,7 +10,7 @@ async fn worker(
 	let game_user_id = unwrap_ref!(ctx.game_user_id).as_uuid();
 	let refresh_jti = unwrap_ref!(ctx.refresh_jti).as_uuid();
 
-	sql_query!(
+	sql_execute!(
 		[ctx]
 		"
 		INSERT INTO db_game_user.sessions (session_id, game_user_id, refresh_jti, start_ts)

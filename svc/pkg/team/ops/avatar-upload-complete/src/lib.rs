@@ -16,7 +16,7 @@ async fn handle(
 	.await?;
 
 	// Set avatar id
-	sql_query!(
+	sql_execute!(
 		[ctx]
 		"
 		UPDATE db_team.teams set profile_id = $2

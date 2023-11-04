@@ -46,7 +46,7 @@ async fn handle(
 	let user_link_token = unwrap!(token_res.token.clone());
 	let token_session_id = unwrap_ref!(token_res.session_id).as_uuid();
 
-	sql_query!(
+	sql_execute!(
 		[ctx]
 		"
 		INSERT INTO db_game_user.links (link_id, namespace_id, token_session_id, current_game_user_id, create_ts)

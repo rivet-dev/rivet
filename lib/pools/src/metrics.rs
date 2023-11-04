@@ -1,4 +1,4 @@
-use rivet_metrics::{prometheus::*, REGISTRY};
+use rivet_metrics::{prometheus::*, BUCKETS, REGISTRY};
 
 lazy_static::lazy_static! {
 	// MARK: CRDB
@@ -20,6 +20,13 @@ lazy_static::lazy_static! {
 		"sql_query_total",
 		"Total number of queries.",
 		&["action", "context_name", "location"],
+		*REGISTRY,
+	).unwrap();
+	pub static ref SQL_QUERY_DURATION: HistogramVec = register_histogram_vec_with_registry!(
+		"sql_query_duration",
+		"Total number of queries.",
+		&["action", "context_name", "location"],
+		BUCKETS.to_vec(),
 		*REGISTRY,
 	).unwrap();
 }

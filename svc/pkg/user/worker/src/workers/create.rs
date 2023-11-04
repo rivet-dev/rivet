@@ -116,7 +116,7 @@ async fn insert_user(
 	tracing::info!(%display_name, %account_number, "attempt");
 
 	let res = if let Some(avatar_upload_id) = avatar_upload_id {
-		sql_query!(
+		sql_execute!(
 			[ctx]
 			"
 			INSERT INTO db_user.users (
@@ -128,6 +128,7 @@ async fn insert_user(
 				join_ts
 			)
 			VALUES ($1, $2, $3, $4, $5, $6)
+			ON CONFLICT (display_name, account_number) DO NOTHING
 			",
 			user_id,
 			&display_name,
@@ -136,9 +137,9 @@ async fn insert_user(
 			avatar_upload_id,
 			join_ts,
 		)
-		.await
+		.await?
 	} else {
-		sql_query!(
+		sql_execute!(
 			[ctx]
 			"
 			INSERT INTO db_user.users (
@@ -149,6 +150,7 @@ async fn insert_user(
 				join_ts
 			)
 			VALUES ($1, $2, $3, $4, $5)
+			ON CONFLICT (display_name, account_number) DO NOTHING
 			",
 			user_id,
 			&display_name,
@@ -156,26 +158,13 @@ async fn insert_user(
 			gen_avatar_id(),
 			join_ts,
 		)
-		.await
+		.await?
 	};
 
-	match res {
-		Ok(_) => Ok(Some((display_name, account_number))),
-		// https://www.postgresql.org/docs/current/errcodes-appendix.html
-		Err(sqlx::Error::Database(err)) => {
-			let pg_err = unwrap!(err.try_downcast_ref::<sqlx::postgres::PgDatabaseError>());
-
-			if pg_err.code() == "23505"
-				&& !pg_err
-					.detail()
-					.map_or(false, |d| d.contains("Key (user_id)"))
-			{
-				Ok(None)
-			} else {
-				Err(err.into())
-			}
-		}
-		Err(err) => Err(err.into()),
+	if res.rows_affected() == 1 {
+		return Ok(Some((display_name, account_number)));
+	} else {
+		Ok(None)
 	}
 }
 

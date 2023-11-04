@@ -7,7 +7,7 @@ async fn worker(ctx: &OperationContext<team::msg::member_remove::Message>) -> Gl
 	let team_id: Uuid = unwrap_ref!(ctx.team_id).as_uuid();
 	let user_id: Uuid = unwrap_ref!(ctx.user_id).as_uuid();
 
-	sql_query!(
+	sql_execute!(
 		[ctx]
 		"DELETE FROM db_team.team_members WHERE team_id = $1 AND user_id = $2",
 		team_id,

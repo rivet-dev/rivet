@@ -504,7 +504,7 @@ async fn update_db(
 
 	// Upsert lobby. May have already been inserted preemptively in
 	// mm-lobby-find.
-	sql_query!(
+	sql_execute!(
 		[ctx, &mut **tx]
 		"
 		UPSERT INTO db_mm_state.lobbies (

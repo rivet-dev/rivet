@@ -7,7 +7,7 @@ async fn handle(
 ) -> GlobalResult<cdn::ns_enable_domain_public_auth_set::Response> {
 	let namespace_id = unwrap_ref!(ctx.namespace_id).as_uuid();
 
-	sql_query!(
+	sql_execute!(
 		[ctx]
 		"
 		UPDATE db_cdn.game_namespaces

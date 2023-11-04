@@ -42,7 +42,7 @@ async fn handle(
 	validate_files(&s3_client, upload_id, files).await?;
 
 	// Mark as complete
-	sql_query!(
+	sql_execute!(
 		[ctx]
 		"
 		UPDATE db_upload.uploads

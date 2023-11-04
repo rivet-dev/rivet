@@ -144,7 +144,7 @@ async fn update_db(
 	// We can't assume that started has been called here, so we can't fetch the alloc ID.
 
 	if run_row.stop_ts.is_none() {
-		sql_query!(
+		sql_execute!(
 			[ctx, &mut **tx]
 			"UPDATE db_job_state.runs SET stop_ts = $2 WHERE run_id = $1",
 			run_id,

@@ -102,7 +102,7 @@ async fn handle(
 	let version_id = unwrap_ref!(version_create_res.version_id).as_uuid();
 
 	// Create the cloud version
-	sql_query!(
+	sql_execute!(
 		[ctx]
 		"
 		INSERT INTO db_cloud.game_versions (version_id)

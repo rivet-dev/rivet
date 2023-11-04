@@ -9,7 +9,7 @@ async fn handle(
 
 	match unwrap_ref!(ctx.registration) {
 		user_notification_auth::register::request::Registration::Firebase(registration) => {
-			sql_query!(
+			sql_execute!(
 				[ctx]
 				"UPSERT INTO db_user_notification_auth.users (user_id, firebase_access_key) VALUES ($1, $2)",
 				user_id,

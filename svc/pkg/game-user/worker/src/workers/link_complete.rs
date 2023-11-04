@@ -141,7 +141,7 @@ async fn worker(
 		}
 		game_user::msg::link_complete::GameUserLinkCompleteResolution::Cancel => {
 			// Flag as cancelled
-			let update_query = sql_query!(
+			let update_query = sql_execute!(
 				[ctx]
 				"
 				UPDATE db_game_user.links

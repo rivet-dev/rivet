@@ -90,7 +90,7 @@ async fn worker(
 
 	// TODO: Delete stripe subscription for hostname
 
-	sql_query!(
+	sql_execute!(
 		[ctx]
 		"
 		DELETE FROM db_cf_custom_hostname.custom_hostnames

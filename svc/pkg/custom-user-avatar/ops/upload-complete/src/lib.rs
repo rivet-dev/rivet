@@ -14,7 +14,7 @@ async fn handle(
 	})
 	.await?;
 
-	sql_query!(
+	sql_execute!(
 		[ctx]
 		"
 		INSERT INTO db_game_custom_avatar.custom_avatars (game_id, upload_id, create_ts)

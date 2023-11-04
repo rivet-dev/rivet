@@ -62,7 +62,7 @@ async fn worker(ctx: &OperationContext<team_dev::msg::create::Message>) -> Globa
 
 	// Create the dev team
 	let crdb = ctx.crdb().await?;
-	sql_query!(
+	sql_execute!(
 		[ctx]
 		"
 		INSERT INTO db_team_dev.dev_teams (team_id, create_ts, stripe_customer_id)

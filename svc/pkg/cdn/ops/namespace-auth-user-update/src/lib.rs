@@ -23,7 +23,7 @@ async fn handle(
 
 	ensure_with!(auth_user_count < CDN_AUTH_USER_MAX, CDN_TOO_MANY_AUTH_USERS);
 
-	sql_query!(
+	sql_execute!(
 		[ctx]
 		"UPSERT INTO db_cdn.game_namespace_auth_users (namespace_id, user_name, password) VALUES ($1, $2, $3)",
 		namespace_id,

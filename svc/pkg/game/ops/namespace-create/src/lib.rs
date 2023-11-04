@@ -30,7 +30,7 @@ async fn handle(
 
 	let namespace_id = Uuid::new_v4();
 
-	sql_query!(
+	sql_execute!(
 		[ctx]
 		"
 		INSERT INTO db_game.game_namespaces (namespace_id, game_id, create_ts, display_name, version_id, name_id)

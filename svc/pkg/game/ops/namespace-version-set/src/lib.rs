@@ -29,7 +29,7 @@ async fn handle(
 	{
 		let tx = crdb.begin().await?;
 
-		let update_query = sql_query!(
+		let update_query = sql_execute!(
 			[ctx]
 			"
 			UPDATE db_game.game_namespaces
@@ -42,7 +42,7 @@ async fn handle(
 		.await?;
 		ensure_eq!(1, update_query.rows_affected(), "invalid namespace id");
 
-		sql_query!(
+		sql_execute!(
 			[ctx]
 			"
 			INSERT INTO db_game.game_namespace_version_history (

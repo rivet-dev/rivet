@@ -10,7 +10,7 @@ async fn worker(ctx: &OperationContext<module::msg::create::Message>) -> Result<
 	let team_id = unwrap_ref!(ctx.team_id).as_uuid();
 	let creator_user_id = ctx.creator_user_id.map(|x| x.as_uuid());
 
-	sql_query!(
+	sql_execute!(
 		[ctx]
 		"
 		INSERT INTO db_module.modules (module_id, name_id, team_id, create_ts, creator_user_id)

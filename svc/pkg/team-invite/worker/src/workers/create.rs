@@ -17,7 +17,7 @@ async fn worker(ctx: &OperationContext<team_invite::msg::create::Message>) -> Gl
 
 	let expire_ts = ctx.ttl.map(|ttl| Some(ctx.ts() + ttl));
 
-	sql_query!(
+	sql_execute!(
 		[ctx]
 		"INSERT INTO db_team_invite.invitations (code, team_id, create_ts, expire_ts, max_use_count) VALUES ($1, $2, $3, $4, $5)",
 		&code,

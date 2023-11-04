@@ -14,7 +14,7 @@ async fn handle(
 	let mut config_buf = Vec::with_capacity(config.encoded_len());
 	config.encode(&mut config_buf)?;
 
-	sql_query!(
+	sql_execute!(
 		[ctx]
 		"INSERT INTO db_module.game_versions (version_id, config) VALUES ($1, $2)",
 		version_id,

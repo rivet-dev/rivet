@@ -92,7 +92,7 @@ async fn handle(
 
 	// Create build
 	let build_id = Uuid::new_v4();
-	sql_query!(
+	sql_execute!(
 		[ctx]
 		"
 		INSERT INTO db_build.builds (build_id, game_id, upload_id, display_name, image_tag, create_ts, kind, compression)

@@ -15,7 +15,7 @@ async fn handle(
 	let identities = &unwrap_ref!(identity.users.first()).identities;
 	ensure_with!(!identities.is_empty(), IDENTITY_NOT_REGISTERED);
 
-	sql_query!(
+	sql_execute!(
 		[ctx]
 		"UPDATE db_user.users SET delete_request_ts = $2 WHERE user_id = $1",
 		user_id,

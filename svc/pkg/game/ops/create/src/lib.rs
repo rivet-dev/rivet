@@ -54,7 +54,7 @@ async fn handle(
 	let game_id = Uuid::new_v4();
 	let plan_code = "free";
 	let subscription_id = Uuid::new_v4();
-	sql_query!(
+	sql_execute!(
 		[ctx]
 		"
 		INSERT INTO db_game.games (

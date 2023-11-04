@@ -177,7 +177,7 @@ async fn worker(
 	let challenge = res.result.ownership_verification_http.http_body;
 	let subscription_id = Uuid::new_v4();
 
-	sql_query!(
+	sql_execute!(
 		[ctx]
 		"
 		INSERT INTO db_cf_custom_hostname.custom_hostnames (

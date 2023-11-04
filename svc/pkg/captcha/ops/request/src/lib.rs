@@ -81,7 +81,7 @@ async fn handle(
 	};
 
 	// Insert a request
-	sql_query!(
+	sql_execute!(
 		[ctx]
 		"
 		INSERT INTO db_captcha.captcha_requests (request_id, topic, topic_str, remote_address, create_ts, expire_ts, user_id, namespace_id)

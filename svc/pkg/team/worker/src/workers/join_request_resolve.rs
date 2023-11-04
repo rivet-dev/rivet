@@ -9,7 +9,7 @@ async fn worker(
 	let team_id: Uuid = unwrap_ref!(ctx.team_id).as_uuid();
 	let user_id: Uuid = unwrap_ref!(ctx.user_id).as_uuid();
 
-	sql_query!(
+	sql_execute!(
 		[ctx]
 		"DELETE FROM db_team.join_requests WHERE team_id = $1 AND user_id = $2",
 		team_id,
