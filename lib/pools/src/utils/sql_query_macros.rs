@@ -1,26 +1,40 @@
 // MARK: Metrics
 #[macro_export]
+macro_rules! __sql_query_metrics_prepare {
+	($prepare_timer:ident) => {
+		// Start timer
+		let $prepare_timer = tokio::time::Instant::now();
+	};
+}
+
+#[macro_export]
 macro_rules! __sql_query_metrics_start {
-	($ctx:expr, $action:expr, $start:ident) => {{
+	($ctx:expr, $action:expr, $prepare_timer:ident, $start_timer:ident) => {{
 		let ctx = &$ctx;
+		let location = concat!(file!(), ":", line!(), ":", column!());
+
+		// Count prepare
+		let prepare_duration = $prepare_timer.elapsed().as_secs_f64();
+		rivet_pools::metrics::SQL_QUERY_PREPARE_DURATION
+			.with_label_values(&[stringify!($action), ctx.name(), location])
+			.observe(prepare_duration);
 
 		// Count metric
-		let location = concat!(file!(), ":", line!(), ":", column!());
 		rivet_pools::metrics::SQL_QUERY_TOTAL
 			.with_label_values(&[stringify!($action), ctx.name(), location])
 			.inc();
 	}
 
 	// Start timer
-	let $start = tokio::time::Instant::now();};
+	let $start_timer = tokio::time::Instant::now();};
 }
 
 #[macro_export]
 macro_rules! __sql_query_metrics_finish {
-	($ctx:expr, $action:expr, $start:ident) => {{
+	($ctx:expr, $action:expr, $start_timer:ident) => {{
 		let ctx = &$ctx;
 
-		let duration = $start.elapsed().as_secs_f64();
+		let duration = $start_timer.elapsed().as_secs_f64();
 
 		// Log query
 		let location = concat!(file!(), ":", line!(), ":", column!());
@@ -38,17 +52,20 @@ macro_rules! __sql_query_metrics_finish {
 macro_rules! __sql_query {
     ([$ctx:expr, $crdb:expr] $sql:expr, $($bind:expr),* $(,)?) => {
 		async {
-			$crate::__sql_query_metrics_start!($ctx, execute, _start);
 
-
-			let res = sqlx::query(indoc!($sql))
+			// Build query before recording metrics so we don't record time for things that don't
+			// affect the query
+			$crate::__sql_query_metrics_prepare!(_prepare);
+			let crdb = $crdb;
+			let query = sqlx::query(indoc!($sql))
 			$(
 				.bind($bind)
 			)*
-			.execute($crdb)
-			.await
-			.map_err(Into::<GlobalError>::into);
+			.execute(crdb);
 
+			// Execute query
+			$crate::__sql_query_metrics_start!($ctx, execute, _prepare, _start);
+			let res = query.await.map_err(Into::<GlobalError>::into);
 			$crate::__sql_query_metrics_finish!($ctx, execute, _start);
 
 			res
@@ -63,17 +80,20 @@ macro_rules! __sql_query {
 macro_rules! __sql_query_as {
     ([$ctx:expr, $rv:ty, $action:ident, $crdb:expr] $sql:expr, $($bind:expr),* $(,)?) => {
 		async {
-			$crate::__sql_query_metrics_start!($ctx, $action, _start);
-
-			let res = sqlx::query_as::<_, $rv>(indoc!($sql))
+			// Build query before recording metrics so we don't record time for things that don't
+			// affect the query
+			$crate::__sql_query_metrics_prepare!(_prepare);
+			let crdb = $crdb;
+			let query = sqlx::query_as::<_, $rv>(indoc!($sql))
 			$(
 				.bind($bind)
 			)*
-			.$action($crdb)
-			.await
-			.map_err(Into::<GlobalError>::into);
+			.$action(crdb);
 
-			$crate::__sql_query_metrics_finish!($ctx, $action, _start);
+			// Execute query
+			$crate::__sql_query_metrics_start!($ctx, $action, _prepare, _start);
+			let res = query.await.map_err(Into::<GlobalError>::into);
+			// $crate::__sql_query_metrics_finish!($ctx, $action, _start);
 
 			res
 		}
@@ -88,14 +108,17 @@ macro_rules! __sql_query_as {
 #[macro_export]
 macro_rules! __sql_query_as_raw {
     ([$ctx:expr, $rv:ty, $action:ident, $crdb:expr] $sql:expr, $($bind:expr),* $(,)?) => {{
-		$crate::__sql_query_metrics_start!($ctx, $action, _start);
 
 		// TODO: Figure out how to wrap this future to be able to record the metrics finish
-		sqlx::query_as::<_, $rv>(indoc!($sql))
+		$crate::__sql_query_metrics_prepare!(_prepare);
+		let query = sqlx::query_as::<_, $rv>(indoc!($sql))
 		$(
 			.bind($bind)
 		)*
-		.$action($crdb)
+		.$action($crdb);
+		$crate::__sql_query_metrics_start!($ctx, $action, _prepare, _start);
+
+		query
     }};
     ([$ctx:expr, $rv:ty, $action:ident] $sql:expr, $($bind:expr),* $(,)?) => {
 		__sql_query_as!([$ctx, $rv, $action, &$ctx.crdb().await?] $sql, $($bind),*)
