@@ -16,5 +16,14 @@ tokio = { version = "1.29", features = ["full"] }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", default-features = false, features = ["fmt", "json", "ansi"] }
 
+cdn-namespace-get = { path = "../../../cdn/ops/namespace-get" }
+mm-config-version-get = { path = "../../../mm-config/ops/version-get" }
+cdn-version-get = { path = "../../../cdn/ops/version-get" }
+
 [dev-dependencies]
 chirp-worker = { path = "../../../../../lib/chirp/worker" }
+
+[dependencies.sqlx]
+version = "0.7"
+default-features = false
+
