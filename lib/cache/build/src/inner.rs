@@ -50,7 +50,7 @@ impl CacheInner {
 	where
 		K: CacheKey,
 	{
-		format!("{{key:{}}}:{}", base_key, key.cache_key())
+		format!("{{key:{}}}:{}", base_key, key.simple_cache_key())
 	}
 
 	// pub(crate) fn build_redis_svc_key<K>(&self, base_key: &str, key: &K) -> String
@@ -62,12 +62,12 @@ impl CacheInner {
 	// 		self.service_name,
 	// 		self.service_source_hash,
 	// 		base_key,
-	// 		key.cache_key()
+	// 		key.simple_cache_key()
 	// 	)
 	// }
 
 	// pub(crate) fn build_redis_topic_key(&self, base_key: &str, key: &impl CacheKey) -> String {
-	// 	format!("{{topic:{}}}:{}:keys", base_key, key.cache_key())
+	// 	format!("{{topic:{}}}:{}:keys", base_key, key.simple_cache_key())
 	// }
 
 	pub(crate) fn build_redis_rate_limit_key(
@@ -78,8 +78,8 @@ impl CacheInner {
 		bucket_duration_ms: i64,
 	) -> String {
 		format!(
-			"cache:rate_limit:{}:{}:{}:{}",
-			key.cache_key(),
+			"{{global}}:cache:rate_limit:{}:{}:{}:{}",
+			key.simple_cache_key(),
 			remote_address.as_ref(),
 			bucket_duration_ms,
 			bucket,
