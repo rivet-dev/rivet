@@ -110,7 +110,7 @@ resource "helm_release" "traefik_tunnel" {
 
 		metrics = {
 			prometheus = {
-				addEntryPointsLabels = true
+				addEntryPointsLabels = false
 				addRoutersLabels = true
 				addServicesLabels = true
 				# See lib/chirp/metrics/src/buckets.rs
@@ -118,6 +118,66 @@ resource "helm_release" "traefik_tunnel" {
 			}
 		}
 	})]
+}
+
+resource "kubernetes_service" "traefik_tunnel_headless" {
+	depends_on = [helm_release.traefik_tunnel]
+
+	metadata {
+		name = "traefik-headless"
+		namespace = kubernetes_namespace.traefik_tunnel.metadata.0.name
+		labels = {
+			"app.kubernetes.io/name" = "traefik-headless"
+		}
+	}
+
+	spec {
+		selector = {
+			"app.kubernetes.io/name" = "traefik"
+		}
+
+		cluster_ip = "None"
+
+		port {
+			name = "tunnel"
+			port = 5000
+			target_port = "tunel"
+		}
+
+		port {
+			name = "metrics"
+			port = 9100
+			target_port = "metrics"
+		}
+	}
+}
+
+resource "kubectl_manifest" "traefik_tunnel_service_monitor" {
+	depends_on = [helm_release.traefik_tunnel]
+
+	yaml_body = yamlencode({
+		apiVersion = "monitoring.coreos.com/v1"
+		kind = "ServiceMonitor"
+
+		metadata = {
+			name = "traefik-service-monitor"
+			namespace = kubernetes_namespace.traefik_tunnel.metadata.0.name
+		}
+
+		spec = {
+			selector = {
+				matchLabels = {
+					"app.kubernetes.io/name": "traefik-headless"
+				}
+			}
+			endpoints = [
+				{
+					port = "metrics"
+					path = "/metrics"
+				}
+			]
+		}
+	})
 }
 
 data "kubernetes_service" "traefik_tunnel" {

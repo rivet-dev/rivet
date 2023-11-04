@@ -111,7 +111,7 @@ resource "kubernetes_service" "nomad_server" {
 }
 
 resource "kubectl_manifest" "nomad_server_monitor" {
-	depends_on = [helm_release.traefik]
+	depends_on = [kubernetes_stateful_set.nomad_server]
 
 	yaml_body = yamlencode({
 		apiVersion = "monitoring.coreos.com/v1"
