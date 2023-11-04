@@ -21,13 +21,13 @@ async fn create(ctx: TestCtx) {
 	assert!(exists, "user not created");
 }
 
-// MARK: Stress tests:
-
+// // MARK: Stress tests:
 // #[worker_test]
-// async fn stress_slow(ctx: TestCtx) {
+// async fn stress(ctx: TestCtx) {
 // 	let mut idx = 0;
-// 	loop {
-// 		tokio::time::sleep(Duration::from_secs(1)).await;
+// 	let mut interval = tokio::time::interval(std::time::Duration::from_millis(50));
+// 	for _ in 0..100_000 {
+// 		interval.tick().await;
 
 // 		tracing::warn!(?idx);
 // 		idx += 1;
@@ -42,9 +42,9 @@ async fn create(ctx: TestCtx) {
 // 		.unwrap();
 
 // 		let (exists,): (bool,) =
-// 			sqlx::query_as("SELECT EXISTS (SELECT 1 FROM users WHERE user_id = $1)")
+// 			sqlx::query_as("SELECT EXISTS (SELECT 1 FROM db_user.users WHERE user_id = $1)")
 // 				.bind(&user_id)
-// 				.fetch_one(&ctx.crdb("db-user"))
+// 				.fetch_one(&ctx.crdb().await.unwrap())
 // 				.await
 // 				.unwrap();
 // 		assert!(exists, "user not created");
@@ -52,9 +52,11 @@ async fn create(ctx: TestCtx) {
 // }
 
 // #[worker_test]
-// async fn stress_tail(ctx: TestCtx) {
+// async fn stress_slow(ctx: TestCtx) {
 // 	let mut idx = 0;
 // 	loop {
+// 		tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+
 // 		tracing::warn!(?idx);
 // 		idx += 1;
 
@@ -67,14 +69,10 @@ async fn create(ctx: TestCtx) {
 // 		.await
 // 		.unwrap();
 
-// 		tail!([ctx] user::msg::create_complete(user_id))
-// 			.await
-// 			.unwrap();
-
 // 		let (exists,): (bool,) =
-// 			sqlx::query_as("SELECT EXISTS (SELECT 1 FROM users WHERE user_id = $1)")
+// 			sqlx::query_as("SELECT EXISTS (SELECT 1 FROM db_user.users WHERE user_id = $1)")
 // 				.bind(&user_id)
-// 				.fetch_one(&ctx.crdb("db-user"))
+// 				.fetch_one(&ctx.crdb().await.unwrap())
 // 				.await
 // 				.unwrap();
 // 		assert!(exists, "user not created");
@@ -87,7 +85,10 @@ async fn create(ctx: TestCtx) {
 // 		atomic::{AtomicI64, Ordering},
 // 		Arc,
 // 	};
-// 	use tokio::task::JoinSet;
+// 	use tokio::{
+// 		task::JoinSet,
+// 		time::{Duration, Instant},
+// 	};
 
 // 	let mut interval = tokio::time::interval(std::time::Duration::from_millis(50));
 // 	let in_progress_counter = Arc::new(AtomicI64::new(0));
