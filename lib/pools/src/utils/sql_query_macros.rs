@@ -38,7 +38,7 @@ macro_rules! __sql_query_metrics_finish {
 macro_rules! __sql_query {
     ([$ctx:expr, $crdb:expr] $sql:expr, $($bind:expr),* $(,)?) => {
 		async {
-			$crate::__sql_query_metrics_start!($ctx, "execute", _start);
+			$crate::__sql_query_metrics_start!($ctx, execute, _start);
 
 
 			let res = sqlx::query(indoc!($sql))
@@ -49,7 +49,7 @@ macro_rules! __sql_query {
 			.await
 			.map_err(Into::<GlobalError>::into);
 
-			$crate::__sql_query_metrics_finish!($ctx, "execute", _start);
+			$crate::__sql_query_metrics_finish!($ctx, execute, _start);
 
 			res
 		}
