@@ -226,7 +226,7 @@ resource "kubectl_manifest" "api_rules" {
 										} [2m]
 									)
 									-
-									on(service, path, method, status)
+									on(service, path, method, status, worker_source_hash)
 									increase(
 										rivet_api_request_duration_bucket{
 											watch="0",
