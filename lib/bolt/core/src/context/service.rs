@@ -703,9 +703,9 @@ impl ServiceContextData {
 		env.push((
 			"TOKIO_WORKER_THREADS".into(),
 			if ns_service_config.resources.cpu >= 1000 {
-				(ns_service_config.resources.cpu / 1000).max(2)
+				(ns_service_config.resources.cpu / 1000).max(1)
 			} else {
-				2
+				1
 			}
 			.to_string(),
 		));
