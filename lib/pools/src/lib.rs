@@ -134,35 +134,50 @@ async fn crdb_from_env(client_name: String) -> Result<Option<CrdbPool>, Error> {
 		let pool = sqlx::postgres::PgPoolOptions::new()
 			// The default connection timeout is too high
 			.acquire_timeout(Duration::from_secs(15))
-			.max_lifetime(Duration::from_secs(60 * 5))
+			// Increase lifetime to mitigate: https://github.com/launchbadge/sqlx/issues/2854
+			.max_lifetime(Duration::from_secs(60 * 60))
 			// Remove connections after a while in order to reduce load
 			// on CRDB after bursts
-			.idle_timeout(Some(Duration::from_secs(60)))
-			// Open a connection
-			// immediately on startup
-			.min_connections(1)
+			.idle_timeout(Some(Duration::from_secs(10 * 60)))
+			// Open connections immediately on startup
+			.min_connections(
+				std::env::var("CRDB_MIN_CONNECTIONS")
+					.ok()
+					.and_then(|s| s.parse().ok())
+					.unwrap_or(1),
+			)
 			// Raise the cap, since this is effectively the amount of
 			// simultaneous requests we can handle. See
 			// https://www.cockroachlabs.com/docs/stable/connection-pooling.html
 			.max_connections(4096)
 			// Speeds up requests at the expense of potential
-			// failures
+			// failures. See `before_acquire`.
 			.test_before_acquire(false)
-			.after_connect({
-				let url = url.clone();
-				move |_, _| {
-					// let client_name = client_name.clone();
-					let url = url.clone();
-					Box::pin(async move {
-						tracing::trace!(%url, "crdb connected");
-						// sqlx::query("SET application_name = $1;")
-						// 	.bind(&client_name)
-						// 	.execute(conn)
-						// 	.await?;
-						Ok(())
-					})
-				}
+			// Ping once per minute to validate the connection is still alive
+			.before_acquire(|conn, meta| {
+				Box::pin(async move {
+					if meta.idle_for.as_secs() > 60 {
+						sqlx::Connection::ping(conn).await?;
+					}
+
+					Ok(true)
+				})
 			})
+			// .after_connect({
+			// 	let url = url.clone();
+			// 	move |_, _| {
+			// 		// let client_name = client_name.clone();
+			// 		let url = url.clone();
+			// 		Box::pin(async move {
+			// 			tracing::trace!(%url, "crdb connected");
+			// 			// sqlx::query("SET application_name = $1;")
+			// 			// 	.bind(&client_name)
+			// 			// 	.execute(conn)
+			// 			// 	.await?;
+			// 			Ok(())
+			// 		})
+			// 	}
+			// })
 			.connect(&url)
 			.await
 			.map_err(Error::BuildSqlx)?;

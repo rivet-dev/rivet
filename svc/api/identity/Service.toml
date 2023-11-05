@@ -16,3 +16,7 @@ subdomain = "identity.api"
 
 [databases]
 db-team-dev = {}
+
+[cockroachdb]
+min-connections = 8
+

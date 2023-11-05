@@ -11,3 +11,7 @@ path = "/matchmaker"
 deprecated = true
 path = "/v1"
 subdomain = "matchmaker.api"
+
+[cockroachdb]
+min-connections = 8
+

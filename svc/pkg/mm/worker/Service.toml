@@ -10,3 +10,6 @@ kind = "rust"
 db-mm-state = {}
 redis-mm = {}
 
+[cockroachdb]
+min-connections = 42
+

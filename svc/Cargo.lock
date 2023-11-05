@@ -4798,6 +4798,26 @@ dependencies = [
 ]
 
 [[package]]
+name = "load-test-sqlx"
+version = "0.0.1"
+dependencies = [
+ "cdn-namespace-get",
+ "cdn-version-get",
+ "chirp-client",
+ "chirp-worker",
+ "mm-config-version-get",
+ "rivet-connection",
+ "rivet-health-checks",
+ "rivet-metrics",
+ "rivet-operation",
+ "rivet-runtime",
+ "sqlx",
+ "tokio",
+ "tracing",
+ "tracing-subscriber",
+]
+
+[[package]]
 name = "lock_api"
 version = "0.4.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"

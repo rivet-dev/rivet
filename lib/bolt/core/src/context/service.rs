@@ -1075,6 +1075,10 @@ impl ServiceContextData {
 				username, password,
 			);
 			env.push(("CRDB_URL".into(), uri));
+			env.push((
+				"CRDB_MIN_CONNECTIONS".into(),
+				self.config().cockroachdb.min_connections.to_string(),
+			));
 		}
 
 		// Redis

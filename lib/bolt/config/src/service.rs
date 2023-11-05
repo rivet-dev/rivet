@@ -32,6 +32,9 @@ pub struct ServiceConfig {
 	/// Secrets that need to be exposed for this service.
 	#[serde(default)]
 	pub secrets: HashMap<String, Secret>,
+
+	#[serde(default)]
+	pub cockroachdb: CockroachDB,
 }
 
 #[derive(Deserialize, Clone, Debug)]
@@ -195,6 +198,24 @@ pub struct CargoPackage {
 pub enum CargoDependency {
 	Path { path: String },
 	Unknown(serde_json::Value),
+}
+
+#[derive(Deserialize, Clone, Debug)]
+#[serde(rename_all = "kebab-case")]
+pub struct CockroachDB {
+	// Sets a minimum number of connections to the database. This is important to ensure that
+	// the initial queries are not delayed by a large surge of TCP connections immediately
+	// after startup.
+	//
+	// To figure out a healthy number for this value, see the `rivet_crdb_pool_conn_size`
+	// metric to see how many connections are being used for a given service.
+	pub min_connections: usize,
+}
+
+impl Default for CockroachDB {
+	fn default() -> Self {
+		Self { min_connections: 1 }
+	}
 }
 
 mod defaults {

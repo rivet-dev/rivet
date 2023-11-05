@@ -14,3 +14,6 @@ deprecated = true
 path = "/v1"
 subdomain = "cloud.api"
 
+[cockroachdb]
+min-connections = 32
+
