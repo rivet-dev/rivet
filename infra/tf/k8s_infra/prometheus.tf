@@ -7,19 +7,9 @@ locals {
 		}
 	})
 
-	prometheus_storage = {
-		volumeClaimTemplate = {
-			spec = {
-				storageClassName = var.k8s_storage_class
-				resources = {
-					requests = {
-						# TODO: Allow configuring
-						storage = "10Gi"
-					}
-				}
-			}
-		}
-	}
+	# TODO: Allow configuring
+	prometheus_storage = 64000 # Mebibytes
+	prometheus_retention_size = "${local.prometheus_storage - 100}Mi"
 
 	service_alertmanager = lookup(var.services, "alertmanager", {
 		count = 1
@@ -28,20 +18,6 @@ locals {
 			memory = 250
 		}
 	})
-
-	alertmanager_storage = {
-		volumeClaimTemplate = {
-			spec = {
-				storageClassName = var.k8s_storage_class
-				resources = {
-					requests = {
-						# TODO: Allow configuring
-						storage = "10Gi"
-					}
-				}
-			}
-		}
-	}
 
 	service_prometheus_operator = lookup(var.services, "prometheus-operator", {
 		count = 1
@@ -160,7 +136,19 @@ resource "helm_release" "prometheus" {
 		}
 		alertmanager = {
 			alertmanagerSpec = {
-				storage = local.alertmanager_storage
+				storage = {
+					volumeClaimTemplate = {
+						spec = {
+							storageClassName = var.k8s_storage_class
+							resources = {
+								requests = {
+									# TODO: Allow configuring
+									storage = "10Gi"
+								}
+							}
+						}
+					}
+				}
 
 				resources = var.limit_resources ? {
 					limits = {
@@ -246,12 +234,26 @@ resource "helm_release" "prometheus" {
 				scrapeInterval = "15s"
 				evaluationInterval = "15s"
 
+				retention = "7d"
+				retentionSize = local.prometheus_retention_size
+
 				# additionalArgs = [{
 				# 	name = "log.level"
 				# 	value = "debug"
 				# }]
 
-				storageSpec = local.prometheus_storage
+				storageSpec = {
+					volumeClaimTemplate = {
+						spec = {
+							storageClassName = var.k8s_storage_class
+							resources = {
+								requests = {
+									storage = "${local.prometheus_storage}MB"
+								}
+							}
+						}
+					}
+				}
 			
 				resources = var.limit_resources ? {
 					limits = {
