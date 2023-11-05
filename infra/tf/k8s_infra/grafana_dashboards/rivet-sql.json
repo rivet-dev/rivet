@@ -134,14 +134,14 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "sum(increase(rivet_sql_query_duration_bucket{context_name=~\"[[context_name]]\",location=~\"[[location]]\",action=~\"[[action]]\"} [$__rate_interval])) by (le)",
+          "expr": "sum(increase(rivet_sql_query_duration_bucket{service=~\"[[service]]\",context_name=~\"[[context_name]]\",location=~\"[[location]]\",action=~\"[[action]]\"} [$__rate_interval])) by (le)",
           "format": "heatmap",
           "legendFormat": "{{le}}",
           "range": true,
           "refId": "A"
         }
       ],
-      "title": "Request Duration",
+      "title": "Duration",
       "tooltip": {
         "show": true,
         "showHistogram": true
@@ -246,13 +246,13 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "sum(rate(rivet_sql_query_total{context_name=~\"[[context_name]]\",location=~\"[[location]]\",action=~\"[[action]]\"}[$__rate_interval])) by (location)",
+          "expr": "sum(rate(rivet_sql_query_total{service=~\"[[service]]\",context_name=~\"[[context_name]]\",location=~\"[[location]]\",action=~\"[[action]]\"}[$__rate_interval])) by (location)",
           "legendFormat": "{{location}}",
           "range": true,
           "refId": "A"
         }
       ],
-      "title": "Request Rate",
+      "title": "Rate",
       "type": "timeseries"
     },
     {
@@ -343,14 +343,14 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "sum(rate(rivet_sql_query_duration_sum{context_name=~\"[[context_name]]\",location=~\"[[location]]\",action=~\"[[action]]\"} [$__rate_interval])) by (location) /\r\nsum(rate(rivet_sql_query_duration_count{context_name=~\"[[context_name]]\",location=~\"[[location]]\",action=~\"[[action]]\"} [$__rate_interval])) by (location)",
+          "expr": "sum(rate(rivet_sql_query_duration_sum{service=~\"[[service]]\",context_name=~\"[[context_name]]\",location=~\"[[location]]\",action=~\"[[action]]\"} [$__rate_interval])) by (location) /\r\nsum(rate(rivet_sql_query_duration_count{service=~\"[[service]]\",context_name=~\"[[context_name]]\",location=~\"[[location]]\",action=~\"[[action]]\"} [$__rate_interval])) by (location)",
           "format": "heatmap",
           "legendFormat": "{{location}}",
           "range": true,
           "refId": "A"
         }
       ],
-      "title": "Request Duration (avg)",
+      "title": "Duration (avg)",
       "type": "timeseries"
     },
     {
@@ -441,14 +441,14 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.95, \r\n    sum(rate(rivet_sql_query_duration_bucket{context_name=~\"[[context_name]]\",location=~\"[[location]]\",action=~\"[[action]]\"} [$__rate_interval]))\r\n    by (le, location)\r\n)",
+          "expr": "histogram_quantile(0.95, \r\n    sum(rate(rivet_sql_query_duration_bucket{service=~\"[[service]]\",context_name=~\"[[context_name]]\",location=~\"[[location]]\",action=~\"[[action]]\"} [$__rate_interval]))\r\n    by (le, location)\r\n)",
           "format": "heatmap",
           "legendFormat": "{{location}}",
           "range": true,
           "refId": "A"
         }
       ],
-      "title": "Request Duration (p95)",
+      "title": "Duration (p95)",
       "type": "timeseries"
     },
     {
@@ -539,14 +539,14 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.99, \r\n    sum(rate(rivet_sql_query_duration_bucket{context_name=~\"[[context_name]]\",location=~\"[[location]]\",action=~\"[[action]]\"} [$__rate_interval]))\r\n    by (le, location)\r\n)",
+          "expr": "histogram_quantile(0.99, \r\n    sum(rate(rivet_sql_query_duration_bucket{service=~\"[[service]]\",context_name=~\"[[context_name]]\",location=~\"[[location]]\",action=~\"[[action]]\"} [$__rate_interval]))\r\n    by (le, location)\r\n)",
           "format": "heatmap",
           "legendFormat": "{{exported_service}}",
           "range": true,
           "refId": "A"
         }
       ],
-      "title": "Request Duration (p99)",
+      "title": "Duration (p99)",
       "type": "timeseries"
     },
     {
@@ -559,7 +559,7 @@
       },
       "id": 36,
       "panels": [],
-      "title": "Query Prepare",
+      "title": "Acquire",
       "type": "row"
     },
     {
@@ -654,14 +654,14 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "sum(increase(rivet_sql_query_prepare_duration_bucket{context_name=~\"[[context_name]]\",location=~\"[[location]]\",action=~\"[[action]]\"} [$__rate_interval])) by (le)",
+          "expr": "sum(increase(rivet_sql_acquire_duration_bucket{service=~\"[[service]]\",context_name=~\"[[context_name]]\",location=~\"[[location]]\",action=~\"[[action]]\"} [$__rate_interval])) by (le)",
           "format": "heatmap",
           "legendFormat": "{{le}}",
           "range": true,
           "refId": "A"
         }
       ],
-      "title": "Request Duration",
+      "title": "Duration",
       "tooltip": {
         "show": true,
         "showHistogram": true
@@ -767,14 +767,14 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "sum(rate(rivet_sql_query_prepare_duration_sum{context_name=~\"[[context_name]]\",location=~\"[[location]]\",action=~\"[[action]]\"} [$__rate_interval])) by (location) /\r\nsum(rate(rivet_sql_query_prepare_duration_count{context_name=~\"[[context_name]]\",location=~\"[[location]]\",action=~\"[[action]]\"} [$__rate_interval])) by (location)",
+          "expr": "sum(rate(rivet_sql_acquire_duration_sum{service=~\"[[service]]\",context_name=~\"[[context_name]]\",location=~\"[[location]]\",action=~\"[[action]]\"} [$__rate_interval])) by (location) /\r\nsum(rate(rivet_sql_acquire_duration_count{service=~\"[[service]]\",context_name=~\"[[context_name]]\",location=~\"[[location]]\",action=~\"[[action]]\"} [$__rate_interval])) by (location)",
           "format": "heatmap",
           "legendFormat": "{{location}}",
           "range": true,
           "refId": "A"
         }
       ],
-      "title": "Request Duration (avg)",
+      "title": "Duration (avg)",
       "type": "timeseries"
     },
     {
@@ -865,14 +865,14 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.95, \r\n    sum(rate(rivet_sql_query_prepare_duration_bucket{context_name=~\"[[context_name]]\",location=~\"[[location]]\",action=~\"[[action]]\"} [$__rate_interval]))\r\n    by (le, location)\r\n)",
+          "expr": "histogram_quantile(0.95, \r\n    sum(rate(rivet_sql_acquire_duration_bucket{service=~\"[[service]]\",context_name=~\"[[context_name]]\",location=~\"[[location]]\",action=~\"[[action]]\"} [$__rate_interval]))\r\n    by (le, location)\r\n)",
           "format": "heatmap",
           "legendFormat": "{{location}}",
           "range": true,
           "refId": "A"
         }
       ],
-      "title": "Request Duration (p95)",
+      "title": "Duration (p95)",
       "type": "timeseries"
     },
     {
@@ -963,14 +963,306 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.99, \r\n    sum(rate(rivet_sql_query_prepare_duration_bucket{context_name=~\"[[context_name]]\",location=~\"[[location]]\",action=~\"[[action]]\"} [$__rate_interval]))\r\n    by (le, location)\r\n)",
+          "expr": "histogram_quantile(0.99, \r\n    sum(rate(rivet_sql_acquire_duration_bucket{service=~\"[[service]]\",context_name=~\"[[context_name]]\",location=~\"[[location]]\",action=~\"[[action]]\"} [$__rate_interval]))\r\n    by (le, location)\r\n)",
           "format": "heatmap",
           "legendFormat": "{{exported_service}}",
           "range": true,
           "refId": "A"
         }
       ],
-      "title": "Request Duration (p99)",
+      "title": "Duration (p99)",
+      "type": "timeseries"
+    },
+    {
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 38
+      },
+      "id": 41,
+      "panels": [],
+      "title": "Pool",
+      "type": "row"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "drawStyle": "line",
+            "fillOpacity": 0,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "auto",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 39
+      },
+      "id": 42,
+      "options": {
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": false
+        },
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "editorMode": "code",
+          "expr": "sum(max_over_time(rivet_crdb_pool_conn_size{service=~\"[[service]]\"}[$__interval])) by (exported_service)",
+          "legendFormat": "{{service}}",
+          "range": true,
+          "refId": "A"
+        }
+      ],
+      "title": "Pool Size",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "drawStyle": "line",
+            "fillOpacity": 0,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "auto",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 39
+      },
+      "id": 43,
+      "options": {
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": false
+        },
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "editorMode": "code",
+          "expr": "sum(max_over_time(rivet_crdb_pool_conn_size{service=~\"[[service]]\"}[$__interval]) - max_over_time(rivet_crdb_pool_num_idle{service=~\"[[service]]\"}[$__interval])) by (service)",
+          "legendFormat": "{{service}}",
+          "range": true,
+          "refId": "A"
+        }
+      ],
+      "title": "Pool Num Active",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "drawStyle": "line",
+            "fillOpacity": 0,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "auto",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 47
+      },
+      "id": 44,
+      "options": {
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": false
+        },
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "editorMode": "code",
+          "expr": "sum(max_over_time(rivet_crdb_pool_num_idle{service=~\"[[service]]\"}[$__interval])) by (service)",
+          "legendFormat": "{{service}}",
+          "range": true,
+          "refId": "A"
+        }
+      ],
+      "title": "Pool Num Idle",
       "type": "timeseries"
     }
   ],
@@ -985,6 +1277,37 @@
       {
         "current": {
           "selected": true,
+          "text": [
+            "All"
+          ],
+          "value": [
+            "$__all"
+          ]
+        },
+        "datasource": {
+          "type": "prometheus",
+          "uid": "prometheus"
+        },
+        "definition": "label_values(rivet_sql_query_total,service)",
+        "hide": 0,
+        "includeAll": true,
+        "label": "Service",
+        "multi": true,
+        "name": "service",
+        "options": [],
+        "query": {
+          "query": "label_values(rivet_sql_query_total,service)",
+          "refId": "PrometheusVariableQueryEditor-VariableQuery"
+        },
+        "refresh": 1,
+        "regex": "",
+        "skipUrlSync": false,
+        "sort": 1,
+        "type": "query"
+      },
+      {
+        "current": {
+          "selected": false,
           "text": [
             "All"
           ],
@@ -1015,7 +1338,7 @@
       },
       {
         "current": {
-          "selected": true,
+          "selected": false,
           "text": [
             "All"
           ],
@@ -1030,7 +1353,7 @@
         "definition": "label_values(rivet_sql_query_total,location)",
         "hide": 0,
         "includeAll": true,
-        "label": "Action",
+        "label": "Location",
         "multi": true,
         "name": "location",
         "options": [],
@@ -1046,7 +1369,7 @@
       },
       {
         "current": {
-          "selected": true,
+          "selected": false,
           "text": [
             "All"
           ],
@@ -1078,13 +1401,13 @@
     ]
   },
   "time": {
-    "from": "now-15m",
+    "from": "now-24h",
     "to": "now"
   },
   "timepicker": {},
   "timezone": "",
   "title": "Rivet / SQL",
   "uid": "aabf5252-8ab0-4940-b261-3b7208db8f18",
-  "version": 4,
+  "version": 1,
   "weekStart": ""
 }
