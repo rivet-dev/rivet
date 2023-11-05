@@ -117,21 +117,14 @@ macro_rules! __sql_query_as {
 /// Used for the `fetch` function.
 #[macro_export]
 macro_rules! __sql_query_as_raw {
-    ([$ctx:expr, $rv:ty, $action:ident, $crdb:expr] $sql:expr, $($bind:expr),* $(,)?) => {{
-
-		let query = sqlx::query_as::<_, $rv>(indoc!($sql))
+    ([$ctx:expr, $rv:ty, $action:ident, $crdb:expr] $sql:expr, $($bind:expr),* $(,)?) => {
+		// We can't record metrics for this because we can't move the `await` in to this macro
+		sqlx::query_as::<_, $rv>(indoc!($sql))
 		$(
 			.bind($bind)
-		)*;
-
-		// TODO: Figure out how to wrap this future to be able to record the metrics finish
-		$crate::__sql_query_metrics_acquire!(_acquire);
-		let crdb = $crdb;
-		let mut conn = crdb.acquire().await?;
-		$crate::__sql_query_metrics_start!($ctx, $action, _acquire, _start);
-
-		query.$action(&mut *conn)
-    }};
+		)*
+		.$action($crdb)
+    };
     ([$ctx:expr, $rv:ty, $action:ident] $sql:expr, $($bind:expr),* $(,)?) => {
 		__sql_query_as!([$ctx, $rv, $action, &$ctx.crdb().await?] $sql, $($bind),*)
     };
