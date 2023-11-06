@@ -516,7 +516,11 @@ impl ServiceContextData {
 	}
 
 	pub async fn redis_dependencies(&self, run_context: &RunContext) -> Vec<ServiceContext> {
-		let default_deps = ["redis-chirp".to_string(), "redis-cache".to_string()];
+		let default_deps = [
+			"redis-chirp".to_string(),
+			"redis-chirp-ephemeral".into(),
+			"redis-cache".to_string(),
+		];
 
 		let dep_names = self
 			.database_dependencies(run_context)
