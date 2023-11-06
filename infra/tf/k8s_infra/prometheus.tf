@@ -9,7 +9,6 @@ locals {
 
 	# TODO: Allow configuring
 	prometheus_storage = 64000 # Mebibytes
-	prometheus_retention_size = "${local.prometheus_storage - 100}Mi"
 
 	service_alertmanager = lookup(var.services, "alertmanager", {
 		count = 1
@@ -235,7 +234,7 @@ resource "helm_release" "prometheus" {
 				evaluationInterval = "15s"
 
 				retention = "7d"
-				retentionSize = local.prometheus_retention_size
+				retentionSize = "${local.prometheus_storage - 100}MB"
 
 				# additionalArgs = [{
 				# 	name = "log.level"
@@ -248,7 +247,7 @@ resource "helm_release" "prometheus" {
 							storageClassName = var.k8s_storage_class
 							resources = {
 								requests = {
-									storage = "${local.prometheus_storage}MB"
+									storage = "${local.prometheus_storage}Mi"
 								}
 							}
 						}
