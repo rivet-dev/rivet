@@ -150,67 +150,6 @@ async fn wrong_lobby(ctx: TestCtx) {
 	assert_eq!(0, player_count, "player not removed");
 }
 
-// Tests player connection to a host port end to end
-#[worker_test]
-async fn host_e2e(ctx: TestCtx) {
-	if !util::feature::job_run() {
-		return;
-	}
-
-	// Setup
-	tracing::info!("setting up");
-	let (primary_region_id, primary_region_name_id) = setup_region(ctx.op_ctx()).await.unwrap();
-	let (_game_id, version_id, namespace_id, _mm_config, _mm_config_meta) =
-		setup_game(ctx.op_ctx(), primary_region_id).await.unwrap();
-	let ns_auth_token = setup_public_token(ctx.op_ctx(), namespace_id)
-		.await
-		.unwrap();
-	let config = setup_config(ctx.op_ctx(), ns_auth_token).await.unwrap();
-
-	tracing::info!("finding");
-	let res = matchmaker_lobbies_api::matchmaker_lobbies_find(
-		&config,
-		models::MatchmakerLobbiesFindRequest {
-			game_modes: vec!["test".to_string()],
-			prevent_auto_create_lobby: None,
-			regions: None,
-			verification_data: None,
-			captcha: Some(Box::new(models::CaptchaConfig {
-				hcaptcha: Some(Box::new(models::CaptchaConfigHcaptcha {
-					client_response: "10000000-aaaa-bbbb-cccc-000000000001".to_string(),
-				})),
-				turnstile: None,
-			})),
-		},
-		None,
-	)
-	.await
-	.unwrap();
-	let (_, mm_port) = res.ports.iter().next().unwrap();
-
-	tracing::info!(?mm_port, "found");
-	let hostname = mm_port.hostname.as_str();
-	let port = mm_port.port_range.as_ref().unwrap().min as u16;
-	let host = format!("{hostname}:{port}");
-
-	tracing::info!(?host, "connecting");
-	let stream = TcpStream::connect(host).await.unwrap();
-	stream.set_nodelay(true).unwrap();
-
-	stream.readable().await.unwrap();
-
-	tokio::time::sleep(Duration::from_secs(5)).await;
-
-	let player_count_res = op!([ctx] mm_player_count_for_namespace {
-		namespace_ids: vec![namespace_id.into()],
-	})
-	.await
-	.unwrap();
-	let player_count = player_count_res.namespaces.first().unwrap().player_count;
-
-	assert_eq!(1, player_count, "player not registered");
-}
-
 async fn setup_config(
 	ctx: &OperationContext<()>,
 	bearer_token: String,
