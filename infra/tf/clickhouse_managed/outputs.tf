@@ -3,5 +3,5 @@ output "host" {
 }
 
 output "port" {
-	value = clickhouse_service.main.endpoints[0].port
+	value = 8443
 }
