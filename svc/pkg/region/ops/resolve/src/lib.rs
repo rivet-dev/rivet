@@ -16,5 +16,6 @@ async fn handle(
 		})
 		.collect::<Vec<_>>();
 
+	// NOTE: Order of regions is not preserved from input
 	Ok(region::resolve::Response { regions })
 }

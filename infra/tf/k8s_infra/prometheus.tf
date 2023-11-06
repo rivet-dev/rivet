@@ -96,6 +96,13 @@ resource "kubernetes_priority_class" "node_exporter_priority" {
 	value = 90
 }
 
+resource "kubernetes_priority_class" "prometheus_priority" {
+	metadata {
+		name = "prometheus-priority"
+	}
+	value = 40
+}
+
 resource "helm_release" "prometheus" {
 	name = "prometheus"
 	namespace = kubernetes_namespace.prometheus.metadata.0.name
@@ -254,6 +261,7 @@ resource "helm_release" "prometheus" {
 					}
 				}
 			
+				priorityClassName = kubernetes_priority_class.prometheus_priority.metadata.0.name
 				resources = var.limit_resources ? {
 					limits = {
 						memory = "${local.service_prometheus.resources.memory}Mi"
@@ -294,6 +302,16 @@ resource "helm_release" "prometheus" {
 		}
 
 		grafana = {
+			"grafana.ini" = {
+				auth = {
+					disable_login_form = true
+				}
+				"auth.anonymous" = {
+					enabled = true
+					org_role = "Admin"
+				}
+			}
+
 			resources = var.limit_resources ? {
 				limits = {
 					memory = "${local.service_grafana.resources.memory}Mi"

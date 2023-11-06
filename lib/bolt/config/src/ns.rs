@@ -30,8 +30,6 @@ pub struct Namespace {
 	#[serde(default)]
 	pub docker: Docker,
 	#[serde(default)]
-	pub grafana: Option<Grafana>,
-	#[serde(default)]
 	pub nomad: Nomad,
 	#[serde(default)]
 	pub kubernetes: Kubernetes,
@@ -219,16 +217,14 @@ pub struct CloudflareAccess {
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(deny_unknown_fields)]
-pub struct CloudflareAccessGroups {
-	pub engineering: String,
+pub struct CloudflareAccessServices {
+	pub grafana: String,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(deny_unknown_fields)]
-pub struct CloudflareAccessServices {
-	pub terraform_nomad: String,
-	pub bolt: String,
-	pub grafana_cloud: String,
+pub struct CloudflareAccessGroups {
+	pub engineering: String,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, Default)]
@@ -365,10 +361,6 @@ impl Default for Docker {
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(deny_unknown_fields)]
-pub struct Grafana {}
-
-#[derive(Serialize, Deserialize, Clone, Debug)]
-#[serde(deny_unknown_fields)]
 pub struct Nomad {
 	pub health_checks: Option<bool>,
 }
@@ -439,7 +431,15 @@ pub enum CockroachDBProvider {
 	#[serde(rename = "kubernetes")]
 	Kubernetes {},
 	#[serde(rename = "managed")]
-	Managed {},
+	Managed {
+		/// USD cents.
+		spend_limit: u32,
+		/// CRDB Request Units.
+		/// https://www.cockroachlabs.com/docs/cockroachcloud/architecture#request-unit-ru
+		request_unit_limit: u32,
+		/// Storage limit in MiB.
+		storage_limit: u32,
+	},
 }
 
 impl Default for CockroachDBProvider {

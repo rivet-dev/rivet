@@ -1,5 +1,5 @@
 locals {
-	tunnel = module.cloudflare_tunnels["local"]
+	tunnel = module.cloudflare_tunnels
 }
 
 resource "kubernetes_namespace" "cloudflared" {
@@ -65,7 +65,7 @@ resource "kubernetes_deployment" "cloudflared" {
 					name = "creds"
 
 					secret {
-						secret_name = "tunnel-credentials"
+						secret_name = kubernetes_secret.tunnel_credentials.metadata.0.name
 					}
 				}
 
@@ -73,7 +73,7 @@ resource "kubernetes_deployment" "cloudflared" {
 					name = "config"
 
 					config_map {
-						name = "cloudflared"
+						name = kubernetes_config_map.cloudflared.metadata.0.name
 
 						items {
 							key = "config.yaml"

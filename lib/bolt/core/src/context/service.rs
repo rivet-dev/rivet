@@ -1085,11 +1085,32 @@ impl ServiceContextData {
 		}
 
 		// Redis
-		// TODO: Function is expensive
+		// TODO: read_redis is expensive
 		let redis_data = terraform::output::read_redis(&project_ctx).await;
+		// Keeps track to avoid duplicates
+		let mut has_ephemeral = false;
+		let mut has_persistent = false;
+
 		for redis_dep in self.redis_dependencies(run_context).await {
-			let _name = redis_dep.name();
-			let db_name = redis_dep.redis_db_name();
+			let db_name = if let RuntimeKind::Redis { persistent } = redis_dep.config().runtime {
+				if persistent {
+					if has_persistent {
+						continue;
+					}
+					has_persistent = true;
+
+					"persistent".to_string()
+				} else {
+					if has_ephemeral {
+						continue;
+					}
+					has_ephemeral = true;
+
+					"ephemeral".to_string()
+				}
+			} else {
+				unreachable!();
+			};
 
 			// Read host and port from terraform
 			let hostname = redis_data
@@ -1102,34 +1123,28 @@ impl ServiceContextData {
 				.expect("terraform output for redis db not found");
 			let host = format!("{}:{}", *hostname, *port);
 
-			// // Read auth secrets
-			// let (username, password) = match project_ctx.ns().cluster.kind {
-			// 	config::ns::ClusterKind::SingleNode { .. } => (
-			// 		project_ctx
-			// 			.read_secret(&["redis", &db_name, "username"])
-			// 			.await?,
-			// 		project_ctx
-			// 			.read_secret_opt(&["redis", &db_name, "password"])
-			// 			.await?,
-			// 	),
-			// 	config::ns::ClusterKind::Distributed { .. } => {
-			// 		let db_name = format!("rivet-{}-{}", project_ctx.ns_id(), db_name);
-			// 		let username = project_ctx
-			// 			.read_secret(&["redis", &db_name, "username"])
-			// 			.await?;
-			// 		let password = project_ctx
-			// 			.read_secret_opt(&["redis", &db_name, "password"])
-			// 			.await?;
+			// Read auth secrets
+			let (username, password) = match project_ctx.ns().redis.provider {
+				config::ns::RedisProvider::Kubernetes {} => (
+					project_ctx
+						.read_secret(&["redis", &db_name, "username"])
+						.await?,
+					project_ctx
+						.read_secret_opt(&["redis", &db_name, "password"])
+						.await?,
+				),
+				config::ns::RedisProvider::Aws {} => {
+					let db_name = format!("rivet-{}-{}", project_ctx.ns_id(), db_name);
+					let username = project_ctx
+						.read_secret(&["redis", &db_name, "username"])
+						.await?;
+					let password = project_ctx
+						.read_secret_opt(&["redis", &db_name, "password"])
+						.await?;
 
-			// 		(username, password)
-			// 	}
-			// };
-			let username = project_ctx
-				.read_secret(&["redis", &db_name, "username"])
-				.await?;
-			let password = project_ctx
-				.read_secret_opt(&["redis", &db_name, "password"])
-				.await?;
+					(username, password)
+				}
+			};
 
 			// Build URL with auth
 			let url = if let Some(password) = password {

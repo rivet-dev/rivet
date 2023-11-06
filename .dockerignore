@@ -28,6 +28,9 @@ tf/
 Bolt.local.toml
 /secrets/
 
+# Rivet
+/infra/
+
 # Rust
 **/target/
 **/pkg/

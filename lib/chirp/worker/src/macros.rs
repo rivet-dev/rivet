@@ -17,6 +17,7 @@ macro_rules! worker_group {
         let shared_client = chirp_client::SharedClient::new(
 			pools.nats()?,
 			pools.redis_chirp()?,
+			pools.redis_chirp_ephemeral()?,
 			pools.redis_cache()?,
 			region,
 		);

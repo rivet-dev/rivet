@@ -51,7 +51,8 @@ impl TestOpts {
 				filter.is_empty(),
 				"cannot provide filters when testing all services"
 			);
-			tasks::test::test_all(&ctx).await?;
+
+			tasks::test::test_all(&ctx, timeout, parallel_tests, no_purge).await?;
 		}
 
 		utils::ringadingding();

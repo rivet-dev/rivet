@@ -37,6 +37,13 @@ resource "kubernetes_namespace" "redis" {
 	}
 }
 
+resource "kubernetes_priority_class" "redis_priority" {
+	metadata {
+		name = "redis-priority"
+	}
+	value = 40
+}
+
 resource "helm_release" "redis" {
 	depends_on = [helm_release.prometheus]
 	for_each = local.redis_svcs
@@ -53,6 +60,7 @@ resource "helm_release" "redis" {
 			storageClass = var.k8s_storage_class
 		}
 		redis = {
+			priorityClassName = kubernetes_priority_class.redis_priority.metadata.0.name
 			# Use allkeys-lru instead of volatile-lru because we don't want the cache nodes to crash
 			extraEnvVars = [
 				{ name = "REDIS_MAXMEMORY_POLICY", value = each.value.persistent ? "noeviction" : "allkeys-lru" }
@@ -84,6 +92,7 @@ resource "helm_release" "redis" {
 		}
 		metrics = {
 			enabled = true
+			priorityClassName = kubernetes_priority_class.redis_priority.metadata.0.name
 			serviceMonitor = {
 				enabled = true
 				namespace = kubernetes_namespace.redis[each.key].metadata.0.name

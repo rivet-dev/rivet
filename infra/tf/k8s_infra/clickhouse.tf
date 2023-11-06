@@ -27,15 +27,24 @@ resource "kubernetes_namespace" "clickhouse" {
 	}
 }
 
+resource "kubernetes_priority_class" "clickhouse_priority" {
+	metadata {
+		name = "clickhouse-priority"
+	}
+
+	value = 40
+}
+
 resource "helm_release" "clickhouse" {
 	depends_on = [helm_release.prometheus]
 	count = local.clickhouse_k8s ? 1 : 0
 
 	name = "clickhouse"
 	namespace = kubernetes_namespace.clickhouse[0].metadata.0.name
-	repository = "oci://registry-1.docker.io/bitnamicharts"
-	chart = "clickhouse"
-	version = "4.0.4"
+	chart = "../../helm/clickhouse"
+	# repository = "oci://registry-1.docker.io/bitnamicharts"
+	# chart = "clickhouse"
+	# version = "4.0.4"
 	values = [yamlencode({
 		global = {
 			storageClass = var.k8s_storage_class
@@ -46,6 +55,7 @@ resource "helm_release" "clickhouse" {
 			replicaCount = 1
 		}
 
+		priorityClassName = kubernetes_priority_class.clickhouse_priority.metadata.0.name
 		resources = var.limit_resources ? {
 			limits = {
 				memory = "${local.service_clickhouse.resources.memory}Mi"

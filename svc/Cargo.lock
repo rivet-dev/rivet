@@ -1686,9 +1686,9 @@ dependencies = [
 name = "cdn-namespace-domain-create"
 version = "0.0.1"
 dependencies = [
- "cdn-namespace-create",
  "chirp-client",
  "chirp-worker",
+ "faker-game",
  "game-get",
  "game-resolve-namespace-id",
  "prost 0.10.4",
@@ -1700,10 +1700,10 @@ dependencies = [
 name = "cdn-namespace-domain-remove"
 version = "0.0.1"
 dependencies = [
- "cdn-namespace-create",
  "cdn-namespace-domain-create",
  "chirp-client",
  "chirp-worker",
+ "faker-game",
  "game-get",
  "game-resolve-namespace-id",
  "prost 0.10.4",
@@ -1729,10 +1729,10 @@ dependencies = [
 name = "cdn-namespace-resolve-domain"
 version = "0.0.1"
 dependencies = [
- "cdn-namespace-create",
  "cdn-namespace-domain-create",
  "chirp-client",
  "chirp-worker",
+ "faker-game",
  "prost 0.10.4",
  "rivet-operation",
  "sqlx",

@@ -167,23 +167,6 @@ impl ProjectContextData {
 			}
 		}
 
-		// MARK: Grafana
-		if self.ns().grafana.is_some() {
-			assert!(
-				matches!(
-					self.ns().dns,
-					Some(config::ns::Dns {
-						provider: Some(config::ns::DnsProvider::Cloudflare {
-							access: Some(_),
-							..
-						}),
-						..
-					})
-				),
-				"cloudflare access must be enabled to use grafana"
-			);
-		}
-
 		// MARK: Dynamic Servers
 		// Validate the build delivery method
 		if !self.ns().pools.is_empty() {
@@ -252,7 +235,8 @@ impl ProjectContextData {
 			}
 		}
 
-		panic!("Could not find project root.");
+		eprintln!("Could not find project root.");
+		std::process::exit(1);
 	}
 }
 

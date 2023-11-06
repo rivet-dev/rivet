@@ -25,9 +25,16 @@ for build in $builds; do
 	printf "$image" > "infra/default-builds/outputs/${build}-tag.txt"
 done
 
+ns=$(bolt output namespace)
+
 echo
 echo "Deleting old job"
-kubectl delete jobs.batch -n rivet-service rivet-build-default-create
+kubectl \
+	--kubeconfig "../gen/k8s/kubeconfig/${ns}.yml" \
+	-n rivet-service \
+	delete \
+	--ignore-not-found \
+	jobs.batch rivet-build-default-create
 
 echo
 echo "Applying to cluster"

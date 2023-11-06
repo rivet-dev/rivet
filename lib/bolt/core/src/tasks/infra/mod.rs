@@ -283,17 +283,6 @@ pub fn build_plan(ctx: &ProjectContext, start_at: Option<String>) -> Result<Vec<
 		});
 	}
 
-	// Grafana
-	if ctx.ns().grafana.is_some() {
-		plan.push(PlanStep {
-			name_id: "tf-grafana",
-			kind: PlanStepKind::Terraform {
-				plan_id: "grafana".into(),
-				needs_destroy: true,
-			},
-		});
-	}
-
 	plan.push(PlanStep {
 		name_id: "migrate",
 		kind: PlanStepKind::Migrate,

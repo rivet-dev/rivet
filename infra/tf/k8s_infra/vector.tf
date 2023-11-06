@@ -14,6 +14,13 @@ resource "kubernetes_namespace" "vector" {
 	}
 }
 
+resource "kubernetes_priority_class" "vector_priority" {
+	metadata {
+		name = "vector-priority"
+	}
+	value = 40
+}
+
 resource "helm_release" "vector" {
 	name = "vector"
 	namespace = kubernetes_namespace.vector.metadata.0.name
@@ -23,6 +30,7 @@ resource "helm_release" "vector" {
 	version = "0.26.0"
 	values = [yamlencode({
 		role = "Aggregator"
+		podPriorityClassName = kubernetes_priority_class.vector_priority.metadata.0.name
 		resources = var.limit_resources ? {
 			limits = {
 				memory = "${local.service_vector.resources.memory}Mi"

@@ -233,6 +233,28 @@ async fn vars(ctx: &ProjectContext) {
 	let pools = super::pools::build_pools(&ctx).await.unwrap();
 	vars.insert("pools".into(), json!(&pools));
 
+	// Tunnels
+	if let Some(ns::Dns {
+		provider: Some(ns::DnsProvider::Cloudflare { access, .. }),
+		..
+	}) = &config.dns
+	{
+		let mut tunnels = HashMap::new();
+
+		// Grafana tunnel
+		tunnels.insert(
+			"grafana",
+			json!({
+				"name": "Grafana",
+				"service": "http://prometheus-grafana.prometheus.svc.cluster.local:80",
+				"access_groups": access.as_ref().map(|x| vec![x.groups.engineering.clone()]).unwrap_or_default(),
+				"service_tokens": access.as_ref().map(|x| vec![x.services.grafana.clone()]).unwrap_or_default(),
+			}),
+		);
+
+		vars.insert("tunnels".into(), json!(&tunnels));
+	}
+
 	// Servers
 	let servers = super::servers::build_servers(&ctx, &regions, &pools).unwrap();
 	vars.insert("servers".into(), json!(servers));
@@ -279,7 +301,7 @@ async fn vars(ctx: &ProjectContext) {
 	// Docker
 	vars.insert(
 		"authenticate_all_docker_hub_pulls".into(),
-		json!(ctx.ns().docker.authenticate_all_docker_hub_pulls),
+		json!(config.docker.authenticate_all_docker_hub_pulls),
 	);
 
 	// Extra DNS
@@ -313,7 +335,7 @@ async fn vars(ctx: &ProjectContext) {
 		}
 
 		// Add Minio
-		let s3_providers = &ctx.ns().s3.providers;
+		let s3_providers = &config.s3.providers;
 		if s3_providers.minio.is_some() {
 			extra_dns.push(json!({
 				"zone_name": "main",
@@ -325,16 +347,27 @@ async fn vars(ctx: &ProjectContext) {
 	}
 
 	// CockroachDB
-	vars.insert(
-		"cockroachdb_provider".into(),
-		json!(match ctx.ns().cockroachdb.provider {
-			ns::CockroachDBProvider::Kubernetes { .. } => "kubernetes",
-			ns::CockroachDBProvider::Managed { .. } => "managed",
-		}),
-	);
+	match config.cockroachdb.provider {
+		ns::CockroachDBProvider::Kubernetes { .. } => {
+			vars.insert("cockroachdb_provider".into(), json!("kubernetes"));
+		}
+		ns::CockroachDBProvider::Managed {
+			spend_limit,
+			request_unit_limit,
+			storage_limit,
+		} => {
+			vars.insert("cockroachdb_provider".into(), json!("managed"));
+			vars.insert("cockroachdb_spend_limit".into(), json!(spend_limit));
+			vars.insert(
+				"cockroachdb_request_unit_limit".into(),
+				json!(request_unit_limit),
+			);
+			vars.insert("cockroachdb_storage_limit".into(), json!(storage_limit));
+		}
+	}
 
 	// ClickHouse
-	match &ctx.ns().clickhouse.provider {
+	match &config.clickhouse.provider {
 		ns::ClickHouseProvider::Kubernetes {} => {
 			vars.insert("clickhouse_provider".into(), json!("kubernetes"));
 		}
@@ -364,28 +397,42 @@ async fn vars(ctx: &ProjectContext) {
 
 	// Redis services
 	{
-		let mut redis_svcs = HashMap::<String, serde_json::Value>::new();
+		let mut redis_dbs = HashMap::new();
 
+		// Generate persistent and ephemeral databases
 		for svc_ctx in all_svc {
 			if let RuntimeKind::Redis { persistent } = svc_ctx.config().runtime {
-				redis_svcs.insert(
-					svc_ctx.redis_db_name(),
-					json!({
-						"persistent": persistent,
-					}),
-				);
+				if persistent {
+					redis_dbs.insert(
+						"persistent",
+						json!({
+							"persistent": true,
+						}),
+					);
+				} else {
+					redis_dbs.insert(
+						"ephemeral",
+						json!({
+							"persistent": false,
+						}),
+					);
+				}
+
+				if redis_dbs.len() == 2 {
+					break;
+				}
 			}
 		}
 
-		vars.insert("redis_replicas".into(), json!(ctx.ns().redis.replicas));
+		vars.insert("redis_replicas".into(), json!(config.redis.replicas));
 		vars.insert(
 			"redis_provider".into(),
-			json!(match ctx.ns().redis.provider {
+			json!(match config.redis.provider {
 				ns::RedisProvider::Kubernetes { .. } => "kubernetes",
 				ns::RedisProvider::Aws { .. } => "aws",
 			}),
 		);
-		vars.insert("redis_dbs".into(), json!(redis_svcs));
+		vars.insert("redis_dbs".into(), json!(redis_dbs));
 	}
 
 	// S3
@@ -437,7 +484,7 @@ async fn vars(ctx: &ProjectContext) {
 	vars.insert("kubeconfig_path".into(), json!(ctx.gen_kubeconfig_path()));
 	vars.insert(
 		"k8s_storage_class".into(),
-		json!(match ctx.ns().kubernetes.provider {
+		json!(match config.kubernetes.provider {
 			ns::KubernetesProvider::K3d { .. } => "local-path",
 			ns::KubernetesProvider::AwsEks { .. } => "ebs-sc",
 		}),

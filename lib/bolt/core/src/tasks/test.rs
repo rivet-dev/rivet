@@ -42,7 +42,12 @@ pub struct TestCtx<'a, T: AsRef<str>> {
 	pub no_purge: bool,
 }
 
-pub async fn test_all(ctx: &ProjectContext) -> Result<()> {
+pub async fn test_all(
+	ctx: &ProjectContext,
+	timeout: Option<u64>,
+	parallel_tests: Option<usize>,
+	no_purge: bool,
+) -> Result<()> {
 	let all_svc_names = ctx
 		.all_services()
 		.await
@@ -54,9 +59,9 @@ pub async fn test_all(ctx: &ProjectContext) -> Result<()> {
 		TestCtx {
 			svc_names: &all_svc_names,
 			filters: Vec::new(),
-			timeout: None,
-			parallel_tests: None,
-			no_purge: false,
+			timeout,
+			parallel_tests,
+			no_purge,
 		},
 	)
 	.await?;
@@ -258,10 +263,11 @@ async fn run_test(
 	let container_path = Path::new("/rivet-src").join(relative_path);
 
 	// Build exec ctx
+	let test_id = gen_test_id();
 	let exec_ctx = ExecServiceContext {
 		svc_ctx: svc_ctx.clone(),
 		run_context: RunContext::Test {
-			test_id: gen_test_id(),
+			test_id: test_id.clone(),
 		},
 		driver: ExecServiceDriver::LocalBinaryArtifact {
 			exec_path: container_path,
@@ -289,7 +295,7 @@ async fn run_test(
 	rivet_term::status::info(
 		"Running",
 		format!(
-			"{display_name} [{logs_path}]",
+			"{display_name} [{test_id}] [{logs_path}]",
 			logs_path = logs_path.display()
 		),
 	);
@@ -317,7 +323,7 @@ async fn run_test(
 	let test_duration = test_start_time.elapsed();
 	let complete_count = tests_complete.fetch_add(1, Ordering::SeqCst) + 1;
 	let run_info = format!(
-		"{display_name} ({complete_count}/{test_count}) [{logs_path}] [{td:.1}s]",
+		"{display_name} ({complete_count}/{test_count}) [{test_id}] [{logs_path}] [{td:.1}s]",
 		td = test_duration.as_secs_f32(),
 		logs_path = logs_path.display()
 	);
@@ -369,7 +375,7 @@ async fn pipe_pod_logs(
 	Ok(())
 }
 
-/// Watch the pod to look for copmetion or failure.
+/// Watch the pod to look for completion or failure.
 async fn watch_pod(
 	ctx: &ProjectContext,
 	k8s_svc_name: &str,
@@ -432,11 +438,11 @@ async fn watch_pod(
 					.await?;
 
 				let exit_code_str = String::from_utf8_lossy(&output.stdout);
-				let exit_code = exit_code_str.trim().parse::<i32>();
-				if exit_code.is_err() {
-					eprintln!("\n-------- {exit_code_str}\n");
-				}
-				let exit_code = exit_code?;
+				let Result::Ok(exit_code) = exit_code_str.trim().parse::<i32>() else {
+					return Ok(TestStatus::UnknownError(format!(
+						"Could not parse exit code: {exit_code_str:?}"
+					)));
+				};
 
 				let test_status = match exit_code {
 					0 => TestStatus::Pass,

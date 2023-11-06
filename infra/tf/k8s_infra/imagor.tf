@@ -87,7 +87,7 @@ resource "kubernetes_deployment" "imagor" {
 			}
 
 			spec {
-				priority_class_name = "imagor-priority"
+				priority_class_name = kubernetes_priority_class.imagor_priority.metadata.0.name
 				
 				# MARK: Docker auth
 				image_pull_secrets {

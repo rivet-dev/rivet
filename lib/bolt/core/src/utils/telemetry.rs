@@ -1,7 +1,8 @@
+use std::collections::HashMap;
+
 use anyhow::Result;
 use duct::cmd;
 use serde_json::json;
-use std::collections::HashMap;
 use tokio::{
 	sync::{Mutex, OnceCell},
 	task::{block_in_place, JoinSet},

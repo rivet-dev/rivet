@@ -1053,7 +1053,6 @@ async fn resolve_region_ids(
 		&backend::matchmaker::LobbyGroupMeta,
 	)],
 ) -> GlobalResult<Vec<Uuid>> {
-	// Represents the requested regions in order of priority.
 	let region_ids = if let Some(region_name_ids) = regions {
 		// Resolve the region ID corresponding to the name IDs
 		let resolve_res = op!([ctx] region_resolve {
@@ -1074,6 +1073,8 @@ async fn resolve_region_ids(
 			MATCHMAKER_REGION_NOT_FOUND
 		);
 
+		// Order of regions is not preserved. Furthermore, this list will be used as a filter instead of a
+		// priority list.
 		region_ids
 	} else {
 		// Find all enabled region IDs in all requested lobby groups

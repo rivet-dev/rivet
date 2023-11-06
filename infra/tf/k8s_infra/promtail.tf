@@ -21,6 +21,13 @@ resource "kubernetes_namespace" "promtail" {
 	}
 }
 
+resource "kubernetes_priority_class" "promtail_priority" {
+	metadata {
+		name = "promtail-priority"
+	}
+	value = 40
+}
+
 resource "helm_release" "promtail" {
 	name = "promtail"
 	namespace = kubernetes_namespace.promtail.metadata.0.name
@@ -101,9 +108,10 @@ resource "helm_release" "promtail" {
 					  # Limits logs to only the "rivet-service" k8s namespace
 					  kubernetes_sd_configs:
 					    - role: pod
-					      namespaces:
-					        names:
-					          - rivet-service
+					    # Namespace scrape filter (disabled)
+					    # namespaces:
+					    #   names:
+					    #     - rivet-service
 					  relabel_configs:
 					    {{- if .Values.config.snippets.addScrapeJobLabel }}
 					    - replacement: kubernetes-pods
@@ -124,6 +132,7 @@ resource "helm_release" "promtail" {
 			}
 		}
 
+		priorityClassName = kubernetes_priority_class.promtail_priority.metadata.0.name
 		resources = var.limit_resources ? {
 			limits = {
 				memory = "${local.service_promtail.resources.memory}Mi"

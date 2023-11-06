@@ -1,6 +1,6 @@
 locals {
 	service_nats = lookup(var.services, "nats", {
-		count = 1
+		count = var.deploy_method_cluster ? 3 : 1
 		resources = {
 			cpu = 1000
 			memory = 1024
@@ -14,6 +14,14 @@ resource "kubernetes_namespace" "nats" {
 	}
 }
 
+resource "kubernetes_priority_class" "nats_priority" {
+	metadata {
+		name = "nats-priority"
+	}
+
+	value = 40
+}
+
 resource "helm_release" "nats" {
 	name = "nats"
 	namespace = kubernetes_namespace.nats.metadata.0.name
@@ -24,6 +32,11 @@ resource "helm_release" "nats" {
 		config = {
 			cluster = {
 				replicas = local.service_nats.count
+			}
+		}
+		podTemplate = {
+			merge = {
+				priorityClassName = kubernetes_priority_class.nats_priority.metadata.0.name
 			}
 		}
 		container = {

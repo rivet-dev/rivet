@@ -5,6 +5,7 @@ use std::{
 
 use anyhow::Result;
 use duct::cmd;
+use indexmap::IndexSet;
 use serde_json::json;
 use sha2::{Digest, Sha256};
 use tokio::{fs, task::block_in_place};
@@ -649,8 +650,21 @@ async fn build_volumes(
 				.redis_dependencies(run_context)
 				.await
 				.iter()
-				.map(|dep| dep.redis_db_name())
-				.collect::<Vec<_>>();
+				.map(|redis_dep| {
+					if let config::service::RuntimeKind::Redis { persistent } =
+						redis_dep.config().runtime
+					{
+						if persistent {
+							"persistent"
+						} else {
+							"ephemeral"
+						}
+					} else {
+						unreachable!();
+					}
+				})
+				// IndexSet to avoid duplicates and keep order
+				.collect::<IndexSet<_>>();
 
 			volumes.extend(redis_deps.iter().map(|db| {
 				json!({
@@ -702,7 +716,7 @@ async fn build_volumes(
 				"subPath": "crdb-ca.crt"
 			}));
 		}
-		config::ns::CockroachDBProvider::Managed {} => {
+		config::ns::CockroachDBProvider::Managed { .. } => {
 			// Uses publicly signed cert
 		}
 	}

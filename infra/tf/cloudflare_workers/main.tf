@@ -14,13 +14,19 @@ module "secrets" {
 }
 
 locals {
-	cf_request_meta_routes = toset([
+	cf_request_meta_routes = toset(concat([
+		"api.${var.domain_main}/matchmaker/lobbies/create",
+		"api.${var.domain_main}/matchmaker/lobbies/find",
+		"api.${var.domain_main}/matchmaker/lobbies/join",
+		"api.${var.domain_main}/matchmaker/lobbies/list",
+		"api.${var.domain_main}/matchmaker/regions",
+	], var.dns_deprecated_subdomains ? [
 		"matchmaker.api.${var.domain_main}/v1/lobbies/create",
 		"matchmaker.api.${var.domain_main}/v1/lobbies/find",
 		"matchmaker.api.${var.domain_main}/v1/lobbies/join",
 		"matchmaker.api.${var.domain_main}/v1/lobbies/list",
 		"matchmaker.api.${var.domain_main}/v1/regions",
-	])
+	] : []))
 }
 
 resource "cloudflare_worker_script" "request_meta" {

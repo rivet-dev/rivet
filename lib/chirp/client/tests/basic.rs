@@ -68,13 +68,12 @@ async fn basic_client() {
 	// Build client
 	let pools = rivet_pools::from_env("chirp-test").await.unwrap();
 	let nats = pools.nats().unwrap();
-	let redis_chirp = pools.redis_chirp().unwrap();
-	let redis_cache = pools.redis_cache().unwrap();
 
 	let shared_client = chirp_client::SharedClient::new(
 		nats.clone(),
-		redis_chirp.clone(),
-		redis_cache.clone(),
+		pools.redis_chirp().unwrap(),
+		pools.redis_chirp_ephemeral().unwrap(),
+		pools.redis_cache().unwrap(),
 		TEST_REGION.to_owned(),
 	);
 	let client = shared_client.clone().wrap_new("chirp-test");
@@ -275,6 +274,4 @@ async fn set_env_vars() {
 	std::env::set_var("NATS_URL", todo!());
 	std::env::set_var("NATS_USERNAME", "chirp");
 	std::env::set_var("NATS_PASSWORD", "password");
-	std::env::set_var("REDIS_URL_CHIRP", todo!());
-	std::env::set_var("REDIS_URL_CACHE", todo!());
 }
