@@ -201,7 +201,7 @@ pub enum CargoDependency {
 }
 
 #[derive(Deserialize, Clone, Debug)]
-#[serde(rename_all = "kebab-case")]
+#[serde(rename_all = "kebab-case", deny_unknown_fields)]
 pub struct CockroachDB {
 	// Sets a minimum number of connections to the database. This is important to ensure that
 	// the initial queries are not delayed by a large surge of TCP connections immediately

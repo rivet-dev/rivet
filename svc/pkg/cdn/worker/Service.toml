@@ -10,5 +10,5 @@ kind = "rust"
 redis-cdn = {}
 
 [cockroachdb]
-min-connections = 20
+min-connections = 8
 

@@ -47,7 +47,7 @@ async fn update_db(
 	let module_id = unwrap_ref!(ctx.module_id).as_uuid();
 
 	sql_execute!(
-		[ctx, &mut **tx]
+		[ctx, @tx tx]
 		"
 		INSERT INTO db_module.versions (version_id, module_id, create_ts, creator_user_id, major, minor, patch)
 		VALUES ($1, $2, $3, $4, $5, $6, $7)
@@ -65,7 +65,7 @@ async fn update_db(
 	match unwrap_ref!(ctx.image) {
 		module::msg::version_create::message::Image::Docker(docker) => {
 			sql_execute!(
-				[ctx, &mut **tx]
+				[ctx, @tx tx]
 				"
                 INSERT INTO db_module.versions_image_docker (version_id, image_tag)
                 VALUES ($1, $2)
@@ -79,7 +79,7 @@ async fn update_db(
 
 	for script in &ctx.scripts {
 		sql_execute!(
-			[ctx, &mut **tx]
+			[ctx, @tx tx]
 			"
             INSERT INTO db_module.scripts (version_id, name, request_schema, response_schema)
             VALUES ($1, $2, $3, $4)
@@ -93,7 +93,7 @@ async fn update_db(
 
 		if script.callable.is_some() {
 			sql_execute!(
-				[ctx, &mut **tx]
+				[ctx, @tx tx]
 				"
                 INSERT INTO db_module.scripts_callable (version_id, name)
                 VALUES ($1, $2)

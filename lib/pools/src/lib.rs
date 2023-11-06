@@ -128,7 +128,15 @@ async fn nats_from_env(client_name: String) -> Result<Option<NatsPool>, Error> {
 #[tracing::instrument]
 async fn crdb_from_env(client_name: String) -> Result<Option<CrdbPool>, Error> {
 	if let Some(url) = std::env::var("CRDB_URL").ok() {
-		tracing::info!(%url, "crdb connecting");
+		let min_connections = std::env::var("CRDB_MIN_CONNECTIONS")
+			.ok()
+			.and_then(|s| s.parse::<u32>().ok())
+			.unwrap_or(1);
+		let max_connections = std::env::var("CRDB_MAX_CONNECTIONS")
+			.ok()
+			.and_then(|s| s.parse::<u32>().ok())
+			.unwrap_or(4096);
+		tracing::info!(%url, ?min_connections, ?max_connections, "crdb connecting");
 
 		// let client_name = client_name.clone();
 		let pool = sqlx::postgres::PgPoolOptions::new()
@@ -142,16 +150,11 @@ async fn crdb_from_env(client_name: String) -> Result<Option<CrdbPool>, Error> {
 			// on CRDB after bursts
 			.idle_timeout(Some(Duration::from_secs(10 * 60)))
 			// Open connections immediately on startup
-			.min_connections(
-				std::env::var("CRDB_MIN_CONNECTIONS")
-					.ok()
-					.and_then(|s| s.parse().ok())
-					.unwrap_or(1),
-			)
+			.min_connections(min_connections)
 			// Raise the cap, since this is effectively the amount of
 			// simultaneous requests we can handle. See
 			// https://www.cockroachlabs.com/docs/stable/connection-pooling.html
-			.max_connections(4096)
+			.max_connections(max_connections)
 			// Speeds up requests at the expense of potential
 			// failures. See `before_acquire`.
 			.test_before_acquire(false)

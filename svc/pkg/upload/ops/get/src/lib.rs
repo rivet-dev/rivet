@@ -50,18 +50,18 @@ async fn handle(
 					let uploads = sql_fetch_all!(
 						[ctx, UploadRow]
 						"
-					SELECT
-						bucket,
-						upload_id,
-						create_ts,
-						content_length,
-						complete_ts,
-						deleted_ts,
-						user_id,
-						provider
-					FROM db_upload.uploads
-					WHERE upload_id = ANY($1)
-					",
+						SELECT
+							bucket,
+							upload_id,
+							create_ts,
+							content_length,
+							complete_ts,
+							deleted_ts,
+							user_id,
+							provider
+						FROM db_upload.uploads
+						WHERE upload_id = ANY($1)
+						",
 						upload_ids,
 					)
 					.await?;

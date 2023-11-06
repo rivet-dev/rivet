@@ -248,7 +248,7 @@ async fn update_db(
 	if run_row.alloc_plan_ts.is_none() {
 		// Write alloc information
 		sql_execute!(
-			[ctx, &mut **tx]
+			[ctx, @tx tx]
 			"
 			UPDATE db_job_state.run_meta_nomad
 			SET alloc_id = $2, alloc_plan_ts = $3, node_id = $4, node_name = $5, node_public_ipv4 = $6, node_vlan_ipv4 = $7
@@ -268,7 +268,7 @@ async fn update_db(
 		for network in &run_networks {
 			tracing::info!(%run_id, mode = %network.mode, ip = %network.ip, "inserting network");
 			sql_execute!(
-				[ctx, &mut **tx]
+				[ctx, @tx tx]
 				"
 				INSERT INTO db_job_state.run_networks (run_id, mode, ip)
 				VALUES ($1, $2, $3)
@@ -284,7 +284,7 @@ async fn update_db(
 		for port in &ports {
 			tracing::info!(%run_id, label = %port.label, source = port.source, target = port.target, ip = %port.ip, "inserting port");
 			sql_execute!(
-				[ctx, &mut **tx]
+				[ctx, @tx tx]
 				"
 				INSERT INTO db_job_state.run_ports (run_id, label, source, target, ip)
 				VALUES ($1, $2, $3, $4, $5)

@@ -11,5 +11,5 @@ db-job-state = {}
 redis-job = {}
 
 [cockroachdb]
-min-connections = 44
+min-connections = 8
 

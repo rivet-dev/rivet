@@ -145,7 +145,7 @@ async fn update_db(
 
 	if run_row.stop_ts.is_none() {
 		sql_execute!(
-			[ctx, &mut **tx]
+			[ctx, @tx tx]
 			"UPDATE db_job_state.runs SET stop_ts = $2 WHERE run_id = $1",
 			run_id,
 			now,

@@ -15,5 +15,5 @@ path = "/v1"
 subdomain = "group.api"
 
 [cockroachdb]
-min-connections = 12
+min-connections = 8
 

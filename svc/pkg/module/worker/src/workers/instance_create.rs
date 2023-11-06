@@ -191,7 +191,7 @@ async fn insert_instance(
 	let version_id = unwrap_ref!(ctx.module_version_id).as_uuid();
 
 	sql_execute!(
-		[ctx, &mut **tx]
+		[ctx, @tx tx]
 		"
 		INSERT INTO db_module.instances (instance_id, version_id, create_ts)
 		VALUES ($1, $2, $3)
@@ -205,7 +205,7 @@ async fn insert_instance(
 	match unwrap_ref!(ctx.driver) {
 		module::msg::instance_create::message::Driver::Dummy(_) => {
 			sql_execute!(
-				[ctx, &mut **tx]
+				[ctx, @tx tx]
 				"
                 INSERT INTO db_module.instances_driver_dummy (instance_id)
                 VALUES ($1)
@@ -216,7 +216,7 @@ async fn insert_instance(
 		}
 		module::msg::instance_create::message::Driver::Fly(_) => {
 			sql_execute!(
-				[ctx, &mut **tx]
+				[ctx, @tx tx]
 				"
                 INSERT INTO db_module.instances_driver_fly (instance_id)
                 VALUES ($1)

@@ -11,5 +11,5 @@ db-mm-state = {}
 redis-mm = {}
 
 [cockroachdb]
-min-connections = 42
+min-connections = 8
 

@@ -15,5 +15,5 @@ path = "/v1"
 subdomain = "cloud.api"
 
 [cockroachdb]
-min-connections = 32
+min-connections = 16
 
