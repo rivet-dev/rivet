@@ -8118,7 +8118,6 @@ paths:
                 verification_data: {}
               required:
                 - game_mode
-                - publicity
   /matchmaker/lobbies/list:
     get:
       description: Lists all open lobbies.

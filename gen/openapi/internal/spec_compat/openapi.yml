@@ -12197,7 +12197,6 @@ paths:
                 verification_data: {}
               required:
               - game_mode
-              - publicity
               type: object
         required: true
       responses:

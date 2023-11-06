@@ -9,7 +9,7 @@ use proto::{
 	common,
 };
 use rivet_api::models;
-use rivet_convert::ApiTryInto;
+use rivet_convert::{ApiInto, ApiTryInto};
 use rivet_operation::prelude::*;
 use serde::Deserialize;
 use serde_json::json;
@@ -277,11 +277,22 @@ pub async fn create(
 	);
 
 	let publicity = match body.publicity {
-		models::MatchmakerCustomLobbyPublicity::Public => {
-			backend::matchmaker::lobby::Publicity::Public
-		}
-		models::MatchmakerCustomLobbyPublicity::Private => {
-			backend::matchmaker::lobby::Publicity::Private
+		Some(publicity) => ApiInto::api_into(publicity),
+		// Default publicity to public if enabled, otherwise private
+		None => {
+			if let Some(backend::matchmaker::lobby_group::Actions {
+				create:
+					Some(backend::matchmaker::CreateConfig {
+						enable_public: true,
+						..
+					}),
+				..
+			}) = lobby_group.actions.as_ref()
+			{
+				backend::matchmaker::lobby::Publicity::Public
+			} else {
+				backend::matchmaker::lobby::Publicity::Private
+			}
 		}
 	};
 
@@ -1247,7 +1258,7 @@ async fn dev_mock_lobby_list(
 				max_players_direct: std::convert::TryInto::try_into(lg.max_players_direct)?,
 				max_players_party: std::convert::TryInto::try_into(lg.max_players_party)?,
 				total_player_count: 0,
-				state: Some(Some(json!({ "foo": "bar" }))),
+				state: include_state.then(|| Some(json!({ "foo": "bar" }))),
 			})
 		})
 		.collect::<GlobalResult<Vec<_>>>()?;
