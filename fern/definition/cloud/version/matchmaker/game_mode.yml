@@ -21,12 +21,8 @@ types:
       listable:
         type: optional<boolean>
 
-      find_config:
-        type: optional<GameModeFindConfig>
-      join_config:
-        type: optional<GameModeJoinConfig>
-      create_config:
-        type: optional<GameModeCreateConfig>
+      actions:
+        type: optional<GameModeActions>
 
       # Region overrides
       tier:
@@ -86,6 +82,13 @@ types:
       min: integer
       max: integer
 
+  GameModeActions:
+    docs: Configuration for the connection types allowed for a game mode.
+    properties:
+      find: optional<GameModeFindConfig>
+      join: optional<GameModeJoinConfig>
+      create: optional<GameModeCreateConfig>
+
   GameModeIdentityRequirement:
     docs: >-
       The registration requirement for a user when joining/finding/creating a
@@ -116,8 +119,8 @@ types:
       enabled:
         docs: Sets whether or not the /find endpoint is enabled.
         type: boolean
-      identity_requirement: GameModeIdentityRequirement
-      verification_config: optional<GameModeVerificationConfig>
+      identity_requirement: optional<GameModeIdentityRequirement>
+      verification: optional<GameModeVerificationConfig>
 
   GameModeJoinConfig:
     docs: >-
@@ -127,16 +130,23 @@ types:
       enabled:
         docs: Sets whether or not the /join endpoint is enabled.
         type: boolean
-      identity_requirement: GameModeIdentityRequirement
-      verification_config: optional<GameModeVerificationConfig>
+      identity_requirement: optional<GameModeIdentityRequirement>
+      verification: optional<GameModeVerificationConfig>
 
   GameModeCreateConfig:
     docs: >-
       Configures the requirements and authentication for the /create endpoint.
       If this value is not set in the config, the /create endpoint is NOT enabled.
     properties:
-      identity_requirement: GameModeIdentityRequirement
-      verification_config: optional<GameModeVerificationConfig>
-      enable_public: boolean
-      enable_private: boolean
+      enabled:
+        docs: Sets whether or not the /create endpoint is enabled.
+        type: boolean
+      identity_requirement: optional<GameModeIdentityRequirement>
+      verification: optional<GameModeVerificationConfig>
+      enable_public:
+        docs: Defaults to false when unset.
+        type: optional<boolean>
+      enable_private:
+        docs: Defaults to true when unset.
+        type: optional<boolean>
       max_lobbies_per_identity: optional<integer>

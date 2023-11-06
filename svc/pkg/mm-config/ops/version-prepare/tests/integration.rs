@@ -59,9 +59,7 @@ async fn empty(ctx: TestCtx) {
 						],
 					}.into()),
 
-					find_config: None,
-					join_config: None,
-					create_config: None,
+					actions: None,
 				},
 				backend::matchmaker::LobbyGroup {
 					name_id: "test-host".into(),
@@ -140,9 +138,7 @@ async fn empty(ctx: TestCtx) {
 						],
 					}.into()),
 
-					find_config: None,
-					join_config: None,
-					create_config: None,
+					actions: None,
 				},
 			],
 			captcha: None,

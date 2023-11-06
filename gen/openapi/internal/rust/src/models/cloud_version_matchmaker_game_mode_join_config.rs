@@ -17,19 +17,19 @@ pub struct CloudVersionMatchmakerGameModeJoinConfig {
     /// Sets whether or not the /join endpoint is enabled.
     #[serde(rename = "enabled")]
     pub enabled: bool,
-    #[serde(rename = "identity_requirement")]
-    pub identity_requirement: crate::models::CloudVersionMatchmakerGameModeIdentityRequirement,
-    #[serde(rename = "verification_config", skip_serializing_if = "Option::is_none")]
-    pub verification_config: Option<Box<crate::models::CloudVersionMatchmakerGameModeVerificationConfig>>,
+    #[serde(rename = "identity_requirement", skip_serializing_if = "Option::is_none")]
+    pub identity_requirement: Option<crate::models::CloudVersionMatchmakerGameModeIdentityRequirement>,
+    #[serde(rename = "verification", skip_serializing_if = "Option::is_none")]
+    pub verification: Option<Box<crate::models::CloudVersionMatchmakerGameModeVerificationConfig>>,
 }
 
 impl CloudVersionMatchmakerGameModeJoinConfig {
     /// Configures the requirements and authentication for the /join endpoint. If this value is not set in the config, the /join endpoint is still enabled.
-    pub fn new(enabled: bool, identity_requirement: crate::models::CloudVersionMatchmakerGameModeIdentityRequirement) -> CloudVersionMatchmakerGameModeJoinConfig {
+    pub fn new(enabled: bool) -> CloudVersionMatchmakerGameModeJoinConfig {
         CloudVersionMatchmakerGameModeJoinConfig {
             enabled,
-            identity_requirement,
-            verification_config: None,
+            identity_requirement: None,
+            verification: None,
         }
     }
 }

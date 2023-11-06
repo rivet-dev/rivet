@@ -130,9 +130,7 @@ async fn empty(ctx: TestCtx) {
 							)),
 						}),
 
-						find_config: None,
-						join_config: None,
-						create_config: None,
+						actions: None,
 					},
 					matchmaker::LobbyGroup {
 						name_id: "name".to_owned(),
@@ -159,9 +157,7 @@ async fn empty(ctx: TestCtx) {
 							)),
 						}),
 
-						find_config: None,
-						join_config: None,
-						create_config: None,
+						actions: None,
 					},
 				],
 				captcha: Some(backend::captcha::CaptchaConfig {

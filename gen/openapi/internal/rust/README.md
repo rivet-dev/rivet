@@ -333,6 +333,7 @@ Class | Method | HTTP request | Description
  - [CloudVersionMatchmakerCaptchaTurnstileDomain](docs/CloudVersionMatchmakerCaptchaTurnstileDomain.md)
  - [CloudVersionMatchmakerConfig](docs/CloudVersionMatchmakerConfig.md)
  - [CloudVersionMatchmakerGameMode](docs/CloudVersionMatchmakerGameMode.md)
+ - [CloudVersionMatchmakerGameModeActions](docs/CloudVersionMatchmakerGameModeActions.md)
  - [CloudVersionMatchmakerGameModeCreateConfig](docs/CloudVersionMatchmakerGameModeCreateConfig.md)
  - [CloudVersionMatchmakerGameModeFindConfig](docs/CloudVersionMatchmakerGameModeFindConfig.md)
  - [CloudVersionMatchmakerGameModeIdentityRequirement](docs/CloudVersionMatchmakerGameModeIdentityRequirement.md)

@@ -171,10 +171,17 @@ async fn worker(ctx: &OperationContext<mm::msg::lobby_find::Message>) -> GlobalR
 				},
 				namespace_id,
 				user_id: ctx.user_id.map(|id| id.as_uuid()),
+				client_info: ctx
+					.players
+					.iter()
+					.filter_map(|player| player.client_info.clone())
+					.collect::<Vec<_>>(),
+
 				lobby_groups: &lobby_group_config.lobby_groups,
 				lobby_group_meta: &lobby_group_config.lobby_group_meta,
 				lobby_info: lobby_group_config.lobby_info.as_ref(),
 				lobby_state_json: lobby_group_config.lobby_state_json.as_deref(),
+
 				verification_data_json: ctx.verification_data_json.as_deref(),
 				lobby_config_json: None,
 				custom_lobby_publicity: None,

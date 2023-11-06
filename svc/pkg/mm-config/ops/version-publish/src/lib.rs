@@ -75,8 +75,9 @@ async fn handle(
 
 		// Encode config data
 		let find_config_buf = lobby_group
-			.find_config
+			.actions
 			.as_ref()
+			.and_then(|a| a.find.as_ref())
 			.map(|config| {
 				let mut buf = Vec::with_capacity(config.encoded_len());
 				config.encode(&mut buf)?;
@@ -85,8 +86,9 @@ async fn handle(
 			})
 			.transpose()?;
 		let join_config_buf = lobby_group
-			.join_config
+			.actions
 			.as_ref()
+			.and_then(|a| a.join.as_ref())
 			.map(|config| {
 				let mut buf = Vec::with_capacity(config.encoded_len());
 				config.encode(&mut buf)?;
@@ -95,8 +97,9 @@ async fn handle(
 			})
 			.transpose()?;
 		let create_config_buf = lobby_group
-			.create_config
+			.actions
 			.as_ref()
+			.and_then(|a| a.create.as_ref())
 			.map(|config| {
 				let mut buf = Vec::with_capacity(config.encoded_len());
 				config.encode(&mut buf)?;

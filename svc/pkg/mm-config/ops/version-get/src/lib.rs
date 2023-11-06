@@ -224,9 +224,13 @@ async fn fetch_versions(
 
 									runtime: Some(runtime),
 
-									find_config,
-									join_config,
-									create_config,
+									actions: (find_config.is_some()
+										|| join_config.is_some() || create_config.is_some())
+									.then(|| backend::matchmaker::lobby_group::Actions {
+										find: find_config,
+										join: join_config,
+										create: create_config,
+									}),
 								})
 							})
 							.collect::<GlobalResult<Vec<_>>>()?,

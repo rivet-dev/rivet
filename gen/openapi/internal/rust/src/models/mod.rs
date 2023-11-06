@@ -326,6 +326,8 @@ pub mod cloud_version_matchmaker_config;
 pub use self::cloud_version_matchmaker_config::CloudVersionMatchmakerConfig;
 pub mod cloud_version_matchmaker_game_mode;
 pub use self::cloud_version_matchmaker_game_mode::CloudVersionMatchmakerGameMode;
+pub mod cloud_version_matchmaker_game_mode_actions;
+pub use self::cloud_version_matchmaker_game_mode_actions::CloudVersionMatchmakerGameModeActions;
 pub mod cloud_version_matchmaker_game_mode_create_config;
 pub use self::cloud_version_matchmaker_game_mode_create_config::CloudVersionMatchmakerGameModeCreateConfig;
 pub mod cloud_version_matchmaker_game_mode_find_config;

@@ -118,10 +118,8 @@ impl ApiTryFrom<backend::cdn::Route> for models::CloudVersionCdnRoute {
 
 	fn try_from(value: backend::cdn::Route) -> GlobalResult<Self> {
 		Ok(models::CloudVersionCdnRoute {
-			glob: std::convert::TryInto::<util::glob::Glob>::try_into(unwrap!(
-				value.glob.clone()
-			))?
-			.to_string(),
+			glob: std::convert::TryInto::<util::glob::Glob>::try_into(unwrap!(value.glob.clone()))?
+				.to_string(),
 			priority: value.priority,
 			middlewares: value
 				.middlewares

@@ -86,9 +86,7 @@ impl Ctx {
 						ports: Vec::new(),
 					}.into()),
 
-					find_config: None,
-					join_config: None,
-					create_config: None,
+					actions: None,
 				}],
 			}),
 			..Default::default()

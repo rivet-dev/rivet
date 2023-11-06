@@ -39,9 +39,7 @@ impl ApiTryFrom<models::CloudVersionMatchmakerLobbyGroup> for backend::matchmake
 
 			runtime: Some((*value.runtime).try_into()?),
 
-			find_config: None,
-			join_config: None,
-			create_config: None,
+			actions: None,
 		})
 	}
 }
@@ -197,11 +195,9 @@ impl ApiTryFrom<backend::matchmaker::LobbyRuntime>
 								.map(ApiTryFrom::try_from)
 								.collect::<Result<Vec<_>, _>>()?,
 							network_mode: Some(
-								unwrap!(
-									backend::matchmaker::lobby_runtime::NetworkMode::from_i32(
-										runtime.network_mode,
-									)
-								)
+								unwrap!(backend::matchmaker::lobby_runtime::NetworkMode::from_i32(
+									runtime.network_mode,
+								))
 								.api_into(),
 							),
 							ports: runtime
@@ -272,9 +268,9 @@ impl ApiTryFrom<backend::matchmaker::lobby_runtime::Port>
 				.map(ApiTryInto::try_into)
 				.transpose()?
 				.map(Box::new),
-			proxy_protocol: unwrap!(
-				backend::matchmaker::lobby_runtime::ProxyProtocol::from_i32(value.proxy_protocol)
-			)
+			proxy_protocol: unwrap!(backend::matchmaker::lobby_runtime::ProxyProtocol::from_i32(
+				value.proxy_protocol
+			))
 			.api_into(),
 		})
 	}
