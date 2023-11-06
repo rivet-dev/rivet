@@ -862,6 +862,13 @@ impl ServiceContextData {
 			));
 		}
 
+		{
+			env.push((
+				"CRDB_MIN_CONNECTIONS".into(),
+				self.config().cockroachdb.min_connections.to_string(),
+			));
+		}
+
 		if self.depends_on_clickhouse() {
 			let clickhouse_data = terraform::output::read_clickhouse(&project_ctx).await;
 			let clickhouse_host = format!(
@@ -1075,10 +1082,6 @@ impl ServiceContextData {
 				username, password,
 			);
 			env.push(("CRDB_URL".into(), uri));
-			env.push((
-				"CRDB_MIN_CONNECTIONS".into(),
-				self.config().cockroachdb.min_connections.to_string(),
-			));
 		}
 
 		// Redis
