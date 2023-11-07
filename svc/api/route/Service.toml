@@ -6,7 +6,7 @@ priority = 70
 [runtime]
 kind = "rust"
 
-[api]
+[api-routes]
 
 [secrets]
 "rivet/api_route/token" = {}

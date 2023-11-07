@@ -4,15 +4,7 @@ name = "api-group"
 [runtime]
 kind = "rust"
 
-[api]
-
-[[api.router.mounts]]
-path = "/group"
-
-[[api.router.mounts]]
-deprecated = true
-path = "/v1"
-subdomain = "group.api"
+[api-routes]
 
 [cockroachdb]
 min-connections = 8

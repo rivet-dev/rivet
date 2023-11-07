@@ -107,6 +107,9 @@ pub enum ServiceKind {
 		router: Option<ServiceRouter>,
 	},
 
+	#[serde(rename = "api-routes", rename_all = "kebab-case")]
+	ApiRoutes {},
+
 	#[serde(rename = "static", rename_all = "kebab-case")]
 	Static { router: ServiceRouter },
 
@@ -314,6 +317,7 @@ impl ServiceKind {
 			ServiceKind::Operation { .. } => "operation",
 			ServiceKind::Consumer { .. } => "consumer",
 			ServiceKind::Api { .. } => "api",
+			ServiceKind::ApiRoutes { .. } => "api-routes",
 			ServiceKind::Static { .. } => "static",
 			ServiceKind::Database { .. } => "database",
 			ServiceKind::Cache { .. } => "cache",
@@ -325,11 +329,11 @@ impl ServiceKind {
 			ServiceKind::Headless { .. }
 			| ServiceKind::Oneshot { .. }
 			| ServiceKind::Periodic { .. }
-			| ServiceKind::Api { .. }
-			| ServiceKind::Static { .. } => ComponentClass::Executable,
-			ServiceKind::Operation { .. } | ServiceKind::Consumer { .. } => {
-				ComponentClass::NonExecutable
-			}
+			| ServiceKind::Static { .. }
+			| ServiceKind::Api { .. } => ComponentClass::Executable,
+			ServiceKind::ApiRoutes { .. }
+			| ServiceKind::Operation { .. }
+			| ServiceKind::Consumer { .. } => ComponentClass::NonExecutable,
 			ServiceKind::Database { .. } => ComponentClass::Database,
 			ServiceKind::Cache { .. } => ComponentClass::Cache,
 		}

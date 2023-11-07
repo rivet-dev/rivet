@@ -135,6 +135,7 @@ pub async fn gen_svc(exec_ctx: &ExecServiceContext) -> Vec<serde_json::Value> {
 			ServiceKind::Oneshot { .. } => SpecType::Job,
 			ServiceKind::Periodic { .. } => SpecType::CronJob,
 			ServiceKind::Operation { .. }
+			| ServiceKind::ApiRoutes { .. }
 			| ServiceKind::Database { .. }
 			| ServiceKind::Cache { .. } => {
 				unreachable!()

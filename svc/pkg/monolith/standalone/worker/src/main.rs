@@ -5,7 +5,7 @@ fn main() -> GlobalResult<()> {
 }
 
 async fn start() -> GlobalResult<()> {
-	monolith_main::run_from_env().await?;
+	monolith_worker::run_from_env().await?;
 
 	Ok(())
 }

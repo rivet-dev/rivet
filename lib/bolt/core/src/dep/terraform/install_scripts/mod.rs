@@ -114,7 +114,7 @@ fn gg_traefik_static_config(server: &Server, api_route_token: &str) -> String {
 			[entryPoints.lb-443]
 				address = ":443"
 
-		[api]
+		[api-routes]
 			insecure = true
 
 		[metrics.prometheus]
