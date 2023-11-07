@@ -4,5 +4,4 @@ name = "api-{{name}}"
 [runtime]
 kind = "rust"
 
-[[api.router.mounts]]
-path = "/{{name}}"
+[api-routes]

@@ -201,9 +201,9 @@ pub async fn auth() {
 		let cache = rivet_cache::CacheInner::from_env(pools.clone()).expect("create cache");
 
 		if let Err(_) = macro_util::__with_ctx::<Auth>(
-			&req,
 			shared_client,
 			cache,
+			&req,
 			Uuid::new_v4(),
 			false,
 			false,
@@ -231,9 +231,9 @@ pub async fn auth() {
 		let cache = rivet_cache::CacheInner::from_env(pools.clone()).expect("create cache");
 
 		if let Ok(_) = macro_util::__with_ctx::<Auth>(
-			&req,
 			shared_client,
 			cache,
+			&req,
 			Uuid::new_v4(),
 			false,
 			false,

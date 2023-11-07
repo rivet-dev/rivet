@@ -63,11 +63,21 @@ impl<T, E> __AsyncOption<Result<T, E>> {
 }
 
 #[doc(hidden)]
-impl<T> Into<Option<T>> for __AsyncOption<T> {
-	fn into(self) -> Option<T> {
-		match self {
+impl<T> From<__AsyncOption<T>> for Option<T> {
+	fn from(value: __AsyncOption<T>) -> Option<T> {
+		match value {
 			__AsyncOption::Some(inner) => Some(inner),
 			__AsyncOption::None => None,
+		}
+	}
+}
+
+#[doc(hidden)]
+impl<T> From<Option<T>> for __AsyncOption<T> {
+	fn from(value: Option<T>) -> __AsyncOption<T> {
+		match value {
+			Some(inner) => __AsyncOption::Some(inner),
+			None => __AsyncOption::None,
 		}
 	}
 }
@@ -195,10 +205,10 @@ pub fn __deserialize_query<T: DeserializeOwned + Send>(route: &Url) -> GlobalRes
 
 #[doc(hidden)]
 pub async fn __with_ctx<A: auth::ApiAuth + Send>(
-	request: &Request<Body>,
 	shared_client: chirp_client::SharedClientHandle,
 	pools: rivet_pools::Pools,
 	cache: rivet_cache::Cache,
+	request: &Request<Body>,
 	ray_id: Uuid,
 	optional_auth: bool,
 	not_using_cloudflare: bool,

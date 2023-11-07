@@ -135,9 +135,9 @@ pub async fn gen_svc(exec_ctx: &ExecServiceContext) -> Vec<serde_json::Value> {
 			ServiceKind::Oneshot { .. } => SpecType::Job,
 			ServiceKind::Periodic { .. } => SpecType::CronJob,
 			ServiceKind::Operation { .. }
-			| ServiceKind::ApiRoutes { .. }
 			| ServiceKind::Database { .. }
-			| ServiceKind::Cache { .. } => {
+			| ServiceKind::Cache { .. }
+			| ServiceKind::ApiRoutes { .. } => {
 				unreachable!()
 			}
 		},
@@ -808,6 +808,9 @@ fn build_ingress_router(
 			rule.push_str(&format!("Host(`{domain}`)"));
 		}
 
+		// Build middlewares
+		let mut middlewares = Vec::new();
+
 		// Build path
 		if let Some(path) = &mount.path {
 			if !rule.is_empty() {
@@ -815,13 +818,7 @@ fn build_ingress_router(
 			}
 
 			rule.push_str(&format!("PathPrefix(`{path}`)"));
-		}
 
-		// Build middlewares
-		let mut middlewares = Vec::new();
-
-		// Strip prefix
-		if let Some(path) = &mount.path {
 			let mw_name = format!("{}-{i}-strip-prefix", svc_ctx.name());
 			middlewares.push(json!({
 				"apiVersion": "traefik.io/v1alpha1",
@@ -892,6 +889,13 @@ fn build_ingress_router(
 
 		specs.extend(middlewares);
 
+		// NOTE: imagor priority is either 50 or 75
+		let priority = if svc_ctx.name() == "api-monolith" {
+			35
+		} else {
+			40
+		};
+
 		// Build insecure router
 		specs.push(json!({
 			"apiVersion": "traefik.io/v1alpha1",
@@ -909,6 +913,7 @@ fn build_ingress_router(
 					{
 						"kind": "Rule",
 						"match": rule,
+						"priority": priority,
 						"middlewares": ingress_middlewares,
 						"services": [
 							{
@@ -941,6 +946,7 @@ fn build_ingress_router(
 						{
 							"kind": "Rule",
 							"match": rule,
+							"priority": 40,
 							"middlewares": ingress_middlewares,
 							"services": [
 								{

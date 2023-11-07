@@ -773,6 +773,32 @@ dependencies = [
 ]
 
 [[package]]
+name = "api-monolith"
+version = "0.0.1"
+dependencies = [
+ "api-admin",
+ "api-auth",
+ "api-cf-verification",
+ "api-chat",
+ "api-cloud",
+ "api-group",
+ "api-helper",
+ "api-identity",
+ "api-kv",
+ "api-module",
+ "api-portal",
+ "async-trait",
+ "chirp-client",
+ "http",
+ "hyper",
+ "rivet-operation",
+ "tokio",
+ "tracing",
+ "tracing-subscriber",
+ "url",
+]
+
+[[package]]
 name = "api-portal"
 version = "0.0.1"
 dependencies = [

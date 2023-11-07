@@ -7,7 +7,7 @@ use proc_macro2::{Literal, TokenStream as TokenStream2, TokenTree};
 use proc_macro_error::{emit_warning, proc_macro_error};
 use quote::{format_ident, quote, ToTokens};
 use syn::{
-	braced, parenthesized,
+	braced, bracketed, parenthesized,
 	parse::{discouraged::Speculative, Parse, ParseStream},
 	punctuated::Punctuated,
 	spanned::Spanned,
@@ -40,14 +40,14 @@ const ENDPOINT_ARGUMENTS: &[&str] = &[
 struct EndpointRouter {
 	routes: Punctuated<Endpoint, Token![,]>,
 	cors_config: Option<syn::Expr>,
-	included: Option<syn::TypePath>,
+	mounts: Punctuated<Mount, Token![,]>,
 }
 
 impl Parse for EndpointRouter {
 	fn parse(input: ParseStream) -> syn::Result<Self> {
 		let mut routes = None;
 		let mut cors_config = None;
-		let mut included = None;
+		let mut mounts = None;
 
 		// Loop through all keys in the object
 		loop {
@@ -82,9 +82,11 @@ impl Parse for EndpointRouter {
 						));
 					}
 				}
-				"include" => {
-					if included.is_none() {
-						included = Some(input.parse()?);
+				"mounts" => {
+					if mounts.is_none() {
+						let mounts_content;
+						bracketed!(mounts_content in input);
+						mounts = Some(mounts_content.parse_terminated(Mount::parse)?);
 					} else {
 						return Err(syn::Error::new(
 							key.span(),
@@ -96,7 +98,7 @@ impl Parse for EndpointRouter {
 					return Err(syn::Error::new(
 						key.span(),
 						format!(
-							"Unexpected key `{}`. Try `routes`, `cors`, or `include`.",
+							"Unexpected key `{}`. Try `routes`, `cors`, or `mounts`.",
 							key
 						),
 					));
@@ -119,11 +121,12 @@ impl Parse for EndpointRouter {
 				));
 			}
 		};
+		let mounts = mounts.unwrap_or_default();
 
 		Ok(EndpointRouter {
 			routes,
 			cors_config,
-			included,
+			mounts,
 		})
 	}
 }
@@ -161,25 +164,33 @@ impl EndpointRouter {
 			})
 			.unwrap_or_else(|| quote! {});
 
-		let included = self
-			.included
-			.map(|included| {
+		let mounts = self
+			.mounts
+			.iter()
+			.map(|mount| {
+				let mount_path = &mount.path;
+				let mount_prefix = match &mount.prefix {
+					Some(prefix) => quote! { Some(#prefix) },
+					None => quote! { None },
+				};
+
 				quote! {
 					.try_or_else(|| async {
-						#included::__inner(
-							shared_client,
-							pools,
-							cache,
+						#mount_path::__inner(
+							shared_client.clone(),
+							pools.clone(),
+							cache.clone(),
 							ray_id,
 							request,
 							response,
+							#mount_prefix,
 						)
 						.await
-						.map(__AsyncOption::Some)
+						.map(std::convert::Into::into)
 					}).await?
 				}
 			})
-			.unwrap_or_else(|| quote! {});
+			.collect::<Vec<_>>();
 
 		Ok(quote! {
 			pub struct Router;
@@ -192,11 +203,10 @@ impl EndpointRouter {
 					ray_id: uuid::Uuid,
 					mut request: &mut Request<Body>,
 					response: &mut http::response::Builder,
-				) -> rivet_operation::prelude::GlobalResult<Vec<u8>> {
+					prefix: Option<&str>,
+				) -> rivet_operation::prelude::GlobalResult<Option<Vec<u8>>> {
 					use std::str::FromStr;
 					use api_helper::macro_util::{self, __AsyncOption};
-
-					tracing::info!(method=?request.method(), uri=?request.uri(), "received request");
 
 					// Set JSON headers
 					if let Some(mut headers) = response.headers_mut() {
@@ -213,22 +223,34 @@ impl EndpointRouter {
 						rivet_operation::prelude::util::env::origin_api(), request.uri()
 					);
 					let __route = url::Url::parse(__url.as_str())?;
-					let __path_segments = __route
-						.path_segments()
-						.map(|segments| segments.collect::<Vec<_>>())
-						.unwrap_or_default();
 
-					let __body = __AsyncOption::None #(#endpoints)*
-						#included
-						.ok_or_else(|| {
-							tracing::debug!("not found: {:?}", request.uri().to_string());
+					// Create path segments list
+					let __path_segments = if let Some(prefix) = prefix {
+						let mut path_segments = match __route.path_segments() {
+							Some(segments) => segments,
+							None => return Ok(None),
+						};
 
-							rivet_operation::prelude::GlobalError::bad_request(
-								rivet_operation::prelude::formatted_error::code::API_NOT_FOUND
-							)
-						})?;
+						// Parse prefix if set (only for nested routers)
+						match path_segments.next() {
+							Some(segment) if segment == prefix => {
+								path_segments.collect::<Vec<_>>()
+							},
+							_ => return Ok(None),
+						}
+					} else {
+						__route
+							.path_segments()
+							.map(|segments| segments.collect::<Vec<_>>())
+							.unwrap_or_default()
+					};
 
-					Ok(__body)
+					let __body = __AsyncOption::None
+						#(#endpoints)*
+						#(#mounts)*
+					;
+
+					Ok(__body.into())
 				}
 
 				pub async fn handle(
@@ -241,15 +263,115 @@ impl EndpointRouter {
 				) -> Result<Response<Body>, http::Error> {
 					#cors
 
-					match Self::__inner(
-						shared_client, pools, cache, ray_id, &mut request, &mut response,
-					).await {
-						Ok(body) => Ok(response.body(hyper::Body::from(body))?),
+					tracing::info!(method=?request.method(), uri=?request.uri(), "received request");
+
+					// If `None`, no route was found
+					let res =
+						match Self::__inner(
+							shared_client, pools, cache, ray_id, &mut request, &mut response, None,
+						).await {
+							Ok(body) => {
+								body.ok_or_else(|| {
+									tracing::debug!("not found: {:?}", request.uri().to_string());
+
+									rivet_operation::prelude::GlobalError::bad_request(
+										rivet_operation::prelude::formatted_error::code::API_NOT_FOUND
+									)
+								})
+							}
+							Err(err) => Err(err),
+						};
+
+					// Convert to hyper response
+					match res {
+						Ok(body) => {
+							Ok(response.body(hyper::Body::from(body))?)
+						},
 						Err(err) => Ok(api_helper::error::handle_rejection(err, response, ray_id)?),
 					}
 				}
 			}
 		})
+	}
+}
+
+/// Structure of a single router mount in the `define_router!` macro:
+/// ```rust
+/// {
+/// 	path: api_cloud::routes::Router,
+/// 	prefix: "cloud",
+/// }
+/// ```
+struct Mount {
+	path: syn::TypePath,
+	prefix: Option<syn::LitStr>,
+}
+
+impl Parse for Mount {
+	fn parse(input: ParseStream) -> syn::Result<Self> {
+		let content;
+		braced!(content in input);
+
+		let mut path = None;
+		let mut prefix = None;
+
+		// Loop through all keys in the object
+		loop {
+			if content.is_empty() {
+				break;
+			}
+
+			let key = content.parse::<syn::Ident>()?;
+			content.parse::<Token![:]>()?;
+
+			// Parse various keys
+			match key.to_string().as_str() {
+				"path" => {
+					if path.is_none() {
+						path = Some(content.parse::<syn::TypePath>()?);
+					} else {
+						return Err(syn::Error::new(
+							key.span(),
+							format!("Duplicate key `{}`.", key),
+						));
+					}
+				}
+				"prefix" => {
+					if prefix.is_none() {
+						prefix = Some(content.parse::<syn::LitStr>()?);
+					} else {
+						return Err(syn::Error::new(
+							key.span(),
+							format!("Duplicate key `{}`.", key),
+						));
+					}
+				}
+				_ => {
+					return Err(syn::Error::new(
+						key.span(),
+						format!("Unexpected key `{}`. Try `path` or `prefix`.", key),
+					));
+				}
+			}
+
+			if content.is_empty() {
+				break;
+			}
+			content.parse::<Token![,]>()?;
+		}
+
+		// Verify keys were set
+		let path = match path {
+			Some(path) => path,
+			None => {
+				return Err(syn::Error::new(
+					input.span(),
+					format!("Missing key `path`."),
+				));
+			}
+		};
+
+		Ok(Mount { path, prefix })
 	}
 }
 
@@ -797,10 +919,10 @@ impl EndpointFunction {
 				#(#args)*
 
 				let ctx = macro_util::__with_ctx(
-					&request,
 					shared_client.clone(),
 					pools.clone(),
 					cache.clone(),
+					&request,
 					ray_id,
 					#opt_auth,
 					#not_using_cloudflare,

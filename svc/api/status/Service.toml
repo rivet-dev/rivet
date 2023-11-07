@@ -4,13 +4,7 @@ name = "api-status"
 [runtime]
 kind = "rust"
 
-[[api.router.mounts]]
-path = "/status"
-
-[[api.router.mounts]]
-deprecated = true
-path = "/v1"
-subdomain = "status.api"
+[api-routes]
 
 [secrets]
 "rivet/api_status/token" = {}

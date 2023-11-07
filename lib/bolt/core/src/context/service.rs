@@ -271,7 +271,7 @@ impl ServiceContextData {
 		format!("{}-{}", self.project().await.ns_id(), self.name())
 	}
 
-	pub fn is_monoloith_worker(&self) -> bool {
+	pub fn is_monolith_worker(&self) -> bool {
 		self.config().service.name == "monolith-worker"
 	}
 
@@ -446,8 +446,8 @@ impl ServiceContextData {
 		}
 
 		// Inherit dependencies from the service that was overridden
-		if let Some(overriden_svc) = &self.overridden_service {
-			dep_ctxs.extend(overriden_svc.dependencies(run_context).await);
+		if let Some(overridden_svc) = &self.overridden_service {
+			dep_ctxs.extend(overridden_svc.dependencies(run_context).await);
 		}
 
 		// Check that these are services you can explicitly depend on in the Service.toml
@@ -464,19 +464,35 @@ impl ServiceContextData {
 				);
 			}
 
-			if !matches!(
-				dep.config().kind,
-				ServiceKind::Database { .. }
-					| ServiceKind::Cache { .. }
-					| ServiceKind::Operation { .. }
-			) {
-				if !self.is_monoloith_worker() {
-					panic!(
-						"{} -> {}: cannot explicitly depend on this kind of service",
-						self.name(),
-						dep.name()
-					);
-				}
+			let can_depend =
+				if self.is_monolith_worker() {
+					matches!(
+						dep.config().kind,
+						ServiceKind::Database { .. }
+							| ServiceKind::Cache { .. } | ServiceKind::Operation { .. }
+							| ServiceKind::Consumer { .. }
+					)
+				} else if matches!(self.config().kind, ServiceKind::Api { .. }) {
+					matches!(
+						dep.config().kind,
+						ServiceKind::Database { .. }
+							| ServiceKind::Cache { .. } | ServiceKind::Operation { .. }
+							| ServiceKind::ApiRoutes { .. }
+					)
+				} else {
+					matches!(
+						dep.config().kind,
+						ServiceKind::Database { .. }
+							| ServiceKind::Cache { .. } | ServiceKind::Operation { .. }
+					)
+				};
+
+			if !can_depend {
+				panic!(
+					"{} -> {}: cannot explicitly depend on this kind of service",
+					self.name(),
+					dep.name()
+				);
 			}
 		}
 
@@ -907,7 +923,7 @@ impl ServiceContextData {
 		// Chirp worker config
 		if (matches!(run_context, RunContext::Service { .. })
 			&& matches!(&self.config().kind, ServiceKind::Consumer { .. }))
-			|| self.is_monoloith_worker()
+			|| self.is_monolith_worker()
 		{
 			env.push((
 				"CHIRP_WORKER_INSTANCE".into(),
