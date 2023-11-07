@@ -14,10 +14,7 @@ pub async fn start(
 	shared_client: chirp_client::SharedClientHandle,
 	redis_job: RedisPool,
 ) -> GlobalResult<()> {
-	let redis_index_key = format!(
-		"nomad:monitor_index:job_run_alloc_plan_monitor:{}",
-		shared_client.region()
-	);
+	let redis_index_key = "nomad:monitor_index:job_run_alloc_plan_monitor";
 
 	let configuration = nomad_util::config_from_env()?;
 	nomad_util::monitor::Monitor::run(
