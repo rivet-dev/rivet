@@ -787,6 +787,7 @@ dependencies = [
  "api-kv",
  "api-module",
  "api-portal",
+ "api-status",
  "async-trait",
  "chirp-client",
  "http",
