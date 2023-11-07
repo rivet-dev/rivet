@@ -39,5 +39,3 @@ user-presence-worker = { path = "../../../user-presence/worker" }
 user-report-worker = { path = "../../../user-report/worker" }
 user-worker = { path = "../../../user/worker" }
 
-[dev-dependencies]
-chirp-worker = { path = "../../../../../lib/chirp/worker" }
