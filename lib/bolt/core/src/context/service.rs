@@ -271,6 +271,10 @@ impl ServiceContextData {
 		format!("{}-{}", self.project().await.ns_id(), self.name())
 	}
 
+	pub fn is_monoloith_worker(&self) -> bool {
+		self.config().service.name == "monolith-worker"
+	}
+
 	pub fn depends_on_nomad_api(&self) -> bool {
 		true
 		// self.name().starts_with("job-")
@@ -466,7 +470,7 @@ impl ServiceContextData {
 					| ServiceKind::Cache { .. }
 					| ServiceKind::Operation { .. }
 			) {
-				if self.config().service.name != "monolith-worker" {
+				if !self.is_monoloith_worker() {
 					panic!(
 						"{} -> {}: cannot explicitly depend on this kind of service",
 						self.name(),
@@ -899,11 +903,11 @@ impl ServiceContextData {
 
 		// Chirp config (used for both Chirp clients and Chirp workers)
 		env.push(("CHIRP_SERVICE_NAME".into(), self.name()));
-		env.push(("CHIRP_REGION".into(), region_id.clone()));
 
 		// Chirp worker config
-		if let (RunContext::Service { .. }, ServiceKind::Consumer { .. }) =
-			(run_context, &self.config().kind)
+		if (matches!(run_context, RunContext::Service { .. })
+			&& matches!(&self.config().kind, ServiceKind::Consumer { .. }))
+			|| self.is_monoloith_worker()
 		{
 			env.push((
 				"CHIRP_WORKER_INSTANCE".into(),

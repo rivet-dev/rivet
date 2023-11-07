@@ -472,7 +472,6 @@ async fn set_env_vars() {
 	std::env::set_var("RIVET_DOMAIN_MAIN", "127.0.0.1:8080");
 
 	std::env::set_var("CHIRP_SERVICE_NAME", &*SERVICE_NAME);
-	std::env::set_var("CHIRP_REGION", "local-lcl");
 
 	std::env::set_var("NATS_URL", todo!());
 	std::env::set_var("NATS_USERNAME", "chirp");

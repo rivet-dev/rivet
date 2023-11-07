@@ -7,8 +7,6 @@ use proto::rivet::chirp;
 use std::{sync::Arc, time::Duration};
 use tokio::{sync::Notify, task};
 
-const TEST_REGION: &str = "local-lcl";
-
 #[derive(Clone, PartialEq, prost::Message)]
 struct TestRequest {
 	#[prost(int32, tag = "1")]
@@ -74,7 +72,6 @@ async fn basic_client() {
 		pools.redis_chirp().unwrap(),
 		pools.redis_chirp_ephemeral().unwrap(),
 		pools.redis_cache().unwrap(),
-		TEST_REGION.to_owned(),
 	);
 	let client = shared_client.clone().wrap_new("chirp-test");
 
@@ -90,7 +87,7 @@ async fn basic_client() {
 		};
 
 		// Read message
-		let subject = chirp_client::endpoint::subject(TEST_REGION, TestEndpoint::NAME);
+		let subject = chirp_client::endpoint::subject(TestEndpoint::NAME);
 		tracing::info!(?subject, "reading message");
 		let msg = {
 			let nats = nats.clone();
@@ -269,7 +266,6 @@ async fn set_env_vars() {
 	std::env::set_var("RIVET_SOURCE_HASH", "00000000");
 
 	std::env::set_var("CHIRP_SERVICE_NAME", "chirp-test");
-	std::env::set_var("CHIRP_REGION", &*TEST_REGION);
 
 	std::env::set_var("NATS_URL", todo!());
 	std::env::set_var("NATS_USERNAME", "chirp");

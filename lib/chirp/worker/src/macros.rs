@@ -9,8 +9,6 @@ macro_rules! worker_group {
             .map_err(|_| ManagerError::MissingEnvVar("CHIRP_SERVICE_NAME".into()))?;
         let source_hash = std::env::var("RIVET_SOURCE_HASH")
             .map_err(|_| ManagerError::MissingEnvVar("RIVET_SOURCE_HASH".into()))?;
-        let region = std::env::var("CHIRP_REGION")
-            .map_err(|_| ManagerError::MissingEnvVar("CHIRP_REGION".into()))?;
 
         // Create connections
         let pools = rivet_pools::from_env(service_name.clone()).await?;
@@ -19,7 +17,6 @@ macro_rules! worker_group {
 			pools.redis_chirp()?,
 			pools.redis_chirp_ephemeral()?,
 			pools.redis_cache()?,
-			region,
 		);
 		let cache = rivet_cache::CacheInner::new(
 			service_name,

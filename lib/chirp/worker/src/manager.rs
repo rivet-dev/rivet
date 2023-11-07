@@ -102,8 +102,7 @@ where
 		// Build the subscription
 		match &self.config.worker_kind {
 			WorkerKind::Rpc { group } => {
-				let subject =
-					chirp_client::endpoint::subject(&self.config.region, &self.config.service_name);
+				let subject = chirp_client::endpoint::subject(&self.config.service_name);
 
 				self.clone().rpc_receiver(subject, group.clone()).await;
 			}

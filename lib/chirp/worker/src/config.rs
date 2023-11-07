@@ -4,9 +4,6 @@ use crate::error::ManagerError;
 
 #[derive(Clone, Debug)]
 pub struct Config {
-	/// The region this Chirp worker belongs to. We'll listen for requests only to this region.
-	pub region: String,
-
 	/// The name of the service running workers.
 	pub service_name: String,
 
@@ -50,8 +47,6 @@ impl Config {
 		};
 
 		Ok(Self {
-			region: env::var("CHIRP_REGION")
-				.map_err(|_| ManagerError::MissingEnvVar("CHIRP_REGION".into()))?,
 			service_name: env::var("CHIRP_SERVICE_NAME")
 				.map_err(|_| ManagerError::MissingEnvVar("CHIRP_SERVICE_NAME".into()))?,
 			worker_instance: env::var("CHIRP_WORKER_INSTANCE")

@@ -7,7 +7,6 @@ use rivet_pools::prelude::*;
 use rivet_util::Backoff;
 use std::{
 	collections::HashSet,
-	env,
 	fmt::{self, Debug},
 	marker::PhantomData,
 	sync::Arc,
@@ -53,13 +52,6 @@ pub struct SharedClient {
 
 	/// Used for caching values. This cache is ephemeral.
 	redis_cache: RedisPool,
-
-	/// The region of Chirp workers to communicate with.
-	///
-	/// We don't send RPC requests outside of this region, since there is a
-	/// cluster of all Chirp workers in every region, so we'd be sending
-	/// requests out of the datacenter for no reason.
-	region: String,
 }
 
 impl SharedClient {
@@ -68,7 +60,6 @@ impl SharedClient {
 		redis_chirp: RedisPool,
 		redis_chirp_ephemeral: RedisPool,
 		redis_cache: RedisPool,
-		region: String,
 	) -> SharedClientHandle {
 		let spawn_res = tokio::task::Builder::new()
 			.name("chirp_client::metrics::start_update_uptime")
@@ -82,21 +73,16 @@ impl SharedClient {
 			redis_chirp,
 			redis_chirp_ephemeral,
 			redis_cache,
-			region,
 		})
 	}
 
 	#[tracing::instrument(skip(pools))]
 	pub fn from_env(pools: rivet_pools::Pools) -> Result<SharedClientHandle, ClientError> {
-		let region = env::var("CHIRP_REGION")
-			.map_err(|_| ClientError::MissingEnvVar("CHIRP_REGION".into()))?;
-
 		Ok(SharedClient::new(
 			pools.nats()?,
 			pools.redis_chirp()?,
 			pools.redis_chirp_ephemeral()?,
 			pools.redis_cache()?,
-			region,
 		))
 	}
 
@@ -155,10 +141,6 @@ impl SharedClient {
 	) -> Client {
 		Client::new(self, parent_req_id, ray_id, trace, Arc::new(perf_ctx), ts)
 	}
-
-	pub fn region(&self) -> &str {
-		&self.region
-	}
 }
 
 /// Used to communicate with other Chirp clients.
@@ -199,7 +181,6 @@ pub struct Client {
 impl Debug for Client {
 	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
 		f.debug_struct("Client")
-			.field("region", &self.region)
 			.field("parent_req_id", &self.parent_req_id)
 			.field("ray_id", &self.ray_id)
 			.finish()
@@ -265,9 +246,6 @@ impl Drop for Client {
 }
 
 impl Client {
-	/// Calls another Chirp worker within the same region region and waits for a
-	/// response.
-	///
 	/// We must always use RPCs instead of publish-and-forget for workers since NATS provides at
 	/// least once delivery and does not provide durable queues. It's the job of the caller to
 	/// make sure the message gets completed.
@@ -282,7 +260,6 @@ impl Client {
 	#[tracing::instrument(err, skip_all, fields(service = M::NAME))]
 	pub async fn rpc<M>(
 		&self,
-		region_id: Option<&str>,
 		req_body: M::Request,
 		dont_log_body: bool,
 	) -> GlobalResult<RpcResponse<M::Response>>
@@ -293,7 +270,7 @@ impl Client {
 
 		let rpc_perf = self.perf_ctx.start_rpc(M::NAME, req_id).await;
 
-		let subject = endpoint::subject(region_id.unwrap_or_else(|| self.region.as_str()), M::NAME);
+		let subject = endpoint::subject(M::NAME);
 		let res = self
 			.rpc_inner::<M>(req_id, subject.clone(), req_body, None, dont_log_body)
 			.await
@@ -314,7 +291,6 @@ impl Client {
 	#[tracing::instrument(err, skip_all, fields(service = M::NAME))]
 	pub async fn rpc_debug<M>(
 		&self,
-		region_id: Option<&str>,
 		req_body: M::Request,
 		req_debug: Option<chirp::RequestDebug>,
 		req_dont_log_body: bool,
@@ -326,7 +302,7 @@ impl Client {
 
 		let rpc_perf = self.perf_ctx.start_rpc(M::NAME, req_id).await;
 
-		let subject = endpoint::subject(region_id.unwrap_or_else(|| self.region.as_str()), M::NAME);
+		let subject = endpoint::subject(M::NAME);
 		let res = self
 			.rpc_inner::<M>(
 				req_id,
