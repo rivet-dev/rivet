@@ -1,2 +1,1 @@
-pub mod link_complete;
-pub mod session_create;
+chirp_worker::workers![link_complete, session_create,];

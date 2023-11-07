@@ -41,8 +41,6 @@ pub struct ServiceConfig {
 #[serde(rename_all = "kebab-case", deny_unknown_fields)]
 pub struct Service {
 	pub name: String,
-	#[serde(default)]
-	pub regions: Option<Vec<String>>,
 	/// If this service needs to be booted no matter what service is running.
 	#[serde(default)]
 	pub essential: bool,

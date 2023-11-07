@@ -1,6 +1,5 @@
 [service]
 name = "user-delete-pending"
-regions = ["lnd-atl"]
 
 [runtime]
 kind = "rust"

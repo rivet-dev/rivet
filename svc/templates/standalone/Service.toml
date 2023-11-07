@@ -1,6 +1,5 @@
 [service]
 name = "{{pkg}}-{{name}}"
-regions = ["lnd-atl"]
 
 [runtime]
 kind = "rust"

@@ -64,7 +64,7 @@ where
 	W: Worker,
 {
 	#[tracing::instrument(err, skip(shared_client, pools, cache, worker))]
-	pub async fn new(
+	pub fn new(
 		config: Config,
 		shared_client: chirp_client::SharedClientHandle,
 		pools: rivet_pools::Pools,

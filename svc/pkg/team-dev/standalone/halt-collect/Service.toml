@@ -1,6 +1,5 @@
 [service]
 name = "team-dev-halt-collect"
-regions = ["lnd-atl"]
 
 [runtime]
 kind = "rust"

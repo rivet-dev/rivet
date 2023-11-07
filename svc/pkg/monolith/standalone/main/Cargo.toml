@@ -1,0 +1,43 @@
+[package]
+name = "monolith-main"
+version = "0.0.1"
+edition = "2018"
+authors = ["Rivet Gaming, LLC <developer@rivet.gg>"]
+license = "Apache-2.0"
+
+[dependencies]
+chirp-client = { path = "../../../../../lib/chirp/client" }
+rivet-operation = { path = "../../../../../lib/operation/core" }
+rivet-connection = { path = "../../../../../lib/connection" }
+rivet-runtime = { path = "../../../../../lib/runtime" }
+tokio = { version = "1.29", features = ["full"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", default-features = false, features = ["fmt", "json", "ansi"] }
+
+analytics-worker = { path = "../../../analytics/worker" }
+cdn-worker = { path = "../../../cdn/worker" }
+cf-custom-hostname-worker = { path = "../../../cf-custom-hostname/worker" }
+chat-message-worker = { path = "../../../chat-message/worker" }
+chat-thread-worker = { path = "../../../chat-thread/worker" }
+chat-worker = { path = "../../../chat/worker" }
+cloud-worker = { path = "../../../cloud/worker" }
+external-worker = { path = "../../../external/worker" }
+game-user-worker = { path = "../../../game-user/worker" }
+job-run-worker = { path = "../../../job-run/worker" }
+kv-worker = { path = "../../../kv/worker" }
+mm-worker = { path = "../../../mm/worker" }
+module-worker = { path = "../../../module/worker" }
+nomad-log-worker = { path = "../../../nomad-log/worker" }
+push-notification-worker = { path = "../../../push-notification/worker" }
+team-dev-worker = { path = "../../../team-dev/worker" }
+team-invite-worker = { path = "../../../team-invite/worker" }
+team-worker = { path = "../../../team/worker" }
+upload-worker = { path = "../../../upload/worker" }
+user-dev-worker = { path = "../../../user-dev/worker" }
+user-follow-worker = { path = "../../../user-follow/worker" }
+user-presence-worker = { path = "../../../user-presence/worker" }
+user-report-worker = { path = "../../../user-report/worker" }
+user-worker = { path = "../../../user/worker" }
+
+[dev-dependencies]
+chirp-worker = { path = "../../../../../lib/chirp/worker" }

@@ -5529,6 +5529,44 @@ dependencies = [
 ]
 
 [[package]]
+name = "monolith-main"
+version = "0.0.1"
+dependencies = [
+ "analytics-worker",
+ "cdn-worker",
+ "cf-custom-hostname-worker",
+ "chat-message-worker",
+ "chat-thread-worker",
+ "chat-worker",
+ "chirp-client",
+ "chirp-worker",
+ "cloud-worker",
+ "external-worker",
+ "game-user-worker",
+ "job-run-worker",
+ "kv-worker",
+ "mm-worker",
+ "module-worker",
+ "nomad-log-worker",
+ "push-notification-worker",
+ "rivet-connection",
+ "rivet-operation",
+ "rivet-runtime",
+ "team-dev-worker",
+ "team-invite-worker",
+ "team-worker",
+ "tokio",
+ "tracing",
+ "tracing-subscriber",
+ "upload-worker",
+ "user-dev-worker",
+ "user-follow-worker",
+ "user-presence-worker",
+ "user-report-worker",
+ "user-worker",
+]
+
+[[package]]
 name = "multimap"
 version = "0.8.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
