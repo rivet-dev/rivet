@@ -839,6 +839,26 @@ fn build_ingress_router(
 			}));
 		}
 
+		if let Some(add_path) = &mount.add_path {
+			let mw_name = format!("{}-{i}-add-prefix", svc_ctx.name());
+			middlewares.push(json!({
+				"apiVersion": "traefik.io/v1alpha1",
+				"kind": "Middleware",
+				"metadata": {
+					"name": mw_name,
+					"namespace": "rivet-service",
+					"labels": {
+						"traefik-instance": "main"
+					}
+				},
+				"spec": {
+					"addPrefix": {
+						"prefix": add_path,
+					}
+				}
+			}));
+		}
+
 		// Compress
 		{
 			let mw_name = format!("{}-{i}-compress", svc_ctx.name());

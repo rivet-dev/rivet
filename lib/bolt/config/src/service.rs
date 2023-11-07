@@ -168,6 +168,8 @@ pub struct ServiceMount {
 	pub subdomain: Option<String>,
 	#[serde(default)]
 	pub path: Option<String>,
+	#[serde(default)]
+	pub add_path: Option<String>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
