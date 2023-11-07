@@ -84,3 +84,6 @@ deprecated = true
 path = "/v1"
 subdomain = "status.api"
 add-path = "/status"
+
+[cockroachdb]
+min-connections = 32
