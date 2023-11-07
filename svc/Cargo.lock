@@ -4478,87 +4478,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "job-run-alloc-plan-monitor"
-version = "0.0.1"
-dependencies = [
- "chirp-client",
- "chirp-worker",
- "chrono",
- "futures-util",
- "indoc",
- "nomad-client",
- "nomad-util",
- "prost 0.10.4",
- "rivet-connection",
- "rivet-health-checks",
- "rivet-metrics",
- "rivet-operation",
- "rivet-pools",
- "rivet-runtime",
- "rivet-util-job",
- "serde",
- "serde_json",
- "tokio",
- "tracing",
- "tracing-subscriber",
-]
-
-[[package]]
-name = "job-run-alloc-update-monitor"
-version = "0.0.1"
-dependencies = [
- "chirp-client",
- "chirp-worker",
- "chrono",
- "futures-util",
- "indoc",
- "nomad-client",
- "nomad-util",
- "prost 0.10.4",
- "rivet-connection",
- "rivet-health-checks",
- "rivet-metrics",
- "rivet-operation",
- "rivet-pools",
- "rivet-runtime",
- "rivet-util-job",
- "serde",
- "serde_json",
- "sqlx",
- "tokio",
- "tracing",
- "tracing-subscriber",
-]
-
-[[package]]
-name = "job-run-eval-update-monitor"
-version = "0.0.1"
-dependencies = [
- "chirp-client",
- "chirp-worker",
- "chrono",
- "futures-util",
- "indoc",
- "lazy_static",
- "nomad-client",
- "nomad-util",
- "prost 0.10.4",
- "rivet-connection",
- "rivet-health-checks",
- "rivet-metrics",
- "rivet-operation",
- "rivet-pools",
- "rivet-runtime",
- "rivet-util-job",
- "serde",
- "serde_json",
- "sqlx",
- "tokio",
- "tracing",
- "tracing-subscriber",
-]
-
-[[package]]
 name = "job-run-get"
 version = "0.0.1"
 dependencies = [
@@ -4589,6 +4508,33 @@ dependencies = [
  "rivet-util-job",
  "serde",
  "serde_urlencoded",
+]
+
+[[package]]
+name = "job-run-nomad-monitor"
+version = "0.0.1"
+dependencies = [
+ "chirp-client",
+ "chirp-worker",
+ "chrono",
+ "futures-util",
+ "indoc",
+ "lazy_static",
+ "nomad-client",
+ "nomad-util",
+ "prost 0.10.4",
+ "rivet-connection",
+ "rivet-health-checks",
+ "rivet-metrics",
+ "rivet-operation",
+ "rivet-pools",
+ "rivet-runtime",
+ "rivet-util-job",
+ "serde",
+ "serde_json",
+ "tokio",
+ "tracing",
+ "tracing-subscriber",
 ]
 
 [[package]]

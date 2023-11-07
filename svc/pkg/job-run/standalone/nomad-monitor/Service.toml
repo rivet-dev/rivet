@@ -1,7 +1,7 @@
 [service]
-name = "job-run-alloc-plan-monitor"
+name = "job-run-nomad-monitor"
 essential = true
-priority = 30
+priority = 70
 
 [runtime]
 kind = "rust"

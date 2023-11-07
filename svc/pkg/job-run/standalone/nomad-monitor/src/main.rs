@@ -21,7 +21,20 @@ async fn start() -> GlobalResult<()> {
 		.name("job_run_alloc_plan_monitor::metrics")
 		.spawn(rivet_metrics::run_standalone())?;
 
-	job_run_alloc_plan_monitor::start(shared_client, redis_job).await?;
+	tokio::try_join!(
+		job_run_nomad_monitor::monitors::alloc_plan::start(
+			shared_client.clone(),
+			redis_job.clone()
+		),
+		job_run_nomad_monitor::monitors::alloc_update::start(
+			shared_client.clone(),
+			redis_job.clone()
+		),
+		job_run_nomad_monitor::monitors::eval_update::start(
+			shared_client.clone(),
+			redis_job.clone()
+		),
+	)?;
 
 	Ok(())
 }
