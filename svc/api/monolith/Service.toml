@@ -1,0 +1,7 @@
+[service]
+name = "api-monolith"
+
+[runtime]
+kind = "rust"
+
+[[api.router.mounts]]

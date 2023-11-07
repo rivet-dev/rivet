@@ -4,11 +4,4 @@ name = "api-cf-verification"
 [runtime]
 kind = "rust"
 
-[[api.router.mounts]]
-path = "/cf-verification"
-
-[[api.router.mounts]]
-deprecated = true
-path = "/v1"
-subdomain = "cf-verification.api"
-
+[api-routes]

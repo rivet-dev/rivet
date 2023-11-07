@@ -3,7 +3,7 @@ use api_helper::{
 	ctx::Ctx,
 };
 use chirp_client::{TailAllConfig, TailAllResponse, TailAnchor};
-use futures_util::{FutureExt, StreamExt, TryStreamExt};
+use futures_util::{StreamExt, TryStreamExt};
 use proto::backend::pkg::*;
 use rivet_api::models;
 use rivet_convert::ApiTryInto;

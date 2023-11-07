@@ -96,10 +96,15 @@ pub enum ServiceKind {
 	Operation {},
 
 	#[serde(rename = "consumer")]
-	Consumer {},
+	Consumer {
+		#[serde(default)]
+		disabled: bool,
+	},
 
 	#[serde(rename = "api", rename_all = "kebab-case")]
 	Api {
+		#[serde(default)]
+		disabled: bool,
 		#[serde(default)]
 		port: Option<u16>,
 		#[serde(default = "defaults::singleton")]
@@ -237,6 +242,14 @@ impl ServiceConfig {
 	pub fn component_class(&self) -> ComponentClass {
 		self.kind.component_class()
 	}
+
+	// TODO: Implement
+	pub fn disabled(&self) -> bool {
+		match self.kind {
+			ServiceKind::Api { disabled, .. } | ServiceKind::Consumer { disabled } => disabled,
+			_ => false,
+		}
+	}
 }
 
 impl Service {
@@ -286,15 +299,13 @@ impl RuntimeKind {
 impl ServiceKind {
 	/// The service's router used to configure how it's exposed to the world.
 	pub fn router(&self) -> Option<&ServiceRouter> {
-		if let ServiceKind::Api {
-			router: Some(router),
-			..
-		}
-		| ServiceKind::Static { router } = self
-		{
-			Some(router)
-		} else {
-			None
+		match self {
+			ServiceKind::Api {
+				router: Some(router),
+				..
+			}
+			| ServiceKind::Static { router } => Some(router),
+			_ => None,
 		}
 	}
 
@@ -302,10 +313,9 @@ impl ServiceKind {
 	/// because this will be true for any services that are internally-facing HTTP servers, such as
 	/// `api-job`.
 	pub fn has_server(&self) -> bool {
-		if let ServiceKind::Api { .. } | ServiceKind::Static { .. } = self {
-			true
-		} else {
-			false
+		match self {
+			ServiceKind::Api { .. } | ServiceKind::Static { .. } => true,
+			_ => false,
 		}
 	}
 
@@ -331,9 +341,10 @@ impl ServiceKind {
 			| ServiceKind::Periodic { .. }
 			| ServiceKind::Static { .. }
 			| ServiceKind::Api { .. } => ComponentClass::Executable,
-			ServiceKind::ApiRoutes { .. }
-			| ServiceKind::Operation { .. }
-			| ServiceKind::Consumer { .. } => ComponentClass::NonExecutable,
+
+			ServiceKind::Operation { .. }
+			| ServiceKind::Consumer { .. }
+			| ServiceKind::ApiRoutes { .. } => ComponentClass::NonExecutable,
 			ServiceKind::Database { .. } => ComponentClass::Database,
 			ServiceKind::Cache { .. } => ComponentClass::Cache,
 		}

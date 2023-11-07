@@ -8,4 +8,3 @@ kind = "rust"
 
 [cockroachdb]
 min-connections = 16
-
