@@ -25,3 +25,7 @@ module "secrets" {
     ]
 }
 
+locals {
+	has_minio = can(var.s3_providers["minio"])
+}
+

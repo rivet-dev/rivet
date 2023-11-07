@@ -25,3 +25,13 @@ variable "regions" {
 	type = map(object({
 	}))
 }
+
+# MARK: S3
+variable "s3_providers" {
+	type = map(object({
+		endpoint_internal = string
+		endpoint_external = string
+		region = string
+	}))
+}
+

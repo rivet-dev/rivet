@@ -65,7 +65,10 @@ resource "cloudflare_origin_ca_certificate" "rivet_gg" {
 
 # Must be created in every namespace it is used in
 resource "kubernetes_secret" "ingress_tls_cert" {
-	for_each = toset(["traefik", "imagor", "rivet-service"])
+	for_each = toset(flatten([
+		["traefik", "imagor", "rivet-service"],
+		local.has_minio ? ["minio"] : []
+	]))
 
 	metadata {
 		name = "ingress-tls-cloudflare-cert"
