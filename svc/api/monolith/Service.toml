@@ -5,3 +5,7 @@ name = "api-monolith"
 kind = "rust"
 
 [[api.router.mounts]]
+
+[cockroachdb]
+min-connections = 32
+

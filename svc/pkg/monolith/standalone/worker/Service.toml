@@ -6,3 +6,6 @@ kind = "rust"
 
 [headless]
 
+[cockroachdb]
+min-connections = 16
+
