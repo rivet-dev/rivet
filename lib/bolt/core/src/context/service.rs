@@ -466,11 +466,13 @@ impl ServiceContextData {
 					| ServiceKind::Cache { .. }
 					| ServiceKind::Operation { .. }
 			) {
-				panic!(
-					"{} -> {}: cannot explicitly depend on this kind of service",
-					self.name(),
-					dep.name()
-				);
+				if self.config().service.name != "monolith-worker" {
+					panic!(
+						"{} -> {}: cannot explicitly depend on this kind of service",
+						self.name(),
+						dep.name()
+					);
+				}
 			}
 		}
 

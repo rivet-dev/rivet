@@ -1,7 +1,6 @@
 use chirp_worker::prelude::*;
 use chirp_worker::ManagerError;
 
-mod workers;
 use workers::*;
 
 fn main() -> Result<(), ManagerError> {

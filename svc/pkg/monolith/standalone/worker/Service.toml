@@ -1,5 +1,5 @@
 [service]
-name = "monolith-main"
+name = "monolith-worker"
 
 [runtime]
 kind = "rust"

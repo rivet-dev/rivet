@@ -325,10 +325,11 @@ impl ServiceKind {
 			ServiceKind::Headless { .. }
 			| ServiceKind::Oneshot { .. }
 			| ServiceKind::Periodic { .. }
-			| ServiceKind::Consumer { .. }
 			| ServiceKind::Api { .. }
 			| ServiceKind::Static { .. } => ComponentClass::Executable,
-			ServiceKind::Operation { .. } => ComponentClass::NonExecutable,
+			ServiceKind::Operation { .. } | ServiceKind::Consumer { .. } => {
+				ComponentClass::NonExecutable
+			}
 			ServiceKind::Database { .. } => ComponentClass::Database,
 			ServiceKind::Cache { .. } => ComponentClass::Cache,
 		}

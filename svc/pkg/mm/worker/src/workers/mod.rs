@@ -1,15 +1,17 @@
-pub mod lobby_cleanup;
-pub mod lobby_closed_set;
-pub mod lobby_create;
-pub mod lobby_find;
-pub mod lobby_find_job_run_fail;
-pub mod lobby_find_lobby_cleanup;
-pub mod lobby_find_lobby_create_fail;
-pub mod lobby_find_lobby_ready;
-pub mod lobby_history_export;
-pub mod lobby_job_run_cleanup;
-pub mod lobby_ready_set;
-pub mod lobby_state_set;
-pub mod lobby_stop;
-pub mod player_register;
-pub mod player_remove;
+chirp_worker::workers![
+	lobby_cleanup,
+	lobby_closed_set,
+	lobby_create,
+	lobby_find,
+	lobby_find_job_run_fail,
+	lobby_find_lobby_cleanup,
+	lobby_find_lobby_create_fail,
+	lobby_find_lobby_ready,
+	lobby_history_export,
+	lobby_job_run_cleanup,
+	lobby_ready_set,
+	lobby_state_set,
+	lobby_stop,
+	player_register,
+	player_remove,
+];

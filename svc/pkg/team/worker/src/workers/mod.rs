@@ -1,11 +1,13 @@
-pub mod create;
-pub mod create_complete_chat_message_create;
-pub mod join_request_create;
-pub mod join_request_resolve;
-pub mod member_create;
-pub mod member_kick;
-pub mod member_remove;
-pub mod owner_transfer;
-pub mod profile_set;
-pub mod user_ban;
-pub mod user_unban;
+chirp_worker::workers![
+	create,
+	create_complete_chat_message_create,
+	join_request_create,
+	join_request_resolve,
+	member_create,
+	member_kick,
+	member_remove,
+	owner_transfer,
+	profile_set,
+	user_ban,
+	user_unban,
+];
