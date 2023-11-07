@@ -75,6 +75,34 @@ resource "helm_release" "traefik" {
 			# }
 		}
 
+		autoscaling = {
+			enabled = var.deploy_method_cluster
+			minReplicas = local.service_traefik.count
+			maxReplicas = 10
+			metrics = [
+				{
+					type = "Resource"
+					resource = {
+						name = "cpu"
+						target = {
+							type = "Utilization"
+							averageUtilization = 60
+						}
+					}
+				},
+				{
+					type = "Resource"
+					resource = {
+						name = "memory"
+						target = {
+							type = "Utilization"
+							averageUtilization = 60
+						}
+					}
+				},
+			]
+		}
+
 		ports = {
 			websecure = {
 				tls = {
