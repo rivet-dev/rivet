@@ -31,7 +31,7 @@ locals {
 				summary = "Pod High CPU utilization ({{ $labels.namespace }}/{{ $labels.pod }})"
 			}
 			expr = "(sum(rate(container_cpu_usage_seconds_total{name!=\"\"}[3m])) BY (namespace, pod) * 100) > 90"
-			"for" = "1h"
+			"for" = "5m"
 			labels = {
 				severity = "info"
 			}
@@ -123,7 +123,7 @@ resource "kubectl_manifest" "pvc_rules" {
 			groups = [
 				{
 					name = "pvc-health"
-					interval = "30m"
+					interval = "1m"
 					rules = [
 						{
 							alert = "PVCHighDiskUsage"
