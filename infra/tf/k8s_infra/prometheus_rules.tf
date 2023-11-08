@@ -17,6 +17,17 @@ locals {
 			}
 		},
 		{
+			alert = "PodHighCpuUtilization"
+			annotations = {
+				summary = "Pod High CPU utilization ({{ $labels.namespace }}/{{ $labels.pod }})"
+			}
+			expr = "(sum(rate(container_cpu_usage_seconds_total{name!=\"\"}[3m])) BY (namespace, pod) * 100) > 90"
+			"for" = "1h"
+			labels = {
+				severity = "info"
+			}
+		},
+		{
 			alert = "PodHighThrottleRate"
 			annotations = {
 				summary = "Pod high throttle rate ({{ $labels.namespace }}/{{ $labels.pod }})"
@@ -80,6 +91,40 @@ resource "kubectl_manifest" "pod_rules" {
 	})
 }
 
+resource "kubectl_manifest" "pvc_rules" {
+	depends_on = [helm_release.prometheus]
+
+	yaml_body = yamlencode({
+		apiVersion = "monitoring.coreos.com/v1"
+		kind = "PrometheusRule"
+		metadata = {
+			name = "persistent-volume-claim-rules"
+			namespace = kubernetes_namespace.prometheus.metadata.0.name
+		}
+		spec = {
+			groups = [
+				{
+					name = "pvc-health"
+					interval = "30m"
+					rules = [
+						{
+							alert = "PVCHighDiskUsage"
+							annotations = {
+								summary = "Persistent volume claim almost full ({{ $labels.pvc_namespace }}/{{ $labels.persistentvolumeclaim }})"
+								description = "Persistent volume claim almost full ({{ printf \"%.2f%%\" $value }} of {{ $labels.pvc_requested_size_human }}) ({{ $labels.pvc_namespace }}/{{ $labels.persistentvolumeclaim }})"
+							}
+							expr = "pvc_usage * 100 > 75"
+							labels = {
+								severity = "warning"
+							}
+						}
+					]
+				}
+			]
+		}
+	})
+}
+
 resource "kubectl_manifest" "host_rules" {
 	depends_on = [helm_release.prometheus]
 
@@ -97,13 +142,21 @@ resource "kubectl_manifest" "host_rules" {
 					interval = "30m"
 					rules = [
 						{
-							alert = "HostOutOfDiskSpace"
+							alert = "HostHighDiskUsage"
 							annotations = {
-								summary = "Host out of disk space (instance {{ $labels.instance }})"
+								summary = "Host disk almost full (instance {{ $labels.instance }})"
 								description = "Disk is almost full (< 10% left)\n  VALUE = {{ $value }}\n  LABELS = {{ $labels }}"
 							}
-							expr = "((node_filesystem_avail_bytes * 100) / node_filesystem_size_bytes < 10 and ON (instance, device, mountpoint) node_filesystem_readonly == 0) * on(instance) group_left (nodename) node_uname_info{nodename=~\".+\"}"
-							"for" = "2m"
+							expr = <<-EOF
+								(
+									(node_filesystem_avail_bytes * 100) / node_filesystem_size_bytes < 10
+									AND
+									ON (instance, device, mountpoint) node_filesystem_readonly == 0
+								)
+								*
+								ON(instance)
+								group_left (nodename) node_uname_info{nodename=~".+"}
+								EOF
 							labels = {
 								severity = "warning"
 							}

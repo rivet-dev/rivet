@@ -144,21 +144,22 @@ impl EndpointRouter {
 			.map(|cors_config| {
 				quote! {
 					lazy_static::lazy_static! {
-						static ref CORS_CONFIG: api_helper::util::	CorsConfig = #cors_config;
+						static ref CORS_CONFIG: api_helper::util::CorsConfig = #cors_config;
 					}
 
-					match api_helper::util::verify_cors(&request, &*CORS_CONFIG) {
-						Ok(api_helper::util::CorsResponse::Preflight(headers)) => {
-							let mut response = Response::new(Body::from(""));
-							response.headers_mut().extend(headers);
+					match api_helper::util::verify_cors(request, &*CORS_CONFIG)? {
+						// Set headers and immediately return empty response
+						api_helper::util::CorsResponse::Preflight(headers) => {
+							response.headers_mut().map(|h| h.extend(headers));
 
-							return Ok(response);
+							return Ok(Some(Vec::new()));
 						}
-						Ok(api_helper::util::CorsResponse::Regular(headers)) => {
+						// Set headers, continue with request
+						api_helper::util::CorsResponse::Regular(headers) => {
 							response.headers_mut().map(|h| h.extend(headers));
 						}
-						Ok(api_helper::util::CorsResponse::NoCors) => {}
-						Err(err) => return api_helper::error::handle_rejection(err, response, ray_id),
+						// No CORS
+						api_helper::util::CorsResponse::NoCors => {}
 					}
 				}
 			})
@@ -207,15 +208,7 @@ impl EndpointRouter {
 				) -> rivet_operation::prelude::GlobalResult<Option<Vec<u8>>> {
 					use std::str::FromStr;
 					use api_helper::macro_util::{self, __AsyncOption};
-
-					// Set JSON headers
-					if let Some(mut headers) = response.headers_mut() {
-						headers.insert(
-							http::header::CONTENT_TYPE,
-							http::HeaderValue::from_static("application/json")
-						);
-					}
-
+					
 					// This url doesn't actually represent the url of the request, it's just put here so that the
 					// URI can be parsed by url::Url::parse
 					let __url = format!(
@@ -243,7 +236,11 @@ impl EndpointRouter {
 							.path_segments()
 							.map(|segments| segments.collect::<Vec<_>>())
 							.unwrap_or_default()
-					};
+						};
+
+					// Cors is handled after path segments are created so that we are sure that we are in
+					// the correct mount (if nested routers)
+					#cors
 
 					let __body = __AsyncOption::None
 						#(#endpoints)*
@@ -261,8 +258,6 @@ impl EndpointRouter {
 					mut request: Request<Body>,
 					mut response: http::response::Builder,
 				) -> Result<Response<Body>, http::Error> {
-					#cors
-
 					tracing::info!(method=?request.method(), uri=?request.uri(), "received request");
 
 					// If `None`, no route was found
@@ -281,6 +276,14 @@ impl EndpointRouter {
 							}
 							Err(err) => Err(err),
 						};
+
+					// Set JSON headers
+					if let Some(mut headers) = response.headers_mut() {
+						headers.insert(
+							http::header::CONTENT_TYPE,
+							http::HeaderValue::from_static("application/json")
+						);
+					}
 
 					// Convert to hyper response
 					match res {
