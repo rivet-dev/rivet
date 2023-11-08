@@ -10,7 +10,16 @@ locals {
 				description = "Pod Memory usage has been above 80% for over 2 minutes\n  VALUE = {{ printf \"%.2f%%\" $value }}\n  LABELS = {{ $labels }}"
 			}
 			# TODO: Maybe use kube_pod_container_resource_limits{resource="memory"} instead?
-			expr = "(sum(container_memory_working_set_bytes{name!=\"\"}) BY (namespace, pod) / sum(container_spec_memory_limit_bytes > 0) BY (namespace, pod) * 100) > 80"
+			expr = <<-EOF
+				(
+					sum(container_memory_working_set_bytes{name!=""})
+					BY (namespace, pod)
+					/
+					sum(kube_pod_container_resource_limits{resource="memory"} > 0)
+					BY (namespace, pod)
+				) * 100
+				> 80
+				EOF
 			"for" = "2m"
 			labels = {
 				severity = "warning"
@@ -45,7 +54,16 @@ locals {
 				summary = "Pod Low Memory usage ({{ $labels.namespace }}/{{ $labels.pod }})"
 				description = "Pod Memory usage is under 20% for 1 week. Consider reducing the allocated memory.\n  VALUE = {{ printf \"%.2f%%\" $value }}\n  LABELS = {{ $labels }}"
 			}
-			expr = "(sum(container_memory_working_set_bytes{name!=\"\"}) BY (namespace, pod) / sum(container_spec_memory_limit_bytes > 0) BY (namespace, pod) * 100) < 20"
+			expr = <<-EOF
+				(
+					sum(container_memory_working_set_bytes{name!=""})
+					BY (namespace, pod)
+					/
+					sum(kube_pod_container_resource_limits{resource="memory"} > 0)
+					BY (namespace, pod)
+				) * 100
+				< 20
+				EOF
 			"for" = "7d"
 			labels = {
 				severity = "info"
