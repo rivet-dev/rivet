@@ -19,8 +19,20 @@ pub async fn run_from_env() -> GlobalResult<()> {
 	let shared_client = chirp_client::SharedClient::from_env(pools.clone())?;
 	let cache = rivet_cache::CacheInner::from_env(pools.clone())?;
 
-	let mut join_set = tokio::task::JoinSet::new();
+	tokio::task::Builder::new()
+		.name("monolith_worker::health_checks")
+		.spawn(rivet_health_checks::run_standalone(
+			rivet_health_checks::Config {
+				pools: Some(pools.clone()),
+			},
+		))?;
 
+	tokio::task::Builder::new()
+		.name("monolith_worker::metrics")
+		.spawn(rivet_metrics::run_standalone())?;
+
+	// Start workers
+	let mut join_set = tokio::task::JoinSet::new();
 	spawn_workers![
 		[shared_client, pools, cache, join_set]
 		analytics_worker,

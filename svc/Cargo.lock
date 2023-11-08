@@ -5522,6 +5522,8 @@ dependencies = [
  "nomad-log-worker",
  "push-notification-worker",
  "rivet-connection",
+ "rivet-health-checks",
+ "rivet-metrics",
  "rivet-operation",
  "rivet-runtime",
  "team-dev-worker",
