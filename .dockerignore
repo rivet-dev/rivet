@@ -30,6 +30,7 @@ Bolt.local.toml
 
 # Rivet
 /infra/
+!/infra/misc/svc_scripts/
 
 # Rust
 **/target/
