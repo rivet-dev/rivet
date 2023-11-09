@@ -32,6 +32,7 @@ pub struct __RouterConfig {
 	pub prefix: Option<&'static str>,
 }
 
+#[doc(hidden)]
 impl __RouterConfig {
 	pub fn new(uri: &hyper::Uri) -> GlobalResult<Self> {
 		// This url doesn't actually represent the url of the request, it's just put here so that the
@@ -51,7 +52,7 @@ impl __RouterConfig {
 	}
 
 	/// If the current prefix matches the first element in the path segments list, it is removed and
-	/// returns true. False otherwise.
+	/// returns true. Always true if no prefix is set.
 	pub fn try_prefix(&mut self) -> bool {
 		let Some(prefix) = &self.prefix else {
 			return true;
