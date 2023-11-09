@@ -1283,17 +1283,11 @@ impl ServiceContextData {
 			.unwrap_or_else(|| match project_ctx.ns().cluster.kind {
 				config::ns::ClusterKind::SingleNode { .. } => config::ns::Service {
 					count: 1,
-					resources: config::ns::ServiceResources {
-						cpu: 100,
-						memory: 128,
-					},
+					resources: self.config().resources.single_node.clone(),
 				},
 				config::ns::ClusterKind::Distributed { .. } => config::ns::Service {
 					count: 2,
-					resources: config::ns::ServiceResources {
-						cpu: 250,
-						memory: 256,
-					},
+					resources: self.config().resources.distributed.clone(),
 				},
 			});
 
