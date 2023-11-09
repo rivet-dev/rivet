@@ -40,8 +40,6 @@ in
 			docker-client  # Standardize client CLI since older clients have breaking changes
 			git  # Bolt relies functionality only available in newer versions of Bolt
 			git-lfs
-			pre-commit
-			gibberish-detector  # Required by detect-secrets
 			jq
 			openssh  # ssh-keygen
 
@@ -77,11 +75,6 @@ in
 		shellHook = ''
 			# Setup Git LFS
 			git lfs install
-
-			# Setup pre-commit framework
-			if [ ! -f .git/hooks/pre-commit ]; then
-				pre-commit install
-			fi
 
 			# Add binaries to path so we can use a locally built copy of Bolt.
 			export PATH="${toString ./target/debug/.}:${toString ./target/release/.}:$PATH"
