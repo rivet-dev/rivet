@@ -15,6 +15,15 @@ kind = "rust"
 "turnstile/cdn/secret_key" = { optional = true }
 "turnstile/main/secret_key" = { optional = true }
 
+[resources.single-node]
+cpu = 250
+# See SVC-3413
+memory = 512
+
+[resources.distributed]
+cpu = 2000
+memory = 2048
+
 [cockroachdb]
 min-connections = 8
 

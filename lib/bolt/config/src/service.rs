@@ -34,6 +34,9 @@ pub struct ServiceConfig {
 	pub secrets: HashMap<String, Secret>,
 
 	#[serde(default)]
+	pub resources: ServiceResourcesMap,
+
+	#[serde(default)]
 	pub cockroachdb: CockroachDB,
 }
 
@@ -206,6 +209,28 @@ pub struct CargoPackage {
 pub enum CargoDependency {
 	Path { path: String },
 	Unknown(serde_json::Value),
+}
+
+#[derive(Deserialize, Clone, Debug)]
+#[serde(rename_all = "kebab-case", deny_unknown_fields)]
+pub struct ServiceResourcesMap {
+	pub single_node: super::ns::ServiceResources,
+	pub distributed: super::ns::ServiceResources,
+}
+
+impl Default for ServiceResourcesMap {
+	fn default() -> Self {
+		Self {
+			single_node: super::ns::ServiceResources {
+				cpu: 100,
+				memory: 128,
+			},
+			distributed: super::ns::ServiceResources {
+				cpu: 1000,
+				memory: 1024,
+			},
+		}
+	}
 }
 
 #[derive(Deserialize, Clone, Debug)]

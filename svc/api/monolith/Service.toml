@@ -90,5 +90,13 @@ path = "/v1"
 subdomain = "status.api"
 add-path = "/status"
 
+[resources.single-node]
+cpu = 250
+memory = 256
+
+[resources.distributed]
+cpu = 2000
+memory = 2048
+
 [cockroachdb]
 min-connections = 8
