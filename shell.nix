@@ -74,7 +74,7 @@ in
 		);
 		shellHook = ''
 			# Setup Git LFS
-			git lfs install
+			git lfs install > /dev/null
 
 			# Add binaries to path so we can use a locally built copy of Bolt.
 			export PATH="${toString ./target/debug/.}:${toString ./target/release/.}:$PATH"
