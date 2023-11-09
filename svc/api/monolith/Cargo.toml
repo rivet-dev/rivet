@@ -24,6 +24,7 @@ api-chat = { path = "../chat" }
 api-cloud = { path = "../cloud" }
 api-group = { path = "../group" }
 api-identity = { path = "../identity" }
+api-job = { path = "../job" }
 api-kv = { path = "../kv" }
 api-matchmaker = { path = "../matchmaker" }
 api-module = { path = "../module" }
