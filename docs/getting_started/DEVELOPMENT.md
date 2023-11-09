@@ -1,7 +1,7 @@
 # Developing
 
 > 🚨 **READ BEFORE PROCEEDING** 🚨
-> 
+>
 > We encourage developers to use the self-hosted version of Rivet, but we're
 > still working on improving the self-hosted developer experience.
 >
@@ -14,13 +14,13 @@
 > want to help make Rivet easier to run, please reach out and we can help
 > provide guidance on [Discord](https://discord.gg/BG2vqsJczH) when
 > implementing the following issues:
-> 
-> - https://github.com/rivet-gg/rivet/issues/153
-> - https://github.com/rivet-gg/rivet/issues/155
-> - https://github.com/rivet-gg/rivet/issues/157
-> - https://github.com/rivet-gg/rivet/issues/154
-> - https://github.com/rivet-gg/rivet/issues/156
-> - https://github.com/rivet-gg/rivet/issues/157
+>
+> -   https://github.com/rivet-gg/rivet/issues/153
+> -   https://github.com/rivet-gg/rivet/issues/155
+> -   https://github.com/rivet-gg/rivet/issues/157
+> -   https://github.com/rivet-gg/rivet/issues/154
+> -   https://github.com/rivet-gg/rivet/issues/156
+> -   https://github.com/rivet-gg/rivet/issues/157
 
 ## Prerequisites
 
@@ -91,7 +91,7 @@ Now, you have to start the hub frontend.
 
 1. Clone the [Rivet Hub](https://github.com/rivet-gg/hub) with
 2. Create a file called `.env` in the root of the `hub` repo
-	- Set `RIVET_API_ENDPOINT=http://localhost:8080` in the `.env` file
+    - Set `RIVET_API_ENDPOINT=http://localhost:8080` in the `.env` file
 3. Start the hub
 4. Visit http://localhost:5080
 5. Register an account with your email
@@ -102,7 +102,7 @@ Now, you have to start the hub frontend.
 nix-shell --run "bolt db sh db-user --query 'UPDATE users SET is_admin = true'"
 ```
 
-You  may need to clear the local cache for this change to appear. ([Related issue](https://github.com/rivet-gg/rivet/issues/152))
+You may need to clear the local cache for this change to appear. ([Related issue](https://github.com/rivet-gg/rivet/issues/152))
 
 _This command sets all users to admin. We're assuming you're the only user in the cluster. Do not run this command again._
 
@@ -113,4 +113,3 @@ You should now see a "Create Group" button on the hub. Proceed to create a group
 ## Next steps
 
 Read more about [working with Bolt](/docs/libraries/bolt/README.md) or see other [helpful docs](/README.md#-documentation-overview)
-

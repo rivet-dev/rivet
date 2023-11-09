@@ -24,4 +24,3 @@ types:
   BootstrapCaptchaTurnstile:
     properties:
       site_key: string
-
