@@ -685,7 +685,7 @@ async fn create_docker_job(
 				value: lobby_token.to_owned(),
 			},
 			job_run::msg::create::Parameter {
-				key: "loby_config".into(),
+				key: "lobby_config".into(),
 				value: ctx.lobby_config_json.clone().unwrap_or_default(),
 			},
 			job_run::msg::create::Parameter {
