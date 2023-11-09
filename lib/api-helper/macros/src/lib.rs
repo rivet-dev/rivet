@@ -206,7 +206,7 @@ impl EndpointRouter {
 					ray_id: uuid::Uuid,
 					mut request: &mut Request<Body>,
 					response: &mut http::response::Builder,
-					mut router_config: api_helper::macro_util::__RouterConfig,
+					router_config: &mut api_helper::macro_util::__RouterConfig,
 				) -> rivet_operation::prelude::GlobalResult<Option<Vec<u8>>> {
 					use std::str::FromStr;
 					use api_helper::macro_util::{self, __AsyncOption};
@@ -239,7 +239,7 @@ impl EndpointRouter {
 					tracing::info!(method=?request.method(), uri=?request.uri(), "received request");
 
 					// Create router config for complex nested routers
-					let router_config = match api_helper::macro_util::__RouterConfig::new(request.uri()) {
+					let mut router_config = match api_helper::macro_util::__RouterConfig::new(request.uri()) {
 						Ok(x) => x,
 						Err(err) => return api_helper::error::handle_rejection(err, response, ray_id),
 					};
@@ -248,7 +248,7 @@ impl EndpointRouter {
 					let res = Self::__inner(
 						shared_client, pools, cache,
 						ray_id, &mut request, &mut response,
-						router_config,
+						&mut router_config,
 					).await;
 
 					// Catch if res is `None` (no route was found)
