@@ -14,8 +14,7 @@ macro_rules! spawn_workers {
 }
 
 #[tracing::instrument(skip_all)]
-pub async fn run_from_env() -> GlobalResult<()> {
-	let pools = rivet_pools::from_env("monolith-worker").await?;
+pub async fn run_from_env(pools: rivet_pools::Pools) -> GlobalResult<()> {
 	let shared_client = chirp_client::SharedClient::from_env(pools.clone())?;
 	let cache = rivet_cache::CacheInner::from_env(pools.clone())?;
 
