@@ -6,6 +6,12 @@ kind = "rust"
 
 [headless]
 
+[secrets]
+"clickhouse/users/chirp/password" = {}
+"fly/auth_token" = { optional = true }
+"hcaptcha/secret" = { optional = true }
+"turnstile/cdn/secret_key" = { optional = true }
+
 [cockroachdb]
 min-connections = 16
 

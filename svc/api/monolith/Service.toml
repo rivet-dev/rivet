@@ -4,6 +4,11 @@ name = "api-monolith"
 [runtime]
 kind = "rust"
 
+[secrets]
+"rivet/api_admin/token" = {}
+"rivet/api_status/token" = {}
+"turnstile/main/secret_key" = { optional = true }
+
 # / path
 [[api.router.mounts]]
 
