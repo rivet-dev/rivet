@@ -17,13 +17,11 @@ async fn start() -> GlobalResult<()> {
 			rivet_health_checks::Config {
 				pools: Some(pools.clone()),
 			},
-		))
-		.unwrap();
+		))?;
 
 	tokio::task::Builder::new()
 		.name("mm_gc::metrics")
-		.spawn(rivet_metrics::run_standalone())
-		.unwrap();
+		.spawn(rivet_metrics::run_standalone())?;
 
 	let mut interval = tokio::time::interval(Duration::from_secs(15));
 	loop {
