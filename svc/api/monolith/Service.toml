@@ -95,8 +95,8 @@ cpu = 250
 memory = 256
 
 [resources.distributed]
-cpu = 2000
-memory = 2048
+cpu = 1000
+memory = 1024
 
 [cockroachdb]
 min-connections = 8

@@ -11,3 +11,4 @@ singleton = true
 
 [databases]
 redis-job = {}
+

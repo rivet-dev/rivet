@@ -15,3 +15,11 @@ kind = "rust"
 redis-job = {}
 redis-cdn = {}
 
+[resources.single-node]
+cpu = 50
+memory = 64
+
+[resources.distributed]
+cpu = 250
+memory = 256
+
