@@ -824,9 +824,6 @@ impl ServiceContextData {
 			}
 		}
 
-		// Configure TLS
-		env.push(("IS_SECURE".to_owned(), "1".into()));
-
 		// Add billing flag
 		if project_ctx.config().billing_enabled {
 			env.push(("IS_BILLING_ENABLED".to_owned(), "1".into()));
@@ -992,47 +989,23 @@ impl ServiceContextData {
 			_ => {}
 		}
 
-		env.push((
-			"RIVET_TELEMETRY_DISABLE".into(),
-			if project_ctx.ns().rivet.telemetry.disable {
-				"1"
-			} else {
-				"0"
-			}
-			.into(),
-		));
+		if project_ctx.ns().rivet.telemetry.disable {
+			env.push(("RIVET_TELEMETRY_DISABLE".into(), "1".into()));
+		}
 
 		env.push((
 			"RIVET_API_HUB_ORIGIN_REGEX".into(),
 			project_ctx.origin_hub_regex(),
 		));
-		env.push((
-			"RIVET_API_ERROR_VERBOSE".into(),
-			if project_ctx.ns().rivet.api.error_verbose {
-				"1"
-			} else {
-				"0"
-			}
-			.into(),
-		));
-		env.push((
-			"RIVET_PROFANITY_FILTER_DISABLE".into(),
-			if project_ctx.ns().rivet.profanity.filter_disable {
-				"1"
-			} else {
-				"0"
-			}
-			.into(),
-		));
-		env.push((
-			"RIVET_UPLOAD_NSFW_ERROR_VERBSOE".into(),
-			if project_ctx.ns().rivet.upload.nsfw_error_verbose {
-				"1"
-			} else {
-				"0"
-			}
-			.into(),
-		));
+		if project_ctx.ns().rivet.api.error_verbose {
+			env.push(("RIVET_API_ERROR_VERBOSE".into(), "1".into()));
+		}
+		if project_ctx.ns().rivet.profanity.filter_disable {
+			env.push(("RIVET_PROFANITY_FILTER_DISABLE".into(), "1".into()));
+		}
+		if project_ctx.ns().rivet.upload.nsfw_error_verbose {
+			env.push(("RIVET_UPLOAD_NSFW_ERROR_VERBSOE".into(), "1".into()));
+		}
 		env.push((
 			"RIVET_DS_BUILD_DELIVERY_METHOD".into(),
 			project_ctx
