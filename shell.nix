@@ -41,6 +41,7 @@ in
 			git  # Bolt relies functionality only available in newer versions of Bolt
 			git-lfs
 			pre-commit
+			gibberish-detector  # Required by detect-secrets
 			jq
 			openssh  # ssh-keygen
 
