@@ -31,27 +31,17 @@ in
 			awscli2
 
 			# Infrastructure
-			nomad
 			terraform
 
 			# Tools
 			custom_bolt
 			cloc
 			curl
-			docker-client
+			docker-client  # Standardize client CLI since older clients have breaking changes
 			git  # Bolt relies functionality only available in newer versions of Bolt
 			git-lfs
-			rsync
-			traefik  # Used to proxy requests in Bolt
-			cloudflared
-			go-migrate
 			jq
 			openssh  # ssh-keygen
-			
-			# Databases
-			postgresql  # For psql
-			custom_clickhouse  # For ClickHouse CLI
-			redis  # For the redis-cli
 
 			# Runtimes
 			nodejs  # Required for Fern
@@ -95,8 +85,6 @@ in
 			
 			# Install autocomplete
 			source ${pkgs.bash-completion}/share/bash-completion/bash_completion
-      		# nomad -autocomplete-install
-      		complete -C ${pkgs.nomad}/bin/nomad nomad
       		# terraform -install-autocomplete
       		complete -C ${pkgs.terraform}/bin/terraform terraform
 			# awscli
