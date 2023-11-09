@@ -7,6 +7,7 @@ use hyper::{
 	body::{Bytes, HttpBody},
 	header, Body, Request,
 };
+use rivet_operation::prelude::util;
 use serde::de::DeserializeOwned;
 use url::Url;
 use uuid::Uuid;
@@ -22,6 +23,51 @@ pub mod __metrics {
 
 const MAX_ALLOWED_BODY_SIZE: u64 = rivet_util::file_size::gibibytes(10);
 const BEARER: &str = "Bearer ";
+
+// For code legibility
+#[doc(hidden)]
+pub struct __RouterConfig {
+	pub route: url::Url,
+	pub path_segments: Vec<String>,
+	pub prefix: Option<&'static str>,
+}
+
+impl __RouterConfig {
+	pub fn new(uri: &hyper::Uri) -> GlobalResult<Self> {
+		// This url doesn't actually represent the url of the request, it's just put here so that the
+		// URI can be parsed by url::Url::parse
+		let url = format!("{}{}", util::env::origin_api(), uri);
+		let route = url::Url::parse(url.as_str())?;
+
+		Ok(__RouterConfig {
+			route: route.clone(),
+			path_segments: route
+				.path_segments()
+				// Store it backwards for more efficient `pop`ing
+				.map(|ps| ps.rev().map(ToString::to_string).collect::<Vec<_>>())
+				.unwrap_or_default(),
+			prefix: None,
+		})
+	}
+
+	/// If the current prefix matches the first element in the path segments list, it is removed and
+	/// returns true. False otherwise.
+	pub fn try_prefix(&mut self) -> bool {
+		let Some(prefix) = &self.prefix else {
+			return true;
+		};
+
+		tracing::info!("trying prefix {prefix}");
+
+		match self.path_segments.last() {
+			Some(segment) if segment == prefix => {
+				self.path_segments.pop();
+				true
+			}
+			_ => false,
+		}
+	}
+}
 
 // Allows for the use of async functions in `.or_else` (`.try_or_else` in this case)
 #[doc(hidden)]

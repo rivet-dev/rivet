@@ -177,6 +177,8 @@ impl EndpointRouter {
 
 				quote! {
 					.try_or_else(|| async {
+						router_config.prefix = #mount_prefix;
+
 						#mount_path::__inner(
 							shared_client.clone(),
 							pools.clone(),
@@ -184,7 +186,7 @@ impl EndpointRouter {
 							ray_id,
 							request,
 							response,
-							#mount_prefix,
+							router_config,
 						)
 						.await
 						.map(std::convert::Into::into)
@@ -204,50 +206,26 @@ impl EndpointRouter {
 					ray_id: uuid::Uuid,
 					mut request: &mut Request<Body>,
 					response: &mut http::response::Builder,
-					prefix: Option<&str>,
+					mut router_config: api_helper::macro_util::__RouterConfig,
 				) -> rivet_operation::prelude::GlobalResult<Option<Vec<u8>>> {
 					use std::str::FromStr;
 					use api_helper::macro_util::{self, __AsyncOption};
-					
-					// This url doesn't actually represent the url of the request, it's just put here so that the
-					// URI can be parsed by url::Url::parse
-					let __url = format!(
-						"{}{}",
-						rivet_operation::prelude::util::env::origin_api(), request.uri()
-					);
-					let __route = url::Url::parse(__url.as_str())?;
 
 					// Create path segments list
-					let __path_segments = if let Some(prefix) = prefix {
-						let mut path_segments = match __route.path_segments() {
-							Some(segments) => segments,
-							None => return Ok(None),
-						};
-
-						// Parse prefix if set (only for nested routers)
-						match path_segments.next() {
-							Some(segment) if segment == prefix => {
-								path_segments.collect::<Vec<_>>()
-							},
-							_ => return Ok(None),
-						}
-					} else {
-						__route
-							.path_segments()
-							.map(|segments| segments.collect::<Vec<_>>())
-							.unwrap_or_default()
-						};
+					if !router_config.try_prefix() {
+						return Ok(None);
+					}
 
 					// Cors is handled after path segments are created so that we are sure that we are in
 					// the correct mount (if nested routers)
 					#cors
 
-					let __body = __AsyncOption::None
+					let body = __AsyncOption::None
 						#(#endpoints)*
 						#(#mounts)*
 					;
 
-					Ok(__body.into())
+					Ok(body.into())
 				}
 
 				pub async fn handle(
@@ -260,22 +238,32 @@ impl EndpointRouter {
 				) -> Result<Response<Body>, http::Error> {
 					tracing::info!(method=?request.method(), uri=?request.uri(), "received request");
 
-					// If `None`, no route was found
-					let res =
-						match Self::__inner(
-							shared_client, pools, cache, ray_id, &mut request, &mut response, None,
-						).await {
-							Ok(body) => {
-								body.ok_or_else(|| {
-									tracing::debug!("not found: {:?}", request.uri().to_string());
+					// Create router config for complex nested routers
+					let router_config = match api_helper::macro_util::__RouterConfig::new(request.uri()) {
+						Ok(x) => x,
+						Err(err) => return api_helper::error::handle_rejection(err, response, ray_id),
+					};
 
-									rivet_operation::prelude::GlobalError::bad_request(
-										rivet_operation::prelude::formatted_error::code::API_NOT_FOUND
-									)
-								})
-							}
-							Err(err) => Err(err),
-						};
+					// Handle router
+					let res = Self::__inner(
+						shared_client, pools, cache,
+						ray_id, &mut request, &mut response,
+						router_config,
+					).await;
+
+					// Catch if res is `None` (no route was found)
+					let res = match res {
+						Ok(body) => {
+							body.ok_or_else(|| {
+								tracing::debug!("not found: {:?}", request.uri().to_string());
+
+								rivet_operation::prelude::GlobalError::bad_request(
+									rivet_operation::prelude::formatted_error::code::API_NOT_FOUND
+								)
+							})
+						}
+						Err(err) => Err(err),
+					};
 
 					// Set JSON headers
 					if let Some(mut headers) = response.headers_mut() {
@@ -290,7 +278,7 @@ impl EndpointRouter {
 						Ok(body) => {
 							Ok(response.body(hyper::Body::from(body))?)
 						},
-						Err(err) => Ok(api_helper::error::handle_rejection(err, response, ray_id)?),
+						Err(err) => api_helper::error::handle_rejection(err, response, ray_id),
 					}
 				}
 			}
@@ -416,7 +404,7 @@ impl RequestPathSegment {
 			// Deserialize literal path segment
 			RequestPathSegment::LitStr(lit) => {
 				quote! {
-					match __path_segments.next() {
+					match path_segments.next() {
 						Some(segment) if segment == & #lit => (),
 						_ => return Ok(__AsyncOption::None),
 					}
@@ -429,7 +417,7 @@ impl RequestPathSegment {
 				*arg_count += 1;
 
 				quote! {
-					let #arg_name = if let Some(segment) = __path_segments.next() {
+					let #arg_name = if let Some(segment) = path_segments.next() {
 						if let Ok(de_segment) = #alias::from_str(segment) {
 							de_segment
 						} else {
@@ -540,10 +528,14 @@ impl Endpoint {
 
 		Ok(quote! {
 			.try_or_else(|| async {
-				let mut __path_segments = __path_segments.iter();
+				// Unreverse path segments (they are stored in reverse)
+				let mut path_segments = router_config
+					.path_segments
+					.iter()
+					.rev();
 				#(#segment_parsing)*
 
-				if __path_segments.next().is_none() {
+				if path_segments.next().is_none() {
 					match request.method() {
 						#(#arms)*
 						_ => {
@@ -691,7 +683,9 @@ impl EndpointFunction {
 			arg_list.push(format_ident!("query").to_token_stream());
 
 			quote! {
-				let query = macro_util::__deserialize_query::<api_helper::anchor::WatchIndexQuery>(&__route)?;
+				let query = macro_util::__deserialize_query::<api_helper::anchor::WatchIndexQuery>(
+					&router_config.route
+				)?;
 				has_watch_index = query.has_watch_index();
 			}
 		} else {
@@ -864,7 +858,9 @@ impl EndpointFunction {
 					arg_list.push(arg_name.to_token_stream());
 
 					Ok(quote! {
-						let #arg_name = macro_util::__deserialize_query::<#value>(&__route)?;
+						let #arg_name = macro_util::__deserialize_query::<#value>(
+							&router_config.route
+						)?;
 					})
 				} else if arg.label == "opt_cookie" {
 					let value = arg.value.expect_expr()?;
