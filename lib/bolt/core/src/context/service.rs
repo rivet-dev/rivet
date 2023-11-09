@@ -897,7 +897,7 @@ impl ServiceContextData {
 			let clickhouse_data = terraform::output::read_clickhouse(&project_ctx).await;
 			let clickhouse_host = format!(
 				"https://{}:{}",
-				*clickhouse_data.host, *clickhouse_data.port
+				*clickhouse_data.host, *clickhouse_data.port_https
 			);
 
 			env.push(("CLICKHOUSE_URL".into(), clickhouse_host));

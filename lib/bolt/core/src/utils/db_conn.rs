@@ -141,7 +141,7 @@ impl DatabaseConnections {
 
 						clickhouse_host = Some(format!(
 							"{}:{}",
-							*clickhouse_data.host, *clickhouse_data.port
+							*clickhouse_data.host, *clickhouse_data.port_native_secure
 						));
 					}
 				}

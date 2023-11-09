@@ -80,7 +80,8 @@ pub struct Cockroach {
 #[derive(Debug, Clone, Deserialize)]
 pub struct ClickHouse {
 	pub host: TerraformOutputValue<String>,
-	pub port: TerraformOutputValue<u32>,
+	pub port_https: TerraformOutputValue<u32>,
+	pub port_native_secure: TerraformOutputValue<u32>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
