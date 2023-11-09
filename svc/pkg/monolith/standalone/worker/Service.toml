@@ -16,5 +16,5 @@ kind = "rust"
 "turnstile/main/secret_key" = { optional = true }
 
 [cockroachdb]
-min-connections = 16
+min-connections = 8
 

@@ -91,4 +91,4 @@ subdomain = "status.api"
 add-path = "/status"
 
 [cockroachdb]
-min-connections = 32
+min-connections = 8
