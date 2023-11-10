@@ -161,28 +161,23 @@ async fn crdb_from_env(client_name: String) -> Result<Option<CrdbPool>, Error> {
 			// Ping once per minute to validate the connection is still alive
 			.before_acquire(|conn, meta| {
 				Box::pin(async move {
-					if meta.idle_for.as_secs() > 60 {
-						sqlx::Connection::ping(conn).await?;
+					if meta.idle_for.as_secs() < 60 {
+						Ok(true)
+					} else {
+						match sqlx::Connection::ping(conn).await {
+							Ok(_) => Ok(true),
+							Err(err) => {
+								// See https://docs.aws.amazon.com/vpc/latest/userguide/nat-gateway-troubleshooting.html#nat-gateway-troubleshooting-timeout
+								tracing::warn!(
+									?err,
+									"crdb ping failed, potential idle tcp connection drop"
+								);
+								Ok(false)
+							}
+						}
 					}
-
-					Ok(true)
 				})
 			})
-			// .after_connect({
-			// 	let url = url.clone();
-			// 	move |_, _| {
-			// 		// let client_name = client_name.clone();
-			// 		let url = url.clone();
-			// 		Box::pin(async move {
-			// 			tracing::trace!(%url, "crdb connected");
-			// 			// sqlx::query("SET application_name = $1;")
-			// 			// 	.bind(&client_name)
-			// 			// 	.execute(conn)
-			// 			// 	.await?;
-			// 			Ok(())
-			// 		})
-			// 	}
-			// })
 			.connect(&url)
 			.await
 			.map_err(Error::BuildSqlx)?;
