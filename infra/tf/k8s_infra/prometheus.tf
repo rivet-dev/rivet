@@ -2,8 +2,8 @@ locals {
 	service_prometheus = lookup(var.services, "prometheus", {
 		count = 1
 		resources = {
-			cpu = 500
-			memory = 2500
+			cpu = 1000
+			memory = 2048
 		}
 	})
 

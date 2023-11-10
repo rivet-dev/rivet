@@ -3,8 +3,8 @@ locals {
 	service_minio = lookup(var.services, "minio", {
 		count = 1
 		resources = {
-			cpu = 50
-			memory = 400
+			cpu = 500
+			memory = 512
 		}
 	})
 }

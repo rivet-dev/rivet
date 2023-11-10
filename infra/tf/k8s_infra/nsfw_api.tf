@@ -2,8 +2,8 @@ locals {
 	service_nsfw_api = lookup(var.services, "nsfw-api", {
 		count = var.deploy_method_cluster ? 2 : 1
 		resources = {
-			cpu = 250
-			memory = 512
+			cpu = 1000
+			memory = 1024
 		}
 	})
 }

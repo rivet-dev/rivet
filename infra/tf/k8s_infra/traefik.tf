@@ -16,8 +16,8 @@ locals {
 	service_traefik = lookup(var.services, "traefik", {
 		count = var.deploy_method_cluster ? 2 : 1
 		resources = {
-			cpu = 50
-			memory = 200
+			cpu = 1000
+			memory = 1024
 		}
 	})
 }
