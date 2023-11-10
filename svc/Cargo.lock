@@ -389,6 +389,7 @@ dependencies = [
  "lazy_static",
  "prost 0.10.4",
  "rand",
+ "rivet-api",
  "rivet-cache",
  "rivet-claims",
  "rivet-connection",

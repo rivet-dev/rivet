@@ -656,7 +656,7 @@ pub async fn prepare_avatar_upload(
 
 	Ok(models::IdentityPrepareAvatarUploadResponse {
 		upload_id,
-		presigned_request: Box::new(presigned_request.clone().api_into()),
+		presigned_request: Box::new(presigned_request.clone().try_into()?),
 	})
 }
 
