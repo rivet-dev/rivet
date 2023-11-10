@@ -90,9 +90,9 @@ pub async fn create_site(
 		upload_id: unwrap_ref!(create_res.upload_id).as_uuid(),
 		presigned_requests: create_res
 			.presigned_requests
-			.clone()
-			.into_iter()
-			.map(models::UploadPresignedRequest::try_from)
+			.iter()
+			.cloned()
+			.map(ApiTryInto::try_into)
 			.collect::<GlobalResult<Vec<_>>>()?,
 	})
 }

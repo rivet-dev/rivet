@@ -56,7 +56,7 @@ types:
         type: optional<string>
       content_length:
         docs: Unsigned 64 bit integer.
-        type: optional<long>
+        type: long
 
   PrepareCustomAvatarUploadResponse:
     properties:

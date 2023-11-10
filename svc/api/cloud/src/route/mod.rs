@@ -135,7 +135,7 @@ define_router! {
 			GET: games::avatars::get_custom_avatars(),
 		},
 		"games" / Uuid / "avatar-upload" / "prepare": {
-			POST: games::avatars::prepare_avatar_upload(body: models::PrepareCustomAvatarUploadRequest),
+			POST: games::avatars::prepare_avatar_upload(body: new_models::CloudGamesPrepareCustomAvatarUploadRequest),
 		},
 		"games" / Uuid / "avatar-upload" / Uuid / "complete": {
 			POST: games::avatars::complete_avatar_upload(body: models::CompleteCustomAvatarUploadRequest),
@@ -163,13 +163,13 @@ define_router! {
 			POST: games::validate(body: models::ValidateGameRequest),
 		},
 		"games" / Uuid / "logo-upload" / "prepare": {
-			POST: games::prepare_logo_upload(body: models::GameLogoUploadPrepareRequest),
+			POST: games::prepare_logo_upload(body: new_models::CloudGamesGameLogoUploadPrepareRequest),
 		},
 		"games" / Uuid / "logo-upload" / Uuid / "complete": {
 			POST: games::complete_logo_upload(body: models::GameLogoUploadCompleteRequest),
 		},
 		"games" / Uuid / "banner-upload" / "prepare": {
-			POST: games::prepare_banner_upload(body: models::GameBannerUploadPrepareRequest),
+			POST: games::prepare_banner_upload(body: new_models::CloudGamesGameBannerUploadPrepareRequest),
 		},
 		"games" / Uuid / "banner-upload" / Uuid / "complete": {
 			POST: games::complete_banner_upload(body: models::GameBannerUploadCompleteRequest),

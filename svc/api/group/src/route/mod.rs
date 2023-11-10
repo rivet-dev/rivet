@@ -1,5 +1,6 @@
 use api_helper::{define_router, util::CorsConfigBuilder};
 use hyper::{Body, Request, Response};
+use rivet_api::models as new_models;
 use rivet_group_server::models;
 
 use uuid::Uuid;
@@ -45,7 +46,7 @@ define_router! {
 			),
 		},
 		"groups" / "avatar-upload" / "prepare": {
-			POST: groups::prepare_avatar_upload(body: models::PrepareGroupAvatarUploadRequest),
+			POST: groups::prepare_avatar_upload(body: new_models::GroupPrepareAvatarUploadRequest),
 		},
 		"groups" / Uuid / "avatar-upload" / Uuid / "complete": {
 			POST: groups::complete_avatar_upload(body: models::CompleteGroupAvatarUploadRequest),
