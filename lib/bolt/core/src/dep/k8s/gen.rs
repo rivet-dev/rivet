@@ -909,11 +909,12 @@ fn build_ingress_router(
 
 		specs.extend(middlewares);
 
-		// NOTE: imagor priority is either 50 or 75
 		let priority = if svc_ctx.name() == "api-monolith" {
-			35
+			// Default priority
+			50
 		} else {
-			40
+			// Override monolith's priority
+			51
 		};
 
 		// Build insecure router
@@ -966,7 +967,7 @@ fn build_ingress_router(
 						{
 							"kind": "Rule",
 							"match": rule,
-							"priority": 40,
+							"priority": priority,
 							"middlewares": ingress_middlewares,
 							"services": [
 								{

@@ -155,7 +155,7 @@ impl From<ResizePreset> for ResizePresetSerialize {
 			path_regex_replacement: preset.path_regex_replacement(),
 			game_cors: preset.game_cors,
 			// Match items with query filters before the fallback path
-			priority: if preset.fallback { 50 } else { 75 },
+			priority: if preset.fallback { 60 } else { 61 },
 		}
 	}
 }
