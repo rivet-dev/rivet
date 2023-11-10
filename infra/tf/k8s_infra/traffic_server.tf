@@ -1,6 +1,6 @@
 locals {
 	service_traffic_server = lookup(var.services, "traffic_server", {
-		count = 2
+		count = var.deploy_method_cluster ? 2 : 1
 		resources = {
 			cpu = 50
 			memory = 00

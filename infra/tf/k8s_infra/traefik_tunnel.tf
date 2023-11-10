@@ -19,7 +19,7 @@ locals {
 	}
 
 	service_traefik_tunnel = lookup(var.services, "traefik-tunnel", {
-		count = 1
+		count = var.deploy_method_cluster ? 2 : 1
 		resources = {
 			cpu = 50
 			memory = 200

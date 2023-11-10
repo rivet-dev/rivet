@@ -14,7 +14,7 @@ module "traefik_secrets" {
 
 locals {
 	service_traefik = lookup(var.services, "traefik", {
-		count = 1
+		count = var.deploy_method_cluster ? 2 : 1
 		resources = {
 			cpu = 50
 			memory = 200
