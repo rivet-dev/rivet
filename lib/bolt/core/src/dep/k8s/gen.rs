@@ -790,6 +790,7 @@ fn build_ingress_router(
 	specs: &mut Vec<serde_json::Value>,
 ) {
 	// Register all mounts with Traefik
+	// TODO: move this in to a single ingressroute crd for web and websecure
 	for (i, mount) in router.mounts.iter().enumerate() {
 		// Build host rule
 		let mut rule = String::new();
