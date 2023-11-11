@@ -72,3 +72,8 @@ Below is a simplified architecture diagram of a Rivet cluster.
 **About**
 
 -   [Notable missing features](/docs/about/MISSING_FEATURES.md)
+
+## We're hiring!
+
+We're a team of scrappy engineers willing to get our hands dirty with everything from Linux internals, niche game engines, designs that don't look like [this](https://www.linears.art/), and god-tier developer experiences. If you prefer reading the source instead of documentation, love hacking on games in your free time, and have a healthy dose of anarchy in you, come [join us!](https://rivet-gg.notion.site/Job-Board-eed66f2eab2b4d7ea3e21ccd63b22efe?pvs=4)
+
