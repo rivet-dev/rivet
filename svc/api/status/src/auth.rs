@@ -16,7 +16,7 @@ impl ApiAuth for Auth {
 
 		// TODO: Use JWT
 		if let Some(api_token) = api_token {
-			assert_eq_with!(
+			ensure_eq_with!(
 				api_token,
 				util::env::read_secret(&["rivet", "api_status", "token"]).await?,
 				API_FORBIDDEN,
@@ -24,7 +24,7 @@ impl ApiAuth for Auth {
 			);
 			Ok(Auth { _claims: None })
 		} else {
-			internal_panic!("unreachable");
+			bail!("unreachable");
 		}
 	}
 

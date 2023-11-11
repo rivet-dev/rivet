@@ -1,10 +1,39 @@
+use std::collections::HashMap;
+
 use anyhow::Result;
 use duct::cmd;
 use serde_json::json;
-use std::collections::HashMap;
-use tokio::task::block_in_place;
+use tokio::{
+	sync::{Mutex, OnceCell},
+	task::{block_in_place, JoinSet},
+	time::Duration,
+};
 
 use crate::context::ProjectContext;
+
+pub static JOIN_SET: OnceCell<Mutex<JoinSet<()>>> = OnceCell::const_new();
+
+/// Get the global join set for telemetry futures.
+async fn join_set() -> &'static Mutex<JoinSet<()>> {
+	JOIN_SET
+		.get_or_init(|| async { Mutex::new(JoinSet::new()) })
+		.await
+}
+
+/// Waits for all telemetry events to finish.
+pub async fn wait_all() {
+	let mut join_set = join_set().await.lock().await;
+	match tokio::time::timeout(Duration::from_secs(15), async move {
+		while join_set.join_next().await.is_some() {}
+	})
+	.await
+	{
+		Ok(_) => {}
+		Err(_) => {
+			println!("Timed out waiting for telemetry to finish. If your network blocks outgoing connections to our telemetry servers, see docs/about/TELEMETRY.md for instructions on disabling telemetry.")
+		}
+	}
+}
 
 // This API key is safe to hardcode. It will not change and is intended to be public.
 const POSTHOG_API_KEY: &str = "phc_1lUNmul6sAdFzDK1VHXNrikCfD7ivQZSpf2yzrPvr4m";
@@ -92,12 +121,14 @@ pub async fn build_event(ctx: &ProjectContext, name: &str) -> Result<async_posth
 	Ok(event)
 }
 
-pub fn capture_event(ctx: &ProjectContext, event: async_posthog::Event) -> Result<()> {
+pub async fn capture_event(ctx: &ProjectContext, event: async_posthog::Event) -> Result<()> {
 	if !ctx.ns().rivet.telemetry.disable {
-		tokio::spawn(async move {
+		join_set().await.lock().await.spawn(async move {
 			match build_client().capture(event).await {
 				Ok(_) => {}
-				Err(err) => println!("Failed to capture event: {err:?}"),
+				Err(_) => {
+					// Fail silently
+				}
 			}
 		});
 	}

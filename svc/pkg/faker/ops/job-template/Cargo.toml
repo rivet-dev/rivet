@@ -9,6 +9,7 @@ license = "Apache-2.0"
 rivet-operation = { path = "../../../../../lib/operation/core" }
 chirp-client = { path = "../../../../../lib/chirp/client" }
 prost = "0.10"
+util-job = { package = "rivet-util-job", path = "../../../job/util" }
 
 nomad-client = "0.0.9"
 

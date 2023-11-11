@@ -61,7 +61,7 @@ pub async fn cloud_games_avatars_complete_custom_avatar_upload(configuration: &c
 
     let local_var_client = &local_var_configuration.client;
 
-    let local_var_uri_str = format!("{}/games/{game_id}/avatar-upload/{upload_id}/complete", local_var_configuration.base_path, game_id=crate::apis::urlencode(game_id), upload_id=crate::apis::urlencode(upload_id));
+    let local_var_uri_str = format!("{}/cloud/games/{game_id}/avatar-upload/{upload_id}/complete", local_var_configuration.base_path, game_id=crate::apis::urlencode(game_id), upload_id=crate::apis::urlencode(upload_id));
     let mut local_var_req_builder = local_var_client.request(reqwest::Method::POST, local_var_uri_str.as_str());
 
     if let Some(ref local_var_user_agent) = local_var_configuration.user_agent {
@@ -92,7 +92,7 @@ pub async fn cloud_games_avatars_list_game_custom_avatars(configuration: &config
 
     let local_var_client = &local_var_configuration.client;
 
-    let local_var_uri_str = format!("{}/games/{game_id}/avatars", local_var_configuration.base_path, game_id=crate::apis::urlencode(game_id));
+    let local_var_uri_str = format!("{}/cloud/games/{game_id}/avatars", local_var_configuration.base_path, game_id=crate::apis::urlencode(game_id));
     let mut local_var_req_builder = local_var_client.request(reqwest::Method::GET, local_var_uri_str.as_str());
 
     if let Some(ref local_var_user_agent) = local_var_configuration.user_agent {
@@ -123,7 +123,7 @@ pub async fn cloud_games_avatars_prepare_custom_avatar_upload(configuration: &co
 
     let local_var_client = &local_var_configuration.client;
 
-    let local_var_uri_str = format!("{}/games/{game_id}/prepare", local_var_configuration.base_path, game_id=crate::apis::urlencode(game_id));
+    let local_var_uri_str = format!("{}/cloud/games/{game_id}/prepare", local_var_configuration.base_path, game_id=crate::apis::urlencode(game_id));
     let mut local_var_req_builder = local_var_client.request(reqwest::Method::POST, local_var_uri_str.as_str());
 
     if let Some(ref local_var_user_agent) = local_var_configuration.user_agent {

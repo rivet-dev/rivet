@@ -3,28 +3,58 @@ use proto::backend;
 use rivet_operation::prelude::*;
 use uuid::Uuid;
 
-const CONTENT_TYPE: &str = "application/x-tar";
-
 const DEFAULT_BUILDS: &[DefaultBuildConfig] = &[
 	DefaultBuildConfig {
 		kind: "game-multiplayer",
-		tag: include_str!("../default-builds/outputs/game-multiplayer-tag.txt"),
-		tar: include_bytes!("../default-builds/outputs/game-multiplayer.tar"),
+		tag: include_str!(
+			"../../../../../../infra/default-builds/outputs/game-multiplayer-tag.txt"
+		),
+		tar: include_bytes!("../../../../../../infra/default-builds/outputs/game-multiplayer.tar"),
 	},
 	DefaultBuildConfig {
 		kind: "test-fail-immediately",
-		tag: include_str!("../default-builds/outputs/test-fail-immediately-tag.txt"),
-		tar: include_bytes!("../default-builds/outputs/test-fail-immediately.tar"),
+		tag: include_str!(
+			"../../../../../../infra/default-builds/outputs/test-fail-immediately-tag.txt"
+		),
+		tar: include_bytes!(
+			"../../../../../../infra/default-builds/outputs/test-fail-immediately.tar"
+		),
 	},
 	DefaultBuildConfig {
 		kind: "test-hang-indefinitely",
-		tag: include_str!("../default-builds/outputs/test-hang-indefinitely-tag.txt"),
-		tar: include_bytes!("../default-builds/outputs/test-hang-indefinitely.tar"),
+		tag: include_str!(
+			"../../../../../../infra/default-builds/outputs/test-hang-indefinitely-tag.txt"
+		),
+		tar: include_bytes!(
+			"../../../../../../infra/default-builds/outputs/test-hang-indefinitely.tar"
+		),
 	},
 	DefaultBuildConfig {
 		kind: "test-mm-lobby-ready",
-		tag: include_str!("../default-builds/outputs/test-mm-lobby-ready-tag.txt"),
-		tar: include_bytes!("../default-builds/outputs/test-mm-lobby-ready.tar"),
+		tag: include_str!(
+			"../../../../../../infra/default-builds/outputs/test-mm-lobby-ready-tag.txt"
+		),
+		tar: include_bytes!(
+			"../../../../../../infra/default-builds/outputs/test-mm-lobby-ready.tar"
+		),
+	},
+	DefaultBuildConfig {
+		kind: "test-mm-lobby-echo",
+		tag: include_str!(
+			"../../../../../../infra/default-builds/outputs/test-mm-lobby-echo-tag.txt"
+		),
+		tar: include_bytes!(
+			"../../../../../../infra/default-builds/outputs/test-mm-lobby-echo.tar"
+		),
+	},
+	DefaultBuildConfig {
+		kind: "test-mm-player-connect",
+		tag: include_str!(
+			"../../../../../../infra/default-builds/outputs/test-mm-player-connect-tag.txt"
+		),
+		tar: include_bytes!(
+			"../../../../../../infra/default-builds/outputs/test-mm-player-connect.tar"
+		),
 	},
 ];
 
@@ -54,15 +84,16 @@ pub async fn run_from_env() -> GlobalResult<()> {
 		(),
 		Vec::new(),
 	);
-	let crdb_pool = ctx.crdb("db-build").await?;
+	let crdb_pool = ctx.crdb().await?;
 
 	for build in DEFAULT_BUILDS {
 		// Check if this default build is already set
-		let old_default_build =
-			sqlx::query_as::<_, (String,)>("SELECT image_tag FROM default_builds WHERE kind = $1")
-				.bind(build.kind)
-				.fetch_optional(&crdb_pool)
-				.await?;
+		let old_default_build = sql_fetch_optional!(
+			[ctx, (String,)]
+			"SELECT image_tag FROM db_build.default_builds WHERE kind = $1",
+			build.kind,
+		)
+		.await?;
 		if old_default_build
 			.as_ref()
 			.map_or(false, |(old_image_tag,)| old_image_tag == build.tag)
@@ -71,7 +102,7 @@ pub async fn run_from_env() -> GlobalResult<()> {
 				?old_default_build,
 				"build already matches the given tag, skipping"
 			);
-			return Ok(());
+			continue;
 		}
 
 		// Upload the build
@@ -80,16 +111,16 @@ pub async fn run_from_env() -> GlobalResult<()> {
 
 		// Update default build
 		tracing::info!(tag = %build.tag, ?upload_id, "setting default build");
-		sqlx::query(indoc!(
+		sql_execute!(
+			[ctx]
 			"
-			UPSERT INTO default_builds (kind, image_tag, upload_id)
+			UPSERT INTO db_build.default_builds (kind, image_tag, upload_id)
 			VALUES ($1, $2, $3)
-			"
-		))
-		.bind(build.kind)
-		.bind(build.tag)
-		.bind(upload_id)
-		.execute(&crdb_pool)
+			",
+			build.kind,
+			build.tag,
+			upload_id,
+		)
 		.await?;
 	}
 
@@ -105,30 +136,39 @@ async fn upload_build(
 		files: vec![
 			backend::upload::PrepareFile {
 				path: "image.tar".into(),
-				mime: Some(CONTENT_TYPE.into()),
 				content_length: build.tar.len() as u64,
+				multipart: true,
 				..Default::default()
 			},
 		],
 	})
 	.await?;
-	let upload_id = internal_unwrap!(upload_prepare_res.upload_id).as_uuid();
-	let req = internal_unwrap_owned!(upload_prepare_res.presigned_requests.first());
+	let upload_id = unwrap_ref!(upload_prepare_res.upload_id).as_uuid();
 
-	let url = &req.url;
-	tracing::info!(%url, "uploading file");
-	let res = reqwest::Client::new()
-		.put(url)
-		.header(reqwest::header::CONTENT_TYPE, CONTENT_TYPE)
-		.header(reqwest::header::CONTENT_LENGTH, build.tar.len() as u64)
-		.body(reqwest::Body::from(build.tar))
-		.send()
-		.await?;
-	if res.status().is_success() {
-		tracing::info!("successfully uploaded");
-	} else {
-		tracing::warn!(status = ?res.status(), "failure uploading");
+	for req in &upload_prepare_res.presigned_requests {
+		let start = req.byte_offset as usize;
+		let end = (req.byte_offset + req.content_length) as usize;
+
+		let part = &build.tar[start..end];
+
+		let url = &req.url;
+		tracing::info!(%url, part=%req.part_number, "uploading file");
+		let res = reqwest::Client::new()
+			.put(url)
+			.header(reqwest::header::CONTENT_LENGTH, part.len() as u64)
+			.body(reqwest::Body::from(part))
+			.send()
+			.await?;
+
+		if !res.status().is_success() {
+			let status = res.status();
+			let body = res.text().await?;
+			tracing::warn!(?status, ?body, "failure uploading");
+			bail!("failure uploading");
+		}
 	}
+
+	tracing::info!("successfully uploaded");
 
 	// Complete the upload
 	op!([ctx] upload_complete {

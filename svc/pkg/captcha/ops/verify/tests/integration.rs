@@ -9,6 +9,10 @@ fn generate_topic() -> HashMap<String, String> {
 
 #[worker_test]
 async fn empty(ctx: TestCtx) {
+	if !util::feature::hcaptcha() {
+		return;
+	}
+
 	op!([ctx] captcha_verify {
 		topic: generate_topic(),
 		remote_address: util::faker::ip_addr_v4().to_string(),
@@ -35,6 +39,10 @@ async fn empty(ctx: TestCtx) {
 
 #[worker_test]
 async fn captcha_counts(ctx: TestCtx) {
+	if !util::feature::hcaptcha() {
+		return;
+	}
+
 	let topic = generate_topic();
 	let remote_address = util::faker::ip_addr_v4().to_string();
 	let requests_before_reverify = 15;
@@ -163,6 +171,10 @@ async fn captcha_counts(ctx: TestCtx) {
 
 #[worker_test]
 async fn captcha_timing(ctx: TestCtx) {
+	if !util::feature::hcaptcha() {
+		return;
+	}
+
 	let topic = generate_topic();
 	let remote_address = util::faker::ip_addr_v4().to_string();
 	let verification_ttl = util::duration::hours(1);
@@ -269,6 +281,10 @@ async fn captcha_verify(
 	captcha_config: &backend::captcha::CaptchaConfig,
 	pass: bool,
 ) {
+	if !util::feature::hcaptcha() {
+		return;
+	}
+
 	let res = op!([ctx] captcha_verify {
 		topic: topic.clone(),
 		remote_address: remote_address.to_string(),

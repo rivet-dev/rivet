@@ -1,3 +1,1 @@
-pub mod create;
-pub mod delete;
-pub mod status_set;
+chirp_worker::workers![create, delete, status_set,];

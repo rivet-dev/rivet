@@ -3,7 +3,6 @@ name = "redis-cdn"
 
 [runtime]
 kind = "redis"
-index = 0
 persistent = true
 
 [cache]

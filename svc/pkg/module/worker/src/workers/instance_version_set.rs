@@ -7,10 +7,10 @@ use serde_json::json;
 async fn worker(
 	ctx: &OperationContext<module::msg::instance_version_set::Message>,
 ) -> Result<(), GlobalError> {
-	let crdb = ctx.crdb("db-module").await?;
+	let crdb = ctx.crdb().await?;
 
-	let instance_id = internal_unwrap!(ctx.instance_id).as_uuid();
-	let version_id = internal_unwrap!(ctx.version_id).as_uuid();
+	let instance_id = unwrap_ref!(ctx.instance_id).as_uuid();
+	let version_id = unwrap_ref!(ctx.version_id).as_uuid();
 
 	let (instances, versions) = tokio::try_join!(
 		op!([ctx] module_instance_get {
@@ -21,18 +21,18 @@ async fn worker(
 			version_ids: vec![version_id.into()],
 		}),
 	)?;
-	let instance = internal_unwrap_owned!(instances.instances.first());
-	let version = internal_unwrap_owned!(versions.versions.first());
+	let instance = unwrap!(instances.instances.first());
+	let version = unwrap!(versions.versions.first());
 
 	// Get Docker image
-	let image = match internal_unwrap!(version.image) {
+	let image = match unwrap_ref!(version.image) {
 		backend::module::version::Image::Docker(docker) => docker.image_tag.as_str(),
 	};
 
 	// Update instance
-	match internal_unwrap!(instance.driver) {
+	match unwrap_ref!(instance.driver) {
 		backend::module::instance::Driver::Fly(fly) => {
-			let app_id = internal_unwrap!(fly.fly_app_id, "fly machine not started yet");
+			let app_id = unwrap_ref!(fly.fly_app_id, "fly machine not started yet");
 
 			update_fly_machines(app_id, image).await?;
 		}
@@ -42,16 +42,16 @@ async fn worker(
 	}
 
 	// Update database
-	sqlx::query(indoc!(
+	sql_execute!(
+		[ctx]
 		"
-		UPDATE instances
+		UPDATE db_module.instances
 		SET version_id = $2
 		WHERE instance_id = $1
-		"
-	))
-	.bind(instance_id)
-	.bind(version_id)
-	.execute(&crdb)
+		",
+		instance_id,
+		version_id,
+	)
 	.await?;
 
 	msg!([ctx] module::msg::instance_version_set_complete(instance_id) {

@@ -1,0 +1,9 @@
+logging:
+  formats:
+    - name: requests
+      format: '%<chi> - %<caun> [%<cqtn>] "%<cqtx>" %<pssc> %<pscl> %<sssc> %<sscl> %<cqcl> %<pqcl> %<cqhl> %<pshl> %<pqhl> %<sshl> %<ttms> %<phr> %<cfsc> %<pfsc> %<crc>'
+
+  logs:
+    - mode: ascii
+      filename: requests
+      format: requests

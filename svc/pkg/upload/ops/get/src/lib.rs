@@ -32,7 +32,7 @@ impl From<UploadRow> for backend::upload::Upload {
 async fn handle(
 	ctx: OperationContext<upload::get::Request>,
 ) -> GlobalResult<upload::get::Response> {
-	let crdb = ctx.crdb("db-upload").await?;
+	let crdb = ctx.crdb().await?;
 
 	let upload_ids = ctx
 		.upload_ids
@@ -40,27 +40,41 @@ async fn handle(
 		.map(common::Uuid::as_uuid)
 		.collect::<Vec<_>>();
 
-	let uploads = sqlx::query_as::<_, UploadRow>(indoc!(
-		"
-		SELECT
-			bucket,
-			upload_id,
-			create_ts,
-			content_length,
-			complete_ts,
-			deleted_ts,
-			user_id,
-			provider
-		FROM uploads
-		WHERE upload_id = ANY($1)
-		"
-	))
-	.bind(upload_ids)
-	.fetch_all(&crdb)
-	.await?
-	.into_iter()
-	.map(Into::<backend::upload::Upload>::into)
-	.collect::<Vec<_>>();
+	let uploads = ctx
+		.cache()
+		.fetch_all_proto("upload", upload_ids, {
+			let ctx = ctx.clone();
+			move |mut cache, upload_ids| {
+				let ctx = ctx.clone();
+				async move {
+					let uploads = sql_fetch_all!(
+						[ctx, UploadRow]
+						"
+						SELECT
+							bucket,
+							upload_id,
+							create_ts,
+							content_length,
+							complete_ts,
+							deleted_ts,
+							user_id,
+							provider
+						FROM db_upload.uploads
+						WHERE upload_id = ANY($1)
+						",
+						upload_ids,
+					)
+					.await?;
+
+					for row in uploads {
+						cache.resolve(&row.upload_id.clone(), row.into());
+					}
+
+					Ok(cache)
+				}
+			}
+		})
+		.await?;
 
 	Ok(upload::get::Response { uploads })
 }

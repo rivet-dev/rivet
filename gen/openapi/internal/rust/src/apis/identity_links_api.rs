@@ -74,7 +74,7 @@ pub async fn identity_links_cancel(configuration: &configuration::Configuration,
 
     let local_var_client = &local_var_configuration.client;
 
-    let local_var_uri_str = format!("{}/game-links/cancel", local_var_configuration.base_path);
+    let local_var_uri_str = format!("{}/identity/game-links/cancel", local_var_configuration.base_path);
     let mut local_var_req_builder = local_var_client.request(reqwest::Method::POST, local_var_uri_str.as_str());
 
     if let Some(ref local_var_user_agent) = local_var_configuration.user_agent {
@@ -106,7 +106,7 @@ pub async fn identity_links_complete(configuration: &configuration::Configuratio
 
     let local_var_client = &local_var_configuration.client;
 
-    let local_var_uri_str = format!("{}/game-links/complete", local_var_configuration.base_path);
+    let local_var_uri_str = format!("{}/identity/game-links/complete", local_var_configuration.base_path);
     let mut local_var_req_builder = local_var_client.request(reqwest::Method::POST, local_var_uri_str.as_str());
 
     if let Some(ref local_var_user_agent) = local_var_configuration.user_agent {
@@ -138,7 +138,7 @@ pub async fn identity_links_get(configuration: &configuration::Configuration, id
 
     let local_var_client = &local_var_configuration.client;
 
-    let local_var_uri_str = format!("{}/game-links", local_var_configuration.base_path);
+    let local_var_uri_str = format!("{}/identity/game-links", local_var_configuration.base_path);
     let mut local_var_req_builder = local_var_client.request(reqwest::Method::GET, local_var_uri_str.as_str());
 
     local_var_req_builder = local_var_req_builder.query(&[("identity_link_token", &identity_link_token.to_string())]);
@@ -173,7 +173,7 @@ pub async fn identity_links_prepare(configuration: &configuration::Configuration
 
     let local_var_client = &local_var_configuration.client;
 
-    let local_var_uri_str = format!("{}/game-links", local_var_configuration.base_path);
+    let local_var_uri_str = format!("{}/identity/game-links", local_var_configuration.base_path);
     let mut local_var_req_builder = local_var_client.request(reqwest::Method::POST, local_var_uri_str.as_str());
 
     if let Some(ref local_var_user_agent) = local_var_configuration.user_agent {

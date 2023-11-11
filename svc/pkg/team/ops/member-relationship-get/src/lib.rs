@@ -11,27 +11,27 @@ async fn handle(
 		.iter()
 		.map(|x| -> GlobalResult<(Uuid, Uuid)> {
 			Ok((
-				internal_unwrap!(x.this_user_id).as_uuid(),
-				internal_unwrap!(x.other_user_id).as_uuid(),
+				unwrap_ref!(x.this_user_id).as_uuid(),
+				unwrap_ref!(x.other_user_id).as_uuid(),
 			))
 		})
 		.collect::<GlobalResult<Vec<(Uuid, Uuid)>>>()?;
 
 	// Query relationships
-	let relationships = sqlx::query_as::<_, (Vec<Uuid>,)>(&formatdoc!(
+	let relationships = sql_fetch_all!(
+		[ctx, (Vec<Uuid>,)]
 		"
 		SELECT
 			ARRAY(
 				SELECT this_tm.team_id
-				FROM team_members AS this_tm
-				INNER JOIN team_members AS other_tm ON this_tm.team_id = other_tm.team_id
+				FROM db_team.team_members AS this_tm
+				INNER JOIN db_team.team_members AS other_tm ON this_tm.team_id = other_tm.team_id
 				WHERE this_tm.user_id = (q->>0)::UUID AND other_tm.user_id = (q->>1)::UUID
 			) AS mutual_team_ids
 		FROM jsonb_array_elements($1::JSONB) AS q
-		"
-	))
-	.bind(serde_json::to_string(&query_users)?)
-	.fetch_all(&ctx.crdb("db-team").await?)
+		",
+		serde_json::to_string(&query_users)?,
+	)
 	.await?;
 
 	let users = relationships

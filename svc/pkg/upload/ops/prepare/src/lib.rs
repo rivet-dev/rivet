@@ -6,7 +6,7 @@ use proto::backend::{self, pkg::*};
 use rivet_operation::prelude::*;
 use serde_json::json;
 
-const CHUNK_SIZE: u64 = util::file_size::mebibytes(100);
+pub const CHUNK_SIZE: u64 = util::file_size::mebibytes(100);
 const MAX_UPLOAD_SIZE: u64 = util::file_size::gigabytes(10);
 const MAX_MULTIPART_UPLOAD_SIZE: u64 = util::file_size::gigabytes(100);
 
@@ -29,9 +29,9 @@ struct MultipartUpdate {
 async fn handle(
 	ctx: OperationContext<upload::prepare::Request>,
 ) -> GlobalResult<upload::prepare::Response> {
-	let crdb = ctx.crdb("db-upload").await?;
+	let crdb = ctx.crdb().await?;
 	let provider = if let Some(provider) = ctx.provider {
-		let proto_provider = internal_unwrap_owned!(
+		let proto_provider = unwrap!(
 			backend::upload::Provider::from_i32(provider),
 			"invalid upload provider"
 		);
@@ -67,11 +67,11 @@ async fn handle(
 		.filter(|file| file.multipart)
 		.fold(0, |acc, x| acc + x.content_length);
 	tracing::info!(len=%ctx.files.len(), %total_content_length, %total_multipart_content_length, "file info");
-	internal_assert!(
+	ensure!(
 		total_content_length < MAX_UPLOAD_SIZE,
 		"upload size must be < 10 gb"
 	);
-	internal_assert!(
+	ensure!(
 		total_content_length < MAX_MULTIPART_UPLOAD_SIZE,
 		"multipart uploads must be < 100 gb"
 	);
@@ -83,7 +83,7 @@ async fn handle(
 	for file in &ctx.files {
 		tracing::info!(?file, "signing url");
 
-		internal_assert!(
+		ensure!(
 			registered_paths.insert(file.path.clone()),
 			"duplicate file path"
 		);
@@ -113,36 +113,34 @@ async fn handle(
 		.collect::<Vec<_>>();
 
 	// Insert in to database
-	sqlx::query(indoc!(
+	sql_execute!(
+		[ctx]
 		"
 		WITH
 			_insert_upload AS (
-				INSERT INTO uploads (upload_id, create_ts, content_length, bucket, user_id, provider)
+				INSERT INTO db_upload.uploads (upload_id, create_ts, content_length, bucket, user_id, provider)
 				VALUES ($1, $2, $3, $4, $5, $6)
 				RETURNING 1
 			),
 			_insert_files AS (
-				INSERT INTO upload_files (upload_id, path, mime, content_length, nsfw_score_threshold)
+				INSERT INTO db_upload.upload_files (upload_id, path, mime, content_length, nsfw_score_threshold)
 				SELECT $1, rows.*
 				FROM unnest($7, $8, $9, $10) AS rows
 				RETURNING 1
 			)
 		SELECT 1
-		"
-	))
-	// Upload
-	.bind(upload_id)
-	.bind(ctx.ts())
-	.bind(total_content_length as i64)
-	.bind(&ctx.bucket)
-	.bind(user_id)
-	.bind(proto_provider as i32 as i64)
-	// Files
-	.bind(paths)
-	.bind(mimes)
-	.bind(content_lengths)
-	.bind(nsfw_score_thresholds)
-	.execute(&crdb)
+		",
+		upload_id,
+		ctx.ts(),
+		total_content_length as i64,
+		&ctx.bucket,
+		user_id,
+		proto_provider as i32 as i64,
+		paths,
+		mimes,
+		content_lengths,
+		nsfw_score_thresholds,
+	)
 	.await?;
 
 	// Create iterators to be joined later
@@ -179,9 +177,10 @@ async fn handle(
 			.try_collect::<Vec<_>>(),
 		// Set multipart upload ids
 		async {
-			sqlx::query(indoc!(
+			sql_execute!(
+				[ctx]
 				"
-				UPDATE upload_files
+				UPDATE db_upload.upload_files
 				SET multipart_upload_id = v.multipart_upload_id
 				FROM (
 					SELECT unnest($2) AS path,
@@ -190,12 +189,11 @@ async fn handle(
 				WHERE
 					upload_files.upload_id = $1 AND
 					upload_files.path = v.path
-				"
-			))
-			.bind(upload_id)
-			.bind(multipart_paths)
-			.bind(multipart_upload_ids)
-			.execute(&crdb)
+				",
+				upload_id,
+				multipart_paths,
+				multipart_upload_ids,
+			)
 			.await
 			.map_err(Into::<GlobalError>::into)
 		},
@@ -252,6 +250,8 @@ async fn handle_upload(
 			path: file.path.clone(),
 			url: presigned_upload_req.uri().to_string(),
 			part_number: 0,
+			byte_offset: 0,
+			content_length: file.content_length,
 		})
 	}
 	.boxed();
@@ -269,7 +269,7 @@ async fn handle_multipart_upload(
 ) -> GlobalResult<Vec<PrepareResult>> {
 	// NOTE: https://docs.aws.amazon.com/AmazonS3/latest/API/API_CompleteMultipartUpload.html. See error
 	// code `EntityTooSmall`
-	assert_with!(
+	ensure_with!(
 		file.content_length >= util::file_size::mebibytes(5),
 		UPLOAD_INVALID,
 		reason = "upload too small for multipart (< 5MiB)"
@@ -285,11 +285,12 @@ async fn handle_multipart_upload(
 	}
 
 	let multipart = multipart_builder.send().await?;
-	let multipart_upload_id = internal_unwrap_owned!(multipart.upload_id()).to_string();
+	let multipart_upload_id = unwrap!(multipart.upload_id()).to_string();
 
 	let part_count = util::div_up!(file.content_length, CHUNK_SIZE);
-	internal_assert!(part_count <= 10000, "too many parts");
+	ensure!(part_count <= 10000, "too many parts");
 
+	// S3's part number is 1-based
 	Ok((1..=part_count)
 		.map(|part_number| {
 			let s3_client = s3_client.clone();
@@ -299,13 +300,14 @@ async fn handle_multipart_upload(
 
 			let fut = async move {
 				// Sign an upload request
+				let offset = (part_number - 1) * CHUNK_SIZE;
+				let content_length = (file.content_length - offset).min(CHUNK_SIZE);
+
 				let upload_part_builder = s3_client
 					.upload_part()
 					.bucket(s3_client.bucket())
 					.key(format!("{}/{}", upload_id, file.path))
-					.content_length(
-						(file.content_length - part_number * CHUNK_SIZE).min(CHUNK_SIZE) as i64,
-					)
+					.content_length(content_length as i64)
 					.upload_id(multipart_upload_id2)
 					.part_number(part_number as i32);
 
@@ -321,6 +323,8 @@ async fn handle_multipart_upload(
 					path: file.path.clone(),
 					url: presigned_upload_req.uri().to_string(),
 					part_number: part_number as u32,
+					byte_offset: offset,
+					content_length,
 				})
 			}
 			.boxed();

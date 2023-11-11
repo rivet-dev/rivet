@@ -80,10 +80,10 @@ where
 
 		// Record metrics
 		metrics::CHIRP_REQUEST_PENDING
-			.with_label_values(&[&self.name])
+			.with_label_values(&[O::NAME])
 			.inc();
 		metrics::CHIRP_REQUEST_TOTAL
-			.with_label_values(&[&self.name])
+			.with_label_values(&[O::NAME])
 			.inc();
 
 		let start_instant = Instant::now();
@@ -91,7 +91,7 @@ where
 		// TODO: Throw dedicated "timed out" error here
 		// Process the request
 		let req_op_ctx = self.wrap::<O>(body)?;
-		let timeout_fut = tokio::time::timeout(O::TIMEOUT, O::handle(req_op_ctx));
+		let timeout_fut = tokio::time::timeout(O::TIMEOUT, O::handle(req_op_ctx).in_current_span());
 		let res = tokio::task::Builder::new()
 			.name("operation::handle")
 			.spawn(timeout_fut)?
@@ -105,14 +105,14 @@ where
 				Err(GlobalError::Internal { ty, code, .. }) => {
 					let error_code_str = code.as_str_name();
 					metrics::CHIRP_REQUEST_ERRORS
-						.with_label_values(&[&self.name, error_code_str, &ty])
+						.with_label_values(&[O::NAME, error_code_str, &ty])
 						.inc();
 
 					error_code_str.to_string()
 				}
 				Err(GlobalError::BadRequest { code, .. }) => {
 					metrics::CHIRP_REQUEST_ERRORS
-						.with_label_values(&[&self.name, &code, "bad_request"])
+						.with_label_values(&[O::NAME, &code, "bad_request"])
 						.inc();
 
 					code.clone()
@@ -123,25 +123,12 @@ where
 			// Other request metrics
 			let dt = start_instant.elapsed().as_secs_f64();
 			metrics::CHIRP_REQUEST_PENDING
-				.with_label_values(&[&self.name])
+				.with_label_values(&[O::NAME])
 				.dec();
 			metrics::CHIRP_REQUEST_DURATION
-				.with_label_values(&[&self.name, error_code_str.as_str()])
+				.with_label_values(&[O::NAME, error_code_str.as_str()])
 				.observe(dt);
 		}
-
-		// TODO: Add back
-		// // Submit perf
-		// let chirp = self.conn.chirp().clone();
-		// tokio::task::Builder::new().name("operation::perf").spawn(
-		// 	async move {
-		// 		// HACK: Force submit performance metrics after delay in order to ensure
-		// 		// all spans have ended appropriately
-		// 		tokio::time::sleep(Duration::from_secs(5)).await;
-		// 		chirp.perf().submit().await;
-		// 	}
-		// 	.instrument(tracing::info_span!("operation_perf")),
-		// )?;
 
 		res
 	}
@@ -269,8 +256,8 @@ where
 		self.conn.cache_handle()
 	}
 
-	pub async fn crdb(&self, key: &str) -> Result<CrdbPool, rivet_pools::Error> {
-		self.conn.crdb(key).await
+	pub async fn crdb(&self) -> Result<CrdbPool, rivet_pools::Error> {
+		self.conn.crdb().await
 	}
 
 	pub async fn redis_cache(&self) -> Result<RedisPool, rivet_pools::Error> {

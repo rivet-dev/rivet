@@ -31,15 +31,15 @@ async fn resolve_rivet_game_subdomain(
 	ctx: &OperationContext<game::namespace_resolve_url::Request>,
 	domain: &str,
 ) -> GlobalResult<Option<game::namespace_resolve_url::response::Resolution>> {
-	let strip_suffix = format!(".{}", util::env::domain_cdn());
+	let domain_cdn = unwrap!(util::env::domain_cdn());
+	let strip_suffix = format!(".{domain_cdn}");
 	tracing::info!(%domain, %strip_suffix, "attempting to strip base domain");
 	let specifier = if let Some(x) = domain.strip_suffix(&strip_suffix) {
 		x
 	} else {
 		tracing::info!(
 			%domain,
-			"base component is not {base} or {{ns}}.{base}",
-			base = util::env::domain_cdn(),
+			"base component is not {domain_cdn} or {{ns}}.{domain_cdn}",
 		);
 		return Ok(None);
 	};
@@ -64,7 +64,7 @@ async fn parse_game_and_namespace(
 	})
 	.await?;
 	let game_id = match game_resolve_res.games.first() {
-		Some(x) => internal_unwrap!(x.game_id).as_uuid(),
+		Some(x) => unwrap_ref!(x.game_id).as_uuid(),
 		None => {
 			tracing::info!(%game_name_id, "game with name id does not exist");
 			return Ok(None);
@@ -77,7 +77,7 @@ async fn parse_game_and_namespace(
 	})
 	.await?;
 	let ns_id = match ns_resolve_res.namespaces.first() {
-		Some(x) => internal_unwrap!(x.namespace_id).as_uuid(),
+		Some(x) => unwrap_ref!(x.namespace_id).as_uuid(),
 		None => {
 			tracing::info!(%game_name_id, %game_id, %ns_name_id, "namespace with name id does not exist for game");
 			return Ok(None);
@@ -100,7 +100,7 @@ async fn resolve_custom_domain(
 	})
 	.await?;
 	let namespace_id = if let Some(domain) = resolve_res.namespaces.first() {
-		internal_unwrap!(domain.namespace_id).as_uuid()
+		unwrap_ref!(domain.namespace_id).as_uuid()
 	} else {
 		tracing::info!(%domain, "no matching cdn domain");
 		return Ok(None);
@@ -111,8 +111,8 @@ async fn resolve_custom_domain(
 	})
 	.await?;
 	let ns_data = ns_res.namespaces.first();
-	let ns_data = internal_unwrap!(ns_data, "missing matching game namespace for cdn domain");
-	let game_id = internal_unwrap!(ns_data.game_id).as_uuid();
+	let ns_data = unwrap_ref!(ns_data, "missing matching game namespace for cdn domain");
+	let game_id = unwrap_ref!(ns_data.game_id).as_uuid();
 
 	Ok(Some(game::namespace_resolve_url::response::Resolution {
 		game_id: Some(game_id.into()),

@@ -20,9 +20,9 @@ async fn empty(ctx: TestCtx) {
 	let version_id = res.version_id.unwrap().as_uuid();
 
 	let (sql_display_name,): (String,) =
-		sqlx::query_as("SELECT display_name FROM game_versions WHERE version_id = $1")
+		sqlx::query_as("SELECT display_name FROM db_game.game_versions WHERE version_id = $1")
 			.bind(version_id)
-			.fetch_one(&ctx.crdb("db-game").await.unwrap())
+			.fetch_one(&ctx.crdb().await.unwrap())
 			.await
 			.unwrap();
 	assert_eq!(display_name, sql_display_name);

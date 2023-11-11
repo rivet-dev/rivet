@@ -72,7 +72,7 @@ pub async fn get_lobby(
 	ctx.auth().check_game_read(ctx.op_ctx(), game_id).await?;
 	let _game_ns = assert::namespace_for_game(&ctx, game_id, namespace_id).await?;
 
-	let lobby = internal_unwrap_owned!(fetch_lobby_logs(&ctx, vec![lobby_id])
+	let lobby = unwrap!(fetch_lobby_logs(&ctx, vec![lobby_id])
 		.await?
 		.into_iter()
 		.next());
@@ -86,7 +86,7 @@ pub async fn get_lobby(
 				step: 15000,
 				metrics: vec![job_run::metrics_log::request::Metric {
 					job: dispatched_job_id.clone(),
-					task: "game".to_owned(),
+					task: util_job::RUN_MAIN_TASK_NAME.to_owned(),
 				}],
 			})
 			.await;
@@ -164,28 +164,28 @@ async fn fetch_lobby_logs(ctx: &Ctx<Auth>, lobby_ids: Vec<Uuid>) -> GlobalResult
 				run
 			} else {
 				tracing::error!(?lobby, "missing run for lobby");
-				internal_panic!("missing run for lobby");
+				bail!("missing run for lobby");
 			};
-			let run_meta = internal_unwrap!(run.run_meta);
+			let run_meta = unwrap_ref!(run.run_meta);
 
 			GlobalResult::Ok(LobbyInfo {
 				summary: models::LogsLobbySummary {
-					lobby_id: internal_unwrap!(lobby.lobby_id).as_uuid().to_string(),
-					namespace_id: internal_unwrap!(lobby.namespace_id).as_uuid().to_string(),
+					lobby_id: unwrap_ref!(lobby.lobby_id).as_uuid().to_string(),
+					namespace_id: unwrap_ref!(lobby.namespace_id).as_uuid().to_string(),
 					lobby_group_name_id: {
-						let lobby_group = internal_unwrap_owned!(lobby_group_res
+						let lobby_group = unwrap!(lobby_group_res
 							.lobby_groups
 							.iter()
 							.find(|x| x.lobby_group_id.as_ref() == lobby.lobby_group_id.as_ref()));
 
 						lobby_group.name_id.to_owned()
 					},
-					region_id: internal_unwrap!(lobby.region_id).as_uuid().to_string(),
+					region_id: unwrap_ref!(lobby.region_id).as_uuid().to_string(),
 					create_ts: util::timestamp::to_chrono(lobby.create_ts)?,
 					start_ts: run.start_ts.map(util::timestamp::to_chrono).transpose()?,
 					ready_ts: lobby.ready_ts.map(util::timestamp::to_chrono).transpose()?,
 					status: if let Some(stop_ts) = lobby.stop_ts {
-						let (failed, exit_code) = match internal_unwrap!(run_meta.kind) {
+						let (failed, exit_code) = match unwrap_ref!(run_meta.kind) {
 							backend::job::run_meta::Kind::Nomad(nomad) => {
 								(nomad.failed.unwrap_or(false), nomad.exit_code.unwrap_or(0))
 							}
@@ -201,7 +201,7 @@ async fn fetch_lobby_logs(ctx: &Ctx<Auth>, lobby_ids: Vec<Uuid>) -> GlobalResult
 					},
 				},
 				run: Some(LobbyRunInfo {
-					dispatched_job_id: match internal_unwrap!(run_meta.kind) {
+					dispatched_job_id: match unwrap_ref!(run_meta.kind) {
 						backend::job::run_meta::Kind::Nomad(nomad) => {
 							nomad.dispatched_job_id.clone()
 						}

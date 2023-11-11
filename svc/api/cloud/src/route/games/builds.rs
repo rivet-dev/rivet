@@ -1,4 +1,5 @@
 use api_helper::{anchor::WatchIndexQuery, ctx::Ctx};
+use proto::backend;
 use rivet_api::models as new_models;
 use rivet_cloud_server::models;
 use rivet_convert::ApiTryInto;
@@ -47,8 +48,8 @@ pub async fn get_builds(
 			}
 
 			GlobalResult::Ok(models::BuildSummary {
-				build_id: internal_unwrap!(build.build_id).as_uuid().to_string(),
-				upload_id: internal_unwrap!(build.upload_id).as_uuid().to_string(),
+				build_id: unwrap_ref!(build.build_id).as_uuid().to_string(),
+				upload_id: unwrap_ref!(build.upload_id).as_uuid().to_string(),
 				display_name: build.display_name.clone(),
 				create_ts: util::timestamp::to_chrono(build.create_ts)?,
 				content_length: upload
@@ -78,19 +79,35 @@ pub async fn create_build(
 
 	let multipart_upload = body.multipart_upload.unwrap_or(false);
 
+	let kind = match body.kind {
+		None | Some(new_models::CloudGamesBuildKind::DockerImage) => {
+			backend::build::BuildKind::DockerImage
+		}
+		Some(new_models::CloudGamesBuildKind::OciBundle) => backend::build::BuildKind::OciBundle,
+	};
+
+	let compression = match body.compression {
+		None | Some(new_models::CloudGamesBuildCompression::None) => {
+			backend::build::BuildCompression::None
+		}
+		Some(new_models::CloudGamesBuildCompression::Lz4) => backend::build::BuildCompression::Lz4,
+	};
+
 	let create_res = op!([ctx] build_create {
 		game_id: Some(game_id.into()),
 		display_name: body.display_name,
 		image_tag: Some(body.image_tag),
 		image_file: Some((*body.image_file).try_into()?),
 		multipart: multipart_upload,
+		kind: kind as i32,
+		compression: compression as i32,
 		..Default::default()
 	})
 	.await?;
 
 	let image_presigned_request = if !multipart_upload {
 		Some(Box::new(
-			internal_unwrap_owned!(create_res.image_presigned_requests.first())
+			unwrap!(create_res.image_presigned_requests.first())
 				.clone()
 				.try_into()?,
 		))
@@ -112,8 +129,8 @@ pub async fn create_build(
 	};
 
 	Ok(new_models::CloudGamesCreateGameBuildResponse {
-		build_id: internal_unwrap!(create_res.build_id).as_uuid(),
-		upload_id: internal_unwrap!(create_res.upload_id).as_uuid(),
+		build_id: unwrap_ref!(create_res.build_id).as_uuid(),
+		upload_id: unwrap_ref!(create_res.upload_id).as_uuid(),
 		image_presigned_request,
 		image_presigned_requests,
 	})

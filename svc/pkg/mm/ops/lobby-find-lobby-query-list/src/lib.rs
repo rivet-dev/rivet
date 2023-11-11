@@ -6,7 +6,7 @@ use rivet_operation::prelude::*;
 async fn handle(
 	ctx: OperationContext<mm::lobby_find_lobby_query_list::Request>,
 ) -> GlobalResult<mm::lobby_find_lobby_query_list::Response> {
-	let lobby_id = internal_unwrap!(ctx.lobby_id).as_uuid();
+	let lobby_id = unwrap_ref!(ctx.lobby_id).as_uuid();
 
 	let query_ids = ctx
 		.redis_mm()

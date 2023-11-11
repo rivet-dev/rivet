@@ -13,8 +13,8 @@
 
 #[derive(Clone, Debug, PartialEq, Default, Serialize, Deserialize)]
 pub struct AuthStartEmailVerificationRequest {
-    #[serde(rename = "captcha")]
-    pub captcha: Box<crate::models::CaptchaConfig>,
+    #[serde(rename = "captcha", skip_serializing_if = "Option::is_none")]
+    pub captcha: Option<Box<crate::models::CaptchaConfig>>,
     #[serde(rename = "email")]
     pub email: String,
     #[serde(rename = "game_id", skip_serializing_if = "Option::is_none")]
@@ -22,9 +22,9 @@ pub struct AuthStartEmailVerificationRequest {
 }
 
 impl AuthStartEmailVerificationRequest {
-    pub fn new(captcha: crate::models::CaptchaConfig, email: String) -> AuthStartEmailVerificationRequest {
+    pub fn new(email: String) -> AuthStartEmailVerificationRequest {
         AuthStartEmailVerificationRequest {
-            captcha: Box::new(captcha),
+            captcha: None,
             email,
             game_id: None,
         }

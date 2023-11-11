@@ -25,9 +25,9 @@ async fn empty(ctx: TestCtx) {
 
 	// TODO: Hack
 	loop {
-		let crdb = ctx.crdb("db-game-user").await.unwrap();
+		let crdb = ctx.crdb().await.unwrap();
 		let (crdb_exists,) = sqlx::query_as::<_, (bool,)>(
-			"SELECT EXISTS (SELECT 1 FROM sessions WHERE game_user_id = $1)",
+			"SELECT EXISTS (SELECT 1 FROM db_game_user.sessions WHERE game_user_id = $1)",
 		)
 		.bind(game_user_id)
 		.fetch_one(&crdb)

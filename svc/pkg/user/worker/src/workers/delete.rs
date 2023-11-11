@@ -9,8 +9,8 @@ const UPLOAD_BATCH_SIZE: usize = 256;
 
 #[worker(name = "user-delete")]
 async fn worker(ctx: &OperationContext<user::msg::delete::Message>) -> GlobalResult<()> {
-	let user_id = internal_unwrap!(ctx.user_id).as_uuid();
-	let crdb = ctx.crdb("db-user").await?;
+	let user_id = unwrap_ref!(ctx.user_id).as_uuid();
+	let crdb = ctx.crdb().await?;
 
 	// Delete user identities
 	{
@@ -38,7 +38,7 @@ async fn worker(ctx: &OperationContext<user::msg::delete::Message>) -> GlobalRes
 				chat_messages_res
 					.messages
 					.iter()
-					.map(|msg| Ok(internal_unwrap_owned!(msg.chat_message_id)))
+					.map(|msg| Ok(unwrap!(msg.chat_message_id)))
 					.collect::<GlobalResult<Vec<_>>>()?,
 			)
 			.map(|chat_message_id| {
@@ -80,7 +80,7 @@ async fn worker(ctx: &OperationContext<user::msg::delete::Message>) -> GlobalRes
 				limit: UPLOAD_BATCH_SIZE as u32,
 			})
 			.await?;
-			let user = internal_unwrap_owned!(uploads_res.users.first());
+			let user = unwrap!(uploads_res.users.first());
 
 			let request_id = Uuid::new_v4();
 			msg!([ctx] upload::msg::delete(request_id) -> upload::msg::delete_complete {
@@ -108,12 +108,12 @@ async fn worker(ctx: &OperationContext<user::msg::delete::Message>) -> GlobalRes
 			user_ids: vec![user_id.into()],
 		})
 		.await?;
-		let user_teams = internal_unwrap_owned!(user_teams_res.users.first());
+		let user_teams = unwrap!(user_teams_res.users.first());
 
 		let teams_res = op!([ctx] team_get {
 			team_ids: user_teams.teams
 				.iter()
-				.map(|member| Ok(internal_unwrap_owned!(member.team_id)))
+				.map(|member| Ok(unwrap!(member.team_id)))
 				.collect::<GlobalResult<Vec<_>>>()?
 		})
 		.await?;
@@ -129,7 +129,7 @@ async fn worker(ctx: &OperationContext<user::msg::delete::Message>) -> GlobalRes
 				let team_id_proto = team.team_id;
 
 				async move {
-					let team_id = internal_unwrap_owned!(team_id_proto).as_uuid();
+					let team_id = unwrap!(team_id_proto).as_uuid();
 
 					msg!([ctx] team::msg::member_remove(team_id, user_id) -> team::msg::member_remove_complete {
 						user_id: ctx.user_id,
@@ -149,22 +149,24 @@ async fn worker(ctx: &OperationContext<user::msg::delete::Message>) -> GlobalRes
 	{
 		tracing::info!(?user_id, "removing user record");
 
-		sqlx::query(indoc!(
+		sql_execute!(
+			[ctx]
 			"
-			UPDATE users
+			UPDATE db_user.users
 			SET
 				display_name = $2,
 				profile_id = NULL,
 				bio = '',
 				delete_complete_ts = $3
 			WHERE user_id = $1
-			"
-		))
-		.bind(user_id)
-		.bind(gen_display_name())
-		.bind(util::timestamp::now())
-		.execute(&crdb)
+			",
+			user_id,
+			gen_display_name(),
+			util::timestamp::now(),
+		)
 		.await?;
+
+		ctx.cache().purge("user", [user_id]).await?;
 	}
 
 	msg!([ctx] user::msg::delete_complete(user_id) {

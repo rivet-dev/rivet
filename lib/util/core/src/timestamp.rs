@@ -15,11 +15,11 @@ pub fn end_of_month(ts: i64) -> GlobalResult<NaiveDateTime> {
 	let nanos = (ts % 1000 * 1_000_000).try_into()?;
 
 	// Get year and month of current month
-	let current_date = internal_unwrap_owned!(NaiveDateTime::from_timestamp_opt(ts / 1000, nanos));
+	let current_date = unwrap!(NaiveDateTime::from_timestamp_opt(ts / 1000, nanos));
 	let year = current_date.year();
 	let month = current_date.month();
 
-	let date = internal_unwrap_owned!(NaiveDate::from_ymd_opt(year, month + 1, 1)
+	let date = unwrap!(NaiveDate::from_ymd_opt(year, month + 1, 1)
 		.or_else(|| NaiveDate::from_ymd_opt(year + 1, 1, 1))
 		.and_then(|date| date.and_hms_opt(0, 0, 0)));
 
@@ -29,7 +29,7 @@ pub fn end_of_month(ts: i64) -> GlobalResult<NaiveDateTime> {
 pub fn to_chrono(ts: i64) -> GlobalResult<DateTime<Utc>> {
 	let nanos = (ts % 1000 * 1_000_000).try_into()?;
 	let local = Utc.timestamp_opt(ts / 1000, nanos).latest();
-	Ok(internal_unwrap_owned!(local))
+	Ok(unwrap!(local))
 }
 
 pub fn to_string(ts: i64) -> GlobalResult<String> {

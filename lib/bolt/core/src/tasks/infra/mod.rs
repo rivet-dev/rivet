@@ -1,11 +1,9 @@
 use anyhow::*;
-use bolt_config::ns::ClusterKind;
+
+use tokio::time::Instant;
 
 use crate::{
-	config,
-	context::ProjectContext,
-	dep::{salt, terraform},
-	tasks,
+	config::ns, context::ProjectContext, dep::terraform, tasks,
 	utils::command_helper::CommandHelper,
 };
 
@@ -34,18 +32,15 @@ pub enum PlanStepKind {
 		/// The purpose of this is to speed up the destroy step in CI.
 		needs_destroy: bool,
 	},
-	Salt {
-		filter: Option<String>,
-		/// Filter which SLS files to apply.
-		sls: Option<Vec<String>>,
-		config_opts: salt::config::BuildOpts,
-	},
 	Migrate,
 	Up,
 }
 
 impl PlanStepKind {
 	async fn execute(&self, ctx: ProjectContext, opts: &ExecutePlanOpts) -> Result<()> {
+		// Generate the project before each step since things likely changed between steps
+		tasks::gen::generate_project(&ctx).await;
+
 		match self {
 			PlanStepKind::Terraform { plan_id, .. } => {
 				let varfile_path = ctx.gen_tf_env_path();
@@ -61,34 +56,10 @@ impl PlanStepKind {
 
 				terraform::output::clear_cache(&ctx, &plan_id).await;
 			}
-			PlanStepKind::Salt {
-				filter,
-				sls,
-				config_opts,
-			} => {
-				let apply_opts = salt::cli::ApplyOpts {
-					sls: (*sls).clone(),
-					..Default::default()
-				};
-				if let Some(filter) = &filter {
-					salt::cli::apply(&ctx, filter, &apply_opts, config_opts).await?;
-				} else {
-					salt::cli::apply_all(&ctx, &apply_opts, config_opts).await?;
-				}
-			}
 			PlanStepKind::Migrate => {
 				tasks::migrate::up_all(&ctx).await?;
 			}
-			PlanStepKind::Up => {
-				tasks::up::up_all(
-					&ctx,
-					tasks::up::UpOpts {
-						auto_approve: opts.auto_approve,
-						..Default::default()
-					},
-				)
-				.await?
-			}
+			PlanStepKind::Up => tasks::up::up_all(&ctx, false).await?,
 		}
 
 		Ok(())
@@ -117,7 +88,7 @@ impl PlanStepKind {
 
 				terraform::output::clear_cache(&ctx, &plan_id).await;
 			}
-			PlanStepKind::Salt { .. } | PlanStepKind::Migrate | PlanStepKind::Up => {
+			PlanStepKind::Migrate | PlanStepKind::Up => {
 				// Do nothing
 			}
 		}
@@ -126,43 +97,115 @@ impl PlanStepKind {
 	}
 }
 
-pub fn build_plan(ctx: &ProjectContext, start_at: Option<String>) -> Result<Vec<PlanStep>> {
+pub fn build_plan(
+	ctx: &ProjectContext,
+	start_at: Option<String>,
+	reverse: bool,
+) -> Result<Vec<PlanStep>> {
 	let mut plan = Vec::new();
 
-	// TLS
-	plan.push(PlanStep {
-		name_id: "tf-tls",
-		kind: PlanStepKind::Terraform {
-			plan_id: "tls".into(),
-			needs_destroy: true,
-		},
-	});
+	// Infra
+	match ctx.ns().kubernetes.provider {
+		ns::KubernetesProvider::K3d { .. } => {
+			plan.push(PlanStep {
+				name_id: "k8s-cluster-k3d",
+				kind: PlanStepKind::Terraform {
+					plan_id: "k8s_cluster_k3d".into(),
+					needs_destroy: true,
+				},
+			});
+		}
+		ns::KubernetesProvider::AwsEks { .. } => {
+			plan.push(PlanStep {
+				name_id: "k8s-cluster-aws",
+				kind: PlanStepKind::Terraform {
+					plan_id: "k8s_cluster_aws".into(),
+					needs_destroy: true,
+				},
+			});
+		}
+	}
 
-	// Nebula
+	// Kubernetes
 	plan.push(PlanStep {
-		name_id: "tf-nebula",
+		name_id: "k8s-infra",
 		kind: PlanStepKind::Terraform {
-			plan_id: "nebula".into(),
+			plan_id: "k8s_infra".into(),
 			needs_destroy: false,
 		},
 	});
 
-	// Master
-	match ctx.ns().cluster.kind {
-		ClusterKind::SingleNode { .. } => {
+	if ctx.tls_enabled() {
+		// TLS
+		plan.push(PlanStep {
+			name_id: "tls",
+			kind: PlanStepKind::Terraform {
+				plan_id: "tls".into(),
+				needs_destroy: true,
+			},
+		});
+	}
+
+	// Redis
+	match ctx.ns().redis.provider {
+		ns::RedisProvider::Kubernetes {} => {
 			plan.push(PlanStep {
-				name_id: "tf-master-local",
+				name_id: "redis-k8s",
 				kind: PlanStepKind::Terraform {
-					plan_id: "master_local".into(),
+					plan_id: "redis_k8s".into(),
 					needs_destroy: false,
 				},
 			});
 		}
-		ClusterKind::Distributed { .. } => {
+		ns::RedisProvider::Aws { .. } => {
 			plan.push(PlanStep {
-				name_id: "tf-master-cluster",
+				name_id: "redis-aws",
 				kind: PlanStepKind::Terraform {
-					plan_id: "master_cluster".into(),
+					plan_id: "redis_aws".into(),
+					needs_destroy: true,
+				},
+			});
+		}
+	}
+
+	// CockroachDB
+	match ctx.ns().cockroachdb.provider {
+		ns::CockroachDBProvider::Kubernetes {} => {
+			plan.push(PlanStep {
+				name_id: "cockroachdb-k8s",
+				kind: PlanStepKind::Terraform {
+					plan_id: "cockroachdb_k8s".into(),
+					needs_destroy: false,
+				},
+			});
+		}
+		ns::CockroachDBProvider::Managed { .. } => {
+			plan.push(PlanStep {
+				name_id: "cockroachdb-managed",
+				kind: PlanStepKind::Terraform {
+					plan_id: "cockroachdb_managed".into(),
+					needs_destroy: true,
+				},
+			});
+		}
+	}
+
+	// ClickHouse
+	match ctx.ns().clickhouse.provider {
+		ns::ClickHouseProvider::Kubernetes {} => {
+			plan.push(PlanStep {
+				name_id: "clickhouse-k8s",
+				kind: PlanStepKind::Terraform {
+					plan_id: "clickhouse_k8s".into(),
+					needs_destroy: false,
+				},
+			});
+		}
+		ns::ClickHouseProvider::Managed { .. } => {
+			plan.push(PlanStep {
+				name_id: "clickhouse-managed",
+				kind: PlanStepKind::Terraform {
+					plan_id: "clickhouse_managed".into(),
 					needs_destroy: true,
 				},
 			});
@@ -170,71 +213,55 @@ pub fn build_plan(ctx: &ProjectContext, start_at: Option<String>) -> Result<Vec<
 	}
 
 	// Pools
-	plan.push(PlanStep {
-		name_id: "tf-pools",
-		kind: PlanStepKind::Terraform {
-			plan_id: "pools".into(),
-			needs_destroy: true,
-		},
-	});
-
-	// DNS
-	plan.push(PlanStep {
-		name_id: "tf-dns",
-		kind: PlanStepKind::Terraform {
-			plan_id: "dns".into(),
-			needs_destroy: true,
-		},
-	});
-
-	// Cloudflare
-	plan.push(PlanStep {
-		name_id: "tf-cf-workers",
-		kind: PlanStepKind::Terraform {
-			plan_id: "cloudflare_workers".into(),
-			needs_destroy: true,
-		},
-	});
-
-	if let config::ns::DnsProvider::Cloudflare {
-		access: Some(_), ..
-	} = ctx.ns().dns.provider
-	{
+	if ctx.ns().dns.is_some() {
 		plan.push(PlanStep {
-			name_id: "tf-cf-tunnels",
+			name_id: "pools",
 			kind: PlanStepKind::Terraform {
-				plan_id: "cloudflare_tunnels".into(),
+				plan_id: "pools".into(),
 				needs_destroy: true,
 			},
 		});
 	}
 
-	// Grafana
-	if ctx.ns().grafana.is_some() {
-		plan.push(PlanStep {
-			name_id: "tf-grafana",
-			kind: PlanStepKind::Terraform {
-				plan_id: "grafana".into(),
-				needs_destroy: true,
-			},
-		});
+	if let Some(dns) = &ctx.ns().dns {
+		// TODO: Allow manual DNS config
+
+		if let Some(ns::DnsProvider::Cloudflare { access, .. }) = &dns.provider {
+			// DNS
+			plan.push(PlanStep {
+				name_id: "dns",
+				kind: PlanStepKind::Terraform {
+					plan_id: "dns".into(),
+					needs_destroy: true,
+				},
+			});
+
+			// Cloudflare
+			plan.push(PlanStep {
+				name_id: "cf-workers",
+				kind: PlanStepKind::Terraform {
+					plan_id: "cloudflare_workers".into(),
+					needs_destroy: true,
+				},
+			});
+
+			if access.is_some() {
+				plan.push(PlanStep {
+					name_id: "cf-tunnels",
+					kind: PlanStepKind::Terraform {
+						plan_id: "cloudflare_tunnels".into(),
+						needs_destroy: true,
+					},
+				});
+			}
+		}
 	}
 
 	// S3
 	let s3_providers = &ctx.ns().s3.providers;
 	if s3_providers.minio.is_some() {
-		// Install Minio for s3_minio Terraform plan
 		plan.push(PlanStep {
-			name_id: "salt-minio",
-			kind: PlanStepKind::Salt {
-				filter: Some("G@roles:minio".into()),
-				sls: None,
-				config_opts: salt::config::BuildOpts { skip_s3: true },
-			},
-		});
-
-		plan.push(PlanStep {
-			name_id: "tf-s3-minio",
+			name_id: "s3-minio",
 			kind: PlanStepKind::Terraform {
 				plan_id: "s3_minio".into(),
 				needs_destroy: false,
@@ -243,7 +270,7 @@ pub fn build_plan(ctx: &ProjectContext, start_at: Option<String>) -> Result<Vec<
 	}
 	if s3_providers.backblaze.is_some() {
 		plan.push(PlanStep {
-			name_id: "tf-s3-backblaze",
+			name_id: "s3-backblaze",
 			kind: PlanStepKind::Terraform {
 				plan_id: "s3_backblaze".into(),
 				needs_destroy: true,
@@ -252,31 +279,13 @@ pub fn build_plan(ctx: &ProjectContext, start_at: Option<String>) -> Result<Vec<
 	}
 	if s3_providers.aws.is_some() {
 		plan.push(PlanStep {
-			name_id: "tf-s3-aws",
+			name_id: "s3-aws",
 			kind: PlanStepKind::Terraform {
 				plan_id: "s3_aws".into(),
 				needs_destroy: true,
 			},
 		});
 	}
-
-	// Apply the rest of the Salt configs
-	plan.push(PlanStep {
-		name_id: "salt",
-		kind: PlanStepKind::Salt {
-			filter: None,
-			sls: None,
-			config_opts: Default::default(),
-		},
-	});
-
-	plan.push(PlanStep {
-		name_id: "tf-nomad",
-		kind: PlanStepKind::Terraform {
-			plan_id: "nomad".into(),
-			needs_destroy: false,
-		},
-	});
 
 	plan.push(PlanStep {
 		name_id: "migrate",
@@ -295,7 +304,11 @@ pub fn build_plan(ctx: &ProjectContext, start_at: Option<String>) -> Result<Vec<
 			.position(|x| x.name_id == start_at)
 			.ok_or_else(|| anyhow!("invalid start_at value: {}", start_at))?;
 
-		plan = plan[idx..].to_vec();
+		if reverse {
+			plan = plan[..=idx].to_vec();
+		} else {
+			plan = plan[idx..].to_vec();
+		}
 	}
 
 	Ok(plan)
@@ -303,7 +316,7 @@ pub fn build_plan(ctx: &ProjectContext, start_at: Option<String>) -> Result<Vec<
 
 /// List all of the Terraform plans in use for the generated plan.
 pub fn all_terraform_plans(ctx: &ProjectContext) -> Result<Vec<String>> {
-	let plan_ids = build_plan(ctx, None)?
+	let plan_ids = build_plan(ctx, None, false)?
 		.into_iter()
 		.flat_map(|x| {
 			if let PlanStepKind::Terraform { plan_id, .. } = x.kind {
@@ -327,11 +340,17 @@ pub async fn execute_plan(
 	for (i, step) in plan.iter().enumerate() {
 		eprintln!();
 		eprintln!();
+
 		rivet_term::status::info(
-			"Executing",
+			"Executing step",
 			format!("({}/{}) {}", i + 1, plan.len(), step.name_id),
 		);
+		let start = Instant::now();
 		step.kind.execute(ctx.clone(), &opts).await?;
+		rivet_term::status::progress(
+			"Step complete",
+			format!("{:.1}s", start.elapsed().as_secs_f32()),
+		);
 	}
 
 	Ok(())

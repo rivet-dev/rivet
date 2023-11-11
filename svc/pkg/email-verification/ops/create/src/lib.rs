@@ -8,10 +8,10 @@ use serde_json::json;
 async fn handle(
 	ctx: OperationContext<email_verification::create::Request>,
 ) -> GlobalResult<email_verification::create::Response> {
-	let crdb = ctx.crdb("db-email-verification").await?;
+	let crdb = ctx.crdb().await?;
 
 	let email_parse = EmailAddress::parse(&ctx.email, None);
-	let email = internal_unwrap!(email_parse);
+	let email = unwrap_ref!(email_parse);
 
 	// Combine the email parts together and make the entire email lowercase
 	let email = format!("{}@{}", email.get_local_part(), email.get_domain()).to_lowercase();
@@ -20,9 +20,10 @@ async fn handle(
 	let verification_id = Uuid::new_v4();
 	let code = gen_code();
 	let expire_ts = ctx.ts() + util::duration::minutes(15);
-	sqlx::query(indoc!(
+	sql_execute!(
+		[ctx]
 		"
-		INSERT INTO verifications (
+		INSERT INTO db_email_verification.verifications (
 			verification_id,
 			email,
 			code,
@@ -30,14 +31,13 @@ async fn handle(
 			expire_ts
 		)
 		VALUES ($1, $2, $3, $4, $5)
-		"
-	))
-	.bind(verification_id)
-	.bind(&email)
-	.bind(&code)
-	.bind(ctx.ts())
-	.bind(expire_ts)
-	.execute(&crdb)
+		",
+		verification_id,
+		&email,
+		&code,
+		ctx.ts(),
+		expire_ts,
+	)
 	.await?;
 
 	let (template_id, dynamic_template_data) = if let Some(game_id) = ctx.game_id {
@@ -45,14 +45,13 @@ async fn handle(
 			game_ids: vec![game_id],
 		})
 		.await?;
-		let game = unwrap_with_owned!(games_res.games.first(), GAME_NOT_FOUND);
+		let game = unwrap_with!(games_res.games.first(), GAME_NOT_FOUND);
 
 		(
 			"d-a742c54153a6436694516fc58cb6eabf".to_string(),
 			json!({
 				"game_display_name": game.display_name.clone(),
-				"game_logo_url": util::route::game_logo(
-					&game),
+				"game_logo_url": util::route::game_logo(game),
 				"verification_code": code,
 			}),
 		)

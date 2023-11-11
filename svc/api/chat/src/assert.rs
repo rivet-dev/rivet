@@ -17,15 +17,15 @@ pub async fn chat_thread_participant(
 	.await?;
 
 	// Check if participant
-	let thread = internal_unwrap_owned!(participants_res.threads.first()).clone();
+	let thread = unwrap!(participants_res.threads.first()).clone();
 	let is_participant = thread
 		.participants
 		.iter()
-		.map(|p| Ok(internal_unwrap!(p.user_id).as_uuid()))
+		.map(|p| Ok(unwrap_ref!(p.user_id).as_uuid()))
 		.collect::<GlobalResult<Vec<_>>>()?
 		.contains(&user_id);
 
-	util::assert_with!(is_participant, CHAT_THREAD_NOT_FOUND);
+	util::ensure_with!(is_participant, CHAT_THREAD_NOT_FOUND);
 
 	Ok(())
 }

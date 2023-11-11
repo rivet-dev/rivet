@@ -1,17 +1,17 @@
 # \MatchmakerLobbiesApi
 
-All URIs are relative to *http://localhost*
+All URIs are relative to *https://api.rivet.gg*
 
 Method | HTTP request | Description
 ------------- | ------------- | -------------
-[**matchmaker_lobbies_create**](MatchmakerLobbiesApi.md#matchmaker_lobbies_create) | **POST** /lobbies/create | 
-[**matchmaker_lobbies_find**](MatchmakerLobbiesApi.md#matchmaker_lobbies_find) | **POST** /lobbies/find | 
-[**matchmaker_lobbies_get_state**](MatchmakerLobbiesApi.md#matchmaker_lobbies_get_state) | **GET** /lobbies/{lobby_id}/state | 
-[**matchmaker_lobbies_join**](MatchmakerLobbiesApi.md#matchmaker_lobbies_join) | **POST** /lobbies/join | 
-[**matchmaker_lobbies_list**](MatchmakerLobbiesApi.md#matchmaker_lobbies_list) | **GET** /lobbies/list | 
-[**matchmaker_lobbies_ready**](MatchmakerLobbiesApi.md#matchmaker_lobbies_ready) | **POST** /lobbies/ready | 
-[**matchmaker_lobbies_set_closed**](MatchmakerLobbiesApi.md#matchmaker_lobbies_set_closed) | **PUT** /lobbies/closed | 
-[**matchmaker_lobbies_set_state**](MatchmakerLobbiesApi.md#matchmaker_lobbies_set_state) | **PUT** /lobbies/state | 
+[**matchmaker_lobbies_create**](MatchmakerLobbiesApi.md#matchmaker_lobbies_create) | **POST** /matchmaker/lobbies/create | 
+[**matchmaker_lobbies_find**](MatchmakerLobbiesApi.md#matchmaker_lobbies_find) | **POST** /matchmaker/lobbies/find | 
+[**matchmaker_lobbies_get_state**](MatchmakerLobbiesApi.md#matchmaker_lobbies_get_state) | **GET** /matchmaker/lobbies/{lobby_id}/state | 
+[**matchmaker_lobbies_join**](MatchmakerLobbiesApi.md#matchmaker_lobbies_join) | **POST** /matchmaker/lobbies/join | 
+[**matchmaker_lobbies_list**](MatchmakerLobbiesApi.md#matchmaker_lobbies_list) | **GET** /matchmaker/lobbies/list | 
+[**matchmaker_lobbies_ready**](MatchmakerLobbiesApi.md#matchmaker_lobbies_ready) | **POST** /matchmaker/lobbies/ready | 
+[**matchmaker_lobbies_set_closed**](MatchmakerLobbiesApi.md#matchmaker_lobbies_set_closed) | **PUT** /matchmaker/lobbies/closed | 
+[**matchmaker_lobbies_set_state**](MatchmakerLobbiesApi.md#matchmaker_lobbies_set_state) | **PUT** /matchmaker/lobbies/state | 
 
 
 

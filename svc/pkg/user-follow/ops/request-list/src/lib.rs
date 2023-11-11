@@ -19,10 +19,11 @@ async fn handle(
 		.collect::<Vec<_>>();
 	let limit = ctx.limit;
 
-	internal_assert!(limit != 0, "limit too low");
-	internal_assert!(limit <= 32, "limit too high");
+	ensure!(limit != 0, "limit too low");
+	ensure!(limit <= 32, "limit too high");
 
-	let follows = sqlx::query_as::<_, Follow>(indoc!(
+	let follows = sql_fetch_all!(
+		[ctx, Follow]
 		"
 		SELECT follower_user_id, following_user_id, create_ts, ignored, is_mutual
 		FROM (
@@ -30,13 +31,13 @@ async fn handle(
 				uf.follower_user_id, uf.following_user_id, uf.create_ts, uf.ignored,
 				EXISTS(
 					SELECT 1
-					FROM user_follows AS uf2
+					FROM db_user_follow.user_follows AS uf2
 					WHERE
 						uf2.follower_user_id = uf.following_user_id AND
 						uf2.following_user_id = uf.follower_user_id
 				) AS is_mutual
 			FROM unnest($1::UUID[]) AS q
-			INNER JOIN user_follows AS uf
+			INNER JOIN db_user_follow.user_follows AS uf
 			ON uf.following_user_id = q
 		)
 		WHERE
@@ -46,11 +47,10 @@ async fn handle(
 		ORDER BY create_ts DESC
 		LIMIT $3
 		",
-	))
-	.bind(&user_ids)
-	.bind(ctx.anchor.unwrap_or_default())
-	.bind(limit as i64)
-	.fetch_all(&ctx.crdb("db-user-follow").await?)
+		&user_ids,
+		ctx.anchor.unwrap_or_default(),
+		limit as i64,
+	)
 	.await?;
 
 	let follows = user_ids

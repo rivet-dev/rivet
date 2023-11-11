@@ -1,2 +1,1 @@
-pub mod create;
-pub mod edit;
+chirp_worker::workers![create, edit,];

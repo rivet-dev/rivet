@@ -15,8 +15,23 @@ variable "domain_job" {
 	type = string
 }
 
+# MARK: K8s
+variable "kubeconfig_path" {
+	type = string
+}
+
 # MARK: Regions
 variable "regions" {
 	type = map(object({
 	}))
 }
+
+# MARK: S3
+variable "s3_providers" {
+	type = map(object({
+		endpoint_internal = string
+		endpoint_external = string
+		region = string
+	}))
+}
+

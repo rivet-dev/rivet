@@ -9,39 +9,34 @@ struct LobbyRow {
 
 #[worker(name = "mm-lobby-stop")]
 async fn worker(ctx: &OperationContext<mm::msg::lobby_stop::Message>) -> GlobalResult<()> {
-	let lobby_id = internal_unwrap!(ctx.lobby_id).as_uuid();
+	let lobby_id = unwrap_ref!(ctx.lobby_id).as_uuid();
 
-	let crdb = ctx.crdb("db-mm-state").await?;
-
-	if ctx.req_dt() > util::duration::minutes(5) {
-		tracing::error!(?lobby_id, "discarding stale message");
-		return Ok(());
-	}
+	let crdb = ctx.crdb().await?;
 
 	// Fetch the lobby.
 	//
 	// This also ensures that mm-lobby-find or mm-lobby-create
 	// has already inserted the row and prevents race conditions.
-	let lobby_row = sqlx::query_as::<_, LobbyRow>(indoc!(
+	let lobby_row = sql_fetch_optional!(
+		[ctx, LobbyRow]
 		"
 		WITH
 			select_lobby AS (
 				SELECT stop_ts, run_id
-				FROM lobbies
+				FROM db_mm_state.lobbies
 				WHERE lobby_id = $1
 			),
 			_update AS (
-				UPDATE lobbies
+				UPDATE db_mm_state.lobbies
 				SET stop_ts = $2
 				WHERE lobby_id = $1 AND stop_ts IS NULL
 				RETURNING 1
 			)
 		SELECT * FROM select_lobby
-		"
-	))
-	.bind(lobby_id)
-	.bind(ctx.ts())
-	.fetch_optional(&crdb)
+		",
+		lobby_id,
+		ctx.ts(),
+	)
 	.await?;
 	tracing::info!(?lobby_row, "lobby row");
 
@@ -50,7 +45,7 @@ async fn worker(ctx: &OperationContext<mm::msg::lobby_stop::Message>) -> GlobalR
 			tracing::error!("discarding stale message");
 			return Ok(());
 		} else {
-			retry_panic!("lobby not found, may be race condition with insertion");
+			retry_bail!("lobby not found, may be race condition with insertion");
 		}
 	};
 

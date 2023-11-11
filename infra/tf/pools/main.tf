@@ -12,7 +12,7 @@ module "secrets" {
 
 	keys = [
 		"linode/terraform/token",
-		"ssh/salt_minion/private_key_openssh",
+		"ssh/server/private_key_openssh",
 	]
 }
 

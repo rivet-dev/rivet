@@ -56,13 +56,13 @@ async fn handle(
 						return GlobalResult::Ok(None);
 					}
 
-					let user_id = util::uuid::parse(internal_unwrap!(user_id))?;
-					let game_id = util::uuid::parse(internal_unwrap!(game_id))?;
+					let user_id = util::uuid::parse(unwrap_ref!(user_id))?;
+					let game_id = util::uuid::parse(unwrap_ref!(game_id))?;
 					GlobalResult::Ok(Some((
 						user_id,
 						backend::user::presence::GameActivity {
 							game_id: Some(game_id.into()),
-							message: internal_unwrap_owned!(message),
+							message: unwrap!(message),
 							public_metadata,
 							friend_metadata,
 						},
@@ -99,12 +99,12 @@ async fn handle(
 					return GlobalResult::Ok(None);
 				}
 
-				let user_id = util::uuid::parse(internal_unwrap!(user_id))?;
+				let user_id = util::uuid::parse(unwrap_ref!(user_id))?;
 				GlobalResult::Ok(Some((
 					user_id,
 					backend::user::Presence {
-						update_ts: internal_unwrap_owned!(update_ts),
-						status: internal_unwrap_owned!(status) as i32,
+						update_ts: unwrap!(update_ts),
+						status: unwrap!(status) as i32,
 						game_activity: game_activities.remove(&user_id),
 					},
 				)))

@@ -61,7 +61,7 @@ pub async fn group_invites_consume_invite(configuration: &configuration::Configu
 
     let local_var_client = &local_var_configuration.client;
 
-    let local_var_uri_str = format!("{}/invites/{group_invite_code}/consume", local_var_configuration.base_path, group_invite_code=crate::apis::urlencode(group_invite_code));
+    let local_var_uri_str = format!("{}/group/invites/{group_invite_code}/consume", local_var_configuration.base_path, group_invite_code=crate::apis::urlencode(group_invite_code));
     let mut local_var_req_builder = local_var_client.request(reqwest::Method::POST, local_var_uri_str.as_str());
 
     if let Some(ref local_var_user_agent) = local_var_configuration.user_agent {
@@ -92,7 +92,7 @@ pub async fn group_invites_create_invite(configuration: &configuration::Configur
 
     let local_var_client = &local_var_configuration.client;
 
-    let local_var_uri_str = format!("{}/groups/{group_id}/invites", local_var_configuration.base_path, group_id=crate::apis::urlencode(group_id));
+    let local_var_uri_str = format!("{}/group/groups/{group_id}/invites", local_var_configuration.base_path, group_id=crate::apis::urlencode(group_id));
     let mut local_var_req_builder = local_var_client.request(reqwest::Method::POST, local_var_uri_str.as_str());
 
     if let Some(ref local_var_user_agent) = local_var_configuration.user_agent {
@@ -124,7 +124,7 @@ pub async fn group_invites_get_invite(configuration: &configuration::Configurati
 
     let local_var_client = &local_var_configuration.client;
 
-    let local_var_uri_str = format!("{}/invites/{group_invite_code}", local_var_configuration.base_path, group_invite_code=crate::apis::urlencode(group_invite_code));
+    let local_var_uri_str = format!("{}/group/invites/{group_invite_code}", local_var_configuration.base_path, group_invite_code=crate::apis::urlencode(group_invite_code));
     let mut local_var_req_builder = local_var_client.request(reqwest::Method::GET, local_var_uri_str.as_str());
 
     if let Some(ref local_var_user_agent) = local_var_configuration.user_agent {

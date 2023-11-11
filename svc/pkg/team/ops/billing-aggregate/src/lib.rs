@@ -32,7 +32,7 @@ async fn handle(
 	let mut team_metrics = Vec::new();
 	for team_req in &ctx.teams {
 		// Find game and namespace IDs for the team
-		let game_ids = &internal_unwrap_owned!(
+		let game_ids = &unwrap!(
 			team_games_res
 				.teams
 				.iter()
@@ -63,7 +63,7 @@ async fn handle(
 			namespace_ids: runtime_res
 				.region_tier_times
 				.iter()
-				.map(|rtt| Ok(internal_unwrap_owned!(rtt.namespace_id)))
+				.map(|rtt| Ok(unwrap!(rtt.namespace_id)))
 				.collect::<GlobalResult<Vec<_>>>()?,
 		})
 		.await?;
@@ -75,9 +75,9 @@ async fn handle(
 
 		// Collect times into hashmap by game id
 		for region_tier_time in &runtime_res.region_tier_times {
-			let namespace_id = internal_unwrap_owned!(region_tier_time.namespace_id);
+			let namespace_id = unwrap!(region_tier_time.namespace_id);
 
-			let game = internal_unwrap_owned!(
+			let game = unwrap!(
 				games_res
 					.games
 					.iter()
@@ -86,7 +86,7 @@ async fn handle(
 			);
 
 			let entry = metrics_by_game
-				.entry(internal_unwrap!(game.game_id).as_uuid())
+				.entry(unwrap_ref!(game.game_id).as_uuid())
 				.or_insert_with(Vec::new);
 
 			entry.push(region_tier_time.clone());

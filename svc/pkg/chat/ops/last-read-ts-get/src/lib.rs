@@ -20,25 +20,25 @@ impl From<Thread> for chat::last_read_ts_get::response::Thread {
 async fn handle(
 	ctx: OperationContext<chat::last_read_ts_get::Request>,
 ) -> GlobalResult<chat::last_read_ts_get::Response> {
-	let crdb = ctx.crdb("db-chat").await?;
+	let crdb = ctx.crdb().await?;
 
-	let user_id = internal_unwrap!(ctx.user_id).as_uuid();
+	let user_id = unwrap_ref!(ctx.user_id).as_uuid();
 	let thread_ids = ctx
 		.thread_ids
 		.iter()
 		.map(common::Uuid::as_uuid)
 		.collect::<Vec<_>>();
 
-	let threads = sqlx::query_as::<_, Thread>(indoc!(
+	let threads = sql_fetch_all!(
+		[ctx, Thread]
 		"
 		SELECT thread_id, last_read_ts
-		FROM thread_user_settings
+		FROM db_chat.thread_user_settings
 		WHERE user_id = $1 AND thread_id = ANY($2)
-		"
-	))
-	.bind(user_id)
-	.bind(&thread_ids)
-	.fetch_all(&crdb)
+		",
+		user_id,
+		&thread_ids,
+	)
 	.await?;
 
 	Ok(chat::last_read_ts_get::Response {

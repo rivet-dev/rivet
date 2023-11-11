@@ -1,6 +1,8 @@
-pub mod create;
-pub mod instance_create;
-pub mod instance_destroy;
-pub mod instance_version_set;
-pub mod ns_version_set;
-pub mod version_create;
+chirp_worker::workers![
+	create,
+	instance_create,
+	instance_destroy,
+	instance_version_set,
+	ns_version_set,
+	version_create,
+];

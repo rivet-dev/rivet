@@ -1,17 +1,17 @@
 # \CloudGamesGamesApi
 
-All URIs are relative to *http://localhost*
+All URIs are relative to *https://api.rivet.gg*
 
 Method | HTTP request | Description
 ------------- | ------------- | -------------
-[**cloud_games_games_create_game**](CloudGamesGamesApi.md#cloud_games_games_create_game) | **POST** /games | 
-[**cloud_games_games_game_banner_upload_complete**](CloudGamesGamesApi.md#cloud_games_games_game_banner_upload_complete) | **POST** /games/{game_id}/banner-upload/{upload_id}/complete | 
-[**cloud_games_games_game_banner_upload_prepare**](CloudGamesGamesApi.md#cloud_games_games_game_banner_upload_prepare) | **POST** /games/{game_id}/banner-upload/prepare | 
-[**cloud_games_games_game_logo_upload_complete**](CloudGamesGamesApi.md#cloud_games_games_game_logo_upload_complete) | **POST** /games/{game_id}/logo-upload/{upload_id}/complete | 
-[**cloud_games_games_game_logo_upload_prepare**](CloudGamesGamesApi.md#cloud_games_games_game_logo_upload_prepare) | **POST** /games/{game_id}/logo-upload/prepare | 
-[**cloud_games_games_get_game_by_id**](CloudGamesGamesApi.md#cloud_games_games_get_game_by_id) | **GET** /games/{game_id} | 
-[**cloud_games_games_get_games**](CloudGamesGamesApi.md#cloud_games_games_get_games) | **GET** /games | 
-[**cloud_games_games_validate_game**](CloudGamesGamesApi.md#cloud_games_games_validate_game) | **POST** /games/validate | 
+[**cloud_games_games_create_game**](CloudGamesGamesApi.md#cloud_games_games_create_game) | **POST** /cloud/games | 
+[**cloud_games_games_game_banner_upload_complete**](CloudGamesGamesApi.md#cloud_games_games_game_banner_upload_complete) | **POST** /cloud/games/{game_id}/banner-upload/{upload_id}/complete | 
+[**cloud_games_games_game_banner_upload_prepare**](CloudGamesGamesApi.md#cloud_games_games_game_banner_upload_prepare) | **POST** /cloud/games/{game_id}/banner-upload/prepare | 
+[**cloud_games_games_game_logo_upload_complete**](CloudGamesGamesApi.md#cloud_games_games_game_logo_upload_complete) | **POST** /cloud/games/{game_id}/logo-upload/{upload_id}/complete | 
+[**cloud_games_games_game_logo_upload_prepare**](CloudGamesGamesApi.md#cloud_games_games_game_logo_upload_prepare) | **POST** /cloud/games/{game_id}/logo-upload/prepare | 
+[**cloud_games_games_get_game_by_id**](CloudGamesGamesApi.md#cloud_games_games_get_game_by_id) | **GET** /cloud/games/{game_id} | 
+[**cloud_games_games_get_games**](CloudGamesGamesApi.md#cloud_games_games_get_games) | **GET** /cloud/games | 
+[**cloud_games_games_validate_game**](CloudGamesGamesApi.md#cloud_games_games_validate_game) | **POST** /cloud/games/validate | 
 
 
 

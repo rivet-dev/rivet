@@ -126,8 +126,8 @@ fn find_all_proto(path: &Path) -> io::Result<Vec<PathBuf>> {
 mod plugins {
 	use std::{io, path::PathBuf};
 
+	use indoc::{formatdoc, indoc};
 	use regex::Regex;
-	use indoc::{indoc, formatdoc};
 
 	use super::config;
 

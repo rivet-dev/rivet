@@ -1,8 +1,7 @@
 use rivet_util as util;
 
-// TODO: Lower this again
-pub const LOBBY_READY_TIMEOUT: i64 = util::duration::minutes(10); // Also see mm-gc.LOBBY_READY_TIMEOUT
-pub const PLAYER_READY_TIMEOUT: i64 = util::duration::minutes(2); // Also see mm-gc.LOBBY_READY_TIMEOUT
+pub const LOBBY_READY_TIMEOUT: i64 = util::duration::minutes(5);
+pub const PLAYER_READY_TIMEOUT: i64 = util::duration::minutes(2);
 
 pub const MIN_HOST_PORT: u16 = 26000;
 pub const MAX_HOST_PORT: u16 = 31999;
@@ -14,6 +13,7 @@ pub const DEV_REGION_NAME: &str = "Local";
 
 // Also see svc/mm-lobby-create/src/nomad_job.rs
 pub const DEFAULT_ENV_KEYS: &[&str] = &[
+	"RIVET_API_ENDPOINT",
 	"RIVET_CHAT_API_URL",
 	"RIVET_GROUP_API_URL",
 	"RIVET_IDENTITY_API_URL",

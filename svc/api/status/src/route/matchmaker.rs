@@ -18,9 +18,11 @@ pub async fn status(
 	_watch_index: WatchIndexQuery,
 	query: StatusQuery,
 ) -> GlobalResult<models::MatchmakerResponse> {
+	let domain_cdn = unwrap!(util::env::domain_cdn());
+
 	// Build client
 	let client = rivet_matchmaker::Config::builder()
-		.set_uri(util::env::svc_router_url("api-matchmaker"))
+		.set_uri("http://traefik.traefik.svc.cluster.local:80/matchmaker")
 		.build_client();
 
 	// Create bypass token
@@ -44,10 +46,10 @@ pub async fn status(
 		..Default::default()
 	})
 	.await?;
-	let token = internal_unwrap!(token_res.token).token.clone();
+	let token = unwrap_ref!(token_res.token).token.clone();
 
 	tracing::info!("finding lobby");
-	let origin = format!("https://test-game.{}/", util::env::domain_cdn());
+	let origin = format!("https://test-game.{domain_cdn}/");
 	client
 		.find_lobby()
 		.origin(origin)

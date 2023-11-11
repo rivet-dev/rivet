@@ -19,7 +19,7 @@ pub async fn run_from_env() -> GlobalResult<()> {
 		(),
 		Vec::new(),
 	);
-	let crdb_pool = ctx.crdb("db-upload").await?;
+	let crdb_pool = ctx.crdb().await?;
 
 	let Ok(backfill_provider) = std::env::var("S3_BACKFILL_PROVIDER") else {
 		tracing::warn!("no backfill provider env var, will have to manually re-run to backfill");
@@ -33,15 +33,15 @@ pub async fn run_from_env() -> GlobalResult<()> {
 		s3_util::Provider::Aws => backend::upload::Provider::Aws,
 	};
 
-	sqlx::query(indoc!(
+	sql_execute!(
+		[ctx]
 		"
-		UPDATE uploads
+		UPDATE db_upload.uploads
 		SET provider = $1
 		WHERE provider IS NULL 
-		"
-	))
-	.bind(proto_provider as i32 as i64)
-	.execute(&crdb_pool)
+		",
+		proto_provider as i32 as i64,
+	)
 	.await?;
 
 	Ok(())

@@ -40,10 +40,10 @@ async fn empty(ctx: TestCtx) {
 	.await
 	.unwrap();
 
-	let crdb = ctx.crdb("db-module").await.unwrap();
+	let crdb = ctx.crdb().await.unwrap();
 
 	let (exists,): (bool,) =
-		sqlx::query_as("SELECT EXISTS (SELECT 1 FROM versions WHERE version_id = $1)")
+		sqlx::query_as("SELECT EXISTS (SELECT 1 FROM db_module.versions WHERE version_id = $1)")
 			.bind(version_id)
 			.fetch_one(&crdb)
 			.await
@@ -51,7 +51,7 @@ async fn empty(ctx: TestCtx) {
 	assert!(exists, "version not created");
 
 	let (exists,): (bool,) = sqlx::query_as(
-		"SELECT EXISTS (SELECT 1 FROM scripts WHERE version_id = $1 AND name = 'foo')",
+		"SELECT EXISTS (SELECT 1 FROM db_module.scripts WHERE version_id = $1 AND name = 'foo')",
 	)
 	.bind(version_id)
 	.fetch_one(&crdb)
@@ -60,7 +60,7 @@ async fn empty(ctx: TestCtx) {
 	assert!(exists, "script not created");
 
 	let (exists,): (bool,) = sqlx::query_as(
-		"SELECT EXISTS (SELECT 1 FROM scripts_callable WHERE version_id = $1 AND name = 'foo')",
+		"SELECT EXISTS (SELECT 1 FROM db_module.scripts_callable WHERE version_id = $1 AND name = 'foo')",
 	)
 	.bind(version_id)
 	.fetch_one(&crdb)

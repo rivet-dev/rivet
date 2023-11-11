@@ -34,10 +34,10 @@ async fn fail(
 
 #[worker(name = "job-run-create")]
 async fn worker(ctx: &OperationContext<job_run::msg::create::Message>) -> GlobalResult<()> {
-	let crdb = ctx.crdb("db-job-state").await?;
+	let crdb = ctx.crdb().await?;
 
-	let run_id = internal_unwrap!(ctx.run_id).as_uuid();
-	let region_id = internal_unwrap!(ctx.region_id).as_uuid();
+	let run_id = unwrap_ref!(ctx.run_id).as_uuid();
+	let region_id = unwrap_ref!(ctx.region_id).as_uuid();
 
 	// Check for stale message
 	if ctx.req_dt() > util::duration::seconds(60) {
@@ -53,11 +53,11 @@ async fn worker(ctx: &OperationContext<job_run::msg::create::Message>) -> Global
 
 	// Validate the parameter data lengths
 	for parameter in &ctx.parameters {
-		internal_assert!(
+		ensure!(
 			parameter.key.len() <= MAX_PARAMETER_KEY_LEN,
 			"parameter key too long"
 		);
-		internal_assert!(
+		ensure!(
 			parameter.value.len() <= MAX_PARAMETER_VALUE_LEN,
 			"parameter value too long"
 		);
@@ -68,7 +68,7 @@ async fn worker(ctx: &OperationContext<job_run::msg::create::Message>) -> Global
 		region_ids: vec![region_id.into()],
 	})
 	.await?;
-	let region = internal_unwrap_owned!(region_res.regions.first());
+	let region = unwrap!(region_res.regions.first());
 
 	// Create the job
 	let create_job_perf = ctx.perf().start("create-job").await;
@@ -82,6 +82,7 @@ async fn worker(ctx: &OperationContext<job_run::msg::create::Message>) -> Global
 	let db_write_perf = ctx.perf().start("write-to-db-before-run").await;
 	rivet_pools::utils::crdb::tx(&crdb, |tx| {
 		Box::pin(write_to_db_before_run(
+			ctx.clone(),
 			tx,
 			ctx.body().clone(),
 			ctx.ts(),
@@ -123,8 +124,12 @@ async fn worker(ctx: &OperationContext<job_run::msg::create::Message>) -> Global
 	run_job_perf.end();
 
 	let db_write_perf = ctx.perf().start("write-to-db-after-run").await;
-	write_to_db_after_run(&crdb, run_id, &nomad_dispatched_job_id).await?;
+	write_to_db_after_run(&ctx, run_id, &nomad_dispatched_job_id).await?;
 	db_write_perf.end();
+
+	// HACK: Wait for Treafik to pick up the new job. 500 ms is the polling interval for the
+	// Traefik HTTP provider.
+	tokio::time::sleep(std::time::Duration::from_millis(500)).await;
 
 	msg!([ctx] job_run::msg::create_complete(run_id) {
 		run_id: Some(run_id.into()),
@@ -175,7 +180,7 @@ async fn run_job(
 		Ok(dispatch_res) => {
 			// We will use the dispatched job ID to identify this allocation for the future. We can't use
 			// eval ID, since that changes if we mutate the allocation (i.e. try to stop it).
-			let nomad_dispatched_job_id = internal_unwrap!(dispatch_res.dispatched_job_id);
+			let nomad_dispatched_job_id = unwrap_ref!(dispatch_res.dispatched_job_id);
 			Ok(Some(nomad_dispatched_job_id.clone()))
 		}
 		Err(err) => {
@@ -214,13 +219,14 @@ async fn create_run_token(
 	})
 	.await?;
 
-	let token = internal_unwrap!(token_res.token).token.clone();
-	let token_session_id = internal_unwrap!(token_res.session_id).as_uuid();
+	let token = unwrap_ref!(token_res.token).token.clone();
+	let token_session_id = unwrap_ref!(token_res.session_id).as_uuid();
 	Ok((token, token_session_id))
 }
 
 #[tracing::instrument(skip_all)]
 async fn write_to_db_before_run(
+	ctx: OperationContext<job_run::msg::create::Message>,
 	tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
 	req: job_run::msg::create::Message,
 	ts: i64,
@@ -228,85 +234,90 @@ async fn write_to_db_before_run(
 	run_id: Uuid,
 	token_session_id: Uuid,
 ) -> GlobalResult<()> {
-	sqlx::query(indoc!(
+	sql_execute!(
+		[ctx, @tx tx]
 		"
-		INSERT INTO runs (run_id, region_id, create_ts, token_session_id)
+		INSERT INTO db_job_state.runs (run_id, region_id, create_ts, token_session_id)
 		VALUES ($1, $2, $3, $4)
-		"
-	))
-	.bind(run_id)
-	.bind(region_id)
-	.bind(ts)
-	.bind(token_session_id)
-	.execute(&mut **tx)
+		",
+		run_id,
+		region_id,
+		ts,
+		token_session_id,
+	)
 	.await?;
 
-	sqlx::query(indoc!("INSERT INTO run_meta_nomad (run_id) VALUES ($1)"))
-		.bind(run_id)
-		.execute(&mut **tx)
-		.await?;
+	sql_execute!(
+		[ctx, @tx tx]
+		"INSERT INTO db_job_state.run_meta_nomad (run_id) VALUES ($1)",
+		run_id,
+	)
+	.await?;
 
+	// TODO: Use future streams?
 	// Validate that the proxied ports point to existing ports
 	for proxied_port in &req.proxied_ports {
-		internal_assert!(
+		ensure!(
 			!proxied_port.ingress_hostnames.is_empty(),
 			"ingress host not provided"
 		);
 
 		for host in &proxied_port.ingress_hostnames {
-			internal_assert!(
+			ensure!(
 				host.chars()
 					.all(|x| x.is_alphanumeric() || x == '.' || x == '-'),
 				"invalid ingress host"
 			);
 		}
 
-		let ingress_port = choose_ingress_port(proxied_port)?;
+		let ingress_port = choose_ingress_port(ctx.clone(), tx, proxied_port).await?;
 
 		tracing::info!(?run_id, ?proxied_port, "inserting run proxied port");
 
 		let mut ingress_hostnames_sorted = proxied_port.ingress_hostnames.clone();
 		ingress_hostnames_sorted.sort();
 
-		sqlx::query(indoc!(
+		sql_execute!(
+			[ctx, @tx tx]
 			"
-					INSERT INTO run_proxied_ports (
-						run_id,
-						target_nomad_port_label,
-						ingress_port,
-						ingress_hostnames,
-						ingress_hostnames_str,
-						proxy_protocol,
-						ssl_domain_mode
-					)
-					VALUES ($1, $2, $3, $4, $5, $6, $7)
-					"
-		))
-		.bind(run_id)
-		.bind(proxied_port.target_nomad_port_label.clone())
-		.bind(ingress_port)
-		.bind(&ingress_hostnames_sorted)
-		.bind(ingress_hostnames_sorted.join(","))
-		.bind(proxied_port.proxy_protocol)
-		.bind(proxied_port.ssl_domain_mode)
-		.execute(&mut **tx)
+			INSERT INTO db_job_state.run_proxied_ports (
+				run_id,
+				target_nomad_port_label,
+				ingress_port,
+				ingress_hostnames,
+				ingress_hostnames_str,
+				proxy_protocol,
+				ssl_domain_mode
+			)
+			VALUES ($1, $2, $3, $4, $5, $6, $7)
+			",
+			run_id,
+			proxied_port.target_nomad_port_label.clone(),
+			ingress_port,
+			&ingress_hostnames_sorted,
+			ingress_hostnames_sorted.join(","),
+			proxied_port.proxy_protocol,
+			proxied_port.ssl_domain_mode,
+		)
 		.await?;
 	}
 
 	Ok(())
 }
 
-#[tracing::instrument(skip(crdb))]
+#[tracing::instrument]
 async fn write_to_db_after_run(
-	crdb: &CrdbPool,
+	ctx: &OperationContext<job_run::msg::create::Message>,
 	run_id: Uuid,
 	dispatched_job_id: &str,
 ) -> GlobalResult<()> {
-	sqlx::query("UPDATE run_meta_nomad SET dispatched_job_id = $2 WHERE run_id = $1")
-		.bind(run_id)
-		.bind(dispatched_job_id)
-		.execute(crdb)
-		.await?;
+	sql_execute!(
+		[ctx]
+		"UPDATE db_job_state.run_meta_nomad SET dispatched_job_id = $2 WHERE run_id = $1",
+		run_id,
+		dispatched_job_id,
+	)
+	.await?;
 
 	Ok(())
 }
@@ -319,29 +330,87 @@ async fn write_to_db_after_run(
 /// - TCP/TLS: random
 /// - UDP: random
 ///
-/// This is very poorly written for TCP & UDP ports and will bite us in the ass
+/// This is somewhat poorly written for TCP & UDP ports and may bite us in the ass
 /// some day. See https://linear.app/rivet-gg/issue/RIV-1799
-fn choose_ingress_port(proxied_port: &job_run::msg::create::ProxiedPort) -> GlobalResult<i32> {
+async fn choose_ingress_port(
+	ctx: OperationContext<job_run::msg::create::Message>,
+	tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+	proxied_port: &job_run::msg::create::ProxiedPort,
+) -> GlobalResult<i32> {
 	use backend::job::ProxyProtocol;
 
 	let ingress_port = if let Some(ingress_port) = proxied_port.ingress_port {
 		ingress_port as i32
 	} else {
-		match internal_unwrap_owned!(backend::job::ProxyProtocol::from_i32(
+		match unwrap!(backend::job::ProxyProtocol::from_i32(
 			proxied_port.proxy_protocol
 		)) {
 			ProxyProtocol::Http => 80_i32,
 			ProxyProtocol::Https => 443,
-			// TODO: https://linear.app/rivet-gg/issue/RIV-1799
-			ProxyProtocol::Tcp | ProxyProtocol::TcpTls => rand::thread_rng().gen_range(
-				util_job::consts::MIN_INGRESS_PORT_TCP..=util_job::consts::MAX_INGRESS_PORT_TCP,
-			) as i32,
-			// TODO: https://linear.app/rivet-gg/issue/RIV-1799
-			ProxyProtocol::Udp => rand::thread_rng().gen_range(
-				util_job::consts::MIN_INGRESS_PORT_UDP..=util_job::consts::MAX_INGRESS_PORT_UDP,
-			) as i32,
+			ProxyProtocol::Tcp | ProxyProtocol::TcpTls => {
+				bind_with_retries(
+					ctx,
+					tx,
+					proxied_port.proxy_protocol,
+					util_job::consts::MIN_INGRESS_PORT_TCP..=util_job::consts::MAX_INGRESS_PORT_TCP,
+				)
+				.await?
+			}
+			ProxyProtocol::Udp => {
+				bind_with_retries(
+					ctx,
+					tx,
+					proxied_port.proxy_protocol,
+					util_job::consts::MIN_INGRESS_PORT_UDP..=util_job::consts::MAX_INGRESS_PORT_UDP,
+				)
+				.await?
+			}
 		}
 	};
 
 	Ok(ingress_port)
+}
+
+async fn bind_with_retries(
+	ctx: OperationContext<job_run::msg::create::Message>,
+	tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+	proxy_protocol: i32,
+	range: std::ops::RangeInclusive<u16>,
+) -> GlobalResult<i32> {
+	let mut attempts = 3u32;
+
+	// Try to bind to a random port, verifying that it is not already bound
+	loop {
+		if attempts == 0 {
+			bail!("failed all attempts to bind to unique port");
+		}
+		attempts -= 1;
+
+		let port = rand::thread_rng().gen_range(range.clone()) as i32;
+
+		let (already_exists,) = sql_fetch_one!(
+			[ctx, (bool,), @tx tx]
+			"
+			SELECT EXISTS(
+				SELECT 1
+				FROM db_job_state.runs as r
+				JOIN db_job_state.run_proxied_ports as p
+				ON r.run_id = p.run_id
+				WHERE
+					r.cleanup_ts IS NULL AND
+					p.ingress_port = $1 AND
+					p.proxy_protocol = $2
+			)
+			",
+			port,
+			proxy_protocol,
+		)
+		.await?;
+
+		if !already_exists {
+			break Ok(port);
+		}
+
+		tracing::info!(?port, ?attempts, "port collision, retrying");
+	}
 }

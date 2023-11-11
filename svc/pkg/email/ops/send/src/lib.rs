@@ -6,7 +6,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::json;
 
 lazy_static::lazy_static! {
-	static ref SENDGRID_KEY: String = std::env::var("SENDGRID_KEY").unwrap();
+	static ref SENDGRID_KEY: String = std::env::var("SENDGRID_KEY").expect("no sendgrid key");
 }
 
 #[derive(Serialize, Deserialize)]
@@ -97,7 +97,7 @@ impl TryFrom<email::send::Address> for SendGridAddress {
 	type Error = GlobalError;
 
 	fn try_from(value: email::send::Address) -> GlobalResult<Self> {
-		internal_assert!(!value.email.is_empty(), "email is empty");
+		ensure!(!value.email.is_empty(), "email is empty");
 		Ok(SendGridAddress {
 			email: value.email,
 			name: if value.name.is_empty() {
@@ -113,7 +113,7 @@ impl TryFrom<email::send::Address> for SendGridAddress {
 async fn handle(
 	ctx: OperationContext<email::send::Request>,
 ) -> GlobalResult<email::send::Response> {
-	let from_address = internal_unwrap!(ctx.from_address);
+	let from_address = unwrap_ref!(ctx.from_address);
 
 	let client = reqwest::Client::new();
 	let body = if ctx.attachments.is_empty() {
@@ -157,7 +157,7 @@ async fn handle(
 			body = ?text_res,
 			"send request failed"
 		);
-		internal_panic!("send request failed");
+		bail!("send request failed");
 	}
 
 	Ok(email::send::Response {})

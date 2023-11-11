@@ -4,26 +4,27 @@ use serde_json::json;
 
 #[worker(name = "chat-thread-create")]
 async fn worker(ctx: &OperationContext<chat_thread::msg::create::Message>) -> GlobalResult<()> {
-	let crdb = ctx.crdb("db-chat").await?;
+	let crdb = ctx.crdb().await?;
 
-	let request_id = internal_unwrap!(ctx.request_id).as_uuid();
-	let kind = internal_unwrap!(internal_unwrap!(ctx.topic).kind);
+	let request_id = unwrap_ref!(ctx.request_id).as_uuid();
+	let kind = unwrap_ref!(unwrap_ref!(ctx.topic).kind);
 	let create_ts = ctx.override_create_ts.unwrap_or(ctx.ts());
 
 	// Insert the thread
 	let preliminary_thread_id = Uuid::new_v4();
 	let (thread_id, analytics_topic) = match kind {
 		backend::chat::topic::Kind::Team(team) => {
-			let team_id = internal_unwrap!(team.team_id).as_uuid();
+			let team_id = unwrap_ref!(team.team_id).as_uuid();
 			tracing::info!(?team_id, "creating team thread");
 
 			// Insert new thread or return existing thread ID if created in race
 			// condition
-			let (thread_id,) = sqlx::query_as::<_, (Uuid,)>(indoc!(
+			let (thread_id,) = sql_fetch_one!(
+				[ctx, (Uuid,)]
 				"
 				WITH
 					insert AS (
-						INSERT INTO threads (thread_id, create_ts, team_team_id)
+						INSERT INTO db_chat.threads (thread_id, create_ts, team_team_id)
 						VALUES ($1, $2, $3)
 						ON CONFLICT (team_team_id)
 						DO NOTHING
@@ -31,31 +32,31 @@ async fn worker(ctx: &OperationContext<chat_thread::msg::create::Message>) -> Gl
 					)
 				SELECT thread_id FROM insert
 				UNION
-				SELECT thread_id FROM threads WHERE team_team_id = $3
+				SELECT thread_id FROM db_chat.threads WHERE team_team_id = $3
 				LIMIT 1
-				"
-			))
-			.bind(preliminary_thread_id)
-			.bind(create_ts)
-			.bind(team_id)
-			.fetch_one(&crdb)
+				",
+				preliminary_thread_id,
+				create_ts,
+				team_id,
+			)
 			.await?;
 
 			(thread_id, json!({ "team": { "team_id": team_id } }))
 		}
 		backend::chat::topic::Kind::Direct(direct) => {
 			let (user_a_id, user_b_id) = util::sort::id_pair(
-				internal_unwrap!(direct.user_a_id).as_uuid(),
-				internal_unwrap!(direct.user_b_id).as_uuid(),
+				unwrap_ref!(direct.user_a_id).as_uuid(),
+				unwrap_ref!(direct.user_b_id).as_uuid(),
 			);
 			tracing::info!(?user_a_id, ?user_b_id, "creating direct thread");
 
 			// See above
-			let (thread_id,) = sqlx::query_as::<_, (Uuid,)>(indoc!(
+			let (thread_id,) = sql_fetch_one!(
+				[ctx, (Uuid,)]
 				"
 				WITH
 					insert AS (
-						INSERT INTO threads (thread_id, create_ts, direct_user_a_id, direct_user_b_id)
+						INSERT INTO db_chat.threads (thread_id, create_ts, direct_user_a_id, direct_user_b_id)
 						VALUES ($1, $2, $3, $4)
 						ON CONFLICT (direct_user_a_id, direct_user_b_id)
 						DO NOTHING
@@ -63,15 +64,14 @@ async fn worker(ctx: &OperationContext<chat_thread::msg::create::Message>) -> Gl
 					)
 				SELECT thread_id FROM insert
 				UNION
-				SELECT thread_id FROM threads WHERE direct_user_a_id = $3 AND direct_user_b_id = $4
+				SELECT thread_id FROM db_chat.threads WHERE direct_user_a_id = $3 AND direct_user_b_id = $4
 				LIMIT 1
-				"
-			))
-			.bind(preliminary_thread_id)
-			.bind(create_ts)
-			.bind(user_a_id)
-			.bind(user_b_id)
-			.fetch_one(&crdb)
+				",
+				preliminary_thread_id,
+				create_ts,
+				user_a_id,
+				user_b_id,
+			)
 			.await?;
 
 			(

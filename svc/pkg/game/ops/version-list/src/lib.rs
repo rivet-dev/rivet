@@ -17,16 +17,16 @@ async fn handle(
 		.map(common::Uuid::as_uuid)
 		.collect::<Vec<_>>();
 
-	let version_rows = sqlx::query_as::<_, VersionRow>(indoc!(
+	let version_rows = sql_fetch_all!(
+		[ctx, VersionRow]
 		"
 		SELECT version_id, game_id
-		FROM game_versions
+		FROM db_game.game_versions
 		WHERE game_id = ANY($1)
 		ORDER BY create_ts DESC
-		"
-	))
-	.bind(&game_ids)
-	.fetch_all(&ctx.crdb("db-game").await?)
+		",
+		&game_ids,
+	)
 	.await?;
 
 	let games = game_ids

@@ -13,16 +13,13 @@ async fn handle(
 			..Default::default()
 		})
 		.await?;
-		*internal_unwrap!(team_create_res.team_id)
+		*unwrap_ref!(team_create_res.team_id)
 	};
 
 	let game_create_res = op!([ctx] game_create {
 		name_id: util::faker::ident(),
 		display_name: util::faker::display_name(),
-		url: format!("https://{}.io", util::faker::ident()),
 		developer_team_id: Some(dev_team_id),
-		description: "test".to_owned(),
-		tags: vec![util::faker::ident(), util::faker::ident(), util::faker::ident()],
 	})
 	.await?;
 
@@ -39,7 +36,7 @@ async fn handle(
 			..Default::default()
 		})
 		.await?;
-		let version_id = internal_unwrap!(version_create_res.version_id).as_uuid();
+		let version_id = unwrap_ref!(version_create_res.version_id).as_uuid();
 		version_ids.push(version_id.into());
 
 		let namespace_name_ids = vec!["prod".to_owned(), "staging".to_owned()];
@@ -51,7 +48,7 @@ async fn handle(
 				..Default::default()
 			})
 			.await?;
-			namespace_ids.push(*internal_unwrap!(ns_create_res.namespace_id));
+			namespace_ids.push(*unwrap_ref!(ns_create_res.namespace_id));
 		}
 	}
 

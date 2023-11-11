@@ -1,8 +1,30 @@
 # Developing
 
-**The following should be installed in a dedicated VM for Rivet.**
+> 🚨 **READ BEFORE PROCEEDING** 🚨
+>
+> We encourage developers to use the self-hosted version of Rivet, but we're
+> still working on improving the self-hosted developer experience.
+>
+> At the moment, all the services need to be built from scratch and deployed
+> to a fully loaded Kubernetes cluster, which requires a beefy Linux machine.
+> (Ideally 8 CPU cores, 32 GB RAM to build the required components for the
+> cluster & run Rust Analyzer at the same time.)
+>
+> Once running, Rivet itself is very lightweight since it's all Rust. If you
+> want to help make Rivet easier to run, please reach out and we can help
+> provide guidance on [Discord](https://discord.gg/BG2vqsJczH) when
+> implementing the following issues:
+>
+> -   https://github.com/rivet-gg/rivet/issues/153
+> -   https://github.com/rivet-gg/rivet/issues/155
+> -   https://github.com/rivet-gg/rivet/issues/157
+> -   https://github.com/rivet-gg/rivet/issues/154
+> -   https://github.com/rivet-gg/rivet/issues/156
+> -   https://github.com/rivet-gg/rivet/issues/157
 
 ## Prerequisites
+
+**The following should be installed in a dedicated VM for Rivet.**
 
 -   Debian 11 (other Linux distros untested)
     -   Accessible from public IP
@@ -10,9 +32,17 @@
 -   [Cloudflare website](https://developers.cloudflare.com/fundamentals/get-started/setup/add-site/) (free)
 -   [Linode account](https://login.linode.com/signup) (more providers coming soon)
 
-## Step 1: Install [Nix package manager](https://nixos.org/download.html)
+## Step 1: Install dependencies
 
-Nix is required to set up the development environment.
+### [Docker](https://docs.docker.com/engine/install/)
+
+_Docker is required to run Rivet services._
+
+See [here](https://docs.docker.com/engine/install/) for install instructions.
+
+### [Nix package manager](https://nixos.org/download.html)
+
+_Nix is required to set up the development environment._
 
 Run:
 
@@ -20,38 +50,28 @@ Run:
 sh <(curl -L https://nixos.org/nix/install) --daemon
 ```
 
-## Step 2: Clone repository
+### [Git](https://git-scm.com/)
 
-This will use Nix to install Git, then clone the repository to `/root/rivet`. You can clone the repository any place you like.
+See [here](https://git-scm.com/book/en/v2/Getting-Started-Installing-Git) for install instructions.
+
+## Step 2: Clone repository
 
 Run:
 
 ```
-nix-env -i git -i git-lfs
-nix-shell -p git -p git-lfs --command "git clone https://github.com/rivet-gg/rivet.git /root/rivet"
+git clone https://github.com/rivet-gg/rivet.git
 ```
 
 > **Warp compatibility**
 >
 > Warp may have issues with the Nix installer since it does not use the default shell. [Read more.](https://docs.warp.dev/features/ssh)
 
-## Step 3: Setup environment
-
-Open your project's folder and run:
-
-```
-nix-shell
-./scripts/setup.sh
-```
-
-_Run `nix-shell` in every new shell you create if you're not using [Lorri](/docs/infrastructure/nix/LORRI.md)._
-
-## Step 4: Initiate new namespace
+## Step 3: Boot cluster
 
 Run:
 
 ```
-bolt init dev
+nix-shell --run "bolt init dev --yes"
 ```
 
 This will:
@@ -65,30 +85,30 @@ Run this command any time you update to a new version of Rivet.
 >
 > See the `namespaces/dev.toml` and `secrets/dev.toml` file to see the generated namespace configs.
 
-> **Tip**
->
-> You can create multiple namespaces with different configs. The active namespace is set in the `Bolt.local.toml` file. We use the name `dev` as a safe default.
+## Step 4: Boot the Rivet Hub
 
-## Step 5: Boot the Rivet Hub
+Now, you have to start the hub frontend.
 
 1. Clone the [Rivet Hub](https://github.com/rivet-gg/hub) with
-2. Set `BASE_URL=https://{your base domain}` in the Hub's `.env`
+2. Create a file called `.env` in the root of the `hub` repo
+    - Set `RIVET_API_ENDPOINT=http://localhost:8080` in the `.env` file
 3. Start the hub
+4. Visit http://localhost:5080
+5. Register an account with your email
 
-## Step 6: Create a group
+## Step 5: Promote yourself to admin
 
-1. Open the hub (defaults to running at http://localhost:5080)
-2. Register your account
-3. Create a new group
+```
+nix-shell --run "bolt db sh db-user --query 'UPDATE users SET is_admin = true'"
+```
 
-## Step 7: Convert the group to a developer group
+You may need to clear the local cache for this change to appear. ([Related issue](https://github.com/rivet-gg/rivet/issues/152))
 
-1. Copy the ID of your group from the URL
-    - For example: `https://hub.rivet.gg/groups/d1f2e0b7-4c0d-48e1-8fae-309b98002b9f` would be `d1f2e0b7-4c0d-48e1-8fae-309b98002b9f`
-2. Run `bolt admin team-dev create <GROUP_ID>`
-    - Replace `<GROUP_ID>` with the ID you just copied
+_This command sets all users to admin. We're assuming you're the only user in the cluster. Do not run this command again._
 
-You should now see a `Developer` tab in the hub.
+## Step 6: Create a developer group
+
+You should now see a "Create Group" button on the hub. Proceed to create a group and start developing.
 
 ## Next steps
 

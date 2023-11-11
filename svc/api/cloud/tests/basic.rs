@@ -22,7 +22,6 @@ impl Ctx {
 				.pretty()
 				.with_max_level(tracing::Level::INFO)
 				.with_target(false)
-				.without_time()
 				.init();
 		});
 
@@ -124,7 +123,7 @@ impl Ctx {
 
 	fn http_client(&self, bearer_token: String) -> rivet_cloud::ClientWrapper {
 		rivet_cloud::Config::builder()
-			.set_uri(util::env::svc_router_url("api-cloud"))
+			.set_uri("http://traefik.traefik.svc.cluster.local:80/cloud")
 			.set_bearer_token(bearer_token)
 			.build_client()
 	}

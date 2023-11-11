@@ -12,9 +12,8 @@ pub async fn verify_custom_hostname(
 		identifiers: vec![identifier.into()],
 	})
 	.await?;
-	let custom_hostname =
-		internal_unwrap_owned!(custom_hostnames_res.custom_hostnames.first(), "not found");
-	let challenge = internal_unwrap!(custom_hostname.challenge);
+	let custom_hostname = unwrap!(custom_hostnames_res.custom_hostnames.first(), "not found");
+	let challenge = unwrap_ref!(custom_hostname.challenge);
 
 	Ok(format!("{}\n", challenge).into_bytes())
 }

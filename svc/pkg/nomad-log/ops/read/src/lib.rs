@@ -12,13 +12,12 @@ struct LogEntry {
 async fn handle(
 	ctx: OperationContext<nomad_log::read::Request>,
 ) -> GlobalResult<nomad_log::read::Response> {
-	let clickhouse = clickhouse::Client::default()
-		.with_url("http://http.clickhouse.service.consul:8123")
+	let clickhouse = rivet_pools::utils::clickhouse::client()?
 		.with_user("chirp")
 		.with_password(util::env::read_secret(&["clickhouse", "users", "chirp", "password"]).await?)
 		.with_database("db_nomad_logs");
 
-	let req_query = internal_unwrap!(ctx.query);
+	let req_query = unwrap_ref!(ctx.query);
 
 	let entries = match req_query {
 		nomad_log::read::request::Query::All(_) => query_all(ctx.body(), &clickhouse).await?,

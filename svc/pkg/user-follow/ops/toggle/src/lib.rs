@@ -8,58 +8,58 @@ use serde_json::json;
 async fn handle(
 	ctx: OperationContext<user_follow::toggle::Request>,
 ) -> GlobalResult<user_follow::toggle::Response> {
-	let follower_user_id = internal_unwrap!(ctx.follower_user_id).as_uuid();
-	let following_user_id = internal_unwrap!(ctx.following_user_id).as_uuid();
+	let follower_user_id = unwrap_ref!(ctx.follower_user_id).as_uuid();
+	let following_user_id = unwrap_ref!(ctx.following_user_id).as_uuid();
 
-	internal_assert!(follower_user_id != following_user_id, "cannot follow self");
+	ensure!(follower_user_id != following_user_id, "cannot follow self");
 
-	let crdb = ctx.crdb("db-user-follow").await?;
+	let crdb = ctx.crdb().await?;
 	let mutual = if ctx.active {
 		tokio::try_join!(
-			sqlx::query(indoc!(
+			sql_execute!(
+				[ctx, &crdb]
 				"
-				INSERT INTO user_follows
+				INSERT INTO db_user_follow.user_follows
 				(follower_user_id, following_user_id, create_ts, ignored)
 				VALUES ($1, $2, $3, false)
-				"
-			))
-			.bind(follower_user_id)
-			.bind(following_user_id)
-			.bind(util::timestamp::now())
-			.execute(&crdb),
+				",
+				follower_user_id,
+				following_user_id,
+				util::timestamp::now(),
+			),
 			// Along with creating a new follow, ignore the following user's follow (if it exists). This
 			// ensures that:
 			// - if the following user has followed the follower user first,
 			// - and the follower user follows then unfollows,
 			// the original following user's follow won't show up in the follower user's "recent follows"
 			// list again.
-			sqlx::query(indoc!(
+			sql_execute!(
+				[ctx, &crdb]
 				"
-				UPDATE user_follows
+				UPDATE db_user_follow.user_follows
 				SET ignored = TRUE
 				WHERE
 					follower_user_id = $1 AND
 					following_user_id = $2
-				"
-			))
-			.bind(following_user_id)
-			.bind(follower_user_id)
-			.bind(util::timestamp::now())
-			.execute(&crdb),
+				",
+				following_user_id,
+				follower_user_id,
+				util::timestamp::now(),
+			),
 		)?;
 
 		// Check for mutuality after creating record
-		check_mutual(&crdb, follower_user_id, following_user_id).await?
+		check_mutual(&ctx, follower_user_id, following_user_id).await?
 	} else {
 		// Check for mutuality before deleting record
-		let mutual = check_mutual(&crdb, follower_user_id, following_user_id).await?;
+		let mutual = check_mutual(&ctx, follower_user_id, following_user_id).await?;
 
-		sqlx::query(
-			"DELETE FROM user_follows WHERE follower_user_id = $1 AND following_user_id = $2",
+		sql_execute!(
+			[ctx]
+			"DELETE FROM db_user_follow.user_follows WHERE follower_user_id = $1 AND following_user_id = $2",
+			follower_user_id,
+			following_user_id,
 		)
-		.bind(follower_user_id)
-		.bind(following_user_id)
-		.execute(&crdb)
 		.await?;
 
 		mutual
@@ -140,23 +140,23 @@ async fn handle(
 }
 
 async fn check_mutual(
-	crdb: &CrdbPool,
+	ctx: &OperationContext<user_follow::toggle::Request>,
 	follower_user_id: Uuid,
 	following_user_id: Uuid,
 ) -> GlobalResult<bool> {
-	let res = sqlx::query_as::<_, (i64,)>(indoc!(
+	let res = sql_fetch_all!(
+		[ctx, (i64,)]
 		"
 		SELECT 1
-			FROM user_follows
+			FROM db_user_follow.user_follows
 			WHERE
 				(follower_user_id = $1 AND following_user_id = $2) OR
 				(follower_user_id = $2 AND following_user_id = $1)
 		LIMIT 2
-		"
-	))
-	.bind(follower_user_id)
-	.bind(following_user_id)
-	.fetch_all(crdb)
+		",
+		follower_user_id,
+		following_user_id,
+	)
 	.await?;
 
 	Ok(res.len() == 2)

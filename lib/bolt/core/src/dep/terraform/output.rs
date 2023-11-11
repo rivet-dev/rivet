@@ -1,7 +1,7 @@
 use serde::Deserialize;
 use std::{collections::HashMap, ops::Deref};
 
-use crate::context::ProjectContext;
+use crate::{config, context::ProjectContext};
 
 #[derive(Debug, Clone, Deserialize)]
 pub struct TerraformOutputValue<T> {
@@ -14,12 +14,6 @@ impl<T> Deref for TerraformOutputValue<T> {
 	fn deref(&self) -> &Self::Target {
 		&self.value
 	}
-}
-
-#[derive(Debug, Clone, Deserialize)]
-pub struct MasterCluster {
-	pub salt_master_host: TerraformOutputValue<String>,
-	pub nebula_lighthouse_host: TerraformOutputValue<String>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -40,30 +34,110 @@ pub struct PoolServer {
 }
 
 #[derive(Debug, Clone, Deserialize)]
-pub struct S3 {
-	pub s3_endpoint_internal: TerraformOutputValue<String>,
-	pub s3_endpoint_external: TerraformOutputValue<String>,
-	pub s3_region: TerraformOutputValue<String>,
+pub struct Cert {
+	pub cert_pem: String,
+	pub key_pem: String,
 }
 
-pub async fn read_master_cluster(ctx: &ProjectContext) -> MasterCluster {
-	read_plan::<MasterCluster>(ctx, "master_cluster").await
+#[derive(Debug, Clone, Deserialize)]
+pub struct K8sInfra {
+	pub traefik_tunnel_external_ip: TerraformOutputValue<String>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct Tls {
+	pub tls_cert_letsencrypt_rivet_job: TerraformOutputValue<Cert>,
+	pub tls_cert_locally_signed_tunnel_server: TerraformOutputValue<Cert>,
+	pub tls_cert_locally_signed_job: TerraformOutputValue<Cert>,
+	pub tls_cert_locally_signed_gg: TerraformOutputValue<Cert>,
+	pub root_ca_cert_pem: TerraformOutputValue<String>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct Dns {
+	pub cloudflare_zone_ids: TerraformOutputValue<DnsZones>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct DnsZones {
+	pub main: String,
+	pub cdn: String,
+	pub job: String,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct KubernetesClusterAws {
+	pub eks_admin_role_arn: TerraformOutputValue<String>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct Cockroach {
+	pub host: TerraformOutputValue<String>,
+	pub port: TerraformOutputValue<u32>,
+	pub cluster_identifier: TerraformOutputValue<String>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct ClickHouse {
+	pub host: TerraformOutputValue<String>,
+	pub port_https: TerraformOutputValue<u32>,
+	pub port_native_secure: TerraformOutputValue<u32>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct Redis {
+	pub host: TerraformOutputValue<HashMap<String, String>>,
+	pub port: TerraformOutputValue<HashMap<String, u32>>,
+}
+
+pub async fn read_k8s_infra(ctx: &ProjectContext) -> K8sInfra {
+	read_plan::<K8sInfra>(ctx, "k8s_infra").await
 }
 
 pub async fn read_pools(ctx: &ProjectContext) -> Pools {
 	read_plan::<Pools>(ctx, "pools").await
 }
 
-pub async fn read_s3_minio(ctx: &ProjectContext) -> S3 {
-	read_plan::<S3>(ctx, "s3_minio").await
+pub async fn read_tls(ctx: &ProjectContext) -> Tls {
+	read_plan::<Tls>(ctx, "tls").await
 }
 
-pub async fn read_s3_backblaze(ctx: &ProjectContext) -> S3 {
-	read_plan::<S3>(ctx, "s3_backblaze").await
+pub async fn read_dns(ctx: &ProjectContext) -> Dns {
+	read_plan::<Dns>(ctx, "dns").await
 }
 
-pub async fn read_s3_aws(ctx: &ProjectContext) -> S3 {
-	read_plan::<S3>(ctx, "s3_aws").await
+pub async fn read_k8s_cluster_aws(ctx: &ProjectContext) -> KubernetesClusterAws {
+	read_plan::<KubernetesClusterAws>(ctx, "k8s_cluster_aws").await
+}
+
+pub async fn read_crdb(ctx: &ProjectContext) -> Cockroach {
+	match &ctx.ns().cluster.kind {
+		config::ns::ClusterKind::SingleNode { .. } => {
+			read_plan::<Cockroach>(ctx, "cockroachdb_k8s").await
+		}
+		config::ns::ClusterKind::Distributed { .. } => {
+			read_plan::<Cockroach>(ctx, "cockroachdb_managed").await
+		}
+	}
+}
+
+pub async fn read_clickhouse(ctx: &ProjectContext) -> ClickHouse {
+	match &ctx.ns().cluster.kind {
+		config::ns::ClusterKind::SingleNode { .. } => {
+			read_plan::<ClickHouse>(ctx, "clickhouse_k8s").await
+		}
+		config::ns::ClusterKind::Distributed { .. } => {
+			read_plan::<ClickHouse>(ctx, "clickhouse_managed").await
+		}
+	}
+}
+
+pub async fn read_redis(ctx: &ProjectContext) -> Redis {
+	// match &ctx.ns().cluster.kind {
+	// 	config::ns::ClusterKind::SingleNode { .. } => read_plan::<Redis>(ctx, "redis_k8s").await,
+	// 	config::ns::ClusterKind::Distributed { .. } => read_plan::<Redis>(ctx, "redis_aws").await,
+	// }
+	read_plan::<Redis>(ctx, "redis_k8s").await
 }
 
 /// Reads a Terraform plan's output and decodes in to type.

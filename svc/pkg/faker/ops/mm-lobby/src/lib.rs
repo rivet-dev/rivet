@@ -28,12 +28,9 @@ async fn handle(
 			namespace_ids: vec![*namespace_id],
 		})
 		.await?;
-		let game = internal_unwrap_owned!(game_res.games.first());
+		let game = unwrap!(game_res.games.first());
 
-		(
-			internal_unwrap!(game.game_id).as_uuid(),
-			namespace_id.as_uuid(),
-		)
+		(unwrap_ref!(game.game_id).as_uuid(), namespace_id.as_uuid())
 	} else {
 		let game_res = op!([ctx] faker_game {
 			..Default::default()
@@ -41,8 +38,8 @@ async fn handle(
 		.await?;
 
 		(
-			internal_unwrap!(game_res.game_id).as_uuid(),
-			internal_unwrap!(game_res.namespace_ids.first()).as_uuid(),
+			unwrap_ref!(game_res.game_id).as_uuid(),
+			unwrap_ref!(game_res.namespace_ids.first()).as_uuid(),
 		)
 	};
 
@@ -54,10 +51,10 @@ async fn handle(
 			image: if let Some(image) = ctx.image {
 				image
 			} else if ctx.skip_set_ready {
-					   faker::build::Image::HangIndefinitely as i32
-				   } else {
-					   faker::build::Image::MmLobbyAutoReady as i32
-				   },
+				faker::build::Image::HangIndefinitely as i32
+			} else {
+				faker::build::Image::MmLobbyEcho as i32
+			},
 		})
 		.await?;
 
@@ -88,7 +85,29 @@ async fn handle(
 						args: Vec::new(),
 						env_vars: Vec::new(),
 						network_mode: backend::matchmaker::lobby_runtime::NetworkMode::Bridge as i32,
-						ports: Vec::new(),
+						ports: vec![
+							backend::matchmaker::lobby_runtime::Port {
+								label: "test-http".into(),
+								target_port: Some(8001),
+								port_range: None,
+								proxy_protocol: backend::matchmaker::lobby_runtime::ProxyProtocol::Http as i32,
+								proxy_kind: backend::matchmaker::lobby_runtime::ProxyKind::GameGuard as i32,
+							},
+							backend::matchmaker::lobby_runtime::Port {
+								label: "test-tcp".into(),
+								target_port: Some(8002),
+								port_range: None,
+								proxy_protocol: backend::matchmaker::lobby_runtime::ProxyProtocol::Tcp as i32,
+								proxy_kind: backend::matchmaker::lobby_runtime::ProxyKind::GameGuard as i32,
+							},
+							backend::matchmaker::lobby_runtime::Port {
+								label: "test-udp".into(),
+								target_port: Some(8002),
+								port_range: None,
+								proxy_protocol: backend::matchmaker::lobby_runtime::ProxyProtocol::Udp as i32,
+								proxy_kind: backend::matchmaker::lobby_runtime::ProxyKind::GameGuard as i32,
+							},
+						],
 					}.into()),
 
 					find_config: None,
@@ -99,7 +118,7 @@ async fn handle(
 			..Default::default()
 		})
 		.await?;
-		internal_unwrap!(game_version_res.version_id).as_uuid()
+		unwrap_ref!(game_version_res.version_id).as_uuid()
 	};
 
 	let version_get_res = op!([ctx] mm_config_version_get {
@@ -107,11 +126,11 @@ async fn handle(
 	})
 	.await?;
 	let version = version_get_res.versions.first();
-	let version = internal_unwrap!(version);
-	let config_meta = internal_unwrap!(version.config_meta);
+	let version = unwrap_ref!(version);
+	let config_meta = unwrap_ref!(version.config_meta);
 	let lobby_group = config_meta.lobby_groups.first();
-	let lobby_group = internal_unwrap!(lobby_group);
-	let lobby_group_id = internal_unwrap!(lobby_group.lobby_group_id).as_uuid();
+	let lobby_group = unwrap_ref!(lobby_group);
+	let lobby_group_id = unwrap_ref!(lobby_group.lobby_group_id).as_uuid();
 
 	op!([ctx] game_namespace_version_set {
 		namespace_id: Some(namespace_id.into()),
@@ -145,14 +164,16 @@ async fn handle(
 			lobby_config_json: ctx.lobby_config_json.clone(),
 		})
 		.await?;
-	let run_id = internal_unwrap!(complete_msg.run_id).as_uuid();
+	let run_id = unwrap_ref!(complete_msg.run_id).as_uuid();
 
-	if !ctx.skip_set_ready {
-		msg!([ctx] mm::msg::lobby_ready(lobby_id) {
-			lobby_id: Some(lobby_id.into()),
-		})
-		.await?;
-	}
+	// TODO: Allow enabling fast-ready instead of waiting for the lobby itself to call ready
+	// endpoint
+	// if !ctx.skip_set_ready {
+	// 	msg!([ctx] mm::msg::lobby_ready(lobby_id) {
+	// 		lobby_id: Some(lobby_id.into()),
+	// 	})
+	// 	.await?;
+	// }
 
 	if let Some((mut ready_sub, mut fail_sub, mut cleanup_sub)) = subs {
 		tokio::select! {
@@ -163,12 +184,12 @@ async fn handle(
 			msg = fail_sub.next() => {
 				let msg = msg?;
 				tracing::error!(?msg, "lobby create failed");
-				rivet_operation::prelude::internal_panic!("lobby create failed");
+				rivet_operation::prelude::bail!("lobby create failed");
 			}
 			msg = cleanup_sub.next() => {
 				let msg = msg?;
 				tracing::error!(?msg, "lobby being cleaned up early");
-				rivet_operation::prelude::internal_panic!("lobby being cleaned up early");
+				rivet_operation::prelude::bail!("lobby being cleaned up early");
 			}
 		}
 	}

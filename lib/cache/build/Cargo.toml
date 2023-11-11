@@ -21,7 +21,7 @@ types = { path = "../../types/core" }
 uuid = { version = "1", features = ["v4"] }
 
 [dependencies.redis]
-version = "0.21"
+version = "0.23"
 default-features = false
 features = [
 	"aio",

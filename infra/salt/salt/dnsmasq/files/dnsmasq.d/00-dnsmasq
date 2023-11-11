@@ -1,9 +1,0 @@
-{% set is_docker = 'docker' in grains['roles'] %}
-{% set is_nomad = 'nomad-client' in grains['roles'] %}
-
-# Binding to `docker0` lets us access dnsmasq within containers
-interface=lo{% if is_docker %},docker0{% endif %}{% if is_nomad %},nomad{% endif %}
-
-# Allows us to bind ot `docker0` and `nomad` even if they haven't started yet
-bind-dynamic
-

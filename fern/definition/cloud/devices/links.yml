@@ -5,8 +5,7 @@ imports:
 
 service:
   auth: false
-  url: Cloud
-  base-path: /devices/links
+  base-path: /cloud/devices/links
   endpoints:
     prepare:
       path: ""

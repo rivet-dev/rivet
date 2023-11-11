@@ -18,4 +18,6 @@ reqwest = "0.11"
 chirp-worker = { path = "../../../../../lib/chirp/worker" }
 
 faker-job-run = { path = "../../../faker/ops/job-run" }
+faker-job-template = { path = "../../../faker/ops/job-template" }
 job-run-get = { path = "../get" }
+util-job = { package = "rivet-util-job", path = "../../../job/util" }

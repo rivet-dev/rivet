@@ -18,26 +18,26 @@ struct CallResponse {
 pub async fn handle(
 	ctx: OperationContext<module::instance_call::Request>,
 ) -> GlobalResult<module::instance_call::Response> {
-	let instance_id = internal_unwrap!(ctx.instance_id).as_uuid();
+	let instance_id = unwrap_ref!(ctx.instance_id).as_uuid();
 
 	// Get instance
 	let instances = op!([ctx] module_instance_get {
 		instance_ids: vec![instance_id.into()],
 	})
 	.await?;
-	let instance = internal_unwrap_owned!(instances.instances.first());
-	let version_id = internal_unwrap!(instance.module_version_id).as_uuid();
-	assert_with!(instance.destroy_ts.is_none(), MODULE_INSTANCE_DESTROYED);
+	let instance = unwrap!(instances.instances.first());
+	let version_id = unwrap_ref!(instance.module_version_id).as_uuid();
+	ensure_with!(instance.destroy_ts.is_none(), MODULE_INSTANCE_DESTROYED);
 
 	// Get version
 	let versions = op!([ctx] module_version_get {
 		version_ids: vec![version_id.into()],
 	})
 	.await?;
-	let version = internal_unwrap_owned!(versions.versions.first());
+	let version = unwrap!(versions.versions.first());
 
 	// Validate script exists
-	assert_with!(
+	ensure_with!(
 		version.scripts.iter().any(|x| x.name == ctx.script_name),
 		MODULE_SCRIPT_NOT_FOUND,
 		script = ctx.script_name,
@@ -46,7 +46,7 @@ pub async fn handle(
 	// TODO: Validate JSON request schema
 
 	// Handle driver
-	let url = match internal_unwrap!(instance.driver) {
+	let url = match unwrap_ref!(instance.driver) {
 		backend::module::instance::Driver::Dummy(_) => {
 			return Ok(module::instance_call::Response {
 				response_json: "{}".into(),
@@ -56,7 +56,7 @@ pub async fn handle(
 			if let Some(app_id) = &driver.fly_app_id {
 				format!("https://{}.fly.dev/call", app_id)
 			} else {
-				panic_with!(MODULE_INSTANCE_STARTING)
+				bail_with!(MODULE_INSTANCE_STARTING)
 			}
 		}
 	};
@@ -82,20 +82,20 @@ pub async fn handle(
 			Err(err) => {
 				tracing::error!(?err, "failed to call module");
 				if backoff.tick().await {
-					panic_with!(MODULE_REQUEST_FAILED)
+					bail_with!(MODULE_REQUEST_FAILED)
 				}
 			}
 		}
 	};
 	if !response.status().is_success() {
 		tracing::warn!(status = ?response.status(), "module error status");
-		panic_with!(MODULE_ERROR_STATUS, status = response.status().to_string());
+		bail_with!(MODULE_ERROR_STATUS, status = response.status().to_string());
 	}
 	let res_body = match response.json::<CallResponse>().await {
 		Ok(x) => x,
 		Err(err) => {
 			tracing::warn!(?err, "malformed module response");
-			panic_with!(MODULE_MALFORMED_RESPONSE)
+			bail_with!(MODULE_MALFORMED_RESPONSE)
 		}
 	};
 	let response_json = serde_json::to_string(&res_body.response)?;

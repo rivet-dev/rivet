@@ -17,15 +17,15 @@ async fn handle(
 		.map(common::Uuid::as_uuid)
 		.collect::<Vec<_>>();
 
-	let cloud_namespaces = sqlx::query_as::<_, GameNamespace>(indoc!(
+	let cloud_namespaces = sql_fetch_all!(
+		[ctx, GameNamespace]
 		"
 		SELECT namespace_id
-		FROM game_namespaces
+		FROM db_cloud.game_namespaces
 		WHERE namespace_id = ANY($1)
-		"
-	))
-	.bind(namespace_ids)
-	.fetch_all(&ctx.crdb("db-cloud").await?)
+		",
+		namespace_ids,
+	)
 	.await?;
 
 	let all_namespace_ids_proto = cloud_namespaces

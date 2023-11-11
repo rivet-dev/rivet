@@ -13,14 +13,15 @@ struct PlayerRow {
 
 #[worker(name = "mm-player-register")]
 async fn worker(ctx: &OperationContext<mm::msg::player_register::Message>) -> GlobalResult<()> {
-	let crdb = ctx.crdb("db-mm-state").await?;
+	let crdb = ctx.crdb().await?;
 
-	let player_id = internal_unwrap!(ctx.player_id).as_uuid();
+	let player_id = unwrap_ref!(ctx.player_id).as_uuid();
 	let lobby_id = ctx.lobby_id.map(|x| x.as_uuid());
 
 	// Get the player
 	let expired_create_ts = ctx.ts() - util_mm::consts::PLAYER_READY_TIMEOUT;
-	let player_row = sqlx::query_as::<_, PlayerRow>(indoc!(
+	let player_row = sql_fetch_optional!(
+		[ctx, PlayerRow]
 		"
 		WITH
 			select_player AS (
@@ -30,12 +31,12 @@ async fn worker(ctx: &OperationContext<mm::msg::player_register::Message>) -> Gl
 					players.register_ts,
 					players.remove_ts,
 					lobbies.namespace_id
-				FROM players
-				INNER JOIN lobbies ON lobbies.lobby_id = players.lobby_id
+				FROM db_mm_state.players
+				INNER JOIN db_mm_state.lobbies ON lobbies.lobby_id = players.lobby_id
 				WHERE player_id = $1
 			),
 			_update AS (
-				UPDATE players
+				UPDATE db_mm_state.players
 				SET register_ts = $3
 				WHERE
 					player_id = $1 AND
@@ -45,12 +46,11 @@ async fn worker(ctx: &OperationContext<mm::msg::player_register::Message>) -> Gl
 				RETURNING 1
 			)
 		SELECT * FROM select_player
-		"
-	))
-	.bind(player_id)
-	.bind(expired_create_ts)
-	.bind(ctx.ts())
-	.fetch_optional(&crdb)
+		",
+		player_id,
+		expired_create_ts,
+		ctx.ts(),
+	)
 	.await?;
 	tracing::info!(?player_row, "player row");
 
@@ -59,7 +59,7 @@ async fn worker(ctx: &OperationContext<mm::msg::player_register::Message>) -> Gl
 			tracing::error!("discarding stale message");
 			return Ok(());
 		} else {
-			retry_panic!("player not found, may be race condition with insertion");
+			retry_bail!("player not found, may be race condition with insertion");
 		}
 	};
 

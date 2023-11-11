@@ -48,7 +48,7 @@ pub async fn cloud_games_builds_create_game_build(configuration: &configuration:
 
     let local_var_client = &local_var_configuration.client;
 
-    let local_var_uri_str = format!("{}/games/{game_id}/builds", local_var_configuration.base_path, game_id=crate::apis::urlencode(game_id));
+    let local_var_uri_str = format!("{}/cloud/games/{game_id}/builds", local_var_configuration.base_path, game_id=crate::apis::urlencode(game_id));
     let mut local_var_req_builder = local_var_client.request(reqwest::Method::POST, local_var_uri_str.as_str());
 
     if let Some(ref local_var_user_agent) = local_var_configuration.user_agent {
@@ -80,7 +80,7 @@ pub async fn cloud_games_builds_list_game_builds(configuration: &configuration::
 
     let local_var_client = &local_var_configuration.client;
 
-    let local_var_uri_str = format!("{}/games/{game_id}/builds", local_var_configuration.base_path, game_id=crate::apis::urlencode(game_id));
+    let local_var_uri_str = format!("{}/cloud/games/{game_id}/builds", local_var_configuration.base_path, game_id=crate::apis::urlencode(game_id));
     let mut local_var_req_builder = local_var_client.request(reqwest::Method::GET, local_var_uri_str.as_str());
 
     if let Some(ref local_var_user_agent) = local_var_configuration.user_agent {

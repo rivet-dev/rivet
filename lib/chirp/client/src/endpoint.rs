@@ -1,7 +1,7 @@
 use std::fmt::Debug;
 
-pub fn subject(region: &str, name: &str) -> String {
-	format!("chirp.{}.rpc.{}", region, name)
+pub fn subject(name: &str) -> String {
+	format!("chirp.rpc.{}", name)
 }
 
 /// Holds data returned from an RPC call.

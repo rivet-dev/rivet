@@ -14,9 +14,6 @@ async fn empty(ctx: TestCtx) {
 	let res = op!([ctx] game_create {
 		name_id: util::faker::ident(),
 		display_name: util::faker::display_name(),
-		url: "https://test.rivet.game".to_owned(),
-		tags: vec!["a".to_owned(), "b".to_owned(), "c".to_owned()],
-		description: "test".to_owned(),
 		developer_team_id: team_res.team_id,
 	})
 	.await
@@ -38,9 +35,6 @@ async fn duplicate_name_id(ctx: TestCtx) {
 	op!([ctx] game_create {
 		name_id: name_id.clone(),
 		display_name: util::faker::display_name(),
-		url: "https://test.rivet.game".to_owned(),
-		tags: vec!["a".to_owned(), "b".to_owned(), "c".to_owned()],
-		description: "test".to_owned(),
 		developer_team_id: team_res.team_id,
 	})
 	.await
@@ -50,9 +44,6 @@ async fn duplicate_name_id(ctx: TestCtx) {
 	op!([ctx] game_create {
 		name_id: name_id.clone(),
 		display_name: util::faker::display_name(),
-		url: "https://test.rivet.game".to_owned(),
-		tags: vec!["a".to_owned(), "b".to_owned(), "c".to_owned()],
-		description: "test".to_owned(),
 		developer_team_id: team_res.team_id,
 	})
 	.await

@@ -24,7 +24,7 @@ impl ApiTryFrom<models::CloudVersionCdnRoute> for backend::cdn::Route {
 	type Error = GlobalError;
 
 	fn try_from(value: models::CloudVersionCdnRoute) -> GlobalResult<Self> {
-		internal_assert!(value.priority >= 0);
+		ensure!(value.priority >= 0);
 
 		let glob = match util::glob::Glob::parse(&value.glob) {
 			Ok(glob) => glob,
@@ -96,7 +96,7 @@ impl ApiTryFrom<backend::cdn::VersionConfig> for models::CloudVersionCdnConfig {
 	type Error = GlobalError;
 
 	fn try_from(value: backend::cdn::VersionConfig) -> GlobalResult<Self> {
-		let site_id = internal_unwrap!(value.site_id).as_uuid();
+		let site_id = unwrap_ref!(value.site_id).as_uuid();
 
 		Ok(models::CloudVersionCdnConfig {
 			build_command: None,
@@ -118,7 +118,7 @@ impl ApiTryFrom<backend::cdn::Route> for models::CloudVersionCdnRoute {
 
 	fn try_from(value: backend::cdn::Route) -> GlobalResult<Self> {
 		Ok(models::CloudVersionCdnRoute {
-			glob: std::convert::TryInto::<util::glob::Glob>::try_into(internal_unwrap_owned!(
+			glob: std::convert::TryInto::<util::glob::Glob>::try_into(unwrap!(
 				value.glob.clone()
 			))?
 			.to_string(),
@@ -136,7 +136,7 @@ impl ApiTryFrom<backend::cdn::Middleware> for models::CloudVersionCdnMiddleware 
 	type Error = GlobalError;
 
 	fn try_from(value: backend::cdn::Middleware) -> GlobalResult<Self> {
-		let kind = internal_unwrap!(value.kind).clone();
+		let kind = unwrap_ref!(value.kind).clone();
 
 		match kind {
 			backend::cdn::middleware::Kind::CustomHeaders(custom_headers) => {

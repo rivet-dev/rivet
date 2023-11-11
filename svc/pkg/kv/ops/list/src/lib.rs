@@ -12,27 +12,27 @@ async fn handle(ctx: OperationContext<kv::list::Request>) -> GlobalResult<kv::li
 	// much more expensive. We only use this for the developer dashboard and not
 	// production games.
 
-	let crdb = ctx.crdb("db-kv").await?;
+	let crdb = ctx.crdb().await?;
 
-	let namespace_id = internal_unwrap!(ctx.namespace_id).as_uuid();
+	let namespace_id = unwrap_ref!(ctx.namespace_id).as_uuid();
 	let limit = ctx.limit.map(|x| x as i64).unwrap_or(DEFAULT_LIMIT);
 
 	// Query keys.
 	//
 	// Uses `AS OF SYSTEM TIME` to improve performance and avoid locking.
 	let mut entries = if ctx.with_values {
-		sqlx::query_as::<_, (String, String)>(indoc!(
+		sql_fetch_all!(
+			[ctx, (String, String)]
 			"
 			SELECT key, value::TEXT
-			FROM kv AS OF SYSTEM TIME '-1s'
+			FROM db_kv.kv AS OF SYSTEM TIME '-1s'
 			WHERE namespace_id = $1 AND directory = $2
 			LIMIT $3
-			"
-		))
-		.bind(namespace_id)
-		.bind(&ctx.directory)
-		.bind(limit)
-		.fetch_all(&crdb)
+			",
+			namespace_id,
+			&ctx.directory,
+			limit,
+		)
 		.await?
 		.into_iter()
 		.map(|(key, value)| kv::list::response::Entry {
@@ -41,18 +41,18 @@ async fn handle(ctx: OperationContext<kv::list::Request>) -> GlobalResult<kv::li
 		})
 		.collect::<Vec<_>>()
 	} else {
-		sqlx::query_as::<_, (String,)>(indoc!(
+		sql_fetch_all!(
+			[ctx, (String,)]
 			"
 			SELECT key
-			FROM kv AS OF SYSTEM TIME '-1s'
+			FROM db_kv.kv AS OF SYSTEM TIME '-1s'
 			WHERE namespace_id = $1 AND directory = $2
 			LIMIT $3
-			"
-		))
-		.bind(namespace_id)
-		.bind(&ctx.directory)
-		.bind(limit)
-		.fetch_all(&crdb)
+			",
+			namespace_id,
+			&ctx.directory,
+			limit,
+		)
 		.await?
 		.into_iter()
 		.map(|(key,)| kv::list::response::Entry { key, value: None })

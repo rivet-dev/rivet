@@ -11,15 +11,17 @@ async fn handle(
 		.map(common::Uuid::as_uuid)
 		.collect::<Vec<_>>();
 
-	sqlx::query(indoc!(
+	sql_execute!(
+		[ctx]
 		"
-		DELETE FROM emails
+		DELETE FROM db_user_identity.emails
 		WHERE user_id = ANY($1)
-		"
-	))
-	.bind(&user_ids)
-	.execute(&ctx.crdb("db-user-identity").await?)
+		",
+		&user_ids,
+	)
 	.await?;
+
+	ctx.cache().purge("user_identity.emails", user_ids).await?;
 
 	Ok(user_identity::delete::Response {})
 }

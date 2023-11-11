@@ -1,328 +1,531 @@
 use anyhow::*;
+use futures_util::{StreamExt, TryStreamExt};
+use rand::{seq::SliceRandom, thread_rng};
 use rivet_term::console::style;
-use std::collections::HashSet;
-use tokio::{fs, process::Command};
+
+use indoc::formatdoc;
+use std::{
+	collections::{HashMap, HashSet},
+	path::{Path, PathBuf},
+	sync::{
+		atomic::{AtomicUsize, Ordering},
+		Arc,
+	},
+	time::{Duration, Instant},
+};
+use tokio::{io::AsyncWriteExt, process::Command};
 
 use crate::{
-	config::service::RuntimeKind,
-	context::{ProjectContext, RunContext, ServiceContext},
+	config::{ns, service::RuntimeKind},
+	context::{ProjectContext, RunContext},
 	dep::{
-		cloudflare, fly,
-		nomad::{self, NomadCtx},
+		self,
+		cargo::{self, cli::TestBinary},
+		k8s::gen::{ExecServiceContext, ExecServiceDriver},
 	},
-	tasks,
+	utils,
 };
 
-struct TestCleanupManager {
-	project_ctx: ProjectContext,
-	nomad_ctx: NomadCtx,
+/// Timeout for tests.
+///
+/// Default Chirp timeout is 60 seconds, so this is 15 seconds longer to give a buffer for Chirp
+/// operations to time out first.
+const DEFAULT_TEST_TIMEOUT: Duration = Duration::from_secs(75);
 
-	/// List of dispatched job names that already before the test starts. Used
-	/// to diff with the new dispatched jobs to stop jobs that were dispatched
-	/// in a test.
-	existing_dispatched_jobs: Vec<nomad::api::JobSummary>,
+const DEFAULT_PARALLEL_TESTS: usize = 8;
 
-	/// List of Fly apps that already exist before the test starts. Used to diff with apps created
-	/// afterwares to know what apps to clean up.
-	existing_fly_apps: Option<HashSet<String>>,
-}
-
-impl TestCleanupManager {
-	async fn setup(project_ctx: ProjectContext, nomad_ctx: NomadCtx) -> Result<TestCleanupManager> {
-		let existing_dispatched_jobs = nomad::api::list_jobs_with_prefix(&nomad_ctx, "job-")
-			.await?
-			.into_iter()
-			.filter(|x| x.id.contains("/dispatch-") || x.id.contains("/periodic-"))
-			.collect::<Vec<_>>();
-
-		let existing_fly_apps = if project_ctx.ns().fly.is_some() {
-			Some(
-				fly::api::list_apps(&project_ctx)
-					.await?
-					.into_iter()
-					.map(|x| x.name)
-					.collect::<HashSet<_>>(),
-			)
-		} else {
-			None
-		};
-
-		Ok(TestCleanupManager {
-			project_ctx,
-			nomad_ctx,
-			existing_dispatched_jobs,
-			existing_fly_apps,
-		})
-	}
-
-	async fn run(self) -> Result<()> {
-		self.cleanup_nomad().await?;
-		self.cleanup_fly().await?;
-
-		Ok(())
-	}
-
-	async fn cleanup_nomad(&self) -> Result<()> {
-		// Fetch list of current dispatched jobs
-		let new_dispatched_jobs = nomad::api::list_jobs_with_prefix(&self.nomad_ctx, "job-")
-			.await?
-			.into_iter()
-			.filter(|x| x.id.contains("/dispatch-") || x.id.contains("/periodic-"))
-			.collect::<Vec<_>>();
-
-		// Diff the jobs
-		let old_ids = self
-			.existing_dispatched_jobs
-			.iter()
-			.map(|x| x.id.as_str())
-			.collect::<HashSet<&str>>();
-		let current_ids = new_dispatched_jobs
-			.iter()
-			.map(|x| x.id.as_str())
-			.collect::<HashSet<&str>>();
-		let created_ids = &current_ids - &old_ids;
-
-		if !created_ids.is_empty() {
-			rivet_term::status::info("Cleaning up jobs", format!("{} jobs", created_ids.len()));
-			for id in &created_ids {
-				nomad::api::stop_job(&self.nomad_ctx, id).await?;
-			}
-		}
-
-		Ok(())
-	}
-
-	async fn cleanup_fly(&self) -> Result<()> {
-		let Some(existing_apps) = &self.existing_fly_apps else {
-			return Ok(());
-		};
-
-		// Fetch list of existing apps
-		let current_apps = fly::api::list_apps(&self.project_ctx)
-			.await?
-			.into_iter()
-			.map(|x| x.name)
-			.collect::<HashSet<_>>();
-
-		// Diff the apps
-		let created_apps = &current_apps - existing_apps;
-
-		if !created_apps.is_empty() {
-			rivet_term::status::info("Cleaning up apps", format!("{} apps", created_apps.len()));
-			for name in &created_apps {
-				// Delete app
-				fly::api::delete_app(&self.project_ctx, &name).await?;
-			}
-		}
-
-		Ok(())
-	}
+pub struct TestCtx<'a, T: AsRef<str>> {
+	pub svc_names: &'a [T],
+	pub filters: Vec<String>,
+	pub timeout: Option<u64>,
+	pub parallel_tests: Option<usize>,
+	pub no_purge: bool,
 }
 
 pub async fn test_all(
-	_ctx: &ProjectContext,
-	_test_only: bool,
-	_test_name: Option<&str>,
-	_force_build: bool,
-	_skip_generate: bool,
+	ctx: &ProjectContext,
+	timeout: Option<u64>,
+	parallel_tests: Option<usize>,
+	no_purge: bool,
 ) -> Result<()> {
-	// TODO: Update this to work like test_service
-	unimplemented!("TODO: update test_all to work like test_service")
+	let all_svc_names = ctx
+		.all_services()
+		.await
+		.iter()
+		.map(|svc| svc.name())
+		.collect::<Vec<_>>();
+	test_services(
+		ctx,
+		TestCtx {
+			svc_names: &all_svc_names,
+			filters: Vec::new(),
+			timeout,
+			parallel_tests,
+			no_purge,
+		},
+	)
+	.await?;
 
-	// if ctx.ns().rivet.test.is_none() {
-	// 	bail!("tests are disabled, enable them by setting rivet.test in the namespace config");
-	// }
-
-	// // Run all services
-	// if !test_only {
-	// 	tasks::up::up_all(
-	// 		ctx,
-	// 		tasks::up::UpOpts {
-	// 			skip_build: false,
-	// 			skip_dependencies: false,
-	// 			force_build,
-	// 			skip_generate,
-	// 			auto_approve: true,
-	// 		},
-	// 	)
-	// 	.await?;
-	// }
-
-	// // Write region config locally
-	// let regions_json = serde_json::to_vec(&ctx.ns().regions)?;
-	// fs::write(ctx.gen_path().join("region-config.json"), &regions_json).await?;
-
-	// // Check all services
-	// let svc_ctxs = ctx.all_services().await;
-	// for ctx_svc in svc_ctxs {
-	// 	run_test(ctx_svc, test_name).await;
-	// }
-
-	// // TODO: Boot dev services if test succeeds
-
-	// Ok(())
+	Ok(())
 }
 
-pub async fn test_service<T: AsRef<str>>(
+pub async fn test_services<T: AsRef<str>>(
 	ctx: &ProjectContext,
-	svc_names: &[T],
-	test_only: bool,
-	test_name: Option<&str>,
-	skip_deps: bool,
-	force_build: bool,
-	skip_generate: bool,
+	test_ctx: TestCtx<'_, T>,
 ) -> Result<()> {
 	if ctx.ns().rivet.test.is_none() {
 		bail!("tests are disabled, enable them by setting rivet.test in the namespace config");
 	}
 
-	// Get contexts
-	let svc_ctxs = ctx.services_with_patterns(&svc_names).await;
-
-	// Run the services. Already ran gen in `check`.
-	if !test_only {
-		tasks::up::up_services(
-			ctx,
-			svc_names,
-			tasks::up::UpOpts {
-				skip_build: false,
-				skip_dependencies: skip_deps,
-				force_build,
-				skip_generate,
-				auto_approve: true,
-			},
-		)
-		.await?;
-	}
-
-	// HACK: Write region config locally to mimic the file mounted to the task dir
-	let regions_json = serde_json::to_vec(&ctx.ns().regions)?;
-	fs::write(ctx.gen_path().join("region-config.json"), &regions_json).await?;
-
-	// Test service
-	let mut passed = Vec::new();
-	let mut failed = Vec::new();
-	for ctx in &svc_ctxs {
-		match run_test(ctx, test_name).await {
-			TestResult::Success => {
-				passed.push(ctx);
-			}
-			TestResult::Failure => {
-				failed.push(ctx);
-			}
-			TestResult::Cancel => {
-				break;
-			}
+	// TODO: implement tests for distributed clusters (must upload test build to docker)
+	match ctx.ns().cluster.kind {
+		ns::ClusterKind::SingleNode { .. } => {}
+		ns::ClusterKind::Distributed { .. } => {
+			bail!("tests not implemented for distributed clusters")
 		}
 	}
 
-	eprintln!();
-	rivet_term::status::success(
-		"Finished",
-		format!(
-			"{}/{} passed",
-			(svc_ctxs.len() - failed.len()),
-			svc_ctxs.len()
-		),
-	);
+	// Resolve services
+	let svc_names = test_ctx
+		.svc_names
+		.iter()
+		.map(|x| x.as_ref().to_string())
+		.collect::<HashSet<_>>()
+		.into_iter()
+		.collect::<Vec<_>>();
+	let all_svcs = ctx.services_with_patterns(&svc_names).await;
 
-	for svc in &passed {
-		eprintln!("  * {}: {}", svc.name(), style("PASS").italic().green());
+	// Find all services that are executables
+	let rust_svcs = all_svcs
+		.iter()
+		.filter(|svc_ctx| matches!(svc_ctx.config().runtime, RuntimeKind::Rust {}))
+		.collect::<Vec<_>>();
+	eprintln!();
+	rivet_term::status::progress("Preparing", format!("{} services", rust_svcs.len()));
+
+	// Telemetry
+	let mut event = utils::telemetry::build_event(ctx, "bolt_test").await?;
+	event.insert_prop(
+		"svc_names",
+		&rust_svcs.iter().map(|x| x.name()).collect::<Vec<_>>(),
+	)?;
+	event.insert_prop("filters", &test_ctx.filters)?;
+	utils::telemetry::capture_event(ctx, event).await?;
+
+	// Run batch commands for all given services
+	eprintln!();
+	rivet_term::status::progress("Building", "(batch)");
+	let test_binaries = {
+		// Collect rust services by their workspace root
+		let mut svcs_by_workspace = HashMap::new();
+		for svc in rust_svcs {
+			let workspace = svcs_by_workspace
+				.entry(svc.workspace_path())
+				.or_insert_with(Vec::new);
+			workspace.push(svc.cargo_name().expect("no cargo name"));
+		}
+		ensure!(!svcs_by_workspace.is_empty(), "no matching services");
+
+		// Run build
+		let test_binaries = cargo::cli::build_tests(
+			ctx,
+			cargo::cli::BuildTestOpts {
+				build_calls: svcs_by_workspace
+					.iter()
+					.map(|(workspace_path, svc_names)| cargo::cli::BuildTestCall {
+						path: workspace_path.strip_prefix(ctx.path()).unwrap(),
+						packages: &svc_names,
+					})
+					.collect::<Vec<_>>(),
+				jobs: ctx.config_local().rust.num_jobs,
+				test_filters: &test_ctx.filters,
+			},
+		)
+		.await
+		.unwrap();
+
+		test_binaries
+	};
+
+	// Generate test ID
+
+	// Run tests
+	eprintln!();
+	let test_suite_id = gen_test_id();
+	rivet_term::status::progress("Running tests", &test_suite_id);
+	let tests_complete = Arc::new(AtomicUsize::new(0));
+	let test_count = test_binaries.len();
+	let test_results = futures_util::stream::iter(test_binaries.into_iter().map(|test_binary| {
+		let ctx = ctx.clone();
+		let test_suite_id = test_suite_id.clone();
+		let tests_complete = tests_complete.clone();
+		let timeout = test_ctx.timeout;
+		async move {
+			run_test(
+				&ctx,
+				test_suite_id,
+				test_binary,
+				tests_complete.clone(),
+				test_count,
+				timeout,
+			)
+			.await
+		}
+	}))
+	.buffer_unordered(test_ctx.parallel_tests.unwrap_or(DEFAULT_PARALLEL_TESTS))
+	.try_collect::<Vec<_>>()
+	.await?;
+
+	// Print results
+	print_results(&test_results);
+
+	// Cleanup jobs
+	{
+		eprintln!();
+		rivet_term::status::progress("Cleaning up jobs", "");
+
+		let purge = if test_ctx.no_purge { "" } else { "-purge" };
+		let cleanup_cmd = formatdoc!(
+			r#"
+			nomad job status |
+				grep -v -e "ID" -e "No running jobs" |
+				cut -f1 -d ' ' |
+				xargs -I {{}} nomad job stop {purge} -detach {{}}
+			"#
+		);
+
+		let mut cmd = Command::new("kubectl");
+		cmd.args(&[
+			"exec",
+			"service/nomad-server",
+			"-n",
+			"nomad",
+			"--container",
+			"nomad-instance",
+			"--",
+			"sh",
+			"-c",
+			&cleanup_cmd,
+		]);
+		cmd.env("KUBECONFIG", ctx.gen_kubeconfig_path());
+
+		let status = cmd.status().await?;
+		ensure!(status.success());
 	}
 
-	for svc in &failed {
-		eprintln!("  * {}: {}", svc.name(), style("FAIL").italic().red());
+	// Error on failure
+	let all_succeeded = test_results
+		.iter()
+		.all(|res| matches!(res.status, TestStatus::Pass));
+	if !all_succeeded {
+		eprintln!();
+		bail!("at least one test failure occurred");
 	}
 
 	Ok(())
 }
 
-enum TestResult {
-	Success,
-	Failure,
-	Cancel,
+#[derive(Debug)]
+enum TestStatus {
+	Pass,
+	TestFailed,
+	Timeout,
+	UnknownExitCode(i32),
+	UnknownError(String),
 }
 
-async fn run_test(svc_ctx: &ServiceContext, test_name: Option<&str>) -> TestResult {
-	eprintln!();
-	eprintln!();
-	rivet_term::status::info("Testing", svc_ctx.name());
+#[derive(Debug)]
+struct TestResult {
+	status: TestStatus,
+}
 
-	let project_ctx = svc_ctx.project().await;
+async fn run_test(
+	ctx: &ProjectContext,
+	test_suite_id: String,
+	test_binary: TestBinary,
+	tests_complete: Arc<AtomicUsize>,
+	test_count: usize,
+	timeout: Option<u64>,
+) -> Result<TestResult> {
+	let svc_ctx = ctx
+		.all_services()
+		.await
+		.into_iter()
+		.find(|x| x.cargo_name() == Some(&test_binary.package))
+		.context("svc not found for package")?;
+	let display_name = format!("{}::{}", svc_ctx.name(), test_binary.test_name);
 
-	// *Really* make sure we don't run a test in production
-	if project_ctx.ns().rivet.test.is_none() {
-		unreachable!();
+	// Convert path relative to project
+	let relative_path = test_binary
+		.path
+		.strip_prefix(ctx.path())
+		.context("path not in project")?;
+	let container_path = Path::new("/rivet-src").join(relative_path);
+
+	// Build exec ctx
+	let test_id = gen_test_id();
+	let exec_ctx = ExecServiceContext {
+		svc_ctx: svc_ctx.clone(),
+		run_context: RunContext::Test {
+			test_id: test_id.clone(),
+		},
+		driver: ExecServiceDriver::LocalBinaryArtifact {
+			exec_path: container_path,
+			// Limit test running in parallel & filter the tests that get ran
+			args: vec!["--exact".to_string(), test_binary.test_name.clone()],
+		},
+	};
+
+	// Build specs
+	let specs = dep::k8s::gen::gen_svc(&exec_ctx).await;
+	let k8s_svc_name = dep::k8s::gen::k8s_svc_name(&exec_ctx);
+
+	// Apply pod
+	dep::k8s::cli::apply_specs(ctx, specs).await?;
+
+	// Build path to logs
+	let logs_dir = Path::new("/tmp")
+		.join(test_suite_id)
+		.join(svc_ctx.name())
+		.join(test_binary.target);
+	tokio::fs::create_dir_all(&logs_dir).await?;
+	let logs_path = logs_dir.join(format!("{}.log", test_binary.test_name));
+
+	// Watch pod
+	rivet_term::status::info(
+		"Running",
+		format!(
+			"{display_name} [{test_id}] [{logs_path}]",
+			logs_path = logs_path.display()
+		),
+	);
+	let test_start_time = Instant::now();
+	let timeout = timeout
+		.map(Duration::from_secs)
+		.unwrap_or(DEFAULT_TEST_TIMEOUT);
+	let status =
+		match tokio::time::timeout(timeout, watch_pod(ctx, &k8s_svc_name, logs_path.clone())).await
+		{
+			Result::Ok(Result::Ok(x)) => x,
+			Result::Ok(Err(err)) => TestStatus::UnknownError(err.to_string()),
+			Err(_) => {
+				Command::new("kubectl")
+					.args(&["delete", "job", &k8s_svc_name, "-n", "rivet-service"])
+					.env("KUBECONFIG", ctx.gen_kubeconfig_path())
+					.output()
+					.await?;
+
+				TestStatus::Timeout
+			}
+		};
+
+	// Print status
+	let test_duration = test_start_time.elapsed();
+	let complete_count = tests_complete.fetch_add(1, Ordering::SeqCst) + 1;
+	let run_info = format!(
+		"{display_name} ({complete_count}/{test_count}) [{test_id}] [{logs_path}] [{td:.1}s]",
+		td = test_duration.as_secs_f32(),
+		logs_path = logs_path.display()
+	);
+	match &status {
+		TestStatus::Pass => {
+			rivet_term::status::success("Passed", &run_info);
+		}
+		TestStatus::TestFailed => {
+			rivet_term::status::error("Failed", &run_info);
+		}
+		TestStatus::Timeout => {
+			rivet_term::status::error("Timeout", &run_info);
+		}
+		TestStatus::UnknownExitCode(code) => {
+			rivet_term::status::error(&format!("Unknown exit code {}", code), &run_info);
+		}
+		TestStatus::UnknownError(err) => {
+			rivet_term::status::error(&format!("Unknown error: {}", err), &run_info);
+		}
 	}
 
-	let nomad_ctx = NomadCtx::remote(&project_ctx).await;
+	Ok(TestResult { status })
+}
 
-	let cleanup = TestCleanupManager::setup(project_ctx.clone(), nomad_ctx.clone())
-		.await
-		.unwrap();
+/// Follow the pod logs and write them to a file.
+async fn pipe_pod_logs(
+	ctx: ProjectContext,
+	k8s_svc_name: String,
+	logs_path: PathBuf,
+) -> Result<()> {
+	let label = format!("app.kubernetes.io/name={k8s_svc_name}");
 
-	let (env, tunnel_configs) = svc_ctx.env(RunContext::Test).await.unwrap();
+	// Write logs to file
+	let file = tokio::task::block_in_place(|| std::fs::File::create(&logs_path))?;
+	let mut logs_child = Command::new("kubectl")
+		.args(&["logs", "-f", "--selector", &label, "-n", "rivet-service"])
+		.env("KUBECONFIG", ctx.gen_kubeconfig_path())
+		.stdout(file)
+		.spawn()?;
+	logs_child.wait().await?;
 
-	// Forward services
-	let _tunnel = if !tunnel_configs.is_empty() {
-		Some(cloudflare::Tunnel::open(&project_ctx, tunnel_configs).await)
-	} else {
-		None
-	};
+	// Write end of file
+	let mut file = tokio::fs::OpenOptions::new()
+		.append(true)
+		.open(&logs_path)
+		.await?;
+	file.write_all(b"\n=== POD STOPPED ===\n").await?;
 
-	// Run tests
-	let res = async {
-		match &svc_ctx.config().runtime {
-			RuntimeKind::Rust {} => {
-				let mut cmd = Command::new("cargo");
-				cmd.current_dir(svc_ctx.path());
-				cmd.env("RUSTFLAGS", "--cfg tokio_unstable");
-				cmd.env("CARGO_TARGET_DIR", project_ctx.path().join("target"));
-				cmd.arg("test");
-				if let Some(jobs) = project_ctx.config_local().rust.num_jobs {
-					cmd.arg("--jobs").arg(jobs.to_string());
-				}
-				if let Some(test_name) = test_name {
-					cmd.arg(test_name);
-				}
-				// Only run one test at a time
-				cmd.args(["--", "--test-threads", "1"]);
-				cmd.envs(env);
-				ensure!(cmd.status().await.unwrap().success(), "test failed");
+	Ok(())
+}
 
-				Result::Ok(())
-			}
-			RuntimeKind::CRDB { .. }
-			| RuntimeKind::ClickHouse { .. }
-			| RuntimeKind::Redis { .. }
-			| RuntimeKind::S3 { .. }
-			| RuntimeKind::Nats { .. } => {
-				rivet_term::status::info("No tests to run", "");
-				Result::Ok(())
-			}
+/// Watch the pod to look for completion or failure.
+async fn watch_pod(
+	ctx: &ProjectContext,
+	k8s_svc_name: &str,
+	logs_path: PathBuf,
+) -> Result<TestStatus> {
+	let label = format!("app.kubernetes.io/name={k8s_svc_name}");
+
+	let mut spawned_pipe_logs_task = false;
+	loop {
+		// TODO: Use --wait for better performance
+		let output = Command::new("kubectl")
+			.args(&[
+				"get",
+				"pod",
+				"--selector",
+				&label,
+				"-n",
+				"rivet-service",
+				"-o",
+				"jsonpath={.items[0].status.phase}",
+			])
+			.env("KUBECONFIG", ctx.gen_kubeconfig_path())
+			.output()
+			.await?;
+
+		let output_str = String::from_utf8_lossy(&output.stdout);
+		let output_str = output_str.trim();
+
+		// Start piping logs to a file once the container has started
+		if !spawned_pipe_logs_task && matches!(output_str, "Running" | "Succeeded" | "Failed") {
+			spawned_pipe_logs_task = true;
+			tokio::spawn(pipe_pod_logs(
+				ctx.clone(),
+				k8s_svc_name.to_string(),
+				logs_path.clone(),
+			));
 		}
-	};
 
-	let test_result = tokio::select! {
-		res = res => {
-			match res {
-				Result::Ok(_) => {
-					rivet_term::status::success("Passed", svc_ctx.name());
-					TestResult::Success
-				}
-				Result::Err(err) => {
-					rivet_term::status::error("Failed", format!("{err:?}"));
-					TestResult::Failure
-				}
+		// Wait for container to finish
+		match output_str {
+			"Pending" | "Running" | "" => {
+				// Continue
+				tokio::time::sleep(Duration::from_millis(500)).await;
 			}
-		}
-		_ = tokio::signal::ctrl_c() => {
-			rivet_term::status::warn("Cancelled", "");
-			TestResult::Cancel
-		}
-	};
+			"Succeeded" | "Failed" => {
+				// Get the exit code of the pod
+				let output = Command::new("kubectl")
+					.args(&[
+						"get",
+						"pod",
+						"--selector",
+						&label,
+						"-n",
+						"rivet-service",
+						"-o",
+						"jsonpath={.items[0].status.containerStatuses[0].state.terminated.exitCode}",
+					])
+					.env("KUBECONFIG", ctx.gen_kubeconfig_path())
+					.output()
+					.await?;
 
-	cleanup.run().await.unwrap();
+				let exit_code_str = String::from_utf8_lossy(&output.stdout);
+				let Result::Ok(exit_code) = exit_code_str.trim().parse::<i32>() else {
+					return Ok(TestStatus::UnknownError(format!(
+						"Could not parse exit code: {exit_code_str:?}"
+					)));
+				};
 
-	test_result
+				let test_status = match exit_code {
+					0 => TestStatus::Pass,
+					101 => TestStatus::TestFailed,
+					x => TestStatus::UnknownExitCode(x),
+				};
+
+				return Ok(test_status);
+			}
+			_ => bail!("unexpected pod status: {}", output_str),
+		}
+	}
+}
+
+fn print_results(test_results: &[TestResult]) {
+	eprintln!();
+	rivet_term::status::success("Complete", "");
+
+	let passed_count = test_results
+		.iter()
+		.filter(|test_result| matches!(test_result.status, TestStatus::Pass))
+		.count();
+	if passed_count > 0 {
+		eprintln!(
+			"  {}: {}/{}",
+			style("PASS").italic().green(),
+			passed_count,
+			test_results.len()
+		);
+	}
+
+	let failed_count = test_results
+		.iter()
+		.filter(|test_result| matches!(test_result.status, TestStatus::TestFailed))
+		.count();
+	if failed_count > 0 {
+		eprintln!(
+			"  {}: {}/{}",
+			style("FAIL").italic().red(),
+			failed_count,
+			test_results.len()
+		);
+	}
+
+	let timeout_count = test_results
+		.iter()
+		.filter(|test_result| matches!(test_result.status, TestStatus::Timeout))
+		.count();
+	if timeout_count > 0 {
+		eprintln!(
+			"  {}: {}/{}",
+			style("TIMEOUT").italic().red(),
+			timeout_count,
+			test_results.len()
+		);
+	}
+
+	let unknown_count = test_results
+		.iter()
+		.filter(|test_result| {
+			matches!(
+				test_result.status,
+				TestStatus::UnknownExitCode(_) | TestStatus::UnknownError(_)
+			)
+		})
+		.count();
+	if unknown_count > 0 {
+		eprintln!(
+			"  {}: {}/{}",
+			style("UNKNOWN").italic().red(),
+			unknown_count,
+			test_results.len()
+		);
+	}
+}
+
+fn gen_test_id() -> String {
+	let mut rng = thread_rng();
+	(0..8)
+		.map(|_| {
+			let mut chars = ('a'..='z').chain('0'..='9').collect::<Vec<_>>();
+			chars.shuffle(&mut rng);
+			chars[0]
+		})
+		.collect()
 }

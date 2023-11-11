@@ -58,7 +58,6 @@ user-identity-get = { path = "../../pkg/user-identity/ops/get" }
 [dev-dependencies]
 reqwest = "0.11"
 rivet-connection = { path = "../../../lib/connection" }
-rivet-matchmaker = { path = "../../../lib/smithy-output/api-matchmaker/rust" }
 util-job = { package = "rivet-util-job", path = "../../pkg/job/util" }
 
 cdn-namespace-domain-create = { path = "../../pkg/cdn/ops/namespace-domain-create" }

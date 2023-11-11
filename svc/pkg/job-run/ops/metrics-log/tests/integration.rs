@@ -5,7 +5,19 @@ use std::time::Duration;
 
 #[worker_test]
 async fn empty(ctx: TestCtx) {
+	if !util::feature::job_run() {
+		return;
+	}
+
+	let template_res = op!([ctx] faker_job_template {
+		kind: Some(faker::job_template::request::Kind::Stress(faker::job_template::request::Stress { flags: "-c 1 -l 50".into() })),
+		..Default::default()
+	})
+	.await
+	.unwrap();
+
 	let run_res = op!([ctx] faker_job_run {
+		job_spec_json: Some(template_res.job_spec_json.clone()),
 		..Default::default()
 	})
 	.await
@@ -38,16 +50,23 @@ async fn empty(ctx: TestCtx) {
 			step: 15000,
 			metrics: vec![job_run::metrics_log::request::Metric {
 				job: nomad_job_id.clone(),
-				task: "test-server".to_owned(),
+				task: util_job::RUN_MAIN_TASK_NAME.to_owned(),
 			}],
 		})
 		.await
 		.unwrap();
 
 		let metrics = metrics_res.metrics.first().unwrap();
-		if *metrics.memory.last().unwrap() != 0 {
-			tracing::info!("received non-0 metrics");
-			break;
+		let memory = *metrics.memory.last().unwrap();
+		let cpu = *metrics.cpu.last().unwrap();
+		if memory != 0 {
+			tracing::info!(?memory, "received valid memory metrics");
+			if cpu > 0.45 {
+				tracing::info!(?cpu, "received valid cpu metrics");
+				break;
+			} else {
+				tracing::info!("cpu metrics not high enough",)
+			}
 		} else {
 			tracing::info!("received zeroed metrics, either Prometheus has not polled this client yet or requests are failing");
 		}

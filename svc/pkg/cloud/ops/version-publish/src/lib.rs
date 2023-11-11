@@ -6,16 +6,16 @@ use serde_json::json;
 async fn handle(
 	ctx: OperationContext<cloud::version_publish::Request>,
 ) -> GlobalResult<cloud::version_publish::Response> {
-	let req_game_id = internal_unwrap!(ctx.game_id);
+	let req_game_id = unwrap_ref!(ctx.game_id);
 	let game_id = req_game_id.as_uuid();
-	let config = internal_unwrap!(ctx.config);
+	let config = unwrap_ref!(ctx.config);
 
 	let game_res = op!([ctx] game_get {
 		game_ids: vec![game_id.into()],
 	})
 	.await?;
-	let game = internal_unwrap_owned!(game_res.games.first());
-	let developer_team_id = internal_unwrap!(game.developer_team_id).as_uuid();
+	let game = unwrap!(game_res.games.first());
+	let developer_team_id = unwrap_ref!(game.developer_team_id).as_uuid();
 
 	// Validate version
 	let validation_res = op!([ctx] game_version_validate {
@@ -33,7 +33,7 @@ async fn handle(
 			.map(|err| err.path.join("."))
 			.collect::<Vec<_>>()
 			.join(", ");
-		panic_with!(VALIDATION_ERROR, error = readable_errors);
+		bail_with!(VALIDATION_ERROR, error = readable_errors);
 	}
 
 	// Prepare the version
@@ -44,7 +44,7 @@ async fn handle(
 		})
 		.await?;
 
-		Some(internal_unwrap!(prepare_res.config_ctx).clone())
+		Some(unwrap_ref!(prepare_res.config_ctx).clone())
 	} else {
 		None
 	};
@@ -55,7 +55,7 @@ async fn handle(
 		})
 		.await?;
 
-		Some(internal_unwrap!(prepare_res.config_ctx).clone())
+		Some(unwrap_ref!(prepare_res.config_ctx).clone())
 	} else {
 		None
 	};
@@ -66,7 +66,7 @@ async fn handle(
 		})
 		.await?;
 
-		Some(internal_unwrap!(prepare_res.config_ctx).clone())
+		Some(unwrap_ref!(prepare_res.config_ctx).clone())
 	} else {
 		None
 	};
@@ -77,7 +77,7 @@ async fn handle(
 		})
 		.await?;
 
-		Some(internal_unwrap!(prepare_res.config_ctx).clone())
+		Some(unwrap_ref!(prepare_res.config_ctx).clone())
 	} else {
 		None
 	};
@@ -88,7 +88,7 @@ async fn handle(
 		})
 		.await?;
 
-		Some(internal_unwrap!(prepare_res.config_ctx).clone())
+		Some(unwrap_ref!(prepare_res.config_ctx).clone())
 	} else {
 		None
 	};
@@ -99,17 +99,17 @@ async fn handle(
 		display_name: ctx.display_name.clone(),
 	})
 	.await?;
-	let version_id = internal_unwrap!(version_create_res.version_id).as_uuid();
+	let version_id = unwrap_ref!(version_create_res.version_id).as_uuid();
 
 	// Create the cloud version
-	sqlx::query(indoc!(
+	sql_execute!(
+		[ctx]
 		"
-		INSERT INTO game_versions (version_id)
+		INSERT INTO db_cloud.game_versions (version_id)
 		VALUES ($1)
-	"
-	))
-	.bind(version_id)
-	.execute(&ctx.crdb("db-cloud").await?)
+	",
+		version_id,
+	)
 	.await?;
 
 	// Create the cloud versions

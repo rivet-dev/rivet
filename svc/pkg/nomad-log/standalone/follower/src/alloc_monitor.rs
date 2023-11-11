@@ -93,10 +93,10 @@ impl AllocMonitor {
 		.await?;
 
 		for alloc in all_allocs {
-			let alloc_id = internal_unwrap!(alloc.ID);
-			let eval_id = internal_unwrap!(alloc.eval_id, "alloc has no eval");
-			let job_id = internal_unwrap!(alloc.job_id);
-			let client_status = internal_unwrap!(alloc.client_status);
+			let alloc_id = unwrap_ref!(alloc.ID);
+			let eval_id = unwrap_ref!(alloc.eval_id, "alloc has no eval");
+			let job_id = unwrap_ref!(alloc.job_id);
+			let client_status = unwrap_ref!(alloc.client_status);
 			let task_states = if let Some(x) = alloc.task_states.as_ref() {
 				x
 			} else {
@@ -201,10 +201,10 @@ impl AllocMonitor {
 		&mut self,
 		AllocationUpdated { allocation: alloc }: &AllocationUpdated,
 	) -> GlobalResult<()> {
-		let alloc_id = internal_unwrap!(alloc.ID);
-		let eval_id = internal_unwrap!(alloc.eval_id, "alloc has no eval");
-		let job_id = internal_unwrap!(alloc.job_id);
-		let client_status = internal_unwrap!(alloc.client_status);
+		let alloc_id = unwrap_ref!(alloc.ID);
+		let eval_id = unwrap_ref!(alloc.eval_id, "alloc has no eval");
+		let job_id = unwrap_ref!(alloc.job_id);
+		let client_status = unwrap_ref!(alloc.client_status);
 
 		// Ignore alloc that doesn't match filter
 		if !(self.alloc_filter)(job_id) {
@@ -232,7 +232,7 @@ impl AllocMonitor {
 					return Ok(());
 				}
 
-				let task_states = internal_unwrap!(alloc.task_states);
+				let task_states = unwrap_ref!(alloc.task_states);
 				self.start_alloc(
 					alloc_id.as_str(),
 					job_id.as_str(),

@@ -7,7 +7,7 @@ kind = "rust"
 [operation]
 
 [secrets]
-"turnstile/rivet_game/secret_key" = { optional = true }
+"turnstile/cdn/secret_key" = { optional = true }
 
 [databases]
 db-captcha = {}

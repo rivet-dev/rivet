@@ -59,8 +59,8 @@ pub async fn handle(config: &Config, req: Request<Body>) -> Result<Response<Body
 	let res = if let Some(crdb_pool) = req
 		.uri()
 		.path()
-		.strip_prefix("/health/crdb/")
-		.and_then(|x| config.pools.as_ref().and_then(|p| p.crdb(x).ok()))
+		.strip_prefix("/health/crdb")
+		.and_then(|_| config.pools.as_ref().and_then(|p| p.crdb().ok()))
 	{
 		status::crdb::route(crdb_pool).await
 	} else if let Some(redis_pool) = req

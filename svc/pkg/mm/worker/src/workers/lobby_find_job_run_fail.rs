@@ -9,21 +9,21 @@ struct LobbyRow {
 
 #[worker(name = "mm-lobby-find-job-run-fail")]
 async fn worker(ctx: &OperationContext<job_run::msg::fail::Message>) -> GlobalResult<()> {
-	let crdb = ctx.crdb("db-mm-state").await?;
+	let crdb = ctx.crdb().await?;
 
-	let run_id = internal_unwrap!(ctx.run_id).as_uuid();
+	let run_id = unwrap_ref!(ctx.run_id).as_uuid();
 
 	// Find the associated lobby
-	let query_rows = sqlx::query_as::<_, (Uuid,)>(
+	let query_rows = sql_fetch_all!(
+		[ctx, (Uuid,)]
 		"
 		SELECT find_queries.query_id
-		FROM lobbies
-		INNER JOIN find_queries ON find_queries.lobby_id = lobbies.lobby_id
+		FROM db_mm_state.lobbies
+		INNER JOIN db_mm_state.find_queries ON find_queries.lobby_id = lobbies.lobby_id
 		WHERE lobbies.run_id = $1
 		",
+		run_id,
 	)
-	.bind(run_id)
-	.fetch_all(&crdb)
 	.await?;
 	if query_rows.is_empty() {
 		tracing::info!(?run_id, "no find queries for run id");

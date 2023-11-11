@@ -4,7 +4,7 @@ use crate::JoinKind;
 
 /// HASH
 pub fn player_config(player_id: Uuid) -> String {
-	format!("mm:player:{}:config", player_id)
+	format!("{{global}}:mm:player:{}:config", player_id)
 }
 
 pub mod player_config {
@@ -27,7 +27,7 @@ pub mod player_config {
 
 /// HASH
 pub fn lobby_config(lobby_id: Uuid) -> String {
-	format!("mm:lobby:{}:config", lobby_id)
+	format!("{{global}}:mm:lobby:{}:config", lobby_id)
 }
 
 pub mod lobby_config {
@@ -76,7 +76,7 @@ pub mod lobby_config {
 ///
 /// Includes the state of all active find queries.
 pub fn find_query_state(query_id: Uuid) -> String {
-	format!("mm:find_query:{}:state", query_id)
+	format!("{{global}}:mm:find_query:{}:state", query_id)
 }
 
 pub mod find_query_state {
@@ -103,48 +103,48 @@ pub mod find_query_state {
 
 /// SET<player id>
 pub fn find_query_player_ids(query_id: Uuid) -> String {
-	format!("mm:find_query:{}:player_ids", query_id)
+	format!("{{global}}:mm:find_query:{}:player_ids", query_id)
 }
 
 /// ZSET<create ts, query id>
 ///
 /// Includes all active find queries for a lobby.
 pub fn lobby_find_queries(lobby_id: Uuid) -> String {
-	format!("mm:lobby:{}:find_queries", lobby_id)
+	format!("{{global}}:mm:lobby:{}:find_queries", lobby_id)
 }
 
 /// ZSET<player id>
 pub fn ns_player_ids(namespace_id: Uuid) -> String {
-	format!("mm:ns:{}:player_ids", namespace_id)
+	format!("{{global}}:mm:ns:{}:player_ids", namespace_id)
 }
 
 /// ZSET<lobby id>
 pub fn ns_lobby_ids(namespace_id: Uuid) -> String {
-	format!("mm:ns:{}:lobby_ids", namespace_id)
+	format!("{{global}}:mm:ns:{}:lobby_ids", namespace_id)
 }
 
 /// SET<player id>
 pub fn ns_remote_address_player_ids(namespace_id: Uuid, remote_address: &str) -> String {
 	format!(
-		"mm:ns:{}:remote_address:{}:player_ids",
+		"{{global}}:mm:ns:{}:remote_address:{}:player_ids",
 		namespace_id, remote_address
 	)
 }
 
 /// ZSET<player id>
 pub fn lobby_player_ids(lobby_id: Uuid) -> String {
-	format!("mm:lobby:{}:player_ids", lobby_id)
+	format!("{{global}}:mm:lobby:{}:player_ids", lobby_id)
 }
 
 /// ZSET<player id>
 pub fn lobby_registered_player_ids(lobby_id: Uuid) -> String {
-	format!("mm:lobby:{}:registered_player_ids", lobby_id)
+	format!("{{global}}:mm:lobby:{}:registered_player_ids", lobby_id)
 }
 
 /// ZSET<lobby id, idle ts>
 pub fn idle_lobby_ids(namespace_id: Uuid, region_id: Uuid, lobby_group_id: Uuid) -> String {
 	format!(
-		"mm:ns:{}:region:{}:lg:{}:idle_lobby_ids",
+		"{{global}}:mm:ns:{}:region:{}:lg:{}:idle_lobby_ids",
 		namespace_id, region_id, lobby_group_id
 	)
 }
@@ -162,7 +162,7 @@ pub fn idle_lobby_ids(namespace_id: Uuid, region_id: Uuid, lobby_group_id: Uuid)
 /// HASH<lobby id, lobby group id>
 pub fn idle_lobby_lobby_group_ids(namespace_id: Uuid, region_id: Uuid) -> String {
 	format!(
-		"mm:ns:{}:region:{}:lobby:idle:lobby_group_ids",
+		"{{global}}:mm:ns:{}:region:{}:lobby:idle:lobby_group_ids",
 		namespace_id, region_id,
 	)
 }
@@ -175,7 +175,7 @@ pub fn lobby_available_spots(
 	join_kind: JoinKind,
 ) -> String {
 	format!(
-		"mm:ns:{}:region:{}:lg:{}:lobby:available_spots:{}",
+		"{{global}}:mm:ns:{}:region:{}:lg:{}:lobby:available_spots:{}",
 		namespace_id,
 		region_id,
 		lobby_group_id,
@@ -185,10 +185,15 @@ pub fn lobby_available_spots(
 
 /// ZSET<lobby id, expire ts>
 pub fn lobby_unready() -> String {
-	"mm:lobby:unready".to_string()
+	format!("{{global}}:mm:lobby:unready")
 }
 
 /// ZSET<lobby id, expire ts>
 pub fn player_unregistered() -> String {
-	"mm:player:unregistered".to_string()
+	format!("{{global}}:mm:player:unregistered")
+}
+
+// Placeholder key
+pub fn empty() -> String {
+	"{global}".to_string()
 }

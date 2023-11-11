@@ -1,13 +1,13 @@
 # \IdentityLinksApi
 
-All URIs are relative to *http://localhost*
+All URIs are relative to *https://api.rivet.gg*
 
 Method | HTTP request | Description
 ------------- | ------------- | -------------
-[**identity_links_cancel**](IdentityLinksApi.md#identity_links_cancel) | **POST** /game-links/cancel | 
-[**identity_links_complete**](IdentityLinksApi.md#identity_links_complete) | **POST** /game-links/complete | 
-[**identity_links_get**](IdentityLinksApi.md#identity_links_get) | **GET** /game-links | 
-[**identity_links_prepare**](IdentityLinksApi.md#identity_links_prepare) | **POST** /game-links | 
+[**identity_links_cancel**](IdentityLinksApi.md#identity_links_cancel) | **POST** /identity/game-links/cancel | 
+[**identity_links_complete**](IdentityLinksApi.md#identity_links_complete) | **POST** /identity/game-links/complete | 
+[**identity_links_get**](IdentityLinksApi.md#identity_links_get) | **GET** /identity/game-links | 
+[**identity_links_prepare**](IdentityLinksApi.md#identity_links_prepare) | **POST** /identity/game-links | 
 
 
 

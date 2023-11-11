@@ -27,7 +27,6 @@ impl Ctx {
 				.pretty()
 				.with_max_level(tracing::Level::INFO)
 				.with_target(false)
-				.without_time()
 				.init();
 		});
 
@@ -69,7 +68,7 @@ impl Ctx {
 
 	fn config(&self, bearer_token: &str) -> Configuration {
 		Configuration {
-			base_path: util::env::svc_router_url("api-module"),
+			base_path: "http://traefik.traefik.svc.cluster.local:80".into(),
 			bearer_access_token: Some(bearer_token.to_string()),
 			..Default::default()
 		}

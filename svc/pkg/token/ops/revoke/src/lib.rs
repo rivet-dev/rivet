@@ -5,7 +5,7 @@ use rivet_operation::prelude::*;
 async fn handle(
 	ctx: OperationContext<token::revoke::Request>,
 ) -> GlobalResult<token::revoke::Response> {
-	let crdb = ctx.crdb("db-token").await?;
+	let crdb = ctx.crdb().await?;
 
 	let jtis = ctx
 		.jtis
@@ -13,16 +13,16 @@ async fn handle(
 		.map(common::Uuid::as_uuid)
 		.collect::<Vec<_>>();
 
-	sqlx::query(indoc!(
+	sql_execute!(
+		[ctx]
 		"
-		UPDATE tokens
+		UPDATE db_token.tokens
 		SET revoke_ts = $2
 		WHERE jti = ANY($1)
-		"
-	))
-	.bind(&jtis)
-	.bind(ctx.ts())
-	.execute(&crdb)
+		",
+		&jtis,
+		ctx.ts(),
+	)
 	.await?;
 
 	Ok(token::revoke::Response {})

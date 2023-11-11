@@ -2,26 +2,17 @@ use chirp_worker::prelude::*;
 
 #[worker_test]
 async fn upsert(ctx: TestCtx) {
-	let namespace_id = Uuid::new_v4();
+	if !util::feature::cf_custom_hostname() {
+		return;
+	}
+
+	let game_res = op!([ctx] faker_game { }).await.unwrap();
+	let namespace_id = *game_res.namespace_ids.first().unwrap();
 	let domain = format!("{}.com", util::faker::ident());
-
-	op!([ctx] cdn_namespace_create {
-		namespace_id: Some(namespace_id.into()),
-	})
-	.await
-	.unwrap();
-
-	// Create the domain
-	op!([ctx] cdn_namespace_domain_create {
-		namespace_id: Some(namespace_id.into()),
-		domain: domain.clone(),
-	})
-	.await
-	.unwrap();
 
 	// This should upsert the domain
 	op!([ctx] cdn_namespace_domain_create {
-		namespace_id: Some(namespace_id.into()),
+		namespace_id: Some(namespace_id),
 		domain: domain.clone(),
 	})
 	.await
@@ -31,14 +22,14 @@ async fn upsert(ctx: TestCtx) {
 		"
 		SELECT EXISTS (
 			SELECT 1
-			FROM game_namespace_domains
+			FROM db_cdn.game_namespace_domains
 			WHERE namespace_id = $1 AND domain = $2
 		)
 		"
 	))
-	.bind(namespace_id)
+	.bind(namespace_id.as_uuid())
 	.bind(domain)
-	.fetch_one(&ctx.crdb("db-cdn").await.unwrap())
+	.fetch_one(&ctx.crdb().await.unwrap())
 	.await
 	.unwrap();
 	assert!(sql_exists);
@@ -46,51 +37,50 @@ async fn upsert(ctx: TestCtx) {
 
 #[worker_test]
 async fn invalid_domain(ctx: TestCtx) {
-	let namespace_id = Uuid::new_v4();
+	if !util::feature::cf_custom_hostname() {
+		return;
+	}
 
-	op!([ctx] cdn_namespace_create {
-		namespace_id: Some(namespace_id.into()),
-	})
-	.await
-	.unwrap();
-
-	op!([ctx] cdn_namespace_domain_create {
-		namespace_id: Some(namespace_id.into()),
-		domain: util::env::domain_main().to_owned(),
-	})
-	.await
-	.unwrap_err();
+	let game_res = op!([ctx] faker_game { }).await.unwrap();
+	let namespace_id = *game_res.namespace_ids.first().unwrap();
 
 	op!([ctx] cdn_namespace_domain_create {
-		namespace_id: Some(namespace_id.into()),
-		domain: util::env::domain_cdn().to_owned(),
+		namespace_id: Some(namespace_id),
+		domain: util::env::domain_main().unwrap().to_owned(),
 	})
 	.await
 	.unwrap_err();
 
 	op!([ctx] cdn_namespace_domain_create {
-		namespace_id: Some(namespace_id.into()),
-		domain: format!("test.{}", util::env::domain_main()),
+		namespace_id: Some(namespace_id),
+		domain: util::env::domain_cdn().unwrap().to_owned(),
 	})
 	.await
 	.unwrap_err();
 
 	op!([ctx] cdn_namespace_domain_create {
-		namespace_id: Some(namespace_id.into()),
-		domain: format!("test.{}", util::env::domain_cdn()),
+		namespace_id: Some(namespace_id),
+		domain: format!("test.{}", util::env::domain_main().unwrap()),
 	})
 	.await
 	.unwrap_err();
 
 	op!([ctx] cdn_namespace_domain_create {
-		namespace_id: Some(namespace_id.into()),
+		namespace_id: Some(namespace_id),
+		domain: format!("test.{}", util::env::domain_cdn().unwrap()),
+	})
+	.await
+	.unwrap_err();
+
+	op!([ctx] cdn_namespace_domain_create {
+		namespace_id: Some(namespace_id),
 		domain: "".to_owned(),
 	})
 	.await
 	.unwrap_err();
 
 	op!([ctx] cdn_namespace_domain_create {
-		namespace_id: Some(namespace_id.into()),
+		namespace_id: Some(namespace_id),
 		domain: (0..257).map(|_| 'a').collect(),
 	})
 	.await

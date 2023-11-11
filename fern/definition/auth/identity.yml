@@ -6,8 +6,7 @@ imports:
 
 service:
   auth: true
-  url: Auth
-  base-path: /identity/email
+  base-path: /auth/identity/email
   endpoints:
     completeEmailVerification:
       path: /complete-verification
@@ -41,7 +40,7 @@ types:
   StartEmailVerificationRequest:
     properties:
       email: string
-      captcha: captchaConfig.Config
+      captcha: optional<captchaConfig.Config>
       game_id:
         type: optional<uuid>
 

@@ -31,7 +31,9 @@ async fn serve_req(_req: Request<Body>) -> Result<Response<Body>, hyper::Error> 
 
 	let metric_families = crate::registry::REGISTRY.gather();
 	let mut buffer = Vec::new();
-	encoder.encode(&metric_families, &mut buffer).expect("encode");
+	encoder
+		.encode(&metric_families, &mut buffer)
+		.expect("encode");
 
 	let response = Response::builder()
 		.status(200)

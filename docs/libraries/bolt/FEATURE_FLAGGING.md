@@ -19,4 +19,3 @@ Validate the following:
 ## Related resources
 
 -   [Terraform configs & secrets](/docs/infrastructure/terraform/CONFIGS_AND_SECRETS.md)
--   [SaltStack configs & secrets](/docs/infrastructure/saltstack/CONFIGS_AND_SECRETS.md)

@@ -4,6 +4,10 @@ use proto::backend::pkg::*;
 
 #[worker_test]
 async fn raw(ctx: TestCtx) {
+	if !util::feature::job_run() {
+		return;
+	}
+
 	let run_res = op!([ctx] faker_job_run {
 		..Default::default()
 	})

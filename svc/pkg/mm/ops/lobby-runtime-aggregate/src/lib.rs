@@ -79,7 +79,7 @@ async fn handle(
 	ctx: OperationContext<mm::lobby_runtime_aggregate::Request>,
 ) -> GlobalResult<mm::lobby_runtime_aggregate::Response> {
 	let _redis = ctx.redis_mm().await?;
-	let crdb = ctx.crdb("db-mm-state").await?;
+	let crdb = ctx.crdb().await?;
 
 	let namespace_ids = ctx
 		.namespace_ids
@@ -105,10 +105,11 @@ async fn handle(
 	//
 	// Use AS OF SYSTEM TIME to reduce contention.
 	// https://www.cockroachlabs.com/docs/v22.2/performance-best-practices-overview#use-as-of-system-time-to-decrease-conflicts-with-long-running-queries
-	let mut lobby_rows = sqlx::query_as::<_, LobbyRow>(indoc!(
+	let mut lobby_rows = sql_fetch!(
+		[ctx, LobbyRow, &crdb]
 		"
 		SELECT namespace_id, lobby_id, region_id, lobby_group_id, create_ts, stop_ts
-		FROM lobbies AS OF SYSTEM TIME '-5s'
+		FROM db_mm_state.lobbies AS OF SYSTEM TIME '-5s'
 		WHERE namespace_id = ANY($1) AND (
 			-- Lobbies stopped during the query window
 			(stop_ts > $2 AND stop_ts <= $3) OR
@@ -117,12 +118,11 @@ async fn handle(
 			-- Lobbies still running that overlap with the query window
 			(stop_ts IS NULL AND create_ts <= $3)
 		)
-		"
-	))
-	.bind(&namespace_ids)
-	.bind(ctx.query_start)
-	.bind(ctx.query_end)
-	.fetch(&crdb);
+		",
+		&namespace_ids,
+		ctx.query_start,
+		ctx.query_end,
+	);
 	while let Some(lobby_row) = lobby_rows.next().await {
 		let lobby_row = lobby_row?;
 		lobby_aggregate.process_lobby(&lobby_row);
@@ -162,7 +162,7 @@ async fn handle(
 		version_ids: version_ids.clone(),
 	})
 	.await?;
-	internal_assert_eq!(
+	ensure_eq!(
 		version_ids.len(),
 		version_res.versions.len(),
 		"missing version ids"
@@ -186,7 +186,7 @@ async fn handle(
 			tracing::warn!(%lobby_group_id, "could not find matching version for lobby group");
 			continue;
 		};
-		let version_id = internal_unwrap!(version_id_proto).as_uuid();
+		let version_id = unwrap_ref!(version_id_proto).as_uuid();
 
 		// Find the matching version config
 		let version_res = if let Some(x) = version_res
@@ -199,11 +199,11 @@ async fn handle(
 			tracing::warn!(%lobby_group_id, %version_id, "could not find matching version config for version id");
 			continue;
 		};
-		let version_config = internal_unwrap!(version_res.config);
-		let version_meta = internal_unwrap!(version_res.config_meta);
+		let version_config = unwrap_ref!(version_res.config);
+		let version_meta = unwrap_ref!(version_res.config_meta);
 
 		// Resolve the configured tier name ID
-		let lobby_group_idx = internal_unwrap_owned!(
+		let lobby_group_idx = unwrap!(
 			version_meta
 				.lobby_groups
 				.iter()
@@ -212,9 +212,8 @@ async fn handle(
 			"could not find matching tier"
 		)
 		.0;
-		let lobby_group_config =
-			internal_unwrap_owned!(version_config.lobby_groups.get(lobby_group_idx));
-		let lobby_group_region = internal_unwrap_owned!(
+		let lobby_group_config = unwrap!(version_config.lobby_groups.get(lobby_group_idx));
+		let lobby_group_region = unwrap!(
 			lobby_group_config
 				.regions
 				.iter()

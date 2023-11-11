@@ -1,6 +1,8 @@
-use proto::backend::{self, pkg::*};
+use proto::backend::{
+	self,
+	pkg::{region::config_get::Region, *},
+};
 use rivet_operation::prelude::*;
-use util_region::config::Region;
 
 fn universal_region(region: &Region) -> backend::region::UniversalRegion {
 	use backend::region::UniversalRegion;
@@ -150,7 +152,7 @@ fn convert_region(
 	let region_display_name = universal_region_display_name(&universal_region).to_owned();
 	let (latitude, longitude) = universal_region_coords(&universal_region);
 	Ok(backend::region::Region {
-		region_id: Some(region.id.into()),
+		region_id: region.id,
 		enabled: true,
 		nomad_region: "global".into(),
 		nomad_datacenter: name_id.to_owned(),
@@ -171,22 +173,22 @@ fn convert_region(
 async fn handle(
 	ctx: OperationContext<region::get::Request>,
 ) -> GlobalResult<region::get::Response> {
-	let region_ids = ctx
-		.region_ids
-		.iter()
-		.map(|x| x.as_uuid())
-		.collect::<Vec<_>>();
-
-	let db = util_region::config::read().await;
-	let primary_region = internal_unwrap_owned!(
-		db.get(util::env::primary_region()),
+	let res = op!([ctx] region_config_get {}).await?;
+	let regions = &res.regions;
+	let primary_region = unwrap!(
+		regions.get(util::env::primary_region()),
 		"missing primary region"
 	);
 
-	let regions = db
+	let regions = regions
 		.iter()
-		.filter(|(_, x)| region_ids.contains(&x.id))
-		.map(|(name_id, region)| convert_region(name_id, region, primary_region.id))
+		.filter(|(_, x)| {
+			x.id.as_ref()
+				.map_or(false, |id| ctx.region_ids.contains(id))
+		})
+		.map(|(name_id, region)| {
+			convert_region(name_id, region, unwrap_ref!(primary_region.id).as_uuid())
+		})
 		.collect::<GlobalResult<Vec<backend::region::Region>>>()?;
 
 	Ok(region::get::Response { regions })

@@ -1,6 +1,8 @@
 use chirp_worker::prelude::*;
 use proto::backend;
 
+const TEST_BODY: &[u8] = b"test file";
+
 #[worker_test]
 async fn empty(ctx: TestCtx) {
 	let game_res = op!([ctx] faker_game {
@@ -17,7 +19,7 @@ async fn empty(ctx: TestCtx) {
 			backend::upload::PrepareFile {
 				path: "image.png".to_owned(),
 				mime: Some("image/png".into()),
-				content_length: 123,
+				content_length: TEST_BODY.len() as u64,
 				..Default::default()
 			},
 		],
@@ -26,10 +28,27 @@ async fn empty(ctx: TestCtx) {
 	.unwrap();
 
 	let upload_id = upload_prepare_res.upload_id.unwrap();
-	let presigned_request = upload_prepare_res.presigned_requests.first();
-	let _presigned_request = presigned_request.unwrap();
+	let presigned_request = upload_prepare_res.presigned_requests.first().unwrap();
 
-	let _res = op!([ctx] custom_user_avatar_upload_complete {
+	tracing::info!("writing test files");
+	let res = reqwest::Client::new()
+		.put(&presigned_request.url)
+		.body(TEST_BODY.to_vec())
+		.header("content-type", "image/png")
+		.send()
+		.await
+		.expect("failed to upload");
+	if res.status().is_success() {
+		tracing::info!("uploaded successfully");
+	} else {
+		panic!(
+			"failed to upload ({}): {:?}",
+			res.status(),
+			res.text().await
+		);
+	}
+
+	op!([ctx] custom_user_avatar_upload_complete {
 		game_id: game_res.game_id,
 		upload_id: Some(upload_id),
 	})

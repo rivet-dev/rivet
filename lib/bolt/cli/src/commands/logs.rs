@@ -20,15 +20,15 @@ impl LogsOpts {
 			stderr,
 		} = self;
 
-		dep::nomad::cli::logs(
+		dep::k8s::cli::logs(
 			&ctx,
 			&service_name,
-			&dep::nomad::cli::LogsOpts {
+			&dep::k8s::cli::LogsOpts {
 				follow,
 				stream: if stderr {
-					dep::nomad::cli::LogStream::StdErr
+					dep::k8s::cli::LogStream::StdErr
 				} else {
-					dep::nomad::cli::LogStream::StdOut
+					dep::k8s::cli::LogStream::StdOut
 				},
 			},
 		)

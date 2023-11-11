@@ -21,11 +21,11 @@ async fn empty(ctx: TestCtx) {
 
 	// assert user_a is following user_b
 	let (num_follows,): (i64,) = sqlx::query_as(
-		"SELECT count(*) FROM user_follows WHERE follower_user_id = $1 AND following_user_id = $2",
+		"SELECT count(*) FROM db_user_follow.user_follows WHERE follower_user_id = $1 AND following_user_id = $2",
 	)
 	.bind(user_a)
 	.bind(user_b)
-	.fetch_one(&ctx.crdb("db-user-follow").await.unwrap())
+	.fetch_one(&ctx.crdb().await.unwrap())
 	.await
 	.unwrap();
 	assert_eq!(num_follows, 1);
@@ -45,11 +45,11 @@ async fn empty(ctx: TestCtx) {
 
 	// assert user_a is not following user_b
 	let (num_follows,): (i64,) = sqlx::query_as(
-		"SELECT count(*) FROM user_follows WHERE follower_user_id = $1 AND following_user_id = $2",
+		"SELECT count(*) FROM db_user_follow.user_follows WHERE follower_user_id = $1 AND following_user_id = $2",
 	)
 	.bind(user_a)
 	.bind(user_b)
-	.fetch_one(&ctx.crdb("db-user-follow").await.unwrap())
+	.fetch_one(&ctx.crdb().await.unwrap())
 	.await
 	.unwrap();
 	assert_eq!(num_follows, 0);

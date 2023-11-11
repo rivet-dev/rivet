@@ -46,10 +46,14 @@ docs/ChatTopicDirect.md
 docs/ChatTopicGroup.md
 docs/ChatTypingStatus.md
 docs/ChatWatchThreadResponse.md
+docs/CloudApi.md
 docs/CloudAuthAgent.md
 docs/CloudAuthAgentGameCloud.md
 docs/CloudAuthAgentIdentity.md
 docs/CloudAuthApi.md
+docs/CloudBootstrapCaptcha.md
+docs/CloudBootstrapCaptchaTurnstile.md
+docs/CloudBootstrapResponse.md
 docs/CloudBuildSummary.md
 docs/CloudCdnAuthType.md
 docs/CloudCdnNamespaceAuthUser.md
@@ -67,6 +71,8 @@ docs/CloudDevicesPrepareDeviceLinkResponse.md
 docs/CloudGameFull.md
 docs/CloudGameLobbyExpenses.md
 docs/CloudGamesAvatarsApi.md
+docs/CloudGamesBuildCompression.md
+docs/CloudGamesBuildKind.md
 docs/CloudGamesBuildsApi.md
 docs/CloudGamesCdnApi.md
 docs/CloudGamesCreateCloudTokenResponse.md
@@ -160,7 +166,6 @@ docs/CloudRegionTierExpenses.md
 docs/CloudSvcMetrics.md
 docs/CloudSvcPerf.md
 docs/CloudTiersApi.md
-docs/CloudUploadPrepareFile.md
 docs/CloudUploadsApi.md
 docs/CloudValidateGroupRequest.md
 docs/CloudValidateGroupResponse.md
@@ -357,6 +362,7 @@ src/apis/auth_identity_api.rs
 src/apis/auth_tokens_api.rs
 src/apis/chat_api.rs
 src/apis/chat_identity_api.rs
+src/apis/cloud_api.rs
 src/apis/cloud_auth_api.rs
 src/apis/cloud_devices_links_api.rs
 src/apis/cloud_games_avatars_api.rs
@@ -432,6 +438,9 @@ src/models/chat_watch_thread_response.rs
 src/models/cloud_auth_agent.rs
 src/models/cloud_auth_agent_game_cloud.rs
 src/models/cloud_auth_agent_identity.rs
+src/models/cloud_bootstrap_captcha.rs
+src/models/cloud_bootstrap_captcha_turnstile.rs
+src/models/cloud_bootstrap_response.rs
 src/models/cloud_build_summary.rs
 src/models/cloud_cdn_auth_type.rs
 src/models/cloud_cdn_namespace_auth_user.rs
@@ -447,6 +456,8 @@ src/models/cloud_devices_get_device_link_response.rs
 src/models/cloud_devices_prepare_device_link_response.rs
 src/models/cloud_game_full.rs
 src/models/cloud_game_lobby_expenses.rs
+src/models/cloud_games_build_compression.rs
+src/models/cloud_games_build_kind.rs
 src/models/cloud_games_create_cloud_token_response.rs
 src/models/cloud_games_create_game_build_request.rs
 src/models/cloud_games_create_game_build_response.rs
@@ -528,7 +539,6 @@ src/models/cloud_region_tier.rs
 src/models/cloud_region_tier_expenses.rs
 src/models/cloud_svc_metrics.rs
 src/models/cloud_svc_perf.rs
-src/models/cloud_upload_prepare_file.rs
 src/models/cloud_validate_group_request.rs
 src/models/cloud_validate_group_response.rs
 src/models/cloud_version_cdn_config.rs

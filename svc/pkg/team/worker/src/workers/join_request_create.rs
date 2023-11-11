@@ -37,12 +37,12 @@ async fn fail(
 async fn worker(
 	ctx: &OperationContext<team::msg::join_request_create::Message>,
 ) -> GlobalResult<()> {
-	let crdb = ctx.crdb("db-team").await?;
-	let team_id: Uuid = internal_unwrap!(ctx.team_id).as_uuid();
-	let user_id: Uuid = internal_unwrap!(ctx.user_id).as_uuid();
+	let crdb = ctx.crdb().await?;
+	let team_id: Uuid = unwrap_ref!(ctx.team_id).as_uuid();
+	let user_id: Uuid = unwrap_ref!(ctx.user_id).as_uuid();
 
 	let (sql_exists,): (bool,) = sqlx::query_as(
-		"SELECT EXISTS (SELECT 1 FROM join_requests WHERE team_id = $1 AND user_id = $2)",
+		"SELECT EXISTS (SELECT 1 FROM db_team.join_requests WHERE team_id = $1 AND user_id = $2)",
 	)
 	.bind(team_id)
 	.bind(user_id)
@@ -59,12 +59,14 @@ async fn worker(
 		.await;
 	}
 
-	sqlx::query("INSERT INTO join_requests (team_id, user_id, ts) VALUES ($1, $2, $3)")
-		.bind(team_id)
-		.bind(user_id)
-		.bind(ctx.ts())
-		.execute(&crdb)
-		.await?;
+	sql_execute!(
+		[ctx]
+		"INSERT INTO db_team.join_requests (team_id, user_id, ts) VALUES ($1, $2, $3)",
+		team_id,
+		user_id,
+		ctx.ts(),
+	)
+	.await?;
 
 	msg!([ctx] team::msg::join_request_create_complete(team_id, user_id) {
 		team_id: Some(team_id.into()),

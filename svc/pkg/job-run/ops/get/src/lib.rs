@@ -33,6 +33,9 @@ struct RunMetaNomad {
 	dispatched_job_id: Option<String>,
 	alloc_id: Option<String>,
 	node_id: Option<String>,
+	node_name: Option<String>,
+	node_public_ipv4: Option<String>,
+	node_vlan_ipv4: Option<String>,
 	alloc_state: Option<serde_json::Value>,
 }
 
@@ -56,76 +59,78 @@ async fn handle(
 		.map(common::Uuid::as_uuid)
 		.collect::<Vec<_>>();
 
-	let crdb = ctx.crdb("db-job-state").await?;
+	let crdb = ctx.crdb().await?;
 
 	// Query the run data
 	let (runs, run_networks, run_ports, run_meta_nomad, run_proxied_ports) = tokio::try_join!(
 		// runs
 		async {
 			GlobalResult::Ok(
-				sqlx::query_as::<_, Run>(indoc!(
+				sql_fetch_all!(
+					[ctx, Run]
 					"
 					SELECT run_id, region_id, create_ts, start_ts, stop_ts, cleanup_ts
-					FROM runs
+					FROM db_job_state.runs
 					WHERE run_id = ANY($1)
-					"
-				))
-				.bind(&run_ids)
-				.fetch_all(&crdb)
+					",
+					&run_ids,
+				)
 				.await?,
 			)
 		},
 		// run_networks
 		async {
 			GlobalResult::Ok(
-				sqlx::query_as::<_, RunNetwork>(indoc!(
+				sql_fetch_all!(
+					[ctx, RunNetwork]
 					"
 					SELECT run_id, ip, mode
-					FROM run_networks
+					FROM db_job_state.run_networks
 					WHERE run_id = ANY($1)
-					"
-				))
-				.bind(&run_ids)
-				.fetch_all(&crdb)
+					",
+					&run_ids,
+				)
 				.await?,
 			)
 		},
 		// run_ports
 		async {
 			GlobalResult::Ok(
-				sqlx::query_as::<_, RunPort>(indoc!(
+				sql_fetch_all!(
+					[ctx, RunPort]
 					"
 					SELECT run_id, label, ip, source, target
-					FROM run_ports
+					FROM db_job_state.run_ports
 					WHERE run_id = ANY($1)
-					"
-				))
-				.bind(&run_ids)
-				.fetch_all(&crdb)
+					",
+					&run_ids,
+				)
 				.await?,
 			)
 		},
 		// run_meta_nomad
 		async {
 			GlobalResult::Ok(
-				sqlx::query_as::<_, RunMetaNomad>("SELECT run_id, dispatched_job_id, alloc_id, node_id, alloc_state FROM run_meta_nomad WHERE run_id = ANY($1)")
-					.bind(&run_ids)
-					.fetch_all(&crdb)
+				sql_fetch_all!(
+					[ctx, RunMetaNomad]
+					"SELECT run_id, dispatched_job_id, alloc_id, node_id, node_name, node_public_ipv4, node_vlan_ipv4, alloc_state FROM db_job_state.run_meta_nomad WHERE run_id = ANY($1)",
+					&run_ids,
+				)
 					.await?
 			)
 		},
 		// run_proxied_ports
 		async {
 			GlobalResult::Ok(
-				sqlx::query_as::<_, RunProxiedPort>(indoc!(
+				sql_fetch_all!(
+					[ctx, RunProxiedPort]
 					"
 					SELECT run_id, target_nomad_port_label, ingress_port, ingress_hostnames, proxy_protocol, ssl_domain_mode
-					FROM run_proxied_ports
+					FROM db_job_state.run_proxied_ports
 					WHERE run_id = ANY($1)
-					"
-				))
-				.bind(&run_ids)
-				.fetch_all(&crdb)
+					",
+					&run_ids,
+				)
 				.await?,
 			)
 		},
@@ -157,6 +162,9 @@ async fn handle(
 					dispatched_job_id: run_meta_nomad.dispatched_job_id.clone(),
 					alloc_id: run_meta_nomad.alloc_id.clone(),
 					node_id: run_meta_nomad.node_id.clone(),
+					node_name: run_meta_nomad.node_name.clone(),
+					node_public_ipv4: run_meta_nomad.node_public_ipv4.clone(),
+					node_vlan_ipv4: run_meta_nomad.node_vlan_ipv4.clone(),
 					failed: task_state.failed,
 					exit_code: task_state.exit_code,
 				})
@@ -226,16 +234,16 @@ struct NomadTaskState {
 fn derive_nomad_task_state(alloc_state_json: &serde_json::Value) -> GlobalResult<NomadTaskState> {
 	let alloc =
 		serde_json::from_value::<nomad_client::models::Allocation>(alloc_state_json.clone())?;
-	let task_states = internal_unwrap!(alloc.task_states);
+	let task_states = unwrap_ref!(alloc.task_states);
 
 	// Get the main task by finding the task that is not the run cleanup task
 	let main_task = task_states
 		.iter()
-		.filter(|(k, _)| k.as_str() != util_job::RUN_CLEANUP_TASK_NAME)
+		.filter(|(k, _)| k.as_str() == util_job::RUN_MAIN_TASK_NAME)
 		.map(|(_, v)| v)
 		.next();
-	let main_task = internal_unwrap_owned!(main_task, "could not find main task");
-	let main_task_state = internal_unwrap!(main_task.state);
+	let main_task = unwrap!(main_task, "could not find main task");
+	let main_task_state = unwrap_ref!(main_task.state);
 
 	if main_task_state == "dead" {
 		if main_task.failed == Some(true) {

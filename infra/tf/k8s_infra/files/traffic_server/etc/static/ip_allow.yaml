@@ -1,0 +1,6 @@
+ip_allow:
+  - apply: in
+    ip_addrs:
+      # VLAN
+      - 0.0.0.0/0
+    action: allow

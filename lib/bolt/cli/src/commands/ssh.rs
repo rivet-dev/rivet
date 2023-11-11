@@ -29,6 +29,8 @@ pub enum SubCommand {
 		pool: String,
 		#[clap(index = 2)]
 		command: Option<String>,
+		#[clap(short = 'a', long)]
+		all: bool,
 	},
 }
 
@@ -40,11 +42,9 @@ impl SubCommand {
 				command,
 				ssh_key,
 			} => {
-				let ssh_key = TempSshKey::new(
-					&ctx,
-					&ssh_key.map_or_else(|| "salt_minion".to_string(), |x| x),
-				)
-				.await?;
+				let ssh_key =
+					TempSshKey::new(&ctx, &ssh_key.map_or_else(|| "server".to_string(), |x| x))
+						.await?;
 				bolt_core::tasks::ssh::ip(
 					&ctx,
 					&ip,
@@ -57,9 +57,14 @@ impl SubCommand {
 				bolt_core::tasks::ssh::name(&ctx, &name, command.as_ref().map(String::as_str))
 					.await?;
 			}
-			Self::Pool { pool, command } => {
-				bolt_core::tasks::ssh::pool(&ctx, &pool, command.as_ref().map(String::as_str))
-					.await?;
+			Self::Pool { pool, command, all } => {
+				if all {
+					let command = command.context("must provide command with --all")?;
+					bolt_core::tasks::ssh::pool_all(&ctx, &pool, &command).await?;
+				} else {
+					bolt_core::tasks::ssh::pool(&ctx, &pool, command.as_ref().map(String::as_str))
+						.await?;
+				}
 			}
 		}
 

@@ -1,10 +1,11 @@
 mod error;
-mod metrics;
+pub mod metrics;
 mod pools;
 pub mod utils;
 
 use rand::prelude::SliceRandom;
 use std::{collections::HashMap, env, fmt::Debug, str::FromStr, sync::Arc, time::Duration};
+use tokio::task::JoinSet;
 use tokio_util::sync::CancellationToken;
 
 use crate::pools::{CrdbPool, NatsPool, PoolsInner, RedisPool};
@@ -14,7 +15,11 @@ pub mod prelude {
 	pub use redis;
 	pub use sqlx;
 
-	pub use crate::pools::{CrdbPool, NatsPool, RedisConn, RedisPool};
+	pub use crate::pools::{CrdbPool, NatsPool, RedisPool};
+	pub use crate::{
+		__sql_query, __sql_query_as, __sql_query_as_raw, sql_execute, sql_fetch, sql_fetch_all,
+		sql_fetch_many, sql_fetch_one, sql_fetch_optional,
+	};
 }
 
 pub use crate::{error::Error, pools::Pools};
@@ -24,11 +29,18 @@ pub use crate::{error::Error, pools::Pools};
 pub async fn from_env(client_name: impl ToString + Debug) -> Result<Pools, Error> {
 	let client_name = client_name.to_string();
 	let token = CancellationToken::new();
+
+	let (nats, crdb, redis) = tokio::try_join!(
+		nats_from_env(client_name.clone()),
+		crdb_from_env(client_name.clone()),
+		redis_from_env(),
+	)?;
+
 	let pool = Arc::new(PoolsInner {
 		_guard: token.clone().drop_guard(),
-		nats: nats_from_env(client_name.clone()).await?,
-		crdb: crdb_from_env(client_name.clone())?,
-		redis: redis_from_env().await?,
+		nats,
+		crdb,
+		redis,
 	});
 	pool.clone().start(token);
 
@@ -114,132 +126,144 @@ async fn nats_from_env(client_name: String) -> Result<Option<NatsPool>, Error> {
 }
 
 #[tracing::instrument]
-fn crdb_from_env(client_name: String) -> Result<HashMap<String, CrdbPool>, Error> {
-	let mut crdb = HashMap::new();
-	for (key, url) in env::vars() {
-		if let Some(svc_name_screaming) = key.strip_prefix("CRDB_URL_") {
-			let svc_name = svc_name_screaming.to_lowercase().replace("_", "-");
+async fn crdb_from_env(client_name: String) -> Result<Option<CrdbPool>, Error> {
+	if let Some(url) = std::env::var("CRDB_URL").ok() {
+		let min_connections = std::env::var("CRDB_MIN_CONNECTIONS")
+			.ok()
+			.and_then(|s| s.parse::<u32>().ok())
+			.unwrap_or(1);
+		let max_connections = std::env::var("CRDB_MAX_CONNECTIONS")
+			.ok()
+			.and_then(|s| s.parse::<u32>().ok())
+			.unwrap_or(4096);
+		tracing::info!(%url, ?min_connections, ?max_connections, "crdb connecting");
 
-			tracing::info!(%url, "crdb creating connection");
+		// let client_name = client_name.clone();
+		let pool = sqlx::postgres::PgPoolOptions::new()
+			// The default connection timeout is too high
+			.acquire_timeout(Duration::from_secs(15))
+			// Increase lifetime to mitigate: https://github.com/launchbadge/sqlx/issues/2854
+			//
+			// See max lifetime https://www.cockroachlabs.com/docs/stable/connection-pooling#set-the-maximum-lifetime-of-connections
+			.max_lifetime(Duration::from_secs(30 * 60))
+			// Remove connections after a while in order to reduce load
+			// on CRDB after bursts
+			.idle_timeout(Some(Duration::from_secs(10 * 60)))
+			// Open connections immediately on startup
+			.min_connections(min_connections)
+			// Raise the cap, since this is effectively the amount of
+			// simultaneous requests we can handle. See
+			// https://www.cockroachlabs.com/docs/stable/connection-pooling.html
+			.max_connections(max_connections)
+			// Speeds up requests at the expense of potential
+			// failures. See `before_acquire`.
+			.test_before_acquire(false)
+			// Ping once per minute to validate the connection is still alive
+			.before_acquire(|conn, meta| {
+				Box::pin(async move {
+					if meta.idle_for.as_secs() < 60 {
+						Ok(true)
+					} else {
+						match sqlx::Connection::ping(conn).await {
+							Ok(_) => Ok(true),
+							Err(err) => {
+								// See https://docs.aws.amazon.com/vpc/latest/userguide/nat-gateway-troubleshooting.html#nat-gateway-troubleshooting-timeout
+								tracing::warn!(
+									?err,
+									"crdb ping failed, potential idle tcp connection drop"
+								);
+								Ok(false)
+							}
+						}
+					}
+				})
+			})
+			.connect(&url)
+			.await
+			.map_err(Error::BuildSqlx)?;
 
-			let client_name = client_name.clone();
-			let pool = sqlx::postgres::PgPoolOptions::new()
-				// The default connection timeout is too high
-				.acquire_timeout(Duration::from_secs(15))
-				.max_lifetime(Duration::from_secs(60 * 5))
-				// Remove connections after a while in order to reduce load
-				// on CRDB after bursts
-				.idle_timeout(Some(Duration::from_secs(60)))
-				// Open a connection
-				// immediately on startup
-				.min_connections(0)
-				// Raise the cap, since this is effectively the amount of
-				// simultaneous requests we can handle. See
-				// https://www.cockroachlabs.com/docs/stable/connection-pooling.html
-				.max_connections(20_000)
-				// Speeds up requests at the expense of potential
-				// failures
-				// .test_before_acquire(false)
-				// .after_connect(|conn, _meta| {
-				// 	Box::pin(async move {
-				// 		tracing::info!("pg connected");
-				// 		Ok(())
-				// 	})
-				// })
-				// .after_release(|conn, meta| {
-				// 	Box::pin(async move {
-				// 		tracing::info!("pg released");
-				// 		Ok(false)
-				// 	})
-				// })
-				// .after_connect({
-				// 	let url = url.clone();
-				// 	move |conn, _| {
-				// 		let client_name = client_name.clone();
-				// 		let url = url.clone();
-				// 		Box::pin(async move {
-				// 			tracing::info!(%url, "crdb connected");
-				// 			sqlx::query("SET application_name = $1;")
-				// 				.bind(&client_name)
-				// 				.execute(conn)
-				// 				.await?;
-				// 			Ok(())
-				// 		})
-				// 	}
-				// })
-				.connect_lazy(&url)
-				.map_err(Error::BuildSqlx)?;
-
-			crdb.insert(svc_name, pool);
-		}
+		Ok(Some(pool))
+	} else {
+		Ok(None)
 	}
-
-	Ok(crdb)
 }
 
 #[tracing::instrument]
 async fn redis_from_env() -> Result<HashMap<String, RedisPool>, Error> {
-	let mut redis = HashMap::new();
-	let mut existing_pools = HashMap::<String, RedisPool>::new();
+	// Create Redis connections
+	let mut join_set = JoinSet::new();
 	for (key, url) in env::vars() {
 		if let Some(svc_name_screaming) = key.strip_prefix("REDIS_URL_") {
 			let svc_name = svc_name_screaming.to_lowercase().replace("_", "-");
 
-			// Some Redis pools have the same URL, so we share the connection
-			// between the pools.
-			let pool = if let Some(existing) = existing_pools.get(&url) {
-				existing.clone()
-			} else {
-				tracing::info!(%url, "redis connecting");
-				let conn = redis::Client::open(url.as_str())
-					.map_err(Error::BuildRedis)?
-					.get_tokio_connection_manager()
-					.await
-					.map_err(Error::BuildRedis)?;
-				tracing::info!(%url, "redis connected");
-				conn
-			};
+			join_set
+				.build_task()
+				.name("redis_from_env")
+				.spawn(async move {
+					tracing::info!(%url, "redis connecting");
+					let conn = redis::cluster::ClusterClient::builder(vec![url.as_str()])
+						// Keep trying to reconnect indefinitely
+						.retries(u32::MAX)
+						.min_retry_wait(250)
+						.max_retry_wait(30_000)
+						.build()
+						.map_err(Error::BuildRedis)?
+						.get_async_connection()
+						.await
+						.map_err(Error::BuildRedis)?;
 
-			redis.insert(svc_name, pool.clone());
-			existing_pools.insert(url, pool);
+					tracing::info!(%url, "redis connected");
+
+					Ok((svc_name, conn))
+				})
+				.map_err(Error::TokioSpawn)?;
 		}
+	}
+
+	// Join connections
+	let mut redis = HashMap::new();
+	while let Some(res) = join_set.join_next().await {
+		let (svc_name, conn) = res.map_err(Error::TokioJoin)??;
+		redis.insert(svc_name, conn.clone());
 	}
 
 	Ok(redis)
 }
 
-#[tracing::instrument(level = "trace", skip(pools))]
-async fn runtime(pools: Pools, client_name: String) {
+#[tracing::instrument(level = "trace", skip(_pools))]
+async fn runtime(_pools: Pools, client_name: String) {
+	// TODO: Delete this once confirmed this is no longer an issue
+
 	// We have to manually ping the Redis connection since `ConnectionManager`
 	// doesn't do this for us. If we don't make a request on a Redis connection
 	// for a long time, we'll get a broken pipe error, so this keeps the
 	// connection alive.
 
-	let mut interval = tokio::time::interval(Duration::from_secs(15));
-	loop {
-		interval.tick().await;
+	// let mut interval = tokio::time::interval(Duration::from_secs(15));
+	// loop {
+	// 	interval.tick().await;
 
-		// TODO: This will ping the same pool multiple times if it shares the
-		// same URL
-		for (db, conn) in &pools.redis {
-			// HACK: Instead of sending `PING`, we test the connection by
-			// updating the client's name. We do this because
-			// `ConnectionManager` doesn't let us hook in to new connections, so
-			// we have to manually update the client's name.
-			let mut conn = conn.clone();
-			let res = redis::cmd("CLIENT")
-				.arg("SETNAME")
-				.arg(&client_name)
-				.query_async::<_, ()>(&mut conn)
-				.await;
-			match res {
-				Ok(_) => {
-					tracing::trace!(%db, "ping success");
-				}
-				Err(err) => {
-					tracing::error!(%db, ?err, "redis ping failed");
-				}
-			}
-		}
-	}
+	// 	// TODO: This will ping the same pool multiple times if it shares the
+	// 	// same URL
+	// 	for (db, conn) in &pools.redis {
+	// 		// HACK: Instead of sending `PING`, we test the connection by
+	// 		// updating the client's name. We do this because
+	// 		// `ConnectionManager` doesn't let us hook in to new connections, so
+	// 		// we have to manually update the client's name.
+	// 		let mut conn = conn.clone();
+	// 		let res = redis::cmd("CLIENT")
+	// 			.arg("SETNAME")
+	// 			.arg(&client_name)
+	// 			.query_async::<_, ()>(&mut conn)
+	// 			.await;
+	// 		match res {
+	// 			Ok(_) => {
+	// 				tracing::trace!(%db, "ping success");
+	// 			}
+	// 			Err(err) => {
+	// 				tracing::error!(%db, ?err, "redis ping failed");
+	// 			}
+	// 		}
+	// 	}
+	// }
 }

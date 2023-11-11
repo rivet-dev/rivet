@@ -9,10 +9,9 @@ imports:
 
 service:
   auth: true
-  url: Identity
   audiences:
     - public
-  base-path: /identities
+  base-path: /identity/identities
   endpoints:
     setup:
       docs: Gets or creates an identity.

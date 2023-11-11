@@ -12,38 +12,39 @@ struct ChatMessage {
 async fn handle(
 	ctx: OperationContext<chat_message::list::Request>,
 ) -> GlobalResult<chat_message::list::Response> {
-	let crdb = ctx.crdb("db-chat").await?;
+	let crdb = ctx.crdb().await?;
 
-	let thread_id = internal_unwrap!(ctx.thread_id).as_uuid();
-	let direction = internal_unwrap_owned!(chat_message::list::request::QueryDirection::from_i32(
+	let thread_id = unwrap_ref!(ctx.thread_id).as_uuid();
+	let direction = unwrap!(chat_message::list::request::QueryDirection::from_i32(
 		ctx.query_direction
 	));
 
 	let messages = match direction {
 		chat_message::list::request::QueryDirection::Before => {
-			let mut msgs = sqlx::query_as::<_, ChatMessage>(indoc!(
+			let mut msgs = sql_fetch_all!(
+				[ctx, ChatMessage]
 				"
 				SELECT message_id, send_ts, body
-				FROM messages
+				FROM db_chat.messages
 				WHERE thread_id = $1 AND send_ts < $2
 				ORDER BY send_ts DESC, message_id DESC
 				LIMIT $3
-				"
-			))
-			.bind(thread_id)
-			.bind(ctx.ts)
-			.bind(ctx.count as i64)
-			.fetch_all(&crdb)
+				",
+				thread_id,
+				ctx.ts,
+				ctx.count as i64,
+			)
 			.await?;
 			msgs.reverse();
 			msgs
 		}
 		chat_message::list::request::QueryDirection::BeforeAndAfter => {
-			sqlx::query_as::<_, ChatMessage>(indoc!(
+			sql_fetch_all!(
+				[ctx, ChatMessage]
 				"
 				SELECT * FROM (
 					SELECT message_id, send_ts, body
-					FROM messages
+					FROM db_chat.messages
 					WHERE thread_id = $1 AND send_ts <= $2
 					ORDER BY send_ts DESC, message_id DESC
 					LIMIT $3
@@ -53,35 +54,34 @@ async fn handle(
 
 				SELECT * FROM (
 					SELECT message_id, send_ts, body
-					FROM messages
+					FROM db_chat.messages
 					WHERE thread_id = $1 AND send_ts > $2
 					ORDER BY send_ts ASC, message_id ASC
 					LIMIT $3
 				)
 
 				ORDER BY send_ts ASC, message_id ASC
-				"
-			))
-			.bind(thread_id)
-			.bind(ctx.ts)
-			.bind(ctx.count as i64)
-			.fetch_all(&crdb)
+				",
+				thread_id,
+				ctx.ts,
+				ctx.count as i64,
+			)
 			.await?
 		}
 		chat_message::list::request::QueryDirection::After => {
-			sqlx::query_as::<_, ChatMessage>(indoc!(
+			sql_fetch_all!(
+				[ctx, ChatMessage]
 				"
 				SELECT message_id, send_ts, body
-				FROM messages
+				FROM db_chat.messages
 				WHERE thread_id = $1 AND send_ts > $2
 				ORDER BY send_ts ASC, message_id ASC
 				LIMIT $3
-				"
-			))
-			.bind(thread_id)
-			.bind(ctx.ts)
-			.bind(ctx.count as i64)
-			.fetch_all(&crdb)
+				",
+				thread_id,
+				ctx.ts,
+				ctx.count as i64,
+			)
 			.await?
 		}
 	};

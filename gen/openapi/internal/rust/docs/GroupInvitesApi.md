@@ -1,12 +1,12 @@
 # \GroupInvitesApi
 
-All URIs are relative to *http://localhost*
+All URIs are relative to *https://api.rivet.gg*
 
 Method | HTTP request | Description
 ------------- | ------------- | -------------
-[**group_invites_consume_invite**](GroupInvitesApi.md#group_invites_consume_invite) | **POST** /invites/{group_invite_code}/consume | 
-[**group_invites_create_invite**](GroupInvitesApi.md#group_invites_create_invite) | **POST** /groups/{group_id}/invites | 
-[**group_invites_get_invite**](GroupInvitesApi.md#group_invites_get_invite) | **GET** /invites/{group_invite_code} | 
+[**group_invites_consume_invite**](GroupInvitesApi.md#group_invites_consume_invite) | **POST** /group/invites/{group_invite_code}/consume | 
+[**group_invites_create_invite**](GroupInvitesApi.md#group_invites_create_invite) | **POST** /group/groups/{group_id}/invites | 
+[**group_invites_get_invite**](GroupInvitesApi.md#group_invites_get_invite) | **GET** /group/invites/{group_invite_code} | 
 
 
 

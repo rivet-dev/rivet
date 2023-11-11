@@ -15,46 +15,45 @@ struct NotificationData {
 async fn worker(
 	ctx: &OperationContext<push_notification::msg::create::Message>,
 ) -> GlobalResult<()> {
-	let user_id = internal_unwrap!(ctx.user_id).as_uuid();
-	let thread_id = internal_unwrap!(ctx.thread_id).as_uuid();
-	let service = internal_unwrap_owned!(backend::notification::NotificationService::from_i32(
+	let user_id = unwrap_ref!(ctx.user_id).as_uuid();
+	let thread_id = unwrap_ref!(ctx.thread_id).as_uuid();
+	let service = unwrap!(backend::notification::NotificationService::from_i32(
 		ctx.service
 	));
 
 	match service {
 		// Send push notification through Firebase
 		backend::notification::NotificationService::Firebase => {
-			let row = sqlx::query_as::<_, (Option<String>,)>(indoc!(
+			let row = sql_fetch_optional!(
+				[ctx, (Option<String>,)]
 				"
-				SELECT
-				firebase_access_key
-				FROM users
+				SELECT firebase_access_key
+				FROM db_user_notification_auth.users
 				WHERE user_id = $1
-				"
-			))
-			.bind(user_id)
-			.fetch_optional(&ctx.crdb("db-user-notification-auth").await?)
+				",
+				user_id,
+			)
 			.await?;
 
 			// Only send notification if registered for Firebase
 			if let Some((Some(firebase_access_key),)) = row {
 				let client = Client::new();
 
-				let msg = internal_unwrap!(ctx.message);
-				let body = internal_unwrap!(msg.body);
-				let kind = internal_unwrap!(body.kind);
+				let msg = unwrap_ref!(ctx.message);
+				let body = unwrap_ref!(msg.body);
+				let kind = unwrap_ref!(body.kind);
 
 				match kind {
 					backend::chat::message_body::Kind::Text(text) => {
 						let mut message_builder =
 							MessageBuilder::new(FCM_SERVER_KEY, firebase_access_key.as_str());
 
-						let sender_user_id = internal_unwrap!(text.sender_user_id);
+						let sender_user_id = unwrap_ref!(text.sender_user_id);
 						let user_res = op!([ctx] user_get {
 							user_ids: vec![*sender_user_id],
 						})
 						.await?;
-						let user = internal_unwrap_owned!(user_res.users.first());
+						let user = unwrap!(user_res.users.first());
 
 						let thread_id = thread_id.to_string();
 

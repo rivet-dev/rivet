@@ -12,7 +12,7 @@ fn build_cookie_header(origin: &Url, refresh_token: &str, max_age: i64) -> Globa
 	//
 	// These local domains are considered secure, so we can leave `Secure`
 	// enabled.
-	let host = internal_unwrap_owned!(origin.host_str());
+	let host = unwrap!(origin.host_str());
 	let is_localhost = host == "127.0.0.1"
 		|| host == "localhost"
 		|| host.ends_with(".localhost")
@@ -27,10 +27,12 @@ fn build_cookie_header(origin: &Url, refresh_token: &str, max_age: i64) -> Globa
 	};
 
 	// Build base header
-	let domain = util::env::domain_main();
-	let header = format!(
-		"{USER_REFRESH_TOKEN_COOKIE}={refresh_token}; Max-Age={max_age}; HttpOnly; Path=/; SameSite={same_site}; Secure; Domain={domain}",
+	let mut header = format!(
+		"{USER_REFRESH_TOKEN_COOKIE}={refresh_token}; Max-Age={max_age}; HttpOnly; Path=/; SameSite={same_site}; Secure",
 	);
+	if let Some(domain_api) = util::env::domain_main_api() {
+		header.push_str(&format!("; Domain={domain_api}"));
+	}
 
 	tracing::info!(?host, ?is_hub, ?same_site, ?header, "built cookie header");
 
@@ -58,7 +60,7 @@ pub fn refresh_token_header(
 pub fn delete_refresh_token_header(origin: &Url) -> GlobalResult<(HeaderName, HeaderValue)> {
 	Ok((
 		header::SET_COOKIE,
-		header::HeaderValue::from_str(&build_cookie_header(origin, "null", 0)?)
+		header::HeaderValue::from_str(&build_cookie_header(origin, "", 0)?)
 			.map_err(Into::<GlobalError>::into)?,
 	))
 }

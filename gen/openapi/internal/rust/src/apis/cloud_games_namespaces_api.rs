@@ -230,7 +230,7 @@ pub async fn cloud_games_namespaces_add_namespace_domain(configuration: &configu
 
     let local_var_client = &local_var_configuration.client;
 
-    let local_var_uri_str = format!("{}/games/{game_id}/namespaces/{namespace_id}/domains", local_var_configuration.base_path, game_id=crate::apis::urlencode(game_id), namespace_id=crate::apis::urlencode(namespace_id));
+    let local_var_uri_str = format!("{}/cloud/games/{game_id}/namespaces/{namespace_id}/domains", local_var_configuration.base_path, game_id=crate::apis::urlencode(game_id), namespace_id=crate::apis::urlencode(namespace_id));
     let mut local_var_req_builder = local_var_client.request(reqwest::Method::POST, local_var_uri_str.as_str());
 
     if let Some(ref local_var_user_agent) = local_var_configuration.user_agent {
@@ -262,7 +262,7 @@ pub async fn cloud_games_namespaces_create_game_namespace(configuration: &config
 
     let local_var_client = &local_var_configuration.client;
 
-    let local_var_uri_str = format!("{}/games/{game_id}/namespaces", local_var_configuration.base_path, game_id=crate::apis::urlencode(game_id));
+    let local_var_uri_str = format!("{}/cloud/games/{game_id}/namespaces", local_var_configuration.base_path, game_id=crate::apis::urlencode(game_id));
     let mut local_var_req_builder = local_var_client.request(reqwest::Method::POST, local_var_uri_str.as_str());
 
     if let Some(ref local_var_user_agent) = local_var_configuration.user_agent {
@@ -294,7 +294,7 @@ pub async fn cloud_games_namespaces_create_game_namespace_token_development(conf
 
     let local_var_client = &local_var_configuration.client;
 
-    let local_var_uri_str = format!("{}/games/{game_id}/namespaces/{namespace_id}/tokens/development", local_var_configuration.base_path, game_id=crate::apis::urlencode(game_id), namespace_id=crate::apis::urlencode(namespace_id));
+    let local_var_uri_str = format!("{}/cloud/games/{game_id}/namespaces/{namespace_id}/tokens/development", local_var_configuration.base_path, game_id=crate::apis::urlencode(game_id), namespace_id=crate::apis::urlencode(namespace_id));
     let mut local_var_req_builder = local_var_client.request(reqwest::Method::POST, local_var_uri_str.as_str());
 
     if let Some(ref local_var_user_agent) = local_var_configuration.user_agent {
@@ -326,7 +326,7 @@ pub async fn cloud_games_namespaces_create_game_namespace_token_public(configura
 
     let local_var_client = &local_var_configuration.client;
 
-    let local_var_uri_str = format!("{}/games/{game_id}/namespaces/{namespace_id}/tokens/public", local_var_configuration.base_path, game_id=crate::apis::urlencode(game_id), namespace_id=crate::apis::urlencode(namespace_id));
+    let local_var_uri_str = format!("{}/cloud/games/{game_id}/namespaces/{namespace_id}/tokens/public", local_var_configuration.base_path, game_id=crate::apis::urlencode(game_id), namespace_id=crate::apis::urlencode(namespace_id));
     let mut local_var_req_builder = local_var_client.request(reqwest::Method::POST, local_var_uri_str.as_str());
 
     if let Some(ref local_var_user_agent) = local_var_configuration.user_agent {
@@ -357,7 +357,7 @@ pub async fn cloud_games_namespaces_get_game_namespace_by_id(configuration: &con
 
     let local_var_client = &local_var_configuration.client;
 
-    let local_var_uri_str = format!("{}/games/{game_id}/namespaces/{namespace_id}", local_var_configuration.base_path, game_id=crate::apis::urlencode(game_id), namespace_id=crate::apis::urlencode(namespace_id));
+    let local_var_uri_str = format!("{}/cloud/games/{game_id}/namespaces/{namespace_id}", local_var_configuration.base_path, game_id=crate::apis::urlencode(game_id), namespace_id=crate::apis::urlencode(namespace_id));
     let mut local_var_req_builder = local_var_client.request(reqwest::Method::GET, local_var_uri_str.as_str());
 
     if let Some(ref local_var_user_agent) = local_var_configuration.user_agent {
@@ -388,7 +388,7 @@ pub async fn cloud_games_namespaces_get_game_namespace_version_history_list(conf
 
     let local_var_client = &local_var_configuration.client;
 
-    let local_var_uri_str = format!("{}/games/{game_id}/namespaces/{namespace_id}/version-history", local_var_configuration.base_path, game_id=crate::apis::urlencode(game_id), namespace_id=crate::apis::urlencode(namespace_id));
+    let local_var_uri_str = format!("{}/cloud/games/{game_id}/namespaces/{namespace_id}/version-history", local_var_configuration.base_path, game_id=crate::apis::urlencode(game_id), namespace_id=crate::apis::urlencode(namespace_id));
     let mut local_var_req_builder = local_var_client.request(reqwest::Method::GET, local_var_uri_str.as_str());
 
     if let Some(ref local_var_str) = anchor {
@@ -425,7 +425,7 @@ pub async fn cloud_games_namespaces_remove_namespace_cdn_auth_user(configuration
 
     let local_var_client = &local_var_configuration.client;
 
-    let local_var_uri_str = format!("{}/games/{game_id}/namespaces/{namespace_id}/auth-user/{user}", local_var_configuration.base_path, game_id=crate::apis::urlencode(game_id), namespace_id=crate::apis::urlencode(namespace_id), user=crate::apis::urlencode(user));
+    let local_var_uri_str = format!("{}/cloud/games/{game_id}/namespaces/{namespace_id}/auth-user/{user}", local_var_configuration.base_path, game_id=crate::apis::urlencode(game_id), namespace_id=crate::apis::urlencode(namespace_id), user=crate::apis::urlencode(user));
     let mut local_var_req_builder = local_var_client.request(reqwest::Method::DELETE, local_var_uri_str.as_str());
 
     if let Some(ref local_var_user_agent) = local_var_configuration.user_agent {
@@ -456,7 +456,7 @@ pub async fn cloud_games_namespaces_remove_namespace_domain(configuration: &conf
 
     let local_var_client = &local_var_configuration.client;
 
-    let local_var_uri_str = format!("{}/games/{game_id}/namespaces/{namespace_id}/domains/{domain}", local_var_configuration.base_path, game_id=crate::apis::urlencode(game_id), namespace_id=crate::apis::urlencode(namespace_id), domain=crate::apis::urlencode(domain));
+    let local_var_uri_str = format!("{}/cloud/games/{game_id}/namespaces/{namespace_id}/domains/{domain}", local_var_configuration.base_path, game_id=crate::apis::urlencode(game_id), namespace_id=crate::apis::urlencode(namespace_id), domain=crate::apis::urlencode(domain));
     let mut local_var_req_builder = local_var_client.request(reqwest::Method::DELETE, local_var_uri_str.as_str());
 
     if let Some(ref local_var_user_agent) = local_var_configuration.user_agent {
@@ -487,7 +487,7 @@ pub async fn cloud_games_namespaces_set_namespace_cdn_auth_type(configuration: &
 
     let local_var_client = &local_var_configuration.client;
 
-    let local_var_uri_str = format!("{}/games/{game_id}/namespaces/{namespace_id}/cdn-auth", local_var_configuration.base_path, game_id=crate::apis::urlencode(game_id), namespace_id=crate::apis::urlencode(namespace_id));
+    let local_var_uri_str = format!("{}/cloud/games/{game_id}/namespaces/{namespace_id}/cdn-auth", local_var_configuration.base_path, game_id=crate::apis::urlencode(game_id), namespace_id=crate::apis::urlencode(namespace_id));
     let mut local_var_req_builder = local_var_client.request(reqwest::Method::PUT, local_var_uri_str.as_str());
 
     if let Some(ref local_var_user_agent) = local_var_configuration.user_agent {
@@ -519,7 +519,7 @@ pub async fn cloud_games_namespaces_toggle_namespace_domain_public_auth(configur
 
     let local_var_client = &local_var_configuration.client;
 
-    let local_var_uri_str = format!("{}/games/{game_id}/namespaces/{namespace_id}/domain-public-auth", local_var_configuration.base_path, game_id=crate::apis::urlencode(game_id), namespace_id=crate::apis::urlencode(namespace_id));
+    let local_var_uri_str = format!("{}/cloud/games/{game_id}/namespaces/{namespace_id}/domain-public-auth", local_var_configuration.base_path, game_id=crate::apis::urlencode(game_id), namespace_id=crate::apis::urlencode(namespace_id));
     let mut local_var_req_builder = local_var_client.request(reqwest::Method::PUT, local_var_uri_str.as_str());
 
     if let Some(ref local_var_user_agent) = local_var_configuration.user_agent {
@@ -551,7 +551,7 @@ pub async fn cloud_games_namespaces_update_game_namespace_matchmaker_config(conf
 
     let local_var_client = &local_var_configuration.client;
 
-    let local_var_uri_str = format!("{}/games/{game_id}/namespaces/{namespace_id}/mm-config", local_var_configuration.base_path, game_id=crate::apis::urlencode(game_id), namespace_id=crate::apis::urlencode(namespace_id));
+    let local_var_uri_str = format!("{}/cloud/games/{game_id}/namespaces/{namespace_id}/mm-config", local_var_configuration.base_path, game_id=crate::apis::urlencode(game_id), namespace_id=crate::apis::urlencode(namespace_id));
     let mut local_var_req_builder = local_var_client.request(reqwest::Method::POST, local_var_uri_str.as_str());
 
     if let Some(ref local_var_user_agent) = local_var_configuration.user_agent {
@@ -583,7 +583,7 @@ pub async fn cloud_games_namespaces_update_game_namespace_version(configuration:
 
     let local_var_client = &local_var_configuration.client;
 
-    let local_var_uri_str = format!("{}/games/{game_id}/namespaces/{namespace_id}/version", local_var_configuration.base_path, game_id=crate::apis::urlencode(game_id), namespace_id=crate::apis::urlencode(namespace_id));
+    let local_var_uri_str = format!("{}/cloud/games/{game_id}/namespaces/{namespace_id}/version", local_var_configuration.base_path, game_id=crate::apis::urlencode(game_id), namespace_id=crate::apis::urlencode(namespace_id));
     let mut local_var_req_builder = local_var_client.request(reqwest::Method::PUT, local_var_uri_str.as_str());
 
     if let Some(ref local_var_user_agent) = local_var_configuration.user_agent {
@@ -615,7 +615,7 @@ pub async fn cloud_games_namespaces_update_namespace_cdn_auth_user(configuration
 
     let local_var_client = &local_var_configuration.client;
 
-    let local_var_uri_str = format!("{}/games/{game_id}/namespaces/{namespace_id}/auth-user", local_var_configuration.base_path, game_id=crate::apis::urlencode(game_id), namespace_id=crate::apis::urlencode(namespace_id));
+    let local_var_uri_str = format!("{}/cloud/games/{game_id}/namespaces/{namespace_id}/auth-user", local_var_configuration.base_path, game_id=crate::apis::urlencode(game_id), namespace_id=crate::apis::urlencode(namespace_id));
     let mut local_var_req_builder = local_var_client.request(reqwest::Method::POST, local_var_uri_str.as_str());
 
     if let Some(ref local_var_user_agent) = local_var_configuration.user_agent {
@@ -647,7 +647,7 @@ pub async fn cloud_games_namespaces_validate_game_namespace(configuration: &conf
 
     let local_var_client = &local_var_configuration.client;
 
-    let local_var_uri_str = format!("{}/games/{game_id}/namespaces/validate", local_var_configuration.base_path, game_id=crate::apis::urlencode(game_id));
+    let local_var_uri_str = format!("{}/cloud/games/{game_id}/namespaces/validate", local_var_configuration.base_path, game_id=crate::apis::urlencode(game_id));
     let mut local_var_req_builder = local_var_client.request(reqwest::Method::POST, local_var_uri_str.as_str());
 
     if let Some(ref local_var_user_agent) = local_var_configuration.user_agent {
@@ -679,7 +679,7 @@ pub async fn cloud_games_namespaces_validate_game_namespace_matchmaker_config(co
 
     let local_var_client = &local_var_configuration.client;
 
-    let local_var_uri_str = format!("{}/games/{game_id}/namespaces/{namespace_id}/mm-config/validate", local_var_configuration.base_path, game_id=crate::apis::urlencode(game_id), namespace_id=crate::apis::urlencode(namespace_id));
+    let local_var_uri_str = format!("{}/cloud/games/{game_id}/namespaces/{namespace_id}/mm-config/validate", local_var_configuration.base_path, game_id=crate::apis::urlencode(game_id), namespace_id=crate::apis::urlencode(namespace_id));
     let mut local_var_req_builder = local_var_client.request(reqwest::Method::POST, local_var_uri_str.as_str());
 
     if let Some(ref local_var_user_agent) = local_var_configuration.user_agent {
@@ -711,7 +711,7 @@ pub async fn cloud_games_namespaces_validate_game_namespace_token_development(co
 
     let local_var_client = &local_var_configuration.client;
 
-    let local_var_uri_str = format!("{}/games/{game_id}/namespaces/{namespace_id}/tokens/development/validate", local_var_configuration.base_path, game_id=crate::apis::urlencode(game_id), namespace_id=crate::apis::urlencode(namespace_id));
+    let local_var_uri_str = format!("{}/cloud/games/{game_id}/namespaces/{namespace_id}/tokens/development/validate", local_var_configuration.base_path, game_id=crate::apis::urlencode(game_id), namespace_id=crate::apis::urlencode(namespace_id));
     let mut local_var_req_builder = local_var_client.request(reqwest::Method::POST, local_var_uri_str.as_str());
 
     if let Some(ref local_var_user_agent) = local_var_configuration.user_agent {

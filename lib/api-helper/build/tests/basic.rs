@@ -14,13 +14,6 @@ use ::api_helper::{
 	util::{verify_cors, CorsConfigBuilder, CorsResponse},
 };
 
-#[derive(Debug, serde::Deserialize)]
-#[serde(rename_all = "PascalCase")]
-struct ConsulService {
-	address: String,
-	service_port: u16,
-}
-
 // Simulated ctx auth
 pub struct Auth {
 	claims: Option<String>,
@@ -208,9 +201,9 @@ pub async fn auth() {
 		let cache = rivet_cache::CacheInner::from_env(pools.clone()).expect("create cache");
 
 		if let Err(_) = macro_util::__with_ctx::<Auth>(
-			&req,
 			shared_client,
 			cache,
+			&req,
 			Uuid::new_v4(),
 			false,
 			false,
@@ -238,9 +231,9 @@ pub async fn auth() {
 		let cache = rivet_cache::CacheInner::from_env(pools.clone()).expect("create cache");
 
 		if let Ok(_) = macro_util::__with_ctx::<Auth>(
-			&req,
 			shared_client,
 			cache,
+			&req,
 			Uuid::new_v4(),
 			false,
 			false,
@@ -453,7 +446,7 @@ mod test_endpoint {
 		_ctx: Ctx<Auth>,
 		_watch_index_query: WatchIndexQuery,
 	) -> GlobalResult<TestResponse> {
-		panic_with!(API_UNAUTHORIZED);
+		bail_with!(API_UNAUTHORIZED);
 	}
 
 	// MARK: GET /forbidden
@@ -461,7 +454,7 @@ mod test_endpoint {
 		_ctx: Ctx<Auth>,
 		_watch_index_query: WatchIndexQuery,
 	) -> GlobalResult<TestResponse> {
-		panic_with!(API_FORBIDDEN, reason = "forbidden");
+		bail_with!(API_FORBIDDEN, reason = "forbidden");
 	}
 
 	// MARK: GET /bad_request
@@ -469,7 +462,7 @@ mod test_endpoint {
 		_ctx: Ctx<Auth>,
 		_watch_index_query: WatchIndexQuery,
 	) -> GlobalResult<TestResponse> {
-		panic_with!(API_BAD_QUERY, error = "something");
+		bail_with!(API_BAD_QUERY, error = "something");
 	}
 }
 
@@ -479,17 +472,8 @@ async fn set_env_vars() {
 	std::env::set_var("RIVET_DOMAIN_MAIN", "127.0.0.1:8080");
 
 	std::env::set_var("CHIRP_SERVICE_NAME", &*SERVICE_NAME);
-	std::env::set_var("CHIRP_REGION", "local-lcl");
 
-	std::env::set_var("NATS_URL", "nats://nats-0.nats.service.consul:21200");
+	std::env::set_var("NATS_URL", todo!());
 	std::env::set_var("NATS_USERNAME", "chirp");
 	std::env::set_var("NATS_PASSWORD", "password");
-	std::env::set_var(
-		"REDIS_URL_REDIS_CHIRP",
-		"redis://listen.redis.service.consul:6379",
-	);
-	std::env::set_var(
-		"REDIS_URL_REDIS_CACHE",
-		"redis://listen.redis.service.consul:6379",
-	);
 }

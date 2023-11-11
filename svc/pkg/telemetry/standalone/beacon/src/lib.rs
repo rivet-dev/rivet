@@ -38,39 +38,39 @@ pub async fn run_from_env(ts: i64) -> GlobalResult<()> {
 		return Ok(());
 	}
 
-	let team_ids = sqlx::query_as::<_, (Uuid,)>(indoc!(
+	let team_ids = sql_fetch_all!(
+		[ctx, (Uuid,)]
 		"
 		SELECT team_id
-		FROM dev_teams
-		"
-	))
-	.fetch_all(&ctx.crdb("db-team-dev").await?)
+		FROM db_team_dev.dev_teams
+		",
+	)
 	.await?
 	.into_iter()
 	.map(|(team_id,)| Into::<common::Uuid>::into(team_id))
 	.collect::<Vec<_>>();
 
-	let game_user_namespaces = sqlx::query_as::<_, NamespaceAnalytics>(indoc!(
+	let game_user_namespaces = sql_fetch_all!(
+		[ctx, NamespaceAnalytics]
 		"
 		SELECT
 			gu.namespace_id,
 			count(DISTINCT gu.user_id) FILTER (WHERE l.link_id IS NULL) AS total_users,
 			count(DISTINCT gu.user_id) FILTER (WHERE l.link_id IS NOT NULL) AS linked_users
-		FROM game_users AS gu
-		LEFT JOIN links AS l ON l.new_game_user_id = gu.game_user_id
+		FROM db_game_user.game_users AS gu
+		LEFT JOIN db_game_user.links AS l ON l.new_game_user_id = gu.game_user_id
 		GROUP BY gu.namespace_id
-		"
-	))
-	.fetch_all(&ctx.crdb("db-game-user").await?)
+		",
+	)
 	.await?;
 
-	let namespaces = sqlx::query_as::<_, (Uuid, Uuid)>(indoc!(
+	let namespaces = sql_fetch_all!(
+		[ctx, (Uuid, Uuid)]
 		"
 		SELECT namespace_id, game_id
-		FROM game_namespaces
-		"
-	))
-	.fetch_all(&ctx.crdb("db-game").await?)
+		FROM db_game.game_namespaces
+		",
+	)
 	.await?;
 
 	let game_ids = namespaces

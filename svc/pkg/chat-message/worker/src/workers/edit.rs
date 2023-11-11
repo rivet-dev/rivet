@@ -8,27 +8,27 @@ lazy_static::lazy_static! {
 // TODO: Implement editing for `Text` message bodies with an `edited` property (See RIV-460)
 #[worker(name = "chat-message-edit")]
 async fn worker(ctx: &OperationContext<chat_message::msg::edit::Message>) -> GlobalResult<()> {
-	let crdb = ctx.crdb("db-chat").await?;
+	let crdb = ctx.crdb().await?;
 
-	let chat_message_id = internal_unwrap!(ctx.chat_message_id).as_uuid();
-	let body = internal_unwrap!(ctx.body);
+	let chat_message_id = unwrap_ref!(ctx.chat_message_id).as_uuid();
+	let body = unwrap_ref!(ctx.body);
 
 	// Encode body
 	let mut body_buf = Vec::with_capacity(body.encoded_len());
 	body.encode(&mut body_buf)?;
 
 	// Update message
-	let (thread_id, send_ts) = sqlx::query_as::<_, (Uuid, i64)>(indoc!(
+	let (thread_id, send_ts) = sql_fetch_one!(
+		[ctx, (Uuid, i64)]
 		"
-		UPDATE messages
+		UPDATE db_chat.messages
 		SET body = $2
 		WHERE message_id = $1
 		RETURNING thread_id, send_ts
-		"
-	))
-	.bind(chat_message_id)
-	.bind(&body_buf)
-	.fetch_one(&crdb)
+		",
+		chat_message_id,
+		&body_buf,
+	)
 	.await?;
 
 	// Build chat message
@@ -56,7 +56,7 @@ async fn worker(ctx: &OperationContext<chat_message::msg::edit::Message>) -> Glo
 		thread_ids: vec![thread_id.into()],
 	})
 	.await?;
-	let thread_participants = internal_unwrap_owned!(thread_participants_res.threads.first());
+	let thread_participants = unwrap!(thread_participants_res.threads.first());
 
 	// Dispatch events
 	msg!([ctx] chat_thread::msg::update(thread_id) {
@@ -69,7 +69,7 @@ async fn worker(ctx: &OperationContext<chat_message::msg::edit::Message>) -> Glo
 		chat_message: Some(message.clone()),
 		participant_user_ids: thread_participants
 			.participants.iter()
-			.map(|p| Ok(internal_unwrap_owned!(p.user_id)))
+			.map(|p| Ok(unwrap!(p.user_id)))
 			.collect::<GlobalResult<Vec<_>>>()?,
 	})
 	.await?;

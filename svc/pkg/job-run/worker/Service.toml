@@ -9,3 +9,7 @@ kind = "rust"
 [databases]
 db-job-state = {}
 redis-job = {}
+
+[cockroachdb]
+min-connections = 8
+

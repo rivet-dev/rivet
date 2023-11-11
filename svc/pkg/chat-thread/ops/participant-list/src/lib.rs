@@ -44,7 +44,7 @@ async fn handle(
 				match thread_kind {
 					backend::chat::topic::Kind::Team(team) => {
 						// Fetch team
-						let team_id = internal_unwrap!(team.team_id).as_uuid();
+						let team_id = unwrap_ref!(team.team_id).as_uuid();
 						let team_members_res = op!([ctx] team_member_list {
 							team_ids: vec![team_id.into()],
 							limit: None,
@@ -68,8 +68,8 @@ async fn handle(
 					}
 					backend::chat::topic::Kind::Direct(direct) => {
 						// Fetch direct chat
-						let user_a_id = internal_unwrap!(direct.user_a_id);
-						let user_b_id = internal_unwrap!(direct.user_b_id);
+						let user_a_id = unwrap_ref!(direct.user_a_id);
+						let user_b_id = unwrap_ref!(direct.user_b_id);
 
 						let direct_chat_users_res = op!([ctx] user_get {
 							user_ids: vec![*user_a_id, *user_b_id],

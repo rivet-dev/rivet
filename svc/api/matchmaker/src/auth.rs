@@ -69,7 +69,7 @@ impl Auth {
 			tracing::info!(res = ?resolve_res, "resolution");
 
 			if let Some(resolution) = &resolve_res.resolution {
-				let namespace_id = internal_unwrap!(resolution.namespace_id).as_uuid();
+				let namespace_id = unwrap_ref!(resolution.namespace_id).as_uuid();
 
 				// Validate that this namespace can be authenticated by domain
 				let ns_res = op!([ctx] cdn_namespace_get {
@@ -77,8 +77,8 @@ impl Auth {
 				})
 				.await?;
 
-				let cdn_ns = internal_unwrap_owned!(ns_res.namespaces.first());
-				let cdn_ns_config = internal_unwrap!(cdn_ns.config);
+				let cdn_ns = unwrap!(ns_res.namespaces.first());
+				let cdn_ns_config = unwrap_ref!(cdn_ns.config);
 
 				if cdn_ns_config.enable_domain_public_auth {
 					return Ok(rivet_claims::ent::GameNamespacePublic { namespace_id });
@@ -87,7 +87,7 @@ impl Auth {
 		}
 
 		// Return default error
-		panic_with!(
+		bail_with!(
 			CLAIMS_MISSING_ENTITLEMENT,
 			entitlement = "GameNamespacePublic"
 		)
@@ -121,20 +121,20 @@ impl Auth {
 					game_user_ids: vec![game_user_ent.game_user_id.into()]
 				})
 				.await?;
-				let game_user = internal_unwrap_owned!(game_user_res.game_users.first());
+				let game_user = unwrap!(game_user_res.game_users.first());
 
 				// Verify that game user is not deleted
 				if game_user.deleted_ts.is_some() {
-					let jti = internal_unwrap_owned!(claims.jti);
+					let jti = unwrap!(claims.jti);
 					op!([ctx] token_revoke {
 						jtis: vec![jti],
 					})
 					.await?;
 
-					panic_with!(TOKEN_REVOKED);
+					bail_with!(TOKEN_REVOKED);
 				}
 
-				return Ok(Some(internal_unwrap!(game_user.user_id).as_uuid()));
+				return Ok(Some(unwrap_ref!(game_user.user_id).as_uuid()));
 			}
 		}
 

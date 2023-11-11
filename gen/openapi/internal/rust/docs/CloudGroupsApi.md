@@ -1,11 +1,11 @@
 # \CloudGroupsApi
 
-All URIs are relative to *http://localhost*
+All URIs are relative to *https://api.rivet.gg*
 
 Method | HTTP request | Description
 ------------- | ------------- | -------------
-[**cloud_groups_convert_group**](CloudGroupsApi.md#cloud_groups_convert_group) | **POST** /groups/{group_id}/convert | 
-[**cloud_groups_validate**](CloudGroupsApi.md#cloud_groups_validate) | **POST** /groups/validate | 
+[**cloud_groups_convert_group**](CloudGroupsApi.md#cloud_groups_convert_group) | **POST** /cloud/groups/{group_id}/convert | 
+[**cloud_groups_validate**](CloudGroupsApi.md#cloud_groups_validate) | **POST** /cloud/groups/validate | 
 
 
 

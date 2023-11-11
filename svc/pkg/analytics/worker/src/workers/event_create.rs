@@ -18,8 +18,7 @@ struct Event {
 async fn worker(ctx: &OperationContext<analytics::msg::event_create::Message>) -> GlobalResult<()> {
 	let ray_id = ctx.ray_id();
 
-	let client = clickhouse::Client::default()
-		.with_url("http://http.clickhouse.service.consul:8123")
+	let client = rivet_pools::utils::clickhouse::client()?
 		.with_user("chirp")
 		.with_password(util::env::read_secret(&["clickhouse", "users", "chirp", "password"]).await?)
 		.with_database("db_analytics");
@@ -91,7 +90,7 @@ fn build_event(
 			serialize_prop(
 				&mut properties,
 				"presence_game_id",
-				internal_unwrap!(game_activity.game_id).as_uuid(),
+				unwrap_ref!(game_activity.game_id).as_uuid(),
 			)?;
 			// TODO: Add back when Serde decoding is fixed (RIV-2278)
 			// if let Some(public_metadata) = &game_activity.public_metadata {

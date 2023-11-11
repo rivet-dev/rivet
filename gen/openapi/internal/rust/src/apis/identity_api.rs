@@ -347,7 +347,7 @@ pub async fn identity_complete_avatar_upload(configuration: &configuration::Conf
 
     let local_var_client = &local_var_configuration.client;
 
-    let local_var_uri_str = format!("{}/identities/avatar-upload/{upload_id}/complete", local_var_configuration.base_path, upload_id=crate::apis::urlencode(upload_id));
+    let local_var_uri_str = format!("{}/identity/identities/avatar-upload/{upload_id}/complete", local_var_configuration.base_path, upload_id=crate::apis::urlencode(upload_id));
     let mut local_var_req_builder = local_var_client.request(reqwest::Method::POST, local_var_uri_str.as_str());
 
     if let Some(ref local_var_user_agent) = local_var_configuration.user_agent {
@@ -378,7 +378,7 @@ pub async fn identity_follow(configuration: &configuration::Configuration, ident
 
     let local_var_client = &local_var_configuration.client;
 
-    let local_var_uri_str = format!("{}/identities/{identity_id}/follow", local_var_configuration.base_path, identity_id=crate::apis::urlencode(identity_id));
+    let local_var_uri_str = format!("{}/identity/identities/{identity_id}/follow", local_var_configuration.base_path, identity_id=crate::apis::urlencode(identity_id));
     let mut local_var_req_builder = local_var_client.request(reqwest::Method::POST, local_var_uri_str.as_str());
 
     if let Some(ref local_var_user_agent) = local_var_configuration.user_agent {
@@ -409,7 +409,7 @@ pub async fn identity_get_handles(configuration: &configuration::Configuration, 
 
     let local_var_client = &local_var_configuration.client;
 
-    let local_var_uri_str = format!("{}/identities/batch/handle", local_var_configuration.base_path);
+    let local_var_uri_str = format!("{}/identity/identities/batch/handle", local_var_configuration.base_path);
     let mut local_var_req_builder = local_var_client.request(reqwest::Method::GET, local_var_uri_str.as_str());
 
     local_var_req_builder = local_var_req_builder.query(&[("identity_ids", &identity_ids.to_string())]);
@@ -441,7 +441,7 @@ pub async fn identity_get_profile(configuration: &configuration::Configuration, 
 
     let local_var_client = &local_var_configuration.client;
 
-    let local_var_uri_str = format!("{}/identities/{identity_id}/profile", local_var_configuration.base_path, identity_id=crate::apis::urlencode(identity_id));
+    let local_var_uri_str = format!("{}/identity/identities/{identity_id}/profile", local_var_configuration.base_path, identity_id=crate::apis::urlencode(identity_id));
     let mut local_var_req_builder = local_var_client.request(reqwest::Method::GET, local_var_uri_str.as_str());
 
     if let Some(ref local_var_str) = watch_index {
@@ -475,7 +475,7 @@ pub async fn identity_get_self_profile(configuration: &configuration::Configurat
 
     let local_var_client = &local_var_configuration.client;
 
-    let local_var_uri_str = format!("{}/identities/self/profile", local_var_configuration.base_path);
+    let local_var_uri_str = format!("{}/identity/identities/self/profile", local_var_configuration.base_path);
     let mut local_var_req_builder = local_var_client.request(reqwest::Method::GET, local_var_uri_str.as_str());
 
     if let Some(ref local_var_str) = watch_index {
@@ -509,7 +509,7 @@ pub async fn identity_get_summaries(configuration: &configuration::Configuration
 
     let local_var_client = &local_var_configuration.client;
 
-    let local_var_uri_str = format!("{}/identities/batch/summary", local_var_configuration.base_path);
+    let local_var_uri_str = format!("{}/identity/identities/batch/summary", local_var_configuration.base_path);
     let mut local_var_req_builder = local_var_client.request(reqwest::Method::GET, local_var_uri_str.as_str());
 
     local_var_req_builder = local_var_req_builder.query(&[("identity_ids", &identity_ids.to_string())]);
@@ -540,7 +540,7 @@ pub async fn identity_ignore_recent_follower(configuration: &configuration::Conf
 
     let local_var_client = &local_var_configuration.client;
 
-    let local_var_uri_str = format!("{}/identities/self/recent-followers/{identity_id}/ignore", local_var_configuration.base_path, identity_id=crate::apis::urlencode(identity_id));
+    let local_var_uri_str = format!("{}/identity/identities/self/recent-followers/{identity_id}/ignore", local_var_configuration.base_path, identity_id=crate::apis::urlencode(identity_id));
     let mut local_var_req_builder = local_var_client.request(reqwest::Method::POST, local_var_uri_str.as_str());
 
     if let Some(ref local_var_user_agent) = local_var_configuration.user_agent {
@@ -570,7 +570,7 @@ pub async fn identity_list_followers(configuration: &configuration::Configuratio
 
     let local_var_client = &local_var_configuration.client;
 
-    let local_var_uri_str = format!("{}/identities/{identity_id}/followers", local_var_configuration.base_path, identity_id=crate::apis::urlencode(identity_id));
+    let local_var_uri_str = format!("{}/identity/identities/{identity_id}/followers", local_var_configuration.base_path, identity_id=crate::apis::urlencode(identity_id));
     let mut local_var_req_builder = local_var_client.request(reqwest::Method::GET, local_var_uri_str.as_str());
 
     if let Some(ref local_var_str) = anchor {
@@ -606,7 +606,7 @@ pub async fn identity_list_following(configuration: &configuration::Configuratio
 
     let local_var_client = &local_var_configuration.client;
 
-    let local_var_uri_str = format!("{}/identities/{identity_id}/following", local_var_configuration.base_path, identity_id=crate::apis::urlencode(identity_id));
+    let local_var_uri_str = format!("{}/identity/identities/{identity_id}/following", local_var_configuration.base_path, identity_id=crate::apis::urlencode(identity_id));
     let mut local_var_req_builder = local_var_client.request(reqwest::Method::GET, local_var_uri_str.as_str());
 
     if let Some(ref local_var_str) = anchor {
@@ -642,7 +642,7 @@ pub async fn identity_list_friends(configuration: &configuration::Configuration,
 
     let local_var_client = &local_var_configuration.client;
 
-    let local_var_uri_str = format!("{}/identities/self/friends", local_var_configuration.base_path);
+    let local_var_uri_str = format!("{}/identity/identities/self/friends", local_var_configuration.base_path);
     let mut local_var_req_builder = local_var_client.request(reqwest::Method::GET, local_var_uri_str.as_str());
 
     if let Some(ref local_var_str) = anchor {
@@ -678,7 +678,7 @@ pub async fn identity_list_mutual_friends(configuration: &configuration::Configu
 
     let local_var_client = &local_var_configuration.client;
 
-    let local_var_uri_str = format!("{}/identities/{identity_id}/mutual-friends", local_var_configuration.base_path, identity_id=crate::apis::urlencode(identity_id));
+    let local_var_uri_str = format!("{}/identity/identities/{identity_id}/mutual-friends", local_var_configuration.base_path, identity_id=crate::apis::urlencode(identity_id));
     let mut local_var_req_builder = local_var_client.request(reqwest::Method::GET, local_var_uri_str.as_str());
 
     if let Some(ref local_var_str) = anchor {
@@ -714,7 +714,7 @@ pub async fn identity_list_recent_followers(configuration: &configuration::Confi
 
     let local_var_client = &local_var_configuration.client;
 
-    let local_var_uri_str = format!("{}/identities/self/recent-followers", local_var_configuration.base_path);
+    let local_var_uri_str = format!("{}/identity/identities/self/recent-followers", local_var_configuration.base_path);
     let mut local_var_req_builder = local_var_client.request(reqwest::Method::GET, local_var_uri_str.as_str());
 
     if let Some(ref local_var_str) = count {
@@ -750,7 +750,7 @@ pub async fn identity_mark_deletion(configuration: &configuration::Configuration
 
     let local_var_client = &local_var_configuration.client;
 
-    let local_var_uri_str = format!("{}/identities/self/delete-request", local_var_configuration.base_path);
+    let local_var_uri_str = format!("{}/identity/identities/self/delete-request", local_var_configuration.base_path);
     let mut local_var_req_builder = local_var_client.request(reqwest::Method::POST, local_var_uri_str.as_str());
 
     if let Some(ref local_var_user_agent) = local_var_configuration.user_agent {
@@ -781,7 +781,7 @@ pub async fn identity_prepare_avatar_upload(configuration: &configuration::Confi
 
     let local_var_client = &local_var_configuration.client;
 
-    let local_var_uri_str = format!("{}/identities/avatar-upload/prepare", local_var_configuration.base_path);
+    let local_var_uri_str = format!("{}/identity/identities/avatar-upload/prepare", local_var_configuration.base_path);
     let mut local_var_req_builder = local_var_client.request(reqwest::Method::POST, local_var_uri_str.as_str());
 
     if let Some(ref local_var_user_agent) = local_var_configuration.user_agent {
@@ -813,7 +813,7 @@ pub async fn identity_remove_game_activity(configuration: &configuration::Config
 
     let local_var_client = &local_var_configuration.client;
 
-    let local_var_uri_str = format!("{}/identities/self/activity", local_var_configuration.base_path);
+    let local_var_uri_str = format!("{}/identity/identities/self/activity", local_var_configuration.base_path);
     let mut local_var_req_builder = local_var_client.request(reqwest::Method::DELETE, local_var_uri_str.as_str());
 
     if let Some(ref local_var_user_agent) = local_var_configuration.user_agent {
@@ -844,7 +844,7 @@ pub async fn identity_report(configuration: &configuration::Configuration, ident
 
     let local_var_client = &local_var_configuration.client;
 
-    let local_var_uri_str = format!("{}/identities/{identity_id}/report", local_var_configuration.base_path, identity_id=crate::apis::urlencode(identity_id));
+    let local_var_uri_str = format!("{}/identity/identities/{identity_id}/report", local_var_configuration.base_path, identity_id=crate::apis::urlencode(identity_id));
     let mut local_var_req_builder = local_var_client.request(reqwest::Method::POST, local_var_uri_str.as_str());
 
     if let Some(ref local_var_user_agent) = local_var_configuration.user_agent {
@@ -876,7 +876,7 @@ pub async fn identity_search(configuration: &configuration::Configuration, query
 
     let local_var_client = &local_var_configuration.client;
 
-    let local_var_uri_str = format!("{}/identities/search", local_var_configuration.base_path);
+    let local_var_uri_str = format!("{}/identity/identities/search", local_var_configuration.base_path);
     let mut local_var_req_builder = local_var_client.request(reqwest::Method::GET, local_var_uri_str.as_str());
 
     local_var_req_builder = local_var_req_builder.query(&[("query", &query.to_string())]);
@@ -914,7 +914,7 @@ pub async fn identity_set_game_activity(configuration: &configuration::Configura
 
     let local_var_client = &local_var_configuration.client;
 
-    let local_var_uri_str = format!("{}/identities/self/activity", local_var_configuration.base_path);
+    let local_var_uri_str = format!("{}/identity/identities/self/activity", local_var_configuration.base_path);
     let mut local_var_req_builder = local_var_client.request(reqwest::Method::POST, local_var_uri_str.as_str());
 
     if let Some(ref local_var_user_agent) = local_var_configuration.user_agent {
@@ -946,7 +946,7 @@ pub async fn identity_setup(configuration: &configuration::Configuration, identi
 
     let local_var_client = &local_var_configuration.client;
 
-    let local_var_uri_str = format!("{}/identities", local_var_configuration.base_path);
+    let local_var_uri_str = format!("{}/identity/identities", local_var_configuration.base_path);
     let mut local_var_req_builder = local_var_client.request(reqwest::Method::POST, local_var_uri_str.as_str());
 
     if let Some(ref local_var_user_agent) = local_var_configuration.user_agent {
@@ -978,7 +978,7 @@ pub async fn identity_signup_for_beta(configuration: &configuration::Configurati
 
     let local_var_client = &local_var_configuration.client;
 
-    let local_var_uri_str = format!("{}/identities/self/beta-signup", local_var_configuration.base_path);
+    let local_var_uri_str = format!("{}/identity/identities/self/beta-signup", local_var_configuration.base_path);
     let mut local_var_req_builder = local_var_client.request(reqwest::Method::POST, local_var_uri_str.as_str());
 
     if let Some(ref local_var_user_agent) = local_var_configuration.user_agent {
@@ -1010,7 +1010,7 @@ pub async fn identity_unfollow(configuration: &configuration::Configuration, ide
 
     let local_var_client = &local_var_configuration.client;
 
-    let local_var_uri_str = format!("{}/identities/{identity_id}/follow", local_var_configuration.base_path, identity_id=crate::apis::urlencode(identity_id));
+    let local_var_uri_str = format!("{}/identity/identities/{identity_id}/follow", local_var_configuration.base_path, identity_id=crate::apis::urlencode(identity_id));
     let mut local_var_req_builder = local_var_client.request(reqwest::Method::DELETE, local_var_uri_str.as_str());
 
     if let Some(ref local_var_user_agent) = local_var_configuration.user_agent {
@@ -1040,7 +1040,7 @@ pub async fn identity_unmark_deletion(configuration: &configuration::Configurati
 
     let local_var_client = &local_var_configuration.client;
 
-    let local_var_uri_str = format!("{}/identities/self/delete-request", local_var_configuration.base_path);
+    let local_var_uri_str = format!("{}/identity/identities/self/delete-request", local_var_configuration.base_path);
     let mut local_var_req_builder = local_var_client.request(reqwest::Method::DELETE, local_var_uri_str.as_str());
 
     if let Some(ref local_var_user_agent) = local_var_configuration.user_agent {
@@ -1071,7 +1071,7 @@ pub async fn identity_update_profile(configuration: &configuration::Configuratio
 
     let local_var_client = &local_var_configuration.client;
 
-    let local_var_uri_str = format!("{}/identities/self/profile", local_var_configuration.base_path);
+    let local_var_uri_str = format!("{}/identity/identities/self/profile", local_var_configuration.base_path);
     let mut local_var_req_builder = local_var_client.request(reqwest::Method::POST, local_var_uri_str.as_str());
 
     if let Some(ref local_var_user_agent) = local_var_configuration.user_agent {
@@ -1103,7 +1103,7 @@ pub async fn identity_update_status(configuration: &configuration::Configuration
 
     let local_var_client = &local_var_configuration.client;
 
-    let local_var_uri_str = format!("{}/identities/identities/self/status", local_var_configuration.base_path);
+    let local_var_uri_str = format!("{}/identity/identities/identities/self/status", local_var_configuration.base_path);
     let mut local_var_req_builder = local_var_client.request(reqwest::Method::POST, local_var_uri_str.as_str());
 
     if let Some(ref local_var_user_agent) = local_var_configuration.user_agent {
@@ -1135,7 +1135,7 @@ pub async fn identity_validate_profile(configuration: &configuration::Configurat
 
     let local_var_client = &local_var_configuration.client;
 
-    let local_var_uri_str = format!("{}/identities/self/profile/validate", local_var_configuration.base_path);
+    let local_var_uri_str = format!("{}/identity/identities/self/profile/validate", local_var_configuration.base_path);
     let mut local_var_req_builder = local_var_client.request(reqwest::Method::POST, local_var_uri_str.as_str());
 
     if let Some(ref local_var_user_agent) = local_var_configuration.user_agent {

@@ -74,7 +74,7 @@ pub async fn cloud_games_matchmaker_delete_matchmaker_lobby(configuration: &conf
 
     let local_var_client = &local_var_configuration.client;
 
-    let local_var_uri_str = format!("{}/games/{game_id}/matchmaker/lobbies/{lobby_id}", local_var_configuration.base_path, game_id=crate::apis::urlencode(game_id), lobby_id=crate::apis::urlencode(lobby_id));
+    let local_var_uri_str = format!("{}/cloud/games/{game_id}/matchmaker/lobbies/{lobby_id}", local_var_configuration.base_path, game_id=crate::apis::urlencode(game_id), lobby_id=crate::apis::urlencode(lobby_id));
     let mut local_var_req_builder = local_var_client.request(reqwest::Method::DELETE, local_var_uri_str.as_str());
 
     if let Some(ref local_var_user_agent) = local_var_configuration.user_agent {
@@ -105,7 +105,7 @@ pub async fn cloud_games_matchmaker_export_lobby_logs(configuration: &configurat
 
     let local_var_client = &local_var_configuration.client;
 
-    let local_var_uri_str = format!("{}/games/{game_id}/matchmaker/lobbies/{lobby_id}/logs/export", local_var_configuration.base_path, game_id=crate::apis::urlencode(game_id), lobby_id=crate::apis::urlencode(lobby_id));
+    let local_var_uri_str = format!("{}/cloud/games/{game_id}/matchmaker/lobbies/{lobby_id}/logs/export", local_var_configuration.base_path, game_id=crate::apis::urlencode(game_id), lobby_id=crate::apis::urlencode(lobby_id));
     let mut local_var_req_builder = local_var_client.request(reqwest::Method::POST, local_var_uri_str.as_str());
 
     if let Some(ref local_var_user_agent) = local_var_configuration.user_agent {
@@ -137,7 +137,7 @@ pub async fn cloud_games_matchmaker_export_matchmaker_lobby_history(configuratio
 
     let local_var_client = &local_var_configuration.client;
 
-    let local_var_uri_str = format!("{}/games/{game_id}/matchmaker/lobbies/export-history", local_var_configuration.base_path, game_id=crate::apis::urlencode(game_id));
+    let local_var_uri_str = format!("{}/cloud/games/{game_id}/matchmaker/lobbies/export-history", local_var_configuration.base_path, game_id=crate::apis::urlencode(game_id));
     let mut local_var_req_builder = local_var_client.request(reqwest::Method::POST, local_var_uri_str.as_str());
 
     if let Some(ref local_var_user_agent) = local_var_configuration.user_agent {
@@ -169,7 +169,7 @@ pub async fn cloud_games_matchmaker_get_lobby_logs(configuration: &configuration
 
     let local_var_client = &local_var_configuration.client;
 
-    let local_var_uri_str = format!("{}/games/{game_id}/matchmaker/lobbies/{lobby_id}/logs", local_var_configuration.base_path, game_id=crate::apis::urlencode(game_id), lobby_id=crate::apis::urlencode(lobby_id));
+    let local_var_uri_str = format!("{}/cloud/games/{game_id}/matchmaker/lobbies/{lobby_id}/logs", local_var_configuration.base_path, game_id=crate::apis::urlencode(game_id), lobby_id=crate::apis::urlencode(lobby_id));
     let mut local_var_req_builder = local_var_client.request(reqwest::Method::GET, local_var_uri_str.as_str());
 
     local_var_req_builder = local_var_req_builder.query(&[("stream", &stream.to_string())]);

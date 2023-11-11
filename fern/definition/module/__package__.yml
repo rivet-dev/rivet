@@ -2,8 +2,7 @@
 
 service:
   auth: true
-  url: Module
-  base-path: /modules
+  base-path: /module/modules
   audiences:
     - public
   endpoints:

@@ -31,7 +31,7 @@ async fn empty(ctx: TestCtx) {
 		"
 		SELECT EXISTS (
 			SELECT 1
-			FROM game_namespace_auth_users
+			FROM db_cdn.game_namespace_auth_users
 			WHERE
 				namespace_id = $1 AND
 				user_name = $2
@@ -40,7 +40,7 @@ async fn empty(ctx: TestCtx) {
 	))
 	.bind(namespace_id)
 	.bind(auth_user)
-	.fetch_one(&ctx.crdb("db-cdn").await.unwrap())
+	.fetch_one(&ctx.crdb().await.unwrap())
 	.await
 	.unwrap();
 	assert!(!sql_exists);

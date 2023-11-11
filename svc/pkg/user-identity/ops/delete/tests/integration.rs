@@ -29,11 +29,12 @@ async fn empty(ctx: TestCtx) {
 	.await
 	.unwrap();
 
-	let (sql_exists,) =
-		sqlx::query_as::<_, (bool,)>("SELECT EXISTS (SELECT 1 FROM emails WHERE email = $1)")
-			.bind(&email)
-			.fetch_one(&ctx.crdb("db-user-identity").await.unwrap())
-			.await
-			.unwrap();
+	let (sql_exists,) = sqlx::query_as::<_, (bool,)>(
+		"SELECT EXISTS (SELECT 1 FROM db_user_identity.emails WHERE email = $1)",
+	)
+	.bind(&email)
+	.fetch_one(&ctx.crdb().await.unwrap())
+	.await
+	.unwrap();
 	assert!(!sql_exists, "identity not deleted");
 }

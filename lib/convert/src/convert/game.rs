@@ -6,13 +6,11 @@ use crate::convert;
 
 pub fn handle(game: &backend::game::Game) -> GlobalResult<models::GameHandle> {
 	Ok(models::GameHandle {
-		game_id: internal_unwrap!(game.game_id).as_uuid(),
+		game_id: unwrap_ref!(game.game_id).as_uuid(),
 		name_id: game.name_id.to_owned(),
 		display_name: game.display_name.to_owned(),
-		logo_url: util::route::game_logo(
-			&game),
-		banner_url: util::route::game_banner(
-			&game),
+		logo_url: util::route::game_logo(&game),
+		banner_url: util::route::game_banner(&game),
 	})
 }
 
@@ -28,13 +26,11 @@ pub fn summary(
 		.unwrap_or_else(|| game.url.clone());
 
 	Ok(models::GameSummary {
-		game_id: internal_unwrap!(game.game_id).as_uuid(),
+		game_id: unwrap_ref!(game.game_id).as_uuid(),
 		name_id: game.name_id.to_owned(),
 		display_name: game.display_name.to_owned(),
-		logo_url: util::route::game_logo(
-			&game),
-		banner_url: util::route::game_banner(
-			&game),
+		logo_url: util::route::game_logo(&game),
+		banner_url: util::route::game_banner(&game),
 		url: game_url,
 		developer: Box::new(convert::group::handle(dev_team, true)?),
 	})

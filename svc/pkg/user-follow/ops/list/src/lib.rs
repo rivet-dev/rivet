@@ -37,14 +37,15 @@ async fn handle(
 
 	let limit = ctx.limit;
 
-	internal_assert!(limit != 0, "limit too low");
-	internal_assert!(limit <= 32, "limit too high");
+	ensure!(limit != 0, "limit too low");
+	ensure!(limit <= 32, "limit too high");
 
-	let req_kind = internal_unwrap_owned!(RequestKind::from_i32(ctx.kind));
+	let req_kind = unwrap!(RequestKind::from_i32(ctx.kind));
 
 	let follows = match req_kind {
 		RequestKind::Mutual => {
-			sqlx::query_as::<_, Follow>(indoc!(
+			sql_fetch_all!(
+				[ctx, Follow]
 				"
 				SELECT follower_user_id, following_user_id, create_ts, is_mutual
 				FROM (
@@ -52,28 +53,28 @@ async fn handle(
 						uf.follower_user_id, uf.following_user_id, uf.create_ts,
 						EXISTS(
 							SELECT 1
-							FROM user_follows AS uf2
+							FROM db_user_follow.user_follows AS uf2
 							WHERE
 								uf2.follower_user_id = uf.following_user_id AND
 								uf2.following_user_id = uf.follower_user_id
 						) AS is_mutual
 					FROM UNNEST($1::UUID[]) AS q
-					INNER JOIN user_follows AS uf
+					INNER JOIN db_user_follow.user_follows AS uf
 					ON uf.following_user_id = q
 				)
 				WHERE is_mutual AND create_ts > $2
 				ORDER BY create_ts DESC
 				LIMIT $3
-				"
-			))
-			.bind(&user_ids)
-			.bind(ctx.anchor.unwrap_or_default())
-			.bind(limit as i64)
-			.fetch_all(&ctx.crdb("db-user-follow").await?)
+				",
+				&user_ids,
+				ctx.anchor.unwrap_or_default(),
+				limit as i64,
+			)
 			.await?
 		}
-		_ => {
-			sqlx::query_as::<_, Follow>(&formatdoc!(
+		RequestKind::Follower => {
+			sql_fetch_all!(
+				[ctx, Follow]
 				"
 				SELECT follower_user_id, following_user_id, create_ts, is_mutual
 				FROM (
@@ -81,29 +82,52 @@ async fn handle(
 						uf.follower_user_id, uf.following_user_id, uf.create_ts,
 						exists(
 							SELECT 1
-							FROM user_follows AS uf2
+							FROM db_user_follow.user_follows AS uf2
 							WHERE
 								uf2.follower_user_id = uf.following_user_id AND
 								uf2.following_user_id = uf.follower_user_id
 						) AS is_mutual
 					FROM unnest($1::UUID[]) AS q
-					INNER JOIN user_follows AS uf
-					ON uf.{join_column} = q
+					INNER JOIN db_user_follow.user_follows AS uf
+					ON uf.follower_user_id = q
 				)
 				WHERE create_ts > $2
 				ORDER BY is_mutual DESC, create_ts DESC
 				LIMIT $3
 				",
-				join_column = match req_kind {
-					RequestKind::Follower => "follower_user_id",
-					RequestKind::Following => "following_user_id",
-					RequestKind::Mutual => unreachable!(),
-				},
-			))
-			.bind(&user_ids)
-			.bind(ctx.anchor.unwrap_or_default())
-			.bind(limit as i64)
-			.fetch_all(&ctx.crdb("db-user-follow").await?)
+				&user_ids,
+				ctx.anchor.unwrap_or_default(),
+				limit as i64,
+			)
+			.await?
+		}
+		RequestKind::Following => {
+			sql_fetch_all!(
+				[ctx, Follow]
+				"
+				SELECT follower_user_id, following_user_id, create_ts, is_mutual
+				FROM (
+					SELECT
+						uf.follower_user_id, uf.following_user_id, uf.create_ts,
+						exists(
+							SELECT 1
+							FROM db_user_follow.user_follows AS uf2
+							WHERE
+								uf2.follower_user_id = uf.following_user_id AND
+								uf2.following_user_id = uf.follower_user_id
+						) AS is_mutual
+					FROM unnest($1::UUID[]) AS q
+					INNER JOIN db_user_follow.user_follows AS uf
+					ON uf.following_user_id = q
+				)
+				WHERE create_ts > $2
+				ORDER BY is_mutual DESC, create_ts DESC
+				LIMIT $3
+				",
+				&user_ids,
+				ctx.anchor.unwrap_or_default(),
+				limit as i64,
+			)
 			.await?
 		}
 	};

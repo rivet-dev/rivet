@@ -19,18 +19,20 @@ struct RunMetaNomadRow {
 async fn worker(ctx: &OperationContext<job_run::msg::cleanup::Message>) -> GlobalResult<()> {
 	// NOTE: Idempotent
 
-	let crdb = ctx.crdb("db-job-state").await?;
+	let crdb = ctx.crdb().await?;
 
-	let run_id = internal_unwrap!(ctx.run_id).as_uuid();
+	let run_id = unwrap_ref!(ctx.run_id).as_uuid();
 
-	let Some((run_row, run_meta_nomad_row)) =
-		rivet_pools::utils::crdb::tx(&crdb, |tx| Box::pin(update_db(ctx.ts(), run_id, tx))).await?
+	let Some((run_row, run_meta_nomad_row)) = rivet_pools::utils::crdb::tx(&crdb, |tx| {
+		Box::pin(update_db(ctx.clone(), ctx.ts(), run_id, tx))
+	})
+	.await?
 	else {
 		if ctx.req_dt() > util::duration::minutes(5) {
 			tracing::error!("discarding stale message");
 			return Ok(());
 		} else {
-			retry_panic!("run not found, may be race condition with insertion");
+			retry_bail!("run not found, may be race condition with insertion");
 		}
 	};
 
@@ -61,20 +63,21 @@ async fn worker(ctx: &OperationContext<job_run::msg::cleanup::Message>) -> Globa
 
 #[tracing::instrument(skip_all)]
 async fn update_db(
+	ctx: OperationContext<job_run::msg::cleanup::Message>,
 	now: i64,
 	run_id: Uuid,
 	tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
 ) -> GlobalResult<Option<(RunRow, Option<RunMetaNomadRow>)>> {
-	let run_row = sqlx::query_as::<_, RunRow>(indoc!(
+	let run_row = sql_fetch_optional!(
+		[ctx, RunRow]
 		"
 		SELECT region_id, create_ts, cleanup_ts
-		FROM runs
+		FROM db_job_state.runs
 		WHERE run_id = $1
 		FOR UPDATE
-		"
-	))
-	.bind(run_id)
-	.fetch_optional(&mut **tx)
+		",
+		run_id,
+	)
 	.await?;
 	tracing::info!(?run_row, "run row");
 
@@ -82,16 +85,16 @@ async fn update_db(
 		return Ok(None);
 	};
 
-	let run_meta_nomad_row = sqlx::query_as::<_, RunMetaNomadRow>(indoc!(
+	let run_meta_nomad_row = sql_fetch_optional!(
+		[ctx, RunMetaNomadRow]
 		"
 		SELECT dispatched_job_id, node_id
-		FROM run_meta_nomad
+		FROM db_job_state.run_meta_nomad
 		WHERE run_id = $1
 		FOR UPDATE
-		"
-	))
-	.bind(run_id)
-	.fetch_optional(&mut **tx)
+		",
+		run_id,
+	)
 	.await?;
 	tracing::info!(?run_meta_nomad_row, "run meta row");
 
@@ -108,17 +111,19 @@ async fn update_db(
 			//
 			// There is a situation where the Nomad API returns an error and the
 			// job ID is never written to the database.
-			internal_panic!("potential race condition with starting nomad job")
+			retry_bail!("potential race condition with starting nomad job")
 		}
 	}
 
 	tracing::info!("deleting run");
 	if run_row.cleanup_ts.is_none() {
-		sqlx::query("UPDATE runs SET cleanup_ts = $2 WHERE run_id = $1")
-			.bind(run_id)
-			.bind(now)
-			.execute(&mut **tx)
-			.await?;
+		sql_execute!(
+			[ctx]
+			"UPDATE db_job_state.runs SET cleanup_ts = $2 WHERE run_id = $1",
+			run_id,
+			now,
+		)
+		.await?;
 	}
 
 	Ok(Some((run_row, run_meta_nomad_row)))

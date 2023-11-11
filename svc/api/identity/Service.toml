@@ -4,11 +4,11 @@ name = "api-identity"
 [runtime]
 kind = "rust"
 
-[api]
-
-[[api.router.mounts]]
-path = "/v1"
-subdomain = "identity.api"
+[api-routes]
 
 [databases]
 db-team-dev = {}
+
+[cockroachdb]
+min-connections = 8
+

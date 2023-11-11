@@ -30,26 +30,26 @@ async fn handle(
 ) -> GlobalResult<cdn::version_get::Response> {
 	let version_ids = ctx.version_ids.iter().map(|id| **id).collect::<Vec<_>>();
 
-	let crdb = ctx.crdb("db-cdn").await?;
+	let crdb = ctx.crdb().await?;
 	let (versions, custom_headers) = tokio::try_join!(
-		sqlx::query_as::<_, GameVersion>(indoc!(
+		sql_fetch_all!(
+			[ctx, GameVersion, &crdb]
 			"
 				SELECT version_id, site_id
-				FROM game_versions
+				FROM db_cdn.game_versions
 				WHERE version_id = ANY($1)
-			"
-		))
-		.bind(&version_ids)
-		.fetch_all(&crdb),
-		sqlx::query_as::<_, GameVersionCustomHeaders>(indoc!(
+			",
+			&version_ids,
+		),
+		sql_fetch_all!(
+			[ctx, GameVersionCustomHeaders, &crdb]
 			"
 				SELECT version_id, glob, priority, header_name, header_value
-				FROM game_version_custom_headers
+				FROM db_cdn.game_version_custom_headers
 				WHERE version_id = ANY($1)
-			"
-		))
-		.bind(&version_ids)
-		.fetch_all(&crdb)
+			",
+			&version_ids,
+		)
 	)?;
 
 	let versions = versions

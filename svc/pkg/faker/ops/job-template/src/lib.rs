@@ -35,9 +35,9 @@ fn gen_job(
 			..ParameterizedJobConfig::new()
 		})),
 		task_groups: Some(vec![TaskGroup {
-			name: Some("test".into()),
+			name: Some(util_job::RUN_MAIN_TASK_NAME.into()),
 			networks: Some(vec![NetworkResource {
-				mode: Some("bridge".into()),
+				mode: Some("cni/rivet-job".into()),
 				dynamic_ports: Some(ports),
 				..NetworkResource::new()
 			}]),
@@ -77,7 +77,7 @@ fn gen_task(ctx: &OperationContext<faker::job_template::Request>) -> GlobalResul
 		..Task::new()
 	};
 
-	Ok(match internal_unwrap!(ctx.kind) {
+	Ok(match unwrap_ref!(ctx.kind) {
 		faker::job_template::request::Kind::EchoServer(_) => GenTaskOutput {
 			ports: vec![Port {
 				label: Some("http".into()),
@@ -86,7 +86,7 @@ fn gen_task(ctx: &OperationContext<faker::job_template::Request>) -> GlobalResul
 			}],
 			meta_required: Some(vec!["test_id".into()]),
 			task: Task {
-				name: Some("test-server".into()),
+				name: Some(util_job::RUN_MAIN_TASK_NAME.into()),
 				driver: Some("docker".into()),
 				config: Some({
 					let mut config = HashMap::new();
@@ -131,7 +131,7 @@ fn gen_task(ctx: &OperationContext<faker::job_template::Request>) -> GlobalResul
 			}],
 			meta_required: Some(vec!["test_id".into()]),
 			task: Task {
-				name: Some("test-server".into()),
+				name: Some(util_job::RUN_MAIN_TASK_NAME.into()),
 				driver: Some("docker".into()),
 				config: Some({
 					let mut config = HashMap::new();
@@ -182,7 +182,7 @@ fn gen_task(ctx: &OperationContext<faker::job_template::Request>) -> GlobalResul
 			}],
 			meta_required: Some(vec!["test_id".into()]),
 			task: Task {
-				name: Some("test-server".into()),
+				name: Some(util_job::RUN_MAIN_TASK_NAME.into()),
 				driver: Some("docker".into()),
 				config: Some({
 					let mut config = HashMap::new();
@@ -229,7 +229,7 @@ fn gen_task(ctx: &OperationContext<faker::job_template::Request>) -> GlobalResul
 			ports: vec![],
 			meta_required: None,
 			task: Task {
-				name: Some("test-log".into()),
+				name: Some(util_job::RUN_MAIN_TASK_NAME.into()),
 				driver: Some("docker".into()),
 				config: Some({
 					let mut config = HashMap::new();
@@ -274,7 +274,7 @@ fn gen_task(ctx: &OperationContext<faker::job_template::Request>) -> GlobalResul
 			ports: vec![],
 			meta_required: None,
 			task: Task {
-				name: Some("test-exit".into()),
+				name: Some(util_job::RUN_MAIN_TASK_NAME.into()),
 				driver: Some("docker".into()),
 				config: Some({
 					let mut config = HashMap::new();
@@ -306,7 +306,7 @@ fn gen_task(ctx: &OperationContext<faker::job_template::Request>) -> GlobalResul
 			ports: vec![],
 			meta_required: None,
 			task: Task {
-				name: Some("test-counter".into()),
+				name: Some(util_job::RUN_MAIN_TASK_NAME.into()),
 				driver: Some("docker".into()),
 				config: Some({
 					let mut config = HashMap::new();
@@ -327,6 +327,43 @@ fn gen_task(ctx: &OperationContext<faker::job_template::Request>) -> GlobalResul
 					done
 					"#,
 						sleep = counter.interval_ms as f64 / 1000.,
+					)),
+					..Template::new()
+				}]),
+				log_config: Some(Box::new(LogConfig {
+					max_files: Some(1),
+					max_file_size_mb: Some(4),
+				})),
+				..base_task
+			},
+		},
+		faker::job_template::request::Kind::Stress(stress) => GenTaskOutput {
+			ports: vec![Port {
+				label: Some("http".into()),
+				value: None,
+				to: Some(80),
+			}],
+			meta_required: Some(vec!["test_id".into()]),
+			task: Task {
+				name: Some(util_job::RUN_MAIN_TASK_NAME.into()),
+				driver: Some("docker".into()),
+				config: Some({
+					let mut config = HashMap::new();
+					config.insert("image".into(), json!("debian:12.1-slim"));
+					config.insert("args".into(), json!(["sh", "${NOMAD_TASK_DIR}/run.sh"]));
+					config
+				}),
+				templates: Some(vec![Template {
+					dest_path: Some("local/run.sh".into()),
+					embedded_tmpl: Some(formatdoc!(
+						r#"
+						#!/bin/sh
+						apt update -y
+						apt install -y stress-ng
+						echo 'Stressing with {flags}'
+						stress-ng {flags}
+						"#,
+						flags = stress.flags
 					)),
 					..Template::new()
 				}]),

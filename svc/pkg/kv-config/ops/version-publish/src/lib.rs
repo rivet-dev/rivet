@@ -5,14 +5,16 @@ use rivet_operation::prelude::*;
 async fn handle(
 	ctx: OperationContext<kv_config::version_publish::Request>,
 ) -> GlobalResult<kv_config::version_publish::Response> {
-	let version_id = internal_unwrap!(ctx.version_id).as_uuid();
-	let _config = internal_unwrap!(ctx.config);
-	let _config_ctx = internal_unwrap!(ctx.config_ctx);
+	let version_id = unwrap_ref!(ctx.version_id).as_uuid();
+	let _config = unwrap_ref!(ctx.config);
+	let _config_ctx = unwrap_ref!(ctx.config_ctx);
 
-	sqlx::query("INSERT INTO game_versions (version_id) VALUES ($1)")
-		.bind(version_id)
-		.execute(&ctx.crdb("db-kv-config").await?)
-		.await?;
+	sql_execute!(
+		[ctx]
+		"INSERT INTO db_kv_config.game_versions (version_id) VALUES ($1)",
+		version_id,
+	)
+	.await?;
 
 	Ok(kv_config::version_publish::Response {})
 }

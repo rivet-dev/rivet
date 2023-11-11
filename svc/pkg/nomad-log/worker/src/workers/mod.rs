@@ -1,2 +1,1 @@
-pub mod export;
-pub mod write;
+chirp_worker::workers![export, write,];

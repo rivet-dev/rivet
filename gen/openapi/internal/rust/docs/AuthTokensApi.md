@@ -1,10 +1,10 @@
 # \AuthTokensApi
 
-All URIs are relative to *http://localhost*
+All URIs are relative to *https://api.rivet.gg*
 
 Method | HTTP request | Description
 ------------- | ------------- | -------------
-[**auth_tokens_refresh_identity_token**](AuthTokensApi.md#auth_tokens_refresh_identity_token) | **POST** /tokens/identity | 
+[**auth_tokens_refresh_identity_token**](AuthTokensApi.md#auth_tokens_refresh_identity_token) | **POST** /auth/tokens/identity | 
 
 
 

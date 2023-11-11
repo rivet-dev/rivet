@@ -35,6 +35,9 @@ message RunMeta {
 		optional string dispatched_job_id = 1;
 		optional string alloc_id = 2;
 		optional string node_id = 3;
+		optional string node_name = 6;
+		optional string node_public_ipv4 = 7;
+		optional string node_vlan_ipv4 = 8;
 		optional bool failed = 4;
 		optional uint32 exit_code = 5;
 	}

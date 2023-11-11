@@ -259,20 +259,20 @@ impl Ctx {
 
 	#[tracing::instrument(skip(self))]
 	async fn fetch_idle_lobby_ids(&self) -> HashSet<Uuid> {
-		let crdb = self.test_ctx.crdb("db-mm-state").await.unwrap();
+		let crdb = self.test_ctx.crdb().await.unwrap();
 
 		// Find lobbies without any players
 		let ili_crdb = sqlx::query_as::<_, (Uuid,)>(indoc!(
 			"
 			SELECT lobby_id
-			FROM lobbies
+			FROM db_mm_state.lobbies
 			WHERE
 				namespace_id = $1 AND
 				region_id = $2 AND
 				lobby_group_id = $3 AND
 				stop_ts IS NULL AND
 				NOT EXISTS (
-					SELECT 1 FROM players WHERE players.lobby_id = lobbies.lobby_id
+					SELECT 1 FROM db_mm_state.players WHERE players.lobby_id = lobbies.lobby_id
 				)
 			"
 		))
@@ -410,6 +410,10 @@ impl Ctx {
 
 #[worker_test]
 async fn create_idle_lobbies(ctx: TestCtx) {
+	if !util::feature::job_run() {
+		return;
+	}
+
 	// Test context A
 	//
 	// Test initial idle lobby creation
@@ -476,6 +480,10 @@ async fn create_idle_lobbies(ctx: TestCtx) {
 
 #[worker_test]
 async fn test_find_idle_lobby(ctx: TestCtx) {
+	if !util::feature::job_run() {
+		return;
+	}
+
 	let test_ctx = Ctx::init(&ctx, None, 2, 4).await;
 	let lgi = test_ctx.lobby_group_id;
 

@@ -17,15 +17,15 @@ async fn handle(
 		.map(common::Uuid::as_uuid)
 		.collect::<Vec<_>>();
 
-	let namespace_rows = sqlx::query_as::<_, NamespaceRow>(indoc!(
+	let namespace_rows = sql_fetch_all!(
+		[ctx, NamespaceRow]
 		"
 		SELECT namespace_id, game_id
-		FROM game_namespaces
+		FROM db_game.game_namespaces
 		WHERE game_id = ANY($1)
-		"
-	))
-	.bind(&game_ids)
-	.fetch_all(&ctx.crdb("db-game").await?)
+		",
+		&game_ids,
+	)
 	.await?;
 
 	let games = game_ids

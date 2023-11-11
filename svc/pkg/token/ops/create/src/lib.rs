@@ -14,13 +14,13 @@ lazy_static::lazy_static! {
 async fn handle(
 	ctx: OperationContext<token::create::Request>,
 ) -> GlobalResult<token::create::Response> {
-	let crdb = ctx.crdb("db-token").await?;
+	let crdb = ctx.crdb().await?;
 
-	internal_assert!(!ctx.issuer.is_empty());
-	let token_config = internal_unwrap!(ctx.token_config);
-	let kind = internal_unwrap!(ctx.kind);
+	ensure!(!ctx.issuer.is_empty());
+	let token_config = unwrap_ref!(ctx.token_config);
+	let kind = unwrap_ref!(ctx.kind);
 	if ctx.combine_refresh_token {
-		internal_assert!(
+		ensure!(
 			ctx.refresh_token_config.is_none(),
 			"cannot use combined refresh token with separate refresh token config"
 		);
@@ -46,33 +46,34 @@ async fn handle(
 
 			// Validate the token
 			let refresh_token_claims = rivet_claims::decode(refresh_token)??;
-			let refresh_jti = internal_unwrap_owned!(refresh_token_claims.jti).as_uuid();
+			let refresh_jti = unwrap!(refresh_token_claims.jti).as_uuid();
 			let refresh_ent = refresh_token_claims.as_refresh()?;
 
 			// Check if revoked
 			// TODO: This is a race condition, es no bueno. See note in token-revoke
-			let rf_token_row =
-				sqlx::query_as::<_, (Option<i64>,)>("SELECT revoke_ts FROM tokens WHERE jti = $1")
-					.bind(refresh_jti)
-					.fetch_optional(&crdb)
-					.await?;
+			let rf_token_row = sql_fetch_optional!(
+				[ctx, (Option<i64>,)]
+				"SELECT revoke_ts FROM db_token.tokens WHERE jti = $1",
+				refresh_jti,
+			)
+			.await?;
 			if let Some((revoke_ts,)) = rf_token_row {
 				if revoke_ts.is_some() {
-					panic_with!(TOKEN_REVOKED);
+					bail_with!(TOKEN_REVOKED);
 				}
 			} else {
 				// TODO: The token may have expired here because of the TTL
-				panic_with!(TOKEN_REFRESH_NOT_FOUND);
+				bail_with!(TOKEN_REFRESH_NOT_FOUND);
 			}
 
 			// Fetch entitlements to create the token with
-			let session_row = sqlx::query_as::<_, (Vec<Vec<u8>>,)>(
-				"SELECT entitlements FROM sessions WHERE session_id = $1",
+			let session_row = sql_fetch_optional!(
+				[ctx, (Vec<Vec<u8>>,)]
+				"SELECT entitlements FROM db_token.sessions WHERE session_id = $1",
+				refresh_ent.session_id,
 			)
-			.bind(refresh_ent.session_id)
-			.fetch_optional(&crdb)
 			.await?;
-			let ent = internal_unwrap_owned!(session_row, "token session not found").0;
+			let ent = unwrap!(session_row, "token session not found").0;
 
 			// Decode entitlements
 			let ent = ent
@@ -84,21 +85,21 @@ async fn handle(
 			let issue_new_refresh = true; // TODO: Change this once we have unit tests to handle auto-refresh
 			let current_refresh_token = if issue_new_refresh {
 				// Revoke the refresh token
-				let update_query = sqlx::query(
+				let update_query = sql_execute!(
+					[ctx]
 					"
-					UPDATE tokens
+					UPDATE db_token.tokens
 					SET revoke_ts = $1
 					WHERE jti = $2 AND revoke_ts IS NULL AND exp > $1
 					",
+					ctx.ts(),
+					refresh_jti,
 				)
-				.bind(ctx.ts())
-				.bind(refresh_jti)
-				.execute(&crdb)
 				.await?;
 
 				if update_query.rows_affected() == 0 {
 					tracing::info!("token revoked in race condition");
-					panic_with!(TOKEN_REVOKED);
+					bail_with!(TOKEN_REVOKED);
 				}
 
 				None
@@ -147,14 +148,14 @@ async fn handle(
 				.iter()
 				.flat_map(|x| x.tag().map(|x| x as i64))
 				.collect::<Vec<_>>();
-			sqlx::query(
-				"INSERT INTO sessions (session_id, entitlements, entitlement_tags, exp) VALUES ($1, $2, $3, $4)"
-			)
-			.bind(new_session_id)
-			.bind(ent_bufs)
-			.bind(&tags)
-			.bind(ctx.ts() + token_config.ttl)
-			.execute(&crdb).await?;
+			sql_execute!(
+				[ctx]
+				"INSERT INTO db_token.sessions (session_id, entitlements, entitlement_tags, exp) VALUES ($1, $2, $3, $4)",
+				new_session_id,
+				ent_bufs,
+				&tags,
+				ctx.ts() + token_config.ttl,
+			).await?;
 		}
 
 		new_session_id
@@ -273,11 +274,12 @@ async fn create_token(
 	tracing::info!(buf_len = %claims_buf.len(), "writing claims");
 	if !ephemeral {
 		// Create the token and update the session expiration as needed
-		sqlx::query(indoc!(
+		sql_execute!(
+			[ctx]
 			"
 			WITH
 				_insert AS (
-					INSERT INTO tokens (
+					INSERT INTO db_token.tokens (
 						jti,
 						exp,
 						iat,
@@ -291,23 +293,22 @@ async fn create_token(
 					RETURNING 1
 				),
 				_update_session AS (
-					UPDATE sessions
+					UPDATE db_token.sessions
 					SET exp  = $2
 					WHERE session_id = $5 AND exp < $2
 					RETURNING 1
 				)
 			SELECT 1
-			"
-		))
-		.bind(jti)
-		.bind(claims.exp)
-		.bind(claims.iat)
-		.bind(refresh_jti)
-		.bind(session_id)
-		.bind(&ctx.issuer)
-		.bind(ctx.client.as_ref().map(|x| &x.user_agent))
-		.bind(ctx.client.as_ref().map(|x| &x.remote_address))
-		.execute(crdb)
+			",
+			jti,
+			claims.exp,
+			claims.iat,
+			refresh_jti,
+			session_id,
+			&ctx.issuer,
+			ctx.client.as_ref().map(|x| &x.user_agent),
+			ctx.client.as_ref().map(|x| &x.remote_address),
+		)
 		.await?;
 	}
 

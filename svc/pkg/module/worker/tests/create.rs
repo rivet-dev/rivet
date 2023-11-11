@@ -14,9 +14,9 @@ async fn empty(ctx: TestCtx) {
 	.unwrap();
 
 	let (exists,): (bool,) =
-		sqlx::query_as("SELECT EXISTS (SELECT 1 FROM modules WHERE module_id = $1)")
+		sqlx::query_as("SELECT EXISTS (SELECT 1 FROM db_module.modules WHERE module_id = $1)")
 			.bind(module_id)
-			.fetch_one(&ctx.crdb("db-module").await.unwrap())
+			.fetch_one(&ctx.crdb().await.unwrap())
 			.await
 			.unwrap();
 	assert!(exists, "module not created");

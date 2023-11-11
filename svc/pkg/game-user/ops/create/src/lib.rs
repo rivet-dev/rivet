@@ -5,11 +5,11 @@ use rivet_operation::prelude::*;
 async fn handle(
 	ctx: OperationContext<game_user::create::Request>,
 ) -> GlobalResult<game_user::create::Response> {
-	let crdb = ctx.crdb("db-game-user").await?;
+	let crdb = ctx.crdb().await?;
 
 	let game_user_id = Uuid::new_v4();
-	let namespace_id = internal_unwrap!(ctx.namespace_id).as_uuid();
-	let user_id = internal_unwrap!(ctx.user_id).as_uuid();
+	let namespace_id = unwrap_ref!(ctx.namespace_id).as_uuid();
+	let user_id = unwrap_ref!(ctx.user_id).as_uuid();
 
 	let token_res = op!([ctx] token_create {
 		issuer: Self::NAME.into(),
@@ -35,21 +35,21 @@ async fn handle(
 	})
 	.await?;
 
-	let game_user_token = internal_unwrap_owned!(token_res.token.clone());
-	let token_session_id = internal_unwrap!(token_res.session_id).as_uuid();
+	let game_user_token = unwrap!(token_res.token.clone());
+	let token_session_id = unwrap_ref!(token_res.session_id).as_uuid();
 
-	sqlx::query(indoc!(
+	sql_execute!(
+		[ctx]
 		"
-		INSERT INTO game_users (game_user_id, user_id, token_session_id, namespace_id, create_ts)
+		INSERT INTO db_game_user.game_users (game_user_id, user_id, token_session_id, namespace_id, create_ts)
 		VALUES ($1, $2, $3, $4, $5)
-		"
-	))
-	.bind(game_user_id)
-	.bind(user_id)
-	.bind(token_session_id)
-	.bind(namespace_id)
-	.bind(ctx.ts())
-	.execute(&crdb)
+		",
+		game_user_id,
+		user_id,
+		token_session_id,
+		namespace_id,
+		ctx.ts(),
+	)
 	.await?;
 
 	Ok(game_user::create::Response {

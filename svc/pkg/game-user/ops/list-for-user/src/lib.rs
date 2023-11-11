@@ -11,7 +11,7 @@ struct GameUser {
 async fn handle(
 	ctx: OperationContext<game_user::list_for_user::Request>,
 ) -> GlobalResult<game_user::list_for_user::Response> {
-	let crdb = ctx.crdb("db-game-user").await?;
+	let crdb = ctx.crdb().await?;
 
 	let user_ids = ctx
 		.user_ids
@@ -19,15 +19,15 @@ async fn handle(
 		.map(common::Uuid::as_uuid)
 		.collect::<Vec<_>>();
 
-	let game_user_rows = sqlx::query_as::<_, GameUser>(indoc!(
+	let game_user_rows = sql_fetch_all!(
+		[ctx, GameUser]
 		"
 		SELECT game_user_id, user_id
-		FROM game_users
+		FROM db_game_user.game_users
 		WHERE user_id = ANY($1)
-		"
-	))
-	.bind(&user_ids)
-	.fetch_all(&crdb)
+		",
+		&user_ids,
+	)
 	.await?;
 
 	let users = user_ids

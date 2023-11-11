@@ -6,43 +6,45 @@ use serde_json::json;
 async fn handle(
 	ctx: OperationContext<cdn::namespace_domain_create::Request>,
 ) -> GlobalResult<cdn::namespace_domain_create::Response> {
-	let namespace_id = internal_unwrap!(ctx.namespace_id).as_uuid();
-	assert_with!(util::check::domain(&ctx.domain, true), CDN_INVALID_DOMAIN);
+	ensure!(util::feature::cf_custom_hostname());
+
+	let namespace_id = unwrap_ref!(ctx.namespace_id).as_uuid();
+	ensure_with!(util::check::domain(&ctx.domain, true), CDN_INVALID_DOMAIN);
 
 	let game_res = op!([ctx] game_resolve_namespace_id {
 		namespace_ids: vec![namespace_id.into()],
 	})
 	.await?;
-	let game = internal_unwrap_owned!(game_res.games.first());
-	let game_id = internal_unwrap!(game.game_id).as_uuid();
+	let game = unwrap!(game_res.games.first());
+	let game_id = unwrap_ref!(game.game_id).as_uuid();
 
 	let game_res = op!([ctx] game_get {
 		game_ids: vec![game_id.into()],
 	})
 	.await?;
-	let game = internal_unwrap_owned!(game_res.games.first());
-	let developer_team_id = internal_unwrap!(game.developer_team_id).as_uuid();
+	let game = unwrap!(game_res.games.first());
+	let developer_team_id = unwrap_ref!(game.developer_team_id).as_uuid();
 
-	let crdb = ctx.crdb("db-cdn").await?;
-	let (domain_count,) = sqlx::query_as::<_, (i64,)>(
-		"SELECT COUNT(*) FROM game_namespace_domains WHERE namespace_id = $1",
+	let crdb = ctx.crdb().await?;
+	let (domain_count,) = sql_fetch_one!(
+		[ctx, (i64,)]
+		"SELECT COUNT(*) FROM db_cdn.game_namespace_domains WHERE namespace_id = $1",
+		namespace_id,
 	)
-	.bind(namespace_id)
-	.fetch_one(&crdb)
 	.await?;
 
-	assert_with!(domain_count < 10, CDN_TOO_MANY_DOMAINS);
+	ensure_with!(domain_count < 10, CDN_TOO_MANY_DOMAINS);
 
-	sqlx::query(indoc!(
+	sql_execute!(
+		[ctx]
 		"
-		INSERT INTO game_namespace_domains (namespace_id, domain, create_ts)
+		INSERT INTO db_cdn.game_namespace_domains (namespace_id, domain, create_ts)
 		VALUES ($1, $2, $3)
-		"
-	))
-	.bind(namespace_id)
-	.bind(&ctx.domain)
-	.bind(ctx.ts())
-	.execute(&crdb)
+		",
+		namespace_id,
+		&ctx.domain,
+		ctx.ts(),
+	)
 	.await?;
 
 	// Create a cloudflare custom hostname
@@ -60,15 +62,15 @@ async fn handle(
 
 				let code =
 					cf_custom_hostname::msg::create_fail::ErrorCode::from_i32(msg.error_code);
-				match internal_unwrap_owned!(code) {
-					Unknown => internal_panic!("unknown custom hostname create error code"),
+				match unwrap!(code) {
+					Unknown => bail!("unknown custom hostname create error code"),
 					AlreadyExists => {
-						rollback(&crdb, namespace_id, &ctx.domain).await?;
-						panic_with!(CLOUD_HOSTNAME_TAKEN)
+						rollback(&ctx, namespace_id, &ctx.domain).await?;
+						bail_with!(CLOUD_HOSTNAME_TAKEN)
 					}
 					TooManyPendingHostnames => {
-						rollback(&crdb, namespace_id, &ctx.domain).await?;
-						panic_with!(CLOUD_TOO_MANY_PENDING_HOSTNAMES_FOR_GROUP)
+						rollback(&ctx, namespace_id, &ctx.domain).await?;
+						bail_with!(CLOUD_TOO_MANY_PENDING_HOSTNAMES_FOR_GROUP)
 					}
 				}
 			}
@@ -99,13 +101,19 @@ async fn handle(
 	Ok(cdn::namespace_domain_create::Response {})
 }
 
-async fn rollback(crdb: &CrdbPool, namespace_id: Uuid, domain: &str) -> GlobalResult<()> {
+async fn rollback(
+	ctx: &OperationContext<cdn::namespace_domain_create::Request>,
+	namespace_id: Uuid,
+	domain: &str,
+) -> GlobalResult<()> {
 	// Rollback
-	sqlx::query("DELETE FROM game_namespace_domains WHERE namespace_id = $1 AND domain = $2")
-		.bind(namespace_id)
-		.bind(domain)
-		.execute(crdb)
-		.await?;
+	sql_execute!(
+		[ctx]
+		"DELETE FROM db_cdn.game_namespace_domains WHERE namespace_id = $1 AND domain = $2",
+		namespace_id,
+		domain,
+	)
+	.await?;
 
 	Ok(())
 }

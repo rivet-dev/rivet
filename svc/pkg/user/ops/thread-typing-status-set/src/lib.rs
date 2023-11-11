@@ -9,9 +9,9 @@ lazy_static::lazy_static! {
 async fn handle(
 	ctx: OperationContext<user::thread_typing_status_set::Request>,
 ) -> GlobalResult<user::thread_typing_status_set::Response> {
-	let user_id = internal_unwrap!(ctx.user_id).as_uuid();
-	let thread_id = internal_unwrap!(ctx.thread_id).as_uuid();
-	let typing_status = internal_unwrap!(ctx.status);
+	let user_id = unwrap_ref!(ctx.user_id).as_uuid();
+	let thread_id = unwrap_ref!(ctx.thread_id).as_uuid();
+	let typing_status = unwrap_ref!(ctx.status);
 
 	let mut typing_status_buf = Vec::with_capacity(typing_status.encoded_len());
 	typing_status.encode(&mut typing_status_buf)?;
@@ -19,7 +19,7 @@ async fn handle(
 	let user_id_str = user_id.to_string();
 
 	let do_broadcast =
-		if let backend::chat::typing_status::Kind::Idle(_) = internal_unwrap!(typing_status.kind) {
+		if let backend::chat::typing_status::Kind::Idle(_) = unwrap_ref!(typing_status.kind) {
 			// Check if key exists before deleting so we don't send unnecessary thread update messages
 			let exists = redis::pipe()
 				.atomic()

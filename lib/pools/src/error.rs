@@ -1,10 +1,13 @@
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
+	#[error("{0}")]
+	Env(std::env::VarError),
+
 	#[error("missing nats pool")]
 	MissingNatsPool,
 
-	#[error("missing crdb pool: {key:?}")]
-	MissingCrdbPool { key: Option<String> },
+	#[error("missing crdb pool")]
+	MissingCrdbPool,
 
 	#[error("missing redis pool: {key:?}")]
 	MissingRedisPool { key: Option<String> },

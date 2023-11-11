@@ -8,12 +8,12 @@ terraform {
 }
 
 locals {
-	cert_json = jsonencode({
+	cert = {
 		AccountTag = var.cloudflare_account_id
 		TunnelID = cloudflare_tunnel.tunnel.id
 		TunnelName = cloudflare_tunnel.tunnel.name
 		TunnelSecret = random_id.tunnel_secret.b64_std
-	})
+	}
 
 	ingress_with_apps = {
 		for k, v in var.ingress:

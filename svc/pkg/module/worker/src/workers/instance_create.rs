@@ -63,7 +63,7 @@ impl<T> GraphQLResponse<T> {
 			GraphQLResponse::Data(data) => Ok(data),
 			GraphQLResponse::Errors(errors) => {
 				tracing::error!(?errors, "graphql errors");
-				internal_panic!("graphql errors")
+				bail!("graphql errors")
 			}
 		}
 	}
@@ -96,30 +96,30 @@ struct CheckStatus {
 async fn worker(
 	ctx: &OperationContext<module::msg::instance_create::Message>,
 ) -> Result<(), GlobalError> {
-	let crdb = ctx.crdb("db-module").await?;
+	let crdb = ctx.crdb().await?;
 
 	let (Ok(fly_org), Ok(fly_region)) = (
 		std::env::var("FLY_ORGANIZATION_ID"),
 		std::env::var("FLY_REGION"),
 	) else {
-		internal_panic!("fly not enabled")
+		bail!("fly not enabled")
 	};
 	let fly_auth_token = util::env::read_secret(&["fly", "auth_token"]).await?;
 
-	let instance_id = internal_unwrap!(ctx.instance_id).as_uuid();
-	let version_id = internal_unwrap!(ctx.module_version_id).as_uuid();
+	let instance_id = unwrap_ref!(ctx.instance_id).as_uuid();
+	let version_id = unwrap_ref!(ctx.module_version_id).as_uuid();
 
 	// Read module version
 	let versions = op!([ctx] module_version_get {
 		version_ids: vec![version_id.into()],
 	})
 	.await?;
-	let version = internal_unwrap_owned!(versions.versions.first());
-	let module_id = internal_unwrap_owned!(version.module_id).as_uuid();
+	let version = unwrap!(versions.versions.first());
+	let module_id = unwrap!(version.module_id).as_uuid();
 
 	// Create transaction
 	rivet_pools::utils::crdb::tx(&crdb, |tx| {
-		Box::pin(insert_instance(tx, ctx.ts(), (**ctx).clone()))
+		Box::pin(insert_instance(ctx.clone(), tx, ctx.ts()))
 	})
 	.await?;
 
@@ -130,7 +130,7 @@ async fn worker(
 	) {
 		// Create app
 		// TODO: Handle failure
-		let image = match internal_unwrap!(version.image) {
+		let image = match unwrap_ref!(version.image) {
 			backend::module::version::Image::Docker(docker) => docker.image_tag.clone(),
 		};
 		let app_id = launch_app(LaunchAppOpts {
@@ -143,16 +143,16 @@ async fn worker(
 		.await?;
 
 		// Update app ID
-		sqlx::query(indoc!(
+		sql_execute!(
+			[ctx]
 			"
-			UPDATE instances_driver_fly
+			UPDATE db_module.instances_driver_fly
 			SET fly_app_id = $2
 			WHERE instance_id = $1
-			"
-		))
-		.bind(instance_id)
-		.bind(app_id)
-		.execute(&crdb)
+			",
+			instance_id,
+			app_id,
+		)
 		.await?;
 	}
 
@@ -169,8 +169,8 @@ async fn worker(
 				name: "module.create".into(),
 				properties_json: Some(serde_json::to_string(&json!({
 					"module_id": module_id,
-					"module_instance_id": internal_unwrap!(ctx.instance_id).as_uuid(),
-					"module_version_id": internal_unwrap!(ctx.module_version_id).as_uuid(),
+					"module_instance_id": unwrap_ref!(ctx.instance_id).as_uuid(),
+					"module_version_id": unwrap_ref!(ctx.module_version_id).as_uuid(),
 				}))?),
 				..Default::default()
 			},
@@ -183,46 +183,46 @@ async fn worker(
 
 #[tracing::instrument(skip_all)]
 async fn insert_instance(
+	ctx: OperationContext<module::msg::instance_create::Message>,
 	tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
 	now: i64,
-	msg: module::msg::instance_create::Message,
 ) -> GlobalResult<()> {
-	let instance_id = internal_unwrap!(msg.instance_id).as_uuid();
-	let version_id = internal_unwrap!(msg.module_version_id).as_uuid();
+	let instance_id = unwrap_ref!(ctx.instance_id).as_uuid();
+	let version_id = unwrap_ref!(ctx.module_version_id).as_uuid();
 
-	sqlx::query(indoc!(
+	sql_execute!(
+		[ctx, @tx tx]
 		"
-		INSERT INTO instances (instance_id, version_id, create_ts)
+		INSERT INTO db_module.instances (instance_id, version_id, create_ts)
 		VALUES ($1, $2, $3)
-		"
-	))
-	.bind(instance_id)
-	.bind(version_id)
-	.bind(now)
-	.execute(&mut **tx)
+		",
+		instance_id,
+		version_id,
+		now,
+	)
 	.await?;
 
-	match internal_unwrap!(msg.driver) {
+	match unwrap_ref!(ctx.driver) {
 		module::msg::instance_create::message::Driver::Dummy(_) => {
-			sqlx::query(indoc!(
+			sql_execute!(
+				[ctx, @tx tx]
 				"
-                INSERT INTO instances_driver_dummy (instance_id)
+                INSERT INTO db_module.instances_driver_dummy (instance_id)
                 VALUES ($1)
-                "
-			))
-			.bind(instance_id)
-			.execute(&mut **tx)
+                ",
+				instance_id,
+			)
 			.await?;
 		}
 		module::msg::instance_create::message::Driver::Fly(_) => {
-			sqlx::query(indoc!(
+			sql_execute!(
+				[ctx, @tx tx]
 				"
-                INSERT INTO instances_driver_fly (instance_id)
+                INSERT INTO db_module.instances_driver_fly (instance_id)
                 VALUES ($1)
-                "
-			))
-			.bind(instance_id)
-			.execute(&mut **tx)
+                ",
+				instance_id,
+			)
 			.await?;
 		}
 	}

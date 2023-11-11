@@ -1,11 +1,11 @@
 # \AuthIdentityApi
 
-All URIs are relative to *http://localhost*
+All URIs are relative to *https://api.rivet.gg*
 
 Method | HTTP request | Description
 ------------- | ------------- | -------------
-[**auth_identity_complete_email_verification**](AuthIdentityApi.md#auth_identity_complete_email_verification) | **POST** /identity/email/complete-verification | 
-[**auth_identity_start_email_verification**](AuthIdentityApi.md#auth_identity_start_email_verification) | **POST** /identity/email/start-verification | 
+[**auth_identity_complete_email_verification**](AuthIdentityApi.md#auth_identity_complete_email_verification) | **POST** /auth/identity/email/complete-verification | 
+[**auth_identity_start_email_verification**](AuthIdentityApi.md#auth_identity_start_email_verification) | **POST** /auth/identity/email/start-verification | 
 
 
 

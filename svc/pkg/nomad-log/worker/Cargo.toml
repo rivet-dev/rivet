@@ -20,3 +20,5 @@ upload-prepare = { path = "../../upload/ops/prepare" }
 
 [dev-dependencies]
 chirp-worker = { path = "../../../../lib/chirp/worker" }
+s3-util = { path = "../../../../lib/s3-util" }
+

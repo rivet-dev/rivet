@@ -8,9 +8,9 @@ async fn handle(
 ) -> GlobalResult<captcha::request::Response> {
 	// TODO: This service is pretty slow, optimize by using counters, Redis, and/or ClickHouse
 
-	let crdb = ctx.crdb("db-captcha").await?;
+	let crdb = ctx.crdb().await?;
 
-	let captcha_config = internal_unwrap!(ctx.captcha_config);
+	let captcha_config = unwrap_ref!(ctx.captcha_config);
 	let user_id = ctx.user_id.as_ref().map(common::Uuid::as_uuid);
 	let namespace_id = ctx.namespace_id.as_ref().map(common::Uuid::as_uuid);
 
@@ -18,19 +18,19 @@ async fn handle(
 	let topic_str = util_captcha::serialize_topic_str(&ctx.topic)?;
 
 	// Fetch last successful query
-	let success_res = sqlx::query_as::<_, (i64,)>(indoc!(
+	let success_res = sql_fetch_optional!(
+		[ctx, (i64,)]
 		"
 		SELECT complete_ts
-		FROM captcha_verifications
+		FROM db_captcha.captcha_verifications
 		WHERE topic_str = $1 AND remote_address = $2 AND success = true
 		ORDER BY complete_ts DESC
 		LIMIT 1
 		FOR SHARE SKIP LOCKED
-		"
-	))
-	.bind(&topic_str)
-	.bind(&ctx.remote_address)
-	.fetch_optional(&crdb)
+		",
+		&topic_str,
+		&ctx.remote_address,
+	)
 	.await?;
 
 	tracing::info!(?success_res, "fetched captcha verifications");
@@ -49,19 +49,19 @@ async fn handle(
 			// don't need to get an exact count beyond the max requests.
 			// Otherwise, abusers could spam requests to make this query slower
 			// by O(n) with every request.
-			let (req_count,) = sqlx::query_as::<_, (i64,)>(indoc!(
+			let (req_count,) = sql_fetch_one!(
+				[ctx, (i64,)]
 				"
-				SELECT count(*)
-				FROM captcha_requests
+				SELECT COUNT(*)
+				FROM db_captcha.captcha_requests
 				WHERE topic_str = $1 AND remote_address = $2 AND create_ts > $3
 				LIMIT $4
-				"
-			))
-			.bind(&topic_str)
-			.bind(&ctx.remote_address)
-			.bind(success_complete_ts)
-			.bind(captcha_config.requests_before_reverify as i64)
-			.fetch_one(&crdb)
+				",
+				&topic_str,
+				&ctx.remote_address,
+				success_complete_ts,
+				captcha_config.requests_before_reverify as i64,
+			)
 			.await?;
 			tracing::info!(?req_count, ts = ?ctx.ts(), "fetched request count");
 
@@ -81,21 +81,21 @@ async fn handle(
 	};
 
 	// Insert a request
-	sqlx::query(indoc!(
+	sql_execute!(
+		[ctx]
 		"
-		INSERT INTO captcha_requests (request_id, topic, topic_str, remote_address, create_ts, expire_ts, user_id, namespace_id)
+		INSERT INTO db_captcha.captcha_requests (request_id, topic, topic_str, remote_address, create_ts, expire_ts, user_id, namespace_id)
 		VALUES ($1, $2, $3, $4, $5, to_timestamp($6::float / 1000), $7, $8)
-		"
-	))
-	.bind(Uuid::new_v4())
-	.bind(&topic_value)
-	.bind(&topic_str)
-	.bind(&ctx.remote_address)
-	.bind(ctx.ts())
-	.bind(ctx.ts() + captcha_config.verification_ttl)
-	.bind(user_id)
-	.bind(namespace_id)
-	.execute(&crdb)
+		",
+		Uuid::new_v4(),
+		&topic_value,
+		&topic_str,
+		&ctx.remote_address,
+		ctx.ts(),
+		ctx.ts() + captcha_config.verification_ttl,
+		user_id,
+		namespace_id,
+	)
 	.await?;
 
 	if needs_verification {

@@ -12,15 +12,16 @@ struct Follow {
 async fn handle(
 	ctx: OperationContext<user::mutual_friend_list::Request>,
 ) -> GlobalResult<user::mutual_friend_list::Response> {
-	let user_a_id = internal_unwrap!(ctx.user_a_id).as_uuid();
-	let user_b_id = internal_unwrap!(ctx.user_b_id).as_uuid();
+	let user_a_id = unwrap_ref!(ctx.user_a_id).as_uuid();
+	let user_b_id = unwrap_ref!(ctx.user_b_id).as_uuid();
 
 	let limit = ctx.limit;
 
-	internal_assert!(limit != 0, "limit too low");
-	internal_assert!(limit <= 32, "limit too high");
+	ensure!(limit != 0, "limit too low");
+	ensure!(limit <= 32, "limit too high");
 
-	let mutual_friends = sqlx::query_as::<_, Follow>(indoc!(
+	let mutual_friends = sql_fetch_all!(
+		[ctx, Follow]
 		"
 		-- Mutual check A-C
 		SELECT aa.follower_user_id, aa.following_user_id, aa.create_ts
@@ -31,12 +32,12 @@ async fn handle(
 					uf.follower_user_id, uf.following_user_id, create_ts,
 					EXISTS (
 						SELECT 1
-						FROM user_follows AS uf2
+						FROM db_user_follow.user_follows AS uf2
 						WHERE
 							uf2.follower_user_id = uf.following_user_id AND
 							uf2.following_user_id = uf.follower_user_id
 					) AS is_mutual_ac
-				FROM user_follows AS uf
+				FROM db_user_follow.user_follows AS uf
 				WHERE uf.following_user_id = $1
 			) AS q
 			WHERE is_mutual_ac AND create_ts > $3
@@ -49,12 +50,12 @@ async fn handle(
 					uf.follower_user_id, uf.following_user_id, create_ts,
 					EXISTS (
 						SELECT 1
-						FROM user_follows AS uf2
+						FROM db_user_follow.user_follows AS uf2
 						WHERE
 							uf2.follower_user_id = uf.following_user_id AND
 							uf2.following_user_id = uf.follower_user_id
 					) AS is_mutual_bc
-				FROM user_follows AS uf
+				FROM db_user_follow.user_follows AS uf
 				WHERE uf.following_user_id = $2
 			) AS q
 			WHERE is_mutual_bc AND create_ts > $3
@@ -68,12 +69,12 @@ async fn handle(
 					uf.follower_user_id, uf.following_user_id, create_ts,
 					EXISTS (
 						SELECT 1
-						FROM user_follows AS uf2
+						FROM db_user_follow.user_follows AS uf2
 						WHERE
 							uf2.follower_user_id = uf.following_user_id AND
 							uf2.following_user_id = uf.follower_user_id
 					) AS is_mutual_ab
-				FROM user_follows AS uf
+				FROM db_user_follow.user_follows AS uf
 				WHERE uf.follower_user_id = $1 AND uf.following_user_id = $2
 			) AS q
 			WHERE is_mutual_ab AND create_ts > $3
@@ -81,13 +82,12 @@ async fn handle(
 		ON bb.following_user_id = cc.follower_user_id OR bb.following_user_id = cc.following_user_id
 		ORDER BY create_ts DESC
 		LIMIT $4
-		"
-	))
-	.bind(user_a_id)
-	.bind(user_b_id)
-	.bind(ctx.anchor.unwrap_or_default())
-	.bind(limit as i64)
-	.fetch_all(&ctx.crdb("db-user-follow").await?)
+		",
+		user_a_id,
+		user_b_id,
+		ctx.anchor.unwrap_or_default(),
+		limit as i64,
+	)
 	.await?;
 
 	let anchor = mutual_friends

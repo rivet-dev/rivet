@@ -28,12 +28,3 @@ impl ApiFrom<team::profile_validate::response::Error> for models::ValidationErro
 		models::ValidationError { path: value.path }
 	}
 }
-
-impl ApiFrom<backend::upload::PresignedUploadRequest> for models::UploadPresignedRequest {
-	fn api_from(value: backend::upload::PresignedUploadRequest) -> models::UploadPresignedRequest {
-		models::UploadPresignedRequest {
-			path: value.path.to_owned(),
-			url: value.url,
-		}
-	}
-}

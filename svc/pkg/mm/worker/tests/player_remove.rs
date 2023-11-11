@@ -4,6 +4,10 @@ use redis::AsyncCommands;
 
 #[worker_test]
 async fn player_remove(ctx: TestCtx) {
+	if !util::feature::job_run() {
+		return;
+	}
+
 	let lobby_res = op!([ctx] faker_mm_lobby {
 		max_players_normal: 50,
 		max_players_party: 100,
@@ -101,14 +105,15 @@ async fn does_player_exist(ctx: &TestCtx, lobby_id: Uuid, player_id: Uuid) -> bo
 		.unwrap()
 		.is_some();
 
-	let crdb_exists =
-		sqlx::query_as::<_, (Option<i64>,)>("SELECT remove_ts FROM players WHERE player_id = $1")
-			.bind(player_id)
-			.fetch_one(&ctx.crdb("db-mm-state").await.unwrap())
-			.await
-			.unwrap()
-			.0
-			.is_none();
+	let crdb_exists = sqlx::query_as::<_, (Option<i64>,)>(
+		"SELECT remove_ts FROM db_mm_state.players WHERE player_id = $1",
+	)
+	.bind(player_id)
+	.fetch_one(&ctx.crdb().await.unwrap())
+	.await
+	.unwrap()
+	.0
+	.is_none();
 
 	assert_eq!(redis_exists, crdb_exists);
 
@@ -124,15 +129,16 @@ async fn fetch_player_count(ctx: &TestCtx, lobby_id: Uuid) -> u32 {
 		.await
 		.unwrap();
 
-	let crdb_player_count =
-		sqlx::query_as::<_, (Option<i64>,)>("SELECT remove_ts FROM players WHERE lobby_id = $1")
-			.bind(lobby_id)
-			.fetch_all(&ctx.crdb("db-mm-state").await.unwrap())
-			.await
-			.unwrap()
-			.into_iter()
-			.filter(|(x,)| x.is_none())
-			.count() as i64;
+	let crdb_player_count = sqlx::query_as::<_, (Option<i64>,)>(
+		"SELECT remove_ts FROM db_mm_state.players WHERE lobby_id = $1",
+	)
+	.bind(lobby_id)
+	.fetch_all(&ctx.crdb().await.unwrap())
+	.await
+	.unwrap()
+	.into_iter()
+	.filter(|(x,)| x.is_none())
+	.count() as i64;
 
 	assert_eq!(redis_player_count, crdb_player_count);
 
@@ -149,12 +155,12 @@ async fn assert_lobby_state(ctx: &TestCtx, lobby_id: Uuid, player_count: i64) {
 		sqlx::query_as::<_, (Uuid, Uuid, Uuid, i64, i64)>(indoc!(
 			"
 				SELECT namespace_id, region_id, lobby_group_id, max_players_normal, max_players_party
-				FROM lobbies
+				FROM db_mm_state.lobbies
 				WHERE lobby_id = $1
 				"
 		))
 		.bind(lobby_id)
-		.fetch_one(&ctx.crdb("db-mm-state").await.unwrap())
+		.fetch_one(&ctx.crdb().await.unwrap())
 		.await
 		.unwrap();
 	let crdb_available_spots_normal = max_players_normal - player_count;

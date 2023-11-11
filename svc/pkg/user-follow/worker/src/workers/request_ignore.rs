@@ -5,23 +5,23 @@ use proto::backend::pkg::*;
 async fn worker(
 	ctx: &OperationContext<user_follow::msg::request_ignore::Message>,
 ) -> GlobalResult<()> {
-	let follower_user_id = internal_unwrap!(ctx.follower_user_id).as_uuid();
-	let following_user_id = internal_unwrap!(ctx.following_user_id).as_uuid();
+	let follower_user_id = unwrap_ref!(ctx.follower_user_id).as_uuid();
+	let following_user_id = unwrap_ref!(ctx.following_user_id).as_uuid();
 
-	internal_assert!(follower_user_id != following_user_id, "cannot follow self");
+	ensure!(follower_user_id != following_user_id, "cannot follow self");
 
-	sqlx::query(indoc!(
+	sql_execute!(
+		[ctx]
 		"
-		UPDATE user_follows
+		UPDATE db_user_follow.user_follows
 		SET ignored = TRUE
 		WHERE
 			follower_user_id = $1 AND
 			following_user_id = $2
-		"
-	))
-	.bind(follower_user_id)
-	.bind(following_user_id)
-	.execute(&ctx.crdb("db-user-follow").await?)
+		",
+		follower_user_id,
+		following_user_id,
+	)
 	.await?;
 
 	msg!([ctx] user_follow::msg::request_ignore_complete(follower_user_id, following_user_id) {

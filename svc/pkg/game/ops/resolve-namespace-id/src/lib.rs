@@ -19,15 +19,15 @@ async fn handle(
 		.map(common::Uuid::as_uuid)
 		.collect::<Vec<_>>();
 
-	let game_rows = sqlx::query_as::<_, GameRow>(indoc!(
+	let game_rows = sql_fetch_all!(
+		[ctx, GameRow]
 		"
 		SELECT game_id, namespace_id
-		FROM game_namespaces
+		FROM db_game.game_namespaces
 		WHERE namespace_id = ANY($1)
-		"
-	))
-	.bind(&namespace_ids)
-	.fetch_all(&ctx.crdb("db-game").await?)
+		",
+		&namespace_ids,
+	)
 	.await?;
 
 	let mut games = HashMap::<Uuid, Vec<Uuid>>::new();

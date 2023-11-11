@@ -6,8 +6,7 @@ imports:
 
 service:
   auth: true
-  url: Portal
-  base-path: /games
+  base-path: /portal/games
   endpoints:
     # getSuggestedGames:
     #   path: ""

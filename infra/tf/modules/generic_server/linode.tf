@@ -90,23 +90,14 @@ resource "linode_instance_config" "server_boot_config" {
 		}
 	}
 
-	dynamic "interface" {
-		# TODO: Document why this is only included when has a VPC
-		for_each = var.vpc != null ? [null] : []
-
-		content {
-			purpose = "public"
-		}
+	interface {
+		purpose = "public"
 	}
 
-	dynamic "interface" {
-		for_each = var.vpc != null ? [null] : []
-
-		content {
-			purpose = "vlan"
-			label = "vpc"
-			ipam_address = "${var.vpc.ip}/${var.vpc.netmask}"
-		}
+	interface {
+		purpose = "vlan"
+		label = "${var.namespace}-vlan"
+		ipam_address = "${var.vlan.ip}/${var.region.vlan.prefix_len}"
 	}
 }
 

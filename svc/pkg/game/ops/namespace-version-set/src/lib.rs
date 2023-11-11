@@ -7,57 +7,58 @@ use tracing::Instrument;
 async fn handle(
 	ctx: OperationContext<game::namespace_version_set::Request>,
 ) -> GlobalResult<game::namespace_version_set::Response> {
-	let namespace_id = internal_unwrap!(ctx.namespace_id).as_uuid();
-	let version_id = internal_unwrap!(ctx.version_id).as_uuid();
+	let namespace_id = unwrap_ref!(ctx.namespace_id).as_uuid();
+	let version_id = unwrap_ref!(ctx.version_id).as_uuid();
 
 	let game_res = op!([ctx] game_resolve_namespace_id {
 		namespace_ids: vec![namespace_id.into()],
 	})
 	.await?;
-	let game = internal_unwrap_owned!(game_res.games.first());
-	let game_id = internal_unwrap!(game.game_id).as_uuid();
+	let game = unwrap!(game_res.games.first());
+	let game_id = unwrap_ref!(game.game_id).as_uuid();
 
 	let game_res = op!([ctx] game_get {
 		game_ids: vec![game_id.into()],
 	})
 	.await?;
-	let game = internal_unwrap_owned!(game_res.games.first());
-	let developer_team_id = internal_unwrap!(game.developer_team_id).as_uuid();
+	let game = unwrap!(game_res.games.first());
+	let developer_team_id = unwrap_ref!(game.developer_team_id).as_uuid();
 
-	let crdb = ctx.crdb("db-game").await?;
+	let crdb = ctx.crdb().await?;
 
 	{
 		let tx = crdb.begin().await?;
 
-		let update_query = sqlx::query(indoc!(
+		let update_query = sql_execute!(
+			[ctx]
 			"
-			UPDATE game_namespaces
+			UPDATE db_game.game_namespaces
 			SET version_id = $2
 			WHERE namespace_id = $1
-			"
-		))
-		.bind(namespace_id)
-		.bind(version_id)
-		.execute(&crdb)
+			",
+			namespace_id,
+			version_id,
+		)
 		.await?;
-		internal_assert_eq!(1, update_query.rows_affected(), "invalid namespace id");
+		ensure_eq!(1, update_query.rows_affected(), "invalid namespace id");
 
-		sqlx::query(indoc!(
+		sql_execute!(
+			[ctx]
 			"
-			INSERT
-			INTO game_namespace_version_history (
+			INSERT INTO db_game.game_namespace_version_history (
 				namespace_id, version_id, deploy_ts
 			)
 			VALUES ($1, $2, $3)
-			"
-		))
-		.bind(namespace_id)
-		.bind(version_id)
-		.bind(ctx.ts())
-		.execute(&crdb)
+			",
+			namespace_id,
+			version_id,
+			ctx.ts(),
+		)
 		.await?;
 
 		tx.commit().await?;
+
+		ctx.cache().purge("game", [game_id]).await?;
 	}
 
 	// Update idle lobbies in all regions in the background

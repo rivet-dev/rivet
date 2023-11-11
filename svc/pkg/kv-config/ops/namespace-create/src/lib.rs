@@ -5,16 +5,16 @@ use rivet_operation::prelude::*;
 async fn handle(
 	ctx: OperationContext<kv_config::namespace_create::Request>,
 ) -> GlobalResult<kv_config::namespace_create::Response> {
-	let namespace_id = internal_unwrap!(ctx.namespace_id).as_uuid();
+	let namespace_id = unwrap_ref!(ctx.namespace_id).as_uuid();
 
-	sqlx::query(indoc!(
+	sql_execute!(
+		[ctx]
 		"
-		INSERT INTO game_namespaces (namespace_id)
+		INSERT INTO db_kv_config.game_namespaces (namespace_id)
 		VALUES ($1)
-		"
-	))
-	.bind(namespace_id)
-	.execute(&ctx.crdb("db-kv-config").await?)
+		",
+		namespace_id,
+	)
 	.await?;
 
 	Ok(kv_config::namespace_create::Response {})

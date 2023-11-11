@@ -18,19 +18,20 @@ async fn handle(
 		.iter()
 		.map(|query| {
 			Ok((
-				internal_unwrap!(query.follower_user_id).as_uuid(),
-				internal_unwrap!(query.following_user_id).as_uuid(),
+				unwrap_ref!(query.follower_user_id).as_uuid(),
+				unwrap_ref!(query.following_user_id).as_uuid(),
 			))
 		})
 		.collect::<GlobalResult<Vec<(Uuid, Uuid)>>>()?;
 
-	let follows = sqlx::query_as::<_, Follow>(indoc!(
+	let follows = sql_fetch_all!(
+		[ctx, Follow]
 		"
 		SELECT 
 			uf.follower_user_id, uf.following_user_id, uf.create_ts,
 			exists(
 				SELECT 1 
-				FROM user_follows AS uf2
+				FROM db_user_follow.user_follows AS uf2
 				WHERE
 					uf2.follower_user_id = q.following_user_id AND 
 					uf2.following_user_id = q.follower_user_id
@@ -39,14 +40,13 @@ async fn handle(
 			SELECT (query->>0)::UUID AS follower_user_id, (query->>1)::UUID AS following_user_id
 			FROM jsonb_array_elements($1) AS query
 		) AS q
-		INNER JOIN user_follows AS uf
+		INNER JOIN db_user_follow.user_follows AS uf
 		ON 
 			uf.follower_user_id = q.follower_user_id AND
 			uf.following_user_id = q.following_user_id
-		"
-	))
-	.bind(serde_json::to_value(queries)?)
-	.fetch_all(&ctx.crdb("db-user-follow").await?)
+		",
+		serde_json::to_value(queries)?,
+	)
 	.await?;
 
 	Ok(user_follow::get::Response {

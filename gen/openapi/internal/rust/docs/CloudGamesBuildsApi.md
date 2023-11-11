@@ -1,11 +1,11 @@
 # \CloudGamesBuildsApi
 
-All URIs are relative to *http://localhost*
+All URIs are relative to *https://api.rivet.gg*
 
 Method | HTTP request | Description
 ------------- | ------------- | -------------
-[**cloud_games_builds_create_game_build**](CloudGamesBuildsApi.md#cloud_games_builds_create_game_build) | **POST** /games/{game_id}/builds | 
-[**cloud_games_builds_list_game_builds**](CloudGamesBuildsApi.md#cloud_games_builds_list_game_builds) | **GET** /games/{game_id}/builds | 
+[**cloud_games_builds_create_game_build**](CloudGamesBuildsApi.md#cloud_games_builds_create_game_build) | **POST** /cloud/games/{game_id}/builds | 
+[**cloud_games_builds_list_game_builds**](CloudGamesBuildsApi.md#cloud_games_builds_list_game_builds) | **GET** /cloud/games/{game_id}/builds | 
 
 
 

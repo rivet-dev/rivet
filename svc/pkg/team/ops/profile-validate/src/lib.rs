@@ -20,17 +20,17 @@ async fn handle(
 		}
 
 		// Validate display name uniqueness
-		let (team_exists,) = sqlx::query_as::<_, (bool,)>(indoc!(
+		let (team_exists,) = sql_fetch_one!(
+			[ctx, (bool,)]
 			"
 			SELECT EXISTS (
 				SELECT 1
-				FROM teams
+				FROM db_team.teams
 				WHERE display_name = $1
 			)
-		"
-		))
-		.bind(display_name)
-		.fetch_one(&ctx.crdb("db-team").await?)
+		",
+			display_name,
+		)
 		.await?;
 
 		if team_exists {

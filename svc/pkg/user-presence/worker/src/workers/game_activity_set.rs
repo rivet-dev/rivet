@@ -8,12 +8,12 @@ async fn worker(
 ) -> GlobalResult<()> {
 	let mut redis = ctx.redis_user_presence().await?;
 
-	let user_id = internal_unwrap!(ctx.user_id).as_uuid();
+	let user_id = unwrap_ref!(ctx.user_id).as_uuid();
 
 	if let Some(game_activity) = &ctx.game_activity {
 		use util_user_presence::key;
 
-		let game_id = internal_unwrap!(game_activity.game_id).as_uuid();
+		let game_id = unwrap_ref!(game_activity.game_id).as_uuid();
 
 		// TODO: Validate user is online atomically
 		redis::cmd("HSET")

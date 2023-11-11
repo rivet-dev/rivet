@@ -4,6 +4,8 @@ name = "api-matchmaker"
 [runtime]
 kind = "rust"
 
-[[api.router.mounts]]
-path = "/v1"
-subdomain = "matchmaker.api"
+[api-routes]
+
+[cockroachdb]
+min-connections = 8
+

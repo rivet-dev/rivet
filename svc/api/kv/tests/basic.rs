@@ -27,7 +27,6 @@ impl Ctx {
 				.pretty()
 				.with_max_level(tracing::Level::INFO)
 				.with_target(false)
-				.without_time()
 				.init();
 		});
 
@@ -68,7 +67,7 @@ impl Ctx {
 
 	fn config(&self, bearer_token: &str) -> Configuration {
 		Configuration {
-			base_path: util::env::svc_router_url("api-kv"),
+			base_path: "http://traefik.traefik.svc.cluster.local:80".into(),
 			bearer_access_token: Some(bearer_token.to_string()),
 			..Default::default()
 		}
@@ -303,10 +302,7 @@ async fn generic() {
 		{
 			// OpenAPI generator does not support repeated query strings
 			let res = reqwest::Client::new()
-				.get(format!(
-					"{}/entries/batch",
-					util::env::svc_router_url("api-kv")
-				))
+				.get("http://traefik.traefik.svc.cluster.local:80/kv/entries/batch")
 				.bearer_auth(&lobby_token)
 				.query(&[
 					("keys", "some/value"),
@@ -387,10 +383,7 @@ async fn generic() {
 			async {
 				// OpenAPI generator does not support repeated query strings
 				reqwest::Client::new()
-					.get(format!(
-						"{}/entries/batch",
-						util::env::svc_router_url("api-kv")
-					))
+					.get("http://traefik.traefik.svc.cluster.local:80/kv/entries/batch")
 					.bearer_auth(&lobby_token)
 					.query(&[
 						("keys", "some/value"),

@@ -4,7 +4,7 @@ use serde_json::json;
 
 #[worker(name = "team-create")]
 async fn worker(ctx: &OperationContext<team::msg::create::Message>) -> GlobalResult<()> {
-	let team_id = internal_unwrap!(ctx.team_id).as_uuid();
+	let team_id = unwrap_ref!(ctx.team_id).as_uuid();
 
 	// Validate team
 	let validation_res = op!([ctx] team_validate {
@@ -23,20 +23,20 @@ async fn worker(ctx: &OperationContext<team::msg::create::Message>) -> GlobalRes
 		return Ok(());
 	}
 
-	let owner_user_id = internal_unwrap!(ctx.owner_user_id).as_uuid();
+	let owner_user_id = unwrap_ref!(ctx.owner_user_id).as_uuid();
 
 	// Create the team
-	sqlx::query(indoc!(
+	sql_execute!(
+		[ctx]
 		"
-		INSERT INTO teams (team_id, owner_user_id, display_name, create_ts)
+		INSERT INTO db_team.teams (team_id, owner_user_id, display_name, create_ts)
 		VALUES ($1, $2, $3, $4)
 	",
-	))
-	.bind(team_id)
-	.bind(owner_user_id)
-	.bind(&ctx.display_name)
-	.bind(util::timestamp::now())
-	.execute(&ctx.crdb("db-team").await?)
+		team_id,
+		owner_user_id,
+		&ctx.display_name,
+		util::timestamp::now(),
+	)
 	.await?;
 
 	// Wait for message to ensure it sends before team member creation

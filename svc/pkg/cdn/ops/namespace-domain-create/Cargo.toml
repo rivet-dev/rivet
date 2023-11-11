@@ -20,4 +20,4 @@ default-features = false
 [dev-dependencies]
 chirp-worker = { path = "../../../../../lib/chirp/worker" }
 
-cdn-namespace-create = { path = "../namespace-create" }
+faker-game = { path = "../../../faker/ops/game" }

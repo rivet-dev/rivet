@@ -15,7 +15,7 @@ struct ThreadRow {
 async fn handle(
 	ctx: OperationContext<chat_thread::get_for_topic::Request>,
 ) -> GlobalResult<chat_thread::get_for_topic::Response> {
-	let crdb = ctx.crdb("db-chat").await?;
+	let crdb = ctx.crdb().await?;
 
 	// Split up rows in to associated IDs
 	let mut team_ids = Vec::new();
@@ -23,16 +23,16 @@ async fn handle(
 	let mut direct_user_b_ids = Vec::new();
 
 	for topic in &ctx.topics {
-		let kind = internal_unwrap!(topic.kind);
+		let kind = unwrap_ref!(topic.kind);
 
 		match kind {
 			backend::chat::topic::Kind::Team(team) => {
-				team_ids.push(internal_unwrap!(team.team_id).as_uuid())
+				team_ids.push(unwrap_ref!(team.team_id).as_uuid())
 			}
 			backend::chat::topic::Kind::Direct(direct) => {
 				let (user_a_id, user_b_id) = util::sort::id_pair(
-					internal_unwrap!(direct.user_a_id).as_uuid(),
-					internal_unwrap!(direct.user_b_id).as_uuid(),
+					unwrap_ref!(direct.user_a_id).as_uuid(),
+					unwrap_ref!(direct.user_b_id).as_uuid(),
 				);
 
 				direct_user_a_ids.push(user_a_id);
@@ -42,25 +42,25 @@ async fn handle(
 	}
 
 	// Query threads
-	let threads = sqlx::query_as::<_, ThreadRow>(indoc!(
+	let threads = sql_fetch_all!(
+		[ctx, ThreadRow]
 		"
 		SELECT thread_id, create_ts, team_team_id, NULL AS direct_user_a_id, NULL AS direct_user_b_id
-		FROM threads
+		FROM db_chat.threads
 		WHERE team_team_id = ANY($1)
 
 		UNION
 
 		SELECT thread_id, create_ts, NULL, direct_user_a_id, direct_user_b_id
 		FROM unnest($2, $3) AS direct (user_a_id, user_b_id)
-		INNER JOIN threads ON
+		INNER JOIN db_chat.threads ON
 			direct_user_a_id = direct.user_a_id AND
 			direct_user_b_id = direct.user_b_id
-		"
-	))
-	.bind(team_ids)
-	.bind(direct_user_a_ids)
-	.bind(direct_user_b_ids)
-	.fetch_all(&crdb)
+		",
+		team_ids,
+		direct_user_a_ids,
+		direct_user_b_ids,
+	)
 	.await?
 	.into_iter()
 	.map(|thread| {
@@ -80,7 +80,7 @@ async fn handle(
 						user_b_id: Some(user_b_id.into()),
 					})
 				} else {
-					internal_panic!("missing thread kind data")
+					bail!("missing thread kind data")
 				}),
 			}),
 		})

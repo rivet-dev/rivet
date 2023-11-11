@@ -9,7 +9,7 @@ pub fn game_summary(
 	team: &backend::team::Team,
 ) -> GlobalResult<models::GameSummary> {
 	Ok(models::GameSummary {
-		game_id: internal_unwrap!(game.game_id).as_uuid().to_string(),
+		game_id: unwrap_ref!(game.game_id).as_uuid().to_string(),
 		name_id: game.name_id.clone(),
 		display_name: game.display_name.clone(),
 		logo_url: util::route::game_logo(&game),
@@ -25,7 +25,7 @@ pub fn group_handle(
 	team: &backend::team::Team,
 	is_developer: bool,
 ) -> GlobalResult<models::GroupHandle> {
-	let team_id = internal_unwrap!(team.team_id).as_uuid();
+	let team_id = unwrap_ref!(team.team_id).as_uuid();
 
 	Ok(models::GroupHandle {
 		group_id: team_id.to_string(),

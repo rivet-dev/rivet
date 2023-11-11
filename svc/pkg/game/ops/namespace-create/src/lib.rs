@@ -5,9 +5,9 @@ use rivet_operation::prelude::*;
 async fn handle(
 	ctx: OperationContext<game::namespace_create::Request>,
 ) -> GlobalResult<game::namespace_create::Response> {
-	let req_game_id = internal_unwrap!(ctx.game_id);
+	let req_game_id = unwrap_ref!(ctx.game_id);
 	let game_id = req_game_id.as_uuid();
-	let version_id = internal_unwrap!(ctx.version_id).as_uuid();
+	let version_id = unwrap_ref!(ctx.version_id).as_uuid();
 
 	// Validate namespace
 	let validation_res = op!([ctx] game_namespace_validate {
@@ -25,24 +25,24 @@ async fn handle(
 			.map(|err| err.path.join("."))
 			.collect::<Vec<_>>()
 			.join(", ");
-		panic_with!(VALIDATION_ERROR, error = readable_errors);
+		bail_with!(VALIDATION_ERROR, error = readable_errors);
 	}
 
 	let namespace_id = Uuid::new_v4();
 
-	sqlx::query(indoc!(
+	sql_execute!(
+		[ctx]
 		"
-		INSERT INTO game_namespaces (namespace_id, game_id, create_ts, display_name, version_id, name_id)
+		INSERT INTO db_game.game_namespaces (namespace_id, game_id, create_ts, display_name, version_id, name_id)
 		VALUES ($1, $2, $3, $4, $5, $6)
-		"
-	))
-	.bind(namespace_id)
-	.bind(game_id)
-	.bind(ctx.ts())
-	.bind(&ctx.display_name)
-	.bind(version_id)
-	.bind(&ctx.name_id)
-	.execute(&ctx.crdb("db-game").await?)
+		",
+		namespace_id,
+		game_id,
+		ctx.ts(),
+		&ctx.display_name,
+		version_id,
+		&ctx.name_id,
+	)
 	.await?;
 
 	msg!([ctx] cdn::msg::ns_config_update(namespace_id) {

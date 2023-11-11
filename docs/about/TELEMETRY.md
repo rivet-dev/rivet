@@ -8,11 +8,24 @@ This document is intended to be as transparent as possible about what we collect
 
 Rivet collects telemetry for three main reasons:
 
--   **Adjust product investments** Let us know which products are being used & require more attention
 -   **Diagnose issues** Help us diagnose issues users are having on non-standard setups
--   **Fundraising** Rough usage metrics help us with fundraising to demonstrate real-world usage
+-   **Focus on widely used features** Let us know which services are being used & require more attention
+-   **Track growth** We invest day and night in to building open source software that anyone can use to distribute multiplayer games; tracking the project's growth in the wild helps us get an accurate sense of our reach
 
 These metrics are never shared publicly without explicit consent.
+
+## Disabling telemetry
+
+**If you disable telemetry, please let us know why in our [Discord](https://discord.gg/BG2vqsJczH). We work hard to make sure we respect your privacy & security.**
+
+Add the following to your namespace config:
+
+```toml
+[rivet.telemetry]
+disable = true
+```
+
+Then run `bolt up telemetry-beacon` to disable the beacon service.
 
 ## What do we collect?
 
@@ -74,23 +87,24 @@ Sent when running `bolt infra destroy` or `bolt terraform destroy`.
 }
 ```
 
-**bolt_salt_apply**
-
-Sent when running `bolt init`, `bolt infra up`, or `bolt salt apply`.
-
-```typescript
-{
-	"filter": string,
-	"sls": string[],
-}
-```
-
 **bolt_up**
 
 Sent when running `bolt init`, `bolt infra up`, or `bolt up`.
 
 ```typescript
 {
+	"svc_names": string[],
+}
+```
+
+**bolt_test**
+
+Sent when running `bolt test`.
+
+```typescript
+{
+	"svc_names": string[],
+	"filters": string[],
 }
 ```
 
@@ -150,8 +164,7 @@ Helps us understand if developers are running multiple games on a single Rivet c
 
 **Game namespaces**
 
--   `total_users` & `linked_users` helps us understand if Rivet Social is being used
--   `player_count` helps us understand how well the system is scaling in comparison to the player count
+-   `player_count` helps us understand how well the system is performing under load on the provided configuration & providers
 
 ```typescript
 {
@@ -169,16 +182,3 @@ Helps us understand if developers are running multiple games on a single Rivet c
 	"player_count": player_count,
 }
 ```
-
-## Disabling telemetry
-
-**If you disable telemetry, please let us know why in our [Discord](https://discord.gg/BG2vqsJczH). We work hard to make sure we respect your privacy & security.**
-
-Add the following to your namespace config:
-
-```toml
-[rivet.telemetry]
-disable = true
-```
-
-Then run `bolt up telemetry-beacon` to disable the beacon.

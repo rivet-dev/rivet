@@ -1,25 +1,25 @@
 # \CloudGamesNamespacesApi
 
-All URIs are relative to *http://localhost*
+All URIs are relative to *https://api.rivet.gg*
 
 Method | HTTP request | Description
 ------------- | ------------- | -------------
-[**cloud_games_namespaces_add_namespace_domain**](CloudGamesNamespacesApi.md#cloud_games_namespaces_add_namespace_domain) | **POST** /games/{game_id}/namespaces/{namespace_id}/domains | 
-[**cloud_games_namespaces_create_game_namespace**](CloudGamesNamespacesApi.md#cloud_games_namespaces_create_game_namespace) | **POST** /games/{game_id}/namespaces | 
-[**cloud_games_namespaces_create_game_namespace_token_development**](CloudGamesNamespacesApi.md#cloud_games_namespaces_create_game_namespace_token_development) | **POST** /games/{game_id}/namespaces/{namespace_id}/tokens/development | 
-[**cloud_games_namespaces_create_game_namespace_token_public**](CloudGamesNamespacesApi.md#cloud_games_namespaces_create_game_namespace_token_public) | **POST** /games/{game_id}/namespaces/{namespace_id}/tokens/public | 
-[**cloud_games_namespaces_get_game_namespace_by_id**](CloudGamesNamespacesApi.md#cloud_games_namespaces_get_game_namespace_by_id) | **GET** /games/{game_id}/namespaces/{namespace_id} | 
-[**cloud_games_namespaces_get_game_namespace_version_history_list**](CloudGamesNamespacesApi.md#cloud_games_namespaces_get_game_namespace_version_history_list) | **GET** /games/{game_id}/namespaces/{namespace_id}/version-history | 
-[**cloud_games_namespaces_remove_namespace_cdn_auth_user**](CloudGamesNamespacesApi.md#cloud_games_namespaces_remove_namespace_cdn_auth_user) | **DELETE** /games/{game_id}/namespaces/{namespace_id}/auth-user/{user} | 
-[**cloud_games_namespaces_remove_namespace_domain**](CloudGamesNamespacesApi.md#cloud_games_namespaces_remove_namespace_domain) | **DELETE** /games/{game_id}/namespaces/{namespace_id}/domains/{domain} | 
-[**cloud_games_namespaces_set_namespace_cdn_auth_type**](CloudGamesNamespacesApi.md#cloud_games_namespaces_set_namespace_cdn_auth_type) | **PUT** /games/{game_id}/namespaces/{namespace_id}/cdn-auth | 
-[**cloud_games_namespaces_toggle_namespace_domain_public_auth**](CloudGamesNamespacesApi.md#cloud_games_namespaces_toggle_namespace_domain_public_auth) | **PUT** /games/{game_id}/namespaces/{namespace_id}/domain-public-auth | 
-[**cloud_games_namespaces_update_game_namespace_matchmaker_config**](CloudGamesNamespacesApi.md#cloud_games_namespaces_update_game_namespace_matchmaker_config) | **POST** /games/{game_id}/namespaces/{namespace_id}/mm-config | 
-[**cloud_games_namespaces_update_game_namespace_version**](CloudGamesNamespacesApi.md#cloud_games_namespaces_update_game_namespace_version) | **PUT** /games/{game_id}/namespaces/{namespace_id}/version | 
-[**cloud_games_namespaces_update_namespace_cdn_auth_user**](CloudGamesNamespacesApi.md#cloud_games_namespaces_update_namespace_cdn_auth_user) | **POST** /games/{game_id}/namespaces/{namespace_id}/auth-user | 
-[**cloud_games_namespaces_validate_game_namespace**](CloudGamesNamespacesApi.md#cloud_games_namespaces_validate_game_namespace) | **POST** /games/{game_id}/namespaces/validate | 
-[**cloud_games_namespaces_validate_game_namespace_matchmaker_config**](CloudGamesNamespacesApi.md#cloud_games_namespaces_validate_game_namespace_matchmaker_config) | **POST** /games/{game_id}/namespaces/{namespace_id}/mm-config/validate | 
-[**cloud_games_namespaces_validate_game_namespace_token_development**](CloudGamesNamespacesApi.md#cloud_games_namespaces_validate_game_namespace_token_development) | **POST** /games/{game_id}/namespaces/{namespace_id}/tokens/development/validate | 
+[**cloud_games_namespaces_add_namespace_domain**](CloudGamesNamespacesApi.md#cloud_games_namespaces_add_namespace_domain) | **POST** /cloud/games/{game_id}/namespaces/{namespace_id}/domains | 
+[**cloud_games_namespaces_create_game_namespace**](CloudGamesNamespacesApi.md#cloud_games_namespaces_create_game_namespace) | **POST** /cloud/games/{game_id}/namespaces | 
+[**cloud_games_namespaces_create_game_namespace_token_development**](CloudGamesNamespacesApi.md#cloud_games_namespaces_create_game_namespace_token_development) | **POST** /cloud/games/{game_id}/namespaces/{namespace_id}/tokens/development | 
+[**cloud_games_namespaces_create_game_namespace_token_public**](CloudGamesNamespacesApi.md#cloud_games_namespaces_create_game_namespace_token_public) | **POST** /cloud/games/{game_id}/namespaces/{namespace_id}/tokens/public | 
+[**cloud_games_namespaces_get_game_namespace_by_id**](CloudGamesNamespacesApi.md#cloud_games_namespaces_get_game_namespace_by_id) | **GET** /cloud/games/{game_id}/namespaces/{namespace_id} | 
+[**cloud_games_namespaces_get_game_namespace_version_history_list**](CloudGamesNamespacesApi.md#cloud_games_namespaces_get_game_namespace_version_history_list) | **GET** /cloud/games/{game_id}/namespaces/{namespace_id}/version-history | 
+[**cloud_games_namespaces_remove_namespace_cdn_auth_user**](CloudGamesNamespacesApi.md#cloud_games_namespaces_remove_namespace_cdn_auth_user) | **DELETE** /cloud/games/{game_id}/namespaces/{namespace_id}/auth-user/{user} | 
+[**cloud_games_namespaces_remove_namespace_domain**](CloudGamesNamespacesApi.md#cloud_games_namespaces_remove_namespace_domain) | **DELETE** /cloud/games/{game_id}/namespaces/{namespace_id}/domains/{domain} | 
+[**cloud_games_namespaces_set_namespace_cdn_auth_type**](CloudGamesNamespacesApi.md#cloud_games_namespaces_set_namespace_cdn_auth_type) | **PUT** /cloud/games/{game_id}/namespaces/{namespace_id}/cdn-auth | 
+[**cloud_games_namespaces_toggle_namespace_domain_public_auth**](CloudGamesNamespacesApi.md#cloud_games_namespaces_toggle_namespace_domain_public_auth) | **PUT** /cloud/games/{game_id}/namespaces/{namespace_id}/domain-public-auth | 
+[**cloud_games_namespaces_update_game_namespace_matchmaker_config**](CloudGamesNamespacesApi.md#cloud_games_namespaces_update_game_namespace_matchmaker_config) | **POST** /cloud/games/{game_id}/namespaces/{namespace_id}/mm-config | 
+[**cloud_games_namespaces_update_game_namespace_version**](CloudGamesNamespacesApi.md#cloud_games_namespaces_update_game_namespace_version) | **PUT** /cloud/games/{game_id}/namespaces/{namespace_id}/version | 
+[**cloud_games_namespaces_update_namespace_cdn_auth_user**](CloudGamesNamespacesApi.md#cloud_games_namespaces_update_namespace_cdn_auth_user) | **POST** /cloud/games/{game_id}/namespaces/{namespace_id}/auth-user | 
+[**cloud_games_namespaces_validate_game_namespace**](CloudGamesNamespacesApi.md#cloud_games_namespaces_validate_game_namespace) | **POST** /cloud/games/{game_id}/namespaces/validate | 
+[**cloud_games_namespaces_validate_game_namespace_matchmaker_config**](CloudGamesNamespacesApi.md#cloud_games_namespaces_validate_game_namespace_matchmaker_config) | **POST** /cloud/games/{game_id}/namespaces/{namespace_id}/mm-config/validate | 
+[**cloud_games_namespaces_validate_game_namespace_token_development**](CloudGamesNamespacesApi.md#cloud_games_namespaces_validate_game_namespace_token_development) | **POST** /cloud/games/{game_id}/namespaces/{namespace_id}/tokens/development/validate | 
 
 
 

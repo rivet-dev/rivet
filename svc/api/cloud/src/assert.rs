@@ -12,8 +12,8 @@ pub async fn user_registered(ctx: &OperationContext<()>, user_id: Uuid) -> Globa
 	})
 	.await?;
 
-	let identities = &internal_unwrap!(identity.users.first()).identities;
-	assert_with!(!identities.is_empty(), IDENTITY_NOT_REGISTERED);
+	let identities = &unwrap_ref!(identity.users.first()).identities;
+	ensure_with!(!identities.is_empty(), IDENTITY_NOT_REGISTERED);
 
 	Ok(())
 }
@@ -32,10 +32,10 @@ pub async fn version_for_game(
 	})
 	.await?;
 
-	let version_data = internal_unwrap_owned!(version_get_res.versions.first());
-	let version_game_id = internal_unwrap!(version_data.game_id).as_uuid();
+	let version_data = unwrap!(version_get_res.versions.first());
+	let version_game_id = unwrap_ref!(version_data.game_id).as_uuid();
 
-	internal_assert_eq!(version_game_id, game_id, "version does not belong to game");
+	ensure_eq!(version_game_id, game_id, "version does not belong to game");
 
 	Ok(version_data.clone())
 }
@@ -54,10 +54,10 @@ pub async fn namespace_for_game(
 	})
 	.await?;
 
-	let ns_data = internal_unwrap_owned!(ns_get_res.namespaces.first());
-	let ns_game_id = internal_unwrap!(ns_data.game_id).as_uuid();
+	let ns_data = unwrap!(ns_get_res.namespaces.first());
+	let ns_game_id = unwrap_ref!(ns_data.game_id).as_uuid();
 
-	internal_assert_eq!(ns_game_id, game_id, "namespace does not belong to game");
+	ensure_eq!(ns_game_id, game_id, "namespace does not belong to game");
 
 	Ok(ns_data.clone())
 }

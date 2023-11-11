@@ -36,14 +36,14 @@ pub enum SubCommand {
 
 #[derive(Parser)]
 pub enum MigrateSubCommand {
-	BreakInfraTerraformMonolith,
+	// Placeholder
 }
 
 impl SubCommand {
 	pub async fn execute(self, ctx: ProjectContext) -> Result<()> {
 		match self {
 			Self::Plan { start_at } => {
-				let plan = tasks::infra::build_plan(&ctx, start_at)?;
+				let plan = tasks::infra::build_plan(&ctx, start_at, false)?;
 				for step in plan {
 					println!("{}: {:?}", step.name_id, step.kind);
 				}
@@ -52,20 +52,18 @@ impl SubCommand {
 				yes: auto_approve,
 				start_at,
 			} => {
-				let plan = tasks::infra::build_plan(&ctx, start_at)?;
+				let plan = tasks::infra::build_plan(&ctx, start_at, false)?;
 				tasks::infra::execute_plan(&ctx, &plan, ExecutePlanOpts { auto_approve }).await?;
 			}
 			Self::Destroy {
 				yes: auto_approve,
 				start_at,
 			} => {
-				let plan = tasks::infra::build_plan(&ctx, start_at)?;
+				let plan = tasks::infra::build_plan(&ctx, start_at, true)?;
 				tasks::infra::destroy_plan(&ctx, &plan, ExecutePlanOpts { auto_approve }).await?;
 			}
 			Self::Migrate { command } => match command {
-				MigrateSubCommand::BreakInfraTerraformMonolith => {
-					tasks::infra::migrate::break_infra_terraform_monolith::run(&ctx).await?;
-				}
+				// Placeholder
 			},
 		}
 

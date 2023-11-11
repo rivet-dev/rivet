@@ -5,8 +5,7 @@ imports:
 
 service:
   auth: true
-  base-path: /region-tiers
-  url: Cloud
+  base-path: /cloud/region-tiers
   audiences:
     - public
   endpoints:

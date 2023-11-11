@@ -1,0 +1,32 @@
+[package]
+name = "api-monolith"
+version = "0.0.1"
+authors = ["Rivet Gaming, LLC <developer@rivet.gg>"]
+edition = "2018"
+license = "Apache-2.0"
+
+[dependencies]
+api-helper = { path = "../../../lib/api-helper/build" }
+async-trait = "0.1"
+chirp-client = { path = "../../../lib/chirp/client" }
+http = "0.2"
+hyper = { version = "0.14", features = ["server", "http1", "tcp"] }
+rivet-operation = { path = "../../../lib/operation/core" }
+tokio = { version = "1.29" }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", default-features = false, features = ["fmt", "json", "ansi"] }
+url = "2.2.2"
+
+api-admin = { path = "../admin" }
+api-auth = { path = "../auth" }
+api-cf-verification = { path = "../cf-verification" }
+api-chat = { path = "../chat" }
+api-cloud = { path = "../cloud" }
+api-group = { path = "../group" }
+api-identity = { path = "../identity" }
+api-job = { path = "../job" }
+api-kv = { path = "../kv" }
+api-matchmaker = { path = "../matchmaker" }
+api-module = { path = "../module" }
+api-portal = { path = "../portal" }
+api-status = { path = "../status" }

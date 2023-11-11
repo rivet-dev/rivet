@@ -23,15 +23,15 @@ struct FileRow {
 async fn handle(
 	ctx: OperationContext<upload::complete::Request>,
 ) -> GlobalResult<upload::complete::Response> {
-	let crdb = ctx.crdb("db-upload").await?;
+	let crdb = ctx.crdb().await?;
 
-	let upload_id = internal_unwrap!(ctx.upload_id).as_uuid();
+	let upload_id = unwrap_ref!(ctx.upload_id).as_uuid();
 
-	let (bucket, provider, files, user_id) = fetch_files(&crdb, upload_id).await?;
+	let (bucket, provider, files, user_id) = fetch_files(&ctx, upload_id).await?;
 	let files_len = files.len();
 
 	if let Some(req_bucket) = &ctx.bucket {
-		assert_eq_with!(&bucket, req_bucket, DB_INVALID_BUCKET);
+		ensure_eq_with!(&bucket, req_bucket, DB_INVALID_BUCKET);
 	}
 
 	let s3_client = s3_util::Client::from_env_with_provider(&bucket, provider).await?;
@@ -42,17 +42,19 @@ async fn handle(
 	validate_files(&s3_client, upload_id, files).await?;
 
 	// Mark as complete
-	sqlx::query(indoc!(
+	sql_execute!(
+		[ctx]
 		"
-		UPDATE uploads
+		UPDATE db_upload.uploads
 		SET complete_ts = $2
 		WHERE upload_id = $1
-		"
-	))
-	.bind(upload_id)
-	.bind(ctx.ts())
-	.execute(&crdb)
+		",
+		upload_id,
+		ctx.ts(),
+	)
 	.await?;
+
+	ctx.cache().purge("upload", [upload_id]).await?;
 
 	msg!([ctx] upload::msg::complete_complete(upload_id) {
 		upload_id: Some(upload_id.into()),
@@ -87,32 +89,33 @@ async fn handle(
 }
 
 async fn fetch_files(
-	crdb: &CrdbPool,
+	ctx: &OperationContext<upload::complete::Request>,
 	upload_id: Uuid,
 ) -> GlobalResult<(String, s3_util::Provider, Vec<FileRow>, Option<Uuid>)> {
+	let crdb = ctx.crdb().await?;
 	let (upload, files) = tokio::try_join!(
-		sqlx::query_as::<_, UploadRow>(indoc!(
+		sql_fetch_one!(
+			[ctx, UploadRow, &crdb]
 			"
 			SELECT bucket, provider, user_id
-			FROM uploads
+			FROM db_upload.uploads
 			WHERE upload_id = $1
-			"
-		))
-		.bind(upload_id)
-		.fetch_one(crdb),
-		sqlx::query_as::<_, FileRow>(indoc!(
+			",
+			upload_id,
+		),
+		sql_fetch_all!(
+			[ctx, FileRow, &crdb]
 			"
 			SELECT path, content_length, nsfw_score_threshold, multipart_upload_id
-			FROM upload_files
+			FROM db_upload.upload_files
 			WHERE upload_id = $1
-			"
-		))
-		.bind(upload_id)
-		.fetch_all(crdb)
+			",
+			upload_id,
+		)
 	)?;
 
 	// Parse provider
-	let proto_provider = internal_unwrap_owned!(
+	let proto_provider = unwrap!(
 		backend::upload::Provider::from_i32(upload.provider as i32),
 		"invalid upload provider"
 	);
@@ -171,7 +174,7 @@ async fn validate_profanity_scores(
 
 		// Validate the images fall within the approved scores
 		for score in &score_res.scores {
-			let required_score = internal_unwrap_owned!(nsfw_required_scores.get(&score.url));
+			let required_score = unwrap!(nsfw_required_scores.get(&score.url));
 			if score.score >= *required_score {
 				msg!([ctx] analytics::msg::event_create() {
 					events: vec![
@@ -196,7 +199,7 @@ async fn validate_profanity_scores(
 						.ok()
 						.map_or(false, |x| x == "1")
 				{
-					panic_with!(UPLOAD_NSFW_CONTENT_DETECTED {
+					bail_with!(UPLOAD_NSFW_CONTENT_DETECTED {
 						metadata: serde_json::json!({
 							"url": score.url,
 							"score": score.score,
@@ -205,7 +208,7 @@ async fn validate_profanity_scores(
 				} else {
 					// Don't expose the score in production to prevent
 					// exploitation
-					panic_with!(UPLOAD_NSFW_CONTENT_DETECTED);
+					bail_with!(UPLOAD_NSFW_CONTENT_DETECTED);
 				}
 			}
 		}
@@ -241,7 +244,7 @@ async fn validate_files(
 					.upload_id(multipart_upload_id.clone())
 					.send()
 					.await?;
-				let parts = internal_unwrap_owned!(parts_res.parts());
+				let parts = unwrap!(parts_res.parts());
 
 				s3_client
 					.complete_multipart_upload()
@@ -289,7 +292,7 @@ async fn validate_files(
 
 			// This should never be triggered since we use prepared uploads, but
 			// we validate it regardless
-			internal_assert_eq!(
+			ensure_eq!(
 				file_row.content_length,
 				head_obj.content_length,
 				"incorrect content length"

@@ -3,9 +3,9 @@ use proto::backend::pkg::*;
 
 #[worker(name = "kv-write")]
 async fn worker(ctx: &OperationContext<kv::msg::write::Message>) -> GlobalResult<()> {
-	let crdb = ctx.crdb("db-kv").await?;
+	let crdb = ctx.crdb().await?;
 
-	let namespace_id = internal_unwrap!(ctx.namespace_id).as_uuid();
+	let namespace_id = unwrap_ref!(ctx.namespace_id).as_uuid();
 
 	let directory_str = util_kv::key_directory(&ctx.key);
 
@@ -15,24 +15,16 @@ async fn worker(ctx: &OperationContext<kv::msg::write::Message>) -> GlobalResult
 		if !value.is_null() {
 			// Write value if not null
 			(
-				upsert_value(
-					ctx.ts(),
-					&crdb,
-					namespace_id,
-					&ctx.key,
-					value,
-					directory_str,
-				)
-				.await?,
+				upsert_value(&ctx, ctx.ts(), namespace_id, &ctx.key, value, directory_str).await?,
 				false,
 			)
 		} else {
 			// Delete value if null
-			(delete_value(&crdb, namespace_id, &ctx.key).await?, true)
+			(delete_value(&ctx, namespace_id, &ctx.key).await?, true)
 		}
 	} else {
 		// Delete value
-		(delete_value(&crdb, namespace_id, &ctx.key).await?, true)
+		(delete_value(&ctx, namespace_id, &ctx.key).await?, true)
 	};
 
 	if updated {
@@ -48,40 +40,44 @@ async fn worker(ctx: &OperationContext<kv::msg::write::Message>) -> GlobalResult
 }
 
 async fn upsert_value(
+	ctx: &OperationContext<kv::msg::write::Message>,
 	now: i64,
-	crdb: &CrdbPool,
 	namespace_id: Uuid,
 	key: &str,
 	value: serde_json::Value,
 	directory: &str,
 ) -> GlobalResult<bool> {
-	let query = sqlx::query(indoc!(
+	let query = sql_execute!(
+		[ctx]
 		"
-		UPSERT INTO kv (namespace_id, key, value, update_ts, directory)
+		UPSERT INTO db_kv.kv (namespace_id, key, value, update_ts, directory)
 		VALUES ($1, $2, $3, $4, $5)
-		"
-	))
-	.bind(namespace_id)
-	.bind(key)
-	.bind(&value)
-	.bind(now)
-	.bind(directory)
-	.execute(crdb)
+		",
+		namespace_id,
+		key,
+		&value,
+		now,
+		directory,
+	)
 	.await?;
 
 	Ok(query.rows_affected() == 1)
 }
 
-async fn delete_value(crdb: &CrdbPool, namespace_id: Uuid, key: &str) -> GlobalResult<bool> {
-	let query = sqlx::query(indoc!(
+async fn delete_value(
+	ctx: &OperationContext<kv::msg::write::Message>,
+	namespace_id: Uuid,
+	key: &str,
+) -> GlobalResult<bool> {
+	let query = sql_execute!(
+		[ctx]
 		"
-		DELETE FROM kv
+		DELETE FROM db_kv.kv
 		WHERE namespace_id = $1 AND key = $2
-		"
-	))
-	.bind(namespace_id)
-	.bind(key)
-	.execute(crdb)
+		",
+		namespace_id,
+		key,
+	)
 	.await?;
 
 	Ok(query.rows_affected() == 1)

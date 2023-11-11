@@ -12,8 +12,10 @@ variable "region" {
 	type = object({
 		provider = string
 		provider_region = string
-		netnum = number
-		supports_vlan = bool
+		vlan = object({
+			address = string
+			prefix_len = number
+		})
 	})
 }
 
@@ -34,20 +36,17 @@ variable "backup" {
     default = false
 }
 
+variable "vlan" {
+    type = object({
+		ip = string
+	})
+}
+
 variable "volumes" {
     type = map(object({
 		size = number
 	}))
 	default = {}
-}
-
-variable "vpc" {
-    type = object({
-		ip = string
-		netmask = number
-	})
-	nullable = true
-	default = null
 }
 
 variable "firewall_inbound" {

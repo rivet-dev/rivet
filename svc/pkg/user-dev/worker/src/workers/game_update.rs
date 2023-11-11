@@ -7,14 +7,14 @@ use proto::backend::pkg::*;
 
 #[worker(name = "user-dev-game-update")]
 async fn worker(ctx: &OperationContext<game::msg::update::Message>) -> GlobalResult<()> {
-	let game_id = internal_unwrap!(ctx.game_id).as_uuid();
+	let game_id = unwrap_ref!(ctx.game_id).as_uuid();
 
 	let game_res = op!([ctx] game_get {
 		game_ids: vec![game_id.into()],
 	})
 	.await?;
-	let game = internal_unwrap_owned!(game_res.games.first());
-	let developer_team_id = internal_unwrap!(game.developer_team_id);
+	let game = unwrap!(game_res.games.first());
+	let developer_team_id = unwrap_ref!(game.developer_team_id);
 
 	let members_res = op!([ctx] team_member_list {
 		team_ids: vec![*developer_team_id],
@@ -22,12 +22,12 @@ async fn worker(ctx: &OperationContext<game::msg::update::Message>) -> GlobalRes
 		anchor: None,
 	})
 	.await?;
-	let team = internal_unwrap_owned!(members_res.teams.first());
+	let team = unwrap!(members_res.teams.first());
 
 	// Insert event for each team member
 	let mut events = Vec::new();
 	for member in &team.members {
-		let user_id = internal_unwrap!(member.user_id).as_uuid();
+		let user_id = unwrap_ref!(member.user_id).as_uuid();
 
 		events.push(
 			msg!([ctx] user_dev::msg::game_update(user_id) {

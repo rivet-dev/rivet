@@ -2,7 +2,11 @@ use chirp_worker::prelude::*;
 use proto::backend::pkg::*;
 
 #[worker_test]
-async fn basic(ctx: TestCtx) {
+async fn lobby_job_run_cleanup(ctx: TestCtx) {
+	if !util::feature::job_run() {
+		return;
+	}
+
 	let faker_lobby = op!([ctx] faker_mm_lobby {}).await.unwrap();
 	let lobby_id = faker_lobby.lobby_id.unwrap().as_uuid();
 	let run_id = faker_lobby.run_id.unwrap().as_uuid();
