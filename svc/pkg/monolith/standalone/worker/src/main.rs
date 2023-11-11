@@ -18,7 +18,7 @@ async fn start() -> GlobalResult<()> {
 	tokio::task::Builder::new()
 		.name("monolith_worker::metrics")
 		.spawn(rivet_metrics::run_standalone())?;
-		
+
 	monolith_worker::run_from_env(pools).await?;
 
 	Ok(())

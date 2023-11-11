@@ -1,8 +1,8 @@
 use api_helper::{anchor::WatchIndexQuery, ctx::Ctx};
 use proto::backend;
+use rivet_api::models as new_models;
 use rivet_claims::ClaimsDecode;
 use rivet_cloud_server::models;
-use rivet_api::models as new_models;
 use rivet_convert::ApiTryInto;
 use rivet_operation::prelude::*;
 
