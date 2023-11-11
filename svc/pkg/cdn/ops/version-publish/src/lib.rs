@@ -14,18 +14,20 @@ struct FlattenedHeader<'a> {
 async fn handle(
 	ctx: OperationContext<cdn::version_publish::Request>,
 ) -> GlobalResult<cdn::version_publish::Response> {
-	let version_id = internal_unwrap!(ctx.version_id);
-	let config = internal_unwrap!(ctx.config);
-	let _config_ctx = internal_unwrap!(ctx.config_ctx);
+	let version_id = unwrap_ref!(ctx.version_id);
+	let config = unwrap_ref!(ctx.config);
+	let _config_ctx = unwrap_ref!(ctx.config_ctx);
 
-	let site_id = internal_unwrap!(config.site_id);
+	let site_id = unwrap_ref!(config.site_id);
 
-	let crdb = ctx.crdb("db-cdn").await?;
-	sqlx::query("INSERT INTO game_versions (version_id, site_id) VALUES ($1, $2)")
-		.bind(**version_id)
-		.bind(**site_id)
-		.execute(&crdb)
-		.await?;
+	let crdb = ctx.crdb().await?;
+	sql_execute!(
+		[ctx]
+		"INSERT INTO db_cdn.game_versions (version_id, site_id) VALUES ($1, $2)",
+		**version_id,
+		**site_id,
+	)
+	.await?;
 
 	// Funky batch insert. Cannot be joined with the above future because it relies on it to create foreign
 	// row first.
@@ -39,7 +41,7 @@ async fn handle(
 				route
 					.middlewares
 					.iter()
-					.map(move |middleware| Ok((route, internal_unwrap!(middleware.kind))))
+					.map(move |middleware| Ok((route, unwrap_ref!(middleware.kind))))
 			})
 			.collect::<GlobalResult<Vec<_>>>()?
 			.into_iter()
@@ -64,7 +66,7 @@ async fn handle(
 					.headers
 					.iter()
 					.map(move |header| {
-						let glob = internal_unwrap!(flattened_header.route.glob);
+						let glob = unwrap_ref!(flattened_header.route.glob);
 						let mut glob_buf = Vec::with_capacity(glob.encoded_len());
 						glob.encode(&mut glob_buf)?;
 
@@ -80,20 +82,20 @@ async fn handle(
 			.into_iter()
 			.unzip_n_vec();
 
-		sqlx::query(indoc!(
+		sql_execute!(
+			[ctx]
 			"
-			INSERT INTO game_version_custom_headers (
+			INSERT INTO db_cdn.game_version_custom_headers (
 				version_id, glob, priority, header_name, header_value
 			)
 			SELECT * FROM UNNEST($1, $2, $3, $4, $5)
-			"
-		))
-		.bind(version_ids)
-		.bind(globs)
-		.bind(priorities)
-		.bind(header_names)
-		.bind(header_values)
-		.execute(&crdb)
+			",
+			version_ids,
+			globs,
+			priorities,
+			header_names,
+			header_values,
+		)
 		.await?;
 	}
 

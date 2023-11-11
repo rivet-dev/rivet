@@ -32,35 +32,35 @@ async fn handle(
 		.map(common::Uuid::as_uuid)
 		.collect::<Vec<_>>();
 
-	let sql_pool = ctx.crdb("db-cdn").await?;
+	let crdb = ctx.crdb().await?;
 	let (namespace_domains, auth_users, namespaces) = tokio::try_join!(
-		sqlx::query_as::<_, GameNamespaceDomain>(indoc!(
+		sql_fetch_all!(
+			[ctx, GameNamespaceDomain, &crdb]
 			"
 			SELECT namespace_id, domain, create_ts
-			FROM game_namespace_domains
+			FROM db_cdn.game_namespace_domains
 			WHERE namespace_id = ANY($1)
-			"
-		))
-		.bind(&namespace_ids)
-		.fetch_all(&sql_pool),
-		sqlx::query_as::<_, GameNamespaceAuthUser>(indoc!(
+			",
+			&namespace_ids,
+		),
+		sql_fetch_all!(
+			[ctx, GameNamespaceAuthUser, &crdb]
 			"
 			SELECT namespace_id, user_name, password
-			FROM game_namespace_auth_users
+			FROM db_cdn.game_namespace_auth_users
 			WHERE namespace_id = ANY($1)
-			"
-		))
-		.bind(&namespace_ids)
-		.fetch_all(&sql_pool),
-		sqlx::query_as::<_, GameNamespace>(indoc!(
+			",
+			&namespace_ids,
+		),
+		sql_fetch_all!(
+			[ctx, GameNamespace, &crdb]
 			"
 			SELECT namespace_id, enable_domain_public_auth, auth_type
-			FROM game_namespaces
+			FROM db_cdn.game_namespaces
 			WHERE namespace_id = ANY($1)
-			"
-		))
-		.bind(&namespace_ids)
-		.fetch_all(&sql_pool),
+			",
+			&namespace_ids,
+		),
 	)?;
 
 	let namespace_proto = namespaces
@@ -78,7 +78,7 @@ async fn handle(
 							create_ts: domain.create_ts,
 						})
 						.collect(),
-					auth_type: internal_unwrap_owned!(
+					auth_type: unwrap!(
 						backend::cdn::namespace_config::AuthType::from_i32(ns.auth_type as i32),
 						"unknown cdn auth type"
 					) as i32,

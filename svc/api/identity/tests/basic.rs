@@ -2,6 +2,7 @@ use std::{str::FromStr, sync::Once};
 
 use proto::backend::{self, pkg::*};
 use regex::Regex;
+use rivet_api::*;
 use rivet_claims::ClaimsDecode;
 use rivet_identity::{model, output};
 use rivet_operation::prelude::*;
@@ -22,7 +23,6 @@ impl Ctx {
 				.pretty()
 				.with_max_level(tracing::Level::INFO)
 				.with_target(false)
-				.without_time()
 				.init();
 		});
 
@@ -53,14 +53,6 @@ impl Ctx {
 		let ns_dev_auth_token =
 			Self::setup_dev_token(&op_ctx, namespace_id, "127.0.0.1".to_owned(), Vec::new()).await;
 
-		let custom_domain = format!("{}.com", util::faker::ident());
-		op!([op_ctx] cdn_namespace_domain_create {
-			namespace_id: Some(namespace_id.into()),
-			domain: custom_domain.clone(),
-		})
-		.await
-		.unwrap();
-
 		Ctx {
 			op_ctx,
 			ns_dev_auth_token,
@@ -69,7 +61,7 @@ impl Ctx {
 
 	fn http_client(&self, bearer_token: String) -> rivet_identity::ClientWrapper {
 		rivet_identity::Config::builder()
-			.set_uri(util::env::svc_router_url("api-identity"))
+			.set_uri("http://traefik.traefik.svc.cluster.local:80/identity")
 			.set_bearer_token(bearer_token)
 			.build_client()
 	}

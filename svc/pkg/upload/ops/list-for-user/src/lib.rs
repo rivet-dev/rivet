@@ -12,7 +12,7 @@ struct UploadRow {
 async fn handle(
 	ctx: OperationContext<upload::list_for_user::Request>,
 ) -> GlobalResult<upload::list_for_user::Response> {
-	let crdb = ctx.crdb("db-upload").await?;
+	let crdb = ctx.crdb().await?;
 
 	let user_ids = ctx
 		.user_ids
@@ -22,36 +22,36 @@ async fn handle(
 	let limit = ctx.limit as i64;
 
 	let uploads = if let Some(anchor) = ctx.anchor {
-		sqlx::query_as::<_, UploadRow>(indoc!(
+		sql_fetch_all!(
+			[ctx, UploadRow]
 			"
 			SELECT user_id, upload_id, create_ts
-			FROM uploads
+			FROM db_upload.uploads
 			WHERE
 				user_id = ANY($1) AND
 				create_ts > $2
 			ORDER BY create_ts DESC
 			LIMIT $3
-			"
-		))
-		.bind(&user_ids)
-		.bind(anchor)
-		.bind(limit)
-		.fetch_all(&crdb)
+			",
+			&user_ids,
+			anchor,
+			limit,
+		)
 		.await?
 	} else {
-		sqlx::query_as::<_, UploadRow>(indoc!(
+		sql_fetch_all!(
+			[ctx, UploadRow]
 			"
 			SELECT user_id, upload_id, create_ts
-			FROM uploads
+			FROM db_upload.uploads
 			WHERE
 				user_id = ANY($1)
 			ORDER BY create_ts DESC
 			LIMIT $2
-			"
-		))
-		.bind(&user_ids)
-		.bind(limit)
-		.fetch_all(&crdb)
+			",
+			&user_ids,
+			limit,
+		)
 		.await?
 	};
 

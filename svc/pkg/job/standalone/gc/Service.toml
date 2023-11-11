@@ -9,3 +9,12 @@ singleton = true
 
 [databases]
 db-job-state = {}
+
+[resources.single-node]
+cpu = 50
+memory = 64
+
+[resources.distributed]
+cpu = 100
+memory = 128
+

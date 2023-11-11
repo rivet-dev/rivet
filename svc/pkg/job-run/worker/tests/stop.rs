@@ -3,6 +3,10 @@ use proto::backend::pkg::*;
 
 #[worker_test]
 async fn empty(ctx: TestCtx) {
+	if !util::feature::job_run() {
+		return;
+	}
+
 	let nomad_config = nomad_util::config_from_env().unwrap();
 
 	let run_res = op!([ctx] faker_job_run {
@@ -13,12 +17,13 @@ async fn empty(ctx: TestCtx) {
 	let run_id = run_res.run_id.unwrap().as_uuid();
 
 	// Read the alloc ID
-	let (alloc_id,) =
-		sqlx::query_as::<_, (String,)>("SELECT alloc_id FROM run_meta_nomad WHERE run_id = $1")
-			.bind(run_id)
-			.fetch_one(&ctx.crdb("db-job-state").await.unwrap())
-			.await
-			.unwrap();
+	let (alloc_id,) = sqlx::query_as::<_, (String,)>(
+		"SELECT alloc_id FROM db_job_state.run_meta_nomad WHERE run_id = $1",
+	)
+	.bind(run_id)
+	.fetch_one(&ctx.crdb().await.unwrap())
+	.await
+	.unwrap();
 	tracing::info!(%alloc_id, "alloc id");
 
 	// Check allocation created

@@ -1,5 +1,6 @@
 use api_helper::{anchor::WatchIndexQuery, ctx::Ctx};
 use proto::backend;
+use rivet_api::models as new_models;
 use rivet_claims::ClaimsDecode;
 use rivet_cloud_server::models;
 use rivet_convert::ApiTryInto;
@@ -58,7 +59,7 @@ pub async fn get_custom_avatars(
 			}
 		})
 		.map(|(custom_avatar, upload, file)| {
-			let upload_id = internal_unwrap!(custom_avatar.upload_id).as_uuid();
+			let upload_id = unwrap_ref!(custom_avatar.upload_id).as_uuid();
 			let profile_file_name = file
 				.path
 				.rsplit_once('/')
@@ -89,18 +90,18 @@ pub async fn get_custom_avatars(
 pub async fn prepare_avatar_upload(
 	ctx: Ctx<Auth>,
 	game_id: Uuid,
-	body: models::PrepareCustomAvatarUploadRequest,
-) -> GlobalResult<models::PrepareCustomAvatarUploadResponse> {
+	body: new_models::CloudGamesPrepareCustomAvatarUploadRequest,
+) -> GlobalResult<new_models::CloudGamesPrepareCustomAvatarUploadResponse> {
 	ctx.auth().check_game_write(ctx.op_ctx(), game_id).await?;
 
 	let user_id = ctx.auth().claims()?.as_user().ok().map(|x| x.user_id);
 
-	assert_with!(
+	ensure_with!(
 		body.content_length >= 0,
 		CLOUD_INVALID_CONFIG,
 		error = "`content_length` out of bounds"
 	);
-	assert_with!(
+	ensure_with!(
 		body.content_length < MAX_AVATAR_UPLOAD_SIZE,
 		UPLOAD_TOO_LARGE
 	);
@@ -110,7 +111,7 @@ pub async fn prepare_avatar_upload(
 	} else if body.path.ends_with(".jpg") || body.path.ends_with(".jpeg") {
 		"jpeg"
 	} else {
-		internal_panic!("invalid file type (allowed: .png, .jpg)");
+		bail!("invalid file type (allowed: .png, .jpg)");
 	};
 
 	// Create the upload
@@ -129,12 +130,12 @@ pub async fn prepare_avatar_upload(
 	})
 	.await?;
 
-	let upload_id = internal_unwrap!(upload_prepare_res.upload_id).as_uuid();
-	let presigned_request = internal_unwrap_owned!(upload_prepare_res.presigned_requests.first());
+	let upload_id = unwrap_ref!(upload_prepare_res.upload_id).as_uuid();
+	let presigned_request = unwrap!(upload_prepare_res.presigned_requests.first());
 
-	Ok(models::PrepareCustomAvatarUploadResponse {
-		upload_id: upload_id.to_string(),
-		presigned_request: presigned_request.clone().try_into()?,
+	Ok(new_models::CloudGamesPrepareCustomAvatarUploadResponse {
+		upload_id,
+		presigned_request: Box::new(presigned_request.clone().try_into()?),
 	})
 }
 

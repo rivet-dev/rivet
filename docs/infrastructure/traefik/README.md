@@ -14,6 +14,4 @@ We run three main Treafik pools:
 
 ## How is Traefik configured?
 
--   Internal service routes are provided with Consul tags using the Consul configuration provider
--   Dynamic configuration for CDN and job routes are provided by the api-route service with the HTTP configuration provider
--   TLS is configured with dynamic TOML files in SaltStack
+_TODO_

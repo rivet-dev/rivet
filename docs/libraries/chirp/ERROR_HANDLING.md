@@ -16,7 +16,7 @@ Throw errors using the macros defined in [`lib/global-error/src/macros.rs`](../.
 
 `err_code!` should be used for any potential user error. This throws errors from the error registry.
 
-`internal_panic!` and `internal_assert!` should be used like a safe alternative to the `panic!` and `assert!` macro.
+`bail!` and `ensure!` should be used like a safe alternative to the `panic!` and `assert!` macro.
 
 ### Consumers: Do or die
 

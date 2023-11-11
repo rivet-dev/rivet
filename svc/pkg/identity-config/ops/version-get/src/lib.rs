@@ -28,35 +28,35 @@ async fn handle(
 		.map(common::Uuid::as_uuid)
 		.collect::<Vec<_>>();
 
-	let crdb = ctx.crdb("db-identity-config").await?;
+	let crdb = ctx.crdb().await?;
 	let (versions, custom_display_names, custom_avatars) = tokio::try_join!(
-		sqlx::query_as::<_, GameVersion>(indoc!(
+		sql_fetch_all!(
+			[ctx, GameVersion, &crdb]
 			"
 				SELECT version_id
-				FROM game_versions
+				FROM db_identity_config.game_versions
 				WHERE version_id = ANY($1)
-			"
-		))
-		.bind(&version_ids)
-		.fetch_all(&crdb),
-		sqlx::query_as::<_, CustomDisplayName>(indoc!(
+			",
+			&version_ids,
+		),
+		sql_fetch_all!(
+			[ctx, CustomDisplayName, &crdb]
 			"
 			SELECT display_name, version_id
-			FROM custom_display_names
+			FROM db_identity_config.custom_display_names
 			WHERE version_id = ANY($1)
-			"
-		))
-		.bind(&version_ids)
-		.fetch_all(&crdb),
-		sqlx::query_as::<_, CustomAvatar>(indoc!(
+			",
+			&version_ids,
+		),
+		sql_fetch_all!(
+			[ctx, CustomAvatar, &crdb]
 			"
 			SELECT upload_id, version_id
-			FROM custom_avatars
+			FROM db_identity_config.custom_avatars
 			WHERE version_id = ANY($1)
-			"
-		))
-		.bind(&version_ids)
-		.fetch_all(&crdb),
+			",
+			&version_ids,
+		),
 	)?;
 
 	let versions = versions

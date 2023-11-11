@@ -3,9 +3,7 @@ use proto::backend::pkg::*;
 
 #[worker(name = "mm-lobby-state-set")]
 async fn worker(ctx: &OperationContext<mm::msg::lobby_state_set::Message>) -> GlobalResult<()> {
-	let crdb = ctx.crdb("db-mm-state").await?;
-
-	let lobby_id = internal_unwrap!(ctx.lobby_id).as_uuid();
+	let lobby_id = unwrap_ref!(ctx.lobby_id).as_uuid();
 	let mut pipe = redis::pipe();
 	pipe.atomic();
 

@@ -51,9 +51,7 @@ struct LobbyGroupCache {
 async fn worker(
 	ctx: &OperationContext<mm::msg::lobby_history_export::Message>,
 ) -> GlobalResult<()> {
-	let crdb = ctx.crdb("db-mm-state").await?;
-
-	let request_id = internal_unwrap!(ctx.request_id).as_uuid();
+	let request_id = unwrap_ref!(ctx.request_id).as_uuid();
 	let namespace_ids = ctx
 		.namespace_ids
 		.iter()
@@ -64,10 +62,12 @@ async fn worker(
 	// TODO: This will iterate over all lobbies regardless of stop timestamp
 	// Use AS OF SYSTEM TIME to reduce contention.
 	// https://www.cockroachlabs.com/docs/v22.2/performance-best-practices-overview#use-as-of-system-time-to-decrease-conflicts-with-long-running-queries
-	let mut all_lobbies = sqlx::query_as::<_, LobbyRow>(indoc!(
+	let crdb = ctx.crdb().await?;
+	let mut all_lobbies = sql_fetch!(
+		[ctx, LobbyRow, &crdb]
 		"
 		SELECT namespace_id, lobby_id, region_id, lobby_group_id, create_ts, stop_ts
-		FROM lobbies AS OF SYSTEM TIME '-5s'
+		FROM db_mm_state.lobbies AS OF SYSTEM TIME '-5s'
 		WHERE namespace_id = ANY($1) AND (
 			-- Lobbies stopped during the query window
 			(stop_ts > $2 AND stop_ts <= $3) OR
@@ -77,12 +77,11 @@ async fn worker(
 			(stop_ts IS NULL AND create_ts <= $3)
 		)
 		ORDER BY create_ts DESC
-		"
-	))
-	.bind(&namespace_ids)
-	.bind(ctx.query_start)
-	.bind(ctx.query_end)
-	.fetch(&crdb);
+		",
+		&namespace_ids,
+		ctx.query_start,
+		ctx.query_end,
+	);
 
 	// Cached metadata
 	let mut regions = HashMap::<Uuid, RegionCache>::new();
@@ -135,11 +134,10 @@ async fn worker(
 				namespace_ids: vec![namespace_id.into()],
 			})
 			.await?;
-			let game_namespace =
-				internal_unwrap_owned!(game_namespace_res.namespaces.first()).clone();
+			let game_namespace = unwrap!(game_namespace_res.namespaces.first()).clone();
 
 			namespaces.insert(namespace_id, game_namespace.clone());
-			internal_unwrap_owned!(namespaces.get(&namespace_id))
+			unwrap!(namespaces.get(&namespace_id))
 		};
 
 		// Fetch region metadata
@@ -150,10 +148,10 @@ async fn worker(
 				region_ids: vec![region_id.into()],
 			})
 			.await?;
-			let region = internal_unwrap_owned!(region_res.regions.first()).clone();
+			let region = unwrap!(region_res.regions.first()).clone();
 
 			regions.insert(region_id, RegionCache { region });
-			internal_unwrap_owned!(regions.get(&region_id))
+			unwrap!(regions.get(&region_id))
 		};
 
 		// Fetch lobby group metadata
@@ -165,7 +163,7 @@ async fn worker(
 			})
 			.await?;
 			let version_id = if let Some(x) = lg_resolve_res.versions.first() {
-				internal_unwrap!(x.version_id).as_uuid()
+				unwrap_ref!(x.version_id).as_uuid()
 			} else {
 				tracing::warn!(?lobby_group_id, "could not resolve version for lobby group");
 				continue;
@@ -179,16 +177,15 @@ async fn worker(
 					version_ids: vec![version_id.into()],
 				})
 				.await?;
-				let game_version =
-					internal_unwrap_owned!(game_version_res.versions.first()).clone();
+				let game_version = unwrap!(game_version_res.versions.first()).clone();
 
 				let mm_version_res = op!([ctx] mm_config_version_get {
 					version_ids: vec![version_id.into()],
 				})
 				.await?;
-				let mm_version = internal_unwrap_owned!(mm_version_res.versions.first());
-				let mm_version_config = internal_unwrap!(mm_version.config).clone();
-				let mm_version_config_meta = internal_unwrap!(mm_version.config_meta).clone();
+				let mm_version = unwrap!(mm_version_res.versions.first());
+				let mm_version_config = unwrap_ref!(mm_version.config).clone();
+				let mm_version_config_meta = unwrap_ref!(mm_version.config_meta).clone();
 
 				versions.insert(
 					version_id,
@@ -198,7 +195,7 @@ async fn worker(
 						mm_version_config_meta,
 					},
 				);
-				internal_unwrap_owned!(versions.get(&version_id))
+				unwrap!(versions.get(&version_id))
 			};
 
 			// Find the lobby group data
@@ -215,9 +212,8 @@ async fn worker(
 				continue;
 			};
 			let lobby_group_config =
-				internal_unwrap_owned!(version.mm_version_config.lobby_groups.get(lobby_group_idx))
-					.clone();
-			let lobby_group_region = internal_unwrap_owned!(
+				unwrap!(version.mm_version_config.lobby_groups.get(lobby_group_idx)).clone();
+			let lobby_group_region = unwrap!(
 				lobby_group_config
 					.regions
 					.iter()
@@ -235,10 +231,10 @@ async fn worker(
 				},
 			);
 
-			internal_unwrap_owned!(lobby_groups.get(&lobby_group_id))
+			unwrap!(lobby_groups.get(&lobby_group_id))
 		};
 
-		let version = internal_unwrap_owned!(versions.get(&lobby_group.version_id));
+		let version = unwrap!(versions.get(&lobby_group.version_id));
 
 		// Write to CSV
 		csv_writer.serialize(CsvRow {
@@ -282,7 +278,7 @@ async fn worker(
 	})
 	.await?;
 
-	let presigned_req = internal_unwrap_owned!(upload_res.presigned_requests.first());
+	let presigned_req = unwrap!(upload_res.presigned_requests.first());
 	let res = reqwest::Client::new()
 		.put(&presigned_req.url)
 		.body(csv_buf)
@@ -296,7 +292,7 @@ async fn worker(
 		let status = res.status();
 		let text = res.text().await;
 		tracing::error!(?status, ?text, "failed to upload csv");
-		internal_panic!("failed to upload csv");
+		bail!("failed to upload csv");
 	}
 
 	op!([ctx] upload_complete {

@@ -12,9 +12,9 @@ enum Error {
 async fn worker(
 	ctx: &OperationContext<user_presence::msg::status_set::Message>,
 ) -> GlobalResult<()> {
-	let crdb = ctx.crdb("db-user-presence").await?;
+	let crdb = ctx.crdb().await?;
 
-	let user_id = internal_unwrap!(ctx.user_id).as_uuid();
+	let user_id = unwrap_ref!(ctx.user_id).as_uuid();
 
 	if backend::user::Status::from_i32(ctx.status).is_none() {
 		return Err(Error::InvalidStatus.into());
@@ -34,15 +34,15 @@ async fn worker(
 
 	// Update the default status
 	if ctx.user_set_status {
-		sqlx::query(indoc!(
+		sql_execute!(
+			[ctx]
 			"
-			UPSERT INTO user_presences (user_id, user_set_status)
+			UPSERT INTO db_user_presence.user_presences (user_id, user_set_status)
 			VALUES ($1, $2)
-			"
-		))
-		.bind(user_id)
-		.bind(ctx.user_set_status)
-		.execute(&crdb)
+			",
+			user_id,
+			ctx.user_set_status,
+		)
 		.await?;
 	}
 

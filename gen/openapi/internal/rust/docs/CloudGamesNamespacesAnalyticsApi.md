@@ -1,10 +1,10 @@
 # \CloudGamesNamespacesAnalyticsApi
 
-All URIs are relative to *http://localhost*
+All URIs are relative to *https://api.rivet.gg*
 
 Method | HTTP request | Description
 ------------- | ------------- | -------------
-[**cloud_games_namespaces_analytics_get_analytics_matchmaker_live**](CloudGamesNamespacesAnalyticsApi.md#cloud_games_namespaces_analytics_get_analytics_matchmaker_live) | **GET** /games/{game_id}/namespaces/{namespace_id}/analytics/matchmaker/live | 
+[**cloud_games_namespaces_analytics_get_analytics_matchmaker_live**](CloudGamesNamespacesAnalyticsApi.md#cloud_games_namespaces_analytics_get_analytics_matchmaker_live) | **GET** /cloud/games/{game_id}/namespaces/{namespace_id}/analytics/matchmaker/live | 
 
 
 

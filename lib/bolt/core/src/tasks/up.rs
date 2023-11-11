@@ -1,11 +1,10 @@
+use std::{collections::HashMap, path::PathBuf, sync::Arc};
+
 use anyhow::*;
 use futures_util::stream::StreamExt;
-use std::{
-	collections::{HashMap, HashSet},
-	path::PathBuf,
-	sync::Arc,
-};
 use tokio::{
+	fs,
+	process::Command,
 	sync::{Mutex, Semaphore},
 	task::JoinSet,
 };
@@ -15,46 +14,26 @@ use crate::{
 		self,
 		service::{ComponentClass, RuntimeKind},
 	},
-	context::{BuildContext, BuildOptimization, ProjectContext, ServiceBuildPlan, ServiceContext},
+	context::{
+		BuildContext, BuildOptimization, ProjectContext, RunContext, ServiceBuildPlan,
+		ServiceContext,
+	},
 	dep::{
 		self, cargo,
-		nomad::{
-			gen::{ExecServiceContext, ExecServiceDriver},
-			NomadCtx,
-		},
+		k8s::gen::{ExecServiceContext, ExecServiceDriver},
 	},
-	tasks, utils,
+	tasks,
+	utils::{self},
 };
 
-#[derive(Debug, Clone)]
-pub struct UpOpts {
-	pub skip_build: bool,
-	pub skip_dependencies: bool,
-	pub force_build: bool,
-	pub skip_generate: bool,
-	pub auto_approve: bool,
-}
-
-impl Default for UpOpts {
-	fn default() -> Self {
-		Self {
-			skip_build: false,
-			skip_dependencies: false,
-			force_build: false,
-			skip_generate: false,
-			auto_approve: false,
-		}
-	}
-}
-
-pub async fn up_all(ctx: &ProjectContext, opts: UpOpts) -> Result<()> {
+pub async fn up_all(ctx: &ProjectContext, load_tests: bool) -> Result<()> {
 	let all_svc_names = ctx
 		.all_services()
 		.await
 		.iter()
 		.map(|svc| svc.name())
 		.collect::<Vec<_>>();
-	up_services(ctx, &all_svc_names, opts).await?;
+	up_services(ctx, &all_svc_names, load_tests).await?;
 
 	Ok(())
 }
@@ -62,41 +41,41 @@ pub async fn up_all(ctx: &ProjectContext, opts: UpOpts) -> Result<()> {
 pub async fn up_services<T: AsRef<str>>(
 	ctx: &ProjectContext,
 	svc_names: &[T],
-	opts: UpOpts,
+	load_tests: bool,
 ) -> Result<Vec<ServiceContext>> {
 	let event = utils::telemetry::build_event(ctx, "bolt_up").await?;
-	utils::telemetry::capture_event(ctx, event)?;
+	utils::telemetry::capture_event(ctx, event).await?;
 
 	// let run_context = RunContext::Service;
 	let build_context = BuildContext::Bin {
 		optimization: ctx.build_optimization(),
 	};
 
-	// Add essential services
-	let mut svc_names = svc_names
-		.iter()
-		.map(|x| x.as_ref().to_string())
-		.collect::<HashSet<_>>();
-	if !opts.skip_dependencies {
-		svc_names.extend(ctx.essential_services().await.into_iter().map(|x| x.name()));
-	}
-	let svc_names = svc_names.into_iter().collect::<Vec<_>>();
-
-	// Find all services and their dependencies
-	let all_svcs = if opts.skip_build {
-		Vec::new()
-	} else if opts.skip_dependencies {
-		ctx.services_with_patterns(&svc_names).await
-	} else {
-		ctx.recursive_dependencies_with_pattern(&svc_names).await
-	};
+	// Find all matching services
+	let all_svcs = ctx.services_with_patterns(&svc_names).await;
+	ensure!(!all_svcs.is_empty(), "input matched no services");
 
 	// Find all services that are executables
 	let all_exec_svcs = all_svcs
 		.iter()
 		.filter(|svc| svc.config().kind.component_class() == ComponentClass::Executable)
+		.filter(|svc| load_tests || !svc.config().service.load_test)
 		.cloned()
 		.collect::<Vec<_>>();
+
+	ensure!(
+		!all_exec_svcs.is_empty(),
+		"no services to bring up (to bring up load tests, use the `--load-tests` flag)"
+	);
+
+	// Telemetry
+	let mut event = utils::telemetry::build_event(ctx, "bolt_up").await?;
+	event.insert_prop(
+		"svc_names",
+		all_exec_svcs.iter().map(|x| x.name()).collect::<Vec<_>>(),
+	)?;
+	utils::telemetry::capture_event(ctx, event).await?;
+
 	eprintln!();
 	rivet_term::status::progress("Preparing", format!("{} services", all_exec_svcs.len()));
 
@@ -104,7 +83,7 @@ pub async fn up_services<T: AsRef<str>>(
 	tasks::gen::generate_project(ctx).await;
 
 	// Generate service config
-	if !opts.skip_generate {
+	{
 		eprintln!();
 		rivet_term::status::progress("Generating", "");
 		{
@@ -143,55 +122,70 @@ pub async fn up_services<T: AsRef<str>>(
 	let mut upload_join_set = JoinSet::<Result<()>>::new();
 	let upload_semaphore = Arc::new(Semaphore::new(4));
 
+	// Login to docker repo for uploading
+	match &ctx.ns().cluster.kind {
+		config::ns::ClusterKind::SingleNode { .. } => {}
+		config::ns::ClusterKind::Distributed { .. } => {
+			if let Some((repo, _)) = ctx.ns().docker.repository.split_once("/") {
+				let username = ctx
+					.read_secret(&["docker", "registry", "ghcr.io", "write", "username"])
+					.await?;
+				let password = ctx
+					.read_secret(&["docker", "registry", "ghcr.io", "write", "password"])
+					.await?;
+
+				let mut cmd = Command::new("sh");
+				cmd.arg("-c").arg(format!(
+					"echo {password} | docker login {repo} -u {username} --password-stdin"
+				));
+
+				let status = cmd.status().await?;
+				ensure!(status.success());
+			} else {
+				bail!("docker repo must end with a slash");
+			};
+		}
+	}
+
 	// Run batch commands for all given services
 	eprintln!();
 	rivet_term::status::progress("Building", "(batch)");
 	{
-		// Build all the Rust modules in parallel if enabled
-		if !ctx.config_local().generate.disable_cargo_workspace {
-			let rust_svcs = all_exec_svcs
-				.iter()
-				.filter(|svc_ctx| match svc_ctx.config().runtime {
-					RuntimeKind::Rust {} => true,
-					_ => false,
-				});
+		// Build all the Rust modules in parallel
+		let rust_svcs = all_exec_svcs
+			.iter()
+			.filter(|svc_ctx| match svc_ctx.config().runtime {
+				RuntimeKind::Rust {} => true,
+				_ => false,
+			});
 
-			// Collect rust services by their workspace root
-			let mut svcs_by_workspace = HashMap::new();
-			for svc in rust_svcs {
-				let workspace = svcs_by_workspace
-					.entry(svc.workspace_path())
-					.or_insert_with(Vec::new);
-				workspace.push(svc.cargo_name().expect("no cargo name"));
-			}
+		// Collect rust services by their workspace root
+		let mut svcs_by_workspace = HashMap::new();
+		for svc in rust_svcs {
+			let workspace = svcs_by_workspace
+				.entry(svc.workspace_path())
+				.or_insert_with(Vec::new);
+			workspace.push(svc.cargo_name().expect("no cargo name"));
+		}
 
-			if !svcs_by_workspace.is_empty() {
-				// Run build
-				cargo::cli::build(
-					ctx,
-					cargo::cli::BuildOpts {
-						build_calls: svcs_by_workspace
-							.iter()
-							.map(|(workspace_path, svc_names)| cargo::cli::BuildCall {
-								path: workspace_path.strip_prefix(ctx.path()).unwrap(),
-								bins: &svc_names,
-							})
-							.collect::<Vec<_>>(),
-						build_method: match &ctx.ns().cluster.kind {
-							config::ns::ClusterKind::SingleNode { .. } => {
-								cargo::cli::BuildMethod::Native
-							}
-							config::ns::ClusterKind::Distributed { .. } => {
-								cargo::cli::BuildMethod::Musl
-							}
-						},
-						release: ctx.build_optimization() == BuildOptimization::Release,
-						jobs: ctx.config_local().rust.num_jobs,
-					},
-				)
-				.await
-				.unwrap();
-			}
+		if !svcs_by_workspace.is_empty() {
+			// Run build
+			cargo::cli::build(
+				ctx,
+				cargo::cli::BuildOpts {
+					build_calls: svcs_by_workspace
+						.iter()
+						.map(|(workspace_path, svc_names)| cargo::cli::BuildCall {
+							path: workspace_path.strip_prefix(ctx.path()).unwrap(),
+							bins: &svc_names,
+						})
+						.collect::<Vec<_>>(),
+					release: ctx.build_optimization() == BuildOptimization::Release,
+					jobs: ctx.config_local().rust.num_jobs,
+				},
+			)
+			.await
+			.unwrap();
 		}
 	}
 
@@ -201,14 +195,11 @@ pub async fn up_services<T: AsRef<str>>(
 	let pb = utils::progress_bar(all_exec_svcs.len());
 	let all_exec_svcs_with_build_plan = futures_util::stream::iter(all_exec_svcs.clone())
 		.map(|svc| {
-			let opts = opts.clone();
+			let build_context = build_context.clone();
 			let pb = pb.clone();
 
 			async move {
-				let build_plan = svc
-					.build_plan(&build_context, opts.force_build)
-					.await
-					.unwrap();
+				let build_plan = svc.build_plan(&build_context).await.unwrap();
 				pb.inc(1);
 				(svc, build_plan)
 			}
@@ -245,40 +236,24 @@ pub async fn up_services<T: AsRef<str>>(
 						.unwrap();
 
 				// Build service
-				build_svc(svc_ctx, ctx.build_optimization()).await;
+				build_svc(svc_ctx, &build_context, ctx.build_optimization()).await;
 
 				// Upload build
-				upload_join_set.spawn(upload_svc_build(
-					svc_ctx.clone(),
-					build_context.clone(),
-					upload_semaphore.clone(),
-				));
+				upload_join_set.spawn(upload_svc_build(svc_ctx.clone(), upload_semaphore.clone()));
 			}
 
 			// Save exec ctx
 			exec_ctxs.push(ExecServiceContext {
 				svc_ctx: svc_ctx.clone().clone(),
-				build_context,
+				run_context: RunContext::Service {},
 				driver: match &build_plan {
-					ServiceBuildPlan::ExistingLocalBuild { exec_path }
-					| ServiceBuildPlan::BuildLocally { exec_path } => {
+					ServiceBuildPlan::BuildLocally { exec_path } => {
 						derive_local_build_driver(svc_ctx, exec_path.clone()).await
 					}
-					ServiceBuildPlan::ExistingUploadedBuild {
-						build_key: artifact_key,
-						exec_path,
+					ServiceBuildPlan::ExistingUploadedBuild { image_tag }
+					| ServiceBuildPlan::BuildAndUpload { image_tag } => {
+						derive_uploaded_svc_driver(svc_ctx, image_tag.clone(), false).await
 					}
-					| ServiceBuildPlan::BuildAndUpload {
-						build_key: artifact_key,
-						exec_path,
-					} => {
-						derive_uploaded_svc_driver(svc_ctx, artifact_key.clone(), exec_path.clone())
-							.await
-					}
-					ServiceBuildPlan::Docker { image_tag } => ExecServiceDriver::Docker {
-						image: image_tag.clone(),
-						force_pull: false,
-					},
 				},
 			});
 
@@ -305,37 +280,34 @@ pub async fn up_services<T: AsRef<str>>(
 	);
 	utils::join_set_progress(upload_join_set).await?;
 
-	// Generate Nomad Jobs
+	// Generate Kubernetes deployments
 	//
-	// We resolve the upstream services after applying Terraform since teh services we need to
+	// We resolve the upstream services after applying Terraform since the services we need to
 	// resolve won't exist yet.
-	eprintln!();
-	rivet_term::status::progress("Generating jobs", "");
-	let mut job_specs = Vec::new();
-	let leader_region_id = ctx.primary_region_or_local();
+	let mut specs = Vec::new();
 	{
+		eprintln!();
+		rivet_term::status::progress("Generating specs", "");
+
+		// Create directory for specs
+		fs::create_dir_all(ctx.gen_path().join("kubernetes")).await?;
+
 		let pb = utils::progress_bar(all_exec_svcs.len());
 		for exec_ctx in &exec_ctxs {
 			pb.set_message(exec_ctx.svc_ctx.name());
-			job_specs.push(dep::nomad::gen::gen_svc(&leader_region_id, &exec_ctx).await);
+
+			// Save specs
+			specs.extend(dep::k8s::gen::gen_svc(&exec_ctx).await);
+
 			pb.inc(1);
 		}
 		pb.finish();
 	}
 
-	// Apply jobs
+	// Apply specs
 	eprintln!();
-	rivet_term::status::progress("Submitting jobs", "");
-	let nomad_ctx = NomadCtx::remote(&ctx).await;
-	let dangling_jobs =
-		dep::nomad::api::list_dangling_jobs(&ctx, &nomad_ctx, &leader_region_id).await?;
-	if !dangling_jobs.is_empty() {
-		rivet_term::status::warn("Dangling jobs", format!("{} jobs", dangling_jobs.len()));
-		for job in dangling_jobs {
-			eprintln!("  * {job}");
-		}
-	}
-	dep::nomad::api::job_run_parallel(&ctx, &nomad_ctx, job_specs).await?;
+	rivet_term::status::progress("Applying", "");
+	dep::k8s::cli::apply_specs(ctx, specs).await?;
 
 	eprintln!();
 	rivet_term::status::success("Finished", "");
@@ -344,49 +316,20 @@ pub async fn up_services<T: AsRef<str>>(
 	Ok(all_svcs.iter().cloned().collect())
 }
 
-async fn upload_svc_build(
-	svc_ctx: ServiceContext,
-	build_context: BuildContext,
-	upload_semaphore: Arc<Semaphore>,
-) -> Result<()> {
+async fn upload_svc_build(svc_ctx: ServiceContext, upload_semaphore: Arc<Semaphore>) -> Result<()> {
 	let _permit = upload_semaphore.acquire().await?;
-	svc_ctx.upload_build(&build_context).await?;
+	svc_ctx.upload_build().await?;
 	Result::Ok(())
 }
 
-async fn build_svc(svc_ctx: &ServiceContext, optimization: BuildOptimization) {
+async fn build_svc(
+	svc_ctx: &ServiceContext,
+	_build_context: &BuildContext,
+	_optimization: BuildOptimization,
+) {
 	match &svc_ctx.config().runtime {
 		RuntimeKind::Rust {} => {
-			let project_ctx = svc_ctx.project().await;
-
-			// Build the service individually if workspace building is
-			// not enabled
-			if project_ctx.config_local().generate.disable_cargo_workspace {
-				cargo::cli::build(
-					&project_ctx,
-					cargo::cli::BuildOpts {
-						build_calls: vec![cargo::cli::BuildCall {
-							path: svc_ctx
-								.workspace_path()
-								.strip_prefix(project_ctx.path())
-								.unwrap(),
-							bins: &[svc_ctx.cargo_name().expect("no cargo name")],
-						}],
-						build_method: match &project_ctx.ns().cluster.kind {
-							config::ns::ClusterKind::SingleNode { .. } => {
-								cargo::cli::BuildMethod::Native
-							}
-							config::ns::ClusterKind::Distributed { .. } => {
-								cargo::cli::BuildMethod::Musl
-							}
-						},
-						release: optimization == BuildOptimization::Release,
-						jobs: project_ctx.config_local().rust.num_jobs,
-					},
-				)
-				.await
-				.unwrap();
-			}
+			// Do nothing
 		}
 		RuntimeKind::CRDB { .. }
 		| RuntimeKind::ClickHouse { .. }
@@ -423,14 +366,13 @@ async fn derive_local_build_driver(
 
 async fn derive_uploaded_svc_driver(
 	svc_ctx: &ServiceContext,
-	artifact_key: String,
-	exec_path: String,
+	image_tag: String,
+	force_pull: bool,
 ) -> ExecServiceDriver {
 	match &svc_ctx.config().runtime {
-		RuntimeKind::Rust {} => ExecServiceDriver::UploadedBinaryArtifact {
-			artifact_key,
-			exec_path,
-			args: Vec::new(),
+		RuntimeKind::Rust {} => ExecServiceDriver::Docker {
+			image_tag,
+			force_pull,
 		},
 		RuntimeKind::CRDB { .. }
 		| RuntimeKind::ClickHouse { .. }

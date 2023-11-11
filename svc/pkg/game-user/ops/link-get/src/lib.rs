@@ -42,7 +42,7 @@ impl From<GameUserLink> for game_user::link_get::response::GameUserLink {
 async fn handle(
 	ctx: OperationContext<game_user::link_get::Request>,
 ) -> GlobalResult<game_user::link_get::Response> {
-	let crdb = ctx.crdb("db-game-user").await?;
+	let crdb = ctx.crdb().await?;
 
 	let link_ids = ctx
 		.link_ids
@@ -50,7 +50,8 @@ async fn handle(
 		.map(common::Uuid::as_uuid)
 		.collect::<Vec<_>>();
 
-	let game_user_links = sqlx::query_as::<_, GameUserLink>(indoc!(
+	let game_user_links = sql_fetch_all!(
+		[ctx, GameUserLink]
 		"
 		SELECT
 			link_id,
@@ -62,12 +63,11 @@ async fn handle(
 			create_ts,
 			complete_ts,
 			cancelled_ts
-		FROM links
+		FROM db_game_user.links
 		WHERE link_id = ANY($1)
-		"
-	))
-	.bind(link_ids)
-	.fetch_all(&crdb)
+		",
+		link_ids,
+	)
 	.await?
 	.into_iter()
 	.map(Into::into)

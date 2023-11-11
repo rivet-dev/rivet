@@ -1,10 +1,10 @@
 # \CloudUploadsApi
 
-All URIs are relative to *http://localhost*
+All URIs are relative to *https://api.rivet.gg*
 
 Method | HTTP request | Description
 ------------- | ------------- | -------------
-[**cloud_uploads_complete_upload**](CloudUploadsApi.md#cloud_uploads_complete_upload) | **POST** /uploads/{upload_id}/complete | 
+[**cloud_uploads_complete_upload**](CloudUploadsApi.md#cloud_uploads_complete_upload) | **POST** /cloud/uploads/{upload_id}/complete | 
 
 
 

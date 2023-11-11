@@ -64,7 +64,7 @@ where
 	W: Worker,
 {
 	#[tracing::instrument(err, skip(shared_client, pools, cache, worker))]
-	pub async fn new(
+	pub fn new(
 		config: Config,
 		shared_client: chirp_client::SharedClientHandle,
 		pools: rivet_pools::Pools,
@@ -98,26 +98,23 @@ where
 	}
 
 	#[tracing::instrument]
-	pub async fn start(self: Arc<Self>) {
+	pub async fn start(self: Arc<Self>) -> Result<(), ManagerError> {
 		// Build the subscription
 		match &self.config.worker_kind {
 			WorkerKind::Rpc { group } => {
-				let subject =
-					chirp_client::endpoint::subject(&self.config.region, &self.config.service_name);
+				let subject = chirp_client::endpoint::subject(&self.config.service_name);
 
 				self.clone().rpc_receiver(subject, group.clone()).await;
 			}
 			WorkerKind::Consumer { topic, group } => {
-				// Create a dedicated connection for blocking Redis requests
+				// Create a dedicated connection to redis-chirp for blocking Redis requests
 				// that won't block other requests in the pool.
-				// TODO: Don't use unwraps here
-				let redis_chirp_conn = redis::Client::open(
-					std::env::var("REDIS_URL_REDIS_CHIRP").expect("REDIS_URL_REDIS_CHIRP"),
-				)
-				.expect("build redis client")
-				.get_tokio_connection_manager()
-				.await
-				.expect("build connection manager");
+				let url = std::env::var("REDIS_URL_PERSISTENT").expect("REDIS_URL_PERSISTENT");
+				let redis_chirp_conn = redis::cluster::ClusterClient::new(vec![url.as_str()])
+					.map_err(ManagerError::BuildRedis)?
+					.get_async_connection()
+					.await
+					.map_err(ManagerError::BuildRedis)?;
 
 				self.clone()
 					.worker_receiver(
@@ -128,6 +125,8 @@ where
 					.await;
 			}
 		}
+
+		Ok(())
 	}
 
 	#[tracing::instrument]
@@ -183,7 +182,7 @@ where
 	#[tracing::instrument(skip(redis_chirp_conn))]
 	async fn worker_receiver(
 		self: Arc<Self>,
-		mut redis_chirp_conn: RedisConn,
+		mut redis_chirp_conn: RedisPool,
 		topic: String,
 		group: String,
 	) -> CleanExit {
@@ -210,7 +209,7 @@ where
 					break 'setup;
 				}
 				Err(err) => {
-					tracing::error!(?err, "failed to create group and stream, retrying");
+					tracing::error!(?err, err2=%err, "failed to create group and stream, retrying");
 					tokio::time::sleep(CONN_ERROR_THROTTLE).await;
 					continue 'setup;
 				}
@@ -254,7 +253,7 @@ where
 	#[tracing::instrument(skip(self, redis_chirp_conn))]
 	async fn pull_redis_stream_msgs(
 		self: Arc<Self>,
-		redis_chirp_conn: &mut RedisConn,
+		redis_chirp_conn: &mut RedisPool,
 		topic_key: &str,
 		group: &str,
 		consumer: &str,
@@ -276,7 +275,7 @@ where
 					.arg(pending_retry_time.as_millis() as i64)
 					.arg("-")
 					.arg("+")
-					.arg(1usize)
+					.arg(16usize)
 					.query_async::<_, redis::streams::StreamPendingCountReply>(redis_chirp_conn)
 					.await
 				{
@@ -306,7 +305,7 @@ where
 					tracing::trace!("no pending messages");
 					return PullRedisStatus::ClaimedPending;
 				}
-				tracing::info!(?msg_ids, "claiming pending messages");
+				tracing::trace!(?msg_ids, "claiming pending messages");
 				let claimed_msgs = match redis_chirp_conn
 					.xclaim::<_, _, _, _, _, redis::streams::StreamClaimReply>(
 						topic_key,
@@ -323,7 +322,7 @@ where
 						return PullRedisStatus::ConnErr;
 					}
 				};
-				tracing::info!(pending_len = ?pending_msgs.ids.len(), claimed_len = ?claimed_msgs.ids.len(), "claimed pending messages");
+				tracing::trace!(pending_len = ?pending_msgs.ids.len(), claimed_len = ?claimed_msgs.ids.len(), "claimed pending messages");
 
 				// Find and delete any messages that are in the PEL but already
 				// deleted from the stream. These are messages that have already
@@ -381,7 +380,7 @@ where
 					.await
 				{
 					Ok(_) => {
-						tracing::info!("successfully deleted message no longer in stream");
+						tracing::trace!("successfully deleted message no longer in stream");
 					}
 					Err(err) => {
 						tracing::error!(
@@ -451,7 +450,7 @@ where
 			let read_options = redis::streams::StreamReadOptions::default()
 				.group(&group, &consumer)
 				.block(30_000)
-				.count(1);
+				.count(16);
 			let res = match redis_chirp_conn
 				.xread_options::<_, _, redis::streams::StreamReadReply>(keys, &[">"], &read_options)
 				.await
@@ -470,7 +469,7 @@ where
 				return PullRedisStatus::PulledMessages;
 			};
 
-			tracing::info!(len = key.ids.len(), "read stream messages");
+			tracing::trace!(len = key.ids.len(), "read stream messages");
 			'read_id: for id in &key.ids {
 				let msg_value = if let Some(x) = id.map.get("m") {
 					x
@@ -528,7 +527,7 @@ where
 			WorkerKind::Consumer { group, .. } => format!("{}--{}", group, W::NAME),
 		};
 
-		tracing::info!(
+		tracing::trace!(
 			?worker_name,
 			bytes = raw_msg_buf.len(),
 			?nats_message,
@@ -686,7 +685,6 @@ where
 					x
 				},
 				chirp_perf::PerfCtxInner::new(self.redis_cache.clone(), ts, req_id, ray_id),
-				None,
 			);
 			let conn = Connection::new(client, self.pools.clone(), self.cache.clone());
 
@@ -703,7 +701,6 @@ where
 
 			// Build request
 			Request {
-				config: self.config.clone(),
 				conn: conn.clone(),
 				nats_message,
 				redis_message_meta,
@@ -739,15 +736,14 @@ where
 		)
 	)]
 	async fn handle_req(self: Arc<Self>, req: Request<W::Request>) {
-		let client = req.chirp().clone();
 		let worker_name = req.op_ctx.name().to_string();
 
 		// Record metrics
 		metrics::CHIRP_REQUEST_PENDING
-			.with_label_values(&[req.op_ctx.name()])
+			.with_label_values(&[&worker_name])
 			.inc();
 		metrics::CHIRP_REQUEST_TOTAL
-			.with_label_values(&[req.op_ctx.name()])
+			.with_label_values(&[&worker_name])
 			.inc();
 
 		let start_instant = Instant::now();
@@ -797,11 +793,6 @@ where
 				.with_label_values(&[&worker_name, error_code_str.as_str()])
 				.observe(dt);
 		}
-
-		// HACK: Force submit performance metrics after delay in order to ensure
-		// all spans have ended appropriately
-		tokio::time::sleep(Duration::from_secs(5)).await;
-		client.perf().submit().await;
 	}
 
 	#[tracing::instrument(level = "trace", err, skip_all)]
@@ -848,7 +839,9 @@ where
 		Ok(summary)
 	}
 
-	/// Enables requests to be retried immediately if needed.
+	/// Enables requests to be retried immediately if the worker throws an error that needs to be
+	/// retried. This is helpful for situations with optimistic locking that need to be retried on
+	/// fail.
 	///
 	/// This is executed within a timeout, so the overall timeout is not restarted
 	/// when retrying the request.
@@ -857,42 +850,38 @@ where
 		self: Arc<Self>,
 		req: &Request<W::Request>,
 	) -> GlobalResult<W::Response> {
-		self.worker
-			.handle(req.op_ctx())
-			.instrument(tracing::info_span!("handle", name = %W::NAME))
-			.await
+		// Will retry 3 times. This will take a maximum of ~2 seconds.
+		let mut backoff = rivet_util::Backoff::new(5, Some(3), 250, 100);
+		loop {
+			let res = self
+				.worker
+				.handle(req.op_ctx())
+				.instrument(
+					tracing::info_span!("handle", name = %W::NAME, tick_index = backoff.tick_index()),
+				)
+				.await;
 
-		// // TODO: Add back
-		// // Will retry 4 times. This will take a maximum of 15 seconds.
-		// let mut backoff = rivet_util::Backoff::new(5, Some(4), 1_000, 1_000);
-		// loop {
-		// 	let res = self
-		// 		.worker
-		// 		.handle(req.op_ctx())
-		// 		.instrument(tracing::info_span!("handle", name = %W::NAME))
-		// 		.await;
+			// Attempt to retry the request with backoff
+			if matches!(
+				res,
+				Err(GlobalError::Internal {
+					retry_immediately: true,
+					..
+				})
+			) {
+				tracing::info!("ticking request retry backoff");
 
-		// 	// Attempt to retry the request with backoff
-		// 	if matches!(
-		// 		res,
-		// 		Err(GlobalError::Internal {
-		// 			retry_immediately: true,
-		// 			..
-		// 		})
-		// 	) {
-		// 		tracing::info!("ticking request retry backoff");
-
-		// 		if backoff.tick().await {
-		// 			tracing::warn!("retry request failed too many times");
-		// 			return res;
-		// 		} else {
-		// 			tracing::info!("retrying request");
-		// 		}
-		// 	} else {
-		// 		// Return result immediately
-		// 		return res;
-		// 	}
-		// }
+				if backoff.tick().await {
+					tracing::warn!("retry request failed too many times");
+					return res;
+				} else {
+					tracing::info!("retrying request");
+				}
+			} else {
+				// Return result immediately
+				return res;
+			}
+		}
 	}
 
 	#[tracing::instrument(level = "trace", skip_all)]
@@ -1033,27 +1022,27 @@ where
 	/// Acknowledges the Redis message from a consumer worker.
 	#[tracing::instrument]
 	async fn consumer_ack(self: Arc<Self>, msg_meta: RedisMessageMeta) {
-		let mut backoff = rivet_util::Backoff::default();
+		// let mut backoff = rivet_util::Backoff::default();
 		// loop {
 		// 	if backoff.tick().await {
 		// 		tracing::error!("acking stream message failed too many times, aborting");
 		// 		return;
 		// 	}
 
-			// Acknowledge the messages
-			let mut redis_chirp = self.redis_chirp.clone();
-			match redis_chirp
-				.xack::<_, _, _, ()>(&msg_meta.topic_key, &msg_meta.group, &[&msg_meta.id])
-				.await
-			{
-				Ok(_) => {
-					tracing::info!(?msg_meta, "acknowledged stream message");
-					// break;
-				}
-				Err(err) => {
-					tracing::error!(?err, "failed to ack message");
-				}
+		// Acknowledge the messages
+		let mut redis_chirp = self.redis_chirp.clone();
+		match redis_chirp
+			.xack::<_, _, _, ()>(&msg_meta.topic_key, &msg_meta.group, &[&msg_meta.id])
+			.await
+		{
+			Ok(_) => {
+				tracing::info!(?msg_meta, "acknowledged stream message");
+				// break;
 			}
+			Err(err) => {
+				tracing::error!(?err, "failed to ack message");
+			}
+		}
 		// }
 	}
 }

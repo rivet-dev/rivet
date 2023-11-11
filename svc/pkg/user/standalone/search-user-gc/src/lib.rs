@@ -20,23 +20,23 @@ pub async fn run_from_env(ts: i64) -> GlobalResult<()> {
 		(),
 		Vec::new(),
 	);
-	let crdb = ctx.crdb("db-user").await?;
 
 	let mut total_removed = 0;
 	let start = std::time::Instant::now();
 
 	// Filters out users who have been updated in the last 14 days
-	let mut query = sqlx::query_as::<_, (Uuid,)>(indoc!(
+	let crdb = ctx.crdb().await?;
+	let mut query = sql_fetch!(
+		[ctx, (Uuid,), &crdb]
 		"
 		SELECT user_id
-		FROM users AS OF SYSTEM TIME '-5s'
+		FROM db_user.users AS OF SYSTEM TIME '-5s'
 		WHERE
 			is_searchable = TRUE AND
 			update_ts < $1
-		"
-	))
-	.bind(ts - util::duration::days(14))
-	.fetch(&crdb);
+		",
+		ts - util::duration::days(14),
+	);
 
 	let mut batch_user_ids = Vec::with_capacity(1024);
 	while let Some(row) = query.next().await {
@@ -79,7 +79,7 @@ async fn process_batch(
 			.await?
 			.users
 			.iter()
-			.map(|user| Ok(internal_unwrap!(user.user_id).as_uuid()))
+			.map(|user| Ok(unwrap_ref!(user.user_id).as_uuid()))
 			.collect::<GlobalResult<HashSet<_>>>()
 		},
 		async {
@@ -90,7 +90,7 @@ async fn process_batch(
 			.follows
 			.iter()
 			.filter(|follows| follows.count != 0)
-			.map(|follows| Ok(internal_unwrap!(follows.user_id).as_uuid()))
+			.map(|follows| Ok(unwrap_ref!(follows.user_id).as_uuid()))
 			.collect::<GlobalResult<HashSet<_>>>()
 		},
 	)?;
@@ -104,15 +104,15 @@ async fn process_batch(
 		.cloned()
 		.collect::<Vec<_>>();
 
-	let res = sqlx::query(indoc!(
+	let res = sql_execute!(
+		[ctx]
 		"
-		UPDATE users
+		UPDATE db_user.users
 		SET is_searchable = FALSE
 		WHERE user_id = ANY($1)
-		"
-	))
-	.bind(deletions)
-	.execute(crdb)
+		",
+		deletions,
+	)
 	.await?;
 
 	Ok(res.rows_affected())

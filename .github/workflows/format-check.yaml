@@ -1,6 +1,6 @@
 name: format-check
 
-on: [push]
+on: push
 
 jobs:
   prettier:

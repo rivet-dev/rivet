@@ -16,7 +16,6 @@ impl Ctx {
 				.pretty()
 				.with_max_level(tracing::Level::INFO)
 				.with_target(false)
-				.without_time()
 				.init();
 		});
 
@@ -43,7 +42,7 @@ impl Ctx {
 		);
 
 		let http_client = rivet_chat::Config::builder()
-			.set_uri(util::env::svc_router_url("api-chat"))
+			.set_uri("http://traefik.traefik.svc.cluster.local:80/chat")
 			.set_bearer_token("TODO".to_string())
 			.build_client();
 

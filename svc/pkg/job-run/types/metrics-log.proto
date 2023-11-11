@@ -21,11 +21,12 @@ message Request {
 
 message Response {
 	message Metrics {
+		reserved 4;
+
 		// Nomad job ID
 		string job = 1;
 		repeated float cpu = 2;  // % CPU
 		repeated uint64 memory = 3;  // Bytes
-		repeated uint64 memory_max = 4;  // Bytes, this is the memory high watermark
 		uint64 allocated_memory = 5;  // Bytes
 	}
 

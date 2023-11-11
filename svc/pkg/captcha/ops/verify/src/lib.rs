@@ -6,11 +6,11 @@ use serde_json::json;
 async fn handle(
 	ctx: OperationContext<captcha::verify::Request>,
 ) -> GlobalResult<captcha::verify::Response> {
-	let crdb = ctx.crdb("db-captcha").await?;
+	let crdb = ctx.crdb().await?;
 
-	let captcha_config = internal_unwrap!(ctx.captcha_config);
-	let client_response = internal_unwrap!(ctx.client_response);
-	let client_response_kind = internal_unwrap!(client_response.kind);
+	let captcha_config = unwrap_ref!(ctx.captcha_config);
+	let client_response = unwrap_ref!(ctx.client_response);
+	let client_response_kind = unwrap_ref!(client_response.kind);
 
 	let topic_value = serde_json::to_value(&ctx.topic)?;
 	let topic_str = util_captcha::serialize_topic_str(&ctx.topic)?;
@@ -39,25 +39,27 @@ async fn handle(
 			.await?;
 
 			// Insert verification
-			sqlx::query(indoc!(
+			sql_execute!(
+				[ctx]
 				"
-				INSERT INTO captcha_verifications (
-					verification_id, topic, topic_str, remote_address, complete_ts, expire_ts, provider, success, user_id, namespace_id
+				INSERT INTO db_captcha.captcha_verifications (
+					verification_id, topic, topic_str, remote_address,
+					complete_ts, expire_ts, provider, success, user_id,
+					namespace_id
 				)
 				VALUES ($1, $2, $3, $4, $5, to_timestamp($6::float / 1000), $7, $8, $9, $10)
-				"
-			))
-				.bind(Uuid::new_v4())
-			.bind(&topic_value)
-			.bind(&topic_str)
-			.bind(ctx.remote_address.as_str())
-			.bind(ctx.ts())
-			.bind(ctx.ts() + captcha_config.verification_ttl)
-			.bind(backend::captcha::CaptchaProvider::Hcaptcha as i64)
-			.bind(res.success)
-			.bind(user_id)
-			.bind(namespace_id)
-			.execute(&crdb)
+				",
+				Uuid::new_v4(),
+				&topic_value,
+				&topic_str,
+				ctx.remote_address.as_str(),
+				ctx.ts(),
+				ctx.ts() + captcha_config.verification_ttl,
+				backend::captcha::CaptchaProvider::Hcaptcha as i64,
+				res.success,
+				user_id,
+				namespace_id,
+			)
 			.await?;
 
 			(res.success, "hcaptcha")
@@ -69,12 +71,13 @@ async fn handle(
 			},
 			backend::captcha::captcha_client_response::Kind::Turnstile(turnstile_client_res),
 		) => {
-			let origin_host = internal_unwrap!(ctx.origin_host, "no origin");
+			let origin_host = unwrap_ref!(ctx.origin_host, "no origin");
 
 			// Check for "rivet.game" host
-			let secret_key = if "rivet.game" == origin_host || origin_host.ends_with(".rivet.game")
-			{
-				Some(util::env::read_secret(&["turnstile", "rivet_game", "secret_key"]).await?)
+			let secret_key = if util::env::domain_cdn().map_or(false, |domain_cdn| {
+				domain_cdn == origin_host || origin_host.ends_with(&format!(".{domain_cdn}"))
+			}) {
+				Some(util::env::read_secret(&["turnstile", "cdn", "secret_key"]).await?)
 			}
 			// Check for host from captcha config
 			else {
@@ -84,7 +87,7 @@ async fn handle(
 					.then(|| domain.secret_key.clone())
 				})
 			};
-			let secret_key = unwrap_with_owned!(secret_key, CAPTCHA_CAPTCHA_ORIGIN_NOT_ALLOWED);
+			let secret_key = unwrap_with!(secret_key, CAPTCHA_CAPTCHA_ORIGIN_NOT_ALLOWED);
 
 			let res = op!([ctx] cf_turnstile_verify {
 				client_response: turnstile_client_res.client_response.clone(),
@@ -94,33 +97,33 @@ async fn handle(
 			.await?;
 
 			// Insert verification
-			sqlx::query(indoc!(
+			sql_execute!(
+				[ctx]
 				"
-				INSERT INTO captcha_verifications (
+				INSERT INTO db_captcha.captcha_verifications (
 					verification_id, topic, topic_str, remote_address, complete_ts, expire_ts, provider, success, user_id, namespace_id
 				)
 				VALUES ($1, $2, $3, $4, $5, to_timestamp($6::float / 1000), $7, $8, $9, $10)
-				"
-			))
-			.bind(Uuid::new_v4())
-			.bind(&topic_value)
-			.bind(&topic_str)
-			.bind(ctx.remote_address.as_str())
-			.bind(ctx.ts())
-			.bind(ctx.ts() + captcha_config.verification_ttl)
-			.bind(backend::captcha::CaptchaProvider::Turnstile as i64)
-			.bind(res.success)
-			.bind(user_id)
-			.bind(namespace_id)
-			.execute(&crdb)
+				",
+				Uuid::new_v4(),
+				&topic_value,
+				&topic_str,
+				ctx.remote_address.as_str(),
+				ctx.ts(),
+				ctx.ts() + captcha_config.verification_ttl,
+				backend::captcha::CaptchaProvider::Turnstile as i64,
+				res.success,
+				user_id,
+				namespace_id,
+			)
 			.await?;
 
 			(res.success, "turnstile")
 		}
-		_ => internal_panic!("invalid request"),
+		_ => bail!("invalid request"),
 	};
 
-	assert_with!(success, CAPTCHA_CAPTCHA_FAILED);
+	ensure_with!(success, CAPTCHA_CAPTCHA_FAILED);
 
 	msg!([ctx] analytics::msg::event_create() {
 		events: vec![

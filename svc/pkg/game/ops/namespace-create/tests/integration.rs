@@ -26,10 +26,10 @@ async fn empty(ctx: TestCtx) {
 	let namespace_id = res.namespace_id.unwrap().as_uuid();
 
 	let (sql_exists,) = sqlx::query_as::<_, (bool,)>(
-		"SELECT EXISTS (SELECT 1 FROM game_namespaces WHERE namespace_id = $1)",
+		"SELECT EXISTS (SELECT 1 FROM db_game.game_namespaces WHERE namespace_id = $1)",
 	)
 	.bind(namespace_id)
-	.fetch_one(&ctx.crdb("db-game").await.unwrap())
+	.fetch_one(&ctx.crdb().await.unwrap())
 	.await
 	.unwrap();
 	assert!(sql_exists, "namespace not created");

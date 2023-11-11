@@ -19,10 +19,10 @@ pub fn analytics_lobby_summary_from_lobby(
 	is_outdated: bool,
 ) -> GlobalResult<models::AnalyticsLobbySummary> {
 	Ok(models::AnalyticsLobbySummary {
-		lobby_id: internal_unwrap!(lobby.lobby_id).to_string(),
+		lobby_id: unwrap_ref!(lobby.lobby_id).to_string(),
 		lobby_group_name_id: lobby_group.name_id.clone(),
-		lobby_group_id: internal_unwrap!(lobby.lobby_group_id).to_string(),
-		region_id: internal_unwrap!(lobby.region_id).to_string(),
+		lobby_group_id: unwrap_ref!(lobby.lobby_group_id).to_string(),
+		region_id: unwrap_ref!(lobby.region_id).to_string(),
 		create_ts: util::timestamp::to_chrono(lobby.create_ts)?,
 		is_ready: lobby.ready_ts.is_some(),
 		is_idle: player_count.total_player_count == 0,
@@ -47,8 +47,8 @@ impl ApiTryFrom<mm::lobby_runtime_aggregate::response::RegionTierTime>
 		let uptime_in_seconds = util::div_up!(value.total_time, 1_000);
 
 		Ok(models::RegionTierMetrics {
-			namespace_id: internal_unwrap!(value.namespace_id).to_string(),
-			region_id: internal_unwrap!(value.region_id).to_string(),
+			namespace_id: unwrap_ref!(value.namespace_id).to_string(),
+			region_id: unwrap_ref!(value.region_id).to_string(),
 			tier_name_id: value.tier_name_id,
 			lobby_group_name_id: value.lobby_group_name_id,
 			uptime: uptime_in_seconds,
@@ -61,13 +61,11 @@ impl ApiTryFrom<backend::game::Game> for models::GameHandle {
 
 	fn try_from(value: backend::game::Game) -> GlobalResult<Self> {
 		Ok(models::GameHandle {
-			game_id: internal_unwrap!(value.game_id).to_string(),
+			game_id: unwrap_ref!(value.game_id).to_string(),
 			name_id: value.name_id.to_owned(),
 			display_name: value.display_name.to_owned(),
-			logo_url: util::route::game_logo(
-				&value),
-			banner_url: util::route::game_banner(
-				&value),
+			logo_url: util::route::game_logo(&value),
+			banner_url: util::route::game_banner(&value),
 		})
 	}
 }
@@ -109,11 +107,7 @@ impl ApiTryFrom<job_run::metrics_log::response::Metrics> for models::SvcMetrics 
 				.into_iter()
 				.map(|v| v.try_into())
 				.collect::<Result<Vec<_>, _>>()?,
-			memory_max: value
-				.memory_max
-				.into_iter()
-				.map(|v| v.try_into())
-				.collect::<Result<Vec<_>, _>>()?,
+			memory_max: Vec::new(),
 			allocated_memory: value.allocated_memory.try_into()?,
 		})
 	}
@@ -152,7 +146,7 @@ impl ApiTryFrom<new_models::UploadPrepareFile> for backend::upload::PrepareFile 
 	type Error = GlobalError;
 
 	fn try_from(value: new_models::UploadPrepareFile) -> GlobalResult<Self> {
-		internal_assert!(value.content_length >= 0);
+		ensure!(value.content_length >= 0);
 
 		Ok(backend::upload::PrepareFile {
 			path: value.path,
@@ -170,6 +164,8 @@ impl ApiTryFrom<backend::upload::PresignedUploadRequest> for new_models::UploadP
 		Ok(new_models::UploadPresignedRequest {
 			path: value.path,
 			url: value.url,
+			byte_offset: value.byte_offset as i64,
+			content_length: value.content_length as i64,
 		})
 	}
 }
@@ -178,7 +174,7 @@ impl ApiTryFrom<models::UploadPrepareFile> for backend::upload::PrepareFile {
 	type Error = GlobalError;
 
 	fn try_from(value: models::UploadPrepareFile) -> GlobalResult<Self> {
-		assert_with!(
+		ensure_with!(
 			value.content_length >= 0,
 			MATCHMAKER_INVALID_VERSION_CONFIG,
 			error = "`file.content_length` out of bounds"
@@ -189,17 +185,6 @@ impl ApiTryFrom<models::UploadPrepareFile> for backend::upload::PrepareFile {
 			mime: value.content_type,
 			content_length: value.content_length as u64,
 			..Default::default()
-		})
-	}
-}
-
-impl ApiTryFrom<backend::upload::PresignedUploadRequest> for models::UploadPresignedRequest {
-	type Error = GlobalError;
-
-	fn try_from(value: backend::upload::PresignedUploadRequest) -> GlobalResult<Self> {
-		Ok(models::UploadPresignedRequest {
-			path: value.path,
-			url: value.url,
 		})
 	}
 }
@@ -279,10 +264,10 @@ impl ApiTryFrom<backend::game::Namespace> for models::NamespaceSummary {
 
 	fn try_from(value: backend::game::Namespace) -> GlobalResult<Self> {
 		Ok(models::NamespaceSummary {
-			namespace_id: internal_unwrap!(value.namespace_id).to_string(),
+			namespace_id: unwrap_ref!(value.namespace_id).to_string(),
 			create_ts: util::timestamp::to_chrono(value.create_ts)?,
 			display_name: value.display_name,
-			version_id: internal_unwrap!(value.version_id).to_string(),
+			version_id: unwrap_ref!(value.version_id).to_string(),
 			name_id: value.name_id,
 		})
 	}
@@ -293,7 +278,7 @@ impl ApiTryFrom<backend::game::Version> for models::VersionSummary {
 
 	fn try_from(value: backend::game::Version) -> GlobalResult<Self> {
 		Ok(models::VersionSummary {
-			version_id: internal_unwrap!(value.version_id).to_string(),
+			version_id: unwrap_ref!(value.version_id).to_string(),
 			create_ts: util::timestamp::to_chrono(value.create_ts)?,
 			display_name: value.display_name,
 		})

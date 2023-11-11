@@ -15,7 +15,7 @@ Rivet needs a caching forward proxy for many internal components.
 ### Nice to haves
 
 -   Cache hierarchy for sharded hashes
-    -   Consul's [hash based routing](https://developer.hashicorp.com/consul/docs/connect/config-entries/service-resolver#hashpolicies) can be used if not supported natively
+    -   [Hash based routing](https://developer.hashicorp.com/consul/docs/connect/config-entries/service-resolver#hashpolicies) can be used if not supported natively
 
 ## Alternatives
 

@@ -18,9 +18,16 @@ pub async fn handle(
 
 define_router! {
 	routes: {
-		"traefik" / "config": {
-			GET: traefik::config(
-				query: traefik::TraefikConfigQuery,
+		"traefik" / "config" / "core": {
+			GET: traefik::core::config(
+				query: traefik::core::ConfigQuery,
+				internal_endpoint: true,
+				opt_auth: true,
+			),
+		},
+		"traefik" / "config" / "game-guard": {
+			GET: traefik::game_guard::config(
+				query: traefik::game_guard::ConfigQuery,
 				internal_endpoint: true,
 				opt_auth: true,
 			),

@@ -5,6 +5,7 @@ use api_helper::{
 	ctx::Ctx,
 };
 use proto::backend::{self, pkg::*};
+use rivet_api::models as new_models;
 use rivet_claims::ClaimsDecode;
 use rivet_cloud_server::models;
 use rivet_convert::{ApiInto, ApiTryFrom, ApiTryInto};
@@ -45,7 +46,7 @@ pub async fn list(
 				}
 			})
 		} else {
-			panic_with!(
+			bail_with!(
 				API_UNAUTHORIZED,
 				reason = "Cloud token cannot watch `/games`"
 			);
@@ -88,9 +89,6 @@ pub async fn create(
 		let create_game_res = op!([ctx] game_create {
 			name_id: body.name_id.clone(),
 			display_name: body.display_name.clone(),
-			url: format!("https://{}.{}", body.name_id, util::env::domain_cdn()),
-			tags: Vec::new(),
-			description: String::new(),
 			developer_team_id: Some(developer_group_id.into()),
 			creator_user_id: user_id.as_ref().map(|x| x.user_id.into()),
 		})
@@ -101,7 +99,7 @@ pub async fn create(
 		})
 		.await?;
 
-		internal_unwrap!(create_game_res.game_id).as_uuid()
+		unwrap_ref!(create_game_res.game_id).as_uuid()
 	};
 
 	// Publish default version
@@ -116,7 +114,7 @@ pub async fn create(
 		})
 		.await?;
 
-		internal_unwrap!(publish_res.version_id).as_uuid()
+		unwrap_ref!(publish_res.version_id).as_uuid()
 	};
 
 	// Create default namespaces
@@ -280,8 +278,8 @@ async fn gen_default_site(
 		files: prepare_files,
 	})
 	.await?;
-	let site_id = internal_unwrap!(create_res.site_id).as_uuid();
-	let upload_id = internal_unwrap!(create_res.upload_id).as_uuid();
+	let site_id = unwrap_ref!(create_res.site_id).as_uuid();
+	let upload_id = unwrap_ref!(create_res.upload_id).as_uuid();
 
 	// TODO: Parallelize (RIV-1113)
 	// Publish the files
@@ -332,7 +330,7 @@ async fn gen_default_build(
 		..Default::default()
 	})
 	.await?;
-	let build_id = internal_unwrap!(create_res.build_id).as_uuid();
+	let build_id = unwrap_ref!(create_res.build_id).as_uuid();
 
 	Ok(build_id)
 }
@@ -361,8 +359,7 @@ pub async fn get(
 	};
 	let update_ts = update_ts.unwrap_or_else(util::timestamp::now);
 
-	let summary =
-		internal_unwrap_owned!(fetch::game_summary_fetch_one(ctx.op_ctx(), game_id).await?);
+	let summary = unwrap!(fetch::game_summary_fetch_one(ctx.op_ctx(), game_id).await?);
 
 	let (ns_list_res, version_list_res) = tokio::try_join!(
 		op!([ctx] game_namespace_list {
@@ -372,8 +369,8 @@ pub async fn get(
 			game_ids: vec![game_id.into()],
 		}),
 	)?;
-	let ns_list = internal_unwrap_owned!(ns_list_res.games.first());
-	let version_list = internal_unwrap_owned!(version_list_res.games.first());
+	let ns_list = unwrap!(ns_list_res.games.first());
+	let version_list = unwrap!(version_list_res.games.first());
 
 	// Fetch cloud and game data for the associated namespaces
 	let (ns_get_res, cloud_ns_get_res, version_get_res, cloud_version_get_res) = tokio::try_join!(
@@ -472,25 +469,25 @@ pub async fn validate(
 pub async fn prepare_logo_upload(
 	ctx: Ctx<Auth>,
 	game_id: Uuid,
-	body: models::GameLogoUploadPrepareRequest,
-) -> GlobalResult<models::GameLogoUploadPrepareResponse> {
+	body: new_models::CloudGamesGameLogoUploadPrepareRequest,
+) -> GlobalResult<new_models::CloudGamesGameLogoUploadPrepareResponse> {
 	ctx.auth().check_game_write(ctx.op_ctx(), game_id).await?;
 
 	let user_id = ctx.auth().claims()?.as_user().ok().map(|x| x.user_id);
 
-	assert_with!(
+	ensure_with!(
 		body.content_length >= 0,
 		CLOUD_INVALID_CONFIG,
 		error = "`content_length` out of bounds"
 	);
-	assert_with!(body.content_length < MAX_LOGO_UPLOAD_SIZE, UPLOAD_TOO_LARGE);
+	ensure_with!(body.content_length < MAX_LOGO_UPLOAD_SIZE, UPLOAD_TOO_LARGE);
 
 	let ext = if body.path.ends_with(".png") {
 		"png"
 	} else if body.path.ends_with(".jpg") || body.path.ends_with(".jpeg") {
 		"jpeg"
 	} else {
-		internal_panic!("invalid file type (allowed: .png, .jpg)");
+		bail!("invalid file type (allowed: .png, .jpg)");
 	};
 
 	// Create the upload
@@ -509,12 +506,12 @@ pub async fn prepare_logo_upload(
 	})
 	.await?;
 
-	let upload_id = internal_unwrap!(upload_prepare_res.upload_id).as_uuid();
-	let presigned_request = internal_unwrap_owned!(upload_prepare_res.presigned_requests.first());
+	let upload_id = unwrap_ref!(upload_prepare_res.upload_id).as_uuid();
+	let presigned_request = unwrap!(upload_prepare_res.presigned_requests.first());
 
-	Ok(models::GameLogoUploadPrepareResponse {
-		upload_id: upload_id.to_string(),
-		presigned_request: presigned_request.clone().try_into()?,
+	Ok(new_models::CloudGamesGameLogoUploadPrepareResponse {
+		upload_id,
+		presigned_request: Box::new(presigned_request.clone().try_into()?),
 	})
 }
 
@@ -540,18 +537,18 @@ pub async fn complete_logo_upload(
 pub async fn prepare_banner_upload(
 	ctx: Ctx<Auth>,
 	game_id: Uuid,
-	body: models::GameBannerUploadPrepareRequest,
-) -> GlobalResult<models::GameBannerUploadPrepareResponse> {
+	body: new_models::CloudGamesGameBannerUploadPrepareRequest,
+) -> GlobalResult<new_models::CloudGamesGameBannerUploadPrepareResponse> {
 	ctx.auth().check_game_write(ctx.op_ctx(), game_id).await?;
 
 	let user_id = ctx.auth().claims()?.as_user().ok().map(|x| x.user_id);
 
-	assert_with!(
+	ensure_with!(
 		body.content_length >= 0,
 		CLOUD_INVALID_CONFIG,
 		error = "`content_length` out of bounds"
 	);
-	assert_with!(
+	ensure_with!(
 		body.content_length < MAX_BANNER_UPLOAD_SIZE,
 		UPLOAD_TOO_LARGE
 	);
@@ -561,7 +558,7 @@ pub async fn prepare_banner_upload(
 	} else if body.path.ends_with(".jpg") || body.path.ends_with(".jpeg") {
 		"jpeg"
 	} else {
-		internal_panic!("invalid file type (allowed: .png, .jpg)");
+		bail!("invalid file type (allowed: .png, .jpg)");
 	};
 
 	// Create the upload
@@ -580,12 +577,12 @@ pub async fn prepare_banner_upload(
 	})
 	.await?;
 
-	let upload_id = internal_unwrap!(upload_prepare_res.upload_id).as_uuid();
-	let presigned_request = internal_unwrap_owned!(upload_prepare_res.presigned_requests.first());
+	let upload_id = unwrap_ref!(upload_prepare_res.upload_id).as_uuid();
+	let presigned_request = unwrap!(upload_prepare_res.presigned_requests.first());
 
-	Ok(models::GameBannerUploadPrepareResponse {
-		upload_id: upload_id.to_string(),
-		presigned_request: presigned_request.clone().try_into()?,
+	Ok(new_models::CloudGamesGameBannerUploadPrepareResponse {
+		upload_id,
+		presigned_request: Box::new(presigned_request.clone().try_into()?),
 	})
 }
 

@@ -1,13 +1,42 @@
+use std::{collections::HashMap, fmt, time::Duration};
+
 use anyhow::*;
 use bolt_config::service::RuntimeKind;
 use duct::cmd;
-use std::time::Duration;
-use tokio::task::block_in_place;
+use futures_util::{StreamExt, TryStreamExt};
+use indoc::formatdoc;
+use serde_json::json;
+use tokio::{fs, io::AsyncWriteExt, task::block_in_place};
 
+use super::db;
 use crate::{
 	context::{ProjectContext, ServiceContext},
-	utils::{self, db_conn::DatabaseConnection},
+	utils::{self, db_conn::DatabaseConnections},
 };
+
+const MIGRATE_IMAGE: &str = "ghcr.io/rivet-gg/golang-migrate:ea4c84e";
+
+enum ClickhouseRole {
+	Admin,
+	Write,
+	Readonly,
+}
+
+impl fmt::Display for ClickhouseRole {
+	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+		match self {
+			ClickhouseRole::Admin => write!(f, "admin"),
+			ClickhouseRole::Write => write!(f, "write"),
+			ClickhouseRole::Readonly => write!(f, "readonly"),
+		}
+	}
+}
+
+struct MigrateCmd {
+	service: ServiceContext,
+	database_url: String,
+	cmd: String,
+}
 
 pub async fn create(
 	_ctx: &ProjectContext,
@@ -244,148 +273,339 @@ pub async fn up_all(ctx: &ProjectContext) -> Result<()> {
 }
 
 pub async fn up(ctx: &ProjectContext, services: &[ServiceContext]) -> Result<()> {
-	let conn = DatabaseConnection::create(ctx, services).await?;
+	let conn = DatabaseConnections::create(ctx, services).await?;
+	let mut crdb_queries = Vec::new();
+	let mut clickhouse_queries = Vec::new();
 
 	// Run migrations
 	for svc in services {
-		let database_url = conn.migrate_db_url(svc).await?;
-
-		eprintln!();
-
 		match &svc.config().runtime {
 			RuntimeKind::CRDB { .. } => {
 				let db_name = svc.crdb_db_name();
-				rivet_term::status::progress("Migrating Cockroach", &db_name);
+				let query = format!("CREATE DATABASE IF NOT EXISTS \"{db_name}\";");
 
-				let host = conn.cockroach_host.as_ref().unwrap();
-				let (hostname, port) = host.split_once(":").unwrap();
-
-				rivet_term::status::progress("Creating database", &db_name);
-				block_in_place(|| {
-					cmd!(
-						"psql",
-						"-h",
-						hostname,
-						"-p",
-						port,
-						"-U",
-						"root",
-						"postgres",
-						"-c",
-						format!("CREATE DATABASE IF NOT EXISTS \"{db_name}\";"),
-					)
-					// See https://github.com/cockroachdb/cockroach/issues/37129#issuecomment-600115995
-					.env("PGCLIENTENCODING", "utf-8")
-					.run()
-				})?;
+				crdb_queries.push(db::ShellQuery {
+					svc: svc.clone(),
+					query: Some(query),
+				});
 			}
 			RuntimeKind::ClickHouse { .. } => {
 				let db_name = svc.clickhouse_db_name();
-				rivet_term::status::progress("Migrating ClickHouse", &db_name);
 
-				let clickhouse_user = "bolt";
-				let clickhouse_password = ctx
-					.read_secret(&["clickhouse", "users", "bolt", "password"])
-					.await?;
-				let host = conn.clickhouse_host.as_ref().unwrap();
-				let (hostname, port) = host.split_once(":").unwrap();
+				let query = formatdoc!(
+					"
+					CREATE ROLE IF NOT EXISTS admin;
+					GRANT CREATE DATABASE ON *.* TO admin;
+					GRANT
+						CREATE TABLE, DROP TABLE, INSERT, SELECT
+					ON {db_name}.* TO admin;
 
-				rivet_term::status::progress("Creating database", &db_name);
-				block_in_place(|| {
-					cmd!(
-						"clickhouse",
-						"client",
-						"--host",
-						hostname,
-						"--port",
-						port,
-						"--user",
-						clickhouse_user,
-						"--password",
-						clickhouse_password,
-						"--query",
-						format!("CREATE DATABASE IF NOT EXISTS \"{db_name}\";")
-					)
-					.run()
-				})?;
+					CREATE ROLE IF NOT EXISTS write;
+					GRANT
+						INSERT, SELECT
+					ON {db_name}.* TO write;
+
+					CREATE ROLE IF NOT EXISTS readonly;
+					GRANT
+						SELECT
+					ON {db_name}.* TO readonly;
+					"
+				);
+				clickhouse_queries.push(db::ShellQuery {
+					svc: svc.clone(),
+					query: Some(query),
+				});
+
+				for (username, role) in [
+					("bolt", ClickhouseRole::Admin),
+					("chirp", ClickhouseRole::Write),
+					("grafana", ClickhouseRole::Readonly),
+				] {
+					let password = ctx
+						.read_secret(&["clickhouse", "users", username, "password"])
+						.await?;
+
+					let query = formatdoc!(
+						"
+						CREATE USER
+						IF NOT EXISTS {username}
+						IDENTIFIED WITH sha256_password BY '{password}';
+						GRANT {role} TO {username};
+						"
+					);
+					clickhouse_queries.push(db::ShellQuery {
+						svc: svc.clone(),
+						query: Some(query),
+					});
+				}
+
+				let query = format!("CREATE DATABASE IF NOT EXISTS \"{db_name}\";");
+				clickhouse_queries.push(db::ShellQuery {
+					svc: svc.clone(),
+					query: Some(query),
+				});
 			}
 			x @ _ => bail!("cannot migrate this type of service: {x:?}"),
 		}
-
-		rivet_term::status::progress("Running migrations", "");
-		block_in_place(|| {
-			cmd!(
-				"migrate",
-				"-database",
-				database_url,
-				"-path",
-				svc.migrations_path(),
-				"up",
-			)
-			.run()
-		})?;
-
-		rivet_term::status::success("Migrated", "");
 	}
+
+	// Run pre-migration queries in parallel
+	rivet_term::status::progress("Running pre-migrations", "");
+	tokio::try_join!(
+		async {
+			if !crdb_queries.is_empty() {
+				db::crdb_shell(db::ShellContext {
+					ctx,
+					conn: &conn,
+					queries: &crdb_queries,
+					log_type: db::LogType::Migration,
+				})
+				.await?;
+			}
+			Ok(())
+		},
+		async {
+			if !clickhouse_queries.is_empty() {
+				db::clickhouse_shell(
+					db::ShellContext {
+						ctx,
+						conn: &conn,
+						queries: &clickhouse_queries,
+						log_type: db::LogType::Migration,
+					},
+					true,
+				)
+				.await?;
+			}
+
+			Ok(())
+		}
+	)?;
+
+	eprintln!();
+	rivet_term::status::progress("Running migrations", "");
+	let migrations = futures_util::stream::iter(services.iter())
+		.map(|svc| {
+			let conn = conn.clone();
+
+			async move {
+				let database_url = conn.migrate_db_url(svc).await?;
+
+				Ok(MigrateCmd {
+					service: svc.clone(),
+					database_url,
+					cmd: "up".to_string(),
+				})
+			}
+		})
+		.buffer_unordered(8)
+		.try_collect::<Vec<_>>()
+		.await?;
+	migration(ctx, &migrations).await?;
+
+	rivet_term::status::success("Migrated", "");
 
 	Ok(())
 }
 
 pub async fn down(ctx: &ProjectContext, service: &ServiceContext, num: usize) -> Result<()> {
-	let conn = DatabaseConnection::create(ctx, &[service.clone()]).await?;
+	let conn = DatabaseConnections::create(ctx, &[service.clone()]).await?;
 	let database_url = conn.migrate_db_url(service).await?;
 
-	block_in_place(|| {
-		cmd!(
-			"migrate",
-			"-database",
+	migration(
+		ctx,
+		&[MigrateCmd {
+			service: service.clone(),
 			database_url,
-			"-path",
-			service.migrations_path(),
-			"down",
-			num.to_string(),
-		)
-		.run()
-	})?;
-
-	Ok(())
+			cmd: format!("down {}", num.to_string().as_str()),
+		}],
+	)
+	.await
 }
 
 pub async fn force(ctx: &ProjectContext, service: &ServiceContext, num: usize) -> Result<()> {
-	let conn = DatabaseConnection::create(ctx, &[service.clone()]).await?;
+	let conn = DatabaseConnections::create(ctx, &[service.clone()]).await?;
 	let database_url = conn.migrate_db_url(service).await?;
+
+	migration(
+		ctx,
+		&[MigrateCmd {
+			service: service.clone(),
+			database_url,
+			cmd: format!("force {}", num.to_string().as_str()),
+		}],
+	)
+	.await
+}
+
+pub async fn drop(ctx: &ProjectContext, service: &ServiceContext) -> Result<()> {
+	let conn = DatabaseConnections::create(ctx, &[service.clone()]).await?;
+	let database_url = conn.migrate_db_url(service).await?;
+
+	migration(
+		ctx,
+		&[MigrateCmd {
+			service: service.clone(),
+			database_url,
+			cmd: "drop -f".to_string(),
+		}],
+	)
+	.await
+}
+
+async fn migration(ctx: &ProjectContext, migration_cmds: &[MigrateCmd]) -> Result<()> {
+	// Combine all commands into one
+	let migration_cmd = migration_cmds
+		.iter()
+		.map(|cmd| {
+			let name = cmd.service.name();
+
+			format!(
+				"echo Migrating {name} && migrate -database \"{}\" -path /local/migrations/{name} {}",
+				cmd.database_url, cmd.cmd
+			)
+		})
+		.collect::<Vec<_>>()
+		.join(" && ");
+	let mut mounts = vec![json!({
+		"name": "crdb-ca",
+		"mountPath": "/local/crdb-ca.crt",
+		"subPath": "crdb-ca.crt"
+	})];
+	let mut volumes = vec![json!({
+		"name": "crdb-ca",
+		"configMap": {
+			"name": "crdb-ca",
+			"defaultMode": 420,
+			"items": [
+				{
+					"key": "ca.crt",
+					"path": "crdb-ca.crt"
+				}
+			]
+		}
+	})];
+
+	// Upload all migration files as config maps
+	futures_util::stream::iter(
+		migration_cmds
+			.iter()
+			.map(|cmd| upload_migrations(ctx, &cmd.service)),
+	)
+	.buffer_unordered(8)
+	.try_collect::<Vec<_>>()
+	.await?;
+
+	// Add volumes
+	for cmd in migration_cmds {
+		let svc = &cmd.service;
+		let label = format!("{}-migrations", svc.name());
+
+		mounts.push(json!({
+			"name": label,
+			"mountPath": format!("/local/migrations/{}", svc.name()),
+			"readOnly": true
+		}));
+		volumes.push(json!({
+			"name": label,
+			"configMap": {
+				"name": label,
+				"defaultMode": 420
+			}
+		}));
+	}
+
+	let overrides = json!({
+		"apiVersion": "v1",
+		"metadata": {
+			"namespace": "bolt",
+		},
+		"spec": {
+			"containers": [
+				{
+					"name": "migrate",
+					"image": MIGRATE_IMAGE,
+					"command": ["sh", "-c", migration_cmd],
+					// // See https://github.com/golang-migrate/migrate/issues/494
+					// "env": [{
+					// 	"name": "TZ",
+					// 	"value": "UTC"
+					// }],
+					"volumeMounts": mounts
+				}
+			],
+			"volumes": volumes
+		}
+	});
 
 	block_in_place(|| {
 		cmd!(
-			"migrate",
-			"-database",
-			database_url,
-			"-path",
-			service.migrations_path(),
-			"force",
-			num.to_string(),
+			"kubectl",
+			"run",
+			"-itq",
+			"--rm",
+			"--restart=Never",
+			format!("--image={MIGRATE_IMAGE}"),
+			"--namespace",
+			"bolt",
+			format!("--overrides={overrides}"),
+			db::shell_name("migrate"),
 		)
+		.env("KUBECONFIG", ctx.gen_kubeconfig_path())
 		.run()
 	})?;
 
 	Ok(())
 }
 
-pub async fn drop(ctx: &ProjectContext, service: &ServiceContext) -> Result<()> {
-	let conn = DatabaseConnection::create(ctx, &[service.clone()]).await?;
-	let database_url = conn.migrate_db_url(service).await?;
+async fn upload_migrations(ctx: &ProjectContext, svc: &ServiceContext) -> Result<()> {
+	let mut files = HashMap::new();
 
-	block_in_place(|| {
-		cmd!(
-			"migrate",
-			"-database",
-			database_url,
-			"-path",
-			service.migrations_path(),
-			"drop",
-		)
-		.run()
-	})?;
+	// Read all files in migrations directory
+	let mut dir = fs::read_dir(svc.migrations_path()).await?;
+	while let Some(entry) = dir.next_entry().await? {
+		let meta = entry.metadata().await?;
+		if !meta.is_file() {
+			bail!("subfolder not allowed in migrations folder");
+		}
+
+		let file_name = entry
+			.path()
+			.file_name()
+			.context("path.file_name")?
+			.to_str()
+			.context("as_str")?
+			.to_string();
+		let content = fs::read_to_string(entry.path()).await?;
+
+		files.insert(file_name, content);
+	}
+
+	// Create config map for all files
+	let spec = serde_json::to_vec(&json!({
+		"kind": "ConfigMap",
+		"apiVersion": "v1",
+		"metadata": {
+			"name": format!("{}-migrations", svc.name()),
+			"namespace": "bolt"
+		},
+		"data": files
+	}))?;
+
+	let mut cmd = tokio::process::Command::new("kubectl");
+	cmd.args(&["apply", "-f", "-"]);
+	cmd.env("KUBECONFIG", ctx.gen_kubeconfig_path());
+	cmd.stdin(std::process::Stdio::piped());
+	cmd.stdout(std::process::Stdio::null());
+	let mut child = cmd.spawn()?;
+
+	{
+		let mut stdin = child.stdin.take().context("missing stdin")?;
+		stdin.write_all(&spec).await?;
+	}
+
+	let status = child.wait().await?;
+	ensure!(status.success(), "kubectl apply failed");
 
 	Ok(())
 }

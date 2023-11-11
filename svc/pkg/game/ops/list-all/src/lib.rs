@@ -5,13 +5,13 @@ use rivet_operation::prelude::*;
 async fn handle(
 	ctx: OperationContext<game::list_all::Request>,
 ) -> GlobalResult<game::list_all::Response> {
-	let game_ids = sqlx::query_as::<_, (Uuid,)>(indoc!(
+	let game_ids = sql_fetch_all!(
+		[ctx, (Uuid,)]
 		"
 		SELECT game_id
-		FROM games
-		"
-	))
-	.fetch_all(&ctx.crdb("db-game").await?)
+		FROM db_game.games
+		",
+	)
 	.await?
 	.into_iter()
 	.map(|(game_id,)| common::Uuid::from(game_id))

@@ -101,9 +101,9 @@ async fn handle(
 	// 4. Map to Protobuf.
 
 	let mut redis = ctx.redis_cache().await?;
-	let crdb = ctx.crdb("db-chat").await?;
+	let crdb = ctx.crdb().await?;
 
-	let user_id = internal_unwrap!(ctx.user_id).as_uuid();
+	let user_id = unwrap_ref!(ctx.user_id).as_uuid();
 	let after_ts = ctx.after_ts;
 
 	// Get rows from Redis cache
@@ -128,7 +128,7 @@ async fn handle(
 		.map(|x| x.thread_id)
 		.collect::<Vec<_>>();
 	let missing_tails =
-		fetch_missing_tails(&crdb, &mut redis, user_id, &threads_without_tail).await?;
+		fetch_missing_tails(&ctx, &mut redis, user_id, &threads_without_tail).await?;
 
 	// Fill in tail messages with those fetched from Cockroach
 	for (row, msg_proto) in missing_tails {
@@ -156,7 +156,7 @@ async fn handle(
 		// Convert to proto
 		.map(|(thread_id, tail_message)| {
 			let thread_id = Into::<common::Uuid>::into(thread_id);
-			let thread = internal_unwrap_owned!(threads_res
+			let thread = unwrap!(threads_res
 				.threads
 				.iter()
 				.find(|t| t.thread_id.as_ref() == Some(&thread_id)));
@@ -220,7 +220,7 @@ async fn fetch_recent_threads(
 			.iter()
 			.map(|thread| {
 				Ok(ThreadWithTail {
-					thread_id: internal_unwrap!(thread.thread_id).as_uuid(),
+					thread_id: unwrap_ref!(thread.thread_id).as_uuid(),
 					tail_message: None,
 				})
 			})
@@ -239,7 +239,7 @@ struct TailMessageRow {
 }
 
 async fn fetch_missing_tails(
-	crdb: &CrdbPool,
+	ctx: &OperationContext<chat_thread::recent_for_user::Request>,
 	redis: &mut RedisPool,
 	user_id: Uuid,
 	threads_without_tail: &[Uuid],
@@ -248,22 +248,22 @@ async fn fetch_missing_tails(
 		return Ok(Vec::new());
 	}
 
-	let thread_with_tails = sqlx::query_as::<_, TailMessageRow>(indoc!(
+	let thread_with_tails = sql_fetch_all!(
+		[ctx, TailMessageRow]
 		"
 		SELECT messages.*
-		FROM threads
+		FROM db_chat.threads
 		LEFT JOIN LATERAL (
 			SELECT messages.thread_id, message_id, send_ts, body
-			FROM messages
+			FROM db_chat.messages
 			WHERE messages.thread_id = threads.thread_id
 			ORDER BY send_ts DESC, message_id DESC
 			LIMIT 1
 		) AS messages ON true
 		WHERE threads.thread_id = ANY($1)
-		"
-	))
-	.bind(threads_without_tail)
-	.fetch_all(crdb)
+		",
+		threads_without_tail,
+	)
 	.await?
 	.into_iter()
 	.map(|row| {

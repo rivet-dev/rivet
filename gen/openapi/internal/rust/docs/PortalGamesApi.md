@@ -1,10 +1,10 @@
 # \PortalGamesApi
 
-All URIs are relative to *http://localhost*
+All URIs are relative to *https://api.rivet.gg*
 
 Method | HTTP request | Description
 ------------- | ------------- | -------------
-[**portal_games_get_game_profile**](PortalGamesApi.md#portal_games_get_game_profile) | **GET** /games/{game_name_id}/profile | 
+[**portal_games_get_game_profile**](PortalGamesApi.md#portal_games_get_game_profile) | **GET** /portal/games/{game_name_id}/profile | 
 
 
 

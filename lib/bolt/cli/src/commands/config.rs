@@ -1,5 +1,8 @@
 use anyhow::*;
-use bolt_core::{context, tasks};
+use bolt_core::{
+	context::{self, RunContext},
+	tasks,
+};
 use clap::Parser;
 
 #[derive(Parser)]
@@ -26,7 +29,10 @@ pub enum SubCommand {
 		svc_name: String,
 		#[clap(long, short = 'r')]
 		recursive: bool,
+		#[clap(long)]
+		test: bool,
 	},
+	Show,
 }
 
 impl SubCommand {
@@ -43,7 +49,16 @@ impl SubCommand {
 			Self::ServiceDependencies {
 				svc_name,
 				recursive,
+				test,
 			} => {
+				let run_context = if *test {
+					RunContext::Test {
+						test_id: String::new(),
+					}
+				} else {
+					RunContext::Service {}
+				};
+
 				// Build project
 				let ctx = bolt_core::context::ProjectContextData::new(
 					std::env::var("BOLT_NAMESPACE").ok(),
@@ -52,16 +67,24 @@ impl SubCommand {
 
 				// Read deps
 				let deps = if *recursive {
-					ctx.recursive_dependencies(&[&svc_name]).await
+					ctx.recursive_dependencies(&[&svc_name], &run_context).await
 				} else {
 					let svc = ctx.service_with_name(svc_name).await;
-					svc.dependencies().await
+					svc.dependencies(&run_context).await
 				};
 
 				// Print deps
 				for dep in deps {
 					println!("{}", dep.name());
 				}
+			}
+			Self::Show => {
+				let ctx = bolt_core::context::ProjectContextData::new(
+					std::env::var("BOLT_NAMESPACE").ok(),
+				)
+				.await;
+
+				println!("{:#?}", ctx.ns());
 			}
 		}
 

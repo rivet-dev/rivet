@@ -1,4 +1,4 @@
-use proto::backend::pkg::*;
+use proto::backend::{self, pkg::*};
 use rivet_operation::prelude::*;
 
 #[derive(sqlx::FromRow)]
@@ -9,6 +9,8 @@ struct BuildRow {
 	display_name: String,
 	image_tag: String,
 	create_ts: i64,
+	kind: i64,
+	compression: i64,
 }
 
 #[operation(name = "build-get")]
@@ -19,24 +21,26 @@ async fn handle(ctx: OperationContext<build::get::Request>) -> GlobalResult<buil
 		.map(common::Uuid::as_uuid)
 		.collect::<Vec<_>>();
 
-	let builds = sqlx::query_as::<_, BuildRow>(indoc!(
+	let builds = sql_fetch_all!(
+		[ctx, BuildRow]
 		"
-		SELECT build_id, game_id, upload_id, display_name, image_tag, create_ts
-		FROM builds
+		SELECT build_id, game_id, upload_id, display_name, image_tag, create_ts, kind, compression
+		FROM db_build.builds
 		WHERE build_id = ANY($1)
-		"
-	))
-	.bind(build_ids)
-	.fetch_all(&ctx.crdb("db-build").await?)
+		",
+		build_ids,
+	)
 	.await?
 	.into_iter()
-	.map(|build| build::get::response::Build {
+	.map(|build| backend::build::Build {
 		build_id: Some(build.build_id.into()),
 		game_id: Some(build.game_id.into()),
 		upload_id: Some(build.upload_id.into()),
 		display_name: build.display_name.clone(),
 		image_tag: build.image_tag.clone(),
 		create_ts: build.create_ts,
+		kind: build.kind as i32,
+		compression: build.compression as i32,
 	})
 	.collect::<Vec<_>>();
 

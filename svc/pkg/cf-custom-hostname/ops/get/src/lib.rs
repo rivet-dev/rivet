@@ -8,7 +8,7 @@ struct CustomHostname {
 	hostname: String,
 	challenge: Uuid,
 	create_ts: i64,
-	status: i32,
+	status: i64,
 	subscription_id: Uuid,
 }
 
@@ -22,7 +22,8 @@ async fn handle(
 		.map(common::Uuid::as_uuid)
 		.collect::<Vec<_>>();
 
-	let custom_hostnames = sqlx::query_as::<_, CustomHostname>(indoc!(
+	let custom_hostnames = sql_fetch_all!(
+		[ctx, CustomHostname]
 		"
 		SELECT
 			identifier,
@@ -32,12 +33,11 @@ async fn handle(
 			create_ts,
 			status,
 			subscription_id
-		FROM custom_hostnames
+		FROM db_cf_custom_hostname.custom_hostnames
 		WHERE identifier = ANY($1)
-		"
-	))
-	.bind(identifiers)
-	.fetch_all(&ctx.crdb("db-cf-custom-hostname").await?)
+		",
+		identifiers,
+	)
 	.await?;
 
 	Ok(cf_custom_hostname::get::Response {
@@ -49,7 +49,7 @@ async fn handle(
 				hostname: ch.hostname,
 				challenge: Some(ch.challenge.into()),
 				create_ts: ch.create_ts,
-				status: ch.status,
+				status: ch.status as i32,
 				subscription_id: Some(ch.subscription_id.into()),
 			})
 			.collect::<Vec<_>>(),

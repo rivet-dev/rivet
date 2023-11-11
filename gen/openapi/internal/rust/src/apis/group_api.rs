@@ -243,7 +243,7 @@ pub async fn group_ban_identity(configuration: &configuration::Configuration, gr
 
     let local_var_client = &local_var_configuration.client;
 
-    let local_var_uri_str = format!("{}/groups/{group_id}/bans/{identity_id}", local_var_configuration.base_path, group_id=crate::apis::urlencode(group_id), identity_id=crate::apis::urlencode(identity_id));
+    let local_var_uri_str = format!("{}/group/groups/{group_id}/bans/{identity_id}", local_var_configuration.base_path, group_id=crate::apis::urlencode(group_id), identity_id=crate::apis::urlencode(identity_id));
     let mut local_var_req_builder = local_var_client.request(reqwest::Method::POST, local_var_uri_str.as_str());
 
     if let Some(ref local_var_user_agent) = local_var_configuration.user_agent {
@@ -274,7 +274,7 @@ pub async fn group_complete_avatar_upload(configuration: &configuration::Configu
 
     let local_var_client = &local_var_configuration.client;
 
-    let local_var_uri_str = format!("{}/groups/{group_id}/avatar-upload/{upload_id}/complete", local_var_configuration.base_path, group_id=crate::apis::urlencode(group_id), upload_id=crate::apis::urlencode(upload_id));
+    let local_var_uri_str = format!("{}/group/groups/{group_id}/avatar-upload/{upload_id}/complete", local_var_configuration.base_path, group_id=crate::apis::urlencode(group_id), upload_id=crate::apis::urlencode(upload_id));
     let mut local_var_req_builder = local_var_client.request(reqwest::Method::POST, local_var_uri_str.as_str());
 
     if let Some(ref local_var_user_agent) = local_var_configuration.user_agent {
@@ -305,7 +305,7 @@ pub async fn group_create(configuration: &configuration::Configuration, group_cr
 
     let local_var_client = &local_var_configuration.client;
 
-    let local_var_uri_str = format!("{}/groups", local_var_configuration.base_path);
+    let local_var_uri_str = format!("{}/group/groups", local_var_configuration.base_path);
     let mut local_var_req_builder = local_var_client.request(reqwest::Method::POST, local_var_uri_str.as_str());
 
     if let Some(ref local_var_user_agent) = local_var_configuration.user_agent {
@@ -337,7 +337,7 @@ pub async fn group_get_bans(configuration: &configuration::Configuration, group_
 
     let local_var_client = &local_var_configuration.client;
 
-    let local_var_uri_str = format!("{}/groups/{group_id}/bans", local_var_configuration.base_path, group_id=crate::apis::urlencode(group_id));
+    let local_var_uri_str = format!("{}/group/groups/{group_id}/bans", local_var_configuration.base_path, group_id=crate::apis::urlencode(group_id));
     let mut local_var_req_builder = local_var_client.request(reqwest::Method::GET, local_var_uri_str.as_str());
 
     if let Some(ref local_var_str) = anchor {
@@ -377,7 +377,7 @@ pub async fn group_get_join_requests(configuration: &configuration::Configuratio
 
     let local_var_client = &local_var_configuration.client;
 
-    let local_var_uri_str = format!("{}/groups/{group_id}/join-requests", local_var_configuration.base_path, group_id=crate::apis::urlencode(group_id));
+    let local_var_uri_str = format!("{}/group/groups/{group_id}/join-requests", local_var_configuration.base_path, group_id=crate::apis::urlencode(group_id));
     let mut local_var_req_builder = local_var_client.request(reqwest::Method::GET, local_var_uri_str.as_str());
 
     if let Some(ref local_var_str) = anchor {
@@ -417,7 +417,7 @@ pub async fn group_get_members(configuration: &configuration::Configuration, gro
 
     let local_var_client = &local_var_configuration.client;
 
-    let local_var_uri_str = format!("{}/groups/{group_id}/members", local_var_configuration.base_path, group_id=crate::apis::urlencode(group_id));
+    let local_var_uri_str = format!("{}/group/groups/{group_id}/members", local_var_configuration.base_path, group_id=crate::apis::urlencode(group_id));
     let mut local_var_req_builder = local_var_client.request(reqwest::Method::GET, local_var_uri_str.as_str());
 
     if let Some(ref local_var_str) = anchor {
@@ -457,7 +457,7 @@ pub async fn group_get_profile(configuration: &configuration::Configuration, gro
 
     let local_var_client = &local_var_configuration.client;
 
-    let local_var_uri_str = format!("{}/groups/{group_id}/profile", local_var_configuration.base_path, group_id=crate::apis::urlencode(group_id));
+    let local_var_uri_str = format!("{}/group/groups/{group_id}/profile", local_var_configuration.base_path, group_id=crate::apis::urlencode(group_id));
     let mut local_var_req_builder = local_var_client.request(reqwest::Method::GET, local_var_uri_str.as_str());
 
     if let Some(ref local_var_str) = watch_index {
@@ -490,7 +490,7 @@ pub async fn group_get_summary(configuration: &configuration::Configuration, gro
 
     let local_var_client = &local_var_configuration.client;
 
-    let local_var_uri_str = format!("{}/groups/{group_id}/summary", local_var_configuration.base_path, group_id=crate::apis::urlencode(group_id));
+    let local_var_uri_str = format!("{}/group/groups/{group_id}/summary", local_var_configuration.base_path, group_id=crate::apis::urlencode(group_id));
     let mut local_var_req_builder = local_var_client.request(reqwest::Method::GET, local_var_uri_str.as_str());
 
     if let Some(ref local_var_user_agent) = local_var_configuration.user_agent {
@@ -521,7 +521,7 @@ pub async fn group_kick_member(configuration: &configuration::Configuration, gro
 
     let local_var_client = &local_var_configuration.client;
 
-    let local_var_uri_str = format!("{}/groups/{group_id}/kick/{identity_id}", local_var_configuration.base_path, group_id=crate::apis::urlencode(group_id), identity_id=crate::apis::urlencode(identity_id));
+    let local_var_uri_str = format!("{}/group/groups/{group_id}/kick/{identity_id}", local_var_configuration.base_path, group_id=crate::apis::urlencode(group_id), identity_id=crate::apis::urlencode(identity_id));
     let mut local_var_req_builder = local_var_client.request(reqwest::Method::POST, local_var_uri_str.as_str());
 
     if let Some(ref local_var_user_agent) = local_var_configuration.user_agent {
@@ -552,7 +552,7 @@ pub async fn group_leave(configuration: &configuration::Configuration, group_id:
 
     let local_var_client = &local_var_configuration.client;
 
-    let local_var_uri_str = format!("{}/groups/{group_id}/leave", local_var_configuration.base_path, group_id=crate::apis::urlencode(group_id));
+    let local_var_uri_str = format!("{}/group/groups/{group_id}/leave", local_var_configuration.base_path, group_id=crate::apis::urlencode(group_id));
     let mut local_var_req_builder = local_var_client.request(reqwest::Method::POST, local_var_uri_str.as_str());
 
     if let Some(ref local_var_user_agent) = local_var_configuration.user_agent {
@@ -583,7 +583,7 @@ pub async fn group_list_suggested(configuration: &configuration::Configuration, 
 
     let local_var_client = &local_var_configuration.client;
 
-    let local_var_uri_str = format!("{}/groups", local_var_configuration.base_path);
+    let local_var_uri_str = format!("{}/group/groups", local_var_configuration.base_path);
     let mut local_var_req_builder = local_var_client.request(reqwest::Method::GET, local_var_uri_str.as_str());
 
     if let Some(ref local_var_str) = watch_index {
@@ -617,7 +617,7 @@ pub async fn group_prepare_avatar_upload(configuration: &configuration::Configur
 
     let local_var_client = &local_var_configuration.client;
 
-    let local_var_uri_str = format!("{}/groups/avatar-upload/prepare", local_var_configuration.base_path);
+    let local_var_uri_str = format!("{}/group/groups/avatar-upload/prepare", local_var_configuration.base_path);
     let mut local_var_req_builder = local_var_client.request(reqwest::Method::POST, local_var_uri_str.as_str());
 
     if let Some(ref local_var_user_agent) = local_var_configuration.user_agent {
@@ -649,7 +649,7 @@ pub async fn group_search(configuration: &configuration::Configuration, query: &
 
     let local_var_client = &local_var_configuration.client;
 
-    let local_var_uri_str = format!("{}/groups/search", local_var_configuration.base_path);
+    let local_var_uri_str = format!("{}/group/groups/search", local_var_configuration.base_path);
     let mut local_var_req_builder = local_var_client.request(reqwest::Method::GET, local_var_uri_str.as_str());
 
     local_var_req_builder = local_var_req_builder.query(&[("query", &query.to_string())]);
@@ -687,7 +687,7 @@ pub async fn group_transfer_ownership(configuration: &configuration::Configurati
 
     let local_var_client = &local_var_configuration.client;
 
-    let local_var_uri_str = format!("{}/groups/{group_id}/transfer-owner", local_var_configuration.base_path, group_id=crate::apis::urlencode(group_id));
+    let local_var_uri_str = format!("{}/group/groups/{group_id}/transfer-owner", local_var_configuration.base_path, group_id=crate::apis::urlencode(group_id));
     let mut local_var_req_builder = local_var_client.request(reqwest::Method::POST, local_var_uri_str.as_str());
 
     if let Some(ref local_var_user_agent) = local_var_configuration.user_agent {
@@ -719,7 +719,7 @@ pub async fn group_unban_identity(configuration: &configuration::Configuration, 
 
     let local_var_client = &local_var_configuration.client;
 
-    let local_var_uri_str = format!("{}/groups/{group_id}/bans/{identity_id}", local_var_configuration.base_path, group_id=crate::apis::urlencode(group_id), identity_id=crate::apis::urlencode(identity_id));
+    let local_var_uri_str = format!("{}/group/groups/{group_id}/bans/{identity_id}", local_var_configuration.base_path, group_id=crate::apis::urlencode(group_id), identity_id=crate::apis::urlencode(identity_id));
     let mut local_var_req_builder = local_var_client.request(reqwest::Method::DELETE, local_var_uri_str.as_str());
 
     if let Some(ref local_var_user_agent) = local_var_configuration.user_agent {
@@ -749,7 +749,7 @@ pub async fn group_update_profile(configuration: &configuration::Configuration, 
 
     let local_var_client = &local_var_configuration.client;
 
-    let local_var_uri_str = format!("{}/groups/{group_id}/profile", local_var_configuration.base_path, group_id=crate::apis::urlencode(group_id));
+    let local_var_uri_str = format!("{}/group/groups/{group_id}/profile", local_var_configuration.base_path, group_id=crate::apis::urlencode(group_id));
     let mut local_var_req_builder = local_var_client.request(reqwest::Method::POST, local_var_uri_str.as_str());
 
     if let Some(ref local_var_user_agent) = local_var_configuration.user_agent {
@@ -781,7 +781,7 @@ pub async fn group_validate_profile(configuration: &configuration::Configuration
 
     let local_var_client = &local_var_configuration.client;
 
-    let local_var_uri_str = format!("{}/groups/profile/validate", local_var_configuration.base_path);
+    let local_var_uri_str = format!("{}/group/groups/profile/validate", local_var_configuration.base_path);
     let mut local_var_req_builder = local_var_client.request(reqwest::Method::POST, local_var_uri_str.as_str());
 
     if let Some(ref local_var_user_agent) = local_var_configuration.user_agent {

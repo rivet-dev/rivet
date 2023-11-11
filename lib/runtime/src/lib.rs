@@ -45,8 +45,6 @@ impl RunConfig {
 				tracing_subscriber::fmt()
 					.pretty()
 					.with_max_level(tracing::Level::INFO)
-					.with_target(false)
-					.without_time()
 					.init();
 			} else {
 				let fmt_filter = tracing_subscriber::filter::LevelFilter::INFO;
@@ -98,6 +96,7 @@ impl RunConfig {
 		if let Ok(thread_stack_size) = env::var("TOKIO_THREAD_STACK_SIZE") {
 			rt_builder.thread_stack_size(thread_stack_size.parse()?);
 		} else {
+			// async-nats requires a fat stack
 			rt_builder.thread_stack_size(8 * 1024 * 1024);
 		}
 

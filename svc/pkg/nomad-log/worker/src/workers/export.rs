@@ -1,5 +1,4 @@
 use chirp_worker::prelude::*;
-use futures_util::stream::StreamExt;
 use proto::backend::{self, pkg::*};
 
 #[derive(clickhouse::Row, serde::Deserialize)]
@@ -9,16 +8,14 @@ struct LogEntry {
 
 #[worker(name = "nomad-log-export")]
 async fn worker(ctx: &OperationContext<nomad_log::msg::export::Message>) -> GlobalResult<()> {
-	let clickhouse = clickhouse::Client::default()
-		.with_url("http://http.clickhouse.service.consul:8123")
+	let clickhouse = rivet_pools::utils::clickhouse::client()?
 		.with_user("chirp")
 		.with_password(util::env::read_secret(&["clickhouse", "users", "chirp", "password"]).await?)
 		.with_database("db_nomad_logs");
 
-	let request_id = internal_unwrap!(ctx.request_id).as_uuid();
+	let request_id = unwrap_ref!(ctx.request_id).as_uuid();
 
-	let stream_type =
-		internal_unwrap_owned!(backend::nomad_log::StreamType::from_i32(ctx.stream_type));
+	let stream_type = unwrap!(backend::nomad_log::StreamType::from_i32(ctx.stream_type));
 	let file_name = match stream_type {
 		backend::nomad_log::StreamType::StdOut => "stdout.txt",
 		backend::nomad_log::StreamType::StdErr => "stderr.txt",
@@ -65,7 +62,7 @@ async fn worker(ctx: &OperationContext<nomad_log::msg::export::Message>) -> Glob
 	})
 	.await?;
 
-	let presigned_req = internal_unwrap_owned!(upload_res.presigned_requests.first());
+	let presigned_req = unwrap!(upload_res.presigned_requests.first());
 	let res = reqwest::Client::new()
 		.put(&presigned_req.url)
 		.body(buf)
@@ -79,7 +76,7 @@ async fn worker(ctx: &OperationContext<nomad_log::msg::export::Message>) -> Glob
 		let status = res.status();
 		let text = res.text().await;
 		tracing::error!(?status, ?text, "failed to upload");
-		internal_panic!("failed to upload");
+		bail!("failed to upload");
 	}
 
 	op!([ctx] upload_complete {

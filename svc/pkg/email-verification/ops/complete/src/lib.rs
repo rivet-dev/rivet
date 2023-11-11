@@ -67,20 +67,20 @@ async fn handle(
 ) -> GlobalResult<email_verification::complete::Response> {
 	// TODO: Use a CRDB transaction
 
-	let crdb = ctx.crdb("db-email-verification").await?;
+	let crdb = ctx.crdb().await?;
 
-	let verification_id = internal_unwrap!(ctx.verification_id).as_uuid();
+	let verification_id = unwrap_ref!(ctx.verification_id).as_uuid();
 
 	// Fetch metadata
-	let verification = sqlx::query_as::<_, VerificationRow>(indoc!(
+	let verification = sql_fetch_one!(
+		[ctx, VerificationRow]
 		"
 		SELECT email, code, expire_ts, complete_ts
-		FROM verifications
+		FROM db_email_verification.verifications
 		WHERE verification_id = $1
-		"
-	))
-	.bind(verification_id)
-	.fetch_one(&crdb)
+		",
+		verification_id,
+	)
 	.await?;
 
 	// Validate the code is not complete or expired in order to prevent spamming
@@ -104,24 +104,24 @@ async fn handle(
 	}
 
 	// Log attempt
-	let (attempt_count,) = sqlx::query_as::<_, (i64,)>(indoc!(
+	let (attempt_count,) = sql_fetch_one!(
+		[ctx, (i64,)]
 		"
 		WITH ins AS (
-			INSERT INTO verification_attempts (verification_id, attempt_id, create_ts)
+			INSERT INTO db_email_verification.verification_attempts (verification_id, attempt_id, create_ts)
 			VALUES ($1, $2, $3)
 			RETURNING 1
 		)
 		SELECT COUNT(*)
-		FROM verification_attempts
+		FROM db_email_verification.verification_attempts
 		WHERE verification_id = $1
 		LIMIT $4
-		"
-	))
-	.bind(verification_id)
-	.bind(Uuid::new_v4())
-	.bind(ctx.ts())
-	.bind(MAX_ATTEMPTS)
-	.fetch_one(&crdb)
+		",
+		verification_id,
+		Uuid::new_v4(),
+		ctx.ts(),
+		MAX_ATTEMPTS,
+	)
 	.await?;
 
 	// Validate attempts
@@ -148,16 +148,16 @@ async fn handle(
 	}
 
 	// Complete verification
-	let complete_res = sqlx::query(indoc!(
+	let complete_res = sql_execute!(
+		[ctx]
 		"
-		UPDATE verifications
+		UPDATE db_email_verification.verifications
 		SET complete_ts = $2
 		WHERE verification_id = $1 AND complete_ts IS NULL
-		"
-	))
-	.bind(verification_id)
-	.bind(ctx.ts())
-	.execute(&crdb)
+		",
+		verification_id,
+		ctx.ts(),
+	)
 	.await?;
 	if complete_res.rows_affected() > 0 {
 		return verification

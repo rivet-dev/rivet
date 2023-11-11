@@ -5,11 +5,11 @@ use rivet_operation::prelude::*;
 async fn handle(
 	ctx: OperationContext<chat_message::validate::Request>,
 ) -> GlobalResult<chat_message::validate::Response> {
-	let message = internal_unwrap!(ctx.message);
-	let topic = internal_unwrap!(message.topic);
-	let topic_kind = internal_unwrap!(topic.kind);
-	let body = internal_unwrap!(message.body);
-	let body_kind = internal_unwrap!(body.kind);
+	let message = unwrap_ref!(ctx.message);
+	let topic = unwrap_ref!(message.topic);
+	let topic_kind = unwrap_ref!(topic.kind);
+	let body = unwrap_ref!(message.body);
+	let body_kind = unwrap_ref!(body.kind);
 
 	tokio::try_join!(
 		validate(&ctx, body_kind, topic_kind),

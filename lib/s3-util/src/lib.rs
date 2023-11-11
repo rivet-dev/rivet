@@ -16,15 +16,15 @@ pub enum Error {
 
 /// How to access the S3 service.
 pub enum EndpointKind {
-	/// Used for making calls within the cluster. Requires the Nebula network & Consul DNS.
+	/// Used for making calls within the core cluster using private DNS.
 	///
 	/// This should be used for all API calls.
 	Internal,
 
-	/// Used for making calls within the cluster, but without access to Consul DNS. This will
-	/// resolve the Consul DNS IP address.
+	/// Used for making calls within the cluster, but without access to the internal DNS server. This will
+	/// resolve the IP address on the machine building the presigned request.
 	///
-	/// Should be used sparingly.
+	/// Should be used sparingly, incredibly hacky.
 	InternalResolved,
 
 	/// Used for making calls from outside of the cluster.
@@ -33,7 +33,7 @@ pub enum EndpointKind {
 	External,
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Provider {
 	Minio,
 	Backblaze,
@@ -47,20 +47,18 @@ impl Provider {
 
 	pub fn from_str(s: &str) -> Result<Self, Error> {
 		match s {
-			"MINIO" => Ok(Provider::Minio),
-			"BACKBLAZE" => Ok(Provider::Backblaze),
-			"AWS" => Ok(Provider::Aws),
+			"minio" => Ok(Provider::Minio),
+			"backblaze" => Ok(Provider::Backblaze),
+			"aws" => Ok(Provider::Aws),
 			_ => Err(Error::UnknownProvider(s.to_string())),
 		}
 	}
-}
 
-impl std::fmt::Display for Provider {
-	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+	pub fn as_str(&self) -> &'static str {
 		match self {
-			Provider::Minio => write!(f, "MINIO"),
-			Provider::Backblaze => write!(f, "BACKBLAZE"),
-			Provider::Aws => write!(f, "AWS"),
+			Provider::Minio => "minio",
+			Provider::Backblaze => "backblaze",
+			Provider::Aws => "aws",
 		}
 	}
 }
@@ -122,56 +120,60 @@ impl Client {
 	) -> Result<Self, Error> {
 		let svc_screaming = svc_name.to_uppercase().replace("-", "_");
 
-		let bucket = std::env::var(format!("S3_{}_BUCKET_{}", provider, svc_screaming))?;
-		let region = std::env::var(format!("S3_{}_REGION_{}", provider, svc_screaming))?;
-		let access_key_id =
-			std::env::var(format!("S3_{}_ACCESS_KEY_ID_{}", provider, svc_screaming))?;
+		let provider_upper = provider.as_str().to_uppercase();
+
+		let bucket = std::env::var(format!("S3_{}_BUCKET_{}", provider_upper, svc_screaming))?;
+		let region = std::env::var(format!("S3_{}_REGION_{}", provider_upper, svc_screaming))?;
+		let access_key_id = std::env::var(format!(
+			"S3_{}_ACCESS_KEY_ID_{}",
+			provider_upper, svc_screaming
+		))?;
 		let secret_access_key = std::env::var(format!(
 			"S3_{}_SECRET_ACCESS_KEY_{}",
-			provider, svc_screaming
+			provider_upper, svc_screaming
 		))?;
 
 		let endpoint = match endpoint_kind {
 			EndpointKind::Internal => std::env::var(format!(
 				"S3_{}_ENDPOINT_INTERNAL_{}",
-				provider, svc_screaming
+				provider_upper, svc_screaming
 			))?,
 			EndpointKind::InternalResolved => {
 				let mut endpoint = std::env::var(format!(
 					"S3_{}_ENDPOINT_INTERNAL_{}",
-					provider, svc_screaming
+					provider_upper, svc_screaming
 				))?;
 
-				// HACK: Resolve Minio Consul address to schedule the job with. We
-				// do this since the job servers don't have Consul clients
-				// running on them to resolve Consul address to.
+				// HACK: Resolve Minio DNS address to schedule the job with. We
+				// do this since the job servers don't have the internal DNS servers
+				// to resolve the Minio endpoint.
 				//
 				// This has issues if there's a race condition with changing the
 				// Minio address.
 				//
 				// We can't resolve the presigned URL, since the host's presigned
 				// host is part of the signature.
-				const MINIO_CONSUL_HOST: &str = "server.minio.service.consul:9200";
-				if endpoint.contains(MINIO_CONSUL_HOST) {
-					tracing::info!(host = %MINIO_CONSUL_HOST, "looking up dns");
+				const MINIO_K8S_HOST: &str = "minio.minio.svc.cluster.local:9200";
+				if endpoint.contains(MINIO_K8S_HOST) {
+					tracing::info!(host = %MINIO_K8S_HOST, "looking up dns");
 
 					// Resolve IP
-					let mut hosts = tokio::net::lookup_host(MINIO_CONSUL_HOST)
+					let mut hosts = tokio::net::lookup_host(MINIO_K8S_HOST)
 						.await
 						.map_err(Error::LookupHost)?;
 					let Some(host) = hosts.next() else {
-						return Err(Error::UnresolvedHost)
+						return Err(Error::UnresolvedHost);
 					};
 
 					// Substitute endpoint with IP
-					endpoint = endpoint.replace(MINIO_CONSUL_HOST, &host.to_string());
+					endpoint = endpoint.replace(MINIO_K8S_HOST, &host.to_string());
 				}
 
 				endpoint
 			}
 			EndpointKind::External => std::env::var(format!(
 				"S3_{}_ENDPOINT_EXTERNAL_{}",
-				provider, svc_screaming
+				provider_upper, svc_screaming
 			))?,
 		};
 

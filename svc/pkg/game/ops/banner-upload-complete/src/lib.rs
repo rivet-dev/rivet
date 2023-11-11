@@ -5,8 +5,8 @@ use rivet_operation::prelude::*;
 async fn handle(
 	ctx: OperationContext<game::banner_upload_complete::Request>,
 ) -> GlobalResult<game::banner_upload_complete::Response> {
-	let game_id = internal_unwrap!(ctx.game_id).as_uuid();
-	let upload_id = internal_unwrap!(ctx.upload_id).as_uuid();
+	let game_id = unwrap_ref!(ctx.game_id).as_uuid();
+	let upload_id = unwrap_ref!(ctx.upload_id).as_uuid();
 
 	op!([ctx] upload_complete {
 		upload_id: ctx.upload_id,
@@ -15,16 +15,18 @@ async fn handle(
 	.await?;
 
 	// Set avatar id
-	sqlx::query(indoc!(
+	sql_execute!(
+		[ctx]
 		"
-		UPDATE games set banner_upload_id = $2
+		UPDATE db_game.games set banner_upload_id = $2
 		WHERE game_id = $1
-		"
-	))
-	.bind(game_id)
-	.bind(upload_id)
-	.execute(&ctx.crdb("db-game").await?)
+		",
+		game_id,
+		upload_id,
+	)
 	.await?;
+
+	ctx.cache().purge("game", [game_id]).await?;
 
 	msg!([ctx] game::msg::update(game_id) {
 		game_id: ctx.game_id,

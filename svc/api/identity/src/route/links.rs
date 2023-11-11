@@ -22,7 +22,7 @@ pub async fn prepare_game_link(
 	})
 	.await?;
 
-	let _link_id = internal_unwrap!(game_user_link_create_res.link_id).as_uuid();
+	let _link_id = unwrap_ref!(game_user_link_create_res.link_id).as_uuid();
 	let identity_link_token = &game_user_link_create_res.user_link_token;
 	let identity_link_url = util::route::identity_game_link(identity_link_token);
 	let claims = rivet_claims::decode(identity_link_token)??;
@@ -30,7 +30,7 @@ pub async fn prepare_game_link(
 	Ok(models::IdentityPrepareGameLinkResponse {
 		identity_link_token: identity_link_token.clone(),
 		identity_link_url,
-		expire_ts: util::timestamp::to_string(internal_unwrap_owned!(claims.exp))?,
+		expire_ts: util::timestamp::to_string(unwrap!(claims.exp))?,
 	})
 }
 
@@ -74,12 +74,12 @@ pub async fn get_game_link(
 	})
 	.await?;
 
-	let game_user_link = internal_unwrap_owned!(game_user_link_status_res.game_user_links.first());
-	let current_game_user_id = internal_unwrap!(game_user_link.current_game_user_id).as_uuid();
-	let namespace_id = internal_unwrap!(game_user_link.namespace_id).as_uuid();
-	let status = internal_unwrap_owned!(
-		game_user::link_get::response::GameUserLinkStatus::from_i32(game_user_link.status)
-	);
+	let game_user_link = unwrap!(game_user_link_status_res.game_user_links.first());
+	let current_game_user_id = unwrap_ref!(game_user_link.current_game_user_id).as_uuid();
+	let namespace_id = unwrap_ref!(game_user_link.namespace_id).as_uuid();
+	let status = unwrap!(game_user::link_get::response::GameUserLinkStatus::from_i32(
+		game_user_link.status
+	));
 
 	let (namespace_res, current_game_user) = tokio::try_join!(
 		op!([ctx] game_namespace_get {
@@ -90,12 +90,12 @@ pub async fn get_game_link(
 				game_user_ids: vec![current_game_user_id.into()]
 			})
 			.await?;
-			let game_user = internal_unwrap_owned!(game_user_res.game_users.first());
-			let user_id = internal_unwrap!(game_user.user_id).as_uuid();
+			let game_user = unwrap!(game_user_res.game_users.first());
+			let user_id = unwrap_ref!(game_user.user_id).as_uuid();
 
 			// Fetch current identity
 			let identities = fetch::identity::handles(ctx.op_ctx(), user_id, vec![user_id]).await?;
-			let identity = internal_unwrap_owned!(identities.into_iter().next());
+			let identity = unwrap!(identities.into_iter().next());
 
 			Ok(identity)
 		}
@@ -103,14 +103,14 @@ pub async fn get_game_link(
 
 	// Fetch game
 	let game = {
-		let namespace = internal_unwrap_owned!(namespace_res.namespaces.first());
-		let game_id = *internal_unwrap!(namespace.game_id);
+		let namespace = unwrap!(namespace_res.namespaces.first());
+		let game_id = *unwrap_ref!(namespace.game_id);
 
 		let game_res = op!([ctx] game_get {
 			game_ids: vec![game_id]
 		})
 		.await?;
-		let game = internal_unwrap_owned!(game_res.games.first());
+		let game = unwrap!(game_res.games.first());
 
 		convert::game::handle(game)?
 	};
@@ -129,14 +129,14 @@ pub async fn get_game_link(
 			game_user_ids: vec![new_game_user_id.into()],
 		})
 		.await?;
-		let game_user = internal_unwrap_owned!(game_user_res.game_users.first());
-		let user_id = internal_unwrap!(game_user.user_id).as_uuid();
+		let game_user = unwrap!(game_user_res.game_users.first());
+		let user_id = unwrap_ref!(game_user.user_id).as_uuid();
 
 		// Fetch identity
 		let identities =
 			fetch::identity::profiles(ctx.op_ctx(), user_id, Some(new_game_user_id), vec![user_id])
 				.await?;
-		let identity = internal_unwrap_owned!(identities.into_iter().next());
+		let identity = unwrap!(identities.into_iter().next());
 
 		Some(models::IdentityGetGameLinkNewIdentity {
 			identity_token: new_game_user_token.clone(),
@@ -184,9 +184,9 @@ pub async fn complete_game_link(
 			use game_user::msg::link_complete_fail::ErrorCode::*;
 
 			let code = game_user::msg::link_complete_fail::ErrorCode::from_i32(msg.error_code);
-			match internal_unwrap_owned!(code) {
-				Unknown => internal_panic!("unknown link complete error code"),
-				TokenExchangeFailed => panic_with!(TOKEN_EXCHANGE_FAILED),
+			match unwrap!(code) {
+				Unknown => bail!("unknown link complete error code"),
+				TokenExchangeFailed => bail_with!(TOKEN_EXCHANGE_FAILED),
 			}
 		}
 	};
@@ -220,9 +220,9 @@ pub async fn cancel_game_link(
 			use game_user::msg::link_complete_fail::ErrorCode::*;
 
 			let code = game_user::msg::link_complete_fail::ErrorCode::from_i32(msg.error_code);
-			match internal_unwrap_owned!(code) {
-				Unknown => internal_panic!("unknown link complete error code"),
-				TokenExchangeFailed => panic_with!(TOKEN_EXCHANGE_FAILED),
+			match unwrap!(code) {
+				Unknown => bail!("unknown link complete error code"),
+				TokenExchangeFailed => bail_with!(TOKEN_EXCHANGE_FAILED),
 			}
 		}
 	};

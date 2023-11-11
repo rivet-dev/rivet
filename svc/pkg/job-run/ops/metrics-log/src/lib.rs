@@ -54,9 +54,8 @@ async fn handle(
 		// Get all queries at once
 		//
 		// If you need to add new metrics, explicitly add then to the `keep`
-		// relabel action in
-		// `salt/salt/prometheus/files/prometheus.prm-job.yaml.j2`
-		let (mem_allocated, cpu_usage, mem_usage, mem_max_usage) = tokio::try_join!(
+		// relabel action in the Kubernetes config.
+		let (mem_allocated, cpu_usage, mem_usage) = tokio::try_join!(
 			handle_request(
 				&prometheus_url,
 				None,
@@ -74,29 +73,20 @@ async fn handle(
 			handle_request(
 				&prometheus_url,
 				query_timing.as_ref(),
-				format!("max(nomad_client_allocs_memory_usage{{exported_job=\"{nomad_job_id}\",task=\"{task}\"}}) or vector(0)",
-					nomad_job_id = metric.job,
-					task = metric.task
-			)),
-			handle_request(
-				&prometheus_url,
-				query_timing.as_ref(),
-				format!("max(nomad_client_allocs_memory_max_usage{{exported_job=\"{nomad_job_id}\",task=\"{task}\"}}) or vector(0)",
+				// Fall back to `nomad_client_allocs_memory_rss` since `nomadusage_memory_usage` is
+				// not available in `raw_exec`.
+				format!("max(nomad_client_allocs_memory_usage{{exported_job=\"{nomad_job_id}\",task=\"{task}\"}}) or max(nomad_client_allocs_memory_rss{{exported_job=\"{nomad_job_id}\",task=\"{task}\"}}) or vector(0)",
 					nomad_job_id = metric.job,
 					task = metric.task
 			)),
 		)?;
 
-		let (_, mem_allocated) = internal_unwrap_owned!(mem_allocated.value);
-		let cpu_usage = internal_unwrap_owned!(cpu_usage.values)
+		let (_, mem_allocated) = unwrap!(mem_allocated.value);
+		let cpu_usage = unwrap!(cpu_usage.values)
 			.into_iter()
 			.map(|(_, v)| v.parse::<f32>())
 			.collect::<Result<Vec<_>, _>>()?;
-		let mem_usage = internal_unwrap_owned!(mem_usage.values)
-			.into_iter()
-			.map(|(_, v)| v.parse::<u64>())
-			.collect::<Result<Vec<_>, _>>()?;
-		let mem_max_usage = internal_unwrap_owned!(mem_max_usage.values)
+		let mem_usage = unwrap!(mem_usage.values)
 			.into_iter()
 			.map(|(_, v)| v.parse::<u64>())
 			.collect::<Result<Vec<_>, _>>()?;
@@ -105,7 +95,6 @@ async fn handle(
 			job: metric.job.clone(),
 			cpu: cpu_usage,
 			memory: mem_usage,
-			memory_max: mem_max_usage,
 			allocated_memory: mem_allocated.parse::<u64>()?,
 		})
 	}
@@ -130,7 +119,7 @@ async fn handle_request(
 
 	let query_string = serde_urlencoded::to_string(query_pairs)?;
 	let req_url = format!(
-		"http://{}/api/v1/query{}?{}",
+		"{}/api/v1/query{}?{}",
 		url,
 		if timing.is_some() { "_range" } else { "" },
 		query_string
@@ -151,5 +140,5 @@ async fn handle_request(
 		.into());
 	}
 
-	Ok(internal_unwrap_owned!(res.json::<PrometheusResponse>().await?.data.result.first()).clone())
+	Ok(unwrap!(res.json::<PrometheusResponse>().await?.data.result.first()).clone())
 }

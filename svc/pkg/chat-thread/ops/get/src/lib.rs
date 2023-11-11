@@ -21,7 +21,7 @@ struct Thread {
 async fn handle(
 	ctx: OperationContext<chat_thread::get::Request>,
 ) -> GlobalResult<chat_thread::get::Response> {
-	let crdb = ctx.crdb("db-chat").await?;
+	let crdb = ctx.crdb().await?;
 
 	let thread_ids = ctx
 		.thread_ids
@@ -31,7 +31,8 @@ async fn handle(
 
 	tracing::info!(?thread_ids, "querying thread ids");
 
-	let threads = sqlx::query_as::<_, Thread>(indoc!(
+	let threads = sql_fetch_all!(
+		[ctx, Thread]
 		"
 		SELECT 
 			thread_id,
@@ -39,12 +40,11 @@ async fn handle(
 			team_team_id,
 			direct_user_a_id,
 			direct_user_b_id
-		FROM threads
+		FROM db_chat.threads
 		WHERE thread_id = ANY($1)
-		"
-	))
-	.bind(&thread_ids)
-	.fetch_all(&crdb)
+		",
+		&thread_ids,
+	)
 	.await?
 	.into_iter()
 	.map(|thread| {

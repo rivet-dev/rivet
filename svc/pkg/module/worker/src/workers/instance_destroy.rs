@@ -5,21 +5,21 @@ use proto::backend::{self, pkg::*};
 async fn worker(
 	ctx: &OperationContext<module::msg::instance_destroy::Message>,
 ) -> Result<(), GlobalError> {
-	let crdb = ctx.crdb("db-module").await?;
+	let crdb = ctx.crdb().await?;
 
-	let instance_id = internal_unwrap!(ctx.instance_id).as_uuid();
+	let instance_id = unwrap_ref!(ctx.instance_id).as_uuid();
 
 	let instances = op!([ctx] module_instance_get {
 		instance_ids: vec![instance_id.into()],
 
 	})
 	.await?;
-	let instance = internal_unwrap_owned!(instances.instances.first());
+	let instance = unwrap!(instances.instances.first());
 
 	// Delete app
-	match internal_unwrap!(instance.driver) {
+	match unwrap_ref!(instance.driver) {
 		backend::module::instance::Driver::Fly(fly) => {
-			let app_id = internal_unwrap!(fly.fly_app_id, "fly machine not started yet");
+			let app_id = unwrap_ref!(fly.fly_app_id, "fly machine not started yet");
 
 			delete_fly_app(app_id).await?;
 		}
@@ -29,16 +29,16 @@ async fn worker(
 	}
 
 	// Update database
-	sqlx::query(indoc!(
+	sql_execute!(
+		[ctx]
 		"
-		UPDATE instances
+		UPDATE db_module.instances
 		SET destroy_ts = $2
 		WHERE instance_id = $1
-		"
-	))
-	.bind(instance_id)
-	.bind(ctx.ts())
-	.execute(&crdb)
+		",
+		instance_id,
+		ctx.ts(),
+	)
 	.await?;
 
 	msg!([ctx] module::msg::instance_destroy_complete(instance_id) {

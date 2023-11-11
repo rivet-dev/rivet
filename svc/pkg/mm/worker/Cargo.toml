@@ -10,20 +10,22 @@ chirp-client = { path = "../../../../lib/chirp/client" }
 chirp-worker = { path = "../../../../lib/chirp/worker" }
 chrono = "0.4"
 csv = "1.1"
+heck = "0.3"
+http = "0.2"
 lazy_static = "1.4.0"
 nomad-client = "0.0.9"
 nomad-util = { path = "../../../../lib/nomad-util" }
 redis-util = { path = "../../../../lib/redis-util" }
+regex = "1.4"
 reqwest = "0.11"
 rivet-health-checks = { path = "../../../../lib/health-checks" }
 rivet-metrics = { path = "../../../../lib/metrics" }
 rivet-runtime = { path = "../../../../lib/runtime" }
 s3-util = { path = "../../../../lib/s3-util" }
 serde = { version = "1.0", features = ["derive"] }
+util-build = { package = "rivet-util-build", path = "../../build/util" }
 util-job = { package = "rivet-util-job", path = "../../job/util" }
 util-mm = { package = "rivet-util-mm", path = "../../mm/util" }
-http = "0.2"
-heck = "0.3"
 
 build-get = { path = "../../build/ops/get" }
 game-get = { path = "../../game/ops/get" }
@@ -53,9 +55,12 @@ default-features = false
 
 [dev-dependencies]
 chirp-worker = { path = "../../../../lib/chirp/worker" }
+rivet-api = { path = "../../../../gen/openapi/internal/rust" }
 
+cloud-namespace-token-public-create = { path = "../../cloud/ops/namespace-token-public-create" }
 faker-build = { path = "../../faker/ops/build" }
 faker-game = { path = "../../faker/ops/game" }
+faker-game-namespace = { path = "../../faker/ops/game-namespace" }
 faker-game-version = { path = "../../faker/ops/game-version" }
 faker-mm-lobby = { path = "../../faker/ops/mm-lobby" }
 faker-region = { path = "../../faker/ops/region" }
@@ -65,5 +70,6 @@ mm-config-namespace-config-set = { path = "../../mm-config/ops/namespace-config-
 mm-config-version-get = { path = "../../mm-config/ops/version-get" }
 mm-lobby-get = { path = "../ops/lobby-get" }
 mm-lobby-player-count = { path = "../ops/lobby-player-count" }
+mm-player-count-for-namespace = { path = "../ops/player-count-for-namespace" }
 region-list = { path = "../../region/ops/list" }
 user-identity-create = { path = "../../user-identity/ops/create" }

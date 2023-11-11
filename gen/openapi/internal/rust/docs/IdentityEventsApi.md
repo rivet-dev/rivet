@@ -1,10 +1,10 @@
 # \IdentityEventsApi
 
-All URIs are relative to *http://localhost*
+All URIs are relative to *https://api.rivet.gg*
 
 Method | HTTP request | Description
 ------------- | ------------- | -------------
-[**identity_events_watch**](IdentityEventsApi.md#identity_events_watch) | **GET** /events/live | 
+[**identity_events_watch**](IdentityEventsApi.md#identity_events_watch) | **GET** /identity/events/live | 
 
 
 

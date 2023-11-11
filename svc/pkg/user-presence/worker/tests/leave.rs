@@ -3,7 +3,7 @@ use proto::backend::{self, pkg::*};
 use redis::AsyncCommands;
 
 #[worker_test]
-async fn basic(ctx: TestCtx) {
+async fn leave(ctx: TestCtx) {
 	let res = op!([ctx] faker_user {}).await.unwrap();
 	let user_id = res.user_id.unwrap().as_uuid();
 
@@ -21,6 +21,8 @@ async fn basic(ctx: TestCtx) {
 	})
 	.await
 	.unwrap();
+
+	tokio::time::sleep(std::time::Duration::from_secs(3)).await;
 
 	let mut redis = ctx.redis_user_presence().await.unwrap();
 	let redis_status: i32 = redis

@@ -50,7 +50,7 @@ pub async fn send_chat_message(
 				)),
 			})
 		}
-		_ => internal_panic!("unreachable"),
+		_ => bail!("unreachable"),
 	};
 
 	// Build body
@@ -61,7 +61,7 @@ pub async fn send_chat_message(
 				body: message.body,
 			})
 		}
-		_ => internal_panic!("unreachable"),
+		_ => bail!("unreachable"),
 	};
 
 	// Validate message
@@ -74,8 +74,8 @@ pub async fn send_chat_message(
 					thread_ids: vec![thread_id.into()],
 				})
 				.await?;
-				let thread = unwrap_with_owned!(res.threads.first(), CHAT_THREAD_NOT_FOUND);
-				let topic = internal_unwrap!(thread.topic);
+				let thread = unwrap_with!(res.threads.first(), CHAT_THREAD_NOT_FOUND);
+				let topic = unwrap_ref!(thread.topic);
 
 				topic.clone()
 			}
@@ -103,7 +103,7 @@ pub async fn send_chat_message(
 			})
 			.await?;
 
-			internal_unwrap!(res.thread_id).as_uuid()
+			unwrap_ref!(res.thread_id).as_uuid()
 		}
 	};
 
@@ -160,7 +160,7 @@ pub async fn thread_history(
 ) -> GlobalResult<models::GetThreadHistoryResponse> {
 	let current_user_id = ctx.auth().dual_user(ctx.op_ctx()).await?;
 
-	assert_with!(
+	ensure_with!(
 		query.count <= 512,
 		API_BAD_QUERY_PARAMETER,
 		parameter = "count",
@@ -210,8 +210,8 @@ pub async fn thread_topic(
 	.await?;
 
 	let thread = threads_res.threads.first();
-	let thread = internal_unwrap!(thread);
-	let topic = internal_unwrap!(thread.topic).clone();
+	let thread = unwrap_ref!(thread);
+	let topic = unwrap_ref!(thread.topic).clone();
 
 	Ok(models::GetThreadTopicResponse {
 		topic: topic.try_into()?,
@@ -241,7 +241,7 @@ pub async fn thread_live(
 
 		let latest_update_ts = thread_tail.messages.last().map(|msg| msg.msg_ts());
 		for event in thread_tail.messages {
-			match internal_unwrap!(event.kind) {
+			match unwrap_ref!(event.kind) {
 				chat_thread::msg::update::message::Kind::ChatMessage(chat_msg) => {
 					new_messages.push(chat_msg.clone());
 				}
@@ -291,7 +291,7 @@ pub async fn thread_live(
 						let user = users_res.users.iter().find(|u| u.user_id == user_id);
 						let identity = convert::identity::handle_without_presence(
 							current_user_id,
-							internal_unwrap_owned!(user),
+							unwrap!(user),
 						)?;
 
 						// Convert typing status from proto to rust type

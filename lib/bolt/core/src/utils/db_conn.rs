@@ -1,92 +1,160 @@
+use std::{collections::HashMap, sync::Arc};
+
 use anyhow::*;
-use std::collections::HashMap;
+
+use indoc::indoc;
 
 use crate::{
 	config::{self, service::RuntimeKind},
 	context::{ProjectContext, ServiceContext},
-	dep::{self, cloudflare},
-	utils,
+	dep::terraform,
 };
 
-pub struct DatabaseConnection {
+pub struct DatabaseConnections {
 	pub redis_hosts: HashMap<String, String>,
 	pub cockroach_host: Option<String>,
 	pub clickhouse_host: Option<String>,
-
-	/// Reference to tunnels that these ports are proxied through. Tunnel will
-	/// close on drop.
-	_tunnel: Option<cloudflare::Tunnel>,
+	pub clickhouse_config: Option<String>,
 }
 
-impl DatabaseConnection {
+impl DatabaseConnections {
 	pub async fn create(
 		ctx: &ProjectContext,
 		services: &[ServiceContext],
-	) -> Result<DatabaseConnection> {
-		// Create tunnels for databases
-		let mut tunnel_configs = Vec::new();
+	) -> Result<Arc<DatabaseConnections>> {
+		match &ctx.ns().cluster.kind {
+			config::ns::ClusterKind::SingleNode { .. } => {
+				DatabaseConnections::create_local(ctx, services).await
+			}
+			config::ns::ClusterKind::Distributed { .. } => {
+				DatabaseConnections::create_distributed(ctx, services).await
+			}
+		}
+	}
+
+	async fn create_local(
+		_ctx: &ProjectContext,
+		services: &[ServiceContext],
+	) -> Result<Arc<DatabaseConnections>> {
 		let mut redis_hosts = HashMap::new();
 		let mut cockroach_host = None;
 		let mut clickhouse_host = None;
+		let mut clickhouse_config = None;
+
 		for svc in services {
 			match &svc.config().runtime {
-				RuntimeKind::Redis { .. } => {
+				RuntimeKind::Redis { persistent } => {
 					let name = svc.name();
-					let port = dep::redis::server_port(&svc);
+
 					if !redis_hosts.contains_key(&name) {
-						let host = access_service(
-							&mut tunnel_configs,
-							&ctx,
-							&format!("listen.{name}.service.consul:{port}"),
-							(cloudflare::TunnelProtocol::Tcp, &name),
-						)
-						.await?;
+						let db_name = if *persistent {
+							"persistent"
+						} else {
+							"ephemeral"
+						};
+
+						let host =
+							format!("redis-redis-cluster.redis-{db_name}.svc.cluster.local:6379");
 						redis_hosts.insert(name, host);
 					}
 				}
 				RuntimeKind::CRDB { .. } => {
 					if cockroach_host.is_none() {
-						cockroach_host = Some(
-							access_service(
-								&mut tunnel_configs,
-								ctx,
-								"sql.cockroach.service.consul:26257",
-								(cloudflare::TunnelProtocol::Tcp, "cockroach-sql"),
-							)
-							.await?,
-						);
+						cockroach_host =
+							Some("cockroachdb.cockroachdb.svc.cluster.local:26257".to_string());
 					}
 				}
 				RuntimeKind::ClickHouse { .. } => {
 					if clickhouse_host.is_none() {
-						clickhouse_host = Some(
-							access_service(
-								&mut tunnel_configs,
-								ctx,
-								"tcp.clickhouse.service.consul:9000",
-								(cloudflare::TunnelProtocol::Tcp, "clickhouse-tcp"),
+						clickhouse_host =
+							Some("clickhouse.clickhouse.svc.cluster.local:9440".to_string());
+						clickhouse_config = Some(
+							indoc!(
+								"
+								openSSL:
+								  client:
+								    caConfig: '/local/clickhouse-ca.crt'
+								"
 							)
-							.await?,
+							.to_string(),
 						);
 					}
 				}
-				x @ _ => bail!("cannot connect to this type of service: {x:?}"),
+				x => bail!("cannot connect to this type of service: {x:?}"),
 			}
 		}
 
-		// Open tunnels if needed
-		let tunnel = if !tunnel_configs.is_empty() {
-			Some(cloudflare::Tunnel::open(&ctx, tunnel_configs).await)
-		} else {
-			None
-		};
-
-		Ok(DatabaseConnection {
+		Ok(Arc::new(DatabaseConnections {
 			redis_hosts,
 			cockroach_host,
 			clickhouse_host,
-			_tunnel: tunnel,
-		})
+			clickhouse_config,
+		}))
+	}
+
+	async fn create_distributed(
+		ctx: &ProjectContext,
+		services: &[ServiceContext],
+	) -> Result<Arc<DatabaseConnections>> {
+		let mut redis_hosts = HashMap::new();
+		let mut cockroach_host = None;
+		let mut clickhouse_host = None;
+		let clickhouse_config = None;
+
+		let redis_data = terraform::output::read_redis(ctx).await;
+
+		for svc in services {
+			match &svc.config().runtime {
+				RuntimeKind::Redis { persistent } => {
+					let name = svc.name();
+
+					if !redis_hosts.contains_key(&name) {
+						let db_name = if *persistent {
+							"persistent".to_string()
+						} else {
+							"ephemeral".to_string()
+						};
+
+						// Read host and port from terraform
+						let hostname = redis_data
+							.host
+							.get(&db_name)
+							.expect("terraform output for redis db not found");
+						let port = redis_data
+							.port
+							.get(&db_name)
+							.expect("terraform output for redis db not found");
+						let host = format!("{}:{}", *hostname, *port);
+
+						redis_hosts.insert(name, host);
+					}
+				}
+				RuntimeKind::CRDB { .. } => {
+					if cockroach_host.is_none() {
+						let crdb_data = terraform::output::read_crdb(ctx).await;
+						cockroach_host = Some(format!("{}:{}", *crdb_data.host, *crdb_data.port));
+					}
+				}
+				RuntimeKind::ClickHouse { .. } => {
+					if clickhouse_host.is_none() {
+						let clickhouse_data = terraform::output::read_clickhouse(ctx).await;
+
+						clickhouse_host = Some(format!(
+							"{}:{}",
+							*clickhouse_data.host, *clickhouse_data.port_native_secure
+						));
+					}
+				}
+				x => bail!("cannot connect to this type of service: {x:?}"),
+			}
+		}
+
+		Ok(Arc::new(DatabaseConnections {
+			redis_hosts,
+			cockroach_host,
+			clickhouse_host,
+			clickhouse_config,
+		}))
 	}
 
 	/// Returns the URL to use for database migrations.
@@ -97,7 +165,23 @@ impl DatabaseConnection {
 			RuntimeKind::CRDB { .. } => {
 				let db_name = service.crdb_db_name();
 				let host = self.cockroach_host.as_ref().unwrap();
-				Ok(format!("cockroach://root@{host}/{db_name}?sslmode=disable"))
+				let username = project_ctx.read_secret(&["crdb", "username"]).await?;
+				let password = project_ctx.read_secret(&["crdb", "password"]).await?;
+
+				// Serverless clusters require a cluster identifier
+				let full_db_name = match &project_ctx.ns().cluster.kind {
+					config::ns::ClusterKind::SingleNode { .. } => db_name,
+					config::ns::ClusterKind::Distributed { .. } => {
+						let crdb_data = terraform::output::read_crdb(&project_ctx).await;
+
+						format!("{}.{}", *crdb_data.cluster_identifier, db_name)
+					}
+				};
+
+				Ok(format!(
+					"cockroach://{}:{}@{}/{}?sslmode=verify-ca&sslrootcert=/local/crdb-ca.crt",
+					username, password, host, full_db_name
+				))
 			}
 			RuntimeKind::ClickHouse { .. } => {
 				let db_name = service.clickhouse_db_name();
@@ -106,33 +190,17 @@ impl DatabaseConnection {
 					.read_secret(&["clickhouse", "users", "bolt", "password"])
 					.await?;
 				let host = self.clickhouse_host.as_ref().unwrap();
-				Ok(format!("clickhouse://{host}/?database={db_name}&username={clickhouse_user}&password={clickhouse_password}&x-multi-statement=true"))
+
+				let query_other = format!(
+					"&x-multi-statement=true&x-migrations-table-engine=ReplicatedMergeTree&secure=true&skip_verify=true",
+				);
+
+				Ok(format!(
+					"clickhouse://{}/?database={}&username={}&password={}{}",
+					host, db_name, clickhouse_user, clickhouse_password, query_other
+				))
 			}
 			x @ _ => bail!("cannot migrate this type of service: {x:?}"),
-		}
-	}
-}
-
-/// Creates a tunnel or returns the Consul address depending on the deploy method.
-pub async fn access_service(
-	tunnel_configs: &mut Vec<cloudflare::TunnelConfig>,
-	ctx: &ProjectContext,
-	service_hostname: &str,
-	(tunnel_protocol, tunnel_name): (cloudflare::TunnelProtocol, &str),
-) -> Result<String> {
-	match &ctx.ns().cluster.kind {
-		config::ns::ClusterKind::SingleNode { .. } => Ok(service_hostname.into()),
-		config::ns::ClusterKind::Distributed { .. } => {
-			// Save the tunnel config
-			let local_port = utils::pick_port();
-			tunnel_configs.push(cloudflare::TunnelConfig::new_with_port(
-				tunnel_protocol,
-				tunnel_name,
-				local_port,
-			));
-
-			// Hardcode to the forwarded port
-			Ok(format!("127.0.0.1:{local_port}"))
 		}
 	}
 }

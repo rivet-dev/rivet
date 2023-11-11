@@ -1,7 +1,7 @@
 use std::collections::HashSet;
 
 use anyhow::*;
-use bolt_core::context::ProjectContext;
+use bolt_core::context::{ProjectContext, RunContext};
 use clap::Parser;
 
 /// Used to extract data from the Bolt configs. This gets called primarily in
@@ -12,6 +12,7 @@ use clap::Parser;
 #[derive(Parser, Debug)]
 pub enum SubCommand {
 	Namespace,
+	ProjectRoot,
 	ServiceName {
 		#[clap(index = 1, action = clap::ArgAction::Append)]
 		service_names: Vec<String>,
@@ -23,6 +24,8 @@ pub enum SubCommand {
 	ServiceDatabases {
 		#[clap(index = 1, action = clap::ArgAction::Append)]
 		service_names: Vec<String>,
+		#[clap(long)]
+		test: bool,
 	},
 }
 
@@ -31,6 +34,9 @@ impl SubCommand {
 		match self {
 			Self::Namespace => {
 				println!("{}", ctx.ns_id());
+			}
+			Self::ProjectRoot => {
+				print!("{}", ctx.path().display());
 			}
 			Self::ServiceName { service_names } => {
 				for svc_ctx in ctx.services_with_patterns(&service_names).await {
@@ -42,12 +48,23 @@ impl SubCommand {
 					println!("{}", svc_ctx.path().display());
 				}
 			}
-			Self::ServiceDatabases { service_names } => {
+			Self::ServiceDatabases {
+				service_names,
+				test,
+			} => {
+				let run_context = if test {
+					RunContext::Test {
+						test_id: String::new(),
+					}
+				} else {
+					RunContext::Service {}
+				};
+
 				let mut databases = HashSet::new();
 
 				// TODO: Use a stream iter instead
 				for svc_ctx in ctx.services_with_patterns(&service_names).await {
-					let dbs = svc_ctx.database_dependencies().await;
+					let dbs = svc_ctx.database_dependencies(&run_context).await;
 
 					databases.extend(dbs.keys().cloned());
 				}

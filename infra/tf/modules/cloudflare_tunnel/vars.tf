@@ -3,7 +3,7 @@ variable "name" {
 	type = string
 }
 
-# MARK: Cloudfalre
+# MARK: Cloudflare
 variable "cloudflare_account_id" {
 	type = string
 }

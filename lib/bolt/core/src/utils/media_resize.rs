@@ -1,5 +1,6 @@
 const UUID_V4_REGEXP: &str = "[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}";
 
+// TODO: Update to support multiple S3 providers
 pub struct ResizePreset {
 	ns: String,
 	name: String,
@@ -54,7 +55,7 @@ impl ResizePreset {
 
 	fn path_regex(&self) -> String {
 		format!(
-			"/{name}/({UUID_V4_REGEXP}){file}",
+			"/media/{name}/({UUID_V4_REGEXP}){file}",
 			name = self.name,
 			file = self.file_path
 		)
@@ -95,7 +96,7 @@ impl ResizePreset {
 		}
 		url.push_str("/");
 		url.push_str(&urlencoding::encode(&format!(
-			"http://proxy.traffic-server.service.consul:9300/s3-cache/{ns}-{bucket}/",
+			"http://traffic-server.traffic-server.svc.cluster.local:8080/s3-cache/{ns}-{bucket}/",
 			ns = self.ns,
 			bucket = self.bucket
 		)));
@@ -155,7 +156,7 @@ impl From<ResizePreset> for ResizePresetSerialize {
 			path_regex_replacement: preset.path_regex_replacement(),
 			game_cors: preset.game_cors,
 			// Match items with query filters before the fallback path
-			priority: if preset.fallback { 50 } else { 75 },
+			priority: if preset.fallback { 60 } else { 61 },
 		}
 	}
 }

@@ -7,12 +7,13 @@ use std::{
 use tokio::{fs, sync::Mutex};
 
 use crate::{
-	config::{self, service::ServiceDomain},
+	config::{self},
 	context,
-	dep::{self, s3, terraform},
+	dep::{self},
+	utils,
 };
 
-use super::ServiceContext;
+use super::{RunContext, ServiceContext};
 
 pub type ProjectContext = Arc<ProjectContextData>;
 
@@ -25,6 +26,8 @@ pub struct ProjectContextData {
 	path: PathBuf,
 	svc_ctxs: Vec<context::service::ServiceContext>,
 	svc_ctxs_map: HashMap<String, context::service::ServiceContext>,
+
+	source_hash: String,
 }
 
 impl ProjectContextData {
@@ -103,9 +106,19 @@ impl ProjectContextData {
 			config_local,
 			ns_config,
 			cache: Mutex::new(cache),
-			path: project_root,
+			path: project_root.clone(),
 			svc_ctxs,
 			svc_ctxs_map,
+
+			source_hash: {
+				let modified_ts =
+					tokio::task::spawn_blocking(move || utils::deep_modified_ts(&project_root))
+						.await
+						.unwrap()
+						.unwrap();
+
+				modified_ts.to_string()
+			},
 		});
 
 		ctx.validate_ns();
@@ -120,17 +133,94 @@ impl ProjectContextData {
 
 	/// Validates the namespace config.
 	fn validate_ns(&self) {
-		if self.ns().grafana.is_some() {
+		// MARK: Pools
+		if self.ns().dns.is_none() {
+			assert!(
+				self.ns().pools.is_empty(),
+				"must have dns configured to provision servers"
+			);
 			assert!(
 				matches!(
-					self.ns().dns.provider,
-					config::ns::DnsProvider::Cloudflare {
-						access: Some(_),
-						..
-					}
+					self.ns().cluster.kind,
+					config::ns::ClusterKind::SingleNode { .. }
 				),
-				"cloudflare access must be enabled to use grafana"
+				"must have dns if not using single node cluster"
 			);
+		} else {
+			if let config::ns::ClusterKind::SingleNode {
+				api_http_port,
+				api_https_port,
+				minio_port,
+				..
+			} = self.ns().cluster.kind
+			{
+				assert_eq!(80, api_http_port, "api_http_port must be 80 if dns enabled");
+				assert_eq!(
+					Some(443),
+					api_https_port,
+					"api_https_port must be 443 if dns enabled"
+				);
+				assert_eq!(
+					9000, minio_port,
+					"minio_port must not be changed if dns enabled"
+				)
+			}
+		}
+
+		// MARK: Dynamic Servers
+		// Validate the build delivery method
+		if !self.ns().pools.is_empty() {
+			let ats_count = self.ns().pools.iter().filter(|p| p.pool == "ats").count();
+			match self.ns().rivet.dynamic_servers.build_delivery_method {
+				config::ns::DynamicServersBuildDeliveryMethod::TrafficServer => {
+					assert_ne!(ats_count, 0, "TrafficServer delivery method will not work without ats servers in each region. either set rivet.dynamic_servers.build_delivery_method = \"S3Direct\" to download builds directly from S3 or add an ATS pool to each region.");
+				}
+				config::ns::DynamicServersBuildDeliveryMethod::S3Direct => {
+					assert_eq!(
+						ats_count, 0,
+						"S3Direct delivery method should not be used if ats servers are available"
+					);
+				}
+			}
+		}
+
+		// MARK: Pools
+		for region_id in self.ns().regions.keys() {
+			// Skip empty regions
+			if !self.ns().pools.iter().any(|p| p.region == *region_id) {
+				continue;
+			}
+
+			// Validate all required pools exist
+			assert!(
+				self.ns()
+					.pools
+					.iter()
+					.any(|p| p.pool == "gg" && p.region == *region_id),
+				"missing gg pool for region {region_id}",
+				region_id = region_id
+			);
+			assert!(
+				self.ns()
+					.pools
+					.iter()
+					.any(|p| p.pool == "job" && p.region == *region_id),
+				"missing job pool for region {region_id}",
+				region_id = region_id
+			);
+			if matches!(
+				self.ns().rivet.dynamic_servers.build_delivery_method,
+				config::ns::DynamicServersBuildDeliveryMethod::TrafficServer
+			) {
+				assert!(
+					self.ns()
+						.pools
+						.iter()
+						.any(|p| p.pool == "ats" && p.region == *region_id),
+					"missing ats pool for region {region_id}",
+					region_id = region_id
+				);
+			}
 		}
 	}
 
@@ -145,7 +235,8 @@ impl ProjectContextData {
 			}
 		}
 
-		panic!("Could not find project root.");
+		eprintln!("Could not find project root.");
+		std::process::exit(1);
 	}
 }
 
@@ -352,18 +443,10 @@ impl ProjectContextData {
 		svc_ctxs
 	}
 
-	pub async fn essential_services(self: &Arc<Self>) -> Vec<context::service::ServiceContext> {
-		self.all_services()
-			.await
-			.iter()
-			.filter(|x| x.config().service.essential)
-			.cloned()
-			.collect::<Vec<_>>()
-	}
-
 	pub async fn recursive_dependencies_with_pattern(
 		self: &Arc<Self>,
 		svc_names: &[impl AsRef<str>],
+		run_context: &RunContext,
 	) -> Vec<ServiceContext> {
 		let svc_names = self
 			.services_with_patterns(svc_names)
@@ -371,23 +454,35 @@ impl ProjectContextData {
 			.iter()
 			.map(|x| x.name())
 			.collect::<Vec<String>>();
-		self.recursive_dependencies(svc_names.as_slice()).await
+		self.recursive_dependencies(svc_names.as_slice(), run_context)
+			.await
 	}
 
 	pub async fn recursive_dependencies(
 		self: &Arc<Self>,
 		svc_names: &[impl AsRef<str>],
+		run_context: &RunContext,
 	) -> Vec<ServiceContext> {
 		// Fetch core services
 		let mut all_svc = self.services_with_names(&svc_names).await;
 
 		// Add all dependencies
+		let mut first_iter = true; // If this is the first recursive iteration
 		let mut pending_deps = all_svc.clone(); // Services whose dependencies still need to be processed
 		while !pending_deps.is_empty() {
 			// Find all new dependencies
 			let mut new_deps = Vec::<ServiceContext>::new();
 			for svc_ctx in &pending_deps {
-				let dependencies = svc_ctx.dependencies().await;
+				let dependencies = if first_iter {
+					// Use the provided run context for the root services
+					svc_ctx.dependencies(run_context).await
+				} else {
+					// Use `Service` context for recursive dependencies. If we recursively use the `Test` run
+					// context recursively, we'll get all of the dev-dependencies and likely get circular
+					// dependencies.
+					svc_ctx.dependencies(&RunContext::Service {}).await
+				};
+
 				for dep_ctx in dependencies {
 					// Check if dependency is already registered
 					if !all_svc.iter().any(|d| d.name() == dep_ctx.name()) {
@@ -399,6 +494,7 @@ impl ProjectContextData {
 
 			// Save new pending dep list
 			pending_deps = new_deps;
+			first_iter = false;
 		}
 
 		all_svc
@@ -432,65 +528,108 @@ impl ProjectContextData {
 	pub fn tf_path(&self) -> PathBuf {
 		self.path.join("infra").join("tf")
 	}
+}
 
-	pub fn salt_path(&self) -> PathBuf {
-		self.path.join("infra").join("salt")
+impl ProjectContextData {
+	pub fn k8s_cluster_name(&self) -> String {
+		format!("rivet-{}", self.ns_id())
+	}
+
+	pub fn gen_kubeconfig_path(&self) -> PathBuf {
+		self.gen_path()
+			.join("k8s")
+			.join("kubeconfig")
+			.join(format!("{}.yml", self.ns_id()))
+	}
+
+	/// If the Kubernetes pods have resource limits imposed.
+	pub fn limit_resources(&self) -> bool {
+		match self.ns().cluster.kind {
+			config::ns::ClusterKind::SingleNode {
+				limit_resources, ..
+			} => limit_resources,
+			config::ns::ClusterKind::Distributed { .. } => true,
+		}
 	}
 }
 
 impl ProjectContextData {
+	pub fn domain_main(&self) -> Option<String> {
+		self.ns().dns.as_ref().map(|x| x.domain.main.clone())
+	}
+
+	pub fn domain_cdn(&self) -> Option<String> {
+		self.ns().dns.as_ref().map(|x| x.domain.cdn.clone())
+	}
+
+	pub fn domain_job(&self) -> Option<String> {
+		self.ns().dns.as_ref().map(|x| x.domain.job.clone())
+	}
+
+	/// Domain to host the API endpoint on. This is the default domain for all endpoints without a
+	/// specific subdomain.
+	pub fn domain_main_api(&self) -> Option<String> {
+		self.domain_main().map(|x| format!("api.{x}"))
+	}
+
+	/// Origin used for building links to the API endpoint.
+	pub fn origin_api(&self) -> String {
+		if let Some(domain_main_api) = self.domain_main_api() {
+			format!("https://{domain_main_api}")
+		} else if let config::ns::ClusterKind::SingleNode {
+			public_ip,
+			api_http_port,
+			..
+		} = &self.ns().cluster.kind
+		{
+			format!("http://{public_ip}:{api_http_port}")
+		} else {
+			unreachable!()
+		}
+	}
+
+	/// Origin used to access Minio. Only applicable if Minio provider is specified.
+	pub fn origin_minio(&self) -> String {
+		if let Some(domain_main) = self.domain_main() {
+			format!("https://minio.{domain_main}")
+		} else if let config::ns::ClusterKind::SingleNode {
+			public_ip,
+			minio_port,
+			..
+		} = &self.ns().cluster.kind
+		{
+			format!("http://{public_ip}:{minio_port}")
+		} else {
+			unreachable!()
+		}
+	}
+
 	/// Origin used for building links to the Hub.
 	pub fn origin_hub(&self) -> String {
+		self.ns().rivet.api.hub_origin.clone().unwrap_or_else(|| {
+			if let Some(domain_main) = self.domain_main() {
+				format!("https://hub.{domain_main}")
+			} else {
+				// Hub will be hosted at the root of the origin
+				self.origin_api()
+			}
+		})
+	}
+
+	pub fn origin_hub_regex(&self) -> String {
 		self.ns()
-			.dns
-			.hub_origin
+			.rivet
+			.api
+			.hub_origin_regex
 			.clone()
-			.unwrap_or_else(|| format!("https://hub.{}", self.ns().dns.domain.main.clone()))
-	}
-	pub fn domain_main(&self) -> String {
-		self.ns().dns.domain.main.clone()
-	}
-
-	pub fn domain_cdn(&self) -> String {
-		self.ns().dns.domain.cdn.clone()
-	}
-
-	pub fn domain_job(&self) -> String {
-		self.ns().dns.domain.job.clone()
-	}
-
-	pub async fn all_router_url_env(self: &Arc<Self>) -> Vec<(String, String)> {
-		self.all_services()
-			.await
-			.iter()
-			.filter_map(|svc| {
-				svc.config()
-					.kind
-					.router()
-					.and_then(|x| x.mounts.first())
-					.map(|x| (svc.clone(), x))
+			.unwrap_or_else(|| {
+				// Create regex pattern from the default hub origin
+				format!("^{}$", self.origin_hub().replace(".", "\\."))
 			})
-			.map(|(svc, mount)| {
-				let domain = match mount.domain {
-					ServiceDomain::Base => self.domain_main(),
-					ServiceDomain::BaseGame => self.domain_cdn(),
-					ServiceDomain::BaseJob => self.domain_job(),
-				};
+	}
 
-				(
-					format!("RIVET_{}_URL", svc.name_screaming_snake()),
-					format!(
-						"https://{domain}{path}",
-						domain = if let Some(subdomain) = &mount.subdomain {
-							format!("{}.{}", subdomain, domain)
-						} else {
-							domain
-						},
-						path = mount.path.clone().unwrap_or_default(),
-					),
-				)
-			})
-			.collect::<Vec<(String, String)>>()
+	pub fn tls_enabled(&self) -> bool {
+		self.ns().dns.is_some()
 	}
 }
 
@@ -560,7 +699,7 @@ impl ProjectContextData {
 			}
 		}
 
-		// If nonoe have the default flag, return the first provider
+		// If none have the default flag, return the first provider
 		if let Some(p) = &providers.minio {
 			return Ok((s3_util::Provider::Minio, p.clone()));
 		} else if let Some(p) = &providers.backblaze {
@@ -577,75 +716,48 @@ impl ProjectContextData {
 		self: &Arc<Self>,
 		provider: s3_util::Provider,
 	) -> Result<S3Credentials> {
-		match provider {
-			s3_util::Provider::Minio => Ok(S3Credentials {
-				access_key_id: "root".into(),
-				access_key_secret: self
-					.read_secret(&["minio", "users", "root", "password"])
-					.await?,
-			}),
-			s3_util::Provider::Backblaze => {
-				let service_key = s3::fetch_service_key(&self, &["b2", "terraform"]).await?;
-				Ok(S3Credentials {
-					access_key_id: service_key.key_id,
-					access_key_secret: service_key.key,
-				})
-			}
-			s3_util::Provider::Aws => {
-				let service_key = s3::fetch_service_key(&self, &["aws", "terraform"]).await?;
-				Ok(S3Credentials {
-					access_key_id: service_key.key_id,
-					access_key_secret: service_key.key,
-				})
-			}
-		}
+		Ok(S3Credentials {
+			access_key_id: self
+				.read_secret(&["s3", provider.as_str(), "terraform", "key_id"])
+				.await?,
+			access_key_secret: self
+				.read_secret(&["s3", provider.as_str(), "terraform", "key"])
+				.await?,
+		})
 	}
 
 	/// Returns the appropriate S3 connection configuration for the provided S3 provider.
 	pub async fn s3_config(self: &Arc<Self>, provider: s3_util::Provider) -> Result<S3Config> {
 		match provider {
 			s3_util::Provider::Minio => {
-				let s3 = terraform::output::read_s3_minio(&*self).await;
 				Ok(S3Config {
-					endpoint_internal: (*s3.s3_endpoint_internal).clone(),
-					endpoint_external: (*s3.s3_endpoint_external).clone(),
-					region: (*s3.s3_region).clone(),
+					endpoint_internal: "http://minio.minio.svc.cluster.local:9000".into(),
+					// Use localhost if DNS is not configured
+					endpoint_external: self.origin_minio(),
+					// Minio defaults to us-east-1 region
+					// https://github.com/minio/minio/blob/0ec722bc5430ad768a263b8464675da67330ad7c/cmd/server-main.go#L739
+					region: "us-east-1".into(),
 				})
 			}
 			s3_util::Provider::Backblaze => {
-				let s3 = terraform::output::read_s3_backblaze(&*self).await;
+				let endpoint = "https://s3.us-west-004.backblazeb2.com".to_string();
 				Ok(S3Config {
-					endpoint_internal: (*s3.s3_endpoint_internal).clone(),
-					endpoint_external: (*s3.s3_endpoint_external).clone(),
-					region: (*s3.s3_region).clone(),
+					endpoint_internal: endpoint.clone(),
+					endpoint_external: endpoint,
+					// See region information here:
+					// https://help.backblaze.com/hc/en-us/articles/360047425453-Getting-Started-with-the-S3-Compatible-API
+					region: "us-west-004".into(),
 				})
 			}
 			s3_util::Provider::Aws => {
-				let s3 = terraform::output::read_s3_aws(&*self).await;
+				let endpoint = "https://s3.us-east-1.amazonaws.com".to_string();
 				Ok(S3Config {
-					endpoint_internal: (*s3.s3_endpoint_internal).clone(),
-					endpoint_external: (*s3.s3_endpoint_external).clone(),
-					region: (*s3.s3_region).clone(),
+					endpoint_internal: endpoint.clone(),
+					endpoint_external: endpoint,
+					region: "us-east-1".into(),
 				})
 			}
 		}
-	}
-
-	pub async fn s3_client_service_builds(self: &Arc<Self>) -> Result<s3_util::Client> {
-		let s3_dep = self.service_with_name("bucket-svc-build").await;
-		let (default_provider, _) = self.default_s3_provider()?;
-		let s3_config = self.s3_config(default_provider).await?;
-		let s3_creds = self.s3_credentials(default_provider).await?;
-
-		let client = s3_util::Client::new(
-			&s3_dep.s3_bucket_name().await,
-			&s3_config.endpoint_internal,
-			&s3_config.region,
-			&s3_creds.access_key_id,
-			&s3_creds.access_key_secret,
-		)?;
-
-		Ok(client)
 	}
 
 	pub fn s3_cors_allowed_origins(&self) -> Vec<String> {
@@ -654,7 +766,16 @@ impl ProjectContextData {
 			.cors
 			.allowed_origins
 			.clone()
-			.unwrap_or_else(|| vec![format!("https://{}", self.domain_main())])
+			.unwrap_or_else(|| {
+				let mut origins = Vec::new();
+				origins.push(self.origin_hub());
+				origins
+			})
+	}
+
+	pub fn imagor_cors_allowed_origins(&self) -> Vec<String> {
+		// Mirror S3 CORS for now
+		self.s3_cors_allowed_origins()
 	}
 }
 
@@ -710,14 +831,8 @@ impl ProjectContextData {
 }
 
 impl ProjectContextData {
-	/// Which target to build for with the current configuration.
-	pub fn rust_build_target(&self) -> context::RustBuildTarget {
-		match self.ns().cluster.kind {
-			// Build natively, since deploying to the same machine locally.
-			config::ns::ClusterKind::SingleNode { .. } => context::RustBuildTarget::Native,
-			// Build for MUSL since this will be deployed to a different machine.
-			config::ns::ClusterKind::Distributed { .. } => context::RustBuildTarget::Musl,
-		}
+	pub fn source_hash(&self) -> String {
+		self.source_hash.clone()
 	}
 }
 

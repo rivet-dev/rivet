@@ -34,7 +34,7 @@ impl From<TokenRow> for token::get::Token {
 
 #[operation(name = "token-get")]
 async fn handle(ctx: OperationContext<token::get::Request>) -> GlobalResult<token::get::Response> {
-	let crdb = ctx.crdb("db-token").await?;
+	let crdb = ctx.crdb().await?;
 
 	let jtis = ctx
 		.jtis
@@ -42,7 +42,8 @@ async fn handle(ctx: OperationContext<token::get::Request>) -> GlobalResult<toke
 		.map(common::Uuid::as_uuid)
 		.collect::<Vec<_>>();
 
-	let tokens = sqlx::query_as::<_, TokenRow>(indoc!(
+	let tokens = sql_fetch_all!(
+		[ctx, TokenRow]
 		"
 		SELECT
 			jti,
@@ -54,12 +55,11 @@ async fn handle(ctx: OperationContext<token::get::Request>) -> GlobalResult<toke
 			user_agent,
 			remote_address,
 			revoke_ts
-		FROM tokens
+		FROM db_token.tokens
 		WHERE jti = ANY($1)
-		"
-	))
-	.bind(&jtis)
-	.fetch_all(&crdb)
+		",
+		&jtis,
+	)
 	.await?
 	.into_iter()
 	.map(Into::<token::get::Token>::into)

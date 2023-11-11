@@ -50,13 +50,16 @@ pub async fn generate(ctx: &mut ProjectContext, opts: TemplateOpts) -> Result<()
 
 	// Create base path based on selected root
 	let base_path = if let Some(root) = root {
-		&ctx.config_local()
+		let root_path = &ctx
+			.config_local()
 			.additional_roots
 			.get(&root)
 			.ok_or_else(|| anyhow!("Root `{}` not found in local config", root))?
-			.path
+			.path;
+
+		ctx.path().join(root_path)
 	} else {
-		ctx.path()
+		ctx.path().to_owned()
 	};
 
 	if !create_pkg
@@ -65,9 +68,16 @@ pub async fn generate(ctx: &mut ProjectContext, opts: TemplateOpts) -> Result<()
 			.await
 			.is_err()
 	{
+		eprintln!("{}", base_path.display());
+		let relative_path = base_path
+			.strip_prefix(ctx.path())
+			.expect("strip path")
+			.display();
+
 		bail!(
-			"Package `{}` does not exist. Use `--create-pkg` to suppress this message.",
-			pkg_name
+			"Package `{}` does not exist at `{}`. Use `--create-pkg` to suppress this message.",
+			pkg_name,
+			relative_path
 		);
 	}
 

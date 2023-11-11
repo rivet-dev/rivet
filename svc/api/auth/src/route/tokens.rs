@@ -26,7 +26,7 @@ pub async fn identity(
 	body: models::RefreshIdentityTokenRequest,
 	refresh_token: Option<String>,
 ) -> GlobalResult<models::RefreshIdentityTokenResponse> {
-	let origin = internal_unwrap_owned!(ctx.origin());
+	let origin = unwrap!(ctx.origin());
 
 	// Prevent getting refresh token on logout, makes sure only a new guest token is returned
 	let refresh_token = if !body.logout {
@@ -82,8 +82,8 @@ pub async fn identity(
 		// Gracefully handle errors
 		match token_res {
 			Ok(token_res) => (
-				internal_unwrap!(token_res.token).token.to_owned(),
-				internal_unwrap!(token_res.refresh_token).token.to_owned(),
+				unwrap_ref!(token_res.token).token.to_owned(),
+				unwrap_ref!(token_res.refresh_token).token.to_owned(),
 			),
 			Err(err) => {
 				tracing::warn!(?err, "error refreshing token");
@@ -93,7 +93,7 @@ pub async fn identity(
 				{
 					// Delete refresh token
 					let (k, v) = delete_refresh_token_header(origin)?;
-					internal_unwrap_owned!(response.headers_mut()).insert(k, v);
+					unwrap!(response.headers_mut()).insert(k, v);
 				}
 
 				return Err(err);
@@ -105,13 +105,13 @@ pub async fn identity(
 
 	// Validate response
 	if refresh_token.is_empty() {
-		internal_panic!("missing refresh token");
+		bail!("missing refresh token");
 	}
 
 	// Set refresh token
 	{
 		let (k, v) = refresh_token_header(origin, refresh_token)?;
-		internal_unwrap_owned!(response.headers_mut()).insert(k, v);
+		unwrap!(response.headers_mut()).insert(k, v);
 	}
 
 	// Decode user token to extract user ID. We do this on the server since it adds a
@@ -125,10 +125,10 @@ pub async fn identity(
 			user_ids: vec![user_ent.user_id.into()],
 		})
 		.await?;
-		let user = internal_unwrap_owned!(user_res.users.first());
+		let user = unwrap!(user_res.users.first());
 
 		if user.delete_complete_ts.is_some() {
-			let jti = internal_unwrap_owned!(user_claims.jti);
+			let jti = unwrap!(user_claims.jti);
 			op!([ctx] token_revoke {
 				jtis: vec![jti],
 			})
@@ -136,9 +136,9 @@ pub async fn identity(
 
 			// Delete refresh token
 			let (k, v) = delete_refresh_token_header(origin)?;
-			internal_unwrap_owned!(response.headers_mut()).insert(k, v);
+			unwrap!(response.headers_mut()).insert(k, v);
 
-			panic_with!(TOKEN_REVOKED);
+			bail_with!(TOKEN_REVOKED);
 		}
 	}
 

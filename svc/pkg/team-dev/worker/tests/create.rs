@@ -18,11 +18,11 @@ async fn empty(ctx: TestCtx) {
 
 	let (sql_exists,) = sqlx::query_as::<_, (bool,)>(indoc!(
 		"
-		SELECT EXISTS (SELECT 1 FROM dev_teams WHERE team_id = $1)
+		SELECT EXISTS (SELECT 1 FROM db_team_dev.dev_teams WHERE team_id = $1)
 		"
 	))
 	.bind(team_res.team_id.unwrap().as_uuid())
-	.fetch_one(&ctx.crdb("db-team-dev").await.unwrap())
+	.fetch_one(&ctx.crdb().await.unwrap())
 	.await
 	.unwrap();
 

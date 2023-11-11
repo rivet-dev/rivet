@@ -31,7 +31,7 @@ pub async fn summaries(
 		}),
 	)?;
 
-	let user_teams = &internal_unwrap_owned!(user_team_list_res.users.first()).teams;
+	let user_teams = &unwrap!(user_team_list_res.users.first()).teams;
 
 	teams_res
 		.teams

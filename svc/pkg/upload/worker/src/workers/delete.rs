@@ -24,42 +24,47 @@ struct BucketDeletions {
 
 #[worker(name = "upload-delete")]
 async fn worker(ctx: &OperationContext<upload::msg::delete::Message>) -> GlobalResult<()> {
-	let crdb = ctx.crdb("db-upload").await?;
+	let crdb = ctx.crdb().await?;
 
-	let request_id = internal_unwrap!(ctx.request_id).as_uuid();
+	let request_id = unwrap_ref!(ctx.request_id).as_uuid();
 	let upload_ids = ctx
 		.upload_ids
 		.iter()
 		.map(common::Uuid::as_uuid)
 		.collect::<Vec<_>>();
 
-	let uploads = sqlx::query_as::<_, UploadRow>(indoc!(
+	let uploads = sql_fetch_all!(
+		[ctx, UploadRow]
 		"
 		SELECT upload_id, bucket, provider
-		FROM uploads
+		FROM db_upload.uploads
 		WHERE upload_id = ANY($1)
-		"
-	))
-	.bind(&upload_ids)
-	.fetch_all(&crdb)
+		",
+		&upload_ids,
+	)
 	.await?;
 
-	let upload_files = sqlx::query_as::<_, FileRow>(indoc!(
+	let upload_files = sql_fetch_all!(
+		[ctx, FileRow]
 		"
 		SELECT upload_id, path
-		FROM upload_files
+		FROM db_upload.upload_files
 		WHERE upload_id = ANY($1)
-		"
-	))
-	.bind(&upload_ids)
-	.fetch_all(&crdb)
+		",
+		&upload_ids,
+	)
 	.await?;
+
+	ctx.cache().purge("upload", upload_ids.clone()).await?;
+	ctx.cache()
+		.purge("upload_files", upload_ids.clone())
+		.await?;
 
 	// Compile uploads into hashmap by bucket
 	let mut deletions: HashMap<String, BucketDeletions> =
 		HashMap::with_capacity(upload_files.len());
 	for upload_file in upload_files {
-		let upload = internal_unwrap_owned!(uploads
+		let upload = unwrap!(uploads
 			.iter()
 			.find(|upload| upload.upload_id == upload_file.upload_id));
 		let key = format!("{}/{}", upload_file.upload_id, upload_file.path);
@@ -68,7 +73,7 @@ async fn worker(ctx: &OperationContext<upload::msg::delete::Message>) -> GlobalR
 			x.keys.push(key);
 		} else {
 			// Parse provider
-			let proto_provider = internal_unwrap_owned!(
+			let proto_provider = unwrap!(
 				backend::upload::Provider::from_i32(upload.provider as i32),
 				"invalid upload provider"
 			);
@@ -125,16 +130,16 @@ async fn worker(ctx: &OperationContext<upload::msg::delete::Message>) -> GlobalR
 		.await?;
 
 	// Mark upload as deleted
-	sqlx::query(indoc!(
+	sql_execute!(
+		[ctx]
 		"
-		UPDATE uploads
+		UPDATE db_upload.uploads
 		SET deleted_ts = $2
 		WHERE upload_id = ANY($1)
-		"
-	))
-	.bind(&upload_ids)
-	.bind(ctx.ts())
-	.execute(&crdb)
+		",
+		&upload_ids,
+		ctx.ts(),
+	)
 	.await?;
 
 	msg!([ctx] upload::msg::delete_complete(request_id) {

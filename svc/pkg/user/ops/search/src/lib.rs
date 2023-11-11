@@ -21,11 +21,11 @@ enum Error {
 async fn handle(
 	ctx: OperationContext<user::search::Request>,
 ) -> GlobalResult<user::search::Response> {
-	let crdb = ctx.crdb("db-user").await?;
+	let crdb = ctx.crdb().await?;
 	let limit = ctx.limit;
 
-	internal_assert!(limit != 0, "limit too low");
-	internal_assert!(limit <= 32, "limit too high");
+	ensure!(limit != 0, "limit too low");
+	ensure!(limit <= 32, "limit too high");
 
 	// Parse name and account number bounds from query
 	let (query, lower, upper): (String, i64, i64) =
@@ -52,9 +52,10 @@ async fn handle(
 			(ctx.query.to_owned(), 0, 10000)
 		};
 
-	let res = sqlx::query_as::<_, User>(indoc!(
+	let res = sql_fetch_all!(
+		[ctx, User]
 		"
-		SELECT user_id, join_ts FROM users@search_index
+		SELECT user_id, join_ts FROM db_user.users@search_index
 		WHERE
 			display_name % $1 AND
 			account_number >= $2 AND
@@ -63,14 +64,13 @@ async fn handle(
 			join_ts < $4
 			ORDER BY join_ts DESC
 			LIMIT $5
-		"
-	))
-	.bind(query)
-	.bind(lower)
-	.bind(upper)
-	.bind(ctx.anchor.unwrap_or_else(util::timestamp::now))
-	.bind(limit as i64)
-	.fetch_all(&crdb)
+		",
+		query,
+		lower,
+		upper,
+		ctx.anchor.unwrap_or_else(util::timestamp::now),
+		limit as i64,
+	)
 	.await?;
 
 	let anchor = res.last().map(|user| user.join_ts);

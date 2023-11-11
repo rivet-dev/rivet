@@ -8,37 +8,37 @@ const MAX_TEAM_SIZE: i64 = 256;
 async fn worker(ctx: &OperationContext<team::msg::member_create::Message>) -> GlobalResult<()> {
 	// Idempotent
 
-	let team_id: Uuid = internal_unwrap!(ctx.team_id).as_uuid();
-	let user_id: Uuid = internal_unwrap!(ctx.user_id).as_uuid();
+	let team_id: Uuid = unwrap_ref!(ctx.team_id).as_uuid();
+	let user_id: Uuid = unwrap_ref!(ctx.user_id).as_uuid();
 
 	// TODO: Race condition can allow brute force to create larger teams than
 	// expected
 
-	let (team_size,) = sqlx::query_as::<_, (i64,)>(indoc!(
+	let (team_size,) = sql_fetch_one!(
+		[ctx, (i64,)]
 		"
 		SELECT COUNT(*)
-		FROM team_members
+		FROM db_team.team_members
 		WHERE team_id = $1
-	"
-	))
-	.bind(team_id)
-	.fetch_one(&ctx.crdb("db-team").await?)
+	",
+		team_id,
+	)
 	.await?;
 	if team_size >= MAX_TEAM_SIZE {
 		return fail(ctx.chirp(), team_id, user_id, ctx.invitation.as_ref()).await;
 	}
 
-	let insert_query = sqlx::query(indoc!(
+	let insert_query = sql_execute!(
+		[ctx]
 		"
-		INSERT INTO team_members (team_id, user_id, join_ts)
+		INSERT INTO db_team.team_members (team_id, user_id, join_ts)
 		VALUES ($1, $2, $3)
 		ON CONFLICT DO NOTHING
-	"
-	))
-	.bind(team_id)
-	.bind(user_id)
-	.bind(util::timestamp::now())
-	.execute(&ctx.crdb("db-team").await?)
+	",
+		team_id,
+		user_id,
+		util::timestamp::now(),
+	)
 	.await?;
 	if insert_query.rows_affected() == 0 {
 		tracing::info!("member already inserted");
@@ -49,6 +49,8 @@ async fn worker(ctx: &OperationContext<team::msg::member_create::Message>) -> Gl
 		.await?;
 		return Ok(());
 	}
+
+	ctx.cache().purge("user_team_list", [user_id]).await?;
 
 	// Dispatch events
 	msg!([ctx] team::msg::member_create_complete(team_id, user_id) {

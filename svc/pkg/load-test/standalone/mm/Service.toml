@@ -1,0 +1,9 @@
+[service]
+name = "load-test-mm"
+load-test = true
+
+[runtime]
+kind = "rust"
+
+[headless]
+

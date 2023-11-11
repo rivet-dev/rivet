@@ -1,10 +1,10 @@
 # \AdminGroupsApi
 
-All URIs are relative to *http://localhost*
+All URIs are relative to *https://api.rivet.gg*
 
 Method | HTTP request | Description
 ------------- | ------------- | -------------
-[**admin_groups_convert_developer**](AdminGroupsApi.md#admin_groups_convert_developer) | **POST** /groups/{group_id}/developer | 
+[**admin_groups_convert_developer**](AdminGroupsApi.md#admin_groups_convert_developer) | **POST** /admin/groups/{group_id}/developer | 
 
 
 

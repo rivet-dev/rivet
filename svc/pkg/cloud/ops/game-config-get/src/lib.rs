@@ -25,15 +25,15 @@ async fn handle(
 		.map(common::Uuid::as_uuid)
 		.collect::<Vec<_>>();
 
-	let game_configs = sqlx::query_as::<_, Game>(indoc!(
+	let game_configs = sql_fetch_all!(
+		[ctx, Game]
 		"
 		SELECT game_id
-		FROM game_configs
+		FROM db_cloud.game_configs
 		WHERE game_id = ANY($1)
-		"
-	))
-	.bind(game_ids)
-	.fetch_all(&ctx.crdb("db-cloud").await?)
+		",
+		game_ids,
+	)
 	.await?
 	.into_iter()
 	.map(Into::<backend::cloud::Game>::into)

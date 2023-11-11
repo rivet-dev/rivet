@@ -183,6 +183,10 @@ async fn setup(ctx: &TestCtx) -> Setup {
 
 #[worker_test]
 async fn lobby_create(ctx: TestCtx) {
+	if !util::feature::job_run() {
+		return;
+	}
+
 	let setup = setup(&ctx).await;
 
 	let lobby_id = Uuid::new_v4();
@@ -205,12 +209,12 @@ async fn lobby_create(ctx: TestCtx) {
 	let (sql_mpn, sql_mpd, sql_mpp) = sqlx::query_as::<_, (i64, i64, i64)>(indoc!(
 		"
 		SELECT max_players_normal, max_players_direct, max_players_party
-		FROM lobbies
+		FROM db_mm_state.lobbies
 		WHERE lobby_id = $1
 		"
 	))
 	.bind(lobby_id)
-	.fetch_one(&ctx.crdb("db-mm-state").await.unwrap())
+	.fetch_one(&ctx.crdb().await.unwrap())
 	.await
 	.unwrap();
 	assert_eq!(8, sql_mpn);
@@ -220,6 +224,10 @@ async fn lobby_create(ctx: TestCtx) {
 
 #[worker_test]
 async fn custom_private_lobby_create(ctx: TestCtx) {
+	if !util::feature::job_run() {
+		return;
+	}
+
 	let setup = setup(&ctx).await;
 
 	let lobby_id = Uuid::new_v4();
@@ -242,12 +250,12 @@ async fn custom_private_lobby_create(ctx: TestCtx) {
 	let (is_custom, publicity) = sqlx::query_as::<_, (bool, i64)>(indoc!(
 		"
 		SELECT is_custom, publicity 
-		FROM lobbies
+		FROM db_mm_state.lobbies
 		WHERE lobby_id = $1
 		"
 	))
 	.bind(lobby_id)
-	.fetch_one(&ctx.crdb("db-mm-state").await.unwrap())
+	.fetch_one(&ctx.crdb().await.unwrap())
 	.await
 	.unwrap();
 
@@ -260,6 +268,10 @@ async fn custom_private_lobby_create(ctx: TestCtx) {
 
 #[worker_test]
 async fn lobby_create_max_lobby_count(ctx: TestCtx) {
+	if !util::feature::job_run() {
+		return;
+	}
+
 	let setup = setup(&ctx).await;
 
 	let lobby_count_max = 3;
@@ -320,6 +332,10 @@ async fn lobby_create_max_lobby_count(ctx: TestCtx) {
 
 #[worker_test]
 async fn lobby_create_reuse_job_id(ctx: TestCtx) {
+	if !util::feature::job_run() {
+		return;
+	}
+
 	let setup = setup(&ctx).await;
 
 	let lobby_id_a = Uuid::new_v4();

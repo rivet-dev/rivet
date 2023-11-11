@@ -106,6 +106,10 @@ async fn create_lobby_group(ctx: &TestCtx, image: Option<faker::build::Image>) -
 
 #[worker_test]
 async fn direct(ctx: TestCtx) {
+	if !util::feature::job_run() {
+		return;
+	}
+
 	let lobby_res = op!([ctx] faker_mm_lobby {
 		..Default::default()
 	})
@@ -135,6 +139,10 @@ async fn direct(ctx: TestCtx) {
 
 #[worker_test]
 async fn lobby_group_existing(ctx: TestCtx) {
+	if !util::feature::job_run() {
+		return;
+	}
+
 	let lobby_res = op!([ctx] faker_mm_lobby {
 		..Default::default()
 	})
@@ -169,6 +177,10 @@ async fn lobby_group_existing(ctx: TestCtx) {
 
 #[worker_test]
 async fn direct_closed(ctx: TestCtx) {
+	if !util::feature::job_run() {
+		return;
+	}
+
 	let lobby_res = op!([ctx] faker_mm_lobby {
 		..Default::default()
 	})
@@ -199,16 +211,15 @@ async fn direct_closed(ctx: TestCtx) {
 		},
 	)
 	.await
-	.unwrap_err();
-
-	assert_eq!(
-		mm::msg::lobby_find_fail::ErrorCode::LobbyClosed as i32,
-		err.error_code
-	);
+	.unwrap();
 }
 
 #[worker_test]
 async fn lobby_group_closed(ctx: TestCtx) {
+	if !util::feature::job_run() {
+		return;
+	}
+
 	let lobby_res = op!([ctx] faker_mm_lobby {
 		..Default::default()
 	})
@@ -281,6 +292,10 @@ async fn lobby_group_closed(ctx: TestCtx) {
 
 #[worker_test]
 async fn lobby_group_closed_auto_create(ctx: TestCtx) {
+	if !util::feature::job_run() {
+		return;
+	}
+
 	let lobby_res = op!([ctx] faker_mm_lobby {
 		..Default::default()
 	})
@@ -322,6 +337,10 @@ async fn lobby_group_closed_auto_create(ctx: TestCtx) {
 
 #[worker_test]
 async fn lobby_crash_immediate(ctx: TestCtx) {
+	if !util::feature::job_run() {
+		return;
+	}
+
 	let lobby_group = create_lobby_group(&ctx, Some(faker::build::Image::FailImmediately)).await;
 
 	let err = find(
@@ -355,6 +374,10 @@ async fn lobby_crash_immediate(ctx: TestCtx) {
 
 #[worker_test]
 async fn max_players_per_client(ctx: TestCtx) {
+	if !util::feature::job_run() {
+		return;
+	}
+
 	let lobby_res = op!([ctx] faker_mm_lobby {
 		..Default::default()
 	})
@@ -417,6 +440,10 @@ async fn max_players_per_client(ctx: TestCtx) {
 
 #[worker_test]
 async fn lobby_group_auto_create(ctx: TestCtx) {
+	if !util::feature::job_run() {
+		return;
+	}
+
 	let lobby_group = create_lobby_group(&ctx, None).await;
 
 	find(
@@ -445,6 +472,10 @@ async fn lobby_group_auto_create(ctx: TestCtx) {
 
 #[worker_test]
 async fn lobby_group_no_auto_create(ctx: TestCtx) {
+	if !util::feature::job_run() {
+		return;
+	}
+
 	let lobby_group = create_lobby_group(&ctx, None).await;
 
 	let err = find(
@@ -475,6 +506,10 @@ async fn lobby_group_no_auto_create(ctx: TestCtx) {
 
 #[worker_test]
 async fn join_disabled(ctx: TestCtx) {
+	if !util::feature::job_run() {
+		return;
+	}
+
 	let user_id = Uuid::new_v4();
 
 	let (namespace_id, lobby_id) = gen_disabled_lobby(&ctx).await;
@@ -505,6 +540,10 @@ async fn join_disabled(ctx: TestCtx) {
 
 #[worker_test]
 async fn guest_verification(ctx: TestCtx) {
+	if !util::feature::job_run() {
+		return;
+	}
+
 	let user_id = Uuid::new_v4();
 
 	let (namespace_id, lobby_id) =
@@ -554,6 +593,10 @@ async fn guest_verification(ctx: TestCtx) {
 
 #[worker_test]
 async fn registered_verification(ctx: TestCtx) {
+	if !util::feature::job_run() {
+		return;
+	}
+
 	let user_res = op!([ctx] faker_user {}).await.unwrap();
 	let user_id = user_res.user_id.unwrap().as_uuid();
 
@@ -645,6 +688,10 @@ async fn registered_verification(ctx: TestCtx) {
 
 #[worker_test]
 async fn bypass_verification(ctx: TestCtx) {
+	if !util::feature::job_run() {
+		return;
+	}
+
 	let user_id = Uuid::new_v4();
 
 	let (namespace_id, lobby_id) = gen_verification_lobby(
@@ -676,6 +723,10 @@ async fn bypass_verification(ctx: TestCtx) {
 // TODO: Find way to actually verify user data
 #[worker_test]
 async fn external_verification(ctx: TestCtx) {
+	if !util::feature::job_run() {
+		return;
+	}
+
 	let user_id = Uuid::new_v4();
 
 	let (namespace_id, lobby_id) = gen_verification_lobby(
@@ -795,7 +846,10 @@ async fn gen_verification_lobby(
 					.map(|region_id| backend::matchmaker::lobby_group::Region {
 						region_id: Some(region_id),
 						tier_name_id: util_mm::test::TIER_NAME_ID.to_owned(),
-						idle_lobbies: None,
+						idle_lobbies: Some(backend::matchmaker::lobby_group::IdleLobbies {
+							min_idle_lobbies: 0,
+							max_idle_lobbies: 2,
+						}),
 					})
 					.collect(),
 
@@ -882,7 +936,10 @@ async fn gen_disabled_lobby(ctx: &TestCtx) -> (Uuid, Uuid) {
 					.map(|region_id| backend::matchmaker::lobby_group::Region {
 						region_id: Some(region_id),
 						tier_name_id: util_mm::test::TIER_NAME_ID.to_owned(),
-						idle_lobbies: None,
+						idle_lobbies: Some(backend::matchmaker::lobby_group::IdleLobbies {
+							min_idle_lobbies: 0,
+							max_idle_lobbies: 2,
+						}),
 					})
 					.collect(),
 

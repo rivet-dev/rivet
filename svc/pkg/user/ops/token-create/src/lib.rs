@@ -9,7 +9,7 @@ pub const REFRESH_TOKEN_TTL: i64 = util::duration::days(90);
 async fn handle(
 	ctx: OperationContext<user::token_create::Request>,
 ) -> GlobalResult<user::token_create::Response> {
-	let user_id = internal_unwrap!(ctx.user_id).as_uuid();
+	let user_id = unwrap_ref!(ctx.user_id).as_uuid();
 
 	let token_res = op!([ctx] token_create {
 		token_config: Some(token::create::request::TokenConfig {
@@ -34,15 +34,17 @@ async fn handle(
 	})
 	.await?;
 
-	let token = internal_unwrap!(token_res.token);
-	let refresh_token = internal_unwrap!(token_res.refresh_token);
-	let token_session_id = internal_unwrap!(token_res.session_id).as_uuid();
+	let token = unwrap_ref!(token_res.token);
+	let refresh_token = unwrap_ref!(token_res.refresh_token);
+	let token_session_id = unwrap_ref!(token_res.session_id).as_uuid();
 
-	sqlx::query("INSERT INTO user_tokens (user_id, token_session_id) VALUES ($1, $2)")
-		.bind(user_id)
-		.bind(token_session_id)
-		.execute(&ctx.crdb("db-user").await?)
-		.await?;
+	sql_execute!(
+		[ctx]
+		"INSERT INTO db_user.user_tokens (user_id, token_session_id) VALUES ($1, $2)",
+		user_id,
+		token_session_id,
+	)
+	.await?;
 
 	Ok(user::token_create::Response {
 		token: token.token.clone(),

@@ -100,7 +100,7 @@ pub struct FindOutput {
 pub async fn find(
 	ctx: &OperationContext<mm::msg::lobby_find::Message>,
 	crdb: &CrdbPool,
-	redis_mm: &mut RedisConn,
+	redis_mm: &mut RedisPool,
 	FindOpts {
 		namespace_id,
 		query_id,
@@ -125,7 +125,7 @@ pub async fn find(
 
 	let (redis_query_kind, join_kind) = match query {
 		Query::Direct(backend::matchmaker::query::Direct { lobby_id }) => {
-			let lobby_id = internal_unwrap!(lobby_id).as_uuid();
+			let lobby_id = unwrap_ref!(lobby_id).as_uuid();
 
 			// Add keys for lobby
 			query_kind_keys.extend([key::lobby_config(lobby_id), key::lobby_player_ids(lobby_id)]);
@@ -154,8 +154,9 @@ pub async fn find(
 
 			// Update config for auto create lobbies
 			let auto_create = if let Some(auto_create) = auto_create {
-				let region_id = internal_unwrap!(auto_create.region_id).as_uuid();
-				let lobby_group_id = internal_unwrap!(auto_create.lobby_group_id).as_uuid();
+				let region_id = unwrap_ref!(auto_create.region_id).as_uuid();
+				let lobby_group_id = unwrap_ref!(auto_create.lobby_group_id).as_uuid();
+				let lobby_group = unwrap!(lobby_group_config.lobby_groups.first());
 
 				// Add keys for auto creating lobby
 				query_kind_keys.extend([
@@ -183,9 +184,9 @@ pub async fn find(
 						namespace_id,
 						region_id,
 						lobby_group_id,
-						max_players_normal: lobby_group_config.lobby_group.max_players_normal,
-						max_players_party: lobby_group_config.lobby_group.max_players_party,
-						max_players_direct: lobby_group_config.lobby_group.max_players_direct,
+						max_players_normal: lobby_group.max_players_normal,
+						max_players_party: lobby_group.max_players_party,
+						max_players_direct: lobby_group.max_players_direct,
 						preemptive: true,
 						ready_ts: None,
 						is_closed: false,
@@ -244,7 +245,7 @@ pub async fn find(
 		ns_remote_address_player_ids_keys.push(if let Some(remote_address) = remote_address {
 			util_mm::key::ns_remote_address_player_ids(namespace_id, remote_address)
 		} else {
-			String::new()
+			util_mm::key::empty()
 		});
 	}
 
@@ -320,13 +321,13 @@ pub async fn find(
 		Err("LOBBY_NOT_FOUND") => {
 			// Check if lobby was already stopped when joining directly
 			if let Query::Direct(backend::matchmaker::query::Direct { lobby_id }) = query {
-				let lobby_id = internal_unwrap!(lobby_id).as_uuid();
+				let lobby_id = unwrap_ref!(lobby_id).as_uuid();
 
-				if let Some((Some(_),)) = sqlx::query_as::<_, (Option<i64>,)>(
-					"SELECT stop_ts FROM lobbies WHERE lobby_id = $1",
+				if let Some((Some(_),)) = sql_fetch_optional!(
+					[ctx, (Option<i64>,)]
+					"SELECT stop_ts FROM db_mm_state.lobbies WHERE lobby_id = $1",
+					lobby_id,
 				)
-				.bind(lobby_id)
-				.fetch_optional(crdb)
 				.await?
 				{
 					ErrorCode::LobbyStopped
@@ -340,7 +341,7 @@ pub async fn find(
 		Err("LOBBY_CLOSED") => ErrorCode::LobbyClosed,
 		Err("LOBBY_FULL") => ErrorCode::LobbyFull,
 		Err("NO_AVAILABLE_LOBBIES") => ErrorCode::NoAvailableLobbies,
-		Err(_) => internal_panic!("unknown redis error"),
+		Err(_) => bail!("unknown redis error"),
 	};
 
 	fail(ctx, namespace_id, query_id, error_code, true)

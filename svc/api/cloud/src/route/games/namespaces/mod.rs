@@ -1,7 +1,7 @@
 use api_helper::{anchor::WatchIndexQuery, ctx::Ctx};
 use futures_util::{StreamExt, TryStreamExt};
 use proto::backend::{self, pkg::*};
-use rivet_api::models;
+use rivet_api::{apis::*, models};
 use rivet_claims::ClaimsDecode;
 use rivet_convert::{ApiInto, ApiTryInto};
 use rivet_operation::prelude::*;
@@ -35,15 +35,14 @@ pub async fn get(
 			pending_only: false,
 		})
 	)?;
-	let ns_config = internal_unwrap_owned!(ns_res.namespaces.first());
-	let ns_config = internal_unwrap!(ns_config.config).clone();
+	let ns_config = unwrap!(ns_res.namespaces.first());
+	let ns_config = unwrap_ref!(ns_config.config).clone();
 
 	// Fetch domain verification statuses from cloudflare
 	let cdn_ns_config = {
-		let cdn = internal_unwrap!(ns_config.cdn).clone();
-		let game = internal_unwrap_owned!(games_res.games.first());
-		let custom_hostname_namespace =
-			internal_unwrap_owned!(custom_hostnames_res.namespaces.first());
+		let cdn = unwrap_ref!(ns_config.cdn).clone();
+		let game = unwrap!(games_res.games.first());
+		let custom_hostname_namespace = unwrap!(custom_hostnames_res.namespaces.first());
 		let client = reqwest::Client::new();
 
 		let hostnames_res =
@@ -53,37 +52,42 @@ pub async fn get(
 					let client = client.clone();
 
 					async move {
-						let res = client
-							.get(format!(
-							"https://api.cloudflare.com/client/v4/zones/{zone_id}/custom_hostnames/{identifier}",
-							zone_id = util::env::cloudflare::zone::game::id(),
+						if util::feature::cf_custom_hostname() {
+							let game_zone_id = unwrap!(util::env::cloudflare::zone::game::id());
+							let res = client
+								.get(format!(
+							"https://api.cloudflare.com/client/v4/zones/{game_zone_id}/custom_hostnames/{identifier}",
 							identifier = identifier,
 						))
-							.header(
-								reqwest::header::AUTHORIZATION,
-								format!("Bearer {}", util::env::cloudflare::auth_token()),
-							)
-							.send()
-							.await?;
-						let status = res.status();
+								.header(
+									reqwest::header::AUTHORIZATION,
+									format!("Bearer {}", util::env::cloudflare::auth_token()),
+								)
+								.send()
+								.await?;
+							let status = res.status();
 
-						if status.is_success() {
-							let res = res
-								.json::<rivet_convert::cloud::cloudflare::CloudflareResponse>()
+							if status.is_success() {
+								let res = res
+									.json::<rivet_convert::cloud::cloudflare::CloudflareResponse>()
+									.await?;
+
+								// Send message to update the hostname's status in our DB
+								msg!([chirp] cf_custom_hostname::msg::status_set(identifier) {
+									identifier: Some(identifier),
+									status: ApiInto::<backend::cf::custom_hostname::Status>::api_into(res.result.status.clone()) as i32,
+								})
 								.await?;
 
-							// Send message to update the hostname's status in our DB
-							msg!([chirp] cf_custom_hostname::msg::status_set(identifier) {
-								identifier: Some(identifier),
-								status: ApiInto::<backend::cf::custom_hostname::Status>::api_into(res.result.status.clone()) as i32,
-							})
-							.await?;
-
-							GlobalResult::Ok(Some(res.result))
+								GlobalResult::Ok(Some(res.result))
+							} else {
+								let body = res.text().await?;
+								tracing::error!(?body, ?status, "failed to fetch custom hostname");
+								Ok(None)
+							}
 						} else {
-							let body = res.text().await?;
-							tracing::error!(?body, ?status, "failed to fetch custom hostname");
-							GlobalResult::Ok(None)
+							tracing::trace!("custom hostnames disabled");
+							Ok(None)
 						}
 					}
 				},
@@ -104,16 +108,13 @@ pub async fn get(
 					.iter()
 					.find(|res| res.hostname == domain.domain)
 				{
+					let domain_cdn = unwrap!(util::env::domain_cdn());
+
 					// Create CNAME url
 					let cname_url = if game_namespace.name_id.as_str() == "prod" {
-						format!("{}.{}", game.name_id, util::env::domain_cdn())
+						format!("{}.{domain_cdn}", game.name_id)
 					} else {
-						format!(
-							"{}--{}.{}",
-							game.name_id,
-							game_namespace.name_id,
-							util::env::domain_cdn()
-						)
+						format!("{}--{}.{domain_cdn}", game.name_id, game_namespace.name_id,)
 					};
 
 					Ok(models::CloudCdnNamespaceDomain {
@@ -155,7 +156,7 @@ pub async fn get(
 		models::CloudCdnNamespaceConfig {
 			enable_domain_public_auth: cdn.enable_domain_public_auth,
 			domains,
-			auth_type: internal_unwrap_owned!(backend::cdn::namespace_config::AuthType::from_i32(
+			auth_type: unwrap!(backend::cdn::namespace_config::AuthType::from_i32(
 				cdn.auth_type
 			))
 			.api_into(),
@@ -177,7 +178,7 @@ pub async fn get(
 
 		config: Box::new(models::CloudNamespaceConfig {
 			cdn: Box::new(cdn_ns_config),
-			matchmaker: Box::new(internal_unwrap!(ns_config.matchmaker).clone().try_into()?),
+			matchmaker: Box::new(unwrap_ref!(ns_config.matchmaker).clone().try_into()?),
 			kv: serde_json::json!({}),
 			identity: serde_json::json!({}),
 		}),
@@ -204,7 +205,7 @@ pub async fn create(
 		name_id: body.name_id.clone(),
 	})
 	.await?;
-	let namespace_id = internal_unwrap!(create_ns_res.namespace_id).as_uuid();
+	let namespace_id = unwrap_ref!(create_ns_res.namespace_id).as_uuid();
 
 	op!([ctx] cloud_namespace_create {
 		namespace_id: Some(namespace_id.into()),
@@ -228,7 +229,7 @@ pub async fn update_version(
 	let user_id = ctx.auth().claims()?.as_user().ok();
 
 	// Set the version
-	let prev_version_id = internal_unwrap!(ns_data.version_id).as_uuid();
+	let prev_version_id = unwrap_ref!(ns_data.version_id).as_uuid();
 	if prev_version_id != body.version_id {
 		op!([ctx] game_namespace_version_set {
 			namespace_id: Some(namespace_id.into()),
@@ -276,7 +277,7 @@ pub async fn create_token_development(
 	let _ns_data = assert::namespace_for_game(&ctx, game_id, namespace_id).await?;
 
 	let lobby_ports = match (body.ports, body.lobby_ports) {
-		(Some(_), Some(_)) => panic_with!(
+		(Some(_), Some(_)) => bail_with!(
 			CLOUD_INVALID_CONFIG,
 			error = "can not specify both `ports` and `lobby_ports`"
 		),
@@ -286,7 +287,7 @@ pub async fn create_token_development(
 				Ok(backend::matchmaker::lobby_runtime::Port {
 					label,
 					target_port: if let Some(port) = port.port {
-						assert_with!(
+						ensure_with!(
 							port >= 0,
 							CLOUD_INVALID_CONFIG,
 							error = "`port` out of bounds"
@@ -297,12 +298,12 @@ pub async fn create_token_development(
 						None
 					},
 					port_range: if let Some(port_range) = port.port_range {
-						assert_with!(
+						ensure_with!(
 							port_range.min >= 0,
 							CLOUD_INVALID_CONFIG,
 							error = "`port_range.min` out of bounds"
 						);
-						assert_with!(
+						ensure_with!(
 							port_range.max >= 0,
 							CLOUD_INVALID_CONFIG,
 							error = "`port_range.max` out of bounds"
@@ -328,12 +329,12 @@ pub async fn create_token_development(
 			ports
 				.into_iter()
 				.map(|port| {
-					let target_port = unwrap_with_owned!(
+					let target_port = unwrap_with!(
 						port.target_port,
 						CLOUD_INVALID_CONFIG,
 						error = "expected `target_port`"
 					);
-					assert_with!(
+					ensure_with!(
 						target_port >= 0,
 						CLOUD_INVALID_CONFIG,
 						error = "`target_port` out of bounds"
@@ -353,7 +354,7 @@ pub async fn create_token_development(
 				.collect::<GlobalResult<Vec<_>>>()?
 		}
 		(None, None) => {
-			internal_panic!("no ports provided")
+			bail!("no ports provided")
 		}
 	};
 
@@ -497,12 +498,12 @@ pub async fn update_mm_config(
 ) -> GlobalResult<serde_json::Value> {
 	let _ns_data = assert::namespace_for_game(&ctx, game_id, namespace_id).await?;
 
-	assert_with!(
+	ensure_with!(
 		body.lobby_count_max >= 0,
 		CLOUD_INVALID_CONFIG,
 		error = "`lobby_count_max` out of bounds"
 	);
-	assert_with!(
+	ensure_with!(
 		body.max_players >= 0,
 		CLOUD_INVALID_CONFIG,
 		error = "`max_players` out of bounds"
@@ -547,7 +548,7 @@ pub async fn get_version_history(
 			.transpose()?,
 	})
 	.await?;
-	let version_history = internal_unwrap_owned!(version_history_res.namespaces.first());
+	let version_history = unwrap!(version_history_res.namespaces.first());
 
 	Ok(
 		models::CloudGamesNamespacesGetGameNamespaceVersionHistoryResponse {
@@ -556,8 +557,8 @@ pub async fn get_version_history(
 				.iter()
 				.map(|version| {
 					Ok(models::CloudNamespaceVersion {
-						namespace_id: internal_unwrap!(version_history.namespace_id).to_string(),
-						version_id: internal_unwrap!(version.version_id).to_string(),
+						namespace_id: unwrap_ref!(version_history.namespace_id).to_string(),
+						version_id: unwrap_ref!(version.version_id).to_string(),
 						deploy_ts: util::timestamp::to_chrono(version.deploy_ts)?
 							.to_rfc3339_openapi(),
 					})
@@ -628,12 +629,12 @@ pub async fn validate_mm_config(
 ) -> GlobalResult<models::CloudGamesNamespacesValidateGameNamespaceMatchmakerConfigResponse> {
 	let _ns_data = assert::namespace_for_game(&ctx, game_id, namespace_id).await?;
 
-	assert_with!(
+	ensure_with!(
 		body.lobby_count_max >= 0,
 		CLOUD_INVALID_CONFIG,
 		error = "`lobby_count_max` out of bounds"
 	);
-	assert_with!(
+	ensure_with!(
 		body.max_players >= 0,
 		CLOUD_INVALID_CONFIG,
 		error = "`max_players` out of bounds"

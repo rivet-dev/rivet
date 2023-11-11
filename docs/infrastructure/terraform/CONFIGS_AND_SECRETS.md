@@ -9,8 +9,4 @@ To pass a configuration from Bolt -> Terraform plan, it goes through these steps
 
 ## Secrets
 
-To pass a secret from Bolt -> Terraform state, it goes through these steps:
-
-1. [Add `secrets` module](/infra/tf/pools/main.tf)
-2. [Read the secret from module.secrets.values](/lib/bolt/core/src/dep/salt/cli.rs)
-3. [Read the module output](/infra/tf/pools/providers.tf)
+_TODO_

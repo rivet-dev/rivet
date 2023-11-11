@@ -20,7 +20,8 @@ pub async fn handle(
 		.map(common::Uuid::as_uuid)
 		.collect::<Vec<_>>();
 
-	let modules = sqlx::query_as::<_, Module>(indoc!(
+	let modules = sql_fetch_all!(
+		[ctx, Module]
 		"
 		SELECT
 			module_id,
@@ -28,12 +29,11 @@ pub async fn handle(
 			team_id,
 			create_ts,
 			publicity
-		FROM modules
+		FROM db_module.modules
 		WHERE module_id = ANY($1)
-		"
-	))
-	.bind(module_ids)
-	.fetch_all(&ctx.crdb("db-module").await?)
+		",
+		module_ids,
+	)
 	.await?;
 
 	Ok(module::get::Response {

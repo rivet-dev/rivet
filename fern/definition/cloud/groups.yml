@@ -6,8 +6,7 @@ imports:
 
 service:
   auth: true
-  base-path: /groups
-  url: Cloud
+  base-path: /cloud/groups
   audiences:
     - public
   endpoints:

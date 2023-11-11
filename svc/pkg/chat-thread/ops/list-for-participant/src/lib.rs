@@ -15,16 +15,16 @@ struct ThreadRow {
 async fn handle(
 	ctx: OperationContext<chat_thread::list_for_participant::Request>,
 ) -> GlobalResult<chat_thread::list_for_participant::Response> {
-	let crdb = ctx.crdb("db-chat").await?;
+	let crdb = ctx.crdb().await?;
 
-	let user_id = internal_unwrap!(ctx.user_id).as_uuid();
+	let user_id = unwrap_ref!(ctx.user_id).as_uuid();
 
 	// Fetch teams the user participates in
 	let team_list_res = op!([ctx] user_team_list {
 		user_ids: vec![user_id.into()],
 	})
 	.await?;
-	let team_ids = internal_unwrap_owned!(team_list_res.users.first())
+	let team_ids = unwrap!(team_list_res.users.first())
 		.teams
 		.iter()
 		.flat_map(|x| x.team_id)
@@ -32,24 +32,24 @@ async fn handle(
 		.collect::<Vec<_>>();
 
 	// Query threads
-	let threads = sqlx::query_as::<_, ThreadRow>(indoc!(
+	let threads = sql_fetch_all!(
+		[ctx, ThreadRow]
 		"
 		SELECT thread_id, create_ts, team_team_id, NULL AS direct_user_a_id, NULL AS direct_user_b_id
-		FROM threads
+		FROM db_chat.threads
 		WHERE team_team_id = ANY($1)
 
 		UNION
 
 		SELECT thread_id, create_ts, NULL, direct_user_a_id, direct_user_b_id
-		FROM threads
+		FROM db_chat.threads
 		WHERE
 			direct_user_a_id = $2 OR
 			direct_user_b_id = $2
-		"
-	))
-	.bind(team_ids)
-	.bind(user_id)
-	.fetch_all(&crdb)
+		",
+		team_ids,
+		user_id,
+	)
 	.await?
 	.into_iter()
 	.map(|thread| {
@@ -69,7 +69,7 @@ async fn handle(
 						user_b_id: Some(user_b_id.into()),
 					})
 				} else {
-					internal_panic!("missing thread kind data")
+					bail!("missing thread kind data")
 				}),
 			}),
 		})

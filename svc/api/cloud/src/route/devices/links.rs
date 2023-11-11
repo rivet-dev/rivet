@@ -18,7 +18,7 @@ pub async fn prepare(
 	let create_res = op!([ctx] cloud_device_link_create {}).await?;
 
 	Ok(models::CloudDevicesPrepareDeviceLinkResponse {
-		device_link_id: internal_unwrap!(create_res.device_link_id).as_uuid(),
+		device_link_id: unwrap_ref!(create_res.device_link_id).as_uuid(),
 		device_link_token: create_res.token.clone(),
 		device_link_url: util::route::cloud_device_link(&create_res.token),
 	})
@@ -94,7 +94,7 @@ pub async fn complete(
 	// Check the link isn't complete already
 	let link_complete_msg = tail_read!([ctx] cloud::msg::device_link_complete(link_id)).await?;
 	if link_complete_msg.is_some() {
-		panic_with!(CLOUD_DEVICE_LINK_ALREADY_COMPLETE)
+		bail_with!(CLOUD_DEVICE_LINK_ALREADY_COMPLETE)
 	}
 
 	// Publish link complete message

@@ -5,7 +5,7 @@ use rivet_operation::prelude::*;
 async fn handle(
 	ctx: OperationContext<cloud::game_token_create::Request>,
 ) -> GlobalResult<cloud::game_token_create::Response> {
-	let game_id = internal_unwrap!(ctx.game_id).as_uuid();
+	let game_id = unwrap_ref!(ctx.game_id).as_uuid();
 
 	let token_res = op!([ctx] token_create {
 		issuer: Self::NAME.into(),
@@ -30,14 +30,16 @@ async fn handle(
 	})
 	.await?;
 
-	let token = internal_unwrap!(token_res.token);
-	let token_session_id = internal_unwrap!(token_res.session_id).as_uuid();
+	let token = unwrap_ref!(token_res.token);
+	let token_session_id = unwrap_ref!(token_res.session_id).as_uuid();
 
-	sqlx::query("INSERT INTO game_cloud_tokens (game_id, token_session_id) VALUES ($1, $2)")
-		.bind(game_id)
-		.bind(token_session_id)
-		.execute(&ctx.crdb("db-cloud").await?)
-		.await?;
+	sql_execute!(
+		[ctx]
+		"INSERT INTO db_cloud.game_cloud_tokens (game_id, token_session_id) VALUES ($1, $2)",
+		game_id,
+		token_session_id,
+	)
+	.await?;
 
 	Ok(cloud::game_token_create::Response {
 		token: token.token.clone(),

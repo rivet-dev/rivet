@@ -13,8 +13,7 @@ struct LogEntry<'a> {
 
 #[worker(name = "nomad-log-write")]
 async fn worker(ctx: &OperationContext<nomad_log::msg::entries::Message>) -> GlobalResult<()> {
-	let client = clickhouse::Client::default()
-		.with_url("http://http.clickhouse.service.consul:8123")
+	let client = rivet_pools::utils::clickhouse::client()?
 		.with_user("chirp")
 		.with_password(util::env::read_secret(&["clickhouse", "users", "chirp", "password"]).await?)
 		.with_database("db_nomad_logs");

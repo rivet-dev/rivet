@@ -1,9 +1,13 @@
 use std::{fs, path::Path, process::Command, sync::Arc};
 
 use anyhow::*;
+use duct::cmd;
 use futures_util::future::{BoxFuture, FutureExt};
 use indicatif::{ProgressBar, ProgressStyle};
-use tokio::sync::Mutex;
+
+use tokio::{net::TcpStream, sync::Mutex};
+
+use crate::context::ProjectContext;
 
 pub mod command_helper;
 pub mod db_conn;
@@ -197,4 +201,86 @@ pub fn copy_dir_all<'a>(src: &'a Path, dst: &'a Path) -> BoxFuture<'a, tokio::io
 
 pub fn pick_port() -> u16 {
 	portpicker::pick_unused_port().expect("no free ports")
+}
+
+pub struct PortForwardConfig {
+	pub service_name: &'static str,
+	pub namespace: &'static str,
+	pub local_port: u16,
+	pub remote_port: u16,
+}
+
+pub struct DroppablePort {
+	local_port: u16,
+	handle: duct::Handle,
+}
+
+impl DroppablePort {
+	pub async fn check_all(ports: &Vec<DroppablePort>) -> Result<()> {
+		let mut futures = Vec::new();
+		for port in ports {
+			futures.push(port.check());
+		}
+		futures_util::future::try_join_all(futures).await?;
+		Ok(())
+	}
+
+	pub async fn check(&self) -> Result<()> {
+		// TODO: Probe TCP in loop
+		tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+
+		// Check that handle didn't close
+		if let Some(output) = self.handle.try_wait()? {
+			eprintln!("{}", std::str::from_utf8(&output.stdout)?);
+			bail!(
+				"port forward closed prematurely: {}",
+				std::str::from_utf8(&output.stderr)?
+			);
+		}
+
+		// Probe port
+		match TcpStream::connect(format!("127.0.0.1:{}", self.local_port)).await {
+			Result::Ok(_) => {
+				// println!("Port forward ready: {}", self.local_port)
+			}
+			Err(_) => {
+				bail!("port forward failed: {}", self.local_port)
+			}
+		}
+
+		Ok(())
+	}
+}
+
+// Safety implementation to ensure port forward is cleaned up
+impl Drop for DroppablePort {
+	fn drop(&mut self) {
+		self.handle.kill().unwrap();
+	}
+}
+
+pub fn kubectl_port_forward(
+	ctx: &ProjectContext,
+	service_name: &str,
+	namespace: &str,
+	(local_port, remote_port): (u16, u16),
+) -> Result<DroppablePort> {
+	// println!(
+	// 	"Forwarding {}: {} -> {}",
+	// 	service_name, local_port, remote_port
+	// );
+	let handle = cmd!(
+		"kubectl",
+		"port-forward",
+		format!("service/{service_name}"),
+		"--namespace",
+		namespace,
+		format!("{local_port}:{remote_port}")
+	)
+	.env("KUBECONFIG", ctx.gen_kubeconfig_path())
+	.stdout_capture()
+	.stderr_capture()
+	.start()?;
+
+	Ok(DroppablePort { local_port, handle })
 }

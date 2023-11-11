@@ -34,7 +34,7 @@ pub async fn job_run_cleanup(configuration: &configuration::Configuration, ) -> 
 
     let local_var_client = &local_var_configuration.client;
 
-    let local_var_uri_str = format!("{}/runs/cleanup", local_var_configuration.base_path);
+    let local_var_uri_str = format!("{}/job/runs/cleanup", local_var_configuration.base_path);
     let mut local_var_req_builder = local_var_client.request(reqwest::Method::POST, local_var_uri_str.as_str());
 
     if let Some(ref local_var_user_agent) = local_var_configuration.user_agent {

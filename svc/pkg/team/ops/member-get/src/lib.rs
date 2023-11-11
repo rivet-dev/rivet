@@ -17,8 +17,8 @@ async fn handle(
 		.iter()
 		.map(|members| {
 			Ok((
-				internal_unwrap!(members.team_id).as_uuid(),
-				internal_unwrap!(members.user_id).as_uuid(),
+				unwrap_ref!(members.team_id).as_uuid(),
+				unwrap_ref!(members.user_id).as_uuid(),
 			))
 		})
 		.collect::<GlobalResult<Vec<(Uuid, Uuid)>>>()?;
@@ -31,14 +31,14 @@ async fn handle(
 			SELECT (member->>0)::UUID AS team_id, (member->>1)::UUID AS user_id
 			FROM jsonb_array_elements($1) AS member
 		) AS q
-		INNER JOIN team_members AS tm
+		INNER JOIN db_team.team_members AS tm
 		ON 
 			tm.team_id = q.team_id AND
 			tm.user_id = q.user_id
 		"
 	))
 	.bind(serde_json::to_value(members)?)
-	.fetch_all(&ctx.crdb("db-team").await?)
+	.fetch_all(&ctx.crdb().await?)
 	.await?;
 
 	let members = members

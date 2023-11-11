@@ -1,0 +1,35 @@
+[package]
+name = "load-test-mm"
+version = "0.0.1"
+edition = "2018"
+authors = ["Rivet Gaming, LLC <developer@rivet.gg>"]
+license = "Apache-2.0"
+
+[dependencies]
+chirp-client = { path = "../../../../../lib/chirp/client" }
+rivet-claims = { path = "../../../../../lib/claims" }
+rivet-operation = { path = "../../../../../lib/operation/core" }
+rivet-connection = { path = "../../../../../lib/connection" }
+rivet-runtime = { path = "../../../../../lib/runtime" }
+tokio = { version = "1.29", features = ["full"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", default-features = false, features = ["fmt", "json", "ansi"] }
+rivet-api = { path = "../../../../../gen/openapi/internal/rust" }
+reqwest = "0.11"
+
+cloud-namespace-token-public-create = { path = "../../../cloud/ops/namespace-token-public-create" }
+faker-build = { path = "../../../faker/ops/build" }
+faker-game = { path = "../../../faker/ops/game" }
+faker-game-namespace = { path = "../../../faker/ops/game-namespace" }
+faker-game-version = { path = "../../../faker/ops/game-version" }
+faker-region = { path = "../../../faker/ops/region" }
+mm-config-namespace-config-set = { path = '../../../mm-config/ops/namespace-config-set' }
+mm-lobby-list-for-namespace = { path = '../../../mm/ops/lobby-list-for-namespace' }
+mm-player-count-for-namespace = { path = '../../../mm/ops/player-count-for-namespace' }
+mm-lobby-player-count = { path = '../../../mm/ops/lobby-player-count' }
+region-get = { path = "../../../region/ops/get" }
+token-create = { path = "../../../token/ops/create" }
+
+
+[dev-dependencies]
+chirp-worker = { path = "../../../../../lib/chirp/worker" }

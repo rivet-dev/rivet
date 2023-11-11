@@ -1,6 +1,6 @@
 name: fern
 
-on: [push]
+on: push
 
 jobs:
   fern-check:

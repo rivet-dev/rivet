@@ -5,17 +5,17 @@ use rivet_operation::prelude::*;
 async fn handle(
 	ctx: OperationContext<cdn::site_list_for_game::Request>,
 ) -> GlobalResult<cdn::site_list_for_game::Response> {
-	let game_id = internal_unwrap!(ctx.game_id).as_uuid();
+	let game_id = unwrap_ref!(ctx.game_id).as_uuid();
 
-	let site_ids = sqlx::query_as::<_, (Uuid,)>(indoc!(
+	let site_ids = sql_fetch_all!(
+		[ctx, (Uuid,)]
 		"
 		SELECT site_id
-		FROM sites
+		FROM db_cdn.sites
 		WHERE game_id = $1
-		"
-	))
-	.bind(game_id)
-	.fetch_all(&ctx.crdb("db-cdn").await?)
+		",
+		game_id,
+	)
 	.await?
 	.into_iter()
 	.map(|(id,)| common::Uuid::from(id))

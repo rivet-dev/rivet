@@ -100,7 +100,7 @@ pub async fn chat_get_thread_history(configuration: &configuration::Configuratio
 
     let local_var_client = &local_var_configuration.client;
 
-    let local_var_uri_str = format!("{}/threads/{thread_id}/history", local_var_configuration.base_path, thread_id=crate::apis::urlencode(thread_id));
+    let local_var_uri_str = format!("{}/chat/threads/{thread_id}/history", local_var_configuration.base_path, thread_id=crate::apis::urlencode(thread_id));
     let mut local_var_req_builder = local_var_client.request(reqwest::Method::GET, local_var_uri_str.as_str());
 
     if let Some(ref local_var_str) = ts {
@@ -138,7 +138,7 @@ pub async fn chat_get_thread_topic(configuration: &configuration::Configuration,
 
     let local_var_client = &local_var_configuration.client;
 
-    let local_var_uri_str = format!("{}/threads/{thread_id}/topic", local_var_configuration.base_path, thread_id=crate::apis::urlencode(thread_id));
+    let local_var_uri_str = format!("{}/chat/threads/{thread_id}/topic", local_var_configuration.base_path, thread_id=crate::apis::urlencode(thread_id));
     let mut local_var_req_builder = local_var_client.request(reqwest::Method::GET, local_var_uri_str.as_str());
 
     if let Some(ref local_var_user_agent) = local_var_configuration.user_agent {
@@ -169,7 +169,7 @@ pub async fn chat_send_message(configuration: &configuration::Configuration, cha
 
     let local_var_client = &local_var_configuration.client;
 
-    let local_var_uri_str = format!("{}/messages", local_var_configuration.base_path);
+    let local_var_uri_str = format!("{}/chat/messages", local_var_configuration.base_path);
     let mut local_var_req_builder = local_var_client.request(reqwest::Method::POST, local_var_uri_str.as_str());
 
     if let Some(ref local_var_user_agent) = local_var_configuration.user_agent {
@@ -201,7 +201,7 @@ pub async fn chat_set_thread_read(configuration: &configuration::Configuration, 
 
     let local_var_client = &local_var_configuration.client;
 
-    let local_var_uri_str = format!("{}/threads/{thread_id}/read", local_var_configuration.base_path, thread_id=crate::apis::urlencode(thread_id));
+    let local_var_uri_str = format!("{}/chat/threads/{thread_id}/read", local_var_configuration.base_path, thread_id=crate::apis::urlencode(thread_id));
     let mut local_var_req_builder = local_var_client.request(reqwest::Method::POST, local_var_uri_str.as_str());
 
     if let Some(ref local_var_user_agent) = local_var_configuration.user_agent {
@@ -233,7 +233,7 @@ pub async fn chat_set_typing_status(configuration: &configuration::Configuration
 
     let local_var_client = &local_var_configuration.client;
 
-    let local_var_uri_str = format!("{}/threads/{thread_id}/typing-status", local_var_configuration.base_path, thread_id=crate::apis::urlencode(thread_id));
+    let local_var_uri_str = format!("{}/chat/threads/{thread_id}/typing-status", local_var_configuration.base_path, thread_id=crate::apis::urlencode(thread_id));
     let mut local_var_req_builder = local_var_client.request(reqwest::Method::PUT, local_var_uri_str.as_str());
 
     if let Some(ref local_var_user_agent) = local_var_configuration.user_agent {
@@ -265,7 +265,7 @@ pub async fn chat_watch_thread(configuration: &configuration::Configuration, thr
 
     let local_var_client = &local_var_configuration.client;
 
-    let local_var_uri_str = format!("{}/threads/{thread_id}/live", local_var_configuration.base_path, thread_id=crate::apis::urlencode(thread_id));
+    let local_var_uri_str = format!("{}/chat/threads/{thread_id}/live", local_var_configuration.base_path, thread_id=crate::apis::urlencode(thread_id));
     let mut local_var_req_builder = local_var_client.request(reqwest::Method::GET, local_var_uri_str.as_str());
 
     if let Some(ref local_var_str) = watch_index {

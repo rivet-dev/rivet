@@ -15,8 +15,6 @@ pub struct Local {
 	#[serde(default)]
 	pub up: Up,
 	#[serde(default)]
-	pub generate: Generate,
-	#[serde(default)]
 	pub rust: Rust,
 }
 
@@ -29,15 +27,6 @@ pub struct AdditionalRoot {
 #[derive(Clone, Debug, Default, Deserialize)]
 #[serde(rename_all = "kebab-case", deny_unknown_fields)]
 pub struct Up {}
-
-#[derive(Clone, Debug, Default, Deserialize)]
-#[serde(rename_all = "kebab-case", deny_unknown_fields)]
-pub struct Generate {
-	/// Use this if you want rust-analyzer to work without timing out. This
-	/// speeds up compilation.
-	#[serde(default)]
-	pub disable_cargo_workspace: bool,
-}
 
 #[derive(Clone, Debug, Default, Deserialize)]
 #[serde(rename_all = "kebab-case", deny_unknown_fields)]

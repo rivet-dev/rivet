@@ -47,7 +47,7 @@ async fn handle(
 		.collect::<Vec<_>>();
 
 	let res = reqwest::Client::new()
-		.post("http://http.nsfw-api.service.consul:21900/batch-classify".to_string())
+		.post("http://nsfw-api.nsfw-api.svc.cluster.local:21900/batch-classify".to_string())
 		.json(&ScoreRequest { images })
 		.send()
 		.await?

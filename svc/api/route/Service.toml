@@ -6,9 +6,7 @@ priority = 70
 [runtime]
 kind = "rust"
 
-[[api.router.mounts]]
-path = "/v1"
-subdomain = "route.api"
+[api]
 
 [secrets]
 "rivet/api_route/token" = {}
@@ -16,4 +14,12 @@ subdomain = "route.api"
 [databases]
 redis-job = {}
 redis-cdn = {}
+
+[resources.single-node]
+cpu = 50
+memory = 64
+
+[resources.distributed]
+cpu = 250
+memory = 256
 

@@ -5,7 +5,7 @@ use rivet_operation::prelude::*;
 async fn handle(
 	ctx: OperationContext<chat_thread::unread_count::Request>,
 ) -> GlobalResult<chat_thread::unread_count::Response> {
-	let crdb = ctx.crdb("db-chat").await?;
+	let crdb = ctx.crdb().await?;
 
 	let thread_ids = ctx
 		.thread_ids
@@ -27,7 +27,7 @@ async fn handle(
 		.collect::<Vec<_>>();
 	let missing_read_ts_res = if !missing_read_ts.is_empty() {
 		op!([ctx] chat_last_read_ts_get {
-			user_id: Some(*internal_unwrap!(ctx.user_id)),
+			user_id: Some(*unwrap_ref!(ctx.user_id)),
 			thread_ids: missing_read_ts,
 		})
 		.await?
@@ -59,20 +59,20 @@ async fn handle(
 		.iter()
 		.map(|x| x.last_read_ts)
 		.collect::<Vec<_>>();
-	let threads = sqlx::query_as::<_, (Uuid, i64)>(indoc!(
+	let threads = sql_fetch_all!(
+		[ctx, (Uuid, i64)]
 		"
 		SELECT thread_id, (
 			SELECT COUNT(*)
-			FROM messages
+			FROM db_chat.messages
 			WHERE thread_id = query.thread_id AND send_ts > query.last_read_ts
 			LIMIT 100
 		)
 		FROM unnest($1::UUID[], $2::INT[]) query (thread_id, last_read_ts)
-		"
-	))
-	.bind(query_thread_ids)
-	.bind(query_read_ts)
-	.fetch_all(&crdb)
+		",
+		query_thread_ids,
+		query_read_ts,
+	)
 	.await?
 	.into_iter()
 	.map(

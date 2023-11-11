@@ -17,30 +17,30 @@ struct LobbyRow {
 
 #[worker(name = "mm-lobby-ready-set")]
 async fn worker(ctx: &OperationContext<mm::msg::lobby_ready::Message>) -> GlobalResult<()> {
-	let crdb = ctx.crdb("db-mm-state").await?;
+	let crdb = ctx.crdb().await?;
 	let mut redis_mm = ctx.redis_mm().await?;
 
-	let lobby_id = internal_unwrap!(ctx.lobby_id).as_uuid();
+	let lobby_id = unwrap_ref!(ctx.lobby_id).as_uuid();
 
-	let lobby_row = sqlx::query_as::<_, LobbyRow>(indoc!(
+	let lobby_row = sql_fetch_optional!(
+		[ctx, LobbyRow]
 		"
 		WITH
 			select_lobby AS (
 				SELECT namespace_id, region_id, lobby_group_id, create_ts, ready_ts
-				FROM lobbies
+				FROM db_mm_state.lobbies
 				WHERE lobby_id = $1
 			),
 			_update AS (
-				UPDATE lobbies SET ready_ts = $2
+				UPDATE db_mm_state.lobbies SET ready_ts = $2
 				WHERE lobby_id = $1 AND ready_ts IS NULL
 				RETURNING 1
 			)
 		SELECT * FROM select_lobby
-		"
-	))
-	.bind(lobby_id)
-	.bind(ctx.ts())
-	.fetch_optional(&crdb)
+		",
+		lobby_id,
+		ctx.ts(),
+	)
 	.await?;
 	tracing::info!(?lobby_row, "lobby row");
 
@@ -49,7 +49,7 @@ async fn worker(ctx: &OperationContext<mm::msg::lobby_ready::Message>) -> Global
 			tracing::error!("discarding stale message");
 			return Ok(());
 		} else {
-			retry_panic!("lobby not found, may be race condition with insertion");
+			retry_bail!("lobby not found, may be race condition with insertion");
 		}
 	};
 

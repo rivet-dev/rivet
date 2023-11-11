@@ -1,15 +1,15 @@
 # \ChatApi
 
-All URIs are relative to *http://localhost*
+All URIs are relative to *https://api.rivet.gg*
 
 Method | HTTP request | Description
 ------------- | ------------- | -------------
-[**chat_get_thread_history**](ChatApi.md#chat_get_thread_history) | **GET** /threads/{thread_id}/history | 
-[**chat_get_thread_topic**](ChatApi.md#chat_get_thread_topic) | **GET** /threads/{thread_id}/topic | 
-[**chat_send_message**](ChatApi.md#chat_send_message) | **POST** /messages | 
-[**chat_set_thread_read**](ChatApi.md#chat_set_thread_read) | **POST** /threads/{thread_id}/read | 
-[**chat_set_typing_status**](ChatApi.md#chat_set_typing_status) | **PUT** /threads/{thread_id}/typing-status | 
-[**chat_watch_thread**](ChatApi.md#chat_watch_thread) | **GET** /threads/{thread_id}/live | 
+[**chat_get_thread_history**](ChatApi.md#chat_get_thread_history) | **GET** /chat/threads/{thread_id}/history | 
+[**chat_get_thread_topic**](ChatApi.md#chat_get_thread_topic) | **GET** /chat/threads/{thread_id}/topic | 
+[**chat_send_message**](ChatApi.md#chat_send_message) | **POST** /chat/messages | 
+[**chat_set_thread_read**](ChatApi.md#chat_set_thread_read) | **POST** /chat/threads/{thread_id}/read | 
+[**chat_set_typing_status**](ChatApi.md#chat_set_typing_status) | **PUT** /chat/threads/{thread_id}/typing-status | 
+[**chat_watch_thread**](ChatApi.md#chat_watch_thread) | **GET** /chat/threads/{thread_id}/live | 
 
 
 

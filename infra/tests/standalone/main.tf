@@ -20,7 +20,6 @@ module "server" {
 		provider = "linode"
 		provider_region = "us-southeast"
 		netnum = 0
-		supports_vlan = false
 	}
 
 	size = "g6-standard-4"
@@ -42,22 +41,6 @@ module "server" {
 			protocol = "tcp"
 			inbound_ipv4_cidr = ["0.0.0.0/0"]
 			inbound_ipv6_cidr = ["::/0"]
-		},
-
-		# TODO: Nebula IPv6 is theoretically supported (https://nebula.defined.net/docs/config/preferred-ranges/#how-nebula-orders-underlay-ip-addresses-it-learns-about), but seems to be problematic
-		{
-			label = "nebula-udp"
-			ports = "4242"
-			protocol = "udp"
-			inbound_ipv4_cidr = ["0.0.0.0/0"]
-			inbound_ipv6_cidr = []
-		},
-		{
-			label = "nebula-tcp"
-			ports = "4242"
-			protocol = "tcp"
-			inbound_ipv4_cidr = ["0.0.0.0/0"]
-			inbound_ipv6_cidr = []
 		},
 	]
 }
@@ -124,7 +107,6 @@ resource "null_resource" "repo_setup" {
 			"set -euf -o pipefail",
 			"source /root/.nix-profile/etc/profile.d/nix.sh",
 			"cd backend",
-			"nix-shell --run './scripts/setup.sh'",
 		]
 	}
 }

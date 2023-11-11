@@ -32,13 +32,14 @@ struct LobbyRow {}
 async fn worker(ctx: &OperationContext<mm::msg::player_remove::Message>) -> GlobalResult<()> {
 	// NOTE: Idempotent
 
-	let crdb = ctx.crdb("db-mm-state").await?;
+	let crdb = ctx.crdb().await?;
 
-	let player_id = internal_unwrap!(ctx.player_id).as_uuid();
+	let player_id = unwrap_ref!(ctx.player_id).as_uuid();
 	let lobby_id = ctx.lobby_id.map(|x| x.as_uuid());
 
 	// Fetch player
-	let player_row = sqlx::query_as::<_, PlayerRow>(indoc!(
+	let player_row = sql_fetch_optional!(
+		[ctx, PlayerRow]
 		"
 		WITH
 			select_player AS (
@@ -54,12 +55,12 @@ async fn worker(ctx: &OperationContext<mm::msg::player_remove::Message>) -> Glob
 					lobbies.stop_ts AS lobby_stop_ts,
 					lobbies.max_players_normal,
 					lobbies.max_players_party
-				FROM players
-				INNER JOIN lobbies ON lobbies.lobby_id = players.lobby_id
+				FROM db_mm_state.players
+				INNER JOIN db_mm_state.lobbies ON lobbies.lobby_id = players.lobby_id
 				WHERE players.player_id = $1
 			),
 			_update AS (
-				UPDATE players
+				UPDATE db_mm_state.players
 				SET remove_ts = $3
 				WHERE
 					player_id = $1 AND
@@ -70,12 +71,11 @@ async fn worker(ctx: &OperationContext<mm::msg::player_remove::Message>) -> Glob
 				RETURNING 1
 			)
 		SELECT * FROM select_player
-		"
-	))
-	.bind(player_id)
-	.bind(lobby_id)
-	.bind(ctx.ts())
-	.fetch_optional(&crdb)
+		",
+		player_id,
+		lobby_id,
+		ctx.ts(),
+	)
 	.await?;
 	tracing::info!(?player_row, "player row");
 
@@ -84,7 +84,7 @@ async fn worker(ctx: &OperationContext<mm::msg::player_remove::Message>) -> Glob
 			tracing::error!("discarding stale message");
 			return Ok(());
 		} else {
-			retry_panic!("player not found, may be race condition with insertion");
+			retry_bail!("player not found, may be race condition with insertion");
 		}
 	};
 
@@ -165,12 +165,12 @@ async fn worker(ctx: &OperationContext<mm::msg::player_remove::Message>) -> Glob
 		))
 		.key(if let Some(remote_address) = &player_row.remote_address {
 			if remote_address.is_empty() {
-				String::new()
+				util_mm::key::empty()
 			} else {
 				util_mm::key::ns_remote_address_player_ids(player_row.namespace_id, remote_address)
 			}
 		} else {
-			String::new()
+			util_mm::key::empty()
 		})
 		.key(util_mm::key::idle_lobby_ids(
 			player_row.namespace_id,

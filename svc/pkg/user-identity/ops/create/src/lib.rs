@@ -7,24 +7,24 @@ use serde_json::json;
 async fn handle(
 	ctx: OperationContext<user_identity::create::Request>,
 ) -> GlobalResult<user_identity::create::Response> {
-	let user_id = internal_unwrap!(ctx.user_id).as_uuid();
-	let identity = internal_unwrap!(ctx.identity);
-	let identity_kind = internal_unwrap!(identity.kind);
+	let user_id = unwrap_ref!(ctx.user_id).as_uuid();
+	let identity = unwrap_ref!(ctx.identity);
+	let identity_kind = unwrap_ref!(identity.kind);
 
 	match &identity_kind {
 		backend::user_identity::identity::Kind::Email(email) => {
-			internal_assert!(EmailAddress::is_valid(&email.email, None), "invalid email");
+			ensure!(EmailAddress::is_valid(&email.email, None), "invalid email");
 
-			sqlx::query(indoc!(
+			sql_execute!(
+				[ctx]
 				"
-				INSERT INTO emails (email, user_id, create_ts)
+				INSERT INTO db_user_identity.emails (email, user_id, create_ts)
 				VALUES ($1, $2, $3)
-				"
-			))
-			.bind(&email.email)
-			.bind(user_id)
-			.bind(ctx.ts())
-			.execute(&ctx.crdb("db-user-identity").await?)
+				",
+				&email.email,
+				user_id,
+				ctx.ts(),
+			)
 			.await?;
 
 			msg!([ctx] analytics::msg::event_create() {

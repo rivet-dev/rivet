@@ -6,17 +6,17 @@ use rivet_operation::prelude::*;
 async fn handle(
 	ctx: OperationContext<mm_config::version_publish::Request>,
 ) -> GlobalResult<mm_config::version_publish::Response> {
-	let version_id = internal_unwrap!(ctx.version_id).as_uuid();
-	let config = internal_unwrap!(ctx.config);
-	let config_ctx = internal_unwrap!(ctx.config_ctx);
+	let version_id = unwrap_ref!(ctx.version_id).as_uuid();
+	let config = unwrap_ref!(ctx.config);
+	let config_ctx = unwrap_ref!(ctx.config_ctx);
 
-	internal_assert_eq!(
+	ensure_eq!(
 		config.lobby_groups.len(),
 		config_ctx.lobby_groups.len(),
 		"incorrect lobby group ctx count"
 	);
 
-	let mut tx = ctx.crdb("db-mm-config").await?.begin().await?;
+	let mut tx = ctx.crdb().await?.begin().await?;
 
 	// Encode captcha data
 	let captcha_buf = config
@@ -31,22 +31,22 @@ async fn handle(
 		.transpose()?;
 
 	// Save version
-	sqlx::query(indoc!(
-		"INSERT INTO game_versions (
+	sql_execute!(
+		[ctx]
+		"INSERT INTO db_mm_config.game_versions (
 			version_id,
 			captcha_config,
 			migrations
 		)
-		VALUES ($1, $2, $3)"
-	))
-	.bind(version_id)
-	.bind(captcha_buf)
-	.bind(util_mm::version_migrations::all())
-	.execute(&mut *tx)
+		VALUES ($1, $2, $3)",
+		version_id,
+		captcha_buf,
+		util_mm::version_migrations::all(),
+	)
 	.await?;
 
 	// Save lobby groups
-	internal_assert_eq!(config.lobby_groups.len(), config_ctx.lobby_groups.len());
+	ensure_eq!(config.lobby_groups.len(), config_ctx.lobby_groups.len());
 	for (lobby_group, lobby_group_ctx) in config
 		.lobby_groups
 		.iter()
@@ -55,11 +55,11 @@ async fn handle(
 		let lobby_group_id = Uuid::new_v4();
 
 		// Build runtime meta
-		let runtime = internal_unwrap!(lobby_group.runtime);
-		let runtime_ctx = internal_unwrap!(lobby_group_ctx.runtime);
+		let runtime = unwrap_ref!(lobby_group.runtime);
+		let runtime_ctx = unwrap_ref!(lobby_group_ctx.runtime);
 		let (runtime, runtime_meta) = publish_runtime(
-			internal_unwrap!(runtime.runtime),
-			internal_unwrap!(runtime_ctx.runtime),
+			unwrap_ref!(runtime.runtime),
+			unwrap_ref!(runtime_ctx.runtime),
 		)?;
 
 		// Encode runtime data
@@ -105,9 +105,10 @@ async fn handle(
 			})
 			.transpose()?;
 
-		sqlx::query(indoc!(
+		sql_execute!(
+			[ctx]
 			"
-			INSERT INTO lobby_groups (
+			INSERT INTO db_mm_config.lobby_groups (
 				lobby_group_id, 
 				version_id,
 
@@ -125,53 +126,52 @@ async fn handle(
 				create_config
 			)
 			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
-			"
-		))
-		.bind(lobby_group_id)
-		.bind(version_id)
-		.bind(&lobby_group.name_id)
-		.bind(lobby_group.max_players_normal as i64)
-		.bind(lobby_group.max_players_direct as i64)
-		.bind(lobby_group.max_players_party as i64)
-		.bind(lobby_group.listable)
-		.bind(&runtime_buf)
-		.bind(&runtime_meta_buf)
-		.bind(&find_config_buf)
-		.bind(&join_config_buf)
-		.bind(&create_config_buf)
-		.execute(&mut *tx)
+			",
+			lobby_group_id,
+			version_id,
+			&lobby_group.name_id,
+			lobby_group.max_players_normal as i64,
+			lobby_group.max_players_direct as i64,
+			lobby_group.max_players_party as i64,
+			lobby_group.listable,
+			&runtime_buf,
+			&runtime_meta_buf,
+			&find_config_buf,
+			&join_config_buf,
+			&create_config_buf,
+		)
 		.await?;
 
 		for region in &lobby_group.regions {
-			let region_id = internal_unwrap!(region.region_id).as_uuid();
-			sqlx::query(indoc!(
+			let region_id = unwrap_ref!(region.region_id).as_uuid();
+			sql_execute!(
+				[ctx]
 				"
-				INSERT INTO lobby_group_regions (
+				INSERT INTO db_mm_config.lobby_group_regions (
 					lobby_group_id, region_id, tier_name_id
 				)
 				VALUES ($1, $2, $3)
-				"
-			))
-			.bind(lobby_group_id)
-			.bind(region_id)
-			.bind(&region.tier_name_id)
-			.execute(&mut *tx)
+				",
+				lobby_group_id,
+				region_id,
+				&region.tier_name_id,
+			)
 			.await?;
 
 			if let Some(idle_lobbies) = &region.idle_lobbies {
-				sqlx::query(indoc!(
+				sql_execute!(
+					[ctx]
 					"
-				INSERT INTO lobby_group_idle_lobbies (
+				INSERT INTO db_mm_config.lobby_group_idle_lobbies (
 					lobby_group_id, region_id, min_idle_lobbies, max_idle_lobbies
 				)
 				VALUES ($1, $2, $3, $4)
-				"
-				))
-				.bind(lobby_group_id)
-				.bind(region_id)
-				.bind(idle_lobbies.min_idle_lobbies as i64)
-				.bind(idle_lobbies.max_idle_lobbies as i64)
-				.execute(&mut *tx)
+				",
+					lobby_group_id,
+					region_id,
+					idle_lobbies.min_idle_lobbies as i64,
+					idle_lobbies.max_idle_lobbies as i64,
+				)
 				.await?;
 			}
 		}

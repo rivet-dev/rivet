@@ -36,15 +36,15 @@ async fn handle(
 				let ctx = ctx.base();
 
 				async move {
-					sqlx::query_as::<_, Version>(indoc!(
+					sql_fetch_all!(
+						[ctx, Version]
 						"
-					SELECT version_id, lobby_group_id
-					FROM lobby_groups
-					WHERE lobby_group_id = ANY($1)
-				"
-					))
-					.bind(lobby_group_ids)
-					.fetch_all(&ctx.crdb("db-mm-config").await?)
+						SELECT version_id, lobby_group_id
+						FROM db_mm_config.lobby_groups
+						WHERE lobby_group_id = ANY($1)
+						",
+						lobby_group_ids,
+					)
 					.await?
 					.into_iter()
 					.for_each(|version| {
@@ -61,10 +61,7 @@ async fn handle(
 				}
 			},
 		)
-		.await?
-		.into_iter()
-		.map(|(_, x)| x)
-		.collect::<Vec<_>>();
+		.await?;
 
 	Ok(mm_config::lobby_group_resolve_version::Response { versions })
 }

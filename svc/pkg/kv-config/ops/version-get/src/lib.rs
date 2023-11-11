@@ -16,15 +16,15 @@ async fn handle(
 		.map(common::Uuid::as_uuid)
 		.collect::<Vec<_>>();
 
-	let versions = sqlx::query_as::<_, GameVersion>(indoc!(
+	let versions = sql_fetch_all!(
+		[ctx, GameVersion]
 		"
 			SELECT version_id
-			FROM game_versions
+			FROM db_kv_config.game_versions
 			WHERE version_id = ANY($1)
-		"
-	))
-	.bind(version_ids)
-	.fetch_all(&ctx.crdb("db-kv-config").await?)
+		",
+		version_ids,
+	)
 	.await?
 	.into_iter()
 	.map(|version| kv_config::version_get::response::Version {

@@ -11,8 +11,8 @@ pub async fn user_registered(ctx: &Ctx<Auth>, user_id: Uuid) -> GlobalResult<()>
 	})
 	.await?;
 
-	let identities = &internal_unwrap!(identity.users.first()).identities;
-	assert_with!(!identities.is_empty(), IDENTITY_NOT_REGISTERED);
+	let identities = &unwrap_ref!(identity.users.first()).identities;
+	ensure_with!(!identities.is_empty(), IDENTITY_NOT_REGISTERED);
 
 	Ok(())
 }

@@ -4,13 +4,6 @@ use rivet_operation::prelude::*;
 
 static GLOBAL_INIT: Once = Once::new();
 
-#[derive(Debug, serde::Deserialize)]
-#[serde(rename_all = "PascalCase")]
-struct ConsulService {
-	address: String,
-	service_port: u16,
-}
-
 struct Ctx {
 	op_ctx: OperationContext<()>,
 	http_client: rivet_status::ClientWrapper,
@@ -23,7 +16,6 @@ impl Ctx {
 				.pretty()
 				.with_max_level(tracing::Level::INFO)
 				.with_target(false)
-				.without_time()
 				.init();
 		});
 
@@ -50,7 +42,7 @@ impl Ctx {
 		);
 
 		let http_client = rivet_status::Config::builder()
-			.set_uri(util::env::svc_router_url("api-status"))
+			.set_uri("http://traefik.traefik.svc.cluster.local:80/status")
 			.set_bearer_token(
 				util::env::read_secret(&["rivet", "api_status", "token"])
 					.await

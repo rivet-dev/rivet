@@ -1,0 +1,19 @@
+syntax = "proto3";
+
+package rivet.backend.pkg.region.config_get;
+
+import "proto/common.proto";
+
+message Region {
+	rivet.common.Uuid id = 1;
+	string provider = 2;
+	string provider_region = 3;
+}
+
+message Request {
+
+}
+
+message Response {
+	map<string, Region> regions = 1;
+}

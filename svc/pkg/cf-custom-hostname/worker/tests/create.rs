@@ -3,6 +3,10 @@ use proto::backend::pkg::*;
 
 #[worker_test]
 async fn empty(ctx: TestCtx) {
+	if !util::feature::cf_custom_hostname() {
+		return;
+	}
+
 	let game_res = op!([ctx] faker_game { }).await.unwrap();
 	let namespace_id = game_res.namespace_ids.first().unwrap().as_uuid();
 

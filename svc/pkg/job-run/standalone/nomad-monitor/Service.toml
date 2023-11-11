@@ -1,0 +1,14 @@
+[service]
+name = "job-run-nomad-monitor"
+essential = true
+priority = 70
+
+[runtime]
+kind = "rust"
+
+[headless]
+singleton = true
+
+[databases]
+redis-job = {}
+

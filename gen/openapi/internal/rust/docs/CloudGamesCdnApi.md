@@ -1,11 +1,11 @@
 # \CloudGamesCdnApi
 
-All URIs are relative to *http://localhost*
+All URIs are relative to *https://api.rivet.gg*
 
 Method | HTTP request | Description
 ------------- | ------------- | -------------
-[**cloud_games_cdn_create_game_cdn_site**](CloudGamesCdnApi.md#cloud_games_cdn_create_game_cdn_site) | **POST** /games/{game_id}/cdn/sites | 
-[**cloud_games_cdn_list_game_cdn_sites**](CloudGamesCdnApi.md#cloud_games_cdn_list_game_cdn_sites) | **GET** /games/{game_id}/cdn/sites | 
+[**cloud_games_cdn_create_game_cdn_site**](CloudGamesCdnApi.md#cloud_games_cdn_create_game_cdn_site) | **POST** /cloud/games/{game_id}/cdn/sites | 
+[**cloud_games_cdn_list_game_cdn_sites**](CloudGamesCdnApi.md#cloud_games_cdn_list_game_cdn_sites) | **GET** /cloud/games/{game_id}/cdn/sites | 
 
 
 

@@ -1,40 +1,22 @@
 use anyhow::*;
-use ipnet::Ipv4Net;
 use serde::Serialize;
-use std::{
-	collections::{HashMap, HashSet},
-	net::Ipv4Addr,
-};
+use std::{collections::HashMap, net::Ipv4Addr};
 
 use crate::context::ProjectContext;
 
-use super::{net, pools::Pool, regions::Region};
+use super::{pools::Pool, regions::Region};
 
 #[derive(Serialize, Clone)]
 pub struct Server {
-	region_id: String,
-	pool_id: String,
-	version_id: String,
-	index: usize,
-	name: String,
-	size: String,
-	netnum: usize,
-	volumes: HashMap<String, ServerVolume>,
-
-	// Tags that will be assgned to the servers.
-	tags: Vec<String>,
-
-	/// IP addresses inside the VPC for all servers that belong to the VPC.
-	///
-	/// We add one to the hostnum in order to prevent trying to allocate the
-	/// network address.
-	vpc_ip: Option<Ipv4Addr>,
-
-	/// IP addresses inside the Nebula network.
-	///
-	/// We add one to the hostnum in order to prevent trying to allocate the
-	/// network address.
-	nebula_ip: Ipv4Addr,
+	pub region_id: String,
+	pub pool_id: String,
+	pub version_id: String,
+	pub index: usize,
+	pub name: String,
+	pub size: String,
+	pub vlan_ip: Ipv4Addr,
+	pub volumes: HashMap<String, ServerVolume>,
+	pub tags: Vec<String>,
 }
 
 #[derive(Serialize, Clone)]
@@ -50,32 +32,17 @@ pub fn build_servers(
 	let ns = ctx.ns_id();
 
 	let mut servers = HashMap::<String, Server>::new();
-	let mut used_netnums = HashSet::new();
 	for pool in &ctx.ns().pools {
 		let region_id = &pool.region;
 		let pool_id = &pool.pool;
 		let version_id = &pool.version;
 
-		let region = regions
+		let _region = regions
 			.get(region_id)
 			.expect(&format!("missing region: {region_id}"));
 		let pool_config = pools
 			.get(pool_id.as_str())
 			.expect(&format!("missing pool: {pool_id}"));
-
-		// Validate netnum is within range
-		assert!(
-			pool.netnum > 0,
-			"netnum 0 is reserved for misc services and cannot be used by a pool"
-		);
-
-		// Validate netnum is unique
-		let netnum_already_used = used_netnums.insert(pool.netnum);
-		assert!(
-			netnum_already_used,
-			"netnum {} is already used",
-			pool.netnum
-		);
 
 		for i in 0..pool.count {
 			let name = format!("{ns}-{region_id}-{pool_id}-{version_id}-{i}");
@@ -86,6 +53,8 @@ pub fn build_servers(
 				.map(|(id, volume)| (id.clone(), ServerVolume { size: volume.size }))
 				.collect::<HashMap<_, _>>();
 
+			let vlan_ip = pool_config.vlan_addr_range.clone().nth(i).unwrap();
+
 			let server = Server {
 				region_id: region_id.clone(),
 				pool_id: pool_id.clone(),
@@ -93,7 +62,7 @@ pub fn build_servers(
 				index: i,
 				name: name.clone(),
 				size: pool.size.clone(),
-				netnum: pool.netnum,
+				vlan_ip,
 				volumes,
 
 				// Tags that will be assigned to the servers.
@@ -105,25 +74,6 @@ pub fn build_servers(
 					format!("{ns}-{region_id}-{pool_id}"),
 					format!("{ns}-{region_id}-{pool_id}-{version_id}"),
 				],
-
-				/// cidrhost(local.vpc_region_subnets[server.region_id], server.netnum * pow(2, 32 - local.svc_pool_netmask) + server.index + 1)
-				vpc_ip: if let (true, Some(vpc_subnet)) = (pool_config.vpc, &region.vpc_subnet) {
-					let n = pool.netnum * 2usize.pow(32 - net::svc::POOL_NETMASK as u32) + i + 1;
-					let ip = vpc_subnet.hosts().nth(n).unwrap();
-
-					Some(ip)
-				} else {
-					None
-				},
-
-				// cidrhost("${local.nebula_subnet}/${local.nebula_netmask}", var.regions[server.region_id].netnum * pow(2, 32 - local.svc_region_netmask) + server.netnum * pow(2, 32 - local.svc_pool_netmask) + server.index + 1)
-				nebula_ip: {
-					let subnet = Ipv4Net::new(net::nebula::SUBNET, net::nebula::NETMASK)?;
-					let n = region.netnum * 2usize.pow(32 - net::svc::REGION_NETMASK as u32)
-						+ pool.netnum * 2usize.pow(32 - net::svc::POOL_NETMASK as u32)
-						+ i + 1;
-					subnet.hosts().nth(n).unwrap()
-				},
 			};
 
 			servers.insert(name.to_string(), server);

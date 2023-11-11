@@ -5,15 +5,15 @@ use rivet_operation::prelude::*;
 async fn handle(
 	ctx: OperationContext<team::resolve_display_name::Request>,
 ) -> GlobalResult<team::resolve_display_name::Response> {
-	let teams = sqlx::query_as::<_, (String, Uuid)>(indoc!(
+	let teams = sql_fetch_all!(
+		[ctx, (String, Uuid)]
 		"
 		SELECT display_name, team_id
-		FROM teams
+		FROM db_team.teams
 		WHERE display_name = ANY($1)
-	"
-	))
-	.bind(&ctx.display_names)
-	.fetch_all(&ctx.crdb("db-team").await?)
+	",
+		&ctx.display_names,
+	)
 	.await?
 	.into_iter()
 	.map(

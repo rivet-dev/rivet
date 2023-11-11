@@ -52,7 +52,7 @@ impl From<LobbyRow> for backend::matchmaker::Lobby {
 async fn handle(
 	ctx: OperationContext<mm::lobby_get::Request>,
 ) -> GlobalResult<mm::lobby_get::Response> {
-	let crdb = ctx.crdb("db-mm-state").await?;
+	let crdb = ctx.crdb().await?;
 
 	let lobby_ids = ctx
 		.lobby_ids
@@ -60,7 +60,8 @@ async fn handle(
 		.map(common::Uuid::as_uuid)
 		.collect::<Vec<_>>();
 
-	let lobbies = sqlx::query_as::<_, LobbyRow>(indoc!(
+	let lobbies = sql_fetch_all!(
+		[ctx, LobbyRow]
 		"
 		SELECT
 			lobby_id,
@@ -81,12 +82,11 @@ async fn handle(
 			max_players_normal,
 			max_players_direct,
 			max_players_party
-		FROM lobbies
+		FROM db_mm_state.lobbies
 		WHERE lobby_id = ANY($1)
-		"
-	))
-	.bind(lobby_ids)
-	.fetch_all(&crdb)
+		",
+		lobby_ids,
+	)
 	.await?
 	.into_iter()
 	.filter(|x| x.stop_ts.is_none() || ctx.include_stopped)

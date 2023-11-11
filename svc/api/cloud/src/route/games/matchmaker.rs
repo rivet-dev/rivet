@@ -1,3 +1,5 @@
+use std::time::Duration;
+
 use api_helper::{
 	anchor::{WatchIndexQuery, WatchResponse},
 	ctx::Ctx,
@@ -28,17 +30,17 @@ pub async fn delete_lobby(
 
 	let did_remove = if let Some(lobby) = lobby_get_res.lobbies.first() {
 		// Get the namespace
-		let ns_id = internal_unwrap!(lobby.namespace_id);
+		let ns_id = unwrap_ref!(lobby.namespace_id);
 
 		let ns_res = op!([ctx] game_namespace_get {
 			namespace_ids: vec![*ns_id],
 		})
 		.await?;
-		let ns_data = internal_unwrap_owned!(ns_res.namespaces.first());
-		let ns_game_id = internal_unwrap!(ns_data.game_id).as_uuid();
+		let ns_data = unwrap!(ns_res.namespaces.first());
+		let ns_game_id = unwrap_ref!(ns_data.game_id).as_uuid();
 
 		// Validate this lobby belongs to this game
-		internal_assert_eq!(ns_game_id, game_id, "lobby does not belong to game");
+		ensure_eq!(ns_game_id, game_id, "lobby does not belong to game");
 
 		// Remove the lobby
 		msg!([ctx] mm::msg::lobby_stop(lobby_id) {
@@ -70,7 +72,7 @@ pub async fn export_history(
 		game_ids: vec![game_id.into()],
 	})
 	.await?;
-	let game = internal_unwrap_owned!(namespaces_res.games.first());
+	let game = unwrap!(namespaces_res.games.first());
 
 	let request_id = Uuid::new_v4();
 	let res = msg!([ctx] mm::msg::lobby_history_export(request_id) -> mm::msg::lobby_history_export_complete {
@@ -80,21 +82,29 @@ pub async fn export_history(
 		query_end: body.query_end,
 	})
 	.await?;
-	let upload_id = internal_unwrap!(res.upload_id).as_uuid();
+	let upload_id = unwrap_ref!(res.upload_id).as_uuid();
 
 	let upload_res = op!([ctx] upload_get {
 		upload_ids: vec![upload_id.into()],
 	})
 	.await?;
-	let _upload = internal_unwrap_owned!(upload_res.uploads.first(), "upload not found");
+	let _upload = unwrap!(upload_res.uploads.first(), "upload not found");
 
-	let url = format!(
-		"https://cdn.{}/lobby-history-export/{}/export.csv",
-		util::env::domain_main(),
-		upload_id,
-	);
+	let s3_client = s3_util::Client::from_env("bucket-lobby-history-export").await?;
+	let presigned_req = s3_client
+		.get_object()
+		.bucket(s3_client.bucket())
+		.key(format!("{upload_id}/export.csv"))
+		.presigned(
+			s3_util::aws_sdk_s3::presigning::config::PresigningConfig::builder()
+				.expires_in(Duration::from_secs(60 * 60))
+				.build()?,
+		)
+		.await?;
 
-	Ok(models::ExportMatchmakerLobbyHistoryResponse { url })
+	Ok(models::ExportMatchmakerLobbyHistoryResponse {
+		url: presigned_req.uri().to_string(),
+	})
 }
 
 // MARK: GET /games/{}/matchmaker/lobbies/{}/logs
@@ -117,7 +127,7 @@ pub async fn get_lobby_logs(
 		models::LogStream::StdOut => backend::nomad_log::StreamType::StdOut,
 		models::LogStream::StdErr => backend::nomad_log::StreamType::StdErr,
 		_ => {
-			panic_with!(
+			bail_with!(
 				API_BAD_QUERY_PARAMETER,
 				parameter = "stream",
 				error = r#"Must be one of "std_out" or "std_err""#,
@@ -128,7 +138,7 @@ pub async fn get_lobby_logs(
 	let alloc_id = if let Some(x) = get_alloc_id(&ctx, game_id, lobby_id).await? {
 		x
 	} else {
-		panic_with!(MATCHMAKER_LOBBY_NOT_STARTED);
+		bail_with!(MATCHMAKER_LOBBY_NOT_STARTED);
 	};
 
 	// Handle anchor
@@ -138,7 +148,7 @@ pub async fn get_lobby_logs(
 			backend::nomad_log::StreamType::StdOut => "stdout",
 			backend::nomad_log::StreamType::StdErr => "stderr",
 		};
-		let log_tail = tail_all!([ctx, anchor, chirp_client::TailAllConfig::wait()] nomad_log::msg::entries(&alloc_id, util_job::GAME_TASK_NAME, stream_type_param)).await?;
+		let log_tail = tail_all!([ctx, anchor, chirp_client::TailAllConfig::wait()] nomad_log::msg::entries(&alloc_id, util_job::RUN_MAIN_TASK_NAME, stream_type_param)).await?;
 
 		// Sort entries by timestamp
 		let mut entries = log_tail
@@ -173,7 +183,7 @@ pub async fn get_lobby_logs(
 	let before_ts = util::timestamp::now();
 	let logs_res = op!([ctx] @dont_log_body nomad_log_read {
 		alloc: alloc_id.clone(),
-		task: util_job::GAME_TASK_NAME.into(),
+		task: util_job::RUN_MAIN_TASK_NAME.into(),
 		stream_type: stream_type as i32,
 		count: 256,
 		query: Some(nomad_log::read::request::Query::BeforeTs(nomad_log::read::request::TimestampQuery {
@@ -213,14 +223,14 @@ pub async fn export_lobby_logs(
 		models::LogStream::StdOut => backend::nomad_log::StreamType::StdOut,
 		models::LogStream::StdErr => backend::nomad_log::StreamType::StdErr,
 		models::LogStream::Unknown(_) => {
-			panic_with!(API_BAD_BODY, error = r#"Invalid "stream""#,);
+			bail_with!(API_BAD_BODY, error = r#"Invalid "stream""#,);
 		}
 	};
 
 	let alloc_id = if let Some(x) = get_alloc_id(&ctx, game_id, lobby_id).await? {
 		x
 	} else {
-		panic_with!(MATCHMAKER_LOBBY_NOT_STARTED);
+		bail_with!(MATCHMAKER_LOBBY_NOT_STARTED);
 	};
 
 	// Export history
@@ -228,28 +238,37 @@ pub async fn export_lobby_logs(
 	let res = msg!([ctx] nomad_log::msg::export(request_id) -> nomad_log::msg::export_complete {
 		request_id: Some(request_id.into()),
 		alloc: alloc_id,
-		task: util_job::GAME_TASK_NAME.into(),
+		task: util_job::RUN_MAIN_TASK_NAME.into(),
 		stream_type: stream_type as i32,
 	})
 	.await?;
-	let upload_id = internal_unwrap!(res.upload_id).as_uuid();
+	let upload_id = unwrap_ref!(res.upload_id).as_uuid();
 
 	let upload_res = op!([ctx] upload_get {
 		upload_ids: vec![upload_id.into()],
 	})
 	.await?;
-	let _upload = internal_unwrap_owned!(upload_res.uploads.first(), "upload not found");
+	let _upload = unwrap!(upload_res.uploads.first(), "upload not found");
 
 	let filename = match stream_type {
 		backend::nomad_log::StreamType::StdOut => "stdout.txt",
 		backend::nomad_log::StreamType::StdErr => "stderr.txt",
 	};
-	let url = format!(
-		"https://cdn.{}/nomad-log-export/{upload_id}/{filename}",
-		util::env::domain_main()
-	);
+	let s3_client = s3_util::Client::from_env("bucket-nomad-log-export").await?;
+	let presigned_req = s3_client
+		.get_object()
+		.bucket(s3_client.bucket())
+		.key(format!("{upload_id}/{filename}"))
+		.presigned(
+			s3_util::aws_sdk_s3::presigning::config::PresigningConfig::builder()
+				.expires_in(Duration::from_secs(60 * 60))
+				.build()?,
+		)
+		.await?;
 
-	Ok(models::ExportLobbyLogsResponse { url })
+	Ok(models::ExportLobbyLogsResponse {
+		url: presigned_req.uri().to_string(),
+	})
 }
 
 async fn get_alloc_id(
@@ -263,10 +282,10 @@ async fn get_alloc_id(
 		include_stopped: true,
 	})
 	.await?;
-	let lobby = unwrap_with_owned!(lobby_res.lobbies.first(), MATCHMAKER_LOBBY_NOT_FOUND);
+	let lobby = unwrap_with!(lobby_res.lobbies.first(), MATCHMAKER_LOBBY_NOT_FOUND);
 
 	// Validate lobby belongs to game
-	let namespace_id = internal_unwrap!(lobby.namespace_id).as_uuid();
+	let namespace_id = unwrap_ref!(lobby.namespace_id).as_uuid();
 	let _game_ns = assert::namespace_for_game(ctx, game_id, namespace_id).await?;
 
 	// Lookup run ID if exists
@@ -282,8 +301,8 @@ async fn get_alloc_id(
 		run_ids: vec![run_id.into()],
 	})
 	.await?;
-	let run = internal_unwrap_owned!(run_res.runs.first());
-	let run_meta = internal_unwrap!(run.run_meta);
+	let run = unwrap!(run_res.runs.first());
+	let run_meta = unwrap_ref!(run.run_meta);
 
 	let alloc_id = if let Some(backend::job::run_meta::Kind::Nomad(nomad)) = &run_meta.kind {
 		if let Some(alloc_id) = &nomad.alloc_id {
@@ -293,7 +312,7 @@ async fn get_alloc_id(
 			return Ok(None);
 		}
 	} else {
-		internal_panic!("lobby is not a nomad job");
+		bail!("lobby is not a nomad job");
 	};
 
 	Ok(Some(alloc_id.clone()))

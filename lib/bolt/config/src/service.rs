@@ -32,18 +32,22 @@ pub struct ServiceConfig {
 	/// Secrets that need to be exposed for this service.
 	#[serde(default)]
 	pub secrets: HashMap<String, Secret>,
+
+	#[serde(default)]
+	pub resources: ServiceResourcesMap,
+
+	#[serde(default)]
+	pub cockroachdb: CockroachDB,
 }
 
 #[derive(Deserialize, Clone, Debug)]
 #[serde(rename_all = "kebab-case", deny_unknown_fields)]
 pub struct Service {
 	pub name: String,
-	#[serde(default)]
-	pub regions: Option<Vec<String>>,
 	/// If this service needs to be booted no matter what service is running.
 	#[serde(default)]
 	pub essential: bool,
-	/// The Nomad job prioirty.
+	/// The Nomad job priority.
 	///
 	/// Used if nodes start failing and some services need to be shut down because of capacity
 	/// constraints.
@@ -52,6 +56,8 @@ pub struct Service {
 	/// If this service should only be used for tests.
 	#[serde(default)]
 	pub test_only: bool,
+	#[serde(default)]
+	pub load_test: bool,
 }
 
 #[derive(Deserialize, Clone, Debug)]
@@ -93,18 +99,24 @@ pub enum ServiceKind {
 	Operation {},
 
 	#[serde(rename = "consumer")]
-	Consumer {},
+	Consumer {
+		#[serde(default)]
+		disabled: bool,
+	},
 
 	#[serde(rename = "api", rename_all = "kebab-case")]
 	Api {
+		#[serde(default)]
+		disabled: bool,
 		#[serde(default)]
 		port: Option<u16>,
 		#[serde(default = "defaults::singleton")]
 		singleton: bool,
 		router: Option<ServiceRouter>,
-		#[serde(default)]
-		consul_connect: bool,
 	},
+
+	#[serde(rename = "api-routes", rename_all = "kebab-case")]
+	ApiRoutes {},
 
 	#[serde(rename = "static", rename_all = "kebab-case")]
 	Static { router: ServiceRouter },
@@ -126,11 +138,7 @@ pub enum RuntimeKind {
 	#[serde(rename = "clickhouse")]
 	ClickHouse {},
 	#[serde(rename = "redis")]
-	Redis {
-		// TODO: Validate index is unique
-		index: u16,
-		persistent: bool,
-	},
+	Redis { persistent: bool },
 	#[serde(rename = "s3")]
 	S3 { upload_policy: UploadPolicy },
 	#[serde(rename = "nats")]
@@ -158,11 +166,13 @@ pub struct ServiceRouter {
 #[serde(rename_all = "kebab-case", deny_unknown_fields)]
 pub struct ServiceMount {
 	#[serde(default)]
-	pub domain: ServiceDomain,
+	pub deprecated: bool,
 	#[serde(default)]
 	pub subdomain: Option<String>,
 	#[serde(default)]
 	pub path: Option<String>,
+	#[serde(default)]
+	pub add_path: Option<String>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -184,6 +194,8 @@ impl Default for ServiceDomain {
 pub struct CargoConfig {
 	pub package: CargoPackage,
 	pub dependencies: HashMap<String, CargoDependency>,
+	#[serde(default)]
+	pub dev_dependencies: HashMap<String, CargoDependency>,
 }
 
 #[derive(Deserialize, Clone, Debug)]
@@ -197,6 +209,46 @@ pub struct CargoPackage {
 pub enum CargoDependency {
 	Path { path: String },
 	Unknown(serde_json::Value),
+}
+
+#[derive(Deserialize, Clone, Debug)]
+#[serde(rename_all = "kebab-case", deny_unknown_fields)]
+pub struct ServiceResourcesMap {
+	pub single_node: super::ns::ServiceResources,
+	pub distributed: super::ns::ServiceResources,
+}
+
+impl Default for ServiceResourcesMap {
+	fn default() -> Self {
+		Self {
+			single_node: super::ns::ServiceResources {
+				cpu: 100,
+				memory: 128,
+			},
+			distributed: super::ns::ServiceResources {
+				cpu: 1000,
+				memory: 1024,
+			},
+		}
+	}
+}
+
+#[derive(Deserialize, Clone, Debug)]
+#[serde(rename_all = "kebab-case", deny_unknown_fields)]
+pub struct CockroachDB {
+	// Sets a minimum number of connections to the database. This is important to ensure that
+	// the initial queries are not delayed by a large surge of TCP connections immediately
+	// after startup.
+	//
+	// To figure out a healthy number for this value, see the `rivet_crdb_pool_conn_size`
+	// metric to see how many connections are being used for a given service.
+	pub min_connections: usize,
+}
+
+impl Default for CockroachDB {
+	fn default() -> Self {
+		Self { min_connections: 1 }
+	}
 }
 
 mod defaults {
@@ -216,6 +268,14 @@ mod defaults {
 impl ServiceConfig {
 	pub fn component_class(&self) -> ComponentClass {
 		self.kind.component_class()
+	}
+
+	// TODO: Implement
+	pub fn disabled(&self) -> bool {
+		match self.kind {
+			ServiceKind::Api { disabled, .. } | ServiceKind::Consumer { disabled } => disabled,
+			_ => false,
+		}
 	}
 }
 
@@ -266,15 +326,13 @@ impl RuntimeKind {
 impl ServiceKind {
 	/// The service's router used to configure how it's exposed to the world.
 	pub fn router(&self) -> Option<&ServiceRouter> {
-		if let ServiceKind::Api {
-			router: Some(router),
-			..
-		}
-		| ServiceKind::Static { router } = self
-		{
-			Some(router)
-		} else {
-			None
+		match self {
+			ServiceKind::Api {
+				router: Some(router),
+				..
+			}
+			| ServiceKind::Static { router } => Some(router),
+			_ => None,
 		}
 	}
 
@@ -282,10 +340,9 @@ impl ServiceKind {
 	/// because this will be true for any services that are internally-facing HTTP servers, such as
 	/// `api-job`.
 	pub fn has_server(&self) -> bool {
-		if let ServiceKind::Api { .. } | ServiceKind::Static { .. } = self {
-			true
-		} else {
-			false
+		match self {
+			ServiceKind::Api { .. } | ServiceKind::Static { .. } => true,
+			_ => false,
 		}
 	}
 
@@ -297,6 +354,7 @@ impl ServiceKind {
 			ServiceKind::Operation { .. } => "operation",
 			ServiceKind::Consumer { .. } => "consumer",
 			ServiceKind::Api { .. } => "api",
+			ServiceKind::ApiRoutes { .. } => "api-routes",
 			ServiceKind::Static { .. } => "static",
 			ServiceKind::Database { .. } => "database",
 			ServiceKind::Cache { .. } => "cache",
@@ -308,10 +366,12 @@ impl ServiceKind {
 			ServiceKind::Headless { .. }
 			| ServiceKind::Oneshot { .. }
 			| ServiceKind::Periodic { .. }
+			| ServiceKind::Static { .. }
+			| ServiceKind::Api { .. } => ComponentClass::Executable,
+
+			ServiceKind::Operation { .. }
 			| ServiceKind::Consumer { .. }
-			| ServiceKind::Api { .. }
-			| ServiceKind::Static { .. } => ComponentClass::Executable,
-			ServiceKind::Operation { .. } => ComponentClass::NonExecutable,
+			| ServiceKind::ApiRoutes { .. } => ComponentClass::NonExecutable,
 			ServiceKind::Database { .. } => ComponentClass::Database,
 			ServiceKind::Cache { .. } => ComponentClass::Cache,
 		}

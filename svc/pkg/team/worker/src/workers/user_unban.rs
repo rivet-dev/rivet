@@ -4,26 +4,28 @@ use serde_json::json;
 
 #[worker(name = "team-user-unban")]
 async fn worker(ctx: &OperationContext<team::msg::user_unban::Message>) -> GlobalResult<()> {
-	let team_id = internal_unwrap!(ctx.team_id).as_uuid();
-	let user_id = internal_unwrap!(ctx.user_id).as_uuid();
+	let team_id = unwrap_ref!(ctx.team_id).as_uuid();
+	let user_id = unwrap_ref!(ctx.user_id).as_uuid();
 
-	sqlx::query(indoc!(
+	sql_execute!(
+		[ctx]
 		"
-		DELETE FROM banned_users
+		DELETE FROM db_team.banned_users
 		WHERE team_id = $1
 		AND user_id = $2
-		"
-	))
-	.bind(team_id)
-	.bind(user_id)
-	.execute(&ctx.crdb("db-team").await?)
+		",
+		team_id,
+		user_id,
+	)
 	.await?;
 
 	// TODO: Establish audit logs
-	// sqlx::query("INSERT INTO team_audit_logs WHERE team_id = $1")
-	// 	.bind(team_id)
-	// 	.bind(user_id)
-	// 	.execute(&ctx.crdb("db-team").await?)
+	// sql_execute!(
+	// 	[ctx]
+	// 	"INSERT INTO team_audit_logs WHERE team_id = $1",
+	// 	team_id,
+	// 	user_id,
+	// )
 	// 	.await?;
 
 	msg!([ctx] team::msg::user_unban_complete(team_id, user_id) {

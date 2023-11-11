@@ -2,7 +2,7 @@ use uuid::Uuid;
 
 /// HASH
 pub fn user_presence(user_id: Uuid) -> String {
-	format!("user_presence:user:{user_id}")
+	format!("{{global}}:user_presence:user:{user_id}")
 }
 
 pub mod user_presence {
@@ -26,7 +26,7 @@ pub mod user_presence {
 
 /// HASH
 pub fn game_activity(user_id: Uuid) -> String {
-	format!("user_presence:game_activity:{user_id}")
+	format!("{{global}}:user_presence:game_activity:{user_id}")
 }
 
 pub mod game_activity {
@@ -59,5 +59,5 @@ pub mod game_activity {
 
 /// ZSET
 pub fn user_presence_touch() -> String {
-	"user_presence:user:touch".into()
+	format!("{{global}}:user_presence:user:touch")
 }

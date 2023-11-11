@@ -21,7 +21,7 @@ pub async fn inspect(
 			game_id: cloud_ent.game_id.to_string(),
 		})
 	} else {
-		panic_with!(
+		bail_with!(
 			API_UNAUTHORIZED,
 			reason = "Token is missing one of the following entitlements: user, game_cloud"
 		);

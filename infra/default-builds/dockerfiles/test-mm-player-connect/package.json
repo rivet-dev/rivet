@@ -1,0 +1,9 @@
+{
+	"name": "test-mm-player-connect",
+	"version": "1.0.0",
+	"type": "module",
+	"dependencies": {
+		"ws": "8.14.2",
+		"@rivet-gg/api": "23.1.0-rc4"
+	}
+}

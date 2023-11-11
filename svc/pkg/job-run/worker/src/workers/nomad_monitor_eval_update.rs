@@ -30,23 +30,23 @@ struct RunRow {
 async fn worker(
 	ctx: &OperationContext<job_run::msg::nomad_monitor_eval_update::Message>,
 ) -> GlobalResult<()> {
-	let crdb = ctx.crdb("db-job-state").await?;
+	let crdb = ctx.crdb().await?;
 
 	let payload_value = serde_json::from_str::<serde_json::Value>(&ctx.payload_json)?;
 	let PlanResult { evaluation: eval } = serde_json::from_str::<PlanResult>(&ctx.payload_json)?;
 
-	let job_id = internal_unwrap!(eval.job_id, "eval has no job id");
-	let eval_status_raw = internal_unwrap!(eval.status).as_str();
+	let job_id = unwrap_ref!(eval.job_id, "eval has no job id");
+	let eval_status_raw = unwrap_ref!(eval.status).as_str();
 
 	// We can't decode this with serde, so manually deserialize the response
-	let eval_value = internal_unwrap_owned!(payload_value.get("Evaluation"));
+	let eval_value = unwrap!(payload_value.get("Evaluation"));
 
 	if !util_job::is_nomad_job_run(job_id) {
 		tracing::info!(%job_id, "disregarding event");
 		return Ok(());
 	}
 
-	// HACK: Serde isn't deserialize this correctly for some reason so
+	// HACK: Serde isn't deserializing this correctly for some reason so
 	// we use raw JSON
 	// Filter out data we need from the event. Ignore events we don't care about
 	// before we touch the database.
@@ -72,17 +72,18 @@ async fn worker(
 	};
 
 	// Fetch and update the run
-	let run_row = sqlx::query_as::<_, RunRow>(indoc!(
+	let run_row = sql_fetch_optional!(
+		[ctx, RunRow]
 		"
 		WITH
 			select_run AS (
 				SELECT runs.run_id, runs.region_id, run_meta_nomad.eval_plan_ts
-				FROM run_meta_nomad
-				INNER JOIN runs ON runs.run_id = run_meta_nomad.run_id
+				FROM db_job_state.run_meta_nomad
+				INNER JOIN db_job_state.runs ON runs.run_id = run_meta_nomad.run_id
 				WHERE dispatched_job_id = $1
 			),
 			_update AS (
-				UPDATE run_meta_nomad
+				UPDATE db_job_state.run_meta_nomad
 				SET eval_plan_ts = $2
 				FROM select_run
 				WHERE
@@ -91,11 +92,10 @@ async fn worker(
 				RETURNING 1
 			)
 		SELECT * FROM select_run
-		"
-	))
-	.bind(job_id)
-	.bind(ctx.ts())
-	.fetch_optional(&crdb)
+		",
+		job_id,
+		ctx.ts(),
+	)
 	.await?;
 
 	// Check if run found
@@ -104,7 +104,7 @@ async fn worker(
 			tracing::error!("discarding stale message");
 			return Ok(());
 		} else {
-			retry_panic!("run not found, may be race condition with insertion");
+			retry_bail!("run not found, may be race condition with insertion");
 		}
 	};
 	let run_id = run_row.run_id;
@@ -133,7 +133,7 @@ async fn worker(
 				region_ids: vec![run_row.region_id.into()],
 			})
 			.await?;
-			let region = internal_unwrap_owned!(region_res.regions.first());
+			let region = unwrap!(region_res.regions.first());
 
 			// Stop the job from attempting to run on another node. This will
 			// be called in job-run-stop too, but we want to catch this earlier.

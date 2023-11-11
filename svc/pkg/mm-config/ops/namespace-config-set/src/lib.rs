@@ -5,7 +5,7 @@ use rivet_operation::prelude::*;
 async fn handle(
 	ctx: OperationContext<mm_config::namespace_config_set::Request>,
 ) -> GlobalResult<mm_config::namespace_config_set::Response> {
-	let namespace_id = internal_unwrap!(ctx.namespace_id).as_uuid();
+	let namespace_id = unwrap_ref!(ctx.namespace_id).as_uuid();
 
 	// Validate game
 	let validation_res = op!([ctx] mm_config_namespace_config_validate {
@@ -27,12 +27,13 @@ async fn handle(
 			.map(|err| err.path.join("."))
 			.collect::<Vec<_>>()
 			.join(", ");
-		panic_with!(VALIDATION_ERROR, error = readable_errors);
+		bail_with!(VALIDATION_ERROR, error = readable_errors);
 	}
 
-	sqlx::query(indoc!(
+	sql_execute!(
+		[ctx]
 		"
-		UPDATE game_namespaces
+		UPDATE db_mm_config.game_namespaces
 		SET 
 			lobby_count_max = $2,
 			max_players_per_client = $3,
@@ -41,16 +42,15 @@ async fn handle(
 			max_players_per_client_tor = $6,
 			max_players_per_client_hosting = $7
 		WHERE namespace_id = $1
-		"
-	))
-	.bind(namespace_id)
-	.bind(ctx.lobby_count_max as i64)
-	.bind(ctx.max_players_per_client as i64)
-	.bind(ctx.max_players_per_client_vpn as i64)
-	.bind(ctx.max_players_per_client_proxy as i64)
-	.bind(ctx.max_players_per_client_tor as i64)
-	.bind(ctx.max_players_per_client_hosting as i64)
-	.execute(&ctx.crdb("db-mm-config").await?)
+		",
+		namespace_id,
+		ctx.lobby_count_max as i64,
+		ctx.max_players_per_client as i64,
+		ctx.max_players_per_client_vpn as i64,
+		ctx.max_players_per_client_proxy as i64,
+		ctx.max_players_per_client_tor as i64,
+		ctx.max_players_per_client_hosting as i64,
+	)
 	.await?;
 
 	Ok(mm_config::namespace_config_set::Response {})

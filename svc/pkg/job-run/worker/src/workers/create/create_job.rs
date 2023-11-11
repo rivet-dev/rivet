@@ -42,7 +42,7 @@ fn build_job(
 		Ok(x) => x,
 		Err(err) => {
 			tracing::error!(?err, "cjson serialization failed");
-			internal_panic!("cjson serialization failed")
+			bail!("cjson serialization failed")
 		}
 	};
 	let job_hash = Sha256::digest(job_cjson_str.as_bytes());
@@ -68,9 +68,9 @@ fn modify_job_spec(
 	// deterministic job spec.
 	override_job_id("__PLACEHOLDER__", &mut job);
 
-	internal_assert_eq!(
+	ensure_eq!(
 		"batch",
-		internal_unwrap!(job._type).as_str(),
+		unwrap_ref!(job._type).as_str(),
 		"only the batch job type is supported"
 	);
 
@@ -79,8 +79,7 @@ fn modify_job_spec(
 	job.datacenters = Some(vec![region.nomad_datacenter.clone()]);
 
 	// Validate that the job is parameterized
-	let parameters =
-		internal_unwrap_owned!(job.parameterized_job.as_mut(), "job not parameterized");
+	let parameters = unwrap!(job.parameterized_job.as_mut(), "job not parameterized");
 
 	// Add run parameters
 	parameters.meta_required = Some({
@@ -91,27 +90,48 @@ fn modify_job_spec(
 	});
 
 	// Get task group
-	let task_groups = internal_unwrap_owned!(job.task_groups.as_mut());
-	internal_assert_eq!(1, task_groups.len(), "must have exactly 1 task group");
-	let task_group = internal_unwrap_owned!(task_groups.first_mut());
+	let task_groups = unwrap!(job.task_groups.as_mut());
+	ensure_eq!(1, task_groups.len(), "must have exactly 1 task group");
+	let task_group = unwrap!(task_groups.first_mut());
+	ensure_eq!(
+		task_group.name.as_deref(),
+		Some(util_job::RUN_MAIN_TASK_NAME),
+		"must have main task group"
+	);
+
+	// Ensure has main task
+	let main_task = unwrap!(
+		task_group
+			.tasks
+			.iter()
+			.flatten()
+			.find(|x| x.name.as_deref() == Some(util_job::RUN_MAIN_TASK_NAME)),
+		"must have main task"
+	);
+	ensure!(
+		main_task
+			.lifecycle
+			.as_ref()
+			.map_or(true, |x| x.hook.is_none()),
+		"main task must not have a lifecycle hook"
+	);
 
 	// Configure networks
-	let networks = internal_unwrap_owned!(task_group.networks.as_mut());
-	internal_assert_eq!(1, networks.len(), "must have exactly 1 network");
-	let network = internal_unwrap_owned!(networks.first_mut());
+	let networks = unwrap!(task_group.networks.as_mut());
+	ensure_eq!(1, networks.len(), "must have exactly 1 network");
+	let network = unwrap!(networks.first_mut());
+	// Disable IPv6 DNS since Docker doesn't support IPv6 yet
 	network.DNS = Some(Box::new(nomad_client::models::NetworkDns {
 		servers: Some(vec![
-			// Cloudflare
-			"1.1.1.1".into(),
-			"1.0.0.1".into(),
-			"2606:4700:4700::1111".into(),
-			"2606:4700:4700::1001".into(),
 			// Google
 			"8.8.8.8".into(),
 			"8.8.4.4".into(),
 			"2001:4860:4860::8888".into(),
 			"2001:4860:4860::8844".into(),
 		]),
+		// Disable default search from the host
+		searches: Some(Vec::new()),
+		options: Some(vec!["rotate".into(), "edns0".into(), "attempts:2".into()]),
 		..nomad_client::models::NetworkDns::new()
 	}));
 
@@ -131,7 +151,7 @@ fn modify_job_spec(
 	}));
 
 	// Add cleanup task
-	let tasks = internal_unwrap_owned!(task_group.tasks.as_mut());
+	let tasks = unwrap!(task_group.tasks.as_mut());
 	tasks.push(gen_cleanup_task());
 
 	Ok(job)
@@ -166,50 +186,49 @@ fn gen_cleanup_task() -> nomad_client::models::Task {
 			dest_path: Some("local/cleanup.py".into()),
 			embedded_tmpl: Some(formatdoc!(
 				r#"
-					import ssl
-					import urllib.request, json, os, mimetypes, sys
+				import ssl
+				import urllib.request, json, os, mimetypes, sys
 
-					API_JOB_URL = '{api_job_url}'
-					BEARER = '{{{{env "NOMAD_META_JOB_RUN_TOKEN"}}}}'
+				BEARER = '{{{{env "NOMAD_META_JOB_RUN_TOKEN"}}}}'
 
-					ctx = ssl.create_default_context()
+				ctx = ssl.create_default_context()
 
-					def eprint(*args, **kwargs):
-    					print(*args, file=sys.stderr, **kwargs)
+				def eprint(*args, **kwargs):
+					print(*args, file=sys.stderr, **kwargs)
 
-					def req(method, url, data = None, headers = {{}}):
-						request = urllib.request.Request(
-							url=url,
-							data=data,
-							method=method,
-							headers=headers
-						)
+				def req(method, url, data = None, headers = {{}}):
+					request = urllib.request.Request(
+						url=url,
+						data=data,
+						method=method,
+						headers=headers
+					)
 
-						try:
-							res = urllib.request.urlopen(request, context=ctx)
-							assert res.status == 200, f"Received non-200 status: {{res.status}}"
-							return res
-						except urllib.error.HTTPError as err:
-							eprint(f"HTTP Error ({{err.code}} {{err.reason}}):\n\nBODY:\n{{err.read().decode()}}\n\nHEADERS:\n{{err.headers}}")
+					try:
+						res = urllib.request.urlopen(request, context=ctx)
+						assert res.status == 200, f"Received non-200 status: {{res.status}}"
+						return res
+					except urllib.error.HTTPError as err:
+						eprint(f"HTTP Error ({{err.code}} {{err.reason}}):\n\nBODY:\n{{err.read().decode()}}\n\nHEADERS:\n{{err.headers}}")
 
-							raise err
+						raise err
 
-					print(f'\n> Cleaning up job')
+				print(f'\n> Cleaning up job')
 
-					res_json = None
-					with req('POST', f'{{API_JOB_URL}}/runs/cleanup',
-						data = json.dumps({{}}).encode(),
-						headers = {{
-							'Authorization': f'Bearer {{BEARER}}',
-							'Content-Type': 'application/json'
-						}}
-					) as res:
-						res_json = json.load(res)
+				res_json = None
+				with req('POST', f'{origin_api}/job/runs/cleanup',
+					data = json.dumps({{}}).encode(),
+					headers = {{
+						'Authorization': f'Bearer {{BEARER}}',
+						'Content-Type': 'application/json'
+					}}
+				) as res:
+					res_json = json.load(res)
 
 
-					print('\n> Finished')
-					"#,
-				api_job_url = util::env::svc_router_url("api-job"),
+				print('\n> Finished')
+				"#,
+				origin_api = util::env::origin_api(),
 			)),
 			..Template::new()
 		}]),
@@ -319,10 +338,10 @@ mod tests {
 				..ParameterizedJobConfig::new()
 			})),
 			task_groups: Some(vec![TaskGroup {
-				name: Some("test".into()),
+				name: Some(util_job::RUN_MAIN_TASK_NAME.into()),
 				networks: Some(vec![NetworkResource {
 					// So we can access it from the test
-					mode: Some("bridge".into()),
+					mode: Some("cni/rivet-job".into()),
 					dynamic_ports: Some(vec![Port {
 						label: Some("http".into()),
 						value: None,
@@ -338,7 +357,7 @@ mod tests {
 					..Service::new()
 				}]),
 				tasks: Some(vec![Task {
-					name: Some("test".into()),
+					name: Some(util_job::RUN_MAIN_TASK_NAME.into()),
 					driver: Some("docker".into()),
 					config: Some({
 						let mut config = HashMap::new();

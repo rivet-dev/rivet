@@ -6,8 +6,7 @@ imports:
 
 service:
   auth: true
-  base-path: /games/{game_id}
-  url: Cloud
+  base-path: /cloud/games/{game_id}
   audiences:
     - public
   path-parameters:
@@ -57,7 +56,7 @@ types:
         type: optional<string>
       content_length:
         docs: Unsigned 64 bit integer.
-        type: optional<long>
+        type: long
 
   PrepareCustomAvatarUploadResponse:
     properties:

@@ -1,10 +1,10 @@
 # \MatchmakerRegionsApi
 
-All URIs are relative to *http://localhost*
+All URIs are relative to *https://api.rivet.gg*
 
 Method | HTTP request | Description
 ------------- | ------------- | -------------
-[**matchmaker_regions_list**](MatchmakerRegionsApi.md#matchmaker_regions_list) | **GET** /regions | 
+[**matchmaker_regions_list**](MatchmakerRegionsApi.md#matchmaker_regions_list) | **GET** /matchmaker/regions | 
 
 
 

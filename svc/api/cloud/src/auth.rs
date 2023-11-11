@@ -52,17 +52,17 @@ impl Auth {
 			user_ids: vec![user_ent.user_id.into()],
 		})
 		.await?;
-		let user = internal_unwrap_owned!(user_res.users.first());
+		let user = unwrap!(user_res.users.first());
 
 		// Verify user is not deleted
 		if user.delete_complete_ts.is_some() {
-			let jti = internal_unwrap_owned!(claims.jti);
+			let jti = unwrap!(claims.jti);
 			op!([ctx] token_revoke {
 				jtis: vec![jti],
 			})
 			.await?;
 
-			panic_with!(TOKEN_REVOKED);
+			bail_with!(TOKEN_REVOKED);
 		}
 
 		Ok(user_ent)
@@ -85,26 +85,26 @@ impl Auth {
 			})
 			.await?;
 
-			let user = internal_unwrap_owned!(team_list_res.users.first());
+			let user = unwrap!(team_list_res.users.first());
 			let user_team_ids = user
 				.teams
 				.iter()
-				.map(|t| Ok(internal_unwrap!(t.team_id).as_uuid()))
+				.map(|t| Ok(unwrap_ref!(t.team_id).as_uuid()))
 				.collect::<GlobalResult<HashSet<_>>>()?;
 			let has_teams = team_ids
 				.iter()
 				.all(|team_id| user_team_ids.contains(team_id));
 
-			assert_with!(has_teams, GROUP_NOT_MEMBER);
+			ensure_with!(has_teams, GROUP_NOT_MEMBER);
 
 			Ok(())
 		} else if claims.as_game_cloud().is_ok() {
-			panic_with!(
+			bail_with!(
 				API_FORBIDDEN,
 				reason = "Game cloud token cannot write to this game",
 			);
 		} else {
-			panic_with!(
+			bail_with!(
 				API_UNAUTHORIZED,
 				reason = "Token is missing one of the following entitlements: user"
 			);
@@ -139,7 +139,7 @@ impl Auth {
 		&self,
 		ctx: &OperationContext<()>,
 		team_id: Uuid,
-	) -> GlobalResult<()> {
+	) -> GlobalResult<Uuid> {
 		let claims = self.claims()?;
 
 		if claims.as_user().is_ok() {
@@ -153,19 +153,19 @@ impl Auth {
 			.await?;
 
 			// Validate the team exists
-			let team = internal_unwrap_owned!(res.teams.first());
-			let owner_user_id = internal_unwrap!(team.owner_user_id).as_uuid();
+			let team = unwrap!(res.teams.first());
+			let owner_user_id = unwrap_ref!(team.owner_user_id).as_uuid();
 
 			// Verify user's permissions
-			assert_eq_with!(
+			ensure_eq_with!(
 				user_ent.user_id,
 				owner_user_id,
 				GROUP_INSUFFICIENT_PERMISSIONS
 			);
 
-			Ok(())
+			Ok(user_ent.user_id)
 		} else {
-			panic_with!(
+			bail_with!(
 				API_UNAUTHORIZED,
 				reason = "token is missing one of the following entitlements: user"
 			);
@@ -194,19 +194,19 @@ impl Auth {
 						.collect::<Vec<_>>(),
 				})
 				.await?;
-				internal_assert!(!games_res.games.is_empty(), "games not found");
+				ensure!(!games_res.games.is_empty(), "games not found");
 
 				games_res
 					.games
 					.iter()
-					.map(|g| Ok(internal_unwrap!(g.developer_team_id).as_uuid()))
+					.map(|g| Ok(unwrap_ref!(g.developer_team_id).as_uuid()))
 					.collect::<GlobalResult<Vec<_>>>()?
 			};
 
 			// Validate can read teams
 			self.check_teams_read(ctx, dev_team_ids).await
 		} else if let Ok(cloud_ent) = claims.as_game_cloud() {
-			assert_with!(
+			ensure_with!(
 				game_ids.iter().any(|id| id == &cloud_ent.game_id),
 				API_FORBIDDEN,
 				reason = "Game cloud token cannot write to this game",
@@ -214,7 +214,7 @@ impl Auth {
 
 			Ok(())
 		} else {
-			panic_with!(
+			bail_with!(
 				API_UNAUTHORIZED,
 				reason = "token is missing one of the following entitlements: user"
 			);
@@ -249,15 +249,15 @@ impl Auth {
 						game_ids: vec![game_id.into()],
 				})
 				.await?;
-				let game = internal_unwrap_owned!(games_res.games.first(), "game not found");
+				let game = unwrap!(games_res.games.first(), "game not found");
 
-				internal_unwrap!(game.developer_team_id).as_uuid()
+				unwrap_ref!(game.developer_team_id).as_uuid()
 			};
 
 			// Validate can write to the team
 			self.check_team_write(ctx, dev_team_id).await
 		} else if let Ok(cloud_ent) = claims.as_game_cloud() {
-			assert_eq_with!(
+			ensure_eq_with!(
 				cloud_ent.game_id,
 				game_id,
 				API_FORBIDDEN,
@@ -266,7 +266,7 @@ impl Auth {
 
 			Ok(())
 		} else {
-			panic_with!(
+			bail_with!(
 				API_UNAUTHORIZED,
 				reason = "token is missing one of the following entitlements: user"
 			);
@@ -322,12 +322,12 @@ impl Auth {
 			})
 			.await?;
 
-			let user = internal_unwrap_owned!(user_res.users.first(), "user not found");
-			assert_with!(user.is_admin, IDENTITY_NOT_ADMIN);
+			let user = unwrap!(user_res.users.first(), "user not found");
+			ensure_with!(user.is_admin, IDENTITY_NOT_ADMIN);
 
 			Ok(())
 		} else {
-			panic_with!(
+			bail_with!(
 				API_UNAUTHORIZED,
 				reason = "token is missing one of the following entitlements: user"
 			);
@@ -344,9 +344,9 @@ impl Auth {
 			team_ids: vec![team_id.into()],
 		})
 		.await?;
-		let dev_team = unwrap_with_owned!(dev_team_res.teams.first(), GROUP_NOT_DEVELOPER_GROUP);
+		let dev_team = unwrap_with!(dev_team_res.teams.first(), GROUP_NOT_DEVELOPER_GROUP);
 
-		assert_with!(dev_team.active, GROUP_INVALID_DEVELOPER_STATUS);
+		ensure_with!(dev_team.active, GROUP_INVALID_DEVELOPER_STATUS);
 
 		Ok(())
 	}
@@ -365,7 +365,7 @@ impl Auth {
 				user_ids: vec![user_ent.user_id.into()],
 			})
 			.await?;
-			let user = internal_unwrap_owned!(teams_res.users.first());
+			let user = unwrap!(teams_res.users.first());
 			let team_ids_proto = user
 				.teams
 				.iter()
@@ -395,7 +395,7 @@ impl Auth {
 		} else if let Ok(cloud_ent) = claims.as_game_cloud() {
 			(None, Vec::new(), vec![cloud_ent.game_id])
 		} else {
-			panic_with!(
+			bail_with!(
 				API_UNAUTHORIZED,
 				reason = "token is missing one of the following entitlements: user, game_cloud"
 			);

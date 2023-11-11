@@ -7,12 +7,12 @@ const MAX_UPLOAD_SIZE: u64 = util::file_size::gigabytes(1);
 async fn handle(
 	ctx: OperationContext<cdn::site_create::Request>,
 ) -> GlobalResult<cdn::site_create::Response> {
-	let game_id = internal_unwrap!(ctx.game_id).as_uuid();
-	internal_assert!(
+	let game_id = unwrap_ref!(ctx.game_id).as_uuid();
+	ensure!(
 		util::check::display_name_long(&ctx.display_name),
 		"invalid display name"
 	);
-	assert_with!(
+	ensure_with!(
 		ctx.files
 			.iter()
 			.fold(0, |acc, file| acc + file.content_length)
@@ -26,7 +26,7 @@ async fn handle(
 	})
 	.await?;
 	let game = game_res.games.first();
-	let _game = internal_unwrap!(game, "game not found");
+	let _game = unwrap_ref!(game, "game not found");
 
 	// Create the upload. Don't log since there might be a lot of files in this
 	// upload.
@@ -35,22 +35,22 @@ async fn handle(
 		files: ctx.files.clone(),
 	})
 	.await?;
-	let upload_id = internal_unwrap!(upload_prepare_res.upload_id).as_uuid();
+	let upload_id = unwrap_ref!(upload_prepare_res.upload_id).as_uuid();
 
 	// Create site
 	let site_id = Uuid::new_v4();
-	sqlx::query(indoc!(
+	sql_execute!(
+		[ctx]
 		"
-		INSERT INTO sites (site_id, game_id, upload_id, display_name, create_ts)
+		INSERT INTO db_cdn.sites (site_id, game_id, upload_id, display_name, create_ts)
 		VALUES ($1, $2, $3, $4, $5)
-		"
-	))
-	.bind(site_id)
-	.bind(game_id)
-	.bind(upload_id)
-	.bind(&ctx.display_name)
-	.bind(ctx.ts())
-	.execute(&ctx.crdb("db-cdn").await?)
+		",
+		site_id,
+		game_id,
+		upload_id,
+		&ctx.display_name,
+		ctx.ts(),
+	)
 	.await?;
 
 	Ok(cdn::site_create::Response {

@@ -1,11 +1,11 @@
 # \CloudGamesNamespacesLogsApi
 
-All URIs are relative to *http://localhost*
+All URIs are relative to *https://api.rivet.gg*
 
 Method | HTTP request | Description
 ------------- | ------------- | -------------
-[**cloud_games_namespaces_logs_get_namespace_lobby**](CloudGamesNamespacesLogsApi.md#cloud_games_namespaces_logs_get_namespace_lobby) | **GET** /games/{game_id}/namespaces/{namespace_id}/logs/lobbies/{lobby_id} | 
-[**cloud_games_namespaces_logs_list_namespace_lobbies**](CloudGamesNamespacesLogsApi.md#cloud_games_namespaces_logs_list_namespace_lobbies) | **GET** /games/{game_id}/namespaces/{namespace_id}/logs/lobbies | 
+[**cloud_games_namespaces_logs_get_namespace_lobby**](CloudGamesNamespacesLogsApi.md#cloud_games_namespaces_logs_get_namespace_lobby) | **GET** /cloud/games/{game_id}/namespaces/{namespace_id}/logs/lobbies/{lobby_id} | 
+[**cloud_games_namespaces_logs_list_namespace_lobbies**](CloudGamesNamespacesLogsApi.md#cloud_games_namespaces_logs_list_namespace_lobbies) | **GET** /cloud/games/{game_id}/namespaces/{namespace_id}/logs/lobbies | 
 
 
 

@@ -5,8 +5,8 @@ use rivet_operation::prelude::*;
 async fn handle(
 	ctx: OperationContext<mm::dev_player_token_create::Request>,
 ) -> GlobalResult<mm::dev_player_token_create::Response> {
-	let namespace_id = internal_unwrap!(ctx.namespace_id).as_uuid();
-	let player_id = internal_unwrap!(ctx.player_id).as_uuid();
+	let namespace_id = unwrap_ref!(ctx.namespace_id).as_uuid();
+	let player_id = unwrap_ref!(ctx.player_id).as_uuid();
 
 	let token_res = op!([ctx] token_create {
 			issuer: Self::NAME.into(),
@@ -34,7 +34,7 @@ async fn handle(
 			..Default::default()
 		})
 		.await?;
-	let token = internal_unwrap!(token_res.token);
+	let token = unwrap_ref!(token_res.token);
 
 	Ok(mm::dev_player_token_create::Response {
 		player_jwt: token.token.clone(),

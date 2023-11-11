@@ -15,7 +15,7 @@ lazy_static! {
 
 #[worker(name = "user-create")]
 async fn worker(ctx: &OperationContext<user::msg::create::Message>) -> GlobalResult<()> {
-	let user_id = internal_unwrap!(ctx.user_id).as_uuid();
+	let user_id = unwrap_ref!(ctx.user_id).as_uuid();
 
 	let join_ts = ctx.ts();
 
@@ -25,16 +25,13 @@ async fn worker(ctx: &OperationContext<user::msg::create::Message>) -> GlobalRes
 			namespace_ids: vec![namespace_id],
 		})
 		.await?;
-		let version_id = internal_unwrap_owned!(
-			internal_unwrap_owned!(namespace_res.namespaces.first()).version_id
-		);
+		let version_id = unwrap!(unwrap!(namespace_res.namespaces.first()).version_id);
 
 		let identity_config_res = op!([ctx] identity_config_version_get {
 			version_ids: vec![version_id],
 		})
 		.await?;
-		let identity_config =
-			internal_unwrap!(internal_unwrap_owned!(identity_config_res.versions.first()).config);
+		let identity_config = unwrap_ref!(unwrap!(identity_config_res.versions.first()).config);
 
 		let mut rng = rand::thread_rng();
 		let display_name = identity_config
@@ -56,18 +53,18 @@ async fn worker(ctx: &OperationContext<user::msg::create::Message>) -> GlobalRes
 	};
 
 	// Attempt to create a unique handle 3 times
-	let crdb = ctx.crdb("db-user").await?;
+	let crdb = ctx.crdb().await?;
 	let mut attempts = 3u32;
 	let (display_name, account_number) = loop {
 		if attempts == 0 {
-			internal_panic!("failed all attempts to create unique user handle");
+			bail!("failed all attempts to create unique user handle");
 		}
 		attempts -= 1;
 
 		let display_name = gen_display_name(display_name.as_deref().unwrap_or("Guest"));
 
 		if let Some(x) = insert_user(
-			&crdb,
+			&ctx,
 			user_id,
 			display_name.clone(),
 			avatar_upload_id,
@@ -109,7 +106,7 @@ async fn worker(ctx: &OperationContext<user::msg::create::Message>) -> GlobalRes
 
 // Handles unique constraint violations
 async fn insert_user(
-	crdb: &CrdbPool,
+	ctx: &OperationContext<user::msg::create::Message>,
 	user_id: Uuid,
 	display_name: String,
 	avatar_upload_id: Option<Uuid>,
@@ -119,9 +116,10 @@ async fn insert_user(
 	tracing::info!(%display_name, %account_number, "attempt");
 
 	let res = if let Some(avatar_upload_id) = avatar_upload_id {
-		sqlx::query(indoc!(
+		sql_execute!(
+			[ctx]
 			"
-			INSERT INTO users (
+			INSERT INTO db_user.users (
 				user_id,
 				display_name,
 				account_number,
@@ -130,20 +128,21 @@ async fn insert_user(
 				join_ts
 			)
 			VALUES ($1, $2, $3, $4, $5, $6)
-			"
-		))
-		.bind(user_id)
-		.bind(&display_name)
-		.bind(account_number)
-		.bind(gen_avatar_id())
-		.bind(avatar_upload_id)
-		.bind(join_ts)
-		.execute(crdb)
-		.await
+			ON CONFLICT (display_name, account_number) DO NOTHING
+			",
+			user_id,
+			&display_name,
+			account_number,
+			gen_avatar_id(),
+			avatar_upload_id,
+			join_ts,
+		)
+		.await?
 	} else {
-		sqlx::query(indoc!(
+		sql_execute!(
+			[ctx]
 			"
-			INSERT INTO users (
+			INSERT INTO db_user.users (
 				user_id,
 				display_name,
 				account_number,
@@ -151,35 +150,21 @@ async fn insert_user(
 				join_ts
 			)
 			VALUES ($1, $2, $3, $4, $5)
-			"
-		))
-		.bind(user_id)
-		.bind(&display_name)
-		.bind(gen_account_number())
-		.bind(gen_avatar_id())
-		.bind(join_ts)
-		.execute(crdb)
-		.await
+			ON CONFLICT (display_name, account_number) DO NOTHING
+			",
+			user_id,
+			&display_name,
+			gen_account_number(),
+			gen_avatar_id(),
+			join_ts,
+		)
+		.await?
 	};
 
-	match res {
-		Ok(_) => Ok(Some((display_name, account_number))),
-		// https://www.postgresql.org/docs/current/errcodes-appendix.html
-		Err(sqlx::Error::Database(err)) => {
-			let pg_err =
-				internal_unwrap_owned!(err.try_downcast_ref::<sqlx::postgres::PgDatabaseError>());
-
-			if pg_err.code() == "23505"
-				&& !pg_err
-					.detail()
-					.map_or(false, |d| d.contains("Key (user_id)"))
-			{
-				Ok(None)
-			} else {
-				Err(err.into())
-			}
-		}
-		Err(err) => Err(err.into()),
+	if res.rows_affected() == 1 {
+		return Ok(Some((display_name, account_number)));
+	} else {
+		Ok(None)
 	}
 }
 

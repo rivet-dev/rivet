@@ -1,0 +1,9 @@
+[service]
+name = "load-test-api-cloud"
+load-test = true
+
+[runtime]
+kind = "rust"
+
+[headless]
+

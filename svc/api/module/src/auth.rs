@@ -50,17 +50,17 @@ impl Auth {
 			user_ids: vec![user_ent.user_id.into()],
 		})
 		.await?;
-		let user = internal_unwrap_owned!(user_res.users.first());
+		let user = unwrap!(user_res.users.first());
 
 		// Verify user is not deleted
 		if user.delete_complete_ts.is_some() {
-			let jti = internal_unwrap_owned!(claims.jti);
+			let jti = unwrap!(claims.jti);
 			op!([ctx] token_revoke {
 				jtis: vec![jti],
 			})
 			.await?;
 
-			panic_with!(TOKEN_REVOKED);
+			bail_with!(TOKEN_REVOKED);
 		}
 
 		Ok(user_ent)
@@ -110,30 +110,30 @@ impl Auth {
 			})
 			.await?;
 
-			let lobby = internal_unwrap_owned!(lobbies_res.lobbies.first());
+			let lobby = unwrap!(lobbies_res.lobbies.first());
 
-			internal_unwrap!(lobby.namespace_id).as_uuid()
+			unwrap_ref!(lobby.namespace_id).as_uuid()
 		} else if let Some(game_user_ent) = claims.as_game_user_option()? {
 			let game_users_res = op!([ctx] game_user_get {
 				game_user_ids: vec![game_user_ent.game_user_id.into()],
 			})
 			.await?;
-			let game_user = internal_unwrap_owned!(game_users_res.game_users.first());
+			let game_user = unwrap!(game_users_res.game_users.first());
 
 			// Verify that game user is not deleted
 			if game_user.deleted_ts.is_some() {
-				let jti = internal_unwrap_owned!(claims.jti);
+				let jti = unwrap!(claims.jti);
 				op!([ctx] token_revoke {
 					jtis: vec![jti],
 				})
 				.await?;
 
-				panic_with!(TOKEN_REVOKED);
+				bail_with!(TOKEN_REVOKED);
 			}
 
-			internal_unwrap!(game_user.namespace_id).as_uuid()
+			unwrap_ref!(game_user.namespace_id).as_uuid()
 		} else {
-			panic_with!(API_UNAUTHORIZED)
+			bail_with!(API_UNAUTHORIZED)
 		};
 
 		utils::validate_config(ctx, namespace_id).await?;
@@ -155,15 +155,15 @@ impl Auth {
 		} else if let Ok(ent) = claims.as_game_cloud() {
 			(None, Some(ent))
 		} else {
-			panic_with!(API_UNAUTHORIZED);
+			bail_with!(API_UNAUTHORIZED);
 		};
 
 		let namespaces_res = op!([ctx] game_namespace_get {
 			namespace_ids: vec![namespace_id.into()],
 		})
 		.await?;
-		let namespace = internal_unwrap_owned!(namespaces_res.namespaces.first());
-		let game_id = internal_unwrap!(namespace.game_id);
+		let namespace = unwrap!(namespaces_res.namespaces.first());
+		let game_id = unwrap_ref!(namespace.game_id);
 
 		if let Some(user_ent) = user_ent {
 			assert::user_registered(ctx, user_ent.user_id).await?;
@@ -174,8 +174,8 @@ impl Auth {
 					game_ids: vec![*game_id],
 				})
 				.await?;
-				let game = internal_unwrap_owned!(games_res.games.first(), "game not found");
-				let dev_team_id = internal_unwrap!(game.developer_team_id);
+				let game = unwrap!(games_res.games.first(), "game not found");
+				let dev_team_id = unwrap_ref!(game.developer_team_id);
 
 				*dev_team_id
 			};
@@ -185,16 +185,16 @@ impl Auth {
 				user_ids: vec![user_ent.user_id.into()],
 			})
 			.await?;
-			let user = internal_unwrap_owned!(user_team_list_res.users.first());
+			let user = unwrap!(user_team_list_res.users.first());
 
 			let has_team = user
 				.teams
 				.iter()
 				.any(|t| t.team_id.as_ref() == Some(&dev_team_id));
 
-			assert_with!(has_team, GROUP_NOT_MEMBER);
+			ensure_with!(has_team, GROUP_NOT_MEMBER);
 		} else if let Some(cloud_ent) = cloud_ent {
-			assert_eq_with!(
+			ensure_eq_with!(
 				cloud_ent.game_id,
 				game_id.as_uuid(),
 				API_FORBIDDEN,

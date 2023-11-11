@@ -60,11 +60,6 @@ enum SubCommand {
 		#[clap(subcommand)]
 		command: terraform::SubCommand,
 	},
-	/// Manages SaltStack configs.
-	Salt {
-		#[clap(subcommand)]
-		command: salt::SubCommand,
-	},
 	/// Provides SSH access to provisioned servers.
 	Ssh {
 		#[clap(subcommand)]
@@ -85,6 +80,12 @@ enum SubCommand {
 
 #[tokio::main]
 async fn main() -> Result<std::process::ExitCode> {
+	let res = main_inner().await;
+	bolt_core::utils::telemetry::wait_all().await;
+	res
+}
+
+async fn main_inner() -> Result<std::process::ExitCode> {
 	let args = Opts::parse();
 
 	// Match commands that need to be ran before ProjectContext is created
@@ -122,7 +123,6 @@ async fn main() -> Result<std::process::ExitCode> {
 		SubCommand::Secret { command } => command.execute(ctx).await?,
 		SubCommand::Output { command } => command.execute(ctx).await?,
 		SubCommand::Terraform { command } => command.execute(ctx).await?,
-		SubCommand::Salt { command } => command.execute(ctx).await?,
 		SubCommand::Ssh { command } => command.execute(ctx).await?,
 		SubCommand::Database { command } => command.execute(ctx).await?,
 		SubCommand::Admin { command } => command.execute(ctx).await?,

@@ -22,7 +22,8 @@ async fn handle(ctx: OperationContext<team::get::Request>) -> GlobalResult<team:
 		.map(common::Uuid::as_uuid)
 		.collect::<Vec<_>>();
 
-	let teams = sqlx::query_as::<_, Team>(indoc!(
+	let teams = sql_fetch_all!(
+		[ctx, Team]
 		"
 		SELECT
 			team_id,
@@ -32,12 +33,11 @@ async fn handle(ctx: OperationContext<team::get::Request>) -> GlobalResult<team:
 			profile_id,
 			create_ts,
 			publicity
-		FROM teams
+		FROM db_team.teams
 		WHERE team_id = ANY($1)
-		"
-	))
-	.bind(team_ids)
-	.fetch_all(&ctx.crdb("db-team").await?)
+		",
+		team_ids,
+	)
 	.await?;
 
 	let upload_ids = teams

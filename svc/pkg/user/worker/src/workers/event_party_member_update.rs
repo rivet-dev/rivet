@@ -3,7 +3,7 @@ use proto::backend::{self, pkg::*};
 
 #[worker(name = "user-event-party-member-update")]
 async fn worker(ctx: &OperationContext<party::msg::member_update::Message>) -> GlobalResult<()> {
-	let user_id = internal_unwrap!(ctx.user_id).as_uuid();
+	let user_id = unwrap_ref!(ctx.user_id).as_uuid();
 
 	msg!([ctx] user::msg::event(user_id) {
 		user_id: Some(user_id.into()),

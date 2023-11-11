@@ -5,8 +5,7 @@ imports:
 
 service:
   auth: true
-  url: Portal
-  base-path: /notifications/register
+  base-path: /portal/notifications/register
   endpoints:
     registerNotifications:
       path: ""

@@ -1,7 +1,6 @@
 // Internal types
 pub use crate::request::Request;
 pub use crate::test::TestCtx;
-pub use crate::worker_group;
 pub use chirp_client::prelude::*;
 pub use chirp_perf::PerfCtx;
 #[cfg(feature = "attributes")]

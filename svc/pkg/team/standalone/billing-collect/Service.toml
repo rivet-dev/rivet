@@ -1,6 +1,5 @@
 [service]
 name = "team-billing-collect"
-regions = ["lnd-atl"]
 
 [runtime]
 kind = "rust"

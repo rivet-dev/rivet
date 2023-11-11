@@ -1,13 +1,11 @@
-use anyhow::{bail, ensure, Context, Result};
+use anyhow::{ensure, Context, Result};
 use async_recursion::async_recursion;
-use s3_util::aws_sdk_s3;
 use std::{
 	collections::HashMap,
 	hash::{Hash, Hasher},
 	path::{Path, PathBuf},
 	sync::{Arc, Weak},
 };
-use tempfile::NamedTempFile;
 use tokio::{fs, process::Command, sync::RwLock};
 
 use crate::{
@@ -16,7 +14,7 @@ use crate::{
 		service::{RuntimeKind, ServiceKind},
 	},
 	context::{self, BuildContext, ProjectContext, RunContext},
-	dep::{self, cloudflare, s3},
+	dep::{k8s, terraform},
 	utils,
 };
 
@@ -228,34 +226,16 @@ impl ServiceContextData {
 	}
 
 	/// Path to the executable binary.
-	pub async fn rust_bin_path(
-		&self,
-		optimization: &BuildOptimization,
-		target: super::RustBuildTarget,
-	) -> PathBuf {
-		match target {
-			super::RustBuildTarget::Native => self
-				.project()
-				.await
-				.path()
-				.join("target")
-				.join(match optimization {
-					BuildOptimization::Release => "release",
-					BuildOptimization::Debug => "debug",
-				})
-				.join(self.cargo_name().expect("no cargo name")),
-			super::RustBuildTarget::Musl => self
-				.project()
-				.await
-				.path()
-				.join("target")
-				.join("x86_64-unknown-linux-musl")
-				.join(match optimization {
-					BuildOptimization::Release => "release",
-					BuildOptimization::Debug => "debug",
-				})
-				.join(self.cargo_name().expect("no cargo name")),
-		}
+	pub async fn rust_bin_path(&self, optimization: &BuildOptimization) -> PathBuf {
+		self.project()
+			.await
+			.path()
+			.join("target")
+			.join(match optimization {
+				BuildOptimization::Release => "release",
+				BuildOptimization::Debug => "debug",
+			})
+			.join(self.cargo_name().expect("no cargo name"))
 	}
 }
 
@@ -277,12 +257,22 @@ impl ServiceContextData {
 	}
 
 	pub fn redis_db_name(&self) -> String {
-		self.config().service.name.clone()
+		self.config()
+			.service
+			.name
+			.clone()
+			.strip_prefix("redis-")
+			.unwrap()
+			.to_string()
 	}
 
 	pub async fn s3_bucket_name(&self) -> String {
 		// Include the namespace name since it needs to be globally unique
 		format!("{}-{}", self.project().await.ns_id(), self.name())
+	}
+
+	pub fn is_monolith_worker(&self) -> bool {
+		self.config().service.name == "monolith-worker"
 	}
 
 	pub fn depends_on_nomad_api(&self) -> bool {
@@ -305,6 +295,10 @@ impl ServiceContextData {
 	pub fn depends_on_prometheus_api(&self) -> bool {
 		true
 		// self.name() == "job-run-metrics-log"
+	}
+
+	pub fn depends_on_clickhouse(&self) -> bool {
+		true
 	}
 
 	pub fn depends_on_jwt_key_private(&self) -> bool {
@@ -333,14 +327,9 @@ impl ServiceContextData {
 		// 	|| self.name() == "api-cloud"
 	}
 
-	pub fn depends_on_hcaptcha(&self) -> bool {
+	pub fn depends_on_captcha(&self) -> bool {
 		// TODO:
 		true
-	}
-
-	pub fn depends_on_region_config(&self) -> bool {
-		true
-		// self.name().starts_with("region-")
 	}
 }
 
@@ -354,45 +343,22 @@ impl ServiceContextData {
 // Build info
 #[derive(Debug, Clone)]
 pub enum ServiceBuildPlan {
-	/// Build exists locally.
-	ExistingLocalBuild {
-		/// Absolute path to the executable on the host system.
-		exec_path: PathBuf,
-	},
-
-	/// Build exists on S3 server.
-	ExistingUploadedBuild {
-		build_key: String,
-
-		/// Path to the executable in the archive.
-		exec_path: String,
-	},
-
 	/// Build the service locally.
 	BuildLocally {
 		/// Absolute path to the executable on the host system.
 		exec_path: PathBuf,
 	},
 
-	/// Build the service and upload to S3.
-	BuildAndUpload {
-		build_key: String,
+	/// Build exists on Docker.
+	ExistingUploadedBuild { image_tag: String },
 
-		/// Path to the executable in the archive.
-		exec_path: String,
-	},
-
-	/// Run a Docker container.
-	Docker { image_tag: String },
+	/// Build the service and upload to Docker.
+	BuildAndUpload { image_tag: String },
 }
 
 impl ServiceContextData {
 	/// Determines if this service needs to be recompiled.
-	pub async fn build_plan(
-		&self,
-		build_context: &BuildContext,
-		force_build: bool,
-	) -> Result<ServiceBuildPlan> {
+	pub async fn build_plan(&self, build_context: &BuildContext) -> Result<ServiceBuildPlan> {
 		let project_ctx = self.project().await;
 
 		match &project_ctx.ns().cluster.kind {
@@ -401,59 +367,21 @@ impl ServiceContextData {
 				// Derive the build path
 				let optimization = match &build_context {
 					BuildContext::Bin { optimization } => optimization,
-					BuildContext::Test => &BuildOptimization::Debug,
+					BuildContext::Test { .. } => &BuildOptimization::Debug,
 				};
-				let output_path = self
-					.rust_bin_path(optimization, project_ctx.rust_build_target())
-					.await;
+				let output_path = self.rust_bin_path(optimization).await;
 
-				if force_build {
-					return Ok(ServiceBuildPlan::BuildLocally {
-						exec_path: output_path,
-					});
-				}
-
-				// Check if there's an existing build we can use
-				let build_exists = tokio::fs::metadata(&output_path).await.is_ok();
-				if build_exists {
-					return Ok(ServiceBuildPlan::ExistingLocalBuild {
-						exec_path: output_path,
-					});
-				}
-
-				// Default to building
+				// Rust libs always attempt to rebuild (handled by cargo)
 				Ok(ServiceBuildPlan::BuildLocally {
 					exec_path: output_path,
 				})
 			}
 			// Build and upload to S3
 			config::ns::ClusterKind::Distributed { .. } => {
-				// Derive the build key
-				let key = self.s3_build_key(build_context).await?;
-				let exec_path = self.cargo_name().expect("no cargo name").to_string();
-
-				if force_build {
-					return Ok(ServiceBuildPlan::BuildAndUpload {
-						build_key: key,
-						exec_path,
-					});
-				}
-
-				// Check if there's an existing build we can use
-				let s3_client = project_ctx.s3_client_service_builds().await?;
-				let build_exists = s3::check_exists_cached(&project_ctx, &s3_client, &key).await?;
-				if build_exists {
-					return Ok(ServiceBuildPlan::ExistingUploadedBuild {
-						build_key: key,
-						exec_path,
-					});
-				}
+				let image_tag = self.docker_image_tag().await?;
 
 				// Default to building
-				Ok(ServiceBuildPlan::BuildAndUpload {
-					build_key: key,
-					exec_path,
-				})
+				Ok(ServiceBuildPlan::BuildAndUpload { image_tag })
 			}
 		}
 	}
@@ -462,14 +390,13 @@ impl ServiceContextData {
 // Dependencies
 impl ServiceContextData {
 	#[async_recursion]
-	pub async fn dependencies(&self) -> Vec<ServiceContext> {
+	pub async fn dependencies(&self, run_context: &RunContext) -> Vec<ServiceContext> {
 		let project = self.project().await;
 
 		let all_svcs = project.all_services().await;
 
 		let mut dep_ctxs = Vec::<ServiceContext>::new();
 
-		// TODO: Add dev dependencies if building for tests
 		// Add operation dependencies from Cargo.toml
 		//
 		// You cannot depend on these services from the Service.toml, only as a Cargo dependency
@@ -477,6 +404,13 @@ impl ServiceContextData {
 			let svcs = cargo
 				.dependencies
 				.iter()
+				// Add dev dependencies for tests
+				.chain(
+					cargo
+						.dev_dependencies
+						.iter()
+						.filter(|_| matches!(run_context, RunContext::Test { .. })),
+				)
 				.filter_map(|(name, dep)| {
 					if let config::service::CargoDependency::Path { .. } = dep {
 						Some(name)
@@ -512,26 +446,48 @@ impl ServiceContextData {
 		}
 
 		// Inherit dependencies from the service that was overridden
-		if let Some(overriden_svc) = &self.overridden_service {
-			dep_ctxs.extend(overriden_svc.dependencies().await);
+		if let Some(overridden_svc) = &self.overridden_service {
+			dep_ctxs.extend(overridden_svc.dependencies(run_context).await);
 		}
 
 		// Check that these are services you can explicitly depend on in the Service.toml
 		for dep in &dep_ctxs {
-			if !self.config().service.test_only && dep.config().service.test_only {
+			if matches!(run_context, RunContext::Service { .. })
+				&& !self.config().service.test_only
+				&& !self.config().service.load_test
+				&& dep.config().service.test_only
+			{
 				panic!(
-					"{} -> {}: cannot depend on a `service.test-only` service outside of `test-dependencies`",
+					"{} -> {}: cannot depend on a `service.test-only` service outside of `test-dependencies` or if `service.load-test = true`",
 					self.name(),
 					dep.name()
 				);
 			}
 
-			if !matches!(
-				dep.config().kind,
-				ServiceKind::Database { .. }
-					| ServiceKind::Cache { .. }
-					| ServiceKind::Operation { .. }
-			) {
+			let can_depend =
+				if self.is_monolith_worker() {
+					matches!(
+						dep.config().kind,
+						ServiceKind::Database { .. }
+							| ServiceKind::Cache { .. } | ServiceKind::Operation { .. }
+							| ServiceKind::Consumer { .. }
+					)
+				} else if matches!(self.config().kind, ServiceKind::Api { .. }) {
+					matches!(
+						dep.config().kind,
+						ServiceKind::Database { .. }
+							| ServiceKind::Cache { .. } | ServiceKind::Operation { .. }
+							| ServiceKind::ApiRoutes { .. }
+					)
+				} else {
+					matches!(
+						dep.config().kind,
+						ServiceKind::Database { .. }
+							| ServiceKind::Cache { .. } | ServiceKind::Operation { .. }
+					)
+				};
+
+			if !can_depend {
 				panic!(
 					"{} -> {}: cannot explicitly depend on this kind of service",
 					self.name(),
@@ -543,11 +499,14 @@ impl ServiceContextData {
 		dep_ctxs
 	}
 
-	pub async fn database_dependencies(&self) -> HashMap<String, config::service::Database> {
+	pub async fn database_dependencies(
+		&self,
+		run_context: &RunContext,
+	) -> HashMap<String, config::service::Database> {
 		let dbs = self
 			.project()
 			.await
-			.recursive_dependencies(&[self.name()])
+			.recursive_dependencies(&[self.name()], run_context)
 			.await
 			.into_iter()
 			// Filter filter services to include only operations, since these run in-process
@@ -562,9 +521,9 @@ impl ServiceContextData {
 		dbs
 	}
 
-	pub async fn crdb_dependencies(&self) -> Vec<ServiceContext> {
+	pub async fn crdb_dependencies(&self, run_context: &RunContext) -> Vec<ServiceContext> {
 		let dep_names = self
-			.database_dependencies()
+			.database_dependencies(run_context)
 			.await
 			.into_iter()
 			.map(|(k, _)| k)
@@ -578,11 +537,15 @@ impl ServiceContextData {
 			.collect()
 	}
 
-	pub async fn redis_dependencies(&self) -> Vec<ServiceContext> {
-		let default_deps = ["redis-chirp".to_string(), "redis-cache".to_string()];
+	pub async fn redis_dependencies(&self, run_context: &RunContext) -> Vec<ServiceContext> {
+		let default_deps = [
+			"redis-chirp".to_string(),
+			"redis-chirp-ephemeral".into(),
+			"redis-cache".to_string(),
+		];
 
 		let dep_names = self
-			.database_dependencies()
+			.database_dependencies(run_context)
 			.await
 			.into_iter()
 			.map(|(k, _)| k)
@@ -598,9 +561,9 @@ impl ServiceContextData {
 			.collect()
 	}
 
-	pub async fn s3_dependencies(&self) -> Vec<ServiceContext> {
+	pub async fn s3_dependencies(&self, run_context: &RunContext) -> Vec<ServiceContext> {
 		let dep_names = self
-			.database_dependencies()
+			.database_dependencies(run_context)
 			.await
 			.into_iter()
 			.map(|(k, _)| k)
@@ -614,9 +577,9 @@ impl ServiceContextData {
 			.collect()
 	}
 
-	pub async fn nats_dependencies(&self) -> Vec<ServiceContext> {
+	pub async fn nats_dependencies(&self, run_context: &RunContext) -> Vec<ServiceContext> {
 		let dep_names = self
-			.database_dependencies()
+			.database_dependencies(run_context)
 			.await
 			.into_iter()
 			.map(|(k, _)| k)
@@ -636,14 +599,8 @@ impl ServiceContextData {
 		match self.config().runtime {
 			// Use binary modified timestamp for rust runtimes
 			RuntimeKind::Rust { .. } => {
-				let bin_ts = if let Ok(metadata) = fs::metadata(
-					self.rust_bin_path(
-						&build_optimization,
-						self.project().await.rust_build_target(),
-					)
-					.await,
-				)
-				.await
+				let bin_ts = if let Ok(metadata) =
+					fs::metadata(self.rust_bin_path(&build_optimization).await).await
 				{
 					metadata
 						.modified()?
@@ -717,11 +674,14 @@ impl ServiceContextData {
 		}
 	}
 
-	async fn required_secrets(&self) -> Result<Vec<(Vec<String>, config::service::Secret)>> {
+	async fn required_secrets(
+		&self,
+		run_context: &RunContext,
+	) -> Result<Vec<(Vec<String>, config::service::Secret)>> {
 		let mut secrets = self
 			.project()
 			.await
-			.recursive_dependencies(&[self.name()])
+			.recursive_dependencies(&[self.name()], run_context)
 			.await
 			.into_iter()
 			// Filter filter services to include only operations, since these run in-process
@@ -740,15 +700,11 @@ impl ServiceContextData {
 		Ok(secrets)
 	}
 
-	pub async fn env(
-		&self,
-		run_context: RunContext,
-	) -> Result<(Vec<(String, String)>, Vec<cloudflare::TunnelConfig>)> {
+	pub async fn env(&self, run_context: &RunContext) -> Result<Vec<(String, String)>> {
 		let project_ctx = self.project().await;
 
 		let region_id = project_ctx.primary_region_or_local();
 		let mut env = Vec::new();
-		let mut tunnel_configs = Vec::<cloudflare::TunnelConfig>::new();
 
 		// HACK: Link to dynamically linked libraries in /nix/store
 		//
@@ -763,18 +719,6 @@ impl ServiceContextData {
 			));
 		}
 
-		// Write secrets
-		for (secret_key, secret_config) in self.required_secrets().await? {
-			let env_key = rivet_util::env::secret_env_var_key(&secret_key);
-			if secret_config.optional {
-				if let Some(value) = project_ctx.read_secret_opt(&secret_key).await? {
-					env.push((env_key, value));
-				}
-			} else {
-				env.push((env_key, project_ctx.read_secret(&secret_key).await?));
-			}
-		}
-
 		// TODO: Convert this to use the bolt taint
 		// TODO: This is re-running the hashing function for every service when we already did this in the planning step
 		// Provide source hash to purge the cache when the service is updated
@@ -784,19 +728,20 @@ impl ServiceContextData {
 		let ns_service_config = self.ns_service_config().await;
 		env.push((
 			"TOKIO_WORKER_THREADS".into(),
-			match ns_service_config.resources.cpu {
-				config::ns::CpuResources::CpuCores(cores) => cores.max(cores),
-				config::ns::CpuResources::Cpu(_) => 2,
+			if ns_service_config.resources.cpu >= 1000 {
+				(ns_service_config.resources.cpu / 1000).max(1)
+			} else {
+				1
 			}
 			.to_string(),
 		));
 
 		// Provide default Nomad variables if in test
-		if matches!(run_context, RunContext::Test) {
-			env.push(("NOMAD_REGION".into(), "global".into()));
-			env.push(("NOMAD_DC".into(), region_id.clone()));
+		if matches!(run_context, RunContext::Test { .. }) {
+			env.push(("KUBERNETES_REGION".into(), "global".into()));
+			env.push(("KUBERNETES_DC".into(), region_id.clone()));
 			env.push((
-				"NOMAD_TASK_DIR".into(),
+				"KUBERNETES_TASK_DIR".into(),
 				project_ctx.gen_path().display().to_string(),
 			));
 		}
@@ -813,89 +758,95 @@ impl ServiceContextData {
 			env.push(("TOKIO_CONSOLE_ENABLE".into(), "1".into()));
 			env.push((
 				"TOKIO_CONSOLE_BIND".into(),
-				r#"0.0.0.0:${NOMAD_PORT_tokio-console}"#.into(),
+				format!("0.0.0.0:{}", k8s::gen::TOKIO_CONSOLE_PORT),
 			));
 		}
 
+		env.push((
+			"RIVET_ACCESS_KIND".into(),
+			match project_ctx.ns().rivet.access {
+				config::ns::RivetAccess::Private {} => "private".into(),
+				config::ns::RivetAccess::Public {} => "public".into(),
+			},
+		));
+
 		// Domains
-		env.push(("RIVET_DOMAIN_MAIN".into(), project_ctx.domain_main()));
-		env.push(("RIVET_DOMAIN_CDN".into(), project_ctx.domain_cdn()));
-		env.push(("RIVET_DOMAIN_JOB".into(), project_ctx.domain_job()));
+		if let Some(x) = project_ctx.domain_main() {
+			env.push(("RIVET_DOMAIN_MAIN".into(), x));
+		}
+		if let Some(x) = project_ctx.domain_cdn() {
+			env.push(("RIVET_DOMAIN_CDN".into(), x));
+		}
+		if let Some(x) = project_ctx.domain_job() {
+			env.push(("RIVET_DOMAIN_JOB".into(), x));
+		}
+		if let Some(x) = project_ctx.domain_main_api() {
+			env.push(("RIVET_DOMAIN_MAIN_API".into(), x));
+		}
+		if let Some(true) = project_ctx
+			.ns()
+			.dns
+			.as_ref()
+			.map(|x| x.deprecated_subdomains)
+		{
+			env.push(("RIVET_SUPPORT_DEPRECATED_SUBDOMAINS".into(), "1".into()));
+		}
+		env.push(("RIVET_ORIGIN_API".into(), project_ctx.origin_api()));
 		env.push(("RIVET_ORIGIN_HUB".into(), project_ctx.origin_hub()));
 
-		// Regions
-		match run_context {
-			RunContext::Service => {
-				env.push(("RIVET_REGION".into(), "${NOMAD_DC}".into()));
-			}
-			RunContext::Test => {
-				env.push(("RIVET_REGION".into(), region_id.clone()));
+		// DNS
+		if let Some(dns) = &project_ctx.ns().dns {
+			if let Some(provider) = &dns.provider {
+				env.push((
+					"RIVET_DNS_PROVIDER".into(),
+					match provider {
+						config::ns::DnsProvider::Cloudflare { .. } => "cloudflare".into(),
+					},
+				));
 			}
 		}
+
+		// Pools
+		if !project_ctx.ns().pools.is_empty() {
+			env.push(("RIVET_HAS_POOLS".into(), "1".into()));
+		}
+
+		// Regions
+		env.push(("RIVET_REGION".into(), region_id.clone()));
 		env.push(("RIVET_PRIMARY_REGION".into(), project_ctx.primary_region()));
 
 		// Networking
-		if run_context == RunContext::Service {
-			env.push(("HEALTH_PORT".into(), "${NOMAD_PORT_health}".into()));
-			env.push(("METRICS_PORT".into(), "${NOMAD_PORT_metrics}".into()));
+		if matches!(run_context, RunContext::Service { .. }) {
+			env.push(("HEALTH_PORT".into(), k8s::gen::HEALTH_PORT.to_string()));
+			env.push(("METRICS_PORT".into(), k8s::gen::METRICS_PORT.to_string()));
 			if self.config().kind.has_server() {
-				env.push(("PORT".into(), "${NOMAD_PORT_http}".into()));
+				env.push(("PORT".into(), k8s::gen::HTTP_SERVER_PORT.to_string()));
 			}
 		}
-
-		// Configure TLS
-		env.push(("IS_SECURE".to_owned(), "1".into()));
 
 		// Add billing flag
 		if project_ctx.config().billing_enabled {
 			env.push(("IS_BILLING_ENABLED".to_owned(), "1".into()));
 		}
 
-		// Expose URLs to env
-		//
-		// We expose all services instead of just dependencies since we need to configure CORS
-		// for some services which don't have an explicit dependency.
-		env.extend(project_ctx.all_router_url_env().await);
-
-		env.push((
-			"RIVET_JWT_KEY_PUBLIC".into(),
-			project_ctx
-				.read_secret(&["jwt", "key", "public_pem"])
-				.await?,
-		));
-		if self.depends_on_jwt_key_private() {
+		if project_ctx.ns().dns.is_some() {
+			let dns = terraform::output::read_dns(&project_ctx).await;
 			env.push((
-				"RIVET_JWT_KEY_PRIVATE".into(),
-				project_ctx
-					.read_secret(&["jwt", "key", "private_pem"])
-					.await?,
+				"CLOUDFLARE_ZONE_ID_BASE".into(),
+				(*dns.cloudflare_zone_ids).main.clone(),
+			));
+			env.push((
+				"CLOUDFLARE_ZONE_ID_GAME".into(),
+				(*dns.cloudflare_zone_ids).cdn.clone(),
+			));
+			env.push((
+				"CLOUDFLARE_ZONE_ID_JOB".into(),
+				(*dns.cloudflare_zone_ids).job.clone(),
 			));
 		}
 
-		if run_context == RunContext::Service {
-			if self.depends_on_sendgrid_key() {
-				env.push((
-					"SENDGRID_KEY".into(),
-					project_ctx.read_secret(&["sendgrid", "key"]).await?,
-				));
-			}
-		}
-
-		let config::ns::DnsProvider::Cloudflare { zones, .. } = &project_ctx.ns().dns.provider;
-		if self.depends_on_cloudflare() {
-			env.push((
-				"CLOUDFLARE_AUTH_TOKEN".into(),
-				project_ctx
-					.read_secret(&["cloudflare", "terraform", "auth_token"])
-					.await?,
-			));
-		}
-		env.push(("CLOUDFLARE_ZONE_ID_BASE".into(), zones.root.clone()));
-		env.push(("CLOUDFLARE_ZONE_ID_GAME".into(), zones.game.clone()));
-		env.push(("CLOUDFLARE_ZONE_ID_JOB".into(), zones.job.clone()));
-
-		if let Some(hcaptcha) = &project_ctx.ns().captcha.hcaptcha {
-			if self.depends_on_hcaptcha() {
+		if self.depends_on_captcha() {
+			if let Some(hcaptcha) = &project_ctx.ns().captcha.hcaptcha {
 				env.push((
 					"HCAPTCHA_SITE_KEY_EASY".into(),
 					hcaptcha.site_keys.easy.clone(),
@@ -913,130 +864,71 @@ impl ServiceContextData {
 					hcaptcha.site_keys.always_on.clone(),
 				));
 			}
+
+			if let Some(turnstile) = &project_ctx.ns().captcha.turnstile {
+				env.push((
+					"TURNSTILE_SITE_KEY_MAIN".into(),
+					turnstile.site_key_main.clone(),
+				));
+				env.push((
+					"TURNSTILE_SITE_KEY_CDN".into(),
+					turnstile.site_key_cdn.clone(),
+				));
+			}
 		}
 
 		if self.depends_on_nomad_api() {
+			// TODO: Read host url from terraform
 			env.push((
-				"NOMAD_ADDRESS".into(),
-				format!(
-					"http://{}",
-					access_service(
-						&project_ctx,
-						&mut tunnel_configs,
-						&run_context,
-						"nomad.service.consul:4646",
-						(cloudflare::TunnelProtocol::Http, "nomad"),
-					)
-					.await?,
-				),
+				"NOMAD_URL".into(),
+				"http://nomad-server.nomad.svc.cluster.local:4646".into(),
 			));
-			env.push((
-				"CONSUL_ADDRESS".into(),
-				format!(
-					"http://{}",
-					access_service(
-						&project_ctx,
-						&mut tunnel_configs,
-						&run_context,
-						"consul.service.consul:8500",
-						(cloudflare::TunnelProtocol::Http, "consul"),
-					)
-					.await?,
-				),
-			));
+		}
+
+		env.push((
+			"CRDB_MIN_CONNECTIONS".into(),
+			self.config().cockroachdb.min_connections.to_string(),
+		));
+
+		if self.depends_on_clickhouse() {
+			let clickhouse_data = terraform::output::read_clickhouse(&project_ctx).await;
+			let clickhouse_host = format!(
+				"https://{}:{}",
+				*clickhouse_data.host, *clickhouse_data.port_https
+			);
+
+			env.push(("CLICKHOUSE_URL".into(), clickhouse_host));
 		}
 
 		if self.depends_on_prometheus_api() {
-			// Add all prometheus regions to env
-			//
-			// We don't run Prometheus regionally at the moment, but we can add
-			// that later.
 			env.push((
 				format!("PROMETHEUS_URL"),
-				access_service(
-					&project_ctx,
-					&mut tunnel_configs,
-					&run_context,
-					"http.prometheus-job.service.consul:9090",
-					(cloudflare::TunnelProtocol::Http, "prometheus"),
-				)
-				.await?,
+				"http://prometheus-operated.prometheus.svc.cluster.local:9090".into(),
 			));
 		}
 
-		// NATS config
+		// NATS
 		env.push((
 			"NATS_URL".into(),
 			// TODO: Add back passing multiple NATS nodes for failover instead of using DNS resolution
-			access_service(
-				&project_ctx,
-				&mut tunnel_configs,
-				&run_context,
-				"client.nats-server.service.consul:4222",
-				(cloudflare::TunnelProtocol::Tcp, "nats-client"),
-			)
-			.await?,
+			"nats.nats.svc.cluster.local:4222".into(),
 		));
-
-		env.push(("NATS_USERNAME".into(), "chirp".into()));
-		env.push(("NATS_PASSWORD".into(), "password".into()));
 
 		// Chirp config (used for both Chirp clients and Chirp workers)
 		env.push(("CHIRP_SERVICE_NAME".into(), self.name()));
-		match run_context {
-			RunContext::Service => {
-				env.push(("CHIRP_REGION".into(), "${NOMAD_DC}".into()));
-			}
-			RunContext::Test => {
-				env.push(("CHIRP_REGION".into(), region_id.clone()));
-			}
-		}
 
 		// Chirp worker config
-		if let (RunContext::Service, ServiceKind::Consumer { .. }) =
-			(run_context, &self.config().kind)
+		if (matches!(run_context, RunContext::Service { .. })
+			&& matches!(&self.config().kind, ServiceKind::Consumer { .. }))
+			|| self.is_monolith_worker()
 		{
 			env.push((
 				"CHIRP_WORKER_INSTANCE".into(),
-				format!("{}-${{NOMAD_DC}}-${{NOMAD_ALLOC_INDEX}}", self.name()),
+				format!("{}-$(KUBERNETES_POD_ID)", self.name()),
 			));
 
 			env.push(("CHIRP_WORKER_KIND".into(), "consumer".into()));
 			env.push(("CHIRP_WORKER_CONSUMER_GROUP".into(), self.name()));
-		}
-
-		// Redis
-		for redis_dep in self.redis_dependencies().await {
-			let name = redis_dep.name();
-			let db_name = redis_dep.redis_db_name();
-			let port = dep::redis::server_port(&redis_dep);
-
-			let host = access_service(
-				&project_ctx,
-				&mut tunnel_configs,
-				&run_context,
-				&format!("listen.{name}.service.consul:{port}"),
-				(cloudflare::TunnelProtocol::Tcp, &name),
-			)
-			.await?;
-
-			// Build URL with auth
-			let username = project_ctx
-				.read_secret(&["redis", &db_name, "username"])
-				.await?;
-			let password = project_ctx
-				.read_secret_opt(&["redis", &db_name, "password"])
-				.await?;
-			let url = if let Some(password) = password {
-				format!("redis://{}:{}@{host}", username, password)
-			} else {
-				format!("redis://{}@{host}", username)
-			};
-
-			env.push((
-				format!("REDIS_URL_{}", db_name.to_uppercase().replace("-", "_")),
-				url,
-			));
 		}
 
 		// Fly
@@ -1045,51 +937,23 @@ impl ServiceContextData {
 			env.push(("FLY_REGION".into(), fly.region.clone()));
 		}
 
-		// CRDB
-		let mut crdb_host = None;
-		for crdb_dep in self.crdb_dependencies().await {
-			let username = "root"; // TODO:
-			let sslmode = "disable"; // TODO:
-
-			// Resolve CRDB host
-			if crdb_host.is_none() {
-				crdb_host = Some(
-					access_service(
-						&project_ctx,
-						&mut tunnel_configs,
-						&run_context,
-						"sql.cockroach.service.consul:26257",
-						(cloudflare::TunnelProtocol::Tcp, "cockroach-sql"),
-					)
-					.await?,
-				);
-			}
-			let host = crdb_host.as_ref().unwrap();
-
-			let uri = format!(
-				"postgres://{username}@{host}/{db_name}?sslmode={sslmode}",
-				db_name = crdb_dep.crdb_db_name(),
-			);
-			env.push((format!("CRDB_URL_{}", crdb_dep.name_screaming_snake()), uri));
-		}
+		// Add default provider
+		let (default_provider, _) = project_ctx.default_s3_provider()?;
+		env.push((
+			"S3_DEFAULT_PROVIDER".to_string(),
+			default_provider.as_str().to_string(),
+		));
 
 		// Expose all S3 endpoints to services that need them
 		let s3_deps = if self.depends_on_s3() {
 			project_ctx.all_services().await.to_vec()
 		} else {
-			self.s3_dependencies().await
+			self.s3_dependencies(&run_context).await
 		};
 		for s3_dep in s3_deps {
 			if !matches!(s3_dep.config().runtime, RuntimeKind::S3 { .. }) {
 				continue;
 			}
-
-			// Add default provider
-			let (default_provider, _) = project_ctx.default_s3_provider()?;
-			env.push((
-				"S3_DEFAULT_PROVIDER".to_string(),
-				default_provider.to_string(),
-			));
 
 			// Add all configured providers
 			let providers = &project_ctx.ns().s3.providers;
@@ -1113,10 +977,7 @@ impl ServiceContextData {
 		// S3 backfill
 		if self.depends_on_s3_backfill() {
 			if let Some(backfill) = &project_ctx.ns().s3.backfill {
-				env.push((
-					"S3_BACKFILL_PROVIDER".into(),
-					heck::ShoutySnakeCase::to_shouty_snake_case(backfill.as_str()),
-				));
+				env.push(("S3_BACKFILL_PROVIDER".into(), backfill.as_str().to_string()));
 			}
 		}
 
@@ -1128,166 +989,246 @@ impl ServiceContextData {
 			_ => {}
 		}
 
-		env.push((
-			"RIVET_TELEMETRY_DISABLE".into(),
-			if project_ctx.ns().rivet.telemetry.disable {
-				"1"
-			} else {
-				"0"
-			}
-			.into(),
-		));
+		if project_ctx.ns().rivet.telemetry.disable {
+			env.push(("RIVET_TELEMETRY_DISABLE".into(), "1".into()));
+		}
 
 		env.push((
 			"RIVET_API_HUB_ORIGIN_REGEX".into(),
+			project_ctx.origin_hub_regex(),
+		));
+		if project_ctx.ns().rivet.api.error_verbose {
+			env.push(("RIVET_API_ERROR_VERBOSE".into(), "1".into()));
+		}
+		if project_ctx.ns().rivet.profanity.filter_disable {
+			env.push(("RIVET_PROFANITY_FILTER_DISABLE".into(), "1".into()));
+		}
+		if project_ctx.ns().rivet.upload.nsfw_error_verbose {
+			env.push(("RIVET_UPLOAD_NSFW_ERROR_VERBSOE".into(), "1".into()));
+		}
+		env.push((
+			"RIVET_DS_BUILD_DELIVERY_METHOD".into(),
 			project_ctx
 				.ns()
 				.rivet
-				.api
-				.hub_origin_regex
-				.clone()
-				.unwrap_or_else(|| {
-					format!("^https://hub\\.{base}$", base = project_ctx.domain_main())
-				}),
-		));
-		env.push((
-			"RIVET_API_ERROR_VERBOSE".into(),
-			if project_ctx.ns().rivet.api.error_verbose {
-				"1"
-			} else {
-				"0"
-			}
-			.into(),
-		));
-		env.push((
-			"RIVET_PROFANITY_FILTER_DISABLE".into(),
-			if project_ctx.ns().rivet.profanity.filter_disable {
-				"1"
-			} else {
-				"0"
-			}
-			.into(),
-		));
-		env.push((
-			"RIVET_UPLOAD_NSFW_ERROR_VERBSOE".into(),
-			if project_ctx.ns().rivet.upload.nsfw_error_verbose {
-				"1"
-			} else {
-				"0"
-			}
-			.into(),
-		));
-		env.push((
-			"RIVET_MM_LOBBY_DELIVERY_METHOD".into(),
-			project_ctx
-				.ns()
-				.rivet
-				.matchmaker
-				.lobby_delivery_method
+				.dynamic_servers
+				.build_delivery_method
 				.to_string(),
 		));
 
 		// Sort env by keys so it's always in the same order
 		env.sort_by_cached_key(|x| x.0.clone());
 
-		Ok((env, tunnel_configs))
+		Ok(env)
+	}
+
+	pub async fn secret_env(&self, run_context: &RunContext) -> Result<Vec<(String, String)>> {
+		let project_ctx = self.project().await;
+
+		let mut env = Vec::new();
+
+		// Write secrets
+		for (secret_key, secret_config) in self.required_secrets(run_context).await? {
+			let env_key = secret_env_var_key(&secret_key);
+			if secret_config.optional {
+				if let Some(value) = project_ctx.read_secret_opt(&secret_key).await? {
+					env.push((env_key, value));
+				}
+			} else {
+				env.push((env_key, project_ctx.read_secret(&secret_key).await?));
+			}
+		}
+
+		// NATS
+		env.push(("NATS_USERNAME".into(), "chirp".into()));
+		env.push(("NATS_PASSWORD".into(), "password".into()));
+
+		env.push((
+			"RIVET_JWT_KEY_PUBLIC".into(),
+			project_ctx
+				.read_secret(&["jwt", "key", "public_pem"])
+				.await?,
+		));
+		if self.depends_on_jwt_key_private() {
+			env.push((
+				"RIVET_JWT_KEY_PRIVATE".into(),
+				project_ctx
+					.read_secret(&["jwt", "key", "private_pem"])
+					.await?,
+			));
+		}
+
+		if self.depends_on_sendgrid_key() {
+			env.push((
+				"SENDGRID_KEY".into(),
+				project_ctx.read_secret(&["sendgrid", "key"]).await?,
+			));
+		}
+
+		// CRDB
+		// TODO: Function is expensive
+		{
+			let crdb_data = terraform::output::read_crdb(&project_ctx).await;
+			let crdb_host = format!("{}:{}", *crdb_data.host, *crdb_data.port);
+			let username = project_ctx.read_secret(&["crdb", "username"]).await?;
+			let password = project_ctx.read_secret(&["crdb", "password"]).await?;
+			let sslmode = "verify-ca";
+
+			let uri = format!(
+				"postgres://{}:{}@{crdb_host}/postgres?sslmode={sslmode}",
+				username, password,
+			);
+			env.push(("CRDB_URL".into(), uri));
+		}
+
+		// Redis
+		// TODO: read_redis is expensive
+		let redis_data = terraform::output::read_redis(&project_ctx).await;
+		// Keeps track to avoid duplicates
+		let mut has_ephemeral = false;
+		let mut has_persistent = false;
+
+		for redis_dep in self.redis_dependencies(run_context).await {
+			let db_name = if let RuntimeKind::Redis { persistent } = redis_dep.config().runtime {
+				if persistent {
+					if has_persistent {
+						continue;
+					}
+					has_persistent = true;
+
+					"persistent".to_string()
+				} else {
+					if has_ephemeral {
+						continue;
+					}
+					has_ephemeral = true;
+
+					"ephemeral".to_string()
+				}
+			} else {
+				unreachable!();
+			};
+
+			// Read host and port from terraform
+			let hostname = redis_data
+				.host
+				.get(&db_name)
+				.expect("terraform output for redis db not found");
+			let port = redis_data
+				.port
+				.get(&db_name)
+				.expect("terraform output for redis db not found");
+			let host = format!("{}:{}", *hostname, *port);
+
+			// Read auth secrets
+			let (username, password) = match project_ctx.ns().redis.provider {
+				config::ns::RedisProvider::Kubernetes {} => (
+					project_ctx
+						.read_secret(&["redis", &db_name, "username"])
+						.await?,
+					project_ctx
+						.read_secret_opt(&["redis", &db_name, "password"])
+						.await?,
+				),
+				config::ns::RedisProvider::Aws {} => {
+					let db_name = format!("rivet-{}-{}", project_ctx.ns_id(), db_name);
+					let username = project_ctx
+						.read_secret(&["redis", &db_name, "username"])
+						.await?;
+					let password = project_ctx
+						.read_secret_opt(&["redis", &db_name, "password"])
+						.await?;
+
+					(username, password)
+				}
+			};
+
+			// Build URL with auth
+			let url = if let Some(password) = password {
+				format!("rediss://{}:{}@{host}", username, password)
+			} else {
+				format!("rediss://{}@{host}", username)
+			};
+
+			env.push((
+				format!("REDIS_URL_{}", db_name.to_uppercase().replace("-", "_")),
+				url,
+			));
+		}
+
+		// Expose S3 endpoints to services that need them
+		let s3_deps = if self.depends_on_s3() {
+			project_ctx.all_services().await.to_vec()
+		} else {
+			self.s3_dependencies(run_context).await
+		};
+		for s3_dep in s3_deps {
+			if !matches!(s3_dep.config().runtime, RuntimeKind::S3 { .. }) {
+				continue;
+			}
+
+			// Add all configured providers
+			let providers = &project_ctx.ns().s3.providers;
+			if providers.minio.is_some() {
+				add_s3_secret_env(&project_ctx, &mut env, &s3_dep, s3_util::Provider::Minio)
+					.await?;
+			}
+			if providers.backblaze.is_some() {
+				add_s3_secret_env(
+					&project_ctx,
+					&mut env,
+					&s3_dep,
+					s3_util::Provider::Backblaze,
+				)
+				.await?;
+			}
+			if providers.aws.is_some() {
+				add_s3_secret_env(&project_ctx, &mut env, &s3_dep, s3_util::Provider::Aws).await?;
+			}
+		}
+
+		if project_ctx.ns().dns.is_some() && self.depends_on_cloudflare() {
+			env.push((
+				"CLOUDFLARE_AUTH_TOKEN".into(),
+				project_ctx
+					.read_secret(&["cloudflare", "terraform", "auth_token"])
+					.await?,
+			));
+		}
+
+		Ok(env)
 	}
 }
 
 impl ServiceContextData {
-	pub async fn s3_build_key(&self, build_context: &BuildContext) -> Result<String> {
-		let source_hash = self
-			.source_hash_dev(match &build_context {
-				BuildContext::Bin { optimization } => optimization,
-				BuildContext::Test => &BuildOptimization::Debug,
-			})
-			.await?;
+	pub async fn docker_image_tag(&self) -> Result<String> {
+		let project_ctx = self.project().await;
+
+		let source_hash = project_ctx.source_hash();
+		let repo = &project_ctx.ns().docker.repository;
+		ensure!(repo.ends_with('/'), "docker repository must end with slash");
+
 		Ok(format!(
-			"{}/{}/{source_hash}.tar.bz2",
-			self.name(),
-			build_context.path()
+			"{}{}:{}",
+			repo,
+			self.cargo_name().expect("no cargo name"),
+			source_hash
 		))
 	}
 
-	pub async fn package_build(&self, build_context: &BuildContext) -> Result<NamedTempFile> {
-		let tar_bz2 = NamedTempFile::new()?;
+	pub async fn upload_build(&self) -> Result<()> {
+		let image_tag = self.docker_image_tag().await?;
 
-		// Compress with bzip2. It has similar performance as gzip. xz is way
-		// too slow.
-		let mut cmd = Command::new("tar");
-		cmd.arg("cfj").arg(tar_bz2.path());
+		let mut cmd = Command::new("docker");
+		cmd.arg("push");
+		cmd.arg(image_tag);
 
-		match build_context {
-			BuildContext::Bin { optimization } => match &self.config.runtime {
-				RuntimeKind::Rust {} => {
-					// Write binary
-					let bin_path = self
-						.rust_bin_path(optimization, self.project().await.rust_build_target())
-						.await;
-					cmd.arg("-C")
-						.arg(bin_path.parent().context("bin_path.parent()")?)
-						.arg(bin_path.file_name().context("bin_path.file_name()")?);
-				}
-				_ => bail!("can't get build binary for this runtime type"),
-			},
-			BuildContext::Test => {
-				bail!("can't get build path for test")
-			}
-		}
+		let status = cmd.status().await?;
+		eprintln!();
 
-		let output = cmd.output().await?;
-		ensure!(
-			output.status.success(),
-			"tar failed: {}",
-			String::from_utf8_lossy(&output.stderr)
-		);
-
-		Ok(tar_bz2)
-	}
-
-	pub async fn upload_build(&self, build_context: &BuildContext) -> Result<()> {
-		let package_file = self.package_build(build_context).await?;
-
-		let body = aws_sdk_s3::types::ByteStream::from_path(package_file.path()).await?;
-
-		let s3_client = self.project().await.s3_client_service_builds().await?;
-		let key = self.s3_build_key(build_context).await?;
-		s3_client
-			.put_object()
-			.bucket(s3_client.bucket())
-			.key(key)
-			.body(body)
-			.send()
-			.await?;
+		ensure!(status.success());
 
 		Ok(())
-	}
-}
-
-pub async fn access_service(
-	ctx: &ProjectContext,
-	tunnel_configs: &mut Vec<cloudflare::TunnelConfig>,
-	run_context: &RunContext,
-	service_hostname: &str,
-	(tunnel_protocol, tunnel_name): (cloudflare::TunnelProtocol, &str),
-) -> Result<String> {
-	match (run_context, &ctx.ns().cluster.kind) {
-		// Create tunnels to remote services
-		(RunContext::Test, config::ns::ClusterKind::Distributed { .. }) => {
-			// Save the tunnel config
-			let local_port = utils::pick_port();
-			tunnel_configs.push(cloudflare::TunnelConfig::new_with_port(
-				tunnel_protocol,
-				tunnel_name,
-				local_port,
-			));
-
-			// Hardcode to the forwarded port
-			Ok(format!("127.0.0.1:{local_port}"))
-		}
-		// Use the Consul address if either in production or running locally
-		(RunContext::Service, _)
-		| (RunContext::Test, config::ns::ClusterKind::SingleNode { .. }) => Ok(service_hostname.into()),
 	}
 }
 
@@ -1315,19 +1256,11 @@ impl ServiceContextData {
 			.unwrap_or_else(|| match project_ctx.ns().cluster.kind {
 				config::ns::ClusterKind::SingleNode { .. } => config::ns::Service {
 					count: 1,
-					resources: config::ns::ServiceResources {
-						cpu: config::ns::CpuResources::Cpu(100),
-						memory: 512,
-						ephemeral_disk: 128,
-					},
+					resources: self.config().resources.single_node.clone(),
 				},
 				config::ns::ClusterKind::Distributed { .. } => config::ns::Service {
 					count: 2,
-					resources: config::ns::ServiceResources {
-						cpu: config::ns::CpuResources::Cpu(250),
-						memory: 256,
-						ephemeral_disk: 128,
-					},
+					resources: self.config().resources.distributed.clone(),
 				},
 			});
 
@@ -1346,35 +1279,58 @@ async fn add_s3_env(
 	s3_dep: &Arc<ServiceContextData>,
 	provider: s3_util::Provider,
 ) -> Result<()> {
-	let provider_name = provider.to_string();
+	let provider_upper = provider.as_str().to_uppercase();
+
 	let s3_dep_name = s3_dep.name_screaming_snake();
 	let s3_config = project_ctx.s3_config(provider).await?;
-	let s3_creds = project_ctx.s3_credentials(provider).await?;
 
 	env.push((
-		format!("S3_{}_BUCKET_{}", provider_name, s3_dep_name),
+		format!("S3_{provider_upper}_BUCKET_{s3_dep_name}"),
 		s3_dep.s3_bucket_name().await,
 	));
 	env.push((
-		format!("S3_{}_ENDPOINT_INTERNAL_{}", provider_name, s3_dep_name),
+		format!("S3_{provider_upper}_ENDPOINT_INTERNAL_{s3_dep_name}"),
 		s3_config.endpoint_internal,
 	));
 	env.push((
-		format!("S3_{}_ENDPOINT_EXTERNAL_{}", provider_name, s3_dep_name),
+		format!("S3_{provider_upper}_ENDPOINT_EXTERNAL_{s3_dep_name}"),
 		s3_config.endpoint_external,
 	));
 	env.push((
-		format!("S3_{}_REGION_{}", provider_name, s3_dep_name),
+		format!("S3_{provider_upper}_REGION_{s3_dep_name}"),
 		s3_config.region,
 	));
+
+	Ok(())
+}
+
+async fn add_s3_secret_env(
+	project_ctx: &ProjectContext,
+	env: &mut Vec<(String, String)>,
+	s3_dep: &Arc<ServiceContextData>,
+	provider: s3_util::Provider,
+) -> Result<()> {
+	let provider_upper = provider.as_str().to_uppercase();
+
+	let s3_dep_name = s3_dep.name_screaming_snake();
+	let s3_creds = project_ctx.s3_credentials(provider).await?;
+
 	env.push((
-		format!("S3_{}_ACCESS_KEY_ID_{}", provider_name, s3_dep_name),
+		format!("S3_{provider_upper}_ACCESS_KEY_ID_{s3_dep_name}"),
 		s3_creds.access_key_id,
 	));
 	env.push((
-		format!("S3_{}_SECRET_ACCESS_KEY_{}", provider_name, s3_dep_name),
+		format!("S3_{provider_upper}_SECRET_ACCESS_KEY_{s3_dep_name}"),
 		s3_creds.access_key_secret,
 	));
 
 	Ok(())
+}
+
+/// TODO: Reuse code with lib/util/env/src/lib.r
+pub fn secret_env_var_key(key: &[impl AsRef<str>]) -> String {
+	key.iter()
+		.map(|x| x.as_ref().to_uppercase())
+		.collect::<Vec<_>>()
+		.join("_")
 }

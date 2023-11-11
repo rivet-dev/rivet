@@ -17,7 +17,6 @@ impl Ctx {
 				.pretty()
 				.with_max_level(tracing::Level::INFO)
 				.with_target(false)
-				.without_time()
 				.init();
 		});
 
@@ -46,7 +45,7 @@ impl Ctx {
 		let (_user_id, user_token) = Self::issue_user_token(&op_ctx).await;
 
 		let http_client = rivet_group::Config::builder()
-			.set_uri(util::env::svc_router_url("api-group"))
+			.set_uri("http://traefik.traefik.svc.cluster.local:80/group")
 			.set_bearer_token(user_token)
 			.build_client();
 

@@ -4,15 +4,15 @@ use serde_json::json;
 
 #[worker(name = "team-dev-create")]
 async fn worker(ctx: &OperationContext<team_dev::msg::create::Message>) -> GlobalResult<()> {
-	let team_id = internal_unwrap!(ctx.team_id).as_uuid();
+	let team_id = unwrap_ref!(ctx.team_id).as_uuid();
 
 	// Get the team
 	let team_res = op!([ctx] team_get {
 		team_ids: vec![team_id.into()],
 	})
 	.await?;
-	let team = internal_unwrap_owned!(team_res.teams.first(), "team not found");
-	let owner_user_id = internal_unwrap_owned!(team.owner_user_id);
+	let team = unwrap!(team_res.teams.first(), "team not found");
+	let owner_user_id = unwrap!(team.owner_user_id);
 
 	let dev_team_res = op!([ctx] team_dev_get {
 		team_ids: vec![team_id.into()],
@@ -34,7 +34,7 @@ async fn worker(ctx: &OperationContext<team_dev::msg::create::Message>) -> Globa
 
 		let email = {
 			let user = identity_res.users.first();
-			let user = internal_unwrap!(user);
+			let user = unwrap_ref!(user);
 			let email_ident = user.identities.iter().find(|identity| {
 				matches!(
 					identity.kind,
@@ -61,17 +61,17 @@ async fn worker(ctx: &OperationContext<team_dev::msg::create::Message>) -> Globa
 	};
 
 	// Create the dev team
-	let crdb = ctx.crdb("db-team-dev").await?;
-	sqlx::query(indoc!(
+	let crdb = ctx.crdb().await?;
+	sql_execute!(
+		[ctx]
 		"
-		INSERT INTO dev_teams (team_id, create_ts, stripe_customer_id)
+		INSERT INTO db_team_dev.dev_teams (team_id, create_ts, stripe_customer_id)
 		VALUES ($1, $2, $3)
-		"
-	))
-	.bind(team_id)
-	.bind(ctx.ts())
-	.bind(stripe_customer_id)
-	.execute(&crdb)
+		",
+		team_id,
+		ctx.ts(),
+		stripe_customer_id,
+	)
 	.await?;
 
 	msg!([ctx] team::msg::update(team_id) {

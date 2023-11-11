@@ -53,21 +53,23 @@ async fn fail(
 async fn worker(
 	ctx: &OperationContext<cf_custom_hostname::msg::create::Message>,
 ) -> GlobalResult<()> {
-	let namespace_id = internal_unwrap!(ctx.namespace_id).as_uuid();
+	let game_zone_id = unwrap!(util::env::cloudflare::zone::game::id());
+
+	let namespace_id = unwrap_ref!(ctx.namespace_id).as_uuid();
 
 	let games_res = op!([ctx] game_resolve_namespace_id {
 		namespace_ids: vec![namespace_id.into()],
 	})
 	.await?;
-	let game = internal_unwrap_owned!(games_res.games.first());
-	let game_id = internal_unwrap_owned!(game.game_id);
+	let game = unwrap!(games_res.games.first());
+	let game_id = unwrap!(game.game_id);
 
 	let games_res = op!([ctx] game_get {
 		game_ids: vec![game_id],
 	})
 	.await?;
-	let game = internal_unwrap_owned!(games_res.games.first());
-	let developer_team_id = internal_unwrap_owned!(game.developer_team_id);
+	let game = unwrap!(games_res.games.first());
+	let developer_team_id = unwrap!(game.developer_team_id);
 
 	// Count current pending hostnames in team
 	if !ctx.bypass_pending_cap {
@@ -75,7 +77,7 @@ async fn worker(
 			team_ids: vec![developer_team_id],
 		})
 		.await?;
-		let team = internal_unwrap_owned!(teams_res.teams.first());
+		let team = unwrap!(teams_res.teams.first());
 
 		let namespaces_res = op!([ctx] game_namespace_list {
 			game_ids: team.game_ids.clone(),
@@ -129,8 +131,7 @@ async fn worker(
 	});
 	let res = reqwest::Client::new()
 		.post(format!(
-			"https://api.cloudflare.com/client/v4/zones/{zone_id}/custom_hostnames",
-			zone_id = util::env::cloudflare::zone::game::id(),
+			"https://api.cloudflare.com/client/v4/zones/{game_zone_id}/custom_hostnames",
 		))
 		.header(
 			reqwest::header::AUTHORIZATION,
@@ -167,7 +168,7 @@ async fn worker(
 		}
 
 		tracing::error!(hostname=?ctx.hostname, ?status, "failed to create custom hostname");
-		internal_panic!("failed to create custom hostname");
+		bail!("failed to create custom hostname");
 	}
 
 	let res = res.json::<CloudflareResponse>().await?;
@@ -176,22 +177,22 @@ async fn worker(
 	let challenge = res.result.ownership_verification_http.http_body;
 	let subscription_id = Uuid::new_v4();
 
-	sqlx::query(indoc!(
+	sql_execute!(
+		[ctx]
 		"
-		INSERT INTO custom_hostnames (
+		INSERT INTO db_cf_custom_hostname.custom_hostnames (
 			identifier, namespace_id, hostname, challenge, create_ts, status, subscription_id
 		)
 		VALUES ($1, $2, $3, $4, $5, $6, $7)
-		"
-	))
-	.bind(identifier)
-	.bind(namespace_id)
-	.bind(&hostname)
-	.bind(challenge)
-	.bind(ctx.ts())
-	.bind(backend::cf::custom_hostname::Status::Pending as i32)
-	.bind(subscription_id)
-	.execute(&ctx.crdb("db-cf-custom-hostname").await?)
+		",
+		identifier,
+		namespace_id,
+		&hostname,
+		challenge,
+		ctx.ts(),
+		backend::cf::custom_hostname::Status::Pending as i32,
+		subscription_id,
+	)
 	.await?;
 
 	// TODO: Add stripe subscription for hostname

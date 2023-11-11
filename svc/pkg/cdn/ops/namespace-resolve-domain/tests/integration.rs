@@ -2,14 +2,14 @@ use chirp_worker::prelude::*;
 
 #[worker_test]
 async fn empty(ctx: TestCtx) {
-	let namespace_id = Uuid::new_v4();
-	let domain = format!("{}.com", util::faker::ident());
+	if !util::feature::cf_custom_hostname() {
+		return;
+	}
 
-	op!([ctx] cdn_namespace_create {
-		namespace_id: Some(namespace_id.into()),
-	})
-	.await
-	.unwrap();
+	let game_res = op!([ctx] faker_game { }).await.unwrap();
+	let namespace_id = *game_res.namespace_ids.first().unwrap();
+
+	let domain = format!("{}.com", util::faker::ident());
 
 	op!([ctx] cdn_namespace_domain_create {
 		namespace_id: Some(namespace_id.into()),

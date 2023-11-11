@@ -18,27 +18,27 @@ async fn handle(
 		.collect::<Vec<_>>();
 
 	let custom_hostnames = if ctx.pending_only {
-		sqlx::query_as::<_, CustomHostname>(indoc!(
+		sql_fetch_all!(
+			[ctx, CustomHostname]
 			"
 		SELECT identifier, namespace_id
-		FROM custom_hostnames
+		FROM db_cf_custom_hostname.custom_hostnames
 		WHERE namespace_id = ANY($1) AND status = $2
-		"
-		))
-		.bind(&namespace_ids)
-		.bind(backend::cf::custom_hostname::Status::Pending as i32)
-		.fetch_all(&ctx.crdb("db-cf-custom-hostname").await?)
+		",
+			&namespace_ids,
+			backend::cf::custom_hostname::Status::Pending as i32,
+		)
 		.await?
 	} else {
-		sqlx::query_as::<_, CustomHostname>(indoc!(
+		sql_fetch_all!(
+			[ctx, CustomHostname]
 			"
 		SELECT identifier, namespace_id
-		FROM custom_hostnames
+		FROM db_cf_custom_hostname.custom_hostnames
 		WHERE namespace_id = ANY($1)
-		"
-		))
-		.bind(&namespace_ids)
-		.fetch_all(&ctx.crdb("db-cf-custom-hostname").await?)
+		",
+			&namespace_ids,
+		)
 		.await?
 	};
 

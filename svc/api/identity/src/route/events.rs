@@ -7,7 +7,7 @@ use proto::{
 	common,
 };
 use rivet_api::models;
-use rivet_convert::{convert, fetch, ApiTryInto};
+use rivet_convert::{fetch, ApiTryInto};
 use rivet_operation::prelude::*;
 use std::collections::{HashMap, HashSet};
 
@@ -23,7 +23,7 @@ pub async fn events(
 	let (current_user_id, game_user) = ctx.auth().dual_user(ctx.op_ctx()).await?;
 
 	let namespace_id = if let Some(game_user) = &game_user {
-		Some(internal_unwrap!(game_user.namespace_id).as_uuid())
+		Some(unwrap_ref!(game_user.namespace_id).as_uuid())
 	} else {
 		None
 	};
@@ -135,17 +135,17 @@ async fn events_wait(
 	let mut removed_team_ids = Vec::new();
 	let mut user_update_ts = None;
 	for msg in thread_tail.messages {
-		let event = internal_unwrap!(msg.event);
+		let event = unwrap_ref!(msg.event);
 
 		if let Some(event) = &event.kind {
 			match event {
 				backend::user::event::event::Kind::ChatMessage(chat_msg) => {
-					let chat_message = internal_unwrap!(chat_msg.chat_message).clone();
+					let chat_message = unwrap_ref!(chat_msg.chat_message).clone();
 					new_messages.push(chat_message);
 				}
 				backend::user::event::event::Kind::ChatRead(chat_read) => {
 					new_chat_reads.push((
-						internal_unwrap!(chat_read.thread_id).as_uuid(),
+						unwrap_ref!(chat_read.thread_id).as_uuid(),
 						chat_read.clone(),
 					));
 				}
@@ -159,7 +159,7 @@ async fn events_wait(
 					user_update_ts = Some(msg.msg_ts());
 				}
 				backend::user::event::event::Kind::TeamMemberRemove(team) => {
-					removed_team_ids.push((msg.msg_ts(), internal_unwrap!(team.team_id).as_uuid()));
+					removed_team_ids.push((msg.msg_ts(), unwrap_ref!(team.team_id).as_uuid()));
 				}
 			}
 		} else {
@@ -227,8 +227,7 @@ async fn process_msg_events(
 	let mut msg_events = Vec::with_capacity(threads.len());
 	for thread in threads {
 		let thread_id = Some(Into::<common::Uuid>::into(thread.thread_id));
-		let message =
-			internal_unwrap_owned!(tail_messages.iter().find(|msg| msg.thread_id == thread_id));
+		let message = unwrap!(tail_messages.iter().find(|msg| msg.thread_id == thread_id));
 
 		let notification = utils::create_notification(current_user_id, &users_res.users, message)?;
 
@@ -286,11 +285,11 @@ async fn fetch_threads_refresh(
 
 	let threads = sorted_threads_iter
 		.iter()
-		.map(|t| Ok(internal_unwrap!(t.thread).clone()))
+		.map(|t| Ok(unwrap_ref!(t.thread).clone()))
 		.collect::<GlobalResult<Vec<_>>>()?;
 	let tail_messages = sorted_threads_iter
 		.iter()
-		.map(|t| Ok(internal_unwrap!(t.tail_message).clone()))
+		.map(|t| Ok(unwrap_ref!(t.tail_message).clone()))
 		.collect::<GlobalResult<Vec<_>>>()?;
 
 	Ok(FetchThreadsResponse {
@@ -311,7 +310,7 @@ async fn fetch_threads_incremental(
 	// messages
 	let thread_ids = new_messages
 		.iter()
-		.map(|message| Ok(internal_unwrap!(message.thread_id).as_uuid()))
+		.map(|message| Ok(unwrap_ref!(message.thread_id).as_uuid()))
 		.collect::<GlobalResult<HashSet<_>>>()?
 		.into_iter()
 		.map(common::Uuid::from)
@@ -348,7 +347,7 @@ async fn process_user_update_events(
 		vec![current_user_id],
 	)
 	.await?;
-	let profile = unwrap_with_owned!(identities.into_iter().next(), IDENTITY_NOT_FOUND);
+	let profile = unwrap_with!(identities.into_iter().next(), IDENTITY_NOT_FOUND);
 
 	Ok(models::IdentityGlobalEvent {
 		ts: util::timestamp::to_string(ts)?,
@@ -498,10 +497,10 @@ async fn fetch_lobby(
 	lobby: &backend::matchmaker::Lobby,
 	player_token: &str,
 ) -> GlobalResult<models::IdentityGlobalEventMatchmakerLobbyJoin> {
-	let lobby_id = internal_unwrap!(lobby.lobby_id).as_uuid();
-	let region_id = internal_unwrap!(lobby.region_id);
-	let lobby_group_id = internal_unwrap!(lobby.lobby_group_id);
-	let run_id = internal_unwrap!(lobby.run_id);
+	let lobby_id = unwrap_ref!(lobby.lobby_id).as_uuid();
+	let region_id = unwrap_ref!(lobby.region_id);
+	let lobby_group_id = unwrap_ref!(lobby.lobby_group_id);
+	let run_id = unwrap_ref!(lobby.run_id);
 
 	// Fetch lobby run data
 	let (run_res, version) = tokio::try_join!(
@@ -520,34 +519,34 @@ async fn fetch_lobby(
 			})
 			.await?;
 
-			let version_id = internal_unwrap_owned!(version_res.versions.first());
-			let version_id = internal_unwrap!(version_id.version_id);
+			let version_id = unwrap!(version_res.versions.first());
+			let version_id = unwrap_ref!(version_id.version_id);
 			let version_res = op!([ctx] mm_config_version_get {
 				version_ids: vec![*version_id],
 			})
 			.await?;
-			let version = internal_unwrap_owned!(version_res.versions.first());
+			let version = unwrap!(version_res.versions.first());
 
 			GlobalResult::Ok(version.clone())
 		}
 	)?;
 
 	// Match the version
-	let version_config = internal_unwrap!(version.config);
-	let version_meta = internal_unwrap!(version.config_meta);
-	let (lobby_group_config, _lobby_group_meta) = internal_unwrap_owned!(version_config
+	let version_config = unwrap_ref!(version.config);
+	let version_meta = unwrap_ref!(version.config_meta);
+	let (lobby_group_config, _lobby_group_meta) = unwrap!(version_config
 		.lobby_groups
 		.iter()
 		.zip(version_meta.lobby_groups.iter())
 		.find(|(_, meta)| meta.lobby_group_id.as_ref() == Some(lobby_group_id)));
-	let lobby_runtime = internal_unwrap!(lobby_group_config.runtime);
+	let lobby_runtime = unwrap_ref!(lobby_group_config.runtime);
 	#[allow(clippy::infallible_destructuring_match)]
-	let docker_runtime = match internal_unwrap!(lobby_runtime.runtime) {
+	let docker_runtime = match unwrap_ref!(lobby_runtime.runtime) {
 		backend::matchmaker::lobby_runtime::Runtime::Docker(x) => x,
 	};
 
 	// Convert the ports to client-friendly ports
-	let run = internal_unwrap_owned!(run_res.runs.first());
+	let run = unwrap!(run_res.runs.first());
 
 	let ports = docker_runtime
 		.ports
@@ -561,7 +560,7 @@ async fn fetch_lobby(
 		region_ids: vec![*region_id],
 	})
 	.await?;
-	let region_proto = internal_unwrap_owned!(region_res.regions.first());
+	let region_proto = unwrap!(region_res.regions.first());
 	let region = models::MatchmakerJoinRegion {
 		region_id: region_proto.name_id.clone(),
 		display_name: region_proto.region_display_name.clone(),
@@ -592,8 +591,8 @@ fn build_port(
 		ProxyKind as MmProxyKind, ProxyProtocol as MmProxyProtocol,
 	};
 
-	let proxy_kind = internal_unwrap_owned!(MmProxyKind::from_i32(port.proxy_kind));
-	let mm_proxy_protocol = internal_unwrap_owned!(MmProxyProtocol::from_i32(port.proxy_protocol));
+	let proxy_kind = unwrap!(MmProxyKind::from_i32(port.proxy_kind));
+	let mm_proxy_protocol = unwrap!(MmProxyProtocol::from_i32(port.proxy_protocol));
 
 	let join_info_port = match (proxy_kind, mm_proxy_protocol) {
 		(
@@ -643,16 +642,17 @@ fn build_port(
 				.next()
 		}
 		(MmProxyKind::None, MmProxyProtocol::Tcp | MmProxyProtocol::Udp) => {
-			let port_range = internal_unwrap!(port.port_range);
+			let port_range = unwrap_ref!(port.port_range);
 
-			let network = internal_unwrap_owned!(
-				run.networks.iter().find(|x| x.mode == "host"),
-				"missing host network"
-			);
+			let run_meta = unwrap_ref!(run.run_meta);
+			let Some(backend::job::run_meta::Kind::Nomad(run_meta_nomad)) = &run_meta.kind else {
+				bail!("invalid nomad run meta kind")
+			};
+			let node_public_ipv4 = unwrap_ref!(run_meta_nomad.node_public_ipv4);
 
 			Some(models::MatchmakerJoinPort {
 				host: None,
-				hostname: network.ip.clone(),
+				hostname: node_public_ipv4.clone(),
 				port: None,
 				port_range: Some(Box::new(models::MatchmakerJoinPortRange {
 					min: port_range.min.try_into()?,
@@ -665,7 +665,7 @@ fn build_port(
 			MmProxyKind::None,
 			MmProxyProtocol::Http | MmProxyProtocol::Https | MmProxyProtocol::TcpTls,
 		) => {
-			internal_panic!("invalid http proxy protocol with host network")
+			bail!("invalid http proxy protocol with host network")
 		}
 	};
 

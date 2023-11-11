@@ -5,7 +5,7 @@ use rivet_operation::prelude::*;
 async fn handle(
 	ctx: OperationContext<chat_thread::get_or_create_for_topic::Request>,
 ) -> GlobalResult<chat_thread::get_or_create_for_topic::Response> {
-	let topic = internal_unwrap!(ctx.topic);
+	let topic = unwrap_ref!(ctx.topic);
 
 	// Find the thread ID
 	let thread_id = op!([ctx] chat_thread_get_for_topic {
@@ -32,7 +32,7 @@ async fn handle(
 				override_create_ts: ctx.send_ts,
 			})
 			.await?;
-		let thread_id = internal_unwrap!(create_res.thread_id).as_uuid();
+		let thread_id = unwrap_ref!(create_res.thread_id).as_uuid();
 
 		(thread_id, true)
 	};

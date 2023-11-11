@@ -7,8 +7,6 @@ use proto::rivet::chirp;
 use std::{sync::Arc, time::Duration};
 use tokio::{sync::Notify, task};
 
-const TEST_REGION: &str = "local-lcl";
-
 #[derive(Clone, PartialEq, prost::Message)]
 struct TestRequest {
 	#[prost(int32, tag = "1")]
@@ -68,14 +66,12 @@ async fn basic_client() {
 	// Build client
 	let pools = rivet_pools::from_env("chirp-test").await.unwrap();
 	let nats = pools.nats().unwrap();
-	let redis_chirp = pools.redis_chirp().unwrap();
-	let redis_cache = pools.redis_cache().unwrap();
 
 	let shared_client = chirp_client::SharedClient::new(
 		nats.clone(),
-		redis_chirp.clone(),
-		redis_cache.clone(),
-		TEST_REGION.to_owned(),
+		pools.redis_chirp().unwrap(),
+		pools.redis_chirp_ephemeral().unwrap(),
+		pools.redis_cache().unwrap(),
 	);
 	let client = shared_client.clone().wrap_new("chirp-test");
 
@@ -91,7 +87,7 @@ async fn basic_client() {
 		};
 
 		// Read message
-		let subject = chirp_client::endpoint::subject(TEST_REGION, TestEndpoint::NAME);
+		let subject = chirp_client::endpoint::subject(TestEndpoint::NAME);
 		tracing::info!(?subject, "reading message");
 		let msg = {
 			let nats = nats.clone();
@@ -268,20 +264,10 @@ async fn basic_client() {
 // Set test env vars to mimic actual env
 async fn set_env_vars() {
 	std::env::set_var("RIVET_SOURCE_HASH", "00000000");
-	std::env::set_var("RIVET_DOMAIN_MAIN", "127.0.0.1:8080");
 
 	std::env::set_var("CHIRP_SERVICE_NAME", "chirp-test");
-	std::env::set_var("CHIRP_REGION", &*TEST_REGION);
 
-	std::env::set_var("NATS_URL", "listen.nats.service.consul");
+	std::env::set_var("NATS_URL", todo!());
 	std::env::set_var("NATS_USERNAME", "chirp");
 	std::env::set_var("NATS_PASSWORD", "password");
-	std::env::set_var(
-		"REDIS_URL_REDIS_CHIRP",
-		"redis://listen.redis.service.consul:6379",
-	);
-	std::env::set_var(
-		"REDIS_URL_REDIS_CACHE",
-		"redis://listen.redis.service.consul:6379",
-	);
 }

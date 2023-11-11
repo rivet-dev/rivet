@@ -31,7 +31,8 @@ pub async fn handle(
 		.map(common::Uuid::as_uuid)
 		.collect::<Vec<_>>();
 
-	let versions = sqlx::query_as::<_, Version>(indoc!(
+	let versions = sql_fetch_all!(
+		[ctx, Version]
 		"
 		SELECT
 			v.version_id,
@@ -41,16 +42,16 @@ pub async fn handle(
 			v.minor,
 			v.patch,
 			vid.image_tag AS image_docker_image_tag
-		FROM versions AS v
-		LEFT JOIN versions_image_docker AS vid ON vid.version_id = v.version_id
+		FROM db_module.versions AS v
+		LEFT JOIN db_module.versions_image_docker AS vid ON vid.version_id = v.version_id
 		WHERE v.version_id = ANY($1)
-		"
-	))
-	.bind(&version_ids)
-	.fetch_all(&ctx.crdb("db-module").await?)
+		",
+		&version_ids,
+	)
 	.await?;
 
-	let scripts = sqlx::query_as::<_, Script>(indoc!(
+	let scripts = sql_fetch_all!(
+		[ctx, Script]
 		"
 		SELECT
 			f.version_id,
@@ -58,13 +59,12 @@ pub async fn handle(
 			f.request_schema,
 			f.response_schema,
 			fc.version_id IS NOT NULL AS callable
-		FROM scripts AS f
-		LEFT JOIN scripts_callable AS fc ON fc.version_id = f.version_id AND fc.name = f.name
+		FROM db_module.scripts AS f
+		LEFT JOIN db_module.scripts_callable AS fc ON fc.version_id = f.version_id AND fc.name = f.name
 		WHERE f.version_id = ANY($1)
-		"
-	))
-	.bind(version_ids)
-	.fetch_all(&ctx.crdb("db-module").await?)
+		",
+		version_ids,
+	)
 	.await?;
 
 	Ok(module::version_get::Response {

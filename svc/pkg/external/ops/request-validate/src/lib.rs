@@ -8,7 +8,7 @@ use rivet_operation::prelude::*;
 async fn handle(
 	ctx: OperationContext<external::request_validate::Request>,
 ) -> GlobalResult<external::request_validate::Response> {
-	let config = internal_unwrap!(ctx.config);
+	let config = unwrap_ref!(ctx.config);
 	let mut errors = Vec::new();
 
 	// Parse URL
@@ -22,7 +22,7 @@ async fn handle(
 				}
 			}
 			// Validate that URL is not internal
-			else if host.ends_with(".consul") {
+			else if host.ends_with(".local") {
 				errors.push(util::err_path!["url", "invalid"]);
 			}
 

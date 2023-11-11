@@ -17,5 +17,5 @@ default-features = false
 [dev-dependencies]
 chirp-worker = { path = "../../../../../lib/chirp/worker" }
 
-cdn-namespace-create = { path = "../namespace-create" }
 cdn-namespace-domain-create = { path = "../namespace-domain-create" }
+faker-game = { path = "../../../faker/ops/game" }

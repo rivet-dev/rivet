@@ -5,18 +5,10 @@ use std::collections::HashMap;
 
 use crate::auth::Auth;
 
-mod cdn;
-mod job_run;
+pub mod core;
+pub mod game_guard;
 
 // MARK: GET /traefik/config
-#[derive(Debug, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
-pub struct TraefikConfigQuery {
-	token: String,
-	pool: String,
-	region: String,
-}
-
 #[derive(Debug, Default, Serialize, Deserialize)]
 #[serde(default, deny_unknown_fields, rename_all = "camelCase")]
 pub struct TraefikConfigResponse {
@@ -42,7 +34,7 @@ pub struct TraefikConfigResponseNullified {
 pub struct TraefikHttp {
 	pub services: HashMap<String, TraefikService>,
 	pub routers: HashMap<String, TraefikRouter>,
-	pub middlewares: HashMap<String, TraefikMiddleware>,
+	pub middlewares: HashMap<String, TraefikMiddlewareHttp>,
 }
 
 /// See above.
@@ -54,7 +46,7 @@ pub struct TraefikHttpNullified {
 	#[serde(skip_serializing_if = "Option::is_none")]
 	pub routers: Option<HashMap<String, TraefikRouter>>,
 	#[serde(skip_serializing_if = "Option::is_none")]
-	pub middlewares: Option<HashMap<String, TraefikMiddleware>>,
+	pub middlewares: Option<HashMap<String, TraefikMiddlewareHttp>>,
 }
 
 impl TraefikHttp {
@@ -136,6 +128,8 @@ pub struct TraefikTls {
 	cert_resolver: Option<String>,
 	#[serde(skip_serializing_if = "Option::is_none")]
 	domains: Option<Vec<TraefikTlsDomain>>,
+	#[serde(skip_serializing_if = "Option::is_none")]
+	options: Option<String>,
 }
 
 impl TraefikTls {
@@ -147,6 +141,15 @@ impl TraefikTls {
 		TraefikTls {
 			cert_resolver: None,
 			domains: Some(domains),
+			options: None,
+		}
+	}
+
+	fn build_cloudflare() -> TraefikTls {
+		TraefikTls {
+			cert_resolver: None,
+			domains: None,
+			options: Some("traefik-ingress-cloudflare@kubernetescrd".into()),
 		}
 	}
 }
@@ -160,7 +163,7 @@ pub struct TraefikTlsDomain {
 
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
-pub enum TraefikMiddleware {
+pub enum TraefikMiddlewareHttp {
 	#[serde(rename = "chain", rename_all = "camelCase")]
 	Chain { middlewares: Vec<String> },
 	#[serde(rename = "ipWhiteList", rename_all = "camelCase")]
@@ -248,126 +251,4 @@ pub enum InFlightReqSourceCriterion {
 	RequestHeaderName { request_header_name: String },
 	#[serde(rename = "requestHost", rename_all = "camelCase")]
 	RequestHost {},
-}
-
-#[tracing::instrument(skip(ctx))]
-pub async fn config(
-	ctx: Ctx<Auth>,
-	_watch_index: WatchIndexQuery,
-	TraefikConfigQuery {
-		token,
-		region,
-		pool,
-	}: TraefikConfigQuery,
-) -> GlobalResult<TraefikConfigResponseNullified> {
-	assert_eq_with!(
-		token,
-		util::env::read_secret(&["rivet", "api_route", "token"]).await?,
-		API_FORBIDDEN,
-		reason = "Invalid token"
-	);
-
-	// Fetch configs and catch any errors
-	let (cdn_config, job_run_config) = tokio::join!(
-		async {
-			match cdn::build(&ctx, &pool).await {
-				Ok(x) => x,
-				Err(err) => {
-					tracing::error!(?err, "error building cdn config");
-					Default::default()
-				}
-			}
-		},
-		async {
-			match job_run::build(&ctx, &pool, &region).await {
-				Ok(x) => x,
-				Err(err) => {
-					tracing::error!(?err, "error building job run config");
-					Default::default()
-				}
-			}
-		},
-	);
-
-	// Merge configs
-	let merged_config = TraefikConfigResponse {
-		http: TraefikHttp {
-			services: cdn_config
-				.http
-				.services
-				.into_iter()
-				.chain(job_run_config.http.services.into_iter())
-				.collect(),
-			routers: cdn_config
-				.http
-				.routers
-				.into_iter()
-				.chain(job_run_config.http.routers.into_iter())
-				.collect(),
-			middlewares: cdn_config
-				.http
-				.middlewares
-				.into_iter()
-				.chain(job_run_config.http.middlewares.into_iter())
-				.collect(),
-		},
-		tcp: TraefikHttp {
-			services: cdn_config
-				.tcp
-				.services
-				.into_iter()
-				.chain(job_run_config.tcp.services.into_iter())
-				.collect(),
-			routers: cdn_config
-				.tcp
-				.routers
-				.into_iter()
-				.chain(job_run_config.tcp.routers.into_iter())
-				.collect(),
-			middlewares: cdn_config
-				.tcp
-				.middlewares
-				.into_iter()
-				.chain(job_run_config.tcp.middlewares.into_iter())
-				.collect(),
-		},
-		udp: TraefikHttp {
-			services: cdn_config
-				.udp
-				.services
-				.into_iter()
-				.chain(job_run_config.udp.services.into_iter())
-				.collect(),
-			routers: cdn_config
-				.udp
-				.routers
-				.into_iter()
-				.chain(job_run_config.udp.routers.into_iter())
-				.collect(),
-			middlewares: cdn_config
-				.udp
-				.middlewares
-				.into_iter()
-				.chain(job_run_config.udp.middlewares.into_iter())
-				.collect(),
-		},
-	};
-	tracing::info!(
-		http_services = ?merged_config.http.services.len(),
-		http_routers = merged_config.http.routers.len(),
-		http_middlewares = ?merged_config.http.middlewares.len(),
-		tcp_services = ?merged_config.tcp.services.len(),
-		tcp_routers = merged_config.tcp.routers.len(),
-		tcp_middlewares = ?merged_config.tcp.middlewares.len(),
-		udp_services = ?merged_config.udp.services.len(),
-		udp_routers = merged_config.udp.routers.len(),
-		udp_middlewares = ?merged_config.udp.middlewares.len(),
-		"merged traefik config"
-	);
-
-	Ok(TraefikConfigResponseNullified {
-		http: merged_config.http.nullified(),
-		tcp: merged_config.tcp.nullified(),
-		udp: merged_config.udp.nullified(),
-	})
 }

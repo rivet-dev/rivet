@@ -12,3 +12,17 @@ message Request {
 message Response {
 	repeated rivet.backend.user.User users = 1;
 }
+
+message CacheUser {
+	rivet.common.Uuid user_id = 1;
+	string display_name = 2;
+	int64 account_number = 3;
+	string avatar_id = 4;
+	optional rivet.common.Uuid profile_id = 5;
+	int64 join_ts = 6;
+	string bio = 7;
+	bool is_admin = 8;
+	optional int64 delete_request_ts = 9;
+	optional int64 delete_complete_ts = 10;
+
+}

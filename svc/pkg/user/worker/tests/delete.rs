@@ -3,7 +3,7 @@ use proto::backend::{self, pkg::*};
 
 // TODO: Verify user identity is deleted
 #[worker_test]
-async fn empty(ctx: TestCtx) {
+async fn delete(ctx: TestCtx) {
 	let user_id = Uuid::new_v4();
 	tracing::info!(%user_id);
 
@@ -177,9 +177,9 @@ async fn empty(ctx: TestCtx) {
 	// Verify user record
 	{
 		let (delete_complete_ts,): (Option<i64>,) =
-			sqlx::query_as("SELECT delete_complete_ts FROM users WHERE user_id = $1")
+			sqlx::query_as("SELECT delete_complete_ts FROM db_user.users WHERE user_id = $1")
 				.bind(user_id)
-				.fetch_one(&ctx.crdb("db-user").await.unwrap())
+				.fetch_one(&ctx.crdb().await.unwrap())
 				.await
 				.unwrap();
 		assert!(delete_complete_ts.is_some(), "user not deleted");

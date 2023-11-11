@@ -23,7 +23,7 @@ pub async fn matchmaker_live(
 			namespace_ids: vec![namespace_id.into()],
 		})
 		.await?;
-		let lobby_ids = internal_unwrap_owned!(lobby_list_res.namespaces.first());
+		let lobby_ids = unwrap!(lobby_list_res.namespaces.first());
 
 		lobby_ids.lobby_ids.clone()
 	};
@@ -99,13 +99,13 @@ pub async fn matchmaker_live(
 		// Find the lobby group
 		.map(|(lobby, player_count)| {
 			for version in &versions {
-				let config = internal_unwrap!(version.config);
-				let config_meta = internal_unwrap!(version.config_meta);
+				let config = unwrap_ref!(version.config);
+				let config_meta = unwrap_ref!(version.config_meta);
 
 				// Find matching lobby group
 				for (i, lobby_group_meta) in config_meta.lobby_groups.iter().enumerate() {
 					if lobby_group_meta.lobby_group_id == lobby.lobby_group_id {
-						let lobby_group = internal_unwrap_owned!(config.lobby_groups.get(i));
+						let lobby_group = unwrap!(config.lobby_groups.get(i));
 
 						// Check if this lobby belongs to a version different that's already deployed
 						let is_outdated = game_ns.version_id != version.version_id;
@@ -123,7 +123,7 @@ pub async fn matchmaker_live(
 			}
 
 			// No lobby group found
-			internal_panic!("lobby group not found")
+			bail!("lobby group not found")
 		})
 		.filter_map(|res| match res {
 			Ok(x) => Some(x),

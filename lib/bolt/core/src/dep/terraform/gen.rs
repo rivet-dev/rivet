@@ -6,15 +6,13 @@ use tokio::fs;
 
 use crate::{
 	config::{
-		self,
-		service::{RuntimeKind, ServiceDomain, UploadPolicy},
+		ns,
+		service::{RuntimeKind, UploadPolicy},
 	},
 	context::ProjectContext,
 	dep,
 	utils::media_resize,
 };
-
-use super::net;
 
 pub async fn project(ctx: &ProjectContext) {
 	// Init all Terraform projects in parallel
@@ -43,8 +41,8 @@ pub async fn project(ctx: &ProjectContext) {
 pub async fn gen_bolt_tf(ctx: &ProjectContext, plan_id: &str) -> Result<()> {
 	// Configure the backend
 	let backend = match ctx.ns().terraform.backend {
-		config::ns::TerraformBackend::Local {} => String::new(),
-		config::ns::TerraformBackend::Postgres {} => indoc!(
+		ns::TerraformBackend::Local {} => String::new(),
+		ns::TerraformBackend::Postgres {} => indoc!(
 			"
 			terraform {
 				backend \"pg\" {}
@@ -58,8 +56,8 @@ pub async fn gen_bolt_tf(ctx: &ProjectContext, plan_id: &str) -> Result<()> {
 	let remote_states =
 		if let Some(remote_states) = super::remote_states::dependency_graph(ctx).get(plan_id) {
 			let variables = match ctx.ns().terraform.backend {
-				config::ns::TerraformBackend::Local {} => String::new(),
-				config::ns::TerraformBackend::Postgres {} => indoc!(
+				ns::TerraformBackend::Local {} => String::new(),
+				ns::TerraformBackend::Postgres {} => indoc!(
 					"
 					variable \"remote_state_pg_conn_str\" {
 						type = string
@@ -106,7 +104,7 @@ fn gen_remote_state(
 	};
 
 	match ctx.ns().terraform.backend {
-		config::ns::TerraformBackend::Local {} => formatdoc!(
+		ns::TerraformBackend::Local {} => formatdoc!(
 			"
 			data \"terraform_remote_state\" \"{data_name}\" {{
 				{meta}
@@ -119,7 +117,7 @@ fn gen_remote_state(
 			}}
 			"
 		),
-		config::ns::TerraformBackend::Postgres {} => formatdoc!(
+		ns::TerraformBackend::Postgres {} => formatdoc!(
 			"
 			data \"terraform_remote_state\" \"{data_name}\" {{
 				{meta}
@@ -146,36 +144,41 @@ async fn vars(ctx: &ProjectContext) {
 	// Namespace
 	vars.insert("namespace".into(), json!(ns));
 
+	vars.insert("minio_port".into(), json!(null));
+
 	match &config.cluster.kind {
-		config::ns::ClusterKind::SingleNode {
+		ns::ClusterKind::SingleNode {
 			public_ip,
-			preferred_subnets,
+			api_http_port,
+			api_https_port,
+			minio_port,
+			tunnel_port,
 			..
 		} => {
 			vars.insert("deploy_method_local".into(), json!(true));
 			vars.insert("deploy_method_cluster".into(), json!(false));
 			vars.insert("public_ip".into(), json!(public_ip));
-			vars.insert("local_preferred_subnets".into(), json!(preferred_subnets));
+			vars.insert("api_http_port".into(), json!(api_http_port));
+			vars.insert("api_https_port".into(), json!(api_https_port));
+			vars.insert("tunnel_port".into(), json!(tunnel_port));
+
+			// Expose Minio on a dedicated port if DNS not enabled
+			if config.dns.is_none() && config.s3.providers.minio.is_some() {
+				vars.insert("minio_port".into(), json!(minio_port));
+			} else {
+				vars.insert("minio_port".into(), json!(null));
+			}
 		}
-		config::ns::ClusterKind::Distributed {
-			salt_master_size,
-			nebula_lighthouse_size,
-		} => {
+		ns::ClusterKind::Distributed {} => {
 			vars.insert("deploy_method_local".into(), json!(false));
 			vars.insert("deploy_method_cluster".into(), json!(true));
-
-			vars.insert("salt_master_size".into(), json!(salt_master_size));
-			vars.insert(
-				"nebula_lighthouse_size".into(),
-				json!(nebula_lighthouse_size),
-			);
 		}
 	}
 
 	// Remote state
 	match ctx.ns().terraform.backend {
-		config::ns::TerraformBackend::Local {} => {}
-		config::ns::TerraformBackend::Postgres {} => {
+		ns::TerraformBackend::Local {} => {}
+		ns::TerraformBackend::Postgres {} => {
 			let remote_state_pg_conn_str = ctx
 				.read_secret(&["terraform", "pg_backend", "conn_str"])
 				.await
@@ -187,41 +190,33 @@ async fn vars(ctx: &ProjectContext) {
 		}
 	}
 
+	// Project
+	vars.insert(
+		"project_root".into(),
+		json!(ctx.path().display().to_string()),
+	);
+
 	// Domains
 	vars.insert("domain_main".into(), json!(ctx.domain_main()));
 	vars.insert("domain_cdn".into(), json!(ctx.domain_cdn()));
 	vars.insert("domain_job".into(), json!(ctx.domain_job()));
-
-	// Net
-	vars.insert("svc_region_netmask".into(), json!(net::svc::REGION_NETMASK));
-	vars.insert("svc_pool_netmask".into(), json!(net::svc::POOL_NETMASK));
-	vars.insert("vpc_subnet".into(), json!(net::vpc::SUBNET));
-	vars.insert("vpc_netmask".into(), json!(net::vpc::NETMASK));
-	vars.insert("nebula_subnet".into(), json!(net::nebula::SUBNET));
-	vars.insert("nebula_netmask".into(), json!(net::nebula::NETMASK));
-	vars.insert("nebula_subnet_svc".into(), json!(net::nebula::SUBNET_SVC));
-	vars.insert("nebula_netmask_svc".into(), json!(net::nebula::NETMASK_SVC));
-	vars.insert("nebula_subnet_job".into(), json!(net::nebula::SUBNET_JOB));
-	vars.insert("nebula_netmask_job".into(), json!(net::nebula::NETMASK_JOB));
+	vars.insert("domain_main_api".into(), json!(ctx.domain_main_api()));
 	vars.insert(
-		"nebula_lighthouse_nebula_ip".into(),
-		json!(net::nebula::nebula_lighthouse_nebula_ip(&ctx)),
+		"dns_deprecated_subdomains".into(),
+		json!(config
+			.dns
+			.as_ref()
+			.map_or(false, |x| x.deprecated_subdomains)),
 	);
-	vars.insert(
-		"salt_master_nebula_ip".into(),
-		json!(net::nebula::salt_master_nebula_ip(&ctx)),
-	);
+	vars.insert("tls_enabled".into(), json!(ctx.tls_enabled()));
 
 	// Cloudflare
-	match &config.dns.provider {
-		config::ns::DnsProvider::Cloudflare {
-			account_id, zones, ..
-		} => {
-			vars.insert("cloudflare_account_id".into(), json!(account_id));
-
-			vars.insert("cloudflare_zone_id_rivet_gg".into(), json!(zones.root));
-			vars.insert("cloudflare_zone_id_rivet_game".into(), json!(zones.game));
-			vars.insert("cloudflare_zone_id_rivet_job".into(), json!(zones.job));
+	if let Some(dns) = &config.dns {
+		match &dns.provider {
+			Some(ns::DnsProvider::Cloudflare { account_id, .. }) => {
+				vars.insert("cloudflare_account_id".into(), json!(account_id));
+			}
+			None => {}
 		}
 	}
 
@@ -238,9 +233,52 @@ async fn vars(ctx: &ProjectContext) {
 	let pools = super::pools::build_pools(&ctx).await.unwrap();
 	vars.insert("pools".into(), json!(&pools));
 
+	// Tunnels
+	if let Some(ns::Dns {
+		provider: Some(ns::DnsProvider::Cloudflare { access, .. }),
+		..
+	}) = &config.dns
+	{
+		let mut tunnels = HashMap::new();
+
+		// Grafana tunnel
+		tunnels.insert(
+			"grafana",
+			json!({
+				"name": "Grafana",
+				"service": "http://prometheus-grafana.prometheus.svc.cluster.local:80",
+				"access_groups": access.as_ref().map(|x| vec![x.groups.engineering.clone()]).unwrap_or_default(),
+				"service_tokens": access.as_ref().map(|x| vec![x.services.grafana.clone()]).unwrap_or_default(),
+			}),
+		);
+
+		vars.insert("tunnels".into(), json!(&tunnels));
+	}
+
 	// Servers
 	let servers = super::servers::build_servers(&ctx, &regions, &pools).unwrap();
 	vars.insert("servers".into(), json!(servers));
+
+	if dep::terraform::cli::has_applied(ctx, "k8s_infra").await
+		&& dep::terraform::cli::has_applied(ctx, "tls").await
+	{
+		let k8s_infra = dep::terraform::output::read_k8s_infra(ctx).await;
+		let tls = dep::terraform::output::read_tls(ctx).await;
+
+		let mut server_install_scripts = HashMap::new();
+		for (k, v) in &servers {
+			server_install_scripts.insert(
+				k.clone(),
+				super::install_scripts::gen(ctx, v, &servers, &k8s_infra, &tls)
+					.await
+					.unwrap(),
+			);
+		}
+		vars.insert(
+			"server_install_scripts".into(),
+			json!(server_install_scripts),
+		);
+	}
 
 	// Services
 	{
@@ -251,8 +289,7 @@ async fn vars(ctx: &ProjectContext) {
 				json!({
 					"count": service.count,
 					"resources": {
-						"cpu": if let config::ns::CpuResources::Cpu(x) = &service.resources.cpu { *x } else { 0 },
-						"cpu_cores": if let config::ns::CpuResources::CpuCores(x) = &service.resources.cpu { *x } else { 0 },
+						"cpu": service.resources.cpu,
 						"memory": service.resources.memory,
 					}
 				}),
@@ -264,93 +301,138 @@ async fn vars(ctx: &ProjectContext) {
 	// Docker
 	vars.insert(
 		"authenticate_all_docker_hub_pulls".into(),
-		json!(ctx.ns().docker.authenticate_all_docker_hub_pulls),
+		json!(config.docker.authenticate_all_docker_hub_pulls),
 	);
 
 	// Extra DNS
-	{
+	if let Some(dns) = &config.dns {
 		let mut extra_dns = Vec::new();
+		let domain_main = ctx.domain_main().unwrap();
+		let domain_main_api = ctx.domain_main_api().unwrap();
 
-		// Which pool of ingress servers the DNS record will be pointed at
-		let ing_pool = match &ctx.ns().cluster.kind {
-			config::ns::ClusterKind::SingleNode { .. } => "local",
-			config::ns::ClusterKind::Distributed { .. } => "ing-px",
-		};
+		// Default API domain
+		extra_dns.push(json!({
+			"zone_name": "main",
+			"name": domain_main_api,
+		}));
 
 		// Add services
 		for svc_ctx in all_svc {
 			if let Some(router) = svc_ctx.config().kind.router() {
 				for mount in &router.mounts {
-					let (domain, zone_name) = match mount.domain {
-						ServiceDomain::Base => (ctx.domain_main(), "base"),
-						ServiceDomain::BaseGame => (ctx.domain_cdn(), "base_game"),
-						ServiceDomain::BaseJob => (ctx.domain_job(), "base_job"),
-					};
+					if mount.deprecated && !dns.deprecated_subdomains {
+						continue;
+					}
 
-					extra_dns.push(json!({
-						"pool": ing_pool,
-						"zone_name": zone_name,
-						"name": if let Some(subdomain) = &mount.subdomain {
-							format!("{}.{}", subdomain, domain)
-						} else {
-							domain
-						},
-					}));
+					if let Some(subdomain) = &mount.subdomain {
+						extra_dns.push(json!({
+							"zone_name": "main",
+							"name": format!("{subdomain}.{domain_main}"),
+						}));
+					}
 				}
 			}
 		}
 
 		// Add Minio
-		let s3_providers = &ctx.ns().s3.providers;
+		let s3_providers = &config.s3.providers;
 		if s3_providers.minio.is_some() {
 			extra_dns.push(json!({
-				"pool": ing_pool,
-				"zone_name": "base",
-				"name": format!("storage.{}", ctx.domain_main()),
+				"zone_name": "main",
+				"name": format!("minio.{}", domain_main),
 			}));
 		}
 
 		vars.insert("extra_dns".into(), json!(extra_dns));
 	}
 
-	// CRDB services
-	{
-		let mut crdb_svcs = HashMap::<String, serde_json::Value>::new();
+	// CockroachDB
+	match config.cockroachdb.provider {
+		ns::CockroachDBProvider::Kubernetes { .. } => {
+			vars.insert("cockroachdb_provider".into(), json!("kubernetes"));
+		}
+		ns::CockroachDBProvider::Managed {
+			spend_limit,
+			request_unit_limit,
+			storage_limit,
+		} => {
+			vars.insert("cockroachdb_provider".into(), json!("managed"));
+			vars.insert("cockroachdb_spend_limit".into(), json!(spend_limit));
+			vars.insert(
+				"cockroachdb_request_unit_limit".into(),
+				json!(request_unit_limit),
+			);
+			vars.insert("cockroachdb_storage_limit".into(), json!(storage_limit));
+		}
+	}
 
-		for svc_ctx in all_svc {
-			if let RuntimeKind::CRDB {} = svc_ctx.config().runtime {
-				crdb_svcs.insert(
-					svc_ctx.name(),
-					json!({
-						"db_name": svc_ctx.crdb_db_name(),
-						"migrations_path": svc_ctx.relative_path().await.join("migrations"),  // TODO: This isn't compatible with Windows
-					}),
-				);
+	// ClickHouse
+	match &config.clickhouse.provider {
+		ns::ClickHouseProvider::Kubernetes {} => {
+			vars.insert("clickhouse_provider".into(), json!("kubernetes"));
+		}
+		ns::ClickHouseProvider::Managed { tier } => {
+			vars.insert("clickhouse_provider".into(), json!("managed"));
+			match tier {
+				ns::ClickHouseManagedTier::Development {} => {
+					vars.insert("clickhouse_tier".into(), json!("development"));
+				}
+				ns::ClickHouseManagedTier::Production {
+					min_total_memory_gb,
+					max_total_memory_gb,
+				} => {
+					vars.insert("clickhouse_tier".into(), json!("production"));
+					vars.insert(
+						"clickhouse_min_total_memory_gb".into(),
+						json!(min_total_memory_gb),
+					);
+					vars.insert(
+						"clickhouse_max_total_memory_gb".into(),
+						json!(max_total_memory_gb),
+					);
+				}
 			}
 		}
-
-		vars.insert("crdb_svcs".into(), json!(crdb_svcs));
 	}
 
 	// Redis services
 	{
-		let mut redis_svcs = HashMap::<String, serde_json::Value>::new();
+		let mut redis_dbs = HashMap::new();
 
+		// Generate persistent and ephemeral databases
 		for svc_ctx in all_svc {
-			if matches!(svc_ctx.config().runtime, RuntimeKind::Redis { .. }) {
-				let name = svc_ctx.name();
-				let port = dep::redis::server_port(&svc_ctx);
+			if let RuntimeKind::Redis { persistent } = svc_ctx.config().runtime {
+				if persistent {
+					redis_dbs.insert(
+						"persistent",
+						json!({
+							"persistent": true,
+						}),
+					);
+				} else {
+					redis_dbs.insert(
+						"ephemeral",
+						json!({
+							"persistent": false,
+						}),
+					);
+				}
 
-				redis_svcs.insert(
-					svc_ctx.redis_db_name(),
-					json!({
-						"endpoint": format!("redis://listen.{name}.service.consul:{port}"),
-					}),
-				);
+				if redis_dbs.len() == 2 {
+					break;
+				}
 			}
 		}
 
-		vars.insert("redis_svcs".into(), json!(redis_svcs));
+		vars.insert("redis_replicas".into(), json!(config.redis.replicas));
+		vars.insert(
+			"redis_provider".into(),
+			json!(match config.redis.provider {
+				ns::RedisProvider::Kubernetes { .. } => "kubernetes",
+				ns::RedisProvider::Aws { .. } => "aws",
+			}),
+		);
+		vars.insert("redis_dbs".into(), json!(redis_dbs));
 	}
 
 	// S3
@@ -379,35 +461,11 @@ async fn vars(ctx: &ProjectContext) {
 
 		vars.insert("s3_buckets".into(), json!(s3_buckets));
 
-		let (default_s3_provider, _) = ctx.default_s3_provider().unwrap();
-		let credentials = ctx.s3_credentials(default_s3_provider).await.unwrap();
 		vars.insert(
-			"s3_persistent_access_key_id".into(),
-			json!(credentials.access_key_id),
+			"s3_default_provider".into(),
+			json!(ctx.default_s3_provider().unwrap().0.as_str()),
 		);
-		vars.insert(
-			"s3_persistent_access_key_secret".into(),
-			json!(credentials.access_key_secret),
-		);
-
-		// Build providers list
-		let ns_s3_providers = &ctx.ns().s3.providers;
-		let mut s3_providers = Vec::with_capacity(1);
-
-		if ns_s3_providers.backblaze.is_some() {
-			s3_providers.push("backblaze");
-		}
-		if ns_s3_providers.minio.is_some() {
-			s3_providers.push("minio");
-		}
-		if ns_s3_providers.aws.is_some() {
-			s3_providers.push("aws");
-		}
-
-		vars.insert(
-			"s3_providers".into(),
-			Into::<serde_json::Value>::into(s3_providers),
-		);
+		vars.insert("s3_providers".into(), s3_providers(ctx).await.unwrap());
 	}
 
 	// Media presets
@@ -418,9 +476,69 @@ async fn vars(ctx: &ProjectContext) {
 			.map(media_resize::ResizePresetSerialize::from)
 			.collect::<Vec<_>>()),
 	);
+	vars.insert(
+		"imagor_cors_allowed_origins".into(),
+		json!(ctx.imagor_cors_allowed_origins()),
+	);
+
+	vars.insert("kubeconfig_path".into(), json!(ctx.gen_kubeconfig_path()));
+	vars.insert(
+		"k8s_storage_class".into(),
+		json!(match config.kubernetes.provider {
+			ns::KubernetesProvider::K3d { .. } => "local-path",
+			ns::KubernetesProvider::AwsEks { .. } => "ebs-sc",
+		}),
+	);
+	vars.insert("limit_resources".into(), json!(ctx.limit_resources()));
+
+	vars.insert(
+		"cdn_cache_size_gb".into(),
+		json!(config.rivet.cdn.cache_size_gb),
+	);
 
 	let tf_gen_path = ctx.gen_tf_env_path();
 	let _ = fs::create_dir_all(&tf_gen_path.parent().unwrap()).await;
 	let vars_json = serde_json::to_string(&vars).unwrap();
 	fs::write(&tf_gen_path, vars_json).await.unwrap();
+}
+
+async fn s3_providers(ctx: &ProjectContext) -> Result<serde_json::Value> {
+	let mut res = serde_json::Map::with_capacity(1);
+
+	let providers = &ctx.ns().s3.providers;
+	if providers.minio.is_some() {
+		let s3_config = ctx.s3_config(s3_util::Provider::Minio).await?;
+		res.insert(
+			"minio".to_string(),
+			json!({
+				"endpoint_internal": s3_config.endpoint_internal,
+				"endpoint_external": s3_config.endpoint_external,
+				"region": s3_config.region,
+			}),
+		);
+	}
+	if providers.backblaze.is_some() {
+		let s3_config = ctx.s3_config(s3_util::Provider::Backblaze).await?;
+		res.insert(
+			"backblaze".to_string(),
+			json!({
+				"endpoint_internal": s3_config.endpoint_internal,
+				"endpoint_external": s3_config.endpoint_external,
+				"region": s3_config.region,
+			}),
+		);
+	}
+	if providers.aws.is_some() {
+		let s3_config = ctx.s3_config(s3_util::Provider::Aws).await?;
+		res.insert(
+			"aws".to_string(),
+			json!({
+				"endpoint_internal": s3_config.endpoint_internal,
+				"endpoint_external": s3_config.endpoint_external,
+				"region": s3_config.region,
+			}),
+		);
+	}
+
+	Ok(res.into())
 }

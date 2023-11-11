@@ -8,8 +8,7 @@ imports:
 
 service:
   auth: true
-  base-path: /games
-  url: Cloud
+  base-path: /cloud/games
   audiences:
     - public
   endpoints:
@@ -171,7 +170,7 @@ types:
         type: optional<string>
       content_length:
         docs: Unsigned 64 bit integer.
-        type: optional<long>
+        type: long
 
   GameBannerUploadPrepareResponse:
     properties:

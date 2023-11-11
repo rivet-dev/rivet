@@ -3,20 +3,12 @@ syntax = "proto3";
 package rivet.backend.pkg.build.get;
 
 import "proto/common.proto";
+import "proto/backend/build.proto";
 
 message Request {
 	repeated rivet.common.Uuid build_ids = 1;
 }
 
 message Response {
-	message Build {
-		rivet.common.Uuid build_id = 1;
-		rivet.common.Uuid game_id = 2;
-		rivet.common.Uuid upload_id = 3;
-		string display_name = 4;
-		string image_tag = 6;
-		int64 create_ts = 5;
-	}
-
-	repeated Build builds = 1;
+	repeated rivet.backend.build.Build builds = 1;
 }

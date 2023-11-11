@@ -18,9 +18,9 @@ struct LobbyRow {
 async fn worker(ctx: &OperationContext<mm::msg::lobby_cleanup::Message>) -> GlobalResult<()> {
 	// NOTE: Idempotent
 
-	let lobby_id = internal_unwrap!(ctx.lobby_id).as_uuid();
+	let lobby_id = unwrap_ref!(ctx.lobby_id).as_uuid();
 
-	let crdb = ctx.crdb("db-mm-state").await?;
+	let crdb = ctx.crdb().await?;
 
 	// TODO: Wrap this in a MULTI/WATCH
 	// Remove from Redis before attempting to remove from database.
@@ -68,26 +68,26 @@ async fn worker(ctx: &OperationContext<mm::msg::lobby_cleanup::Message>) -> Glob
 	//
 	// This also locks the lobby row in case there is a race condition with
 	// mm-lobby-create.
-	let lobby_row = sqlx::query_as::<_, LobbyRow>(indoc!(
+	let lobby_row = sql_fetch_optional!(
+		[ctx, LobbyRow]
 		"
 		WITH
 			select_lobby AS (
 				SELECT namespace_id, region_id, lobby_group_id, run_id, create_ts, stop_ts
-				FROM lobbies
+				FROM db_mm_state.lobbies
 				WHERE lobby_id = $1
 			),
 			_update AS (
-				UPDATE lobbies
+				UPDATE db_mm_state.lobbies
 				SET stop_ts = $2
 				WHERE lobby_id = $1 AND stop_ts IS NULL
 				RETURNING 1
 			)
 		SELECT * FROM select_lobby
-		"
-	))
-	.bind(lobby_id)
-	.bind(ctx.ts())
-	.fetch_optional(&crdb)
+		",
+		lobby_id,
+		ctx.ts(),
+	)
 	.await?;
 	tracing::info!(?lobby_row, "lobby row");
 
@@ -96,22 +96,22 @@ async fn worker(ctx: &OperationContext<mm::msg::lobby_cleanup::Message>) -> Glob
 			tracing::error!("discarding stale message");
 			return Ok(());
 		} else {
-			retry_panic!("lobby not found, may be race condition with insertion");
+			retry_bail!("lobby not found, may be race condition with insertion");
 		}
 	};
 
 	// TODO: Handle race condition here where mm-lobby-find will insert players on a stopped lobby. This can be fixed by checking the lobby stop_ts in the mm-lobby-find trans.
 	// Find players to remove. This is idempotent, so we do this regardless of
 	// if the lobby was already stopped.
-	let players_to_remove = sqlx::query_as::<_, (Uuid,)>(indoc!(
+	let players_to_remove = sql_fetch_all!(
+		[ctx, (Uuid,)]
 		"
 		SELECT player_id
-		FROM players
+		FROM db_mm_state.players
 		WHERE lobby_id = $1 AND remove_ts IS NULL
-		"
-	))
-	.bind(lobby_id)
-	.fetch_all(&crdb)
+		",
+		lobby_id,
+	)
 	.await?
 	.into_iter()
 	.map(|x| x.0)
@@ -210,7 +210,7 @@ async fn worker(ctx: &OperationContext<mm::msg::lobby_cleanup::Message>) -> Glob
 
 /// Removes the lobby from the Redis database.
 async fn remove_from_redis(
-	redis_mm: &mut RedisConn,
+	redis_mm: &mut RedisPool,
 	namespace_id: Uuid,
 	region_id: Uuid,
 	lobby_group_id: Uuid,
@@ -250,7 +250,6 @@ async fn remove_from_redis(
 			util_mm::key::idle_lobby_lobby_group_ids(namespace_id, region_id),
 			lobby_id.to_string(),
 		)
-		.unlink(util_mm::key::lobby_find_queries(lobby_id))
 		.query_async(redis_mm)
 		.await?;
 

@@ -13,7 +13,7 @@ struct ChatMessage {
 async fn handle(
 	ctx: OperationContext<chat_message::get::Request>,
 ) -> GlobalResult<chat_message::get::Response> {
-	let crdb = ctx.crdb("db-chat").await?;
+	let crdb = ctx.crdb().await?;
 
 	let chat_message_ids = ctx
 		.chat_message_ids
@@ -21,15 +21,15 @@ async fn handle(
 		.map(common::Uuid::as_uuid)
 		.collect::<Vec<_>>();
 
-	let messages = sqlx::query_as::<_, ChatMessage>(indoc!(
+	let messages = sql_fetch_all!(
+		[ctx, ChatMessage]
 		"
 		SELECT message_id, thread_id, send_ts, body 
-		FROM messages
+		FROM db_chat.messages
 		WHERE message_id = ANY($1)
-		"
-	))
-	.bind(&chat_message_ids)
-	.fetch_all(&crdb)
+		",
+		&chat_message_ids,
+	)
 	.await?
 	.into_iter()
 	.map(|message| {

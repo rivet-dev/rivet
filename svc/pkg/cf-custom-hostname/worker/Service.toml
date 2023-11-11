@@ -1,5 +1,5 @@
 [service]
-name = "cf-worker"
+name = "cf-custom-hostname-worker"
 
 [runtime]
 kind = "rust"

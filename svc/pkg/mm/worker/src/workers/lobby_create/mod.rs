@@ -5,6 +5,8 @@ use serde_json::json;
 use std::ops::Deref;
 
 mod nomad_job;
+mod oci_config;
+mod seccomp;
 
 lazy_static::lazy_static! {
 	static ref NOMAD_CONFIG: nomad_client::apis::configuration::Configuration =
@@ -46,12 +48,12 @@ async fn fail(
 
 #[worker(name = "mm-lobby-create")]
 async fn worker(ctx: &OperationContext<mm::msg::lobby_create::Message>) -> GlobalResult<()> {
-	let crdb = ctx.crdb("db-mm-state").await?;
+	let crdb = ctx.crdb().await?;
 
-	let lobby_id = internal_unwrap!(ctx.lobby_id).as_uuid();
-	let namespace_id = internal_unwrap!(ctx.namespace_id).as_uuid();
-	let lobby_group_id = internal_unwrap!(ctx.lobby_group_id).as_uuid();
-	let region_id = internal_unwrap!(ctx.region_id).as_uuid();
+	let lobby_id = unwrap_ref!(ctx.lobby_id).as_uuid();
+	let namespace_id = unwrap_ref!(ctx.namespace_id).as_uuid();
+	let lobby_group_id = unwrap_ref!(ctx.lobby_group_id).as_uuid();
+	let region_id = unwrap_ref!(ctx.region_id).as_uuid();
 	let create_ray_id = ctx.region_id.as_ref().map(common::Uuid::as_uuid);
 	let creator_user_id = ctx.creator_user_id.as_ref().map(common::Uuid::as_uuid);
 
@@ -78,7 +80,7 @@ async fn worker(ctx: &OperationContext<mm::msg::lobby_create::Message>) -> Globa
 
 	// Make assertions about the fetched data
 	{
-		internal_assert_eq!(
+		ensure_eq!(
 			namespace.game_id,
 			version.game_id,
 			"namespace and version do not belong to the same game"
@@ -113,14 +115,14 @@ async fn worker(ctx: &OperationContext<mm::msg::lobby_create::Message>) -> Globa
 	};
 
 	// Find the relevant tier
-	let tier = internal_unwrap_owned!(tiers
+	let tier = unwrap!(tiers
 		.iter()
 		.find(|x| x.tier_name_id == lobby_group_region.tier_name_id));
 
-	let runtime = internal_unwrap!(lobby_group.runtime);
-	let runtime = internal_unwrap!(runtime.runtime);
-	let runtime_meta = internal_unwrap!(lobby_group_meta.runtime);
-	let runtime_meta = internal_unwrap!(runtime_meta.runtime);
+	let runtime = unwrap_ref!(lobby_group.runtime);
+	let runtime = unwrap_ref!(runtime.runtime);
+	let runtime_meta = unwrap_ref!(lobby_group_meta.runtime);
+	let runtime_meta = unwrap_ref!(runtime_meta.runtime);
 
 	let validate_lobby_count_perf = ctx.perf().start("validate-lobby-count").await;
 	if !validate_lobby_count(
@@ -163,7 +165,8 @@ async fn worker(ctx: &OperationContext<mm::msg::lobby_create::Message>) -> Globa
 			.and_then(backend::matchmaker::lobby::Publicity::from_i32),
 	};
 	rivet_pools::utils::crdb::tx(&crdb, |tx| {
-		Box::pin(update_db(ctx.ts(), tx, insert_opts.clone()))
+		let ctx = ctx.clone();
+		Box::pin(update_db(ctx, tx, insert_opts.clone()))
 	})
 	.await?;
 
@@ -280,7 +283,7 @@ async fn fetch_region(
 		region_ids: vec![region_id.into()],
 	})
 	.await?;
-	let region = internal_unwrap_owned!(primary_get_res.regions.first(), "region not found");
+	let region = unwrap!(primary_get_res.regions.first(), "region not found");
 
 	Ok(region.clone())
 }
@@ -294,7 +297,7 @@ async fn fetch_tiers(
 		region_ids: vec![region_id.into()],
 	})
 	.await?;
-	let tier_region = internal_unwrap_owned!(tier_res.regions.first());
+	let tier_region = unwrap!(tier_res.regions.first());
 
 	Ok(tier_region.tiers.clone())
 }
@@ -309,8 +312,7 @@ async fn fetch_namespace(
 	})
 	.await?;
 
-	let namespace =
-		internal_unwrap_owned!(get_res.namespaces.first(), "namespace not found").clone();
+	let namespace = unwrap!(get_res.namespaces.first(), "namespace not found").clone();
 
 	Ok(namespace)
 }
@@ -325,13 +327,12 @@ async fn fetch_mm_namespace_config(
 	})
 	.await?;
 
-	let namespace = internal_unwrap!(
-		internal_unwrap_owned!(get_res.namespaces.first(), "namespace not found").config
-	)
-	.deref()
-	.clone();
+	let namespace = unwrap!(get_res.namespaces.first(), "namespace not found")
+		.deref()
+		.clone();
+	let namespace_config = unwrap_ref!(namespace.config).clone();
 
-	Ok(namespace)
+	Ok(namespace_config)
 }
 
 #[tracing::instrument]
@@ -344,7 +345,7 @@ async fn fetch_version(
 	})
 	.await?;
 
-	let version = internal_unwrap!(get_res.versions.first(), "version not found")
+	let version = unwrap_ref!(get_res.versions.first(), "version not found")
 		.deref()
 		.clone();
 
@@ -367,8 +368,8 @@ async fn fetch_lobby_group_config(
 		lobby_group_ids: vec![lobby_group_id.into()],
 	})
 	.await?;
-	let version_id = internal_unwrap!(
-		internal_unwrap!(
+	let version_id = unwrap_ref!(
+		unwrap_ref!(
 			resolve_version_res.versions.first(),
 			"lobby group not found"
 		)
@@ -383,9 +384,9 @@ async fn fetch_lobby_group_config(
 	.await?;
 
 	let version = config_get_res.versions.first();
-	let version = internal_unwrap!(version, "version config not found");
-	let version_config = internal_unwrap!(version.config);
-	let version_config_meta = internal_unwrap!(version.config_meta);
+	let version = unwrap_ref!(version, "version config not found");
+	let version_config = unwrap_ref!(version.config);
+	let version_config_meta = unwrap_ref!(version.config_meta);
 
 	// Find the matching lobby group
 	let lobby_group_meta = version_config_meta
@@ -393,9 +394,9 @@ async fn fetch_lobby_group_config(
 		.iter()
 		.enumerate()
 		.find(|(_, lg)| lg.lobby_group_id == lobby_group_id_proto);
-	let (lg_idx, lobby_group_meta) = internal_unwrap!(lobby_group_meta, "lobby group not found");
+	let (lg_idx, lobby_group_meta) = unwrap_ref!(lobby_group_meta, "lobby group not found");
 	let lobby_group = version_config.lobby_groups.get(*lg_idx);
-	let lobby_group = internal_unwrap!(lobby_group);
+	let lobby_group = unwrap_ref!(lobby_group);
 
 	Ok((
 		(*lobby_group).clone(),
@@ -408,7 +409,7 @@ async fn fetch_lobby_group_config(
 #[tracing::instrument(skip(redis_mm))]
 async fn validate_lobby_count(
 	ctx: &OperationContext<mm::msg::lobby_create::Message>,
-	mut redis_mm: RedisConn,
+	mut redis_mm: RedisPool,
 	lobby_id: Uuid,
 	mm_ns_config: &backend::matchmaker::NamespaceConfig,
 	namespace_id: Uuid,
@@ -449,8 +450,8 @@ async fn gen_lobby_token(
 	})
 	.await?;
 
-	let token = internal_unwrap!(token_res.token);
-	let token_session_id = internal_unwrap!(token_res.session_id).as_uuid();
+	let token = unwrap_ref!(token_res.token);
+	let token_session_id = unwrap_ref!(token_res.session_id).as_uuid();
 
 	Ok((token.token.clone(), token_session_id))
 }
@@ -472,21 +473,23 @@ struct UpdateDbOpts {
 
 #[tracing::instrument(skip_all)]
 async fn update_db(
-	now: i64,
+	ctx: OperationContext<mm::msg::lobby_create::Message>,
 	tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
 	opts: UpdateDbOpts,
 ) -> GlobalResult<()> {
+	let now = ctx.ts();
+
 	// Check the lobby was created preemptively created and already stopped.
 	//
 	// This can happen when preemptively created in mm-lobby-find then
 	// mm-lobby-cleanup is called.
 	//
 	// This will lock the lobby for the duration of the transaction
-	let lobby_row = sqlx::query_as::<_, (Option<i64>, Option<i64>)>(
-		"SELECT stop_ts, preemptive_create_ts FROM lobbies WHERE lobby_id = $1 FOR UPDATE",
+	let lobby_row = sql_fetch_optional!(
+		[ctx, (Option<i64>, Option<i64>)]
+		"SELECT stop_ts, preemptive_create_ts FROM db_mm_state.lobbies WHERE lobby_id = $1 FOR UPDATE",
+		opts.lobby_id,
 	)
-	.bind(opts.lobby_id)
-	.fetch_optional(&mut **tx)
 	.await?;
 	if let Some((stop_ts, preemptive_create_ts)) = lobby_row {
 		if preemptive_create_ts.is_none() {
@@ -501,9 +504,10 @@ async fn update_db(
 
 	// Upsert lobby. May have already been inserted preemptively in
 	// mm-lobby-find.
-	sqlx::query(indoc!(
+	sql_execute!(
+		[ctx, @tx tx]
 		"
-		UPSERT INTO lobbies (
+		UPSERT INTO db_mm_state.lobbies (
 			lobby_id,
 			namespace_id,
 			region_id,
@@ -523,26 +527,23 @@ async fn update_db(
 			publicity
 		)
 		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, false, $12, $13, $14)
-		"
-	))
-	.bind(opts.lobby_id)
-	.bind(opts.namespace_id)
-	.bind(opts.region_id)
-	.bind(opts.lobby_group_id)
-	.bind(opts.token_session_id)
-	.bind(now)
-	.bind(opts.run_id)
-	.bind(opts.create_ray_id)
-	.bind(opts.lobby_group.max_players_normal as i64)
-	.bind(opts.lobby_group.max_players_direct as i64)
-	.bind(opts.lobby_group.max_players_party as i64)
-	.bind(opts.creator_user_id)
-	.bind(opts.is_custom)
-	.bind(
+		",
+		opts.lobby_id,
+		opts.namespace_id,
+		opts.region_id,
+		opts.lobby_group_id,
+		opts.token_session_id,
+		now,
+		opts.run_id,
+		opts.create_ray_id,
+		opts.lobby_group.max_players_normal as i64,
+		opts.lobby_group.max_players_direct as i64,
+		opts.lobby_group.max_players_party as i64,
+		opts.creator_user_id,
+		opts.is_custom,
 		opts.publicity
 			.unwrap_or(backend::matchmaker::lobby::Publicity::Public) as i32 as i64,
 	)
-	.execute(&mut **tx)
 	.await?;
 
 	Ok(())
@@ -563,23 +564,27 @@ async fn create_docker_job(
 	lobby_id: Uuid,
 	lobby_token: &str,
 ) -> GlobalResult<()> {
-	let namespace_id = internal_unwrap!(namespace.namespace_id).as_uuid();
-	let version_id = internal_unwrap!(version.version_id).as_uuid();
-	let lobby_group_id = internal_unwrap!(lobby_group_meta.lobby_group_id).as_uuid();
-	let region_id = internal_unwrap!(region.region_id).as_uuid();
+	let namespace_id = unwrap_ref!(namespace.namespace_id).as_uuid();
+	let version_id = unwrap_ref!(version.version_id).as_uuid();
+	let lobby_group_id = unwrap_ref!(lobby_group_meta.lobby_group_id).as_uuid();
+	let region_id = unwrap_ref!(region.region_id).as_uuid();
 
 	let resolve_perf = ctx.perf().start("resolve-image-artifact-url").await;
-	let build_id = internal_unwrap!(runtime.build_id).as_uuid();
+	let build_id = unwrap_ref!(runtime.build_id).as_uuid();
 	let image_artifact_url = resolve_image_artifact_url(ctx, build_id, region).await?;
 	resolve_perf.end();
 
 	// Validate build exists and belongs to this game
-	let build_id = internal_unwrap!(runtime.build_id).as_uuid();
+	let build_id = unwrap_ref!(runtime.build_id).as_uuid();
 	let build_get = op!([ctx] build_get {
 		build_ids: vec![build_id.into()],
 	})
 	.await?;
-	let build = internal_unwrap_owned!(build_get.builds.first());
+	let build = unwrap!(build_get.builds.first());
+	let build_kind = unwrap!(backend::build::BuildKind::from_i32(build.kind));
+	let build_compression = unwrap!(backend::build::BuildCompression::from_i32(
+		build.compression
+	));
 
 	// Generate the Docker job
 	let job_spec = nomad_job::gen_lobby_docker_job(
@@ -587,6 +592,8 @@ async fn create_docker_job(
 		&build.image_tag,
 		tier,
 		ctx.lobby_config_json.as_ref(),
+		build_kind,
+		build_compression,
 	)?;
 	let job_spec_json = serde_json::to_string(&job_spec)?;
 
@@ -599,7 +606,7 @@ async fn create_docker_job(
 				&& port.port_range.is_none()
 		})
 		.map(|port| {
-			let job_proxy_protocol = match internal_unwrap_owned!(
+			let job_proxy_protocol = match unwrap!(
 				backend::matchmaker::lobby_runtime::ProxyProtocol::from_i32(port.proxy_protocol)
 			) {
 				backend::matchmaker::lobby_runtime::ProxyProtocol::Http => {
@@ -629,7 +636,7 @@ async fn create_docker_job(
 					lobby_id,
 					port.label,
 					region.name_id,
-					util::env::domain_job(),
+					unwrap!(util::env::domain_job()),
 				)],
 				proxy_protocol: job_proxy_protocol,
 				ssl_domain_mode: backend::job::SslDomainMode::ParentWildcard as i32,
@@ -678,6 +685,10 @@ async fn create_docker_job(
 				value: lobby_token.to_owned(),
 			},
 			job_run::msg::create::Parameter {
+				key: "lobby_config".into(),
+				value: ctx.lobby_config_json.clone().unwrap_or_default(),
+			},
+			job_run::msg::create::Parameter {
 				key: "region_id".into(),
 				value: region_id.to_string(),
 			},
@@ -718,17 +729,21 @@ async fn resolve_image_artifact_url(
 	})
 	.await?;
 	let build = build_res.builds.first();
-	let build = internal_unwrap!(build);
-	let upload_id_proto = internal_unwrap!(build.upload_id);
+	let build = unwrap_ref!(build);
+	let build_kind = unwrap!(backend::build::BuildKind::from_i32(build.kind));
+	let build_compression = unwrap!(backend::build::BuildCompression::from_i32(
+		build.compression
+	));
+	let upload_id_proto = unwrap_ref!(build.upload_id);
 
 	let upload_res = op!([ctx] upload_get {
 		upload_ids: vec![*upload_id_proto],
 	})
 	.await?;
-	let upload = internal_unwrap_owned!(upload_res.uploads.first());
+	let upload = unwrap!(upload_res.uploads.first());
 
 	// Get provider
-	let proto_provider = internal_unwrap_owned!(
+	let proto_provider = unwrap!(
 		backend::upload::Provider::from_i32(upload.provider),
 		"invalid upload provider"
 	);
@@ -738,63 +753,49 @@ async fn resolve_image_artifact_url(
 		backend::upload::Provider::Aws => s3_util::Provider::Aws,
 	};
 
-	match internal_unwrap_owned!(
-		std::env::var("RIVET_MM_LOBBY_DELIVERY_METHOD").ok(),
-		"missing RIVET_MM_LOBBY_DELIVERY_METHOD"
-	)
-	.as_str()
-	{
-		// "s3_direct" => {
-		// 	tracing::info!("using s3 direct delivery");
+	let file_name = util_build::file_name(build_kind, build_compression);
 
-		// 	let bucket = "bucket-build";
-		// 	let bucket_screaming = bucket.to_uppercase().replace('-', "_");
+	let mm_lobby_delivery_method = unwrap!(
+		std::env::var("RIVET_DS_BUILD_DELIVERY_METHOD").ok(),
+		"missing RIVET_DS_BUILD_DELIVERY_METHOD"
+	);
+	match mm_lobby_delivery_method.as_str() {
+		"s3_direct" => {
+			tracing::info!("using s3 direct delivery");
 
-		// 	// Build client
-		// 	let s3_client = s3_util::Client::from_env_opt(
-		// 		bucket,
-		// 		provider,
-		// 		s3_util::EndpointKind::InternalResolved,
-		// 	)
-		// 	.await?;
+			let bucket = "bucket-build";
 
-		// 	let upload_id = internal_unwrap!(upload.upload_id).as_uuid();
-		// 	let presigned_req = s3_client
-		// 		.get_object()
-		// 		.bucket(s3_client.bucket())
-		// 		.key(format!("{upload_id}/image.tar"))
-		// 		.presigned(
-		// 			s3_util::aws_sdk_s3::presigning::config::PresigningConfig::builder()
-		// 				.expires_in(std::time::Duration::from_secs(15 * 60))
-		// 				.build()?,
-		// 		)
-		// 		.await?;
+			// Build client
+			let s3_client =
+				s3_util::Client::from_env_opt(bucket, provider, s3_util::EndpointKind::External)
+					.await?;
 
-		// 	let addr = presigned_req.uri().clone();
+			let upload_id = unwrap_ref!(upload.upload_id).as_uuid();
+			let presigned_req = s3_client
+				.get_object()
+				.bucket(s3_client.bucket())
+				.key(format!("{upload_id}/{file_name}"))
+				.presigned(
+					s3_util::aws_sdk_s3::presigning::config::PresigningConfig::builder()
+						.expires_in(std::time::Duration::from_secs(15 * 60))
+						.build()?,
+				)
+				.await?;
 
-		// 	let addr_str = addr.to_string();
-		// 	tracing::info!(addr = %addr_str, "resolved artifact s3 presigned request");
+			let addr = presigned_req.uri().clone();
 
-		// 	Ok(addr_str)
-		// }
+			let addr_str = addr.to_string();
+			tracing::info!(addr = %addr_str, "resolved artifact s3 presigned request");
+
+			Ok(addr_str)
+		}
 		"traffic_server" => {
 			tracing::info!("using traffic server delivery");
 
-			// HACK: Hardcode ATS IP since this will be replaced shortly
-			let ats_url = if region.name_id == "lnd-atl" {
-				"10.0.25.2"
-			} else if region.name_id == "lnd-fra" {
-				"10.0.50.2"
-			} else {
-				tracing::info!(?region.name_id);
-				internal_panic!("invalid region");
-			};
-
-			let upload_id = internal_unwrap!(upload.upload_id).as_uuid();
+			let upload_id = unwrap_ref!(upload.upload_id).as_uuid();
 			let addr = format!(
-				"http://{ats_url}:9300/s3-cache/{provider}/{namespace}-bucket-build/{upload_id}/image.tar",
-				ats_url = ats_url,
-				provider = heck::KebabCase::to_kebab_case(provider.to_string().as_str()),
+				"http://127.0.0.1:8080/s3-cache/{provider}/{namespace}-bucket-build/{upload_id}/{file_name}",
+				provider = heck::KebabCase::to_kebab_case(provider.as_str()),
 				namespace = util::env::namespace(),
 				upload_id = upload_id,
 			);
@@ -804,7 +805,7 @@ async fn resolve_image_artifact_url(
 			Ok(addr)
 		}
 		_ => {
-			internal_panic!("invalid RIVET_MM_LOBBY_DELIVERY_METHOD")
+			bail!("invalid RIVET_DS_BUILD_DELIVERY_METHOD")
 		}
 	}
 }

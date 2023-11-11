@@ -21,13 +21,13 @@ async fn empty(ctx: TestCtx) {
 		"
 		SELECT EXISTS (
 			SELECT firebase_access_key
-			FROM users
+			FROM db_user_notification_auth.users
 			WHERE user_id = $1
 		)
 		"
 	))
 	.bind(user_id.as_uuid())
-	.fetch_one(&ctx.crdb("db-user-notification-auth").await.unwrap())
+	.fetch_one(&ctx.crdb().await.unwrap())
 	.await
 	.unwrap();
 

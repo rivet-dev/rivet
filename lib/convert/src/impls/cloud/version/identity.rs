@@ -114,7 +114,7 @@ impl ApiTryFrom<backend::identity::CustomAvatar> for models::CloudVersionIdentit
 
 	fn try_from(value: backend::identity::CustomAvatar) -> GlobalResult<Self> {
 		Ok(models::CloudVersionIdentityCustomAvatar {
-			upload_id: internal_unwrap_owned!(value.upload_id).as_uuid(),
+			upload_id: unwrap!(value.upload_id).as_uuid(),
 		})
 	}
 }

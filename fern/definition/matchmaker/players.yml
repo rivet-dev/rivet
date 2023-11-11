@@ -6,8 +6,7 @@ imports:
 
 service:
   auth: true
-  url: Matchmaker
-  base-path: /players
+  base-path: /matchmaker/players
   audiences:
     - public
   endpoints:

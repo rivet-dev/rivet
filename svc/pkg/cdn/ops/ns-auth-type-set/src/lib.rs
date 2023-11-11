@@ -5,23 +5,23 @@ use rivet_operation::prelude::*;
 async fn handle(
 	ctx: OperationContext<cdn::ns_auth_type_set::Request>,
 ) -> GlobalResult<cdn::ns_auth_type_set::Response> {
-	let namespace_id = internal_unwrap!(ctx.namespace_id).as_uuid();
+	let namespace_id = unwrap_ref!(ctx.namespace_id).as_uuid();
 
-	internal_assert!(
+	ensure!(
 		backend::cdn::namespace_config::AuthType::from_i32(ctx.auth_type).is_some(),
 		"invalid auth type"
 	);
 
-	sqlx::query(indoc!(
+	sql_execute!(
+		[ctx]
 		"
-		UPDATE game_namespaces
+		UPDATE db_cdn.game_namespaces
 		SET auth_type = $2
 		WHERE namespace_id = $1
-		"
-	))
-	.bind(namespace_id)
-	.bind(ctx.auth_type)
-	.execute(&ctx.crdb("db-cdn").await?)
+		",
+		namespace_id,
+		ctx.auth_type,
+	)
 	.await?;
 
 	msg!([ctx] cdn::msg::ns_config_update(namespace_id) {

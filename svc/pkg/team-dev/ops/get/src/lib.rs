@@ -23,8 +23,9 @@ async fn handle(
 		.map(|id| id.as_uuid())
 		.collect::<Vec<_>>();
 
-	let crdb = ctx.crdb("db-team-dev").await?;
-	let teams = sqlx::query_as::<_, DevTeam>(indoc!(
+	let crdb = ctx.crdb().await?;
+	let teams = sql_fetch_all!(
+		[ctx, DevTeam]
 		"
 			SELECT
 				team_id,
@@ -33,12 +34,11 @@ async fn handle(
 				payment_failed_ts,
 				spending_limit_reached_ts,
 				stripe_customer_id
-			FROM dev_teams
+			FROM db_team_dev.dev_teams
 			WHERE team_id = ANY($1)
-			"
-	))
-	.bind(&team_ids)
-	.fetch_all(&crdb)
+			",
+		&team_ids,
+	)
 	.await?;
 
 	let cutoff_ts = ctx.ts() - util::billing::CUTOFF_DURATION;

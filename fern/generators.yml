@@ -77,11 +77,11 @@ groups:
         version: 0.0.22
         output:
           location: local-file-system
-          path: ../../gen/openapi/external/spec
+          path: ../gen/openapi/external/spec
   local_internal:
     generators:
       - name: fernapi/fern-openapi
         version: 0.0.22
         output:
           location: local-file-system
-          path: ../../gen/openapi/internal/spec
+          path: ../gen/openapi/internal/spec
