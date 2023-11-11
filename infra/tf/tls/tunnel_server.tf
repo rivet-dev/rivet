@@ -29,7 +29,7 @@ resource "tls_locally_signed_cert" "locally_signed_tunnel_server" {
 
 resource "kubernetes_secret" "ingress_tls_cert_tunnel_server" {
 	type = "kubernetes.io/tls"
-	for_each = toset(["traefik-tunnel", "nomad", "rivet-service"])
+	for_each = toset(["traefik-tunnel", "nomad", "rivet-service", "vector"])
 
 	metadata {
 		name = "ingress-tls-cert-tunnel-server"
