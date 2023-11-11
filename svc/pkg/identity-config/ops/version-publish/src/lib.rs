@@ -9,7 +9,7 @@ async fn handle(
 	let config = unwrap_ref!(ctx.config);
 	let _config_ctx = unwrap_ref!(ctx.config_ctx);
 
-	sql_query!(
+	sql_execute!(
 		[ctx]
 		"INSERT INTO db_identity_config.game_versions (version_id) VALUES ($1)",
 		version_id,
@@ -18,7 +18,7 @@ async fn handle(
 
 	// TODO: Parallelize all futures in this for loop
 	for custom_display_name in &config.custom_display_names {
-		sql_query!(
+		sql_execute!(
 			[ctx]
 			"
 			INSERT INTO db_identity_config.custom_display_names
@@ -33,7 +33,7 @@ async fn handle(
 
 	for custom_avatar in &config.custom_avatars {
 		let upload_id = unwrap_ref!(custom_avatar.upload_id).as_uuid();
-		sql_query!(
+		sql_execute!(
 			[ctx]
 			"
 			INSERT INTO db_identity_config.custom_avatars

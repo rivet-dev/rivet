@@ -143,7 +143,7 @@ async fn worker(
 		.await?;
 
 		// Update app ID
-		sql_query!(
+		sql_execute!(
 			[ctx]
 			"
 			UPDATE db_module.instances_driver_fly
@@ -190,8 +190,8 @@ async fn insert_instance(
 	let instance_id = unwrap_ref!(ctx.instance_id).as_uuid();
 	let version_id = unwrap_ref!(ctx.module_version_id).as_uuid();
 
-	sql_query!(
-		[ctx, &mut **tx]
+	sql_execute!(
+		[ctx, @tx tx]
 		"
 		INSERT INTO db_module.instances (instance_id, version_id, create_ts)
 		VALUES ($1, $2, $3)
@@ -204,8 +204,8 @@ async fn insert_instance(
 
 	match unwrap_ref!(ctx.driver) {
 		module::msg::instance_create::message::Driver::Dummy(_) => {
-			sql_query!(
-				[ctx, &mut **tx]
+			sql_execute!(
+				[ctx, @tx tx]
 				"
                 INSERT INTO db_module.instances_driver_dummy (instance_id)
                 VALUES ($1)
@@ -215,8 +215,8 @@ async fn insert_instance(
 			.await?;
 		}
 		module::msg::instance_create::message::Driver::Fly(_) => {
-			sql_query!(
-				[ctx, &mut **tx]
+			sql_execute!(
+				[ctx, @tx tx]
 				"
                 INSERT INTO db_module.instances_driver_fly (instance_id)
                 VALUES ($1)

@@ -4,15 +4,15 @@
 
 We want the impossible. We want something that scales on pricing but doesn't require us to pay up front.
 
-- High QPS (implied by Redis Cluster support)
-- Compatible with vanilla Redis (including EVAL)
-- AOF persistence
-- Reasonably affordable
+-   High QPS (implied by Redis Cluster support)
+-   Compatible with vanilla Redis (including EVAL)
+-   AOF persistence
+-   Reasonably affordable
 
 ### Nice to haves
 
-- Redis Cluster
-- Autoscaling
+-   Redis Cluster
+-   Autoscaling
 
 ## Options
 
@@ -124,7 +124,7 @@ Allows us to absorb load and manualy adjust shard count as needed.
 
 **Cons**
 
-Self-hosting is already prone to go wrong. 
+Self-hosting is already prone to go wrong.
 
 There is no prior art for a VPA on Redis cluster.
 
@@ -155,4 +155,3 @@ Upstash is still extreamly expensive.
 Self-hosted K8S, potentially with VPA in the future.
 
 This is the most cost-effective and scalable solution. It comes with more difficulty in managing & monitoring Redis.
-

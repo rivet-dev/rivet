@@ -24,7 +24,7 @@ async fn handle(
 	let game = unwrap!(game_res.games.first());
 	let developer_team_id = unwrap_ref!(game.developer_team_id).as_uuid();
 
-	sql_query!(
+	sql_execute!(
 		[ctx]
 		"DELETE FROM db_cdn.game_namespace_domains WHERE namespace_id = $1 AND domain = $2",
 		namespace_id,

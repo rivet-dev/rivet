@@ -3,8 +3,8 @@ locals {
 	service_minio = lookup(var.services, "minio", {
 		count = 1
 		resources = {
-			cpu = 50
-			memory = 400
+			cpu = 500
+			memory = 512
 		}
 	})
 }
@@ -103,8 +103,9 @@ resource "kubectl_manifest" "minio_ingress_route" {
 
 			routes = [
 				{
-					match = "Host(`minio.${var.domain_main}`)"
 					kind  = "Rule"
+					match = "Host(`minio.${var.domain_main}`)"
+					priority = 50
 					services = [
 						{
 							name = "minio"

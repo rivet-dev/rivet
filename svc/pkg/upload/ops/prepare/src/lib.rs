@@ -113,7 +113,7 @@ async fn handle(
 		.collect::<Vec<_>>();
 
 	// Insert in to database
-	sql_query!(
+	sql_execute!(
 		[ctx]
 		"
 		WITH
@@ -177,7 +177,7 @@ async fn handle(
 			.try_collect::<Vec<_>>(),
 		// Set multipart upload ids
 		async {
-			sql_query!(
+			sql_execute!(
 				[ctx]
 				"
 				UPDATE db_upload.upload_files
@@ -290,6 +290,7 @@ async fn handle_multipart_upload(
 	let part_count = util::div_up!(file.content_length, CHUNK_SIZE);
 	ensure!(part_count <= 10000, "too many parts");
 
+	// S3's part number is 1-based
 	Ok((1..=part_count)
 		.map(|part_number| {
 			let s3_client = s3_client.clone();

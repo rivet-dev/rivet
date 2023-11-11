@@ -144,10 +144,10 @@ pub fn gen_lobby_docker_job(
 		.env_vars
 		.iter()
 		.map(|v| (v.key.clone(), escape_go_template(&v.value)))
-		.chain(lobby_config_json.map(|config| {
+		.chain(lobby_config_json.map(|_| {
 			(
 				"RIVET_LOBBY_CONFIG".to_string(),
-				escape_go_template(&config),
+				template_env_var("NOMAD_META_LOBBY_CONFIG"),
 			)
 		}))
 		.chain([(
@@ -338,6 +338,7 @@ pub fn gen_lobby_docker_job(
 				"lobby_group_name".into(),
 				"lobby_id".into(),
 				"lobby_token".into(),
+				"lobby_config".into(),
 				"region_id".into(),
 				"region_name".into(),
 				"max_players_normal".into(),

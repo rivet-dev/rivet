@@ -59,7 +59,7 @@ async fn worker(
 		.await;
 	}
 
-	sql_query!(
+	sql_execute!(
 		[ctx]
 		"INSERT INTO db_team.join_requests (team_id, user_id, ts) VALUES ($1, $2, $3)",
 		team_id,

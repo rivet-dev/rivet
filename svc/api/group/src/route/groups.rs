@@ -10,6 +10,7 @@ use proto::{
 	backend::{self, pkg::*},
 	common,
 };
+use rivet_api::models as new_models;
 use rivet_convert::{ApiInto, ApiTryInto};
 use rivet_group_server::models;
 use rivet_operation::prelude::*;
@@ -875,8 +876,8 @@ pub async fn transfer_owner(
 // MARK: POST /groups/avatar-upload/prepare
 pub async fn prepare_avatar_upload(
 	ctx: Ctx<Auth>,
-	body: models::PrepareGroupAvatarUploadRequest,
-) -> GlobalResult<models::PrepareGroupAvatarUploadResponse> {
+	body: new_models::GroupPrepareAvatarUploadRequest,
+) -> GlobalResult<new_models::GroupPrepareAvatarUploadResponse> {
 	let user_ent = ctx.auth().user(ctx.op_ctx()).await?;
 	assert::user_registered(&ctx, user_ent.user_id).await?;
 
@@ -913,9 +914,9 @@ pub async fn prepare_avatar_upload(
 	let upload_id = unwrap_ref!(upload_prepare_res.upload_id).as_uuid();
 	let presigned_request = unwrap!(upload_prepare_res.presigned_requests.first());
 
-	Ok(models::PrepareGroupAvatarUploadResponse {
-		upload_id: upload_id.to_string(),
-		presigned_request: presigned_request.clone().api_into(),
+	Ok(new_models::GroupPrepareAvatarUploadResponse {
+		upload_id,
+		presigned_request: Box::new(presigned_request.clone().try_into()?),
 	})
 }
 

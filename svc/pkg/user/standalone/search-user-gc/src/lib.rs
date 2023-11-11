@@ -104,7 +104,7 @@ async fn process_batch(
 		.cloned()
 		.collect::<Vec<_>>();
 
-	let res = sql_query!(
+	let res = sql_execute!(
 		[ctx]
 		"
 		UPDATE db_user.users

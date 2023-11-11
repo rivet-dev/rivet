@@ -26,7 +26,7 @@ async fn worker(ctx: &OperationContext<team::msg::create::Message>) -> GlobalRes
 	let owner_user_id = unwrap_ref!(ctx.owner_user_id).as_uuid();
 
 	// Create the team
-	sql_query!(
+	sql_execute!(
 		[ctx]
 		"
 		INSERT INTO db_team.teams (team_id, owner_user_id, display_name, create_ts)

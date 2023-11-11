@@ -3,8 +3,8 @@ locals {
 	service_clickhouse = lookup(var.services, "clickhouse", {
 		count = 1
 		resources = {
-			cpu = 300
-			memory = 1500
+			cpu = 1000
+			memory = 2048
 		}
 	})
 }

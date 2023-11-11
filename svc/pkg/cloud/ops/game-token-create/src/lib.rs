@@ -33,7 +33,7 @@ async fn handle(
 	let token = unwrap_ref!(token_res.token);
 	let token_session_id = unwrap_ref!(token_res.session_id).as_uuid();
 
-	sql_query!(
+	sql_execute!(
 		[ctx]
 		"INSERT INTO db_cloud.game_cloud_tokens (game_id, token_session_id) VALUES ($1, $2)",
 		game_id,

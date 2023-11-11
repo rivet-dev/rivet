@@ -8,7 +8,7 @@ async fn worker(ctx: &OperationContext<team::msg::member_kick::Message>) -> Glob
 	let user_id = unwrap_ref!(ctx.user_id).as_uuid();
 
 	// TODO: Establish audit logs
-	// sql_query!(
+	// sql_execute!(
 	// 	[ctx]
 	// 	"INSERT INTO team_audit_logs WHERE team_id = $1",
 	// 	team_id,

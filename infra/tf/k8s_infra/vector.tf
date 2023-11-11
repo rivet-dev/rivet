@@ -2,8 +2,8 @@ locals {
 	service_vector = lookup(var.services, "vector", {
 		count = 1
 		resources = {
-			cpu = 50
-			memory = 2000
+			cpu = 1000
+			memory = 2048
 		}
 	})
 }

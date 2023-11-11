@@ -10,7 +10,7 @@ async fn worker(
 
 	ensure!(follower_user_id != following_user_id, "cannot follow self");
 
-	sql_query!(
+	sql_execute!(
 		[ctx]
 		"
 		UPDATE db_user_follow.user_follows

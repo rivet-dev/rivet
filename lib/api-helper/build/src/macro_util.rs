@@ -7,6 +7,7 @@ use hyper::{
 	body::{Bytes, HttpBody},
 	header, Body, Request,
 };
+use rivet_operation::prelude::util;
 use serde::de::DeserializeOwned;
 use url::Url;
 use uuid::Uuid;
@@ -22,6 +23,52 @@ pub mod __metrics {
 
 const MAX_ALLOWED_BODY_SIZE: u64 = rivet_util::file_size::gibibytes(10);
 const BEARER: &str = "Bearer ";
+
+// For code legibility
+#[doc(hidden)]
+pub struct __RouterConfig {
+	pub route: url::Url,
+	pub path_segments: Vec<String>,
+	pub prefix: Option<&'static str>,
+}
+
+#[doc(hidden)]
+impl __RouterConfig {
+	pub fn new(uri: &hyper::Uri) -> GlobalResult<Self> {
+		// This url doesn't actually represent the url of the request, it's just put here so that the
+		// URI can be parsed by url::Url::parse
+		let url = format!("{}{}", util::env::origin_api(), uri);
+		let route = url::Url::parse(url.as_str())?;
+
+		Ok(__RouterConfig {
+			route: route.clone(),
+			path_segments: route
+				.path_segments()
+				// Store it backwards for more efficient `pop`ing
+				.map(|ps| ps.rev().map(ToString::to_string).collect::<Vec<_>>())
+				.unwrap_or_default(),
+			prefix: None,
+		})
+	}
+
+	/// If the current prefix matches the first element in the path segments list, it is removed and
+	/// returns true. Always true if no prefix is set.
+	pub fn try_prefix(&mut self) -> bool {
+		let Some(prefix) = &self.prefix else {
+			return true;
+		};
+
+		tracing::info!("trying prefix {prefix}");
+
+		match self.path_segments.last() {
+			Some(segment) if segment == prefix => {
+				self.path_segments.pop();
+				true
+			}
+			_ => false,
+		}
+	}
+}
 
 // Allows for the use of async functions in `.or_else` (`.try_or_else` in this case)
 #[doc(hidden)]
@@ -63,11 +110,21 @@ impl<T, E> __AsyncOption<Result<T, E>> {
 }
 
 #[doc(hidden)]
-impl<T> Into<Option<T>> for __AsyncOption<T> {
-	fn into(self) -> Option<T> {
-		match self {
+impl<T> From<__AsyncOption<T>> for Option<T> {
+	fn from(value: __AsyncOption<T>) -> Option<T> {
+		match value {
 			__AsyncOption::Some(inner) => Some(inner),
 			__AsyncOption::None => None,
+		}
+	}
+}
+
+#[doc(hidden)]
+impl<T> From<Option<T>> for __AsyncOption<T> {
+	fn from(value: Option<T>) -> __AsyncOption<T> {
+		match value {
+			Some(inner) => __AsyncOption::Some(inner),
+			None => __AsyncOption::None,
 		}
 	}
 }
@@ -195,10 +252,10 @@ pub fn __deserialize_query<T: DeserializeOwned + Send>(route: &Url) -> GlobalRes
 
 #[doc(hidden)]
 pub async fn __with_ctx<A: auth::ApiAuth + Send>(
-	request: &Request<Body>,
 	shared_client: chirp_client::SharedClientHandle,
 	pools: rivet_pools::Pools,
 	cache: rivet_cache::Cache,
+	request: &Request<Body>,
 	ray_id: Uuid,
 	optional_auth: bool,
 	not_using_cloudflare: bool,

@@ -9856,6 +9856,7 @@ components:
           description: Unsigned 64 bit integer.
       required:
         - path
+        - content_length
     CloudGamesPrepareCustomAvatarUploadResponse:
       type: object
       properties:
@@ -10065,6 +10066,7 @@ components:
           description: Unsigned 64 bit integer.
       required:
         - path
+        - content_length
     CloudGamesGameBannerUploadPrepareResponse:
       type: object
       properties:

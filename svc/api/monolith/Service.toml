@@ -1,0 +1,102 @@
+[service]
+name = "api-monolith"
+
+[runtime]
+kind = "rust"
+
+[secrets]
+"rivet/api_admin/token" = {}
+"rivet/api_status/token" = {}
+"turnstile/main/secret_key" = { optional = true }
+
+# / path
+[[api.router.mounts]]
+
+[[api.router.mounts]]
+deprecated = true
+path = "/v1"
+subdomain = "admin.api"
+add-path = "/admin"
+
+[[api.router.mounts]]
+deprecated = true
+path = "/v1"
+subdomain = "auth.api"
+add-path = "/auth"
+
+[[api.router.mounts]]
+deprecated = true
+path = "/v1"
+subdomain = "cf-verification.api"
+add-path = "/cf-verification"
+
+[[api.router.mounts]]
+deprecated = true
+path = "/v1"
+subdomain = "chat.api"
+add-path = "/chat"
+
+[[api.router.mounts]]
+deprecated = true
+path = "/v1"
+subdomain = "cloud.api"
+add-path = "/cloud"
+
+[[api.router.mounts]]
+deprecated = true
+path = "/v1"
+subdomain = "group.api"
+add-path = "/group"
+
+[[api.router.mounts]]
+deprecated = true
+path = "/v1"
+subdomain = "identity.api"
+add-path = "/identity"
+
+[[api.router.mounts]]
+deprecated = true
+path = "/v1"
+subdomain = "job.api"
+add-path = "/job"
+
+[[api.router.mounts]]
+deprecated = true
+path = "/v1"
+subdomain = "kv.api"
+add-path = "/kv"
+
+[[api.router.mounts]]
+deprecated = true
+path = "/v1"
+subdomain = "matchmaker.api"
+add-path = "/matchmaker"
+
+[[api.router.mounts]]
+deprecated = true
+path = "/v1"
+subdomain = "module.api"
+add-path = "/module"
+
+[[api.router.mounts]]
+deprecated = true
+path = "/v1"
+subdomain = "portal.api"
+add-path = "/portal"
+
+[[api.router.mounts]]
+deprecated = true
+path = "/v1"
+subdomain = "status.api"
+add-path = "/status"
+
+[resources.single-node]
+cpu = 250
+memory = 256
+
+[resources.distributed]
+cpu = 1000
+memory = 1024
+
+[cockroachdb]
+min-connections = 8

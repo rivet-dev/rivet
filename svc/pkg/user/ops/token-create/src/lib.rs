@@ -38,7 +38,7 @@ async fn handle(
 	let refresh_token = unwrap_ref!(token_res.refresh_token);
 	let token_session_id = unwrap_ref!(token_res.session_id).as_uuid();
 
-	sql_query!(
+	sql_execute!(
 		[ctx]
 		"INSERT INTO db_user.user_tokens (user_id, token_session_id) VALUES ($1, $2)",
 		user_id,

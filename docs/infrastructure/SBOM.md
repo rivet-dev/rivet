@@ -20,7 +20,7 @@ _Loosely follows [SPDX](https://spdx.org/licenses/) format._
 | CNI                   | Apache-2.0                         |
 | ClickHouse            | Apache-2.0                         |
 | Cloudflared           |                                    |
-| Cockraoch             | Apache-2.0                         |
+| Cockroach             | Apache-2.0                         |
 | Docker                | Apache-2.0                         |
 | Imagor                | Apache-2.0                         |
 | Minio                 | AGPL-3.0 (non-derivative, dev use) |

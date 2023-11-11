@@ -38,7 +38,7 @@ async fn handle(
 	let game_user_token = unwrap!(token_res.token.clone());
 	let token_session_id = unwrap_ref!(token_res.session_id).as_uuid();
 
-	sql_query!(
+	sql_execute!(
 		[ctx]
 		"
 		INSERT INTO db_game_user.game_users (game_user_id, user_id, token_session_id, namespace_id, create_ts)

@@ -20,7 +20,7 @@ async fn handle(
 	let verification_id = Uuid::new_v4();
 	let code = gen_code();
 	let expire_ts = ctx.ts() + util::duration::minutes(15);
-	sql_query!(
+	sql_execute!(
 		[ctx]
 		"
 		INSERT INTO db_email_verification.verifications (

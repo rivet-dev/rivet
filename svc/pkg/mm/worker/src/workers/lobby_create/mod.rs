@@ -504,8 +504,8 @@ async fn update_db(
 
 	// Upsert lobby. May have already been inserted preemptively in
 	// mm-lobby-find.
-	sql_query!(
-		[ctx, &mut **tx]
+	sql_execute!(
+		[ctx, @tx tx]
 		"
 		UPSERT INTO db_mm_state.lobbies (
 			lobby_id,
@@ -683,6 +683,10 @@ async fn create_docker_job(
 			job_run::msg::create::Parameter {
 				key: "lobby_token".into(),
 				value: lobby_token.to_owned(),
+			},
+			job_run::msg::create::Parameter {
+				key: "lobby_config".into(),
+				value: ctx.lobby_config_json.clone().unwrap_or_default(),
 			},
 			job_run::msg::create::Parameter {
 				key: "region_id".into(),

@@ -136,7 +136,7 @@ async fn create_instances(
 	.unwrap();
 
 	// Insert instance
-	sql_query!(
+	sql_execute!(
 		[ctx]
 		"
 		INSERT INTO db_module.namespace_instances (namespace_id, key, instance_id)
@@ -181,7 +181,7 @@ async fn delete_instance(
 	.unwrap();
 
 	// Remove instance
-	sql_query!(
+	sql_execute!(
 		[ctx]
 		"
 		DELETE FROM namespace_instances

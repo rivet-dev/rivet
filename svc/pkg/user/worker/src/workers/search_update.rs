@@ -6,7 +6,7 @@ async fn worker(ctx: &OperationContext<user::msg::search_update::Message>) -> Gl
 	let crdb = ctx.crdb().await?;
 	let user_id = unwrap!(ctx.user_id).as_uuid();
 
-	sql_query!(
+	sql_execute!(
 		[ctx]
 		"
 		UPDATE db_user.users

@@ -14,10 +14,10 @@ module "traefik_secrets" {
 
 locals {
 	service_traefik = lookup(var.services, "traefik", {
-		count = 1
+		count = var.deploy_method_cluster ? 2 : 1
 		resources = {
-			cpu = 50
-			memory = 200
+			cpu = 1000
+			memory = 1024
 		}
 	})
 }
@@ -75,6 +75,34 @@ resource "helm_release" "traefik" {
 			# }
 		}
 
+		autoscaling = {
+			enabled = var.deploy_method_cluster
+			minReplicas = local.service_traefik.count
+			maxReplicas = 10
+			metrics = [
+				{
+					type = "Resource"
+					resource = {
+						name = "cpu"
+						target = {
+							type = "Utilization"
+							averageUtilization = 60
+						}
+					}
+				},
+				{
+					type = "Resource"
+					resource = {
+						name = "memory"
+						target = {
+							type = "Utilization"
+							averageUtilization = 60
+						}
+					}
+				},
+			]
+		}
+
 		ports = {
 			websecure = {
 				tls = {
@@ -97,14 +125,80 @@ resource "helm_release" "traefik" {
 
 		metrics = {
 			prometheus = {
-				addEntryPointsLabels = true
-				addRoutersLabels = true
+				addEntryPointsLabels = false
+				addRoutersLabels = false  # There will be a lot of CDN routers
 				addServicesLabels = true
 				# See lib/chirp/metrics/src/buckets.rs
 				buckets = "0.001,0.0025,0.005,0.01,0.025,0.05,0.1,0.25,0.5,1.0,2.5,5.0,10.0,25.0,50.0,100.0"
 			}
 		}
 	})]
+}
+
+resource "kubernetes_service" "traefik_headless" {
+	depends_on = [helm_release.traefik]
+
+	metadata {
+		name = "traefik-headless"
+		namespace = kubernetes_namespace.traefik.metadata.0.name
+		labels = {
+			"app.kubernetes.io/name" = "traefik-headless"
+		}
+	}
+
+	spec {
+		selector = {
+			"app.kubernetes.io/name" = "traefik"
+		}
+
+		cluster_ip = "None"
+
+		port {
+			name = "web"
+			port = 80
+			target_port = "web"
+		}
+
+		port {
+			name = "websecure"
+			port = 443
+			target_port = "websecure"
+		}
+
+		port {
+			name = "metrics"
+			port = 9100
+			target_port = "metrics"
+		}
+	}
+}
+
+resource "kubectl_manifest" "traefik_service_monitor" {
+	depends_on = [helm_release.traefik]
+
+	yaml_body = yamlencode({
+		apiVersion = "monitoring.coreos.com/v1"
+		kind = "ServiceMonitor"
+
+		metadata = {
+			name = "traefik-service-monitor"
+			namespace = kubernetes_namespace.traefik.metadata.0.name
+		}
+
+		spec = {
+			selector = {
+				matchLabels = {
+					"app.kubernetes.io/name": "traefik-headless"
+				}
+			}
+			endpoints = [
+				{
+					port = "metrics"
+					path = "/metrics"
+				}
+			]
+		}
+	})
 }
 
 data "kubernetes_service" "traefik" {

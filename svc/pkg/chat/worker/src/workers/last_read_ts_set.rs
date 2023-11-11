@@ -8,7 +8,7 @@ async fn worker(ctx: &OperationContext<chat::msg::last_read_ts_set::Message>) ->
 	let user_id = unwrap_ref!(ctx.user_id).as_uuid();
 	let thread_id = unwrap_ref!(ctx.thread_id).as_uuid();
 
-	let res = sql_query!(
+	let res = sql_execute!(
 		[ctx]
 		"
 		INSERT INTO db_chat.thread_user_settings (user_id, thread_id, last_read_ts)

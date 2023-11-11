@@ -189,17 +189,6 @@ impl ApiTryFrom<models::UploadPrepareFile> for backend::upload::PrepareFile {
 	}
 }
 
-impl ApiTryFrom<backend::upload::PresignedUploadRequest> for models::UploadPresignedRequest {
-	type Error = GlobalError;
-
-	fn try_from(value: backend::upload::PresignedUploadRequest) -> GlobalResult<Self> {
-		Ok(models::UploadPresignedRequest {
-			path: value.path,
-			url: value.url,
-		})
-	}
-}
-
 impl ApiFrom<team::validate::response::Error> for models::ValidationError {
 	fn api_from(value: team::validate::response::Error) -> models::ValidationError {
 		models::ValidationError { path: value.path }

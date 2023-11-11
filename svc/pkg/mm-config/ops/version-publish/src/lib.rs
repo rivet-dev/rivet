@@ -31,7 +31,7 @@ async fn handle(
 		.transpose()?;
 
 	// Save version
-	sql_query!(
+	sql_execute!(
 		[ctx]
 		"INSERT INTO db_mm_config.game_versions (
 			version_id,
@@ -108,7 +108,7 @@ async fn handle(
 			})
 			.transpose()?;
 
-		sql_query!(
+		sql_execute!(
 			[ctx]
 			"
 			INSERT INTO db_mm_config.lobby_groups (
@@ -147,7 +147,7 @@ async fn handle(
 
 		for region in &lobby_group.regions {
 			let region_id = unwrap_ref!(region.region_id).as_uuid();
-			sql_query!(
+			sql_execute!(
 				[ctx]
 				"
 				INSERT INTO db_mm_config.lobby_group_regions (
@@ -162,7 +162,7 @@ async fn handle(
 			.await?;
 
 			if let Some(idle_lobbies) = &region.idle_lobbies {
-				sql_query!(
+				sql_execute!(
 					[ctx]
 					"
 				INSERT INTO db_mm_config.lobby_group_idle_lobbies (

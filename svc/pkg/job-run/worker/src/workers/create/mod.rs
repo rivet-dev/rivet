@@ -234,8 +234,8 @@ async fn write_to_db_before_run(
 	run_id: Uuid,
 	token_session_id: Uuid,
 ) -> GlobalResult<()> {
-	sql_query!(
-		[ctx]
+	sql_execute!(
+		[ctx, @tx tx]
 		"
 		INSERT INTO db_job_state.runs (run_id, region_id, create_ts, token_session_id)
 		VALUES ($1, $2, $3, $4)
@@ -247,8 +247,8 @@ async fn write_to_db_before_run(
 	)
 	.await?;
 
-	sql_query!(
-		[ctx]
+	sql_execute!(
+		[ctx, @tx tx]
 		"INSERT INTO db_job_state.run_meta_nomad (run_id) VALUES ($1)",
 		run_id,
 	)
@@ -277,8 +277,8 @@ async fn write_to_db_before_run(
 		let mut ingress_hostnames_sorted = proxied_port.ingress_hostnames.clone();
 		ingress_hostnames_sorted.sort();
 
-		sql_query!(
-			[ctx]
+		sql_execute!(
+			[ctx, @tx tx]
 			"
 			INSERT INTO db_job_state.run_proxied_ports (
 				run_id,
@@ -311,7 +311,7 @@ async fn write_to_db_after_run(
 	run_id: Uuid,
 	dispatched_job_id: &str,
 ) -> GlobalResult<()> {
-	sql_query!(
+	sql_execute!(
 		[ctx]
 		"UPDATE db_job_state.run_meta_nomad SET dispatched_job_id = $2 WHERE run_id = $1",
 		run_id,
@@ -389,7 +389,7 @@ async fn bind_with_retries(
 		let port = rand::thread_rng().gen_range(range.clone()) as i32;
 
 		let (already_exists,) = sql_fetch_one!(
-			[ctx, (bool,), &mut **tx]
+			[ctx, (bool,), @tx tx]
 			"
 			SELECT EXISTS(
 				SELECT 1

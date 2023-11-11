@@ -45,6 +45,6 @@ tests/basic-game/.env
 
 # MARK: Prettier specific
 gen/
-infra/helm/redis-cluster/
+infra/helm/
 infra/tf/k8s_infra/grafana_dashboards/
 

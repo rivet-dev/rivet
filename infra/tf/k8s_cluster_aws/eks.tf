@@ -36,8 +36,8 @@ module "eks" {
 						memory = "512M"
 					}
 					requests = {
-						cpu = "0.5"
-						memory = "512M"
+						cpu = "0.05"
+						memory = "64M"
 					}
 				}
 			})

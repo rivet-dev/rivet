@@ -111,7 +111,7 @@ pub async fn run_from_env() -> GlobalResult<()> {
 
 		// Update default build
 		tracing::info!(tag = %build.tag, ?upload_id, "setting default build");
-		sql_query!(
+		sql_execute!(
 			[ctx]
 			"
 			UPSERT INTO db_build.default_builds (kind, image_tag, upload_id)

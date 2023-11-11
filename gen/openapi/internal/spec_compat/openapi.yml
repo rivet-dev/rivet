@@ -944,6 +944,7 @@ components:
           type: string
       required:
       - path
+      - content_length
       type: object
     CloudGamesGameBannerUploadPrepareResponse:
       properties:
@@ -1395,6 +1396,7 @@ components:
           type: string
       required:
       - path
+      - content_length
       type: object
     CloudGamesPrepareCustomAvatarUploadResponse:
       properties:

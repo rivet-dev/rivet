@@ -88,7 +88,6 @@ where
 			let ray_id = Uuid::new_v4();
 			let req_span = tracing::info_span!("http request", method = %req.method(), uri = %req.uri(), %ray_id);
 			async move {
-				let sem_start = Instant::now();
 				tracing::info!(
 					method = %req.method(),
 					uri = %req.uri(),

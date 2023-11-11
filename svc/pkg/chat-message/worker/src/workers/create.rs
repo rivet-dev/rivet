@@ -19,7 +19,7 @@ async fn worker(ctx: &OperationContext<chat_message::msg::create::Message>) -> G
 	let mut body_buf = Vec::with_capacity(body.encoded_len());
 	body.encode(&mut body_buf)?;
 
-	sql_query!(
+	sql_execute!(
 		[ctx]
 		"
 		INSERT INTO db_chat.messages (

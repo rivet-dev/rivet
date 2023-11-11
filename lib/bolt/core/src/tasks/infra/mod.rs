@@ -97,7 +97,11 @@ impl PlanStepKind {
 	}
 }
 
-pub fn build_plan(ctx: &ProjectContext, start_at: Option<String>) -> Result<Vec<PlanStep>> {
+pub fn build_plan(
+	ctx: &ProjectContext,
+	start_at: Option<String>,
+	reverse: bool,
+) -> Result<Vec<PlanStep>> {
 	let mut plan = Vec::new();
 
 	// Infra
@@ -134,7 +138,7 @@ pub fn build_plan(ctx: &ProjectContext, start_at: Option<String>) -> Result<Vec<
 	if ctx.tls_enabled() {
 		// TLS
 		plan.push(PlanStep {
-			name_id: "tf-tls",
+			name_id: "tls",
 			kind: PlanStepKind::Terraform {
 				plan_id: "tls".into(),
 				needs_destroy: true,
@@ -211,7 +215,7 @@ pub fn build_plan(ctx: &ProjectContext, start_at: Option<String>) -> Result<Vec<
 	// Pools
 	if ctx.ns().dns.is_some() {
 		plan.push(PlanStep {
-			name_id: "tf-pools",
+			name_id: "pools",
 			kind: PlanStepKind::Terraform {
 				plan_id: "pools".into(),
 				needs_destroy: true,
@@ -225,7 +229,7 @@ pub fn build_plan(ctx: &ProjectContext, start_at: Option<String>) -> Result<Vec<
 		if let Some(ns::DnsProvider::Cloudflare { access, .. }) = &dns.provider {
 			// DNS
 			plan.push(PlanStep {
-				name_id: "tf-dns",
+				name_id: "dns",
 				kind: PlanStepKind::Terraform {
 					plan_id: "dns".into(),
 					needs_destroy: true,
@@ -234,7 +238,7 @@ pub fn build_plan(ctx: &ProjectContext, start_at: Option<String>) -> Result<Vec<
 
 			// Cloudflare
 			plan.push(PlanStep {
-				name_id: "tf-cf-workers",
+				name_id: "cf-workers",
 				kind: PlanStepKind::Terraform {
 					plan_id: "cloudflare_workers".into(),
 					needs_destroy: true,
@@ -243,7 +247,7 @@ pub fn build_plan(ctx: &ProjectContext, start_at: Option<String>) -> Result<Vec<
 
 			if access.is_some() {
 				plan.push(PlanStep {
-					name_id: "tf-cf-tunnels",
+					name_id: "cf-tunnels",
 					kind: PlanStepKind::Terraform {
 						plan_id: "cloudflare_tunnels".into(),
 						needs_destroy: true,
@@ -257,7 +261,7 @@ pub fn build_plan(ctx: &ProjectContext, start_at: Option<String>) -> Result<Vec<
 	let s3_providers = &ctx.ns().s3.providers;
 	if s3_providers.minio.is_some() {
 		plan.push(PlanStep {
-			name_id: "tf-s3-minio",
+			name_id: "s3-minio",
 			kind: PlanStepKind::Terraform {
 				plan_id: "s3_minio".into(),
 				needs_destroy: false,
@@ -266,7 +270,7 @@ pub fn build_plan(ctx: &ProjectContext, start_at: Option<String>) -> Result<Vec<
 	}
 	if s3_providers.backblaze.is_some() {
 		plan.push(PlanStep {
-			name_id: "tf-s3-backblaze",
+			name_id: "s3-backblaze",
 			kind: PlanStepKind::Terraform {
 				plan_id: "s3_backblaze".into(),
 				needs_destroy: true,
@@ -275,7 +279,7 @@ pub fn build_plan(ctx: &ProjectContext, start_at: Option<String>) -> Result<Vec<
 	}
 	if s3_providers.aws.is_some() {
 		plan.push(PlanStep {
-			name_id: "tf-s3-aws",
+			name_id: "s3-aws",
 			kind: PlanStepKind::Terraform {
 				plan_id: "s3_aws".into(),
 				needs_destroy: true,
@@ -300,7 +304,11 @@ pub fn build_plan(ctx: &ProjectContext, start_at: Option<String>) -> Result<Vec<
 			.position(|x| x.name_id == start_at)
 			.ok_or_else(|| anyhow!("invalid start_at value: {}", start_at))?;
 
-		plan = plan[idx..].to_vec();
+		if reverse {
+			plan = plan[..=idx].to_vec();
+		} else {
+			plan = plan[idx..].to_vec();
+		}
 	}
 
 	Ok(plan)
@@ -308,7 +316,7 @@ pub fn build_plan(ctx: &ProjectContext, start_at: Option<String>) -> Result<Vec<
 
 /// List all of the Terraform plans in use for the generated plan.
 pub fn all_terraform_plans(ctx: &ProjectContext) -> Result<Vec<String>> {
-	let plan_ids = build_plan(ctx, None)?
+	let plan_ids = build_plan(ctx, None, false)?
 		.into_iter()
 		.flat_map(|x| {
 			if let PlanStepKind::Terraform { plan_id, .. } = x.kind {

@@ -9,7 +9,7 @@ async fn handle(
 
 	let jti = unwrap_ref!(ctx.jti).as_uuid();
 
-	let update_query = sql_query!(
+	let update_query = sql_execute!(
 		[ctx]
 		"
 		UPDATE db_token.tokens

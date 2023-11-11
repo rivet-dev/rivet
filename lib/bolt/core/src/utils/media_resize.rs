@@ -1,5 +1,6 @@
 const UUID_V4_REGEXP: &str = "[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}";
 
+// TODO: Update to support multiple S3 providers
 pub struct ResizePreset {
 	ns: String,
 	name: String,
@@ -155,7 +156,7 @@ impl From<ResizePreset> for ResizePresetSerialize {
 			path_regex_replacement: preset.path_regex_replacement(),
 			game_cors: preset.game_cors,
 			// Match items with query filters before the fallback path
-			priority: if preset.fallback { 50 } else { 75 },
+			priority: if preset.fallback { 60 } else { 61 },
 		}
 	}
 }

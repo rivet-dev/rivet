@@ -148,7 +148,7 @@ async fn handle(
 	}
 
 	// Complete verification
-	let complete_res = sql_query!(
+	let complete_res = sql_execute!(
 		[ctx]
 		"
 		UPDATE db_email_verification.verifications

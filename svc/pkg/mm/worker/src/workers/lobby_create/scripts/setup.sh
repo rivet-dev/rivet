@@ -27,12 +27,33 @@ else
 	export NETNS_PATH="/var/run/netns/$CONTAINER_ID"
 fi
 
-# Run setup scripts
+# Run OCI setup script
 "$NOMAD_TASK_DIR/setup_oci_bundle.sh" &
+pid_oci=$!
+
+# Run CNI setup script
 if ! __HOST_NETWORK__; then
 	"$NOMAD_TASK_DIR/setup_cni_network.sh" &
+	pid_cni=$!
 fi
-wait
+
+# Wait for OCI setup scripts to finish
+wait $pid_oci
+exit_status_oci=$?
+if [ $exit_status_oci -ne 0 ]; then
+	log "OCI setup failed with exit code $exit_status_oci"
+	exit $exit_status_oci
+fi
+
+# Wait for CNI setup script to finish
+if ! __HOST_NETWORK__; then
+    wait $pid_cni
+    exit_status_cni=$?
+	if [ $exit_status_cni -ne 0 ]; then
+		log "CNI setup failed with exit code $exit_status_cni"
+		exit $exit_status_cni
+	fi
+fi
 
 log "Setup finished"
 

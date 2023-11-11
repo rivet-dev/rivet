@@ -15,7 +15,7 @@ async fn handle(
 		backend::user_identity::identity::Kind::Email(email) => {
 			ensure!(EmailAddress::is_valid(&email.email, None), "invalid email");
 
-			sql_query!(
+			sql_execute!(
 				[ctx]
 				"
 				INSERT INTO db_user_identity.emails (email, user_id, create_ts)

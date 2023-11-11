@@ -149,7 +149,7 @@ async fn worker(ctx: &OperationContext<user::msg::delete::Message>) -> GlobalRes
 	{
 		tracing::info!(?user_id, "removing user record");
 
-		sql_query!(
+		sql_execute!(
 			[ctx]
 			"
 			UPDATE db_user.users

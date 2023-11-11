@@ -13,7 +13,7 @@ async fn handle(
 		.map(common::Uuid::as_uuid)
 		.collect::<Vec<_>>();
 
-	sql_query!(
+	sql_execute!(
 		[ctx]
 		"
 		UPDATE db_token.tokens

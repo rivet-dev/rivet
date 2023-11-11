@@ -41,7 +41,7 @@ async fn handle(
 		)
 		.query_async(&mut redis)
 		.await?;
-	sql_query!(
+	sql_execute!(
 		[ctx]
 		"
 		INSERT INTO db_mm_state.lobbies (

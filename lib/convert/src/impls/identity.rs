@@ -29,17 +29,6 @@ impl ApiFrom<user::profile_validate::response::Error> for models::ValidationErro
 	}
 }
 
-impl ApiFrom<backend::upload::PresignedUploadRequest> for models::UploadPresignedRequest {
-	fn api_from(value: backend::upload::PresignedUploadRequest) -> models::UploadPresignedRequest {
-		models::UploadPresignedRequest {
-			path: value.path.to_owned(),
-			url: value.url,
-			byte_offset: value.byte_offset as i64,
-			content_length: value.content_length as i64,
-		}
-	}
-}
-
 impl ApiFrom<game_user::link_get::response::GameUserLinkStatus> for models::IdentityGameLinkStatus {
 	fn api_from(value: game_user::link_get::response::GameUserLinkStatus) -> Self {
 		match value {

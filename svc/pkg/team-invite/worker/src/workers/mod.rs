@@ -1,2 +1,1 @@
-pub mod consume;
-pub mod create;
+chirp_worker::workers![consume, create,];

@@ -10,7 +10,7 @@ use serde_json::json;
 use tokio::{io::AsyncWriteExt, net::TcpStream, time::Duration};
 
 const LOBBY_GROUP_NAME_ID: &str = "test";
-const CHUNK_SIZE: usize = 64;
+const CHUNK_SIZE: usize = 2048;
 const BUFFER_SIZE: usize = 16;
 
 struct Ctx {

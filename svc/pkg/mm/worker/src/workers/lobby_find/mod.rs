@@ -592,8 +592,8 @@ async fn insert_to_crdb(
 		let lobby_group = unwrap!(lobby_group_config.lobby_groups.first());
 
 		// Insert lobby if needed
-		sql_query!(
-			[ctx, &mut **tx]
+		sql_execute!(
+			[ctx, @tx tx]
 			"
 			INSERT INTO db_mm_state.lobbies (
 				lobby_id,
@@ -627,8 +627,8 @@ async fn insert_to_crdb(
 	}
 
 	// Insert query
-	sql_query!(
-		[ctx, &mut **tx]
+	sql_execute!(
+		[ctx, @tx tx]
 		"
 		INSERT INTO db_mm_state.find_queries (
 			query_id,
@@ -651,8 +651,8 @@ async fn insert_to_crdb(
 
 	// Insert players
 	for player in players {
-		sql_query!(
-			[ctx, &mut **tx]
+		sql_execute!(
+			[ctx, @tx tx]
 			"
 			INSERT INTO db_mm_state.players (
 				player_id,

@@ -186,13 +186,13 @@ async fn update_db(
 	}
 
 	// Insert consumption
-	sql_query!(
+	sql_execute!(
 		[ctx]
 		"UPDATE db_team_invite.invitations SET use_counter = use_counter + 1 WHERE code = $1",
 		&code,
 	)
 	.await?;
-	sql_query!(
+	sql_execute!(
 		[ctx]
 		"INSERT INTO db_team_invite.invitation_uses (code, user_id, create_ts) VALUES ($1, $2, $3)",
 		&code,

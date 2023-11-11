@@ -35,7 +35,7 @@ async fn handle(
 
 	ensure_with!(domain_count < 10, CDN_TOO_MANY_DOMAINS);
 
-	sql_query!(
+	sql_execute!(
 		[ctx]
 		"
 		INSERT INTO db_cdn.game_namespace_domains (namespace_id, domain, create_ts)
@@ -107,7 +107,7 @@ async fn rollback(
 	domain: &str,
 ) -> GlobalResult<()> {
 	// Rollback
-	sql_query!(
+	sql_execute!(
 		[ctx]
 		"DELETE FROM db_cdn.game_namespace_domains WHERE namespace_id = $1 AND domain = $2",
 		namespace_id,

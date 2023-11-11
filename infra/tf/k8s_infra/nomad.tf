@@ -13,7 +13,13 @@
 # complicated + adds another point of failure and (b) it doesn't fix the problem with Nomad server addresses changing.
 
 locals {
-	nomad_server_count = 2
+	# !!! DO NOT CHANGE !!!
+	#
+	# This value must be 3, 5, or 7. More = better redundancy, but does not make things faster.
+	# 
+	# See https://developer.hashicorp.com/nomad/tutorials/enterprise/production-reference-architecture-vm-with-consul
+	nomad_server_count = 3
+
 	nomad_server_addrs = [for i in range(0, local.nomad_server_count): "127.0.0.1:${6000 + i}"]
 	nomad_server_addrs_escaped = [for addr in local.nomad_server_addrs : "\"${addr}\""]
 	nomad_server_configmap_data = {
@@ -56,7 +62,7 @@ locals {
 	service_nomad = lookup(var.services, "nomad", {
 		count = 1
 		resources = {
-			cpu = 2000
+			cpu = 1000
 			memory = 2048
 		}
 	})
@@ -111,7 +117,7 @@ resource "kubernetes_service" "nomad_server" {
 }
 
 resource "kubectl_manifest" "nomad_server_monitor" {
-	depends_on = [helm_release.traefik]
+	depends_on = [kubernetes_stateful_set.nomad_server]
 
 	yaml_body = yamlencode({
 		apiVersion = "monitoring.coreos.com/v1"

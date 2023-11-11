@@ -57,7 +57,7 @@ async fn worker(ctx: &OperationContext<team::msg::profile_set::Message>) -> Glob
 		built_query.trim_end_matches(',')
 	);
 
-	// TODO: Migrate to sql_query! macro
+	// TODO: Migrate to sql_execute! macro
 	let query = sqlx::query(&query_string).bind(team_id);
 
 	// Bind display name

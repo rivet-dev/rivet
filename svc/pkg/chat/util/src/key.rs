@@ -39,5 +39,8 @@ pub fn typing_statuses(thread_id: Uuid) -> String {
 
 /// ZSET<user id, update ts>
 pub fn typing_statuses_update_ts(thread_id: Uuid) -> String {
-	format!("{{global}}:chat:thread:{}:typing_statuses_update_ts", thread_id)
+	format!(
+		"{{global}}:chat:thread:{}:typing_statuses_update_ts",
+		thread_id
+	)
 }

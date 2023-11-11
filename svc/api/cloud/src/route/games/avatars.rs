@@ -1,5 +1,6 @@
 use api_helper::{anchor::WatchIndexQuery, ctx::Ctx};
 use proto::backend;
+use rivet_api::models as new_models;
 use rivet_claims::ClaimsDecode;
 use rivet_cloud_server::models;
 use rivet_convert::ApiTryInto;
@@ -89,8 +90,8 @@ pub async fn get_custom_avatars(
 pub async fn prepare_avatar_upload(
 	ctx: Ctx<Auth>,
 	game_id: Uuid,
-	body: models::PrepareCustomAvatarUploadRequest,
-) -> GlobalResult<models::PrepareCustomAvatarUploadResponse> {
+	body: new_models::CloudGamesPrepareCustomAvatarUploadRequest,
+) -> GlobalResult<new_models::CloudGamesPrepareCustomAvatarUploadResponse> {
 	ctx.auth().check_game_write(ctx.op_ctx(), game_id).await?;
 
 	let user_id = ctx.auth().claims()?.as_user().ok().map(|x| x.user_id);
@@ -132,9 +133,9 @@ pub async fn prepare_avatar_upload(
 	let upload_id = unwrap_ref!(upload_prepare_res.upload_id).as_uuid();
 	let presigned_request = unwrap!(upload_prepare_res.presigned_requests.first());
 
-	Ok(models::PrepareCustomAvatarUploadResponse {
-		upload_id: upload_id.to_string(),
-		presigned_request: presigned_request.clone().try_into()?,
+	Ok(new_models::CloudGamesPrepareCustomAvatarUploadResponse {
+		upload_id,
+		presigned_request: Box::new(presigned_request.clone().try_into()?),
 	})
 }
 

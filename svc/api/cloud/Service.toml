@@ -4,13 +4,7 @@ name = "api-cloud"
 [runtime]
 kind = "rust"
 
-[api]
+[api-routes]
 
-[[api.router.mounts]]
-path = "/cloud"
-
-[[api.router.mounts]]
-deprecated = true
-path = "/v1"
-subdomain = "cloud.api"
-
+[cockroachdb]
+min-connections = 16

@@ -136,7 +136,8 @@ pub async fn gen_svc(exec_ctx: &ExecServiceContext) -> Vec<serde_json::Value> {
 			ServiceKind::Periodic { .. } => SpecType::CronJob,
 			ServiceKind::Operation { .. }
 			| ServiceKind::Database { .. }
-			| ServiceKind::Cache { .. } => {
+			| ServiceKind::Cache { .. }
+			| ServiceKind::ApiRoutes { .. } => {
 				unreachable!()
 			}
 		},
@@ -789,6 +790,7 @@ fn build_ingress_router(
 	specs: &mut Vec<serde_json::Value>,
 ) {
 	// Register all mounts with Traefik
+	// TODO: move this in to a single ingressroute crd for web and websecure
 	for (i, mount) in router.mounts.iter().enumerate() {
 		// Build host rule
 		let mut rule = String::new();
@@ -807,6 +809,9 @@ fn build_ingress_router(
 			rule.push_str(&format!("Host(`{domain}`)"));
 		}
 
+		// Build middlewares
+		let mut middlewares = Vec::new();
+
 		// Build path
 		if let Some(path) = &mount.path {
 			if !rule.is_empty() {
@@ -814,13 +819,7 @@ fn build_ingress_router(
 			}
 
 			rule.push_str(&format!("PathPrefix(`{path}`)"));
-		}
 
-		// Build middlewares
-		let mut middlewares = Vec::new();
-
-		// Strip prefix
-		if let Some(path) = &mount.path {
 			let mw_name = format!("{}-{i}-strip-prefix", svc_ctx.name());
 			middlewares.push(json!({
 				"apiVersion": "traefik.io/v1alpha1",
@@ -836,6 +835,26 @@ fn build_ingress_router(
 					"stripPrefix": {
 						"prefixes": [ path ],
 						"forceSlash": true
+					}
+				}
+			}));
+		}
+
+		if let Some(add_path) = &mount.add_path {
+			let mw_name = format!("{}-{i}-add-prefix", svc_ctx.name());
+			middlewares.push(json!({
+				"apiVersion": "traefik.io/v1alpha1",
+				"kind": "Middleware",
+				"metadata": {
+					"name": mw_name,
+					"namespace": "rivet-service",
+					"labels": {
+						"traefik-instance": "main"
+					}
+				},
+				"spec": {
+					"addPrefix": {
+						"prefix": add_path,
 					}
 				}
 			}));
@@ -891,6 +910,14 @@ fn build_ingress_router(
 
 		specs.extend(middlewares);
 
+		let priority = if svc_ctx.name() == "api-monolith" {
+			// Default priority
+			50
+		} else {
+			// Override monolith's priority
+			51
+		};
+
 		// Build insecure router
 		specs.push(json!({
 			"apiVersion": "traefik.io/v1alpha1",
@@ -908,6 +935,7 @@ fn build_ingress_router(
 					{
 						"kind": "Rule",
 						"match": rule,
+						"priority": priority,
 						"middlewares": ingress_middlewares,
 						"services": [
 							{
@@ -940,6 +968,7 @@ fn build_ingress_router(
 						{
 							"kind": "Rule",
 							"match": rule,
+							"priority": priority,
 							"middlewares": ingress_middlewares,
 							"services": [
 								{

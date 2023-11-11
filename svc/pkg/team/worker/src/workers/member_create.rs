@@ -28,7 +28,7 @@ async fn worker(ctx: &OperationContext<team::msg::member_create::Message>) -> Gl
 		return fail(ctx.chirp(), team_id, user_id, ctx.invitation.as_ref()).await;
 	}
 
-	let insert_query = sql_query!(
+	let insert_query = sql_execute!(
 		[ctx]
 		"
 		INSERT INTO db_team.team_members (team_id, user_id, join_ts)

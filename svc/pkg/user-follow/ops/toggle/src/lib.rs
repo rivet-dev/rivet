@@ -16,7 +16,7 @@ async fn handle(
 	let crdb = ctx.crdb().await?;
 	let mutual = if ctx.active {
 		tokio::try_join!(
-			sql_query!(
+			sql_execute!(
 				[ctx, &crdb]
 				"
 				INSERT INTO db_user_follow.user_follows
@@ -33,7 +33,7 @@ async fn handle(
 			// - and the follower user follows then unfollows,
 			// the original following user's follow won't show up in the follower user's "recent follows"
 			// list again.
-			sql_query!(
+			sql_execute!(
 				[ctx, &crdb]
 				"
 				UPDATE db_user_follow.user_follows
@@ -54,7 +54,7 @@ async fn handle(
 		// Check for mutuality before deleting record
 		let mutual = check_mutual(&ctx, follower_user_id, following_user_id).await?;
 
-		sql_query!(
+		sql_execute!(
 			[ctx]
 			"DELETE FROM db_user_follow.user_follows WHERE follower_user_id = $1 AND following_user_id = $2",
 			follower_user_id,

@@ -271,6 +271,10 @@ impl ServiceContextData {
 		format!("{}-{}", self.project().await.ns_id(), self.name())
 	}
 
+	pub fn is_monolith_worker(&self) -> bool {
+		self.config().service.name == "monolith-worker"
+	}
+
 	pub fn depends_on_nomad_api(&self) -> bool {
 		true
 		// self.name().starts_with("job-")
@@ -442,8 +446,8 @@ impl ServiceContextData {
 		}
 
 		// Inherit dependencies from the service that was overridden
-		if let Some(overriden_svc) = &self.overridden_service {
-			dep_ctxs.extend(overriden_svc.dependencies(run_context).await);
+		if let Some(overridden_svc) = &self.overridden_service {
+			dep_ctxs.extend(overridden_svc.dependencies(run_context).await);
 		}
 
 		// Check that these are services you can explicitly depend on in the Service.toml
@@ -460,12 +464,30 @@ impl ServiceContextData {
 				);
 			}
 
-			if !matches!(
-				dep.config().kind,
-				ServiceKind::Database { .. }
-					| ServiceKind::Cache { .. }
-					| ServiceKind::Operation { .. }
-			) {
+			let can_depend =
+				if self.is_monolith_worker() {
+					matches!(
+						dep.config().kind,
+						ServiceKind::Database { .. }
+							| ServiceKind::Cache { .. } | ServiceKind::Operation { .. }
+							| ServiceKind::Consumer { .. }
+					)
+				} else if matches!(self.config().kind, ServiceKind::Api { .. }) {
+					matches!(
+						dep.config().kind,
+						ServiceKind::Database { .. }
+							| ServiceKind::Cache { .. } | ServiceKind::Operation { .. }
+							| ServiceKind::ApiRoutes { .. }
+					)
+				} else {
+					matches!(
+						dep.config().kind,
+						ServiceKind::Database { .. }
+							| ServiceKind::Cache { .. } | ServiceKind::Operation { .. }
+					)
+				};
+
+			if !can_depend {
 				panic!(
 					"{} -> {}: cannot explicitly depend on this kind of service",
 					self.name(),
@@ -516,7 +538,11 @@ impl ServiceContextData {
 	}
 
 	pub async fn redis_dependencies(&self, run_context: &RunContext) -> Vec<ServiceContext> {
-		let default_deps = ["redis-chirp".to_string(), "redis-cache".to_string()];
+		let default_deps = [
+			"redis-chirp".to_string(),
+			"redis-chirp-ephemeral".into(),
+			"redis-cache".to_string(),
+		];
 
 		let dep_names = self
 			.database_dependencies(run_context)
@@ -703,9 +729,9 @@ impl ServiceContextData {
 		env.push((
 			"TOKIO_WORKER_THREADS".into(),
 			if ns_service_config.resources.cpu >= 1000 {
-				(ns_service_config.resources.cpu / 1000).max(2)
+				(ns_service_config.resources.cpu / 1000).max(1)
 			} else {
-				2
+				1
 			}
 			.to_string(),
 		));
@@ -798,9 +824,6 @@ impl ServiceContextData {
 			}
 		}
 
-		// Configure TLS
-		env.push(("IS_SECURE".to_owned(), "1".into()));
-
 		// Add billing flag
 		if project_ctx.config().billing_enabled {
 			env.push(("IS_BILLING_ENABLED".to_owned(), "1".into()));
@@ -862,11 +885,16 @@ impl ServiceContextData {
 			));
 		}
 
+		env.push((
+			"CRDB_MIN_CONNECTIONS".into(),
+			self.config().cockroachdb.min_connections.to_string(),
+		));
+
 		if self.depends_on_clickhouse() {
 			let clickhouse_data = terraform::output::read_clickhouse(&project_ctx).await;
 			let clickhouse_host = format!(
 				"https://{}:{}",
-				*clickhouse_data.host, *clickhouse_data.port
+				*clickhouse_data.host, *clickhouse_data.port_https
 			);
 
 			env.push(("CLICKHOUSE_URL".into(), clickhouse_host));
@@ -888,11 +916,11 @@ impl ServiceContextData {
 
 		// Chirp config (used for both Chirp clients and Chirp workers)
 		env.push(("CHIRP_SERVICE_NAME".into(), self.name()));
-		env.push(("CHIRP_REGION".into(), region_id.clone()));
 
 		// Chirp worker config
-		if let (RunContext::Service { .. }, ServiceKind::Consumer { .. }) =
-			(run_context, &self.config().kind)
+		if (matches!(run_context, RunContext::Service { .. })
+			&& matches!(&self.config().kind, ServiceKind::Consumer { .. }))
+			|| self.is_monolith_worker()
 		{
 			env.push((
 				"CHIRP_WORKER_INSTANCE".into(),
@@ -961,47 +989,23 @@ impl ServiceContextData {
 			_ => {}
 		}
 
-		env.push((
-			"RIVET_TELEMETRY_DISABLE".into(),
-			if project_ctx.ns().rivet.telemetry.disable {
-				"1"
-			} else {
-				"0"
-			}
-			.into(),
-		));
+		if project_ctx.ns().rivet.telemetry.disable {
+			env.push(("RIVET_TELEMETRY_DISABLE".into(), "1".into()));
+		}
 
 		env.push((
 			"RIVET_API_HUB_ORIGIN_REGEX".into(),
 			project_ctx.origin_hub_regex(),
 		));
-		env.push((
-			"RIVET_API_ERROR_VERBOSE".into(),
-			if project_ctx.ns().rivet.api.error_verbose {
-				"1"
-			} else {
-				"0"
-			}
-			.into(),
-		));
-		env.push((
-			"RIVET_PROFANITY_FILTER_DISABLE".into(),
-			if project_ctx.ns().rivet.profanity.filter_disable {
-				"1"
-			} else {
-				"0"
-			}
-			.into(),
-		));
-		env.push((
-			"RIVET_UPLOAD_NSFW_ERROR_VERBSOE".into(),
-			if project_ctx.ns().rivet.upload.nsfw_error_verbose {
-				"1"
-			} else {
-				"0"
-			}
-			.into(),
-		));
+		if project_ctx.ns().rivet.api.error_verbose {
+			env.push(("RIVET_API_ERROR_VERBOSE".into(), "1".into()));
+		}
+		if project_ctx.ns().rivet.profanity.filter_disable {
+			env.push(("RIVET_PROFANITY_FILTER_DISABLE".into(), "1".into()));
+		}
+		if project_ctx.ns().rivet.upload.nsfw_error_verbose {
+			env.push(("RIVET_UPLOAD_NSFW_ERROR_VERBSOE".into(), "1".into()));
+		}
 		env.push((
 			"RIVET_DS_BUILD_DELIVERY_METHOD".into(),
 			project_ctx
@@ -1252,17 +1256,11 @@ impl ServiceContextData {
 			.unwrap_or_else(|| match project_ctx.ns().cluster.kind {
 				config::ns::ClusterKind::SingleNode { .. } => config::ns::Service {
 					count: 1,
-					resources: config::ns::ServiceResources {
-						cpu: 100,
-						memory: 128,
-					},
+					resources: self.config().resources.single_node.clone(),
 				},
 				config::ns::ClusterKind::Distributed { .. } => config::ns::Service {
 					count: 2,
-					resources: config::ns::ServiceResources {
-						cpu: 250,
-						memory: 256,
-					},
+					resources: self.config().resources.distributed.clone(),
 				},
 			});
 

@@ -130,7 +130,7 @@ async fn worker(ctx: &OperationContext<upload::msg::delete::Message>) -> GlobalR
 		.await?;
 
 	// Mark upload as deleted
-	sql_query!(
+	sql_execute!(
 		[ctx]
 		"
 		UPDATE db_upload.uploads

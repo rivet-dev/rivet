@@ -4,13 +4,7 @@ name = "api-admin"
 [runtime]
 kind = "rust"
 
-[[api.router.mounts]]
-path = "/admin"
-
-[[api.router.mounts]]
-deprecated = true
-path = "/v1"
-subdomain = "admin.api"
+[api-routes]
 
 [secrets]
 "rivet/api_admin/token" = {}

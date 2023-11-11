@@ -4,13 +4,5 @@ name = "api-kv"
 [runtime]
 kind = "rust"
 
-[api]
-
-[[api.router.mounts]]
-path = "/kv"
-
-[[api.router.mounts]]
-deprecated = true
-path = "/v1"
-subdomain = "kv.api"
+[api-routes]
 

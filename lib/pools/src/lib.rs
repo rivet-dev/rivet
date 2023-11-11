@@ -17,8 +17,8 @@ pub mod prelude {
 
 	pub use crate::pools::{CrdbPool, NatsPool, RedisPool};
 	pub use crate::{
-		sql_fetch, sql_fetch_all, sql_fetch_many, sql_fetch_one, sql_fetch_optional, sql_query,
-		sql_query_as,
+		__sql_query, __sql_query_as, __sql_query_as_raw, sql_execute, sql_fetch, sql_fetch_all,
+		sql_fetch_many, sql_fetch_one, sql_fetch_optional,
 	};
 }
 
@@ -128,40 +128,55 @@ async fn nats_from_env(client_name: String) -> Result<Option<NatsPool>, Error> {
 #[tracing::instrument]
 async fn crdb_from_env(client_name: String) -> Result<Option<CrdbPool>, Error> {
 	if let Some(url) = std::env::var("CRDB_URL").ok() {
-		tracing::info!(%url, "crdb connecting");
+		let min_connections = std::env::var("CRDB_MIN_CONNECTIONS")
+			.ok()
+			.and_then(|s| s.parse::<u32>().ok())
+			.unwrap_or(1);
+		let max_connections = std::env::var("CRDB_MAX_CONNECTIONS")
+			.ok()
+			.and_then(|s| s.parse::<u32>().ok())
+			.unwrap_or(4096);
+		tracing::info!(%url, ?min_connections, ?max_connections, "crdb connecting");
 
 		// let client_name = client_name.clone();
 		let pool = sqlx::postgres::PgPoolOptions::new()
 			// The default connection timeout is too high
 			.acquire_timeout(Duration::from_secs(15))
-			.max_lifetime(Duration::from_secs(60 * 5))
+			// Increase lifetime to mitigate: https://github.com/launchbadge/sqlx/issues/2854
+			//
+			// See max lifetime https://www.cockroachlabs.com/docs/stable/connection-pooling#set-the-maximum-lifetime-of-connections
+			.max_lifetime(Duration::from_secs(30 * 60))
 			// Remove connections after a while in order to reduce load
 			// on CRDB after bursts
-			.idle_timeout(Some(Duration::from_secs(60)))
-			// Open a connection
-			// immediately on startup
-			.min_connections(1)
+			.idle_timeout(Some(Duration::from_secs(10 * 60)))
+			// Open connections immediately on startup
+			.min_connections(min_connections)
 			// Raise the cap, since this is effectively the amount of
 			// simultaneous requests we can handle. See
 			// https://www.cockroachlabs.com/docs/stable/connection-pooling.html
-			.max_connections(4096)
+			.max_connections(max_connections)
 			// Speeds up requests at the expense of potential
-			// failures
+			// failures. See `before_acquire`.
 			.test_before_acquire(false)
-			.after_connect({
-				let url = url.clone();
-				move |_, _| {
-					// let client_name = client_name.clone();
-					let url = url.clone();
-					Box::pin(async move {
-						tracing::trace!(%url, "crdb connected");
-						// sqlx::query("SET application_name = $1;")
-						// 	.bind(&client_name)
-						// 	.execute(conn)
-						// 	.await?;
-						Ok(())
-					})
-				}
+			// Ping once per minute to validate the connection is still alive
+			.before_acquire(|conn, meta| {
+				Box::pin(async move {
+					if meta.idle_for.as_secs() < 60 {
+						Ok(true)
+					} else {
+						match sqlx::Connection::ping(conn).await {
+							Ok(_) => Ok(true),
+							Err(err) => {
+								// See https://docs.aws.amazon.com/vpc/latest/userguide/nat-gateway-troubleshooting.html#nat-gateway-troubleshooting-timeout
+								tracing::warn!(
+									?err,
+									"crdb ping failed, potential idle tcp connection drop"
+								);
+								Ok(false)
+							}
+						}
+					}
+				})
 			})
 			.connect(&url)
 			.await

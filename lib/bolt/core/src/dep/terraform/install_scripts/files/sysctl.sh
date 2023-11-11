@@ -56,8 +56,8 @@ fs.file-max = 65535
 # Allow for more PIDs (to reduce rollover problems); may break some programs 32768
 kernel.pid_max = 4194304
 
-# Increase system IP port limits
-net.ipv4.ip_local_port_range = 2000 65000
+# Increase minimum port so we can bind to 20000-32000 in both GG and Nomad
+net.ipv4.ip_local_port_range = 32768 60999
 
 # Increase TCP max buffer size setable using setsockopt()
 net.ipv4.tcp_rmem = 4096 87380 16777216

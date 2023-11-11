@@ -5,6 +5,7 @@ use api_helper::{
 	ctx::Ctx,
 };
 use proto::backend::{self, pkg::*};
+use rivet_api::models as new_models;
 use rivet_claims::ClaimsDecode;
 use rivet_cloud_server::models;
 use rivet_convert::{ApiInto, ApiTryFrom, ApiTryInto};
@@ -466,8 +467,8 @@ pub async fn validate(
 pub async fn prepare_logo_upload(
 	ctx: Ctx<Auth>,
 	game_id: Uuid,
-	body: models::GameLogoUploadPrepareRequest,
-) -> GlobalResult<models::GameLogoUploadPrepareResponse> {
+	body: new_models::CloudGamesGameLogoUploadPrepareRequest,
+) -> GlobalResult<new_models::CloudGamesGameLogoUploadPrepareResponse> {
 	ctx.auth().check_game_write(ctx.op_ctx(), game_id).await?;
 
 	let user_id = ctx.auth().claims()?.as_user().ok().map(|x| x.user_id);
@@ -506,9 +507,9 @@ pub async fn prepare_logo_upload(
 	let upload_id = unwrap_ref!(upload_prepare_res.upload_id).as_uuid();
 	let presigned_request = unwrap!(upload_prepare_res.presigned_requests.first());
 
-	Ok(models::GameLogoUploadPrepareResponse {
-		upload_id: upload_id.to_string(),
-		presigned_request: presigned_request.clone().try_into()?,
+	Ok(new_models::CloudGamesGameLogoUploadPrepareResponse {
+		upload_id,
+		presigned_request: Box::new(presigned_request.clone().try_into()?),
 	})
 }
 
@@ -534,8 +535,8 @@ pub async fn complete_logo_upload(
 pub async fn prepare_banner_upload(
 	ctx: Ctx<Auth>,
 	game_id: Uuid,
-	body: models::GameBannerUploadPrepareRequest,
-) -> GlobalResult<models::GameBannerUploadPrepareResponse> {
+	body: new_models::CloudGamesGameBannerUploadPrepareRequest,
+) -> GlobalResult<new_models::CloudGamesGameBannerUploadPrepareResponse> {
 	ctx.auth().check_game_write(ctx.op_ctx(), game_id).await?;
 
 	let user_id = ctx.auth().claims()?.as_user().ok().map(|x| x.user_id);
@@ -577,9 +578,9 @@ pub async fn prepare_banner_upload(
 	let upload_id = unwrap_ref!(upload_prepare_res.upload_id).as_uuid();
 	let presigned_request = unwrap!(upload_prepare_res.presigned_requests.first());
 
-	Ok(models::GameBannerUploadPrepareResponse {
-		upload_id: upload_id.to_string(),
-		presigned_request: presigned_request.clone().try_into()?,
+	Ok(new_models::CloudGamesGameBannerUploadPrepareResponse {
+		upload_id,
+		presigned_request: Box::new(presigned_request.clone().try_into()?),
 	})
 }
 

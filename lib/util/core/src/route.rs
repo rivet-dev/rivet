@@ -32,15 +32,12 @@ pub fn game_profile(game_name_id: &str) -> String {
 }
 
 pub fn user_avatar(user: &backend::user::User) -> String {
-	if let (Some(upload_id), Some(file_name), Some(provider)) = (
-		user.profile_upload_id,
-		user.profile_file_name.as_ref(),
-		user.profile_provider,
-	) {
+	if let (Some(upload_id), Some(file_name)) =
+		(user.profile_upload_id, user.profile_file_name.as_ref())
+	{
 		format!(
-			"{}/media/{}/user-avatar/{}/{}",
+			"{}/media/user-avatar/{}/{}",
 			origin_api(),
-			provider_str(provider),
 			upload_id,
 			file_name
 		)
@@ -49,26 +46,22 @@ pub fn user_avatar(user: &backend::user::User) -> String {
 	}
 }
 
-pub fn custom_avatar(upload_id: Uuid, file_name: &str, provider: i32) -> String {
+pub fn custom_avatar(upload_id: Uuid, file_name: &str, _provider: i32) -> String {
 	format!(
-		"{}/media/{}/user-avatar/{}/{}",
+		"{}/media/user-avatar/{}/{}",
 		origin_api(),
-		provider_str(provider),
 		upload_id,
 		file_name
 	)
 }
 
 pub fn team_avatar(team: &backend::team::Team) -> Option<String> {
-	if let (Some(upload_id), Some(file_name), Some(provider)) = (
-		team.profile_upload_id,
-		team.profile_file_name.as_ref(),
-		team.profile_provider,
-	) {
+	if let (Some(upload_id), Some(file_name)) =
+		(team.profile_upload_id, team.profile_file_name.as_ref())
+	{
 		Some(format!(
-			"{}/media/{}/team-avatar/{}/{}",
+			"{}/media/team-avatar/{}/{}",
 			origin_api(),
-			provider_str(provider),
 			upload_id,
 			file_name
 		))
@@ -78,15 +71,11 @@ pub fn team_avatar(team: &backend::team::Team) -> Option<String> {
 }
 
 pub fn game_logo(game: &backend::game::Game) -> Option<String> {
-	if let (Some(upload_id), Some(file_name), Some(provider)) = (
-		game.logo_upload_id,
-		game.logo_file_name.as_ref(),
-		game.logo_provider,
-	) {
+	if let (Some(upload_id), Some(file_name)) = (game.logo_upload_id, game.logo_file_name.as_ref())
+	{
 		Some(format!(
-			"{}/media/{}/game-logo/{}/{}",
+			"{}/media/game-logo/{}/{}",
 			origin_api(),
-			provider_str(provider),
 			upload_id,
 			file_name
 		))
@@ -96,15 +85,12 @@ pub fn game_logo(game: &backend::game::Game) -> Option<String> {
 }
 
 pub fn game_banner(game: &backend::game::Game) -> Option<String> {
-	if let (Some(upload_id), Some(file_name), Some(provider)) = (
-		game.banner_upload_id,
-		game.banner_file_name.as_ref(),
-		game.banner_provider,
-	) {
+	if let (Some(upload_id), Some(file_name)) =
+		(game.banner_upload_id, game.banner_file_name.as_ref())
+	{
 		Some(format!(
-			"{}/media/{}/game-banner/{}/{}",
+			"{}/media/game-banner/{}/{}",
 			origin_api(),
-			provider_str(provider),
 			upload_id,
 			file_name
 		))

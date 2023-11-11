@@ -11,7 +11,7 @@ async fn worker(
 		bail!("invalid hostname status");
 	}
 
-	sql_query!(
+	sql_execute!(
 		[ctx]
 		"
 		UPDATE db_cf_custom_hostname.custom_hostnames
