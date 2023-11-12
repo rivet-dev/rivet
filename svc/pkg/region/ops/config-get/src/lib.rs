@@ -1,4 +1,4 @@
-use proto::backend::{self, pkg::*};
+use proto::backend::pkg::*;
 use rivet_operation::prelude::*;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
