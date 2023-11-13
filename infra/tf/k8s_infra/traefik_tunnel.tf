@@ -40,7 +40,6 @@ resource "kubernetes_priority_class" "traefik_tunnel_priority" {
 	value = 40
 }
 
-# need to adjust config for second instance of traefik? 
 resource "helm_release" "traefik_tunnel" {
 	name = "traefik-tunnel"
 	namespace = kubernetes_namespace.traefik_tunnel.metadata.0.name
