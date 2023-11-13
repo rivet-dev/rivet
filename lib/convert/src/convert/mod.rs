@@ -3,7 +3,6 @@
 use rivet_operation::prelude::*;
 use types::rivet::backend;
 
-pub mod chat;
 pub mod game;
 pub mod group;
 pub mod identity;

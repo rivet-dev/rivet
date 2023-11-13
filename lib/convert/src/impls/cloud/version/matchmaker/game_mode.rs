@@ -627,9 +627,7 @@ impl ApiTryFrom<backend::matchmaker::CreateConfig>
 	}
 }
 
-impl ApiFrom<models::MatchmakerCustomLobbyPublicity>
-	for backend::matchmaker::lobby::Publicity
-{
+impl ApiFrom<models::MatchmakerCustomLobbyPublicity> for backend::matchmaker::lobby::Publicity {
 	fn api_from(
 		value: models::MatchmakerCustomLobbyPublicity,
 	) -> backend::matchmaker::lobby::Publicity {

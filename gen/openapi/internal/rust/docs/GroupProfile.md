@@ -17,7 +17,6 @@ Name | Type | Description | Notes
 **members** | [**Vec<crate::models::GroupMember>**](GroupMember.md) | A list of group members. | 
 **owner_identity_id** | [**uuid::Uuid**](uuid::Uuid.md) |  | 
 **publicity** | [**crate::models::GroupPublicity**](GroupPublicity.md) |  | 
-**thread_id** | Option<[**uuid::Uuid**](uuid::Uuid.md)> |  | [optional]
 
 [[Back to Model list]](../README.md#documentation-for-models) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to README]](../README.md)
 

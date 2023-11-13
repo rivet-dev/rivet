@@ -20,54 +20,6 @@ async fn worker(ctx: &OperationContext<user::msg::delete::Message>) -> GlobalRes
 		.await?;
 	}
 
-	// Redact chat messages
-	{
-		tracing::info!(?user_id, "removing chat messages");
-		let mut last_send_ts = 0;
-
-		loop {
-			let chat_messages_res = op!([ctx] chat_message_list_for_user {
-				user_id: ctx.user_id,
-				ts: last_send_ts,
-				count: MESSAGE_BATCH_SIZE as u32,
-				query_direction: chat_message::list_for_user::request::QueryDirection::After as i32,
-			})
-			.await?;
-
-			futures_util::stream::iter(
-				chat_messages_res
-					.messages
-					.iter()
-					.map(|msg| Ok(unwrap!(msg.chat_message_id)))
-					.collect::<GlobalResult<Vec<_>>>()?,
-			)
-			.map(|chat_message_id| {
-				msg!([ctx] chat_message::msg::edit(chat_message_id) -> chat_message::msg::edit_complete {
-					chat_message_id: Some((*chat_message_id).into()),
-					body: Some(backend::chat::MessageBody {
-						kind: Some(backend::chat::message_body::Kind::Deleted(
-							backend::chat::message_body::Deleted {
-								sender_user_id: ctx.user_id,
-							},
-						)),
-					}),
-				})
-			})
-			.buffer_unordered(32)
-			.try_collect::<Vec<_>>()
-			.await?;
-
-			// Update last timestamp
-			if let Some(last) = chat_messages_res.messages.last() {
-				last_send_ts = last.send_ts;
-			}
-
-			if chat_messages_res.messages.len() < MESSAGE_BATCH_SIZE {
-				break;
-			}
-		}
-	}
-
 	// Remove uploads
 	{
 		tracing::info!(?user_id, "removing uploads");

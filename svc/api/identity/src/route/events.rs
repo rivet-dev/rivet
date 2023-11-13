@@ -13,8 +13,6 @@ use std::collections::{HashMap, HashSet};
 
 use crate::{auth::Auth, utils};
 
-const CHAT_THREAD_HISTORY: usize = 64;
-
 // MARK: GET /events/live
 pub async fn events(
 	ctx: Ctx<Auth>,
@@ -32,8 +30,6 @@ pub async fn events(
 
 	// Wait for an update if needed
 	let EventsWaitResponse {
-		new_messages,
-		new_chat_reads,
 		new_mm_lobby_joins,
 		removed_team_ids,
 		user_update_ts,
@@ -43,8 +39,6 @@ pub async fn events(
 		events_wait(&ctx, anchor, current_user_id).await?
 	} else {
 		EventsWaitResponse {
-			new_messages: Vec::new(),
-			new_chat_reads: Vec::new(),
 			new_mm_lobby_joins: Vec::new(),
 			removed_team_ids: Vec::new(),
 
@@ -56,30 +50,23 @@ pub async fn events(
 	let last_update_ts = last_update_ts.unwrap_or_else(util::timestamp::now);
 
 	// Process events
-	let (msg_events, chat_read_events, user_update_events, mm_lobby_events, thread_remove_events) =
-		tokio::try_join!(
-			process_msg_events(&ctx, current_user_id, new_messages, valid_anchor),
-			process_chat_read_events(new_chat_reads),
-			async {
-				if let Some(ts) = user_update_ts {
-					Ok(Some(
-						process_user_update_events(&ctx, ts, current_user_id, game_user).await?,
-					))
-				} else {
-					Ok(None)
-				}
-			},
-			process_mm_lobby_events(&ctx, namespace_id, new_mm_lobby_joins),
-			process_chat_thread_remove_events(&ctx, removed_team_ids),
-		)?;
+	let (user_update_events, mm_lobby_events) = tokio::try_join!(
+		async {
+			if let Some(ts) = user_update_ts {
+				Ok(Some(
+					process_user_update_events(&ctx, ts, current_user_id, game_user).await?,
+				))
+			} else {
+				Ok(None)
+			}
+		},
+		process_mm_lobby_events(&ctx, namespace_id, new_mm_lobby_joins),
+	)?;
 
 	// Merge and sort events
-	let mut events = msg_events
+	let mut events = user_update_events
 		.into_iter()
-		.chain(chat_read_events)
-		.chain(user_update_events)
 		.chain(mm_lobby_events)
-		.chain(thread_remove_events)
 		.collect::<Vec<_>>();
 	// TODO: Shouldn't be sorting strings
 	events.sort_by(|x, y| x.ts.cmp(&y.ts));
@@ -91,10 +78,6 @@ pub async fn events(
 }
 
 struct EventsWaitResponse {
-	new_messages: Vec<backend::chat::Message>,
-
-	new_chat_reads: Vec<(Uuid, backend::user::event::ChatRead)>,
-
 	new_mm_lobby_joins: Vec<(i64, backend::user::event::MatchmakerLobbyJoin)>,
 
 	removed_team_ids: Vec<(i64, Uuid)>,
@@ -105,6 +88,7 @@ struct EventsWaitResponse {
 
 	/// Timestamp of the last user update.
 	user_update_ts: Option<i64>,
+
 	/// If the provided anchor was valid. If false, the tail will return
 	/// immediately and we'll do a fresh pull of all events.
 	valid_anchor: bool,
@@ -129,8 +113,6 @@ async fn events_wait(
 	tracing::info!(?thread_tail, "thread tail");
 
 	// Decode messages
-	let mut new_messages = Vec::new();
-	let mut new_chat_reads = Vec::new();
 	let mut new_mm_lobby_joins = Vec::new();
 	let mut removed_team_ids = Vec::new();
 	let mut user_update_ts = None;
@@ -139,16 +121,6 @@ async fn events_wait(
 
 		if let Some(event) = &event.kind {
 			match event {
-				backend::user::event::event::Kind::ChatMessage(chat_msg) => {
-					let chat_message = unwrap_ref!(chat_msg.chat_message).clone();
-					new_messages.push(chat_message);
-				}
-				backend::user::event::event::Kind::ChatRead(chat_read) => {
-					new_chat_reads.push((
-						unwrap_ref!(chat_read.thread_id).as_uuid(),
-						chat_read.clone(),
-					));
-				}
 				backend::user::event::event::Kind::MatchmakerLobbyJoin(mm_lobby_join) => {
 					new_mm_lobby_joins.push((msg.msg_ts(), mm_lobby_join.clone()));
 				}
@@ -168,168 +140,11 @@ async fn events_wait(
 	}
 
 	Ok(EventsWaitResponse {
-		new_messages,
-		new_chat_reads,
 		new_mm_lobby_joins,
 		removed_team_ids,
 		user_update_ts,
 		last_update_ts,
 		valid_anchor: thread_tail.anchor_status != chirp_client::TailAllAnchorStatus::Expired,
-	})
-}
-
-// MARK: Chat read events
-async fn process_chat_read_events(
-	new_chat_reads: Vec<(Uuid, backend::user::event::ChatRead)>,
-) -> GlobalResult<Vec<models::IdentityGlobalEvent>> {
-	new_chat_reads
-		.into_iter()
-		.map(|(thread_id, event)| {
-			Ok(models::IdentityGlobalEvent {
-				ts: util::timestamp::to_string(event.read_ts)?,
-				kind: Box::new(models::IdentityGlobalEventKind {
-					chat_read: Some(Box::new(models::IdentityGlobalEventChatRead {
-						read_ts: util::timestamp::to_string(event.read_ts)?,
-						thread_id,
-					})),
-					..Default::default()
-				}),
-				notification: None,
-			})
-		})
-		.collect::<GlobalResult<Vec<_>>>()
-}
-
-// MARK: Chat message events
-async fn process_msg_events(
-	ctx: &Ctx<Auth>,
-	current_user_id: Uuid,
-	new_messages: Vec<backend::chat::Message>,
-	valid_anchor: bool,
-) -> GlobalResult<Vec<models::IdentityGlobalEvent>> {
-	// Fetch threads
-	let FetchThreadsResponse {
-		threads,
-		tail_messages,
-	} = if valid_anchor {
-		fetch_threads_incremental(ctx, current_user_id, new_messages).await?
-	} else {
-		fetch_threads_refresh(ctx, current_user_id).await?
-	};
-
-	if threads.is_empty() {
-		return Ok(Vec::new());
-	}
-
-	let (threads, users_res) =
-		fetch::chat::threads(ctx.op_ctx(), current_user_id, &threads, &tail_messages).await?;
-
-	let mut msg_events = Vec::with_capacity(threads.len());
-	for thread in threads {
-		let thread_id = Some(Into::<common::Uuid>::into(thread.thread_id));
-		let message = unwrap!(tail_messages.iter().find(|msg| msg.thread_id == thread_id));
-
-		let notification = utils::create_notification(current_user_id, &users_res.users, message)?;
-
-		msg_events.push(models::IdentityGlobalEvent {
-			ts: util::timestamp::to_string(message.send_ts)?,
-			kind: Box::new(models::IdentityGlobalEventKind {
-				chat_message: Some(Box::new(models::IdentityGlobalEventChatMessage {
-					thread: Box::new(thread),
-				})),
-				..Default::default()
-			}),
-			notification: notification.map(Box::new),
-		});
-	}
-
-	Ok(msg_events)
-}
-
-struct FetchThreadsResponse {
-	/// List of metadata for all threads.
-	threads: Vec<backend::chat::Thread>,
-
-	/// The last message for each of the threads. Used for channel previews.
-	tail_messages: Vec<backend::chat::Message>,
-}
-
-/// Fetches all of the threads the user is a part of.
-///
-/// Call this when we can't infer incremental events because the anchor is
-/// invalid.
-async fn fetch_threads_refresh(
-	ctx: &Ctx<Auth>,
-	current_user_id: Uuid,
-) -> GlobalResult<FetchThreadsResponse> {
-	// Fetch initial list of threads
-	let threads_res = op!([ctx] chat_thread_recent_for_user {
-		user_id: Some(current_user_id.into()),
-		after_ts: None,
-	})
-	.await?;
-
-	// Get the most recent tail messages in order of timestamp desc
-	let mut tail_threads = threads_res.threads;
-	tail_threads.sort_by_key(|t| {
-		t.tail_message
-			.as_ref()
-			.map(|m| m.send_ts)
-			.unwrap_or_else(|| t.thread.as_ref().map(|t| t.create_ts).unwrap_or(0))
-	});
-	let sorted_threads_iter = tail_threads
-		.iter()
-		.rev()
-		.take(CHAT_THREAD_HISTORY)
-		.collect::<Vec<_>>();
-
-	let threads = sorted_threads_iter
-		.iter()
-		.map(|t| Ok(unwrap_ref!(t.thread).clone()))
-		.collect::<GlobalResult<Vec<_>>>()?;
-	let tail_messages = sorted_threads_iter
-		.iter()
-		.map(|t| Ok(unwrap_ref!(t.tail_message).clone()))
-		.collect::<GlobalResult<Vec<_>>>()?;
-
-	Ok(FetchThreadsResponse {
-		threads,
-		tail_messages,
-	})
-}
-
-/// Fetch all thread for the new messages that came in since the anchor.
-async fn fetch_threads_incremental(
-	ctx: &Ctx<Auth>,
-	_current_user_id: Uuid,
-	new_messages: Vec<backend::chat::Message>,
-) -> GlobalResult<FetchThreadsResponse> {
-	// Fetch information about the threads of the new messages
-
-	// Get a deduplicated list of all thread IDs to fetch from the new
-	// messages
-	let thread_ids = new_messages
-		.iter()
-		.map(|message| Ok(unwrap_ref!(message.thread_id).as_uuid()))
-		.collect::<GlobalResult<HashSet<_>>>()?
-		.into_iter()
-		.map(common::Uuid::from)
-		.collect::<Vec<_>>();
-
-	let threads = if !thread_ids.is_empty() {
-		let threads_res = op!([ctx] chat_thread_get {
-			thread_ids: thread_ids.clone(),
-		})
-		.await?;
-
-		threads_res.threads
-	} else {
-		Vec::new()
-	};
-
-	Ok(FetchThreadsResponse {
-		threads,
-		tail_messages: new_messages,
 	})
 }
 
@@ -429,67 +244,6 @@ async fn process_mm_lobby_events(
 	}
 
 	Ok(events)
-}
-
-// MARK: Chat thread remove events
-async fn process_chat_thread_remove_events(
-	ctx: &Ctx<Auth>,
-	removed_team_ids: Vec<(i64, Uuid)>,
-) -> GlobalResult<Vec<models::IdentityGlobalEvent>> {
-	// Ignore if no removed_team_ids provided
-	if removed_team_ids.is_empty() {
-		return Ok(Vec::new());
-	}
-
-	let team_thread_res = op!([ctx] chat_thread_get_for_topic {
-		topics: removed_team_ids
-			.iter()
-			.map(|(_, team_id)| backend::chat::Topic {
-				kind: Some(backend::chat::topic::Kind::Team(backend::chat::topic::Team {
-					team_id: Some((*team_id).into()),
-				})),
-			})
-			.collect::<Vec<_>>(),
-	})
-	.await?;
-
-	// Infallibly find matching threads
-	let team_threads = removed_team_ids
-		.iter()
-		.map(|(ts, team_id)| (ts, Into::<common::Uuid>::into(*team_id)))
-		.filter_map(|(ts, team_id)| {
-			team_thread_res
-				.threads
-				.iter()
-				.find_map(|thread| {
-					match thread.topic.as_ref().and_then(|topic| topic.kind.as_ref()) {
-						Some(backend::chat::topic::Kind::Team(team))
-							if team.team_id == Some(team_id) =>
-						{
-							thread.thread_id
-						}
-						_ => None,
-					}
-				})
-				.map(|thread_id| (ts, thread_id))
-		});
-
-	team_threads
-		.map(|(ts, thread_id)| {
-			Ok(models::IdentityGlobalEvent {
-				ts: util::timestamp::to_string(*ts)?,
-				kind: Box::new(models::IdentityGlobalEventKind {
-					chat_thread_remove: Some(Box::new(
-						models::IdentityGlobalEventChatThreadRemove {
-							thread_id: thread_id.as_uuid(),
-						},
-					)),
-					..Default::default()
-				}),
-				notification: None,
-			})
-		})
-		.collect::<GlobalResult<Vec<_>>>()
 }
 
 async fn fetch_lobby(

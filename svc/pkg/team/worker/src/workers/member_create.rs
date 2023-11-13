@@ -63,26 +63,6 @@ async fn worker(ctx: &OperationContext<team::msg::member_create::Message>) -> Gl
 	})
 	.await?;
 
-	// Send new member message
-	let chat_message_id = Uuid::new_v4();
-	op!([ctx] chat_message_create_with_topic {
-		chat_message_id: Some(chat_message_id.into()),
-		topic: Some(backend::chat::Topic {
-			kind: Some(backend::chat::topic::Kind::Team(
-				  backend::chat::topic::Team {
-					  team_id: Some(team_id.into()),
-				  },
-			  )),
-		}),
-		send_ts: util::timestamp::now(),
-		body: Some(backend::chat::MessageBody {
-			kind: Some(backend::chat::message_body::Kind::TeamJoin(backend::chat::message_body::TeamJoin {
-				user_id: Some(user_id.into()),
-			})),
-		}),
-	})
-	.await?;
-
 	msg!([ctx] analytics::msg::event_create() {
 		events: vec![
 			analytics::msg::event_create::Event {

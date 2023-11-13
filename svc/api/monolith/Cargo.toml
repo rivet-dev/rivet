@@ -20,7 +20,6 @@ url = "2.2.2"
 api-admin = { path = "../admin" }
 api-auth = { path = "../auth" }
 api-cf-verification = { path = "../cf-verification" }
-api-chat = { path = "../chat" }
 api-cloud = { path = "../cloud" }
 api-group = { path = "../group" }
 api-identity = { path = "../identity" }

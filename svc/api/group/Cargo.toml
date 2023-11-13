@@ -33,7 +33,6 @@ url = "2.2.2"
 util-nsfw = { package = "rivet-util-nsfw", path = "../../pkg/nsfw/util" }
 uuid = { version = "1", features = ["v4"] }
 
-chat-thread-get-for-topic = { path = "../../pkg/chat-thread/ops/get-for-topic" }
 game-get = { path = "../../pkg/game/ops/get" }
 game-resolve-namespace-id = { path = "../../pkg/game/ops/resolve-namespace-id" }
 team-avatar-upload-complete = { path = "../../pkg/team/ops/avatar-upload-complete" }

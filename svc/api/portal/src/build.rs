@@ -58,7 +58,7 @@ pub async fn group_summaries(
 				avatar_url: util::route::team_avatar(&team_data),
 				external: models::GroupExternalLinks {
 					profile: util::route::team_profile(team_id),
-					chat: util::route::team_chat(team_id),
+					chat: Default::default(),
 				},
 
 				is_current_identity_member: is_current_user_member,

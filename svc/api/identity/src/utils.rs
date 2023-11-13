@@ -5,45 +5,6 @@ use rivet_operation::prelude::*;
 
 use crate::auth::Auth;
 
-pub fn create_notification(
-	current_user_id: Uuid,
-	users: &[backend::user::User],
-	message: &backend::chat::Message,
-) -> GlobalResult<Option<models::IdentityGlobalEventNotification>> {
-	let thread_id = unwrap_ref!(message.thread_id);
-	let body = unwrap_ref!(message.body);
-	let kind = unwrap_ref!(body.kind);
-
-	match kind {
-		// TODO: Create notifications for other important message variants
-		backend::chat::message_body::Kind::Text(text) => {
-			// No notification if message is from self
-			if unwrap_ref!(text.sender_user_id).as_uuid() == current_user_id {
-				return Ok(None);
-			}
-
-			let sender = unwrap!(users
-				.iter()
-				.find(|user| user.user_id == text.sender_user_id))
-			.clone();
-
-			let title = sender.display_name.to_owned();
-			let description =
-				util::format::truncate_at_code_point(&text.body.chars().collect::<Vec<_>>(), 1024)?;
-			let thumbnail_url = util::route::user_avatar(&sender);
-			let url = util::route::thread(thread_id.as_uuid());
-
-			Ok(Some(models::IdentityGlobalEventNotification {
-				title,
-				description,
-				thumbnail_url,
-				url,
-			}))
-		}
-		_ => Ok(None),
-	}
-}
-
 // Used to get the game id when the game user has not been made yet
 pub async fn get_game_id(ctx: &Ctx<Auth>) -> GlobalResult<common::Uuid> {
 	let namespace_id = if let Some(ns_dev_ent) = ctx.auth().game_ns_dev_option()? {

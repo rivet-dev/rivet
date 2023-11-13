@@ -1,7 +1,0 @@
-[service]
-name = "user-thread-typing-status-set"
-
-[runtime]
-kind = "rust"
-
-[operation]

@@ -49,8 +49,6 @@ pub struct GroupProfile {
     pub owner_identity_id: uuid::Uuid,
     #[serde(rename = "publicity")]
     pub publicity: crate::models::GroupPublicity,
-    #[serde(rename = "thread_id", skip_serializing_if = "Option::is_none")]
-    pub thread_id: Option<uuid::Uuid>,
 }
 
 impl GroupProfile {
@@ -70,7 +68,6 @@ impl GroupProfile {
             members,
             owner_identity_id,
             publicity,
-            thread_id: None,
         }
     }
 }

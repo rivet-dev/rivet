@@ -14,9 +14,6 @@
 
 #[derive(Clone, Debug, PartialEq, Default, Serialize, Deserialize)]
 pub struct GroupExternalLinks {
-    /// A link to this group's chat page.
-    #[serde(rename = "chat")]
-    pub chat: String,
     /// A link to this group's profile page.
     #[serde(rename = "profile")]
     pub profile: String,
@@ -24,9 +21,8 @@ pub struct GroupExternalLinks {
 
 impl GroupExternalLinks {
     /// External links for this group.
-    pub fn new(chat: String, profile: String) -> GroupExternalLinks {
+    pub fn new(profile: String) -> GroupExternalLinks {
         GroupExternalLinks {
-            chat,
             profile,
         }
     }

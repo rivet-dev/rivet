@@ -14,7 +14,6 @@ rivet-health-checks = { path = "../../../../lib/health-checks" }
 rivet-metrics = { path = "../../../../lib/metrics" }
 rivet-runtime = { path = "../../../../lib/runtime" }
 
-chat-message-create-with-topic = { path = "../../chat-message/ops/create-with-topic" }
 team-dev-get = { path = "../../team-dev/ops/get" }
 team-join-request-list = { path = "../ops/join-request-list" }
 team-profile-validate = { path = "../ops/profile-validate" }

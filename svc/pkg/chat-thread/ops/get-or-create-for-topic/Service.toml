@@ -1,7 +1,0 @@
-[service]
-name = "chat-thread-get-or-create-for-topic"
-
-[runtime]
-kind = "rust"
-
-[operation]

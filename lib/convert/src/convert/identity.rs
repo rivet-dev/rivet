@@ -38,7 +38,6 @@ pub fn handle(
 		external: Box::new(models::IdentityExternalLinks {
 			profile: util::route::user_profile(user_id),
 			settings: None,
-			chat: (!is_self).then(|| util::route::user_chat(user_id)),
 		}),
 	})
 }
@@ -60,7 +59,6 @@ pub fn handle_without_presence(
 		external: Box::new(models::IdentityExternalLinks {
 			profile: util::route::user_profile(user_id),
 			settings: None,
-			chat: (!is_self).then(|| util::route::user_chat(user_id)),
 		}),
 	})
 }
@@ -107,7 +105,6 @@ pub fn summary(
 		external: Box::new(models::IdentityExternalLinks {
 			profile: util::route::user_profile(user_id),
 			settings: None,
-			chat: (!is_self).then(|| util::route::user_chat(user_id)),
 		}),
 		following,
 		is_following_me,
@@ -228,7 +225,6 @@ pub fn profile(
 		external: Box::new(models::IdentityExternalLinks {
 			profile: util::route::user_profile(user_id),
 			settings: (is_self && pctx.is_game_user).then(util::route::user_settings),
-			chat: (!is_self).then(|| util::route::user_chat(user_id)),
 		}),
 		dev_state: None,
 		is_admin: is_self && user.is_admin,

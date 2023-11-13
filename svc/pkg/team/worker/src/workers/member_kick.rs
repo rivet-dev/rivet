@@ -17,38 +17,12 @@ async fn worker(ctx: &OperationContext<team::msg::member_kick::Message>) -> Glob
 	// 	.await?;
 
 	// Dispatch events
-	tokio::try_join!(
-		async {
-			Ok(msg!([ctx] team::msg::member_remove(team_id, user_id) -> team::msg::member_remove_complete {
-				team_id: Some(team_id.into()),
-				user_id: Some(user_id.into()),
-				silent: true,
-			})
-			.await?)
-		},
-		async {
-			// Send team member kick message
-			let chat_message_id = Uuid::new_v4();
-			op!([ctx] chat_message_create_with_topic {
-				chat_message_id: Some(chat_message_id.into()),
-				topic: Some(backend::chat::Topic {
-					kind: Some(backend::chat::topic::Kind::Team(
-						backend::chat::topic::Team {
-							team_id: Some(team_id.into()),
-						},
-					)),
-				}),
-				send_ts: util::timestamp::now(),
-				body: Some(backend::chat::MessageBody {
-					kind: Some(backend::chat::message_body::Kind::TeamMemberKick(backend::chat::message_body::TeamMemberKick {
-						user_id: Some(user_id.into()),
-					})),
-				}),
-			})
-			.await
-			.map_err(Into::<GlobalError>::into)
-		},
-	)?;
+	msg!([ctx] team::msg::member_remove(team_id, user_id) -> team::msg::member_remove_complete {
+		team_id: Some(team_id.into()),
+		user_id: Some(user_id.into()),
+		silent: true,
+	})
+	.await?;
 
 	msg!([ctx] team::msg::member_kick_complete(team_id, user_id) { }).await?;
 

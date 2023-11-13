@@ -18,7 +18,6 @@ with open('gen/openapi/internal/spec/openapi.yml', 'r') as f:
 openapi['info']['version'] = '0.0.1'
 openapi['components']['schemas']['PortalNotificationUnregisterService'].pop('enum')
 openapi['components']['schemas']['CloudGamesLogStream'].pop('enum')
-openapi['components']['schemas']['ChatQueryDirection'].pop('enum')
 
 # Write new spec
 with open(f'{output_dir}/openapi.yml', "w") as f:

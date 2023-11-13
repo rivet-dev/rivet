@@ -1,6 +1,0 @@
-syntax = "proto3";
-
-package rivet.backend.pkg.team.create_complete_chat_message_create;
-
-import "proto/common.proto";
-

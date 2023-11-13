@@ -1,7 +1,6 @@
 # yaml-language-server: $schema=https://raw.githubusercontent.com/fern-api/fern/main/fern.schema.json
 
 imports:
-  chatCommons: ../chat/common.yml
   commons: ../common.yml
   gameCommons: ../game/common.yml
   groupCommons: ../group/common.yml
@@ -18,11 +17,8 @@ types:
 
   GlobalEventKind:
     properties:
-      chat_message: optional<GlobalEventChatMessage>
-      chat_read: optional<GlobalEventChatRead>
       identity_update: optional<GlobalEventIdentityUpdate>
       matchmaker_lobby_join: optional<GlobalEventMatchmakerLobbyJoin>
-      chat_thread_remove: optional<GlobalEventChatThreadRemove>
 
   GlobalEventNotification:
     docs: |
@@ -53,15 +49,6 @@ types:
         docs: Rivet Hub URL that holds the relevant context for this notification.
         type: string
 
-  GlobalEventChatMessage:
-    properties:
-      thread: chatCommons.Thread
-
-  GlobalEventChatRead:
-    properties:
-      thread_id: uuid
-      read_ts: datetime
-
   GlobalEventIdentityUpdate:
     properties:
       identity: identityCommons.Profile
@@ -71,14 +58,6 @@ types:
       lobby: matchmakerCommons.JoinLobby
       ports: map<string, matchmakerCommons.JoinPort>
       player: matchmakerCommons.JoinPlayer
-
-  GlobalEventChatThreadRemove:
-    docs: >
-      Received any time the current identity is no longer able to access
-      the  given thread. This can happen if the identity leaves a group or
-      party.
-    properties:
-      thread_id: uuid
 
   UpdateGameActivity:
     docs: Information about the identity's current game. This is information that
@@ -186,9 +165,6 @@ types:
       settings:
         type: optional<string>
         docs: A link to the Rivet settings page.
-      chat:
-        type: optional<string>
-        docs: A link to a chat page with the given identity.
 
   Presence:
     docs: Information about the identity's current status, party, and active game.

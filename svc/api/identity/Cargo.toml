@@ -34,9 +34,6 @@ util-nsfw = { package = "rivet-util-nsfw", path = "../../pkg/nsfw/util" }
 uuid = { version = "1", features = ["v4"] }
 
 cdn-namespace-get = { path = "../../pkg/cdn/ops/namespace-get" }
-chat-thread-get = { path = "../../pkg/chat-thread/ops/get" }
-chat-thread-get-for-topic = { path = "../../pkg/chat-thread/ops/get-for-topic" }
-chat-thread-recent-for-user = { path = "../../pkg/chat-thread/ops/recent-for-user" }
 game-get = { path = "../../pkg/game/ops/get" }
 game-namespace-get = { path = "../../pkg/game/ops/namespace-get" }
 game-namespace-resolve-url = { path = "../../pkg/game/ops/namespace-resolve-url" }

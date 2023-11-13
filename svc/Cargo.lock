@@ -209,52 +209,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "api-chat"
-version = "0.0.1"
-dependencies = [
- "api-helper",
- "async-trait",
- "chat-message-list",
- "chat-message-validate",
- "chat-thread-get",
- "chat-thread-get-for-topic",
- "chat-thread-get-or-create-for-topic",
- "chat-thread-participant-list",
- "chirp-client",
- "chrono",
- "futures-util",
- "game-get",
- "game-resolve-namespace-id",
- "game-user-get",
- "http",
- "hyper",
- "lazy_static",
- "prost 0.10.4",
- "rand",
- "rivet-cache",
- "rivet-chat",
- "rivet-chat-server",
- "rivet-claims",
- "rivet-connection",
- "rivet-convert",
- "rivet-health-checks",
- "rivet-operation",
- "rivet-pools",
- "rivet-util-chat",
- "serde",
- "serde_json",
- "thiserror",
- "token-revoke",
- "tokio",
- "tracing",
- "tracing-subscriber",
- "url",
- "user-get",
- "user-thread-typing-status-set",
- "uuid",
-]
-
-[[package]]
 name = "api-cloud"
 version = "0.0.1"
 dependencies = [
@@ -377,7 +331,6 @@ version = "0.0.1"
 dependencies = [
  "api-helper",
  "async-trait",
- "chat-thread-get-for-topic",
  "chirp-client",
  "chrono",
  "faker-user",
@@ -487,9 +440,6 @@ dependencies = [
  "async-trait",
  "cdn-namespace-domain-create",
  "cdn-namespace-get",
- "chat-thread-get",
- "chat-thread-get-for-topic",
- "chat-thread-recent-for-user",
  "chirp-client",
  "cloud-namespace-token-development-create",
  "faker-build",
@@ -780,7 +730,6 @@ dependencies = [
  "api-admin",
  "api-auth",
  "api-cf-verification",
- "api-chat",
  "api-cloud",
  "api-group",
  "api-helper",
@@ -1976,243 +1925,6 @@ name = "cfg-if"
 version = "1.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "baf1de4339761588bc0619e3cbc0120ee582ebb74b53b4efbf79117bd2da40fd"
-
-[[package]]
-name = "chat-last-read-ts-get"
-version = "0.0.1"
-dependencies = [
- "chat-thread-get-or-create-for-topic",
- "chirp-client",
- "chirp-worker",
- "chrono",
- "faker-user",
- "prost 0.10.4",
- "rivet-operation",
- "sqlx",
-]
-
-[[package]]
-name = "chat-message-body-validate"
-version = "0.0.1"
-dependencies = [
- "chirp-client",
- "chirp-worker",
- "prost 0.10.4",
- "rivet-claims",
- "rivet-operation",
-]
-
-[[package]]
-name = "chat-message-create-with-topic"
-version = "0.0.1"
-dependencies = [
- "chat-thread-get-or-create-for-topic",
- "chirp-client",
- "chirp-worker",
- "faker-user",
- "prost 0.10.4",
- "rivet-operation",
-]
-
-[[package]]
-name = "chat-message-get"
-version = "0.0.1"
-dependencies = [
- "chat-thread-get-or-create-for-topic",
- "chirp-client",
- "chirp-worker",
- "chrono",
- "prost 0.10.4",
- "rivet-operation",
- "sqlx",
-]
-
-[[package]]
-name = "chat-message-list"
-version = "0.0.1"
-dependencies = [
- "chat-thread-get-or-create-for-topic",
- "chirp-client",
- "chirp-worker",
- "chrono",
- "prost 0.10.4",
- "rivet-operation",
- "sqlx",
-]
-
-[[package]]
-name = "chat-message-list-for-user"
-version = "0.0.1"
-dependencies = [
- "chat-thread-get-or-create-for-topic",
- "chirp-client",
- "chirp-worker",
- "chrono",
- "prost 0.10.4",
- "rivet-operation",
- "sqlx",
-]
-
-[[package]]
-name = "chat-message-validate"
-version = "0.0.1"
-dependencies = [
- "chat-message-body-validate",
- "chirp-client",
- "chirp-worker",
- "prost 0.10.4",
- "rivet-operation",
-]
-
-[[package]]
-name = "chat-message-worker"
-version = "0.0.1"
-dependencies = [
- "chat-message-list",
- "chat-thread-get-or-create-for-topic",
- "chat-thread-participant-list",
- "chirp-client",
- "chirp-worker",
- "chrono",
- "lazy_static",
- "rivet-health-checks",
- "rivet-metrics",
- "rivet-runtime",
- "rivet-util-chat",
-]
-
-[[package]]
-name = "chat-thread-get"
-version = "0.0.1"
-dependencies = [
- "chat-thread-get-or-create-for-topic",
- "chirp-client",
- "chirp-worker",
- "chrono",
- "prost 0.10.4",
- "rivet-operation",
- "sqlx",
-]
-
-[[package]]
-name = "chat-thread-get-for-topic"
-version = "0.0.1"
-dependencies = [
- "chat-thread-get-or-create-for-topic",
- "chirp-client",
- "chirp-worker",
- "chrono",
- "prost 0.10.4",
- "rivet-operation",
- "sqlx",
-]
-
-[[package]]
-name = "chat-thread-get-or-create-for-topic"
-version = "0.0.1"
-dependencies = [
- "chat-thread-get-for-topic",
- "chirp-client",
- "chirp-worker",
- "prost 0.10.4",
- "rivet-operation",
-]
-
-[[package]]
-name = "chat-thread-list-for-participant"
-version = "0.0.1"
-dependencies = [
- "chat-thread-get-or-create-for-topic",
- "chirp-client",
- "chirp-worker",
- "chrono",
- "faker-user",
- "prost 0.10.4",
- "rivet-operation",
- "sqlx",
- "user-team-list",
-]
-
-[[package]]
-name = "chat-thread-participant-list"
-version = "0.0.1"
-dependencies = [
- "chat-thread-get",
- "chat-thread-get-for-topic",
- "chat-thread-get-or-create-for-topic",
- "chirp-client",
- "chirp-worker",
- "faker-user",
- "prost 0.10.4",
- "rivet-operation",
- "team-member-list",
- "user-get",
-]
-
-[[package]]
-name = "chat-thread-recent-for-user"
-version = "0.0.1"
-dependencies = [
- "chat-thread-get",
- "chat-thread-get-for-topic",
- "chat-thread-get-or-create-for-topic",
- "chat-thread-list-for-participant",
- "chirp-client",
- "chirp-worker",
- "chrono",
- "faker-user",
- "lazy_static",
- "prost 0.10.4",
- "rivet-operation",
- "rivet-util-chat",
- "sqlx",
-]
-
-[[package]]
-name = "chat-thread-unread-count"
-version = "0.0.1"
-dependencies = [
- "chat-last-read-ts-get",
- "chat-thread-get-or-create-for-topic",
- "chirp-client",
- "chirp-worker",
- "chrono",
- "faker-user",
- "prost 0.10.4",
- "rivet-operation",
- "serde_json",
- "sqlx",
-]
-
-[[package]]
-name = "chat-thread-worker"
-version = "0.0.1"
-dependencies = [
- "chirp-client",
- "chirp-worker",
- "chrono",
- "lazy_static",
- "rivet-health-checks",
- "rivet-metrics",
- "rivet-runtime",
- "sqlx",
-]
-
-[[package]]
-name = "chat-worker"
-version = "0.0.1"
-dependencies = [
- "chat-last-read-ts-get",
- "chat-thread-get-or-create-for-topic",
- "chirp-client",
- "chirp-worker",
- "chrono",
- "faker-user",
- "lazy_static",
- "rivet-health-checks",
- "rivet-metrics",
- "rivet-runtime",
-]
 
 [[package]]
 name = "chirp-client"
@@ -5480,7 +5192,6 @@ dependencies = [
 name = "module-worker"
 version = "0.0.1"
 dependencies = [
- "chat-thread-get-or-create-for-topic",
  "chirp-client",
  "chirp-worker",
  "chrono",
@@ -5508,9 +5219,6 @@ dependencies = [
  "analytics-worker",
  "cdn-worker",
  "cf-custom-hostname-worker",
- "chat-message-worker",
- "chat-thread-worker",
- "chat-worker",
  "chirp-client",
  "cloud-worker",
  "external-worker",
@@ -6635,28 +6343,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "rivet-chat"
-version = "0.0.7"
-dependencies = [
- "aws-smithy-client 0.41.0",
- "aws-smithy-http 0.41.0",
- "aws-smithy-json",
- "aws-smithy-types 0.41.0",
- "bytes",
- "http",
- "tower",
-]
-
-[[package]]
-name = "rivet-chat-server"
-version = "0.0.7"
-dependencies = [
- "chrono",
- "serde",
- "serde_json",
-]
-
-[[package]]
 name = "rivet-claims"
 version = "0.1.0"
 dependencies = [
@@ -6713,9 +6399,6 @@ name = "rivet-convert"
 version = "0.1.0"
 dependencies = [
  "cdn-namespace-get",
- "chat-last-read-ts-get",
- "chat-thread-get-for-topic",
- "chat-thread-unread-count",
  "chirp-client",
  "chrono",
  "game-get",
@@ -6735,7 +6418,6 @@ dependencies = [
  "region-resolve",
  "rivet-api",
  "rivet-auth-server",
- "rivet-chat-server",
  "rivet-cloud-server",
  "rivet-group-server",
  "rivet-kv-server",
@@ -7053,14 +6735,6 @@ dependencies = [
 [[package]]
 name = "rivet-util-cdn"
 version = "0.1.0"
-
-[[package]]
-name = "rivet-util-chat"
-version = "0.1.0"
-dependencies = [
- "rivet-util",
- "uuid",
-]
 
 [[package]]
 name = "rivet-util-env"
@@ -8298,7 +7972,6 @@ dependencies = [
 name = "team-worker"
 version = "0.0.1"
 dependencies = [
- "chat-message-create-with-topic",
  "chirp-client",
  "chirp-worker",
  "faker-team",
@@ -9423,19 +9096,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "user-thread-typing-status-set"
-version = "0.0.1"
-dependencies = [
- "chirp-client",
- "chirp-worker",
- "lazy_static",
- "prost 0.10.4",
- "rivet-operation",
- "rivet-util-chat",
- "sqlx",
-]
-
-[[package]]
 name = "user-token-create"
 version = "0.0.1"
 dependencies = [
@@ -9452,8 +9112,6 @@ dependencies = [
 name = "user-worker"
 version = "0.0.1"
 dependencies = [
- "chat-message-list-for-user",
- "chat-thread-get-or-create-for-topic",
  "chirp-client",
  "chirp-worker",
  "chrono",
