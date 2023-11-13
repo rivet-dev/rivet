@@ -68,9 +68,7 @@ async fn create_lobby_group(ctx: &TestCtx, image: Option<faker::build::Image>) -
 					}],
 				}.into()),
 
-				find_config: None,
-				join_config: None,
-				create_config: None,
+				actions: None,
 			}],
 		}),
 		..Default::default()
@@ -811,7 +809,7 @@ fn gen_players(count: usize) -> Vec<mm::msg::lobby_find::Player> {
 async fn gen_verification_lobby(
 	ctx: &TestCtx,
 	identity_requirement: backend::matchmaker::IdentityRequirement,
-	verification_config: Option<backend::matchmaker::VerificationConfig>,
+	verification: Option<backend::matchmaker::VerificationConfig>,
 ) -> (Uuid, Uuid) {
 	let region_list_res = op!([ctx] region_list {
 		..Default::default()
@@ -871,17 +869,19 @@ async fn gen_verification_lobby(
 					.into(),
 				),
 
-				find_config: Some(backend::matchmaker::FindConfig {
-					enabled: true,
-					identity_requirement: identity_requirement as i32,
-					verification_config: verification_config.clone(),
-				}),
-				join_config: Some(backend::matchmaker::JoinConfig {
-					enabled: true,
-					identity_requirement: identity_requirement as i32,
-					verification_config,
-				}),
-				create_config: None,
+				actions: Some(backend::matchmaker::lobby_group::Actions {
+					find: Some(backend::matchmaker::FindConfig {
+						enabled: true,
+						identity_requirement: identity_requirement as i32,
+						verification: verification.clone(),
+					}),
+					join: Some(backend::matchmaker::JoinConfig {
+						enabled: true,
+						identity_requirement: identity_requirement as i32,
+						verification,
+					}),
+					create: None,
+				})
 			}],
 		}),
 	})
@@ -961,17 +961,19 @@ async fn gen_disabled_lobby(ctx: &TestCtx) -> (Uuid, Uuid) {
 					.into(),
 				),
 
-				find_config: Some(backend::matchmaker::FindConfig {
-					enabled: false,
-					identity_requirement: backend::matchmaker::IdentityRequirement::None as i32,
-					verification_config: None,
-				}),
-				join_config: Some(backend::matchmaker::JoinConfig {
-					enabled: false,
-					identity_requirement: backend::matchmaker::IdentityRequirement::None as i32,
-					verification_config: None,
-				}),
-				create_config: None,
+				actions: Some(backend::matchmaker::lobby_group::Actions {
+					find: Some(backend::matchmaker::FindConfig {
+						enabled: false,
+						identity_requirement: backend::matchmaker::IdentityRequirement::None as i32,
+						verification: None,
+					}),
+					join: Some(backend::matchmaker::JoinConfig {
+						enabled: false,
+						identity_requirement: backend::matchmaker::IdentityRequirement::None as i32,
+						verification: None,
+					}),
+					create: None,
+				})
 			}],
 		}),
 	})

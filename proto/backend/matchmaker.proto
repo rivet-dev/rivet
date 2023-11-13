@@ -35,6 +35,12 @@ message LobbyGroup {
 		uint32 max_idle_lobbies = 2;
 	}
 
+	message Actions {
+		optional FindConfig find = 1;
+		optional JoinConfig join = 2;
+		optional CreateConfig create = 3;
+	}
+
 	string name_id = 1;
 
 	repeated Region regions = 101;
@@ -45,9 +51,7 @@ message LobbyGroup {
 
 	LobbyRuntime runtime = 201;
 
-	optional FindConfig find_config = 301;
-	optional JoinConfig join_config = 302;
-	optional CreateConfig create_config = 303;
+	optional Actions actions = 301;
 }
 
 message LobbyRuntime {
@@ -121,23 +125,24 @@ message VerificationConfig {
 message FindConfig {
 	bool enabled = 1;
 	IdentityRequirement identity_requirement = 2;
-	optional VerificationConfig verification_config = 3;
+	optional VerificationConfig verification = 3;
 }
 
 message JoinConfig {
 	bool enabled = 1;
 	IdentityRequirement identity_requirement = 2;
-	optional VerificationConfig verification_config = 3;
+	optional VerificationConfig verification = 3;
 }
 
 message CreateConfig {
-	IdentityRequirement identity_requirement = 1;
-	optional VerificationConfig verification_config = 2;
+	bool enabled = 1;
+	IdentityRequirement identity_requirement = 2;
+	optional VerificationConfig verification = 3;
 
-	bool enable_public = 3;
-	bool enable_private = 4;
+	bool enable_public = 4;
+	bool enable_private = 5;
 
-	optional uint64 max_lobbies_per_identity = 5;
+	optional uint64 max_lobbies_per_identity = 6;
 }
 
 // MARK: Game Version Config Context

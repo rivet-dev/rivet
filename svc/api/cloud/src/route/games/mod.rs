@@ -200,9 +200,7 @@ async fn gen_default_version_config(
 					.into(),
 				),
 
-				find_config: None,
-				join_config: None,
-				create_config: None,
+				actions: None,
 			}],
 			captcha: None,
 		}),

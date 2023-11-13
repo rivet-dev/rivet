@@ -7,7 +7,7 @@ Name | Type | Description | Notes
 **captcha** | Option<[**crate::models::CaptchaConfig**](CaptchaConfig.md)> |  | [optional]
 **game_mode** | **String** |  | 
 **lobby_config** | Option<[**serde_json::Value**](.md)> |  | [optional]
-**publicity** | [**crate::models::MatchmakerCustomLobbyPublicity**](MatchmakerCustomLobbyPublicity.md) |  | 
+**publicity** | Option<[**crate::models::MatchmakerCustomLobbyPublicity**](MatchmakerCustomLobbyPublicity.md)> |  | [optional]
 **region** | Option<**String**> |  | [optional]
 **verification_data** | Option<[**serde_json::Value**](.md)> |  | [optional]
 

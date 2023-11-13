@@ -226,15 +226,18 @@ impl Ctx {
 							],
 						}.into()),
 
-						find_config: None,
-						join_config: None,
-						create_config: Some(backend::matchmaker::CreateConfig {
-							identity_requirement: backend::matchmaker::IdentityRequirement::None as i32,
-							verification_config: None,
+						actions: Some(backend::matchmaker::lobby_group::Actions {
+							find: None,
+							join: None,
+							create: Some(backend::matchmaker::CreateConfig {
+								enabled: true,
+								identity_requirement: backend::matchmaker::IdentityRequirement::None as i32,
+								verification: None,
 
-							enable_public: true,
-							enable_private: true,
-							max_lobbies_per_identity: Some(1),
+								enable_public: true,
+								enable_private: true,
+								max_lobbies_per_identity: Some(1),
+							}),
 						}),
 					},
 					backend::matchmaker::LobbyGroup {
@@ -300,9 +303,7 @@ impl Ctx {
 							],
 						}.into()),
 
-						find_config: None,
-						join_config: None,
-						create_config: None,
+						actions: None,
 					},
 				],
 			}),

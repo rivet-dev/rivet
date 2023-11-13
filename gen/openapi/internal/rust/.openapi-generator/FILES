@@ -159,6 +159,7 @@ docs/CloudVersionMatchmakerCaptchaTurnstile.md
 docs/CloudVersionMatchmakerCaptchaTurnstileDomain.md
 docs/CloudVersionMatchmakerConfig.md
 docs/CloudVersionMatchmakerGameMode.md
+docs/CloudVersionMatchmakerGameModeActions.md
 docs/CloudVersionMatchmakerGameModeCreateConfig.md
 docs/CloudVersionMatchmakerGameModeFindConfig.md
 docs/CloudVersionMatchmakerGameModeIdentityRequirement.md
@@ -497,6 +498,7 @@ src/models/cloud_version_matchmaker_captcha_turnstile.rs
 src/models/cloud_version_matchmaker_captcha_turnstile_domain.rs
 src/models/cloud_version_matchmaker_config.rs
 src/models/cloud_version_matchmaker_game_mode.rs
+src/models/cloud_version_matchmaker_game_mode_actions.rs
 src/models/cloud_version_matchmaker_game_mode_create_config.rs
 src/models/cloud_version_matchmaker_game_mode_find_config.rs
 src/models/cloud_version_matchmaker_game_mode_identity_requirement.rs

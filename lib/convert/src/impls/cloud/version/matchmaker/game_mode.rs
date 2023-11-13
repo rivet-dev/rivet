@@ -143,18 +143,8 @@ pub fn game_mode_to_proto(
 
 		runtime,
 
-		find_config: game_mode
-			.find_config
-			.clone()
-			.map(|x| ApiTryInto::try_into(*x))
-			.transpose()?,
-		join_config: game_mode
-			.join_config
-			.clone()
-			.map(|x| ApiTryInto::try_into(*x))
-			.transpose()?,
-		create_config: game_mode
-			.create_config
+		actions: game_mode
+			.actions
 			.clone()
 			.map(|x| ApiTryInto::try_into(*x))
 			.transpose()?,
@@ -182,11 +172,9 @@ pub fn game_mode_to_openapi(
 						.collect(),
 				),
 				network_mode: Some(
-					unwrap!(
-						backend::matchmaker::lobby_runtime::NetworkMode::from_i32(
-							runtime.network_mode,
-						)
-					)
+					unwrap!(backend::matchmaker::lobby_runtime::NetworkMode::from_i32(
+						runtime.network_mode,
+					))
 					.api_into(),
 				),
 				ports: Some(
@@ -255,18 +243,8 @@ pub fn game_mode_to_openapi(
 
 			docker: Some(Box::new(docker)),
 
-			find_config: value
-				.find_config
-				.map(ApiTryInto::try_into)
-				.transpose()?
-				.map(Box::new),
-			join_config: value
-				.join_config
-				.map(ApiTryInto::try_into)
-				.transpose()?
-				.map(Box::new),
-			create_config: value
-				.create_config
+			actions: value
+				.actions
 				.map(ApiTryInto::try_into)
 				.transpose()?
 				.map(Box::new),
@@ -417,6 +395,58 @@ impl ApiFrom<backend::matchmaker::IdentityRequirement>
 	}
 }
 
+impl ApiTryFrom<models::CloudVersionMatchmakerGameModeActions>
+	for backend::matchmaker::lobby_group::Actions
+{
+	type Error = GlobalError;
+
+	fn try_from(value: models::CloudVersionMatchmakerGameModeActions) -> GlobalResult<Self> {
+		Ok(backend::matchmaker::lobby_group::Actions {
+			find: value
+				.find
+				.clone()
+				.map(|x| ApiTryInto::try_into(*x))
+				.transpose()?,
+			join: value
+				.join
+				.clone()
+				.map(|x| ApiTryInto::try_into(*x))
+				.transpose()?,
+			create: value
+				.create
+				.clone()
+				.map(|x| ApiTryInto::try_into(*x))
+				.transpose()?,
+		})
+	}
+}
+
+impl ApiTryFrom<backend::matchmaker::lobby_group::Actions>
+	for models::CloudVersionMatchmakerGameModeActions
+{
+	type Error = GlobalError;
+
+	fn try_from(value: backend::matchmaker::lobby_group::Actions) -> GlobalResult<Self> {
+		Ok(models::CloudVersionMatchmakerGameModeActions {
+			find: value
+				.find
+				.map(ApiTryInto::try_into)
+				.transpose()?
+				.map(Box::new),
+			join: value
+				.join
+				.map(ApiTryInto::try_into)
+				.transpose()?
+				.map(Box::new),
+			create: value
+				.create
+				.map(ApiTryInto::try_into)
+				.transpose()?
+				.map(Box::new),
+		})
+	}
+}
+
 impl ApiTryFrom<models::CloudVersionMatchmakerGameModeVerificationConfig>
 	for backend::matchmaker::VerificationConfig
 {
@@ -453,11 +483,12 @@ impl ApiTryFrom<models::CloudVersionMatchmakerGameModeFindConfig>
 	fn try_from(value: models::CloudVersionMatchmakerGameModeFindConfig) -> GlobalResult<Self> {
 		Ok(backend::matchmaker::FindConfig {
 			enabled: value.enabled,
-			identity_requirement: ApiInto::<backend::matchmaker::IdentityRequirement>::api_into(
-				value.identity_requirement,
-			) as i32,
-			verification_config: value
-				.verification_config
+			identity_requirement: value
+				.identity_requirement
+				.map(ApiInto::<backend::matchmaker::IdentityRequirement>::api_into)
+				.unwrap_or(backend::matchmaker::IdentityRequirement::None) as i32,
+			verification: value
+				.verification
 				.map(|x| ApiTryInto::try_into(*x))
 				.transpose()?,
 		})
@@ -472,13 +503,15 @@ impl ApiTryFrom<backend::matchmaker::FindConfig>
 	fn try_from(value: backend::matchmaker::FindConfig) -> GlobalResult<Self> {
 		Ok(models::CloudVersionMatchmakerGameModeFindConfig {
 			enabled: value.enabled,
-			identity_requirement: unwrap!(
-				backend::matchmaker::IdentityRequirement::from_i32(value.identity_requirement),
-				"invalid identity requirement variant"
-			)
-			.api_into(),
-			verification_config: value
-				.verification_config
+			identity_requirement: Some(
+				unwrap!(
+					backend::matchmaker::IdentityRequirement::from_i32(value.identity_requirement),
+					"invalid identity requirement variant"
+				)
+				.api_into(),
+			),
+			verification: value
+				.verification
 				.map(ApiTryInto::try_into)
 				.transpose()?
 				.map(Box::new),
@@ -494,11 +527,12 @@ impl ApiTryFrom<models::CloudVersionMatchmakerGameModeJoinConfig>
 	fn try_from(value: models::CloudVersionMatchmakerGameModeJoinConfig) -> GlobalResult<Self> {
 		Ok(backend::matchmaker::JoinConfig {
 			enabled: value.enabled,
-			identity_requirement: ApiInto::<backend::matchmaker::IdentityRequirement>::api_into(
-				value.identity_requirement,
-			) as i32,
-			verification_config: value
-				.verification_config
+			identity_requirement: value
+				.identity_requirement
+				.map(ApiInto::<backend::matchmaker::IdentityRequirement>::api_into)
+				.unwrap_or(backend::matchmaker::IdentityRequirement::None) as i32,
+			verification: value
+				.verification
 				.map(|x| ApiTryInto::try_into(*x))
 				.transpose()?,
 		})
@@ -513,13 +547,15 @@ impl ApiTryFrom<backend::matchmaker::JoinConfig>
 	fn try_from(value: backend::matchmaker::JoinConfig) -> GlobalResult<Self> {
 		Ok(models::CloudVersionMatchmakerGameModeJoinConfig {
 			enabled: value.enabled,
-			identity_requirement: unwrap!(
-				backend::matchmaker::IdentityRequirement::from_i32(value.identity_requirement),
-				"invalid identity requirement variant"
-			)
-			.api_into(),
-			verification_config: value
-				.verification_config
+			identity_requirement: Some(
+				unwrap!(
+					backend::matchmaker::IdentityRequirement::from_i32(value.identity_requirement),
+					"invalid identity requirement variant"
+				)
+				.api_into(),
+			),
+			verification: value
+				.verification
 				.map(ApiTryInto::try_into)
 				.transpose()?
 				.map(Box::new),
@@ -537,20 +573,22 @@ impl ApiTryFrom<models::CloudVersionMatchmakerGameModeCreateConfig>
 			ensure_with!(
 				max_lobbies_per_identity >= 0,
 				MATCHMAKER_INVALID_VERSION_CONFIG,
-				error = "`create_config.max_lobbies_per_identity` out of bounds"
+				error = "`actions.create.max_lobbies_per_identity` out of bounds"
 			);
 		}
 
 		Ok(backend::matchmaker::CreateConfig {
-			identity_requirement: ApiInto::<backend::matchmaker::IdentityRequirement>::api_into(
-				value.identity_requirement,
-			) as i32,
-			verification_config: value
-				.verification_config
+			enabled: value.enabled,
+			identity_requirement: value
+				.identity_requirement
+				.map(ApiInto::<backend::matchmaker::IdentityRequirement>::api_into)
+				.unwrap_or(backend::matchmaker::IdentityRequirement::None) as i32,
+			verification: value
+				.verification
 				.map(|x| ApiTryInto::try_into(*x))
 				.transpose()?,
-			enable_public: value.enable_public,
-			enable_private: value.enable_private,
+			enable_public: value.enable_public.unwrap_or(false),
+			enable_private: value.enable_private.unwrap_or(true),
 			max_lobbies_per_identity: value
 				.max_lobbies_per_identity
 				.map(ApiTryInto::try_into)
@@ -566,22 +604,40 @@ impl ApiTryFrom<backend::matchmaker::CreateConfig>
 
 	fn try_from(value: backend::matchmaker::CreateConfig) -> GlobalResult<Self> {
 		Ok(models::CloudVersionMatchmakerGameModeCreateConfig {
-			identity_requirement: unwrap!(
-				backend::matchmaker::IdentityRequirement::from_i32(value.identity_requirement),
-				"invalid identity requirement variant"
-			)
-			.api_into(),
-			verification_config: value
-				.verification_config
+			enabled: value.enabled,
+			identity_requirement: Some(
+				unwrap!(
+					backend::matchmaker::IdentityRequirement::from_i32(value.identity_requirement),
+					"invalid identity requirement variant"
+				)
+				.api_into(),
+			),
+			verification: value
+				.verification
 				.map(ApiTryInto::try_into)
 				.transpose()?
 				.map(Box::new),
-			enable_public: value.enable_public,
-			enable_private: value.enable_private,
+			enable_public: Some(value.enable_public),
+			enable_private: Some(value.enable_private),
 			max_lobbies_per_identity: value
 				.max_lobbies_per_identity
 				.map(ApiTryInto::try_into)
 				.transpose()?,
 		})
+	}
+}
+
+impl ApiFrom<models::MatchmakerCustomLobbyPublicity> for backend::matchmaker::lobby::Publicity {
+	fn api_from(
+		value: models::MatchmakerCustomLobbyPublicity,
+	) -> backend::matchmaker::lobby::Publicity {
+		match value {
+			models::MatchmakerCustomLobbyPublicity::Public => {
+				backend::matchmaker::lobby::Publicity::Public
+			}
+			models::MatchmakerCustomLobbyPublicity::Private => {
+				backend::matchmaker::lobby::Publicity::Private
+			}
+		}
 	}
 }

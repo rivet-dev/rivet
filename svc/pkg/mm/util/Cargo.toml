@@ -17,6 +17,7 @@ serde_json = "1.0"
 strum = { version = "0.24", features = ["derive"] }
 uuid = { version = "1", features = ["v4", "serde"] }
 
+ip-info = { path = "../../ip/ops/info" }
 mm-lobby-list-for-user-id = { path = "../ops/lobby-list-for-user-id" }
 region-get = { path = "../../region/ops/get" }
 user-identity-get = { path = "../../user-identity/ops/get" }

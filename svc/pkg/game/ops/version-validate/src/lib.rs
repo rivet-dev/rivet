@@ -995,66 +995,99 @@ async fn handle(
 				]);
 			}
 
-			// Validate find config
-			if let Some(matchmaker::FindConfig {
-				verification_config: Some(verification_config),
-				..
-			}) = &lobby_group.find_config
-			{
-				let validation_res = op!([ctx] external_request_validate {
-					config: Some(backend::net::ExternalRequestConfig {
-						url: verification_config.url.clone(),
-						headers: verification_config.headers.clone(),
-						..Default::default()
-					}),
-				})
-				.await?;
+			if let Some(actions) = &lobby_group.actions {
+				// Validate find config
+				if let Some(matchmaker::FindConfig {
+					verification: Some(verification),
+					..
+				}) = &actions.find
+				{
+					let validation_res = op!([ctx] external_request_validate {
+						config: Some(backend::net::ExternalRequestConfig {
+							url: verification.url.clone(),
+							headers: verification.headers.clone(),
+							..Default::default()
+						}),
+					})
+					.await?;
 
-				// Append errors from external request validation
-				errors.extend(validation_res.errors.iter().map(|err| {
-					util::err_path![
-						"config",
-						"matchmaker",
-						"game-modes",
-						lobby_group_label,
-						"find-config",
-						"verification-config"
-					]
-					.into_iter()
-					.chain(err.path.clone())
-					.collect::<Vec<_>>()
-				}));
-			}
+					// Append errors from external request validation
+					errors.extend(validation_res.errors.iter().map(|err| {
+						util::err_path![
+							"config",
+							"matchmaker",
+							"game-modes",
+							lobby_group_label,
+							"find-config",
+							"verification-config"
+						]
+						.into_iter()
+						.chain(err.path.clone())
+						.collect::<Vec<_>>()
+					}));
+				}
 
-			// Validate join config
-			if let Some(matchmaker::JoinConfig {
-				verification_config: Some(verification_config),
-				..
-			}) = &lobby_group.join_config
-			{
-				let validation_res = op!([ctx] external_request_validate {
-					config: Some(backend::net::ExternalRequestConfig {
-						url: verification_config.url.clone(),
-						headers: verification_config.headers.clone(),
-						..Default::default()
-					}),
-				})
-				.await?;
+				// Validate join config
+				if let Some(matchmaker::JoinConfig {
+					verification: Some(verification),
+					..
+				}) = &actions.join
+				{
+					let validation_res = op!([ctx] external_request_validate {
+						config: Some(backend::net::ExternalRequestConfig {
+							url: verification.url.clone(),
+							headers: verification.headers.clone(),
+							..Default::default()
+						}),
+					})
+					.await?;
 
-				// Append errors from external request validation
-				errors.extend(validation_res.errors.iter().map(|err| {
-					util::err_path![
-						"config",
-						"matchmaker",
-						"game-modes",
-						lobby_group_label,
-						"join-config",
-						"verification-config"
-					]
-					.into_iter()
-					.chain(err.path.clone())
-					.collect::<Vec<_>>()
-				}));
+					// Append errors from external request validation
+					errors.extend(validation_res.errors.iter().map(|err| {
+						util::err_path![
+							"config",
+							"matchmaker",
+							"game-modes",
+							lobby_group_label,
+							"join-config",
+							"verification-config"
+						]
+						.into_iter()
+						.chain(err.path.clone())
+						.collect::<Vec<_>>()
+					}));
+				}
+
+				// Validate create config
+				if let Some(matchmaker::CreateConfig {
+					verification: Some(verification),
+					..
+				}) = &actions.create
+				{
+					let validation_res = op!([ctx] external_request_validate {
+						config: Some(backend::net::ExternalRequestConfig {
+							url: verification.url.clone(),
+							headers: verification.headers.clone(),
+							..Default::default()
+						}),
+					})
+					.await?;
+
+					// Append errors from external request validation
+					errors.extend(validation_res.errors.iter().map(|err| {
+						util::err_path![
+							"config",
+							"matchmaker",
+							"game-modes",
+							lobby_group_label,
+							"join-config",
+							"verification-config"
+						]
+						.into_iter()
+						.chain(err.path.clone())
+						.collect::<Vec<_>>()
+					}));
+				}
 			}
 		}
 	}

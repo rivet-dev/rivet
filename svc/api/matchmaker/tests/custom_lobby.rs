@@ -18,7 +18,7 @@ async fn create_custom_lobby() {
 			models::MatchmakerLobbiesCreateRequest {
 				game_mode: LOBBY_GROUP_NAME_ID_BRIDGE.to_string(),
 				region: Some(ctx.primary_region_name_id.clone()),
-				publicity: models::MatchmakerCustomLobbyPublicity::Public,
+				publicity: Some(models::MatchmakerCustomLobbyPublicity::Public),
 				lobby_config: Some(Some(json!({ "foo": "bar" }))),
 				verification_data: None,
 				captcha: Some(Box::new(models::CaptchaConfig {

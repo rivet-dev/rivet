@@ -349,15 +349,18 @@ async fn setup_game(
 						],
 					}.into()),
 
-					find_config: None,
-					join_config: None,
-					create_config: Some(backend::matchmaker::CreateConfig {
-						identity_requirement: backend::matchmaker::IdentityRequirement::None as i32,
-						verification_config: None,
+					actions: Some(backend::matchmaker::lobby_group::Actions {
+						find: None,
+						join: None,
+						create: Some(backend::matchmaker::CreateConfig {
+							enabled: true,
+							identity_requirement: backend::matchmaker::IdentityRequirement::None as i32,
+							verification: None,
 
-						enable_public: true,
-						enable_private: true,
-						max_lobbies_per_identity: Some(1),
+							enable_public: true,
+							enable_private: true,
+							max_lobbies_per_identity: Some(1),
+						}),
 					}),
 				},
 			],
@@ -414,7 +417,7 @@ async fn create_lobby(ctx: &Ctx) -> GlobalResult<models::MatchmakerCreateLobbyRe
 		models::MatchmakerLobbiesCreateRequest {
 			game_mode: LOBBY_GROUP_NAME_ID.to_string(),
 			region: Some(ctx.primary_region_name_id.clone()),
-			publicity: models::MatchmakerCustomLobbyPublicity::Public,
+			publicity: Some(models::MatchmakerCustomLobbyPublicity::Public),
 			lobby_config: Some(Some(json!({ "foo": "bar" }))),
 			verification_data: None,
 			captcha: Some(Box::new(models::CaptchaConfig {
