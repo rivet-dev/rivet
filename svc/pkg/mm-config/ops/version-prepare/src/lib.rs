@@ -56,12 +56,15 @@ async fn handle(
 		//
 		// We only need to prewarm the cache if _not_ using idle lobbies or if using custom lobbies. If there are idle
 		// lobbies, then we'll start a lobby immediately, so the prewarm is redundant.
-		let needs_ats_prewarm = lobby_group.create_config.is_some()
-			|| lobby_group.regions.iter().any(|x| {
-				x.idle_lobbies
-					.as_ref()
-					.map_or(true, |y| y.min_idle_lobbies == 0)
-			});
+		let needs_ats_prewarm = lobby_group
+			.actions
+			.as_ref()
+			.and_then(|a| a.create.as_ref())
+			.is_some() || lobby_group.regions.iter().any(|x| {
+			x.idle_lobbies
+				.as_ref()
+				.map_or(true, |y| y.min_idle_lobbies == 0)
+		});
 
 		// Prepare runtime
 		let runtime = unwrap_ref!(lobby_group.runtime);

@@ -4,11 +4,9 @@
 
 Name | Type | Description | Notes
 ------------ | ------------- | ------------- | -------------
-**create_config** | Option<[**crate::models::CloudVersionMatchmakerGameModeCreateConfig**](CloudVersionMatchmakerGameModeCreateConfig.md)> |  | [optional]
+**actions** | Option<[**crate::models::CloudVersionMatchmakerGameModeActions**](CloudVersionMatchmakerGameModeActions.md)> |  | [optional]
 **docker** | Option<[**crate::models::CloudVersionMatchmakerGameModeRuntimeDocker**](CloudVersionMatchmakerGameModeRuntimeDocker.md)> |  | [optional]
-**find_config** | Option<[**crate::models::CloudVersionMatchmakerGameModeFindConfig**](CloudVersionMatchmakerGameModeFindConfig.md)> |  | [optional]
 **idle_lobbies** | Option<[**crate::models::CloudVersionMatchmakerGameModeIdleLobbiesConfig**](CloudVersionMatchmakerGameModeIdleLobbiesConfig.md)> |  | [optional]
-**join_config** | Option<[**crate::models::CloudVersionMatchmakerGameModeJoinConfig**](CloudVersionMatchmakerGameModeJoinConfig.md)> |  | [optional]
 **listable** | Option<**bool**> |  | [optional]
 **max_players** | Option<**i32**> |  | [optional]
 **max_players_direct** | Option<**i32**> |  | [optional]

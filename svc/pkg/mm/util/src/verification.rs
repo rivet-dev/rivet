@@ -1,3 +1,6 @@
+use std::collections::HashMap;
+
+use futures_util::{StreamExt, TryStreamExt};
 use http::StatusCode;
 use proto::backend::{self, pkg::*};
 use rivet_operation::prelude::*;
@@ -7,29 +10,37 @@ use uuid::Uuid;
 #[derive(Serialize)]
 pub struct ExternalVerificationRequest {
 	pub verification_data: Option<serde_json::Value>,
-	pub lobby: Lobby,
+	pub game: Game,
+	pub clients: HashMap<String, Client>,
 	pub join_kind: JoinKind,
 	pub kind: ConnectionKind,
 }
 
 #[derive(Serialize)]
-pub struct Lobby {
+pub struct Game {
 	pub namespace_id: Uuid,
 	pub game_mode_id: Uuid,
 	pub game_mode_name_id: String,
 
-	pub info: Option<LobbyInfo>,
+	pub lobby: Option<Lobby>,
 	pub state: Option<serde_json::Value>,
 	pub config: Option<serde_json::Value>,
 }
 
 #[derive(Serialize)]
-pub struct LobbyInfo {
+pub struct Lobby {
 	pub lobby_id: Uuid,
 	pub region_id: Uuid,
 	pub region_name_id: String,
 	pub create_ts: String,
 	pub is_closed: bool,
+}
+
+#[derive(Serialize)]
+pub struct Client {
+	pub user_agent: Option<String>,
+	pub latitude: Option<f64>,
+	pub longitude: Option<f64>,
 }
 
 #[derive(Serialize)]
@@ -49,6 +60,7 @@ pub struct VerifyConfigOpts<'a> {
 	pub kind: ConnectionKind,
 	pub namespace_id: Uuid,
 	pub user_id: Option<Uuid>,
+	pub client_info: Vec<backend::net::ClientInfo>,
 
 	pub lobby_groups: &'a [backend::matchmaker::LobbyGroup],
 	pub lobby_group_meta: &'a [backend::matchmaker::LobbyGroupMeta],
@@ -78,9 +90,9 @@ pub async fn verify_config(
 	for (lobby_group, lobby_group_meta) in opts.lobby_groups.iter().zip(opts.lobby_group_meta) {
 		let (identity_requirement, external_request_config) = match (
 			opts.kind,
-			lobby_group.find_config.as_ref(),
-			lobby_group.join_config.as_ref(),
-			lobby_group.create_config.as_ref(),
+			lobby_group.actions.as_ref().and_then(|a| a.find.as_ref()),
+			lobby_group.actions.as_ref().and_then(|a| a.join.as_ref()),
+			lobby_group.actions.as_ref().and_then(|a| a.create.as_ref()),
 		) {
 			(ConnectionKind::Find, Some(find_config), _, _) => {
 				if !find_config.enabled {
@@ -94,7 +106,7 @@ pub async fn verify_config(
 						),
 						"invalid identity requirement variant"
 					),
-					find_config.verification_config.as_ref().map(|config| {
+					find_config.verification.as_ref().map(|config| {
 						backend::net::ExternalRequestConfig {
 							url: config.url.clone(),
 							method: backend::net::HttpMethod::Post as i32,
@@ -115,7 +127,7 @@ pub async fn verify_config(
 						),
 						"invalid identity requirement variant"
 					),
-					join_config.verification_config.as_ref().map(|config| {
+					join_config.verification.as_ref().map(|config| {
 						backend::net::ExternalRequestConfig {
 							url: config.url.clone(),
 							method: backend::net::HttpMethod::Post as i32,
@@ -165,7 +177,7 @@ pub async fn verify_config(
 						),
 						"invalid identity requirement variant"
 					),
-					create_config.verification_config.as_ref().map(|config| {
+					create_config.verification.as_ref().map(|config| {
 						backend::net::ExternalRequestConfig {
 							url: config.url.clone(),
 							method: backend::net::HttpMethod::Post as i32,
@@ -250,7 +262,7 @@ pub async fn verify_config(
 		} = external_request_config_and_lobby;
 
 		// Build lobby info
-		let lobby_info = if let Some(l) = &opts.lobby_info {
+		let lobby = if let Some(l) = &opts.lobby_info {
 			// Fetch region data for readable name
 			let region_id = unwrap!(l.region_id);
 			let regions_res = op!([ctx] region_get {
@@ -259,7 +271,7 @@ pub async fn verify_config(
 			.await?;
 			let region = unwrap!(regions_res.regions.first());
 
-			Some(LobbyInfo {
+			Some(Lobby {
 				lobby_id: unwrap_ref!(l.lobby_id).as_uuid(),
 				region_id: region_id.as_uuid(),
 				region_name_id: region.name_id.clone(),
@@ -270,6 +282,41 @@ pub async fn verify_config(
 			None
 		};
 
+		// Fetch IP info
+		let clients = futures_util::stream::iter(
+			opts.client_info
+				.iter()
+				.filter_map(|client_info| {
+					client_info
+						.remote_address
+						.as_ref()
+						.map(|ip| (ip.clone(), client_info.user_agent.clone()))
+				})
+				.collect::<Vec<_>>(),
+		)
+		.map(|(ip, user_agent)| async move {
+			let ip_res = op!([ctx] ip_info {
+				ip: ip.clone(),
+			})
+			.await?;
+			let (latitude, longitude) = ip_res
+				.ip_info
+				.map(|ip_info| (ip_info.latitude, ip_info.longitude))
+				.unzip();
+
+			GlobalResult::Ok((
+				ip.clone(),
+				Client {
+					user_agent: user_agent.clone(),
+					longitude,
+					latitude,
+				},
+			))
+		})
+		.buffer_unordered(16)
+		.try_collect::<HashMap<_, _>>()
+		.await?;
+
 		// Build body
 		let body = ExternalVerificationRequest {
 			verification_data: opts
@@ -277,12 +324,12 @@ pub async fn verify_config(
 				.as_ref()
 				.map(|json| serde_json::from_str::<serde_json::Value>(json))
 				.transpose()?,
-			lobby: Lobby {
+			game: Game {
 				game_mode_id: unwrap_ref!(lobby_group_meta.lobby_group_id).as_uuid(),
 				game_mode_name_id: lobby_group.name_id.clone(),
 				namespace_id: opts.namespace_id,
 
-				info: lobby_info,
+				lobby,
 				state: opts
 					.lobby_state_json
 					.as_ref()
@@ -294,6 +341,7 @@ pub async fn verify_config(
 					.map(|json| serde_json::from_str::<serde_json::Value>(json))
 					.transpose()?,
 			},
+			clients,
 			join_kind: JoinKind::Normal,
 			kind: opts.kind,
 		};

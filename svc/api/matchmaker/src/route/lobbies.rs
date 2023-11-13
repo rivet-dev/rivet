@@ -9,7 +9,7 @@ use proto::{
 	common,
 };
 use rivet_api::models;
-use rivet_convert::ApiTryInto;
+use rivet_convert::{ApiInto, ApiTryInto};
 use rivet_operation::prelude::*;
 use serde::Deserialize;
 use serde_json::json;
@@ -277,11 +277,22 @@ pub async fn create(
 	);
 
 	let publicity = match body.publicity {
-		models::MatchmakerCustomLobbyPublicity::Public => {
-			backend::matchmaker::lobby::Publicity::Public
-		}
-		models::MatchmakerCustomLobbyPublicity::Private => {
-			backend::matchmaker::lobby::Publicity::Private
+		Some(publicity) => ApiInto::api_into(publicity),
+		// Default publicity to public if enabled, otherwise private
+		None => {
+			if let Some(backend::matchmaker::lobby_group::Actions {
+				create:
+					Some(backend::matchmaker::CreateConfig {
+						enable_public: true,
+						..
+					}),
+				..
+			}) = lobby_group.actions.as_ref()
+			{
+				backend::matchmaker::lobby::Publicity::Public
+			} else {
+				backend::matchmaker::lobby::Publicity::Private
+			}
 		}
 	};
 
@@ -292,19 +303,22 @@ pub async fn create(
 			kind: util_mm::verification::ConnectionKind::Create,
 			namespace_id: ns_data.namespace_id,
 			user_id,
+			client_info: vec![ctx.client_info()],
+
 			lobby_groups: &[lobby_group.clone()],
 			lobby_group_meta: &[lobby_group_meta.clone()],
 			lobby_info: None,
 			lobby_state_json: None,
-			verification_data_json: body
-				.verification_data
+			lobby_config_json: body
+				.lobby_config
 				.as_ref()
 				.map(|o| o.as_ref().map(serde_json::to_string))
 				.flatten()
 				.transpose()?
 				.as_deref(),
-			lobby_config_json: body
-				.lobby_config
+
+			verification_data_json: body
+				.verification_data
 				.as_ref()
 				.map(|o| o.as_ref().map(serde_json::to_string))
 				.flatten()
@@ -1244,7 +1258,7 @@ async fn dev_mock_lobby_list(
 				max_players_direct: std::convert::TryInto::try_into(lg.max_players_direct)?,
 				max_players_party: std::convert::TryInto::try_into(lg.max_players_party)?,
 				total_player_count: 0,
-				state: Some(Some(json!({ "foo": "bar" }))),
+				state: include_state.then(|| Some(json!({ "foo": "bar" }))),
 			})
 		})
 		.collect::<GlobalResult<Vec<_>>>()?;

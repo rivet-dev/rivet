@@ -95,7 +95,7 @@ service:
             game_mode: string
             region: optional<string>
             captcha: optional<captchaConfig.Config>
-            publicity: localCommons.CustomLobbyPublicity
+            publicity: optional<localCommons.CustomLobbyPublicity>
             lobby_config: optional<unknown>
             verification_data: optional<unknown>
       response: CreateLobbyResponse

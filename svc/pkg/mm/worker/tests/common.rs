@@ -93,9 +93,7 @@ impl Setup {
 
 					}.into()),
 
-					find_config: None,
-					join_config: None,
-					create_config: None,
+					actions: None,
 				},
 				backend::matchmaker::LobbyGroup {
 					name_id: "test-2".into(),
@@ -185,9 +183,7 @@ impl Setup {
 
 					}.into()),
 
-					find_config: None,
-					join_config: None,
-					create_config: None,
+					actions: None,
 				}],
 			}),
 			..Default::default()

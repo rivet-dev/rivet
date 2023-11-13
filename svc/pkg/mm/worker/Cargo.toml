@@ -55,12 +55,9 @@ default-features = false
 
 [dev-dependencies]
 chirp-worker = { path = "../../../../lib/chirp/worker" }
-rivet-api = { path = "../../../../gen/openapi/internal/rust" }
 
-cloud-namespace-token-public-create = { path = "../../cloud/ops/namespace-token-public-create" }
 faker-build = { path = "../../faker/ops/build" }
 faker-game = { path = "../../faker/ops/game" }
-faker-game-namespace = { path = "../../faker/ops/game-namespace" }
 faker-game-version = { path = "../../faker/ops/game-version" }
 faker-mm-lobby = { path = "../../faker/ops/mm-lobby" }
 faker-region = { path = "../../faker/ops/region" }

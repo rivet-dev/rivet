@@ -15,5 +15,5 @@ message Request {
 }
 
 message Response {
-	backend.net.IpInfo ip_info = 1;
+	optional backend.net.IpInfo ip_info = 1;
 }

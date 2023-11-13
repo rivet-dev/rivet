@@ -8118,7 +8118,6 @@ paths:
                 verification_data: {}
               required:
                 - game_mode
-                - publicity
   /matchmaker/lobbies/list:
     get:
       description: Lists all open lobbies.
@@ -11529,12 +11528,8 @@ components:
           $ref: '#/components/schemas/CloudVersionMatchmakerGameModeRuntimeDocker'
         listable:
           type: boolean
-        find_config:
-          $ref: '#/components/schemas/CloudVersionMatchmakerGameModeFindConfig'
-        join_config:
-          $ref: '#/components/schemas/CloudVersionMatchmakerGameModeJoinConfig'
-        create_config:
-          $ref: '#/components/schemas/CloudVersionMatchmakerGameModeCreateConfig'
+        actions:
+          $ref: '#/components/schemas/CloudVersionMatchmakerGameModeActions'
         tier:
           type: string
         idle_lobbies:
@@ -11609,6 +11604,16 @@ components:
       required:
         - min
         - max
+    CloudVersionMatchmakerGameModeActions:
+      type: object
+      description: Configuration for the connection types allowed for a game mode.
+      properties:
+        find:
+          $ref: '#/components/schemas/CloudVersionMatchmakerGameModeFindConfig'
+        join:
+          $ref: '#/components/schemas/CloudVersionMatchmakerGameModeJoinConfig'
+        create:
+          $ref: '#/components/schemas/CloudVersionMatchmakerGameModeCreateConfig'
     CloudVersionMatchmakerGameModeIdentityRequirement:
       type: string
       enum:
@@ -11650,12 +11655,11 @@ components:
         identity_requirement:
           $ref: >-
             #/components/schemas/CloudVersionMatchmakerGameModeIdentityRequirement
-        verification_config:
+        verification:
           $ref: >-
             #/components/schemas/CloudVersionMatchmakerGameModeVerificationConfig
       required:
         - enabled
-        - identity_requirement
     CloudVersionMatchmakerGameModeJoinConfig:
       type: object
       description: >-
@@ -11669,12 +11673,11 @@ components:
         identity_requirement:
           $ref: >-
             #/components/schemas/CloudVersionMatchmakerGameModeIdentityRequirement
-        verification_config:
+        verification:
           $ref: >-
             #/components/schemas/CloudVersionMatchmakerGameModeVerificationConfig
       required:
         - enabled
-        - identity_requirement
     CloudVersionMatchmakerGameModeCreateConfig:
       type: object
       description: >-
@@ -11682,22 +11685,25 @@ components:
         If this value is not set in the config, the /create endpoint is NOT
         enabled.
       properties:
+        enabled:
+          type: boolean
+          description: Sets whether or not the /create endpoint is enabled.
         identity_requirement:
           $ref: >-
             #/components/schemas/CloudVersionMatchmakerGameModeIdentityRequirement
-        verification_config:
+        verification:
           $ref: >-
             #/components/schemas/CloudVersionMatchmakerGameModeVerificationConfig
         enable_public:
           type: boolean
+          description: Defaults to false when unset.
         enable_private:
           type: boolean
+          description: Defaults to true when unset.
         max_lobbies_per_identity:
           type: integer
       required:
-        - identity_requirement
-        - enable_public
-        - enable_private
+        - enabled
     CloudVersionMatchmakerLobbyGroup:
       type: object
       description: A game mode.

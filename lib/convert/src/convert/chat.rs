@@ -31,9 +31,7 @@ pub fn message(
 				sender_user_id,
 				body,
 			}) => {
-				let sender = unwrap!(users
-					.iter()
-					.find(|user| &user.user_id == sender_user_id));
+				let sender = unwrap!(users.iter().find(|user| &user.user_id == sender_user_id));
 
 				models::ChatMessageBody {
 					text: Some(Box::new(models::ChatMessageBodyText {
@@ -53,9 +51,7 @@ pub fn message(
 				}
 			}
 			backend_body::Kind::Deleted(backend_body::Deleted { sender_user_id }) => {
-				let sender = unwrap!(users
-					.iter()
-					.find(|user| &user.user_id == sender_user_id));
+				let sender = unwrap!(users.iter().find(|user| &user.user_id == sender_user_id));
 
 				models::ChatMessageBody {
 					deleted: Some(Box::new(models::ChatMessageBodyDeleted {
@@ -74,8 +70,7 @@ pub fn message(
 				}
 			}
 			backend_body::Kind::TeamJoin(backend_body::TeamJoin { user_id }) => {
-				let user =
-					unwrap!(users.iter().find(|user| &user.user_id == user_id));
+				let user = unwrap!(users.iter().find(|user| &user.user_id == user_id));
 
 				models::ChatMessageBody {
 					group_join: Some(Box::new(models::ChatMessageBodyGroupJoin {
@@ -88,8 +83,7 @@ pub fn message(
 				}
 			}
 			backend_body::Kind::TeamLeave(backend_body::TeamLeave { user_id }) => {
-				let user =
-					unwrap!(users.iter().find(|user| &user.user_id == user_id));
+				let user = unwrap!(users.iter().find(|user| &user.user_id == user_id));
 
 				models::ChatMessageBody {
 					group_leave: Some(Box::new(models::ChatMessageBodyGroupLeave {
@@ -102,8 +96,7 @@ pub fn message(
 				}
 			}
 			backend_body::Kind::TeamMemberKick(backend_body::TeamMemberKick { user_id }) => {
-				let user =
-					unwrap!(users.iter().find(|user| &user.user_id == user_id));
+				let user = unwrap!(users.iter().find(|user| &user.user_id == user_id));
 
 				models::ChatMessageBody {
 					group_member_kick: Some(Box::new(models::ChatMessageBodyGroupMemberKick {
