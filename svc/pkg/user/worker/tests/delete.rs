@@ -14,42 +14,6 @@ async fn delete(ctx: TestCtx) {
 	.await
 	.unwrap();
 
-	// Chat message
-	{
-		let chat_message_id = Uuid::new_v4();
-		let user_b_id = Uuid::new_v4();
-
-		let res = op!([ctx] chat_thread_get_or_create_for_topic {
-			topic: Some(backend::chat::Topic {
-				kind: Some(backend::chat::topic::Kind::Direct(
-					backend::chat::topic::Direct {
-						user_a_id: Some(user_id.into()),
-						user_b_id: Some(user_b_id.into()),
-					},
-				)),
-			}),
-		})
-		.await
-		.unwrap();
-		let thread_id = res.thread_id.unwrap().as_uuid();
-
-		msg!([ctx] chat_message::msg::create(thread_id, chat_message_id) -> chat_message::msg::create_complete {
-			chat_message_id: Some(chat_message_id.into()),
-			thread_id: Some(thread_id.into()),
-			send_ts: util::timestamp::now(),
-			body: Some(backend::chat::MessageBody {
-				kind: Some(backend::chat::message_body::Kind::Text(
-					backend::chat::message_body::Text {
-						sender_user_id: Some(user_id.into()),
-						body: "Hello, world!".to_owned(),
-					},
-				)),
-			}),
-		})
-		.await
-		.unwrap();
-	}
-
 	// File upload
 	{
 		op!([ctx] upload_prepare {
@@ -103,33 +67,6 @@ async fn delete(ctx: TestCtx) {
 	})
 	.await
 	.unwrap();
-
-	// Verify chat messages
-	{
-		let chat_messages_res = op!([ctx] chat_message_list_for_user {
-			user_id: Some(user_id.into()),
-			ts: util::timestamp::now(),
-			count: 1,
-			query_direction: chat_message::list_for_user::request::QueryDirection::Before as i32,
-		})
-		.await
-		.unwrap();
-
-		for chat_message in &chat_messages_res.messages {
-			let body = chat_message.body.as_ref().unwrap();
-			let kind = body.kind.as_ref().unwrap();
-
-			assert!(
-				matches!(
-					kind,
-					backend::chat::message_body::Kind::Deleted(
-						backend::chat::message_body::Deleted { .. },
-					)
-				),
-				"chat message not redacted"
-			);
-		}
-	}
 
 	// Verify uploads
 	{

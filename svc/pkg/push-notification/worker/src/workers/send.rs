@@ -39,51 +39,49 @@ async fn worker(
 			if let Some((Some(firebase_access_key),)) = row {
 				let client = Client::new();
 
-				let msg = unwrap_ref!(ctx.message);
-				let body = unwrap_ref!(msg.body);
-				let kind = unwrap_ref!(body.kind);
+				bail!("todo")
 
-				match kind {
-					backend::chat::message_body::Kind::Text(text) => {
-						let mut message_builder =
-							MessageBuilder::new(FCM_SERVER_KEY, firebase_access_key.as_str());
+				// match kind {
+				// 	backend::chat::message_body::Kind::Text(text) => {
+				// 		let mut message_builder =
+				// 			MessageBuilder::new(FCM_SERVER_KEY, firebase_access_key.as_str());
 
-						let sender_user_id = unwrap_ref!(text.sender_user_id);
-						let user_res = op!([ctx] user_get {
-							user_ids: vec![*sender_user_id],
-						})
-						.await?;
-						let user = unwrap!(user_res.users.first());
+				// 		let sender_user_id = unwrap_ref!(text.sender_user_id);
+				// 		let user_res = op!([ctx] user_get {
+				// 			user_ids: vec![*sender_user_id],
+				// 		})
+				// 		.await?;
+				// 		let user = unwrap!(user_res.users.first());
 
-						let thread_id = thread_id.to_string();
+				// 		let thread_id = thread_id.to_string();
 
-						let title = user.display_name.to_owned();
-						let body = util::format::truncate_at_code_point(
-							&text.body.chars().collect::<Vec<_>>(),
-							1024,
-						)?;
-						let icon = util::route::user_avatar(&user);
-						let click_url = format!("/threads/{}", thread_id);
+				// 		let title = user.display_name.to_owned();
+				// 		let body = util::format::truncate_at_code_point(
+				// 			&text.body.chars().collect::<Vec<_>>(),
+				// 			1024,
+				// 		)?;
+				// 		let icon = util::route::user_avatar(&user);
+				// 		let click_url = format!("/threads/{}", thread_id);
 
-						let mut notif_builder = NotificationBuilder::new();
-						notif_builder.title(&title);
-						notif_builder.body(&body);
-						notif_builder.icon(&icon);
-						if let Some(tag) = ctx.tag.as_ref() {
-							notif_builder.tag(tag);
-						}
-						notif_builder.color("#151515");
-						notif_builder.click_action(&click_url);
-						// notif_builder.sound(); // TODO
-						let notification = notif_builder.finalize();
+				// 		let mut notif_builder = NotificationBuilder::new();
+				// 		notif_builder.title(&title);
+				// 		notif_builder.body(&body);
+				// 		notif_builder.icon(&icon);
+				// 		if let Some(tag) = ctx.tag.as_ref() {
+				// 			notif_builder.tag(tag);
+				// 		}
+				// 		notif_builder.color("#151515");
+				// 		notif_builder.click_action(&click_url);
+				// 		// notif_builder.sound(); // TODO
+				// 		let notification = notif_builder.finalize();
 
-						message_builder.notification(notification);
-						message_builder.collapse_key(&thread_id);
+				// 		message_builder.notification(notification);
+				// 		message_builder.collapse_key(&thread_id);
 
-						client.send(message_builder.finalize()).await?;
-					}
-					_ => {}
-				}
+				// 		client.send(message_builder.finalize()).await?;
+				// 	}
+				// 	_ => {}
+				// }
 			}
 		}
 	}

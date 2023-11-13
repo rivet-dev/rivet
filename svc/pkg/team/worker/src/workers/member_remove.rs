@@ -20,41 +20,18 @@ async fn worker(ctx: &OperationContext<team::msg::member_remove::Message>) -> Gl
 	// Dispatch events
 	tokio::try_join!(
 		async {
-			Ok(msg!([ctx] team::msg::update(team_id) {
-				team_id: Some(team_id.into()),
-			})
-			.await?)
+			GlobalResult::Ok(
+				msg!([ctx] team::msg::update(team_id) {
+					team_id: Some(team_id.into()),
+				})
+				.await?,
+			)
 		},
 		async {
 			Ok(msg!([ctx] user::msg::update(user_id) {
 				user_id: Some(user_id.into()),
 			})
 			.await?)
-		},
-		async {
-			if !ctx.silent {
-				// Send team member leave message
-				let chat_message_id = Uuid::new_v4();
-				op!([ctx] chat_message_create_with_topic {
-					chat_message_id: Some(chat_message_id.into()),
-					topic: Some(backend::chat::Topic {
-						kind: Some(backend::chat::topic::Kind::Team(
-							backend::chat::topic::Team {
-								team_id: Some(team_id.into()),
-							},
-						)),
-					}),
-					send_ts: util::timestamp::now(),
-					body: Some(backend::chat::MessageBody {
-						kind: Some(backend::chat::message_body::Kind::TeamLeave(backend::chat::message_body::TeamLeave {
-							user_id: Some(user_id.into()),
-						})),
-					}),
-				})
-				.await?;
-			}
-
-			GlobalResult::Ok(())
 		},
 	)?;
 

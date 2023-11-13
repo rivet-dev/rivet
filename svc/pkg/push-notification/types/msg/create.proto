@@ -3,7 +3,6 @@ syntax = "proto3";
 package rivet.backend.pkg.push_notification.msg.create;
 
 import "proto/common.proto";
-import "proto/backend/chat.proto";
 import "proto/backend/notification.proto";
 
 /// name = "msg-push-notification-create"
@@ -11,9 +10,10 @@ import "proto/backend/notification.proto";
 /// 	{ name = "user_id" }
 /// ]
 message Message {
+	reserved 4;
+
 	rivet.common.Uuid user_id = 1;
 	rivet.common.Uuid thread_id = 2;
-	rivet.backend.chat.Message message = 4;
 	rivet.backend.notification.NotificationService service = 5;
 	optional string tag = 6;
 }
