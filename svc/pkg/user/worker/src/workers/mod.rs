@@ -1,8 +1,6 @@
 chirp_worker::workers![
 	create,
 	delete,
-	event_chat_last_read_ts_update,
-	event_chat_message_create_complete,
 	event_team_member_remove,
 	event_user_mm_lobby_join,
 	event_user_presence_update,

@@ -37,7 +37,7 @@ pub fn handle(
 		external: models::IdentityExternalLinks {
 			profile: util::route::user_profile(user_id),
 			settings: None,
-			chat: (!is_self).then(|| util::route::user_chat(user_id)),
+			chat: Default::default(),
 		},
 		party: None,
 	})

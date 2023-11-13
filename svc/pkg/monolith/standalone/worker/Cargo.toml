@@ -19,9 +19,6 @@ tracing-subscriber = { version = "0.3", default-features = false, features = ["f
 analytics-worker = { path = "../../../analytics/worker" }
 cdn-worker = { path = "../../../cdn/worker" }
 cf-custom-hostname-worker = { path = "../../../cf-custom-hostname/worker" }
-chat-message-worker = { path = "../../../chat-message/worker" }
-chat-thread-worker = { path = "../../../chat-thread/worker" }
-chat-worker = { path = "../../../chat/worker" }
 cloud-worker = { path = "../../../cloud/worker" }
 external-worker = { path = "../../../external/worker" }
 game-user-worker = { path = "../../../game-user/worker" }

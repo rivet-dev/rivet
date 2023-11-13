@@ -1,6 +1,5 @@
 chirp_worker::workers![
 	create,
-	create_complete_chat_message_create,
 	join_request_create,
 	join_request_resolve,
 	member_create,

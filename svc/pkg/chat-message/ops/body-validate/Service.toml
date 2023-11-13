@@ -1,7 +1,0 @@
-[service]
-name = "chat-message-body-validate"
-
-[runtime]
-kind = "rust"
-
-[operation]

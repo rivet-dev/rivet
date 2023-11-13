@@ -31,10 +31,6 @@ define_router! {
 			prefix: "cf-verification"
 		},
 		{
-			path: api_chat::route::Router,
-			prefix: "chat"
-		},
-		{
 			path: api_cloud::route::Router,
 			prefix: "cloud"
 		},

@@ -4,28 +4,16 @@ package rivet.backend.user.event;
 
 import "proto/common.proto";
 import "proto/backend/user.proto";
-import "proto/backend/chat.proto";
 
 message Event {
 	reserved 3;
 
 	oneof kind {
-		ChatMessage chat_message = 1;
-		ChatRead chat_read = 2;
 		UserUpdate user_update = 5;
 		MatchmakerLobbyJoin matchmaker_lobby_join = 4;
 		PresenceUpdate presence_update = 6;
 		TeamMemberRemove team_member_remove = 7;
 	}
-}
-
-message ChatMessage {
-	rivet.backend.chat.Message chat_message = 1;
-}
-
-message ChatRead {
-	rivet.common.Uuid thread_id = 1;
-	int64 read_ts = 2;
 }
 
 message UserUpdate {

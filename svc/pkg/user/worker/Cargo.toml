@@ -15,7 +15,6 @@ rivet-health-checks = { path = "../../../../lib/health-checks" }
 rivet-metrics = { path = "../../../../lib/metrics" }
 rivet-runtime = { path = "../../../../lib/runtime" }
 
-chat-message-list-for-user = { path = "../../chat-message/ops/list-for-user" }
 game-get = { path = "../../game/ops/get" }
 game-namespace-get = { path = "../../game/ops/namespace-get" }
 identity-config-version-get = { path = "../../identity-config/ops/version-get" }
@@ -30,7 +29,6 @@ user-team-list = { path = "../ops/team-list" }
 [dev-dependencies]
 chirp-worker = { path = "../../../../lib/chirp/worker" }
 
-chat-thread-get-or-create-for-topic = { path = "../../chat-thread/ops/get-or-create-for-topic" }
 faker-user = { path = "../../faker/ops/user" }
 upload-get = { path = "../../upload/ops/get" }
 upload-prepare = { path = "../../upload/ops/prepare" }

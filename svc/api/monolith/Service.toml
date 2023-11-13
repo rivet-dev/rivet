@@ -33,12 +33,6 @@ add-path = "/cf-verification"
 [[api.router.mounts]]
 deprecated = true
 path = "/v1"
-subdomain = "chat.api"
-add-path = "/chat"
-
-[[api.router.mounts]]
-deprecated = true
-path = "/v1"
 subdomain = "cloud.api"
 add-path = "/cloud"
 

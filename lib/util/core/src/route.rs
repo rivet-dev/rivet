@@ -11,20 +11,8 @@ pub fn user_profile(user_id: Uuid) -> String {
 	format!("{}/identities/{}", origin_hub(), user_id)
 }
 
-pub fn user_chat(user_id: Uuid) -> String {
-	format!("{}/identities/{}/chat", origin_hub(), user_id)
-}
-
 pub fn team_profile(team_id: Uuid) -> String {
 	format!("{}/groups/{}", origin_hub(), team_id)
-}
-
-pub fn team_chat(team_id: Uuid) -> String {
-	format!("{}/groups/{}/chat", origin_hub(), team_id)
-}
-
-pub fn thread(thread_id: Uuid) -> String {
-	format!("{}/threads/{}", origin_hub(), thread_id)
 }
 
 pub fn game_profile(game_name_id: &str) -> String {

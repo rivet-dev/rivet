@@ -29,13 +29,6 @@ Class | Method | HTTP request | Description
 *AuthIdentityApi* | [**auth_identity_complete_email_verification**](docs/AuthIdentityApi.md#auth_identity_complete_email_verification) | **POST** /auth/identity/email/complete-verification | 
 *AuthIdentityApi* | [**auth_identity_start_email_verification**](docs/AuthIdentityApi.md#auth_identity_start_email_verification) | **POST** /auth/identity/email/start-verification | 
 *AuthTokensApi* | [**auth_tokens_refresh_identity_token**](docs/AuthTokensApi.md#auth_tokens_refresh_identity_token) | **POST** /auth/tokens/identity | 
-*ChatApi* | [**chat_get_thread_history**](docs/ChatApi.md#chat_get_thread_history) | **GET** /chat/threads/{thread_id}/history | 
-*ChatApi* | [**chat_get_thread_topic**](docs/ChatApi.md#chat_get_thread_topic) | **GET** /chat/threads/{thread_id}/topic | 
-*ChatApi* | [**chat_send_message**](docs/ChatApi.md#chat_send_message) | **POST** /chat/messages | 
-*ChatApi* | [**chat_set_thread_read**](docs/ChatApi.md#chat_set_thread_read) | **POST** /chat/threads/{thread_id}/read | 
-*ChatApi* | [**chat_set_typing_status**](docs/ChatApi.md#chat_set_typing_status) | **PUT** /chat/threads/{thread_id}/typing-status | 
-*ChatApi* | [**chat_watch_thread**](docs/ChatApi.md#chat_watch_thread) | **GET** /chat/threads/{thread_id}/live | 
-*ChatIdentityApi* | [**chat_identity_get_direct_thread**](docs/ChatIdentityApi.md#chat_identity_get_direct_thread) | **GET** /chat/identities/{identity_id}/thread | 
 *CloudApi* | [**cloud_bootstrap**](docs/CloudApi.md#cloud_bootstrap) | **GET** /cloud/bootstrap | 
 *CloudAuthApi* | [**cloud_auth_inspect**](docs/CloudAuthApi.md#cloud_auth_inspect) | **GET** /cloud/auth/inspect | 
 *CloudDevicesLinksApi* | [**cloud_devices_links_complete**](docs/CloudDevicesLinksApi.md#cloud_devices_links_complete) | **POST** /cloud/devices/links/complete | 
@@ -179,34 +172,6 @@ Class | Method | HTTP request | Description
  - [CaptchaConfig](docs/CaptchaConfig.md)
  - [CaptchaConfigHcaptcha](docs/CaptchaConfigHcaptcha.md)
  - [CaptchaConfigTurnstile](docs/CaptchaConfigTurnstile.md)
- - [ChatGetDirectThreadResponse](docs/ChatGetDirectThreadResponse.md)
- - [ChatGetThreadHistoryResponse](docs/ChatGetThreadHistoryResponse.md)
- - [ChatGetThreadTopicResponse](docs/ChatGetThreadTopicResponse.md)
- - [ChatIdentityTypingStatus](docs/ChatIdentityTypingStatus.md)
- - [ChatMessage](docs/ChatMessage.md)
- - [ChatMessageBody](docs/ChatMessageBody.md)
- - [ChatMessageBodyDeleted](docs/ChatMessageBodyDeleted.md)
- - [ChatMessageBodyGroupJoin](docs/ChatMessageBodyGroupJoin.md)
- - [ChatMessageBodyGroupLeave](docs/ChatMessageBodyGroupLeave.md)
- - [ChatMessageBodyGroupMemberKick](docs/ChatMessageBodyGroupMemberKick.md)
- - [ChatMessageBodyText](docs/ChatMessageBodyText.md)
- - [ChatSendMessageBody](docs/ChatSendMessageBody.md)
- - [ChatSendMessageBodyText](docs/ChatSendMessageBodyText.md)
- - [ChatSendMessageRequest](docs/ChatSendMessageRequest.md)
- - [ChatSendMessageResponse](docs/ChatSendMessageResponse.md)
- - [ChatSendTopic](docs/ChatSendTopic.md)
- - [ChatSetThreadReadRequest](docs/ChatSetThreadReadRequest.md)
- - [ChatSetTypingStatusRequest](docs/ChatSetTypingStatusRequest.md)
- - [ChatSimpleTopic](docs/ChatSimpleTopic.md)
- - [ChatSimpleTopicDirect](docs/ChatSimpleTopicDirect.md)
- - [ChatSimpleTopicGroup](docs/ChatSimpleTopicGroup.md)
- - [ChatThread](docs/ChatThread.md)
- - [ChatThreadExternalLinks](docs/ChatThreadExternalLinks.md)
- - [ChatTopic](docs/ChatTopic.md)
- - [ChatTopicDirect](docs/ChatTopicDirect.md)
- - [ChatTopicGroup](docs/ChatTopicGroup.md)
- - [ChatTypingStatus](docs/ChatTypingStatus.md)
- - [ChatWatchThreadResponse](docs/ChatWatchThreadResponse.md)
  - [CloudAuthAgent](docs/CloudAuthAgent.md)
  - [CloudAuthAgentGameCloud](docs/CloudAuthAgentGameCloud.md)
  - [CloudAuthAgentIdentity](docs/CloudAuthAgentIdentity.md)
@@ -368,7 +333,6 @@ Class | Method | HTTP request | Description
  - [GameSummary](docs/GameSummary.md)
  - [GeoCoord](docs/GeoCoord.md)
  - [GeoDistance](docs/GeoDistance.md)
- - [GlobalEventChatThreadRemove](docs/GlobalEventChatThreadRemove.md)
  - [GlobalEventNotification](docs/GlobalEventNotification.md)
  - [GroupBannedIdentity](docs/GroupBannedIdentity.md)
  - [GroupConsumeInviteResponse](docs/GroupConsumeInviteResponse.md)
@@ -411,9 +375,6 @@ Class | Method | HTTP request | Description
  - [IdentityGetProfileResponse](docs/IdentityGetProfileResponse.md)
  - [IdentityGetSummariesResponse](docs/IdentityGetSummariesResponse.md)
  - [IdentityGlobalEvent](docs/IdentityGlobalEvent.md)
- - [IdentityGlobalEventChatMessage](docs/IdentityGlobalEventChatMessage.md)
- - [IdentityGlobalEventChatRead](docs/IdentityGlobalEventChatRead.md)
- - [IdentityGlobalEventChatThreadRemove](docs/IdentityGlobalEventChatThreadRemove.md)
  - [IdentityGlobalEventIdentityUpdate](docs/IdentityGlobalEventIdentityUpdate.md)
  - [IdentityGlobalEventKind](docs/IdentityGlobalEventKind.md)
  - [IdentityGlobalEventMatchmakerLobbyJoin](docs/IdentityGlobalEventMatchmakerLobbyJoin.md)

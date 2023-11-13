@@ -1,7 +1,0 @@
-[service]
-name = "db-chat"
-
-[runtime]
-kind = "crdb"
-
-[database]

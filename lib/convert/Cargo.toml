@@ -15,9 +15,6 @@ types = { path = "../types/core" }
 util-mm = { package = "rivet-util-mm", path = "../../svc/pkg/mm/util" }
 
 cdn-namespace-get = { path = "../../svc/pkg/cdn/ops/namespace-get" }
-chat-last-read-ts-get = { path = "../../svc/pkg/chat/ops/last-read-ts-get" }
-chat-thread-get-for-topic = { path = "../../svc/pkg/chat-thread/ops/get-for-topic" }
-chat-thread-unread-count = { path = "../../svc/pkg/chat-thread/ops/unread-count" }
 game-get = { path = "../../svc/pkg/game/ops/get" }
 game-namespace-get = { path = "../../svc/pkg/game/ops/namespace-get" }
 game-resolve-namespace-id = { path = "../../svc/pkg/game/ops/resolve-namespace-id" }
@@ -47,7 +44,6 @@ user-team-list = { path = "../../svc/pkg/user/ops/team-list" }
 
 rivet-api = { path = "../../gen/openapi/internal/rust" }
 rivet-auth-server = { path = "../../lib/smithy-output/api-auth/rust-server" }
-rivet-chat-server = { path = "../../lib/smithy-output/api-chat/rust-server" }
 rivet-cloud-server = { path = "../../lib/smithy-output/api-cloud/rust-server" }
 rivet-group-server = { path = "../../lib/smithy-output/api-group/rust-server" }
 rivet-kv-server = { path = "../../lib/smithy-output/api-kv/rust-server" }

@@ -108,7 +108,7 @@ pub async fn profile(
 	};
 	let update_ts = update_ts.unwrap_or_else(util::timestamp::now);
 
-	let (team, team_members_res, team_join_requests_res, team_chat_threads_res) = tokio::try_join!(
+	let (team, team_members_res, team_join_requests_res) = tokio::try_join!(
 		// Fetch new team data (if updated)
 		async {
 			if let Some(TeamConsumerUpdate::Team) = update {
@@ -130,16 +130,8 @@ pub async fn profile(
 		op!([ctx] team_join_request_list {
 			team_ids: vec![group_id.into()],
 		}),
-		op!([ctx] chat_thread_get_for_topic {
-			topics: vec![backend::chat::Topic {
-				kind: Some(backend::chat::topic::Kind::Team(backend::chat::topic::Team {
-					team_id: Some(group_id.into()),
-				})),
-			}],
-		}),
 	)?;
 	let team_members_res = unwrap!(team_members_res.teams.first());
-	let team_chat_thread = team_chat_threads_res.threads.first().cloned();
 
 	let is_current_identity_member = team_members_res
 		.members
@@ -165,7 +157,7 @@ pub async fn profile(
 			avatar_url: util::route::team_avatar(&team),
 			external: models::GroupExternalLinks {
 				profile: util::route::team_profile(team_id),
-				chat: util::route::team_chat(team_id),
+				chat: Default::default(),
 			},
 
 			is_current_identity_member,
@@ -177,9 +169,8 @@ pub async fn profile(
 			join_requests: Vec::new(),
 			is_current_identity_requesting_join,
 			owner_identity_id: owner_user_id.to_string(),
-			thread_id: team_chat_thread
-				.map(|thread| GlobalResult::Ok(unwrap_ref!(thread.thread_id).as_uuid().to_string()))
-				.transpose()?,
+
+			thread_id: Default::default(),
 		},
 		watch: convert::watch_response(WatchResponse::new(update_ts + 1)),
 	})

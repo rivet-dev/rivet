@@ -12,7 +12,7 @@ pub fn handle(team: &backend::team::Team, is_developer: bool) -> GlobalResult<mo
 		avatar_url: util::route::team_avatar(&team),
 		external: models::GroupExternalLinks {
 			profile: util::route::team_profile(team_id),
-			chat: util::route::team_chat(team_id),
+			chat: Default::default(),
 		},
 		is_developer: is_developer.then_some(true),
 	})
@@ -44,7 +44,7 @@ pub fn summary(
 		avatar_url: util::route::team_avatar(&team),
 		external: models::GroupExternalLinks {
 			profile: util::route::team_profile(team_id),
-			chat: util::route::team_chat(team_id),
+			chat: Default::default(),
 		},
 
 		is_current_identity_member,

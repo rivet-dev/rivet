@@ -28,7 +28,6 @@ default-features = false
 [dev-dependencies]
 chirp-worker = { path = "../../../../lib/chirp/worker" }
 
-chat-thread-get-or-create-for-topic = { path = "../../chat-thread/ops/get-or-create-for-topic" }
 faker-game = { path = "../../faker/ops/game" }
 faker-game-version = { path = "../../faker/ops/game-version" }
 upload-get = { path = "../../upload/ops/get" }

@@ -85,10 +85,6 @@ types:
       thumbnail_url: string
       url: string
 
-  GlobalEventChatThreadRemove:
-    properties:
-      thread_id: uuid
-
   ValidationError:
     docs: An error given by failed content validation.
     properties:

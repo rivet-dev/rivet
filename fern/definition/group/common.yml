@@ -50,9 +50,6 @@ types:
       profile:
         type: string
         docs: A link to this group's profile page.
-      chat:
-        type: string
-        docs: A link to this group's chat page.
 
   JoinRequest:
     docs: A group join request.
@@ -105,8 +102,6 @@ types:
         type: optional<boolean>
       owner_identity_id:
         type: uuid
-      thread_id:
-        type: optional<uuid>
 
   BannedIdentity:
     docs: A banned identity.

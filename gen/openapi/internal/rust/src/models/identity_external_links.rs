@@ -14,9 +14,6 @@
 
 #[derive(Clone, Debug, PartialEq, Default, Serialize, Deserialize)]
 pub struct IdentityExternalLinks {
-    /// A link to a chat page with the given identity.
-    #[serde(rename = "chat", skip_serializing_if = "Option::is_none")]
-    pub chat: Option<String>,
     /// A link to this identity's profile page.
     #[serde(rename = "profile")]
     pub profile: String,
@@ -29,7 +26,6 @@ impl IdentityExternalLinks {
     /// External links for an identity.
     pub fn new(profile: String) -> IdentityExternalLinks {
         IdentityExternalLinks {
-            chat: None,
             profile,
             settings: None,
         }
