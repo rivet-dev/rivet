@@ -1,0 +1,115 @@
+# Debugging
+
+## Fetching service logs
+
+### Option A: `bolt logs`
+
+To read logs of a **single, currently running service**, run the following command:
+
+```
+bolt logs my-service
+```
+
+This command also supports `--follow` and `--stderr`.
+
+### Option B: Loki
+
+If the container has **stopped, restarted, or is a short-lived job**, you need to use Loki to read the logs.
+
+Connect to the Grafana dashboard by running the following, then visiting http://localhost:9090:
+
+```
+./scripts/forward/grafana.sh
+```
+
+Open the _Explore_ page and query `{service=~"rivet-.*"} |= "ERROR"`, or click [here](http://localhost:9090/explore?panes=%7B%22DNM%22:%7B%22datasource%22:%22loki%22,%22queries%22:%5B%7B%22refId%22:%22A%22,%22expr%22:%22%7Bservice%3D~%5C%22rivet-.*%5C%22%7D%20%7C%3D%20%5C%22ERROR%5C%22%22,%22queryType%22:%22range%22,%22datasource%22:%7B%22type%22:%22loki%22,%22uid%22:%22loki%22%7D,%22editorMode%22:%22code%22%7D%5D,%22range%22:%7B%22from%22:%22now-6h%22,%22to%22:%22now%22%7D%7D%7D&schemaVersion=1&orgId=1).
+
+## Reading logs
+
+Rivet uses structured logging, which can be verbose and hard to read at times.
+
+Here is an example log:
+
+```json
+{
+	"timestamp":"2023-11-14T20:24:34.038004Z",
+	"level":"INFO",
+	"fields":{"message":"operation call","body":"Request { user_ids: [Uuid(6bda49ad-355c-4f0b-b76f-cb773f4ba9df)] }"},
+	"target":"rivet_operation",
+	"spans":[
+		{"method":"GET","ray_id":"f14d9ff6-06bf-42dc-8939-8e228c4baa0f","uri":"/cloud/games?watch_index=1699993473573","name":"http request"},
+		{"operation":"user-get","name":"call"}
+	]
+}
+```
+
+- `target` is the name of the span (usually the function name) that made the log
+- `fields` are the relevant information to the given function call
+- `spans` are an abbreviated stack trace providing information about where the log came from
+	- `spans[0].ray_id` is important, see below
+
+### Parsing & formatting logs
+
+Loki's [`json`](https://grafana.com/docs/loki/latest/query/log_queries/#parser-expression) parser and [`line_format`](https://grafana.com/docs/loki/latest/query/log_queries/#line-format-expression) expression are helpful for parsing structured logs.
+
+## Rays & requests
+
+Any code that runs in Rivet has an associated ray ID & request ID.
+
+A ray correlates a series of actions that started from a single event (such as an HTTP request or CRON job).
+
+A request represents what happens in a single `OperationContext` (e.g. operation call, consuming a message, HTTP request).
+
+There are multiple requests for a single ray.
+
+### Querying by ray
+
+When running in to any issue, the first thing you want to do is find the ray ID that this issue came from.
+
+Use that ray ID and query Loki with the following:
+
+```
+{service=~"rivet-.*"} |= "ead90acf-8a95-43c8-9c8b-8671fb373cca"
+```
+
+This will give you all logs associated with the problem. From here, you can either narrow down the service or filter by errors.
+
+### Helpful log messages
+
+The following log messages are commonly queried against in Loki to narrow down events:
+
+- `operation call` provides the request for an operation
+- `operation response` provides the response for an operation
+- `publish message` provides the source & body of a published message
+- `received message` is logged when workers consume a message
+- `worker success` is logged when a worker finishes
+
+## Testing
+
+Rivet is extensively tested, which makes it easy to narrow down the cause of an error.
+
+You can run all of the tests by running `bolt test`, but this may take a long time depending on your hardware. If you don't know the specific service causing an issue, use the glob syntax to test a portion of the codebase. For example, to test all user-related services, run `bolt test user-*`.
+
+### How tests work
+
+The `bolt test` command will run tests in parallel by running tests as pods inside the Kubernetes cluster. Logs are written to the path displayed in the output.
+
+### Reading test logs
+
+Use `cat` to read the logs at the given path. If wish to read the logs in real time, use `tail -f <path to logs>`.
+
+Test logs are also available in Loki.
+
+## Monitoring performance & errors
+
+Rivet exposes extensive Prometheus metrics on our internal services. Look for the following Grafana dashboards:
+
+- `Chirp / API` for performance & errors on API services
+- `Chirp / Operation` for performance, errors, & consumer monitoring on operations & consumers
+- `Chirp / Perf Spans` for performance of narrow portions of services
+- `Rivet / SQL` for monitoring SQL queries & pools
+
+## Alerting
+
+Rivet uses Alert Manager extensively for catching errors before they happen & quickly narrowing down the source of errors. Alerts can be pushed to Slack if the `alertmanager/slack/url` and `alertmanager/slack/channel` secrets are provided. See _infra/tf/k8s_infra/prometheus.tf_.
+
