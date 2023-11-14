@@ -17,14 +17,9 @@ fn build_cookie_header(origin: &Url, refresh_token: &str, max_age: i64) -> Globa
 		|| host == "localhost"
 		|| host.ends_with(".localhost")
 		|| origin.scheme() == "file";
-	let is_hub = api_helper::util::hub_origin_regex().is_match(&origin.to_string());
 
-	// Disable `SameSite` to let localhost work.
-	let same_site = if is_localhost || is_hub {
-		"None"
-	} else {
-		"Strict"
-	};
+	// Disable `SameSite` to let localhost work
+	let same_site = if is_localhost { "None" } else { "Strict" };
 
 	// Build base header
 	let mut header = format!(
@@ -34,7 +29,7 @@ fn build_cookie_header(origin: &Url, refresh_token: &str, max_age: i64) -> Globa
 		header.push_str(&format!("; Domain={domain_api}"));
 	}
 
-	tracing::info!(?host, ?is_hub, ?same_site, ?header, "built cookie header");
+	tracing::info!(?host, ?same_site, ?header, "built cookie header");
 
 	Ok(header)
 }
