@@ -14,6 +14,17 @@ resource "helm_release" "pvc_exporter" {
 	chart = "pvc-exporter"
 	version = "0.1.4-beta"
 	values = [yamlencode({
-		
+		PvcExporter = {
+			resources = {
+				requests = {
+					cpu = "100m"
+					memory = "100Mi"
+				}
+				limits = {
+					cpu = "200m"
+					memory = "200Mi"
+				}
+			}
+		}
 	})]
 }

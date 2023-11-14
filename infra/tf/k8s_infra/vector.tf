@@ -22,9 +22,10 @@ resource "kubernetes_priority_class" "vector_priority" {
 }
 
 resource "helm_release" "vector" {
+	depends_on = [null_resource.daemons]
+
 	name = "vector"
 	namespace = kubernetes_namespace.vector.metadata.0.name
-
 	repository = "https://helm.vector.dev"
 	chart = "vector"
 	version = "0.26.0"

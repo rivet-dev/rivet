@@ -115,7 +115,7 @@ resource "kubernetes_priority_class" "traffic_server_priority" {
 }
 
 resource "kubernetes_stateful_set" "traffic_server" {
-	depends_on = [module.docker_auth]
+	depends_on = [null_resource.daemons, module.docker_auth]
 
 	metadata {
 		namespace = kubernetes_namespace.traffic_server.metadata.0.name

@@ -23,7 +23,7 @@ resource "kubernetes_priority_class" "nsfw_api_priority" {
 }
 
 resource "kubernetes_deployment" "nsfw_api" {
-	depends_on = [module.docker_auth]
+	depends_on = [null_resource.daemons, module.docker_auth]
 
 	metadata {
 		name = "nsfw-api"

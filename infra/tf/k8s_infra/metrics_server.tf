@@ -12,6 +12,7 @@ resource "kubernetes_namespace" "metrics_server" {
 # everything in the kube-system namespace on Fargate by default,
 # which doesn't allow us to access the node API.
 resource "helm_release" "metrics_server" {
+	depends_on = [null_resource.daemons]
 	count = var.deploy_method_cluster ? 1 : 0
 
 	name = "metrics-server"

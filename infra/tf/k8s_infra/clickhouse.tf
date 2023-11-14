@@ -36,7 +36,8 @@ resource "kubernetes_priority_class" "clickhouse_priority" {
 }
 
 resource "helm_release" "clickhouse" {
-	depends_on = [helm_release.prometheus]
+	depends_on = [null_resource.daemons]
+
 	count = local.clickhouse_k8s ? 1 : 0
 
 	name = "clickhouse"

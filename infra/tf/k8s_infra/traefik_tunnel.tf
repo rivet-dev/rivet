@@ -41,9 +41,10 @@ resource "kubernetes_priority_class" "traefik_tunnel_priority" {
 }
 
 resource "helm_release" "traefik_tunnel" {
+	depends_on = [null_resource.daemons]
+
 	name = "traefik-tunnel"
 	namespace = kubernetes_namespace.traefik_tunnel.metadata.0.name
-
 	repository = "https://traefik.github.io/charts"
 	chart = "traefik"
 	version = "24.0.0"

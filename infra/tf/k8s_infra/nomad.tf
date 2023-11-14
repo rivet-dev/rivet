@@ -156,6 +156,8 @@ resource "kubernetes_priority_class" "nomad_priority" {
 }
 
 resource "kubernetes_stateful_set" "nomad_server" {
+	depends_on = [null_resource.daemons]
+
 	metadata {
 		namespace = kubernetes_namespace.nomad.metadata.0.name
 		name = "nomad-server-statefulset"
