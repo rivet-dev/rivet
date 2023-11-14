@@ -49,4 +49,3 @@ Creates a CockroachDB database. Contains migrations for this database.
 ### Cache
 
 A Redis cache. Currently a noop. Redis databases are split between two clusters: a persistent database (with AOF persistence, no eviction) and an ephemeral database (with LRU eviction).
-

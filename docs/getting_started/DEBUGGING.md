@@ -32,21 +32,29 @@ Here is an example log:
 
 ```json
 {
-	"timestamp":"2023-11-14T20:24:34.038004Z",
-	"level":"INFO",
-	"fields":{"message":"operation call","body":"Request { user_ids: [Uuid(6bda49ad-355c-4f0b-b76f-cb773f4ba9df)] }"},
-	"target":"rivet_operation",
-	"spans":[
-		{"method":"GET","ray_id":"f14d9ff6-06bf-42dc-8939-8e228c4baa0f","uri":"/cloud/games?watch_index=1699993473573","name":"http request"},
-		{"operation":"user-get","name":"call"}
+	"timestamp": "2023-11-14T20:24:34.038004Z",
+	"level": "INFO",
+	"fields": {
+		"message": "operation call",
+		"body": "Request { user_ids: [Uuid(6bda49ad-355c-4f0b-b76f-cb773f4ba9df)] }"
+	},
+	"target": "rivet_operation",
+	"spans": [
+		{
+			"method": "GET",
+			"ray_id": "f14d9ff6-06bf-42dc-8939-8e228c4baa0f",
+			"uri": "/cloud/games?watch_index=1699993473573",
+			"name": "http request"
+		},
+		{ "operation": "user-get", "name": "call" }
 	]
 }
 ```
 
-- `target` is the name of the span (usually the function name) that made the log
-- `fields` are the relevant information to the given function call
-- `spans` are an abbreviated stack trace providing information about where the log came from
-	- `spans[0].ray_id` is important, see below
+-   `target` is the name of the span (usually the function name) that made the log
+-   `fields` are the relevant information to the given function call
+-   `spans` are an abbreviated stack trace providing information about where the log came from
+    -   `spans[0].ray_id` is important, see below
 
 ### Parsing & formatting logs
 
@@ -78,11 +86,11 @@ This will give you all logs associated with the problem. From here, you can eith
 
 The following log messages are commonly queried against in Loki to narrow down events:
 
-- `operation call` provides the request for an operation
-- `operation response` provides the response for an operation
-- `publish message` provides the source & body of a published message
-- `received message` is logged when workers consume a message
-- `worker success` is logged when a worker finishes
+-   `operation call` provides the request for an operation
+-   `operation response` provides the response for an operation
+-   `publish message` provides the source & body of a published message
+-   `received message` is logged when workers consume a message
+-   `worker success` is logged when a worker finishes
 
 ## Testing
 
@@ -104,12 +112,11 @@ Test logs are also available in Loki.
 
 Rivet exposes extensive Prometheus metrics on our internal services. Look for the following Grafana dashboards:
 
-- `Chirp / API` for performance & errors on API services
-- `Chirp / Operation` for performance, errors, & consumer monitoring on operations & consumers
-- `Chirp / Perf Spans` for performance of narrow portions of services
-- `Rivet / SQL` for monitoring SQL queries & pools
+-   `Chirp / API` for performance & errors on API services
+-   `Chirp / Operation` for performance, errors, & consumer monitoring on operations & consumers
+-   `Chirp / Perf Spans` for performance of narrow portions of services
+-   `Rivet / SQL` for monitoring SQL queries & pools
 
 ## Alerting
 
 Rivet uses Alert Manager extensively for catching errors before they happen & quickly narrowing down the source of errors. Alerts can be pushed to Slack if the `alertmanager/slack/url` and `alertmanager/slack/channel` secrets are provided. See _infra/tf/k8s_infra/prometheus.tf_.
-
