@@ -31,6 +31,14 @@ pub fn build_servers(
 ) -> Result<HashMap<String, Server>> {
 	let ns = ctx.ns_id();
 
+	// HACK: Linode requires tags to be > 3 characters. We extend the namespace to make sure it
+	// meets the minimum length requirement.
+	let ns_long = if ns.len() < 3 {
+		format!("rivet-{ns}")
+	} else {
+		ns.to_string()
+	};
+
 	let mut servers = HashMap::<String, Server>::new();
 	for pool in &ctx.ns().pools {
 		let region_id = &pool.region;
@@ -67,7 +75,7 @@ pub fn build_servers(
 
 				// Tags that will be assigned to the servers.
 				tags: vec![
-					ns.to_string(),
+					ns_long.clone(),
 					format!("{ns}-{region_id}"),
 					format!("{ns}-{pool_id}"),
 					format!("{ns}-{pool_id}-{version_id}"),
