@@ -92,17 +92,6 @@ pub fn gen_lobby_docker_job(
 		..Resources::new()
 	};
 
-	tracing::info!(
-		?tier,
-		?resources,
-		?memory,
-		?memory_max,
-		test1=?(memory as i64 / (1024 * 1024)),
-		test2=?(memory_max as i64 / (1024 * 1024)),
-		clean=?util_job::TASK_CLEANUP_MEMORY,
-		"--------------"
-	);
-
 	let network_mode = unwrap!(LobbyRuntimeNetworkMode::from_i32(runtime.network_mode));
 
 	// Read ports
