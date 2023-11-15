@@ -69,7 +69,7 @@ runs:
         [rivet]
         test = {}
 
-        # NOTE: We set the public IP to localhost because we are running inside of a github action, therefore
+        # We set the public IP to localhost because we are running inside of a github action, therefore
         # it is not reachable from the public.
         [cluster.single_node]
         public_ip = "127.0.0.1"
