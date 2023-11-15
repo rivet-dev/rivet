@@ -204,11 +204,17 @@ types:
     docs: A union representing an identity's linked accounts.
     properties:
       email: optional<EmailLinkedAccount>
+      access_token: optional<AccessTokenLinkedAccount>
 
   EmailLinkedAccount:
     docs: An identity's linked email.
     properties:
       email: commons.Email
+
+  AccessTokenLinkedAccount:
+    docs: An identity's access token identity.
+    properties:
+      name: string
 
   DevState:
     docs: The state of the given identity's developer status.

@@ -32,7 +32,7 @@ define_router! {
 		},
 		"identity" / "email" / "start-verification": {
 			POST: identity::start(
-				body: models::AuthStartEmailVerificationRequest,
+				body: models::AuthIdentityStartEmailVerificationRequest,
 				rate_limit: {
 					buckets: [
 						{ count: 2 },
@@ -43,7 +43,18 @@ define_router! {
 		"identity" / "email" / "complete-verification": {
 			POST: identity::complete(
 				with_response: true,
-				body: models_old::CompleteEmailVerificationRequest,
+				body: models::AuthIdentityCompleteEmailVerificationRequest,
+				rate_limit: {
+					buckets: [
+						{ count: 2 },
+					],
+				},
+			),
+		},
+		"identity" / "access-token" / "complete-verification": {
+			POST: identity::complete_access_token(
+				with_response: true,
+				body: models::AuthIdentityCompleteAccessTokenVerificationRequest,
 				rate_limit: {
 					buckets: [
 						{ count: 2 },

@@ -3,6 +3,7 @@ use hyper::{Body, Request, Response};
 use uuid::Uuid;
 
 pub mod groups;
+pub mod login;
 
 pub async fn handle(
 	shared_client: chirp_client::SharedClientHandle,

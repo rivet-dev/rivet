@@ -1,16 +1,16 @@
 syntax = "proto3";
 
-package rivet.backend.pkg.user.resolve_email;
+package rivet.backend.pkg.user.resolve_access_token;
 
 import "proto/common.proto";
 
 message Request {
-	repeated string emails = 1;
+	repeated string names = 1;
 }
 
 message Response {
 	message User {
-		string email = 1;
+		string name = 1;
 		rivet.common.Uuid user_id = 2;
 	}
 

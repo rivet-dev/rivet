@@ -121,6 +121,7 @@ dependencies = [
  "s3-util",
  "serde",
  "serde_json",
+ "team-dev-get",
  "thiserror",
  "tokio",
  "tracing",
@@ -170,6 +171,7 @@ dependencies = [
  "user-identity-create",
  "user-identity-get",
  "user-presence-touch",
+ "user-resolve-access-token",
  "user-resolve-email",
  "user-token-create",
  "uuid",
@@ -9034,6 +9036,19 @@ dependencies = [
  "rivet-health-checks",
  "rivet-metrics",
  "rivet-runtime",
+]
+
+[[package]]
+name = "user-resolve-access-token"
+version = "0.0.1"
+dependencies = [
+ "chirp-client",
+ "chirp-worker",
+ "faker-user",
+ "prost 0.10.4",
+ "rivet-operation",
+ "sqlx",
+ "user-identity-create",
 ]
 
 [[package]]

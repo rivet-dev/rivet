@@ -3,6 +3,63 @@ info:
   title: Rivet API
   version: ''
 paths:
+  /admin/login:
+    post:
+      operationId: admin_login
+      tags:
+        - Admin
+      parameters: []
+      responses:
+        '200':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminLoginResponse'
+        '400':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '403':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '404':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '408':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '429':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '500':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+      security: &ref_0
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AdminLoginRequest'
   /cloud/bootstrap:
     get:
       description: Returns the basic information required to use the cloud APIs.
@@ -53,8 +110,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorBody'
-      security: &ref_0
-        - BearerAuth: []
+      security: *ref_0
   /cloud/games/{game_id}/namespaces:
     post:
       description: Creates a new namespace for the given game.
@@ -7482,13 +7538,36 @@ paths:
       security: *ref_0
 components:
   schemas:
+    AdminLoginRequest:
+      type: object
+      properties:
+        name:
+          type: string
+      required:
+        - name
+    AdminLoginResponse:
+      type: object
+      properties:
+        url:
+          type: string
+      required:
+        - url
     CloudBootstrapResponse:
       type: object
       properties:
+        cluster:
+          $ref: '#/components/schemas/CloudBootstrapCluster'
         captcha:
           $ref: '#/components/schemas/CloudBootstrapCaptcha'
       required:
+        - cluster
         - captcha
+    CloudBootstrapCluster:
+      type: string
+      enum:
+        - enterprise
+        - oss
+      description: The type of cluster that the backend is currently running.
     CloudBootstrapCaptcha:
       type: object
       properties:
@@ -10852,6 +10931,8 @@ components:
       properties:
         email:
           $ref: '#/components/schemas/IdentityEmailLinkedAccount'
+        access_token:
+          $ref: '#/components/schemas/IdentityAccessTokenLinkedAccount'
     IdentityEmailLinkedAccount:
       type: object
       description: An identity's linked email.
@@ -10860,6 +10941,14 @@ components:
           $ref: '#/components/schemas/Email'
       required:
         - email
+    IdentityAccessTokenLinkedAccount:
+      type: object
+      description: An identity's access token identity.
+      properties:
+        name:
+          type: string
+      required:
+        - name
     IdentityDevState:
       type: string
       enum:
