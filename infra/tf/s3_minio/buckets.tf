@@ -3,7 +3,7 @@ resource "null_resource" "check_minio" {
 	provisioner "local-exec" {
 		command = <<EOL
 		until curl -sf ${var.s3_providers.minio.endpoint_external}/minio/health/ready; do
-			echo "Waiting for Minio to become reachable..."
+			echo "Waiting for Minio to become reachable publicly (${var.s3_providers.minio.endpoint_external})..."
 			sleep 1
 		done
 		EOL
@@ -20,4 +20,3 @@ resource "aws_s3_bucket" "bucket" {
 	# TODO: Configure bucket type
 	# TODO: Configure CORS
 }
-
