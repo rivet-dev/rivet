@@ -26,19 +26,19 @@ You can choose any of the two Redis&reg; Helm charts for deploying a Redis&reg; 
 While [Redis&reg; Helm Chart](https://github.com/bitnami/charts/tree/main/bitnami/redis) will deploy a master-slave cluster using Redis&reg; Sentinel, the [Redis&reg; Cluster Helm Chart](https://github.com/bitnami/charts/tree/main/bitnami/redis-cluster) will deploy a Redis&reg; Cluster with sharding.
 The main features of each chart are the following:
 
-| Redis&reg;                                     | Redis&reg; Cluster                                             |
-|--------------------------------------------------------|------------------------------------------------------------------------|
-| Supports multiple databases                            | Supports only one database. Better if you have a big dataset           |
-| Single write point (single master)                     | Multiple write points (multiple masters)                               |
-| ![Redis&reg; Topology](img/redis-topology.png) | ![Redis&reg; Cluster Topology](img/redis-cluster-topology.png) |
+| Redis&reg;                                 | Redis&reg; Cluster                                           |
+| ------------------------------------------ | ------------------------------------------------------------ |
+| Supports multiple databases                | Supports only one database. Better if you have a big dataset |
+| Single write point (single master)         | Multiple write points (multiple masters)                     |
+| ![Redis® Topology](img/redis-topology.png) | ![Redis® Cluster Topology](img/redis-cluster-topology.png)   |
 
 Looking to use Redisreg; Cluster in production? Try [VMware Application Catalog](https://bitnami.com/enterprise), the enterprise edition of Bitnami Application Catalog.
 
 ## Prerequisites
 
-- Kubernetes 1.19+
-- Helm 3.2.0+
-- PV provisioner support in the underlying infrastructure
+-   Kubernetes 1.19+
+-   Helm 3.2.0+
+-   PV provisioner support in the underlying infrastructure
 
 ## Installing the Chart
 
@@ -360,12 +360,11 @@ Alternatively, a YAML file that specifies the values for the parameters can be p
 helm install my-release -f values.yaml oci://registry-1.docker.io/bitnamicharts/redis-cluster
 ```
 
-> **Tip**: You can use the default [values.yaml](values.yaml)
-> **Note for minikube users**: Current versions of minikube (v0.24.1 at the time of writing) provision `hostPath` persistent volumes that are only writable by root. Using chart defaults cause pod failure for the Redis&reg; pod as it attempts to write to the `/bitnami` directory. See minikube issue [1990](https://github.com/kubernetes/minikube/issues/1990) for more information.
+> **Tip**: You can use the default [values.yaml](values.yaml) > **Note for minikube users**: Current versions of minikube (v0.24.1 at the time of writing) provision `hostPath` persistent volumes that are only writable by root. Using chart defaults cause pod failure for the Redis&reg; pod as it attempts to write to the `/bitnami` directory. See minikube issue [1990](https://github.com/kubernetes/minikube/issues/1990) for more information.
 
 ## Configuration and installation details
 
-### [Rolling VS Immutable tags](https://docs.bitnami.com/containers/how-to/understand-rolling-tags-containers/)
+### [Rolling VS Immutable tags](https://docs.bitnami.com/containers/tutorials/understand-rolling-tags-containers/)
 
 It is strongly recommended to use immutable tags in a production environment. This ensures your deployment does not change automatically if the same tag is updated with a different image.
 
@@ -387,8 +386,8 @@ Using the external access mode, you can connect to any of the pods and the slave
 
 In case the master crashes, one of his slaves will be promoted to master. The slots stored by the crashed master will be unavailable until the slave finish the promotion. If a master and all his slaves crash, the cluster will be down until one of them is up again. To avoid downtime, it is possible to configure the number of Redis&reg; nodes with `cluster.nodes` and the number of replicas that will be assigned to each master with `cluster.replicas`. For example:
 
-- `cluster.nodes=9` ( 3 master plus 2 replicas for each master)
-- `cluster.replicas=2`
+-   `cluster.nodes=9` ( 3 master plus 2 replicas for each master)
+-   `cluster.replicas=2`
 
 Providing the values above, the cluster will have 3 masters and, each master, will have 2 replicas.
 
@@ -398,10 +397,10 @@ Providing the values above, the cluster will have 3 masters and, each master, wi
 
 There is a job that will be executed using a `post-upgrade` hook that will allow you to add a new node. To use it, you should provide some parameters to the upgrade:
 
-- Pass as `password` the password used in the installation time. If you did not provide a password follow the instructions from the NOTES.txt to get the generated password.
-- Set the desired number of nodes at `cluster.nodes`.
-- Set the number of current nodes at `cluster.update.currentNumberOfNodes`.
-- Set to true `cluster.update.addNodes`.
+-   Pass as `password` the password used in the installation time. If you did not provide a password follow the instructions from the NOTES.txt to get the generated password.
+-   Set the desired number of nodes at `cluster.nodes`.
+-   Set the number of current nodes at `cluster.update.currentNumberOfNodes`.
+-   Set to true `cluster.update.addNodes`.
 
 The following will be an example to add one more node:
 
@@ -475,7 +474,7 @@ redis-cli -a $REDIS_PASSWORD CLUSTER FORGET b23bcffa1fd64368d445c1d9bd9aeb926411
 
 To use a password file for Redis&reg; you need to create a secret containing the password.
 
-> *NOTE*: It is important that the file with the password must be called `redis-password`
+> _NOTE_: It is important that the file with the password must be called `redis-password`
 
 And then deploy the Helm Chart using the secret name as parameter:
 
@@ -490,11 +489,11 @@ metrics.enabled=true
 
 TLS support can be enabled in the chart by specifying the `tls.` parameters while creating a release. The following parameters should be configured to properly enable the TLS support in the cluster:
 
-- `tls.enabled`: Enable TLS support. Defaults to `false`
-- `tls.existingSecret`: Name of the secret that contains the certificates. No defaults.
-- `tls.certFilename`: Certificate filename. No defaults.
-- `tls.certKeyFilename`: Certificate key filename. No defaults.
-- `tls.certCAFilename`: CA Certificate filename. No defaults.
+-   `tls.enabled`: Enable TLS support. Defaults to `false`
+-   `tls.existingSecret`: Name of the secret that contains the certificates. No defaults.
+-   `tls.certFilename`: Certificate filename. No defaults.
+-   `tls.certKeyFilename`: Certificate key filename. No defaults.
+-   `tls.certCAFilename`: CA Certificate filename. No defaults.
 
 For example:
 
@@ -532,12 +531,12 @@ Similarly, you can add extra init containers using the `initContainers` paramete
 
 ```yaml
 initContainers:
-  - name: your-image-name
-    image: your-image
-    imagePullPolicy: Always
-    ports:
-      - name: portname
-        containerPort: 1234
+    - name: your-image-name
+      image: your-image
+      imagePullPolicy: Always
+      ports:
+          - name: portname
+            containerPort: 1234
 ```
 
 ### Adding extra environment variables
@@ -546,8 +545,8 @@ In case you want to add extra environment variables (useful for advanced operati
 
 ```yaml
 extraEnvVars:
-  - name: REDIS_WHATEVER
-    value: value
+    - name: REDIS_WHATEVER
+      value: value
 ```
 
 Alternatively, you can use a ConfigMap or a Secret with the environment variables. To do so, use the `extraEnvVarsCM` or the `extraEnvVarsSecret` values.
@@ -563,23 +562,23 @@ To do so, you can set up a privileged initContainer with the `sysctlImage` confi
 
 ```yaml
 sysctlImage:
-  enabled: true
-  mountHostSys: true
-  command:
-    - /bin/sh
-    - -c
-    - |-
-      sysctl -w net.core.somaxconn=10000
-      echo never > /host-sys/kernel/mm/transparent_hugepage/enabled
+    enabled: true
+    mountHostSys: true
+    command:
+        - /bin/sh
+        - -c
+        - |-
+            sysctl -w net.core.somaxconn=10000
+            echo never > /host-sys/kernel/mm/transparent_hugepage/enabled
 ```
 
 Alternatively, for Kubernetes 1.12+ you can set `podSecurityContext.sysctls` which will configure sysctls for master and slave pods. Example:
 
 ```yaml
 podSecurityContext:
-  sysctls:
-  - name: net.core.somaxconn
-    value: "10000"
+    sysctls:
+        - name: net.core.somaxconn
+          value: "10000"
 ```
 
 Note that this will not disable transparent huge tables.
@@ -620,7 +619,7 @@ To enable network policy for Redis&reg;, install
 and set `networkPolicy.enabled` to `true`.
 
 For Kubernetes v1.5 & v1.6, you must also turn on NetworkPolicy by setting
-the DefaultDeny namespace annotation. Note: this will enforce policy for *all* pods in the namespace:
+the DefaultDeny namespace annotation. Note: this will enforce policy for _all_ pods in the namespace:
 
 ```console
 kubectl annotate namespace default "net.beta.kubernetes.io/network-policy={\"ingress\":{\"isolation\":\"DefaultDeny\"}}"
@@ -634,11 +633,11 @@ With `networkPolicy.ingressNSMatchLabels` pods from other namespaces can connect
 
 ```yaml
 networkPolicy:
-  enabled: true
-  ingressNSMatchLabels:
-    redis: external
-  ingressNSPodMatchLabels:
-    redis-client: true
+    enabled: true
+    ingressNSMatchLabels:
+        redis: external
+    ingressNSPodMatchLabels:
+        redis-client: true
 ```
 
 ### Setting Pod's affinity
@@ -686,22 +685,22 @@ This major version updates the Redis&reg; docker image version used from `6.0` t
 
 #### What changes were introduced in this major version?
 
-- Previous versions of this Helm Chart use `apiVersion: v1` (installable by both Helm 2 and 3), this Helm Chart was updated to `apiVersion: v2` (installable by Helm 3 only). [Here](https://helm.sh/docs/topics/charts/#the-apiversion-field) you can find more information about the `apiVersion` field.
-- Move dependency information from the *requirements.yaml* to the *Chart.yaml*
-- After running `helm dependency update`, a *Chart.lock* file is generated containing the same structure used in the previous *requirements.lock*
-- The different fields present in the *Chart.yaml* file has been ordered alphabetically in a homogeneous way for all the Bitnami Helm Charts
+-   Previous versions of this Helm Chart use `apiVersion: v1` (installable by both Helm 2 and 3), this Helm Chart was updated to `apiVersion: v2` (installable by Helm 3 only). [Here](https://helm.sh/docs/topics/charts/#the-apiversion-field) you can find more information about the `apiVersion` field.
+-   Move dependency information from the _requirements.yaml_ to the _Chart.yaml_
+-   After running `helm dependency update`, a _Chart.lock_ file is generated containing the same structure used in the previous _requirements.lock_
+-   The different fields present in the _Chart.yaml_ file has been ordered alphabetically in a homogeneous way for all the Bitnami Helm Charts
 
 #### Considerations when upgrading to this version
 
-- If you want to upgrade to this version from a previous one installed with Helm v3, you shouldn't face any issues
-- If you want to upgrade to this version using Helm v2, this scenario is not supported as this version doesn't support Helm v2 anymore
-- If you installed the previous version with Helm v2 and wants to upgrade to this version with Helm v3, please refer to the [official Helm documentation](https://helm.sh/docs/topics/v2_v3_migration/#migration-use-cases) about migrating from Helm v2 to v3
+-   If you want to upgrade to this version from a previous one installed with Helm v3, you shouldn't face any issues
+-   If you want to upgrade to this version using Helm v2, this scenario is not supported as this version doesn't support Helm v2 anymore
+-   If you installed the previous version with Helm v2 and wants to upgrade to this version with Helm v3, please refer to the [official Helm documentation](https://helm.sh/docs/topics/v2_v3_migration/#migration-use-cases) about migrating from Helm v2 to v3
 
 #### Useful links
 
-- <https://docs.bitnami.com/tutorials/resolve-helm2-helm3-post-migration-issues/>
-- <https://helm.sh/docs/topics/v2_v3_migration/>
-- <https://helm.sh/blog/migrate-from-helm-v2-to-helm-v3/>
+-   <https://docs.bitnami.com/tutorials/resolve-helm2-helm3-post-migration-issues/>
+-   <https://helm.sh/docs/topics/v2_v3_migration/>
+-   <https://helm.sh/blog/migrate-from-helm-v2-to-helm-v3/>
 
 ### To 3.0.0
 
