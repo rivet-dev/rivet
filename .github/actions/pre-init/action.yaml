@@ -68,6 +68,11 @@ runs:
         cat <<'EOF' > namespaces/ci.toml
         [rivet]
         test = {}
+
+        # We set the public IP to localhost because we are running inside of a github action, therefore
+        # it is not reachable from the public.
+        [cluster.single_node]
+        public_ip = "127.0.0.1"
         EOF
 
         # Write secrets so they're not prompted in `bolt init`
