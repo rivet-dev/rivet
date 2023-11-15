@@ -30,10 +30,10 @@ Looking to use ClickHouse in production? Try [VMware Tanzu Application Catalog](
 
 ## Prerequisites
 
-- Kubernetes 1.23+
-- Helm 3.8.0+
-- PV provisioner support in the underlying infrastructure
-- ReadWriteMany volumes for deployment scaling
+-   Kubernetes 1.23+
+-   Helm 3.8.0+
+-   PV provisioner support in the underlying infrastructure
+-   ReadWriteMany volumes for deployment scaling
 
 > If you are using Kubernetes 1.18, the following code needs to be commented out.
 > seccompProfile:
@@ -385,7 +385,7 @@ helm install my-release -f values.yaml oci://REGISTRY_NAME/REPOSITORY_NAME/click
 
 ## Configuration and installation details
 
-### [Rolling VS Immutable tags](https://docs.bitnami.com/containers/how-to/understand-rolling-tags-containers/)
+### [Rolling VS Immutable tags](https://docs.bitnami.com/tutorials/understand-rolling-tags-containers/)
 
 It is strongly recommended to use immutable tags in a production environment. This ensures your deployment does not change automatically if the same tag is updated with a different image.
 
@@ -422,9 +422,9 @@ In case you want to add extra environment variables (useful for advanced operati
 
 ```yaml
 clickhouse:
-  extraEnvVars:
-    - name: LOG_LEVEL
-      value: error
+    extraEnvVars:
+        - name: LOG_LEVEL
+          value: error
 ```
 
 Alternatively, you can use a ConfigMap or a Secret with the environment variables. To do so, use the `extraEnvVarsCM` or the `extraEnvVarsSecret` values.
@@ -439,21 +439,21 @@ For using ingress (example without TLS):
 
 ```yaml
 ingress:
-  ## If true, ClickHouse server Ingress will be created
-  ##
-  enabled: true
+    ## If true, ClickHouse server Ingress will be created
+    ##
+    enabled: true
 
-  ## ClickHouse server Ingress annotations
-  ##
-  annotations: {}
-  #   kubernetes.io/ingress.class: nginx
-  #   kubernetes.io/tls-acme: 'true'
+    ## ClickHouse server Ingress annotations
+    ##
+    annotations: {}
+    #   kubernetes.io/ingress.class: nginx
+    #   kubernetes.io/tls-acme: 'true'
 
-  ## ClickHouse server Ingress hostnames
-  ## Must be provided if Ingress is enabled
-  ##
-  hosts:
-    - clickhouse.domain.com
+    ## ClickHouse server Ingress hostnames
+    ## Must be provided if Ingress is enabled
+    ##
+    hosts:
+        - clickhouse.domain.com
 ```
 
 ### Ingress TLS
@@ -464,29 +464,29 @@ To manually configure TLS, first create/retrieve a key & certificate pair for th
 
 ```yaml
 ingress:
-  ## If true, ClickHouse server Ingress will be created
-  ##
-  enabled: true
+    ## If true, ClickHouse server Ingress will be created
+    ##
+    enabled: true
 
-  ## ClickHouse server Ingress annotations
-  ##
-  annotations: {}
-  #   kubernetes.io/ingress.class: nginx
-  #   kubernetes.io/tls-acme: 'true'
+    ## ClickHouse server Ingress annotations
+    ##
+    annotations: {}
+    #   kubernetes.io/ingress.class: nginx
+    #   kubernetes.io/tls-acme: 'true'
 
-  ## ClickHouse server Ingress hostnames
-  ## Must be provided if Ingress is enabled
-  ##
-  hosts:
-    - clickhouse.domain.com
-
-  ## ClickHouse server Ingress TLS configuration
-  ## Secrets must be manually created in the namespace
-  ##
-  tls:
-    - secretName: clickhouse-server-tls
-      hosts:
+    ## ClickHouse server Ingress hostnames
+    ## Must be provided if Ingress is enabled
+    ##
+    hosts:
         - clickhouse.domain.com
+
+    ## ClickHouse server Ingress TLS configuration
+    ## Secrets must be manually created in the namespace
+    ##
+    tls:
+        - secretName: clickhouse-server-tls
+          hosts:
+              - clickhouse.domain.com
 ```
 
 ### Using custom scripts

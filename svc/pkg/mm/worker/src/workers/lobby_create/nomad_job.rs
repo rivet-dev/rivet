@@ -1,3 +1,5 @@
+use std::{convert::TryInto, collections::HashMap};
+
 use chirp_worker::prelude::*;
 use proto::backend::{
 	self,
@@ -5,7 +7,6 @@ use proto::backend::{
 };
 use regex::Regex;
 use serde_json::json;
-use std::collections::HashMap;
 
 /// What a port is being pointed at.
 enum PortTarget {
@@ -57,16 +58,16 @@ pub fn gen_lobby_docker_job(
 	// runc-compatible resources
 	let cpu =
 		tier.rivet_cores_numerator as u64 * 1_000 / tier.rivet_cores_denominator as u64 * 1_000; // Millicore (1/1000 of a core)
-	let memory = tier.memory as u64 * (1024 * 1024); // bytes
-	let memory_max = tier.memory_max as u64 * (1024 * 1024); // bytes
+	let memory = tier.memory * (1024 * 1024); // bytes
+	let memory_max = tier.memory_max * (1024 * 1024); // bytes
 
-	// Nomad-compatbile resources
+	// Nomad-compatible resources
 	let resources = Resources {
 		// TODO: Configure this per-provider
 		// Nomad configures CPU based on MHz, not millicores. We havel to calculate the CPU share
 		// by knowing how many MHz are on the client.
 		CPU: if tier.rivet_cores_numerator < tier.rivet_cores_denominator {
-			Some(tier.cpu as i32 - util_job::TASK_CLEANUP_CPU)
+			Some((tier.cpu - util_job::TASK_CLEANUP_CPU as u64).try_into()?)
 		} else {
 			None
 		},
@@ -75,10 +76,18 @@ pub fn gen_lobby_docker_job(
 		} else {
 			None
 		},
-		memory_mb: Some(memory as i32 / (1024 * 1024) - util_job::TASK_CLEANUP_MEMORY),
+		memory_mb: Some((
+			TryInto::<i64>::try_into(memory)?
+			/ (1024 * 1024)
+			- util_job::TASK_CLEANUP_MEMORY as i64
+		).try_into()?),
 		// Allow oversubscribing memory by 50% of the reserved
 		// memory if using less than the node's total memory
-		memory_max_mb: Some(memory_max as i32 / (1024 * 1024) - util_job::TASK_CLEANUP_MEMORY),
+		memory_max_mb: Some((
+			TryInto::<i64>::try_into(memory_max)?
+			/ (1024 * 1024)
+			- util_job::TASK_CLEANUP_MEMORY as i64
+		).try_into()?),
 		disk_mb: Some(tier.disk as i32), // TODO: Is this deprecated?
 		..Resources::new()
 	};
