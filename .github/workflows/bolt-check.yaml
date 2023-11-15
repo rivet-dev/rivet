@@ -31,16 +31,6 @@ jobs:
           sscache_aws_secret_access_key: ${{ secrets.SCCACHE_AWS_SECRET_ACCESS_KEY }}
           sscache_aws_access_key_id: ${{ secrets.SCCACHE_AWS_ACCESS_KEY_ID }}
 
-      # NOTE: We set the public IP to localhost because we are running inside of a github action, therefore
-      # it is not reachable from the public.
-      - name: Write partial config
-        run: |
-          mkdir -p ./namespaces
-          cat <<EOF > ./namespaces/ci.toml
-          [cluster.single_node]
-            public_ip = "127.0.0.1"
-          EOF
-
       - name: Bolt Generate Project
         run: nix-shell --pure --run "bolt gen project"
 
