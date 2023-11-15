@@ -6,30 +6,20 @@ use crate::route::tokens::{REFRESH_TOKEN_TTL, USER_REFRESH_TOKEN_COOKIE};
 
 #[tracing::instrument(skip(refresh_token))]
 fn build_cookie_header(origin: &Url, refresh_token: &str, max_age: i64) -> GlobalResult<String> {
-	// https://developer.mozilla.org/en-US/docs/Web/Security/Secure_Contexts#when_is_a_context_considered_secure
-
-	// See https://developer.mozilla.org/en-US/docs/Web/Security/Secure_Contexts#when_is_a_context_considered_secure
-	//
-	// These local domains are considered secure, so we can leave `Secure`
-	// enabled.
-	let host = unwrap!(origin.host_str());
-	let is_localhost = host == "127.0.0.1"
-		|| host == "localhost"
-		|| host.ends_with(".localhost")
-		|| origin.scheme() == "file";
-
-	// Disable `SameSite` to let localhost work
-	let same_site = if is_localhost { "None" } else { "Strict" };
-
 	// Build base header
+	//
+	// Use `SameSite=None` because the hub is hosted on a separate subdomain than the API
+	//
+	// Localhost domains are considered secure, so we can leave `Secure` enabled even for local
+	// development.
 	let mut header = format!(
-		"{USER_REFRESH_TOKEN_COOKIE}={refresh_token}; Max-Age={max_age}; HttpOnly; Path=/; SameSite={same_site}; Secure",
+		"{USER_REFRESH_TOKEN_COOKIE}={refresh_token}; Max-Age={max_age}; HttpOnly; Path=/; SameSite=None; Secure",
 	);
 	if let Some(domain_api) = util::env::domain_main_api() {
 		header.push_str(&format!("; Domain={domain_api}"));
 	}
 
-	tracing::info!(?host, ?same_site, ?header, "built cookie header");
+	tracing::info!(?header, "built cookie header");
 
 	Ok(header)
 }
