@@ -18,12 +18,8 @@ message Response {
 	repeated User users = 1;
 }
 
-message CacheUserEmailIdentity {
+message CacheUserIdentity {
 	rivet.common.Uuid user_id = 1;
-	string email = 2;
-}
-
-message CacheUserAccessTokenIdentity {
-	rivet.common.Uuid user_id = 1;
-	string name = 2;
+	optional string email = 2;
+	optional string access_token_name = 3;
 }

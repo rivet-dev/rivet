@@ -2,31 +2,18 @@ use proto::backend::{self, pkg::*};
 use rivet_operation::prelude::*;
 
 #[derive(Debug, sqlx::FromRow)]
-struct EmailRow {
+struct IdentityRow {
 	user_id: Uuid,
-	email: String,
+	email: Option<String>,
+	name: Option<String>,
 }
 
-impl From<EmailRow> for user_identity::get::CacheUserEmailIdentity {
-	fn from(val: EmailRow) -> Self {
-		user_identity::get::CacheUserEmailIdentity {
+impl From<IdentityRow> for user_identity::get::CacheUserIdentity {
+	fn from(val: IdentityRow) -> Self {
+		user_identity::get::CacheUserIdentity {
 			user_id: Some(val.user_id.into()),
 			email: val.email,
-		}
-	}
-}
-
-#[derive(Debug, sqlx::FromRow)]
-struct AccessTokenRow {
-	user_id: Uuid,
-	name: String,
-}
-
-impl From<AccessTokenRow> for user_identity::get::CacheUserAccessTokenIdentity {
-	fn from(val: AccessTokenRow) -> Self {
-		user_identity::get::CacheUserAccessTokenIdentity {
-			user_id: Some(val.user_id.into()),
-			name: val.name,
+			access_token_name: val.name,
 		}
 	}
 }
@@ -41,19 +28,23 @@ async fn handle(
 		.map(common::Uuid::as_uuid)
 		.collect::<Vec<_>>();
 
-	let emails = ctx
+	let identities = ctx
 		.cache()
-		.fetch_all_proto("user_identity.emails", user_ids.clone(), {
+		.fetch_all_proto("user_identity.identities", user_ids.clone(), {
 			let ctx = ctx.clone();
 			move |mut cache, user_ids| {
 				let ctx = ctx.clone();
 				async move {
 					let identity_rows = sql_fetch_all!(
-						[ctx, EmailRow]
+						[ctx, IdentityRow]
 						"
-						SELECT user_id, email
-						FROM db_user_identity.emails
-						WHERE user_id = ANY($1)
+						SELECT COALESCE(e.user_id, a.user_id) as user_id, e.email, a.name
+						FROM db_user_identity.emails as e
+						FULL OUTER JOIN db_user_identity.access_tokens as a
+						ON e.user_id = a.user_id
+						WHERE
+							e.user_id = ANY($1) OR
+							a.user_id = ANY($1);
 						",
 						&user_ids,
 					)
@@ -62,38 +53,7 @@ async fn handle(
 					for row in identity_rows {
 						cache.resolve(
 							&row.user_id.clone(),
-							user_identity::get::CacheUserEmailIdentity::from(row),
-						);
-					}
-
-					Ok(cache)
-				}
-			}
-		})
-		.await?;
-
-	let access_tokens = ctx
-		.cache()
-		.fetch_all_proto("user_identity.access_tokens", user_ids.clone(), {
-			let ctx = ctx.clone();
-			move |mut cache, user_ids| {
-				let ctx = ctx.clone();
-				async move {
-					let identity_rows = sql_fetch_all!(
-						[ctx, AccessTokenRow]
-						"
-							SELECT user_id, name
-							FROM db_user_identity.access_tokens
-							WHERE user_id = ANY($1)
-							",
-						&user_ids,
-					)
-					.await?;
-
-					for row in identity_rows {
-						cache.resolve(
-							&row.user_id.clone(),
-							user_identity::get::CacheUserAccessTokenIdentity::from(row),
+							user_identity::get::CacheUserIdentity::from(row),
 						);
 					}
 
@@ -106,40 +66,41 @@ async fn handle(
 	let users = user_ids
 		.iter()
 		.map(|user_id| {
-			let emails = emails
+			let identities = identities
 				.iter()
 				.filter(|x| {
 					x.user_id
 						.as_ref()
 						.map_or(false, |x| x.as_uuid() == *user_id)
 				})
-				.map(|x| backend::user_identity::Identity {
-					kind: Some(backend::user_identity::identity::Kind::Email(
-						backend::user_identity::identity::Email {
-							email: x.email.clone(),
-						},
-					)),
-				});
-
-			let access_tokens = access_tokens
-				.iter()
-				.filter(|x| {
-					x.user_id
-						.as_ref()
-						.map_or(false, |x| x.as_uuid() == *user_id)
+				.flat_map(|x| {
+					IntoIterator::into_iter([
+						x.email
+							.as_ref()
+							.map(|email| backend::user_identity::Identity {
+								kind: Some(backend::user_identity::identity::Kind::Email(
+									backend::user_identity::identity::Email {
+										email: email.clone(),
+									},
+								)),
+							}),
+						x.access_token_name
+							.as_ref()
+							.map(|name| backend::user_identity::Identity {
+								kind: Some(backend::user_identity::identity::Kind::AccessToken(
+									backend::user_identity::identity::AccessToken {
+										name: name.clone(),
+									},
+								)),
+							}),
+					])
+					.flatten()
 				})
-				.map(|x| backend::user_identity::Identity {
-					kind: Some(backend::user_identity::identity::Kind::AccessToken(
-						backend::user_identity::identity::AccessToken {
-							name: x.name.clone(),
-						},
-					)),
-				});
+				.collect::<Vec<_>>();
 
 			user_identity::get::response::User {
 				user_id: Some((*user_id).into()),
-				// Find all matching identities
-				identities: emails.chain(access_tokens).collect::<Vec<_>>(),
+				identities,
 			}
 		})
 		.collect::<Vec<_>>();
