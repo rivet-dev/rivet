@@ -95,6 +95,10 @@ pub fn cloud_device_link(link_token: &str) -> String {
 	format!("{}/devices/link/{}", origin_hub(), link_token)
 }
 
+pub fn access_token_link(access_token_token: &str) -> String {
+	format!("{}/access-token/{}", origin_hub(), access_token_token)
+}
+
 pub fn team_billing(team_id: Uuid) -> String {
 	format!("{}/groups/{}/billing", origin_hub(), team_id)
 }

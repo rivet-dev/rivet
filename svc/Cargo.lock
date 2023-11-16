@@ -123,6 +123,7 @@ dependencies = [
  "serde_json",
  "team-dev-get",
  "thiserror",
+ "token-create",
  "tokio",
  "tracing",
  "tracing-futures",

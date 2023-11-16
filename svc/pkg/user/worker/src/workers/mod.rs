@@ -1,4 +1,5 @@
 chirp_worker::workers![
+	admin_set,
 	create,
 	delete,
 	event_team_member_remove,

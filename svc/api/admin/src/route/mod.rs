@@ -1,5 +1,6 @@
 use api_helper::define_router;
 use hyper::{Body, Request, Response};
+use rivet_api::models;
 use uuid::Uuid;
 
 pub mod groups;
@@ -23,6 +24,12 @@ define_router! {
 		"groups" / Uuid / "developer": {
 			POST: groups::convert_developer(
 				body: serde_json::Value,
+			),
+		},
+
+		"login": {
+			POST: login::login(
+				body: models::AdminLoginRequest,
 			),
 		},
 	},

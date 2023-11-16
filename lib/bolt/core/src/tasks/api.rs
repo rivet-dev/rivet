@@ -72,10 +72,15 @@ pub async fn access_token_login(project_ctx: &ProjectContext, name: String) -> R
 	}
 
 	let body = response.json::<serde_json::Value>().await?;
-	let url = body.get("url").expect("url in login body");
+	let url = body
+		.get("url")
+		.expect("url in login body")
+		.as_str()
+		.unwrap();
 
 	eprintln!();
-	rivet_term::status::success("Login with this url", url);
+	rivet_term::status::success("Login with this url", "");
+	eprintln!("{url}");
 
 	Ok(())
 }

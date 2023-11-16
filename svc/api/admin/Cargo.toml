@@ -36,6 +36,7 @@ uuid = { version = "1", features = ["v4"] }
 util-mm = { package = "rivet-util-mm", path = "../../pkg/mm/util" }
 
 team-dev-get = { path = "../../pkg/team-dev/ops/get" }
+token-create = { path = "../../pkg/token/ops/create" }
 
 [dev-dependencies]
 rivet-connection = { path = "../../../lib/connection" }

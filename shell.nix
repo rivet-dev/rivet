@@ -40,6 +40,7 @@ in
 			docker-client  # Standardize client CLI since older clients have breaking changes
 			git  # Bolt relies functionality only available in newer versions of Bolt
 			git-lfs
+			go-migrate
 			jq
 			openssh  # ssh-keygen
 
