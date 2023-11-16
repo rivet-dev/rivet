@@ -21,10 +21,6 @@ locals {
 		for k, v in var.redis_dbs:
 		k => {
 			priorityClassName = kubernetes_priority_class.redis_priority.metadata.0.name
-			extraEnvVars = [
-				# Use allkeys-lru instead of volatile-lru because we don't want the cache nodes to crash
-				{ name = "REDIS_MAXMEMORY_POLICY", value = v.persistent ? "noeviction" : "allkeys-lru" }
-			]
 			resources = var.limit_resources ? {
 				limits = {
 					memory = "${local.service_redis.resources.memory}Mi"
@@ -75,6 +71,18 @@ resource "helm_release" "redis" {
 	version = "18.4.0"
 	values = [yamlencode({
 		architecture = "replication"
+
+		commonConfiguration = <<EOF
+		# Enable AOF https://redis.io/topics/persistence#append-only-file
+		appendonly ${each.value.persistent ? "yes" : "no"}
+
+		# Disable RDB persistence. AOF persistence already enabled on persistent,
+		# not needed on ephemeral.
+		save ""
+
+		# Use allkeys-lru instead of volatile-lru because we don't want the cache nodes to crash if they run out of memory
+		maxmemory-policy ${each.value.persistent ? "noeviction" : "allkeys-lru"}
+		EOF
 
 		global = {
 			storageClass = var.k8s_storage_class
