@@ -1605,7 +1605,7 @@ dependencies = [
  "captcha-hcaptcha-config-get",
  "captcha-hcaptcha-verify",
  "captcha-request",
- "cf-turnstile-verify",
+ "captcha-turnstile-verify",
  "chirp-client",
  "chirp-worker",
  "chrono",
@@ -1909,7 +1909,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "cf-turnstile-verify"
+name = "captcha-turnstile-verify"
 version = "0.0.1"
 dependencies = [
  "chirp-client",

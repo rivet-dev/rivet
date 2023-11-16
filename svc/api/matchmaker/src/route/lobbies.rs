@@ -852,11 +852,18 @@ async fn find_inner(
 					}
 				);
 			} else if let Some(_turnstile_config) = &captcha_config.turnstile {
+				let turnstile_config_res = op!([ctx] captcha_turnstile_config_get {
+					config: Some(hcaptcha_config.clone()),
+				})
+				.await?;
+
 				ensure_with!(
 					!required_res.needs_verification,
 					CAPTCHA_CAPTCHA_REQUIRED {
 						metadata: json!({
-							"turnstile": {}
+							"turnstile": {
+								"site_key": ,
+							}
 						}),
 					}
 				);

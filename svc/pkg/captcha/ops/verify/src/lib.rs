@@ -89,7 +89,7 @@ async fn handle(
 			};
 			let secret_key = unwrap_with!(secret_key, CAPTCHA_CAPTCHA_ORIGIN_NOT_ALLOWED);
 
-			let res = op!([ctx] cf_turnstile_verify {
+			let res = op!([ctx] captcha_turnstile_verify {
 				client_response: turnstile_client_res.client_response.clone(),
 				remote_address: ctx.remote_address.to_owned(),
 				secret_key: secret_key,

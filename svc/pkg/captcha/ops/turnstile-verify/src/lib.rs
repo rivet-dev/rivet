@@ -11,7 +11,7 @@ struct VerifyResponse {
 	error_codes: Option<Vec<String>>,
 }
 
-#[operation(name = "cf-turnstile-verify")]
+#[operation(name = "captcha-turnstile-verify")]
 async fn handle(
 	ctx: OperationContext<cf::turnstile_verify::Request>,
 ) -> GlobalResult<cf::turnstile_verify::Response> {
