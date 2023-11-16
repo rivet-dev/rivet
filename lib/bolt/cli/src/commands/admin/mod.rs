@@ -10,6 +10,8 @@ pub enum SubCommand {
 		#[clap(subcommand)]
 		command: team_dev::SubCommand,
 	},
+	/// Generates a login link for the given access token. Automatically turns the existing user into an
+	/// admin (or creates a new admin if no user).
 	Login {
 		#[clap(default_value = "root")]
 		name: String,
