@@ -1,4 +1,4 @@
-use std::{convert::TryInto, collections::HashMap};
+use std::{collections::HashMap, convert::TryInto};
 
 use chirp_worker::prelude::*;
 use proto::backend::{
@@ -56,8 +56,7 @@ pub fn gen_lobby_docker_job(
 	use nomad_client::models::*;
 
 	// runc-compatible resources
-	let cpu =
-		tier.rivet_cores_numerator as u64 * 1_000 / tier.rivet_cores_denominator as u64 * 1_000; // Millicore (1/1000 of a core)
+	let cpu = tier.rivet_cores_numerator as u64 * 1_000 / tier.rivet_cores_denominator as u64; // Millicore (1/1000 of a core)
 	let memory = tier.memory * (1024 * 1024); // bytes
 	let memory_max = tier.memory_max * (1024 * 1024); // bytes
 
@@ -76,18 +75,18 @@ pub fn gen_lobby_docker_job(
 		} else {
 			None
 		},
-		memory_mb: Some((
-			TryInto::<i64>::try_into(memory)?
-			/ (1024 * 1024)
-			- util_job::TASK_CLEANUP_MEMORY as i64
-		).try_into()?),
+		memory_mb: Some(
+			(TryInto::<i64>::try_into(memory)? / (1024 * 1024)
+				- util_job::TASK_CLEANUP_MEMORY as i64)
+				.try_into()?,
+		),
 		// Allow oversubscribing memory by 50% of the reserved
 		// memory if using less than the node's total memory
-		memory_max_mb: Some((
-			TryInto::<i64>::try_into(memory_max)?
-			/ (1024 * 1024)
-			- util_job::TASK_CLEANUP_MEMORY as i64
-		).try_into()?),
+		memory_max_mb: Some(
+			(TryInto::<i64>::try_into(memory_max)? / (1024 * 1024)
+				- util_job::TASK_CLEANUP_MEMORY as i64)
+				.try_into()?,
+		),
 		disk_mb: Some(tier.disk as i32), // TODO: Is this deprecated?
 		..Resources::new()
 	};
@@ -226,7 +225,7 @@ pub fn gen_lobby_docker_job(
 					"RIVET_MAX_PLAYERS_PARTY",
 					template_env_var("NOMAD_META_MAX_PLAYERS_PARTY"),
 				),
-				// CPU in millishares
+				// CPU in millicores
 				//
 				// < 1000 is for fractional CPU
 				// > 1000 is for whole CPU, will always be 1000 increments
