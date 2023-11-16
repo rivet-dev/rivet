@@ -201,14 +201,9 @@ async fn redis_from_env() -> Result<HashMap<String, RedisPool>, Error> {
 				.name("redis_from_env")
 				.spawn(async move {
 					tracing::info!(%url, "redis connecting");
-					let conn = redis::cluster::ClusterClient::builder(vec![url.as_str()])
-						// Keep trying to reconnect indefinitely
-						.retries(u32::MAX)
-						.min_retry_wait(250)
-						.max_retry_wait(30_000)
-						.build()
+					let conn = redis::Client::open(url.as_str())
 						.map_err(Error::BuildRedis)?
-						.get_async_connection()
+						.get_tokio_connection_manager()
 						.await
 						.map_err(Error::BuildRedis)?;
 
