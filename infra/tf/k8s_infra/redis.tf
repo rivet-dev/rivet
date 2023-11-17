@@ -66,9 +66,10 @@ resource "helm_release" "redis" {
 
 	name = "redis"
 	namespace = kubernetes_namespace.redis[each.key].metadata.0.name
-	repository = "https://charts.bitnami.com/bitnami"
-	chart = "redis"
-	version = "18.4.0"
+	chart = "../../helm/redis"
+	# repository = "https://charts.bitnami.com/bitnami"
+	# chart = "redis"
+	# version = "18.4.0"
 	values = [yamlencode({
 		architecture = "replication"
 
