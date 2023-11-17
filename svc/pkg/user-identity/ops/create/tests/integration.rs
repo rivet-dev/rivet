@@ -58,7 +58,7 @@ async fn access_token(ctx: TestCtx) {
 	let (sql_exists,) = sqlx::query_as::<_, (bool,)>(
 		"SELECT EXISTS (SELECT 1 FROM db_user_identity.access_tokens WHERE name = $1)",
 	)
-	.bind(&email)
+	.bind(&name)
 	.fetch_one(&ctx.crdb().await.unwrap())
 	.await
 	.unwrap();
