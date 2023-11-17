@@ -33,11 +33,7 @@ pub fn build_servers(
 
 	// HACK: Linode requires tags to be > 3 characters. We extend the namespace to make sure it
 	// meets the minimum length requirement.
-	let ns_long = if ns.len() < 3 {
-		format!("rivet-{ns}")
-	} else {
-		ns.to_string()
-	};
+	let ns_long = format!("rivet-{ns}");
 
 	let mut servers = HashMap::<String, Server>::new();
 	for pool in &ctx.ns().pools {
