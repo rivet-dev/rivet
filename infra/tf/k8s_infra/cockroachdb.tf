@@ -35,7 +35,7 @@ resource "kubernetes_priority_class" "cockroachdb_priority" {
 
 # NOTE: Helm chart is no longer supported by CockroachDB. However, it's intended to be used only for development and it's the easiest to set up.
 resource "helm_release" "cockroachdb" {
-	depends_on = [helm_release.prometheus]
+	depends_on = [null_resource.daemons]
 	count = local.cockroachdb_k8s ? 1 : 0
 
 	name = "cockroachdb"

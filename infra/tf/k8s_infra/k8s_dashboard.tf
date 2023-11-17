@@ -5,6 +5,8 @@ resource "kubernetes_namespace" "k8s_dashboard" {
 }
 
 resource "helm_release" "k8s_dashboard" {
+	depends_on = [null_resource.daemons]
+
 	name = "kubernetes-dashboard"
 	namespace = kubernetes_namespace.k8s_dashboard.metadata.0.name
 	repository = "https://kubernetes.github.io/dashboard/"

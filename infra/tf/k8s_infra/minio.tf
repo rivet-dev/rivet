@@ -35,7 +35,7 @@ resource "kubernetes_priority_class" "minio_priority" {
 }
 
 resource "helm_release" "minio" {
-	depends_on = [helm_release.prometheus]
+	depends_on = [null_resource.daemons]
 	count = local.has_minio ? 1 : 0
 
 	name = "minio"

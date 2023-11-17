@@ -23,6 +23,8 @@ resource "kubernetes_priority_class" "nats_priority" {
 }
 
 resource "helm_release" "nats" {
+	depends_on = [null_resource.daemons]
+
 	name = "nats"
 	namespace = kubernetes_namespace.nats.metadata.0.name
 	repository = "https://nats-io.github.io/k8s/helm/charts/"

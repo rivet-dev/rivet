@@ -61,7 +61,7 @@ resource "kubernetes_priority_class" "redis_priority" {
 }
 
 resource "helm_release" "redis" {
-	depends_on = [helm_release.prometheus]
+	depends_on = [null_resource.daemons]
 	for_each = local.redis_svcs
 
 	name = "redis"
