@@ -51,14 +51,15 @@ locals {
 	})
 
 	has_slack_receiver = (
-		module.alertmanager_secrets.values["alertmanager/slack/url"] != null &&
-		module.alertmanager_secrets.values["alertmanager/slack/channel"] != null
+		module.alertmanager_secrets.values["alertmanager/slack/url"] != "" &&
+		module.alertmanager_secrets.values["alertmanager/slack/channel"] != ""
 	)
-	receivers = local.has_slack_receiver ? [
+
+	_receivers = [
 		{
 			name = "null"
 		},
-		{
+		local.has_slack_receiver ? {
 			name = "slack"
 			slack_configs = [
 				{
@@ -66,13 +67,9 @@ locals {
 					api_url = module.alertmanager_secrets.values["alertmanager/slack/url"]
 				}
 			]
-		}
-	] : [
-		{
-			name = "null"
-		},
-		null
+		} : null
 	]
+	receivers = [ for v in local._receivers : v if v != null ]
 }
 
 module "alertmanager_secrets" {
