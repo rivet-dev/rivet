@@ -280,18 +280,14 @@ fn region_to_proto(
 		.clone()
 		.or_else(|| game_mode.idle_lobbies.clone())
 		.or_else(|| matchmaker.idle_lobbies.clone())
-		// TODO: Remove? idle lobby default is 0
-		.unwrap_or_else(|| {
-			Box::new(models::CloudVersionMatchmakerGameModeIdleLobbiesConfig {
-				min: util_mm::defaults::IDLE_LOBBIES_MIN as i32,
-				max: util_mm::defaults::IDLE_LOBBIES_MAX as i32,
-			})
-		});
+		.map(|x| *x)
+		.map(ApiTryInto::try_into)
+		.transpose()?;
 
 	Ok(backend::matchmaker::lobby_group::Region {
 		region_id,
 		tier_name_id,
-		idle_lobbies: Some((*idle_lobbies).try_into()?),
+		idle_lobbies,
 	})
 }
 
