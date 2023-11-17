@@ -53,8 +53,7 @@ impl DatabaseConnections {
 							"ephemeral"
 						};
 
-						let host =
-							format!("redis-redis-cluster.redis-{db_name}.svc.cluster.local:6379");
+						let host = format!("redis.redis-{db_name}.svc.cluster.local:6379");
 						redis_hosts.insert(name, host);
 					}
 				}

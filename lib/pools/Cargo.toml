@@ -39,9 +39,9 @@ version = "0.23"
 default-features = false
 features = [
 	"aio",
-	"cluster-async",
 	"tokio-comp",
 	"tokio-native-tls-comp",
+	"connection-manager",
 	"script",
 	"streams",
 ]

@@ -26,9 +26,9 @@ Looking to use Apache ZooKeeper in production? Try [VMware Tanzu Application Cat
 
 ## Prerequisites
 
-- Kubernetes 1.23+
-- Helm 3.8.0+
-- PV provisioner support in the underlying infrastructure
+-   Kubernetes 1.23+
+-   Helm 3.8.0+
+-   PV provisioner support in the underlying infrastructure
 
 ## Installing the Chart
 
@@ -341,7 +341,7 @@ helm install my-release -f values.yaml oci://REGISTRY_NAME/REPOSITORY_NAME/zooke
 
 ## Configuration and installation details
 
-### [Rolling vs Immutable tags](https://docs.bitnami.com/containers/how-to/understand-rolling-tags-containers/)
+### [Rolling vs Immutable tags](https://docs.bitnami.com/tutorials/understand-rolling-tags-containers/)
 
 It is strongly recommended to use immutable tags in a production environment. This ensures your deployment does not change automatically if the same tag is updated with a different image.
 
@@ -359,25 +359,26 @@ Second, to avoid the connection/disconnection messages from the probes, you can 
 
 ```yaml
 livenessProbe:
-  enabled: false
+    enabled: false
 readinessProbe:
-  enabled: false
+    enabled: false
 customLivenessProbe:
-  exec:
-    command: ['/bin/bash', '-c', 'curl -s -m 2 http://localhost:8080/commands/ruok | grep ruok']
-  initialDelaySeconds: 30
-  periodSeconds: 10
-  timeoutSeconds: 5
-  successThreshold: 1
-  failureThreshold: 6
+    exec:
+        command: ["/bin/bash", "-c", "curl -s -m 2 http://localhost:8080/commands/ruok | grep ruok"]
+    initialDelaySeconds: 30
+    periodSeconds: 10
+    timeoutSeconds: 5
+    successThreshold: 1
+    failureThreshold: 6
 customReadinessProbe:
-  exec:
-    command: ['/bin/bash', '-c', 'curl -s -m 2 http://localhost:8080/commands/ruok | grep error | grep null']
-  initialDelaySeconds: 5
-  periodSeconds: 10
-  timeoutSeconds: 5
-  successThreshold: 1
-  failureThreshold: 6
+    exec:
+        command:
+            ["/bin/bash", "-c", "curl -s -m 2 http://localhost:8080/commands/ruok | grep error | grep null"]
+    initialDelaySeconds: 5
+    periodSeconds: 10
+    timeoutSeconds: 5
+    successThreshold: 1
+    failureThreshold: 6
 ```
 
 You can also set the log4j logging level and what log appenders are turned on, by using `ZOO_LOG4J_PROP` set inside of conf/log4j.properties as zookeeper.root.logger by default to
@@ -388,10 +389,10 @@ zookeeper.root.logger=INFO, CONSOLE
 
 the available appender is
 
-- CONSOLE
-- ROLLINGFILE
-- RFAAUDIT
-- TRACEFILE
+-   CONSOLE
+-   ROLLINGFILE
+-   RFAAUDIT
+-   TRACEFILE
 
 ## Persistence
 
@@ -451,28 +452,28 @@ This major release renames several values in this chart and adds missing feature
 
 Affected values:
 
-- `allowAnonymousLogin` is deprecated.
-- `containerPort`, `tlsContainerPort`, `followerContainerPort` and `electionContainerPort` have been regrouped under the `containerPorts` map.
-- `service.port`, `service.tlsClientPort`, `service.followerPort`, and  `service.electionPort` have been regrouped under the `service.ports` map.
-- `updateStrategy` (string) and `rollingUpdatePartition` are regrouped under the `updateStrategy` map.
-- `podDisruptionBudget.*` parameters are renamed to `pdb.*`.
+-   `allowAnonymousLogin` is deprecated.
+-   `containerPort`, `tlsContainerPort`, `followerContainerPort` and `electionContainerPort` have been regrouped under the `containerPorts` map.
+-   `service.port`, `service.tlsClientPort`, `service.followerPort`, and `service.electionPort` have been regrouped under the `service.ports` map.
+-   `updateStrategy` (string) and `rollingUpdatePartition` are regrouped under the `updateStrategy` map.
+-   `podDisruptionBudget.*` parameters are renamed to `pdb.*`.
 
 ### To 7.0.0
 
 This new version renames the parameters used to configure TLS for both client and quorum.
 
-- `service.tls.disable_base_client_port` is renamed to `service.disableBaseClientPort`
-- `service.tls.client_port` is renamed to `service.tlsClientPort`
-- `service.tls.client_enable` is renamed to `tls.client.enabled`
-- `service.tls.client_keystore_path` is renamed to `tls.client.keystorePath`
-- `service.tls.client_truststore_path` is renamed to `tls.client.truststorePath`
-- `service.tls.client_keystore_password` is renamed to `tls.client.keystorePassword`
-- `service.tls.client_truststore_password` is renamed to `tls.client.truststorePassword`
-- `service.tls.quorum_enable` is renamed to `tls.quorum.enabled`
-- `service.tls.quorum_keystore_path` is renamed to `tls.quorum.keystorePath`
-- `service.tls.quorum_truststore_path` is renamed to `tls.quorum.truststorePath`
-- `service.tls.quorum_keystore_password` is renamed to `tls.quorum.keystorePassword`
-- `service.tls.quorum_truststore_password` is renamed to `tls.quorum.truststorePassword`
+-   `service.tls.disable_base_client_port` is renamed to `service.disableBaseClientPort`
+-   `service.tls.client_port` is renamed to `service.tlsClientPort`
+-   `service.tls.client_enable` is renamed to `tls.client.enabled`
+-   `service.tls.client_keystore_path` is renamed to `tls.client.keystorePath`
+-   `service.tls.client_truststore_path` is renamed to `tls.client.truststorePath`
+-   `service.tls.client_keystore_password` is renamed to `tls.client.keystorePassword`
+-   `service.tls.client_truststore_password` is renamed to `tls.client.truststorePassword`
+-   `service.tls.quorum_enable` is renamed to `tls.quorum.enabled`
+-   `service.tls.quorum_keystore_path` is renamed to `tls.quorum.keystorePath`
+-   `service.tls.quorum_truststore_path` is renamed to `tls.quorum.truststorePath`
+-   `service.tls.quorum_keystore_password` is renamed to `tls.quorum.keystorePassword`
+-   `service.tls.quorum_truststore_password` is renamed to `tls.quorum.truststorePassword`
 
 ### To 6.1.0
 
@@ -488,8 +489,8 @@ This version introduces `bitnami/common`, a [library chart](https://helm.sh/docs
 
 A couple of parameters related to Zookeeper metrics were renamed or disappeared in favor of new ones:
 
-- `metrics.port` is renamed to `metrics.containerPort`.
-- `metrics.annotations` is deprecated in favor of `metrics.service.annotations`.
+-   `metrics.port` is renamed to `metrics.containerPort`.
+-   `metrics.annotations` is deprecated in favor of `metrics.service.annotations`.
 
 ### To 3.0.0
 
