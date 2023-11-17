@@ -61,4 +61,3 @@ A Redis cache.
 Redis databases are split between two clusters: a persistent database (with AOF persistence, no eviction) and an ephemeral database (with LRU eviction).
 
 There is no isolation between Redis services at the moment. This will change in the future with Redis ACL support.
-
