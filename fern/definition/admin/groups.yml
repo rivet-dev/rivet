@@ -1,8 +1,5 @@
 # yaml-language-server: $schema=https://raw.githubusercontent.com/fern-api/fern/main/fern.schema.json
 
-imports:
-  gameCommons: ../game/common.yml
-
 service:
   auth: true
   base-path: /admin/groups

@@ -7,7 +7,12 @@ message Identity {
 		string email = 1;
 	}
 
+	message AccessToken {
+		string name = 1;
+	}
+
 	oneof kind {
 		Email email = 1;
+		AccessToken access_token = 2;
 	}
 }

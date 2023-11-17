@@ -110,9 +110,9 @@ where
 				// Create a dedicated connection to redis-chirp for blocking Redis requests
 				// that won't block other requests in the pool.
 				let url = std::env::var("REDIS_URL_PERSISTENT").expect("REDIS_URL_PERSISTENT");
-				let redis_chirp_conn = redis::cluster::ClusterClient::new(vec![url.as_str()])
+				let redis_chirp_conn = redis::Client::open(url)
 					.map_err(ManagerError::BuildRedis)?
-					.get_async_connection()
+					.get_tokio_connection_manager()
 					.await
 					.map_err(ManagerError::BuildRedis)?;
 

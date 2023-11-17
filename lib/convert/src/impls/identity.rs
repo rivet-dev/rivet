@@ -19,6 +19,14 @@ impl ApiTryFrom<backend::user_identity::Identity> for models::IdentityLinkedAcco
 					..Default::default()
 				})
 			}
+			backend::user_identity::identity::Kind::AccessToken(access_token_ident) => {
+				Ok(models::IdentityLinkedAccount {
+					access_token: Some(Box::new(models::IdentityAccessTokenLinkedAccount {
+						name: access_token_ident.name.to_owned(),
+					})),
+					..Default::default()
+				})
+			}
 		}
 	}
 }

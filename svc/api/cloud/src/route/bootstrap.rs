@@ -10,14 +10,11 @@ pub async fn get(
 	_watch_index_query: WatchIndexQuery,
 ) -> GlobalResult<models::CloudBootstrapResponse> {
 	Ok(models::CloudBootstrapResponse {
+		cluster: models::CloudBootstrapCluster::Oss,
 		captcha: Box::new(models::CloudBootstrapCaptcha {
-			turnstile: if let Some(site_key) = std::env::var("TURNSTILE_SITE_KEY_MAIN").ok() {
-				Some(Box::new(models::CloudBootstrapCaptchaTurnstile {
-					site_key,
-				}))
-			} else {
-				None
-			},
+			turnstile: std::env::var("TURNSTILE_SITE_KEY_MAIN")
+				.ok()
+				.map(|site_key| Box::new(models::CloudBootstrapCaptchaTurnstile { site_key })),
 		}),
 	})
 }

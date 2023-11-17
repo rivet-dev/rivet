@@ -15,12 +15,15 @@
 pub struct CloudBootstrapResponse {
     #[serde(rename = "captcha")]
     pub captcha: Box<crate::models::CloudBootstrapCaptcha>,
+    #[serde(rename = "cluster")]
+    pub cluster: crate::models::CloudBootstrapCluster,
 }
 
 impl CloudBootstrapResponse {
-    pub fn new(captcha: crate::models::CloudBootstrapCaptcha) -> CloudBootstrapResponse {
+    pub fn new(captcha: crate::models::CloudBootstrapCaptcha, cluster: crate::models::CloudBootstrapCluster) -> CloudBootstrapResponse {
         CloudBootstrapResponse {
             captcha: Box::new(captcha),
+            cluster,
         }
     }
 }

@@ -384,6 +384,21 @@ pub mod ent {
 			Ok(Bypass {})
 		}
 	}
+
+	#[derive(Clone, Debug)]
+	pub struct AccessToken {
+		pub name: String,
+	}
+
+	impl TryFrom<&schema::entitlement::AccessToken> for AccessToken {
+		type Error = GlobalError;
+
+		fn try_from(value: &schema::entitlement::AccessToken) -> GlobalResult<Self> {
+			Ok(AccessToken {
+				name: value.name.clone(),
+			})
+		}
+	}
 }
 
 pub trait ClaimsDecode {
@@ -406,6 +421,7 @@ pub trait ClaimsDecode {
 	fn as_upload_file(&self) -> GlobalResult<ent::UploadFile>;
 	fn as_cloud_device_link(&self) -> GlobalResult<ent::CloudDeviceLink>;
 	fn as_bypass(&self) -> GlobalResult<ent::Bypass>;
+	fn as_access_token(&self) -> GlobalResult<ent::AccessToken>;
 }
 
 impl ClaimsDecode for schema::Claims {
@@ -655,6 +671,20 @@ impl ClaimsDecode for schema::Claims {
 			))
 			.and_then(std::convert::identity)
 	}
+
+	fn as_access_token(&self) -> GlobalResult<ent::AccessToken> {
+		self.entitlements
+			.iter()
+			.find_map(|ent| match &ent.kind {
+				Some(schema::entitlement::Kind::AccessToken(ent)) => Some(ent::AccessToken::try_from(ent)),
+				_ => None,
+			})
+			.ok_or(err_code!(
+				CLAIMS_MISSING_ENTITLEMENT,
+				entitlement = "AccessToken"
+			))
+			.and_then(std::convert::identity)
+	}
 }
 
 pub trait EntitlementTag {
@@ -680,6 +710,7 @@ impl EntitlementTag for schema::Entitlement {
 			schema::entitlement::Kind::UploadFile(_) => 12,
 			schema::entitlement::Kind::CloudDeviceLink(_) => 14,
 			schema::entitlement::Kind::Bypass(_) => 15,
+			schema::entitlement::Kind::AccessToken(_) => 16,
 		})
 	}
 }

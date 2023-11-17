@@ -602,10 +602,10 @@ pub async fn validate_token_development(
 	let res = op!([ctx] game_token_development_validate {
 		hostname: body.hostname,
 		lobby_ports: body.lobby_ports
-		.clone()
-			.into_iter()
-			.map(ApiTryInto::try_into)
-			.collect::<GlobalResult<_>>()?,
+			.clone()
+				.into_iter()
+				.map(ApiTryInto::try_into)
+				.collect::<GlobalResult<_>>()?,
 	})
 	.await?;
 

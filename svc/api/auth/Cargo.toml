@@ -36,6 +36,7 @@ token-revoke = { path = "../../pkg/token/ops/revoke" }
 captcha-verify = { path = "../../pkg/captcha/ops/verify" }
 email-verification-create = { path = "../../pkg/email-verification/ops/create" }
 email-verification-complete = { path = "../../pkg/email-verification/ops/complete" }
+user-resolve-access-token = { path = "../../pkg/user/ops/resolve-access-token" }
 user-resolve-email = { path = "../../pkg/user/ops/resolve-email" }
 user-token-create = { path = "../../pkg/user/ops/token-create" }
 user-identity-create = { path = "../../pkg/user-identity/ops/create" }

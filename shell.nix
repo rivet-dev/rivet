@@ -40,6 +40,7 @@ in
 			docker-client  # Standardize client CLI since older clients have breaking changes
 			git  # Bolt relies functionality only available in newer versions of Bolt
 			git-lfs
+			go-migrate
 			jq
 			openssh  # ssh-keygen
 
@@ -92,6 +93,8 @@ in
 			# kubectl completion bash
 			source <(kubectl completion bash)
 
+			# Automatically connect to correct cluster
+			alias kubectl='KUBECONFIG=$(bolt output project-root)/gen/k8s/kubeconfig/$(bolt output namespace).yml kubectl'
 
 			# Fix dynamic library path to fix issue with Python
 			export LD_LIBRARY_PATH="${pkgs.clang}/resource-root/lib:${pkgs.lib.strings.makeLibraryPath [ pkgs.openssl ]}"
