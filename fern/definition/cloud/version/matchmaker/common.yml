@@ -61,11 +61,7 @@ types:
   CaptchaTurnstile:
     docs: Turnstile captcha configuration.
     properties:
-      domains: map<string, CaptchaTurnstileDomain>
-
-  CaptchaTurnstileDomain:
-    docs: Turnstile domain configuration.
-    properties:
+      site_key: string
       secret_key: string
 
   NetworkMode:

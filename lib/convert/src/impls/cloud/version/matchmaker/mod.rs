@@ -382,16 +382,8 @@ impl ApiFrom<models::CloudVersionMatchmakerCaptchaTurnstile>
 		value: models::CloudVersionMatchmakerCaptchaTurnstile,
 	) -> backend::captcha::captcha_config::Turnstile {
 		backend::captcha::captcha_config::Turnstile {
-			domains: value
-				.domains
-				.into_iter()
-				.map(
-					|(domain, value)| backend::captcha::captcha_config::turnstile::Domain {
-						domain,
-						secret_key: value.secret_key,
-					},
-				)
-				.collect::<Vec<_>>(),
+			site_key: value.site_key,
+			secret_key: value.secret_key,
 		}
 	}
 }
@@ -403,21 +395,8 @@ impl ApiTryFrom<backend::captcha::captcha_config::Turnstile>
 
 	fn try_from(value: backend::captcha::captcha_config::Turnstile) -> GlobalResult<Self> {
 		Ok(models::CloudVersionMatchmakerCaptchaTurnstile {
-			domains: value
-				.domains
-				.into_iter()
-				.map(|d| (d.domain.clone(), ApiInto::api_into(d)))
-				.collect::<HashMap<_, _>>(),
-		})
-	}
-}
-
-impl ApiFrom<backend::captcha::captcha_config::turnstile::Domain>
-	for models::CloudVersionMatchmakerCaptchaTurnstileDomain
-{
-	fn api_from(value: backend::captcha::captcha_config::turnstile::Domain) -> Self {
-		models::CloudVersionMatchmakerCaptchaTurnstileDomain {
+			site_key: value.site_key,
 			secret_key: value.secret_key,
-		}
+		})
 	}
 }

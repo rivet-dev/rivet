@@ -11,10 +11,10 @@ struct VerifyResponse {
 	error_codes: Option<Vec<String>>,
 }
 
-#[operation(name = "cf-turnstile-verify")]
+#[operation(name = "captcha-turnstile-verify")]
 async fn handle(
-	ctx: OperationContext<cf::turnstile_verify::Request>,
-) -> GlobalResult<cf::turnstile_verify::Response> {
+	ctx: OperationContext<captcha::turnstile_verify::Request>,
+) -> GlobalResult<captcha::turnstile_verify::Response> {
 	let client = reqwest::Client::new();
 
 	let res = client
@@ -32,7 +32,7 @@ async fn handle(
 		.await?;
 	tracing::info!(?res, "captcha response");
 
-	Ok(cf::turnstile_verify::Response {
+	Ok(captcha::turnstile_verify::Response {
 		success: res.success,
 	})
 }

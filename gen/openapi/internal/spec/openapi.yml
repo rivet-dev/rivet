@@ -4253,58 +4253,6 @@ paths:
                 data: {}
               required:
                 - data
-  /admin/groups/{group_id}/developer:
-    post:
-      operationId: admin_groups_convertDeveloper
-      tags:
-        - AdminGroups
-      parameters:
-        - name: group_id
-          in: path
-          required: true
-          schema:
-            type: string
-            format: uuid
-      responses:
-        '204':
-          description: ''
-        '400':
-          description: ''
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBody'
-        '403':
-          description: ''
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBody'
-        '404':
-          description: ''
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBody'
-        '408':
-          description: ''
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBody'
-        '429':
-          description: ''
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBody'
-        '500':
-          description: ''
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBody'
-      security: *ref_0
   /auth/identity/access-token/complete-verification:
     post:
       description: Completes the access token verification process.
@@ -10884,19 +10832,12 @@ components:
       type: object
       description: Turnstile captcha configuration.
       properties:
-        domains:
-          type: object
-          additionalProperties:
-            $ref: '#/components/schemas/CloudVersionMatchmakerCaptchaTurnstileDomain'
-      required:
-        - domains
-    CloudVersionMatchmakerCaptchaTurnstileDomain:
-      type: object
-      description: Turnstile domain configuration.
-      properties:
+        site_key:
+          type: string
         secret_key:
           type: string
       required:
+        - site_key
         - secret_key
     CloudVersionMatchmakerNetworkMode:
       type: string

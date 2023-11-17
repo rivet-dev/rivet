@@ -1,1 +1,0 @@
-# cf-turnstile-verify

@@ -121,7 +121,6 @@ dependencies = [
  "s3-util",
  "serde",
  "serde_json",
- "team-dev-get",
  "thiserror",
  "token-create",
  "tokio",
@@ -614,6 +613,7 @@ dependencies = [
  "bytes",
  "captcha-hcaptcha-config-get",
  "captcha-request",
+ "captcha-turnstile-config-get",
  "captcha-verify",
  "cdn-namespace-domain-create",
  "cdn-namespace-get",
@@ -1602,13 +1602,36 @@ dependencies = [
 ]
 
 [[package]]
+name = "captcha-turnstile-config-get"
+version = "0.0.1"
+dependencies = [
+ "chirp-client",
+ "chirp-worker",
+ "prost 0.10.4",
+ "rivet-operation",
+ "rivet-util-captcha",
+]
+
+[[package]]
+name = "captcha-turnstile-verify"
+version = "0.0.1"
+dependencies = [
+ "chirp-client",
+ "chirp-worker",
+ "prost 0.10.4",
+ "reqwest",
+ "rivet-operation",
+ "serde",
+]
+
+[[package]]
 name = "captcha-verify"
 version = "0.0.1"
 dependencies = [
  "captcha-hcaptcha-config-get",
  "captcha-hcaptcha-verify",
  "captcha-request",
- "cf-turnstile-verify",
+ "captcha-turnstile-verify",
  "chirp-client",
  "chirp-worker",
  "chrono",
@@ -1909,18 +1932,6 @@ dependencies = [
  "rivet-runtime",
  "serde",
  "team-dev-game-list",
-]
-
-[[package]]
-name = "cf-turnstile-verify"
-version = "0.0.1"
-dependencies = [
- "chirp-client",
- "chirp-worker",
- "prost 0.10.4",
- "reqwest",
- "rivet-operation",
- "serde",
 ]
 
 [[package]]

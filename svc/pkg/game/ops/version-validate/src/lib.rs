@@ -263,66 +263,40 @@ async fn handle(
 			}
 
 			if let Some(turnstile) = &captcha_config.turnstile {
-				if turnstile.domains.len() > 16 {
+				if turnstile.site_key.is_empty() {
 					errors.push(util::err_path![
 						"config",
 						"matchmaker",
 						"captcha",
 						"turnstile",
-						"domains-meta",
-						"too-many",
+						"site-key-too-short",
+					]);
+				} else if turnstile.site_key.len() > 30 {
+					errors.push(util::err_path![
+						"config",
+						"matchmaker",
+						"captcha",
+						"turnstile",
+						"site-key-too-long",
 					]);
 				}
 
-				let mut unique_domains = HashSet::new();
-				for (domain_index, domain) in turnstile.domains.iter().take(16).enumerate() {
-					if util::check::domain(&domain.domain, true) {
-						if unique_domains.contains(domain.domain.trim()) {
-							errors.push(util::err_path![
-								"config",
-								"matchmaker",
-								"captcha",
-								"turnstile",
-								"domains",
-								domain_index,
-								"domain-not-unique",
-							]);
-						} else {
-							unique_domains.insert(domain.domain.trim().to_owned());
-						}
-					} else {
-						errors.push(util::err_path![
-							"config",
-							"matchmaker",
-							"captcha",
-							"turnstile",
-							"domains",
-							domain_index,
-							"domain-invalid",
-						]);
-					}
-
-					if domain.secret_key.is_empty() {
-						errors.push(util::err_path![
-							"config",
-							"matchmaker",
-							"captcha",
-							"turnstile",
-							"domains",
-							domain_index,
-							"secret-key-too-short",
-						]);
-					} else if domain.secret_key.len() > 40 {
-						errors.push(util::err_path![
-							"config",
-							"matchmaker",
-							"captcha",
-							"turnstile",
-							"domains",
-							domain_index,
-							"secret-key-too-long",
-						]);
-					}
+				if turnstile.secret_key.is_empty() {
+					errors.push(util::err_path![
+						"config",
+						"matchmaker",
+						"captcha",
+						"turnstile",
+						"secret-key-too-short",
+					]);
+				} else if turnstile.secret_key.len() > 40 {
+					errors.push(util::err_path![
+						"config",
+						"matchmaker",
+						"captcha",
+						"turnstile",
+						"secret-key-too-long",
+					]);
 				}
 			}
 		}
