@@ -30,6 +30,7 @@ fn universal_region(region: &Region) -> backend::region::UniversalRegion {
 			}
 		},
 		"linode" => match region.provider_region.as_str() {
+			"nl-ams" => UniversalRegion::Amsterdam,
 			"ap-west" => UniversalRegion::Mumbai,
 			"ca-central" => UniversalRegion::Toronto,
 			"ap-southeast" => UniversalRegion::Sydney,
@@ -42,6 +43,17 @@ fn universal_region(region: &Region) -> backend::region::UniversalRegion {
 			"ap-south" => UniversalRegion::Singapore,
 			"eu-central" => UniversalRegion::Frankfurt,
 			"ap-northeast" => UniversalRegion::Tokyo,
+			"us-ord" => UniversalRegion::Chicago,
+			"fr-par" => UniversalRegion::Paris,
+			"us-sea" => UniversalRegion::Seattle,
+			"br-gru" => UniversalRegion::SaoPaulo,
+			"se-sto" => UniversalRegion::Stockholm,
+			"in-maa" => UniversalRegion::Chennai,
+			"jp-osa" => UniversalRegion::Osaka,
+			"it-mil" => UniversalRegion::Milan,
+			"us-mia" => UniversalRegion::Miami,
+			"id-cgk" => UniversalRegion::Jakarta,
+			"us-lax" => UniversalRegion::LosAngeles,
 			_ => {
 				tracing::error!(provider_region = ?region.provider_region, "unknown linode region");
 				UniversalRegion::Unknown
