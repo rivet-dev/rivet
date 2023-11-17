@@ -436,6 +436,8 @@ pub async fn gen_svc(exec_ctx: &ExecServiceContext) -> Vec<serde_json::Value> {
 			} else {
 				json!({
 					"completions": 1,
+					// Keep retrying until completion
+					"backoffLimit": 0,
 					// TODO: Needed?
 					// "parallelism": ns_service_config.count,
 					"template": pod_template
