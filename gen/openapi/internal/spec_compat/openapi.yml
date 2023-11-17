@@ -4240,59 +4240,6 @@ info:
   version: 0.0.1
 openapi: 3.0.1
 paths:
-  /admin/groups/{group_id}/developer:
-    post:
-      operationId: admin_groups_convertDeveloper
-      parameters:
-      - in: path
-        name: group_id
-        required: true
-        schema:
-          format: uuid
-          type: string
-      responses:
-        '204':
-          description: ''
-        '400':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBody'
-          description: ''
-        '403':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBody'
-          description: ''
-        '404':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBody'
-          description: ''
-        '408':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBody'
-          description: ''
-        '429':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBody'
-          description: ''
-        '500':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBody'
-          description: ''
-      security: &id001
-      - BearerAuth: []
-      tags:
-      - AdminGroups
   /admin/login:
     post:
       operationId: admin_login
@@ -4346,7 +4293,8 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorBody'
           description: ''
-      security: *id001
+      security: &id001
+      - BearerAuth: []
       tags:
       - Admin
   /auth/identity/access-token/complete-verification:

@@ -3,7 +3,6 @@ use hyper::{Body, Request, Response};
 use rivet_api::models;
 use uuid::Uuid;
 
-pub mod groups;
 pub mod login;
 
 pub async fn handle(
@@ -21,12 +20,6 @@ pub async fn handle(
 
 define_router! {
 	routes: {
-		"groups" / Uuid / "developer": {
-			POST: groups::convert_developer(
-				body: serde_json::Value,
-			),
-		},
-
 		"login": {
 			POST: login::login(
 				body: models::AdminLoginRequest,

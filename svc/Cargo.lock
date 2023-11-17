@@ -121,7 +121,6 @@ dependencies = [
  "s3-util",
  "serde",
  "serde_json",
- "team-dev-get",
  "thiserror",
  "token-create",
  "tokio",

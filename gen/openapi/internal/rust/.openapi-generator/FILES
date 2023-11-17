@@ -4,7 +4,6 @@
 Cargo.toml
 README.md
 docs/AdminApi.md
-docs/AdminGroupsApi.md
 docs/AdminLoginRequest.md
 docs/AdminLoginResponse.md
 docs/AuthCompleteStatus.md
@@ -331,7 +330,6 @@ docs/ValidationError.md
 docs/WatchResponse.md
 git_push.sh
 src/apis/admin_api.rs
-src/apis/admin_groups_api.rs
 src/apis/auth_identity_access_token_api.rs
 src/apis/auth_identity_email_api.rs
 src/apis/auth_tokens_api.rs
