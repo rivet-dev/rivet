@@ -1,0 +1,50 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/fern-api/fern/main/fern.schema.json
+
+imports:
+  localCommons: ../common.yml
+  captchaConfig: ../../captcha/config.yml
+
+service:
+  auth: true
+  base-path: /auth/identity/email
+  endpoints:
+    startEmailVerification:
+      path: /start-verification
+      method: POST
+      docs: Starts the verification process for linking an email to your identity.
+      request:
+        body: StartEmailVerificationRequest
+      response: StartEmailVerificationResponse
+
+    completeEmailVerification:
+      path: /complete-verification
+      method: POST
+      docs: Completes the email verification process.
+      request:
+        body: CompleteEmailVerificationRequest
+      response: CompleteEmailVerificationResponse
+
+types:
+  StartEmailVerificationRequest:
+    properties:
+      email: string
+      captcha: optional<captchaConfig.Config>
+      game_id:
+        type: optional<uuid>
+
+  StartEmailVerificationResponse:
+    properties:
+      verification_id:
+        type: uuid
+
+  CompleteEmailVerificationRequest:
+    properties:
+      verification_id:
+        type: uuid
+      code:
+        docs: The code sent to the requestee's email.
+        type: string
+
+  CompleteEmailVerificationResponse:
+    properties:
+      status: localCommons.CompleteStatus

@@ -15,7 +15,14 @@ service:
 types:
   BootstrapResponse:
     properties:
+      cluster: BootstrapCluster
       captcha: BootstrapCaptcha
+
+  BootstrapCluster:
+    docs: The type of cluster that the backend is currently running.
+    enum:
+      - value: enterprise
+      - value: oss
 
   BootstrapCaptcha:
     properties:

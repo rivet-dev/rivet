@@ -6,17 +6,17 @@ use email_verification::complete::response::Status as StatusProto;
 use http::response::Builder;
 use proto::backend::{self, pkg::*};
 use rivet_api::models;
-use rivet_auth_server::models as models_old;
 use rivet_convert::ApiTryInto;
 use rivet_operation::prelude::*;
+use serde_json::json;
 
 use crate::{auth::Auth, utils::refresh_token_header};
 
 // MARK: POST /identity/email/start-verification
 pub async fn start(
 	ctx: Ctx<Auth>,
-	body: models::AuthStartEmailVerificationRequest,
-) -> GlobalResult<models::AuthStartEmailVerificationResponse> {
+	body: models::AuthIdentityStartEmailVerificationRequest,
+) -> GlobalResult<models::AuthIdentityStartEmailVerificationResponse> {
 	let user_ent = ctx.auth().user(ctx.op_ctx()).await?;
 
 	// Verify captcha
@@ -62,7 +62,7 @@ pub async fn start(
 
 	let verification_id = unwrap_ref!(res.verification_id).as_uuid();
 
-	Ok(models::AuthStartEmailVerificationResponse {
+	Ok(models::AuthIdentityStartEmailVerificationResponse {
 		verification_id: verification_id,
 	})
 }
@@ -71,16 +71,14 @@ pub async fn start(
 pub async fn complete(
 	ctx: Ctx<Auth>,
 	response: &mut Builder,
-	body: models_old::CompleteEmailVerificationRequest,
-) -> GlobalResult<models_old::CompleteEmailVerificationResponse> {
+	body: models::AuthIdentityCompleteEmailVerificationRequest,
+) -> GlobalResult<models::AuthIdentityCompleteEmailVerificationResponse> {
 	let user_ent = ctx.auth().user(ctx.op_ctx()).await?;
 
 	let origin = unwrap!(ctx.origin());
 
 	let res = op!([ctx] email_verification_complete {
-		verification_id: Some(Into::into(
-			Uuid::from_str(body.verification_id.as_str())?
-		)),
+		verification_id: Some(body.verification_id.into()),
 		code: body.code.clone()
 	})
 	.await?;
@@ -90,14 +88,14 @@ pub async fn complete(
 	// Handle error statuses
 	let err = match status {
 		StatusProto::Correct => None,
-		StatusProto::AlreadyComplete => Some(models_old::CompleteStatus::AlreadyComplete),
-		StatusProto::Expired => Some(models_old::CompleteStatus::Expired),
-		StatusProto::TooManyAttempts => Some(models_old::CompleteStatus::TooManyAttempts),
-		StatusProto::Incorrect => Some(models_old::CompleteStatus::Incorrect),
+		StatusProto::AlreadyComplete => Some(models::AuthCompleteStatus::AlreadyComplete),
+		StatusProto::Expired => Some(models::AuthCompleteStatus::Expired),
+		StatusProto::TooManyAttempts => Some(models::AuthCompleteStatus::TooManyAttempts),
+		StatusProto::Incorrect => Some(models::AuthCompleteStatus::Incorrect),
 	};
 
 	if let Some(status) = err {
-		return Ok(models_old::CompleteEmailVerificationResponse { status });
+		return Ok(models::AuthIdentityCompleteEmailVerificationResponse { status });
 	}
 
 	let email_res = op!([ctx] user_resolve_email {
@@ -125,8 +123,8 @@ pub async fn complete(
 			unwrap!(response.headers_mut()).insert(k, v);
 		}
 
-		Ok(models_old::CompleteEmailVerificationResponse {
-			status: models_old::CompleteStatus::SwitchIdentity,
+		Ok(models::AuthIdentityCompleteEmailVerificationResponse {
+			status: models::AuthCompleteStatus::SwitchIdentity,
 		})
 	}
 	// Associate identity with existing user
@@ -145,14 +143,75 @@ pub async fn complete(
 		})
 		.await?;
 
-		// Send user update to api-portal
+		// Send user update to hub
 		msg!([ctx] user::msg::update(user_ent.user_id) {
 			user_id: Some(user_ent.user_id.into()),
 		})
 		.await?;
 
-		Ok(models_old::CompleteEmailVerificationResponse {
-			status: models_old::CompleteStatus::LinkedAccountAdded,
+		Ok(models::AuthIdentityCompleteEmailVerificationResponse {
+			status: models::AuthCompleteStatus::LinkedAccountAdded,
 		})
 	}
+}
+
+// MARK: POST /identity/access-token/complete-verification
+pub async fn complete_access_token(
+	ctx: Ctx<Auth>,
+	response: &mut Builder,
+	body: models::AuthIdentityCompleteAccessTokenVerificationRequest,
+) -> GlobalResult<serde_json::Value> {
+	let user_ent = ctx.auth().user(ctx.op_ctx()).await?;
+	let origin = unwrap!(ctx.origin());
+	let access_token_ent = ctx.auth().access_token_ent(body.access_token)?;
+
+	let access_token_res = op!([ctx] user_resolve_access_token {
+		names: vec![access_token_ent.name.clone()]
+	})
+	.await?;
+
+	tracing::info!(access_token = %access_token_ent.name, "resolved access_token");
+
+	// Switch to new user
+	if let Some(new_user) = access_token_res.users.first() {
+		let new_user_id = unwrap_ref!(new_user.user_id).as_uuid();
+
+		tracing::info!(old_user_id = %user_ent.user_id, %new_user_id, "identity found, switching user");
+
+		let token_res = op!([ctx] user_token_create {
+			user_id: Some(new_user_id.into()),
+			client: Some(ctx.client_info()),
+		})
+		.await?;
+
+		// Set refresh token
+		{
+			let (k, v) = refresh_token_header(origin, token_res.refresh_token)?;
+			unwrap!(response.headers_mut()).insert(k, v);
+		}
+	}
+	// Associate identity with existing user
+	else {
+		tracing::info!(user_id = %user_ent.user_id, "creating new identity for guest");
+
+		op!([ctx] user_identity_create {
+			user_id: Some(Into::into(user_ent.user_id)),
+			identity: Some(backend::user_identity::Identity {
+				kind: Some(backend::user_identity::identity::Kind::AccessToken(
+					backend::user_identity::identity::AccessToken {
+						name: access_token_ent.name.clone(),
+					}
+				))
+			})
+		})
+		.await?;
+	}
+
+	// Turn user into admin
+	msg!([ctx] user::msg::admin_set(user_ent.user_id) -> user::msg::update {
+		user_id: Some(user_ent.user_id.into()),
+	})
+	.await?;
+
+	Ok(json!({}))
 }

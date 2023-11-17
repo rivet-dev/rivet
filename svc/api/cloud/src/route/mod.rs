@@ -30,7 +30,9 @@ define_router! {
 	cors: CorsConfigBuilder::hub().build(),
 	routes: {
 		"bootstrap": {
-			GET: bootstrap::get(),
+			GET: bootstrap::get(
+				opt_auth: true,
+			),
 		},
 
 		// Auth

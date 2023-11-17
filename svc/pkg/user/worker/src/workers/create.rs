@@ -162,7 +162,7 @@ async fn insert_user(
 	};
 
 	if res.rows_affected() == 1 {
-		return Ok(Some((display_name, account_number)));
+		Ok(Some((display_name, account_number)))
 	} else {
 		Ok(None)
 	}

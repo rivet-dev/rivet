@@ -25,9 +25,11 @@ All URIs are relative to *https://api.rivet.gg*
 
 Class | Method | HTTP request | Description
 ------------ | ------------- | ------------- | -------------
+*AdminApi* | [**admin_login**](docs/AdminApi.md#admin_login) | **POST** /admin/login | 
 *AdminGroupsApi* | [**admin_groups_convert_developer**](docs/AdminGroupsApi.md#admin_groups_convert_developer) | **POST** /admin/groups/{group_id}/developer | 
-*AuthIdentityApi* | [**auth_identity_complete_email_verification**](docs/AuthIdentityApi.md#auth_identity_complete_email_verification) | **POST** /auth/identity/email/complete-verification | 
-*AuthIdentityApi* | [**auth_identity_start_email_verification**](docs/AuthIdentityApi.md#auth_identity_start_email_verification) | **POST** /auth/identity/email/start-verification | 
+*AuthIdentityAccessTokenApi* | [**auth_identity_access_token_complete_access_token_verification**](docs/AuthIdentityAccessTokenApi.md#auth_identity_access_token_complete_access_token_verification) | **POST** /auth/identity/access-token/complete-verification | 
+*AuthIdentityEmailApi* | [**auth_identity_email_complete_email_verification**](docs/AuthIdentityEmailApi.md#auth_identity_email_complete_email_verification) | **POST** /auth/identity/email/complete-verification | 
+*AuthIdentityEmailApi* | [**auth_identity_email_start_email_verification**](docs/AuthIdentityEmailApi.md#auth_identity_email_start_email_verification) | **POST** /auth/identity/email/start-verification | 
 *AuthTokensApi* | [**auth_tokens_refresh_identity_token**](docs/AuthTokensApi.md#auth_tokens_refresh_identity_token) | **POST** /auth/tokens/identity | 
 *CloudApi* | [**cloud_bootstrap**](docs/CloudApi.md#cloud_bootstrap) | **GET** /cloud/bootstrap | 
 *CloudAuthApi* | [**cloud_auth_inspect**](docs/CloudAuthApi.md#cloud_auth_inspect) | **GET** /cloud/auth/inspect | 
@@ -162,13 +164,16 @@ Class | Method | HTTP request | Description
 
 ## Documentation For Models
 
- - [AuthCompleteEmailVerificationRequest](docs/AuthCompleteEmailVerificationRequest.md)
- - [AuthCompleteEmailVerificationResponse](docs/AuthCompleteEmailVerificationResponse.md)
+ - [AdminLoginRequest](docs/AdminLoginRequest.md)
+ - [AdminLoginResponse](docs/AdminLoginResponse.md)
  - [AuthCompleteStatus](docs/AuthCompleteStatus.md)
+ - [AuthIdentityCompleteAccessTokenVerificationRequest](docs/AuthIdentityCompleteAccessTokenVerificationRequest.md)
+ - [AuthIdentityCompleteEmailVerificationRequest](docs/AuthIdentityCompleteEmailVerificationRequest.md)
+ - [AuthIdentityCompleteEmailVerificationResponse](docs/AuthIdentityCompleteEmailVerificationResponse.md)
+ - [AuthIdentityStartEmailVerificationRequest](docs/AuthIdentityStartEmailVerificationRequest.md)
+ - [AuthIdentityStartEmailVerificationResponse](docs/AuthIdentityStartEmailVerificationResponse.md)
  - [AuthRefreshIdentityTokenRequest](docs/AuthRefreshIdentityTokenRequest.md)
  - [AuthRefreshIdentityTokenResponse](docs/AuthRefreshIdentityTokenResponse.md)
- - [AuthStartEmailVerificationRequest](docs/AuthStartEmailVerificationRequest.md)
- - [AuthStartEmailVerificationResponse](docs/AuthStartEmailVerificationResponse.md)
  - [CaptchaConfig](docs/CaptchaConfig.md)
  - [CaptchaConfigHcaptcha](docs/CaptchaConfigHcaptcha.md)
  - [CaptchaConfigTurnstile](docs/CaptchaConfigTurnstile.md)
@@ -177,6 +182,7 @@ Class | Method | HTTP request | Description
  - [CloudAuthAgentIdentity](docs/CloudAuthAgentIdentity.md)
  - [CloudBootstrapCaptcha](docs/CloudBootstrapCaptcha.md)
  - [CloudBootstrapCaptchaTurnstile](docs/CloudBootstrapCaptchaTurnstile.md)
+ - [CloudBootstrapCluster](docs/CloudBootstrapCluster.md)
  - [CloudBootstrapResponse](docs/CloudBootstrapResponse.md)
  - [CloudBuildSummary](docs/CloudBuildSummary.md)
  - [CloudCdnAuthType](docs/CloudCdnAuthType.md)
@@ -362,6 +368,7 @@ Class | Method | HTTP request | Description
  - [GroupUpdateProfileRequest](docs/GroupUpdateProfileRequest.md)
  - [GroupValidateProfileRequest](docs/GroupValidateProfileRequest.md)
  - [GroupValidateProfileResponse](docs/GroupValidateProfileResponse.md)
+ - [IdentityAccessTokenLinkedAccount](docs/IdentityAccessTokenLinkedAccount.md)
  - [IdentityCancelGameLinkRequest](docs/IdentityCancelGameLinkRequest.md)
  - [IdentityCompleteGameLinkRequest](docs/IdentityCompleteGameLinkRequest.md)
  - [IdentityDevState](docs/IdentityDevState.md)

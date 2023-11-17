@@ -2,25 +2,19 @@ components:
   schemas:
     AccountNumber:
       type: integer
-    AuthCompleteEmailVerificationRequest:
+    AdminLoginRequest:
       properties:
-        code:
-          description: The code sent to the requestee's email.
-          format: uuid
-          type: string
-        verification_id:
-          format: uuid
+        name:
           type: string
       required:
-      - verification_id
-      - code
+      - name
       type: object
-    AuthCompleteEmailVerificationResponse:
+    AdminLoginResponse:
       properties:
-        status:
-          $ref: '#/components/schemas/AuthCompleteStatus'
+        url:
+          type: string
       required:
-      - status
+      - url
       type: object
     AuthCompleteStatus:
       description: Represents the state of an external account linking process.
@@ -32,6 +26,52 @@ components:
       - too_many_attempts
       - incorrect
       type: string
+    AuthIdentityCompleteAccessTokenVerificationRequest:
+      properties:
+        access_token:
+          $ref: '#/components/schemas/Jwt'
+      required:
+      - access_token
+      type: object
+    AuthIdentityCompleteEmailVerificationRequest:
+      properties:
+        code:
+          description: The code sent to the requestee's email.
+          type: string
+        verification_id:
+          format: uuid
+          type: string
+      required:
+      - verification_id
+      - code
+      type: object
+    AuthIdentityCompleteEmailVerificationResponse:
+      properties:
+        status:
+          $ref: '#/components/schemas/AuthCompleteStatus'
+      required:
+      - status
+      type: object
+    AuthIdentityStartEmailVerificationRequest:
+      properties:
+        captcha:
+          $ref: '#/components/schemas/CaptchaConfig'
+        email:
+          type: string
+        game_id:
+          format: uuid
+          type: string
+      required:
+      - email
+      type: object
+    AuthIdentityStartEmailVerificationResponse:
+      properties:
+        verification_id:
+          format: uuid
+          type: string
+      required:
+      - verification_id
+      type: object
     AuthRefreshIdentityTokenRequest:
       properties:
         logout:
@@ -58,26 +98,6 @@ components:
       - token
       - exp
       - identity_id
-      type: object
-    AuthStartEmailVerificationRequest:
-      properties:
-        captcha:
-          $ref: '#/components/schemas/CaptchaConfig'
-        email:
-          type: string
-        game_id:
-          format: uuid
-          type: string
-      required:
-      - email
-      type: object
-    AuthStartEmailVerificationResponse:
-      properties:
-        verification_id:
-          format: uuid
-          type: string
-      required:
-      - verification_id
       type: object
     Bio:
       description: Follows regex ^(?:[^\n\r]+\n?|\n){1,5}$
@@ -144,11 +164,20 @@ components:
       required:
       - site_key
       type: object
+    CloudBootstrapCluster:
+      description: The type of cluster that the backend is currently running.
+      enum:
+      - enterprise
+      - oss
+      type: string
     CloudBootstrapResponse:
       properties:
         captcha:
           $ref: '#/components/schemas/CloudBootstrapCaptcha'
+        cluster:
+          $ref: '#/components/schemas/CloudBootstrapCluster'
       required:
+      - cluster
       - captcha
       type: object
     CloudBuildSummary:
@@ -3094,6 +3123,14 @@ components:
         than `DisplayName` because this should not include special characters and
         be short.
       type: string
+    IdentityAccessTokenLinkedAccount:
+      description: An identity's access token identity.
+      properties:
+        name:
+          type: string
+      required:
+      - name
+      type: object
     IdentityCancelGameLinkRequest:
       properties:
         identity_link_token:
@@ -3338,6 +3375,8 @@ components:
     IdentityLinkedAccount:
       description: A union representing an identity's linked accounts.
       properties:
+        access_token:
+          $ref: '#/components/schemas/IdentityAccessTokenLinkedAccount'
         email:
           $ref: '#/components/schemas/IdentityEmailLinkedAccount'
       type: object
@@ -4254,23 +4293,132 @@ paths:
       - BearerAuth: []
       tags:
       - AdminGroups
+  /admin/login:
+    post:
+      operationId: admin_login
+      parameters: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AdminLoginRequest'
+        required: true
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminLoginResponse'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+          description: ''
+        '408':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+          description: ''
+        '429':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+          description: ''
+        '500':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+          description: ''
+      security: *id001
+      tags:
+      - Admin
+  /auth/identity/access-token/complete-verification:
+    post:
+      description: Completes the access token verification process.
+      operationId: auth_identity_accessToken_completeAccessTokenVerification
+      parameters: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AuthIdentityCompleteAccessTokenVerificationRequest'
+        required: true
+      responses:
+        '204':
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+          description: ''
+        '408':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+          description: ''
+        '429':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+          description: ''
+        '500':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+          description: ''
+      security: *id001
+      tags:
+      - AuthIdentityAccessToken
   /auth/identity/email/complete-verification:
     post:
       description: Completes the email verification process.
-      operationId: auth_identity_completeEmailVerification
+      operationId: auth_identity_email_completeEmailVerification
       parameters: []
       requestBody:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/AuthCompleteEmailVerificationRequest'
+              $ref: '#/components/schemas/AuthIdentityCompleteEmailVerificationRequest'
         required: true
       responses:
         '200':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/AuthCompleteEmailVerificationResponse'
+                $ref: '#/components/schemas/AuthIdentityCompleteEmailVerificationResponse'
           description: ''
         '400':
           content:
@@ -4310,24 +4458,24 @@ paths:
           description: ''
       security: *id001
       tags:
-      - AuthIdentity
+      - AuthIdentityEmail
   /auth/identity/email/start-verification:
     post:
       description: Starts the verification process for linking an email to your identity.
-      operationId: auth_identity_startEmailVerification
+      operationId: auth_identity_email_startEmailVerification
       parameters: []
       requestBody:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/AuthStartEmailVerificationRequest'
+              $ref: '#/components/schemas/AuthIdentityStartEmailVerificationRequest'
         required: true
       responses:
         '200':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/AuthStartEmailVerificationResponse'
+                $ref: '#/components/schemas/AuthIdentityStartEmailVerificationResponse'
           description: ''
         '400':
           content:
@@ -4367,7 +4515,7 @@ paths:
           description: ''
       security: *id001
       tags:
-      - AuthIdentity
+      - AuthIdentityEmail
   /auth/tokens/identity:
     post:
       description: Refreshes the current identity's token and sets authentication
