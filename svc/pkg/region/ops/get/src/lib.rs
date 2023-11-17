@@ -30,6 +30,7 @@ fn universal_region(region: &Region) -> backend::region::UniversalRegion {
 			}
 		},
 		"linode" => match region.provider_region.as_str() {
+			"nl-ams" => UniversalRegion::Amsterdam,
 			"ap-west" => UniversalRegion::Mumbai,
 			"ca-central" => UniversalRegion::Toronto,
 			"ap-southeast" => UniversalRegion::Sydney,
@@ -42,6 +43,17 @@ fn universal_region(region: &Region) -> backend::region::UniversalRegion {
 			"ap-south" => UniversalRegion::Singapore,
 			"eu-central" => UniversalRegion::Frankfurt,
 			"ap-northeast" => UniversalRegion::Tokyo,
+			"us-ord" => UniversalRegion::Chicago,
+			"fr-par" => UniversalRegion::Paris,
+			"us-sea" => UniversalRegion::Seattle,
+			"br-gru" => UniversalRegion::SaoPaulo,
+			"se-sto" => UniversalRegion::Stockholm,
+			"in-maa" => UniversalRegion::Chennai,
+			"jp-osa" => UniversalRegion::Osaka,
+			"it-mil" => UniversalRegion::Milan,
+			"us-mia" => UniversalRegion::Miami,
+			"id-cgk" => UniversalRegion::Jakarta,
+			"us-lax" => UniversalRegion::LosAngeles,
 			_ => {
 				tracing::error!(provider_region = ?region.provider_region, "unknown linode region");
 				UniversalRegion::Unknown
@@ -112,7 +124,18 @@ fn universal_region_display_name(
 		UniversalRegion::Sydney => "Sydney",
 		UniversalRegion::Tokyo => "Tokyo",
 		UniversalRegion::Toronto => "Toronto",
-		UniversalRegion::WashingtonDc => "wdc",
+		UniversalRegion::WashingtonDc => "Washington, DC",
+		UniversalRegion::Chicago => "Chicago",
+		UniversalRegion::Paris => "Paris",
+		UniversalRegion::Seattle => "Seattle",
+		UniversalRegion::SaoPaulo => "Sao Paulo",
+		UniversalRegion::Stockholm => "Stockholm",
+		UniversalRegion::Chennai => "Chennai",
+		UniversalRegion::Osaka => "Osaka",
+		UniversalRegion::Milan => "Milan",
+		UniversalRegion::Miami => "Miami",
+		UniversalRegion::Jakarta => "Jakarta",
+		UniversalRegion::LosAngeles => "Los Angeles",
 	}
 }
 
@@ -138,6 +161,17 @@ fn universal_region_coords(universal_region: &backend::region::UniversalRegion) 
 		UniversalRegion::Tokyo => (35.68951, 139.69170),
 		UniversalRegion::Toronto => (43.65161, -79.38313),
 		UniversalRegion::WashingtonDc => (38.89212213251763, -77.00908542245845),
+		UniversalRegion::Chicago => (41.8781, -87.6298),
+		UniversalRegion::Paris => (48.8566, 2.3522),
+		UniversalRegion::Seattle => (47.6062, -122.3321),
+		UniversalRegion::SaoPaulo => (-23.5505, -46.6333),
+		UniversalRegion::Stockholm => (59.3293, 18.0686),
+		UniversalRegion::Chennai => (13.0827, 80.2707),
+		UniversalRegion::Osaka => (34.6937, 135.5023),
+		UniversalRegion::Milan => (45.4642, 9.1900),
+		UniversalRegion::Miami => (25.7617, -80.1918),
+		UniversalRegion::Jakarta => (-6.2088, 106.8456),
+		UniversalRegion::LosAngeles => (34.0522, -118.2437),
 	}
 }
 
