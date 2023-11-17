@@ -808,6 +808,11 @@ async fn find_inner(
 
 	// Validate captcha
 	if let Some(captcha_config) = &version_config.captcha {
+		let origin_host = ctx
+			.origin()
+			.and_then(|origin| origin.host_str())
+			.map(ToString::to_string);
+
 		if let Some(captcha) = captcha {
 			// Will throw an error if the captcha is invalid
 			op!([ctx] captcha_verify {
@@ -815,10 +820,7 @@ async fn find_inner(
 					("kind".into(), "mm:find".into()),
 				]),
 				remote_address: unwrap_ref!(ctx.remote_address()).to_string(),
-				origin_host: ctx
-					.origin()
-					.and_then(|origin| origin.host_str())
-					.map(ToString::to_string),
+				origin_host: origin_host,
 				captcha_config: Some(captcha_config.clone()),
 				client_response: Some((*captcha).try_into()?),
 				namespace_id: Some(game_ns.namespace_id.into()),
@@ -851,9 +853,10 @@ async fn find_inner(
 						}),
 					}
 				);
-			} else if let Some(_turnstile_config) = &captcha_config.turnstile {
+			} else if let Some(turnstile_config) = &captcha_config.turnstile {
 				let turnstile_config_res = op!([ctx] captcha_turnstile_config_get {
-					config: Some(hcaptcha_config.clone()),
+					origin_host: origin_host,
+					config: Some(turnstile_config.clone()),
 				})
 				.await?;
 
@@ -862,7 +865,7 @@ async fn find_inner(
 					CAPTCHA_CAPTCHA_REQUIRED {
 						metadata: json!({
 							"turnstile": {
-								"site_key": ,
+								"site_key": turnstile_config_res.site_key,
 							}
 						}),
 					}

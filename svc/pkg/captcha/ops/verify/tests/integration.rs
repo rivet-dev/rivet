@@ -232,11 +232,10 @@ async fn turnstile(ctx: TestCtx) {
 		requests_before_reverify: 15,
 		verification_ttl,
 		turnstile: Some(backend::captcha::captcha_config::Turnstile {
-			domains: vec![backend::captcha::captcha_config::turnstile::Domain {
-				domain: "rivet.gg".to_string(),
-				// Always passes
-				secret_key: "1x0000000000000000000000000000000AA".to_string(),
-			}],
+			// Not needed for captcha verification
+			site_key: "".to_string(),
+			// Always passes
+			secret_key: "1x0000000000000000000000000000000AA".to_string(),
 		}),
 		..Default::default()
 	};

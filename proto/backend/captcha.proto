@@ -22,12 +22,8 @@ message CaptchaConfig {
 	}
 
 	message Turnstile {
-		message Domain {
-			string domain = 1;
-			string secret_key = 2;
-		}
-
-		repeated Domain domains = 1;
+		string site_key = 1;
+		string secret_key = 2;
 	}
 
 	// How many times a user can bypass the captcha before being prompted

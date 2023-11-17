@@ -611,6 +611,7 @@ dependencies = [
  "bytes",
  "captcha-hcaptcha-config-get",
  "captcha-request",
+ "captcha-turnstile-config-get",
  "captcha-verify",
  "cdn-namespace-domain-create",
  "cdn-namespace-get",
@@ -1599,6 +1600,29 @@ dependencies = [
 ]
 
 [[package]]
+name = "captcha-turnstile-config-get"
+version = "0.0.1"
+dependencies = [
+ "chirp-client",
+ "chirp-worker",
+ "prost 0.10.4",
+ "rivet-operation",
+ "rivet-util-captcha",
+]
+
+[[package]]
+name = "captcha-turnstile-verify"
+version = "0.0.1"
+dependencies = [
+ "chirp-client",
+ "chirp-worker",
+ "prost 0.10.4",
+ "reqwest",
+ "rivet-operation",
+ "serde",
+]
+
+[[package]]
 name = "captcha-verify"
 version = "0.0.1"
 dependencies = [
@@ -1906,18 +1930,6 @@ dependencies = [
  "rivet-runtime",
  "serde",
  "team-dev-game-list",
-]
-
-[[package]]
-name = "captcha-turnstile-verify"
-version = "0.0.1"
-dependencies = [
- "chirp-client",
- "chirp-worker",
- "prost 0.10.4",
- "reqwest",
- "rivet-operation",
- "serde",
 ]
 
 [[package]]

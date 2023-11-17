@@ -16,7 +16,7 @@ util-captcha = { package = "rivet-util-captcha", path = "../../util" }
 
 captcha-hcaptcha-config-get = { path = "../hcaptcha-config-get" }
 captcha-hcaptcha-verify = { path = "../hcaptcha-verify" }
-captcha-turnstile-verify = { path = "../../../cf/ops/turnstile-verify" }
+captcha-turnstile-verify = { path = "../turnstile-verify" }
 
 [dev-dependencies]
 chirp-worker = { path = "../../../../../lib/chirp/worker" }

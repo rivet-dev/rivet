@@ -296,7 +296,7 @@ pub fn vector(config: &VectorConfig) -> String {
 
 	let mut config_str = formatdoc!(
 		r#"
-		[api-routes]
+		[api]
 			enabled = true
 
 		[sinks.vector_sink]

@@ -77,17 +77,10 @@ async fn handle(
 			let secret_key = if util::env::domain_cdn().map_or(false, |domain_cdn| {
 				domain_cdn == origin_host || origin_host.ends_with(&format!(".{domain_cdn}"))
 			}) {
-				Some(util::env::read_secret(&["turnstile", "cdn", "secret_key"]).await?)
-			}
-			// Check for host from captcha config
-			else {
-				turnstile.domains.iter().find_map(|domain| {
-					(&domain.domain == origin_host
-						|| origin_host.ends_with(&format!(".{}", domain.domain)))
-					.then(|| domain.secret_key.clone())
-				})
+				util::env::read_secret(&["turnstile", "cdn", "secret_key"]).await?
+			} else {
+				turnstile.secret_key.clone()
 			};
-			let secret_key = unwrap_with!(secret_key, CAPTCHA_CAPTCHA_ORIGIN_NOT_ALLOWED);
 
 			let res = op!([ctx] captcha_turnstile_verify {
 				client_response: turnstile_client_res.client_response.clone(),

@@ -10742,19 +10742,12 @@ components:
       type: object
       description: Turnstile captcha configuration.
       properties:
-        domains:
-          type: object
-          additionalProperties:
-            $ref: '#/components/schemas/CloudVersionMatchmakerCaptchaTurnstileDomain'
-      required:
-        - domains
-    CloudVersionMatchmakerCaptchaTurnstileDomain:
-      type: object
-      description: Turnstile domain configuration.
-      properties:
+        site_key:
+          type: string
         secret_key:
           type: string
       required:
+        - site_key
         - secret_key
     CloudVersionMatchmakerNetworkMode:
       type: string
