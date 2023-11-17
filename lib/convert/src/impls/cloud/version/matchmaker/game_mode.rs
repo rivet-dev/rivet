@@ -280,6 +280,7 @@ fn region_to_proto(
 		.clone()
 		.or_else(|| game_mode.idle_lobbies.clone())
 		.or_else(|| matchmaker.idle_lobbies.clone())
+		// TODO: Remove? idle lobby default is 0
 		.unwrap_or_else(|| {
 			Box::new(models::CloudVersionMatchmakerGameModeIdleLobbiesConfig {
 				min: util_mm::defaults::IDLE_LOBBIES_MIN as i32,

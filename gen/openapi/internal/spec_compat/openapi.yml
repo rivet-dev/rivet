@@ -2032,19 +2032,12 @@ components:
     CloudVersionMatchmakerCaptchaTurnstile:
       description: Turnstile captcha configuration.
       properties:
-        domains:
-          additionalProperties:
-            $ref: '#/components/schemas/CloudVersionMatchmakerCaptchaTurnstileDomain'
-          type: object
-      required:
-      - domains
-      type: object
-    CloudVersionMatchmakerCaptchaTurnstileDomain:
-      description: Turnstile domain configuration.
-      properties:
         secret_key:
           type: string
+        site_key:
+          type: string
       required:
+      - site_key
       - secret_key
       type: object
     CloudVersionMatchmakerConfig:

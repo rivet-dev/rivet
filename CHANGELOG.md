@@ -13,6 +13,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 -   **Bolt** Fixed `bolt db migrate create`
 -   **Infra** Added `user-admin-set` service for creating an admin user
 
+### Changed
+
+-   **Infra** Turnstile `CAPTCHA_CAPTCHA_REQUIRED` responses now include a site key
+-   **Infra** Turnstile is no longer configurable by domain (instead configured by Turnstile itself)
+
 ## [23.1.0] - 2023-10-30
 
 ### Added

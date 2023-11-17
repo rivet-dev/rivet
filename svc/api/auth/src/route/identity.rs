@@ -36,12 +36,9 @@ pub async fn start(
 						requests_before_reverify: 0,
 						verification_ttl: 0,
 						turnstile: Some(backend::captcha::captcha_config::Turnstile {
-							domains: vec![
-								backend::captcha::captcha_config::turnstile::Domain {
-									domain: "rivet.gg".to_string(),
-									secret_key: secret_key
-								},
-							],
+							// Not needed for captcha verification
+							site_key: "".to_string(),
+							secret_key: secret_key,
 						}),
 						..Default::default()
 					}),

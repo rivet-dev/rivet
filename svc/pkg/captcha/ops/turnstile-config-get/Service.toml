@@ -1,5 +1,5 @@
 [service]
-name = "cf-turnstile-verify"
+name = "captcha-turnstile-config-get"
 
 [runtime]
 kind = "rust"

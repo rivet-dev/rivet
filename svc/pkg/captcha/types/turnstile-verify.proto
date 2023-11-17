@@ -1,6 +1,6 @@
 syntax = "proto3";
 
-package rivet.backend.pkg.cf.turnstile_verify;
+package rivet.backend.pkg.captcha.turnstile_verify;
 
 import "proto/common.proto";
 

@@ -1,0 +1,7 @@
+[service]
+name = "captcha-turnstile-verify"
+
+[runtime]
+kind = "rust"
+
+[operation]

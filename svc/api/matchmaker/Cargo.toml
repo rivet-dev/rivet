@@ -34,6 +34,7 @@ util-mm = { package = "rivet-util-mm", path = "../../pkg/mm/util" }
 uuid = { version = "1", features = ["v4"] }
 
 captcha-request = { path = "../../pkg/captcha/ops/request" }
+captcha-turnstile-config-get = { path = "../../pkg/captcha/ops/turnstile-config-get" }
 captcha-verify = { path = "../../pkg/captcha/ops/verify" }
 cdn-namespace-get = { path = "../../pkg/cdn/ops/namespace-get" }
 game-namespace-get = { path = "../../pkg/game/ops/namespace-get" }
