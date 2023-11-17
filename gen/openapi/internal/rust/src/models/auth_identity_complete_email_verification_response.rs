@@ -12,14 +12,14 @@
 
 
 #[derive(Clone, Debug, PartialEq, Default, Serialize, Deserialize)]
-pub struct AuthCompleteEmailVerificationResponse {
+pub struct AuthIdentityCompleteEmailVerificationResponse {
     #[serde(rename = "status")]
     pub status: crate::models::AuthCompleteStatus,
 }
 
-impl AuthCompleteEmailVerificationResponse {
-    pub fn new(status: crate::models::AuthCompleteStatus) -> AuthCompleteEmailVerificationResponse {
-        AuthCompleteEmailVerificationResponse {
+impl AuthIdentityCompleteEmailVerificationResponse {
+    pub fn new(status: crate::models::AuthCompleteStatus) -> AuthIdentityCompleteEmailVerificationResponse {
+        AuthIdentityCompleteEmailVerificationResponse {
             status,
         }
     }

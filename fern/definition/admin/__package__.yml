@@ -1,0 +1,23 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/fern-api/fern/main/fern.schema.json
+
+service:
+  auth: true
+  base-path: /admin
+  audiences:
+    - public
+  endpoints:
+    login:
+      path: /login
+      method: POST
+      request:
+        body: LoginRequest
+      response: LoginResponse
+
+types:
+  LoginRequest:
+    properties:
+      name: string
+
+  LoginResponse:
+    properties:
+      url: string

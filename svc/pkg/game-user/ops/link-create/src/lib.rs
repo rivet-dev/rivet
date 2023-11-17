@@ -43,7 +43,7 @@ async fn handle(
 	})
 	.await?;
 
-	let user_link_token = unwrap!(token_res.token.clone());
+	let user_link_token = unwrap!(token_res.token);
 	let token_session_id = unwrap_ref!(token_res.session_id).as_uuid();
 
 	sql_execute!(

@@ -1,0 +1,18 @@
+syntax = "proto3";
+
+package rivet.backend.pkg.user.resolve_access_token;
+
+import "proto/common.proto";
+
+message Request {
+	repeated string names = 1;
+}
+
+message Response {
+	message User {
+		string name = 1;
+		rivet.common.Uuid user_id = 2;
+	}
+
+	repeated User users = 1;
+}

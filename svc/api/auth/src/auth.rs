@@ -63,4 +63,15 @@ impl Auth {
 
 		Ok(user_ent)
 	}
+
+	pub fn access_token_ent(&self, token: String) -> GlobalResult<rivet_claims::ent::AccessToken> {
+		// Decode & validate claims
+		let claims = rivet_claims::decode(&token)
+			.map_err(|_| err_code!(API_FORBIDDEN, reason = "Claims error"))??;
+		let access_token_ent = claims
+			.as_access_token()
+			.map_err(|_| err_code!(API_FORBIDDEN, reason = "Decode error"))?;
+
+		Ok(access_token_ent)
+	}
 }

@@ -21,4 +21,5 @@ message Response {
 message CacheUserIdentity {
 	rivet.common.Uuid user_id = 1;
 	optional string email = 2;
+	optional string access_token_name = 3;
 }

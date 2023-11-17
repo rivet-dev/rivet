@@ -15,10 +15,10 @@ use crate::apis::ResponseContent;
 use super::{Error, configuration};
 
 
-/// struct for typed errors of method [`auth_identity_complete_email_verification`]
+/// struct for typed errors of method [`auth_identity_email_complete_email_verification`]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(untagged)]
-pub enum AuthIdentityCompleteEmailVerificationError {
+pub enum AuthIdentityEmailCompleteEmailVerificationError {
     Status400(crate::models::ErrorBody),
     Status403(crate::models::ErrorBody),
     Status404(crate::models::ErrorBody),
@@ -28,10 +28,10 @@ pub enum AuthIdentityCompleteEmailVerificationError {
     UnknownValue(serde_json::Value),
 }
 
-/// struct for typed errors of method [`auth_identity_start_email_verification`]
+/// struct for typed errors of method [`auth_identity_email_start_email_verification`]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(untagged)]
-pub enum AuthIdentityStartEmailVerificationError {
+pub enum AuthIdentityEmailStartEmailVerificationError {
     Status400(crate::models::ErrorBody),
     Status403(crate::models::ErrorBody),
     Status404(crate::models::ErrorBody),
@@ -43,7 +43,7 @@ pub enum AuthIdentityStartEmailVerificationError {
 
 
 /// Completes the email verification process.
-pub async fn auth_identity_complete_email_verification(configuration: &configuration::Configuration, auth_complete_email_verification_request: crate::models::AuthCompleteEmailVerificationRequest) -> Result<crate::models::AuthCompleteEmailVerificationResponse, Error<AuthIdentityCompleteEmailVerificationError>> {
+pub async fn auth_identity_email_complete_email_verification(configuration: &configuration::Configuration, auth_identity_complete_email_verification_request: crate::models::AuthIdentityCompleteEmailVerificationRequest) -> Result<crate::models::AuthIdentityCompleteEmailVerificationResponse, Error<AuthIdentityEmailCompleteEmailVerificationError>> {
     let local_var_configuration = configuration;
 
     let local_var_client = &local_var_configuration.client;
@@ -57,7 +57,7 @@ pub async fn auth_identity_complete_email_verification(configuration: &configura
     if let Some(ref local_var_token) = local_var_configuration.bearer_access_token {
         local_var_req_builder = local_var_req_builder.bearer_auth(local_var_token.to_owned());
     };
-    local_var_req_builder = local_var_req_builder.json(&auth_complete_email_verification_request);
+    local_var_req_builder = local_var_req_builder.json(&auth_identity_complete_email_verification_request);
 
     let local_var_req = local_var_req_builder.build()?;
     let local_var_resp = local_var_client.execute(local_var_req).await?;
@@ -68,14 +68,14 @@ pub async fn auth_identity_complete_email_verification(configuration: &configura
     if !local_var_status.is_client_error() && !local_var_status.is_server_error() {
         serde_json::from_str(&local_var_content).map_err(Error::from)
     } else {
-        let local_var_entity: Option<AuthIdentityCompleteEmailVerificationError> = serde_json::from_str(&local_var_content).ok();
+        let local_var_entity: Option<AuthIdentityEmailCompleteEmailVerificationError> = serde_json::from_str(&local_var_content).ok();
         let local_var_error = ResponseContent { status: local_var_status, content: local_var_content, entity: local_var_entity };
         Err(Error::ResponseError(local_var_error))
     }
 }
 
 /// Starts the verification process for linking an email to your identity.
-pub async fn auth_identity_start_email_verification(configuration: &configuration::Configuration, auth_start_email_verification_request: crate::models::AuthStartEmailVerificationRequest) -> Result<crate::models::AuthStartEmailVerificationResponse, Error<AuthIdentityStartEmailVerificationError>> {
+pub async fn auth_identity_email_start_email_verification(configuration: &configuration::Configuration, auth_identity_start_email_verification_request: crate::models::AuthIdentityStartEmailVerificationRequest) -> Result<crate::models::AuthIdentityStartEmailVerificationResponse, Error<AuthIdentityEmailStartEmailVerificationError>> {
     let local_var_configuration = configuration;
 
     let local_var_client = &local_var_configuration.client;
@@ -89,7 +89,7 @@ pub async fn auth_identity_start_email_verification(configuration: &configuratio
     if let Some(ref local_var_token) = local_var_configuration.bearer_access_token {
         local_var_req_builder = local_var_req_builder.bearer_auth(local_var_token.to_owned());
     };
-    local_var_req_builder = local_var_req_builder.json(&auth_start_email_verification_request);
+    local_var_req_builder = local_var_req_builder.json(&auth_identity_start_email_verification_request);
 
     let local_var_req = local_var_req_builder.build()?;
     let local_var_resp = local_var_client.execute(local_var_req).await?;
@@ -100,7 +100,7 @@ pub async fn auth_identity_start_email_verification(configuration: &configuratio
     if !local_var_status.is_client_error() && !local_var_status.is_server_error() {
         serde_json::from_str(&local_var_content).map_err(Error::from)
     } else {
-        let local_var_entity: Option<AuthIdentityStartEmailVerificationError> = serde_json::from_str(&local_var_content).ok();
+        let local_var_entity: Option<AuthIdentityEmailStartEmailVerificationError> = serde_json::from_str(&local_var_content).ok();
         let local_var_error = ResponseContent { status: local_var_status, content: local_var_content, entity: local_var_entity };
         Err(Error::ResponseError(local_var_error))
     }

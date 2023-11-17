@@ -1,0 +1,22 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/fern-api/fern/main/fern.schema.json
+
+imports:
+  commons: ../../common.yml
+  localCommons: ../common.yml
+  captchaConfig: ../../captcha/config.yml
+
+service:
+  auth: true
+  base-path: /auth/identity/access-token
+  endpoints:
+    completeAccessTokenVerification:
+      path: /complete-verification
+      method: POST
+      docs: Completes the access token verification process.
+      request:
+        body: CompleteAccessTokenVerificationRequest
+
+types:
+  CompleteAccessTokenVerificationRequest:
+    properties:
+      access_token: commons.JWT

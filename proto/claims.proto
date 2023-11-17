@@ -100,6 +100,11 @@ message Entitlement {
 
 	}
 
+	// Token used to login via the CLI.
+	message AccessToken {
+		string name = 1;
+	}
+
 	oneof kind {
 		Refresh refresh = 1;
 		User user = 2;
@@ -115,6 +120,7 @@ message Entitlement {
 		UploadFile upload_file = 12;
 		CloudDeviceLink cloud_device_link = 14;
 		Bypass bypass = 15;
+		AccessToken access_token = 16;
 	}
 
 	reserved 13;
