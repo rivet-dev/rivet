@@ -295,6 +295,7 @@ resource "helm_release" "prometheus" {
 				KubeSchedulerDown = true
 				CPUThrottlingHigh = true
 				KubeJobNotCompleted = true
+				KubeMemoryOvercommit = true
 			}
 		}
 

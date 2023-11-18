@@ -12,7 +12,7 @@ module "eks" {
 	cluster_addons = {
 		kube-proxy = {
 			# https://docs.aws.amazon.com/eks/latest/userguide/managing-kube-proxy.html
-			addon_version = "v1.27.4-eksbuild.2"
+			addon_version = "v1.28.2-eksbuild.2"
 			configuration_values = jsonencode({
 				resources = {
 					limits = {
