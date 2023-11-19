@@ -18,6 +18,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 -   **Bolt** Removed `bolt admin team-dev create`. You can use `bolt admin login` and the hub to create a new dev team
 -   **Infra** Turnstile `CAPTCHA_CAPTCHA_REQUIRED` responses now include a site key
 -   **Infra** Turnstile is no longer configurable by domain (instead configured by Turnstile itself)
+-   **Infra** Fixed /list not returning lobbies unless the `include_state` query parameter was true
 
 ## [23.1.0] - 2023-10-30
 
