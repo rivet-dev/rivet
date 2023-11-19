@@ -680,8 +680,7 @@ async fn fetch_lobby_list(
 							.map(|s| serde_json::from_str::<serde_json::Value>(s.as_str()))
 							.transpose()?,
 					}))
-				}
-				else {
+				} else {
 					tracing::warn!(?lobby, "lobby without player count");
 					Ok(None)
 				}
