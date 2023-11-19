@@ -671,17 +671,18 @@ async fn fetch_lobby_list(
 					.find(|pc| pc.lobby_id == lobby.lobby_id);
 				let state = lobby_states.iter().find(|ls| ls.lobby_id == lobby.lobby_id);
 
-				if let (Some(player_count), Some(state)) = (player_count, state) {
+				if let Some(player_count) = player_count {
 					Ok(Some(FetchLobbyListEntry {
 						lobby: lobby.clone(),
 						player_count: player_count.clone(),
 						state: state
-							.state_json
-							.as_ref()
-							.map(|s| serde_json::from_str::<serde_json::Value>(&s))
+							.and_then(|s| s.state_json.as_ref())
+							.map(|s| serde_json::from_str::<serde_json::Value>(s.as_str()))
 							.transpose()?,
 					}))
-				} else {
+				}
+				else {
+					tracing::warn!(?lobby, "lobby without player count");
 					Ok(None)
 				}
 			})
