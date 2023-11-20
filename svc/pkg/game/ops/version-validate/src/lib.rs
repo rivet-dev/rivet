@@ -262,6 +262,15 @@ async fn handle(
 				]);
 			}
 
+			if captcha_config.turnstile.is_none() && captcha_config.hcaptcha.is_none() {
+				errors.push(util::err_path![
+					"config",
+					"matchmaker",
+					"captcha-meta",
+					"must-have-one",
+				]);
+			}
+
 			if let Some(turnstile) = &captcha_config.turnstile {
 				if turnstile.site_key.is_empty() {
 					errors.push(util::err_path![
