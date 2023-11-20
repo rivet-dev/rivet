@@ -8,9 +8,9 @@ description: "Set up Nix and Bolt"
 #     shell: bash -e {0}
 
 inputs:
-  sscache_aws_secret_access_key:
+  sccache_aws_secret_access_key:
     required: true
-  sscache_aws_access_key_id:
+  sccache_aws_access_key_id:
     required: true
 
 runs:
@@ -34,10 +34,10 @@ runs:
         # Expose sccache config for all future calls of nix-shell, which configures sccache respectively
         echo 'USE_SCCACHE=1' >> $GITHUB_ENV
         echo 'SCCACHE_BUCKET=rivet-sccache' >> $GITHUB_ENV
-        echo 'SCCACHE_ENDPOINT=https://2a94c6a0ced8d35ea63cddc86c2681e7.r2.cloudflarestorage.com/rivet-sscache' >> $GITHUB_ENV
+        echo 'SCCACHE_ENDPOINT=https://2a94c6a0ced8d35ea63cddc86c2681e7.r2.cloudflarestorage.com/rivet-sccache' >> $GITHUB_ENV
         echo 'SCCACHE_REGION=auto' >> $GITHUB_ENV
-        echo 'AWS_SECRET_ACCESS_KEY=${{ inputs.sscache_aws_secret_access_key }}' >> $GITHUB_ENV
-        echo 'AWS_ACCESS_KEY_ID=${{ inputs.sscache_aws_access_key_id }}' >> $GITHUB_ENV
+        echo 'AWS_SECRET_ACCESS_KEY=${{ inputs.sccache_aws_secret_access_key }}' >> $GITHUB_ENV
+        echo 'AWS_ACCESS_KEY_ID=${{ inputs.sccache_aws_access_key_id }}' >> $GITHUB_ENV
 
     # Cache generated Bolt files in order to prevent needless rebuilding
     - name: Bolt Cache

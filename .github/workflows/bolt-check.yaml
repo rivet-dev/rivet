@@ -28,8 +28,8 @@ jobs:
 
       - uses: ./.github/actions/pre-init
         with:
-          sscache_aws_secret_access_key: ${{ secrets.SCCACHE_AWS_SECRET_ACCESS_KEY }}
-          sscache_aws_access_key_id: ${{ secrets.SCCACHE_AWS_ACCESS_KEY_ID }}
+          sccache_aws_secret_access_key: ${{ secrets.SCCACHE_AWS_SECRET_ACCESS_KEY }}
+          sccache_aws_access_key_id: ${{ secrets.SCCACHE_AWS_ACCESS_KEY_ID }}
 
       - name: Bolt Generate Project
         run: nix-shell --pure --run "bolt gen project"
