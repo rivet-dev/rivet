@@ -62,6 +62,28 @@ pub async fn build<'a, T: AsRef<str>>(ctx: &ProjectContext, opts: BuildOpts<'a, 
 		.collect::<Vec<_>>()
 		.join("\n");
 
+	let sccache_env = if let Some(sccache) = &ctx.ns().rust.sccache {
+		formatdoc!(
+			"
+			export RUSTC_WRAPPER=sccache
+			export SCCACHE_BUCKET='{bucket}'
+			export SCCACHE_ENDPOINT='{endpoint}'
+			export SCCACHE_REGION='{region}'
+			export AWS_ACCESS_KEY_ID='{aws_access_key_id}'
+			export AWS_SECRET_ACCESS_KEY='{aws_secret_access_key}'
+			",
+			bucket = sccache.bucket,
+			endpoint = sccache.endpoint,
+			region = sccache.region,
+			aws_access_key_id = ctx.read_secret(&["sccache", "aws_access_key_id"]).await?,
+			aws_secret_access_key = ctx
+				.read_secret(&["sccache", "aws_secret_access_key"])
+				.await?,
+		)
+	} else {
+		String::new()
+	};
+
 	// Generate build script
 	let build_script = formatdoc!(
 		r#"
@@ -72,6 +94,8 @@ pub async fn build<'a, T: AsRef<str>>(ctx: &ProjectContext, opts: BuildOpts<'a, 
 		export RUSTFLAGS="--cfg tokio_unstable"
 		# Used for debugging
 		export CARGO_LOG=cargo::core::compiler::fingerprint=info
+
+		{sccache_env}
 
 		EXIT_CODE=0
 
@@ -111,14 +135,21 @@ pub async fn build<'a, T: AsRef<str>>(ctx: &ProjectContext, opts: BuildOpts<'a, 
 			let build_image_tag = {
 				let image_tag = format!("{repo}build:{source_hash}");
 				let dockerfile_path = gen_path.join(format!("Dockerfile.build"));
+				// TODO: Use --secret to pass sccache credentials instead of the build script.
 				fs::write(
 					&dockerfile_path,
 					formatdoc!(
 						r#"
 							FROM rust:1.72-slim
 
-							RUN apt-get update
-							RUN apt-get install -y protobuf-compiler pkg-config libssl-dev g++
+							RUN apt-get update && apt-get install -y protobuf-compiler pkg-config libssl-dev g++
+
+							RUN apt-get install --yes libpq-dev wget
+							RUN wget https://github.com/mozilla/sccache/releases/download/v0.2.15/sccache-v0.2.15-x86_64-unknown-linux-musl.tar.gz \
+								&& tar xzf sccache-v0.2.15-x86_64-unknown-linux-musl.tar.gz \
+								&& mv sccache-v0.2.15-x86_64-unknown-linux-musl/sccache /usr/local/bin/sccache \
+								&& chmod +x /usr/local/bin/sccache
+
 
 							WORKDIR /usr/rivet
 							COPY . .

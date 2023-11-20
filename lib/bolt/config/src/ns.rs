@@ -502,6 +502,21 @@ impl Default for Traefik {
 pub struct Rust {
 	#[serde(default)]
 	pub build_opt: RustBuildOpt,
+
+	/// Enables using sccache to speed up Docker builds since we cannot use a shared Docker file.
+	///
+	/// Does not support `bolt check`. This will cause `bolt up` to error on single node
+	/// installations if sccache is not installed.
+	#[serde(default)]
+	pub sccache: Option<RustSccache>,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, Default)]
+#[serde(deny_unknown_fields)]
+pub struct RustSccache {
+	pub bucket: String,
+	pub endpoint: String,
+	pub region: String,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, Default)]
