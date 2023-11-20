@@ -103,19 +103,18 @@ pub async fn build<'a, T: AsRef<str>>(ctx: &ProjectContext, opts: BuildOpts<'a, 
 			let gen_path = ctx.gen_path().join("docker");
 			fs::create_dir_all(&gen_path).await?;
 
-			for call in &opts.build_calls {
-				// Build all of the base binaries in batch to optimize build speed
-				//
-				// We could do this as a single multi-stage Docker container, but it requires
-				// re-hashing the entire project every time to check the build layers and can be
-				// faulty sometimes.
-				let build_image_tag = {
-					let image_tag = format!("{repo}build:{source_hash}");
-					let dockerfile_path = gen_path.join(format!("Dockerfile.build"));
-					fs::write(
-						&dockerfile_path,
-						formatdoc!(
-							r#"
+			// Build all of the base binaries in batch to optimize build speed
+			//
+			// We could do this as a single multi-stage Docker container, but it requires
+			// re-hashing the entire project every time to check the build layers and can be
+			// faulty sometimes.
+			let build_image_tag = {
+				let image_tag = format!("{repo}build:{source_hash}");
+				let dockerfile_path = gen_path.join(format!("Dockerfile.build"));
+				fs::write(
+					&dockerfile_path,
+					formatdoc!(
+						r#"
 							FROM rust:1.72-slim
 
 							RUN apt-get update
@@ -125,26 +124,27 @@ pub async fn build<'a, T: AsRef<str>>(ctx: &ProjectContext, opts: BuildOpts<'a, 
 							COPY . .
 							RUN ["sh", "-c", {build_script:?}]
 							"#
-						),
-					)
-					.await?;
+					),
+				)
+				.await?;
 
-					// Build image
-					let mut cmd = Command::new("docker");
-					cmd.current_dir(ctx.path());
-					cmd.arg("build");
-					cmd.arg("-f").arg(dockerfile_path);
-					// Prints plain console output for debugging
-					// cmd.arg("--progress=plain");
-					cmd.arg("-t").arg(&image_tag);
-					cmd.arg(".");
+				// Build image
+				let mut cmd = Command::new("docker");
+				cmd.current_dir(ctx.path());
+				cmd.arg("build");
+				cmd.arg("-f").arg(dockerfile_path);
+				// Prints plain console output for debugging
+				// cmd.arg("--progress=plain");
+				cmd.arg("-t").arg(&image_tag);
+				cmd.arg(".");
 
-					let status = cmd.status().await?;
-					ensure!(status.success());
+				let status = cmd.status().await?;
+				ensure!(status.success());
 
-					image_tag
-				};
+				image_tag
+			};
 
+			for call in &opts.build_calls {
 				for bin in call.bins {
 					let bin = bin.as_ref();
 
