@@ -197,6 +197,22 @@ pub async fn members(
 ) -> GlobalResult<models::GetGroupMembersResponse> {
 	let user_ent = ctx.auth().user(ctx.op_ctx()).await?;
 
+	// Check if user is a member of this team
+	let team_list_res = op!([ctx] user_team_list {
+		user_ids: vec![user_ent.user_id.into()],
+	})
+	.await?;
+
+	let user = unwrap!(team_list_res.users.first());
+	let user_team_ids = user
+		.teams
+		.iter()
+		.map(|t| Ok(unwrap_ref!(t.team_id).as_uuid()))
+		.collect::<GlobalResult<Vec<_>>>()?;
+	let has_team = user_team_ids.iter().any(|team_id| &group_id == team_id);
+
+	ensure_with!(has_team, GROUP_NOT_MEMBER);
+
 	let team_members_res = op!([ctx] team_member_list {
 		team_ids: vec![group_id.into()],
 		limit: query.limit.or(Some(16)),
