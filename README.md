@@ -59,6 +59,8 @@ Below is a simplified architecture diagram of a Rivet cluster.
 
 -   [Project Structure](/docs/getting_started/PROJECT_STRUCTURE.md)
 -   [Developing on Rivet](/docs/getting_started/DEVELOPMENT.md)
+-   [Debugging Rivet](/docs/getting_started/DEBUGGING.md)
+-   [Services](/docs/getting_started/SERVICES.md)
 -   [Error Handling](/docs/libraries/chirp/ERROR_HANDLING.md)
 
 **Philosophy**

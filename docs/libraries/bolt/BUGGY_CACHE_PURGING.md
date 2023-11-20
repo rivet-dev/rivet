@@ -1,5 +1,7 @@
 # Buggy Cache Purging
 
+This document should not affect most users unless finding that the Rust build cache stops working.
+
 Running `bolt up` or `bolt check` may frequently rebuild services if there is a problem with the Bolt generation code. These problems are usually not obvious.
 
 ## Cause
