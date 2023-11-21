@@ -320,7 +320,7 @@ pub async fn gen_svc(exec_ctx: &ExecServiceContext) -> Vec<serde_json::Value> {
 			},
 			"limits": {
 				// Allow oversubscribing memory
-				"memory": format!("{}Mi", ns_service_config.resources.memory * 2),
+				"memory": format!("{}Mi", ns_service_config.resources.memory),
 				"cpu": format!("{}m", ns_service_config.resources.cpu),
 			},
 		})
