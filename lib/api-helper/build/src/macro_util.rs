@@ -216,84 +216,8 @@ pub fn __deserialize_header<T: FromStr + Send, U: Clone + AsHeaderName>(
 }
 
 #[doc(hidden)]
-pub fn __deserialize_optional_cookie<T: FromStr + Send>(
-	request: &Request<Body>,
-	cookie_name: &str,
-) -> GlobalResult<Option<T>> {
-	let expected_domain = util::env::domain_main_api();
-	let cookie = request
-		.headers()
-		// Get the cookie header
-		.typed_get::<Cookie>()
-		.and_then(|cookie_header| {
-			if let Some(expected_domain) = expected_domain {
-				cookie_header
-					.iter()
-					// Find cookie with name
-					.filter(|&(k, _)| k == cookie_name)
-					// Find cookie with the correct domain
-					.filter(|&(k, v)| {
-						// Parse the domain
-						let domain = v
-							.split(";")
-							.map(|x| x.trim())
-							.map(|x| x.to_lowercase())
-							.filter_map(|x| x.strip_prefix("domain=").map(|x| x.to_owned()))
-							.next();
-
-						// Check domain exists
-						if let Some(domain) = domain {
-							// Check domain matches. We do this because there may be cookies on parent
-							// domains. For example, cookies from bar.com would conflict with cookies
-							// from foo.bar.com.
-							//
-							// We have to match both `api.rivet.gg` and `.api.api.rivet.gg`. The
-							// returned cookie does not include a leading dot, but browsers will
-							// add it by default in the response.
-							if domain == expected_domain
-								|| domain
-									.strip_prefix(".")
-									.map_or(false, |x| x == expected_domain)
-							{
-								true
-							} else {
-								tracing::warn!(
-									?k,
-									?v,
-									?domain,
-									?expected_domain,
-									"cookie domain does not match"
-								);
-								false
-							}
-						} else {
-							tracing::warn!(?k, ?v, "cookie domain not provided");
-							false
-						}
-					})
-					.map(|x| x.1.to_owned())
-					.next()
-			} else {
-				cookie_header.get(cookie_name).map(|x| x.to_owned())
-			}
-		});
-
-	if let Some(cookie) = cookie {
-		Ok(Some(T::from_str(cookie.as_str()).map_err(|_| {
-			err_code!(API_BAD_COOKIE, cookie = cookie_name)
-		})?))
-	} else {
-		Ok(None)
-	}
-}
-
-#[doc(hidden)]
-pub fn __deserialize_cookie<T: FromStr + Send>(
-	request: &Request<Body>,
-	cookie_name: &str,
-) -> GlobalResult<T> {
-	__deserialize_optional_cookie::<T>(request, cookie_name)?
-		.ok_or_else(|| err_code!(API_MISSING_COOKIE, cookie = cookie_name))
+pub fn __deserialize_cookies(request: &Request<Body>) -> Option<Cookie> {
+	request.headers().typed_get::<Cookie>()
 }
 
 #[doc(hidden)]

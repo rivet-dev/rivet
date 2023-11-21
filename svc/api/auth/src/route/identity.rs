@@ -1,5 +1,4 @@
 use std::collections::HashMap;
-use std::str::FromStr;
 
 use api_helper::ctx::Ctx;
 use email_verification::complete::response::Status as StatusProto;
@@ -38,7 +37,7 @@ pub async fn start(
 						turnstile: Some(backend::captcha::captcha_config::Turnstile {
 							// Not needed for captcha verification
 							site_key: "".to_string(),
-							secret_key: secret_key,
+							secret_key,
 						}),
 						..Default::default()
 					}),
@@ -62,9 +61,7 @@ pub async fn start(
 
 	let verification_id = unwrap_ref!(res.verification_id).as_uuid();
 
-	Ok(models::AuthIdentityStartEmailVerificationResponse {
-		verification_id: verification_id,
-	})
+	Ok(models::AuthIdentityStartEmailVerificationResponse { verification_id })
 }
 
 // MARK: POST /identity/email/complete-verification
