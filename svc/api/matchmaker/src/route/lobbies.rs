@@ -157,7 +157,7 @@ pub async fn find(
 		for (lgc, _) in &lobby_groups {
 			ensure_with!(
 				lgc.taggable,
-				MATCHMAKER_GAME_MODE_TAGS_DISABLED,
+				MATCHMAKER_TAGS_DISABLED,
 				game_mode = lgc.name_id
 			);
 		}
@@ -309,7 +309,7 @@ pub async fn create(
 
 		ensure_with!(
 			lobby_group.taggable,
-			MATCHMAKER_GAME_MODE_TAGS_DISABLED,
+			MATCHMAKER_TAGS_DISABLED,
 			game_mode = lobby_group.name_id
 		);
 	}
