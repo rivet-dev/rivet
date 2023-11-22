@@ -20,6 +20,8 @@ types:
         type: optional<GameModeRuntimeDocker>
       listable:
         type: optional<boolean>
+      allow_dynamic_player_count:
+        type: optional<boolean>
 
       actions:
         type: optional<GameModeActions>

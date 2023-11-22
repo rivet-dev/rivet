@@ -48,6 +48,7 @@ message LobbyGroup {
 	uint32 max_players_direct = 103;
 	uint32 max_players_party = 104;
 	bool listable = 105;
+	bool allow_dynamic_player_count = 107;
 
 	LobbyRuntime runtime = 201;
 

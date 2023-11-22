@@ -91,6 +91,7 @@ async fn handle(
 						max_players_direct: 10,
 						max_players_party: 12,
 						listable: true,
+						allow_dynamic_player_count: false,
 
 						runtime: Some(
 							backend::matchmaker::lobby_runtime::Docker {
