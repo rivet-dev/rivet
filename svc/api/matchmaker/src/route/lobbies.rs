@@ -74,6 +74,7 @@ pub async fn join(
 		find_query,
 		None,
 		body.captcha,
+		&HashMap::new(),
 		VerificationType::UserData(body.verification_data.flatten()),
 	)
 	.await?;
@@ -142,6 +143,25 @@ pub async fn find(
 			))
 		})
 		.collect::<GlobalResult<Vec<_>>>()?;
+
+	// Validate that each lobby is taggable
+	let tags = body.tags.unwrap_or_default();
+	if !tags.is_empty() {
+		ensure_with!(tags.len() <= 8, MATCHMAKER_TOO_MANY_TAGS);
+
+		for (tag_name, tag) in &tags {
+			ensure_with!(tag_name.len() <= 128, MATCHMAKER_TAG_NAME_TOO_LONG);
+			ensure_with!(tag.len() <= 512, MATCHMAKER_TAG_TOO_LONG);
+		}
+
+		for (lgc, _) in &lobby_groups {
+			ensure_with!(
+				lgc.taggable,
+				MATCHMAKER_GAME_MODE_TAGS_DISABLED,
+				game_mode = lgc.name_id
+			);
+		}
+	}
 
 	// Resolve region IDs
 	let region_ids = resolve_region_ids(&ctx, coords, body.regions.as_ref(), &lobby_groups).await?;
@@ -218,6 +238,7 @@ pub async fn find(
 		find_query,
 		None,
 		body.captcha,
+		&tags,
 		VerificationType::UserData(body.verification_data.flatten()),
 	)
 	.await?;
@@ -276,6 +297,23 @@ pub async fn create(
 		MATCHMAKER_GAME_MODE_NOT_FOUND
 	);
 
+	// Validate that each lobby is taggable
+	let tags = body.tags.unwrap_or_default();
+	if !tags.is_empty() {
+		ensure_with!(tags.len() <= 8, MATCHMAKER_TOO_MANY_TAGS);
+
+		for (tag_name, tag) in &tags {
+			ensure_with!(tag_name.len() <= 128, MATCHMAKER_TAG_NAME_TOO_LONG);
+			ensure_with!(tag.len() <= 512, MATCHMAKER_TAG_TOO_LONG);
+		}
+
+		ensure_with!(
+			lobby_group.taggable,
+			MATCHMAKER_GAME_MODE_TAGS_DISABLED,
+			game_mode = lobby_group.name_id
+		);
+	}
+
 	let publicity = match body.publicity {
 		Some(publicity) => ApiInto::api_into(publicity),
 		// Default publicity to public if enabled, otherwise private
@@ -304,6 +342,7 @@ pub async fn create(
 			namespace_id: ns_data.namespace_id,
 			user_id,
 			client_info: vec![ctx.client_info()],
+			tags: &tags,
 
 			lobby_groups: &[lobby_group.clone()],
 			lobby_group_meta: &[lobby_group_meta.clone()],
@@ -374,6 +413,7 @@ pub async fn create(
 		find_query,
 		Some(version_config.clone()),
 		body.captcha,
+		&tags,
 		// Bypassing join verification because this user created the lobby (create verification
 		// already happened)
 		VerificationType::Bypass,
@@ -786,6 +826,7 @@ async fn find_inner(
 	query: mm::msg::lobby_find::message::Query,
 	version_config: Option<backend::matchmaker::VersionConfig>,
 	captcha: Option<Box<models::CaptchaConfig>>,
+	tags: &HashMap<String, String>,
 	verification: VerificationType,
 ) -> GlobalResult<FindResponse> {
 	let (version_config, user_id) = tokio::try_join!(
@@ -921,14 +962,15 @@ async fn find_inner(
 		query: Some(query),
 		user_id: user_id.map(Into::into),
 		verification_data_json: if let VerificationType::UserData(verification_data) = &verification {
-				verification_data
-					.as_ref()
-					.map(|data| serde_json::to_string(&data))
-					.transpose()?
-			} else {
-				None
-			},
+			verification_data
+			.as_ref()
+			.map(|data| serde_json::to_string(&data))
+			.transpose()?
+		} else {
+			None
+		},
 		bypass_verification: matches!(verification, VerificationType::Bypass),
+		tags: tags.clone(),
 	})
 	.await?;
 	let lobby_id = match find_res

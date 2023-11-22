@@ -219,6 +219,7 @@ async fn remove_from_redis(
 	let mut pipe = redis::pipe();
 	pipe.atomic()
 		.unlink(util_mm::key::lobby_config(lobby_id))
+		.unlink(util_mm::key::lobby_tags(lobby_id))
 		.zrem(
 			util_mm::key::ns_lobby_ids(namespace_id),
 			lobby_id.to_string(),

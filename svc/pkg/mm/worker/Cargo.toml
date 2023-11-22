@@ -13,6 +13,7 @@ csv = "1.1"
 heck = "0.3"
 http = "0.2"
 lazy_static = "1.4.0"
+maplit = "1.0"
 nomad-client = "0.0.9"
 nomad-util = { path = "../../../../lib/nomad-util" }
 redis-util = { path = "../../../../lib/redis-util" }

@@ -18,6 +18,7 @@ struct LobbyGroup {
 	max_players_direct: i64,
 	max_players_party: i64,
 	listable: bool,
+	taggable: bool,
 
 	runtime: Vec<u8>,
 	runtime_meta: Vec<u8>,
@@ -106,7 +107,8 @@ async fn fetch_versions(
 			SELECT 
 				lobby_group_id, version_id,
 				name_id,
-				max_players_normal, max_players_direct, max_players_party, listable,
+				max_players_normal, max_players_direct, max_players_party,
+				listable, taggable,
 				runtime, runtime_meta,
 				find_config, join_config, create_config
 			FROM db_mm_config.lobby_groups
@@ -221,6 +223,7 @@ async fn fetch_versions(
 									max_players_direct: lg.max_players_direct as u32,
 									max_players_party: lg.max_players_party as u32,
 									listable: lg.listable,
+									taggable: lg.taggable,
 
 									runtime: Some(runtime),
 

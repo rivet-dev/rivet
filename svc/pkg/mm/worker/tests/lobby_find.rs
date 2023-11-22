@@ -1,106 +1,11 @@
 use std::collections::HashMap;
 
 use chirp_worker::prelude::*;
+use maplit::hashmap;
 use proto::backend::{self, pkg::*};
 
 // TODO: Test player limits
 // TODO: Test all failure cases
-
-struct TestLobbyGroup {
-	lobby_group_id: Uuid,
-	#[allow(unused)]
-	version_id: Uuid,
-	namespace_id: Uuid,
-	region_id: Uuid,
-}
-
-async fn create_lobby_group(ctx: &TestCtx, image: Option<faker::build::Image>) -> TestLobbyGroup {
-	let region_res = op!([ctx] faker_region {}).await.unwrap();
-	let region_id = region_res.region_id.as_ref().unwrap().as_uuid();
-
-	let game_res = op!([ctx] faker_game {
-		..Default::default()
-	})
-	.await
-	.unwrap();
-	let namespace_id = game_res.namespace_ids.first().unwrap().as_uuid();
-
-	let build_res = op!([ctx] faker_build {
-		game_id: game_res.game_id,
-		image: image.unwrap_or(faker::build::Image::MmLobbyAutoReady) as i32,
-	})
-	.await
-	.unwrap();
-
-	let game_version_res = op!([ctx] faker_game_version {
-		game_id: game_res.game_id,
-		override_lobby_groups: Some(faker::game_version::request::OverrideLobbyGroups {
-			lobby_groups: vec![backend::matchmaker::LobbyGroup {
-				name_id: "faker-lg".into(),
-
-				regions: vec![backend::matchmaker::lobby_group::Region {
-					region_id: region_res.region_id,
-					tier_name_id: util_mm::test::TIER_NAME_ID.to_owned(),
-					idle_lobbies: None,
-				}],
-				max_players_normal: 8,
-				max_players_direct: 10,
-				max_players_party: 12,
-				listable: true,
-
-				runtime: Some(backend::matchmaker::lobby_runtime::Docker {
-					// We can't use `curlimages/curl` here because it doesn't allow for
-					// variable interpolation, so we need a container that has a proper shell
-					// that we can inject variables with.
-					build_id: build_res.build_id,
-					args: vec![],
-					env_vars: vec![backend::matchmaker::lobby_runtime::EnvVar {
-						key: "HELLO".into(),
-						value: "world".into(),
-					}],
-					network_mode: backend::matchmaker::lobby_runtime::NetworkMode::Bridge as i32,
-					ports: vec![backend::matchmaker::lobby_runtime::Port {
-						label: "1234".into(),
-						target_port: Some(1234),
-						port_range: None,
-						proxy_protocol: backend::matchmaker::lobby_runtime::ProxyProtocol::Https as i32,
-						proxy_kind: backend::matchmaker::lobby_runtime::ProxyKind::GameGuard as i32,
-					}],
-				}.into()),
-
-				actions: None,
-			}],
-		}),
-		..Default::default()
-	})
-	.await
-	.unwrap();
-	let version_id = game_version_res.version_id.as_ref().unwrap().as_uuid();
-
-	let version_get_res = op!([ctx] mm_config_version_get {
-		version_ids: vec![version_id.into()],
-	})
-	.await
-	.unwrap();
-	let version = version_get_res.versions.first().unwrap();
-	let config_meta = version.config_meta.as_ref().unwrap();
-	let lobby_group = config_meta.lobby_groups.first().unwrap();
-	let lobby_group_id = lobby_group.lobby_group_id.as_ref().unwrap().as_uuid();
-
-	op!([ctx] game_namespace_version_set {
-		namespace_id: Some(namespace_id.into()),
-		version_id: Some(version_id.into()),
-	})
-	.await
-	.unwrap();
-
-	TestLobbyGroup {
-		lobby_group_id,
-		version_id,
-		namespace_id,
-		region_id,
-	}
-}
 
 #[worker_test]
 async fn direct(ctx: TestCtx) {
@@ -127,6 +32,7 @@ async fn direct(ctx: TestCtx) {
 			user_id: None,
 			verification_data_json: None,
 			bypass_verification: false,
+			tags: HashMap::new(),
 		},
 	)
 	.await
@@ -165,12 +71,13 @@ async fn lobby_group_existing(ctx: TestCtx) {
 			user_id: None,
 			verification_data_json: None,
 			bypass_verification: false,
+			tags: HashMap::new(),
 		},
 	)
 	.await
 	.unwrap();
 
-	assert_eq!(lobby_res.lobby_id, find_res.lobby_id, "fond wrong lobby");
+	assert_eq!(lobby_res.lobby_id, find_res.lobby_id, "found wrong lobby");
 }
 
 #[worker_test]
@@ -206,6 +113,7 @@ async fn direct_closed(ctx: TestCtx) {
 			user_id: None,
 			verification_data_json: None,
 			bypass_verification: false,
+			tags: HashMap::new(),
 		},
 	)
 	.await
@@ -248,6 +156,7 @@ async fn lobby_group_closed(ctx: TestCtx) {
 			user_id: None,
 			verification_data_json: None,
 			bypass_verification: false,
+			tags: HashMap::new(),
 		},
 	)
 	.await
@@ -281,6 +190,7 @@ async fn lobby_group_closed(ctx: TestCtx) {
 			user_id: None,
 			verification_data_json: None,
 			bypass_verification: false,
+			tags: HashMap::new(),
 		},
 	)
 	.await
@@ -326,6 +236,7 @@ async fn lobby_group_closed_auto_create(ctx: TestCtx) {
 			user_id: None,
 			verification_data_json: None,
 			bypass_verification: false,
+			tags: HashMap::new(),
 		},
 	)
 	.await
@@ -359,6 +270,7 @@ async fn lobby_crash_immediate(ctx: TestCtx) {
 			user_id: None,
 			verification_data_json: None,
 			bypass_verification: false,
+			tags: HashMap::new(),
 		},
 	)
 	.await
@@ -421,6 +333,7 @@ async fn max_players_per_client(ctx: TestCtx) {
 				user_id: None,
 				verification_data_json: None,
 				bypass_verification: false,
+				tags: HashMap::new(),
 			},
 		)
 		.await;
@@ -462,6 +375,7 @@ async fn lobby_group_auto_create(ctx: TestCtx) {
 			user_id: None,
 			verification_data_json: None,
 			bypass_verification: false,
+			tags: HashMap::new(),
 		},
 	)
 	.await
@@ -491,6 +405,7 @@ async fn lobby_group_no_auto_create(ctx: TestCtx) {
 			user_id: None,
 			verification_data_json: None,
 			bypass_verification: false,
+			tags: HashMap::new(),
 		},
 	)
 	.await
@@ -525,6 +440,7 @@ async fn join_disabled(ctx: TestCtx) {
 			user_id: None,
 			verification_data_json: None,
 			bypass_verification: false,
+			tags: HashMap::new(),
 		},
 	)
 	.await
@@ -560,6 +476,7 @@ async fn guest_verification(ctx: TestCtx) {
 			user_id: None,
 			verification_data_json: None,
 			bypass_verification: false,
+			tags: HashMap::new(),
 		},
 	)
 	.await
@@ -583,6 +500,7 @@ async fn guest_verification(ctx: TestCtx) {
 			user_id: Some(user_id),
 			verification_data_json: None,
 			bypass_verification: false,
+			tags: HashMap::new(),
 		},
 	)
 	.await
@@ -618,6 +536,7 @@ async fn registered_verification(ctx: TestCtx) {
 			user_id: None,
 			verification_data_json: None,
 			bypass_verification: false,
+			tags: HashMap::new(),
 		},
 	)
 	.await
@@ -641,6 +560,7 @@ async fn registered_verification(ctx: TestCtx) {
 			user_id: Some(user_id),
 			verification_data_json: None,
 			bypass_verification: false,
+			tags: HashMap::new(),
 		},
 	)
 	.await
@@ -678,6 +598,7 @@ async fn registered_verification(ctx: TestCtx) {
 			user_id: Some(user_id),
 			verification_data_json: None,
 			bypass_verification: false,
+			tags: HashMap::new(),
 		},
 	)
 	.await
@@ -712,6 +633,7 @@ async fn bypass_verification(ctx: TestCtx) {
 			user_id: None,
 			verification_data_json: None,
 			bypass_verification: true,
+			tags: HashMap::new(),
 		},
 	)
 	.await
@@ -751,6 +673,7 @@ async fn external_verification(ctx: TestCtx) {
 			user_id: None,
 			verification_data_json: None,
 			bypass_verification: false,
+			tags: HashMap::new(),
 		},
 	)
 	.await
@@ -785,10 +708,148 @@ async fn external_verification(ctx: TestCtx) {
 			user_id: Some(user_id),
 			verification_data_json: None,
 			bypass_verification: false,
+			tags: HashMap::new(),
 		},
 	)
 	.await
 	.unwrap();
+}
+
+#[worker_test]
+async fn tagged(ctx: TestCtx) {
+	if !util::feature::job_run() {
+		return;
+	}
+
+	let lobby_res = op!([ctx] faker_mm_lobby {
+		..Default::default()
+	})
+	.await
+	.unwrap();
+
+	let find_res1 = find(
+		&ctx,
+		FindRequest {
+			namespace_id: lobby_res.namespace_id.as_ref().unwrap().as_uuid(),
+			players: gen_players(1),
+			query: mm::msg::lobby_find::message::Query::LobbyGroup(
+				backend::matchmaker::query::LobbyGroup {
+					lobby_group_ids: vec![lobby_res.lobby_group_id.unwrap()],
+					region_ids: vec![lobby_res.region_id.unwrap()],
+					auto_create: Some(backend::matchmaker::query::AutoCreate {
+						lobby_group_id: lobby_res.lobby_group_id,
+						region_id: lobby_res.region_id,
+					}),
+				},
+			),
+			user_id: None,
+			verification_data_json: None,
+			bypass_verification: false,
+			tags: hashmap! {
+				"mytag".to_string() => "1234".to_string(),
+			},
+		},
+	)
+	.await
+	.unwrap();
+
+	let find_res2 = find(
+		&ctx,
+		FindRequest {
+			namespace_id: lobby_res.namespace_id.as_ref().unwrap().as_uuid(),
+			players: gen_players(1),
+			query: mm::msg::lobby_find::message::Query::LobbyGroup(
+				backend::matchmaker::query::LobbyGroup {
+					lobby_group_ids: vec![lobby_res.lobby_group_id.unwrap()],
+					region_ids: vec![lobby_res.region_id.unwrap()],
+					auto_create: Some(backend::matchmaker::query::AutoCreate {
+						lobby_group_id: lobby_res.lobby_group_id,
+						region_id: lobby_res.region_id,
+					}),
+				},
+			),
+			user_id: None,
+			verification_data_json: None,
+			bypass_verification: false,
+			tags: hashmap! {
+				"mytag".to_string() => "1234".to_string(),
+			},
+		},
+	)
+	.await
+	.unwrap();
+
+	assert_eq!(find_res1.lobby_id, find_res2.lobby_id, "found wrong lobby");
+
+	let find_res3 = find(
+		&ctx,
+		FindRequest {
+			namespace_id: lobby_res.namespace_id.as_ref().unwrap().as_uuid(),
+			players: gen_players(1),
+			query: mm::msg::lobby_find::message::Query::LobbyGroup(
+				backend::matchmaker::query::LobbyGroup {
+					lobby_group_ids: vec![lobby_res.lobby_group_id.unwrap()],
+					region_ids: vec![lobby_res.region_id.unwrap()],
+					auto_create: Some(backend::matchmaker::query::AutoCreate {
+						lobby_group_id: lobby_res.lobby_group_id,
+						region_id: lobby_res.region_id,
+					}),
+				},
+			),
+			user_id: None,
+			verification_data_json: None,
+			bypass_verification: false,
+			tags: hashmap! {
+				"mytag".to_string() => "1234".to_string(),
+				"othertag".to_string() => "foobar".to_string(),
+			},
+		},
+	)
+	.await
+	.unwrap();
+
+	assert_ne!(find_res2.lobby_id, find_res3.lobby_id, "found wrong lobby");
+}
+
+#[worker_test]
+async fn tagged_no_auto_create(ctx: TestCtx) {
+	if !util::feature::job_run() {
+		return;
+	}
+
+	let lobby_res = op!([ctx] faker_mm_lobby {
+		..Default::default()
+	})
+	.await
+	.unwrap();
+
+	let err = find(
+		&ctx,
+		FindRequest {
+			namespace_id: lobby_res.namespace_id.as_ref().unwrap().as_uuid(),
+			players: gen_players(1),
+			query: mm::msg::lobby_find::message::Query::LobbyGroup(
+				backend::matchmaker::query::LobbyGroup {
+					lobby_group_ids: vec![lobby_res.lobby_group_id.unwrap()],
+					region_ids: vec![lobby_res.region_id.unwrap()],
+					auto_create: None,
+				},
+			),
+			user_id: None,
+			verification_data_json: None,
+			bypass_verification: false,
+			tags: hashmap! {
+				"mytag".to_string() => "1234".to_string(),
+			},
+		},
+	)
+	.await
+	.unwrap_err();
+
+	assert_eq!(
+		mm::msg::lobby_find_fail::ErrorCode::NoAvailableLobbies as i32,
+		err.error_code
+	);
 }
 
 fn gen_players(count: usize) -> Vec<mm::msg::lobby_find::Player> {
@@ -855,6 +916,7 @@ async fn gen_verification_lobby(
 				max_players_direct: 10,
 				max_players_party: 12,
 				listable: true,
+				taggable: false,
 
 				runtime: Some(
 					backend::matchmaker::lobby_runtime::Docker {
@@ -947,6 +1009,7 @@ async fn gen_disabled_lobby(ctx: &TestCtx) -> (Uuid, Uuid) {
 				max_players_direct: 10,
 				max_players_party: 12,
 				listable: true,
+				taggable: false,
 
 				runtime: Some(
 					backend::matchmaker::lobby_runtime::Docker {
@@ -994,6 +1057,104 @@ async fn gen_disabled_lobby(ctx: &TestCtx) -> (Uuid, Uuid) {
 	)
 }
 
+struct TestLobbyGroup {
+	lobby_group_id: Uuid,
+	#[allow(unused)]
+	version_id: Uuid,
+	namespace_id: Uuid,
+	region_id: Uuid,
+}
+
+async fn create_lobby_group(ctx: &TestCtx, image: Option<faker::build::Image>) -> TestLobbyGroup {
+	let region_res = op!([ctx] faker_region {}).await.unwrap();
+	let region_id = region_res.region_id.as_ref().unwrap().as_uuid();
+
+	let game_res = op!([ctx] faker_game {
+		..Default::default()
+	})
+	.await
+	.unwrap();
+	let namespace_id = game_res.namespace_ids.first().unwrap().as_uuid();
+
+	let build_res = op!([ctx] faker_build {
+		game_id: game_res.game_id,
+		image: image.unwrap_or(faker::build::Image::MmLobbyAutoReady) as i32,
+	})
+	.await
+	.unwrap();
+
+	let game_version_res = op!([ctx] faker_game_version {
+		game_id: game_res.game_id,
+		override_lobby_groups: Some(faker::game_version::request::OverrideLobbyGroups {
+			lobby_groups: vec![backend::matchmaker::LobbyGroup {
+				name_id: "faker-lg".into(),
+
+				regions: vec![backend::matchmaker::lobby_group::Region {
+					region_id: region_res.region_id,
+					tier_name_id: util_mm::test::TIER_NAME_ID.to_owned(),
+					idle_lobbies: None,
+				}],
+				max_players_normal: 8,
+				max_players_direct: 10,
+				max_players_party: 12,
+				listable: true,
+				taggable: false,
+
+				runtime: Some(backend::matchmaker::lobby_runtime::Docker {
+					// We can't use `curlimages/curl` here because it doesn't allow for
+					// variable interpolation, so we need a container that has a proper shell
+					// that we can inject variables with.
+					build_id: build_res.build_id,
+					args: vec![],
+					env_vars: vec![backend::matchmaker::lobby_runtime::EnvVar {
+						key: "HELLO".into(),
+						value: "world".into(),
+					}],
+					network_mode: backend::matchmaker::lobby_runtime::NetworkMode::Bridge as i32,
+					ports: vec![backend::matchmaker::lobby_runtime::Port {
+						label: "1234".into(),
+						target_port: Some(1234),
+						port_range: None,
+						proxy_protocol: backend::matchmaker::lobby_runtime::ProxyProtocol::Https as i32,
+						proxy_kind: backend::matchmaker::lobby_runtime::ProxyKind::GameGuard as i32,
+					}],
+				}.into()),
+
+				actions: None,
+			}],
+		}),
+		..Default::default()
+	})
+	.await
+	.unwrap();
+	let version_id = game_version_res.version_id.as_ref().unwrap().as_uuid();
+
+	let version_get_res = op!([ctx] mm_config_version_get {
+		version_ids: vec![version_id.into()],
+	})
+	.await
+	.unwrap();
+	let version = version_get_res.versions.first().unwrap();
+	let config_meta = version.config_meta.as_ref().unwrap();
+	let lobby_group = config_meta.lobby_groups.first().unwrap();
+	let lobby_group_id = lobby_group.lobby_group_id.as_ref().unwrap().as_uuid();
+
+	op!([ctx] game_namespace_version_set {
+		namespace_id: Some(namespace_id.into()),
+		version_id: Some(version_id.into()),
+	})
+	.await
+	.unwrap();
+
+	TestLobbyGroup {
+		lobby_group_id,
+		version_id,
+		namespace_id,
+		region_id,
+	}
+}
+
+// TODO: Split into multiple functions
 struct FindRequest {
 	namespace_id: Uuid,
 	players: Vec<mm::msg::lobby_find::Player>,
@@ -1001,6 +1162,7 @@ struct FindRequest {
 	user_id: Option<Uuid>,
 	verification_data_json: Option<String>,
 	bypass_verification: bool,
+	tags: HashMap<String, String>,
 }
 
 async fn find(
@@ -1021,6 +1183,7 @@ async fn find(
 		user_id: req.user_id.map(Into::into),
 		verification_data_json: req.verification_data_json,
 		bypass_verification: req.bypass_verification,
+		tags: req.tags,
 	})
 	.await
 	.unwrap()

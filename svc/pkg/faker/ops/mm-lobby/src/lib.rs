@@ -79,6 +79,7 @@ async fn handle(
 					max_players_direct,
 					max_players_party,
 					listable: true,
+					taggable: true,
 
 					runtime: Some(backend::matchmaker::lobby_runtime::Docker {
 						build_id: build_res.build_id,

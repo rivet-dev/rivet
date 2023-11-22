@@ -11,6 +11,12 @@ local key_find_query_player_ids = KEYS[2]
 local key_ns_player_ids = KEYS[3]
 local key_player_unregistered = KEYS[4]
 
+-- Extract names into list
+local lobby_tag_names = {}
+for tag_name, _ in pairs(query.tags) do
+	lobby_tag_names[#lobby_tag_names + 1] = tag_name
+end
+
 -- MARK: Find
 local lobby_id = nil
 local lobby_auto_created = false
@@ -43,7 +49,7 @@ if query.kind.direct ~= nil then
 
 	-- Validate player count
 	local player_count = redis.call('ZCARD', key_direct_lobby_player_ids)
-	if player_count + table.getn(query.players) > max_player_count then
+	if player_count + #query.players > max_player_count then
 		return { 'err', 'LOBBY_FULL' }
 	end
 
@@ -64,16 +70,36 @@ elseif query.kind.lobby_group ~= nil then
 		-- instead of `max_players_party` because `max_players_party` is
 		-- only relevant when joining a lobby with the exact lobby ID (i.e.
 		-- where `max_players_direct` would normally be used).
-		local lobby = redis.call('ZRANGEBYSCORE', key_available_spots, table.getn(query.players), '+inf', 'WITHSCORES',
+		local lobby = redis.call('ZRANGEBYSCORE', key_available_spots, #query.players, '+inf', 'WITHSCORES',
 			'LIMIT', '0', '1')
-		if table.getn(lobby) > 0 then
+		if #lobby > 0 then
 			local lobby_id = lobby[1]
 			local available_spots = tonumber(lobby[2])
+			local correct_tags = 0
 
-			-- Set as best lobby if no lobby selected or lobby is more full
-			if best_lobby_id == nil or available_spots < best_available_spots then
-				best_lobby_id = lobby_id
-				best_available_spots = available_spots
+			-- Verify tags
+			if #lobby_tag_names > 0 then
+				-- Fetch specified lobby tags
+				local key_lobby_tags = '{global}:mm:lobby:' .. lobby_id .. ':tags'
+				local lobby_tags = redis.call('HMGET', key_lobby_tags, unpack(lobby_tag_names))
+				
+				-- Check that all tags are correct
+				for tag_idx, tag in ipairs(lobby_tags) do
+					if query.tags[lobby_tag_names[tag_idx]] ~= tag then
+						break
+					end
+
+					correct_tags = correct_tags + 1
+				end
+			end
+
+			-- Check if the correct number of tags have been parsed
+			if correct_tags == #lobby_tag_names then
+				-- Set as best lobby if no lobby selected or lobby is more full
+				if best_lobby_id == nil or available_spots < best_available_spots then
+					best_lobby_id = lobby_id
+					best_available_spots = available_spots
+				end
 			end
 		end
 	end
@@ -90,9 +116,14 @@ elseif query.kind.lobby_group ~= nil then
 		local key_auto_create_ns_lobby_ids = KEYS[query_kind_key_idx + 3]
 		local key_auto_create_lobby_available_spots_normal = KEYS[query_kind_key_idx + 4]
 		local key_auto_create_lobby_available_spots_party = KEYS[query_kind_key_idx + 5]
+		local key_auto_create_lobby_tags = KEYS[query_kind_key_idx + 6]
 
 		for k, v in pairs(auto_create.lobby_config) do
 			redis.call('HSET', key_auto_create_lobby_config, k, tostring(v))
+		end
+
+		for k, v in pairs(query.tags) do
+			redis.call('HSET', key_auto_create_lobby_tags, k, v)
 		end
 
 		redis.call('ZADD', key_auto_create_ns_lobby_ids, ts, auto_create.lobby_id)

@@ -2098,6 +2098,8 @@ components:
           additionalProperties:
             $ref: '#/components/schemas/CloudVersionMatchmakerGameModeRegion'
           type: object
+        taggable:
+          type: boolean
         tier:
           type: string
       type: object
@@ -11485,6 +11487,10 @@ paths:
                   $ref: '#/components/schemas/MatchmakerCustomLobbyPublicity'
                 region:
                   type: string
+                tags:
+                  additionalProperties:
+                    type: string
+                  type: object
                 verification_data: {}
               required:
               - game_mode
@@ -11564,6 +11570,10 @@ paths:
                   items:
                     type: string
                   type: array
+                tags:
+                  additionalProperties:
+                    type: string
+                  type: object
                 verification_data: {}
               required:
               - game_modes

@@ -63,6 +63,7 @@ service:
             game_modes: list<string>
             regions: optional<list<string>>
             prevent_auto_create_lobby: optional<boolean>
+            tags: optional<map<string, string>>
             player_count: optional<integer>
             captcha: optional<captchaConfig.Config>
             verification_data: optional<unknown>
@@ -96,6 +97,7 @@ service:
             game_mode: string
             region: optional<string>
             publicity: optional<localCommons.CustomLobbyPublicity>
+            tags: optional<map<string, string>>
             player_count: optional<integer>
             lobby_config: optional<unknown>
             captcha: optional<captchaConfig.Config>

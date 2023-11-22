@@ -120,6 +120,7 @@ impl Ctx {
 					max_players_direct: 10,
 					max_players_party: 12,
 					listable: true,
+					taggable: false,
 
 					runtime: Some(backend::matchmaker::lobby_runtime::Docker {
 						build_id: build_res.build_id,
