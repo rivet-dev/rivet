@@ -12,6 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 -   **Bolt** Added `bolt admin login` to allow for logging in without an email provider setup. Automatically turns the user into an admin for immediate access to the developer dashboard.
 -   **Bolt** Fixed `bolt db migrate create`
 -   **Infra** Added `user-admin-set` service for creating an admin user
+-   **Infra** Added lobby tags system for filtering lobbies in /find
 
 ### Changed
 
