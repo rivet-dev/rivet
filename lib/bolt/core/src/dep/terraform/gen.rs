@@ -395,6 +395,21 @@ async fn vars(ctx: &ProjectContext) {
 		}
 	}
 
+	if dep::terraform::cli::has_applied(ctx, "clickhouse_k8s").await
+		|| dep::terraform::cli::has_applied(ctx, "clickhouse_managed").await
+	{
+		let clickhouse = dep::terraform::output::read_clickhouse(ctx).await;
+		vars.insert("clickhouse_host".into(), json!(*clickhouse.host));
+		vars.insert(
+			"clickhouse_port_https".into(),
+			json!(*clickhouse.port_https),
+		);
+		vars.insert(
+			"clickhouse_port_native_secure".into(),
+			json!(*clickhouse.port_native_secure),
+		);
+	}
+
 	// Redis services
 	{
 		let mut redis_dbs = HashMap::new();

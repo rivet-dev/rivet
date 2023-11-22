@@ -423,7 +423,7 @@ pub async fn generate(project_path: &Path, ns_id: &str) -> Result<()> {
 		.await?;
 
 	// MARK: ClickHouse
-	for user in ["default", "bolt", "chirp", "grafana"] {
+	for user in ["default", "bolt", "chirp", "grafana", "vector"] {
 		generator
 			.generate_secret(&["clickhouse", "users", user, "password"], || async {
 				Ok(value(generate_clickhouse_password(32)))
