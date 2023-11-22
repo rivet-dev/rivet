@@ -1,4 +1,4 @@
-version="0.33.0"
+version="0.34.1"
 
 # Create vector user
 if ! id -u "vector" &>/dev/null; then
@@ -12,7 +12,7 @@ tar zxvf "/tmp/vector_${version}.tar.gz" -C "/opt/vector-${version}"
 install -o vector -g vector "/opt/vector-${version}/vector-x86_64-unknown-linux-gnu/bin/vector" /usr/bin/
 
 # Check vector version
-if vector --version | grep 'vector 0.33.0'; then
+if vector --version | grep "vector ${version}"; then
 	echo "Successfully installed Vector ${version}"
 else
 	echo "Vector version mismatch"

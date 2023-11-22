@@ -129,12 +129,12 @@ resource "helm_release" "vector" {
 			}
 		] : []
 
-		env = [
-			{
-				name = "VECTOR_LOG"
-				value = "debug"
-			}
-		]
+		# env = [
+		# 	{
+		# 		name = "VECTOR_LOG"
+		# 		value = "debug"
+		# 	}
+		# ]
 	})]
 }
 

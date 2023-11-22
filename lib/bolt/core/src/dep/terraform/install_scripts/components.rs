@@ -304,7 +304,7 @@ pub fn vector(config: &VectorConfig) -> String {
 			inputs = [{sources}]
 			address = "127.0.0.1:5002"
 			healthcheck.enabled = false
-			compress = true
+			compression = true
 		"#
 	);
 
