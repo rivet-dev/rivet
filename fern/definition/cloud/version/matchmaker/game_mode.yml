@@ -20,6 +20,8 @@ types:
         type: optional<GameModeRuntimeDocker>
       listable:
         type: optional<boolean>
+      taggable:
+        type: optional<boolean>
 
       actions:
         type: optional<GameModeActions>

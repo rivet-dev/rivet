@@ -140,6 +140,7 @@ pub fn game_mode_to_proto(
 		max_players_direct: max_players_direct.try_into()?,
 		max_players_party: max_players_party.try_into()?,
 		listable: game_mode.listable.unwrap_or(true),
+		taggable: game_mode.taggable.unwrap_or(false),
 
 		runtime,
 
@@ -240,6 +241,7 @@ pub fn game_mode_to_openapi(
 			max_players_direct: Some(value.max_players_direct.try_into()?),
 			max_players_party: Some(value.max_players_party.try_into()?),
 			listable: Some(value.listable),
+			taggable: Some(value.taggable),
 
 			docker: Some(Box::new(docker)),
 
@@ -295,15 +297,18 @@ fn region_to_openapi(
 	region: backend::matchmaker::lobby_group::Region,
 	regions_data: &[backend::region::Region],
 ) -> GlobalResult<(String, models::CloudVersionMatchmakerGameModeRegion)> {
-	let region_data = unwrap!(
-		regions_data
-			.iter()
-			.find(|x| x.region_id == region.region_id),
-		"failed to find region matching name id"
-	);
+	let name_id = if let Some(region_data) = regions_data
+		.iter()
+		.find(|x| x.region_id == region.region_id)
+	{
+		region_data.name_id.clone()
+	} else {
+		tracing::warn!(?region, "no region data for region");
+		"unknown".to_string()
+	};
 
 	Ok((
-		region_data.name_id.clone(),
+		name_id,
 		models::CloudVersionMatchmakerGameModeRegion {
 			tier: Some(region.tier_name_id.to_owned()),
 			idle_lobbies: region

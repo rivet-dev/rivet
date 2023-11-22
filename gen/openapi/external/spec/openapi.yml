@@ -7043,6 +7043,10 @@ paths:
                     type: string
                 prevent_auto_create_lobby:
                   type: boolean
+                tags:
+                  type: object
+                  additionalProperties:
+                    type: string
                 captcha:
                   $ref: '#/components/schemas/CaptchaConfig'
                 verification_data: {}
@@ -7183,6 +7187,10 @@ paths:
                   $ref: '#/components/schemas/CaptchaConfig'
                 publicity:
                   $ref: '#/components/schemas/MatchmakerCustomLobbyPublicity'
+                tags:
+                  type: object
+                  additionalProperties:
+                    type: string
                 lobby_config: {}
                 verification_data: {}
               required:
@@ -9849,6 +9857,8 @@ components:
         docker:
           $ref: '#/components/schemas/CloudVersionMatchmakerGameModeRuntimeDocker'
         listable:
+          type: boolean
+        taggable:
           type: boolean
         actions:
           $ref: '#/components/schemas/CloudVersionMatchmakerGameModeActions'

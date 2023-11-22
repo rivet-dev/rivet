@@ -21,6 +21,7 @@ async fn create_custom_lobby() {
 				publicity: Some(models::MatchmakerCustomLobbyPublicity::Public),
 				lobby_config: Some(Some(json!({ "foo": "bar" }))),
 				verification_data: None,
+				tags: None,
 				captcha: Some(Box::new(models::CaptchaConfig {
 					hcaptcha: Some(Box::new(models::CaptchaConfigHcaptcha {
 						client_response: "10000000-aaaa-bbbb-cccc-000000000001".to_string(),

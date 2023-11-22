@@ -42,5 +42,6 @@ message Message {
 	optional string verification_data_json = 202;
 	// Bypasses user data verification (if the give lobby group has any).
 	bool bypass_verification = 203;
+	map<string, string> tags = 204;
 }
 

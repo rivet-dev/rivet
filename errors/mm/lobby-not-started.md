@@ -1,6 +1,6 @@
 ---
 name = "MATCHMAKER_LOBBY_NOT_STARTED"
-description = "Lobby not found."
+description = "Lobby not started."
 http_status = 400
 ---
 

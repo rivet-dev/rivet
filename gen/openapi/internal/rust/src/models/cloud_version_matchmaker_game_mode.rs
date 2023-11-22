@@ -30,6 +30,8 @@ pub struct CloudVersionMatchmakerGameMode {
     pub max_players_party: Option<i32>,
     #[serde(rename = "regions", skip_serializing_if = "Option::is_none")]
     pub regions: Option<::std::collections::HashMap<String, crate::models::CloudVersionMatchmakerGameModeRegion>>,
+    #[serde(rename = "taggable", skip_serializing_if = "Option::is_none")]
+    pub taggable: Option<bool>,
     #[serde(rename = "tier", skip_serializing_if = "Option::is_none")]
     pub tier: Option<String>,
 }
@@ -46,6 +48,7 @@ impl CloudVersionMatchmakerGameMode {
             max_players_direct: None,
             max_players_party: None,
             regions: None,
+            taggable: None,
             tier: None,
         }
     }

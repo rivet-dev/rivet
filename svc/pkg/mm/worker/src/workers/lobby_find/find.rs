@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use chirp_worker::prelude::*;
 use proto::backend::{
 	self,
@@ -19,6 +21,8 @@ lazy_static::lazy_static! {
 
 /// Query that will be passed to the Redis find script as JSON.
 mod redis_query {
+	use std::collections::HashMap;
+	
 	use chirp_worker::prelude::*;
 	use serde::Serialize;
 
@@ -39,6 +43,8 @@ mod redis_query {
 		pub players: Vec<Player>,
 
 		pub player_register_expire_ts: i64,
+
+		pub tags: HashMap<String, String>,
 	}
 
 	#[derive(Serialize)]
@@ -85,6 +91,7 @@ pub struct FindOpts<'a> {
 	pub query: &'a Query,
 	pub lobby_group_config: &'a LobbyGroupConfig,
 	pub auto_create_lobby_id: Uuid,
+	pub tags: &'a HashMap<String, String>,
 }
 
 pub struct FindOutput {
@@ -109,6 +116,7 @@ pub async fn find(
 		query,
 		lobby_group_config,
 		auto_create_lobby_id,
+		tags,
 	}: FindOpts<'_>,
 ) -> GlobalResult<Option<FindOutput>> {
 	use util_mm::key;
@@ -175,6 +183,7 @@ pub async fn find(
 						lobby_group_id,
 						util_mm::JoinKind::Party,
 					),
+					key::lobby_tags(auto_create_lobby_id),
 				]);
 
 				// Create lobby config
@@ -287,6 +296,7 @@ pub async fn find(
 		},
 		players: query_players,
 		player_register_expire_ts: ctx.ts() + util_mm::consts::PLAYER_READY_TIMEOUT,
+		tags: tags.clone(),
 	};
 
 	// Execute script
