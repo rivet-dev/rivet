@@ -55,7 +55,10 @@ inputs = ["tag"]
 address = "127.0.0.1:5002"
 healthcheck.enabled = false
 compression = true
+# Use less memory when buffering
 buffer.max_events = 100
+# Speed up for realtime logs
+batch.timeout_secs = 0.25
 EOF
 done
 

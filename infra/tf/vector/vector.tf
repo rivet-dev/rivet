@@ -95,6 +95,10 @@ resource "helm_release" "vector" {
 					tls = local.clickhouse_override_ca ? {
 						ca_file = "/usr/local/share/ca-certificates/clickhouse-ca.crt"
 					} : {}
+					batch = {
+						# Speed up for realtime logs
+						timeout_secs = 0.25
+					}
 				}
 
 				console = {
