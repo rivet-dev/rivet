@@ -11,7 +11,7 @@ async fn worker(ctx: &OperationContext<job_log::msg::export::Message>) -> Global
 	let clickhouse = rivet_pools::utils::clickhouse::client()?
 		.with_user("chirp")
 		.with_password(util::env::read_secret(&["clickhouse", "users", "chirp", "password"]).await?)
-		.with_database("db_job_logs");
+		.with_database("db_job_log");
 
 	let request_id = unwrap_ref!(ctx.request_id).as_uuid();
 	let run_id = unwrap_ref!(ctx.run_id).as_uuid();
