@@ -21,6 +21,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 -   **Infra** Fixed /list not returning lobbies unless the `include_state` query parameter was true
 -   **Infra** Job log aggregating to use Vector under the hood to insert directly in to ClickHouse
 
+### Fixed
+
+-  **Infra** Job logs occasionally returning duplicate log lines
+
 ## [23.1.0] - 2023-10-30
 
 ### Added
