@@ -141,14 +141,25 @@ pub async fn get_lobby_logs(
 		}
 	};
 
+	// Timestamp to start the query at
+	let before_ts = util::timestamp::now() * 1_000_000;
+
+	// Get run ID
 	let run_id = if let Some(x) = get_run_id(&ctx, game_id, lobby_id).await? {
 		x
 	} else {
-		bail_with!(MATCHMAKER_LOBBY_NOT_STARTED);
-	};
+		// Throttle request if watching. This is effectively polling until the lobby is ready.
+		if watch_index.to_consumer()?.is_some() {
+			tokio::time::sleep(Duration::from_secs(1)).await;
+		}
 
-	// Timestamp to start the query at
-	let before_ts = util::timestamp::now() * 1_000_000;
+		// Return empty logs
+		return Ok(models::GetLobbyLogsResponse {
+			lines: Vec::new(),
+			timestamps: Vec::new(),
+			watch: convert::watch_response(WatchResponse::new(before_ts)),
+		});
+	};
 
 	// Handle anchor
 	let logs_res = if let Some(anchor) = watch_index.as_i64()? {
@@ -170,10 +181,7 @@ pub async fn get_lobby_logs(
 				stream_type: stream_type as i32,
 				count: 64,
 				order_asc: false,
-				query: Some(job_log::read::request::Query::TsRange(job_log::read::request::TsRangeQuery {
-					after_ts: anchor,
-					before_ts: before_ts,
-				}))
+				query: Some(job_log::read::request::Query::AfterTs(anchor))
 
 			})
 			.await?;
@@ -183,7 +191,7 @@ pub async fn get_lobby_logs(
 				break logs_res;
 			}
 
-			// Rate limit request
+			// Throttle request
 			//
 			// We don't use `tokio::time::interval` because if the request takes longer than 500
 			// ms, we'll enter a tight loop of requests.
@@ -220,7 +228,7 @@ pub async fn get_lobby_logs(
 	let mut timestamps = logs_res
 		.entries
 		.iter()
-		.map(|x| x.ts)
+		.map(|x| x.ts / 1_000_000)
 		.map(util::timestamp::to_chrono)
 		.collect::<Result<Vec<_>, _>>()?;
 
