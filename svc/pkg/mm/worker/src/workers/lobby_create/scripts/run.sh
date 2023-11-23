@@ -36,15 +36,28 @@ EOF
 [sources.stdin]
 type = "stdin"
 
-[transforms.throttle]
+# Reduces logging spikes. This logging is in place in order to ensure that a single
+# spike of logs does not exhaust the long rate limit.
+[transforms.throttle_short]
 type = "throttle"
 inputs = ["stdin"]
-threshold = 750  # 25/s
-window_secs = 30
+threshold = 960  # 64 logs/s
+window_secs = 15
+
+# Reduces logs from noisy games. Set reasonable caps on how
+# much can be logged per minute. This is here to prevent games
+# that log as fast as possible (i.e. positions of objects every
+# tick) from exhausting the system while still allowing sane
+# amounts of logging. This happens very frequently.
+[transforms.throttle_long]
+type = "throttle"
+inputs = ["throttle_short"]
+threshold = 1200  # 4 logs/s * 1024 bytes/log = 4096 bytes/lobby/s = 14.7 MB/lobby/hr = 353.8 MB/lobby/day  = 10.6 GB/lobby/month
+window_secs = 300
 
 [transforms.tag]
 type = "remap"
-inputs = ["throttle"]
+inputs = ["throttle_long"]
 drop_on_abort = true
 file = "${VECTOR_CONFIGS}/remap_${stream}.vrl"
 metric_tag_values = "single"
