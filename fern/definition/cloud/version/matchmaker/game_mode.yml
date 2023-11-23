@@ -22,7 +22,7 @@ types:
         type: optional<boolean>
       taggable:
         type: optional<boolean>
-      allow_dynamic_player_count:
+      allow_dynamic_max_players:
         type: optional<boolean>
 
       actions:

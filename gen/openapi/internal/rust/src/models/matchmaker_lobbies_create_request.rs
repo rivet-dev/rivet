@@ -19,6 +19,8 @@ pub struct MatchmakerLobbiesCreateRequest {
     pub game_mode: String,
     #[serde(rename = "lobby_config", default, with = "::serde_with::rust::double_option", skip_serializing_if = "Option::is_none")]
     pub lobby_config: Option<Option<serde_json::Value>>,
+    #[serde(rename = "max_players", skip_serializing_if = "Option::is_none")]
+    pub max_players: Option<i32>,
     #[serde(rename = "publicity", skip_serializing_if = "Option::is_none")]
     pub publicity: Option<crate::models::MatchmakerCustomLobbyPublicity>,
     #[serde(rename = "region", skip_serializing_if = "Option::is_none")]
@@ -35,6 +37,7 @@ impl MatchmakerLobbiesCreateRequest {
             captcha: None,
             game_mode,
             lobby_config: None,
+            max_players: None,
             publicity: None,
             region: None,
             tags: None,

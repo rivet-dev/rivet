@@ -80,6 +80,7 @@ async fn handle(
 					max_players_party,
 					listable: true,
 					taggable: true,
+					allow_dynamic_max_players: true,
 
 					runtime: Some(backend::matchmaker::lobby_runtime::Docker {
 						build_id: build_res.build_id,
@@ -127,8 +128,7 @@ async fn handle(
 	let version = version_get_res.versions.first();
 	let version = unwrap_ref!(version);
 	let config_meta = unwrap_ref!(version.config_meta);
-	let lobby_group = config_meta.lobby_groups.first();
-	let lobby_group = unwrap_ref!(lobby_group);
+	let lobby_group = unwrap!(config_meta.lobby_groups.first());
 	let lobby_group_id = unwrap_ref!(lobby_group.lobby_group_id).as_uuid();
 
 	op!([ctx] game_namespace_version_set {
@@ -161,6 +161,7 @@ async fn handle(
 			is_custom: ctx.is_custom,
 			publicity: ctx.publicity,
 			lobby_config_json: ctx.lobby_config_json.clone(),
+			dynamic_max_players: None,
 		})
 		.await?;
 	let run_id = unwrap_ref!(complete_msg.run_id).as_uuid();

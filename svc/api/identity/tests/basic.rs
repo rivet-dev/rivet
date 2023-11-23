@@ -121,6 +121,7 @@ impl Ctx {
 					max_players_party: 12,
 					listable: true,
 					taggable: false,
+					allow_dynamic_max_players: false,
 
 					runtime: Some(backend::matchmaker::lobby_runtime::Docker {
 						build_id: build_res.build_id,

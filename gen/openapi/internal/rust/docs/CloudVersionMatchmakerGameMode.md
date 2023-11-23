@@ -5,6 +5,7 @@
 Name | Type | Description | Notes
 ------------ | ------------- | ------------- | -------------
 **actions** | Option<[**crate::models::CloudVersionMatchmakerGameModeActions**](CloudVersionMatchmakerGameModeActions.md)> |  | [optional]
+**allow_dynamic_max_players** | Option<**bool**> |  | [optional]
 **docker** | Option<[**crate::models::CloudVersionMatchmakerGameModeRuntimeDocker**](CloudVersionMatchmakerGameModeRuntimeDocker.md)> |  | [optional]
 **idle_lobbies** | Option<[**crate::models::CloudVersionMatchmakerGameModeIdleLobbiesConfig**](CloudVersionMatchmakerGameModeIdleLobbiesConfig.md)> |  | [optional]
 **listable** | Option<**bool**> |  | [optional]

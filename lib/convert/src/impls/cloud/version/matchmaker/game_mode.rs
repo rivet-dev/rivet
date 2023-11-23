@@ -141,7 +141,7 @@ pub fn game_mode_to_proto(
 		max_players_party: max_players_party.try_into()?,
 		listable: game_mode.listable.unwrap_or(true),
 		taggable: game_mode.taggable.unwrap_or(false),
-		allow_dynamic_player_count: game_mode.allow_dynamic_player_count.unwrap_or(true),
+		allow_dynamic_max_players: game_mode.allow_dynamic_max_players.unwrap_or(true),
 
 		runtime,
 
@@ -243,7 +243,7 @@ pub fn game_mode_to_openapi(
 			max_players_party: Some(value.max_players_party.try_into()?),
 			listable: Some(value.listable),
 			taggable: Some(value.taggable),
-			allow_dynamic_player_count: Some(value.allow_dynamic_player_count),
+			allow_dynamic_max_players: Some(value.allow_dynamic_max_players),
 
 			docker: Some(Box::new(docker)),
 

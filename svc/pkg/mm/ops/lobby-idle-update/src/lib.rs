@@ -79,6 +79,7 @@ async fn handle(
 			is_custom: false,
 			publicity: None,
 			lobby_config_json: None,
+			dynamic_max_players: None,
 		}));
 	}
 	futures_util::future::try_join_all(create_futs).await?;
