@@ -88,9 +88,23 @@ pub async fn export_history(
 		upload_ids: vec![upload_id.into()],
 	})
 	.await?;
-	let _upload = unwrap!(upload_res.uploads.first(), "upload not found");
+	let upload = unwrap!(upload_res.uploads.first(), "upload not found");
 
-	let s3_client = s3_util::Client::from_env("bucket-lobby-history-export").await?;
+	let proto_provider = unwrap!(
+		backend::upload::Provider::from_i32(upload.provider),
+		"invalid upload provider"
+	);
+	let provider = match proto_provider {
+		backend::upload::Provider::Minio => s3_util::Provider::Minio,
+		backend::upload::Provider::Backblaze => s3_util::Provider::Backblaze,
+		backend::upload::Provider::Aws => s3_util::Provider::Aws,
+	};
+	let s3_client = s3_util::Client::from_env_opt(
+		"bucket-lobby-history-export",
+		provider,
+		s3_util::EndpointKind::External,
+	)
+	.await?;
 	let presigned_req = s3_client
 		.get_object()
 		.bucket(s3_client.bucket())
@@ -282,13 +296,28 @@ pub async fn export_lobby_logs(
 		upload_ids: vec![upload_id.into()],
 	})
 	.await?;
-	let _upload = unwrap!(upload_res.uploads.first(), "upload not found");
+	let upload = unwrap!(upload_res.uploads.first(), "upload not found");
 
 	let filename = match stream_type {
 		backend::job::log::StreamType::StdOut => "stdout.txt",
 		backend::job::log::StreamType::StdErr => "stderr.txt",
 	};
-	let s3_client = s3_util::Client::from_env("bucket-job-log-export").await?;
+
+	let proto_provider = unwrap!(
+		backend::upload::Provider::from_i32(upload.provider),
+		"invalid upload provider"
+	);
+	let provider = match proto_provider {
+		backend::upload::Provider::Minio => s3_util::Provider::Minio,
+		backend::upload::Provider::Backblaze => s3_util::Provider::Backblaze,
+		backend::upload::Provider::Aws => s3_util::Provider::Aws,
+	};
+	let s3_client = s3_util::Client::from_env_opt(
+		"bucket-job-log-export",
+		provider,
+		s3_util::EndpointKind::External,
+	)
+	.await?;
 	let presigned_req = s3_client
 		.get_object()
 		.bucket(s3_client.bucket())
