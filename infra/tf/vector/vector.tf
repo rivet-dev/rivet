@@ -7,7 +7,7 @@ locals {
 		}
 	})
 
-	clickhouse_override_ca = true
+	clickhouse_k8s = var.clickhouse_provider == "kubernetes"
 }
 
 resource "kubernetes_priority_class" "vector_priority" {
@@ -92,7 +92,7 @@ resource "helm_release" "vector" {
 						user = "vector"
 						password = module.secrets.values["clickhouse/users/vector/password"]
 					}
-					tls = local.clickhouse_override_ca ? {
+					tls = local.clickhouse_k8s ? {
 						ca_file = "/usr/local/share/ca-certificates/clickhouse-ca.crt"
 					} : {}
 					batch = {
@@ -110,7 +110,7 @@ resource "helm_release" "vector" {
 				}
 			}
 		}
-		extraVolumes = local.clickhouse_override_ca ? [
+		extraVolumes = local.clickhouse_k8s ? [
 			{
 				name = "clickhouse-ca",
 				configMap = {
@@ -125,7 +125,7 @@ resource "helm_release" "vector" {
 				}
 			}
 		] : []
-		extraVolumeMounts = local.clickhouse_override_ca ? [
+		extraVolumeMounts = local.clickhouse_k8s ? [
 			{
 				name = "clickhouse-ca",
 				mountPath = "/usr/local/share/ca-certificates/clickhouse-ca.crt",
