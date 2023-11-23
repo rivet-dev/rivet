@@ -14,6 +14,7 @@ async fn worker(ctx: &OperationContext<job_log::msg::export::Message>) -> Global
 		.with_database("db_job_logs");
 
 	let request_id = unwrap_ref!(ctx.request_id).as_uuid();
+	let run_id = unwrap_ref!(ctx.run_id).as_uuid();
 
 	let stream_type = unwrap!(backend::job::log::StreamType::from_i32(ctx.stream_type));
 	let file_name = match stream_type {
@@ -25,15 +26,14 @@ async fn worker(ctx: &OperationContext<job_log::msg::export::Message>) -> Global
 		.query(indoc!(
 			"
 			SELECT message
-			FROM logs
-			WHERE alloc = ? AND task = ? AND stream_type = ? AND ts < ?
-			ORDER BY ts ASC, idx ASC
+			FROM run_logs
+			WHERE run_id = ? AND task = ? AND stream_type = ?
+			ORDER BY ts ASC
 			"
 		))
-		.bind(&ctx.alloc)
+		.bind(run_id)
 		.bind(&ctx.task)
 		.bind(ctx.stream_type as i8)
-		.bind(ctx.ts())
 		.fetch::<LogEntry>()?;
 
 	let mut lines = 0;

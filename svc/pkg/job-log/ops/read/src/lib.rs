@@ -19,13 +19,28 @@ async fn handle(
 	let run_id = unwrap_ref!(ctx.run_id).as_uuid();
 	let req_query = unwrap_ref!(ctx.query);
 
+	let order_by = if ctx.order_asc { "ASC" } else { "DESC" };
+
 	let entries = match req_query {
-		job_log::read::request::Query::All(_) => query_all(ctx.body(), &clickhouse, run_id).await?,
+		job_log::read::request::Query::All(_) => {
+			query_all(ctx.body(), &clickhouse, run_id, order_by).await?
+		}
 		job_log::read::request::Query::BeforeTs(ts) => {
-			query_before_ts(ctx.body(), &clickhouse, run_id, *ts).await?
+			query_before_ts(ctx.body(), &clickhouse, run_id, *ts, order_by).await?
 		}
 		job_log::read::request::Query::AfterTs(ts) => {
-			query_after_ts(ctx.body(), &clickhouse, run_id, *ts).await?
+			query_after_ts(ctx.body(), &clickhouse, run_id, *ts, order_by).await?
+		}
+		job_log::read::request::Query::TsRange(query) => {
+			query_ts_range(
+				ctx.body(),
+				&clickhouse,
+				run_id,
+				query.after_ts,
+				query.before_ts,
+				order_by,
+			)
+			.await?
 		}
 	};
 
@@ -36,14 +51,15 @@ async fn query_all(
 	req: &job_log::read::Request,
 	clickhouse: &clickhouse::Client,
 	run_id: Uuid,
+	order_by: &str,
 ) -> GlobalResult<Vec<backend::job::log::LogEntry>> {
 	let mut entries_cursor = clickhouse
-		.query(indoc!(
+		.query(&formatdoc!(
 			"
 			SELECT ts, message
 			FROM run_logs
 			WHERE run_id = ? AND task = ? AND stream_type = ?
-			ORDER BY ts ASC
+			ORDER BY ts {order_by}
 			LIMIT ?
 			"
 		))
@@ -66,14 +82,15 @@ async fn query_before_ts(
 	clickhouse: &clickhouse::Client,
 	run_id: Uuid,
 	ts: i64,
+	order_by: &str,
 ) -> GlobalResult<Vec<backend::job::log::LogEntry>> {
 	let mut entries_cursor = clickhouse
-		.query(indoc!(
+		.query(&formatdoc!(
 			"
 			SELECT ts, message
-			FROM logs
+			FROM run_logs
 			WHERE run_id = ? AND task = ? AND stream_type = ? AND ts <= fromUnixTimestamp64Milli(?)
-			ORDER BY ts DESC
+			ORDER BY ts {order_by}
 			LIMIT ?
 			"
 		))
@@ -89,9 +106,6 @@ async fn query_before_ts(
 		entries.push(convert_entry(entry));
 	}
 
-	// Sort in asc order
-	entries.sort_by_key(|x| x.ts);
-
 	Ok(entries)
 }
 
@@ -100,14 +114,15 @@ async fn query_after_ts(
 	clickhouse: &clickhouse::Client,
 	run_id: Uuid,
 	ts: i64,
+	order_by: &str,
 ) -> GlobalResult<Vec<backend::job::log::LogEntry>> {
 	let mut entries_cursor = clickhouse
-		.query(indoc!(
+		.query(&formatdoc!(
 			"
 			SELECT ts, message
-			FROM logs
+			FROM run_logs
 			WHERE run_id = ? AND task = ? AND stream_type = ? AND ts >= fromUnixTimestamp64Milli(?)
-			ORDER BY ts ASC
+			ORDER BY ts {order_by}
 			LIMIT ?
 			"
 		))
@@ -115,6 +130,40 @@ async fn query_after_ts(
 		.bind(&req.task)
 		.bind(req.stream_type as u8)
 		.bind(ts)
+		.bind(req.count)
+		.fetch::<LogEntry>()?;
+
+	let mut entries = Vec::new();
+	while let Some(entry) = entries_cursor.next().await? {
+		entries.push(convert_entry(entry));
+	}
+
+	Ok(entries)
+}
+
+async fn query_ts_range(
+	req: &job_log::read::Request,
+	clickhouse: &clickhouse::Client,
+	run_id: Uuid,
+	after_ts: i64,
+	before_ts: i64,
+	order_by: &str,
+) -> GlobalResult<Vec<backend::job::log::LogEntry>> {
+	let mut entries_cursor = clickhouse
+		.query(&formatdoc!(
+			"
+			SELECT ts, message
+			FROM run_logs
+			WHERE run_id = ? AND task = ? AND stream_type = ? AND ts > fromUnixTimestamp64Milli(?) AND ts < fromUnixTimestamp64Milli(?)
+			ORDER BY ts {order_by}
+			LIMIT ?
+			"
+		))
+		.bind(run_id)
+		.bind(&req.task)
+		.bind(req.stream_type as u8)
+		.bind(after_ts)
+		.bind(before_ts)
 		.bind(req.count)
 		.fetch::<LogEntry>()?;
 

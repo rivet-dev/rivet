@@ -7,15 +7,26 @@ import "proto/backend/job/log.proto";
 import "proto/common.proto";
 
 message Request {
+	message TsRangeQuery {
+		/// Timestamp in nanoseconds
+		int64 after_ts = 1;
+		/// Timestamp in nanoseconds
+		int64 before_ts = 2;
+	}
+
 	rivet.common.Uuid run_id = 1;
 	string task = 2;
 	rivet.backend.job.log.StreamType stream_type = 3;
 	int64 count = 4;
+	bool order_asc = 5;
 
 	oneof query {
 		google.protobuf.Empty all = 101;
+		/// Timestamp in nanoseconds
 		int64 before_ts = 102;
+		/// Timestamp in nanoseconds
 		int64 after_ts = 103;
+		TsRangeQuery ts_range = 104;
 	}
 }
 

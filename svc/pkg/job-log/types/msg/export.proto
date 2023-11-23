@@ -11,7 +11,7 @@ import "proto/backend/job/log.proto";
 /// ]
 message Message {
 	rivet.common.Uuid request_id = 1;
-	string alloc = 2;
+	rivet.common.Uuid run_id = 2;
 	string task = 3;
 	rivet.backend.job.log.StreamType stream_type = 4;
 }
