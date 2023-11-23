@@ -347,7 +347,9 @@ pub async fn create(
 			game_mode = lobby_group.name_id
 		);
 
-		let max = lobby_group.max_players_normal.max(lobby_group.max_players_direct) as i32;
+		let max = lobby_group
+			.max_players_normal
+			.max(lobby_group.max_players_direct) as i32;
 		ensure_with!(
 			max_players <= max,
 			MATCHMAKER_DYNAMIC_MAX_PLAYERS_INVALID,
