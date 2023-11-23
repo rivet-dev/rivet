@@ -10,4 +10,4 @@ kind = "rust"
 "clickhouse/users/chirp/password" = {}
 
 [databases]
-db-job-logs = {}
+db-job-log = {}
