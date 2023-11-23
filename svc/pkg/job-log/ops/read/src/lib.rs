@@ -89,7 +89,7 @@ async fn query_before_ts(
 			"
 			SELECT ts, message
 			FROM run_logs
-			WHERE run_id = ? AND task = ? AND stream_type = ? AND ts <= fromUnixTimestamp64Milli(?)
+			WHERE run_id = ? AND task = ? AND stream_type = ? AND ts < fromUnixTimestamp64Nano(?)
 			ORDER BY ts {order_by}
 			LIMIT ?
 			"
@@ -121,7 +121,7 @@ async fn query_after_ts(
 			"
 			SELECT ts, message
 			FROM run_logs
-			WHERE run_id = ? AND task = ? AND stream_type = ? AND ts >= fromUnixTimestamp64Milli(?)
+			WHERE run_id = ? AND task = ? AND stream_type = ? AND ts > fromUnixTimestamp64Nano(?)
 			ORDER BY ts {order_by}
 			LIMIT ?
 			"
@@ -154,7 +154,7 @@ async fn query_ts_range(
 			"
 			SELECT ts, message
 			FROM run_logs
-			WHERE run_id = ? AND task = ? AND stream_type = ? AND ts > fromUnixTimestamp64Milli(?) AND ts < fromUnixTimestamp64Milli(?)
+			WHERE run_id = ? AND task = ? AND stream_type = ? AND ts > fromUnixTimestamp64Nano(?) AND ts < fromUnixTimestamp64Nano(?)
 			ORDER BY ts {order_by}
 			LIMIT ?
 			"
