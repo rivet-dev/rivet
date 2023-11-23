@@ -1,0 +1,24 @@
+[package]
+name = "job-log-worker"
+version = "0.0.1"
+edition = "2018"
+authors = ["Rivet Gaming, LLC <developer@rivet.gg>"]
+license = "Apache-2.0"
+
+[dependencies]
+chirp-worker = { path = "../../../../lib/chirp/worker" }
+chirp-client = { path = "../../../../lib/chirp/client" }
+clickhouse = { version = "0.11.2", features = ["wa-37420", "uuid"] }
+rivet-health-checks = { path = "../../../../lib/health-checks" }
+rivet-metrics = { path = "../../../../lib/metrics" }
+rivet-runtime = { path = "../../../../lib/runtime" }
+reqwest = "0.11"
+serde = { version = "1.0", features = ["derive"] }
+
+upload-complete = { path = "../../upload/ops/complete" }
+upload-prepare = { path = "../../upload/ops/prepare" }
+
+[dev-dependencies]
+chirp-worker = { path = "../../../../lib/chirp/worker" }
+s3-util = { path = "../../../../lib/s3-util" }
+

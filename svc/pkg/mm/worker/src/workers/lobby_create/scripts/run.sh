@@ -22,6 +22,7 @@ for stream in stdout stderr; do
 . = {
 	"source": "job_run",
 	"run_id": "${JOB_RUN_ID}",
+	"task": "${NOMAD_TASK_NAME}",
 	"stream": 1,
 	# Convert to nanoseconds for ClickHouse
 	"ts": to_unix_timestamp(parse_timestamp!(.timestamp, format: "%+"), unit: "nanoseconds"),

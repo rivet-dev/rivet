@@ -1,7 +1,0 @@
-[service]
-name = "db-nomad-logs"
-
-[runtime]
-kind = "clickhouse"
-
-[database]

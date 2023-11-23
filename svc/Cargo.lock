@@ -266,6 +266,7 @@ dependencies = [
  "game-version-validate",
  "http",
  "hyper",
+ "job-log-read",
  "job-run-get",
  "job-run-metrics-log",
  "lazy_static",
@@ -280,7 +281,6 @@ dependencies = [
  "mm-lobby-player-count",
  "mm-lobby-runtime-aggregate",
  "mm-player-count-for-namespace",
- "nomad-log-read",
  "perf-log-get",
  "prost 0.10.4",
  "rand",
@@ -4228,6 +4228,36 @@ dependencies = [
 ]
 
 [[package]]
+name = "job-log-read"
+version = "0.0.1"
+dependencies = [
+ "chirp-client",
+ "chirp-worker",
+ "chrono",
+ "clickhouse",
+ "prost 0.10.4",
+ "rivet-operation",
+ "serde",
+]
+
+[[package]]
+name = "job-log-worker"
+version = "0.0.1"
+dependencies = [
+ "chirp-client",
+ "chirp-worker",
+ "clickhouse",
+ "reqwest",
+ "rivet-health-checks",
+ "rivet-metrics",
+ "rivet-runtime",
+ "s3-util",
+ "serde",
+ "upload-complete",
+ "upload-prepare",
+]
+
+[[package]]
 name = "job-run-get"
 version = "0.0.1"
 dependencies = [
@@ -5231,11 +5261,11 @@ dependencies = [
  "cloud-worker",
  "external-worker",
  "game-user-worker",
+ "job-log-worker",
  "job-run-worker",
  "kv-worker",
  "mm-worker",
  "module-worker",
- "nomad-log-worker",
  "push-notification-worker",
  "rivet-connection",
  "rivet-health-checks",
@@ -5323,65 +5353,6 @@ dependencies = [
  "serde_derive",
  "serde_json",
  "url",
-]
-
-[[package]]
-name = "nomad-log-follower"
-version = "0.0.1"
-dependencies = [
- "chirp-client",
- "chirp-worker",
- "chrono",
- "faker-job-template",
- "faker-region",
- "futures-util",
- "indoc",
- "lazy_static",
- "nomad-client",
- "nomad-util",
- "prost 0.10.4",
- "rivet-connection",
- "rivet-health-checks",
- "rivet-metrics",
- "rivet-operation",
- "rivet-pools",
- "rivet-runtime",
- "rivet-util-job",
- "serde",
- "serde_json",
- "tokio",
- "tracing",
- "tracing-subscriber",
-]
-
-[[package]]
-name = "nomad-log-read"
-version = "0.0.1"
-dependencies = [
- "chirp-client",
- "chirp-worker",
- "chrono",
- "clickhouse",
- "prost 0.10.4",
- "rivet-operation",
- "serde",
-]
-
-[[package]]
-name = "nomad-log-worker"
-version = "0.0.1"
-dependencies = [
- "chirp-client",
- "chirp-worker",
- "clickhouse",
- "reqwest",
- "rivet-health-checks",
- "rivet-metrics",
- "rivet-runtime",
- "s3-util",
- "serde",
- "upload-complete",
- "upload-prepare",
 ]
 
 [[package]]

@@ -1,6 +1,7 @@
 CREATE TABLE IF NOT EXISTS run_logs
 (
 	run_id UUID,
+	task LowCardinality(String),
 	stream_type UInt8,  -- backend::job::log::StreamType
 	ts DateTime64(9),
 	message String

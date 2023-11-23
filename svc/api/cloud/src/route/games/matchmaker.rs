@@ -124,8 +124,8 @@ pub async fn get_lobby_logs(
 
 	// Determine stream type
 	let stream_type = match models::LogStream::from(query.stream.as_str()) {
-		models::LogStream::StdOut => backend::nomad_log::StreamType::StdOut,
-		models::LogStream::StdErr => backend::nomad_log::StreamType::StdErr,
+		models::LogStream::StdOut => backend::job::log::StreamType::StdOut,
+		models::LogStream::StdErr => backend::job::log::StreamType::StdErr,
 		_ => {
 			bail_with!(
 				API_BAD_QUERY_PARAMETER,
@@ -145,10 +145,10 @@ pub async fn get_lobby_logs(
 	if let Some(anchor) = watch_index.to_consumer()? {
 		// Fetch logs
 		let stream_type_param = match stream_type {
-			backend::nomad_log::StreamType::StdOut => "stdout",
-			backend::nomad_log::StreamType::StdErr => "stderr",
+			backend::job::log::StreamType::StdOut => "stdout",
+			backend::job::log::StreamType::StdErr => "stderr",
 		};
-		let log_tail = tail_all!([ctx, anchor, chirp_client::TailAllConfig::wait()] nomad_log::msg::entries(&alloc_id, util_job::RUN_MAIN_TASK_NAME, stream_type_param)).await?;
+		let log_tail = tail_all!([ctx, anchor, chirp_client::TailAllConfig::wait()] job::log::msg::entries(&alloc_id, util_job::RUN_MAIN_TASK_NAME, stream_type_param)).await?;
 
 		// Sort entries by timestamp
 		let mut entries = log_tail
@@ -186,7 +186,7 @@ pub async fn get_lobby_logs(
 		task: util_job::RUN_MAIN_TASK_NAME.into(),
 		stream_type: stream_type as i32,
 		count: 256,
-		query: Some(nomad_log::read::request::Query::BeforeTs(nomad_log::read::request::TimestampQuery {
+		query: Some(job::log::read::request::Query::BeforeTs(job::log::read::request::TimestampQuery {
 			ts: before_ts,
 			idx: 0,
 		})),
@@ -220,8 +220,8 @@ pub async fn export_lobby_logs(
 	ctx.auth().check_game_read(ctx.op_ctx(), game_id).await?;
 
 	let stream_type = match body.stream {
-		models::LogStream::StdOut => backend::nomad_log::StreamType::StdOut,
-		models::LogStream::StdErr => backend::nomad_log::StreamType::StdErr,
+		models::LogStream::StdOut => backend::job::log::StreamType::StdOut,
+		models::LogStream::StdErr => backend::job::log::StreamType::StdErr,
 		models::LogStream::Unknown(_) => {
 			bail_with!(API_BAD_BODY, error = r#"Invalid "stream""#,);
 		}
@@ -235,7 +235,7 @@ pub async fn export_lobby_logs(
 
 	// Export history
 	let request_id = Uuid::new_v4();
-	let res = msg!([ctx] nomad_log::msg::export(request_id) -> nomad_log::msg::export_complete {
+	let res = msg!([ctx] job::log::msg::export(request_id) -> job::log::msg::export_complete {
 		request_id: Some(request_id.into()),
 		alloc: alloc_id,
 		task: util_job::RUN_MAIN_TASK_NAME.into(),
@@ -251,10 +251,10 @@ pub async fn export_lobby_logs(
 	let _upload = unwrap!(upload_res.uploads.first(), "upload not found");
 
 	let filename = match stream_type {
-		backend::nomad_log::StreamType::StdOut => "stdout.txt",
-		backend::nomad_log::StreamType::StdErr => "stderr.txt",
+		backend::job::log::StreamType::StdOut => "stdout.txt",
+		backend::job::log::StreamType::StdErr => "stderr.txt",
 	};
-	let s3_client = s3_util::Client::from_env("bucket-nomad-log-export").await?;
+	let s3_client = s3_util::Client::from_env("bucket-job-log-export").await?;
 	let presigned_req = s3_client
 		.get_object()
 		.bucket(s3_client.bucket())

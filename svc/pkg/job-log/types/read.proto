@@ -1,0 +1,25 @@
+syntax = "proto3";
+
+package rivet.backend.pkg.job_log.read;
+
+import "google/protobuf/empty.proto";
+import "proto/backend/job/log.proto";
+import "proto/common.proto";
+
+message Request {
+	rivet.common.Uuid run_id = 1;
+	string task = 2;
+	rivet.backend.job.log.StreamType stream_type = 3;
+	int64 count = 4;
+
+	oneof query {
+		google.protobuf.Empty all = 101;
+		int64 before_ts = 102;
+		int64 after_ts = 103;
+	}
+}
+
+message Response {
+	repeated rivet.backend.job.log.LogEntry entries = 1;
+}
+

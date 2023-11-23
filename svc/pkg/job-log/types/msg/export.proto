@@ -1,0 +1,18 @@
+syntax = "proto3";
+
+package rivet.backend.pkg.job_log.msg.export;
+
+import "proto/common.proto";
+import "proto/backend/job/log.proto";
+
+/// name = "msg-job-log-export"
+/// parameters = [
+/// 	{ name = "request_id" },
+/// ]
+message Message {
+	rivet.common.Uuid request_id = 1;
+	string alloc = 2;
+	string task = 3;
+	rivet.backend.job.log.StreamType stream_type = 4;
+}
+
