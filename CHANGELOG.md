@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 -   **Bolt** Fixed `bolt db migrate create`
 -   **Infra** Added `user-admin-set` service for creating an admin user
 -   **Infra** Added lobby tags system for filtering lobbies in /find
+-   **Infra** Added `max_players` property to /find and /create for custom lobby sizes
 
 ### Changed
 
