@@ -53,6 +53,7 @@ async fn empty(ctx: TestCtx) {
 						max_players_direct: 0,
 						max_players_party: 16,
 						listable: true,
+						taggable: false,
 
 						runtime: Some(matchmaker::LobbyRuntime {
 							runtime: Some(matchmaker::lobby_runtime::Runtime::Docker(
@@ -143,6 +144,7 @@ async fn empty(ctx: TestCtx) {
 						max_players_direct: 0,
 						max_players_party: 16,
 						listable: true,
+						taggable: false,
 
 						runtime: Some(matchmaker::LobbyRuntime {
 							runtime: Some(matchmaker::lobby_runtime::Runtime::Docker(
