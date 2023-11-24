@@ -216,30 +216,8 @@ pub fn __deserialize_header<T: FromStr + Send, U: Clone + AsHeaderName>(
 }
 
 #[doc(hidden)]
-pub fn __deserialize_optional_cookie<T: FromStr + Send>(
-	request: &Request<Body>,
-	cookie_name: &str,
-) -> GlobalResult<Option<T>> {
-	if let Some(cookie) = request
-		.headers()
-		.typed_get::<Cookie>()
-		.and_then(|cookie_header| cookie_header.get(cookie_name).map(ToOwned::to_owned))
-	{
-		Ok(Some(T::from_str(cookie.as_str()).map_err(|_| {
-			err_code!(API_BAD_COOKIE, cookie = cookie_name)
-		})?))
-	} else {
-		Ok(None)
-	}
-}
-
-#[doc(hidden)]
-pub fn __deserialize_cookie<T: FromStr + Send>(
-	request: &Request<Body>,
-	cookie_name: &str,
-) -> GlobalResult<T> {
-	__deserialize_optional_cookie::<T>(request, cookie_name)?
-		.ok_or_else(|| err_code!(API_MISSING_COOKIE, cookie = cookie_name))
+pub fn __deserialize_cookies(request: &Request<Body>) -> Option<Cookie> {
+	request.headers().typed_get::<Cookie>()
 }
 
 #[doc(hidden)]

@@ -144,6 +144,7 @@ dependencies = [
  "email-verification-complete",
  "email-verification-create",
  "faker-user",
+ "headers",
  "http",
  "hyper",
  "lazy_static",

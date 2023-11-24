@@ -24,9 +24,8 @@ const ENDPOINT_ARGUMENTS: &[&str] = &[
 	"body",
 	"body_as_bytes",
 	"body_as_stream",
-	"cookie",
+	"cookies",
 	"raw_remote_addr",
-	"opt_cookie",
 	"header",
 	"opt_auth",
 	"not_using_cloudflare",
@@ -862,33 +861,12 @@ impl EndpointFunction {
 							&router_config.route
 						)?;
 					})
-				} else if arg.label == "opt_cookie" {
-					let value = arg.value.expect_expr()?;
-
+				} else if arg.label == "cookies" {
 					let arg_name = format_ident!("{}_{}", arg.label, i);
 					arg_list.push(arg_name.to_token_stream());
 
-					let associated_type = arg
-						.associated_type
-						.map(|t| quote! { #t })
-						.unwrap_or_else(|| quote! { _ });
-
 					Ok(quote! {
-						let #arg_name = macro_util::__deserialize_optional_cookie::<#associated_type>(&request, #value)?;
-					})
-				} else if arg.label == "cookie" {
-					let value = arg.value.expect_expr()?;
-
-					let arg_name = format_ident!("{}_{}", arg.label, i);
-					arg_list.push(arg_name.to_token_stream());
-
-					let associated_type = arg
-						.associated_type
-						.map(|t| quote! { #t })
-						.unwrap_or_else(|| quote! { _ });
-
-					Ok(quote! {
-						let #arg_name = macro_util::__deserialize_cookie::<#associated_type>(&request, #value)?;
+						let #arg_name = macro_util::__deserialize_cookies(&request);
 					})
 				} else if arg.label == "header" {
 					let value = arg.value.expect_expr()?;
