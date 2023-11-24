@@ -8,6 +8,3 @@ provider "helm" {
 	}
 }
 
-provider "kubectl" {
-	config_path = var.kubeconfig_path
-}
