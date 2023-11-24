@@ -5,4 +5,3 @@
 ```
 aws s3 rm s3://foo --recursive
 ```
-

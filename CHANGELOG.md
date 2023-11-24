@@ -23,7 +23,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
--  **Infra** Job logs occasionally returning duplicate log lines
+-   **Infra** Job logs occasionally returning duplicate log lines
 
 ## [23.1.0] - 2023-10-30
 
