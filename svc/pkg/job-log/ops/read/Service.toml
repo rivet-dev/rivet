@@ -1,0 +1,13 @@
+[service]
+name = "job-log-read"
+
+[runtime]
+kind = "rust"
+
+[operation]
+
+[secrets]
+"clickhouse/users/chirp/password" = {}
+
+[databases]
+db-job-log = {}

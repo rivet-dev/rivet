@@ -160,7 +160,8 @@ pub async fn state_list(ctx: &ProjectContext, plan_id: &str) -> Option<Vec<Strin
 }
 
 pub async fn has_applied(ctx: &ProjectContext, plan_id: &str) -> bool {
-	state_list(ctx, plan_id)
-		.await
-		.map_or(false, |x| !x.is_empty())
+	// Check if there is any output
+	//
+	// HACK: This will have a false negative for plans that have no output variables
+	output(ctx, plan_id, true).await != serde_json::json!({})
 }

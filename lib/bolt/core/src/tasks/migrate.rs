@@ -320,6 +320,7 @@ pub async fn up(ctx: &ProjectContext, services: &[ServiceContext]) -> Result<()>
 					("bolt", ClickhouseRole::Admin),
 					("chirp", ClickhouseRole::Write),
 					("grafana", ClickhouseRole::Readonly),
+					("vector", ClickhouseRole::Write),
 				] {
 					let password = ctx
 						.read_secret(&["clickhouse", "users", username, "password"])

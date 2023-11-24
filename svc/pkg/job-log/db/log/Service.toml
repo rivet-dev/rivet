@@ -1,0 +1,7 @@
+[service]
+name = "db-job-log"
+
+[runtime]
+kind = "clickhouse"
+
+[database]

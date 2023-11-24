@@ -14,6 +14,14 @@ impl WatchIndexQuery {
 		self.watch_index.is_some()
 	}
 
+	pub fn as_i64(&self) -> Result<Option<i64>, ClientError> {
+		self.watch_index
+			.as_ref()
+			.map(|x| x.parse::<i64>())
+			.transpose()
+			.map_err(Into::into)
+	}
+
 	/// Converts the `WatchIndexQuery` into a `TailAnchor` for use with the Chirp client.
 	pub fn to_consumer(self) -> Result<Option<TailAnchor>, ClientError> {
 		if let Some(watch_index) = self.watch_index {

@@ -95,6 +95,7 @@ in
 
 			# Automatically connect to correct cluster
 			alias kubectl='KUBECONFIG=$(bolt output project-root)/gen/k8s/kubeconfig/$(bolt output namespace).yml kubectl'
+			alias helm='KUBECONFIG=$(bolt output project-root)/gen/k8s/kubeconfig/$(bolt output namespace).yml helm'
 
 			# Fix dynamic library path to fix issue with Python
 			export LD_LIBRARY_PATH="${pkgs.clang}/resource-root/lib:${pkgs.lib.strings.makeLibraryPath [ pkgs.openssl ]}"
