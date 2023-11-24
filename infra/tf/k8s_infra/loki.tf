@@ -36,7 +36,7 @@ resource "helm_release" "loki" {
 			resources = var.limit_resources ? {
 				limits = {
 					cpu = "4"
-					memory = "8192Mi"
+					memory = "2048Mi"
 				}
 			} : null
 		}
