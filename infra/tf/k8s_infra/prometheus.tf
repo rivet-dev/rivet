@@ -155,8 +155,8 @@ resource "helm_release" "prometheus" {
 
 				resources = var.limit_resources ? {
 					limits = {
-						memory = "${local.service_prometheus.resources.memory}Mi"
-						cpu = "${local.service_prometheus.resources.cpu}m"
+						memory = "${local.service_alertmanager.resources.memory}Mi"
+						cpu = "${local.service_alertmanager.resources.cpu}m"
 					}
 				} : null
 
@@ -200,9 +200,13 @@ resource "helm_release" "prometheus" {
 						]
 						equal = ["namespace", "alertname"]
 					},
+					# Disable info alerts
+					#
+					# See https://github.com/prometheus-community/helm-charts/issues/1773 for
+					# why we don't use InfoInhibitor
 					{
 						source_matchers = [
-							"alertname = \"InfoInhibitor\"",
+							"severity = info",
 						]
 						target_matchers = [
 							"severity = info",
@@ -220,7 +224,7 @@ resource "helm_release" "prometheus" {
 						{
 							receiver = "null"
 							matchers = [
-								"alertname =~ \"InfoInhibitor|Watchdog\""
+								"alertname = Watchdog"
 							]
 						}
 					]
@@ -295,6 +299,7 @@ resource "helm_release" "prometheus" {
 				KubeSchedulerDown = true
 				CPUThrottlingHigh = true
 				KubeJobNotCompleted = true
+				InfoInhibitor = true
 			}
 		}
 
