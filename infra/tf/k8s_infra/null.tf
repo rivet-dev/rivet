@@ -6,6 +6,6 @@
 # If this happens, the pods need to be manually deleted so the daemons
 # can schedule
 resource "null_resource" "daemons" {
-	depends_on = [helm_release.promtail, helm_release.pvc_exporter, helm_release.prometheus, helm_release.loki]
+	depends_on = [helm_release.promtail, helm_release.prometheus, helm_release.loki]
 }
 
