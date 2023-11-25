@@ -134,10 +134,10 @@ resource "kubectl_manifest" "pvc_rules" {
 							# Exclude Loki since it intentionally fills the disk space
 							expr = <<EOF
 							(
-								kubelet_volume_stats_used_bytes{persistentvolumeclaim!=\"storage-loki-0\"}
-								\
-								kubelet_volume_stats_capacity_bytes{persistentvolumeclaim!=\"storage-loki-0\"}
-							) * 100 > 75"
+								kubelet_volume_stats_used_bytes{persistentvolumeclaim!="storage-loki-0"}
+								/
+								kubelet_volume_stats_capacity_bytes{persistentvolumeclaim!="storage-loki-0"}
+							) * 100 > 75
 							EOF
 							labels = {
 								severity = "warning"
