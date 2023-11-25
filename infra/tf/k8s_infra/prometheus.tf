@@ -55,11 +55,11 @@ locals {
 		module.alertmanager_secrets.values["alertmanager/slack/channel"] != ""
 	)
 
-	_receivers = [
-		{
+	receivers = flatten([
+		[{
 			name = "null"
-		},
-		local.has_slack_receiver ? {
+		}],
+		local.has_slack_receiver ? [{
 			name = "slack"
 			slack_configs = [
 				{
@@ -68,9 +68,8 @@ locals {
 					send_resolved = true
 				}
 			]
-		} : null
-	]
-	receivers = [ for v in local._receivers : v if v != null ]
+		}] : []
+	])
 }
 
 module "alertmanager_secrets" {
@@ -200,19 +199,6 @@ resource "helm_release" "prometheus" {
 							"severity = info",
 						]
 						equal = ["namespace", "alertname"]
-					},
-					# Disable info alerts
-					#
-					# See https://github.com/prometheus-community/helm-charts/issues/1773 for
-					# why we don't use InfoInhibitor
-					{
-						source_matchers = [
-							"severity = info",
-						]
-						target_matchers = [
-							"severity = info",
-						]
-						equal = ["namespace"]
 					}
 				]
 				route = {
@@ -221,14 +207,20 @@ resource "helm_release" "prometheus" {
 					group_interval = "1m"
 					repeat_interval = "4h"
 					receiver = local.has_slack_receiver ? "slack" : "null"
-					routes = [
-						{
+					routes = flatten([
+						[{
 							receiver = "null"
 							matchers = [
 								"alertname = Watchdog"
 							]
-						}
-					]
+						}],
+						local.has_slack_receiver ? [{
+							receiver = "slack"
+							matchers = [
+								"severity = warning|critical"
+							]
+						}] : []
+					])
 				}
 				receivers = local.receivers
 				templates = [
