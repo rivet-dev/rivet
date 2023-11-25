@@ -65,6 +65,7 @@ locals {
 				{
 					channel = module.alertmanager_secrets.values["alertmanager/slack/channel"]
 					api_url = module.alertmanager_secrets.values["alertmanager/slack/url"]
+					send_resolved = true
 				}
 			]
 		} : null
