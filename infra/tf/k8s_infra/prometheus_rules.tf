@@ -9,13 +9,13 @@ locals {
 				summary = "Pod High Memory usage ({{ $labels.namespace }}/{{ $labels.pod }})"
 				description = "Pod Memory usage has been above 80% for over 2 minutes\n  VALUE = {{ printf \"%.2f%%\" $value }}\n  LABELS = {{ $labels }}"
 			}
-			# TODO: Maybe use kube_pod_container_resource_limits{resource="memory"} instead?
+			# Exclude Prometheus because it intentionally maintains high memory usage as a cache
 			expr = <<-EOF
 				(
-					sum(container_memory_working_set_bytes{name!=""})
+					sum(container_memory_working_set_bytes{name!="", container!="prometheus"})
 					BY (namespace, pod)
 					/
-					sum(kube_pod_container_resource_limits{resource="memory"} > 0)
+					sum(kube_pod_container_resource_limits{resource="memory", container!="prometheus"} > 0)
 					BY (namespace, pod)
 				) * 100
 				> 80
