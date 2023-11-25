@@ -206,7 +206,7 @@ resource "helm_release" "prometheus" {
 					group_wait = "15s"
 					group_interval = "1m"
 					repeat_interval = "4h"
-					receiver = local.has_slack_receiver ? "slack" : "null"
+					receiver = "null"
 					routes = flatten([
 						[{
 							receiver = "null"
