@@ -128,10 +128,10 @@ resource "kubectl_manifest" "pvc_rules" {
 						{
 							alert = "PVCHighDiskUsage"
 							annotations = {
-								summary = "Persistent volume claim almost full ({{ $labels.pvc_namespace }}/{{ $labels.persistentvolumeclaim }})"
-								description = "Persistent volume claim almost full ({{ printf \"%.2f%%\" $value }} of {{ $labels.pvc_requested_size_human }}) ({{ $labels.pvc_namespace }}/{{ $labels.persistentvolumeclaim }})"
+								summary = "Persistent volume claim almost full ({{ $labels.namespace }}/{{ $labels.persistentvolumeclaim }})"
+								description = "Persistent volume claim almost full ({{ printf \"%.2f%%\" $value }}) ({{ $labels.namespace }}/{{ $labels.persistentvolumeclaim }})"
 							}
-							expr = "pvc_usage * 100 > 75"
+							expr = "(kubelet_volume_stats_used_bytes / kubelet_volume_stats_capacity_bytes) * 100 > 75"
 							labels = {
 								severity = "warning"
 							}
