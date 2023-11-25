@@ -293,12 +293,10 @@ resource "helm_release" "prometheus" {
 				KubeSchedulerDown = true
 				CPUThrottlingHigh = true
 				KubeJobNotCompleted = true
+				PrometheusOutOfOrderTimestamps = true
 
 				# See https://github.com/prometheus-community/helm-charts/issues/1773#issue-1126092733
 				InfoInhibitor = true
-
-				# Unsure why this is failing
-				PrometheusOutOfOrderTimestamps = true
 			}
 		}
 
