@@ -39,6 +39,9 @@ resource "helm_release" "loki" {
 					memory = "2048Mi"
 				}
 			} : null
+			persistence = {
+				size = var.deploy_method_cluster ? "128Gi" : "10Gi"
+			}
 		}
 		monitoring = {
 			lokiCanary = {
