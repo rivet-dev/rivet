@@ -131,7 +131,14 @@ resource "kubectl_manifest" "pvc_rules" {
 								summary = "Persistent volume claim almost full ({{ $labels.namespace }}/{{ $labels.persistentvolumeclaim }})"
 								description = "Persistent volume claim almost full ({{ printf \"%.2f%%\" $value }}) ({{ $labels.namespace }}/{{ $labels.persistentvolumeclaim }})"
 							}
-							expr = "(kubelet_volume_stats_used_bytes / kubelet_volume_stats_capacity_bytes) * 100 > 75"
+							# Exclude Loki since it intentionally fills the disk space
+							expr = <<EOF
+							(
+								kubelet_volume_stats_used_bytes{persistentvolumeclaim!=\"storage-loki-0\"}
+								\
+								kubelet_volume_stats_capacity_bytes{persistentvolumeclaim!=\"storage-loki-0\"}
+							) * 100 > 75"
+							EOF
 							labels = {
 								severity = "warning"
 							}
