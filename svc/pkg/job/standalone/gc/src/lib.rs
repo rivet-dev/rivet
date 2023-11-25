@@ -18,7 +18,6 @@ pub const CHECK_ORPHANED_JOB_THRESHOLD: i64 = util::duration::hours(1);
 pub async fn run_from_env(ts: i64, pools: rivet_pools::Pools) -> GlobalResult<()> {
 	let check_orphaned_ts = ts - CHECK_ORPHANED_JOB_THRESHOLD;
 
-	let pools = rivet_pools::from_env("job-gc").await?;
 	let client = chirp_client::SharedClient::from_env(pools.clone())?.wrap_new("job-gc");
 	let cache = rivet_cache::CacheInner::from_env(pools.clone())?;
 	let ctx = OperationContext::new(
