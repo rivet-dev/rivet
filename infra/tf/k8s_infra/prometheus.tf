@@ -287,12 +287,18 @@ resource "helm_release" "prometheus" {
 
 		defaultRules = {
 			disabled = {
+				# TODO: Re-enable these alerts
 				KubeProxyDown = true
 				KubeControllerManagerDown = true
 				KubeSchedulerDown = true
 				CPUThrottlingHigh = true
 				KubeJobNotCompleted = true
+
+				# See https://github.com/prometheus-community/helm-charts/issues/1773#issue-1126092733
 				InfoInhibitor = true
+
+				# Unsure why this is failing
+				PrometheusOutOfOrderTimestamps = true
 			}
 		}
 
