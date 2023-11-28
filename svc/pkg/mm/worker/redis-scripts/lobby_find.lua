@@ -12,9 +12,9 @@ local key_ns_player_ids = KEYS[3]
 local key_player_unregistered = KEYS[4]
 
 -- Extract names into list
-local lobby_tag_names = {}
+local query_tag_names = {}
 for tag_name, _ in pairs(query.tags) do
-	lobby_tag_names[#lobby_tag_names + 1] = tag_name
+	query_tag_names[#query_tag_names + 1] = tag_name
 end
 
 -- MARK: Find
@@ -64,41 +64,65 @@ elseif query.kind.lobby_group ~= nil then
 	for i = 1, available_spots_key_count do
 		local key_available_spots = KEYS[available_spots_key_idx + i]
 
-		-- Find the lobby with the least available spots (i.e. the most full lobby)
-		--
-		-- We always use `max_players_normal` when finding lobby groups
-		-- instead of `max_players_party` because `max_players_party` is
-		-- only relevant when joining a lobby with the exact lobby ID (i.e.
-		-- where `max_players_direct` would normally be used).
-		local lobby = redis.call('ZRANGEBYSCORE', key_available_spots, #query.players, '+inf', 'WITHSCORES',
-			'LIMIT', '0', '1')
-		if #lobby > 0 then
-			local lobby_id = lobby[1]
-			local available_spots = tonumber(lobby[2])
-			local correct_tags = 0
+		-- No lobby tags, continue normally
+		if #query_tag_names == 0 then
+			-- Find the lobby with the least available spots (i.e. the most full lobby)
+			--
+			-- We always use `max_players_normal` when finding lobby groups
+			-- instead of `max_players_party` because `max_players_party` is
+			-- only relevant when joining a lobby with the exact lobby ID (i.e.
+			-- where `max_players_direct` would normally be used).
+			local lobby = redis.call('ZRANGEBYSCORE', key_available_spots, #query.players, '+inf',
+				'WITHSCORES', 'LIMIT', '0', '1')
 
-			-- Verify tags
-			if #lobby_tag_names > 0 then
-				-- Fetch specified lobby tags
-				local key_lobby_tags = '{global}:mm:lobby:' .. lobby_id .. ':tags'
-				local lobby_tags = redis.call('HMGET', key_lobby_tags, unpack(lobby_tag_names))
+			if #lobby > 0 then
+				local lobby_id = lobby[1]
+				local available_spots = tonumber(lobby[2])
 				
-				-- Check that all tags are correct
-				for tag_idx, tag in ipairs(lobby_tags) do
-					if query.tags[lobby_tag_names[tag_idx]] ~= tag then
-						break
-					end
-
-					correct_tags = correct_tags + 1
-				end
-			end
-
-			-- Check if the correct number of tags have been parsed
-			if correct_tags == #lobby_tag_names then
 				-- Set as best lobby if no lobby selected or lobby is more full
 				if best_lobby_id == nil or available_spots < best_available_spots then
 					best_lobby_id = lobby_id
 					best_available_spots = available_spots
+				end
+			end
+		else
+			-- Max iteration count is 128 to prevent spinning
+			local MAX_LOBBY_COUNT = 128
+
+			-- With lobby tags we need to query each available spots key multiple times until we find a
+			-- lobby that matches
+			local lobbies = redis.call('ZRANGEBYSCORE', key_available_spots, #query.players, '+inf',
+				'WITHSCORES', 'LIMIT', '0', tostring(MAX_LOBBY_COUNT))
+
+			for i = 1, #lobbies, 2 do
+				local lobby_id = lobbies[i]
+				local available_spots = tonumber(lobbies[i + 1])
+				local correct_tags = 0
+
+				-- Verify tags
+				if #query_tag_names > 0 then	
+					-- Fetch specified lobby tags
+					local key_lobby_tags = '{global}:mm:lobby:' .. lobby_id .. ':tags'
+					local lobby_tags = redis.call('HMGET', key_lobby_tags, unpack(query_tag_names))
+							
+					-- Check that all tags are correct
+					for tag_idx, tag in ipairs(lobby_tags) do
+						if query.tags[query_tag_names[tag_idx]] ~= tag then
+							break
+						end
+		
+						correct_tags = correct_tags + 1
+					end
+				end
+		
+				-- Check if the correct number of tags have been parsed
+				if correct_tags == #query_tag_names and
+					(best_lobby_id == nil or available_spots < best_available_spots)
+				then
+					best_lobby_id = lobby_id
+					best_available_spots = available_spots
+
+					break
 				end
 			end
 		end
