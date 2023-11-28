@@ -5110,7 +5110,6 @@ dependencies = [
  "redis-util",
  "regex",
  "region-get",
- "region-list",
  "reqwest",
  "rivet-health-checks",
  "rivet-metrics",

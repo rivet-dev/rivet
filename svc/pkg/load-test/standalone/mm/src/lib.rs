@@ -326,6 +326,7 @@ async fn setup_game(
 					max_players_party: 4,
 					listable: true,
 					taggable: false,
+					allow_dynamic_max_players: false,
 
 					runtime: Some(backend::matchmaker::lobby_runtime::Docker {
 						build_id: build_res.build_id,
@@ -428,6 +429,7 @@ async fn create_lobby(ctx: &Ctx) -> GlobalResult<models::MatchmakerCreateLobbyRe
 				turnstile: None,
 			})),
 			tags: None,
+			max_players: None,
 		},
 	)
 	.await?;
@@ -450,6 +452,7 @@ async fn find_lobby(ctx: &Ctx) -> GlobalResult<models::MatchmakerFindLobbyRespon
 				turnstile: None,
 			})),
 			tags: None,
+			max_players: None,
 		},
 		None,
 	)

@@ -75,6 +75,7 @@ pub async fn join(
 		None,
 		body.captcha,
 		&HashMap::new(),
+		None,
 		VerificationType::UserData(body.verification_data.flatten()),
 	)
 	.await?;
@@ -163,6 +164,27 @@ pub async fn find(
 		}
 	}
 
+	// Validate player count
+	if let Some(max_players) = body.max_players {
+		ensure_with!(max_players >= 1, MATCHMAKER_DYNAMIC_MAX_PLAYERS_INVALID);
+
+		for (lgc, _) in &lobby_groups {
+			ensure_with!(
+				lgc.allow_dynamic_max_players,
+				MATCHMAKER_DYNAMIC_MAX_PLAYERS_DISABLED,
+				game_mode = lgc.name_id
+			);
+
+			let max = lgc.max_players_normal.max(lgc.max_players_direct) as i32;
+			ensure_with!(
+				max_players <= max,
+				MATCHMAKER_DYNAMIC_MAX_PLAYERS_INVALID,
+				game_mode = lgc.name_id,
+				max = max
+			);
+		}
+	}
+
 	// Resolve region IDs
 	let region_ids = resolve_region_ids(&ctx, coords, body.regions.as_ref(), &lobby_groups).await?;
 
@@ -239,6 +261,7 @@ pub async fn find(
 		None,
 		body.captcha,
 		&tags,
+		body.max_players,
 		VerificationType::UserData(body.verification_data.flatten()),
 	)
 	.await?;
@@ -314,6 +337,27 @@ pub async fn create(
 		);
 	}
 
+	// Validate player count
+	if let Some(max_players) = body.max_players {
+		ensure_with!(max_players >= 1, MATCHMAKER_DYNAMIC_MAX_PLAYERS_INVALID);
+
+		ensure_with!(
+			lobby_group.allow_dynamic_max_players,
+			MATCHMAKER_DYNAMIC_MAX_PLAYERS_DISABLED,
+			game_mode = lobby_group.name_id
+		);
+
+		let max = lobby_group
+			.max_players_normal
+			.max(lobby_group.max_players_direct) as i32;
+		ensure_with!(
+			max_players <= max,
+			MATCHMAKER_DYNAMIC_MAX_PLAYERS_INVALID,
+			game_mode = lobby_group.name_id,
+			max = max
+		);
+	}
+
 	let publicity = match body.publicity {
 		Some(publicity) => ApiInto::api_into(publicity),
 		// Default publicity to public if enabled, otherwise private
@@ -334,6 +378,8 @@ pub async fn create(
 		}
 	};
 
+	let dynamic_max_players = body.max_players.map(ApiTryInto::try_into).transpose()?;
+
 	// Verify that lobby creation is enabled and user can create a lobby
 	util_mm::verification::verify_config(
 		ctx.op_ctx(),
@@ -343,6 +389,7 @@ pub async fn create(
 			user_id,
 			client_info: vec![ctx.client_info()],
 			tags: &tags,
+			dynamic_max_players,
 
 			lobby_groups: &[lobby_group.clone()],
 			lobby_group_meta: &[lobby_group_meta.clone()],
@@ -395,6 +442,7 @@ pub async fn create(
 				.as_ref()
 				.map(serde_json::to_string)
 				.transpose()?,
+			dynamic_max_players: dynamic_max_players,
 		})
 		.await?;
 
@@ -414,6 +462,7 @@ pub async fn create(
 		Some(version_config.clone()),
 		body.captcha,
 		&tags,
+		body.max_players,
 		// Bypassing join verification because this user created the lobby (create verification
 		// already happened)
 		VerificationType::Bypass,
@@ -827,6 +876,7 @@ async fn find_inner(
 	version_config: Option<backend::matchmaker::VersionConfig>,
 	captcha: Option<Box<models::CaptchaConfig>>,
 	tags: &HashMap<String, String>,
+	dynamic_max_players: Option<i32>,
 	verification: VerificationType,
 ) -> GlobalResult<FindResponse> {
 	let (version_config, user_id) = tokio::try_join!(
@@ -971,6 +1021,9 @@ async fn find_inner(
 		},
 		bypass_verification: matches!(verification, VerificationType::Bypass),
 		tags: tags.clone(),
+		dynamic_max_players: dynamic_max_players
+			.map(ApiTryInto::try_into)
+			.transpose()?,
 	})
 	.await?;
 	let lobby_id = match find_res

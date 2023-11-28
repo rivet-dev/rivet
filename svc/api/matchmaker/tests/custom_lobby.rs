@@ -22,6 +22,7 @@ async fn create_custom_lobby() {
 				lobby_config: Some(Some(json!({ "foo": "bar" }))),
 				verification_data: None,
 				tags: None,
+				max_players: None,
 				captcha: Some(Box::new(models::CaptchaConfig {
 					hcaptcha: Some(Box::new(models::CaptchaConfigHcaptcha {
 						client_response: "10000000-aaaa-bbbb-cccc-000000000001".to_string(),

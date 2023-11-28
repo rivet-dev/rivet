@@ -37,6 +37,7 @@ impl ApiTryFrom<models::CloudVersionMatchmakerLobbyGroup> for backend::matchmake
 			max_players_party: value.max_players_party as u32,
 			listable: true,
 			taggable: false,
+			allow_dynamic_max_players: false,
 
 			runtime: Some((*value.runtime).try_into()?),
 

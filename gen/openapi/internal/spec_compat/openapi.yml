@@ -2082,6 +2082,8 @@ components:
       properties:
         actions:
           $ref: '#/components/schemas/CloudVersionMatchmakerGameModeActions'
+        allow_dynamic_max_players:
+          type: boolean
         docker:
           $ref: '#/components/schemas/CloudVersionMatchmakerGameModeRuntimeDocker'
         idle_lobbies:
@@ -11483,6 +11485,8 @@ paths:
                 game_mode:
                   type: string
                 lobby_config: {}
+                max_players:
+                  type: integer
                 publicity:
                   $ref: '#/components/schemas/MatchmakerCustomLobbyPublicity'
                 region:
@@ -11564,6 +11568,8 @@ paths:
                   items:
                     type: string
                   type: array
+                max_players:
+                  type: integer
                 prevent_auto_create_lobby:
                   type: boolean
                 regions:

@@ -43,5 +43,7 @@ message Message {
 	// Bypasses user data verification (if the give lobby group has any).
 	bool bypass_verification = 203;
 	map<string, string> tags = 204;
+	// User configured player count that overrides the config.
+	optional uint32 dynamic_max_players = 205;
 }
 

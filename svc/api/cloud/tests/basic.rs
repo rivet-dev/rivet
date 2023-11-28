@@ -531,6 +531,7 @@ async fn generic() {
 				is_custom: false,
 				publicity: None,
 				lobby_config_json: None,
+				dynamic_max_players: None,
 			})
 			.await
 			.unwrap();

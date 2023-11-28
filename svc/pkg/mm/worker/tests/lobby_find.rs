@@ -30,9 +30,6 @@ async fn direct(ctx: TestCtx) {
 				},
 			),
 			user_id: None,
-			verification_data_json: None,
-			bypass_verification: false,
-			tags: HashMap::new(),
 		},
 	)
 	.await
@@ -69,9 +66,6 @@ async fn lobby_group_existing(ctx: TestCtx) {
 				},
 			),
 			user_id: None,
-			verification_data_json: None,
-			bypass_verification: false,
-			tags: HashMap::new(),
 		},
 	)
 	.await
@@ -100,7 +94,7 @@ async fn direct_closed(ctx: TestCtx) {
 	.await
 	.unwrap();
 
-	let err = find(
+	find(
 		&ctx,
 		FindRequest {
 			namespace_id: lobby_res.namespace_id.as_ref().unwrap().as_uuid(),
@@ -111,9 +105,6 @@ async fn direct_closed(ctx: TestCtx) {
 				},
 			),
 			user_id: None,
-			verification_data_json: None,
-			bypass_verification: false,
-			tags: HashMap::new(),
 		},
 	)
 	.await
@@ -154,9 +145,6 @@ async fn lobby_group_closed(ctx: TestCtx) {
 				},
 			),
 			user_id: None,
-			verification_data_json: None,
-			bypass_verification: false,
-			tags: HashMap::new(),
 		},
 	)
 	.await
@@ -188,9 +176,6 @@ async fn lobby_group_closed(ctx: TestCtx) {
 				},
 			),
 			user_id: None,
-			verification_data_json: None,
-			bypass_verification: false,
-			tags: HashMap::new(),
 		},
 	)
 	.await
@@ -234,9 +219,6 @@ async fn lobby_group_closed_auto_create(ctx: TestCtx) {
 				},
 			),
 			user_id: None,
-			verification_data_json: None,
-			bypass_verification: false,
-			tags: HashMap::new(),
 		},
 	)
 	.await
@@ -268,9 +250,6 @@ async fn lobby_crash_immediate(ctx: TestCtx) {
 				},
 			),
 			user_id: None,
-			verification_data_json: None,
-			bypass_verification: false,
-			tags: HashMap::new(),
 		},
 	)
 	.await
@@ -331,9 +310,6 @@ async fn max_players_per_client(ctx: TestCtx) {
 					},
 				),
 				user_id: None,
-				verification_data_json: None,
-				bypass_verification: false,
-				tags: HashMap::new(),
 			},
 		)
 		.await;
@@ -373,9 +349,6 @@ async fn lobby_group_auto_create(ctx: TestCtx) {
 				},
 			),
 			user_id: None,
-			verification_data_json: None,
-			bypass_verification: false,
-			tags: HashMap::new(),
 		},
 	)
 	.await
@@ -403,9 +376,6 @@ async fn lobby_group_no_auto_create(ctx: TestCtx) {
 				},
 			),
 			user_id: None,
-			verification_data_json: None,
-			bypass_verification: false,
-			tags: HashMap::new(),
 		},
 	)
 	.await
@@ -438,9 +408,6 @@ async fn join_disabled(ctx: TestCtx) {
 				},
 			),
 			user_id: None,
-			verification_data_json: None,
-			bypass_verification: false,
-			tags: HashMap::new(),
 		},
 	)
 	.await
@@ -474,9 +441,6 @@ async fn guest_verification(ctx: TestCtx) {
 				},
 			),
 			user_id: None,
-			verification_data_json: None,
-			bypass_verification: false,
-			tags: HashMap::new(),
 		},
 	)
 	.await
@@ -498,9 +462,6 @@ async fn guest_verification(ctx: TestCtx) {
 				},
 			),
 			user_id: Some(user_id),
-			verification_data_json: None,
-			bypass_verification: false,
-			tags: HashMap::new(),
 		},
 	)
 	.await
@@ -534,9 +495,6 @@ async fn registered_verification(ctx: TestCtx) {
 				},
 			),
 			user_id: None,
-			verification_data_json: None,
-			bypass_verification: false,
-			tags: HashMap::new(),
 		},
 	)
 	.await
@@ -558,9 +516,6 @@ async fn registered_verification(ctx: TestCtx) {
 				},
 			),
 			user_id: Some(user_id),
-			verification_data_json: None,
-			bypass_verification: false,
-			tags: HashMap::new(),
 		},
 	)
 	.await
@@ -596,9 +551,6 @@ async fn registered_verification(ctx: TestCtx) {
 				},
 			),
 			user_id: Some(user_id),
-			verification_data_json: None,
-			bypass_verification: false,
-			tags: HashMap::new(),
 		},
 	)
 	.await
@@ -620,7 +572,7 @@ async fn bypass_verification(ctx: TestCtx) {
 	)
 	.await;
 
-	let _find_res = find(
+	let _find_res = find_with_verification(
 		&ctx,
 		FindRequest {
 			namespace_id,
@@ -631,10 +583,9 @@ async fn bypass_verification(ctx: TestCtx) {
 				},
 			),
 			user_id: None,
-			verification_data_json: None,
-			bypass_verification: true,
-			tags: HashMap::new(),
 		},
+		None,
+		true,
 	)
 	.await
 	.unwrap();
@@ -671,9 +622,6 @@ async fn external_verification(ctx: TestCtx) {
 				},
 			),
 			user_id: None,
-			verification_data_json: None,
-			bypass_verification: false,
-			tags: HashMap::new(),
 		},
 	)
 	.await
@@ -706,9 +654,6 @@ async fn external_verification(ctx: TestCtx) {
 				},
 			),
 			user_id: Some(user_id),
-			verification_data_json: None,
-			bypass_verification: false,
-			tags: HashMap::new(),
 		},
 	)
 	.await
@@ -727,7 +672,7 @@ async fn tagged(ctx: TestCtx) {
 	.await
 	.unwrap();
 
-	let find_res1 = find(
+	let find_res1 = find_with_tags(
 		&ctx,
 		FindRequest {
 			namespace_id: lobby_res.namespace_id.as_ref().unwrap().as_uuid(),
@@ -743,17 +688,15 @@ async fn tagged(ctx: TestCtx) {
 				},
 			),
 			user_id: None,
-			verification_data_json: None,
-			bypass_verification: false,
-			tags: hashmap! {
-				"mytag".to_string() => "1234".to_string(),
-			},
+		},
+		hashmap! {
+			"mytag".to_string() => "1234".to_string(),
 		},
 	)
 	.await
 	.unwrap();
 
-	let find_res2 = find(
+	let find_res2 = find_with_tags(
 		&ctx,
 		FindRequest {
 			namespace_id: lobby_res.namespace_id.as_ref().unwrap().as_uuid(),
@@ -769,11 +712,9 @@ async fn tagged(ctx: TestCtx) {
 				},
 			),
 			user_id: None,
-			verification_data_json: None,
-			bypass_verification: false,
-			tags: hashmap! {
-				"mytag".to_string() => "1234".to_string(),
-			},
+		},
+		hashmap! {
+			"mytag".to_string() => "1234".to_string(),
 		},
 	)
 	.await
@@ -781,7 +722,7 @@ async fn tagged(ctx: TestCtx) {
 
 	assert_eq!(find_res1.lobby_id, find_res2.lobby_id, "found wrong lobby");
 
-	let find_res3 = find(
+	let find_res3 = find_with_tags(
 		&ctx,
 		FindRequest {
 			namespace_id: lobby_res.namespace_id.as_ref().unwrap().as_uuid(),
@@ -797,12 +738,10 @@ async fn tagged(ctx: TestCtx) {
 				},
 			),
 			user_id: None,
-			verification_data_json: None,
-			bypass_verification: false,
-			tags: hashmap! {
-				"mytag".to_string() => "1234".to_string(),
-				"othertag".to_string() => "foobar".to_string(),
-			},
+		},
+		hashmap! {
+			"mytag".to_string() => "1234".to_string(),
+			"othertag".to_string() => "foobar".to_string(),
 		},
 	)
 	.await
@@ -823,7 +762,7 @@ async fn tagged_no_auto_create(ctx: TestCtx) {
 	.await
 	.unwrap();
 
-	let err = find(
+	let err = find_with_tags(
 		&ctx,
 		FindRequest {
 			namespace_id: lobby_res.namespace_id.as_ref().unwrap().as_uuid(),
@@ -836,11 +775,9 @@ async fn tagged_no_auto_create(ctx: TestCtx) {
 				},
 			),
 			user_id: None,
-			verification_data_json: None,
-			bypass_verification: false,
-			tags: hashmap! {
-				"mytag".to_string() => "1234".to_string(),
-			},
+		},
+		hashmap! {
+			"mytag".to_string() => "1234".to_string(),
 		},
 	)
 	.await
@@ -848,6 +785,58 @@ async fn tagged_no_auto_create(ctx: TestCtx) {
 
 	assert_eq!(
 		mm::msg::lobby_find_fail::ErrorCode::NoAvailableLobbies as i32,
+		err.error_code
+	);
+}
+
+#[worker_test]
+async fn dynamic_max_players(ctx: TestCtx) {
+	if !util::feature::job_run() {
+		return;
+	}
+
+	let lobby_group = create_lobby_group(&ctx, None).await;
+
+	let find_res = find_with_dynamic_max_players(
+		&ctx,
+		FindRequest {
+			namespace_id: lobby_group.namespace_id,
+			players: gen_players(1),
+			query: mm::msg::lobby_find::message::Query::LobbyGroup(
+				backend::matchmaker::query::LobbyGroup {
+					lobby_group_ids: vec![lobby_group.lobby_group_id.into()],
+					region_ids: vec![lobby_group.region_id.into()],
+					auto_create: Some(backend::matchmaker::query::AutoCreate {
+						lobby_group_id: Some(lobby_group.lobby_group_id.into()),
+						region_id: Some(lobby_group.region_id.into()),
+					}),
+				},
+			),
+			user_id: None,
+		},
+		1,
+	)
+	.await
+	.unwrap();
+
+	let err = find(
+		&ctx,
+		FindRequest {
+			namespace_id: lobby_group.namespace_id,
+			players: gen_players(1),
+			query: mm::msg::lobby_find::message::Query::Direct(
+				backend::matchmaker::query::Direct {
+					lobby_id: find_res.lobby_id,
+				},
+			),
+			user_id: None,
+		},
+	)
+	.await
+	.unwrap_err();
+
+	assert_eq!(
+		mm::msg::lobby_find_fail::ErrorCode::LobbyFull as i32,
 		err.error_code
 	);
 }
@@ -872,12 +861,7 @@ async fn gen_verification_lobby(
 	identity_requirement: backend::matchmaker::IdentityRequirement,
 	verification: Option<backend::matchmaker::VerificationConfig>,
 ) -> (Uuid, Uuid) {
-	let region_list_res = op!([ctx] region_list {
-		..Default::default()
-	})
-	.await
-	.unwrap();
-
+	let region_res = op!([ctx] faker_region {}).await.unwrap();
 	let game_res = op!([ctx] faker_game {
 		..Default::default()
 	})
@@ -898,25 +882,23 @@ async fn gen_verification_lobby(
 			lobby_groups: vec![backend::matchmaker::LobbyGroup {
 				name_id: "test-1".into(),
 
-				regions: region_list_res
-					.region_ids
-					.iter()
-					.cloned()
-					.map(|region_id| backend::matchmaker::lobby_group::Region {
-						region_id: Some(region_id),
+				regions: vec![
+					backend::matchmaker::lobby_group::Region {
+						region_id: region_res.region_id,
 						tier_name_id: util_mm::test::TIER_NAME_ID.to_owned(),
 						idle_lobbies: Some(backend::matchmaker::lobby_group::IdleLobbies {
 							min_idle_lobbies: 0,
 							max_idle_lobbies: 2,
 						}),
-					})
-					.collect(),
+					},
+				],
 
 				max_players_normal: 8,
 				max_players_direct: 10,
 				max_players_party: 12,
 				listable: true,
 				taggable: false,
+				allow_dynamic_max_players: false,
 
 				runtime: Some(
 					backend::matchmaker::lobby_runtime::Docker {
@@ -965,12 +947,7 @@ async fn gen_verification_lobby(
 }
 
 async fn gen_disabled_lobby(ctx: &TestCtx) -> (Uuid, Uuid) {
-	let region_list_res = op!([ctx] region_list {
-		..Default::default()
-	})
-	.await
-	.unwrap();
-
+	let region_res = op!([ctx] faker_region {}).await.unwrap();
 	let game_res = op!([ctx] faker_game {
 		..Default::default()
 	})
@@ -991,25 +968,23 @@ async fn gen_disabled_lobby(ctx: &TestCtx) -> (Uuid, Uuid) {
 			lobby_groups: vec![backend::matchmaker::LobbyGroup {
 				name_id: "test-1".into(),
 
-				regions: region_list_res
-					.region_ids
-					.iter()
-					.cloned()
-					.map(|region_id| backend::matchmaker::lobby_group::Region {
-						region_id: Some(region_id),
+				regions: vec![
+					backend::matchmaker::lobby_group::Region {
+						region_id: region_res.region_id,
 						tier_name_id: util_mm::test::TIER_NAME_ID.to_owned(),
 						idle_lobbies: Some(backend::matchmaker::lobby_group::IdleLobbies {
 							min_idle_lobbies: 0,
 							max_idle_lobbies: 2,
 						}),
-					})
-					.collect(),
+					},
+				],
 
 				max_players_normal: 8,
 				max_players_direct: 10,
 				max_players_party: 12,
 				listable: true,
 				taggable: false,
+				allow_dynamic_max_players: false,
 
 				runtime: Some(
 					backend::matchmaker::lobby_runtime::Docker {
@@ -1099,6 +1074,7 @@ async fn create_lobby_group(ctx: &TestCtx, image: Option<faker::build::Image>) -
 				max_players_party: 12,
 				listable: true,
 				taggable: false,
+				allow_dynamic_max_players: false,
 
 				runtime: Some(backend::matchmaker::lobby_runtime::Docker {
 					// We can't use `curlimages/curl` here because it doesn't allow for
@@ -1160,9 +1136,6 @@ struct FindRequest {
 	players: Vec<mm::msg::lobby_find::Player>,
 	query: mm::msg::lobby_find::message::Query,
 	user_id: Option<Uuid>,
-	verification_data_json: Option<String>,
-	bypass_verification: bool,
-	tags: HashMap<String, String>,
 }
 
 async fn find(
@@ -1181,9 +1154,89 @@ async fn find(
 		query: Some(req.query),
 
 		user_id: req.user_id.map(Into::into),
-		verification_data_json: req.verification_data_json,
-		bypass_verification: req.bypass_verification,
-		tags: req.tags,
+		verification_data_json: None,
+		bypass_verification: false,
+		tags: HashMap::new(),
+		dynamic_max_players: None,
+	})
+	.await
+	.unwrap()
+}
+
+async fn find_with_verification(
+	ctx: &TestCtx,
+	req: FindRequest,
+	verification_data_json: Option<String>,
+	bypass_verification: bool,
+) -> Result<
+	chirp_client::message::ReceivedMessage<mm::msg::lobby_find_complete::Message>,
+	chirp_client::message::ReceivedMessage<mm::msg::lobby_find_fail::Message>,
+> {
+	let query_id = Uuid::new_v4();
+	msg!([ctx] @notrace mm::msg::lobby_find(req.namespace_id, query_id) -> Result<mm::msg::lobby_find_complete, mm::msg::lobby_find_fail> {
+		namespace_id: Some(req.namespace_id.into()),
+		query_id: Some(query_id.into()),
+		join_kind: backend::matchmaker::query::JoinKind::Normal as i32,
+		players: req.players,
+		query: Some(req.query),
+
+		user_id: req.user_id.map(Into::into),
+		verification_data_json: verification_data_json,
+		bypass_verification: bypass_verification,
+		tags: HashMap::new(),
+		dynamic_max_players: None,
+	})
+	.await
+	.unwrap()
+}
+
+async fn find_with_tags(
+	ctx: &TestCtx,
+	req: FindRequest,
+	tags: HashMap<String, String>,
+) -> Result<
+	chirp_client::message::ReceivedMessage<mm::msg::lobby_find_complete::Message>,
+	chirp_client::message::ReceivedMessage<mm::msg::lobby_find_fail::Message>,
+> {
+	let query_id = Uuid::new_v4();
+	msg!([ctx] @notrace mm::msg::lobby_find(req.namespace_id, query_id) -> Result<mm::msg::lobby_find_complete, mm::msg::lobby_find_fail> {
+		namespace_id: Some(req.namespace_id.into()),
+		query_id: Some(query_id.into()),
+		join_kind: backend::matchmaker::query::JoinKind::Normal as i32,
+		players: req.players,
+		query: Some(req.query),
+
+		user_id: req.user_id.map(Into::into),
+		verification_data_json: None,
+		bypass_verification: false,
+		tags: tags,
+		dynamic_max_players: None,
+	})
+	.await
+	.unwrap()
+}
+
+async fn find_with_dynamic_max_players(
+	ctx: &TestCtx,
+	req: FindRequest,
+	dynamic_max_players: u32,
+) -> Result<
+	chirp_client::message::ReceivedMessage<mm::msg::lobby_find_complete::Message>,
+	chirp_client::message::ReceivedMessage<mm::msg::lobby_find_fail::Message>,
+> {
+	let query_id = Uuid::new_v4();
+	msg!([ctx] @notrace mm::msg::lobby_find(req.namespace_id, query_id) -> Result<mm::msg::lobby_find_complete, mm::msg::lobby_find_fail> {
+		namespace_id: Some(req.namespace_id.into()),
+		query_id: Some(query_id.into()),
+		join_kind: backend::matchmaker::query::JoinKind::Normal as i32,
+		players: req.players,
+		query: Some(req.query),
+
+		user_id: req.user_id.map(Into::into),
+		verification_data_json: None,
+		bypass_verification: false,
+		tags: HashMap::new(),
+		dynamic_max_players: Some(dynamic_max_players),
 	})
 	.await
 	.unwrap()

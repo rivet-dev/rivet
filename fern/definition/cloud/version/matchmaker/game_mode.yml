@@ -22,6 +22,8 @@ types:
         type: optional<boolean>
       taggable:
         type: optional<boolean>
+      allow_dynamic_max_players:
+        type: optional<boolean>
 
       actions:
         type: optional<GameModeActions>

@@ -7047,6 +7047,8 @@ paths:
                   type: object
                   additionalProperties:
                     type: string
+                max_players:
+                  type: integer
                 captcha:
                   $ref: '#/components/schemas/CaptchaConfig'
                 verification_data: {}
@@ -7183,15 +7185,17 @@ paths:
                   type: string
                 region:
                   type: string
-                captcha:
-                  $ref: '#/components/schemas/CaptchaConfig'
                 publicity:
                   $ref: '#/components/schemas/MatchmakerCustomLobbyPublicity'
                 tags:
                   type: object
                   additionalProperties:
                     type: string
+                max_players:
+                  type: integer
                 lobby_config: {}
+                captcha:
+                  $ref: '#/components/schemas/CaptchaConfig'
                 verification_data: {}
               required:
                 - game_mode
@@ -9859,6 +9863,8 @@ components:
         listable:
           type: boolean
         taggable:
+          type: boolean
+        allow_dynamic_max_players:
           type: boolean
         actions:
           $ref: '#/components/schemas/CloudVersionMatchmakerGameModeActions'

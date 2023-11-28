@@ -92,6 +92,7 @@ pub struct FindOpts<'a> {
 	pub lobby_group_config: &'a LobbyGroupConfig,
 	pub auto_create_lobby_id: Uuid,
 	pub tags: &'a HashMap<String, String>,
+	pub dynamic_max_players: Option<u32>,
 }
 
 pub struct FindOutput {
@@ -117,6 +118,7 @@ pub async fn find(
 		lobby_group_config,
 		auto_create_lobby_id,
 		tags,
+		dynamic_max_players,
 	}: FindOpts<'_>,
 ) -> GlobalResult<Option<FindOutput>> {
 	use util_mm::key;
@@ -193,9 +195,9 @@ pub async fn find(
 						namespace_id,
 						region_id,
 						lobby_group_id,
-						max_players_normal: lobby_group.max_players_normal,
+						max_players_normal: dynamic_max_players.unwrap_or(lobby_group.max_players_normal),
+						max_players_direct: dynamic_max_players.unwrap_or(lobby_group.max_players_direct),
 						max_players_party: lobby_group.max_players_party,
-						max_players_direct: lobby_group.max_players_direct,
 						preemptive: true,
 						ready_ts: None,
 						is_closed: false,

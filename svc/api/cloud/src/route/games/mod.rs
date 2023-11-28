@@ -177,6 +177,7 @@ async fn gen_default_version_config(
 				max_players_party: 32,
 				listable: true,
 				taggable: false,
+				allow_dynamic_max_players: false,
 
 				runtime: Some(
 					backend::matchmaker::lobby_runtime::Docker {
