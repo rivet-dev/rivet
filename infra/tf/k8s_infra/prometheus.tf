@@ -217,7 +217,7 @@ resource "helm_release" "prometheus" {
 						local.has_slack_receiver ? [{
 							receiver = "slack"
 							matchers = [
-								"severity = warning|critical"
+								"severity =~ warning|critical"
 							]
 						}] : []
 					])
