@@ -848,7 +848,7 @@ async fn tagged_multiple_game_modes(ctx: TestCtx) {
 				backend::matchmaker::query::LobbyGroup {
 					lobby_group_ids: vec![
 						lobby_group.lobby_group_id.into(),
-						lobby_group.lobby_group_id2.into()
+						lobby_group.lobby_group_id2.into(),
 					],
 					region_ids: vec![lobby_group.region_id.into()],
 					auto_create: None,
