@@ -22,11 +22,11 @@ cf-custom-hostname-worker = { path = "../../../cf-custom-hostname/worker" }
 cloud-worker = { path = "../../../cloud/worker" }
 external-worker = { path = "../../../external/worker" }
 game-user-worker = { path = "../../../game-user/worker" }
+job-log-worker = { path = "../../../job-log/worker" }
 job-run-worker = { path = "../../../job-run/worker" }
 kv-worker = { path = "../../../kv/worker" }
 mm-worker = { path = "../../../mm/worker" }
 module-worker = { path = "../../../module/worker" }
-nomad-log-worker = { path = "../../../nomad-log/worker" }
 push-notification-worker = { path = "../../../push-notification/worker" }
 team-dev-worker = { path = "../../../team-dev/worker" }
 team-invite-worker = { path = "../../../team-invite/worker" }

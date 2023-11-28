@@ -26,7 +26,7 @@ define_router! {
 			POST: tokens::identity(
 				body: models_old::RefreshIdentityTokenRequest,
 				with_response: true,
-				opt_cookie: tokens::USER_REFRESH_TOKEN_COOKIE,
+				cookies: true,
 				opt_auth: true,
 			),
 		},

@@ -88,9 +88,23 @@ pub async fn export_history(
 		upload_ids: vec![upload_id.into()],
 	})
 	.await?;
-	let _upload = unwrap!(upload_res.uploads.first(), "upload not found");
+	let upload = unwrap!(upload_res.uploads.first(), "upload not found");
 
-	let s3_client = s3_util::Client::from_env("bucket-lobby-history-export").await?;
+	let proto_provider = unwrap!(
+		backend::upload::Provider::from_i32(upload.provider),
+		"invalid upload provider"
+	);
+	let provider = match proto_provider {
+		backend::upload::Provider::Minio => s3_util::Provider::Minio,
+		backend::upload::Provider::Backblaze => s3_util::Provider::Backblaze,
+		backend::upload::Provider::Aws => s3_util::Provider::Aws,
+	};
+	let s3_client = s3_util::Client::from_env_opt(
+		"bucket-lobby-history-export",
+		provider,
+		s3_util::EndpointKind::External,
+	)
+	.await?;
 	let presigned_req = s3_client
 		.get_object()
 		.bucket(s3_client.bucket())
@@ -122,10 +136,16 @@ pub async fn get_lobby_logs(
 ) -> GlobalResult<models::GetLobbyLogsResponse> {
 	ctx.auth().check_game_read(ctx.op_ctx(), game_id).await?;
 
+	// Get start ts
+	// If no watch: read logs
+	// If watch:
+	//   loop read logs from index
+	//	 wait until start ts + 1 second
+
 	// Determine stream type
 	let stream_type = match models::LogStream::from(query.stream.as_str()) {
-		models::LogStream::StdOut => backend::nomad_log::StreamType::StdOut,
-		models::LogStream::StdErr => backend::nomad_log::StreamType::StdErr,
+		models::LogStream::StdOut => backend::job::log::StreamType::StdOut,
+		models::LogStream::StdErr => backend::job::log::StreamType::StdErr,
 		_ => {
 			bail_with!(
 				API_BAD_QUERY_PARAMETER,
@@ -135,77 +155,105 @@ pub async fn get_lobby_logs(
 		}
 	};
 
-	let alloc_id = if let Some(x) = get_alloc_id(&ctx, game_id, lobby_id).await? {
+	// Timestamp to start the query at
+	let before_ts = util::timestamp::now() * 1_000_000;
+
+	// Get run ID
+	let run_id = if let Some(x) = get_run_id(&ctx, game_id, lobby_id).await? {
 		x
 	} else {
-		bail_with!(MATCHMAKER_LOBBY_NOT_STARTED);
+		// Throttle request if watching. This is effectively polling until the lobby is ready.
+		if watch_index.to_consumer()?.is_some() {
+			tokio::time::sleep(Duration::from_secs(1)).await;
+		}
+
+		// Return empty logs
+		return Ok(models::GetLobbyLogsResponse {
+			lines: Vec::new(),
+			timestamps: Vec::new(),
+			watch: convert::watch_response(WatchResponse::new(before_ts)),
+		});
 	};
 
 	// Handle anchor
-	if let Some(anchor) = watch_index.to_consumer()? {
-		// Fetch logs
-		let stream_type_param = match stream_type {
-			backend::nomad_log::StreamType::StdOut => "stdout",
-			backend::nomad_log::StreamType::StdErr => "stderr",
+	let logs_res = if let Some(anchor) = watch_index.as_i64()? {
+		let query_start = tokio::time::Instant::now();
+
+		// Poll for new logs
+		let logs_res = loop {
+			// Read logs after the timestamp
+			//
+			// We read descending in order to get at most 256 of the most recent logs. If we used
+			// asc, we would be paginating through all the logs which would likely fall behind
+			// actual stream and strain the database.
+			//
+			// We return fewer logs than the non-anchor request since this will be called
+			// frequently and should not return a significant amount of logs.
+			let logs_res = op!([ctx] @dont_log_body job_log_read {
+				run_id: Some(run_id.into()),
+				task: util_job::RUN_MAIN_TASK_NAME.into(),
+				stream_type: stream_type as i32,
+				count: 64,
+				order_asc: false,
+				query: Some(job_log::read::request::Query::AfterTs(anchor))
+
+			})
+			.await?;
+
+			// Return logs
+			if !logs_res.entries.is_empty() {
+				break logs_res;
+			}
+
+			// Throttle request
+			//
+			// We don't use `tokio::time::interval` because if the request takes longer than 500
+			// ms, we'll enter a tight loop of requests.
+			tokio::time::sleep(Duration::from_millis(500)).await;
 		};
-		let log_tail = tail_all!([ctx, anchor, chirp_client::TailAllConfig::wait()] nomad_log::msg::entries(&alloc_id, util_job::RUN_MAIN_TASK_NAME, stream_type_param)).await?;
 
-		// Sort entries by timestamp
-		let mut entries = log_tail
-			.messages
-			.iter()
-			.flat_map(|x| x.entries.iter())
-			.collect::<Vec<_>>();
-		entries.sort_by_key(|x| x.ts);
+		// Since we're using watch, we don't want this request to return immediately if there's new
+		// results. Add an artificial timeout in order to prevent a tight loop if there's a high
+		// log frequency.
+		tokio::time::sleep_until(query_start + Duration::from_secs(1)).await;
 
-		// Split lines and timestamps
-		let mut lines = Vec::with_capacity(log_tail.messages.len());
-		let mut timestamps = Vec::with_capacity(log_tail.messages.len());
-		for entry in &entries {
-			lines.push(base64::encode(&entry.message));
-			timestamps.push(util::timestamp::to_chrono(entry.ts)?);
-		}
+		logs_res
+	} else {
+		// Read most recent logs
+		let logs_res = op!([ctx] @dont_log_body job_log_read {
+			run_id: Some(run_id.into()),
+			task: util_job::RUN_MAIN_TASK_NAME.into(),
+			stream_type: stream_type as i32,
+			count: 256,
+			order_asc: false,
+			query: Some(job_log::read::request::Query::BeforeTs(before_ts)),
+		})
+		.await?;
 
-		let update_ts = log_tail
-			.messages
-			.iter()
-			.map(|x| x.msg_ts())
-			.max()
-			.unwrap_or_else(util::timestamp::now);
-		return Ok(models::GetLobbyLogsResponse {
-			lines,
-			timestamps,
-			watch: convert::watch_response(WatchResponse::new(update_ts)),
-		});
-	}
+		logs_res
+	};
 
-	// Read logs
-	let before_ts = util::timestamp::now();
-	let logs_res = op!([ctx] @dont_log_body nomad_log_read {
-		alloc: alloc_id.clone(),
-		task: util_job::RUN_MAIN_TASK_NAME.into(),
-		stream_type: stream_type as i32,
-		count: 256,
-		query: Some(nomad_log::read::request::Query::BeforeTs(nomad_log::read::request::TimestampQuery {
-			ts: before_ts,
-			idx: 0,
-		})),
-	})
-	.await?;
+	// Convert logs
+	let mut lines = logs_res
+		.entries
+		.iter()
+		.map(|entry| base64::encode(&entry.message))
+		.collect::<Vec<_>>();
+	let mut timestamps = logs_res
+		.entries
+		.iter()
+		.map(|x| x.ts / 1_000_000)
+		.map(util::timestamp::to_chrono)
+		.collect::<Result<Vec<_>, _>>()?;
 
-	let watch_ts = logs_res.entries.last().map_or(before_ts, |x| x.ts);
+	// Order desc
+	lines.reverse();
+	timestamps.reverse();
+
+	let watch_ts = logs_res.entries.first().map_or(before_ts, |x| x.ts);
 	Ok(models::GetLobbyLogsResponse {
-		lines: logs_res
-			.entries
-			.iter()
-			.map(|entry| base64::encode(&entry.message))
-			.collect(),
-		timestamps: logs_res
-			.entries
-			.iter()
-			.map(|x| x.ts)
-			.map(util::timestamp::to_chrono)
-			.collect::<Result<Vec<_>, _>>()?,
+		lines,
+		timestamps,
 		watch: convert::watch_response(WatchResponse::new(watch_ts)),
 	})
 }
@@ -220,14 +268,14 @@ pub async fn export_lobby_logs(
 	ctx.auth().check_game_read(ctx.op_ctx(), game_id).await?;
 
 	let stream_type = match body.stream {
-		models::LogStream::StdOut => backend::nomad_log::StreamType::StdOut,
-		models::LogStream::StdErr => backend::nomad_log::StreamType::StdErr,
+		models::LogStream::StdOut => backend::job::log::StreamType::StdOut,
+		models::LogStream::StdErr => backend::job::log::StreamType::StdErr,
 		models::LogStream::Unknown(_) => {
 			bail_with!(API_BAD_BODY, error = r#"Invalid "stream""#,);
 		}
 	};
 
-	let alloc_id = if let Some(x) = get_alloc_id(&ctx, game_id, lobby_id).await? {
+	let run_id = if let Some(x) = get_run_id(&ctx, game_id, lobby_id).await? {
 		x
 	} else {
 		bail_with!(MATCHMAKER_LOBBY_NOT_STARTED);
@@ -235,9 +283,9 @@ pub async fn export_lobby_logs(
 
 	// Export history
 	let request_id = Uuid::new_v4();
-	let res = msg!([ctx] nomad_log::msg::export(request_id) -> nomad_log::msg::export_complete {
+	let res = msg!([ctx] job_log::msg::export(request_id) -> job_log::msg::export_complete {
 		request_id: Some(request_id.into()),
-		alloc: alloc_id,
+		run_id: Some(run_id.into()),
 		task: util_job::RUN_MAIN_TASK_NAME.into(),
 		stream_type: stream_type as i32,
 	})
@@ -248,13 +296,28 @@ pub async fn export_lobby_logs(
 		upload_ids: vec![upload_id.into()],
 	})
 	.await?;
-	let _upload = unwrap!(upload_res.uploads.first(), "upload not found");
+	let upload = unwrap!(upload_res.uploads.first(), "upload not found");
 
 	let filename = match stream_type {
-		backend::nomad_log::StreamType::StdOut => "stdout.txt",
-		backend::nomad_log::StreamType::StdErr => "stderr.txt",
+		backend::job::log::StreamType::StdOut => "stdout.txt",
+		backend::job::log::StreamType::StdErr => "stderr.txt",
 	};
-	let s3_client = s3_util::Client::from_env("bucket-nomad-log-export").await?;
+
+	let proto_provider = unwrap!(
+		backend::upload::Provider::from_i32(upload.provider),
+		"invalid upload provider"
+	);
+	let provider = match proto_provider {
+		backend::upload::Provider::Minio => s3_util::Provider::Minio,
+		backend::upload::Provider::Backblaze => s3_util::Provider::Backblaze,
+		backend::upload::Provider::Aws => s3_util::Provider::Aws,
+	};
+	let s3_client = s3_util::Client::from_env_opt(
+		"bucket-job-log-export",
+		provider,
+		s3_util::EndpointKind::External,
+	)
+	.await?;
 	let presigned_req = s3_client
 		.get_object()
 		.bucket(s3_client.bucket())
@@ -271,11 +334,7 @@ pub async fn export_lobby_logs(
 	})
 }
 
-async fn get_alloc_id(
-	ctx: &Ctx<Auth>,
-	game_id: Uuid,
-	lobby_id: Uuid,
-) -> GlobalResult<Option<String>> {
+async fn get_run_id(ctx: &Ctx<Auth>, game_id: Uuid, lobby_id: Uuid) -> GlobalResult<Option<Uuid>> {
 	// Fetch lobbies and re-sort them
 	let lobby_res = op!([ctx] mm_lobby_get {
 		lobby_ids: vec![lobby_id.into()],
@@ -296,24 +355,5 @@ async fn get_alloc_id(
 		return Ok(None);
 	};
 
-	// Get run
-	let run_res = op!([ctx] job_run_get {
-		run_ids: vec![run_id.into()],
-	})
-	.await?;
-	let run = unwrap!(run_res.runs.first());
-	let run_meta = unwrap_ref!(run.run_meta);
-
-	let alloc_id = if let Some(backend::job::run_meta::Kind::Nomad(nomad)) = &run_meta.kind {
-		if let Some(alloc_id) = &nomad.alloc_id {
-			alloc_id
-		} else {
-			tracing::info!("no run alloc id, returning empty logs");
-			return Ok(None);
-		}
-	} else {
-		bail!("lobby is not a nomad job");
-	};
-
-	Ok(Some(alloc_id.clone()))
+	Ok(Some(run_id))
 }

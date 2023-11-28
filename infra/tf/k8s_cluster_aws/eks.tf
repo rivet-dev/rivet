@@ -12,7 +12,7 @@ module "eks" {
 	cluster_addons = {
 		kube-proxy = {
 			# https://docs.aws.amazon.com/eks/latest/userguide/managing-kube-proxy.html
-			addon_version = "v1.27.4-eksbuild.2"
+			addon_version = "v1.28.2-eksbuild.2"
 			configuration_values = jsonencode({
 				resources = {
 					limits = {
@@ -28,7 +28,7 @@ module "eks" {
 		}
 		vpc-cni = {
 			# https://docs.aws.amazon.com/eks/latest/userguide/managing-vpc-cni.html
-			addon_version = "v1.14.0-eksbuild.3"
+			addon_version = "v1.15.4-eksbuild.1"
 			configuration_values = jsonencode({
 				resources = {
 					limits = {
@@ -44,7 +44,7 @@ module "eks" {
 		}
 		coredns = {
 			# https://docs.aws.amazon.com/eks/latest/userguide/managing-coredns.html
-			addon_version = "v1.10.1-eksbuild.3"
+			addon_version = "v1.10.1-eksbuild.6"
 			configuration_values = jsonencode({
 				computeType = "Fargate"
 				# Ensure that we fully utilize the minimum amount of resources that are supplied by
@@ -70,7 +70,7 @@ module "eks" {
 			})
 		}
 		aws-ebs-csi-driver = {
-			addon_version = "v1.22.0-eksbuild.2"
+			addon_version = "v1.25.0-eksbuild.1"
 			service_account_role_arn = module.ebs_csi_irsa_role.iam_role_arn
 		}
 	}

@@ -36,9 +36,12 @@ resource "helm_release" "loki" {
 			resources = var.limit_resources ? {
 				limits = {
 					cpu = "4"
-					memory = "8192Mi"
+					memory = "2048Mi"
 				}
 			} : null
+			persistence = {
+				size = var.deploy_method_cluster ? "128Gi" : "10Gi"
+			}
 		}
 		monitoring = {
 			lokiCanary = {

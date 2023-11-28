@@ -55,21 +55,21 @@ locals {
 		module.alertmanager_secrets.values["alertmanager/slack/channel"] != ""
 	)
 
-	_receivers = [
-		{
+	receivers = flatten([
+		[{
 			name = "null"
-		},
-		local.has_slack_receiver ? {
+		}],
+		local.has_slack_receiver ? [{
 			name = "slack"
 			slack_configs = [
 				{
 					channel = module.alertmanager_secrets.values["alertmanager/slack/channel"]
 					api_url = module.alertmanager_secrets.values["alertmanager/slack/url"]
+					send_resolved = true
 				}
 			]
-		} : null
-	]
-	receivers = [ for v in local._receivers : v if v != null ]
+		}] : []
+	])
 }
 
 module "alertmanager_secrets" {
@@ -155,8 +155,8 @@ resource "helm_release" "prometheus" {
 
 				resources = var.limit_resources ? {
 					limits = {
-						memory = "${local.service_prometheus.resources.memory}Mi"
-						cpu = "${local.service_prometheus.resources.cpu}m"
+						memory = "${local.service_alertmanager.resources.memory}Mi"
+						cpu = "${local.service_alertmanager.resources.cpu}m"
 					}
 				} : null
 
@@ -199,15 +199,6 @@ resource "helm_release" "prometheus" {
 							"severity = info",
 						]
 						equal = ["namespace", "alertname"]
-					},
-					{
-						source_matchers = [
-							"alertname = \"InfoInhibitor\"",
-						]
-						target_matchers = [
-							"severity = info",
-						]
-						equal = ["namespace"]
 					}
 				]
 				route = {
@@ -215,15 +206,21 @@ resource "helm_release" "prometheus" {
 					group_wait = "15s"
 					group_interval = "1m"
 					repeat_interval = "4h"
-					receiver = local.has_slack_receiver ? "slack" : "null"
-					routes = [
-						{
+					receiver = "null"
+					routes = flatten([
+						[{
 							receiver = "null"
 							matchers = [
-								"alertname =~ \"InfoInhibitor|Watchdog\""
+								"alertname = Watchdog"
 							]
-						}
-					]
+						}],
+						local.has_slack_receiver ? [{
+							receiver = "slack"
+							matchers = [
+								"severity =~ warning|critical"
+							]
+						}] : []
+					])
 				}
 				receivers = local.receivers
 				templates = [
@@ -290,11 +287,16 @@ resource "helm_release" "prometheus" {
 
 		defaultRules = {
 			disabled = {
+				# TODO: Re-enable these alerts
 				KubeProxyDown = true
 				KubeControllerManagerDown = true
 				KubeSchedulerDown = true
 				CPUThrottlingHigh = true
 				KubeJobNotCompleted = true
+				PrometheusOutOfOrderTimestamps = true
+
+				# See https://github.com/prometheus-community/helm-charts/issues/1773#issue-1126092733
+				InfoInhibitor = true
 			}
 		}
 

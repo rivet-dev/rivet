@@ -212,6 +212,15 @@ pub fn build_plan(
 		}
 	}
 
+	// Vector
+	plan.push(PlanStep {
+		name_id: "vector",
+		kind: PlanStepKind::Terraform {
+			plan_id: "vector".into(),
+			needs_destroy: false,
+		},
+	});
+
 	// Pools
 	if ctx.ns().dns.is_some() {
 		plan.push(PlanStep {

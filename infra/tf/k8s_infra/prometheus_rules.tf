@@ -9,13 +9,13 @@ locals {
 				summary = "Pod High Memory usage ({{ $labels.namespace }}/{{ $labels.pod }})"
 				description = "Pod Memory usage has been above 80% for over 2 minutes\n  VALUE = {{ printf \"%.2f%%\" $value }}\n  LABELS = {{ $labels }}"
 			}
-			# TODO: Maybe use kube_pod_container_resource_limits{resource="memory"} instead?
+			# Exclude Prometheus because it intentionally maintains high memory usage as a cache
 			expr = <<-EOF
 				(
-					sum(container_memory_working_set_bytes{name!=""})
+					sum(container_memory_working_set_bytes{name!="", container!="prometheus"})
 					BY (namespace, pod)
 					/
-					sum(kube_pod_container_resource_limits{resource="memory"} > 0)
+					sum(kube_pod_container_resource_limits{resource="memory", container!="prometheus"} > 0)
 					BY (namespace, pod)
 				) * 100
 				> 80
@@ -128,10 +128,17 @@ resource "kubectl_manifest" "pvc_rules" {
 						{
 							alert = "PVCHighDiskUsage"
 							annotations = {
-								summary = "Persistent volume claim almost full ({{ $labels.pvc_namespace }}/{{ $labels.persistentvolumeclaim }})"
-								description = "Persistent volume claim almost full ({{ printf \"%.2f%%\" $value }} of {{ $labels.pvc_requested_size_human }}) ({{ $labels.pvc_namespace }}/{{ $labels.persistentvolumeclaim }})"
+								summary = "Persistent volume claim almost full ({{ $labels.namespace }}/{{ $labels.persistentvolumeclaim }})"
+								description = "Persistent volume claim almost full ({{ printf \"%.2f%%\" $value }}) ({{ $labels.namespace }}/{{ $labels.persistentvolumeclaim }})"
 							}
-							expr = "pvc_usage * 100 > 75"
+							# Exclude Loki since it intentionally fills the disk space
+							expr = <<EOF
+							(
+								kubelet_volume_stats_used_bytes{persistentvolumeclaim!="storage-loki-0"}
+								/
+								kubelet_volume_stats_capacity_bytes{persistentvolumeclaim!="storage-loki-0"}
+							) * 100 > 75
+							EOF
 							labels = {
 								severity = "warning"
 							}
@@ -297,7 +304,7 @@ resource "kubectl_manifest" "api_rules" {
 										} [2m]
 									)
 									-
-									on(service, path, method, status, worker_source_hash)
+									on(service, path, method, status, kubernetes_pod_id)
 									increase(
 										rivet_api_request_duration_bucket{
 											watch="0",

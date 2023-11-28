@@ -24,28 +24,42 @@ pub async fn identity(
 	ctx: Ctx<Auth>,
 	response: &mut Builder,
 	body: models::RefreshIdentityTokenRequest,
-	refresh_token: Option<String>,
+	cookies: Option<headers::Cookie>,
 ) -> GlobalResult<models::RefreshIdentityTokenResponse> {
 	let origin = unwrap!(ctx.origin());
 
 	// Prevent getting refresh token on logout, makes sure only a new guest token is returned
 	let refresh_token = if !body.logout {
+		// Find refresh token
+		let refresh_token_cookie = cookies.iter().flat_map(|x| x.iter()).filter(|&(k, _)| k == USER_REFRESH_TOKEN_COOKIE).filter_map(|(_k, v)| {
+			match rivet_claims::decode(v) {
+				Ok(x) => Some((x, v)),
+				Err(err) => {
+					// Gracefully ignore cookies that can't be decoded.
+					//
+					// This frequently happens when receiving a cookie with a
+					// different `Domain` (e.g. a cookie issued to bar.com being used on foo.bar.com).
+					// These cookies have a different JWT format and will fail to decode. By ignoring
+					// this, we will iterate to find the cookie that can be decoded.
+					tracing::warn!(cookie = ?v, ?err, "failed to decode refresh token, this might be from the wrong domain, skipping cookie");
+					None
+				}
+
+			}
+		}).next();
+
 		// Get refresh token
-		if let Some(refresh_token) = refresh_token {
-			match rivet_claims::decode(&refresh_token) {
-				Ok(Ok(claims)) => match claims.as_refresh() {
-					Ok(_) => Some(refresh_token),
+		if let Some((claims_res, refresh_token_str)) = refresh_token_cookie {
+			match claims_res {
+				Ok(claims) => match claims.as_refresh() {
+					Ok(_) => Some(refresh_token_str.to_string()),
 					Err(_) => {
 						tracing::warn!("token does not have a refresh entitlement");
 						None
 					}
 				},
-				Ok(Err(err)) => {
-					tracing::info!(?err, "refresh token not valid");
-					None
-				}
 				Err(err) => {
-					tracing::warn!(?err, "failed to decode refresh token");
+					tracing::info!(?err, "refresh token not valid");
 					None
 				}
 			}

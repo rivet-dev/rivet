@@ -153,7 +153,7 @@ data "kubernetes_secret" "clickhouse_ca" {
 }
 
 resource "kubernetes_config_map" "clickhouse_ca" {
-	for_each = local.clickhouse_k8s ? toset(["rivet-service", "bolt"]) : toset([])
+	for_each = local.clickhouse_k8s ? toset(["rivet-service", "bolt", "vector"]) : toset([])
 
 	metadata {
 		name = "clickhouse-ca"

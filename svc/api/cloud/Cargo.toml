@@ -93,7 +93,7 @@ mm-lobby-list-for-namespace = { path = "../../pkg/mm/ops/lobby-list-for-namespac
 mm-lobby-player-count = { path = "../../pkg/mm/ops/lobby-player-count" }
 mm-lobby-runtime-aggregate = { path = "../../pkg/mm/ops/lobby-runtime-aggregate" }
 mm-player-count-for-namespace = { path = "../../pkg/mm/ops/player-count-for-namespace" }
-nomad-log-read = { path = "../../pkg/nomad-log/ops/read" }
+job-log-read = { path = "../../pkg/job-log/ops/read" }
 perf-log-get = { path = "../../pkg/perf/ops/log-get" }
 region-get = { path = "../../pkg/region/ops/get" }
 region-list = { path = "../../pkg/region/ops/list" }
