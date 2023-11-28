@@ -929,6 +929,7 @@ async fn find_inner(
 				None
 			},
 		bypass_verification: matches!(verification, VerificationType::Bypass),
+		debug: None,
 	})
 	.await?;
 	let lobby_id = match find_res

@@ -42,5 +42,13 @@ message Message {
 	optional string verification_data_json = 202;
 	// Bypasses user data verification (if the give lobby group has any).
 	bool bypass_verification = 203;
+
+	optional Debug debug = 301;
 }
 
+message Debug {
+	// Intentionally throw an error between inserting in to Redis an
+	// inserting in to SQL in order to test how this failure is
+	// handled.
+	bool fail_sql = 301;
+}
