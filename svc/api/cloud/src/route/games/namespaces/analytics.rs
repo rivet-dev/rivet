@@ -1,7 +1,7 @@
 use std::collections::HashSet;
 
 use api_helper::{anchor::WatchIndexQuery, ctx::Ctx};
-use rivet_cloud_server::models;
+use rivet_api::models;
 use rivet_convert::cloud::analytics_lobby_summary_from_lobby;
 use rivet_operation::prelude::*;
 
@@ -13,7 +13,7 @@ pub async fn matchmaker_live(
 	game_id: Uuid,
 	namespace_id: Uuid,
 	_watch_index: WatchIndexQuery,
-) -> GlobalResult<models::GetNamespaceAnalyticsMatchmakerLiveResponse> {
+) -> GlobalResult<models::CloudGamesNamespacesGetAnalyticsMatchmakerLiveResponse> {
 	ctx.auth().check_game_read(ctx.op_ctx(), game_id).await?;
 	let game_ns = assert::namespace_for_game(&ctx, game_id, namespace_id).await?;
 
@@ -134,5 +134,5 @@ pub async fn matchmaker_live(
 		})
 		.collect::<Vec<_>>();
 
-	Ok(models::GetNamespaceAnalyticsMatchmakerLiveResponse { lobbies })
+	Ok(models::CloudGamesNamespacesGetAnalyticsMatchmakerLiveResponse { lobbies })
 }

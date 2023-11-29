@@ -1,7 +1,8 @@
 use api_helper::ctx::Ctx;
+use rivet_api::models;
 use rivet_claims::ClaimsDecode;
-use rivet_cloud_server::models;
 use rivet_operation::prelude::*;
+use serde_json::json;
 
 use crate::auth::Auth;
 
@@ -9,8 +10,8 @@ use crate::auth::Auth;
 pub async fn complete(
 	ctx: Ctx<Auth>,
 	upload_id: Uuid,
-	_body: models::CompleteUploadRequest,
-) -> GlobalResult<models::CompleteUploadResponse> {
+	_body: serde_json::Value,
+) -> GlobalResult<serde_json::Value> {
 	// TODO: use auth module instead
 	let claims = ctx.auth().claims()?;
 	if claims.as_user().is_err() {
@@ -23,5 +24,5 @@ pub async fn complete(
 	})
 	.await?;
 
-	Ok(models::CompleteUploadResponse {})
+	Ok(json!({}))
 }

@@ -119,7 +119,7 @@ Name | Type | Description  | Required | Notes
 ------------- | ------------- | ------------- | ------------- | -------------
 **game_id** | **uuid::Uuid** |  | [required] |
 **lobby_id** | **uuid::Uuid** |  | [required] |
-**stream** | **String** |  | [required] |
+**stream** | [**CloudGamesLogStream**](.md) |  | [required] |
 **watch_index** | Option<**String**> | A query parameter denoting the requests watch index. |  |
 
 ### Return type

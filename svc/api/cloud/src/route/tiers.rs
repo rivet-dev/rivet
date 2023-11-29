@@ -1,5 +1,5 @@
 use api_helper::{anchor::WatchIndexQuery, ctx::Ctx};
-use rivet_cloud_server::models;
+use rivet_api::models;
 use rivet_convert::ApiTryInto;
 use rivet_operation::prelude::*;
 
@@ -9,7 +9,7 @@ use crate::auth::Auth;
 pub async fn list_tiers(
 	ctx: Ctx<Auth>,
 	_watch_index: WatchIndexQuery,
-) -> GlobalResult<models::GetRegionTiersResponse> {
+) -> GlobalResult<models::CloudGetRegionTiersResponse> {
 	// TODO: fill in user regions. `region_ids` doesn't actually do anything for now so its not important
 	let res = op!([ctx] tier_list {
 		region_ids: vec![Uuid::new_v4().into()],
@@ -18,7 +18,7 @@ pub async fn list_tiers(
 
 	let region = unwrap!(res.regions.first());
 
-	Ok(models::GetRegionTiersResponse {
+	Ok(models::CloudGetRegionTiersResponse {
 		tiers: region
 			.tiers
 			.clone()

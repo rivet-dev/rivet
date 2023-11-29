@@ -2,7 +2,7 @@ use rivet_api::models;
 use rivet_operation::prelude::*;
 use types::rivet::backend;
 
-use crate::convert;
+use crate::{convert, fetch, ApiInto, ApiTryInto};
 
 pub fn handle(game: &backend::game::Game) -> GlobalResult<models::GameHandle> {
 	Ok(models::GameHandle {
@@ -16,10 +16,11 @@ pub fn handle(game: &backend::game::Game) -> GlobalResult<models::GameHandle> {
 
 pub fn summary(
 	game: &backend::game::Game,
-	cdn_config: &backend::cdn::NamespaceConfig,
+	state: &fetch::game::GameState,
 	dev_team: &backend::team::Team,
 ) -> GlobalResult<models::GameSummary> {
-	let game_url = cdn_config
+	let game_url = state
+		.prod_config
 		.domains
 		.first()
 		.map(|d| d.domain.clone())
@@ -33,5 +34,22 @@ pub fn summary(
 		banner_url: util::route::game_banner(&game),
 		url: game_url,
 		developer: Box::new(convert::group::handle(dev_team, true)?),
+		total_player_count: state.total_player_count.try_into()?,
+	})
+}
+
+pub fn region_summary(
+	region: &backend::region::Region,
+) -> GlobalResult<models::CloudRegionSummary> {
+	Ok(models::CloudRegionSummary {
+		region_id: unwrap_ref!(region.region_id).as_uuid(),
+		region_name_id: region.name_id.clone(),
+		provider: region.provider.clone(),
+		universal_region: unwrap!(backend::region::UniversalRegion::from_i32(
+			region.universal_region
+		))
+		.api_into(),
+		provider_display_name: region.provider_display_name.clone(),
+		region_display_name: region.region_display_name.clone(),
 	})
 }

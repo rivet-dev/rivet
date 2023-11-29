@@ -14,14 +14,14 @@
 #[derive(Clone, Debug, PartialEq, Default, Serialize, Deserialize)]
 pub struct CloudGamesDeleteMatchmakerLobbyResponse {
     /// Whether or not the lobby was successfully stopped.
-    #[serde(rename = "did_remove", skip_serializing_if = "Option::is_none")]
-    pub did_remove: Option<bool>,
+    #[serde(rename = "did_remove")]
+    pub did_remove: bool,
 }
 
 impl CloudGamesDeleteMatchmakerLobbyResponse {
-    pub fn new() -> CloudGamesDeleteMatchmakerLobbyResponse {
+    pub fn new(did_remove: bool) -> CloudGamesDeleteMatchmakerLobbyResponse {
         CloudGamesDeleteMatchmakerLobbyResponse {
-            did_remove: None,
+            did_remove,
         }
     }
 }

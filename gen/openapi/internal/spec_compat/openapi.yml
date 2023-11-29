@@ -616,6 +616,8 @@ components:
         did_remove:
           description: Whether or not the lobby was successfully stopped.
           type: boolean
+      required:
+      - did_remove
       type: object
     CloudGamesExportLobbyLogsRequest:
       properties:
@@ -642,6 +644,9 @@ components:
           description: Unsigned 64 bit integer.
           format: int64
           type: integer
+      required:
+      - query_start
+      - query_end
       type: object
     CloudGamesExportMatchmakerLobbyHistoryResponse:
       properties:
@@ -705,44 +710,6 @@ components:
       - upload_id
       - presigned_request
       type: object
-    CloudGamesGameSummary:
-      description: A game summary.
-      properties:
-        banner_url:
-          description: The URL of this game's banner image.
-          type: string
-        create_ts:
-          description: RFC3339 timestamp.
-          format: date-time
-          type: string
-        developer_group_id:
-          format: uuid
-          type: string
-        display_name:
-          description: Represent a resource's readable display name.
-          type: string
-        game_id:
-          format: uuid
-          type: string
-        logo_url:
-          description: The URL of this game's logo image.
-          type: string
-        name_id:
-          description: A human readable short identifier used to references resources.
-            Different than a `rivet.common#Uuid` because this is intended to be human
-            readable. Different than `rivet.common#DisplayName` because this should
-            not include special characters and be short.
-          type: string
-        total_player_count:
-          description: Unsigned 32 bit integer.
-          type: integer
-      required:
-      - game_id
-      - create_ts
-      - name_id
-      - display_name
-      - developer_group_id
-      type: object
     CloudGamesGetGameByIdResponse:
       properties:
         game:
@@ -765,12 +732,12 @@ components:
         games:
           description: A list of game summaries.
           items:
-            $ref: '#/components/schemas/CloudGamesGameSummary'
+            $ref: '#/components/schemas/GameSummary'
           type: array
         groups:
           description: A list of group summaries.
           items:
-            $ref: '#/components/schemas/GroupHandle'
+            $ref: '#/components/schemas/GroupSummary'
           type: array
         watch:
           $ref: '#/components/schemas/WatchResponse'
@@ -829,6 +796,9 @@ components:
       - custom_avatars
       type: object
     CloudGamesLogStream:
+      enum:
+      - std_out
+      - std_err
       type: string
     CloudGamesNamespacesAddNamespaceDomainRequest:
       properties:
@@ -1647,9 +1617,8 @@ components:
             not include special characters and be short.
           type: string
         universal_region:
-          description: A universal number given to this region.
-          format: double
-          type: number
+          $ref: '#/components/schemas/CloudUniversalRegion'
+          description: A universal region label given to this region.
       required:
       - region_id
       - region_name_id
@@ -1674,8 +1643,10 @@ components:
           description: Allocated memory (MB).
           type: integer
         price_per_second:
-          description: Price billed for every second this server is running (in quadrillionth
-            USD, 1,000,000,000,000 = $1.00).
+          description: '**Deprecated**
+
+            Price billed for every second this server is running (in quadrillionth
+            USD, 1,000,000,000,000 = $1.00).'
           type: integer
         rivet_cores_denominator:
           description: Together with the numerator, denotes the portion of the CPU
@@ -1800,6 +1771,37 @@ components:
       - spans
       - marks
       type: object
+    CloudUniversalRegion:
+      enum:
+      - unknown
+      - local
+      - amsterdam
+      - atlanta
+      - bangalore
+      - dallas
+      - frankfurt
+      - london
+      - mumbai
+      - newark
+      - new_york_city
+      - san_francisco
+      - singapore
+      - sydney
+      - tokyo
+      - toronto
+      - washington_dc
+      - chicago
+      - paris
+      - seattle
+      - sao_paulo
+      - stockholm
+      - chennai
+      - osaka
+      - milan
+      - miami
+      - jakarta
+      - los_angeles
+      type: string
     CloudValidateGroupRequest:
       properties:
         display_name:
@@ -2694,6 +2696,9 @@ components:
           type: string
         name_id:
           $ref: '#/components/schemas/Identifier'
+        total_player_count:
+          description: Unsigned 32 bit integer.
+          type: integer
         url:
           type: string
       required:
@@ -2702,6 +2707,7 @@ components:
       - display_name
       - url
       - developer
+      - total_player_count
       type: object
     GeoCoord:
       description: Geographical coordinates for a location on Planet Earth.
@@ -4147,6 +4153,8 @@ components:
           $ref: '#/components/schemas/PortalNotificationRegisterFirebaseService'
       type: object
     PortalNotificationUnregisterService:
+      enum:
+      - firebase
       type: string
     PortalRegisterNotificationsRequest:
       properties:

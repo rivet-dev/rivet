@@ -1,10 +1,10 @@
 use api_helper::{anchor::WatchIndexQuery, ctx::Ctx};
 use proto::backend;
-use rivet_api::models as new_models;
+use rivet_api::models;
 use rivet_claims::ClaimsDecode;
-use rivet_cloud_server::models;
 use rivet_convert::ApiTryInto;
 use rivet_operation::prelude::*;
+use serde_json::json;
 
 use crate::auth::Auth;
 
@@ -15,7 +15,7 @@ pub async fn get_custom_avatars(
 	ctx: Ctx<Auth>,
 	game_id: Uuid,
 	_watch_index: WatchIndexQuery,
-) -> GlobalResult<models::ListGameCustomAvatarsResponse> {
+) -> GlobalResult<models::CloudGamesListGameCustomAvatarsResponse> {
 	ctx.auth().check_game_read(ctx.op_ctx(), game_id).await?;
 
 	let custom_avatars_res = op!([ctx] custom_user_avatar_list_for_game {
@@ -66,32 +66,40 @@ pub async fn get_custom_avatars(
 				.map(|(_, file_name)| file_name.to_owned())
 				.unwrap_or(file.path.clone());
 
-			GlobalResult::Ok(models::CustomAvatarSummary {
-				upload_id: upload_id.to_string(),
-				display_name: profile_file_name.clone(),
-				url: upload.complete_ts.map(|_| {
-					util::route::custom_avatar(upload_id, &profile_file_name, upload.provider)
-				}),
-				create_ts: util::timestamp::to_chrono(upload.create_ts)?,
-				content_length: upload.content_length as i64,
-				complete: upload.complete_ts.is_some(),
-			})
+			GlobalResult::Ok((
+				upload.create_ts,
+				models::CloudCustomAvatarSummary {
+					upload_id: upload_id,
+					display_name: profile_file_name.clone(),
+					url: upload.complete_ts.map(|_| {
+						util::route::custom_avatar(upload_id, &profile_file_name, upload.provider)
+					}),
+					create_ts: util::timestamp::to_string(upload.create_ts)?,
+					content_length: upload.content_length as i64,
+					complete: upload.complete_ts.is_some(),
+				},
+			))
 		})
 		.collect::<Result<Vec<_>, _>>()?;
 
 	// Sort by date desc
-	custom_avatars.sort_by_key(|b| b.create_ts);
+	custom_avatars.sort_by_key(|(create_ts, _)| *create_ts);
 	custom_avatars.reverse();
 
-	Ok(models::ListGameCustomAvatarsResponse { custom_avatars })
+	Ok(models::CloudGamesListGameCustomAvatarsResponse {
+		custom_avatars: custom_avatars
+			.into_iter()
+			.map(|(_, x)| x)
+			.collect::<Vec<_>>(),
+	})
 }
 
 // MARK: POST /games/{}/avatar-upload/prepare
 pub async fn prepare_avatar_upload(
 	ctx: Ctx<Auth>,
 	game_id: Uuid,
-	body: new_models::CloudGamesPrepareCustomAvatarUploadRequest,
-) -> GlobalResult<new_models::CloudGamesPrepareCustomAvatarUploadResponse> {
+	body: models::CloudGamesPrepareCustomAvatarUploadRequest,
+) -> GlobalResult<models::CloudGamesPrepareCustomAvatarUploadResponse> {
 	ctx.auth().check_game_write(ctx.op_ctx(), game_id).await?;
 
 	let user_id = ctx.auth().claims()?.as_user().ok().map(|x| x.user_id);
@@ -133,7 +141,7 @@ pub async fn prepare_avatar_upload(
 	let upload_id = unwrap_ref!(upload_prepare_res.upload_id).as_uuid();
 	let presigned_request = unwrap!(upload_prepare_res.presigned_requests.first());
 
-	Ok(new_models::CloudGamesPrepareCustomAvatarUploadResponse {
+	Ok(models::CloudGamesPrepareCustomAvatarUploadResponse {
 		upload_id,
 		presigned_request: Box::new(presigned_request.clone().try_into()?),
 	})
@@ -144,8 +152,8 @@ pub async fn complete_avatar_upload(
 	ctx: Ctx<Auth>,
 	game_id: Uuid,
 	upload_id: Uuid,
-	_body: models::CompleteCustomAvatarUploadRequest,
-) -> GlobalResult<models::CompleteCustomAvatarUploadResponse> {
+	_body: serde_json::Value,
+) -> GlobalResult<serde_json::Value> {
 	ctx.auth().check_game_write(ctx.op_ctx(), game_id).await?;
 
 	op!([ctx] custom_user_avatar_upload_complete {
@@ -154,5 +162,5 @@ pub async fn complete_avatar_upload(
 	})
 	.await?;
 
-	Ok(models::CompleteCustomAvatarUploadResponse {})
+	Ok(json!({}))
 }
