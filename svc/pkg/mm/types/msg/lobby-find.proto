@@ -45,5 +45,13 @@ message Message {
 	map<string, string> tags = 204;
 	// User configured player count that overrides the config.
 	optional uint32 dynamic_max_players = 205;
+
+	optional Debug debug = 301;
 }
 
+message Debug {
+	// Intentionally throw an error between inserting in to Redis an
+	// inserting in to SQL in order to test how this failure is
+	// handled.
+	bool fail_sql = 301;
+}

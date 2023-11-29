@@ -304,7 +304,7 @@ resource "kubectl_manifest" "api_rules" {
 										} [2m]
 									)
 									-
-									on(service, path, method, status, kubernetes_pod_id)
+									on(service, path, method, status, kubernetes_pod_id, error_code)
 									increase(
 										rivet_api_request_duration_bucket{
 											watch="0",

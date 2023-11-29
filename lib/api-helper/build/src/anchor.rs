@@ -55,7 +55,7 @@ impl WatchResponse {
 		})
 	}
 
-	// TODO: Remove when all `<api service>::utils::watch_response`'s is fully deprecated
+	// TODO: Remove when all `<api service>::utils::watch_response`'s are fully removed
 	#[deprecated(note = "Use `api_helper::anchor::WatchResponse::new_as_model`")]
 	pub fn watch_index(&self) -> &String {
 		&self.index
