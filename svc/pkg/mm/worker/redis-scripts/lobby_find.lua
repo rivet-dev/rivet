@@ -99,20 +99,17 @@ elseif query.kind.lobby_group ~= nil then
 				local available_spots = tonumber(lobbies[i + 1])
 				local correct_tags = 0
 
-				-- Verify tags
-				if #query_tag_names > 0 then	
-					-- Fetch specified lobby tags
-					local key_lobby_tags = '{global}:mm:lobby:' .. lobby_id .. ':tags'
-					local lobby_tags = redis.call('HMGET', key_lobby_tags, unpack(query_tag_names))
-							
-					-- Check that all tags are correct
-					for tag_idx, tag in ipairs(lobby_tags) do
-						if query.tags[query_tag_names[tag_idx]] ~= tag then
-							break
-						end
-		
-						correct_tags = correct_tags + 1
+				-- Fetch specified lobby tags
+				local key_lobby_tags = '{global}:mm:lobby:' .. lobby_id .. ':tags'
+				local lobby_tags = redis.call('HMGET', key_lobby_tags, unpack(query_tag_names))
+						
+				-- Check that all tags are correct
+				for tag_idx, tag in ipairs(lobby_tags) do
+					if query.tags[query_tag_names[tag_idx]] ~= tag then
+						break
 					end
+	
+					correct_tags = correct_tags + 1
 				end
 		
 				-- Check if the correct number of tags have been parsed
