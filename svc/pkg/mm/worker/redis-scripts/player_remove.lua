@@ -3,12 +3,13 @@ local key_ns_player_ids = KEYS[2]
 local key_lobby_player_ids = KEYS[3]
 local key_lobby_registered_player_ids = KEYS[4]
 local key_player_unregistered = KEYS[5]
-local key_lobby_available_spots_normal = KEYS[6]
-local key_lobby_available_spots_party = KEYS[7]
-local key_ns_remote_address_player_ids = KEYS[8]
-local key_idle_lobby_ids = KEYS[9]
-local key_idle_lobby_lobby_group_ids = KEYS[10]
-local key_lobby_config = KEYS[11]
+local key_player_auto_remove = KEYS[6]
+local key_lobby_available_spots_normal = KEYS[7]
+local key_lobby_available_spots_party = KEYS[8]
+local key_ns_remote_address_player_ids = KEYS[9]
+local key_idle_lobby_ids = KEYS[10]
+local key_idle_lobby_lobby_group_ids = KEYS[11]
+local key_lobby_config = KEYS[12]
 
 local ts = tonumber(ARGV[1])
 local lobby_id = ARGV[2]
@@ -24,6 +25,7 @@ redis.call('ZREM', key_ns_player_ids, player_id)
 redis.call('ZREM', key_lobby_player_ids, player_id)
 redis.call('ZREM', key_lobby_registered_player_ids, player_id)
 redis.call('ZREM', key_player_unregistered, player_id)
+redis.call('ZREM', key_player_auto_remove, player_id)
 if key_ns_remote_address_player_ids ~= "" then
 	redis.call('SREM', key_ns_remote_address_player_ids, player_id)
 end

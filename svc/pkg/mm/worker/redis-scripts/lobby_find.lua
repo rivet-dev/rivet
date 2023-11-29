@@ -10,6 +10,7 @@ local key_find_query_state = KEYS[1]
 local key_find_query_player_ids = KEYS[2]
 local key_ns_player_ids = KEYS[3]
 local key_player_unregistered = KEYS[4]
+local key_player_auto_remove = KEYS[5]
 
 -- MARK: Find
 local lobby_id = nil
@@ -101,7 +102,6 @@ elseif query.kind.lobby_group ~= nil then
 		redis.call('ZADD', key_auto_create_lobby_available_spots_party, auto_create.lobby_config['mpp'],
 			auto_create.lobby_id)
 		redis.call('ZADD', key_lobby_unready, tonumber(auto_create.ready_expire_ts), auto_create.lobby_id)
-		
 	end
 
 	-- Determine lobby ID to use
@@ -112,7 +112,6 @@ elseif query.kind.lobby_group ~= nil then
 	else
 		return { 'err', 'NO_AVAILABLE_LOBBIES' }
 	end
-
 else
 	return redis.error_reply('Invalid query kind')
 end
@@ -139,13 +138,13 @@ local max_players_party = tonumber(redis.call('HGET', key_lobby_config, 'mpp'))
 local key_lobby_find_queries = '{global}:mm:lobby:' .. lobby_id .. ':find_queries'
 local key_lobby_player_ids = '{global}:mm:lobby:' .. lobby_id .. ':player_ids'
 local key_lobby_available_spots_normal = '{global}:mm:ns:' ..
-namespace_id .. ':region:' .. region_id .. ':lg:' .. lobby_group_id .. ':lobby:available_spots:normal'
+	namespace_id .. ':region:' .. region_id .. ':lg:' .. lobby_group_id .. ':lobby:available_spots:normal'
 local key_lobby_available_spots_party = '{global}:mm:ns:' ..
-namespace_id .. ':region:' .. region_id .. ':lg:' .. lobby_group_id .. ':lobby:available_spots:party'
+	namespace_id .. ':region:' .. region_id .. ':lg:' .. lobby_group_id .. ':lobby:available_spots:party'
 local key_idle_lobby_ids = '{global}:mm:ns:' ..
-namespace_id .. ':region:' .. region_id .. ':lg:' .. lobby_group_id .. ':idle_lobby_ids'
+	namespace_id .. ':region:' .. region_id .. ':lg:' .. lobby_group_id .. ':idle_lobby_ids'
 local key_idle_lobby_lobby_group_ids = '{global}:mm:ns:' ..
-namespace_id .. ':region:' .. region_id .. ':lobby:idle:lobby_group_ids'
+	namespace_id .. ':region:' .. region_id .. ':lobby:idle:lobby_group_ids'
 
 -- Assert lobby state
 if #lobby_id ~= 36 then
@@ -184,6 +183,7 @@ for i, player in ipairs(query.players) do
 	redis.call('ZADD', key_ns_player_ids, ts, player_id)
 	redis.call('ZADD', key_lobby_player_ids, ts, player_id)
 	redis.call('ZADD', key_player_unregistered, query.player_register_expire_ts, player_id)
+	redis.call('ZADD', key_player_auto_remove, query.player_auto_remove_ts, player_id)
 	if player.remote_address ~= nil then
 		redis.call('SADD', key_ns_remote_address_player_ids, player_id)
 	end

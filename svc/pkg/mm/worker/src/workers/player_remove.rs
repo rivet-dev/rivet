@@ -151,6 +151,7 @@ async fn worker(ctx: &OperationContext<mm::msg::player_remove::Message>) -> Glob
 			player_row.lobby_id,
 		))
 		.key(util_mm::key::player_unregistered())
+		.key(util_mm::key::player_auto_remove())
 		.key(util_mm::key::lobby_available_spots(
 			player_row.namespace_id,
 			player_row.region_id,

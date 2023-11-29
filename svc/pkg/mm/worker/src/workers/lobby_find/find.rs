@@ -39,6 +39,7 @@ mod redis_query {
 		pub players: Vec<Player>,
 
 		pub player_register_expire_ts: i64,
+		pub player_auto_remove_ts: i64,
 	}
 
 	#[derive(Serialize)]
@@ -255,6 +256,7 @@ pub async fn find(
 		util_mm::key::find_query_player_ids(query_id),
 		util_mm::key::ns_player_ids(namespace_id),
 		util_mm::key::player_unregistered(),
+		util_mm::key::player_auto_remove(),
 	];
 
 	let query_kind_key_idx = keys.len();
@@ -287,6 +289,7 @@ pub async fn find(
 		},
 		players: query_players,
 		player_register_expire_ts: ctx.ts() + util_mm::consts::PLAYER_READY_TIMEOUT,
+		player_auto_remove_ts: ctx.ts() + util_mm::consts::PLAYER_AUTO_REMOVE_TIMEOUT,
 	};
 
 	// Execute script
