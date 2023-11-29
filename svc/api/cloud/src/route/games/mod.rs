@@ -405,20 +405,27 @@ pub async fn get(
 	}
 	namespaces.sort_by(|a, b| a.display_name.cmp(&b.display_name));
 
-	let mut versions = cloud_version_get_res.versions.iter().filter_map(|cloud_version| {
-		let version = version_get_res
-			.versions
-			.iter()
-			.find(|x| x.version_id == cloud_version.version_id);
+	let mut versions = cloud_version_get_res
+		.versions
+		.iter()
+		.filter_map(|cloud_version| {
+			let version = version_get_res
+				.versions
+				.iter()
+				.find(|x| x.version_id == cloud_version.version_id);
 
-		if version.is_none() {
-			tracing::warn!(version_id = ?cloud_version.version_id, "missing game version");
-		}
+			if version.is_none() {
+				tracing::warn!(version_id = ?cloud_version.version_id, "missing game version");
+			}
 
-		version.cloned()
-	}).collect::<Vec<_>>();
+			version.cloned()
+		})
+		.collect::<Vec<_>>();
 	versions.sort_by_key(|v| v.create_ts);
-	let versions = versions.into_iter().map(ApiTryInto::try_into).collect::<GlobalResult<Vec<_>>>()?;
+	let versions = versions
+		.into_iter()
+		.map(ApiTryInto::try_into)
+		.collect::<GlobalResult<Vec<_>>>()?;
 
 	let regions = fetch::game::region_summaries(ctx.op_ctx()).await?;
 
@@ -432,7 +439,7 @@ pub async fn get(
 			total_player_count: state.total_player_count.try_into()?,
 			logo_url: util::route::game_logo(&game),
 			banner_url: util::route::game_banner(&game),
-	
+
 			namespaces,
 			versions,
 			available_regions: regions,

@@ -34,7 +34,8 @@ pub async fn get_builds(
 	.await?;
 
 	// Convert the build data structures
-	let mut builds = builds_res.builds
+	let mut builds = builds_res
+		.builds
 		.iter()
 		.map(|build| {
 			let upload = uploads_res
@@ -45,16 +46,19 @@ pub async fn get_builds(
 				tracing::warn!("unable to find upload for build");
 			}
 
-			GlobalResult::Ok((build.create_ts, models::CloudBuildSummary {
-				build_id: unwrap_ref!(build.build_id).as_uuid(),
-				upload_id: unwrap_ref!(build.upload_id).as_uuid(),
-				display_name: build.display_name.clone(),
-				create_ts: util::timestamp::to_string(build.create_ts)?,
-				content_length: upload
-					.map_or(0, |upload| upload.content_length)
-					.try_into()?,
-				complete: upload.map_or(true, |upload| upload.complete_ts.is_some()),
-			}))
+			GlobalResult::Ok((
+				build.create_ts,
+				models::CloudBuildSummary {
+					build_id: unwrap_ref!(build.build_id).as_uuid(),
+					upload_id: unwrap_ref!(build.upload_id).as_uuid(),
+					display_name: build.display_name.clone(),
+					create_ts: util::timestamp::to_string(build.create_ts)?,
+					content_length: upload
+						.map_or(0, |upload| upload.content_length)
+						.try_into()?,
+					complete: upload.map_or(true, |upload| upload.complete_ts.is_some()),
+				},
+			))
 		})
 		.collect::<Result<Vec<_>, _>>()?;
 
@@ -63,10 +67,7 @@ pub async fn get_builds(
 	builds.reverse();
 
 	Ok(models::CloudGamesListGameBuildsResponse {
-		builds: builds
-			.into_iter()
-			.map(|(_, x)| x)
-			.collect::<Vec<_>>(),
+		builds: builds.into_iter().map(|(_, x)| x).collect::<Vec<_>>(),
 	})
 }
 
