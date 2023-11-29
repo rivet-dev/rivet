@@ -1021,6 +1021,8 @@ async fn find(
 		user_id: req.user_id.map(Into::into),
 		verification_data_json: req.verification_data_json,
 		bypass_verification: req.bypass_verification,
+
+		debug: None,
 	})
 	.await
 	.unwrap()

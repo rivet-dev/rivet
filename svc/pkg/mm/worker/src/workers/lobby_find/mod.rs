@@ -29,7 +29,7 @@ async fn fail(
 	error_code: ErrorCode,
 	force_fail: bool,
 ) -> GlobalResult<()> {
-	tracing::warn!(%namespace_id, ?query_id, ?error_code, ?force_fail, "player create failed");
+	tracing::warn!(%namespace_id, ?query_id, ?error_code, ?force_fail, "lobby create failed");
 
 	let ctx = ctx.base();
 	tokio::task::Builder::new()
@@ -288,6 +288,9 @@ async fn worker(ctx: &OperationContext<mm::msg::lobby_find::Message>) -> GlobalR
 		now_ts: ctx.ts(),
 		ray_id: ctx.ray_id(),
 	};
+	if ctx.debug.as_ref().map_or(false, |x| x.fail_sql) {
+		bail!("debug fail sql");
+	}
 	rivet_pools::utils::crdb::tx(&crdb, |tx| {
 		let ctx = ctx.clone();
 		Box::pin(insert_to_crdb(ctx, tx, insert_opts.clone()))
@@ -586,6 +589,8 @@ async fn insert_to_crdb(
 		ray_id,
 	}: InsertCrdbOpts,
 ) -> GlobalResult<()> {
+	// These queries are idempotent
+
 	// Insert preemptive lobby row if needed
 	if auto_create_lobby {
 		// Lobby group will exist if the lobby was auto created
@@ -595,7 +600,7 @@ async fn insert_to_crdb(
 		sql_execute!(
 			[ctx, @tx tx]
 			"
-			INSERT INTO db_mm_state.lobbies (
+			UPSERT INTO db_mm_state.lobbies (
 				lobby_id,
 				namespace_id,
 				region_id,
@@ -630,7 +635,7 @@ async fn insert_to_crdb(
 	sql_execute!(
 		[ctx, @tx tx]
 		"
-		INSERT INTO db_mm_state.find_queries (
+		UPSERT INTO db_mm_state.find_queries (
 			query_id,
 			namespace_id,
 			join_kind,
@@ -654,7 +659,7 @@ async fn insert_to_crdb(
 		sql_execute!(
 			[ctx, @tx tx]
 			"
-			INSERT INTO db_mm_state.players (
+			UPSERT INTO db_mm_state.players (
 				player_id,
 				lobby_id,
 				find_query_id,
