@@ -18,12 +18,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 -   **Bolt** Removed `bolt admin team-dev create`. You can use `bolt admin login` and the hub to create a new dev team
 -   **Infra** Turnstile `CAPTCHA_CAPTCHA_REQUIRED` responses now include a site key
 -   **Infra** Turnstile is no longer configurable by domain (instead configured by Turnstile itself)
--   **Infra** Fixed /list not returning lobbies unless the `include_state` query parameter was true
--   **Infra** Job log aggregating to use Vector under the hood to insert directly in to ClickHouse
+-   **Infra** Job log aggregating to use Vector under the hood to insert directly into ClickHouse
+-   **Matchmaker** Players automatically remove after extended periods of time to account for network failures
 
 ### Fixed
 
 -   **Infra** Job logs occasionally returning duplicate log lines
+-   **Matchmaker** /list returning no lobbies unless `include_state` query parameter is `true`
+-   **Matchmaker** Players remove correctly when the player fails to be inserted into the Cockroach database and only exists in Redis
 
 ## [23.1.0] - 2023-10-30
 
