@@ -198,6 +198,11 @@ pub fn player_unregistered() -> String {
 	format!("{{global}}:mm:player:unregistered")
 }
 
+/// ZSET<lobby id, expire ts>
+pub fn player_auto_remove() -> String {
+	format!("{{global}}:mm:player:auto_remove")
+}
+
 // Placeholder key
 pub fn empty() -> String {
 	"{global}".to_string()
