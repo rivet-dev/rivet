@@ -1498,8 +1498,6 @@ async fn find_with_dynamic_max_players(
 		bypass_verification: false,
 		tags: HashMap::new(),
 		dynamic_max_players: Some(dynamic_max_players),
-		verification_data_json: req.verification_data_json,
-		bypass_verification: req.bypass_verification,
 
 		debug: None,
 	})
