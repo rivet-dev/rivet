@@ -815,32 +815,35 @@ fn build_ingress_router(
 		let mut middlewares = Vec::new();
 
 		// Build path
-		if let Some(path) = &mount.path {
-			if !rule.is_empty() {
-				rule.push_str(" && ");
-			}
-
-			rule.push_str(&format!("PathPrefix(`{path}`)"));
-
-			let mw_name = format!("{}-{i}-strip-prefix", svc_ctx.name());
-			middlewares.push(json!({
-				"apiVersion": "traefik.io/v1alpha1",
-				"kind": "Middleware",
-				"metadata": {
-					"name": mw_name,
-					"namespace": "rivet-service",
-					"labels": {
-						"traefik-instance": "main"
-					}
-				},
-				"spec": {
-					"stripPrefix": {
-						"prefixes": [ path ],
-						"forceSlash": true
-					}
-				}
-			}));
+		if !rule.is_empty() {
+			rule.push_str(" && ");
 		}
+
+		let path = match &mount.path {
+			Some(path) => path,
+			None => "/",
+		};
+
+		rule.push_str(&format!("PathPrefix(`{path}`)"));
+
+		let mw_name = format!("{}-{i}-strip-prefix", svc_ctx.name());
+		middlewares.push(json!({
+			"apiVersion": "traefik.io/v1alpha1",
+			"kind": "Middleware",
+			"metadata": {
+				"name": mw_name,
+				"namespace": "rivet-service",
+				"labels": {
+					"traefik-instance": "main"
+				}
+			},
+			"spec": {
+				"stripPrefix": {
+					"prefixes": [ path ],
+					"forceSlash": true
+				}
+			}
+		}));
 
 		if let Some(add_path) = &mount.add_path {
 			let mw_name = format!("{}-{i}-add-prefix", svc_ctx.name());
