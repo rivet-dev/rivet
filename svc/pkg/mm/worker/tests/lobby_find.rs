@@ -666,24 +666,20 @@ async fn tagged(ctx: TestCtx) {
 		return;
 	}
 
-	let lobby_res = op!([ctx] faker_mm_lobby {
-		..Default::default()
-	})
-	.await
-	.unwrap();
+	let lobby_group = create_lobby_group(&ctx, None).await;
 
 	let find_res1 = find_with_tags(
 		&ctx,
 		FindRequest {
-			namespace_id: lobby_res.namespace_id.as_ref().unwrap().as_uuid(),
+			namespace_id: lobby_group.namespace_id,
 			players: gen_players(1),
 			query: mm::msg::lobby_find::message::Query::LobbyGroup(
 				backend::matchmaker::query::LobbyGroup {
-					lobby_group_ids: vec![lobby_res.lobby_group_id.unwrap()],
-					region_ids: vec![lobby_res.region_id.unwrap()],
+					lobby_group_ids: vec![lobby_group.lobby_group_id.into()],
+					region_ids: vec![lobby_group.region_id.into()],
 					auto_create: Some(backend::matchmaker::query::AutoCreate {
-						lobby_group_id: lobby_res.lobby_group_id,
-						region_id: lobby_res.region_id,
+						lobby_group_id: Some(lobby_group.lobby_group_id.into()),
+						region_id: Some(lobby_group.region_id.into()),
 					}),
 				},
 			),
@@ -699,15 +695,15 @@ async fn tagged(ctx: TestCtx) {
 	let find_res2 = find_with_tags(
 		&ctx,
 		FindRequest {
-			namespace_id: lobby_res.namespace_id.as_ref().unwrap().as_uuid(),
+			namespace_id: lobby_group.namespace_id,
 			players: gen_players(1),
 			query: mm::msg::lobby_find::message::Query::LobbyGroup(
 				backend::matchmaker::query::LobbyGroup {
-					lobby_group_ids: vec![lobby_res.lobby_group_id.unwrap()],
-					region_ids: vec![lobby_res.region_id.unwrap()],
+					lobby_group_ids: vec![lobby_group.lobby_group_id.into()],
+					region_ids: vec![lobby_group.region_id.into()],
 					auto_create: Some(backend::matchmaker::query::AutoCreate {
-						lobby_group_id: lobby_res.lobby_group_id,
-						region_id: lobby_res.region_id,
+						lobby_group_id: Some(lobby_group.lobby_group_id.into()),
+						region_id: Some(lobby_group.region_id.into()),
 					}),
 				},
 			),
@@ -725,15 +721,15 @@ async fn tagged(ctx: TestCtx) {
 	let find_res3 = find_with_tags(
 		&ctx,
 		FindRequest {
-			namespace_id: lobby_res.namespace_id.as_ref().unwrap().as_uuid(),
+			namespace_id: lobby_group.namespace_id,
 			players: gen_players(1),
 			query: mm::msg::lobby_find::message::Query::LobbyGroup(
 				backend::matchmaker::query::LobbyGroup {
-					lobby_group_ids: vec![lobby_res.lobby_group_id.unwrap()],
-					region_ids: vec![lobby_res.region_id.unwrap()],
+					lobby_group_ids: vec![lobby_group.lobby_group_id.into()],
+					region_ids: vec![lobby_group.region_id.into()],
 					auto_create: Some(backend::matchmaker::query::AutoCreate {
-						lobby_group_id: lobby_res.lobby_group_id,
-						region_id: lobby_res.region_id,
+						lobby_group_id: Some(lobby_group.lobby_group_id.into()),
+						region_id: Some(lobby_group.region_id.into()),
 					}),
 				},
 			),
@@ -756,21 +752,17 @@ async fn tagged_no_auto_create(ctx: TestCtx) {
 		return;
 	}
 
-	let lobby_res = op!([ctx] faker_mm_lobby {
-		..Default::default()
-	})
-	.await
-	.unwrap();
+	let lobby_group = create_lobby_group(&ctx, None).await;
 
 	let err = find_with_tags(
 		&ctx,
 		FindRequest {
-			namespace_id: lobby_res.namespace_id.as_ref().unwrap().as_uuid(),
+			namespace_id: lobby_group.namespace_id,
 			players: gen_players(1),
 			query: mm::msg::lobby_find::message::Query::LobbyGroup(
 				backend::matchmaker::query::LobbyGroup {
-					lobby_group_ids: vec![lobby_res.lobby_group_id.unwrap()],
-					region_ids: vec![lobby_res.region_id.unwrap()],
+					lobby_group_ids: vec![lobby_group.lobby_group_id.into()],
+					region_ids: vec![lobby_group.region_id.into()],
 					auto_create: None,
 				},
 			),
@@ -787,6 +779,231 @@ async fn tagged_no_auto_create(ctx: TestCtx) {
 		mm::msg::lobby_find_fail::ErrorCode::NoAvailableLobbies as i32,
 		err.error_code
 	);
+}
+
+#[worker_test]
+async fn tagged_multiple_game_modes(ctx: TestCtx) {
+	if !util::feature::job_run() {
+		return;
+	}
+
+	let lobby_group = create_lobby_group(&ctx, None).await;
+
+	let find_res1 = find_with_tags(
+		&ctx,
+		FindRequest {
+			namespace_id: lobby_group.namespace_id,
+			players: gen_players(2),
+			query: mm::msg::lobby_find::message::Query::LobbyGroup(
+				backend::matchmaker::query::LobbyGroup {
+					lobby_group_ids: vec![lobby_group.lobby_group_id.into()],
+					region_ids: vec![lobby_group.region_id.into()],
+					auto_create: Some(backend::matchmaker::query::AutoCreate {
+						lobby_group_id: Some(lobby_group.lobby_group_id.into()),
+						region_id: Some(lobby_group.region_id.into()),
+					}),
+				},
+			),
+			user_id: None,
+		},
+		hashmap! {
+			"mytag".to_string() => "1234".to_string(),
+		},
+	)
+	.await
+	.unwrap();
+
+	let find_res2 = find_with_tags(
+		&ctx,
+		FindRequest {
+			namespace_id: lobby_group.namespace_id,
+			players: gen_players(1),
+			query: mm::msg::lobby_find::message::Query::LobbyGroup(
+				backend::matchmaker::query::LobbyGroup {
+					lobby_group_ids: vec![lobby_group.lobby_group_id2.into()],
+					region_ids: vec![lobby_group.region_id.into()],
+					auto_create: Some(backend::matchmaker::query::AutoCreate {
+						lobby_group_id: Some(lobby_group.lobby_group_id2.into()),
+						region_id: Some(lobby_group.region_id.into()),
+					}),
+				},
+			),
+			user_id: None,
+		},
+		hashmap! {
+			"mytag".to_string() => "4321".to_string(),
+		},
+	)
+	.await
+	.unwrap();
+
+	// This should iterate over the both of the previously created lobbies and skip the first one because
+	// it's tag doesn't match.
+	let find_res3 = find_with_tags(
+		&ctx,
+		FindRequest {
+			namespace_id: lobby_group.namespace_id,
+			players: gen_players(1),
+			query: mm::msg::lobby_find::message::Query::LobbyGroup(
+				backend::matchmaker::query::LobbyGroup {
+					lobby_group_ids: vec![
+						lobby_group.lobby_group_id.into(),
+						lobby_group.lobby_group_id2.into(),
+					],
+					region_ids: vec![lobby_group.region_id.into()],
+					auto_create: None,
+				},
+			),
+			user_id: None,
+		},
+		hashmap! {
+			"mytag".to_string() => "4321".to_string(),
+		},
+	)
+	.await
+	.unwrap();
+
+	assert_eq!(find_res2.lobby_id, find_res3.lobby_id, "found wrong lobby");
+}
+
+#[worker_test]
+async fn tagged_multiple_lobbies(ctx: TestCtx) {
+	if !util::feature::job_run() {
+		return;
+	}
+
+	let lobby_group = create_lobby_group(&ctx, None).await;
+
+	let find_res1 = find_with_tags(
+		&ctx,
+		FindRequest {
+			namespace_id: lobby_group.namespace_id,
+			players: gen_players(2),
+			query: mm::msg::lobby_find::message::Query::LobbyGroup(
+				backend::matchmaker::query::LobbyGroup {
+					lobby_group_ids: vec![lobby_group.lobby_group_id.into()],
+					region_ids: vec![lobby_group.region_id.into()],
+					auto_create: Some(backend::matchmaker::query::AutoCreate {
+						lobby_group_id: Some(lobby_group.lobby_group_id.into()),
+						region_id: Some(lobby_group.region_id.into()),
+					}),
+				},
+			),
+			user_id: None,
+		},
+		hashmap! {
+			"mytag".to_string() => "1234".to_string(),
+		},
+	)
+	.await
+	.unwrap();
+
+	let find_res2 = find_with_tags(
+		&ctx,
+		FindRequest {
+			namespace_id: lobby_group.namespace_id,
+			players: gen_players(1),
+			query: mm::msg::lobby_find::message::Query::LobbyGroup(
+				backend::matchmaker::query::LobbyGroup {
+					lobby_group_ids: vec![lobby_group.lobby_group_id.into()],
+					region_ids: vec![lobby_group.region_id.into()],
+					auto_create: Some(backend::matchmaker::query::AutoCreate {
+						lobby_group_id: Some(lobby_group.lobby_group_id.into()),
+						region_id: Some(lobby_group.region_id.into()),
+					}),
+				},
+			),
+			user_id: None,
+		},
+		hashmap! {
+			"mytag".to_string() => "4321".to_string(),
+		},
+	)
+	.await
+	.unwrap();
+
+	// This should iterate over the both of the previously created lobbies and skip the first one because
+	// it's tag doesn't match.
+	let find_res3 = find_with_tags(
+		&ctx,
+		FindRequest {
+			namespace_id: lobby_group.namespace_id,
+			players: gen_players(1),
+			query: mm::msg::lobby_find::message::Query::LobbyGroup(
+				backend::matchmaker::query::LobbyGroup {
+					lobby_group_ids: vec![lobby_group.lobby_group_id.into()],
+					region_ids: vec![lobby_group.region_id.into()],
+					auto_create: None,
+				},
+			),
+			user_id: None,
+		},
+		hashmap! {
+			"mytag".to_string() => "4321".to_string(),
+		},
+	)
+	.await
+	.unwrap();
+
+	assert_eq!(find_res2.lobby_id, find_res3.lobby_id, "found wrong lobby");
+}
+
+#[worker_test]
+async fn tagged_subset(ctx: TestCtx) {
+	if !util::feature::job_run() {
+		return;
+	}
+
+	let lobby_group = create_lobby_group(&ctx, None).await;
+
+	let find_res1 = find_with_tags(
+		&ctx,
+		FindRequest {
+			namespace_id: lobby_group.namespace_id,
+			players: gen_players(1),
+			query: mm::msg::lobby_find::message::Query::LobbyGroup(
+				backend::matchmaker::query::LobbyGroup {
+					lobby_group_ids: vec![lobby_group.lobby_group_id.into()],
+					region_ids: vec![lobby_group.region_id.into()],
+					auto_create: Some(backend::matchmaker::query::AutoCreate {
+						lobby_group_id: Some(lobby_group.lobby_group_id.into()),
+						region_id: Some(lobby_group.region_id.into()),
+					}),
+				},
+			),
+			user_id: None,
+		},
+		hashmap! {
+			"mytag".to_string() => "1234".to_string(),
+			"othertag".to_string() => "foobar".to_string(),
+		},
+	)
+	.await
+	.unwrap();
+
+	// Subset tags will still match
+	let find_res2 = find_with_tags(
+		&ctx,
+		FindRequest {
+			namespace_id: lobby_group.namespace_id,
+			players: gen_players(1),
+			query: mm::msg::lobby_find::message::Query::LobbyGroup(
+				backend::matchmaker::query::LobbyGroup {
+					lobby_group_ids: vec![lobby_group.lobby_group_id.into()],
+					region_ids: vec![lobby_group.region_id.into()],
+					auto_create: None,
+				},
+			),
+			user_id: None,
+		},
+		hashmap! {
+			"mytag".to_string() => "1234".to_string(),
+		},
+	)
+	.await
+	.unwrap();
+
+	assert_eq!(find_res1.lobby_id, find_res2.lobby_id, "found wrong lobby");
 }
 
 #[worker_test]
@@ -1034,6 +1251,7 @@ async fn gen_disabled_lobby(ctx: &TestCtx) -> (Uuid, Uuid) {
 
 struct TestLobbyGroup {
 	lobby_group_id: Uuid,
+	lobby_group_id2: Uuid,
 	#[allow(unused)]
 	version_id: Uuid,
 	namespace_id: Uuid,
@@ -1097,6 +1315,39 @@ async fn create_lobby_group(ctx: &TestCtx, image: Option<faker::build::Image>) -
 				}.into()),
 
 				actions: None,
+			}, backend::matchmaker::LobbyGroup {
+				name_id: "faker-lg2".into(),
+
+				regions: vec![backend::matchmaker::lobby_group::Region {
+					region_id: region_res.region_id,
+					tier_name_id: util_mm::test::TIER_NAME_ID.to_owned(),
+					idle_lobbies: None,
+				}],
+				max_players_normal: 8,
+				max_players_direct: 10,
+				max_players_party: 12,
+				listable: true,
+				taggable: false,
+				allow_dynamic_max_players: false,
+
+				runtime: Some(backend::matchmaker::lobby_runtime::Docker {
+					build_id: build_res.build_id,
+					args: vec![],
+					env_vars: vec![backend::matchmaker::lobby_runtime::EnvVar {
+						key: "HELLO".into(),
+						value: "world".into(),
+					}],
+					network_mode: backend::matchmaker::lobby_runtime::NetworkMode::Bridge as i32,
+					ports: vec![backend::matchmaker::lobby_runtime::Port {
+						label: "1234".into(),
+						target_port: Some(1234),
+						port_range: None,
+						proxy_protocol: backend::matchmaker::lobby_runtime::ProxyProtocol::Https as i32,
+						proxy_kind: backend::matchmaker::lobby_runtime::ProxyKind::GameGuard as i32,
+					}],
+				}.into()),
+
+				actions: None,
 			}],
 		}),
 		..Default::default()
@@ -1115,6 +1366,9 @@ async fn create_lobby_group(ctx: &TestCtx, image: Option<faker::build::Image>) -
 	let lobby_group = config_meta.lobby_groups.first().unwrap();
 	let lobby_group_id = lobby_group.lobby_group_id.as_ref().unwrap().as_uuid();
 
+	let lobby_group2 = config_meta.lobby_groups.get(1).unwrap();
+	let lobby_group_id2 = lobby_group2.lobby_group_id.as_ref().unwrap().as_uuid();
+
 	op!([ctx] game_namespace_version_set {
 		namespace_id: Some(namespace_id.into()),
 		version_id: Some(version_id.into()),
@@ -1124,6 +1378,7 @@ async fn create_lobby_group(ctx: &TestCtx, image: Option<faker::build::Image>) -
 
 	TestLobbyGroup {
 		lobby_group_id,
+		lobby_group_id2,
 		version_id,
 		namespace_id,
 		region_id,
@@ -1158,6 +1413,8 @@ async fn find(
 		bypass_verification: false,
 		tags: HashMap::new(),
 		dynamic_max_players: None,
+
+		debug: None,
 	})
 	.await
 	.unwrap()
@@ -1185,6 +1442,8 @@ async fn find_with_verification(
 		bypass_verification: bypass_verification,
 		tags: HashMap::new(),
 		dynamic_max_players: None,
+
+		debug: None,
 	})
 	.await
 	.unwrap()
@@ -1211,6 +1470,8 @@ async fn find_with_tags(
 		bypass_verification: false,
 		tags: tags,
 		dynamic_max_players: None,
+
+		debug: None,
 	})
 	.await
 	.unwrap()
@@ -1237,6 +1498,10 @@ async fn find_with_dynamic_max_players(
 		bypass_verification: false,
 		tags: HashMap::new(),
 		dynamic_max_players: Some(dynamic_max_players),
+		verification_data_json: req.verification_data_json,
+		bypass_verification: req.bypass_verification,
+
+		debug: None,
 	})
 	.await
 	.unwrap()

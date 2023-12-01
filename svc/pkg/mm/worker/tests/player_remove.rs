@@ -92,9 +92,76 @@ async fn player_remove(ctx: TestCtx) {
 	assert_eq!(0, fetch_player_count(&ctx, lobby_id).await);
 }
 
-async fn does_player_exist(ctx: &TestCtx, lobby_id: Uuid, player_id: Uuid) -> bool {
-	let redis_exists = ctx
-		.redis_mm()
+#[worker_test]
+async fn player_remove_redis_fallback(ctx: TestCtx) {
+	if !util::feature::job_run() {
+		return;
+	}
+
+	let lobby_res = op!([ctx] faker_mm_lobby {
+		max_players_normal: 50,
+		max_players_party: 100,
+		max_players_direct: 200,
+		..Default::default()
+	})
+	.await
+	.unwrap();
+	let namespace_id = lobby_res.namespace_id.as_ref().unwrap().as_uuid();
+	let lobby_id = lobby_res.lobby_id.as_ref().unwrap().as_uuid();
+	let player_ids = std::iter::repeat_with(Uuid::new_v4)
+		.take(3)
+		.collect::<Vec<_>>();
+
+	// Find lobby, but this will fail so we can't wait on any message for this to complete
+	let query_id = Uuid::new_v4();
+	msg!([ctx] mm::msg::lobby_find(namespace_id, query_id) {
+		namespace_id: Some(namespace_id.into()),
+		query_id: Some(query_id.into()),
+		join_kind: backend::matchmaker::query::JoinKind::Normal as i32,
+		players: player_ids
+			.iter()
+			.map(|&player_id| mm::msg::lobby_find::Player {
+				player_id: Some(player_id.into()),
+				token_session_id: Some(Uuid::new_v4().into()),
+				client_info:None,
+			})
+			.collect(),
+		query: Some(mm::msg::lobby_find::message::Query::Direct(backend::matchmaker::query::Direct {
+			lobby_id: Some(lobby_id.into()),
+		})),
+		debug: Some(mm::msg::lobby_find::Debug {
+			fail_sql: true,
+			..Default::default()
+		}),
+		..Default::default()
+	})
+	.await
+	.unwrap();
+
+	// Wait until the player is written to Redis
+	tracing::info!("waiting for player to be added to redis");
+	let mut interval = tokio::time::interval(std::time::Duration::from_millis(100));
+	loop {
+		interval.tick().await;
+		if does_player_exist_redis(&ctx, lobby_id, player_ids[0]).await {
+			tracing::info!("found player in redis");
+			break;
+		}
+	}
+
+	tracing::info!("removing player");
+	msg!([ctx] mm::msg::player_remove(player_ids[0]) -> Result<mm::msg::player_remove_complete, mm::msg::player_remove_fail> {
+		player_id: Some(player_ids[0].into()),
+		lobby_id: Some(lobby_id.into()),
+		..Default::default()
+	})
+	.await
+	.unwrap().unwrap();
+	assert!(!does_player_exist_redis(&ctx, lobby_id, player_ids[0]).await);
+}
+
+async fn does_player_exist_redis(ctx: &TestCtx, lobby_id: Uuid, player_id: Uuid) -> bool {
+	ctx.redis_mm()
 		.await
 		.unwrap()
 		.zscore::<_, _, Option<u64>>(
@@ -103,7 +170,11 @@ async fn does_player_exist(ctx: &TestCtx, lobby_id: Uuid, player_id: Uuid) -> bo
 		)
 		.await
 		.unwrap()
-		.is_some();
+		.is_some()
+}
+
+async fn does_player_exist(ctx: &TestCtx, lobby_id: Uuid, player_id: Uuid) -> bool {
+	let redis_exists = does_player_exist_redis(ctx, lobby_id, player_id).await;
 
 	let crdb_exists = sqlx::query_as::<_, (Option<i64>,)>(
 		"SELECT remove_ts FROM db_mm_state.players WHERE player_id = $1",
