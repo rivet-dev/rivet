@@ -1024,6 +1024,7 @@ async fn find_inner(
 		dynamic_max_players: dynamic_max_players
 			.map(ApiTryInto::try_into)
 			.transpose()?,
+		debug: None,
 	})
 	.await?;
 	let lobby_id = match find_res
