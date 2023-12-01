@@ -61,10 +61,10 @@ types:
     properties:
       query_start:
         docs: Unsigned 64 bit integer.
-        type: optional<long>
+        type: long
       query_end:
         docs: Unsigned 64 bit integer.
-        type: optional<long>
+        type: long
 
   ExportMatchmakerLobbyHistoryResponse:
     properties:
@@ -76,7 +76,7 @@ types:
     properties:
       did_remove:
         docs: Whether or not the lobby was successfully stopped.
-        type: optional<boolean>
+        type: boolean
 
   GetLobbyLogsResponse:
     properties:

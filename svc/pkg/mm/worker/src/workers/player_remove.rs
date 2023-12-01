@@ -1,5 +1,6 @@
 use chirp_worker::prelude::*;
 use proto::backend::pkg::*;
+use redis::AsyncCommands;
 use serde_json::json;
 use tracing::Instrument;
 
@@ -11,7 +12,7 @@ lazy_static::lazy_static! {
 struct PlayerRow {
 	// Lobby may not exist for this ID if mm-lobby-create didn't succeed
 	lobby_id: Uuid,
-	create_ts: i64,
+	create_ts: Option<i64>,
 	register_ts: Option<i64>,
 	remote_address: Option<String>,
 	remove_ts: Option<i64>,
@@ -25,14 +26,9 @@ struct PlayerRow {
 	max_players_party: i64,
 }
 
-#[derive(Debug, sqlx::FromRow)]
-struct LobbyRow {}
-
 #[worker(name = "mm-player-remove")]
 async fn worker(ctx: &OperationContext<mm::msg::player_remove::Message>) -> GlobalResult<()> {
 	// NOTE: Idempotent
-
-	let crdb = ctx.crdb().await?;
 
 	let player_id = unwrap_ref!(ctx.player_id).as_uuid();
 	let lobby_id = ctx.lobby_id.map(|x| x.as_uuid());
@@ -79,13 +75,15 @@ async fn worker(ctx: &OperationContext<mm::msg::player_remove::Message>) -> Glob
 	.await?;
 	tracing::info!(?player_row, "player row");
 
-	let Some(player_row) = player_row else {
-		if ctx.req_dt() > util::duration::minutes(5) {
-			tracing::error!("discarding stale message");
-			return Ok(());
-		} else {
-			retry_bail!("player not found, may be race condition with insertion");
-		}
+	let player_row = if let Some(player_row) = player_row {
+		player_row
+	} else if let Some(player_row) = fallback_fetch_player_from_redis(&ctx, player_id).await? {
+		player_row
+	} else if ctx.req_dt() > util::duration::minutes(5) {
+		tracing::error!("discarding stale message");
+		return Ok(());
+	} else {
+		retry_bail!("player not found, may be race condition with insertion");
 	};
 
 	// Validate lobby
@@ -270,4 +268,82 @@ async fn fail(
 	.await?;
 
 	Ok(())
+}
+
+/// If the player does not exist in Cockraoch, then attempt to fetch it from Redis.
+///
+/// This happens when the SQL query to insert in to the database fails after the player was already
+/// preemptively inserted in to Redis. It's a rare edge case, but has cascading implications for
+/// player counts.
+#[tracing::instrument(skip(ctx))]
+async fn fallback_fetch_player_from_redis(
+	ctx: &OperationContext<mm::msg::player_remove::Message>,
+	player_id: Uuid,
+) -> GlobalResult<Option<PlayerRow>> {
+	tracing::warn!("player not found in cockroach, falling back to fetching from redis");
+
+	let mut redis = ctx.redis_mm().await?;
+
+	// Read player config
+	let mut player_config_iter = redis
+		.hget::<_, _, Vec<Option<String>>>(
+			util_mm::key::player_config(player_id),
+			&[
+				util_mm::key::player_config::LOBBY_ID,
+				util_mm::key::player_config::REMOTE_ADDRESS,
+			],
+		)
+		.await?
+		.into_iter();
+
+	// If the first value is nil, then there is no player config in Redis
+	let Some(lobby_id_str) = unwrap!(player_config_iter.next()) else {
+		tracing::warn!(?player_id, "player does not exist in redis");
+		return Ok(None);
+	};
+
+	let lobby_id = lobby_id_str.parse::<Uuid>()?;
+	let remote_address = unwrap!(player_config_iter.next());
+
+	// Read lobby config
+	let mut lobby_config_iter = redis
+		.hget::<_, _, Vec<Option<String>>>(
+			util_mm::key::lobby_config(lobby_id),
+			&[
+				util_mm::key::lobby_config::NAMESPACE_ID,
+				util_mm::key::lobby_config::REGION_ID,
+				util_mm::key::lobby_config::LOBBY_GROUP_ID,
+				util_mm::key::lobby_config::MAX_PLAYERS_NORMAL,
+			],
+		)
+		.await?
+		.into_iter();
+	let Some(namespace_id_str) = unwrap!(lobby_config_iter.next()) else {
+		tracing::warn!(?lobby_id, "lobby does not exist in redis");
+		return Ok(None);
+	};
+	let namespace_id = namespace_id_str.parse::<Uuid>()?;
+	let region_id = unwrap!(unwrap!(lobby_config_iter.next())).parse::<Uuid>()?;
+	let lobby_group_id = unwrap!(unwrap!(lobby_config_iter.next())).parse::<Uuid>()?;
+	let max_players_normal = unwrap!(unwrap!(lobby_config_iter.next())).parse::<i64>()?;
+
+	// Build row with the information we have
+	let row = PlayerRow {
+		// Lobby may not exist for this ID if mm-lobby-create didn't succeed
+		lobby_id,
+		create_ts: None,
+		register_ts: None,
+		remote_address,
+		remove_ts: None,
+
+		// Lobby
+		namespace_id,
+		region_id,
+		lobby_group_id,
+		lobby_stop_ts: None,
+		max_players_normal,
+		max_players_party: max_players_normal,
+	};
+
+	Ok(Some(row))
 }

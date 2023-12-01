@@ -28,14 +28,13 @@ pub struct CloudRegionSummary {
     /// A human readable short identifier used to references resources. Different than a `rivet.common#Uuid` because this is intended to be human readable. Different than `rivet.common#DisplayName` because this should not include special characters and be short.
     #[serde(rename = "region_name_id")]
     pub region_name_id: String,
-    /// A universal number given to this region.
     #[serde(rename = "universal_region")]
-    pub universal_region: f64,
+    pub universal_region: crate::models::CloudUniversalRegion,
 }
 
 impl CloudRegionSummary {
     /// A region summary.
-    pub fn new(provider: String, provider_display_name: String, region_display_name: String, region_id: uuid::Uuid, region_name_id: String, universal_region: f64) -> CloudRegionSummary {
+    pub fn new(provider: String, provider_display_name: String, region_display_name: String, region_id: uuid::Uuid, region_name_id: String, universal_region: crate::models::CloudUniversalRegion) -> CloudRegionSummary {
         CloudRegionSummary {
             provider,
             provider_display_name,

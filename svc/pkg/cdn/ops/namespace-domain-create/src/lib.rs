@@ -27,7 +27,7 @@ async fn handle(
 
 	let crdb = ctx.crdb().await?;
 	let (domain_count,) = sql_fetch_one!(
-		[ctx, (i64,)]
+		[ctx, (i64,), &crdb]
 		"SELECT COUNT(*) FROM db_cdn.game_namespace_domains WHERE namespace_id = $1",
 		namespace_id,
 	)
@@ -36,7 +36,7 @@ async fn handle(
 	ensure_with!(domain_count < 10, CDN_TOO_MANY_DOMAINS);
 
 	sql_execute!(
-		[ctx]
+		[ctx, &crdb]
 		"
 		INSERT INTO db_cdn.game_namespace_domains (namespace_id, domain, create_ts)
 		VALUES ($1, $2, $3)

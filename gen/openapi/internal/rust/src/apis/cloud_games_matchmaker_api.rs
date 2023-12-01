@@ -164,7 +164,7 @@ pub async fn cloud_games_matchmaker_export_matchmaker_lobby_history(configuratio
 }
 
 /// Returns the logs for a given lobby.
-pub async fn cloud_games_matchmaker_get_lobby_logs(configuration: &configuration::Configuration, game_id: &str, lobby_id: &str, stream: &str, watch_index: Option<&str>) -> Result<crate::models::CloudGamesGetLobbyLogsResponse, Error<CloudGamesMatchmakerGetLobbyLogsError>> {
+pub async fn cloud_games_matchmaker_get_lobby_logs(configuration: &configuration::Configuration, game_id: &str, lobby_id: &str, stream: crate::models::CloudGamesLogStream, watch_index: Option<&str>) -> Result<crate::models::CloudGamesGetLobbyLogsResponse, Error<CloudGamesMatchmakerGetLobbyLogsError>> {
     let local_var_configuration = configuration;
 
     let local_var_client = &local_var_configuration.client;

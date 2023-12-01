@@ -316,7 +316,7 @@ async fn fetch_suggested_groups(
 
 	fetch::group::summaries(
 		ctx,
-		current_user_id,
+		Some(current_user_id),
 		teams_res
 			.team_ids
 			.iter()

@@ -16,8 +16,6 @@ with open('gen/openapi/internal/spec/openapi.yml', 'r') as f:
 
 # Modify spec for compatability
 openapi['info']['version'] = '0.0.1'
-openapi['components']['schemas']['PortalNotificationUnregisterService'].pop('enum')
-openapi['components']['schemas']['CloudGamesLogStream'].pop('enum')
 
 # Write new spec
 with open(f'{output_dir}/openapi.yml', "w") as f:
