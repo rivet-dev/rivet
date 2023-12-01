@@ -949,6 +949,64 @@ async fn tagged_multiple_lobbies(ctx: TestCtx) {
 }
 
 #[worker_test]
+async fn tagged_subset(ctx: TestCtx) {
+	if !util::feature::job_run() {
+		return;
+	}
+
+	let lobby_group = create_lobby_group(&ctx, None).await;
+
+	let find_res1 = find_with_tags(
+		&ctx,
+		FindRequest {
+			namespace_id: lobby_group.namespace_id,
+			players: gen_players(1),
+			query: mm::msg::lobby_find::message::Query::LobbyGroup(
+				backend::matchmaker::query::LobbyGroup {
+					lobby_group_ids: vec![lobby_group.lobby_group_id.into()],
+					region_ids: vec![lobby_group.region_id.into()],
+					auto_create: Some(backend::matchmaker::query::AutoCreate {
+						lobby_group_id: Some(lobby_group.lobby_group_id.into()),
+						region_id: Some(lobby_group.region_id.into()),
+					}),
+				},
+			),
+			user_id: None,
+		},
+		hashmap! {
+			"mytag".to_string() => "1234".to_string(),
+			"othertag".to_string() => "foobar".to_string(),
+		},
+	)
+	.await
+	.unwrap();
+
+	// Subset tags will still match
+	let find_res2 = find_with_tags(
+		&ctx,
+		FindRequest {
+			namespace_id: lobby_group.namespace_id,
+			players: gen_players(1),
+			query: mm::msg::lobby_find::message::Query::LobbyGroup(
+				backend::matchmaker::query::LobbyGroup {
+					lobby_group_ids: vec![lobby_group.lobby_group_id.into()],
+					region_ids: vec![lobby_group.region_id.into()],
+					auto_create: None,
+				},
+			),
+			user_id: None,
+		},
+		hashmap! {
+			"mytag".to_string() => "1234".to_string(),
+		},
+	)
+	.await
+	.unwrap();
+
+	assert_eq!(find_res1.lobby_id, find_res2.lobby_id, "found wrong lobby");
+}
+
+#[worker_test]
 async fn dynamic_max_players(ctx: TestCtx) {
 	if !util::feature::job_run() {
 		return;
@@ -1355,6 +1413,7 @@ async fn find(
 		bypass_verification: false,
 		tags: HashMap::new(),
 		dynamic_max_players: None,
+
 		debug: None,
 	})
 	.await
@@ -1383,6 +1442,7 @@ async fn find_with_verification(
 		bypass_verification: bypass_verification,
 		tags: HashMap::new(),
 		dynamic_max_players: None,
+
 		debug: None,
 	})
 	.await
@@ -1410,6 +1470,7 @@ async fn find_with_tags(
 		bypass_verification: false,
 		tags: tags,
 		dynamic_max_players: None,
+
 		debug: None,
 	})
 	.await
