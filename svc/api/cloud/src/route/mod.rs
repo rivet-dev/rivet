@@ -1,7 +1,6 @@
 use api_helper::{define_router, util::CorsConfigBuilder};
 use hyper::{Body, Request, Response};
-use rivet_api::models as new_models;
-use rivet_cloud_server::models;
+use rivet_api::models;
 use uuid::Uuid;
 
 mod auth;
@@ -42,31 +41,31 @@ define_router! {
 
 		// Uploads
 		"uploads" / Uuid / "complete": {
-			POST: uploads::complete(body: models::CompleteUploadRequest),
+			POST: uploads::complete(body: serde_json::Value),
 		},
 
 		// Games
 		"games": {
 			GET: games::list(),
-			POST: games::create(body: models::CreateGameRequest),
+			POST: games::create(body: models::CloudGamesCreateGameRequest),
 		},
 		"games" / Uuid: {
 			GET: games::get(),
 		},
 		"games" / Uuid / "versions": {
-			POST: games::versions::create(body: new_models::CloudGamesCreateGameVersionRequest),
+			POST: games::versions::create(body: models::CloudGamesCreateGameVersionRequest),
 		},
 		"games" / Uuid / "versions" / Uuid: {
 			GET: games::versions::get(),
 		},
 		"games" / Uuid / "namespaces": {
-			POST: games::namespaces::create(body: new_models::CloudGamesNamespacesCreateGameNamespaceRequest),
+			POST: games::namespaces::create(body: models::CloudGamesNamespacesCreateGameNamespaceRequest),
 		},
 		"games" / Uuid / "namespaces" / Uuid: {
 			GET: games::namespaces::get(),
 		},
 		"games" / Uuid / "namespaces" / Uuid / "version": {
-			PUT: games::namespaces::update_version(body: new_models::CloudGamesNamespacesUpdateGameNamespaceVersionRequest),
+			PUT: games::namespaces::update_version(body: models::CloudGamesNamespacesUpdateGameNamespaceVersionRequest),
 		},
 		"games" / Uuid / "namespaces" / Uuid / "tokens" / "public": {
 			POST: games::namespaces::create_token_public(
@@ -75,12 +74,12 @@ define_router! {
 		},
 		"games" / Uuid / "namespaces" / Uuid / "tokens" / "development": {
 			POST: games::namespaces::create_token_development(
-				body: new_models::CloudGamesNamespacesCreateGameNamespaceTokenDevelopmentRequest
+				body: models::CloudGamesNamespacesCreateGameNamespaceTokenDevelopmentRequest
 			),
 		},
 		"games" / Uuid / "namespaces" / Uuid / "domains": {
 			POST: games::namespaces::add_namespace_domain(
-				body: new_models::CloudGamesNamespacesAddNamespaceDomainRequest
+				body: models::CloudGamesNamespacesAddNamespaceDomainRequest
 			),
 		},
 		"games" / Uuid / "namespaces" / Uuid / "domains" / String: {
@@ -88,12 +87,12 @@ define_router! {
 		},
 		"games" / Uuid / "namespaces" / Uuid / "domain-public-auth": {
 			PUT: games::namespaces::toggle_domain_public_auth(
-				body: new_models::CloudGamesNamespacesToggleNamespaceDomainPublicAuthRequest
+				body: models::CloudGamesNamespacesToggleNamespaceDomainPublicAuthRequest
 			),
 		},
 		"games" / Uuid / "namespaces" / Uuid / "auth-user": {
 			POST: games::namespaces::update_namespace_cdn_auth_user(
-				body: new_models::CloudGamesNamespacesUpdateNamespaceCdnAuthUserRequest,
+				body: models::CloudGamesNamespacesUpdateNamespaceCdnAuthUserRequest,
 			),
 		},
 		"games" / Uuid / "namespaces" / Uuid / "auth-user"/ String: {
@@ -101,12 +100,12 @@ define_router! {
 		},
 		"games" / Uuid / "namespaces" / Uuid / "cdn-auth": {
 			PUT: games::namespaces::set_cdn_auth_type(
-				body: new_models::CloudGamesNamespacesSetNamespaceCdnAuthTypeRequest,
+				body: models::CloudGamesNamespacesSetNamespaceCdnAuthTypeRequest,
 			),
 		},
 		"games" / Uuid / "namespaces" / Uuid / "mm-config": {
 			POST: games::namespaces::update_mm_config(
-				body: new_models::CloudGamesNamespacesUpdateGameNamespaceMatchmakerConfigRequest
+				body: models::CloudGamesNamespacesUpdateGameNamespaceMatchmakerConfigRequest
 			),
 		},
 		"games" / Uuid / "namespaces" / Uuid / "version-history": {
@@ -127,26 +126,26 @@ define_router! {
 		},
 		"games" / Uuid / "cdn" / "sites": {
 			GET: games::cdn::get_sites(),
-			POST: games::cdn::create_site(body: new_models::CloudGamesCreateGameCdnSiteRequest),
+			POST: games::cdn::create_site(body: models::CloudGamesCreateGameCdnSiteRequest),
 		},
 		"games" / Uuid / "builds": {
 			GET: games::builds::get_builds(),
-			POST: games::builds::create_build(body: new_models::CloudGamesCreateGameBuildRequest),
+			POST: games::builds::create_build(body: models::CloudGamesCreateGameBuildRequest),
 		},
 		"games" / Uuid / "avatars": {
 			GET: games::avatars::get_custom_avatars(),
 		},
 		"games" / Uuid / "avatar-upload" / "prepare": {
-			POST: games::avatars::prepare_avatar_upload(body: new_models::CloudGamesPrepareCustomAvatarUploadRequest),
+			POST: games::avatars::prepare_avatar_upload(body: models::CloudGamesPrepareCustomAvatarUploadRequest),
 		},
 		"games" / Uuid / "avatar-upload" / Uuid / "complete": {
-			POST: games::avatars::complete_avatar_upload(body: models::CompleteCustomAvatarUploadRequest),
+			POST: games::avatars::complete_avatar_upload(body: serde_json::Value),
 		},
 		"games" / Uuid / "tokens" / "cloud": {
-			POST: games::tokens::create_cloud_token(body: models::CreateCloudTokenRequest),
+			POST: games::tokens::create_cloud_token(body: serde_json::Value),
 		},
 		"games" / Uuid / "matchmaker" / "lobbies" / "export-history": {
-			POST: games::matchmaker::export_history(body: models::ExportMatchmakerLobbyHistoryRequest),
+			POST: games::matchmaker::export_history(body: models::CloudGamesExportMatchmakerLobbyHistoryRequest),
 		},
 		"games" / Uuid / "matchmaker" / "lobbies" / Uuid: {
 			DELETE: games::matchmaker::delete_lobby(),
@@ -158,47 +157,47 @@ define_router! {
 		},
 		"games" / Uuid / "matchmaker" / "lobbies" / Uuid / "logs" / "export": {
 			POST: games::matchmaker::export_lobby_logs(
-				body: models::ExportLobbyLogsRequest,
+				body: models::CloudGamesExportLobbyLogsRequest,
 			),
 		},
 		"games" / "validate": {
-			POST: games::validate(body: models::ValidateGameRequest),
+			POST: games::validate(body: models::CloudGamesValidateGameRequest),
 		},
 		"games" / Uuid / "logo-upload" / "prepare": {
-			POST: games::prepare_logo_upload(body: new_models::CloudGamesGameLogoUploadPrepareRequest),
+			POST: games::prepare_logo_upload(body: models::CloudGamesGameLogoUploadPrepareRequest),
 		},
 		"games" / Uuid / "logo-upload" / Uuid / "complete": {
-			POST: games::complete_logo_upload(body: models::GameLogoUploadCompleteRequest),
+			POST: games::complete_logo_upload(body: serde_json::Value),
 		},
 		"games" / Uuid / "banner-upload" / "prepare": {
-			POST: games::prepare_banner_upload(body: new_models::CloudGamesGameBannerUploadPrepareRequest),
+			POST: games::prepare_banner_upload(body: models::CloudGamesGameBannerUploadPrepareRequest),
 		},
 		"games" / Uuid / "banner-upload" / Uuid / "complete": {
-			POST: games::complete_banner_upload(body: models::GameBannerUploadCompleteRequest),
+			POST: games::complete_banner_upload(body: serde_json::Value),
 		},
 		"games" / Uuid / "versions" / "validate": {
-			POST: games::versions::validate(body: new_models::CloudGamesValidateGameVersionRequest),
+			POST: games::versions::validate(body: models::CloudGamesValidateGameVersionRequest),
 		},
 		"games" / Uuid / "namespaces" / "validate": {
-			POST: games::namespaces::validate(body: new_models::CloudGamesNamespacesValidateGameNamespaceRequest),
+			POST: games::namespaces::validate(body: models::CloudGamesNamespacesValidateGameNamespaceRequest),
 		},
 		"games" / Uuid / "namespaces" / Uuid / "tokens" / "development" / "validate": {
 			POST: games::namespaces::validate_token_development(
-				body: new_models::CloudGamesNamespacesValidateGameNamespaceTokenDevelopmentRequest
+				body: models::CloudGamesNamespacesValidateGameNamespaceTokenDevelopmentRequest
 			),
 		},
 		"games" / Uuid / "namespaces" / Uuid / "mm-config" / "validate": {
 			POST: games::namespaces::validate_mm_config(
-				body: new_models::CloudGamesNamespacesValidateGameNamespaceMatchmakerConfigRequest
+				body: models::CloudGamesNamespacesValidateGameNamespaceMatchmakerConfigRequest
 			),
 		},
 
 		// Groups
 		"groups" / Uuid / "convert": {
-			POST: groups::convert(body: models::ConvertGroupRequest),
+			POST: groups::convert(body: serde_json::Value),
 		},
 		"groups" / "validate": {
-			POST: groups::validate(body: models::ValidateGroupRequest),
+			POST: groups::validate(body: models::CloudValidateGroupRequest),
 		},
 
 		// Tiers
@@ -223,7 +222,7 @@ define_router! {
 			),
 		},
 		"devices" / "links" / "complete": {
-			POST: devices::links::complete(body: new_models::CloudDevicesCompleteDeviceLinkRequest),
+			POST: devices::links::complete(body: models::CloudDevicesCompleteDeviceLinkRequest),
 		},
 	},
 }

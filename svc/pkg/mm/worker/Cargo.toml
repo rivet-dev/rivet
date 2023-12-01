@@ -13,6 +13,7 @@ csv = "1.1"
 heck = "0.3"
 http = "0.2"
 lazy_static = "1.4.0"
+maplit = "1.0"
 nomad-client = "0.0.9"
 nomad-util = { path = "../../../../lib/nomad-util" }
 redis-util = { path = "../../../../lib/redis-util" }
@@ -68,5 +69,4 @@ mm-config-version-get = { path = "../../mm-config/ops/version-get" }
 mm-lobby-get = { path = "../ops/lobby-get" }
 mm-lobby-player-count = { path = "../ops/lobby-player-count" }
 mm-player-count-for-namespace = { path = "../ops/player-count-for-namespace" }
-region-list = { path = "../../region/ops/list" }
 user-identity-create = { path = "../../user-identity/ops/create" }

@@ -14,18 +14,18 @@
 #[derive(Clone, Debug, PartialEq, Default, Serialize, Deserialize)]
 pub struct CloudGamesExportMatchmakerLobbyHistoryRequest {
     /// Unsigned 64 bit integer.
-    #[serde(rename = "query_end", skip_serializing_if = "Option::is_none")]
-    pub query_end: Option<i64>,
+    #[serde(rename = "query_end")]
+    pub query_end: i64,
     /// Unsigned 64 bit integer.
-    #[serde(rename = "query_start", skip_serializing_if = "Option::is_none")]
-    pub query_start: Option<i64>,
+    #[serde(rename = "query_start")]
+    pub query_start: i64,
 }
 
 impl CloudGamesExportMatchmakerLobbyHistoryRequest {
-    pub fn new() -> CloudGamesExportMatchmakerLobbyHistoryRequest {
+    pub fn new(query_end: i64, query_start: i64) -> CloudGamesExportMatchmakerLobbyHistoryRequest {
         CloudGamesExportMatchmakerLobbyHistoryRequest {
-            query_end: None,
-            query_start: None,
+            query_end,
+            query_start,
         }
     }
 }

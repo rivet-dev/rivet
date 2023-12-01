@@ -25,6 +25,8 @@ pub struct Game {
 	pub lobby: Option<Lobby>,
 	pub state: Option<serde_json::Value>,
 	pub config: Option<serde_json::Value>,
+	pub tags: HashMap<String, String>,
+	pub dynamic_max_players: Option<u32>,
 }
 
 #[derive(Serialize)]
@@ -61,6 +63,8 @@ pub struct VerifyConfigOpts<'a> {
 	pub namespace_id: Uuid,
 	pub user_id: Option<Uuid>,
 	pub client_info: Vec<backend::net::ClientInfo>,
+	pub tags: &'a HashMap<String, String>,
+	pub dynamic_max_players: Option<u32>,
 
 	pub lobby_groups: &'a [backend::matchmaker::LobbyGroup],
 	pub lobby_group_meta: &'a [backend::matchmaker::LobbyGroupMeta],
@@ -340,6 +344,8 @@ pub async fn verify_config(
 					.as_ref()
 					.map(|json| serde_json::from_str::<serde_json::Value>(json))
 					.transpose()?,
+				tags: opts.tags.clone(),
+				dynamic_max_players: opts.dynamic_max_players,
 			},
 			clients,
 			join_kind: JoinKind::Normal,

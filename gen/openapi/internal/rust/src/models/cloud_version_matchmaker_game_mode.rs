@@ -16,6 +16,8 @@
 pub struct CloudVersionMatchmakerGameMode {
     #[serde(rename = "actions", skip_serializing_if = "Option::is_none")]
     pub actions: Option<Box<crate::models::CloudVersionMatchmakerGameModeActions>>,
+    #[serde(rename = "allow_dynamic_max_players", skip_serializing_if = "Option::is_none")]
+    pub allow_dynamic_max_players: Option<bool>,
     #[serde(rename = "docker", skip_serializing_if = "Option::is_none")]
     pub docker: Option<Box<crate::models::CloudVersionMatchmakerGameModeRuntimeDocker>>,
     #[serde(rename = "idle_lobbies", skip_serializing_if = "Option::is_none")]
@@ -30,6 +32,8 @@ pub struct CloudVersionMatchmakerGameMode {
     pub max_players_party: Option<i32>,
     #[serde(rename = "regions", skip_serializing_if = "Option::is_none")]
     pub regions: Option<::std::collections::HashMap<String, crate::models::CloudVersionMatchmakerGameModeRegion>>,
+    #[serde(rename = "taggable", skip_serializing_if = "Option::is_none")]
+    pub taggable: Option<bool>,
     #[serde(rename = "tier", skip_serializing_if = "Option::is_none")]
     pub tier: Option<String>,
 }
@@ -39,6 +43,7 @@ impl CloudVersionMatchmakerGameMode {
     pub fn new() -> CloudVersionMatchmakerGameMode {
         CloudVersionMatchmakerGameMode {
             actions: None,
+            allow_dynamic_max_players: None,
             docker: None,
             idle_lobbies: None,
             listable: None,
@@ -46,6 +51,7 @@ impl CloudVersionMatchmakerGameMode {
             max_players_direct: None,
             max_players_party: None,
             regions: None,
+            taggable: None,
             tier: None,
         }
     }

@@ -1,4 +1,5 @@
 use proto::backend::{self, pkg::*};
+use rivet_api::models as new_models;
 use rivet_group_server::models;
 use rivet_operation::prelude::*;
 
@@ -26,5 +27,14 @@ impl ApiFrom<models::GroupPublicity> for backend::team::Publicity {
 impl ApiFrom<team::profile_validate::response::Error> for models::ValidationError {
 	fn api_from(value: team::profile_validate::response::Error) -> models::ValidationError {
 		models::ValidationError { path: value.path }
+	}
+}
+
+impl ApiFrom<backend::team::Publicity> for new_models::GroupPublicity {
+	fn api_from(value: backend::team::Publicity) -> new_models::GroupPublicity {
+		match value {
+			backend::team::Publicity::Open => new_models::GroupPublicity::Open,
+			backend::team::Publicity::Closed => new_models::GroupPublicity::Closed,
+		}
 	}
 }

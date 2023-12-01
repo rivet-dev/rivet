@@ -5,18 +5,18 @@ use api_helper::{
 	ctx::Ctx,
 };
 use proto::backend::{self, pkg::*};
-use rivet_cloud_server::models;
+use rivet_api::models;
 use rivet_operation::prelude::*;
 use serde::Deserialize;
 
-use crate::{assert, auth::Auth, convert};
+use crate::{assert, auth::Auth};
 
 // MARK: DELETE /games/{}/matchmaker/lobby/{}
 pub async fn delete_lobby(
 	ctx: Ctx<Auth>,
 	game_id: Uuid,
 	lobby_id: Uuid,
-) -> GlobalResult<models::DeleteMatchmakerLobbyResponse> {
+) -> GlobalResult<models::CloudGamesDeleteMatchmakerLobbyResponse> {
 	ctx.auth().check_game_write(ctx.op_ctx(), game_id).await?;
 
 	// Do this before getting the lobby for race conditions
@@ -57,15 +57,15 @@ pub async fn delete_lobby(
 		false
 	};
 
-	Ok(models::DeleteMatchmakerLobbyResponse { did_remove })
+	Ok(models::CloudGamesDeleteMatchmakerLobbyResponse { did_remove })
 }
 
 // MARK: POST /games/{}/matchmaker/lobby/export-history
 pub async fn export_history(
 	ctx: Ctx<Auth>,
 	game_id: Uuid,
-	body: models::ExportMatchmakerLobbyHistoryRequest,
-) -> GlobalResult<models::ExportMatchmakerLobbyHistoryResponse> {
+	body: models::CloudGamesExportMatchmakerLobbyHistoryRequest,
+) -> GlobalResult<models::CloudGamesExportMatchmakerLobbyHistoryResponse> {
 	ctx.auth().check_game_read(ctx.op_ctx(), game_id).await?;
 
 	let namespaces_res = op!([ctx] game_namespace_list {
@@ -116,7 +116,7 @@ pub async fn export_history(
 		)
 		.await?;
 
-	Ok(models::ExportMatchmakerLobbyHistoryResponse {
+	Ok(models::CloudGamesExportMatchmakerLobbyHistoryResponse {
 		url: presigned_req.uri().to_string(),
 	})
 }
@@ -124,7 +124,7 @@ pub async fn export_history(
 // MARK: GET /games/{}/matchmaker/lobbies/{}/logs
 #[derive(Debug, Deserialize)]
 pub struct GetLobbyLogsQuery {
-	pub stream: String,
+	pub stream: models::CloudGamesLogStream,
 }
 
 pub async fn get_lobby_logs(
@@ -133,7 +133,7 @@ pub async fn get_lobby_logs(
 	lobby_id: Uuid,
 	watch_index: WatchIndexQuery,
 	query: GetLobbyLogsQuery,
-) -> GlobalResult<models::GetLobbyLogsResponse> {
+) -> GlobalResult<models::CloudGamesGetLobbyLogsResponse> {
 	ctx.auth().check_game_read(ctx.op_ctx(), game_id).await?;
 
 	// Get start ts
@@ -143,16 +143,9 @@ pub async fn get_lobby_logs(
 	//	 wait until start ts + 1 second
 
 	// Determine stream type
-	let stream_type = match models::LogStream::from(query.stream.as_str()) {
-		models::LogStream::StdOut => backend::job::log::StreamType::StdOut,
-		models::LogStream::StdErr => backend::job::log::StreamType::StdErr,
-		_ => {
-			bail_with!(
-				API_BAD_QUERY_PARAMETER,
-				parameter = "stream",
-				error = r#"Must be one of "std_out" or "std_err""#,
-			);
-		}
+	let stream_type = match query.stream {
+		models::CloudGamesLogStream::StdOut => backend::job::log::StreamType::StdOut,
+		models::CloudGamesLogStream::StdErr => backend::job::log::StreamType::StdErr,
 	};
 
 	// Timestamp to start the query at
@@ -168,10 +161,10 @@ pub async fn get_lobby_logs(
 		}
 
 		// Return empty logs
-		return Ok(models::GetLobbyLogsResponse {
+		return Ok(models::CloudGamesGetLobbyLogsResponse {
 			lines: Vec::new(),
 			timestamps: Vec::new(),
-			watch: convert::watch_response(WatchResponse::new(before_ts)),
+			watch: WatchResponse::new_as_model(before_ts),
 		});
 	};
 
@@ -243,7 +236,7 @@ pub async fn get_lobby_logs(
 		.entries
 		.iter()
 		.map(|x| x.ts / 1_000_000)
-		.map(util::timestamp::to_chrono)
+		.map(util::timestamp::to_string)
 		.collect::<Result<Vec<_>, _>>()?;
 
 	// Order desc
@@ -251,10 +244,10 @@ pub async fn get_lobby_logs(
 	timestamps.reverse();
 
 	let watch_ts = logs_res.entries.first().map_or(before_ts, |x| x.ts);
-	Ok(models::GetLobbyLogsResponse {
+	Ok(models::CloudGamesGetLobbyLogsResponse {
 		lines,
 		timestamps,
-		watch: convert::watch_response(WatchResponse::new(watch_ts)),
+		watch: WatchResponse::new_as_model(watch_ts),
 	})
 }
 
@@ -263,16 +256,13 @@ pub async fn export_lobby_logs(
 	ctx: Ctx<Auth>,
 	game_id: Uuid,
 	lobby_id: Uuid,
-	body: models::ExportLobbyLogsRequest,
-) -> GlobalResult<models::ExportLobbyLogsResponse> {
+	body: models::CloudGamesExportLobbyLogsRequest,
+) -> GlobalResult<models::CloudGamesExportLobbyLogsResponse> {
 	ctx.auth().check_game_read(ctx.op_ctx(), game_id).await?;
 
 	let stream_type = match body.stream {
-		models::LogStream::StdOut => backend::job::log::StreamType::StdOut,
-		models::LogStream::StdErr => backend::job::log::StreamType::StdErr,
-		models::LogStream::Unknown(_) => {
-			bail_with!(API_BAD_BODY, error = r#"Invalid "stream""#,);
-		}
+		models::CloudGamesLogStream::StdOut => backend::job::log::StreamType::StdOut,
+		models::CloudGamesLogStream::StdErr => backend::job::log::StreamType::StdErr,
 	};
 
 	let run_id = if let Some(x) = get_run_id(&ctx, game_id, lobby_id).await? {
@@ -329,7 +319,7 @@ pub async fn export_lobby_logs(
 		)
 		.await?;
 
-	Ok(models::ExportLobbyLogsResponse {
+	Ok(models::CloudGamesExportLobbyLogsResponse {
 		url: presigned_req.uri().to_string(),
 	})
 }

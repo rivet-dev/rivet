@@ -176,6 +176,8 @@ async fn worker(ctx: &OperationContext<mm::msg::lobby_find::Message>) -> GlobalR
 					.iter()
 					.filter_map(|player| player.client_info.clone())
 					.collect::<Vec<_>>(),
+				tags: &ctx.tags,
+				dynamic_max_players: ctx.dynamic_max_players,
 
 				lobby_groups: &lobby_group_config.lobby_groups,
 				lobby_group_meta: &lobby_group_config.lobby_group_meta,
@@ -233,6 +235,8 @@ async fn worker(ctx: &OperationContext<mm::msg::lobby_find::Message>) -> GlobalR
 			query,
 			lobby_group_config: &lobby_group_config,
 			auto_create_lobby_id,
+			tags: &ctx.tags,
+			dynamic_max_players: ctx.dynamic_max_players,
 		},
 	)
 	.await?
@@ -329,6 +333,7 @@ async fn worker(ctx: &OperationContext<mm::msg::lobby_find::Message>) -> GlobalR
 				is_custom: false,
 				publicity: None,
 				lobby_config_json: None,
+				dynamic_max_players: ctx.dynamic_max_players,
 			})
 			.await?;
 

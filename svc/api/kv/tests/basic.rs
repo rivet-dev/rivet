@@ -90,6 +90,7 @@ impl Ctx {
 			is_custom: false,
 			publicity: None,
 			lobby_config_json: None,
+			dynamic_max_players: None,
 		})
 		.await
 		.unwrap();
@@ -161,6 +162,8 @@ impl Ctx {
 					max_players_direct: 10,
 					max_players_party: 12,
 					listable: true,
+					taggable: false,
+					allow_dynamic_max_players: false,
 
 					runtime: Some(backend::matchmaker::lobby_runtime::Docker {
 						build_id: build_res.build_id,

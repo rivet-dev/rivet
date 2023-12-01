@@ -1,18 +1,20 @@
+use std::collections::HashSet;
+
 use api_helper::{anchor::WatchIndexQuery, ctx::Ctx};
 use proto::{
 	backend::{self, pkg::*},
 	common,
 };
-use rivet_cloud_server::models;
+use rivet_api::models;
 use rivet_convert::ApiTryInto;
 use rivet_operation::prelude::*;
 use serde::{Deserialize, Serialize};
-use std::collections::HashSet;
+use serde_json::json;
 
 use crate::{assert, auth::Auth};
 
 struct LobbyInfo {
-	summary: models::LogsLobbySummary,
+	summary: models::CloudLogsLobbySummary,
 	run: Option<LobbyRunInfo>,
 }
 
@@ -32,7 +34,7 @@ pub async fn list_lobbies(
 	namespace_id: Uuid,
 	_watch_index: WatchIndexQuery,
 	query: ListNamespaceLobbiesQuery,
-) -> GlobalResult<models::ListNamespaceLobbiesResponse> {
+) -> GlobalResult<models::CloudGamesNamespacesListNamespaceLobbiesResponse> {
 	ctx.auth().check_game_read(ctx.op_ctx(), game_id).await?;
 	let _game_ns = assert::namespace_for_game(&ctx, game_id, namespace_id).await?;
 
@@ -58,7 +60,7 @@ pub async fn list_lobbies(
 		.map(|x| x.summary)
 		.collect::<Vec<_>>();
 
-	Ok(models::ListNamespaceLobbiesResponse { lobbies })
+	Ok(models::CloudGamesNamespacesListNamespaceLobbiesResponse { lobbies })
 }
 
 // MARK: GET /games/{}/namespaces/{}/logs/lobbies/{}
@@ -68,7 +70,7 @@ pub async fn get_lobby(
 	namespace_id: Uuid,
 	lobby_id: Uuid,
 	_watch_index: WatchIndexQuery,
-) -> GlobalResult<models::GetNamespaceLobbyResponse> {
+) -> GlobalResult<models::CloudGamesNamespacesGetNamespaceLobbyResponse> {
 	ctx.auth().check_game_read(ctx.op_ctx(), game_id).await?;
 	let _game_ns = assert::namespace_for_game(&ctx, game_id, namespace_id).await?;
 
@@ -106,10 +108,10 @@ pub async fn get_lobby(
 		None
 	};
 
-	Ok(models::GetNamespaceLobbyResponse {
-		lobby: lobby.summary,
+	Ok(models::CloudGamesNamespacesGetNamespaceLobbyResponse {
+		lobby: Box::new(lobby.summary),
 		perf_lists: Vec::new(),
-		metrics: metrics.map(ApiTryInto::try_into).transpose()?,
+		metrics: metrics.map(ApiTryInto::try_into).transpose()?.map(Box::new),
 
 		// Deprecated
 		stdout_presigned_urls: Vec::new(),
@@ -169,9 +171,9 @@ async fn fetch_lobby_logs(ctx: &Ctx<Auth>, lobby_ids: Vec<Uuid>) -> GlobalResult
 			let run_meta = unwrap_ref!(run.run_meta);
 
 			GlobalResult::Ok(LobbyInfo {
-				summary: models::LogsLobbySummary {
-					lobby_id: unwrap_ref!(lobby.lobby_id).as_uuid().to_string(),
-					namespace_id: unwrap_ref!(lobby.namespace_id).as_uuid().to_string(),
+				summary: models::CloudLogsLobbySummary {
+					lobby_id: unwrap_ref!(lobby.lobby_id).as_uuid(),
+					namespace_id: unwrap_ref!(lobby.namespace_id).as_uuid(),
 					lobby_group_name_id: {
 						let lobby_group = unwrap!(lobby_group_res
 							.lobby_groups
@@ -180,10 +182,10 @@ async fn fetch_lobby_logs(ctx: &Ctx<Auth>, lobby_ids: Vec<Uuid>) -> GlobalResult
 
 						lobby_group.name_id.to_owned()
 					},
-					region_id: unwrap_ref!(lobby.region_id).as_uuid().to_string(),
-					create_ts: util::timestamp::to_chrono(lobby.create_ts)?,
-					start_ts: run.start_ts.map(util::timestamp::to_chrono).transpose()?,
-					ready_ts: lobby.ready_ts.map(util::timestamp::to_chrono).transpose()?,
+					region_id: unwrap_ref!(lobby.region_id).as_uuid(),
+					create_ts: util::timestamp::to_string(lobby.create_ts)?,
+					start_ts: run.start_ts.map(util::timestamp::to_string).transpose()?,
+					ready_ts: lobby.ready_ts.map(util::timestamp::to_string).transpose()?,
 					status: if let Some(stop_ts) = lobby.stop_ts {
 						let (failed, exit_code) = match unwrap_ref!(run_meta.kind) {
 							backend::job::run_meta::Kind::Nomad(nomad) => {
@@ -191,13 +193,19 @@ async fn fetch_lobby_logs(ctx: &Ctx<Auth>, lobby_ids: Vec<Uuid>) -> GlobalResult
 							}
 						};
 
-						models::LogsLobbyStatus::Stopped(models::LogsLobbyStatusStopped {
-							stop_ts: util::timestamp::to_chrono(stop_ts)?,
-							failed,
-							exit_code: exit_code.try_into()?,
+						Box::new(models::CloudLogsLobbyStatus {
+							stopped: Some(Box::new(models::CloudLogsLobbyStatusStopped {
+								stop_ts: util::timestamp::to_string(stop_ts)?,
+								failed,
+								exit_code: exit_code.try_into()?,
+							})),
+							..Default::default()
 						})
 					} else {
-						models::LogsLobbyStatus::Running(models::Unit {})
+						Box::new(models::CloudLogsLobbyStatus {
+							running: json!({}),
+							..Default::default()
+						})
 					},
 				},
 				run: Some(LobbyRunInfo {

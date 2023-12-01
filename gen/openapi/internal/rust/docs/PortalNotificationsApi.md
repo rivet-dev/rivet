@@ -51,7 +51,7 @@ Unregister push notification for the current identity.
 
 Name | Type | Description  | Required | Notes
 ------------- | ------------- | ------------- | ------------- | -------------
-**service** | **String** | Represents a value for which notification service to unregister. | [required] |
+**service** | [**PortalNotificationUnregisterService**](.md) | Represents a value for which notification service to unregister. | [required] |
 
 ### Return type
 

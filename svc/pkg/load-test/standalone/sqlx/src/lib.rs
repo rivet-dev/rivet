@@ -113,7 +113,8 @@ async fn exec(ctx: OperationContext<()>) -> GlobalResult<()> {
 			SELECT 
 				lobby_group_id, version_id,
 				name_id,
-				max_players_normal, max_players_direct, max_players_party, listable,
+				max_players_normal, max_players_direct, max_players_party,
+				listable, taggable,
 				runtime, runtime_meta,
 				find_config, join_config, create_config
 			FROM db_mm_config.lobby_groups
@@ -150,6 +151,7 @@ struct LobbyGroup {
 	max_players_direct: i64,
 	max_players_party: i64,
 	listable: bool,
+	taggable: bool,
 
 	runtime: Vec<u8>,
 	runtime_meta: Vec<u8>,
