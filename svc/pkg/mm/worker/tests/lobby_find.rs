@@ -1413,6 +1413,8 @@ async fn find(
 		bypass_verification: false,
 		tags: HashMap::new(),
 		dynamic_max_players: None,
+
+		debug: None,
 	})
 	.await
 	.unwrap()
@@ -1440,6 +1442,8 @@ async fn find_with_verification(
 		bypass_verification: bypass_verification,
 		tags: HashMap::new(),
 		dynamic_max_players: None,
+
+		debug: None,
 	})
 	.await
 	.unwrap()
@@ -1466,6 +1470,8 @@ async fn find_with_tags(
 		bypass_verification: false,
 		tags: tags,
 		dynamic_max_players: None,
+
+		debug: None,
 	})
 	.await
 	.unwrap()
