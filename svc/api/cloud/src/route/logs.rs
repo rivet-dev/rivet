@@ -1,5 +1,5 @@
 use api_helper::{anchor::WatchIndexQuery, ctx::Ctx};
-use rivet_cloud_server::models;
+use rivet_api::models;
 use rivet_convert::ApiTryInto;
 use rivet_operation::prelude::*;
 
@@ -10,7 +10,7 @@ pub async fn get_ray_perf(
 	ctx: Ctx<Auth>,
 	ray_id: Uuid,
 	_watch_index: WatchIndexQuery,
-) -> GlobalResult<models::GetRayPerfLogsResponse> {
+) -> GlobalResult<models::CloudGetRayPerfLogsResponse> {
 	ctx.auth().admin(ctx.op_ctx()).await?;
 
 	let perf_logs_res = op!([ctx] perf_log_get {
@@ -23,7 +23,7 @@ pub async fn get_ray_perf(
 		.first()
 		.map_or(Vec::new(), |ray| ray.perf_lists.clone());
 
-	Ok(models::GetRayPerfLogsResponse {
+	Ok(models::CloudGetRayPerfLogsResponse {
 		perf_lists: perf_lists
 			.into_iter()
 			.map(ApiTryInto::try_into)

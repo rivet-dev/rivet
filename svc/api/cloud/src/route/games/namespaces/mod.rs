@@ -559,8 +559,7 @@ pub async fn get_version_history(
 					Ok(models::CloudNamespaceVersion {
 						namespace_id: unwrap_ref!(version_history.namespace_id).to_string(),
 						version_id: unwrap_ref!(version.version_id).to_string(),
-						deploy_ts: util::timestamp::to_chrono(version.deploy_ts)?
-							.to_rfc3339_openapi(),
+						deploy_ts: util::timestamp::to_string(version.deploy_ts)?,
 					})
 				})
 				.collect::<GlobalResult<Vec<_>>>()?,

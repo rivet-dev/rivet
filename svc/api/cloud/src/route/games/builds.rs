@@ -1,7 +1,6 @@
 use api_helper::{anchor::WatchIndexQuery, ctx::Ctx};
 use proto::backend;
-use rivet_api::models as new_models;
-use rivet_cloud_server::models;
+use rivet_api::models;
 use rivet_convert::ApiTryInto;
 use rivet_operation::prelude::*;
 
@@ -12,7 +11,7 @@ pub async fn get_builds(
 	ctx: Ctx<Auth>,
 	game_id: Uuid,
 	_watch_index: WatchIndexQuery,
-) -> GlobalResult<models::ListGameBuildsResponse> {
+) -> GlobalResult<models::CloudGamesListGameBuildsResponse> {
 	ctx.auth().check_game_read(ctx.op_ctx(), game_id).await?;
 
 	let list_res = op!([ctx] build_list_for_game {
@@ -47,32 +46,37 @@ pub async fn get_builds(
 				tracing::warn!("unable to find upload for build");
 			}
 
-			GlobalResult::Ok(models::BuildSummary {
-				build_id: unwrap_ref!(build.build_id).as_uuid().to_string(),
-				upload_id: unwrap_ref!(build.upload_id).as_uuid().to_string(),
-				display_name: build.display_name.clone(),
-				create_ts: util::timestamp::to_chrono(build.create_ts)?,
-				content_length: upload
-					.map_or(0, |upload| upload.content_length)
-					.try_into()?,
-				complete: upload.map_or(true, |upload| upload.complete_ts.is_some()),
-			})
+			GlobalResult::Ok((
+				build.create_ts,
+				models::CloudBuildSummary {
+					build_id: unwrap_ref!(build.build_id).as_uuid(),
+					upload_id: unwrap_ref!(build.upload_id).as_uuid(),
+					display_name: build.display_name.clone(),
+					create_ts: util::timestamp::to_string(build.create_ts)?,
+					content_length: upload
+						.map_or(0, |upload| upload.content_length)
+						.try_into()?,
+					complete: upload.map_or(true, |upload| upload.complete_ts.is_some()),
+				},
+			))
 		})
 		.collect::<Result<Vec<_>, _>>()?;
 
 	// Sort by date desc
-	builds.sort_by_key(|b| b.create_ts);
+	builds.sort_by_key(|(create_ts, _)| *create_ts);
 	builds.reverse();
 
-	Ok(models::ListGameBuildsResponse { builds })
+	Ok(models::CloudGamesListGameBuildsResponse {
+		builds: builds.into_iter().map(|(_, x)| x).collect::<Vec<_>>(),
+	})
 }
 
 // MARK: POST /games/{}/versions/builds
 pub async fn create_build(
 	ctx: Ctx<Auth>,
 	game_id: Uuid,
-	body: new_models::CloudGamesCreateGameBuildRequest,
-) -> GlobalResult<new_models::CloudGamesCreateGameBuildResponse> {
+	body: models::CloudGamesCreateGameBuildRequest,
+) -> GlobalResult<models::CloudGamesCreateGameBuildResponse> {
 	ctx.auth().check_game_write(ctx.op_ctx(), game_id).await?;
 
 	// TODO: Read and validate image file
@@ -80,17 +84,17 @@ pub async fn create_build(
 	let multipart_upload = body.multipart_upload.unwrap_or(false);
 
 	let kind = match body.kind {
-		None | Some(new_models::CloudGamesBuildKind::DockerImage) => {
+		None | Some(models::CloudGamesBuildKind::DockerImage) => {
 			backend::build::BuildKind::DockerImage
 		}
-		Some(new_models::CloudGamesBuildKind::OciBundle) => backend::build::BuildKind::OciBundle,
+		Some(models::CloudGamesBuildKind::OciBundle) => backend::build::BuildKind::OciBundle,
 	};
 
 	let compression = match body.compression {
-		None | Some(new_models::CloudGamesBuildCompression::None) => {
+		None | Some(models::CloudGamesBuildCompression::None) => {
 			backend::build::BuildCompression::None
 		}
-		Some(new_models::CloudGamesBuildCompression::Lz4) => backend::build::BuildCompression::Lz4,
+		Some(models::CloudGamesBuildCompression::Lz4) => backend::build::BuildCompression::Lz4,
 	};
 
 	let create_res = op!([ctx] build_create {
@@ -128,7 +132,7 @@ pub async fn create_build(
 		None
 	};
 
-	Ok(new_models::CloudGamesCreateGameBuildResponse {
+	Ok(models::CloudGamesCreateGameBuildResponse {
 		build_id: unwrap_ref!(create_res.build_id).as_uuid(),
 		upload_id: unwrap_ref!(create_res.upload_id).as_uuid(),
 		image_presigned_request,

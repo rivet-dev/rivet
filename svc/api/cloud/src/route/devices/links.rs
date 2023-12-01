@@ -1,4 +1,7 @@
-use api_helper::{anchor::WatchIndexQuery, ctx::Ctx};
+use api_helper::{
+	anchor::{WatchIndexQuery, WatchResponse},
+	ctx::Ctx,
+};
 use chirp_client::TailAnchorResponse;
 use proto::backend::pkg::*;
 use rivet_api::models;
@@ -67,9 +70,7 @@ pub async fn get(
 
 	Ok(models::CloudDevicesGetDeviceLinkResponse {
 		cloud_token,
-		watch: Box::new(models::WatchResponse {
-			index: (update_ts + 1).to_string(),
-		}),
+		watch: WatchResponse::new_as_model(update_ts),
 	})
 }
 

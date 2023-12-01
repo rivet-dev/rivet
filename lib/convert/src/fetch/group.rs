@@ -5,7 +5,7 @@ use crate::convert;
 
 pub async fn summaries(
 	ctx: &OperationContext<()>,
-	current_user_id: Uuid,
+	current_user_id: Option<Uuid>,
 	group_ids: Vec<Uuid>,
 ) -> GlobalResult<Vec<models::GroupSummary>> {
 	if group_ids.is_empty() {
@@ -19,10 +19,19 @@ pub async fn summaries(
 		.collect::<Vec<_>>();
 
 	// Fetch team metadata
-	let (user_team_list_res, teams_res, team_member_count_res, team_dev_res) = tokio::try_join!(
-		op!([ctx] user_team_list {
-			user_ids: vec![current_user_id.into()],
-		}),
+	let (user_teams, teams_res, team_member_count_res, team_dev_res) = tokio::try_join!(
+		async {
+			if let Some(current_user_id) = current_user_id {
+				let user_team_list_res = op!([ctx] user_team_list {
+					user_ids: vec![current_user_id.into()],
+				})
+				.await?;
+
+				Ok(unwrap!(user_team_list_res.users.first()).teams.clone())
+			} else {
+				Ok(Vec::new())
+			}
+		},
 		op!([ctx] team_get {
 			team_ids: group_ids_proto.clone(),
 		}),
@@ -33,8 +42,6 @@ pub async fn summaries(
 			team_ids: group_ids_proto,
 		}),
 	)?;
-
-	let user_teams = &unwrap!(user_team_list_res.users.first()).teams;
 
 	teams_res
 		.teams

@@ -291,8 +291,6 @@ dependencies = [
  "rivet-api",
  "rivet-cache",
  "rivet-claims",
- "rivet-cloud",
- "rivet-cloud-server",
  "rivet-connection",
  "rivet-convert",
  "rivet-health-checks",
@@ -6343,28 +6341,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "rivet-cloud"
-version = "0.0.1"
-dependencies = [
- "aws-smithy-client 0.41.0",
- "aws-smithy-http 0.41.0",
- "aws-smithy-json",
- "aws-smithy-types 0.41.0",
- "bytes",
- "http",
- "tower",
-]
-
-[[package]]
-name = "rivet-cloud-server"
-version = "0.0.1"
-dependencies = [
- "chrono",
- "serde",
- "serde_json",
-]
-
-[[package]]
 name = "rivet-connection"
 version = "0.1.0"
 dependencies = [
@@ -6397,14 +6373,12 @@ dependencies = [
  "kv-list",
  "mm-lobby-player-count",
  "mm-lobby-runtime-aggregate",
+ "mm-player-count-for-namespace",
  "region-get",
+ "region-list",
  "region-resolve",
  "rivet-api",
- "rivet-auth-server",
- "rivet-cloud-server",
  "rivet-group-server",
- "rivet-kv-server",
- "rivet-matchmaker-server",
  "rivet-operation",
  "rivet-portal-server",
  "rivet-util-mm",
@@ -6507,15 +6481,6 @@ dependencies = [
  "bytes",
  "http",
  "tower",
-]
-
-[[package]]
-name = "rivet-kv-server"
-version = "0.0.8"
-dependencies = [
- "chrono",
- "serde",
- "serde_json",
 ]
 
 [[package]]

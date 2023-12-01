@@ -26,7 +26,7 @@ pub struct CloudRegionTier {
     /// Allocated memory (MB).
     #[serde(rename = "memory")]
     pub memory: i32,
-    /// Price billed for every second this server is running (in quadrillionth USD, 1,000,000,000,000 = $1.00).
+    /// **Deprecated** Price billed for every second this server is running (in quadrillionth USD, 1,000,000,000,000 = $1.00).
     #[serde(rename = "price_per_second")]
     pub price_per_second: i32,
     /// Together with the numerator, denotes the portion of the CPU a given server uses.

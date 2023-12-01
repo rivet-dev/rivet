@@ -9716,9 +9716,8 @@ components:
           type: string
           description: The server provider of this region.
         universal_region:
-          type: number
-          format: double
-          description: A universal number given to this region.
+          $ref: '#/components/schemas/CloudUniversalRegion'
+          description: A universal region label given to this region.
         provider_display_name:
           type: string
           description: Represent a resource's readable display name.
@@ -9933,6 +9932,8 @@ components:
         price_per_second:
           type: integer
           description: >-
+            **Deprecated**
+
             Price billed for every second this server is running (in
             quadrillionth USD, 1,000,000,000,000 = $1.00).
       required:
@@ -9944,6 +9945,37 @@ components:
         - disk
         - bandwidth
         - price_per_second
+    CloudUniversalRegion:
+      type: string
+      enum:
+        - unknown
+        - local
+        - amsterdam
+        - atlanta
+        - bangalore
+        - dallas
+        - frankfurt
+        - london
+        - mumbai
+        - newark
+        - new_york_city
+        - san_francisco
+        - singapore
+        - sydney
+        - tokyo
+        - toronto
+        - washington_dc
+        - chicago
+        - paris
+        - seattle
+        - sao_paulo
+        - stockholm
+        - chennai
+        - osaka
+        - milan
+        - miami
+        - jakarta
+        - los_angeles
     CloudNamespaceFull:
       type: object
       description: A full namespace.
@@ -10328,12 +10360,12 @@ components:
         games:
           type: array
           items:
-            $ref: '#/components/schemas/CloudGamesGameSummary'
+            $ref: '#/components/schemas/GameSummary'
           description: A list of game summaries.
         groups:
           type: array
           items:
-            $ref: '#/components/schemas/GroupHandle'
+            $ref: '#/components/schemas/GroupSummary'
           description: A list of group summaries.
         watch:
           $ref: '#/components/schemas/WatchResponse'
@@ -10459,45 +10491,6 @@ components:
       required:
         - upload_id
         - presigned_request
-    CloudGamesGameSummary:
-      type: object
-      description: A game summary.
-      properties:
-        game_id:
-          type: string
-          format: uuid
-        create_ts:
-          type: string
-          format: date-time
-          description: RFC3339 timestamp.
-        name_id:
-          type: string
-          description: >-
-            A human readable short identifier used to references resources.
-            Different than a `rivet.common#Uuid` because this is intended to be
-            human readable. Different than `rivet.common#DisplayName` because
-            this should not include special characters and be short.
-        display_name:
-          type: string
-          description: Represent a resource's readable display name.
-        developer_group_id:
-          type: string
-          format: uuid
-        total_player_count:
-          type: integer
-          description: Unsigned 32 bit integer.
-        logo_url:
-          type: string
-          description: The URL of this game's logo image.
-        banner_url:
-          type: string
-          description: The URL of this game's banner image.
-      required:
-        - game_id
-        - create_ts
-        - name_id
-        - display_name
-        - developer_group_id
     CloudGamesExportMatchmakerLobbyHistoryRequest:
       type: object
       properties:
@@ -10509,6 +10502,9 @@ components:
           type: integer
           format: int64
           description: Unsigned 64 bit integer.
+      required:
+        - query_start
+        - query_end
     CloudGamesExportMatchmakerLobbyHistoryResponse:
       type: object
       properties:
@@ -10523,6 +10519,8 @@ components:
         did_remove:
           type: boolean
           description: Whether or not the lobby was successfully stopped.
+      required:
+        - did_remove
     CloudGamesGetLobbyLogsResponse:
       type: object
       properties:
@@ -11319,12 +11317,16 @@ components:
           type: string
         developer:
           $ref: '#/components/schemas/GroupHandle'
+        total_player_count:
+          type: integer
+          description: Unsigned 32 bit integer.
       required:
         - game_id
         - name_id
         - display_name
         - url
         - developer
+        - total_player_count
     GameProfile:
       type: object
       description: A game profile.

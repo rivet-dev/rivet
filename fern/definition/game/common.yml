@@ -30,6 +30,9 @@ types:
         type: optional<string>
       url: string
       developer: groupCommons.Handle
+      total_player_count:
+        docs: Unsigned 32 bit integer.
+        type: integer
 
   Profile:
     docs: A game profile.

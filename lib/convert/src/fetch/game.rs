@@ -9,6 +9,11 @@ use types::rivet::{
 
 use crate::convert;
 
+pub struct GameState {
+	pub prod_config: backend::cdn::NamespaceConfig,
+	pub total_player_count: u32,
+}
+
 pub async fn summaries(
 	ctx: &OperationContext<()>,
 	game_ids: Vec<Uuid>,
@@ -23,9 +28,9 @@ pub async fn summaries(
 		.map(Into::into)
 		.collect::<Vec<_>>();
 
-	let ((games, dev_teams), configs) = tokio::try_join!(
+	let ((games, dev_teams), states) = tokio::try_join!(
 		games_and_dev_teams(ctx, proto_game_ids.clone()),
-		cdn_config(ctx, proto_game_ids.clone()),
+		state(ctx, proto_game_ids.clone()),
 	)?;
 
 	// Convert all data
@@ -34,10 +39,10 @@ pub async fn summaries(
 		.iter()
 		.map(|game| {
 			let game_id = unwrap_ref!(game.game_id).as_uuid();
-			let cdn_config = unwrap!(configs.get(&game_id));
+			let state = unwrap!(states.get(&game_id));
 			let dev_team = unwrap!(dev_teams.get(&game_id));
 
-			convert::game::summary(game, cdn_config, dev_team)
+			convert::game::summary(game, state, dev_team)
 		})
 		.collect::<GlobalResult<Vec<_>>>()
 }
@@ -77,22 +82,28 @@ pub async fn games_and_dev_teams(
 	Ok((games_res, dev_teams))
 }
 
-pub async fn cdn_config(
+pub async fn state(
 	ctx: &OperationContext<()>,
 	game_ids: Vec<common::Uuid>,
-) -> GlobalResult<HashMap<Uuid, backend::cdn::NamespaceConfig>> {
+) -> GlobalResult<HashMap<Uuid, GameState>> {
 	let namespaces_res = op!([ctx] game_namespace_list {
 		game_ids: game_ids,
 	})
 	.await?;
+	let all_namespace_ids = namespaces_res
+		.games
+		.iter()
+		.flat_map(|game| game.namespace_ids.iter().cloned())
+		.collect::<Vec<_>>();
 
-	let game_namespaces_res = op!([ctx] game_namespace_get {
-		namespace_ids: namespaces_res.games
-			.iter()
-			.flat_map(|g| g.namespace_ids.iter().cloned())
-			.collect::<Vec<_>>(),
-	})
-	.await?;
+	let (game_namespaces_res, player_count_res) = tokio::try_join!(
+		op!([ctx] game_namespace_get {
+			namespace_ids: all_namespace_ids.clone(),
+		}),
+		op!([ctx] mm_player_count_for_namespace {
+			namespace_ids: all_namespace_ids,
+		}),
+	)?;
 
 	let mut prod_namespaces = HashMap::new();
 	for namespace in &game_namespaces_res.namespaces {
@@ -121,9 +132,57 @@ pub async fn cdn_config(
 			let game_id = unwrap!(prod_namespaces.get(&namespace_id));
 			let config = unwrap_ref!(ns.config).clone();
 
-			Ok((*game_id, config))
+			// Fetch all namespace ids for game
+			let game_id_proto = Some(Into::<common::Uuid>::into(*game_id));
+			let all_namespace_ids = &unwrap!(namespaces_res
+				.games
+				.iter()
+				.find(|game| game.game_id == game_id_proto))
+			.namespace_ids;
+
+			let total_player_count = player_count_res
+				.namespaces
+				.iter()
+				.filter(|ns1| {
+					// Make sure this namespace belongs to this game
+					all_namespace_ids.iter().any(|ns2_id| {
+						ns1.namespace_id
+							.as_ref()
+							.map_or(false, |ns1_id| ns1_id == ns2_id)
+					})
+				})
+				// Aggregate the player count
+				.fold(0u32, |acc, x| acc + x.player_count);
+
+			Ok((
+				*game_id,
+				GameState {
+					prod_config: config,
+					total_player_count,
+				},
+			))
 		})
 		.collect::<GlobalResult<HashMap<_, _>>>()?;
 
 	Ok(cdn_configs)
+}
+
+pub async fn region_summaries(
+	ctx: &OperationContext<()>,
+) -> GlobalResult<Vec<models::CloudRegionSummary>> {
+	let list_res = op!([ctx] region_list {
+		..Default::default()
+	})
+	.await?;
+
+	let get_res = op!([ctx] region_get {
+		region_ids: list_res.region_ids.clone(),
+	})
+	.await?;
+
+	get_res
+		.regions
+		.iter()
+		.map(convert::game::region_summary)
+		.collect()
 }

@@ -5,13 +5,13 @@ use api_helper::{
 	ctx::Ctx,
 };
 use proto::backend::{self, pkg::*};
-use rivet_api::models as new_models;
+use rivet_api::models;
 use rivet_claims::ClaimsDecode;
-use rivet_cloud_server::models;
-use rivet_convert::{ApiInto, ApiTryFrom, ApiTryInto};
+use rivet_convert::{fetch, ApiInto, ApiTryFrom, ApiTryInto};
 use rivet_operation::prelude::*;
+use serde_json::json;
 
-use crate::{auth::Auth, convert, fetch};
+use crate::auth::Auth;
 
 pub mod avatars;
 pub mod builds;
@@ -28,7 +28,7 @@ const MAX_BANNER_UPLOAD_SIZE: i64 = util::file_size::megabytes(10) as i64;
 pub async fn list(
 	ctx: Ctx<Auth>,
 	watch_index: WatchIndexQuery,
-) -> GlobalResult<models::GetGamesResponse> {
+) -> GlobalResult<models::CloudGamesGetGamesResponse> {
 	let accessible_games = ctx.auth().accessible_games(ctx.op_ctx()).await?;
 
 	// Wait for an update if needed
@@ -56,7 +56,7 @@ pub async fn list(
 	};
 	let update_ts = update_ts.unwrap_or_else(util::timestamp::now);
 
-	let games = fetch::game_summary_fetch(ctx.op_ctx(), accessible_games.game_ids).await?;
+	let games = fetch::game::summaries(ctx.op_ctx(), accessible_games.game_ids).await?;
 	let groups = fetch::group::summaries(
 		ctx.op_ctx(),
 		accessible_games.user_id,
@@ -64,24 +64,22 @@ pub async fn list(
 	)
 	.await?;
 
-	Ok(models::GetGamesResponse {
+	Ok(models::CloudGamesGetGamesResponse {
 		games,
 		groups,
-		watch: convert::watch_response(WatchResponse::new(update_ts + 1)),
+		watch: WatchResponse::new_as_model(update_ts),
 	})
 }
 
 // MARK: POST /games
 pub async fn create(
 	ctx: Ctx<Auth>,
-	body: models::CreateGameRequest,
-) -> GlobalResult<models::CreateGameResponse> {
-	let developer_group_id = Uuid::from_str(body.developer_group_id.as_str())?;
-
+	body: models::CloudGamesCreateGameRequest,
+) -> GlobalResult<models::CloudGamesCreateGameResponse> {
 	let user_id = ctx.auth().claims()?.as_user().ok();
 
 	ctx.auth()
-		.check_team_write(ctx.op_ctx(), developer_group_id)
+		.check_team_write(ctx.op_ctx(), body.developer_group_id)
 		.await?;
 
 	// Create game
@@ -89,7 +87,7 @@ pub async fn create(
 		let create_game_res = op!([ctx] game_create {
 			name_id: body.name_id.clone(),
 			display_name: body.display_name.clone(),
-			developer_team_id: Some(developer_group_id.into()),
+			developer_team_id: Some(body.developer_group_id.into()),
 			creator_user_id: user_id.as_ref().map(|x| x.user_id.into()),
 		})
 		.await?;
@@ -134,9 +132,7 @@ pub async fn create(
 		.await?;
 	}
 
-	Ok(models::CreateGameResponse {
-		game_id: game_id.to_string(),
-	})
+	Ok(models::CloudGamesCreateGameResponse { game_id })
 }
 
 async fn gen_default_version_config(
@@ -340,7 +336,7 @@ pub async fn get(
 	ctx: Ctx<Auth>,
 	game_id: Uuid,
 	watch_index: WatchIndexQuery,
-) -> GlobalResult<models::GetGameByIdResponse> {
+) -> GlobalResult<models::CloudGamesGetGameByIdResponse> {
 	ctx.auth().check_game_read(ctx.op_ctx(), game_id).await?;
 
 	// Wait for an update if needed
@@ -359,9 +355,9 @@ pub async fn get(
 	};
 	let update_ts = update_ts.unwrap_or_else(util::timestamp::now);
 
-	let summary = unwrap!(fetch::game_summary_fetch_one(ctx.op_ctx(), game_id).await?);
-
-	let (ns_list_res, version_list_res) = tokio::try_join!(
+	let ((games, dev_teams), states, ns_list_res, version_list_res) = tokio::try_join!(
+		fetch::game::games_and_dev_teams(ctx.op_ctx(), vec![game_id.into()]),
+		fetch::game::state(ctx.op_ctx(), vec![game_id.into()]),
 		op!([ctx] game_namespace_list {
 			game_ids: vec![game_id.into()],
 		}),
@@ -369,6 +365,9 @@ pub async fn get(
 			game_ids: vec![game_id.into()],
 		}),
 	)?;
+	let game = unwrap!(games.games.first());
+	let state = unwrap!(states.get(&game_id));
+	let dev_team = unwrap!(dev_teams.get(&game_id));
 	let ns_list = unwrap!(ns_list_res.games.first());
 	let version_list = unwrap!(version_list_res.games.first());
 
@@ -402,61 +401,65 @@ pub async fn get(
 			continue;
 		};
 
-		namespaces.push(models::NamespaceSummary::try_from(ns.clone())?);
+		namespaces.push(models::CloudNamespaceSummary::try_from(ns.clone())?);
 	}
 	namespaces.sort_by(|a, b| a.display_name.cmp(&b.display_name));
 
-	let mut versions = Vec::new();
-	for cloud_version in &cloud_version_get_res.versions {
-		// Find associated version data, if exists
-		let version = if let Some(version) = version_get_res
-			.versions
-			.iter()
-			.find(|x| x.version_id == cloud_version.version_id)
-		{
-			version
-		} else {
-			tracing::warn!(version_id = ?cloud_version.version_id, "missing game version");
-			continue;
-		};
+	let mut versions = cloud_version_get_res
+		.versions
+		.iter()
+		.filter_map(|cloud_version| {
+			let version = version_get_res
+				.versions
+				.iter()
+				.find(|x| x.version_id == cloud_version.version_id);
 
-		versions.push(models::VersionSummary::try_from(version.clone())?);
-	}
+			if version.is_none() {
+				tracing::warn!(version_id = ?cloud_version.version_id, "missing game version");
+			}
+
+			version.cloned()
+		})
+		.collect::<Vec<_>>();
 	versions.sort_by_key(|v| v.create_ts);
+	let versions = versions
+		.into_iter()
+		.map(ApiTryInto::try_into)
+		.collect::<GlobalResult<Vec<_>>>()?;
 
-	let regions = fetch::region_summary_fetch_all(ctx.op_ctx()).await?;
+	let regions = fetch::game::region_summaries(ctx.op_ctx()).await?;
 
-	Ok(models::GetGameByIdResponse {
-		game: models::GameFull {
-			game_id: summary.game_id,
-			create_ts: summary.create_ts,
-			name_id: summary.name_id,
-			display_name: summary.display_name,
-			developer_group_id: summary.developer_group_id,
-			total_player_count: summary.total_player_count,
-			logo_url: summary.logo_url,
-			banner_url: summary.banner_url,
+	Ok(models::CloudGamesGetGameByIdResponse {
+		game: Box::new(models::CloudGameFull {
+			game_id,
+			create_ts: util::timestamp::to_string(game.create_ts)?,
+			name_id: game.name_id.to_owned(),
+			display_name: game.display_name.to_owned(),
+			developer_group_id: unwrap_ref!(dev_team.team_id).as_uuid(),
+			total_player_count: state.total_player_count.try_into()?,
+			logo_url: util::route::game_logo(&game),
+			banner_url: util::route::game_banner(&game),
 
 			namespaces,
 			versions,
 			available_regions: regions,
-		},
-		watch: convert::watch_response(WatchResponse::new(update_ts + 1)),
+		}),
+		watch: WatchResponse::new_as_model(update_ts),
 	})
 }
 
 // MARK: POST /games/validate
 pub async fn validate(
 	ctx: Ctx<Auth>,
-	body: models::ValidateGameRequest,
-) -> GlobalResult<models::ValidateGameResponse> {
+	body: models::CloudGamesValidateGameRequest,
+) -> GlobalResult<models::CloudGamesValidateGameResponse> {
 	let res = op!([ctx] game_validate {
 		name_id: body.name_id,
 		display_name: body.display_name
 	})
 	.await?;
 
-	Ok(models::ValidateGameResponse {
+	Ok(models::CloudGamesValidateGameResponse {
 		errors: res
 			.errors
 			.into_iter()
@@ -469,8 +472,8 @@ pub async fn validate(
 pub async fn prepare_logo_upload(
 	ctx: Ctx<Auth>,
 	game_id: Uuid,
-	body: new_models::CloudGamesGameLogoUploadPrepareRequest,
-) -> GlobalResult<new_models::CloudGamesGameLogoUploadPrepareResponse> {
+	body: models::CloudGamesGameLogoUploadPrepareRequest,
+) -> GlobalResult<models::CloudGamesGameLogoUploadPrepareResponse> {
 	ctx.auth().check_game_write(ctx.op_ctx(), game_id).await?;
 
 	let user_id = ctx.auth().claims()?.as_user().ok().map(|x| x.user_id);
@@ -509,19 +512,19 @@ pub async fn prepare_logo_upload(
 	let upload_id = unwrap_ref!(upload_prepare_res.upload_id).as_uuid();
 	let presigned_request = unwrap!(upload_prepare_res.presigned_requests.first());
 
-	Ok(new_models::CloudGamesGameLogoUploadPrepareResponse {
+	Ok(models::CloudGamesGameLogoUploadPrepareResponse {
 		upload_id,
 		presigned_request: Box::new(presigned_request.clone().try_into()?),
 	})
 }
 
-// MARK: POST /games/{}/logo-upload/{}/prepare
+// MARK: POST /games/{}/logo-upload/{}/complete
 pub async fn complete_logo_upload(
 	ctx: Ctx<Auth>,
 	game_id: Uuid,
 	upload_id: Uuid,
-	_body: models::GameLogoUploadCompleteRequest,
-) -> GlobalResult<models::GameLogoUploadCompleteResponse> {
+	_body: serde_json::Value,
+) -> GlobalResult<serde_json::Value> {
 	ctx.auth().check_game_write(ctx.op_ctx(), game_id).await?;
 
 	op!([ctx] game_logo_upload_complete {
@@ -530,15 +533,15 @@ pub async fn complete_logo_upload(
 	})
 	.await?;
 
-	Ok(models::GameLogoUploadCompleteResponse {})
+	Ok(json!({}))
 }
 
 // MARK: POST /games/banner-upload/prepare
 pub async fn prepare_banner_upload(
 	ctx: Ctx<Auth>,
 	game_id: Uuid,
-	body: new_models::CloudGamesGameBannerUploadPrepareRequest,
-) -> GlobalResult<new_models::CloudGamesGameBannerUploadPrepareResponse> {
+	body: models::CloudGamesGameBannerUploadPrepareRequest,
+) -> GlobalResult<models::CloudGamesGameBannerUploadPrepareResponse> {
 	ctx.auth().check_game_write(ctx.op_ctx(), game_id).await?;
 
 	let user_id = ctx.auth().claims()?.as_user().ok().map(|x| x.user_id);
@@ -580,7 +583,7 @@ pub async fn prepare_banner_upload(
 	let upload_id = unwrap_ref!(upload_prepare_res.upload_id).as_uuid();
 	let presigned_request = unwrap!(upload_prepare_res.presigned_requests.first());
 
-	Ok(new_models::CloudGamesGameBannerUploadPrepareResponse {
+	Ok(models::CloudGamesGameBannerUploadPrepareResponse {
 		upload_id,
 		presigned_request: Box::new(presigned_request.clone().try_into()?),
 	})
@@ -591,8 +594,8 @@ pub async fn complete_banner_upload(
 	ctx: Ctx<Auth>,
 	game_id: Uuid,
 	upload_id: Uuid,
-	_body: models::GameBannerUploadCompleteRequest,
-) -> GlobalResult<models::GameBannerUploadCompleteResponse> {
+	_body: serde_json::Value,
+) -> GlobalResult<serde_json::Value> {
 	ctx.auth().check_game_write(ctx.op_ctx(), game_id).await?;
 
 	op!([ctx] game_banner_upload_complete {
@@ -601,5 +604,5 @@ pub async fn complete_banner_upload(
 	})
 	.await?;
 
-	Ok(models::GameBannerUploadCompleteResponse {})
+	Ok(json!({}))
 }
