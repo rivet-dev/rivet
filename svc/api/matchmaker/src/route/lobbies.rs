@@ -442,6 +442,7 @@ pub async fn create(
 				.as_ref()
 				.map(serde_json::to_string)
 				.transpose()?,
+			tags: HashMap::new(),
 			dynamic_max_players: dynamic_max_players,
 		})
 		.await?;

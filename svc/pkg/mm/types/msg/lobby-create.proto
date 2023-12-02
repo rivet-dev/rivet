@@ -49,6 +49,8 @@ message Message {
 	// Extra lobby config provided by the user in /create. Sent to the lobby as an env var.
 	optional string lobby_config_json = 11;
 
+	map<string, string> tags = 13;
+
 	// User configured player count that overrides the config.
 	optional uint32 dynamic_max_players = 12;
 }

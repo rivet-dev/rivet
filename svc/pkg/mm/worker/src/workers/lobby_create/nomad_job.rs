@@ -46,7 +46,8 @@ pub fn gen_lobby_docker_job(
 	runtime: &backend::matchmaker::lobby_runtime::Docker,
 	image_tag: &str,
 	tier: &backend::region::Tier,
-	lobby_config_json: Option<&String>,
+	lobby_config: bool,
+	lobby_tags: bool,
 	build_kind: backend::build::BuildKind,
 	build_compression: backend::build::BuildCompression,
 ) -> GlobalResult<nomad_client::models::Job> {
@@ -152,12 +153,22 @@ pub fn gen_lobby_docker_job(
 		.env_vars
 		.iter()
 		.map(|v| (v.key.clone(), escape_go_template(&v.value)))
-		.chain(lobby_config_json.map(|_| {
-			(
+		.chain(if lobby_config {
+			Some((
 				"RIVET_LOBBY_CONFIG".to_string(),
 				template_env_var("NOMAD_META_LOBBY_CONFIG"),
-			)
-		}))
+			))
+		} else {
+			None
+		})
+		.chain(if lobby_tags {
+			Some((
+				"RIVET_LOBBY_TAGS".to_string(),
+				template_env_var("NOMAD_META_LOBBY_TAGS"),
+			))
+		} else {
+			None
+		})
 		.chain([(
 			"RIVET_API_ENDPOINT".to_string(),
 			util::env::origin_api().to_string(),
@@ -347,6 +358,7 @@ pub fn gen_lobby_docker_job(
 				"lobby_id".into(),
 				"lobby_token".into(),
 				"lobby_config".into(),
+				"lobby_tags".into(),
 				"region_id".into(),
 				"region_name".into(),
 				"max_players_normal".into(),

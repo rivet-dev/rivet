@@ -333,6 +333,7 @@ async fn worker(ctx: &OperationContext<mm::msg::lobby_find::Message>) -> GlobalR
 				is_custom: false,
 				publicity: None,
 				lobby_config_json: None,
+				tags: ctx.tags.clone(),
 				dynamic_max_players: ctx.dynamic_max_players,
 			})
 			.await?;

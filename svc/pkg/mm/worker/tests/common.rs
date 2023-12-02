@@ -1,6 +1,7 @@
 use chirp_worker::prelude::*;
 use chirp_worker::prelude::*;
 use proto::backend::{self, pkg::*};
+use std::collections::HashMap;
 
 pub struct Setup {
 	pub namespace_id: Uuid,
@@ -249,6 +250,7 @@ impl Setup {
 			is_custom: false,
 			publicity: None,
 			lobby_config_json: None,
+			tags: HashMap::new(),
 			dynamic_max_players: None,
 		})
 		.await
