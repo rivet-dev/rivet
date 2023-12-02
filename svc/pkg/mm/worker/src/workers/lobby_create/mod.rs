@@ -98,8 +98,12 @@ async fn worker(ctx: &OperationContext<mm::msg::lobby_create::Message>) -> Globa
 	}
 
 	// Override max player count
-	let max_players_normal = ctx.dynamic_max_players.unwrap_or(lobby_group.max_players_normal);
-	let max_players_direct = ctx.dynamic_max_players.unwrap_or(lobby_group.max_players_direct);
+	let max_players_normal = ctx
+		.dynamic_max_players
+		.unwrap_or(lobby_group.max_players_normal);
+	let max_players_direct = ctx
+		.dynamic_max_players
+		.unwrap_or(lobby_group.max_players_direct);
 
 	// Get the relevant lobby group region
 	let lobby_group_region = if let Some(x) = lobby_group
@@ -603,7 +607,8 @@ async fn create_docker_job(
 		runtime,
 		&build.image_tag,
 		tier,
-		ctx.lobby_config_json.as_ref(),
+		ctx.lobby_config_json.is_some(),
+		!ctx.tags.is_empty(),
 		build_kind,
 		build_compression,
 	)?;
@@ -699,6 +704,10 @@ async fn create_docker_job(
 			job_run::msg::create::Parameter {
 				key: "lobby_config".into(),
 				value: ctx.lobby_config_json.clone().unwrap_or_default(),
+			},
+			job_run::msg::create::Parameter {
+				key: "lobby_tags".into(),
+				value: serde_json::to_string(&ctx.tags)?,
 			},
 			job_run::msg::create::Parameter {
 				key: "region_id".into(),

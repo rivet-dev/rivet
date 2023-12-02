@@ -1,5 +1,6 @@
 use proto::backend::pkg::*;
 use rivet_operation::prelude::*;
+use std::collections::HashMap;
 
 lazy_static::lazy_static! {
 	static ref REDIS_SCRIPT: redis::Script = redis::Script::new(include_str!("../redis-scripts/main.lua"));
@@ -79,6 +80,7 @@ async fn handle(
 			is_custom: false,
 			publicity: None,
 			lobby_config_json: None,
+			tags: HashMap::new(),
 			dynamic_max_players: None,
 		}));
 	}

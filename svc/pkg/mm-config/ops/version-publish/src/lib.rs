@@ -126,9 +126,11 @@ async fn handle(
 				runtime_meta,
 				find_config,
 				join_config,
-				create_config
+				create_config,
+				allow_dynamic_max_players,
+				taggable
 			)
-			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
 			",
 			lobby_group_id,
 			version_id,
@@ -142,6 +144,8 @@ async fn handle(
 			&find_config_buf,
 			&join_config_buf,
 			&create_config_buf,
+			lobby_group.allow_dynamic_max_players,
+			lobby_group.taggable,
 		)
 		.await?;
 

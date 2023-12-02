@@ -1,5 +1,6 @@
 use proto::backend::{self, pkg::*};
 use rivet_operation::prelude::*;
+use std::collections::HashMap;
 
 #[operation(name = "faker-mm-lobby")]
 async fn handle(
@@ -161,6 +162,7 @@ async fn handle(
 			is_custom: ctx.is_custom,
 			publicity: ctx.publicity,
 			lobby_config_json: ctx.lobby_config_json.clone(),
+			tags: HashMap::new(),
 			dynamic_max_players: None,
 		})
 		.await?;

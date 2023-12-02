@@ -1,7 +1,7 @@
 use proto::backend::{self, pkg::*};
 use rivet_operation::prelude::*;
 use serde_json::{json, Value};
-use std::{str::FromStr, sync::Once, time::Duration};
+use std::{collections::HashMap, str::FromStr, sync::Once, time::Duration};
 
 use rivet_api::{
 	apis::{configuration::Configuration, *},
@@ -90,6 +90,7 @@ impl Ctx {
 			is_custom: false,
 			publicity: None,
 			lobby_config_json: None,
+			tags: HashMap::new(),
 			dynamic_max_players: None,
 		})
 		.await
