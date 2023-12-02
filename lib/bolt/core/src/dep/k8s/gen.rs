@@ -791,9 +791,20 @@ fn build_ingress_router(
 	router: &ServiceRouter,
 	specs: &mut Vec<serde_json::Value>,
 ) {
+	// Filter mounts
+	let enable_deprecated_subdomains = project_ctx
+		.ns()
+		.dns
+		.as_ref()
+		.map_or(false, |y| y.deprecated_subdomains);
+	let mounts = router
+		.mounts
+		.iter()
+		.filter(|x| !x.deprecated || enable_deprecated_subdomains);
+
 	// Register all mounts with Traefik
 	// TODO: move this in to a single ingressroute crd for web and websecure
-	for (i, mount) in router.mounts.iter().enumerate() {
+	for (i, mount) in mounts.enumerate() {
 		// Build host rule
 		let mut rule = String::new();
 
