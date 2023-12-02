@@ -126,7 +126,7 @@ async fn handle(
 				runtime_meta,
 				find_config,
 				join_config,
-				create_config
+				create_config,
 				allow_dynamic_max_players,
 				taggable
 			)
