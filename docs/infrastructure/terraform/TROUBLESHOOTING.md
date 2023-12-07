@@ -11,4 +11,3 @@ cd infra/tf/my_tf_plan && terraform init -upgrade
 ```
 
 Then try the original command again.
-
