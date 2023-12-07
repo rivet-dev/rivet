@@ -25,8 +25,10 @@ pub async fn config_to_proto(
 			}
 		}
 	}
-	let regions_res = op!([ctx] region_resolve {
-		name_ids: all_region_name_ids.into_iter().collect::<Vec<_>>(),
+
+	let regions_list = op!([ctx] region_list {}).await?;
+	let regions_res = op!([ctx] region_get {
+		region_ids: regions_list.region_ids.clone(),
 	})
 	.await?;
 

@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use proto::backend::{self, pkg::*};
+use proto::backend;
 use rivet_api::models;
 use rivet_operation::prelude::*;
 
@@ -10,14 +10,27 @@ pub fn game_mode_to_proto(
 	name_id: String,
 	game_mode: &models::CloudVersionMatchmakerGameMode,
 	matchmaker: &models::CloudVersionMatchmakerConfig,
-	regions_data: &[region::resolve::response::Region],
+	all_regions: &[backend::region::Region],
 ) -> GlobalResult<backend::matchmaker::LobbyGroup> {
 	// Derive regions
-	let regions = game_mode
+	let mut regions = game_mode
 		.regions
 		.clone()
 		.or_else(|| matchmaker.regions.clone())
 		.unwrap_or_default();
+
+	// Populate default regions
+	if regions.is_empty() {
+		for region in all_regions {
+			regions.insert(
+				region.name_id.clone(),
+				models::CloudVersionMatchmakerGameModeRegion {
+					tier: None,
+					idle_lobbies: None,
+				},
+			);
+		}
+	}
 
 	// Derive max players
 	let max_players_normal = game_mode
@@ -134,7 +147,7 @@ pub fn game_mode_to_proto(
 
 		regions: regions
 			.iter()
-			.map(|(k, v)| region_to_proto(k.clone(), v, game_mode, matchmaker, regions_data))
+			.map(|(k, v)| region_to_proto(k.clone(), v, game_mode, matchmaker, all_regions))
 			.collect::<GlobalResult<_>>()?,
 		max_players_normal: max_players_normal.try_into()?,
 		max_players_direct: max_players_direct.try_into()?,
@@ -265,7 +278,7 @@ fn region_to_proto(
 	region: &models::CloudVersionMatchmakerGameModeRegion,
 	game_mode: &models::CloudVersionMatchmakerGameMode,
 	matchmaker: &models::CloudVersionMatchmakerConfig,
-	regions_data: &[region::resolve::response::Region],
+	regions_data: &[backend::region::Region],
 ) -> GlobalResult<backend::matchmaker::lobby_group::Region> {
 	let region_id = regions_data
 		.iter()
