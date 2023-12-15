@@ -4,10 +4,6 @@ macro_rules! workers {
 		use ::chirp_worker::prelude::*;
 		use chirp_types::message::Message;
 
-		$(
-			pub mod $worker;
-		)*
-
 		pub fn spawn_workers(shared_client: chirp_client::SharedClientHandle, pools: rivet_pools::Pools, cache: rivet_cache::Cache, join_set: &mut tokio::task::JoinSet<GlobalResult<()>>) -> GlobalResult<()> {
 			// Spawn a manager for each worker
 			$(

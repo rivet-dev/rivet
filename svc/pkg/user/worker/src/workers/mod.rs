@@ -1,3 +1,19 @@
+mod admin_set;
+mod create;
+mod delete;
+mod event_team_member_remove;
+mod event_user_mm_lobby_join;
+mod event_user_presence_update;
+mod event_user_update;
+mod profile_set;
+mod search_update;
+mod search_update_user_follow_create;
+mod search_update_user_update;
+mod updated_user_follow_create;
+mod updated_user_follow_delete;
+mod updated_user_presence_update;
+mod updated_user_update;
+
 chirp_worker::workers![
 	admin_set,
 	create,
