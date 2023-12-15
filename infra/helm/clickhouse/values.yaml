@@ -1097,7 +1097,7 @@ metrics:
     ##      severity: warning
     rules: []
 
-## @section External Zookeeper paramaters
+## @section External Zookeeper parameters
 ##
 externalZookeeper:
   ## @param externalZookeeper.servers List of external zookeeper servers to use

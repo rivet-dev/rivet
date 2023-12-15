@@ -269,7 +269,7 @@ Compile all warnings into a single message, and call fail.
 {{- end -}}
 {{- end -}}
 
-{{/* Validate values of Redis&reg; - spreadConstrainsts K8s version */}}
+{{/* Validate values of Redis&reg; - spreadConstraints K8s version */}}
 {{- define "redis.validateValues.topologySpreadConstraints" -}}
 {{- if and (semverCompare "<1.16-0" .Capabilities.KubeVersion.GitVersion) .Values.replica.topologySpreadConstraints -}}
 redis: topologySpreadConstraints

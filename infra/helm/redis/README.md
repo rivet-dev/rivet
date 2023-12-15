@@ -788,7 +788,7 @@ Refer to the chart documentation for more information on [backing up and restori
 
 To enable network policy for Redis&reg;, install [a networking plugin that implements the Kubernetes NetworkPolicy spec](https://kubernetes.io/docs/tasks/administer-cluster/declare-network-policy#before-you-begin), and set `networkPolicy.enabled` to `true`.
 
-Refer to the chart documenation for more information on [enabling the network policy in Redis&reg; deployments](https://docs.bitnami.com/kubernetes/infrastructure/redis/administration/enable-network-policy/).
+Refer to the chart documentation for more information on [enabling the network policy in Redis&reg; deployments](https://docs.bitnami.com/kubernetes/infrastructure/redis/administration/enable-network-policy/).
 
 ### Setting Pod's affinity
 

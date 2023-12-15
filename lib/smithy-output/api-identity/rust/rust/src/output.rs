@@ -1952,7 +1952,7 @@ impl GetIdentityProfileOutput {
 #[non_exhaustive]
 #[derive(std::clone::Clone, std::cmp::PartialEq)]
 pub struct SetupIdentityOutput {
-	/// Token used to authenticate the identity. Should be stored somewhere permanent. Pass this to `rivet.api.identity#SetupIdentity$existing_identity_token` next time `rivet.api.identity#SetupIdentity` is called. Token has a 90 day TTL. This means that if `rivet.api.identity#SetupIdentity` is not called again within 90 days, the token will no longer be valid. If this happens, the user can recover their account through the linking process (see `rivet.api.identity#PrepareGameLink`). This token should be stored locally and never sent to a server or another device. If this token is comprimised, anyone with access to this token has control of the identity.
+	/// Token used to authenticate the identity. Should be stored somewhere permanent. Pass this to `rivet.api.identity#SetupIdentity$existing_identity_token` next time `rivet.api.identity#SetupIdentity` is called. Token has a 90 day TTL. This means that if `rivet.api.identity#SetupIdentity` is not called again within 90 days, the token will no longer be valid. If this happens, the user can recover their account through the linking process (see `rivet.api.identity#PrepareGameLink`). This token should be stored locally and never sent to a server or another device. If this token is compromised, anyone with access to this token has control of the identity.
 	pub identity_token: std::option::Option<std::string::String>,
 	/// Timestamp (in milliseconds) at which the token expires.
 	pub identity_token_expire_ts: std::option::Option<aws_smithy_types::DateTime>,
@@ -1962,7 +1962,7 @@ pub struct SetupIdentityOutput {
 	pub game_id: std::option::Option<std::string::String>,
 }
 impl SetupIdentityOutput {
-	/// Token used to authenticate the identity. Should be stored somewhere permanent. Pass this to `rivet.api.identity#SetupIdentity$existing_identity_token` next time `rivet.api.identity#SetupIdentity` is called. Token has a 90 day TTL. This means that if `rivet.api.identity#SetupIdentity` is not called again within 90 days, the token will no longer be valid. If this happens, the user can recover their account through the linking process (see `rivet.api.identity#PrepareGameLink`). This token should be stored locally and never sent to a server or another device. If this token is comprimised, anyone with access to this token has control of the identity.
+	/// Token used to authenticate the identity. Should be stored somewhere permanent. Pass this to `rivet.api.identity#SetupIdentity$existing_identity_token` next time `rivet.api.identity#SetupIdentity` is called. Token has a 90 day TTL. This means that if `rivet.api.identity#SetupIdentity` is not called again within 90 days, the token will no longer be valid. If this happens, the user can recover their account through the linking process (see `rivet.api.identity#PrepareGameLink`). This token should be stored locally and never sent to a server or another device. If this token is compromised, anyone with access to this token has control of the identity.
 	pub fn identity_token(&self) -> std::option::Option<&str> {
 		self.identity_token.as_deref()
 	}
@@ -2001,12 +2001,12 @@ pub mod setup_identity_output {
 		pub(crate) game_id: std::option::Option<std::string::String>,
 	}
 	impl Builder {
-		/// Token used to authenticate the identity. Should be stored somewhere permanent. Pass this to `rivet.api.identity#SetupIdentity$existing_identity_token` next time `rivet.api.identity#SetupIdentity` is called. Token has a 90 day TTL. This means that if `rivet.api.identity#SetupIdentity` is not called again within 90 days, the token will no longer be valid. If this happens, the user can recover their account through the linking process (see `rivet.api.identity#PrepareGameLink`). This token should be stored locally and never sent to a server or another device. If this token is comprimised, anyone with access to this token has control of the identity.
+		/// Token used to authenticate the identity. Should be stored somewhere permanent. Pass this to `rivet.api.identity#SetupIdentity$existing_identity_token` next time `rivet.api.identity#SetupIdentity` is called. Token has a 90 day TTL. This means that if `rivet.api.identity#SetupIdentity` is not called again within 90 days, the token will no longer be valid. If this happens, the user can recover their account through the linking process (see `rivet.api.identity#PrepareGameLink`). This token should be stored locally and never sent to a server or another device. If this token is compromised, anyone with access to this token has control of the identity.
 		pub fn identity_token(mut self, input: impl Into<std::string::String>) -> Self {
 			self.identity_token = Some(input.into());
 			self
 		}
-		/// Token used to authenticate the identity. Should be stored somewhere permanent. Pass this to `rivet.api.identity#SetupIdentity$existing_identity_token` next time `rivet.api.identity#SetupIdentity` is called. Token has a 90 day TTL. This means that if `rivet.api.identity#SetupIdentity` is not called again within 90 days, the token will no longer be valid. If this happens, the user can recover their account through the linking process (see `rivet.api.identity#PrepareGameLink`). This token should be stored locally and never sent to a server or another device. If this token is comprimised, anyone with access to this token has control of the identity.
+		/// Token used to authenticate the identity. Should be stored somewhere permanent. Pass this to `rivet.api.identity#SetupIdentity$existing_identity_token` next time `rivet.api.identity#SetupIdentity` is called. Token has a 90 day TTL. This means that if `rivet.api.identity#SetupIdentity` is not called again within 90 days, the token will no longer be valid. If this happens, the user can recover their account through the linking process (see `rivet.api.identity#PrepareGameLink`). This token should be stored locally and never sent to a server or another device. If this token is compromised, anyone with access to this token has control of the identity.
 		pub fn set_identity_token(
 			mut self,
 			input: std::option::Option<std::string::String>,

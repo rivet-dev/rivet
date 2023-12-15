@@ -20,7 +20,7 @@ pub struct IdentitySetupResponse {
     /// Documentation at https://jwt.io/
     #[serde(rename = "identity_token")]
     pub identity_token: String,
-    /// If this token is comprimised, anyone with access to this token has control of the identity. 
+    /// If this token is compromised, anyone with access to this token has control of the identity. 
     #[serde(rename = "identity_token_expire_ts")]
     pub identity_token_expire_ts: String,
 }

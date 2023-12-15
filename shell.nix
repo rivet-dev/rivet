@@ -1,4 +1,4 @@
-# Cross-platofrm Rust Setup: https://zeroes.dev/p/nix-recipe-for-rust/
+# Cross-platform Rust Setup: https://zeroes.dev/p/nix-recipe-for-rust/
 
 let
 	pkgs = import ./infra/nix/common/pkgs.nix;

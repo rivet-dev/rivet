@@ -46,7 +46,7 @@ async fn non_unique_name(ctx: TestCtx) {
 	.await
 	.unwrap();
 
-	// Create anoter version with the same name
+	// Create another version with the same name
 	op!([ctx] game_version_create {
 		game_id: Some(game_id.into()),
 		display_name: display_name.clone(),

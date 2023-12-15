@@ -282,7 +282,7 @@ Name | Type | Description  | Required | Notes
 > cloud_games_namespaces_set_namespace_cdn_auth_type(game_id, namespace_id, cloud_games_namespaces_set_namespace_cdn_auth_type_request)
 
 
-Updates the CDN authentication type of the given game namesapce.
+Updates the CDN authentication type of the given game namespace.
 
 ### Parameters
 
@@ -314,7 +314,7 @@ Name | Type | Description  | Required | Notes
 > cloud_games_namespaces_toggle_namespace_domain_public_auth(game_id, namespace_id, cloud_games_namespaces_toggle_namespace_domain_public_auth_request)
 
 
-Toggles whether or not to allow authentication based on domain for the given game namesapce.
+Toggles whether or not to allow authentication based on domain for the given game namespace.
 
 ### Parameters
 

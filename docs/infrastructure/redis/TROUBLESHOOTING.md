@@ -4,7 +4,7 @@
 
 _Only applicable if using Redis on Kubernetes._
 
-If your cluster is under load, sometimes Redis Cluster will faill to boostrap.
+If your cluster is under load, sometimes Redis Cluster will fail to bootstrap.
 
 Find the cluster having this issue and rung the following:
 

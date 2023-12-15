@@ -17,7 +17,7 @@ pub struct PrewarmAtsContext {
 /// This is important for games that (a) don't have idle lobbies and need the lobbies to start
 /// quickly and (b) use custom lobbies that need to be started as fast as possible.
 ///
-/// This works by scheduling a Nomad job that requests the given artifacts and exits immediatley.
+/// This works by scheduling a Nomad job that requests the given artifacts and exits immediately.
 /// Under the hood, this will:
 ///
 /// 1. Schedule a Nomad job with artifact requests for the resources
@@ -69,7 +69,7 @@ pub async fn prewarm_ats_cache(
 /// Generates a Nomad job that will fetch the required assets then exit immediately.
 ///
 /// This uses our job-run infrastructure to reuse dispatched jobs. This will generate a unique job
-/// for every requrested artifact count.
+/// for every requested artifact count.
 fn gen_prewarm_job(artifact_count: usize) -> GlobalResult<nomad_client::models::Job> {
 	use nomad_client::models::*;
 

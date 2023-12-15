@@ -14,7 +14,7 @@ if not os.path.exists(output_dir):
 with open('gen/openapi/internal/spec/openapi.yml', 'r') as f:
 	openapi = yaml.safe_load(f.read())
 
-# Modify spec for compatability
+# Modify spec for compatibility
 openapi['info']['version'] = '0.0.1'
 
 # Write new spec

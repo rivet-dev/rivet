@@ -337,7 +337,7 @@ The command removes all the Kubernetes components associated with the chart and 
 | `metrics.prometheusRule.additionalLabels`     | Additional labels that can be used so PrometheusRule will be discovered by Prometheus                  | `{}`    |
 | `metrics.prometheusRule.rules`                | PrometheusRule definitions                                                                             | `[]`    |
 
-### External Zookeeper paramaters
+### External Zookeeper parameters
 
 | Name                        | Description                               | Value  |
 | --------------------------- | ----------------------------------------- | ------ |

@@ -37,7 +37,7 @@ async fn setup(ctx: &TestCtx) -> Setup {
 					tier_name_id: util_mm::test::TIER_NAME_ID.to_owned(),
 					idle_lobbies: Some(backend::matchmaker::lobby_group::IdleLobbies {
 						min_idle_lobbies: 0,
-						// Don't auto-destory lobbies from tests
+						// Don't auto-destroy lobbies from tests
 						max_idle_lobbies: 32,
 					}),
 				}],

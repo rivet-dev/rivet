@@ -438,7 +438,7 @@ paths:
       security: *ref_0
   /cloud/games/{game_id}/namespaces/{namespace_id}/cdn-auth:
     put:
-      description: Updates the CDN authentication type of the given game namesapce.
+      description: Updates the CDN authentication type of the given game namespace.
       operationId: cloud_games_namespaces_setNamespaceCdnAuthType
       tags:
         - CloudGamesNamespaces
@@ -506,7 +506,7 @@ paths:
     put:
       description: >-
         Toggles whether or not to allow authentication based on domain for the
-        given game namesapce.
+        given game namespace.
       operationId: cloud_games_namespaces_toggleNamespaceDomainPublicAuth
       tags:
         - CloudGamesNamespaces
@@ -8922,7 +8922,7 @@ components:
           type: string
           format: date-time
           description: >
-            If this token is comprimised, anyone with access to this token has
+            If this token is compromised, anyone with access to this token has
             control of the identity.
         identity:
           $ref: '#/components/schemas/IdentityProfile'
@@ -9850,7 +9850,7 @@ components:
         amount:
           type: number
           format: double
-          description: Payment amount (in hundreths USD, 100 = $1.00).
+          description: Payment amount (in hundredths USD, 100 = $1.00).
         description:
           type: string
           description: A description of this payment.
@@ -9882,7 +9882,7 @@ components:
         amount:
           type: integer
           format: int64
-          description: Payment amount (in hundreths USD, 100 = $1.00).
+          description: Payment amount (in hundredths USD, 100 = $1.00).
         description:
           type: string
           description: A description of this transfer.
@@ -11944,7 +11944,7 @@ components:
         is_following_me:
           type: boolean
           description: >-
-            Whether or not this identity is both followng and is followed by the
+            Whether or not this identity is both following and is followed by the
             requestee's identity.
         is_mutual_following:
           type: boolean
@@ -12003,7 +12003,7 @@ components:
         is_following_me:
           type: boolean
           description: >-
-            Whether or not this identity is both followng and is followed by the
+            Whether or not this identity is both following and is followed by the
             requestee's identity.
         is_mutual_following:
           type: boolean

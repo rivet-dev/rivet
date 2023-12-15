@@ -224,7 +224,7 @@ for ipt in iptables ip6tables; do
 		add_ipt_rule "\$ipt" "filter" "$ADMIN_CHAIN" "-s __GG_VLAN_SUBNET__ -d \$SUBNET_VAR -j ACCEPT"
 
 		# MARK: GG egress
-		# Prioritize resopnse traffic
+		# Prioritize response traffic
 		add_ipt_rule "\$ipt" "filter" "$ADMIN_CHAIN" "-s \$SUBNET_VAR -m conntrack --ctstate NEW,ESTABLISHED -j MARK --set-mark 1"
 		# Enable conntrack to allow traffic to flow back to the GG subnet
 		add_ipt_rule "\$ipt" "filter" "$ADMIN_CHAIN" "-s \$SUBNET_VAR -m conntrack --ctstate NEW,ESTABLISHED -j ACCEPT"

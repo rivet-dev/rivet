@@ -954,7 +954,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "max(redis_stream_group_messages_pending{group=~\"[[context]]\"}) by (group, streamm)",
+          "expr": "max(redis_stream_group_messages_pending{group=~\"[[context]]\"}) by (group, stream)",
           "legendFormat": "{{stream}}: {{group}}",
           "range": true,
           "refId": "A"

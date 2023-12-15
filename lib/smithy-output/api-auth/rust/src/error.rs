@@ -20,7 +20,7 @@ pub enum CompleteEmailVerificationErrorKind {
 	ForbiddenError(crate::error::ForbiddenError),
 	/// An error thrown when the requestee is not authenticated.
 	UnauthorizedError(crate::error::UnauthorizedError),
-	/// An error thrown when the requestee requests a non existant resource.
+	/// An error thrown when the requestee requests a non existent resource.
 	NotFoundError(crate::error::NotFoundError),
 	/// An error thrown when the requestee has sent an invalid or malformed request.
 	BadRequestError(crate::error::BadRequestError),
@@ -176,7 +176,7 @@ pub enum RefreshIdentityTokenErrorKind {
 	ForbiddenError(crate::error::ForbiddenError),
 	/// An error thrown when the requestee is not authenticated.
 	UnauthorizedError(crate::error::UnauthorizedError),
-	/// An error thrown when the requestee requests a non existant resource.
+	/// An error thrown when the requestee requests a non existent resource.
 	NotFoundError(crate::error::NotFoundError),
 	/// An error thrown when the requestee has sent an invalid or malformed request.
 	BadRequestError(crate::error::BadRequestError),
@@ -320,7 +320,7 @@ pub enum StartEmailVerificationErrorKind {
 	ForbiddenError(crate::error::ForbiddenError),
 	/// An error thrown when the requestee is not authenticated.
 	UnauthorizedError(crate::error::UnauthorizedError),
-	/// An error thrown when the requestee requests a non existant resource.
+	/// An error thrown when the requestee requests a non existent resource.
 	NotFoundError(crate::error::NotFoundError),
 	/// An error thrown when the requestee has sent an invalid or malformed request.
 	BadRequestError(crate::error::BadRequestError),
@@ -584,7 +584,7 @@ impl BadRequestError {
 	}
 }
 
-/// An error thrown when the requestee requests a non existant resource.
+/// An error thrown when the requestee requests a non existent resource.
 #[non_exhaustive]
 #[derive(std::clone::Clone, std::cmp::PartialEq)]
 pub struct NotFoundError {

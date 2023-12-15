@@ -21,7 +21,7 @@ message Mark {
 	// If these are not null, then this data can be used to associate with
 	// events across other services.
 	//
-	// `req_id` will not always point to an RPC or consuemr handler event,
+	// `req_id` will not always point to an RPC or consumer handler event,
 	// since all messages are given a request ID no matter if there is a
 	// consumer associated with the message.
 	optional rivet.common.Uuid ray_id = 3;

@@ -481,7 +481,7 @@ pub async fn cloud_games_namespaces_remove_namespace_domain(configuration: &conf
     }
 }
 
-/// Updates the CDN authentication type of the given game namesapce.
+/// Updates the CDN authentication type of the given game namespace.
 pub async fn cloud_games_namespaces_set_namespace_cdn_auth_type(configuration: &configuration::Configuration, game_id: &str, namespace_id: &str, cloud_games_namespaces_set_namespace_cdn_auth_type_request: crate::models::CloudGamesNamespacesSetNamespaceCdnAuthTypeRequest) -> Result<(), Error<CloudGamesNamespacesSetNamespaceCdnAuthTypeError>> {
     let local_var_configuration = configuration;
 
@@ -513,7 +513,7 @@ pub async fn cloud_games_namespaces_set_namespace_cdn_auth_type(configuration: &
     }
 }
 
-/// Toggles whether or not to allow authentication based on domain for the given game namesapce.
+/// Toggles whether or not to allow authentication based on domain for the given game namespace.
 pub async fn cloud_games_namespaces_toggle_namespace_domain_public_auth(configuration: &configuration::Configuration, game_id: &str, namespace_id: &str, cloud_games_namespaces_toggle_namespace_domain_public_auth_request: crate::models::CloudGamesNamespacesToggleNamespaceDomainPublicAuthRequest) -> Result<(), Error<CloudGamesNamespacesToggleNamespaceDomainPublicAuthError>> {
     let local_var_configuration = configuration;
 

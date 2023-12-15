@@ -4199,7 +4199,7 @@ pub mod fluent_builders {
 	}
 	/// Fluent builder constructing a request to `SetNamespaceCdnAuthType`.
 	///
-	/// Updates the CDN authentication type of the given game namesapce.
+	/// Updates the CDN authentication type of the given game namespace.
 	#[derive(std::clone::Clone, std::fmt::Debug)]
 	pub struct SetNamespaceCdnAuthType<C, M, R = aws_smithy_client::retry::Standard> {
 		handle: std::sync::Arc<super::Handle<C, M, R>>,
@@ -4288,7 +4288,7 @@ pub mod fluent_builders {
 	}
 	/// Fluent builder constructing a request to `ToggleNamespaceDomainPublicAuth`.
 	///
-	/// Toggles whether or not to allow authentication based on domain for the given game namesapce.
+	/// Toggles whether or not to allow authentication based on domain for the given game namespace.
 	#[derive(std::clone::Clone, std::fmt::Debug)]
 	pub struct ToggleNamespaceDomainPublicAuth<C, M, R = aws_smithy_client::retry::Standard> {
 		handle: std::sync::Arc<super::Handle<C, M, R>>,

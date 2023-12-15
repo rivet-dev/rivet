@@ -47,7 +47,7 @@ pub struct IdentityProfile {
     /// Whether or not this identity is an admin.
     #[serde(rename = "is_admin")]
     pub is_admin: bool,
-    /// Whether or not this identity is both followng and is followed by the requestee's identity.
+    /// Whether or not this identity is both following and is followed by the requestee's identity.
     #[serde(rename = "is_following_me")]
     pub is_following_me: bool,
     /// Whether or not this game user has been linked through the Rivet dashboard.

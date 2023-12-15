@@ -2751,7 +2751,7 @@ pub struct IdentityProfile {
 	pub following: std::option::Option<bool>,
 	/// Whether or not this identity following the requestee's identity.
 	pub is_following_me: std::option::Option<bool>,
-	/// Whether or not this identity is both followng and is followed by the requestee's identity.
+	/// Whether or not this identity is both following and is followed by the requestee's identity.
 	pub is_mutual_following: std::option::Option<bool>,
 	/// RFC3339 timestamp.
 	pub join_ts: std::option::Option<aws_smithy_types::DateTime>,
@@ -2827,7 +2827,7 @@ impl IdentityProfile {
 	pub fn is_following_me(&self) -> std::option::Option<bool> {
 		self.is_following_me
 	}
-	/// Whether or not this identity is both followng and is followed by the requestee's identity.
+	/// Whether or not this identity is both following and is followed by the requestee's identity.
 	pub fn is_mutual_following(&self) -> std::option::Option<bool> {
 		self.is_mutual_following
 	}
@@ -3074,12 +3074,12 @@ pub mod identity_profile {
 			self.is_following_me = input;
 			self
 		}
-		/// Whether or not this identity is both followng and is followed by the requestee's identity.
+		/// Whether or not this identity is both following and is followed by the requestee's identity.
 		pub fn is_mutual_following(mut self, input: bool) -> Self {
 			self.is_mutual_following = Some(input);
 			self
 		}
-		/// Whether or not this identity is both followng and is followed by the requestee's identity.
+		/// Whether or not this identity is both following and is followed by the requestee's identity.
 		pub fn set_is_mutual_following(mut self, input: std::option::Option<bool>) -> Self {
 			self.is_mutual_following = input;
 			self
@@ -4101,7 +4101,7 @@ impl AsRef<str> for GameLinkStatus {
 pub struct GlobalEvent {
 	/// RFC3339 timestamp.
 	pub ts: std::option::Option<aws_smithy_types::DateTime>,
-	/// Kind of event that occured.
+	/// Kind of event that occurred.
 	pub kind: std::option::Option<crate::model::GlobalEventKind>,
 	/// Notifications represent information that should be presented to the user immediately. At the moment, only chat message events have associated notifications. # Display Notifications should be displayed in an unobtrusive manner throughout the entire game. Notifications should disappear after a few seconds if not interacted with. # Interactions If your platform supports it, notifications should be able to be clicked or tapped in order to open the relevant context for the event. For a simple implementation of notification interactions, open `url` in a web browser to present the relevant context. For example, a chat message notification will open the thread the chat message was sent in. For advanced implementations that implement a custom chat UI, use `rivet.api.identity.common#GlobalEvent$kind` to determine what action to take when the notification is interacted with. For example, if the global event kind is `rivet.api.identity.common#GlobalEventChatMessage`, then open the chat UI for the given thread.
 	pub notification: std::option::Option<crate::model::GlobalEventNotification>,
@@ -4111,7 +4111,7 @@ impl GlobalEvent {
 	pub fn ts(&self) -> std::option::Option<&aws_smithy_types::DateTime> {
 		self.ts.as_ref()
 	}
-	/// Kind of event that occured.
+	/// Kind of event that occurred.
 	pub fn kind(&self) -> std::option::Option<&crate::model::GlobalEventKind> {
 		self.kind.as_ref()
 	}
@@ -4150,12 +4150,12 @@ pub mod global_event {
 			self.ts = input;
 			self
 		}
-		/// Kind of event that occured.
+		/// Kind of event that occurred.
 		pub fn kind(mut self, input: crate::model::GlobalEventKind) -> Self {
 			self.kind = Some(input);
 			self
 		}
-		/// Kind of event that occured.
+		/// Kind of event that occurred.
 		pub fn set_kind(
 			mut self,
 			input: std::option::Option<crate::model::GlobalEventKind>,
@@ -4307,7 +4307,7 @@ impl GlobalEventNotification {
 	}
 }
 
-/// Kind of event that occured.
+/// Kind of event that occurred.
 #[non_exhaustive]
 #[derive(std::clone::Clone, std::cmp::PartialEq, std::fmt::Debug)]
 pub enum GlobalEventKind {
@@ -6788,7 +6788,7 @@ pub struct IdentitySummary {
 	pub following: std::option::Option<bool>,
 	/// Whether or not this identity following the requestee's identity.
 	pub is_following_me: std::option::Option<bool>,
-	/// Whether or not this identity is both followng and is followed by the requestee's identity.
+	/// Whether or not this identity is both following and is followed by the requestee's identity.
 	pub is_mutual_following: std::option::Option<bool>,
 }
 impl IdentitySummary {
@@ -6832,7 +6832,7 @@ impl IdentitySummary {
 	pub fn is_following_me(&self) -> std::option::Option<bool> {
 		self.is_following_me
 	}
-	/// Whether or not this identity is both followng and is followed by the requestee's identity.
+	/// Whether or not this identity is both following and is followed by the requestee's identity.
 	pub fn is_mutual_following(&self) -> std::option::Option<bool> {
 		self.is_mutual_following
 	}
@@ -6979,12 +6979,12 @@ pub mod identity_summary {
 			self.is_following_me = input;
 			self
 		}
-		/// Whether or not this identity is both followng and is followed by the requestee's identity.
+		/// Whether or not this identity is both following and is followed by the requestee's identity.
 		pub fn is_mutual_following(mut self, input: bool) -> Self {
 			self.is_mutual_following = Some(input);
 			self
 		}
-		/// Whether or not this identity is both followng and is followed by the requestee's identity.
+		/// Whether or not this identity is both following and is followed by the requestee's identity.
 		pub fn set_is_mutual_following(mut self, input: std::option::Option<bool>) -> Self {
 			self.is_mutual_following = input;
 			self

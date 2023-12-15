@@ -73,7 +73,7 @@ service:
     setNamespaceCdnAuthType:
       path: /games/{game_id}/namespaces/{namespace_id}/cdn-auth
       method: PUT
-      docs: Updates the CDN authentication type of the given game namesapce.
+      docs: Updates the CDN authentication type of the given game namespace.
       path-parameters:
         game_id:
           type: uuid
@@ -87,7 +87,7 @@ service:
       method: PUT
       docs: >-
         Toggles whether or not to allow authentication based on domain for the
-        given game namesapce.
+        given game namespace.
       path-parameters:
         game_id:
           type: uuid

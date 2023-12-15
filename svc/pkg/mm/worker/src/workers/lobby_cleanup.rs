@@ -133,7 +133,7 @@ async fn worker(ctx: &OperationContext<mm::msg::lobby_cleanup::Message>) -> Glob
 	//
 	// This helps mitigate edge cases where part of the root lobby configuration
 	// was removed from Redis but lingering data. These problems should no
-	// longer exist, but requried from much older deployments.
+	// longer exist, but required from much older deployments.
 	//
 	// See `util_mm:key::invalid_lobby_ids`
 	if !did_remove_from_redis {

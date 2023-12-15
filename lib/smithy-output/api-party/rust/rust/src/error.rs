@@ -20,7 +20,7 @@ pub enum CreatePartyErrorKind {
 	ForbiddenError(crate::error::ForbiddenError),
 	/// An error thrown when the requestee is not authenticated.
 	UnauthorizedError(crate::error::UnauthorizedError),
-	/// An error thrown when the requestee requests a non existant resource.
+	/// An error thrown when the requestee requests a non existent resource.
 	NotFoundError(crate::error::NotFoundError),
 	/// An error thrown when the requestee has sent an invalid or malformed request.
 	BadRequestError(crate::error::BadRequestError),
@@ -154,7 +154,7 @@ pub enum CreatePartyInviteErrorKind {
 	ForbiddenError(crate::error::ForbiddenError),
 	/// An error thrown when the requestee is not authenticated.
 	UnauthorizedError(crate::error::UnauthorizedError),
-	/// An error thrown when the requestee requests a non existant resource.
+	/// An error thrown when the requestee requests a non existent resource.
 	NotFoundError(crate::error::NotFoundError),
 	/// An error thrown when the requestee has sent an invalid or malformed request.
 	BadRequestError(crate::error::BadRequestError),
@@ -290,7 +290,7 @@ pub enum GetPartyFromInviteErrorKind {
 	ForbiddenError(crate::error::ForbiddenError),
 	/// An error thrown when the requestee is not authenticated.
 	UnauthorizedError(crate::error::UnauthorizedError),
-	/// An error thrown when the requestee requests a non existant resource.
+	/// An error thrown when the requestee requests a non existent resource.
 	NotFoundError(crate::error::NotFoundError),
 	/// An error thrown when the requestee has sent an invalid or malformed request.
 	BadRequestError(crate::error::BadRequestError),
@@ -429,7 +429,7 @@ pub enum GetPartyProfileErrorKind {
 	ForbiddenError(crate::error::ForbiddenError),
 	/// An error thrown when the requestee is not authenticated.
 	UnauthorizedError(crate::error::UnauthorizedError),
-	/// An error thrown when the requestee requests a non existant resource.
+	/// An error thrown when the requestee requests a non existent resource.
 	NotFoundError(crate::error::NotFoundError),
 	/// An error thrown when the requestee has sent an invalid or malformed request.
 	BadRequestError(crate::error::BadRequestError),
@@ -565,7 +565,7 @@ pub enum GetPartySelfProfileErrorKind {
 	ForbiddenError(crate::error::ForbiddenError),
 	/// An error thrown when the requestee is not authenticated.
 	UnauthorizedError(crate::error::UnauthorizedError),
-	/// An error thrown when the requestee requests a non existant resource.
+	/// An error thrown when the requestee requests a non existent resource.
 	NotFoundError(crate::error::NotFoundError),
 	/// An error thrown when the requestee has sent an invalid or malformed request.
 	BadRequestError(crate::error::BadRequestError),
@@ -706,7 +706,7 @@ pub enum GetPartySelfSummaryErrorKind {
 	ForbiddenError(crate::error::ForbiddenError),
 	/// An error thrown when the requestee is not authenticated.
 	UnauthorizedError(crate::error::UnauthorizedError),
-	/// An error thrown when the requestee requests a non existant resource.
+	/// An error thrown when the requestee requests a non existent resource.
 	NotFoundError(crate::error::NotFoundError),
 	/// An error thrown when the requestee has sent an invalid or malformed request.
 	BadRequestError(crate::error::BadRequestError),
@@ -847,7 +847,7 @@ pub enum GetPartySummaryErrorKind {
 	ForbiddenError(crate::error::ForbiddenError),
 	/// An error thrown when the requestee is not authenticated.
 	UnauthorizedError(crate::error::UnauthorizedError),
-	/// An error thrown when the requestee requests a non existant resource.
+	/// An error thrown when the requestee requests a non existent resource.
 	NotFoundError(crate::error::NotFoundError),
 	/// An error thrown when the requestee has sent an invalid or malformed request.
 	BadRequestError(crate::error::BadRequestError),
@@ -983,7 +983,7 @@ pub enum JoinPartyErrorKind {
 	ForbiddenError(crate::error::ForbiddenError),
 	/// An error thrown when the requestee is not authenticated.
 	UnauthorizedError(crate::error::UnauthorizedError),
-	/// An error thrown when the requestee requests a non existant resource.
+	/// An error thrown when the requestee requests a non existent resource.
 	NotFoundError(crate::error::NotFoundError),
 	/// An error thrown when the requestee has sent an invalid or malformed request.
 	BadRequestError(crate::error::BadRequestError),
@@ -1117,7 +1117,7 @@ pub enum KickMemberErrorKind {
 	ForbiddenError(crate::error::ForbiddenError),
 	/// An error thrown when the requestee is not authenticated.
 	UnauthorizedError(crate::error::UnauthorizedError),
-	/// An error thrown when the requestee requests a non existant resource.
+	/// An error thrown when the requestee requests a non existent resource.
 	NotFoundError(crate::error::NotFoundError),
 	/// An error thrown when the requestee has sent an invalid or malformed request.
 	BadRequestError(crate::error::BadRequestError),
@@ -1251,7 +1251,7 @@ pub enum LeavePartyErrorKind {
 	ForbiddenError(crate::error::ForbiddenError),
 	/// An error thrown when the requestee is not authenticated.
 	UnauthorizedError(crate::error::UnauthorizedError),
-	/// An error thrown when the requestee requests a non existant resource.
+	/// An error thrown when the requestee requests a non existent resource.
 	NotFoundError(crate::error::NotFoundError),
 	/// An error thrown when the requestee has sent an invalid or malformed request.
 	BadRequestError(crate::error::BadRequestError),
@@ -1385,7 +1385,7 @@ pub enum RevokePartyInviteErrorKind {
 	ForbiddenError(crate::error::ForbiddenError),
 	/// An error thrown when the requestee is not authenticated.
 	UnauthorizedError(crate::error::UnauthorizedError),
-	/// An error thrown when the requestee requests a non existant resource.
+	/// An error thrown when the requestee requests a non existent resource.
 	NotFoundError(crate::error::NotFoundError),
 	/// An error thrown when the requestee has sent an invalid or malformed request.
 	BadRequestError(crate::error::BadRequestError),
@@ -1521,7 +1521,7 @@ pub enum SendJoinRequestErrorKind {
 	ForbiddenError(crate::error::ForbiddenError),
 	/// An error thrown when the requestee is not authenticated.
 	UnauthorizedError(crate::error::UnauthorizedError),
-	/// An error thrown when the requestee requests a non existant resource.
+	/// An error thrown when the requestee requests a non existent resource.
 	NotFoundError(crate::error::NotFoundError),
 	/// An error thrown when the requestee has sent an invalid or malformed request.
 	BadRequestError(crate::error::BadRequestError),
@@ -1657,7 +1657,7 @@ pub enum SetPartyPublicityErrorKind {
 	ForbiddenError(crate::error::ForbiddenError),
 	/// An error thrown when the requestee is not authenticated.
 	UnauthorizedError(crate::error::UnauthorizedError),
-	/// An error thrown when the requestee requests a non existant resource.
+	/// An error thrown when the requestee requests a non existent resource.
 	NotFoundError(crate::error::NotFoundError),
 	/// An error thrown when the requestee has sent an invalid or malformed request.
 	BadRequestError(crate::error::BadRequestError),
@@ -1793,7 +1793,7 @@ pub enum TransferPartyOwnershipErrorKind {
 	ForbiddenError(crate::error::ForbiddenError),
 	/// An error thrown when the requestee is not authenticated.
 	UnauthorizedError(crate::error::UnauthorizedError),
-	/// An error thrown when the requestee requests a non existant resource.
+	/// An error thrown when the requestee requests a non existent resource.
 	NotFoundError(crate::error::NotFoundError),
 	/// An error thrown when the requestee has sent an invalid or malformed request.
 	BadRequestError(crate::error::BadRequestError),
@@ -1949,7 +1949,7 @@ pub enum FindMatchmakerLobbyForPartyErrorKind {
 	ForbiddenError(crate::error::ForbiddenError),
 	/// An error thrown when the requestee is not authenticated.
 	UnauthorizedError(crate::error::UnauthorizedError),
-	/// An error thrown when the requestee requests a non existant resource.
+	/// An error thrown when the requestee requests a non existent resource.
 	NotFoundError(crate::error::NotFoundError),
 	/// An error thrown when the requestee has sent an invalid or malformed request.
 	BadRequestError(crate::error::BadRequestError),
@@ -2105,7 +2105,7 @@ pub enum JoinMatchmakerLobbyForPartyErrorKind {
 	ForbiddenError(crate::error::ForbiddenError),
 	/// An error thrown when the requestee is not authenticated.
 	UnauthorizedError(crate::error::UnauthorizedError),
-	/// An error thrown when the requestee requests a non existant resource.
+	/// An error thrown when the requestee requests a non existent resource.
 	NotFoundError(crate::error::NotFoundError),
 	/// An error thrown when the requestee has sent an invalid or malformed request.
 	BadRequestError(crate::error::BadRequestError),
@@ -2261,7 +2261,7 @@ pub enum MatchmakerSelfReadyErrorKind {
 	ForbiddenError(crate::error::ForbiddenError),
 	/// An error thrown when the requestee is not authenticated.
 	UnauthorizedError(crate::error::UnauthorizedError),
-	/// An error thrown when the requestee requests a non existant resource.
+	/// An error thrown when the requestee requests a non existent resource.
 	NotFoundError(crate::error::NotFoundError),
 	/// An error thrown when the requestee has sent an invalid or malformed request.
 	BadRequestError(crate::error::BadRequestError),
@@ -2402,7 +2402,7 @@ pub enum SetPartyToIdleErrorKind {
 	ForbiddenError(crate::error::ForbiddenError),
 	/// An error thrown when the requestee is not authenticated.
 	UnauthorizedError(crate::error::UnauthorizedError),
-	/// An error thrown when the requestee requests a non existant resource.
+	/// An error thrown when the requestee requests a non existent resource.
 	NotFoundError(crate::error::NotFoundError),
 	/// An error thrown when the requestee has sent an invalid or malformed request.
 	BadRequestError(crate::error::BadRequestError),
@@ -2536,7 +2536,7 @@ pub enum SetSelfInactiveErrorKind {
 	ForbiddenError(crate::error::ForbiddenError),
 	/// An error thrown when the requestee is not authenticated.
 	UnauthorizedError(crate::error::UnauthorizedError),
-	/// An error thrown when the requestee requests a non existant resource.
+	/// An error thrown when the requestee requests a non existent resource.
 	NotFoundError(crate::error::NotFoundError),
 	/// An error thrown when the requestee has sent an invalid or malformed request.
 	BadRequestError(crate::error::BadRequestError),
@@ -2780,7 +2780,7 @@ impl BadRequestError {
 	}
 }
 
-/// An error thrown when the requestee requests a non existant resource.
+/// An error thrown when the requestee requests a non existent resource.
 #[non_exhaustive]
 #[derive(std::clone::Clone, std::cmp::PartialEq)]
 pub struct NotFoundError {
