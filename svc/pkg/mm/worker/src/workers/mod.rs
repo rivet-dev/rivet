@@ -1,3 +1,19 @@
+mod lobby_cleanup;
+mod lobby_closed_set;
+mod lobby_create;
+mod lobby_find;
+mod lobby_find_job_run_fail;
+mod lobby_find_lobby_cleanup;
+mod lobby_find_lobby_create_fail;
+mod lobby_find_lobby_ready;
+mod lobby_history_export;
+mod lobby_job_run_cleanup;
+mod lobby_ready_set;
+mod lobby_state_set;
+mod lobby_stop;
+mod player_register;
+mod player_remove;
+
 chirp_worker::workers![
 	lobby_cleanup,
 	lobby_closed_set,

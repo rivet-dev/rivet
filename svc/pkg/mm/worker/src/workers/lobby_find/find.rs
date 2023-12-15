@@ -22,7 +22,7 @@ lazy_static::lazy_static! {
 /// Query that will be passed to the Redis find script as JSON.
 mod redis_query {
 	use std::collections::HashMap;
-	
+
 	use chirp_worker::prelude::*;
 	use serde::Serialize;
 
@@ -196,8 +196,10 @@ pub async fn find(
 						namespace_id,
 						region_id,
 						lobby_group_id,
-						max_players_normal: dynamic_max_players.unwrap_or(lobby_group.max_players_normal),
-						max_players_direct: dynamic_max_players.unwrap_or(lobby_group.max_players_direct),
+						max_players_normal: dynamic_max_players
+							.unwrap_or(lobby_group.max_players_normal),
+						max_players_direct: dynamic_max_players
+							.unwrap_or(lobby_group.max_players_direct),
 						max_players_party: lobby_group.max_players_party,
 						preemptive: true,
 						ready_ts: None,
