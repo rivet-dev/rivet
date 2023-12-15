@@ -1205,7 +1205,7 @@ components:
       description: A group's billing payment.
       properties:
         amount:
-          description: Payment amount (in hundreths USD, 100 = $1.00).
+          description: Payment amount (in hundredths USD, 100 = $1.00).
           format: double
           type: number
         created_ts:
@@ -1253,7 +1253,7 @@ components:
       description: A group's billing transfer.
       properties:
         amount:
-          description: Payment amount (in hundreths USD, 100 = $1.00).
+          description: Payment amount (in hundredths USD, 100 = $1.00).
           format: int64
           type: integer
         created_ts:
@@ -3577,7 +3577,7 @@ components:
           description: Whether or not this identity is an admin.
           type: boolean
         is_following_me:
-          description: Whether or not this identity is both followng and is followed
+          description: Whether or not this identity is both following and is followed
             by the requestee's identity.
           type: boolean
         is_game_linked:
@@ -3654,7 +3654,7 @@ components:
             \ is compromised, anyone with access to this token has control of the\
             \ identity.\n"
         identity_token_expire_ts:
-          description: 'If this token is comprimised, anyone with access to this token
+          description: 'If this token is compromised, anyone with access to this token
             has control of the identity.
 
             '
@@ -3693,7 +3693,7 @@ components:
           format: uuid
           type: string
         is_following_me:
-          description: Whether or not this identity is both followng and is followed
+          description: Whether or not this identity is both following and is followed
             by the requestee's identity.
           type: boolean
         is_mutual_following:
@@ -6282,7 +6282,7 @@ paths:
       - CloudGamesNamespaces
   /cloud/games/{game_id}/namespaces/{namespace_id}/cdn-auth:
     put:
-      description: Updates the CDN authentication type of the given game namesapce.
+      description: Updates the CDN authentication type of the given game namespace.
       operationId: cloud_games_namespaces_setNamespaceCdnAuthType
       parameters:
       - in: path
@@ -6348,7 +6348,7 @@ paths:
   /cloud/games/{game_id}/namespaces/{namespace_id}/domain-public-auth:
     put:
       description: Toggles whether or not to allow authentication based on domain
-        for the given game namesapce.
+        for the given game namespace.
       operationId: cloud_games_namespaces_toggleNamespaceDomainPublicAuth
       parameters:
       - in: path

@@ -10,10 +10,10 @@ DOCKER_IMAGE_PATH="$NOMAD_ALLOC_DIR/docker-image.tar"
 OCI_IMAGE_PATH="$NOMAD_ALLOC_DIR/oci-image"
 OCI_BUNDLE_PATH="$NOMAD_ALLOC_DIR/oci-bundle"
 
-# MARK: Genreate OCI bundle
+# MARK: Generate OCI bundle
 case "__BUILD_KIND__" in
 	"docker-image")
-		# We need to conver the Docker image to an OCI bundle in order to run it.
+		# We need to convert the Docker image to an OCI bundle in order to run it.
 
 		log "Downloading Docker image"
 		__DOWNLOAD_CMD__ > "$DOCKER_IMAGE_PATH"

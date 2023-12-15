@@ -28,7 +28,7 @@ pub struct IdentitySummary {
     pub following: bool,
     #[serde(rename = "identity_id")]
     pub identity_id: uuid::Uuid,
-    /// Whether or not this identity is both followng and is followed by the requestee's identity.
+    /// Whether or not this identity is both following and is followed by the requestee's identity.
     #[serde(rename = "is_following_me")]
     pub is_following_me: bool,
     #[serde(rename = "is_mutual_following")]

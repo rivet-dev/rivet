@@ -201,7 +201,7 @@ async fn multiple(ctx: TestCtx) {
 			"wrong version count"
 		);
 
-		// Validate lobby gropu names
+		// Validate lobby group names
 		let actual_lobby_group_names = lobby_group_names
 			.iter()
 			.map(|x| x.to_string())

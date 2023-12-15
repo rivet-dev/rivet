@@ -324,7 +324,7 @@ types:
       identity_token_expire_ts:
         type: datetime
         docs: |
-          If this token is comprimised, anyone with access to this token has control of the identity.
+          If this token is compromised, anyone with access to this token has control of the identity.
       identity:
         type: identityCommons.Profile
         docs: |

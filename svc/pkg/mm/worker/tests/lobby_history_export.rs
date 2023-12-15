@@ -38,7 +38,7 @@ async fn default(ctx: TestCtx) {
 	.unwrap();
 	let upload = upload_res.uploads.first().unwrap();
 
-	// TODO: Check the outputed CSV
+	// TODO: Check the outputted CSV
 }
 
 /// mm-lobby-history returns stale responses for performance purposes.

@@ -10,7 +10,7 @@ We use Nomad to run our Rivet services (see [`svc/`](../../../svc)), any 3rd par
 
 ## Why bin pack and not spread?
 
-In the HashiCorp Nomad C2M challenge, they [switched to the spread scheduler](https://www.hashicorp.com/c2m) to increase performance.
+In the HashCorp Nomad C2M challenge, they [switched to the spread scheduler](https://www.hashicorp.com/c2m) to increase performance.
 
 **Autoscaling**
 

@@ -10,7 +10,7 @@ Name | Type | Description | Notes
 **external** | [**crate::models::IdentityExternalLinks**](IdentityExternalLinks.md) |  | 
 **following** | **bool** | Whether or not the requestee's identity is following this identity. | 
 **identity_id** | [**uuid::Uuid**](uuid::Uuid.md) |  | 
-**is_following_me** | **bool** | Whether or not this identity is both followng and is followed by the requestee's identity. | 
+**is_following_me** | **bool** | Whether or not this identity is both following and is followed by the requestee's identity. | 
 **is_mutual_following** | **bool** |  | 
 **is_registered** | **bool** | Whether or not this identity is registered with a linked account. | 
 **presence** | Option<[**crate::models::IdentityPresence**](IdentityPresence.md)> |  | [optional]

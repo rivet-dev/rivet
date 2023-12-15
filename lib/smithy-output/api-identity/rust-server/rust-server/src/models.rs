@@ -482,7 +482,7 @@ pub struct IdentityProfile {
 	pub following: bool,
 	/// Whether or not this identity following the requestee's identity.
 	pub is_following_me: bool,
-	/// Whether or not this identity is both followng and is followed by the requestee's identity.
+	/// Whether or not this identity is both following and is followed by the requestee's identity.
 	pub is_mutual_following: bool,
 	/// RFC3339 timestamp.
 	pub join_ts: chrono::DateTime<chrono::Utc>,
@@ -849,7 +849,7 @@ impl AsRef<str> for GameLinkStatus {
 pub struct GlobalEvent {
 	/// RFC3339 timestamp.
 	pub ts: chrono::DateTime<chrono::Utc>,
-	/// Kind of event that occured.
+	/// Kind of event that occurred.
 	pub kind: GlobalEventKind,
 	/// Notifications represent information that should be presented to the user immediately. At the moment, only chat message events have associated notifications. # Display Notifications should be displayed in an unobtrusive manner throughout the entire game. Notifications should disappear after a few seconds if not interacted with. # Interactions If your platform supports it, notifications should be able to be clicked or tapped in order to open the relevant context for the event. For a simple implementation of notification interactions, open `url` in a web browser to present the relevant context. For example, a chat message notification will open the thread the chat message was sent in. For advanced implementations that implement a custom chat UI, use `rivet.api.identity.common#GlobalEvent$kind` to determine what action to take when the notification is interacted with. For example, if the global event kind is `rivet.api.identity.common#GlobalEventChatMessage`, then open the chat UI for the given thread.
 	pub notification: std::option::Option<GlobalEventNotification>,
@@ -868,7 +868,7 @@ pub struct GlobalEventNotification {
 	pub url: std::string::String,
 }
 
-/// Kind of event that occured.
+/// Kind of event that occurred.
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum GlobalEventKind {
@@ -1195,7 +1195,7 @@ pub struct IdentitySummary {
 	pub following: bool,
 	/// Whether or not this identity following the requestee's identity.
 	pub is_following_me: bool,
-	/// Whether or not this identity is both followng and is followed by the requestee's identity.
+	/// Whether or not this identity is both following and is followed by the requestee's identity.
 	pub is_mutual_following: bool,
 }
 
@@ -1621,7 +1621,7 @@ pub struct GetIdentityProfileResponse {
 #[allow(missing_docs)] // documentation missing in model
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct SetupIdentityResponse {
-	/// Token used to authenticate the identity. Should be stored somewhere permanent. Pass this to `rivet.api.identity#SetupIdentity$existing_identity_token` next time `rivet.api.identity#SetupIdentity` is called. Token has a 90 day TTL. This means that if `rivet.api.identity#SetupIdentity` is not called again within 90 days, the token will no longer be valid. If this happens, the user can recover their account through the linking process (see `rivet.api.identity#PrepareGameLink`). This token should be stored locally and never sent to a server or another device. If this token is comprimised, anyone with access to this token has control of the identity.
+	/// Token used to authenticate the identity. Should be stored somewhere permanent. Pass this to `rivet.api.identity#SetupIdentity$existing_identity_token` next time `rivet.api.identity#SetupIdentity` is called. Token has a 90 day TTL. This means that if `rivet.api.identity#SetupIdentity` is not called again within 90 days, the token will no longer be valid. If this happens, the user can recover their account through the linking process (see `rivet.api.identity#PrepareGameLink`). This token should be stored locally and never sent to a server or another device. If this token is compromised, anyone with access to this token has control of the identity.
 	pub identity_token: std::string::String,
 	/// Timestamp (in milliseconds) at which the token expires.
 	pub identity_token_expire_ts: chrono::DateTime<chrono::Utc>,

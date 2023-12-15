@@ -14,7 +14,7 @@
 
 #[derive(Clone, Debug, PartialEq, Default, Serialize, Deserialize)]
 pub struct CloudGroupBillingPayment {
-    /// Payment amount (in hundreths USD, 100 = $1.00).
+    /// Payment amount (in hundredths USD, 100 = $1.00).
     #[serde(rename = "amount")]
     pub amount: f64,
     /// RFC3339 timestamp.

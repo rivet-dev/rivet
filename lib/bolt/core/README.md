@@ -21,7 +21,7 @@ Names should use kebab case. Bolt and other tools will automatically convert the
 The original plan for schemas was to have two modules: the schema module and the service module. The schema module could be published an other modules could import it in order to interface with the service. However, that presents a few problems. Instead we import the Protobuf files from other services directly in the .proto files. This is done for a few reasons:
 
 1. Microservices should be designed to be as language-agnostic as possible.
-    - By importing schemas for other services in the Protobuf layer, we can really easiliy interface between services no matter the language.
+    - By importing schemas for other services in the Protobuf layer, we can really easily interface between services no matter the language.
 2. Simplifies dependency management & Docker image building.
     - Traditionally when building a Docker project in monorepos, you have to do a little dance to selectively import parts of the monorepo in order to retain build caching. Caching schemas is not a big concern, so dumping all of this in the local schema module is easier.
 3. Some data is not "owned" by a service.

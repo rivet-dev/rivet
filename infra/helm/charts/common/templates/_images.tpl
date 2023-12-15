@@ -101,7 +101,7 @@ imagePullSecrets:
 {{- end -}}
 
 {{/*
-Return the proper image version (ingores image revision/prerelease info & fallbacks to chart appVersion)
+Return the proper image version (ignores image revision/prerelease info & fallbacks to chart appVersion)
 {{ include "common.images.version" ( dict "imageRoot" .Values.path.to.the.image "chart" .Chart ) }}
 */}}
 {{- define "common.images.version" -}}

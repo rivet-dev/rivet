@@ -54,13 +54,13 @@ Fast single-node speeds.
 
 Supports clustered mode.
 
-Their benchmarks promise significantly higher QPS than we already require. While we rely on Redis Cluster's linear scalability, it would likley be possible ot run DragonflyDB of a single machine.
+Their benchmarks promise significantly higher QPS than we already require. While we rely on Redis Cluster's linear scalability, it would likely be possible ot run DragonflyDB of a single machine.
 
 Prometheus is built in.
 
 **Cons**
 
-Uneasy with using a re-implementaiton complicated mechanisms. Very likely we'll run in to implementation differences with with either streams or clustering.
+Uneasy with using a re-implementation complicated mechanisms. Very likely we'll run in to implementation differences with with either streams or clustering.
 
 BSL license _should_ be compatible with Apache 2.0, but not reassuring.
 
@@ -90,7 +90,7 @@ Fly.io & Vercel have bet their companies on Upstash.
 
 Seems like a bleeding edge architecture, would rather stick with a boring vanilla Redis setup. Likely to have weird sharp edges that we'll run in to considering how heavily we rely on Redis.
 
-Upstash's QPS are weirdly low. They force you to ugprade to enterprise at 10k QPS. Paying extra for Upstash is not a problem, but it's not reassuring how small workload they consider to be "enterprise."
+Upstash's QPS are weirdly low. They force you to upgrade to enterprise at 10k QPS. Paying extra for Upstash is not a problem, but it's not reassuring how small workload they consider to be "enterprise."
 
 Does not let us choose our own cloud provider, so there's an extra 2 ms latency between the client & server. Caching services services need to be in the same datacenter.
 
@@ -120,7 +120,7 @@ Could help scale to meet spiky traffic.
 
 Saves cost on smaller clusters.
 
-Allows us to absorb load and manualy adjust shard count as needed.
+Allows us to absorb load and manually adjust shard count as needed.
 
 **Cons**
 
@@ -130,7 +130,7 @@ There is no prior art for a VPA on Redis cluster.
 
 There is a HPA available for [vanilla Redis](https://artifacthub.io/packages/helm/bitnami/redis) for scaling replicas. This doesn't help with Redis Cluster, though.
 
-Would be interesting to [experiement with HPA for Redis Cluster](https://medium.com/swlh/scaling-redis-cluster-via-kubernetes-horizontal-pod-autoscaler-852541c01b29), but that is more prone to failure than a VPA.
+Would be interesting to [experiment with HPA for Redis Cluster](https://medium.com/swlh/scaling-redis-cluster-via-kubernetes-horizontal-pod-autoscaler-852541c01b29), but that is more prone to failure than a VPA.
 
 ### Hybrid: Self-hosted Ephemeral + Upstash Persistence
 
@@ -146,9 +146,9 @@ Upstash lets us autoscale according to our usage, which leads to being cheaper o
 
 **Cons**
 
-See preivous cons related to Upstash.
+See previous cons related to Upstash.
 
-Upstash is still extreamly expensive.
+Upstash is still extremely expensive.
 
 ## Solution
 

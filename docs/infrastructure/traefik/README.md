@@ -2,7 +2,7 @@
 
 ## What is Traefik?
 
-Traefik is an easy to configure and flexible load balancer. Treafik provides many different ways of configuring dynamically and many types of middlewares that let us maniuplate incoming traffic.
+Traefik is an easy to configure and flexible load balancer. Treafik provides many different ways of configuring dynamically and many types of middlewares that let us manipulate incoming traffic.
 
 ## What do we use Traefik for?
 

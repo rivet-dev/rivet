@@ -70,7 +70,7 @@ job "test-param" {
 					{{ end }}
 				{{ end }}
 
-				# Turn this up in order to ensure all jobs are running in paralllel
+				# Turn this up in order to ensure all jobs are running in parallel
 				sleep 5
 				echo 'Finished'
 				EOF

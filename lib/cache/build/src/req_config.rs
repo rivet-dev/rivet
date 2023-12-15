@@ -46,7 +46,7 @@ impl RequestConfig {
 		self
 	}
 
-	/// Deterines if the value for this key can change. If the value is immutible, we apply more
+	/// Deterines if the value for this key can change. If the value is immutable, we apply more
 	/// aggressive caching rules to it.
 	pub fn immutable(mut self) -> Self {
 		self.immutable = true;
@@ -532,7 +532,7 @@ impl RequestConfig {
 		let mut conn = self.cache.redis_conn.clone();
 		match conn.del::<_, ()>(redis_keys).await {
 			Ok(_) => {
-				tracing::trace!("sucessfully wrote");
+				tracing::trace!("successfully wrote");
 			}
 			Err(err) => {
 				tracing::error!(?err, "failed to delete from cache, proceeding regardless")

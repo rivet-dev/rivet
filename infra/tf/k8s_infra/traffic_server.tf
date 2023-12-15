@@ -141,7 +141,7 @@ resource "kubernetes_stateful_set" "traffic_server" {
 					app = "traffic-server"
 				}
 				annotations = {
-					# Trigger a rolling update on config chagne
+					# Trigger a rolling update on config change
 					"checksum/configmap" = local.checksum_traffic_server_configmap
 					"checksum/s3-auth" = local.checksum_traffic_server_s3_auth
 				}

@@ -61,7 +61,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 -   **Dev** Bolt automatically builds with Nix shell
 -   **Bolt** `--no-purge` flag to `test` to prevent purging Nomad jobs
 -   **Matchmaker** Expose hardware metrics to container with `RIVET_CPU`, `RIVET_MEMORY`, and `RIVET_MEMORY_OVERSUBSCRIBE`
--   **api-cloud** `GET /cloud/bootstrapp` to provide intiial config data to the hub
+-   **api-cloud** `GET /cloud/bootstrapp` to provide initial config data to the hub
 -   **api-cloud** Dynamically send Turnstile site key to hub
 -   **Infra** Rate limit on creating new SQL connections to prevent stampeding connections
 
@@ -169,7 +169,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 -   **Portal** Skip captcha if no Turnstile key provided
--   **Infra** Missing dpenedency on mounting volumn before setting permissions of /var/\* for Cockroach, ClickHouse, Prometheus, and Traffic Server
+-   **Infra** Missing dpenedency on mounting volume before setting permissions of /var/\* for Cockroach, ClickHouse, Prometheus, and Traffic Server
 -   **Chrip** Empty message parameters now have placeholder so NATS doesn't throw an error
 -   **Chrip** Messages with no parameters no longer have a trailing dot
 -   **Bolt** Correctly resolve project root when building services natively

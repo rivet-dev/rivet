@@ -11,7 +11,7 @@ pub(super) struct GetterCtxKey<K, V> {
 	/// The value that was read from the cache or getter.
 	value: Option<V>,
 
-	/// If this value was read from the cacahe. If false and a value is present,
+	/// If this value was read from the cache. If false and a value is present,
 	/// then this value was read from the getter and will be written to the
 	/// cache.
 	from_cache: bool,

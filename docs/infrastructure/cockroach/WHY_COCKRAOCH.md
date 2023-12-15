@@ -6,7 +6,7 @@ Rivet needs a OLTP to provide the core of our operations.
 
 **Why SQL**
 
-KV & document databases like MongoDB are not an option. Databases that use good old SQL usually have straightforward transaction processing, joins, contraints, schemas, and row locking mechanics that are often well handled in other types of databases.
+KV & document databases like MongoDB are not an option. Databases that use good old SQL usually have straightforward transaction processing, joins, constraints, schemas, and row locking mechanics that are often well handled in other types of databases.
 
 Adopting an SQL-based database also means that developers don't have to learn the semantics of a new query language and all the pitfalls that comes with it.
 
@@ -15,8 +15,8 @@ SQL is an oldie but a godie.
 ## Requirements
 
 -   Easy to operate
--   ACID-compliant-ish (distributed SQL databases often aren't truely ACID compliant)
--   Schemas & contraints
+-   ACID-compliant-ish (distributed SQL databases often aren't truly ACID compliant)
+-   Schemas & constraints
 -   Secondary indexes
 
 ## Alternatives
@@ -25,11 +25,11 @@ SQL is an oldie but a godie.
 
 **Maturity & Governance**
 
-In hindsight, it woudl have been a good idea to stick with Postgres instead of building on top of CockroachDB, which is a newer and for-profit database.
+In hindsight, it would have been a good idea to stick with Postgres instead of building on top of CockroachDB, which is a newer and for-profit database.
 
 **Exentions**
 
-While CockroachDB supports common features like JSON, full-text search, and spatial indexes, there are numerous Postgres extensions that will never exists within CockroachDB. For example, we could have used the TimescaleDB extension instead of ClickHouse for our time series workloads. If we chose to support ML workloads, pgvector woudl be a click away, but instead we would have to adopt a new database.
+While CockroachDB supports common features like JSON, full-text search, and spatial indexes, there are numerous Postgres extensions that will never exists within CockroachDB. For example, we could have used the TimescaleDB extension instead of ClickHouse for our time series workloads. If we chose to support ML workloads, pgvector would be a click away, but instead we would have to adopt a new database.
 
 **Scaling\***
 

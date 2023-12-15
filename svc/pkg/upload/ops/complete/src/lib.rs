@@ -166,7 +166,7 @@ async fn validate_profanity_scores(
 		.await?;
 
 	let scores = if !nsfw_required_scores.is_empty() {
-		// Score teh images
+		// Score the images
 		let score_res = op!([ctx] nsfw_image_score {
 			image_urls: nsfw_required_scores.keys().cloned().collect(),
 		})

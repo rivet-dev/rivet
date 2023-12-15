@@ -20,7 +20,7 @@ pub enum BanGroupIdentityErrorKind {
 	ForbiddenError(crate::error::ForbiddenError),
 	/// An error thrown when the requestee is not authenticated.
 	UnauthorizedError(crate::error::UnauthorizedError),
-	/// An error thrown when the requestee requests a non existant resource.
+	/// An error thrown when the requestee requests a non existent resource.
 	NotFoundError(crate::error::NotFoundError),
 	/// An error thrown when the requestee has sent an invalid or malformed request.
 	BadRequestError(crate::error::BadRequestError),
@@ -156,7 +156,7 @@ pub enum CompleteGroupAvatarUploadErrorKind {
 	ForbiddenError(crate::error::ForbiddenError),
 	/// An error thrown when the requestee is not authenticated.
 	UnauthorizedError(crate::error::UnauthorizedError),
-	/// An error thrown when the requestee requests a non existant resource.
+	/// An error thrown when the requestee requests a non existent resource.
 	NotFoundError(crate::error::NotFoundError),
 	/// An error thrown when the requestee has sent an invalid or malformed request.
 	BadRequestError(crate::error::BadRequestError),
@@ -312,7 +312,7 @@ pub enum ConsumeGroupInviteErrorKind {
 	ForbiddenError(crate::error::ForbiddenError),
 	/// An error thrown when the requestee is not authenticated.
 	UnauthorizedError(crate::error::UnauthorizedError),
-	/// An error thrown when the requestee requests a non existant resource.
+	/// An error thrown when the requestee requests a non existent resource.
 	NotFoundError(crate::error::NotFoundError),
 	/// An error thrown when the requestee has sent an invalid or malformed request.
 	BadRequestError(crate::error::BadRequestError),
@@ -451,7 +451,7 @@ pub enum CreateGroupErrorKind {
 	ForbiddenError(crate::error::ForbiddenError),
 	/// An error thrown when the requestee is not authenticated.
 	UnauthorizedError(crate::error::UnauthorizedError),
-	/// An error thrown when the requestee requests a non existant resource.
+	/// An error thrown when the requestee requests a non existent resource.
 	NotFoundError(crate::error::NotFoundError),
 	/// An error thrown when the requestee has sent an invalid or malformed request.
 	BadRequestError(crate::error::BadRequestError),
@@ -585,7 +585,7 @@ pub enum CreateGroupInviteErrorKind {
 	ForbiddenError(crate::error::ForbiddenError),
 	/// An error thrown when the requestee is not authenticated.
 	UnauthorizedError(crate::error::UnauthorizedError),
-	/// An error thrown when the requestee requests a non existant resource.
+	/// An error thrown when the requestee requests a non existent resource.
 	NotFoundError(crate::error::NotFoundError),
 	/// An error thrown when the requestee has sent an invalid or malformed request.
 	BadRequestError(crate::error::BadRequestError),
@@ -721,7 +721,7 @@ pub enum CreateGroupJoinRequestErrorKind {
 	ForbiddenError(crate::error::ForbiddenError),
 	/// An error thrown when the requestee is not authenticated.
 	UnauthorizedError(crate::error::UnauthorizedError),
-	/// An error thrown when the requestee requests a non existant resource.
+	/// An error thrown when the requestee requests a non existent resource.
 	NotFoundError(crate::error::NotFoundError),
 	/// An error thrown when the requestee has sent an invalid or malformed request.
 	BadRequestError(crate::error::BadRequestError),
@@ -877,7 +877,7 @@ pub enum GetGroupBansErrorKind {
 	ForbiddenError(crate::error::ForbiddenError),
 	/// An error thrown when the requestee is not authenticated.
 	UnauthorizedError(crate::error::UnauthorizedError),
-	/// An error thrown when the requestee requests a non existant resource.
+	/// An error thrown when the requestee requests a non existent resource.
 	NotFoundError(crate::error::NotFoundError),
 	/// An error thrown when the requestee has sent an invalid or malformed request.
 	BadRequestError(crate::error::BadRequestError),
@@ -1011,7 +1011,7 @@ pub enum GetGroupInviteErrorKind {
 	ForbiddenError(crate::error::ForbiddenError),
 	/// An error thrown when the requestee is not authenticated.
 	UnauthorizedError(crate::error::UnauthorizedError),
-	/// An error thrown when the requestee requests a non existant resource.
+	/// An error thrown when the requestee requests a non existent resource.
 	NotFoundError(crate::error::NotFoundError),
 	/// An error thrown when the requestee has sent an invalid or malformed request.
 	BadRequestError(crate::error::BadRequestError),
@@ -1145,7 +1145,7 @@ pub enum GetGroupJoinRequestsErrorKind {
 	ForbiddenError(crate::error::ForbiddenError),
 	/// An error thrown when the requestee is not authenticated.
 	UnauthorizedError(crate::error::UnauthorizedError),
-	/// An error thrown when the requestee requests a non existant resource.
+	/// An error thrown when the requestee requests a non existent resource.
 	NotFoundError(crate::error::NotFoundError),
 	/// An error thrown when the requestee has sent an invalid or malformed request.
 	BadRequestError(crate::error::BadRequestError),
@@ -1289,7 +1289,7 @@ pub enum GetGroupMembersErrorKind {
 	ForbiddenError(crate::error::ForbiddenError),
 	/// An error thrown when the requestee is not authenticated.
 	UnauthorizedError(crate::error::UnauthorizedError),
-	/// An error thrown when the requestee requests a non existant resource.
+	/// An error thrown when the requestee requests a non existent resource.
 	NotFoundError(crate::error::NotFoundError),
 	/// An error thrown when the requestee has sent an invalid or malformed request.
 	BadRequestError(crate::error::BadRequestError),
@@ -1425,7 +1425,7 @@ pub enum GetGroupProfileErrorKind {
 	ForbiddenError(crate::error::ForbiddenError),
 	/// An error thrown when the requestee is not authenticated.
 	UnauthorizedError(crate::error::UnauthorizedError),
-	/// An error thrown when the requestee requests a non existant resource.
+	/// An error thrown when the requestee requests a non existent resource.
 	NotFoundError(crate::error::NotFoundError),
 	/// An error thrown when the requestee has sent an invalid or malformed request.
 	BadRequestError(crate::error::BadRequestError),
@@ -1561,7 +1561,7 @@ pub enum GetGroupSummaryErrorKind {
 	ForbiddenError(crate::error::ForbiddenError),
 	/// An error thrown when the requestee is not authenticated.
 	UnauthorizedError(crate::error::UnauthorizedError),
-	/// An error thrown when the requestee requests a non existant resource.
+	/// An error thrown when the requestee requests a non existent resource.
 	NotFoundError(crate::error::NotFoundError),
 	/// An error thrown when the requestee has sent an invalid or malformed request.
 	BadRequestError(crate::error::BadRequestError),
@@ -1697,7 +1697,7 @@ pub enum KickGroupMemberErrorKind {
 	ForbiddenError(crate::error::ForbiddenError),
 	/// An error thrown when the requestee is not authenticated.
 	UnauthorizedError(crate::error::UnauthorizedError),
-	/// An error thrown when the requestee requests a non existant resource.
+	/// An error thrown when the requestee requests a non existent resource.
 	NotFoundError(crate::error::NotFoundError),
 	/// An error thrown when the requestee has sent an invalid or malformed request.
 	BadRequestError(crate::error::BadRequestError),
@@ -1833,7 +1833,7 @@ pub enum LeaveGroupErrorKind {
 	ForbiddenError(crate::error::ForbiddenError),
 	/// An error thrown when the requestee is not authenticated.
 	UnauthorizedError(crate::error::UnauthorizedError),
-	/// An error thrown when the requestee requests a non existant resource.
+	/// An error thrown when the requestee requests a non existent resource.
 	NotFoundError(crate::error::NotFoundError),
 	/// An error thrown when the requestee has sent an invalid or malformed request.
 	BadRequestError(crate::error::BadRequestError),
@@ -1967,7 +1967,7 @@ pub enum ListSuggestedGroupsErrorKind {
 	ForbiddenError(crate::error::ForbiddenError),
 	/// An error thrown when the requestee is not authenticated.
 	UnauthorizedError(crate::error::UnauthorizedError),
-	/// An error thrown when the requestee requests a non existant resource.
+	/// An error thrown when the requestee requests a non existent resource.
 	NotFoundError(crate::error::NotFoundError),
 	/// An error thrown when the requestee has sent an invalid or malformed request.
 	BadRequestError(crate::error::BadRequestError),
@@ -2108,7 +2108,7 @@ pub enum PrepareGroupAvatarUploadErrorKind {
 	ForbiddenError(crate::error::ForbiddenError),
 	/// An error thrown when the requestee is not authenticated.
 	UnauthorizedError(crate::error::UnauthorizedError),
-	/// An error thrown when the requestee requests a non existant resource.
+	/// An error thrown when the requestee requests a non existent resource.
 	NotFoundError(crate::error::NotFoundError),
 	/// An error thrown when the requestee has sent an invalid or malformed request.
 	BadRequestError(crate::error::BadRequestError),
@@ -2264,7 +2264,7 @@ pub enum ResolveGroupJoinRequestErrorKind {
 	ForbiddenError(crate::error::ForbiddenError),
 	/// An error thrown when the requestee is not authenticated.
 	UnauthorizedError(crate::error::UnauthorizedError),
-	/// An error thrown when the requestee requests a non existant resource.
+	/// An error thrown when the requestee requests a non existent resource.
 	NotFoundError(crate::error::NotFoundError),
 	/// An error thrown when the requestee has sent an invalid or malformed request.
 	BadRequestError(crate::error::BadRequestError),
@@ -2420,7 +2420,7 @@ pub enum SearchGroupsErrorKind {
 	ForbiddenError(crate::error::ForbiddenError),
 	/// An error thrown when the requestee is not authenticated.
 	UnauthorizedError(crate::error::UnauthorizedError),
-	/// An error thrown when the requestee requests a non existant resource.
+	/// An error thrown when the requestee requests a non existent resource.
 	NotFoundError(crate::error::NotFoundError),
 	/// An error thrown when the requestee has sent an invalid or malformed request.
 	BadRequestError(crate::error::BadRequestError),
@@ -2554,7 +2554,7 @@ pub enum TransferGroupOwnershipErrorKind {
 	ForbiddenError(crate::error::ForbiddenError),
 	/// An error thrown when the requestee is not authenticated.
 	UnauthorizedError(crate::error::UnauthorizedError),
-	/// An error thrown when the requestee requests a non existant resource.
+	/// An error thrown when the requestee requests a non existent resource.
 	NotFoundError(crate::error::NotFoundError),
 	/// An error thrown when the requestee has sent an invalid or malformed request.
 	BadRequestError(crate::error::BadRequestError),
@@ -2710,7 +2710,7 @@ pub enum UnbanGroupIdentityErrorKind {
 	ForbiddenError(crate::error::ForbiddenError),
 	/// An error thrown when the requestee is not authenticated.
 	UnauthorizedError(crate::error::UnauthorizedError),
-	/// An error thrown when the requestee requests a non existant resource.
+	/// An error thrown when the requestee requests a non existent resource.
 	NotFoundError(crate::error::NotFoundError),
 	/// An error thrown when the requestee has sent an invalid or malformed request.
 	BadRequestError(crate::error::BadRequestError),
@@ -2849,7 +2849,7 @@ pub enum UpdateGroupProfileErrorKind {
 	ForbiddenError(crate::error::ForbiddenError),
 	/// An error thrown when the requestee is not authenticated.
 	UnauthorizedError(crate::error::UnauthorizedError),
-	/// An error thrown when the requestee requests a non existant resource.
+	/// An error thrown when the requestee requests a non existent resource.
 	NotFoundError(crate::error::NotFoundError),
 	/// An error thrown when the requestee has sent an invalid or malformed request.
 	BadRequestError(crate::error::BadRequestError),
@@ -2988,7 +2988,7 @@ pub enum ValidateGroupProfileErrorKind {
 	ForbiddenError(crate::error::ForbiddenError),
 	/// An error thrown when the requestee is not authenticated.
 	UnauthorizedError(crate::error::UnauthorizedError),
-	/// An error thrown when the requestee requests a non existant resource.
+	/// An error thrown when the requestee requests a non existent resource.
 	NotFoundError(crate::error::NotFoundError),
 	/// An error thrown when the requestee has sent an invalid or malformed request.
 	BadRequestError(crate::error::BadRequestError),
@@ -3240,7 +3240,7 @@ impl BadRequestError {
 	}
 }
 
-/// An error thrown when the requestee requests a non existant resource.
+/// An error thrown when the requestee requests a non existent resource.
 #[non_exhaustive]
 #[derive(std::clone::Clone, std::cmp::PartialEq)]
 pub struct NotFoundError {

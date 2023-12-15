@@ -503,7 +503,7 @@ data:
     if ! sentinel_failover_finished; then
         echo "I am the master pod and you are stopping me. Starting sentinel failover"
         if retry_while "sentinel_failover_finished" "{{ sub .Values.sentinel.terminationGracePeriodSeconds 10 }}" 1; then
-            echo "Master has been successfuly failed over to a different pod."
+            echo "Master has been successfully failed over to a different pod."
             exit 0
         else
             echo "Master failover failed"

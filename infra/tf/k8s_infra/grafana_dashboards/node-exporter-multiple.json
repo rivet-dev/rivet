@@ -4843,7 +4843,7 @@
 							"step": 240
 						}
 					],
-					"title": "Memory Commited",
+					"title": "Memory Committed",
 					"type": "timeseries"
 				},
 				{
@@ -6017,7 +6017,7 @@
 							"expr": "node_memory_Mapped_bytes{node=\"$node\",job=\"$job\"}",
 							"format": "time_series",
 							"intervalFactor": 1,
-							"legendFormat": "Mapped - Used memory in mapped pages files which have been mmaped, such as libraries",
+							"legendFormat": "Mapped - Used memory in mapped pages files which have been mapped, such as libraries",
 							"refId": "A",
 							"step": 240
 						},
@@ -6055,7 +6055,7 @@
 							"format": "time_series",
 							"interval": "",
 							"intervalFactor": 1,
-							"legendFormat": "ShmemPmdMapped - Ammount of shared (shmem/tmpfs) memory backed by huge pages",
+							"legendFormat": "ShmemPmdMapped - Amount of shared (shmem/tmpfs) memory backed by huge pages",
 							"refId": "D",
 							"step": 240
 						}
@@ -9873,7 +9873,7 @@
 							"expr": "node_memory_NFS_Unstable_bytes{node=\"$node\",job=\"$job\"}",
 							"format": "time_series",
 							"intervalFactor": 1,
-							"legendFormat": "NFS Unstable - Memory in NFS pages sent to the server, but not yet commited to the storage",
+							"legendFormat": "NFS Unstable - Memory in NFS pages sent to the server, but not yet committed to the storage",
 							"refId": "A",
 							"step": 240
 						}
@@ -11098,7 +11098,7 @@
 							"step": 240
 						}
 					],
-					"title": "Time Syncronized Drift",
+					"title": "Time Synchronized Drift",
 					"type": "timeseries"
 				},
 				{
@@ -11323,7 +11323,7 @@
 							"step": 240
 						}
 					],
-					"title": "Time Syncronized Status",
+					"title": "Time Synchronized Status",
 					"type": "timeseries"
 				},
 				{
@@ -20002,7 +20002,7 @@
 							"format": "time_series",
 							"interval": "",
 							"intervalFactor": 1,
-							"legendFormat": "{{node}} TCP_tw - Sockets wating close",
+							"legendFormat": "{{node}} TCP_tw - Sockets waiting close",
 							"range": true,
 							"refId": "E",
 							"step": 240
@@ -20534,7 +20534,7 @@
 							"custom": {
 								"axisCenteredZero": false,
 								"axisColorMode": "text",
-								"axisLabel": "octects out (-) / in (+)",
+								"axisLabel": "octets out (-) / in (+)",
 								"axisPlacement": "auto",
 								"barAlignment": 0,
 								"drawStyle": "line",
@@ -21725,7 +21725,7 @@
 							"hide": false,
 							"interval": "",
 							"intervalFactor": 1,
-							"legendFormat": "MaxConn - Limit on the total number of TCP connections the entity can support (Dinamic is \"-1\")",
+							"legendFormat": "MaxConn - Limit on the total number of TCP connections the entity can support (Dynamic is \"-1\")",
 							"range": true,
 							"refId": "B",
 							"step": 240

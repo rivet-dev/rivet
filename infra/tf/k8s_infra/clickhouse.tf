@@ -132,7 +132,7 @@ resource "helm_release" "clickhouse" {
 				namespace = kubernetes_namespace.clickhouse[0].metadata.0.name
 			}
 
-			# TOOD:
+			# TODO:
 			# prometheusRule = {
 			# 	enabled = true
 			# 	namespace = kubernetes_namespace.prometheus.metadata.0.name

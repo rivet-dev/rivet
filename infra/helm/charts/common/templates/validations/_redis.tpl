@@ -17,13 +17,13 @@ Params:
 {{- define "common.validations.values.redis.passwords" -}}
   {{- $enabled := include "common.redis.values.enabled" . -}}
   {{- $valueKeyPrefix := include "common.redis.values.keys.prefix" . -}}
-  {{- $standarizedVersion := include "common.redis.values.standarized.version" . }}
+  {{- $standardizedVersion := include "common.redis.values.standardized.version" . }}
 
-  {{- $existingSecret := ternary (printf "%s%s" $valueKeyPrefix "auth.existingSecret") (printf "%s%s" $valueKeyPrefix "existingSecret") (eq $standarizedVersion "true") }}
+  {{- $existingSecret := ternary (printf "%s%s" $valueKeyPrefix "auth.existingSecret") (printf "%s%s" $valueKeyPrefix "existingSecret") (eq $standardizedVersion "true") }}
   {{- $existingSecretValue := include "common.utils.getValueFromKey" (dict "key" $existingSecret "context" .context) }}
 
-  {{- $valueKeyRedisPassword := ternary (printf "%s%s" $valueKeyPrefix "auth.password") (printf "%s%s" $valueKeyPrefix "password") (eq $standarizedVersion "true") }}
-  {{- $valueKeyRedisUseAuth := ternary (printf "%s%s" $valueKeyPrefix "auth.enabled") (printf "%s%s" $valueKeyPrefix "usePassword") (eq $standarizedVersion "true") }}
+  {{- $valueKeyRedisPassword := ternary (printf "%s%s" $valueKeyPrefix "auth.password") (printf "%s%s" $valueKeyPrefix "password") (eq $standardizedVersion "true") }}
+  {{- $valueKeyRedisUseAuth := ternary (printf "%s%s" $valueKeyPrefix "auth.enabled") (printf "%s%s" $valueKeyPrefix "usePassword") (eq $standardizedVersion "true") }}
 
   {{- if and (or (not $existingSecret) (eq $existingSecret "\"\"")) (eq $enabled "true") -}}
     {{- $requiredPasswords := list -}}
@@ -68,14 +68,14 @@ Params:
 Checks whether the redis chart's includes the standarizations (version >= 14)
 
 Usage:
-{{ include "common.redis.values.standarized.version" (dict "context" $) }}
+{{ include "common.redis.values.standardized.version" (dict "context" $) }}
 */}}
-{{- define "common.redis.values.standarized.version" -}}
+{{- define "common.redis.values.standardized.version" -}}
 
-  {{- $standarizedAuth := printf "%s%s" (include "common.redis.values.keys.prefix" .) "auth" -}}
-  {{- $standarizedAuthValues := include "common.utils.getValueFromKey" (dict "key" $standarizedAuth "context" .context) }}
+  {{- $standardizedAuth := printf "%s%s" (include "common.redis.values.keys.prefix" .) "auth" -}}
+  {{- $standardizedAuthValues := include "common.utils.getValueFromKey" (dict "key" $standardizedAuth "context" .context) }}
 
-  {{- if $standarizedAuthValues -}}
+  {{- if $standardizedAuthValues -}}
     {{- true -}}
   {{- end -}}
 {{- end -}}

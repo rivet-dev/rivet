@@ -107,7 +107,7 @@ types:
         docs: Whether or not the requestee's identity is following this identity.
       is_following_me:
         type: boolean
-        docs: Whether or not this identity is both followng and is followed by the
+        docs: Whether or not this identity is both following and is followed by the
           requestee's identity.
       is_mutual_following: boolean
 
@@ -141,7 +141,7 @@ types:
         docs: Whether or not the requestee's identity is following this identity.
         type: boolean
       is_following_me:
-        docs: Whether or not this identity is both followng and is followed by the
+        docs: Whether or not this identity is both following and is followed by the
           requestee's identity.
         type: boolean
       is_mutual_following: boolean

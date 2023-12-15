@@ -42,7 +42,7 @@ if redis.call('EXISTS', key_lobby_config) == 1 then
 	-- Remove the lobby if empty
 	if player_count == 0 then
 		if auto_remove_lobby then
-			-- Remove lobby and prevent it from being seeked again
+			-- Remove lobby and prevent it from being sought again
 			redis.call('ZREM', key_lobby_available_spots_normal, lobby_id)
 			redis.call('ZREM', key_lobby_available_spots_party, lobby_id)
 

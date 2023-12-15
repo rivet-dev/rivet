@@ -10,9 +10,9 @@ module "vpc" {
 	public_subnets = [for k, v in local.azs : cidrsubnet(local.vpc_cidr, 8, k + 48)]
 	intra_subnets = [for k, v in local.azs : cidrsubnet(local.vpc_cidr, 8, k + 52)]
 
-	# Confugre one NAT gateway per AZ
+	# Configure one NAT gateway per AZ
 	#
-	# For a cheaper configuraiton, see "Single NAT Gateway":
+	# For a cheaper configuration, see "Single NAT Gateway":
 	# https://registry.terraform.io/modules/terraform-aws-modules/vpc/aws/latest#nat-gateway-scenarios
 	enable_nat_gateway = true
 	single_nat_gateway = false

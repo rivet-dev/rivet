@@ -18,7 +18,7 @@ Name | Type | Description | Notes
 **groups** | [**Vec<crate::models::IdentityGroup>**](IdentityGroup.md) |  | 
 **identity_id** | [**uuid::Uuid**](uuid::Uuid.md) |  | 
 **is_admin** | **bool** | Whether or not this identity is an admin. | 
-**is_following_me** | **bool** | Whether or not this identity is both followng and is followed by the requestee's identity. | 
+**is_following_me** | **bool** | Whether or not this identity is both following and is followed by the requestee's identity. | 
 **is_game_linked** | Option<**bool**> | Whether or not this game user has been linked through the Rivet dashboard. | [optional]
 **is_mutual_following** | **bool** |  | 
 **is_registered** | **bool** | Whether or not this identity is registered with a linked account. | 

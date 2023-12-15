@@ -191,7 +191,7 @@ async fn handle(
 	Ok(mm_config::version_publish::Response {})
 }
 
-/// Takes the given runtime ane runtime ctx configs and outputs a new runtime config and runtime
+/// Takes the given runtime and runtime ctx configs and outputs a new runtime config and runtime
 /// meta. We re-create the root config here because this gives an opportunity to resolve certain
 /// values to values we can use in production. It's not common we need to modify the core config,
 /// though.

@@ -104,7 +104,7 @@ async fn main_inner() -> Result<std::process::ExitCode> {
 	let ctx =
 		bolt_core::context::ProjectContextData::new(std::env::var("BOLT_NAMESPACE").ok()).await;
 
-	// Prompt confirmation if delpoying to prod
+	// Prompt confirmation if deploying to prod
 	if ctx.ns_id() == "prod" {
 		tokio::task::block_in_place(|| prompt_prod())?;
 	}

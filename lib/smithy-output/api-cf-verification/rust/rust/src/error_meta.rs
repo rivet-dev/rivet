@@ -9,7 +9,7 @@ pub enum Error {
 	ForbiddenError(crate::error::ForbiddenError),
 	/// An error caused by internal server problems.
 	InternalError(crate::error::InternalError),
-	/// An error thrown when the requestee requests a non existant resource.
+	/// An error thrown when the requestee requests a non existent resource.
 	NotFoundError(crate::error::NotFoundError),
 	/// An error thrown when the requestee has hit a rate limit. You are sending too many requests too quickly.
 	RateLimitError(crate::error::RateLimitError),

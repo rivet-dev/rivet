@@ -1,6 +1,6 @@
 /// Reads a secret from the env.
 ///
-/// This is marked as async so we have the flexiblity to pull the secret from remote datasources.
+/// This is marked as async so we have the flexibility to pull the secret from remote datasources.
 pub async fn read_secret(key: &[impl AsRef<str>]) -> Result<String, std::env::VarError> {
 	std::env::var(secret_env_var_key(key))
 }
