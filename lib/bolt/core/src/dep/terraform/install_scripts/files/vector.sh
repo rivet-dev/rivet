@@ -41,9 +41,9 @@ Requires=network-online.target
 [Service]
 User=vector
 Group=vector
-ExecStartPre=/usr/bin/vector validate
-ExecStart=/usr/bin/vector
-ExecReload=/usr/bin/vector validate
+ExecStartPre=/usr/bin/vector validate --config-toml /etc/vector/vector.toml
+ExecStart=/usr/bin/vector --config-toml /etc/vector/vector.toml
+ExecReload=/usr/bin/vector validate --config-toml /etc/vector/vector.toml
 ExecReload=/bin/kill -HUP $MAINPID
 Restart=always
 AmbientCapabilities=CAP_NET_BIND_SERVICE
