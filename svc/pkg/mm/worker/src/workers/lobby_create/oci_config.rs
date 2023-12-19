@@ -68,7 +68,8 @@ pub fn config(cpu: u64, memory: u64, memory_max: u64, env: Vec<String>) -> serde
 		},
 		"root": {
 			"path": "rootfs",
-			"readonly": true
+			// This means we can't reuse the oci-bundle since the rootfs is writable.
+			"readonly": false
 		},
 		"mounts": mounts(),
 		"linux": {
