@@ -113,7 +113,7 @@ pub use bail;
 macro_rules! retry_bail {
 	($msg:expr) => {{
 		let mut err = GlobalError::from($crate::ext::RetryError {
-			message: $msg,
+			message: Into::<String>::into($msg),
 			location: $crate::location!(),
 		});
 		if let GlobalError::Internal {
@@ -149,7 +149,7 @@ macro_rules! ensure {
 		if !val {
 			return Err(Into::into($crate::ext::AssertionError::Assert {
 				val: format!("{:?}", val),
-				message: $msg,
+				message: Into::<String>::into($msg),
 				location: $crate::location!(),
 			}));
 		}
@@ -182,7 +182,7 @@ macro_rules! ensure_eq {
 					return Err(Into::into($crate::ext::AssertionError::AssertEq {
 						val_left: format!("{:?}", val_left),
 						val_right: format!("{:?}", val_right),
-						message: $msg,
+						message: Into::<String>::into($msg),
 						location: $crate::location!(),
 					}));
 				}

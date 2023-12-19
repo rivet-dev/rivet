@@ -8,7 +8,7 @@ pub enum AssertionError {
 	#[error("{location} {val}: {message}")]
 	Assert {
 		val: String,
-		message: &'static str,
+		message: String,
 		location: Location,
 	},
 
@@ -16,7 +16,7 @@ pub enum AssertionError {
 	AssertEq {
 		val_left: String,
 		val_right: String,
-		message: &'static str,
+		message: String,
 		location: Location,
 	},
 
@@ -27,7 +27,7 @@ pub enum AssertionError {
 #[derive(Debug, thiserror::Error)]
 #[error("{location} retry: {message}")]
 pub struct RetryError {
-	pub message: &'static str,
+	pub message: String,
 	pub location: Location,
 }
 
