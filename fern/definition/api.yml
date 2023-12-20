@@ -8,7 +8,6 @@ error-discrimination:
   strategy: status-code
 environments:
   Production: https://api.rivet.gg
-  Staging: https://api.staging.gameinc.io
 default-environment: Production
 audiences:
   - public

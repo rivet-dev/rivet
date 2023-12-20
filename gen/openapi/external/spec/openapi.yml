@@ -11406,5 +11406,3 @@ components:
 servers:
   - url: https://api.rivet.gg
     description: Production
-  - url: https://api.staging.gameinc.io
-    description: Staging
