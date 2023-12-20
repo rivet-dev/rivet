@@ -93,12 +93,12 @@ pub use err_code;
 /// ```
 #[macro_export]
 macro_rules! bail {
-	($msg:expr) => {{
+	($msg:expr) => {
 		return Err(Into::into($crate::ext::AssertionError::Panic {
-			message: $msg,
+			message: Into::<String>::into($msg),
 			location: $crate::location!(),
 		}));
-	}};
+	};
 }
 pub use bail;
 
@@ -220,17 +220,30 @@ macro_rules! unwrap_ref {
 }
 pub use unwrap_ref;
 
+/// Unwraps an `Option` and returns the contained value or exits early with an
+/// error.
+///
+/// # Examples
+///
+/// ```
+/// let value = unwrap!(option, "Value must exist");
+/// ```
+///
+/// With a default message:
+///
+/// ```
+/// let value = unwrap!(option);
+/// ```
 #[macro_export]
 macro_rules! unwrap {
 	($expr:expr, $msg:expr) => {{
-		#[allow(match_result_ok)]
-		if let Some(val) = $expr {
-			val
-		} else {
-			return Err(Into::into($crate::ext::AssertionError::Unwrap {
-				message: $msg,
-				location: $crate::location!(),
-			}));
+		match $crate::ext::UnwrapOrAssertError::assertion_error_unwrap(
+			$expr,
+			Into::<String>::into($msg),
+			$crate::location!(),
+		) {
+			Ok(val) => val,
+			Err(err) => return Err(err.into()),
 		}
 	}};
 	($expr:expr $(,)?) => {{
