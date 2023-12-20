@@ -6,7 +6,7 @@ imports:
   cdn: cdn/__package__.yml
   matchmaker: matchmaker/__package__.yml
   kv: kv/__package__.yml
-  identity: identity/__pacakge__.yml
+  identity: identity/__package__.yml
 
 types:
   Config:
