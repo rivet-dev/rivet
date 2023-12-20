@@ -11,6 +11,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 -   **Matchmaker** Allow excluding `matchmaker.regions` in order to enable all regions
 
+### Security
+
+-   Resolve [RUSTSEC-2023-0044](https://rustsec.org/advisories/RUSTSEC-2023-0074)
+
 ## [23.2.0-rc1] - 2023-12-01
 
 ### Added
