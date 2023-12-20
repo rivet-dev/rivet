@@ -12461,5 +12461,3 @@ paths:
 servers:
 - description: Production
   url: https://api.rivet.gg
-- description: Staging
-  url: https://api.staging.gameinc.io
