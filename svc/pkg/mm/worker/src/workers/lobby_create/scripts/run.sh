@@ -1,38 +1,47 @@
 #!/usr/bin/env bash
-set -euf -o pipefail
+# set -euf -o pipefail
 
 JOB_RUN_ID="{{env "NOMAD_META_JOB_RUN_ID"}}"
+CONTAINER_ID=$(cat "$NOMAD_ALLOC_DIR/container-id")
 
 # Write log shipping config
 VECTOR_CONFIGS="$NOMAD_ALLOC_DIR/vector"
 mkdir -p $VECTOR_CONFIGS
 
-for stream in stdout stderr; do
-	if [[ "$stream" == "stdout" ]]; then
-		stream_idx=0
-	elif [[ "$stream" == "stderr" ]]; then
-		stream_idx=1
-	else
-		echo "Invalid stream: $stream"
-		exit 1
-	fi
+# Parse stream metadata & add appropriate tags for insertion
+cat <<EOF > "$VECTOR_CONFIGS/remap.vrl"
+# Determine which stream this message came from by the custom prefix that we append
+#
+# See below for more details
+stream = if starts_with!(.message, "O") {
+	0
+} else if starts_with!(.message, "E") {
+	1
+} else {
+	log("Unknown event stream", level: "warn", rate_limit_secs: 60)
+	abort
+}
 
-	# Add tags for insertion
-	cat <<EOF > "$VECTOR_CONFIGS/remap_${stream}.vrl"
+# Cap line length to 1024 for data saving purposes
+#
+# Strip the first character, since this is used purely for metadata
+message = slice!(.message, start: 1, end: 1025)
+
+# Convert to nanoseconds for ClickHouse
+ts = to_unix_timestamp(parse_timestamp!(.timestamp, format: "%+"), unit: "nanoseconds")
+
 . = {
 	"source": "job_run",
 	"run_id": "${JOB_RUN_ID}",
 	"task": "${NOMAD_TASK_NAME}",
-	"stream": 1,
-	# Convert to nanoseconds for ClickHouse
-	"ts": to_unix_timestamp(parse_timestamp!(.timestamp, format: "%+"), unit: "nanoseconds"),
-	# Cap line length to 1024
-	"message": slice!(.message, start: 0, end: 1024),
+	"stream_type": stream,
+	"ts": ts,
+	"message": message,
 }
 EOF
 
-	# Write config that takes this stream via stdin
-	cat <<EOF > "$VECTOR_CONFIGS/vector_${stream}.toml"
+# Write config that ships logs from stdin
+cat <<EOF > "$VECTOR_CONFIGS/vector.toml"
 [sources.stdin]
 type = "stdin"
 
@@ -59,7 +68,7 @@ window_secs = 300
 type = "remap"
 inputs = ["throttle_long"]
 drop_on_abort = true
-file = "${VECTOR_CONFIGS}/remap_${stream}.vrl"
+file = "${VECTOR_CONFIGS}/remap.vrl"
 metric_tag_values = "single"
 
 [sinks.vector]
@@ -72,13 +81,30 @@ compression = true
 buffer.max_events = 100
 # Speed up for realtime logs
 batch.timeout_secs = 0.25
+
+[sinks.out]
+type = "console"
+inputs = ["tag"]
+encoding.codec = "text"
 EOF
-done
 
 # Run container
 #
-# We spawn two instances of Vector in order to ship stdout and stderr without writing to disk
-# TODO: Look at using file descriptor collector to use a single instance of Vector
-CONTAINER_ID=$(cat "$NOMAD_ALLOC_DIR/container-id")
-runc run $CONTAINER_ID -b "$NOMAD_ALLOC_DIR/oci-bundle" 1> >(/usr/bin/vector --config "$VECTOR_CONFIGS/vector_stdout.toml") 2> >(/usr/bin/vector --config "$VECTOR_CONFIGS/vector_stderr.toml")
+# This will prefix stdout with "O" and stderr with "E" so that we can determine the
+# stream type from stdin in Vector. See the `remap.vrl` script above that determines
+# the stream type and removes the prefix.
+#
+# Use `sleep 1` because a command that exits immediately will not be able to flush its entire
+# logs to Vector and no logs will get shipped.
+#
+# The exit code must be preserved in order to pass the exit code to Nomad.
+#
+# Use `set +e` so a failiure in `runc run` doesn't immediately terminate `vector`.
+set +e
+{
+   (runc run $CONTAINER_ID -b "$NOMAD_ALLOC_DIR/oci-bundle"; runc_exit_status=$?; sleep 1) \
+   2> >(stdbuf -o0 sed 's/^/E/' >&1) \
+   > >(stdbuf -o0 sed 's/^/O/' >&1)
+} | /usr/bin/vector --config "$VECTOR_CONFIGS/vector.toml"
+exit $runc_exit_status
 

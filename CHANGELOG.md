@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 -   **Matchmaker** Allow excluding `matchmaker.regions` in order to enable all regions
+-   **Matchmaker** Lowered internal overhead of log shipping for lobbies
 
 ### Security
 
@@ -18,6 +19,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 -   **Infra** runc rootfs is now a writable file system
+-   **Matchmaker** Fix logs not shipping if lobby exits immediately
 
 ## [23.2.0-rc1] - 2023-12-01
 
