@@ -971,8 +971,10 @@ impl EndpointFunction {
 						}
 					})?;
 
-				let (response, http_status, err_code) = match #path(ctx, #(#arg_list),*).await {
-					Ok(body) => {
+				let fut = #path(ctx, #(#arg_list),*);
+				let timeout = ::tokio::time::Duration::from_secs(50);
+				let (response, http_status, err_code) = match ::tokio::time::timeout(timeout, fut).await {
+					Ok(Ok(body)) => {
 						(
 							Ok(__AsyncOption::Some(
 								#response_body
@@ -981,7 +983,13 @@ impl EndpointFunction {
 							String::new(),
 						)
 					}
-					Err(err) => {
+					Ok(Err(err)) => {
+						let http_status = err.http_status();
+						let err_code = err.code().unwrap_or("?").to_string();
+						(Err(err), http_status, err_code)
+					}
+					Err(_) => {
+						let err = rivet_operation::prelude::err_code!(API_REQUEST_TIMEOUT);
 						let http_status = err.http_status();
 						let err_code = err.code().unwrap_or("?").to_string();
 						(Err(err), http_status, err_code)

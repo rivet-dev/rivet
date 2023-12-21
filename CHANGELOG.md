@@ -11,6 +11,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 -   **Matchmaker** Allow excluding `matchmaker.regions` in order to enable all regions
 -   **Matchmaker** Lowered internal overhead of log shipping for lobbies
+-   **API** Return `API_REQUEST_TIMEOUT` error after 50s (see `docs/infrastructure/API_TIMEOUTS.md` for context)
+-   Lower long poll timeout from 60s -> 40s
 
 ### Security
 
