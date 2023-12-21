@@ -2,6 +2,7 @@ use lazy_static::lazy_static;
 use regex::{Regex, RegexBuilder};
 
 pub const MAX_IDENT_LEN: usize = 16;
+pub const MAX_IDENT_LONG_LEN: usize = 64;
 pub const MAX_DISPLAY_NAME_LEN: usize = 24;
 pub const MAX_DISPLAY_NAME_LONG_LEN: usize = 128;
 pub const MAX_BIOGRAPHY_LEN: usize = 200;
@@ -20,24 +21,20 @@ lazy_static! {
 ///
 /// Double dashes are used as separators in DNS and path components internally.
 pub fn ident(s: impl AsRef<str>) -> bool {
-	let s = s.as_ref();
-	s.chars().all(|c| match c {
-		'0'..='9' | 'a'..='z' | '-' => true,
-		_ => false,
-	}) && !s.is_empty()
-		&& s.len() <= MAX_IDENT_LEN
-		&& !s.contains("--")
-		&& !s.starts_with('-')
-		&& !s.ends_with('-')
+	ident_with_len(s, MAX_IDENT_LEN)
 }
 
-/// Same as `ident` but without the length requirement.
-pub fn ident_unlimited_length(s: impl AsRef<str>) -> bool {
+pub fn ident_long(s: impl AsRef<str>) -> bool {
+	ident_with_len(s, MAX_IDENT_LONG_LEN)
+}
+
+pub fn ident_with_len(s: impl AsRef<str>, len: usize) -> bool {
 	let s = s.as_ref();
 	s.chars().all(|c| match c {
 		'0'..='9' | 'a'..='z' | '-' => true,
 		_ => false,
 	}) && !s.is_empty()
+		&& s.len() <= len
 		&& !s.contains("--")
 		&& !s.starts_with('-')
 		&& !s.ends_with('-')

@@ -353,10 +353,9 @@ async fn handle(
 
 		let mut unique_lobby_names = HashSet::new();
 		for (lobby_index, lobby_group) in matchmaker.lobby_groups.iter().take(32).enumerate() {
-			tracing::info!(%lobby_group.name_id, valid = util::check::ident(&lobby_group.name_id), "checking name id");
 			let lobby_group_label = format!("*{}*", lobby_group.name_id);
 
-			if util::check::ident(&lobby_group.name_id) {
+			if util::check::ident_long(&lobby_group.name_id) {
 				if unique_lobby_names.contains(lobby_group.name_id.trim()) {
 					errors.push(util::err_path![
 						"config",
