@@ -7944,6 +7944,8 @@ components:
           $ref: '#/components/schemas/CloudVersionEngineGodotConfig'
         html5:
           $ref: '#/components/schemas/CloudVersionEngineHtml5Config'
+        custom:
+          $ref: '#/components/schemas/CloudVersionEngineCustomConfig'
     CloudVersionIdentityConfig:
       type: object
       description: Identity configuration for a given version.
@@ -9738,6 +9740,9 @@ components:
           description: A list of region server tiers.
       required:
         - tiers
+    CloudVersionEngineCustomConfig:
+      type: object
+      properties: {}
     CloudVersionEngineGodotConfig:
       type: object
       properties: {}

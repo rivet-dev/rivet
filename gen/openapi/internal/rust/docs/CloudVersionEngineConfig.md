@@ -4,6 +4,7 @@
 
 Name | Type | Description | Notes
 ------------ | ------------- | ------------- | -------------
+**custom** | Option<[**serde_json::Value**](.md)> |  | [optional]
 **godot** | Option<[**serde_json::Value**](.md)> |  | [optional]
 **html5** | Option<[**serde_json::Value**](.md)> |  | [optional]
 **unity** | Option<[**serde_json::Value**](.md)> |  | [optional]

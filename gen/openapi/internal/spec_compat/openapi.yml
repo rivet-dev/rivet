@@ -1902,6 +1902,8 @@ components:
       type: object
     CloudVersionEngineConfig:
       properties:
+        custom:
+          $ref: '#/components/schemas/CloudVersionEngineCustomConfig'
         godot:
           $ref: '#/components/schemas/CloudVersionEngineGodotConfig'
         html5:
@@ -1910,6 +1912,9 @@ components:
           $ref: '#/components/schemas/CloudVersionEngineUnityConfig'
         unreal:
           $ref: '#/components/schemas/CloudVersionEngineUnrealConfig'
+      type: object
+    CloudVersionEngineCustomConfig:
+      properties: {}
       type: object
     CloudVersionEngineGodotConfig:
       properties: {}

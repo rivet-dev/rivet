@@ -5,6 +5,7 @@ imports:
   unreal: unreal.yml
   godot: godot.yml
   html5: html5.yml
+  custom: custom.yml
 
 types:
   Config:
@@ -13,3 +14,4 @@ types:
       unreal: optional<unreal.UnrealConfig>
       godot: optional<godot.GodotConfig>
       html5: optional<html5.Html5Config>
+      custom: optional<custom.CustomConfig>
