@@ -154,6 +154,12 @@ resource "kubernetes_service" "traefik_tunnel_headless" {
 		}
 
 		port {
+			name = "traefik"
+			port = 9000
+			target_port = "traefik"
+		}
+
+		port {
 			name = "metrics"
 			port = 9100
 			target_port = "metrics"
