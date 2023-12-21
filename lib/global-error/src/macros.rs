@@ -82,6 +82,10 @@ pub use err_code;
 /// It takes a string message and invokes the `location!` macro to attach file
 /// and line information to the error automatically.
 ///
+/// Variants:
+/// - bail!("message") - Exits with an error message.
+/// - bail!("format {}", value) - Exits with a formatted error message.
+///
 /// # Examples
 ///
 /// ```
@@ -96,6 +100,12 @@ macro_rules! bail {
 	($msg:expr) => {
 		return Err(Into::into($crate::ext::AssertionError::Panic {
 			message: Into::<String>::into($msg),
+			location: $crate::location!(),
+		}));
+	};
+	($fmt:expr, $($arg:tt)*) => {
+		return Err(Into::into($crate::ext::AssertionError::Panic {
+			message: format!($fmt, $($arg)*),
 			location: $crate::location!(),
 		}));
 	};
@@ -126,6 +136,21 @@ macro_rules! retry_bail {
 
 		return Err(err);
 	}};
+	($fmt:expr, $($arg:tt)*) => {{
+		let mut err = GlobalError::from($crate::ext::RetryError {
+			message: format!($fmt, $($arg)*),
+			location: $crate::location!(),
+		});
+		if let GlobalError::Internal {
+			ref mut retry_immediately,
+			..
+		} = err
+		{
+			*retry_immediately = true;
+		}
+
+		return Err(err);
+	}};
 }
 pub use retry_bail;
 
@@ -142,6 +167,12 @@ pub use retry_bail;
 /// ```
 /// ensure!(1 + 1 == 2);
 /// ```
+///
+/// With a formatted message:
+///
+/// ```
+/// ensure!(1 + 1 == 2, "Math is broken: {}", "expression is false");
+/// ```
 #[macro_export]
 macro_rules! ensure {
 	($expr:expr, $msg:expr) => {{
@@ -150,6 +181,16 @@ macro_rules! ensure {
 			return Err(Into::into($crate::ext::AssertionError::Assert {
 				val: format!("{:?}", val),
 				message: Into::<String>::into($msg),
+				location: $crate::location!(),
+			}));
+		}
+	}};
+	($expr:expr, $fmt:expr, $($arg:tt)*) => {{
+		let val = $expr;
+		if !val {
+			return Err(Into::into($crate::ext::AssertionError::Assert {
+				val: format!("{:?}", val),
+				message: format!($fmt, $($arg)*),
 				location: $crate::location!(),
 			}));
 		}
@@ -173,6 +214,12 @@ pub use ensure;
 /// ```
 /// ensure_eq!(a, b);
 /// ```
+///
+/// With a formatted message:
+///
+/// ```
+/// ensure_eq!(a, b, "Values {} and {} are not equal", a, b);
+/// ```
 #[macro_export]
 macro_rules! ensure_eq {
 	($left:expr, $right:expr, $msg:expr) => {{
@@ -183,6 +230,20 @@ macro_rules! ensure_eq {
 						val_left: format!("{:?}", val_left),
 						val_right: format!("{:?}", val_right),
 						message: Into::<String>::into($msg),
+						location: $crate::location!(),
+					}));
+				}
+			}
+		}
+	}};
+	($left:expr, $right:expr, $fmt:expr, $($arg:tt)*) => {{
+		match (&$left, &$right) {
+			(val_left, val_right) => {
+				if !(*val_left == *val_right) {
+					return Err(Into::into($crate::ext::AssertionError::AssertEq {
+						val_left: format!("{:?}", val_left),
+						val_right: format!("{:?}", val_right),
+						message: format!($fmt, $($arg)*),
 						location: $crate::location!(),
 					}));
 				}
@@ -209,10 +270,19 @@ pub use ensure_eq;
 /// ```
 /// let value = unwrap_ref!(option);
 /// ```
+///
+/// With a formatted message:
+///
+/// ```
+/// let value = unwrap_ref!(option, "Value {} does not exist", index);
+/// ```
 #[macro_export]
 macro_rules! unwrap_ref {
 	($expr:expr, $msg:expr) => {{
 		$crate::unwrap!(&$expr, $msg)
+	}};
+	($expr:expr, $fmt:expr, $($arg:tt)*) => {{
+		$crate::unwrap!(&$expr, format!($fmt, $($arg)*))
 	}};
 	($expr:expr $(,)?) => {{
 		$crate::unwrap!(&$expr)
@@ -234,12 +304,28 @@ pub use unwrap_ref;
 /// ```
 /// let value = unwrap!(option);
 /// ```
+///
+/// With a formatted message:
+///
+/// ```
+/// let value = unwrap!(option, "Value {} does not exist", index);
+/// ```
 #[macro_export]
 macro_rules! unwrap {
 	($expr:expr, $msg:expr) => {{
 		match $crate::ext::UnwrapOrAssertError::assertion_error_unwrap(
 			$expr,
 			Into::<String>::into($msg),
+			$crate::location!(),
+		) {
+			Ok(val) => val,
+			Err(err) => return Err(err.into()),
+		}
+	}};
+	($expr:expr, $fmt:expr, $($arg:tt)*) => {{
+		match $crate::ext::UnwrapOrAssertError::assertion_error_unwrap(
+			$expr,
+			format!($fmt, $($arg)*),
 			$crate::location!(),
 		) {
 			Ok(val) => val,
