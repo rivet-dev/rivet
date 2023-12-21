@@ -8,8 +8,10 @@ use syn::parse::{Parse, ParseStream};
 use syn::token::Return;
 use syn::{braced, bracketed, Expr, Ident, Result, Token};
 
-// 1 min
-const DEFAULT_TIMEOUT: u64 = 60 * 1000;
+/// Represented in seconds.
+///
+/// See docs/infrastructure/API_TIMEOUTS.md for reasoning.
+const DEFAULT_TIMEOUT: u64 = 40 * 1000;
 
 mod kw {
 	syn::custom_keyword!(JITTER);

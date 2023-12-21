@@ -20,6 +20,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 -   **Infra** runc rootfs is now a writable file system
 -   **Matchmaker** Fix logs not shipping if lobby exits immediately
+-   **API** 520 error when long polling
 
 ## [23.2.0-rc1] - 2023-12-01
 
