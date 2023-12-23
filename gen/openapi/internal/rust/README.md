@@ -182,6 +182,8 @@ Class | Method | HTTP request | Description
  - [CloudBootstrapCaptcha](docs/CloudBootstrapCaptcha.md)
  - [CloudBootstrapCaptchaTurnstile](docs/CloudBootstrapCaptchaTurnstile.md)
  - [CloudBootstrapCluster](docs/CloudBootstrapCluster.md)
+ - [CloudBootstrapDomains](docs/CloudBootstrapDomains.md)
+ - [CloudBootstrapOrigins](docs/CloudBootstrapOrigins.md)
  - [CloudBootstrapResponse](docs/CloudBootstrapResponse.md)
  - [CloudBuildSummary](docs/CloudBuildSummary.md)
  - [CloudCdnAuthType](docs/CloudCdnAuthType.md)
