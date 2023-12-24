@@ -500,7 +500,7 @@ async fn update_db(
 	//
 	// This will lock the lobby for the duration of the transaction
 	let lobby_row = sql_fetch_optional!(
-		[ctx, (Option<i64>, Option<i64>)]
+		[ctx, (Option<i64>, Option<i64>), @tx tx]
 		"SELECT stop_ts, preemptive_create_ts FROM db_mm_state.lobbies WHERE lobby_id = $1 FOR UPDATE",
 		opts.lobby_id,
 	)
