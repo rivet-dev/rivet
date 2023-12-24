@@ -76,6 +76,7 @@ Class | Method | HTTP request | Description
 *CloudGamesTokensApi* | [**cloud_games_tokens_create_cloud_token**](docs/CloudGamesTokensApi.md#cloud_games_tokens_create_cloud_token) | **POST** /cloud/games/{game_id}/tokens/cloud | 
 *CloudGamesVersionsApi* | [**cloud_games_versions_create_game_version**](docs/CloudGamesVersionsApi.md#cloud_games_versions_create_game_version) | **POST** /cloud/games/{game_id}/versions | 
 *CloudGamesVersionsApi* | [**cloud_games_versions_get_game_version_by_id**](docs/CloudGamesVersionsApi.md#cloud_games_versions_get_game_version_by_id) | **GET** /cloud/games/{game_id}/versions/{version_id} | 
+*CloudGamesVersionsApi* | [**cloud_games_versions_reserve_version_name**](docs/CloudGamesVersionsApi.md#cloud_games_versions_reserve_version_name) | **POST** /cloud/games/{game_id}/versions/reserve-name | 
 *CloudGamesVersionsApi* | [**cloud_games_versions_validate_game_version**](docs/CloudGamesVersionsApi.md#cloud_games_versions_validate_game_version) | **POST** /cloud/games/{game_id}/versions/validate | 
 *CloudGroupsApi* | [**cloud_groups_convert_group**](docs/CloudGroupsApi.md#cloud_groups_convert_group) | **POST** /cloud/groups/{group_id}/convert | 
 *CloudGroupsApi* | [**cloud_groups_validate**](docs/CloudGroupsApi.md#cloud_groups_validate) | **POST** /cloud/groups/validate | 
@@ -253,6 +254,7 @@ Class | Method | HTTP request | Description
  - [CloudGamesNamespacesValidateGameNamespaceTokenDevelopmentResponse](docs/CloudGamesNamespacesValidateGameNamespaceTokenDevelopmentResponse.md)
  - [CloudGamesPrepareCustomAvatarUploadRequest](docs/CloudGamesPrepareCustomAvatarUploadRequest.md)
  - [CloudGamesPrepareCustomAvatarUploadResponse](docs/CloudGamesPrepareCustomAvatarUploadResponse.md)
+ - [CloudGamesReserveVersionNameResponse](docs/CloudGamesReserveVersionNameResponse.md)
  - [CloudGamesValidateGameRequest](docs/CloudGamesValidateGameRequest.md)
  - [CloudGamesValidateGameResponse](docs/CloudGamesValidateGameResponse.md)
  - [CloudGamesValidateGameVersionRequest](docs/CloudGamesValidateGameVersionRequest.md)

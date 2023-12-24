@@ -12,6 +12,6 @@ import "proto/common.proto";
 message Message {
 	rivet.common.Uuid game_id = 1;
 	rivet.common.Uuid request_id = 2;
-	string display_name = 3;
+	string version_display_name = 3;
 }
 
