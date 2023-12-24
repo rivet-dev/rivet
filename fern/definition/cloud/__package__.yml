@@ -16,6 +16,8 @@ types:
   BootstrapResponse:
     properties:
       cluster: BootstrapCluster
+      domains: optional<BootstrapDomains>
+      origins: BootstrapOrigins
       captcha: BootstrapCaptcha
 
   BootstrapCluster:
@@ -23,6 +25,18 @@ types:
     enum:
       - value: enterprise
       - value: oss
+
+  BootstrapDomains:
+    docs: Domains that host parts of Rivet
+    properties:
+      main: string
+      cdn: string
+      job: string
+
+  BootstrapOrigins:
+    docs: Origins used to build URLs from
+    properties:
+      hub: string
 
   BootstrapCaptcha:
     properties:

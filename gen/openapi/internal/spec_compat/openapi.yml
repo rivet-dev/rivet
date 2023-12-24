@@ -170,14 +170,41 @@ components:
       - enterprise
       - oss
       type: string
+    CloudBootstrapDomains:
+      description: Domains that host parts of Rivet
+      properties:
+        cdn:
+          type: string
+        job:
+          type: string
+        main:
+          type: string
+      required:
+      - main
+      - cdn
+      - job
+      type: object
+    CloudBootstrapOrigins:
+      description: Origins used to build URLs from
+      properties:
+        hub:
+          type: string
+      required:
+      - hub
+      type: object
     CloudBootstrapResponse:
       properties:
         captcha:
           $ref: '#/components/schemas/CloudBootstrapCaptcha'
         cluster:
           $ref: '#/components/schemas/CloudBootstrapCluster'
+        domains:
+          $ref: '#/components/schemas/CloudBootstrapDomains'
+        origins:
+          $ref: '#/components/schemas/CloudBootstrapOrigins'
       required:
       - cluster
+      - origins
       - captcha
       type: object
     CloudBuildSummary:

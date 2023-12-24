@@ -17,13 +17,19 @@ pub struct CloudBootstrapResponse {
     pub captcha: Box<crate::models::CloudBootstrapCaptcha>,
     #[serde(rename = "cluster")]
     pub cluster: crate::models::CloudBootstrapCluster,
+    #[serde(rename = "domains", skip_serializing_if = "Option::is_none")]
+    pub domains: Option<Box<crate::models::CloudBootstrapDomains>>,
+    #[serde(rename = "origins")]
+    pub origins: Box<crate::models::CloudBootstrapOrigins>,
 }
 
 impl CloudBootstrapResponse {
-    pub fn new(captcha: crate::models::CloudBootstrapCaptcha, cluster: crate::models::CloudBootstrapCluster) -> CloudBootstrapResponse {
+    pub fn new(captcha: crate::models::CloudBootstrapCaptcha, cluster: crate::models::CloudBootstrapCluster, origins: crate::models::CloudBootstrapOrigins) -> CloudBootstrapResponse {
         CloudBootstrapResponse {
             captcha: Box::new(captcha),
             cluster,
+            domains: None,
+            origins: Box::new(origins),
         }
     }
 }

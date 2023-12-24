@@ -8294,10 +8294,15 @@ components:
       properties:
         cluster:
           $ref: '#/components/schemas/CloudBootstrapCluster'
+        domains:
+          $ref: '#/components/schemas/CloudBootstrapDomains'
+        origins:
+          $ref: '#/components/schemas/CloudBootstrapOrigins'
         captcha:
           $ref: '#/components/schemas/CloudBootstrapCaptcha'
       required:
         - cluster
+        - origins
         - captcha
     CloudBootstrapCluster:
       type: string
@@ -8305,6 +8310,28 @@ components:
         - enterprise
         - oss
       description: The type of cluster that the backend is currently running.
+    CloudBootstrapDomains:
+      type: object
+      description: Domains that host parts of Rivet
+      properties:
+        main:
+          type: string
+        cdn:
+          type: string
+        job:
+          type: string
+      required:
+        - main
+        - cdn
+        - job
+    CloudBootstrapOrigins:
+      type: object
+      description: Origins used to build URLs from
+      properties:
+        hub:
+          type: string
+      required:
+        - hub
     CloudBootstrapCaptcha:
       type: object
       properties:

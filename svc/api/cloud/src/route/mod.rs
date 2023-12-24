@@ -3,14 +3,14 @@ use hyper::{Body, Request, Response};
 use rivet_api::models;
 use uuid::Uuid;
 
-mod auth;
-mod bootstrap;
-mod devices;
-mod games;
-mod groups;
-mod logs;
-mod tiers;
-mod uploads;
+pub mod auth;
+pub mod bootstrap;
+pub mod devices;
+pub mod games;
+pub mod groups;
+pub mod logs;
+pub mod tiers;
+pub mod uploads;
 
 pub async fn handle(
 	shared_client: chirp_client::SharedClientHandle,
