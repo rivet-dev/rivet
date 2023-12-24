@@ -6191,6 +6191,66 @@ paths:
           application/json:
             schema:
               $ref: '#/components/schemas/CloudGamesCreateGameVersionRequest'
+  /cloud/games/{game_id}/versions/reserve-name:
+    post:
+      description: >-
+        Reserves a display name for the next version. Used to generate a
+        monotomically increasing build number without causing a race condition
+        with multiple versions getting created at the same time.
+      operationId: cloud_games_versions_reserveVersionName
+      tags:
+        - CloudGamesVersions
+      parameters:
+        - name: game_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CloudGamesReserveVersionNameResponse'
+        '400':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '403':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '404':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '408':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '429':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '500':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+      security: *ref_0
   /cloud/games/{game_id}/versions/validate:
     post:
       description: Validates information used to create a new game version.
@@ -10713,6 +10773,13 @@ components:
           format: uuid
       required:
         - version_id
+    CloudGamesReserveVersionNameResponse:
+      type: object
+      properties:
+        version_display_name:
+          type: string
+      required:
+        - version_display_name
     CloudGamesValidateGameVersionRequest:
       type: object
       properties:

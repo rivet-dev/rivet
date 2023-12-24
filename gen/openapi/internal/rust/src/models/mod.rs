@@ -178,6 +178,8 @@ pub mod cloud_games_prepare_custom_avatar_upload_request;
 pub use self::cloud_games_prepare_custom_avatar_upload_request::CloudGamesPrepareCustomAvatarUploadRequest;
 pub mod cloud_games_prepare_custom_avatar_upload_response;
 pub use self::cloud_games_prepare_custom_avatar_upload_response::CloudGamesPrepareCustomAvatarUploadResponse;
+pub mod cloud_games_reserve_version_name_response;
+pub use self::cloud_games_reserve_version_name_response::CloudGamesReserveVersionNameResponse;
 pub mod cloud_games_validate_game_request;
 pub use self::cloud_games_validate_game_request::CloudGamesValidateGameRequest;
 pub mod cloud_games_validate_game_response;

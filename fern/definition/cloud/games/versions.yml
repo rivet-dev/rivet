@@ -22,6 +22,12 @@ service:
         body: CreateGameVersionRequest
       response: CreateGameVersionResponse
 
+    reserveVersionName:
+      path: /reserve-name
+      method: POST
+      docs: Reserves a display name for the next version. Used to generate a monotomically increasing build number without causing a race condition with multiple versions getting created at the same time.
+      response: ReserveVersionNameResponse
+
     validateGameVersion:
       path: /validate
       method: POST
@@ -51,6 +57,10 @@ types:
     properties:
       version_id:
         type: uuid
+
+  ReserveVersionNameResponse:
+    properties:
+      version_display_name: string
 
   ValidateGameVersionRequest:
     properties:

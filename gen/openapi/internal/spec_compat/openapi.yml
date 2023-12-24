@@ -1127,6 +1127,13 @@ components:
       - upload_id
       - presigned_request
       type: object
+    CloudGamesReserveVersionNameResponse:
+      properties:
+        version_display_name:
+          type: string
+      required:
+      - version_display_name
+      type: object
     CloudGamesValidateGameRequest:
       properties:
         display_name:
@@ -7334,6 +7341,65 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/CloudGamesCreateGameVersionResponse'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+          description: ''
+        '408':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+          description: ''
+        '429':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+          description: ''
+        '500':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+          description: ''
+      security: *id001
+      tags:
+      - CloudGamesVersions
+  /cloud/games/{game_id}/versions/reserve-name:
+    post:
+      description: Reserves a display name for the next version. Used to generate
+        a monotomically increasing build number without causing a race condition with
+        multiple versions getting created at the same time.
+      operationId: cloud_games_versions_reserveVersionName
+      parameters:
+      - in: path
+        name: game_id
+        required: true
+        schema:
+          format: uuid
+          type: string
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CloudGamesReserveVersionNameResponse'
           description: ''
         '400':
           content:

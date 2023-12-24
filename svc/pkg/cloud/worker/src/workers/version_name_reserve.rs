@@ -41,7 +41,7 @@ async fn worker(
 	msg!([ctx] cloud::msg::version_name_reserve_complete(game_id, request_id) {
 		game_id: ctx.game_id,
 		request_id: ctx.request_id,
-		display_name: display_name,
+		version_display_name: display_name,
 	})
 	.await?;
 

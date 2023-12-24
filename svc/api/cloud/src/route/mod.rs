@@ -55,6 +55,9 @@ define_router! {
 		"games" / Uuid / "versions": {
 			POST: games::versions::create(body: models::CloudGamesCreateGameVersionRequest),
 		},
+		"games" / Uuid / "versions" / "reserve-name": {
+			POST: games::versions::reserve_name(body: serde_json::Value),
+		},
 		"games" / Uuid / "versions" / Uuid: {
 			GET: games::versions::get(),
 		},

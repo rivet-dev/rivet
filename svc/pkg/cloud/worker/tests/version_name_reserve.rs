@@ -17,6 +17,6 @@ async fn version_name_reserve(ctx: TestCtx) {
 		.await
 		.unwrap();
 
-		assert_eq!(format!("{} ({})", date_prefix, i), res.display_name);
+		assert_eq!(format!("{} ({})", date_prefix, i), res.version_display_name);
 	}
 }

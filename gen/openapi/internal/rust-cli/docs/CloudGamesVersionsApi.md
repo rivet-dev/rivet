@@ -6,6 +6,7 @@ Method | HTTP request | Description
 ------------- | ------------- | -------------
 [**cloud_games_versions_create_game_version**](CloudGamesVersionsApi.md#cloud_games_versions_create_game_version) | **POST** /cloud/games/{game_id}/versions | 
 [**cloud_games_versions_get_game_version_by_id**](CloudGamesVersionsApi.md#cloud_games_versions_get_game_version_by_id) | **GET** /cloud/games/{game_id}/versions/{version_id} | 
+[**cloud_games_versions_reserve_version_name**](CloudGamesVersionsApi.md#cloud_games_versions_reserve_version_name) | **POST** /cloud/games/{game_id}/versions/reserve-name | 
 [**cloud_games_versions_validate_game_version**](CloudGamesVersionsApi.md#cloud_games_versions_validate_game_version) | **POST** /cloud/games/{game_id}/versions/validate | 
 
 
@@ -59,6 +60,36 @@ Name | Type | Description  | Required | Notes
 ### Return type
 
 [**crate::models::CloudGamesGetGameVersionByIdResponse**](CloudGamesGetGameVersionByIdResponse.md)
+
+### Authorization
+
+[BearerAuth](../README.md#BearerAuth)
+
+### HTTP request headers
+
+- **Content-Type**: Not defined
+- **Accept**: application/json
+
+[[Back to top]](#) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to Model list]](../README.md#documentation-for-models) [[Back to README]](../README.md)
+
+
+## cloud_games_versions_reserve_version_name
+
+> crate::models::CloudGamesReserveVersionNameResponse cloud_games_versions_reserve_version_name(game_id)
+
+
+Reserves a display name for the next version. Used to generate a monotomically increasing build number without causing a race condition with multiple versions getting created at the same time.
+
+### Parameters
+
+
+Name | Type | Description  | Required | Notes
+------------- | ------------- | ------------- | ------------- | -------------
+**game_id** | **uuid::Uuid** |  | [required] |
+
+### Return type
+
+[**crate::models::CloudGamesReserveVersionNameResponse**](CloudGamesReserveVersionNameResponse.md)
 
 ### Authorization
 

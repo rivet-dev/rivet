@@ -1,4 +1,5 @@
 use api_helper::{anchor::WatchIndexQuery, ctx::Ctx};
+use proto::backend::pkg::*;
 use rivet_api::models;
 use rivet_claims::ClaimsDecode;
 use rivet_convert::{ApiInto, ApiTryFrom};
@@ -63,6 +64,25 @@ pub async fn create(
 	let version_id = unwrap_ref!(publish_res.version_id).as_uuid();
 
 	Ok(models::CloudGamesCreateGameVersionResponse { version_id })
+}
+
+// MARK: POST /games/{}/versions/reserve-name
+pub async fn reserve_name(
+	ctx: Ctx<Auth>,
+	game_id: Uuid,
+	body: serde_json::Value,
+) -> GlobalResult<models::CloudGamesReserveVersionNameResponse> {
+	ctx.auth().check_game_write(ctx.op_ctx(), game_id).await?;
+
+	let request_id = uuid::Uuid::new_v4();
+	let res = msg!([ctx] cloud::msg::version_name_reserve(game_id, request_id) -> cloud::msg::version_name_reserve_complete {
+		game_id: Some(game_id.into()),
+		request_id: Some(request_id.into()),
+	}).await?;
+
+	Ok(models::CloudGamesReserveVersionNameResponse {
+		version_display_name: res.version_display_name.clone(),
+	})
 }
 
 // MARK: POST /games/{}/versions/validate
