@@ -1,0 +1,16 @@
+syntax = "proto3";
+
+package rivet.backend.pkg.cloud.msg.version_name_reserve;
+
+import "proto/common.proto";
+
+/// name = "msg-version-name-reserve"
+/// parameters = [
+/// 	{ name = "game_id" },
+/// 	{ name = "request_id" },
+/// ]
+message Message {
+	rivet.common.Uuid game_id = 1;
+	rivet.common.Uuid request_id = 2;
+}
+
