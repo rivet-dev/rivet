@@ -1,0 +1,12 @@
+# IdentitySearchResponse
+
+## Properties
+
+Name | Type | Description | Notes
+------------ | ------------- | ------------- | -------------
+**anchor** | Option<**String**> | The pagination anchor.  | [optional]
+**identities** | [**Vec<crate::models::IdentityHandle>**](IdentityHandle.md) |  | 
+
+[[Back to Model list]](../README.md#documentation-for-models) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to README]](../README.md)
+
+
