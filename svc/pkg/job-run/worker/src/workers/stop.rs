@@ -95,7 +95,7 @@ async fn update_db(
 	tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
 ) -> GlobalResult<Option<(RunRow, Option<RunMetaNomadRow>)>> {
 	let run_row = sql_fetch_optional!(
-		[ctx, RunRow]
+		[ctx,  RunRow, @tx tx]
 		"
 		SELECT region_id, create_ts, stop_ts
 		FROM db_job_state.runs
@@ -112,7 +112,7 @@ async fn update_db(
 	};
 
 	let run_meta_nomad_row = sql_fetch_optional!(
-		[ctx, RunMetaNomadRow]
+		[ctx, RunMetaNomadRow, @tx tx]
 		"
 		SELECT dispatched_job_id
 		FROM db_job_state.run_meta_nomad

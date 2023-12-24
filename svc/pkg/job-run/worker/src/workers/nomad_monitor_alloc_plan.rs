@@ -223,7 +223,7 @@ async fn update_db(
 	}: RunData,
 ) -> GlobalResult<Option<DbOutput>> {
 	let run_row = sql_fetch_optional!(
-		[ctx, RunRow]
+		[ctx, RunRow, @tx tx]
 		"
 		SELECT runs.run_id, runs.region_id, run_meta_nomad.alloc_plan_ts
 		FROM db_job_state.run_meta_nomad
@@ -301,7 +301,7 @@ async fn update_db(
 
 	// Update the run ports
 	let proxied_ports = sql_fetch_all!(
-		[ctx, ProxiedPort]
+		[ctx, ProxiedPort, @tx tx]
 		"
 		SELECT target_nomad_port_label, ingress_port, ingress_hostnames, proxy_protocol, ssl_domain_mode
 		FROM db_job_state.run_proxied_ports

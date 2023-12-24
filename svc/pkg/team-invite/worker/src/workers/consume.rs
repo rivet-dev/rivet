@@ -103,7 +103,7 @@ async fn update_db(
 ) -> GlobalResult<DbOutput> {
 	// Find the invitation
 	let invitation_row = sql_fetch_optional!(
-		[ctx, InvitationRow]
+		[ctx, InvitationRow, @tx tx]
 		"
 		SELECT team_id, expire_ts, max_use_count, use_counter, revoke_ts
 		FROM db_team_invite.invitations
@@ -187,13 +187,13 @@ async fn update_db(
 
 	// Insert consumption
 	sql_execute!(
-		[ctx]
+		[ctx, @tx tx]
 		"UPDATE db_team_invite.invitations SET use_counter = use_counter + 1 WHERE code = $1",
 		&code,
 	)
 	.await?;
 	sql_execute!(
-		[ctx]
+		[ctx, @tx tx]
 		"INSERT INTO db_team_invite.invitation_uses (code, user_id, create_ts) VALUES ($1, $2, $3)",
 		&code,
 		user_id,
