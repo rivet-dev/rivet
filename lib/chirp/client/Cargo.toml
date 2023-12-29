@@ -10,7 +10,7 @@ chirp-perf = { path = "../perf" }
 chirp-types = { path = "../types" }
 chrono = "0.4"
 futures-util = "0.3"
-global-error = { path = "../../global-error" }
+global-error = { path = "../../global-error", features = ["chirp"] }
 lazy_static = "1.4"
 prost = "0.10"
 rand = "0.8"

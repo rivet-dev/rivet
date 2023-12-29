@@ -61,10 +61,11 @@ message Response {
 
 	message Err {
 		message Internal {
+			reserved 4;
+
 			string ty = 1;
 			string message = 2;
 			string debug = 3;
-			ErrorCode code = 4;
 		}
 
 		message BadRequest {
@@ -84,15 +85,6 @@ message Response {
 		Ok ok = 1;
 		Err err = 2;
 	}
-}
-
-enum ErrorCode {
-	reserved 1002;
-	UNKNOWN = 0;
-
-	INTERNAL = 1001;
-	RECURSIVE_REQUEST = 1003;
-	TIMED_OUT = 1004;
 }
 
 message DebugServiceError {

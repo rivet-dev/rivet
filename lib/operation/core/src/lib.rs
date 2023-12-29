@@ -102,13 +102,13 @@ where
 		// Record metrics
 		{
 			let error_code_str = match &res {
-				Err(GlobalError::Internal { ty, code, .. }) => {
-					let error_code_str = code.as_str_name();
+				Err(GlobalError::Internal { ty, .. }) => {
+					let err_code_str = "__UNKNOWN__".to_string();
 					metrics::CHIRP_REQUEST_ERRORS
-						.with_label_values(&[O::NAME, error_code_str, &ty])
+						.with_label_values(&[O::NAME, &err_code_str, &ty])
 						.inc();
 
-					error_code_str.to_string()
+					err_code_str
 				}
 				Err(GlobalError::BadRequest { code, .. }) => {
 					metrics::CHIRP_REQUEST_ERRORS

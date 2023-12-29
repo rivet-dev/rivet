@@ -13,7 +13,7 @@ attributes = ["chirp-worker-attributes", "tracing-subscriber"]
 [dependencies]
 async-trait = "0.1"
 chirp-client = { path = "../client" }
-global-error = { path = "../../global-error" }
+global-error = { path = "../../global-error", features = ["chirp"] }
 chirp-metrics = { path = "../metrics" }
 chirp-perf = { path = "../perf" }
 chirp-worker-attributes = { path = "../worker-attributes", optional = true }

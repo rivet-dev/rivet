@@ -2,7 +2,9 @@ use std::{collections::HashMap, fmt::Display};
 
 use http::StatusCode;
 use serde::Serialize;
-use types::rivet::chirp::{self, ErrorCode};
+
+#[cfg(feature = "chirp")]
+use types::rivet::chirp;
 
 pub type GlobalResult<T> = Result<T, GlobalError>;
 
@@ -12,7 +14,6 @@ pub enum GlobalError {
 		ty: String,
 		message: String,
 		debug: String,
-		code: ErrorCode,
 
 		/// If true, will retry the request immediately with a backoff.
 		///
@@ -47,7 +48,7 @@ impl Display for GlobalError {
 }
 
 impl GlobalError {
-	pub fn new<E>(err: E, code: ErrorCode) -> GlobalError
+	pub fn new<E>(err: E) -> GlobalError
 	where
 		E: std::error::Error,
 	{
@@ -70,7 +71,6 @@ impl GlobalError {
 			ty,
 			message: format!("{}", err),
 			debug,
-			code,
 			retry_immediately: false,
 		}
 	}
@@ -97,12 +97,7 @@ impl GlobalError {
 
 	pub fn http_status(&self) -> StatusCode {
 		match self {
-			GlobalError::Internal { code, .. } => match code {
-				ErrorCode::Unknown
-				| ErrorCode::Internal
-				| ErrorCode::RecursiveRequest
-				| ErrorCode::TimedOut => StatusCode::INTERNAL_SERVER_ERROR,
-			},
+			GlobalError::Internal { .. } => StatusCode::INTERNAL_SERVER_ERROR,
 			GlobalError::BadRequest { code, .. } => formatted_error::parse(code).http_status(),
 		}
 	}
@@ -152,10 +147,11 @@ where
 	T: std::error::Error,
 {
 	fn from(err: T) -> Self {
-		GlobalError::new(err, ErrorCode::Internal)
+		GlobalError::new(err)
 	}
 }
 
+#[cfg(feature = "chirp")]
 impl From<GlobalError> for chirp::response::Err {
 	fn from(val: GlobalError) -> Self {
 		match val {
@@ -163,7 +159,6 @@ impl From<GlobalError> for chirp::response::Err {
 				ty,
 				message,
 				debug,
-				code,
 				retry_immediately: _,
 			} => chirp::response::Err {
 				kind: Some(chirp::response::err::Kind::Internal(
@@ -171,7 +166,6 @@ impl From<GlobalError> for chirp::response::Err {
 						ty,
 						message,
 						debug,
-						code: code.into(),
 					},
 				)),
 			},

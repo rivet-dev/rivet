@@ -450,8 +450,6 @@ impl Client {
 							ty: err.ty,
 							message: err.message,
 							debug: err.debug,
-							code: chirp::ErrorCode::from_i32(err.code)
-								.unwrap_or(chirp::ErrorCode::Internal),
 							retry_immediately: false,
 						}))
 					}

@@ -4,7 +4,7 @@ use global_error::{GlobalError, GlobalResult};
 use prost::Message;
 use redis::{self, AsyncCommands};
 use rivet_connection::Connection;
-use rivet_operation::OperationContext;
+use rivet_operation::{prelude::err_code, OperationContext};
 use rivet_pools::prelude::*;
 use rivet_util::CleanExit;
 use std::{
@@ -758,7 +758,7 @@ where
 				if let Some(error) = &summary.error {
 					match &error.kind {
 						Some(chirp::response::err::Kind::Internal(error)) => {
-							let error_code_str = error.code.to_string();
+							let error_code_str = "__UNKNOWN__".to_string();
 							metrics::CHIRP_REQUEST_ERRORS
 								.with_label_values(&[&worker_name, &error_code_str, &error.ty])
 								.inc();
@@ -812,11 +812,9 @@ where
 			.iter()
 			.any(|x| x.context_name == req.op_ctx.name());
 		let handle_res = if is_recursive {
-			Ok(Err(GlobalError::new(
-				ManagerError::RecursiveRequest {
-					worker_name: req.op_ctx.name().into(),
-				},
-				chirp::ErrorCode::RecursiveRequest,
+			Ok(Err(err_code!(
+				CHIRP_RECURSIVE_REQUEST,
+				worker_name = req.op_ctx.name()
 			)))
 		} else {
 			// Decrease the timeout based on how many callers there are. This
@@ -935,12 +933,12 @@ where
 
 					let err_proto = Into::<chirp::response::Err>::into(err);
 
-					if let Some(chirp::response::err::Kind::Internal(error)) = &err_proto.kind {
+					if let Some(chirp::response::err::Kind::BadRequest(error)) = &err_proto.kind {
 						// Ack the message if recursive (i.e. this will never succeed
 						// again)
 						if let (Some(msg_meta), true) = (
 							req.redis_message_meta,
-							error.code == chirp::ErrorCode::RecursiveRequest as i32,
+							error.code == formatted_error::code::CHIRP_RECURSIVE_REQUEST,
 						) {
 							tracing::error!(
 								?msg_meta,
@@ -975,10 +973,8 @@ where
 				Err(err) => {
 					tracing::error!(?err, "worker task timed out");
 
-					let err_proto = Into::<chirp::response::Err>::into(GlobalError::new(
-						ManagerError::RequestTaskTimedOut,
-						chirp::ErrorCode::TimedOut,
-					));
+					let err_proto =
+						Into::<chirp::response::Err>::into(err_code!(CHIRP_REQUEST_TIMEOUT));
 
 					(
 						if let WorkerKind::Rpc { .. } = &self.config.worker_kind {
