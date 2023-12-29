@@ -10,6 +10,7 @@ bolt-config = { path = "../../bolt/config" }
 heck = "0.3"
 indoc = "1.0"
 prost-build = "0.11"
+protobuf-src = { version = "1.1.0", optional = true }
 regex = "1.5"
 schemac = { path = "../../schemac" }
 serde = { version = "1.0", features = ["derive"] }

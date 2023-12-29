@@ -5,6 +5,9 @@ authors = ["Rivet Gaming, LLC <developer@rivet.gg>"]
 edition = "2018"
 license = "Apache-2.0"
 
+[features]
+protobuf-src = ["types/protobuf-src"]
+
 [dependencies]
 formatted-error = { path = "../formatted-error" }
 types = { path = "../types/core" }

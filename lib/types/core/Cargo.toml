@@ -5,6 +5,9 @@ edition = "2018"
 authors = ["Rivet Gaming, LLC <developer@rivet.gg>"]
 license = "Apache-2.0"
 
+[features]
+protobuf-src = ["types-build/protobuf-src"]
+
 [dependencies]
 chirp-types = { path = "../../chirp/types" }
 prost = "0.10"
