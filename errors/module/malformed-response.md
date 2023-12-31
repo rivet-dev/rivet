@@ -2,6 +2,7 @@
 name = "MODULE_MALFORMED_RESPONSE"
 description = "Module returned malformed response."
 http_status = 500
+experimental = true
 ---
 
 # Module Malformed Response

@@ -3,6 +3,7 @@ name = "MODULE_KEY_NOT_FOUND"
 description = "Module not found for key: {key}"
 description_basic = "Module not found."
 http_status = 400
+experimental = true
 ---
 
 # Module Not Found

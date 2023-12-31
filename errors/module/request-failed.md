@@ -2,6 +2,7 @@
 name = "MODULE_REQUEST_FAILED"
 description = "Failed to make request to module."
 http_status = 500
+experimental = true
 ---
 
 # Module Request Failed
