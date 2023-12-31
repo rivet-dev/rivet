@@ -1294,8 +1294,8 @@ async fn dev_mock_lobby(
 		lobby: Box::new(models::MatchmakerJoinLobby {
 			lobby_id: Uuid::nil(),
 			region: Box::new(models::MatchmakerJoinRegion {
-				region_id: "dev-lcl".into(),
-				display_name: "Local".into(),
+				region_id: util_mm::consts::DEV_REGION_ID.into(),
+				display_name: util_mm::consts::DEV_REGION_NAME.into(),
 			}),
 			ports: ports.clone(),
 			player: player.clone(),

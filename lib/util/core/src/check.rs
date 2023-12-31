@@ -21,23 +21,28 @@ lazy_static! {
 ///
 /// Double dashes are used as separators in DNS and path components internally.
 pub fn ident(s: impl AsRef<str>) -> bool {
-	ident_with_len(s, MAX_IDENT_LEN)
+	ident_with_len(s, false, MAX_IDENT_LEN)
 }
 
 pub fn ident_long(s: impl AsRef<str>) -> bool {
-	ident_with_len(s, MAX_IDENT_LONG_LEN)
+	ident_with_len(s, false, MAX_IDENT_LONG_LEN)
 }
 
-pub fn ident_with_len(s: impl AsRef<str>, len: usize) -> bool {
+pub fn ident_lenient(s: impl AsRef<str>) -> bool {
+	ident_with_len(s, true, MAX_IDENT_LONG_LEN)
+}
+
+pub fn ident_with_len(s: impl AsRef<str>, lenient: bool, len: usize) -> bool {
 	let s = s.as_ref();
 	s.chars().all(|c| match c {
 		'0'..='9' | 'a'..='z' | '-' => true,
+		'A'..='Z' | '_' if lenient => true,
 		_ => false,
 	}) && !s.is_empty()
 		&& s.len() <= len
-		&& !s.contains("--")
 		&& !s.starts_with('-')
 		&& !s.ends_with('-')
+		&& (lenient || !s.contains("--"))
 }
 
 /// Same as `ident` but without the length requirement.
@@ -167,4 +172,55 @@ pub fn bcrypt(s: impl AsRef<str>) -> bool {
 	let s = s.as_ref();
 
 	BCRYPT.is_match(s)
+}
+
+#[cfg(test)]
+mod tests {
+	#[test]
+	fn ident() {
+		assert!(super::ident("x".repeat(super::MAX_IDENT_LEN)));
+		assert!(!super::ident("x".repeat(super::MAX_IDENT_LEN + 1)));
+		assert!(super::ident("test"));
+		assert!(super::ident("test-123"));
+		assert!(super::ident("test-123-abc"));
+		assert!(!super::ident("test--123"));
+		assert!(!super::ident("test-123-"));
+		assert!(!super::ident("-test-123"));
+		assert!(!super::ident("test_123"));
+		assert!(!super::ident("test-ABC"));
+	}
+
+	#[test]
+	fn ident_long() {
+		assert!(super::ident_long("x".repeat(super::MAX_IDENT_LONG_LEN)));
+		assert!(!super::ident_long(
+			"x".repeat(super::MAX_IDENT_LONG_LEN + 1)
+		));
+		assert!(super::ident_long("test"));
+		assert!(super::ident_long("test-123"));
+		assert!(super::ident_long("test-123-abc"));
+		assert!(!super::ident_long("test--123"));
+		assert!(!super::ident_long("test-123-"));
+		assert!(!super::ident_long("-test-123"));
+		assert!(!super::ident_long("test_123"));
+		assert!(!super::ident("test-ABC"));
+	}
+
+	#[test]
+	fn ident_lenient() {
+		assert!(super::ident_lenient("x".repeat(super::MAX_IDENT_LONG_LEN)));
+		assert!(!super::ident_lenient(
+			"x".repeat(super::MAX_IDENT_LONG_LEN + 1)
+		));
+		assert!(super::ident_lenient("test"));
+		assert!(super::ident_lenient("test-123"));
+		assert!(super::ident_lenient("test-123-abc"));
+		assert!(super::ident_lenient("test--123"));
+		assert!(!super::ident_lenient("test-123-"));
+		assert!(!super::ident_lenient("-test-123"));
+		assert!(super::ident_lenient("test_123"));
+		assert!(super::ident_lenient("test_123-abc"));
+		assert!(super::ident_lenient("test_123_abc"));
+		assert!(super::ident_lenient("test-ABC"));
+	}
 }

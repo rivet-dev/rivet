@@ -355,7 +355,7 @@ async fn handle(
 		for (lobby_index, lobby_group) in matchmaker.lobby_groups.iter().take(32).enumerate() {
 			let lobby_group_label = format!("*{}*", lobby_group.name_id);
 
-			if util::check::ident_long(&lobby_group.name_id) {
+			if util::check::ident_lenient(&lobby_group.name_id) {
 				if unique_lobby_names.contains(lobby_group.name_id.trim()) {
 					errors.push(util::err_path![
 						"config",
