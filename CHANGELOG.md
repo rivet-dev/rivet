@@ -25,6 +25,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 -   **Matchmaker** Logs not shipping if lobby exits immediately
 -   **Matchmaker** Returning `lnd-atl` instead of `dev-lcl` as the mocked mocked region ID in the region list
 -   **API** 520 error when long polling
+-   **api-cloud** Returning wrong domain for `domains.cdn`
 
 ## [23.2.0-rc.1] - 2023-12-01
 

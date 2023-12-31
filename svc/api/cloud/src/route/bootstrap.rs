@@ -17,7 +17,7 @@ pub async fn build_bootstrap_data() -> GlobalResult<models::CloudBootstrapRespon
 		cluster: models::CloudBootstrapCluster::Oss,
 		domains: if let (Some(main), Some(cdn), Some(job)) = (
 			util::env::domain_main(),
-			util::env::domain_job(),
+			util::env::domain_cdn(),
 			util::env::domain_job(),
 		) {
 			Some(Box::new(models::CloudBootstrapDomains {
