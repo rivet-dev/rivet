@@ -12,6 +12,7 @@ types:
   Config:
     docs: Cloud configuration for a given version.
     properties:
+      scripts: optional<map<string, string>>
       engine: optional<engine.Config>
       cdn: optional<cdn.Config>
       matchmaker: optional<matchmaker.Config>

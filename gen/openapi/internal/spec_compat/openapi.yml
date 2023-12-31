@@ -1933,6 +1933,10 @@ components:
           $ref: '#/components/schemas/CloudVersionKvConfig'
         matchmaker:
           $ref: '#/components/schemas/CloudVersionMatchmakerConfig'
+        scripts:
+          additionalProperties:
+            type: string
+          type: object
       type: object
     CloudVersionEngineConfig:
       properties:

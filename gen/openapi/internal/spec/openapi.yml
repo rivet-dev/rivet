@@ -8637,6 +8637,10 @@ components:
       type: object
       description: Cloud configuration for a given version.
       properties:
+        scripts:
+          type: object
+          additionalProperties:
+            type: string
         engine:
           $ref: '#/components/schemas/CloudVersionEngineConfig'
         cdn:

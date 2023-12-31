@@ -26,6 +26,8 @@ pub struct CloudVersionConfig {
     pub kv: Option<serde_json::Value>,
     #[serde(rename = "matchmaker", skip_serializing_if = "Option::is_none")]
     pub matchmaker: Option<Box<crate::models::CloudVersionMatchmakerConfig>>,
+    #[serde(rename = "scripts", skip_serializing_if = "Option::is_none")]
+    pub scripts: Option<::std::collections::HashMap<String, String>>,
 }
 
 impl CloudVersionConfig {
@@ -37,6 +39,7 @@ impl CloudVersionConfig {
             identity: None,
             kv: None,
             matchmaker: None,
+            scripts: None,
         }
     }
 }
