@@ -5,10 +5,19 @@ imports:
 
 types:
   Config:
-    docs: Identity configuration for a given version.
+    docs: >-
+      **Deprecated**
+
+      Identity configuration for a given version.
     properties:
-      display_names: optional<list<string>>
-      avatars: optional<list<uuid>>
+      display_names:
+        docs: >-
+          **Deprecated**
+        type: optional<list<string>>
+      avatars:
+        docs: >-
+          **Deprecated**
+        type: optional<list<uuid>>
 
       custom_display_names:
         docs: >-

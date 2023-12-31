@@ -1997,9 +1997,12 @@ components:
       - config
       type: object
     CloudVersionIdentityConfig:
-      description: Identity configuration for a given version.
+      description: '**Deprecated**
+
+        Identity configuration for a given version.'
       properties:
         avatars:
+          description: '**Deprecated**'
           items:
             format: uuid
             type: string
@@ -2015,6 +2018,7 @@ components:
             $ref: '#/components/schemas/CloudVersionIdentityCustomDisplayName'
           type: array
         display_names:
+          description: '**Deprecated**'
           items:
             type: string
           type: array
@@ -2177,6 +2181,7 @@ components:
         identity_requirement:
           $ref: '#/components/schemas/CloudVersionMatchmakerGameModeIdentityRequirement'
         max_lobbies_per_identity:
+          description: '**Deprecated**'
           type: integer
         verification:
           $ref: '#/components/schemas/CloudVersionMatchmakerGameModeVerificationConfig'
@@ -2198,8 +2203,10 @@ components:
       - enabled
       type: object
     CloudVersionMatchmakerGameModeIdentityRequirement:
-      description: The registration requirement for a user when joining/finding/creating
-        a lobby. "None" allows for connections without an identity.
+      description: '**Deprecated**
+
+        The registration requirement for a user when joining/finding/creating a lobby.
+        "None" allows for connections without an identity.'
       enum:
       - none
       - guest

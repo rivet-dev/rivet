@@ -98,6 +98,8 @@ types:
 
   GameModeIdentityRequirement:
     docs: >-
+      **Deprecated**
+
       The registration requirement for a user when joining/finding/creating a
       lobby. "None" allows for connections without an identity.
     enum:
@@ -156,4 +158,8 @@ types:
       enable_private:
         docs: Defaults to true when unset.
         type: optional<boolean>
-      max_lobbies_per_identity: optional<integer>
+      max_lobbies_per_identity:
+        docs: >-
+          **Deprecated**
+
+        type: optional<integer>

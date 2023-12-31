@@ -8771,17 +8771,21 @@ components:
           $ref: '#/components/schemas/CloudVersionEngineCustomConfig'
     CloudVersionIdentityConfig:
       type: object
-      description: Identity configuration for a given version.
+      description: |-
+        **Deprecated**
+        Identity configuration for a given version.
       properties:
         display_names:
           type: array
           items:
             type: string
+          description: '**Deprecated**'
         avatars:
           type: array
           items:
             type: string
             format: uuid
+          description: '**Deprecated**'
         custom_display_names:
           type: array
           items:
@@ -11077,6 +11081,8 @@ components:
         - guest
         - registered
       description: >-
+        **Deprecated**
+
         The registration requirement for a user when joining/finding/creating a
         lobby. "None" allows for connections without an identity.
     CloudVersionMatchmakerGameModeVerificationConfig:
@@ -11158,6 +11164,7 @@ components:
           description: Defaults to true when unset.
         max_lobbies_per_identity:
           type: integer
+          description: '**Deprecated**'
       required:
         - enabled
     CloudVersionMatchmakerLobbyGroup:

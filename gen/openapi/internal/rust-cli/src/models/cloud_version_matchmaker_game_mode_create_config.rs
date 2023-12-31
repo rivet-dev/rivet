@@ -26,6 +26,7 @@ pub struct CloudVersionMatchmakerGameModeCreateConfig {
     pub enabled: bool,
     #[serde(rename = "identity_requirement", skip_serializing_if = "Option::is_none")]
     pub identity_requirement: Option<crate::models::CloudVersionMatchmakerGameModeIdentityRequirement>,
+    /// **Deprecated**
     #[serde(rename = "max_lobbies_per_identity", skip_serializing_if = "Option::is_none")]
     pub max_lobbies_per_identity: Option<i32>,
     #[serde(rename = "verification", skip_serializing_if = "Option::is_none")]
