@@ -5,6 +5,7 @@
 Name | Type | Description | Notes
 ------------ | ------------- | ------------- | -------------
 **args** | Option<**Vec<String>**> |  | [optional]
+**build_args** | Option<**::std::collections::HashMap<String, String>**> | _Configures Rivet CLI behavior. Has no effect on server behavior._ | [optional]
 **dockerfile** | Option<**String**> | _Configures Rivet CLI behavior. Has no effect on server behavior._ | [optional]
 **env** | Option<**::std::collections::HashMap<String, String>**> |  | [optional]
 **image** | Option<**String**> | _Configures Rivet CLI behavior. Has no effect on server behavior._ | [optional]

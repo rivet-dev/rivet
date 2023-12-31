@@ -17,6 +17,9 @@ pub struct CloudVersionMatchmakerGameModeRuntimeDocker {
     #[serde(rename = "args", skip_serializing_if = "Option::is_none")]
     pub args: Option<Vec<String>>,
     /// _Configures Rivet CLI behavior. Has no effect on server behavior._
+    #[serde(rename = "build_args", skip_serializing_if = "Option::is_none")]
+    pub build_args: Option<::std::collections::HashMap<String, String>>,
+    /// _Configures Rivet CLI behavior. Has no effect on server behavior._
     #[serde(rename = "dockerfile", skip_serializing_if = "Option::is_none")]
     pub dockerfile: Option<String>,
     #[serde(rename = "env", skip_serializing_if = "Option::is_none")]
@@ -37,6 +40,7 @@ impl CloudVersionMatchmakerGameModeRuntimeDocker {
     pub fn new() -> CloudVersionMatchmakerGameModeRuntimeDocker {
         CloudVersionMatchmakerGameModeRuntimeDocker {
             args: None,
+            build_args: None,
             dockerfile: None,
             env: None,
             image: None,

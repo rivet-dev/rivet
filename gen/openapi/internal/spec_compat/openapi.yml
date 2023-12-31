@@ -2245,6 +2245,11 @@ components:
           items:
             type: string
           type: array
+        build_args:
+          additionalProperties:
+            type: string
+          description: _Configures Rivet CLI behavior. Has no effect on server behavior._
+          type: object
         dockerfile:
           description: _Configures Rivet CLI behavior. Has no effect on server behavior._
           type: string

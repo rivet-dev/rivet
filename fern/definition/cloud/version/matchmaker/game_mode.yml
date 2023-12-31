@@ -48,6 +48,9 @@ types:
       dockerfile:
         docs: _Configures Rivet CLI behavior. Has no effect on server behavior._
         type: optional<string>
+      build_args:
+        docs: _Configures Rivet CLI behavior. Has no effect on server behavior._
+        type: optional<map<string, string>>
       image:
         docs: _Configures Rivet CLI behavior. Has no effect on server behavior._
         type: optional<string>

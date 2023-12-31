@@ -177,6 +177,7 @@ pub fn game_mode_to_openapi(
 		backend::matchmaker::lobby_runtime::Runtime::Docker(runtime) => {
 			models::CloudVersionMatchmakerGameModeRuntimeDocker {
 				image_id: Some(unwrap_ref!(runtime.build_id).as_uuid()),
+				build_args: None,
 				args: Some(runtime.args.clone()),
 				env: Some(
 					runtime
