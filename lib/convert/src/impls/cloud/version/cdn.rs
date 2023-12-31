@@ -101,6 +101,7 @@ impl ApiTryFrom<backend::cdn::VersionConfig> for models::CloudVersionCdnConfig {
 		Ok(models::CloudVersionCdnConfig {
 			build_command: None,
 			build_output: None,
+			build_env: None,
 			site_id: Some(site_id),
 			routes: Some(
 				value

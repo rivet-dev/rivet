@@ -18,6 +18,9 @@ pub struct CloudVersionCdnConfig {
     #[serde(rename = "build_command", skip_serializing_if = "Option::is_none")]
     pub build_command: Option<String>,
     /// _Configures Rivet CLI behavior. Has no effect on server behavior._
+    #[serde(rename = "build_env", skip_serializing_if = "Option::is_none")]
+    pub build_env: Option<::std::collections::HashMap<String, String>>,
+    /// _Configures Rivet CLI behavior. Has no effect on server behavior._
     #[serde(rename = "build_output", skip_serializing_if = "Option::is_none")]
     pub build_output: Option<String>,
     /// Multiple CDN version routes.
@@ -32,6 +35,7 @@ impl CloudVersionCdnConfig {
     pub fn new() -> CloudVersionCdnConfig {
         CloudVersionCdnConfig {
             build_command: None,
+            build_env: None,
             build_output: None,
             routes: None,
             site_id: None,

@@ -13,6 +13,9 @@ types:
       build_output:
         docs: _Configures Rivet CLI behavior. Has no effect on server behavior._
         type: optional<string>
+      build_env:
+        docs: _Configures Rivet CLI behavior. Has no effect on server behavior._
+        type: optional<map<string, string>>
       site_id:
         type: optional<uuid>
       routes:

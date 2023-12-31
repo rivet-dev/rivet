@@ -7968,6 +7968,11 @@ components:
         build_output:
           type: string
           description: _Configures Rivet CLI behavior. Has no effect on server behavior._
+        build_env:
+          type: object
+          additionalProperties:
+            type: string
+          description: _Configures Rivet CLI behavior. Has no effect on server behavior._
         site_id:
           type: string
           format: uuid

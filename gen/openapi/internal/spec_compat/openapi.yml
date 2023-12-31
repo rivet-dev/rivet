@@ -1860,6 +1860,11 @@ components:
         build_command:
           description: _Configures Rivet CLI behavior. Has no effect on server behavior._
           type: string
+        build_env:
+          additionalProperties:
+            type: string
+          description: _Configures Rivet CLI behavior. Has no effect on server behavior._
+          type: object
         build_output:
           description: _Configures Rivet CLI behavior. Has no effect on server behavior._
           type: string
