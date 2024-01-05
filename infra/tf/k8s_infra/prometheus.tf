@@ -8,7 +8,8 @@ locals {
 	})
 
 	# TODO: Allow configuring
-	prometheus_storage = 64000 # Mebibytes
+	# Use exact bytes so we don't have to worry about converting between mebibytes in k8s and megabytes in Prometheus
+	prometheus_storage = 64 * 1000 * 1000 * 1000 # Bytes
 
 	service_alertmanager = lookup(var.services, "alertmanager", {
 		count = 1
@@ -235,7 +236,11 @@ resource "helm_release" "prometheus" {
 				evaluationInterval = "15s"
 
 				retention = "7d"
-				retentionSize = "${local.prometheus_storage - 100}MB"
+
+				# Provide unused storage space
+				#
+				# See https://arc.net/l/quote/ncocbkuo
+				retentionSize = "${floor(local.prometheus_storage * 0.8)}B"
 
 				# additionalArgs = [{
 				# 	name = "log.level"
@@ -248,7 +253,7 @@ resource "helm_release" "prometheus" {
 							storageClassName = var.k8s_storage_class
 							resources = {
 								requests = {
-									storage = "${local.prometheus_storage}Mi"
+									storage = "${local.prometheus_storage}"
 								}
 							}
 						}
