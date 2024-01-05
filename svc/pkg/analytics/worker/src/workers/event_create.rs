@@ -33,21 +33,10 @@ async fn worker(ctx: &OperationContext<analytics::msg::event_create::Message>) -
 		.map(Into::<common::Uuid>::into)
 		.collect::<Vec<_>>();
 
-	// Fetch the user's current presence to enrich the event
-	let user_presences = op!([ctx] user_presence_get {
-		user_ids: user_ids_proto.clone(),
-	})
-	.await?;
-
 	// Build events
 	let mut insert = client.insert("events")?;
 	for req_event in &ctx.events {
-		let event = build_event(
-			req_event.ts.unwrap_or(ctx.ts()),
-			ray_id,
-			req_event,
-			&user_presences.users,
-		)?;
+		let event = build_event(req_event.ts.unwrap_or(ctx.ts()), ray_id, req_event)?;
 		insert.write(&event).await?;
 	}
 	insert.end().await?;
@@ -59,7 +48,6 @@ fn build_event(
 	ts: i64,
 	ray_id: Uuid,
 	req_event: &analytics::msg::event_create::Event,
-	user_presences: &[user_presence::get::UserPresenceEntry],
 ) -> GlobalResult<Event> {
 	let mut properties = HashMap::<String, Box<serde_json::value::RawValue>>::new();
 
@@ -77,37 +65,6 @@ fn build_event(
 	}
 	if let Some(ns_id) = req_event.namespace_id {
 		serialize_prop(&mut properties, "namespace_id", ns_id.as_uuid())?;
-	}
-
-	// Insert user presence
-	if let Some(user_presence) = user_presences
-		.iter()
-		.find(|x| x.user_id == req_event.user_id)
-		.and_then(|x| x.presence.as_ref())
-	{
-		serialize_prop(&mut properties, "presence_status", user_presence.status)?;
-		if let Some(game_activity) = &user_presence.game_activity {
-			serialize_prop(
-				&mut properties,
-				"presence_game_id",
-				unwrap_ref!(game_activity.game_id).as_uuid(),
-			)?;
-			// TODO: Add back when Serde decoding is fixed (RIV-2278)
-			// if let Some(public_metadata) = &game_activity.public_metadata {
-			// 	serialize_prop(
-			// 		&mut properties,
-			// 		"presence_game_public_metadata",
-			// 		serde_json::from_str::<serde_json::Value>(public_metadata)?,
-			// 	)?;
-			// }
-			// if let Some(friend_metadata) = &game_activity.friend_metadata {
-			// 	serialize_prop(
-			// 		&mut properties,
-			// 		"presence_game_friend_metadata",
-			// 		serde_json::from_str::<serde_json::Value>(friend_metadata)?,
-			// 	)?;
-			// }
-		}
 	}
 
 	Ok(Event {

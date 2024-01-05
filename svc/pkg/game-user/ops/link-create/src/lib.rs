@@ -60,21 +60,6 @@ async fn handle(
 	)
 	.await?;
 
-	msg!([ctx] analytics::msg::event_create() {
-		events: vec![
-			analytics::msg::event_create::Event {
-				name: "game_user_link.create".into(),
-				user_id: game_user.user_id,
-				namespace_id: game_user.namespace_id,
-				properties_json: Some(serde_json::to_string(&json!({
-					"link_id": link_id,
-				}))?),
-				..Default::default()
-			}
-		],
-	})
-	.await?;
-
 	Ok(game_user::link_create::Response {
 		link_id: Some(link_id.into()),
 		user_link_token: user_link_token.token.to_owned(),

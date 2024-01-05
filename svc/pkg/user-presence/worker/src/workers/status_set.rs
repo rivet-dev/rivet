@@ -55,20 +55,5 @@ async fn worker(
 		.await?;
 	}
 
-	msg!([ctx] analytics::msg::event_create() {
-		events: vec![
-			analytics::msg::event_create::Event {
-				name: "user.status_set".into(),
-				properties_json: Some(serde_json::to_string(&json!({
-					"user_id": user_id,
-					"status": ctx.status,
-					"silent": ctx.silent,
-				}))?),
-				..Default::default()
-			}
-		],
-	})
-	.await?;
-
 	Ok(())
 }

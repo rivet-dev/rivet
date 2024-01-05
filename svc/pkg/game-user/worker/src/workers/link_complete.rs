@@ -122,21 +122,6 @@ async fn worker(
 			})
 			.await?;
 
-			msg!([ctx] analytics::msg::event_create() {
-				events: vec![
-					analytics::msg::event_create::Event {
-						name: "game_user_link.complete".into(),
-						user_id: Some(user_id.into()),
-						namespace_id: Some(namespace_id.into()),
-						properties_json: Some(serde_json::to_string(&json!({
-							"link_id": link_id,
-						}))?),
-						..Default::default()
-					}
-				],
-			})
-			.await?;
-
 			Some(game_user_token.token)
 		}
 		game_user::msg::link_complete::GameUserLinkCompleteResolution::Cancel => {

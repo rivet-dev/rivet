@@ -33,16 +33,5 @@ async fn worker(ctx: &OperationContext<user_presence::msg::arrive::Message>) -> 
 		.await?;
 	}
 
-	msg!([ctx] analytics::msg::event_create() {
-		events: vec![
-			analytics::msg::event_create::Event {
-				name: "user.presence_arrive".into(),
-				user_id: Some(user_id.into()),
-				..Default::default()
-			}
-		],
-	})
-	.await?;
-
 	Ok(())
 }
