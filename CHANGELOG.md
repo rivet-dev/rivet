@@ -27,6 +27,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 -   **API** 520 error when long polling
 -   **api-cloud** Returning wrong domain for `domains.cdn`
 -   **Infra** Fix Prometheus storage retention conversion between mebibytes and megabytes
+-   **Infra** Fix typo in Game Guard Traefik config not exposing API endpoint
 
 ## [23.2.0-rc.1] - 2023-12-01
 
