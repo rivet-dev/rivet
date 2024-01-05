@@ -1,5 +1,23 @@
 # Troubleshooting
 
+## `No nodes found for the given cluster`
+
+This is the error when running a Bolt command:
+
+```
+FATA[0000] No nodes found for given cluster
+thread 'main' panicked at /root/rivet/ee/oss/lib/bolt/core/src/tasks/gen.rs:26:39:
+```
+
+Run:
+
+```
+BOLT_SKIP_K8S_GEN=1 bolt tf destroy k8s_cluster_k3d
+bolt tf apply k8s_cluster_k3d
+```
+
+This will tell Terraform to forget about the K3D cluster and create a new one.
+
 ## Check what ports are forwarded to my load balancer?
 
 Check the ports forwarded with this command:

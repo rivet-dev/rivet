@@ -60,7 +60,11 @@ pub async fn project(ctx: &ProjectContext) -> Result<()> {
 	};
 
 	// TODO: has_applied is slow
-	if terraform::cli::has_applied(ctx, plan_id).await {
+	if !std::env::var("BOLT_SKIP_K8S_GEN")
+		.ok()
+		.map_or(false, |x| x == "1")
+		&& terraform::cli::has_applied(ctx, plan_id).await
+	{
 		// Read kubectl config
 		let config = match ctx.ns().kubernetes.provider {
 			ns::KubernetesProvider::K3d {} => block_in_place(move || {
