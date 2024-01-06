@@ -9,15 +9,11 @@ service:
   endpoints:
     prepare:
       path: ""
-      audiences:
-        - public
       method: "POST"
       response: PrepareDeviceLinkResponse
 
     get:
       path: ""
-      audiences:
-        - public
       method: "GET"
       request:
         name: GetDeviceLinkRequest

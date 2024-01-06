@@ -1,0 +1,1 @@
+export { GetGameProfileRequest } from "./GetGameProfileRequest";

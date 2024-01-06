@@ -1,0 +1,23 @@
+node_modules
+.DS_Store
+*.d.ts
+
+# yarn berry
+.pnp.*
+.yarn/*
+!.yarn/patches
+!.yarn/plugins
+!.yarn/releases
+!.yarn/sdks
+!.yarn/versions
+
+# These would normally be ignored.
+#
+# We include them in the repo so the can be manually
+#
+# In the future, we can try something like:
+#
+# yarn add 'https://gitpkg.now.sh/rivet-gg/rivet/sdks/typescript?80957d86a73b8c718796fb21f569af4d959cdd46&scripts.postinstall=yarn%20install%20%26%26%20yarn%20run%20build'
+!dist/
+!types/
+

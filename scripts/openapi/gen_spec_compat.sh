@@ -6,12 +6,12 @@ import yaml
 import os
 
 # Create output dir
-output_dir='gen/openapi/internal/spec_compat'
+output_dir='sdks/openapi-compat'
 if not os.path.exists(output_dir):
 	os.makedirs(output_dir)
 
 # Read spec
-with open('gen/openapi/internal/spec/openapi.yml', 'r') as f:
+with open('sdks/openapi/openapi.yml', 'r') as f:
 	openapi = yaml.safe_load(f.read())
 
 # Modify spec for compatibility

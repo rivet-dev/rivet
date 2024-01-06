@@ -6,8 +6,6 @@ imports:
 service:
   auth: true
   base-path: /matchmaker/regions
-  audiences:
-    - public
   endpoints:
     list:
       path: ""

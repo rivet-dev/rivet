@@ -8,8 +8,6 @@ imports:
 
 service:
   auth: true
-  audiences:
-    - public
   base-path: /matchmaker/lobbies
   endpoints:
     ready:

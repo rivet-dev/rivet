@@ -6,8 +6,6 @@ imports:
 
 service:
   auth: true
-  audiences:
-    - public
   base-path: /identity/events
   endpoints:
     watch:

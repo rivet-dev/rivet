@@ -6,8 +6,6 @@ imports:
 service:
   auth: true
   base-path: /cloud/rays
-  audiences:
-    - public
   endpoints:
     getRayPerfLogs:
       path: /{ray_id}/perf

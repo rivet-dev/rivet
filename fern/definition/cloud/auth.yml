@@ -6,8 +6,6 @@ imports:
 service:
   auth: true
   base-path: /cloud/auth
-  audiences:
-    - public
   endpoints:
     inspect:
       path: /inspect

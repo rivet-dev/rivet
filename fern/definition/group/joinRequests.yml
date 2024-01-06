@@ -2,8 +2,6 @@
 
 service:
   auth: true
-  audiences:
-    - public
   base-path: /group/groups/{group_id}/join-request
   path-parameters:
     group_id:

@@ -1,87 +1,25 @@
 default-group: local
 groups:
-  external:
-    audiences:
-      - public
+  local:
     generators:
-      - name: fernapi/fern-typescript-sdk
-        version: 0.5.6
-        config:
-          namespaceExport: Rivet
-          bundle: true
-        output:
-          location: npm
-          package-name: "@rivet-gg/api"
-          token: ${FERN_NPM_TOKEN}
-        github:
-          repository: rivet-gg/rivet-node
-      - name: fernapi/fern-java-sdk
-        version: 0.4.8
-        output:
-          location: maven
-          coordinate: gg.rivet:api
-          username: ${RIVET_MAVEN_USERNAME}
-          password: ${RIVET_MAVEN_PASSWORD}
-        github:
-          repository: rivet-gg/rivet-java
-      - name: fernapi/fern-go-sdk
-        version: 0.5.0
-        config:
-          module:
-            path: github.com/rivet-gg/rivet-go
-        github:
-          repository: rivet-gg/rivet-go
       - name: fernapi/fern-openapi
         version: 0.0.22
-        github:
-          repository: rivet-gg/rivet-openapi
-  internal:
-    generators:
-      - name: fernapi/fern-typescript-sdk
-        version: 0.5.6
+        output:
+          location: local-file-system
+          path: ../sdks/openapi
+      - name: fernapi/fern-typescript-browser-sdk
+        version: 0.9.0
+        output:
+          location: local-file-system
+          path: ../sdks/typescript/src
         config:
+          outputSourceFiles: true
           namespaceExport: Rivet
-          bundle: true
+          defaultTimeoutInSeconds: 180
+          skipResponseValidation: true
           allowCustomFetcher: true
-        output:
-          location: npm
-          package-name: "@rivet-gg/api-internal"
-          token: ${FERN_NPM_TOKEN}
-  local_sdks:
-    audiences:
-      - public
-    generators:
-      - name: fernapi/fern-typescript-sdk
-        version: 0.5.6
-        output:
-          location: local-file-system
-          path: ../sdks/ts
-        config:
-          namespaceExport: Rivet
-          bundle: true
-      - name: fernapi/fern-java-sdk
-        version: 0.4.8
-        output:
-          location: local-file-system
-          path: ../sdks/java
       - name: fernapi/fern-go-sdk
-        version: 0.3.0
+        version: 0.9.3
         output:
           location: local-file-system
           path: ../sdks/go
-  local_external:
-    audiences:
-      - public
-    generators:
-      - name: fernapi/fern-openapi
-        version: 0.0.22
-        output:
-          location: local-file-system
-          path: ../gen/openapi/external/spec
-  local_internal:
-    generators:
-      - name: fernapi/fern-openapi
-        version: 0.0.22
-        output:
-          location: local-file-system
-          path: ../gen/openapi/internal/spec

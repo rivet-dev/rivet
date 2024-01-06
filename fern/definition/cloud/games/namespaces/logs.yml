@@ -5,8 +5,6 @@ imports:
 
 service:
   auth: true
-  audiences:
-    - public
   base-path: /cloud/games/{game_id}/namespaces/{namespace_id}
   path-parameters:
     game_id:

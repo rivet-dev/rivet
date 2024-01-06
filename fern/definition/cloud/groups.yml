@@ -7,8 +7,6 @@ imports:
 service:
   auth: true
   base-path: /cloud/groups
-  audiences:
-    - public
   endpoints:
     validate:
       path: /validate

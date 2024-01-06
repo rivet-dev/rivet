@@ -49,5 +49,3 @@ lib/**/Cargo.lock
 
 tests/basic-game/.env
 
-# Local SDKs
-sdks/

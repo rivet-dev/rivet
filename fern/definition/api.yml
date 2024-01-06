@@ -9,8 +9,6 @@ error-discrimination:
 environments:
   Production: https://api.rivet.gg
 default-environment: Production
-audiences:
-  - public
 errors:
   - commons.InternalError
   - commons.RateLimitError

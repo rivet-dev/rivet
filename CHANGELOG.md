@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 -   **Matchmaker** Lowered internal overhead of log shipping for lobbies
 -   **Matchmaker** Game mode names are now more lenient to include capital letters & underscores
 -   **API** Return `API_REQUEST_TIMEOUT` error after 50s (see `docs/infrastructure/API_TIMEOUTS.md` for context)
+-   **API** Move generated client APIs to sdks/
 -   Lower long poll timeout from 60s -> 40s
 
 ### Security

@@ -10,8 +10,6 @@ imports:
 service:
   auth: true
   base-path: /cloud/games
-  audiences:
-    - public
   endpoints:
     getGames:
       path: ""

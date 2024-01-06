@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 set -euf -o pipefail
 
-GEN_PATH_RUST="gen/openapi/internal/rust"
-GEN_PATH_RUST_CLI="gen/openapi/internal/rust-cli"
-GEN_PATH_OPENAPI="gen/openapi/internal/spec_compat/openapi.yml"
+GEN_PATH_RUST="sdks/rust"
+GEN_PATH_RUST_CLI="sdks/rust-cli"
+GEN_PATH_OPENAPI="sdks/openapi-compat/openapi.yml"
 
 rm -rf $GEN_PATH_RUST
 rm -rf $GEN_PATH_RUST_CLI

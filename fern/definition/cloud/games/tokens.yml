@@ -3,8 +3,6 @@
 service:
   auth: true
   base-path: /cloud
-  audiences:
-    - public
   endpoints:
     createCloudToken:
       path: /games/{game_id}/tokens/cloud

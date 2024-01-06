@@ -8,8 +8,6 @@ imports:
 service:
   auth: true
   base-path: /cloud/games/{game_id}/versions
-  audiences:
-    - public
   path-parameters:
     game_id:
       type: uuid

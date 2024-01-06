@@ -11,8 +11,6 @@ service:
     get:
       path: ""
       method: GET
-      audiences:
-        - public
       docs: Returns a specific key-value entry by key.
       request:
         name: GetOperationRequest
@@ -28,8 +26,6 @@ service:
     put:
       path: ""
       method: PUT
-      audiences:
-        - public
       docs: Puts (sets or overwrites) a key-value entry by key.
       request:
         body: PutRequest
@@ -37,8 +33,6 @@ service:
     delete:
       path: ""
       method: DELETE
-      audiences:
-        - public
       docs: Deletes a key-value entry by key.
       request:
         name: DeleteOperationRequest
@@ -61,8 +55,6 @@ service:
     getBatch:
       path: /batch
       method: GET
-      audiences:
-        - public
       docs: Gets multiple key-value entries by key(s).
       request:
         name: GetBatchRequest
@@ -80,8 +72,6 @@ service:
     putBatch:
       path: /batch
       method: PUT
-      audiences:
-        - public
       docs: Puts (sets or overwrites) multiple key-value entries by key(s).
       request:
         body: PutBatchRequest
@@ -89,8 +79,6 @@ service:
     deleteBatch:
       path: /batch
       method: DELETE
-      audiences:
-        - public
       docs: Deletes multiple key-value entries by key(s).
       request:
         name: DeleteBatchRequest

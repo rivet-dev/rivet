@@ -9,8 +9,6 @@ imports:
 
 service:
   auth: true
-  audiences:
-    - public
   base-path: /identity/identities
   endpoints:
     setup:
@@ -37,8 +35,6 @@ service:
         `Setup` every time the client starts.
       path: ""
       method: POST
-      audiences:
-        - public
       request:
         name: SetupRequest
         body:

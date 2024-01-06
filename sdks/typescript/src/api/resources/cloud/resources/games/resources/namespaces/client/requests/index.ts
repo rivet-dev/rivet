@@ -1,0 +1,1 @@
+export { GetGameNamespaceVersionHistoryRequest } from "./GetGameNamespaceVersionHistoryRequest";

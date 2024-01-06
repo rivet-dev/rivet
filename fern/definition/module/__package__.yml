@@ -3,8 +3,6 @@
 service:
   auth: true
   base-path: /module/modules
-  audiences:
-    - public
   endpoints:
     call:
       path: /{module}/scripts/{script}/call

@@ -1,0 +1,1 @@
+export { GetGameLinkRequest } from "./GetGameLinkRequest";
