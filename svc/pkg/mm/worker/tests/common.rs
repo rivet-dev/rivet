@@ -1,5 +1,4 @@
 use chirp_worker::prelude::*;
-use chirp_worker::prelude::*;
 use proto::backend::{self, pkg::*};
 use std::collections::HashMap;
 
@@ -28,7 +27,7 @@ impl Setup {
 
 		let build_res = op!([ctx] faker_build {
 			game_id: game_res.game_id,
-			image: faker::build::Image::MmLobbyEcho as i32,
+			image: backend::faker::Image::MmLobbyEcho as i32,
 		})
 		.await
 		.unwrap();

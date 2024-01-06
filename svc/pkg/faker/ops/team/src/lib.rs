@@ -29,26 +29,10 @@ async fn handle(
 	.await?;
 
 	if ctx.is_dev {
-		msg!([ctx] team_dev::msg::create(team_id) -> team::msg::update {
+		msg!([ctx] team_dev::msg::create(team_id) -> team_dev::msg::create_complete {
 			team_id: team_id_proto,
 		})
 		.await?;
-
-		if util::env::is_billing_enabled() {
-			let team_dev_get_res = op!([ctx] team_dev_get {
-				team_ids: vec![team_id.into()],
-			})
-			.await?;
-			let dev_team = unwrap!(team_dev_get_res.teams.first());
-			let stripe_customer_id = unwrap_ref!(dev_team.stripe_customer_id).clone();
-
-			msg!([ctx] team_dev::msg::status_update(&stripe_customer_id) -> team_dev::msg::status_update_complete {
-				stripe_customer_id: stripe_customer_id,
-				setup_complete: Some(true),
-				..Default::default()
-			})
-			.await?;
-		}
 	}
 
 	for user_id in &member_user_ids {

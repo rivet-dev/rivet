@@ -76,6 +76,24 @@ message ProxiedPort {
 	SslDomainMode ssl_domain_mode = 5;
 }
 
+// Used to create a propxied port
+//
+// See ProxiedPort.
+message ProxiedPortConfig {
+	reserved 1;
+
+	/// Label of the Nomad port to connect to.
+	optional string target_nomad_port_label = 6;
+
+	// Port to listen on on the load balancer. If not provided, a port will be
+	// automatically chosen from the port allocator.
+	optional uint32 ingress_port = 2;
+
+	repeated string ingress_hostnames = 3;
+	ProxyProtocol proxy_protocol = 4;
+	SslDomainMode ssl_domain_mode = 5;
+}
+
 // Protocol that this proxied port uses.
 enum ProxyProtocol {
 	HTTP = 0;

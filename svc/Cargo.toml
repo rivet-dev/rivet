@@ -180,8 +180,6 @@ members = [
 	"pkg/region/ops/resolve",
 	"pkg/team-dev/ops/game-list",
 	"pkg/team-dev/ops/get",
-	"pkg/team-dev/ops/halt",
-	"pkg/team-dev/standalone/halt-collect",
 	"pkg/team-dev/worker",
 	"pkg/team-invite/ops/get",
 	"pkg/team-invite/worker",

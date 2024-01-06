@@ -1,5 +1,5 @@
 use chirp_worker::prelude::*;
-use proto::backend::pkg::*;
+use proto::backend::{self, pkg::*};
 
 #[worker(name = "mm-lobby-find-lobby-create-fail")]
 async fn worker(ctx: &OperationContext<mm::msg::lobby_create_fail::Message>) -> GlobalResult<()> {
@@ -7,17 +7,17 @@ async fn worker(ctx: &OperationContext<mm::msg::lobby_create_fail::Message>) -> 
 
 	let error_code = match mm::msg::lobby_create_fail::ErrorCode::from_i32(ctx.error_code) {
 		Some(mm::msg::lobby_create_fail::ErrorCode::LobbyCountOverMax) => {
-			mm::msg::lobby_find_fail::ErrorCode::LobbyCountOverMax
+			backend::matchmaker::lobby_find::ErrorCode::LobbyCountOverMax
 		}
 		Some(mm::msg::lobby_create_fail::ErrorCode::RegionNotEnabled) => {
-			mm::msg::lobby_find_fail::ErrorCode::RegionNotEnabled
+			backend::matchmaker::lobby_find::ErrorCode::RegionNotEnabled
 		}
 		Some(mm::msg::lobby_create_fail::ErrorCode::StaleMessage) => {
-			mm::msg::lobby_find_fail::ErrorCode::StaleMessage
+			backend::matchmaker::lobby_find::ErrorCode::StaleMessage
 		}
 		Some(mm::msg::lobby_create_fail::ErrorCode::Unknown) | None => {
 			tracing::warn!("unknown lobby create fail error code");
-			mm::msg::lobby_find_fail::ErrorCode::Unknown
+			backend::matchmaker::lobby_find::ErrorCode::Unknown
 		}
 	};
 

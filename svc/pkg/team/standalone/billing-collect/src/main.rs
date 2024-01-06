@@ -5,7 +5,7 @@ fn main() -> GlobalResult<()> {
 }
 
 async fn start() -> GlobalResult<()> {
-	if util::env::is_billing_enabled() {
+	if util::env::billing().is_some() {
 		team_billing_collect::run_from_env(util::timestamp::now()).await?;
 	}
 

@@ -1,4 +1,4 @@
-use proto::backend::pkg::*;
+use proto::backend::{self, pkg::*};
 use rivet_operation::prelude::*;
 
 #[operation(name = "faker-build")]
@@ -10,12 +10,12 @@ async fn handle(
 	// Determine image name
 	//
 	// These are built in `bin/runtime_docker_builds/`
-	let build_kind = match unwrap!(faker::build::Image::from_i32(ctx.image)) {
-		faker::build::Image::FailImmediately => "test-fail-immediately",
-		faker::build::Image::HangIndefinitely => "test-hang-indefinitely",
-		faker::build::Image::MmLobbyAutoReady => "test-mm-lobby-ready",
-		faker::build::Image::MmLobbyEcho => "test-mm-lobby-echo",
-		faker::build::Image::MmPlayerConnect => "test-mm-player-connect",
+	let build_kind = match unwrap!(backend::faker::Image::from_i32(ctx.image)) {
+		backend::faker::Image::FailImmediately => "test-fail-immediately",
+		backend::faker::Image::HangIndefinitely => "test-hang-indefinitely",
+		backend::faker::Image::MmLobbyAutoReady => "test-mm-lobby-ready",
+		backend::faker::Image::MmLobbyEcho => "test-mm-lobby-echo",
+		backend::faker::Image::MmPlayerConnect => "test-mm-player-connect",
 	};
 
 	let create_res = op!([ctx] build_create {

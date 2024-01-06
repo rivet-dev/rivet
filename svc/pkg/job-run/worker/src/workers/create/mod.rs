@@ -335,7 +335,7 @@ async fn write_to_db_after_run(
 async fn choose_ingress_port(
 	ctx: OperationContext<job_run::msg::create::Message>,
 	tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
-	proxied_port: &job_run::msg::create::ProxiedPort,
+	proxied_port: &backend::job::ProxiedPortConfig,
 ) -> GlobalResult<i32> {
 	use backend::job::ProxyProtocol;
 

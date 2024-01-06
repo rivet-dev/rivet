@@ -16,6 +16,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 -   **API** Move generated client APIs to sdks/
 -   Lower long poll timeout from 60s -> 40s
 -   **Bolt** Moved additional project roots to Bolt.toml
+-   **types** Support multiple project roots for reusing Protobuf types
 
 ### Security
 

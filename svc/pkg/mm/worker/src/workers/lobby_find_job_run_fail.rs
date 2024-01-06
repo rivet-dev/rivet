@@ -1,5 +1,5 @@
 use chirp_worker::prelude::*;
-use proto::backend::pkg::*;
+use proto::backend::{self, pkg::*};
 
 #[derive(Debug, sqlx::FromRow)]
 struct LobbyRow {
@@ -39,14 +39,14 @@ async fn worker(ctx: &OperationContext<job_run::msg::fail::Message>) -> GlobalRe
 			// We make this the same error as the one dispatched in
 			// mm-lobby-find-lobby-cleanup since there is a race condition
 			// between the two.
-			mm::msg::lobby_find_fail::ErrorCode::LobbyStoppedPrematurely
+			backend::matchmaker::lobby_find::ErrorCode::LobbyStoppedPrematurely
 		}
 		Some(job_run::msg::fail::ErrorCode::StaleMessage) => {
-			mm::msg::lobby_find_fail::ErrorCode::StaleMessage
+			backend::matchmaker::lobby_find::ErrorCode::StaleMessage
 		}
 		Some(job_run::msg::fail::ErrorCode::Unknown) | None => {
 			tracing::warn!("unknown job run fail error code");
-			mm::msg::lobby_find_fail::ErrorCode::Unknown
+			backend::matchmaker::lobby_find::ErrorCode::Unknown
 		}
 	};
 

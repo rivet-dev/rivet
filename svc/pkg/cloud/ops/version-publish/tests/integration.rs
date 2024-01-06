@@ -17,7 +17,7 @@ async fn empty(ctx: TestCtx) {
 
 	let build_res = op!([ctx] faker_build {
 		game_id: game_res.game_id,
-		image: faker::build::Image::MmLobbyAutoReady as i32,
+		image: backend::faker::Image::MmLobbyAutoReady as i32,
 	})
 	.await
 	.unwrap();

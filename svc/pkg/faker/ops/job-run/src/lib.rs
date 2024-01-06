@@ -48,7 +48,7 @@ async fn handle(
 			ctx.proxied_ports.clone()
 		} else {
 			vec![
-				job_run::msg::create::ProxiedPort {
+				backend::job::ProxiedPortConfig {
 					target_nomad_port_label: Some("http".into()),
 					ingress_port: None,
 					ingress_hostnames: vec!["test1.com".into(), "test2.com".into()],

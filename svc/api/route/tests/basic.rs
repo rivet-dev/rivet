@@ -217,14 +217,14 @@ async fn job_run() {
 		run_id: Some(run_id.into()),
 		region_id: region_res.region_id,
 		proxied_ports: vec![
-			job_run::msg::create::ProxiedPort {
+			backend::job::ProxiedPortConfig {
 				target_nomad_port_label: Some("http".into()),
 				ingress_port: None,
 				ingress_hostnames: vec!["test1.com".into(), "test2.com".into()],
 				proxy_protocol: backend::job::ProxyProtocol::Http as i32,
 				ssl_domain_mode: backend::job::SslDomainMode::Exact as i32,
 			},
-			job_run::msg::create::ProxiedPort {
+			backend::job::ProxiedPortConfig {
 				target_nomad_port_label: Some("http".into()),
 				ingress_port: None,
 				ingress_hostnames: vec!["test1.com".into(), "test2.com".into()],

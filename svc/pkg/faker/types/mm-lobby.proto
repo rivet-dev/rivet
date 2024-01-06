@@ -4,7 +4,7 @@ package rivet.backend.pkg.faker.mm_lobby;
 
 import "proto/common.proto";
 import "proto/backend/matchmaker.proto";
-import "svc/pkg/faker/types/build.proto";
+import "proto/backend/faker.proto";
 
 message Request {
 	optional rivet.common.Uuid namespace_id = 6;
@@ -13,7 +13,7 @@ message Request {
 	uint32 max_players_direct = 2;
 	uint32 max_players_party = 3;
 	bool skip_set_ready = 4;
-	optional rivet.backend.pkg.faker.build.Image image = 5;
+	optional rivet.backend.faker.Image image = 5;
 
 	optional rivet.common.Uuid creator_user_id = 8;
 	bool is_custom = 9;

@@ -24,57 +24,25 @@ async fn worker(ctx: &OperationContext<team_dev::msg::create::Message>) -> Globa
 		return Ok(());
 	}
 
-	// Create stripe customer
-	let stripe_customer_id = if util::env::is_billing_enabled() {
-		// Get user's identities
-		let identity_res = op!([ctx] user_identity_get {
-			user_ids: vec![owner_user_id],
-		})
-		.await?;
-
-		let email = {
-			let user = identity_res.users.first();
-			let user = unwrap_ref!(user);
-			let email_ident = user.identities.iter().find(|identity| {
-				matches!(
-					identity.kind,
-					Some(backend::user_identity::identity::Kind::Email(_))
-				)
-			});
-
-			if let Some(backend::user_identity::Identity {
-				kind: Some(backend::user_identity::identity::Kind::Email(email_ident)),
-			}) = email_ident
-			{
-				Some(email_ident.email.clone())
-			} else {
-				None
-			}
-		};
-
-		// TODO: Redo customer creation with stripe
-		let stripe_customer_id = String::new();
-
-		Some(stripe_customer_id)
-	} else {
-		None
-	};
-
 	// Create the dev team
 	let crdb = ctx.crdb().await?;
 	sql_execute!(
 		[ctx]
 		"
-		INSERT INTO db_team_dev.dev_teams (team_id, create_ts, stripe_customer_id)
-		VALUES ($1, $2, $3)
+		INSERT INTO db_team_dev.dev_teams (team_id, create_ts)
+		VALUES ($1, $2)
 		",
 		team_id,
 		ctx.ts(),
-		stripe_customer_id,
 	)
 	.await?;
 
 	msg!([ctx] team::msg::update(team_id) {
+		team_id: Some(team_id.into()),
+	})
+	.await?;
+
+	msg!([ctx] team::msg::create_complete(team_id) {
 		team_id: Some(team_id.into()),
 	})
 	.await?;

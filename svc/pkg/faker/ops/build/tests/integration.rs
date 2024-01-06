@@ -1,5 +1,5 @@
 use chirp_worker::prelude::*;
-use proto::backend::pkg::*;
+use proto::backend::{self, pkg::*};
 
 #[worker_test]
 async fn empty(ctx: TestCtx) {
@@ -10,10 +10,10 @@ async fn empty(ctx: TestCtx) {
 	.unwrap();
 
 	let images = vec![
-		faker::build::Image::HangIndefinitely,
-		faker::build::Image::MmLobbyAutoReady,
-		faker::build::Image::FailImmediately,
-		faker::build::Image::MmPlayerConnect,
+		backend::faker::Image::HangIndefinitely,
+		backend::faker::Image::MmLobbyAutoReady,
+		backend::faker::Image::FailImmediately,
+		backend::faker::Image::MmPlayerConnect,
 	];
 
 	// Build all images in parallel

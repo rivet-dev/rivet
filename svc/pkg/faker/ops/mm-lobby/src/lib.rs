@@ -52,9 +52,9 @@ async fn handle(
 			image: if let Some(image) = ctx.image {
 				image
 			} else if ctx.skip_set_ready {
-				faker::build::Image::HangIndefinitely as i32
+				backend::faker::Image::HangIndefinitely as i32
 			} else {
-				faker::build::Image::MmLobbyEcho as i32
+				backend::faker::Image::MmLobbyEcho as i32
 			},
 		})
 		.await?;

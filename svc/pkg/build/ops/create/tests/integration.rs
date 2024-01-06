@@ -15,7 +15,7 @@ use chirp_worker::prelude::*;
 // 	todo!("fs_path doesn't work");
 
 // 	let faker_res = op!([ctx] faker_build {
-// 		image: faker::build::Image::HangIndefinitely as i32,
+// 		image: backend::faker::Image::HangIndefinitely as i32,
 // 		// fs_path: Some(build_path.clone()),
 // 	})
 // 	.await

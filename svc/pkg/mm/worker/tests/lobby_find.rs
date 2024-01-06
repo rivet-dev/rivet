@@ -151,7 +151,7 @@ async fn lobby_group_closed(ctx: TestCtx) {
 	.unwrap_err();
 
 	assert_eq!(
-		mm::msg::lobby_find_fail::ErrorCode::NoAvailableLobbies as i32,
+		backend::matchmaker::lobby_find::ErrorCode::NoAvailableLobbies as i32,
 		err.error_code
 	);
 
@@ -232,7 +232,7 @@ async fn lobby_crash_immediate(ctx: TestCtx) {
 		return;
 	}
 
-	let lobby_group = create_lobby_group(&ctx, Some(faker::build::Image::FailImmediately)).await;
+	let lobby_group = create_lobby_group(&ctx, Some(backend::faker::Image::FailImmediately)).await;
 
 	let err = find(
 		&ctx,
@@ -256,7 +256,7 @@ async fn lobby_crash_immediate(ctx: TestCtx) {
 	.unwrap_err();
 
 	assert_eq!(
-		mm::msg::lobby_find_fail::ErrorCode::LobbyStoppedPrematurely as i32,
+		backend::matchmaker::lobby_find::ErrorCode::LobbyStoppedPrematurely as i32,
 		err.error_code
 	);
 }
@@ -316,7 +316,7 @@ async fn max_players_per_client(ctx: TestCtx) {
 		if i >= max_players_per_client {
 			let err = res.unwrap_err();
 			assert_eq!(
-				mm::msg::lobby_find_fail::ErrorCode::TooManyPlayersFromSource as i32,
+				backend::matchmaker::lobby_find::ErrorCode::TooManyPlayersFromSource as i32,
 				err.error_code
 			);
 		} else {
@@ -382,7 +382,7 @@ async fn lobby_group_no_auto_create(ctx: TestCtx) {
 	.unwrap_err();
 
 	assert_eq!(
-		mm::msg::lobby_find_fail::ErrorCode::NoAvailableLobbies as i32,
+		backend::matchmaker::lobby_find::ErrorCode::NoAvailableLobbies as i32,
 		err.error_code
 	);
 }
@@ -414,7 +414,7 @@ async fn join_disabled(ctx: TestCtx) {
 	.unwrap_err();
 
 	assert_eq!(
-		mm::msg::lobby_find_fail::ErrorCode::JoinDisabled as i32,
+		backend::matchmaker::lobby_find::ErrorCode::JoinDisabled as i32,
 		err.error_code
 	);
 }
@@ -447,7 +447,7 @@ async fn guest_verification(ctx: TestCtx) {
 	.unwrap_err();
 
 	assert_eq!(
-		mm::msg::lobby_find_fail::ErrorCode::IdentityRequired as i32,
+		backend::matchmaker::lobby_find::ErrorCode::IdentityRequired as i32,
 		err.error_code
 	);
 
@@ -501,7 +501,7 @@ async fn registered_verification(ctx: TestCtx) {
 	.unwrap_err();
 
 	assert_eq!(
-		mm::msg::lobby_find_fail::ErrorCode::IdentityRequired as i32,
+		backend::matchmaker::lobby_find::ErrorCode::IdentityRequired as i32,
 		err.error_code
 	);
 
@@ -522,7 +522,7 @@ async fn registered_verification(ctx: TestCtx) {
 	.unwrap_err();
 
 	assert_eq!(
-		mm::msg::lobby_find_fail::ErrorCode::RegistrationRequired as i32,
+		backend::matchmaker::lobby_find::ErrorCode::RegistrationRequired as i32,
 		err.error_code
 	);
 
@@ -628,7 +628,7 @@ async fn external_verification(ctx: TestCtx) {
 	.unwrap_err();
 
 	assert_eq!(
-		mm::msg::lobby_find_fail::ErrorCode::VerificationFailed as i32,
+		backend::matchmaker::lobby_find::ErrorCode::VerificationFailed as i32,
 		err.error_code
 	);
 
@@ -776,7 +776,7 @@ async fn tagged_no_auto_create(ctx: TestCtx) {
 	.unwrap_err();
 
 	assert_eq!(
-		mm::msg::lobby_find_fail::ErrorCode::NoAvailableLobbies as i32,
+		backend::matchmaker::lobby_find::ErrorCode::NoAvailableLobbies as i32,
 		err.error_code
 	);
 }
@@ -1053,7 +1053,7 @@ async fn dynamic_max_players(ctx: TestCtx) {
 	.unwrap_err();
 
 	assert_eq!(
-		mm::msg::lobby_find_fail::ErrorCode::LobbyFull as i32,
+		backend::matchmaker::lobby_find::ErrorCode::LobbyFull as i32,
 		err.error_code
 	);
 }
@@ -1088,7 +1088,7 @@ async fn gen_verification_lobby(
 
 	let build_res = op!([ctx] faker_build {
 		game_id: game_res.game_id,
-		image: faker::build::Image::MmLobbyAutoReady as i32,
+		image: backend::faker::Image::MmLobbyAutoReady as i32,
 	})
 	.await
 	.unwrap();
@@ -1174,7 +1174,7 @@ async fn gen_disabled_lobby(ctx: &TestCtx) -> (Uuid, Uuid) {
 
 	let build_res = op!([ctx] faker_build {
 		game_id: game_res.game_id,
-		image: faker::build::Image::MmLobbyAutoReady as i32,
+		image: backend::faker::Image::MmLobbyAutoReady as i32,
 	})
 	.await
 	.unwrap();
@@ -1258,7 +1258,7 @@ struct TestLobbyGroup {
 	region_id: Uuid,
 }
 
-async fn create_lobby_group(ctx: &TestCtx, image: Option<faker::build::Image>) -> TestLobbyGroup {
+async fn create_lobby_group(ctx: &TestCtx, image: Option<backend::faker::Image>) -> TestLobbyGroup {
 	let region_res = op!([ctx] faker_region {}).await.unwrap();
 	let region_id = region_res.region_id.as_ref().unwrap().as_uuid();
 
@@ -1271,7 +1271,7 @@ async fn create_lobby_group(ctx: &TestCtx, image: Option<faker::build::Image>) -
 
 	let build_res = op!([ctx] faker_build {
 		game_id: game_res.game_id,
-		image: image.unwrap_or(faker::build::Image::MmLobbyAutoReady) as i32,
+		image: image.unwrap_or(backend::faker::Image::MmLobbyAutoReady) as i32,
 	})
 	.await
 	.unwrap();

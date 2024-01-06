@@ -1,3 +1,6 @@
+use serde::Deserialize;
+use std::collections::HashMap;
+
 /// Reads a secret from the env.
 ///
 /// This is marked as async so we have the flexibility to pull the secret from remote datasources.
@@ -72,10 +75,9 @@ lazy_static::lazy_static! {
 	static ref ORIGIN_HUB: Option<String> = std::env::var("RIVET_ORIGIN_HUB").ok();
 	static ref DNS_PROVIDER: Option<String> = std::env::var("RIVET_DNS_PROVIDER").ok();
 	static ref CHIRP_SERVICE_NAME: Option<String> = std::env::var("CHIRP_SERVICE_NAME").ok();
-	static ref IS_BILLING_ENABLED: bool = std::env::var("IS_BILLING_ENABLED")
+	static ref BILLING: Option<RivetBilling> = std::env::var("RIVET_BILLING")
 		.ok()
-		.map(|s| s == "1")
-		.unwrap_or_default();
+		.map(|x| serde_json::from_str(&x).expect("failed to parse billing"));
 }
 
 pub fn region() -> &'static str {
@@ -169,8 +171,13 @@ pub fn chirp_service_name() -> &'static str {
 	}
 }
 
-pub fn is_billing_enabled() -> bool {
-	*IS_BILLING_ENABLED
+#[derive(Deserialize)]
+pub struct RivetBilling {
+	pub region_price_ids: HashMap<String, String>,
+}
+
+pub fn billing() -> Option<&'static RivetBilling> {
+	BILLING.as_ref()
 }
 
 /// The current stripe API token.

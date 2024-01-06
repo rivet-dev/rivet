@@ -643,7 +643,7 @@ async fn create_docker_job(
 				}
 			};
 
-			GlobalResult::Ok(job_run::msg::create::ProxiedPort {
+			GlobalResult::Ok(backend::job::ProxiedPortConfig {
 				// Match the port label generated in mm-config-version-prepare
 				// and in api-matchmaker
 				target_nomad_port_label: Some(util_mm::format_nomad_port_label(&port.label)),

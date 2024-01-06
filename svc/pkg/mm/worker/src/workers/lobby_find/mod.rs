@@ -1,10 +1,8 @@
 use chirp_worker::prelude::*;
 use proto::backend::{
 	self,
-	pkg::{
-		mm::{msg::lobby_find::message::Query, msg::lobby_find_fail::ErrorCode},
-		*,
-	},
+	matchmaker::lobby_find::ErrorCode,
+	pkg::{mm::msg::lobby_find::message::Query, *},
 };
 use serde_json::json;
 use tracing::Instrument;

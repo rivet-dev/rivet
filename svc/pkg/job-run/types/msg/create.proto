@@ -10,22 +10,6 @@ message Parameter {
 	string value = 2;
 }
 
-// See rivet.backend.job.ProxiedPort.
-message ProxiedPort {
-	reserved 1;
-
-	/// Label of the Nomad port to connect to.
-	optional string target_nomad_port_label = 6;
-
-	// Port to listen on on the load balancer. If not provided, a port will be
-	// automatically chosen from the port allocator.
-	optional uint32 ingress_port = 2;
-
-	repeated string ingress_hostnames = 3;
-	rivet.backend.job.ProxyProtocol proxy_protocol = 4;
-	rivet.backend.job.SslDomainMode ssl_domain_mode = 5;
-}
-
 /// name = "msg-job-run-create"
 /// parameters = [
 /// 	{ name = "run_id" },
@@ -37,6 +21,6 @@ message Message {
 	rivet.common.Uuid region_id = 3;
 	repeated Parameter parameters = 4;
 	string job_spec_json = 8;
-	repeated ProxiedPort proxied_ports = 6;
+	repeated rivet.backend.job.ProxiedPortConfig proxied_ports = 6;
 }
 

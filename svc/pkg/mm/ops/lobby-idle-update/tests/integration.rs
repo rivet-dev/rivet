@@ -54,7 +54,7 @@ impl Ctx {
 
 		let build_res = op!([test_ctx] faker_build {
 			game_id: Some(game_id.into()),
-			image: faker::build::Image::MmLobbyAutoReady as i32,
+			image: backend::faker::Image::MmLobbyAutoReady as i32,
 		})
 		.await
 		.unwrap();

@@ -1029,11 +1029,11 @@ async fn find_inner(
 	})
 	.await?;
 	let lobby_id = match find_res
-		.map_err(|msg| mm::msg::lobby_find_fail::ErrorCode::from_i32(msg.error_code))
+		.map_err(|msg| backend::matchmaker::lobby_find::ErrorCode::from_i32(msg.error_code))
 	{
 		Ok(res) => unwrap_ref!(res.lobby_id).as_uuid(),
 		Err(Some(code)) => {
-			use mm::msg::lobby_find_fail::ErrorCode::*;
+			use backend::matchmaker::lobby_find::ErrorCode::*;
 
 			match code {
 				Unknown => bail!("unknown find error code"),

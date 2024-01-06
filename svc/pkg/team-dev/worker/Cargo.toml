@@ -15,7 +15,6 @@ rivet-metrics = { path = "../../../../lib/metrics" }
 rivet-runtime = { path = "../../../../lib/runtime" }
 
 team-dev-get = { path = "../ops/get" }
-team-dev-halt = { path = "../ops/halt" }
 team-get = { path = "../../team/ops/get" }
 user-identity-get = { path = "../../user-identity/ops/get" }
 

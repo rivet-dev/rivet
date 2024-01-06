@@ -1,5 +1,5 @@
 use chirp_worker::prelude::*;
-use proto::backend::pkg::{mm::msg::lobby_find_fail::ErrorCode, *};
+use proto::backend::{matchmaker::lobby_find::ErrorCode, pkg::*};
 use redis::AsyncCommands;
 
 #[worker(name = "mm-lobby-find-lobby-cleanup")]

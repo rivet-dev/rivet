@@ -18,38 +18,44 @@ pub fn compile_with_base<F>(base_builder: F) -> io::Result<()>
 where
 	F: Fn() -> io::Result<schemac::CompileOpts>,
 {
-	let project_root = seek_project_root()?;
+	let project_roots = seek_project_roots()?;
+	let main_project_root = &project_roots[0];
 	let out_dir = PathBuf::from(std::env::var("OUT_DIR").unwrap());
 
-	// Add rereun statement
+	let mut input_paths = Vec::new();
+
+	// Add common proto from root of project
+	//
+	// This will be symlinked if there are multiple roots
 	println!(
 		"cargo:rerun-if-changed={}",
-		project_root.join("proto").display()
+		main_project_root.join("proto").display()
 	);
-
-	let mut paths = if project_root.join("proto").is_dir() {
-		find_all_proto(&project_root.join("proto"))?
-	} else {
-		Vec::new()
+	if main_project_root.join("proto").is_dir() {
+		let paths = find_all_proto(&main_project_root.join("proto"))?;
+		input_paths.extend(paths);
 	};
 
-	// Find all proto files
-	for entry in fs::read_dir(project_root.join("svc").join("pkg"))? {
-		let entry = entry?;
-		let proto_path = entry.path().join("types");
+	// Add protos from all services
+	for project_root in &project_roots {
+		for entry in fs::read_dir(project_root.join("svc").join("pkg"))? {
+			let entry = entry?;
+			let proto_path = entry.path().join("types");
 
-		if proto_path.is_dir() {
-			println!("cargo:rerun-if-changed={}", proto_path.display());
+			if proto_path.is_dir() {
+				println!("cargo:rerun-if-changed={}", proto_path.display());
 
-			paths.append(&mut find_all_proto(&proto_path)?);
+				let paths = find_all_proto(&proto_path)?;
+				input_paths.extend(paths);
+			}
 		}
 	}
 
-	let paths = paths.iter().map(std::ops::Deref::deref).collect::<Vec<_>>();
-
+	// Compile
+	let input_paths = input_paths.iter().map(|x| x.as_path()).collect::<Vec<_>>();
 	compile_proto_input(
 		base_builder()?,
-		paths.as_slice(),
+		input_paths.as_slice(),
 		&out_dir.join("schema.rs"),
 	)?;
 
@@ -78,21 +84,19 @@ pub fn compile_proto_input(
 	Ok(())
 }
 
-fn update_compile_opts(base: schemac::CompileOpts) -> io::Result<schemac::CompileOpts> {
-	let project_root = seek_project_root()?;
+fn update_compile_opts(mut base: schemac::CompileOpts) -> io::Result<schemac::CompileOpts> {
+	let project_roots = seek_project_roots()?;
 
-	Ok(base
-		.root(&project_root)
+	base = base
+		.root(&project_roots[0])
 		.plugin(Box::new(plugins::CommonPlugin::default()))
-		// .plugin(Box::new(plugins::BackendServicePlugin {
-		// 	project_root: project_root.clone(),
-		// }))
-		.plugin(Box::new(plugins::BackendMessagePlugin {
-			project_root: project_root.clone(),
-		})))
+		.plugin(Box::new(plugins::BackendMessagePlugin::default()));
+
+	Ok(base)
 }
 
-fn seek_project_root() -> io::Result<PathBuf> {
+fn seek_project_roots() -> io::Result<Vec<PathBuf>> {
+	// Find project root
 	let mut project_root = std::env::current_dir()?;
 	loop {
 		if project_root.join("Bolt.toml").exists() {
@@ -104,7 +108,18 @@ fn seek_project_root() -> io::Result<PathBuf> {
 			panic!("could not find project root");
 		}
 	}
-	Ok(project_root)
+
+	// Read project roots
+	let bolt_toml = fs::read_to_string(project_root.join("Bolt.toml"))?;
+	let project_config = bolt_config::project::decode(&bolt_toml)
+		.map_err(|err| io::Error::new(io::ErrorKind::InvalidData, err))?;
+
+	let mut roots = vec![project_root.clone()];
+	for (_, additional_root) in project_config.additional_roots.iter() {
+		roots.push(project_root.join(&additional_root.path));
+	}
+
+	Ok(roots)
 }
 
 fn find_all_proto(path: &Path) -> io::Result<Vec<PathBuf>> {
@@ -131,7 +146,7 @@ fn find_all_proto(path: &Path) -> io::Result<Vec<PathBuf>> {
 }
 
 mod plugins {
-	use std::{io, path::PathBuf};
+	use std::io;
 
 	use indoc::{formatdoc, indoc};
 	use regex::Regex;
@@ -199,10 +214,8 @@ mod plugins {
 		}
 	}
 
-	#[derive(Debug)]
-	pub struct BackendMessagePlugin {
-		pub project_root: PathBuf,
-	}
+	#[derive(Debug, Default)]
+	pub struct BackendMessagePlugin;
 
 	impl schemac::CompilePlugin for BackendMessagePlugin {
 		fn module_pass(
