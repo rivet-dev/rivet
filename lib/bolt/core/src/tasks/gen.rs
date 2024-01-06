@@ -12,14 +12,21 @@ use crate::{
 pub async fn generate_project(ctx: &ProjectContext) {
 	// println!("\n> Generating project");
 
-	// Generate Terraform variables
-	if std::env::var("BOLT_IGNORE_TERRAFORM")
+	// HACK: Speed up bolt commands by skipping the generate step
+	if std::env::var("BOLT_SKIP_GEN")
 		.ok()
-		.map_or(true, |x| x != "1")
+		.map_or(false, |x| x == "1")
 	{
+		rivet_term::status::info("Skipping generate_project", "");
+		return;
+	}
+
+	if !std::env::var("BOLT_IGNORE_TERRAFORM")
+		.ok()
+		.map_or(false, |x| x == "1")
+	{
+		// Generate Terraform variables
 		dep::terraform::gen::project(ctx).await;
-	} else {
-		rivet_term::status::info("Skipping Terrafrom Init", "");
 	}
 
 	// Generate K8S configs
