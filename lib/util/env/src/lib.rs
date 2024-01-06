@@ -181,8 +181,8 @@ pub fn billing() -> Option<&'static RivetBilling> {
 }
 
 /// The current stripe API token.
-pub async fn stripe_token() -> Result<String, std::env::VarError> {
-	read_secret(&["stripe", "token"]).await
+pub async fn stripe_secret_key() -> Result<String, std::env::VarError> {
+	read_secret(&["stripe", "secret_key"]).await
 }
 
 /// The current stripe webhook secret.
