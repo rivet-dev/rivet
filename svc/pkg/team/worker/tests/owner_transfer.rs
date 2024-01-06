@@ -4,7 +4,6 @@ use proto::backend::pkg::*;
 #[worker_test]
 async fn empty(ctx: TestCtx) {
 	let res = op!([ctx] faker_team {
-		is_dev: false,
 		..Default::default()
 	})
 	.await

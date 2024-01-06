@@ -99,7 +99,7 @@ pub fn access_token_link(access_token_token: &str) -> String {
 	format!("{}/access-token/{}", origin_hub(), access_token_token)
 }
 
-pub fn team_billing(team_id: Uuid) -> String {
+pub fn billing(team_id: Uuid) -> String {
 	format!("{}/groups/{}/billing", origin_hub(), team_id)
 }
 

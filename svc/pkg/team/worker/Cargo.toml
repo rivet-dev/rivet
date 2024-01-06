@@ -14,11 +14,12 @@ rivet-health-checks = { path = "../../../../lib/health-checks" }
 rivet-metrics = { path = "../../../../lib/metrics" }
 rivet-runtime = { path = "../../../../lib/runtime" }
 
-team-dev-get = { path = "../../team-dev/ops/get" }
 team-join-request-list = { path = "../ops/join-request-list" }
 team-profile-validate = { path = "../ops/profile-validate" }
 team-validate = { path = "../ops/validate" }
 user-identity-get = { path = "../../user-identity/ops/get" }
+game-namespace-list = { path = "../../game/ops/namespace-list" }
+mm-lobby-list-for-namespace = { path = "../../mm/ops/lobby-list-for-namespace" }
 
 [dev-dependencies]
 chirp-worker = { path = "../../../../lib/chirp/worker" }

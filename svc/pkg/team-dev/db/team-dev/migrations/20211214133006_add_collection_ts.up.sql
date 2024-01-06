@@ -1,1 +1,0 @@
-ALTER TABLE dev_teams ADD COLUMN last_collection_ts INT DEFAULT 0;

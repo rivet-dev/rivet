@@ -83,7 +83,7 @@ async fn handle(
 				LobbyCountOverMax => bail_with!(MATCHMAKER_TOO_MANY_LOBBIES),
 				RegionNotEnabled => bail_with!(MATCHMAKER_REGION_NOT_ENABLED_FOR_GAME_MODE),
 
-				DevTeamInvalidStatus => bail_with!(GROUP_INVALID_DEVELOPER_STATUS),
+				DevTeamInvalidStatus => bail_with!(GROUP_DEACTIVATED),
 
 				FindDisabled => bail_with!(MATCHMAKER_FIND_DISABLED),
 				JoinDisabled => bail_with!(MATCHMAKER_JOIN_DISABLED),

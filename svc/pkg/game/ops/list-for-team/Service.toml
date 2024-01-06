@@ -1,0 +1,11 @@
+[service]
+name = "game-list-for-team"
+
+[runtime]
+kind = "rust"
+
+[operation]
+
+[databases]
+db-game = {}
+

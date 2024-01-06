@@ -35,18 +35,12 @@ async fn handle(
 
 	// Check if team can create a game
 	{
-		let dev_team_res = op!([ctx] team_dev_get {
+		let team_res = op!([ctx] team_get {
 			team_ids: vec![developer_team_id_proto]
 		})
 		.await?;
-		let dev_team = unwrap_with!(dev_team_res.teams.first(), GROUP_NOT_DEVELOPER_GROUP);
-		let status = unwrap!(backend::team::dev_team::DevStatus::from_i32(
-			dev_team.status
-		));
-		ensure_with!(
-			matches!(status, backend::team::dev_team::DevStatus::Active),
-			GROUP_INVALID_DEVELOPER_STATUS
-		);
+		let team = unwrap!(team_res.teams.first());
+		ensure_with!(team.deactivate_reasons.is_empty(), GROUP_DEACTIVATED);
 	}
 
 	// TODO: Deprecate `url` and `description` columns

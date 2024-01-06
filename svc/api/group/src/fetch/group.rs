@@ -16,7 +16,7 @@ pub async fn summaries(
 		.collect::<Vec<_>>();
 
 	// Fetch team metadata
-	let (user_team_list_res, teams_res, team_member_count_res, team_dev_res) = tokio::try_join!(
+	let (user_team_list_res, teams_res, team_member_count_res) = tokio::try_join!(
 		op!([ctx] user_team_list {
 			user_ids: vec![current_user_id.into()],
 		}),
@@ -25,9 +25,6 @@ pub async fn summaries(
 		}),
 		op!([ctx] team_member_count {
 			team_ids: group_ids_proto.clone(),
-		}),
-		op!([ctx] team_dev_get {
-			team_ids: group_ids_proto,
 		}),
 	)?;
 
@@ -42,7 +39,6 @@ pub async fn summaries(
 			convert::group::summary(
 				team,
 				&team_member_count_res.teams,
-				&team_dev_res.teams,
 				is_current_identity_member,
 			)
 		})

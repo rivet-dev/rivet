@@ -12,7 +12,7 @@ pub async fn group_summaries(
 	group_ids: &[common::Uuid],
 ) -> GlobalResult<Vec<models::GroupSummary>> {
 	// Fetch team metadata
-	let (user_team_list_res, teams_res, team_member_count_res, team_dev_res) = tokio::try_join!(
+	let (user_team_list_res, teams_res, team_member_count_res) = tokio::try_join!(
 		op!([ctx] user_team_list {
 			user_ids: vec![current_user_id],
 		}),
@@ -20,9 +20,6 @@ pub async fn group_summaries(
 			team_ids: group_ids.to_vec(),
 		}),
 		op!([ctx] team_member_count {
-			team_ids: group_ids.to_vec(),
-		}),
-		op!([ctx] team_dev_get {
 			team_ids: group_ids.to_vec(),
 		}),
 	)?;
@@ -44,10 +41,6 @@ pub async fn group_summaries(
 				.iter()
 				.find(|t| t.team_id.as_ref() == Some(group_id)))
 			.member_count;
-			let is_developer = team_dev_res
-				.teams
-				.iter()
-				.any(|dev_team| dev_team.team_id == team_data.team_id);
 
 			let team_id = group_id.as_uuid();
 			let owner_user_id = unwrap_ref!(team_data.owner_user_id).as_uuid();
@@ -66,7 +59,7 @@ pub async fn group_summaries(
 					.api_into(),
 				member_count: member_count.try_into()?,
 				owner_identity_id: owner_user_id.to_string(),
-				is_developer,
+				is_developer: true,
 			})
 		})
 		.collect::<GlobalResult<Vec<models::GroupSummary>>>()?;

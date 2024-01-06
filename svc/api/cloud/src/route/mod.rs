@@ -196,9 +196,6 @@ define_router! {
 		},
 
 		// Groups
-		"groups" / Uuid / "convert": {
-			POST: groups::convert(body: serde_json::Value),
-		},
 		"groups" / "validate": {
 			POST: groups::validate(body: models::CloudValidateGroupRequest),
 		},

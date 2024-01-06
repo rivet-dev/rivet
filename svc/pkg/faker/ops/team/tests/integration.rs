@@ -19,7 +19,7 @@ async fn empty(ctx: TestCtx) {
 #[worker_test]
 async fn dev(ctx: TestCtx) {
 	let _res = op!([ctx] faker_team {
-		is_dev: true,
+
 		..Default::default()
 	})
 	.await

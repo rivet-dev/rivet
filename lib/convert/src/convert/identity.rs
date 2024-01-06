@@ -165,14 +165,8 @@ pub fn profile(
 					.any(|team_id| Some(team_id) == team.team_id.as_ref())
 			})
 			.map(|team| {
-				let is_developer = pctx
-					.teams_ctx
-					.dev_teams
-					.teams
-					.iter()
-					.any(|dev_team| team.team_id == dev_team.team_id);
 				Ok(models::IdentityGroup {
-					group: Box::new(convert::group::handle(team, is_developer)?),
+					group: Box::new(convert::group::handle(team)?),
 				})
 			})
 			.collect::<GlobalResult<Vec<_>>>()?

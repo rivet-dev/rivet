@@ -63,4 +63,29 @@ impl Auth {
 
 		Ok(user_ent)
 	}
+
+	/// Validates that the given agent is an admin user.
+	pub async fn admin(&self, ctx: &OperationContext<()>) -> GlobalResult<()> {
+		let claims = self.claims()?;
+
+		if claims.as_user().is_ok() {
+			let user_ent = self.user(ctx).await?;
+
+			// Get user
+			let user_res = op!([ctx] user_get {
+				user_ids: vec![user_ent.user_id.into()]
+			})
+			.await?;
+
+			let user = unwrap!(user_res.users.first(), "user not found");
+			ensure_with!(user.is_admin, IDENTITY_NOT_ADMIN);
+
+			Ok(())
+		} else {
+			bail_with!(
+				API_UNAUTHORIZED,
+				reason = "token is missing one of the following entitlements: user"
+			);
+		}
+	}
 }

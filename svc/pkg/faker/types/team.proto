@@ -6,7 +6,6 @@ import "proto/common.proto";
 
 message Request {
 	rivet.common.Uuid team_id = 2;
-	bool is_dev = 1;
 }
 
 message Response {

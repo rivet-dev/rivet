@@ -43,7 +43,7 @@ mm-lobby-get = { path = "../ops/lobby-get" }
 mm-lobby-idle-update = { path = "../ops/lobby-idle-update" }
 mm-lobby-state-get = { path = "../ops/lobby-state-get" }
 region-get = { path = "../../region/ops/get" }
-team-dev-get = { path = "../../team-dev/ops/get" }
+team-get = { path = "../../team/ops/get" }
 tier-list = { path = "../../tier/ops/list" }
 token-create = { path = "../../token/ops/create" }
 upload-complete = { path = "../../upload/ops/complete" }

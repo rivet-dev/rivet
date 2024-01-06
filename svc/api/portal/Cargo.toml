@@ -34,7 +34,6 @@ uuid = { version = "1", features = ["v4"] }
 
 game-get = { path = "../../pkg/game/ops/get" }
 game-resolve-name-id = { path = "../../pkg/game/ops/resolve-name-id" }
-team-dev-get = { path = "../../pkg/team-dev/ops/get" }
 team-get = { path = "../../pkg/team/ops/get" }
 team-member-count = { path = "../../pkg/team/ops/member-count" }
 token-revoke = { path = "../../pkg/token/ops/revoke" }

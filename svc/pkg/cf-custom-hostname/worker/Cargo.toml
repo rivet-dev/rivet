@@ -19,7 +19,7 @@ cf-custom-hostname-resolve-hostname = { path = "../ops/resolve-hostname" }
 game-get = { path = "../../game/ops/get" }
 game-namespace-list = { path = "../../game/ops/namespace-list" }
 game-resolve-namespace-id = { path = "../../game/ops/resolve-namespace-id" }
-team-dev-game-list = { path = "../../team-dev/ops/game-list" }
+game-list-for-team = { path = "../../game/ops/list-for-team" }
 
 [dev-dependencies]
 chirp-worker = { path = "../../../../lib/chirp/worker" }

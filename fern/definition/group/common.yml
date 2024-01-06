@@ -15,7 +15,10 @@ types:
       external: ExternalLinks
       is_developer:
         type: boolean
-        docs: Whether or not this group is a developer.
+        docs: >-
+          **Deprecated**
+
+          Whether or not this group is a developer.
       bio: commons.Bio
       is_current_identity_member:
         docs: Whether or not the current identity is a member of this group.

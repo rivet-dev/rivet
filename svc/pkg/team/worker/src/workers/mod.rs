@@ -21,3 +21,4 @@ chirp_worker::workers![
 	user_ban,
 	user_unban,
 ];
+pub mod deactivated_update;

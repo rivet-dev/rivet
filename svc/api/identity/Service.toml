@@ -6,9 +6,6 @@ kind = "rust"
 
 [api-routes]
 
-[databases]
-db-team-dev = {}
-
 [cockroachdb]
 min-connections = 8
 

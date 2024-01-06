@@ -54,7 +54,7 @@
 // 			// Create team
 // 			tracing::info!("setup team");
 // 			let create_res = op!([op_ctx] faker_team {
-// 				is_dev: true,
+//
 // 				..Default::default()
 // 			})
 // 			.await

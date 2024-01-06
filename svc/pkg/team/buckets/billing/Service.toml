@@ -1,5 +1,5 @@
 [service]
-name = "bucket-team-billing"
+name = "bucket-billing"
 
 [runtime]
 kind = "s3"

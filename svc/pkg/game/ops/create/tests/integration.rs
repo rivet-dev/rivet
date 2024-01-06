@@ -5,7 +5,7 @@ use chirp_worker::prelude::*;
 #[worker_test]
 async fn empty(ctx: TestCtx) {
 	let team_res = op!([ctx] faker_team {
-		is_dev: true,
+
 		..Default::default()
 	})
 	.await
@@ -26,7 +26,7 @@ async fn duplicate_name_id(ctx: TestCtx) {
 	let name_id = util::faker::ident();
 
 	let team_res = op!([ctx] faker_team {
-		is_dev: true,
+
 		..Default::default()
 	})
 	.await

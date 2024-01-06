@@ -32,7 +32,7 @@ pub async fn run_from_env(ts: i64) -> GlobalResult<()> {
 	let (team_id, primary_user_id) = {
 		// Create team
 		let create_res = op!([ctx] faker_team {
-			is_dev: true,
+
 			..Default::default()
 		})
 		.await?;

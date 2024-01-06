@@ -252,6 +252,7 @@ dependencies = [
  "game-banner-upload-complete",
  "game-create",
  "game-get",
+ "game-list-for-team",
  "game-logo-upload-complete",
  "game-namespace-create",
  "game-namespace-get",
@@ -302,8 +303,6 @@ dependencies = [
  "s3-util",
  "serde",
  "serde_json",
- "team-dev-game-list",
- "team-dev-get",
  "team-get",
  "team-member-count",
  "team-validate",
@@ -357,7 +356,6 @@ dependencies = [
  "serde",
  "serde_json",
  "team-avatar-upload-complete",
- "team-dev-get",
  "team-get",
  "team-invite-get",
  "team-join-request-list",
@@ -782,7 +780,6 @@ dependencies = [
  "rivet-portal-server",
  "serde",
  "serde_json",
- "team-dev-get",
  "team-get",
  "team-member-count",
  "thiserror",
@@ -1923,6 +1920,7 @@ dependencies = [
  "chirp-worker",
  "faker-game",
  "game-get",
+ "game-list-for-team",
  "game-namespace-list",
  "game-resolve-namespace-id",
  "reqwest",
@@ -1930,7 +1928,6 @@ dependencies = [
  "rivet-metrics",
  "rivet-runtime",
  "serde",
- "team-dev-game-list",
 ]
 
 [[package]]
@@ -2990,7 +2987,6 @@ dependencies = [
  "faker-user",
  "prost 0.10.4",
  "rivet-operation",
- "team-dev-get",
  "team-get",
 ]
 
@@ -3254,7 +3250,7 @@ dependencies = [
  "prost 0.10.4",
  "rivet-operation",
  "sqlx",
- "team-dev-get",
+ "team-get",
 ]
 
 [[package]]
@@ -3279,6 +3275,18 @@ dependencies = [
  "chirp-client",
  "chirp-worker",
  "prost 0.10.4",
+ "rivet-operation",
+ "sqlx",
+]
+
+[[package]]
+name = "game-list-for-team"
+version = "0.0.1"
+dependencies = [
+ "chirp-client",
+ "chirp-worker",
+ "faker-game",
+ "faker-team",
  "rivet-operation",
  "sqlx",
 ]
@@ -5119,7 +5127,7 @@ dependencies = [
  "s3-util",
  "serde",
  "sqlx",
- "team-dev-get",
+ "team-get",
  "tier-list",
  "token-create",
  "upload-complete",
@@ -5278,7 +5286,6 @@ dependencies = [
  "rivet-metrics",
  "rivet-operation",
  "rivet-runtime",
- "team-dev-worker",
  "team-invite-worker",
  "team-worker",
  "tokio",
@@ -6385,7 +6392,6 @@ dependencies = [
  "rivet-util-mm",
  "serde",
  "serde_json",
- "team-dev-get",
  "team-get",
  "team-member-count",
  "team-profile-validate",
@@ -7621,92 +7627,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "team-billing-aggregate"
-version = "0.0.1"
-dependencies = [
- "chirp-client",
- "chirp-worker",
- "faker-game",
- "faker-mm-lobby-row",
- "faker-region",
- "game-get",
- "game-namespace-list",
- "game-resolve-namespace-id",
- "mm-config-version-get",
- "mm-lobby-runtime-aggregate",
- "prost 0.10.4",
- "region-list",
- "rivet-operation",
- "team-dev-game-list",
-]
-
-[[package]]
-name = "team-billing-collect"
-version = "0.0.1"
-dependencies = [
- "chirp-client",
- "chirp-worker",
- "chrono",
- "faker-mm-lobby",
- "faker-team",
- "futures-util",
- "game-get",
- "indoc",
- "prost 0.10.4",
- "rivet-connection",
- "rivet-operation",
- "rivet-pools",
- "rivet-runtime",
- "sqlx",
- "team-billing-aggregate",
- "tokio",
- "tracing",
- "tracing-subscriber",
-]
-
-[[package]]
-name = "team-dev-game-list"
-version = "0.0.1"
-dependencies = [
- "chirp-client",
- "chirp-worker",
- "faker-game",
- "faker-team",
- "prost 0.10.4",
- "rivet-operation",
- "sqlx",
-]
-
-[[package]]
-name = "team-dev-get"
-version = "0.0.1"
-dependencies = [
- "chirp-client",
- "chirp-worker",
- "faker-team",
- "prost 0.10.4",
- "rivet-operation",
- "sqlx",
-]
-
-[[package]]
-name = "team-dev-worker"
-version = "0.0.1"
-dependencies = [
- "chirp-client",
- "chirp-worker",
- "chrono",
- "faker-team",
- "rivet-health-checks",
- "rivet-metrics",
- "rivet-runtime",
- "serde",
- "team-dev-get",
- "team-get",
- "user-identity-get",
-]
-
-[[package]]
 name = "team-get"
 version = "0.0.1"
 dependencies = [
@@ -7890,12 +7810,13 @@ dependencies = [
  "chirp-client",
  "chirp-worker",
  "faker-team",
+ "game-namespace-list",
+ "mm-lobby-list-for-namespace",
  "reqwest",
  "rivet-health-checks",
  "rivet-metrics",
  "rivet-runtime",
  "serde",
- "team-dev-get",
  "team-join-request-list",
  "team-profile-validate",
  "team-user-ban-get",

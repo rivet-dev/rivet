@@ -13,7 +13,7 @@ async fn empty(ctx: TestCtx) {
 #[worker_test]
 async fn fetch(ctx: TestCtx) {
 	let team_res = op!([ctx] faker_team {
-		is_dev: true,
+
 		..Default::default()
 	})
 	.await
@@ -72,7 +72,7 @@ async fn fetch(ctx: TestCtx) {
 // #[worker_test]
 // async fn stress(ctx: TestCtx) {
 // 	let team_res = op!([ctx] faker_team {
-// 		is_dev: true,
+//
 // 		..Default::default()
 // 	})
 // 	.await
@@ -122,7 +122,7 @@ async fn fetch(ctx: TestCtx) {
 // #[worker_test]
 // async fn stress_serial(ctx: TestCtx) {
 // 	let team_res = op!([ctx] faker_team {
-// 		is_dev: true,
+//
 // 		..Default::default()
 // 	})
 // 	.await

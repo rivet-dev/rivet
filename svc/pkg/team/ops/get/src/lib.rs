@@ -1,4 +1,4 @@
-use std::convert::TryInto;
+use std::convert::{TryFrom, TryInto};
 
 use proto::backend::{self, pkg::*};
 use rivet_operation::prelude::*;
@@ -12,6 +12,7 @@ struct Team {
 	profile_id: Option<Uuid>,
 	create_ts: i64,
 	publicity: i64,
+	deactivate_reasons: Vec<i64>,
 }
 
 #[operation(name = "team-get")]
@@ -32,7 +33,8 @@ async fn handle(ctx: OperationContext<team::get::Request>) -> GlobalResult<team:
 			bio,
 			profile_id,
 			create_ts,
-			publicity
+			publicity,
+			deactivate_reasons
 		FROM db_team.teams
 		WHERE team_id = ANY($1)
 		",
@@ -97,6 +99,11 @@ async fn handle(ctx: OperationContext<team::get::Request>) -> GlobalResult<team:
 					profile_provider,
 					create_ts: team.create_ts,
 					publicity: team.publicity.try_into()?,
+					deactivate_reasons: team
+						.deactivate_reasons
+						.iter()
+						.map(|reason| i32::try_from(*reason))
+						.collect::<Result<Vec<_>, _>>()?,
 				})
 			})
 			.collect::<GlobalResult<Vec<_>>>()?,

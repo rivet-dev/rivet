@@ -1,0 +1,17 @@
+syntax = "proto3";
+
+package rivet.backend.pkg.team.msg.deactivated_update;
+
+import "proto/common.proto";
+import "proto/backend/team.proto";
+
+/// name = "msg-team-deactivated-update"
+/// tail-ttl = 300
+/// parameters = [
+/// 	{ name = "team_id" },
+/// ]
+message Message {
+    rivet.common.Uuid team_id = 1;
+	rivet.backend.team.DeactivateReason reason = 2;
+	bool active = 3;
+}

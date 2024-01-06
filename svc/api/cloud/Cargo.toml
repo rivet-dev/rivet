@@ -66,6 +66,7 @@ custom-user-avatar-upload-complete = { path = "../../pkg/custom-user-avatar/ops/
 game-banner-upload-complete = { path = "../../pkg/game/ops/banner-upload-complete" }
 game-create = { path = "../../pkg/game/ops/create" }
 game-get = { path = "../../pkg/game/ops/get" }
+game-list-for-team = { path = "../../pkg/game/ops/list-for-team" }
 game-logo-upload-complete = { path = "../../pkg/game/ops/logo-upload-complete" }
 game-namespace-create = { path = "../../pkg/game/ops/namespace-create" }
 game-namespace-get = { path = "../../pkg/game/ops/namespace-get" }
@@ -96,8 +97,6 @@ job-log-read = { path = "../../pkg/job-log/ops/read" }
 perf-log-get = { path = "../../pkg/perf/ops/log-get" }
 region-get = { path = "../../pkg/region/ops/get" }
 region-list = { path = "../../pkg/region/ops/list" }
-team-dev-game-list = { path = "../../pkg/team-dev/ops/game-list" }
-team-dev-get = { path = "../../pkg/team-dev/ops/get" }
 team-get = { path = "../../pkg/team/ops/get" }
 team-member-count = { path = "../../pkg/team/ops/member-count" }
 team-validate = { path = "../../pkg/team/ops/validate" }

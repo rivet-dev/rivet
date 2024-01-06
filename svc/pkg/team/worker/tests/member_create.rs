@@ -30,7 +30,7 @@ async fn create_user_dev(ctx: TestCtx) {
 	let user_id = Uuid::new_v4();
 
 	let team_res = op!([ctx] faker_team {
-		is_dev: true,
+
 		..Default::default()
 	})
 	.await

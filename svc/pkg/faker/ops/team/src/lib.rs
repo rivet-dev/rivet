@@ -28,13 +28,6 @@ async fn handle(
 	})
 	.await?;
 
-	if ctx.is_dev {
-		msg!([ctx] team_dev::msg::create(team_id) -> team_dev::msg::create_complete {
-			team_id: team_id_proto,
-		})
-		.await?;
-	}
-
 	for user_id in &member_user_ids {
 		if user_id != owner_user_id {
 			msg!([ctx] team::msg::member_create(team_id, user_id) -> team::msg::member_create_complete {

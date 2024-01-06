@@ -73,7 +73,7 @@ async fn worker(
 
 	// Count current pending hostnames in team
 	if !ctx.bypass_pending_cap {
-		let teams_res = op!([ctx] team_dev_game_list {
+		let teams_res = op!([ctx] game_list_for_team {
 			team_ids: vec![developer_team_id],
 		})
 		.await?;

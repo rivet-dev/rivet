@@ -42,7 +42,7 @@ pub async fn run_from_env(ts: i64) -> GlobalResult<()> {
 		[ctx, (Uuid,)]
 		"
 		SELECT team_id
-		FROM db_team_dev.dev_teams
+		FROM db_team.teams
 		",
 	)
 	.await?

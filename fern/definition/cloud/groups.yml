@@ -16,14 +16,6 @@ service:
         body: ValidateGroupRequest
       response: ValidateGroupResponse
 
-    convertGroup:
-      path: /{group_id}/convert
-      method: POST
-      docs: Converts the given group into a developer group.
-      path-parameters:
-        group_id:
-          type: uuid
-
 types:
   ValidateGroupRequest:
     properties:

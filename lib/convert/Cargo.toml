@@ -32,7 +32,6 @@ mm-player-count-for-namespace = { path = "../../svc/pkg/mm/ops/player-count-for-
 region-get = { path = "../../svc/pkg/region/ops/get" }
 region-list = { path = "../../svc/pkg/region/ops/list" }
 region-resolve = { path = "../../svc/pkg/region/ops/resolve" }
-team-dev-get = { path = "../../svc/pkg/team-dev/ops/get" }
 team-get = { path = "../../svc/pkg/team/ops/get" }
 team-member-count = { path = "../../svc/pkg/team/ops/member-count" }
 team-profile-validate = { path = "../../svc/pkg/team/ops/profile-validate" }

@@ -11,7 +11,7 @@ chirp-client = { path = "../../../../../lib/chirp/client" }
 prost = "0.10"
 
 game-validate = { path = "../validate" }
-team-dev-get = { path = "../../../team-dev/ops/get" }
+team-get = { path = "../../../team/ops/get" }
 
 [dependencies.sqlx]
 version = "0.7"

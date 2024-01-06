@@ -340,13 +340,13 @@ impl Auth {
 		ctx: &OperationContext<()>,
 		team_id: Uuid,
 	) -> GlobalResult<()> {
-		let dev_team_res = op!([ctx] team_dev_get {
+		let team_res = op!([ctx] team_get {
 			team_ids: vec![team_id.into()],
 		})
 		.await?;
-		let dev_team = unwrap_with!(dev_team_res.teams.first(), GROUP_NOT_DEVELOPER_GROUP);
+		let team = unwrap!(team_res.teams.first());
 
-		ensure_with!(dev_team.active, GROUP_INVALID_DEVELOPER_STATUS);
+		ensure_with!(team.deactivate_reasons.is_empty(), GROUP_DEACTIVATED);
 
 		Ok(())
 	}
@@ -377,7 +377,7 @@ impl Auth {
 				.collect::<Vec<_>>();
 
 			// Fetch games associated with teams
-			let games_res = op!([ctx] team_dev_game_list {
+			let games_res = op!([ctx] game_list_for_team {
 				team_ids: team_ids_proto,
 			})
 			.await?;

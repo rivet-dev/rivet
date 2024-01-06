@@ -78,7 +78,12 @@ pub fn compile_proto_input(
 	);
 
 	// Write file
-	// println!("cargo:warning=schemac output: {}", output_path.display());
+	if std::env::var("SCHEMAC_DEBUG")
+		.ok()
+		.map_or(false, |x| x == "1")
+	{
+		println!("cargo:warning=schemac output: {}", output_path.display());
+	}
 	fs::write(output_path, schema_file)?;
 
 	Ok(())

@@ -9,7 +9,7 @@ async fn handle(
 		*dev_team_id
 	} else {
 		let team_create_res = op!([ctx] faker_team {
-			is_dev: true,
+
 			..Default::default()
 		})
 		.await?;

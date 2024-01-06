@@ -1,7 +1,0 @@
-[service]
-name = "team-billing-aggregate"
-
-[runtime]
-kind = "rust"
-
-[operation]
