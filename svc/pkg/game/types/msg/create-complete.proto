@@ -1,0 +1,15 @@
+syntax = "proto3";
+
+package rivet.backend.pkg.game.msg.create_complete;
+
+import "proto/common.proto";
+
+/// name = "msg-game-create-complete"
+/// tail-ttl = 300
+/// parameters = [
+/// 	{ name = "game_id" },
+/// ]
+message Message {
+	rivet.common.Uuid game_id = 1;
+}
+

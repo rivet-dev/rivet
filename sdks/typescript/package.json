@@ -37,7 +37,8 @@
         "format": "prettier --write 'src/**/*.ts'",
         "compile": "tsc",
         "bundle": "node build.js",
-        "build": "yarn compile && yarn bundle"
+        "build": "yarn compile && yarn bundle",
+		"prepack": "yarn run build"
     },
     "dependencies": {
         "form-data": "^4.0.0",

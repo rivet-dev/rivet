@@ -15,19 +15,6 @@ use crate::apis::ResponseContent;
 use super::{Error, configuration};
 
 
-/// struct for typed errors of method [`cloud_groups_convert_group`]
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(untagged)]
-pub enum CloudGroupsConvertGroupError {
-    Status400(crate::models::ErrorBody),
-    Status403(crate::models::ErrorBody),
-    Status404(crate::models::ErrorBody),
-    Status408(crate::models::ErrorBody),
-    Status429(crate::models::ErrorBody),
-    Status500(crate::models::ErrorBody),
-    UnknownValue(serde_json::Value),
-}
-
 /// struct for typed errors of method [`cloud_groups_validate`]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(untagged)]
@@ -41,37 +28,6 @@ pub enum CloudGroupsValidateError {
     UnknownValue(serde_json::Value),
 }
 
-
-/// Converts the given group into a developer group.
-pub async fn cloud_groups_convert_group(configuration: &configuration::Configuration, group_id: &str) -> Result<(), Error<CloudGroupsConvertGroupError>> {
-    let local_var_configuration = configuration;
-
-    let local_var_client = &local_var_configuration.client;
-
-    let local_var_uri_str = format!("{}/cloud/groups/{group_id}/convert", local_var_configuration.base_path, group_id=crate::apis::urlencode(group_id));
-    let mut local_var_req_builder = local_var_client.request(reqwest::Method::POST, local_var_uri_str.as_str());
-
-    if let Some(ref local_var_user_agent) = local_var_configuration.user_agent {
-        local_var_req_builder = local_var_req_builder.header(reqwest::header::USER_AGENT, local_var_user_agent.clone());
-    }
-    if let Some(ref local_var_token) = local_var_configuration.bearer_access_token {
-        local_var_req_builder = local_var_req_builder.bearer_auth(local_var_token.to_owned());
-    };
-
-    let local_var_req = local_var_req_builder.build()?;
-    let local_var_resp = local_var_client.execute(local_var_req).await?;
-
-    let local_var_status = local_var_resp.status();
-    let local_var_content = local_var_resp.text().await?;
-
-    if !local_var_status.is_client_error() && !local_var_status.is_server_error() {
-        Ok(())
-    } else {
-        let local_var_entity: Option<CloudGroupsConvertGroupError> = serde_json::from_str(&local_var_content).ok();
-        let local_var_error = ResponseContent { status: local_var_status, content: local_var_content, entity: local_var_entity };
-        Err(Error::ResponseError(local_var_error))
-    }
-}
 
 /// Validates information used to create a new group.
 pub async fn cloud_groups_validate(configuration: &configuration::Configuration, cloud_validate_group_request: crate::models::CloudValidateGroupRequest) -> Result<crate::models::CloudValidateGroupResponse, Error<CloudGroupsValidateError>> {

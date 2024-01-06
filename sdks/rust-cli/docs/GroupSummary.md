@@ -10,7 +10,7 @@ Name | Type | Description | Notes
 **external** | [**crate::models::GroupExternalLinks**](GroupExternalLinks.md) |  | 
 **group_id** | [**uuid::Uuid**](uuid::Uuid.md) |  | 
 **is_current_identity_member** | **bool** | Whether or not the current identity is a member of this group. | 
-**is_developer** | **bool** | Whether or not this group is a developer. | 
+**is_developer** | **bool** | **Deprecated** Whether or not this group is a developer. | 
 **member_count** | **i32** |  | 
 **owner_identity_id** | [**uuid::Uuid**](uuid::Uuid.md) |  | 
 **publicity** | [**crate::models::GroupPublicity**](GroupPublicity.md) |  | 

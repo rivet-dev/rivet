@@ -44,10 +44,7 @@ async fn handle(
 	}
 
 	// TODO: Deprecate `url` and `description` columns
-	let crdb = ctx.crdb().await?;
 	let game_id = Uuid::new_v4();
-	let plan_code = "free";
-	let subscription_id = Uuid::new_v4();
 	sql_execute!(
 		[ctx]
 		"
@@ -58,11 +55,9 @@ async fn handle(
 			display_name,
 			url,
 			description,
-			developer_team_id,
-			plan_code,
-			subscription_id
+			developer_team_id
 		)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+		VALUES ($1, $2, $3, $4, $5, $6, $7)
 		",
 		game_id,
 		ctx.ts(),
@@ -71,12 +66,13 @@ async fn handle(
 		"",
 		"",
 		developer_team_id,
-		plan_code,
-		subscription_id,
 	)
 	.await?;
 
-	// TODO: Add stripe subscription for game
+	msg!([ctx] game::msg::create_complete(game_id) {
+		game_id: Some(game_id.into()),
+	})
+	.await?;
 
 	msg!([ctx] analytics::msg::event_create() {
 		events: vec![

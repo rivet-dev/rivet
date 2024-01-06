@@ -644,7 +644,7 @@ impl Default for Cdn {
 #[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(deny_unknown_fields)]
 pub struct RivetBilling {
-	region_price_ids: HashMap<String, String>,
+	pub dynamic_servers_capacity_price_id: String,
 }
 
 fn default_regions() -> HashMap<String, Region> {

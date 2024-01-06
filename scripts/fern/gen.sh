@@ -34,7 +34,7 @@ EOF
 # Build libraries
 #
 # See https://github.com/fern-api/fern-typescript/blob/3b1c33781bbd726cee26a21c1ff3464eeae70cad/README.md?plain=1#L379
-(cd sdks/typescript && yarn install && yarn build) &
+(cd sdks/typescript && yarn install && yarn pack -f archive.tgz) &
 
 # Generate OpenAPI clients
 (./scripts/openapi/gen_spec_compat.sh && ./scripts/openapi/gen_rust.sh) &

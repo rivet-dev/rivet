@@ -1212,98 +1212,6 @@ components:
       - account_number
       - routing_number
       type: object
-    CloudGroupBillingInvoice:
-      description: A group's billing invoice.
-      properties:
-        csv_url:
-          description: A URL to this invoice's CSV breakdown.
-          type: string
-        pdf_url:
-          description: A URL to this invoice's PDF document.
-          type: string
-        period_end_ts:
-          description: RFC3339 timestamp.
-          format: date-time
-          type: string
-        period_start_ts:
-          description: RFC3339 timestamp.
-          format: date-time
-          type: string
-      required:
-      - csv_url
-      - pdf_url
-      - period_start_ts
-      - period_end_ts
-      type: object
-    CloudGroupBillingPayment:
-      description: A group's billing payment.
-      properties:
-        amount:
-          description: Payment amount (in hundredths USD, 100 = $1.00).
-          format: double
-          type: number
-        created_ts:
-          description: RFC3339 timestamp.
-          format: date-time
-          type: string
-        description:
-          description: A description of this payment.
-          type: string
-        from_invoice:
-          description: Whether or not this payment is from an invoice.
-          type: boolean
-        status:
-          $ref: '#/components/schemas/CloudGroupBillingStatus'
-      required:
-      - amount
-      - from_invoice
-      - created_ts
-      - status
-      type: object
-    CloudGroupBillingStatus:
-      description: A value denoting the status of a billing transfer.
-      enum:
-      - succeeded
-      - processing
-      - refunded
-      type: string
-    CloudGroupBillingSummary:
-      description: A group billing summary.
-      properties:
-        balance:
-          description: A group's available balance.
-          format: double
-          type: number
-        games:
-          description: A list of multiple game lobby expenses.
-          items:
-            $ref: '#/components/schemas/CloudGameLobbyExpenses'
-          type: array
-      required:
-      - games
-      - balance
-      type: object
-    CloudGroupBillingTransfer:
-      description: A group's billing transfer.
-      properties:
-        amount:
-          description: Payment amount (in hundredths USD, 100 = $1.00).
-          format: int64
-          type: integer
-        created_ts:
-          description: RFC3339 timestamp.
-          format: date-time
-          type: string
-        description:
-          description: A description of this transfer.
-          type: string
-        status:
-          $ref: '#/components/schemas/CloudGroupBillingStatus'
-      required:
-      - amount
-      - created_ts
-      - status
-      type: object
     CloudIdentityNamespaceConfig:
       description: Identity configuration for a given namespace.
       properties: {}
@@ -3125,7 +3033,9 @@ components:
           description: Whether or not the current identity is a member of this group.
           type: boolean
         is_developer:
-          description: Whether or not this group is a developer.
+          description: '**Deprecated**
+
+            Whether or not this group is a developer.'
           type: boolean
         member_count:
           type: integer
@@ -7612,59 +7522,6 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/CloudValidateGroupResponse'
-          description: ''
-        '400':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBody'
-          description: ''
-        '403':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBody'
-          description: ''
-        '404':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBody'
-          description: ''
-        '408':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBody'
-          description: ''
-        '429':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBody'
-          description: ''
-        '500':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBody'
-          description: ''
-      security: *id001
-      tags:
-      - CloudGroups
-  /cloud/groups/{group_id}/convert:
-    post:
-      description: Converts the given group into a developer group.
-      operationId: cloud_groups_convertGroup
-      parameters:
-      - in: path
-        name: group_id
-        required: true
-        schema:
-          format: uuid
-          type: string
-      responses:
-        '204':
           description: ''
         '400':
           content:

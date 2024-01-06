@@ -118,11 +118,6 @@ docs/CloudGamesVersionsApi.md
 docs/CloudGetRayPerfLogsResponse.md
 docs/CloudGetRegionTiersResponse.md
 docs/CloudGroupBankSource.md
-docs/CloudGroupBillingInvoice.md
-docs/CloudGroupBillingPayment.md
-docs/CloudGroupBillingStatus.md
-docs/CloudGroupBillingSummary.md
-docs/CloudGroupBillingTransfer.md
 docs/CloudGroupsApi.md
 docs/CloudInspectResponse.md
 docs/CloudLobbySummaryAnalytics.md
@@ -471,11 +466,6 @@ src/models/cloud_games_validate_game_version_response.rs
 src/models/cloud_get_ray_perf_logs_response.rs
 src/models/cloud_get_region_tiers_response.rs
 src/models/cloud_group_bank_source.rs
-src/models/cloud_group_billing_invoice.rs
-src/models/cloud_group_billing_payment.rs
-src/models/cloud_group_billing_status.rs
-src/models/cloud_group_billing_summary.rs
-src/models/cloud_group_billing_transfer.rs
 src/models/cloud_inspect_response.rs
 src/models/cloud_lobby_summary_analytics.rs
 src/models/cloud_logs_lobby_status.rs

@@ -13,8 +13,6 @@ struct Game {
 	tags: Vec<String>,
 	logo_upload_id: Option<Uuid>,
 	banner_upload_id: Option<Uuid>,
-	plan_code: Option<String>,
-	subscription_id: Option<Uuid>,
 }
 
 impl From<Game> for game::get::CacheGame {
@@ -30,8 +28,6 @@ impl From<Game> for game::get::CacheGame {
 			tags: val.tags,
 			logo_upload_id: val.logo_upload_id.map(Into::into),
 			banner_upload_id: val.banner_upload_id.map(Into::into),
-			plan_code: val.plan_code,
-			subscription_id: val.subscription_id.map(Into::into),
 		}
 	}
 }
@@ -68,9 +64,7 @@ async fn handle(ctx: OperationContext<game::get::Request>) -> GlobalResult<game:
 								WHERE game_tags.game_id = games.game_id
 							) AS tags,
 							logo_upload_id,
-							banner_upload_id,
-							plan_code,
-							subscription_id
+							banner_upload_id
 						FROM db_game.games
 						WHERE game_id = ANY($1)
 						",
@@ -184,8 +178,6 @@ async fn handle(ctx: OperationContext<game::get::Request>) -> GlobalResult<game:
 					},
 					banner_file_name,
 					banner_provider,
-					plan_code: game.plan_code.clone(),
-					subscription_id: game.subscription_id.map(Into::into),
 				}
 			})
 			.collect::<Vec<_>>(),

@@ -338,16 +338,6 @@ types:
         docs: Represent a resource's readable display name.
         type: string
 
-  GroupBillingSummary:
-    docs: A group billing summary.
-    properties:
-      games:
-        docs: A list of multiple game lobby expenses.
-        type: list<GameLobbyExpenses>
-      balance:
-        docs: A group's available balance.
-        type: double
-
   GameLobbyExpenses:
     docs: Game lobby expenses.
     properties:
@@ -401,60 +391,6 @@ types:
       routing_number:
         docs: The bank routing number of this group's bank source.
         type: string
-
-  GroupBillingInvoice:
-    docs: A group's billing invoice.
-    properties:
-      csv_url:
-        docs: A URL to this invoice's CSV breakdown.
-        type: string
-      pdf_url:
-        docs: A URL to this invoice's PDF document.
-        type: string
-      period_start_ts:
-        docs: RFC3339 timestamp.
-        type: datetime
-      period_end_ts:
-        docs: RFC3339 timestamp.
-        type: datetime
-
-  GroupBillingPayment:
-    docs: A group's billing payment.
-    properties:
-      amount:
-        docs: Payment amount (in hundredths USD, 100 = $1.00).
-        type: double
-      description:
-        docs: A description of this payment.
-        type: optional<string>
-      from_invoice:
-        docs: Whether or not this payment is from an invoice.
-        type: boolean
-      created_ts:
-        docs: RFC3339 timestamp.
-        type: datetime
-      status: GroupBillingStatus
-
-  GroupBillingStatus:
-    docs: A value denoting the status of a billing transfer.
-    enum:
-      - succeeded
-      - processing
-      - refunded
-
-  GroupBillingTransfer:
-    docs: A group's billing transfer.
-    properties:
-      amount:
-        docs: Payment amount (in hundredths USD, 100 = $1.00).
-        type: long
-      description:
-        docs: A description of this transfer.
-        type: optional<string>
-      created_ts:
-        docs: RFC3339 timestamp.
-        type: datetime
-      status: GroupBillingStatus
 
   RegionTier:
     docs: A region server tier.

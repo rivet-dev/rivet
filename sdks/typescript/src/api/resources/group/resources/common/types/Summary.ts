@@ -10,7 +10,10 @@ export interface Summary {
     /** The URL of this group's avatar image. */
     avatarUrl?: string;
     external: Rivet.group.ExternalLinks;
-    /** Whether or not this group is a developer. */
+    /**
+     * **Deprecated**
+     * Whether or not this group is a developer.
+     */
     isDeveloper: boolean;
     bio: Rivet.Bio;
     /** Whether or not the current identity is a member of this group. */

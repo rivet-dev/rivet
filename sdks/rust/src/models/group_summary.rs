@@ -28,7 +28,7 @@ pub struct GroupSummary {
     /// Whether or not the current identity is a member of this group.
     #[serde(rename = "is_current_identity_member")]
     pub is_current_identity_member: bool,
-    /// Whether or not this group is a developer.
+    /// **Deprecated** Whether or not this group is a developer.
     #[serde(rename = "is_developer")]
     pub is_developer: bool,
     #[serde(rename = "member_count")]

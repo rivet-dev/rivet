@@ -6433,59 +6433,6 @@ paths:
           application/json:
             schema:
               $ref: '#/components/schemas/CloudValidateGroupRequest'
-  /cloud/groups/{group_id}/convert:
-    post:
-      description: Converts the given group into a developer group.
-      operationId: cloud_groups_convertGroup
-      tags:
-        - CloudGroups
-      parameters:
-        - name: group_id
-          in: path
-          required: true
-          schema:
-            type: string
-            format: uuid
-      responses:
-        '204':
-          description: ''
-        '400':
-          description: ''
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBody'
-        '403':
-          description: ''
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBody'
-        '404':
-          description: ''
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBody'
-        '408':
-          description: ''
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBody'
-        '429':
-          description: ''
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBody'
-        '500':
-          description: ''
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBody'
-      security: *ref_0
   /cloud/rays/{ray_id}/perf:
     get:
       description: Returns performance information about a Rivet Ray.
@@ -9876,22 +9823,6 @@ components:
         - universal_region
         - provider_display_name
         - region_display_name
-    CloudGroupBillingSummary:
-      type: object
-      description: A group billing summary.
-      properties:
-        games:
-          type: array
-          items:
-            $ref: '#/components/schemas/CloudGameLobbyExpenses'
-          description: A list of multiple game lobby expenses.
-        balance:
-          type: number
-          format: double
-          description: A group's available balance.
-      required:
-        - games
-        - balance
     CloudGameLobbyExpenses:
       type: object
       description: Game lobby expenses.
@@ -9965,82 +9896,6 @@ components:
       required:
         - account_number
         - routing_number
-    CloudGroupBillingInvoice:
-      type: object
-      description: A group's billing invoice.
-      properties:
-        csv_url:
-          type: string
-          description: A URL to this invoice's CSV breakdown.
-        pdf_url:
-          type: string
-          description: A URL to this invoice's PDF document.
-        period_start_ts:
-          type: string
-          format: date-time
-          description: RFC3339 timestamp.
-        period_end_ts:
-          type: string
-          format: date-time
-          description: RFC3339 timestamp.
-      required:
-        - csv_url
-        - pdf_url
-        - period_start_ts
-        - period_end_ts
-    CloudGroupBillingPayment:
-      type: object
-      description: A group's billing payment.
-      properties:
-        amount:
-          type: number
-          format: double
-          description: Payment amount (in hundredths USD, 100 = $1.00).
-        description:
-          type: string
-          description: A description of this payment.
-        from_invoice:
-          type: boolean
-          description: Whether or not this payment is from an invoice.
-        created_ts:
-          type: string
-          format: date-time
-          description: RFC3339 timestamp.
-        status:
-          $ref: '#/components/schemas/CloudGroupBillingStatus'
-      required:
-        - amount
-        - from_invoice
-        - created_ts
-        - status
-    CloudGroupBillingStatus:
-      type: string
-      enum:
-        - succeeded
-        - processing
-        - refunded
-      description: A value denoting the status of a billing transfer.
-    CloudGroupBillingTransfer:
-      type: object
-      description: A group's billing transfer.
-      properties:
-        amount:
-          type: integer
-          format: int64
-          description: Payment amount (in hundredths USD, 100 = $1.00).
-        description:
-          type: string
-          description: A description of this transfer.
-        created_ts:
-          type: string
-          format: date-time
-          description: RFC3339 timestamp.
-        status:
-          $ref: '#/components/schemas/CloudGroupBillingStatus'
-      required:
-        - amount
-        - created_ts
-        - status
     CloudRegionTier:
       type: object
       description: A region server tier.
@@ -11682,7 +11537,9 @@ components:
           $ref: '#/components/schemas/GroupExternalLinks'
         is_developer:
           type: boolean
-          description: Whether or not this group is a developer.
+          description: |-
+            **Deprecated**
+            Whether or not this group is a developer.
         bio:
           $ref: '#/components/schemas/Bio'
         is_current_identity_member:

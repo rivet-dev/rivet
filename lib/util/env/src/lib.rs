@@ -1,5 +1,4 @@
 use serde::Deserialize;
-use std::collections::HashMap;
 
 /// Reads a secret from the env.
 ///
@@ -173,7 +172,7 @@ pub fn chirp_service_name() -> &'static str {
 
 #[derive(Deserialize)]
 pub struct RivetBilling {
-	pub region_price_ids: HashMap<String, String>,
+	pub dynamic_servers_capacity_price_id: String,
 }
 
 pub fn billing() -> Option<&'static RivetBilling> {

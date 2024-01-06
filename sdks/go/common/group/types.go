@@ -106,6 +106,7 @@ type Summary struct {
 	// The URL of this group's avatar image.
 	AvatarUrl *string        `json:"avatar_url,omitempty"`
 	External  *ExternalLinks `json:"external,omitempty"`
+	// **Deprecated**
 	// Whether or not this group is a developer.
 	IsDeveloper bool    `json:"is_developer"`
 	Bio         sdk.Bio `json:"bio"`

@@ -78,7 +78,6 @@ Class | Method | HTTP request | Description
 *CloudGamesVersionsApi* | [**cloud_games_versions_get_game_version_by_id**](docs/CloudGamesVersionsApi.md#cloud_games_versions_get_game_version_by_id) | **GET** /cloud/games/{game_id}/versions/{version_id} | 
 *CloudGamesVersionsApi* | [**cloud_games_versions_reserve_version_name**](docs/CloudGamesVersionsApi.md#cloud_games_versions_reserve_version_name) | **POST** /cloud/games/{game_id}/versions/reserve-name | 
 *CloudGamesVersionsApi* | [**cloud_games_versions_validate_game_version**](docs/CloudGamesVersionsApi.md#cloud_games_versions_validate_game_version) | **POST** /cloud/games/{game_id}/versions/validate | 
-*CloudGroupsApi* | [**cloud_groups_convert_group**](docs/CloudGroupsApi.md#cloud_groups_convert_group) | **POST** /cloud/groups/{group_id}/convert | 
 *CloudGroupsApi* | [**cloud_groups_validate**](docs/CloudGroupsApi.md#cloud_groups_validate) | **POST** /cloud/groups/validate | 
 *CloudLogsApi* | [**cloud_logs_get_ray_perf_logs**](docs/CloudLogsApi.md#cloud_logs_get_ray_perf_logs) | **GET** /cloud/rays/{ray_id}/perf | 
 *CloudTiersApi* | [**cloud_tiers_get_region_tiers**](docs/CloudTiersApi.md#cloud_tiers_get_region_tiers) | **GET** /cloud/region-tiers | 
@@ -262,11 +261,6 @@ Class | Method | HTTP request | Description
  - [CloudGetRayPerfLogsResponse](docs/CloudGetRayPerfLogsResponse.md)
  - [CloudGetRegionTiersResponse](docs/CloudGetRegionTiersResponse.md)
  - [CloudGroupBankSource](docs/CloudGroupBankSource.md)
- - [CloudGroupBillingInvoice](docs/CloudGroupBillingInvoice.md)
- - [CloudGroupBillingPayment](docs/CloudGroupBillingPayment.md)
- - [CloudGroupBillingStatus](docs/CloudGroupBillingStatus.md)
- - [CloudGroupBillingSummary](docs/CloudGroupBillingSummary.md)
- - [CloudGroupBillingTransfer](docs/CloudGroupBillingTransfer.md)
  - [CloudInspectResponse](docs/CloudInspectResponse.md)
  - [CloudLobbySummaryAnalytics](docs/CloudLobbySummaryAnalytics.md)
  - [CloudLogsLobbyStatus](docs/CloudLogsLobbyStatus.md)
