@@ -1,4 +1,5 @@
 use serde::Deserialize;
+use std::{collections::HashMap, path::PathBuf};
 
 pub fn decode(s: &str) -> Result<Project, toml::de::Error> {
 	toml::from_str(s)
@@ -10,5 +11,11 @@ pub fn decode(s: &str) -> Result<Project, toml::de::Error> {
 #[serde(rename_all = "kebab-case")]
 pub struct Project {
 	#[serde(default)]
-	pub billing_enabled: bool,
+	pub additional_roots: HashMap<String, AdditionalRoot>,
+}
+
+#[derive(Clone, Debug, Default, Deserialize)]
+#[serde(rename_all = "kebab-case", deny_unknown_fields)]
+pub struct AdditionalRoot {
+	pub path: PathBuf,
 }

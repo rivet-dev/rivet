@@ -15,6 +15,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 -   **API** Return `API_REQUEST_TIMEOUT` error after 50s (see `docs/infrastructure/API_TIMEOUTS.md` for context)
 -   **API** Move generated client APIs to sdks/
 -   Lower long poll timeout from 60s -> 40s
+-   **Bolt** Moved additional project roots to Bolt.toml
 
 ### Security
 

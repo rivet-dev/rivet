@@ -1,5 +1,3 @@
-use std::{collections::HashMap, path::PathBuf};
-
 use serde::Deserialize;
 
 /// Configuration for the Bolt.local.toml file.
@@ -11,17 +9,9 @@ pub struct Local {
 	#[serde(default)]
 	pub namespace: Option<String>,
 	#[serde(default)]
-	pub additional_roots: HashMap<String, AdditionalRoot>,
-	#[serde(default)]
 	pub up: Up,
 	#[serde(default)]
 	pub rust: Rust,
-}
-
-#[derive(Clone, Debug, Default, Deserialize)]
-#[serde(rename_all = "kebab-case", deny_unknown_fields)]
-pub struct AdditionalRoot {
-	pub path: PathBuf,
 }
 
 #[derive(Clone, Debug, Default, Deserialize)]

@@ -26,7 +26,7 @@ pub async fn generate_project(ctx: &ProjectContext) {
 	dep::k8s::gen::project(ctx).await.unwrap();
 
 	// Generate additional roots
-	let additional_roots = &ctx.config_local().additional_roots;
+	let additional_roots = &ctx.config().additional_roots;
 	for (_, additional_root) in additional_roots {
 		let path = fs::canonicalize(ctx.path().join(&additional_root.path))
 			.await

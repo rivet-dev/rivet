@@ -51,7 +51,7 @@ pub async fn generate(ctx: &mut ProjectContext, opts: TemplateOpts) -> Result<()
 	// Create base path based on selected root
 	let base_path = if let Some(root) = root {
 		let root_path = &ctx
-			.config_local()
+			.config()
 			.additional_roots
 			.get(&root)
 			.ok_or_else(|| anyhow!("Root `{}` not found in local config", root))?

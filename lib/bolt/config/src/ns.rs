@@ -546,6 +546,8 @@ pub struct Rivet {
 	pub dynamic_servers: DynamicServers,
 	#[serde(default)]
 	pub cdn: Cdn,
+	#[serde(default)]
+	pub billing: Option<RivetBilling>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, Default)]
@@ -637,6 +639,12 @@ impl Default for Cdn {
 	fn default() -> Self {
 		Cdn { cache_size_gb: 10 }
 	}
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+#[serde(deny_unknown_fields)]
+pub struct RivetBilling {
+	region_price_ids: HashMap<String, String>,
 }
 
 fn default_regions() -> HashMap<String, Region> {

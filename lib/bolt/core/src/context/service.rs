@@ -825,8 +825,11 @@ impl ServiceContextData {
 		}
 
 		// Add billing flag
-		if project_ctx.config().billing_enabled {
-			env.push(("IS_BILLING_ENABLED".to_owned(), "1".into()));
+		if let Some(billing) = &project_ctx.ns().rivet.billing {
+			env.push((
+				"RIVET_BILLING".to_owned(),
+				serde_json::to_string(&billing).unwrap(),
+			));
 		}
 
 		if project_ctx.ns().dns.is_some() {
