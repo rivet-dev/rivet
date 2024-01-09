@@ -88,6 +88,10 @@ impl Connection {
 	pub fn perf(&self) -> &chirp_perf::PerfCtx {
 		self.client.perf()
 	}
+
+	pub async fn clickhouse(&self) -> Result<ClickHousePool, rivet_pools::Error> {
+		self.pools.clickhouse()
+	}
 }
 
 impl std::ops::Deref for Connection {

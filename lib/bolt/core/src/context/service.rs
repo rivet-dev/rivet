@@ -893,16 +893,6 @@ impl ServiceContextData {
 			self.config().cockroachdb.min_connections.to_string(),
 		));
 
-		if self.depends_on_clickhouse() {
-			let clickhouse_data = terraform::output::read_clickhouse(&project_ctx).await;
-			let clickhouse_host = format!(
-				"https://{}:{}",
-				*clickhouse_data.host, *clickhouse_data.port_https
-			);
-
-			env.push(("CLICKHOUSE_URL".into(), clickhouse_host));
-		}
-
 		if self.depends_on_prometheus_api() {
 			env.push((
 				format!("PROMETHEUS_URL"),
@@ -1157,6 +1147,21 @@ impl ServiceContextData {
 				format!("REDIS_URL_{}", db_name.to_uppercase().replace("-", "_")),
 				url,
 			));
+		}
+
+		// ClickHouse
+		if self.depends_on_clickhouse() {
+			let clickhouse_data = terraform::output::read_clickhouse(&project_ctx).await;
+			let username = "chirp";
+			let password = project_ctx
+				.read_secret(&["clickhouse", "users", username, "password"])
+				.await?;
+			let uri = format!(
+				"https://{}:{}@{}:{}",
+				username, password, *clickhouse_data.host, *clickhouse_data.port_https
+			);
+
+			env.push(("CLICKHOUSE_URL".into(), uri));
 		}
 
 		// Expose S3 endpoints to services that need them

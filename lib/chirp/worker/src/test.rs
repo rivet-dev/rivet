@@ -74,4 +74,8 @@ impl TestCtx {
 	pub async fn redis_user_presence(&self) -> Result<RedisPool, rivet_pools::Error> {
 		self.op_ctx.redis_user_presence().await
 	}
+
+	pub async fn clickhouse(&self) -> Result<ClickHousePool, rivet_pools::Error> {
+		self.op_ctx.clickhouse().await
+	}
 }

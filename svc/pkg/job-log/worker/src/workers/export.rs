@@ -8,11 +8,6 @@ struct LogEntry {
 
 #[worker(name = "job-log-export")]
 async fn worker(ctx: &OperationContext<job_log::msg::export::Message>) -> GlobalResult<()> {
-	let clickhouse = rivet_pools::utils::clickhouse::client()?
-		.with_user("chirp")
-		.with_password(util::env::read_secret(&["clickhouse", "users", "chirp", "password"]).await?)
-		.with_database("db_job_log");
-
 	let request_id = unwrap_ref!(ctx.request_id).as_uuid();
 	let run_id = unwrap_ref!(ctx.run_id).as_uuid();
 
@@ -22,11 +17,13 @@ async fn worker(ctx: &OperationContext<job_log::msg::export::Message>) -> Global
 		backend::job::log::StreamType::StdErr => "stderr.txt",
 	};
 
-	let mut entries_cursor = clickhouse
+	let mut entries_cursor = ctx
+		.clickhouse()
+		.await?
 		.query(indoc!(
 			"
 			SELECT message
-			FROM run_logs
+			FROM db_job_log.run_logs
 			WHERE run_id = ? AND task = ? AND stream_type = ?
 			ORDER BY ts ASC
 			"

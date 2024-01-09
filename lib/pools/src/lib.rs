@@ -8,14 +8,15 @@ use std::{collections::HashMap, env, fmt::Debug, str::FromStr, sync::Arc, time::
 use tokio::task::JoinSet;
 use tokio_util::sync::CancellationToken;
 
-use crate::pools::{CrdbPool, NatsPool, PoolsInner, RedisPool};
+use crate::pools::{ClickHousePool, CrdbPool, NatsPool, PoolsInner, RedisPool};
 
 pub mod prelude {
 	pub use async_nats as nats;
+	pub use clickhouse;
 	pub use redis;
 	pub use sqlx;
 
-	pub use crate::pools::{CrdbPool, NatsPool, RedisPool};
+	pub use crate::pools::{ClickHousePool, CrdbPool, NatsPool, RedisPool};
 	pub use crate::{
 		__sql_query, __sql_query_as, __sql_query_as_raw, sql_execute, sql_fetch, sql_fetch_all,
 		sql_fetch_many, sql_fetch_one, sql_fetch_optional,
@@ -35,12 +36,14 @@ pub async fn from_env(client_name: impl ToString + Debug) -> Result<Pools, Error
 		crdb_from_env(client_name.clone()),
 		redis_from_env(),
 	)?;
+	let clickhouse = clickhouse_from_env()?;
 
 	let pool = Arc::new(PoolsInner {
 		_guard: token.clone().drop_guard(),
 		nats,
 		crdb,
 		redis,
+		clickhouse,
 	});
 	pool.clone().start(token);
 
@@ -223,6 +226,35 @@ async fn redis_from_env() -> Result<HashMap<String, RedisPool>, Error> {
 	}
 
 	Ok(redis)
+}
+
+#[tracing::instrument]
+fn clickhouse_from_env() -> Result<Option<ClickHousePool>, Error> {
+	if let Some(url) = std::env::var("CLICKHOUSE_URL").ok() {
+		tracing::info!(%url, "clickhouse connecting");
+
+		// Build HTTP client
+		let mut http_connector = hyper::client::connect::HttpConnector::new();
+		http_connector.enforce_http(false);
+		http_connector.set_keepalive(Some(Duration::from_secs(60)));
+		let https_connector = hyper_tls::HttpsConnector::new_with_connector(http_connector);
+		let http_client = hyper::Client::builder()
+			.pool_idle_timeout(Duration::from_secs(2))
+			.build(https_connector);
+
+		// Build ClickHouse client
+		let parsed_url = url::Url::parse(&url).map_err(Error::BuildClickHouseUrl)?;
+		let mut client = clickhouse::Client::with_http_client(http_client)
+			.with_url(url)
+			.with_user(parsed_url.username());
+		if let Some(password) = parsed_url.password() {
+			client = client.with_password(password);
+		}
+
+		Ok(Some(client))
+	} else {
+		Ok(None)
+	}
 }
 
 #[tracing::instrument(level = "trace", skip(_pools))]

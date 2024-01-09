@@ -6,6 +6,7 @@ use crate::Error;
 pub type NatsPool = async_nats::Client;
 pub type CrdbPool = sqlx::PgPool;
 pub type RedisPool = redis::aio::ConnectionManager;
+pub type ClickHousePool = clickhouse::Client;
 
 pub type Pools = Arc<PoolsInner>;
 
@@ -14,6 +15,7 @@ pub struct PoolsInner {
 	pub(crate) nats: Option<NatsPool>,
 	pub(crate) crdb: Option<CrdbPool>,
 	pub(crate) redis: HashMap<String, RedisPool>,
+	pub(crate) clickhouse: Option<clickhouse::Client>,
 }
 
 impl PoolsInner {
@@ -66,6 +68,10 @@ impl PoolsInner {
 
 	pub fn redis_cache(&self) -> Result<RedisPool, Error> {
 		self.redis("ephemeral")
+	}
+
+	pub fn clickhouse(&self) -> Result<ClickHousePool, Error> {
+		self.clickhouse.clone().ok_or(Error::MissingClickHousePool)
 	}
 }
 

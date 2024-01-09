@@ -11,10 +11,7 @@ struct LogEntry {
 async fn handle(
 	ctx: OperationContext<job_log::read::Request>,
 ) -> GlobalResult<job_log::read::Response> {
-	let clickhouse = rivet_pools::utils::clickhouse::client()?
-		.with_user("chirp")
-		.with_password(util::env::read_secret(&["clickhouse", "users", "chirp", "password"]).await?)
-		.with_database("db_job_log");
+	let clickhouse = ctx.clickhouse().await?;
 
 	let run_id = unwrap_ref!(ctx.run_id).as_uuid();
 	let req_query = unwrap_ref!(ctx.query);
@@ -49,7 +46,7 @@ async fn handle(
 
 async fn query_all(
 	req: &job_log::read::Request,
-	clickhouse: &clickhouse::Client,
+	clickhouse: &ClickHousePool,
 	run_id: Uuid,
 	order_by: &str,
 ) -> GlobalResult<Vec<backend::job::log::LogEntry>> {
@@ -57,7 +54,7 @@ async fn query_all(
 		.query(&formatdoc!(
 			"
 			SELECT ts, message
-			FROM run_logs
+			FROM db_job_log.run_logs
 			WHERE run_id = ? AND task = ? AND stream_type = ?
 			ORDER BY ts {order_by}
 			LIMIT ?
@@ -79,7 +76,7 @@ async fn query_all(
 
 async fn query_before_ts(
 	req: &job_log::read::Request,
-	clickhouse: &clickhouse::Client,
+	clickhouse: &ClickHousePool,
 	run_id: Uuid,
 	ts: i64,
 	order_by: &str,
@@ -88,7 +85,7 @@ async fn query_before_ts(
 		.query(&formatdoc!(
 			"
 			SELECT ts, message
-			FROM run_logs
+			FROM db_job_log.run_logs
 			WHERE run_id = ? AND task = ? AND stream_type = ? AND ts < fromUnixTimestamp64Nano(?)
 			ORDER BY ts {order_by}
 			LIMIT ?
@@ -111,7 +108,7 @@ async fn query_before_ts(
 
 async fn query_after_ts(
 	req: &job_log::read::Request,
-	clickhouse: &clickhouse::Client,
+	clickhouse: &ClickHousePool,
 	run_id: Uuid,
 	ts: i64,
 	order_by: &str,
@@ -120,7 +117,7 @@ async fn query_after_ts(
 		.query(&formatdoc!(
 			"
 			SELECT ts, message
-			FROM run_logs
+			FROM db_job_log.run_logs
 			WHERE run_id = ? AND task = ? AND stream_type = ? AND ts > fromUnixTimestamp64Nano(?)
 			ORDER BY ts {order_by}
 			LIMIT ?
@@ -143,7 +140,7 @@ async fn query_after_ts(
 
 async fn query_ts_range(
 	req: &job_log::read::Request,
-	clickhouse: &clickhouse::Client,
+	clickhouse: &ClickHousePool,
 	run_id: Uuid,
 	after_ts: i64,
 	before_ts: i64,
@@ -153,7 +150,7 @@ async fn query_ts_range(
 		.query(&formatdoc!(
 			"
 			SELECT ts, message
-			FROM run_logs
+			FROM db_job_log.run_logs
 			WHERE run_id = ? AND task = ? AND stream_type = ? AND ts > fromUnixTimestamp64Nano(?) AND ts < fromUnixTimestamp64Nano(?)
 			ORDER BY ts {order_by}
 			LIMIT ?

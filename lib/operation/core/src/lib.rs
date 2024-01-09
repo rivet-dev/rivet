@@ -283,6 +283,10 @@ where
 	pub fn perf(&self) -> &chirp_perf::PerfCtx {
 		self.conn.perf()
 	}
+
+	pub async fn clickhouse(&self) -> Result<ClickHousePool, rivet_pools::Error> {
+		self.conn.clickhouse().await
+	}
 }
 
 impl<B> std::ops::Deref for OperationContext<B>

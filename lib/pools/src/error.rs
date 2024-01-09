@@ -12,6 +12,9 @@ pub enum Error {
 	#[error("missing redis pool: {key:?}")]
 	MissingRedisPool { key: Option<String> },
 
+	#[error("missing clickhouse pool")]
+	MissingClickHousePool,
+
 	#[error("tokio join: {0}")]
 	TokioJoin(tokio::task::JoinError),
 
@@ -29,4 +32,10 @@ pub enum Error {
 
 	#[error("build sqlx: {0}")]
 	BuildSqlx(sqlx::Error),
+
+	#[error("build clickhouse: {0}")]
+	BuildClickHouse(clickhouse::error::Error),
+
+	#[error("build clickhouse url: {0}")]
+	BuildClickHouseUrl(url::ParseError),
 }
