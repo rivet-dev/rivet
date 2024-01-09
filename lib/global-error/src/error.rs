@@ -8,7 +8,7 @@ use types::rivet::chirp;
 
 pub type GlobalResult<T> = Result<T, GlobalError>;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum GlobalError {
 	Internal {
 		ty: String,
