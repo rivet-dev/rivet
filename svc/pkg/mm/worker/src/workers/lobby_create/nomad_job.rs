@@ -348,6 +348,7 @@ pub fn gen_lobby_docker_job(
 		parameterized_job: Some(Box::new(ParameterizedJobConfig {
 			payload: Some("forbidden".into()),
 			meta_required: Some(vec![
+				"vector_socket_addr".into(),
 				"image_artifact_url".into(),
 				"namespace_id".into(),
 				"namespace_name".into(),
@@ -505,6 +506,7 @@ pub fn gen_lobby_docker_job(
 					resources: Some(Box::new(resources.clone())),
 					// Gives the game processes time to shut down gracefully.
 					kill_timeout: Some(60 * 1_000_000_000),
+					kill_signal: Some("SIGTERM".into()),
 					log_config: Some(Box::new(LogConfig {
 						max_files: Some(4),
 						max_file_size_mb: Some(4),

@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [23.2.0-rc.2] - Unreleased
 
+### Added
+
+-   **Infra** New `job-runner` crate responsible for managing the OCI bundle runtime & log shipping on the machine
+-   **Infra** Jobs now log an explicit rate message when logs are rate limited & truncated
+
 ### Changed
 
 -   **Matchmaker** Allow excluding `matchmaker.regions` in order to enable all regions
@@ -31,6 +36,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 -   **api-cloud** Returning wrong domain for `domains.cdn`
 -   **Infra** Fix Prometheus storage retention conversion between mebibytes and megabytes
 -   **Infra** Fix typo in Game Guard Traefik config not exposing API endpoint
+-   **Infra** Kill signal for servers was `SIGINT` instead of `SIGTERM`
 
 ## [23.2.0-rc.1] - 2023-12-01
 
