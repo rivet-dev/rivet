@@ -348,6 +348,7 @@ pub fn gen_lobby_docker_job(
 		parameterized_job: Some(Box::new(ParameterizedJobConfig {
 			payload: Some("forbidden".into()),
 			meta_required: Some(vec![
+				"job_runner_binary_url".into(),
 				"vector_socket_addr".into(),
 				"image_artifact_url".into(),
 				"namespace_id".into(),
@@ -425,6 +426,14 @@ pub fn gen_lobby_docker_job(
 						},
 						Template {
 							embedded_tmpl: Some(
+								include_str!("./scripts/setup_job_runner.sh").into(),
+							),
+							dest_path: Some("${NOMAD_TASK_DIR}/setup_job_runner.sh".into()),
+							perms: Some("744".into()),
+							..Template::new()
+						},
+						Template {
+							embedded_tmpl: Some(
 								include_str!("./scripts/setup_oci_bundle.sh")
 									.replace("__DOWNLOAD_CMD__", &download_cmd)
 									.replace(
@@ -494,15 +503,10 @@ pub fn gen_lobby_docker_job(
 					driver: Some("raw_exec".into()),
 					config: Some({
 						let mut x = HashMap::new();
-						x.insert("command".into(), json!("${NOMAD_TASK_DIR}/run.sh"));
+						// This is downloaded in setup_job_runner.sh
+						x.insert("command".into(), json!("${NOMAD_ALLOC_DIR}/job-runner"));
 						x
 					}),
-					templates: Some(vec![Template {
-						embedded_tmpl: Some(include_str!("./scripts/run.sh").into()),
-						dest_path: Some("${NOMAD_TASK_DIR}/run.sh".into()),
-						perms: Some("744".into()),
-						..Template::new()
-					}]),
 					resources: Some(Box::new(resources.clone())),
 					// Gives the game processes time to shut down gracefully.
 					kill_timeout: Some(60 * 1_000_000_000),

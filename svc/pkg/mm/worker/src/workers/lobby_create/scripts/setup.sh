@@ -27,6 +27,10 @@ else
 	export NETNS_PATH="/var/run/netns/$CONTAINER_ID"
 fi
 
+# Run job runner setup script
+"$NOMAD_TASK_DIR/setup_job_runner.sh" &
+pid_job_runner=$!
+
 # Run OCI setup script
 "$NOMAD_TASK_DIR/setup_oci_bundle.sh" &
 pid_oci=$!
@@ -35,6 +39,14 @@ pid_oci=$!
 if ! __HOST_NETWORK__; then
 	"$NOMAD_TASK_DIR/setup_cni_network.sh" &
 	pid_cni=$!
+fi
+
+# Wait for job runner setup scripts to finish
+wait $pid_job_runner
+exit_status_job_runner=$?
+if [ $exit_status_job_runner -ne 0 ]; then
+	log "job-runner setup failed with exit code $exit_status_job_runner"
+	exit $exit_status_job_runner
 fi
 
 # Wait for OCI setup scripts to finish

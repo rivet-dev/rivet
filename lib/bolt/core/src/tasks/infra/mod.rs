@@ -297,6 +297,14 @@ pub fn build_plan(
 	}
 
 	plan.push(PlanStep {
+		name_id: "infra-artifacts",
+		kind: PlanStepKind::Terraform {
+			plan_id: "infra_artifacts".into(),
+			needs_destroy: false,
+		},
+	});
+
+	plan.push(PlanStep {
 		name_id: "migrate",
 		kind: PlanStepKind::Migrate,
 	});
