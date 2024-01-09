@@ -76,6 +76,7 @@ async fn worker(ctx: &OperationContext<mm::msg::lobby_ready::Message>) -> Global
 		msg!([ctx] analytics::msg::event_create() {
 			events: vec![
 				analytics::msg::event_create::Event {
+					event_id: Some(Uuid::new_v4().into()),
 					name: "mm.lobby.ready".into(),
 					properties_json: Some(serde_json::to_string(&json!({
 						"namespace_id": lobby_row.namespace_id,

@@ -30,6 +30,7 @@ async fn handle(
 			msg!([ctx] analytics::msg::event_create() {
 				events: vec![
 					analytics::msg::event_create::Event {
+						event_id: Some(Uuid::new_v4().into()),
 						name: "user_identity.create".into(),
 						user_id: Some(user_id.into()),
 						namespace_id: None,
@@ -58,6 +59,7 @@ async fn handle(
 			msg!([ctx] analytics::msg::event_create() {
 				events: vec![
 					analytics::msg::event_create::Event {
+						event_id: Some(Uuid::new_v4().into()),
 						name: "user_identity.create".into(),
 						user_id: Some(user_id.into()),
 						namespace_id: None,

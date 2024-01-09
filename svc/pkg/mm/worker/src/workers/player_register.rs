@@ -137,6 +137,7 @@ async fn worker(ctx: &OperationContext<mm::msg::player_register::Message>) -> Gl
 	msg!([ctx] analytics::msg::event_create() {
 		events: vec![
 			analytics::msg::event_create::Event {
+				event_id: Some(Uuid::new_v4().into()),
 				name: "mm.player.ready".into(),
 				properties_json: Some(serde_json::to_string(&json!({
 					"namespace_id": player_row.namespace_id,
@@ -175,6 +176,7 @@ async fn fail(
 	msg!([client] analytics::msg::event_create() {
 		events: vec![
 			analytics::msg::event_create::Event {
+				event_id: Some(Uuid::new_v4().into()),
 				name: "mm.player.ready_fail".into(),
 				properties_json: Some(serde_json::to_string(&json!({
 					"namespace_id": player_row.namespace_id,

@@ -89,6 +89,7 @@ async fn handle(
 
 		msg!([ctx] analytics::msg::event_create() {
 			events: vec![ analytics::msg::event_create::Event {
+				event_id: Some(Uuid::new_v4().into()),
 				name: "user_follow.create".into(),
 				user_id: Some(follower_user_id.into()),
 				properties_json: Some(serde_json::to_string(&json!({
@@ -123,6 +124,7 @@ async fn handle(
 
 		msg!([ctx] analytics::msg::event_create() {
 			events: vec![analytics::msg::event_create::Event {
+				event_id: Some(Uuid::new_v4().into()),
 				name: "user_follow.delete".into(),
 				user_id: Some(follower_user_id.into()),
 				properties_json: Some(serde_json::to_string(&json!({

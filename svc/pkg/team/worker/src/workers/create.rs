@@ -56,6 +56,7 @@ async fn worker(ctx: &OperationContext<team::msg::create::Message>) -> GlobalRes
 	msg!([ctx] analytics::msg::event_create() {
 		events: vec![
 			analytics::msg::event_create::Event {
+				event_id: Some(Uuid::new_v4().into()),
 				name: "team.create".into(),
 				user_id: ctx.owner_user_id,
 				properties_json: Some(serde_json::to_string(&json!({
@@ -64,6 +65,7 @@ async fn worker(ctx: &OperationContext<team::msg::create::Message>) -> GlobalRes
 				..Default::default()
 			},
 			analytics::msg::event_create::Event {
+				event_id: Some(Uuid::new_v4().into()),
 				name: "team.profile_set".into(),
 				properties_json: Some(serde_json::to_string(&json!({
 					"display_name": ctx.display_name,

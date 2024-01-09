@@ -166,6 +166,7 @@ async fn worker(
 	msg!([ctx] analytics::msg::event_create() {
 		events: vec![
 			analytics::msg::event_create::Event {
+				event_id: Some(Uuid::new_v4().into()),
 				name: "module.create".into(),
 				properties_json: Some(serde_json::to_string(&json!({
 					"module_id": module_id,

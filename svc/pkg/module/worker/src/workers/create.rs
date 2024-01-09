@@ -32,6 +32,7 @@ async fn worker(ctx: &OperationContext<module::msg::create::Message>) -> Result<
 	msg!([ctx] analytics::msg::event_create() {
 		events: vec![
 			analytics::msg::event_create::Event {
+				event_id: Some(Uuid::new_v4().into()),
 				name: "module.create".into(),
 				properties_json: Some(serde_json::to_string(&json!({
 					"user_id": ctx.creator_user_id.map(|x| x.as_uuid()),

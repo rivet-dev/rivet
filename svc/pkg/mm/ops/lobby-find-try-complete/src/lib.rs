@@ -161,6 +161,7 @@ async fn complete_query(
 		msg!([ctx] analytics::msg::event_create() {
 			events: vec![
 				analytics::msg::event_create::Event {
+					event_id: Some(Uuid::new_v4().into()),
 					name: "mm.query.complete".into(),
 					namespace_id: Some(find_query.namespace_id.into()),
 					properties_json: Some(serde_json::to_string(&json!({

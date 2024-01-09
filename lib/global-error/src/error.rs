@@ -125,7 +125,9 @@ impl GlobalError {
 	pub fn documentation(&self) -> Option<&str> {
 		match self {
 			GlobalError::Internal { .. } => None,
-			GlobalError::BadRequest { code, .. } => Some(formatted_error::parse(code).documentation()),
+			GlobalError::BadRequest { code, .. } => {
+				Some(formatted_error::parse(code).documentation())
+			}
 		}
 	}
 
@@ -162,11 +164,7 @@ impl From<GlobalError> for chirp::response::Err {
 				retry_immediately: _,
 			} => chirp::response::Err {
 				kind: Some(chirp::response::err::Kind::Internal(
-					chirp::response::err::Internal {
-						ty,
-						message,
-						debug,
-					},
+					chirp::response::err::Internal { ty, message, debug },
 				)),
 			},
 			GlobalError::BadRequest {

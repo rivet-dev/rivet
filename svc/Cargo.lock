@@ -57,24 +57,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0942ffc6dcaadf03badf6e6a2d0228460359d5e34b57ccdc720b7382dfbd5ec5"
 
 [[package]]
-name = "analytics-worker"
-version = "0.0.1"
-dependencies = [
- "chirp-client",
- "chirp-worker",
- "clickhouse",
- "faker-game",
- "faker-user",
- "lazy_static",
- "prost 0.10.4",
- "rivet-health-checks",
- "rivet-metrics",
- "rivet-runtime",
- "serde",
- "user-presence-get",
-]
-
-[[package]]
 name = "android-tzdata"
 version = "0.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5268,7 +5250,6 @@ dependencies = [
 name = "monolith-worker"
 version = "0.0.1"
 dependencies = [
- "analytics-worker",
  "cdn-worker",
  "cf-custom-hostname-worker",
  "chirp-client",

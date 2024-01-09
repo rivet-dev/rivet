@@ -60,6 +60,7 @@ pub async fn check_remote_addresses(
 		);
 
 		analytics_events.push(analytics::msg::event_create::Event {
+			event_id: Some(Uuid::new_v4().into()),
 			name: "mm.players.count_for_remote_address".into(),
 			properties_json: Some(serde_json::to_string(&json!({
 				"namespace_id": namespace_id,

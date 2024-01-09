@@ -66,6 +66,7 @@ async fn worker(ctx: &OperationContext<team::msg::member_create::Message>) -> Gl
 	msg!([ctx] analytics::msg::event_create() {
 		events: vec![
 			analytics::msg::event_create::Event {
+				event_id: Some(Uuid::new_v4().into()),
 				name: "team.member.create".into(),
 				user_id: Some(user_id.into()),
 				properties_json: Some(serde_json::to_string(&json!({
@@ -81,6 +82,7 @@ async fn worker(ctx: &OperationContext<team::msg::member_create::Message>) -> Gl
 		msg!([ctx] analytics::msg::event_create() {
 			events: vec![
 				analytics::msg::event_create::Event {
+					event_id: Some(Uuid::new_v4().into()),
 					name: "team.invite.consume".into(),
 					properties_json: Some(serde_json::to_string(&json!({
 						"user_id": user_id,
@@ -123,6 +125,7 @@ async fn fail(
 		msg!([client] analytics::msg::event_create() {
 			events: vec![
 				analytics::msg::event_create::Event {
+					event_id: Some(Uuid::new_v4().into()),
 					name: "team.invite.consume_fail".into(),
 					user_id: Some(user_id.into()),
 					properties_json: Some(serde_json::to_string(&json!({

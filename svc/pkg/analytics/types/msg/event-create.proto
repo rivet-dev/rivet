@@ -13,6 +13,9 @@ message Message {
 message Event {
 	reserved 5, 6, 7, 8;
 
+	// ID of event. This is used as the primary key in ClickHouse for deduplication.
+	rivet.common.Uuid event_id = 10;
+
 	// Override the timestamp the event was emitted at.
 	optional int64 ts = 9;
 

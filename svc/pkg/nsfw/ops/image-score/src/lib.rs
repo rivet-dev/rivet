@@ -79,6 +79,7 @@ async fn handle(
 		.iter()
 		.map(|x| {
 			GlobalResult::Ok(analytics::msg::event_create::Event {
+				event_id: Some(Uuid::new_v4().into()),
 				name: "nsfw.score".into(),
 				properties_json: Some(serde_json::to_string(&json!({
 					"url": x.url,

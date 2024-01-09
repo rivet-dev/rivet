@@ -260,6 +260,7 @@ async fn worker(ctx: &OperationContext<mm::msg::lobby_create::Message>) -> Globa
 	msg!([ctx] analytics::msg::event_create() {
 		events: vec![
 			analytics::msg::event_create::Event {
+				event_id: Some(Uuid::new_v4().into()),
 				name: "mm.lobby.create".into(),
 				namespace_id: ctx.namespace_id,
 				properties_json: Some(serde_json::to_string(&json!({

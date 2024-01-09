@@ -134,6 +134,7 @@ async fn worker(ctx: &OperationContext<user::msg::delete::Message>) -> GlobalRes
 	msg!([ctx] analytics::msg::event_create() {
 		events: vec![
 			analytics::msg::event_create::Event {
+				event_id: Some(Uuid::new_v4().into()),
 				name: "user.delete".into(),
 				user_id: None,
 				namespace_id: None,

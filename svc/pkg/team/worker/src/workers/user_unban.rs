@@ -38,6 +38,7 @@ async fn worker(ctx: &OperationContext<team::msg::user_unban::Message>) -> Globa
 	msg!([ctx] analytics::msg::event_create() {
 		events: vec![
 			analytics::msg::event_create::Event {
+				event_id: Some(Uuid::new_v4().into()),
 				name: "team.user.unban".into(),
 				user_id: ctx.unbanner_user_id,
 				properties_json: Some(serde_json::to_string(&json!({

@@ -16,7 +16,6 @@ members = [
 	"api/portal",
 	"api/route",
 	"api/status",
-	"pkg/analytics/worker",
 	"pkg/build/ops/create",
 	"pkg/build/ops/get",
 	"pkg/build/ops/list-for-game",

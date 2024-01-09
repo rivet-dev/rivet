@@ -44,6 +44,7 @@ async fn worker(ctx: &OperationContext<team::msg::member_remove::Message>) -> Gl
 	msg!([ctx] analytics::msg::event_create() {
 		events: vec![
 			analytics::msg::event_create::Event {
+				event_id: Some(Uuid::new_v4().into()),
 				name: "team.member.remove".into(),
 				user_id: Some(user_id.into()),
 				properties_json: Some(serde_json::to_string(&json!({

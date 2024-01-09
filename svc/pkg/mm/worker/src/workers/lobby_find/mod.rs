@@ -130,6 +130,7 @@ async fn worker(ctx: &OperationContext<mm::msg::lobby_find::Message>) -> GlobalR
 	msg!([ctx] analytics::msg::event_create() {
 		events: vec![
 			analytics::msg::event_create::Event {
+				event_id: Some(Uuid::new_v4().into()),
 				name: "mm.find.create".into(),
 				properties_json: Some(serde_json::to_string(&json!({
 					"namespace_id": namespace_id,
@@ -247,6 +248,7 @@ async fn worker(ctx: &OperationContext<mm::msg::lobby_find::Message>) -> GlobalR
 
 	// Record analytics events
 	analytics_events.push(analytics::msg::event_create::Event {
+		event_id: Some(Uuid::new_v4().into()),
 		name: "mm.query.create".into(),
 		properties_json: Some(serde_json::to_string(&json!({
 			"namespace_id": namespace_id,
@@ -260,6 +262,7 @@ async fn worker(ctx: &OperationContext<mm::msg::lobby_find::Message>) -> GlobalR
 	});
 	for player in &players {
 		analytics_events.push(analytics::msg::event_create::Event {
+			event_id: Some(Uuid::new_v4().into()),
 			name: "mm.player.create".into(),
 			properties_json: Some(serde_json::to_string(&json!({
 				"namespace_id": namespace_id,

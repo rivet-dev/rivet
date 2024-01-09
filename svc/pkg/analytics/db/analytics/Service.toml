@@ -1,7 +1,0 @@
-[service]
-name = "db-analytics"
-
-[runtime]
-kind = "clickhouse"
-
-[database]

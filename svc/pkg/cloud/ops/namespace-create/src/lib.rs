@@ -59,6 +59,7 @@ async fn handle(
 	msg!([ctx] analytics::msg::event_create() {
 		events: vec![
 			analytics::msg::event_create::Event {
+				event_id: Some(Uuid::new_v4().into()),
 				name: "game.namespace.create".into(),
 				user_id: ctx.creator_user_id,
 				properties_json: Some(serde_json::to_string(&json!({

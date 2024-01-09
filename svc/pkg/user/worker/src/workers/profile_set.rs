@@ -90,6 +90,7 @@ async fn worker(ctx: &OperationContext<user::msg::profile_set::Message>) -> Glob
 	msg!([ctx] analytics::msg::event_create() {
 		events: vec![
 			analytics::msg::event_create::Event {
+				event_id: Some(Uuid::new_v4().into()),
 				name: "user.profile_set".into(),
 				user_id: Some(*user_id),
 				..Default::default()

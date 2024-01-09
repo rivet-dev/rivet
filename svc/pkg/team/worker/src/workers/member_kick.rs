@@ -29,6 +29,7 @@ async fn worker(ctx: &OperationContext<team::msg::member_kick::Message>) -> Glob
 	msg!([ctx] analytics::msg::event_create() {
 		events: vec![
 			analytics::msg::event_create::Event {
+				event_id: Some(Uuid::new_v4().into()),
 				name: "team.member.kick".into(),
 				user_id: ctx.kicker_user_id,
 				properties_json: Some(serde_json::to_string(&json!({
