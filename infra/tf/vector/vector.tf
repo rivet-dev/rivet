@@ -55,6 +55,13 @@ resource "helm_release" "vector" {
 					type = "vector"
 					address = "0.0.0.0:6000"
 				}
+
+				tcp_json = {
+					type = "socket"
+					mode = "tcp"
+					address = "0.0.0.0:6100"
+					decoding = { codec = "json" }
+				}
 				
 				vector_metrics = {
 					type = "internal_metrics"
@@ -66,7 +73,7 @@ resource "helm_release" "vector" {
 			transforms = {
 				job_run = {
 					type = "filter"
-					inputs = ["vector"]
+					inputs = ["vector", "tcp_json"]
 					condition = {
 						type = "vrl"
 						source = ".source == \"job_run\""
@@ -96,8 +103,8 @@ resource "helm_release" "vector" {
 						ca_file = "/usr/local/share/ca-certificates/clickhouse-ca.crt"
 					} : {}
 					batch = {
-						# Speed up for realtime logs
-						timeout_secs = 0.25
+						# Speed up for realtime-ish logs
+						timeout_secs = 1.0
 					}
 				}
 

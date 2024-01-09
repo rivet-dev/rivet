@@ -203,7 +203,7 @@ pub fn traefik_instance(config: TraefikInstance) -> String {
 	script
 }
 
-const TUNNEL_SERVICES: &[&'static str] = &["nomad", "api-route", "vector"];
+const TUNNEL_SERVICES: &[&'static str] = &["nomad", "api-route", "vector", "vector-tcp-json"];
 
 pub fn traefik_tunnel(
 	_ctx: &ProjectContext,
