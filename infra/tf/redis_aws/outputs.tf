@@ -1,8 +1,3 @@
-output "test" {
-	value = aws_elasticache_replication_group.main
-	sensitive = true
-}
-
 output "host" {
 	value = merge(
 		{

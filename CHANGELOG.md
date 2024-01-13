@@ -23,6 +23,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 -   Lower long poll timeout from 60s -> 40s
 -   **Bolt** Moved additional project roots to Bolt.toml
 -   **types** Support multiple project roots for reusing Protobuf types
+-   **Infra** Switch from AWS ELB to NLB to work around surge queue length limitation
 
 ### Security
 

@@ -122,6 +122,17 @@ resource "helm_release" "traefik_tunnel" {
 			}
 		}
 
+		service = {
+			enabled = true
+			annotations = var.deploy_method_cluster ? {
+				# See: https://docs.aws.amazon.com/eks/latest/userguide/network-load-balancing.html
+				"service.beta.kubernetes.io/aws-load-balancer-type" = "external"
+				# Removes the need for an extra network hop: https://kubernetes-sigs.github.io/aws-load-balancer-controller/v2.2/guide/service/nlb/#ip-mode
+				"service.beta.kubernetes.io/aws-load-balancer-nlb-target-type" = "ip"
+				"service.beta.kubernetes.io/aws-load-balancer-scheme" = "internet-facing"
+			} : {}
+		}
+
 		metrics = {
 			prometheus = {
 				addEntryPointsLabels = false
