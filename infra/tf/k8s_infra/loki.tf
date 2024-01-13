@@ -41,6 +41,7 @@ resource "helm_release" "loki" {
 			} : null
 			persistence = {
 				size = var.deploy_method_cluster ? "128Gi" : "10Gi"
+				storageClass = var.k8s_storage_class
 			}
 		}
 		monitoring = {
