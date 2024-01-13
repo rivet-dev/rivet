@@ -24,7 +24,6 @@
   "editable": true,
   "fiscalYearStartMonth": 0,
   "graphTooltip": 0,
-  "id": 1,
   "links": [],
   "liveNow": false,
   "panels": [
@@ -124,7 +123,7 @@
           "unit": "s"
         }
       },
-      "pluginVersion": "10.1.2",
+      "pluginVersion": "10.1.4",
       "reverseYBuckets": false,
       "targets": [
         {
@@ -241,7 +240,7 @@
           "unit": "s"
         }
       },
-      "pluginVersion": "10.1.2",
+      "pluginVersion": "10.1.4",
       "reverseYBuckets": false,
       "targets": [
         {
@@ -336,7 +335,7 @@
       },
       "gridPos": {
         "h": 9,
-        "w": 12,
+        "w": 8,
         "x": 0,
         "y": 10
       },
@@ -346,9 +345,11 @@
           "calcs": [
             "mean"
           ],
-          "displayMode": "list",
+          "displayMode": "table",
           "placement": "bottom",
-          "showLegend": true
+          "showLegend": true,
+          "sortBy": "Mean",
+          "sortDesc": true
         },
         "tooltip": {
           "mode": "single",
@@ -432,8 +433,8 @@
       },
       "gridPos": {
         "h": 9,
-        "w": 12,
-        "x": 12,
+        "w": 8,
+        "x": 8,
         "y": 10
       },
       "id": 28,
@@ -460,13 +461,111 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "sum(rate(rivet_api_request_errors{exported_service=~\"[[service]]\",path=~\"[[path]]\",method=~\"[[method]]\",error_code!=\"API_CANCELLED\",error_code!=\"CAPTCHA_CAPTCHA_REQUIRED\"}[$__rate_interval])) by (exported_service, method, path, status, error_code)",
+          "expr": "sum(rate(rivet_api_request_errors{exported_service=~\"[[service]]\",status=~\"4[0-9][0-9]\",path=~\"[[path]]\",method=~\"[[method]]\",error_code!=\"API_CANCELLED\",error_code!=\"CAPTCHA_CAPTCHA_REQUIRED\"}[$__rate_interval])) by (exported_service, method, path, status, error_code)",
           "legendFormat": "{{method}} {{service}}{{path}}: {{status}} ({{error_code}})",
           "range": true,
           "refId": "A"
         }
       ],
-      "title": "Error Rate",
+      "title": "Error Rate (4xx)",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "drawStyle": "line",
+            "fillOpacity": 0,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "auto",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          },
+          "unit": "reqps"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 9,
+        "w": 8,
+        "x": 16,
+        "y": 10
+      },
+      "id": 31,
+      "options": {
+        "legend": {
+          "calcs": [
+            "mean"
+          ],
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true,
+          "sortBy": "Mean",
+          "sortDesc": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "none"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "editorMode": "code",
+          "expr": "sum(rate(rivet_api_request_errors{exported_service=~\"[[service]]\",path=~\"[[path]]\",status=~\"5[0-9][0-9]\",method=~\"[[method]]\",error_code!=\"API_CANCELLED\",error_code!=\"CAPTCHA_CAPTCHA_REQUIRED\"}[$__rate_interval])) by (exported_service, method, path, status, error_code)",
+          "legendFormat": "{{method}} {{service}}{{path}}: {{status}} ({{error_code}})",
+          "range": true,
+          "refId": "A"
+        }
+      ],
+      "title": "Error Rate (5xx)",
       "type": "timeseries"
     },
     {
@@ -658,7 +757,7 @@
       "type": "timeseries"
     }
   ],
-  "refresh": "",
+  "refresh": "30s",
   "schemaVersion": 38,
   "style": "dark",
   "tags": [
@@ -754,7 +853,7 @@
     ]
   },
   "time": {
-    "from": "now-24h",
+    "from": "now-15m",
     "to": "now"
   },
   "timepicker": {},

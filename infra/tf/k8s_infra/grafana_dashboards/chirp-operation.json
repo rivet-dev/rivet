@@ -24,7 +24,6 @@
   "editable": true,
   "fiscalYearStartMonth": 0,
   "graphTooltip": 0,
-  "id": 5,
   "links": [],
   "liveNow": false,
   "panels": [
@@ -229,10 +228,14 @@
       "interval": "15s",
       "options": {
         "legend": {
-          "calcs": [],
-          "displayMode": "list",
+          "calcs": [
+            "mean"
+          ],
+          "displayMode": "table",
           "placement": "bottom",
-          "showLegend": false
+          "showLegend": true,
+          "sortBy": "Mean",
+          "sortDesc": true
         },
         "tooltip": {
           "mode": "single",
@@ -324,10 +327,14 @@
       "interval": "15s",
       "options": {
         "legend": {
-          "calcs": [],
-          "displayMode": "list",
+          "calcs": [
+            "mean"
+          ],
+          "displayMode": "table",
           "placement": "bottom",
-          "showLegend": false
+          "showLegend": true,
+          "sortBy": "Mean",
+          "sortDesc": true
         },
         "tooltip": {
           "mode": "single",
@@ -420,10 +427,14 @@
       "interval": "15s",
       "options": {
         "legend": {
-          "calcs": [],
-          "displayMode": "list",
+          "calcs": [
+            "mean"
+          ],
+          "displayMode": "table",
           "placement": "bottom",
-          "showLegend": false
+          "showLegend": true,
+          "sortBy": "Mean",
+          "sortDesc": true
         },
         "tooltip": {
           "mode": "single",
@@ -515,10 +526,14 @@
       "interval": "15s",
       "options": {
         "legend": {
-          "calcs": [],
-          "displayMode": "list",
+          "calcs": [
+            "mean"
+          ],
+          "displayMode": "table",
           "placement": "bottom",
-          "showLegend": false
+          "showLegend": true,
+          "sortBy": "Mean",
+          "sortDesc": true
         },
         "tooltip": {
           "mode": "single",
@@ -533,7 +548,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "sum(rate(rivet_chirp_request_duration_sum{error_code!=\"1004\",context_name=~\"[[context]]\"} [$__rate_interval])) by (context_name) /\r\nsum(rate(rivet_chirp_request_duration_count{error_code!=\"1004\",context_name=~\"[[context]]\"} [$__rate_interval])) by (context_name)",
+          "expr": "(\r\n        sum(rate(rivet_chirp_request_duration_sum{error_code!=\"1004\",context_name=~\"[[context]]\"} [$__rate_interval])) by (context_name) /\r\n    sum(rate(rivet_chirp_request_duration_count{error_code!=\"1004\",context_name=~\"[[context]]\"} [$__rate_interval])) by (context_name)\r\n) > 0",
           "format": "heatmap",
           "legendFormat": "{{context_name}}",
           "range": true,
@@ -612,10 +627,14 @@
       "interval": "15s",
       "options": {
         "legend": {
-          "calcs": [],
-          "displayMode": "list",
+          "calcs": [
+            "mean"
+          ],
+          "displayMode": "table",
           "placement": "bottom",
-          "showLegend": false
+          "showLegend": true,
+          "sortBy": "Mean",
+          "sortDesc": true
         },
         "tooltip": {
           "mode": "single",
@@ -630,7 +649,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.95, \r\n  sum(rate(rivet_chirp_request_duration_bucket{error_code!=\"1004\",context_name=~\"[[context]]\"} [$__rate_interval])) \r\n  by (le, context_name)\r\n)\r\n",
+          "expr": "histogram_quantile(0.95, \r\n  sum(rate(rivet_chirp_request_duration_bucket{error_code!=\"1004\",context_name=~\"[[context]]\"} [$__rate_interval])) \r\n  by (le, context_name)\r\n) > 0\r\n",
           "format": "heatmap",
           "legendFormat": "{{context_name}}",
           "range": true,
@@ -638,6 +657,7 @@
         }
       ],
       "title": "Request Duration (p95)",
+      "transformations": [],
       "type": "timeseries"
     },
     {
@@ -697,7 +717,155 @@
           },
           "unit": "seconds"
         },
-        "overrides": []
+        "overrides": [
+          {
+            "__systemRef": "hideSeriesFrom",
+            "matcher": {
+              "id": "byNames",
+              "options": {
+                "mode": "exclude",
+                "names": [
+                  "analytics-dataset-query",
+                  "build-get",
+                  "captcha-hcaptcha-config-get",
+                  "captcha-hcaptcha-verify",
+                  "captcha-request",
+                  "captcha-turnstile-verify",
+                  "captcha-verify",
+                  "cdn-namespace-get",
+                  "cdn-namespace-resolve-domain",
+                  "cdn-site-get",
+                  "cdn-site-list-for-game",
+                  "cdn-version-get",
+                  "cf-custom-hostname-list-for-namespace-id",
+                  "cloud-namespace-get",
+                  "cloud-version-get",
+                  "custom-user-avatar-list-for-game",
+                  "email-send",
+                  "email-verification-complete",
+                  "email-verification-create",
+                  "game-get",
+                  "game-list-for-team",
+                  "game-namespace-get",
+                  "game-namespace-list",
+                  "game-namespace-resolve-name-id",
+                  "game-namespace-resolve-url",
+                  "game-resolve-name-id",
+                  "game-resolve-namespace-id",
+                  "game-user-create",
+                  "game-user-get",
+                  "game-user-link-create",
+                  "game-user-link-get",
+                  "game-user-recommend",
+                  "game-version-get",
+                  "game-version-list",
+                  "identity-config-namespace-get",
+                  "identity-config-version-get",
+                  "job-log-read",
+                  "job-run-get",
+                  "job-run-metrics-log",
+                  "kv-config-namespace-get",
+                  "kv-config-version-get",
+                  "mm-config-lobby-group-get",
+                  "mm-config-lobby-group-resolve-version",
+                  "mm-config-namespace-get",
+                  "mm-config-version-get",
+                  "mm-lobby-find-fail",
+                  "mm-lobby-find-lobby-query-list",
+                  "mm-lobby-find-try-complete",
+                  "mm-lobby-get",
+                  "mm-lobby-history",
+                  "mm-lobby-idle-update",
+                  "mm-lobby-list-for-namespace",
+                  "mm-lobby-player-count",
+                  "mm-lobby-state-get",
+                  "mm-player-count-for-namespace",
+                  "module-game-version-get",
+                  "monolith-worker--game-user-link-complete",
+                  "monolith-worker--game-user-session-create",
+                  "monolith-worker--job-run-cleanup",
+                  "monolith-worker--job-run-create",
+                  "monolith-worker--job-run-nomad-monitor-alloc-plan",
+                  "monolith-worker--job-run-nomad-monitor-alloc-update",
+                  "monolith-worker--job-run-nomad-monitor-eval-update",
+                  "monolith-worker--job-run-stop",
+                  "monolith-worker--mm-lobby-cleanup",
+                  "monolith-worker--mm-lobby-create",
+                  "monolith-worker--mm-lobby-find",
+                  "monolith-worker--mm-lobby-find-lobby-cleanup",
+                  "monolith-worker--mm-lobby-find-lobby-ready",
+                  "monolith-worker--mm-lobby-job-run-cleanup",
+                  "monolith-worker--mm-lobby-ready-set",
+                  "monolith-worker--mm-lobby-stop",
+                  "monolith-worker--mm-player-register",
+                  "monolith-worker--mm-player-remove",
+                  "monolith-worker--user-create",
+                  "monolith-worker--user-event-user-presence-update",
+                  "monolith-worker--user-event-user-update",
+                  "monolith-worker--user-presence-arrive",
+                  "monolith-worker--user-presence-game-activity-set",
+                  "monolith-worker--user-presence-leave",
+                  "monolith-worker--user-presence-status-set",
+                  "monolith-worker--user-profile-set",
+                  "monolith-worker--user-report-create",
+                  "monolith-worker--user-search-update",
+                  "monolith-worker--user-search-update-user-follow-create",
+                  "monolith-worker--user-search-update-user-update",
+                  "monolith-worker--user-updated-user-follow-create",
+                  "monolith-worker--user-updated-user-follow-delete",
+                  "monolith-worker--user-updated-user-presence-update",
+                  "monolith-worker--user-updated-user-update",
+                  "nsfw-image-score",
+                  "profanity-check",
+                  "region-config-get",
+                  "region-get",
+                  "region-list",
+                  "region-recommend",
+                  "region-resolve",
+                  "team-get",
+                  "team-join-request-list",
+                  "team-member-count",
+                  "team-member-list",
+                  "team-recommend",
+                  "tier-list",
+                  "token-create",
+                  "token-exchange",
+                  "token-get",
+                  "upload-complete",
+                  "upload-file-list",
+                  "upload-get",
+                  "upload-prepare",
+                  "user-avatar-upload-complete",
+                  "user-follow-count",
+                  "user-follow-get",
+                  "user-follow-list",
+                  "user-follow-toggle",
+                  "user-get",
+                  "user-identity-create",
+                  "user-identity-get",
+                  "user-presence-get",
+                  "user-presence-touch",
+                  "user-profile-validate",
+                  "user-resolve-email",
+                  "user-team-list",
+                  "user-token-create"
+                ],
+                "prefix": "All except:",
+                "readOnly": true
+              }
+            },
+            "properties": [
+              {
+                "id": "custom.hideFrom",
+                "value": {
+                  "legend": false,
+                  "tooltip": false,
+                  "viz": true
+                }
+              }
+            ]
+          }
+        ]
       },
       "gridPos": {
         "h": 9,
@@ -709,10 +877,14 @@
       "interval": "15s",
       "options": {
         "legend": {
-          "calcs": [],
-          "displayMode": "list",
+          "calcs": [
+            "mean"
+          ],
+          "displayMode": "table",
           "placement": "bottom",
-          "showLegend": false
+          "showLegend": true,
+          "sortBy": "Mean",
+          "sortDesc": true
         },
         "tooltip": {
           "mode": "single",
@@ -727,7 +899,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.99, \r\n  sum(rate(rivet_chirp_request_duration_bucket{error_code!=\"1004\",context_name=~\"[[context]]\"} [$__rate_interval])) \r\n  by (le, context_name)\r\n)\r\n",
+          "expr": "histogram_quantile(0.99, \r\n  sum(rate(rivet_chirp_request_duration_bucket{error_code!=\"1004\",context_name=~\"[[context]]\"} [$__rate_interval])) \r\n  by (le, context_name)\r\n) > 0",
           "format": "heatmap",
           "legendFormat": "{{context_name}}",
           "range": true,
@@ -964,7 +1136,7 @@
       "type": "timeseries"
     }
   ],
-  "refresh": "",
+  "refresh": "30s",
   "schemaVersion": 38,
   "style": "dark",
   "tags": [],
@@ -1004,7 +1176,7 @@
     ]
   },
   "time": {
-    "from": "now-30m",
+    "from": "now-24h",
     "to": "now"
   },
   "timepicker": {},
