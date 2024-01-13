@@ -442,9 +442,11 @@ dependencies = [
  "chrono",
  "clap",
  "duct",
+ "rivet-term",
  "serde_json",
  "tempfile",
  "tokio",
+ "toml_edit",
 ]
 
 [[package]]

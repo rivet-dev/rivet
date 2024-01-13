@@ -23,7 +23,7 @@ const NS_CONFIG_COMMENT: &str = r#"# Documentation: doc/bolt/config/NAMESPACE.md
 "#;
 
 /// Helper for generating configs.
-struct ConfigGenerator {
+pub struct ConfigGenerator {
 	term: rivet_term::console::Term,
 
 	#[allow(unused)]
@@ -41,7 +41,7 @@ struct ConfigGenerator {
 }
 
 impl ConfigGenerator {
-	async fn new(
+	pub async fn new(
 		term: rivet_term::console::Term,
 		project_path: &Path,
 		ns_id: impl ToString,
@@ -80,7 +80,7 @@ impl ConfigGenerator {
 	}
 
 	// Writes the config to the respective files.
-	async fn write(&mut self) -> Result<()> {
+	pub async fn write(&mut self) -> Result<()> {
 		// Prepend comment
 		let mut ns_str = self.ns.to_string();
 		if self.is_new {
@@ -144,6 +144,13 @@ impl ConfigGenerator {
 
 	// 	Ok(())
 	// }
+
+	/// Sets & overrides a secret.
+	pub async fn set_secret(&mut self, path: &[&str], value: toml_edit::Item) -> Result<()> {
+		write_value(self.secrets.as_item_mut(), path, value);
+
+		Ok(())
+	}
 
 	/// Inserts a secret value if does not exist.
 	async fn generate_secret<Fut>(

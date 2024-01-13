@@ -12,6 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 -   **Infra** New `job-runner` crate responsible for managing the OCI bundle runtime & log shipping on the machine
 -   **Infra** Jobs now log an explicit rate message when logs are rate limited & truncated
 -   **Infra** `infra-artifacts` Terraform plan & S3 bucket used for automating building & uploading internal binaries, etc.
+-   **Bolt** `bolt secret set <path> <value>` command
 
 ### Changed
 

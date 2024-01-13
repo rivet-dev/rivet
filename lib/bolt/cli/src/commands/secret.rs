@@ -1,5 +1,6 @@
 use anyhow::*;
 use bolt_core::context::ProjectContext;
+use bolt_core::tasks::config::ConfigGenerator;
 use clap::{Parser, ValueEnum};
 use serde_json::json;
 
@@ -17,6 +18,12 @@ pub enum SubCommand {
 		optional: bool,
 		#[clap(long, value_parser)]
 		format: Option<Format>,
+	},
+	Set {
+		#[clap(index = 1)]
+		path: String,
+		#[clap(index = 2)]
+		value: String,
 	},
 }
 
@@ -48,6 +55,14 @@ impl SubCommand {
 					}
 					Some(Format::Json) => println!("{}", json!({ "value": value })),
 				}
+			}
+			Self::Set { path, value } => {
+				let path = path.split("/").collect::<Vec<_>>();
+
+				let mut generator =
+					ConfigGenerator::new(rivet_term::terminal(), ctx.path(), ctx.ns_id()).await?;
+				generator.set_secret(&path, toml_edit::value(value)).await?;
+				generator.write().await?;
 			}
 		}
 

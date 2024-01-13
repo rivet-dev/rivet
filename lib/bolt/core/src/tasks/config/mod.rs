@@ -7,7 +7,7 @@ use crate::context;
 mod generate;
 mod generate_default_regions;
 
-pub use generate::generate;
+pub use generate::{generate, ConfigGenerator};
 pub use generate_default_regions::generate_default_regions;
 
 /// Updates the namespace in `Bolt.local.toml`.
