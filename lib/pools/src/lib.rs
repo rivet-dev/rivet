@@ -151,36 +151,38 @@ async fn crdb_from_env(client_name: String) -> Result<Option<CrdbPool>, Error> {
 			.max_lifetime(Duration::from_secs(30 * 60))
 			// Remove connections after a while in order to reduce load
 			// on CRDB after bursts
-			.idle_timeout(Some(Duration::from_secs(10 * 60)))
+			.idle_timeout(Some(Duration::from_secs(3 * 60)))
 			// Open connections immediately on startup
 			.min_connections(min_connections)
 			// Raise the cap, since this is effectively the amount of
 			// simultaneous requests we can handle. See
 			// https://www.cockroachlabs.com/docs/stable/connection-pooling.html
 			.max_connections(max_connections)
-			// Speeds up requests at the expense of potential
-			// failures. See `before_acquire`.
-			.test_before_acquire(false)
-			// Ping once per minute to validate the connection is still alive
-			.before_acquire(|conn, meta| {
-				Box::pin(async move {
-					if meta.idle_for.as_secs() < 60 {
-						Ok(true)
-					} else {
-						match sqlx::Connection::ping(conn).await {
-							Ok(_) => Ok(true),
-							Err(err) => {
-								// See https://docs.aws.amazon.com/vpc/latest/userguide/nat-gateway-troubleshooting.html#nat-gateway-troubleshooting-timeout
-								tracing::warn!(
-									?err,
-									"crdb ping failed, potential idle tcp connection drop"
-								);
-								Ok(false)
-							}
-						}
-					}
-				})
-			})
+			// NOTE: This is disabled until we can ensure that TCP connections stop getting dropped
+			// on AWS.
+			// // Speeds up requests at the expense of potential
+			// // failures. See `before_acquire`.
+			// .test_before_acquire(false)
+			// // Ping once per minute to validate the connection is still alive
+			// .before_acquire(|conn, meta| {
+			// 	Box::pin(async move {
+			// 		if meta.idle_for.as_secs() < 60 {
+			// 			Ok(true)
+			// 		} else {
+			// 			match sqlx::Connection::ping(conn).await {
+			// 				Ok(_) => Ok(true),
+			// 				Err(err) => {
+			// 					// See https://docs.aws.amazon.com/vpc/latest/userguide/nat-gateway-troubleshooting.html#nat-gateway-troubleshooting-timeout
+			// 					tracing::warn!(
+			// 						?err,
+			// 						"crdb ping failed, potential idle tcp connection drop"
+			// 					);
+			// 					Ok(false)
+			// 				}
+			// 			}
+			// 		}
+			// 	})
+			// })
 			.connect(&url)
 			.await
 			.map_err(Error::BuildSqlx)?;
@@ -204,11 +206,11 @@ async fn redis_from_env() -> Result<HashMap<String, RedisPool>, Error> {
 				.name("redis_from_env")
 				.spawn(async move {
 					tracing::info!(%url, "redis connecting");
-					let conn = redis::Client::open(url.as_str())
-						.map_err(Error::BuildRedis)?
-						.get_tokio_connection_manager()
-						.await
-						.map_err(Error::BuildRedis)?;
+					let client = redis::Client::open(url.as_str()).map_err(Error::BuildRedis)?;
+					let conn =
+						redis::aio::ConnectionManager::new_with_backoff(client, 2, 100, usize::MAX)
+							.await
+							.map_err(Error::BuildRedis)?;
 
 					tracing::info!(%url, "redis connected");
 
@@ -236,7 +238,7 @@ fn clickhouse_from_env() -> Result<Option<ClickHousePool>, Error> {
 		// Build HTTP client
 		let mut http_connector = hyper::client::connect::HttpConnector::new();
 		http_connector.enforce_http(false);
-		http_connector.set_keepalive(Some(Duration::from_secs(60)));
+		http_connector.set_keepalive(Some(Duration::from_secs(15)));
 		let https_connector = hyper_tls::HttpsConnector::new_with_connector(http_connector);
 		let http_client = hyper::Client::builder()
 			.pool_idle_timeout(Duration::from_secs(2))
@@ -257,40 +259,36 @@ fn clickhouse_from_env() -> Result<Option<ClickHousePool>, Error> {
 	}
 }
 
-#[tracing::instrument(level = "trace", skip(_pools))]
-async fn runtime(_pools: Pools, client_name: String) {
-	// TODO: Delete this once confirmed this is no longer an issue
-
+#[tracing::instrument(level = "trace", skip(pools))]
+async fn runtime(pools: Pools, client_name: String) {
 	// We have to manually ping the Redis connection since `ConnectionManager`
 	// doesn't do this for us. If we don't make a request on a Redis connection
 	// for a long time, we'll get a broken pipe error, so this keeps the
 	// connection alive.
 
-	// let mut interval = tokio::time::interval(Duration::from_secs(15));
-	// loop {
-	// 	interval.tick().await;
+	let mut interval = tokio::time::interval(Duration::from_secs(15));
+	loop {
+		interval.tick().await;
 
-	// 	// TODO: This will ping the same pool multiple times if it shares the
-	// 	// same URL
-	// 	for (db, conn) in &pools.redis {
-	// 		// HACK: Instead of sending `PING`, we test the connection by
-	// 		// updating the client's name. We do this because
-	// 		// `ConnectionManager` doesn't let us hook in to new connections, so
-	// 		// we have to manually update the client's name.
-	// 		let mut conn = conn.clone();
-	// 		let res = redis::cmd("CLIENT")
-	// 			.arg("SETNAME")
-	// 			.arg(&client_name)
-	// 			.query_async::<_, ()>(&mut conn)
-	// 			.await;
-	// 		match res {
-	// 			Ok(_) => {
-	// 				tracing::trace!(%db, "ping success");
-	// 			}
-	// 			Err(err) => {
-	// 				tracing::error!(%db, ?err, "redis ping failed");
-	// 			}
-	// 		}
-	// 	}
-	// }
+		for (db, conn) in &pools.redis {
+			// HACK: Instead of sending `PING`, we test the connection by
+			// updating the client's name. We do this because
+			// `ConnectionManager` doesn't let us hook in to new connections, so
+			// we have to manually update the client's name.
+			let mut conn = conn.clone();
+			let res = redis::cmd("CLIENT")
+				.arg("SETNAME")
+				.arg(&client_name)
+				.query_async::<_, ()>(&mut conn)
+				.await;
+			match res {
+				Ok(_) => {
+					tracing::trace!(%db, "ping success");
+				}
+				Err(err) => {
+					tracing::error!(%db, ?err, "redis ping failed");
+				}
+			}
+		}
+	}
 }

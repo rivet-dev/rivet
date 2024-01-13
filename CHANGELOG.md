@@ -24,6 +24,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 -   **Bolt** Moved additional project roots to Bolt.toml
 -   **types** Support multiple project roots for reusing Protobuf types
 -   **Infra** Switch from AWS ELB to NLB to work around surge queue length limitation
+-   **pools** Allow infinite Redis reconnection attempts
+-   **pools** Set Redis client names
+-   **pools** Ping Redis every 15 seconds
+-   **pools** Enable `test_before_acquire` on SQLx
+-   **pools** Decrease SQLx `idle_timeout` to 3 minutes
+-   **pools** Set ClickHoue `idle_timeout` to 15 seconds
 
 ### Security
 
