@@ -88,6 +88,9 @@ async fn publish_fail_event(
 	error_code: i32,
 ) -> GlobalResult<()> {
 	// Publish fail message
+	//
+	// Don't get confused: this is an operation named `mm-lobby-find-fail` that is publishing a
+	// message named `mm::msg::lobby_find_fail`
 	msg!([ctx] mm::msg::lobby_find_fail(namespace_id, query_id) {
 		namespace_id: Some(namespace_id.into()),
 		query_id: Some(query_id.into()),
