@@ -128,7 +128,7 @@ resource "helm_release" "redis" {
 }
 
 data "kubernetes_secret" "redis_ca" {
-	for_each = var.redis_dbs
+	for_each = local.redis_k8s ? var.redis_dbs : {}
 
 	depends_on = [helm_release.redis]
 
@@ -139,7 +139,7 @@ data "kubernetes_secret" "redis_ca" {
 }
 
 resource "kubernetes_config_map" "redis_ca" {
-	for_each = merge([
+	for_each = local.redis_k8s ? merge([
 		for ns in ["rivet-service", "bolt"]: {
 			for k, v in var.redis_dbs:
 				"${k}-${ns}" => {
@@ -147,7 +147,7 @@ resource "kubernetes_config_map" "redis_ca" {
 				namespace = ns
 			}
 		}
-	]...)
+	]...) : {}
 
 	metadata {
 		name = "redis-${each.value.db}-ca"
