@@ -47,6 +47,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 -   **Infra** Fix Prometheus storage retention conversion between mebibytes and megabytes
 -   **Infra** Fix typo in Game Guard Traefik config not exposing API endpoint
 -   **Infra** Kill signal for servers was `SIGINT` instead of `SIGTERM`
+-   **Infra** NATS cluster not getting enabled
 
 ## [23.2.0-rc.1] - 2023-12-01
 

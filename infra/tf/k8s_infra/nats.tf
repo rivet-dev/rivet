@@ -2,8 +2,8 @@ locals {
 	service_nats = lookup(var.services, "nats", {
 		count = var.deploy_method_cluster ? 3 : 1
 		resources = {
-			cpu = 1000
-			memory = 1024
+			cpu = 250
+			memory = 512
 		}
 	})
 }
@@ -33,6 +33,7 @@ resource "helm_release" "nats" {
 	values = [yamlencode({
 		config = {
 			cluster = {
+				enabled = true
 				replicas = local.service_nats.count
 			}
 		}
