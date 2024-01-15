@@ -11,6 +11,9 @@ use crate::context::ProjectContext;
 pub fn dependency_graph(_ctx: &ProjectContext) -> HashMap<&'static str, Vec<RemoteState>> {
 	hashmap! {
 		"dns" => vec![RemoteStateBuilder::default().plan_id("pools").build().unwrap(), RemoteStateBuilder::default().plan_id("k8s_infra").build().unwrap()],
+		"redis_aiven" => vec![
+			RemoteStateBuilder::default().plan_id("k8s_cluster_aws").build().unwrap()
+		],
 		"redis_aws" => vec![
 			RemoteStateBuilder::default().plan_id("k8s_cluster_aws").build().unwrap()
 		],

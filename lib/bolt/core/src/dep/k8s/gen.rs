@@ -696,7 +696,7 @@ async fn build_volumes(
 				})
 			}));
 		}
-		config::ns::RedisProvider::Aws { .. } => {
+		config::ns::RedisProvider::Aws { .. } | config::ns::RedisProvider::Aiven { .. } => {
 			// Uses publicly signed cert
 		}
 	}

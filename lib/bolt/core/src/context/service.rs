@@ -1115,7 +1115,8 @@ impl ServiceContextData {
 
 			// Read auth secrets
 			let (username, password) = match project_ctx.ns().redis.provider {
-				config::ns::RedisProvider::Kubernetes {} => (
+				config::ns::RedisProvider::Kubernetes {}
+				| config::ns::RedisProvider::Aiven { .. } => (
 					project_ctx
 						.read_secret(&["redis", &db_name, "username"])
 						.await?,

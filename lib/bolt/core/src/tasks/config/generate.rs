@@ -482,7 +482,7 @@ pub async fn generate(project_path: &Path, ns_id: &str) -> Result<()> {
 			"ephemeral"
 		};
 		let (db_name, username) = match &ctx.ns().redis.provider {
-			config::ns::RedisProvider::Kubernetes {} => {
+			config::ns::RedisProvider::Kubernetes {} | config::ns::RedisProvider::Aiven { .. } => {
 				(db_name.to_string(), "default".to_string())
 			}
 			config::ns::RedisProvider::Aws {} => {

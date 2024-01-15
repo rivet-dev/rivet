@@ -166,6 +166,15 @@ pub fn build_plan(
 				},
 			});
 		}
+		ns::RedisProvider::Aiven { .. } => {
+			plan.push(PlanStep {
+				name_id: "redis-aiven",
+				kind: PlanStepKind::Terraform {
+					plan_id: "redis_aiven".into(),
+					needs_destroy: true,
+				},
+			});
+		}
 	}
 
 	// CockroachDB

@@ -411,6 +411,13 @@ pub enum RedisProvider {
 	Kubernetes {},
 	#[serde(rename = "aws")]
 	Aws {},
+	#[serde(rename = "aiven")]
+	Aiven {
+		project: String,
+		cloud: String,
+		plan_ephemeral: String,
+		plan_persistent: String,
+	},
 }
 
 impl Default for RedisProvider {

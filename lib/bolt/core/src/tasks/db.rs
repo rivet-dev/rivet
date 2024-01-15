@@ -78,7 +78,7 @@ async fn redis_shell(shell_ctx: ShellContext<'_>) -> Result<()> {
 
 	// Read auth secrets
 	let (username, password) = match ctx.ns().redis.provider {
-		config::ns::RedisProvider::Kubernetes {} => (
+		config::ns::RedisProvider::Kubernetes {} | config::ns::RedisProvider::Aiven { .. } => (
 			ctx.read_secret(&["redis", &db_name, "username"]).await?,
 			ctx.read_secret_opt(&["redis", &db_name, "password"])
 				.await?,
@@ -93,6 +93,10 @@ async fn redis_shell(shell_ctx: ShellContext<'_>) -> Result<()> {
 			(username, password)
 		}
 	};
+	let mount_ca = matches!(
+		ctx.ns().redis.provider,
+		config::ns::RedisProvider::Kubernetes {}
+	);
 
 	if let LogType::Default = log_type {
 		rivet_term::status::progress("Connecting to Redis", &db_name);
@@ -110,6 +114,7 @@ async fn redis_shell(shell_ctx: ShellContext<'_>) -> Result<()> {
 	} else {
 		Vec::new()
 	};
+
 	let cmd = formatdoc!(
 		"
 		sleep 1 &&
@@ -118,9 +123,15 @@ async fn redis_shell(shell_ctx: ShellContext<'_>) -> Result<()> {
 		-p {port} \
 		--user {username} \
 		-c \
-		--tls --cacert /local/redis-ca.crt
-		"
+		--tls {cacert}
+		",
+		cacert = if mount_ca {
+			"--cacert /local/redis-ca.crt"
+		} else {
+			""
+		}
 	);
+
 	let overrides = json!({
 		"apiVersion": "v1",
 		"metadata": {
@@ -146,28 +157,36 @@ async fn redis_shell(shell_ctx: ShellContext<'_>) -> Result<()> {
 					"stdin": true,
 					"stdinOnce": true,
 					"tty": true,
-					"volumeMounts": [{
-						"name": "redis-ca",
-						"mountPath": "/local/redis-ca.crt",
-						"subPath": "redis-ca.crt"
-					}]
+					"volumeMounts": if mount_ca {
+						json!([{
+							"name": "redis-ca",
+							"mountPath": "/local/redis-ca.crt",
+							"subPath": "redis-ca.crt"
+						}])
+					} else {
+						json!([])
+					}
 				}
 			],
-			"volumes": [{
-				"name": "redis-ca",
-				"configMap": {
-					"name": format!("redis-{}-ca", db_name),
-					"defaultMode": 420,
-					// Distributed clusters don't need a CA for redis
-					"optional": true,
-					"items": [
-						{
-							"key": "ca.crt",
-							"path": "redis-ca.crt"
-						}
-					]
-				}
-			}]
+			"volumes": if mount_ca {
+				json!([{
+					"name": "redis-ca",
+					"configMap": {
+						"name": format!("redis-{}-ca", db_name),
+						"defaultMode": 420,
+						// Distributed clusters don't need a CA for redis
+						"optional": true,
+						"items": [
+							{
+								"key": "ca.crt",
+								"path": "redis-ca.crt"
+							}
+						]
+					}
+				}])
+			} else {
+				json!([])
+			}
 		}
 	});
 
