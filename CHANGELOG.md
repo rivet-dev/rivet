@@ -26,6 +26,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 -   **Bolt** Moved additional project roots to Bolt.toml
 -   **types** Support multiple project roots for reusing Protobuf types
 -   **Infra** Switch from AWS ELB to NLB to work around surge queue length limitation
+-   **Infra** Loki resources are now configurable
 -   **pools** Allow infinite Redis reconnection attempts
 -   **pools** Set Redis client names
 -   **pools** Ping Redis every 15 seconds

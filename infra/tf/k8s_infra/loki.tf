@@ -1,3 +1,13 @@
+locals {
+	service_loki = lookup(var.services, "loki", {
+		count = 1
+		resources = {
+			cpu = 2000
+			memory = 2048
+		}
+	})
+}
+
 resource "kubernetes_namespace" "loki" {
 	metadata {
 		name = "loki"
@@ -35,8 +45,8 @@ resource "helm_release" "loki" {
 			replicas = 1
 			resources = var.limit_resources ? {
 				limits = {
-					cpu = "4"
-					memory = "2048Mi"
+					memory = "${local.service_loki.resources.memory}Mi"
+					cpu = "${local.service_loki.resources.cpu}m"
 				}
 			} : null
 			persistence = {
