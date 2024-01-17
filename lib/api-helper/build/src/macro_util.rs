@@ -58,8 +58,6 @@ impl __RouterConfig {
 			return true;
 		};
 
-		tracing::info!("trying prefix {prefix}");
-
 		match self.path_segments.last() {
 			Some(segment) if segment == prefix => {
 				self.path_segments.pop();
@@ -245,8 +243,6 @@ pub async fn __with_ctx<A: auth::ApiAuth + Send>(
 
 	// Check auth exists
 	if !optional_auth && bearer_token.is_none() {
-		tracing::info!("no auth");
-
 		return Err(err_code!(
 			API_UNAUTHORIZED,
 			reason = "No bearer token provided."
