@@ -16,6 +16,10 @@ const MAX_LINE_BYTES: usize = 1024;
 /// Maximum number of bytes to buffer before dropping logs
 const MAX_BUFFER_BYTES: usize = 1024 * 1024;
 
+/// Maximum number of lines to print to stdout for debugging. This helps
+/// identify the reasons for program crashes based from Nomad's output.
+const MAX_PREVIEW_LINES: usize = 128;
+
 fn main() -> anyhow::Result<()> {
 	let nomad_alloc_dir = std::env::var("NOMAD_ALLOC_DIR").context("NOMAD_ALLOC_DIR")?;
 	let job_run_id = std::env::var("NOMAD_META_job_run_id").context("NOMAD_META_job_run_id")?;
@@ -150,6 +154,9 @@ fn ship_logs(
 		// Throttles error logs
 		let mut throttle_error = throttle::Throttle::new(1, Duration::from_secs(60));
 
+		// How many lines have been logged as a preview, see `MAX_PREVIEW_LINES`
+		let mut preview_iine_count = 0;
+
 		for line in stream.lines() {
 			// Throttle
 			if let Err(err) = throttle_short.tick() {
@@ -189,6 +196,23 @@ fn ship_logs(
 			{
 				message.truncate(byte_idx);
 				message.push_str(" (truncated)")
+			}
+
+			// Log preview of lines from the program for easy debugging from Nomad
+			if preview_iine_count < MAX_PREVIEW_LINES {
+				preview_iine_count += 1;
+				println!(
+					"{stream_type:?}: {message}",
+					stream_type = stream_type,
+					message = message
+				);
+
+				if preview_iine_count == MAX_PREVIEW_LINES {
+					println!(
+						"{stream_type:?}: ...not logging any more lines...",
+						stream_type = stream_type
+					);
+				}
 			}
 
 			if send_message(&msg_tx, &mut throttle_error, stream_type, message) {
