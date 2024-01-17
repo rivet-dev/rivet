@@ -36,6 +36,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 -   **pools** Set ClickHouse `idle_timeout` to 15 seconds
 -   **api-helper** Box path futures for faster compile times
 -   Upgrade `async-nats`
+-   `test-mm-lobby-echo` now handles `SIGTERM` and exits immediately, allows for less resource consumption while testing lobbies
 
 ### Security
 

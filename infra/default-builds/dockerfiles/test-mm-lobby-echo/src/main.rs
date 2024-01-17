@@ -24,33 +24,33 @@ async fn main() -> Result<()> {
 	// Echo servers (bridge networking)
 	if let Ok(http_port) = env::var("PORT_test_http") {
 		let http_port: u16 = http_port.parse()?;
-		tokio::spawn(echo_http_server(http_port));
+		tokio::spawn(with_select_term(echo_http_server(http_port)));
 	}
 
 	if let Ok(tcp_port) = env::var("PORT_test_tcp") {
 		let tcp_port: u16 = tcp_port.parse()?;
-		tokio::spawn(echo_tcp_server(tcp_port));
+		tokio::spawn(with_select_term(echo_tcp_server(tcp_port)));
 	}
 
 	if let Ok(udp_port) = env::var("PORT_test_udp") {
 		let udp_port: u16 = udp_port.parse()?;
-		tokio::spawn(echo_udp_server(udp_port));
+		tokio::spawn(with_select_term(echo_udp_server(udp_port)));
 	}
 
 	// Echo servers (host networking)
 	if let Ok(http_port) = env::var("HOST_PORT_HTTP") {
 		let http_port: u16 = http_port.parse()?;
-		tokio::spawn(echo_http_server(http_port));
+		tokio::spawn(with_select_term(echo_http_server(http_port)));
 	}
 
 	if let Ok(tcp_port) = env::var("HOST_PORT_TCP") {
 		let tcp_port: u16 = tcp_port.parse()?;
-		tokio::spawn(echo_tcp_server(tcp_port));
+		tokio::spawn(with_select_term(echo_tcp_server(tcp_port)));
 	}
 
 	if let Ok(udp_port) = env::var("HOST_PORT_UDP") {
 		let udp_port: u16 = udp_port.parse()?;
-		tokio::spawn(echo_udp_server(udp_port));
+		tokio::spawn(with_select_term(echo_udp_server(udp_port)));
 	}
 
 	// Lobby ready
@@ -58,7 +58,8 @@ async fn main() -> Result<()> {
 
 	// Wait indefinitely
 	println!("Waiting indefinitely...");
-	std::future::pending::<()>().await;
+	wait_term().await?;
+	println!("Ctrl+C pressed. Exiting main...");
 
 	Ok(())
 }
@@ -82,7 +83,30 @@ async fn lobby_ready() -> Result<()> {
 	Ok(())
 }
 
-async fn echo_http_server(port: u16) {
+/// Waits for the SIGTERM signal.
+async fn wait_term() -> Result<()> {
+	use tokio::signal::unix::{signal, SignalKind};
+
+	signal(SignalKind::terminate())
+		.expect("Failed to set up SIGTERM handler")
+		.recv()
+		.await;
+
+	Ok(())
+}
+
+/// Waits until future exits or term.
+async fn with_select_term(future: impl std::future::Future<Output = Result<()>>) -> Result<()> {
+	tokio::select! {
+		result = future => result,
+		_ = wait_term() => {
+			println!("Ctrl+C pressed. Exiting...");
+			Ok(())
+		},
+	}
+}
+
+async fn echo_http_server(port: u16) -> Result<()> {
 	use hyper::service::{make_service_fn, service_fn};
 	use hyper::{Body, Request, Response, Server};
 
@@ -98,15 +122,17 @@ async fn echo_http_server(port: u16) {
 		.serve(make_service)
 		.await
 		.expect("hyper server");
+
+	Ok(())
 }
 
-async fn echo_tcp_server(port: u16) {
+async fn echo_tcp_server(port: u16) -> Result<()> {
 	let addr = SocketAddr::from(([0, 0, 0, 0], port));
 	println!("TCP: {}", port);
 
-	let listener = TcpListener::bind(&addr).await.expect("bind failed");
+	let listener = TcpListener::bind(&addr).await.context("bind failed")?;
 	loop {
-		let (socket, _) = listener.accept().await.expect("accept failed");
+		let (socket, _) = listener.accept().await.context("accept failed")?;
 		tokio::spawn(async move {
 			let mut reader = tokio::io::BufReader::new(socket);
 			let mut line = String::new();
