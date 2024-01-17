@@ -306,9 +306,11 @@ impl ServiceContextData {
 		// self.name() == "token-create"
 	}
 
-	pub fn depends_on_sendgrid_key(&self) -> bool {
-		true
+	pub fn depends_on_sendgrid_key(&self, project_ctx: &ProjectContext) -> bool {
 		// self.name() == "email-send"
+		project_ctx.ns().email.as_ref().map_or(false, |x| {
+			matches!(x.provider, config::ns::EmailProvider::SendGrid { .. })
+		})
 	}
 
 	pub fn depends_on_s3(&self) -> bool {
@@ -1051,7 +1053,7 @@ impl ServiceContextData {
 			));
 		}
 
-		if self.depends_on_sendgrid_key() {
+		if self.depends_on_sendgrid_key(&project_ctx) {
 			env.push((
 				"SENDGRID_KEY".into(),
 				project_ctx.read_secret(&["sendgrid", "key"]).await?,

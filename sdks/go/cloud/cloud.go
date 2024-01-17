@@ -9,10 +9,12 @@ import (
 )
 
 type BootstrapResponse struct {
-	Cluster BootstrapCluster  `json:"cluster,omitempty"`
-	Domains *BootstrapDomains `json:"domains,omitempty"`
-	Origins *BootstrapOrigins `json:"origins,omitempty"`
-	Captcha *BootstrapCaptcha `json:"captcha,omitempty"`
+	Cluster      BootstrapCluster       `json:"cluster,omitempty"`
+	Access       BootstrapAccess        `json:"access,omitempty"`
+	Domains      *BootstrapDomains      `json:"domains,omitempty"`
+	Origins      *BootstrapOrigins      `json:"origins,omitempty"`
+	Captcha      *BootstrapCaptcha      `json:"captcha,omitempty"`
+	LoginMethods *BootstrapLoginMethods `json:"login_methods,omitempty"`
 
 	_rawJSON json.RawMessage
 }

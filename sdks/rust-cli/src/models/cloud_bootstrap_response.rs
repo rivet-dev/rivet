@@ -13,22 +13,28 @@
 
 #[derive(Clone, Debug, PartialEq, Default, Serialize, Deserialize)]
 pub struct CloudBootstrapResponse {
+    #[serde(rename = "access")]
+    pub access: crate::models::CloudBootstrapAccess,
     #[serde(rename = "captcha")]
     pub captcha: Box<crate::models::CloudBootstrapCaptcha>,
     #[serde(rename = "cluster")]
     pub cluster: crate::models::CloudBootstrapCluster,
     #[serde(rename = "domains", skip_serializing_if = "Option::is_none")]
     pub domains: Option<Box<crate::models::CloudBootstrapDomains>>,
+    #[serde(rename = "login_methods")]
+    pub login_methods: Box<crate::models::CloudBootstrapLoginMethods>,
     #[serde(rename = "origins")]
     pub origins: Box<crate::models::CloudBootstrapOrigins>,
 }
 
 impl CloudBootstrapResponse {
-    pub fn new(captcha: crate::models::CloudBootstrapCaptcha, cluster: crate::models::CloudBootstrapCluster, origins: crate::models::CloudBootstrapOrigins) -> CloudBootstrapResponse {
+    pub fn new(access: crate::models::CloudBootstrapAccess, captcha: crate::models::CloudBootstrapCaptcha, cluster: crate::models::CloudBootstrapCluster, login_methods: crate::models::CloudBootstrapLoginMethods, origins: crate::models::CloudBootstrapOrigins) -> CloudBootstrapResponse {
         CloudBootstrapResponse {
+            access,
             captcha: Box::new(captcha),
             cluster,
             domains: None,
+            login_methods: Box::new(login_methods),
             origins: Box::new(origins),
         }
     }

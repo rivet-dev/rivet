@@ -102,6 +102,8 @@ message Entitlement {
 
 	// Token used to login via the CLI.
 	message AccessToken {
+		// Name of the token to be referenced as. This is used to create
+		// multiple tokens for different users.
 		string name = 1;
 	}
 

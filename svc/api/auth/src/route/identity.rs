@@ -162,6 +162,7 @@ pub async fn complete_access_token(
 	let origin = unwrap!(ctx.origin());
 	let access_token_ent = ctx.auth().access_token_ent(body.access_token)?;
 
+	// Find the user associated with this access token
 	let access_token_res = op!([ctx] user_resolve_access_token {
 		names: vec![access_token_ent.name.clone()]
 	})

@@ -6,7 +6,9 @@ import * as Rivet from "../../..";
 
 export interface BootstrapResponse {
     cluster: Rivet.cloud.BootstrapCluster;
+    access: Rivet.cloud.BootstrapAccess;
     domains?: Rivet.cloud.BootstrapDomains;
     origins: Rivet.cloud.BootstrapOrigins;
     captcha: Rivet.cloud.BootstrapCaptcha;
+    loginMethods: Rivet.cloud.BootstrapLoginMethods;
 }

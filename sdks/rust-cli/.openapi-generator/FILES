@@ -25,10 +25,12 @@ docs/CloudAuthAgent.md
 docs/CloudAuthAgentGameCloud.md
 docs/CloudAuthAgentIdentity.md
 docs/CloudAuthApi.md
+docs/CloudBootstrapAccess.md
 docs/CloudBootstrapCaptcha.md
 docs/CloudBootstrapCaptchaTurnstile.md
 docs/CloudBootstrapCluster.md
 docs/CloudBootstrapDomains.md
+docs/CloudBootstrapLoginMethods.md
 docs/CloudBootstrapOrigins.md
 docs/CloudBootstrapResponse.md
 docs/CloudBuildSummary.md
@@ -384,10 +386,12 @@ src/models/captcha_config_turnstile.rs
 src/models/cloud_auth_agent.rs
 src/models/cloud_auth_agent_game_cloud.rs
 src/models/cloud_auth_agent_identity.rs
+src/models/cloud_bootstrap_access.rs
 src/models/cloud_bootstrap_captcha.rs
 src/models/cloud_bootstrap_captcha_turnstile.rs
 src/models/cloud_bootstrap_cluster.rs
 src/models/cloud_bootstrap_domains.rs
+src/models/cloud_bootstrap_login_methods.rs
 src/models/cloud_bootstrap_origins.rs
 src/models/cloud_bootstrap_response.rs
 src/models/cloud_build_summary.rs

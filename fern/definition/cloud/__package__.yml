@@ -14,15 +14,22 @@ types:
   BootstrapResponse:
     properties:
       cluster: BootstrapCluster
+      access: BootstrapAccess
       domains: optional<BootstrapDomains>
       origins: BootstrapOrigins
       captcha: BootstrapCaptcha
+      login_methods: BootstrapLoginMethods
 
   BootstrapCluster:
     docs: The type of cluster that the backend is currently running.
     enum:
       - value: enterprise
       - value: oss
+
+  BootstrapAccess:
+    enum:
+      - value: public
+      - value: private
 
   BootstrapDomains:
     docs: Domains that host parts of Rivet
@@ -43,3 +50,8 @@ types:
   BootstrapCaptchaTurnstile:
     properties:
       site_key: string
+
+  BootstrapLoginMethods:
+    properties:
+      access_token: boolean
+      email: boolean

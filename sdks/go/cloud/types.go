@@ -1355,6 +1355,28 @@ func (u UniversalRegion) Ptr() *UniversalRegion {
 	return &u
 }
 
+type BootstrapAccess string
+
+const (
+	BootstrapAccessPublic  BootstrapAccess = "public"
+	BootstrapAccessPrivate BootstrapAccess = "private"
+)
+
+func NewBootstrapAccessFromString(s string) (BootstrapAccess, error) {
+	switch s {
+	case "public":
+		return BootstrapAccessPublic, nil
+	case "private":
+		return BootstrapAccessPrivate, nil
+	}
+	var t BootstrapAccess
+	return "", fmt.Errorf("%s is not a valid %T", s, t)
+}
+
+func (b BootstrapAccess) Ptr() *BootstrapAccess {
+	return &b
+}
+
 type BootstrapCaptcha struct {
 	Turnstile *BootstrapCaptchaTurnstile `json:"turnstile,omitempty"`
 
@@ -1457,6 +1479,36 @@ func (b *BootstrapDomains) UnmarshalJSON(data []byte) error {
 }
 
 func (b *BootstrapDomains) String() string {
+	if len(b._rawJSON) > 0 {
+		if value, err := core.StringifyJSON(b._rawJSON); err == nil {
+			return value
+		}
+	}
+	if value, err := core.StringifyJSON(b); err == nil {
+		return value
+	}
+	return fmt.Sprintf("%#v", b)
+}
+
+type BootstrapLoginMethods struct {
+	AccessToken bool `json:"access_token"`
+	Email       bool `json:"email"`
+
+	_rawJSON json.RawMessage
+}
+
+func (b *BootstrapLoginMethods) UnmarshalJSON(data []byte) error {
+	type unmarshaler BootstrapLoginMethods
+	var value unmarshaler
+	if err := json.Unmarshal(data, &value); err != nil {
+		return err
+	}
+	*b = BootstrapLoginMethods(value)
+	b._rawJSON = json.RawMessage(data)
+	return nil
+}
+
+func (b *BootstrapLoginMethods) String() string {
 	if len(b._rawJSON) > 0 {
 		if value, err := core.StringifyJSON(b._rawJSON); err == nil {
 			return value

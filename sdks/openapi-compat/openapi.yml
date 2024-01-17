@@ -152,6 +152,11 @@ components:
       required:
       - identity_id
       type: object
+    CloudBootstrapAccess:
+      enum:
+      - public
+      - private
+      type: string
     CloudBootstrapCaptcha:
       properties:
         turnstile:
@@ -184,6 +189,16 @@ components:
       - cdn
       - job
       type: object
+    CloudBootstrapLoginMethods:
+      properties:
+        access_token:
+          type: boolean
+        email:
+          type: boolean
+      required:
+      - access_token
+      - email
+      type: object
     CloudBootstrapOrigins:
       description: Origins used to build URLs from
       properties:
@@ -194,18 +209,24 @@ components:
       type: object
     CloudBootstrapResponse:
       properties:
+        access:
+          $ref: '#/components/schemas/CloudBootstrapAccess'
         captcha:
           $ref: '#/components/schemas/CloudBootstrapCaptcha'
         cluster:
           $ref: '#/components/schemas/CloudBootstrapCluster'
         domains:
           $ref: '#/components/schemas/CloudBootstrapDomains'
+        login_methods:
+          $ref: '#/components/schemas/CloudBootstrapLoginMethods'
         origins:
           $ref: '#/components/schemas/CloudBootstrapOrigins'
       required:
       - cluster
+      - access
       - origins
       - captcha
+      - login_methods
       type: object
     CloudBuildSummary:
       description: A build summary.

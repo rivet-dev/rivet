@@ -8308,22 +8308,33 @@ components:
       properties:
         cluster:
           $ref: '#/components/schemas/CloudBootstrapCluster'
+        access:
+          $ref: '#/components/schemas/CloudBootstrapAccess'
         domains:
           $ref: '#/components/schemas/CloudBootstrapDomains'
         origins:
           $ref: '#/components/schemas/CloudBootstrapOrigins'
         captcha:
           $ref: '#/components/schemas/CloudBootstrapCaptcha'
+        login_methods:
+          $ref: '#/components/schemas/CloudBootstrapLoginMethods'
       required:
         - cluster
+        - access
         - origins
         - captcha
+        - login_methods
     CloudBootstrapCluster:
       type: string
       enum:
         - enterprise
         - oss
       description: The type of cluster that the backend is currently running.
+    CloudBootstrapAccess:
+      type: string
+      enum:
+        - public
+        - private
     CloudBootstrapDomains:
       type: object
       description: Domains that host parts of Rivet
@@ -8358,6 +8369,16 @@ components:
           type: string
       required:
         - site_key
+    CloudBootstrapLoginMethods:
+      type: object
+      properties:
+        access_token:
+          type: boolean
+        email:
+          type: boolean
+      required:
+        - access_token
+        - email
     CloudGamesNamespacesInspectResponse:
       type: object
       properties:

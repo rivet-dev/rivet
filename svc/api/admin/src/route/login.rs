@@ -30,7 +30,7 @@ pub async fn login(
 				}
 			],
 		})),
-		label: Some("access_token".to_string()),
+		label: Some("access".to_string()),
 		..Default::default()
 	})
 	.await?;
