@@ -110,11 +110,24 @@ where
 				// Create a dedicated connection to redis-chirp for blocking Redis requests
 				// that won't block other requests in the pool.
 				let url = std::env::var("REDIS_URL_PERSISTENT").expect("REDIS_URL_PERSISTENT");
-				let redis_chirp_conn = redis::Client::open(url)
+				let mut redis_chirp_conn = redis::Client::open(url)
 					.map_err(ManagerError::BuildRedis)?
 					.get_tokio_connection_manager()
 					.await
 					.map_err(ManagerError::BuildRedis)?;
+				let res = redis::cmd("CLIENT")
+					.arg("SETNAME")
+					.arg(format!("consumer:{}:{}", group, W::NAME))
+					.query_async::<_, ()>(&mut redis_chirp_conn)
+					.await;
+				match res {
+					Ok(_) => {
+						tracing::trace!("setname success");
+					}
+					Err(err) => {
+						tracing::error!(?err, "setname failed");
+					}
+				}
 
 				self.clone()
 					.worker_receiver(
