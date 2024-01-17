@@ -160,6 +160,14 @@ pub async fn state_list(ctx: &ProjectContext, plan_id: &str) -> Option<Vec<Strin
 }
 
 pub async fn has_applied(ctx: &ProjectContext, plan_id: &str) -> bool {
+	// Check if Terraform plan is required for both:
+	// - Return false if the plan was disabled for any reason
+	// - Faster performance
+	let terraform_plans = crate::tasks::infra::all_terraform_plans(ctx).unwrap();
+	if terraform_plans.iter().all(|x| x != plan_id) {
+		return false;
+	}
+
 	// Check if there is any output
 	//
 	// HACK: This will have a false negative for plans that have no output variables
