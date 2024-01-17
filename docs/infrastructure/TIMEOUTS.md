@@ -35,6 +35,9 @@ Current timeouts:
 -   `select_with_timeout!`: 40s ([source](https://github.com/rivet-gg/rivet/blob/9811ae11656d63e26b4814fe15f7f852f5479a48/lib/util/macros/src/lib.rs#L12))
     -   **Behavior** Timeout handled by API endpoint, usually 200
     -   **Motivation** This gives a 10s budget for any requests before/after the select statement
+-   `tail!` and `tail_all!`: 40s (depending on `TailAllConfig`) ([source](https://github.com/rivet-gg/rivet/blob/9811ae11656d63e26b4814fe15f7f852f5479a48/lib/util/macros/src/lib.rs#L12))
+    -   **Behavior** Timeout handled by API endpoint, usually 200
+    -   **Motivation** This gives a 10s budget for any requests before/after the select statement
 
 ## Database connections
 

@@ -81,6 +81,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 -   **Infra** Job logs occasionally returning duplicate log lines
 -   **Matchmaker** /list returning no lobbies unless `include_state` query parameter is `true`
 -   **Matchmaker** Players remove correctly when the player fails to be inserted into the Cockroach database and only exists in Redis
+-   **Chirp** `tail_all` default timeouts are now lower than `api-helper` timeout
+-   **api-kv** Batch operation timeouts are now lower than `api-helper` timeout
 
 ## [23.1.0] - 2023-10-30
 

@@ -1676,6 +1676,8 @@ where
 	}
 }
 
+pub const TAIL_ALL_DEFAULT_EMPTY_GRACE: Duration = Duration::from_secs(40);
+
 /// Configuration for `tail_all`.
 pub struct TailAllConfig {
 	/// What to do when the anchor is older than the message's TTL.
@@ -1740,7 +1742,7 @@ impl TailAllConfig {
 			anchor_expired_behavior: TailAllAnchorExpiredBehavior::UseCurrentAnchor,
 			message_limit: 256,
 			collect_grace: Some(Duration::from_millis(100)),
-			empty_grace: Some(Duration::from_secs(60)),
+			empty_grace: Some(TAIL_ALL_DEFAULT_EMPTY_GRACE),
 			post_logs_behavior: TailAllPostLogsBehavior::None,
 		}
 	}
@@ -1752,7 +1754,7 @@ impl TailAllConfig {
 			anchor_expired_behavior: TailAllAnchorExpiredBehavior::ReturnImmediately,
 			message_limit: 256,
 			collect_grace: Some(Duration::from_millis(100)),
-			empty_grace: Some(Duration::from_secs(60)),
+			empty_grace: Some(TAIL_ALL_DEFAULT_EMPTY_GRACE),
 			post_logs_behavior: TailAllPostLogsBehavior::None,
 		}
 	}
@@ -1764,7 +1766,7 @@ impl TailAllConfig {
 			anchor_expired_behavior: TailAllAnchorExpiredBehavior::UseCurrentAnchor,
 			message_limit: 256,
 			collect_grace: Some(Duration::from_millis(100)),
-			empty_grace: Some(Duration::from_secs(60)),
+			empty_grace: Some(TAIL_ALL_DEFAULT_EMPTY_GRACE),
 			post_logs_behavior: TailAllPostLogsBehavior::ReturnIfMessages,
 		}
 	}

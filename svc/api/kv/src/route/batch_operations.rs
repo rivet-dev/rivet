@@ -294,7 +294,7 @@ async fn watch_batch_merge_subs(
 
 		let timeout = collect_expire
 			.map(|collect_expire| (collect_expire - now).as_millis() as u64)
-			.unwrap_or_else(|| util::duration::minutes(1) as u64);
+			.unwrap_or_else(|| chirp_client::TAIL_ALL_DEFAULT_EMPTY_GRACE.as_millis() as u64);
 
 		util::macros::select_with_timeout!([timeout MS] {
 			msg = all_subs.next() => {
