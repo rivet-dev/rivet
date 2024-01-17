@@ -8,6 +8,33 @@ use proto::backend::{
 use regex::Regex;
 use serde_json::json;
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum TransportProtocol {
+	Tcp,
+	Udp,
+}
+
+impl From<ProxyProtocol> for TransportProtocol {
+	fn from(proxy_protocol: ProxyProtocol) -> Self {
+		match proxy_protocol {
+			ProxyProtocol::Http
+			| ProxyProtocol::Https
+			| ProxyProtocol::Tcp
+			| ProxyProtocol::TcpTls => Self::Tcp,
+			ProxyProtocol::Udp => Self::Udp,
+		}
+	}
+}
+
+impl TransportProtocol {
+	fn as_cni_protocol(&self) -> &'static str {
+		match self {
+			Self::Tcp => "tcp",
+			Self::Udp => "udp",
+		}
+	}
+}
+
 /// What a port is being pointed at.
 enum PortTarget {
 	Single(u16),
@@ -139,10 +166,7 @@ pub fn gen_lobby_docker_job(
 				json!({
 					"HostPort": template_env_var_int(&nomad_host_port_env_var(&port.nomad_port_label)),
 					"ContainerPort": target_port,
-					"Protocol": match port.proxy_protocol {
-						ProxyProtocol::Http | ProxyProtocol::Https | ProxyProtocol::Tcp | ProxyProtocol::TcpTls => "tcp",
-						ProxyProtocol::Udp => "udp",
-					},
+					"Protocol": TransportProtocol::from(port.proxy_protocol).as_cni_protocol(),
 				})
 			})
 		})
@@ -320,6 +344,20 @@ pub fn gen_lobby_docker_job(
 					name: Some(service_name),
 					tags: Some(vec!["game".into()]),
 					port_label: Some(port.nomad_port_label.clone()),
+					// checks: if TransportProtocol::from(port.proxy_protocol)
+					// 	== TransportProtocol::Tcp
+					// {
+					// 	Some(vec![ServiceCheck {
+					// 		name: Some(format!("{}-probe", port.label)),
+					// 		port_label: Some(port.nomad_port_label.clone()),
+					// 		_type: Some("tcp".into()),
+					// 		interval: Some(30_000_000_000),
+					// 		timeout: Some(2_000_000_000),
+					// 		..ServiceCheck::new()
+					// 	}])
+					// } else {
+					// 	None
+					// },
 					..Service::new()
 				}))
 			} else {

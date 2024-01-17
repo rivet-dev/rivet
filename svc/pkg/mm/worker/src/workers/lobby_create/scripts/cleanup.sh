@@ -6,8 +6,11 @@ log() {
     echo "[$timestamp] [cleanup] $@"
 }
 
+# MARK: Generate CNI parameters
 export CNI_PATH="/opt/cni/bin"
 export NETCONFPATH="/opt/cni/config"
+export CNI_IFNAME="eth0"
+export CAP_ARGS=$(cat "$NOMAD_ALLOC_DIR/cni-cap-args.json")
 
 # Every step in this script gracefully fails so everything gets cleaned up no matter what.
 

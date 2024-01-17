@@ -6,8 +6,26 @@ log() {
     echo "[$timestamp] [setup_cni_network] $@"
 }
 
+# MARK: Generate CNI parameters
+#
+# See https://github.com/containernetworking/cni/blob/b62753aa2bfa365c1ceaff6f25774a8047c896b5/cnitool/cnitool.go#L31
+
+# See Nomad capabilities equivalent:
+# https://github.com/hashicorp/nomad/blob/a8f0f2612ef9d283ed903721f8453a0c0c3f51c5/client/allocrunner/networking_cni.go#L105C46-L105C46
+#
+# See supported args:
+# https://github.com/containerd/go-cni/blob/6603d5bd8941d7f2026bb5627f6aa4ff434f859a/namespace_opts.go#L22
+jq -c <<EOF > "$NOMAD_ALLOC_DIR/cni-cap-args.json"
+{
+	"portMappings": $(cat "$NOMAD_ALLOC_DIR/cni-port-mappings.json")
+}
+EOF
+
 export CNI_PATH="/opt/cni/bin"
 export NETCONFPATH="/opt/cni/config"
+export CNI_IFNAME="eth0"
+export CAP_ARGS=$(cat "$NOMAD_ALLOC_DIR/cni-cap-args.json")
+log "CAP_ARGS: $CAP_ARGS"
 
 # MARK: Create network
 #
@@ -16,20 +34,6 @@ export NETCONFPATH="/opt/cni/config"
 
 # Name of the network in /opt/cni/config/$NETWORK_NAME.conflist
 NETWORK_NAME="rivet-job"
-
-# See Nomad capabilities equivalent:
-# https://github.com/hashicorp/nomad/blob/a8f0f2612ef9d283ed903721f8453a0c0c3f51c5/client/allocrunner/networking_cni.go#L105C46-L105C46
-#
-# See supported args:
-# https://github.com/containerd/go-cni/blob/6603d5bd8941d7f2026bb5627f6aa4ff434f859a/namespace_opts.go#L22
-export CAP_ARGS=$(jq -c <<EOF
-{
-	"portMappings": $(cat "$NOMAD_ALLOC_DIR/cni-port-mappings.json")
-}
-EOF
-)
-export CNI_IFNAME="eth0"
-log "CAP_ARGS: $CAP_ARGS"
 
 log "Creating network $CONTAINER_ID"
 ip netns add "$CONTAINER_ID"

@@ -57,6 +57,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 -   `user_identity.identities` not getting purged on create & delete
 -   **Bolt** Error when applying Terraform when a plan is no longer required
 -   **api-helper** Instrument path futures
+-   **Infra** CNI ports not being removed from the `nat` iptable, therefore occasionally causing failed connections
 
 ## [23.2.0-rc.1] - 2023-12-01
 
