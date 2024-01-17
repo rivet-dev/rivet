@@ -133,6 +133,7 @@ members = [
 	"pkg/load-test/standalone/api-cloud",
 	"pkg/load-test/standalone/mm",
 	"pkg/load-test/standalone/sqlx",
+	"pkg/load-test/standalone/watch-requests",
 	"pkg/mm-config/ops/lobby-group-get",
 	"pkg/mm-config/ops/lobby-group-resolve-name-id",
 	"pkg/mm-config/ops/lobby-group-resolve-version",

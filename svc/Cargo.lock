@@ -4571,6 +4571,26 @@ dependencies = [
 ]
 
 [[package]]
+name = "load-test-watch-requests"
+version = "0.0.1"
+dependencies = [
+ "chirp-client",
+ "chirp-worker",
+ "faker-game",
+ "faker-team",
+ "reqwest",
+ "rivet-api",
+ "rivet-connection",
+ "rivet-operation",
+ "rivet-runtime",
+ "token-create",
+ "tokio",
+ "tracing",
+ "tracing-subscriber",
+ "user-identity-create",
+]
+
+[[package]]
 name = "lock_api"
 version = "0.4.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
