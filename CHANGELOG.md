@@ -35,6 +35,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 -   **pools** Decrease SQLx `idle_timeout` to 3 minutes
 -   **pools** Set ClickHouse `idle_timeout` to 15 seconds
 -   **api-helper** Box path futures for faster compile times
+-   Upgrade `async-nats`
 
 ### Security
 

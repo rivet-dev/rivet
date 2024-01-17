@@ -78,9 +78,6 @@ async fn nats_from_env(client_name: String) -> Result<Option<NatsPool>, Error> {
 			async_nats::ConnectOptions::new()
 		};
 		options = options
-			// Flush frequently since we don't flush messages
-			// TODO: Lower this interval in development to reduce overhead
-			.flush_interval(Duration::from_millis(50))
 			.client_capacity(256)
 			.subscription_capacity(8192)
 			.event_callback({
