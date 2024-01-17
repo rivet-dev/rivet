@@ -175,7 +175,7 @@ impl EndpointRouter {
 				};
 
 				quote! {
-					.try_or_else(|| async {
+					.try_or_else(|| rivet_operation::prelude::futures_util::FutureExt::boxed(tracing::Instrument::in_current_span(async {
 						router_config.prefix = #mount_prefix;
 
 						#mount_path::__inner(
@@ -189,7 +189,7 @@ impl EndpointRouter {
 						)
 						.await
 						.map(std::convert::Into::into)
-					}).await?
+					}))).await?
 				}
 			})
 			.collect::<Vec<_>>();
@@ -198,6 +198,7 @@ impl EndpointRouter {
 			pub struct Router;
 			impl Router {
 				#[doc(hidden)]
+				#[tracing::instrument(skip_all)]
 				pub async fn __inner(
 					shared_client: chirp_client::SharedClientHandle,
 					pools: rivet_pools::Pools,
@@ -227,6 +228,7 @@ impl EndpointRouter {
 					Ok(body.into())
 				}
 
+				#[tracing::instrument(skip_all)]
 				pub async fn handle(
 					shared_client: chirp_client::SharedClientHandle,
 					pools: rivet_pools::Pools,
@@ -526,7 +528,7 @@ impl Endpoint {
 			.collect::<syn::Result<Vec<_>>>()?;
 
 		Ok(quote! {
-			.try_or_else(|| async {
+			.try_or_else(|| rivet_operation::prelude::futures_util::FutureExt::boxed(tracing::Instrument::in_current_span(async {
 				// Unreverse path segments (they are stored in reverse)
 				let mut path_segments = router_config
 					.path_segments
@@ -547,7 +549,7 @@ impl Endpoint {
 				} else {
 					Ok(__AsyncOption::None)
 				}
-			}).await?
+			}))).await?
 		})
 	}
 }
@@ -931,7 +933,7 @@ impl EndpointFunction {
 					tokio::sync::oneshot::channel::<(http::StatusCode, String)>();
 				tokio::task::Builder::new()
 					.name("api_helper::req_metrics_drop")
-					.spawn(async move {
+					.spawn(rivet_operation::prelude::futures_util::FutureExt::boxed(tracing::Instrument::in_current_span(async move {
 						// Wait for the request to complete or be
 						// cancelled
 						let complete_msg = metrics_complete_rx.await;
@@ -969,7 +971,7 @@ impl EndpointFunction {
 								])
 								.inc();
 						}
-					})?;
+					})))?;
 
 				let fut = #path(ctx, #(#arg_list),*);
 				let timeout = ::tokio::time::Duration::from_secs(50);

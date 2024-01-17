@@ -136,7 +136,7 @@ where
 						}
 					},
 					Err(err) => {
-						tracing::error!(?err, "http error");
+						tracing::error!(?err, "tokio spawn error");
 						return Ok(Response::builder()
 							.status(http::StatusCode::INTERNAL_SERVER_ERROR)
 							.body(Body::empty())?);

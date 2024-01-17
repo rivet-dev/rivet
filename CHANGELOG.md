@@ -33,7 +33,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 -   **pools** Ping Redis every 15 seconds
 -   **pools** Enable `test_before_acquire` on SQLx
 -   **pools** Decrease SQLx `idle_timeout` to 3 minutes
--   **pools** Set ClickHoue `idle_timeout` to 15 seconds
+-   **pools** Set ClickHouse `idle_timeout` to 15 seconds
+-   **api-helper** Box path futures for faster compile times
 
 ### Security
 
@@ -54,6 +55,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 -   **api-helper** Remove excess logging
 -   `user_identity.identities` not getting purged on create & delete
 -   **Bolt** Error when applying Terraform when a plan is no longer required
+-   **api-helper** Instrument path futures
 
 ## [23.2.0-rc.1] - 2023-12-01
 
