@@ -64,6 +64,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 -   **api-helper** Instrument path futures
 -   **Infra** CNI ports not being removed from the `nat` iptable, therefore occasionally causing failed connections
 -   **Infra** Disable `nativeLB` for Traefik tunnel
+-   **Infra** Update default Nomad storage to 64Gi
 
 ## [23.2.0-rc.1] - 2023-12-01
 

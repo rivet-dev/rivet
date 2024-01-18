@@ -59,6 +59,8 @@ locals {
 		EOT
 	}
 	nomad_checksum_configmap = sha256(jsonencode(local.nomad_server_configmap_data))
+
+	# Recommendations: https://developer.hashicorp.com/nomad/docs/install/production/requirements#resources-ram-cpu-etc
 	service_nomad = lookup(var.services, "nomad", {
 		count = 1
 		resources = {
@@ -366,7 +368,7 @@ resource "kubernetes_stateful_set" "nomad_server" {
 				access_modes = ["ReadWriteOnce"]
 				resources {
 					requests = {
-						storage = "1Gi"
+						storage = "64Gi"
 					}
 				}
 				storage_class_name = var.k8s_storage_class
