@@ -118,6 +118,37 @@ resource "kubernetes_service" "nomad_server" {
 	}
 }
 
+resource "kubernetes_service" "nomad_server_indexed" {
+	count = local.nomad_server_count
+
+	metadata {
+		namespace = kubernetes_namespace.nomad.metadata.0.name
+		name = "nomad-server-${count.index}"
+		labels = {
+			name = "nomad-server-${count.index}"
+			"app.kubernetes.io/name" = "nomad-server-${count.index}"
+		}
+	}
+	spec {
+		selector = {
+			app = "nomad-server"
+			"apps.kubernetes.io/pod-index" = count.index
+		}
+
+		port {
+			name = "http"
+			port = 4646
+			protocol = "TCP"
+		}
+
+		port {
+			name = "rpc"
+			port = 4647
+			protocol = "TCP"
+		}
+	}
+}
+
 resource "kubectl_manifest" "nomad_server_monitor" {
 	depends_on = [kubernetes_stateful_set.nomad_server]
 
@@ -368,7 +399,7 @@ resource "kubernetes_stateful_set" "nomad_server" {
 				access_modes = ["ReadWriteOnce"]
 				resources {
 					requests = {
-						storage = "64Gi"
+						storage = var.deploy_method_cluster ? "64Gi" : "1Gi"
 					}
 				}
 				storage_class_name = var.k8s_storage_class

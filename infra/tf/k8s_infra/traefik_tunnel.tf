@@ -1,11 +1,30 @@
 locals {
 	# Specify what services to expose via the tunnel server
 	tunnel_services = {
+		# LEGACY: Addresses a random Nomad server.
 		"nomad" = {
 			service = "nomad-server"
 			service_namespace = kubernetes_namespace.nomad.metadata[0].name
 			service_port = 4647
 		}
+
+		# Addresses specific Nomad servers.
+		"nomad-server-0" = {
+			service = "nomad-server-0"
+			service_namespace = kubernetes_namespace.nomad.metadata[0].name
+			service_port = 4647
+		}
+		"nomad-server-1" = {
+			service = "nomad-server-1"
+			service_namespace = kubernetes_namespace.nomad.metadata[0].name
+			service_port = 4647
+		}
+		"nomad-server-2" = {
+			service = "nomad-server-2"
+			service_namespace = kubernetes_namespace.nomad.metadata[0].name
+			service_port = 4647
+		}
+
 		"api-route" = {
 			service = "rivet-api-route"
 			service_namespace = kubernetes_namespace.rivet_service.metadata[0].name

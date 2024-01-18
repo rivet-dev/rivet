@@ -65,6 +65,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 -   **Infra** CNI ports not being removed from the `nat` iptable, therefore occasionally causing failed connections
 -   **Infra** Disable `nativeLB` for Traefik tunnel
 -   **Infra** Update default Nomad storage to 64Gi
+-   **Infra** Tunnel now exposes each Nomad server individually so the Nomad client can handle failover natively instead of relying on Traefik
 
 ## [23.2.0-rc.1] - 2023-12-01
 

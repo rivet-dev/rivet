@@ -11,6 +11,46 @@ use crate::{
 	dep::terraform::{net, output::Cert, servers::Server},
 };
 
+/// Service that gets exposed from the Traefik tunnel.
+pub struct TunnelService {
+	/// Name of the service for the subdomain. This is how the Treafik tunnel server knows where to
+	/// route traffic.
+	name: &'static str,
+
+	/// The port to serve the service on locally.
+	port: u16,
+}
+
+pub const TUNNEL_API_ROUTE_PORT: u16 = 5010;
+pub const TUNNEL_VECTOR_PORT: u16 = 5020;
+pub const TUNNEL_VECTOR_TCP_JSON_PORT: u16 = 5021;
+pub const TUNNEL_SERVICES: &[TunnelService] = &[
+	TunnelService {
+		name: "nomad-server-0",
+		port: 5000,
+	},
+	TunnelService {
+		name: "nomad-server-1",
+		port: 5001,
+	},
+	TunnelService {
+		name: "nomad-server-2",
+		port: 5002,
+	},
+	TunnelService {
+		name: "api-route",
+		port: TUNNEL_API_ROUTE_PORT,
+	},
+	TunnelService {
+		name: "vector",
+		port: TUNNEL_VECTOR_PORT,
+	},
+	TunnelService {
+		name: "vector-tcp-json",
+		port: TUNNEL_VECTOR_TCP_JSON_PORT,
+	},
+];
+
 pub fn common() -> String {
 	vec![
 		format!("apt-get update -y"),
@@ -60,7 +100,7 @@ pub fn cni_plugins() -> String {
 }
 
 pub fn nomad(server: &Server) -> String {
-	let servers = &["127.0.0.1:5000"];
+	let servers = &["127.0.0.1:5000", "127.0.0.1:5001", "127.0.0.1:5002"];
 
 	include_str!("files/nomad.sh")
 		.replace("__REGION_ID__", &server.region_id)
@@ -203,8 +243,6 @@ pub fn traefik_instance(config: TraefikInstance) -> String {
 	script
 }
 
-const TUNNEL_SERVICES: &[&'static str] = &["nomad", "api-route", "vector", "vector-tcp-json"];
-
 pub fn traefik_tunnel(
 	_ctx: &ProjectContext,
 	k8s_infra: &crate::dep::terraform::output::K8sInfra,
@@ -212,11 +250,11 @@ pub fn traefik_tunnel(
 ) -> String {
 	// Build transports for each service
 	let mut tcp_server_transports = IndexMap::new();
-	for service in TUNNEL_SERVICES {
+	for TunnelService { name, .. } in TUNNEL_SERVICES {
 		tcp_server_transports.insert(
-			service.to_string(),
+			name.to_string(),
 			ServerTransport {
-				server_name: format!("{service}.tunnel.rivet.gg"),
+				server_name: format!("{name}.tunnel.rivet.gg"),
 				root_cas: vec![(*tls.root_ca_cert_pem).clone()],
 				certs: vec![(*tls.tls_cert_locally_signed_job).clone()],
 			},
@@ -241,13 +279,12 @@ fn tunnel_traefik_static_config() -> String {
 		"#
 	);
 
-	for (i, service) in TUNNEL_SERVICES.iter().enumerate() {
+	for TunnelService { name, port } in TUNNEL_SERVICES.iter() {
 		config.push_str(&formatdoc!(
 			r#"
-			[entryPoints.{service}]
+			[entryPoints.{name}]
 				address = "127.0.0.1:{port}"
 			"#,
-			port = 5000 + i
 		))
 	}
 
@@ -256,18 +293,18 @@ fn tunnel_traefik_static_config() -> String {
 
 fn tunnel_traefik_dynamic_config(tunnel_external_ip: &str) -> String {
 	let mut config = String::new();
-	for service in TUNNEL_SERVICES.iter() {
+	for TunnelService { name, .. } in TUNNEL_SERVICES.iter() {
 		config.push_str(&formatdoc!(
 			r#"
-			[tcp.routers.{service}]
-				entryPoints = ["{service}"]
+			[tcp.routers.{name}]
+				entryPoints = ["{name}"]
 				rule = "HostSNI(`*`)"  # Match all ingress, unrelated to the outbound TLS
-				service = "{service}"
+				service = "{name}"
 
-			[tcp.services.{service}.loadBalancer]
-				serversTransport = "{service}"
+			[tcp.services.{name}.loadBalancer]
+				serversTransport = "{name}"
 
-				[[tcp.services.{service}.loadBalancer.servers]]
+				[[tcp.services.{name}.loadBalancer.servers]]
 					address = "{tunnel_external_ip}:5000"
 					tls = true
 			"#
@@ -302,7 +339,7 @@ pub fn vector(config: &VectorConfig) -> String {
 		[sinks.vector_sink]
 			type = "vector"
 			inputs = [{sources}]
-			address = "127.0.0.1:5002"
+			address = "127.0.0.1:{TUNNEL_VECTOR_PORT}"
 			healthcheck.enabled = false
 			compression = true
 		"#

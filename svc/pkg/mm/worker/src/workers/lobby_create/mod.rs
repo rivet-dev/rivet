@@ -674,7 +674,7 @@ async fn create_docker_job(
 			},
 			job_run::msg::create::Parameter {
 				key: "vector_socket_addr".into(),
-				value: "127.0.0.1:5003".to_string(),
+				value: "127.0.0.1:5021".to_string(),
 			},
 			job_run::msg::create::Parameter {
 				key: "image_artifact_url".into(),
