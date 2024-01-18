@@ -56,7 +56,7 @@ resource "helm_release" "traefik_tunnel" {
 	values = [yamlencode({
 		# Use Traefik v3 beta for TLS servers transport support
 		image = {
-			tag = "v3.0.0-beta3"
+			tag = "v3.0.0-beta5"
 		}
 		ports = {
 			# Disable default ports

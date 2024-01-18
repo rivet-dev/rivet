@@ -38,6 +38,11 @@ resource "helm_release" "traefik" {
 	chart = "traefik"
 	version = "24.0.0"
 	values = [yamlencode({
+		# Upgrade image to fix CVEs
+		image = {
+			tag = "v2.10.7"
+		}
+
 		# Allows referencing services outside of the traefik namespace
 		providers = {
 			kubernetesCRD = {

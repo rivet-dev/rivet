@@ -39,6 +39,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 -   Upgrade `async-nats`
 -   `test-mm-lobby-echo` now handles `SIGTERM` and exits immediately, allows for less resource consumption while testing lobbies
 -   **mm** Dynamically sleep based on lobby's `create_ts` for Treafik config to update
+-   **Infra** Update Traefik tunnel client & server to v3.0.0-beta5
+-   **Infra** Update Traefik load balancer to v2.10.7
 
 ### Security
 
