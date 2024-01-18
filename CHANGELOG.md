@@ -63,6 +63,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 -   **Bolt** Error when applying Terraform when a plan is no longer required
 -   **api-helper** Instrument path futures
 -   **Infra** CNI ports not being removed from the `nat` iptable, therefore occasionally causing failed connections
+-   **Infra** Disable `nativeLB` for Traefik tunnel
 
 ## [23.2.0-rc.1] - 2023-12-01
 

@@ -248,8 +248,6 @@ resource "kubectl_manifest" "traefik_nomad_router" {
 						{
 							name = each.value.service
 							port = each.value.service_port
-							# Directly access the service
-							nativeLB = true
 						}
 					]
 				}
