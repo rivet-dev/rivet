@@ -1,6 +1,15 @@
 use chirp_worker::prelude::*;
 use proto::backend::pkg::*;
 use serde_json::json;
+use tokio::time::Duration;
+
+/// HACK: Give the Traefik load balancer time to complete before considering the lobby ready.
+///
+/// Traefik updates every 500 ms and we give an extra 500 ms for grace.
+///
+/// See also svc/pkg/job-run/worker/src/workers/create/mod.rs TRAEFIK_GRACE_MS
+// const TRAEFIK_GRACE_MS: i64 = 750;
+const TRAEFIK_GRACE_MS: i64 = 100;
 
 lazy_static::lazy_static! {
 	static ref REDIS_SCRIPT: redis::Script = redis::Script::new(include_str!("../../redis-scripts/lobby_ready_set.lua"));
@@ -52,6 +61,13 @@ async fn worker(ctx: &OperationContext<mm::msg::lobby_ready::Message>) -> Global
 			retry_bail!("lobby not found, may be race condition with insertion");
 		}
 	};
+
+	// See TRAEFIK_GRACE_MS
+	let traefik_grace_ms = TRAEFIK_GRACE_MS - (util::timestamp::now() - lobby_row.create_ts);
+	if traefik_grace_ms > 0 {
+		tracing::info!(traefik_grace_ms, "sleeping for traefik grace");
+		tokio::time::sleep(Duration::from_millis(traefik_grace_ms as u64)).await;
+	}
 
 	msg!([ctx] mm::msg::lobby_ready_complete(lobby_id) {
 		lobby_id: Some(lobby_id.into()),

@@ -2,6 +2,7 @@ use std::collections::HashMap;
 
 use chirp_worker::prelude::*;
 use proto::backend::{self, pkg::*};
+use tokio::time::Duration;
 
 mod create_job;
 
@@ -9,6 +10,13 @@ mod create_job;
 
 const MAX_PARAMETER_KEY_LEN: usize = 64;
 const MAX_PARAMETER_VALUE_LEN: usize = 8_192; // 8 KB
+
+/// HACK: Give the Traefik load balancer time to complete before considering the lobby ready.
+///
+/// Traefik updates every 500 ms and we give an extra 500 ms for grace.
+///
+/// See also svc/pkg/mm/worker/src/workers/lobby_ready_set.rs TRAEFIK_GRACE_MS.
+const TRAEFIK_GRACE: Duration = Duration::from_millis(1_000);
 
 lazy_static::lazy_static! {
 	static ref NOMAD_CONFIG: nomad_client::apis::configuration::Configuration =
@@ -127,9 +135,8 @@ async fn worker(ctx: &OperationContext<job_run::msg::create::Message>) -> Global
 	write_to_db_after_run(&ctx, run_id, &nomad_dispatched_job_id).await?;
 	db_write_perf.end();
 
-	// HACK: Wait for Treafik to pick up the new job. 500 ms is the polling interval for the
-	// Traefik HTTP provider.
-	tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+	// See TRAEFIK_GRACE_MS
+	tokio::time::sleep(TRAEFIK_GRACE).await;
 
 	msg!([ctx] job_run::msg::create_complete(run_id) {
 		run_id: Some(run_id.into()),

@@ -37,6 +37,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 -   **api-helper** Box path futures for faster compile times
 -   Upgrade `async-nats`
 -   `test-mm-lobby-echo` now handles `SIGTERM` and exits immediately, allows for less resource consumption while testing lobbies
+-   **mm** Dynamically sleep based on lobby's `create_ts` for Treafik config to update
 
 ### Security
 
