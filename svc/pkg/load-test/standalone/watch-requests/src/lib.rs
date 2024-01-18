@@ -119,7 +119,7 @@ pub async fn run_from_env(ts: i64) -> GlobalResult<()> {
 			);
 			headers.insert(
 				"host",
-				reqwest::header::HeaderValue::from_str("api.nathan5.gameinc.io")?,
+				reqwest::header::HeaderValue::from_str(util::env::domain_main_api())?,
 			);
 			headers.insert(
 				"cf-connecting-ip",

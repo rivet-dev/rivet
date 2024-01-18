@@ -1,0 +1,33 @@
+[package]
+name = "load-test-mm-sustain"
+version = "0.0.1"
+edition = "2018"
+authors = ["Rivet Gaming, LLC <developer@rivet.gg>"]
+license = "Apache-2.0"
+
+[dependencies]
+chirp-client = { path = "../../../../../lib/chirp/client" }
+rivet-operation = { path = "../../../../../lib/operation/core" }
+rivet-connection = { path = "../../../../../lib/connection" }
+rivet-runtime = { path = "../../../../../lib/runtime" }
+tokio = { version = "1.29", features = ["full"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", default-features = false, features = ["fmt", "json", "ansi"] }
+rivet-api = { path = "../../../../../sdks/rust" }
+reqwest = "0.11"
+
+faker-game = { path = "../../../faker/ops/game" }
+faker-team = { path = "../../../faker/ops/team" }
+faker-game-version = { path = "../../../faker/ops/game-version" }
+faker-region = { path = "../../../faker/ops/region" }
+faker-build = { path = "../../../faker/ops/build" }
+mm-config-version-get = { path = "../../../mm-config/ops/version-get" }
+game-namespace-version-set = { path = "../../../game/ops/namespace-version-set" }
+mm-lobby-get = { path = "../../../mm/ops/lobby-get" }
+job-run-get = { path = "../../../job-run/ops/get" }
+user-identity-create = { path = "../../../user-identity/ops/create" }
+token-create = { path = "../../../token/ops/create" }
+util-mm = { package = "rivet-util-mm", path = "../../../mm/util" }
+
+[dev-dependencies]
+chirp-worker = { path = "../../../../../lib/chirp/worker" }

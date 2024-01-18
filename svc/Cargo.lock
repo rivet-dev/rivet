@@ -4551,6 +4551,34 @@ dependencies = [
 ]
 
 [[package]]
+name = "load-test-mm-sustain"
+version = "0.0.1"
+dependencies = [
+ "chirp-client",
+ "chirp-worker",
+ "faker-build",
+ "faker-game",
+ "faker-game-version",
+ "faker-region",
+ "faker-team",
+ "game-namespace-version-set",
+ "job-run-get",
+ "mm-config-version-get",
+ "mm-lobby-get",
+ "reqwest",
+ "rivet-api",
+ "rivet-connection",
+ "rivet-operation",
+ "rivet-runtime",
+ "rivet-util-mm",
+ "token-create",
+ "tokio",
+ "tracing",
+ "tracing-subscriber",
+ "user-identity-create",
+]
+
+[[package]]
 name = "load-test-sqlx"
 version = "0.0.1"
 dependencies = [
