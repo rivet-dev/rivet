@@ -335,10 +335,17 @@ pub fn vector(config: &VectorConfig) -> String {
 		r#"
 		[api]
 			enabled = true
-
+	
+		[transforms.add_meta]
+			type = "remap"
+			inputs = [{sources}]
+			source = '''
+			.tags.public_ip = "${{PUBLIC_IP}}"
+			'''
+	
 		[sinks.vector_sink]
 			type = "vector"
-			inputs = [{sources}]
+			inputs = ["add_meta"]
 			address = "127.0.0.1:{TUNNEL_VECTOR_PORT}"
 			healthcheck.enabled = false
 			compression = true

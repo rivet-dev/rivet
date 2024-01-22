@@ -1,3 +1,5 @@
+PUBLIC_IP=$(ip -4 route get 1.0.0.0 | awk '{print $7; exit}')
+
 version="0.34.1"
 
 # Create vector user
