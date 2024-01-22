@@ -513,18 +513,6 @@ pub fn gen_lobby_docker_job(
 							..Template::new()
 						},
 					]),
-					artifacts: Some(vec![TaskArtifact {
-						getter_source: Some("${NOMAD_META_IMAGE_ARTIFACT_URL}".into()),
-						getter_mode: Some("file".into()),
-						getter_options: Some({
-							let mut opts = HashMap::new();
-							// Disable automatic unarchiving since the Docker archive needs to be
-							// consumed in the original tar format
-							opts.insert("archive".into(), "false".into());
-							opts
-						}),
-						relative_dest: Some("${NOMAD_ALLOC_DIR}/docker-image.tar".into()),
-					}]),
 					resources: Some(Box::new(Resources {
 						CPU: Some(util_mm::RUNC_SETUP_CPU),
 						memory_mb: Some(util_mm::RUNC_SETUP_MEMORY),
