@@ -12,5 +12,7 @@ RUN touch src/main.rs && \
 FROM alpine:latest
 COPY --from=build /app/target/x86_64-unknown-linux-musl/release/test-mm-lobby-echo /usr/local/bin/app
 RUN chmod +x /usr/local/bin/app
+RUN adduser -D app
+USER app
 CMD ["/usr/local/bin/app"]
 
