@@ -672,14 +672,18 @@ fn generate_password(length: usize) -> String {
 
 /// Random password plus a special character in there somewhere.
 fn generate_clickhouse_password(length: usize) -> String {
-	let mut rng = rand::thread_rng();
-	let split = rng.gen_range(0..length);
+	use rand::prelude::*;
+	use rand::{distributions::Alphanumeric, Rng};
 
-	rng.clone()
-		.sample_iter(&Alphanumeric)
-		.take(split)
-		.chain(std::iter::once(46))
-		.chain(rng.sample_iter(&Alphanumeric).take(length - split))
-		.map(char::from)
-		.collect()
+	let mut rng = thread_rng();
+	let special_chars = "!#$%^*_+";
+	let mut password: Vec<char> = (0..length - 3)
+		.map(|_| rng.sample(Alphanumeric) as char)
+		.collect();
+	password.push(rng.gen_range('A'..'Z'));
+	password.push(rng.gen_range('a'..'z'));
+	password.push(rng.gen_range('0'..'9'));
+	password.push(special_chars.chars().choose(&mut rng).unwrap());
+	password.shuffle(&mut rng);
+	password.into_iter().collect()
 }
