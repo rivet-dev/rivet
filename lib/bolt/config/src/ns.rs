@@ -45,6 +45,8 @@ pub struct Namespace {
 	pub rust: Rust,
 	#[serde(default)]
 	pub rivet: Rivet,
+	#[serde(default)]
+	pub bolt: Bolt,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -652,6 +654,13 @@ impl Default for Cdn {
 #[serde(deny_unknown_fields)]
 pub struct RivetBilling {
 	pub dynamic_servers_capacity_price_id: String,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, Default)]
+#[serde(deny_unknown_fields)]
+pub struct Bolt {
+	#[serde(default)]
+	pub confirm_commands: bool,
 }
 
 fn default_regions() -> HashMap<String, Region> {

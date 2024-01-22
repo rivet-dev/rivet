@@ -14,6 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 -   **Infra** `infra-artifacts` Terraform plan & S3 bucket used for automating building & uploading internal binaries, etc.
 -   **Infra** Aiven Redis provider
 -   **Bolt** `bolt secret set <path> <value>` command
+-   **Bolt** `bolt.confirm_commands` to namespace to confirm before running commands on a namespace
 -   `watch-requests` load test
 -   `mm-sustain` load test
 
