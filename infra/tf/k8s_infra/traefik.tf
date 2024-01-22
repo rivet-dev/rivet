@@ -17,7 +17,7 @@ locals {
 		count = var.deploy_method_cluster ? 2 : 1
 		resources = {
 			cpu = 1000
-			memory = 1024
+			memory = 2048
 		}
 	})
 }
@@ -79,6 +79,10 @@ resource "helm_release" "traefik" {
 			# access = {
 			# 	enabled = true
 			# }
+		}
+
+		deployment = {
+			replicas = local.service_traefik.count
 		}
 
 		service = {

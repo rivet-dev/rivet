@@ -141,6 +141,10 @@ resource "helm_release" "traefik_tunnel" {
 			}
 		}
 
+		deployment = {
+			replicas = local.service_traefik_tunnel.count
+		}
+
 		service = {
 			enabled = true
 			annotations = var.deploy_method_cluster ? {
