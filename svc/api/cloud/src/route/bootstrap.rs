@@ -15,7 +15,7 @@ pub async fn get(
 pub async fn build_bootstrap_data() -> GlobalResult<models::CloudBootstrapResponse> {
 	Ok(models::CloudBootstrapResponse {
 		cluster: models::CloudBootstrapCluster::Oss,
-		access: match unwrap!(std::env::var("RIVET_ACCESS_KIND").ok()).as_str() {
+		access: match unwrap!(util::env::var("RIVET_ACCESS_KIND").ok()).as_str() {
 			"public" => models::CloudBootstrapAccess::Public,
 			"private" => models::CloudBootstrapAccess::Private,
 			_ => bail!("invalid RIVET_ACCESS_KIND"),
@@ -37,13 +37,13 @@ pub async fn build_bootstrap_data() -> GlobalResult<models::CloudBootstrapRespon
 			hub: util::env::origin_hub().into(),
 		}),
 		captcha: Box::new(models::CloudBootstrapCaptcha {
-			turnstile: std::env::var("TURNSTILE_SITE_KEY_MAIN")
+			turnstile: util::env::var("TURNSTILE_SITE_KEY_MAIN")
 				.ok()
 				.map(|site_key| Box::new(models::CloudBootstrapCaptchaTurnstile { site_key })),
 		}),
 		login_methods: Box::new(models::CloudBootstrapLoginMethods {
-			access_token: true,
-			email: std::env::var("SENDGRID_KEY").is_ok(),
+			access_token: util::env::var("RIVET_ACCESS_TOKEN_LOGIN").map_or(false, |v| v == "1"),
+			email: util::env::var("SENDGRID_KEY").is_ok(),
 		}),
 	})
 }

@@ -544,6 +544,8 @@ pub struct Rivet {
 	#[serde(default)]
 	pub access: RivetAccess,
 	#[serde(default)]
+	pub login: RivetLogin,
+	#[serde(default)]
 	pub test: Option<RivetTest>,
 	#[serde(default)]
 	pub api: Api,
@@ -579,6 +581,21 @@ pub enum RivetAccess {
 impl Default for RivetAccess {
 	fn default() -> Self {
 		RivetAccess::Private {}
+	}
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+#[serde(deny_unknown_fields)]
+pub struct RivetLogin {
+	pub enable_admin: bool,
+}
+
+impl Default for RivetLogin {
+	fn default() -> Self {
+		RivetLogin {
+			// Admin login enabled by default
+			enable_admin: true,
+		}
 	}
 }
 
@@ -666,6 +683,10 @@ pub struct Bolt {
 fn default_regions() -> HashMap<String, Region> {
 	toml::from_str(include_str!("../default_regions.toml"))
 		.expect("failed to parse default_regions.toml")
+}
+
+fn trueable() -> bool {
+	true
 }
 
 fn default_docker_repo() -> String {

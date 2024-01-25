@@ -203,13 +203,13 @@ pub async fn complete_access_token(
 			})
 		})
 		.await?;
-	}
 
-	// Turn user into admin
-	msg!([ctx] user::msg::admin_set(user_ent.user_id) -> user::msg::update {
-		user_id: Some(user_ent.user_id.into()),
-	})
-	.await?;
+		// Turn user into admin
+		msg!([ctx] user::msg::admin_set(user_ent.user_id) -> user::msg::update {
+			user_id: Some(user_ent.user_id.into()),
+		})
+		.await?;
+	}
 
 	Ok(json!({}))
 }

@@ -772,6 +772,10 @@ impl ServiceContextData {
 			},
 		));
 
+		if project_ctx.ns().rivet.login.enable_admin {
+			env.push(("RIVET_ACCESS_TOKEN_LOGIN".into(), "1".into()));
+		}
+
 		// Domains
 		if let Some(x) = project_ctx.domain_main() {
 			env.push(("RIVET_DOMAIN_MAIN".into(), x));

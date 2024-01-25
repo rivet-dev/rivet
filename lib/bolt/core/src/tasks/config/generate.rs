@@ -1,6 +1,6 @@
 use anyhow::*;
 use duct::cmd;
-use rand::{distributions::Alphanumeric, Rng};
+use rand::{distributions::Alphanumeric, prelude::*};
 use std::{
 	future::Future,
 	path::{Path, PathBuf},
@@ -672,9 +672,6 @@ fn generate_password(length: usize) -> String {
 
 /// Random password plus a special character in there somewhere.
 fn generate_clickhouse_password(length: usize) -> String {
-	use rand::prelude::*;
-	use rand::{distributions::Alphanumeric, Rng};
-
 	let mut rng = thread_rng();
 	let special_chars = "!#$%^*_+";
 	let mut password: Vec<char> = (0..length - 3)
