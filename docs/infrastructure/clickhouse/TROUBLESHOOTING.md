@@ -11,8 +11,8 @@ Code: 47. DB::Exception: Received from clickhouse.clickhouse.svc.cluster.local:9
 
 This is because the `JSON` type is semi-structured and stored as a tuple under the hood. If there is not a row with the given JSON property, then the tuple element will not exist.
 
-In order to optionally read a tuple element, you need to use `tupleElement`, like this:
+In order to optionally read a tuple element, you need to use `tupleElement`, like this (where `''` is the fallback value):
 
 ```
-SELECT tupleElement(properties, 'abc', NULL) FROM events
+SELECT tupleElement(properties, 'abc', '') FROM events
 ```
