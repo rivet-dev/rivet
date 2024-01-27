@@ -69,9 +69,12 @@ impl Ctx {
 async fn matchmaker_find() {
 	let ctx = Ctx::init().await;
 
+	let region_res = op!([ctx] faker_region {}).await.unwrap();
+	let region = region_res.region.unwrap();
+
 	ctx.http_client
 		.matchmaker()
-		.region(util::env::region())
+		.region(&region.name_id)
 		.send()
 		.await
 		.unwrap();

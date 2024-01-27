@@ -49,7 +49,7 @@ pub async fn status(
 	let token = unwrap_ref!(token_res.token).token.clone();
 
 	tracing::info!("finding lobby");
-	let origin = format!("https://test-game.{domain_cdn}/");
+	let origin = format!("https://sandbox.{domain_cdn}/");
 	client
 		.find_lobby()
 		.origin(origin)

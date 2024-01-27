@@ -44,3 +44,4 @@ rivet-status = { path = "../../../lib/smithy-output/api-status/rust" }
 urlencoding = "2.1.0"
 util-kv = { package = "rivet-util-kv", path = "../../pkg/kv/util" }
 uuid = { version = "1", features = ["v4"] }
+faker-region = { path = "../../pkg/faker/ops/region" }

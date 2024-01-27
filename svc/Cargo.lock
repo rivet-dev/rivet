@@ -834,6 +834,7 @@ dependencies = [
  "async_once",
  "chirp-client",
  "chrono",
+ "faker-region",
  "futures-util",
  "http",
  "hyper",
@@ -6727,6 +6728,8 @@ dependencies = [
  "lazy_static",
  "serde",
  "serde_json",
+ "thiserror",
+ "uuid",
 ]
 
 [[package]]
