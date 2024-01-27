@@ -572,6 +572,22 @@ impl ProjectContextData {
 		self.domain_main().map(|x| format!("api.{x}"))
 	}
 
+	/// Host used for building links to the API endpoint.
+	pub fn host_api(&self) -> String {
+		if let Some(domain_main_api) = self.domain_main_api() {
+			domain_main_api
+		} else if let config::ns::ClusterKind::SingleNode {
+			public_ip,
+			api_http_port,
+			..
+		} = &self.ns().cluster.kind
+		{
+			format!("{public_ip}:{api_http_port}")
+		} else {
+			unreachable!()
+		}
+	}
+
 	/// Origin used for building links to the API endpoint.
 	pub fn origin_api(&self) -> String {
 		if let Some(domain_main_api) = self.domain_main_api() {

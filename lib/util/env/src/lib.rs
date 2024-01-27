@@ -26,6 +26,7 @@ lazy_static::lazy_static! {
 		.ok()
 		.map(|s| s == "1")
 		.unwrap_or_default();
+	static ref HOST_API: Option<String> = std::env::var("RIVET_HOST_API").ok();
 	static ref ORIGIN_API: Option<String> = std::env::var("RIVET_ORIGIN_API").ok();
 	static ref ORIGIN_HUB: Option<String> = std::env::var("RIVET_ORIGIN_HUB").ok();
 	static ref DNS_PROVIDER: Option<String> = std::env::var("RIVET_DNS_PROVIDER").ok();
@@ -109,8 +110,15 @@ pub fn support_deprecated_subdomains() -> bool {
 	*SUPPORT_DEPRECATED_SUBDOMAINS
 }
 
-///
-/// The base domain for the hub.
+/// The host for the API.
+pub fn host_api() -> &'static str {
+	match &*HOST_API {
+		Some(x) => x.as_str(),
+		None => panic!("{}", EnvVarError::Missing("RIVET_HOST_API".to_string())),
+	}
+}
+
+/// The base domain for the API.
 pub fn origin_api() -> &'static str {
 	match &*ORIGIN_API {
 		Some(x) => x.as_str(),
@@ -180,7 +188,10 @@ pub mod cloudflare {
 	pub fn auth_token() -> &'static str {
 		match &*CLOUDFLARE_AUTH_TOKEN {
 			Some(x) => x.as_str(),
-			None => panic!("{}", EnvVarError::Missing("CLOUDFLARE_AUTH_TOKEN".to_string())),
+			None => panic!(
+				"{}",
+				EnvVarError::Missing("CLOUDFLARE_AUTH_TOKEN".to_string())
+			),
 		}
 	}
 
@@ -224,9 +235,7 @@ pub async fn read_secret(key: &[impl AsRef<str>]) -> Result<String, EnvVarError>
 	var(secret_env_var_key(key))
 }
 
-pub async fn read_secret_opt(
-	key: &[impl AsRef<str>],
-) -> Result<Option<String>, EnvVarError> {
+pub async fn read_secret_opt(key: &[impl AsRef<str>]) -> Result<Option<String>, EnvVarError> {
 	let env_var = read_secret(key).await;
 
 	match env_var {
@@ -248,7 +257,7 @@ pub fn secret_env_var_key(key: &[impl AsRef<str>]) -> String {
 
 pub fn var(name: impl AsRef<str>) -> Result<String, EnvVarError> {
 	let env_var = std::env::var(name.as_ref());
-	
+
 	match env_var {
 		Ok(v) => Ok(v),
 		Err(var_error) => match var_error {

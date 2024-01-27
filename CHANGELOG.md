@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [24.1.1] - Unreleased
 
+### Added
+
+-   **Infra** Added Better Uptime monitor
+
+### Changed
+
+-   **api-status** More comprehensive status check that both creates a lobby & connects to it
+
 ### Fixed
 
 -   **Bolt** Prompt prod won't prompt if does not have user control

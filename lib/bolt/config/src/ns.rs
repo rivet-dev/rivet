@@ -47,6 +47,8 @@ pub struct Namespace {
 	pub rivet: Rivet,
 	#[serde(default)]
 	pub bolt: Bolt,
+	#[serde(default)]
+	pub better_uptime: Option<BetterUptime>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -707,4 +709,22 @@ fn default_minio_port() -> u16 {
 
 fn default_tunnel_port() -> u16 {
 	5000
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, Default)]
+#[serde(deny_unknown_fields)]
+pub struct BetterUptime {
+	/// The name of your company. This will be displayed on your status page
+	/// in the top left. This is required by Better Uptime.
+	pub company_name: String,
+	/// The URL of your company. This will be used on the status page to link
+	/// to your company's website. This is required by Better Uptime.
+	pub company_url: String,
+	/// The subdomain is the part of the public URL of your status page uses.
+	///
+	/// Eg. <company_subdomain>.betteruptime.com.
+	///
+	/// It needs to be unique across all of Better Uptime. This is required
+	/// by Better Uptime.
+	pub company_subdomain: String,
 }

@@ -797,6 +797,7 @@ impl ServiceContextData {
 		{
 			env.push(("RIVET_SUPPORT_DEPRECATED_SUBDOMAINS".into(), "1".into()));
 		}
+		env.push(("RIVET_HOST_API".into(), project_ctx.host_api()));
 		env.push(("RIVET_ORIGIN_API".into(), project_ctx.origin_api()));
 		env.push(("RIVET_ORIGIN_HUB".into(), project_ctx.origin_hub()));
 

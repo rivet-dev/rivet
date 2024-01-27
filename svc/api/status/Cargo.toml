@@ -35,6 +35,8 @@ tracing = "0.1"
 tracing-subscriber = { version = "0.3", default-features = false, features = ["fmt", "json", "ansi"] }
 url = "2.2.2"
 uuid = { version = "1", features = ["v4"] }
+game-resolve-name-id = { path = "../../pkg/game/ops/resolve-name-id" }
+game-namespace-resolve-name-id = { path = "../../pkg/game/ops/namespace-resolve-name-id" }
 
 token-create = { path = "../../pkg/token/ops/create" }
 

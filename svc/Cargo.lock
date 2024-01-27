@@ -836,6 +836,8 @@ dependencies = [
  "chrono",
  "faker-region",
  "futures-util",
+ "game-namespace-resolve-name-id",
+ "game-resolve-name-id",
  "http",
  "hyper",
  "lazy_static",

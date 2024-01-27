@@ -1,7 +1,7 @@
 use anyhow::{Context, Result};
 use indoc::{formatdoc, indoc};
 use serde_json::json;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use tokio::fs;
 
 use crate::{
@@ -500,6 +500,68 @@ async fn vars(ctx: &ProjectContext) {
 			json!(ctx.default_s3_provider().unwrap().0.as_str()),
 		);
 		vars.insert("s3_providers".into(), s3_providers(ctx).await.unwrap());
+	}
+
+	// Better Uptime
+	if let Some(better_uptime) = &config.better_uptime {
+		// Make sure DNS is enabled
+		if config.dns.is_none() {
+			panic!("Better Uptime requires DNS to be enabled, since it uses subdomains to monitor services");
+		}
+
+		// Make sure there is at least one pool
+		if config.pools.is_empty() {
+			panic!("Better Uptime requires at least one pool, otherwise it will not be able to monitor the service");
+		}
+
+		// Load all the regions of pools
+		let mut regions = config
+			.pools
+			.iter()
+			.filter_map(|pool| match config.regions.get(&pool.region) {
+				Some(region) => Some((pool.region.clone(), region.provider_region.clone())),
+				None => None,
+			})
+			.collect::<HashSet<_>>()
+			.into_iter()
+			.collect::<Vec<_>>();
+		regions.sort();
+
+		// Create monitors
+		let mm_monitors = regions
+			.iter()
+			.map(|(region, _)| {
+				json!({
+					"id": region,
+					"url": format!("{}/status/matchmaker?region={}", ctx.origin_api(), region),
+					"public_name": region,
+				})
+			})
+			.collect::<Vec<_>>();
+
+		vars.insert(
+			"better_uptime_groups".into(),
+			json!([
+				{
+					"id": "mm",
+					"name": "Matchmaker",
+					"monitors": mm_monitors,
+				},
+				{
+					"id": "cdn",
+					"name": "CDN",
+					"monitors": [
+						{
+							"id": "sandbox",
+							"url": format!("https://sandbox.{}", ctx.domain_cdn().unwrap()),
+							"public_name": "CDN"
+						}
+					]
+				},
+			]),
+		);
+
+		vars.insert("better_uptime".into(), json!(better_uptime.to_owned()));
 	}
 
 	// Media presets
