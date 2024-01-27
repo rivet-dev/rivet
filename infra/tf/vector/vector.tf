@@ -97,7 +97,8 @@ resource "helm_release" "vector" {
 					auth = {
 						strategy = "basic"
 						user = "vector"
-						password = module.secrets.values["clickhouse/users/vector/password"]
+						# Escape values for Vector
+						password = replace(module.secrets.values["clickhouse/users/vector/password"], "$", "$$")
 					}
 					tls = local.clickhouse_k8s ? {
 						ca_file = "/usr/local/share/ca-certificates/clickhouse-ca.crt"
