@@ -127,8 +127,8 @@ resource "helm_release" "traefik_tunnel" {
 
 		resources = var.limit_resources ? {
 			limits = {
-				memory = "${local.service_traefik.resources.memory}Mi"
-				cpu = "${local.service_traefik.resources.cpu}m"
+				memory = "${local.service_traefik_tunnel.resources.memory}Mi"
+				cpu = "${local.service_traefik_tunnel.resources.cpu}m"
 			}
 		} : null
 
