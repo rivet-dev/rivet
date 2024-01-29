@@ -37,6 +37,7 @@ gen/k8s/
 # Rust
 lib/**/Cargo.lock
 !lib/bolt/Cargo.lock
+!lib/job-runner/Cargo.lock
 # Allows symlinking target instead of being a directory
 **/target
 **/target/
