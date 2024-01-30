@@ -899,27 +899,39 @@ fn build_ingress_router(
 			}));
 		}
 
-		// TODO: Add back
 		// In flight
-		// {
-		// 	let mw_name = format!("{}-{i}-inflight", svc_ctx.name());
-		// 	middlewares.push(json!({
-		// 		"apiVersion": "traefik.io/v1alpha1",
-		// 		"kind": "Middleware",
-		// 		"metadata": {
-		// 			"name": mw_name,
-		// 			"namespace": "rivet-service"
-		// 		},
-		// 		"spec": {
-		// 			"inFlightReq": {
-		// 				"amount": 64,
-		// 				"sourceCriterion": {
-		// 					"requestHeaderName": "cf-connecting-ip"
-		// 				}
-		// 			}
-		// 		}
-		// 	}));
-		// }
+		{
+			let ip_header = if let Some(provider) = &project_ctx
+				.ns()
+				.dns
+				.as_ref()
+				.and_then(|dns| dns.provider.as_ref())
+			{
+				match provider {
+					config::ns::DnsProvider::Cloudflare { .. } => "cf-connecting-ip",
+				}
+			} else {
+				"x-forwarded-for"
+			};
+
+			let mw_name = format!("{}-{i}-inflight", svc_ctx.name());
+			middlewares.push(json!({
+				"apiVersion": "traefik.io/v1alpha1",
+				"kind": "Middleware",
+				"metadata": {
+					"name": mw_name,
+					"namespace": "rivet-service"
+				},
+				"spec": {
+					"inFlightReq": {
+						"amount": 64,
+						"sourceCriterion": {
+							"requestHeaderName": ip_header,
+						}
+					}
+				}
+			}));
+		}
 
 		let ingress_middlewares = middlewares
 			.iter()

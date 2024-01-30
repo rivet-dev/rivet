@@ -19,9 +19,13 @@ These are the timeouts that our API servers are restricted to:
     -   **Behavior** Connection drop
 -   AWS NLB: 350 seconds ([source](https://docs.aws.amazon.com/elasticloadbalancing/latest/network/network-load-balancers.html#connection-idle-timeout))
     -   **Behavior** Connection drop
--   Traefik: 60s ([source](https://github.com/rivet-gg/rivet/blob/c63067ce6e81f97b435e424e576fbd922b14f748/infra/tf/k8s_infra/traefik.tf#L65))
+-   Traefik: 60s, 120s ([source](https://github.com/rivet-gg/rivet/blob/c63067ce6e81f97b435e424e576fbd922b14f748/infra/tf/k8s_infra/traefik.tf#L65))
     -   **Behavior** _Unknown_
     -   Unlike the other timeouts, this is configurable by us
+    -   60s timeout for active requests before traefik stops
+    -   120s timeout for reading the body and writing the response
+-   ATS (Through Traefik): 15s ([source](https://github.com/rivet-gg/rivet/blob/01-26-Add_timeouts_max_in_flight_compression_to_API_and_CDN/infra/tf/k8s_infra/traffic_server.tf#L313))
+    -   **Behavior** _Unknown_
 
 ## Rivet API Timeouts
 

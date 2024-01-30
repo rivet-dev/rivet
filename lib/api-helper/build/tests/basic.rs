@@ -257,30 +257,6 @@ pub async fn responses() {
 	let shared_client = chirp_client::SharedClient::from_env(pools.clone()).expect("create client");
 	let cache = rivet_cache::CacheInner::from_env(pools.clone()).expect("create cache");
 
-	// Test ray id header
-	{
-		let ray_id = Uuid::new_v4();
-		let mut res = handle(
-			shared_client.clone(),
-			cache.clone(),
-			ray_id,
-			Request::builder()
-				.method("GET")
-				.uri("/empty")
-				.body(Body::from(""))
-				.unwrap(),
-		)
-		.await
-		.unwrap();
-
-		// Normally this code is run in the `api_helper::start` function
-		res.headers_mut()
-			.insert("rvt-ray-id", ray_id.to_string().parse().unwrap());
-
-		assert_eq!(res.status(), http::StatusCode::OK, "request failed");
-		res.headers().get("rvt-ray-id").expect("no ray id header");
-	}
-
 	// Invalid method
 	{
 		let res = handle(
@@ -398,25 +374,21 @@ async fn route(
 			"empty": {
 				GET: test_endpoint::empty(
 					opt_auth: true,
-					not_using_cloudflare: true,
 				),
 			},
 			"unauthorized": {
 				GET: test_endpoint::unauthorized(
 					opt_auth: true,
-					not_using_cloudflare: true,
 				),
 			},
 			"forbidden": {
 				GET: test_endpoint::forbidden(
 					opt_auth: true,
-					not_using_cloudflare: true,
 				),
 			},
 			"bad_request": {
 				GET: test_endpoint::bad_request(
 					opt_auth: true,
-					not_using_cloudflare: true,
 				),
 			},
 		},

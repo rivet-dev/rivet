@@ -66,9 +66,13 @@ resource "helm_release" "traefik" {
 		additionalArguments = [
 			"--providers.http.endpoint=http://rivet-api-route.rivet-service.svc.cluster.local/traefik/config/core?token=${module.traefik_secrets.values["rivet/api_route/token"]}",
 			"--providers.http.pollInterval=2.5s",
-			# See docs/infrastructure/API_TIMEOUTS.md
+			# See docs/infrastructure/TIMEOUTS.md
 			"--entryPoints.web.transport.lifeCycle.graceTimeOut=60s",
 			"--entryPoints.websecure.transport.lifeCycle.graceTimeOut=60s",
+			"--entryPoints.web.transport.respondingTimeouts.readTimeout=120s",
+			"--entryPoints.websecure.transport.respondingTimeouts.readTimeout=120s",
+			"--entryPoints.web.transport.respondingTimeouts.writeTimeout=120s",
+			"--entryPoints.websecure.transport.respondingTimeouts.writeTimeout=120s",
 		]
 
 		logs = {

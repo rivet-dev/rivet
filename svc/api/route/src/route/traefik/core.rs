@@ -81,30 +81,17 @@ pub async fn build_cdn(ctx: &Ctx<Auth>) -> GlobalResult<traefik::TraefikConfigRe
 	// Many of these are the same as the `cdn` middleware chain in the Traefik
 	// file configuration.
 	config.http.middlewares.insert(
-		"cdn-rate-limit".to_owned(),
-		traefik::TraefikMiddlewareHttp::RateLimit {
-			average: 2048,
-			period: "5m".into(),
-			burst: 256,
-			source_criterion: traefik::InFlightReqSourceCriterion::IpStrategy(
-				traefik::IpStrategy {
-					depth: 0,
-					exclude_ips: None,
-				},
-			),
-		},
-	);
-	config.http.middlewares.insert(
 		"cdn-in-flight".to_owned(),
 		traefik::TraefikMiddlewareHttp::InFlightReq {
 			// This number needs to be high to allow for parallel requests
 			amount: 128,
-			source_criterion: traefik::InFlightReqSourceCriterion::IpStrategy(
-				traefik::IpStrategy {
-					depth: 0,
-					exclude_ips: None,
+			source_criterion: traefik::InFlightReqSourceCriterion::RequestHeaderName {
+				request_header_name: if util::env::dns_provider() == Some("cloudflare") {
+					"cf-connecting-ip".to_string()
+				} else {
+					"x-forwarded-for".to_string()
 				},
-			),
+			},
 		},
 	);
 	config.http.middlewares.insert(
@@ -257,11 +244,9 @@ fn register_namespace(
 	let rewrite_middleware_key = format!("ns-rewrite:{}", ns_id);
 	let auth_middleware_key = format!("ns-auth:{}", ns_id);
 	let router_middlewares_base = vec![
-		// TODO: Add back
-		// "cdn-rate-limit".into(),
-		// "cdn-in-flight".into(),
+		"cdn-in-flight".into(),
 		"cdn-retry".into(),
-		// "cdn-compress".into(),
+		"cdn-compress".into(),
 		rewrite_middleware_key.clone(),
 		auth_middleware_key.clone(),
 	];

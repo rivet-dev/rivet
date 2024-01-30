@@ -296,6 +296,26 @@ resource "kubectl_manifest" "traffic_server_traefik_service" {
 	})
 }
 
+resource "kubectl_manifest" "traffic_server_transport" {
+	depends_on = [helm_release.traefik]
+
+	yaml_body = yamlencode({
+		apiVersion = "traefik.io/v1alpha1"
+		kind = "ServersTransport"
+
+		metadata = {
+			name = "traffic-server-transport"
+			namespace = kubernetes_namespace.traffic_server.metadata.0.name
+		}
+
+		spec = {
+			forwardingTimeouts = {
+				dialTimeout = "15s"
+			}
+		}
+	})
+}
+
 resource "kubectl_manifest" "traffic_server_vpa" {
 	count = var.limit_resources ? 1 : 0
 	depends_on = [helm_release.traefik, helm_release.vpa]

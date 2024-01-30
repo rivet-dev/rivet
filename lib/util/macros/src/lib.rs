@@ -10,7 +10,7 @@ use syn::{braced, bracketed, Expr, Ident, Result, Token};
 
 /// Represented in seconds.
 ///
-/// See docs/infrastructure/API_TIMEOUTS.md for reasoning.
+/// See docs/infrastructure/TIMEOUTS.md for reasoning.
 const DEFAULT_TIMEOUT: u64 = 40 * 1000;
 
 mod kw {

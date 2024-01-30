@@ -28,7 +28,6 @@ const ENDPOINT_ARGUMENTS: &[&str] = &[
 	"raw_remote_addr",
 	"header",
 	"opt_auth",
-	"not_using_cloudflare",
 	"internal_endpoint",
 	"query",
 	"rate_limit",
@@ -796,20 +795,6 @@ impl EndpointFunction {
 			quote! { false }
 		};
 
-		// TODO: Combine not_using_cloudflare and internal_endpoint in to an enum
-		// If this endpoint is not proxied behind Cloudflare
-		let not_using_cloudflare = if let Some(not_using_cloudflare) = self
-			.args
-			.iter()
-			.find(|arg| arg.label == "not_using_cloudflare")
-		{
-			let value = not_using_cloudflare.value.expect_expr()?;
-
-			quote! { #value }
-		} else {
-			quote! { false }
-		};
-
 		// If this endpoint is accessed directly from other services
 		let internal_endpoint = if let Some(internal_endpoint) = self
 			.args
@@ -904,7 +889,6 @@ impl EndpointFunction {
 					&request,
 					ray_id,
 					#opt_auth,
-					#not_using_cloudflare,
 					#internal_endpoint,
 					#rate_limit,
 				).await?;
