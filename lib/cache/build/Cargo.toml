@@ -2,7 +2,7 @@
 name = "rivet-cache"
 version = "0.1.0"
 authors = ["Rivet Gaming, LLC <developer@rivet.gg>"]
-edition = "2018"
+edition = "2021"
 license = "Apache-2.0"
 
 [dependencies]
@@ -23,11 +23,7 @@ uuid = { version = "1", features = ["v4"] }
 [dependencies.redis]
 version = "0.23"
 default-features = false
-features = [
-	"aio",
-	"tokio-comp",
-	"tokio-native-tls-comp",
-]
+features = ["aio", "tokio-comp", "tokio-native-tls-comp"]
 
 [dev-dependencies]
 rand = "0.8"

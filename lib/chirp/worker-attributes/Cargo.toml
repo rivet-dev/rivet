@@ -2,7 +2,7 @@
 name = "chirp-worker-attributes"
 version = "0.1.0"
 authors = ["Rivet Gaming, LLC <developer@rivet.gg>"]
-edition = "2018"
+edition = "2021"
 license = "Apache-2.0"
 description = "Server manager for running a Chirp worker."
 
@@ -19,6 +19,4 @@ prost = "0.10"
 
 [dependencies.syn]
 version = "2.0"
-features = [
-	"full",
-]
+features = ["full"]

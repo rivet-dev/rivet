@@ -2,7 +2,7 @@
 name = "chirp-worker"
 version = "0.1.5"
 authors = ["Rivet Gaming, LLC <developer@rivet.gg>"]
-edition = "2018"
+edition = "2021"
 license = "Apache-2.0"
 description = "Server manager for running a Chirp worker."
 
@@ -35,7 +35,11 @@ thiserror = "1.0"
 tokio = { version = "1.29", features = ["full", "tracing"] }
 tracing = "0.1"
 types = { path = "../../types/core" }
-tracing-subscriber = { version = "0.3", optional = true, default-features = false, features = ["fmt", "json", "ansi"] }  # Used with attribute
+tracing-subscriber = { version = "0.3", optional = true, default-features = false, features = [
+	"fmt",
+	"json",
+	"ansi",
+] } # Used with attribute
 
 [dependencies.uuid]
 version = "1.1"
@@ -56,4 +60,3 @@ features = [
 [dev-dependencies]
 testcontainers = "0.12"
 rivet-test-images = { path = "../../test-images" }
-

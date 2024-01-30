@@ -1,7 +1,7 @@
 [package]
 name = "user-search-user-gc"
 version = "0.0.1"
-edition = "2018"
+edition = "2021"
 authors = ["Rivet Gaming, LLC <developer@rivet.gg>"]
 license = "Apache-2.0"
 
@@ -16,7 +16,11 @@ rivet-connection = { path = "../../../../../lib/connection" }
 rivet-runtime = { path = "../../../../../lib/runtime" }
 tokio = { version = "1.29", features = ["full"] }
 tracing = "0.1"
-tracing-subscriber = { version = "0.3", default-features = false, features = ["fmt", "json", "ansi"] }
+tracing-subscriber = { version = "0.3", default-features = false, features = [
+    "fmt",
+    "json",
+    "ansi",
+] }
 
 user-identity-get = { path = "../../../user-identity/ops/get" }
 user-follow-count = { path = "../../../user-follow/ops/count" }

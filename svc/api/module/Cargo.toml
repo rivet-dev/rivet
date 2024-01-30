@@ -1,7 +1,7 @@
 [package]
 name = "api-module"
 version = "0.0.1"
-edition = "2018"
+edition = "2021"
 authors = ["Rivet Gaming, LLC <developer@rivet.gg>"]
 license = "Apache-2.0"
 
@@ -28,7 +28,11 @@ serde_json = "1.0"
 thiserror = "1.0"
 tokio = { version = "1.29" }
 tracing = "0.1"
-tracing-subscriber = { version = "0.3", default-features = false, features = ["fmt", "json", "ansi"] }
+tracing-subscriber = { version = "0.3", default-features = false, features = [
+    "fmt",
+    "json",
+    "ansi",
+] }
 url = "2.2.2"
 urlencoding = "2.1.0"
 uuid = { version = "1", features = ["v4"] }
@@ -61,4 +65,3 @@ faker-region = { path = "../../pkg/faker/ops/region" }
 region-get = { path = "../../pkg/region/ops/get" }
 token-create = { path = "../../pkg/token/ops/create" }
 cloud-namespace-token-public-create = { path = "../../pkg/cloud/ops/namespace-token-public-create" }
-

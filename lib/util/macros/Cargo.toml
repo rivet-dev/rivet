@@ -2,7 +2,7 @@
 name = "rivet-util-macros"
 version = "0.1.0"
 authors = ["Rivet Gaming, LLC <developer@rivet.gg>"]
-edition = "2018"
+edition = "2021"
 license = "Apache-2.0"
 
 [lib]
@@ -14,7 +14,4 @@ proc-macro2 = "1.0"
 
 [dependencies.syn]
 version = "1.0"
-features = [
-	"full",
-	"extra-traits",
-]
+features = ["full", "extra-traits"]

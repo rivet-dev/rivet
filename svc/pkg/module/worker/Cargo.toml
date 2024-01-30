@@ -1,7 +1,7 @@
 [package]
 name = "module-worker"
 version = "0.0.1"
-edition = "2018"
+edition = "2021"
 authors = ["Rivet Gaming, LLC <developer@rivet.gg>"]
 license = "Apache-2.0"
 
@@ -32,4 +32,3 @@ faker-game = { path = "../../faker/ops/game" }
 faker-game-version = { path = "../../faker/ops/game-version" }
 upload-get = { path = "../../upload/ops/get" }
 upload-prepare = { path = "../../upload/ops/prepare" }
-

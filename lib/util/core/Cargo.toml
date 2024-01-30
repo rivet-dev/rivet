@@ -2,7 +2,7 @@
 name = "rivet-util"
 version = "0.1.0"
 authors = ["Rivet Gaming, LLC <developer@rivet.gg>"]
-edition = "2018"
+edition = "2021"
 license = "Apache-2.0"
 
 [features]
@@ -24,10 +24,16 @@ rivet-util-macros = { path = "../macros" }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 thiserror = "1.0"
-tokio = { version = "1.29", default-features = false, features = ["time", "sync", "fs", "parking_lot", "test-util", "macros"] }
+tokio = { version = "1.29", default-features = false, features = [
+    "time",
+    "sync",
+    "fs",
+    "parking_lot",
+    "test-util",
+    "macros",
+] }
 types = { path = "../../types/core" }
 uuid = { version = "1", features = ["v4", "serde"] }
 
 aws-smithy-client = "^0.41.0"
 aws-smithy-types = "^0.41.0"
-

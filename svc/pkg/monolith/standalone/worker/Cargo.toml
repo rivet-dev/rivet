@@ -1,7 +1,7 @@
 [package]
 name = "monolith-worker"
 version = "0.0.1"
-edition = "2018"
+edition = "2021"
 authors = ["Rivet Gaming, LLC <developer@rivet.gg>"]
 license = "Apache-2.0"
 
@@ -14,7 +14,11 @@ rivet-operation = { path = "../../../../../lib/operation/core" }
 rivet-runtime = { path = "../../../../../lib/runtime" }
 tokio = { version = "1.29", features = ["full"] }
 tracing = "0.1"
-tracing-subscriber = { version = "0.3", default-features = false, features = ["fmt", "json", "ansi"] }
+tracing-subscriber = { version = "0.3", default-features = false, features = [
+    "fmt",
+    "json",
+    "ansi",
+] }
 
 cdn-worker = { path = "../../../cdn/worker" }
 cf-custom-hostname-worker = { path = "../../../cf-custom-hostname/worker" }
@@ -35,4 +39,3 @@ user-follow-worker = { path = "../../../user-follow/worker" }
 user-presence-worker = { path = "../../../user-presence/worker" }
 user-report-worker = { path = "../../../user-report/worker" }
 user-worker = { path = "../../../user/worker" }
-

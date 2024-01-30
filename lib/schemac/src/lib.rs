@@ -344,7 +344,7 @@ pub fn compile(opts: CompileOpts) -> io::Result<String> {
 	// // Format code with rustfmt
 	// let mut cmd = Command::new("rustfmt")
 	//	 .arg("+stable")
-	//	 .arg("--edition=2018")
+	//	 .arg("--edition=2021")
 	//	 .stdin(Stdio::piped())
 	//	 .stdout(Stdio::piped())
 	//	 .spawn()?;

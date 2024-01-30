@@ -1,7 +1,7 @@
 [package]
 name = "telemetry-beacon"
 version = "0.0.38"
-edition = "2018"
+edition = "2021"
 authors = ["Rivet Gaming, LLC <developer@rivet.gg>"]
 license = "Apache-2.0"
 
@@ -18,7 +18,11 @@ rivet-pools = { path = "../../../../../lib/pools" }
 rivet-runtime = { path = "../../../../../lib/runtime" }
 tokio = { version = "1.29", features = ["full"] }
 tracing = "0.1"
-tracing-subscriber = { version = "0.3", default-features = false, features = ["fmt", "json", "ansi"] }
+tracing-subscriber = { version = "0.3", default-features = false, features = [
+    "fmt",
+    "json",
+    "ansi",
+] }
 
 cloud-version-get = { path = "../../../cloud/ops/version-get" }
 game-get = { path = "../../../game/ops/get" }
