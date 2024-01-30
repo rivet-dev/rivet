@@ -12,6 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 -   **Infra** Added Better Uptime monitor
 -   **Bolt** Add Docker `RUN` cache to distributed deploys to improve deploy speeds
 -   **Infra** Prometheus VPA
+-   **Infra** Apache Traffic Server VPA
 
 ### Changed
 

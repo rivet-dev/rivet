@@ -296,3 +296,43 @@ resource "kubectl_manifest" "traffic_server_traefik_service" {
 	})
 }
 
+resource "kubectl_manifest" "traffic_server_vpa" {
+	count = var.limit_resources ? 1 : 0
+	depends_on = [helm_release.traefik, helm_release.vpa]
+
+	yaml_body = yamlencode({
+		apiVersion = "autoscaling.k8s.io/v1"
+		kind = "VerticalPodAutoscaler"
+
+		metadata = {
+			name = "traffic-server-vpa"
+			namespace = kubernetes_namespace.traffic_server.metadata.0.name
+		}
+
+		spec = {
+			targetRef = {
+				apiVersion = "apps/v1"
+				kind = "StatefulSet"
+				name = kubernetes_stateful_set.traffic_server.metadata.0.name
+			}
+			updatePolicy = {
+				updateMode = "Auto"
+			}
+			resourcePolicy = {
+				containerPolicies = [
+					{
+						containerName = kubernetes_stateful_set.traffic_server.spec.0.template.0.spec.0.container.0.name
+						minAllowed = {
+							cpu	= "500m"
+							memory = "500Mi"
+						}
+						maxAllowed = {
+							cpu	= "8"
+							memory = "16Gi"
+						}
+					}
+				]
+			}
+		}
+	})
+}
