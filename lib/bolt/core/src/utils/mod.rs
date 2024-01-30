@@ -133,6 +133,9 @@ fn deep_modified_ts_inner(path: &Path, max_modified_ts: &mut u128) -> Result<()>
 	Ok(())
 }
 
+/// The `ringadingding` function is used to generate a bell sound in the
+/// terminal. This function only works on Unix-based systems. It does this by
+/// printing the ASCII bell character (`\x07`) to the standard output.
 pub fn ringadingding() {
 	#[cfg(unix)]
 	{

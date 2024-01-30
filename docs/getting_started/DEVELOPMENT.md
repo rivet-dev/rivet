@@ -17,7 +17,6 @@
 >
 > -   https://github.com/rivet-gg/rivet/issues/153
 > -   https://github.com/rivet-gg/rivet/issues/155
-> -   https://github.com/rivet-gg/rivet/issues/157
 > -   https://github.com/rivet-gg/rivet/issues/154
 > -   https://github.com/rivet-gg/rivet/issues/156
 > -   https://github.com/rivet-gg/rivet/issues/157
@@ -29,8 +28,6 @@
 -   Debian 11 (other Linux distros untested)
     -   Accessible from public IP
     -   Recommended: [Firewalls](/docs/getting_started/DEVELOPMENT_FIREWALLS.md)
--   [Cloudflare website](https://developers.cloudflare.com/fundamentals/get-started/setup/add-site/) (free)
--   [Linode account](https://login.linode.com/signup) (more providers coming soon)
 
 ## Step 1: Install dependencies
 
