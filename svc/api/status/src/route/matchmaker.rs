@@ -1,3 +1,5 @@
+use std::time::Duration;
+
 use api_helper::{anchor::WatchIndexQuery, ctx::Ctx};
 use proto::backend::pkg::*;
 use rivet_api::{
@@ -6,6 +8,7 @@ use rivet_api::{
 };
 use rivet_operation::prelude::*;
 use serde::{Deserialize, Serialize};
+use tokio_tungstenite::connect_async;
 
 use crate::auth::Auth;
 
@@ -21,8 +24,6 @@ pub async fn status(
 	_watch_index: WatchIndexQuery,
 	query: StatusQuery,
 ) -> GlobalResult<serde_json::Value> {
-	let domain_cdn = unwrap!(util::env::domain_cdn());
-
 	// Find namespace ID
 	let game_res = op!([ctx] game_resolve_name_id {
 		name_ids: vec!["sandbox".into()],
@@ -143,10 +144,23 @@ pub async fn status(
 		}
 	};
 
-	// Make HTTP request through the socket
 	let port_default = unwrap!(res.lobby.ports.get("default"));
-	let port_host = unwrap_ref!(port_default.host);
-	let res = reqwest::get(format!("https://{port_host}/health")).await;
+	let host = unwrap_ref!(port_default.host);
+	let token = &res.player.token;
+
+	// Test HTTP connectivity. This gives a verbose error if the LB returns a non-200 response.
+	test_http(host).await?;
+
+	// Test WebSocket connectivity. This will pass the player token to the server & call player
+	// connected + disconnected. This will shut down the lobby once the socket closes.
+	test_ws(host, token).await?;
+
+	Ok(serde_json::json!({}))
+}
+
+async fn test_http(host: &str) -> GlobalResult<()> {
+	let res = reqwest::get(format!("https://{host}/health")).await;
+
 	let res = match res {
 		Ok(x) => x,
 		Err(err) => {
@@ -156,15 +170,23 @@ pub async fn status(
 			)
 		}
 	};
-	let res = match res.error_for_status() {
-		Ok(x) => x,
-		Err(err) => {
-			bail_with!(
-				INTERNAL_STATUS_CHECK_FAILED,
-				error = format!("connect to lobby status: {:?}", err)
-			)
-		}
-	};
 
-	Ok(serde_json::json!({}))
+	if let Err(err) = res.error_for_status() {
+		bail_with!(
+			INTERNAL_STATUS_CHECK_FAILED,
+			error = format!("connect to lobby status: {:?}", err)
+		);
+	}
+
+	Ok(())
+}
+
+async fn test_ws(host: &str, token: &str) -> GlobalResult<()> {
+	let (mut socket, _) = connect_async(format!("wss://{host}?token={token}")).await?;
+
+	tokio::time::sleep(Duration::from_millis(500)).await;
+
+	socket.close(None).await?;
+
+	Ok(())
 }

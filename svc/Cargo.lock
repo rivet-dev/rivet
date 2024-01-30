@@ -86,7 +86,7 @@ dependencies = [
  "async_once",
  "chirp-client",
  "chrono",
- "http",
+ "http 0.2.9",
  "hyper",
  "lazy_static",
  "prost 0.10.4",
@@ -127,7 +127,7 @@ dependencies = [
  "email-verification-create",
  "faker-user",
  "headers",
- "http",
+ "http 0.2.9",
  "hyper",
  "lazy_static",
  "prost 0.10.4",
@@ -171,7 +171,7 @@ dependencies = [
  "chirp-client",
  "chrono",
  "faker-game",
- "http",
+ "http 0.2.9",
  "hyper",
  "lazy_static",
  "prost 0.10.4",
@@ -248,7 +248,7 @@ dependencies = [
  "game-version-get",
  "game-version-list",
  "game-version-validate",
- "http",
+ "http 0.2.9",
  "hyper",
  "job-log-read",
  "job-run-get",
@@ -319,7 +319,7 @@ dependencies = [
  "futures-util",
  "game-get",
  "game-resolve-namespace-id",
- "http",
+ "http 0.2.9",
  "hyper",
  "lazy_static",
  "prost 0.10.4",
@@ -376,7 +376,7 @@ dependencies = [
  "futures-util",
  "global-error",
  "headers",
- "http",
+ "http 0.2.9",
  "hyper",
  "lazy_static",
  "prost 0.10.4",
@@ -440,7 +440,7 @@ dependencies = [
  "game-user-link-get",
  "game-user-recent-session-list",
  "game-user-recommend",
- "http",
+ "http 0.2.9",
  "hyper",
  "identity-config-version-get",
  "job-run-get",
@@ -499,7 +499,7 @@ dependencies = [
  "chirp-client",
  "chrono",
  "faker-job-run",
- "http",
+ "http 0.2.9",
  "hyper",
  "job-run-get",
  "lazy_static",
@@ -544,7 +544,7 @@ dependencies = [
  "game-get",
  "game-namespace-get",
  "game-user-get",
- "http",
+ "http 0.2.9",
  "hyper",
  "kv-config-version-get",
  "kv-get",
@@ -609,7 +609,7 @@ dependencies = [
  "game-namespace-get",
  "game-namespace-resolve-url",
  "game-user-get",
- "http",
+ "http 0.2.9",
  "hyper",
  "job-run-get",
  "lazy_static",
@@ -668,7 +668,7 @@ dependencies = [
  "game-get",
  "game-namespace-get",
  "game-user-get",
- "http",
+ "http 0.2.9",
  "hyper",
  "lazy_static",
  "mm-lobby-get",
@@ -724,7 +724,7 @@ dependencies = [
  "api-status",
  "async-trait",
  "chirp-client",
- "http",
+ "http 0.2.9",
  "hyper",
  "rivet-operation",
  "tokio",
@@ -745,7 +745,7 @@ dependencies = [
  "futures-util",
  "game-get",
  "game-resolve-name-id",
- "http",
+ "http 0.2.9",
  "hyper",
  "lazy_static",
  "prost 0.10.4",
@@ -797,7 +797,7 @@ dependencies = [
  "faker-job-run",
  "faker-region",
  "game-get",
- "http",
+ "http 0.2.9",
  "hyper",
  "lazy_static",
  "prost 0.10.4",
@@ -838,7 +838,7 @@ dependencies = [
  "futures-util",
  "game-namespace-resolve-name-id",
  "game-resolve-name-id",
- "http",
+ "http 0.2.9",
  "hyper",
  "lazy_static",
  "prost 0.10.4",
@@ -861,6 +861,7 @@ dependencies = [
  "thiserror",
  "token-create",
  "tokio",
+ "tokio-tungstenite",
  "tracing",
  "tracing-subscriber",
  "url",
@@ -883,7 +884,7 @@ dependencies = [
  "base64 0.21.5",
  "bytes",
  "futures",
- "http",
+ "http 0.2.9",
  "memchr",
  "nkeys",
  "nuid",
@@ -962,7 +963,7 @@ dependencies = [
  "aws-smithy-http 0.52.0",
  "aws-smithy-types 0.52.0",
  "aws-types",
- "http",
+ "http 0.2.9",
  "regex",
  "tracing",
 ]
@@ -977,7 +978,7 @@ dependencies = [
  "aws-smithy-types 0.52.0",
  "aws-types",
  "bytes",
- "http",
+ "http 0.2.9",
  "http-body",
  "lazy_static",
  "percent-encoding",
@@ -1007,7 +1008,7 @@ dependencies = [
  "bytes",
  "bytes-utils",
  "fastrand 1.9.0",
- "http",
+ "http 0.2.9",
  "http-body",
  "tokio-stream",
  "tower",
@@ -1024,7 +1025,7 @@ dependencies = [
  "aws-smithy-eventstream",
  "aws-smithy-http 0.52.0",
  "aws-types",
- "http",
+ "http 0.2.9",
  "tracing",
 ]
 
@@ -1040,7 +1041,7 @@ dependencies = [
  "form_urlencoded",
  "hex",
  "hmac",
- "http",
+ "http 0.2.9",
  "once_cell",
  "percent-encoding",
  "regex",
@@ -1085,7 +1086,7 @@ dependencies = [
  "crc32c",
  "crc32fast",
  "hex",
- "http",
+ "http 0.2.9",
  "http-body",
  "md-5",
  "pin-project-lite",
@@ -1106,7 +1107,7 @@ dependencies = [
  "aws-smithy-types 0.41.0",
  "bytes",
  "fastrand 1.9.0",
- "http",
+ "http 0.2.9",
  "http-body",
  "hyper",
  "hyper-rustls 0.22.1",
@@ -1130,7 +1131,7 @@ dependencies = [
  "aws-smithy-types 0.52.0",
  "bytes",
  "fastrand 1.9.0",
- "http",
+ "http 0.2.9",
  "http-body",
  "hyper",
  "hyper-rustls 0.23.2",
@@ -1162,7 +1163,7 @@ dependencies = [
  "bytes",
  "bytes-utils",
  "futures-core",
- "http",
+ "http 0.2.9",
  "http-body",
  "hyper",
  "once_cell",
@@ -1184,7 +1185,7 @@ dependencies = [
  "bytes",
  "bytes-utils",
  "futures-core",
- "http",
+ "http 0.2.9",
  "http-body",
  "hyper",
  "once_cell",
@@ -1204,7 +1205,7 @@ checksum = "8017959786cce64e690214d303d062c97fcd38a68df7cb444255e534c9bbce49"
 dependencies = [
  "aws-smithy-http 0.41.0",
  "bytes",
- "http",
+ "http 0.2.9",
  "http-body",
  "pin-project",
  "tower",
@@ -1220,7 +1221,7 @@ dependencies = [
  "aws-smithy-http 0.52.0",
  "aws-smithy-types 0.52.0",
  "bytes",
- "http",
+ "http 0.2.9",
  "http-body",
  "pin-project-lite",
  "tower",
@@ -1280,7 +1281,7 @@ dependencies = [
  "aws-smithy-client 0.52.0",
  "aws-smithy-http 0.52.0",
  "aws-smithy-types 0.52.0",
- "http",
+ "http 0.2.9",
  "rustc_version",
  "tracing",
  "zeroize",
@@ -1297,7 +1298,7 @@ dependencies = [
  "bitflags 1.3.2",
  "bytes",
  "futures-util",
- "http",
+ "http 0.2.9",
  "http-body",
  "hyper",
  "itoa 1.0.9",
@@ -1323,7 +1324,7 @@ dependencies = [
  "async-trait",
  "bytes",
  "futures-util",
- "http",
+ "http 0.2.9",
  "http-body",
  "mime",
  "rustversion",
@@ -2787,7 +2788,7 @@ dependencies = [
  "chirp-client",
  "chirp-worker",
  "chrono",
- "http",
+ "http 0.2.9",
  "prost 0.10.4",
  "reqwest",
  "rivet-operation",
@@ -3090,7 +3091,7 @@ version = "0.1.0"
 dependencies = [
  "gray_matter",
  "hashbrown 0.12.3",
- "http",
+ "http 0.2.9",
  "indoc",
  "lazy_static",
  "serde",
@@ -3682,7 +3683,7 @@ name = "global-error"
 version = "0.1.5"
 dependencies = [
  "formatted-error",
- "http",
+ "http 0.2.9",
  "serde",
  "serde_json",
  "thiserror",
@@ -3730,7 +3731,7 @@ dependencies = [
  "futures-core",
  "futures-sink",
  "futures-util",
- "http",
+ "http 0.2.9",
  "indexmap 2.0.2",
  "slab",
  "tokio",
@@ -3788,7 +3789,7 @@ dependencies = [
  "base64 0.21.5",
  "bytes",
  "headers-core",
- "http",
+ "http 0.2.9",
  "httpdate",
  "mime",
  "sha1",
@@ -3800,7 +3801,7 @@ version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e7f66481bfee273957b1f20485a4ff3362987f85b2c236580d81b4eb7a326429"
 dependencies = [
- "http",
+ "http 0.2.9",
 ]
 
 [[package]]
@@ -3872,13 +3873,24 @@ dependencies = [
 ]
 
 [[package]]
+name = "http"
+version = "1.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b32afd38673a8016f7c9ae69e5af41a58f81b1d31689040f2f1959594ce194ea"
+dependencies = [
+ "bytes",
+ "fnv",
+ "itoa 1.0.9",
+]
+
+[[package]]
 name = "http-body"
 version = "0.4.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d5f38f16d184e36f2408a55281cd658ecbd3ca05cce6d6510a176eca393e26d1"
 dependencies = [
  "bytes",
- "http",
+ "http 0.2.9",
  "pin-project-lite",
 ]
 
@@ -3911,7 +3923,7 @@ dependencies = [
  "futures-core",
  "futures-util",
  "h2",
- "http",
+ "http 0.2.9",
  "http-body",
  "httparse",
  "httpdate",
@@ -3947,7 +3959,7 @@ version = "0.23.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1788965e61b367cd03a62950836d5cd41560c3577d90e40e0819373194d1661c"
 dependencies = [
- "http",
+ "http 0.2.9",
  "hyper",
  "log",
  "rustls 0.20.9",
@@ -3964,7 +3976,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ec3efd23720e2049821a693cbc7e65ea87c72f1c58ff2f9522ff332b1491e590"
 dependencies = [
  "futures-util",
- "http",
+ "http 0.2.9",
  "hyper",
  "rustls 0.21.8",
  "tokio",
@@ -5129,7 +5141,7 @@ dependencies = [
  "game-namespace-version-set",
  "game-version-get",
  "heck 0.3.3",
- "http",
+ "http 0.2.9",
  "job-run-get",
  "lazy_static",
  "maplit",
@@ -6215,7 +6227,7 @@ dependencies = [
  "futures-core",
  "futures-util",
  "h2",
- "http",
+ "http 0.2.9",
  "http-body",
  "hyper",
  "hyper-rustls 0.24.2",
@@ -6300,7 +6312,7 @@ dependencies = [
  "aws-smithy-json",
  "aws-smithy-types 0.41.0",
  "bytes",
- "http",
+ "http 0.2.9",
  "tower",
 ]
 
@@ -6349,7 +6361,7 @@ dependencies = [
  "aws-smithy-json",
  "aws-smithy-types 0.41.0",
  "bytes",
- "http",
+ "http 0.2.9",
  "tower",
 ]
 
@@ -6445,7 +6457,7 @@ dependencies = [
  "aws-smithy-json",
  "aws-smithy-types 0.41.0",
  "bytes",
- "http",
+ "http 0.2.9",
  "tower",
 ]
 
@@ -6482,7 +6494,7 @@ dependencies = [
  "aws-smithy-json",
  "aws-smithy-types 0.41.0",
  "bytes",
- "http",
+ "http 0.2.9",
  "tower",
 ]
 
@@ -6495,7 +6507,7 @@ dependencies = [
  "aws-smithy-json",
  "aws-smithy-types 0.41.0",
  "bytes",
- "http",
+ "http 0.2.9",
  "tower",
 ]
 
@@ -6517,7 +6529,7 @@ dependencies = [
  "aws-smithy-json",
  "aws-smithy-types 0.41.0",
  "bytes",
- "http",
+ "http 0.2.9",
  "tower",
 ]
 
@@ -6530,7 +6542,7 @@ dependencies = [
  "aws-smithy-json",
  "aws-smithy-types 0.41.0",
  "bytes",
- "http",
+ "http 0.2.9",
  "tower",
 ]
 
@@ -6620,7 +6632,7 @@ dependencies = [
  "aws-smithy-json",
  "aws-smithy-types 0.41.0",
  "bytes",
- "http",
+ "http 0.2.9",
  "tower",
 ]
 
@@ -6642,7 +6654,7 @@ dependencies = [
  "aws-smithy-json",
  "aws-smithy-types 0.41.0",
  "bytes",
- "http",
+ "http 0.2.9",
  "tower",
 ]
 
@@ -6668,7 +6680,7 @@ dependencies = [
  "aws-smithy-json",
  "aws-smithy-types 0.41.0",
  "bytes",
- "http",
+ "http 0.2.9",
  "tower",
 ]
 
@@ -6769,7 +6781,7 @@ dependencies = [
  "bit-vec",
  "chirp-client",
  "heck 0.3.3",
- "http",
+ "http 0.2.9",
  "ip-info",
  "mm-lobby-list-for-user-id",
  "region-get",
@@ -6951,7 +6963,7 @@ dependencies = [
  "aws-smithy-async 0.52.0",
  "aws-smithy-http 0.52.0",
  "aws-smithy-types 0.52.0",
- "http",
+ "http 0.2.9",
  "thiserror",
  "tokio",
  "tracing",
@@ -8145,6 +8157,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "tokio-tungstenite"
+version = "0.21.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c83b561d025642014097b66e6c1bb422783339e0909e4429cde4749d1990bc38"
+dependencies = [
+ "futures-util",
+ "log",
+ "tokio",
+ "tungstenite",
+]
+
+[[package]]
 name = "tokio-util"
 version = "0.6.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -8228,7 +8252,7 @@ dependencies = [
  "futures-core",
  "futures-util",
  "h2",
- "http",
+ "http 0.2.9",
  "http-body",
  "hyper",
  "hyper-timeout",
@@ -8354,6 +8378,25 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3528ecfd12c466c6f163363caf2d02a71161dd5e1cc6ae7b34207ea2d42d81ed"
 
 [[package]]
+name = "tungstenite"
+version = "0.21.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9ef1a641ea34f399a848dea702823bbecfb4c486f911735368f1f137cb8257e1"
+dependencies = [
+ "byteorder",
+ "bytes",
+ "data-encoding",
+ "http 1.0.0",
+ "httparse",
+ "log",
+ "rand",
+ "sha1",
+ "thiserror",
+ "url",
+ "utf-8",
+]
+
+[[package]]
 name = "typenum"
 version = "1.17.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -8364,7 +8407,7 @@ name = "types"
 version = "0.1.0"
 dependencies = [
  "chirp-types",
- "http",
+ "http 0.2.9",
  "prost 0.10.4",
  "prost-types 0.10.1",
  "serde",
@@ -9017,6 +9060,12 @@ dependencies = [
  "user-profile-validate",
  "user-team-list",
 ]
+
+[[package]]
+name = "utf-8"
+version = "0.7.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "09cc8ee72d2a9becf2f2febe0205bbed8fc6615b7cb429ad062dc7b7ddd036a9"
 
 [[package]]
 name = "uuid"
