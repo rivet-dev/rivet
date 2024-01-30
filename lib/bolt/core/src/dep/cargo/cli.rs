@@ -36,31 +36,22 @@ pub async fn build<'a, T: AsRef<str>>(ctx: &ProjectContext, opts: BuildOpts<'a, 
 
 	let release_flag = if opts.release { "--release" } else { "" };
 
-	let build_calls = opts
-		.build_calls
-		.iter()
-		.map(|build_call| {
-			let path = build_call.path.display();
-			let bin_flags = build_call
-				.bins
-				.iter()
-				.map(|x| format!("--bin {}", x.as_ref()))
-				.collect::<Vec<String>>()
-				.join(" ");
+	let build_calls =
+		opts.build_calls
+			.iter()
+			.map(|build_call| {
+				let path = build_call.path.display();
+				let bin_flags = build_call
+					.bins
+					.iter()
+					.map(|x| format!("--bin {}", x.as_ref()))
+					.collect::<Vec<String>>()
+					.join(" ");
 
-			// TODO: Not sure why the .cargo/config.toml isn't working with nested projects, have to hardcode
-			// the target dir
-			formatdoc!(
-				"
-				if [ $EXIT_CODE -eq 0 ]; then
-					(cd {path} && cargo build {jobs_flag} {format_flag} {release_flag} {bin_flags})
-					EXIT_CODE=$?
-				fi
-				"
-			)
-		})
-		.collect::<Vec<_>>()
-		.join("\n");
+				format!("(cd {path} && cargo build {jobs_flag} {format_flag} {release_flag} {bin_flags})")
+			})
+			.collect::<Vec<_>>()
+			.join("\n");
 
 	let sccache_env = if let Some(sccache) = &ctx.ns().rust.sccache {
 		formatdoc!(
@@ -84,11 +75,19 @@ pub async fn build<'a, T: AsRef<str>>(ctx: &ProjectContext, opts: BuildOpts<'a, 
 		String::new()
 	};
 
+	let build_script_path = ctx.gen_path().join("build_script.sh");
+	let build_script_path_relative = build_script_path
+		.strip_prefix(ctx.path())
+		.context("failed to strip prefix")?;
+
+	// TODO: Not sure why the .cargo/config.toml isn't working with nested projects, have to hardcode
+	// the target dir
 	// Generate build script
 	let build_script = formatdoc!(
 		r#"
-		# TODO: Not sure why the .cargo/config.toml isn't working with nested projects, have to hardcode
-		# the target dir
+		#!/bin/bash
+		set -euf
+
 		export CARGO_TARGET_DIR=$(readlink -f ./target)
 		# Used for Tokio Console. See https://github.com/tokio-rs/console#using-it
 		export RUSTFLAGS="--cfg tokio_unstable"
@@ -97,24 +96,28 @@ pub async fn build<'a, T: AsRef<str>>(ctx: &ProjectContext, opts: BuildOpts<'a, 
 
 		{sccache_env}
 
-		EXIT_CODE=0
-
 		{build_calls}
-
-		# Exit
-		exit $EXIT_CODE
 		"#,
 	);
+
+	// Write build script to file
+	fs::write(&build_script_path, build_script).await?;
 
 	// Execute build command
 	match &ctx.ns().cluster.kind {
 		config::ns::ClusterKind::SingleNode { .. } => {
-			let mut cmd = Command::new("sh");
+			// Make build script executable
+			let mut cmd = Command::new("chmod");
 			cmd.current_dir(ctx.path());
-			cmd.arg("-c");
-			cmd.arg(build_script);
+			cmd.arg("+x");
+			cmd.arg(build_script_path.display().to_string());
 			let status = cmd.status().await?;
+			ensure!(status.success());
 
+			// Execute
+			let mut cmd = Command::new(build_script_path.display().to_string());
+			cmd.current_dir(ctx.path());
+			let status = cmd.status().await?;
 			ensure!(status.success());
 		}
 		config::ns::ClusterKind::Distributed { .. } => {
@@ -135,26 +138,42 @@ pub async fn build<'a, T: AsRef<str>>(ctx: &ProjectContext, opts: BuildOpts<'a, 
 			let build_image_tag = {
 				let image_tag = format!("{repo}build:{source_hash}");
 				let dockerfile_path = gen_path.join(format!("Dockerfile.build"));
+
 				// TODO: Use --secret to pass sccache credentials instead of the build script.
 				fs::write(
 					&dockerfile_path,
 					formatdoc!(
 						r#"
-							FROM rust:1.72-slim
+						# syntax=docker/dockerfile:1.2
 
-							RUN apt-get update && apt-get install -y protobuf-compiler pkg-config libssl-dev g++
+						FROM rust:1.72-slim
 
-							RUN apt-get install --yes libpq-dev wget
-							RUN wget https://github.com/mozilla/sccache/releases/download/v0.2.15/sccache-v0.2.15-x86_64-unknown-linux-musl.tar.gz \
-								&& tar xzf sccache-v0.2.15-x86_64-unknown-linux-musl.tar.gz \
-								&& mv sccache-v0.2.15-x86_64-unknown-linux-musl/sccache /usr/local/bin/sccache \
-								&& chmod +x /usr/local/bin/sccache
+						RUN apt-get update && apt-get install -y protobuf-compiler pkg-config libssl-dev g++
 
+						RUN apt-get install --yes libpq-dev wget
+						RUN wget https://github.com/mozilla/sccache/releases/download/v0.2.15/sccache-v0.2.15-x86_64-unknown-linux-musl.tar.gz \
+							&& tar xzf sccache-v0.2.15-x86_64-unknown-linux-musl.tar.gz \
+							&& mv sccache-v0.2.15-x86_64-unknown-linux-musl/sccache /usr/local/bin/sccache \
+							&& chmod +x /usr/local/bin/sccache
 
-							WORKDIR /usr/rivet
-							COPY . .
-							RUN ["sh", "-c", {build_script:?}]
-							"#
+						WORKDIR /usr/rivet
+						
+						COPY . .
+						COPY {build_script_path} build_script.sh
+						
+						RUN chmod +x ./build_script.sh
+						RUN \
+							--mount=type=cache,target=/usr/rivet/target \
+							--mount=type=cache,target=/usr/rivet/oss/target \
+							sh -c ./build_script.sh
+						
+						# Copy all binaries from target directory (it is not included in the output because of cache mount)
+						RUN \
+							--mount=type=cache,target=/usr/rivet/target \
+							--mount=type=cache,target=/usr/rivet/oss/target \
+							find target/{optimization} -maxdepth 1 -type f ! -name "*.*" -exec cp {{}} /usr/bin/ \;
+						"#,
+						build_script_path = build_script_path_relative.display(),
 					),
 				)
 				.await?;
@@ -209,7 +228,7 @@ pub async fn build<'a, T: AsRef<str>>(ctx: &ProjectContext, opts: BuildOpts<'a, 
 							RUN chmod +x /usr/bin/health_check.sh /usr/bin/install_ca.sh
 
 							# Copy final binary
-							COPY --from=build /usr/rivet/target/{optimization}/{bin} /usr/bin/{bin}
+							COPY --from=build /usr/bin/{bin} /usr/bin/{bin}
 							"#,
 							svc_scripts_path = svc_scripts_path_relative.display(),
 						),

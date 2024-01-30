@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 -   **Infra** Added Better Uptime monitor
+-   **Bolt** Add Docker `RUN` cache to distributed deploys to improve deploy speeds
 
 ### Changed
 
@@ -18,6 +19,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 -   **Bolt** Prompt prod won't prompt if does not have user control
+-   **Bolt** Exclude copying bloat from `infra/tf/` to distributed Docker builds
 
 ### Security
 

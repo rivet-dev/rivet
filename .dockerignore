@@ -10,9 +10,6 @@
 **/.DS_Store
 **/symbolCache.db
 
-# Terraform
-tf/
-
 # Vagrant
 .vagrant-remote
 .vagrant-digitalocean-token
@@ -26,19 +23,19 @@ tf/
 .bolt-meta.json
 .volumes/
 Bolt.local.toml
-/secrets/
+secrets/
 
 # Rivet
-/infra/
-!/infra/misc/svc_scripts/
+infra/
+!infra/misc/svc_scripts/
+oss/infra/
+!oss/infra/misc/svc_scripts/
 
 # Rust
 **/target/
-**/pkg/
 **/*.rustfmt
 
 # JavaScript
 **/.cache/
 **/dist/
 **/node_modules/
-ptato.sh

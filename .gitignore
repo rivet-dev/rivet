@@ -29,6 +29,7 @@ Bolt.local.toml
 !/secrets/README.md
 
 # Generated code
+gen/build_script.sh
 gen/svc/
 gen/tf/
 gen/docker/

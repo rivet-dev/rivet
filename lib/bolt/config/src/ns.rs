@@ -687,10 +687,6 @@ fn default_regions() -> HashMap<String, Region> {
 		.expect("failed to parse default_regions.toml")
 }
 
-fn trueable() -> bool {
-	true
-}
-
 fn default_docker_repo() -> String {
 	"ghcr.io/rivet-gg/".to_string()
 }

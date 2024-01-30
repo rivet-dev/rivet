@@ -128,7 +128,7 @@ fn universal_region_display_name(
 		UniversalRegion::Chicago => "Chicago",
 		UniversalRegion::Paris => "Paris",
 		UniversalRegion::Seattle => "Seattle",
-		UniversalRegion::SaoPaulo => "Sao Paulo",
+		UniversalRegion::SaoPaulo => "São Paulo",
 		UniversalRegion::Stockholm => "Stockholm",
 		UniversalRegion::Chennai => "Chennai",
 		UniversalRegion::Osaka => "Osaka",
