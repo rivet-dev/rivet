@@ -35,7 +35,9 @@ pub async fn list_lobbies(
 	_watch_index: WatchIndexQuery,
 	query: ListNamespaceLobbiesQuery,
 ) -> GlobalResult<models::CloudGamesNamespacesListNamespaceLobbiesResponse> {
-	ctx.auth().check_game_read(ctx.op_ctx(), game_id).await?;
+	ctx.auth()
+		.check_game_read_or_admin(ctx.op_ctx(), game_id)
+		.await?;
 	let _game_ns = assert::namespace_for_game(&ctx, game_id, namespace_id).await?;
 
 	// Fetch lobby list
@@ -71,7 +73,9 @@ pub async fn get_lobby(
 	lobby_id: Uuid,
 	_watch_index: WatchIndexQuery,
 ) -> GlobalResult<models::CloudGamesNamespacesGetNamespaceLobbyResponse> {
-	ctx.auth().check_game_read(ctx.op_ctx(), game_id).await?;
+	ctx.auth()
+		.check_game_read_or_admin(ctx.op_ctx(), game_id)
+		.await?;
 	let _game_ns = assert::namespace_for_game(&ctx, game_id, namespace_id).await?;
 
 	let lobby = unwrap!(fetch_lobby_logs(&ctx, vec![lobby_id])

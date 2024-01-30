@@ -14,7 +14,9 @@ pub async fn matchmaker_live(
 	namespace_id: Uuid,
 	_watch_index: WatchIndexQuery,
 ) -> GlobalResult<models::CloudGamesNamespacesGetAnalyticsMatchmakerLiveResponse> {
-	ctx.auth().check_game_read(ctx.op_ctx(), game_id).await?;
+	ctx.auth()
+		.check_game_read_or_admin(ctx.op_ctx(), game_id)
+		.await?;
 	let game_ns = assert::namespace_for_game(&ctx, game_id, namespace_id).await?;
 
 	// Fetch lobby IDs

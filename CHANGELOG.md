@@ -13,15 +13,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 -   **Bolt** Add Docker `RUN` cache to distributed deploys to improve deploy speeds
 -   **Infra** Prometheus VPA
 -   **Infra** Apache Traffic Server VPA
+-   **api-cloud** Admins can view all teams & games in a cluster
 
 ### Changed
 
 -   **api-status** More comprehensive status check that both creates a lobby & connects to it
+-   More details in `CLAIMS_MISSING_ENTITLEMENT` error
 
 ### Fixed
 
 -   **Bolt** Prompt prod won't prompt if does not have user control
 -   **Bolt** Exclude copying bloat from `infra/tf/` to distributed Docker builds
+-   Invalid JWT tokens now return explicit `TOKEN_INVALID` error instead of 500
 
 ### Security
 

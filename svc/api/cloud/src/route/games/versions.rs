@@ -14,7 +14,9 @@ pub async fn get(
 	version_id: Uuid,
 	_watch_index: WatchIndexQuery,
 ) -> GlobalResult<models::CloudGamesGetGameVersionByIdResponse> {
-	ctx.auth().check_game_read(ctx.op_ctx(), game_id).await?;
+	ctx.auth()
+		.check_game_read_or_admin(ctx.op_ctx(), game_id)
+		.await?;
 	let game_version = assert::version_for_game(&ctx, game_id, version_id).await?;
 
 	let cloud_version_res = op!([ctx] cloud_version_get {
@@ -48,7 +50,9 @@ pub async fn create(
 	game_id: Uuid,
 	body: models::CloudGamesCreateGameVersionRequest,
 ) -> GlobalResult<models::CloudGamesCreateGameVersionResponse> {
-	ctx.auth().check_game_write(ctx.op_ctx(), game_id).await?;
+	ctx.auth()
+		.check_game_write_or_admin(ctx.op_ctx(), game_id)
+		.await?;
 
 	let user_id = ctx.auth().claims()?.as_user().ok();
 
@@ -72,7 +76,9 @@ pub async fn reserve_name(
 	game_id: Uuid,
 	body: serde_json::Value,
 ) -> GlobalResult<models::CloudGamesReserveVersionNameResponse> {
-	ctx.auth().check_game_write(ctx.op_ctx(), game_id).await?;
+	ctx.auth()
+		.check_game_write_or_admin(ctx.op_ctx(), game_id)
+		.await?;
 
 	let request_id = uuid::Uuid::new_v4();
 	let res = msg!([ctx] cloud::msg::version_name_reserve(game_id, request_id) -> cloud::msg::version_name_reserve_complete {

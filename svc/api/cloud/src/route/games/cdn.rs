@@ -11,7 +11,9 @@ pub async fn get_sites(
 	game_id: Uuid,
 	_watch_index: WatchIndexQuery,
 ) -> GlobalResult<models::CloudGamesListGameCdnSitesResponse> {
-	ctx.auth().check_game_read(ctx.op_ctx(), game_id).await?;
+	ctx.auth()
+		.check_game_read_or_admin(ctx.op_ctx(), game_id)
+		.await?;
 
 	let list_res = op!([ctx] cdn_site_list_for_game {
 		game_id: Some(game_id.into()),
@@ -72,7 +74,9 @@ pub async fn create_site(
 	game_id: Uuid,
 	body: models::CloudGamesCreateGameCdnSiteRequest,
 ) -> GlobalResult<models::CloudGamesCreateGameCdnSiteResponse> {
-	ctx.auth().check_game_write(ctx.op_ctx(), game_id).await?;
+	ctx.auth()
+		.check_game_write_or_admin(ctx.op_ctx(), game_id)
+		.await?;
 
 	let create_res = op!([ctx] cdn_site_create {
 		game_id: Some(game_id.into()),

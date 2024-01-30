@@ -83,8 +83,8 @@ impl Auth {
 			Ok(())
 		} else {
 			bail_with!(
-				API_UNAUTHORIZED,
-				reason = "token is missing one of the following entitlements: user"
+				CLAIMS_MISSING_ENTITLEMENT,
+				entitlements = "User"
 			);
 		}
 	}

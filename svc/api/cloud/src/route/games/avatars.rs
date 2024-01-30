@@ -16,7 +16,9 @@ pub async fn get_custom_avatars(
 	game_id: Uuid,
 	_watch_index: WatchIndexQuery,
 ) -> GlobalResult<models::CloudGamesListGameCustomAvatarsResponse> {
-	ctx.auth().check_game_read(ctx.op_ctx(), game_id).await?;
+	ctx.auth()
+		.check_game_read_or_admin(ctx.op_ctx(), game_id)
+		.await?;
 
 	let custom_avatars_res = op!([ctx] custom_user_avatar_list_for_game {
 		game_id: Some(game_id.into()),
@@ -100,7 +102,9 @@ pub async fn prepare_avatar_upload(
 	game_id: Uuid,
 	body: models::CloudGamesPrepareCustomAvatarUploadRequest,
 ) -> GlobalResult<models::CloudGamesPrepareCustomAvatarUploadResponse> {
-	ctx.auth().check_game_write(ctx.op_ctx(), game_id).await?;
+	ctx.auth()
+		.check_game_write_or_admin(ctx.op_ctx(), game_id)
+		.await?;
 
 	let user_id = ctx.auth().claims()?.as_user().ok().map(|x| x.user_id);
 
@@ -154,7 +158,9 @@ pub async fn complete_avatar_upload(
 	upload_id: Uuid,
 	_body: serde_json::Value,
 ) -> GlobalResult<serde_json::Value> {
-	ctx.auth().check_game_write(ctx.op_ctx(), game_id).await?;
+	ctx.auth()
+		.check_game_write_or_admin(ctx.op_ctx(), game_id)
+		.await?;
 
 	op!([ctx] custom_user_avatar_upload_complete {
 		game_id: Some(game_id.into()),

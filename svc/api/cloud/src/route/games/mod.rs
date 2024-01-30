@@ -337,7 +337,9 @@ pub async fn get(
 	game_id: Uuid,
 	watch_index: WatchIndexQuery,
 ) -> GlobalResult<models::CloudGamesGetGameByIdResponse> {
-	ctx.auth().check_game_read(ctx.op_ctx(), game_id).await?;
+	ctx.auth()
+		.check_game_read_or_admin(ctx.op_ctx(), game_id)
+		.await?;
 
 	// Wait for an update if needed
 	let update_ts = if let Some(anchor) = watch_index.to_consumer()? {
@@ -474,7 +476,9 @@ pub async fn prepare_logo_upload(
 	game_id: Uuid,
 	body: models::CloudGamesGameLogoUploadPrepareRequest,
 ) -> GlobalResult<models::CloudGamesGameLogoUploadPrepareResponse> {
-	ctx.auth().check_game_write(ctx.op_ctx(), game_id).await?;
+	ctx.auth()
+		.check_game_write_or_admin(ctx.op_ctx(), game_id)
+		.await?;
 
 	let user_id = ctx.auth().claims()?.as_user().ok().map(|x| x.user_id);
 
@@ -525,7 +529,9 @@ pub async fn complete_logo_upload(
 	upload_id: Uuid,
 	_body: serde_json::Value,
 ) -> GlobalResult<serde_json::Value> {
-	ctx.auth().check_game_write(ctx.op_ctx(), game_id).await?;
+	ctx.auth()
+		.check_game_write_or_admin(ctx.op_ctx(), game_id)
+		.await?;
 
 	op!([ctx] game_logo_upload_complete {
 		game_id: Some(game_id.into()),
@@ -542,7 +548,9 @@ pub async fn prepare_banner_upload(
 	game_id: Uuid,
 	body: models::CloudGamesGameBannerUploadPrepareRequest,
 ) -> GlobalResult<models::CloudGamesGameBannerUploadPrepareResponse> {
-	ctx.auth().check_game_write(ctx.op_ctx(), game_id).await?;
+	ctx.auth()
+		.check_game_write_or_admin(ctx.op_ctx(), game_id)
+		.await?;
 
 	let user_id = ctx.auth().claims()?.as_user().ok().map(|x| x.user_id);
 
@@ -596,7 +604,9 @@ pub async fn complete_banner_upload(
 	upload_id: Uuid,
 	_body: serde_json::Value,
 ) -> GlobalResult<serde_json::Value> {
-	ctx.auth().check_game_write(ctx.op_ctx(), game_id).await?;
+	ctx.auth()
+		.check_game_write_or_admin(ctx.op_ctx(), game_id)
+		.await?;
 
 	op!([ctx] game_banner_upload_complete {
 		game_id: Some(game_id.into()),

@@ -133,11 +133,11 @@ impl Auth {
 			*unwrap_ref!(game_user.namespace_id)
 		} else {
 			bail_with!(
-				API_UNAUTHORIZED,
-				reason = if allow_users {
-					"token is missing one of the following entitlements: user, lobby"
+				CLAIMS_MISSING_ENTITLEMENT,
+				entitlements = if allow_users {
+					"User, Lobby"
 				} else {
-					"token is missing one of the following entitlements: lobby"
+					"Lobby"
 				}
 			);
 		};
@@ -164,8 +164,8 @@ impl Auth {
 			(None, Some(ent))
 		} else {
 			bail_with!(
-				API_UNAUTHORIZED,
-				reason = "token is missing one of the following entitlements: user, game_cloud"
+				CLAIMS_MISSING_ENTITLEMENT,
+				entitlements = "User, GameCloud"
 			);
 		};
 

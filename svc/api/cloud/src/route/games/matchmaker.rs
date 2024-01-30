@@ -17,7 +17,9 @@ pub async fn delete_lobby(
 	game_id: Uuid,
 	lobby_id: Uuid,
 ) -> GlobalResult<models::CloudGamesDeleteMatchmakerLobbyResponse> {
-	ctx.auth().check_game_write(ctx.op_ctx(), game_id).await?;
+	ctx.auth()
+		.check_game_write_or_admin(ctx.op_ctx(), game_id)
+		.await?;
 
 	// Do this before getting the lobby for race conditions
 	let mut complete_sub = subscribe!([ctx] mm::msg::lobby_cleanup_complete(lobby_id)).await?;
@@ -66,7 +68,9 @@ pub async fn export_history(
 	game_id: Uuid,
 	body: models::CloudGamesExportMatchmakerLobbyHistoryRequest,
 ) -> GlobalResult<models::CloudGamesExportMatchmakerLobbyHistoryResponse> {
-	ctx.auth().check_game_read(ctx.op_ctx(), game_id).await?;
+	ctx.auth()
+		.check_game_read_or_admin(ctx.op_ctx(), game_id)
+		.await?;
 
 	let namespaces_res = op!([ctx] game_namespace_list {
 		game_ids: vec![game_id.into()],
@@ -134,7 +138,9 @@ pub async fn get_lobby_logs(
 	watch_index: WatchIndexQuery,
 	query: GetLobbyLogsQuery,
 ) -> GlobalResult<models::CloudGamesGetLobbyLogsResponse> {
-	ctx.auth().check_game_read(ctx.op_ctx(), game_id).await?;
+	ctx.auth()
+		.check_game_read_or_admin(ctx.op_ctx(), game_id)
+		.await?;
 
 	// Get start ts
 	// If no watch: read logs
@@ -258,7 +264,9 @@ pub async fn export_lobby_logs(
 	lobby_id: Uuid,
 	body: models::CloudGamesExportLobbyLogsRequest,
 ) -> GlobalResult<models::CloudGamesExportLobbyLogsResponse> {
-	ctx.auth().check_game_read(ctx.op_ctx(), game_id).await?;
+	ctx.auth()
+		.check_game_read_or_admin(ctx.op_ctx(), game_id)
+		.await?;
 
 	let stream_type = match body.stream {
 		models::CloudGamesLogStream::StdOut => backend::job::log::StreamType::StdOut,

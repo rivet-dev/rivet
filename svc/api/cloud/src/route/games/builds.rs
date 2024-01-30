@@ -12,7 +12,9 @@ pub async fn get_builds(
 	game_id: Uuid,
 	_watch_index: WatchIndexQuery,
 ) -> GlobalResult<models::CloudGamesListGameBuildsResponse> {
-	ctx.auth().check_game_read(ctx.op_ctx(), game_id).await?;
+	ctx.auth()
+		.check_game_read_or_admin(ctx.op_ctx(), game_id)
+		.await?;
 
 	let list_res = op!([ctx] build_list_for_game {
 		game_id: Some(game_id.into()),
@@ -77,7 +79,9 @@ pub async fn create_build(
 	game_id: Uuid,
 	body: models::CloudGamesCreateGameBuildRequest,
 ) -> GlobalResult<models::CloudGamesCreateGameBuildResponse> {
-	ctx.auth().check_game_write(ctx.op_ctx(), game_id).await?;
+	ctx.auth()
+		.check_game_write_or_admin(ctx.op_ctx(), game_id)
+		.await?;
 
 	// TODO: Read and validate image file
 

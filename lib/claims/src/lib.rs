@@ -1,82 +1,16 @@
 use global_error::prelude::*;
 use jsonwebtoken::{Algorithm, DecodingKey};
 use prost::Message;
-use std::{convert::TryFrom, sync::Arc};
+use std::convert::TryFrom;
 
 mod schema {
-	pub use types::rivet::{backend, claims::*, common};
-}
-
-macro_rules! expect_two {
-	($iter:expr) => {{
-		let mut i = $iter;
-		match (i.next(), i.next(), i.next()) {
-			(Some(first), Some(second), None) => (first, second),
-			_ => return Err(Error::from(jsonwebtoken::errors::ErrorKind::InvalidToken).into()),
-		}
-	}};
+	pub use types::rivet::{backend, claims::*};
 }
 
 pub const ALGORITHM: Algorithm = Algorithm::EdDSA;
 
 lazy_static::lazy_static! {
-	static ref JWT_KEY_PUBLIC: Result<String, Error> = std::env::var("RIVET_JWT_KEY_PUBLIC").map_err(Error::from);
-}
-
-#[derive(thiserror::Error, Clone, Debug)]
-pub enum Error {
-	#[error("invalid separator count")]
-	InvalidSeparatorCount,
-	#[error("missing env var: {source}")]
-	EnvVar {
-		#[from]
-		source: std::env::VarError,
-	},
-	#[error("jwt: {source}")]
-	JWT {
-		source: Arc<jsonwebtoken::errors::Error>,
-	},
-	#[error("base64: {source}")]
-	Base64 {
-		#[from]
-		source: base64::DecodeError,
-	},
-	#[error("from utf8: {source}")]
-	FromUtf8 {
-		#[from]
-		source: std::string::FromUtf8Error,
-	},
-	#[error("prost decode: {source}")]
-	ProstDecode {
-		#[from]
-		source: prost::DecodeError,
-	},
-	#[error("serde: {source}")]
-	SerdeDeserialize { source: Arc<serde_json::Error> },
-}
-
-impl From<jsonwebtoken::errors::Error> for Error {
-	fn from(source: jsonwebtoken::errors::Error) -> Error {
-		Error::JWT {
-			source: Arc::new(source),
-		}
-	}
-}
-
-impl From<jsonwebtoken::errors::ErrorKind> for Error {
-	fn from(source: jsonwebtoken::errors::ErrorKind) -> Error {
-		Error::JWT {
-			source: Arc::new(jsonwebtoken::errors::Error::from(source)),
-		}
-	}
-}
-
-impl From<serde_json::Error> for Error {
-	fn from(source: serde_json::Error) -> Error {
-		Error::SerdeDeserialize {
-			source: Arc::new(source),
-		}
-	}
+	static ref JWT_KEY_PUBLIC: Option<String> = std::env::var("RIVET_JWT_KEY_PUBLIC").ok();
 }
 
 pub mod ent {
@@ -434,7 +368,7 @@ impl ClaimsDecode for schema::Claims {
 			})
 			.ok_or(err_code!(
 				CLAIMS_MISSING_ENTITLEMENT,
-				entitlement = "Refresh"
+				entitlements = "Refresh"
 			))
 			.and_then(std::convert::identity)
 	}
@@ -676,7 +610,9 @@ impl ClaimsDecode for schema::Claims {
 		self.entitlements
 			.iter()
 			.find_map(|ent| match &ent.kind {
-				Some(schema::entitlement::Kind::AccessToken(ent)) => Some(ent::AccessToken::try_from(ent)),
+				Some(schema::entitlement::Kind::AccessToken(ent)) => {
+					Some(ent::AccessToken::try_from(ent))
+				}
 				_ => None,
 			})
 			.ok_or(err_code!(
@@ -716,7 +652,10 @@ impl EntitlementTag for schema::Entitlement {
 }
 
 pub fn decode(token: &str) -> GlobalResult<GlobalResult<schema::Claims>> {
-	let pem_public = JWT_KEY_PUBLIC.clone()?;
+	let pem_public = unwrap!(
+		JWT_KEY_PUBLIC.as_ref(),
+		"missing env var `RIVET_JWT_KEY_PUBLIC`"
+	);
 
 	let mut validation = jsonwebtoken::Validation::default();
 	validation.algorithms = vec![ALGORITHM];
@@ -738,11 +677,9 @@ fn decode_proto(
 ) -> GlobalResult<GlobalResult<schema::Claims>> {
 	// TODO:
 	// for alg in &validation.algorithms {
-	//	 if key.family != alg.family() {
-	//		 return Err(Error::from(
-	//			 jsonwebtoken::errors::ErrorKind::InvalidAlgorithm,
-	//		 ));
-	//	 }
+	// 	if key.family != alg.family() {
+	// 		bail_with!(TOKEN_INVALID, reason = "invalid algorithm");
+	// 	}
 	// }
 
 	// Count the # of separators to determine if we need to remove the label
@@ -751,32 +688,34 @@ fn decode_proto(
 		.fold(0, |acc, x| if x == '.' { acc + 1 } else { acc });
 	let token = if sep_count == 3 {
 		// Discard label
-		let (_, token) = token
-			.split_once('.')
-			.ok_or_else(|| Error::from(jsonwebtoken::errors::ErrorKind::InvalidToken))?;
-		token
-	} else if sep_count == 2 {
-		// No label, do nothing
+		let (_, token) = unwrap!(token.split_once('.'), "unreachable");
 		token
 	} else {
-		bail_with!(TOKEN_INVALID, reason = "invalid separator count");
+		token
 	};
 
 	// Split up parts
-	let (signature, message) = expect_two!(token.rsplitn(2, '.'));
-	let (claims, header) = expect_two!(message.rsplitn(2, '.'));
-	let header = {
-		let decoded = base64::decode_config(header, base64::URL_SAFE_NO_PAD)?;
-		let s = String::from_utf8(decoded)?;
-		serde_json::from_str::<jsonwebtoken::Header>(&s)?
+	let mut iter = token.rsplitn(2, '.');
+	let (signature, message) = match (iter.next(), iter.next()) {
+		(Some(signature), Some(message)) => (signature, message),
+		_ => bail_with!(TOKEN_INVALID, reason = "invalid separator count"),
+	};
+	let mut iter = message.rsplit('.');
+	let (claims, header) = match (iter.next(), iter.next(), iter.next()) {
+		(Some(claims), Some(header), None) => (claims, {
+			let decoded = base64::decode_config(header, base64::URL_SAFE_NO_PAD)?;
+			let s = String::from_utf8(decoded)?;
+			serde_json::from_str::<jsonwebtoken::Header>(&s)?
+		}),
+		_ => bail_with!(TOKEN_INVALID, reason = "invalid separator count"),
 	};
 
 	if !validation.algorithms.contains(&header.alg) {
-		return Err(Error::from(jsonwebtoken::errors::ErrorKind::InvalidAlgorithm).into());
+		bail_with!(TOKEN_INVALID, reason = "invalid algorithm");
 	}
 
 	if !jsonwebtoken::crypto::verify(signature, message.as_bytes(), key, header.alg)? {
-		return Err(Error::from(jsonwebtoken::errors::ErrorKind::InvalidSignature).into());
+		bail_with!(TOKEN_INVALID, reason = "invalid signature");
 	}
 
 	let claims_buf = base64::decode_config(&claims, base64::URL_SAFE_NO_PAD)?;

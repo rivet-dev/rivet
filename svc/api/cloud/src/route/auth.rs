@@ -27,10 +27,7 @@ pub async fn inspect(
 			..Default::default()
 		}
 	} else {
-		bail_with!(
-			API_UNAUTHORIZED,
-			reason = "Token is missing one of the following entitlements: user, game_cloud"
-		);
+		bail_with!(CLAIMS_MISSING_ENTITLEMENT, entitlements = "User, GameCloud");
 	};
 
 	Ok(models::CloudInspectResponse {

@@ -19,7 +19,9 @@ pub async fn get(
 	namespace_id: Uuid,
 	_watch_index: WatchIndexQuery,
 ) -> GlobalResult<models::CloudGamesNamespacesGetGameNamespaceByIdResponse> {
-	ctx.auth().check_game_read(ctx.op_ctx(), game_id).await?;
+	ctx.auth()
+		.check_game_read_or_admin(ctx.op_ctx(), game_id)
+		.await?;
 	let game_namespace = assert::namespace_for_game(&ctx, game_id, namespace_id).await?;
 
 	// Fetch the namespace with config
@@ -195,7 +197,9 @@ pub async fn create(
 	game_id: Uuid,
 	body: models::CloudGamesNamespacesCreateGameNamespaceRequest,
 ) -> GlobalResult<models::CloudGamesNamespacesCreateGameNamespaceResponse> {
-	ctx.auth().check_game_write(ctx.op_ctx(), game_id).await?;
+	ctx.auth()
+		.check_game_write_or_admin(ctx.op_ctx(), game_id)
+		.await?;
 	assert::version_for_game(&ctx, game_id, body.version_id).await?;
 
 	let create_ns_res = op!([ctx] game_namespace_create {
@@ -222,7 +226,9 @@ pub async fn update_version(
 	namespace_id: Uuid,
 	body: models::CloudGamesNamespacesUpdateGameNamespaceVersionRequest,
 ) -> GlobalResult<serde_json::Value> {
-	ctx.auth().check_game_write(ctx.op_ctx(), game_id).await?;
+	ctx.auth()
+		.check_game_write_or_admin(ctx.op_ctx(), game_id)
+		.await?;
 	let ns_data = assert::namespace_for_game(&ctx, game_id, namespace_id).await?;
 	assert::version_for_game(&ctx, game_id, body.version_id).await?;
 
@@ -251,7 +257,9 @@ pub async fn create_token_public(
 	namespace_id: Uuid,
 	_body: serde_json::Value,
 ) -> GlobalResult<models::CloudGamesNamespacesCreateGameNamespaceTokenPublicResponse> {
-	ctx.auth().check_game_write(ctx.op_ctx(), game_id).await?;
+	ctx.auth()
+		.check_game_write_or_admin(ctx.op_ctx(), game_id)
+		.await?;
 	let _ns_data = assert::namespace_for_game(&ctx, game_id, namespace_id).await?;
 
 	let create_res = op!([ctx] cloud_namespace_token_public_create {
@@ -273,7 +281,9 @@ pub async fn create_token_development(
 	namespace_id: Uuid,
 	body: models::CloudGamesNamespacesCreateGameNamespaceTokenDevelopmentRequest,
 ) -> GlobalResult<models::CloudGamesNamespacesCreateGameNamespaceTokenDevelopmentResponse> {
-	ctx.auth().check_game_write(ctx.op_ctx(), game_id).await?;
+	ctx.auth()
+		.check_game_write_or_admin(ctx.op_ctx(), game_id)
+		.await?;
 	let _ns_data = assert::namespace_for_game(&ctx, game_id, namespace_id).await?;
 
 	let lobby_ports = match (body.ports, body.lobby_ports) {
@@ -379,7 +389,9 @@ pub async fn add_namespace_domain(
 	namespace_id: Uuid,
 	body: models::CloudGamesNamespacesAddNamespaceDomainRequest,
 ) -> GlobalResult<serde_json::Value> {
-	ctx.auth().check_game_write(ctx.op_ctx(), game_id).await?;
+	ctx.auth()
+		.check_game_write_or_admin(ctx.op_ctx(), game_id)
+		.await?;
 	let _ns_data = assert::namespace_for_game(&ctx, game_id, namespace_id).await?;
 
 	op!([ctx] cdn_namespace_domain_create {
@@ -398,7 +410,9 @@ pub async fn remove_namespace_domain(
 	namespace_id: Uuid,
 	domain: String,
 ) -> GlobalResult<serde_json::Value> {
-	ctx.auth().check_game_write(ctx.op_ctx(), game_id).await?;
+	ctx.auth()
+		.check_game_write_or_admin(ctx.op_ctx(), game_id)
+		.await?;
 	let _ns_data = assert::namespace_for_game(&ctx, game_id, namespace_id).await?;
 
 	op!([ctx] cdn_namespace_domain_remove {
@@ -417,7 +431,9 @@ pub async fn toggle_domain_public_auth(
 	namespace_id: Uuid,
 	body: models::CloudGamesNamespacesToggleNamespaceDomainPublicAuthRequest,
 ) -> GlobalResult<serde_json::Value> {
-	ctx.auth().check_game_write(ctx.op_ctx(), game_id).await?;
+	ctx.auth()
+		.check_game_write_or_admin(ctx.op_ctx(), game_id)
+		.await?;
 	let ns_data = assert::namespace_for_game(&ctx, game_id, namespace_id).await?;
 
 	op!([ctx] cdn_ns_enable_domain_public_auth_set {
@@ -436,7 +452,9 @@ pub async fn update_namespace_cdn_auth_user(
 	namespace_id: Uuid,
 	body: models::CloudGamesNamespacesUpdateNamespaceCdnAuthUserRequest,
 ) -> GlobalResult<serde_json::Value> {
-	ctx.auth().check_game_write(ctx.op_ctx(), game_id).await?;
+	ctx.auth()
+		.check_game_write_or_admin(ctx.op_ctx(), game_id)
+		.await?;
 	let _ns_data = assert::namespace_for_game(&ctx, game_id, namespace_id).await?;
 
 	op!([ctx] cdn_namespace_auth_user_update {
@@ -456,7 +474,9 @@ pub async fn remove_namespace_cdn_auth_user(
 	namespace_id: Uuid,
 	auth_user: String,
 ) -> GlobalResult<serde_json::Value> {
-	ctx.auth().check_game_write(ctx.op_ctx(), game_id).await?;
+	ctx.auth()
+		.check_game_write_or_admin(ctx.op_ctx(), game_id)
+		.await?;
 	let _ns_data = assert::namespace_for_game(&ctx, game_id, namespace_id).await?;
 
 	op!([ctx] cdn_namespace_auth_user_remove {
@@ -475,7 +495,9 @@ pub async fn set_cdn_auth_type(
 	namespace_id: Uuid,
 	body: models::CloudGamesNamespacesSetNamespaceCdnAuthTypeRequest,
 ) -> GlobalResult<serde_json::Value> {
-	ctx.auth().check_game_write(ctx.op_ctx(), game_id).await?;
+	ctx.auth()
+		.check_game_write_or_admin(ctx.op_ctx(), game_id)
+		.await?;
 	let ns_data = assert::namespace_for_game(&ctx, game_id, namespace_id).await?;
 
 	op!([ctx] cdn_ns_auth_type_set {
@@ -537,7 +559,9 @@ pub async fn get_version_history(
 	_watch_index: WatchIndexQuery,
 	query: GetGameNamespaceGetVersionHistoryQuery,
 ) -> GlobalResult<models::CloudGamesNamespacesGetGameNamespaceVersionHistoryResponse> {
-	ctx.auth().check_game_write(ctx.op_ctx(), game_id).await?;
+	ctx.auth()
+		.check_game_write_or_admin(ctx.op_ctx(), game_id)
+		.await?;
 	let _ns_data = assert::namespace_for_game(&ctx, game_id, namespace_id).await?;
 
 	let version_history_res = op!([ctx] game_namespace_version_history_list {

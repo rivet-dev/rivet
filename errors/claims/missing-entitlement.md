@@ -1,6 +1,6 @@
 ---
 name = "CLAIMS_MISSING_ENTITLEMENT"
-description = "Missing \"{entitlement}\" entitlement."
+description = "Token is missing one of the following entitlements: {entitlements}"
 description_basic = "A required entitlement is missing."
 http_status = 401
 ---

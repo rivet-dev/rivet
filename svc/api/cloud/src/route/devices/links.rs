@@ -85,7 +85,7 @@ pub async fn complete(
 
 	// Verify has access to game
 	ctx.auth()
-		.check_game_write(ctx.op_ctx(), body.game_id)
+		.check_game_write_or_admin(ctx.op_ctx(), body.game_id)
 		.await?;
 
 	// Decode device link token

@@ -96,7 +96,7 @@ impl Auth {
 		// Return default error
 		bail_with!(
 			CLAIMS_MISSING_ENTITLEMENT,
-			entitlement = "GameNamespacePublic"
+			entitlements = "GameNamespacePublic"
 		)
 	}
 
@@ -223,8 +223,8 @@ impl Auth {
 			))
 		} else {
 			bail_with!(
-				API_UNAUTHORIZED,
-				reason = "Token is missing one of the following entitlements: user, game_user"
+				CLAIMS_MISSING_ENTITLEMENT,
+				entitlements = "User, GameUser"
 			);
 		}
 	}

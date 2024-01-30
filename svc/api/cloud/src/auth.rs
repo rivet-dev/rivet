@@ -104,10 +104,7 @@ impl Auth {
 				reason = "Game cloud token cannot write to this game",
 			);
 		} else {
-			bail_with!(
-				API_UNAUTHORIZED,
-				reason = "Token is missing one of the following entitlements: user"
-			);
+			bail_with!(CLAIMS_MISSING_ENTITLEMENT, entitlements = "User, GameCloud");
 		}
 	}
 
@@ -132,44 +129,6 @@ impl Auth {
 		)?;
 
 		Ok(())
-	}
-
-	/// Validates that the agent is the owner of a given team.
-	pub async fn check_team_owner(
-		&self,
-		ctx: &OperationContext<()>,
-		team_id: Uuid,
-	) -> GlobalResult<Uuid> {
-		let claims = self.claims()?;
-
-		if claims.as_user().is_ok() {
-			let user_ent = self.user(ctx).await?;
-
-			assert::user_registered(ctx, user_ent.user_id).await?;
-
-			let res = op!([ctx] team_get {
-				team_ids: vec![team_id.into()],
-			})
-			.await?;
-
-			// Validate the team exists
-			let team = unwrap!(res.teams.first());
-			let owner_user_id = unwrap_ref!(team.owner_user_id).as_uuid();
-
-			// Verify user's permissions
-			ensure_eq_with!(
-				user_ent.user_id,
-				owner_user_id,
-				GROUP_INSUFFICIENT_PERMISSIONS
-			);
-
-			Ok(user_ent.user_id)
-		} else {
-			bail_with!(
-				API_UNAUTHORIZED,
-				reason = "token is missing one of the following entitlements: user"
-			);
-		}
 	}
 
 	/// Validates that the agent can read a list of games.
@@ -214,10 +173,7 @@ impl Auth {
 
 			Ok(())
 		} else {
-			bail_with!(
-				API_UNAUTHORIZED,
-				reason = "token is missing one of the following entitlements: user"
-			);
+			bail_with!(CLAIMS_MISSING_ENTITLEMENT, entitlements = "User, GameCloud");
 		}
 	}
 
@@ -266,71 +222,7 @@ impl Auth {
 
 			Ok(())
 		} else {
-			bail_with!(
-				API_UNAUTHORIZED,
-				reason = "token is missing one of the following entitlements: user"
-			);
-		}
-	}
-
-	/// Validates that the agent can read the given games or is an admin.
-	pub async fn check_games_read_or_admin(
-		&self,
-		ctx: &OperationContext<()>,
-		game_ids: Vec<Uuid>,
-	) -> GlobalResult<()> {
-		match self.check_games_read(ctx, game_ids).await {
-			Err(err) if err.is(formatted_error::code::API_FORBIDDEN) => self.admin(ctx).await,
-			other => other,
-		}
-	}
-
-	/// Validates that the agent can read the given team or is an admin.
-	pub async fn check_team_read_or_admin(
-		&self,
-		ctx: &OperationContext<()>,
-		team_id: Uuid,
-	) -> GlobalResult<()> {
-		match self.check_team_read(ctx, team_id).await {
-			Err(err) if err.is(formatted_error::code::API_FORBIDDEN) => self.admin(ctx).await,
-			other => other,
-		}
-	}
-
-	/// Validates that the agent can read the given game or is an admin.
-	pub async fn check_game_read_or_admin(
-		&self,
-		ctx: &OperationContext<()>,
-		game_id: Uuid,
-	) -> GlobalResult<()> {
-		match self.check_game_read(ctx, game_id).await {
-			Err(err) if err.is(formatted_error::code::API_FORBIDDEN) => self.admin(ctx).await,
-			other => other,
-		}
-	}
-
-	/// Validates that the given agent is an admin user.
-	pub async fn admin(&self, ctx: &OperationContext<()>) -> GlobalResult<()> {
-		let claims = self.claims()?;
-
-		if claims.as_user().is_ok() {
-			let user_ent = self.user(ctx).await?;
-
-			// Get user
-			let user_res = op!([ctx] user_get {
-				user_ids: vec![user_ent.user_id.into()]
-			})
-			.await?;
-
-			let user = unwrap!(user_res.users.first(), "user not found");
-			ensure_with!(user.is_admin, IDENTITY_NOT_ADMIN);
-
-			Ok(())
-		} else {
-			bail_with!(
-				API_UNAUTHORIZED,
-				reason = "token is missing one of the following entitlements: user"
-			);
+			bail_with!(CLAIMS_MISSING_ENTITLEMENT, entitlements = "User, GameCloud");
 		}
 	}
 
@@ -395,10 +287,7 @@ impl Auth {
 		} else if let Ok(cloud_ent) = claims.as_game_cloud() {
 			(None, Vec::new(), vec![cloud_ent.game_id])
 		} else {
-			bail_with!(
-				API_UNAUTHORIZED,
-				reason = "token is missing one of the following entitlements: user, game_cloud"
-			);
+			bail_with!(CLAIMS_MISSING_ENTITLEMENT, entitlements = "User, GameCloud");
 		};
 
 		Ok(AccessibleGameIdsResponse {
@@ -406,6 +295,104 @@ impl Auth {
 			team_ids,
 			game_ids,
 		})
+	}
+}
+
+// Admin
+impl Auth {
+	/// Validates that the agent can read the given games or is an admin.
+	pub async fn check_games_read_or_admin(
+		&self,
+		ctx: &OperationContext<()>,
+		game_ids: Vec<Uuid>,
+	) -> GlobalResult<()> {
+		match self.check_games_read(ctx, game_ids).await {
+			Err(err) if err.is(formatted_error::code::API_FORBIDDEN) => self.or_admin(ctx).await,
+			other => other,
+		}
+	}
+
+	/// Validates that the agent can read the given team or is an admin.
+	pub async fn check_team_read_or_admin(
+		&self,
+		ctx: &OperationContext<()>,
+		team_id: Uuid,
+	) -> GlobalResult<()> {
+		match self.check_team_read(ctx, team_id).await {
+			Err(err) if err.is(formatted_error::code::API_FORBIDDEN) => self.or_admin(ctx).await,
+			other => other,
+		}
+	}
+
+	/// Validates that the agent can write the given team or is an admin.
+	pub async fn check_team_write_or_admin(
+		&self,
+		ctx: &OperationContext<()>,
+		team_id: Uuid,
+	) -> GlobalResult<()> {
+		match self.check_team_write(ctx, team_id).await {
+			Err(err) if err.is(formatted_error::code::API_FORBIDDEN) => self.or_admin(ctx).await,
+			other => other,
+		}
+	}
+
+	/// Validates that the agent can read the given game or is an admin.
+	pub async fn check_game_read_or_admin(
+		&self,
+		ctx: &OperationContext<()>,
+		game_id: Uuid,
+	) -> GlobalResult<()> {
+		match self.check_game_read(ctx, game_id).await {
+			Err(err) if err.is(formatted_error::code::API_FORBIDDEN) => self.or_admin(ctx).await,
+			other => other,
+		}
+	}
+
+	/// Validates that the agent can write the given game or is an admin.
+	pub async fn check_game_write_or_admin(
+		&self,
+		ctx: &OperationContext<()>,
+		game_id: Uuid,
+	) -> GlobalResult<()> {
+		match self.check_game_write(ctx, game_id).await {
+			Err(err) if err.is(formatted_error::code::API_FORBIDDEN) => self.or_admin(ctx).await,
+			other => other,
+		}
+	}
+
+	/// Validates that the given agent is an admin user.
+	pub async fn admin(&self, ctx: &OperationContext<()>) -> GlobalResult<()> {
+		let claims = self.claims()?;
+
+		if claims.as_user().is_ok() {
+			let user_ent = self.user(ctx).await?;
+
+			// Get user
+			let user_res = op!([ctx] user_get {
+				user_ids: vec![user_ent.user_id.into()]
+			})
+			.await?;
+
+			let user = unwrap!(user_res.users.first(), "user not found");
+			ensure_with!(user.is_admin, IDENTITY_NOT_ADMIN);
+
+			Ok(())
+		} else {
+			bail_with!(CLAIMS_MISSING_ENTITLEMENT, entitlements = "User");
+		}
+	}
+
+	// Helper function
+	async fn or_admin(&self, ctx: &OperationContext<()>) -> GlobalResult<()> {
+		match self.admin(ctx).await {
+			Err(err)
+				if err.is(formatted_error::code::API_FORBIDDEN)
+					|| err.is(formatted_error::code::IDENTITY_NOT_ADMIN) =>
+			{
+				bail_with!(CLAIMS_MISSING_ENTITLEMENT, entitlements = "User, GameCloud");
+			}
+			other => other,
+		}
 	}
 }
 

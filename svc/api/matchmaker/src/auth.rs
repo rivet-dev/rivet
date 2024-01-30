@@ -89,7 +89,7 @@ impl Auth {
 		// Return default error
 		bail_with!(
 			CLAIMS_MISSING_ENTITLEMENT,
-			entitlement = "GameNamespacePublic"
+			entitlements = "GameNamespacePublic"
 		)
 	}
 
