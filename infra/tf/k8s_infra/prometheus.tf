@@ -1,6 +1,6 @@
 locals {
 	service_prometheus = lookup(var.services, "prometheus", {
-		count = 1
+		count = var.deploy_method_cluster ? 2 : 1
 		resources = {
 			cpu = 1000
 			memory = 2048
@@ -102,6 +102,8 @@ resource "kubernetes_priority_class" "prometheus_priority" {
 }
 
 resource "helm_release" "prometheus" {
+	depends_on = [helm_release.vpa]
+
 	name = "prometheus"
 	namespace = kubernetes_namespace.prometheus.metadata.0.name
 	repository = "https://prometheus-community.github.io/helm-charts"
@@ -140,6 +142,8 @@ resource "helm_release" "prometheus" {
 		}
 		alertmanager = {
 			alertmanagerSpec = {
+				replicas = local.service_alertmanager.count
+
 				storage = {
 					volumeClaimTemplate = {
 						spec = {
@@ -232,6 +236,7 @@ resource "helm_release" "prometheus" {
 
 		prometheus = {
 			prometheusSpec = {
+				replicas = local.service_prometheus.count
 				scrapeInterval = "15s"
 				evaluationInterval = "15s"
 
@@ -347,5 +352,44 @@ resource "helm_release" "prometheus" {
 				relabelings = []
 			}
 		}
+
+		extraManifests = flatten([
+			# Autoscale if resource limits enabled
+			#
+			# See PR for official support: https://github.com/prometheus-community/helm-charts/pull/3097
+			var.limit_resources ? [{
+				apiVersion = "autoscaling.k8s.io/v1"
+				kind = "VerticalPodAutoscaler"
+				metadata = {
+					name = "prometheus-prometheus-kube-prometheus-vpa"
+					# namespace = kubernetes_namespace.prometheus.metadata.0.name
+				}
+				spec = {
+					targetRef = {
+						apiVersion = "apps/v1"
+						kind = "StatefulSet"
+						name = "prometheus-prometheus-kube-prometheus-prometheus"
+					}
+					updatePolicy = {
+						updateMode = "Auto"
+					}
+					resourcePolicy = {
+						containerPolicies = [
+							{
+								containerName = "prometheus"
+								minAllowed = {
+									cpu	= "100m"
+									memory = "500Mi"
+								}
+								maxAllowed = {
+									cpu	= "4"
+									memory = "8Gi"
+								}
+							}
+						]
+					}
+				}
+			}] : []
+		])
 	})]
 }
