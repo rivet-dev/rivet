@@ -134,11 +134,7 @@ impl Auth {
 		} else {
 			bail_with!(
 				CLAIMS_MISSING_ENTITLEMENT,
-				entitlements = if allow_users {
-					"User, Lobby"
-				} else {
-					"Lobby"
-				}
+				entitlements = if allow_users { "User, Lobby" } else { "Lobby" }
 			);
 		};
 
@@ -163,10 +159,7 @@ impl Auth {
 		} else if let Ok(ent) = claims.as_game_cloud() {
 			(None, Some(ent))
 		} else {
-			bail_with!(
-				CLAIMS_MISSING_ENTITLEMENT,
-				entitlements = "User, GameCloud"
-			);
+			bail_with!(CLAIMS_MISSING_ENTITLEMENT, entitlements = "User, GameCloud");
 		};
 
 		let namespaces_res = op!([ctx] game_namespace_get {

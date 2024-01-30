@@ -9,6 +9,9 @@ pub struct UpOpts {
 
 	#[clap(long)]
 	load_tests: bool,
+
+	#[clap(long)]
+	build_only: bool,
 }
 
 impl UpOpts {
@@ -16,13 +19,14 @@ impl UpOpts {
 		let UpOpts {
 			service_names,
 			load_tests,
+			build_only,
 		} = self;
 
 		// Bring up the service
 		if !service_names.is_empty() {
-			tasks::up::up_services(&ctx, &service_names, load_tests).await?;
+			tasks::up::up_services(&ctx, &service_names, load_tests, build_only).await?;
 		} else {
-			tasks::up::up_all(&ctx, load_tests).await?;
+			tasks::up::up_all(&ctx, load_tests, build_only).await?;
 		}
 
 		utils::ringadingding();

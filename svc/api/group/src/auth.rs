@@ -82,10 +82,7 @@ impl Auth {
 
 			Ok(())
 		} else {
-			bail_with!(
-				CLAIMS_MISSING_ENTITLEMENT,
-				entitlements = "User"
-			);
+			bail_with!(CLAIMS_MISSING_ENTITLEMENT, entitlements = "User");
 		}
 	}
 }

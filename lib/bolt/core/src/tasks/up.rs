@@ -26,14 +26,14 @@ use crate::{
 	utils::{self},
 };
 
-pub async fn up_all(ctx: &ProjectContext, load_tests: bool) -> Result<()> {
+pub async fn up_all(ctx: &ProjectContext, load_tests: bool, build_only: bool) -> Result<()> {
 	let all_svc_names = ctx
 		.all_services()
 		.await
 		.iter()
 		.map(|svc| svc.name())
 		.collect::<Vec<_>>();
-	up_services(ctx, &all_svc_names, load_tests).await?;
+	up_services(ctx, &all_svc_names, load_tests, build_only).await?;
 
 	Ok(())
 }
@@ -42,11 +42,11 @@ pub async fn up_services<T: AsRef<str>>(
 	ctx: &ProjectContext,
 	svc_names: &[T],
 	load_tests: bool,
+	build_only: bool,
 ) -> Result<Vec<ServiceContext>> {
 	let event = utils::telemetry::build_event(ctx, "bolt_up").await?;
 	utils::telemetry::capture_event(ctx, event).await?;
 
-	// let run_context = RunContext::Service;
 	let build_context = BuildContext::Bin {
 		optimization: ctx.build_optimization(),
 	};
@@ -122,28 +122,30 @@ pub async fn up_services<T: AsRef<str>>(
 	let mut upload_join_set = JoinSet::<Result<()>>::new();
 	let upload_semaphore = Arc::new(Semaphore::new(4));
 
-	// Login to docker repo for uploading
-	match &ctx.ns().cluster.kind {
-		config::ns::ClusterKind::SingleNode { .. } => {}
-		config::ns::ClusterKind::Distributed { .. } => {
-			if let Some((repo, _)) = ctx.ns().docker.repository.split_once("/") {
-				let username = ctx
-					.read_secret(&["docker", "registry", "ghcr.io", "write", "username"])
-					.await?;
-				let password = ctx
-					.read_secret(&["docker", "registry", "ghcr.io", "write", "password"])
-					.await?;
+	if !build_only {
+		// Login to docker repo for uploading
+		match &ctx.ns().cluster.kind {
+			config::ns::ClusterKind::SingleNode { .. } => {}
+			config::ns::ClusterKind::Distributed { .. } => {
+				if let Some((repo, _)) = ctx.ns().docker.repository.split_once("/") {
+					let username = ctx
+						.read_secret(&["docker", "registry", "ghcr.io", "write", "username"])
+						.await?;
+					let password = ctx
+						.read_secret(&["docker", "registry", "ghcr.io", "write", "password"])
+						.await?;
 
-				let mut cmd = Command::new("sh");
-				cmd.arg("-c").arg(format!(
-					"echo {password} | docker login {repo} -u {username} --password-stdin"
-				));
+					let mut cmd = Command::new("sh");
+					cmd.arg("-c").arg(format!(
+						"echo {password} | docker login {repo} -u {username} --password-stdin"
+					));
 
-				let status = cmd.status().await?;
-				ensure!(status.success());
-			} else {
-				bail!("docker repo must end with a slash");
-			};
+					let status = cmd.status().await?;
+					ensure!(status.success());
+				} else {
+					bail!("docker repo must end with a slash");
+				};
+			}
 		}
 	}
 
@@ -187,6 +189,11 @@ pub async fn up_services<T: AsRef<str>>(
 			.await
 			.unwrap();
 		}
+	}
+
+	// If we're only building the services, we can return here
+	if build_only {
+		return Ok(all_svcs.iter().cloned().collect());
 	}
 
 	// Fetch build plans after compiling rust

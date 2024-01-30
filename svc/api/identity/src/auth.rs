@@ -222,10 +222,7 @@ impl Auth {
 				Some(game_user.clone()),
 			))
 		} else {
-			bail_with!(
-				CLAIMS_MISSING_ENTITLEMENT,
-				entitlements = "User, GameUser"
-			);
+			bail_with!(CLAIMS_MISSING_ENTITLEMENT, entitlements = "User, GameUser");
 		}
 	}
 
