@@ -34,7 +34,7 @@ pub async fn config_to_proto(
 
 	let lobby_groups = if let Some(x) = value.lobby_groups {
 		x.into_iter()
-			.map(ApiTryInto::try_into)
+			.map(ApiTryInto::api_try_into)
 			.collect::<GlobalResult<Vec<_>>>()?
 	} else if let Some(x) = value.game_modes.as_ref() {
 		x.iter()
@@ -46,7 +46,7 @@ pub async fn config_to_proto(
 
 	Ok(backend::matchmaker::VersionConfig {
 		lobby_groups,
-		captcha: value.captcha.map(|x| (*x).try_into()).transpose()?,
+		captcha: value.captcha.map(|x| (*x).api_try_into()).transpose()?,
 	})
 }
 
@@ -80,7 +80,7 @@ pub async fn config_to_openapi(
 		),
 		captcha: value
 			.captcha
-			.map(ApiTryInto::try_into)
+			.map(ApiTryInto::api_try_into)
 			.transpose()?
 			.map(Box::new),
 
@@ -102,7 +102,7 @@ pub async fn config_to_openapi(
 				.lobby_groups
 				.iter()
 				.cloned()
-				.map(ApiTryFrom::try_from)
+				.map(ApiTryFrom::api_try_from)
 				.collect::<Result<Vec<_>, _>>()?,
 		),
 	})
@@ -113,7 +113,7 @@ impl ApiTryFrom<models::CloudVersionMatchmakerPortRange>
 {
 	type Error = GlobalError;
 
-	fn try_from(value: models::CloudVersionMatchmakerPortRange) -> GlobalResult<Self> {
+	fn api_try_from(value: models::CloudVersionMatchmakerPortRange) -> GlobalResult<Self> {
 		ensure_with!(
 			value.min >= 0,
 			MATCHMAKER_INVALID_VERSION_CONFIG,
@@ -126,8 +126,8 @@ impl ApiTryFrom<models::CloudVersionMatchmakerPortRange>
 		);
 
 		Ok(backend::matchmaker::lobby_runtime::PortRange {
-			min: value.min.try_into()?,
-			max: value.max.try_into()?,
+			min: value.min.api_try_into()?,
+			max: value.max.api_try_into()?,
 		})
 	}
 }
@@ -137,10 +137,10 @@ impl ApiTryFrom<backend::matchmaker::lobby_runtime::PortRange>
 {
 	type Error = GlobalError;
 
-	fn try_from(value: backend::matchmaker::lobby_runtime::PortRange) -> GlobalResult<Self> {
+	fn api_try_from(value: backend::matchmaker::lobby_runtime::PortRange) -> GlobalResult<Self> {
 		Ok(models::CloudVersionMatchmakerPortRange {
-			min: value.min.try_into()?,
-			max: value.max.try_into()?,
+			min: value.min.api_try_into()?,
+			max: value.max.api_try_into()?,
 		})
 	}
 }
@@ -262,7 +262,7 @@ impl ApiFrom<backend::matchmaker::lobby_runtime::ProxyKind>
 impl ApiTryFrom<models::CloudVersionMatchmakerCaptcha> for backend::captcha::CaptchaConfig {
 	type Error = GlobalError;
 
-	fn try_from(value: models::CloudVersionMatchmakerCaptcha) -> GlobalResult<Self> {
+	fn api_try_from(value: models::CloudVersionMatchmakerCaptcha) -> GlobalResult<Self> {
 		ensure_with!(
 			value.requests_before_reverify >= 0,
 			MATCHMAKER_INVALID_VERSION_CONFIG,
@@ -275,7 +275,7 @@ impl ApiTryFrom<models::CloudVersionMatchmakerCaptcha> for backend::captcha::Cap
 		);
 
 		Ok(backend::captcha::CaptchaConfig {
-			requests_before_reverify: value.requests_before_reverify.try_into()?,
+			requests_before_reverify: value.requests_before_reverify.api_try_into()?,
 			verification_ttl: value.verification_ttl,
 			hcaptcha: value.hcaptcha.map(|x| (*x).api_into()),
 			turnstile: value.turnstile.map(|x| (*x).api_into()),
@@ -286,18 +286,18 @@ impl ApiTryFrom<models::CloudVersionMatchmakerCaptcha> for backend::captcha::Cap
 impl ApiTryFrom<backend::captcha::CaptchaConfig> for models::CloudVersionMatchmakerCaptcha {
 	type Error = GlobalError;
 
-	fn try_from(value: backend::captcha::CaptchaConfig) -> GlobalResult<Self> {
+	fn api_try_from(value: backend::captcha::CaptchaConfig) -> GlobalResult<Self> {
 		Ok(models::CloudVersionMatchmakerCaptcha {
-			requests_before_reverify: value.requests_before_reverify.try_into()?,
+			requests_before_reverify: value.requests_before_reverify.api_try_into()?,
 			verification_ttl: value.verification_ttl,
 			hcaptcha: value
 				.hcaptcha
-				.map(ApiTryInto::try_into)
+				.map(ApiTryInto::api_try_into)
 				.transpose()?
 				.map(Box::new),
 			turnstile: value
 				.turnstile
-				.map(ApiTryInto::try_into)
+				.map(ApiTryInto::api_try_into)
 				.transpose()?
 				.map(Box::new),
 		})
@@ -323,7 +323,7 @@ impl ApiTryFrom<backend::captcha::captcha_config::Hcaptcha>
 {
 	type Error = GlobalError;
 
-	fn try_from(value: backend::captcha::captcha_config::Hcaptcha) -> GlobalResult<Self> {
+	fn api_try_from(value: backend::captcha::captcha_config::Hcaptcha) -> GlobalResult<Self> {
 		Ok(models::CloudVersionMatchmakerCaptchaHcaptcha {
 			level: unwrap!(backend::captcha::captcha_config::hcaptcha::Level::from_i32(
 				value.level
@@ -395,7 +395,7 @@ impl ApiTryFrom<backend::captcha::captcha_config::Turnstile>
 {
 	type Error = GlobalError;
 
-	fn try_from(value: backend::captcha::captcha_config::Turnstile) -> GlobalResult<Self> {
+	fn api_try_from(value: backend::captcha::captcha_config::Turnstile) -> GlobalResult<Self> {
 		Ok(models::CloudVersionMatchmakerCaptchaTurnstile {
 			site_key: value.site_key,
 			secret_key: value.secret_key,

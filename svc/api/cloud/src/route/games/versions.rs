@@ -26,7 +26,7 @@ pub async fn get(
 	let cloud_version = unwrap!(cloud_version_res.versions.first());
 	let cloud_version_config = unwrap_ref!(cloud_version.config);
 
-	let summary = models::CloudVersionSummary::try_from(game_version)?;
+	let summary = models::CloudVersionSummary::api_try_from(game_version)?;
 	let openapi_version = rivet_convert::cloud::version::config_to_openapi(
 		ctx.op_ctx(),
 		cloud_version_config.clone(),

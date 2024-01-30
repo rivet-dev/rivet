@@ -409,8 +409,8 @@ fn build_port(
 				hostname: node_public_ipv4.clone(),
 				port: None,
 				port_range: Some(Box::new(models::MatchmakerJoinPortRange {
-					min: port_range.min.try_into()?,
-					max: port_range.max.try_into()?,
+					min: port_range.min.api_try_into()?,
+					max: port_range.max.api_try_into()?,
 				})),
 				is_tls: false,
 			})

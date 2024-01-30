@@ -115,7 +115,10 @@ pub async fn get_lobby(
 	Ok(models::CloudGamesNamespacesGetNamespaceLobbyResponse {
 		lobby: Box::new(lobby.summary),
 		perf_lists: Vec::new(),
-		metrics: metrics.map(ApiTryInto::try_into).transpose()?.map(Box::new),
+		metrics: metrics
+			.map(ApiTryInto::api_try_into)
+			.transpose()?
+			.map(Box::new),
 
 		// Deprecated
 		stdout_presigned_urls: Vec::new(),
@@ -201,7 +204,7 @@ async fn fetch_lobby_logs(ctx: &Ctx<Auth>, lobby_ids: Vec<Uuid>) -> GlobalResult
 							stopped: Some(Box::new(models::CloudLogsLobbyStatusStopped {
 								stop_ts: util::timestamp::to_string(stop_ts)?,
 								failed,
-								exit_code: exit_code.try_into()?,
+								exit_code: exit_code.api_try_into()?,
 							})),
 							..Default::default()
 						})

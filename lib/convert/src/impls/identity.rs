@@ -7,7 +7,7 @@ use crate::{ApiFrom, ApiTryFrom};
 impl ApiTryFrom<backend::user_identity::Identity> for models::IdentityLinkedAccount {
 	type Error = GlobalError;
 
-	fn try_from(
+	fn api_try_from(
 		value: backend::user_identity::Identity,
 	) -> GlobalResult<models::IdentityLinkedAccount> {
 		match unwrap_ref!(value.kind) {

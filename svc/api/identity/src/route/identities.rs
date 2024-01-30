@@ -432,7 +432,7 @@ pub async fn update_profile(
 	msg!([ctx] user::msg::profile_set(user_ent.user_id) -> user::msg::update {
 		user_id: Some(user_ent.user_id.into()),
 		display_name: body.display_name.clone(),
-		account_number: body.account_number.map(|n| n.try_into()).transpose()?,
+		account_number: body.account_number.map(|n| n.api_try_into()).transpose()?,
 		bio: body.bio.clone(),
 	})
 	.await?;
@@ -598,7 +598,7 @@ pub async fn validate_profile(
 		display_name: body.display_name.clone(),
 		account_number:
 			body.account_number
-				.map(|n| n.try_into())
+				.map(|n| n.api_try_into())
 				.transpose()?,
 		bio: body.bio.clone(),
 	})
@@ -642,7 +642,7 @@ pub async fn prepare_avatar_upload(
 			backend::upload::PrepareFile {
 				path: format!("image.{}", ext),
 				mime: Some(format!("image/{}", ext)),
-				content_length: body.content_length.try_into()?,
+				content_length: body.content_length.api_try_into()?,
 				nsfw_score_threshold: Some(util_nsfw::score_thresholds::USER_AVATAR),
 				..Default::default()
 			},
@@ -656,7 +656,7 @@ pub async fn prepare_avatar_upload(
 
 	Ok(models::IdentityPrepareAvatarUploadResponse {
 		upload_id,
-		presigned_request: Box::new(presigned_request.clone().try_into()?),
+		presigned_request: Box::new(presigned_request.clone().api_try_into()?),
 	})
 }
 

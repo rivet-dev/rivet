@@ -7,12 +7,12 @@ use crate::{ApiTryFrom, ApiTryInto};
 impl ApiTryFrom<models::CloudVersionIdentityConfig> for backend::identity::VersionConfig {
 	type Error = GlobalError;
 
-	fn try_from(value: models::CloudVersionIdentityConfig) -> GlobalResult<Self> {
+	fn api_try_from(value: models::CloudVersionIdentityConfig) -> GlobalResult<Self> {
 		Ok(backend::identity::VersionConfig {
 			custom_display_names: value
 				.custom_display_names
 				.into_iter()
-				.flat_map(|x| x.into_iter().map(ApiTryInto::try_into))
+				.flat_map(|x| x.into_iter().map(ApiTryInto::api_try_into))
 				.chain(value.display_names.into_iter().flat_map(|x| {
 					x.into_iter().map(|display_name| {
 						GlobalResult::Ok(backend::identity::CustomDisplayName { display_name })
@@ -22,7 +22,7 @@ impl ApiTryFrom<models::CloudVersionIdentityConfig> for backend::identity::Versi
 			custom_avatars: value
 				.custom_avatars
 				.into_iter()
-				.flat_map(|x| x.into_iter().map(ApiTryInto::try_into))
+				.flat_map(|x| x.into_iter().map(ApiTryInto::api_try_into))
 				.chain(value.avatars.into_iter().flat_map(|x| {
 					x.into_iter().map(|upload_id| {
 						GlobalResult::Ok(backend::identity::CustomAvatar {
@@ -40,7 +40,7 @@ impl ApiTryFrom<models::CloudVersionIdentityCustomDisplayName>
 {
 	type Error = GlobalError;
 
-	fn try_from(value: models::CloudVersionIdentityCustomDisplayName) -> GlobalResult<Self> {
+	fn api_try_from(value: models::CloudVersionIdentityCustomDisplayName) -> GlobalResult<Self> {
 		Ok(backend::identity::CustomDisplayName {
 			display_name: value.display_name,
 		})
@@ -50,7 +50,7 @@ impl ApiTryFrom<models::CloudVersionIdentityCustomDisplayName>
 impl ApiTryFrom<models::CloudVersionIdentityCustomAvatar> for backend::identity::CustomAvatar {
 	type Error = GlobalError;
 
-	fn try_from(value: models::CloudVersionIdentityCustomAvatar) -> GlobalResult<Self> {
+	fn api_try_from(value: models::CloudVersionIdentityCustomAvatar) -> GlobalResult<Self> {
 		Ok(backend::identity::CustomAvatar {
 			upload_id: Some(value.upload_id.into()),
 		})
@@ -60,7 +60,7 @@ impl ApiTryFrom<models::CloudVersionIdentityCustomAvatar> for backend::identity:
 impl ApiTryFrom<backend::identity::VersionConfig> for models::CloudVersionIdentityConfig {
 	type Error = GlobalError;
 
-	fn try_from(value: backend::identity::VersionConfig) -> GlobalResult<Self> {
+	fn api_try_from(value: backend::identity::VersionConfig) -> GlobalResult<Self> {
 		Ok(models::CloudVersionIdentityConfig {
 			display_names: Some(
 				value
@@ -83,14 +83,14 @@ impl ApiTryFrom<backend::identity::VersionConfig> for models::CloudVersionIdenti
 				value
 					.custom_display_names
 					.into_iter()
-					.map(ApiTryInto::try_into)
+					.map(ApiTryInto::api_try_into)
 					.collect::<Result<Vec<_>, _>>()?,
 			),
 			custom_avatars: Some(
 				value
 					.custom_avatars
 					.into_iter()
-					.map(ApiTryInto::try_into)
+					.map(ApiTryInto::api_try_into)
 					.collect::<Result<Vec<_>, _>>()?,
 			),
 		})
@@ -102,7 +102,7 @@ impl ApiTryFrom<backend::identity::CustomDisplayName>
 {
 	type Error = GlobalError;
 
-	fn try_from(value: backend::identity::CustomDisplayName) -> GlobalResult<Self> {
+	fn api_try_from(value: backend::identity::CustomDisplayName) -> GlobalResult<Self> {
 		Ok(models::CloudVersionIdentityCustomDisplayName {
 			display_name: value.display_name,
 		})
@@ -112,7 +112,7 @@ impl ApiTryFrom<backend::identity::CustomDisplayName>
 impl ApiTryFrom<backend::identity::CustomAvatar> for models::CloudVersionIdentityCustomAvatar {
 	type Error = GlobalError;
 
-	fn try_from(value: backend::identity::CustomAvatar) -> GlobalResult<Self> {
+	fn api_try_from(value: backend::identity::CustomAvatar) -> GlobalResult<Self> {
 		Ok(models::CloudVersionIdentityCustomAvatar {
 			upload_id: unwrap!(value.upload_id).as_uuid(),
 		})

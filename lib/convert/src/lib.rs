@@ -8,7 +8,7 @@ pub trait ApiTryFrom<T>: Sized {
 	type Error;
 
 	/// Performs the conversion.
-	fn try_from(value: T) -> Result<Self, Self::Error>;
+	fn api_try_from(value: T) -> Result<Self, Self::Error>;
 }
 
 pub trait ApiTryInto<T>: Sized {
@@ -16,7 +16,7 @@ pub trait ApiTryInto<T>: Sized {
 	type Error;
 
 	/// Performs the conversion.
-	fn try_into(self) -> Result<T, Self::Error>;
+	fn api_try_into(self) -> Result<T, Self::Error>;
 }
 
 impl<T, U> ApiTryInto<U> for T
@@ -25,8 +25,8 @@ where
 {
 	type Error = U::Error;
 
-	fn try_into(self) -> Result<U, U::Error> {
-		U::try_from(self)
+	fn api_try_into(self) -> Result<U, U::Error> {
+		U::api_try_from(self)
 	}
 }
 

@@ -57,7 +57,7 @@ pub async fn group_summaries(
 				is_current_identity_member: is_current_user_member,
 				publicity: unwrap!(backend::team::Publicity::from_i32(team_data.publicity))
 					.api_into(),
-				member_count: member_count.try_into()?,
+				member_count: member_count.api_try_into()?,
 				owner_identity_id: owner_user_id.to_string(),
 				is_developer: true,
 			})

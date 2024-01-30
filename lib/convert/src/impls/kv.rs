@@ -14,7 +14,7 @@ pub struct DestructuredKvEntry {
 impl ApiTryFrom<kv::list::response::Entry> for models::KvEntry {
 	type Error = GlobalError;
 
-	fn try_from(value: kv::list::response::Entry) -> GlobalResult<models::KvEntry> {
+	fn api_try_from(value: kv::list::response::Entry) -> GlobalResult<models::KvEntry> {
 		Ok(models::KvEntry {
 			key: value.key,
 			value: value
@@ -29,7 +29,7 @@ impl ApiTryFrom<kv::list::response::Entry> for models::KvEntry {
 impl ApiTryFrom<kv::msg::update::Message> for models::KvEntry {
 	type Error = GlobalError;
 
-	fn try_from(value: kv::msg::update::Message) -> GlobalResult<models::KvEntry> {
+	fn api_try_from(value: kv::msg::update::Message) -> GlobalResult<models::KvEntry> {
 		let deleted = value.value.is_some().then(|| true);
 
 		Ok(models::KvEntry {
@@ -46,7 +46,7 @@ impl ApiTryFrom<kv::msg::update::Message> for models::KvEntry {
 impl ApiTryFrom<DestructuredKvEntry> for models::KvEntry {
 	type Error = GlobalError;
 
-	fn try_from(value: DestructuredKvEntry) -> GlobalResult<models::KvEntry> {
+	fn api_try_from(value: DestructuredKvEntry) -> GlobalResult<models::KvEntry> {
 		let deleted = value.value.is_some().then(|| true);
 
 		Ok(models::KvEntry {

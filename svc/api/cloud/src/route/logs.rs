@@ -26,7 +26,7 @@ pub async fn get_ray_perf(
 	Ok(models::CloudGetRayPerfLogsResponse {
 		perf_lists: perf_lists
 			.into_iter()
-			.map(ApiTryInto::try_into)
+			.map(ApiTryInto::api_try_into)
 			.collect::<Result<Vec<_>, _>>()?,
 	})
 }

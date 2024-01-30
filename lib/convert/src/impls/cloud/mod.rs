@@ -27,11 +27,11 @@ pub fn analytics_lobby_summary_from_lobby(
 		is_idle: player_count.total_player_count == 0,
 		is_closed: lobby.is_closed,
 		is_outdated,
-		max_players_normal: lobby.max_players_normal.try_into()?,
-		max_players_direct: lobby.max_players_direct.try_into()?,
-		max_players_party: lobby.max_players_party.try_into()?,
-		total_player_count: player_count.total_player_count.try_into()?,
-		registered_player_count: player_count.registered_player_count.try_into()?,
+		max_players_normal: lobby.max_players_normal.api_try_into()?,
+		max_players_direct: lobby.max_players_direct.api_try_into()?,
+		max_players_party: lobby.max_players_party.api_try_into()?,
+		total_player_count: player_count.total_player_count.api_try_into()?,
+		registered_player_count: player_count.registered_player_count.api_try_into()?,
 	})
 }
 
@@ -41,7 +41,7 @@ pub fn analytics_lobby_summary_from_lobby(
 // {
 // 	type Error = GlobalError;
 
-// 	fn try_from(
+// 	fn api_try_from(
 // 		value: mm::lobby_runtime_aggregate::response::RegionTierTime,
 // 	) -> GlobalResult<Self> {
 // 		let uptime_in_seconds = util::div_up!(value.total_time, 1_000);
@@ -59,7 +59,7 @@ pub fn analytics_lobby_summary_from_lobby(
 impl ApiTryFrom<backend::game::Game> for models::GameHandle {
 	type Error = GlobalError;
 
-	fn try_from(value: backend::game::Game) -> GlobalResult<Self> {
+	fn api_try_from(value: backend::game::Game) -> GlobalResult<Self> {
 		Ok(models::GameHandle {
 			game_id: unwrap_ref!(value.game_id).as_uuid(),
 			name_id: value.name_id.to_owned(),
@@ -73,7 +73,7 @@ impl ApiTryFrom<backend::game::Game> for models::GameHandle {
 impl ApiTryFrom<perf::SvcPerf> for models::CloudSvcPerf {
 	type Error = GlobalError;
 
-	fn try_from(value: perf::SvcPerf) -> GlobalResult<Self> {
+	fn api_try_from(value: perf::SvcPerf) -> GlobalResult<Self> {
 		Ok(models::CloudSvcPerf {
 			svc_name: value.context_name.to_owned(),
 			ts: util::timestamp::to_string(value.ts)?,
@@ -82,12 +82,12 @@ impl ApiTryFrom<perf::SvcPerf> for models::CloudSvcPerf {
 			spans: value
 				.spans
 				.into_iter()
-				.map(ApiTryInto::try_into)
+				.map(ApiTryInto::api_try_into)
 				.collect::<Result<Vec<_>, _>>()?,
 			marks: value
 				.marks
 				.into_iter()
-				.map(ApiTryInto::try_into)
+				.map(ApiTryInto::api_try_into)
 				.collect::<Result<Vec<_>, _>>()?,
 		})
 	}
@@ -96,7 +96,7 @@ impl ApiTryFrom<perf::SvcPerf> for models::CloudSvcPerf {
 impl ApiTryFrom<job_run::metrics_log::response::Metrics> for models::CloudSvcMetrics {
 	type Error = GlobalError;
 
-	fn try_from(value: job_run::metrics_log::response::Metrics) -> GlobalResult<Self> {
+	fn api_try_from(value: job_run::metrics_log::response::Metrics) -> GlobalResult<Self> {
 		Ok(models::CloudSvcMetrics {
 			job: value.job,
 			cpu: value.cpu.into_iter().map(|v| v as f64).collect::<Vec<_>>(),
@@ -113,7 +113,7 @@ impl ApiTryFrom<job_run::metrics_log::response::Metrics> for models::CloudSvcMet
 impl ApiTryFrom<perf::Span> for models::CloudLogsPerfSpan {
 	type Error = GlobalError;
 
-	fn try_from(value: perf::Span) -> GlobalResult<Self> {
+	fn api_try_from(value: perf::Span) -> GlobalResult<Self> {
 		Ok(models::CloudLogsPerfSpan {
 			label: value.label.to_owned(),
 			start_ts: util::timestamp::to_string(value.start_ts)?,
@@ -129,7 +129,7 @@ impl ApiTryFrom<perf::Span> for models::CloudLogsPerfSpan {
 impl ApiTryFrom<perf::Mark> for models::CloudLogsPerfMark {
 	type Error = GlobalError;
 
-	fn try_from(value: perf::Mark) -> GlobalResult<Self> {
+	fn api_try_from(value: perf::Mark) -> GlobalResult<Self> {
 		Ok(models::CloudLogsPerfMark {
 			label: value.label.to_owned(),
 			ts: util::timestamp::to_string(value.ts)?,
@@ -142,7 +142,7 @@ impl ApiTryFrom<perf::Mark> for models::CloudLogsPerfMark {
 impl ApiTryFrom<backend::upload::PresignedUploadRequest> for models::UploadPresignedRequest {
 	type Error = GlobalError;
 
-	fn try_from(value: backend::upload::PresignedUploadRequest) -> GlobalResult<Self> {
+	fn api_try_from(value: backend::upload::PresignedUploadRequest) -> GlobalResult<Self> {
 		Ok(models::UploadPresignedRequest {
 			path: value.path,
 			url: value.url,
@@ -155,7 +155,7 @@ impl ApiTryFrom<backend::upload::PresignedUploadRequest> for models::UploadPresi
 impl ApiTryFrom<models::UploadPrepareFile> for backend::upload::PrepareFile {
 	type Error = GlobalError;
 
-	fn try_from(value: models::UploadPrepareFile) -> GlobalResult<Self> {
+	fn api_try_from(value: models::UploadPrepareFile) -> GlobalResult<Self> {
 		ensure_with!(
 			value.content_length >= 0,
 			MATCHMAKER_INVALID_VERSION_CONFIG,
@@ -214,15 +214,15 @@ impl ApiFrom<mm_config::namespace_config_validate::response::Error> for models::
 impl ApiTryFrom<backend::region::Tier> for models::CloudRegionTier {
 	type Error = GlobalError;
 
-	fn try_from(value: backend::region::Tier) -> GlobalResult<Self> {
+	fn api_try_from(value: backend::region::Tier) -> GlobalResult<Self> {
 		Ok(models::CloudRegionTier {
 			tier_name_id: value.tier_name_id.to_owned(),
-			rivet_cores_numerator: value.rivet_cores_numerator.try_into()?,
-			rivet_cores_denominator: value.rivet_cores_denominator.try_into()?,
-			cpu: value.cpu.try_into()?,
-			memory: value.memory.try_into()?,
-			disk: value.disk.try_into()?,
-			bandwidth: value.bandwidth.try_into()?,
+			rivet_cores_numerator: value.rivet_cores_numerator.api_try_into()?,
+			rivet_cores_denominator: value.rivet_cores_denominator.api_try_into()?,
+			cpu: value.cpu.api_try_into()?,
+			memory: value.memory.api_try_into()?,
+			disk: value.disk.api_try_into()?,
+			bandwidth: value.bandwidth.api_try_into()?,
 
 			price_per_second: 0,
 		})

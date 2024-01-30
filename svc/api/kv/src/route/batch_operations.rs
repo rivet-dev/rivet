@@ -259,7 +259,7 @@ async fn watch_batch_immediate(
 		Ok(ImmediateResult::Complete((
 			entries
 				.into_iter()
-				.map(ApiTryInto::<models::KvEntry>::try_into)
+				.map(ApiTryInto::<models::KvEntry>::api_try_into)
 				.collect::<GlobalResult<Vec<_>>>()?,
 			latest_update_ts,
 		)))
@@ -324,7 +324,7 @@ async fn watch_batch_merge_subs(
 	Ok((
 		entries
 			.into_iter()
-			.map(ApiTryInto::try_into)
+			.map(ApiTryInto::api_try_into)
 			.collect::<GlobalResult<Vec<_>>>()?,
 		latest_update_ts,
 	))

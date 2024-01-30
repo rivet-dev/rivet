@@ -7,7 +7,7 @@ use crate::{ApiFrom, ApiInto, ApiTryFrom, ApiTryInto};
 impl ApiTryFrom<models::CloudVersionMatchmakerLobbyGroup> for backend::matchmaker::LobbyGroup {
 	type Error = GlobalError;
 
-	fn try_from(value: models::CloudVersionMatchmakerLobbyGroup) -> GlobalResult<Self> {
+	fn api_try_from(value: models::CloudVersionMatchmakerLobbyGroup) -> GlobalResult<Self> {
 		ensure_with!(
 			value.max_players_normal >= 0,
 			MATCHMAKER_INVALID_VERSION_CONFIG,
@@ -30,7 +30,7 @@ impl ApiTryFrom<models::CloudVersionMatchmakerLobbyGroup> for backend::matchmake
 			regions: value
 				.regions
 				.into_iter()
-				.map(|x| x.try_into())
+				.map(|x| x.api_try_into())
 				.collect::<GlobalResult<_>>()?,
 			max_players_normal: value.max_players_normal as u32,
 			max_players_direct: value.max_players_direct as u32,
@@ -39,7 +39,7 @@ impl ApiTryFrom<models::CloudVersionMatchmakerLobbyGroup> for backend::matchmake
 			taggable: false,
 			allow_dynamic_max_players: false,
 
-			runtime: Some((*value.runtime).try_into()?),
+			runtime: Some((*value.runtime).api_try_into()?),
 
 			actions: None,
 		})
@@ -49,20 +49,20 @@ impl ApiTryFrom<models::CloudVersionMatchmakerLobbyGroup> for backend::matchmake
 impl ApiTryFrom<backend::matchmaker::LobbyGroup> for models::CloudVersionMatchmakerLobbyGroup {
 	type Error = GlobalError;
 
-	fn try_from(value: backend::matchmaker::LobbyGroup) -> GlobalResult<Self> {
+	fn api_try_from(value: backend::matchmaker::LobbyGroup) -> GlobalResult<Self> {
 		Ok(models::CloudVersionMatchmakerLobbyGroup {
 			name_id: value.name_id.clone(),
 
 			regions: value
 				.regions
 				.into_iter()
-				.map(ApiTryFrom::try_from)
+				.map(ApiTryFrom::api_try_from)
 				.collect::<Result<Vec<_>, _>>()?,
-			max_players_normal: value.max_players_normal.try_into()?,
-			max_players_direct: value.max_players_direct.try_into()?,
-			max_players_party: value.max_players_party.try_into()?,
+			max_players_normal: value.max_players_normal.api_try_into()?,
+			max_players_direct: value.max_players_direct.api_try_into()?,
+			max_players_party: value.max_players_party.api_try_into()?,
 
-			runtime: Box::new(unwrap!(value.runtime).try_into()?),
+			runtime: Box::new(unwrap!(value.runtime).api_try_into()?),
 		})
 	}
 }
@@ -72,11 +72,11 @@ impl ApiTryFrom<models::CloudVersionMatchmakerLobbyGroupRegion>
 {
 	type Error = GlobalError;
 
-	fn try_from(value: models::CloudVersionMatchmakerLobbyGroupRegion) -> GlobalResult<Self> {
+	fn api_try_from(value: models::CloudVersionMatchmakerLobbyGroupRegion) -> GlobalResult<Self> {
 		Ok(backend::matchmaker::lobby_group::Region {
 			region_id: Some(value.region_id.into()),
 			tier_name_id: value.tier_name_id.to_owned(),
-			idle_lobbies: value.idle_lobbies.map(|x| (*x).try_into()).transpose()?,
+			idle_lobbies: value.idle_lobbies.map(|x| (*x).api_try_into()).transpose()?,
 		})
 	}
 }
@@ -86,13 +86,13 @@ impl ApiTryFrom<backend::matchmaker::lobby_group::Region>
 {
 	type Error = GlobalError;
 
-	fn try_from(value: backend::matchmaker::lobby_group::Region) -> GlobalResult<Self> {
+	fn api_try_from(value: backend::matchmaker::lobby_group::Region) -> GlobalResult<Self> {
 		Ok(models::CloudVersionMatchmakerLobbyGroupRegion {
 			region_id: unwrap!(value.region_id).as_uuid(),
 			tier_name_id: value.tier_name_id.to_owned(),
 			idle_lobbies: value
 				.idle_lobbies
-				.map(ApiTryInto::try_into)
+				.map(ApiTryInto::api_try_into)
 				.transpose()?
 				.map(Box::new),
 		})
@@ -104,7 +104,7 @@ impl ApiTryFrom<models::CloudVersionMatchmakerLobbyGroupIdleLobbiesConfig>
 {
 	type Error = GlobalError;
 
-	fn try_from(
+	fn api_try_from(
 		value: models::CloudVersionMatchmakerLobbyGroupIdleLobbiesConfig,
 	) -> GlobalResult<Self> {
 		ensure_with!(
@@ -119,8 +119,8 @@ impl ApiTryFrom<models::CloudVersionMatchmakerLobbyGroupIdleLobbiesConfig>
 		);
 
 		Ok(backend::matchmaker::lobby_group::IdleLobbies {
-			min_idle_lobbies: value.min_idle_lobbies.try_into()?,
-			max_idle_lobbies: value.max_idle_lobbies.try_into()?,
+			min_idle_lobbies: value.min_idle_lobbies.api_try_into()?,
+			max_idle_lobbies: value.max_idle_lobbies.api_try_into()?,
 		})
 	}
 }
@@ -130,10 +130,10 @@ impl ApiTryFrom<backend::matchmaker::lobby_group::IdleLobbies>
 {
 	type Error = GlobalError;
 
-	fn try_from(value: backend::matchmaker::lobby_group::IdleLobbies) -> GlobalResult<Self> {
+	fn api_try_from(value: backend::matchmaker::lobby_group::IdleLobbies) -> GlobalResult<Self> {
 		Ok(models::CloudVersionMatchmakerLobbyGroupIdleLobbiesConfig {
-			min_idle_lobbies: value.min_idle_lobbies.try_into()?,
-			max_idle_lobbies: value.max_idle_lobbies.try_into()?,
+			min_idle_lobbies: value.min_idle_lobbies.api_try_into()?,
+			max_idle_lobbies: value.max_idle_lobbies.api_try_into()?,
 		})
 	}
 }
@@ -143,7 +143,7 @@ impl ApiTryFrom<models::CloudVersionMatchmakerLobbyGroupRuntime>
 {
 	type Error = GlobalError;
 
-	fn try_from(value: models::CloudVersionMatchmakerLobbyGroupRuntime) -> GlobalResult<Self> {
+	fn api_try_from(value: models::CloudVersionMatchmakerLobbyGroupRuntime) -> GlobalResult<Self> {
 		Ok(backend::matchmaker::LobbyRuntime {
 			runtime: value
 				.docker
@@ -166,7 +166,7 @@ impl ApiTryFrom<models::CloudVersionMatchmakerLobbyGroupRuntime>
 							ports: runtime
 								.ports
 								.into_iter()
-								.map(ApiTryInto::try_into)
+								.map(ApiTryInto::api_try_into)
 								.collect::<GlobalResult<_>>()?,
 						},
 					))
@@ -181,7 +181,7 @@ impl ApiTryFrom<backend::matchmaker::LobbyRuntime>
 {
 	type Error = GlobalError;
 
-	fn try_from(value: backend::matchmaker::LobbyRuntime) -> GlobalResult<Self> {
+	fn api_try_from(value: backend::matchmaker::LobbyRuntime) -> GlobalResult<Self> {
 		let runtime = unwrap!(value.runtime);
 
 		Ok(match runtime {
@@ -194,7 +194,7 @@ impl ApiTryFrom<backend::matchmaker::LobbyRuntime>
 							env_vars: runtime
 								.env_vars
 								.into_iter()
-								.map(ApiTryFrom::try_from)
+								.map(ApiTryFrom::api_try_from)
 								.collect::<Result<Vec<_>, _>>()?,
 							network_mode: Some(
 								unwrap!(backend::matchmaker::lobby_runtime::NetworkMode::from_i32(
@@ -205,7 +205,7 @@ impl ApiTryFrom<backend::matchmaker::LobbyRuntime>
 							ports: runtime
 								.ports
 								.into_iter()
-								.map(ApiTryFrom::try_from)
+								.map(ApiTryFrom::api_try_from)
 								.collect::<Result<Vec<_>, _>>()?,
 						},
 					)),
@@ -220,7 +220,7 @@ impl ApiTryFrom<models::CloudVersionMatchmakerLobbyGroupRuntimeDockerPort>
 {
 	type Error = GlobalError;
 
-	fn try_from(
+	fn api_try_from(
 		value: models::CloudVersionMatchmakerLobbyGroupRuntimeDockerPort,
 	) -> GlobalResult<Self> {
 		if let Some(target_port) = value.target_port {
@@ -244,10 +244,10 @@ impl ApiTryFrom<models::CloudVersionMatchmakerLobbyGroupRuntimeDockerPort>
 						error = "`target_port` out of bounds"
 					);
 
-					Ok(x.try_into()?)
+					Ok(x.api_try_into()?)
 				})
 				.transpose()?,
-			port_range: value.port_range.map(|x| (*x).try_into()).transpose()?,
+			port_range: value.port_range.map(|x| (*x).api_try_into()).transpose()?,
 			proxy_protocol: (ApiInto::<backend::matchmaker::lobby_runtime::ProxyProtocol>::api_into(
 				value.proxy_protocol,
 			)) as i32,
@@ -261,13 +261,13 @@ impl ApiTryFrom<backend::matchmaker::lobby_runtime::Port>
 {
 	type Error = GlobalError;
 
-	fn try_from(value: backend::matchmaker::lobby_runtime::Port) -> GlobalResult<Self> {
+	fn api_try_from(value: backend::matchmaker::lobby_runtime::Port) -> GlobalResult<Self> {
 		Ok(models::CloudVersionMatchmakerLobbyGroupRuntimeDockerPort {
 			label: value.label,
-			target_port: value.target_port.map(|x| x.try_into()).transpose()?,
+			target_port: value.target_port.map(|x| x.api_try_into()).transpose()?,
 			port_range: value
 				.port_range
-				.map(ApiTryInto::try_into)
+				.map(ApiTryInto::api_try_into)
 				.transpose()?
 				.map(Box::new),
 			proxy_protocol: unwrap!(backend::matchmaker::lobby_runtime::ProxyProtocol::from_i32(
@@ -296,7 +296,7 @@ impl ApiTryFrom<backend::matchmaker::lobby_runtime::EnvVar>
 {
 	type Error = GlobalError;
 
-	fn try_from(value: backend::matchmaker::lobby_runtime::EnvVar) -> GlobalResult<Self> {
+	fn api_try_from(value: backend::matchmaker::lobby_runtime::EnvVar) -> GlobalResult<Self> {
 		Ok(
 			models::CloudVersionMatchmakerLobbyGroupRuntimeDockerEnvVar {
 				key: value.key,

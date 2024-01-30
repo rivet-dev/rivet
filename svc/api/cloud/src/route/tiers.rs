@@ -23,7 +23,7 @@ pub async fn list_tiers(
 			.tiers
 			.clone()
 			.into_iter()
-			.map(ApiTryInto::try_into)
+			.map(ApiTryInto::api_try_into)
 			.collect::<GlobalResult<Vec<_>>>()?,
 	})
 }

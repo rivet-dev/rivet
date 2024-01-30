@@ -378,7 +378,7 @@ pub async fn create(
 		}
 	};
 
-	let dynamic_max_players = body.max_players.map(ApiTryInto::try_into).transpose()?;
+	let dynamic_max_players = body.max_players.map(ApiTryInto::api_try_into).transpose()?;
 
 	// Verify that lobby creation is enabled and user can create a lobby
 	util_mm::verification::verify_config(
@@ -581,10 +581,10 @@ pub async fn list(
 				region_id: region.name_id.clone(),
 				game_mode_id: lobby_group.name_id.clone(),
 				lobby_id: unwrap_ref!(lobby.lobby.lobby_id).as_uuid(),
-				max_players_normal: ApiTryInto::try_into(lobby.lobby.max_players_normal)?,
-				max_players_direct: ApiTryInto::try_into(lobby.lobby.max_players_direct)?,
-				max_players_party: ApiTryInto::try_into(lobby.lobby.max_players_party)?,
-				total_player_count: ApiTryInto::try_into(
+				max_players_normal: ApiTryInto::api_try_into(lobby.lobby.max_players_normal)?,
+				max_players_direct: ApiTryInto::api_try_into(lobby.lobby.max_players_direct)?,
+				max_players_party: ApiTryInto::api_try_into(lobby.lobby.max_players_party)?,
+				total_player_count: ApiTryInto::api_try_into(
 					lobby.player_count.registered_player_count,
 				)?,
 				state: lobby.state.map(Some),
@@ -914,7 +914,7 @@ async fn find_inner(
 				remote_address: unwrap_ref!(ctx.remote_address()).to_string(),
 				origin_host: origin_host,
 				captcha_config: Some(captcha_config.clone()),
-				client_response: Some((*captcha).try_into()?),
+				client_response: Some((*captcha).api_try_into()?),
 				namespace_id: Some(game_ns.namespace_id.into()),
 			})
 			.await?;
@@ -1023,7 +1023,7 @@ async fn find_inner(
 		bypass_verification: matches!(verification, VerificationType::Bypass),
 		tags: tags.clone(),
 		dynamic_max_players: dynamic_max_players
-			.map(ApiTryInto::try_into)
+			.map(ApiTryInto::api_try_into)
 			.transpose()?,
 		debug: None,
 	})
@@ -1264,14 +1264,14 @@ async fn dev_mock_lobby(
 						.target_port
 						.map(|port| format!("{}:{port}", ns_dev_ent.hostname)),
 					hostname: ns_dev_ent.hostname.clone(),
-					port: port.target_port.map(|x| x.try_into()).transpose()?,
+					port: port.target_port.map(|x| x.api_try_into()).transpose()?,
 					port_range: port
 						.port_range
 						.as_ref()
 						.map(|x| {
 							GlobalResult::Ok(models::MatchmakerJoinPortRange {
-								min: x.min.try_into()?,
-								max: x.max.try_into()?,
+								min: x.min.api_try_into()?,
+								max: x.max.api_try_into()?,
 							})
 						})
 						.transpose()?
@@ -1429,7 +1429,7 @@ fn build_port(
 					GlobalResult::Ok(models::MatchmakerJoinPort {
 						host: Some(format!("{}:{}", hostname, proxied_port.ingress_port)),
 						hostname: hostname.clone(),
-						port: Some(proxied_port.ingress_port.try_into()?),
+						port: Some(proxied_port.ingress_port.api_try_into()?),
 						port_range: None,
 						is_tls: matches!(
 							mm_proxy_protocol,
@@ -1454,8 +1454,8 @@ fn build_port(
 				hostname: node_public_ipv4.clone(),
 				port: None,
 				port_range: Some(Box::new(models::MatchmakerJoinPortRange {
-					min: port_range.min.try_into()?,
-					max: port_range.max.try_into()?,
+					min: port_range.min.api_try_into()?,
+					max: port_range.max.api_try_into()?,
 				})),
 				is_tls: false,
 			})

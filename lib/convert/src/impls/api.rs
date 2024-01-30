@@ -7,7 +7,7 @@ use crate::ApiTryFrom;
 impl ApiTryFrom<models::CaptchaConfig> for backend::captcha::CaptchaClientResponse {
 	type Error = GlobalError;
 
-	fn try_from(
+	fn api_try_from(
 		value: models::CaptchaConfig,
 	) -> GlobalResult<backend::captcha::CaptchaClientResponse> {
 		let kind = if let Some(hcaptcha) = value.hcaptcha {

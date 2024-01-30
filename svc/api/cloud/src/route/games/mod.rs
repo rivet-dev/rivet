@@ -403,7 +403,7 @@ pub async fn get(
 			continue;
 		};
 
-		namespaces.push(models::CloudNamespaceSummary::try_from(ns.clone())?);
+		namespaces.push(models::CloudNamespaceSummary::api_try_from(ns.clone())?);
 	}
 	namespaces.sort_by(|a, b| a.display_name.cmp(&b.display_name));
 
@@ -426,7 +426,7 @@ pub async fn get(
 	versions.sort_by_key(|v| v.create_ts);
 	let versions = versions
 		.into_iter()
-		.map(ApiTryInto::try_into)
+		.map(ApiTryInto::api_try_into)
 		.collect::<GlobalResult<Vec<_>>>()?;
 
 	let regions = fetch::game::region_summaries(ctx.op_ctx()).await?;
@@ -438,7 +438,7 @@ pub async fn get(
 			name_id: game.name_id.to_owned(),
 			display_name: game.display_name.to_owned(),
 			developer_group_id: unwrap_ref!(dev_team.team_id).as_uuid(),
-			total_player_count: state.total_player_count.try_into()?,
+			total_player_count: state.total_player_count.api_try_into()?,
 			logo_url: util::route::game_logo(&game),
 			banner_url: util::route::game_banner(&game),
 
@@ -504,7 +504,7 @@ pub async fn prepare_logo_upload(
 			backend::upload::PrepareFile {
 				path: format!("logo.{ext}"),
 				mime: Some(format!("image/{ext}")),
-				content_length: body.content_length.try_into()?,
+				content_length: body.content_length.api_try_into()?,
 				nsfw_score_threshold: Some(util_nsfw::score_thresholds::GAME_LOGO),
 				..Default::default()
 			},
@@ -518,7 +518,7 @@ pub async fn prepare_logo_upload(
 
 	Ok(models::CloudGamesGameLogoUploadPrepareResponse {
 		upload_id,
-		presigned_request: Box::new(presigned_request.clone().try_into()?),
+		presigned_request: Box::new(presigned_request.clone().api_try_into()?),
 	})
 }
 
@@ -579,7 +579,7 @@ pub async fn prepare_banner_upload(
 			backend::upload::PrepareFile {
 				path: format!("banner.{ext}"),
 				mime: Some(format!("image/{ext}")),
-				content_length: body.content_length.try_into()?,
+				content_length: body.content_length.api_try_into()?,
 				nsfw_score_threshold: Some(util_nsfw::score_thresholds::GAME_BANNER),
 				..Default::default()
 			},
@@ -593,7 +593,7 @@ pub async fn prepare_banner_upload(
 
 	Ok(models::CloudGamesGameBannerUploadPrepareResponse {
 		upload_id,
-		presigned_request: Box::new(presigned_request.clone().try_into()?),
+		presigned_request: Box::new(presigned_request.clone().api_try_into()?),
 	})
 }
 

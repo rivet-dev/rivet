@@ -12,7 +12,7 @@ pub mod matchmaker;
 impl ApiTryFrom<backend::game::Version> for models::CloudVersionSummary {
 	type Error = GlobalError;
 
-	fn try_from(value: backend::game::Version) -> GlobalResult<Self> {
+	fn api_try_from(value: backend::game::Version) -> GlobalResult<Self> {
 		Ok(models::CloudVersionSummary {
 			version_id: unwrap!(value.version_id).as_uuid(),
 			create_ts: util::timestamp::to_string(value.create_ts)?,
@@ -25,14 +25,14 @@ pub async fn config_to_proto(
 	value: models::CloudVersionConfig,
 ) -> GlobalResult<backend::cloud::VersionConfig> {
 	Ok(backend::cloud::VersionConfig {
-		cdn: value.cdn.map(|x| (*x).try_into()).transpose()?,
+		cdn: value.cdn.map(|x| (*x).api_try_into()).transpose()?,
 		matchmaker: if let Some(matchmaker) = value.matchmaker {
 			Some(matchmaker::config_to_proto(ctx, *matchmaker).await?)
 		} else {
 			None
 		},
 		kv: value.kv.map(|_| backend::kv::VersionConfig {}),
-		identity: value.identity.map(|x| (*x).try_into()).transpose()?,
+		identity: value.identity.map(|x| (*x).api_try_into()).transpose()?,
 		// TODO:
 		module: None,
 	})
@@ -47,7 +47,7 @@ pub async fn config_to_openapi(
 		engine: None, // CLient side only
 		cdn: value
 			.cdn
-			.map(ApiTryFrom::try_from)
+			.map(ApiTryFrom::api_try_from)
 			.transpose()?
 			.map(Box::new),
 		matchmaker: if let Some(matchmaker) = value.matchmaker {
@@ -60,7 +60,7 @@ pub async fn config_to_openapi(
 		kv: value.kv.map(|_| serde_json::json!({})),
 		identity: value
 			.identity
-			.map(ApiTryFrom::try_from)
+			.map(ApiTryFrom::api_try_from)
 			.transpose()?
 			.map(Box::new),
 	})

@@ -237,7 +237,7 @@ pub fn profile(
 			identities
 				.iter()
 				.cloned()
-				.map(ApiTryInto::try_into)
+				.map(ApiTryInto::api_try_into)
 				.collect::<GlobalResult<Vec<_>>>()?
 		} else {
 			Vec::new()

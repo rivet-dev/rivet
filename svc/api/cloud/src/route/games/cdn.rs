@@ -59,7 +59,7 @@ pub async fn get_sites(
 				create_ts: util::timestamp::to_string(site.create_ts)?,
 				content_length: upload
 					.map_or(0, |upload| upload.content_length)
-					.try_into()?,
+					.api_try_into()?,
 				complete: upload.map_or(true, |upload| upload.complete_ts.is_some()),
 			})
 		})
@@ -84,7 +84,7 @@ pub async fn create_site(
 		files: body
 			.files
 			.into_iter()
-			.map(ApiTryInto::try_into)
+			.map(ApiTryInto::api_try_into)
 			.collect::<GlobalResult<_>>()?,
 	})
 	.await?;
@@ -96,7 +96,7 @@ pub async fn create_site(
 			.presigned_requests
 			.iter()
 			.cloned()
-			.map(ApiTryInto::try_into)
+			.map(ApiTryInto::api_try_into)
 			.collect::<GlobalResult<Vec<_>>>()?,
 	})
 }

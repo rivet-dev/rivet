@@ -170,7 +170,7 @@ pub async fn get(
 		}
 	};
 
-	let summary = ApiTryInto::<models::CloudNamespaceSummary>::try_into(game_namespace)?;
+	let summary = ApiTryInto::<models::CloudNamespaceSummary>::api_try_into(game_namespace)?;
 	let namespace = models::CloudNamespaceFull {
 		namespace_id: summary.namespace_id,
 		create_ts: summary.create_ts,
@@ -180,7 +180,7 @@ pub async fn get(
 
 		config: Box::new(models::CloudNamespaceConfig {
 			cdn: Box::new(cdn_ns_config),
-			matchmaker: Box::new(unwrap_ref!(ns_config.matchmaker).clone().try_into()?),
+			matchmaker: Box::new(unwrap_ref!(ns_config.matchmaker).clone().api_try_into()?),
 			kv: serde_json::json!({}),
 			identity: serde_json::json!({}),
 		}),
@@ -303,7 +303,7 @@ pub async fn create_token_development(
 							error = "`port` out of bounds"
 						);
 
-						Some(port.try_into()?)
+						Some(port.api_try_into()?)
 					} else {
 						None
 					},
@@ -320,8 +320,8 @@ pub async fn create_token_development(
 						);
 
 						Some(backend::matchmaker::lobby_runtime::PortRange {
-							min: port_range.min.try_into()?,
-							max: port_range.max.try_into()?,
+							min: port_range.min.api_try_into()?,
+							max: port_range.max.api_try_into()?,
 						})
 					} else {
 						None
@@ -352,7 +352,7 @@ pub async fn create_token_development(
 
 					Ok(backend::matchmaker::lobby_runtime::Port {
 						label: port.label,
-						target_port: Some(target_port.try_into()?),
+						target_port: Some(target_port.api_try_into()?),
 						port_range: None,
 						proxy_protocol:
 							(ApiInto::<backend::matchmaker::lobby_runtime::ProxyProtocol>::api_into(
@@ -533,12 +533,12 @@ pub async fn update_mm_config(
 
 	let _res = op!([ctx] mm_config_namespace_config_set {
 		namespace_id: Some(namespace_id.into()),
-		lobby_count_max: body.lobby_count_max.try_into()?,
-		max_players_per_client: body.max_players.try_into()?,
-		max_players_per_client_vpn: body.max_players.try_into()?,
-		max_players_per_client_proxy: body.max_players.try_into()?,
-		max_players_per_client_tor: body.max_players.try_into()?,
-		max_players_per_client_hosting: body.max_players.try_into()?,
+		lobby_count_max: body.lobby_count_max.api_try_into()?,
+		max_players_per_client: body.max_players.api_try_into()?,
+		max_players_per_client_vpn: body.max_players.api_try_into()?,
+		max_players_per_client_proxy: body.max_players.api_try_into()?,
+		max_players_per_client_tor: body.max_players.api_try_into()?,
+		max_players_per_client_hosting: body.max_players.api_try_into()?,
 	})
 	.await?;
 
@@ -627,7 +627,7 @@ pub async fn validate_token_development(
 		lobby_ports: body.lobby_ports
 			.clone()
 				.into_iter()
-				.map(ApiTryInto::try_into)
+				.map(ApiTryInto::api_try_into)
 				.collect::<GlobalResult<_>>()?,
 	})
 	.await?;
@@ -665,12 +665,12 @@ pub async fn validate_mm_config(
 
 	let res = op!([ctx] mm_config_namespace_config_validate {
 		namespace_id: Some(namespace_id.into()),
-		lobby_count_max: body.lobby_count_max.try_into()?,
-		max_players_per_client: body.max_players.try_into()?,
-		max_players_per_client_vpn: body.max_players.try_into()?,
-		max_players_per_client_proxy: body.max_players.try_into()?,
-		max_players_per_client_tor: body.max_players.try_into()?,
-		max_players_per_client_hosting: body.max_players.try_into()?,
+		lobby_count_max: body.lobby_count_max.api_try_into()?,
+		max_players_per_client: body.max_players.api_try_into()?,
+		max_players_per_client_vpn: body.max_players.api_try_into()?,
+		max_players_per_client_proxy: body.max_players.api_try_into()?,
+		max_players_per_client_tor: body.max_players.api_try_into()?,
+		max_players_per_client_hosting: body.max_players.api_try_into()?,
 	})
 	.await?;
 

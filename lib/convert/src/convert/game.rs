@@ -34,7 +34,7 @@ pub fn summary(
 		banner_url: util::route::game_banner(&game),
 		url: game_url,
 		developer: Box::new(convert::group::handle(dev_team)?),
-		total_player_count: state.total_player_count.try_into()?,
+		total_player_count: ApiTryInto::api_try_into(state.total_player_count)?,
 	})
 }
 

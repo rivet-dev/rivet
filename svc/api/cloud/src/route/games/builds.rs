@@ -57,7 +57,7 @@ pub async fn get_builds(
 					create_ts: util::timestamp::to_string(build.create_ts)?,
 					content_length: upload
 						.map_or(0, |upload| upload.content_length)
-						.try_into()?,
+						.api_try_into()?,
 					complete: upload.map_or(true, |upload| upload.complete_ts.is_some()),
 				},
 			))
@@ -105,7 +105,7 @@ pub async fn create_build(
 		game_id: Some(game_id.into()),
 		display_name: body.display_name,
 		image_tag: Some(body.image_tag),
-		image_file: Some((*body.image_file).try_into()?),
+		image_file: Some((*body.image_file).api_try_into()?),
 		multipart: multipart_upload,
 		kind: kind as i32,
 		compression: compression as i32,
@@ -117,7 +117,7 @@ pub async fn create_build(
 		Some(Box::new(
 			unwrap!(create_res.image_presigned_requests.first())
 				.clone()
-				.try_into()?,
+				.api_try_into()?,
 		))
 	} else {
 		None
@@ -129,7 +129,7 @@ pub async fn create_build(
 				.image_presigned_requests
 				.iter()
 				.cloned()
-				.map(ApiTryInto::try_into)
+				.map(ApiTryInto::api_try_into)
 				.collect::<GlobalResult<Vec<_>>>()?,
 		)
 	} else {
