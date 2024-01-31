@@ -3,7 +3,7 @@
 # Save the original rustfmt.toml content
 original_content="hard_tabs = true"
 
-# New content to be added
+# New content to be added. These are all unstable, and require nightly to run.
 new_content="
 # https://rust-lang.github.io/rustfmt/?version=v1.6.0&search=import#Crate%5C%3A
 imports_granularity = \"Crate\"
@@ -19,8 +19,8 @@ echo "$original_content$new_content" > rustfmt.toml
 
 # Find all Cargo.toml files in subdirectories
 for cargo_toml in $(find . -name "Cargo.toml"); do
-    # Ignore anything in gen/ and /lib/smithy-output
-    if [[ $cargo_toml == *"gen"* ]] || [[ $cargo_toml == *"lib/smithy-output"* ]]; then
+    # Ignore auto-generated files
+    if [[ $cargo_toml == *"gen"* ]] || [[ $cargo_toml == *"lib/smithy-output"* ]] || [[ $cargo_toml == *"sdks"* ]]; then
         continue
     fi
 
