@@ -71,7 +71,7 @@ pub async fn get_custom_avatars(
 			GlobalResult::Ok((
 				upload.create_ts,
 				models::CloudCustomAvatarSummary {
-					upload_id: upload_id,
+					upload_id,
 					display_name: profile_file_name.clone(),
 					url: upload.complete_ts.map(|_| {
 						util::route::custom_avatar(upload_id, &profile_file_name, upload.provider)

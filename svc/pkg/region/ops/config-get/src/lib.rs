@@ -34,7 +34,8 @@ pub async fn read() -> HashMap<String, region::config_get::Region> {
 				.expect("invalid region config");
 
 			// Convert to proto
-			let config_proto = config
+
+			config
 				.into_iter()
 				.map(|(k, v)| {
 					(
@@ -46,9 +47,7 @@ pub async fn read() -> HashMap<String, region::config_get::Region> {
 						},
 					)
 				})
-				.collect::<HashMap<String, _>>();
-
-			config_proto
+				.collect::<HashMap<String, _>>()
 		})
 		.await
 		.clone()

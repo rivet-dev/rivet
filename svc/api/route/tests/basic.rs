@@ -12,7 +12,7 @@ const CDN_POLL_INTERVAL: Duration = Duration::from_millis(500);
 
 static GLOBAL_INIT: Once = Once::new();
 
-const API_ROUTE_URL: &'static str = "http://rivet-api-route.rivet-service.svc.cluster.local";
+const API_ROUTE_URL: &str = "http://rivet-api-route.rivet-service.svc.cluster.local";
 
 async fn get_api_route_token() -> String {
 	util::env::read_secret(&["rivet", "api_route", "token"])

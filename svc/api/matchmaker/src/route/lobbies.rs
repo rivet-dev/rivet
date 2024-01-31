@@ -398,16 +398,14 @@ pub async fn create(
 			lobby_config_json: body
 				.lobby_config
 				.as_ref()
-				.map(|o| o.as_ref().map(serde_json::to_string))
-				.flatten()
+				.and_then(|o| o.as_ref().map(serde_json::to_string))
 				.transpose()?
 				.as_deref(),
 
 			verification_data_json: body
 				.verification_data
 				.as_ref()
-				.map(|o| o.as_ref().map(serde_json::to_string))
-				.flatten()
+				.and_then(|o| o.as_ref().map(serde_json::to_string))
 				.transpose()?
 				.as_deref(),
 			custom_lobby_publicity: Some(publicity),
@@ -750,7 +748,7 @@ async fn fetch_lobby_list(
 			.iter()
 			.filter(|x| {
 				matches!(
-					backend::matchmaker::lobby::Publicity::from_i32(x.publicity as i32),
+					backend::matchmaker::lobby::Publicity::from_i32(x.publicity),
 					Some(backend::matchmaker::lobby::Publicity::Public)
 				)
 			})
@@ -850,7 +848,7 @@ pub async fn get_state(
 	let state = lobby
 		.state_json
 		.as_ref()
-		.map(|state_json| serde_json::from_str::<serde_json::Value>(&state_json))
+		.map(|state_json| serde_json::from_str::<serde_json::Value>(state_json))
 		.transpose()?;
 
 	Ok(state)

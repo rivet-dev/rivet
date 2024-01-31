@@ -791,7 +791,7 @@ pub async fn search(
 	let group_handles = team_res
 		.teams
 		.iter()
-		.map(|team| convert::group::handle(team))
+		.map(convert::group::handle)
 		.collect::<GlobalResult<Vec<_>>>()?;
 
 	Ok(models::SearchGroupsResponse {

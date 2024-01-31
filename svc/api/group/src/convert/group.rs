@@ -9,7 +9,7 @@ pub fn handle(team: &backend::team::Team) -> GlobalResult<models::GroupHandle> {
 	Ok(models::GroupHandle {
 		group_id: team_id.to_string(),
 		display_name: team.display_name.to_owned(),
-		avatar_url: util::route::team_avatar(&team),
+		avatar_url: util::route::team_avatar(team),
 		external: models::GroupExternalLinks {
 			profile: util::route::team_profile(team_id),
 			chat: Default::default(),
@@ -37,7 +37,7 @@ pub fn summary(
 		group_id: team_id.to_string(),
 		display_name: team.display_name.clone(),
 		bio: team.bio.clone(),
-		avatar_url: util::route::team_avatar(&team),
+		avatar_url: util::route::team_avatar(team),
 		external: models::GroupExternalLinks {
 			profile: util::route::team_profile(team_id),
 			chat: Default::default(),

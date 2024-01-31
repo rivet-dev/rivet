@@ -65,64 +65,55 @@ async fn handle(
 	let (runs, run_networks, run_ports, run_meta_nomad, run_proxied_ports) = tokio::try_join!(
 		// runs
 		async {
-			GlobalResult::Ok(
-				sql_fetch_all!(
-					[ctx, Run]
-					"
+			sql_fetch_all!(
+				[ctx, Run]
+				"
 					SELECT run_id, region_id, create_ts, start_ts, stop_ts, cleanup_ts
 					FROM db_job_state.runs
 					WHERE run_id = ANY($1)
 					",
-					&run_ids,
-				)
-				.await?,
+				&run_ids,
 			)
+			.await
 		},
 		// run_networks
 		async {
-			GlobalResult::Ok(
-				sql_fetch_all!(
-					[ctx, RunNetwork]
-					"
+			sql_fetch_all!(
+				[ctx, RunNetwork]
+				"
 					SELECT run_id, ip, mode
 					FROM db_job_state.run_networks
 					WHERE run_id = ANY($1)
 					",
-					&run_ids,
-				)
-				.await?,
+				&run_ids,
 			)
+			.await
 		},
 		// run_ports
 		async {
-			GlobalResult::Ok(
-				sql_fetch_all!(
-					[ctx, RunPort]
-					"
+			sql_fetch_all!(
+				[ctx, RunPort]
+				"
 					SELECT run_id, label, ip, source, target
 					FROM db_job_state.run_ports
 					WHERE run_id = ANY($1)
 					",
-					&run_ids,
-				)
-				.await?,
+				&run_ids,
 			)
+			.await
 		},
 		// run_meta_nomad
 		async {
-			GlobalResult::Ok(
-				sql_fetch_all!(
+			sql_fetch_all!(
 					[ctx, RunMetaNomad]
 					"SELECT run_id, dispatched_job_id, alloc_id, node_id, node_name, node_public_ipv4, node_vlan_ipv4, alloc_state FROM db_job_state.run_meta_nomad WHERE run_id = ANY($1)",
 					&run_ids,
 				)
-					.await?
-			)
+					.await
 		},
 		// run_proxied_ports
 		async {
-			GlobalResult::Ok(
-				sql_fetch_all!(
+			sql_fetch_all!(
 					[ctx, RunProxiedPort]
 					"
 					SELECT run_id, target_nomad_port_label, ingress_port, ingress_hostnames, proxy_protocol, ssl_domain_mode
@@ -131,8 +122,7 @@ async fn handle(
 					",
 					&run_ids,
 				)
-				.await?,
-			)
+				.await
 		},
 	)?;
 

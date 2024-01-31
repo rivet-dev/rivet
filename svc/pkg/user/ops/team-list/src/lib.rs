@@ -44,7 +44,7 @@ async fn handle(
 								.collect(),
 						};
 
-						cache.resolve(&user_id.clone(), user_teams.into());
+						cache.resolve(&user_id.clone(), user_teams);
 					}
 
 					Ok(cache)

@@ -34,7 +34,7 @@ async fn handle(
 
 	// Collect rows into hashmap
 	for row in &game_rows {
-		let entry = games.entry(row.game_id).or_insert_with(Vec::new);
+		let entry = games.entry(row.game_id).or_default();
 		entry.push(row.namespace_id);
 	}
 

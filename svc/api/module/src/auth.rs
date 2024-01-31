@@ -202,7 +202,7 @@ impl Auth {
 			);
 		}
 
-		utils::validate_config(ctx, namespace_id.into()).await?;
+		utils::validate_config(ctx, namespace_id).await?;
 
 		Ok(namespace_id)
 	}

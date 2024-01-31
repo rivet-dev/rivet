@@ -437,8 +437,8 @@ pub async fn get(
 			display_name: game.display_name.to_owned(),
 			developer_group_id: unwrap_ref!(dev_team.team_id).as_uuid(),
 			total_player_count: state.total_player_count.api_try_into()?,
-			logo_url: util::route::game_logo(&game),
-			banner_url: util::route::game_banner(&game),
+			logo_url: util::route::game_logo(game),
+			banner_url: util::route::game_banner(game),
 
 			namespaces,
 			versions,

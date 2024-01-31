@@ -59,5 +59,5 @@ pub mod game_activity {
 
 /// ZSET
 pub fn user_presence_touch() -> String {
-	format!("{{global}}:user_presence:user:touch")
+	"{global}:user_presence:user:touch".to_string()
 }

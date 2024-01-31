@@ -219,7 +219,8 @@ pub async fn get_lobby_logs(
 		logs_res
 	} else {
 		// Read most recent logs
-		let logs_res = op!([ctx] @dont_log_body job_log_read {
+
+		op!([ctx] @dont_log_body job_log_read {
 			run_id: Some(run_id.into()),
 			task: util_job::RUN_MAIN_TASK_NAME.into(),
 			stream_type: stream_type as i32,
@@ -227,9 +228,7 @@ pub async fn get_lobby_logs(
 			order_asc: false,
 			query: Some(job_log::read::request::Query::BeforeTs(before_ts)),
 		})
-		.await?;
-
-		logs_res
+		.await?
 	};
 
 	// Convert logs

@@ -165,37 +165,35 @@ async fn handle(
 	let refresh_token = if let Some(token) = current_refresh_token {
 		// Preserve existing refresh token
 		Some(token)
-	} else {
-		if let Some(refresh_token_config) = &ctx.refresh_token_config {
-			// Create new refresh token
-			let refresh_token = create_token(
-				&ctx,
-				&crdb,
-				if let Some(req_label) = &ctx.label {
-					Some(format!("{}_rf", req_label))
-				} else {
-					Some("rf".to_owned())
-				},
-				refresh_token_config,
-				Uuid::new_v4(),
-				None,
-				&[claims::Entitlement {
-					kind: Some(claims::entitlement::Kind::Refresh(
-						claims::entitlement::Refresh {
-							session_id: Some(session_id.into()),
-						},
-					)),
-				}],
-				session_id,
-				ctx.ephemeral,
-			)
-			.await?;
+	} else if let Some(refresh_token_config) = &ctx.refresh_token_config {
+		// Create new refresh token
+		let refresh_token = create_token(
+			&ctx,
+			&crdb,
+			if let Some(req_label) = &ctx.label {
+				Some(format!("{}_rf", req_label))
+			} else {
+				Some("rf".to_owned())
+			},
+			refresh_token_config,
+			Uuid::new_v4(),
+			None,
+			&[claims::Entitlement {
+				kind: Some(claims::entitlement::Kind::Refresh(
+					claims::entitlement::Refresh {
+						session_id: Some(session_id.into()),
+					},
+				)),
+			}],
+			session_id,
+			ctx.ephemeral,
+		)
+		.await?;
 
-			Some(refresh_token)
-		} else {
-			// No refresh token is needed
-			None
-		}
+		Some(refresh_token)
+	} else {
+		// No refresh token is needed
+		None
 	};
 
 	// Create token

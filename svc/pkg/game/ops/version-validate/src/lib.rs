@@ -695,7 +695,7 @@ async fn handle(
 							.any(|x| *x == env_var.key);
 						let conflicts_port = docker_config.ports.iter().any(|port| {
 							if port.target_port.is_some() {
-								env_var.key == format!("PORT_{}", port.label.replace("-", "_"))
+								env_var.key == format!("PORT_{}", port.label.replace('-', "_"))
 							} else if port.port_range.is_some() {
 								env_var.key == format!("PORT_RANGE_{}_MIN", port.label)
 									|| env_var.key == format!("PORT_RANGE_{}_MAX", port.label)

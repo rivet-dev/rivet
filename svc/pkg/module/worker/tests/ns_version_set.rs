@@ -209,7 +209,7 @@ async fn deploy_game_version(
 			config: Some(backend::module::GameVersionConfig {
 				dependencies: dependencies.into_iter().map(|(key, module_version_id)| {
 					backend::module::game_version_config::Dependency {
-						key: key,
+						key,
 						module_version_id: Some(module_version_id.into()),
 					}
 				}).collect(),

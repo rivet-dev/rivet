@@ -9,7 +9,7 @@ pub async fn get(
 	_ctx: Ctx<Auth>,
 	_watch_index_query: WatchIndexQuery,
 ) -> GlobalResult<models::CloudBootstrapResponse> {
-	Ok(build_bootstrap_data().await?)
+	build_bootstrap_data().await
 }
 
 pub async fn build_bootstrap_data() -> GlobalResult<models::CloudBootstrapResponse> {

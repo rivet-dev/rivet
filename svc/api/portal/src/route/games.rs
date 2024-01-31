@@ -41,8 +41,8 @@ pub async fn profile(
 			game_id: game_id.to_string(),
 			name_id: game.name_id.clone(),
 			display_name: game.display_name.clone(),
-			logo_url: util::route::game_logo(&game),
-			banner_url: util::route::game_banner(&game),
+			logo_url: util::route::game_logo(game),
+			banner_url: util::route::game_banner(game),
 
 			url: game.url.clone(),
 			developer: developer_team.clone(),

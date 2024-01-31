@@ -309,7 +309,7 @@ async fn captcha_verify(
 		Err(err) if err.is(formatted_error::code::CAPTCHA_CAPTCHA_FAILED) => {
 			assert!(!pass, "verify should have passed");
 		}
-		Err(err) => Err(err).unwrap(),
+		Err(err) => panic!("{:?}", err),
 	}
 }
 

@@ -304,7 +304,6 @@ async fn get_lobby_host_ip(ctx: &TestCtx, lobby_id: Uuid) -> String {
 	let Some(backend::job::run_meta::Kind::Nomad(run_meta_nomad)) = &run_meta.kind else {
 		panic!()
 	};
-	let node_public_ipv4 = run_meta_nomad.node_public_ipv4.clone().unwrap();
 
-	node_public_ipv4
+	run_meta_nomad.node_public_ipv4.clone().unwrap()
 }

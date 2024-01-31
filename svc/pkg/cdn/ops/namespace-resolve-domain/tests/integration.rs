@@ -12,7 +12,7 @@ async fn empty(ctx: TestCtx) {
 	let domain = format!("{}.com", util::faker::ident());
 
 	op!([ctx] cdn_namespace_domain_create {
-		namespace_id: Some(namespace_id.into()),
+		namespace_id: Some(namespace_id),
 		domain: domain.clone(),
 	})
 	.await

@@ -191,7 +191,7 @@ async fn run_lobby_lifecycle(
 		.await?;
 
 	// Test HTTP connectivity
-	let (hostname, _) = get_lobby_addr(&ctx, lobby_id, "test-http").await?;
+	let (hostname, _) = get_lobby_addr(ctx, lobby_id, "test-http").await?;
 	tracing::info!("testing http to {}", hostname);
 
 	// Echo body

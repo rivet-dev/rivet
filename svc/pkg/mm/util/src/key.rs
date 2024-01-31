@@ -190,17 +190,17 @@ pub fn lobby_available_spots(
 
 /// ZSET<lobby id, expire ts>
 pub fn lobby_unready() -> String {
-	format!("{{global}}:mm:lobby:unready")
+	"{global}:mm:lobby:unready".to_string()
 }
 
 /// ZSET<lobby id, expire ts>
 pub fn player_unregistered() -> String {
-	format!("{{global}}:mm:player:unregistered")
+	"{global}:mm:player:unregistered".to_string()
 }
 
 /// ZSET<lobby id, expire ts>
 pub fn player_auto_remove() -> String {
-	format!("{{global}}:mm:player:auto_remove")
+	"{global}:mm:player:auto_remove".to_string()
 }
 
 // Placeholder key

@@ -75,7 +75,7 @@ async fn worker(
 			.find(|x| x.key == **dep_key)
 			.and_then(|x| x.module_version_id)
 			.map(|x| x.as_uuid());
-		create_instances(&ctx, namespace_id, dep_key, unwrap!(version_id)).await?;
+		create_instances(ctx, namespace_id, dep_key, unwrap!(version_id)).await?;
 	}
 
 	// Update instances
@@ -107,7 +107,7 @@ async fn worker(
 			.find(|x| x.key == **dep_key)
 			.map(|x| x.instance_id);
 
-		delete_instance(&ctx, namespace_id, dep_key, unwrap!(instance_id)).await?;
+		delete_instance(ctx, namespace_id, dep_key, unwrap!(instance_id)).await?;
 	}
 
 	msg!([ctx] module::msg::ns_version_set_complete(namespace_id) {

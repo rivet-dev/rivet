@@ -132,7 +132,7 @@ async fn worker(ctx: &OperationContext<job_run::msg::create::Message>) -> Global
 	run_job_perf.end();
 
 	let db_write_perf = ctx.perf().start("write-to-db-after-run").await;
-	write_to_db_after_run(&ctx, run_id, &nomad_dispatched_job_id).await?;
+	write_to_db_after_run(ctx, run_id, &nomad_dispatched_job_id).await?;
 	db_write_perf.end();
 
 	// See TRAEFIK_GRACE_MS

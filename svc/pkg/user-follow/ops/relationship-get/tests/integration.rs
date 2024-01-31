@@ -7,9 +7,9 @@ async fn basic(ctx: TestCtx) {
 	let user_b = Uuid::new_v4();
 	let user_c = Uuid::new_v4();
 
-	let all_user_ids = vec![user_a, user_b, user_c];
+	let all_user_ids = [user_a, user_b, user_c];
 
-	let follows = vec![
+	let follows = [
 		(user_a, user_b),
 		(user_a, user_c),
 		(user_b, user_c),

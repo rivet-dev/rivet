@@ -142,7 +142,7 @@ async fn test_image_has_profanity(
 	match res {
 		Ok(_) => false,
 		Err(err) if err.is(formatted_error::code::UPLOAD_NSFW_CONTENT_DETECTED) => true,
-		Err(err) => Err(err).unwrap(),
+		Err(err) => panic!("{:?}", err),
 	}
 }
 

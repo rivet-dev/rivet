@@ -1,4 +1,3 @@
-use futures_util::StreamExt;
 use proto::backend::{self, pkg::*};
 use rivet_api::apis::configuration::Configuration;
 use rivet_operation::prelude::*;
@@ -145,7 +144,7 @@ pub async fn run_from_env(_ts: i64) -> GlobalResult<()> {
 				let start = Instant::now();
 				match rivet_api::apis::identity_events_api::identity_events_watch(
 					&config,
-					watch_index.as_ref().map(|x| x.as_str()),
+					watch_index.as_deref(),
 				)
 				.await
 				{

@@ -48,7 +48,7 @@ pub async fn group_summaries(
 				group_id: team_id.to_string(),
 				display_name: team_data.display_name.clone(),
 				bio: team_data.bio.clone(),
-				avatar_url: util::route::team_avatar(&team_data),
+				avatar_url: util::route::team_avatar(team_data),
 				external: models::GroupExternalLinks {
 					profile: util::route::team_profile(team_id),
 					chat: Default::default(),

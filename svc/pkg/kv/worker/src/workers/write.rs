@@ -15,16 +15,16 @@ async fn worker(ctx: &OperationContext<kv::msg::write::Message>) -> GlobalResult
 		if !value.is_null() {
 			// Write value if not null
 			(
-				upsert_value(&ctx, ctx.ts(), namespace_id, &ctx.key, value, directory_str).await?,
+				upsert_value(ctx, ctx.ts(), namespace_id, &ctx.key, value, directory_str).await?,
 				false,
 			)
 		} else {
 			// Delete value if null
-			(delete_value(&ctx, namespace_id, &ctx.key).await?, true)
+			(delete_value(ctx, namespace_id, &ctx.key).await?, true)
 		}
 	} else {
 		// Delete value
-		(delete_value(&ctx, namespace_id, &ctx.key).await?, true)
+		(delete_value(ctx, namespace_id, &ctx.key).await?, true)
 	};
 
 	if updated {

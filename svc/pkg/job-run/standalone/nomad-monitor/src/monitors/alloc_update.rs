@@ -19,7 +19,7 @@ pub async fn start(
 	nomad_util::monitor::Monitor::run(
 		configuration,
 		redis_job,
-		&redis_index_key,
+		redis_index_key,
 		&["Allocation"],
 		move |event| {
 			let client = shared_client.clone().wrap_new("job-alloc-updated-monitor");

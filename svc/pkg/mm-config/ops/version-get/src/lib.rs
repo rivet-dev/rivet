@@ -231,7 +231,7 @@ async fn fetch_versions(
 
 									actions: (find_config.is_some()
 										|| join_config.is_some() || create_config.is_some())
-									.then(|| backend::matchmaker::lobby_group::Actions {
+									.then_some(backend::matchmaker::lobby_group::Actions {
 										find: find_config,
 										join: join_config,
 										create: create_config,

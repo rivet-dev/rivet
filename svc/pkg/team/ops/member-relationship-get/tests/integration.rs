@@ -13,7 +13,7 @@ async fn basic(ctx: TestCtx) {
 	let team_b = Uuid::new_v4();
 	let team_c = Uuid::new_v4();
 
-	let all_user_ids = vec![user_a, user_b, user_c];
+	let all_user_ids = [user_a, user_b, user_c];
 	let all_team_ids = vec![team_a, team_b, team_c];
 
 	// Create fake teams
@@ -27,7 +27,7 @@ async fn basic(ctx: TestCtx) {
 	}
 
 	// Create memberships
-	let memberships = vec![
+	let memberships = [
 		(user_a, team_a),
 		(user_a, team_b),
 		(user_b, team_c),
