@@ -54,7 +54,7 @@ async fn worker(
 	let job_id = unwrap_ref!(alloc.job_id, "alloc has no job id");
 	let alloc_id = unwrap_ref!(alloc.ID);
 	let nomad_node_id = unwrap_ref!(alloc.node_id, "alloc has no node id");
-	let nomad_node_name = unwrap_ref!(alloc.node_id, "alloc has no node name");
+	let _nomad_node_name = unwrap_ref!(alloc.node_id, "alloc has no node name");
 
 	if !util_job::is_nomad_job_run(job_id) {
 		tracing::info!(%job_id, "disregarding event");

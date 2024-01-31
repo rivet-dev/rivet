@@ -149,7 +149,7 @@ pub async fn list(
 	let directory = urlencoding::decode(&query.directory)?.to_string();
 	utils::validate_keys(&[&directory], true)?;
 
-	let update_ts = util::timestamp::now();
+	let _update_ts = util::timestamp::now();
 
 	// Get current value
 	let res = op!([ctx] kv_list {

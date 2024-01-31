@@ -6,7 +6,7 @@ fn main() -> GlobalResult<()> {
 
 async fn start() -> GlobalResult<()> {
 	let pools = rivet_pools::from_env("load-test-sqlx").await?;
-	let shared_client = chirp_client::SharedClient::from_env(pools.clone())?;
+	let _shared_client = chirp_client::SharedClient::from_env(pools.clone())?;
 
 	tokio::task::Builder::new()
 		.name("load_test_sqlx::health_checks")

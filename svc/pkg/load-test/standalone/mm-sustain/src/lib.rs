@@ -1,16 +1,12 @@
-use futures_util::StreamExt;
-use proto::{
-	backend::{self, pkg::*},
-	common,
-};
-use rivet_api::{apis::configuration::Configuration, models};
+use proto::backend::{self, pkg::*};
+
 use rivet_operation::prelude::*;
-use serde_json::json;
-use std::collections::{HashMap, HashSet};
-use tokio::time::{interval, Duration, Instant};
+
+use std::collections::HashMap;
+use tokio::time::Instant;
 
 #[tracing::instrument(skip_all)]
-pub async fn run_from_env(ts: i64) -> GlobalResult<()> {
+pub async fn run_from_env(_ts: i64) -> GlobalResult<()> {
 	let pools = rivet_pools::from_env("load-test-mm-sustain").await?;
 	let client =
 		chirp_client::SharedClient::from_env(pools.clone())?.wrap_new("load-test-mm-sustain");
@@ -141,7 +137,7 @@ pub async fn run_from_env(ts: i64) -> GlobalResult<()> {
 
 async fn run_lobby_worker(
 	ctx: OperationContext<()>,
-	worker_idx: usize,
+	_worker_idx: usize,
 	namespace_id: Uuid,
 	region_id: Uuid,
 	lobby_group_id: Uuid,

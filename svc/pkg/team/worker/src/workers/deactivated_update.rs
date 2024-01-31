@@ -3,7 +3,7 @@ use proto::backend::pkg::*;
 
 #[worker(name = "team-deactivated-update")]
 async fn worker(
-	ctx: &OperationContext<team::msg::deactivated_update::Message>,
+	_ctx: &OperationContext<team::msg::deactivated_update::Message>,
 ) -> GlobalResult<()> {
 	// TODO: Halt all mm
 

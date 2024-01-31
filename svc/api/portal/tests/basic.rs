@@ -42,7 +42,7 @@ impl Ctx {
 			Vec::new(),
 		);
 
-		let (user_id, user_token) = Self::issue_user_token(&op_ctx).await;
+		let (_user_id, user_token) = Self::issue_user_token(&op_ctx).await;
 
 		let http_client = rivet_portal::Config::builder()
 			.set_uri("http://traefik.traefik.svc.cluster.local:80/portal")
@@ -89,7 +89,7 @@ fn socket_addr() -> SocketAddr {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn generic() {
-	let ctx = Ctx::init().await;
+	let _ctx = Ctx::init().await;
 
 	// TODO: Write tests
 }

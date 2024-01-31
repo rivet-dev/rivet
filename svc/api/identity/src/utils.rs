@@ -1,6 +1,6 @@
 use api_helper::ctx::Ctx;
-use proto::{backend, common};
-use rivet_api::models;
+use proto::common;
+
 use rivet_operation::prelude::*;
 
 use crate::auth::Auth;

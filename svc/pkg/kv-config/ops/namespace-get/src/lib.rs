@@ -16,7 +16,7 @@ async fn handle(
 		.map(common::Uuid::as_uuid)
 		.collect::<Vec<_>>();
 
-	let sql_pool = ctx.crdb().await?;
+	let _sql_pool = ctx.crdb().await?;
 	let namespaces = sql_fetch_all!(
 		[ctx, GameNamespace]
 		"

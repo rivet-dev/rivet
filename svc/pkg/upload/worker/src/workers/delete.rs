@@ -24,7 +24,7 @@ struct BucketDeletions {
 
 #[worker(name = "upload-delete")]
 async fn worker(ctx: &OperationContext<upload::msg::delete::Message>) -> GlobalResult<()> {
-	let crdb = ctx.crdb().await?;
+	let _crdb = ctx.crdb().await?;
 
 	let request_id = unwrap_ref!(ctx.request_id).as_uuid();
 	let upload_ids = ctx

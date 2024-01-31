@@ -19,7 +19,7 @@ pub async fn run_from_env() -> GlobalResult<()> {
 		(),
 		Vec::new(),
 	);
-	let crdb_pool = ctx.crdb().await?;
+	let _crdb_pool = ctx.crdb().await?;
 
 	let Ok(backfill_provider) = std::env::var("S3_BACKFILL_PROVIDER") else {
 		tracing::warn!("no backfill provider env var, will have to manually re-run to backfill");

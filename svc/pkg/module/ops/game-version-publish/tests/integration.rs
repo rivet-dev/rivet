@@ -1,9 +1,9 @@
 use chirp_worker::prelude::*;
-use proto::backend::{self, module::*};
+use proto::backend::{self};
 
 #[worker_test]
 async fn empty(ctx: TestCtx) {
-	let game_res = op!([ctx] faker_game {
+	let _game_res = op!([ctx] faker_game {
 		..Default::default()
 	})
 	.await
@@ -26,5 +26,5 @@ async fn empty(ctx: TestCtx) {
 	})
 	.await
 	.unwrap();
-	let version = res.versions.first().expect("version not found");
+	let _version = res.versions.first().expect("version not found");
 }

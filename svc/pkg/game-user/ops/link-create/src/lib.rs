@@ -1,6 +1,5 @@
 use proto::backend::pkg::*;
 use rivet_operation::prelude::*;
-use serde_json::json;
 
 pub const TOKEN_TTL: i64 = util::duration::minutes(15);
 
@@ -8,7 +7,7 @@ pub const TOKEN_TTL: i64 = util::duration::minutes(15);
 async fn handle(
 	ctx: OperationContext<game_user::link_create::Request>,
 ) -> GlobalResult<game_user::link_create::Response> {
-	let crdb = ctx.crdb().await?;
+	let _crdb = ctx.crdb().await?;
 
 	let game_user_id = unwrap_ref!(ctx.game_user_id).as_uuid();
 	let link_id = Uuid::new_v4();

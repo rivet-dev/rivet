@@ -839,7 +839,7 @@ pub async fn get_state(
 		return Ok(Some(json!({})));
 	}
 
-	let lobby_ent = ctx.auth().lobby()?;
+	let _lobby_ent = ctx.auth().lobby()?;
 
 	let lobbies_res = op!([ctx] mm_lobby_state_get {
 		lobby_ids: vec![lobby_id.into()],

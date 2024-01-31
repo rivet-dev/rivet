@@ -34,7 +34,7 @@ impl From<TokenRow> for token::get::Token {
 
 #[operation(name = "token-get")]
 async fn handle(ctx: OperationContext<token::get::Request>) -> GlobalResult<token::get::Response> {
-	let crdb = ctx.crdb().await?;
+	let _crdb = ctx.crdb().await?;
 
 	let jtis = ctx
 		.jtis

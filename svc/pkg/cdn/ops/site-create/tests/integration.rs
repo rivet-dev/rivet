@@ -57,5 +57,5 @@ async fn empty(ctx: TestCtx) {
 	.await
 	.unwrap();
 
-	let upload_data = upload_res.uploads.first().expect("upload not created");
+	let _upload_data = upload_res.uploads.first().expect("upload not created");
 }

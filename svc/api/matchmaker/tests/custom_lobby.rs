@@ -1,7 +1,7 @@
 mod common;
 
 use common::*;
-use proto::backend::{self, pkg::*};
+
 use rivet_api::{apis::*, models};
 use rivet_operation::prelude::*;
 use serde_json::json;

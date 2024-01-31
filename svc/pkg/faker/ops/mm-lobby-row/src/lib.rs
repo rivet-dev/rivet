@@ -5,7 +5,7 @@ use rivet_operation::prelude::*;
 async fn handle(
 	ctx: OperationContext<faker::mm_lobby_row::Request>,
 ) -> GlobalResult<faker::mm_lobby_row::Response> {
-	let crdb = ctx.crdb().await?;
+	let _crdb = ctx.crdb().await?;
 	let mut redis = ctx.redis_mm().await?;
 
 	let lobby_id = unwrap_ref!(ctx.lobby_id).as_uuid();

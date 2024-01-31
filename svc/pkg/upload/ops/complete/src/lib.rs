@@ -23,7 +23,7 @@ struct FileRow {
 async fn handle(
 	ctx: OperationContext<upload::complete::Request>,
 ) -> GlobalResult<upload::complete::Response> {
-	let crdb = ctx.crdb().await?;
+	let _crdb = ctx.crdb().await?;
 
 	let upload_id = unwrap_ref!(ctx.upload_id).as_uuid();
 

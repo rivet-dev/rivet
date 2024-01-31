@@ -5,7 +5,7 @@ use rivet_operation::prelude::*;
 async fn handle(
 	ctx: OperationContext<mm::lobby_history::Request>,
 ) -> GlobalResult<mm::lobby_history::Response> {
-	let crdb = ctx.crdb().await?;
+	let _crdb = ctx.crdb().await?;
 
 	let namespace_id = unwrap_ref!(ctx.namespace_id).as_uuid();
 

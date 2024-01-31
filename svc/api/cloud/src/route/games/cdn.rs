@@ -1,6 +1,6 @@
 use api_helper::{anchor::WatchIndexQuery, ctx::Ctx};
 use rivet_api::models;
-use rivet_convert::{ApiTryFrom, ApiTryInto};
+use rivet_convert::ApiTryInto;
 use rivet_operation::prelude::*;
 
 use crate::auth::Auth;

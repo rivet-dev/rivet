@@ -288,18 +288,17 @@ pub async fn __with_ctx<A: auth::ApiAuth + Send>(
 		//
 		// Otherwise, we use the cf-connecting-ip header since that's the recommended header to
 		// use by Cloudflare.
-		let remote_address_str =
-			if rivet_util::env::dns_provider() == Some("cloudflare") {
-				__deserialize_header::<String, _>(&request, "cf-connecting-ip")?
-			} else {
-				// Traefik will override any user-provided provided x-forwarded-for
-				// header, so we can trust this
-				__deserialize_header::<String, _>(&request, "x-forwarded-for")?
-					.split(",")
-					.last()
-					.ok_or_else(|| err_code!(API_MISSING_HEADER, header = "x-forwarded-for"))?
-					.to_string()
-			};
+		let remote_address_str = if rivet_util::env::dns_provider() == Some("cloudflare") {
+			__deserialize_header::<String, _>(&request, "cf-connecting-ip")?
+		} else {
+			// Traefik will override any user-provided provided x-forwarded-for
+			// header, so we can trust this
+			__deserialize_header::<String, _>(&request, "x-forwarded-for")?
+				.split(",")
+				.last()
+				.ok_or_else(|| err_code!(API_MISSING_HEADER, header = "x-forwarded-for"))?
+				.to_string()
+		};
 		let remote_address =
 			IpAddr::from_str(&remote_address_str).map_err(|_| err_code!(API_INVALID_IP))?;
 

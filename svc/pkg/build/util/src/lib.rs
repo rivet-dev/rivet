@@ -1,4 +1,4 @@
-use proto::backend::{self, pkg::*};
+use proto::backend::{self};
 use rivet_operation::prelude::*;
 
 /// Generates the file name that holds the build tar.

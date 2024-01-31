@@ -6,7 +6,7 @@ async fn empty(ctx: TestCtx) {
 	let team_a = Uuid::new_v4();
 	let team_b = Uuid::new_v4();
 	let team_c = Uuid::new_v4();
-	let team_d = Uuid::new_v4();
+	let _team_d = Uuid::new_v4();
 
 	let user_a = Uuid::new_v4();
 	let user_b = Uuid::new_v4();

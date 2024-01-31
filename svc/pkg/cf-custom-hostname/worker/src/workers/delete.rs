@@ -20,7 +20,7 @@ async fn worker(
 	let game_zone_id = unwrap!(util::env::cloudflare::zone::game::id());
 
 	let namespace_id = unwrap_ref!(ctx.namespace_id).as_uuid();
-	let crdb = ctx.crdb().await?;
+	let _crdb = ctx.crdb().await?;
 
 	let custom_hostnames_res = op!([ctx] cf_custom_hostname_resolve_hostname {
 		hostnames: vec![ctx.hostname.clone()],
@@ -77,7 +77,7 @@ async fn worker(
 		}
 	}
 
-	let (subscription_id,) = sql_fetch_one!(
+	let (_subscription_id,) = sql_fetch_one!(
 		[ctx, (Uuid,)]
 		"
 		SELECT subscription_id

@@ -1,4 +1,4 @@
-use proto::backend::{self, pkg::*};
+use proto::backend::pkg::*;
 use rivet_operation::prelude::*;
 
 #[operation(name = "module-ns-instance-get")]

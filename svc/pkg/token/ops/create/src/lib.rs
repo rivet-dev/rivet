@@ -233,7 +233,7 @@ struct TokenData {
 
 async fn create_token(
 	ctx: &OperationContext<token::create::Request>,
-	crdb: &CrdbPool,
+	_crdb: &CrdbPool,
 	label: Option<impl AsRef<str>>,
 	token_config: &token::create::request::TokenConfig,
 	jti: Uuid,

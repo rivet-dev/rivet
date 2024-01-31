@@ -1,5 +1,5 @@
 use chirp_worker::prelude::*;
-use chrono::Duration;
+
 use proto::backend::{self, pkg::*};
 
 #[worker_test]

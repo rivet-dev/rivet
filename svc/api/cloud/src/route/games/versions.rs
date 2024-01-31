@@ -74,7 +74,7 @@ pub async fn create(
 pub async fn reserve_name(
 	ctx: Ctx<Auth>,
 	game_id: Uuid,
-	body: serde_json::Value,
+	_body: serde_json::Value,
 ) -> GlobalResult<models::CloudGamesReserveVersionNameResponse> {
 	ctx.auth()
 		.check_game_write_or_admin(ctx.op_ctx(), game_id)

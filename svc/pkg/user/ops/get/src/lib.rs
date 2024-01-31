@@ -1,6 +1,5 @@
 use proto::backend::{self, pkg::*};
 use rivet_operation::prelude::*;
-use rivet_pools::prelude::*;
 
 #[derive(sqlx::FromRow)]
 struct UserRow {
@@ -37,7 +36,7 @@ impl From<UserRow> for user::get::CacheUser {
 pub async fn handle(
 	ctx: OperationContext<user::get::Request>,
 ) -> GlobalResult<user::get::Response> {
-	let crdb = ctx.crdb().await?;
+	let _crdb = ctx.crdb().await?;
 
 	let user_ids = ctx
 		.user_ids

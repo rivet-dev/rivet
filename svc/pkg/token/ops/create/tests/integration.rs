@@ -97,7 +97,7 @@ async fn new_and_reload(ctx: TestCtx) {
 		let refresh_token = rivet_claims::decode(&new_res.refresh_token.as_ref().unwrap().token)
 			.expect("decode user token")
 			.expect("validate refresh token");
-		let refresh_ent = refresh_token.as_refresh().unwrap();
+		let _refresh_ent = refresh_token.as_refresh().unwrap();
 	}
 }
 

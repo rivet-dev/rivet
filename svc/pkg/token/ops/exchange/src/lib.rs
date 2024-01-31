@@ -5,7 +5,7 @@ use rivet_operation::prelude::*;
 async fn handle(
 	ctx: OperationContext<token::exchange::Request>,
 ) -> GlobalResult<token::exchange::Response> {
-	let crdb = ctx.crdb().await?;
+	let _crdb = ctx.crdb().await?;
 
 	let jti = unwrap_ref!(ctx.jti).as_uuid();
 

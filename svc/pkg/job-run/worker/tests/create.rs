@@ -84,7 +84,7 @@ async fn basic_http(ctx: TestCtx) {
 		}
 	}
 
-	let ValidateJobOutput { ip, port, .. } =
+	let ValidateJobOutput { .. } =
 		validate_job(ctx.crdb().await.unwrap(), run_id, region_id, "http").await;
 
 	// Test against origin
@@ -177,8 +177,8 @@ async fn basic_tcp(ctx: TestCtx) {
 	}
 
 	let ValidateJobOutput {
-		ip,
-		port,
+		ip: _,
+		port: _,
 		proxied_ports,
 	} = validate_job(ctx.crdb().await.unwrap(), run_id, region_id, "tcp").await;
 	let ingress_port_tcp = proxied_ports
@@ -277,8 +277,8 @@ async fn basic_udp(ctx: TestCtx) {
 	}
 
 	let ValidateJobOutput {
-		ip,
-		port,
+		ip: _,
+		port: _,
 		proxied_ports,
 	} = validate_job(ctx.crdb().await.unwrap(), run_id, region_id, "udp").await;
 	let ingress_port_udp = proxied_ports.first().unwrap().ingress_port;

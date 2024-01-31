@@ -5,9 +5,9 @@ use rivet_operation::prelude::*;
 async fn handle(
 	ctx: OperationContext<game_user::recommend::Request>,
 ) -> GlobalResult<game_user::recommend::Response> {
-	let crdb = ctx.crdb().await?;
+	let _crdb = ctx.crdb().await?;
 
-	let count = ctx.count as i32;
+	let _count = ctx.count as i32;
 
 	Ok(game_user::recommend::Response {
 		game_user_ids: Vec::new(),

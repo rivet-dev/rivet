@@ -351,7 +351,7 @@ pub async fn join_requests(
 	ctx: Ctx<Auth>,
 	group_id: Uuid,
 	watch_index: WatchIndexQuery,
-	query: ListJoinRequestsQuery,
+	_query: ListJoinRequestsQuery,
 ) -> GlobalResult<models::GetGroupJoinRequestsResponse> {
 	let user_ent = ctx.auth().user(ctx.op_ctx()).await?;
 
@@ -1261,7 +1261,7 @@ pub async fn bans(
 	ctx: Ctx<Auth>,
 	group_id: Uuid,
 	watch_index: WatchIndexQuery,
-	query: ListBansQuery,
+	_query: ListBansQuery,
 ) -> GlobalResult<models::GetGroupBansResponse> {
 	let user_ent = ctx.auth().user(ctx.op_ctx()).await?;
 

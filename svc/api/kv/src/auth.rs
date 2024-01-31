@@ -152,7 +152,7 @@ impl Auth {
 		let claims = self.claims()?;
 
 		// Pre-fetch entitlements so we don't fetch the namespace if there is no ent
-		let (user_ent, cloud_ent) = if let Ok(ent) = claims.as_user() {
+		let (user_ent, cloud_ent) = if let Ok(_ent) = claims.as_user() {
 			let user_ent = self.user(ctx).await?;
 
 			(Some(user_ent), None)

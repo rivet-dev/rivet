@@ -1,5 +1,3 @@
-use std::time::Duration;
-
 use chirp_worker::prelude::*;
 use proto::backend::{self, pkg::*};
 use serde_json::json;

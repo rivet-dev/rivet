@@ -485,7 +485,7 @@ async fn test_find_idle_lobby(ctx: TestCtx) {
 	}
 
 	let test_ctx = Ctx::init(&ctx, None, 2, 4).await;
-	let lgi = test_ctx.lobby_group_id;
+	let _lgi = test_ctx.lobby_group_id;
 
 	tracing::info!("calling");
 	test_ctx.call_update(0, 0).await;

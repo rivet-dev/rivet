@@ -9,13 +9,13 @@ async fn empty(ctx: TestCtx) {
 	.await
 	.unwrap();
 
-	let site_a_res = op!([ctx] faker_cdn_site {
+	let _site_a_res = op!([ctx] faker_cdn_site {
 		game_id: game_res.game_id,
 	})
 	.await
 	.unwrap();
 
-	let site_b_res = op!([ctx] faker_cdn_site {
+	let _site_b_res = op!([ctx] faker_cdn_site {
 		game_id: game_res.game_id,
 	})
 	.await

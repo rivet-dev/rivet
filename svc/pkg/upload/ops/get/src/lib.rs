@@ -32,7 +32,7 @@ impl From<UploadRow> for backend::upload::Upload {
 async fn handle(
 	ctx: OperationContext<upload::get::Request>,
 ) -> GlobalResult<upload::get::Response> {
-	let crdb = ctx.crdb().await?;
+	let _crdb = ctx.crdb().await?;
 
 	let upload_ids = ctx
 		.upload_ids

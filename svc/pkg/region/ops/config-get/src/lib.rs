@@ -5,7 +5,7 @@ use std::collections::HashMap;
 
 #[operation(name = "region-config-get")]
 pub async fn handle(
-	ctx: OperationContext<region::config_get::Request>,
+	_ctx: OperationContext<region::config_get::Request>,
 ) -> GlobalResult<region::config_get::Response> {
 	Ok(region::config_get::Response {
 		regions: read().await,

@@ -98,7 +98,7 @@ impl<'a, T> UnwrapOrAssertError for &'a Option<T> {
 			Some(t) => Ok(t),
 			None => Err(Into::into(crate::ext::AssertionError::Unwrap {
 				message,
-				location
+				location,
 			})),
 		}
 	}
@@ -117,7 +117,7 @@ impl<'a, T> UnwrapOrAssertError for &'a &'a Option<T> {
 			Some(t) => Ok(t),
 			None => Err(Into::into(crate::ext::AssertionError::Unwrap {
 				message,
-				location
+				location,
 			})),
 		}
 	}

@@ -3,7 +3,7 @@ use proto::backend::pkg::*;
 
 #[worker(name = "kv-write")]
 async fn worker(ctx: &OperationContext<kv::msg::write::Message>) -> GlobalResult<()> {
-	let crdb = ctx.crdb().await?;
+	let _crdb = ctx.crdb().await?;
 
 	let namespace_id = unwrap_ref!(ctx.namespace_id).as_uuid();
 

@@ -11,7 +11,7 @@ struct Team {
 async fn handle(
 	ctx: OperationContext<team::search::Request>,
 ) -> GlobalResult<team::search::Response> {
-	let crdb = ctx.crdb().await?;
+	let _crdb = ctx.crdb().await?;
 	let limit = ctx.limit;
 
 	ensure!(limit != 0, "limit too low");

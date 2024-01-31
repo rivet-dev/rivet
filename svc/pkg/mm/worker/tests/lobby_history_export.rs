@@ -36,7 +36,7 @@ async fn default(ctx: TestCtx) {
 	})
 	.await
 	.unwrap();
-	let upload = upload_res.uploads.first().unwrap();
+	let _upload = upload_res.uploads.first().unwrap();
 
 	// TODO: Check the outputted CSV
 }

@@ -4,7 +4,7 @@ use serde_json::json;
 
 #[worker(name = "team-invite-create")]
 async fn worker(ctx: &OperationContext<team_invite::msg::create::Message>) -> GlobalResult<()> {
-	let crdb = ctx.crdb().await?;
+	let _crdb = ctx.crdb().await?;
 
 	let team_id = unwrap_ref!(ctx.team_id).as_uuid();
 

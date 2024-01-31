@@ -8,15 +8,15 @@ pub struct ErrorBuilder<T: serde::Serialize> {
 	pub metadata: T,
 }
 
+mod error;
 pub mod ext;
 pub mod macros;
-mod error;
 
 pub mod prelude {
 	pub use crate::{
+		error::{GlobalError, GlobalResult},
 		ext::*,
 		macros::*,
-		error::{GlobalError, GlobalResult},
 	};
 }
 

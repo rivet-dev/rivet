@@ -21,7 +21,7 @@ pub fn handle(
 		.iter()
 		.find(|presence| presence.user_id == user.user_id));
 	let user_presence = unwrap_ref!(user_presence.presence);
-	let status = unwrap!(backend::user::Status::from_i32(user_presence.status));
+	let _status = unwrap!(backend::user::Status::from_i32(user_presence.status));
 
 	Ok(models::IdentityHandle {
 		identity_id: user_id.to_string(),

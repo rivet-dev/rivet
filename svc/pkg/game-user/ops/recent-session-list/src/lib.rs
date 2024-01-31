@@ -12,7 +12,7 @@ struct Session {
 async fn handle(
 	ctx: OperationContext<game_user::recent_session_list::Request>,
 ) -> GlobalResult<game_user::recent_session_list::Response> {
-	let crdb = ctx.crdb().await?;
+	let _crdb = ctx.crdb().await?;
 
 	let user_ids = ctx
 		.user_ids

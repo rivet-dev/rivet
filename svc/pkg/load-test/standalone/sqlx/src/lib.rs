@@ -2,7 +2,7 @@ use futures_util::StreamExt;
 use rivet_operation::prelude::*;
 
 #[tracing::instrument(skip_all)]
-pub async fn run_from_env(ts: i64) -> GlobalResult<()> {
+pub async fn run_from_env(_ts: i64) -> GlobalResult<()> {
 	let pools = rivet_pools::from_env("load-test-sqlx").await?;
 	let client = chirp_client::SharedClient::from_env(pools.clone())?.wrap_new("load-test-sqlx");
 	let cache = rivet_cache::CacheInner::from_env(pools.clone())?;

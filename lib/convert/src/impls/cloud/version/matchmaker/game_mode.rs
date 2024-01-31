@@ -586,7 +586,9 @@ impl ApiTryFrom<models::CloudVersionMatchmakerGameModeCreateConfig>
 {
 	type Error = GlobalError;
 
-	fn api_try_from(value: models::CloudVersionMatchmakerGameModeCreateConfig) -> GlobalResult<Self> {
+	fn api_try_from(
+		value: models::CloudVersionMatchmakerGameModeCreateConfig,
+	) -> GlobalResult<Self> {
 		if let Some(max_lobbies_per_identity) = value.max_lobbies_per_identity {
 			ensure_with!(
 				max_lobbies_per_identity >= 0,

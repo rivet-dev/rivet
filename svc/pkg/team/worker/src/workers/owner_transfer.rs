@@ -1,6 +1,5 @@
 use chirp_worker::prelude::*;
-use proto::backend::{self, pkg::*};
-use serde_json::json;
+use proto::backend::pkg::*;
 
 #[worker(name = "team-owner-transfer")]
 async fn worker(ctx: &OperationContext<team::msg::owner_transfer::Message>) -> GlobalResult<()> {

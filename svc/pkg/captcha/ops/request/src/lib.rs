@@ -8,7 +8,7 @@ async fn handle(
 ) -> GlobalResult<captcha::request::Response> {
 	// TODO: This service is pretty slow, optimize by using counters, Redis, and/or ClickHouse
 
-	let crdb = ctx.crdb().await?;
+	let _crdb = ctx.crdb().await?;
 
 	let captcha_config = unwrap_ref!(ctx.captcha_config);
 	let user_id = ctx.user_id.as_ref().map(common::Uuid::as_uuid);

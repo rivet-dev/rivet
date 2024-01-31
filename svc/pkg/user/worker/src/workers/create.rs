@@ -53,9 +53,9 @@ async fn worker(ctx: &OperationContext<user::msg::create::Message>) -> GlobalRes
 	};
 
 	// Attempt to create a unique handle 3 times
-	let crdb = ctx.crdb().await?;
+	let _crdb = ctx.crdb().await?;
 	let mut attempts = 3u32;
-	let (display_name, account_number) = loop {
+	let (_display_name, _account_number) = loop {
 		if attempts == 0 {
 			bail!("failed all attempts to create unique user handle");
 		}

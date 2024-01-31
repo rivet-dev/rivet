@@ -1,7 +1,7 @@
 use chirp_worker::prelude::*;
 use proto::backend::{self, pkg::*};
 
-use fcm::{Client, MessageBuilder, NotificationBuilder};
+use fcm::Client;
 use serde::Serialize;
 
 const FCM_SERVER_KEY: &str = "AAAAYGT1Pys:APA91bFlpAPLVFqsABrYy-38UZAH6tbbxiaM52FOFQDty3N6Ofwjhy5vv_9GgWer7yytg0OxTzKgxvkrgNKYEWL1CK4kiPCSrAq7eEDVU5mSwPvUB7qraqxjuAPSx-h5eMVeO4KTqIRB";
@@ -16,7 +16,7 @@ async fn worker(
 	ctx: &OperationContext<push_notification::msg::create::Message>,
 ) -> GlobalResult<()> {
 	let user_id = unwrap_ref!(ctx.user_id).as_uuid();
-	let thread_id = unwrap_ref!(ctx.thread_id).as_uuid();
+	let _thread_id = unwrap_ref!(ctx.thread_id).as_uuid();
 	let service = unwrap!(backend::notification::NotificationService::from_i32(
 		ctx.service
 	));
@@ -36,8 +36,8 @@ async fn worker(
 			.await?;
 
 			// Only send notification if registered for Firebase
-			if let Some((Some(firebase_access_key),)) = row {
-				let client = Client::new();
+			if let Some((Some(_firebase_access_key),)) = row {
+				let _client = Client::new();
 
 				bail!("todo")
 

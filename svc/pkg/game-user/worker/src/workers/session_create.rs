@@ -5,7 +5,7 @@ use proto::backend::pkg::*;
 async fn worker(
 	ctx: &OperationContext<game_user::msg::session_create::Message>,
 ) -> GlobalResult<()> {
-	let crdb = ctx.crdb().await?;
+	let _crdb = ctx.crdb().await?;
 
 	let game_user_id = unwrap_ref!(ctx.game_user_id).as_uuid();
 	let refresh_jti = unwrap_ref!(ctx.refresh_jti).as_uuid();

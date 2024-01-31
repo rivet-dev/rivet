@@ -16,7 +16,7 @@ async fn handle(
 		"incorrect lobby group ctx count"
 	);
 
-	let mut tx = ctx.crdb().await?.begin().await?;
+	let tx = ctx.crdb().await?.begin().await?;
 
 	// Encode captcha data
 	let captcha_buf = config

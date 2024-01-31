@@ -1,4 +1,4 @@
-use std::collections::{HashMap, HashSet};
+use std::collections::HashSet;
 
 use api_helper::ctx::Ctx;
 use proto::{
@@ -7,7 +7,7 @@ use proto::{
 };
 use rivet_operation::prelude::*;
 
-use crate::{auth::Auth, convert, fetch};
+use crate::{auth::Auth, convert};
 
 pub struct PresencesCtx {
 	pub res: user_presence::get::Response,
@@ -27,9 +27,9 @@ pub async fn users(
 
 pub async fn presence_data(
 	ctx: &Ctx<Auth>,
-	current_user_id: Uuid,
+	_current_user_id: Uuid,
 	user_ids: Vec<common::Uuid>,
-	summary_info: bool,
+	_summary_info: bool,
 ) -> GlobalResult<PresencesCtx> {
 	let ((presences_res, game_ids),) = tokio::try_join!(presences_and_game_ids(ctx, user_ids),)?;
 	let (games, games_with_namespace_ids) = games(

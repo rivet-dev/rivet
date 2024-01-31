@@ -866,7 +866,7 @@ async fn handle(
 								| LobbyRuntimeProxyProtocol::Tcp
 								| LobbyRuntimeProxyProtocol::TcpTls
 								| LobbyRuntimeProxyProtocol::Udp,
-								Some(target_port),
+								Some(_target_port),
 								None,
 							) => {
 								// Valid

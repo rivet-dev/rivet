@@ -393,7 +393,7 @@ async fn join_disabled(ctx: TestCtx) {
 		return;
 	}
 
-	let user_id = Uuid::new_v4();
+	let _user_id = Uuid::new_v4();
 
 	let (namespace_id, lobby_id) = gen_disabled_lobby(&ctx).await;
 
@@ -563,7 +563,7 @@ async fn bypass_verification(ctx: TestCtx) {
 		return;
 	}
 
-	let user_id = Uuid::new_v4();
+	let _user_id = Uuid::new_v4();
 
 	let (namespace_id, lobby_id) = gen_verification_lobby(
 		&ctx,
@@ -789,7 +789,7 @@ async fn tagged_multiple_game_modes(ctx: TestCtx) {
 
 	let lobby_group = create_lobby_group(&ctx, None).await;
 
-	let find_res1 = find_with_tags(
+	let _find_res1 = find_with_tags(
 		&ctx,
 		FindRequest {
 			namespace_id: lobby_group.namespace_id,
@@ -874,7 +874,7 @@ async fn tagged_multiple_lobbies(ctx: TestCtx) {
 
 	let lobby_group = create_lobby_group(&ctx, None).await;
 
-	let find_res1 = find_with_tags(
+	let _find_res1 = find_with_tags(
 		&ctx,
 		FindRequest {
 			namespace_id: lobby_group.namespace_id,

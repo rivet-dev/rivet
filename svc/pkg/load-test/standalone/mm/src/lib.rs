@@ -59,7 +59,7 @@ impl Conn {
 }
 
 #[tracing::instrument(skip_all)]
-pub async fn run_from_env(ts: i64) -> GlobalResult<()> {
+pub async fn run_from_env(_ts: i64) -> GlobalResult<()> {
 	let pools = rivet_pools::from_env("load-test-mm").await?;
 	let client = chirp_client::SharedClient::from_env(pools.clone())?.wrap_new("load-test-mm");
 	let cache = rivet_cache::CacheInner::from_env(pools.clone())?;
@@ -77,7 +77,7 @@ pub async fn run_from_env(ts: i64) -> GlobalResult<()> {
 
 	// Setup
 	let (primary_region_id, primary_region_name_id) = setup_region(&ctx).await?;
-	let (_game_id, version_id, namespace_id, _mm_config, _mm_config_meta) =
+	let (_game_id, _version_id, namespace_id, _mm_config, _mm_config_meta) =
 		setup_game(&ctx, primary_region_id).await?;
 	let ns_auth_token = setup_public_token(&ctx, namespace_id).await?;
 	let config = setup_config(&ctx, ns_auth_token).await?;

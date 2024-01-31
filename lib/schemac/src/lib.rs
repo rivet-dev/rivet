@@ -242,7 +242,7 @@ pub fn compile(opts: CompileOpts) -> io::Result<String> {
 	for (path, attribute) in &opts.type_attributes {
 		build_config.type_attribute(path, attribute);
 	}
-	
+
 	let res = build_config.compile_protos(&opts.input_paths, &[opts.root_path.clone()]);
 	match res {
 		Err(err) => {
@@ -251,8 +251,7 @@ pub fn compile(opts: CompileOpts) -> io::Result<String> {
 			if let Some(inner) = err.into_inner() {
 				eprintln!("{}", inner);
 				return Err(io::Error::new(io::ErrorKind::Other, "protoc failed"));
-			}
-			else {
+			} else {
 				return Err(io::Error::new(err_kind, "failed to get inner error"));
 			}
 		}
@@ -313,7 +312,11 @@ pub fn compile(opts: CompileOpts) -> io::Result<String> {
 						.collect::<Vec<MessageFieldMeta>>();
 					fields.sort_by_key(|f| f.tag());
 
-					MessageMeta { comment, name, fields }
+					MessageMeta {
+						comment,
+						name,
+						fields,
+					}
 				})
 				.collect::<Vec<MessageMeta>>();
 			messages.sort_by_cached_key(|m| m.name.clone());

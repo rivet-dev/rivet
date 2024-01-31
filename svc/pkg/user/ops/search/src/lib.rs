@@ -21,7 +21,7 @@ enum Error {
 async fn handle(
 	ctx: OperationContext<user::search::Request>,
 ) -> GlobalResult<user::search::Response> {
-	let crdb = ctx.crdb().await?;
+	let _crdb = ctx.crdb().await?;
 	let limit = ctx.limit;
 
 	ensure!(limit != 0, "limit too low");

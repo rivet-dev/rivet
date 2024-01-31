@@ -1,7 +1,6 @@
 use api_helper::define_router;
 use hyper::{Body, Request, Response};
 use rivet_api::models;
-use uuid::Uuid;
 
 pub mod login;
 

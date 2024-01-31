@@ -8,7 +8,7 @@ use serde_json::json;
 async fn handle(
 	ctx: OperationContext<mm::lobby_find_fail::Request>,
 ) -> GlobalResult<mm::lobby_find_fail::Response> {
-	let crdb = ctx.crdb().await?;
+	let _crdb = ctx.crdb().await?;
 	let redis = ctx.redis_mm().await?;
 
 	// Complete all queries in parallel

@@ -1,17 +1,12 @@
-use std::collections::HashSet;
-
 use futures_util::StreamExt;
-use proto::{
-	backend::{self, pkg::*},
-	common,
-};
-use rivet_api::{apis::configuration::Configuration, models};
+use proto::backend::{self, pkg::*};
+use rivet_api::apis::configuration::Configuration;
 use rivet_operation::prelude::*;
-use serde_json::json;
-use tokio::time::{interval, Duration, Instant};
+
+use tokio::time::{Duration, Instant};
 
 #[tracing::instrument(skip_all)]
-pub async fn run_from_env(ts: i64) -> GlobalResult<()> {
+pub async fn run_from_env(_ts: i64) -> GlobalResult<()> {
 	let pools = rivet_pools::from_env("load-test-watch-requests").await?;
 	let client =
 		chirp_client::SharedClient::from_env(pools.clone())?.wrap_new("load-test-watch-requests");
@@ -29,7 +24,7 @@ pub async fn run_from_env(ts: i64) -> GlobalResult<()> {
 	);
 
 	// Create temp team
-	let (team_id, primary_user_id) = {
+	let (_team_id, primary_user_id) = {
 		// Create team
 		let create_res = op!([ctx] faker_team {
 

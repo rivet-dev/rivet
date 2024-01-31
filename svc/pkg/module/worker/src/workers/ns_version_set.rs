@@ -21,7 +21,7 @@ struct NamespaceInstances {
 async fn worker(
 	ctx: &OperationContext<game::msg::ns_version_set_complete::Message>,
 ) -> Result<(), GlobalError> {
-	let crdb = ctx.crdb().await?;
+	let _crdb = ctx.crdb().await?;
 
 	let namespace_id = unwrap_ref!(ctx.namespace_id).as_uuid();
 	let version_id = unwrap_ref!(ctx.version_id).as_uuid();

@@ -1,5 +1,3 @@
-use api_helper::anchor::WatchResponse;
-use rivet_api::models;
 use rivet_operation::prelude::*;
 
 pub async fn validate_config(ctx: &OperationContext<()>, namespace_id: Uuid) -> GlobalResult<()> {

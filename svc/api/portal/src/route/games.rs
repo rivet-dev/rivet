@@ -63,7 +63,7 @@ pub async fn get_suggested_games(
 	ctx: Ctx<Auth>,
 	_watch_index: WatchIndexQuery,
 ) -> GlobalResult<models::GetSuggestedGamesResponse> {
-	let user_ent = ctx.auth().user(ctx.op_ctx()).await?;
+	let _user_ent = ctx.auth().user(ctx.op_ctx()).await?;
 
 	// TODO:
 

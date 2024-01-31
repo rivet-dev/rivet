@@ -6,7 +6,7 @@ const DEFAULT_USER_SET_STATUS: i32 = backend::user::Status::Online as i32;
 
 #[worker(name = "user-presence-leave")]
 async fn worker(ctx: &OperationContext<user_presence::msg::leave::Message>) -> GlobalResult<()> {
-	let crdb = ctx.crdb().await?;
+	let _crdb = ctx.crdb().await?;
 
 	let mut redis = ctx.redis_user_presence().await?;
 
@@ -26,7 +26,7 @@ async fn worker(ctx: &OperationContext<user_presence::msg::leave::Message>) -> G
 	//
 	// Remove the user presence from the register. User may have already been
 	// removed by user-presence-gc.
-	let pipe = redis::pipe()
+	let _pipe = redis::pipe()
 		.atomic()
 		.unlink(util_user_presence::key::user_presence(user_id))
 		.unlink(util_user_presence::key::game_activity(user_id))

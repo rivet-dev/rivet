@@ -5,7 +5,7 @@ const DEFAULT_USER_SET_STATUS: i32 = backend::user::Status::Online as i32;
 
 #[worker(name = "user-presence-arrive")]
 async fn worker(ctx: &OperationContext<user_presence::msg::arrive::Message>) -> GlobalResult<()> {
-	let crdb = ctx.crdb().await?;
+	let _crdb = ctx.crdb().await?;
 
 	let user_id = unwrap_ref!(ctx.user_id).as_uuid();
 

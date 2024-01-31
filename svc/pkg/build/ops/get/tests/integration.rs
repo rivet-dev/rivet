@@ -1,5 +1,5 @@
 use chirp_worker::prelude::*;
-use proto::backend::{self, pkg::*};
+use proto::backend::{self};
 
 #[worker_test]
 async fn empty(ctx: TestCtx) {
@@ -17,7 +17,7 @@ async fn empty(ctx: TestCtx) {
 	.unwrap();
 	let build_id = build_res.build_id.as_ref().unwrap().as_uuid();
 
-	let res = op!([ctx] build_get {
+	let _res = op!([ctx] build_get {
 		build_ids: vec![build_id.into()],
 	})
 	.await

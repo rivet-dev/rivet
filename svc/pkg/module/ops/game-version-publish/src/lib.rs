@@ -1,12 +1,11 @@
-use proto::backend::{self, pkg::*};
+use proto::backend::pkg::*;
 use rivet_operation::prelude::*;
-use unzip_n::unzip_n;
 
 #[operation(name = "module-game-version-publish")]
 async fn handle(
 	ctx: OperationContext<module::game_version_publish::Request>,
 ) -> GlobalResult<module::game_version_publish::Response> {
-	let crdb = ctx.crdb().await?;
+	let _crdb = ctx.crdb().await?;
 
 	let version_id = unwrap_ref!(ctx.version_id).as_uuid();
 	let config = unwrap_ref!(ctx.config);

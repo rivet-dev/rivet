@@ -1,5 +1,3 @@
-use std::str::FromStr;
-
 use api_helper::{
 	anchor::{WatchIndexQuery, WatchResponse},
 	ctx::Ctx,

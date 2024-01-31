@@ -5,7 +5,7 @@ use std::collections::HashMap;
 
 #[worker_test]
 async fn empty(ctx: TestCtx) {
-	let res = op!([ctx] captcha_request {
+	let _res = op!([ctx] captcha_request {
 		topic: vec![
 			("test".to_string(), Uuid::new_v4().to_string())
 		].into_iter().collect::<HashMap<String, String>>(),

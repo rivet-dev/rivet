@@ -20,7 +20,7 @@ async fn handle(
 
 	let site_id = unwrap_ref!(config.site_id);
 
-	let crdb = ctx.crdb().await?;
+	let _crdb = ctx.crdb().await?;
 	sql_execute!(
 		[ctx]
 		"INSERT INTO db_cdn.game_versions (version_id, site_id) VALUES ($1, $2)",

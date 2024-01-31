@@ -42,7 +42,7 @@ impl From<GameUserLink> for game_user::link_get::response::GameUserLink {
 async fn handle(
 	ctx: OperationContext<game_user::link_get::Request>,
 ) -> GlobalResult<game_user::link_get::Response> {
-	let crdb = ctx.crdb().await?;
+	let _crdb = ctx.crdb().await?;
 
 	let link_ids = ctx
 		.link_ids

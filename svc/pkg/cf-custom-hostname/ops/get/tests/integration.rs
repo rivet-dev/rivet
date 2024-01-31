@@ -1,6 +1,6 @@
 use chirp_worker::prelude::*;
 
 #[worker_test]
-async fn empty(ctx: TestCtx) {
+async fn empty(_ctx: TestCtx) {
 	// TODO:
 }

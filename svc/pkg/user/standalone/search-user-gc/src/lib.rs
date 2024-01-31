@@ -65,7 +65,7 @@ pub async fn run_from_env(ts: i64) -> GlobalResult<()> {
 
 async fn process_batch(
 	ctx: &OperationContext<()>,
-	crdb: &CrdbPool,
+	_crdb: &CrdbPool,
 	user_ids: &[Uuid],
 ) -> GlobalResult<u64> {
 	let user_ids_proto = user_ids.iter().cloned().map(Into::into).collect::<Vec<_>>();

@@ -1,6 +1,6 @@
 use chirp_worker::prelude::*;
 use futures_util::{StreamExt, TryStreamExt};
-use proto::backend::{self, pkg::*};
+use proto::backend::pkg::*;
 use rand::Rng;
 use serde_json::json;
 
@@ -10,7 +10,7 @@ const UPLOAD_BATCH_SIZE: usize = 256;
 #[worker(name = "user-delete")]
 async fn worker(ctx: &OperationContext<user::msg::delete::Message>) -> GlobalResult<()> {
 	let user_id = unwrap_ref!(ctx.user_id).as_uuid();
-	let crdb = ctx.crdb().await?;
+	let _crdb = ctx.crdb().await?;
 
 	// Delete user identities
 	{

@@ -1,8 +1,7 @@
 use chirp_worker::prelude::*;
-use proto::backend::pkg::*;
 
 #[worker_test]
-async fn deactivated_update(ctx: TestCtx) {
+async fn deactivated_update(_ctx: TestCtx) {
 	// msg!([ctx] team::msg::deactivated_update() {
 
 	// })

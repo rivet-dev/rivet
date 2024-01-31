@@ -25,7 +25,7 @@ async fn empty(ctx: TestCtx) {
 	})
 	.await
 	.unwrap();
-	let ns_data = res.namespaces.first().unwrap();
+	let _ns_data = res.namespaces.first().unwrap();
 
 	// TODO: Find a good way to mock this
 	// assert_eq!(3, ns_data.config.as_ref().unwrap().domains.len());

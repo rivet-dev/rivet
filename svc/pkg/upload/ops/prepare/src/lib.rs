@@ -29,7 +29,7 @@ struct MultipartUpdate {
 async fn handle(
 	ctx: OperationContext<upload::prepare::Request>,
 ) -> GlobalResult<upload::prepare::Response> {
-	let crdb = ctx.crdb().await?;
+	let _crdb = ctx.crdb().await?;
 	let provider = if let Some(provider) = ctx.provider {
 		let proto_provider = unwrap!(
 			backend::upload::Provider::from_i32(provider),

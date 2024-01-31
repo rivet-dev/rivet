@@ -5,7 +5,7 @@ use rivet_operation::prelude::*;
 async fn handle(
 	ctx: OperationContext<game_user::create::Request>,
 ) -> GlobalResult<game_user::create::Response> {
-	let crdb = ctx.crdb().await?;
+	let _crdb = ctx.crdb().await?;
 
 	let game_user_id = Uuid::new_v4();
 	let namespace_id = unwrap_ref!(ctx.namespace_id).as_uuid();

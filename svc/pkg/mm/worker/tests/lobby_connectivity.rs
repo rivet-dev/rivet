@@ -2,9 +2,9 @@ mod common;
 
 use chirp_worker::prelude::*;
 use common::*;
-use proto::backend::{self, pkg::*};
+use proto::backend::{self};
 use std::{
-	io::{BufRead, BufReader, Read, Write},
+	io::{BufRead, BufReader, Write},
 	net::{TcpStream, UdpSocket},
 };
 

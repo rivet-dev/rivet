@@ -76,7 +76,10 @@ impl ApiTryFrom<models::CloudVersionMatchmakerLobbyGroupRegion>
 		Ok(backend::matchmaker::lobby_group::Region {
 			region_id: Some(value.region_id.into()),
 			tier_name_id: value.tier_name_id.to_owned(),
-			idle_lobbies: value.idle_lobbies.map(|x| (*x).api_try_into()).transpose()?,
+			idle_lobbies: value
+				.idle_lobbies
+				.map(|x| (*x).api_try_into())
+				.transpose()?,
 		})
 	}
 }

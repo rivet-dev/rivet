@@ -1,5 +1,5 @@
 use chirp_worker::prelude::*;
-use proto::backend::{self, pkg::*};
+use proto::backend::pkg::*;
 use serde_json::json;
 
 #[worker(name = "team-member-kick")]

@@ -4,7 +4,7 @@ use serde_json::json;
 
 #[worker(name = "module-create")]
 async fn worker(ctx: &OperationContext<module::msg::create::Message>) -> Result<(), GlobalError> {
-	let crdb = ctx.crdb().await?;
+	let _crdb = ctx.crdb().await?;
 
 	let module_id = unwrap_ref!(ctx.module_id).as_uuid();
 	let team_id = unwrap_ref!(ctx.team_id).as_uuid();
