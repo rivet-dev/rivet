@@ -21,7 +21,7 @@ jobs:
     steps:
       # MARK: Git
       - name: Checkout
-        uses: actions/checkout@v3.5.2
+        uses: actions/checkout@v4
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           submodules: recursive

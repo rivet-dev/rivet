@@ -15,7 +15,7 @@ jobs:
   cargo-deny:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - name: cargo deny (svc)
         uses: EmbarkStudios/cargo-deny-action@v1
         with:
