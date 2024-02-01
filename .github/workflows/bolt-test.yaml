@@ -28,8 +28,8 @@ jobs:
 
       - uses: ./.github/actions/pre-init
         with:
-          sccache_aws_secret_access_key: ${{ secrets.SCCACHE_AWS_SECRET_ACCESS_KEY }}
-          sccache_aws_access_key_id: ${{ secrets.SCCACHE_AWS_ACCESS_KEY_ID }}
+          SCCACHE_AWS_SECRET_ACCESS_KEY: ${{ secrets.SCCACHE_AWS_SECRET_ACCESS_KEY }}
+          SCCACHE_AWS_ACCESS_KEY_ID: ${{ secrets.SCCACHE_AWS_ACCESS_KEY_ID }}
 
       - name: Bolt Init
         run: nix-shell --pure --run "bolt init --yes ci"
