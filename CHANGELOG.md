@@ -14,7 +14,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 -   **Infra** Prometheus VPA
 -   **Infra** Apache Traffic Server VPA
 -   **api-cloud** Admins can view all teams & games in a cluster
--   Automatic deploy CI for staging
+-   Added automatic deploy CI for staging
+-   **Infra** Added compactor and GC to Loki
 
 ### Changed
 

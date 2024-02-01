@@ -41,6 +41,17 @@ resource "helm_release" "loki" {
 				type = "filesystem"
 			}
 		}
+		compactor = {
+			retention_enabled = true
+			retention_delete_delay = "2h"
+			retention_delete_worker_count = 150
+		}
+		tableManager = {
+			retention_deletes_enabled = true
+			# NOTE: This must be a multiple of the index period in `schemaConfig`. Default is 24h
+			# (https://github.com/grafana/loki/blob/main/cmd/loki/loki-local-config.yaml#L34)
+			retention_period = "24h"
+		}
 		singleBinary = {
 			replicas = 1
 			resources = var.limit_resources ? {
