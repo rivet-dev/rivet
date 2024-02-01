@@ -9,18 +9,18 @@ concurrency:
 defaults:
   run:
     # Enable fail-fast behavior
-    shell: bash
+    shell: bash -e {0}
 
 jobs:
   cargo-deny:
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
       - name: cargo deny (svc)
         uses: EmbarkStudios/cargo-deny-action@v1
         with:
           arguments: --manifest-path svc/Cargo.toml
-      - name: cargy deny (lib/bolt)
+      - name: cargo deny (lib/bolt)
         uses: EmbarkStudios/cargo-deny-action@v1
         with:
           arguments: --manifest-path lib/bolt/Cargo.toml

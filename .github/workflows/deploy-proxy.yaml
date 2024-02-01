@@ -1,0 +1,34 @@
+# Based on https://github.com/orgs/community/discussions/26323#discussioncomment-6749966
+
+name: deploy-proxy
+
+on:
+  pull_request:
+    branches:
+      - main
+    types:
+      - closed
+
+defaults:
+  run:
+    # Enable fail-fast behavior
+    shell: bash -e {0}
+
+jobs:
+  emit:
+    runs-on: ubuntu-latest
+    # Only trigger on successful merge
+    if: github.event_name == 'pull_request' && github.event.action == 'closed' && github.event.pull_request.merged == true
+    steps:
+      - uses: actions/github-script@v6
+        with:
+          # Use "Fine-grained tokens (beta)", select the target repo, give read-write access to "Content" category.
+          github-token: ${{ secrets.DEPLOY_PROXY_PAT }}
+          script: |
+            const result = await github.rest.repos.createDispatchEvent({
+              owner: 'rivet-gg',
+              repo: 'rivet-ee',
+              event_type: 'deploy_proxy',
+              client_payload: { }
+            });
+            console.log(result);

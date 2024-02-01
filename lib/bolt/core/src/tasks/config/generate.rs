@@ -363,16 +363,6 @@ pub async fn generate(project_path: &Path, ns_id: &str) -> Result<()> {
 		};
 	}
 
-	// MARK: SendGrid
-	if generator.ns.get("email").is_none() {
-		generator.ns["email"] = {
-			let mut x = toml_edit::Table::new();
-			x.set_implicit(true);
-			x["sendgrid"] = toml_edit::table();
-			toml_edit::Item::Table(x)
-		};
-	}
-
 	// TODO: Prompt login
 	if generator
 		.ns

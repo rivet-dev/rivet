@@ -1,5 +1,5 @@
-name: "Pre-Init"
-description: "Set up Nix and Bolt"
+name: pre-init
+description: Set up Nix and Bolt
 
 # TODO: Composite actions don't support defaults
 # defaults:
@@ -58,14 +58,15 @@ runs:
       shell: bash -e {0}
       run: nix-shell --pure --run "echo 'Built shell'"
 
+    # MARK: Bolt
     - name: Write Configs
       shell: bash -e {0}
       run: |
-        cat <<'EOF' > Bolt.local.toml
+        cat << 'EOF' > Bolt.local.toml
         namespace = "ci"
         EOF
 
-        cat <<'EOF' > namespaces/ci.toml
+        cat << 'EOF' > namespaces/ci.toml
         [rivet]
         test = {}
 
@@ -75,13 +76,6 @@ runs:
         public_ip = "127.0.0.1"
         EOF
 
-        # Write secrets so they're not prompted in `bolt init`
-        cat <<'EOF' > secrets/ci.toml
-        [sendgrid]
-        key = "TODO"
-        EOF
-
-    # MARK: Bolt
     # Delete old Bolt binaries in order to fall back to the Nix-built binary
     - name: Remove Old Bolt Builds
       shell: bash -e {0}
