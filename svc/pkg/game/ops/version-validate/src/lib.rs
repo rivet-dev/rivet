@@ -718,14 +718,17 @@ async fn handle(
 					}
 				}
 
+				let network_mode = unwrap!(LobbyRuntimeNetworkMode::from_i32(
+					docker_config.network_mode
+				));
+				let host_networking_enabled =
+					std::env::var("RIVET_HOST_NETWORKING").map_or(false, |v| v == "1");
 				// Validate ports
+				if host_networking_enabled || !matches!(network_mode, LobbyRuntimeNetworkMode::Host)
 				{
 					let mut unique_port_labels = HashSet::<String>::new();
 					let mut unique_ports = HashSet::<(u32, i32)>::new();
 					let mut ranges = Vec::<PortRange>::new();
-					let network_mode = unwrap!(LobbyRuntimeNetworkMode::from_i32(
-						docker_config.network_mode
-					));
 
 					if docker_config.ports.len() > 16 {
 						errors.push(util::err_path![
@@ -955,6 +958,14 @@ async fn handle(
 							}
 						}
 					}
+				} else {
+					errors.push(util::err_path![
+						"config",
+						"matchmaker",
+						"game-modes",
+						lobby_group_label,
+						"host-networking-disabled",
+					]);
 				}
 			} else {
 				errors.push(util::err_path![

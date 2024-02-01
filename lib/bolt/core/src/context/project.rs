@@ -222,6 +222,18 @@ impl ProjectContextData {
 				);
 			}
 		}
+
+		if self.ns().rivet.test.is_some()
+			&& !self.ns().pools.is_empty()
+			&& !self
+				.ns()
+				.rivet
+				.matchmaker
+				.as_ref()
+				.map_or(false, |mm| mm.host_networking)
+		{
+			panic!("must have host networking enabled if tests + pools are enabled (rivet.matchmaker.host_networking = true)");
+		}
 	}
 
 	// Traverses from FS root to CWD, returns first directory with Bolt.toml

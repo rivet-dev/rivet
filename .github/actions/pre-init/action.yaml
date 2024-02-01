@@ -67,8 +67,7 @@ runs:
         EOF
 
         cat << 'EOF' > namespaces/ci.toml
-        [rivet]
-        test = {}
+        [rivet.test]
 
         # We set the public IP to localhost because we are running inside of a github action, therefore
         # it is not reachable from the public.
