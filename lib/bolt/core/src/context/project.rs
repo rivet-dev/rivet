@@ -234,6 +234,14 @@ impl ProjectContextData {
 		{
 			panic!("must have host networking enabled if tests + pools are enabled (rivet.matchmaker.host_networking = true)");
 		}
+
+		// MARK: Billing emails
+		if self.ns().rivet.billing.is_some() {
+			assert!(
+				self.ns().email.is_some(),
+				"cannot enable billing without emailing"
+			);
+		}
 	}
 
 	// Traverses from FS root to CWD, returns first directory with Bolt.toml
