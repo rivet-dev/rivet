@@ -85,13 +85,13 @@ pub async fn build_cdn(ctx: &Ctx<Auth>) -> GlobalResult<traefik::TraefikConfigRe
 		traefik::TraefikMiddlewareHttp::InFlightReq {
 			// This number needs to be high to allow for parallel requests
 			amount: 128,
-			source_criterion: traefik::InFlightReqSourceCriterion::RequestHeaderName {
-				request_header_name: if util::env::dns_provider() == Some("cloudflare") {
+			source_criterion: traefik::InFlightReqSourceCriterion::RequestHeaderName(
+				if util::env::dns_provider() == Some("cloudflare") {
 					"cf-connecting-ip".to_string()
 				} else {
 					"x-forwarded-for".to_string()
 				},
-			},
+			),
 		},
 	);
 	config.http.middlewares.insert(

@@ -244,7 +244,7 @@ pub enum InFlightReqSourceCriterion {
 	#[serde(rename = "ipStrategy")]
 	IpStrategy(IpStrategy),
 	#[serde(rename = "requestHeaderName", rename_all = "camelCase")]
-	RequestHeaderName { request_header_name: String },
+	RequestHeaderName(String),
 	#[serde(rename = "requestHost", rename_all = "camelCase")]
 	RequestHost {},
 }
