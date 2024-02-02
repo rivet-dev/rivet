@@ -182,7 +182,7 @@ async fn test_http(host: &str) -> GlobalResult<()> {
 }
 
 async fn test_ws(host: &str, token: &str) -> GlobalResult<()> {
-	let (mut socket, _) = connect_async(format!("wss://{host}?token={token}")).await?;
+	let (mut socket, _) = connect_async(format!("wss://{host}/?token={token}")).await?;
 
 	tokio::time::sleep(Duration::from_millis(500)).await;
 
