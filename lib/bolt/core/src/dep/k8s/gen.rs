@@ -920,7 +920,10 @@ fn build_ingress_router(
 				"kind": "Middleware",
 				"metadata": {
 					"name": mw_name,
-					"namespace": "rivet-service"
+					"namespace": "rivet-service",
+					"labels": {
+						"traefik-instance": "main"
+					}
 				},
 				"spec": {
 					"inFlightReq": {
