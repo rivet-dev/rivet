@@ -28,8 +28,10 @@ secrets/
 # Rivet
 infra/
 !infra/misc/svc_scripts/
+!infra/default-builds/
 oss/infra/
 !oss/infra/misc/svc_scripts/
+!oss/infra/default-builds/
 
 # Rust
 **/target/
