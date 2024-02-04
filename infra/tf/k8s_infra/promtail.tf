@@ -1,11 +1,4 @@
 locals {
-	labels = {
-		ns = var.namespace
-	}
-	external_labels = join(",", [
-		for key, value in local.labels:
-		"${key}=${value}"
-	])
 	service_promtail = lookup(var.services, "promtail", {
 		count = 1
 		resources = {
@@ -58,13 +51,28 @@ resource "helm_release" "promtail" {
 				extraRelabelConfigs = [
 					{
 						action = "replace"
+						source_labels = ["__meta_kubernetes_namespace"]
+						target_label = "namespace"
+					},
+					{
+						action = "replace"
 						source_labels = ["__meta_kubernetes_pod_node_name"]
 						target_label = "node"
 					},
 					{
 						action = "replace"
+						source_labels = ["__meta_kubernetes_pod_name"]
+						target_label = "pod"
+					},
+					{
+						action = "replace"
 						source_labels = ["__meta_kubernetes_pod_uid"]
-						target_label = "alloc"
+						target_label = "pod_uid"
+					},
+					{
+						action = "replace"
+						source_labels = ["__meta_kubernetes_pod_container_name"]
+						target_label = "container"
 					},
 					{
 						action = "replace"
@@ -72,9 +80,9 @@ resource "helm_release" "promtail" {
 						# https://groups.google.com/g/prometheus-users/c/dGx7MArW-eE
 						# https://github.com/prometheus/docs/issues/735
 						source_labels = ["__meta_kubernetes_pod_label_app_kubernetes_io_name"]
-						target_label = "service"
+						target_label = "name"
 					},
-					# Doesn't work for some reason
+					# TODO: Doesn't work for some reason
 					{
 						action = "labeldrop"
 						regex = "^(host|filename)$"
@@ -139,9 +147,5 @@ resource "helm_release" "promtail" {
 				cpu = "${local.service_promtail.resources.cpu}m"
 			}
 		} : null
-
-		extraArgs = [
-			"-client.external-labels=${local.external_labels}"
-		]
 	})]
 }
