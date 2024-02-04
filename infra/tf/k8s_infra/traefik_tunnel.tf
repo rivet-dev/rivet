@@ -133,12 +133,12 @@ resource "helm_release" "traefik_tunnel" {
 		} : null
 
 		logs = {
-			general = {
-				level = "DEBUG"
-			}
-			access = {
-				enabled = true
-			}
+			# general = {
+			# 	level = "DEBUG"
+			# }
+			# access = {
+			# 	enabled = true
+			# }
 		}
 
 		deployment = {
