@@ -498,7 +498,7 @@ export class Lobbies {
 
     /**
      * Finds a lobby based on the given criteria.
-     * If a lobby is not found and `prevent_auto_create_lobby` is `true`,
+     * If a lobby is not found and `prevent_auto_create_lobby` is `false`,
      * a new lobby will be created.
      * @throws {@link Rivet.InternalError}
      * @throws {@link Rivet.RateLimitError}

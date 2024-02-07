@@ -50,7 +50,7 @@ Name | Type | Description  | Required | Notes
 > crate::models::MatchmakerFindLobbyResponse matchmaker_lobbies_find(matchmaker_lobbies_find_request, origin)
 
 
-Finds a lobby based on the given criteria. If a lobby is not found and `prevent_auto_create_lobby` is `true`, a new lobby will be created.
+Finds a lobby based on the given criteria. If a lobby is not found and `prevent_auto_create_lobby` is `false`, a new lobby will be created.
 
 ### Parameters
 
