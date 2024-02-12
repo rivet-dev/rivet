@@ -1,17 +1,19 @@
-default-group: local
+default-group: full
 groups:
-  local:
+  runtime:
+    audiences:
+      - runtime
     generators:
       - name: fernapi/fern-openapi
         version: 0.0.22
         output:
           location: local-file-system
-          path: ../sdks/openapi
+          path: ../sdks/runtime/openapi
       - name: fernapi/fern-typescript-browser-sdk
         version: 0.9.0
         output:
           location: local-file-system
-          path: ../sdks/typescript/src
+          path: ../sdks/runtime/typescript/src
         config:
           outputSourceFiles: true
           namespaceExport: Rivet
@@ -22,4 +24,27 @@ groups:
         version: 0.9.3
         output:
           location: local-file-system
-          path: ../sdks/go
+          path: ../sdks/runtime/go
+  full:
+    generators:
+      - name: fernapi/fern-openapi
+        version: 0.0.22
+        output:
+          location: local-file-system
+          path: ../sdks/full/openapi
+      - name: fernapi/fern-typescript-browser-sdk
+        version: 0.9.0
+        output:
+          location: local-file-system
+          path: ../sdks/full/typescript/src
+        config:
+          outputSourceFiles: true
+          namespaceExport: Rivet
+          defaultTimeoutInSeconds: 180
+          skipResponseValidation: true
+          allowCustomFetcher: true
+      - name: fernapi/fern-go-sdk
+        version: 0.9.3
+        output:
+          location: local-file-system
+          path: ../sdks/full/go

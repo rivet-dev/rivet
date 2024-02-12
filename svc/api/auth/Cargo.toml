@@ -30,7 +30,7 @@ tracing = "0.1"
 tracing-subscriber = { version = "0.3", default-features = false, features = ["fmt", "json", "ansi"] }
 url = "2.2.2"
 uuid = { version = "1", features = ["v4"] }
-rivet-api = { path = "../../../sdks/rust" }
+rivet-api = { path = "../../../sdks/full/rust" }
 
 user-get = { path = "../../pkg/user/ops/get" }
 token-revoke = { path = "../../pkg/token/ops/revoke" }

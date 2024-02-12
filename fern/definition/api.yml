@@ -9,6 +9,11 @@ error-discrimination:
 environments:
   Production: https://api.rivet.gg
 default-environment: Production
+audiences:
+  # If flagged with runtime, this will be included with the core
+  # API library. All other API endpoints are not essential for
+  # using Rivet at runtime (e.g. cloud, identity, etc).
+  - runtime
 errors:
   - commons.InternalError
   - commons.RateLimitError
