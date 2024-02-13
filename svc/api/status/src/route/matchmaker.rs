@@ -1,4 +1,7 @@
-use std::time::Duration;
+use std::{
+	net::{IpAddr, SocketAddr},
+	time::Duration,
+};
 
 use api_helper::{anchor::WatchIndexQuery, ctx::Ctx};
 use proto::backend::pkg::*;
@@ -146,41 +149,90 @@ pub async fn status(
 
 	let port_default = unwrap!(res.lobby.ports.get("default"));
 	let host = unwrap_ref!(port_default.host);
+	let hostname = &port_default.hostname;
 	let token = &res.player.token;
 
+	// Look up IP for GG nodes
+	let gg_ips = lookup_dns(hostname).await?;
+	ensure_with!(
+		!gg_ips.is_empty(),
+		INTERNAL_STATUS_CHECK_FAILED,
+		error = format!("no IPs found for GG host {hostname}")
+	);
+
 	// Test HTTP connectivity. This gives a verbose error if the LB returns a non-200 response.
-	test_http(host).await?;
+	let test_http_res = futures_util::future::join_all(
+		gg_ips
+			.iter()
+			.cloned()
+			.map(|x| test_http(hostname.clone(), (x, 443).into())),
+	)
+	.await;
+	let failed_tests = gg_ips
+		.iter()
+		.zip(test_http_res.iter())
+		.filter_map(|(ip, res)| {
+			if let Err(err) = res {
+				Some((ip, err))
+			} else {
+				None
+			}
+		})
+		.collect::<Vec<_>>();
+	if !failed_tests.is_empty() {
+		bail_with!(
+			INTERNAL_STATUS_CHECK_FAILED,
+			error = format!(
+				"{} http out of {} failed: {:?}",
+				failed_tests.len(),
+				gg_ips.len(),
+				failed_tests
+			)
+		);
+	}
 
 	// Test WebSocket connectivity. This will pass the player token to the server & call player
 	// connected + disconnected. This will shut down the lobby once the socket closes.
-	test_ws(host, token).await?;
+	test_ws(host, token).await.map_err(|err| {
+		err_code!(
+			INTERNAL_STATUS_CHECK_FAILED,
+			error = format!("ws failed: {err:?}")
+		)
+	})?;
 
 	Ok(serde_json::json!({}))
 }
 
-async fn test_http(host: &str) -> GlobalResult<()> {
-	let res = reqwest::get(format!("https://{host}/health")).await;
+/// Returns the IP addresses for a given hostname.
+async fn lookup_dns(hostname: &str) -> GlobalResult<Vec<IpAddr>> {
+	let resolver = trust_dns_resolver::TokioAsyncResolver::tokio_from_system_conf()?;
+	let addrs = resolver
+		.lookup_ip(hostname)
+		.await?
+		.into_iter()
+		.collect::<Vec<IpAddr>>();
 
-	let res = match res {
-		Ok(x) => x,
-		Err(err) => {
-			bail_with!(
-				INTERNAL_STATUS_CHECK_FAILED,
-				error = format!("connect to lobby: {:?}", err)
-			)
-		}
-	};
+	Ok(addrs)
+}
 
-	if let Err(err) = res.error_for_status() {
-		bail_with!(
-			INTERNAL_STATUS_CHECK_FAILED,
-			error = format!("connect to lobby status: {:?}", err)
-		);
-	}
+/// Tests HTTP connectivity to a hostname for a given address.
+///
+/// This lets us isolate of a specific GG IP address is not behaving correctly.
+async fn test_http(host: String, addr: SocketAddr) -> Result<(), reqwest::Error> {
+	// Resolve the host to the specific IP addr
+	let client = reqwest::Client::builder().resolve(&host, addr).build()?;
+
+	// Test HTTP connectivity
+	client
+		.get(format!("https://{host}/health"))
+		.send()
+		.await?
+		.error_for_status()?;
 
 	Ok(())
 }
 
+/// Tests WebSocket connectivity to a hostname.
 async fn test_ws(host: &str, token: &str) -> GlobalResult<()> {
 	let (mut socket, _) = connect_async(format!("wss://{host}/?token={token}")).await?;
 

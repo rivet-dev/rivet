@@ -40,6 +40,7 @@ game-resolve-name-id = { path = "../../pkg/game/ops/resolve-name-id" }
 game-namespace-resolve-name-id = { path = "../../pkg/game/ops/namespace-resolve-name-id" }
 
 token-create = { path = "../../pkg/token/ops/create" }
+trust-dns-resolver = "0.23.2"
 
 [dev-dependencies]
 rivet-connection = { path = "../../../lib/connection" }
