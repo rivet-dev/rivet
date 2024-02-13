@@ -152,7 +152,7 @@ pub async fn matchmaker_lobbies_create(configuration: &configuration::Configurat
     }
 }
 
-/// Finds a lobby based on the given criteria. If a lobby is not found and `prevent_auto_create_lobby` is `true`, a new lobby will be created.
+/// Finds a lobby based on the given criteria. If a lobby is not found and `prevent_auto_create_lobby` is `false`, a new lobby will be created.
 pub async fn matchmaker_lobbies_find(configuration: &configuration::Configuration, matchmaker_lobbies_find_request: crate::models::MatchmakerLobbiesFindRequest, origin: Option<&str>) -> Result<crate::models::MatchmakerFindLobbyResponse, Error<MatchmakerLobbiesFindError>> {
     let local_var_configuration = configuration;
 

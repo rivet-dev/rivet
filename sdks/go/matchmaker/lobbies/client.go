@@ -346,7 +346,7 @@ func (c *Client) GetState(ctx context.Context, lobbyId uuid.UUID) (interface{}, 
 }
 
 // Finds a lobby based on the given criteria.
-// If a lobby is not found and `prevent_auto_create_lobby` is `true`,
+// If a lobby is not found and `prevent_auto_create_lobby` is `false`,
 // a new lobby will be created.
 func (c *Client) Find(ctx context.Context, request *matchmaker.FindLobbyRequest) (*matchmaker.FindLobbyResponse, error) {
 	baseURL := "https://api.rivet.gg"
