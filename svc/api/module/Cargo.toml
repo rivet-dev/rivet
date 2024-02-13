@@ -21,7 +21,7 @@ regex = "1.5"
 rivet-cache = { path = "../../../lib/cache/build" }
 rivet-claims = { path = "../../../lib/claims" }
 rivet-health-checks = { path = "../../../lib/health-checks" }
-rivet-api = { path = "../../../sdks/rust" }
+rivet-api = { path = "../../../sdks/full/rust" }
 rivet-pools = { path = "../../../lib/pools" }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"

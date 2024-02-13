@@ -9,6 +9,8 @@ imports:
 service:
   auth: true
   base-path: /matchmaker/lobbies
+  audiences:
+    - runtime
   endpoints:
     ready:
       path: /ready

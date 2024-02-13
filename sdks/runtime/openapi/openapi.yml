@@ -1,0 +1,1681 @@
+openapi: 3.0.1
+info:
+  title: Rivet API
+  version: ''
+paths:
+  /kv/entries:
+    get:
+      description: Returns a specific key-value entry by key.
+      operationId: kv_get
+      tags:
+        - Kv
+      parameters:
+        - name: key
+          in: query
+          required: true
+          schema:
+            $ref: '#/components/schemas/KvKey'
+        - name: watch_index
+          in: query
+          description: A query parameter denoting the requests watch index.
+          required: false
+          schema:
+            type: string
+        - name: namespace_id
+          in: query
+          required: false
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KvGetResponse'
+        '400':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '403':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '404':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '408':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '429':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '500':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+      security: &ref_0
+        - BearerAuth: []
+    put:
+      description: Puts (sets or overwrites) a key-value entry by key.
+      operationId: kv_put
+      tags:
+        - Kv
+      parameters: []
+      responses:
+        '204':
+          description: ''
+        '400':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '403':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '404':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '408':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '429':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '500':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+      security: *ref_0
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/KvPutRequest'
+    delete:
+      description: Deletes a key-value entry by key.
+      operationId: kv_delete
+      tags:
+        - Kv
+      parameters:
+        - name: key
+          in: query
+          required: true
+          schema:
+            $ref: '#/components/schemas/KvKey'
+        - name: namespace_id
+          in: query
+          required: false
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '204':
+          description: ''
+        '400':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '403':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '404':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '408':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '429':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '500':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+      security: *ref_0
+  /kv/entries/list:
+    get:
+      description: Lists all keys in a directory.
+      operationId: kv_list
+      tags:
+        - Kv
+      parameters:
+        - name: directory
+          in: query
+          required: true
+          schema:
+            $ref: '#/components/schemas/KvDirectory'
+        - name: namespace_id
+          in: query
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KvListResponse'
+        '400':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '403':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '404':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '408':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '429':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '500':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+      security: *ref_0
+  /kv/entries/batch:
+    get:
+      description: Gets multiple key-value entries by key(s).
+      operationId: kv_getBatch
+      tags:
+        - Kv
+      parameters:
+        - name: keys
+          in: query
+          required: true
+          schema:
+            $ref: '#/components/schemas/KvKey'
+        - name: watch_index
+          in: query
+          description: A query parameter denoting the requests watch index.
+          required: false
+          schema:
+            type: string
+        - name: namespace_id
+          in: query
+          required: false
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KvGetBatchResponse'
+        '400':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '403':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '404':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '408':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '429':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '500':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+      security: *ref_0
+    put:
+      description: Puts (sets or overwrites) multiple key-value entries by key(s).
+      operationId: kv_putBatch
+      tags:
+        - Kv
+      parameters: []
+      responses:
+        '204':
+          description: ''
+        '400':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '403':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '404':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '408':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '429':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '500':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+      security: *ref_0
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/KvPutBatchRequest'
+    delete:
+      description: Deletes multiple key-value entries by key(s).
+      operationId: kv_deleteBatch
+      tags:
+        - Kv
+      parameters:
+        - name: keys
+          in: query
+          required: true
+          schema:
+            $ref: '#/components/schemas/KvKey'
+        - name: namespace_id
+          in: query
+          required: false
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '204':
+          description: ''
+        '400':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '403':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '404':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '408':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '429':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '500':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+      security: *ref_0
+  /matchmaker/lobbies/ready:
+    post:
+      description: >-
+        Marks the current lobby as ready to accept connections. Players will not
+        be able to connect to this lobby until the lobby is flagged as ready.
+      operationId: matchmaker_lobbies_ready
+      tags:
+        - MatchmakerLobbies
+      parameters: []
+      responses:
+        '204':
+          description: ''
+        '400':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '403':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '404':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '408':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '429':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '500':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+      security: *ref_0
+  /matchmaker/lobbies/closed:
+    put:
+      description: >-
+        If `is_closed` is `true`, the matchmaker will no longer route players to
+        the lobby. Players can still
+
+        join using the /join endpoint (this can be disabled by the developer by
+        rejecting all new connections
+
+        after setting the lobby to closed).
+
+        Does not shutdown the lobby.
+      operationId: matchmaker_lobbies_setClosed
+      tags:
+        - MatchmakerLobbies
+      parameters: []
+      responses:
+        '204':
+          description: ''
+        '400':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '403':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '404':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '408':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '429':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '500':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+      security: *ref_0
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                is_closed:
+                  type: boolean
+              required:
+                - is_closed
+  /matchmaker/lobbies/state:
+    put:
+      operationId: matchmaker_lobbies_setState
+      tags:
+        - MatchmakerLobbies
+      parameters: []
+      responses:
+        '204':
+          description: ''
+        '400':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '403':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '404':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '408':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '429':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '500':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+      security: *ref_0
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema: {}
+  /matchmaker/lobbies/{lobby_id}/state:
+    get:
+      operationId: matchmaker_lobbies_getState
+      tags:
+        - MatchmakerLobbies
+      parameters:
+        - name: lobby_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: ''
+          content:
+            application/json:
+              schema: {}
+        '400':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '403':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '404':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '408':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '429':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '500':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+      security: *ref_0
+  /matchmaker/lobbies/find:
+    post:
+      description: |-
+        Finds a lobby based on the given criteria.
+        If a lobby is not found and `prevent_auto_create_lobby` is `false`,
+        a new lobby will be created.
+      operationId: matchmaker_lobbies_find
+      tags:
+        - MatchmakerLobbies
+      parameters:
+        - name: origin
+          in: header
+          required: false
+          schema:
+            type: string
+      responses:
+        '200':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MatchmakerFindLobbyResponse'
+        '400':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '403':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '404':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '408':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '429':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '500':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+      security: *ref_0
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                game_modes:
+                  type: array
+                  items:
+                    type: string
+                regions:
+                  type: array
+                  items:
+                    type: string
+                prevent_auto_create_lobby:
+                  type: boolean
+                tags:
+                  type: object
+                  additionalProperties:
+                    type: string
+                max_players:
+                  type: integer
+                captcha:
+                  $ref: '#/components/schemas/CaptchaConfig'
+                verification_data: {}
+              required:
+                - game_modes
+  /matchmaker/lobbies/join:
+    post:
+      description: |-
+        Joins a specific lobby.
+        This request will use the direct player count configured for the
+        lobby group.
+      operationId: matchmaker_lobbies_join
+      tags:
+        - MatchmakerLobbies
+      parameters: []
+      responses:
+        '200':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MatchmakerJoinLobbyResponse'
+        '400':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '403':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '404':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '408':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '429':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '500':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+      security: *ref_0
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                lobby_id:
+                  type: string
+                captcha:
+                  $ref: '#/components/schemas/CaptchaConfig'
+                verification_data: {}
+              required:
+                - lobby_id
+  /matchmaker/lobbies/create:
+    post:
+      description: Creates a custom lobby.
+      operationId: matchmaker_lobbies_create
+      tags:
+        - MatchmakerLobbies
+      parameters: []
+      responses:
+        '200':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MatchmakerCreateLobbyResponse'
+        '400':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '403':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '404':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '408':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '429':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '500':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+      security: *ref_0
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                game_mode:
+                  type: string
+                region:
+                  type: string
+                publicity:
+                  $ref: '#/components/schemas/MatchmakerCustomLobbyPublicity'
+                tags:
+                  type: object
+                  additionalProperties:
+                    type: string
+                max_players:
+                  type: integer
+                lobby_config: {}
+                captcha:
+                  $ref: '#/components/schemas/CaptchaConfig'
+                verification_data: {}
+              required:
+                - game_mode
+  /matchmaker/lobbies/list:
+    get:
+      description: Lists all open lobbies.
+      operationId: matchmaker_lobbies_list
+      tags:
+        - MatchmakerLobbies
+      parameters:
+        - name: include_state
+          in: query
+          required: false
+          schema:
+            type: boolean
+      responses:
+        '200':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MatchmakerListLobbiesResponse'
+        '400':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '403':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '404':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '408':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '429':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '500':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+      security: *ref_0
+  /matchmaker/players/connected:
+    post:
+      description: >-
+        Validates the player token is valid and has not already been consumed
+        then
+
+        marks the player as connected.
+
+
+        # Player Tokens and Reserved Slots
+
+
+        Player tokens reserve a spot in the lobby until they expire. This allows
+        for
+
+        precise matchmaking up to exactly the lobby's player limit, which is
+
+        important for games with small lobbies and a high influx of players.
+
+        By calling this endpoint with the player token, the player's spot is
+        marked
+
+        as connected and will not expire. If this endpoint is never called, the
+
+        player's token will expire and this spot will be filled by another
+        player.
+
+
+        # Anti-Botting
+
+
+        Player tokens are only issued by caling `lobbies.join`, calling
+        `lobbies.find`, or
+
+        from the `GlobalEventMatchmakerLobbyJoin` event.
+
+        These endpoints have anti-botting measures (i.e. enforcing max player
+
+        limits, captchas, and detecting bots), so valid player tokens provide
+        some
+
+        confidence that the player is not a bot.
+
+        Therefore, it's important to make sure the token is valid by waiting for
+
+        this endpoint to return OK before allowing the connected socket to do
+
+        anything else. If this endpoint returns an error, the socket should be
+
+        disconnected immediately.
+
+
+        # How to Transmit the Player Token
+
+
+        The client is responsible for acquiring the player token by caling
+
+        `lobbies.join`, calling `lobbies.find`, or from the
+        `GlobalEventMatchmakerLobbyJoin`
+
+        event. Beyond that, it's up to the developer how the player token is
+
+        transmitted to the lobby.
+
+        If using WebSockets, the player token can be transmitted as a query
+
+        parameter.
+
+        Otherwise, the player token will likely be automatically sent by the
+        client
+
+        once the socket opens. As mentioned above, nothing else should happen
+        until
+
+        the player token is validated.
+      operationId: matchmaker_players_connected
+      tags:
+        - MatchmakerPlayers
+      parameters: []
+      responses:
+        '204':
+          description: ''
+        '400':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '403':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '404':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '408':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '429':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '500':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+      security: *ref_0
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                player_token:
+                  type: string
+              required:
+                - player_token
+  /matchmaker/players/disconnected:
+    post:
+      description: >-
+        Marks a player as disconnected. # Ghost Players If players are not
+        marked as disconnected, lobbies will result with "ghost players" that
+        the matchmaker thinks exist but are no longer connected to the lobby.
+      operationId: matchmaker_players_disconnected
+      tags:
+        - MatchmakerPlayers
+      parameters: []
+      responses:
+        '204':
+          description: ''
+        '400':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '403':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '404':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '408':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '429':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '500':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+      security: *ref_0
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                player_token:
+                  type: string
+              required:
+                - player_token
+  /matchmaker/players/statistics:
+    get:
+      description: Gives matchmaker statistics about the players in game.
+      operationId: matchmaker_players_getStatistics
+      tags:
+        - MatchmakerPlayers
+      parameters: []
+      responses:
+        '200':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MatchmakerGetStatisticsResponse'
+        '400':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '403':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '404':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '408':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '429':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '500':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+      security: *ref_0
+  /matchmaker/regions:
+    get:
+      description: >-
+        Returns a list of regions available to this namespace.
+
+        Regions are sorted by most optimal to least optimal. The player's IP
+        address
+
+        is used to calculate the regions' optimality.
+      operationId: matchmaker_regions_list
+      tags:
+        - MatchmakerRegions
+      parameters: []
+      responses:
+        '200':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MatchmakerListRegionsResponse'
+        '400':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '403':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '404':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '408':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '429':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '500':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+      security: *ref_0
+components:
+  schemas:
+    KvGetResponse:
+      type: object
+      properties:
+        value:
+          $ref: '#/components/schemas/KvValue'
+        deleted:
+          type: boolean
+          description: >-
+            Whether or not the entry has been deleted. Only set when watching
+            this endpoint.
+        watch:
+          $ref: '#/components/schemas/WatchResponse'
+      required:
+        - value
+        - watch
+    KvPutRequest:
+      type: object
+      properties:
+        namespace_id:
+          type: string
+          format: uuid
+        key:
+          $ref: '#/components/schemas/KvKey'
+        value:
+          $ref: '#/components/schemas/KvValue'
+      required:
+        - key
+        - value
+    KvListResponse:
+      type: object
+      properties:
+        entries:
+          type: array
+          items:
+            $ref: '#/components/schemas/KvEntry'
+      required:
+        - entries
+    KvGetBatchResponse:
+      type: object
+      properties:
+        entries:
+          type: array
+          items:
+            $ref: '#/components/schemas/KvEntry'
+        watch:
+          $ref: '#/components/schemas/WatchResponse'
+      required:
+        - entries
+        - watch
+    KvPutBatchRequest:
+      type: object
+      properties:
+        namespace_id:
+          type: string
+          format: uuid
+        entries:
+          type: array
+          items:
+            $ref: '#/components/schemas/KvPutEntry'
+      required:
+        - entries
+    CaptchaConfig:
+      type: object
+      description: Methods to verify a captcha
+      properties:
+        hcaptcha:
+          $ref: '#/components/schemas/CaptchaConfigHcaptcha'
+        turnstile:
+          $ref: '#/components/schemas/CaptchaConfigTurnstile'
+    CaptchaConfigHcaptcha:
+      type: object
+      description: Captcha configuration.
+      properties:
+        client_response:
+          type: string
+      required:
+        - client_response
+    CaptchaConfigTurnstile:
+      type: object
+      description: Captcha configuration.
+      properties:
+        client_response:
+          type: string
+      required:
+        - client_response
+    Identifier:
+      type: string
+      description: >-
+        A human readable short identifier used to references resources.
+        Different than a `uuid` because this is intended to be human readable.
+        Different than `DisplayName` because this should not include special
+        characters and be short.
+    Jwt:
+      type: string
+      description: Documentation at https://jwt.io/
+    WatchResponse:
+      type: object
+      description: Provided by watchable endpoints used in blocking loops.
+      properties:
+        index:
+          type: string
+          description: |-
+            Index indicating the version of the data responded.
+            Pass this to `WatchQuery` to block and wait for the next response.
+      required:
+        - index
+    DisplayName:
+      type: string
+    ErrorMetadata:
+      description: Unstructured metadata relating to an error. Must be manually parsed.
+    ErrorBody:
+      type: object
+      properties:
+        code:
+          type: string
+        message:
+          type: string
+        documentation:
+          type: string
+        metadata:
+          $ref: '#/components/schemas/ErrorMetadata'
+      required:
+        - code
+        - message
+    GeoCoord:
+      type: object
+      description: Geographical coordinates for a location on Planet Earth.
+      properties:
+        latitude:
+          type: number
+          format: double
+        longitude:
+          type: number
+          format: double
+      required:
+        - latitude
+        - longitude
+    GeoDistance:
+      type: object
+      description: Distance available in multiple units.
+      properties:
+        kilometers:
+          type: number
+          format: double
+        miles:
+          type: number
+          format: double
+      required:
+        - kilometers
+        - miles
+    KvKey:
+      type: string
+      description: >-
+        A string representing a key in the key-value database.
+
+        Maximum length of 512 characters.
+
+        _Recommended Key Path Format_
+
+        Key path components are split by a slash (e.g. `a/b/c` has the path
+        components `["a", "b", "c"]`). Slashes can be escaped by using a
+        backslash (e.g. `a/b\/c/d` has the path components `["a", "b/c", "d"]`).
+
+        This format is not enforced by Rivet, but the tools built around Rivet
+        KV work better if this format is used.
+    KvDirectory:
+      type: string
+    KvValue:
+      description: |-
+        A JSON object stored in the KV database.
+        A `null` value indicates the entry is deleted.
+        Maximum length of 262,144 bytes when encoded.
+    KvEntry:
+      type: object
+      description: A key-value entry.
+      properties:
+        key:
+          $ref: '#/components/schemas/KvKey'
+        value:
+          $ref: '#/components/schemas/KvValue'
+        deleted:
+          type: boolean
+      required:
+        - key
+        - value
+    KvPutEntry:
+      type: object
+      description: A new entry to insert into the key-value database.
+      properties:
+        key:
+          $ref: '#/components/schemas/KvKey'
+        value:
+          $ref: '#/components/schemas/KvValue'
+      required:
+        - key
+        - value
+    MatchmakerLobbyInfo:
+      type: object
+      description: A public lobby in the lobby list.
+      properties:
+        region_id:
+          type: string
+        game_mode_id:
+          type: string
+        lobby_id:
+          type: string
+          format: uuid
+        max_players_normal:
+          type: integer
+        max_players_direct:
+          type: integer
+        max_players_party:
+          type: integer
+        total_player_count:
+          type: integer
+        state: {}
+      required:
+        - region_id
+        - game_mode_id
+        - lobby_id
+        - max_players_normal
+        - max_players_direct
+        - max_players_party
+        - total_player_count
+    MatchmakerGameModeInfo:
+      type: object
+      description: A game mode that the player can join.
+      properties:
+        game_mode_id:
+          $ref: '#/components/schemas/Identifier'
+      required:
+        - game_mode_id
+    MatchmakerRegionInfo:
+      type: object
+      description: A region that the player can connect to.
+      properties:
+        region_id:
+          $ref: '#/components/schemas/Identifier'
+        provider_display_name:
+          type: string
+        region_display_name:
+          type: string
+        datacenter_coord:
+          $ref: '#/components/schemas/GeoCoord'
+        datacenter_distance_from_client:
+          $ref: '#/components/schemas/GeoDistance'
+      required:
+        - region_id
+        - provider_display_name
+        - region_display_name
+        - datacenter_coord
+        - datacenter_distance_from_client
+    MatchmakerJoinLobby:
+      type: object
+      description: A matchmaker lobby.
+      properties:
+        lobby_id:
+          type: string
+          format: uuid
+        region:
+          $ref: '#/components/schemas/MatchmakerJoinRegion'
+        ports:
+          type: object
+          additionalProperties:
+            $ref: '#/components/schemas/MatchmakerJoinPort'
+          description: '**Deprecated**'
+        player:
+          $ref: '#/components/schemas/MatchmakerJoinPlayer'
+          description: '**Deprecated**'
+      required:
+        - lobby_id
+        - region
+        - ports
+        - player
+    MatchmakerJoinRegion:
+      type: object
+      description: A matchmaker lobby region.
+      properties:
+        region_id:
+          $ref: '#/components/schemas/Identifier'
+        display_name:
+          $ref: '#/components/schemas/DisplayName'
+      required:
+        - region_id
+        - display_name
+    MatchmakerJoinPort:
+      type: object
+      properties:
+        host:
+          type: string
+          description: The host for the given port. Will be null if using a port range.
+        hostname:
+          type: string
+        port:
+          type: integer
+          description: The port number for this lobby. Will be null if using a port range.
+        port_range:
+          $ref: '#/components/schemas/MatchmakerJoinPortRange'
+          description: >-
+            Whether or not this lobby port uses TLS. You cannot mix a non-TLS
+            and TLS ports.
+        is_tls:
+          type: boolean
+      required:
+        - hostname
+        - is_tls
+    MatchmakerJoinPortRange:
+      type: object
+      description: Inclusive range of ports that can be connected to.
+      properties:
+        min:
+          type: integer
+          description: Minimum port that can be connected to. Inclusive range.
+        max:
+          type: integer
+          description: Maximum port that can be connected to. Inclusive range.
+      required:
+        - min
+        - max
+    MatchmakerJoinPlayer:
+      type: object
+      description: A matchmaker lobby player.
+      properties:
+        token:
+          $ref: '#/components/schemas/Jwt'
+          description: >-
+            Pass this token through the socket to the lobby server. The lobby
+            server will validate this token with `PlayerConnected.player_token`
+      required:
+        - token
+    MatchmakerCustomLobbyPublicity:
+      type: string
+      enum:
+        - public
+        - private
+    MatchmakerFindLobbyResponse:
+      type: object
+      properties:
+        lobby:
+          $ref: '#/components/schemas/MatchmakerJoinLobby'
+        ports:
+          type: object
+          additionalProperties:
+            $ref: '#/components/schemas/MatchmakerJoinPort'
+        player:
+          $ref: '#/components/schemas/MatchmakerJoinPlayer'
+      required:
+        - lobby
+        - ports
+        - player
+    MatchmakerJoinLobbyResponse:
+      type: object
+      properties:
+        lobby:
+          $ref: '#/components/schemas/MatchmakerJoinLobby'
+        ports:
+          type: object
+          additionalProperties:
+            $ref: '#/components/schemas/MatchmakerJoinPort'
+        player:
+          $ref: '#/components/schemas/MatchmakerJoinPlayer'
+      required:
+        - lobby
+        - ports
+        - player
+    MatchmakerCreateLobbyResponse:
+      type: object
+      properties:
+        lobby:
+          $ref: '#/components/schemas/MatchmakerJoinLobby'
+        ports:
+          type: object
+          additionalProperties:
+            $ref: '#/components/schemas/MatchmakerJoinPort'
+        player:
+          $ref: '#/components/schemas/MatchmakerJoinPlayer'
+      required:
+        - lobby
+        - ports
+        - player
+    MatchmakerListLobbiesResponse:
+      type: object
+      properties:
+        game_modes:
+          type: array
+          items:
+            $ref: '#/components/schemas/MatchmakerGameModeInfo'
+        regions:
+          type: array
+          items:
+            $ref: '#/components/schemas/MatchmakerRegionInfo'
+        lobbies:
+          type: array
+          items:
+            $ref: '#/components/schemas/MatchmakerLobbyInfo'
+      required:
+        - game_modes
+        - regions
+        - lobbies
+    MatchmakerGetStatisticsResponse:
+      type: object
+      properties:
+        player_count:
+          type: integer
+          format: int64
+        game_modes:
+          type: object
+          additionalProperties:
+            $ref: '#/components/schemas/MatchmakerGameModeStatistics'
+      required:
+        - player_count
+        - game_modes
+    MatchmakerGameModeStatistics:
+      type: object
+      properties:
+        player_count:
+          type: integer
+          format: int64
+        regions:
+          type: object
+          additionalProperties:
+            $ref: '#/components/schemas/MatchmakerRegionStatistics'
+      required:
+        - player_count
+        - regions
+    MatchmakerRegionStatistics:
+      type: object
+      properties:
+        player_count:
+          type: integer
+          format: int64
+      required:
+        - player_count
+    MatchmakerListRegionsResponse:
+      type: object
+      properties:
+        regions:
+          type: array
+          items:
+            $ref: '#/components/schemas/MatchmakerRegionInfo'
+      required:
+        - regions
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+servers:
+  - url: https://api.rivet.gg
+    description: Production

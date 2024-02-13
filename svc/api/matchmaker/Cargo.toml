@@ -17,7 +17,7 @@ http = "0.2"
 hyper = { version = "0.14", features = ["server", "http1", "stream", "tcp"] }
 lazy_static = "1.4"
 prost = "0.10"
-rivet-api = { path = "../../../sdks/rust" }
+rivet-api = { path = "../../../sdks/full/rust" }
 rivet-cache = { path = "../../../lib/cache/build" }
 rivet-claims = { path = "../../../lib/claims" }
 rivet-health-checks = { path = "../../../lib/health-checks" }
