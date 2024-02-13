@@ -25,22 +25,12 @@ jobs:
           token: ${{ secrets.GITHUB_TOKEN }}
           submodules: recursive
 
-      - uses: ./.github/actions/pre-init
+      - uses: ./.github/actions/pre-init-distributed
         with:
           SCCACHE_AWS_SECRET_ACCESS_KEY: ${{ secrets.SCCACHE_AWS_SECRET_ACCESS_KEY }}
           SCCACHE_AWS_ACCESS_KEY_ID: ${{ secrets.SCCACHE_AWS_ACCESS_KEY_ID }}
           BOLT_NAMESPACE_CONFIG: ${{ secrets.BOLT_NAMESPACE_CONFIG }}
           BOLT_SECRETS_CONFIG: ${{ secrets.BOLT_SECRETS_CONFIG }}
-
-      - name: Make cluster distributed
-        run: |
-          cat <<EOF > namespaces/ci.toml
-          [cluster.distributed]
-
-          [docker]
-          authenticate_all_docker_hub_pulls = false
-          repository = "docker.io/rivet-gg/"
-          EOF
 
       - name: Login to docker
         env:
