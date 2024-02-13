@@ -14,7 +14,7 @@ use crate::{
 		service::{RuntimeKind, ServiceKind},
 	},
 	context::{self, BuildContext, ProjectContext, RunContext},
-	dep::{k8s, terraform},
+	dep::{docker, k8s, terraform},
 	utils,
 };
 
@@ -361,6 +361,20 @@ pub enum ServiceBuildPlan {
 impl ServiceContextData {
 	/// Determines if this service needs to be recompiled.
 	pub async fn build_plan(&self, build_context: &BuildContext) -> Result<ServiceBuildPlan> {
+		// Check if build exists on docker.io
+		let pub_image_tag = self.docker_image_tag(Some("docker.io/rivet-gg/")).await?;
+		if docker::cli::container_exists(&pub_image_tag).await {
+			return Ok(ServiceBuildPlan::ExistingUploadedBuild {
+				image_tag: pub_image_tag,
+			});
+		}
+
+		// Check if build exists in custom repo
+		let image_tag = self.docker_image_tag(None).await?;
+		if docker::cli::container_exists(&image_tag).await {
+			return Ok(ServiceBuildPlan::ExistingUploadedBuild { image_tag });
+		}
+
 		let project_ctx = self.project().await;
 
 		match &project_ctx.ns().cluster.kind {
@@ -380,8 +394,6 @@ impl ServiceContextData {
 			}
 			// Build and upload to S3
 			config::ns::ClusterKind::Distributed { .. } => {
-				let image_tag = self.docker_image_tag().await?;
-
 				// Default to building
 				Ok(ServiceBuildPlan::BuildAndUpload { image_tag })
 			}
@@ -1223,11 +1235,11 @@ impl ServiceContextData {
 }
 
 impl ServiceContextData {
-	pub async fn docker_image_tag(&self) -> Result<String> {
+	pub async fn docker_image_tag(&self, override_repo: Option<&str>) -> Result<String> {
 		let project_ctx = self.project().await;
 
 		let source_hash = project_ctx.source_hash();
-		let repo = &project_ctx.ns().docker.repository;
+		let repo = override_repo.unwrap_or(&project_ctx.ns().docker.repository);
 		ensure!(repo.ends_with('/'), "docker repository must end with slash");
 
 		Ok(format!(
@@ -1239,7 +1251,7 @@ impl ServiceContextData {
 	}
 
 	pub async fn upload_build(&self) -> Result<()> {
-		let image_tag = self.docker_image_tag().await?;
+		let image_tag = self.docker_image_tag(None).await?;
 
 		let mut cmd = Command::new("docker");
 		cmd.arg("push");

@@ -1,0 +1,56 @@
+name: publish-containers
+
+on:
+  push:
+    branches:
+      - main
+
+defaults:
+  run:
+    # Enable fail-fast behavior
+    shell: bash -e {0}
+
+env:
+  store: /home/runner/nix
+
+jobs:
+  deploy:
+    runs-on: [self-hosted, linux, x64]
+
+    steps:
+      # MARK: Git
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          submodules: recursive
+
+      - uses: ./.github/actions/pre-init
+        with:
+          SCCACHE_AWS_SECRET_ACCESS_KEY: ${{ secrets.SCCACHE_AWS_SECRET_ACCESS_KEY }}
+          SCCACHE_AWS_ACCESS_KEY_ID: ${{ secrets.SCCACHE_AWS_ACCESS_KEY_ID }}
+          BOLT_NAMESPACE_CONFIG: ${{ secrets.BOLT_NAMESPACE_CONFIG }}
+          BOLT_SECRETS_CONFIG: ${{ secrets.BOLT_SECRETS_CONFIG }}
+
+      - name: Make cluster distributed
+        run: |
+          cat <<EOF >> namespaces/ci.toml
+          [cluster.distributed]
+
+          [docker]
+          authenticate_all_docker_hub_pulls = false
+          repository = "docker.io/rivet-gg/"
+          EOF
+
+      - name: Login to docker
+        env:
+          DOCKER_CI_ACCESS_TOKEN: ${{ secrets.DOCKER_CI_ACCESS_TOKEN }}
+        run: |
+          echo "$DOCKER_CI_ACCESS_TOKEN" | docker login -u rivetggci --password-stdin
+
+      - name: Bolt up and push containers
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        # Cannot use --pure `https://github.com/NixOS/nixpkgs/issues/66716`
+        run: nix-shell --run "bolt up --skip-deploy"

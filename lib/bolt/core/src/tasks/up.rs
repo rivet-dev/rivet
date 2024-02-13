@@ -26,14 +26,19 @@ use crate::{
 	utils::{self},
 };
 
-pub async fn up_all(ctx: &ProjectContext, load_tests: bool, build_only: bool) -> Result<()> {
+pub async fn up_all(
+	ctx: &ProjectContext,
+	load_tests: bool,
+	build_only: bool,
+	skip_deploy: bool,
+) -> Result<()> {
 	let all_svc_names = ctx
 		.all_services()
 		.await
 		.iter()
 		.map(|svc| svc.name())
 		.collect::<Vec<_>>();
-	up_services(ctx, &all_svc_names, load_tests, build_only).await?;
+	up_services(ctx, &all_svc_names, load_tests, build_only, skip_deploy).await?;
 
 	Ok(())
 }
@@ -43,6 +48,7 @@ pub async fn up_services<T: AsRef<str>>(
 	svc_names: &[T],
 	load_tests: bool,
 	build_only: bool,
+	skip_deploy: bool,
 ) -> Result<Vec<ServiceContext>> {
 	let event = utils::telemetry::build_event(ctx, "bolt_up").await?;
 	utils::telemetry::capture_event(ctx, event).await?;
@@ -119,36 +125,6 @@ pub async fn up_services<T: AsRef<str>>(
 		}
 	}
 
-	let mut upload_join_set = JoinSet::<Result<()>>::new();
-	let upload_semaphore = Arc::new(Semaphore::new(4));
-
-	if !build_only {
-		// Login to docker repo for uploading
-		match &ctx.ns().cluster.kind {
-			config::ns::ClusterKind::SingleNode { .. } => {}
-			config::ns::ClusterKind::Distributed { .. } => {
-				if let Some((repo, _)) = ctx.ns().docker.repository.split_once("/") {
-					let username = ctx
-						.read_secret(&["docker", "registry", "ghcr.io", "write", "username"])
-						.await?;
-					let password = ctx
-						.read_secret(&["docker", "registry", "ghcr.io", "write", "password"])
-						.await?;
-
-					let mut cmd = Command::new("sh");
-					cmd.arg("-c").arg(format!(
-						"echo {password} | docker login {repo} -u {username} --password-stdin"
-					));
-
-					let status = cmd.status().await?;
-					ensure!(status.success());
-				} else {
-					bail!("docker repo must end with a slash");
-				};
-			}
-		}
-	}
-
 	// Run batch commands for all given services
 	eprintln!();
 	rivet_term::status::progress("Building", "(batch)");
@@ -191,11 +167,6 @@ pub async fn up_services<T: AsRef<str>>(
 		}
 	}
 
-	// If we're only building the services, we can return here
-	if build_only {
-		return Ok(all_svcs.iter().cloned().collect());
-	}
-
 	// Fetch build plans after compiling rust
 	eprintln!();
 	rivet_term::status::progress("Planning builds", "");
@@ -216,6 +187,38 @@ pub async fn up_services<T: AsRef<str>>(
 		.await;
 	pb.finish();
 
+	if build_only {
+		return Ok(all_svcs.iter().cloned().collect());
+	}
+
+	let mut upload_join_set = JoinSet::<Result<()>>::new();
+	let upload_semaphore = Arc::new(Semaphore::new(4));
+
+	// Login to docker repo for uploading
+	match &ctx.ns().cluster.kind {
+		config::ns::ClusterKind::SingleNode { .. } => {}
+		config::ns::ClusterKind::Distributed { .. } => {
+			if let Some((repo, _)) = ctx.ns().docker.repository.split_once("/") {
+				let username = ctx
+					.read_secret(&["docker", "registry", "ghcr.io", "write", "username"])
+					.await?;
+				let password = ctx
+					.read_secret(&["docker", "registry", "ghcr.io", "write", "password"])
+					.await?;
+
+				let mut cmd = Command::new("sh");
+				cmd.arg("-c").arg(format!(
+					"echo {password} | docker login {repo} -u {username} --password-stdin"
+				));
+
+				let status = cmd.status().await?;
+				ensure!(status.success());
+			} else {
+				bail!("docker repo must end with a slash");
+			};
+		}
+	}
+
 	// Build exec ctx contexts
 	eprintln!();
 	rivet_term::status::progress("Building", "(individual)");
@@ -224,13 +227,6 @@ pub async fn up_services<T: AsRef<str>>(
 		let pb = utils::progress_bar(all_exec_svcs_with_build_plan.len());
 		for (svc_ctx, build_plan) in &all_exec_svcs_with_build_plan {
 			pb.set_message(svc_ctx.name());
-
-			// // TODO: Build shared env
-			// let mut env = Vec::<(String, String)>::new();
-			// env.push(("PORT".into(), "80".into()));
-			// env.push(("RUN_CONTEXT".into(), run_context.short().into()));
-
-			// env.extend(ctx.all_router_url_env().await);
 
 			// Build the service if needed
 			if let ServiceBuildPlan::BuildAndUpload { .. } = &build_plan {
@@ -286,6 +282,10 @@ pub async fn up_services<T: AsRef<str>>(
 		),
 	);
 	utils::join_set_progress(upload_join_set).await?;
+
+	if skip_deploy {
+		return Ok(all_svcs.iter().cloned().collect());
+	}
 
 	// Generate Kubernetes deployments
 	//

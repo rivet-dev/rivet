@@ -1,17 +1,14 @@
 use anyhow::*;
+use sha2::{Digest, Sha256};
 use std::{
 	collections::HashMap,
 	path::{Path, PathBuf},
+	process::Command,
 	sync::{Arc, Weak},
 };
 use tokio::{fs, sync::Mutex};
 
-use crate::{
-	config::{self},
-	context,
-	dep::{self},
-	utils,
-};
+use crate::{config, context, utils::command_helper::CommandHelper};
 
 use super::{RunContext, ServiceContext};
 
@@ -111,13 +108,27 @@ impl ProjectContextData {
 			svc_ctxs_map,
 
 			source_hash: {
-				let modified_ts =
-					tokio::task::spawn_blocking(move || utils::deep_modified_ts(&project_root))
+				// Compute the git diff between the current branch and the local changes
+				let mut cmd = Command::new("git");
+				cmd.arg("diff").arg("--minimal");
+
+				let content = cmd
+					.exec_string_with_err("Failed to get source hash", true)
+					.await
+					.unwrap();
+
+				// If there is no diff, use the git commit hash
+				if content.is_empty() {
+					let mut cmd = Command::new("git");
+					cmd.arg("rev-parse").arg("HEAD");
+
+					cmd.exec_string_with_err("Command failed", true)
 						.await
 						.unwrap()
-						.unwrap();
-
-				modified_ts.to_string()
+				} else {
+					// Get hash of diff
+					hex::encode(Sha256::digest(content.as_bytes()))
+				}
 			},
 		});
 
@@ -666,36 +677,6 @@ impl ProjectContextData {
 
 	pub fn tls_enabled(&self) -> bool {
 		self.ns().dns.is_some()
-	}
-}
-
-impl ProjectContextData {
-	pub async fn resolve_image_tag(&self, tag: &str) -> Option<String> {
-		if let Some(resolved_tag) = self
-			.cache(|x| x.resolved_image_tags.get(tag).cloned())
-			.await
-		{
-			// Use cached tag
-			Some(resolved_tag.clone())
-		} else {
-			// Attempt to fetch the resolved image tag
-			if let Some(resolved_tag) = dep::docker::cli::inspect_sha_tag_pull(&tag).await {
-				// Cache the image tag if it exists
-				{
-					let resolved_tag = resolved_tag.clone();
-					self.cache_mut(|cache| {
-						cache
-							.resolved_image_tags
-							.insert(tag.to_owned(), resolved_tag);
-					})
-					.await;
-				}
-
-				Some(resolved_tag)
-			} else {
-				None
-			}
-		}
 	}
 }
 

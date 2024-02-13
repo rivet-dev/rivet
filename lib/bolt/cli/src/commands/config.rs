@@ -1,3 +1,5 @@
+use std::io::Write;
+
 use anyhow::*;
 use bolt_core::{
 	context::{self, RunContext},
@@ -33,6 +35,7 @@ pub enum SubCommand {
 		test: bool,
 	},
 	Show,
+	SourceHash,
 }
 
 impl SubCommand {
@@ -85,6 +88,16 @@ impl SubCommand {
 				.await;
 
 				println!("{:#?}", ctx.ns());
+			}
+			Self::SourceHash => {
+				let ctx = bolt_core::context::ProjectContextData::new(
+					std::env::var("BOLT_NAMESPACE").ok(),
+				)
+				.await;
+
+				print!("{}", ctx.source_hash());
+				std::io::stdout().flush()?;
+				eprintln!();
 			}
 		}
 

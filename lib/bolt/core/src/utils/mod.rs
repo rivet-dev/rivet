@@ -18,7 +18,8 @@ pub fn progress_bar(len: usize) -> ProgressBar {
 	let pb = ProgressBar::new(len as u64);
 	pb.set_style(
 		ProgressStyle::default_bar()
-			.template("{spinner} [{elapsed_precise}] {bar:40} ({pos}/{len}) {wide_msg}"),
+			.progress_chars("=> ")
+			.template("{spinner} {elapsed_precise:.bold} [{bar:23}] ({pos}/{len}) {wide_msg}"),
 	);
 	pb.enable_steady_tick(250);
 	pb
