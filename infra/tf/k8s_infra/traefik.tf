@@ -79,7 +79,6 @@ resource "helm_release" "traefik" {
 			# general = {
 			# 	level = "DEBUG"
 			# }
-			# NOTE: Do not enable on prod
 			# access = {
 			# 	enabled = true
 			# }

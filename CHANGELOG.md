@@ -28,6 +28,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 -   **Bolt** Prompt prod won't prompt if does not have user control
 -   **Bolt** Exclude copying bloat from `infra/tf/` to distributed Docker builds
 -   Invalid JWT tokens now return explicit `TOKEN_INVALID` error instead of 500
+-   **Infra** Remove debug logging from traefik-tunnel
 
 ### Security
 
