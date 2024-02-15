@@ -197,7 +197,7 @@ async fn validate_profanity_scores(
 				.await?;
 
 				if ctx.test()
-					|| std::env::var("RIVET_UPLOAD_NSFW_ERROR_VERBSOE")
+					|| std::env::var("RIVET_UPLOAD_NSFW_ERROR_VERBOSE")
 						.ok()
 						.map_or(false, |x| x == "1")
 				{

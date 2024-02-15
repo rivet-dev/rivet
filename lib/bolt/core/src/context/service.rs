@@ -1022,7 +1022,7 @@ impl ServiceContextData {
 			env.push(("RIVET_PROFANITY_FILTER_DISABLE".into(), "1".into()));
 		}
 		if project_ctx.ns().rivet.upload.nsfw_error_verbose {
-			env.push(("RIVET_UPLOAD_NSFW_ERROR_VERBSOE".into(), "1".into()));
+			env.push(("RIVET_UPLOAD_NSFW_ERROR_VERBOSE".into(), "1".into()));
 		}
 		env.push((
 			"RIVET_DS_BUILD_DELIVERY_METHOD".into(),
