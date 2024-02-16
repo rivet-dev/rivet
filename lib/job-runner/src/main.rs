@@ -34,13 +34,13 @@ fn main() -> anyhow::Result<()> {
 	// Start log shipper
 	let (msg_tx, msg_rx) =
 		mpsc::sync_channel::<log_shipper::ReceivedMessage>(MAX_BUFFER_BYTES / MAX_LINE_BYTES);
-	log_shipper::LogShipper {
+	let log_shipper = log_shipper::LogShipper {
 		shutdown_rx,
 		msg_rx,
 		job_run_id,
 		nomad_task_name,
-	}
-	.spawn();
+	};
+	let log_shipper_thread = log_shipper.spawn();
 
 	// Spawn runc container
 	println!(
@@ -121,6 +121,15 @@ fn main() -> anyhow::Result<()> {
 		}
 		Err(err) => {
 			eprintln!("Failed to send shutdown signal: {err:?}");
+		}
+	}
+
+	// Wait for log shipper to finish
+	drop(msg_tx);
+	match log_shipper_thread.join() {
+		Result::Ok(_) => {}
+		Err(err) => {
+			eprintln!("log shipper failed: {err:?}")
 		}
 	}
 

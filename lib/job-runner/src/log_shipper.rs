@@ -1,7 +1,7 @@
 use anyhow::*;
 use serde::Serialize;
 use serde_json;
-use std::{io::Write, net::TcpStream, sync::mpsc};
+use std::{io::Write, net::TcpStream, sync::mpsc, thread::JoinHandle};
 
 #[derive(Copy, Clone, Debug)]
 #[repr(u8)]
@@ -38,11 +38,12 @@ pub struct LogShipper {
 }
 
 impl LogShipper {
-	pub fn spawn(self) {
-		std::thread::spawn(move || self.run());
+	pub fn spawn(self) -> JoinHandle<()> {
+		std::thread::spawn(move || self.run())
 	}
 
 	fn run(self) {
+		// Retry loop
 		loop {
 			match self.run_inner() {
 				Result::Ok(()) => {

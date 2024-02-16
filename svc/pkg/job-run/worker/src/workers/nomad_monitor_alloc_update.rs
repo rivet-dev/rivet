@@ -154,7 +154,7 @@ async fn worker(
 		TaskState::Dead => {
 			let run_row = sql_fetch_optional!(
 				[ctx, (Uuid, Option<i64>)]
-				"
+				r#"
 				WITH
 					select_run AS (
 						SELECT runs.run_id, runs.finish_ts
@@ -164,7 +164,11 @@ async fn worker(
 					),
 					_update_runs AS (
 						UPDATE db_job_state.runs
-						SET finish_ts = $2
+						SET
+							-- If the job stops immediately, the task state will never be "running" so we need to
+							-- make sure start_ts is set here as well
+							start_ts = COALESCE(start_ts, $2),
+							finish_ts = $2
 						FROM select_run
 						WHERE
 							runs.run_id = select_run.run_id AND
@@ -179,7 +183,7 @@ async fn worker(
 						RETURNING 1
 					)
 				SELECT * FROM select_run
-				",
+				"#,
 				job_id,
 				ctx.ts(),
 				&alloc_state_json,
