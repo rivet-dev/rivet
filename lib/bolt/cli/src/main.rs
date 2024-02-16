@@ -106,7 +106,7 @@ async fn main_inner() -> Result<std::process::ExitCode> {
 
 	// Prompt confirmation if deploying to prod
 	if ctx.ns().bolt.confirm_commands {
-		tokio::task::block_in_place(|| prompt_prod(&ctx))?;
+		prompt_prod(&ctx).await?;
 	}
 
 	match args.command {
@@ -131,26 +131,24 @@ async fn main_inner() -> Result<std::process::ExitCode> {
 	Ok(std::process::ExitCode::SUCCESS)
 }
 
-fn prompt_prod(ctx: &bolt_core::context::ProjectContextData) -> Result<()> {
-	use std::io::Write;
-
+async fn prompt_prod(ctx: &bolt_core::context::ProjectContextData) -> Result<()> {
 	if std::env::var("BOLT_HEADLESS").ok() == Some("1".to_string())
 		|| !atty::is(atty::Stream::Stdout)
 	{
 		return Ok(());
 	}
 
-	let mut input = String::new();
+	let term = rivet_term::terminal();
+	let response = rivet_term::prompt::PromptBuilder::default()
+		.message(format!(
+			"Are you sure you want to run this command in {}?",
+			ctx.ns_id()
+		))
+		.build()?
+		.bool(&term)
+		.await?;
 
-	print!(
-		"Are you sure you want to run this command in {}? (yes) ",
-		ctx.ns_id()
-	);
-	std::io::stdout().flush()?;
-
-	std::io::stdin().read_line(&mut input)?;
-
-	if input.trim().eq_ignore_ascii_case("yes") {
+	if response {
 		return Ok(());
 	} else {
 		bail!("Bailing");

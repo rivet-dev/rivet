@@ -91,17 +91,19 @@ pub enum ClusterKind {
 	Distributed {},
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug)]
+#[derive(Default, Serialize, Deserialize, Clone, Debug)]
 #[serde(deny_unknown_fields)]
-pub enum Secrets {
-	#[serde(rename = "file")]
-	File { path: Option<PathBuf> },
+pub struct Secrets {
+	pub path: Option<PathBuf>,
+	#[serde(rename = "1password")]
+	pub _1password: Option<_1Password>,
 }
 
-impl Default for Secrets {
-	fn default() -> Self {
-		Self::File { path: None }
-	}
+#[derive(Serialize, Deserialize, Clone, Debug)]
+#[serde(deny_unknown_fields)]
+pub struct _1Password {
+	pub namespace_path: String,
+	pub secrets_path: String,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]

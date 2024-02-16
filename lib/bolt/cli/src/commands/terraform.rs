@@ -55,7 +55,7 @@ impl SubCommand {
 			Self::Apply { plan, yes } => {
 				ensure_valid_plan(&ctx, &plan)?;
 
-				gen::generate_project(&ctx).await;
+				gen::generate_project(&ctx, false).await;
 
 				terraform::cli::apply(&ctx, &plan, yes, &varfile_path).await?;
 
@@ -64,7 +64,7 @@ impl SubCommand {
 			Self::Destroy { plan } => {
 				ensure_valid_plan(&ctx, &plan)?;
 
-				gen::generate_project(&ctx).await;
+				gen::generate_project(&ctx, false).await;
 
 				terraform::cli::destroy(&ctx, &plan, &varfile_path).await?;
 
@@ -73,7 +73,7 @@ impl SubCommand {
 			Self::Import { plan, name, id } => {
 				ensure_valid_plan(&ctx, &plan)?;
 
-				gen::generate_project(&ctx).await;
+				gen::generate_project(&ctx, false).await;
 
 				let mut cmd = terraform::cli::build_command(&ctx, &plan).await;
 				cmd.arg("import")
@@ -87,7 +87,7 @@ impl SubCommand {
 			Self::Refresh { plan } => {
 				ensure_valid_plan(&ctx, &plan)?;
 
-				gen::generate_project(&ctx).await;
+				gen::generate_project(&ctx, false).await;
 
 				let mut cmd = terraform::cli::build_command(&ctx, &plan).await;
 				cmd.arg("refresh")

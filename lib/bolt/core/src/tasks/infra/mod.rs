@@ -39,7 +39,7 @@ pub enum PlanStepKind {
 impl PlanStepKind {
 	async fn execute(&self, ctx: ProjectContext, opts: &ExecutePlanOpts) -> Result<()> {
 		// Generate the project before each step since things likely changed between steps
-		tasks::gen::generate_project(&ctx).await;
+		tasks::gen::generate_project(&ctx, false).await;
 
 		match self {
 			PlanStepKind::Terraform { plan_id, .. } => {
@@ -372,7 +372,7 @@ pub async fn execute_plan(
 	plan: &[PlanStep],
 	opts: ExecutePlanOpts,
 ) -> Result<()> {
-	tasks::gen::generate_project(&ctx).await;
+	tasks::gen::generate_project(&ctx, false).await;
 
 	for (i, step) in plan.iter().enumerate() {
 		eprintln!();
@@ -398,7 +398,7 @@ pub async fn destroy_plan(
 	plan: &[PlanStep],
 	opts: ExecutePlanOpts,
 ) -> Result<()> {
-	tasks::gen::generate_project(&ctx).await;
+	tasks::gen::generate_project(&ctx, false).await;
 
 	for (i, step) in plan.iter().enumerate().rev() {
 		eprintln!();

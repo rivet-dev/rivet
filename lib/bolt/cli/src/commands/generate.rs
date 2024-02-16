@@ -18,14 +18,14 @@ impl SubCommand {
 	pub async fn execute(self, ctx: ProjectContext) -> Result<()> {
 		match self {
 			Self::All => {
-				tasks::gen::generate_project(&ctx).await;
+				tasks::gen::generate_project(&ctx, false).await;
 				tasks::gen::generate_all_services(&ctx).await;
 
 				tasks::artifact::generate_project(&ctx).await;
 				tasks::artifact::generate_all_services(&ctx).await;
 			}
 			Self::Project => {
-				tasks::gen::generate_project(&ctx).await;
+				tasks::gen::generate_project(&ctx, false).await;
 				tasks::artifact::generate_project(&ctx).await;
 			}
 			Self::Service { service_name } => {

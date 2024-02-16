@@ -12,8 +12,10 @@ bolt-core = { path = "../core" }
 chrono = "0.4"
 clap = { version = "4.3", features = ["derive", "env"] }
 duct = "0.13"
-rivet-term = { git = "https://github.com/rivet-gg/rivet-term.git", rev = "7cf60c225f00eb40d212cec673f09ac47d13d295" }
+json-patch = "1.2"
+rivet-term = { git = "https://github.com/rivet-gg/rivet-term.git", rev = "f70f76f63eba12e535e53db1b436d5297edf979a" }
 serde_json = "1.0"
 tempfile = "3.2"
 tokio = { version = "1.29", features = ["full"] }
+toml = "0.7"
 toml_edit = "0.19.0"

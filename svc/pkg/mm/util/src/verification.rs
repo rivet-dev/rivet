@@ -149,8 +149,22 @@ pub async fn verify_config(
 					create_config.enable_public,
 					create_config.enable_private,
 				) {
-					(backend::matchmaker::lobby::Publicity::Public, true, _) => {}
-					(backend::matchmaker::lobby::Publicity::Private, _, true) => {}
+					(backend::matchmaker::lobby::Publicity::Public, allowed, _) => {
+						if allowed {
+							bail_with!(
+								MATCHMAKER_CUSTOM_LOBBY_CONFIG_INVALID,
+								reason = r#""public" publicity not allowed with this custom game mode"#
+							);
+						}
+					}
+					(backend::matchmaker::lobby::Publicity::Private, _, allowed) => {
+						if allowed {
+							bail_with!(
+								MATCHMAKER_CUSTOM_LOBBY_CONFIG_INVALID,
+								reason = r#""private" publicity not allowed with this custom game mode"#
+							);
+						}
+					}
 					_ => {
 						bail_with!(
 							MATCHMAKER_CUSTOM_LOBBY_CONFIG_INVALID,

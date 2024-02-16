@@ -6,10 +6,10 @@ use toml_edit::value;
 
 use crate::{
 	context::{ProjectContext, ServiceContext},
-	dep,
+	dep, tasks,
 };
 
-pub async fn generate_project(ctx: &ProjectContext) {
+pub async fn generate_project(ctx: &ProjectContext, skip_config_sync_check: bool) {
 	// println!("\n> Generating project");
 
 	// HACK: Speed up bolt commands by skipping the generate step
@@ -19,6 +19,11 @@ pub async fn generate_project(ctx: &ProjectContext) {
 	{
 		rivet_term::status::info("Skipping generate_project", "");
 		return;
+	}
+
+	// Check config and secrets are synced
+	if !skip_config_sync_check {
+		tasks::check::check_config_sync(ctx).await;
 	}
 
 	if !std::env::var("BOLT_IGNORE_TERRAFORM")

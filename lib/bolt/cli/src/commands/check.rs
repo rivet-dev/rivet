@@ -10,6 +10,9 @@ pub struct CheckOpts {
 	skip_generate: bool,
 	#[clap(long, short = 't')]
 	skip_tests: bool,
+	/// Skip 1Password config sync check.
+	#[clap(long, short = 's')]
+	skip_config_sync_check: bool,
 	#[clap(long)]
 	validate_format: bool,
 }
@@ -20,6 +23,7 @@ impl CheckOpts {
 			service_names,
 			skip_generate,
 			skip_tests,
+			skip_config_sync_check,
 			validate_format,
 		} = self;
 
@@ -30,11 +34,20 @@ impl CheckOpts {
 				false,
 				skip_generate,
 				skip_tests,
+				skip_config_sync_check,
 				validate_format,
 			)
 			.await;
 		} else {
-			tasks::check::check_all(&ctx, false, skip_generate, skip_tests, validate_format).await;
+			tasks::check::check_all(
+				&ctx,
+				false,
+				skip_generate,
+				skip_tests,
+				skip_config_sync_check,
+				validate_format,
+			)
+			.await;
 		}
 
 		utils::ringadingding();

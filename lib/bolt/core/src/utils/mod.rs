@@ -4,7 +4,7 @@ use anyhow::*;
 use duct::cmd;
 use futures_util::future::{BoxFuture, FutureExt};
 use indicatif::{ProgressBar, ProgressStyle};
-
+use rivet_term::console::style;
 use tokio::{net::TcpStream, sync::Mutex};
 
 use crate::context::ProjectContext;
@@ -287,4 +287,40 @@ pub fn kubectl_port_forward(
 	.start()?;
 
 	Ok(DroppablePort { local_port, handle })
+}
+
+pub fn render_diff(indent: usize, patches: &json_patch::Patch) {
+	use json_patch::PatchOperation::*;
+	for patch in &**patches {
+		match patch {
+			Add(op) => {
+				eprintln!(
+					"{}{}{} {}",
+					" ".repeat(indent),
+					op.path.replace("/", "."),
+					style(":").dim(),
+					style("added").green().bold()
+				);
+			}
+			Remove(op) => {
+				eprintln!(
+					"{}{}{} {}",
+					" ".repeat(indent),
+					op.path.replace("/", "."),
+					style(":").dim(),
+					style("removed").red().bold()
+				);
+			}
+			Replace(op) => {
+				eprintln!(
+					"{}{}{} {}",
+					" ".repeat(indent),
+					op.path.replace("/", "."),
+					style(":").dim(),
+					style("changed").yellow().bold()
+				);
+			}
+			_ => unreachable!(),
+		}
+	}
 }

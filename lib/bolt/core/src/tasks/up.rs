@@ -31,6 +31,7 @@ pub async fn up_all(
 	load_tests: bool,
 	build_only: bool,
 	skip_deploy: bool,
+	skip_config_sync_check: bool,
 ) -> Result<()> {
 	let all_svc_names = ctx
 		.all_services()
@@ -38,7 +39,15 @@ pub async fn up_all(
 		.iter()
 		.map(|svc| svc.name())
 		.collect::<Vec<_>>();
-	up_services(ctx, &all_svc_names, load_tests, build_only, skip_deploy).await?;
+	up_services(
+		ctx,
+		&all_svc_names,
+		load_tests,
+		build_only,
+		skip_deploy,
+		skip_config_sync_check,
+	)
+	.await?;
 
 	Ok(())
 }
@@ -49,6 +58,7 @@ pub async fn up_services<T: AsRef<str>>(
 	load_tests: bool,
 	build_only: bool,
 	skip_deploy: bool,
+	skip_config_sync_check: bool,
 ) -> Result<Vec<ServiceContext>> {
 	let event = utils::telemetry::build_event(ctx, "bolt_up").await?;
 	utils::telemetry::capture_event(ctx, event).await?;
@@ -82,11 +92,11 @@ pub async fn up_services<T: AsRef<str>>(
 	)?;
 	utils::telemetry::capture_event(ctx, event).await?;
 
+	// Generate configs
+	tasks::gen::generate_project(ctx, skip_config_sync_check).await;
+
 	eprintln!();
 	rivet_term::status::progress("Preparing", format!("{} services", all_exec_svcs.len()));
-
-	// Generate configs
-	tasks::gen::generate_project(ctx).await;
 
 	// Generate service config
 	{

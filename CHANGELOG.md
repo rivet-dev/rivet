@@ -19,6 +19,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 -   **api-status** Test individual Game Guard nodes to ensure all nodes have the correct configuration
 -   Generate separate SDKs for `runtime` (lightweight, essentials for running a game) and `full` (heavy, includes cloud APIs)
 -   Metrics for cache operations as well as a Grafana dashboard
+-   **Bolt** Added namespace config and secrets sync with `bolt config pull` and `bolt config push` via 1Password
 
 ### Changed
 

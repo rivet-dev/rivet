@@ -1,11 +1,12 @@
-use anyhow::*;
-use sha2::{Digest, Sha256};
 use std::{
 	collections::HashMap,
 	path::{Path, PathBuf},
 	process::Command,
 	sync::{Arc, Weak},
 };
+
+use anyhow::*;
+use sha2::{Digest, Sha256};
 use tokio::{fs, sync::Mutex};
 
 use crate::{config, context, utils::command_helper::CommandHelper};
@@ -15,12 +16,13 @@ use super::{RunContext, ServiceContext};
 pub type ProjectContext = Arc<ProjectContextData>;
 
 pub struct ProjectContextData {
+	path: PathBuf,
 	ns_id: String,
 	config: config::project::Project,
 	config_local: config::local::Local,
 	ns_config: config::ns::Namespace,
 	cache: Mutex<config::cache::Cache>,
-	path: PathBuf,
+	secrets: serde_json::Value,
 	svc_ctxs: Vec<context::service::ServiceContext>,
 	svc_ctxs_map: HashMap<String, context::service::ServiceContext>,
 
@@ -71,7 +73,7 @@ impl ProjectContextData {
 impl ProjectContextData {
 	pub async fn new(ns_id: Option<String>) -> ProjectContext {
 		// Read the config
-		let project_root = Self::seek_project_root().await;
+		let project_root = ProjectContextData::seek_project_root().await;
 		let config = ProjectContextData::read_config(project_root.as_path()).await;
 		let config_local = ProjectContextData::read_config_local(project_root.as_path()).await;
 		let cache = ProjectContextData::read_cache(project_root.as_path()).await;
@@ -90,20 +92,25 @@ impl ProjectContextData {
 		}
 
 		// Load main project after sub projects so it overrides sub project services
-		// eprintln!("> Loading root");
 		Self::load_root_dir(&mut svc_ctxs_map, project_root.clone()).await;
+
+		// Load secrets
+		let secrets =
+			ProjectContextData::read_secrets(Some(&ns_config), project_root.as_path(), &ns_id)
+				.await;
 
 		let mut svc_ctxs = svc_ctxs_map.values().cloned().collect::<Vec<_>>();
 		svc_ctxs.sort_by_key(|v| v.name());
 
 		// Create project
 		let ctx = Arc::new(ProjectContextData {
+			path: project_root.clone(),
 			ns_id,
 			config,
 			config_local,
 			ns_config,
+			secrets,
 			cache: Mutex::new(cache),
-			path: project_root.clone(),
 			svc_ctxs,
 			svc_ctxs_map,
 
@@ -269,6 +276,17 @@ impl ProjectContextData {
 		eprintln!("Could not find project root.");
 		std::process::exit(1);
 	}
+
+	pub fn get_secrets_path(
+		ns: Option<&config::ns::Namespace>,
+		project_path: &Path,
+		ns_id: &str,
+	) -> PathBuf {
+		ns.and_then(|ns| ns.secrets.path.as_ref()).map_or_else(
+			|| project_path.join("secrets").join(format!("{}.toml", ns_id)),
+			|v| v.clone(),
+		)
+	}
 }
 
 impl ProjectContextData {
@@ -360,7 +378,7 @@ impl ProjectContextData {
 		toml::from_str::<config::project::Project>(&config_str).unwrap()
 	}
 
-	async fn read_config_local(project_path: &Path) -> config::local::Local {
+	pub async fn read_config_local(project_path: &Path) -> config::local::Local {
 		let config_path = project_path.join("Bolt.local.toml");
 		match fs::read_to_string(config_path).await {
 			Result::Ok(config) => toml::from_str::<config::local::Local>(&config).unwrap(),
@@ -368,11 +386,11 @@ impl ProjectContextData {
 		}
 	}
 
-	async fn read_ns(project_path: &Path, ns_id: &str) -> config::ns::Namespace {
+	pub async fn read_ns(project_path: &Path, ns_id: &str) -> config::ns::Namespace {
 		let path = project_path
 			.join("namespaces")
 			.join(format!("{ns_id}.toml"));
-		let config_str = tokio::fs::read_to_string(&path).await.expect(&format!(
+		let config_str = fs::read_to_string(&path).await.expect(&format!(
 			"failed to read namespace config: {}",
 			path.display()
 		));
@@ -388,6 +406,27 @@ impl ProjectContextData {
 		}
 
 		config
+	}
+
+	pub async fn read_secrets(
+		ns: Option<&config::ns::Namespace>,
+		project_path: &Path,
+		ns_id: &str,
+	) -> serde_json::Value {
+		let secrets_path = ProjectContextData::get_secrets_path(ns, project_path, &ns_id);
+
+		// Read the config
+		let config_str = fs::read_to_string(&secrets_path)
+			.await
+			.context(format!(
+				"failed to read secrets file: {}",
+				secrets_path.display()
+			))
+			.unwrap();
+
+		toml::from_str::<serde_json::Value>(&config_str)
+			.context("failed to read secrets")
+			.unwrap()
 	}
 
 	async fn read_cache(project_path: &Path) -> config::cache::Cache {
@@ -547,9 +586,7 @@ impl ProjectContextData {
 	}
 
 	pub fn secrets_path(&self) -> PathBuf {
-		self.path
-			.join("secrets")
-			.join(format!("{}.toml", self.ns_id()))
+		ProjectContextData::get_secrets_path(Some(self.ns()), self.path(), self.ns_id())
 	}
 
 	pub fn gen_path(&self) -> PathBuf {
@@ -856,86 +893,49 @@ impl ProjectContextData {
 impl ProjectContextData {
 	/// Reads a secret from the configured secret datasource.
 	pub async fn read_secret(&self, key_path: &[impl AsRef<str>]) -> Result<String> {
-		match &self.ns().secrets {
-			config::ns::Secrets::File { path } => {
-				let path = path.clone().unwrap_or_else(|| self.secrets_path());
-
-				// TODO: RIV-2289
-				// Read the config
-				let config_str = tokio::fs::read_to_string(&path)
-					.await
-					.context(format!("failed to read secrets: {}", path.display()))?;
-				let config_json = toml::from_str::<serde_json::Value>(&config_str)
-					.context("failed to read secrets")?;
-
-				// Extract the value
-				let mut current_value = &config_json;
-				for component in key_path {
-					let component: &str = component.as_ref();
-
-					current_value = current_value.get(component).with_context(|| {
-						let path_joined = key_path
-							.iter()
-							.map(|x| x.as_ref())
-							.collect::<Vec<_>>()
-							.join("/");
-						format!(
-							"secret '{path_joined}' does not exist in '{}'",
-							path.display()
-						)
-					})?;
-				}
-
-				// Serialize to string
-				let value_str = match current_value {
-					serde_json::Value::Bool(x) => x.to_string(),
-					serde_json::Value::Number(x) => x.to_string(),
-					serde_json::Value::String(x) => x.clone(),
-					_ => bail!("cannot convert to string: {current_value}"),
-				};
-
-				Ok(value_str)
-			}
-		}
+		self.read_secret_opt(key_path).await?.with_context(|| {
+			let path_joined = key_path
+				.iter()
+				.map(|x| x.as_ref())
+				.collect::<Vec<_>>()
+				.join("/");
+			format!(
+				"secret '{path_joined}' does not exist in '{}'",
+				self.secrets_path().display(),
+			)
+		})
 	}
 
 	/// Reads a secret from the configured data source, returning None if not available.
 	pub async fn read_secret_opt(&self, key_path: &[impl AsRef<str>]) -> Result<Option<String>> {
-		match &self.ns().secrets {
-			config::ns::Secrets::File { path } => {
-				let path = path.clone().unwrap_or_else(|| self.secrets_path());
+		ProjectContextData::read_secret_inner(&self.secrets, key_path).await
+	}
 
-				// TODO: RIV-2289
-				// Read the config
-				let config_str = tokio::fs::read_to_string(&path)
-					.await
-					.context(format!("failed to read secrets: {}", path.display()))?;
-				let config_json = toml::from_str::<serde_json::Value>(&config_str)
-					.context("failed to read secrets")?;
+	async fn read_secret_inner(
+		secrets: &serde_json::Value,
+		key_path: &[impl AsRef<str>],
+	) -> Result<Option<String>> {
+		// Extract the value
+		let mut current_value = secrets;
+		for component in key_path {
+			let component: &str = component.as_ref();
 
-				// Extract the value
-				let mut current_value = &config_json;
-				for component in key_path {
-					let component: &str = component.as_ref();
-
-					if let Some(x) = current_value.get(component) {
-						current_value = x;
-					} else {
-						return Ok(None);
-					}
-				}
-
-				// Serialize to string
-				let value_str = match current_value {
-					serde_json::Value::Null => None,
-					serde_json::Value::Bool(x) => Some(x.to_string()),
-					serde_json::Value::Number(x) => Some(x.to_string()),
-					serde_json::Value::String(x) => Some(x.clone()),
-					_ => bail!("cannot convert to string: {current_value}"),
-				};
-
-				Ok(value_str)
+			if let Some(x) = current_value.get(component) {
+				current_value = x;
+			} else {
+				return Ok(None);
 			}
 		}
+
+		// Serialize to string
+		let value_str = match current_value {
+			serde_json::Value::Null => None,
+			serde_json::Value::Bool(x) => Some(x.to_string()),
+			serde_json::Value::Number(x) => Some(x.to_string()),
+			serde_json::Value::String(x) => Some(x.clone()),
+			_ => bail!("cannot convert to string: {current_value}"),
+		};
+
+		Ok(value_str)
 	}
 }

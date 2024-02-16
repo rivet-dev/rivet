@@ -1,8 +1,13 @@
 use std::{collections::HashMap, path::Path, process::Command, sync::Arc};
 
+use rivet_term::console::style;
+use tokio::fs;
+
 use crate::{
-	context::ProjectContext, context::ServiceContextData, tasks,
-	utils::command_helper::CommandHelper,
+	context::ServiceContextData,
+	context::{ProjectContext, ProjectContextData},
+	dep, tasks,
+	utils::{self, command_helper::CommandHelper},
 };
 
 pub async fn check_all(
@@ -10,6 +15,7 @@ pub async fn check_all(
 	skip_build: bool,
 	skip_generate: bool,
 	skip_tests: bool,
+	skip_config_sync_check: bool,
 	validate_format: bool,
 ) {
 	let all_svc_names = ctx
@@ -24,6 +30,7 @@ pub async fn check_all(
 		skip_build,
 		skip_generate,
 		skip_tests,
+		skip_config_sync_check,
 		validate_format,
 	)
 	.await;
@@ -35,6 +42,7 @@ pub async fn check_service<T: AsRef<str>>(
 	_skip_build: bool,
 	skip_generate: bool,
 	skip_tests: bool,
+	skip_config_sync_check: bool,
 	validate_format: bool,
 ) {
 	use crate::config::service::RuntimeKind;
@@ -44,7 +52,7 @@ pub async fn check_service<T: AsRef<str>>(
 
 	// Generate configs
 	if !skip_generate {
-		tasks::gen::generate_project(ctx).await;
+		tasks::gen::generate_project(ctx, skip_config_sync_check).await;
 		tasks::gen::generate_all_services(ctx).await;
 		tasks::artifact::generate_all_services(ctx).await;
 	}
@@ -175,5 +183,87 @@ async fn check_svcs(
 
 			cmd.exec().await.unwrap();
 		}
+	}
+}
+
+/// Checks if the config and secrets files are in sync with 1Password.
+pub async fn check_config_sync(ctx: &ProjectContext) {
+	if std::env::var("BOLT_SKIP_CONFIG_SYNC")
+		.ok()
+		.map_or(false, |x| x == "1")
+	{
+		return;
+	}
+
+	let (Some(local_op), Some(ns_op)) = (
+		ctx.config_local()._1password.as_ref(),
+		ctx.ns().secrets._1password.as_ref(),
+	) else {
+		eprintln!();
+		rivet_term::status::warn(
+			"Warning",
+			format!(
+				r#"1Password config is not set up. Configure "ns.1password" and "local.1password" to enable config sync checks, or use `{}` to suppress this message."#,
+				style("BOLT_SKIP_CONFIG_SYNC=1").bold()
+			),
+		);
+		return;
+	};
+
+	let op_service_account_token = Some(local_op.service_account_token.clone());
+	let op_namespace_path = &ns_op.namespace_path;
+	let op_secrets_path = &ns_op.secrets_path;
+
+	// Fetch and parse configs from 1Password
+	let op_namespace_str =
+		dep::one_password::cli::read(op_service_account_token.as_deref(), op_namespace_path).await;
+	let op_namespace = toml::from_str::<serde_json::Value>(&op_namespace_str)
+		.expect("failed to parse op namespace config");
+	let op_secrets_str =
+		dep::one_password::cli::read(op_service_account_token.as_deref(), op_secrets_path).await;
+	let op_secrets =
+		toml::from_str::<serde_json::Value>(&op_secrets_str).expect("failed to parse op secrets");
+
+	// Fetch local configs
+	let ns_id = ctx.ns_id();
+	let namespace_path = ctx.ns_path().join(format!("{ns_id}.toml"));
+	let secrets_path = ctx.secrets_path();
+
+	let local_namespace_str = fs::read_to_string(&namespace_path).await.unwrap();
+	let namespace = toml::from_str::<serde_json::Value>(&local_namespace_str)
+		.expect("failed to read namespace config");
+	let secrets = ProjectContextData::read_secrets(Some(ctx.ns()), ctx.path(), &ns_id).await;
+
+	let ns_patches = json_patch::diff(&op_namespace, &namespace);
+	if !ns_patches.is_empty() {
+		rivet_term::status::error("Error",
+			format!("Diff detected between local namespace file ({}) and 1Password namespace reference ({}):",
+			namespace_path.display(),
+			op_namespace_path
+		));
+		utils::render_diff(2, &ns_patches);
+	}
+
+	let secrets_patches = json_patch::diff(&op_secrets, &secrets);
+	if !secrets_patches.is_empty() {
+		if !ns_patches.is_empty() {
+			eprintln!();
+		}
+
+		rivet_term::status::error("Error",
+			format!("Diff detected between local secrets file ({}) and 1Password secrets reference ({}):",
+			secrets_path.display(),
+			op_secrets_path,
+		));
+		utils::render_diff(2, &secrets_patches);
+	}
+
+	if !ns_patches.is_empty() || !secrets_patches.is_empty() {
+		eprintln!(
+			"\nUse `{}` to resolve this conflict or `{}` to suppress this message.",
+			style("bolt config push/pull").bold(),
+			style("BOLT_SKIP_CONFIG_SYNC=1").bold()
+		);
+		std::process::exit(1);
 	}
 }

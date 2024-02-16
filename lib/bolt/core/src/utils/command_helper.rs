@@ -36,6 +36,10 @@ pub trait CommandHelper: Sized {
 	where
 		E: Display + Send + Sync + 'static;
 
+	async fn exec_string_with_stderr(mut self, quiet: bool) -> Result<String>;
+
+	async fn exec_with_stderr(mut self, quiet: bool) -> Result<()>;
+
 	async fn exec_value_with_err<E, T>(mut self, err: E, quiet: bool) -> Result<T>
 	where
 		E: Display + Send + Sync + 'static,
@@ -82,7 +86,7 @@ impl CommandHelper for Command {
 		E: Display + Send + Sync + 'static,
 	{
 		if !quiet {
-			println!("  $ {:?}", self);
+			eprintln!("  $ {:?}", self);
 		}
 
 		task::spawn_blocking(move || {
@@ -126,12 +130,12 @@ impl CommandHelper for Command {
 			// Validate success
 			if !output.status.success() {
 				if !quiet {
-					println!("{}", err);
+					eprintln!("{}", err);
 				}
 				return Err(CommandError::Status(output.status).into());
 			}
 
-			Result::<()>::Ok(())
+			Ok(())
 		})
 		.await?
 	}
@@ -141,7 +145,7 @@ impl CommandHelper for Command {
 		E: Display + Send + Sync + 'static,
 	{
 		if !quiet {
-			println!("  $ {:?}", self);
+			eprintln!("  $ {:?}", self);
 		}
 
 		task::spawn_blocking(move || {
@@ -153,14 +157,62 @@ impl CommandHelper for Command {
 			// Validate success
 			if !output.status.success() {
 				if !quiet {
-					println!("{}", err);
+					eprintln!("{}", err);
 				}
 				return Err(CommandError::Status(output.status).into());
 			}
 
 			let res = String::from_utf8(output.stdout)?;
 
-			Result::<String>::Ok(res)
+			Ok(res)
+		})
+		.await?
+	}
+
+	async fn exec_string_with_stderr(mut self, quiet: bool) -> Result<String> {
+		if !quiet {
+			eprintln!("  $ {:?}", self);
+		}
+
+		task::spawn_blocking(move || {
+			// Execute command
+			let output = self
+				.output()
+				.map_err(|err| CommandError::Exec(err.to_string()))?;
+
+			// Validate success
+			if !output.status.success() {
+				eprintln!("{}", String::from_utf8(output.stderr)?);
+
+				return Err(CommandError::Status(output.status).into());
+			}
+
+			let res = String::from_utf8(output.stdout)?;
+
+			Ok(res)
+		})
+		.await?
+	}
+
+	async fn exec_with_stderr(mut self, quiet: bool) -> Result<()> {
+		if !quiet {
+			eprintln!("  $ {:?}", self);
+		}
+
+		task::spawn_blocking(move || {
+			// Execute command
+			let output = self
+				.output()
+				.map_err(|err| CommandError::Exec(err.to_string()))?;
+
+			// Validate success
+			if !output.status.success() {
+				eprintln!("{}", String::from_utf8(output.stderr)?);
+
+				return Err(CommandError::Status(output.status).into());
+			}
+
+			Ok(())
 		})
 		.await?
 	}
@@ -171,7 +223,7 @@ impl CommandHelper for Command {
 		T: serde::de::DeserializeOwned + Send + Sync + 'static,
 	{
 		if !quiet {
-			println!("  $ {:?}", self);
+			eprintln!("  $ {:?}", self);
 		}
 
 		task::spawn_blocking(move || {
@@ -183,7 +235,7 @@ impl CommandHelper for Command {
 			// Validate success
 			if !output.status.success() {
 				if !quiet {
-					println!("{}", err);
+					eprintln!("{}", err);
 				}
 				return Err(CommandError::Status(output.status).into());
 			}
@@ -191,7 +243,7 @@ impl CommandHelper for Command {
 			// Parse output
 			let res = serde_json::from_slice::<T>(&output.stdout[..])?;
 
-			Result::<T>::Ok(res)
+			Ok(res)
 		})
 		.await?
 	}
