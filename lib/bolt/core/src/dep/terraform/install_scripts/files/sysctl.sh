@@ -99,6 +99,13 @@ vm.min_free_kbytes = 65536
 net.netfilter.nf_conntrack_max=262144
 EOF
 
+# journald settings
+mkdir -p /etc/systemd/journald.conf.d/
+cat << 'EOF' > /etc/systemd/journald.conf.d/10-rivet.conf
+[Journal]
+SystemMaxUse=1G
+EOF
+
 # Reload settings
 sysctl --system
-
+systemctl restart systemd-journald
