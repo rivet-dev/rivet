@@ -31,7 +31,7 @@ async fn worker(ctx: &OperationContext<team::msg::create::Message>) -> GlobalRes
 		"
 		INSERT INTO db_team.teams (team_id, owner_user_id, display_name, create_ts)
 		VALUES ($1, $2, $3, $4)
-	",
+		",
 		team_id,
 		owner_user_id,
 		&ctx.display_name,

@@ -6,15 +6,6 @@ kind = "rust"
 
 [headless]
 
-[secrets]
-"clickhouse/users/chirp/password" = {}
-"fly/auth_token" = { optional = true }
-"hcaptcha/secret" = { optional = true }
-"rivet/api_admin/token" = {}
-"rivet/api_status/token" = {}
-"turnstile/cdn/secret_key" = { optional = true }
-"turnstile/main/secret_key" = { optional = true }
-
 [resources.single-node]
 cpu = 250
 # See SVC-3413
