@@ -30,7 +30,6 @@ impl UpOpts {
 
 		// Bring up the service
 		if !service_names.is_empty() {
-
 			tasks::up::up_services(
 				&ctx,
 				&service_names,
@@ -41,7 +40,14 @@ impl UpOpts {
 			)
 			.await?;
 		} else {
-			tasks::up::up_all(&ctx, load_tests, build_only, skip_deploy, skip_config_sync_check).await?;
+			tasks::up::up_all(
+				&ctx,
+				load_tests,
+				build_only,
+				skip_deploy,
+				skip_config_sync_check,
+			)
+			.await?;
 		}
 
 		utils::ringadingding();

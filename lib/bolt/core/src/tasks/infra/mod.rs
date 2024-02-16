@@ -59,7 +59,7 @@ impl PlanStepKind {
 			PlanStepKind::Migrate => {
 				tasks::migrate::up_all(&ctx).await?;
 			}
-			PlanStepKind::Up => tasks::up::up_all(&ctx, false, false, false).await?,
+			PlanStepKind::Up => tasks::up::up_all(&ctx, false, false, false, false).await?,
 		}
 
 		Ok(())

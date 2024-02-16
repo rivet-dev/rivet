@@ -871,7 +871,10 @@ impl ServiceContextData {
 
 		if self.depends_on_captcha() {
 			if let Some(hcaptcha) = &project_ctx.ns().captcha.hcaptcha {
-				env.push(("HCAPTCHA_SITE_KEY_FALLBACK".into(), hcaptcha.site_key_fallback.clone()));
+				env.push((
+					"HCAPTCHA_SITE_KEY_FALLBACK".into(),
+					hcaptcha.site_key_fallback.clone(),
+				));
 			}
 
 			if let Some(turnstile) = &project_ctx.ns().captcha.turnstile {
