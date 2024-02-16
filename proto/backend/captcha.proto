@@ -11,14 +11,11 @@ enum CaptchaProvider {
 
 message CaptchaConfig {
 	message Hcaptcha {
-		enum Level {
-			EASY = 0;
-			MODERATE = 1;
-			DIFFICULT = 2;
-			ALWAYS_ON = 3;
-		}
+		reserved 1;
 
-		Level level = 1;
+		// Should not be unset. Optional for backwards compatibility
+		optional string site_key = 2;
+		optional string secret_key = 3;
 	}
 
 	message Turnstile {

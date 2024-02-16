@@ -6,8 +6,9 @@ import "proto/common.proto";
 
 message Request {
 	string client_response = 1;
-	string site_key = 2;
 	string remote_address = 3;
+	string site_key = 2;
+	optional string secret_key = 4;
 }
 
 message Response {

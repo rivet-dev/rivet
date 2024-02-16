@@ -46,7 +46,12 @@ func (c *Captcha) String() string {
 
 // hCpatcha configuration.
 type CaptchaHcaptcha struct {
-	Level CaptchaHcaptchaLevel `json:"level,omitempty"`
+	// **Deprecated**
+	Level *CaptchaHcaptchaLevel `json:"level,omitempty"`
+	// Site key for your hCaptcha application. Must be set.
+	SiteKey *string `json:"site_key,omitempty"`
+	// Secret key for your hCaptcha application. Must be set.
+	SecretKey *string `json:"secret_key,omitempty"`
 
 	_rawJSON json.RawMessage
 }
@@ -74,6 +79,7 @@ func (c *CaptchaHcaptcha) String() string {
 	return fmt.Sprintf("%#v", c)
 }
 
+// **Deprecated**
 // How hard a captcha should be.
 type CaptchaHcaptchaLevel string
 

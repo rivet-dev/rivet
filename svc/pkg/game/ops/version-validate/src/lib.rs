@@ -271,6 +271,70 @@ async fn handle(
 				]);
 			}
 
+			if let Some(hcaptcha) = &captcha_config.hcaptcha {
+				if let Some(site_key) = &hcaptcha.site_key {
+					if site_key.is_empty() {
+						errors.push(util::err_path![
+							"config",
+							"matchmaker",
+							"captcha",
+							"hcaptcha",
+							"site-key",
+							"too-short",
+						]);
+					} else if site_key.len() > 30 {
+						errors.push(util::err_path![
+							"config",
+							"matchmaker",
+							"captcha",
+							"hcaptcha",
+							"site-key",
+							"too-long",
+						]);
+					}
+				} else {
+					errors.push(util::err_path![
+						"config",
+						"matchmaker",
+						"captcha",
+						"hcaptcha",
+						"site-key",
+						"required",
+					]);
+				}
+
+				if let Some(secret_key) = &hcaptcha.secret_key {
+					if secret_key.is_empty() {
+						errors.push(util::err_path![
+							"config",
+							"matchmaker",
+							"captcha",
+							"hcaptcha",
+							"secret-key",
+							"too-short",
+						]);
+					} else if secret_key.len() > 40 {
+						errors.push(util::err_path![
+							"config",
+							"matchmaker",
+							"captcha",
+							"hcaptcha",
+							"secret-key",
+							"too-long",
+						]);
+					}
+				} else {
+					errors.push(util::err_path![
+						"config",
+						"matchmaker",
+						"captcha",
+						"hcaptcha",
+						"secret-key",
+						"required",
+					]);
+				}
+			}
+
 			if let Some(turnstile) = &captcha_config.turnstile {
 				if turnstile.site_key.is_empty() {
 					errors.push(util::err_path![
@@ -278,7 +342,8 @@ async fn handle(
 						"matchmaker",
 						"captcha",
 						"turnstile",
-						"site-key-too-short",
+						"site-key",
+						"too-short",
 					]);
 				} else if turnstile.site_key.len() > 30 {
 					errors.push(util::err_path![
@@ -286,7 +351,8 @@ async fn handle(
 						"matchmaker",
 						"captcha",
 						"turnstile",
-						"site-key-too-long",
+						"site-key",
+						"too-long",
 					]);
 				}
 
@@ -296,7 +362,8 @@ async fn handle(
 						"matchmaker",
 						"captcha",
 						"turnstile",
-						"secret-key-too-short",
+						"secret-key",
+						"too-short",
 					]);
 				} else if turnstile.secret_key.len() > 40 {
 					errors.push(util::err_path![
@@ -304,7 +371,8 @@ async fn handle(
 						"matchmaker",
 						"captcha",
 						"turnstile",
-						"secret-key-too-long",
+						"secret-key",
+						"too-long",
 					]);
 				}
 			}

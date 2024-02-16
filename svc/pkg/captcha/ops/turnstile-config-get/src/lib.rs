@@ -12,10 +12,7 @@ async fn handle(
 		if util::env::domain_cdn().map_or(false, |domain_cdn| {
 			domain_cdn == origin_host || origin_host.ends_with(&format!(".{domain_cdn}"))
 		}) {
-			Some(unwrap!(
-				std::env::var("TURNSTILE_SITE_KEY_CDN").ok(),
-				"no turnstile site key"
-			))
+			Some(util::env::var("TURNSTILE_SITE_KEY_CDN")?)
 		} else {
 			None
 		}

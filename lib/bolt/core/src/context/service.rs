@@ -875,22 +875,7 @@ impl ServiceContextData {
 
 		if self.depends_on_captcha() {
 			if let Some(hcaptcha) = &project_ctx.ns().captcha.hcaptcha {
-				env.push((
-					"HCAPTCHA_SITE_KEY_EASY".into(),
-					hcaptcha.site_keys.easy.clone(),
-				));
-				env.push((
-					"HCAPTCHA_SITE_KEY_MODERATE".into(),
-					hcaptcha.site_keys.moderate.clone(),
-				));
-				env.push((
-					"HCAPTCHA_SITE_KEY_DIFFICULT".into(),
-					hcaptcha.site_keys.difficult.clone(),
-				));
-				env.push((
-					"HCAPTCHA_SITE_KEY_ALWAYS_ON".into(),
-					hcaptcha.site_keys.always_on.clone(),
-				));
+				env.push(("HCAPTCHA_SITE_KEY_FALLBACK".into(), hcaptcha.site_key_fallback.clone()));
 			}
 
 			if let Some(turnstile) = &project_ctx.ns().captcha.turnstile {

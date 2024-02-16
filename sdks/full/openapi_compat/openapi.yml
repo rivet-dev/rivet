@@ -2001,11 +2001,18 @@ components:
       properties:
         level:
           $ref: '#/components/schemas/CloudVersionMatchmakerCaptchaHcaptchaLevel'
-      required:
-      - level
+          description: '**Deprecated**'
+        secret_key:
+          description: Secret key for your hCaptcha application. Must be set.
+          type: string
+        site_key:
+          description: Site key for your hCaptcha application. Must be set.
+          type: string
       type: object
     CloudVersionMatchmakerCaptchaHcaptchaLevel:
-      description: How hard a captcha should be.
+      description: '**Deprecated**
+
+        How hard a captcha should be.'
       enum:
       - easy
       - moderate

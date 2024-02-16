@@ -306,16 +306,7 @@ pub struct Captcha {
 #[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(deny_unknown_fields)]
 pub struct Hcaptcha {
-	pub site_keys: HcaptchaSiteKeys,
-}
-
-#[derive(Serialize, Deserialize, Clone, Debug)]
-#[serde(deny_unknown_fields)]
-pub struct HcaptchaSiteKeys {
-	pub easy: String,
-	pub moderate: String,
-	pub difficult: String,
-	pub always_on: String,
+	pub site_key_fallback: String,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]

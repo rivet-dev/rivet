@@ -33,8 +33,9 @@ async fn handle(
 
 			let res = op!([ctx] captcha_hcaptcha_verify {
 				client_response: hcaptcha_client_res.client_response.clone(),
-				site_key: config_res.site_key.clone(),
 				remote_address: ctx.remote_address.to_owned(),
+				site_key: config_res.site_key.clone(),
+				secret_key: hcaptcha.secret_key.clone(),
 			})
 			.await?;
 

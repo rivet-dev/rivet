@@ -938,7 +938,9 @@ async fn find_inner(
 					CAPTCHA_CAPTCHA_REQUIRED {
 						metadata: json!({
 							"hcaptcha": {
+								// Deprecated
 								"site_id": hcaptcha_config_res.site_key,
+								"site_key": hcaptcha_config_res.site_key,
 							}
 						}),
 					}

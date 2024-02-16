@@ -168,7 +168,8 @@ async fn empty(ctx: TestCtx) {
 					requests_before_reverify: 601,
 					verification_ttl: util::duration::hours(13),
 					hcaptcha: Some(backend::captcha::captcha_config::Hcaptcha {
-						level: backend::captcha::captcha_config::hcaptcha::Level::Easy as i32,
+						site_key: None,
+						secret_key: None,
 					}),
 					..Default::default()
 				}),
@@ -189,5 +190,5 @@ async fn empty(ctx: TestCtx) {
 	.await
 	.unwrap();
 
-	assert_eq!(res.errors.len(), 20, "validation failed");
+	assert_eq!(res.errors.len(), 22, "validation failed");
 }

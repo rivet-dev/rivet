@@ -311,9 +311,8 @@ impl ApiFrom<models::CloudVersionMatchmakerCaptchaHcaptcha>
 		value: models::CloudVersionMatchmakerCaptchaHcaptcha,
 	) -> backend::captcha::captcha_config::Hcaptcha {
 		backend::captcha::captcha_config::Hcaptcha {
-			level: ApiInto::<backend::captcha::captcha_config::hcaptcha::Level>::api_into(
-				value.level,
-			) as i32,
+			site_key: value.site_key,
+			secret_key: value.secret_key,
 		}
 	}
 }
@@ -325,57 +324,14 @@ impl ApiTryFrom<backend::captcha::captcha_config::Hcaptcha>
 
 	fn api_try_from(value: backend::captcha::captcha_config::Hcaptcha) -> GlobalResult<Self> {
 		Ok(models::CloudVersionMatchmakerCaptchaHcaptcha {
-			level: unwrap!(backend::captcha::captcha_config::hcaptcha::Level::from_i32(
-				value.level
-			))
-			.api_into(),
+			// Deprecated
+			level: Some(models::CloudVersionMatchmakerCaptchaHcaptchaLevel::Moderate),
+			site_key: value.site_key,
+			secret_key: value.secret_key,
 		})
 	}
 }
 
-impl ApiFrom<models::CloudVersionMatchmakerCaptchaHcaptchaLevel>
-	for backend::captcha::captcha_config::hcaptcha::Level
-{
-	fn api_from(
-		value: models::CloudVersionMatchmakerCaptchaHcaptchaLevel,
-	) -> backend::captcha::captcha_config::hcaptcha::Level {
-		match value {
-			models::CloudVersionMatchmakerCaptchaHcaptchaLevel::Easy => {
-				backend::captcha::captcha_config::hcaptcha::Level::Easy
-			}
-			models::CloudVersionMatchmakerCaptchaHcaptchaLevel::Moderate => {
-				backend::captcha::captcha_config::hcaptcha::Level::Moderate
-			}
-			models::CloudVersionMatchmakerCaptchaHcaptchaLevel::Difficult => {
-				backend::captcha::captcha_config::hcaptcha::Level::Difficult
-			}
-			models::CloudVersionMatchmakerCaptchaHcaptchaLevel::AlwaysOn => {
-				backend::captcha::captcha_config::hcaptcha::Level::AlwaysOn
-			}
-		}
-	}
-}
-
-impl ApiFrom<backend::captcha::captcha_config::hcaptcha::Level>
-	for models::CloudVersionMatchmakerCaptchaHcaptchaLevel
-{
-	fn api_from(value: backend::captcha::captcha_config::hcaptcha::Level) -> Self {
-		match value {
-			backend::captcha::captcha_config::hcaptcha::Level::Easy => {
-				models::CloudVersionMatchmakerCaptchaHcaptchaLevel::Easy
-			}
-			backend::captcha::captcha_config::hcaptcha::Level::Moderate => {
-				models::CloudVersionMatchmakerCaptchaHcaptchaLevel::Moderate
-			}
-			backend::captcha::captcha_config::hcaptcha::Level::Difficult => {
-				models::CloudVersionMatchmakerCaptchaHcaptchaLevel::Difficult
-			}
-			backend::captcha::captcha_config::hcaptcha::Level::AlwaysOn => {
-				models::CloudVersionMatchmakerCaptchaHcaptchaLevel::AlwaysOn
-			}
-		}
-	}
-}
 
 impl ApiFrom<models::CloudVersionMatchmakerCaptchaTurnstile>
 	for backend::captcha::captcha_config::Turnstile

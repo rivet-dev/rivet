@@ -10821,8 +10821,13 @@ components:
       properties:
         level:
           $ref: '#/components/schemas/CloudVersionMatchmakerCaptchaHcaptchaLevel'
-      required:
-        - level
+          description: '**Deprecated**'
+        site_key:
+          type: string
+          description: Site key for your hCaptcha application. Must be set.
+        secret_key:
+          type: string
+          description: Secret key for your hCaptcha application. Must be set.
     CloudVersionMatchmakerCaptchaHcaptchaLevel:
       type: string
       enum:
@@ -10830,7 +10835,9 @@ components:
         - moderate
         - difficult
         - always_on
-      description: How hard a captcha should be.
+      description: |-
+        **Deprecated**
+        How hard a captcha should be.
     CloudVersionMatchmakerCaptchaTurnstile:
       type: object
       description: Turnstile captcha configuration.

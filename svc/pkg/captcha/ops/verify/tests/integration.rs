@@ -21,7 +21,8 @@ async fn empty(ctx: TestCtx) {
 			requests_before_reverify: 15,
 			verification_ttl: util::duration::hours(1),
 			hcaptcha: Some(backend::captcha::captcha_config::Hcaptcha {
-				level: backend::captcha::captcha_config::hcaptcha::Level::Easy as i32,
+				site_key: Some("10000000-ffff-ffff-ffff-000000000001".to_string()),
+				secret_key: Some("0x0000000000000000000000000000000000000000".to_string()),
 			}),
 			..Default::default()
 		}),
@@ -50,7 +51,8 @@ async fn captcha_counts(ctx: TestCtx) {
 		requests_before_reverify,
 		verification_ttl: util::duration::hours(1),
 		hcaptcha: Some(backend::captcha::captcha_config::Hcaptcha {
-			level: backend::captcha::captcha_config::hcaptcha::Level::Easy as i32,
+			site_key: Some("10000000-ffff-ffff-ffff-000000000001".to_string()),
+			secret_key: Some("0x0000000000000000000000000000000000000000".to_string()),
 		}),
 		..Default::default()
 	};
@@ -182,7 +184,8 @@ async fn captcha_timing(ctx: TestCtx) {
 		requests_before_reverify: 15,
 		verification_ttl,
 		hcaptcha: Some(backend::captcha::captcha_config::Hcaptcha {
-			level: backend::captcha::captcha_config::hcaptcha::Level::Easy as i32,
+			site_key: Some("10000000-ffff-ffff-ffff-000000000001".to_string()),
+			secret_key: Some("0x0000000000000000000000000000000000000000".to_string()),
 		}),
 		..Default::default()
 	};
@@ -240,22 +243,26 @@ async fn turnstile(ctx: TestCtx) {
 		..Default::default()
 	};
 
-	op!([ctx] captcha_verify {
-		topic: topic.clone(),
-		remote_address: remote_address.to_string(),
-		origin_host: Some("test.rivet.gg".to_string()),
-		captcha_config: Some(captcha_config.clone()),
-		client_response: Some(backend::captcha::CaptchaClientResponse {
-			kind: Some(backend::captcha::captcha_client_response::Kind::Turnstile(
-				backend::captcha::captcha_client_response::Turnstile {
-					client_response: "unimportant".to_owned(),
-				},
-			))
+	// Test CDN site key (should fail as its an actual site key)
+	if let Some(domain_cdn) = util::env::domain_cdn() {
+		op!([ctx] captcha_verify {
+			topic: topic.clone(),
+			remote_address: remote_address.to_string(),
+			origin_host: Some(format!("test.{domain_cdn}")),
+			captcha_config: Some(captcha_config.clone()),
+			client_response: Some(backend::captcha::CaptchaClientResponse {
+				kind: Some(backend::captcha::captcha_client_response::Kind::Turnstile(
+					backend::captcha::captcha_client_response::Turnstile {
+						client_response: "unimportant".to_owned(),
+					},
+				))
+			})
 		})
-	})
-	.await
-	.unwrap();
+		.await
+		.unwrap_err();
+	}
 
+	// Test our config site key
 	op!([ctx] captcha_verify {
 		topic: topic.clone(),
 		remote_address: remote_address.to_string(),
@@ -270,7 +277,7 @@ async fn turnstile(ctx: TestCtx) {
 		})
 	})
 	.await
-	.unwrap_err();
+	.unwrap();
 }
 
 async fn captcha_verify(

@@ -15,15 +15,23 @@
 #[derive(Clone, Debug, PartialEq, Default, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct CloudVersionMatchmakerCaptchaHcaptcha {
-    #[serde(rename = "level")]
-    pub level: crate::models::CloudVersionMatchmakerCaptchaHcaptchaLevel,
+    #[serde(rename = "level", skip_serializing_if = "Option::is_none")]
+    pub level: Option<crate::models::CloudVersionMatchmakerCaptchaHcaptchaLevel>,
+    /// Secret key for your hCaptcha application. Must be set.
+    #[serde(rename = "secret_key", skip_serializing_if = "Option::is_none")]
+    pub secret_key: Option<String>,
+    /// Site key for your hCaptcha application. Must be set.
+    #[serde(rename = "site_key", skip_serializing_if = "Option::is_none")]
+    pub site_key: Option<String>,
 }
 
 impl CloudVersionMatchmakerCaptchaHcaptcha {
     /// hCpatcha configuration.
-    pub fn new(level: crate::models::CloudVersionMatchmakerCaptchaHcaptchaLevel) -> CloudVersionMatchmakerCaptchaHcaptcha {
+    pub fn new() -> CloudVersionMatchmakerCaptchaHcaptcha {
         CloudVersionMatchmakerCaptchaHcaptcha {
-            level,
+            level: None,
+            secret_key: None,
+            site_key: None,
         }
     }
 }

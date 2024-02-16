@@ -48,10 +48,22 @@ types:
   CaptchaHcaptcha:
     docs: hCpatcha configuration.
     properties:
-      level: CaptchaHcaptchaLevel
+      level:
+        docs: |
+          **Deprecated**
+
+        type: optional<CaptchaHcaptchaLevel>
+      site_key:
+        docs: Site key for your hCaptcha application. Must be set.
+        type: optional<string>
+      secret_key:
+        docs: Secret key for your hCaptcha application. Must be set.
+        type: optional<string>
 
   CaptchaHcaptchaLevel:
-    docs: How hard a captcha should be.
+    docs: |
+      **Deprecated**
+      How hard a captcha should be.
     enum:
       - easy
       - moderate

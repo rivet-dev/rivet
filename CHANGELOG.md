@@ -26,6 +26,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 -   **API** Added 120s timeout to reading request body and writing response to all requests going through Traefik
 -   **Infra** Update Promtail logs to match k8s semantics
 -   **Infra** Added `Cache-Control: no-cache` to 400 responses from CDN
+-   **[BREAKING]** **Infra** Removed config-less hCaptcha. You are now required to provide a site key and
+    secret key for the hCaptcha config in your game version matchmaker config for all future versions (old
+    version will remain operational using our own hCaptcha site key).
 
 ### Fixed
 
