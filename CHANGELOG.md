@@ -37,6 +37,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 -   Invalid JWT tokens now return explicit `TOKEN_INVALID` error instead of 500
 -   **Infra** Remove debug logging from traefik-tunnel
 -   Game lobby logs now ship even when the lobby fails immediately
+-   Fixed `CLAIMS_MISSING_ENTITLEMENT` not formatting correctly (reason given was `?`)
 
 ### Security
 

@@ -380,7 +380,7 @@ impl ClaimsDecode for schema::Claims {
 				Some(schema::entitlement::Kind::User(ent)) => Some(ent::User::try_from(ent)),
 				_ => None,
 			})
-			.ok_or(err_code!(CLAIMS_MISSING_ENTITLEMENT, entitlement = "User"))
+			.ok_or(err_code!(CLAIMS_MISSING_ENTITLEMENT, entitlements = "User"))
 			.and_then(std::convert::identity)
 	}
 
@@ -395,7 +395,7 @@ impl ClaimsDecode for schema::Claims {
 			})
 			.ok_or(err_code!(
 				CLAIMS_MISSING_ENTITLEMENT,
-				entitlement = "GameNamespacePublic"
+				entitlements = "GameNamespacePublic"
 			))
 			.and_then(std::convert::identity)
 	}
@@ -423,7 +423,7 @@ impl ClaimsDecode for schema::Claims {
 			})
 			.ok_or(err_code!(
 				CLAIMS_MISSING_ENTITLEMENT,
-				entitlement = "MatchmakerLobby"
+				entitlements = "MatchmakerLobby"
 			))
 			.and_then(std::convert::identity)
 	}
@@ -451,7 +451,7 @@ impl ClaimsDecode for schema::Claims {
 			})
 			.ok_or(err_code!(
 				CLAIMS_MISSING_ENTITLEMENT,
-				entitlement = "MatchmakerPlayer"
+				entitlements = "MatchmakerPlayer"
 			))
 			.and_then(std::convert::identity)
 	}
@@ -465,7 +465,7 @@ impl ClaimsDecode for schema::Claims {
 			})
 			.ok_or(err_code!(
 				CLAIMS_MISSING_ENTITLEMENT,
-				entitlement = "JobRun"
+				entitlements = "JobRun"
 			))
 			.and_then(std::convert::identity)
 	}
@@ -481,7 +481,7 @@ impl ClaimsDecode for schema::Claims {
 			})
 			.ok_or(err_code!(
 				CLAIMS_MISSING_ENTITLEMENT,
-				entitlement = "GameCloud"
+				entitlements = "GameCloud"
 			))
 			.and_then(std::convert::identity)
 	}
@@ -511,7 +511,7 @@ impl ClaimsDecode for schema::Claims {
 			})
 			.ok_or(err_code!(
 				CLAIMS_MISSING_ENTITLEMENT,
-				entitlement = "MatchmakerDevelopmentPlayer"
+				entitlements = "MatchmakerDevelopmentPlayer"
 			))
 			.and_then(std::convert::identity)
 	}
@@ -527,7 +527,7 @@ impl ClaimsDecode for schema::Claims {
 			})
 			.ok_or(err_code!(
 				CLAIMS_MISSING_ENTITLEMENT,
-				entitlement = "GameUser"
+				entitlements = "GameUser"
 			))
 			.and_then(std::convert::identity)
 	}
@@ -555,7 +555,7 @@ impl ClaimsDecode for schema::Claims {
 			})
 			.ok_or(err_code!(
 				CLAIMS_MISSING_ENTITLEMENT,
-				entitlement = "GameUserLink"
+				entitlements = "GameUserLink"
 			))
 			.and_then(std::convert::identity)
 	}
@@ -571,7 +571,7 @@ impl ClaimsDecode for schema::Claims {
 			})
 			.ok_or(err_code!(
 				CLAIMS_MISSING_ENTITLEMENT,
-				entitlement = "UploadFile"
+				entitlements = "UploadFile"
 			))
 			.and_then(std::convert::identity)
 	}
@@ -587,7 +587,7 @@ impl ClaimsDecode for schema::Claims {
 			})
 			.ok_or(err_code!(
 				CLAIMS_MISSING_ENTITLEMENT,
-				entitlement = "CloudDeviceLink"
+				entitlements = "CloudDeviceLink"
 			))
 			.and_then(std::convert::identity)
 	}
@@ -601,7 +601,7 @@ impl ClaimsDecode for schema::Claims {
 			})
 			.ok_or(err_code!(
 				CLAIMS_MISSING_ENTITLEMENT,
-				entitlement = "Bypass"
+				entitlements = "Bypass"
 			))
 			.and_then(std::convert::identity)
 	}
@@ -617,7 +617,7 @@ impl ClaimsDecode for schema::Claims {
 			})
 			.ok_or(err_code!(
 				CLAIMS_MISSING_ENTITLEMENT,
-				entitlement = "AccessToken"
+				entitlements = "AccessToken"
 			))
 			.and_then(std::convert::identity)
 	}
