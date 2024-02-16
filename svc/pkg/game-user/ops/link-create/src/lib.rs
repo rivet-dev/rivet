@@ -59,6 +59,8 @@ async fn handle(
 	)
 	.await?;
 
+	ctx.cache().purge("game_user", [game_user_id]).await?;
+
 	Ok(game_user::link_create::Response {
 		link_id: Some(link_id.into()),
 		user_link_token: user_link_token.token.to_owned(),

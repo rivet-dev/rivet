@@ -22,17 +22,17 @@ async fn handle(
 		.collect::<Vec<_>>();
 
 	// Fetch all members
-	let join_requests: Vec<JoinRequest> = sqlx::query_as(indoc!(
+	let join_requests = sql_fetch_all!(
+		[ctx, JoinRequest]
 		"
 		SELECT team_id, user_id, ts
 		FROM db_team.join_requests
 		WHERE team_id = ANY($1)
 		LIMIT $2
-		"
-	))
-	.bind(&team_ids)
-	.bind(MAX_JOIN_REQUESTS)
-	.fetch_all(&ctx.crdb().await?)
+		",
+		&team_ids,
+		MAX_JOIN_REQUESTS
+	)
 	.await?;
 
 	// Group in to teams

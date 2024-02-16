@@ -38,20 +38,35 @@ async fn handle(
 		.map(common::Uuid::as_uuid)
 		.collect::<Vec<_>>();
 
-	let game_users = sql_fetch_all!(
-		[ctx, GameUser]
-		"
-		SELECT gu.game_user_id, gu.user_id, gu.token_session_id, gu.namespace_id, gu.create_ts, l.link_id, gu.deleted_ts
-		FROM db_game_user.game_users AS gu
-		LEFT JOIN db_game_user.links AS l ON l.new_game_user_id = gu.game_user_id
-		WHERE gu.game_user_id = ANY($1)
-		",
-		game_user_ids,
-	)
-	.await?
-	.into_iter()
-	.map(Into::into)
-	.collect();
+	let game_users = ctx
+		.cache()
+		.immutable()
+		.fetch_all_proto("game_user", game_user_ids, |mut cache, game_user_ids| {
+			let ctx = ctx.base();
+			async move {
+				let game_users = sql_fetch_all!(
+					[ctx, GameUser]
+					"
+					SELECT gu.game_user_id, gu.user_id, gu.token_session_id, gu.namespace_id, gu.create_ts, l.link_id, gu.deleted_ts
+					FROM db_game_user.game_users AS gu
+					LEFT JOIN db_game_user.links AS l ON l.new_game_user_id = gu.game_user_id
+					WHERE gu.game_user_id = ANY($1)
+					",
+					game_user_ids,
+				)
+				.await?;
+
+				for game_user in game_users {
+					cache.resolve(
+						&game_user.game_user_id.clone(),
+						game_user.into(),
+					);
+				}
+
+				Ok(cache)
+			}
+		})
+		.await?;
 
 	Ok(game_user::get::Response { game_users })
 }

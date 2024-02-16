@@ -16,3 +16,8 @@ message Response {
 
 	repeated Game games = 1;
 }
+
+message Cache {
+	rivet.common.Uuid game_id = 1;
+	rivet.common.Uuid namespace_id = 2;
+}

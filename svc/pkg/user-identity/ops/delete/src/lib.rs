@@ -22,7 +22,7 @@ async fn handle(
 	.await?;
 
 	ctx.cache()
-		.purge("user_identity.identities", user_ids)
+		.purge("user_identity.identity", user_ids)
 		.await?;
 
 	Ok(user_identity::delete::Response {})

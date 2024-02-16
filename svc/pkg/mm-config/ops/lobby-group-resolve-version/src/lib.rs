@@ -36,7 +36,7 @@ async fn handle(
 				let ctx = ctx.base();
 
 				async move {
-					sql_fetch_all!(
+					let versions = sql_fetch_all!(
 						[ctx, Version]
 						"
 						SELECT version_id, lobby_group_id
@@ -46,8 +46,9 @@ async fn handle(
 						lobby_group_ids,
 					)
 					.await?
-					.into_iter()
-					.for_each(|version| {
+					.into_iter();
+
+					for version in versions {
 						let lobby_group_id = version.lobby_group_id;
 						cache.resolve_with_topic(
 							&lobby_group_id,
@@ -56,7 +57,8 @@ async fn handle(
 							),
 							("lobby_groups", &lobby_group_id),
 						);
-					});
+					}
+
 					Ok(cache)
 				}
 			},

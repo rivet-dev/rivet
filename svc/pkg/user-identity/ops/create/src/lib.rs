@@ -75,7 +75,7 @@ async fn handle(
 	}
 
 	ctx.cache()
-		.purge("user_identity.identities", [user_id])
+		.purge("user_identity.identity", [user_id])
 		.await?;
 
 	msg!([ctx] user::msg::update(user_id) {

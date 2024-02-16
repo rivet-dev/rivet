@@ -33,10 +33,10 @@ async fn handle(
 	let versions = ctx
 		.cache()
 		.immutable()
-		.fetch_all_proto("version_ids", version_ids, |mut cache, version_ids| {
+		.fetch_all_proto("version_id", version_ids, |mut cache, version_ids| {
 			let ctx = ctx.base();
 			async move {
-				sql_fetch_all!(
+				let versions = sql_fetch_all!(
 					[ctx, GameVersion]
 					"
 					SELECT version_id, game_id, create_ts, display_name
@@ -46,16 +46,17 @@ async fn handle(
 					",
 					version_ids,
 				)
-				.await?
-				.into_iter()
-				.for_each(|row| {
+				.await?;
+
+				for row in versions {
 					let version_id = row.version_id;
 					cache.resolve_with_topic(
 						&version_id,
 						Into::<backend::game::Version>::into(row),
 						("game_versions", &version_id),
-					)
-				});
+					);
+				}
+
 				Ok(cache)
 			}
 		})

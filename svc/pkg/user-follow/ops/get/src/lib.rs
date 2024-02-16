@@ -9,6 +9,17 @@ struct Follow {
 	is_mutual: bool,
 }
 
+impl From<Follow> for user_follow::get::response::Follow {
+	fn from(value: Follow) -> Self {
+		user_follow::get::response::Follow {
+			follower_user_id: Some(value.follower_user_id.into()),
+			following_user_id: Some(value.following_user_id.into()),
+			create_ts: value.create_ts,
+			is_mutual: value.is_mutual,
+		}
+	}
+}
+
 #[operation(name = "user-follow-get")]
 async fn handle(
 	ctx: OperationContext<user_follow::get::Request>,
@@ -50,14 +61,6 @@ async fn handle(
 	.await?;
 
 	Ok(user_follow::get::Response {
-		follows: follows
-			.into_iter()
-			.map(|follow| user_follow::get::response::Follow {
-				follower_user_id: Some(follow.follower_user_id.into()),
-				following_user_id: Some(follow.following_user_id.into()),
-				create_ts: follow.create_ts,
-				is_mutual: follow.is_mutual,
-			})
-			.collect(),
+		follows: follows.into_iter().map(Into::into).collect(),
 	})
 }

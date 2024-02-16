@@ -30,7 +30,7 @@ async fn handle(
 
 	let identities = ctx
 		.cache()
-		.fetch_all_proto("user_identity.identities", user_ids.clone(), {
+		.fetch_all_proto("user_identity.identity", user_ids.clone(), {
 			let ctx = ctx.clone();
 			move |mut cache, user_ids| {
 				let ctx = ctx.clone();

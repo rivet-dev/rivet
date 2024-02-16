@@ -7,7 +7,7 @@ async fn handle(
 ) -> GlobalResult<game::resolve_name_id::Response> {
 	let games = ctx
 		.cache()
-		.fetch_all_proto("user", ctx.name_ids.clone(), {
+		.fetch_all_proto("game_resolved", ctx.name_ids.clone(), {
 			let ctx = ctx.clone();
 			move |mut cache, name_ids| {
 				let ctx = ctx.clone();

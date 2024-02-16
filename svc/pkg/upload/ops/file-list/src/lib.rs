@@ -34,7 +34,7 @@ pub async fn handle(
 
 	let files = ctx
 		.cache()
-		.fetch_all_proto("upload_files", upload_ids, move |mut cache, upload_ids| {
+		.fetch_all_proto("upload_file", upload_ids, move |mut cache, upload_ids| {
 			let ctx = ctx.clone();
 			async move {
 				let rows = sql_fetch_all!(

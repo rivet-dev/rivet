@@ -83,6 +83,8 @@ async fn worker(ctx: &OperationContext<team::msg::profile_set::Message>) -> Glob
 
 	query.execute(&ctx.crdb().await?).await?;
 
+	ctx.cache().purge("team", [team_id]).await?;
+
 	// Accept all group join requests when publicity is set to open
 	if let Some(publicity) = publicity {
 		let publicity = unwrap!(backend::team::Publicity::from_i32(*publicity));

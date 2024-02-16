@@ -27,6 +27,8 @@ async fn handle(
 	)
 	.await?;
 
+	ctx.cache().purge("team", [team_id]).await?;
+
 	msg!([ctx] team::msg::update(team_id) {
 		team_id: Some(team_id.into()),
 	})

@@ -19,23 +19,48 @@ async fn handle(
 		.map(common::Uuid::as_uuid)
 		.collect::<Vec<_>>();
 
-	let game_rows = sql_fetch_all!(
-		[ctx, GameRow]
-		"
-		SELECT game_id, namespace_id
-		FROM db_game.game_namespaces
-		WHERE namespace_id = ANY($1)
-		",
-		&namespace_ids,
-	)
-	.await?;
+	let caches = ctx
+		.cache()
+		.immutable()
+		.fetch_all_proto(
+			"game_ids_from_namespace_ids",
+			namespace_ids,
+			|mut cache, namespace_ids| {
+				let ctx = ctx.base();
+				async move {
+					let game_rows = sql_fetch_all!(
+						[ctx, GameRow]
+						"
+						SELECT game_id, namespace_id
+						FROM db_game.game_namespaces
+						WHERE namespace_id = ANY($1)
+						",
+						&namespace_ids,
+					)
+					.await?;
+
+					for row in game_rows {
+						cache.resolve(
+							&row.namespace_id,
+							game::resolve_namespace_id::Cache {
+								game_id: Some(row.game_id.into()),
+								namespace_id: Some(row.namespace_id.into()),
+							},
+						);
+					}
+
+					Ok(cache)
+				}
+			},
+		)
+		.await?;
 
 	let mut games = HashMap::<Uuid, Vec<Uuid>>::new();
 
 	// Collect rows into hashmap
-	for row in &game_rows {
-		let entry = games.entry(row.game_id).or_default();
-		entry.push(row.namespace_id);
+	for row in caches {
+		let entry = games.entry(unwrap!(row.game_id).as_uuid()).or_default();
+		entry.push(unwrap!(row.namespace_id).as_uuid());
 	}
 
 	Ok(game::resolve_namespace_id::Response {

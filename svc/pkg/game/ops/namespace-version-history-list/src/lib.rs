@@ -19,18 +19,18 @@ async fn handle(
 		.collect::<Vec<_>>();
 
 	// Fetch all members
-	let versions: Vec<Version> = sqlx::query_as(indoc!(
+	let versions = sql_fetch_all!(
+		[ctx, Version]
 		"
 		SELECT namespace_id, version_id, deploy_ts
 		FROM db_game.game_namespace_version_history
 		WHERE namespace_id = ANY($1)
 		ORDER BY deploy_ts DESC
 		LIMIT $2
-		"
-	))
-	.bind(&namespace_ids)
-	.bind(ctx.limit as i32)
-	.fetch_all(&ctx.crdb().await?)
+		",
+		&namespace_ids,
+		ctx.limit as i32,
+	)
 	.await?;
 
 	// Group in to namespaces

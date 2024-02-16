@@ -34,20 +34,32 @@ async fn handle(
 		.map(common::Uuid::as_uuid)
 		.collect::<Vec<_>>();
 
-	let namespaces = sql_fetch_all!(
-		[ctx, Namespace]
-		"
-		SELECT namespace_id, game_id, create_ts, display_name, version_id, name_id
-		FROM db_game.game_namespaces
-		WHERE namespace_id = ANY($1)
-		ORDER BY display_name
-		",
-		&namespace_ids,
-	)
-	.await?
-	.into_iter()
-	.map(Into::<backend::game::Namespace>::into)
-	.collect::<Vec<_>>();
+	let namespaces = ctx
+		.cache()
+		.immutable()
+		.fetch_all_proto("namespace", namespace_ids, |mut cache, namespace_ids| {
+			let ctx = ctx.base();
+			async move {
+				let namespaces = sql_fetch_all!(
+					[ctx, Namespace]
+					"
+					SELECT namespace_id, game_id, create_ts, display_name, version_id, name_id
+					FROM db_game.game_namespaces
+					WHERE namespace_id = ANY($1)
+					ORDER BY display_name
+					",
+					&namespace_ids,
+				)
+				.await?;
+
+				for namespace in namespaces {
+					cache.resolve(&namespace.namespace_id.clone(), namespace.into());
+				}
+
+				Ok(cache)
+			}
+		})
+		.await?;
 
 	Ok(game::namespace_get::Response { namespaces })
 }

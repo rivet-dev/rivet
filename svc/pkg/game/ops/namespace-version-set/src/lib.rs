@@ -42,6 +42,8 @@ async fn handle(
 		.await?;
 		ensure_eq!(1, update_query.rows_affected(), "invalid namespace id");
 
+		ctx.cache().purge("namespace", [namespace_id]).await?;
+
 		sql_execute!(
 			[ctx]
 			"
