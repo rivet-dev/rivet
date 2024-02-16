@@ -25,6 +25,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 -   More details in `CLAIMS_MISSING_ENTITLEMENT` error
 -   **API** Added 120s timeout to reading request body and writing response to all requests going through Traefik
 -   **Infra** Update Promtail logs to match k8s semantics
+-   **Infra** Added `Cache-Control: no-cache` to 400 responses from CDN
 
 ### Fixed
 
