@@ -4,6 +4,7 @@ mod inner;
 mod key;
 mod rate_limit;
 mod req_config;
+mod metrics;
 
 pub use error::*;
 pub use getter_ctx::*;

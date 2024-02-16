@@ -18,6 +18,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 -   **Infra** Added compactor and GC to Loki
 -   **api-status** Test individual Game Guard nodes to ensure all nodes have the correct configuration
 -   Generate separate SDKs for `runtime` (lightweight, essentials for running a game) and `full` (heavy, includes cloud APIs)
+-   Metrics for cache operations as well as a Grafana dashboard
 
 ### Changed
 

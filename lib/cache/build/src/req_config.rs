@@ -7,7 +7,10 @@ use std::{
 };
 use tracing::Instrument;
 
-use crate::error::{Error, GetterResult};
+use crate::{
+	error::{Error, GetterResult},
+	metrics,
+};
 
 use super::*;
 
@@ -142,6 +145,13 @@ impl RequestConfig {
 
 		let mut conn = self.cache.redis_conn.clone();
 
+		metrics::CACHE_REQUEST_TOTAL
+			.with_label_values(&[&base_key])
+			.inc();
+		metrics::CACHE_VALUE_TOTAL
+			.with_label_values(&[&base_key])
+			.inc_by(keys.len() as u64);
+
 		let redis_keys = keys
 			.iter()
 			.map(|key| self.cache.build_redis_cache_key(&base_key, key))
@@ -186,6 +196,11 @@ impl RequestConfig {
 					// Call the getter
 					let remaining_keys = ctx.unresolved_keys();
 					let unresolved_len = remaining_keys.len();
+
+					metrics::CACHE_VALUE_MISS_TOTAL
+						.with_label_values(&[&base_key])
+						.inc_by(unresolved_len as u64);
+
 					ctx = getter(ctx, remaining_keys).await.map_err(Error::Getter)?;
 
 					// Write the values to the pipe
@@ -195,6 +210,7 @@ impl RequestConfig {
 						.unwrap_or_default()
 						.as_millis() as i64;
 					let values_needing_cache_write = ctx.values_needing_cache_write();
+
 					tracing::trace!(
 						unresolved_len,
 						fetched_len = values_needing_cache_write.len(),
@@ -228,9 +244,13 @@ impl RequestConfig {
 							.in_current_span(),
 						);
 					if let Err(err) = spawn_res {
-						tracing::error!(?err, "failed to spawn user_presence_touch task");
+						tracing::error!(?err, "failed to spawn redis_cache::write task");
 					}
 				}
+
+				metrics::CACHE_VALUE_EMPTY_TOTAL
+					.with_label_values(&[&base_key])
+					.inc_by(ctx.unresolved_keys().len() as u64);
 
 				Ok(ctx.into_values())
 			}
@@ -240,6 +260,10 @@ impl RequestConfig {
 					"failed to read batch keys from cache, falling back to getter"
 				);
 
+				metrics::CACHE_REQUEST_ERRORS
+					.with_label_values(&[&base_key])
+					.inc();
+
 				// Fall back to the getter since we can't fetch the value from
 				// the cache
 				let ctx = getter(
@@ -248,7 +272,8 @@ impl RequestConfig {
 				)
 				.await
 				.map_err(Error::Getter)?;
-				return Ok(ctx.into_values());
+
+				Ok(ctx.into_values())
 			}
 		}
 	}
@@ -527,6 +552,13 @@ impl RequestConfig {
 			.into_iter()
 			.map(|key| self.cache.build_redis_cache_key(base_key, &key))
 			.collect::<Vec<_>>();
+
+		metrics::CACHE_PURGE_REQUEST_TOTAL
+			.with_label_values(&[&base_key])
+			.inc();
+		metrics::CACHE_PURGE_VALUE_TOTAL
+			.with_label_values(&[&base_key])
+			.inc_by(redis_keys.len() as u64);
 
 		// Delete keys
 		let mut conn = self.cache.redis_conn.clone();

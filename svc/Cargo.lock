@@ -6408,10 +6408,12 @@ version = "0.1.0"
 dependencies = [
  "futures-util",
  "global-error",
+ "lazy_static",
  "prost 0.10.4",
  "prost-types 0.10.1",
  "redis",
  "rivet-cache-result",
+ "rivet-metrics",
  "rivet-pools",
  "rivet-util",
  "serde",

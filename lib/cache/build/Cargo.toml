@@ -8,9 +8,11 @@ license = "Apache-2.0"
 [dependencies]
 futures-util = "0.3"
 global-error = { path = "../../global-error" }
+lazy_static = "1.4"
 prost = "0.10"
 prost-types = "0.10"
 rivet-cache-result = { path = "../result" }
+rivet-metrics = { path = "../../metrics" }
 rivet-pools = { path = "../../pools" }
 rivet-util = { path = "../../util/core" }
 serde = { version = "1.0", features = ["derive"] }
