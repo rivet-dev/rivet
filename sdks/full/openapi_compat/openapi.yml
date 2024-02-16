@@ -11432,7 +11432,18 @@ paths:
 
         after setting the lobby to closed).
 
-        Does not shutdown the lobby.'
+        Does not shutdown the lobby.
+
+
+        This endpoint requires a [lobby token](/docs/general/concepts/token-types#matchmaker-lobby)
+        for
+
+        authentication, or a [development namespace token](/docs/general/concepts/token-types#namespace-development)
+
+        for mock responses. When running on Rivet servers, you can access the given
+        lobby token from the
+
+        [`RIVET_TOKEN`](/docs/matchmaker/concepts/lobby-env) environment variable.'
       operationId: matchmaker_lobbies_setClosed
       parameters: []
       requestBody:
@@ -11490,7 +11501,21 @@ paths:
       - MatchmakerLobbies
   /matchmaker/lobbies/create:
     post:
-      description: Creates a custom lobby.
+      description: 'Creates a custom lobby.
+
+
+        When [tokenless authentication](/docs/general/concepts/tokenless-authentication/web)
+        is enabled in
+
+        your game namespace, this endpoint does not require a token to authenticate.
+        Otherwise, a
+
+        [development namespace token](/docs/general/concepts/token-types#namespace-development)
+        can be used
+
+        for mock responses and a [public namespace token](/docs/general/concepts/token-types#namespace-public)
+
+        can be used for general authentication.'
       operationId: matchmaker_lobbies_create
       parameters: []
       requestBody:
@@ -11570,7 +11595,21 @@ paths:
 
         If a lobby is not found and `prevent_auto_create_lobby` is `false`,
 
-        a new lobby will be created.'
+        a new lobby will be created.
+
+
+        When [tokenless authentication](/docs/general/concepts/tokenless-authentication/web)
+        is enabled in
+
+        your game namespace, this endpoint does not require a token to authenticate.
+        Otherwise, a
+
+        [development namespace token](/docs/general/concepts/token-types#namespace-development)
+        can be used
+
+        for mock responses and a [public namespace token](/docs/general/concepts/token-types#namespace-public)
+
+        can be used for general authentication.'
       operationId: matchmaker_lobbies_find
       parameters:
       - in: header
@@ -11658,7 +11697,21 @@ paths:
 
         This request will use the direct player count configured for the
 
-        lobby group.'
+        lobby group.
+
+
+        When [tokenless authentication](/docs/general/concepts/tokenless-authentication/web)
+        is enabled in
+
+        your game namespace, this endpoint does not require a token to authenticate.
+        Otherwise, a
+
+        [development namespace token](/docs/general/concepts/token-types#namespace-development)
+        can be used
+
+        for mock responses and a [public namespace token](/docs/general/concepts/token-types#namespace-public)
+
+        can be used for general authentication.'
       operationId: matchmaker_lobbies_join
       parameters: []
       requestBody:
@@ -11723,7 +11776,21 @@ paths:
       - MatchmakerLobbies
   /matchmaker/lobbies/list:
     get:
-      description: Lists all open lobbies.
+      description: 'Lists all open lobbies.
+
+
+        When [tokenless authentication](/docs/general/concepts/tokenless-authentication/web)
+        is enabled in
+
+        your game namespace, this endpoint does not require a token to authenticate.
+        Otherwise, a
+
+        [development namespace token](/docs/general/concepts/token-types#namespace-development)
+        can be used
+
+        for mock responses and a [public namespace token](/docs/general/concepts/token-types#namespace-public)
+
+        can be used for general authentication.'
       operationId: matchmaker_lobbies_list
       parameters:
       - in: query
@@ -11779,8 +11846,14 @@ paths:
       - MatchmakerLobbies
   /matchmaker/lobbies/ready:
     post:
-      description: Marks the current lobby as ready to accept connections. Players
+      description: 'Marks the current lobby as ready to accept connections. Players
         will not be able to connect to this lobby until the lobby is flagged as ready.
+
+        This endpoint requires a [lobby token](/docs/general/concepts/token-types#matchmaker-lobby)
+        for authentication, or a [development namespace token](/docs/general/concepts/token-types#namespace-development)
+        for mock responses. When running on Rivet servers, you can access the given
+        lobby token from the [`RIVET_TOKEN`](/docs/matchmaker/concepts/lobby-env)
+        environment variable.'
       operationId: matchmaker_lobbies_ready
       parameters: []
       responses:
@@ -11827,6 +11900,18 @@ paths:
       - MatchmakerLobbies
   /matchmaker/lobbies/state:
     put:
+      description: 'Sets the state JSON of the current lobby.
+
+
+        This endpoint requires a [lobby token](/docs/general/concepts/token-types#matchmaker-lobby)
+        for
+
+        authentication, or a [development namespace token](/docs/general/concepts/token-types#namespace-development)
+
+        for mock responses. When running on Rivet servers, you can access the given
+        lobby token from the
+
+        [`RIVET_TOKEN`](/docs/matchmaker/concepts/lobby-env) environment variable.'
       operationId: matchmaker_lobbies_setState
       parameters: []
       requestBody:
@@ -11878,6 +11963,18 @@ paths:
       - MatchmakerLobbies
   /matchmaker/lobbies/{lobby_id}/state:
     get:
+      description: 'Get the state of any lobby.
+
+
+        This endpoint requires a [lobby token](/docs/general/concepts/token-types#matchmaker-lobby)
+        for
+
+        authentication, or a [development namespace token](/docs/general/concepts/token-types#namespace-development)
+
+        for mock responses. When running on Rivet servers, you can access the given
+        lobby token from the
+
+        [`RIVET_TOKEN`](/docs/matchmaker/concepts/lobby-env) environment variable.'
       operationId: matchmaker_lobbies_getState
       parameters:
       - in: path
