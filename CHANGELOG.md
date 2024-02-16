@@ -40,6 +40,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 -   Game lobby logs now ship even when the lobby fails immediately
 -   Fixed `CLAIMS_MISSING_ENTITLEMENT` not formatting correctly (reason given was `?`)
 -   Added role ARN to exec commands in `k8s-cluster-aws` tf provider to properly authenticate
+-   Change email attached to Stripe on group ownership change
 
 ### Security
 
@@ -256,7 +257,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 -   **Infra** Update Prometheus server to 2.46.0
 -   **Infra** Update Redis Exporter to 1.52.0
 -   **Infra** Update Redis to 7.0.12
--   **Infra** Update Treafik to 2.10.4
+-   **Infra** Update Traefik to 2.10.4
 -   **Bolt** PostHog events are now captured in a background task
 -   **Bolt** Auto-install rsync on Salt Master
 -   **Bolt** Recursively add dependencies from overridden services when using additional roots

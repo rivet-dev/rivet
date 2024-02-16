@@ -36,6 +36,11 @@ async fn worker(ctx: &OperationContext<team::msg::owner_transfer::Message>) -> G
 		),
 	)?;
 
+	msg!([ctx] team::msg::owner_transfer_complete(team_id) {
+		team_id: Some(team_id.into()),
+	})
+	.await?;
+
 	msg!([ctx] team::msg::update(team_id) {
 		team_id: Some(team_id.into()),
 	})
