@@ -20,6 +20,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 -   Generate separate SDKs for `runtime` (lightweight, essentials for running a game) and `full` (heavy, includes cloud APIs)
 -   Metrics for cache operations as well as a Grafana dashboard
 -   **Bolt** Added namespace config and secrets sync with `bolt config pull` and `bolt config push` via 1Password
+-   `GROUP_DEACTIVATED` error now shows reasons for deactivation. Added docs for deactivation reasons
 
 ### Changed
 

@@ -1,3 +1,5 @@
+use std::iter::Iterator;
+
 use lazy_static::lazy_static;
 use regex::Regex;
 
@@ -53,4 +55,19 @@ pub fn truncate_at_code_point(
 			.flatten()
 			.collect(),
 	)
+}
+
+pub fn item_list<'a, I: Iterator<Item = impl AsRef<str>>>(mut iter: I) -> String {
+	let mut s = String::new();
+
+	if let Some(item) = iter.next() {
+		s.push_str(item.as_ref());
+	}
+
+	while let Some(item) = iter.next() {
+		s.push_str(", ");
+		s.push_str(item.as_ref());
+	}
+	
+	s
 }

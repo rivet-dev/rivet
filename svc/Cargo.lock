@@ -282,6 +282,7 @@ dependencies = [
  "rivet-util-job",
  "rivet-util-mm",
  "rivet-util-nsfw",
+ "rivet-util-team",
  "s3-util",
  "serde",
  "serde_json",
@@ -3248,6 +3249,7 @@ dependencies = [
  "game-validate",
  "prost 0.10.4",
  "rivet-operation",
+ "rivet-util-team",
  "sqlx",
  "team-get",
 ]
@@ -6884,6 +6886,13 @@ dependencies = [
 [[package]]
 name = "rivet-util-nsfw"
 version = "0.1.0"
+
+[[package]]
+name = "rivet-util-team"
+version = "0.1.0"
+dependencies = [
+ "rivet-operation",
+]
 
 [[package]]
 name = "rivet-util-user-presence"

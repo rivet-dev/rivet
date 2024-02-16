@@ -36,6 +36,7 @@ url = "2.2.2"
 util-job = { package = "rivet-util-job", path = "../../pkg/job/util" }
 util-mm = { package = "rivet-util-mm", path = "../../pkg/mm/util" }
 util-nsfw = { package = "rivet-util-nsfw", path = "../../pkg/nsfw/util" }
+util-team = { package = "rivet-util-team", path = "../../pkg/team/util" }
 uuid = { version = "1", features = ["v4"] }
 
 build-create = { path = "../../pkg/build/ops/create" }

@@ -238,7 +238,11 @@ impl Auth {
 		.await?;
 		let team = unwrap!(team_res.teams.first());
 
-		ensure_with!(team.deactivate_reasons.is_empty(), GROUP_DEACTIVATED);
+		ensure_with!(
+			team.deactivate_reasons.is_empty(),
+			GROUP_DEACTIVATED,
+			reasons = util_team::format_deactivate_reasons(&team.deactivate_reasons)?,
+		);
 
 		Ok(())
 	}
