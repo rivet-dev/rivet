@@ -38,6 +38,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 -   **Infra** Remove debug logging from traefik-tunnel
 -   Game lobby logs now ship even when the lobby fails immediately
 -   Fixed `CLAIMS_MISSING_ENTITLEMENT` not formatting correctly (reason given was `?`)
+-   Added role ARN to exec commands in `k8s-cluster-aws` tf provider to properly authenticate
 
 ### Security
 

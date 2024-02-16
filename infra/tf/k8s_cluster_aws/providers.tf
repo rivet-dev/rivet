@@ -18,7 +18,7 @@ provider "kubernetes" {
 	exec {
 		api_version = "client.authentication.k8s.io/v1beta1"
 		command = "aws"
-		args = ["eks", "get-token", "--cluster-name", module.eks.cluster_name]
+		args = ["--region", "us-east-1", "eks", "get-token", "--cluster-name", module.eks.cluster_name, "--output", "json", "--role", "arn:aws:iam::717589162638:role/rivet-staging2-Admin"]
 	}
 }
 
@@ -30,7 +30,7 @@ provider "helm" {
 		exec {
 			api_version = "client.authentication.k8s.io/v1beta1"
 			command = "aws"
-			args = ["eks", "get-token", "--cluster-name", module.eks.cluster_name]
+			args = ["--region", "us-east-1", "eks", "get-token", "--cluster-name", module.eks.cluster_name, "--output", "json", "--role", "arn:aws:iam::717589162638:role/rivet-staging2-Admin"]
 		}
 	}
 }
@@ -44,6 +44,6 @@ provider "kubectl" {
 	exec {
 		api_version = "client.authentication.k8s.io/v1beta1"
 		command = "aws"
-		args = ["eks", "get-token", "--cluster-name", module.eks.cluster_name]
+		args = ["--region", "us-east-1", "eks", "get-token", "--cluster-name", module.eks.cluster_name, "--output", "json", "--role", "arn:aws:iam::717589162638:role/rivet-staging2-Admin"]
 	}
 }
