@@ -80,7 +80,6 @@ export class Players {
             method: "POST",
             headers: {
                 Authorization: await this._getAuthorizationHeader(),
-                "X-Fern-Language": "JavaScript",
             },
             contentType: "application/json",
             body: await serializers.matchmaker.PlayerConnectedRequest.jsonOrThrow(request, {
@@ -199,7 +198,6 @@ export class Players {
             method: "POST",
             headers: {
                 Authorization: await this._getAuthorizationHeader(),
-                "X-Fern-Language": "JavaScript",
             },
             contentType: "application/json",
             body: await serializers.matchmaker.PlayerDisconnectedRequest.jsonOrThrow(request, {
@@ -317,7 +315,6 @@ export class Players {
             method: "GET",
             headers: {
                 Authorization: await this._getAuthorizationHeader(),
-                "X-Fern-Language": "JavaScript",
             },
             contentType: "application/json",
             timeoutMs: requestOptions?.timeoutInSeconds != null ? requestOptions.timeoutInSeconds * 1000 : 180000,

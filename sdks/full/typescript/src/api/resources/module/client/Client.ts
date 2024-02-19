@@ -49,7 +49,6 @@ export class Module {
             method: "POST",
             headers: {
                 Authorization: await this._getAuthorizationHeader(),
-                "X-Fern-Language": "JavaScript",
                 origin: origin != null ? origin : undefined,
             },
             contentType: "application/json",

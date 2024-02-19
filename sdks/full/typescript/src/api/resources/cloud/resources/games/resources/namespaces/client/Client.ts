@@ -49,7 +49,6 @@ export class Namespaces {
             method: "POST",
             headers: {
                 Authorization: await this._getAuthorizationHeader(),
-                "X-Fern-Language": "JavaScript",
             },
             contentType: "application/json",
             body: await serializers.cloud.games.namespaces.CreateGameNamespaceRequest.jsonOrThrow(request, {
@@ -175,7 +174,6 @@ export class Namespaces {
             method: "POST",
             headers: {
                 Authorization: await this._getAuthorizationHeader(),
-                "X-Fern-Language": "JavaScript",
             },
             contentType: "application/json",
             body: await serializers.cloud.games.namespaces.ValidateGameNamespaceRequest.jsonOrThrow(request, {
@@ -301,7 +299,6 @@ export class Namespaces {
             method: "GET",
             headers: {
                 Authorization: await this._getAuthorizationHeader(),
-                "X-Fern-Language": "JavaScript",
             },
             contentType: "application/json",
             timeoutMs: requestOptions?.timeoutInSeconds != null ? requestOptions.timeoutInSeconds * 1000 : 180000,
@@ -425,7 +422,6 @@ export class Namespaces {
             method: "POST",
             headers: {
                 Authorization: await this._getAuthorizationHeader(),
-                "X-Fern-Language": "JavaScript",
             },
             contentType: "application/json",
             body: await serializers.cloud.games.namespaces.UpdateNamespaceCdnAuthUserRequest.jsonOrThrow(request, {
@@ -546,7 +542,6 @@ export class Namespaces {
             method: "DELETE",
             headers: {
                 Authorization: await this._getAuthorizationHeader(),
-                "X-Fern-Language": "JavaScript",
             },
             contentType: "application/json",
             timeoutMs: requestOptions?.timeoutInSeconds != null ? requestOptions.timeoutInSeconds * 1000 : 180000,
@@ -664,7 +659,6 @@ export class Namespaces {
             method: "PUT",
             headers: {
                 Authorization: await this._getAuthorizationHeader(),
-                "X-Fern-Language": "JavaScript",
             },
             contentType: "application/json",
             body: await serializers.cloud.games.namespaces.SetNamespaceCdnAuthTypeRequest.jsonOrThrow(request, {
@@ -785,7 +779,6 @@ export class Namespaces {
             method: "PUT",
             headers: {
                 Authorization: await this._getAuthorizationHeader(),
-                "X-Fern-Language": "JavaScript",
             },
             contentType: "application/json",
             body: await serializers.cloud.games.namespaces.ToggleNamespaceDomainPublicAuthRequest.jsonOrThrow(request, {
@@ -906,7 +899,6 @@ export class Namespaces {
             method: "POST",
             headers: {
                 Authorization: await this._getAuthorizationHeader(),
-                "X-Fern-Language": "JavaScript",
             },
             contentType: "application/json",
             body: await serializers.cloud.games.namespaces.AddNamespaceDomainRequest.jsonOrThrow(request, {
@@ -1027,7 +1019,6 @@ export class Namespaces {
             method: "DELETE",
             headers: {
                 Authorization: await this._getAuthorizationHeader(),
-                "X-Fern-Language": "JavaScript",
             },
             contentType: "application/json",
             timeoutMs: requestOptions?.timeoutInSeconds != null ? requestOptions.timeoutInSeconds * 1000 : 180000,
@@ -1145,7 +1136,6 @@ export class Namespaces {
             method: "POST",
             headers: {
                 Authorization: await this._getAuthorizationHeader(),
-                "X-Fern-Language": "JavaScript",
             },
             contentType: "application/json",
             body: await serializers.cloud.games.namespaces.UpdateGameNamespaceMatchmakerConfigRequest.jsonOrThrow(
@@ -1277,7 +1267,6 @@ export class Namespaces {
             method: "GET",
             headers: {
                 Authorization: await this._getAuthorizationHeader(),
-                "X-Fern-Language": "JavaScript",
             },
             contentType: "application/json",
             queryParameters: _queryParams,
@@ -1405,7 +1394,6 @@ export class Namespaces {
             method: "POST",
             headers: {
                 Authorization: await this._getAuthorizationHeader(),
-                "X-Fern-Language": "JavaScript",
             },
             contentType: "application/json",
             body: await serializers.cloud.games.namespaces.ValidateGameNamespaceMatchmakerConfigRequest.jsonOrThrow(
@@ -1536,7 +1524,6 @@ export class Namespaces {
             method: "POST",
             headers: {
                 Authorization: await this._getAuthorizationHeader(),
-                "X-Fern-Language": "JavaScript",
             },
             contentType: "application/json",
             body: await serializers.cloud.games.namespaces.CreateGameNamespaceTokenDevelopmentRequest.jsonOrThrow(
@@ -1667,7 +1654,6 @@ export class Namespaces {
             method: "POST",
             headers: {
                 Authorization: await this._getAuthorizationHeader(),
-                "X-Fern-Language": "JavaScript",
             },
             contentType: "application/json",
             body: await serializers.cloud.games.namespaces.ValidateGameNamespaceTokenDevelopmentRequest.jsonOrThrow(
@@ -1797,7 +1783,6 @@ export class Namespaces {
             method: "POST",
             headers: {
                 Authorization: await this._getAuthorizationHeader(),
-                "X-Fern-Language": "JavaScript",
             },
             contentType: "application/json",
             timeoutMs: requestOptions?.timeoutInSeconds != null ? requestOptions.timeoutInSeconds * 1000 : 180000,
@@ -1924,7 +1909,6 @@ export class Namespaces {
             method: "PUT",
             headers: {
                 Authorization: await this._getAuthorizationHeader(),
-                "X-Fern-Language": "JavaScript",
             },
             contentType: "application/json",
             body: await serializers.cloud.games.namespaces.UpdateGameNamespaceVersionRequest.jsonOrThrow(request, {

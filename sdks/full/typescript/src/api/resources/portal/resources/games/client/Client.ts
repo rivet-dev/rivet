@@ -53,7 +53,6 @@ export class Games {
             method: "GET",
             headers: {
                 Authorization: await this._getAuthorizationHeader(),
-                "X-Fern-Language": "JavaScript",
             },
             contentType: "application/json",
             queryParameters: _queryParams,

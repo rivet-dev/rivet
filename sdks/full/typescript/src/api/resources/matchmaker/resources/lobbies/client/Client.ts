@@ -43,7 +43,6 @@ export class Lobbies {
             method: "POST",
             headers: {
                 Authorization: await this._getAuthorizationHeader(),
-                "X-Fern-Language": "JavaScript",
             },
             contentType: "application/json",
             timeoutMs: requestOptions?.timeoutInSeconds != null ? requestOptions.timeoutInSeconds * 1000 : 180000,
@@ -162,7 +161,6 @@ export class Lobbies {
             method: "PUT",
             headers: {
                 Authorization: await this._getAuthorizationHeader(),
-                "X-Fern-Language": "JavaScript",
             },
             contentType: "application/json",
             body: await serializers.matchmaker.SetLobbyClosedRequest.jsonOrThrow(request, {
@@ -277,7 +275,6 @@ export class Lobbies {
             method: "PUT",
             headers: {
                 Authorization: await this._getAuthorizationHeader(),
-                "X-Fern-Language": "JavaScript",
             },
             contentType: "application/json",
             body:
@@ -395,7 +392,6 @@ export class Lobbies {
             method: "GET",
             headers: {
                 Authorization: await this._getAuthorizationHeader(),
-                "X-Fern-Language": "JavaScript",
             },
             contentType: "application/json",
             timeoutMs: requestOptions?.timeoutInSeconds != null ? requestOptions.timeoutInSeconds * 1000 : 180000,
@@ -520,7 +516,6 @@ export class Lobbies {
             method: "POST",
             headers: {
                 Authorization: await this._getAuthorizationHeader(),
-                "X-Fern-Language": "JavaScript",
                 origin: origin != null ? origin : undefined,
             },
             contentType: "application/json",
@@ -646,7 +641,6 @@ export class Lobbies {
             method: "POST",
             headers: {
                 Authorization: await this._getAuthorizationHeader(),
-                "X-Fern-Language": "JavaScript",
             },
             contentType: "application/json",
             body: await serializers.matchmaker.JoinLobbyRequest.jsonOrThrow(request, {
@@ -771,7 +765,6 @@ export class Lobbies {
             method: "POST",
             headers: {
                 Authorization: await this._getAuthorizationHeader(),
-                "X-Fern-Language": "JavaScript",
             },
             contentType: "application/json",
             body: await serializers.matchmaker.CreateLobbyRequest.jsonOrThrow(request, {
@@ -902,7 +895,6 @@ export class Lobbies {
             method: "GET",
             headers: {
                 Authorization: await this._getAuthorizationHeader(),
-                "X-Fern-Language": "JavaScript",
             },
             contentType: "application/json",
             queryParameters: _queryParams,

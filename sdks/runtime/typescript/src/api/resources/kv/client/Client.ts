@@ -949,7 +949,6 @@ export class Kv {
             method: "GET",
             headers: {
                 Authorization: await this._getAuthorizationHeader(),
-                "X-Fern-Language": "JavaScript",
             },
             contentType: "application/json",
             queryParameters: _queryParams,
@@ -1069,7 +1068,6 @@ export class Kv {
             method: "PUT",
             headers: {
                 Authorization: await this._getAuthorizationHeader(),
-                "X-Fern-Language": "JavaScript",
             },
             contentType: "application/json",
             body: await serializers.kv.PutRequest.jsonOrThrow(request, { unrecognizedObjectKeys: "strip" }),
@@ -1190,7 +1188,6 @@ export class Kv {
             method: "DELETE",
             headers: {
                 Authorization: await this._getAuthorizationHeader(),
-                "X-Fern-Language": "JavaScript",
             },
             contentType: "application/json",
             queryParameters: _queryParams,
@@ -1311,7 +1308,6 @@ export class Kv {
             method: "GET",
             headers: {
                 Authorization: await this._getAuthorizationHeader(),
-                "X-Fern-Language": "JavaScript",
             },
             contentType: "application/json",
             queryParameters: _queryParams,
@@ -1450,7 +1446,6 @@ export class Kv {
             method: "GET",
             headers: {
                 Authorization: await this._getAuthorizationHeader(),
-                "X-Fern-Language": "JavaScript",
             },
             contentType: "application/json",
             queryParameters: _queryParams,
@@ -1570,7 +1565,6 @@ export class Kv {
             method: "PUT",
             headers: {
                 Authorization: await this._getAuthorizationHeader(),
-                "X-Fern-Language": "JavaScript",
             },
             contentType: "application/json",
             body: await serializers.kv.PutBatchRequest.jsonOrThrow(request, { unrecognizedObjectKeys: "strip" }),
@@ -1696,7 +1690,6 @@ export class Kv {
             method: "DELETE",
             headers: {
                 Authorization: await this._getAuthorizationHeader(),
-                "X-Fern-Language": "JavaScript",
             },
             contentType: "application/json",
             queryParameters: _queryParams,

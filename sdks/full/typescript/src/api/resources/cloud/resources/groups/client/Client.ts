@@ -46,7 +46,6 @@ export class Groups {
             method: "POST",
             headers: {
                 Authorization: await this._getAuthorizationHeader(),
-                "X-Fern-Language": "JavaScript",
             },
             contentType: "application/json",
             body: await serializers.cloud.ValidateGroupRequest.jsonOrThrow(request, {

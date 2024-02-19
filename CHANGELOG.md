@@ -33,6 +33,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     secret key for the hCaptcha config in your game version matchmaker config for all future versions (old
     version will remain operational using our own hCaptcha site key).
 -   **Internal** Updated source hash calculation to use `git diff` and `git rev-parse HEAD`
+-   **API** Removed `x-fern-*` headers from generated TypeScript clients
 
 ### Fixed
 

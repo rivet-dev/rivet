@@ -47,7 +47,6 @@ export class Matchmaker {
             method: "POST",
             headers: {
                 Authorization: await this._getAuthorizationHeader(),
-                "X-Fern-Language": "JavaScript",
             },
             contentType: "application/json",
             body: await serializers.cloud.games.ExportMatchmakerLobbyHistoryRequest.jsonOrThrow(request, {
@@ -173,7 +172,6 @@ export class Matchmaker {
             method: "DELETE",
             headers: {
                 Authorization: await this._getAuthorizationHeader(),
-                "X-Fern-Language": "JavaScript",
             },
             contentType: "application/json",
             timeoutMs: requestOptions?.timeoutInSeconds != null ? requestOptions.timeoutInSeconds * 1000 : 180000,
@@ -304,7 +302,6 @@ export class Matchmaker {
             method: "GET",
             headers: {
                 Authorization: await this._getAuthorizationHeader(),
-                "X-Fern-Language": "JavaScript",
             },
             contentType: "application/json",
             queryParameters: _queryParams,
@@ -429,7 +426,6 @@ export class Matchmaker {
             method: "POST",
             headers: {
                 Authorization: await this._getAuthorizationHeader(),
-                "X-Fern-Language": "JavaScript",
             },
             contentType: "application/json",
             body: await serializers.cloud.games.ExportLobbyLogsRequest.jsonOrThrow(request, {

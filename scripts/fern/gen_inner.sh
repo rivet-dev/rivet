@@ -3,10 +3,16 @@ set -euf -o pipefail
 
 set +u
 if [ -z "$FERN_REPO_PATH" ]; then
-	echo 'Please clone and build https://github.com/rivet-gg/fern/tree/nathan/skip-token-local and set $FERN_REPO_PATH. This is a workaround until https://github.com/fern-api/fern/pull/2551 is resolved.'
+	echo 'Please clone and build https://github.com/rivet-gg/fern/tree/max/remove-headers and set $FERN_REPO_PATH. This is a workaround until https://github.com/fern-api/fern/pull/2551 is resolved.'
 	exit 1
 fi
 set -u
+
+# Generate typescript SDK docker image
+if ! docker images | grep -w "^fernapi/fern-typescript-browser-sdk.*999\.999\.999" > /dev/null; then
+	echo "Generating TypeScript SDK"
+	(cd "$FERN_REPO_PATH" && nix-shell -p yarn --run 'yarn workspace @fern-typescript/sdk-generator-cli dockerTagVersion:browser 999.999.999')
+fi
 
 # Generate Fern libraries
 echo "Using Fern from $FERN_REPO_PATH"

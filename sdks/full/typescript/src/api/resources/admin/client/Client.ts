@@ -45,7 +45,6 @@ export class Admin {
             method: "POST",
             headers: {
                 Authorization: await this._getAuthorizationHeader(),
-                "X-Fern-Language": "JavaScript",
             },
             contentType: "application/json",
             body: await serializers.admin.LoginRequest.jsonOrThrow(request, { unrecognizedObjectKeys: "strip" }),

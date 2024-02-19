@@ -46,7 +46,6 @@ export class Email {
             method: "POST",
             headers: {
                 Authorization: await this._getAuthorizationHeader(),
-                "X-Fern-Language": "JavaScript",
             },
             contentType: "application/json",
             body: await serializers.auth.identity.StartEmailVerificationRequest.jsonOrThrow(request, {
@@ -171,7 +170,6 @@ export class Email {
             method: "POST",
             headers: {
                 Authorization: await this._getAuthorizationHeader(),
-                "X-Fern-Language": "JavaScript",
             },
             contentType: "application/json",
             body: await serializers.auth.identity.CompleteEmailVerificationRequest.jsonOrThrow(request, {
