@@ -78,9 +78,6 @@ impl LobbyAggregate {
 async fn handle(
 	ctx: OperationContext<mm::lobby_runtime_aggregate::Request>,
 ) -> GlobalResult<mm::lobby_runtime_aggregate::Response> {
-	let _redis = ctx.redis_mm().await?;
-	let crdb = ctx.crdb().await?;
-
 	let namespace_ids = ctx
 		.namespace_ids
 		.iter()
@@ -105,6 +102,7 @@ async fn handle(
 	//
 	// Use AS OF SYSTEM TIME to reduce contention.
 	// https://www.cockroachlabs.com/docs/v22.2/performance-best-practices-overview#use-as-of-system-time-to-decrease-conflicts-with-long-running-queries
+	let crdb = ctx.crdb().await?;
 	let mut lobby_rows = sql_fetch!(
 		[ctx, LobbyRow, &crdb]
 		"

@@ -84,8 +84,7 @@ async fn basic_http(ctx: TestCtx) {
 		}
 	}
 
-	let ValidateJobOutput { .. } =
-		validate_job(ctx.crdb().await.unwrap(), run_id, region_id, "http").await;
+	let ValidateJobOutput { .. } = validate_job(&ctx, run_id, region_id, "http").await;
 
 	// Test against origin
 	// TODO: Cannot access the IP directly since it's listening on a private interface
@@ -180,7 +179,7 @@ async fn basic_tcp(ctx: TestCtx) {
 		ip: _,
 		port: _,
 		proxied_ports,
-	} = validate_job(ctx.crdb().await.unwrap(), run_id, region_id, "tcp").await;
+	} = validate_job(&ctx, run_id, region_id, "tcp").await;
 	let ingress_port_tcp = proxied_ports
 		.iter()
 		.find(|x| x.proxy_protocol == backend::job::ProxyProtocol::Tcp as i64)
@@ -280,7 +279,7 @@ async fn basic_udp(ctx: TestCtx) {
 		ip: _,
 		port: _,
 		proxied_ports,
-	} = validate_job(ctx.crdb().await.unwrap(), run_id, region_id, "udp").await;
+	} = validate_job(&ctx, run_id, region_id, "udp").await;
 	let ingress_port_udp = proxied_ports.first().unwrap().ingress_port;
 
 	// Test against origin
@@ -533,7 +532,7 @@ struct RunProxiedPort {
 }
 
 async fn validate_job(
-	crdb: CrdbPool,
+	ctx: &TestCtx,
 	run_id: Uuid,
 	region_id: Uuid,
 	port_label: &str,
@@ -543,21 +542,21 @@ async fn validate_job(
 	let (cql_region_id,) =
 		sqlx::query_as::<_, (Uuid,)>("SELECT region_id FROM db_job_state.runs WHERE run_id = $1")
 			.bind(run_id)
-			.fetch_one(&crdb)
+			.fetch_one(&ctx.crdb().await.unwrap())
 			.await
 			.unwrap();
 	let (dispatched_job_id,) = sqlx::query_as::<_, (String,)>(
 		"SELECT dispatched_job_id FROM db_job_state.run_meta_nomad WHERE run_id = $1",
 	)
 	.bind(run_id)
-	.fetch_one(&crdb)
+	.fetch_one(&ctx.crdb().await.unwrap())
 	.await
 	.unwrap();
 	let proxied_ports = sqlx::query_as::<_, RunProxiedPort>(
 		"SELECT ingress_port, proxy_protocol FROM db_job_state.run_proxied_ports WHERE run_id = $1",
 	)
 	.bind(run_id)
-	.fetch_all(&crdb)
+	.fetch_all(&ctx.crdb().await.unwrap())
 	.await
 	.unwrap();
 

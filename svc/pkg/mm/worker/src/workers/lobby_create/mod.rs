@@ -48,8 +48,6 @@ async fn fail(
 
 #[worker(name = "mm-lobby-create")]
 async fn worker(ctx: &OperationContext<mm::msg::lobby_create::Message>) -> GlobalResult<()> {
-	let crdb = ctx.crdb().await?;
-
 	let lobby_id = unwrap_ref!(ctx.lobby_id).as_uuid();
 	let namespace_id = unwrap_ref!(ctx.namespace_id).as_uuid();
 	let lobby_group_id = unwrap_ref!(ctx.lobby_group_id).as_uuid();
@@ -174,7 +172,7 @@ async fn worker(ctx: &OperationContext<mm::msg::lobby_create::Message>) -> Globa
 		max_players_normal,
 		max_players_direct,
 	};
-	rivet_pools::utils::crdb::tx(&crdb, |tx| {
+	rivet_pools::utils::crdb::tx(&ctx.crdb().await?, |tx| {
 		let ctx = ctx.clone();
 		Box::pin(update_db(ctx, tx, insert_opts.clone()))
 	})

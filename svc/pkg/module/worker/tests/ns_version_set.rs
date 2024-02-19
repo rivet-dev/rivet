@@ -8,8 +8,6 @@ async fn ns_version_set(ctx: TestCtx) {
 		return;
 	}
 
-	let crdb = ctx.crdb().await.unwrap();
-
 	let module_id = Uuid::new_v4();
 
 	// Create game
@@ -72,7 +70,7 @@ async fn ns_version_set(ctx: TestCtx) {
 		create_sub.next().await.unwrap();
 
 		// Check instances created
-		let versions = get_namespace_module_version(&crdb, namespace_id).await;
+		let versions = get_namespace_module_version(&ctx, namespace_id).await;
 		assert_eq!(2, versions.len());
 		assert_eq!(mv_a, versions["module-a"].module_version_id);
 		assert_eq!(mv_b, versions["module-b"].module_version_id);
@@ -96,7 +94,7 @@ async fn ns_version_set(ctx: TestCtx) {
 		update_sub.next().await.unwrap();
 
 		// Check instances updated & using same instances
-		let versions = get_namespace_module_version(&crdb, namespace_id).await;
+		let versions = get_namespace_module_version(&ctx, namespace_id).await;
 		assert_eq!(2, versions.len());
 		assert_eq!(mv_a, versions["module-a"].module_version_id);
 		assert_eq!(mv_c, versions["module-b"].module_version_id);
@@ -122,7 +120,7 @@ async fn ns_version_set(ctx: TestCtx) {
 		destroy_sub.next().await.unwrap();
 
 		// Check instance removed
-		let versions = get_namespace_module_version(&crdb, namespace_id).await;
+		let versions = get_namespace_module_version(&ctx, namespace_id).await;
 		assert_eq!(1, versions.len());
 		assert_eq!(mv_c, versions["module-b"].module_version_id);
 		assert_eq!(
@@ -148,7 +146,7 @@ async fn ns_version_set(ctx: TestCtx) {
 		create_sub.next().await.unwrap();
 
 		// Check new instance created for module_a
-		let versions = get_namespace_module_version(&crdb, namespace_id).await;
+		let versions = get_namespace_module_version(&ctx, namespace_id).await;
 		assert_eq!(2, versions.len());
 		assert_eq!(mv_a, versions["module-a"].module_version_id);
 		assert_eq!(mv_c, versions["module-b"].module_version_id);
@@ -229,7 +227,7 @@ struct NamespaceModule {
 }
 
 async fn get_namespace_module_version(
-	crdb: &CrdbPool,
+	ctx: &TestCtx,
 	namespace_id: Uuid,
 ) -> HashMap<String, NamespaceModule> {
 	let versions = sqlx::query_as::<_, (String, Uuid, Uuid)>(indoc!(
@@ -241,7 +239,7 @@ async fn get_namespace_module_version(
 		"
 	))
 	.bind(namespace_id)
-	.fetch_all(crdb)
+	.fetch_all(&ctx.crdb().await.unwrap())
 	.await
 	.unwrap()
 	.into_iter()

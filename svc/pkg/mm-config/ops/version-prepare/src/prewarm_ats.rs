@@ -59,8 +59,7 @@ pub async fn prewarm_ats_cache(
 			job_spec_json: job_spec_json.clone(),
 			..Default::default()
 		})
-		.await
-		.unwrap();
+		.await?;
 	}
 
 	Ok(())

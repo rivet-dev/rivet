@@ -22,15 +22,13 @@ async fn handle(
 			ctx.override_name_id.clone()
 		},
 	})
-	.await
-	.unwrap();
+	.await?;
 	let namespace_id = unwrap_ref!(create_ns_res.namespace_id).as_uuid();
 
 	op!([ctx] cloud_namespace_create {
 		namespace_id: Some(namespace_id.into()),
 	})
-	.await
-	.unwrap();
+	.await?;
 
 	Ok(faker::game_namespace::Response {
 		namespace_id: create_ns_res.namespace_id,

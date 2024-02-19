@@ -13,7 +13,6 @@ async fn handle(
 		CDN_INVALID_AUTH_USER_PASSWORD
 	);
 
-	let _crdb = ctx.crdb().await?;
 	let (auth_user_count,) = sql_fetch_one!(
 		[ctx, (i64,)]
 		"SELECT COUNT(*) FROM db_cdn.game_namespace_auth_users WHERE namespace_id = $1",

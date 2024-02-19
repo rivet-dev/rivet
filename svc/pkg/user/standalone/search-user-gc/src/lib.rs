@@ -45,13 +45,13 @@ pub async fn run_from_env(ts: i64) -> GlobalResult<()> {
 		batch_user_ids.push(user_id);
 
 		if batch_user_ids.len() >= 1024 {
-			total_removed += process_batch(&ctx, &crdb, &batch_user_ids).await?;
+			total_removed += process_batch(&ctx, &batch_user_ids).await?;
 			batch_user_ids.clear();
 		}
 	}
 
 	if !batch_user_ids.is_empty() {
-		total_removed += process_batch(&ctx, &crdb, &batch_user_ids).await?;
+		total_removed += process_batch(&ctx, &batch_user_ids).await?;
 	}
 
 	tracing::info!(
@@ -63,11 +63,7 @@ pub async fn run_from_env(ts: i64) -> GlobalResult<()> {
 	Ok(())
 }
 
-async fn process_batch(
-	ctx: &OperationContext<()>,
-	_crdb: &CrdbPool,
-	user_ids: &[Uuid],
-) -> GlobalResult<u64> {
+async fn process_batch(ctx: &OperationContext<()>, user_ids: &[Uuid]) -> GlobalResult<u64> {
 	let user_ids_proto = user_ids.iter().cloned().map(Into::into).collect::<Vec<_>>();
 
 	let (registered, has_followers) = tokio::try_join!(

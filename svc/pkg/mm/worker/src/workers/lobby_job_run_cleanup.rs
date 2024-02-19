@@ -3,8 +3,6 @@ use proto::backend::pkg::*;
 
 #[worker(name = "mm-lobby-job-run-cleanup")]
 async fn worker(ctx: &OperationContext<job_run::msg::cleanup::Message>) -> GlobalResult<()> {
-	let crdb = ctx.crdb().await?;
-
 	let run_id = unwrap_ref!(ctx.run_id).as_uuid();
 
 	let lobby_row = sql_fetch_optional!(

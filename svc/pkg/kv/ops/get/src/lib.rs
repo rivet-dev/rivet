@@ -20,8 +20,6 @@ impl From<KvPair> for kv::get::response::Key {
 
 #[operation(name = "kv-get")]
 async fn handle(ctx: OperationContext<kv::get::Request>) -> GlobalResult<kv::get::Response> {
-	let _crdb = ctx.crdb().await?;
-
 	// Collect keys into a hashmap of <namespace id, keys>
 	let mut namespace_ids = Vec::new();
 	let mut key_strs = Vec::new();

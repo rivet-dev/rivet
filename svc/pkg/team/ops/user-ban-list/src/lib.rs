@@ -22,17 +22,17 @@ async fn handle(
 		.collect::<Vec<_>>();
 
 	// Fetch all users
-	let banned_users: Vec<BannedUser> = sqlx::query_as(indoc!(
+	let banned_users: Vec<BannedUser> = sql_fetch_all!(
+		[ctx, BannedUser]
 		"
-			SELECT team_id, user_id, ban_ts
-			FROM db_team.banned_users
-			WHERE team_id = ANY($1)
-			LIMIT $2
-			"
-	))
-	.bind(&team_ids)
-	.bind(MAX_BANS)
-	.fetch_all(&ctx.crdb().await?)
+		SELECT team_id, user_id, ban_ts
+		FROM db_team.banned_users
+		WHERE team_id = ANY($1)
+		LIMIT $2
+		",
+		&team_ids,
+		MAX_BANS,
+	)
 	.await?;
 
 	// Group in to teams

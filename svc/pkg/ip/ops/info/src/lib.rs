@@ -21,8 +21,6 @@ enum IpInfoParsed {
 
 #[operation(name = "ip-info")]
 async fn handle(ctx: OperationContext<ip::info::Request>) -> GlobalResult<ip::info::Response> {
-	let _crdb = ctx.crdb().await?;
-
 	// TODO: Handle situation where we can't find the location
 
 	// Parse IP address

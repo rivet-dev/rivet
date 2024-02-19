@@ -163,7 +163,7 @@ async fn handle(
 		version_ids: vec![version_create_res.version_id.unwrap()],
 	})
 	.await?;
-	let version_data = version_get.versions.first().unwrap();
+	let version_data = unwrap!(version_get.versions.first());
 
 	Ok(faker::game_version::Response {
 		version_id: version_create_res.version_id,

@@ -11,8 +11,6 @@ struct LobbyRow {
 async fn worker(ctx: &OperationContext<mm::msg::lobby_stop::Message>) -> GlobalResult<()> {
 	let lobby_id = unwrap_ref!(ctx.lobby_id).as_uuid();
 
-	let crdb = ctx.crdb().await?;
-
 	// Fetch the lobby.
 	//
 	// This also ensures that mm-lobby-find or mm-lobby-create

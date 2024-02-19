@@ -16,8 +16,6 @@ struct LobbyRow {
 
 #[worker(name = "mm-lobby-closed-set")]
 async fn worker(ctx: &OperationContext<mm::msg::lobby_closed_set::Message>) -> GlobalResult<()> {
-	let crdb = ctx.crdb().await?;
-
 	let lobby_id = unwrap_ref!(ctx.lobby_id).as_uuid();
 
 	let lobby_row = sql_fetch_optional!(

@@ -82,10 +82,9 @@ async fn fetch_versions(
 	ctx: &OperationContext<()>,
 	req_version_ids: Vec<Uuid>,
 ) -> GlobalResult<Vec<(Uuid, mm_config::version_get::response::Version)>> {
-	let crdb = ctx.crdb().await?;
 	let (versions, lobby_groups) = tokio::try_join!(
 		sql_fetch_all!(
-			[ctx, GameVersion, &crdb]
+			[ctx, GameVersion]
 			"
 			SELECT version_id, captcha_config
 			FROM db_mm_config.game_versions
@@ -94,7 +93,7 @@ async fn fetch_versions(
 			&req_version_ids,
 		),
 		sql_fetch_all!(
-			[ctx, LobbyGroup, &crdb]
+			[ctx, LobbyGroup]
 			"
 			SELECT 
 				lobby_group_id, version_id,
@@ -116,7 +115,7 @@ async fn fetch_versions(
 		.collect::<Vec<_>>();
 	let (lobby_group_regions, lobby_group_idle_lobbies) = tokio::try_join!(
 		sql_fetch_all!(
-			[ctx, LobbyGroupRegion, &crdb]
+			[ctx, LobbyGroupRegion]
 			"
 			SELECT lobby_group_id, region_id, tier_name_id
 			FROM db_mm_config.lobby_group_regions
@@ -125,7 +124,7 @@ async fn fetch_versions(
 			&all_lobby_group_ids,
 		),
 		sql_fetch_all!(
-			[ctx, LobbyGroupIdleLobbies, &crdb]
+			[ctx, LobbyGroupIdleLobbies]
 			"
 			SELECT lobby_group_id, region_id, min_idle_lobbies, max_idle_lobbies
 			FROM db_mm_config.lobby_group_idle_lobbies

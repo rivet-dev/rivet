@@ -6,8 +6,6 @@ use serde_json::json;
 async fn worker(
 	ctx: &OperationContext<game_user::msg::link_complete::Message>,
 ) -> GlobalResult<()> {
-	let _crdb = ctx.crdb().await?;
-
 	let user_id = unwrap_ref!(ctx.user_id).as_uuid();
 	let link_id = unwrap_ref!(ctx.link_id).as_uuid();
 

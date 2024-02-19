@@ -46,7 +46,6 @@ struct RunData {
 async fn worker(
 	ctx: &OperationContext<job_run::msg::nomad_monitor_alloc_plan::Message>,
 ) -> GlobalResult<()> {
-	let crdb = ctx.crdb().await?;
 	let mut redis_job = ctx.redis_job().await?;
 
 	let PlanResult { allocation: alloc } = serde_json::from_str::<PlanResult>(&ctx.payload_json)?;
@@ -118,7 +117,7 @@ async fn worker(
 		run_networks: run_networks.clone(),
 		ports: ports.clone(),
 	};
-	let db_output = rivet_pools::utils::crdb::tx(&crdb, |tx| {
+	let db_output = rivet_pools::utils::crdb::tx(&ctx.crdb().await?, |tx| {
 		let ctx = ctx.clone();
 		let now = ctx.ts();
 		let run_data = run_data.clone();

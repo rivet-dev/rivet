@@ -52,8 +52,6 @@ impl From<LobbyRow> for backend::matchmaker::Lobby {
 async fn handle(
 	ctx: OperationContext<mm::lobby_get::Request>,
 ) -> GlobalResult<mm::lobby_get::Response> {
-	let _crdb = ctx.crdb().await?;
-
 	let lobby_ids = ctx
 		.lobby_ids
 		.iter()

@@ -12,8 +12,6 @@ struct UploadRow {
 async fn handle(
 	ctx: OperationContext<upload::list_for_user::Request>,
 ) -> GlobalResult<upload::list_for_user::Response> {
-	let _crdb = ctx.crdb().await?;
-
 	let user_ids = ctx
 		.user_ids
 		.iter()

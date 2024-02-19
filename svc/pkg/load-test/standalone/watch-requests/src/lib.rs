@@ -42,8 +42,7 @@ pub async fn run_from_env(_ts: i64) -> GlobalResult<()> {
 				}))
 			})
 		})
-		.await
-		.unwrap();
+		.await?;
 
 		(team_id, primary_user_id)
 	};
@@ -74,9 +73,8 @@ pub async fn run_from_env(_ts: i64) -> GlobalResult<()> {
 			label: Some("usr".into()),
 			..Default::default()
 		})
-		.await
-		.unwrap();
-		let token = token_res.token.unwrap();
+		.await?;
+		let token = unwrap!(token_res.token);
 
 		token.token
 	};

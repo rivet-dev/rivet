@@ -42,8 +42,7 @@ pub async fn run_from_env(_ts: i64) -> GlobalResult<()> {
 				}))
 			})
 		})
-		.await
-		.unwrap();
+		.await?;
 
 		(team_id, primary_user_id)
 	};
@@ -82,16 +81,15 @@ pub async fn run_from_env(_ts: i64) -> GlobalResult<()> {
 			label: Some("usr".into()),
 			..Default::default()
 		})
-		.await
-		.unwrap();
-		let token = token_res.token.unwrap();
+		.await?;
+		let token = unwrap!(token_res.token);
 
 		token.token
 	};
 	let bypass_token = {
 		let token_res = op!([ctx] token_create {
 			token_config: Some(token::create::request::TokenConfig {
-				ttl: util::duration::hours(1)
+				ttl: util::duration::hours(1),
 			}),
 			refresh_token_config: None,
 			issuer: "api-status".to_owned(),

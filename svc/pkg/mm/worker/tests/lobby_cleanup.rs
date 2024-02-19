@@ -20,13 +20,11 @@ async fn lobby_cleanup(ctx: TestCtx) {
 	.await
 	.unwrap();
 
-	let crdb = ctx.crdb().await.unwrap();
-
 	let (stop_ts,) = sqlx::query_as::<_, (Option<i64>,)>(
 		"SELECT stop_ts FROM db_mm_state.lobbies WHERE lobby_id = $1",
 	)
 	.bind(lobby_id)
-	.fetch_one(&crdb)
+	.fetch_one(&ctx.crdb().await.unwrap())
 	.await
 	.unwrap();
 	assert!(stop_ts.is_some(), "lobby not removed");
@@ -35,7 +33,7 @@ async fn lobby_cleanup(ctx: TestCtx) {
 		"SELECT remove_ts FROM db_mm_state.players WHERE lobby_id = $1",
 	)
 	.bind(lobby_id)
-	.fetch_all(&crdb)
+	.fetch_all(&ctx.crdb().await.unwrap())
 	.await
 	.unwrap();
 	for (remove_ts,) in players {

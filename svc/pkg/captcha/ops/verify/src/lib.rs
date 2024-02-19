@@ -6,8 +6,6 @@ use serde_json::json;
 async fn handle(
 	ctx: OperationContext<captcha::verify::Request>,
 ) -> GlobalResult<captcha::verify::Response> {
-	let _crdb = ctx.crdb().await?;
-
 	let captcha_config = unwrap_ref!(ctx.captcha_config);
 	let client_response = unwrap_ref!(ctx.client_response);
 	let client_response_kind = unwrap_ref!(client_response.kind);

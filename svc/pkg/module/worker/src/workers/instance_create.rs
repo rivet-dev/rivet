@@ -96,8 +96,6 @@ struct CheckStatus {
 async fn worker(
 	ctx: &OperationContext<module::msg::instance_create::Message>,
 ) -> Result<(), GlobalError> {
-	let crdb = ctx.crdb().await?;
-
 	let (Ok(fly_org), Ok(fly_region)) = (
 		std::env::var("FLY_ORGANIZATION_ID"),
 		std::env::var("FLY_REGION"),
@@ -118,7 +116,7 @@ async fn worker(
 	let module_id = unwrap!(version.module_id).as_uuid();
 
 	// Create transaction
-	rivet_pools::utils::crdb::tx(&crdb, |tx| {
+	rivet_pools::utils::crdb::tx(&ctx.crdb().await?, |tx| {
 		Box::pin(insert_instance(ctx.clone(), tx, ctx.ts()))
 	})
 	.await?;

@@ -31,7 +31,7 @@ async fn handle(
 		LIMIT $2
 		",
 		&team_ids,
-		MAX_JOIN_REQUESTS
+		MAX_JOIN_REQUESTS,
 	)
 	.await?;
 

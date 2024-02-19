@@ -40,12 +40,10 @@ async fn empty(ctx: TestCtx) {
 	.await
 	.unwrap();
 
-	let crdb = ctx.crdb().await.unwrap();
-
 	let (exists,): (bool,) =
 		sqlx::query_as("SELECT EXISTS (SELECT 1 FROM db_module.versions WHERE version_id = $1)")
 			.bind(version_id)
-			.fetch_one(&crdb)
+			.fetch_one(&ctx.crdb().await.unwrap())
 			.await
 			.unwrap();
 	assert!(exists, "version not created");
@@ -54,7 +52,7 @@ async fn empty(ctx: TestCtx) {
 		"SELECT EXISTS (SELECT 1 FROM db_module.scripts WHERE version_id = $1 AND name = 'foo')",
 	)
 	.bind(version_id)
-	.fetch_one(&crdb)
+	.fetch_one(&ctx.crdb().await.unwrap())
 	.await
 	.unwrap();
 	assert!(exists, "script not created");
@@ -63,7 +61,7 @@ async fn empty(ctx: TestCtx) {
 		"SELECT EXISTS (SELECT 1 FROM db_module.scripts_callable WHERE version_id = $1 AND name = 'foo')",
 	)
 	.bind(version_id)
-	.fetch_one(&crdb)
+	.fetch_one(&ctx.crdb().await.unwrap())
 	.await
 	.unwrap();
 	assert!(exists, "script not callable");

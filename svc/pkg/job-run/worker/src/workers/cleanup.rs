@@ -19,14 +19,13 @@ struct RunMetaNomadRow {
 async fn worker(ctx: &OperationContext<job_run::msg::cleanup::Message>) -> GlobalResult<()> {
 	// NOTE: Idempotent
 
-	let crdb = ctx.crdb().await?;
-
 	let run_id = unwrap_ref!(ctx.run_id).as_uuid();
 
-	let Some((run_row, run_meta_nomad_row)) = rivet_pools::utils::crdb::tx(&crdb, |tx| {
-		Box::pin(update_db(ctx.clone(), ctx.ts(), run_id, tx))
-	})
-	.await?
+	let Some((run_row, run_meta_nomad_row)) =
+		rivet_pools::utils::crdb::tx(&ctx.crdb().await?, |tx| {
+			Box::pin(update_db(ctx.clone(), ctx.ts(), run_id, tx))
+		})
+		.await?
 	else {
 		if ctx.req_dt() > util::duration::minutes(5) {
 			tracing::error!("discarding stale message");

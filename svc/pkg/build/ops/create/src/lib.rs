@@ -7,8 +7,6 @@ const MAX_UPLOAD_SIZE: u64 = util::file_size::gigabytes(8);
 async fn handle(
 	ctx: OperationContext<build::create::Request>,
 ) -> GlobalResult<build::create::Response> {
-	let _crdb = ctx.crdb().await?;
-
 	let kind = unwrap!(backend::build::BuildKind::from_i32(ctx.kind));
 	let compression = unwrap!(backend::build::BuildCompression::from_i32(ctx.compression));
 

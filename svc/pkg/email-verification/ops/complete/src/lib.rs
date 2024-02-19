@@ -69,8 +69,6 @@ async fn handle(
 ) -> GlobalResult<email_verification::complete::Response> {
 	// TODO: Use a CRDB transaction
 
-	let _crdb = ctx.crdb().await?;
-
 	let verification_id = unwrap_ref!(ctx.verification_id).as_uuid();
 
 	// Fetch metadata

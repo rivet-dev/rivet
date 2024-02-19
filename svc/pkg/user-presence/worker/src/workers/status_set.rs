@@ -11,8 +11,6 @@ enum Error {
 async fn worker(
 	ctx: &OperationContext<user_presence::msg::status_set::Message>,
 ) -> GlobalResult<()> {
-	let _crdb = ctx.crdb().await?;
-
 	let user_id = unwrap_ref!(ctx.user_id).as_uuid();
 
 	if backend::user::Status::from_i32(ctx.status).is_none() {

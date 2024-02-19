@@ -95,7 +95,7 @@ async fn handle(
 
 		let mut unique_globs = HashSet::<util::glob::Glob>::new();
 		for (route_index, route) in cdn.routes.iter().take(32).enumerate() {
-			let glob = TryInto::<util::glob::Glob>::try_into(unwrap!(route.glob.clone())).unwrap();
+			let glob = TryInto::<util::glob::Glob>::try_into(unwrap!(route.glob.clone()))?;
 
 			if glob.tokens.is_empty() {
 				errors.push(util::err_path![

@@ -15,8 +15,6 @@ struct InvitationRow {
 async fn handle(
 	ctx: OperationContext<team_invite::get::Request>,
 ) -> GlobalResult<team_invite::get::Response> {
-	let _crdb = ctx.crdb().await?;
-
 	// Find the invitation
 	let invitations = sql_fetch_all!(
 		[ctx, InvitationRow]

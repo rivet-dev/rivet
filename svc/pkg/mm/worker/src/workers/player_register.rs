@@ -13,8 +13,6 @@ struct PlayerRow {
 
 #[worker(name = "mm-player-register")]
 async fn worker(ctx: &OperationContext<mm::msg::player_register::Message>) -> GlobalResult<()> {
-	let crdb = ctx.crdb().await?;
-
 	let player_id = unwrap_ref!(ctx.player_id).as_uuid();
 	let lobby_id = ctx.lobby_id.map(|x| x.as_uuid());
 

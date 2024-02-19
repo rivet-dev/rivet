@@ -17,7 +17,6 @@ struct FindQuery {
 async fn handle(
 	ctx: OperationContext<mm::lobby_find_try_complete::Request>,
 ) -> GlobalResult<mm::lobby_find_try_complete::Response> {
-	let _crdb = ctx.crdb().await?;
 	let redis = ctx.redis_mm().await?;
 
 	util::inject_latency!();

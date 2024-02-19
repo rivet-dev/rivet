@@ -13,11 +13,10 @@ async fn handle(
 
 	ensure!(follower_user_id != following_user_id, "cannot follow self");
 
-	let crdb = ctx.crdb().await?;
 	let mutual = if ctx.active {
 		tokio::try_join!(
 			sql_execute!(
-				[ctx, &crdb]
+				[ctx]
 				"
 				INSERT INTO db_user_follow.user_follows
 				(follower_user_id, following_user_id, create_ts, ignored)
@@ -34,7 +33,7 @@ async fn handle(
 			// the original following user's follow won't show up in the follower user's "recent follows"
 			// list again.
 			sql_execute!(
-				[ctx, &crdb]
+				[ctx]
 				"
 				UPDATE db_user_follow.user_follows
 				SET ignored = TRUE

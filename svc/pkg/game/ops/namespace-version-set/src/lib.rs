@@ -24,13 +24,11 @@ async fn handle(
 	let game = unwrap!(game_res.games.first());
 	let developer_team_id = unwrap_ref!(game.developer_team_id).as_uuid();
 
-	let crdb = ctx.crdb().await?;
-
 	{
-		let tx = crdb.begin().await?;
+		let mut tx = ctx.crdb().await?.begin().await?;
 
 		let update_query = sql_execute!(
-			[ctx]
+			[ctx, @tx &mut tx]
 			"
 			UPDATE db_game.game_namespaces
 			SET version_id = $2
@@ -45,7 +43,7 @@ async fn handle(
 		ctx.cache().purge("namespace", [namespace_id]).await?;
 
 		sql_execute!(
-			[ctx]
+			[ctx, @tx &mut tx]
 			"
 			INSERT INTO db_game.game_namespace_version_history (
 				namespace_id, version_id, deploy_ts

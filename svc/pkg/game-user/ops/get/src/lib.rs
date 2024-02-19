@@ -30,8 +30,6 @@ impl From<GameUser> for game_user::get::response::GameUser {
 async fn handle(
 	ctx: OperationContext<game_user::get::Request>,
 ) -> GlobalResult<game_user::get::Response> {
-	let _crdb = ctx.crdb().await?;
-
 	let game_user_ids = ctx
 		.game_user_ids
 		.iter()

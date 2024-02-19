@@ -5,8 +5,6 @@ use proto::backend::{self, pkg::*};
 async fn worker(
 	ctx: &OperationContext<module::msg::instance_destroy::Message>,
 ) -> Result<(), GlobalError> {
-	let _crdb = ctx.crdb().await?;
-
 	let instance_id = unwrap_ref!(ctx.instance_id).as_uuid();
 
 	let instances = op!([ctx] module_instance_get {

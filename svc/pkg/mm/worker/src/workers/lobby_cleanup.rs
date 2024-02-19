@@ -20,8 +20,6 @@ async fn worker(ctx: &OperationContext<mm::msg::lobby_cleanup::Message>) -> Glob
 
 	let lobby_id = unwrap_ref!(ctx.lobby_id).as_uuid();
 
-	let crdb = ctx.crdb().await?;
-
 	// TODO: Wrap this in a MULTI/WATCH
 	// Remove from Redis before attempting to remove from database.
 	//

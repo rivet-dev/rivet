@@ -26,7 +26,6 @@ struct LobbyRow {
 
 #[worker(name = "mm-lobby-ready-set")]
 async fn worker(ctx: &OperationContext<mm::msg::lobby_ready::Message>) -> GlobalResult<()> {
-	let crdb = ctx.crdb().await?;
 	let mut redis_mm = ctx.redis_mm().await?;
 
 	let lobby_id = unwrap_ref!(ctx.lobby_id).as_uuid();

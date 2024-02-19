@@ -27,7 +27,8 @@ async fn empty(ctx: TestCtx) {
 	.await
 	.unwrap();
 
-	let (sql_exists,) = sqlx::query_as::<_, (bool,)>(indoc!(
+	let (sql_exists,) = sql_fetch_one!(
+		[ctx, (bool,)]
 		"
 		SELECT EXISTS (
 			SELECT 1
@@ -36,11 +37,10 @@ async fn empty(ctx: TestCtx) {
 				namespace_id = $1 AND
 				user_name = $2
 		)
-		"
-	))
-	.bind(namespace_id)
-	.bind(auth_user)
-	.fetch_one(&ctx.crdb().await.unwrap())
+		",
+		namespace_id,
+		auth_user,
+	)
 	.await
 	.unwrap();
 	assert!(!sql_exists);

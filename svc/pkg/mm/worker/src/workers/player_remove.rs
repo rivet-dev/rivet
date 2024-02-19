@@ -223,8 +223,7 @@ async fn worker(ctx: &OperationContext<mm::msg::player_remove::Message>) -> Glob
 					}
 				}
 				.instrument(tracing::info_span!("lobby_idle_update")),
-			)
-			.unwrap();
+			)?;
 	}
 
 	// Handle error

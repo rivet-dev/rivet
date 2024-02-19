@@ -73,7 +73,6 @@ async fn worker(ctx: &OperationContext<mm::msg::lobby_find::Message>) -> GlobalR
 	// TODO: Fetch all sessions for the current IP
 	// TODO: Map to all players matching the given sessions
 
-	let crdb = ctx.crdb().await?;
 	let mut redis_mm = ctx.redis_mm().await?;
 
 	let mut analytics_events = Vec::new();
@@ -224,7 +223,6 @@ async fn worker(ctx: &OperationContext<mm::msg::lobby_find::Message>) -> GlobalR
 		lobby_group_id,
 	} = if let Some(x) = find::find(
 		ctx,
-		&crdb,
 		&mut redis_mm,
 		find::FindOpts {
 			namespace_id,
@@ -296,7 +294,7 @@ async fn worker(ctx: &OperationContext<mm::msg::lobby_find::Message>) -> GlobalR
 	if ctx.debug.as_ref().map_or(false, |x| x.fail_sql) {
 		bail!("debug fail sql");
 	}
-	rivet_pools::utils::crdb::tx(&crdb, |tx| {
+	rivet_pools::utils::crdb::tx(&ctx.crdb().await?, |tx| {
 		let ctx = ctx.clone();
 		Box::pin(insert_to_crdb(ctx, tx, insert_opts.clone()))
 	})

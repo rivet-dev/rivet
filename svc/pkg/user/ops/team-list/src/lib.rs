@@ -5,8 +5,6 @@ use rivet_operation::prelude::*;
 async fn handle(
 	ctx: OperationContext<user::team_list::Request>,
 ) -> GlobalResult<user::team_list::Response> {
-	let _crdb = ctx.crdb().await?;
-
 	let user_ids = ctx
 		.user_ids
 		.iter()

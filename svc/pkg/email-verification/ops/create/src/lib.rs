@@ -8,8 +8,6 @@ use serde_json::json;
 async fn handle(
 	ctx: OperationContext<email_verification::create::Request>,
 ) -> GlobalResult<email_verification::create::Response> {
-	let _crdb = ctx.crdb().await?;
-
 	let email_parse = EmailAddress::parse(&ctx.email, None);
 	let email = unwrap_ref!(email_parse);
 

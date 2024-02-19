@@ -23,8 +23,6 @@ struct FileRow {
 async fn handle(
 	ctx: OperationContext<upload::complete::Request>,
 ) -> GlobalResult<upload::complete::Response> {
-	let _crdb = ctx.crdb().await?;
-
 	let upload_id = unwrap_ref!(ctx.upload_id).as_uuid();
 
 	let (bucket, provider, files, user_id) = fetch_files(&ctx, upload_id).await?;
@@ -93,10 +91,9 @@ async fn fetch_files(
 	ctx: &OperationContext<upload::complete::Request>,
 	upload_id: Uuid,
 ) -> GlobalResult<(String, s3_util::Provider, Vec<FileRow>, Option<Uuid>)> {
-	let crdb = ctx.crdb().await?;
 	let (upload, files) = tokio::try_join!(
 		sql_fetch_one!(
-			[ctx, UploadRow, &crdb]
+			[ctx, UploadRow]
 			"
 			SELECT bucket, provider, user_id
 			FROM db_upload.uploads
@@ -105,7 +102,7 @@ async fn fetch_files(
 			upload_id,
 		),
 		sql_fetch_all!(
-			[ctx, FileRow, &crdb]
+			[ctx, FileRow]
 			"
 			SELECT path, content_length, nsfw_score_threshold, multipart_upload_id
 			FROM db_upload.upload_files

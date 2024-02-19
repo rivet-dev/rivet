@@ -43,6 +43,10 @@ impl TestCtx {
 }
 
 impl TestCtx {
+	pub fn name(&self) -> &str {
+		self.op_ctx.name()
+	}
+
 	pub fn chirp(&self) -> &chirp_client::Client {
 		self.op_ctx.chirp()
 	}

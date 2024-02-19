@@ -20,9 +20,7 @@ struct NamespaceInstances {
 #[worker(name = "module-ns-version-set")]
 async fn worker(
 	ctx: &OperationContext<game::msg::ns_version_set_complete::Message>,
-) -> Result<(), GlobalError> {
-	let _crdb = ctx.crdb().await?;
-
+) -> GlobalResult<()> {
 	let namespace_id = unwrap_ref!(ctx.namespace_id).as_uuid();
 	let version_id = unwrap_ref!(ctx.version_id).as_uuid();
 
@@ -124,7 +122,7 @@ async fn create_instances(
 	namespace_id: Uuid,
 	dep_key: &str,
 	version_id: Uuid,
-) -> Result<(), GlobalError> {
+) -> GlobalResult<()> {
 	// Create instance
 	let instance_id = Uuid::new_v4();
 	msg!([ctx] module::msg::instance_create(instance_id) -> module::msg::instance_create_complete {
@@ -132,8 +130,7 @@ async fn create_instances(
 		module_version_id: Some(version_id.into()),
 		driver: Some(module::msg::instance_create::message::Driver::Fly(module::msg::instance_create::message::Fly {})),
 	})
-	.await
-	.unwrap();
+	.await?;
 
 	// Insert instance
 	sql_execute!(
@@ -155,14 +152,13 @@ async fn update_instance(
 	client: &chirp_client::Client,
 	instance_id: Uuid,
 	version_id: Uuid,
-) -> Result<(), GlobalError> {
+) -> GlobalResult<()> {
 	// Update instance
 	msg!([client] module::msg::instance_version_set(instance_id) -> module::msg::instance_version_set_complete {
 		instance_id: Some(instance_id.into()),
 		version_id: Some(version_id.into()),
 	})
-	.await
-	.unwrap();
+	.await?;
 
 	Ok(())
 }
@@ -172,13 +168,12 @@ async fn delete_instance(
 	namespace_id: Uuid,
 	dep_key: &str,
 	instance_id: Uuid,
-) -> Result<(), GlobalError> {
+) -> GlobalResult<()> {
 	// Delete instance
 	msg!([ctx] module::msg::instance_destroy(instance_id) -> module::msg::instance_destroy_complete {
 		instance_id: Some(instance_id.into()),
 	})
-	.await
-	.unwrap();
+	.await?;
 
 	// Remove instance
 	sql_execute!(

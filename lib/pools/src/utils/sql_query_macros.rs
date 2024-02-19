@@ -218,8 +218,9 @@ macro_rules! __sql_query_as_raw {
 		)*
 		.$action($crdb)
     };
+	// TODO: This doesn't work with `fetch`
     ([$ctx:expr, $rv:ty, $action:ident] $sql:expr, $($bind:expr),* $(,)?) => {
-		__sql_query_as!([$ctx, $rv, $action, &$ctx.crdb().await?] $sql, $($bind),*)
+		__sql_query_as_raw!([$ctx, $rv, $action, &$ctx.crdb().await?] $sql, $($bind),*)
     };
 }
 
@@ -235,12 +236,6 @@ macro_rules! sql_execute {
 macro_rules! sql_fetch {
     ([$ctx:expr, $rv:ty, $crdb:expr] $sql:expr, $($bind:expr),* $(,)?) => {
 		__sql_query_as_raw!([$ctx, $rv, fetch, $crdb] $sql, $($bind),*)
-    };
-    ([$ctx:expr, $rv:ty, @tx $crdb:expr] $sql:expr, $($bind:expr),* $(,)?) => {
-		__sql_query_as_raw!([$ctx, $rv, fetch, @tx $crdb] $sql, $($bind),*)
-    };
-    ([$ctx:expr, $rv:ty] $sql:expr, $($bind:expr),* $(,)?) => {
-		__sql_query_as_raw!([$ctx, $rv, fetch] $sql, $($bind),*)
     };
 }
 

@@ -103,10 +103,9 @@ pub struct FindOutput {
 /// Finds or creates a lobby for the given query.
 ///
 /// Returns `None` if called `fail`.
-#[tracing::instrument(skip(crdb, redis_mm))]
+#[tracing::instrument(skip(redis_mm))]
 pub async fn find(
 	ctx: &OperationContext<mm::msg::lobby_find::Message>,
-	crdb: &CrdbPool,
 	redis_mm: &mut RedisPool,
 	FindOpts {
 		namespace_id,

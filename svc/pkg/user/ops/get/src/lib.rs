@@ -36,8 +36,6 @@ impl From<UserRow> for user::get::CacheUser {
 pub async fn handle(
 	ctx: OperationContext<user::get::Request>,
 ) -> GlobalResult<user::get::Response> {
-	let _crdb = ctx.crdb().await?;
-
 	let user_ids = ctx
 		.user_ids
 		.iter()

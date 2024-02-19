@@ -11,8 +11,6 @@ struct GameVersion {
 async fn handle(
 	ctx: OperationContext<module::game_version_get::Request>,
 ) -> GlobalResult<module::game_version_get::Response> {
-	let _crdb = ctx.crdb().await?;
-
 	let version_ids = ctx
 		.version_ids
 		.iter()

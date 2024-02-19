@@ -6,8 +6,6 @@ const DEFAULT_USER_SET_STATUS: i32 = backend::user::Status::Online as i32;
 
 #[worker(name = "user-presence-leave")]
 async fn worker(ctx: &OperationContext<user_presence::msg::leave::Message>) -> GlobalResult<()> {
-	let _crdb = ctx.crdb().await?;
-
 	let mut redis = ctx.redis_user_presence().await?;
 
 	let user_id = unwrap_ref!(ctx.user_id).as_uuid();

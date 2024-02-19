@@ -14,8 +14,6 @@ lazy_static::lazy_static! {
 async fn handle(
 	ctx: OperationContext<token::create::Request>,
 ) -> GlobalResult<token::create::Response> {
-	let crdb = ctx.crdb().await?;
-
 	ensure!(!ctx.issuer.is_empty());
 	let token_config = unwrap_ref!(ctx.token_config);
 	let kind = unwrap_ref!(ctx.kind);
@@ -169,7 +167,6 @@ async fn handle(
 		// Create new refresh token
 		let refresh_token = create_token(
 			&ctx,
-			&crdb,
 			if let Some(req_label) = &ctx.label {
 				Some(format!("{}_rf", req_label))
 			} else {
@@ -200,7 +197,6 @@ async fn handle(
 	let jti = Uuid::new_v4();
 	let token = create_token(
 		&ctx,
-		&crdb,
 		ctx.label.clone(),
 		token_config,
 		jti,
@@ -231,7 +227,6 @@ struct TokenData {
 
 async fn create_token(
 	ctx: &OperationContext<token::create::Request>,
-	_crdb: &CrdbPool,
 	label: Option<impl AsRef<str>>,
 	token_config: &token::create::request::TokenConfig,
 	jti: Uuid,

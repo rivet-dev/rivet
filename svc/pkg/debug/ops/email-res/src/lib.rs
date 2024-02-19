@@ -5,7 +5,6 @@ use rivet_operation::prelude::*;
 async fn handle(
 	ctx: OperationContext<debug::email_res::Request>,
 ) -> GlobalResult<debug::email_res::Response> {
-	let _crdb = ctx.crdb().await?;
 	let verification_id = unwrap_ref!(ctx.verification_id).as_uuid();
 
 	let (code,) = sql_fetch_one!(

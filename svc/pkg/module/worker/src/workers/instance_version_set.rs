@@ -7,8 +7,6 @@ use serde_json::json;
 async fn worker(
 	ctx: &OperationContext<module::msg::instance_version_set::Message>,
 ) -> Result<(), GlobalError> {
-	let _crdb = ctx.crdb().await?;
-
 	let instance_id = unwrap_ref!(ctx.instance_id).as_uuid();
 	let version_id = unwrap_ref!(ctx.version_id).as_uuid();
 

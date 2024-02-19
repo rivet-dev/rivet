@@ -7,12 +7,12 @@ use std::convert::TryInto;
 async fn worker(
 	ctx: &OperationContext<module::msg::version_create::Message>,
 ) -> Result<(), GlobalError> {
-	let crdb = ctx.crdb().await?;
-
 	let version_id = unwrap_ref!(ctx.version_id).as_uuid();
 
-	rivet_pools::utils::crdb::tx(&crdb, |tx| Box::pin(update_db(ctx.clone(), tx, ctx.ts())))
-		.await?;
+	rivet_pools::utils::crdb::tx(&ctx.crdb().await?, |tx| {
+		Box::pin(update_db(ctx.clone(), tx, ctx.ts()))
+	})
+	.await?;
 
 	msg!([ctx] module::msg::version_create_complete(version_id) {
 		version_id: ctx.version_id,

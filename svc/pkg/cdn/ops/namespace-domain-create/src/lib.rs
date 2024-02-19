@@ -25,9 +25,8 @@ async fn handle(
 	let game = unwrap!(game_res.games.first());
 	let developer_team_id = unwrap_ref!(game.developer_team_id).as_uuid();
 
-	let crdb = ctx.crdb().await?;
 	let (domain_count,) = sql_fetch_one!(
-		[ctx, (i64,), &crdb]
+		[ctx, (i64,)]
 		"SELECT COUNT(*) FROM db_cdn.game_namespace_domains WHERE namespace_id = $1",
 		namespace_id,
 	)
@@ -36,7 +35,7 @@ async fn handle(
 	ensure_with!(domain_count < 10, CDN_TOO_MANY_DOMAINS);
 
 	sql_execute!(
-		[ctx, &crdb]
+		[ctx]
 		"
 		INSERT INTO db_cdn.game_namespace_domains (namespace_id, domain, create_ts)
 		VALUES ($1, $2, $3)

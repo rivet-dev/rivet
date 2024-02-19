@@ -42,8 +42,6 @@ async fn fail(
 
 #[worker(name = "job-run-create")]
 async fn worker(ctx: &OperationContext<job_run::msg::create::Message>) -> GlobalResult<()> {
-	let crdb = ctx.crdb().await?;
-
 	let run_id = unwrap_ref!(ctx.run_id).as_uuid();
 	let region_id = unwrap_ref!(ctx.region_id).as_uuid();
 
@@ -88,7 +86,7 @@ async fn worker(ctx: &OperationContext<job_run::msg::create::Message>) -> Global
 
 	// Write to the database before doing anything
 	let db_write_perf = ctx.perf().start("write-to-db-before-run").await;
-	rivet_pools::utils::crdb::tx(&crdb, |tx| {
+	rivet_pools::utils::crdb::tx(&ctx.crdb().await?, |tx| {
 		Box::pin(write_to_db_before_run(
 			ctx.clone(),
 			tx,

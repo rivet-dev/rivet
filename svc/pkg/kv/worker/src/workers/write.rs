@@ -3,8 +3,6 @@ use proto::backend::pkg::*;
 
 #[worker(name = "kv-write")]
 async fn worker(ctx: &OperationContext<kv::msg::write::Message>) -> GlobalResult<()> {
-	let _crdb = ctx.crdb().await?;
-
 	let namespace_id = unwrap_ref!(ctx.namespace_id).as_uuid();
 
 	let directory_str = util_kv::key_directory(&ctx.key);

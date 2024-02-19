@@ -28,10 +28,9 @@ async fn handle(
 		.map(common::Uuid::as_uuid)
 		.collect::<Vec<_>>();
 
-	let crdb = ctx.crdb().await?;
 	let (versions, custom_display_names, custom_avatars) = tokio::try_join!(
 		sql_fetch_all!(
-			[ctx, GameVersion, &crdb]
+			[ctx, GameVersion]
 			"
 				SELECT version_id
 				FROM db_identity_config.game_versions
@@ -40,7 +39,7 @@ async fn handle(
 			&version_ids,
 		),
 		sql_fetch_all!(
-			[ctx, CustomDisplayName, &crdb]
+			[ctx, CustomDisplayName]
 			"
 			SELECT display_name, version_id
 			FROM db_identity_config.custom_display_names
@@ -49,7 +48,7 @@ async fn handle(
 			&version_ids,
 		),
 		sql_fetch_all!(
-			[ctx, CustomAvatar, &crdb]
+			[ctx, CustomAvatar]
 			"
 			SELECT upload_id, version_id
 			FROM db_identity_config.custom_avatars

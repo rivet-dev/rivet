@@ -19,8 +19,6 @@ enum TaskState {
 async fn worker(
 	ctx: &OperationContext<job_run::msg::nomad_monitor_alloc_update::Message>,
 ) -> GlobalResult<()> {
-	let _crdb = ctx.crdb().await?;
-
 	let AllocationUpdated { allocation: alloc } = serde_json::from_str(&ctx.payload_json)?;
 	let alloc_state_json = serde_json::to_value(&alloc)?;
 

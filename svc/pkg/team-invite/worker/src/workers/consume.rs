@@ -13,11 +13,9 @@ struct InvitationRow {
 
 #[worker(name = "team-invite-consume")]
 async fn worker(ctx: &OperationContext<team_invite::msg::consume::Message>) -> GlobalResult<()> {
-	let crdb = ctx.crdb().await?;
-
 	let user_id = unwrap_ref!(ctx.user_id).as_uuid();
 
-	let db_output = rivet_pools::utils::crdb::tx(&crdb, |tx| {
+	let db_output = rivet_pools::utils::crdb::tx(&ctx.crdb().await?, |tx| {
 		let code = ctx.code.clone();
 		Box::pin(update_db(ctx.base(), tx, ctx.ts(), code, user_id))
 	})

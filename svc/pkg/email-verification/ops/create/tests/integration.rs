@@ -3,8 +3,6 @@ use proto::backend;
 
 #[worker_test]
 async fn normal(ctx: TestCtx) {
-	let crdb = ctx.crdb().await.unwrap();
-
 	let res = op!([ctx] email_verification_create {
 		email: "test@rivet.gg".into(),
 	})
@@ -12,11 +10,15 @@ async fn normal(ctx: TestCtx) {
 	.unwrap();
 	let verification_id = res.verification_id.as_ref().unwrap().as_uuid();
 
-	let (row_count,) = sqlx::query_as::<_, (i64,)>(
-		"SELECT COUNT(*) FROM db_email_verification.verifications WHERE verification_id = $1",
+	let (row_count,) = sql_fetch_one!(
+		[ctx, (i64,)]
+		"
+		SELECT COUNT(*)
+		FROM db_email_verification.verifications
+		WHERE verification_id = $1
+		",
+		verification_id,
 	)
-	.bind(verification_id)
-	.fetch_one(&crdb)
 	.await
 	.unwrap();
 	assert_eq!(row_count, 1);
@@ -24,8 +26,6 @@ async fn normal(ctx: TestCtx) {
 
 #[worker_test]
 async fn with_game(ctx: TestCtx) {
-	let crdb = ctx.crdb().await.unwrap();
-
 	let game_res = op!([ctx] faker_game {}).await.unwrap();
 	let game_id = game_res.game_id.unwrap().as_uuid();
 
@@ -41,11 +41,15 @@ async fn with_game(ctx: TestCtx) {
 	.unwrap();
 	let verification_id = res.verification_id.as_ref().unwrap().as_uuid();
 
-	let (row_count,) = sqlx::query_as::<_, (i64,)>(
-		"SELECT COUNT(*) FROM db_email_verification.verifications WHERE verification_id = $1",
+	let (row_count,) = sql_fetch_one!(
+		[ctx, (i64,)]
+		"
+		SELECT COUNT(*)
+		FROM db_email_verification.verifications
+		WHERE verification_id = $1
+		",
+		verification_id,
 	)
-	.bind(verification_id)
-	.fetch_one(&crdb)
 	.await
 	.unwrap();
 	assert_eq!(row_count, 1);

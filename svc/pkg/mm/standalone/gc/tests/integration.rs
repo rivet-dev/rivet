@@ -22,15 +22,14 @@ async fn all() {
 		.init();
 
 	let ctx = TestCtx::from_env("all").await.unwrap();
-	let crdb = ctx.crdb().await.unwrap();
 
 	// Run tests sequentially so the gc's don't interfere with each other
-	// remove_unready_lobbies(ctx.clone(), crdb.clone()).await;
-	// remove_unregistered_players(ctx.clone(), crdb.clone()).await;
-	remove_auto_remove_players(ctx.clone(), crdb.clone()).await;
+	// remove_unready_lobbies(ctx.clone()).await;
+	// remove_unregistered_players(ctx.clone()).await;
+	remove_auto_remove_players(ctx.clone()).await;
 }
 
-async fn remove_unready_lobbies(ctx: TestCtx, _crdb: CrdbPool) {
+async fn remove_unready_lobbies(ctx: TestCtx) {
 	let _pools = rivet_pools::from_env("mm-gc-test").await.unwrap();
 
 	let lobby = op!([ctx] faker_mm_lobby {
@@ -90,7 +89,7 @@ async fn remove_unready_lobbies(ctx: TestCtx, _crdb: CrdbPool) {
 	}
 }
 
-async fn remove_unregistered_players(ctx: TestCtx, crdb: CrdbPool) {
+async fn remove_unregistered_players(ctx: TestCtx) {
 	let _pools = rivet_pools::from_env("mm-gc-test").await.unwrap();
 
 	let lobby = op!([ctx] faker_mm_lobby {
@@ -135,7 +134,7 @@ async fn remove_unregistered_players(ctx: TestCtx, crdb: CrdbPool) {
 			"
 		))
 		.bind(player_id)
-		.fetch_one(&crdb)
+		.fetch_one(&ctx.crdb().await.unwrap())
 		.await
 		.unwrap();
 		assert!(
@@ -165,7 +164,7 @@ async fn remove_unregistered_players(ctx: TestCtx, crdb: CrdbPool) {
 			"SELECT remove_ts FROM db_mm_state.players WHERE player_id = $1",
 		)
 		.bind(player_id)
-		.fetch_one(&crdb)
+		.fetch_one(&ctx.crdb().await.unwrap())
 		.await
 		.unwrap()
 		.0
@@ -176,7 +175,7 @@ async fn remove_unregistered_players(ctx: TestCtx, crdb: CrdbPool) {
 	// TODO: Test max(create_ts, lobby_ready_ts) logic
 }
 
-async fn remove_auto_remove_players(ctx: TestCtx, crdb: CrdbPool) {
+async fn remove_auto_remove_players(ctx: TestCtx) {
 	let _pools = rivet_pools::from_env("mm-gc-test").await.unwrap();
 
 	let lobby = op!([ctx] faker_mm_lobby {
@@ -238,7 +237,7 @@ async fn remove_auto_remove_players(ctx: TestCtx, crdb: CrdbPool) {
 			"
 		))
 		.bind(player_id)
-		.fetch_one(&crdb)
+		.fetch_one(&ctx.crdb().await.unwrap())
 		.await
 		.unwrap();
 		assert!(
@@ -268,7 +267,7 @@ async fn remove_auto_remove_players(ctx: TestCtx, crdb: CrdbPool) {
 			"SELECT remove_ts FROM db_mm_state.players WHERE player_id = $1",
 		)
 		.bind(player_id)
-		.fetch_one(&crdb)
+		.fetch_one(&ctx.crdb().await.unwrap())
 		.await
 		.unwrap()
 		.0

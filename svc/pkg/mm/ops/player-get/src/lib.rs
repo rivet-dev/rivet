@@ -30,8 +30,6 @@ impl From<PlayerRow> for backend::matchmaker::Player {
 async fn handle(
 	ctx: OperationContext<mm::player_get::Request>,
 ) -> GlobalResult<mm::player_get::Response> {
-	let _crdb = ctx.crdb().await?;
-
 	let player_ids = ctx
 		.player_ids
 		.iter()

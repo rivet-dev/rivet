@@ -11,8 +11,6 @@ struct GameUser {
 async fn handle(
 	ctx: OperationContext<game_user::list_for_user::Request>,
 ) -> GlobalResult<game_user::list_for_user::Response> {
-	let _crdb = ctx.crdb().await?;
-
 	let user_ids = ctx
 		.user_ids
 		.iter()

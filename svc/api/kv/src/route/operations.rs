@@ -99,8 +99,7 @@ pub async fn put(ctx: Ctx<Auth>, body: models::KvPutRequest) -> GlobalResult<ser
 		key: key.clone(),
 		value: Some(value),
 	})
-	.await
-	.unwrap();
+	.await?;
 
 	Ok(json!({}))
 }
@@ -122,8 +121,7 @@ pub async fn delete(ctx: Ctx<Auth>, query: SingleQuery) -> GlobalResult<serde_js
 		key: key.clone(),
 		value: None,
 	})
-	.await
-	.unwrap();
+	.await?;
 
 	Ok(json!({}))
 }

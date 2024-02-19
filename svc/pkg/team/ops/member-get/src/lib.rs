@@ -23,7 +23,8 @@ async fn handle(
 		})
 		.collect::<GlobalResult<Vec<(Uuid, Uuid)>>>()?;
 
-	let members: Vec<TeamMember> = sqlx::query_as(indoc!(
+	let members: Vec<TeamMember> = sql_fetch_all!(
+		[ctx, TeamMember]
 		"
 		SELECT 
 			tm.team_id, tm.user_id, tm.join_ts
@@ -35,10 +36,9 @@ async fn handle(
 		ON 
 			tm.team_id = q.team_id AND
 			tm.user_id = q.user_id
-		"
-	))
-	.bind(serde_json::to_value(members)?)
-	.fetch_all(&ctx.crdb().await?)
+		",
+		serde_json::to_value(members)?,
+	)
 	.await?;
 
 	let members = members

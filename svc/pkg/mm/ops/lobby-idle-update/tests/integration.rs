@@ -259,8 +259,6 @@ impl Ctx {
 
 	#[tracing::instrument(skip(self))]
 	async fn fetch_idle_lobby_ids(&self) -> HashSet<Uuid> {
-		let crdb = self.test_ctx.crdb().await.unwrap();
-
 		// Find lobbies without any players
 		let ili_crdb = sqlx::query_as::<_, (Uuid,)>(indoc!(
 			"
@@ -279,7 +277,7 @@ impl Ctx {
 		.bind(self.namespace_id)
 		.bind(self.region_id)
 		.bind(self.lobby_group_id)
-		.fetch_all(&crdb)
+		.fetch_all(&self.test_ctx.crdb().await.unwrap())
 		.await
 		.unwrap()
 		.into_iter()

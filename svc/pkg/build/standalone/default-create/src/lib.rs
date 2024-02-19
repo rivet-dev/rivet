@@ -84,7 +84,6 @@ pub async fn run_from_env() -> GlobalResult<()> {
 		(),
 		Vec::new(),
 	);
-	let _crdb_pool = ctx.crdb().await?;
 
 	for build in DEFAULT_BUILDS {
 		// Check if this default build is already set

@@ -59,8 +59,6 @@ async fn handle(
 		.map(common::Uuid::as_uuid)
 		.collect::<Vec<_>>();
 
-	let _crdb = ctx.crdb().await?;
-
 	// Query the run data
 	let (runs, run_networks, run_ports, run_meta_nomad, run_proxied_ports) = tokio::try_join!(
 		// runs
