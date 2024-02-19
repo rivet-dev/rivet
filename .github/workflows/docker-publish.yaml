@@ -2,6 +2,11 @@ name: docker-publish
 
 on: push
 
+defaults:
+  run:
+    # Enable fail-fast behavior
+    shell: bash -e {0}
+
 jobs:
   rivet-local-binary-artifact-runner:
     runs-on: ubuntu-latest

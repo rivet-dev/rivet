@@ -729,7 +729,6 @@ impl ServiceContextData {
 			));
 		}
 
-		// TODO: Convert this to use the bolt taint
 		// TODO: This is re-running the hashing function for every service when we already did this in the planning step
 		// Provide source hash to purge the cache when the service is updated
 		let source_hash = self.source_hash_dev(&BuildOptimization::Debug).await?;

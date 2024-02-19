@@ -2,6 +2,11 @@ name: fern
 
 on: push
 
+defaults:
+  run:
+    # Enable fail-fast behavior
+    shell: bash -e {0}
+
 jobs:
   fern-check:
     runs-on: ubuntu-20.04
@@ -22,3 +27,46 @@ jobs:
       #   run: |
       #     ./scripts/fern/gen.sh
       #     git --no-pager diff --exit-code
+
+  fern-publish:
+    runs-on: ubuntu-20.04
+    needs:
+      - fern-check
+    steps:
+      # Only run on a tagged push
+      - name: Check Tag
+        id: check-tag
+        run: |
+          if [[ ${{ github.event.ref }} =~ ^refs/tags/[0-9]+\.[0-9]+\.[0-9]+.*$ ]]; then
+            echo "match=true" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Checkout repo
+        if: steps.check-tag.outputs.match == 'true'
+        uses: actions/checkout@v4
+
+      - name: Publish Full
+        if: steps.check-tag.outputs.match == 'true'
+        env:
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          cd sdks/full/typescript
+
+          npm config set '//registry.npmjs.org/:_authToken' "$NPM_TOKEN"
+
+          yarn version --no-git-tag-version --new-version "${{ github.ref_name }}"
+          yarn pack --ignore-scripts -f archive.tgz
+          yarn publish --ignore-scripts archive.tgz
+
+      - name: Publish Runtime
+        if: steps.check-tag.outputs.match == 'true'
+        env:
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          cd sdks/runtime/typescript
+
+          npm config set '//registry.npmjs.org/:_authToken' "$NPM_TOKEN"
+
+          yarn version --no-git-tag-version --new-version "${{ github.ref_name }}"
+          yarn pack --ignore-scripts -f archive.tgz
+          yarn publish --ignore-scripts archive.tgz
