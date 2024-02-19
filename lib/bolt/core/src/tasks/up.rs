@@ -135,17 +135,55 @@ pub async fn up_services<T: AsRef<str>>(
 		}
 	}
 
+	// Fetch build plans
+	eprintln!();
+	rivet_term::status::progress("Planning builds", "");
+	let pb = utils::progress_bar(all_exec_svcs.len());
+	let all_exec_svcs_with_build_plan = futures_util::stream::iter(all_exec_svcs.clone())
+		.map(|svc| {
+			let build_context = build_context.clone();
+			let pb = pb.clone();
+
+			async move {
+				let build_plan = svc.build_plan(&build_context).await.unwrap();
+				pb.inc(1);
+				(svc, build_plan)
+			}
+		})
+		.buffer_unordered(16)
+		.collect::<Vec<_>>()
+		.await;
+	pb.finish();
+
+	let existing_count = all_exec_svcs_with_build_plan
+		.iter()
+		.filter(|(_, bp)| matches!(bp, ServiceBuildPlan::ExistingUploadedBuild { .. }))
+		.count();
+
+	eprintln!();
+	rivet_term::status::progress(
+		"Plan",
+		format!(
+			"{} services to build, {} existing binaries",
+			all_exec_svcs_with_build_plan.len() - existing_count,
+			existing_count
+		),
+	);
+
 	// Run batch commands for all given services
 	eprintln!();
 	rivet_term::status::progress("Building", "(batch)");
 	{
 		// Build all the Rust modules in parallel
-		let rust_svcs = all_exec_svcs
+		let rust_svcs = all_exec_svcs_with_build_plan
 			.iter()
-			.filter(|svc_ctx| match svc_ctx.config().runtime {
-				RuntimeKind::Rust {} => true,
+			.filter(|(svc, build_plan)| match svc.config().runtime {
+				RuntimeKind::Rust {} => {
+					!matches!(build_plan, ServiceBuildPlan::ExistingUploadedBuild { .. })
+				}
 				_ => false,
-			});
+			})
+			.map(|(svc, _)| svc);
 
 		// Collect rust services by their workspace root
 		let mut svcs_by_workspace = HashMap::new();
@@ -177,26 +215,6 @@ pub async fn up_services<T: AsRef<str>>(
 		}
 	}
 
-	// Fetch build plans after compiling rust
-	eprintln!();
-	rivet_term::status::progress("Planning builds", "");
-	let pb = utils::progress_bar(all_exec_svcs.len());
-	let all_exec_svcs_with_build_plan = futures_util::stream::iter(all_exec_svcs.clone())
-		.map(|svc| {
-			let build_context = build_context.clone();
-			let pb = pb.clone();
-
-			async move {
-				let build_plan = svc.build_plan(&build_context).await.unwrap();
-				pb.inc(1);
-				(svc, build_plan)
-			}
-		})
-		.buffer_unordered(16)
-		.collect::<Vec<_>>()
-		.await;
-	pb.finish();
-
 	if build_only {
 		return Ok(all_svcs.iter().cloned().collect());
 	}
@@ -210,10 +228,10 @@ pub async fn up_services<T: AsRef<str>>(
 		config::ns::ClusterKind::Distributed { .. } => {
 			if let Some((repo, _)) = ctx.ns().docker.repository.split_once("/") {
 				let username = ctx
-					.read_secret(&["docker", "registry", "ghcr.io", "write", "username"])
+					.read_secret(&["docker", "registry", repo, "write", "username"])
 					.await?;
 				let password = ctx
-					.read_secret(&["docker", "registry", "ghcr.io", "write", "password"])
+					.read_secret(&["docker", "registry", repo, "write", "password"])
 					.await?;
 
 				let mut cmd = Command::new("sh");
@@ -276,22 +294,11 @@ pub async fn up_services<T: AsRef<str>>(
 	}
 
 	// Wait for builds to finish uploading
-	eprintln!();
-	rivet_term::status::progress(
-		"Uploading builds",
-		format!(
-			"{} services to upload, {} existing binaries",
-			all_exec_svcs_with_build_plan
-				.iter()
-				.filter(|(_, bp)| matches!(bp, ServiceBuildPlan::BuildAndUpload { .. }))
-				.count(),
-			all_exec_svcs_with_build_plan
-				.iter()
-				.filter(|(_, bp)| matches!(bp, ServiceBuildPlan::ExistingUploadedBuild { .. }))
-				.count(),
-		),
-	);
-	utils::join_set_progress(upload_join_set).await?;
+	if !upload_join_set.is_empty() {
+		eprintln!();
+		rivet_term::status::progress("Waiting for uploads to complete", "");
+		utils::join_set_progress(upload_join_set).await?;
+	}
 
 	if skip_deploy {
 		return Ok(all_svcs.iter().cloned().collect());

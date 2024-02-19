@@ -362,7 +362,7 @@ impl ServiceContextData {
 	/// Determines if this service needs to be recompiled.
 	pub async fn build_plan(&self, build_context: &BuildContext) -> Result<ServiceBuildPlan> {
 		// Check if build exists on docker.io
-		let pub_image_tag = self.docker_image_tag(Some("docker.io/rivet-gg/")).await?;
+		let pub_image_tag = self.docker_image_tag(Some("docker.io/rivetgg/")).await?;
 		if docker::cli::container_exists(&pub_image_tag).await {
 			return Ok(ServiceBuildPlan::ExistingUploadedBuild {
 				image_tag: pub_image_tag,

@@ -32,6 +32,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 -   **[BREAKING]** **Infra** Removed config-less hCaptcha. You are now required to provide a site key and
     secret key for the hCaptcha config in your game version matchmaker config for all future versions (old
     version will remain operational using our own hCaptcha site key).
+-   **Internal** Updated source hash calculation to use `git diff` and `git rev-parse HEAD`
 
 ### Fixed
 

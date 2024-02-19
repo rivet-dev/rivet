@@ -1,5 +1,3 @@
-use std::io::Write;
-
 use anyhow::*;
 use bolt_core::dep;
 use bolt_core::{
@@ -504,8 +502,6 @@ impl SubCommand {
 				.await;
 
 				print!("{}", ctx.source_hash());
-				std::io::stdout().flush()?;
-				eprintln!();
 			}
 		}
 

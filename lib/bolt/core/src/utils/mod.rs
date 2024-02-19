@@ -19,7 +19,7 @@ pub fn progress_bar(len: usize) -> ProgressBar {
 	pb.set_style(
 		ProgressStyle::default_bar()
 			.progress_chars("=> ")
-			.template("{spinner} {elapsed_precise:.bold} [{bar:23}] ({pos}/{len}) {wide_msg}"),
+			.template("{spinner} {elapsed_precise:.bold} [{bar:23}] {pos}/{len} {wide_msg}"),
 	);
 	pb.enable_steady_tick(250);
 	pb

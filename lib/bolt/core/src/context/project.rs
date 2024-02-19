@@ -83,21 +83,41 @@ impl ProjectContextData {
 			.expect("no namespace specified, either use the `BOLT_NAMESPACE` environment variable or specify in `Bolt.local.toml`");
 		let ns_config = ProjectContextData::read_ns(project_root.as_path(), &ns_id).await;
 
+		// Load secrets
+		let secrets =
+			ProjectContextData::read_secrets(Some(&ns_config), project_root.as_path(), &ns_id)
+				.await;
+
 		let mut svc_ctxs_map = HashMap::new();
+
+		let mut source_diff = String::new();
 
 		// Load sub projects
 		for (_, additional_root) in &config.additional_roots {
 			let path = project_root.join(&additional_root.path);
-			Self::load_root_dir(&mut svc_ctxs_map, path).await;
+			Self::load_root_dir(&mut svc_ctxs_map, path.clone()).await;
+
+			// Compute the git diff between the current branch and the local changes
+			let mut cmd = Command::new("git");
+			cmd.current_dir(path).arg("diff").arg("--minimal");
+			source_diff.push_str(
+				&cmd.exec_string_with_err("Failed to get source hash", true)
+					.await
+					.unwrap(),
+			);
 		}
 
 		// Load main project after sub projects so it overrides sub project services
 		Self::load_root_dir(&mut svc_ctxs_map, project_root.clone()).await;
 
-		// Load secrets
-		let secrets =
-			ProjectContextData::read_secrets(Some(&ns_config), project_root.as_path(), &ns_id)
-				.await;
+		// Compute the git diff between the current branch and the local changes
+		let mut cmd = Command::new("git");
+		cmd.current_dir(&project_root).arg("diff").arg("--minimal");
+		source_diff.push_str(
+			&cmd.exec_string_with_err("Failed to get source hash", true)
+				.await
+				.unwrap(),
+		);
 
 		let mut svc_ctxs = svc_ctxs_map.values().cloned().collect::<Vec<_>>();
 		svc_ctxs.sort_by_key(|v| v.name());
@@ -114,28 +134,20 @@ impl ProjectContextData {
 			svc_ctxs,
 			svc_ctxs_map,
 
-			source_hash: {
-				// Compute the git diff between the current branch and the local changes
+			// If there is no diff, use the git commit hash
+			source_hash: if source_diff.is_empty() {
 				let mut cmd = Command::new("git");
-				cmd.arg("diff").arg("--minimal");
+				cmd.current_dir(&project_root).arg("rev-parse").arg("HEAD");
 
-				let content = cmd
-					.exec_string_with_err("Failed to get source hash", true)
+				cmd.exec_string_with_err("Command failed", true)
 					.await
-					.unwrap();
-
-				// If there is no diff, use the git commit hash
-				if content.is_empty() {
-					let mut cmd = Command::new("git");
-					cmd.arg("rev-parse").arg("HEAD");
-
-					cmd.exec_string_with_err("Command failed", true)
-						.await
-						.unwrap()
-				} else {
-					// Get hash of diff
-					hex::encode(Sha256::digest(content.as_bytes()))
-				}
+					.unwrap()
+					// No idea why a new line appears at the end of this in CI
+					.trim()
+					.to_string()
+			} else {
+				// Get hash of diff
+				hex::encode(Sha256::digest(source_diff.as_bytes()))
 			},
 		});
 

@@ -18,9 +18,7 @@ pub async fn tag(src_tag: &str, target_tag: &str) {
 	cmd.exec().await.unwrap();
 }
 
-/// Gets the SHA hash for an image.
-///
-/// Returns `None` if image does not exist.
+// Check if the container exists by fetching its manifest
 pub async fn container_exists(tag: &str) -> bool {
 	let mut cmd = build_command().await;
 	cmd.arg("manifest").arg("inspect").arg(tag);

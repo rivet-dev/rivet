@@ -12,6 +12,8 @@ inputs:
     required: true
   SCCACHE_AWS_ACCESS_KEY_ID:
     required: true
+  DOCKER_CI_ACCESS_TOKEN:
+    required: true
 
 runs:
   using: composite
@@ -77,7 +79,13 @@ runs:
 
         [docker]
         authenticate_all_docker_hub_pulls = false
-        repository = "docker.io/rivet-gg/"
+        repository = "docker.io/rivetgg/"
+        EOF
+
+        cat << EOF > secrets/ci.toml
+        [docker.registry."docker.io".write]
+        username = "rivetggci"
+        password = "${{ inputs.DOCKER_CI_ACCESS_TOKEN }}"
         EOF
 
     # Delete old Bolt binaries in order to fall back to the Nix-built binary

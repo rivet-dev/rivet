@@ -1,4 +1,4 @@
-name: publish-containers
+name: service-containers-publish
 
 on:
   push:
@@ -14,7 +14,7 @@ env:
   store: /home/runner/nix
 
 jobs:
-  deploy:
+  service-containers-publish:
     runs-on: [self-hosted, linux, x64]
 
     steps:
@@ -25,29 +25,11 @@ jobs:
           token: ${{ secrets.GITHUB_TOKEN }}
           submodules: recursive
 
-      - uses: ./.github/actions/pre-init
+      - uses: ./.github/actions/pre-init-distributed
         with:
           SCCACHE_AWS_SECRET_ACCESS_KEY: ${{ secrets.SCCACHE_AWS_SECRET_ACCESS_KEY }}
           SCCACHE_AWS_ACCESS_KEY_ID: ${{ secrets.SCCACHE_AWS_ACCESS_KEY_ID }}
-
-      - name: Make cluster distributed
-        run: |
-          cat <<EOF > namespaces/ci.toml
-          [cluster]
-          id = "92ff0e67-7557-4026-b478-b4d2ad6f15da"
-
-          [cluster.distributed]
-
-          [docker]
-          authenticate_all_docker_hub_pulls = false
-          repository = "docker.io/rivet-gg/"
-          EOF
-
-      - name: Login to docker
-        env:
           DOCKER_CI_ACCESS_TOKEN: ${{ secrets.DOCKER_CI_ACCESS_TOKEN }}
-        run: |
-          echo "$DOCKER_CI_ACCESS_TOKEN" | docker login -u rivetggci --password-stdin
 
       - name: Bolt up and push containers
         env:
