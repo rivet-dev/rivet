@@ -152,7 +152,7 @@ pub async fn matchmaker_lobbies_create(configuration: &configuration::Configurat
     }
 }
 
-/// Finds a lobby based on the given criteria. If a lobby is not found and `prevent_auto_create_lobby` is `true`, a new lobby will be created.  When [tokenless authentication](/docs/general/concepts/tokenless-authentication/web) is enabled in your game namespace, this endpoint does not require a token to authenticate. Otherwise, a [development namespace token](/docs/general/concepts/token-types#namespace-development) can be used for mock responses and a [public namespace token](/docs/general/concepts/token-types#namespace-public) can be used for general authentication.
+/// Finds a lobby based on the given criteria. If a lobby is not found and `prevent_auto_create_lobby` is `false`, a new lobby will be created.  When [tokenless authentication](/docs/general/concepts/tokenless-authentication/web) is enabled in your game namespace, this endpoint does not require a token to authenticate. Otherwise, a [development namespace token](/docs/general/concepts/token-types#namespace-development) can be used for mock responses and a [public namespace token](/docs/general/concepts/token-types#namespace-public) can be used for general authentication.
 pub async fn matchmaker_lobbies_find(configuration: &configuration::Configuration, matchmaker_lobbies_find_request: crate::models::MatchmakerLobbiesFindRequest, origin: Option<&str>) -> Result<crate::models::MatchmakerFindLobbyResponse, Error<MatchmakerLobbiesFindError>> {
     let local_var_configuration = configuration;
 

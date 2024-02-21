@@ -3,6 +3,7 @@ use api_helper::{
 	ctx::Ctx,
 };
 use proto::backend::{self, pkg::*};
+use rand::seq::IteratorRandom;
 use rivet_api::models;
 use rivet_claims::ClaimsDecode;
 use rivet_convert::{fetch, ApiInto, ApiTryFrom, ApiTryInto};
@@ -83,7 +84,7 @@ pub async fn create(
 	// Create game
 	let game_id = {
 		let create_game_res = op!([ctx] game_create {
-			name_id: body.name_id.clone(),
+			name_id: gen_name_id(&body.display_name),
 			display_name: body.display_name.clone(),
 			developer_team_id: Some(body.developer_group_id.into()),
 			creator_user_id: user_id.as_ref().map(|x| x.user_id.into()),
@@ -454,7 +455,8 @@ pub async fn validate(
 	body: models::CloudGamesValidateGameRequest,
 ) -> GlobalResult<models::CloudGamesValidateGameResponse> {
 	let res = op!([ctx] game_validate {
-		name_id: body.name_id,
+		// `name_id` value from request is deprecated, gets randomly generated when a game is created
+		name_id: util::faker::ident(),
 		display_name: body.display_name
 	})
 	.await?;
@@ -613,4 +615,29 @@ pub async fn complete_banner_upload(
 	.await?;
 
 	Ok(json!({}))
+}
+
+fn gen_name_id(s: impl AsRef<str>) -> String {
+	let proc_ident = util::format::str_to_ident(s);
+
+	// Default
+	let (proc_ident, rng_count) = if proc_ident.is_empty() {
+		("game", 8)
+	} else {
+		(proc_ident.as_str(), 3)
+	};
+
+	// Choose a random hash to add to the name id
+	let chars = "abcdefghijklmnopqrstuvwxyz1234567890";
+	let mut rng = rand::thread_rng();
+	let hash = std::iter::repeat_with(|| chars.chars().choose(&mut rng))
+		.flatten()
+		.take(rng_count);
+
+	proc_ident
+		.chars()
+		.take(util::check::MAX_IDENT_LEN - 4)
+		.chain(std::iter::once('-'))
+		.chain(hash)
+		.collect::<String>()
 }

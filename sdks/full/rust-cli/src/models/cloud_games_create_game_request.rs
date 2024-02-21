@@ -18,17 +18,17 @@ pub struct CloudGamesCreateGameRequest {
     /// Represent a resource's readable display name.
     #[serde(rename = "display_name")]
     pub display_name: String,
-    /// A human readable short identifier used to references resources. Different than a `rivet.common#Uuid` because this is intended to be human readable. Different than `rivet.common#DisplayName` because this should not include special characters and be short.
-    #[serde(rename = "name_id")]
-    pub name_id: String,
+    /// **Deprecated** A human readable short identifier used to references resources. Different than a `rivet.common#Uuid` because this is intended to be human readable. Different than `rivet.common#DisplayName` because this should not include special characters and be short.
+    #[serde(rename = "name_id", skip_serializing_if = "Option::is_none")]
+    pub name_id: Option<String>,
 }
 
 impl CloudGamesCreateGameRequest {
-    pub fn new(developer_group_id: uuid::Uuid, display_name: String, name_id: String) -> CloudGamesCreateGameRequest {
+    pub fn new(developer_group_id: uuid::Uuid, display_name: String) -> CloudGamesCreateGameRequest {
         CloudGamesCreateGameRequest {
             developer_group_id,
             display_name,
-            name_id,
+            name_id: None,
         }
     }
 }

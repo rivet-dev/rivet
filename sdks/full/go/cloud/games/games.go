@@ -25,8 +25,9 @@ type GetGamesRequest struct {
 }
 
 type CreateGameRequest struct {
+	// **Deprecated**
 	// A human readable short identifier used to references resources. Different than a `rivet.common#Uuid` because this is intended to be human readable. Different than `rivet.common#DisplayName` because this should not include special characters and be short.
-	NameId string `json:"name_id"`
+	NameId *string `json:"name_id,omitempty"`
 	// Represent a resource's readable display name.
 	DisplayName      string    `json:"display_name"`
 	DeveloperGroupId uuid.UUID `json:"developer_group_id"`
@@ -280,8 +281,9 @@ func (g *GetGamesResponse) String() string {
 type ValidateGameRequest struct {
 	// Represent a resource's readable display name.
 	DisplayName string `json:"display_name"`
+	// **Deprecated**
 	// A human readable short identifier used to references resources. Different than a `rivet.common#Uuid` because this is intended to be human readable. Different than `rivet.common#DisplayName` because this should not include special characters and be short.
-	NameId string `json:"name_id"`
+	NameId *string `json:"name_id,omitempty"`
 
 	_rawJSON json.RawMessage
 }

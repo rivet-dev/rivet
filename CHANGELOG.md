@@ -37,6 +37,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 -   **API** Removed `x-fern-*` headers from generated TypeScript clients
 -   Implemented liveness probe to check connectivity to essential services
 -   Remove public-facing health check endpoints
+-   **API** Removed ability to choose a name id when creating a game. One will be generated based on the given display name
 
 ### Fixed
 

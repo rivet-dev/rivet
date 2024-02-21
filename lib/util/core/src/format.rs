@@ -70,4 +70,32 @@ pub fn item_list<'a, I: Iterator<Item = impl AsRef<str>>>(mut iter: I) -> String
 	}
 	
 	s
+
+}
+
+pub fn str_to_ident(
+	s: impl AsRef<str>,
+) -> String {
+	let s = s.as_ref().to_ascii_lowercase();
+	let mut last_was_underscore = false;
+
+	let dashed = s.chars().filter_map(|c| {
+		match c {
+			'0'..='9' | 'a'..='z' => {
+			    last_was_underscore = false;
+
+				Some(c)
+			},
+			_ => {
+				if !last_was_underscore {
+					last_was_underscore = true;
+					Some('-')
+				} else {
+				    None
+				}
+			}
+		}
+	}).collect::<String>();
+	
+	dashed.trim_matches('-').to_string()
 }
