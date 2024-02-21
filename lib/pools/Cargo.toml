@@ -39,6 +39,7 @@ features = [
 version = "0.23"
 default-features = false
 features = [
+	"keep-alive",
 	"aio",
 	"tokio-comp",
 	"tokio-native-tls-comp",

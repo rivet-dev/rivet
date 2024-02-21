@@ -25,7 +25,12 @@ uuid = { version = "1", features = ["v4"] }
 [dependencies.redis]
 version = "0.23"
 default-features = false
-features = ["aio", "tokio-comp", "tokio-native-tls-comp"]
+features = [
+	"keep-alive",
+	"aio",
+	"tokio-comp",
+	"tokio-native-tls-comp",
+]
 
 [dev-dependencies]
 rand = "0.8"

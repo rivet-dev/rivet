@@ -45,6 +45,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 -   Fixed `CLAIMS_MISSING_ENTITLEMENT` not formatting correctly (reason given was `?`)
 -   Added role ARN to exec commands in `k8s-cluster-aws` tf provider to properly authenticate
 -   Change email attached to Stripe on group ownership change
+-   Enable `keep-alive` on `redis` crate
 
 ### Security
 

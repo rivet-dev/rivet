@@ -22,4 +22,9 @@ features = ["v4", "serde"]
 [dependencies.redis]
 version = "0.23"
 default-features = false
-features = ["aio", "tokio-comp", "tokio-native-tls-comp"]
+features = [
+	"keep-alive",
+	"aio",
+	"tokio-comp",
+	"tokio-native-tls-comp",
+]
