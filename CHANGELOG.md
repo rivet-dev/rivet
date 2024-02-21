@@ -50,6 +50,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 -   Change email attached to Stripe on group ownership change
 -   Enable `keep-alive` on `redis` crate
 -   Update `redis` crate to mitigate panic on connection failure during `AUTH`
+-   Wrong grace period for GG config to update after `mm::msg::lobby_ready`
 
 ### Security
 

@@ -15,8 +15,8 @@ const MAX_PARAMETER_VALUE_LEN: usize = 8_192; // 8 KB
 ///
 /// Traefik updates every 500 ms and we give an extra 500 ms for grace.
 ///
-/// See also svc/pkg/mm/worker/src/workers/lobby_ready_set.rs TRAEFIK_GRACE_MS.
-const TRAEFIK_GRACE: Duration = Duration::from_millis(1_000);
+/// See also svc/pkg/mm/worker/src/workers/lobby_ready_set.rs @ TRAEFIK_GRACE_MS
+const TRAEFIK_GRACE: Duration = Duration::from_secs(1);
 
 lazy_static::lazy_static! {
 	static ref NOMAD_CONFIG: nomad_client::apis::configuration::Configuration =

@@ -7,9 +7,8 @@ use tokio::time::Duration;
 ///
 /// Traefik updates every 500 ms and we give an extra 500 ms for grace.
 ///
-/// See also svc/pkg/job-run/worker/src/workers/create/mod.rs TRAEFIK_GRACE_MS
-// const TRAEFIK_GRACE_MS: i64 = 750;
-const TRAEFIK_GRACE_MS: i64 = 100;
+/// See also svc/pkg/job-run/worker/src/workers/create/mod.rs @ TRAEFIK_GRACE_MS
+const TRAEFIK_GRACE_MS: i64 = 1_000;
 
 lazy_static::lazy_static! {
 	static ref REDIS_SCRIPT: redis::Script = redis::Script::new(include_str!("../../redis-scripts/lobby_ready_set.lua"));
