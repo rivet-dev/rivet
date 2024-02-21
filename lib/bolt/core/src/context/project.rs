@@ -163,41 +163,53 @@ impl ProjectContextData {
 
 	/// Validates the namespace config.
 	fn validate_ns(&self) {
-		// MARK: Pools
-		if self.ns().dns.is_none() {
-			assert!(
-				self.ns().pools.is_empty(),
-				"must have dns configured to provision servers"
-			);
-			assert!(
-				matches!(
-					self.ns().cluster.kind,
-					config::ns::ClusterKind::SingleNode { .. }
-				),
-				"must have dns if not using single node cluster"
-			);
-		} else {
-			if let config::ns::ClusterKind::SingleNode {
+		match &self.ns().cluster.kind {
+			config::ns::ClusterKind::SingleNode {
 				api_http_port,
 				api_https_port,
 				minio_port,
 				..
-			} = self.ns().cluster.kind
-			{
-				assert_eq!(80, api_http_port, "api_http_port must be 80 if dns enabled");
-				assert_eq!(
-					Some(443),
-					api_https_port,
-					"api_https_port must be 443 if dns enabled"
+			} => {
+				if self.ns().dns.is_some() {
+					assert_eq!(
+						80, *api_http_port,
+						"api_http_port must be 80 if dns is configured"
+					);
+					assert_eq!(
+						Some(443),
+						*api_https_port,
+						"api_https_port must be 443 if dns is configured"
+					);
+					assert_eq!(
+						9000, *minio_port,
+						"minio_port must not be changed if dns is configured"
+					);
+				}
+			}
+			config::ns::ClusterKind::Distributed { .. } => {
+				assert!(
+					std::env::consts::OS == "linux"
+						&& (std::env::consts::ARCH == "x86_64"
+							|| std::env::consts::ARCH == "x86"
+							|| std::env::consts::ARCH == "i686"),
+					"distributed clusters on platforms other than linux-x86 are not supported"
 				);
-				assert_eq!(
-					9000, minio_port,
-					"minio_port must not be changed if dns enabled"
-				)
+
+				assert!(
+					self.ns().dns.is_some(),
+					"must have dns configured with a distributed cluster"
+				);
 			}
 		}
 
 		// MARK: Dynamic Servers
+		if !self.ns().pools.is_empty() {
+			assert!(
+				self.ns().dns.is_some(),
+				"must have dns configured to provision servers"
+			);
+		}
+
 		// Validate the build delivery method
 		if !self.ns().pools.is_empty() {
 			let ats_count = self.ns().pools.iter().filter(|p| p.pool == "ats").count();
