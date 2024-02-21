@@ -23,7 +23,9 @@ types = { path = "../../types/core" }
 uuid = { version = "1", features = ["v4"] }
 
 [dependencies.redis]
-version = "0.23"
+# TODO: https://github.com/rivet-gg/rivet/issues/508
+git = "https://github.com/redis-rs/redis-rs.git"
+rev = "26c977c"
 default-features = false
 features = [
 	"keep-alive",

@@ -10,6 +10,8 @@ lazy_static = "1.4"
 regex = "1.5"
 
 [dependencies.redis]
-version = "0.23"
+# TODO: https://github.com/rivet-gg/rivet/issues/508
+git = "https://github.com/redis-rs/redis-rs.git"
+rev = "26c977c"
 default-features = false
 

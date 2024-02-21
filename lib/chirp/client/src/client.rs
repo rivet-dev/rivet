@@ -781,7 +781,7 @@ impl Client {
 				.ignore();
 
 				// Automatically expire
-				pipe.expire(&tail_key, ttl as usize).ignore();
+				pipe.expire(&tail_key, ttl).ignore();
 
 				// Write history
 				if M::HISTORY {
@@ -803,7 +803,7 @@ impl Client {
 					pipe.zadd(&history_key, message_buf.as_slice(), ts).ignore();
 
 					// Automatically expire
-					pipe.expire(&history_key, ttl as usize).ignore();
+					pipe.expire(&history_key, ttl).ignore();
 
 					let perf = self.perf().clone();
 					let mut conn = self.redis_chirp_ephemeral.clone();

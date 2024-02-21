@@ -46,6 +46,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 -   Added role ARN to exec commands in `k8s-cluster-aws` tf provider to properly authenticate
 -   Change email attached to Stripe on group ownership change
 -   Enable `keep-alive` on `redis` crate
+-   Update `redis` crate to mitigate panic on connection failure during `AUTH`
 
 ### Security
 
