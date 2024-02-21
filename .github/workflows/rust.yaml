@@ -19,8 +19,8 @@ jobs:
       - name: cargo deny (svc)
         uses: EmbarkStudios/cargo-deny-action@v1
         with:
-          arguments: --manifest-path svc/Cargo.toml
+          manifest-path: svc/Cargo.toml
       - name: cargo deny (lib/bolt)
         uses: EmbarkStudios/cargo-deny-action@v1
         with:
-          arguments: --manifest-path lib/bolt/Cargo.toml
+          manifest-path: lib/bolt/Cargo.toml
