@@ -36,6 +36,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 -   **Internal** Updated source hash calculation to use `git diff` and `git rev-parse HEAD`
 -   **API** Removed `x-fern-*` headers from generated TypeScript clients
 -   Implemented liveness probe to check connectivity to essential services
+-   Remove public-facing health check endpoints
 
 ### Fixed
 
