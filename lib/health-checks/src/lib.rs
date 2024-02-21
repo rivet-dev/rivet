@@ -56,7 +56,11 @@ async fn handle_infallible(
 
 #[tracing::instrument(skip_all)]
 pub async fn handle(config: &Config, req: Request<Body>) -> Result<Response<Body>, Request<Body>> {
-	let res = if let Some(crdb_pool) = req
+	let res = if req.uri().path() == "/health/liveness" {
+		status::liveness::route().await
+	} else if let (Some(pools), "/health/essential") = (config.pools.clone(), req.uri().path()) {
+		status::essential::route(pools).await
+	} else if let Some(crdb_pool) = req
 		.uri()
 		.path()
 		.strip_prefix("/health/crdb")
@@ -77,8 +81,6 @@ pub async fn handle(config: &Config, req: Request<Body>) -> Result<Response<Body
 		.and_then(|_| config.pools.as_ref().and_then(|p| p.nats().ok()))
 	{
 		status::nats::route(nats).await
-	} else if req.uri().path() == "/health/liveness" {
-		status::liveness::route().await
 	} else {
 		return Err(req);
 	};
@@ -149,31 +151,90 @@ mod status {
 		}
 	}
 
-	pub mod nats {
+	pub mod essential {
+		use super::{Status, StatusResponse};
+
+		#[derive(serde::Serialize)]
+		struct EssentialStatus {
+			crdb: Option<super::crdb::CrdbStatus>,
+			redis: Option<super::redis::RedisStatus>,
+			nats: Option<super::nats::NatsStatus>,
+		}
+
+		#[tracing::instrument(skip_all)]
+		pub async fn route(pools: rivet_pools::Pools) -> StatusResponse {
+			let (crdb, redis, nats) = tokio::join!(
+				async {
+					if let Ok(pool) = pools.crdb() {
+						Some(super::crdb::check_status(pool).await)
+					} else {
+						None
+					}
+				},
+				async {
+					if let Ok(pool) = pools.redis("persistent") {
+						Some(super::redis::check_status(pool).await)
+					} else {
+						None
+					}
+				},
+				async {
+					if let Ok(pool) = pools.nats() {
+						Some(super::nats::check_status(pool).await)
+					} else {
+						None
+					}
+				}
+			);
+
+			let crdb = match crdb {
+				Some(Ok(status)) => Some(status),
+				Some(Err(err)) => return Status::<EssentialStatus>::err(err),
+				None => None,
+			};
+			let redis = match redis {
+				Some(Ok(status)) => Some(status),
+				Some(Err(err)) => return Status::<EssentialStatus>::err(err),
+				None => None,
+			};
+			let nats = match nats {
+				Some(Ok(status)) => Some(status),
+				Some(Err(err)) => return Status::<EssentialStatus>::err(err),
+				None => None,
+			};
+
+			Status::ok(EssentialStatus { crdb, redis, nats })
+		}
+	}
+
+	pub mod crdb {
 		use rivet_pools::prelude::*;
-		use std::time::{Duration, Instant};
+		use std::time::Instant;
 
 		use super::{Status, StatusResponse};
 
 		#[derive(serde::Serialize)]
-		struct NatsStatus {
+		pub struct CrdbStatus {
 			rtt_ns: u128,
 			rtt_s: f64,
 		}
 
 		#[tracing::instrument(skip_all)]
-		pub async fn route(pool: NatsPool) -> StatusResponse {
+		pub async fn check_status(pool: CrdbPool) -> Result<CrdbStatus, sqlx::Error> {
 			let start = Instant::now();
-			match tokio::time::timeout(Duration::from_secs(10), pool.flush()).await {
-				Ok(Ok(_)) => {
-					let rtt = Instant::now().duration_since(start);
-					Status::ok(NatsStatus {
-						rtt_ns: rtt.as_nanos(),
-						rtt_s: rtt.as_secs_f64(),
-					})
-				}
-				Ok(Err(err)) => Status::<NatsStatus>::err(err),
-				Err(err) => Status::<NatsStatus>::err(err),
+			sqlx::query("SELECT 1").execute(&pool).await?;
+			let rtt = Instant::now().duration_since(start);
+			Ok(CrdbStatus {
+				rtt_ns: rtt.as_nanos(),
+				rtt_s: rtt.as_secs_f64(),
+			})
+		}
+
+		#[tracing::instrument(skip_all)]
+		pub async fn route(crdb_pool: CrdbPool) -> StatusResponse {
+			match check_status(crdb_pool).await {
+				Ok(res) => Status::ok(res),
+				Err(err) => Status::<CrdbStatus>::err(err),
 			}
 		}
 	}
@@ -185,51 +246,78 @@ mod status {
 		use super::{Status, StatusResponse};
 
 		#[derive(serde::Serialize)]
-		struct RedisStatus {
+		pub struct RedisStatus {
 			rtt_ns: u128,
 			rtt_s: f64,
 		}
 
 		#[tracing::instrument(skip_all)]
-		pub async fn route(mut pool: RedisPool) -> StatusResponse {
+		pub async fn check_status(mut pool: RedisPool) -> Result<RedisStatus, redis::RedisError> {
 			let start = Instant::now();
-			let res = redis::cmd("PING").query_async::<_, ()>(&mut pool).await;
+			redis::cmd("PING").query_async::<_, ()>(&mut pool).await?;
 			let rtt = Instant::now().duration_since(start);
 
-			match res {
-				Ok(_) => Status::ok(RedisStatus {
-					rtt_ns: rtt.as_nanos(),
-					rtt_s: rtt.as_secs_f64(),
-				}),
+			Ok(RedisStatus {
+				rtt_ns: rtt.as_nanos(),
+				rtt_s: rtt.as_secs_f64(),
+			})
+		}
+
+		#[tracing::instrument(skip_all)]
+		pub async fn route(pool: RedisPool) -> StatusResponse {
+			match check_status(pool).await {
+				Ok(status) => Status::ok(status),
 				Err(err) => Status::<RedisStatus>::err(err),
 			}
 		}
 	}
 
-	pub mod crdb {
+	pub mod nats {
 		use rivet_pools::prelude::*;
-		use std::time::Instant;
+		use std::time::{Duration, Instant};
 
 		use super::{Status, StatusResponse};
 
+		#[derive(Debug)]
+		pub enum StatusError {
+			Timeout(tokio::time::error::Elapsed),
+			Nats(nats::Error),
+		}
+
+		impl std::fmt::Display for StatusError {
+			fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+				match self {
+					StatusError::Timeout(e) => write!(f, "timeout: {}", e),
+					StatusError::Nats(e) => write!(f, "nats: {}", e),
+				}
+			}
+		}
+
 		#[derive(serde::Serialize)]
-		struct CrdbStatus {
+		pub struct NatsStatus {
 			rtt_ns: u128,
 			rtt_s: f64,
 		}
 
 		#[tracing::instrument(skip_all)]
-		pub async fn route(crdb_pool: CrdbPool) -> StatusResponse {
+		pub async fn check_status(pool: NatsPool) -> Result<NatsStatus, StatusError> {
 			let start = Instant::now();
-			let res = sqlx::query("SELECT 1").execute(&crdb_pool).await;
+			tokio::time::timeout(Duration::from_secs(10), pool.flush())
+				.await
+				.map_err(StatusError::Timeout)?
+				.map_err(|err| StatusError::Nats(err.into()))?;
 			let rtt = Instant::now().duration_since(start);
+			Ok(NatsStatus {
+				rtt_ns: rtt.as_nanos(),
+				rtt_s: rtt.as_secs_f64(),
+			})
+		}
 
-			match res {
-				Ok(_) => Status::ok(CrdbStatus {
-					rtt_ns: rtt.as_nanos(),
-					rtt_s: rtt.as_secs_f64(),
-				}),
-				Err(err) => Status::<CrdbStatus>::err(err),
+		#[tracing::instrument(skip_all)]
+		pub async fn route(pool: NatsPool) -> StatusResponse {
+			match check_status(pool).await {
+				Ok(res) => Status::ok(res),
+				Err(err) => Status::<NatsStatus>::err(err),
 			}
 		}
 	}

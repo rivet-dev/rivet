@@ -1,5 +1,4 @@
 use serde::Deserialize;
-use uuid::Uuid;
 
 #[derive(Debug, thiserror::Error)]
 pub enum EnvVarError {

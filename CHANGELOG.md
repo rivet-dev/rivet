@@ -21,6 +21,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 -   Metrics for cache operations as well as a Grafana dashboard
 -   **Bolt** Added namespace config and secrets sync with `bolt config pull` and `bolt config push` via 1Password
 -   `GROUP_DEACTIVATED` error now shows reasons for deactivation. Added docs for deactivation reasons
+-   `/health/essential` endpoint to test connectivity to all essential services
 
 ### Changed
 
@@ -34,6 +35,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     version will remain operational using our own hCaptcha site key).
 -   **Internal** Updated source hash calculation to use `git diff` and `git rev-parse HEAD`
 -   **API** Removed `x-fern-*` headers from generated TypeScript clients
+-   Implemented liveness probe to check connectivity to essential services
 
 ### Fixed
 

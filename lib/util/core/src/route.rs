@@ -102,12 +102,3 @@ pub fn access_token_link(access_token_token: &str) -> String {
 pub fn billing(team_id: Uuid) -> String {
 	format!("{}/groups/{}/billing", origin_hub(), team_id)
 }
-
-fn provider_str(provider: i32) -> &'static str {
-	// Default gracefully
-	match backend::upload::Provider::from_i32(provider).unwrap_or_default() {
-		backend::upload::Provider::Minio => "minio",
-		backend::upload::Provider::Backblaze => "backblaze",
-		backend::upload::Provider::Aws => "aws",
-	}
-}

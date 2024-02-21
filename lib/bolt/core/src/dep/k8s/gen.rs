@@ -276,17 +276,39 @@ pub async fn gen_svc(exec_ctx: &ExecServiceContext) -> Vec<serde_json::Value> {
 		(pod_ports, service_ports)
 	};
 
-	let health_check = if has_health {
-		json!({
-			"exec": {
-				"command": ["/bin/sh", "-c", "/usr/bin/health_check.sh"],
-			},
-			"initialDelaySeconds": 1,
-			"periodSeconds": 5,
-			"timeoutSeconds": 5
-		})
+	let (readieness_probe, liveness_probe) = if has_health {
+		(
+			// Check if the HTTP server is reachable
+			json!({
+				"exec": {
+					// This is intentionally using the /health/liveness endpoint for a readiness probe because
+					// this checks if the HTTP server is reachable
+					//
+					// We don't want to check the essential services since this will cause a
+					// complete outage if the essential probe sporadically fails. This is also
+					// more lightweight.
+					"command": ["/usr/bin/health_check.sh", "/health/liveness"],
+				},
+				"initialDelaySeconds": 1,
+				"periodSeconds": 5,
+				"timeoutSeconds": 5
+			}),
+			// Check if the essential connections are working
+			//
+			// This will cause cascading failure if one of the essential connections are down, so
+			// we restart very conservatively (8 * 15 seconds = 2 minutes of downtime) as a worst case fallback.
+			json!({
+				"exec": {
+				"command": ["/usr/bin/health_check.sh", "/health/essential"],
+				},
+				"initialDelaySeconds": 5,
+				"periodSeconds": 30,
+				"timeoutSeconds": 15,
+				"failureThreshold": 8
+			}),
+		)
 	} else {
-		serde_json::Value::Null
+		(serde_json::Value::Null, serde_json::Value::Null)
 	};
 
 	let (image, image_pull_policy, exec) = match &driver {
@@ -393,7 +415,8 @@ pub async fn gen_svc(exec_ctx: &ExecServiceContext) -> Vec<serde_json::Value> {
 			}],
 			"volumeMounts": volume_mounts,
 			"ports": pod_ports,
-			"readinessProbe": health_check,
+			"readinessProbe": readieness_probe,
+			"livenessProbe": liveness_probe,
 			"resources": resources,
 		}],
 		"volumes": volumes
