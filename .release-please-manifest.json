@@ -1,0 +1,64 @@
+{
+    "changelog-sections": [
+        {
+            "type": "feat",
+            "hidden": false,
+            "section": "Features"
+        },
+        {
+            "type": "fix",
+            "hidden": false,
+            "section": "Bug Fixes"
+        },
+        {
+            "type": "perf",
+            "hidden": false,
+            "section": "Performance Improvements"
+        },
+        {
+            "type": "revert",
+            "hidden": false,
+            "section": "Reverts"
+        },
+        {
+            "type": "docs",
+            "hidden": false,
+            "section": "Documentation"
+        },
+        {
+            "type": "style",
+            "hidden": false,
+            "section": "Styles"
+        },
+        {
+            "type": "refactor",
+            "hidden": false,
+            "section": "Code Refactoring"
+        },
+        {
+            "type": "test",
+            "hidden": false,
+            "section": "Tests"
+        },
+        {
+            "type": "build",
+            "hidden": false,
+            "section": "Build System"
+        },
+        {
+            "type": "ci",
+            "hidden": false,
+            "section": "Continuous Integration"
+        },
+        {
+            "type": "chore",
+            "hidden": false,
+            "section": "Chores"
+        },
+        {
+            "type": "other",
+            "hidden": false,
+            "section": "Others"
+        }
+    ]
+}
