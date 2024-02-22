@@ -628,7 +628,7 @@ fn gen_name_id(s: impl AsRef<str>) -> String {
 	};
 
 	// Choose a random hash to add to the name id
-	let chars = "abcdefghijklmnopqrstuvwxyz1234567890";
+	let chars = "abcdefghijklmnopqrstuvwxyz1234567890"; // pragma: allowlist secret
 	let mut rng = rand::thread_rng();
 	let hash = std::iter::repeat_with(|| chars.chars().choose(&mut rng))
 		.flatten()
