@@ -5,6 +5,8 @@ use commands::*;
 mod commands;
 
 #[derive(Parser)]
+// This will use the version from the Cargo.toml file during compilation
+#[clap(version = env!("CARGO_PKG_VERSION"))]
 struct Opts {
 	#[clap(subcommand)]
 	command: SubCommand,
