@@ -68,7 +68,12 @@ pub async fn name(ctx: &ProjectContext, name: &str, command: Option<&str>) -> Re
 	Ok(())
 }
 
-pub async fn pool(ctx: &ProjectContext, pool: &str, command: Option<&str>) -> Result<()> {
+pub async fn pool(
+	ctx: &ProjectContext,
+	pool: &str,
+	region: Option<&str>,
+	command: Option<&str>,
+) -> Result<()> {
 	// Choose IP
 	let tf_pools = terraform::output::read_pools(&ctx).await;
 	let server = tf_pools
@@ -76,7 +81,7 @@ pub async fn pool(ctx: &ProjectContext, pool: &str, command: Option<&str>) -> Re
 		.value
 		.into_iter()
 		.map(|x| x.1)
-		.find(|x| x.pool_id == pool)
+		.find(|x| x.pool_id == pool && region.map(|r| &x.region_id == r).unwrap_or(true))
 		.expect("failed to find server pool");
 
 	let ssh_key = TempSshKey::new(&ctx, "server").await?;
@@ -85,7 +90,12 @@ pub async fn pool(ctx: &ProjectContext, pool: &str, command: Option<&str>) -> Re
 	Ok(())
 }
 
-pub async fn pool_all(ctx: &ProjectContext, pool: &str, command: &str) -> Result<()> {
+pub async fn pool_all(
+	ctx: &ProjectContext,
+	pool: &str,
+	region: Option<&str>,
+	command: &str,
+) -> Result<()> {
 	let ssh_key = Arc::new(TempSshKey::new(&ctx, "server").await?);
 
 	let tf_pools = terraform::output::read_pools(&ctx).await;
@@ -95,7 +105,7 @@ pub async fn pool_all(ctx: &ProjectContext, pool: &str, command: &str) -> Result
 			.servers
 			.value
 			.into_iter()
-			.filter(|x| x.1.pool_id == pool),
+			.filter(|x| x.1.pool_id == pool && region.map(|r| &x.1.region_id == r).unwrap_or(true)),
 	)
 	.map(|(name, server)| {
 		let ctx = ctx.clone();
