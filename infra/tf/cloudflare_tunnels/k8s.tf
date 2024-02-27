@@ -1,5 +1,17 @@
 locals {
 	tunnel = module.cloudflare_tunnels
+
+	tunnel_credentials_json = jsonencode(local.tunnel.cert)
+	tunnel_credentials_json_checksum = sha256(local.tunnel_credentials_json)
+
+	tunnel_config_yaml = yamlencode({
+		tunnel = local.tunnel.tunnel_name
+		credentials-file = "/etc/cloudflared/creds/credentials.json"
+		metrics = "0.0.0.0:2000"
+		"no-autoupdate" = true
+		ingress = local.tunnel.ingress
+	})
+	tunnel_config_yaml_checksum = sha256(local.tunnel_config_yaml)
 }
 
 resource "kubernetes_namespace" "cloudflared" {
@@ -27,6 +39,10 @@ resource "kubernetes_deployment" "cloudflared" {
 			metadata {
 				labels = {
 					"app.kubernetes.io/name" = "cloudflared"
+				}
+				annotations = {
+					"checksum/credentials.json" = local.tunnel_credentials_json_checksum
+					"checksum/config.yaml" = local.tunnel_config_yaml_checksum
 				}
 			}
 
@@ -93,7 +109,7 @@ resource "kubernetes_secret" "tunnel_credentials" {
 	}
 
 	data = {
-		"credentials.json" = jsonencode(local.tunnel.cert)
+		"credentials.json" = local.tunnel_credentials_json
 	}
 }
 
@@ -104,12 +120,6 @@ resource "kubernetes_config_map" "cloudflared" {
 	}
 
 	data = {
-		"config.yaml" = yamlencode({
-			tunnel = local.tunnel.tunnel_name
-			credentials-file = "/etc/cloudflared/creds/credentials.json"
-			metrics = "0.0.0.0:2000"
-			"no-autoupdate" = true
-			ingress = local.tunnel.ingress
-		})
+		"config.yaml" = local.tunnel_config_yaml
 	}
 }
