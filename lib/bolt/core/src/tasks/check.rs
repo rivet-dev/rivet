@@ -195,18 +195,23 @@ pub async fn check_config_sync(ctx: &ProjectContext) {
 		return;
 	}
 
-	let (Some(local_op), Some(ns_op)) = (
-		ctx.config_local()._1password.as_ref(),
-		ctx.ns().secrets._1password.as_ref(),
-	) else {
+	// Check if 1Password service token is available
+	if ctx.ns().secrets._1password.is_some() && ctx.config_local()._1password.is_none() {
 		eprintln!();
 		rivet_term::status::warn(
 			"Warning",
 			format!(
-				r#"1Password config is not set up. Configure "ns.1password" and "local.1password" to enable config sync checks, or use `{}` to suppress this message."#,
+				r#"Cannot validate that config is synchronized without configuring the 1Password service token in Bolt.local.toml. See docs/libraries/bolt/CONFIG_SYNC.md for details or use `{}` to suppress this message."#,
 				style("BOLT_SKIP_CONFIG_SYNC=1").bold()
 			),
 		);
+		return;
+	}
+
+	let (Some(local_op), Some(ns_op)) = (
+		ctx.config_local()._1password.as_ref(),
+		ctx.ns().secrets._1password.as_ref(),
+	) else {
 		return;
 	};
 
