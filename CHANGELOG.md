@@ -39,6 +39,7 @@ and this project adheres to [Calendar Versioning](https://calver.org/).
 -   Implemented liveness probe to check connectivity to essential services
 -   Remove public-facing health check endpoints
 -   **API** Removed ability to choose a name id when creating a game. One will be generated based on the given display name
+-   **Infra** Reduced allocated cache size on ATS nodes to prevent disks exhaustion
 
 ### Fixed
 

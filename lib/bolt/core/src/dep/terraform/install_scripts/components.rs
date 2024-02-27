@@ -381,14 +381,14 @@ pub async fn traffic_server(ctx: &ProjectContext, server: &Server) -> Result<Str
 		.map(|(k, v)| format!("cat << 'EOF' > /etc/trafficserver/{k}\n{v}\nEOF\n"))
 		.collect::<Vec<_>>();
 
-	// Update default storage config size to be entire filesystem size
+	// Update default storage config size to be entire filesystem size minus 4GB
 	config_scripts.push(
 		indoc!(
-			"
-		df -h / |
-		awk 'NR==2 {print $2}' |
-		xargs -I {} sed -i 's/64G/{}/' /etc/trafficserver/storage.config
-		"
+			r#"
+			df -h / |
+			awk 'NR==2 {gsub(/G/, "", $2); print $2 - 4 "G"}' |
+			xargs -I {} sed -i 's/64G/{}/' /etc/trafficserver/storage.config
+			"#
 		)
 		.to_string(),
 	);
