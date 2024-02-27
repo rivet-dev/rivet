@@ -1,19 +1,19 @@
 {
-    "name": "Rivet Dev",
-    "build": {
-        "dockerfile": "Dockerfile",
-        "context": "."
-    },
-    "remoteUser": "root",
-    "features": {
-        "ghcr.io/devcontainers/features/docker-in-docker:2": {
+	"name": "Rivet Dev",
+	"build": {
+		"dockerfile": "Dockerfile",
+		"context": "."
+	},
+	"remoteUser": "root",
+	"features": {
+		"ghcr.io/devcontainers/features/docker-in-docker:2": {
 			"moby": true,
 			"azureDnsAutoDetection": true,
 			"installDockerBuildx": true,
 			"version": "latest",
 			"dockerDashComposeVersion": "v2"
 		},
-        "ghcr.io/devcontainers/features/nix:1": {
+		"ghcr.io/devcontainers/features/nix:1": {
 			"multiUser": true,
 			"version": "latest"
 		},
@@ -24,9 +24,7 @@
 	},
 	"customizations": {
 		"vscode": {
-			"extensions": [
-				"rust-lang.rust-analyzer"
-			]
+			"extensions": ["rust-lang.rust-analyzer"]
 		}
 	}
 }
