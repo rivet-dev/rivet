@@ -282,7 +282,7 @@ async fn handle(
 							"site-key",
 							"too-short",
 						]);
-					} else if site_key.len() > 30 {
+					} else if site_key.len() > 36 {
 						errors.push(util::err_path![
 							"config",
 							"matchmaker",
@@ -313,7 +313,7 @@ async fn handle(
 							"secret-key",
 							"too-short",
 						]);
-					} else if secret_key.len() > 40 {
+					} else if secret_key.len() > 42 {
 						errors.push(util::err_path![
 							"config",
 							"matchmaker",
