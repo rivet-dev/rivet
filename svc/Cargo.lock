@@ -2915,6 +2915,7 @@ dependencies = [
  "faker-team",
  "game-create",
  "game-get",
+ "mm-config-game-upsert",
  "prost 0.10.4",
  "rivet-operation",
 ]
@@ -3731,6 +3732,7 @@ dependencies = [
  "faker-game",
  "game-version-get",
  "game-version-list",
+ "mm-config-game-get",
  "module-version-get",
  "prost 0.10.4",
  "region-get",
@@ -4910,6 +4912,26 @@ dependencies = [
 ]
 
 [[package]]
+name = "mm-config-game-get"
+version = "0.0.1"
+dependencies = [
+ "chirp-client",
+ "chirp-worker",
+ "rivet-operation",
+ "sqlx",
+]
+
+[[package]]
+name = "mm-config-game-upsert"
+version = "0.0.1"
+dependencies = [
+ "chirp-client",
+ "chirp-worker",
+ "rivet-operation",
+ "sqlx",
+]
+
+[[package]]
 name = "mm-config-lobby-group-get"
 version = "0.0.1"
 dependencies = [
@@ -5297,6 +5319,7 @@ dependencies = [
  "job-run-get",
  "lazy_static",
  "maplit",
+ "mm-config-game-get",
  "mm-config-lobby-group-resolve-version",
  "mm-config-namespace-config-set",
  "mm-config-namespace-get",

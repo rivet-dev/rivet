@@ -15,6 +15,7 @@ faker-game-namespace = { path = "../game-namespace" }
 faker-game-version = { path = "../game-version" }
 faker-team = { path = "../team" }
 game-create = { path = "../../../game/ops/create" }
+mm-config-game-upsert = { path = "../../../mm-config/ops/game-upsert" }
 
 [dev-dependencies]
 chirp-worker = { path = "../../../../../lib/chirp/worker" }

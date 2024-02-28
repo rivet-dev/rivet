@@ -58,6 +58,13 @@ async fn handle(
 		errors.push(util::err_path!["display-name", "invalid"]);
 	}
 
+	// Get game config
+	let game_res = op!([ctx] mm_config_game_get {
+		game_ids: vec![*game_id],
+	})
+	.await?;
+	let mm_game_config = unwrap_ref!(unwrap!(game_res.games.first()).config);
+
 	// Validate display name uniqueness
 	{
 		let version_list_res = op!([ctx] game_version_list {
@@ -789,11 +796,18 @@ async fn handle(
 				let network_mode = unwrap!(LobbyRuntimeNetworkMode::from_i32(
 					docker_config.network_mode
 				));
-				let host_networking_enabled =
-					std::env::var("RIVET_HOST_NETWORKING").map_or(false, |v| v == "1");
 				// Validate ports
-				if host_networking_enabled || !matches!(network_mode, LobbyRuntimeNetworkMode::Host)
+				if !mm_game_config.host_networking_enabled
+					&& matches!(network_mode, LobbyRuntimeNetworkMode::Host)
 				{
+					errors.push(util::err_path![
+						"config",
+						"matchmaker",
+						"game-modes",
+						lobby_group_label,
+						"host-networking-disabled",
+					]);
+				} else {
 					let mut unique_port_labels = HashSet::<String>::new();
 					let mut unique_ports = HashSet::<(u32, i32)>::new();
 					let mut ranges = Vec::<PortRange>::new();
@@ -1026,14 +1040,6 @@ async fn handle(
 							}
 						}
 					}
-				} else {
-					errors.push(util::err_path![
-						"config",
-						"matchmaker",
-						"game-modes",
-						lobby_group_label,
-						"host-networking-disabled",
-					]);
 				}
 			} else {
 				errors.push(util::err_path![

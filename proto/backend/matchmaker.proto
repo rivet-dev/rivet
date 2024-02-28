@@ -6,6 +6,12 @@ import "proto/common.proto";
 import "proto/backend/captcha.proto";
 import "proto/backend/region.proto";
 
+// MARK: Game Config
+message GameConfig {
+	bool host_networking_enabled = 1;
+	bool root_user_enabled = 2;
+}
+
 // MARK: Game Namespace Config
 message NamespaceConfig {
 	uint32 lobby_count_max = 1;

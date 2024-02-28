@@ -24,6 +24,9 @@ fn main() -> anyhow::Result<()> {
 	let nomad_alloc_dir = std::env::var("NOMAD_ALLOC_DIR").context("NOMAD_ALLOC_DIR")?;
 	let job_run_id = std::env::var("NOMAD_META_job_run_id").context("NOMAD_META_job_run_id")?;
 	let nomad_task_name = std::env::var("NOMAD_TASK_NAME").context("NOMAD_TASK_NAME")?;
+	let root_user_enabled = std::env::var("NOMAD_META_root_user_enabled")
+		.context("NOMAD_META_root_user_enabled")?
+		== "1";
 
 	let oci_bundle_path = format!("{}/oci-bundle", nomad_alloc_dir);
 	let container_id = fs::read_to_string(format!("{}/container-id", nomad_alloc_dir))
@@ -41,6 +44,32 @@ fn main() -> anyhow::Result<()> {
 		nomad_task_name,
 	};
 	let log_shipper_thread = log_shipper.spawn();
+
+	// Validate OCI bundle
+	let oci_bundle_str =
+		fs::read_to_string(&oci_bundle_path).context("failed to read OCI bundle")?;
+	let oci_bundle = serde_json::from_str::<serde_json::Value>(&oci_bundle_str)
+		.context("failed to parse OCI bundle")?;
+	let (Some(uid), Some(gid)) = (
+		oci_bundle["process"]["user"]["uid"].as_i64(),
+		oci_bundle["process"]["user"]["gid"].as_i64(),
+	) else {
+		bail!("missing uid or gid in OCI bundle")
+	};
+	if !root_user_enabled && (uid == 0 || gid == 0) {
+		send_message(
+			&msg_tx,
+			None,
+			log_shipper::StreamType::StdErr,
+			format!("Server is attempting to run as root user or group (uid: {uid}, gid: {gid})"),
+		);
+		send_message(
+			&msg_tx,
+			None,
+			log_shipper::StreamType::StdErr,
+			format!("See https://rivet.gg/docs/dynamic-servers/concepts/docker-root-user"),
+		);
+	}
 
 	// Spawn runc container
 	println!(
@@ -172,7 +201,7 @@ fn ship_logs(
 				if err.first_throttle_in_window {
 					if send_message(
 						&msg_tx,
-						&mut throttle_error,
+						Some(&mut throttle_error),
 						stream_type,
 						format_rate_limit(err.time_remaining),
 					) {
@@ -184,7 +213,7 @@ fn ship_logs(
 				if err.first_throttle_in_window {
 					if send_message(
 						&msg_tx,
-						&mut throttle_error,
+						Some(&mut throttle_error),
 						stream_type,
 						format_rate_limit(err.time_remaining),
 					) {
@@ -224,7 +253,7 @@ fn ship_logs(
 				}
 			}
 
-			if send_message(&msg_tx, &mut throttle_error, stream_type, message) {
+			if send_message(&msg_tx, Some(&mut throttle_error), stream_type, message) {
 				break;
 			}
 		}
@@ -238,7 +267,7 @@ fn ship_logs(
 /// Returns true if receiver is disconnected
 fn send_message(
 	msg_tx: &mpsc::SyncSender<log_shipper::ReceivedMessage>,
-	throttle_error: &mut throttle::Throttle,
+	throttle_error: Option<&mut throttle::Throttle>,
 	stream_type: log_shipper::StreamType,
 	message: String,
 ) -> bool {
@@ -258,7 +287,7 @@ fn send_message(
 	}) {
 		Result::Ok(_) => {}
 		Err(mpsc::TrySendError::Full(_)) => {
-			if throttle_error.tick().is_ok() {
+			if throttle_error.map_or(true, |x| x.tick().is_ok()) {
 				eprintln!("log shipper buffer full, logs are being dropped");
 			}
 		}

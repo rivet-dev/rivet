@@ -1,0 +1,15 @@
+syntax = "proto3";
+
+package rivet.backend.pkg.mm_config.game_upsert;
+
+import "proto/common.proto";
+import "proto/backend/matchmaker.proto";
+
+message Request {
+	rivet.common.Uuid game_id = 1;
+	rivet.backend.matchmaker.GameConfig config = 2;
+}
+
+message Response {
+
+}

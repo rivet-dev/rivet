@@ -1,4 +1,4 @@
-use proto::backend::pkg::*;
+use proto::backend::{self, pkg::*};
 use rivet_operation::prelude::*;
 
 #[operation(name = "faker-game")]
@@ -25,6 +25,17 @@ async fn handle(
 
 	op!([ctx] cloud_game_config_create {
 		game_id: game_create_res.game_id,
+	})
+	.await?;
+
+	op!([ctx] mm_config_game_upsert {
+		game_id: game_create_res.game_id,
+		config: Some(backend::matchmaker::GameConfig {
+			// Required for testing
+			host_networking_enabled: true,
+			// Will never be tested
+			root_user_enabled: false,
+		})
 	})
 	.await?;
 

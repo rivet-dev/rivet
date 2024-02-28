@@ -783,12 +783,6 @@ impl ServiceContextData {
 			env.push(("RIVET_ACCESS_TOKEN_LOGIN".into(), "1".into()));
 		}
 
-		if let Some(mm) = &project_ctx.ns().rivet.matchmaker {
-			if mm.host_networking {
-				env.push(("RIVET_HOST_NETWORKING".into(), "1".into()));
-			}
-		}
-
 		// Domains
 		if let Some(x) = project_ctx.domain_main() {
 			env.push(("RIVET_DOMAIN_MAIN".into(), x));

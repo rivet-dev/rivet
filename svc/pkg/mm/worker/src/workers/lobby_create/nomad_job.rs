@@ -404,6 +404,7 @@ pub fn gen_lobby_docker_job(
 				"max_players_normal".into(),
 				"max_players_direct".into(),
 				"max_players_party".into(),
+				"root_user_enabled".into(),
 			]),
 			meta_optional: None,
 		})),

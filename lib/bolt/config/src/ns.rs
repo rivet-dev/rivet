@@ -554,8 +554,6 @@ pub struct Rivet {
 	pub cdn: Cdn,
 	#[serde(default)]
 	pub billing: Option<RivetBilling>,
-	#[serde(default)]
-	pub matchmaker: Option<RivetMatchmaker>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, Default)]
@@ -564,13 +562,6 @@ pub struct Telemetry {
 	/// Disables sending telemetry to Rivet.
 	#[serde(default)]
 	pub disable: bool,
-}
-
-#[derive(Serialize, Deserialize, Clone, Debug, Default)]
-#[serde(deny_unknown_fields)]
-pub struct RivetMatchmaker {
-	#[serde(default)]
-	pub host_networking: bool,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]

@@ -67,7 +67,13 @@ async fn worker(ctx: &OperationContext<mm::msg::lobby_create::Message>) -> Globa
 		.await;
 	}
 
-	let (namespace, mm_ns_config, (lobby_group, lobby_group_meta, version_id), region, tiers) = tokio::try_join!(
+	let (
+		(mm_game_config, namespace),
+		mm_ns_config,
+		(lobby_group, lobby_group_meta, version_id),
+		region,
+		tiers,
+	) = tokio::try_join!(
 		fetch_namespace(ctx, namespace_id),
 		fetch_mm_namespace_config(ctx, namespace_id),
 		fetch_lobby_group_config(ctx, lobby_group_id),
@@ -235,6 +241,7 @@ async fn worker(ctx: &OperationContext<mm::msg::lobby_create::Message>) -> Globa
 				runtime_meta,
 				&namespace,
 				&version,
+				&mm_game_config,
 				&lobby_group,
 				&lobby_group_meta,
 				&region,
@@ -317,15 +324,22 @@ async fn fetch_tiers(
 async fn fetch_namespace(
 	ctx: &OperationContext<mm::msg::lobby_create::Message>,
 	namespace_id: Uuid,
-) -> GlobalResult<backend::game::Namespace> {
+) -> GlobalResult<(backend::matchmaker::GameConfig, backend::game::Namespace)> {
 	let get_res = op!([ctx] game_namespace_get {
 		namespace_ids: vec![namespace_id.into()],
 	})
 	.await?;
 
 	let namespace = unwrap!(get_res.namespaces.first(), "namespace not found").clone();
+	let game_id = unwrap!(namespace.game_id);
 
-	Ok(namespace)
+	let get_res = op!([ctx] mm_config_game_get {
+		game_ids: vec![game_id],
+	})
+	.await?;
+	let game_config = unwrap_ref!(unwrap!(get_res.games.first()).config).clone();
+
+	Ok((game_config, namespace))
 }
 
 #[tracing::instrument]
@@ -569,6 +583,7 @@ async fn create_docker_job(
 	runtime_meta: &backend::matchmaker::lobby_runtime_meta::Docker,
 	namespace: &backend::game::Namespace,
 	version: &backend::game::Version,
+	mm_game_config: &backend::matchmaker::GameConfig,
 	lobby_group: &backend::matchmaker::LobbyGroup,
 	lobby_group_meta: &backend::matchmaker::LobbyGroupMeta,
 	region: &backend::region::Region,
@@ -737,6 +752,10 @@ async fn create_docker_job(
 			job_run::msg::create::Parameter {
 				key: "max_players_party".into(),
 				value: lobby_group.max_players_party.to_string(),
+			},
+			job_run::msg::create::Parameter {
+				key: "root_user_enabled".into(),
+				value: if mm_game_config.root_user_enabled { "1" } else { "0" }.into()
 			},
 		],
 		job_spec_json: job_spec_json,
