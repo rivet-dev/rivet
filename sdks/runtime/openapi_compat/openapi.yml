@@ -307,6 +307,8 @@ components:
         hostname:
           type: string
         is_tls:
+          description: Whether or not this lobby port uses TLS. You cannot mix a non-TLS
+            and TLS ports.
           type: boolean
         port:
           description: The port number for this lobby. Will be null if using a port
@@ -314,8 +316,6 @@ components:
           type: integer
         port_range:
           $ref: '#/components/schemas/MatchmakerJoinPortRange'
-          description: Whether or not this lobby port uses TLS. You cannot mix a non-TLS
-            and TLS ports.
       required:
       - hostname
       - is_tls

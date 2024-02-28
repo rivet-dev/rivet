@@ -18,6 +18,7 @@ pub struct MatchmakerJoinPort {
     pub host: Option<String>,
     #[serde(rename = "hostname")]
     pub hostname: String,
+    /// Whether or not this lobby port uses TLS. You cannot mix a non-TLS and TLS ports.
     #[serde(rename = "is_tls")]
     pub is_tls: bool,
     /// The port number for this lobby. Will be null if using a port range.

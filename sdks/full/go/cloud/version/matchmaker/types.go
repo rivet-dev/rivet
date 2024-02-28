@@ -140,6 +140,10 @@ func (c *CaptchaTurnstile) String() string {
 	return fmt.Sprintf("%#v", c)
 }
 
+// Configures how the container's network is isolated from the host.
+// `bridge` (default) networking isolates the container's network from the host & other containers.
+// `host` networking removes isolation between the container and the host. Only available in Rivet Open Source & Enterprise.
+// Read more about bridge vs host networking [here](https://rivet.gg/docs/dynamic-servers/concepts/host-bridge-networking).
 type NetworkMode string
 
 const (
@@ -162,7 +166,9 @@ func (n NetworkMode) Ptr() *NetworkMode {
 	return &n
 }
 
-// A port protocol.
+// Type of network traffic to allow access to this port.
+// Configuring `https` or `tcp_tls` will provide TLS termination for you via Game Guard.
+// `https` and `tcp_tls` must have `proxy_kind` set to `game_guard`.
 type PortProtocol string
 
 const (
@@ -195,6 +201,10 @@ func (p PortProtocol) Ptr() *PortProtocol {
 }
 
 // Range of ports that can be connected to.
+// If configured, `network_mode` must equal `host`.
+// Port ranges may overlap between containers, it is the responsibility of the developer to ensure ports are available before using.
+// Read more about host networking [here](https://rivet.gg/docs/dynamic-servers/concepts/host-bridge-networking).
+// Only available on Rivet Open Source & Enterprise.
 type PortRange struct {
 	// Unsigned 32 bit integer.
 	Min int `json:"min"`
@@ -227,6 +237,9 @@ func (p *PortRange) String() string {
 	return fmt.Sprintf("%#v", p)
 }
 
+// Range of ports that can be connected to.
+// `game_guard` (default) proxies all traffic through [Game Guard](https://rivet.gg/docs/dynamic-servers/concepts/game-guard) to mitigate DDoS attacks and provide TLS termination.
+// `none` sends traffic directly to the game server. If configured, `network_mode` must equal `host`. Read more about host networking [here](https://rivet.gg/docs/dynamic-servers/concepts/host-bridge-networking). Only available on Rivet Open Source & Enterprise.
 type ProxyKind string
 
 const (

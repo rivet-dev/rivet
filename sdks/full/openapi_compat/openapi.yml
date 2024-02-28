@@ -2399,12 +2399,26 @@ components:
       - proxy_protocol
       type: object
     CloudVersionMatchmakerNetworkMode:
+      description: 'Configures how the container''s network is isolated from the host.
+
+        `bridge` (default) networking isolates the container''s network from the host
+        & other containers.
+
+        `host` networking removes isolation between the container and the host. Only
+        available in Rivet Open Source & Enterprise.
+
+        Read more about bridge vs host networking [here](https://rivet.gg/docs/dynamic-servers/concepts/host-bridge-networking).'
       enum:
       - bridge
       - host
       type: string
     CloudVersionMatchmakerPortProtocol:
-      description: A port protocol.
+      description: 'Type of network traffic to allow access to this port.
+
+        Configuring `https` or `tcp_tls` will provide TLS termination for you via
+        Game Guard.
+
+        `https` and `tcp_tls` must have `proxy_kind` set to `game_guard`.'
       enum:
       - http
       - https
@@ -2413,7 +2427,16 @@ components:
       - udp
       type: string
     CloudVersionMatchmakerPortRange:
-      description: Range of ports that can be connected to.
+      description: 'Range of ports that can be connected to.
+
+        If configured, `network_mode` must equal `host`.
+
+        Port ranges may overlap between containers, it is the responsibility of the
+        developer to ensure ports are available before using.
+
+        Read more about host networking [here](https://rivet.gg/docs/dynamic-servers/concepts/host-bridge-networking).
+
+        Only available on Rivet Open Source & Enterprise.'
       properties:
         max:
           description: Unsigned 32 bit integer.
@@ -2426,6 +2449,14 @@ components:
       - max
       type: object
     CloudVersionMatchmakerProxyKind:
+      description: 'Range of ports that can be connected to.
+
+        `game_guard` (default) proxies all traffic through [Game Guard](https://rivet.gg/docs/dynamic-servers/concepts/game-guard)
+        to mitigate DDoS attacks and provide TLS termination.
+
+        `none` sends traffic directly to the game server. If configured, `network_mode`
+        must equal `host`. Read more about host networking [here](https://rivet.gg/docs/dynamic-servers/concepts/host-bridge-networking).
+        Only available on Rivet Open Source & Enterprise.'
       enum:
       - none
       - game_guard
@@ -4006,6 +4037,8 @@ components:
         hostname:
           type: string
         is_tls:
+          description: Whether or not this lobby port uses TLS. You cannot mix a non-TLS
+            and TLS ports.
           type: boolean
         port:
           description: The port number for this lobby. Will be null if using a port
@@ -4013,8 +4046,6 @@ components:
           type: integer
         port_range:
           $ref: '#/components/schemas/MatchmakerJoinPortRange'
-          description: Whether or not this lobby port uses TLS. You cannot mix a non-TLS
-            and TLS ports.
       required:
       - hostname
       - is_tls

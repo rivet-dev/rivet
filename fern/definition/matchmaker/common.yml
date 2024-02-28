@@ -64,10 +64,11 @@ types:
           The port number for this lobby. Will be null if using a port range.
       port_range:
         type: optional<JoinPortRange>
+      is_tls:
+        type: boolean
         docs: >
           Whether or not this lobby port uses TLS. You cannot mix a non-TLS and TLS
           ports.
-      is_tls: boolean
 
   JoinPortRange:
     docs: Inclusive range of ports that can be connected to.
