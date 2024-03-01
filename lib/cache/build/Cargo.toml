@@ -24,8 +24,8 @@ uuid = { version = "1", features = ["v4"] }
 
 [dependencies.redis]
 # TODO: https://github.com/rivet-gg/rivet/issues/508
-git = "https://github.com/redis-rs/redis-rs.git"
-rev = "26c977c"
+git = "https://github.com/rivet-gg/redis-rs.git"
+rev = "ac3e27fa1d133847db54354493f4d25957ad3466"
 default-features = false
 features = [
 	"keep-alive",

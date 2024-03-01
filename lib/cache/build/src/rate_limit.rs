@@ -49,7 +49,7 @@ impl CacheInner {
 				let mut pipe = redis::pipe();
 				pipe.atomic();
 				pipe.incr(&key, 1);
-				pipe.pexpire(&key, result.ttl_ms()).ignore();
+				pipe.pexpire(&key, result.ttl_ms() as usize).ignore();
 
 				async move {
 					match pipe.query_async::<_, (i64,)>(&mut conn).await {
