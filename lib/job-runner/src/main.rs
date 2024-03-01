@@ -28,10 +28,6 @@ fn main() -> anyhow::Result<()> {
 		.context("NOMAD_META_root_user_enabled")?
 		== "1";
 
-	let oci_bundle_path = format!("{}/oci-bundle", nomad_alloc_dir);
-	let container_id = fs::read_to_string(format!("{}/container-id", nomad_alloc_dir))
-		.context("failed to read container-id")?;
-
 	let (shutdown_tx, shutdown_rx) = mpsc::sync_channel(1);
 
 	// Start log shipper
@@ -45,9 +41,60 @@ fn main() -> anyhow::Result<()> {
 	};
 	let log_shipper_thread = log_shipper.spawn();
 
+	// Run the container
+	let exit_code = match run_container(msg_tx.clone(), &nomad_alloc_dir, root_user_enabled) {
+		Result::Ok(exit_code) => exit_code,
+		Err(err) => {
+			eprintln!("run container failed: {err:?}");
+			send_message(
+				&msg_tx,
+				None,
+				log_shipper::StreamType::StdErr,
+				format!("Aborting"),
+			);
+
+			1
+		}
+	};
+
+	// Shutdown all threads
+	match shutdown_tx.send(()) {
+		Result::Ok(_) => {
+			println!("Sent shutdown signal");
+		}
+		Err(err) => {
+			eprintln!("Failed to send shutdown signal: {err:?}");
+		}
+	}
+
+	// Wait for log shipper to finish
+	drop(msg_tx);
+	match log_shipper_thread.join() {
+		Result::Ok(_) => {}
+		Err(err) => {
+			eprintln!("log shipper failed: {err:?}")
+		}
+	}
+
+	std::process::exit(exit_code)
+}
+
+/// Sets up & runs the container using runc.
+///
+/// Returns the exit code of the container that will be passed to the parent
+fn run_container(
+	msg_tx: mpsc::SyncSender<log_shipper::ReceivedMessage>,
+	nomad_alloc_dir: &str,
+	root_user_enabled: bool,
+) -> anyhow::Result<i32> {
+	let container_id = fs::read_to_string(format!("{}/container-id", nomad_alloc_dir))
+		.context("failed to read container-id")?;
+	let oci_bundle_path = format!("{}/oci-bundle", nomad_alloc_dir);
+	let oci_bundle_config_json = format!("{}/config.json", oci_bundle_path);
+
 	// Validate OCI bundle
 	let oci_bundle_str =
-		fs::read_to_string(&oci_bundle_path).context("failed to read OCI bundle")?;
+		fs::read_to_string(&oci_bundle_config_json).context("failed to read OCI bundle")?;
 	let oci_bundle = serde_json::from_str::<serde_json::Value>(&oci_bundle_str)
 		.context("failed to parse OCI bundle")?;
 	let (Some(uid), Some(gid)) = (
@@ -69,6 +116,7 @@ fn main() -> anyhow::Result<()> {
 			log_shipper::StreamType::StdErr,
 			format!("See https://rivet.gg/docs/dynamic-servers/concepts/docker-root-user"),
 		);
+		bail!("root user or group detected")
 	}
 
 	// Spawn runc container
@@ -143,29 +191,8 @@ fn main() -> anyhow::Result<()> {
 		}
 	};
 
-	// Shutdown
-	match shutdown_tx.send(()) {
-		Result::Ok(_) => {
-			println!("Sent shutdown signal");
-		}
-		Err(err) => {
-			eprintln!("Failed to send shutdown signal: {err:?}");
-		}
-	}
-
-	// Wait for log shipper to finish
-	drop(msg_tx);
-	match log_shipper_thread.join() {
-		Result::Ok(_) => {}
-		Err(err) => {
-			eprintln!("log shipper failed: {err:?}")
-		}
-	}
-
-	std::process::exit(runc_exit_code)
+	Ok(runc_exit_code)
 }
-
-// TODO: Rate limit
 
 /// Spawn a thread to ship logs from a stream to log_shipper::LogShipper
 fn ship_logs(

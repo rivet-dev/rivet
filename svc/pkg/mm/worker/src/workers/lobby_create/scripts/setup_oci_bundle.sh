@@ -78,15 +78,7 @@ jq "
 }]
 " "$NOMAD_ALLOC_DIR/oci-bundle-config.base.json" > "$OCI_BUNDLE_PATH/config.json"
 
-# Validate config
-if [ "$(jq '.process.user.uid' "$OVERRIDE_CONFIG")" == "0" ]; then
-	log "Container is attempting to run as root user"
-	exit 1
-fi
-if [ "$(jq '.process.user.gid' "$OVERRIDE_CONFIG")" == "0" ]; then
-	log "Container is attempting to run as root group"
-	exit 1
-fi
+# Config will be validated in `job-runner`
 
 log "Finished setting up OCI bundle"
 
