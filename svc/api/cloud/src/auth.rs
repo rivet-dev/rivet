@@ -4,7 +4,7 @@ use api_helper::{
 	auth::{ApiAuth, AuthRateLimitCtx},
 	util::{as_auth_expired, basic_rate_limit},
 };
-use proto::claims::Claims;
+use proto::{backend, claims::Claims};
 use rivet_claims::ClaimsDecode;
 use rivet_operation::prelude::*;
 
@@ -44,7 +44,10 @@ impl Auth {
 			.ok_or_else(|| err_code!(API_UNAUTHORIZED, reason = "No bearer token provided."))
 	}
 
-	pub async fn user(&self, ctx: &OperationContext<()>) -> GlobalResult<rivet_claims::ent::User> {
+	pub async fn user(
+		&self,
+		ctx: &OperationContext<()>,
+	) -> GlobalResult<(backend::user::User, rivet_claims::ent::User)> {
 		let claims = self.claims()?;
 		let user_ent = claims.as_user()?;
 
@@ -65,7 +68,7 @@ impl Auth {
 			bail_with!(TOKEN_REVOKED);
 		}
 
-		Ok(user_ent)
+		Ok((user.clone(), user_ent))
 	}
 
 	/// Validates that the agent can read a list of teams.
@@ -77,7 +80,7 @@ impl Auth {
 		let claims = self.claims()?;
 
 		if claims.as_user().is_ok() {
-			let user_ent = self.user(ctx).await?;
+			let (user, user_ent) = self.user(ctx).await?;
 			assert::user_registered(ctx, user_ent.user_id).await?;
 
 			let team_list_res = op!([ctx] user_team_list {
@@ -85,8 +88,8 @@ impl Auth {
 			})
 			.await?;
 
-			let user = unwrap!(team_list_res.users.first());
-			let user_team_ids = user
+			let user_teams = unwrap!(team_list_res.users.first());
+			let user_team_ids = user_teams
 				.teams
 				.iter()
 				.map(|t| Ok(unwrap_ref!(t.team_id).as_uuid()))
@@ -95,7 +98,7 @@ impl Auth {
 				.iter()
 				.all(|team_id| user_team_ids.contains(team_id));
 
-			ensure_with!(has_teams, GROUP_NOT_MEMBER);
+			ensure_with!(has_teams || user.is_admin, GROUP_NOT_MEMBER);
 
 			Ok(())
 		} else if claims.as_game_cloud().is_ok() {
@@ -140,7 +143,7 @@ impl Auth {
 		let claims = self.claims()?;
 
 		if claims.as_user().is_ok() {
-			let user_ent = self.user(ctx).await?;
+			let (user, user_ent) = self.user(ctx).await?;
 
 			assert::user_registered(ctx, user_ent.user_id).await?;
 
@@ -195,7 +198,7 @@ impl Auth {
 		let claims = self.claims()?;
 
 		if claims.as_user().is_ok() {
-			let user_ent = self.user(ctx).await?;
+			let (user, user_ent) = self.user(ctx).await?;
 
 			assert::user_registered(ctx, user_ent.user_id).await?;
 
@@ -254,7 +257,7 @@ impl Auth {
 		let claims = self.claims()?;
 
 		let (user_id, team_ids, game_ids) = if claims.as_user().is_ok() {
-			let user_ent = self.user(ctx).await?;
+			let (_, user_ent) = self.user(ctx).await?;
 
 			// Fetch teams associated with user
 			let teams_res = op!([ctx] user_team_list {
@@ -369,15 +372,8 @@ impl Auth {
 		let claims = self.claims()?;
 
 		if claims.as_user().is_ok() {
-			let user_ent = self.user(ctx).await?;
+			let (user, _) = self.user(ctx).await?;
 
-			// Get user
-			let user_res = op!([ctx] user_get {
-				user_ids: vec![user_ent.user_id.into()]
-			})
-			.await?;
-
-			let user = unwrap!(user_res.users.first(), "user not found");
 			ensure_with!(user.is_admin, IDENTITY_NOT_ADMIN);
 
 			Ok(())

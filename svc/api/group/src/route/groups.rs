@@ -35,7 +35,7 @@ pub async fn profile(
 	group_id: Uuid,
 	watch_index: WatchIndexQuery,
 ) -> GlobalResult<models::GetGroupProfileResponse> {
-	let user_ent = ctx.auth().user(ctx.op_ctx()).await?;
+	let (_, user_ent) = ctx.auth().user(ctx.op_ctx()).await?;
 
 	// Fetch team data
 	let teams = op!([ctx] team_get {
@@ -190,7 +190,7 @@ pub async fn members(
 	watch_index: WatchIndexQuery,
 	query: ListMembersQuery,
 ) -> GlobalResult<models::GetGroupMembersResponse> {
-	let user_ent = ctx.auth().user(ctx.op_ctx()).await?;
+	let (user, user_ent) = ctx.auth().user(ctx.op_ctx()).await?;
 
 	// Check if user is a member of this team
 	let team_list_res = op!([ctx] user_team_list {
@@ -198,15 +198,15 @@ pub async fn members(
 	})
 	.await?;
 
-	let user = unwrap!(team_list_res.users.first());
-	let user_team_ids = user
+	let user_team = unwrap!(team_list_res.users.first());
+	let user_team_ids = user_team
 		.teams
 		.iter()
 		.map(|t| Ok(unwrap_ref!(t.team_id).as_uuid()))
 		.collect::<GlobalResult<Vec<_>>>()?;
 	let has_team = user_team_ids.iter().any(|team_id| &group_id == team_id);
 
-	ensure_with!(has_team, GROUP_NOT_MEMBER);
+	ensure_with!(has_team || user.is_admin, GROUP_NOT_MEMBER);
 
 	let team_members_res = op!([ctx] team_member_list {
 		team_ids: vec![group_id.into()],
@@ -353,7 +353,7 @@ pub async fn join_requests(
 	watch_index: WatchIndexQuery,
 	_query: ListJoinRequestsQuery,
 ) -> GlobalResult<models::GetGroupJoinRequestsResponse> {
-	let user_ent = ctx.auth().user(ctx.op_ctx()).await?;
+	let (_, user_ent) = ctx.auth().user(ctx.op_ctx()).await?;
 
 	// Verify the team exists
 	let (teams_res, team_join_requests_res) = tokio::try_join!(
@@ -518,7 +518,7 @@ pub async fn update_profile(
 	group_id: Uuid,
 	body: models::UpdateGroupProfileRequest,
 ) -> GlobalResult<models::UpdateGroupProfileResponse> {
-	let user_ent = ctx.auth().user(ctx.op_ctx()).await?;
+	let (_, user_ent) = ctx.auth().user(ctx.op_ctx()).await?;
 
 	let res = op!([ctx] team_get {
 		team_ids: vec![group_id.into()],
@@ -564,7 +564,7 @@ pub async fn get_suggested_groups(
 	ctx: Ctx<Auth>,
 	_watch_index: WatchIndexQuery,
 ) -> GlobalResult<models::ListSuggestedGroupsResponse> {
-	let user_ent = ctx.auth().user(ctx.op_ctx()).await?;
+	let (_, user_ent) = ctx.auth().user(ctx.op_ctx()).await?;
 
 	// Fetch recommendations
 	let recommend_res = op!([ctx] team_recommend { count: 64 }).await?;
@@ -593,7 +593,7 @@ pub async fn leave(
 	group_id: Uuid,
 	_body: models::LeaveGroupRequest,
 ) -> GlobalResult<models::LeaveGroupResponse> {
-	let user_ent = ctx.auth().user(ctx.op_ctx()).await?;
+	let (_, user_ent) = ctx.auth().user(ctx.op_ctx()).await?;
 
 	// Validate the team exists
 	let teams_res = op!([ctx] team_get {
@@ -618,7 +618,7 @@ pub async fn create(
 	ctx: Ctx<Auth>,
 	body: models::CreateGroupRequest,
 ) -> GlobalResult<models::CreateGroupResponse> {
-	let user_ent = ctx.auth().user(ctx.op_ctx()).await?;
+	let (_, user_ent) = ctx.auth().user(ctx.op_ctx()).await?;
 
 	let publicity = unwrap!(std::env::var("RIVET_ACCESS_KIND").ok());
 	match publicity.as_str() {
@@ -661,7 +661,7 @@ pub async fn request_join(
 	group_id: Uuid,
 	_body: models::CreateGroupJoinRequestRequest,
 ) -> GlobalResult<models::CreateGroupJoinRequestResponse> {
-	let user_ent = ctx.auth().user(ctx.op_ctx()).await?;
+	let (_, user_ent) = ctx.auth().user(ctx.op_ctx()).await?;
 
 	// Validate the team exists
 	let teams_res = op!([ctx] team_get {
@@ -724,7 +724,7 @@ pub async fn resolve_join_request(
 	identity_id: Uuid,
 	body: models::ResolveGroupJoinRequestRequest,
 ) -> GlobalResult<models::ResolveGroupJoinRequestResponse> {
-	let user_ent = ctx.auth().user(ctx.op_ctx()).await?;
+	let (_, user_ent) = ctx.auth().user(ctx.op_ctx()).await?;
 
 	// Validate the team exists
 	let teams_res = op!([ctx] team_get {
@@ -765,7 +765,7 @@ pub async fn search(
 	_watch_index: WatchIndexQuery,
 	query: SearchQuery,
 ) -> GlobalResult<models::SearchGroupsResponse> {
-	let _user_ent = ctx.auth().user(ctx.op_ctx()).await?;
+	ctx.auth().user(ctx.op_ctx()).await?;
 
 	ensure_with!(
 		query.limit.map(|v| v != 0).unwrap_or(true),
@@ -805,7 +805,7 @@ pub async fn validate_profile(
 	ctx: Ctx<Auth>,
 	body: models::ValidateGroupProfileRequest,
 ) -> GlobalResult<models::ValidateGroupProfileResponse> {
-	let _user_ent = ctx.auth().user(ctx.op_ctx()).await?;
+	ctx.auth().user(ctx.op_ctx()).await?;
 
 	let res = op!([ctx] team_profile_validate {
 		display_name: body.display_name.clone(),
@@ -828,7 +828,7 @@ pub async fn transfer_owner(
 	group_id: Uuid,
 	body: models::TransferGroupOwnershipRequest,
 ) -> GlobalResult<models::TransferGroupOwnershipResponse> {
-	let user_ent = ctx.auth().user(ctx.op_ctx()).await?;
+	let (user, user_ent) = ctx.auth().user(ctx.op_ctx()).await?;
 
 	let new_owner_user_id = Uuid::from_str(body.new_owner_identity_id.as_str())?;
 
@@ -856,7 +856,7 @@ pub async fn transfer_owner(
 
 	// Verify that new owner is a group member
 	ensure_with!(
-		utils::group_member(&ctx, group_id, new_owner_user_id).await?,
+		utils::group_member(&ctx, group_id, new_owner_user_id).await? || user.is_admin,
 		GROUP_NOT_MEMBER
 	);
 
@@ -878,7 +878,7 @@ pub async fn prepare_avatar_upload(
 	ctx: Ctx<Auth>,
 	body: new_models::GroupPrepareAvatarUploadRequest,
 ) -> GlobalResult<new_models::GroupPrepareAvatarUploadResponse> {
-	let user_ent = ctx.auth().user(ctx.op_ctx()).await?;
+	let (_, user_ent) = ctx.auth().user(ctx.op_ctx()).await?;
 	assert::user_registered(&ctx, user_ent.user_id).await?;
 
 	ensure!(body.content_length >= 0, "Upload invalid");
@@ -927,7 +927,7 @@ pub async fn complete_avatar_upload(
 	upload_id: Uuid,
 	_body: models::CompleteGroupAvatarUploadRequest,
 ) -> GlobalResult<models::CompleteGroupAvatarUploadResponse> {
-	let user_ent = ctx.auth().user(ctx.op_ctx()).await?;
+	let (_, user_ent) = ctx.auth().user(ctx.op_ctx()).await?;
 
 	// Validate the team exists
 	let teams_res = op!([ctx] team_get {
@@ -959,7 +959,7 @@ pub async fn create_invite(
 	group_id: Uuid,
 	body: models::CreateGroupInviteRequest,
 ) -> GlobalResult<models::CreateGroupInviteResponse> {
-	let user_ent = ctx.auth().user(ctx.op_ctx()).await?;
+	let (_, user_ent) = ctx.auth().user(ctx.op_ctx()).await?;
 
 	// Validate the team exists
 	let teams_res = op!([ctx] team_get {
@@ -999,7 +999,7 @@ pub async fn consume_invite(
 	code: String,
 	_body: models::ConsumeGroupInviteRequest,
 ) -> GlobalResult<models::ConsumeGroupInviteResponse> {
-	let user_ent = ctx.auth().user(ctx.op_ctx()).await?;
+	let (_, user_ent) = ctx.auth().user(ctx.op_ctx()).await?;
 
 	ensure_eq!(code.len(), 8, "invalid code");
 
@@ -1078,7 +1078,7 @@ pub async fn get_invite(
 	code: String,
 	_watch_index: WatchIndexQuery,
 ) -> GlobalResult<models::GetGroupInviteResponse> {
-	let _user_ent = ctx.auth().user(ctx.op_ctx()).await?;
+	ctx.auth().user(ctx.op_ctx()).await?;
 
 	ensure_eq!(code.len(), 8, "invalid code");
 
@@ -1121,7 +1121,7 @@ pub async fn kick_member(
 	identity_id: Uuid,
 	_body: models::KickGroupMemberRequest,
 ) -> GlobalResult<models::KickGroupMemberResponse> {
-	let user_ent = ctx.auth().user(ctx.op_ctx()).await?;
+	let (user, user_ent) = ctx.auth().user(ctx.op_ctx()).await?;
 
 	// Verify user is not self
 	ensure_with!(
@@ -1147,7 +1147,7 @@ pub async fn kick_member(
 
 	// Verify that user is a group member
 	ensure_with!(
-		utils::group_member(&ctx, group_id, identity_id).await?,
+		utils::group_member(&ctx, group_id, identity_id).await? || user.is_admin,
 		GROUP_NOT_MEMBER
 	);
 
@@ -1169,7 +1169,7 @@ pub async fn ban(
 	identity_id: Uuid,
 	_body: models::BanGroupIdentityRequest,
 ) -> GlobalResult<models::BanGroupIdentityResponse> {
-	let user_ent = ctx.auth().user(ctx.op_ctx()).await?;
+	let (_, user_ent) = ctx.auth().user(ctx.op_ctx()).await?;
 
 	// Verify user is not self
 	ensure_with!(
@@ -1210,7 +1210,7 @@ pub async fn unban(
 	group_id: Uuid,
 	identity_id: Uuid,
 ) -> GlobalResult<models::UnbanGroupIdentityResponse> {
-	let user_ent = ctx.auth().user(ctx.op_ctx()).await?;
+	let (_, user_ent) = ctx.auth().user(ctx.op_ctx()).await?;
 
 	// Verify user is not self
 	ensure_with!(
@@ -1263,7 +1263,7 @@ pub async fn bans(
 	watch_index: WatchIndexQuery,
 	_query: ListBansQuery,
 ) -> GlobalResult<models::GetGroupBansResponse> {
-	let user_ent = ctx.auth().user(ctx.op_ctx()).await?;
+	let (_, user_ent) = ctx.auth().user(ctx.op_ctx()).await?;
 
 	// Verify the team exists
 	let (teams_res, team_bans_res) = tokio::try_join!(

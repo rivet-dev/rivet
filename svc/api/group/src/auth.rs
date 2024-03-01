@@ -2,7 +2,7 @@ use api_helper::{
 	auth::{ApiAuth, AuthRateLimitCtx},
 	util::{as_auth_expired, basic_rate_limit},
 };
-use proto::claims::Claims;
+use proto::{backend, claims::Claims};
 use rivet_claims::ClaimsDecode;
 use rivet_operation::prelude::*;
 
@@ -40,7 +40,10 @@ impl Auth {
 			.ok_or_else(|| err_code!(API_UNAUTHORIZED, reason = "No bearer token provided."))
 	}
 
-	pub async fn user(&self, ctx: &OperationContext<()>) -> GlobalResult<rivet_claims::ent::User> {
+	pub async fn user(
+		&self,
+		ctx: &OperationContext<()>,
+	) -> GlobalResult<(backend::user::User, rivet_claims::ent::User)> {
 		let claims = self.claims()?;
 		let user_ent = claims.as_user()?;
 
@@ -61,7 +64,7 @@ impl Auth {
 			bail_with!(TOKEN_REVOKED);
 		}
 
-		Ok(user_ent)
+		Ok((user.clone(), user_ent))
 	}
 
 	/// Validates that the given agent is an admin user.
@@ -69,7 +72,7 @@ impl Auth {
 		let claims = self.claims()?;
 
 		if claims.as_user().is_ok() {
-			let user_ent = self.user(ctx).await?;
+			let (_, user_ent) = self.user(ctx).await?;
 
 			// Get user
 			let user_res = op!([ctx] user_get {
