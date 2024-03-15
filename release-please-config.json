@@ -1,4 +1,9 @@
 {
+	"packages": {
+		".": {
+			"release-type": "simple"
+		}
+	},
 	"changelog-sections": [
 		{
 			"type": "feat",
