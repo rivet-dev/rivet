@@ -49,3 +49,6 @@ infra/helm/
 infra/tf/k8s_infra/grafana_dashboards/
 sdks/
 
+# Ignore CHANGELOG.md for now
+# https://github.com/rivet-gg/rivet/issues/562
+CHANGELOG.md
