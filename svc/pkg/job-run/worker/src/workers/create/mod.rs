@@ -267,13 +267,14 @@ async fn write_to_db_before_run(
 			"ingress host not provided"
 		);
 
-		for host in &proxied_port.ingress_hostnames {
-			ensure!(
-				host.chars()
-					.all(|x| x.is_alphanumeric() || x == '.' || x == '-'),
-				"invalid ingress host"
-			);
-		}
+		// TODO:
+		// for host in &proxied_port.ingress_hostnames {
+		// 	ensure!(
+		// 		host.chars()
+		// 			.all(|x| x.is_alphanumeric() || x == '.' || x == '-'),
+		// 		"invalid ingress host"
+		// 	);
+		// }
 
 		let ingress_port = choose_ingress_port(ctx.clone(), tx, proxied_port).await?;
 

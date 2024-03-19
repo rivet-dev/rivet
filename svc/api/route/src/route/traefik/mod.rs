@@ -173,7 +173,7 @@ pub enum TraefikMiddlewareHttp {
 	#[serde(rename = "stripPrefix", rename_all = "camelCase")]
 	StripPrefix {
 		prefixes: Vec<String>,
-		force_slash: bool,
+		force_slash: Option<bool>,
 	},
 	#[serde(rename = "addPrefix", rename_all = "camelCase")]
 	AddPrefix { prefix: String },

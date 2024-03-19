@@ -638,42 +638,9 @@ async fn create_docker_job(
 			port.proxy_kind == backend::matchmaker::lobby_runtime::ProxyKind::GameGuard as i32
 				&& port.port_range.is_none()
 		})
-		.map(|port| {
-			let job_proxy_protocol = match unwrap!(
-				backend::matchmaker::lobby_runtime::ProxyProtocol::from_i32(port.proxy_protocol)
-			) {
-				backend::matchmaker::lobby_runtime::ProxyProtocol::Http => {
-					backend::job::ProxyProtocol::Http as i32
-				}
-				backend::matchmaker::lobby_runtime::ProxyProtocol::Https => {
-					backend::job::ProxyProtocol::Https as i32
-				}
-				backend::matchmaker::lobby_runtime::ProxyProtocol::Tcp => {
-					backend::job::ProxyProtocol::Tcp as i32
-				}
-				backend::matchmaker::lobby_runtime::ProxyProtocol::TcpTls => {
-					backend::job::ProxyProtocol::TcpTls as i32
-				}
-				backend::matchmaker::lobby_runtime::ProxyProtocol::Udp => {
-					backend::job::ProxyProtocol::Udp as i32
-				}
-			};
-
-			GlobalResult::Ok(backend::job::ProxiedPortConfig {
-				// Match the port label generated in mm-config-version-prepare
-				// and in api-matchmaker
-				target_nomad_port_label: Some(util_mm::format_nomad_port_label(&port.label)),
-				ingress_port: None,
-				ingress_hostnames: vec![format!(
-					"{}-{}.lobby.{}.{}",
-					lobby_id,
-					port.label,
-					region.name_id,
-					unwrap!(util::env::domain_job()),
-				)],
-				proxy_protocol: job_proxy_protocol,
-				ssl_domain_mode: backend::job::SslDomainMode::ParentWildcard as i32,
-			})
+		.flat_map(|port| {
+			std::iter::once(direct_proxied_port(lobby_id, region, port))
+				.chain(std::iter::once(path_proxied_port(lobby_id, region, port)))
 		})
 		.collect::<GlobalResult<Vec<_>>>()?;
 
@@ -888,4 +855,70 @@ async fn resolve_image_artifact_url(
 			bail!("invalid RIVET_DS_BUILD_DELIVERY_METHOD")
 		}
 	}
+}
+
+fn direct_proxied_port(
+	lobby_id: Uuid,
+	region: &backend::region::Region,
+	port: &backend::matchmaker::lobby_runtime::Port,
+) -> GlobalResult<backend::job::ProxiedPortConfig> {
+	Ok(backend::job::ProxiedPortConfig {
+		// Match the port label generated in mm-config-version-prepare
+		// and in api-matchmaker
+		target_nomad_port_label: Some(util_mm::format_nomad_port_label(&port.label)),
+		ingress_port: None,
+		ingress_hostnames: vec![format!(
+			"{}-{}.lobby.{}.{}",
+			lobby_id,
+			port.label,
+			region.name_id,
+			unwrap!(util::env::domain_job()),
+		)],
+		proxy_protocol: job_proxy_protocol(port.proxy_protocol)? as i32,
+		ssl_domain_mode: backend::job::SslDomainMode::ParentWildcard as i32,
+	})
+}
+
+fn path_proxied_port(
+	lobby_id: Uuid,
+	region: &backend::region::Region,
+	port: &backend::matchmaker::lobby_runtime::Port,
+) -> GlobalResult<backend::job::ProxiedPortConfig> {
+	Ok(backend::job::ProxiedPortConfig {
+		// Match the port label generated in mm-config-version-prepare
+		// and in api-matchmaker
+		target_nomad_port_label: Some(util_mm::format_nomad_port_label(&port.label)),
+		ingress_port: None,
+		// TODO: Not just for hostnames anymore, change name?
+		ingress_hostnames: vec![format!(
+			"lobby.{}/{}/{}-{}",
+			unwrap!(util::env::domain_job()),
+			region.name_id,
+			lobby_id,
+			port.label,
+		)],
+		proxy_protocol: job_proxy_protocol(port.proxy_protocol)? as i32,
+		ssl_domain_mode: backend::job::SslDomainMode::Exact as i32,
+	})
+}
+
+fn job_proxy_protocol(proxy_protocol: i32) -> GlobalResult<backend::job::ProxyProtocol> {
+	let proxy_protocol = unwrap!(backend::matchmaker::lobby_runtime::ProxyProtocol::from_i32(
+		proxy_protocol
+	));
+	let job_proxy_protocol = match proxy_protocol {
+		backend::matchmaker::lobby_runtime::ProxyProtocol::Http => {
+			backend::job::ProxyProtocol::Http
+		}
+		backend::matchmaker::lobby_runtime::ProxyProtocol::Https => {
+			backend::job::ProxyProtocol::Https
+		}
+		backend::matchmaker::lobby_runtime::ProxyProtocol::Tcp => backend::job::ProxyProtocol::Tcp,
+		backend::matchmaker::lobby_runtime::ProxyProtocol::TcpTls => {
+			backend::job::ProxyProtocol::TcpTls
+		}
+		backend::matchmaker::lobby_runtime::ProxyProtocol::Udp => backend::job::ProxyProtocol::Udp,
+	};
+
+	Ok(job_proxy_protocol)
 }

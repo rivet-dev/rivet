@@ -3,6 +3,7 @@ use proto::backend::{self, pkg::*};
 use redis::AsyncCommands;
 use rivet_operation::prelude::*;
 use serde::{Deserialize, Serialize};
+use url::Url;
 
 use crate::{auth::Auth, route::traefik};
 
@@ -218,27 +219,33 @@ fn register_proxied_port(
 	// Insert the relevant router
 	match proxy_protocol {
 		ProxyProtocol::Http => {
+			let middlewares =
+				http_router_middlewares(run_id, proxied_port, &target_nomad_port_label, config);
+
 			config.http.routers.insert(
 				format!("job-run:{}:{}:http", run_id, target_nomad_port_label),
 				traefik::TraefikRouter {
 					entry_points: vec![format!("lb-{ingress_port}")],
 					rule: Some(format_http_rule(proxied_port)),
 					priority: None,
-					service: service_id,
-					middlewares: vec!["job-rate-limit".into(), "job-in-flight".into()],
+					service: service_id.clone(),
+					middlewares,
 					tls: None,
 				},
 			);
 		}
 		ProxyProtocol::Https => {
+			let middlewares =
+				http_router_middlewares(run_id, proxied_port, &target_nomad_port_label, config);
+
 			config.http.routers.insert(
 				format!("job-run:{}:{}:https", run_id, target_nomad_port_label),
 				traefik::TraefikRouter {
 					entry_points: vec![format!("lb-{ingress_port}")],
 					rule: Some(format_http_rule(proxied_port)),
 					priority: None,
-					service: service_id,
-					middlewares: vec!["job-rate-limit".into(), "job-in-flight".into()],
+					service: service_id.clone(),
+					middlewares,
 					tls: Some(traefik::TraefikTls::build(build_tls_domains(proxied_port)?)),
 				},
 			);
@@ -291,7 +298,15 @@ fn format_http_rule(proxied_port: &job::redis_job::run_proxied_ports::ProxiedPor
 	proxied_port
 		.ingress_hostnames
 		.iter()
-		.map(|x| format!("Host(`{}`)", x))
+		.map(|x| {
+			if let Ok(url) = Url::parse(&format!("https://{x}")) {
+				if let (true, Some(host)) = (url.path() != "/", url.host()) {
+					return format!("(Host(`{host}`) && PathPrefix(`{}`))", url.path());
+				}
+			}
+
+			format!("Host(`{x}`)")
+		})
 		.collect::<Vec<String>>()
 		.join(" || ")
 }
@@ -332,4 +347,42 @@ fn build_tls_domains(
 	}
 
 	Ok(domains)
+}
+
+fn http_router_middlewares(
+	run_id: Uuid,
+	proxied_port: &job::redis_job::run_proxied_ports::ProxiedPort,
+	target_nomad_port_label: &str,
+	config: &mut traefik::TraefikConfigResponse,
+) -> Vec<String> {
+	let ingress_port = proxied_port.ingress_port;
+
+	let mut middlewares = vec!["job-rate-limit".to_string(), "job-in-flight".to_string()];
+
+	// Check if any of the hostname values have paths
+	let paths = proxied_port
+		.ingress_hostnames
+		.iter()
+		.flat_map(|url| Url::parse(&format!("https://{url}")))
+		.filter(|url| url.path() != "/");
+
+	// Create strip prefix middleware
+	if paths.clone().count() != 0 {
+		let strip_prefix_id = format!(
+			"job-run-strip-prefix:{}:{}",
+			run_id, target_nomad_port_label,
+		);
+
+		config.http.middlewares.insert(
+			strip_prefix_id.clone(),
+			traefik::TraefikMiddlewareHttp::StripPrefix {
+				prefixes: paths.map(|url| url.path().to_string()).collect(),
+				force_slash: None,
+			},
+		);
+
+		middlewares.push(strip_prefix_id);
+	}
+
+	middlewares
 }
