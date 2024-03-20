@@ -891,9 +891,9 @@ fn path_proxied_port(
 		ingress_port: None,
 		// TODO: Not just for hostnames anymore, change name?
 		ingress_hostnames: vec![format!(
-			"lobby.{}/{}/{}-{}",
-			unwrap!(util::env::domain_job()),
+			"lobby.{}.{}/{}-{}",
 			region.name_id,
+			unwrap!(util::env::domain_job()),
 			lobby_id,
 			port.label,
 		)],

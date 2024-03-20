@@ -57,11 +57,12 @@ locals {
 			}
 			if server.pool_id == "gg"
 		],
+		# Lobby ID in path instead of domain
 		[
 			for server_id, server in local.servers:
 			{
 				zone_id = local.cloudflare_zone_id_job
-				name = "lobby.${var.domain_job}"
+				name = "lobby.${server.region_id}.${var.domain_job}"
 				server = server
 				proxied = false
 			}
