@@ -3,6 +3,10 @@ use proto::backend::{self, pkg::*};
 use redis::AsyncCommands;
 use rivet_operation::prelude::*;
 use serde::{Deserialize, Serialize};
+use std::{
+	collections::hash_map::DefaultHasher,
+	hash::{Hash, Hasher},
+};
 use url::Url;
 
 use crate::{auth::Auth, route::traefik};
@@ -219,14 +223,22 @@ fn register_proxied_port(
 	// Insert the relevant router
 	match proxy_protocol {
 		ProxyProtocol::Http => {
+			// Generate config
 			let middlewares =
 				http_router_middlewares(run_id, proxied_port, &target_nomad_port_label, config);
+			let rule = format_http_rule(proxied_port);
+
+			// Hash key
+			let unique_key = (&run_id, &target_nomad_port_label, &rule, &middlewares);
+			let mut hasher = DefaultHasher::new();
+			unique_key.hash(&mut hasher);
+			let hash = hasher.finish();
 
 			config.http.routers.insert(
-				format!("job-run:{}:{}:http", run_id, target_nomad_port_label),
+				format!("job-run:{run_id}:{hash:x}:http"),
 				traefik::TraefikRouter {
 					entry_points: vec![format!("lb-{ingress_port}")],
-					rule: Some(format_http_rule(proxied_port)),
+					rule: Some(rule),
 					priority: None,
 					service: service_id.clone(),
 					middlewares,
@@ -235,14 +247,22 @@ fn register_proxied_port(
 			);
 		}
 		ProxyProtocol::Https => {
+			// Generate config
 			let middlewares =
 				http_router_middlewares(run_id, proxied_port, &target_nomad_port_label, config);
+			let rule = format_http_rule(proxied_port);
+
+			// Hash key
+			let unique_key = (&run_id, &target_nomad_port_label, &rule, &middlewares);
+			let mut hasher = DefaultHasher::new();
+			unique_key.hash(&mut hasher);
+			let hash = hasher.finish();
 
 			config.http.routers.insert(
-				format!("job-run:{}:{}:https", run_id, target_nomad_port_label),
+				format!("job-run:{run_id}:{hash:x}:https"),
 				traefik::TraefikRouter {
 					entry_points: vec![format!("lb-{ingress_port}")],
-					rule: Some(format_http_rule(proxied_port)),
+					rule: Some(rule),
 					priority: None,
 					service: service_id.clone(),
 					middlewares,
@@ -355,8 +375,6 @@ fn http_router_middlewares(
 	target_nomad_port_label: &str,
 	config: &mut traefik::TraefikConfigResponse,
 ) -> Vec<String> {
-	let ingress_port = proxied_port.ingress_port;
-
 	let mut middlewares = vec!["job-rate-limit".to_string(), "job-in-flight".to_string()];
 
 	// Check if any of the hostname values have paths
@@ -366,12 +384,19 @@ fn http_router_middlewares(
 		.flat_map(|url| Url::parse(&format!("https://{url}")))
 		.filter(|url| url.path() != "/");
 
+	// Hash key
+	let unique_key = (
+		&run_id,
+		&target_nomad_port_label,
+		&proxied_port.ingress_hostnames,
+	);
+	let mut hasher = DefaultHasher::new();
+	unique_key.hash(&mut hasher);
+	let hash = hasher.finish();
+
 	// Create strip prefix middleware
 	if paths.clone().count() != 0 {
-		let strip_prefix_id = format!(
-			"job-run-strip-prefix:{}:{}",
-			run_id, target_nomad_port_label,
-		);
+		let strip_prefix_id = format!("job-run-strip-prefix:{run_id}:{hash:x}");
 
 		config.http.middlewares.insert(
 			strip_prefix_id.clone(),
