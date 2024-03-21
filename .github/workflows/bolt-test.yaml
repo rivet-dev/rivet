@@ -37,9 +37,13 @@ jobs:
       - name: Bolt Test
         run: nix-shell --pure --run "bolt test"
 
-      - name: K3D Cleanup
-        if: always()
-        run: nix-shell --pure --run "k3d cluster delete rivet-ci"
+      - name: Tmate
+        if: failure()
+        uses: mxschmitt/action-tmate@v3
+
+      # - name: K3D Cleanup
+      #   if: always()
+      #   run: nix-shell --pure --run "k3d cluster delete rivet-ci"
 
       - name: Force Parallel Failure
         if: failure()
