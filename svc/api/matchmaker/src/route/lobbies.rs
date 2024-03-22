@@ -1422,7 +1422,9 @@ fn build_port(
 				.filter_map(|(proxied_port, _)| {
 					proxied_port
 						.ingress_hostnames
-						.first()
+						.iter()
+						// NOTE: Selects the primary ingress hostname (has no path segments)
+						.find(|hostname| !hostname.contains('/'))
 						.map(|hostname| (proxied_port, hostname))
 				})
 				.map(|(proxied_port, hostname)| {
