@@ -639,8 +639,22 @@ async fn create_docker_job(
 				&& port.port_range.is_none()
 		})
 		.flat_map(|port| {
-			std::iter::once(direct_proxied_port(lobby_id, region, port))
-				.chain(std::iter::once(path_proxied_port(lobby_id, region, port)))
+			let mut ports = vec![direct_proxied_port(lobby_id, region, port)];
+			match backend::matchmaker::lobby_runtime::ProxyProtocol::from_i32(port.proxy_protocol) {
+				Some(
+					backend::matchmaker::lobby_runtime::ProxyProtocol::Http
+					| backend::matchmaker::lobby_runtime::ProxyProtocol::Https,
+				) => {
+					ports.push(path_proxied_port(lobby_id, region, port));
+				}
+				Some(
+					backend::matchmaker::lobby_runtime::ProxyProtocol::Udp
+					| backend::matchmaker::lobby_runtime::ProxyProtocol::Tcp
+					| backend::matchmaker::lobby_runtime::ProxyProtocol::TcpTls,
+				)
+				| None => {}
+			}
+			ports
 		})
 		.collect::<GlobalResult<Vec<_>>>()?;
 
