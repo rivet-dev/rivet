@@ -49,9 +49,6 @@ pub async fn generate_project(ctx: &ProjectContext, skip_config_sync_check: bool
 
 	// Generate root
 	generate_root(ctx.path()).await;
-
-	// Generate regions
-	generate_regions(ctx).await;
 }
 
 async fn generate_root(path: &Path) {
@@ -235,19 +232,6 @@ pub async fn generate_all_services(ctx: &ProjectContext) {
 
 pub async fn generate_service(_ctx: &ServiceContext) {
 	// println!("  * Generating service {}", ctx.name());
-}
-
-async fn generate_regions(ctx: &ProjectContext) {
-	let svc = ctx.service_with_name("region-config-get").await;
-	let gen_path = svc.path().join("gen");
-	let gen_config_path = gen_path.join("region_config.json");
-
-	// Make gen dir
-	fs::create_dir_all(gen_path).await.unwrap();
-
-	// Write config. Use cjson in order to get deterministic output.
-	let regions_json = cjson::to_string(&ctx.ns().regions).unwrap();
-	write_if_different(&gen_config_path, &regions_json).await;
 }
 
 /// Writes to a file if the contents are different.

@@ -201,6 +201,22 @@ pub async fn gen_svc(exec_ctx: &ExecServiceContext) -> Vec<serde_json::Value> {
 		"data": secret_data
 	}));
 
+	// Create config for /etc/rivet
+	//
+	// Use cjson for consistent outputs
+	let regions_json = cjson::to_string(&project_ctx.ns().regions).unwrap();
+	specs.push(json!({
+		"apiVersion": "v1",
+		"kind": "ConfigMap",
+		"metadata": {
+			"name": format!("rivet-etc-{}", svc_ctx.name()),
+			"namespace": "rivet-service"
+		},
+		"data": {
+			"region_config.json": regions_json
+		}
+	}));
+
 	// Render ports
 	let (pod_ports, service_ports) = {
 		let mut pod_ports = Vec::new();
@@ -637,6 +653,19 @@ async fn build_volumes(
 	// Shared data between containers
 	let mut volumes = Vec::<serde_json::Value>::new();
 	let mut volume_mounts = Vec::<serde_json::Value>::new();
+
+	// TODO: Move this to reading vanilla config inside service instead of populating this
+	// Add static config
+	volumes.push(json!({
+		"name": "rivet-etc",
+		"configMap": {
+			"name": format!("rivet-etc-{}", svc_ctx.name()),
+		}
+	}));
+	volume_mounts.push(json!({
+		"name": "rivet-etc",
+		"mountPath": "/etc/rivet"
+	}));
 
 	// Add volumes based on exec service
 	match driver {

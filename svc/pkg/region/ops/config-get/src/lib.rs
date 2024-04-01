@@ -2,6 +2,7 @@ use proto::backend::pkg::*;
 use rivet_operation::prelude::*;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use tokio::fs;
 
 #[operation(name = "region-config-get")]
 pub async fn handle(
@@ -29,12 +30,13 @@ pub async fn read() -> HashMap<String, region::config_get::Region> {
 	READ_CONFIG_ONCE
 		.get_or_init(|| async {
 			// Read config
-			let config_buf = include_bytes!("../gen/region_config.json");
+			let config_buf = fs::read("/etc/rivet/region_config.json")
+				.await
+				.expect("failed to read /region_config.json");
 			let config = serde_json::from_slice::<HashMap<String, Region>>(config_buf.as_slice())
 				.expect("invalid region config");
 
 			// Convert to proto
-
 			config
 				.into_iter()
 				.map(|(k, v)| {
