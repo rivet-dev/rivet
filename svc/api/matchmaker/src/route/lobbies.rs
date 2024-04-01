@@ -440,7 +440,7 @@ pub async fn create(
 				.as_ref()
 				.map(serde_json::to_string)
 				.transpose()?,
-			tags: HashMap::new(),
+			tags: tags,
 			dynamic_max_players: dynamic_max_players,
 		})
 		.await?;
@@ -460,7 +460,7 @@ pub async fn create(
 		find_query,
 		Some(version_config.clone()),
 		body.captcha,
-		&tags,
+		&HashMap::new(),
 		body.max_players,
 		// Bypassing join verification because this user created the lobby (create verification
 		// already happened)
