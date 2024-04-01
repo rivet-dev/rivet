@@ -320,11 +320,15 @@ pub async fn build_tests<'a, T: AsRef<str>>(
 			let v = serde_json::from_str::<serde_json::Value>(line).context("invalid json")?;
 			if v["reason"] == "compiler-artifact" && v["target"]["kind"] == json!(["test"]) {
 				if let Some(executable) = v["filenames"][0].as_str() {
-					// Parse package name
+					// Parsing the cargo package name (foo-bar) from
+					// path+file:///foo/bar#foo-bar@0.0.1
 					let package = v["package_id"]
 						.as_str()
 						.context("missing package_id")?
-						.split_once(" ")
+						.split_once("#")
+						.context("split_once failed")?
+						.1
+						.split_once("@")
 						.context("split_once failed")?
 						.0;
 
