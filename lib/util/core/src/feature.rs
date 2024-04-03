@@ -19,6 +19,10 @@ pub fn fly() -> bool {
 		.is_some()
 }
 
+pub fn billing() -> bool {
+	std::env::var("RIVET_BILLING").ok().is_some()
+}
+
 pub fn job_run() -> bool {
 	std::env::var("RIVET_HAS_POOLS").ok().is_some()
 }
