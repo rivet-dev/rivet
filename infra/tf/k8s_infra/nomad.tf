@@ -60,7 +60,10 @@ locals {
 	}
 	nomad_checksum_configmap = sha256(jsonencode(local.nomad_server_configmap_data))
 
-	# Recommendations: https://developer.hashicorp.com/nomad/docs/install/production/requirements#resources-ram-cpu-etc
+	# This default is intended for testing & small games.
+	# 
+	# If running at scale in production, see the recommended resource configuration:
+	# https://developer.hashicorp.com/nomad/docs/install/production/requirements#resources-ram-cpu-etc
 	service_nomad = lookup(var.services, "nomad", {
 		count = 1
 		resources = {
