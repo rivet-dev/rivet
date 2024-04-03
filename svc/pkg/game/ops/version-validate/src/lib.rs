@@ -17,6 +17,7 @@ use std::collections::HashSet;
 
 // See version-info-game-mode.ts
 const MAX_LOBBY_SIZE: u32 = 256;
+const MAX_MAX_PLAYERS: u32 = 256;
 const MAX_MIN_IDLE_LOBBY_COUNT: u32 = 16;
 const MAX_MAX_IDLE_LOBBY_COUNT: u32 = 32;
 const MAX_CUSTOM_DISPLAY_NAME_LEN: usize = 11;
@@ -463,7 +464,7 @@ async fn handle(
 					"max-players-normal",
 					"too-low",
 				]);
-			} else if lobby_group.max_players_normal > MAX_LOBBY_SIZE {
+			} else if lobby_group.max_players_normal > MAX_MAX_PLAYERS {
 				errors.push(util::err_path![
 					"config",
 					"matchmaker",
@@ -485,7 +486,7 @@ async fn handle(
 					"max-players-direct",
 					"too-low",
 				]);
-			} else if lobby_group.max_players_direct > MAX_LOBBY_SIZE {
+			} else if lobby_group.max_players_direct > MAX_MAX_PLAYERS {
 				errors.push(util::err_path![
 					"config",
 					"matchmaker",
@@ -507,7 +508,7 @@ async fn handle(
 					"max-players-party",
 					"too-low",
 				]);
-			} else if lobby_group.max_players_party > MAX_LOBBY_SIZE {
+			} else if lobby_group.max_players_party > MAX_MAX_PLAYERS {
 				errors.push(util::err_path![
 					"config",
 					"matchmaker",

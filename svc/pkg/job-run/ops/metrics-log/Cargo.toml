@@ -6,13 +6,13 @@ authors = ["Rivet Gaming, LLC <developer@rivet.gg>"]
 license = "Apache-2.0"
 
 [dependencies]
-rivet-operation = { path = "../../../../../lib/operation/core" }
 chirp-client = { path = "../../../../../lib/chirp/client" }
+indoc = "1.0"
 prost = "0.10"
-
+reqwest = "0.11"
+rivet-operation = { path = "../../../../../lib/operation/core" }
 serde = { version = "1.0", features = ["derive"] }
 serde_urlencoded = "0.7.0"
-reqwest = "0.11"
 
 [dev-dependencies]
 chirp-worker = { path = "../../../../../lib/chirp/worker" }

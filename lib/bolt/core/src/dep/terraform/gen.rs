@@ -261,7 +261,7 @@ async fn vars(ctx: &ProjectContext) {
 				"name": "Nomad",
 				"service": "http://nomad-server.nomad.svc.cluster.local:4646",
 				"access_groups": access.as_ref().map(|x| vec![x.groups.engineering.clone()]).unwrap_or_default(),
-				"service_tokens": []
+				"service_tokens": [],
 			}),
 		);
 

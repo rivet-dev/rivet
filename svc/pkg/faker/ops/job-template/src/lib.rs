@@ -161,7 +161,7 @@ fn gen_task(ctx: &OperationContext<faker::job_template::Request>) -> GlobalResul
 									});
 								})
 								.listen(process.env.NOMAD_PORT_tcp);
-						"#
+							"#
 						)
 						.into(),
 					),
@@ -212,7 +212,7 @@ fn gen_task(ctx: &OperationContext<faker::job_template::Request>) -> GlobalResul
 									});
 								})
 								.bind(process.env.NOMAD_PORT_udp);
-						"#
+							"#
 						)
 						.into(),
 					),
@@ -243,10 +243,10 @@ fn gen_task(ctx: &OperationContext<faker::job_template::Request>) -> GlobalResul
 						embedded_tmpl: Some(
 							indoc!(
 								r#"
-							#!/bin/sh
-							cat ${NOMAD_TASK_DIR}/stdout.txt
-							cat ${NOMAD_TASK_DIR}/stderr.txt > /dev/stderr
-							"#
+								#!/bin/sh
+								cat ${NOMAD_TASK_DIR}/stdout.txt
+								cat ${NOMAD_TASK_DIR}/stderr.txt > /dev/stderr
+								"#
 							)
 							.into(),
 						),
@@ -318,14 +318,14 @@ fn gen_task(ctx: &OperationContext<faker::job_template::Request>) -> GlobalResul
 					dest_path: Some("local/run.sh".into()),
 					embedded_tmpl: Some(formatdoc!(
 						r#"
-					#!/bin/sh
-					counter=0
-					while [ true ]; do
-						echo "Counter: $counter"
-						let 'counter++'
-						sleep {sleep}
-					done
-					"#,
+						#!/bin/sh
+						counter=0
+						while [ true ]; do
+							echo "Counter: $counter"
+							let 'counter++'
+							sleep {sleep}
+						done
+						"#,
 						sleep = counter.interval_ms as f64 / 1000.,
 					)),
 					..Template::new()

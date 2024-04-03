@@ -1,3 +1,4 @@
+use indoc::formatdoc;
 use proto::backend::pkg::*;
 use reqwest::StatusCode;
 use rivet_operation::prelude::*;
@@ -59,26 +60,45 @@ async fn handle(
 			handle_request(
 				&prometheus_url,
 				None,
-				format!("last_over_time(nomad_client_allocs_memory_allocated{{exported_job=\"{nomad_job_id}\",task=\"{task}\"}} [15m:15s]) or vector(0)",
+				formatdoc!(
+					"
+					last_over_time(
+						nomad_client_allocs_memory_allocated{{exported_job=\"{nomad_job_id}\",task=\"{task}\"}}
+						[15m:15s]
+					) or vector(0)
+					",
 					nomad_job_id = metric.job,
 					task = metric.task
-			)),
+				)
+			),
 			handle_request(
 				&prometheus_url,
 				query_timing.as_ref(),
-				format!("max(nomad_client_allocs_cpu_total_percent{{exported_job=\"{nomad_job_id}\",task=\"{task}\"}}) or vector(0)",
+				formatdoc!(
+					"
+					max(
+						nomad_client_allocs_cpu_total_ticks{{exported_job=\"{nomad_job_id}\",task=\"{task}\"}} /
+						nomad_client_allocs_cpu_allocated{{exported_job=\"{nomad_job_id}\",task=\"{task}\"}}
+					) or vector(0)
+					",
 					nomad_job_id = metric.job,
 					task = metric.task
-			)),
+				)
+			),
 			handle_request(
 				&prometheus_url,
 				query_timing.as_ref(),
-				// Fall back to `nomad_client_allocs_memory_rss` since `nomadusage_memory_usage` is
+				// Fall back to `nomad_client_allocs_memory_rss` since `nomad_client_allocs_memory_usage` is
 				// not available in `raw_exec`.
-				format!("max(nomad_client_allocs_memory_usage{{exported_job=\"{nomad_job_id}\",task=\"{task}\"}}) or max(nomad_client_allocs_memory_rss{{exported_job=\"{nomad_job_id}\",task=\"{task}\"}}) or vector(0)",
+				formatdoc!(
+					"
+					max(nomad_client_allocs_memory_usage{{exported_job=\"{nomad_job_id}\",task=\"{task}\"}}) or
+					max(nomad_client_allocs_memory_rss{{exported_job=\"{nomad_job_id}\",task=\"{task}\"}}) or
+					vector(0)",
 					nomad_job_id = metric.job,
 					task = metric.task
-			)),
+				)
+			),
 		)?;
 
 		let (_, mem_allocated) = unwrap!(mem_allocated.value);
