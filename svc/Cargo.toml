@@ -152,6 +152,7 @@ members = [
 	"pkg/mm/ops/lobby-find-fail",
 	"pkg/mm/ops/lobby-find-lobby-query-list",
 	"pkg/mm/ops/lobby-find-try-complete",
+	"pkg/mm/ops/lobby-for-run-id",
 	"pkg/mm/ops/lobby-get",
 	"pkg/mm/ops/lobby-history",
 	"pkg/mm/ops/lobby-idle-update",

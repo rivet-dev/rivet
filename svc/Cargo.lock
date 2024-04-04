@@ -4270,6 +4270,8 @@ dependencies = [
  "indoc",
  "job-run-get",
  "lazy_static",
+ "mm-lobby-for-run-id",
+ "mm-lobby-get",
  "nomad-client",
  "nomad-util",
  "prost 0.10.4",
@@ -5058,6 +5060,17 @@ dependencies = [
  "prost 0.10.4",
  "rivet-operation",
  "rivet-util-mm",
+]
+
+[[package]]
+name = "mm-lobby-for-run-id"
+version = "0.0.1"
+dependencies = [
+ "chirp-client",
+ "chirp-worker",
+ "faker-mm-lobby",
+ "rivet-operation",
+ "sqlx",
 ]
 
 [[package]]
