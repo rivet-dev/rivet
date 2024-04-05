@@ -5,7 +5,7 @@ use serde::Deserialize;
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "PascalCase")]
 struct AllocationUpdated {
-	allocation: nomad_client::models::Allocation,
+	allocation: nomad_client_new::models::Allocation,
 }
 
 #[derive(Debug, Copy, Clone)]
@@ -17,8 +17,10 @@ enum TaskState {
 
 #[worker(name = "job-run-nomad-monitor-alloc-update")]
 async fn worker(
-	ctx: &OperationContext<job_run::msg::nomad_monitor_alloc_update::Message>,
+	ctx: &OperationContext<nomad::msg::monitor_alloc_update::Message>,
 ) -> GlobalResult<()> {
+	let crdb = ctx.crdb().await?;
+
 	let AllocationUpdated { allocation: alloc } = serde_json::from_str(&ctx.payload_json)?;
 	let alloc_state_json = serde_json::to_value(&alloc)?;
 

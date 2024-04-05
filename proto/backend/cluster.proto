@@ -1,0 +1,67 @@
+syntax = "proto3";
+
+package rivet.backend.cluster;
+
+import "proto/common.proto";
+import "proto/backend/net.proto";
+
+message Cluster {
+    rivet.common.Uuid cluster_id = 1;
+    string name_id = 2;
+    int64 create_ts = 3;
+    optional rivet.common.Uuid owner_team_id = 4;
+}
+
+enum Provider {
+    LINODE = 0;
+}
+
+message Datacenter {
+    rivet.common.Uuid datacenter_id = 1;
+    rivet.common.Uuid cluster_id = 2;
+    string name_id = 3;
+    string display_name = 4;
+
+    Provider provider = 5;
+    string provider_datacenter_id = 6;
+
+    repeated Pool pools = 7;
+    BuildDeliveryMethod build_delivery_method = 8;
+    // Nomad drain time in seconds.
+    uint64 drain_timeout = 9;
+}
+
+message Pool {
+    PoolType pool_type = 1;
+    repeated Hardware hardware = 2;
+    uint32 desired_count = 3;
+    uint32 max_count = 4;
+}
+
+enum PoolType {
+    JOB = 0;
+    GG = 1;
+    ATS = 2;
+}
+
+message Hardware {
+    string provider_hardware = 1;
+}
+
+enum BuildDeliveryMethod {
+    TRAFFIC_SERVER = 0;
+    S3_DIRECT = 1;
+}
+
+message Server {
+    rivet.common.Uuid server_id = 1;
+    rivet.common.Uuid datacenter_id = 2;
+    rivet.common.Uuid cluster_id = 3;
+    PoolType pool_type = 4;
+    optional string vlan_ip = 5;
+    optional string public_ip = 6;
+
+    optional int64 cloud_destroy_ts = 7;
+
+    // TODO: Add the rest of the sql columns
+}

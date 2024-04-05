@@ -1,7 +1,7 @@
 use anyhow::{Context, Result};
 use indoc::{formatdoc, indoc};
 use serde_json::json;
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use tokio::fs;
 
 use crate::{
@@ -222,19 +222,6 @@ async fn vars(ctx: &ProjectContext) {
 		}
 	}
 
-	// Regions
-	vars.insert(
-		"primary_region".into(),
-		json!(ctx.primary_region_or_local()),
-	);
-
-	let regions = super::regions::build_regions(&ctx).unwrap();
-	vars.insert("regions".into(), json!(&regions));
-
-	// Pools
-	let pools = super::pools::build_pools(&ctx).await.unwrap();
-	vars.insert("pools".into(), json!(&pools));
-
 	// Tunnels
 	if let Some(ns::Dns {
 		provider: Some(ns::DnsProvider::Cloudflare { access, .. }),
@@ -268,31 +255,6 @@ async fn vars(ctx: &ProjectContext) {
 		vars.insert("tunnels".into(), json!(&tunnels));
 	}
 
-	// Servers
-	let servers = super::servers::build_servers(&ctx, &regions, &pools).unwrap();
-	vars.insert("servers".into(), json!(servers));
-
-	if dep::terraform::cli::has_applied(ctx, "k8s_infra").await
-		&& dep::terraform::cli::has_applied(ctx, "tls").await
-	{
-		let k8s_infra = dep::terraform::output::read_k8s_infra(ctx).await;
-		let tls = dep::terraform::output::read_tls(ctx).await;
-
-		let mut server_install_scripts = HashMap::new();
-		for (k, v) in &servers {
-			server_install_scripts.insert(
-				k.clone(),
-				super::install_scripts::gen(ctx, v, &servers, &k8s_infra, &tls)
-					.await
-					.unwrap(),
-			);
-		}
-		vars.insert(
-			"server_install_scripts".into(),
-			json!(server_install_scripts),
-		);
-	}
-
 	// Services
 	{
 		let mut services = HashMap::new();
@@ -310,6 +272,27 @@ async fn vars(ctx: &ProjectContext) {
 		}
 		vars.insert("services".into(), json!(services));
 	}
+
+	// Datacenters
+	if let Some(dynamic_servers) = &config.rivet.dynamic_servers {
+		let datacenters = dynamic_servers
+			.cluster
+			.datacenters
+			.iter()
+			.map(|(name_id, dc)| {
+				(
+					name_id,
+					json!({
+						"datacenter_id": dc.datacenter_id,
+					}),
+				)
+			})
+			.collect::<HashMap<_, _>>();
+
+		vars.insert("datacenters".into(), json!(datacenters));
+	} else {
+		vars.insert("datacenters".into(), json!({}));
+	};
 
 	// Docker
 	vars.insert(
@@ -513,67 +496,68 @@ async fn vars(ctx: &ProjectContext) {
 		vars.insert("s3_providers".into(), s3_providers(ctx).await.unwrap());
 	}
 
+	// TODO: Reimplement with new server provisioning
 	// Better Uptime
-	if let Some(better_uptime) = &config.better_uptime {
-		// Make sure DNS is enabled
-		if config.dns.is_none() {
-			panic!("Better Uptime requires DNS to be enabled, since it uses subdomains to monitor services");
-		}
+	// if let Some(better_uptime) = &config.better_uptime {
+	// 	// Make sure DNS is enabled
+	// 	if config.dns.is_none() {
+	// 		panic!("Better Uptime requires DNS to be enabled, since it uses subdomains to monitor services");
+	// 	}
 
-		// Make sure there is at least one pool
-		if config.pools.is_empty() {
-			panic!("Better Uptime requires at least one pool, otherwise it will not be able to monitor the service");
-		}
+	// 	// Make sure there is at least one pool
+	// 	if config.pools.is_empty() {
+	// 		panic!("Better Uptime requires at least one pool, otherwise it will not be able to monitor the service");
+	// 	}
 
-		// Load all the regions of pools
-		let mut regions = config
-			.pools
-			.iter()
-			.filter_map(|pool| match config.regions.get(&pool.region) {
-				Some(region) => Some((pool.region.clone(), region.provider_region.clone())),
-				None => None,
-			})
-			.collect::<HashSet<_>>()
-			.into_iter()
-			.collect::<Vec<_>>();
-		regions.sort();
+	// 	// Load all the regions of pools
+	// 	let mut regions = config
+	// 		.pools
+	// 		.iter()
+	// 		.filter_map(|pool| match config.regions.get(&pool.region) {
+	// 			Some(region) => Some((pool.region.clone(), region.provider_region.clone())),
+	// 			None => None,
+	// 		})
+	// 		.collect::<HashSet<_>>()
+	// 		.into_iter()
+	// 		.collect::<Vec<_>>();
+	// 	regions.sort();
 
-		// Create monitors
-		let mm_monitors = regions
-			.iter()
-			.map(|(region, _)| {
-				json!({
-					"id": region,
-					"url": format!("{}/status/matchmaker?region={}", ctx.origin_api(), region),
-					"public_name": region,
-				})
-			})
-			.collect::<Vec<_>>();
+	// 	// Create monitors
+	// 	let mm_monitors = regions
+	// 		.iter()
+	// 		.map(|(region, _)| {
+	// 			json!({
+	// 				"id": region,
+	// 				"url": format!("{}/status/matchmaker?region={}", ctx.origin_api(), region),
+	// 				"public_name": region,
+	// 			})
+	// 		})
+	// 		.collect::<Vec<_>>();
 
-		vars.insert(
-			"better_uptime_groups".into(),
-			json!([
-				{
-					"id": "mm",
-					"name": "Matchmaker",
-					"monitors": mm_monitors,
-				},
-				{
-					"id": "cdn",
-					"name": "CDN",
-					"monitors": [
-						{
-							"id": "sandbox",
-							"url": format!("https://sandbox.{}", ctx.domain_cdn().unwrap()),
-							"public_name": "CDN"
-						}
-					]
-				},
-			]),
-		);
+	// 	vars.insert(
+	// 		"better_uptime_groups".into(),
+	// 		json!([
+	// 			{
+	// 				"id": "mm",
+	// 				"name": "Matchmaker",
+	// 				"monitors": mm_monitors,
+	// 			},
+	// 			{
+	// 				"id": "cdn",
+	// 				"name": "CDN",
+	// 				"monitors": [
+	// 					{
+	// 						"id": "sandbox",
+	// 						"url": format!("https://sandbox.{}", ctx.domain_cdn().unwrap()),
+	// 						"public_name": "CDN"
+	// 					}
+	// 				]
+	// 			},
+	// 		]),
+	// 	);
 
-		vars.insert("better_uptime".into(), json!(better_uptime.to_owned()));
-	}
+	// 	vars.insert("better_uptime".into(), json!(better_uptime.to_owned()));
+	// }
 
 	// Media presets
 	vars.insert(

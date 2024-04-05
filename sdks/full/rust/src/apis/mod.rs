@@ -91,6 +91,7 @@ pub fn parse_deep_object(prefix: &str, value: &serde_json::Value) -> Vec<(String
 }
 
 pub mod admin_api;
+pub mod admin_cluster_api;
 pub mod auth_identity_access_token_api;
 pub mod auth_identity_email_api;
 pub mod auth_tokens_api;
@@ -126,5 +127,6 @@ pub mod matchmaker_regions_api;
 pub mod module_api;
 pub mod portal_games_api;
 pub mod portal_notifications_api;
+pub mod provision_servers_api;
 
 pub mod configuration;

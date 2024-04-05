@@ -27,7 +27,6 @@ export class Lobbies {
 
     /**
      * Marks the current lobby as ready to accept connections. Players will not be able to connect to this lobby until the lobby is flagged as ready.
-     * This endpoint requires a [lobby token](/docs/general/concepts/token-types#matchmaker-lobby) for authentication, or a [development namespace token](/docs/general/concepts/token-types#namespace-development) for mock responses. When running on Rivet servers, you can access the given lobby token from the [`RIVET_TOKEN`](/docs/matchmaker/concepts/lobby-env) environment variable.
      * @throws {@link Rivet.InternalError}
      * @throws {@link Rivet.RateLimitError}
      * @throws {@link Rivet.ForbiddenError}
@@ -44,6 +43,7 @@ export class Lobbies {
             method: "POST",
             headers: {
                 Authorization: await this._getAuthorizationHeader(),
+                "X-Fern-Language": "JavaScript",
             },
             contentType: "application/json",
             timeoutMs: requestOptions?.timeoutInSeconds != null ? requestOptions.timeoutInSeconds * 1000 : 180000,
@@ -143,11 +143,6 @@ export class Lobbies {
      * join using the /join endpoint (this can be disabled by the developer by rejecting all new connections
      * after setting the lobby to closed).
      * Does not shutdown the lobby.
-     *
-     * This endpoint requires a [lobby token](/docs/general/concepts/token-types#matchmaker-lobby) for
-     * authentication, or a [development namespace token](/docs/general/concepts/token-types#namespace-development)
-     * for mock responses. When running on Rivet servers, you can access the given lobby token from the
-     * [`RIVET_TOKEN`](/docs/matchmaker/concepts/lobby-env) environment variable.
      * @throws {@link Rivet.InternalError}
      * @throws {@link Rivet.RateLimitError}
      * @throws {@link Rivet.ForbiddenError}
@@ -167,6 +162,7 @@ export class Lobbies {
             method: "PUT",
             headers: {
                 Authorization: await this._getAuthorizationHeader(),
+                "X-Fern-Language": "JavaScript",
             },
             contentType: "application/json",
             body: await serializers.matchmaker.SetLobbyClosedRequest.jsonOrThrow(request, {
@@ -265,12 +261,6 @@ export class Lobbies {
     }
 
     /**
-     * Sets the state JSON of the current lobby.
-     *
-     * This endpoint requires a [lobby token](/docs/general/concepts/token-types#matchmaker-lobby) for
-     * authentication, or a [development namespace token](/docs/general/concepts/token-types#namespace-development)
-     * for mock responses. When running on Rivet servers, you can access the given lobby token from the
-     * [`RIVET_TOKEN`](/docs/matchmaker/concepts/lobby-env) environment variable.
      * @throws {@link Rivet.InternalError}
      * @throws {@link Rivet.RateLimitError}
      * @throws {@link Rivet.ForbiddenError}
@@ -287,6 +277,7 @@ export class Lobbies {
             method: "PUT",
             headers: {
                 Authorization: await this._getAuthorizationHeader(),
+                "X-Fern-Language": "JavaScript",
             },
             contentType: "application/json",
             body:
@@ -388,12 +379,6 @@ export class Lobbies {
     }
 
     /**
-     * Get the state of any lobby.
-     *
-     * This endpoint requires a [lobby token](/docs/general/concepts/token-types#matchmaker-lobby) for
-     * authentication, or a [development namespace token](/docs/general/concepts/token-types#namespace-development)
-     * for mock responses. When running on Rivet servers, you can access the given lobby token from the
-     * [`RIVET_TOKEN`](/docs/matchmaker/concepts/lobby-env) environment variable.
      * @throws {@link Rivet.InternalError}
      * @throws {@link Rivet.RateLimitError}
      * @throws {@link Rivet.ForbiddenError}
@@ -410,6 +395,7 @@ export class Lobbies {
             method: "GET",
             headers: {
                 Authorization: await this._getAuthorizationHeader(),
+                "X-Fern-Language": "JavaScript",
             },
             contentType: "application/json",
             timeoutMs: requestOptions?.timeoutInSeconds != null ? requestOptions.timeoutInSeconds * 1000 : 180000,
@@ -514,12 +500,6 @@ export class Lobbies {
      * Finds a lobby based on the given criteria.
      * If a lobby is not found and `prevent_auto_create_lobby` is `false`,
      * a new lobby will be created.
-     *
-     * When [tokenless authentication](/docs/general/concepts/tokenless-authentication/web) is enabled in
-     * your game namespace, this endpoint does not require a token to authenticate. Otherwise, a
-     * [development namespace token](/docs/general/concepts/token-types#namespace-development) can be used
-     * for mock responses and a [public namespace token](/docs/general/concepts/token-types#namespace-public)
-     * can be used for general authentication.
      * @throws {@link Rivet.InternalError}
      * @throws {@link Rivet.RateLimitError}
      * @throws {@link Rivet.ForbiddenError}
@@ -540,6 +520,7 @@ export class Lobbies {
             method: "POST",
             headers: {
                 Authorization: await this._getAuthorizationHeader(),
+                "X-Fern-Language": "JavaScript",
                 origin: origin != null ? origin : undefined,
             },
             contentType: "application/json",
@@ -646,12 +627,6 @@ export class Lobbies {
      * Joins a specific lobby.
      * This request will use the direct player count configured for the
      * lobby group.
-     *
-     * When [tokenless authentication](/docs/general/concepts/tokenless-authentication/web) is enabled in
-     * your game namespace, this endpoint does not require a token to authenticate. Otherwise, a
-     * [development namespace token](/docs/general/concepts/token-types#namespace-development) can be used
-     * for mock responses and a [public namespace token](/docs/general/concepts/token-types#namespace-public)
-     * can be used for general authentication.
      * @throws {@link Rivet.InternalError}
      * @throws {@link Rivet.RateLimitError}
      * @throws {@link Rivet.ForbiddenError}
@@ -671,6 +646,7 @@ export class Lobbies {
             method: "POST",
             headers: {
                 Authorization: await this._getAuthorizationHeader(),
+                "X-Fern-Language": "JavaScript",
             },
             contentType: "application/json",
             body: await serializers.matchmaker.JoinLobbyRequest.jsonOrThrow(request, {
@@ -776,12 +752,6 @@ export class Lobbies {
 
     /**
      * Creates a custom lobby.
-     *
-     * When [tokenless authentication](/docs/general/concepts/tokenless-authentication/web) is enabled in
-     * your game namespace, this endpoint does not require a token to authenticate. Otherwise, a
-     * [development namespace token](/docs/general/concepts/token-types#namespace-development) can be used
-     * for mock responses and a [public namespace token](/docs/general/concepts/token-types#namespace-public)
-     * can be used for general authentication.
      * @throws {@link Rivet.InternalError}
      * @throws {@link Rivet.RateLimitError}
      * @throws {@link Rivet.ForbiddenError}
@@ -801,6 +771,7 @@ export class Lobbies {
             method: "POST",
             headers: {
                 Authorization: await this._getAuthorizationHeader(),
+                "X-Fern-Language": "JavaScript",
             },
             contentType: "application/json",
             body: await serializers.matchmaker.CreateLobbyRequest.jsonOrThrow(request, {
@@ -906,12 +877,6 @@ export class Lobbies {
 
     /**
      * Lists all open lobbies.
-     *
-     * When [tokenless authentication](/docs/general/concepts/tokenless-authentication/web) is enabled in
-     * your game namespace, this endpoint does not require a token to authenticate. Otherwise, a
-     * [development namespace token](/docs/general/concepts/token-types#namespace-development) can be used
-     * for mock responses and a [public namespace token](/docs/general/concepts/token-types#namespace-public)
-     * can be used for general authentication.
      * @throws {@link Rivet.InternalError}
      * @throws {@link Rivet.RateLimitError}
      * @throws {@link Rivet.ForbiddenError}
@@ -937,6 +902,7 @@ export class Lobbies {
             method: "GET",
             headers: {
                 Authorization: await this._getAuthorizationHeader(),
+                "X-Fern-Language": "JavaScript",
             },
             contentType: "application/json",
             queryParameters: _queryParams,

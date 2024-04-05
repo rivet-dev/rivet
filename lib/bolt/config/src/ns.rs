@@ -12,10 +12,6 @@ pub struct Namespace {
 	pub cluster: Cluster,
 	#[serde(default)]
 	pub secrets: Secrets,
-	#[serde(default = "default_regions")]
-	pub regions: HashMap<String, Region>,
-	#[serde(default)]
-	pub pools: Vec<Pool>,
 	#[serde(default)]
 	pub terraform: Terraform,
 	pub dns: Option<Dns>,
@@ -106,42 +102,6 @@ pub struct _1Password {
 	pub secrets_path: String,
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug)]
-#[serde(deny_unknown_fields)]
-pub struct Region {
-	#[serde(default)]
-	pub primary: bool,
-	pub id: String,
-	pub provider: String,
-	pub provider_region: String,
-	pub netnum: usize,
-}
-
-#[derive(Serialize, Deserialize, Clone, Debug)]
-#[serde(deny_unknown_fields)]
-pub struct Pool {
-	pub pool: String,
-	pub version: String,
-	pub region: String,
-	pub count: usize,
-	pub size: String,
-	#[serde(default)]
-	pub volumes: HashMap<String, Volume>,
-}
-
-#[derive(Serialize, Deserialize, Clone, Debug)]
-#[serde(deny_unknown_fields)]
-pub struct Volume {
-	pub size: usize,
-}
-
-#[derive(Serialize, Deserialize, Clone, Debug)]
-#[serde(deny_unknown_fields)]
-pub enum ProviderKind {
-	#[serde(rename = "linode")]
-	Linode {},
-}
-
 #[derive(Serialize, Deserialize, Clone, Debug, Default)]
 #[serde(deny_unknown_fields)]
 pub struct Terraform {
@@ -184,7 +144,7 @@ pub struct DnsDomains {
 	/// - api.{domain.main}
 	pub main: String,
 	/// Will create DNS records for:
-	/// - *.lobby.{region}.{domain.job}
+	/// - *.lobby.{region_id}.{domain.job}
 	///
 	/// Can be the identical to `domain.main`.
 	pub job: String,
@@ -549,7 +509,7 @@ pub struct Rivet {
 	#[serde(default)]
 	pub upload: Upload,
 	#[serde(default)]
-	pub dynamic_servers: DynamicServers,
+	pub dynamic_servers: Option<DynamicServers>,
 	#[serde(default)]
 	pub cdn: Cdn,
 	#[serde(default)]
@@ -632,11 +592,16 @@ pub struct Upload {
 	pub nsfw_error_verbose: bool,
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug, Default)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(deny_unknown_fields)]
 pub struct DynamicServers {
+	pub cluster: DynamicServersCluster,
+	/// Whether or not to send a taint message in the next cluster update.
 	#[serde(default)]
-	pub build_delivery_method: DynamicServersBuildDeliveryMethod,
+	pub taint: bool,
+	/// How many empty job servers to have at all times. Used in the simple provisioning algorithm.
+	#[serde(default = "default_job_server_provision_margin")]
+	pub job_server_provision_margin: u32,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, Default, strum_macros::Display)]
@@ -648,6 +613,60 @@ pub enum DynamicServersBuildDeliveryMethod {
 	#[serde(rename = "s3_direct")]
 	#[strum(serialize = "s3_direct")]
 	S3Direct,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+#[serde(deny_unknown_fields)]
+pub struct DynamicServersCluster {
+	name_id: String,
+	#[serde(default)]
+	pub datacenters: HashMap<String, DynamicServersDatacenter>,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+#[serde(deny_unknown_fields)]
+pub struct DynamicServersDatacenter {
+	pub datacenter_id: Uuid,
+	pub display_name: String,
+	pub provider: DynamicServersProvider,
+	pub provider_datacenter_name: String,
+	#[serde(default)]
+	pub build_delivery_method: DynamicServersBuildDeliveryMethod,
+	/// Nomad drain time in seconds.
+	pub drain_timeout: u32,
+
+	#[serde(default)]
+	pub pools: HashMap<DynamicServersDatacenterPoolType, DynamicServersDatacenterPool>,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub enum DynamicServersProvider {
+	#[serde(rename = "linode")]
+	Linode,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+#[serde(deny_unknown_fields)]
+pub struct DynamicServersDatacenterPool {
+	pub hardware: Vec<DynamicServersDatacenterHardware>,
+	pub desired_count: u32,
+	pub max_count: u32,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+#[serde(deny_unknown_fields)]
+pub struct DynamicServersDatacenterHardware {
+	pub name: String,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, Hash)]
+pub enum DynamicServersDatacenterPoolType {
+	#[serde(rename = "job")]
+	Job,
+	#[serde(rename = "gg")]
+	Gg,
+	#[serde(rename = "ats")]
+	Ats,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -675,9 +694,22 @@ pub struct Bolt {
 	pub confirm_commands: bool,
 }
 
-fn default_regions() -> HashMap<String, Region> {
-	toml::from_str(include_str!("../default_regions.toml"))
-		.expect("failed to parse default_regions.toml")
+#[derive(Serialize, Deserialize, Clone, Debug, Default)]
+#[serde(deny_unknown_fields)]
+pub struct BetterUptime {
+	/// The name of your company. This will be displayed on your status page
+	/// in the top left. This is required by Better Uptime.
+	pub company_name: String,
+	/// The URL of your company. This will be used on the status page to link
+	/// to your company's website. This is required by Better Uptime.
+	pub company_url: String,
+	/// The subdomain is the part of the public URL of your status page uses.
+	///
+	/// Eg. <company_subdomain>.betteruptime.com.
+	///
+	/// It needs to be unique across all of Better Uptime. This is required
+	/// by Better Uptime.
+	pub company_subdomain: String,
 }
 
 fn default_docker_repo() -> String {
@@ -700,20 +732,6 @@ fn default_tunnel_port() -> u16 {
 	5000
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug, Default)]
-#[serde(deny_unknown_fields)]
-pub struct BetterUptime {
-	/// The name of your company. This will be displayed on your status page
-	/// in the top left. This is required by Better Uptime.
-	pub company_name: String,
-	/// The URL of your company. This will be used on the status page to link
-	/// to your company's website. This is required by Better Uptime.
-	pub company_url: String,
-	/// The subdomain is the part of the public URL of your status page uses.
-	///
-	/// Eg. <company_subdomain>.betteruptime.com.
-	///
-	/// It needs to be unique across all of Better Uptime. This is required
-	/// by Better Uptime.
-	pub company_subdomain: String,
+fn default_job_server_provision_margin() -> u32 {
+	2
 }

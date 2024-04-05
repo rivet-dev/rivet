@@ -17,23 +17,6 @@ impl<T> Deref for TerraformOutputValue<T> {
 }
 
 #[derive(Debug, Clone, Deserialize)]
-pub struct Pools {
-	pub servers: TerraformOutputValue<HashMap<String, PoolServer>>,
-}
-
-#[derive(Debug, Clone, Deserialize)]
-pub struct PoolServer {
-	// Server
-	pub region_id: String,
-	pub pool_id: String,
-	pub version_id: String,
-	pub index: usize,
-
-	// New data
-	pub public_ipv4: String,
-}
-
-#[derive(Debug, Clone, Deserialize)]
 pub struct Cert {
 	pub cert_pem: String,
 	pub key_pem: String,
@@ -92,10 +75,6 @@ pub struct Redis {
 
 pub async fn read_k8s_infra(ctx: &ProjectContext) -> K8sInfra {
 	read_plan::<K8sInfra>(ctx, "k8s_infra").await
-}
-
-pub async fn read_pools(ctx: &ProjectContext) -> Pools {
-	read_plan::<Pools>(ctx, "pools").await
 }
 
 pub async fn read_tls(ctx: &ProjectContext) -> Tls {

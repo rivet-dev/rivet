@@ -39,7 +39,7 @@ pub async fn run_from_env() -> GlobalResult<()> {
 		SET provider = $1
 		WHERE provider IS NULL 
 		",
-		proto_provider as i32 as i64,
+		proto_provider as i64,
 	)
 	.await?;
 

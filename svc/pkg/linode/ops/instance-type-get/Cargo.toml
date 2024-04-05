@@ -1,0 +1,19 @@
+[package]
+name = "linode-instance-type-get"
+version = "0.0.1"
+edition = "2018"
+authors = ["Rivet Gaming, LLC <developer@rivet.gg>"]
+license = "Apache-2.0"
+
+[dependencies]
+chirp-client = { path = "../../../../../lib/chirp/client" }
+rivet-operation = { path = "../../../../../lib/operation/core" }
+util-linode = { package = "rivet-util-linode", path = "../../util" }
+
+[dependencies.sqlx]
+version = "0.7"
+default-features = false
+
+[dev-dependencies]
+chirp-worker = { path = "../../../../../lib/chirp/worker" }
+util-cluster = { package = "rivet-util-cluster", path = "../../../cluster/util" }

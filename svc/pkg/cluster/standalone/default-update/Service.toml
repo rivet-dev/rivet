@@ -1,0 +1,11 @@
+[service]
+name = "cluster-default-update"
+essential = true
+
+[runtime]
+kind = "rust"
+
+[oneshot]
+
+[databases]
+db-build = {}

@@ -26,6 +26,7 @@ All URIs are relative to *https://api.rivet.gg*
 Class | Method | HTTP request | Description
 ------------ | ------------- | ------------- | -------------
 *AdminApi* | [**admin_login**](docs/AdminApi.md#admin_login) | **POST** /admin/login | 
+*AdminClusterApi* | [**admin_cluster_get_server_ips**](docs/AdminClusterApi.md#admin_cluster_get_server_ips) | **GET** /cluster/server_ips | 
 *AuthIdentityAccessTokenApi* | [**auth_identity_access_token_complete_access_token_verification**](docs/AuthIdentityAccessTokenApi.md#auth_identity_access_token_complete_access_token_verification) | **POST** /auth/identity/access-token/complete-verification | 
 *AuthIdentityEmailApi* | [**auth_identity_email_complete_email_verification**](docs/AuthIdentityEmailApi.md#auth_identity_email_complete_email_verification) | **POST** /auth/identity/email/complete-verification | 
 *AuthIdentityEmailApi* | [**auth_identity_email_start_email_verification**](docs/AuthIdentityEmailApi.md#auth_identity_email_start_email_verification) | **POST** /auth/identity/email/start-verification | 
@@ -159,12 +160,15 @@ Class | Method | HTTP request | Description
 *PortalGamesApi* | [**portal_games_get_game_profile**](docs/PortalGamesApi.md#portal_games_get_game_profile) | **GET** /portal/games/{game_name_id}/profile | 
 *PortalNotificationsApi* | [**portal_notifications_register_notifications**](docs/PortalNotificationsApi.md#portal_notifications_register_notifications) | **POST** /portal/notifications/register | 
 *PortalNotificationsApi* | [**portal_notifications_unregister_notifications**](docs/PortalNotificationsApi.md#portal_notifications_unregister_notifications) | **DELETE** /portal/notifications/register | 
+*ProvisionServersApi* | [**provision_servers_get_server_info**](docs/ProvisionServersApi.md#provision_servers_get_server_info) | **GET** /servers/{ip}/info | 
 
 
 ## Documentation For Models
 
+ - [AdminClusterGetServerIpsResponse](docs/AdminClusterGetServerIpsResponse.md)
  - [AdminLoginRequest](docs/AdminLoginRequest.md)
  - [AdminLoginResponse](docs/AdminLoginResponse.md)
+ - [AdminPoolType](docs/AdminPoolType.md)
  - [AuthCompleteStatus](docs/AuthCompleteStatus.md)
  - [AuthIdentityCompleteAccessTokenVerificationRequest](docs/AuthIdentityCompleteAccessTokenVerificationRequest.md)
  - [AuthIdentityCompleteEmailVerificationRequest](docs/AuthIdentityCompleteEmailVerificationRequest.md)
@@ -281,7 +285,6 @@ Class | Method | HTTP request | Description
  - [CloudRegionTierExpenses](docs/CloudRegionTierExpenses.md)
  - [CloudSvcMetrics](docs/CloudSvcMetrics.md)
  - [CloudSvcPerf](docs/CloudSvcPerf.md)
- - [CloudUniversalRegion](docs/CloudUniversalRegion.md)
  - [CloudValidateGroupRequest](docs/CloudValidateGroupRequest.md)
  - [CloudValidateGroupResponse](docs/CloudValidateGroupResponse.md)
  - [CloudVersionCdnConfig](docs/CloudVersionCdnConfig.md)
@@ -450,6 +453,7 @@ Class | Method | HTTP request | Description
  - [PortalNotificationRegisterService](docs/PortalNotificationRegisterService.md)
  - [PortalNotificationUnregisterService](docs/PortalNotificationUnregisterService.md)
  - [PortalRegisterNotificationsRequest](docs/PortalRegisterNotificationsRequest.md)
+ - [ProvisionServersGetServerInfoResponse](docs/ProvisionServersGetServerInfoResponse.md)
  - [UploadPrepareFile](docs/UploadPrepareFile.md)
  - [UploadPresignedRequest](docs/UploadPresignedRequest.md)
  - [ValidationError](docs/ValidationError.md)

@@ -1,0 +1,46 @@
+[package]
+name = "cluster-worker"
+version = "0.0.1"
+edition = "2018"
+authors = ["Rivet Gaming, LLC <developer@rivet.gg>"]
+license = "Apache-2.0"
+
+[dependencies]
+anyhow = "1.0"
+chirp-client = { path = "../../../../lib/chirp/client" }
+chirp-worker = { path = "../../../../lib/chirp/worker" }
+chrono = "0.4"
+cloudflare = "0.10.1"
+include_dir = "0.7.3"
+indoc = "1.0"
+lazy_static = "1.4.0"
+maplit = "1.0"
+nomad-util = { path = "../../../../lib/nomad-util" }
+rivet-convert = { path = "../../../../lib/convert" }
+rivet-health-checks = { path = "../../../../lib/health-checks" }
+rivet-metrics = { path = "../../../../lib/metrics" }
+rivet-runtime = { path = "../../../../lib/runtime" }
+s3-util = { path = "../../../../lib/s3-util" }
+serde_yaml = "0.9"
+ssh2 = "0.9.4"
+thiserror = "1.0"
+util-cluster = { package = "rivet-util-cluster", path = "../util" }
+
+cluster-datacenter-get = { path = "../ops/datacenter-get" }
+cluster-datacenter-list = { path = "../ops/datacenter-list" }
+cluster-datacenter-topology-get = { path = "../ops/datacenter-topology-get" }
+linode-instance-type-get = { path = "../../linode/ops/instance-type-get" }
+linode-server-destroy = { path = "../../linode/ops/server-destroy" }
+linode-server-provision = { path = "../../linode/ops/server-provision" }
+token-create = { path = "../../token/ops/create" }
+
+[dependencies.nomad_client]
+git = "https://github.com/rivet-gg/nomad-client"
+rev = "abb66bf0c30c7ff5b0c695dae952481c33e538b5" # pragma: allowlist secret
+
+[dependencies.sqlx]
+version = "0.7"
+default-features = false
+
+[dev-dependencies]
+chirp-worker = { path = "../../../../lib/chirp/worker" }

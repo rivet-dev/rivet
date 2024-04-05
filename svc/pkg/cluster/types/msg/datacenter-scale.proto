@@ -1,0 +1,13 @@
+syntax = "proto3";
+
+package rivet.backend.pkg.cluster.msg.datacenter_scale;
+
+import "proto/common.proto";
+
+/// name = "msg-cluster-datacenter-scale"
+/// parameters = [
+/// 	{ name = "datacenter_id" },
+/// ]
+message Message {
+    rivet.common.Uuid datacenter_id = 1;
+}

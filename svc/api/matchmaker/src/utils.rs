@@ -5,14 +5,16 @@ use rivet_operation::prelude::*;
 pub fn build_region(
 	region: &backend::region::Region,
 	recommend: Option<&region::recommend::response::Region>,
-) -> models::RegionInfo {
-	models::RegionInfo {
+) -> GlobalResult<models::RegionInfo> {
+	let coords = unwrap_ref!(region.coords);
+
+	Ok(models::RegionInfo {
 		region_id: region.name_id.clone(),
 		provider_display_name: region.provider_display_name.clone(),
 		region_display_name: region.region_display_name.clone(),
 		datacenter_coord: models::Coord {
-			latitude: region.latitude,
-			longitude: region.longitude,
+			latitude: coords.latitude,
+			longitude: coords.longitude,
 		},
 		datacenter_distance_from_client: if let Some(recommend) = recommend {
 			models::Distance {
@@ -25,20 +27,22 @@ pub fn build_region(
 				miles: 0.0,
 			}
 		},
-	}
+	})
 }
 
 pub fn build_region_openapi(
 	region: &backend::region::Region,
 	recommend: Option<&region::recommend::response::Region>,
-) -> rivet_api::models::MatchmakerRegionInfo {
-	rivet_api::models::MatchmakerRegionInfo {
+) -> GlobalResult<rivet_api::models::MatchmakerRegionInfo> {
+	let coords = unwrap_ref!(region.coords);
+
+	Ok(rivet_api::models::MatchmakerRegionInfo {
 		region_id: region.name_id.clone(),
 		provider_display_name: region.provider_display_name.clone(),
 		region_display_name: region.region_display_name.clone(),
 		datacenter_coord: Box::new(rivet_api::models::GeoCoord {
-			latitude: region.latitude,
-			longitude: region.longitude,
+			latitude: coords.latitude,
+			longitude: coords.longitude,
 		}),
 		datacenter_distance_from_client: Box::new(if let Some(recommend) = recommend {
 			rivet_api::models::GeoDistance {
@@ -51,5 +55,5 @@ pub fn build_region_openapi(
 				miles: 0.0,
 			}
 		}),
-	}
+	})
 }

@@ -1,0 +1,14 @@
+syntax = "proto3";
+
+package rivet.backend.pkg.nomad.msg.monitor_eval_update;
+
+import "proto/common.proto";
+
+/// name = "msg-nomad-monitor-eval-update"
+/// parameters = [
+/// 	{ name = "dispatched_job_id" },
+/// ]
+message Message {
+	string dispatched_job_id = 1;
+	string payload_json = 2;
+}

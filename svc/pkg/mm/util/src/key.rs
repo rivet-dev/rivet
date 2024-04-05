@@ -62,6 +62,8 @@ pub mod lobby_config {
 		pub is_custom: bool,
 		#[serde(rename = "st", skip_serializing_if = "Option::is_none")]
 		pub state_json: Option<String>,
+		#[serde(rename = "nc")]
+		pub is_node_closed: bool,
 	}
 
 	pub const NAMESPACE_ID: &str = "ns";
@@ -75,6 +77,7 @@ pub mod lobby_config {
 	pub const IS_CLOSED: &str = "c";
 	pub const IS_CUSTOM: &str = "cu";
 	pub const STATE_JSON: &str = "st";
+	pub const IS_NODE_CLOSED: &str = "nc";
 }
 
 /// HASH
@@ -201,6 +204,16 @@ pub fn player_unregistered() -> String {
 /// ZSET<lobby id, expire ts>
 pub fn player_auto_remove() -> String {
 	"{global}:mm:player:auto_remove".to_string()
+}
+
+/// is closed
+pub fn node_is_closed(
+	node_id: &str,
+) -> String {
+	format!(
+		"{{global}}:mm:node:{}:is_closed",
+		node_id,
+	)
 }
 
 // Placeholder key

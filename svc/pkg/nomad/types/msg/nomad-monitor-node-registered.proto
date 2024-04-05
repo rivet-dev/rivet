@@ -1,0 +1,14 @@
+syntax = "proto3";
+
+package rivet.backend.pkg.nomad.msg.monitor_node_registered;
+
+import "proto/common.proto";
+
+/// name = "msg-nomad-monitor-node-registered"
+/// parameters = [
+/// 	{ name = "server_id" },
+/// ]
+message Message {
+	rivet.common.Uuid server_id = 1;
+	string node_id = 2;
+}

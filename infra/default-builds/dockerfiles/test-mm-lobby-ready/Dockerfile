@@ -7,4 +7,3 @@ RUN chmod +x ./run.sh
 RUN adduser -D app
 USER app
 CMD ["sh", "-ecx", "/app/run.sh"]
-

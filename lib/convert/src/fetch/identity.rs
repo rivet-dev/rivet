@@ -1,4 +1,4 @@
-use std::collections::{HashMap, HashSet};
+use std::collections::HashSet;
 
 use proto::{
 	backend::{self, pkg::*},
@@ -7,7 +7,7 @@ use proto::{
 use rivet_api::models;
 use rivet_operation::prelude::*;
 
-use crate::{convert, fetch};
+use crate::convert;
 
 #[derive(Debug)]
 pub struct TeamsCtx {
@@ -39,7 +39,7 @@ pub async fn handles(
 
 	let (users, presences_ctx, mutual_follows) = tokio::try_join!(
 		users(ctx, user_ids.clone()),
-		presence_data(ctx, current_user_id, user_ids.clone(), false),
+		presence_data(ctx, user_ids.clone(), false),
 		mutual_follows(ctx, current_user_id, raw_user_ids),
 	)?;
 
@@ -78,7 +78,7 @@ pub async fn summaries(
 
 	let (users, presences_ctx, mutual_follows) = tokio::try_join!(
 		users(ctx, user_ids.clone()),
-		presence_data(ctx, current_user_id, user_ids.clone(), false),
+		presence_data(ctx, user_ids.clone(), false),
 		mutual_follows(ctx, current_user_id, raw_user_ids),
 	)?;
 
@@ -127,7 +127,7 @@ pub async fn profiles(
 		self_is_game_linked,
 	) = tokio::try_join!(
 		users(ctx, user_ids.clone()),
-		presence_data(ctx, current_user_id, user_ids.clone(), true),
+		presence_data(ctx, user_ids.clone(), true),
 		teams(ctx, user_ids.clone()),
 		mutual_follows(ctx, current_user_id, raw_user_ids),
 		follows(ctx, user_ids.clone()),
@@ -170,7 +170,6 @@ pub async fn users(
 
 pub async fn presence_data(
 	ctx: &OperationContext<()>,
-	current_user_id: Uuid,
 	user_ids: Vec<common::Uuid>,
 	summary_info: bool,
 ) -> GlobalResult<PresencesCtx> {

@@ -121,6 +121,16 @@ impl SubCommand {
 			),
 		};
 
+		assert!(
+			!pkg_name.contains("_"),
+			"package name should not contain underscores, use dashes"
+		);
+
+		assert!(
+			!service_name.contains("_"),
+			"service name should not contain underscores, use dashes"
+		);
+
 		tasks::template::generate(
 			&mut ctx,
 			tasks::template::TemplateOpts {

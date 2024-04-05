@@ -11,7 +11,7 @@ module "secrets" {
 	source = "../modules/secrets"
 
 	keys = [
-		"linode/terraform/token",
+		"linode/token",
 		"ssh/server/private_key_openssh",
 	]
 }

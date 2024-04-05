@@ -1,0 +1,17 @@
+syntax = "proto3";
+
+package rivet.backend.pkg.linode.msg.prebake_provision;
+
+import "proto/common.proto";
+import "proto/backend/cluster.proto";
+
+/// name = "msg-linode-prebake-provision"
+/// parameters = [
+/// 	{ name = "variant" },
+/// ]
+message Message {
+    string variant = 1;
+    string provider_datacenter_id = 2;
+    rivet.backend.cluster.PoolType pool_type = 3;
+    repeated string tags = 4;
+}

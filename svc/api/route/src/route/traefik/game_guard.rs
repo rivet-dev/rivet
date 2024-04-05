@@ -15,14 +15,14 @@ use crate::{auth::Auth, route::traefik};
 #[serde(deny_unknown_fields)]
 pub struct ConfigQuery {
 	token: String,
-	region: String,
+	datacenter: Uuid,
 }
 
 #[tracing::instrument(skip(ctx))]
 pub async fn config(
 	ctx: Ctx<Auth>,
 	_watch_index: WatchIndexQuery,
-	ConfigQuery { token, region }: ConfigQuery,
+	ConfigQuery { token, datacenter }: ConfigQuery,
 ) -> GlobalResult<super::TraefikConfigResponseNullified> {
 	ensure_eq_with!(
 		token,
@@ -32,7 +32,7 @@ pub async fn config(
 	);
 
 	// Fetch configs and catch any errors
-	let config = build_job(&ctx, &region).await?;
+	let config = build_job(&ctx, datacenter).await?;
 
 	// tracing::info!(
 	// 	http_services = ?config.http.services.len(),
@@ -58,20 +58,12 @@ pub async fn config(
 #[tracing::instrument(skip(ctx))]
 pub async fn build_job(
 	ctx: &Ctx<Auth>,
-	region: &str,
+	region_id: Uuid,
 ) -> GlobalResult<traefik::TraefikConfigResponse> {
 	let mut config = traefik::TraefikConfigResponse::default();
 
-	// TODO: Cache this
-	// Determine the region from the query
-	let region_resolve_res = op!([ctx] region_resolve {
-		name_ids: vec![region.to_string()],
-	})
-	.await?;
-	let region_id = unwrap_ref!(unwrap_ref!(region_resolve_res.regions.first()).region_id);
-
 	let redis_job = ctx.op_ctx().redis_job().await?;
-	let job_runs_fetch = fetch_job_runs(redis_job, region_id.as_uuid()).await?;
+	let job_runs_fetch = fetch_job_runs(redis_job, region_id).await?;
 
 	config.http.middlewares.insert(
 		"job-rate-limit".to_owned(),

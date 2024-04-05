@@ -3,19 +3,20 @@ syntax = "proto3";
 package rivet.backend.pkg.region.recommend;
 
 import "proto/common.proto";
+import "proto/backend/net.proto";
 
 message Request {
+	reserved 3, 4;
 	optional string origin_ip = 1 [deprecated = true];
-	optional double latitude = 3;
-	optional double longitude = 4;
+	optional rivet.backend.net.Coordinates coords = 5;
 	repeated rivet.common.Uuid region_ids = 2;
 }
 
 message Response {
 	message Region {
+		reserved 2, 3;
 		rivet.common.Uuid region_id = 1;
-		double latitude = 2;
-		double longitude = 3;
+		rivet.backend.net.Coordinates coords = 5;
 		double distance_meters = 4;
 	}
 

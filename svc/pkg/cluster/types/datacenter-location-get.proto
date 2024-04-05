@@ -1,0 +1,19 @@
+syntax = "proto3";
+
+package rivet.backend.pkg.cluster.datacenter_location_get;
+
+import "proto/common.proto";
+import "proto/backend/net.proto";
+
+message Request {
+	repeated rivet.common.Uuid datacenter_ids = 1;
+}
+
+message Response {
+    message Datacenter {
+        rivet.common.Uuid datacenter_id = 1;
+        optional rivet.backend.net.Coordinates coords = 2; 
+    }
+
+    repeated Datacenter datacenters = 1;
+}

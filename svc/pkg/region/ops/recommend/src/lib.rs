@@ -1,7 +1,7 @@
 use futures_util::TryFutureExt;
 use std::cmp::{Ordering, PartialOrd};
 
-use proto::backend::pkg::*;
+use proto::backend::{self, pkg::*};
 use rivet_operation::prelude::*;
 
 #[derive(Debug, Clone)]
@@ -34,10 +34,11 @@ async fn handle(
 		.iter()
 		.map(common::Uuid::as_uuid)
 		.collect::<Vec<_>>();
+	let coords = unwrap_ref!(ctx.coords);
 
 	#[allow(deprecated)]
-	let origin = if let (Some(lat), Some(long)) = (ctx.latitude, ctx.longitude) {
-		OriginKind::Coords(lat, long)
+	let origin = if let Some(coords) = &ctx.coords {
+		OriginKind::Coords(coords.latitude, coords.longitude)
 	} else if let Some(origin_ip) = &ctx.origin_ip {
 		OriginKind::Ip(origin_ip.clone())
 	} else {
@@ -65,9 +66,12 @@ async fn list_regions(
 						ip: origin_ip.to_owned(),
 					})
 					.await?;
+
 					let ip_info =
 						unwrap_ref!(res.ip_info, "cannot recommend regions to a bogon ip");
-					GlobalResult::Ok((ip_info.latitude, ip_info.longitude))
+					let coords = unwrap_ref!(ip_info.coords);
+
+					GlobalResult::Ok((coords.latitude, coords.longitude))
 				}
 			}
 		},
@@ -92,10 +96,12 @@ async fn list_regions(
 		.regions
 		.iter()
 		.map(|region| {
+			let coords = unwrap_ref!(region.coords);
+
 			Ok((
-				(region.latitude, region.longitude),
+				(coords.latitude, coords.longitude),
 				unwrap!(
-					geoutils::Location::new(region.latitude, region.longitude)
+					geoutils::Location::new(coords.latitude, coords.longitude)
 						.distance_to(&origin_location)
 						.ok(),
 					"failed to calculate distance to region"
@@ -115,8 +121,10 @@ async fn list_regions(
 		.map(|((latitude, longitude), distance_meters, region_id)| {
 			region::recommend::response::Region {
 				region_id: Some(region_id.into()),
-				latitude,
-				longitude,
+				coords: Some(backend::net::Coordinates {
+					latitude,
+					longitude,
+				}),
 				distance_meters,
 			}
 		})

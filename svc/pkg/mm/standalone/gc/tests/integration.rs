@@ -30,7 +30,7 @@ async fn all() {
 }
 
 async fn remove_unready_lobbies(ctx: TestCtx) {
-	let _pools = rivet_pools::from_env("mm-gc-test").await.unwrap();
+	let pools = rivet_pools::from_env("mm-gc-test").await.unwrap();
 
 	let lobby = op!([ctx] faker_mm_lobby {
 		skip_set_ready: true,
@@ -42,7 +42,7 @@ async fn remove_unready_lobbies(ctx: TestCtx) {
 
 	// Check that it didn't remove lobbies it shouldn't
 	{
-		run_from_env(util::timestamp::now(), ctx.op_ctx().base())
+		run_from_env(util::timestamp::now(), pools.clone())
 			.await
 			.unwrap();
 		tokio::time::sleep(Duration::from_secs(1)).await;
@@ -70,7 +70,7 @@ async fn remove_unready_lobbies(ctx: TestCtx) {
 			util::timestamp::now()
 				+ util_mm::consts::LOBBY_READY_TIMEOUT
 				+ util::duration::seconds(1),
-			ctx.op_ctx().base(),
+			pools.clone(),
 		)
 		.await
 		.unwrap();
@@ -90,7 +90,7 @@ async fn remove_unready_lobbies(ctx: TestCtx) {
 }
 
 async fn remove_unregistered_players(ctx: TestCtx) {
-	let _pools = rivet_pools::from_env("mm-gc-test").await.unwrap();
+	let pools = rivet_pools::from_env("mm-gc-test").await.unwrap();
 
 	let lobby = op!([ctx] faker_mm_lobby {
 		..Default::default()
@@ -121,7 +121,7 @@ async fn remove_unregistered_players(ctx: TestCtx) {
 
 	// Check that it didn't remove players it shouldn't
 	{
-		run_from_env(util::timestamp::now(), ctx.op_ctx().base())
+		run_from_env(util::timestamp::now(), pools.clone())
 			.await
 			.unwrap();
 		tokio::time::sleep(Duration::from_secs(1)).await;
@@ -153,7 +153,7 @@ async fn remove_unregistered_players(ctx: TestCtx) {
 			util::timestamp::now()
 				+ util_mm::consts::PLAYER_READY_TIMEOUT
 				+ util::duration::seconds(1),
-			ctx.op_ctx().base(),
+			pools.clone(),
 		)
 		.await
 		.unwrap();
@@ -176,7 +176,7 @@ async fn remove_unregistered_players(ctx: TestCtx) {
 }
 
 async fn remove_auto_remove_players(ctx: TestCtx) {
-	let _pools = rivet_pools::from_env("mm-gc-test").await.unwrap();
+	let pools = rivet_pools::from_env("mm-gc-test").await.unwrap();
 
 	let lobby = op!([ctx] faker_mm_lobby {
 		..Default::default()
@@ -214,7 +214,7 @@ async fn remove_auto_remove_players(ctx: TestCtx) {
 
 	// Check that it didn't remove players it shouldn't
 	{
-		run_from_env(util::timestamp::now(), ctx.op_ctx().base())
+		run_from_env(util::timestamp::now(), pools.clone())
 			.await
 			.unwrap();
 		tokio::time::sleep(Duration::from_secs(1)).await;
@@ -223,7 +223,7 @@ async fn remove_auto_remove_players(ctx: TestCtx) {
 			util::timestamp::now()
 				+ util_mm::consts::PLAYER_READY_TIMEOUT
 				+ util::duration::seconds(1),
-			ctx.op_ctx().base(),
+			pools.clone(),
 		)
 		.await
 		.unwrap();
@@ -256,7 +256,7 @@ async fn remove_auto_remove_players(ctx: TestCtx) {
 			util::timestamp::now()
 				+ util_mm::consts::PLAYER_AUTO_REMOVE_TIMEOUT
 				+ util::duration::seconds(1),
-			ctx.op_ctx().base(),
+			pools.clone(),
 		)
 		.await
 		.unwrap();

@@ -1,0 +1,11 @@
+[service]
+name = "linode-gc"
+
+[runtime]
+kind = "rust"
+
+[headless]
+singleton = true
+
+[secrets]
+"linode/token" = {}

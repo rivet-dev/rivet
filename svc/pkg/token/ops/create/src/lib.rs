@@ -7,7 +7,7 @@ use rivet_operation::prelude::*;
 lazy_static::lazy_static! {
 	/// The private EdDSA key in a PEM format. Corresponds to
 	/// `rivet_claims::Config::jwt_key_public`.
-	static ref JWT_KEY_PRIVATE: String = std::env::var("RIVET_JWT_KEY_PRIVATE").unwrap();
+	static ref JWT_KEY_PRIVATE: String = util::env::var("RIVET_JWT_KEY_PRIVATE").unwrap();
 }
 
 #[operation(name = "token-create")]

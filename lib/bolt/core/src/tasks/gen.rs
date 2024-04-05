@@ -189,7 +189,7 @@ fn update_libs<'a>(lib_path: &'a Path) -> BoxFuture<'a, ()> {
 	async move {
 		let mut lib_dir = fs::read_dir(lib_path).await.unwrap();
 		while let Some(entry) = lib_dir.next_entry().await.unwrap() {
-			if !entry.metadata().await.unwrap().is_dir() {
+			if !entry.metadata().await.unwrap().is_dir() || entry.file_name() == "nomad-client" {
 				continue;
 			}
 
@@ -210,7 +210,9 @@ fn update_libs<'a>(lib_path: &'a Path) -> BoxFuture<'a, ()> {
 }
 
 async fn set_license(path: &Path) {
-	let toml = fs::read_to_string(path).await.unwrap();
+	let toml = fs::read_to_string(path)
+		.await
+		.expect(&format!("could not read path: {}", path.display()));
 	let mut doc = toml.parse::<toml_edit::Document>().unwrap();
 
 	let mut array = toml_edit::Array::new();

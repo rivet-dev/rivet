@@ -5,7 +5,7 @@ use proto::backend;
 use serde_json::json;
 use sha2::{Digest, Sha256};
 
-use super::NOMAD_CONFIG;
+use crate::NEW_NOMAD_CONFIG;
 
 // TODO: Only run create job if run job returns job not found
 
@@ -21,7 +21,7 @@ pub async fn create_job(
 	Ok(job_id)
 }
 
-fn override_job_id(job_id: &str, job: &mut nomad_client::models::Job) {
+fn override_job_id(job_id: &str, job: &mut nomad_client_new::models::Job) {
 	job.ID = Some(job_id.into());
 	job.name = Some(job_id.into());
 }
@@ -29,8 +29,8 @@ fn override_job_id(job_id: &str, job: &mut nomad_client::models::Job) {
 fn build_job(
 	base_job_json: &str,
 	region: &backend::region::Region,
-) -> GlobalResult<(String, nomad_client::models::Job)> {
-	let base_job = serde_json::from_str::<nomad_client::models::Job>(base_job_json)?;
+) -> GlobalResult<(String, nomad_client_new::models::Job)> {
+	let base_job = serde_json::from_str::<nomad_client_new::models::Job>(base_job_json)?;
 
 	// Modify the job spec
 	let mut job = modify_job_spec(base_job, region)?;
@@ -61,9 +61,9 @@ fn build_job(
 
 /// Modifies the provided job spec to be compatible with the Rivet job runtime.
 fn modify_job_spec(
-	mut job: nomad_client::models::Job,
+	mut job: nomad_client_new::models::Job,
 	region: &backend::region::Region,
-) -> GlobalResult<nomad_client::models::Job> {
+) -> GlobalResult<nomad_client_new::models::Job> {
 	// Replace all job IDs with a placeholder value in order to create a
 	// deterministic job spec.
 	override_job_id("__PLACEHOLDER__", &mut job);
@@ -103,7 +103,7 @@ fn modify_job_spec(
 	let main_task = unwrap!(
 		task_group
 			.tasks
-			.iter()
+			.iter_mut()
 			.flatten()
 			.find(|x| x.name.as_deref() == Some(util_job::RUN_MAIN_TASK_NAME)),
 		"must have main task"
@@ -116,12 +116,17 @@ fn modify_job_spec(
 		"main task must not have a lifecycle hook"
 	);
 
+	// Disable logs
+	// if let Some(log_config) = main_task.log_config.as_mut() {
+	// 	log_config.disabled = Some(true);
+	// }
+
 	// Configure networks
 	let networks = unwrap!(task_group.networks.as_mut());
 	ensure_eq!(1, networks.len(), "must have exactly 1 network");
 	let network = unwrap!(networks.first_mut());
 	// Disable IPv6 DNS since Docker doesn't support IPv6 yet
-	network.DNS = Some(Box::new(nomad_client::models::NetworkDns {
+	network.DNS = Some(Box::new(nomad_client_new::models::DnsConfig {
 		servers: Some(vec![
 			// Google
 			"8.8.8.8".into(),
@@ -132,22 +137,22 @@ fn modify_job_spec(
 		// Disable default search from the host
 		searches: Some(Vec::new()),
 		options: Some(vec!["rotate".into(), "edns0".into(), "attempts:2".into()]),
-		..nomad_client::models::NetworkDns::new()
+		..nomad_client_new::models::DnsConfig::new()
 	}));
 
 	// Disable rescheduling, since job-run doesn't support this at the moment
-	task_group.reschedule_policy = Some(Box::new(nomad_client::models::ReschedulePolicy {
+	task_group.reschedule_policy = Some(Box::new(nomad_client_new::models::ReschedulePolicy {
 		attempts: Some(0),
 		unlimited: Some(false),
-		..nomad_client::models::ReschedulePolicy::new()
+		..nomad_client_new::models::ReschedulePolicy::new()
 	}));
 
 	// Disable restarts. Our Nomad monitoring workflow doesn't support restarts
 	// at the moment.
-	task_group.restart_policy = Some(Box::new(nomad_client::models::RestartPolicy {
+	task_group.restart_policy = Some(Box::new(nomad_client_new::models::RestartPolicy {
 		attempts: Some(0),
 		// unlimited: Some(false),
-		..nomad_client::models::RestartPolicy::new()
+		..nomad_client_new::models::RestartPolicy::new()
 	}));
 
 	// Add cleanup task
@@ -157,8 +162,8 @@ fn modify_job_spec(
 	Ok(job)
 }
 
-fn gen_cleanup_task() -> nomad_client::models::Task {
-	use nomad_client::models::*;
+fn gen_cleanup_task() -> nomad_client_new::models::Task {
+	use nomad_client_new::models::*;
 
 	Task {
 		name: Some(util_job::RUN_CLEANUP_TASK_NAME.into()),
@@ -187,7 +192,7 @@ fn gen_cleanup_task() -> nomad_client::models::Task {
 			embedded_tmpl: Some(formatdoc!(
 				r#"
 				import ssl
-				import urllib.request, json, os, mimetypes, sys
+				import urllib.request, json, os, mimetypes, sys, socket
 
 				BEARER = '{{{{env "NOMAD_META_JOB_RUN_TOKEN"}}}}'
 
@@ -240,6 +245,7 @@ fn gen_cleanup_task() -> nomad_client::models::Task {
 		log_config: Some(Box::new(LogConfig {
 			max_files: Some(4),
 			max_file_size_mb: Some(2),
+			disabled: Some(false),
 		})),
 		..Task::new()
 	}
@@ -248,24 +254,22 @@ fn gen_cleanup_task() -> nomad_client::models::Task {
 #[tracing::instrument]
 async fn submit_job(
 	job_id: &str,
-	job: nomad_client::models::Job,
+	job: nomad_client_new::models::Job,
 	region: &backend::region::Region,
 ) -> GlobalResult<()> {
 	tracing::info!("submitting job");
 
-	nomad_client::apis::jobs_api::update_job(
-		&NOMAD_CONFIG,
+	nomad_client_new::apis::jobs_api::post_job(
+		&NEW_NOMAD_CONFIG,
 		job_id,
-		None,
+		nomad_client_new::models::JobRegisterRequest {
+			job: Some(Box::new(job)),
+			..nomad_client_new::models::JobRegisterRequest::new()
+		},
 		Some(&region.nomad_region),
 		None,
 		None,
-		Some(nomad_client::models::RegisterJobRequest {
-			job: Some(Box::new(job)),
-			enforce_index: None,
-			job_modify_index: None,
-			policy_override: None,
-		}),
+		None,
 	)
 	.await?;
 
@@ -317,8 +321,8 @@ mod tests {
 		}
 	}
 
-	fn gen_job(x: &str) -> nomad_client::models::Job {
-		use nomad_client::models::*;
+	fn gen_job(x: &str) -> nomad_client_new::models::Job {
+		use nomad_client_new::models::*;
 
 		// This job ID will be overridden, so it should not matter what we put
 		// here
@@ -343,6 +347,7 @@ mod tests {
 					// So we can access it from the test
 					mode: Some("cni/rivet-job".into()),
 					dynamic_ports: Some(vec![Port {
+						host_network: None,
 						label: Some("http".into()),
 						value: None,
 						to: Some(80),
@@ -351,7 +356,6 @@ mod tests {
 				}]),
 				services: Some(vec![Service {
 					provider: Some("nomad".into()),
-					ID: Some("test-job".into()),
 					name: Some("test-job".into()),
 					tags: Some(vec!["test".into()]),
 					..Service::new()

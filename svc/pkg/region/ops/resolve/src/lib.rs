@@ -5,14 +5,27 @@ use rivet_operation::prelude::*;
 async fn handle(
 	ctx: OperationContext<region::resolve::Request>,
 ) -> GlobalResult<region::resolve::Response> {
-	let res = op!([ctx] region_config_get {}).await?;
-	let regions = res
-		.regions
+	let datacenter_list_res = op!([ctx] cluster_datacenter_list {
+		cluster_ids: vec![util::env::default_cluster_id().into()],
+	})
+	.await?;
+	let cluster = unwrap!(
+		datacenter_list_res.clusters.first(),
+		"default cluster doesn't exist"
+	);
+
+	let datacenters_res = op!([ctx] cluster_datacenter_get {
+		datacenter_ids: cluster.datacenter_ids.clone(),
+	})
+	.await?;
+
+	let regions = datacenters_res
+		.datacenters
 		.iter()
-		.filter(|(x, _)| ctx.name_ids.contains(x))
-		.map(|(name_id, region)| region::resolve::response::Region {
-			region_id: region.id,
-			name_id: name_id.clone(),
+		.filter(|dc| ctx.name_ids.contains(&dc.name_id))
+		.map(|dc| region::resolve::response::Region {
+			region_id: dc.datacenter_id,
+			name_id: dc.name_id.clone(),
 		})
 		.collect::<Vec<_>>();
 

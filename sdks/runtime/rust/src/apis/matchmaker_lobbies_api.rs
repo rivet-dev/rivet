@@ -120,7 +120,7 @@ pub enum MatchmakerLobbiesSetStateError {
 }
 
 
-/// Creates a custom lobby.  When [tokenless authentication](/docs/general/concepts/tokenless-authentication/web) is enabled in your game namespace, this endpoint does not require a token to authenticate. Otherwise, a [development namespace token](/docs/general/concepts/token-types#namespace-development) can be used for mock responses and a [public namespace token](/docs/general/concepts/token-types#namespace-public) can be used for general authentication.
+/// Creates a custom lobby.
 pub async fn matchmaker_lobbies_create(configuration: &configuration::Configuration, matchmaker_lobbies_create_request: crate::models::MatchmakerLobbiesCreateRequest) -> Result<crate::models::MatchmakerCreateLobbyResponse, Error<MatchmakerLobbiesCreateError>> {
     let local_var_configuration = configuration;
 
@@ -152,7 +152,7 @@ pub async fn matchmaker_lobbies_create(configuration: &configuration::Configurat
     }
 }
 
-/// Finds a lobby based on the given criteria. If a lobby is not found and `prevent_auto_create_lobby` is `false`, a new lobby will be created.  When [tokenless authentication](/docs/general/concepts/tokenless-authentication/web) is enabled in your game namespace, this endpoint does not require a token to authenticate. Otherwise, a [development namespace token](/docs/general/concepts/token-types#namespace-development) can be used for mock responses and a [public namespace token](/docs/general/concepts/token-types#namespace-public) can be used for general authentication.
+/// Finds a lobby based on the given criteria. If a lobby is not found and `prevent_auto_create_lobby` is `false`, a new lobby will be created.
 pub async fn matchmaker_lobbies_find(configuration: &configuration::Configuration, matchmaker_lobbies_find_request: crate::models::MatchmakerLobbiesFindRequest, origin: Option<&str>) -> Result<crate::models::MatchmakerFindLobbyResponse, Error<MatchmakerLobbiesFindError>> {
     let local_var_configuration = configuration;
 
@@ -187,7 +187,6 @@ pub async fn matchmaker_lobbies_find(configuration: &configuration::Configuratio
     }
 }
 
-/// Get the state of any lobby.  This endpoint requires a [lobby token](/docs/general/concepts/token-types#matchmaker-lobby) for authentication, or a [development namespace token](/docs/general/concepts/token-types#namespace-development) for mock responses. When running on Rivet servers, you can access the given lobby token from the [`RIVET_TOKEN`](/docs/matchmaker/concepts/lobby-env) environment variable.
 pub async fn matchmaker_lobbies_get_state(configuration: &configuration::Configuration, lobby_id: &str) -> Result<serde_json::Value, Error<MatchmakerLobbiesGetStateError>> {
     let local_var_configuration = configuration;
 
@@ -218,7 +217,7 @@ pub async fn matchmaker_lobbies_get_state(configuration: &configuration::Configu
     }
 }
 
-/// Joins a specific lobby. This request will use the direct player count configured for the lobby group.  When [tokenless authentication](/docs/general/concepts/tokenless-authentication/web) is enabled in your game namespace, this endpoint does not require a token to authenticate. Otherwise, a [development namespace token](/docs/general/concepts/token-types#namespace-development) can be used for mock responses and a [public namespace token](/docs/general/concepts/token-types#namespace-public) can be used for general authentication.
+/// Joins a specific lobby. This request will use the direct player count configured for the lobby group.
 pub async fn matchmaker_lobbies_join(configuration: &configuration::Configuration, matchmaker_lobbies_join_request: crate::models::MatchmakerLobbiesJoinRequest) -> Result<crate::models::MatchmakerJoinLobbyResponse, Error<MatchmakerLobbiesJoinError>> {
     let local_var_configuration = configuration;
 
@@ -250,7 +249,7 @@ pub async fn matchmaker_lobbies_join(configuration: &configuration::Configuratio
     }
 }
 
-/// Lists all open lobbies.  When [tokenless authentication](/docs/general/concepts/tokenless-authentication/web) is enabled in your game namespace, this endpoint does not require a token to authenticate. Otherwise, a [development namespace token](/docs/general/concepts/token-types#namespace-development) can be used for mock responses and a [public namespace token](/docs/general/concepts/token-types#namespace-public) can be used for general authentication.
+/// Lists all open lobbies.
 pub async fn matchmaker_lobbies_list(configuration: &configuration::Configuration, include_state: Option<bool>) -> Result<crate::models::MatchmakerListLobbiesResponse, Error<MatchmakerLobbiesListError>> {
     let local_var_configuration = configuration;
 
@@ -284,7 +283,7 @@ pub async fn matchmaker_lobbies_list(configuration: &configuration::Configuratio
     }
 }
 
-/// Marks the current lobby as ready to accept connections. Players will not be able to connect to this lobby until the lobby is flagged as ready. This endpoint requires a [lobby token](/docs/general/concepts/token-types#matchmaker-lobby) for authentication, or a [development namespace token](/docs/general/concepts/token-types#namespace-development) for mock responses. When running on Rivet servers, you can access the given lobby token from the [`RIVET_TOKEN`](/docs/matchmaker/concepts/lobby-env) environment variable.
+/// Marks the current lobby as ready to accept connections. Players will not be able to connect to this lobby until the lobby is flagged as ready.
 pub async fn matchmaker_lobbies_ready(configuration: &configuration::Configuration, ) -> Result<(), Error<MatchmakerLobbiesReadyError>> {
     let local_var_configuration = configuration;
 
@@ -315,7 +314,7 @@ pub async fn matchmaker_lobbies_ready(configuration: &configuration::Configurati
     }
 }
 
-/// If `is_closed` is `true`, the matchmaker will no longer route players to the lobby. Players can still join using the /join endpoint (this can be disabled by the developer by rejecting all new connections after setting the lobby to closed). Does not shutdown the lobby.  This endpoint requires a [lobby token](/docs/general/concepts/token-types#matchmaker-lobby) for authentication, or a [development namespace token](/docs/general/concepts/token-types#namespace-development) for mock responses. When running on Rivet servers, you can access the given lobby token from the [`RIVET_TOKEN`](/docs/matchmaker/concepts/lobby-env) environment variable.
+/// If `is_closed` is `true`, the matchmaker will no longer route players to the lobby. Players can still join using the /join endpoint (this can be disabled by the developer by rejecting all new connections after setting the lobby to closed). Does not shutdown the lobby.
 pub async fn matchmaker_lobbies_set_closed(configuration: &configuration::Configuration, matchmaker_lobbies_set_closed_request: crate::models::MatchmakerLobbiesSetClosedRequest) -> Result<(), Error<MatchmakerLobbiesSetClosedError>> {
     let local_var_configuration = configuration;
 
@@ -347,7 +346,6 @@ pub async fn matchmaker_lobbies_set_closed(configuration: &configuration::Config
     }
 }
 
-/// Sets the state JSON of the current lobby.  This endpoint requires a [lobby token](/docs/general/concepts/token-types#matchmaker-lobby) for authentication, or a [development namespace token](/docs/general/concepts/token-types#namespace-development) for mock responses. When running on Rivet servers, you can access the given lobby token from the [`RIVET_TOKEN`](/docs/matchmaker/concepts/lobby-env) environment variable.
 pub async fn matchmaker_lobbies_set_state(configuration: &configuration::Configuration, body: Option<serde_json::Value>) -> Result<(), Error<MatchmakerLobbiesSetStateError>> {
     let local_var_configuration = configuration;
 

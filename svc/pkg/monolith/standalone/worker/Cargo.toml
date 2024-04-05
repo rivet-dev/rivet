@@ -23,11 +23,13 @@ tracing-subscriber = { version = "0.3", default-features = false, features = [
 cdn-worker = { path = "../../../cdn/worker" }
 cf-custom-hostname-worker = { path = "../../../cf-custom-hostname/worker" }
 cloud-worker = { path = "../../../cloud/worker" }
+cluster-worker = { path = "../../../cluster/worker" }
 external-worker = { path = "../../../external/worker" }
 game-user-worker = { path = "../../../game-user/worker" }
 job-log-worker = { path = "../../../job-log/worker" }
 job-run-worker = { path = "../../../job-run/worker" }
 kv-worker = { path = "../../../kv/worker" }
+linode-worker = { path = "../../../linode/worker" }
 mm-worker = { path = "../../../mm/worker" }
 module-worker = { path = "../../../module/worker" }
 push-notification-worker = { path = "../../../push-notification/worker" }

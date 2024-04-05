@@ -6,7 +6,7 @@ Name | Type | Description | Notes
 ------------ | ------------- | ------------- | -------------
 **host** | Option<**String**> | The host for the given port. Will be null if using a port range. | [optional]
 **hostname** | **String** |  | 
-**is_tls** | **bool** | Whether or not this lobby port uses TLS. You cannot mix a non-TLS and TLS ports. | 
+**is_tls** | **bool** |  | 
 **port** | Option<**i32**> | The port number for this lobby. Will be null if using a port range. | [optional]
 **port_range** | Option<[**crate::models::MatchmakerJoinPortRange**](MatchmakerJoinPortRange.md)> |  | [optional]
 

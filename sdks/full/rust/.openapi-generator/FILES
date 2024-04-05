@@ -4,8 +4,11 @@
 Cargo.toml
 README.md
 docs/AdminApi.md
+docs/AdminClusterApi.md
+docs/AdminClusterGetServerIpsResponse.md
 docs/AdminLoginRequest.md
 docs/AdminLoginResponse.md
+docs/AdminPoolType.md
 docs/AuthCompleteStatus.md
 docs/AuthIdentityAccessTokenApi.md
 docs/AuthIdentityCompleteAccessTokenVerificationRequest.md
@@ -141,7 +144,6 @@ docs/CloudRegionTierExpenses.md
 docs/CloudSvcMetrics.md
 docs/CloudSvcPerf.md
 docs/CloudTiersApi.md
-docs/CloudUniversalRegion.md
 docs/CloudUploadsApi.md
 docs/CloudValidateGroupRequest.md
 docs/CloudValidateGroupResponse.md
@@ -326,12 +328,15 @@ docs/PortalNotificationRegisterService.md
 docs/PortalNotificationUnregisterService.md
 docs/PortalNotificationsApi.md
 docs/PortalRegisterNotificationsRequest.md
+docs/ProvisionServersApi.md
+docs/ProvisionServersGetServerInfoResponse.md
 docs/UploadPrepareFile.md
 docs/UploadPresignedRequest.md
 docs/ValidationError.md
 docs/WatchResponse.md
 git_push.sh
 src/apis/admin_api.rs
+src/apis/admin_cluster_api.rs
 src/apis/auth_identity_access_token_api.rs
 src/apis/auth_identity_email_api.rs
 src/apis/auth_tokens_api.rs
@@ -369,9 +374,12 @@ src/apis/mod.rs
 src/apis/module_api.rs
 src/apis/portal_games_api.rs
 src/apis/portal_notifications_api.rs
+src/apis/provision_servers_api.rs
 src/lib.rs
+src/models/admin_cluster_get_server_ips_response.rs
 src/models/admin_login_request.rs
 src/models/admin_login_response.rs
+src/models/admin_pool_type.rs
 src/models/auth_complete_status.rs
 src/models/auth_identity_complete_access_token_verification_request.rs
 src/models/auth_identity_complete_email_verification_request.rs
@@ -488,7 +496,6 @@ src/models/cloud_region_tier.rs
 src/models/cloud_region_tier_expenses.rs
 src/models/cloud_svc_metrics.rs
 src/models/cloud_svc_perf.rs
-src/models/cloud_universal_region.rs
 src/models/cloud_validate_group_request.rs
 src/models/cloud_validate_group_response.rs
 src/models/cloud_version_cdn_config.rs
@@ -658,6 +665,7 @@ src/models/portal_notification_register_firebase_service.rs
 src/models/portal_notification_register_service.rs
 src/models/portal_notification_unregister_service.rs
 src/models/portal_register_notifications_request.rs
+src/models/provision_servers_get_server_info_response.rs
 src/models/upload_prepare_file.rs
 src/models/upload_presigned_request.rs
 src/models/validation_error.rs

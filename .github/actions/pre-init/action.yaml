@@ -39,14 +39,6 @@ runs:
         echo 'AWS_SECRET_ACCESS_KEY=${{ inputs.SCCACHE_AWS_SECRET_ACCESS_KEY }}' >> $GITHUB_ENV
         echo 'AWS_ACCESS_KEY_ID=${{ inputs.SCCACHE_AWS_ACCESS_KEY_ID }}' >> $GITHUB_ENV
 
-    # Cache generated Bolt files in order to prevent needless rebuilding
-    - name: Bolt Cache
-      uses: actions/cache@v3
-      with:
-        key: ${{ runner.os }}-bolt-gen
-        path: |
-          svc/pkg/region/ops/config-get/gen
-
     # MARK: Nix
     - uses: cachix/install-nix-action@v22
       with:

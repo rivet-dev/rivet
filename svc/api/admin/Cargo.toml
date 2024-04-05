@@ -6,6 +6,7 @@ edition = "2021"
 license = "Apache-2.0"
 
 [dependencies]
+rivet-convert = { path = "../../../lib/convert" }
 api-helper = { path = "../../../lib/api-helper/build" }
 async_once = "0.2"
 async-trait = "0.1"
@@ -39,6 +40,8 @@ url = "2.2.2"
 uuid = { version = "1", features = ["v4"] }
 util-mm = { package = "rivet-util-mm", path = "../../pkg/mm/util" }
 
+cluster-server-get = { path = "../../pkg/cluster/ops/server-get" }
+cluster-server-list = { path = "../../pkg/cluster/ops/server-list" }
 token-create = { path = "../../pkg/token/ops/create" }
 
 [dev-dependencies]

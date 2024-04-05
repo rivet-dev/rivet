@@ -112,10 +112,10 @@ type JoinPort struct {
 	Host     *string `json:"host,omitempty"`
 	Hostname string  `json:"hostname"`
 	// The port number for this lobby. Will be null if using a port range.
-	Port      *int           `json:"port,omitempty"`
-	PortRange *JoinPortRange `json:"port_range,omitempty"`
+	Port *int `json:"port,omitempty"`
 	// Whether or not this lobby port uses TLS. You cannot mix a non-TLS and TLS ports.
-	IsTls bool `json:"is_tls"`
+	PortRange *JoinPortRange `json:"port_range,omitempty"`
+	IsTls     bool           `json:"is_tls"`
 
 	_rawJSON json.RawMessage
 }

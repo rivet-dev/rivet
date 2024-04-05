@@ -93,11 +93,6 @@ variable "redis_dbs" {
 	}))
 }
 
-# MARK: Regions
-variable "regions" {
-	type = map(any)
-}
-
 # MARK: K8s
 variable "kubeconfig_path" {
 	type = string

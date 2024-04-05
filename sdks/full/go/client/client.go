@@ -15,6 +15,7 @@ import (
 	matchmakerclient "sdk/matchmaker/client"
 	moduleclient "sdk/module/client"
 	portalclient "sdk/portal/client"
+	provisionclient "sdk/provision/client"
 )
 
 type Client struct {
@@ -28,6 +29,7 @@ type Client struct {
 	Identity   *identityclient.Client
 	Kv         *kvclient.Client
 	Module     *moduleclient.Client
+	Provision  *provisionclient.Client
 	Auth       *authclient.Client
 	Job        *jobclient.Client
 	Matchmaker *matchmakerclient.Client
@@ -49,6 +51,7 @@ func NewClient(opts ...core.ClientOption) *Client {
 		Identity:   identityclient.NewClient(opts...),
 		Kv:         kvclient.NewClient(opts...),
 		Module:     moduleclient.NewClient(opts...),
+		Provision:  provisionclient.NewClient(opts...),
 		Auth:       authclient.NewClient(opts...),
 		Job:        jobclient.NewClient(opts...),
 		Matchmaker: matchmakerclient.NewClient(opts...),

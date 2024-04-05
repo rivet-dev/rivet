@@ -1,0 +1,10 @@
+[service]
+name = "linode-server-destroy"
+
+[runtime]
+kind = "rust"
+
+[operation]
+
+[secrets]
+"linode/token" = {}

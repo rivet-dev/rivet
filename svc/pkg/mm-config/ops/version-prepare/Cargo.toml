@@ -21,6 +21,10 @@ upload-get = { path = "../../../upload/ops/get" }
 region-get = { path = "../../../region/ops/get" }
 tier-list = { path = "../../../tier/ops/list" }
 
+[dependencies.sqlx]
+version = "0.7"
+default-features = false
+
 [dev-dependencies]
 chirp-worker = { path = "../../../../../lib/chirp/worker" }
 util-mm = { package = "rivet-util-mm", path = "../../../mm/util" }

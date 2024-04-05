@@ -142,7 +142,7 @@ pub async fn activities(
 			}
 		},
 		fetch::identity::users(ctx.op_ctx(), user_ids.clone()),
-		fetch::identity::presence_data(ctx.op_ctx(), current_user_id, user_ids, true),
+		fetch::identity::presence_data(ctx.op_ctx(), user_ids, true),
 		fetch_recent_games(ctx.op_ctx(), current_user_id, &game_user),
 		fetch_suggested_groups(ctx.op_ctx(), current_user_id),
 	)?;

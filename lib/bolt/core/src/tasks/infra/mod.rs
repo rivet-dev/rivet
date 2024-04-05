@@ -230,17 +230,6 @@ pub fn build_plan(
 		},
 	});
 
-	// Pools
-	if ctx.ns().dns.is_some() {
-		plan.push(PlanStep {
-			name_id: "pools",
-			kind: PlanStepKind::Terraform {
-				plan_id: "pools".into(),
-				needs_destroy: true,
-			},
-		});
-	}
-
 	if let Some(dns) = &ctx.ns().dns {
 		// TODO: Allow manual DNS config
 

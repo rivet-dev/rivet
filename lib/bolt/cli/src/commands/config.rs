@@ -24,9 +24,6 @@ pub enum SubCommand {
 		#[clap(index = 1)]
 		namespace: String,
 	},
-	/// Adds missing regions from supported cloud providers to default_regions.toml.
-	#[clap(hide(true))]
-	GenerateDefaultRegions,
 	ServiceDependencies {
 		#[clap(index = 1)]
 		svc_name: String,
@@ -75,7 +72,6 @@ impl SubCommand {
 			Self::SetNamespace { namespace } => {
 				tasks::config::set_namespace(&namespace).await?;
 			}
-			Self::GenerateDefaultRegions => tasks::config::generate_default_regions().await?,
 			Self::ServiceDependencies {
 				svc_name,
 				recursive,

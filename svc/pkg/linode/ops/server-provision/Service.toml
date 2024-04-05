@@ -1,0 +1,11 @@
+[service]
+name = "linode-server-provision"
+
+[runtime]
+kind = "rust"
+
+[operation]
+
+[secrets]
+"linode/token" = {}
+"ssh/server/private_key_openssh" = {}

@@ -100,7 +100,7 @@ async fn worker(
 		std::env::var("FLY_ORGANIZATION_ID"),
 		std::env::var("FLY_REGION"),
 	) else {
-		bail!("fly not enabled")
+		bail!("fly not enabled");
 	};
 	let fly_auth_token = util::env::read_secret(&["fly", "auth_token"]).await?;
 

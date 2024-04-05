@@ -6,7 +6,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::json;
 
 lazy_static::lazy_static! {
-	static ref SENDGRID_KEY: String = std::env::var("SENDGRID_KEY").expect("no sendgrid key");
+	static ref SENDGRID_KEY: String = util::env::var("SENDGRID_KEY").unwrap();
 }
 
 #[derive(Serialize, Deserialize)]

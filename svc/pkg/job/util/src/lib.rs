@@ -1,4 +1,5 @@
-pub mod consts;
+use std::time::Duration;
+
 pub mod key;
 
 /// Determines if a Nomad job is dispatched from our run.
@@ -8,6 +9,9 @@ pub mod key;
 pub fn is_nomad_job_run(job_id: &str) -> bool {
 	job_id.starts_with("job-") && job_id.contains("/dispatch-")
 }
+
+// Timeout from when `stop_job` is called and the kill signal is sent
+pub const JOB_STOP_TIMEOUT: Duration = Duration::from_secs(30);
 
 pub const TASK_CLEANUP_CPU: i32 = 50;
 

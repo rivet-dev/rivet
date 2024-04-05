@@ -9,7 +9,9 @@ license = "Apache-2.0"
 rivet-operation = { path = "../../../../../lib/operation/core" }
 chirp-client = { path = "../../../../../lib/chirp/client" }
 prost = "0.10"
-region-config-get = { path = "../config-get" }
+
+cluster-datacenter-get = { path = "../../../cluster/ops/datacenter-get" }
+cluster-datacenter-list = { path = "../../../cluster/ops/datacenter-list" }
 
 [dependencies.sqlx]
 version = "0.7"

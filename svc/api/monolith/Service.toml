@@ -76,6 +76,12 @@ add-path = "/portal"
 [[api.router.mounts]]
 deprecated = true
 path = "/v1"
+subdomain = "provision.api"
+add-path = "/provision"
+
+[[api.router.mounts]]
+deprecated = true
+path = "/v1"
 subdomain = "status.api"
 add-path = "/status"
 

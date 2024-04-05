@@ -2,14 +2,14 @@ mod common;
 
 use chirp_worker::prelude::*;
 use common::*;
-use proto::backend::{self};
+use proto::backend;
 use std::{
 	io::{BufRead, BufReader, Write},
 	net::{TcpStream, UdpSocket},
 };
 
 #[worker_test]
-async fn lobby_connectivity_http(ctx: TestCtx) {
+async fn lobby_connectivity_http_normal(ctx: TestCtx) {
 	if !util::feature::job_run() {
 		return;
 	}
@@ -202,7 +202,7 @@ async fn lobby_connectivity_udp(ctx: TestCtx) {
 	let recv_len = socket.recv(&mut response).unwrap();
 
 	assert_eq!(
-		random_body.as_ref(),
+		random_body.as_bytes(),
 		&response[..recv_len],
 		"echoed wrong response"
 	);
@@ -236,7 +236,7 @@ async fn lobby_connectivity_udp_host(ctx: TestCtx) {
 		let recv_len = socket.recv(&mut response).unwrap();
 
 		assert_eq!(
-			random_body.as_ref(),
+			random_body.as_bytes(),
 			&response[..recv_len],
 			"echoed wrong response"
 		);
@@ -255,7 +255,7 @@ async fn lobby_connectivity_udp_host(ctx: TestCtx) {
 		let recv_len = socket.recv(&mut response).unwrap();
 
 		assert_eq!(
-			random_body.as_ref(),
+			random_body.as_bytes(),
 			&response[..recv_len],
 			"echoed wrong response"
 		);

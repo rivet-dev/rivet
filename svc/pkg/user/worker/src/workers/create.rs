@@ -25,6 +25,7 @@ async fn worker(ctx: &OperationContext<user::msg::create::Message>) -> GlobalRes
 			namespace_ids: vec![namespace_id],
 		})
 		.await?;
+
 		let version_id = unwrap!(unwrap!(namespace_res.namespaces.first()).version_id);
 
 		let identity_config_res = op!([ctx] identity_config_version_get {

@@ -2,15 +2,12 @@ use chirp_worker::prelude::*;
 use proto::backend::pkg::*;
 use serde::Deserialize;
 
-lazy_static::lazy_static! {
-	static ref NOMAD_CONFIG: nomad_client::apis::configuration::Configuration =
-		nomad_util::config_from_env().unwrap();
-}
+use crate::NEW_NOMAD_CONFIG;
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "PascalCase")]
 struct PlanResult {
-	evaluation: nomad_client::models::Evaluation,
+	evaluation: nomad_client_new::models::Evaluation,
 }
 
 #[derive(Debug, Copy, Clone)]
@@ -28,8 +25,10 @@ struct RunRow {
 
 #[worker(name = "job-run-nomad-monitor-eval-update")]
 async fn worker(
-	ctx: &OperationContext<job_run::msg::nomad_monitor_eval_update::Message>,
+	ctx: &OperationContext<nomad::msg::monitor_eval_update::Message>,
 ) -> GlobalResult<()> {
+	let crdb = ctx.crdb().await?;
+
 	let payload_value = serde_json::from_str::<serde_json::Value>(&ctx.payload_json)?;
 	let PlanResult { evaluation: eval } = serde_json::from_str::<PlanResult>(&ctx.payload_json)?;
 
@@ -135,14 +134,15 @@ async fn worker(
 
 			// Stop the job from attempting to run on another node. This will
 			// be called in job-run-stop too, but we want to catch this earlier.
-			match nomad_client::apis::jobs_api::stop_job(
-				&NOMAD_CONFIG,
+			match nomad_client_new::apis::jobs_api::delete_job(
+				&NEW_NOMAD_CONFIG,
 				job_id,
 				None,
 				Some(&region.nomad_region),
 				None,
 				None,
 				Some(false),
+				None,
 			)
 			.await
 			{

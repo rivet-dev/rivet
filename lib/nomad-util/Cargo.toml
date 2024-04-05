@@ -17,3 +17,8 @@ serde_json = { version = "1.0", features = ["raw_value"] }
 thiserror = "1.0"
 tokio = { version = "1.29", features = ["full"] }
 tracing = "0.1"
+
+[dependencies.nomad_client_new]
+package = "nomad_client"
+git = "https://github.com/rivet-gg/nomad-client"
+rev = "abb66bf0c30c7ff5b0c695dae952481c33e538b5" # pragma: allowlist secret

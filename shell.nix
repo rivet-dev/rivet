@@ -94,8 +94,26 @@ in
 			source <(kubectl completion bash)
 
 			# Automatically connect to correct cluster
-			alias kubectl='KUBECONFIG=$(bolt output project-root)/gen/k8s/kubeconfig/$(bolt output namespace).yml kubectl'
-			alias helm='KUBECONFIG=$(bolt output project-root)/gen/k8s/kubeconfig/$(bolt output namespace).yml helm'
+			alias kubectl='KUBECONFIG=$(get_config) && export KUBECONFIG && kubectl'
+			alias helm='KUBECONFIG=$(get_config) && export KUBECONFIG && helm'
+
+			get_config() {
+				ROOT=$(bolt output project-root)
+				
+				if [ $? -ne 0 ]; then
+					echo $ROOT
+					return 1
+				fi
+				
+				NS=$(bolt output namespace)
+
+				if [ $? -ne 0 ]; then
+					echo $NS
+					return 1
+				fi
+
+				echo "$ROOT/gen/k8s/kubeconfig/$NS.yml"
+			}
 
 			# Fix dynamic library path to fix issue with Python
 			export LD_LIBRARY_PATH="${pkgs.clang}/resource-root/lib:${pkgs.lib.strings.makeLibraryPath [ pkgs.openssl ]}"

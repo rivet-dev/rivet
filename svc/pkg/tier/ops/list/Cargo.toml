@@ -9,6 +9,12 @@ license = "Apache-2.0"
 rivet-operation = { path = "../../../../../lib/operation/core" }
 chirp-client = { path = "../../../../../lib/chirp/client" }
 prost = "0.10"
+util-cluster = { package = "rivet-util-cluster", path = "../../../cluster/util" }
+
+cluster-datacenter-get = { path = "../../../cluster/ops/datacenter-get" }
+linode-instance-type-get = { path = "../../../linode/ops/instance-type-get" }
 
 [dev-dependencies]
 chirp-worker = { path = "../../../../../lib/chirp/worker" }
+
+cluster-datacenter-list = { path = "../../../cluster/ops/datacenter-list" }

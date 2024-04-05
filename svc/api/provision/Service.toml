@@ -1,0 +1,8 @@
+[service]
+name = "api-provision"
+essential = true
+
+[runtime]
+kind = "rust"
+
+[api-routes]

@@ -107,6 +107,11 @@ message Entitlement {
 		string name = 1;
 	}
 
+	// Issued to provisioned servers for communication with our API.
+	message Server {
+		
+	}
+
 	oneof kind {
 		Refresh refresh = 1;
 		User user = 2;
@@ -123,6 +128,7 @@ message Entitlement {
 		CloudDeviceLink cloud_device_link = 14;
 		Bypass bypass = 15;
 		AccessToken access_token = 16;
+		Server server = 17;
 	}
 
 	reserved 13;

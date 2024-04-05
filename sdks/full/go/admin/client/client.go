@@ -11,6 +11,7 @@ import (
 	http "net/http"
 	sdk "sdk"
 	admin "sdk/admin"
+	clusterclient "sdk/admin/cluster/client"
 	core "sdk/core"
 )
 
@@ -18,6 +19,8 @@ type Client struct {
 	baseURL string
 	caller  *core.Caller
 	header  http.Header
+
+	Cluster *clusterclient.Client
 }
 
 func NewClient(opts ...core.ClientOption) *Client {
@@ -29,6 +32,7 @@ func NewClient(opts ...core.ClientOption) *Client {
 		baseURL: options.BaseURL,
 		caller:  core.NewCaller(options.HTTPClient),
 		header:  options.ToHeader(),
+		Cluster: clusterclient.NewClient(opts...),
 	}
 }
 

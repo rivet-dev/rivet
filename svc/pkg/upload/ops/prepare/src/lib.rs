@@ -134,7 +134,7 @@ async fn handle(
 		total_content_length as i64,
 		&ctx.bucket,
 		user_id,
-		proto_provider as i32 as i64,
+		proto_provider as i64,
 		paths,
 		mimes,
 		content_lengths,

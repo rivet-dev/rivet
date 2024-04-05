@@ -1,0 +1,7 @@
+[service]
+name = "cluster-datacenter-location-get"
+
+[runtime]
+kind = "rust"
+
+[operation]

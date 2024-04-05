@@ -11,7 +11,7 @@ pub(crate) fn render_template(template: &'static str, context: &HashMap<String, 
 		.map(|(i, c)| {
 			if c == '{' {
 				// Double opening bracket (escaped)
-				if potential_replace {
+				if potential_replace && i == start_index + 1 {
 					potential_replace = false;
 					is_escaped = true;
 
@@ -38,6 +38,8 @@ pub(crate) fn render_template(template: &'static str, context: &HashMap<String, 
 					None
 				}
 			}
+			// TODO: This doesn't close escaped sequences correctly, "{{a } b}" would become "{a b}" when it
+			// shouldn't close at all (no double closing brace }})
 			// Single closing bracket (when escaped)
 			else if is_escaped && c == '}' {
 				is_escaped = false;

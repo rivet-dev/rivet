@@ -1,0 +1,10 @@
+[service]
+name = "linode-instance-type-get"
+
+[runtime]
+kind = "rust"
+
+[operation]
+
+[secrets]
+"linode/token" = {}

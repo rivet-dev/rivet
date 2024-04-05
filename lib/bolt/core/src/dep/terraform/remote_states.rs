@@ -10,7 +10,9 @@ use crate::context::ProjectContext;
 /// for each Terraform plan with the correct state backend.
 pub fn dependency_graph(_ctx: &ProjectContext) -> HashMap<&'static str, Vec<RemoteState>> {
 	hashmap! {
-		"dns" => vec![RemoteStateBuilder::default().plan_id("pools").build().unwrap(), RemoteStateBuilder::default().plan_id("k8s_infra").build().unwrap()],
+		"dns" => vec![
+			RemoteStateBuilder::default().plan_id("k8s_infra").build().unwrap()
+		],
 		"redis_aiven" => vec![
 			RemoteStateBuilder::default().plan_id("k8s_cluster_aws").build().unwrap()
 		],

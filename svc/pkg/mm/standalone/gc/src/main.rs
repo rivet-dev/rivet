@@ -1,5 +1,6 @@
-use rivet_operation::prelude::*;
 use std::time::Duration;
+
+use rivet_operation::prelude::*;
 
 fn main() -> GlobalResult<()> {
 	rivet_runtime::run(start()).unwrap()
@@ -9,7 +10,6 @@ async fn start() -> GlobalResult<()> {
 	// TODO: Handle ctrl-c
 
 	let pools = rivet_pools::from_env("mm-gc").await?;
-	let cache = rivet_cache::CacheInner::from_env(pools.clone())?;
 
 	tokio::task::Builder::new()
 		.name("mm_gc::health_checks")
@@ -28,19 +28,6 @@ async fn start() -> GlobalResult<()> {
 		interval.tick().await;
 
 		let ts = util::timestamp::now();
-		let client = chirp_client::SharedClient::from_env(pools.clone())?.wrap_new("mm-gc");
-		let ctx = OperationContext::new(
-			"mm-gc".into(),
-			std::time::Duration::from_secs(60),
-			rivet_connection::Connection::new(client, pools.clone(), cache.clone()),
-			Uuid::new_v4(),
-			Uuid::new_v4(),
-			ts,
-			ts,
-			(),
-			Vec::new(),
-		);
-
-		mm_gc::run_from_env(ts, ctx).await?;
+		mm_gc::run_from_env(ts, pools.clone()).await?;
 	}
 }

@@ -15,6 +15,7 @@ pub mod future;
 pub mod geo;
 pub mod glob;
 pub mod math;
+pub mod net;
 pub mod route;
 pub mod sort;
 pub mod timestamp;

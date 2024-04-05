@@ -190,3 +190,43 @@ impl Client {
 		&self.bucket
 	}
 }
+
+pub fn s3_provider_active(svc_name: &str, provider: Provider) -> bool {
+	let svc_screaming = svc_name.to_uppercase().replace("-", "_");
+	let provider_upper = provider.as_str().to_uppercase();
+
+	std::env::var(format!("S3_{}_BUCKET_{}", provider_upper, svc_screaming)).is_ok()
+} 
+
+pub fn s3_region(svc_name: &str, provider: Provider) -> Result<String, Error> {
+	let svc_screaming = svc_name.to_uppercase().replace("-", "_");
+	let provider_upper = provider.as_str().to_uppercase();
+
+	std::env::var(format!("S3_{}_REGION_{}", provider_upper, svc_screaming)).map_err(Into::into)
+} 
+
+pub fn s3_credentials(svc_name: &str, provider: Provider) -> Result<(String, String), Error> {
+	let svc_screaming = svc_name.to_uppercase().replace("-", "_");
+	let provider_upper = provider.as_str().to_uppercase();
+
+	let access_key_id = std::env::var(format!(
+		"S3_{}_ACCESS_KEY_ID_{}",
+		provider_upper, svc_screaming
+	))?;
+	let secret_access_key = std::env::var(format!(
+		"S3_{}_SECRET_ACCESS_KEY_{}",
+		provider_upper, svc_screaming
+	))?;
+
+	Ok((access_key_id, secret_access_key))
+}
+
+pub fn s3_endpoint_external(svc_name: &str, provider: Provider) -> Result<String, Error> {
+	let svc_screaming = svc_name.to_uppercase().replace("-", "_");
+	let provider_upper = provider.as_str().to_uppercase();
+
+	std::env::var(format!(
+		"S3_{}_ENDPOINT_EXTERNAL_{}",
+		provider_upper, svc_screaming
+	)).map_err(Into::into)
+}

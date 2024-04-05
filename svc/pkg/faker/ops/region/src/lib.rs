@@ -15,11 +15,7 @@ async fn handle(
 		region_ids: region_list.region_ids.clone(),
 	})
 	.await?;
-	let region = region_get
-		.regions
-		.iter()
-		.find(|x| x.name_id == util::env::primary_region());
-	let region = unwrap!(region, "primary region not listed in region list");
+	let region = unwrap!(region_get.regions.first());
 
 	Ok(faker::region::Response {
 		region_id: region.region_id,

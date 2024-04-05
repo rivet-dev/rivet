@@ -10,9 +10,14 @@ pub async fn list_tiers(
 	ctx: Ctx<Auth>,
 	_watch_index: WatchIndexQuery,
 ) -> GlobalResult<models::CloudGetRegionTiersResponse> {
-	// TODO: fill in user regions. `region_ids` doesn't actually do anything for now so its not important
+	let datacenters_res = op!([ctx] cluster_datacenter_list {
+		cluster_ids: vec![util::env::default_cluster_id().into()],
+	})
+	.await?;
+	let cluster = unwrap!(datacenters_res.clusters.first());
+
 	let res = op!([ctx] tier_list {
-		region_ids: vec![Uuid::new_v4().into()],
+		region_ids: cluster.datacenter_ids.clone(),
 	})
 	.await?;
 

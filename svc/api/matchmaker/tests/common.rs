@@ -439,8 +439,8 @@ pub async fn assert_lobby_state(
 		{
 			let p = ports.get("test-5051-tcp").unwrap();
 			assert!(
-				p.port.unwrap() >= util_job::consts::MIN_INGRESS_PORT_TCP as i32
-					&& p.port.unwrap() <= util_job::consts::MAX_INGRESS_PORT_TCP as i32
+				p.port.unwrap() >= util::net::job::MIN_INGRESS_PORT_TCP as i32
+					&& p.port.unwrap() <= util::net::job::MAX_INGRESS_PORT_TCP as i32
 			);
 			assert!(!p.is_tls);
 		}
@@ -448,8 +448,8 @@ pub async fn assert_lobby_state(
 		{
 			let p = ports.get("test-5051-tls").unwrap();
 			assert!(
-				p.port.unwrap() >= util_job::consts::MIN_INGRESS_PORT_TCP as i32
-					&& p.port.unwrap() <= util_job::consts::MAX_INGRESS_PORT_TCP as i32
+				p.port.unwrap() >= util::net::job::MIN_INGRESS_PORT_TCP as i32
+					&& p.port.unwrap() <= util::net::job::MAX_INGRESS_PORT_TCP as i32
 			);
 			assert!(p.is_tls);
 		}
@@ -457,8 +457,8 @@ pub async fn assert_lobby_state(
 		{
 			let p = ports.get("test-5052-udp").unwrap();
 			assert!(
-				p.port.unwrap() >= util_job::consts::MIN_INGRESS_PORT_UDP as i32
-					&& p.port.unwrap() <= util_job::consts::MAX_INGRESS_PORT_UDP as i32
+				p.port.unwrap() >= util::net::job::MIN_INGRESS_PORT_UDP as i32
+					&& p.port.unwrap() <= util::net::job::MAX_INGRESS_PORT_UDP as i32
 			);
 			assert!(!p.is_tls);
 		}
@@ -605,8 +605,8 @@ pub async fn assert_lobby_state(
 // 		{
 // 			let p = ports.get("test-5051-tcp").unwrap();
 // 			assert!(
-// 				p.port().unwrap() >= util_job::consts::MIN_INGRESS_PORT_TCP as i32
-// 					&& p.port().unwrap() <= util_job::consts::MAX_INGRESS_PORT_TCP as i32
+// 				p.port().unwrap() >= util::net::job::MIN_INGRESS_PORT_TCP as i32
+// 					&& p.port().unwrap() <= util::net::job::MAX_INGRESS_PORT_TCP as i32
 // 			);
 // 			assert!(!p.is_tls().unwrap());
 // 		}
@@ -614,8 +614,8 @@ pub async fn assert_lobby_state(
 // 		{
 // 			let p = ports.get("test-5051-tls").unwrap();
 // 			assert!(
-// 				p.port().unwrap() >= util_job::consts::MIN_INGRESS_PORT_TCP as i32
-// 					&& p.port().unwrap() <= util_job::consts::MAX_INGRESS_PORT_TCP as i32
+// 				p.port().unwrap() >= util::net::job::MIN_INGRESS_PORT_TCP as i32
+// 					&& p.port().unwrap() <= util::net::job::MAX_INGRESS_PORT_TCP as i32
 // 			);
 // 			assert!(p.is_tls().unwrap());
 // 		}
@@ -623,8 +623,8 @@ pub async fn assert_lobby_state(
 // 		{
 // 			let p = ports.get("test-5052-udp").unwrap();
 // 			assert!(
-// 				p.port().unwrap() >= util_job::consts::MIN_INGRESS_PORT_UDP as i32
-// 					&& p.port().unwrap() <= util_job::consts::MAX_INGRESS_PORT_UDP as i32
+// 				p.port().unwrap() >= util::net::job::MIN_INGRESS_PORT_UDP as i32
+// 					&& p.port().unwrap() <= util::net::job::MAX_INGRESS_PORT_UDP as i32
 // 			);
 // 			assert!(!p.is_tls().unwrap());
 // 		}

@@ -8,3 +8,6 @@ kind = "rust"
 
 [databases]
 db-ip-info = {}
+
+[secrets]
+"ip_info/token" = { optional = true }

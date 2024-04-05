@@ -16,6 +16,7 @@ chrono = "0.4"
 formatted-error = { path = "../../formatted-error", optional = true }
 futures-util = "0.3"
 global-error = { path = "../../global-error" }
+ipnet = { version = "2.7", features = ["serde"] }
 lazy_static = "1.4"
 rand = "0.8"
 regex = "1.4"

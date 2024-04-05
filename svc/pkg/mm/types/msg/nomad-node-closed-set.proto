@@ -1,0 +1,15 @@
+syntax = "proto3";
+
+package rivet.backend.pkg.mm.msg.nomad_node_closed_set;
+
+import "proto/common.proto";
+
+/// name = "msg-mm-nomad-node-closed-set"
+/// parameters = [
+/// 	{ name = "nomad_node_id" },
+/// ]
+message Message {
+    rivet.common.Uuid datacenter_id = 1;
+    string nomad_node_id = 2;
+	bool is_closed = 3;
+}

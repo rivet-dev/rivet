@@ -1,0 +1,13 @@
+syntax = "proto3";
+
+package rivet.backend.pkg.cluster.msg.server_destroy_complete;
+
+import "proto/common.proto";
+
+/// name = "msg-cluster-server-destroy-complete"
+/// parameters = [
+/// 	{ name = "server_id" },
+/// ]
+message Message {
+    rivet.common.Uuid server_id = 1;
+}

@@ -60,6 +60,67 @@ paths:
           application/json:
             schema:
               $ref: '#/components/schemas/AdminLoginRequest'
+  /cluster/server_ips:
+    get:
+      operationId: admin_cluster_getServerIps
+      tags:
+        - AdminCluster
+      parameters:
+        - name: server_id
+          in: query
+          required: false
+          schema:
+            type: string
+            format: uuid
+        - name: pool
+          in: query
+          required: false
+          schema:
+            $ref: '#/components/schemas/AdminPoolType'
+      responses:
+        '200':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminClusterGetServerIpsResponse'
+        '400':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '403':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '404':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '408':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '429':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '500':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+      security: *ref_0
   /cloud/bootstrap:
     get:
       description: Returns the basic information required to use the cloud APIs.
@@ -4252,6 +4313,61 @@ paths:
                 data: {}
               required:
                 - data
+  /servers/{ip}/info:
+    get:
+      operationId: provision_servers_getServerInfo
+      tags:
+        - ProvisionServers
+      parameters:
+        - name: ip
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProvisionServersGetServerInfoResponse'
+        '400':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '403':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '404':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '408':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '429':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '500':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+      security: *ref_0
   /auth/identity/access-token/complete-verification:
     post:
       description: Completes the access token verification process.
@@ -8429,6 +8545,15 @@ components:
           type: string
       required:
         - url
+    AdminClusterGetServerIpsResponse:
+      type: object
+      properties:
+        ips:
+          type: array
+          items:
+            type: string
+      required:
+        - ips
     CloudBootstrapResponse:
       type: object
       properties:
@@ -9376,6 +9501,34 @@ components:
         data: {}
       required:
         - data
+    ProvisionServersGetServerInfoResponse:
+      type: object
+      properties:
+        name:
+          type: string
+        server_id:
+          type: string
+          format: uuid
+        datacenter_id:
+          type: string
+          format: uuid
+        cluster_id:
+          type: string
+          format: uuid
+        vlan_ip:
+          type: string
+      required:
+        - name
+        - server_id
+        - datacenter_id
+        - cluster_id
+        - vlan_ip
+    AdminPoolType:
+      type: string
+      enum:
+        - job
+        - gg
+        - ats
     AuthCompleteStatus:
       type: string
       enum:
@@ -9954,9 +10107,6 @@ components:
         provider:
           type: string
           description: The server provider of this region.
-        universal_region:
-          $ref: '#/components/schemas/CloudUniversalRegion'
-          description: A universal region label given to this region.
         provider_display_name:
           type: string
           description: Represent a resource's readable display name.
@@ -9967,7 +10117,6 @@ components:
         - region_id
         - region_name_id
         - provider
-        - universal_region
         - provider_display_name
         - region_display_name
     CloudGameLobbyExpenses:
@@ -10092,37 +10241,6 @@ components:
         - disk
         - bandwidth
         - price_per_second
-    CloudUniversalRegion:
-      type: string
-      enum:
-        - unknown
-        - local
-        - amsterdam
-        - atlanta
-        - bangalore
-        - dallas
-        - frankfurt
-        - london
-        - mumbai
-        - newark
-        - new_york_city
-        - san_francisco
-        - singapore
-        - sydney
-        - tokyo
-        - toronto
-        - washington_dc
-        - chicago
-        - paris
-        - seattle
-        - sao_paulo
-        - stockholm
-        - chennai
-        - osaka
-        - milan
-        - miami
-        - jakarta
-        - los_angeles
     CloudNamespaceFull:
       type: object
       description: A full namespace.
@@ -10897,17 +11015,16 @@ components:
     CloudVersionMatchmakerPortRange:
       type: object
       description: >-
-        Range of ports that can be connected to.
+        Range of ports that can be connected to. Note that the port range values
+        returned by /find
 
-        If configured, `network_mode` must equal `host`.
 
-        Port ranges may overlap between containers, it is the responsibility of
-        the developer to ensure ports are available before using.
+        ### Related
 
-        Read more about host networking
-        [here](https://rivet.gg/docs/dynamic-servers/concepts/host-bridge-networking).
 
-        Only available on Rivet Open Source & Enterprise.
+        - cloud.version.matchmaker.PortProtocol
+
+        - cloud.version.matchmaker.ProxyKind
       properties:
         min:
           type: integer
@@ -10927,28 +11044,38 @@ components:
         - tcp_tls
         - udp
       description: >-
-        Type of network traffic to allow access to this port.
+        Signifies the protocol of the port.
 
-        Configuring `https` or `tcp_tls` will provide TLS termination for you
-        via Game Guard.
+        Note that when proxying through GameGuard (via `ProxyKind`), the port
+        number returned by `/find`, `/join`, and `/create` will not be the same
+        as the port number configured in the config:
 
-        `https` and `tcp_tls` must have `proxy_kind` set to `game_guard`.
+
+        - With HTTP, the port will always be 80. The hostname of the port
+        correctly routes the incoming
+          connection to the correct port being used by the game server.
+        - With HTTPS, the port will always be 443. The hostname of the port
+        correctly routes the incoming
+          connection to the correct port being used by the game server.
+        - Using TCP/UDP, the port will be a random number between 26000 and
+        31999. This gets automatically
+          routed to the correct port being used by the game server.
+
+        ### Related - cloud.version.matchmaker.GameModeRuntimeDockerPort -
+        cloud.version.matchmaker.ProxyKind -
+        /docs/dynamic-servers/concepts/game-guard - matchmaker.lobbies.find
     CloudVersionMatchmakerProxyKind:
       type: string
       enum:
         - none
         - game_guard
       description: >-
-        Range of ports that can be connected to.
+        Denotes what type of proxying to use for ports. Rivet GameGuard adds DoS
+        and DDoS mitigation to incoming connections.
 
-        `game_guard` (default) proxies all traffic through [Game
-        Guard](https://rivet.gg/docs/dynamic-servers/concepts/game-guard) to
-        mitigate DDoS attacks and provide TLS termination.
 
-        `none` sends traffic directly to the game server. If configured,
-        `network_mode` must equal `host`. Read more about host networking
-        [here](https://rivet.gg/docs/dynamic-servers/concepts/host-bridge-networking).
-        Only available on Rivet Open Source & Enterprise.
+        ### Related - /docs/dynamic-servers/concepts/game-guard -
+        cloud.version.matchmaker.PortProtocol
     CloudVersionMatchmakerCaptcha:
       type: object
       description: Matchmaker captcha configuration.
@@ -11092,11 +11219,16 @@ components:
               #/components/schemas/CloudVersionMatchmakerGameModeRuntimeDockerPort
     CloudVersionMatchmakerGameModeRuntimeDockerPort:
       type: object
-      description: A docker port.
+      description: Port config for a docker build.
       properties:
         port:
           type: integer
-          description: The port number to connect to.
+          description: >-
+            The port number to connect to.
+
+
+            ### Related - cloud.version.matchmaker.PortProtocol -
+            cloud.version.matchmaker.ProxyKind
         port_range:
           $ref: '#/components/schemas/CloudVersionMatchmakerPortRange'
         protocol:

@@ -43,13 +43,13 @@ impl RequestConfig {
 
 	/// Sets the TTL for the keys in ms.
 	///
-	/// Defaults to 2 days.
+	/// Defaults to 2 hours.
 	pub fn ttl(mut self, ttl: i64) -> Self {
 		self.ttl = ttl;
 		self
 	}
 
-	/// Deterines if the value for this key can change. If the value is immutable, we apply more
+	/// Determines if the value for this key can change. If the value is immutable, we apply more
 	/// aggressive caching rules to it.
 	pub fn immutable(mut self) -> Self {
 		self.immutable = true;
@@ -622,7 +622,7 @@ impl RequestConfig {
 	{
 		self.fetch_all_proto_with_keys::<Key, Value, Getter, Fut>(base_key, keys, getter)
 			.await
-			// TODO: Find a way to not allowcate another vec here
+			// TODO: Find a way to not allocate another vec here
 			.map(|x| x.into_iter().map(|(_, v)| v).collect::<Vec<_>>())
 	}
 

@@ -2,7 +2,7 @@ use rivet_api::models;
 use rivet_operation::prelude::*;
 use types::rivet::backend;
 
-use crate::{convert, fetch, ApiInto, ApiTryInto};
+use crate::{convert, fetch, ApiTryInto};
 
 pub fn handle(game: &backend::game::Game) -> GlobalResult<models::GameHandle> {
 	Ok(models::GameHandle {
@@ -45,10 +45,6 @@ pub fn region_summary(
 		region_id: unwrap_ref!(region.region_id).as_uuid(),
 		region_name_id: region.name_id.clone(),
 		provider: region.provider.clone(),
-		universal_region: unwrap!(backend::region::UniversalRegion::from_i32(
-			region.universal_region
-		))
-		.api_into(),
 		provider_display_name: region.provider_display_name.clone(),
 		region_display_name: region.region_display_name.clone(),
 	})

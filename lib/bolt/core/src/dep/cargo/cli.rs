@@ -292,9 +292,6 @@ pub async fn build_tests<'a, T: AsRef<str>>(
 		])
 		.stdout(std::process::Stdio::piped())
 		.current_dir(abs_path)
-		// TODO: Not sure why the .cargo/config.toml isn't working with nested projects, have to hardcode
-		// the target dir
-		// .env("CARGO_TARGET_DIR", $(readlink -f ./target))
 		// Used for Tokio Console. See https://github.com/tokio-rs/console#using-it
 		.env("RUSTFLAGS", "--cfg tokio_unstable");
 		if let Some(jobs) = opts.jobs {

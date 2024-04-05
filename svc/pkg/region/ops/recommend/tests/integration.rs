@@ -1,4 +1,5 @@
 use chirp_worker::prelude::*;
+use proto::backend;
 
 #[worker_test]
 async fn empty(ctx: TestCtx) {
@@ -17,9 +18,11 @@ async fn empty(ctx: TestCtx) {
 	// .unwrap();
 
 	op!([ctx] region_recommend {
-		latitude: Some(100.0),
-		longitude: Some(200.0),
 		region_ids: regions_res.region_ids.clone(),
+		coords: Some(backend::net::Coordinates {
+			latitude: 100.0,
+			longitude: 200.0,
+		}),
 		..Default::default()
 	})
 	.await

@@ -210,7 +210,6 @@ impl EndpointRouter {
 					use std::str::FromStr;
 					use api_helper::macro_util::{self, __AsyncOption};
 
-					// Create path segments list
 					if !router_config.try_prefix() {
 						return Ok(None);
 					}

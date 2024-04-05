@@ -1,0 +1,26 @@
+syntax = "proto3";
+
+package rivet.backend.pkg.linode.instance_type_get;
+
+import "proto/common.proto";
+
+message Request {
+    repeated string hardware_ids = 1;
+}
+
+message Response {
+    message InstanceType {
+        string hardware_id = 1;
+        uint64 memory = 2;
+        uint64 disk = 3;
+        uint64 vcpus = 4;
+        uint64 transfer = 5;
+    }
+
+    repeated InstanceType instance_types = 1;
+}
+
+message CacheInstanceTypes {
+	repeated Response.InstanceType instance_types = 1;
+}
+

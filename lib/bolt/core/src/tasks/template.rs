@@ -5,7 +5,7 @@ use std::{
 
 use anyhow::*;
 use async_recursion::async_recursion;
-use tokio::{fs, io::AsyncWriteExt};
+use tokio::fs;
 
 use crate::context::ProjectContext;
 
@@ -68,17 +68,48 @@ pub async fn generate(ctx: &mut ProjectContext, opts: TemplateOpts) -> Result<()
 			.await
 			.is_err()
 	{
-		eprintln!("{}", base_path.display());
-		let relative_path = base_path
-			.strip_prefix(ctx.path())
-			.expect("strip path")
-			.display();
-
 		bail!(
-			"Package `{}` does not exist at `{}`. Use `--create-pkg` to suppress this message.",
+			"Package `{}` does not exist under the `{}` root. Try a different root, create the package folder yourself, or use `--create-pkg` to automatically create it.",
 			pkg_name,
-			relative_path
+			base_path.display(),
 		);
+	}
+
+	// Touch types lib to force it to rebuild generated proto when making a new package
+	if create_pkg {
+		let lib_file = base_path
+			.join("lib")
+			.join("types")
+			.join("build")
+			.join("src")
+			.join("lib.rs");
+		let alt_lib_file = base_path
+			.join("lib")
+			.join("types")
+			.join("src")
+			.join("lib.rs");
+
+		if let Err(err) = fs::OpenOptions::new()
+			.create(true)
+			.write(true)
+			.open(lib_file)
+			.await
+		{
+			if !matches!(err.kind(), std::io::ErrorKind::NotFound) {
+				return Err(err.into());
+			}
+		}
+
+		if let Err(err) = fs::OpenOptions::new()
+			.create(true)
+			.write(true)
+			.open(alt_lib_file)
+			.await
+		{
+			if !matches!(err.kind(), std::io::ErrorKind::NotFound) {
+				return Err(err.into());
+			}
+		}
 	}
 
 	// Build templating manager
@@ -278,37 +309,20 @@ async fn generate_worker_partial(
 	{
 		let worker_mod_path = output_path.join("src").join("workers").join("mod.rs");
 		rivet_term::status::progress("Editing", worker_mod_path.display());
-		let mut worker_mod = fs::OpenOptions::new()
-			.write(true)
-			.append(true)
-			.open(worker_mod_path)
-			.await?;
+		let worker_mod_str = fs::read_to_string(&worker_mod_path).await?;
 
-		worker_mod
-			.write(format!("pub mod {};\n", snake_name).as_str().as_bytes())
-			.await?;
-	}
-
-	// Update main.rs
-	{
-		let main_path = output_path.join("src").join("main.rs");
-		rivet_term::status::progress("Editing", main_path.display());
-		let main_str = fs::read_to_string(&main_path).await?;
-
-		// Find place to insert text
-		let insert_idx = main_str
-			.find("worker_group!")
-			.and_then(|idx| (&main_str[idx..]).find(']').map(|idx2| idx + idx2))
-			.ok_or_else(|| anyhow!("Invalid main.rs file in worker: {}", main_path.display()))?
-			- 3;
+		let Some(bracket_idx) = worker_mod_str.find("[") else {
+			bail!("malformed mod.rs file");
+		};
 
 		fs::write(
-			main_path,
+			worker_mod_path,
 			&format!(
-				"{}\n\t\t\t{},{}",
-				&main_str[..insert_idx],
+				"pub mod {};\n{}\n\t{},{}",
 				snake_name,
-				&main_str[insert_idx..]
+				&worker_mod_str[..bracket_idx + 1],
+				snake_name,
+				&worker_mod_str[bracket_idx + 1..]
 			),
 		)
 		.await?;

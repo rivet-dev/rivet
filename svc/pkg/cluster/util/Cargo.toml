@@ -1,0 +1,16 @@
+[package]
+name = "rivet-util-cluster"
+version = "0.1.0"
+edition = "2021"
+authors = ["Rivet Gaming, LLC <developer@rivet.gg>"]
+license = "Apache-2.0"
+
+[dependencies]
+rivet-util = { path = "../../../../lib/util/core" }
+types = { path = "../../../../lib/types/core" }
+uuid = { version = "1", features = ["v4", "serde"] }
+
+[build-dependencies]
+hex = "0.4"
+sha2 = "0.10"
+tokio = { version = "1.29", features = ["full"] }

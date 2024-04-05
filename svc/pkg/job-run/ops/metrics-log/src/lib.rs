@@ -4,12 +4,6 @@ use reqwest::StatusCode;
 use rivet_operation::prelude::*;
 use serde::Deserialize;
 
-#[derive(Debug, thiserror::Error)]
-enum Error {
-	#[error("prometheus error: {0}")]
-	PrometheusError(String),
-}
-
 #[derive(Debug, Deserialize)]
 struct PrometheusResponse {
 	data: PrometheusData,
@@ -41,12 +35,14 @@ impl QueryTiming {
 	}
 }
 
+lazy_static::lazy_static! {
+	static ref PROMETHEUS_URL: String = util::env::var("PROMETHEUS_URL").unwrap();
+}
+
 #[operation(name = "job-run-metrics-log")]
 async fn handle(
 	ctx: OperationContext<job_run::metrics_log::Request>,
 ) -> GlobalResult<job_run::metrics_log::Response> {
-	let prometheus_url = std::env::var("PROMETHEUS_URL")?;
-
 	let mut metrics = Vec::new();
 
 	for metric in &ctx.metrics {
@@ -58,7 +54,7 @@ async fn handle(
 		// relabel action in the Kubernetes config.
 		let (mem_allocated, cpu_usage, mem_usage) = tokio::try_join!(
 			handle_request(
-				&prometheus_url,
+				&PROMETHEUS_URL,
 				None,
 				formatdoc!(
 					"
@@ -72,7 +68,7 @@ async fn handle(
 				)
 			),
 			handle_request(
-				&prometheus_url,
+				&PROMETHEUS_URL,
 				query_timing.as_ref(),
 				formatdoc!(
 					"
@@ -86,7 +82,7 @@ async fn handle(
 				)
 			),
 			handle_request(
-				&prometheus_url,
+				&PROMETHEUS_URL,
 				query_timing.as_ref(),
 				// Fall back to `nomad_client_allocs_memory_rss` since `nomad_client_allocs_memory_usage` is
 				// not available in `raw_exec`.
@@ -149,16 +145,15 @@ async fn handle_request(
 	// Query prometheus
 	let res = reqwest::Client::new().get(req_url).send().await?;
 
-	if res.status() != StatusCode::OK {
+	if !res.status().is_success() {
 		let status = res.status();
 		let text = res.text().await?;
 
-		return Err(Error::PrometheusError(format!(
-			"failed prometheus request: ({}) {}",
-			status, text
-		))
-		.into());
+		bail!(format!("failed prometheus request: ({}) {}", status, text));
 	}
 
-	Ok(unwrap!(res.json::<PrometheusResponse>().await?.data.result.first()).clone())
+	let body = res.json::<PrometheusResponse>().await?;
+	let data = unwrap!(body.data.result.first()).clone();
+
+	Ok(data)
 }

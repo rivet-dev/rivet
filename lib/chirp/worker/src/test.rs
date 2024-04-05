@@ -8,6 +8,7 @@ use crate::error::ManagerError;
 
 #[derive(Clone)]
 pub struct TestCtx {
+	name: String,
 	op_ctx: OperationContext<()>,
 }
 
@@ -27,7 +28,7 @@ impl TestCtx {
 			.wrap_new(&service_name);
 		let conn = rivet_connection::Connection::new(client, pools, cache);
 		let op_ctx = OperationContext::new(
-			service_name,
+			service_name.clone(),
 			Duration::from_secs(60),
 			conn,
 			Uuid::new_v4(),
@@ -38,13 +39,13 @@ impl TestCtx {
 			Vec::new(),
 		);
 
-		Ok(TestCtx { op_ctx })
+		Ok(TestCtx { name: service_name, op_ctx })
 	}
 }
 
 impl TestCtx {
 	pub fn name(&self) -> &str {
-		self.op_ctx.name()
+		&self.name
 	}
 
 	pub fn chirp(&self) -> &chirp_client::Client {

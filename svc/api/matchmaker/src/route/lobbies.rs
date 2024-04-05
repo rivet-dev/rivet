@@ -510,7 +510,7 @@ pub async fn list(
 		.regions
 		.iter()
 		.map(|(region, recommend)| utils::build_region_openapi(region, recommend.as_ref()))
-		.collect();
+		.collect::<GlobalResult<Vec<_>>>()?;
 
 	let game_modes = meta
 		.lobby_groups
@@ -662,8 +662,10 @@ async fn fetch_lobby_list_meta(
 			if let Some((lat, long)) = coords {
 				let res = op!([ctx] region_recommend {
 					region_ids: region_ids_proto.clone(),
-					latitude: Some(lat),
-					longitude: Some(long),
+					coords: Some(backend::net::Coordinates {
+						latitude: lat,
+						longitude: long,
+					}),
 					..Default::default()
 				})
 				.await?;
@@ -1218,9 +1220,11 @@ async fn resolve_region_ids(
 		// Auto-select the closest region
 		if let Some((lat, long)) = coords {
 			let recommend_res = op!([ctx] region_recommend {
-				latitude: Some(lat),
-				longitude: Some(long),
 				region_ids: enabled_region_ids,
+				coords: Some(backend::net::Coordinates {
+					latitude: lat,
+					longitude: long,
+				}),
 				..Default::default()
 			})
 			.await?;

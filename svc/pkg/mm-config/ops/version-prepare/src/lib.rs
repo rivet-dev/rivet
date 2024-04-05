@@ -1,10 +1,13 @@
-mod prewarm_ats;
+use std::collections::hash_map::DefaultHasher;
+use std::hash::Hasher;
 
 use proto::backend::{self, pkg::*};
 use rivet_operation::prelude::*;
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
 use crate::prewarm_ats::PrewarmAtsContext;
+
+mod prewarm_ats;
 
 #[operation(name = "mm-config-version-prepare")]
 async fn handle(
@@ -16,7 +19,7 @@ async fn handle(
 	// List of build paths that will be used to prewarm the ATS cache
 	let mut prewarm_ctx = PrewarmAtsContext {
 		region_ids: HashSet::new(),
-		paths: HashSet::new(),
+		paths: HashMap::new(),
 		total_size: 0,
 	};
 
@@ -86,7 +89,7 @@ async fn handle(
 		});
 	}
 
-	crate::prewarm_ats::prewarm_ats_cache(ctx.chirp(), prewarm_ctx).await?;
+	crate::prewarm_ats::prewarm_ats_cache(&ctx, prewarm_ctx).await?;
 
 	Ok(mm_config::version_prepare::Response {
 		config_ctx: Some(backend::matchmaker::VersionConfigCtx {
@@ -198,7 +201,13 @@ async fn validate_build(
 			namespace = util::env::namespace(),
 			file_name = util_build::file_name(build_kind, build_compression),
 		);
-		if prewarm_ctx.paths.insert(path.clone()) {
+		if !prewarm_ctx.paths.contains_key(&path) {
+			// Hash build id
+			let mut hasher = DefaultHasher::new();
+			hasher.write(build_id.as_bytes());
+			let build_id_hash = hasher.finish();
+
+			prewarm_ctx.paths.insert(path.clone(), build_id_hash);
 			prewarm_ctx.total_size += upload.content_length;
 		}
 	}

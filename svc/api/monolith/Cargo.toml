@@ -32,4 +32,5 @@ api-kv = { path = "../kv" }
 api-matchmaker = { path = "../matchmaker" }
 api-module = { path = "../module" }
 api-portal = { path = "../portal" }
+api-provision = { path = "../provision" }
 api-status = { path = "../status" }

@@ -317,7 +317,8 @@ pub async fn verify_config(
 			.await?;
 			let (latitude, longitude) = ip_res
 				.ip_info
-				.map(|ip_info| (ip_info.latitude, ip_info.longitude))
+				.and_then(|ip_info| ip_info.coords)
+				.map(|coords| (coords.latitude, coords.longitude))
 				.unzip();
 
 			GlobalResult::Ok((

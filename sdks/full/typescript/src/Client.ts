@@ -10,6 +10,7 @@ import { Group } from "./api/resources/group/client/Client";
 import { Identity } from "./api/resources/identity/client/Client";
 import { Kv } from "./api/resources/kv/client/Client";
 import { Module } from "./api/resources/module/client/Client";
+import { Provision } from "./api/resources/provision/client/Client";
 import { Auth } from "./api/resources/auth/client/Client";
 import { Job } from "./api/resources/job/client/Client";
 import { Matchmaker } from "./api/resources/matchmaker/client/Client";
@@ -65,6 +66,12 @@ export class RivetClient {
 
     public get module(): Module {
         return (this._module ??= new Module(this._options));
+    }
+
+    protected _provision: Provision | undefined;
+
+    public get provision(): Provision {
+        return (this._provision ??= new Provision(this._options));
     }
 
     protected _auth: Auth | undefined;

@@ -45,12 +45,3 @@ variable "extra_dns" {
 variable "cloudflare_account_id" {
 	type = string
 }
-
-# MARK: Servers
-variable "servers" {
-	type = map(object({
-		region_id = string
-		pool_id = string
-		name = string
-	}))
-}

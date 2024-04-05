@@ -23,7 +23,9 @@ service:
     reserveVersionName:
       path: /reserve-name
       method: POST
-      docs: Reserves a display name for the next version. Used to generate a monotomically increasing build number without causing a race condition with multiple versions getting created at the same time.
+      docs: >-
+        Reserves a display name for the next version. Used to generate a monotomically increasing build
+        number without causing a race condition with multiple versions getting created at the same time.
       response: ReserveVersionNameResponse
 
     validateGameVersion:

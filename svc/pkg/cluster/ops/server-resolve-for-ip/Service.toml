@@ -1,0 +1,10 @@
+[service]
+name = "cluster-server-resolve-for-ip"
+
+[runtime]
+kind = "rust"
+
+[operation]
+
+[databases]
+db-cluster = {}

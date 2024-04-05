@@ -91,6 +91,7 @@ and this project adheres to [Calendar Versioning](https://calver.org/).
 -   **Bolt** `bolt.confirm_commands` to namespace to confirm before running commands on a namespace
 -   `watch-requests` load test
 -   `mm-sustain` load test
+-   **Infra** Automatic server provisioning system ([Read more](/docs/packages/cluster/SERVER_PROVISIONING.md)).
 
 ### Changed
 

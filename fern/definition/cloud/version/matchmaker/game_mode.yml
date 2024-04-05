@@ -61,10 +61,17 @@ types:
       ports: optional<map<string, GameModeRuntimeDockerPort>>
 
   GameModeRuntimeDockerPort:
-    docs: A docker port.
+    docs: |
+      Port config for a docker build.
     properties:
       port:
-        docs: The port number to connect to.
+        docs: >-
+          The port number to connect to.
+
+          ### Related
+          - cloud.version.matchmaker.PortProtocol
+          - cloud.version.matchmaker.ProxyKind
+
         type: optional<integer>
       port_range: optional<localCommons.PortRange>
       protocol: optional<localCommons.PortProtocol>

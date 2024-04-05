@@ -1,0 +1,21 @@
+syntax = "proto3";
+
+package rivet.backend.pkg.linode.server_provision;
+
+import "proto/common.proto";
+import "proto/backend/cluster.proto";
+
+message Request {
+    rivet.common.Uuid server_id = 1;
+    string provider_datacenter_id = 2;
+    rivet.backend.cluster.Hardware hardware = 3;
+    rivet.backend.cluster.PoolType pool_type = 4;
+    string vlan_ip = 5;
+    repeated string tags = 6;
+}
+
+message Response {
+    string provider_server_id = 1;
+    string public_ip = 2;
+    bool already_installed = 3;
+}

@@ -8,9 +8,14 @@ message ClientInfo {
 }
 
 message IpInfo {
+	reserved 2, 3;
 	string ip = 1;
-	double latitude = 2;
-	double longitude = 3;
+	Coordinates coords = 4;
+}
+
+message Coordinates {
+	double latitude = 1;
+	double longitude = 2;
 }
 
 enum HttpMethod {

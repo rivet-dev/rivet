@@ -1,0 +1,22 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/fern-api/fern/main/fern.schema.json
+
+service:
+  auth: true
+  base-path: /servers
+  endpoints:
+    getServerInfo:
+      path: /{ip}/info
+      method: GET
+      path-parameters:
+        ip:
+          type: string
+      response: GetServerInfoResponse
+
+types:
+  GetServerInfoResponse:
+    properties:
+      name: string
+      server_id: uuid
+      datacenter_id: uuid
+      cluster_id: uuid
+      vlan_ip: string

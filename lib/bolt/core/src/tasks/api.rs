@@ -1,48 +1,8 @@
 use anyhow::*;
+use serde::Deserialize;
 use serde_json::json;
-use uuid::Uuid;
 
 use crate::context::ProjectContext;
-
-/// Converts a team into a developer team via the Rivet API.
-pub async fn convert_team(project_ctx: &ProjectContext, team_id: String) -> Result<()> {
-	if let Err(err) = Uuid::parse_str(&team_id) {
-		bail!("failed to parse uuid: {}", err);
-	}
-
-	eprintln!();
-	rivet_term::status::progress("Converting team", &team_id);
-
-	let api_admin_token = project_ctx
-		.read_secret(&["rivet", "api_admin", "token"])
-		.await?;
-	let response = reqwest::Client::new()
-		.post(format!(
-			"{}/admin/groups/{}/developer",
-			project_ctx.origin_api(),
-			team_id,
-		))
-		.header(
-			reqwest::header::AUTHORIZATION,
-			reqwest::header::HeaderValue::from_str(&format!("Bearer {api_admin_token}"))?,
-		)
-		.json(&json!({}))
-		.send()
-		.await?;
-
-	if !response.status().is_success() {
-		bail!(
-			"failed to convert team ({}):\n{:#?}",
-			response.status().as_u16(),
-			response.json::<serde_json::Value>().await?
-		);
-	}
-
-	eprintln!();
-	rivet_term::status::success("Converted", "");
-
-	Ok(())
-}
 
 /// Creates a login link for the hub.
 pub async fn access_token_login(project_ctx: &ProjectContext, name: String) -> Result<()> {
@@ -83,4 +43,42 @@ pub async fn access_token_login(project_ctx: &ProjectContext, name: String) -> R
 	eprintln!("{url}");
 
 	Ok(())
+}
+
+#[derive(Deserialize)]
+struct GetServerIpsResponse {
+	ips: Vec<String>,
+}
+
+pub async fn get_cluster_server_ips(
+	project_ctx: &ProjectContext,
+	query: (&str, &str),
+) -> Result<Vec<String>> {
+	let api_admin_token = project_ctx
+		.read_secret(&["rivet", "api_admin", "token"])
+		.await?;
+	let response = reqwest::Client::new()
+		.get(format!(
+			"{}/admin/cluster/server_ips",
+			project_ctx.origin_api(),
+		))
+		.query(&[query])
+		.header(
+			reqwest::header::AUTHORIZATION,
+			reqwest::header::HeaderValue::from_str(&format!("Bearer {api_admin_token}"))?,
+		)
+		.send()
+		.await?;
+
+	if !response.status().is_success() {
+		bail!(
+			"failed to get server ips ({}):\n{:#?}",
+			response.status().as_u16(),
+			response.json::<serde_json::Value>().await?
+		);
+	}
+
+	let res = response.json::<GetServerIpsResponse>().await?;
+
+	Ok(res.ips)
 }

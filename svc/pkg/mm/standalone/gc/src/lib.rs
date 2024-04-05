@@ -2,8 +2,21 @@ use proto::backend::pkg::*;
 use redis::AsyncCommands;
 use rivet_operation::prelude::*;
 
-#[tracing::instrument]
-pub async fn run_from_env(ts: i64, ctx: OperationContext<()>) -> GlobalResult<()> {
+#[tracing::instrument(skip_all)]
+pub async fn run_from_env(ts: i64, pools: rivet_pools::Pools) -> GlobalResult<()> {
+	let client = chirp_client::SharedClient::from_env(pools.clone())?.wrap_new("mm-gc");
+	let cache = rivet_cache::CacheInner::from_env(pools.clone())?;
+	let ctx = OperationContext::new(
+		"mm-gc".into(),
+		std::time::Duration::from_secs(60),
+		rivet_connection::Connection::new(client, pools.clone(), cache.clone()),
+		Uuid::new_v4(),
+		Uuid::new_v4(),
+		ts,
+		ts,
+		(),
+		Vec::new(),
+	);
 	let redis_mm = ctx.redis_mm().await?;
 
 	let mut return_err: Option<GlobalError> = None;

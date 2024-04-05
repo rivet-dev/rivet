@@ -18,17 +18,15 @@ pub enum SubCommand {
 		#[clap(long)]
 		ssh_key: Option<String>,
 	},
-	Name {
+	Id {
 		#[clap(index = 1)]
-		name: String,
+		server_id: String,
 		#[clap(index = 2)]
 		command: Option<String>,
 	},
 	Pool {
 		#[clap(index = 1)]
 		pool: String,
-		#[clap(long, short = 'r')]
-		region: Option<String>,
 		#[clap(index = 2)]
 		command: Option<String>,
 		#[clap(short = 'a', long)]
@@ -55,33 +53,17 @@ impl SubCommand {
 				)
 				.await?;
 			}
-			Self::Name { name, command } => {
-				bolt_core::tasks::ssh::name(&ctx, &name, command.as_ref().map(String::as_str))
+			Self::Id { server_id, command } => {
+				bolt_core::tasks::ssh::id(&ctx, &server_id, command.as_ref().map(String::as_str))
 					.await?;
 			}
-			Self::Pool {
-				pool,
-				region,
-				command,
-				all,
-			} => {
+			Self::Pool { pool, command, all } => {
 				if all {
 					let command = command.context("must provide command with --all")?;
-					bolt_core::tasks::ssh::pool_all(
-						&ctx,
-						&pool,
-						region.as_ref().map(String::as_str),
-						&command,
-					)
-					.await?;
+					bolt_core::tasks::ssh::pool_all(&ctx, &pool, &command).await?;
 				} else {
-					bolt_core::tasks::ssh::pool(
-						&ctx,
-						&pool,
-						region.as_ref().map(String::as_str),
-						command.as_ref().map(String::as_str),
-					)
-					.await?;
+					bolt_core::tasks::ssh::pool(&ctx, &pool, command.as_ref().map(String::as_str))
+						.await?;
 				}
 			}
 		}

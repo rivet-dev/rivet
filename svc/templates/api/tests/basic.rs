@@ -21,7 +21,7 @@ impl Ctx {
 		let pools = rivet_pools::from_env("api-{{name}}-test").await.unwrap();
 		let cache = rivet_cache::CacheInner::new(
 			"api-{{name}}-test".to_string(),
-			std::env::var("RIVET_SOURCE_HASH").unwrap(),
+			util::env::var("RIVET_SOURCE_HASH").unwrap(),
 			pools.redis_cache().unwrap(),
 		);
 		let client = chirp_client::SharedClient::from_env(pools.clone())

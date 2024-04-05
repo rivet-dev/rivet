@@ -1,0 +1,10 @@
+[service]
+name = "cluster-datacenter-topology-get"
+
+[runtime]
+kind = "rust"
+
+[operation]
+
+[databases]
+db-cluster = {}

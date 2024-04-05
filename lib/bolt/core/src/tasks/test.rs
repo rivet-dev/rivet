@@ -1,7 +1,11 @@
+use std::fmt;
+
 use anyhow::*;
 use futures_util::{StreamExt, TryStreamExt};
 use rand::{seq::SliceRandom, thread_rng};
+use reqwest::header;
 use rivet_term::console::style;
+use serde::Deserialize;
 
 use indoc::formatdoc;
 use std::{
@@ -179,39 +183,8 @@ pub async fn test_services<T: AsRef<str>>(
 	// Print results
 	print_results(&test_results);
 
-	// Cleanup jobs
-	{
-		eprintln!();
-		rivet_term::status::progress("Cleaning up jobs", "");
-
-		let purge = if test_ctx.no_purge { "" } else { "-purge" };
-		let cleanup_cmd = formatdoc!(
-			r#"
-			nomad job status |
-				grep -v -e "ID" -e "No running jobs" |
-				cut -f1 -d ' ' |
-				xargs -I {{}} nomad job stop {purge} -detach {{}}
-			"#
-		);
-
-		let mut cmd = Command::new("kubectl");
-		cmd.args(&[
-			"exec",
-			"service/nomad-server",
-			"-n",
-			"nomad",
-			"--container",
-			"nomad-instance",
-			"--",
-			"sh",
-			"-c",
-			&cleanup_cmd,
-		]);
-		cmd.env("KUBECONFIG", ctx.gen_kubeconfig_path());
-
-		let status = cmd.status().await?;
-		ensure!(status.success());
-	}
+	cleanup_jobs(ctx, test_ctx.no_purge).await?;
+	cleanup_servers(ctx).await?;
 
 	// Error on failure
 	let all_succeeded = test_results
@@ -517,6 +490,171 @@ fn print_results(test_results: &[TestResult]) {
 			test_results.len()
 		);
 	}
+}
+
+async fn cleanup_jobs(ctx: &ProjectContext, no_purge: bool) -> Result<()> {
+	eprintln!();
+	rivet_term::status::progress("Cleaning up jobs", "");
+
+	let purge = if no_purge { "" } else { "-purge" };
+	let cleanup_cmd = formatdoc!(
+		r#"
+		nomad job status |
+			grep -v -e "ID" -e "No running jobs" |
+			cut -f1 -d ' ' |
+			xargs -I {{}} nomad job stop {purge} -detach {{}}
+		"#
+	);
+
+	let mut cmd = Command::new("kubectl");
+	cmd.args(&[
+		"exec",
+		"service/nomad-server",
+		"-n",
+		"nomad",
+		"--container",
+		"nomad-instance",
+		"--",
+		"sh",
+		"-c",
+		&cleanup_cmd,
+	]);
+	cmd.env("KUBECONFIG", ctx.gen_kubeconfig_path());
+
+	let status = cmd.status().await?;
+	ensure!(status.success());
+
+	Ok(())
+}
+
+#[derive(Deserialize)]
+struct ApiErrorResponse {
+	errors: Vec<ApiError>,
+}
+
+impl fmt::Display for ApiErrorResponse {
+	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+		for error in &self.errors {
+			if let Some(field) = &error.field {
+				write!(f, "{:?}: ", field)?;
+			}
+
+			writeln!(f, "{}", error.reason)?;
+		}
+
+		std::result::Result::Ok(())
+	}
+}
+
+#[derive(Deserialize)]
+struct ApiError {
+	field: Option<String>,
+	reason: String,
+}
+
+#[derive(Debug, Deserialize)]
+struct TaggedObjectsListResponse {
+	data: Vec<TaggedObject>,
+}
+
+#[derive(Debug, Deserialize)]
+struct TaggedObject {
+	#[serde(rename = "type")]
+	_type: String,
+	data: Data,
+}
+
+#[derive(Debug, Deserialize)]
+struct Data {
+	id: u64,
+}
+
+// TODO: This only deletes linodes and firewalls, the ssh key still remains
+async fn cleanup_servers(ctx: &ProjectContext) -> Result<()> {
+	eprintln!();
+	rivet_term::status::progress("Cleaning up servers", "");
+
+	// Create client
+	let api_token = ctx.read_secret(&["linode", "token"]).await?;
+	let auth = format!("Bearer {}", api_token,);
+	let mut headers = header::HeaderMap::new();
+	headers.insert(header::AUTHORIZATION, header::HeaderValue::from_str(&auth)?);
+	let client = reqwest::Client::builder()
+		.default_headers(headers)
+		.build()?;
+
+	// Fetch all objects with the tag "test"
+	let test_tag = "test";
+	let res = client
+		.get(format!("https://api.linode.com/v4/tags/{test_tag}"))
+		.send()
+		.await?;
+
+	if !res.status().is_success() {
+		bail!(
+			"api request failed ({}):\n{}",
+			res.status(),
+			res.json::<ApiErrorResponse>().await?
+		);
+	}
+
+	// Deserialize
+	let res = res.json::<TaggedObjectsListResponse>().await?;
+
+	futures_util::stream::iter(res.data)
+		.map(|object| {
+			let client = client.clone();
+			let obj_type = object._type;
+			let id = object.data.id;
+
+			async move {
+				eprintln!("destroying {} {}", obj_type, id);
+
+				// Destroy resource
+				let res = match obj_type.as_str() {
+					"linode" => {
+						client
+							.delete(format!("https://api.linode.com/v4/linode/instances/{}", id))
+							.send()
+							.await?
+					}
+					"firewall" => {
+						client
+							.delete(format!(
+								"https://api.linode.com/v4/networking/firewalls/{}",
+								id
+							))
+							.send()
+							.await?
+					}
+					_ => {
+						eprintln!("unknown type tagged with \"test\": {}", obj_type);
+						return Ok(());
+					}
+				};
+
+				if !res.status().is_success() {
+					// Resource does not exist to be deleted, not an error
+					if res.status() == reqwest::StatusCode::NOT_FOUND {
+						eprintln!("{} {} doesn't exist, skipping", obj_type, id);
+						return Ok(());
+					}
+
+					bail!(
+						"api request failed ({}):\n{}",
+						res.status(),
+						res.json::<ApiErrorResponse>().await?
+					);
+				}
+
+				Ok(())
+			}
+		})
+		.buffer_unordered(8)
+		.try_collect::<Vec<_>>()
+		.await?;
+
+	Ok(())
 }
 
 fn gen_test_id() -> String {

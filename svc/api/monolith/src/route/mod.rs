@@ -63,6 +63,10 @@ define_router! {
 			prefix: "portal"
 		},
 		{
+			path: api_provision::route::Router,
+			prefix: "provision"
+		},
+		{
 			path: api_status::route::Router,
 			prefix: "status"
 		},

@@ -1,0 +1,15 @@
+syntax = "proto3";
+
+package rivet.backend.pkg.cluster.msg.server_destroy;
+
+import "proto/common.proto";
+
+/// name = "msg-cluster-server-destroy"
+/// parameters = [
+/// 	{ name = "server_id" },
+/// ]
+message Message {
+    rivet.common.Uuid server_id = 1;
+    // Destroys the server even if it isn't fully provisioned yet
+    bool force = 2;
+}

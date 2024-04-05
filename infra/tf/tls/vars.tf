@@ -15,15 +15,16 @@ variable "domain_job" {
 	type = string
 }
 
+# MARK: Datacenters
+variable "datacenters" {
+	type = map(object({
+		datacenter_id = string
+	}))
+}
+
 # MARK: K8s
 variable "kubeconfig_path" {
 	type = string
-}
-
-# MARK: Regions
-variable "regions" {
-	type = map(object({
-	}))
 }
 
 # MARK: S3
@@ -34,4 +35,3 @@ variable "s3_providers" {
 		region = string
 	}))
 }
-

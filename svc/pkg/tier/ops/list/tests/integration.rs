@@ -2,9 +2,18 @@ use chirp_worker::prelude::*;
 
 #[worker_test]
 async fn empty(ctx: TestCtx) {
-	op!([ctx] tier_list {
-		region_ids: vec![Uuid::new_v4().into()]
+	let datacenters_res = op!([ctx] cluster_datacenter_list {
+		cluster_ids: vec![util::env::default_cluster_id().into()],
 	})
 	.await
 	.unwrap();
+	let cluster = datacenters_res.clusters.first().unwrap();
+
+	let res = op!([ctx] tier_list {
+		region_ids: cluster.datacenter_ids.clone(),
+	})
+	.await
+	.unwrap();
+
+	tracing::info!(?res);
 }

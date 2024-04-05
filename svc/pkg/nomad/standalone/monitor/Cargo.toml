@@ -1,0 +1,38 @@
+[package]
+name = "nomad-monitor"
+version = "0.0.1"
+edition = "2021"
+authors = ["Rivet Gaming, LLC <developer@rivet.gg>"]
+license = "Apache-2.0"
+
+[dependencies]
+chirp-client = { path = "../../../../../lib/chirp/client" }
+chrono = "0.4"
+futures-util = "0.3"
+indoc = "1.0"
+lazy_static = "1.4"
+nomad-util = { path = "../../../../../lib/nomad-util" }
+prost = "0.10"
+rivet-connection = { path = "../../../../../lib/connection" }
+rivet-health-checks = { path = "../../../../../lib/health-checks" }
+rivet-metrics = { path = "../../../../../lib/metrics" }
+rivet-operation = { path = "../../../../../lib/operation/core" }
+rivet-pools = { path = "../../../../../lib/pools" }
+rivet-runtime = { path = "../../../../../lib/runtime" }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+tokio = { version = "1.29", features = ["full"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", default-features = false, features = [
+    "fmt",
+    "json",
+    "ansi",
+] }
+util-job = { package = "rivet-util-job", path = "../../../job/util" }
+
+[dependencies.nomad_client]
+git = "https://github.com/rivet-gg/nomad-client"
+rev = "abb66bf0c30c7ff5b0c695dae952481c33e538b5" # pragma: allowlist secret
+
+[dev-dependencies]
+chirp-worker = { path = "../../../../../lib/chirp/worker" }

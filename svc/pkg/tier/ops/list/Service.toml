@@ -5,3 +5,6 @@ name = "tier-list"
 kind = "rust"
 
 [operation]
+
+[secrets]
+"linode/token" = {}

@@ -1,0 +1,13 @@
+syntax = "proto3";
+
+package rivet.backend.pkg.linode.msg.prebake_install_complete;
+
+import "proto/common.proto";
+
+/// name = "msg-linode-prebake-install-complete"
+/// parameters = [
+/// 	{ name = "ip" },
+/// ]
+message Message {
+    string ip = 1;
+}

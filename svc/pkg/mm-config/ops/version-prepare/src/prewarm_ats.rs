@@ -1,4 +1,4 @@
-use proto::backend::pkg::*;
+use proto::backend::{self, pkg::*};
 use rivet_operation::prelude::*;
 use serde_json::json;
 use std::collections::{HashMap, HashSet};
@@ -7,9 +7,15 @@ use std::collections::{HashMap, HashSet};
 #[derive(Debug)]
 pub struct PrewarmAtsContext {
 	pub region_ids: HashSet<Uuid>,
-	pub paths: HashSet<String>,
+	pub paths: HashMap<String, u64>,
 	#[allow(unused)]
 	pub total_size: u64,
+}
+
+#[derive(sqlx::FromRow)]
+struct VlanIp {
+	datacenter_id: Uuid,
+	vlan_ip: String,
 }
 
 /// Requests resources from the ATS cache to make sure any subsequent requests will be faster.
@@ -29,7 +35,7 @@ pub struct PrewarmAtsContext {
 /// already be in the cache.
 #[tracing::instrument]
 pub async fn prewarm_ats_cache(
-	client: &chirp_client::Client,
+	ctx: &OperationContext<mm_config::version_prepare::Request>,
 	prewarm_ctx: PrewarmAtsContext,
 ) -> GlobalResult<()> {
 	if prewarm_ctx.paths.is_empty() {
@@ -38,21 +44,52 @@ pub async fn prewarm_ats_cache(
 
 	let job_spec_json = serde_json::to_string(&gen_prewarm_job(prewarm_ctx.paths.len())?)?;
 
+	// Get all vlan ips
+	let vlan_ips = sql_fetch_all!(
+		[ctx, VlanIp]
+		"
+		SELECT
+		datacenter_id, vlan_ip
+		FROM db_cluster.servers
+		WHERE
+			datacenter_id = ANY($1) AND
+			pool_type = $2 AND
+			vlan_ip IS NOT NULL AND
+			cloud_destroy_ts IS NULL
+		",
+		// NOTE: region_id is just the old name for datacenter_id
+		prewarm_ctx.region_ids.iter().cloned().collect::<Vec<_>>(),
+		backend::cluster::PoolType::Ats as i64,
+	)
+	.await?;
+
 	for region_id in prewarm_ctx.region_ids {
+		let mut vlan_ips_in_region = vlan_ips.iter().filter(|row| row.datacenter_id == region_id);
+		let vlan_ip_count = vlan_ips_in_region.clone().count() as i64;
+
+		ensure!(vlan_ip_count != 0, "no ats servers found");
+
 		// Pass artifact URLs to the job
 		let parameters = prewarm_ctx
 			.paths
 			.iter()
 			.enumerate()
-			.map(|(i, path)| job_run::msg::create::Parameter {
-				key: format!("artifact_url_{i}"),
-				value: format!("http://127.0.0.1:8080{path}"),
+			.map(|(i, (path, build_id_hash))| {
+				// NOTE: The algorithm here for deterministically choosing the vlan ip should match the one
+				// used in the SQL statement in mm-lobby-create @ resolve_image_artifact_url
+				let idx = (*build_id_hash as i64 % vlan_ip_count).abs() as usize;
+				let vlan_ip = &unwrap!(vlan_ips_in_region.nth(idx), "no vlan ip").vlan_ip;
+
+				Ok(job_run::msg::create::Parameter {
+					key: format!("artifact_url_{i}"),
+					value: format!("http://{vlan_ip}:8080{path}"),
+				})
 			})
-			.collect::<Vec<_>>();
+			.collect::<GlobalResult<Vec<_>>>()?;
 
 		// Run the job and forget about it
 		let run_id = Uuid::new_v4();
-		msg!([client] job_run::msg::create(run_id) {
+		msg!([ctx] job_run::msg::create(run_id) {
 			run_id: Some(run_id.into()),
 			region_id: Some(region_id.into()),
 			parameters: parameters,

@@ -1,0 +1,13 @@
+syntax = "proto3";
+
+package rivet.backend.pkg.cluster.msg.server_dns_delete;
+
+import "proto/common.proto";
+
+/// name = "msg-cluster-server-dns-delete"
+/// parameters = [
+/// 	{ name = "server_id" },
+/// ]
+message Message {
+    rivet.common.Uuid server_id = 1;
+}

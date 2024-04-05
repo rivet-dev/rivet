@@ -328,9 +328,6 @@ types:
       provider:
         docs: The server provider of this region.
         type: string
-      universal_region:
-        docs: A universal region label given to this region.
-        type: UniversalRegion
       provider_display_name:
         docs: Represent a resource's readable display name.
         type: string
@@ -433,37 +430,6 @@ types:
           Price billed for every second this server is running (in quadrillionth
           USD, 1,000,000,000,000 = $1.00).
         type: integer
-
-  UniversalRegion:
-    enum:
-      - unknown
-      - local
-      - amsterdam
-      - atlanta
-      - bangalore
-      - dallas
-      - frankfurt
-      - london
-      - mumbai
-      - newark
-      - new_york_city
-      - san_francisco
-      - singapore
-      - sydney
-      - tokyo
-      - toronto
-      - washington_dc
-      - chicago
-      - paris
-      - seattle
-      - sao_paulo
-      - stockholm
-      - chennai
-      - osaka
-      - milan
-      - miami
-      - jakarta
-      - los_angeles
 
   NamespaceFull:
     docs: A full namespace.

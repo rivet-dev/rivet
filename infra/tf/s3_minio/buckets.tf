@@ -4,7 +4,7 @@ resource "null_resource" "check_minio" {
 		command = <<EOL
 		until curl -sf ${var.s3_providers.minio.endpoint_external}/minio/health/ready; do
 			echo "Waiting for Minio to become reachable publicly (${var.s3_providers.minio.endpoint_external})..."
-			sleep 1
+			sleep 2
 		done
 		EOL
 	}

@@ -3,15 +3,12 @@ use proto::backend::{self, pkg::*};
 use redis::AsyncCommands;
 use serde::Deserialize;
 
-lazy_static::lazy_static! {
-	static ref NOMAD_CONFIG: nomad_client::apis::configuration::Configuration =
-		nomad_util::config_from_env().unwrap();
-}
+use crate::NEW_NOMAD_CONFIG;
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "PascalCase")]
 struct PlanResult {
-	allocation: nomad_client::models::Allocation,
+	allocation: nomad_client_new::models::Allocation,
 }
 
 #[derive(Debug, sqlx::FromRow)]
@@ -44,7 +41,7 @@ struct RunData {
 
 #[worker(name = "job-run-nomad-monitor-alloc-plan")]
 async fn worker(
-	ctx: &OperationContext<job_run::msg::nomad_monitor_alloc_plan::Message>,
+	ctx: &OperationContext<nomad::msg::monitor_alloc_plan::Message>,
 ) -> GlobalResult<()> {
 	let mut redis_job = ctx.redis_job().await?;
 
@@ -61,9 +58,14 @@ async fn worker(
 	}
 
 	// Fetch node metadata
-	let node = nomad_client::apis::nodes_api::get_node(
-		&NOMAD_CONFIG,
-		nomad_node_id,
+	let node = nomad_client_new::apis::nodes_api::get_node(
+		&NEW_NOMAD_CONFIG,
+		&nomad_node_id,
+		None,
+		None,
+		None,
+		None,
+		None,
 		None,
 		None,
 		None,
@@ -207,7 +209,7 @@ struct DbOutput {
 /// Returns `None` if the run could not be found.
 #[tracing::instrument(skip_all)]
 async fn update_db(
-	ctx: OperationContext<job_run::msg::nomad_monitor_alloc_plan::Message>,
+	ctx: OperationContext<nomad::msg::monitor_alloc_plan::Message>,
 	tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
 	now: i64,
 	RunData {

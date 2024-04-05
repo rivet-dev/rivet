@@ -1,8 +1,6 @@
 use proto::backend::{self, pkg::*};
 use rivet_operation::prelude::*;
 
-const IP_INFO_TOKEN: &str = "1a0c0cea381431";
-
 /// Parsed response from ipinfo.io. We can't retrieve data from bogon or anycast
 /// addresses.
 #[derive(serde::Deserialize)]
@@ -53,13 +51,16 @@ async fn fetch_ip_info_io(
 		tracing::info!("found cached ip info");
 		ip_info_raw
 	} else {
+		let api_url =
+			if let Some(ip_info_token) = util::env::read_secret_opt(&["ip_info", "token"]).await? {
+				format!("https://ipinfo.io/{}?token={}", ip_str, ip_info_token)
+			} else {
+				format!("https://ipinfo.io/{}", ip_str)
+			};
+
 		// Fetch IP data from external service
 		tracing::info!(?ip_str, "fetching fresh ip info");
-		let ip_info_res = reqwest::get(format!(
-			"https://ipinfo.io/{}?token={}",
-			ip_str, IP_INFO_TOKEN
-		))
-		.await?;
+		let ip_info_res = reqwest::get(api_url).await?;
 
 		if !ip_info_res.status().is_success() {
 			tracing::error!(status = ?ip_info_res.status(), "failed to fetch ip info, using fallback");
@@ -97,8 +98,10 @@ async fn fetch_ip_info_io(
 
 			Some(backend::net::IpInfo {
 				ip: ip_str.to_string(),
-				latitude,
-				longitude,
+				coords: Some(backend::net::Coordinates {
+					latitude,
+					longitude,
+				}),
 			})
 		}
 		IpInfoParsed::Bogon { .. } => {
