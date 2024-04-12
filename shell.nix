@@ -5,6 +5,8 @@ let
 	unstablePkgs = import ./infra/nix/common/unstable_pkgs.nix;
 
 	custom_clickhouse = import ./infra/nix/pkgs/clickhouse.nix { inherit (pkgs) stdenv fetchurl lib; };
+
+	envSkipBolt = builtins.getEnv "NIX_SKIP_BOLT" == "1";
 	custom_bolt = import ./infra/nix/bolt/default.nix;
 
 	useSccache = builtins.getEnv "USE_SCCACHE" == "1";
@@ -34,7 +36,6 @@ in
 			terraform
 
 			# Tools
-			custom_bolt
 			cloc
 			curl
 			docker-client  # Standardize client CLI since older clients have breaking changes
@@ -65,15 +66,18 @@ in
 
 			# Fixes "cannot change locale" warning
 			glibcLocales
-		] ++ extraInputs ++ (
-			pkgs.lib.optionals stdenv.isDarwin [
-				libiconv  # See https://stackoverflow.com/a/69732679
-				darwin.apple_sdk.frameworks.Security
-				darwin.apple_sdk.frameworks.CoreServices
-				darwin.apple_sdk.frameworks.CoreFoundation
-				darwin.apple_sdk.frameworks.Foundation
-			]
-		);
+		]
+			++ lib.optional (builtins.getEnv "NIX_SKIP_BOLT" != "1") custom_bolt
+			++ extraInputs
+			++ (
+				pkgs.lib.optionals stdenv.isDarwin [
+					libiconv  # See https://stackoverflow.com/a/69732679
+					darwin.apple_sdk.frameworks.Security
+					darwin.apple_sdk.frameworks.CoreServices
+					darwin.apple_sdk.frameworks.CoreFoundation
+					darwin.apple_sdk.frameworks.Foundation
+				]
+			);
 		shellHook = ''
 			# Setup Git LFS
 			git lfs install --manual > /dev/null
