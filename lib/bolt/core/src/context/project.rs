@@ -752,8 +752,8 @@ impl ProjectContextData {
 			if let Some(domain_main) = self.domain_main() {
 				format!("https://hub.{domain_main}")
 			} else {
-				// Hub will be hosted at the root of the origin
-				self.origin_api()
+				// We assume the dev is hosting the hub locally
+				"http://127.0.0.1:5080".into()
 			}
 		})
 	}
