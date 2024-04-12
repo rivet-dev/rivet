@@ -46,6 +46,7 @@ in
 
 			# Runtimes
 			nodejs  # Required for Fern
+			python310Packages.detect-secrets
 
 			# Compilers
 			clang
@@ -75,7 +76,7 @@ in
 		);
 		shellHook = ''
 			# Setup Git LFS
-			git lfs install > /dev/null
+			git lfs install --manual > /dev/null
 
 			# Add binaries to path so we can use a locally built copy of Bolt.
 			export PATH="${toString ./target/debug/.}:${toString ./target/release/.}:$PATH"
