@@ -59,8 +59,7 @@ impl SubCommand {
 			Self::Set { path, value } => {
 				let path = path.split("/").collect::<Vec<_>>();
 
-				let mut generator =
-					ConfigGenerator::new(rivet_term::terminal(), ctx.path(), ctx.ns_id()).await?;
+				let mut generator = ConfigGenerator::new(ctx.path(), ctx.ns_id()).await?;
 				generator.set_secret(&path, toml_edit::value(value)).await?;
 				generator.write().await?;
 			}

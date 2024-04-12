@@ -24,8 +24,6 @@ const NS_CONFIG_COMMENT: &str = r#"# Documentation: doc/bolt/config/NAMESPACE.md
 
 /// Helper for generating configs.
 pub struct ConfigGenerator {
-	term: rivet_term::console::Term,
-
 	#[allow(unused)]
 	ns_id: String,
 
@@ -41,11 +39,7 @@ pub struct ConfigGenerator {
 }
 
 impl ConfigGenerator {
-	pub async fn new(
-		term: rivet_term::console::Term,
-		project_path: &Path,
-		ns_id: impl ToString,
-	) -> Result<Self> {
+	pub async fn new(project_path: &Path, ns_id: impl ToString) -> Result<Self> {
 		let ns_id = ns_id.to_string();
 
 		// Load namespace config
@@ -69,7 +63,6 @@ impl ConfigGenerator {
 		};
 
 		Ok(Self {
-			term,
 			ns_id,
 			ns_path,
 			ns,
@@ -94,23 +87,6 @@ impl ConfigGenerator {
 		Ok(())
 	}
 
-	/// Moves a value's location. Useful for updating schemas.
-	// async fn move_config(&mut self, from_path: &[&str], to_path: &[&str]) -> Result<()> {
-	// 	// Read the parent
-	// 	if let Some(parent_value) =
-	// 		get_value_mut(self.ns.as_item_mut(), &from_path[0..(from_path.len() - 1)])
-	// 			.and_then(|x| x.as_table_mut())
-	// 	{
-	// 		// Remove the item
-	// 		if let Some(value) = parent_value.remove(from_path.last().unwrap()) {
-	// 			// Write to the new path
-	// 			write_value(self.ns.as_item_mut(), to_path, value);
-	// 		}
-	// 	}
-
-	// 	Ok(())
-	// }
-
 	/// Inserts a config value if does not exist.
 	async fn generate_config<Fut>(
 		&mut self,
@@ -128,22 +104,6 @@ impl ConfigGenerator {
 
 		Ok(())
 	}
-
-	/// Prompts user for config value if does not exist.
-	// async fn prompt_config(&mut self, message: &str, docs: &str, path: &[&str]) -> Result<()> {
-	// 	// Check if item already exists
-	// 	if get_value(self.ns.as_item(), path).is_none() {
-	// 		let x = rivet_term::prompt::PromptBuilder::default()
-	// 			.message(message)
-	// 			.docs_url(docs)
-	// 			.build()?
-	// 			.string(&self.term)
-	// 			.await?;
-	// 		write_value(self.ns.as_item_mut(), path, value(x));
-	// 	}
-
-	// 	Ok(())
-	// }
 
 	/// Sets & overrides a secret.
 	pub async fn set_secret(&mut self, path: &[&str], value: toml_edit::Item) -> Result<()> {
@@ -169,46 +129,11 @@ impl ConfigGenerator {
 
 		Ok(())
 	}
-
-	/// Prompts user for config value if does not exist.
-	async fn prompt_secret(&mut self, message: &str, docs: &str, path: &[&str]) -> Result<()> {
-		self.prompt_secret_multiple(message, docs, &[path]).await
-	}
-
-	/// Prompts user for multiple config values if does not exist. Useful when
-	/// there's multiple secrets that are OK being set to the same value for the
-	/// default config.
-	async fn prompt_secret_multiple(
-		&mut self,
-		message: &str,
-		docs: &str,
-		paths: &[&[&str]],
-	) -> Result<()> {
-		// Check if item already exists
-		if !paths
-			.iter()
-			.all(|x| get_value(self.secrets.as_item(), x).is_some())
-		{
-			let x = rivet_term::prompt::PromptBuilder::default()
-				.message(message)
-				.docs_url(docs)
-				.build()?
-				.string_secure(&self.term)
-				.await?;
-			for path in paths {
-				write_value(self.secrets.as_item_mut(), path, value(&x));
-			}
-		}
-
-		Ok(())
-	}
 }
 
 /// Generates a new config & secrets based on user input.
 pub async fn generate(project_path: &Path, ns_id: &str) -> Result<()> {
-	let term = rivet_term::terminal();
-
-	let mut generator = ConfigGenerator::new(term, &project_path, ns_id).await?;
+	let mut generator = ConfigGenerator::new(&project_path, ns_id).await?;
 
 	// MARK: Cluster
 	generator
@@ -231,9 +156,13 @@ pub async fn generate(project_path: &Path, ns_id: &str) -> Result<()> {
 			.is_none()
 	{
 		generator
+			.generate_config(&["cluster", "id"], || async {
+				Ok(value(Uuid::new_v4().to_string()).into())
+			})
+			.await?;
+		generator
 			.generate_config(&["cluster", "single_node", "public_ip"], || async {
-				let public_ip = fetch_public_ip().await?;
-				Ok(value(public_ip).into())
+				Ok(value("127.0.0.1").into())
 			})
 			.await?;
 
@@ -245,114 +174,6 @@ pub async fn generate(project_path: &Path, ns_id: &str) -> Result<()> {
 			.await?;
 	}
 
-	// TODO: Prompt for provisioning servers
-	// // MARK: Linode
-	// generator
-	// 	.prompt_secret(
-	// 		"Linode Token",
-	// 		"doc/bolt/config/LINODE.md",
-	// 		&["linode", "terraform", "token"],
-	// 	)
-	// 	.await?;
-
-	// // MARK: Pools
-	// if generator.ns.get("pools").is_none() {
-	// 	let mut pools = toml_edit::ArrayOfTables::new();
-
-	// 	for (i, name_id) in ["lnd-sfo", "lnd-fra"].iter().enumerate() {
-	// 		let base_netnum = i as i64 * 3;
-
-	// 		let mut job = toml_edit::Table::new();
-	// 		job["pool"] = value("job");
-	// 		job["version"] = value("01");
-	// 		job["region"] = value(*name_id);
-	// 		job["count"] = value(1);
-	// 		job["size"] = value("g6-standard-1");
-	// 		job["netnum"] = value(base_netnum + 1);
-	// 		pools.push(job);
-
-	// 		let mut gg = toml_edit::Table::new();
-	// 		gg["pool"] = value("gg");
-	// 		gg["version"] = value("01");
-	// 		gg["region"] = value(*name_id);
-	// 		gg["count"] = value(1);
-	// 		gg["size"] = value("g6-standard-1");
-	// 		gg["netnum"] = value(base_netnum + 2);
-	// 		pools.push(gg);
-
-	// 		let mut ats = toml_edit::Table::new();
-	// 		ats["pool"] = value("ats");
-	// 		ats["version"] = value("01");
-	// 		ats["region"] = value(*name_id);
-	// 		ats["count"] = value(1);
-	// 		ats["size"] = value("g6-standard-1");
-	// 		ats["netnum"] = value(base_netnum + 3);
-	// 		pools.push(ats);
-	// 	}
-
-	// 	generator.ns["pools"] = toml_edit::Item::ArrayOfTables(pools);
-	// }
-
-	// TODO: Prompt for DNS
-	// // MARK: DNS
-	// generator
-	// 	.prompt_config(
-	// 		"Domain Main",
-	// 		"doc/bolt/config/DNS.md",
-	// 		&["dns", "domain", "main"],
-	// 	)
-	// 	.await?;
-	// generator
-	// 	.prompt_config(
-	// 		"Domain CDN",
-	// 		"doc/bolt/config/DNS.md",
-	// 		&["dns", "domain", "cdn"],
-	// 	)
-	// 	.await?;
-	// generator
-	// 	.prompt_config(
-	// 		"Domain Job",
-	// 		"doc/bolt/config/DNS.md",
-	// 		&["dns", "domain", "job"],
-	// 	)
-	// 	.await?;
-
-	// // MARK: Cloudflare
-	// generator
-	// 	.prompt_config(
-	// 		"Cloudflare Account ID",
-	// 		"doc/bolt/config/CLOUDFLARE.md",
-	// 		&["dns", "cloudflare", "account_id"],
-	// 	)
-	// 	.await?;
-	// generator
-	// 	.prompt_secret_multiple(
-	// 		"Cloudflare Auth Token",
-	// 		"doc/bolt/config/CLOUDFLARE.md",
-	// 		&[
-	// 			// Permissions:
-	// 			// - Zone > DNS > Edit
-	// 			//
-	// 			// Zone Resources:
-	// 			// - rivet.run
-	// 			&["cloudflare", "persistent", "auth_token"],
-	// 			// Permissions:
-	// 			// - Account > Cloudflare Tunnel > Edit (if using access)
-	// 			// - Account > Access: Apps and Policies > Edit (if using access)
-	// 			// - Account > Worker Scripts > Edit
-	// 			// - Zone > Workers Routes > Edit
-	// 			// - Zone > SSL and Certificates > Edit
-	// 			// - Zone > DNS > Edit
-	// 			//
-	// 			// Zone Resources:
-	// 			// - rivet.gg
-	// 			// - rivet.game
-	// 			// - rivet.run
-	// 			&["cloudflare", "terraform", "auth_token"],
-	// 		],
-	// 	)
-	// 	.await?;
-
 	// MARK: S3
 	if generator.ns.get("s3").is_none() {
 		generator.ns["s3"] = {
@@ -361,22 +182,6 @@ pub async fn generate(project_path: &Path, ns_id: &str) -> Result<()> {
 			x["minio"] = toml_edit::table();
 			toml_edit::Item::Table(x)
 		};
-	}
-
-	// TODO: Prompt login
-	if generator
-		.ns
-		.get("email")
-		.and_then(|x| x.get("sendgrid"))
-		.is_some()
-	{
-		generator
-			.prompt_secret(
-				"SendGrid Key",
-				"doc/bolt/config/SENDGRID.md",
-				&["sendgrid", "key"],
-			)
-			.await?;
 	}
 
 	// MARK: SSH
@@ -569,12 +374,6 @@ fn write_value(item: &mut toml_edit::Item, path: &[&str], value: toml_edit::Item
 			write_value(&mut item[key], sub_path, value);
 		}
 	}
-}
-
-/// Returns the public IP of this machine.
-async fn fetch_public_ip() -> Result<String> {
-	let response = reqwest::get("https://ipinfo.io/ip").await?.text().await?;
-	Ok(response.trim().to_string())
 }
 
 /// Generates an OpenSSH key and returns the private key.
