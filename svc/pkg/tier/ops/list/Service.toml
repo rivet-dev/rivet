@@ -7,4 +7,4 @@ kind = "rust"
 [operation]
 
 [secrets]
-"linode/token" = {}
+"linode/token" = { optional = true }

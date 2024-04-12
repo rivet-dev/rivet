@@ -7,5 +7,5 @@ kind = "rust"
 [operation]
 
 [secrets]
-"linode/token" = {}
+"linode/token" = { optional = true }
 "ssh/server/private_key_openssh" = {}

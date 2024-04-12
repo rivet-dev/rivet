@@ -8,7 +8,7 @@ kind = "rust"
 
 [secrets]
 "rivet/api_route/token" = {}
-"cloudflare/terraform/auth_token" = {}
+"cloudflare/terraform/auth_token" = { optional = true }
 "ssh/server/private_key_openssh" = {}
 
 [databases]

@@ -1241,7 +1241,7 @@ impl ServiceContextData {
 			));
 		}
 
-		if self.depends_on_infra() {
+		if self.depends_on_infra() && project_ctx.tls_enabled() {
 			let tls = terraform::output::read_tls(&project_ctx).await;
 			let k8s_infra = terraform::output::read_k8s_infra(&project_ctx).await;
 

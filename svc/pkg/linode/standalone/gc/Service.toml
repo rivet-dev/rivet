@@ -8,4 +8,4 @@ kind = "rust"
 singleton = true
 
 [secrets]
-"linode/token" = {}
+"linode/token" = { optional = true }

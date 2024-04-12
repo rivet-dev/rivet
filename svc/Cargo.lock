@@ -7386,7 +7386,9 @@ version = "0.1.0"
 name = "rivet-util-cluster"
 version = "0.1.0"
 dependencies = [
+ "hex",
  "rivet-util",
+ "sha2",
  "tokio",
  "types",
  "uuid",
