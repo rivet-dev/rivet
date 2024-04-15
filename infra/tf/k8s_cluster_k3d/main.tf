@@ -12,8 +12,8 @@ resource "k3d_cluster" "main" {
 
 	# Mount repository in to k3d so we can access the built binaries
 	volume {
-		source = var.project_root
-		destination = "/rivet-src"
+		source = var.cargo_target_dir
+		destination = "/target"
 		node_filters = ["server:0"]
 	}
 

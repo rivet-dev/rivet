@@ -130,7 +130,7 @@ async fn check_svcs(
 			let mut cmd = Command::new("cargo");
 			cmd.current_dir(path);
 			cmd.env("RUSTFLAGS", "--cfg tokio_unstable");
-			cmd.env("CARGO_TARGET_DIR", ctx.path().join("target"));
+			cmd.env("CARGO_TARGET_DIR", ctx.cargo_target_dir());
 			cmd.arg("clippy");
 
 			// Check tests, which will also check the main module. Using

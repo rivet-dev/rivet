@@ -317,7 +317,7 @@ pub async fn gen_svc(exec_ctx: &ExecServiceContext) -> Vec<serde_json::Value> {
 			"IfNotPresent",
 			format!(
 				"{} {}",
-				Path::new("/rivet-src").join(exec_path).display(),
+				Path::new("/target").join(exec_path).display(),
 				args.join(" ")
 			),
 		),
@@ -644,9 +644,9 @@ async fn build_volumes(
 		ExecServiceDriver::LocalBinaryArtifact { .. } => {
 			// Volumes
 			volumes.push(json!({
-				"name": "rivet-src",
+				"name": "target",
 				"hostPath": {
-					"path": "/rivet-src",
+					"path": "/target",
 					"type": "Directory"
 				}
 			}));
@@ -660,8 +660,8 @@ async fn build_volumes(
 
 			// Mounts
 			volume_mounts.push(json!({
-				"name": "rivet-src",
-				"mountPath": "/rivet-src",
+				"name": "target",
+				"mountPath": "/target",
 				"readOnly": true
 			}));
 			volume_mounts.push(json!({

@@ -6,6 +6,10 @@ variable "project_root" {
 	type = string
 }
 
+variable "cargo_target_dir" {
+	type = string
+}
+
 variable "public_ip" {
 	type = string
 }

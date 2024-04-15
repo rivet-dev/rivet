@@ -231,9 +231,9 @@ async fn run_test(
 	// Convert path relative to project
 	let relative_path = test_binary
 		.path
-		.strip_prefix(ctx.path())
+		.strip_prefix(ctx.cargo_target_dir())
 		.context("path not in project")?;
-	let container_path = Path::new("/rivet-src").join(relative_path);
+	let container_path = Path::new("/target").join(relative_path);
 
 	// Build exec ctx
 	let test_id = gen_test_id();
@@ -571,6 +571,10 @@ struct Data {
 
 // TODO: This only deletes linodes and firewalls, the ssh key still remains
 async fn cleanup_servers(ctx: &ProjectContext) -> Result<()> {
+	if ctx.ns().rivet.dynamic_servers.is_none() {
+		return Ok(());
+	}
+
 	eprintln!();
 	rivet_term::status::progress("Cleaning up servers", "");
 

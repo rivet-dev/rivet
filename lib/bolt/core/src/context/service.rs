@@ -242,8 +242,7 @@ impl ServiceContextData {
 	pub async fn rust_bin_path(&self, optimization: &BuildOptimization) -> PathBuf {
 		self.project()
 			.await
-			.path()
-			.join("target")
+			.cargo_target_dir()
 			.join(match optimization {
 				BuildOptimization::Release => "release",
 				BuildOptimization::Debug => "debug",

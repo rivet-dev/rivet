@@ -255,6 +255,12 @@ async fn vars(ctx: &ProjectContext) {
 		vars.insert("tunnels".into(), json!(&tunnels));
 	}
 
+	// Rust
+	vars.insert(
+		"cargo_target_dir".into(),
+		json!(ctx.cargo_target_dir().display().to_string()),
+	);
+
 	// Services
 	{
 		let mut services = HashMap::new();

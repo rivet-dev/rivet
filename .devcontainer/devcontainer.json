@@ -26,5 +26,11 @@
 		"vscode": {
 			"extensions": ["rust-lang.rust-analyzer"]
 		}
-	}
+	},
+	// docs/infrastructure/devcontainers/RUST_WORKAROUND.md
+	"containerEnv": {
+		"CARGO_TARGET_DIR": "/target"
+	},
+	// docs/infrastructure/devcontainers/RUST_WORKAROUND.md
+	"postCreateCommand": "echo 'export PATH=\"/target/debug:/target/release:${PATH}\"' >> ~/.bashrc"
 }

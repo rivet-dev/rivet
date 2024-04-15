@@ -88,7 +88,7 @@ pub async fn build<'a, T: AsRef<str>>(ctx: &ProjectContext, opts: BuildOpts<'a, 
 		#!/bin/bash
 		set -euf
 
-		export CARGO_TARGET_DIR=$(readlink -f ./target)
+		[ -z "$CARGO_TARGET_DIR" ] && export CARGO_TARGET_DIR=$(readlink -f ./target)
 		# Used for Tokio Console. See https://github.com/tokio-rs/console#using-it
 		export RUSTFLAGS="--cfg tokio_unstable"
 		# Used for debugging

@@ -373,7 +373,7 @@ async fn derive_local_build_driver(
 		RuntimeKind::Rust {} => ExecServiceDriver::LocalBinaryArtifact {
 			// Convert path to be relative to the project root
 			exec_path: exec_path
-				.strip_prefix(svc_ctx.project().await.path())
+				.strip_prefix(svc_ctx.project().await.cargo_target_dir())
 				.expect("rust binary path not inside of project dir")
 				.to_owned(),
 			args: Vec::new(),

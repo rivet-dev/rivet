@@ -2,6 +2,7 @@ use std::{
 	collections::{HashMap, HashSet},
 	path::{Path, PathBuf},
 	process::Command,
+	str::FromStr,
 	sync::{Arc, Weak},
 };
 
@@ -67,6 +68,13 @@ impl ProjectContextData {
 
 	pub fn path(&self) -> &Path {
 		self.path.as_path()
+	}
+
+	pub fn cargo_target_dir(&self) -> PathBuf {
+		std::env::var("CARGO_TARGET_DIR").map_or_else(
+			|_| self.path().join("target"),
+			|x| PathBuf::from_str(&x).unwrap(),
+		)
 	}
 }
 
