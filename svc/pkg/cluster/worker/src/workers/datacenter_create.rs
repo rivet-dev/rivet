@@ -34,11 +34,12 @@ async fn worker(
 			display_name,
 			provider,
 			provider_datacenter_id,
+			provider_api_token,
 			pools,
 			build_delivery_method,
 			drain_timeout
 		)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
 		",
 		datacenter_id,
 		cluster_id,
@@ -46,6 +47,7 @@ async fn worker(
 		&config.display_name,
 		config.provider as i64,
 		&config.provider_datacenter_id,
+		&config.provider_api_token,
 		pools_buf,
 		config.build_delivery_method as i64,
 		config.drain_timeout as i64

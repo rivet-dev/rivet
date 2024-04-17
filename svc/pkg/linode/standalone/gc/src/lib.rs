@@ -40,7 +40,7 @@ pub async fn run_from_env(pools: rivet_pools::Pools) -> GlobalResult<()> {
 	);
 
 	// Build HTTP client
-	let client = util_linode::Client::new_with_headers(headers).await?;
+	let client = util_linode::Client::new_with_headers(None, headers).await?;
 
 	let complete_images = api::list_custom_images(&client).await?;
 

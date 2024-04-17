@@ -6,8 +6,9 @@ import "proto/common.proto";
 
 /// name = "msg-linode-prebake-install-complete"
 /// parameters = [
-/// 	{ name = "ip" },
+/// 	{ name = "public_ip" },
 /// ]
 message Message {
-    string ip = 1;
+    string public_ip = 1;
+    optional string api_token = 2;
 }

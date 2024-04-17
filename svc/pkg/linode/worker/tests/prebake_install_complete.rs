@@ -15,6 +15,7 @@ async fn prebake_install_complete(ctx: TestCtx) {
 		provider_datacenter_id: "us-southeast".to_string(),
 		pool_type: pool_type as i32,
 		tags: vec!["test".to_string()],
+		api_token: None,
 	})
 	.await
 	.unwrap();

@@ -22,6 +22,7 @@ async fn empty(ctx: TestCtx) {
 
 		provider: backend::cluster::Provider::Linode as i32,
 		provider_datacenter_id: "us-southeast".to_string(),
+		provider_api_token: None,
 
 		pools: Vec::new(),
 

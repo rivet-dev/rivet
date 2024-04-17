@@ -24,11 +24,12 @@ message Datacenter {
 
     Provider provider = 5;
     string provider_datacenter_id = 6;
+    optional string provider_api_token = 7;
 
-    repeated Pool pools = 7;
-    BuildDeliveryMethod build_delivery_method = 8;
+    repeated Pool pools = 8;
+    BuildDeliveryMethod build_delivery_method = 9;
     // Nomad drain time in seconds.
-    uint64 drain_timeout = 9;
+    uint64 drain_timeout = 10;
 }
 
 message Pool {

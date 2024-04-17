@@ -228,6 +228,7 @@ pub async fn run_from_env(use_autoscaler: bool) -> GlobalResult<()> {
 
 					provider: Into::<backend::cluster::Provider>::into(datacenter.provider) as i32,
 					provider_datacenter_id: datacenter.provider_datacenter_name,
+					provider_api_token: None,
 
 					pools: datacenter.pools.into_iter().map(|(pool_type, pool)| {
 						backend::cluster::Pool {

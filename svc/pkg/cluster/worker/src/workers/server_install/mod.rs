@@ -134,9 +134,10 @@ async fn worker(ctx: &OperationContext<cluster::msg::server_install::Message>) -
 	.await??;
 
 	msg!([ctx] cluster::msg::server_install_complete(&ctx.public_ip) {
-		ip: ctx.public_ip.clone(),
+		public_ip: ctx.public_ip.clone(),
 		server_id: ctx.server_id,
 		provider: ctx.provider,
+		provider_api_token: ctx.provider_api_token.clone(),
 	})
 	.await?;
 

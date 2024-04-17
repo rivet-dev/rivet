@@ -11,17 +11,18 @@ async fn worker(
 		datacenter_ids: vec![datacenter_id.into()],
 	})
 	.await?;
-	let datacenter_config = unwrap!(
+	let datacenter = unwrap!(
 		datacenter_res.datacenters.first(),
 		"datacenter does not exist"
 	);
 
-	// Update config
-	let mut new_config = datacenter_config.clone();
-
+	// Update pools config
+	let mut new_pools = cluster::msg::datacenter_create::Pools {
+		pools: datacenter.pools.clone(),
+	};
 	for pool in &ctx.pools {
-		let mut current_pool = unwrap!(
-			new_config
+		let current_pool = unwrap!(
+			new_pools
 				.pools
 				.iter_mut()
 				.find(|p| p.pool_type == pool.pool_type),
@@ -40,25 +41,46 @@ async fn worker(
 		}
 	}
 
-	if let Some(drain_timeout) = ctx.drain_timeout {
-		new_config.drain_timeout = drain_timeout;
-	}
-
 	// Encode config
-	let mut config_buf = Vec::with_capacity(new_config.encoded_len());
-	new_config.encode(&mut config_buf)?;
+	let mut pools_buf = Vec::with_capacity(new_pools.encoded_len());
+	new_pools.encode(&mut pools_buf)?;
 
-	// Write config
-	sql_execute!(
-		[ctx]
-		"
-		UPDATE db_cluster.datacenters
-		SET config = $2
-		WHERE datacenter_id = $1
-		",
-		datacenter_id,
-		config_buf,
-	)
+	rivet_pools::utils::crdb::tx(&ctx.crdb().await?, |tx| {
+		let ctx = ctx.clone();
+		let pools_buf = pools_buf.clone();
+
+		Box::pin(async move {
+			// Update pools
+			sql_execute!(
+				[ctx, @tx tx]
+				"
+				UPDATE db_cluster.datacenters
+				SET pools = $2
+				WHERE datacenter_id = $1
+				",
+				datacenter_id,
+				pools_buf,
+			)
+			.await?;
+
+			// Update drain timeout
+			if let Some(drain_timeout) = ctx.drain_timeout {
+				sql_execute!(
+					[ctx, @tx tx]
+					"
+					UPDATE db_cluster.datacenters
+					SET drain_timeout = $2
+					WHERE datacenter_id = $1
+					",
+					datacenter_id,
+					drain_timeout as i64,
+				)
+				.await?;
+			}
+
+			Ok(())
+		})
+	})
 	.await?;
 
 	msg!([ctx] cluster::msg::datacenter_scale(datacenter_id) {

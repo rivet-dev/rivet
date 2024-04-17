@@ -10,8 +10,9 @@ import "proto/backend/cluster.proto";
 /// 	{ name = "public_ip" },
 /// ]
 message Message {
-    string ip = 1;
+    string public_ip = 1;
     // If set in server install message
     optional rivet.common.Uuid server_id = 2;
     rivet.backend.cluster.Provider provider = 3;
+    optional string provider_api_token = 4;
 }

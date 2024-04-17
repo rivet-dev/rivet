@@ -87,6 +87,7 @@ async fn worker(
 					pool_type: ctx.pool_type,
 					vlan_ip: vlan_ip.clone(),
 					tags: ctx.tags.clone(),
+					api_token: datacenter.provider_api_token.clone(),
 				})
 				.await;
 
@@ -138,9 +139,10 @@ async fn worker(
 		if !provision_res.already_installed {
 			msg!([ctx] cluster::msg::server_install(&provision_res.public_ip) {
 				public_ip: provision_res.public_ip,
-				pool_type: ctx.pool_type,
 				server_id: ctx.server_id,
+				pool_type: ctx.pool_type,
 				provider: ctx.provider,
+				provider_api_token: datacenter.provider_api_token.clone(),
 				initialize_immediately: true,
 			})
 			.await?;

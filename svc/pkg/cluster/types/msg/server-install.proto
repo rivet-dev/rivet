@@ -17,5 +17,6 @@ message Message {
     optional rivet.common.Uuid server_id = 3;
     // Simply passed to the install complete message
     rivet.backend.cluster.Provider provider = 4;
-    bool initialize_immediately = 5;
+    optional string provider_api_token = 5;
+    bool initialize_immediately = 6;
 }

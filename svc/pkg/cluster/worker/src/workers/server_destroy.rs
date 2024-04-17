@@ -44,6 +44,7 @@ async fn worker(ctx: &OperationContext<cluster::msg::server_destroy::Message>) -
 
 			op!([ctx] linode_server_destroy {
 				server_id: ctx.server_id,
+				api_token: datacenter.provider_api_token.clone(),
 			})
 			.await?;
 		}

@@ -52,7 +52,7 @@ pub async fn handle(
 	};
 
 	// Build HTTP client
-	let client = util_linode::Client::new().await?;
+	let client = util_linode::Client::new(ctx.api_token.clone()).await?;
 
 	// Create SSH key
 	let ssh_key_res = api::create_ssh_key(&client, &server_id.to_string()).await?;
@@ -168,6 +168,7 @@ async fn create_disks(
 			provider_datacenter_id: server.datacenter.clone(),
 			pool_type: pool_type as i32,
 			tags: Vec::new(),
+			api_token: ctx.api_token.clone(),
 		})
 		.await?;
 	}

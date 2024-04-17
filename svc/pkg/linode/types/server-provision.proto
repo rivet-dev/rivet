@@ -12,6 +12,7 @@ message Request {
     rivet.backend.cluster.PoolType pool_type = 4;
     string vlan_ip = 5;
     repeated string tags = 6;
+    optional string api_token = 7;
 }
 
 message Response {
