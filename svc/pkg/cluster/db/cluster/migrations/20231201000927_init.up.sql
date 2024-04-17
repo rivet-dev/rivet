@@ -65,14 +65,23 @@ CREATE TABLE cloudflare_misc (
 );
 
 CREATE TABLE server_images (
-	-- A string denoting what type of image this is (ex. "linode-us-southeast-job")
-	variant TEXT PRIMARY KEY,
+	provider INT,
+	install_hash TEXT,
+	datacenter_id UUID,
+	pool_type INT,
+
 	create_ts INT NOT NULL,
-	image_id TEXT
+	image_id TEXT,
+
+	PRIMARY KEY (provider, install_hash, datacenter_id, pool_type)
 );
 
+-- Stores data for destroying linode prebake resources and creating custom images
 CREATE TABLE server_images_linode_misc (
-	variant TEXT PRIMARY KEY,
+	install_hash TEXT,
+	datacenter_id UUID,
+	pool_type INT,
+
 	ssh_key_id INT NOT NULL,
 	linode_id INT,
 	firewall_id INT,
@@ -80,6 +89,7 @@ CREATE TABLE server_images_linode_misc (
 	public_ip TEXT,
 	image_id TEXT,
 
+	PRIMARY KEY (install_hash, datacenter_id, pool_type),
 	INDEX (public_ip),
 	INDEX (image_id)
 );

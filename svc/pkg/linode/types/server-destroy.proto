@@ -7,7 +7,7 @@ import "proto/backend/cluster.proto";
 
 message Request {
     rivet.common.Uuid server_id = 1;
-    optional string api_token = 2;
+    rivet.common.Uuid datacenter_id = 2;
 }
 
 message Response {

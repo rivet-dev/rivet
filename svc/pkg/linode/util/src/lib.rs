@@ -44,7 +44,6 @@ impl Client {
 			util::env::read_secret(&["linode", "token"]).await?
 		};
 		
-		let api_token = util::env::read_secret(&["linode", "token"]).await?;
 		let auth = format!("Bearer {}", api_token);
 		headers.insert(header::AUTHORIZATION, header::HeaderValue::from_str(&auth)?);
 

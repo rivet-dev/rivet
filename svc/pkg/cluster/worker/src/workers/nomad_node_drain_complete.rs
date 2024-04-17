@@ -12,8 +12,7 @@ async fn worker(
 		"
 		UPDATE db_cluster.servers
 		SET cloud_destroy_ts = $2
-		WHERE
-			server_id = $1
+		WHERE server_id = $1
 		RETURNING datacenter_id
 		",
 		&server_id,

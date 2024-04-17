@@ -12,11 +12,13 @@ import "proto/backend/cluster.proto";
 message Message {
     string public_ip = 1;
     rivet.backend.cluster.PoolType pool_type = 2;
-    // Only if installing on a "server" (see cluster database). Used to check if
-    // the server is currently being deleted
+
+    rivet.common.Uuid datacenter_id = 6;
+    // Unset when installing prebake servers since they don't have an id. Used to check if
+    // the server is currently being deleted to prevent installation
     optional rivet.common.Uuid server_id = 3;
+
     // Simply passed to the install complete message
     rivet.backend.cluster.Provider provider = 4;
-    optional string provider_api_token = 5;
-    bool initialize_immediately = 6;
+    bool initialize_immediately = 5;
 }

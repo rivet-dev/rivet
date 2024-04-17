@@ -3,6 +3,10 @@ use uuid::Uuid;
 
 pub mod test;
 
+// Use the hash of the server install script in the image variant so that if the install scripts are updated
+// we won't be using the old image anymore
+pub const INSTALL_SCRIPT_HASH: &str = include_str!("../gen/hash.txt");
+
 // NOTE: We don't reserve CPU because Nomad is running as a higher priority process than the rest and
 // shouldn't be doing much heavy lifting.
 const RESERVE_SYSTEM_MEMORY: u64 = 512;
@@ -71,39 +75,3 @@ pub fn server_name(
 	)
 }
 
-// Use the hash of the server install script in the image variant so that if the install scripts are updated
-// we wont be using the old image anymore
-const CLUSTER_SERVER_INSTALL_HASH: &str = include_str!("../gen/hash.txt");
-
-// Used for linode labels which have to be between 3 and 64 characters for some reason
-pub fn simple_image_variant(
-	provider_datacenter_id: &str,
-	pool_type: backend::cluster::PoolType,
-) -> String {
-	let ns = rivet_util::env::namespace();
-	let pool_type_str = match pool_type {
-		backend::cluster::PoolType::Job => "job",
-		backend::cluster::PoolType::Gg => "gg",
-		backend::cluster::PoolType::Ats => "ats",
-	};
-
-	format!("{ns}-{provider_datacenter_id}-{pool_type_str}")
-}
-
-pub fn image_variant(
-	provider: backend::cluster::Provider,
-	provider_datacenter_id: &str,
-	pool_type: backend::cluster::PoolType,
-) -> String {
-	let ns = rivet_util::env::namespace();
-	let provider_str = match provider {
-		backend::cluster::Provider::Linode => "linode",
-	};
-	let pool_type_str = match pool_type {
-		backend::cluster::PoolType::Job => "job",
-		backend::cluster::PoolType::Gg => "gg",
-		backend::cluster::PoolType::Ats => "ats",
-	};
-
-	format!("{ns}-{CLUSTER_SERVER_INSTALL_HASH}-{provider_str}-{provider_datacenter_id}-{pool_type_str}")
-}

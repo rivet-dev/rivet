@@ -88,8 +88,7 @@ pub async fn run_from_env(ts: i64, pools: rivet_pools::Pools) -> GlobalResult<()
 		"
 		UPDATE db_cluster.servers
 		SET cloud_destroy_ts = $2
-		WHERE
-			server_id = ANY($1)
+		WHERE server_id = ANY($1)
 		",
 		&destroy_server_ids,
 		util::timestamp::now(),

@@ -7,12 +7,12 @@ import "proto/backend/cluster.proto";
 
 /// name = "msg-linode-prebake-provision"
 /// parameters = [
-/// 	{ name = "variant" },
+/// 	{ name = "datacenter_id" },
+/// 	{ name = "pool_type" },
 /// ]
 message Message {
-    string variant = 1;
-    string provider_datacenter_id = 2;
-    rivet.backend.cluster.PoolType pool_type = 3;
+    rivet.common.Uuid datacenter_id = 1;
+    rivet.backend.cluster.PoolType pool_type = 2;
+    string provider_datacenter_id = 3;
     repeated string tags = 4;
-    optional string api_token = 5;
 }

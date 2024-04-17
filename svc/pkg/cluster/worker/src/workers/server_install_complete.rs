@@ -12,7 +12,7 @@ async fn worker(
 			if ctx.server_id.is_none() {
 				msg!([ctx] linode::msg::prebake_install_complete(&ctx.public_ip) {
 					public_ip: ctx.public_ip.clone(),
-					api_token: ctx.provider_api_token.clone(),
+					datacenter_id: ctx.datacenter_id,
 				})
 				.await?;
 			}

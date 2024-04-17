@@ -12,6 +12,8 @@ reqwest = { version = "0.11", features = ["json"] }
 util-cluster = { package = "rivet-util-cluster", path = "../../../cluster/util" }
 util-linode = { package = "rivet-util-linode", path = "../../util" }
 
+cluster-datacenter-get = { path = "../../../cluster/ops/datacenter-get" }
+
 [dependencies.sqlx]
 version = "0.7"
 default-features = false

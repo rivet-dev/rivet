@@ -4927,6 +4927,7 @@ version = "0.0.1"
 dependencies = [
  "chirp-client",
  "chirp-worker",
+ "cluster-datacenter-get",
  "linode-server-provision",
  "reqwest",
  "rivet-operation",
@@ -4941,6 +4942,7 @@ version = "0.0.1"
 dependencies = [
  "chirp-client",
  "chirp-worker",
+ "cluster-datacenter-get",
  "linode-server-destroy",
  "reqwest",
  "rivet-operation",
@@ -4955,6 +4957,7 @@ version = "0.0.1"
 dependencies = [
  "chirp-client",
  "chirp-worker",
+ "cluster-datacenter-get",
  "rivet-convert",
  "rivet-health-checks",
  "rivet-metrics",

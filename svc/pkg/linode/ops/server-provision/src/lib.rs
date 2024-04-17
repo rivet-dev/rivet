@@ -8,9 +8,16 @@ pub async fn handle(
 ) -> GlobalResult<linode::server_provision::Response> {
 	let crdb = ctx.crdb().await?;
 	let server_id = unwrap_ref!(ctx.server_id).as_uuid();
+	let datacenter_id = unwrap_ref!(ctx.datacenter_id).as_uuid();
 	let provider_datacenter_id = ctx.provider_datacenter_id.clone();
 	let pool_type = unwrap!(PoolType::from_i32(ctx.pool_type));
 	let provider_hardware = unwrap_ref!(ctx.hardware).provider_hardware.clone();
+
+	let datacenter_res = op!([ctx] cluster_datacenter_get {
+		datacenter_ids: vec![datacenter_id.into()],
+	})
+	.await?;
+	let datacenter = unwrap!(datacenter_res.datacenters.first());
 
 	let ns = util::env::namespace();
 	let pool_type_str = match pool_type {
@@ -52,7 +59,7 @@ pub async fn handle(
 	};
 
 	// Build HTTP client
-	let client = util_linode::Client::new(ctx.api_token.clone()).await?;
+	let client = util_linode::Client::new(datacenter.provider_api_token.clone()).await?;
 
 	// Create SSH key
 	let ssh_key_res = api::create_ssh_key(&client, &server_id.to_string()).await?;
@@ -95,11 +102,14 @@ pub async fn handle(
 		&ctx,
 		&crdb,
 		&client,
-		&server,
-		pool_type,
-		&ssh_key_res.public_key,
-		linode_id,
-		create_instance_res.specs.disk,
+		CreateDisks {
+			provider_datacenter_id: &server.datacenter,
+			datacenter_id,
+			pool_type,
+			ssh_key: &ssh_key_res.public_key,
+			linode_id,
+			server_disk_size: create_instance_res.specs.disk,
+		},
 	)
 	.await?;
 
@@ -131,23 +141,24 @@ pub async fn handle(
 	})
 }
 
+struct CreateDisks<'a> {
+	provider_datacenter_id: &'a str,
+	datacenter_id: Uuid,
+	pool_type: PoolType,
+	ssh_key: &'a str,
+	linode_id: u64,
+	server_disk_size: u64,
+}
+
 async fn create_disks(
 	ctx: &OperationContext<linode::server_provision::Request>,
 	crdb: &CrdbPool,
 	client: &util_linode::Client,
-	server: &api::ProvisionCtx,
-	pool_type: PoolType,
-	ssh_key: &str,
-	linode_id: u64,
-	server_disk_size: u64,
+	opts: CreateDisks<'_>,
 ) -> GlobalResult<(api::CreateDisksResponse, bool)> {
 	// Try to get custom image (if exists)
-	let image_variant = util_cluster::image_variant(
-		backend::cluster::Provider::Linode,
-		&server.datacenter,
-		pool_type,
-	);
-	let (custom_image, updated) = get_custom_image(ctx, crdb, &image_variant).await?;
+	let (custom_image, updated) =
+		get_custom_image(ctx, crdb, opts.datacenter_id, opts.pool_type).await?;
 
 	// Default image
 	let used_custom_image = custom_image.is_some();
@@ -163,18 +174,23 @@ async fn create_disks(
 
 	// Start custom image creation process
 	if updated {
-		msg!([ctx] linode::msg::prebake_provision(&image_variant) {
-			variant: image_variant,
-			provider_datacenter_id: server.datacenter.clone(),
-			pool_type: pool_type as i32,
+		msg!([ctx] linode::msg::prebake_provision(opts.datacenter_id, opts.pool_type as i32) {
+			datacenter_id: ctx.datacenter_id,
+			pool_type: opts.pool_type as i32,
+			provider_datacenter_id: opts.provider_datacenter_id.to_string(),
 			tags: Vec::new(),
-			api_token: ctx.api_token.clone(),
 		})
 		.await?;
 	}
 
-	let create_disks_res =
-		api::create_disks(client, ssh_key, linode_id, &image, server_disk_size).await?;
+	let create_disks_res = api::create_disks(
+		client,
+		opts.ssh_key,
+		opts.linode_id,
+		&image,
+		opts.server_disk_size,
+	)
+	.await?;
 
 	Ok((create_disks_res, used_custom_image))
 }
@@ -182,8 +198,11 @@ async fn create_disks(
 async fn get_custom_image(
 	ctx: &OperationContext<linode::server_provision::Request>,
 	crdb: &CrdbPool,
-	variant: &str,
+	datacenter_id: Uuid,
+	pool_type: PoolType,
 ) -> GlobalResult<(Option<String>, bool)> {
+	let provider = backend::cluster::Provider::Linode;
+
 	// Get the custom image id for this server, or insert a record and start creating one
 	let (image_id, updated) = sql_fetch_one!(
 		[ctx, (Option<String>, bool), &crdb]
@@ -191,29 +210,41 @@ async fn get_custom_image(
 		WITH
 			updated AS (
 				INSERT INTO db_cluster.server_images AS s (
-					variant, create_ts
+					provider, install_hash, datacenter_id, pool_type, create_ts
 				)
-				VALUES ($1, $2)
-				ON CONFLICT (variant) DO UPDATE
+				VALUES ($1, $2, $3, $4, $5)
+				ON CONFLICT (provider, install_hash, datacenter_id, pool_type) DO UPDATE
 					SET
 						image_id = NULL,
-						create_ts = $2
-					WHERE s.create_ts < $3
-				RETURNING variant
+						create_ts = $5
+					WHERE s.create_ts < $6
+				RETURNING provider, install_hash, datacenter_id, pool_type
 			),
 			selected AS (
-				SELECT variant, image_id
+				SELECT provider, install_hash, datacenter_id, pool_type, image_id
 				FROM db_cluster.server_images
-				WHERE variant = $1
+				WHERE
+					provider = $1 AND
+					install_hash = $2 AND
+					datacenter_id = $3 AND
+					pool_type = $4
 			)
 		SELECT
 			selected.image_id AS image_id,
-			(updated.variant IS NOT NULL) AS updated
+			-- Primary key is not null
+			(updated.provider IS NOT NULL) AS updated
 		FROM selected
 		FULL OUTER JOIN updated
-		ON selected.variant = updated.variant;
+		ON
+			selected.provider = updated.provider AND
+			selected.install_hash = updated.install_hash AND
+			selected.datacenter_id = updated.datacenter_id AND
+			selected.pool_type = updated.pool_type
 		",
-		variant,
+		provider as i64,
+		util_cluster::INSTALL_SCRIPT_HASH,
+		datacenter_id,
+		pool_type as i64,
 		util::timestamp::now(),
 		// 5 month expiration
 		util::timestamp::now() - util::duration::days(5 * 30),

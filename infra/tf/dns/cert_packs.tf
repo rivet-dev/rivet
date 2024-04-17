@@ -8,6 +8,10 @@ locals {
  	# 
  	# If the CDN domain is already at the root of the zone, then Cloudflare exposes a cert back by default and we don't need to create a new one.
  	needs_cdn_cert_pack = data.cloudflare_zone.cdn.name != var.domain_cdn
+
+	# Should be `lets_encrypt` to be consistent with job node certs, change to `google` if experiencing rate
+	# limits
+	certificate_authority = "lets_encrypt"
 }
 
 # TODO: Only if we use deprecated subdomains
@@ -22,7 +26,7 @@ resource "cloudflare_certificate_pack" "main" {
 		create_before_destroy = true
 	}
 
-	certificate_authority = "lets_encrypt"
+	certificate_authority = local.certificate_authority
 	# The certificate must include the root domain in it.
 	#
 	# We convert to set then back to list to remove potential duplicates of the root zoon.
@@ -52,7 +56,7 @@ resource "cloudflare_certificate_pack" "cdn" {
 		create_before_destroy = true
 	}
 
-	certificate_authority = "lets_encrypt"
+	certificate_authority = local.certificate_authority
 	# The certificate must include the root domain in it.
 	#
 	# We convert to set then back to list to remove potential duplicates of the root zoon.
