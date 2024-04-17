@@ -22,3 +22,16 @@ impl ApiAuth for Auth {
 		Ok(())
 	}
 }
+
+impl Auth {
+	pub async fn token(&self, token: &str) -> GlobalResult<()> {
+		ensure_eq_with!(
+			token,
+			&util::env::read_secret(&["rivet", "api_route", "token"]).await?,
+			API_FORBIDDEN,
+			reason = "Invalid token",
+		);
+
+		Ok(())
+	}
+}

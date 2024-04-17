@@ -28,12 +28,7 @@ pub async fn config(
 	_watch_index: WatchIndexQuery,
 	ConfigQuery { token }: ConfigQuery,
 ) -> GlobalResult<super::TraefikConfigResponseNullified> {
-	ensure_eq_with!(
-		token,
-		util::env::read_secret(&["rivet", "api_route", "token"]).await?,
-		API_FORBIDDEN,
-		reason = "Invalid token"
-	);
+	ctx.auth().token(&token).await?;
 
 	// Fetch configs and catch any errors
 	let config = build_cdn(&ctx).await?;

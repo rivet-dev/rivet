@@ -25,8 +25,8 @@ locals {
 			service_port = 4647
 		}
 
-		"api-route" = {
-			service = "rivet-api-route"
+		"api-internal" = {
+			service = "rivet-api-internal-monolith"
 			service_namespace = kubernetes_namespace.rivet_service.metadata[0].name
 			service_port = 80
 		}

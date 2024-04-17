@@ -20,55 +20,51 @@ define_router! {
 	mounts: [
 		{
 			path: api_admin::route::Router,
-			prefix: "admin"
+			prefix: "admin",
 		},
 		{
 			path: api_auth::route::Router,
-			prefix: "auth"
+			prefix: "auth",
 		},
 		{
 			path: api_cf_verification::route::Router,
-			prefix: "cf-verification"
+			prefix: "cf-verification",
 		},
 		{
 			path: api_cloud::route::Router,
-			prefix: "cloud"
+			prefix: "cloud",
 		},
 		{
 			path: api_group::route::Router,
-			prefix: "group"
+			prefix: "group",
 		},
 		{
 			path: api_identity::route::Router,
-			prefix: "identity"
+			prefix: "identity",
 		},
 		{
 			path: api_job::route::Router,
-			prefix: "job"
+			prefix: "job",
 		},
 		{
 			path: api_kv::route::Router,
-			prefix: "kv"
+			prefix: "kv",
 		},
 		{
 			path: api_matchmaker::route::Router,
-			prefix: "matchmaker"
+			prefix: "matchmaker",
 		},
 		{
 			path: api_module::route::Router,
-			prefix: "module"
+			prefix: "module",
 		},
 		{
 			path: api_portal::route::Router,
-			prefix: "portal"
-		},
-		{
-			path: api_provision::route::Router,
-			prefix: "provision"
+			prefix: "portal",
 		},
 		{
 			path: api_status::route::Router,
-			prefix: "status"
+			prefix: "status",
 		},
 	],
 }

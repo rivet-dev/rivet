@@ -4,7 +4,7 @@ PUBLIC_IP=$(ip -4 route get 1.0.0.0 | awk '{print $7; exit}')
 response=$(
 	curl -f \
 		-H "Authorization: Bearer __SERVER_TOKEN__" \
-		"https://__DOMAIN_MAIN_API__/provision/servers/$PUBLIC_IP/info"
+		"http://127.0.0.1:__TUNNEL_API_INTERNAL_PORT__/provision/servers/$PUBLIC_IP/info"
 )
 
 # Fetch data

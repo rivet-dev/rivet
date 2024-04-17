@@ -8,7 +8,7 @@ use serde::Deserialize;
 
 use crate::auth::Auth;
 
-// MARK: GET /server_ip
+// MARK: GET /cluster/server_ips
 #[derive(Debug, Clone, Deserialize)]
 pub struct ServerIpsQuery {
 	server_id: Option<Uuid>,

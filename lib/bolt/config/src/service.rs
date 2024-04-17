@@ -170,7 +170,9 @@ pub struct ServiceMount {
 	#[serde(default)]
 	pub subdomain: Option<String>,
 	#[serde(default)]
-	pub path: Option<String>,
+	pub paths: Vec<String>,
+	#[serde(default)]
+	pub strip_prefix: Option<String>,
 	#[serde(default)]
 	pub add_path: Option<String>,
 }

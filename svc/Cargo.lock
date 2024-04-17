@@ -512,6 +512,24 @@ dependencies = [
 ]
 
 [[package]]
+name = "api-internal-monolith"
+version = "0.0.1"
+dependencies = [
+ "api-helper",
+ "api-provision",
+ "api-route",
+ "async-trait",
+ "chirp-client",
+ "http 0.2.12",
+ "hyper",
+ "rivet-operation",
+ "tokio",
+ "tracing",
+ "tracing-subscriber",
+ "url",
+]
+
+[[package]]
 name = "api-job"
 version = "0.0.1"
 dependencies = [
@@ -743,7 +761,6 @@ dependencies = [
  "api-matchmaker",
  "api-module",
  "api-portal",
- "api-provision",
  "api-status",
  "async-trait",
  "chirp-client",

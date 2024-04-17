@@ -832,10 +832,10 @@ fn build_ingress_router(
 	// Register all mounts with Traefik
 	// TODO: move this in to a single ingressroute crd for web and websecure
 	for (i, mount) in mounts.enumerate() {
-		// Build host rule
 		let mut rule = String::new();
+		let mut middlewares = Vec::new();
 
-		// Build host
+		// Build host for rule
 		if let (Some(domain_main), Some(domain_main_api)) =
 			(project_ctx.domain_main(), project_ctx.domain_main_api())
 		{
@@ -849,39 +849,42 @@ fn build_ingress_router(
 			rule.push_str(&format!("Host(`{domain}`)"));
 		}
 
-		// Build middlewares
-		let mut middlewares = Vec::new();
-
-		// Build path
 		if !rule.is_empty() {
 			rule.push_str(" && ");
 		}
 
-		let path = match &mount.path {
-			Some(path) => path,
-			None => "/",
-		};
+		// Build paths for rule
+		rule.push_str("(");
+		rule.push_str(
+			&mount
+				.paths
+				.iter()
+				.map(|path| format!("PathPrefix(`{path}`)"))
+				.collect::<Vec<_>>()
+				.join(" || "),
+		);
+		rule.push_str(")");
 
-		rule.push_str(&format!("PathPrefix(`{path}`)"));
-
-		let mw_name = format!("{}-{i}-strip-prefix", svc_ctx.name());
-		middlewares.push(json!({
-			"apiVersion": "traefik.io/v1alpha1",
-			"kind": "Middleware",
-			"metadata": {
-				"name": mw_name,
-				"namespace": "rivet-service",
-				"labels": {
-					"traefik-instance": "main"
+		if let Some(strip_prefix) = &mount.strip_prefix {
+			let mw_name = format!("{}-{i}-strip-prefix", svc_ctx.name());
+			middlewares.push(json!({
+				"apiVersion": "traefik.io/v1alpha1",
+				"kind": "Middleware",
+				"metadata": {
+					"name": mw_name,
+					"namespace": "rivet-service",
+					"labels": {
+						"traefik-instance": "main"
+					}
+				},
+				"spec": {
+					"stripPrefix": {
+						"prefixes": [ strip_prefix ],
+						"forceSlash": true
+					}
 				}
-			},
-			"spec": {
-				"stripPrefix": {
-					"prefixes": [ path ],
-					"forceSlash": true
-				}
-			}
-		}));
+			}));
+		}
 
 		if let Some(add_path) = &mount.add_path {
 			let mw_name = format!("{}-{i}-add-prefix", svc_ctx.name());
@@ -968,13 +971,7 @@ fn build_ingress_router(
 
 		specs.extend(middlewares);
 
-		let priority = if svc_ctx.name() == "api-monolith" {
-			// Default priority
-			50
-		} else {
-			// Override monolith's priority
-			51
-		};
+		let priority = 50;
 
 		// Build insecure router
 		specs.push(json!({
@@ -1049,7 +1046,7 @@ fn build_ingress_router(
 			}));
 		}
 
-		// if svc_ctx.name() == "api-cf-verification" {
+		// Add CF challenge routes
 		if svc_ctx.name() == "api-monolith" {
 			specs.push(json!({
 				"apiVersion": "traefik.io/v1alpha1",

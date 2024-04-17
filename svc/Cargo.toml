@@ -9,6 +9,7 @@ members = [
 	"api/cloud",
 	"api/group",
 	"api/identity",
+	"api/internal-monolith",
 	"api/job",
 	"api/kv",
 	"api/matchmaker",

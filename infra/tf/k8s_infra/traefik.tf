@@ -64,7 +64,7 @@ resource "helm_release" "traefik" {
 		} : null
 
 		additionalArguments = [
-			"--providers.http.endpoint=http://rivet-api-route.rivet-service.svc.cluster.local/traefik/config/core?token=${module.traefik_secrets.values["rivet/api_route/token"]}",
+			"--providers.http.endpoint=http://rivet-api-internal-monolith.rivet-service.svc.cluster.local/route/traefik/config/core?token=${module.traefik_secrets.values["rivet/api_route/token"]}",
 			"--providers.http.pollInterval=2.5s",
 			# See docs/infrastructure/TIMEOUTS.md
 			"--entryPoints.web.transport.lifeCycle.graceTimeOut=60s",
@@ -76,12 +76,12 @@ resource "helm_release" "traefik" {
 		]
 
 		logs = {
-			# general = {
-			# 	level = "DEBUG"
-			# }
-			# access = {
-			# 	enabled = true
-			# }
+			general = {
+				level = "DEBUG"
+			}
+			access = {
+				enabled = true
+			}
 		}
 
 		deployment = {

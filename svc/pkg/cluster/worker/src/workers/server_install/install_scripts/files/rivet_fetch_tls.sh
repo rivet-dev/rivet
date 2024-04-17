@@ -11,7 +11,7 @@ while true; do
   response=$(
     curl -f \
       -H "Authorization: Bearer __SERVER_TOKEN__" \
-      "https://__DOMAIN_MAIN_API__/provision/datacenters/___DATACENTER_ID___/tls"
+      "http://127.0.0.1:__API_INTERNAL_PORT__/provision/datacenters/___DATACENTER_ID___/tls"
   ) && break || sleep 5
 done
 

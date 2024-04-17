@@ -1,5 +1,5 @@
 [package]
-name = "api-monolith"
+name = "api-internal-monolith"
 version = "0.0.1"
 authors = ["Rivet Gaming, LLC <developer@rivet.gg>"]
 edition = "2021"
@@ -21,15 +21,5 @@ tracing-subscriber = { version = "0.3", default-features = false, features = [
 ] }
 url = "2.2.2"
 
-api-admin = { path = "../admin" }
-api-auth = { path = "../auth" }
-api-cf-verification = { path = "../cf-verification" }
-api-cloud = { path = "../cloud" }
-api-group = { path = "../group" }
-api-identity = { path = "../identity" }
-api-job = { path = "../job" }
-api-kv = { path = "../kv" }
-api-matchmaker = { path = "../matchmaker" }
-api-module = { path = "../module" }
-api-portal = { path = "../portal" }
-api-status = { path = "../status" }
+api-route = { path = "../route" }
+api-provision = { path = "../provision" }

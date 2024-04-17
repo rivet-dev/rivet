@@ -16,7 +16,7 @@ pub struct TunnelService {
 	port: u16,
 }
 
-pub const TUNNEL_API_ROUTE_PORT: u16 = 5010;
+pub const TUNNEL_API_INTERNAL_PORT: u16 = 5010;
 pub const TUNNEL_VECTOR_PORT: u16 = 5020;
 pub const TUNNEL_VECTOR_TCP_JSON_PORT: u16 = 5021;
 pub const TUNNEL_SERVICES: &[TunnelService] = &[
@@ -33,8 +33,8 @@ pub const TUNNEL_SERVICES: &[TunnelService] = &[
 		port: 5002,
 	},
 	TunnelService {
-		name: "api-route",
-		port: TUNNEL_API_ROUTE_PORT,
+		name: "api-internal",
+		port: TUNNEL_API_INTERNAL_PORT,
 	},
 	TunnelService {
 		name: "vector",
@@ -526,9 +526,7 @@ async fn gen_s3_provider(
 }
 
 pub fn rivet_create_hook(initialize_immediately: bool) -> GlobalResult<String> {
-	let domain_main_api = unwrap!(util::env::domain_main_api(), "no cdn");
-	let mut script =
-		include_str!("files/rivet_create_hook.sh").replace("__DOMAIN_MAIN_API__", domain_main_api);
+	let mut script = include_str!("files/rivet_create_hook.sh").to_string();
 
 	if initialize_immediately {
 		script.push_str("systemctl start rivet_hook\n");
@@ -538,11 +536,12 @@ pub fn rivet_create_hook(initialize_immediately: bool) -> GlobalResult<String> {
 }
 
 pub fn rivet_fetch_info(server_token: &str) -> GlobalResult<String> {
-	let domain_main_api = unwrap!(util::env::domain_main_api(), "no cdn");
-
 	Ok(include_str!("files/rivet_fetch_info.sh")
 		.replace("__SERVER_TOKEN__", server_token)
-		.replace("__DOMAIN_MAIN_API__", domain_main_api))
+		.replace(
+			"__TUNNEL_API_INTERNAL_PORT__",
+			&TUNNEL_API_INTERNAL_PORT.to_string(),
+		))
 }
 
 pub fn rivet_fetch_tls(
@@ -550,12 +549,13 @@ pub fn rivet_fetch_tls(
 	server_token: &str,
 	traefik_instance_name: &str,
 ) -> GlobalResult<String> {
-	let domain_main_api = unwrap!(util::env::domain_main_api(), "no cdn");
-
 	let mut script = include_str!("files/rivet_fetch_tls.sh")
 		.replace("__NAME__", traefik_instance_name)
 		.replace("__SERVER_TOKEN__", server_token)
-		.replace("__DOMAIN_MAIN_API__", domain_main_api);
+		.replace(
+			"__TUNNEL_API_INTERNAL_PORT__",
+			&TUNNEL_API_INTERNAL_PORT.to_string(),
+		);
 
 	if initialize_immediately {
 		script.push_str("systemctl start rivet_fetch_tls.timer\n");

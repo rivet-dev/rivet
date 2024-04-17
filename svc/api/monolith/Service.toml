@@ -4,85 +4,94 @@ name = "api-monolith"
 [runtime]
 kind = "rust"
 
-# / path
+# monolith mount
 [[api.router.mounts]]
+paths = [
+	"/admin",
+	"/auth",
+	"/cf-verification",
+	"/cloud",
+	"/group",
+	"/identity",
+	"/job",
+	"/kv",
+	"/matchmaker",
+	"/module",
+	"/portal",
+	"/provision",
+	"/status",
+]
 
 [[api.router.mounts]]
 deprecated = true
-path = "/v1"
 subdomain = "admin.api"
+strip-prefix = "/v1"
 add-path = "/admin"
 
 [[api.router.mounts]]
 deprecated = true
-path = "/v1"
 subdomain = "auth.api"
+strip-prefix = "/v1"
 add-path = "/auth"
 
 [[api.router.mounts]]
 deprecated = true
-path = "/v1"
 subdomain = "cf-verification.api"
+strip-prefix = "/v1"
 add-path = "/cf-verification"
 
 [[api.router.mounts]]
 deprecated = true
-path = "/v1"
 subdomain = "cloud.api"
+strip-prefix = "/v1"
 add-path = "/cloud"
 
 [[api.router.mounts]]
 deprecated = true
-path = "/v1"
 subdomain = "group.api"
+strip-prefix = "/v1"
 add-path = "/group"
 
 [[api.router.mounts]]
 deprecated = true
-path = "/v1"
 subdomain = "identity.api"
+strip-prefix = "/v1"
 add-path = "/identity"
 
 [[api.router.mounts]]
 deprecated = true
-path = "/v1"
 subdomain = "job.api"
+strip-prefix = "/v1"
 add-path = "/job"
 
 [[api.router.mounts]]
 deprecated = true
-path = "/v1"
 subdomain = "kv.api"
+strip-prefix = "/v1"
 add-path = "/kv"
 
 [[api.router.mounts]]
 deprecated = true
-path = "/v1"
 subdomain = "matchmaker.api"
+strip-prefix = "/v1"
 add-path = "/matchmaker"
 
 [[api.router.mounts]]
 deprecated = true
-path = "/v1"
 subdomain = "module.api"
+strip-prefix = "/v1"
 add-path = "/module"
 
 [[api.router.mounts]]
 deprecated = true
-path = "/v1"
 subdomain = "portal.api"
+strip-prefix = "/v1"
 add-path = "/portal"
 
 [[api.router.mounts]]
 deprecated = true
-path = "/v1"
-subdomain = "provision.api"
-add-path = "/provision"
-
-[[api.router.mounts]]
-deprecated = true
-path = "/v1"
 subdomain = "status.api"
+strip-prefix = "/v1"
 add-path = "/status"
 
 [resources.single-node]

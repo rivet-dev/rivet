@@ -299,7 +299,7 @@ resource "kubectl_manifest" "api_rules" {
 										rivet_api_request_duration_bucket{
 											watch="0",
 											path!~"/find|/create",
-											service!="rivet-api-route",
+											service!="rivet-api-internal-monolith",
 											le="+Inf"
 										} [2m]
 									)
@@ -309,7 +309,7 @@ resource "kubectl_manifest" "api_rules" {
 										rivet_api_request_duration_bucket{
 											watch="0",
 											path!~"/find|/create",
-											service!="rivet-api-route",
+											service!="rivet-api-internal-monolith",
 											le="1"
 										} [2m]
 									)

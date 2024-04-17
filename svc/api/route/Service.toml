@@ -1,12 +1,10 @@
 [service]
 name = "api-route"
-essential = true
-priority = 70
 
 [runtime]
 kind = "rust"
 
-[api]
+[api-routes]
 
 [secrets]
 "rivet/api_route/token" = {}
@@ -14,12 +12,3 @@ kind = "rust"
 [databases]
 redis-job = {}
 redis-cdn = {}
-
-[resources.single-node]
-cpu = 50
-memory = 64
-
-[resources.distributed]
-cpu = 1000
-memory = 512
-
