@@ -481,68 +481,64 @@ async fn vars(ctx: &ProjectContext) {
 		vars.insert("s3_providers".into(), s3_providers(ctx).await.unwrap());
 	}
 
-	// TODO: Reimplement with new server provisioning
 	// Better Uptime
-	// if let Some(better_uptime) = &config.better_uptime {
-	// 	// Make sure DNS is enabled
-	// 	if config.dns.is_none() {
-	// 		panic!("Better Uptime requires DNS to be enabled, since it uses subdomains to monitor services");
-	// 	}
+	if let Some(better_uptime) = &config.better_uptime {
+		// Make sure DNS is enabled
+		if config.dns.is_none() {
+			panic!("Better Uptime requires DNS to be enabled, since it uses subdomains to monitor services");
+		}
 
-	// 	// Make sure there is at least one pool
-	// 	if config.pools.is_empty() {
-	// 		panic!("Better Uptime requires at least one pool, otherwise it will not be able to monitor the service");
-	// 	}
+		// Make sure there is at least one pool
+		let Some(cluster) = config
+			.rivet
+			.provisioning
+			.as_ref()
+			.and_then(|p| p.cluster.as_ref())
+		else {
+			panic!("Better Uptime requires cluster provisioning");
+		};
 
-	// 	// Load all the regions of pools
-	// 	let mut regions = config
-	// 		.pools
-	// 		.iter()
-	// 		.filter_map(|pool| match config.regions.get(&pool.region) {
-	// 			Some(region) => Some((pool.region.clone(), region.provider_region.clone())),
-	// 			None => None,
-	// 		})
-	// 		.collect::<HashSet<_>>()
-	// 		.into_iter()
-	// 		.collect::<Vec<_>>();
-	// 	regions.sort();
+		if cluster.datacenters.is_empty() {
+			panic!("Better Uptime requires at least one datacenter, otherwise it will not be able to monitor");
+		};
 
-	// 	// Create monitors
-	// 	let mm_monitors = regions
-	// 		.iter()
-	// 		.map(|(region, _)| {
-	// 			json!({
-	// 				"id": region,
-	// 				"url": format!("{}/status/matchmaker?region={}", ctx.origin_api(), region),
-	// 				"public_name": region,
-	// 			})
-	// 		})
-	// 		.collect::<Vec<_>>();
+		// Create monitors
+		let mm_monitors = cluster
+			.datacenters
+			.iter()
+			.map(|(name_id, dc)| {
+				json!({
+					"id": dc.datacenter_id,
+					"url": format!("{}/status/matchmaker?region={}", ctx.origin_api(), name_id),
+					"public_name": dc.display_name,
+				})
+			})
+			.collect::<Vec<_>>();
 
-	// 	vars.insert(
-	// 		"better_uptime_groups".into(),
-	// 		json!([
-	// 			{
-	// 				"id": "mm",
-	// 				"name": "Matchmaker",
-	// 				"monitors": mm_monitors,
-	// 			},
-	// 			{
-	// 				"id": "cdn",
-	// 				"name": "CDN",
-	// 				"monitors": [
-	// 					{
-	// 						"id": "sandbox",
-	// 						"url": format!("https://sandbox.{}", ctx.domain_cdn().unwrap()),
-	// 						"public_name": "CDN"
-	// 					}
-	// 				]
-	// 			},
-	// 		]),
-	// 	);
+		vars.insert(
+			"better_uptime_groups".into(),
+			json!([
+				{
+					"id": "mm",
+					"name": "Matchmaker",
+					"monitors": mm_monitors,
+				},
+				{
+					"id": "cdn",
+					"name": "CDN",
+					"monitors": [
+						{
+							"id": "sandbox",
+							"url": format!("https://sandbox.{}", ctx.domain_cdn().unwrap()),
+							"public_name": "CDN"
+						}
+					]
+				},
+			]),
+		);
 
-	// 	vars.insert("better_uptime".into(), json!(better_uptime.to_owned()));
-	// }
+		vars.insert("better_uptime".into(), json!(better_uptime.to_owned()));
+	}
 
 	// Media presets
 	vars.insert(
