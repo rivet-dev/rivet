@@ -12,7 +12,7 @@
 
 
 #[derive(Clone, Debug, PartialEq, Default, Serialize, Deserialize)]
-pub struct ProvisionServersGetServerInfoResponse {
+pub struct ProvisionServersGetInfoResponse {
     #[serde(rename = "cluster_id")]
     pub cluster_id: uuid::Uuid,
     #[serde(rename = "datacenter_id")]
@@ -25,9 +25,9 @@ pub struct ProvisionServersGetServerInfoResponse {
     pub vlan_ip: String,
 }
 
-impl ProvisionServersGetServerInfoResponse {
-    pub fn new(cluster_id: uuid::Uuid, datacenter_id: uuid::Uuid, name: String, server_id: uuid::Uuid, vlan_ip: String) -> ProvisionServersGetServerInfoResponse {
-        ProvisionServersGetServerInfoResponse {
+impl ProvisionServersGetInfoResponse {
+    pub fn new(cluster_id: uuid::Uuid, datacenter_id: uuid::Uuid, name: String, server_id: uuid::Uuid, vlan_ip: String) -> ProvisionServersGetInfoResponse {
+        ProvisionServersGetInfoResponse {
             cluster_id,
             datacenter_id,
             name,

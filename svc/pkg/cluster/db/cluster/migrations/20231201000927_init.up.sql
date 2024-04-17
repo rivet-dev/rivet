@@ -16,9 +16,23 @@ CREATE TABLE datacenters (
 	pools BYTES NOT NULL,
 	build_delivery_method INT NOT NULL,
 	drain_timeout INT NOT NULL,
+	create_ts INT NOT NULL,
 
 	UNIQUE (cluster_id, name_id),
 	INDEX (cluster_id)
+);
+
+CREATE TABLE datacenter_tls (
+	datacenter_id UUID PRIMARY KEY REFERENCES datacenters (datacenter_id),
+
+	-- Null until TLS cert is fully created. DB record needs to exist to prevent race condition
+	gg_cert_pem TEXT,
+	gg_private_key_pem TEXT,
+	job_cert_pem TEXT,
+	job_private_key_pem TEXT,
+
+	state INT NOT NULL,
+	expire_ts INT NOT NULL
 );
 
 CREATE TABLE servers (

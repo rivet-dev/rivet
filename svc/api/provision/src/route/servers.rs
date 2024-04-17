@@ -12,7 +12,7 @@ pub async fn info(
 	ctx: Ctx<Auth>,
 	public_ip: Ipv4Addr,
 	_watch_index: WatchIndexQuery,
-) -> GlobalResult<models::ProvisionServersGetServerInfoResponse> {
+) -> GlobalResult<models::ProvisionServersGetInfoResponse> {
 	ctx.auth().server()?;
 
 	// Find server based on public ip
@@ -45,7 +45,7 @@ pub async fn info(
 		server_id.as_uuid(),
 	);
 
-	Ok(models::ProvisionServersGetServerInfoResponse {
+	Ok(models::ProvisionServersGetInfoResponse {
 		name,
 		server_id: server_id.as_uuid(),
 		datacenter_id: datacenter_id.as_uuid(),

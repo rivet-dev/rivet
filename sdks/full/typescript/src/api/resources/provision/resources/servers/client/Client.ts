@@ -33,10 +33,10 @@ export class Servers {
      * @throws {@link Rivet.NotFoundError}
      * @throws {@link Rivet.BadRequestError}
      */
-    public async getServerInfo(
+    public async getInfo(
         ip: string,
         requestOptions?: Servers.RequestOptions
-    ): Promise<Rivet.provision.servers.GetServerInfoResponse> {
+    ): Promise<Rivet.provision.servers.GetInfoResponse> {
         const _response = await (this._options.fetcher ?? core.fetcher)({
             url: urlJoin(
                 (await core.Supplier.get(this._options.environment)) ?? environments.RivetEnvironment.Production,
@@ -45,14 +45,13 @@ export class Servers {
             method: "GET",
             headers: {
                 Authorization: await this._getAuthorizationHeader(),
-                "X-Fern-Language": "JavaScript",
             },
             contentType: "application/json",
             timeoutMs: requestOptions?.timeoutInSeconds != null ? requestOptions.timeoutInSeconds * 1000 : 180000,
             maxRetries: requestOptions?.maxRetries,
         });
         if (_response.ok) {
-            return await serializers.provision.servers.GetServerInfoResponse.parseOrThrow(_response.body, {
+            return await serializers.provision.servers.GetInfoResponse.parseOrThrow(_response.body, {
                 unrecognizedObjectKeys: "passthrough",
                 allowUnrecognizedUnionMembers: true,
                 allowUnrecognizedEnumValues: true,

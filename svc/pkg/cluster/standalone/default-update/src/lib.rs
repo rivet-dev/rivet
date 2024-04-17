@@ -220,28 +220,26 @@ pub async fn run_from_env(use_autoscaler: bool) -> GlobalResult<()> {
 		// Create new datacenter
 		else {
 			msg!([ctx] @wait cluster::msg::datacenter_create(datacenter.datacenter_id) {
-				config: Some(backend::cluster::Datacenter {
-					datacenter_id: datacenter_id_proto,
-					cluster_id: Some(cluster_id.into()),
-					name_id,
-					display_name: datacenter.display_name,
+				datacenter_id: datacenter_id_proto,
+				cluster_id: Some(cluster_id.into()),
+				name_id,
+				display_name: datacenter.display_name,
 
-					provider: Into::<backend::cluster::Provider>::into(datacenter.provider) as i32,
-					provider_datacenter_id: datacenter.provider_datacenter_name,
-					provider_api_token: None,
+				provider: Into::<backend::cluster::Provider>::into(datacenter.provider) as i32,
+				provider_datacenter_id: datacenter.provider_datacenter_name,
+				provider_api_token: None,
 
-					pools: datacenter.pools.into_iter().map(|(pool_type, pool)| {
-						backend::cluster::Pool {
-							pool_type: Into::<backend::cluster::PoolType>::into(pool_type) as i32,
-							hardware: pool.hardware.into_iter().map(Into::into).collect::<Vec<_>>(),
-							desired_count: pool.desired_count,
-							max_count: pool.max_count,
-						}
-					}).collect::<Vec<_>>(),
+				pools: datacenter.pools.into_iter().map(|(pool_type, pool)| {
+					backend::cluster::Pool {
+						pool_type: Into::<backend::cluster::PoolType>::into(pool_type) as i32,
+						hardware: pool.hardware.into_iter().map(Into::into).collect::<Vec<_>>(),
+						desired_count: pool.desired_count,
+						max_count: pool.max_count,
+					}
+				}).collect::<Vec<_>>(),
 
-					build_delivery_method: Into::<backend::cluster::BuildDeliveryMethod>::into(datacenter.build_delivery_method) as i32,
-					drain_timeout: datacenter.drain_timeout,
-				}),
+				build_delivery_method: Into::<backend::cluster::BuildDeliveryMethod>::into(datacenter.build_delivery_method) as i32,
+				drain_timeout: datacenter.drain_timeout,
 			})
 			.await?;
 		}

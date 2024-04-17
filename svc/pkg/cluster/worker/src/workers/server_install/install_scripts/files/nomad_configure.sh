@@ -292,14 +292,14 @@ mkdir -p /etc/nomad.d
 # Copy HCL files
 cat << EOF > /etc/nomad.d/common.hcl
 region = "global"
-datacenter = "__DATACENTER_ID__"
+datacenter = "___DATACENTER_ID___"
 data_dir = "/opt/nomad/data"
-name = "__NODE_NAME__"
+name = "___NODE_NAME___"
 
-bind_addr = "__VLAN_IP__"
+bind_addr = "___VLAN_IP___"
 
 addresses {
-	http = "__VLAN_IP__ 127.0.0.1"
+	http = "___VLAN_IP___ 127.0.0.1"
 }
 
 telemetry {
@@ -345,11 +345,11 @@ client {
 
 	meta {
 		"pool-type" = "job"
-		"server-id" = "__SERVER_ID__"
-		"datacenter-id" = "__DATACENTER_ID__"
-		"cluster-id" = "__CLUSTER_ID__"
+		"server-id" = "___SERVER_ID___"
+		"datacenter-id" = "___DATACENTER_ID___"
+		"cluster-id" = "___CLUSTER_ID___"
 
-		"network-vlan-ipv4" = "__VLAN_IP__"
+		"network-vlan-ipv4" = "___VLAN_IP___"
 		"network-public-ipv4" = "${PUBLIC_IP}"
 	}
 

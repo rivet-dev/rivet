@@ -1,4 +1,4 @@
-# ProvisionServersGetServerInfoResponse
+# ProvisionServersGetInfoResponse
 
 ## Properties
 

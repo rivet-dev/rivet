@@ -29,11 +29,11 @@ pub struct K8sInfra {
 
 #[derive(Debug, Clone, Deserialize)]
 pub struct Tls {
-	pub tls_cert_letsencrypt_rivet_job: TerraformOutputValue<Cert>,
 	pub tls_cert_locally_signed_tunnel_server: TerraformOutputValue<Cert>,
 	pub tls_cert_locally_signed_job: TerraformOutputValue<Cert>,
 	pub tls_cert_locally_signed_gg: TerraformOutputValue<Cert>,
 	pub root_ca_cert_pem: TerraformOutputValue<String>,
+	pub acme_account_private_key_pem: TerraformOutputValue<String>,
 }
 
 #[derive(Debug, Clone, Deserialize)]

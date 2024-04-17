@@ -3,28 +3,29 @@ use proto::backend::{self, pkg::*};
 
 #[worker_test]
 async fn prebake_provision(ctx: TestCtx) {
+	if !util::feature::server_provision() {
+		return;
+	}
+
 	let cluster_id = Uuid::new_v4();
 	let datacenter_id = Uuid::new_v4();
 	let pool_type = backend::cluster::PoolType::Ats;
+	let provider_datacenter_id = "us-southeast".to_string();
 
-	let dc = backend::cluster::Datacenter {
+	msg!([ctx] cluster::msg::datacenter_create(datacenter_id) -> cluster::msg::datacenter_scale {
 		datacenter_id: Some(datacenter_id.into()),
 		cluster_id: Some(cluster_id.into()),
 		name_id: util::faker::ident(),
 		display_name: util::faker::ident(),
 
 		provider: backend::cluster::Provider::Linode as i32,
-		provider_datacenter_id: "us-southeast".to_string(),
+		provider_datacenter_id: provider_datacenter_id.clone(),
 		provider_api_token: None,
 
 		pools: Vec::new(),
 
 		build_delivery_method: backend::cluster::BuildDeliveryMethod::TrafficServer as i32,
 		drain_timeout: 0,
-	};
-
-	msg!([ctx] cluster::msg::datacenter_create(datacenter_id) -> cluster::msg::datacenter_scale {
-		config: Some(dc.clone()),
 	})
 	.await
 	.unwrap();
@@ -32,7 +33,7 @@ async fn prebake_provision(ctx: TestCtx) {
 	msg!([ctx] linode::msg::prebake_provision(datacenter_id, pool_type as i32) {
 		datacenter_id: Some(datacenter_id.into()),
 		pool_type: pool_type as i32,
-		provider_datacenter_id: dc.provider_datacenter_id.clone(),
+		provider_datacenter_id: provider_datacenter_id,
 		tags: vec!["test".to_string()],
 	})
 	.await

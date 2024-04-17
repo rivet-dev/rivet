@@ -4313,9 +4313,65 @@ paths:
                 data: {}
               required:
                 - data
+  /datacenters/{datacenter_id}/tls:
+    get:
+      operationId: provision_datacenters_getTls
+      tags:
+        - ProvisionDatacenters
+      parameters:
+        - name: datacenter_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProvisionDatacentersGetTlsResponse'
+        '400':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '403':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '404':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '408':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '429':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '500':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+      security: *ref_0
   /servers/{ip}/info:
     get:
-      operationId: provision_servers_getServerInfo
+      operationId: provision_servers_getInfo
       tags:
         - ProvisionServers
       parameters:
@@ -4330,7 +4386,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ProvisionServersGetServerInfoResponse'
+                $ref: '#/components/schemas/ProvisionServersGetInfoResponse'
         '400':
           description: ''
           content:
@@ -9501,7 +9557,17 @@ components:
         data: {}
       required:
         - data
-    ProvisionServersGetServerInfoResponse:
+    ProvisionDatacentersGetTlsResponse:
+      type: object
+      properties:
+        job_cert_pem:
+          type: string
+        job_private_key_pem:
+          type: string
+      required:
+        - job_cert_pem
+        - job_private_key_pem
+    ProvisionServersGetInfoResponse:
       type: object
       properties:
         name:
@@ -11015,8 +11081,17 @@ components:
     CloudVersionMatchmakerPortRange:
       type: object
       description: >-
-        Range of ports that can be connected to. Note that the port range values
-        returned by /find
+        Range of ports that can be connected to.
+
+        If configured, `network_mode` must equal `host`.
+
+        Port ranges may overlap between containers, it is the responsibility of
+        the developer to ensure ports are available before using.
+
+        Read more about host networking
+        [here](https://rivet.gg/docs/dynamic-servers/concepts/host-bridge-networking).
+
+        Only available on Rivet Open Source & Enterprise.
 
 
         ### Related
@@ -11070,8 +11145,16 @@ components:
         - none
         - game_guard
       description: >-
-        Denotes what type of proxying to use for ports. Rivet GameGuard adds DoS
-        and DDoS mitigation to incoming connections.
+        Range of ports that can be connected to.
+
+        `game_guard` (default) proxies all traffic through [Game
+        Guard](https://rivet.gg/docs/dynamic-servers/concepts/game-guard) to
+        mitigate DDoS attacks and provide TLS termination.
+
+        `none` sends traffic directly to the game server. If configured,
+        `network_mode` must equal `host`. Read more about host networking
+        [here](https://rivet.gg/docs/dynamic-servers/concepts/host-bridge-networking).
+        Only available on Rivet Open Source & Enterprise.
 
 
         ### Related - /docs/dynamic-servers/concepts/game-guard -

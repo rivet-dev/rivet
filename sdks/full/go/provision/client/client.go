@@ -5,6 +5,7 @@ package client
 import (
 	http "net/http"
 	core "sdk/core"
+	datacentersclient "sdk/provision/datacenters/client"
 	serversclient "sdk/provision/servers/client"
 )
 
@@ -13,7 +14,8 @@ type Client struct {
 	caller  *core.Caller
 	header  http.Header
 
-	Servers *serversclient.Client
+	Datacenters *datacentersclient.Client
+	Servers     *serversclient.Client
 }
 
 func NewClient(opts ...core.ClientOption) *Client {
@@ -22,9 +24,10 @@ func NewClient(opts ...core.ClientOption) *Client {
 		opt(options)
 	}
 	return &Client{
-		baseURL: options.BaseURL,
-		caller:  core.NewCaller(options.HTTPClient),
-		header:  options.ToHeader(),
-		Servers: serversclient.NewClient(opts...),
+		baseURL:     options.BaseURL,
+		caller:      core.NewCaller(options.HTTPClient),
+		header:      options.ToHeader(),
+		Datacenters: datacentersclient.NewClient(opts...),
+		Servers:     serversclient.NewClient(opts...),
 	}
 }

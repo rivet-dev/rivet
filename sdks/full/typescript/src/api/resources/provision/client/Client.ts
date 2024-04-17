@@ -4,6 +4,7 @@
 
 import * as environments from "../../../../environments";
 import * as core from "../../../../core";
+import { Datacenters } from "../resources/datacenters/client/Client";
 import { Servers } from "../resources/servers/client/Client";
 
 export declare namespace Provision {
@@ -21,6 +22,12 @@ export declare namespace Provision {
 
 export class Provision {
     constructor(protected readonly _options: Provision.Options = {}) {}
+
+    protected _datacenters: Datacenters | undefined;
+
+    public get datacenters(): Datacenters {
+        return (this._datacenters ??= new Datacenters(this._options));
+    }
 
     protected _servers: Servers | undefined;
 

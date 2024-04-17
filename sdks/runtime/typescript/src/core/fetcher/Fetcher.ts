@@ -2,10 +2,6 @@ import { default as FormData } from "form-data";
 import qs from "qs";
 import { APIResponse } from "./APIResponse";
 
-if (typeof window === "undefined") {
-    global.fetch = require("node-fetch");
-}
-
 export type FetchFunction = <R = unknown>(args: Fetcher.Args) => Promise<APIResponse<R, Fetcher.Error>>;
 
 export declare namespace Fetcher {
@@ -77,18 +73,20 @@ async function fetcherImpl<R = unknown>(args: Fetcher.Args): Promise<APIResponse
         body = JSON.stringify(args.body);
     }
 
+    const fetchFn = typeof fetch == "function" ? fetch : require("node-fetch");
+
     const makeRequest = async (): Promise<Response> => {
         const controller = new AbortController();
         let abortId = undefined;
         if (args.timeoutMs != null) {
             abortId = setTimeout(() => controller.abort(), args.timeoutMs);
         }
-        const response = await fetch(url, {
+        const response = await fetchFn(url, {
             method: args.method,
             headers,
             body,
             signal: controller.signal,
-            credentials: args.withCredentials ? "same-origin" : undefined,
+            credentials: args.withCredentials ? "include" : undefined,
         });
         if (abortId != null) {
             clearTimeout(abortId);
@@ -119,18 +117,21 @@ async function fetcherImpl<R = unknown>(args: Fetcher.Args): Promise<APIResponse
             body = await response.blob();
         } else if (response.body != null && args.responseType === "streaming") {
             body = response.body;
-        } else if (response.body != null) {
-            try {
-                body = await response.json();
-            } catch (err) {
-                return {
-                    ok: false,
-                    error: {
-                        reason: "non-json",
-                        statusCode: response.status,
-                        rawBody: await response.text(),
-                    },
-                };
+        } else {
+            const text = await response.text();
+            if (text.length > 0) {
+                try {
+                    body = JSON.parse(text);
+                } catch (err) {
+                    return {
+                        ok: false,
+                        error: {
+                            reason: "non-json",
+                            statusCode: response.status,
+                            rawBody: text,
+                        },
+                    };
+                }
             }
         }
 

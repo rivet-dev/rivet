@@ -4,16 +4,16 @@ service:
   auth: true
   base-path: /servers
   endpoints:
-    getServerInfo:
-      path: /{ip}/info
+    getInfo:
+      path: /{ip}
       method: GET
       path-parameters:
         ip:
           type: string
-      response: GetServerInfoResponse
+      response: GetInfoResponse
 
 types:
-  GetServerInfoResponse:
+  GetInfoResponse:
     properties:
       name: string
       server_id: uuid

@@ -9,6 +9,7 @@ struct Datacenter {
 	cluster_id: Uuid,
 	name_id: String,
 	display_name: String,
+	create_ts: i64,
 	provider: i64,
 	provider_datacenter_id: String,
 	provider_api_token: Option<String>,
@@ -28,6 +29,7 @@ impl TryFrom<Datacenter> for backend::cluster::Datacenter {
 			cluster_id: Some(value.cluster_id.into()),
 			name_id: value.name_id,
 			display_name: value.display_name,
+			create_ts: value.create_ts,
 			provider: value.provider as i32,
 			provider_datacenter_id: value.provider_datacenter_id,
 			provider_api_token: value.provider_api_token,
@@ -61,7 +63,8 @@ pub async fn handle(
 			provider_api_token,
 			pools,
 			build_delivery_method,
-			drain_timeout
+			drain_timeout,
+			create_ts
 		FROM db_cluster.datacenters
 		WHERE datacenter_id = ANY($1)
 		",

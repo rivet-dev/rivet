@@ -6,8 +6,7 @@ use nomad_client::{
 use proto::backend::{self, pkg::*};
 
 lazy_static::lazy_static! {
-	static ref NOMAD_CONFIG: Configuration =
-		nomad_util::new_config_from_env().unwrap();
+	static ref NOMAD_CONFIG: Configuration = nomad_util::new_config_from_env().unwrap();
 }
 
 #[derive(sqlx::FromRow)]

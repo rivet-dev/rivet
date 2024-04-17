@@ -16,11 +16,11 @@ vlan_ip=$(echo $response | jq -r '.vlan_ip')
 
 # Template initialize script
 initialize_script="/usr/bin/rivet_initialize.sh"
-sed -i "s/__NODE_NAME__/$name/g" $initialize_script
-sed -i "s/__SERVER_ID__/$server_id/g" $initialize_script
-sed -i "s/__DATACENTER_ID__/$datacenter_id/g" $initialize_script
-sed -i "s/__CLUSTER_ID__/$cluster_id/g" $initialize_script
-sed -i "s/__VLAN_IP__/$vlan_ip/g" $initialize_script
+sed -i "s/___NODE_NAME___/$name/g" $initialize_script
+sed -i "s/___SERVER_ID___/$server_id/g" $initialize_script
+sed -i "s/___DATACENTER_ID___/$datacenter_id/g" $initialize_script
+sed -i "s/___CLUSTER_ID___/$cluster_id/g" $initialize_script
+sed -i "s/___VLAN_IP___/$vlan_ip/g" $initialize_script
 
 # Run initialize script
 "$initialize_script"

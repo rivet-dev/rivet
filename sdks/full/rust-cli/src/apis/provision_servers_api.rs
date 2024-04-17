@@ -15,10 +15,10 @@ use crate::apis::ResponseContent;
 use super::{Error, configuration};
 
 
-/// struct for typed errors of method [`provision_servers_get_server_info`]
+/// struct for typed errors of method [`provision_servers_get_info`]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(untagged)]
-pub enum ProvisionServersGetServerInfoError {
+pub enum ProvisionServersGetInfoError {
     Status400(crate::models::ErrorBody),
     Status403(crate::models::ErrorBody),
     Status404(crate::models::ErrorBody),
@@ -29,7 +29,7 @@ pub enum ProvisionServersGetServerInfoError {
 }
 
 
-pub async fn provision_servers_get_server_info(configuration: &configuration::Configuration, ip: &str) -> Result<crate::models::ProvisionServersGetServerInfoResponse, Error<ProvisionServersGetServerInfoError>> {
+pub async fn provision_servers_get_info(configuration: &configuration::Configuration, ip: &str) -> Result<crate::models::ProvisionServersGetInfoResponse, Error<ProvisionServersGetInfoError>> {
     let local_var_configuration = configuration;
 
     let local_var_client = &local_var_configuration.client;
@@ -53,7 +53,7 @@ pub async fn provision_servers_get_server_info(configuration: &configuration::Co
     if !local_var_status.is_client_error() && !local_var_status.is_server_error() {
         serde_json::from_str(&local_var_content).map_err(Error::from)
     } else {
-        let local_var_entity: Option<ProvisionServersGetServerInfoError> = serde_json::from_str(&local_var_content).ok();
+        let local_var_entity: Option<ProvisionServersGetInfoError> = serde_json::from_str(&local_var_content).ok();
         let local_var_error = ResponseContent { status: local_var_status, content: local_var_content, entity: local_var_entity };
         Err(Error::ResponseError(local_var_error))
     }

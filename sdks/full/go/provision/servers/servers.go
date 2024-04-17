@@ -9,7 +9,7 @@ import (
 	core "sdk/core"
 )
 
-type GetServerInfoResponse struct {
+type GetInfoResponse struct {
 	Name         string    `json:"name"`
 	ServerId     uuid.UUID `json:"server_id"`
 	DatacenterId uuid.UUID `json:"datacenter_id"`
@@ -19,18 +19,18 @@ type GetServerInfoResponse struct {
 	_rawJSON json.RawMessage
 }
 
-func (g *GetServerInfoResponse) UnmarshalJSON(data []byte) error {
-	type unmarshaler GetServerInfoResponse
+func (g *GetInfoResponse) UnmarshalJSON(data []byte) error {
+	type unmarshaler GetInfoResponse
 	var value unmarshaler
 	if err := json.Unmarshal(data, &value); err != nil {
 		return err
 	}
-	*g = GetServerInfoResponse(value)
+	*g = GetInfoResponse(value)
 	g._rawJSON = json.RawMessage(data)
 	return nil
 }
 
-func (g *GetServerInfoResponse) String() string {
+func (g *GetInfoResponse) String() string {
 	if len(g._rawJSON) > 0 {
 		if value, err := core.StringifyJSON(g._rawJSON); err == nil {
 			return value

@@ -24,14 +24,14 @@ async fn basic() {
 	let datacenter_id = Uuid::new_v4();
 	let cluster_id = Uuid::new_v4();
 
-	let dc = setup(&ctx, server_id, datacenter_id, cluster_id).await;
+	let (dc_pools, provider) = setup(&ctx, server_id, datacenter_id, cluster_id).await;
 
 	msg!([ctx] cluster::msg::server_provision(server_id) {
 		cluster_id: Some(cluster_id.into()),
 		datacenter_id: Some(datacenter_id.into()),
 		server_id: Some(server_id.into()),
-		pool_type: dc.pools.first().unwrap().pool_type,
-		provider: dc.provider,
+		pool_type: dc_pools.first().unwrap().pool_type,
+		provider: provider as i32,
 		tags: vec!["test".to_string()],
 	})
 	.await
@@ -106,8 +106,17 @@ async fn setup(
 	server_id: Uuid,
 	datacenter_id: Uuid,
 	cluster_id: Uuid,
-) -> backend::cluster::Datacenter {
+) -> (Vec<backend::cluster::Pool>, backend::cluster::Provider) {
 	let pool_type = backend::cluster::PoolType::Gg as i32;
+	let pools = vec![backend::cluster::Pool {
+		pool_type,
+		hardware: vec![backend::cluster::Hardware {
+			provider_hardware: util_cluster::test::HARDWARE.to_string(),
+		}],
+		desired_count: 0,
+		max_count: 0,
+	}];
+	let provider = backend::cluster::Provider::Linode;
 
 	msg!([ctx] cluster::msg::create(cluster_id) -> cluster::msg::create_complete {
 		cluster_id: Some(cluster_id.into()),
@@ -117,31 +126,20 @@ async fn setup(
 	.await
 	.unwrap();
 
-	let dc = backend::cluster::Datacenter {
+	msg!([ctx] cluster::msg::datacenter_create(datacenter_id) -> cluster::msg::datacenter_scale {
 		datacenter_id: Some(datacenter_id.into()),
 		cluster_id: Some(cluster_id.into()),
 		name_id: util::faker::ident(),
 		display_name: util::faker::ident(),
 
-		provider: backend::cluster::Provider::Linode as i32,
+		provider: provider as i32,
 		provider_datacenter_id: "us-southeast".to_string(),
 		provider_api_token: None,
 
-		pools: vec![backend::cluster::Pool {
-			pool_type,
-			hardware: vec![backend::cluster::Hardware {
-				provider_hardware: util_cluster::test::HARDWARE.to_string(),
-			}],
-			desired_count: 0,
-			max_count: 0,
-		}],
+		pools: pools.clone(),
 
 		build_delivery_method: backend::cluster::BuildDeliveryMethod::TrafficServer as i32,
 		drain_timeout: DRAIN_TIMEOUT as u64,
-	};
-
-	msg!([ctx] cluster::msg::datacenter_create(datacenter_id) -> cluster::msg::datacenter_scale {
-		config: Some(dc.clone()),
 	})
 	.await
 	.unwrap();
@@ -168,5 +166,5 @@ async fn setup(
 	.await
 	.unwrap();
 
-	dc
+	(pools, provider)
 }

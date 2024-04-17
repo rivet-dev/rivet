@@ -36,6 +36,7 @@ func NewClient(opts ...core.ClientOption) *Client {
 }
 
 // Marks the current lobby as ready to accept connections. Players will not be able to connect to this lobby until the lobby is flagged as ready.
+// This endpoint requires a [lobby token](/docs/general/concepts/token-types#matchmaker-lobby) for authentication, or a [development namespace token](/docs/general/concepts/token-types#namespace-development) for mock responses. When running on Rivet servers, you can access the given lobby token from the [`RIVET_TOKEN`](/docs/matchmaker/concepts/lobby-env) environment variable.
 func (c *Client) Ready(ctx context.Context) error {
 	baseURL := "https://api.rivet.gg"
 	if c.baseURL != "" {
@@ -115,6 +116,11 @@ func (c *Client) Ready(ctx context.Context) error {
 // join using the /join endpoint (this can be disabled by the developer by rejecting all new connections
 // after setting the lobby to closed).
 // Does not shutdown the lobby.
+//
+// This endpoint requires a [lobby token](/docs/general/concepts/token-types#matchmaker-lobby) for
+// authentication, or a [development namespace token](/docs/general/concepts/token-types#namespace-development)
+// for mock responses. When running on Rivet servers, you can access the given lobby token from the
+// [`RIVET_TOKEN`](/docs/matchmaker/concepts/lobby-env) environment variable.
 func (c *Client) SetClosed(ctx context.Context, request *matchmaker.SetLobbyClosedRequest) error {
 	baseURL := "https://api.rivet.gg"
 	if c.baseURL != "" {
@@ -191,6 +197,12 @@ func (c *Client) SetClosed(ctx context.Context, request *matchmaker.SetLobbyClos
 	return nil
 }
 
+// Sets the state JSON of the current lobby.
+//
+// This endpoint requires a [lobby token](/docs/general/concepts/token-types#matchmaker-lobby) for
+// authentication, or a [development namespace token](/docs/general/concepts/token-types#namespace-development)
+// for mock responses. When running on Rivet servers, you can access the given lobby token from the
+// [`RIVET_TOKEN`](/docs/matchmaker/concepts/lobby-env) environment variable.
 func (c *Client) SetState(ctx context.Context, request interface{}) error {
 	baseURL := "https://api.rivet.gg"
 	if c.baseURL != "" {
@@ -267,6 +279,12 @@ func (c *Client) SetState(ctx context.Context, request interface{}) error {
 	return nil
 }
 
+// Get the state of any lobby.
+//
+// This endpoint requires a [lobby token](/docs/general/concepts/token-types#matchmaker-lobby) for
+// authentication, or a [development namespace token](/docs/general/concepts/token-types#namespace-development)
+// for mock responses. When running on Rivet servers, you can access the given lobby token from the
+// [`RIVET_TOKEN`](/docs/matchmaker/concepts/lobby-env) environment variable.
 func (c *Client) GetState(ctx context.Context, lobbyId uuid.UUID) (interface{}, error) {
 	baseURL := "https://api.rivet.gg"
 	if c.baseURL != "" {
@@ -348,6 +366,12 @@ func (c *Client) GetState(ctx context.Context, lobbyId uuid.UUID) (interface{}, 
 // Finds a lobby based on the given criteria.
 // If a lobby is not found and `prevent_auto_create_lobby` is `false`,
 // a new lobby will be created.
+//
+// When [tokenless authentication](/docs/general/concepts/tokenless-authentication/web) is enabled in
+// your game namespace, this endpoint does not require a token to authenticate. Otherwise, a
+// [development namespace token](/docs/general/concepts/token-types#namespace-development) can be used
+// for mock responses and a [public namespace token](/docs/general/concepts/token-types#namespace-public)
+// can be used for general authentication.
 func (c *Client) Find(ctx context.Context, request *matchmaker.FindLobbyRequest) (*matchmaker.FindLobbyResponse, error) {
 	baseURL := "https://api.rivet.gg"
 	if c.baseURL != "" {
@@ -434,6 +458,12 @@ func (c *Client) Find(ctx context.Context, request *matchmaker.FindLobbyRequest)
 // Joins a specific lobby.
 // This request will use the direct player count configured for the
 // lobby group.
+//
+// When [tokenless authentication](/docs/general/concepts/tokenless-authentication/web) is enabled in
+// your game namespace, this endpoint does not require a token to authenticate. Otherwise, a
+// [development namespace token](/docs/general/concepts/token-types#namespace-development) can be used
+// for mock responses and a [public namespace token](/docs/general/concepts/token-types#namespace-public)
+// can be used for general authentication.
 func (c *Client) Join(ctx context.Context, request *matchmaker.JoinLobbyRequest) (*matchmaker.JoinLobbyResponse, error) {
 	baseURL := "https://api.rivet.gg"
 	if c.baseURL != "" {
@@ -513,6 +543,12 @@ func (c *Client) Join(ctx context.Context, request *matchmaker.JoinLobbyRequest)
 }
 
 // Creates a custom lobby.
+//
+// When [tokenless authentication](/docs/general/concepts/tokenless-authentication/web) is enabled in
+// your game namespace, this endpoint does not require a token to authenticate. Otherwise, a
+// [development namespace token](/docs/general/concepts/token-types#namespace-development) can be used
+// for mock responses and a [public namespace token](/docs/general/concepts/token-types#namespace-public)
+// can be used for general authentication.
 func (c *Client) Create(ctx context.Context, request *matchmaker.CreateLobbyRequest) (*matchmaker.CreateLobbyResponse, error) {
 	baseURL := "https://api.rivet.gg"
 	if c.baseURL != "" {
@@ -592,6 +628,12 @@ func (c *Client) Create(ctx context.Context, request *matchmaker.CreateLobbyRequ
 }
 
 // Lists all open lobbies.
+//
+// When [tokenless authentication](/docs/general/concepts/tokenless-authentication/web) is enabled in
+// your game namespace, this endpoint does not require a token to authenticate. Otherwise, a
+// [development namespace token](/docs/general/concepts/token-types#namespace-development) can be used
+// for mock responses and a [public namespace token](/docs/general/concepts/token-types#namespace-public)
+// can be used for general authentication.
 func (c *Client) List(ctx context.Context, request *matchmaker.ListLobbiesRequest) (*matchmaker.ListLobbiesResponse, error) {
 	baseURL := "https://api.rivet.gg"
 	if c.baseURL != "" {

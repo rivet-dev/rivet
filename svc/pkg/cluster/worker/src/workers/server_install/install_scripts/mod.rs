@@ -2,7 +2,6 @@ use std::collections::HashMap;
 
 use chirp_worker::prelude::*;
 use indoc::formatdoc;
-use maplit::hashmap;
 use proto::backend;
 
 pub mod components;
@@ -58,7 +57,11 @@ pub async fn gen_hook(server_token: &str) -> GlobalResult<String> {
 
 // This script is templated on the server itself after fetching server data from the Rivet API
 // (see gen_hook) After being templated, it is run.
-pub async fn gen_initialize(pool_type: backend::cluster::PoolType) -> GlobalResult<String> {
+pub async fn gen_initialize(
+	pool_type: backend::cluster::PoolType,
+	initialize_immediately: bool,
+	server_token: &str,
+) -> GlobalResult<String> {
 	let mut script = Vec::new();
 
 	let mut prometheus_targets = HashMap::new();
@@ -86,18 +89,20 @@ pub async fn gen_initialize(pool_type: backend::cluster::PoolType) -> GlobalResu
 			);
 		}
 		backend::cluster::PoolType::Gg => {
+			let traefik_instance_name = "game_guard".to_string();
+
 			script.push(components::traefik_instance(components::TraefikInstance {
-				name: "game_guard".into(),
+				name: traefik_instance_name.clone(),
 				static_config: gg_traefik_static_config().await?,
 				dynamic_config: String::new(),
-				tls_certs: hashmap! {
-					"letsencrypt_rivet_job".into() => components::TlsCert {
-						cert_pem: util::env::var("TLS_CERT_LETSENCRYPT_RIVET_JOB_CERT_PEM")?,
-						key_pem: util::env::var("TLS_CERT_LETSENCRYPT_RIVET_JOB_KEY_PEM")?,
-					},
-				},
 				tcp_server_transports: Default::default(),
 			}));
+
+			script.push(components::rivet_fetch_tls(
+				initialize_immediately,
+				server_token,
+				&traefik_instance_name,
+			)?);
 
 			prometheus_targets.insert(
 				"game_guard".into(),
@@ -127,7 +132,7 @@ pub async fn gen_initialize(pool_type: backend::cluster::PoolType) -> GlobalResu
 async fn gg_traefik_static_config() -> GlobalResult<String> {
 	let api_route_token = &util::env::read_secret(&["rivet", "api_route", "token"]).await?;
 	let http_provider_endpoint = format!(
-		"http://127.0.0.1:{port}/traefik/config/game-guard?token={api_route_token}&datacenter=__DATACENTER_ID__",
+		"http://127.0.0.1:{port}/traefik/config/game-guard?token={api_route_token}&datacenter=___DATACENTER_ID___",
 		port = components::TUNNEL_API_ROUTE_PORT,
 	);
 

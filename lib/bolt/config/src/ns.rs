@@ -603,17 +603,22 @@ pub struct Provisioning {
 	/// How many empty job servers to have at all times. Used in the simple provisioning algorithm.
 	#[serde(default = "default_job_server_provision_margin")]
 	pub job_server_provision_margin: u32,
+	#[serde(default)]
+	pub acme_directory: ProvisioningAcmeDirectory,
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug, Default, strum_macros::Display)]
-pub enum ProvisioningBuildDeliveryMethod {
-	#[serde(rename = "traffic_server")]
-	#[strum(serialize = "traffic_server")]
-	#[default]
-	TrafficServer,
-	#[serde(rename = "s3_direct")]
-	#[strum(serialize = "s3_direct")]
-	S3Direct,
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub enum ProvisioningAcmeDirectory {
+	#[serde(rename = "lets_encrypt")]
+	LetsEncrypt,
+	#[serde(rename = "lets_encrypt_staging")]
+	LetsEncryptStaging,
+}
+
+impl Default for ProvisioningAcmeDirectory {
+	fn default() -> Self {
+		ProvisioningAcmeDirectory::LetsEncryptStaging
+	}
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -644,6 +649,17 @@ pub struct ProvisioningDatacenter {
 pub enum ProvisioningProvider {
 	#[serde(rename = "linode")]
 	Linode,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, Default, strum_macros::Display)]
+pub enum ProvisioningBuildDeliveryMethod {
+	#[serde(rename = "traffic_server")]
+	#[strum(serialize = "traffic_server")]
+	#[default]
+	TrafficServer,
+	#[serde(rename = "s3_direct")]
+	#[strum(serialize = "s3_direct")]
+	S3Direct,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]

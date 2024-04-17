@@ -279,31 +279,6 @@ async fn vars(ctx: &ProjectContext) {
 		vars.insert("services".into(), json!(services));
 	}
 
-	// Datacenters
-	if let Some(cluster) = config
-		.rivet
-		.provisioning
-		.as_ref()
-		.and_then(|p| p.cluster.as_ref())
-	{
-		let datacenters = cluster
-			.datacenters
-			.iter()
-			.map(|(name_id, dc)| {
-				(
-					name_id,
-					json!({
-						"datacenter_id": dc.datacenter_id,
-					}),
-				)
-			})
-			.collect::<HashMap<_, _>>();
-
-		vars.insert("datacenters".into(), json!(datacenters));
-	} else {
-		vars.insert("datacenters".into(), json!({}));
-	};
-
 	// Docker
 	vars.insert(
 		"authenticate_all_docker_hub_pulls".into(),

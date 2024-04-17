@@ -3,6 +3,22 @@
 version = 3
 
 [[package]]
+name = "acme-lib"
+version = "0.9.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6bcfe879d8669cfe09f2dd1bef4dc8cb232ca7b9ce46f4621cda9e7cc729cf73"
+dependencies = [
+ "base64 0.21.7",
+ "lazy_static",
+ "log",
+ "openssl",
+ "serde",
+ "serde_json",
+ "time 0.1.45",
+ "ureq",
+]
+
+[[package]]
 name = "addr2line"
 version = "0.21.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -273,7 +289,7 @@ dependencies = [
  "prost 0.10.4",
  "rand",
  "region-get",
- "region-list",
+ "region-list-for-game",
  "reqwest",
  "rivet-api",
  "rivet-cache",
@@ -794,6 +810,7 @@ dependencies = [
  "chirp-client",
  "chrono",
  "cluster-datacenter-get",
+ "cluster-datacenter-tls-get",
  "cluster-server-get",
  "cluster-server-resolve-for-ip",
  "http 0.2.12",
@@ -933,13 +950,13 @@ dependencies = [
  "rustls 0.21.10",
  "rustls-native-certs 0.6.3",
  "rustls-pemfile",
- "rustls-webpki",
+ "rustls-webpki 0.101.7",
  "serde",
  "serde_json",
  "serde_nanos",
  "serde_repr",
  "thiserror",
- "time",
+ "time 0.3.34",
  "tokio",
  "tokio-retry",
  "tokio-rustls 0.24.1",
@@ -1084,7 +1101,7 @@ dependencies = [
  "percent-encoding",
  "regex",
  "sha2",
- "time",
+ "time 0.3.34",
  "tracing",
 ]
 
@@ -1284,7 +1301,7 @@ dependencies = [
  "itoa 1.0.11",
  "num-integer",
  "ryu",
- "time",
+ "time 0.3.34",
 ]
 
 [[package]]
@@ -1297,7 +1314,7 @@ dependencies = [
  "itoa 1.0.11",
  "num-integer",
  "ryu",
- "time",
+ "time 0.3.34",
 ]
 
 [[package]]
@@ -2388,6 +2405,35 @@ dependencies = [
 ]
 
 [[package]]
+name = "cluster-datacenter-tls-get"
+version = "0.0.1"
+dependencies = [
+ "chirp-client",
+ "chirp-worker",
+ "prost 0.10.4",
+ "rivet-operation",
+ "sqlx",
+]
+
+[[package]]
+name = "cluster-datacenter-tls-renew"
+version = "0.0.1"
+dependencies = [
+ "chirp-client",
+ "chirp-worker",
+ "cluster-datacenter-get",
+ "rivet-connection",
+ "rivet-health-checks",
+ "rivet-metrics",
+ "rivet-operation",
+ "rivet-runtime",
+ "sqlx",
+ "tokio",
+ "tracing",
+ "tracing-subscriber",
+]
+
+[[package]]
 name = "cluster-datacenter-topology-get"
 version = "0.0.1"
 dependencies = [
@@ -2501,6 +2547,7 @@ dependencies = [
 name = "cluster-worker"
 version = "0.0.1"
 dependencies = [
+ "acme-lib",
  "anyhow",
  "chirp-client",
  "chirp-worker",
@@ -2518,6 +2565,7 @@ dependencies = [
  "maplit",
  "nomad-util",
  "nomad_client",
+ "openssl",
  "rivet-convert",
  "rivet-health-checks",
  "rivet-metrics",
@@ -2529,6 +2577,7 @@ dependencies = [
  "ssh2",
  "thiserror",
  "token-create",
+ "trust-dns-resolver",
 ]
 
 [[package]]
@@ -3987,7 +4036,7 @@ checksum = "190092ea657667030ac6a35e305e62fc4dd69fd98ac98631e5d3a2b1575a12b5"
 dependencies = [
  "cfg-if",
  "libc",
- "wasi",
+ "wasi 0.11.0+wasi-snapshot-preview1",
 ]
 
 [[package]]
@@ -5228,7 +5277,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a4a650543ca06a924e8b371db273b2756685faae30f8487da1b56505a8f78b0c"
 dependencies = [
  "libc",
- "wasi",
+ "wasi 0.11.0+wasi-snapshot-preview1",
  "windows-sys 0.48.0",
 ]
 
@@ -6631,7 +6680,7 @@ dependencies = [
  "libc",
  "once_cell",
  "raw-cpuid",
- "wasi",
+ "wasi 0.11.0+wasi-snapshot-preview1",
  "web-sys",
  "winapi",
 ]
@@ -7116,7 +7165,7 @@ dependencies = [
  "mm-lobby-runtime-aggregate",
  "mm-player-count-for-namespace",
  "region-get",
- "region-list",
+ "region-list-for-game",
  "region-resolve",
  "rivet-api",
  "rivet-group-server",
@@ -7620,8 +7669,22 @@ checksum = "f9d5a6813c0759e4609cd494e8e725babae6a2ca7b62a5536a13daaec6fcb7ba"
 dependencies = [
  "log",
  "ring 0.17.8",
- "rustls-webpki",
+ "rustls-webpki 0.101.7",
  "sct 0.7.1",
+]
+
+[[package]]
+name = "rustls"
+version = "0.22.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "99008d7ad0bbbea527ec27bddbc0e432c5b87d8175178cee68d2eec9c4a1813c"
+dependencies = [
+ "log",
+ "ring 0.17.8",
+ "rustls-pki-types",
+ "rustls-webpki 0.102.2",
+ "subtle",
+ "zeroize",
 ]
 
 [[package]]
@@ -7658,12 +7721,29 @@ dependencies = [
 ]
 
 [[package]]
+name = "rustls-pki-types"
+version = "1.4.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ecd36cc4259e3e4514335c4a138c6b43171a8d61d8f5c9348f9fc7529416f247"
+
+[[package]]
 name = "rustls-webpki"
 version = "0.101.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8b6275d1ee7a1cd780b64aca7726599a1dbc893b1e64144529e55c3c2f745765"
 dependencies = [
  "ring 0.17.8",
+ "untrusted 0.9.0",
+]
+
+[[package]]
+name = "rustls-webpki"
+version = "0.102.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "faaa0a62740bedb9b2ef5afa303da42764c012f743917351dc9a237ea1663610"
+dependencies = [
+ "ring 0.17.8",
+ "rustls-pki-types",
  "untrusted 0.9.0",
 ]
 
@@ -7909,7 +7989,7 @@ dependencies = [
  "serde",
  "serde_json",
  "serde_with_macros",
- "time",
+ "time 0.3.34",
 ]
 
 [[package]]
@@ -8023,7 +8103,7 @@ dependencies = [
  "num-bigint",
  "num-traits",
  "thiserror",
- "time",
+ "time 0.3.34",
 ]
 
 [[package]]
@@ -8780,6 +8860,17 @@ dependencies = [
 
 [[package]]
 name = "time"
+version = "0.1.45"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1b797afad3f312d1c66a56d11d0316f916356d11bd158fbc6ca6389ff6bf805a"
+dependencies = [
+ "libc",
+ "wasi 0.10.0+wasi-snapshot-preview1",
+ "winapi",
+]
+
+[[package]]
+name = "time"
 version = "0.3.34"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c8248b6521bb14bc45b4067159b9b6ad792e2d6d754d6c41fb50e29fefe38749"
@@ -9216,12 +9307,14 @@ dependencies = [
  "futures-util",
  "idna 0.4.0",
  "ipnet",
+ "native-tls",
  "once_cell",
  "rand",
  "smallvec",
  "thiserror",
  "tinyvec",
  "tokio",
+ "tokio-native-tls",
  "tracing",
  "url",
 ]
@@ -9243,6 +9336,7 @@ dependencies = [
  "smallvec",
  "thiserror",
  "tokio",
+ "tokio-native-tls",
  "tracing",
  "trust-dns-proto",
 ]
@@ -9491,6 +9585,23 @@ dependencies = [
  "sqlx",
  "upload-get",
  "upload-prepare",
+]
+
+[[package]]
+name = "ureq"
+version = "2.9.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "11f214ce18d8b2cbe84ed3aa6486ed3f5b285cf8d8fbdbce9f3f767a724adc35"
+dependencies = [
+ "base64 0.21.7",
+ "flate2",
+ "log",
+ "once_cell",
+ "rustls 0.22.3",
+ "rustls-pki-types",
+ "rustls-webpki 0.102.2",
+ "url",
+ "webpki-roots 0.26.1",
 ]
 
 [[package]]
@@ -9989,6 +10100,12 @@ dependencies = [
 
 [[package]]
 name = "wasi"
+version = "0.10.0+wasi-snapshot-preview1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1a143597ca7c7793eff794def352d41792a93c481eb1042423ff7ff72ba2c31f"
+
+[[package]]
+name = "wasi"
 version = "0.11.0+wasi-snapshot-preview1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9c8d87e72b64a3b4db28d11ce29237c246188f4f51057d65a7eab63b7987e423"
@@ -10122,6 +10239,15 @@ name = "webpki-roots"
 version = "0.25.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5f20c57d8d7db6d3b86154206ae5d8fba62dd39573114de97c2cb0578251f8e1"
+
+[[package]]
+name = "webpki-roots"
+version = "0.26.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b3de34ae270483955a94f4b21bdaaeb83d508bb84a01435f393818edb0012009"
+dependencies = [
+ "rustls-pki-types",
+]
 
 [[package]]
 name = "which"

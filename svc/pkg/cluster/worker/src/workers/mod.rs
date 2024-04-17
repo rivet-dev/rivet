@@ -3,6 +3,7 @@ pub mod datacenter_create;
 pub mod datacenter_scale;
 pub mod datacenter_taint;
 pub mod datacenter_taint_complete;
+pub mod datacenter_tls_issue;
 pub mod datacenter_update;
 pub mod game_link;
 pub mod nomad_node_drain_complete;
@@ -22,6 +23,7 @@ chirp_worker::workers![
 	datacenter_scale,
 	datacenter_taint_complete,
 	datacenter_taint,
+	datacenter_tls_issue,
 	datacenter_update,
 	game_link,
 	nomad_node_drain_complete,

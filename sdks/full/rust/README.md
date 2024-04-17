@@ -160,7 +160,8 @@ Class | Method | HTTP request | Description
 *PortalGamesApi* | [**portal_games_get_game_profile**](docs/PortalGamesApi.md#portal_games_get_game_profile) | **GET** /portal/games/{game_name_id}/profile | 
 *PortalNotificationsApi* | [**portal_notifications_register_notifications**](docs/PortalNotificationsApi.md#portal_notifications_register_notifications) | **POST** /portal/notifications/register | 
 *PortalNotificationsApi* | [**portal_notifications_unregister_notifications**](docs/PortalNotificationsApi.md#portal_notifications_unregister_notifications) | **DELETE** /portal/notifications/register | 
-*ProvisionServersApi* | [**provision_servers_get_server_info**](docs/ProvisionServersApi.md#provision_servers_get_server_info) | **GET** /servers/{ip}/info | 
+*ProvisionDatacentersApi* | [**provision_datacenters_get_tls**](docs/ProvisionDatacentersApi.md#provision_datacenters_get_tls) | **GET** /datacenters/{datacenter_id}/tls | 
+*ProvisionServersApi* | [**provision_servers_get_info**](docs/ProvisionServersApi.md#provision_servers_get_info) | **GET** /servers/{ip}/info | 
 
 
 ## Documentation For Models
@@ -453,7 +454,8 @@ Class | Method | HTTP request | Description
  - [PortalNotificationRegisterService](docs/PortalNotificationRegisterService.md)
  - [PortalNotificationUnregisterService](docs/PortalNotificationUnregisterService.md)
  - [PortalRegisterNotificationsRequest](docs/PortalRegisterNotificationsRequest.md)
- - [ProvisionServersGetServerInfoResponse](docs/ProvisionServersGetServerInfoResponse.md)
+ - [ProvisionDatacentersGetTlsResponse](docs/ProvisionDatacentersGetTlsResponse.md)
+ - [ProvisionServersGetInfoResponse](docs/ProvisionServersGetInfoResponse.md)
  - [UploadPrepareFile](docs/UploadPrepareFile.md)
  - [UploadPresignedRequest](docs/UploadPresignedRequest.md)
  - [ValidationError](docs/ValidationError.md)

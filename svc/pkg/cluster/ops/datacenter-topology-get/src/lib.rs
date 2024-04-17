@@ -5,8 +5,7 @@ use proto::backend::pkg::*;
 use rivet_operation::prelude::*;
 
 lazy_static::lazy_static! {
-	static ref NOMAD_CONFIG: Configuration =
-	nomad_util::new_config_from_env().unwrap();
+	static ref NOMAD_CONFIG: Configuration = nomad_util::new_config_from_env().unwrap();
 }
 
 #[derive(sqlx::FromRow)]

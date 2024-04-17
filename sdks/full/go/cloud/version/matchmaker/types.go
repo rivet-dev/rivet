@@ -208,7 +208,11 @@ func (p PortProtocol) Ptr() *PortProtocol {
 	return &p
 }
 
-// Range of ports that can be connected to. Note that the port range values returned by /find
+// Range of ports that can be connected to.
+// If configured, `network_mode` must equal `host`.
+// Port ranges may overlap between containers, it is the responsibility of the developer to ensure ports are available before using.
+// Read more about host networking [here](https://rivet.gg/docs/dynamic-servers/concepts/host-bridge-networking).
+// Only available on Rivet Open Source & Enterprise.
 //
 // ### Related
 //
@@ -246,7 +250,9 @@ func (p *PortRange) String() string {
 	return fmt.Sprintf("%#v", p)
 }
 
-// Denotes what type of proxying to use for ports. Rivet GameGuard adds DoS and DDoS mitigation to incoming connections.
+// Range of ports that can be connected to.
+// `game_guard` (default) proxies all traffic through [Game Guard](https://rivet.gg/docs/dynamic-servers/concepts/game-guard) to mitigate DDoS attacks and provide TLS termination.
+// `none` sends traffic directly to the game server. If configured, `network_mode` must equal `host`. Read more about host networking [here](https://rivet.gg/docs/dynamic-servers/concepts/host-bridge-networking). Only available on Rivet Open Source & Enterprise.
 //
 // ### Related - /docs/dynamic-servers/concepts/game-guard - cloud.version.matchmaker.PortProtocol
 type ProxyKind string

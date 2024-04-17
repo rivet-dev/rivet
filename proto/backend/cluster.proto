@@ -22,6 +22,7 @@ message Datacenter {
     rivet.common.Uuid cluster_id = 2;
     string name_id = 3;
     string display_name = 4;
+    int64 create_ts = 11;
 
     Provider provider = 5;
     string provider_datacenter_id = 6;
@@ -66,4 +67,10 @@ message Server {
     optional int64 cloud_destroy_ts = 7;
 
     // TODO: Add the rest of the sql columns
+}
+
+enum TlsState {
+    CREATING = 0;
+    ACTIVE = 1;
+    RENEWING = 2;
 }

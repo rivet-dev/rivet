@@ -25,7 +25,7 @@ async fn main() {
 	let util_path = util_path.join("worker").join("src").join("workers").join("server_install");
 
 	// Compute the git diff between the current branch and the local changes
-	let mut cmd = Command::new("git").arg("diff").arg("--minimal").arg("HEAD").arg("--").arg(util_path).output()
+	let cmd = Command::new("git").arg("diff").arg("--minimal").arg("HEAD").arg("--").arg(util_path).output()
 	.await
 	.unwrap();
 	

@@ -1039,6 +1039,11 @@ impl ServiceContextData {
 					provisioning.job_server_provision_margin.to_string(),
 				));
 			}
+
+			env.push((
+				format!("TLS_ACME_DIRECTORY"),
+				serde_json::to_string(&provisioning.acme_directory)?,
+			));
 		}
 
 		// Sort env by keys so it's always in the same order
@@ -1252,16 +1257,12 @@ impl ServiceContextData {
 				tls.tls_cert_locally_signed_job.key_pem.clone(),
 			));
 			env.push((
-				"TLS_CERT_LETSENCRYPT_RIVET_JOB_CERT_PEM".into(),
-				tls.tls_cert_letsencrypt_rivet_job.cert_pem.clone(),
-			));
-			env.push((
-				"TLS_CERT_LETSENCRYPT_RIVET_JOB_KEY_PEM".into(),
-				tls.tls_cert_letsencrypt_rivet_job.key_pem.clone(),
-			));
-			env.push((
 				"TLS_ROOT_CA_CERT_PEM".into(),
 				(*tls.root_ca_cert_pem).clone(),
+			));
+			env.push((
+				"TLS_ACME_ACCOUNT_PRIVATE_KEY_PEM".into(),
+				(*tls.acme_account_private_key_pem).clone(),
 			));
 			env.push((
 				"K8S_TRAEFIK_TUNNEL_EXTERNAL_IP".into(),

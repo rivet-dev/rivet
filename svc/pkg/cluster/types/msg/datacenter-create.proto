@@ -10,7 +10,19 @@ import "proto/backend/cluster.proto";
 /// 	{ name = "datacenter_id" },
 /// ]
 message Message {
-    rivet.backend.cluster.Datacenter config = 1;
+    rivet.common.Uuid datacenter_id = 1;
+    rivet.common.Uuid cluster_id = 2;
+    string name_id = 3;
+    string display_name = 4;
+
+    rivet.backend.cluster.Provider provider = 5;
+    string provider_datacenter_id = 6;
+    optional string provider_api_token = 7;
+
+    repeated rivet.backend.cluster.Pool pools = 8;
+    rivet.backend.cluster.BuildDeliveryMethod build_delivery_method = 9;
+    // Nomad drain time in seconds.
+    uint64 drain_timeout = 10;
 }
 
 // Helper proto for writing to sql

@@ -1,0 +1,19 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/fern-api/fern/main/fern.schema.json
+
+service:
+  auth: true
+  base-path: /datacenters
+  endpoints:
+    getTls:
+      path: /{datacenter_id}/tls
+      method: GET
+      path-parameters:
+        datacenter_id:
+          type: uuid
+      response: GetTlsResponse
+
+types:
+  GetTlsResponse:
+    properties:
+      job_cert_pem: string
+      job_private_key_pem: string

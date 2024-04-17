@@ -5,6 +5,12 @@ use proto::backend::{self, pkg::*};
 async fn datacenter_update(ctx: TestCtx) {
 	let datacenter_id = Uuid::new_v4();
 	let cluster_id = Uuid::new_v4();
+	let pools = vec![backend::cluster::Pool {
+		pool_type: backend::cluster::PoolType::Ats as i32,
+		hardware: Vec::new(),
+		desired_count: 0,
+		max_count: 0,
+	}];
 
 	msg!([ctx] cluster::msg::create(cluster_id) -> cluster::msg::create_complete {
 		cluster_id: Some(cluster_id.into()),
@@ -14,7 +20,7 @@ async fn datacenter_update(ctx: TestCtx) {
 	.await
 	.unwrap();
 
-	let dc = backend::cluster::Datacenter {
+	msg!([ctx] cluster::msg::datacenter_create(datacenter_id) -> cluster::msg::datacenter_scale {
 		datacenter_id: Some(datacenter_id.into()),
 		cluster_id: Some(cluster_id.into()),
 		name_id: util::faker::ident(),
@@ -24,19 +30,10 @@ async fn datacenter_update(ctx: TestCtx) {
 		provider_datacenter_id: "us-southeast".to_string(),
 		provider_api_token: None,
 
-		pools: vec![backend::cluster::Pool {
-			pool_type: backend::cluster::PoolType::Ats as i32,
-			hardware: Vec::new(),
-			desired_count: 0,
-			max_count: 0,
-		}],
+		pools: pools.clone(),
 
 		build_delivery_method: backend::cluster::BuildDeliveryMethod::TrafficServer as i32,
 		drain_timeout: 0,
-	};
-
-	msg!([ctx] cluster::msg::datacenter_create(datacenter_id) -> cluster::msg::datacenter_scale {
-		config: Some(dc.clone()),
 	})
 	.await
 	.unwrap();
@@ -62,8 +59,8 @@ async fn datacenter_update(ctx: TestCtx) {
 	let updated_dc = datacenter_res.datacenters.first().unwrap();
 
 	assert_ne!(
-		dc.pools.first().unwrap().desired_count,
+		pools.first().unwrap().desired_count,
 		updated_dc.pools.first().unwrap().desired_count,
-		"datacenter not updated"
+		"datacenter not updated",
 	);
 }

@@ -33,7 +33,7 @@ func NewClient(opts ...core.ClientOption) *Client {
 	}
 }
 
-func (c *Client) GetServerInfo(ctx context.Context, ip string) (*servers.GetServerInfoResponse, error) {
+func (c *Client) GetInfo(ctx context.Context, ip string) (*servers.GetInfoResponse, error) {
 	baseURL := "https://api.rivet.gg"
 	if c.baseURL != "" {
 		baseURL = c.baseURL
@@ -94,7 +94,7 @@ func (c *Client) GetServerInfo(ctx context.Context, ip string) (*servers.GetServ
 		return apiError
 	}
 
-	var response *servers.GetServerInfoResponse
+	var response *servers.GetInfoResponse
 	if err := c.caller.Call(
 		ctx,
 		&core.CallParams{

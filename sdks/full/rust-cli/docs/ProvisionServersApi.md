@@ -4,13 +4,13 @@ All URIs are relative to *https://api.rivet.gg*
 
 Method | HTTP request | Description
 ------------- | ------------- | -------------
-[**provision_servers_get_server_info**](ProvisionServersApi.md#provision_servers_get_server_info) | **GET** /servers/{ip}/info | 
+[**provision_servers_get_info**](ProvisionServersApi.md#provision_servers_get_info) | **GET** /servers/{ip}/info | 
 
 
 
-## provision_servers_get_server_info
+## provision_servers_get_info
 
-> crate::models::ProvisionServersGetServerInfoResponse provision_servers_get_server_info(ip)
+> crate::models::ProvisionServersGetInfoResponse provision_servers_get_info(ip)
 
 
 ### Parameters
@@ -22,7 +22,7 @@ Name | Type | Description  | Required | Notes
 
 ### Return type
 
-[**crate::models::ProvisionServersGetServerInfoResponse**](ProvisionServersGetServerInfoResponse.md)
+[**crate::models::ProvisionServersGetInfoResponse**](ProvisionServersGetInfoResponse.md)
 
 ### Authorization
 

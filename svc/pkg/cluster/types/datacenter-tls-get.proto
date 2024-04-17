@@ -1,0 +1,24 @@
+syntax = "proto3";
+
+package rivet.backend.pkg.cluster.datacenter_tls_get;
+
+import "proto/common.proto";
+import "proto/backend/cluster.proto";
+
+message Request {
+	repeated rivet.common.Uuid datacenter_ids = 1;
+}
+
+message Response {
+	message Datacenter {
+		rivet.common.Uuid datacenter_id = 1;
+		optional string gg_cert_pem = 2;
+		optional string gg_private_key_pem = 3;
+		optional string job_cert_pem = 4;
+		optional string job_private_key_pem = 5;
+		rivet.backend.cluster.TlsState state = 6;
+		int64 expire_ts = 7;
+	}
+
+	repeated Datacenter datacenters = 1;
+}

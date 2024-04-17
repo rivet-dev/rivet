@@ -14,7 +14,7 @@ async fn datacenter_create(ctx: TestCtx) {
 	.await
 	.unwrap();
 
-	let dc = backend::cluster::Datacenter {
+	msg!([ctx] cluster::msg::datacenter_create(datacenter_id) -> cluster::msg::datacenter_scale {
 		datacenter_id: Some(datacenter_id.into()),
 		cluster_id: Some(cluster_id.into()),
 		name_id: util::faker::ident(),
@@ -28,11 +28,24 @@ async fn datacenter_create(ctx: TestCtx) {
 
 		build_delivery_method: backend::cluster::BuildDeliveryMethod::TrafficServer as i32,
 		drain_timeout: 0,
-	};
-
-	msg!([ctx] cluster::msg::datacenter_create(datacenter_id) -> cluster::msg::datacenter_scale {
-		config: Some(dc.clone()),
 	})
 	.await
 	.unwrap();
+
+	// Check if tls record exists
+	let (exists,) = sql_fetch_one!(
+		[ctx, (bool,)]
+		"
+		SELECT EXISTS (
+			SELECT 1
+			FROM db_cluster.datacenter_tls
+			WHERE datacenter_id = $1
+		)
+		",
+		datacenter_id,
+	)
+	.await
+	.unwrap();
+
+	assert!(exists, "no tls record");
 }

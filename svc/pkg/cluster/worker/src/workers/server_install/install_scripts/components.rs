@@ -140,7 +140,6 @@ pub struct TraefikInstance {
 	pub name: String,
 	pub static_config: String,
 	pub dynamic_config: String,
-	pub tls_certs: HashMap<String, TlsCert>,
 	pub tcp_server_transports: HashMap<String, ServerTransport>,
 }
 
@@ -160,29 +159,6 @@ pub fn traefik_instance(config: TraefikInstance) -> String {
 		.replace("__NAME__", &config.name)
 		.replace("__STATIC_CONFIG__", &config.static_config)
 		.replace("__DYNAMIC_CONFIG__", &config.dynamic_config);
-
-	// Add TLS certs
-	for (cert_id, cert) in config.tls_certs {
-		script.push_str(&formatdoc!(
-			r#"
-			cat << 'EOF' > /etc/{config_name}/tls/{cert_id}_cert.pem
-			{cert}
-			EOF
-
-			cat << 'EOF' > /etc/{config_name}/tls/{cert_id}_key.pem
-			{key}
-			EOF
-
-			cat << 'EOF' > /etc/{config_name}/dynamic/tls/{cert_id}.toml
-			[[tls.certificates]]
-				certFile = "/etc/{config_name}/tls/{cert_id}_cert.pem"
-				keyFile = "/etc/{config_name}/tls/{cert_id}_key.pem"
-			EOF
-			"#,
-			cert = cert.cert_pem,
-			key = cert.key_pem,
-		));
-	}
 
 	for (transport_id, transport) in config.tcp_server_transports {
 		// Build config
@@ -275,7 +251,6 @@ pub fn traefik_tunnel() -> GlobalResult<String> {
 		dynamic_config: tunnel_traefik_dynamic_config(&util::env::var(
 			"K8S_TRAEFIK_TUNNEL_EXTERNAL_IP",
 		)?),
-		tls_certs: Default::default(),
 		tcp_server_transports,
 	}))
 }
@@ -360,9 +335,9 @@ pub fn vector_configure(config: &VectorConfig, pool_type: backend::cluster::Pool
 			type = "remap"
 			inputs = [{sources}]
 			source = '''
-			.tags.server_id = "__SERVER_ID__"
-			.tags.datacenter_id = "__DATACENTER_ID__"
-			.tags.cluster_id = "__CLUSTER_ID__"
+			.tags.server_id = "___SERVER_ID___"
+			.tags.datacenter_id = "___DATACENTER_ID___"
+			.tags.cluster_id = "___CLUSTER_ID___"
 			.tags.pool_type = "{pool_type_str}"
 			.tags.public_ip = "${{PUBLIC_IP}}"
 			'''
@@ -568,4 +543,23 @@ pub fn rivet_fetch_info(server_token: &str) -> GlobalResult<String> {
 	Ok(include_str!("files/rivet_fetch_info.sh")
 		.replace("__SERVER_TOKEN__", server_token)
 		.replace("__DOMAIN_MAIN_API__", domain_main_api))
+}
+
+pub fn rivet_fetch_tls(
+	initialize_immediately: bool,
+	server_token: &str,
+	traefik_instance_name: &str,
+) -> GlobalResult<String> {
+	let domain_main_api = unwrap!(util::env::domain_main_api(), "no cdn");
+
+	let mut script = include_str!("files/rivet_fetch_tls.sh")
+		.replace("__NAME__", traefik_instance_name)
+		.replace("__SERVER_TOKEN__", server_token)
+		.replace("__DOMAIN_MAIN_API__", domain_main_api);
+
+	if initialize_immediately {
+		script.push_str("systemctl start rivet_fetch_tls.timer\n");
+	}
+
+	Ok(script)
 }

@@ -39,7 +39,7 @@ async fn create_dc(ctx: &TestCtx) -> (Uuid, Uuid) {
 	.await
 	.unwrap();
 
-	let dc = backend::cluster::Datacenter {
+	msg!([ctx] cluster::msg::datacenter_create(datacenter_id) -> cluster::msg::datacenter_scale {
 		datacenter_id: Some(datacenter_id.into()),
 		cluster_id: Some(cluster_id.into()),
 		name_id: util::faker::ident(),
@@ -53,10 +53,6 @@ async fn create_dc(ctx: &TestCtx) -> (Uuid, Uuid) {
 
 		build_delivery_method: backend::cluster::BuildDeliveryMethod::TrafficServer as i32,
 		drain_timeout: 0,
-	};
-
-	msg!([ctx] cluster::msg::datacenter_create(datacenter_id) -> cluster::msg::datacenter_scale {
-		config: Some(dc.clone()),
 	})
 	.await
 	.unwrap();
