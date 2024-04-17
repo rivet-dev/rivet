@@ -1,5 +1,5 @@
 [service]
-name = "api-route"
+name = "api-traefik-provider"
 
 [runtime]
 kind = "rust"
@@ -7,7 +7,7 @@ kind = "rust"
 [api-routes]
 
 [secrets]
-"rivet/api_route/token" = {}
+"rivet/api_traefik_provider/token" = {}
 
 [databases]
 redis-job = {}

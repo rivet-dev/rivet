@@ -27,7 +27,7 @@ impl Auth {
 	pub async fn token(&self, token: &str) -> GlobalResult<()> {
 		ensure_eq_with!(
 			token,
-			&util::env::read_secret(&["rivet", "api_route", "token"]).await?,
+			&util::env::read_secret(&["rivet", "api_traefik_provider", "token"]).await?,
 			API_FORBIDDEN,
 			reason = "Invalid token",
 		);

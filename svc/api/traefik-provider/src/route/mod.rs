@@ -1,7 +1,8 @@
 use api_helper::define_router;
 use hyper::{Body, Request, Response};
 
-pub mod traefik;
+pub mod core;
+pub mod game_guard;
 
 pub async fn handle(
 	shared_client: chirp_client::SharedClientHandle,
@@ -18,16 +19,16 @@ pub async fn handle(
 
 define_router! {
 	routes: {
-		"traefik" / "config" / "core": {
-			GET: traefik::core::config(
-				query: traefik::core::ConfigQuery,
+		"config" / "core": {
+			GET: core::config(
+				query: core::ConfigQuery,
 				internal_endpoint: true,
 				opt_auth: true,
 			),
 		},
-		"traefik" / "config" / "game-guard": {
-			GET: traefik::game_guard::config(
-				query: traefik::game_guard::ConfigQuery,
+		"config" / "game-guard": {
+			GET: game_guard::config(
+				query: game_guard::ConfigQuery,
 				internal_endpoint: true,
 				opt_auth: true,
 			),

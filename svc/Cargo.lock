@@ -517,7 +517,7 @@ version = "0.0.1"
 dependencies = [
  "api-helper",
  "api-provision",
- "api-route",
+ "api-traefik-provider",
  "async-trait",
  "chirp-client",
  "http 0.2.12",
@@ -852,51 +852,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "api-route"
-version = "0.0.1"
-dependencies = [
- "api-helper",
- "async-trait",
- "async_once",
- "base64 0.13.1",
- "cdn-namespace-auth-user-update",
- "cdn-namespace-domain-create",
- "chirp-client",
- "chrono",
- "faker-cdn-site",
- "faker-game",
- "faker-game-namespace",
- "faker-game-version",
- "faker-job-run",
- "faker-region",
- "game-get",
- "http 0.2.12",
- "hyper",
- "lazy_static",
- "prost 0.10.4",
- "reqwest",
- "rivet-cache",
- "rivet-claims",
- "rivet-connection",
- "rivet-convert",
- "rivet-health-checks",
- "rivet-operation",
- "rivet-pools",
- "rivet-route",
- "rivet-util-cdn",
- "rivet-util-job",
- "s3-util",
- "serde",
- "serde_json",
- "thiserror",
- "tokio",
- "tracing",
- "tracing-subscriber",
- "url",
- "uuid",
-]
-
-[[package]]
 name = "api-status"
 version = "0.0.1"
 dependencies = [
@@ -938,6 +893,51 @@ dependencies = [
  "trust-dns-resolver",
  "url",
  "urlencoding",
+ "uuid",
+]
+
+[[package]]
+name = "api-traefik-provider"
+version = "0.0.1"
+dependencies = [
+ "api-helper",
+ "async-trait",
+ "async_once",
+ "base64 0.13.1",
+ "cdn-namespace-auth-user-update",
+ "cdn-namespace-domain-create",
+ "chirp-client",
+ "chrono",
+ "faker-cdn-site",
+ "faker-game",
+ "faker-game-namespace",
+ "faker-game-version",
+ "faker-job-run",
+ "faker-region",
+ "game-get",
+ "http 0.2.12",
+ "hyper",
+ "lazy_static",
+ "prost 0.10.4",
+ "reqwest",
+ "rivet-cache",
+ "rivet-claims",
+ "rivet-connection",
+ "rivet-convert",
+ "rivet-health-checks",
+ "rivet-operation",
+ "rivet-pools",
+ "rivet-route",
+ "rivet-util-cdn",
+ "rivet-util-job",
+ "s3-util",
+ "serde",
+ "serde_json",
+ "thiserror",
+ "tokio",
+ "tracing",
+ "tracing-subscriber",
+ "url",
  "uuid",
 ]
 

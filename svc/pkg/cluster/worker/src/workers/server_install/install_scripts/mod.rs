@@ -130,9 +130,10 @@ pub async fn gen_initialize(
 }
 
 async fn gg_traefik_static_config() -> GlobalResult<String> {
-	let api_route_token = &util::env::read_secret(&["rivet", "api_route", "token"]).await?;
+	let api_traefik_provider_token =
+		&util::env::read_secret(&["rivet", "api_traefik_provider", "token"]).await?;
 	let http_provider_endpoint = format!(
-		"http://127.0.0.1:{port}/route/traefik/config/game-guard?token={api_route_token}&datacenter=___DATACENTER_ID___",
+		"http://127.0.0.1:{port}/traefik-provider/config/game-guard?token={api_traefik_provider_token}&datacenter=___DATACENTER_ID___",
 		port = components::TUNNEL_API_INTERNAL_PORT,
 	);
 

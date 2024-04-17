@@ -21,5 +21,5 @@ tracing-subscriber = { version = "0.3", default-features = false, features = [
 ] }
 url = "2.2.2"
 
-api-route = { path = "../route" }
+api-traefik-provider = { path = "../traefik-provider" }
 api-provision = { path = "../provision" }

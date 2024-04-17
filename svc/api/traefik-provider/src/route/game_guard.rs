@@ -9,7 +9,7 @@ use std::{
 };
 use url::Url;
 
-use crate::{auth::Auth, route::traefik};
+use crate::{auth::Auth, types};
 
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -23,7 +23,7 @@ pub async fn config(
 	ctx: Ctx<Auth>,
 	_watch_index: WatchIndexQuery,
 	ConfigQuery { token, datacenter }: ConfigQuery,
-) -> GlobalResult<super::TraefikConfigResponseNullified> {
+) -> GlobalResult<types::TraefikConfigResponseNullified> {
 	ctx.auth().token(&token).await?;
 
 	// Fetch configs and catch any errors
@@ -42,7 +42,7 @@ pub async fn config(
 	// 	"traefik config"
 	// );
 
-	Ok(super::TraefikConfigResponseNullified {
+	Ok(types::TraefikConfigResponseNullified {
 		http: config.http.nullified(),
 		tcp: config.tcp.nullified(),
 		udp: config.udp.nullified(),
@@ -54,37 +54,33 @@ pub async fn config(
 pub async fn build_job(
 	ctx: &Ctx<Auth>,
 	region_id: Uuid,
-) -> GlobalResult<traefik::TraefikConfigResponse> {
-	let mut config = traefik::TraefikConfigResponse::default();
+) -> GlobalResult<types::TraefikConfigResponse> {
+	let mut config = types::TraefikConfigResponse::default();
 
 	let redis_job = ctx.op_ctx().redis_job().await?;
 	let job_runs_fetch = fetch_job_runs(redis_job, region_id).await?;
 
 	config.http.middlewares.insert(
 		"job-rate-limit".to_owned(),
-		traefik::TraefikMiddlewareHttp::RateLimit {
+		types::TraefikMiddlewareHttp::RateLimit {
 			average: 100,
 			period: "5m".into(),
 			burst: 256,
-			source_criterion: traefik::InFlightReqSourceCriterion::IpStrategy(
-				traefik::IpStrategy {
-					depth: 0,
-					exclude_ips: None,
-				},
-			),
+			source_criterion: types::InFlightReqSourceCriterion::IpStrategy(types::IpStrategy {
+				depth: 0,
+				exclude_ips: None,
+			}),
 		},
 	);
 	config.http.middlewares.insert(
 		"job-in-flight".to_owned(),
-		traefik::TraefikMiddlewareHttp::InFlightReq {
+		types::TraefikMiddlewareHttp::InFlightReq {
 			// This number needs to be high to allow for parallel requests
 			amount: 4,
-			source_criterion: traefik::InFlightReqSourceCriterion::IpStrategy(
-				traefik::IpStrategy {
-					depth: 0,
-					exclude_ips: None,
-				},
-			),
+			source_criterion: types::InFlightReqSourceCriterion::IpStrategy(types::IpStrategy {
+				depth: 0,
+				exclude_ips: None,
+			}),
 		},
 	);
 
@@ -147,7 +143,7 @@ async fn fetch_job_runs(
 fn register_proxied_port(
 	run_id: Uuid,
 	proxied_port: &job::redis_job::run_proxied_ports::ProxiedPort,
-	config: &mut traefik::TraefikConfigResponse,
+	config: &mut types::TraefikConfigResponse,
 ) -> GlobalResult<()> {
 	use backend::job::ProxyProtocol;
 
@@ -163,9 +159,9 @@ fn register_proxied_port(
 		ProxyProtocol::Http | ProxyProtocol::Https => {
 			config.http.services.insert(
 				service_id.clone(),
-				traefik::TraefikService {
-					load_balancer: traefik::TraefikLoadBalancer {
-						servers: vec![traefik::TraefikServer {
+				types::TraefikService {
+					load_balancer: types::TraefikLoadBalancer {
+						servers: vec![types::TraefikServer {
 							url: Some(format!(
 								"http://{}:{}",
 								proxied_port.ip, proxied_port.source
@@ -180,9 +176,9 @@ fn register_proxied_port(
 		ProxyProtocol::Tcp | ProxyProtocol::TcpTls => {
 			config.tcp.services.insert(
 				service_id.clone(),
-				traefik::TraefikService {
-					load_balancer: traefik::TraefikLoadBalancer {
-						servers: vec![traefik::TraefikServer {
+				types::TraefikService {
+					load_balancer: types::TraefikLoadBalancer {
+						servers: vec![types::TraefikServer {
 							url: None,
 							address: Some(format!("{}:{}", proxied_port.ip, proxied_port.source)),
 						}],
@@ -194,9 +190,9 @@ fn register_proxied_port(
 		ProxyProtocol::Udp => {
 			config.udp.services.insert(
 				service_id.clone(),
-				traefik::TraefikService {
-					load_balancer: traefik::TraefikLoadBalancer {
-						servers: vec![traefik::TraefikServer {
+				types::TraefikService {
+					load_balancer: types::TraefikLoadBalancer {
+						servers: vec![types::TraefikServer {
 							url: None,
 							address: Some(format!("{}:{}", proxied_port.ip, proxied_port.source)),
 						}],
@@ -212,7 +208,7 @@ fn register_proxied_port(
 		ProxyProtocol::Http => {
 			// Generate config
 			let middlewares =
-				http_router_middlewares(run_id, proxied_port, &target_nomad_port_label, config);
+				http_router_middlewares(run_id, proxied_port, target_nomad_port_label, config);
 			let rule = format_http_rule(proxied_port);
 
 			// Hash key
@@ -223,7 +219,7 @@ fn register_proxied_port(
 
 			config.http.routers.insert(
 				format!("job-run:{run_id}:{hash:x}:http"),
-				traefik::TraefikRouter {
+				types::TraefikRouter {
 					entry_points: vec![format!("lb-{ingress_port}")],
 					rule: Some(rule),
 					priority: None,
@@ -236,7 +232,7 @@ fn register_proxied_port(
 		ProxyProtocol::Https => {
 			// Generate config
 			let middlewares =
-				http_router_middlewares(run_id, proxied_port, &target_nomad_port_label, config);
+				http_router_middlewares(run_id, proxied_port, target_nomad_port_label, config);
 			let rule = format_http_rule(proxied_port);
 
 			// Hash key
@@ -247,20 +243,20 @@ fn register_proxied_port(
 
 			config.http.routers.insert(
 				format!("job-run:{run_id}:{hash:x}:https"),
-				traefik::TraefikRouter {
+				types::TraefikRouter {
 					entry_points: vec![format!("lb-{ingress_port}")],
 					rule: Some(rule),
 					priority: None,
 					service: service_id.clone(),
 					middlewares,
-					tls: Some(traefik::TraefikTls::build(build_tls_domains(proxied_port)?)),
+					tls: Some(types::TraefikTls::build(build_tls_domains(proxied_port)?)),
 				},
 			);
 		}
 		ProxyProtocol::Tcp => {
 			config.tcp.routers.insert(
 				format!("job-run:{}:{}:tcp", run_id, target_nomad_port_label),
-				traefik::TraefikRouter {
+				types::TraefikRouter {
 					entry_points: vec![format!("lb-{ingress_port}-tcp")],
 					rule: Some("HostSNI(`*`)".into()),
 					priority: None,
@@ -273,20 +269,20 @@ fn register_proxied_port(
 		ProxyProtocol::TcpTls => {
 			config.tcp.routers.insert(
 				format!("job-run:{}:{}:tcp-tls", run_id, target_nomad_port_label),
-				traefik::TraefikRouter {
+				types::TraefikRouter {
 					entry_points: vec![format!("lb-{ingress_port}-tcp")],
 					rule: Some("HostSNI(`*`)".into()),
 					priority: None,
 					service: service_id,
 					middlewares: vec![],
-					tls: Some(traefik::TraefikTls::build(build_tls_domains(proxied_port)?)),
+					tls: Some(types::TraefikTls::build(build_tls_domains(proxied_port)?)),
 				},
 			);
 		}
 		ProxyProtocol::Udp => {
 			config.udp.routers.insert(
 				format!("job-run:{}:{}:udp", run_id, target_nomad_port_label),
-				traefik::TraefikRouter {
+				types::TraefikRouter {
 					entry_points: vec![format!("lb-{ingress_port}-udp")],
 					rule: None,
 					priority: None,
@@ -320,7 +316,7 @@ fn format_http_rule(proxied_port: &job::redis_job::run_proxied_ports::ProxiedPor
 
 fn build_tls_domains(
 	proxied_port: &job::redis_job::run_proxied_ports::ProxiedPort,
-) -> GlobalResult<Vec<traefik::TraefikTlsDomain>> {
+) -> GlobalResult<Vec<types::TraefikTlsDomain>> {
 	// Derive TLS config. Jobs can specify their own ingress rules, so we
 	// need to derive which domains to use for the job.
 	//
@@ -336,7 +332,7 @@ fn build_tls_domains(
 	match ssl_domain_mode {
 		backend::job::SslDomainMode::Exact => {
 			for host in &proxied_port.ingress_hostnames {
-				domains.push(traefik::TraefikTlsDomain {
+				domains.push(types::TraefikTlsDomain {
 					main: host.clone(),
 					sans: Vec::new(),
 				});
@@ -345,7 +341,7 @@ fn build_tls_domains(
 		backend::job::SslDomainMode::ParentWildcard => {
 			for host in &proxied_port.ingress_hostnames {
 				let (_, parent_host) = unwrap!(host.split_once('.'));
-				domains.push(traefik::TraefikTlsDomain {
+				domains.push(types::TraefikTlsDomain {
 					main: parent_host.to_owned(),
 					sans: vec![format!("*.{}", parent_host)],
 				});
@@ -360,7 +356,7 @@ fn http_router_middlewares(
 	run_id: Uuid,
 	proxied_port: &job::redis_job::run_proxied_ports::ProxiedPort,
 	target_nomad_port_label: &str,
-	config: &mut traefik::TraefikConfigResponse,
+	config: &mut types::TraefikConfigResponse,
 ) -> Vec<String> {
 	let mut middlewares = vec!["job-rate-limit".to_string(), "job-in-flight".to_string()];
 
@@ -387,7 +383,7 @@ fn http_router_middlewares(
 
 		config.http.middlewares.insert(
 			strip_prefix_id.clone(),
-			traefik::TraefikMiddlewareHttp::StripPrefix {
+			types::TraefikMiddlewareHttp::StripPrefix {
 				prefixes: paths.map(|url| url.path().to_string()).collect(),
 				force_slash: None,
 			},

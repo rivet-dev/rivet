@@ -214,7 +214,7 @@ pub async fn generate(project_path: &Path, ns_id: &str) -> Result<()> {
 		})
 		.await?;
 	generator
-		.generate_secret(&["rivet", "api_route", "token"], || async {
+		.generate_secret(&["rivet", "api_traefik_provider", "token"], || async {
 			Ok(value(generate_password(32)))
 		})
 		.await?;

@@ -1,5 +1,5 @@
 [package]
-name = "api-route"
+name = "api-traefik-provider"
 version = "0.0.1"
 authors = ["Rivet Gaming, LLC <developer@rivet.gg>"]
 edition = "2021"
@@ -39,7 +39,7 @@ uuid = { version = "1", features = ["v4"] }
 
 [dev-dependencies]
 rivet-connection = { path = "../../../lib/connection" }
-rivet-route = { path = "../../../lib/smithy-output/api-route/rust" }
+rivet-route = { path = "../../../lib/smithy-output/api-traefik-provider/rust" }
 base64 = "0.13"
 reqwest = "0.11"
 

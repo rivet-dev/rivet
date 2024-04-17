@@ -1,9 +1,6 @@
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
-pub mod core;
-pub mod game_guard;
-
 // MARK: GET /traefik/config
 #[derive(Debug, Default, Serialize, Deserialize)]
 #[serde(default, deny_unknown_fields, rename_all = "camelCase")]
@@ -133,7 +130,7 @@ impl TraefikTls {
 	///
 	/// We don't associate a cert resolver if in local development because we generate certificates
 	/// with mkcert.
-	fn build(domains: Vec<TraefikTlsDomain>) -> TraefikTls {
+	pub fn build(domains: Vec<TraefikTlsDomain>) -> TraefikTls {
 		TraefikTls {
 			cert_resolver: None,
 			domains: Some(domains),
@@ -141,7 +138,7 @@ impl TraefikTls {
 		}
 	}
 
-	fn build_cloudflare() -> TraefikTls {
+	pub fn build_cloudflare() -> TraefikTls {
 		TraefikTls {
 			cert_resolver: None,
 			domains: None,
@@ -153,8 +150,8 @@ impl TraefikTls {
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
 pub struct TraefikTlsDomain {
-	main: String,
-	sans: Vec<String>,
+	pub main: String,
+	pub sans: Vec<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -218,24 +215,24 @@ pub enum TraefikMiddlewareHttp {
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
 pub struct TraefikMiddlewareHeaders {
 	#[serde(skip_serializing_if = "Option::is_none")]
-	access_control_allow_methods: Option<Vec<String>>,
+	pub access_control_allow_methods: Option<Vec<String>>,
 	#[serde(skip_serializing_if = "Option::is_none")]
-	access_control_allow_origin_list: Option<Vec<String>>,
+	pub access_control_allow_origin_list: Option<Vec<String>>,
 	#[serde(skip_serializing_if = "Option::is_none")]
-	access_control_max_age: Option<usize>,
+	pub access_control_max_age: Option<usize>,
 	#[serde(skip_serializing_if = "Option::is_none")]
-	custom_request_headers: Option<HashMap<String, String>>,
+	pub custom_request_headers: Option<HashMap<String, String>>,
 	#[serde(skip_serializing_if = "Option::is_none")]
-	custom_response_headers: Option<HashMap<String, String>>,
+	pub custom_response_headers: Option<HashMap<String, String>>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
 pub struct IpStrategy {
-	depth: usize,
+	pub depth: usize,
 
 	#[serde(rename = "excludedIPs", skip_serializing_if = "Option::is_none")]
-	exclude_ips: Option<Vec<String>>,
+	pub exclude_ips: Option<Vec<String>>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]

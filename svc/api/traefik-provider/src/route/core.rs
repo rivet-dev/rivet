@@ -11,7 +11,7 @@ use std::{
 };
 use util::glob::Traefik;
 
-use crate::{auth::Auth, route::traefik};
+use crate::{auth::Auth, types};
 
 const BASE_ROUTER_PRIORITY: usize = 100;
 const HTML_ROUTER_PRIORITY: usize = 150;
@@ -27,7 +27,7 @@ pub async fn config(
 	ctx: Ctx<Auth>,
 	_watch_index: WatchIndexQuery,
 	ConfigQuery { token }: ConfigQuery,
-) -> GlobalResult<super::TraefikConfigResponseNullified> {
+) -> GlobalResult<types::TraefikConfigResponseNullified> {
 	ctx.auth().token(&token).await?;
 
 	// Fetch configs and catch any errors
@@ -46,7 +46,7 @@ pub async fn config(
 	// 	"traefik config"
 	// );
 
-	Ok(super::TraefikConfigResponseNullified {
+	Ok(types::TraefikConfigResponseNullified {
 		http: config.http.nullified(),
 		tcp: config.tcp.nullified(),
 		udp: config.udp.nullified(),
@@ -55,8 +55,8 @@ pub async fn config(
 
 /// Builds configuration for CDN routes.
 #[tracing::instrument(skip(ctx))]
-pub async fn build_cdn(ctx: &Ctx<Auth>) -> GlobalResult<traefik::TraefikConfigResponse> {
-	let mut config = traefik::TraefikConfigResponse::default();
+pub async fn build_cdn(ctx: &Ctx<Auth>) -> GlobalResult<types::TraefikConfigResponse> {
+	let mut config = types::TraefikConfigResponse::default();
 	let s3_client = s3_util::Client::from_env("bucket-cdn").await?;
 
 	let redis_cdn = ctx.op_ctx().redis_cdn().await?;
@@ -77,10 +77,10 @@ pub async fn build_cdn(ctx: &Ctx<Auth>) -> GlobalResult<traefik::TraefikConfigRe
 	// file configuration.
 	config.http.middlewares.insert(
 		"cdn-in-flight".to_owned(),
-		traefik::TraefikMiddlewareHttp::InFlightReq {
+		types::TraefikMiddlewareHttp::InFlightReq {
 			// This number needs to be high to allow for parallel requests
 			amount: 128,
-			source_criterion: traefik::InFlightReqSourceCriterion::RequestHeaderName(
+			source_criterion: types::InFlightReqSourceCriterion::RequestHeaderName(
 				if util::env::dns_provider() == Some("cloudflare") {
 					"cf-connecting-ip".to_string()
 				} else {
@@ -91,14 +91,14 @@ pub async fn build_cdn(ctx: &Ctx<Auth>) -> GlobalResult<traefik::TraefikConfigRe
 	);
 	config.http.middlewares.insert(
 		"cdn-retry".to_owned(),
-		traefik::TraefikMiddlewareHttp::Retry {
+		types::TraefikMiddlewareHttp::Retry {
 			attempts: 4,
 			initial_interval: "1s".into(),
 		},
 	);
 	config.http.middlewares.insert(
 		"cdn-compress".to_owned(),
-		traefik::TraefikMiddlewareHttp::Compress {},
+		types::TraefikMiddlewareHttp::Compress {},
 	);
 
 	let base_headers = {
@@ -112,7 +112,7 @@ pub async fn build_cdn(ctx: &Ctx<Auth>) -> GlobalResult<traefik::TraefikConfigRe
 
 	config.http.middlewares.insert(
 		"cdn-cache-control".to_owned(),
-		traefik::TraefikMiddlewareHttp::Headers(traefik::TraefikMiddlewareHeaders {
+		types::TraefikMiddlewareHttp::Headers(types::TraefikMiddlewareHeaders {
 			custom_response_headers: Some({
 				let mut x = base_headers.clone();
 				// See https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Cache-Control#caching_static_assets
@@ -129,7 +129,7 @@ pub async fn build_cdn(ctx: &Ctx<Auth>) -> GlobalResult<traefik::TraefikConfigRe
 
 	config.http.middlewares.insert(
 		"cdn-cache-control-html".to_owned(),
-		traefik::TraefikMiddlewareHttp::Headers(traefik::TraefikMiddlewareHeaders {
+		types::TraefikMiddlewareHttp::Headers(types::TraefikMiddlewareHeaders {
 			custom_response_headers: Some({
 				let mut x = base_headers;
 				// See above
@@ -142,7 +142,7 @@ pub async fn build_cdn(ctx: &Ctx<Auth>) -> GlobalResult<traefik::TraefikConfigRe
 
 	config.http.middlewares.insert(
 		"cdn-append-index".to_owned(),
-		traefik::TraefikMiddlewareHttp::ReplacePathRegex {
+		types::TraefikMiddlewareHttp::ReplacePathRegex {
 			regex: "(.*)/$".into(),
 			replacement: "${1}/index.html".into(),
 		},
@@ -183,7 +183,7 @@ async fn fetch_cdn(
 #[tracing::instrument(skip(config, s3_client))]
 fn register_namespace(
 	ns: &cdn::redis_cdn::NamespaceCdnConfig,
-	config: &mut traefik::TraefikConfigResponse,
+	config: &mut types::TraefikConfigResponse,
 	s3_client: &s3_util::Client,
 ) -> GlobalResult<()> {
 	let Some(domain_cdn) = util::env::domain_cdn() else {
@@ -262,7 +262,7 @@ fn register_namespace(
 	{
 		config.http.routers.insert(
 			format!("ns:{}-insecure", ns_id),
-			traefik::TraefikRouter {
+			types::TraefikRouter {
 				entry_points: vec!["web".into()],
 				rule: Some(router_rule.clone()),
 				priority: Some(BASE_ROUTER_PRIORITY),
@@ -273,7 +273,7 @@ fn register_namespace(
 		);
 		config.http.routers.insert(
 			format!("ns:{}-insecure-html", ns_id),
-			traefik::TraefikRouter {
+			types::TraefikRouter {
 				entry_points: vec!["web".into()],
 				rule: Some(router_rule_html.clone()),
 				priority: Some(HTML_ROUTER_PRIORITY),
@@ -284,24 +284,24 @@ fn register_namespace(
 		);
 		config.http.routers.insert(
 			format!("ns:{}-secure", ns_id),
-			traefik::TraefikRouter {
+			types::TraefikRouter {
 				entry_points: vec!["websecure".into()],
 				rule: Some(router_rule),
 				priority: Some(BASE_ROUTER_PRIORITY),
 				service: service.to_owned(),
 				middlewares: router_middlewares_cdn.clone(),
-				tls: Some(traefik::TraefikTls::build_cloudflare()),
+				tls: Some(types::TraefikTls::build_cloudflare()),
 			},
 		);
 		config.http.routers.insert(
 			format!("ns:{}-secure-html", ns_id),
-			traefik::TraefikRouter {
+			types::TraefikRouter {
 				entry_points: vec!["websecure".into()],
 				rule: Some(router_rule_html),
 				priority: Some(HTML_ROUTER_PRIORITY),
 				service: service.to_owned(),
 				middlewares: router_middlewares_html.clone(),
-				tls: Some(traefik::TraefikTls::build_cloudflare()),
+				tls: Some(types::TraefikTls::build_cloudflare()),
 			},
 		);
 	}
@@ -309,7 +309,7 @@ fn register_namespace(
 	// Create middleware
 	config.http.middlewares.insert(
 		rewrite_middleware_key,
-		traefik::TraefikMiddlewareHttp::AddPrefix {
+		types::TraefikMiddlewareHttp::AddPrefix {
 			prefix: path_prefix,
 		},
 	);
@@ -322,7 +322,7 @@ fn register_namespace(
 			// when attempting to request a resource with cached auth headers.
 			// This can happen immediately after signing in, disabling ns
 			// authorization, then visiting the site again.
-			traefik::TraefikMiddlewareHttp::Headers(traefik::TraefikMiddlewareHeaders {
+			types::TraefikMiddlewareHttp::Headers(types::TraefikMiddlewareHeaders {
 				custom_request_headers: Some({
 					let mut x = HashMap::new();
 					x.insert("Authorization".to_owned(), String::new());
@@ -332,7 +332,7 @@ fn register_namespace(
 			})
 		}
 		backend::cdn::namespace_config::AuthType::Basic => {
-			traefik::TraefikMiddlewareHttp::BasicAuth {
+			types::TraefikMiddlewareHttp::BasicAuth {
 				users: ns
 					.auth_user_list
 					.iter()
@@ -365,7 +365,7 @@ fn register_namespace(
 #[tracing::instrument(skip(config))]
 fn register_custom_cdn_route(
 	ns: &cdn::redis_cdn::NamespaceCdnConfig,
-	config: &mut traefik::TraefikConfigResponse,
+	config: &mut types::TraefikConfigResponse,
 	service: &str,
 	router_middlewares_cdn: Vec<String>,
 	router_middlewares_html: Vec<String>,
@@ -437,8 +437,8 @@ fn register_custom_cdn_route(
 								format!("ns-custom-headers:{}:{}", ns_id, glob_hash);
 
 							// Create headers middleware
-							let headers = traefik::TraefikMiddlewareHttp::Headers(
-								traefik::TraefikMiddlewareHeaders {
+							let headers = types::TraefikMiddlewareHttp::Headers(
+								types::TraefikMiddlewareHeaders {
 									custom_response_headers: Some(
 										custom_headers
 											.headers
@@ -465,7 +465,7 @@ fn register_custom_cdn_route(
 				// Create routers
 				config.http.routers.insert(
 					format!("ns-custom-headers:{}-insecure:{}", ns_id, glob_hash),
-					traefik::TraefikRouter {
+					types::TraefikRouter {
 						entry_points: vec!["web".into()],
 						rule: Some(router_rule.clone()),
 						priority: Some(
@@ -478,7 +478,7 @@ fn register_custom_cdn_route(
 				);
 				config.http.routers.insert(
 					format!("ns-custom-headers:{}-insecure-html:{}", ns_id, glob_hash),
-					traefik::TraefikRouter {
+					types::TraefikRouter {
 						entry_points: vec!["web".into()],
 						rule: Some(router_rule_html.clone()),
 						priority: Some(
@@ -491,7 +491,7 @@ fn register_custom_cdn_route(
 				);
 				config.http.routers.insert(
 					format!("ns-custom-headers:{}-secure:{}", ns_id, glob_hash),
-					traefik::TraefikRouter {
+					types::TraefikRouter {
 						entry_points: vec!["websecure".into()],
 						rule: Some(router_rule),
 						priority: Some(
@@ -499,12 +499,12 @@ fn register_custom_cdn_route(
 						),
 						service: service.to_owned(),
 						middlewares: custom_headers_router_middlewares_cdn.clone(),
-						tls: Some(traefik::TraefikTls::build_cloudflare()),
+						tls: Some(types::TraefikTls::build_cloudflare()),
 					},
 				);
 				config.http.routers.insert(
 					format!("ns-custom-headers:{}-secure-html:{}", ns_id, glob_hash),
-					traefik::TraefikRouter {
+					types::TraefikRouter {
 						entry_points: vec!["websecure".into()],
 						rule: Some(router_rule_html),
 						priority: Some(
@@ -512,7 +512,7 @@ fn register_custom_cdn_route(
 						),
 						service: service.to_owned(),
 						middlewares: custom_headers_router_middlewares_html.clone(),
-						tls: Some(traefik::TraefikTls::build_cloudflare()),
+						tls: Some(types::TraefikTls::build_cloudflare()),
 					},
 				);
 			}

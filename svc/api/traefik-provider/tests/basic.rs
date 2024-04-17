@@ -12,11 +12,11 @@ const CDN_POLL_INTERVAL: Duration = Duration::from_millis(500);
 
 static GLOBAL_INIT: Once = Once::new();
 
-const API_ROUTE_URL: &str =
-	"http://rivet-api-internal-monolith.rivet-service.svc.cluster.local/route";
+const API_TRAEFIK_PROVIDER_URL: &str =
+	"http://rivet-api-internal-monolith.rivet-service.svc.cluster.local/traefik-provider";
 
-async fn get_api_route_token() -> String {
-	util::env::read_secret(&["rivet", "api_route", "token"])
+async fn get_api_traefik_provider_token() -> String {
+	util::env::read_secret(&["rivet", "api_traefik_provider", "token"])
 		.await
 		.unwrap()
 }
@@ -109,21 +109,21 @@ async fn cdn() {
 
 	tokio::time::sleep(CDN_SLEEP_DURATION).await;
 
-	// MARK: GET /traefik/config/core
+	// MARK: GET /config/core
 	{
 		tracing::info!("fetching traefik config");
 
 		let res = reqwest::Client::new()
 			.get(&format!(
-				"{API_ROUTE_URL}/traefik/config/core?token={token}",
-				token = get_api_route_token().await
+				"{API_TRAEFIK_PROVIDER_URL}/config/core?token={token}",
+				token = get_api_traefik_provider_token().await
 			))
 			.send()
 			.await
 			.unwrap()
 			.error_for_status()
 			.unwrap()
-			.json::<api_route::route::traefik::TraefikConfigResponseNullified>()
+			.json::<api_traefik_provider::types::TraefikConfigResponseNullified>()
 			.await
 			.unwrap();
 		let routers = res.http.as_ref().unwrap().routers.as_ref().unwrap();
@@ -239,22 +239,22 @@ async fn job_run() {
 	.unwrap();
 	resolved_sub.next().await.unwrap();
 
-	// MARK: GET /traefik/config
+	// MARK: GET /config
 	{
 		tracing::info!("fetching traefik config");
 
 		let res = reqwest::Client::new()
 			.get(&format!(
-				"{API_ROUTE_URL}/traefik/config/core?region={region}&token={token}",
+				"{API_TRAEFIK_PROVIDER_URL}/config/core?region={region}&token={token}",
 				region = region.name_id,
-				token = get_api_route_token().await
+				token = get_api_traefik_provider_token().await
 			))
 			.send()
 			.await
 			.unwrap()
 			.error_for_status()
 			.unwrap()
-			.json::<api_route::route::traefik::TraefikConfigResponseNullified>()
+			.json::<api_traefik_provider::types::TraefikConfigResponseNullified>()
 			.await
 			.unwrap();
 		let services = res

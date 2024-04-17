@@ -7,7 +7,7 @@ kind = "rust"
 [consumer]
 
 [secrets]
-"rivet/api_route/token" = {}
+"rivet/api_traefik_provider/token" = {}
 "cloudflare/terraform/auth_token" = { optional = true }
 "ssh/server/private_key_openssh" = {}
 
