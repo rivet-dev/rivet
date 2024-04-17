@@ -194,7 +194,7 @@ impl ProjectContextData {
 					);
 				} else {
 					assert!(
-						self.ns().rivet.dynamic_servers.is_none(),
+						self.ns().rivet.provisioning.is_none(),
 						"must have dns configured to provision servers"
 					);
 				}
@@ -215,11 +215,17 @@ impl ProjectContextData {
 			}
 		}
 
-		// MARK: Dynamic Servers
-		if let Some(dynamic_servers) = &self.ns().rivet.dynamic_servers {
+		// MARK: Cluster Provisioning
+		if let Some(cluster) = self
+			.ns()
+			.rivet
+			.provisioning
+			.as_ref()
+			.and_then(|p| p.cluster.as_ref())
+		{
 			let mut unique_datacenter_ids = HashSet::new();
 
-			for (name_id, datacenter) in &dynamic_servers.cluster.datacenters {
+			for (name_id, datacenter) in &cluster.datacenters {
 				assert!(
 					!unique_datacenter_ids.contains(&datacenter.datacenter_id),
 					"invalid datacenter ({}): datacenter_id not unique",
@@ -229,7 +235,7 @@ impl ProjectContextData {
 
 				let Some(ats_pool) = datacenter
 					.pools
-					.get(&config::ns::DynamicServersDatacenterPoolType::Ats)
+					.get(&config::ns::ProvisioningDatacenterPoolType::Ats)
 				else {
 					panic!("invalid datacenter ({}): Missing ATS pool", name_id);
 				};
@@ -241,14 +247,14 @@ impl ProjectContextData {
 					name_id
 				);
 				match datacenter.build_delivery_method {
-					config::ns::DynamicServersBuildDeliveryMethod::TrafficServer => {
+					config::ns::ProvisioningBuildDeliveryMethod::TrafficServer => {
 						assert_ne!(
 							0, ats_pool.desired_count,
 							"invalid datacenter ({}): TrafficServer delivery method will not work without ats servers. Either set datacenter.build_delivery_method = \"s3_direct\" to download builds directly from S3 or increase the ATS pool count.",
 							name_id,
 						);
 					}
-					config::ns::DynamicServersBuildDeliveryMethod::S3Direct => {
+					config::ns::ProvisioningBuildDeliveryMethod::S3Direct => {
 						assert_eq!(
 							0, ats_pool.desired_count,
 							"invalid datacenter ({}): S3Direct delivery method should not be used if ats servers are available",
@@ -260,7 +266,7 @@ impl ProjectContextData {
 				// Validate all required pools exist
 				let gg_pool = datacenter
 					.pools
-					.get(&config::ns::DynamicServersDatacenterPoolType::Gg);
+					.get(&config::ns::ProvisioningDatacenterPoolType::Gg);
 				let gg_count = gg_pool.map(|pool| pool.desired_count).unwrap_or_default();
 				assert_ne!(
 					gg_count, 0,
@@ -275,7 +281,7 @@ impl ProjectContextData {
 
 				let job_pool = datacenter
 					.pools
-					.get(&config::ns::DynamicServersDatacenterPoolType::Job);
+					.get(&config::ns::ProvisioningDatacenterPoolType::Job);
 				let job_count = job_pool.map(|pool| pool.desired_count).unwrap_or_default();
 
 				assert_ne!(

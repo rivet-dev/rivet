@@ -509,7 +509,7 @@ pub struct Rivet {
 	#[serde(default)]
 	pub upload: Upload,
 	#[serde(default)]
-	pub dynamic_servers: Option<DynamicServers>,
+	pub provisioning: Option<Provisioning>,
 	#[serde(default)]
 	pub cdn: Cdn,
 	#[serde(default)]
@@ -594,8 +594,9 @@ pub struct Upload {
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(deny_unknown_fields)]
-pub struct DynamicServers {
-	pub cluster: DynamicServersCluster,
+pub struct Provisioning {
+	/// Default cluster.
+	pub cluster: Option<ProvisioningCluster>,
 	/// Whether or not to send a taint message in the next cluster update.
 	#[serde(default)]
 	pub taint: bool,
@@ -605,7 +606,7 @@ pub struct DynamicServers {
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, Default, strum_macros::Display)]
-pub enum DynamicServersBuildDeliveryMethod {
+pub enum ProvisioningBuildDeliveryMethod {
 	#[serde(rename = "traffic_server")]
 	#[strum(serialize = "traffic_server")]
 	#[default]
@@ -617,50 +618,50 @@ pub enum DynamicServersBuildDeliveryMethod {
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(deny_unknown_fields)]
-pub struct DynamicServersCluster {
+pub struct ProvisioningCluster {
 	name_id: String,
 	#[serde(default)]
-	pub datacenters: HashMap<String, DynamicServersDatacenter>,
+	pub datacenters: HashMap<String, ProvisioningDatacenter>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(deny_unknown_fields)]
-pub struct DynamicServersDatacenter {
+pub struct ProvisioningDatacenter {
 	pub datacenter_id: Uuid,
 	pub display_name: String,
-	pub provider: DynamicServersProvider,
+	pub provider: ProvisioningProvider,
 	pub provider_datacenter_name: String,
 	#[serde(default)]
-	pub build_delivery_method: DynamicServersBuildDeliveryMethod,
+	pub build_delivery_method: ProvisioningBuildDeliveryMethod,
 	/// Nomad drain time in seconds.
 	pub drain_timeout: u32,
 
 	#[serde(default)]
-	pub pools: HashMap<DynamicServersDatacenterPoolType, DynamicServersDatacenterPool>,
+	pub pools: HashMap<ProvisioningDatacenterPoolType, ProvisioningDatacenterPool>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
-pub enum DynamicServersProvider {
+pub enum ProvisioningProvider {
 	#[serde(rename = "linode")]
 	Linode,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(deny_unknown_fields)]
-pub struct DynamicServersDatacenterPool {
-	pub hardware: Vec<DynamicServersDatacenterHardware>,
+pub struct ProvisioningDatacenterPool {
+	pub hardware: Vec<ProvisioningDatacenterHardware>,
 	pub desired_count: u32,
 	pub max_count: u32,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(deny_unknown_fields)]
-pub struct DynamicServersDatacenterHardware {
+pub struct ProvisioningDatacenterHardware {
 	pub name: String,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, Hash)]
-pub enum DynamicServersDatacenterPoolType {
+pub enum ProvisioningDatacenterPoolType {
 	#[serde(rename = "job")]
 	Job,
 	#[serde(rename = "gg")]

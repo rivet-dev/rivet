@@ -280,9 +280,13 @@ async fn vars(ctx: &ProjectContext) {
 	}
 
 	// Datacenters
-	if let Some(dynamic_servers) = &config.rivet.dynamic_servers {
-		let datacenters = dynamic_servers
-			.cluster
+	if let Some(cluster) = config
+		.rivet
+		.provisioning
+		.as_ref()
+		.and_then(|p| p.cluster.as_ref())
+	{
+		let datacenters = cluster
 			.datacenters
 			.iter()
 			.map(|(name_id, dc)| {

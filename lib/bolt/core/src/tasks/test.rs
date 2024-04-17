@@ -571,7 +571,7 @@ struct Data {
 
 // TODO: This only deletes linodes and firewalls, the ssh key still remains
 async fn cleanup_servers(ctx: &ProjectContext) -> Result<()> {
-	if ctx.ns().rivet.dynamic_servers.is_none() {
+	if ctx.ns().rivet.provisioning.is_none() {
 		return Ok(());
 	}
 

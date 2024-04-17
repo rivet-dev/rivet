@@ -1017,16 +1017,15 @@ impl ServiceContextData {
 			env.push(("RIVET_UPLOAD_NSFW_ERROR_VERBOSE".into(), "1".into()));
 		}
 
-		// Dynamic servers
-		if let Some(dynamic_servers) = &project_ctx.ns().rivet.dynamic_servers {
+		if let Some(provisioning) = &project_ctx.ns().rivet.provisioning {
 			if self.depends_on_cluster_config() || matches!(run_context, RunContext::Test { .. }) {
 				env.push((
 					"RIVET_DEFAULT_CLUSTER_CONFIG".into(),
-					serde_json::to_string(&dynamic_servers.cluster)?,
+					serde_json::to_string(&provisioning.cluster)?,
 				));
 				env.push((
 					"RIVET_TAINT_DEFAULT_CLUSTER".into(),
-					if dynamic_servers.taint {
+					if provisioning.taint {
 						"1".to_string()
 					} else {
 						"0".to_string()
@@ -1036,8 +1035,8 @@ impl ServiceContextData {
 
 			if self.depends_on_provision_margin() {
 				env.push((
-					format!("JOB_SERVER_PROVISION_MARGIN"),
-					dynamic_servers.job_server_provision_margin.to_string(),
+					format!("RIVET_JOB_SERVER_PROVISION_MARGIN"),
+					provisioning.job_server_provision_margin.to_string(),
 				));
 			}
 		}
@@ -1240,7 +1239,7 @@ impl ServiceContextData {
 			));
 		}
 
-		if self.depends_on_infra() && project_ctx.tls_enabled() {
+		if self.depends_on_infra() && project_ctx.ns().rivet.provisioning.is_some() {
 			let tls = terraform::output::read_tls(&project_ctx).await;
 			let k8s_infra = terraform::output::read_k8s_infra(&project_ctx).await;
 
