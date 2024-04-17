@@ -1,6 +1,0 @@
-cluster:
-  api_endpoint: https://api.eg.rivet.gg
-telemetry:
-  disabled: false
-tokens:
-  cloud: null
