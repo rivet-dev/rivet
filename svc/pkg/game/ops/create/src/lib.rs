@@ -6,19 +6,13 @@ use serde_json::json;
 async fn handle(
 	ctx: OperationContext<game::create::Request>,
 ) -> GlobalResult<game::create::Response> {
-	let game::create::Request {
-		name_id,
-		display_name,
-		developer_team_id,
-		creator_user_id: _,
-	} = ctx.body();
-	let developer_team_id_proto = *unwrap!(developer_team_id);
+	let developer_team_id_proto = unwrap!(ctx.developer_team_id);
 	let developer_team_id = developer_team_id_proto.as_uuid();
 
 	// Validate game
 	let validation_res = op!([ctx] game_validate {
-		name_id: name_id.to_owned(),
-		display_name: display_name.to_owned(),
+		name_id: ctx.name_id.clone(),
+		display_name: ctx.display_name.clone(),
 	})
 	.await?;
 	if !validation_res.errors.is_empty() {
@@ -36,7 +30,7 @@ async fn handle(
 	// Check if team can create a game
 	{
 		let team_res = op!([ctx] team_get {
-			team_ids: vec![developer_team_id_proto]
+			team_ids: vec![developer_team_id_proto],
 		})
 		.await?;
 		let team = unwrap!(team_res.teams.first());
@@ -65,13 +59,21 @@ async fn handle(
 		",
 		game_id,
 		ctx.ts(),
-		name_id,
-		display_name,
+		&ctx.name_id,
+		&ctx.display_name,
 		"",
 		"",
 		developer_team_id,
 	)
 	.await?;
+
+	if let Some(cluster_id) = ctx.cluster_id {
+		msg!([ctx] cluster::msg::game_link(game_id, cluster_id) -> cluster::msg::game_link_complete {
+			game_id: Some(game_id.into()),
+			cluster_id: ctx.cluster_id,
+		})
+		.await?;
+	}
 
 	msg!([ctx] game::msg::create_complete(game_id) {
 		game_id: Some(game_id.into()),
@@ -86,7 +88,7 @@ async fn handle(
 				properties_json: Some(serde_json::to_string(&json!({
 					"developer_team_id": developer_team_id,
 					"game_id": game_id,
-					"display_name": display_name,
+					"display_name": ctx.display_name,
 				}))?),
 				..Default::default()
 			}

@@ -30,7 +30,7 @@ mm-lobby-player-count = { path = "../../svc/pkg/mm/ops/lobby-player-count" }
 mm-lobby-runtime-aggregate = { path = "../../svc/pkg/mm/ops/lobby-runtime-aggregate" }
 mm-player-count-for-namespace = { path = "../../svc/pkg/mm/ops/player-count-for-namespace" }
 region-get = { path = "../../svc/pkg/region/ops/get" }
-region-list = { path = "../../svc/pkg/region/ops/list" }
+region-list-for-game = { path = "../../svc/pkg/region/ops/list-for-game" }
 region-resolve = { path = "../../svc/pkg/region/ops/resolve" }
 team-get = { path = "../../svc/pkg/team/ops/get" }
 team-member-count = { path = "../../svc/pkg/team/ops/member-count" }

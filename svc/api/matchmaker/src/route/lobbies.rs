@@ -114,7 +114,15 @@ pub async fn find(
 	);
 
 	let game_ns = ctx.auth().game_ns(&ctx).await?;
-	let ns_data = fetch_ns(&ctx, &game_ns).await?;
+
+	let (ns_data, game_resolve_res) = tokio::try_join!(
+		fetch_ns(&ctx, &game_ns),
+		op!([ctx] game_resolve_namespace_id {
+			namespace_ids: vec![game_ns.namespace_id.into()],
+		}),
+	)?;
+	let game = unwrap!(game_resolve_res.games.first());
+	let game_id = unwrap_ref!(game.game_id);
 
 	// Fetch version data
 	let version_res = op!([ctx] mm_config_version_get {
@@ -186,7 +194,8 @@ pub async fn find(
 	}
 
 	// Resolve region IDs
-	let region_ids = resolve_region_ids(&ctx, coords, body.regions.as_ref(), &lobby_groups).await?;
+	let region_ids =
+		resolve_region_ids(&ctx, coords, body.regions.as_ref(), game_id, &lobby_groups).await?;
 
 	// Validate that there is a lobby group and region pair that is valid.
 	//
@@ -299,7 +308,14 @@ pub async fn create(
 		ctx.auth().game_ns(&ctx),
 		ctx.auth().fetch_game_user_option(ctx.op_ctx()),
 	)?;
-	let ns_data = fetch_ns(&ctx, &game_ns).await?;
+	let (ns_data, game_resolve_res) = tokio::try_join!(
+		fetch_ns(&ctx, &game_ns),
+		op!([ctx] game_resolve_namespace_id {
+			namespace_ids: vec![game_ns.namespace_id.into()],
+		}),
+	)?;
+	let game = unwrap!(game_resolve_res.games.first());
+	let game_id = unwrap_ref!(game.game_id);
 
 	// Fetch version config
 	let version_config_res = op!([ctx] mm_config_version_get {
@@ -418,6 +434,7 @@ pub async fn create(
 		&ctx,
 		coords,
 		body.region.map(|r| vec![r]).as_ref(),
+		game_id,
 		&[(lobby_group, lobby_group_meta)],
 	)
 	.await?;
@@ -1171,6 +1188,7 @@ async fn resolve_region_ids(
 	ctx: &Ctx<Auth>,
 	coords: Option<(f64, f64)>,
 	regions: Option<&Vec<String>>,
+	game_id: &common::Uuid,
 	lobby_groups: &[(
 		&backend::matchmaker::LobbyGroup,
 		&backend::matchmaker::LobbyGroupMeta,
@@ -1178,7 +1196,8 @@ async fn resolve_region_ids(
 ) -> GlobalResult<Vec<Uuid>> {
 	let region_ids = if let Some(region_name_ids) = regions {
 		// Resolve the region ID corresponding to the name IDs
-		let resolve_res = op!([ctx] region_resolve {
+		let resolve_res = op!([ctx] region_resolve_for_game {
+			game_id: Some(*game_id),
 			name_ids: region_name_ids.clone(),
 		})
 		.await?;

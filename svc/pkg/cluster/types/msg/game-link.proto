@@ -1,0 +1,15 @@
+syntax = "proto3";
+
+package rivet.backend.pkg.cluster.msg.game_link;
+
+import "proto/common.proto";
+
+/// name = "msg-cluster-game-link"
+/// parameters = [
+/// 	{ name = "game_id" },
+/// 	{ name = "cluster_id" },
+/// ]
+message Message {
+    rivet.common.Uuid game_id = 1;
+    rivet.common.Uuid cluster_id = 2;
+}

@@ -5,10 +5,7 @@ use rivet_operation::prelude::*;
 async fn handle(
 	ctx: OperationContext<faker::region::Request>,
 ) -> GlobalResult<faker::region::Response> {
-	let region_list = op!([ctx] region_list {
-		..Default::default()
-	})
-	.await?;
+	let region_list = op!([ctx] region_list { }).await?;
 
 	// Get the region data
 	let region_get = op!([ctx] region_get {

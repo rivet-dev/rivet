@@ -99,7 +99,7 @@ mm-player-count-for-namespace = { path = "../../pkg/mm/ops/player-count-for-name
 job-log-read = { path = "../../pkg/job-log/ops/read" }
 perf-log-get = { path = "../../pkg/perf/ops/log-get" }
 region-get = { path = "../../pkg/region/ops/get" }
-region-list = { path = "../../pkg/region/ops/list" }
+region-list-for-game = { path = "../../pkg/region/ops/list-for-game" }
 team-get = { path = "../../pkg/team/ops/get" }
 team-member-count = { path = "../../pkg/team/ops/member-count" }
 team-validate = { path = "../../pkg/team/ops/validate" }

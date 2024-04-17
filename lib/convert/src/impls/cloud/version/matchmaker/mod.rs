@@ -11,6 +11,7 @@ pub mod lobby_group;
 
 pub async fn config_to_proto(
 	ctx: &OperationContext<()>,
+	game_id: Uuid,
 	value: models::CloudVersionMatchmakerConfig,
 ) -> GlobalResult<backend::matchmaker::VersionConfig> {
 	// Fetch region data required to convert models
@@ -26,7 +27,9 @@ pub async fn config_to_proto(
 		}
 	}
 
-	let regions_list = op!([ctx] region_list {}).await?;
+	let regions_list = op!([ctx] region_list_for_game {
+		game_ids: vec![game_id.into()],
+	}).await?;
 	let regions_res = op!([ctx] region_get {
 		region_ids: regions_list.region_ids.clone(),
 	})

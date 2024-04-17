@@ -22,12 +22,13 @@ impl ApiTryFrom<backend::game::Version> for models::CloudVersionSummary {
 }
 pub async fn config_to_proto(
 	ctx: &OperationContext<()>,
+	game_id: Uuid,
 	value: models::CloudVersionConfig,
 ) -> GlobalResult<backend::cloud::VersionConfig> {
 	Ok(backend::cloud::VersionConfig {
 		cdn: value.cdn.map(|x| (*x).api_try_into()).transpose()?,
 		matchmaker: if let Some(matchmaker) = value.matchmaker {
-			Some(matchmaker::config_to_proto(ctx, *matchmaker).await?)
+			Some(matchmaker::config_to_proto(ctx, game_id, *matchmaker).await?)
 		} else {
 			None
 		},

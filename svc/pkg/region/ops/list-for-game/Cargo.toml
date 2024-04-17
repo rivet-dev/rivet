@@ -1,5 +1,5 @@
 [package]
-name = "region-resolve"
+name = "region-list-for-game"
 version = "0.0.1"
 edition = "2021"
 authors = ["Rivet Gaming, LLC <developer@rivet.gg>"]
@@ -10,8 +10,8 @@ rivet-operation = { path = "../../../../../lib/operation/core" }
 chirp-client = { path = "../../../../../lib/chirp/client" }
 prost = "0.10"
 
-cluster-datacenter-get = { path = "../../../cluster/ops/datacenter-get" }
-region-list = { path = "../list" }
+cluster-get-for-game = { path = "../../../cluster/ops/get-for-game" }
+cluster-datacenter-list = { path = "../../../cluster/ops/datacenter-list" }
 
 [dependencies.sqlx]
 version = "0.7"
@@ -21,4 +21,3 @@ default-features = false
 chirp-worker = { path = "../../../../../lib/chirp/worker" }
 
 faker-region = { path = "../../../faker/ops/region" }
-region-get = { path = "../get" }

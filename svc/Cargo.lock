@@ -613,6 +613,7 @@ dependencies = [
  "game-get",
  "game-namespace-get",
  "game-namespace-resolve-url",
+ "game-resolve-namespace-id",
  "game-user-get",
  "http 0.2.12",
  "hyper",
@@ -628,7 +629,7 @@ dependencies = [
  "prost 0.10.4",
  "region-get",
  "region-recommend",
- "region-resolve",
+ "region-resolve-for-game",
  "reqwest",
  "rivet-api",
  "rivet-cache",
@@ -2453,6 +2454,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "cluster-get-for-game"
+version = "0.0.1"
+dependencies = [
+ "chirp-client",
+ "chirp-worker",
+ "prost 0.10.4",
+ "rivet-operation",
+ "sqlx",
+]
+
+[[package]]
 name = "cluster-server-get"
 version = "0.0.1"
 dependencies = [
@@ -3707,7 +3719,7 @@ dependencies = [
  "game-version-create",
  "mm-lobby-idle-update",
  "prost 0.10.4",
- "region-list",
+ "region-list-for-game",
  "rivet-operation",
  "sqlx",
 ]
@@ -6811,6 +6823,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "region-list-for-game"
+version = "0.0.1"
+dependencies = [
+ "chirp-client",
+ "chirp-worker",
+ "cluster-datacenter-list",
+ "cluster-get-for-game",
+ "faker-region",
+ "prost 0.10.4",
+ "rivet-operation",
+ "sqlx",
+]
+
+[[package]]
 name = "region-recommend"
 version = "0.0.1"
 dependencies = [
@@ -6832,10 +6858,25 @@ dependencies = [
  "chirp-client",
  "chirp-worker",
  "cluster-datacenter-get",
- "cluster-datacenter-list",
  "faker-region",
  "prost 0.10.4",
  "region-get",
+ "region-list",
+ "rivet-operation",
+ "sqlx",
+]
+
+[[package]]
+name = "region-resolve-for-game"
+version = "0.0.1"
+dependencies = [
+ "chirp-client",
+ "chirp-worker",
+ "cluster-datacenter-get",
+ "faker-region",
+ "prost 0.10.4",
+ "region-get",
+ "region-list-for-game",
  "rivet-operation",
  "sqlx",
 ]

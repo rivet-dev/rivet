@@ -70,8 +70,8 @@ async fn handle(
 			.spawn(
 				async move {
 					// List regions
-					let region_res = op!([ctx] region_list {
-						..Default::default()
+					let region_res = op!([ctx] region_list_for_game {
+						game_ids: vec![game_id.into()],
 					})
 					.await;
 					let region_ids = match region_res {

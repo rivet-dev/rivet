@@ -93,3 +93,9 @@ CREATE TABLE server_images_linode_misc (
 	INDEX (public_ip),
 	INDEX (image_id)
 );
+
+-- Dictates which cluster a game's lobbies will be created in
+CREATE TABLE games (
+	game_id UUID PRIMARY KEY,
+	cluster_id UUID NOT NULL
+);

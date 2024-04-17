@@ -12,7 +12,7 @@ prost = "0.10"
 
 game-resolve-namespace-id = { path = "../resolve-namespace-id" }
 game-get = { path = "../get" }
-region-list = { path = "../../../region/ops/list" }
+region-list-for-game = { path = "../../../region/ops/list-for-game" }
 mm-lobby-idle-update = { path = "../../../mm/ops/lobby-idle-update" }
 
 [dependencies.sqlx]

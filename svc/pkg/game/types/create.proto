@@ -11,6 +11,7 @@ message Request {
 	string display_name = 2;
 	rivet.common.Uuid developer_team_id = 6;
 	optional rivet.common.Uuid creator_user_id = 7;
+	optional rivet.common.Uuid cluster_id = 8;
 }
 
 message Response {

@@ -9,6 +9,7 @@ message Cluster {
     rivet.common.Uuid cluster_id = 1;
     string name_id = 2;
     int64 create_ts = 3;
+    // Unset for the default cluster.
     optional rivet.common.Uuid owner_team_id = 4;
 }
 

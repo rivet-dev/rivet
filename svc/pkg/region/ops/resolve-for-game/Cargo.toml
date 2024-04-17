@@ -1,5 +1,5 @@
 [package]
-name = "region-resolve"
+name = "region-resolve-for-game"
 version = "0.0.1"
 edition = "2021"
 authors = ["Rivet Gaming, LLC <developer@rivet.gg>"]
@@ -11,7 +11,7 @@ chirp-client = { path = "../../../../../lib/chirp/client" }
 prost = "0.10"
 
 cluster-datacenter-get = { path = "../../../cluster/ops/datacenter-get" }
-region-list = { path = "../list" }
+region-list-for-game = { path = "../list-for-game" }
 
 [dependencies.sqlx]
 version = "0.7"

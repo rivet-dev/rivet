@@ -57,7 +57,7 @@ pub async fn create(
 	let user_id = ctx.auth().claims()?.as_user().ok();
 
 	let proto_config =
-		rivet_convert::cloud::version::config_to_proto(ctx.op_ctx(), *body.config).await?;
+		rivet_convert::cloud::version::config_to_proto(ctx.op_ctx(), game_id, *body.config).await?;
 	let publish_res = op!([ctx] cloud_version_publish {
 		game_id: Some(game_id.into()),
 		display_name: body.display_name,
@@ -98,7 +98,7 @@ pub async fn validate(
 	body: models::CloudGamesValidateGameVersionRequest,
 ) -> GlobalResult<models::CloudGamesValidateGameVersionResponse> {
 	let proto_config =
-		rivet_convert::cloud::version::config_to_proto(ctx.op_ctx(), *body.config).await?;
+		rivet_convert::cloud::version::config_to_proto(ctx.op_ctx(), game_id, *body.config).await?;
 	let res = op!([ctx] game_version_validate {
 		game_id: Some(game_id.into()),
 		display_name: body.display_name,

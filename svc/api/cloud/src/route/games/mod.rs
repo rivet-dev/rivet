@@ -139,8 +139,8 @@ async fn gen_default_version_config(
 	game_id: Uuid,
 	display_name: &str,
 ) -> GlobalResult<backend::cloud::VersionConfig> {
-	let list_regions_res = op!([ctx] region_list {
-		..Default::default()
+	let list_regions_res = op!([ctx] region_list_for_game {
+		game_ids: vec![game_id.into()],
 	})
 	.await?;
 
@@ -428,7 +428,7 @@ pub async fn get(
 		.map(ApiTryInto::api_try_into)
 		.collect::<GlobalResult<Vec<_>>>()?;
 
-	let regions = fetch::game::region_summaries(ctx.op_ctx()).await?;
+	let regions = fetch::game::region_summaries(ctx.op_ctx(), game_id).await?;
 
 	Ok(models::CloudGamesGetGameByIdResponse {
 		game: Box::new(models::CloudGameFull {

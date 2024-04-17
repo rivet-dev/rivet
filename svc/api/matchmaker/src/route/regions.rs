@@ -33,7 +33,6 @@ pub async fn list(
 	}
 
 	let game_ns = ctx.auth().game_ns(&ctx).await?;
-
 	let ns_data = fetch_ns(&ctx, &game_ns).await?;
 
 	// Fetch version data

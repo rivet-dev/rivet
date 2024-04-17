@@ -169,9 +169,10 @@ pub async fn state(
 
 pub async fn region_summaries(
 	ctx: &OperationContext<()>,
+	game_id: Uuid,
 ) -> GlobalResult<Vec<models::CloudRegionSummary>> {
-	let list_res = op!([ctx] region_list {
-		..Default::default()
+	let list_res = op!([ctx] region_list_for_game {
+		game_ids: vec![game_id.into()],
 	})
 	.await?;
 
