@@ -5,8 +5,8 @@ use reqwest::header;
 use rivet_operation::prelude::*;
 use serde::{de::DeserializeOwned, Deserialize};
 
-pub mod consts;
 pub mod api;
+pub mod consts;
 
 #[derive(Clone)]
 pub struct Client {
@@ -61,7 +61,7 @@ impl Client {
 		&self.inner
 	}
 
-	async fn request(
+	pub async fn request(
 		&self,
 		req: reqwest::RequestBuilder,
 		body: Option<serde_json::Value>,

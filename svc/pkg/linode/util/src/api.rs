@@ -428,6 +428,8 @@ pub async fn delete_custom_image(client: &Client, image_id: &str) -> GlobalResul
 	client.delete(&format!("/images/{image_id}")).await
 }
 
+pub const CUSTOM_IMAGE_LIST_SIZE: usize = 500;
+
 #[derive(Deserialize)]
 pub struct ListCustomImagesResponse {
 	pub data: Vec<CustomImage>,
@@ -444,8 +446,18 @@ pub struct CustomImage {
 pub async fn list_custom_images(client: &Client) -> GlobalResult<Vec<CustomImage>> {
 	tracing::info!("listing custom images");
 
-	let res = client.get::<ListCustomImagesResponse>("/images").await?;
+	let req = client
+		.inner()
+		.get("https://api.linode.com/v4/images")
+		.query(&[("page_size", CUSTOM_IMAGE_LIST_SIZE)]);
 
+	let res = client
+		.request(req, None, false)
+		.await?
+		.json::<ListCustomImagesResponse>()
+		.await?;
+
+	// Can't use `X-Filter` on `created_by`, filter manually
 	Ok(res
 		.data
 		.into_iter()

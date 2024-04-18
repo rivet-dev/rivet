@@ -88,7 +88,10 @@ async fn run_for_linode_account(
 		.into_iter()
 		.map(|x| x.id)
 		.collect::<Vec<_>>();
-	if image_ids.len() == 100 {
+	if image_ids.len() == util_linode::api::CUSTOM_IMAGE_LIST_SIZE {
+		// We don't need to paginate since we'll never have more than
+		// `number of regions * number of pools * 2` images which is not more than 500 (x2 is for the old +
+		// new images)
 		tracing::warn!("page limit reached, new images may not be returned");
 	}
 
