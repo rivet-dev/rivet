@@ -136,7 +136,7 @@ async fn upload_build(
 			backend::upload::PrepareFile {
 				path: "image.tar".into(),
 				content_length: build.tar.len() as u64,
-				multipart: true,
+				multipart: false,
 				..Default::default()
 			},
 		],

@@ -26,12 +26,17 @@ async fn handle(
 
 	let (image_tag, upload_id, image_presigned_requests) =
 		if let Some(build_kind) = &ctx.default_build_kind {
-			let (image_tag, upload_id) = sql_fetch_one!(
+			let default_build_row = sql_fetch_optional!(
 				[ctx, (String, Uuid)]
 				"SELECT image_tag, upload_id FROM db_build.default_builds WHERE kind = $1",
 				build_kind,
 			)
 			.await?;
+
+			let (image_tag, upload_id) = unwrap!(
+				default_build_row,
+				format!("default build missing: {build_kind}")
+			);
 
 			(image_tag, upload_id, Vec::new())
 		} else {

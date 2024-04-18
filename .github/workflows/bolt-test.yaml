@@ -26,6 +26,9 @@ jobs:
           token: ${{ secrets.GITHUB_TOKEN }}
           submodules: recursive
 
+      - name: LFS
+        run: git lfs pull
+
       - uses: ./.github/actions/pre-init
         with:
           SCCACHE_AWS_SECRET_ACCESS_KEY: ${{ secrets.SCCACHE_AWS_SECRET_ACCESS_KEY }}
@@ -41,9 +44,9 @@ jobs:
         if: failure()
         uses: mxschmitt/action-tmate@v3
 
-      - name: K3D Cleanup
+      - name: Bolt Cleanup
         if: always()
-        run: nix-shell --pure --run "k3d cluster delete rivet-ci"
+        run: nix-shell --pure --run "bolt infra destroy --yes"
 
       - name: Force Parallel Failure
         if: failure()

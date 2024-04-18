@@ -46,8 +46,10 @@ rustPlatform.buildRustPackage rec {
 	nativeBuildInputs = buildInputs;
 	doCheck = false;
 
+
 	shellHook = ''
 		export LD_LIBRARY_PATH="${pkgs.lib.strings.makeLibraryPath [ pkgs.openssl ]}"
+		export RUSTFLAGS="--cfg tokio_unstable"
 	'';
 
 	# See https://artemis.sh/2023/07/08/nix-rust-project-with-git-dependencies.html
