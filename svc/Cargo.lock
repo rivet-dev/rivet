@@ -118,6 +118,7 @@ dependencies = [
  "rivet-matchmaker",
  "rivet-operation",
  "rivet-pools",
+ "rivet-util-cluster",
  "rivet-util-mm",
  "s3-util",
  "serde",
@@ -299,6 +300,7 @@ dependencies = [
  "rivet-health-checks",
  "rivet-operation",
  "rivet-pools",
+ "rivet-util-cluster",
  "rivet-util-job",
  "rivet-util-mm",
  "rivet-util-nsfw",
@@ -2478,6 +2480,7 @@ dependencies = [
  "rivet-connection",
  "rivet-operation",
  "rivet-pools",
+ "rivet-util-cluster",
  "serde",
  "serde_json",
  "tokio",
@@ -2524,6 +2527,7 @@ dependencies = [
  "chirp-worker",
  "prost 0.10.4",
  "rivet-operation",
+ "rivet-util-cluster",
  "sqlx",
 ]
 
@@ -4621,6 +4625,15 @@ name = "ipnet"
 version = "2.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8f518f335dce6725a761382244631d86cf0ccb2863413590b31338feb467f9c3"
+dependencies = [
+ "serde",
+]
+
+[[package]]
+name = "ipnetwork"
+version = "0.20.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bf466541e9d546596ee94f9f69590f89473455f88372423e0008fc1a7daf100e"
 dependencies = [
  "serde",
 ]
@@ -6885,6 +6898,7 @@ dependencies = [
  "faker-region",
  "prost 0.10.4",
  "rivet-operation",
+ "rivet-util-cluster",
  "sqlx",
 ]
 
@@ -8239,6 +8253,7 @@ dependencies = [
  "hashlink",
  "hex",
  "indexmap 2.2.6",
+ "ipnetwork",
  "log",
  "memchr",
  "native-tls",
@@ -8362,6 +8377,7 @@ dependencies = [
  "hkdf",
  "hmac",
  "home",
+ "ipnetwork",
  "itoa 1.0.11",
  "log",
  "md-5",

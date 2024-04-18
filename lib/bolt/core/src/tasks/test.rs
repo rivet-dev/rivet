@@ -1,7 +1,7 @@
 use std::fmt;
 
 use anyhow::*;
-use futures_util::{StreamExt, TryStreamExt};
+use futures_util::{FutureExt, StreamExt, TryStreamExt};
 use rand::{seq::SliceRandom, thread_rng};
 use reqwest::header;
 use rivet_term::console::style;
@@ -569,6 +569,16 @@ struct Data {
 	id: u64,
 }
 
+#[derive(Debug, Deserialize)]
+struct SshKeysListResponse {
+	data: Vec<SshKey>,
+}
+
+#[derive(Debug, Deserialize)]
+struct SshKey {
+	id: u64,
+}
+
 // TODO: This only deletes linodes and firewalls, the ssh key still remains
 async fn cleanup_servers(ctx: &ProjectContext) -> Result<()> {
 	if ctx.ns().rivet.provisioning.is_none() {
@@ -580,59 +590,85 @@ async fn cleanup_servers(ctx: &ProjectContext) -> Result<()> {
 
 	// Create client
 	let api_token = ctx.read_secret(&["linode", "token"]).await?;
-	let auth = format!("Bearer {}", api_token,);
+	let auth = format!("Bearer {}", api_token);
 	let mut headers = header::HeaderMap::new();
 	headers.insert(header::AUTHORIZATION, header::HeaderValue::from_str(&auth)?);
 	let client = reqwest::Client::builder()
 		.default_headers(headers)
 		.build()?;
 
-	// Fetch all objects with the tag "test"
+	// Fetch all objects with the tag "test" and ssh keys with "test-" in them
 	let test_tag = "test";
-	let res = client
-		.get(format!("https://api.linode.com/v4/tags/{test_tag}"))
-		.send()
-		.await?;
+	let (objects_res, ssh_keys_res) = tokio::try_join!(
+		async {
+			let res = client
+				.get(format!("https://api.linode.com/v4/tags/{test_tag}"))
+				.send()
+				.await?;
 
-	if !res.status().is_success() {
-		bail!(
-			"api request failed ({}):\n{}",
-			res.status(),
-			res.json::<ApiErrorResponse>().await?
-		);
-	}
+			if !res.status().is_success() {
+				bail!(
+					"api request failed ({}):\n{}",
+					res.status(),
+					res.json::<ApiErrorResponse>().await?
+				);
+			}
 
-	// Deserialize
-	let res = res.json::<TaggedObjectsListResponse>().await?;
+			// Deserialize
+			Ok(res.json::<TaggedObjectsListResponse>().await?)
+		},
+		async {
+			let res = client
+				.get(format!("https://api.linode.com/v4/profile/sshkeys"))
+				.header(
+					"X-Filter",
+					format!(r#"{{ "label": {{ "+contains": "{test_tag}-" }} }}"#),
+				)
+				.send()
+				.await?;
 
-	futures_util::stream::iter(res.data)
+			if !res.status().is_success() {
+				bail!(
+					"api request failed ({}):\n{}",
+					res.status(),
+					res.json::<ApiErrorResponse>().await?
+				);
+			}
+
+			// Deserialize
+			Ok(res.json::<SshKeysListResponse>().await?)
+		}
+	)?;
+
+	let deletions = objects_res
+		.data
+		.into_iter()
 		.map(|object| {
 			let client = client.clone();
 			let obj_type = object._type;
 			let id = object.data.id;
 
 			async move {
-				eprintln!("destroying {} {}", obj_type, id);
+				eprintln!("destroying {obj_type} {id}");
 
 				// Destroy resource
 				let res = match obj_type.as_str() {
 					"linode" => {
 						client
-							.delete(format!("https://api.linode.com/v4/linode/instances/{}", id))
+							.delete(format!("https://api.linode.com/v4/linode/instances/{id}"))
 							.send()
 							.await?
 					}
 					"firewall" => {
 						client
 							.delete(format!(
-								"https://api.linode.com/v4/networking/firewalls/{}",
-								id
+								"https://api.linode.com/v4/networking/firewalls/{id}"
 							))
 							.send()
 							.await?
 					}
 					_ => {
-						eprintln!("unknown type tagged with \"test\": {}", obj_type);
+						eprintln!("unknown type tagged with \"test\": {obj_type}");
 						return Ok(());
 					}
 				};
@@ -640,7 +676,7 @@ async fn cleanup_servers(ctx: &ProjectContext) -> Result<()> {
 				if !res.status().is_success() {
 					// Resource does not exist to be deleted, not an error
 					if res.status() == reqwest::StatusCode::NOT_FOUND {
-						eprintln!("{} {} doesn't exist, skipping", obj_type, id);
+						eprintln!("{obj_type} {id} doesn't exist, skipping");
 						return Ok(());
 					}
 
@@ -653,7 +689,40 @@ async fn cleanup_servers(ctx: &ProjectContext) -> Result<()> {
 
 				Ok(())
 			}
+			.boxed()
 		})
+		.chain(ssh_keys_res.data.into_iter().map(|key| {
+			let client = client.clone();
+			let id = key.id;
+
+			async move {
+				eprintln!("destroying key {id}");
+
+				let res = client
+					.delete(format!("https://api.linode.com/v4/profile/sshkeys/{id}"))
+					.send()
+					.await?;
+
+				if !res.status().is_success() {
+					// Resource does not exist to be deleted, not an error
+					if res.status() == reqwest::StatusCode::NOT_FOUND {
+						eprintln!("key {id} doesn't exist, skipping");
+						return Ok(());
+					}
+
+					bail!(
+						"api request failed ({}):\n{}",
+						res.status(),
+						res.json::<ApiErrorResponse>().await?
+					);
+				}
+
+				Ok(())
+			}
+			.boxed()
+		}));
+
+	futures_util::stream::iter(deletions)
 		.buffer_unordered(8)
 		.try_collect::<Vec<_>>()
 		.await?;

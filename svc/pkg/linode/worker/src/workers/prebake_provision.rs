@@ -86,13 +86,13 @@ async fn provision(
 	server: &api::ProvisionCtx,
 ) -> GlobalResult<String> {
 	// Create SSH key
-	let ssh_key_res = api::create_ssh_key(client, &Uuid::new_v4().to_string()).await?;
+	let ssh_key_res = api::create_ssh_key(client, &Uuid::new_v4().to_string(), false).await?;
 
 	// Write SSH key id
 	sql_execute!(
 		[ctx]
 		"
-		INSERT INTO db_cluster.server_images_linode_misc (
+		INSERT INTO db_cluster.server_images_linode (
 			install_hash,
 			datacenter_id,
 			pool_type,
@@ -114,7 +114,7 @@ async fn provision(
 	sql_execute!(
 		[ctx]
 		"
-		UPDATE db_cluster.server_images_linode_misc
+		UPDATE db_cluster.server_images_linode
 		SET linode_id = $4
 		WHERE
 			install_hash = $1 AND
@@ -147,7 +147,7 @@ async fn provision(
 	sql_execute!(
 		[ctx, &crdb]
 		"
-		UPDATE db_cluster.server_images_linode_misc
+		UPDATE db_cluster.server_images_linode
 		SET firewall_id = $4
 		WHERE
 			install_hash = $1 AND
@@ -169,7 +169,7 @@ async fn provision(
 	sql_execute!(
 		[ctx, &crdb]
 		"
-		UPDATE db_cluster.server_images_linode_misc
+		UPDATE db_cluster.server_images_linode
 		SET
 			disk_id = $4,
 			public_ip = $5
@@ -206,7 +206,7 @@ async fn destroy(
 		[ctx, LinodeData, &crdb]
 		"
 		SELECT ssh_key_id, linode_id, firewall_id
-		FROM db_cluster.server_images_linode_misc
+		FROM db_cluster.server_images_linode
 		WHERE
 			install_hash = $1 AND
 			datacenter_id = $2 AND
@@ -237,7 +237,7 @@ async fn destroy(
 	sql_execute!(
 		[ctx]
 		"
-		DELETE FROM db_cluster.server_images_linode_misc
+		DELETE FROM db_cluster.server_images_linode
 		WHERE
 			install_hash = $1 AND
 			datacenter_id = $2 AND

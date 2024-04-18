@@ -1,5 +1,4 @@
 use serde::Deserialize;
-use uuid::Uuid;
 
 #[derive(Debug, thiserror::Error)]
 pub enum EnvVarError {
@@ -57,11 +56,6 @@ impl RunContext {
 
 pub fn run_context() -> RunContext {
 	RUN_CONTEXT.clone().expect("RIVET_RUN_CONTEXT")
-}
-
-// Cluster id for provisioning servers
-pub fn default_cluster_id() -> Uuid {
-	Uuid::nil()
 }
 
 /// The namespace this service is running in. This is derived from the `NAMESPACE` environment

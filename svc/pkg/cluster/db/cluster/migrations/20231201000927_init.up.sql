@@ -13,7 +13,7 @@ CREATE TABLE datacenters (
 	provider INT NOT NULL,
 	provider_datacenter_id TEXT NOT NULL,
 	provider_api_token TEXT,
-	pools BYTES NOT NULL,
+	pools BYTES NOT NULL, -- rivet.backend.pkg.cluster.msg.datacenter_create.Pools
 	build_delivery_method INT NOT NULL,
 	drain_timeout INT NOT NULL,
 	create_ts INT NOT NULL,
@@ -37,16 +37,16 @@ CREATE TABLE datacenter_tls (
 
 CREATE TABLE servers (
 	server_id UUID PRIMARY KEY,
-	datacenter_id UUID NOT NULL,
+	datacenter_id UUID NOT NULL REFERENCES datacenters (datacenter_id),
     cluster_id UUID NOT NULL REFERENCES clusters (cluster_id),
-	pool_type INT NOT NULL,
+	pool_type INT NOT NULL, -- rivet.backend.cluster.PoolType
 
 	-- Null until actual server is provisioned
 	provider_server_id TEXT,
 	provider_hardware TEXT,
-	vlan_ip TEXT,
+	vlan_ip INET,
 	network_idx INT,
-	public_ip TEXT,
+	public_ip INET,
 
 	-- Null until nomad node successfully registers
 	nomad_node_id TEXT,
@@ -57,14 +57,16 @@ CREATE TABLE servers (
 	drain_ts INT,
 	-- When the server was marked to be deleted by rivet
 	cloud_destroy_ts INT,
-	taint_ts INT,
-
-	-- Used when determining which server this ip belongs to
-	INDEX (public_ip)
+	taint_ts INT
 );
 
+-- Used when determining which server this ip belongs to
+CREATE UNIQUE INDEX idx_servers_public_ip
+ON servers (public_ip)
+WHERE cloud_destroy_ts IS NULL;
+
 -- Stores data for destroying linode resources
-CREATE TABLE linode_misc (
+CREATE TABLE servers_linode (
 	server_id UUID PRIMARY KEY REFERENCES servers (server_id),
 	ssh_key_id INT NOT NULL,
 	linode_id INT,
@@ -72,9 +74,10 @@ CREATE TABLE linode_misc (
 );
 
 -- Stores data for destroying cloudflare resources
-CREATE TABLE cloudflare_misc (
+CREATE TABLE servers_cloudflare (
 	server_id UUID PRIMARY KEY REFERENCES servers (server_id),
 	dns_record_id TEXT NOT NULL,
+	-- Secondary DNS route which doesn't have a wildcard. Used for discord activities.
 	secondary_dns_record_id TEXT
 );
 
@@ -85,13 +88,13 @@ CREATE TABLE server_images (
 	pool_type INT,
 
 	create_ts INT NOT NULL,
-	image_id TEXT,
+	provider_image_id TEXT,
 
 	PRIMARY KEY (provider, install_hash, datacenter_id, pool_type)
 );
 
 -- Stores data for destroying linode prebake resources and creating custom images
-CREATE TABLE server_images_linode_misc (
+CREATE TABLE server_images_linode (
 	install_hash TEXT,
 	datacenter_id UUID,
 	pool_type INT,
@@ -100,7 +103,7 @@ CREATE TABLE server_images_linode_misc (
 	linode_id INT,
 	firewall_id INT,
 	disk_id INT,
-	public_ip TEXT,
+	public_ip INET,
 	image_id TEXT,
 
 	PRIMARY KEY (install_hash, datacenter_id, pool_type),

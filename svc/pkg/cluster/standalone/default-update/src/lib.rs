@@ -130,7 +130,7 @@ pub async fn run_from_env(use_autoscaler: bool) -> GlobalResult<()> {
 	// monolith-worker, resulting in nothing happening.
 	tokio::time::sleep(std::time::Duration::from_secs(5)).await;
 
-	let cluster_id = util::env::default_cluster_id();
+	let cluster_id = util_cluster::default_cluster_id();
 
 	let (cluster_res, datacenter_list_res) = tokio::try_join!(
 		// Check if cluster already exists

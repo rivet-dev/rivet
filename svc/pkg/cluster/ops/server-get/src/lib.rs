@@ -1,3 +1,5 @@
+use std::net::IpAddr;
+
 use proto::backend::{self, pkg::*};
 use rivet_operation::prelude::*;
 
@@ -7,8 +9,8 @@ struct Server {
 	datacenter_id: Uuid,
 	cluster_id: Uuid,
 	pool_type: i64,
-	vlan_ip: Option<String>,
-	public_ip: Option<String>,
+	vlan_ip: Option<IpAddr>,
+	public_ip: Option<IpAddr>,
 	cloud_destroy_ts: Option<i64>,
 }
 
@@ -19,8 +21,8 @@ impl From<Server> for backend::cluster::Server {
 			datacenter_id: Some(value.datacenter_id.into()),
 			cluster_id: Some(value.cluster_id.into()),
 			pool_type: value.pool_type as i32,
-			vlan_ip: value.vlan_ip,
-			public_ip: value.public_ip,
+			vlan_ip: value.vlan_ip.map(|ip| ip.to_string()),
+			public_ip: value.public_ip.map(|ip| ip.to_string()),
 			cloud_destroy_ts: value.cloud_destroy_ts,
 		}
 	}

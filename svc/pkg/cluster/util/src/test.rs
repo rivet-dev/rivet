@@ -1,1 +1,1 @@
-pub const HARDWARE: &str = "g6-nanode-1";
+pub const LINODE_HARDWARE: &str = "g6-nanode-1";

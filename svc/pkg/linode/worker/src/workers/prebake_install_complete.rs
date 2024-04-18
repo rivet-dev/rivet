@@ -1,3 +1,5 @@
+use std::net::IpAddr;
+
 use chirp_worker::prelude::*;
 use proto::backend::pkg::*;
 use util_linode::api;
@@ -17,16 +19,18 @@ async fn worker(
 	ctx: &OperationContext<linode::msg::prebake_install_complete::Message>,
 ) -> GlobalResult<()> {
 	let datacenter_id = unwrap_ref!(ctx.datacenter_id).as_uuid();
+	let public_ip = unwrap!(ctx.public_ip.parse::<IpAddr>(), "invalid public ip");
 
 	let prebake_server = sql_fetch_one!(
 		[ctx, PrebakeServer]
 		"
 		SELECT
 			install_hash, datacenter_id, pool_type, linode_id, disk_id
-		FROM db_cluster.server_images_linode_misc
-		WHERE public_ip = $1
+		FROM db_cluster.server_images_linode
+		WHERE
+			public_ip = $1
 		",
-		&ctx.public_ip,
+		public_ip,
 	)
 	.await?;
 
@@ -53,7 +57,7 @@ async fn worker(
 	sql_execute!(
 		[ctx]
 		"
-		UPDATE db_cluster.server_images_linode_misc
+		UPDATE db_cluster.server_images_linode
 		SET image_id = $4
 		WHERE
 			install_hash = $1 AND
@@ -62,7 +66,7 @@ async fn worker(
 		",
 		prebake_server.install_hash,
 		prebake_server.datacenter_id,
-		prebake_server.pool_type as i64,
+		prebake_server.pool_type,
 		create_image_res.id,
 	)
 	.await?;

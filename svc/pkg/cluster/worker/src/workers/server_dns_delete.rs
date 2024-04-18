@@ -2,6 +2,8 @@ use chirp_worker::prelude::*;
 use cloudflare::{endpoints as cf, framework as cf_framework, framework::async_api::ApiClient};
 use proto::backend::pkg::*;
 
+use crate::util::CloudflareError;
+
 #[worker(name = "cluster-server-dns-delete")]
 async fn worker(
 	ctx: &OperationContext<cluster::msg::server_dns_delete::Message>,
@@ -13,7 +15,7 @@ async fn worker(
 		[ctx, (String, Option<String>), &crdb]
 		"
 		SELECT dns_record_id, secondary_dns_record_id
-		FROM db_cluster.cloudflare_misc
+		FROM db_cluster.servers_cloudflare
 		WHERE server_id = $1
 		",
 		&server_id,
@@ -35,7 +37,7 @@ async fn worker(
 		Default::default(),
 		cf_framework::Environment::Production,
 	)
-	.map_err(crate::CloudflareError::from)?;
+	.map_err(CloudflareError::from)?;
 
 	// Delete main record
 	client
@@ -59,7 +61,7 @@ async fn worker(
 	sql_execute!(
 		[ctx, &crdb]
 		"
-		DELETE FROM db_cluster.cloudflare_misc
+		DELETE FROM db_cluster.servers_cloudflare
 		WHERE server_id = $1
 		",
 		server_id,

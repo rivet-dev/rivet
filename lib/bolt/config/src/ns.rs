@@ -600,7 +600,8 @@ pub struct Provisioning {
 	/// Whether or not to send a taint message in the next cluster update.
 	#[serde(default)]
 	pub taint: bool,
-	/// How many empty job servers to have at all times. Used in the simple provisioning algorithm.
+	/// How many empty job servers to have at all times. Used in the simple provisioning algorithm on Rivet
+	/// Enterprise.
 	#[serde(default = "default_job_server_provision_margin")]
 	pub job_server_provision_margin: u32,
 	#[serde(default)]
@@ -624,6 +625,7 @@ impl Default for ProvisioningAcmeDirectory {
 #[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(deny_unknown_fields)]
 pub struct ProvisioningCluster {
+	/// Identifier name of the default cluster.
 	name_id: String,
 	#[serde(default)]
 	pub datacenters: HashMap<String, ProvisioningDatacenter>,
@@ -632,6 +634,7 @@ pub struct ProvisioningCluster {
 #[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(deny_unknown_fields)]
 pub struct ProvisioningDatacenter {
+	/// Randomly generated ID for the given datacenter.
 	pub datacenter_id: Uuid,
 	pub display_name: String,
 	pub provider: ProvisioningProvider,

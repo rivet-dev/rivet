@@ -12,7 +12,7 @@ message Request {
 message Response {
     message Datacenter {
         rivet.common.Uuid datacenter_id = 1;
-        optional rivet.backend.net.Coordinates coords = 2; 
+        rivet.backend.net.Coordinates coords = 2; 
     }
 
     repeated Datacenter datacenters = 1;

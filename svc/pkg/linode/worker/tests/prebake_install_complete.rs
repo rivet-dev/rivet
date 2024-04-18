@@ -47,7 +47,7 @@ async fn prebake_install_complete(ctx: TestCtx) {
 			[ctx, (String,)]
 			"
 			SELECT public_ip
-			FROM db_cluster.server_images_linode_misc
+			FROM db_cluster.server_images_linode
 			WHERE
 				provider = $1 AND
 				install_hash = $2 AND
@@ -83,7 +83,7 @@ async fn prebake_install_complete(ctx: TestCtx) {
 			"
 			SELECT EXISTS (
 				SELECT 1
-				FROM db_cluster.server_images_linode_misc
+				FROM db_cluster.server_images_linode
 				WHERE
 					provider = $1 AND
 					install_hash = $2 AND

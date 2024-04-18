@@ -3,7 +3,7 @@ use chirp_worker::prelude::*;
 #[worker_test]
 async fn empty(ctx: TestCtx) {
 	let datacenters_res = op!([ctx] cluster_datacenter_list {
-		cluster_ids: vec![util::env::default_cluster_id().into()],
+		cluster_ids: vec![util_cluster::default_cluster_id().into()],
 	})
 	.await
 	.unwrap();

@@ -44,6 +44,8 @@ async fn worker(ctx: &OperationContext<cluster::msg::server_drain::Message>) -> 
 	));
 	match pool_type {
 		backend::cluster::PoolType::Job => {
+			// This worker will never be called if the server has no nomad instance running. This should be an
+			// unreachable log.
 			let Some(nomad_node_id) = server.nomad_node_id else {
 				tracing::error!("server does not have nomad running, cannot drain");
 				return Ok(());

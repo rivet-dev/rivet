@@ -17,7 +17,7 @@ async fn basic(ctx: TestCtx) {
 		server_id: Some(server_id.into()),
 		provider_datacenter_id: "us-southeast".to_string(),
 		hardware: Some(backend::cluster::Hardware {
-			provider_hardware: util_cluster::test::HARDWARE.to_string(),
+			provider_hardware: util_cluster::test::LINODE_HARDWARE.to_string(),
 		}),
 		pool_type: pool_type as i32,
 		vlan_ip: vlan_ip.to_string(),

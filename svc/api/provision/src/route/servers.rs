@@ -20,6 +20,7 @@ pub async fn info(
 		ips: vec![public_ip.to_string()],
 	})
 	.await?;
+
 	let server = unwrap!(servers_res.servers.first(), "server not found");
 	let server_id = unwrap!(server.server_id);
 

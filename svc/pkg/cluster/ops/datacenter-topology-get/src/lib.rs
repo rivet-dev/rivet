@@ -44,6 +44,7 @@ pub async fn handle(
 	// Fetch batch data from nomad
 	let (allocation_info, node_info) = tokio::try_join!(
 		async {
+			// Request is not paginated
 			allocations_api::get_allocations(
 				&NOMAD_CONFIG,
 				None,
@@ -62,6 +63,7 @@ pub async fn handle(
 			.map_err(Into::<GlobalError>::into)
 		},
 		async {
+			// Request is not paginated
 			nodes_api::get_nodes(
 				&NOMAD_CONFIG,
 				None,
@@ -80,7 +82,7 @@ pub async fn handle(
 		},
 	)?;
 
-	// Fill in empty datacenters
+	// Preempt datacenters
 	let mut datacenters = datacenter_ids
 		.iter()
 		.map(|datacenter_id| {
@@ -117,7 +119,8 @@ pub async fn handle(
 						let task_state = unwrap!(task_states.get(task_name));
 						let state = unwrap_ref!(task_state.state);
 
-						// Only count pending, running, or failed tasks
+						// Only count pending, running, or failed tasks. In a "failed" allocation, all of the
+						// tasks are have a "dead" state
 						if state != "pending" && state != "running" && state != "failed" {
 							continue;
 						}
@@ -149,12 +152,7 @@ pub async fn handle(
 			disk: unwrap!(unwrap_ref!(resources.disk).disk_mb) as u64,
 		};
 
-		let datacenter = datacenters.entry(server.datacenter_id).or_insert_with(|| {
-			cluster::datacenter_topology_get::response::Datacenter {
-				datacenter_id: Some(server.datacenter_id.into()),
-				servers: Vec::new(),
-			}
-		});
+		let datacenter = unwrap!(datacenters.get_mut(&server.datacenter_id));
 
 		datacenter
 			.servers

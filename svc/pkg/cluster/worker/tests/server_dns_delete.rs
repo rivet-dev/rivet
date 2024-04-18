@@ -51,7 +51,7 @@ async fn server_dns_delete(ctx: TestCtx) {
 		"
 		SELECT EXISTS (
 			SELECT 1
-			FROM db_cluster.cloudflare_misc
+			FROM db_cluster.servers_cloudflare
 			WHERE server_id = $1
 		)
 		",

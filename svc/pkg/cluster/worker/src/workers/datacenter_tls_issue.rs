@@ -14,6 +14,8 @@ use trust_dns_resolver::{
 	TokioAsyncResolver,
 };
 
+use crate::util::CloudflareError;
+
 const ENCRYPT_EMAIL: &str = "letsencrypt@rivet.gg";
 
 #[worker(name = "cluster-datacenter-tls-issue", timeout = 300)]
@@ -29,7 +31,7 @@ async fn worker(
 		Default::default(),
 		cf_framework::Environment::Production,
 	)
-	.map_err(crate::CloudflareError::from)?;
+	.map_err(CloudflareError::from)?;
 
 	// Fetch ACME account registration
 	let account = acme_account().await?;
@@ -257,7 +259,7 @@ async fn delete_dns_record(
 
 async fn poll_txt_dns(hostname: &str, content: &str) -> GlobalResult<()> {
 	// Because the dns resolver has its own internal cache, we create a new one for each poll function call
-	// so that clearing cache does not affect other concurrently txt lookup calls
+	// so that clearing cache does not affect other concurrent txt lookup calls
 	let dns_resolver =
 		TokioAsyncResolver::tokio(ResolverConfig::cloudflare_tls(), ResolverOpts::default());
 

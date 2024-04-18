@@ -64,7 +64,7 @@ async fn worker(ctx: &OperationContext<user::msg::create::Message>) -> GlobalRes
 		let display_name = gen_display_name(display_name.as_deref().unwrap_or("Guest"));
 
 		if let Some(x) = insert_user(
-			&ctx,
+			ctx,
 			user_id,
 			display_name.clone(),
 			avatar_upload_id,

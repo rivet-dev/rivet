@@ -103,7 +103,7 @@ async fn run_for_linode_account(
 				SELECT
 					install_hash, datacenter_id, pool_type,
 					ssh_key_id, linode_id, firewall_id
-				FROM db_cluster.server_images_linode_misc
+				FROM db_cluster.server_images_linode
 				WHERE image_id = ANY($1)
 				",
 				image_ids,
@@ -131,11 +131,11 @@ async fn run_for_linode_account(
 				[ctx, @tx tx]
 				"
 				UPDATE db_cluster.server_images AS i
-				SET image_id = m.image_id
+				SET provider_image_id = m.image_id
 				FROM (
 					SELECT
 						install_hash, datacenter_id, pool_type, image_id
-					FROM db_cluster.server_images_linode_misc AS s
+					FROM db_cluster.server_images_linode AS s
 					INNER JOIN jsonb_array_elements($1::JSONB) AS q
 					ON
 						s.install_hash = (q->>0)::TEXT AND
@@ -157,7 +157,7 @@ async fn run_for_linode_account(
 			sql_execute!(
 				[ctx, @tx tx]
 				"
-				DELETE FROM db_cluster.server_images_linode_misc AS s
+				DELETE FROM db_cluster.server_images_linode AS s
 				USING jsonb_array_elements($1::JSONB) AS q
 				WHERE
 					s.install_hash = (q->>0)::TEXT AND

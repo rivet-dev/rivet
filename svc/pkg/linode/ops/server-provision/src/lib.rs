@@ -2,7 +2,8 @@ use proto::backend::{self, cluster::PoolType, pkg::*};
 use rivet_operation::prelude::*;
 use util_linode::api;
 
-#[operation(name = "linode-server-provision", timeout = 150)]
+// Less than the timeout in cluster-server-provision
+#[operation(name = "linode-server-provision", timeout = 245)]
 pub async fn handle(
 	ctx: OperationContext<linode::server_provision::Request>,
 ) -> GlobalResult<linode::server_provision::Response> {
@@ -62,13 +63,18 @@ pub async fn handle(
 	let client = util_linode::Client::new(datacenter.provider_api_token.clone()).await?;
 
 	// Create SSH key
-	let ssh_key_res = api::create_ssh_key(&client, &server_id.to_string()).await?;
+	let ssh_key_res = api::create_ssh_key(
+		&client,
+		&server_id.to_string(),
+		ctx.tags.iter().any(|tag| tag == "test"),
+	)
+	.await?;
 
 	// Write SSH key id
 	sql_execute!(
 		[ctx, &crdb]
 		"
-		INSERT INTO db_cluster.linode_misc (
+		INSERT INTO db_cluster.servers_linode (
 			server_id,
 			ssh_key_id
 		)
@@ -87,7 +93,7 @@ pub async fn handle(
 	sql_execute!(
 		[ctx, &crdb]
 		"
-		UPDATE db_cluster.linode_misc
+		UPDATE db_cluster.servers_linode
 		SET linode_id = $2
 		WHERE server_id = $1
 		",
@@ -121,7 +127,7 @@ pub async fn handle(
 	sql_execute!(
 		[ctx, &crdb]
 		"
-		UPDATE db_cluster.linode_misc
+		UPDATE db_cluster.servers_linode
 		SET firewall_id = $2
 		WHERE server_id = $1
 		",
@@ -215,7 +221,7 @@ async fn get_custom_image(
 				VALUES ($1, $2, $3, $4, $5)
 				ON CONFLICT (provider, install_hash, datacenter_id, pool_type) DO UPDATE
 					SET
-						image_id = NULL,
+						provider_image_id = NULL,
 						create_ts = $5
 					WHERE s.create_ts < $6
 				RETURNING provider, install_hash, datacenter_id, pool_type
@@ -230,16 +236,12 @@ async fn get_custom_image(
 					pool_type = $4
 			)
 		SELECT
-			selected.image_id AS image_id,
+			selected.provider_image_id,
 			-- Primary key is not null
 			(updated.provider IS NOT NULL) AS updated
 		FROM selected
 		FULL OUTER JOIN updated
-		ON
-			selected.provider = updated.provider AND
-			selected.install_hash = updated.install_hash AND
-			selected.datacenter_id = updated.datacenter_id AND
-			selected.pool_type = updated.pool_type
+		ON true
 		",
 		provider as i64,
 		util_cluster::INSTALL_SCRIPT_HASH,
@@ -252,5 +254,5 @@ async fn get_custom_image(
 	.await?;
 
 	// Updated is true if this specific sql call either reset (if expired) or inserted the row
-	Ok((image_id, updated))
+	Ok((if updated { None } else { image_id }, updated))
 }

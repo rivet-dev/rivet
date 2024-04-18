@@ -32,7 +32,9 @@ If `cluster-datacenter-scale` determines that there are less servers in a [pool]
 
 -   ### Creating a new server
 
-    1. Before the new server is provisioned, it checks if a [prebaked](#prebaking) image for the given [pool](#pool) already exists. If it does, the prebake image is copied to the newly created disk and no install procedure is required. If the prebake image does not exist, it will be created on a separate prebake server. The current server being created will be ssh'd into and run install scripts that are customized based on the [pool](#pool) this server is assigned to.
+    First, a hardware tier is chosen from the list of user-defined hardware in the [pool](#pool) config. If there is any failure in provisioning this chosen hardware (i.e. the specific tier ran out of capacity with the chosen provider), the next hardware choice will be chosen.
+
+    Before the new server is provisioned, we check if a [prebaked](#prebaking) image for the given [pool](#pool) already exists. If it does, the prebake image is copied to the newly created disk and no install procedure is required. If the prebake image does not exist, it will be created on a separate prebake server. The current server being created will be ssh'd into and will run install scripts that are customized based on the [pool](#pool) this server is a part of.
 
 -   ### [Prebaking](#prebaking)
 

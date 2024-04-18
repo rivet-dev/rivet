@@ -31,6 +31,7 @@ pub struct SshKeyResponse {
 pub async fn create_ssh_key(
 	client: &Client,
 	label: &str,
+	is_test: bool,
 ) -> GlobalResult<SshKeyResponse> {
 	tracing::info!("creating linode ssh key");
 
@@ -41,11 +42,18 @@ pub async fn create_ssh_key(
 	// Extract the public key
 	let public_key = private_key.public_key().to_string();
 
+	// HACK: We use this when cleaning up tests; we check if the label has `test-` in it
+	let label = if is_test {
+		format!("test-{label}")
+	} else {
+		label.to_string()
+	};
+
 	let res = client
 		.post::<CreateSshKeyResponse>(
 			"/profile/sshkeys",
 			json!({
-				// Label must be < 64 characters for some stupid reason
+				// Label must be < 64 characters
 				"label": label,
 				"ssh_key": public_key,
 			}),

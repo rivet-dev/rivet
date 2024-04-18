@@ -1,13 +1,15 @@
-use std::net::Ipv4Addr;
+use std::net::IpAddr;
 
 use chirp_worker::prelude::*;
 use cloudflare::{endpoints as cf, framework as cf_framework, framework::async_api::ApiClient};
 use proto::backend::pkg::*;
 
+use crate::util::CloudflareError;
+
 #[derive(sqlx::FromRow)]
 struct Server {
 	datacenter_id: Uuid,
-	public_ip: String,
+	public_ip: IpAddr,
 	cloud_destroy_ts: Option<i64>,
 }
 
@@ -36,7 +38,10 @@ async fn worker(
 
 	let cf_token = util::env::read_secret(&["cloudflare", "terraform", "auth_token"]).await?;
 	let zone_id = unwrap!(util::env::cloudflare::zone::job::id(), "dns not configured");
-	let public_ip = server.public_ip.as_str().parse::<Ipv4Addr>()?;
+	let public_ip = match server.public_ip {
+		IpAddr::V4(ip) => ip,
+		IpAddr::V6(_) => bail!("unexpected ipv6 public ip"),
+	};
 
 	// Create cloudflare HTTP client
 	let client = cf_framework::async_api::Client::new(
@@ -44,7 +49,7 @@ async fn worker(
 		Default::default(),
 		cf_framework::Environment::Production,
 	)
-	.map_err(crate::CloudflareError::from)?;
+	.map_err(CloudflareError::from)?;
 
 	let record_name = format!(
 		"*.lobby.{}.{}",
@@ -93,7 +98,7 @@ async fn worker(
 	sql_execute!(
 		[ctx]
 		"
-		INSERT INTO db_cluster.cloudflare_misc (
+		INSERT INTO db_cluster.servers_cloudflare (
 			server_id,
 			dns_record_id,
 			secondary_dns_record_id

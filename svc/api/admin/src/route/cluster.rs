@@ -20,13 +20,6 @@ pub async fn server_ips(
 	watch_index: WatchIndexQuery,
 	query: ServerIpsQuery,
 ) -> GlobalResult<models::AdminClusterGetServerIpsResponse> {
-	if query.server_id.is_none() && query.pool.is_none() {
-		bail_with!(
-			API_BAD_QUERY,
-			error = "expected one of: `server_id`, `pool`"
-		);
-	}
-
 	let ips = match (query.server_id, query.pool) {
 		(Some(server_id), _) => {
 			let servers_res = op!([ctx] cluster_server_get {
@@ -43,7 +36,7 @@ pub async fn server_ips(
 		(_, Some(pool)) => {
 			let pool_type = Some(ApiInto::<backend::cluster::PoolType>::api_into(pool));
 
-			let cluster_id = util::env::default_cluster_id();
+			let cluster_id = util_cluster::default_cluster_id();
 			let server_list_res = op!([ctx] cluster_server_list {
 				cluster_ids: vec![cluster_id.into()],
 			})
@@ -64,8 +57,12 @@ pub async fn server_ips(
 				.filter_map(|server| server.public_ip.clone())
 				.collect::<Vec<_>>()
 		}
-		// Handled earlier
-		(None, None) => unreachable!(),
+		(None, None) => {
+			bail_with!(
+				API_BAD_QUERY,
+				error = "expected one of: `server_id`, `pool`"
+			);
+		}
 	};
 
 	Ok(models::AdminClusterGetServerIpsResponse { ips })

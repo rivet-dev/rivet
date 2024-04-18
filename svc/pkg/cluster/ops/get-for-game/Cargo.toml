@@ -9,6 +9,7 @@ license = "Apache-2.0"
 chirp-client = { path = "../../../../../lib/chirp/client" }
 prost = "0.10"
 rivet-operation = { path = "../../../../../lib/operation/core" }
+util-cluster = { package = "rivet-util-cluster", path = "../../util" }
 
 [dependencies.sqlx]
 version = "0.7"

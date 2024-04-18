@@ -38,6 +38,7 @@ tracing-subscriber = { version = "0.3", default-features = false, features = [
 ] }
 url = "2.2.2"
 uuid = { version = "1", features = ["v4"] }
+util-cluster = { package = "rivet-util-cluster", path = "../../pkg/cluster/util" }
 util-mm = { package = "rivet-util-mm", path = "../../pkg/mm/util" }
 
 cluster-server-get = { path = "../../pkg/cluster/ops/server-get" }

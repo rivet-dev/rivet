@@ -116,11 +116,6 @@ fn modify_job_spec(
 		"main task must not have a lifecycle hook"
 	);
 
-	// Disable logs
-	// if let Some(log_config) = main_task.log_config.as_mut() {
-	// 	log_config.disabled = Some(true);
-	// }
-
 	// Configure networks
 	let networks = unwrap!(task_group.networks.as_mut());
 	ensure_eq!(1, networks.len(), "must have exactly 1 network");
@@ -192,7 +187,7 @@ fn gen_cleanup_task() -> nomad_client_new::models::Task {
 			embedded_tmpl: Some(formatdoc!(
 				r#"
 				import ssl
-				import urllib.request, json, os, mimetypes, sys, socket
+				import urllib.request, json, os, mimetypes, sys
 
 				BEARER = '{{{{env "NOMAD_META_JOB_RUN_TOKEN"}}}}'
 

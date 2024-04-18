@@ -11,7 +11,7 @@ pub async fn list_tiers(
 	_watch_index: WatchIndexQuery,
 ) -> GlobalResult<models::CloudGetRegionTiersResponse> {
 	let datacenters_res = op!([ctx] cluster_datacenter_list {
-		cluster_ids: vec![util::env::default_cluster_id().into()],
+		cluster_ids: vec![util_cluster::default_cluster_id().into()],
 	})
 	.await?;
 	let cluster = unwrap!(datacenters_res.clusters.first());

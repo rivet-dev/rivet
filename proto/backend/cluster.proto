@@ -36,6 +36,7 @@ message Datacenter {
 
 message Pool {
     PoolType pool_type = 1;
+    // See docs on failover (/docs/packages/cluster/SERVER_PROVISIONING.md#creating-a-new-server)
     repeated Hardware hardware = 2;
     uint32 desired_count = 3;
     uint32 max_count = 4;

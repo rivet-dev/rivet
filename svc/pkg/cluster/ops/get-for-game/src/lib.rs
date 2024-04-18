@@ -32,7 +32,7 @@ pub async fn handle(
 					game_id: Some(game_id.into()),
 					cluster_id: Some(
 						cluster_id
-							.unwrap_or_else(util::env::default_cluster_id)
+							.unwrap_or_else(util_cluster::default_cluster_id)
 							.into(),
 					),
 				},

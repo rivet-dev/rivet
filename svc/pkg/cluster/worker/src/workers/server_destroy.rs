@@ -6,29 +6,37 @@ struct Server {
 	datacenter_id: Uuid,
 	pool_type: i64,
 	provider_server_id: Option<String>,
+	cloud_destroy_ts: Option<i64>,
 }
 
 #[worker(name = "cluster-server-destroy")]
 async fn worker(ctx: &OperationContext<cluster::msg::server_destroy::Message>) -> GlobalResult<()> {
 	let server_id = unwrap_ref!(ctx.server_id).as_uuid();
-	let crdb = ctx.crdb().await?;
 
 	let server = sql_fetch_one!(
-		[ctx, Server, &crdb]
+		[ctx, Server]
 		"
-		SELECT
-			datacenter_id, pool_type, provider_server_id
-		FROM db_cluster.servers AS s
-		LEFT JOIN db_cluster.cloudflare_misc AS cf
-		ON s.server_id = cf.server_id
-		WHERE s.server_id = $1
+		SELECT datacenter_id, pool_type, provider_server_id, cloud_destroy_ts
+		FROM db_cluster.servers
+		WHERE server_id = $1
 		",
 		&server_id,
 		util::timestamp::now(),
 	)
 	.await?;
+
 	if server.provider_server_id.is_none() && !ctx.force {
+		if ctx.req_dt() > util::duration::minutes(25) {
+			tracing::error!("discarding stale message");
+			return Ok(());
+		}
+
 		bail!("server is not completely provisioned yet, retrying");
+	}
+
+	if server.cloud_destroy_ts.is_none() {
+		tracing::error!("attempting to destroy server that doesn't have `cloud_destroy_ts` set");
+		return Ok(());
 	}
 
 	let datacenter_res = op!([ctx] cluster_datacenter_get {

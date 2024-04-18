@@ -27,7 +27,7 @@ pub async fn handle(
 		[ctx, LinodeData, &crdb]
 		"
 		SELECT ssh_key_id, linode_id, firewall_id
-		FROM db_cluster.linode_misc
+		FROM db_cluster.servers_linode
 		WHERE server_id = $1
 		",
 		server_id,
@@ -56,7 +56,7 @@ pub async fn handle(
 	sql_execute!(
 		[ctx, &crdb]
 		"
-		DELETE FROM db_cluster.linode_misc
+		DELETE FROM db_cluster.servers_linode
 		WHERE server_id = $1
 		",
 		server_id,

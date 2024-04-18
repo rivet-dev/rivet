@@ -9,7 +9,8 @@ struct ProvisionResponse {
 	already_installed: bool,
 }
 
-#[worker(name = "cluster-server-provision", timeout = 150)]
+// More than the timeout in linode-server-provision
+#[worker(name = "cluster-server-provision", timeout = 300)]
 async fn worker(
 	ctx: &OperationContext<cluster::msg::server_provision::Message>,
 ) -> GlobalResult<()> {
@@ -63,23 +64,22 @@ async fn worker(
 	// Get a new vlan ip
 	let vlan_ip = get_vlan_ip(ctx, &crdb, server_id, pool_type).await?;
 
-	let provision_res = match provider {
-		backend::cluster::Provider::Linode => {
-			let mut hardware_list = pool.hardware.iter();
+	// Iterate through list of hardware and attempt to schedule a server. Goes to the next
+	// hardware if an error happens during provisioning
+	let mut hardware_list = pool.hardware.iter();
+	let provision_res = loop {
+		// List exhausted
+		let Some(hardware) = hardware_list.next() else {
+			break None;
+		};
 
-			// Iterate through list of hardware and attempt to schedule a server. Goes to the next
-			// hardware if an error happens during provisioning
-			loop {
-				// List exhausted
-				let Some(hardware) = hardware_list.next() else {
-					break None;
-				};
+		tracing::info!(
+			"attempting to provision hardware: {}",
+			hardware.provider_hardware
+		);
 
-				tracing::info!(
-					"attempting to provision hardware: {}",
-					hardware.provider_hardware
-				);
-
+		match provider {
+			backend::cluster::Provider::Linode => {
 				let res = op!([ctx] linode_server_provision {
 					datacenter_id: ctx.datacenter_id,
 					server_id: ctx.server_id,

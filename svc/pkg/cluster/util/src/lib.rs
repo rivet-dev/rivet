@@ -14,6 +14,8 @@ const RESERVE_SYSTEM_MEMORY: u64 = 512;
 const RESERVE_LB_MEMORY: u64 = 512;
 const RESERVE_MEMORY: u64 = RESERVE_SYSTEM_MEMORY + RESERVE_LB_MEMORY;
 
+const CPU_PER_CORE: u64 = 1999;
+
 /// Provider agnostic hardware specs.
 #[derive(Debug)]
 pub struct JobNodeConfig {
@@ -34,7 +36,7 @@ impl JobNodeConfig {
 
 		JobNodeConfig {
 			cpu_cores: instance_type.vcpus,
-			cpu: instance_type.vcpus * 1999,
+			cpu: instance_type.vcpus * CPU_PER_CORE,
 			memory,
 			disk: instance_type.disk,
 			bandwidth: instance_type.transfer * 1000,
@@ -42,7 +44,7 @@ impl JobNodeConfig {
 	}
 
 	pub fn cpu_per_core(&self) -> u64 {
-		1999
+		CPU_PER_CORE
 	}
 
 	pub fn memory_per_core(&self) -> u64 {
@@ -56,6 +58,11 @@ impl JobNodeConfig {
 	pub fn bandwidth_per_core(&self) -> u64 {
 		self.bandwidth / self.cpu_cores
 	}
+}
+
+// Cluster id for provisioning servers
+pub fn default_cluster_id() -> Uuid {
+	Uuid::nil()
 }
 
 pub fn server_name(
@@ -74,4 +81,3 @@ pub fn server_name(
 		"{ns}-{provider_datacenter_id}-{pool_type_str}-{server_id}",
 	)
 }
-
