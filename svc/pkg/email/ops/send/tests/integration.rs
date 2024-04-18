@@ -3,6 +3,10 @@ use proto::backend::pkg::*;
 
 #[worker_test]
 async fn empty(ctx: TestCtx) {
+	if !util::feature::email() {
+		return;
+	}
+
 	op!([ctx] email_send {
 		from_address: Some(email::send::Address {
 			email: "hello@rivet.gg".into(),

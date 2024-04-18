@@ -30,3 +30,7 @@ pub fn job_run() -> bool {
 pub fn server_provision() -> bool {
 	std::env::var("RIVET_DEFAULT_CLUSTER_CONFIG").ok().is_some()
 }
+
+pub fn email() -> bool {
+	std::env::var("SENDGRID_KEY").ok().is_some()
+}

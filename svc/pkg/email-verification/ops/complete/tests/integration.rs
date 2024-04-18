@@ -3,6 +3,10 @@ use proto::backend::pkg::*;
 
 #[worker_test]
 async fn correct(ctx: TestCtx) {
+	if !util::feature::email() {
+		return;
+	}
+
 	let create_res = op!([ctx] email_verification_create {
 		email: "test@rivet.gg".into(),
 	})
@@ -53,6 +57,10 @@ async fn correct(ctx: TestCtx) {
 
 #[worker_test]
 async fn incorrect(ctx: TestCtx) {
+	if !util::feature::email() {
+		return;
+	}
+
 	let create_res = op!([ctx] email_verification_create {
 		email: "test@rivet.gg".into(),
 	})

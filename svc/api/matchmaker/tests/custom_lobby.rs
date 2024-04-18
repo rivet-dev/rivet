@@ -8,6 +8,10 @@ use serde_json::json;
 
 #[tokio::test(flavor = "multi_thread")]
 async fn create_custom_lobby() {
+	if !util::feature::dns() || !util::feature::job_run() {
+		return;
+	}
+
 	let ctx = Ctx::init().await;
 
 	{

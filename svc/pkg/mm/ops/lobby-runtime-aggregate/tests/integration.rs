@@ -98,6 +98,10 @@ async fn missing_columns(ctx: TestCtx) {
 
 #[worker_test]
 async fn out_of_range(ctx: TestCtx) {
+	if !util::feature::job_run() {
+		return;
+	}
+
 	let lobby_res = op!([ctx] faker_mm_lobby {
 		..Default::default()
 	})

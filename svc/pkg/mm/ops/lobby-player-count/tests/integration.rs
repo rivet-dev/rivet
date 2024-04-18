@@ -10,6 +10,10 @@ struct TestPlayer {
 
 #[worker_test]
 async fn empty(ctx: TestCtx) {
+	if !util::feature::job_run() {
+		return;
+	}
+
 	let lobby_a = op!([ctx] faker_mm_lobby {
 		..Default::default()
 	})

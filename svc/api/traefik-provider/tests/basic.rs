@@ -200,6 +200,10 @@ async fn cdn() {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn job_run() {
+	if !util::feature::job_run() {
+		return;
+	}
+
 	struct Namespace {
 		namespace_id: Uuid,
 		domain: String,
@@ -315,6 +319,10 @@ mod cdn_suite {
 
 	#[tokio::test(flavor = "multi_thread")]
 	async fn cdn_all() {
+		if !util::feature::dns() {
+			return;
+		}
+
 		let ctx = Ctx::init().await;
 
 		// Create CDN

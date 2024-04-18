@@ -3,6 +3,10 @@ use proto::backend;
 
 #[worker_test]
 async fn normal(ctx: TestCtx) {
+	if !util::feature::email() {
+		return;
+	}
+
 	let res = op!([ctx] email_verification_create {
 		email: "test@rivet.gg".into(),
 	})
@@ -26,6 +30,10 @@ async fn normal(ctx: TestCtx) {
 
 #[worker_test]
 async fn with_game(ctx: TestCtx) {
+	if !util::feature::email() {
+		return;
+	}
+
 	let game_res = op!([ctx] faker_game {}).await.unwrap();
 	let game_id = game_res.game_id.unwrap().as_uuid();
 

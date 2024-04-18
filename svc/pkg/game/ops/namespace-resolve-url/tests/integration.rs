@@ -27,6 +27,10 @@ async fn test_no_ns(ctx: TestCtx) {
 
 #[worker_test]
 async fn test_with_ns(ctx: TestCtx) {
+	if !util::feature::dns() {
+		return;
+	}
+
 	let game_data = prepare_game(&ctx).await;
 	for ns in &game_data.namespaces {
 		let domain_main_res = test_url(
