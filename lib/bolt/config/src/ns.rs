@@ -641,9 +641,6 @@ pub struct ProvisioningDatacenter {
 	pub provider_datacenter_name: String,
 	#[serde(default)]
 	pub build_delivery_method: ProvisioningBuildDeliveryMethod,
-	/// Nomad drain time in seconds.
-	pub drain_timeout: u32,
-
 	#[serde(default)]
 	pub pools: HashMap<ProvisioningDatacenterPoolType, ProvisioningDatacenterPool>,
 }
@@ -671,6 +668,8 @@ pub struct ProvisioningDatacenterPool {
 	pub hardware: Vec<ProvisioningDatacenterHardware>,
 	pub desired_count: u32,
 	pub max_count: u32,
+	/// Server drain time in ms.
+	pub drain_timeout: u64,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]

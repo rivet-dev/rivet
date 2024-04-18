@@ -42,6 +42,14 @@ async fn worker(ctx: &OperationContext<cluster::msg::server_drain::Message>) -> 
 	let pool_type = unwrap!(backend::cluster::PoolType::from_i32(
 		server.pool_type as i32
 	));
+	let pool = unwrap!(
+		datacenter
+			.pools
+			.iter()
+			.find(|pool| pool.pool_type == server.pool_type as i32),
+		"missing pool"
+	);
+
 	match pool_type {
 		backend::cluster::PoolType::Job => {
 			// This worker will never be called if the server has no nomad instance running. This should be an
@@ -56,7 +64,7 @@ async fn worker(ctx: &OperationContext<cluster::msg::server_drain::Message>) -> 
 				&nomad_node_id,
 				models::NodeUpdateDrainRequest {
 					drain_spec: Some(Box::new(models::DrainSpec {
-						deadline: Some(datacenter.drain_timeout as i64),
+						deadline: Some((pool.drain_timeout / 1000) as i64),
 						ignore_system_jobs: None,
 					})),
 					mark_eligible: None,
@@ -90,10 +98,7 @@ async fn worker(ctx: &OperationContext<cluster::msg::server_drain::Message>) -> 
 			})
 			.await?;
 		}
-		_ => {
-			// Gracefully fail
-			tracing::error!("cannot undrain this pool type: {:?}", pool_type);
-		}
+		backend::cluster::PoolType::Ats => {}
 	}
 
 	Ok(())

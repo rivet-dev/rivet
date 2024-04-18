@@ -21,8 +21,6 @@ message Message {
 
     repeated rivet.backend.cluster.Pool pools = 8;
     rivet.backend.cluster.BuildDeliveryMethod build_delivery_method = 9;
-    // Nomad drain time in seconds.
-    uint64 drain_timeout = 10;
 }
 
 // Helper proto for writing to sql

@@ -11,6 +11,7 @@ import "proto/backend/cluster.proto";
 /// ]
 message Message {
     rivet.common.Uuid request_id = 1;
+
     string public_ip = 2;
     rivet.common.Uuid datacenter_id = 3;
     // If set in server install message

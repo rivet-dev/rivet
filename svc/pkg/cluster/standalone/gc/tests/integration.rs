@@ -115,6 +115,7 @@ async fn setup(
 		}],
 		desired_count: 0,
 		max_count: 0,
+		drain_timeout: DRAIN_TIMEOUT as u64,
 	}];
 	let provider = backend::cluster::Provider::Linode;
 
@@ -139,7 +140,6 @@ async fn setup(
 		pools: pools.clone(),
 
 		build_delivery_method: backend::cluster::BuildDeliveryMethod::TrafficServer as i32,
-		drain_timeout: DRAIN_TIMEOUT as u64,
 	})
 	.await
 	.unwrap();

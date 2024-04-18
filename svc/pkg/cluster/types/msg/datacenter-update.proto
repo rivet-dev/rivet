@@ -12,7 +12,6 @@ import "proto/backend/cluster.proto";
 message Message {
     rivet.common.Uuid datacenter_id = 1;
     repeated PoolUpdate pools = 2;
-    optional uint64 drain_timeout = 3;
 }
 
 message PoolUpdate {
@@ -22,4 +21,5 @@ message PoolUpdate {
     repeated rivet.backend.cluster.Hardware hardware = 2;
     optional uint32 desired_count = 3;
     optional uint32 max_count = 4;
+    optional uint64 drain_timeout = 5;
 }

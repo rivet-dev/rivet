@@ -161,7 +161,7 @@ async fn inner(
 	// Sort job servers by memory usage
 	servers.sort_unstable_by_key(|server| memory_by_server.get(&server.server_id));
 
-	// TODO: Sort gg and ats servers by cpu usage
+	// TODO: RVT-3732 Sort gg and ats servers by cpu usage
 	// servers.sort_by_key
 
 	let mut msgs = Vec::new();

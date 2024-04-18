@@ -19,7 +19,6 @@ struct Datacenter {
 	provider_datacenter_name: String,
 	pools: HashMap<PoolType, Pool>,
 	build_delivery_method: BuildDeliveryMethod,
-	drain_timeout: u64,
 }
 
 #[derive(Deserialize)]
@@ -41,6 +40,7 @@ struct Pool {
 	hardware: Vec<Hardware>,
 	desired_count: u32,
 	max_count: u32,
+	drain_timeout: u64,
 }
 
 #[derive(Deserialize, PartialEq, Eq, Hash)]
@@ -205,6 +205,7 @@ pub async fn run_from_env(use_autoscaler: bool) -> GlobalResult<()> {
 							.collect::<Vec<_>>(),
 						desired_count,
 						max_count: Some(pool.max_count),
+						drain_timeout: Some(pool.drain_timeout),
 					}
 				})
 				.collect::<Vec<_>>();
@@ -212,8 +213,6 @@ pub async fn run_from_env(use_autoscaler: bool) -> GlobalResult<()> {
 			msg!([ctx] @wait cluster::msg::datacenter_update(datacenter.datacenter_id) {
 				datacenter_id: datacenter_id_proto,
 				pools: new_pools,
-				// Convert from seconds to ms
-				drain_timeout: Some(datacenter.drain_timeout * 1000),
 			})
 			.await?;
 		}
@@ -235,11 +234,11 @@ pub async fn run_from_env(use_autoscaler: bool) -> GlobalResult<()> {
 						hardware: pool.hardware.into_iter().map(Into::into).collect::<Vec<_>>(),
 						desired_count: pool.desired_count,
 						max_count: pool.max_count,
+						drain_timeout: pool.drain_timeout,
 					}
 				}).collect::<Vec<_>>(),
 
 				build_delivery_method: Into::<backend::cluster::BuildDeliveryMethod>::into(datacenter.build_delivery_method) as i32,
-				drain_timeout: datacenter.drain_timeout,
 			})
 			.await?;
 		}

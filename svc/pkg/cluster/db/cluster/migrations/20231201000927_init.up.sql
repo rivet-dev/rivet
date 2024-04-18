@@ -15,7 +15,6 @@ CREATE TABLE datacenters (
 	provider_api_token TEXT,
 	pools BYTES NOT NULL, -- rivet.backend.pkg.cluster.msg.datacenter_create.Pools
 	build_delivery_method INT NOT NULL,
-	drain_timeout INT NOT NULL,
 	create_ts INT NOT NULL,
 
 	UNIQUE (cluster_id, name_id),

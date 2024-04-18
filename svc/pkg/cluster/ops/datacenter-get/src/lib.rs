@@ -15,7 +15,6 @@ struct Datacenter {
 	provider_api_token: Option<String>,
 	pools: Vec<u8>,
 	build_delivery_method: i64,
-	drain_timeout: i64,
 }
 
 impl TryFrom<Datacenter> for backend::cluster::Datacenter {
@@ -35,7 +34,6 @@ impl TryFrom<Datacenter> for backend::cluster::Datacenter {
 			provider_api_token: value.provider_api_token,
 			pools,
 			build_delivery_method: value.build_delivery_method as i32,
-			drain_timeout: value.drain_timeout as u64,
 		})
 	}
 }
@@ -63,7 +61,6 @@ pub async fn handle(
 			provider_api_token,
 			pools,
 			build_delivery_method,
-			drain_timeout,
 			create_ts
 		FROM db_cluster.datacenters
 		WHERE datacenter_id = ANY($1)

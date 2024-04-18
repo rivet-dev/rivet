@@ -30,8 +30,6 @@ message Datacenter {
 
     repeated Pool pools = 8;
     BuildDeliveryMethod build_delivery_method = 9;
-    // Nomad drain time in seconds.
-    uint64 drain_timeout = 10;
 }
 
 message Pool {
@@ -40,6 +38,8 @@ message Pool {
     repeated Hardware hardware = 2;
     uint32 desired_count = 3;
     uint32 max_count = 4;
+    // Server drain timeout In ms
+    uint64 drain_timeout = 5;
 }
 
 enum PoolType {

@@ -52,7 +52,6 @@ async fn create_dc(ctx: &TestCtx) -> (Uuid, Uuid) {
 		pools: Vec::new(),
 
 		build_delivery_method: backend::cluster::BuildDeliveryMethod::TrafficServer as i32,
-		drain_timeout: 0,
 	})
 	.await
 	.unwrap();

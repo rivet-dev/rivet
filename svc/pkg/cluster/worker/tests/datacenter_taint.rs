@@ -73,8 +73,8 @@ async fn datacenter_taint(ctx: TestCtx) {
 			hardware: Vec::new(),
 			desired_count: Some(1),
 			max_count: Some(1),
+			drain_timeout: None,
 		}],
-		drain_timeout: None,
 	})
 	.await
 	.unwrap();
@@ -111,8 +111,8 @@ async fn datacenter_taint(ctx: TestCtx) {
 			hardware: Vec::new(),
 			desired_count: Some(0),
 			max_count: Some(0),
+			drain_timeout: None,
 		}],
-		drain_timeout: None,
 	})
 	.await
 	.unwrap();

@@ -22,6 +22,7 @@ pub async fn setup(ctx: &TestCtx, opts: Setup) -> SetupRes {
 		}],
 		desired_count: 0,
 		max_count: 0,
+		drain_timeout: opts.drain_timeout,
 	}];
 	let provider = backend::cluster::Provider::Linode;
 
@@ -46,7 +47,6 @@ pub async fn setup(ctx: &TestCtx, opts: Setup) -> SetupRes {
 		pools: pools.clone(),
 
 		build_delivery_method: backend::cluster::BuildDeliveryMethod::TrafficServer as i32,
-		drain_timeout: opts.drain_timeout,
 	})
 	.await
 	.unwrap();

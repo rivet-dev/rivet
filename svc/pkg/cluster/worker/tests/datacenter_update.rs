@@ -10,6 +10,7 @@ async fn datacenter_update(ctx: TestCtx) {
 		hardware: Vec::new(),
 		desired_count: 0,
 		max_count: 0,
+		drain_timeout: 0,
 	}];
 
 	msg!([ctx] cluster::msg::create(cluster_id) -> cluster::msg::create_complete {
@@ -33,7 +34,6 @@ async fn datacenter_update(ctx: TestCtx) {
 		pools: pools.clone(),
 
 		build_delivery_method: backend::cluster::BuildDeliveryMethod::TrafficServer as i32,
-		drain_timeout: 0,
 	})
 	.await
 	.unwrap();
@@ -45,8 +45,8 @@ async fn datacenter_update(ctx: TestCtx) {
 			hardware: Vec::new(),
 			desired_count: Some(1),
 			max_count: None,
+			drain_timeout: None,
 		}],
-		drain_timeout: None,
 	})
 	.await
 	.unwrap();
