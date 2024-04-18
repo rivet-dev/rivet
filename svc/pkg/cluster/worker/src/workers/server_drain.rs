@@ -1,4 +1,5 @@
 use chirp_worker::prelude::*;
+use futures_util::FutureExt;
 use nomad_client::{
 	apis::{configuration::Configuration, nodes_api},
 	models,
@@ -14,23 +15,43 @@ struct Server {
 	datacenter_id: Uuid,
 	pool_type: i64,
 	nomad_node_id: Option<String>,
+	is_not_draining: bool,
 }
 
 #[worker(name = "cluster-server-drain")]
 async fn worker(ctx: &OperationContext<cluster::msg::server_drain::Message>) -> GlobalResult<()> {
+	rivet_pools::utils::crdb::tx_no_retry(&ctx.crdb().await?, |tx| inner(ctx.clone(), tx).boxed())
+		.await?;
+
+	Ok(())
+}
+
+async fn inner(
+	ctx: OperationContext<cluster::msg::server_drain::Message>,
+	tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+) -> GlobalResult<()> {
 	let server_id = unwrap_ref!(ctx.server_id).as_uuid();
 
 	let server = sql_fetch_one!(
-		[ctx, Server]
+		[ctx, Server, @tx tx]
 		"
 		SELECT
-			datacenter_id, pool_type, nomad_node_id
+			datacenter_id,
+			pool_type,
+			nomad_node_id,
+			(drain_ts IS NULL) AS is_not_draining
 		FROM db_cluster.servers
 		WHERE server_id = $1
+		FOR UPDATE
 		",
 		server_id,
 	)
 	.await?;
+
+	if server.is_not_draining {
+		tracing::error!("attempting to drain server that was not set as draining");
+		return Ok(());
+	}
 
 	// Fetch datacenter config
 	let datacenter_res = op!([ctx] cluster_datacenter_get {
@@ -95,7 +116,7 @@ async fn worker(ctx: &OperationContext<cluster::msg::server_drain::Message>) -> 
 		backend::cluster::PoolType::Gg => {
 			// Delete DNS record
 			msg!([ctx] cluster::msg::server_dns_delete(server_id) {
-				server_id: ctx.server_id,
+				server_id: Some(server_id.into()),
 			})
 			.await?;
 		}
