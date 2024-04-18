@@ -1,104 +1,106 @@
-use proto::backend::pkg::*;
-use rivet_operation::prelude::*;
+// TODO: Rewrite with new api clients
 
-struct Ctx {
-	op_ctx: OperationContext<()>,
-	http_client: rivet_cf_verification::ClientWrapper,
-}
+// use proto::backend::pkg::*;
+// use rivet_operation::prelude::*;
 
-impl Ctx {
-	async fn init() -> Ctx {
-		let _ = tracing_subscriber::fmt()
-			.pretty()
-			.with_max_level(tracing::Level::INFO)
-			.with_target(false)
-			.try_init();
+// struct Ctx {
+// 	op_ctx: OperationContext<()>,
+// 	http_client: rivet_cf_verification::ClientWrapper,
+// }
 
-		let pools = rivet_pools::from_env("api-cf-verification-test")
-			.await
-			.unwrap();
-		let cache = rivet_cache::CacheInner::new(
-			"api-cf-verification-test".to_string(),
-			std::env::var("RIVET_SOURCE_HASH").unwrap(),
-			pools.redis_cache().unwrap(),
-		);
-		let client = chirp_client::SharedClient::from_env(pools.clone())
-			.expect("create client")
-			.wrap_new("api-cf-verification-test");
-		let conn = rivet_connection::Connection::new(client, pools, cache);
-		let op_ctx = OperationContext::new(
-			"api-cf-verification-test".to_string(),
-			std::time::Duration::from_secs(60),
-			conn,
-			Uuid::new_v4(),
-			Uuid::new_v4(),
-			util::timestamp::now(),
-			util::timestamp::now(),
-			(),
-			Vec::new(),
-		);
+// impl Ctx {
+// 	async fn init() -> Ctx {
+// 		let _ = tracing_subscriber::fmt()
+// 			.pretty()
+// 			.with_max_level(tracing::Level::INFO)
+// 			.with_target(false)
+// 			.try_init();
 
-		let http_client = rivet_cf_verification::Config::builder()
-			.set_uri("http://traefik.traefik.svc.cluster.local:80/cf-verification")
-			.build_client();
+// 		let pools = rivet_pools::from_env("api-cf-verification-test")
+// 			.await
+// 			.unwrap();
+// 		let cache = rivet_cache::CacheInner::new(
+// 			"api-cf-verification-test".to_string(),
+// 			std::env::var("RIVET_SOURCE_HASH").unwrap(),
+// 			pools.redis_cache().unwrap(),
+// 		);
+// 		let client = chirp_client::SharedClient::from_env(pools.clone())
+// 			.expect("create client")
+// 			.wrap_new("api-cf-verification-test");
+// 		let conn = rivet_connection::Connection::new(client, pools, cache);
+// 		let op_ctx = OperationContext::new(
+// 			"api-cf-verification-test".to_string(),
+// 			std::time::Duration::from_secs(60),
+// 			conn,
+// 			Uuid::new_v4(),
+// 			Uuid::new_v4(),
+// 			util::timestamp::now(),
+// 			util::timestamp::now(),
+// 			(),
+// 			Vec::new(),
+// 		);
 
-		Ctx {
-			op_ctx,
-			http_client,
-		}
-	}
+// 		let http_client = rivet_cf_verification::Config::builder()
+// 			.set_uri("http://traefik.traefik.svc.cluster.local:80/cf-verification")
+// 			.build_client();
 
-	fn chirp(&self) -> &chirp_client::Client {
-		self.op_ctx.chirp()
-	}
+// 		Ctx {
+// 			op_ctx,
+// 			http_client,
+// 		}
+// 	}
 
-	fn op_ctx(&self) -> &OperationContext<()> {
-		&self.op_ctx
-	}
-}
+// 	fn chirp(&self) -> &chirp_client::Client {
+// 		self.op_ctx.chirp()
+// 	}
 
-#[tokio::test(flavor = "multi_thread")]
-async fn custom_hostname_verification() {
-	if !util::feature::cf_custom_hostname() {
-		return;
-	};
+// 	fn op_ctx(&self) -> &OperationContext<()> {
+// 		&self.op_ctx
+// 	}
+// }
 
-	let ctx = Ctx::init().await;
+// #[tokio::test(flavor = "multi_thread")]
+// async fn custom_hostname_verification() {
+// 	if !util::feature::cf_custom_hostname() {
+// 		return;
+// 	};
 
-	// MARK: GET /.well-known/cf-custom-hostname-challenge/{}
-	{
-		tracing::info!("testing custom hostname verification");
+// 	let ctx = Ctx::init().await;
 
-		let game_res = op!([ctx] faker_game { }).await.unwrap();
-		let namespace_id = game_res.namespace_ids.first().unwrap().as_uuid();
+// 	// MARK: GET /.well-known/cf-custom-hostname-challenge/{}
+// 	{
+// 		tracing::info!("testing custom hostname verification");
 
-		let hostname = format!("{}.com", util::faker::ident());
+// 		let game_res = op!([ctx] faker_game { }).await.unwrap();
+// 		let namespace_id = game_res.namespace_ids.first().unwrap().as_uuid();
 
-		let res = msg!([ctx] cf_custom_hostname::msg::create(namespace_id, &hostname) -> Result<cf_custom_hostname::msg::create_complete, cf_custom_hostname::msg::create_fail> {
-			namespace_id: Some(namespace_id.into()),
-			hostname: hostname.clone(),
-			bypass_pending_cap: false,
-		}).await.unwrap().unwrap();
-		let identifier = res.identifier.unwrap();
+// 		let hostname = format!("{}.com", util::faker::ident());
 
-		let res = op!([ctx] cf_custom_hostname_get {
-			identifiers: vec![identifier],
-		})
-		.await
-		.unwrap();
-		assert_eq!(1, res.custom_hostnames.len());
+// 		let res = msg!([ctx] cf_custom_hostname::msg::create(namespace_id, &hostname) -> Result<cf_custom_hostname::msg::create_complete, cf_custom_hostname::msg::create_fail> {
+// 			namespace_id: Some(namespace_id.into()),
+// 			hostname: hostname.clone(),
+// 			bypass_pending_cap: false,
+// 		}).await.unwrap().unwrap();
+// 		let identifier = res.identifier.unwrap();
 
-		let custom_hostname = res.custom_hostnames.first().unwrap();
-		let challenge = custom_hostname.challenge.unwrap().as_uuid();
+// 		let res = op!([ctx] cf_custom_hostname_get {
+// 			identifiers: vec![identifier],
+// 		})
+// 		.await
+// 		.unwrap();
+// 		assert_eq!(1, res.custom_hostnames.len());
 
-		let res = ctx
-			.http_client
-			.verify_custom_hostname()
-			.identifier(identifier.as_uuid().to_string())
-			.send()
-			.await
-			.unwrap();
+// 		let custom_hostname = res.custom_hostnames.first().unwrap();
+// 		let challenge = custom_hostname.challenge.unwrap().as_uuid();
 
-		assert_eq!(format!("{challenge}\n"), res.body().unwrap());
-	}
-}
+// 		let res = ctx
+// 			.http_client
+// 			.verify_custom_hostname()
+// 			.identifier(identifier.as_uuid().to_string())
+// 			.send()
+// 			.await
+// 			.unwrap();
+
+// 		assert_eq!(format!("{challenge}\n"), res.body().unwrap());
+// 	}
+// }

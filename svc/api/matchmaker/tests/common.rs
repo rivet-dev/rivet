@@ -1,6 +1,7 @@
 use std::{str::FromStr, sync::Once};
 
 use proto::backend::{self, pkg::*};
+use reqwest::header;
 use rivet_api::{apis::configuration::Configuration, models};
 use rivet_operation::prelude::*;
 
@@ -109,6 +110,21 @@ impl Ctx {
 		Configuration {
 			base_path: "http://traefik.traefik.svc.cluster.local:80".into(),
 			bearer_access_token: Some(bearer_token),
+			client: {
+				let mut headers = header::HeaderMap::new();
+				headers.insert(
+					header::HOST,
+					header::HeaderValue::from_str(util::env::domain_main_api().unwrap()).unwrap(),
+				);
+				headers.insert(
+					"cf-connecting-ip",
+					header::HeaderValue::from_static("127.0.0.1"),
+				);
+				reqwest::Client::builder()
+					.default_headers(headers)
+					.build()
+					.unwrap()
+			},
 			..Default::default()
 		}
 	}
