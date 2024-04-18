@@ -2,7 +2,7 @@ use chirp_worker::prelude::*;
 use proto::backend::{self, pkg::*};
 
 #[worker_test]
-async fn empty(ctx: TestCtx) {
+async fn lobby_stop(ctx: TestCtx) {
 	if !util::feature::job_run() {
 		return;
 	}
