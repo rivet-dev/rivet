@@ -89,6 +89,14 @@ pub async fn test_services<T: AsRef<str>>(
 		}
 	}
 
+	let run_load_tests = ctx
+		.ns()
+		.rivet
+		.test
+		.as_ref()
+		.map(|test| test.load_tests)
+		.unwrap_or_default();
+
 	// Resolve services
 	let svc_names = test_ctx
 		.svc_names
@@ -99,10 +107,12 @@ pub async fn test_services<T: AsRef<str>>(
 		.collect::<Vec<_>>();
 	let all_svcs = ctx.services_with_patterns(&svc_names).await;
 
-	// Find all services that are executables
 	let rust_svcs = all_svcs
 		.iter()
+		// Find all services that are executables
 		.filter(|svc_ctx| matches!(svc_ctx.config().runtime, RuntimeKind::Rust {}))
+		// Filter/include load tests
+		.filter(|svc_ctx| run_load_tests || !svc_ctx.config().service.load_test)
 		.collect::<Vec<_>>();
 	eprintln!();
 	rivet_term::status::progress("Preparing", format!("{} services", rust_svcs.len()));
@@ -128,7 +138,10 @@ pub async fn test_services<T: AsRef<str>>(
 				.or_insert_with(Vec::new);
 			workspace.push(svc.cargo_name().expect("no cargo name"));
 		}
-		ensure!(!svcs_by_workspace.is_empty(), "no matching services");
+		ensure!(
+			!svcs_by_workspace.is_empty(),
+			"no matching services (to run load tests set `rivet.test.load_tests = true`)"
+		);
 
 		// Run build
 		let test_binaries = cargo::cli::build_tests(
