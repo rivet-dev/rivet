@@ -3,6 +3,7 @@ use async_recursion::async_recursion;
 use std::{
 	collections::HashMap,
 	hash::{Hash, Hasher},
+	net::Ipv4Addr,
 	path::{Path, PathBuf},
 	sync::{Arc, Weak},
 };
@@ -1369,10 +1370,36 @@ async fn add_s3_env(
 		format!("S3_{provider_upper}_ENDPOINT_INTERNAL_{s3_dep_name}"),
 		s3_config.endpoint_internal,
 	));
-	env.push((
-		format!("S3_{provider_upper}_ENDPOINT_EXTERNAL_{s3_dep_name}"),
-		s3_config.endpoint_external,
-	));
+	// External endpoint
+	{
+		let mut external_endpoint = s3_config.endpoint_external;
+
+		// Switch to internal k8s url if public ip is loopback
+		if let (
+			s3_util::Provider::Minio,
+			config::ns::ClusterKind::SingleNode {
+				public_ip,
+				minio_port,
+				..
+			},
+		) = (provider, &project_ctx.ns().cluster.kind)
+		{
+			let is_loopback = public_ip
+				.parse::<Ipv4Addr>()
+				.ok()
+				.map(|ip| ip.is_loopback())
+				.unwrap_or_default();
+
+			if is_loopback {
+				external_endpoint = format!("http://minio.minio.svc.cluster.local:{minio_port}");
+			}
+		}
+
+		env.push((
+			format!("S3_{provider_upper}_ENDPOINT_EXTERNAL_{s3_dep_name}",),
+			external_endpoint,
+		));
+	}
 	env.push((
 		format!("S3_{provider_upper}_REGION_{s3_dep_name}"),
 		s3_config.region,
