@@ -1,0 +1,21 @@
+version: "3"
+
+tasks:
+  init:
+    internal: true
+    cmds:
+      - terraform init -upgrade
+
+  up:
+    deps: [init]
+    cmds:
+      - terraform apply
+
+  down:
+    deps: [init]
+    cmds:
+      - terraform destroy
+
+  get-ip:
+    cmds:
+      - terraform output

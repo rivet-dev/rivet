@@ -109,6 +109,12 @@ and run "Remote-Containers: Reopen in Container".
 
 You can now skip to the [Common steps](#common-steps) section.
 
+### Step 5: Setup dev tunnel (optional)
+
+Rivet needs a publicly accessible IP in order to be able to deploy servers. Without it, you can still run Rivet, but you won't be able to access servers.
+
+Read the guide on setting up a dev tunnel (similar to ngrok) [here](/docs/infrastructure/dev-tunnel/SETUP.md).
+
 ## Method 2: Virtual Machine
 
 This is best if running a small deployment of Rivet on a cloud provider.

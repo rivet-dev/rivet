@@ -64,6 +64,10 @@ in
 			bashInteractive
 			bash-completion
 
+			# Utilities
+			go-task
+			netcat
+
 			# Fixes "cannot change locale" warning
 			glibcLocales
 		]
