@@ -1,0 +1,16 @@
+syntax = "proto3";
+
+package rivet.backend.pkg.user_identity.msg.create_complete;
+
+import "proto/common.proto";
+import "proto/backend/user_identity.proto";
+
+/// name = "msg-user-identity-create-complete"
+/// deduplicate = true
+/// parameters = [
+/// 	{ name = "run_id" },
+/// ]
+message Message {
+	rivet.common.Uuid user_id = 1;
+	rivet.backend.user_identity.Identity identity = 2;
+}

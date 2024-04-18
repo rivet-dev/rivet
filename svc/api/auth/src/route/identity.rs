@@ -96,14 +96,14 @@ pub async fn complete(
 	}
 
 	let email_res = op!([ctx] user_resolve_email {
-		emails: vec![res.email.clone()]
+		emails: vec![res.email.clone()],
 	})
 	.await?;
 
-	tracing::info!(email = %res.email, "resolved email");
-
 	// Switch to new user
 	if let Some(new_user) = email_res.users.first() {
+		tracing::info!(email = %new_user.email, "resolved email");
+
 		let new_user_id = unwrap_ref!(new_user.user_id).as_uuid();
 
 		tracing::info!(old_user_id = %user_ent.user_id, %new_user_id, "identity found, switching user");

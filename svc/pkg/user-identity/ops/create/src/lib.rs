@@ -78,6 +78,12 @@ async fn handle(
 		.purge("user_identity.identity", [user_id])
 		.await?;
 
+	msg!([ctx] user_identity::msg::create_complete(user_id) {
+		user_id: ctx.user_id,
+		identity: ctx.identity.clone(),
+	})
+	.await?;
+
 	msg!([ctx] user::msg::update(user_id) {
 		user_id: ctx.user_id,
 	})
