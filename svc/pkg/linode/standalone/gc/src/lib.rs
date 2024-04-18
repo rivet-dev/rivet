@@ -204,7 +204,11 @@ async fn delete_expired_images(
 	client: &util_linode::Client,
 	complete_images: &[api::CustomImage],
 ) -> GlobalResult<()> {
-	let expiration = chrono::Utc::now() - chrono::Duration::days(6 * 30);
+	// Prebake images have an expiration because of their server token. We add 2 days of padding here for
+	// safety
+	let expiration = chrono::Utc::now()
+		- chrono::Duration::milliseconds(util_cluster::SERVER_TOKEN_TTL)
+		+ chrono::Duration::days(2);
 
 	let expired_images = complete_images
 		.iter()

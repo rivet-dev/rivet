@@ -10,9 +10,6 @@ use ssh2::Session;
 
 mod install_scripts;
 
-// 6 months
-pub const TOKEN_TTL: i64 = util::duration::days(30 * 6);
-
 #[worker(name = "cluster-server-install", timeout = 200)]
 async fn worker(ctx: &OperationContext<cluster::msg::server_install::Message>) -> GlobalResult<()> {
 	// Check for stale message
@@ -51,7 +48,7 @@ async fn worker(ctx: &OperationContext<cluster::msg::server_install::Message>) -
 	// Create server token for authenticating API calls from the server
 	let token_res = op!([ctx] token_create {
 		token_config: Some(token::create::request::TokenConfig {
-			ttl: TOKEN_TTL,
+			ttl: util_cluster::SERVER_TOKEN_TTL,
 		}),
 		refresh_token_config: None,
 		issuer: "cluster-worker-server-install".to_owned(),

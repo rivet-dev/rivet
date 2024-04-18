@@ -16,6 +16,9 @@ const RESERVE_MEMORY: u64 = RESERVE_SYSTEM_MEMORY + RESERVE_LB_MEMORY;
 
 const CPU_PER_CORE: u64 = 1999;
 
+// TTL of the token written to prebake images. Prebake images are renewed before the token would expire
+pub const SERVER_TOKEN_TTL: i64 = rivet_util::duration::days(30 * 6);
+
 /// Provider agnostic hardware specs.
 #[derive(Debug)]
 pub struct JobNodeConfig {
