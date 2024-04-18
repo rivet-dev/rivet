@@ -303,8 +303,7 @@ async fn job_run() {
 }
 
 mod cdn_suite {
-
-	use super::Ctx;
+	use super::{Ctx, CDN_SLEEP_DURATION};
 	use proto::backend::{self, cdn::*, pkg::*};
 	use rivet_operation::prelude::*;
 
@@ -368,6 +367,8 @@ mod cdn_suite {
 		})
 		.await
 		.unwrap();
+
+		tokio::time::sleep(CDN_SLEEP_DURATION).await;
 
 		// Test HTML
 		{

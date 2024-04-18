@@ -9,7 +9,7 @@ async fn empty(ctx: TestCtx) {
 	.await
 	.unwrap();
 
-	let name = "foo".to_string();
+	let name = util::faker::ident();
 	op!([ctx] user_identity_create {
 		user_id: user_res.user_id,
 		identity: Some(backend::user_identity::Identity {
