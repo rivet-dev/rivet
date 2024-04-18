@@ -107,8 +107,9 @@ message Entitlement {
 		string name = 1;
 	}
 
-	// Issued to provisioned servers for communication with our API.
-	message Server {
+	// Issued to provisioned servers for communication with our API. This will be written to prebake servers
+	// (see /docs/packages/cluster/SERVER_PROVISIONING.md).
+	message ProvisionedServer {
 		
 	}
 
@@ -128,7 +129,7 @@ message Entitlement {
 		CloudDeviceLink cloud_device_link = 14;
 		Bypass bypass = 15;
 		AccessToken access_token = 16;
-		Server server = 17;
+		ProvisionedServer provisioned_server = 17;
 	}
 
 	reserved 13;

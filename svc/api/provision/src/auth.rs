@@ -40,7 +40,7 @@ impl Auth {
 			.ok_or_else(|| err_code!(API_UNAUTHORIZED, reason = "No bearer token provided."))
 	}
 
-	pub fn server(&self) -> GlobalResult<rivet_claims::ent::Server> {
-		self.claims()?.as_server()
+	pub fn server(&self) -> GlobalResult<rivet_claims::ent::ProvisionedServer> {
+		self.claims()?.as_provisioned_server()
 	}
 }

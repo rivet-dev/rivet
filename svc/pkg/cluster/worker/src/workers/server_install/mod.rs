@@ -60,7 +60,9 @@ async fn worker(ctx: &OperationContext<cluster::msg::server_install::Message>) -
 			entitlements: vec![
 				proto::claims::Entitlement {
 					kind: Some(
-						proto::claims::entitlement::Kind::Server(proto::claims::entitlement::Server { })
+						proto::claims::entitlement::Kind::ProvisionedServer(
+							proto::claims::entitlement::ProvisionedServer {}
+						)
 					)
 				}
 			],

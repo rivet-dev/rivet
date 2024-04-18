@@ -335,13 +335,13 @@ pub mod ent {
 	}
 
 	#[derive(Clone, Debug)]
-	pub struct Server {}
+	pub struct ProvisionedServer {}
 
-	impl TryFrom<&schema::entitlement::Server> for Server {
+	impl TryFrom<&schema::entitlement::ProvisionedServer> for ProvisionedServer {
 		type Error = GlobalError;
 
-		fn try_from(_value: &schema::entitlement::Server) -> GlobalResult<Self> {
-			Ok(Server {})
+		fn try_from(_value: &schema::entitlement::ProvisionedServer) -> GlobalResult<Self> {
+			Ok(ProvisionedServer {})
 		}
 	}
 }
@@ -367,7 +367,7 @@ pub trait ClaimsDecode {
 	fn as_cloud_device_link(&self) -> GlobalResult<ent::CloudDeviceLink>;
 	fn as_bypass(&self) -> GlobalResult<ent::Bypass>;
 	fn as_access_token(&self) -> GlobalResult<ent::AccessToken>;
-	fn as_server(&self) -> GlobalResult<ent::Server>;
+	fn as_provisioned_server(&self) -> GlobalResult<ent::ProvisionedServer>;
 }
 
 impl ClaimsDecode for schema::Claims {
@@ -618,16 +618,16 @@ impl ClaimsDecode for schema::Claims {
 			.and_then(std::convert::identity)
 	}
 
-	fn as_server(&self) -> GlobalResult<ent::Server> {
+	fn as_provisioned_server(&self) -> GlobalResult<ent::ProvisionedServer> {
 		self.entitlements
 			.iter()
 			.find_map(|ent| match &ent.kind {
-				Some(schema::entitlement::Kind::Server(ent)) => Some(ent::Server::try_from(ent)),
+				Some(schema::entitlement::Kind::ProvisionedServer(ent)) => Some(ent::ProvisionedServer::try_from(ent)),
 				_ => None,
 			})
 			.ok_or(err_code!(
 				CLAIMS_MISSING_ENTITLEMENT,
-				entitlement = "Server"
+				entitlement = "ProvisionedServer"
 			))
 			.and_then(std::convert::identity)
 	}
@@ -673,7 +673,7 @@ impl EntitlementTag for schema::Entitlement {
 			schema::entitlement::Kind::CloudDeviceLink(_) => 14,
 			schema::entitlement::Kind::Bypass(_) => 15,
 			schema::entitlement::Kind::AccessToken(_) => 16,
-			schema::entitlement::Kind::Server(_) => 17,
+			schema::entitlement::Kind::ProvisionedServer(_) => 17,
 		})
 	}
 }
