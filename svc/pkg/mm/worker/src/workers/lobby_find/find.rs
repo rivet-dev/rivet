@@ -203,7 +203,6 @@ pub async fn find(
 						is_closed: false,
 						is_custom: false,
 						state_json: None,
-						is_node_closed: false,
 					},
 					ready_expire_ts: ctx.ts() + util_mm::consts::LOBBY_READY_TIMEOUT,
 				})

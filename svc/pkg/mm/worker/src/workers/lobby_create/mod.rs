@@ -206,7 +206,6 @@ async fn worker(ctx: &OperationContext<mm::msg::lobby_create::Message>) -> Globa
 				ready_ts: None,
 				is_custom: ctx.is_custom,
 				state_json: None,
-				is_node_closed: false,
 			})?)
 			.arg(ctx.ts() + util_mm::consts::LOBBY_READY_TIMEOUT)
 			.key(key::lobby_config(lobby_id))

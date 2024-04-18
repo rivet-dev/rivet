@@ -61,8 +61,7 @@ async fn worker(
 					util_mm::JoinKind::Party,
 				),
 				lobby.lobby_id.to_string(),
-			)
-			.hset(util_mm::key::lobby_config(lobby.lobby_id), "nc", 1);
+			);
 		}
 
 		pipe.query_async(&mut ctx.redis_mm().await?).await?;

@@ -32,15 +32,6 @@ if query.kind.direct ~= nil then
 		return { 'err', 'LOBBY_NOT_FOUND' }
 	end
 
-	-- Check that lobby and node are not closed
-	local config_keys = redis.call('HMGET', key_direct_lobby_config, 'c', 'nc')
-	local is_closed = config_keys[1] == '1'
-	local is_node_closed = config_keys[2] == '1'
-
-	if is_closed or is_node_closed then
-		return {'err', 'LOBBY_CLOSED'}
-	end
-
 	-- Get max player count
 	local max_player_count = nil
 	if query.join_kind == 'direct' then

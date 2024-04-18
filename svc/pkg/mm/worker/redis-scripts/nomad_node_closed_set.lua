@@ -5,13 +5,11 @@ for i=1,lobby_count do
 	local lobby_id = ARGV[real_i * 3 + 2]
 	local max_players_normal = tonumber(ARGV[real_i * 3 + 3])
 	local max_players_party = tonumber(ARGV[real_i * 3 + 4])
-	
+
 	local key_lobby_config = KEYS[real_i * 4 + 2]
-	
-	redis.call('HSET', key_lobby_config, 'nc', 0)
-	
+
 	local is_closed = redis.call('HGET', key_lobby_config, 'c')
-	
+
 	-- Don't modify closed lobbies
 	if is_closed ~= '1' then
 		local key_lobby_player_ids = KEYS[real_i * 4 + 3]
