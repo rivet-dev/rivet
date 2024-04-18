@@ -12,6 +12,7 @@ chirp-client = { path = "../../../../lib/chirp/client" }
 chirp-worker = { path = "../../../../lib/chirp/worker" }
 chrono = "0.4"
 cloudflare = "0.10.1"
+http = "0.2"
 include_dir = "0.7.3"
 indoc = "1.0"
 lazy_static = "1.4"

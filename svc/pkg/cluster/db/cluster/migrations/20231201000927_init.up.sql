@@ -83,7 +83,7 @@ WHERE destroy_ts IS NULL;
 -- Stores data for destroying cloudflare resources
 CREATE TABLE servers_cloudflare (
 	server_id UUID NOT NULL REFERENCES servers (server_id),
-	dns_record_id TEXT NOT NULL,
+	dns_record_id TEXT,
 	-- Secondary DNS route which doesn't have a wildcard. Used for discord activities.
 	secondary_dns_record_id TEXT,
 

@@ -55,26 +55,6 @@ where
 	bail!("transaction failed with retry too many times");
 }
 
-/// Runs a transaction without retrying.
-#[tracing::instrument(skip_all)]
-pub async fn tx_no_retry<T, F>(crdb: &CrdbPool, f: F) -> GlobalResult<T>
-where
-	for<'t> F: Fn(&'t mut sqlx::Transaction<'_, sqlx::Postgres>) -> AsyncResult<'t, T>,
-{
-	let mut tx = crdb.begin().await?;
-
-	match f(&mut tx).await {
-		Err(err) => {
-			tx.rollback().await?;
-			Err(err)
-		}
-		Ok(x) => {
-			tx.commit().await?;
-			Ok(x)
-		}
-	}
-}
-
 // TODO: This seems to leak connections on retries, even though it matches the
 // CRDB spec. This is likely because of odd behavior in the sqlx driver.
 ///// Runs a transaction. This explicitly handles retry errors.

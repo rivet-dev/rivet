@@ -20,8 +20,7 @@ struct Server {
 
 #[worker(name = "cluster-server-drain")]
 async fn worker(ctx: &OperationContext<cluster::msg::server_drain::Message>) -> GlobalResult<()> {
-	rivet_pools::utils::crdb::tx_no_retry(&ctx.crdb().await?, |tx| inner(ctx.clone(), tx).boxed())
-		.await?;
+	rivet_pools::utils::crdb::tx(&ctx.crdb().await?, |tx| inner(ctx.clone(), tx).boxed()).await?;
 
 	Ok(())
 }

@@ -20,8 +20,7 @@ struct Server {
 
 #[worker(name = "cluster-server-undrain")]
 async fn worker(ctx: &OperationContext<cluster::msg::server_undrain::Message>) -> GlobalResult<()> {
-	rivet_pools::utils::crdb::tx_no_retry(&ctx.crdb().await?, |tx| inner(ctx.clone(), tx).boxed())
-		.await?;
+	rivet_pools::utils::crdb::tx(&ctx.crdb().await?, |tx| inner(ctx.clone(), tx).boxed()).await?;
 
 	Ok(())
 }
@@ -96,6 +95,17 @@ async fn inner(
 			.await?;
 		}
 		backend::cluster::PoolType::Gg => {
+			// Source of truth record
+			sql_execute!(
+				[ctx, @tx tx]
+				"
+				INSERT INTO db_cluster.servers_cloudflare (server_id)
+				VALUES ($1)
+				",
+				server_id,
+			)
+			.await?;
+
 			// Recreate DNS record
 			msg!([ctx] cluster::msg::server_dns_create(server_id) {
 				server_id: Some(server_id.into()),

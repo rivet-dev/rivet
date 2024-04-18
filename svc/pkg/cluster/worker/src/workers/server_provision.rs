@@ -1,4 +1,5 @@
 use chirp_worker::prelude::*;
+use futures_util::FutureExt;
 use proto::backend::{self, cluster::PoolType, pkg::*};
 use rand::Rng;
 
@@ -14,8 +15,15 @@ struct ProvisionResponse {
 async fn worker(
 	ctx: &OperationContext<cluster::msg::server_provision::Message>,
 ) -> GlobalResult<()> {
-	let crdb = ctx.crdb().await?;
+	rivet_pools::utils::crdb::tx(&ctx.crdb().await?, |tx| inner(ctx.clone(), tx).boxed()).await?;
 
+	Ok(())
+}
+
+async fn inner(
+	ctx: OperationContext<cluster::msg::server_provision::Message>,
+	tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+) -> GlobalResult<()> {
 	let datacenter_id = unwrap!(ctx.datacenter_id);
 	let server_id = unwrap_ref!(ctx.server_id).as_uuid();
 	let pool_type = unwrap!(backend::cluster::PoolType::from_i32(ctx.pool_type));
@@ -24,12 +32,13 @@ async fn worker(
 	// Check if server is already provisioned
 	// NOTE: sql record already exists before this worker is called
 	let (provider_server_id, destroyed) = sql_fetch_one!(
-		[ctx, (Option<String>, bool), &crdb]
+		[ctx, (Option<String>, bool), @tx tx]
 		"
 		SELECT
 			provider_server_id, cloud_destroy_ts IS NOT NULL
 		FROM db_cluster.servers
 		WHERE server_id = $1
+		FOR UPDATE
 		",
 		server_id,
 	)
@@ -62,7 +71,19 @@ async fn worker(
 	);
 
 	// Get a new vlan ip
-	let vlan_ip = get_vlan_ip(ctx, &crdb, server_id, pool_type).await?;
+	let vlan_ip = get_vlan_ip(&ctx, tx, server_id, pool_type).await?;
+
+	sql_execute!(
+		[ctx, @tx tx]
+		"
+		UPDATE db_cluster.servers
+		SET vlan_ip = $2
+		WHERE server_id = $1
+		",
+		server_id,
+		&vlan_ip,
+	)
+	.await?;
 
 	// Iterate through list of hardware and attempt to schedule a server. Goes to the next
 	// hardware if an error happens during provisioning
@@ -107,34 +128,31 @@ async fn worker(
 							"failed to provision server, cleaning up"
 						);
 
-						cleanup(ctx, server_id).await?;
+						cleanup(&ctx, server_id).await?;
 					}
 				}
 			}
 		}
 	};
 
-	// Update DB regardless of success (have to set vlan_ip)
-	sql_execute!(
-		[ctx, &crdb]
-		"
-		UPDATE db_cluster.servers
-		SET
-			provider_server_id = $2,
-			provider_hardware = $3,
-			vlan_ip = $4,
-			public_ip = $5
-		WHERE server_id = $1
-		",
-		server_id,
-		provision_res.as_ref().map(|res| &res.provider_server_id),
-		provision_res.as_ref().map(|res| &res.provider_hardware),
-		vlan_ip,
-		provision_res.as_ref().map(|res| &res.public_ip),
-	)
-	.await?;
-
 	if let Some(provision_res) = provision_res {
+		sql_execute!(
+			[ctx, @tx tx]
+			"
+			UPDATE db_cluster.servers
+			SET
+				provider_server_id = $2,
+				provider_hardware = $3,
+				public_ip = $4
+			WHERE server_id = $1
+			",
+			server_id,
+			&provision_res.provider_server_id,
+			&provision_res.provider_hardware,
+			&provision_res.public_ip,
+		)
+		.await?;
+
 		// Install components
 		if !provision_res.already_installed {
 			let request_id = Uuid::new_v4();
@@ -153,6 +171,17 @@ async fn worker(
 
 		// Create DNS record
 		if let backend::cluster::PoolType::Gg = pool_type {
+			// Source of truth record
+			sql_execute!(
+				[ctx, @tx tx]
+				"
+				INSERT INTO db_cluster.servers_cloudflare (server_id)
+				VALUES ($1)
+				",
+				server_id,
+			)
+			.await?;
+
 			msg!([ctx] cluster::msg::server_dns_create(server_id) {
 				server_id: ctx.server_id,
 			})
@@ -168,7 +197,7 @@ async fn worker(
 
 async fn get_vlan_ip(
 	ctx: &OperationContext<cluster::msg::server_provision::Message>,
-	crdb: &CrdbPool,
+	tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
 	server_id: Uuid,
 	pool_type: backend::cluster::PoolType,
 ) -> GlobalResult<String> {
@@ -180,7 +209,7 @@ async fn get_vlan_ip(
 	};
 	let max_idx = vlan_addr_range.count() as i64;
 	let (network_idx,) = sql_fetch_one!(
-		[ctx, (i64,), &crdb]
+		[ctx, (i64,), @tx tx]
 		"
 		WITH
 			get_next_network_idx AS (

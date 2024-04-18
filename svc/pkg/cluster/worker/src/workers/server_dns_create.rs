@@ -1,7 +1,8 @@
-use std::net::IpAddr;
+use std::{net::IpAddr, sync::Arc};
 
 use chirp_worker::prelude::*;
 use cloudflare::{endpoints as cf, framework as cf_framework, framework::async_api::ApiClient};
+use futures_util::FutureExt;
 use proto::backend::pkg::*;
 
 use crate::util::CloudflareError;
@@ -17,10 +18,34 @@ struct Server {
 async fn worker(
 	ctx: &OperationContext<cluster::msg::server_dns_create::Message>,
 ) -> GlobalResult<()> {
+	let cf_token = util::env::read_secret(&["cloudflare", "terraform", "auth_token"]).await?;
+	// Create cloudflare HTTP client
+	let client = Arc::new(
+		cf_framework::async_api::Client::new(
+			cf_framework::auth::Credentials::UserAuthToken { token: cf_token },
+			Default::default(),
+			cf_framework::Environment::Production,
+		)
+		.map_err(CloudflareError::from)?,
+	);
+
+	rivet_pools::utils::crdb::tx(&ctx.crdb().await?, |tx| {
+		inner(ctx.clone(), tx, client.clone()).boxed()
+	})
+	.await?;
+
+	Ok(())
+}
+
+async fn inner(
+	ctx: OperationContext<cluster::msg::server_dns_create::Message>,
+	tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+	client: Arc<cf_framework::async_api::Client>,
+) -> GlobalResult<()> {
 	let server_id = unwrap_ref!(ctx.server_id).as_uuid();
 
 	let server = sql_fetch_one!(
-		[ctx, Server]
+		[ctx, Server, @tx tx]
 		"
 		SELECT
 			datacenter_id, public_ip, cloud_destroy_ts
@@ -31,25 +56,30 @@ async fn worker(
 	)
 	.await?;
 
+	// Lock row
+	sql_execute!(
+		[ctx, @tx tx]
+		"
+		SELECT 1 FROM db_cluster.servers_cloudflare
+		WHERE
+			server_id = $1 AND
+			destroy_ts IS NULL
+		FOR UPDATE
+		",
+		server_id,
+	)
+	.await?;
+
 	if server.cloud_destroy_ts.is_some() {
 		tracing::info!("server marked for deletion, not creating dns record");
 		return Ok(());
 	}
 
-	let cf_token = util::env::read_secret(&["cloudflare", "terraform", "auth_token"]).await?;
 	let zone_id = unwrap!(util::env::cloudflare::zone::job::id(), "dns not configured");
 	let public_ip = match server.public_ip {
 		IpAddr::V4(ip) => ip,
 		IpAddr::V6(_) => bail!("unexpected ipv6 public ip"),
 	};
-
-	// Create cloudflare HTTP client
-	let client = cf_framework::async_api::Client::new(
-		cf_framework::auth::Credentials::UserAuthToken { token: cf_token },
-		Default::default(),
-		cf_framework::Environment::Production,
-	)
-	.map_err(CloudflareError::from)?;
 
 	let record_name = format!(
 		"*.lobby.{}.{}",
@@ -68,7 +98,21 @@ async fn worker(
 			},
 		})
 		.await?;
-	let record_id = create_record_res.result.id;
+
+	// Save record id for deletion
+	sql_execute!(
+		[ctx, @tx tx]
+		"
+		UPDATE db_cluster.servers_cloudflare
+		SET dns_record_id = $2
+		WHERE
+			server_id = $1 AND
+			destroy_ts IS NULL
+		",
+		server_id,
+		create_record_res.result.id,
+	)
+	.await?;
 
 	// This is solely for compatibility with Discord activities. Their docs say they support parameter
 	// mapping but it does not work
@@ -89,32 +133,22 @@ async fn worker(
 				priority: None,
 			},
 		})
-		.await;
+		.await?;
 
-	// Optionally get secondary record id
-	let secondary_dns_record_id = create_secondary_record_res
-		.as_ref()
-		.ok()
-		.map(|res| res.result.id.clone());
-
-	// Save record ids for deletion
+	// Save record id for deletion
 	sql_execute!(
-		[ctx]
+		[ctx, @tx tx]
 		"
-		INSERT INTO db_cluster.servers_cloudflare (
-			server_id,
-			dns_record_id,
-			secondary_dns_record_id
-		)
-		VALUES ($1, $2, $3)
+		UPDATE db_cluster.servers_cloudflare
+		SET dns_record_id = $2
+		WHERE
+			server_id = $1 AND
+			destroy_ts IS NULL
 		",
 		server_id,
-		record_id,
-		secondary_dns_record_id,
+		create_secondary_record_res.result.id,
 	)
 	.await?;
-
-	create_secondary_record_res?;
 
 	Ok(())
 }

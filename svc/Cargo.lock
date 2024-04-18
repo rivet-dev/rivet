@@ -2577,6 +2577,7 @@ dependencies = [
  "cluster-datacenter-get",
  "cluster-datacenter-list",
  "cluster-datacenter-topology-get",
+ "http 0.2.12",
  "include_dir",
  "indoc",
  "lazy_static",
