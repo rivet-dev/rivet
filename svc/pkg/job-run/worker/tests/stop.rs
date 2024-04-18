@@ -2,7 +2,7 @@ use chirp_worker::prelude::*;
 use proto::backend::pkg::*;
 
 #[worker_test]
-async fn empty(ctx: TestCtx) {
+async fn stop(ctx: TestCtx) {
 	if !util::feature::job_run() {
 		return;
 	}
@@ -70,9 +70,8 @@ async fn empty(ctx: TestCtx) {
 				.task_states
 				.as_ref()
 				.unwrap()
-				.get("test-server")
-				.expect("missing test-server task state");
-			tracing::info!(?task_state, "task state");
+				.get("main")
+				.expect("missing main task state");
 			assert!(!task_state.failed.unwrap(), "task failed");
 			assert_eq!("stop", status.desired_status.as_ref().unwrap());
 			assert_eq!("dead", task_state.state.as_ref().unwrap());

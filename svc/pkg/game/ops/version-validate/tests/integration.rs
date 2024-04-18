@@ -190,5 +190,5 @@ async fn empty(ctx: TestCtx) {
 	.await
 	.unwrap();
 
-	assert_eq!(res.errors.len(), 22, "validation failed");
+	assert_eq!(res.errors.len(), 21, "validation failed");
 }

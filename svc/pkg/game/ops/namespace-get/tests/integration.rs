@@ -49,10 +49,13 @@ async fn empty(ctx: TestCtx) {
 	})
 	.await
 	.unwrap();
+	let mut res_namespaces = res.namespaces.clone();
 
+	res_namespaces.sort_by(|a, b| a.display_name.cmp(&b.display_name));
 	test_namespaces.sort_by(|a, b| a.display_name.cmp(&b.display_name));
-	assert_eq!(test_namespaces.len(), res.namespaces.len());
-	for (a, b) in test_namespaces.iter().zip(res.namespaces.iter()) {
+
+	assert_eq!(test_namespaces.len(), res_namespaces.len());
+	for (a, b) in test_namespaces.iter().zip(res_namespaces.iter()) {
 		assert_eq!(a.namespace_id.unwrap(), b.namespace_id.unwrap().as_uuid());
 	}
 }

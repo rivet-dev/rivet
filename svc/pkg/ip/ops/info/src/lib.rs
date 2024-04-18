@@ -60,12 +60,24 @@ async fn fetch_ip_info_io(
 
 		// Fetch IP data from external service
 		tracing::info!(?ip_str, "fetching fresh ip info");
-		let ip_info_res = reqwest::get(api_url).await?;
+
+		let client = reqwest::Client::new();
+		let req = client.get(format!("https://ipinfo.io/{}", ip_str));
+
+		let req = if let Ok(token) = util::env::read_secret(&["ip_info", "token"]).await {
+			req.query(&[("token", token)])
+		} else {
+			req
+		};
+
+		let ip_info_res = req.send().await?;
 
 		if !ip_info_res.status().is_success() {
-			tracing::error!(status = ?ip_info_res.status(), "failed to fetch ip info, using fallback");
+			let status = ip_info_res.status();
+			let body = ip_info_res.text().await?;
+			tracing::error!(?status, %body, "failed to fetch ip info");
 
-			bail!("ip info error")
+			bail!("ip info error");
 		};
 
 		let ip_info_raw = ip_info_res.json::<serde_json::Value>().await?;
