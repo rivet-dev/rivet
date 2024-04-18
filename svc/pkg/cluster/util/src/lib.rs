@@ -5,7 +5,7 @@ pub mod test;
 
 // Use the hash of the server install script in the image variant so that if the install scripts are updated
 // we won't be using the old image anymore
-pub const INSTALL_SCRIPT_HASH: &str = include_str!("../gen/hash.txt");
+pub const INSTALL_SCRIPT_HASH: &str = include_str!(concat!(env!("OUT_DIR"), "/hash.txt"));
 
 // NOTE: We don't reserve CPU because Nomad is running as a higher priority process than the rest and
 // shouldn't be doing much heavy lifting.

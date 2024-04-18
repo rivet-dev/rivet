@@ -85,8 +85,12 @@ async fn provision(
 	datacenter_id: Uuid,
 	server: &api::ProvisionCtx,
 ) -> GlobalResult<String> {
+	let server_id = Uuid::new_v4();
+	let ns = util::env::namespace();
+
 	// Create SSH key
-	let ssh_key_res = api::create_ssh_key(client, &Uuid::new_v4().to_string(), false).await?;
+	let ssh_key_label = format!("{ns}-{server_id}");
+	let ssh_key_res = api::create_ssh_key(client, &ssh_key_label, false).await?;
 
 	// Write SSH key id
 	sql_execute!(

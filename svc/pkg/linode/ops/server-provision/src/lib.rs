@@ -63,9 +63,10 @@ pub async fn handle(
 	let client = util_linode::Client::new(datacenter.provider_api_token.clone()).await?;
 
 	// Create SSH key
+	let ssh_key_label = format!("{ns}-{server_id}");
 	let ssh_key_res = api::create_ssh_key(
 		&client,
-		&server_id.to_string(),
+		&ssh_key_label,
 		ctx.tags.iter().any(|tag| tag == "test"),
 	)
 	.await?;
@@ -227,7 +228,7 @@ async fn get_custom_image(
 				RETURNING provider, install_hash, datacenter_id, pool_type
 			),
 			selected AS (
-				SELECT provider, install_hash, datacenter_id, pool_type, image_id
+				SELECT provider, install_hash, datacenter_id, pool_type, provider_image_id
 				FROM db_cluster.server_images
 				WHERE
 					provider = $1 AND

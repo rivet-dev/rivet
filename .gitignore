@@ -29,13 +29,11 @@ Bolt.local.toml
 !/secrets/README.md
 
 # Generated code
-gen/hash.txt
 gen/build_script.sh
 gen/svc/
 gen/tf/
 gen/docker/
 gen/k8s/
-svc/pkg/cluster/util/gen/hash.txt
 
 # Rust
 lib/**/Cargo.lock
@@ -52,4 +50,3 @@ lib/**/Cargo.lock
 **/node_modules/
 
 tests/basic-game/.env
-

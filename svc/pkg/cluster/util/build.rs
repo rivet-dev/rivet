@@ -1,3 +1,5 @@
+use std::path::PathBuf;
+
 use tokio::{fs, process::Command};
 use sha2::{Digest, Sha256};
 
@@ -6,6 +8,7 @@ use sha2::{Digest, Sha256};
 // Get a hash of the server install worker
 #[tokio::main]
 async fn main() {
+	let out_dir = PathBuf::from(std::env::var("OUT_DIR").unwrap());
 	let current_dir = std::env::current_dir().unwrap();
 	let server_install_path = {
 		let mut dir = current_dir.clone();
@@ -18,9 +21,9 @@ async fn main() {
 	};
 
 	// Add rereun statement
-	println!("cargo:rerun-if-changed={}", server_install_path.display(),);
+	println!("cargo:rerun-if-changed={}", server_install_path.display());
 
-	let mut util_path = std::env::current_dir().unwrap();
+	let mut util_path = current_dir.clone();
 	util_path.pop();
 	let util_path = util_path.join("worker").join("src").join("workers").join("server_install");
 
@@ -62,8 +65,7 @@ async fn main() {
 		hex::encode(Sha256::digest(source_diff.as_bytes()))
 	};
 
-	fs::create_dir_all(current_dir.join("gen")).await.unwrap();
-	fs::write(current_dir.join("gen").join("hash.txt"), source_hash.trim())
+	fs::write(out_dir.join("hash.txt"), source_hash.trim())
 		.await
 		.unwrap();
 }

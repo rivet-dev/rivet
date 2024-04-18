@@ -561,12 +561,13 @@ struct TaggedObjectsListResponse {
 struct TaggedObject {
 	#[serde(rename = "type")]
 	_type: String,
-	data: Data,
+	data: TaggedObjectData,
 }
 
 #[derive(Debug, Deserialize)]
-struct Data {
+struct TaggedObjectData {
 	id: u64,
+	tags: Vec<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -588,6 +589,8 @@ async fn cleanup_servers(ctx: &ProjectContext) -> Result<()> {
 	eprintln!();
 	rivet_term::status::progress("Cleaning up servers", "");
 
+	let ns = ctx.ns_id();
+
 	// Create client
 	let api_token = ctx.read_secret(&["linode", "token"]).await?;
 	let auth = format!("Bearer {}", api_token);
@@ -597,10 +600,10 @@ async fn cleanup_servers(ctx: &ProjectContext) -> Result<()> {
 		.default_headers(headers)
 		.build()?;
 
-	// Fetch all objects with the tag "test" and ssh keys with "test-" in them
 	let test_tag = "test";
 	let (objects_res, ssh_keys_res) = tokio::try_join!(
 		async {
+			// Fetch all objects with the tag "test"
 			let res = client
 				.get(format!("https://api.linode.com/v4/tags/{test_tag}"))
 				.send()
@@ -618,11 +621,12 @@ async fn cleanup_servers(ctx: &ProjectContext) -> Result<()> {
 			Ok(res.json::<TaggedObjectsListResponse>().await?)
 		},
 		async {
+			// Fetch all ssh keys with "test-" in their label and are in this namespace
 			let res = client
 				.get(format!("https://api.linode.com/v4/profile/sshkeys"))
 				.header(
 					"X-Filter",
-					format!(r#"{{ "label": {{ "+contains": "{test_tag}-" }} }}"#),
+					format!(r#"{{ "label": {{ "+contains": "{test_tag}-{ns}-" }} }}"#),
 				)
 				.send()
 				.await?;
@@ -643,6 +647,8 @@ async fn cleanup_servers(ctx: &ProjectContext) -> Result<()> {
 	let deletions = objects_res
 		.data
 		.into_iter()
+		// Only delete test objects from this namespace
+		.filter(|object| object.data.tags.iter().any(|tag| tag == ns))
 		.map(|object| {
 			let client = client.clone();
 			let obj_type = object._type;
