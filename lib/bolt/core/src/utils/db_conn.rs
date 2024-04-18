@@ -1,4 +1,5 @@
 use std::{collections::HashMap, sync::Arc};
+use urlencoding::encode;
 
 use anyhow::*;
 
@@ -179,7 +180,10 @@ impl DatabaseConnections {
 
 				Ok(format!(
 					"cockroach://{}:{}@{}/{}?sslmode=verify-ca&sslrootcert=/local/crdb-ca.crt",
-					username, password, host, full_db_name
+					encode(&username),
+					encode(&password),
+					host,
+					encode(&full_db_name),
 				))
 			}
 			RuntimeKind::ClickHouse { .. } => {
@@ -196,7 +200,11 @@ impl DatabaseConnections {
 
 				Ok(format!(
 					"clickhouse://{}/?database={}&username={}&password={}{}",
-					host, db_name, clickhouse_user, clickhouse_password, query_other
+					host,
+					encode(&db_name),
+					encode(&clickhouse_user),
+					encode(&clickhouse_password),
+					query_other,
 				))
 			}
 			x @ _ => bail!("cannot migrate this type of service: {x:?}"),
