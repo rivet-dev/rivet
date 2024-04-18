@@ -33,7 +33,15 @@
 			"scheme": "file"
 		}
 	],
+	// Override CARGO_TARGET_DIR in order to prevent locking or cobbling the main target.
+	//
+	// Cargo often uses a diferent Rust version than RA because of Nix.
 	"rust-analyzer.cargo.extraEnv": {
-		"RUSTFLAGS": "--cfg tokio_unstable"
-	}
+		"RUSTFLAGS": "--cfg tokio_unstable",
+		"CARGO_TARGET_DIR": "${workspaceFolder}/target/analyzer"
+	},
+	"rust-analyzer.server.extraEnv": {
+		"CARGO_TARGET_DIR": "${workspaceFolder}/target/analyzer"
+	},
+	"rust-analyzer.cargo.targetDir": "${workspaceFolder}/target/analyzer"
 }
