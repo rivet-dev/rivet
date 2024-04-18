@@ -49,7 +49,6 @@ enum DrainState {
 }
 
 struct PoolCtx {
-	cluster_id: Uuid,
 	datacenter_id: Uuid,
 	provider: i32,
 	pool_type: backend::cluster::PoolType,
@@ -114,7 +113,6 @@ async fn inner(
 	dc: backend::cluster::Datacenter,
 	memory_by_server: HashMap<Uuid, u64>,
 ) -> GlobalResult<Vec<MsgFuture>> {
-	let cluster_id = unwrap_ref!(dc.cluster_id).as_uuid();
 	let datacenter_id = unwrap_ref!(dc.datacenter_id).as_uuid();
 
 	let servers = sql_fetch_all!(
@@ -169,7 +167,6 @@ async fn inner(
 	// NOTE: Can't parallelize because this is in a transaction
 	for pool in &dc.pools {
 		let pool_ctx = PoolCtx {
-			cluster_id,
 			datacenter_id,
 			provider: dc.provider,
 			pool_type: unwrap!(backend::cluster::PoolType::from_i32(pool.pool_type)),
@@ -547,22 +544,19 @@ async fn provision_server(
 				INSERT INTO db_cluster.servers (
 					server_id,
 					datacenter_id,
-					cluster_id,
 					pool_type,
 					create_ts
 				)
-				VALUES ($1, $2, $3, $4, $5)
+				VALUES ($1, $2, $3, $4)
 				",
 		server_id,
 		pctx.datacenter_id,
-		pctx.cluster_id,
 		pctx.pool_type as i64,
 		util::timestamp::now(),
 	)
 	.await?;
 
 	let ctx = ctx.base();
-	let cluster_id = pctx.cluster_id;
 	let datacenter_id = pctx.datacenter_id;
 	let provider = pctx.provider;
 	let pool_type = pctx.pool_type;
@@ -571,7 +565,6 @@ async fn provision_server(
 		async move {
 			tracing::info!(%server_id, "provisioning server");
 			msg!([ctx] cluster::msg::server_provision(server_id) {
-				cluster_id: Some(cluster_id.into()),
 				datacenter_id: Some(datacenter_id.into()),
 				server_id: Some(server_id.into()),
 				pool_type: pool_type as i32,

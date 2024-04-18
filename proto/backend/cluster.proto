@@ -60,12 +60,11 @@ enum BuildDeliveryMethod {
 message Server {
     rivet.common.Uuid server_id = 1;
     rivet.common.Uuid datacenter_id = 2;
-    rivet.common.Uuid cluster_id = 3;
-    PoolType pool_type = 4;
-    optional string vlan_ip = 5;
-    optional string public_ip = 6;
+    PoolType pool_type = 3;
+    optional string vlan_ip = 4;
+    optional string public_ip = 5;
 
-    optional int64 cloud_destroy_ts = 7;
+    optional int64 cloud_destroy_ts = 6;
 
     // TODO: Add the rest of the sql columns
 }

@@ -27,7 +27,6 @@ async fn nomad_node_drain_complete(ctx: TestCtx) {
 	.await;
 
 	msg!([ctx] @notrace cluster::msg::server_provision(server_id) -> nomad::msg::monitor_node_registered {
-		cluster_id: Some(cluster_id.into()),
 		datacenter_id: Some(datacenter_id.into()),
 		server_id: Some(server_id.into()),
 		pool_type: dc.pools.first().unwrap().pool_type,

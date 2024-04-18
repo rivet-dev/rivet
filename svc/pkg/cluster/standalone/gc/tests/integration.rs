@@ -27,7 +27,6 @@ async fn basic() {
 	let (dc_pools, provider) = setup(&ctx, server_id, datacenter_id, cluster_id).await;
 
 	msg!([ctx] cluster::msg::server_provision(server_id) {
-		cluster_id: Some(cluster_id.into()),
 		datacenter_id: Some(datacenter_id.into()),
 		server_id: Some(server_id.into()),
 		pool_type: dc_pools.first().unwrap().pool_type,
@@ -151,15 +150,13 @@ async fn setup(
 		INSERT INTO db_cluster.servers (
 			server_id,
 			datacenter_id,
-			cluster_id,
 			pool_type,
 			create_ts
 		)
-		VALUES ($1, $2, $3, $4, $5)
+		VALUES ($1, $2, $3, $4)
 		",
 		server_id,
 		datacenter_id,
-		cluster_id,
 		pool_type as i64,
 		util::timestamp::now(),
 	)

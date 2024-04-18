@@ -39,16 +39,14 @@ async fn basic(ctx: TestCtx) {
 		INSERT INTO db_cluster.servers (
 			server_id,
 			datacenter_id,
-			cluster_id,
 			pool_type,
 			create_ts,
 			public_ip
 		)
-		VALUES ($1, $2, $3, $4, $5, $6)
+		VALUES ($1, $2, $3, $4, $5)
 		",
 		server_id,
 		datacenter_id,
-		cluster_id,
 		backend::cluster::PoolType::Gg as i64,
 		util::timestamp::now(),
 		// Google

@@ -58,15 +58,13 @@ pub async fn setup(ctx: &TestCtx, opts: Setup) -> SetupRes {
 		INSERT INTO db_cluster.servers (
 			server_id,
 			datacenter_id,
-			cluster_id,
 			pool_type,
 			create_ts
 		)
-		VALUES ($1, $2, $3, $4, $5)
+		VALUES ($1, $2, $3, $4)
 		",
 		opts.server_id,
 		opts.datacenter_id,
-		opts.cluster_id,
 		opts.pool_type as i64,
 		util::timestamp::now(),
 	)

@@ -37,7 +37,6 @@ CREATE TABLE datacenter_tls (
 CREATE TABLE servers (
 	server_id UUID PRIMARY KEY,
 	datacenter_id UUID NOT NULL REFERENCES datacenters (datacenter_id),
-    cluster_id UUID NOT NULL REFERENCES clusters (cluster_id),
 	pool_type INT NOT NULL, -- rivet.backend.cluster.PoolType
 
 	-- Null until actual server is provisioned

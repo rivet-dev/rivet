@@ -7,7 +7,6 @@ use rivet_operation::prelude::*;
 struct Server {
 	server_id: Uuid,
 	datacenter_id: Uuid,
-	cluster_id: Uuid,
 	pool_type: i64,
 	vlan_ip: Option<IpAddr>,
 	public_ip: Option<IpAddr>,
@@ -19,7 +18,6 @@ impl From<Server> for backend::cluster::Server {
 		backend::cluster::Server {
 			server_id: Some(value.server_id.into()),
 			datacenter_id: Some(value.datacenter_id.into()),
-			cluster_id: Some(value.cluster_id.into()),
 			pool_type: value.pool_type as i32,
 			vlan_ip: value.vlan_ip.map(|ip| ip.to_string()),
 			public_ip: value.public_ip.map(|ip| ip.to_string()),
@@ -44,7 +42,6 @@ pub async fn handle(
 		SELECT
 			server_id,
 			datacenter_id,
-			cluster_id,
 			pool_type,
 			vlan_ip,
 			public_ip,

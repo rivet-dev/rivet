@@ -10,10 +10,9 @@ import "proto/backend/cluster.proto";
 /// 	{ name = "server_id" },
 /// ]
 message Message {
-    rivet.common.Uuid cluster_id = 1;
-    rivet.common.Uuid datacenter_id = 2;
-    rivet.common.Uuid server_id = 3;
-    rivet.backend.cluster.PoolType pool_type = 4;
-    rivet.backend.cluster.Provider provider = 5;
-    repeated string tags = 6;
+    rivet.common.Uuid datacenter_id = 1;
+    rivet.common.Uuid server_id = 2;
+    rivet.backend.cluster.PoolType pool_type = 3;
+    rivet.backend.cluster.Provider provider = 4;
+    repeated string tags = 5;
 }

@@ -50,7 +50,7 @@ pub async fn info(
 		name,
 		server_id: server_id.as_uuid(),
 		datacenter_id: datacenter_id.as_uuid(),
-		cluster_id: unwrap_ref!(server.cluster_id).as_uuid(),
+		cluster_id: unwrap_ref!(datacenter.cluster_id).as_uuid(),
 		vlan_ip: unwrap_ref!(server.vlan_ip, "server should have vlan ip by now").clone(),
 	})
 }

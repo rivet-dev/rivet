@@ -30,7 +30,6 @@ async fn datacenter_taint(ctx: TestCtx) {
 
 	// Manually create a server
 	msg!([ctx] cluster::msg::server_provision(server_id) {
-		cluster_id: Some(cluster_id.into()),
 		datacenter_id: Some(datacenter_id.into()),
 		server_id: Some(server_id.into()),
 		pool_type: dc.pools.first().unwrap().pool_type,
