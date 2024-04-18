@@ -7,8 +7,8 @@ async fn worker(
 ) -> GlobalResult<()> {
 	let server_id = unwrap_ref!(ctx.server_id).as_uuid();
 
-	sql_execute!(
-		[ctx]
+	let (datacenter_id,) = sql_fetch_one!(
+		[ctx, (Uuid,)]
 		"
 		UPDATE db_cluster.servers
 		SET
@@ -17,11 +17,18 @@ async fn worker(
 		WHERE
 			server_id = $1 AND
 			nomad_node_id IS NULL
+		RETURNING datacenter_id
 		",
 		&server_id,
 		&ctx.node_id,
 		util::timestamp::now(),
 	)
+	.await?;
+
+	// Scale to get rid of tainted servers
+	msg!([ctx] cluster::msg::datacenter_scale(datacenter_id) {
+		datacenter_id: Some(datacenter_id.into()),
+	})
 	.await?;
 
 	Ok(())

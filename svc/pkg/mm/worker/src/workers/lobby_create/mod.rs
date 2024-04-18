@@ -857,12 +857,15 @@ async fn resolve_image_artifact_url(
 
 			let region_id = unwrap_ref!(region.region_id).as_uuid();
 
-			// Hash build id
+			// Hash build so that the ATS server that we download the build from is always the same one. This
+			// improves cache hit rates and reduces download times.
 			let build_id = unwrap_ref!(build.build_id).as_uuid();
 			let mut hasher = DefaultHasher::new();
 			hasher.write(build_id.as_bytes());
 			let hash = hasher.finish() as i64;
 
+			// NOTE: The algorithm for choosing the vlan_ip from the hash should match the one in
+			// prewarm_ats.rs @ prewarm_ats_cache
 			// Get vlan ip from build id hash for consistent routing
 			let (ats_vlan_ip,) = sql_fetch_one!(
 				[ctx, (String,)]
@@ -876,6 +879,7 @@ async fn resolve_image_artifact_url(
 						datacenter_id = $1 AND
 						pool_type = $2 AND
 						vlan_ip IS NOT NULL AND
+						drain_ts IS NULL AND
 						cloud_destroy_ts IS NULL	
 				)
 				SELECT vlan_ip

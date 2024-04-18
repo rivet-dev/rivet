@@ -1,4 +1,5 @@
 use chirp_worker::prelude::*;
+use futures_util::FutureExt;
 use proto::backend::pkg::*;
 
 #[worker(name = "cluster-datacenter-update")]
@@ -46,10 +47,11 @@ async fn worker(
 	new_pools.encode(&mut pools_buf)?;
 
 	rivet_pools::utils::crdb::tx(&ctx.crdb().await?, |tx| {
-		let ctx = ctx.clone();
+		let drain_timeout = ctx.drain_timeout;
+		let ctx = ctx.base();
 		let pools_buf = pools_buf.clone();
 
-		Box::pin(async move {
+		async move {
 			// Update pools
 			sql_execute!(
 				[ctx, @tx tx]
@@ -64,7 +66,7 @@ async fn worker(
 			.await?;
 
 			// Update drain timeout
-			if let Some(drain_timeout) = ctx.drain_timeout {
+			if let Some(drain_timeout) = drain_timeout {
 				sql_execute!(
 					[ctx, @tx tx]
 					"
@@ -79,7 +81,8 @@ async fn worker(
 			}
 
 			Ok(())
-		})
+		}
+		.boxed()
 	})
 	.await?;
 

@@ -1,3 +1,4 @@
+use futures_util::FutureExt;
 use proto::backend::{self, pkg::*};
 use rivet_operation::prelude::*;
 
@@ -24,7 +25,7 @@ pub async fn run_from_env(pools: rivet_pools::Pools) -> GlobalResult<()> {
 	let updated_datacenter_ids = rivet_pools::utils::crdb::tx(&ctx.crdb().await?, |tx| {
 		let ctx = ctx.base();
 
-		Box::pin(async move {
+		async move {
 			// Check for expired rows
 			let datacenters = sql_fetch_all!(
 				[ctx, (Uuid,), @tx tx]
@@ -61,7 +62,8 @@ pub async fn run_from_env(pools: rivet_pools::Pools) -> GlobalResult<()> {
 			}
 
 			Ok(datacenters)
-		})
+		}
+		.boxed()
 	})
 	.await?;
 

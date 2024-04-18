@@ -7,9 +7,10 @@ async fn worker(
 ) -> GlobalResult<()> {
 	let provider = unwrap!(backend::cluster::Provider::from_i32(ctx.provider));
 
-	match provider {
-		backend::cluster::Provider::Linode => {
-			if ctx.server_id.is_none() {
+	// No server id means this was from a prebake install
+	if ctx.server_id.is_none() {
+		match provider {
+			backend::cluster::Provider::Linode => {
 				msg!([ctx] linode::msg::prebake_install_complete(&ctx.public_ip) {
 					public_ip: ctx.public_ip.clone(),
 					datacenter_id: ctx.datacenter_id,

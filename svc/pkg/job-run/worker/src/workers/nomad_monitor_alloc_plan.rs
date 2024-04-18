@@ -123,7 +123,7 @@ async fn worker(
 		let ctx = ctx.clone();
 		let now = ctx.ts();
 		let run_data = run_data.clone();
-		Box::pin(async move { update_db(ctx, tx, now, run_data).await })
+		Box::pin(update_db(ctx, tx, now, run_data))
 	})
 	.await?;
 

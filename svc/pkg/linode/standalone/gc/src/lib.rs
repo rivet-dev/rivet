@@ -1,4 +1,4 @@
-use futures_util::{StreamExt, TryStreamExt};
+use futures_util::{FutureExt, StreamExt, TryStreamExt};
 use proto::backend;
 use reqwest::header;
 use rivet_operation::prelude::*;
@@ -96,81 +96,7 @@ async fn run_for_linode_account(
 		let ctx = ctx.clone();
 		let image_ids = image_ids.clone();
 
-		Box::pin(async move {
-			let prebake_servers = sql_fetch_all!(
-				[ctx, LinodePrebakeServer, @tx tx]
-				"
-				SELECT
-					install_hash, datacenter_id, pool_type,
-					ssh_key_id, linode_id, firewall_id
-				FROM db_cluster.server_images_linode
-				WHERE image_id = ANY($1)
-				",
-				image_ids,
-			)
-			.await?;
-
-			if prebake_servers.is_empty() {
-				return Ok(Vec::new());
-			}
-
-			let primary_keys = prebake_servers
-				.iter()
-				.map(|server| {
-					(
-						&server.install_hash,
-						&server.datacenter_id,
-						server.pool_type,
-					)
-				})
-				.collect::<Vec<_>>();
-			let primary_keys = serde_json::to_string(&primary_keys)?;
-
-			// Update image id so it can now be used in provisioning
-			sql_execute!(
-				[ctx, @tx tx]
-				"
-				UPDATE db_cluster.server_images AS i
-				SET provider_image_id = m.image_id
-				FROM (
-					SELECT
-						install_hash, datacenter_id, pool_type, image_id
-					FROM db_cluster.server_images_linode AS s
-					INNER JOIN jsonb_array_elements($1::JSONB) AS q
-					ON
-						s.install_hash = (q->>0)::TEXT AND
-						s.datacenter_id = (q->>1)::UUID AND
-						s.pool_type = (q->>2)::INT
-				) AS m
-				WHERE
-					i.provider = $2 AND
-					i.install_hash = m.install_hash AND
-					i.datacenter_id = m.datacenter_id AND
-					i.pool_type = m.pool_type
-				",
-				&primary_keys,
-				backend::cluster::Provider::Linode as i64,
-			)
-			.await?;
-
-			// Remove records
-			sql_execute!(
-				[ctx, @tx tx]
-				"
-				DELETE FROM db_cluster.server_images_linode AS s
-				USING jsonb_array_elements($1::JSONB) AS q
-				WHERE
-					s.install_hash = (q->>0)::TEXT AND
-					s.datacenter_id = (q->>1)::UUID AND
-					s.pool_type = (q->>2)::INT
-				",
-				&primary_keys,
-				backend::cluster::Provider::Linode as i64,
-			)
-			.await?;
-
-			Ok(prebake_servers)
-		})
+		get_prebake_servers(ctx, tx, image_ids).boxed()
 	})
 	.await?;
 
@@ -185,6 +111,88 @@ async fn run_for_linode_account(
 		.await?;
 
 	Ok(())
+}
+
+#[tracing::instrument(skip_all)]
+async fn get_prebake_servers(
+	ctx: OperationContext<()>,
+	tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+	image_ids: Vec<String>,
+) -> GlobalResult<Vec<LinodePrebakeServer>> {
+	let prebake_servers = sql_fetch_all!(
+		[ctx, LinodePrebakeServer, @tx tx]
+		"
+		SELECT
+			install_hash, datacenter_id, pool_type,
+			ssh_key_id, linode_id, firewall_id
+		FROM db_cluster.server_images_linode
+		WHERE image_id = ANY($1)
+		FOR UPDATE
+		",
+		image_ids,
+	)
+	.await?;
+
+	if prebake_servers.is_empty() {
+		return Ok(Vec::new());
+	}
+
+	let primary_keys = prebake_servers
+		.iter()
+		.map(|server| {
+			(
+				&server.install_hash,
+				&server.datacenter_id,
+				server.pool_type,
+			)
+		})
+		.collect::<Vec<_>>();
+	let primary_keys = serde_json::to_string(&primary_keys)?;
+
+	// Update image id so it can now be used in provisioning
+	sql_execute!(
+		[ctx, @tx tx]
+		"
+		UPDATE db_cluster.server_images AS i
+		SET provider_image_id = m.image_id
+		FROM (
+			SELECT
+				install_hash, datacenter_id, pool_type, image_id
+			FROM db_cluster.server_images_linode AS s
+			INNER JOIN jsonb_array_elements($1::JSONB) AS q
+			ON
+				s.install_hash = (q->>0)::TEXT AND
+				s.datacenter_id = (q->>1)::UUID AND
+				s.pool_type = (q->>2)::INT
+		) AS m
+		WHERE
+			i.provider = $2 AND
+			i.install_hash = m.install_hash AND
+			i.datacenter_id = m.datacenter_id AND
+			i.pool_type = m.pool_type
+		",
+		&primary_keys,
+		backend::cluster::Provider::Linode as i64,
+	)
+	.await?;
+
+	// Remove records
+	sql_execute!(
+		[ctx, @tx tx]
+		"
+		DELETE FROM db_cluster.server_images_linode AS s
+		USING jsonb_array_elements($1::JSONB) AS q
+		WHERE
+			s.install_hash = (q->>0)::TEXT AND
+			s.datacenter_id = (q->>1)::UUID AND
+			s.pool_type = (q->>2)::INT
+		",
+		&primary_keys,
+		backend::cluster::Provider::Linode as i64,
+	)
+	.await?;
+
+	Ok(prebake_servers)
 }
 
 async fn delete_expired_images(

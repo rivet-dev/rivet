@@ -1,51 +1,68 @@
+// TERMINOLOGY:
+//
+// server: a non-destroyed non-tainted server
+// active server: a server that is being provisioned, is already provisioned, or is installed
+// installed server: a server that has successfully installed the required software
+// nomad server: a job server that has its nomad client connected to the leader
+// draining server: a server that is currently draining, not drained
+// drained server: a server that is finished draining
+// tainted server: a tainted server
+
 use std::{
 	cmp::Ordering,
 	collections::HashMap,
+	future::Future,
 	iter::{DoubleEndedIterator, Iterator},
+	pin::Pin,
 };
 
 use chirp_worker::prelude::*;
-use futures_util::{StreamExt, TryStreamExt};
+use futures_util::{FutureExt, StreamExt, TryStreamExt};
 use proto::backend::{self, pkg::*};
+
+type MsgFuture = Pin<Box<dyn Future<Output = Result<(), chirp_client::error::ClientError>> + Send>>;
 
 #[derive(sqlx::FromRow)]
 struct ServerRow {
 	server_id: Uuid,
 	pool_type: i64,
-	nomad_node_id: Option<String>,
-	drain_ts: Option<i64>,
+	is_installed: bool,
+	has_nomad_node: bool,
+	is_draining: bool,
+	is_drained: bool,
+	is_tainted: bool,
 }
 
 struct Server {
 	server_id: Uuid,
 	pool_type: backend::cluster::PoolType,
-	nomad_node_id: Option<String>,
-	is_draining: bool,
+	is_installed: bool,
+	has_nomad_node: bool,
+	is_tainted: bool,
+	drain_state: DrainState,
+}
+
+enum DrainState {
+	None,
+	Draining,
+	Complete,
+}
+
+struct PoolCtx {
+	cluster_id: Uuid,
+	datacenter_id: Uuid,
+	provider: i32,
+	pool_type: backend::cluster::PoolType,
+	desired_count: usize,
 }
 
 #[worker(name = "cluster-datacenter-scale")]
 async fn worker(
 	ctx: &OperationContext<cluster::msg::datacenter_scale::Message>,
 ) -> GlobalResult<()> {
-	let crdb = ctx.crdb().await?;
 	let datacenter_id = unwrap_ref!(ctx.datacenter_id).as_uuid();
 
-	let (servers, datacenter_res, topology_res) = tokio::try_join!(
-		// Get only ACTIVE servers
-		sql_fetch_all!(
-			[ctx, ServerRow]
-			"
-			SELECT
-				server_id, pool_type, nomad_node_id, drain_ts
-			FROM db_cluster.servers
-			WHERE
-				datacenter_id = $1 AND
-				-- Filters out servers that are being destroyed/already destroyed
-				cloud_destroy_ts IS NULL AND
-				taint_ts IS NULL
-			",
-			datacenter_id,
-		),
+	let (datacenter_res, topology_res) = tokio::try_join!(
 		op!([ctx] cluster_datacenter_get {
 			datacenter_ids: vec![datacenter_id.into()],
 		}),
@@ -54,17 +71,7 @@ async fn worker(
 		}),
 	)?;
 
-	let mut servers = servers
-		.into_iter()
-		.map(|row| {
-			Ok(Server {
-				server_id: row.server_id,
-				pool_type: unwrap!(backend::cluster::PoolType::from_i32(row.pool_type as i32)),
-				nomad_node_id: row.nomad_node_id,
-				is_draining: row.drain_ts.is_some(),
-			})
-		})
-		.collect::<GlobalResult<Vec<_>>>()?;
+	let dc = unwrap!(datacenter_res.datacenters.first());
 
 	let topology = unwrap!(topology_res.datacenters.first());
 	let memory_by_server = topology
@@ -78,88 +85,140 @@ async fn worker(
 		})
 		.collect::<GlobalResult<HashMap<_, _>>>()?;
 
-	// TODO: Sort gg servers by cpu usage
-	// Sort job servers by memory usage using cluster-datacenter-topology-get
-	servers.sort_by_key(|server| memory_by_server.get(&server.server_id));
+	// Run everything in a locking transaction
+	let msgs = rivet_pools::utils::crdb::tx(&ctx.crdb().await?, |tx| {
+		let ctx = ctx.base();
+		let dc = dc.clone();
+		let memory_by_server = memory_by_server.clone();
 
-	let dc = unwrap!(datacenter_res.datacenters.first());
-	let cluster_id = unwrap_ref!(dc.cluster_id).as_uuid();
+		inner(ctx, tx, dc, memory_by_server).boxed()
+	})
+	.await?;
 
-	for pool in &dc.pools {
-		scale_servers(ctx, &crdb, cluster_id, dc, &servers, pool).await?;
+	// Publish all messages
+	if !msgs.is_empty() {
+		tracing::info!("transaction successful, publishing messages");
+
+		futures_util::stream::iter(msgs)
+			.buffer_unordered(16)
+			.try_collect::<Vec<_>>()
+			.await?;
 	}
 
 	Ok(())
 }
 
-async fn scale_servers(
-	ctx: &OperationContext<cluster::msg::datacenter_scale::Message>,
-	crdb: &CrdbPool,
-	cluster_id: Uuid,
-	dc: &backend::cluster::Datacenter,
-	servers: &[Server],
-	pool: &backend::cluster::Pool,
-) -> GlobalResult<()> {
-	let pool_type = unwrap!(backend::cluster::PoolType::from_i32(pool.pool_type));
-	let desired_count = pool.desired_count.min(pool.max_count) as usize;
+async fn inner(
+	ctx: OperationContext<()>,
+	tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+	dc: backend::cluster::Datacenter,
+	memory_by_server: HashMap<Uuid, u64>,
+) -> GlobalResult<Vec<MsgFuture>> {
+	let cluster_id = unwrap_ref!(dc.cluster_id).as_uuid();
+	let datacenter_id = unwrap_ref!(dc.datacenter_id).as_uuid();
 
+	let servers = sql_fetch_all!(
+		[ctx, ServerRow, @tx tx]
+		"
+		SELECT
+			server_id, pool_type,
+			(install_complete_ts IS NOT NULL) AS is_installed,
+			(nomad_node_id IS NOT NULL) AS has_nomad_node,
+			(drain_ts IS NOT NULL) AS is_draining,
+			(drain_complete_ts IS NOT NULL) AS is_drained,
+			(taint_ts IS NOT NULL) AS is_tainted
+		FROM db_cluster.servers
+		WHERE
+			datacenter_id = $1 AND
+			-- Filters out servers that are being destroyed/already destroyed
+			cloud_destroy_ts IS NULL
+		FOR UPDATE
+		",
+		datacenter_id,
+	)
+	.await?;
+
+	let mut servers = servers
+		.into_iter()
+		.map(|row| {
+			Ok(Server {
+				server_id: row.server_id,
+				pool_type: unwrap!(backend::cluster::PoolType::from_i32(row.pool_type as i32)),
+				is_installed: row.is_installed,
+				has_nomad_node: row.has_nomad_node,
+				is_tainted: row.is_tainted,
+				drain_state: if row.is_drained {
+					DrainState::Complete
+				} else if row.is_draining {
+					DrainState::Draining
+				} else {
+					DrainState::None
+				},
+			})
+		})
+		.collect::<GlobalResult<Vec<_>>>()?;
+
+	// Sort job servers by memory usage
+	servers.sort_unstable_by_key(|server| memory_by_server.get(&server.server_id));
+
+	// TODO: Sort gg and ats servers by cpu usage
+	// servers.sort_by_key
+
+	let mut msgs = Vec::new();
+
+	// NOTE: Can't parallelize because this is in a transaction
+	for pool in &dc.pools {
+		let pool_ctx = PoolCtx {
+			cluster_id,
+			datacenter_id,
+			provider: dc.provider,
+			pool_type: unwrap!(backend::cluster::PoolType::from_i32(pool.pool_type)),
+			desired_count: pool.desired_count.min(pool.max_count) as usize,
+		};
+
+		scale_servers(&ctx, tx, &mut msgs, &servers, &pool_ctx).await?;
+		drain_tainted_servers(&ctx, tx, &mut msgs, &servers, &pool_ctx).await?;
+	}
+
+	destroy_drained_servers(&ctx, tx, &mut msgs, &servers).await?;
+
+	Ok(msgs)
+}
+
+async fn scale_servers(
+	ctx: &OperationContext<()>,
+	tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+	msgs: &mut Vec<MsgFuture>,
+	servers: &[Server],
+	pctx: &PoolCtx,
+) -> GlobalResult<()> {
 	let servers_in_pool = servers
 		.iter()
-		.filter(|server| server.pool_type == pool_type);
-	let draining_servers = servers_in_pool
-		.clone()
-		.filter(|server| server.is_draining)
-		.collect::<Vec<_>>();
-	let active_server_count = servers_in_pool.clone().count() - draining_servers.len();
+		.filter(|server| server.pool_type == pctx.pool_type)
+		.filter(|server| !server.is_tainted);
 
-	match desired_count.cmp(&active_server_count) {
-		Ordering::Less => match pool_type {
+	let active_servers_in_pool = servers_in_pool
+		.clone()
+		.filter(|server| matches!(server.drain_state, DrainState::None));
+	let active_count = active_servers_in_pool.clone().count();
+
+	match pctx.desired_count.cmp(&active_count) {
+		Ordering::Less => match pctx.pool_type {
 			backend::cluster::PoolType::Job => {
-				scale_down_job_servers(
-					ctx,
-					crdb,
-					dc,
-					servers_in_pool,
-					active_server_count,
-					desired_count,
-				)
-				.await?
+				scale_down_job_servers(ctx, tx, msgs, pctx, active_servers_in_pool, active_count)
+					.await?
 			}
 			backend::cluster::PoolType::Gg => {
-				scale_down_gg_servers(
-					ctx,
-					crdb,
-					dc,
-					servers_in_pool,
-					active_server_count,
-					desired_count,
-				)
-				.await?
+				scale_down_gg_servers(ctx, tx, msgs, pctx, active_servers_in_pool, active_count)
+					.await?
 			}
 			backend::cluster::PoolType::Ats => {
-				scale_down_ats_servers(
-					ctx,
-					crdb,
-					dc,
-					servers_in_pool,
-					active_server_count,
-					desired_count,
-				)
-				.await?
+				scale_down_ats_servers(ctx, tx, msgs, pctx, active_servers_in_pool, active_count)
+					.await?
 			}
 		},
 		Ordering::Greater => {
-			scale_up_servers(
-				ctx,
-				crdb,
-				cluster_id,
-				dc,
-				draining_servers,
-				active_server_count,
-				desired_count,
-				pool_type,
-			)
-			.await?;
+			scale_up_servers(ctx, tx, msgs, pctx, servers_in_pool, active_count).await?;
 		}
 		Ordering::Equal => {}
 	}
@@ -167,155 +226,82 @@ async fn scale_servers(
 	Ok(())
 }
 
-async fn scale_down_job_servers<'a, I: Iterator<Item = &'a Server> + Clone>(
-	ctx: &OperationContext<cluster::msg::datacenter_scale::Message>,
-	crdb: &CrdbPool,
-	dc: &backend::cluster::Datacenter,
-	servers: I,
-	active_server_count: usize,
-	desired_count: usize,
+async fn scale_down_job_servers<'a, I: Iterator<Item = &'a Server>>(
+	ctx: &OperationContext<()>,
+	tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+	msgs: &mut Vec<MsgFuture>,
+	pctx: &PoolCtx,
+	active_servers: I,
+	active_count: usize,
 ) -> GlobalResult<()> {
-	let datacenter_id = unwrap_ref!(dc.datacenter_id).as_uuid();
-
 	tracing::info!(
-		?datacenter_id,
-		active=%active_server_count,
-		desired=%desired_count,
+		datacenter_id=?pctx.datacenter_id,
+		desired=%pctx.desired_count,
+		active=%active_count,
 		"scaling down job"
 	);
 
-	let (nomad_servers, no_nomad_servers) = servers
-		.clone()
-		.partition::<Vec<_>, _>(|server| server.nomad_node_id.is_some());
+	let (nomad_servers, without_nomad_servers) =
+		active_servers.partition::<Vec<_>, _>(|server| server.has_nomad_node);
 
-	let destroy_count = (active_server_count - desired_count).min(no_nomad_servers.len());
-	let drain_count = active_server_count - desired_count - destroy_count;
+	let destroy_count = (active_count - pctx.desired_count).min(without_nomad_servers.len());
+	let drain_count = active_count - pctx.desired_count - destroy_count;
 
 	// Destroy servers
 	if destroy_count != 0 {
 		tracing::info!(count=%destroy_count, "destroying servers");
 
-		let destroy_candidates = no_nomad_servers.iter().take(destroy_count);
+		let destroy_candidates = without_nomad_servers
+			.iter()
+			.take(destroy_count)
+			.map(|server| server.server_id);
 
-		// Mark servers for destruction in db
-		sql_execute!(
-			[ctx, &crdb]
-			"
-			UPDATE db_cluster.servers
-			SET cloud_destroy_ts = $2
-			WHERE server_id = ANY($1)
-			",
-			destroy_candidates.clone()
-				.map(|server| server.server_id)
-				.collect::<Vec<_>>(),
-			util::timestamp::now(),
-		)
-		.await?;
-
-		for server in destroy_candidates {
-			tracing::info!(
-				server_id=%server.server_id,
-				nomad_node_id=?server.nomad_node_id,
-				"destroying server"
-			);
-
-			msg!([ctx] cluster::msg::server_destroy(server.server_id) {
-				server_id: Some(server.server_id.into()),
-				force: false,
-			})
-			.await?;
-		}
+		destroy_servers(ctx, tx, msgs, destroy_candidates).await?;
 	}
 
 	// Drain servers
 	if drain_count != 0 {
-		tracing::info!(count=%drain_count, "draining servers");
+		tracing::info!(count=%drain_count, "draining job servers");
 
-		let drain_candidates = nomad_servers.iter().rev().take(drain_count);
+		let drain_candidates = nomad_servers
+			.iter()
+			.rev()
+			.take(drain_count)
+			.map(|server| server.server_id);
 
-		// Mark servers as draining in db
-		sql_execute!(
-			[ctx, &crdb]
-			"
-			UPDATE db_cluster.servers
-			SET drain_ts = $2
-			WHERE server_id = ANY($1)
-			",
-			drain_candidates.clone()
-				.map(|server| server.server_id)
-				.collect::<Vec<_>>(),
-			util::timestamp::now(),
-		)
-		.await?;
-
-		for server in drain_candidates {
-			tracing::info!(
-				server_id=%server.server_id,
-				nomad_node_id=?server.nomad_node_id,
-				"draining server"
-			);
-
-			msg!([ctx] cluster::msg::server_drain(server.server_id) {
-				server_id: Some(server.server_id.into()),
-			})
-			.await?;
-		}
+		drain_servers(ctx, tx, msgs, drain_candidates).await?;
 	}
 
 	Ok(())
 }
 
 async fn scale_down_gg_servers<'a, I: Iterator<Item = &'a Server> + DoubleEndedIterator + Clone>(
-	ctx: &OperationContext<cluster::msg::datacenter_scale::Message>,
-	crdb: &CrdbPool,
-	dc: &backend::cluster::Datacenter,
-	servers: I,
-	active_server_count: usize,
-	desired_count: usize,
+	ctx: &OperationContext<()>,
+	tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+	msgs: &mut Vec<MsgFuture>,
+	pctx: &PoolCtx,
+	active_servers: I,
+	active_count: usize,
 ) -> GlobalResult<()> {
-	let datacenter_id = unwrap_ref!(dc.datacenter_id).as_uuid();
-
 	tracing::info!(
-		?datacenter_id,
-		active=%active_server_count,
-		desired=%desired_count,
+		datacenter_id=?pctx.datacenter_id,
+		desired=%pctx.desired_count,
+		active=%active_count,
 		"scaling down gg"
 	);
 
-	let drain_count = active_server_count - desired_count;
+	let drain_count = active_count - pctx.desired_count;
 
 	// Drain servers
 	if drain_count != 0 {
-		tracing::info!(count=%drain_count, "draining servers");
+		tracing::info!(count=%drain_count, "draining gg servers");
 
-		let drain_candidates = servers.rev().take(drain_count);
+		let drain_candidates = active_servers
+			.rev()
+			.take(drain_count)
+			.map(|server| server.server_id);
 
-		// Mark servers as draining in db
-		sql_execute!(
-			[ctx, &crdb]
-			"
-			UPDATE db_cluster.servers
-			SET drain_ts = $2
-			WHERE server_id = ANY($1)
-			",
-			drain_candidates.clone()
-				.map(|server| server.server_id)
-				.collect::<Vec<_>>(),
-			util::timestamp::now(),
-		)
-		.await?;
-
-		for server in drain_candidates {
-			tracing::info!(
-				server_id=%server.server_id,
-				"draining server"
-			);
-
-			msg!([ctx] cluster::msg::server_drain(server.server_id) {
-				server_id: Some(server.server_id.into()),
-			})
-			.await?;
-		}
+		drain_servers(ctx, tx, msgs, drain_candidates).await?;
 	}
 
 	Ok(())
@@ -325,85 +311,61 @@ async fn scale_down_ats_servers<
 	'a,
 	I: Iterator<Item = &'a Server> + DoubleEndedIterator + Clone,
 >(
-	ctx: &OperationContext<cluster::msg::datacenter_scale::Message>,
-	crdb: &CrdbPool,
-	dc: &backend::cluster::Datacenter,
-	servers: I,
-	active_server_count: usize,
-	desired_count: usize,
+	ctx: &OperationContext<()>,
+	tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+	msgs: &mut Vec<MsgFuture>,
+	pctx: &PoolCtx,
+	active_servers: I,
+	active_count: usize,
 ) -> GlobalResult<()> {
-	let datacenter_id = unwrap_ref!(dc.datacenter_id).as_uuid();
-
 	tracing::info!(
-		?datacenter_id,
-		active=%active_server_count,
-		desired=%desired_count,
+		datacenter_id=?pctx.datacenter_id,
+		desired=%pctx.desired_count,
+		active=%active_count,
 		"scaling down ats"
 	);
 
-	let destroy_count = active_server_count - desired_count;
+	let drain_count = active_count - pctx.desired_count;
 
-	// Destroy servers
-	if destroy_count != 0 {
-		tracing::info!(count=%destroy_count, "destroying servers");
+	// Drain servers
+	if drain_count != 0 {
+		tracing::info!(count=%drain_count, "draining ats servers");
 
-		let destroy_candidates = servers.take(destroy_count);
+		let drain_candidates = active_servers
+			.rev()
+			.take(drain_count)
+			.map(|server| server.server_id);
 
-		// Mark servers for destruction in db
-		sql_execute!(
-			[ctx, &crdb]
-			"
-			UPDATE db_cluster.servers
-			SET cloud_destroy_ts = $2
-			WHERE server_id = ANY($1)
-			",
-			destroy_candidates.clone()
-				.map(|server| server.server_id)
-				.collect::<Vec<_>>(),
-			util::timestamp::now(),
-		)
-		.await?;
-
-		for server in destroy_candidates {
-			tracing::info!(
-				server_id=%server.server_id,
-				"destroying server"
-			);
-
-			msg!([ctx] cluster::msg::server_destroy(server.server_id) {
-				server_id: Some(server.server_id.into()),
-				force: false,
-			})
-			.await?;
-		}
+		drain_servers(ctx, tx, msgs, drain_candidates).await?;
 	}
 
 	Ok(())
 }
 
-async fn scale_up_servers(
-	ctx: &OperationContext<cluster::msg::datacenter_scale::Message>,
-	crdb: &CrdbPool,
-	cluster_id: Uuid,
-	dc: &backend::cluster::Datacenter,
-	draining_servers: Vec<&Server>,
-	active_server_count: usize,
-	desired_count: usize,
-	pool_type: backend::cluster::PoolType,
+async fn scale_up_servers<'a, I: Iterator<Item = &'a Server> + Clone>(
+	ctx: &OperationContext<()>,
+	tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+	msgs: &mut Vec<MsgFuture>,
+	pctx: &PoolCtx,
+	servers: I,
+	active_count: usize,
 ) -> GlobalResult<()> {
-	let datacenter_id = unwrap_ref!(dc.datacenter_id).as_uuid();
+	let draining_servers = servers
+		.clone()
+		.filter(|server| matches!(server.drain_state, DrainState::Draining))
+		.collect::<Vec<_>>();
 
 	tracing::info!(
-		?datacenter_id,
-		active=%active_server_count,
+		datacenter_id=?pctx.datacenter_id,
+		desired=%pctx.desired_count,
+		active=%active_count,
 		draining=%draining_servers.len(),
-		desired=%desired_count,
-		?pool_type,
+		pool_type=?pctx.pool_type,
 		"scaling up"
 	);
 
-	let undrain_count = (desired_count - active_server_count).min(draining_servers.len());
-	let provision_count = desired_count - active_server_count - undrain_count;
+	let undrain_count = (pctx.desired_count - active_count).min(draining_servers.len());
+	let provision_count = pctx.desired_count - active_count - undrain_count;
 
 	// Undrain servers
 	if undrain_count != 0 {
@@ -411,81 +373,251 @@ async fn scale_up_servers(
 
 		// Because job servers are ordered by memory usage, this will undrain the servers with the most memory
 		// usage
-		let undrain_candidates = draining_servers.iter().take(undrain_count);
+		let undrain_candidates = draining_servers
+			.iter()
+			.take(undrain_count)
+			.map(|server| server.server_id);
 
-		// Mark servers as not draining in db
-		sql_execute!(
-			[ctx, &crdb]
-			"
-			UPDATE db_cluster.servers
-			SET drain_ts = NULL
-			WHERE server_id = ANY($1)
-			",
-			undrain_candidates.clone()
-				.map(|server| server.server_id)
-				.collect::<Vec<_>>(),
-		)
-		.await?;
-
-		for draining_server in undrain_candidates {
-			tracing::info!(
-				server_id=%draining_server.server_id,
-				nomad_node_id=?draining_server.nomad_node_id,
-				"undraining server"
-			);
-
-			msg!([ctx] cluster::msg::server_undrain(draining_server.server_id) {
-				server_id: Some(draining_server.server_id.into()),
-			})
-			.await?;
-		}
+		undrain_servers(ctx, tx, msgs, undrain_candidates).await?;
 	}
 
 	// Create new servers
 	if provision_count != 0 {
 		tracing::info!(count=%provision_count, "provisioning servers");
 
-		futures_util::stream::iter(0..provision_count)
-			.map(|_| async {
-				let server_id = Uuid::new_v4();
+		for _ in 0..provision_count {
+			provision_server(ctx, tx, msgs, pctx).await?;
+		}
+	}
 
-				// Write new server to db
-				sql_execute!(
-					[ctx, &crdb]
-					"
-					INSERT INTO db_cluster.servers (
-						server_id,
-						datacenter_id,
-						cluster_id,
-						pool_type,
-						create_ts
-					)
-					VALUES ($1, $2, $3, $4, $5)
-					",
+	Ok(())
+}
+
+async fn drain_tainted_servers(
+	ctx: &OperationContext<()>,
+	tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+	msgs: &mut Vec<MsgFuture>,
+	servers: &[Server],
+	pctx: &PoolCtx,
+) -> GlobalResult<()> {
+	let active_servers_in_pool = servers
+		.iter()
+		.filter(|server| server.pool_type == pctx.pool_type)
+		.filter(|server| matches!(server.drain_state, DrainState::None));
+
+	let active_tainted_servers_in_pool = active_servers_in_pool
+		.clone()
+		.filter(|server| server.is_tainted);
+
+	// For job servers the "active" servers we count are ones with nomad successfully connected. Otherwise we
+	// count servers that have successfully installed
+	let relevant_active_count = match pctx.pool_type {
+		backend::cluster::PoolType::Job => active_servers_in_pool
+			.clone()
+			.filter(|server| server.has_nomad_node)
+			.count(),
+		_ => active_servers_in_pool
+			.clone()
+			.filter(|server| server.is_installed)
+			.count(),
+	};
+
+	let active_tainted_count = active_tainted_servers_in_pool.clone().count();
+
+	// tainted - (desired - running) -> tainted + running - desired
+	let drain_count =
+		(active_tainted_count + relevant_active_count).saturating_sub(pctx.desired_count);
+
+	drain_servers(
+		ctx,
+		tx,
+		msgs,
+		active_tainted_servers_in_pool
+			.take(drain_count)
+			.map(|server| server.server_id),
+	)
+	.await?;
+
+	Ok(())
+}
+
+// Destroys all drained servers (including tainted drained servers)
+async fn destroy_drained_servers(
+	ctx: &OperationContext<()>,
+	tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+	msgs: &mut Vec<MsgFuture>,
+	servers: &[Server],
+) -> GlobalResult<()> {
+	let drained_server_ids = servers
+		.iter()
+		.filter(|server| matches!(server.drain_state, DrainState::Complete))
+		.map(|server| server.server_id)
+		.collect::<Vec<_>>();
+
+	if drained_server_ids.is_empty() {
+		return Ok(());
+	}
+
+	tracing::info!(count=%drained_server_ids.len(), "deleting drained servers");
+
+	destroy_servers(ctx, tx, msgs, drained_server_ids.into_iter()).await
+}
+
+async fn drain_servers<I: Iterator<Item = Uuid> + Clone>(
+	ctx: &OperationContext<()>,
+	tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+	msgs: &mut Vec<MsgFuture>,
+	server_ids: I,
+) -> GlobalResult<()> {
+	// Mark servers as draining in db
+	sql_execute!(
+		[ctx, @tx tx]
+		"
+		UPDATE db_cluster.servers
+		SET drain_ts = $2
+		WHERE server_id = ANY($1)
+		",
+		server_ids.clone().collect::<Vec<_>>(),
+		util::timestamp::now(),
+	)
+	.await?;
+
+	msgs.extend(server_ids.map(|server_id| {
+		let ctx = ctx.base();
+		async move {
+			tracing::info!(%server_id, "draining server");
+
+			msg!([ctx] cluster::msg::server_drain(server_id) {
+				server_id: Some(server_id.into()),
+			})
+			.await
+		}
+		.boxed()
+	}));
+
+	Ok(())
+}
+
+async fn undrain_servers<I: Iterator<Item = Uuid> + Clone>(
+	ctx: &OperationContext<()>,
+	tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+	msgs: &mut Vec<MsgFuture>,
+	server_ids: I,
+) -> GlobalResult<()> {
+	// Mark servers as not draining in db
+	sql_execute!(
+		[ctx, @tx tx]
+		"
+		UPDATE db_cluster.servers
+		SET drain_ts = NULL
+		WHERE server_id = ANY($1)
+		",
+		server_ids.clone().collect::<Vec<_>>(),
+	)
+	.await?;
+
+	msgs.extend(server_ids.map(|server_id| {
+		let ctx = ctx.base();
+		async move {
+			tracing::info!(%server_id, "undraining server");
+
+			msg!([ctx] cluster::msg::server_undrain(server_id) {
+				server_id: Some(server_id.into()),
+			})
+			.await
+		}
+		.boxed()
+	}));
+
+	Ok(())
+}
+
+async fn provision_server(
+	ctx: &OperationContext<()>,
+	tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+	msgs: &mut Vec<MsgFuture>,
+	pctx: &PoolCtx,
+) -> GlobalResult<()> {
+	let server_id = Uuid::new_v4();
+
+	// Write new server to db
+	sql_execute!(
+		[ctx, @tx tx]
+		"
+				INSERT INTO db_cluster.servers (
 					server_id,
 					datacenter_id,
 					cluster_id,
-					pool_type as i64,
-					util::timestamp::now(),
+					pool_type,
+					create_ts
 				)
-				.await?;
+				VALUES ($1, $2, $3, $4, $5)
+				",
+		server_id,
+		pctx.datacenter_id,
+		pctx.cluster_id,
+		pctx.pool_type as i64,
+		util::timestamp::now(),
+	)
+	.await?;
 
-				msg!([ctx] cluster::msg::server_provision(server_id) {
-					cluster_id: Some(cluster_id.into()),
-					datacenter_id: dc.datacenter_id,
-					server_id: Some(server_id.into()),
-					pool_type: pool_type as i32,
-					provider: dc.provider,
-					tags: Vec::new(),
-				})
-				.await?;
+	let ctx = ctx.base();
+	let cluster_id = pctx.cluster_id;
+	let datacenter_id = pctx.datacenter_id;
+	let provider = pctx.provider;
+	let pool_type = pctx.pool_type;
 
-				GlobalResult::Ok(())
+	msgs.push(
+		async move {
+			tracing::info!(%server_id, "provisioning server");
+			msg!([ctx] cluster::msg::server_provision(server_id) {
+				cluster_id: Some(cluster_id.into()),
+				datacenter_id: Some(datacenter_id.into()),
+				server_id: Some(server_id.into()),
+				pool_type: pool_type as i32,
+				provider: provider,
+				tags: Vec::new(),
 			})
-			.buffer_unordered(16)
-			.try_collect::<Vec<_>>()
-			.await?;
-	}
+			.await
+		}
+		.boxed(),
+	);
+
+	Ok(())
+}
+
+async fn destroy_servers<I: Iterator<Item = Uuid> + Clone>(
+	ctx: &OperationContext<()>,
+	tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+	msgs: &mut Vec<MsgFuture>,
+	server_ids: I,
+) -> GlobalResult<()> {
+	// Mark servers for destruction in db
+	sql_execute!(
+		[ctx, @tx tx]
+		"
+		UPDATE db_cluster.servers
+		SET cloud_destroy_ts = $2
+		WHERE server_id = ANY($1)
+		",
+		server_ids.clone().collect::<Vec<_>>(),
+		util::timestamp::now(),
+	)
+	.await?;
+
+	msgs.extend(server_ids.map(|server_id| {
+		let ctx = ctx.base();
+		async move {
+			tracing::info!(%server_id, "destroying server");
+
+			msg!([ctx] cluster::msg::server_destroy(server_id) {
+				server_id: Some(server_id.into()),
+				force: false,
+			})
+			.await
+		}
+		.boxed()
+	}));
 
 	Ok(())
 }

@@ -16,6 +16,9 @@ pub type AsyncResult<'a, T> = Pin<Box<dyn Future<Output = GlobalResult<T>> + Sen
 ///
 /// See
 /// https://www.cockroachlabs.com/docs/v22.2/advanced-client-side-transaction-retries
+/// 
+/// **NOTE** The transaction will be rolled back if the future is cancelled. See
+/// https://docs.rs/sqlx/0.7.4/sqlx/struct.Transaction.html
 #[tracing::instrument(skip_all)]
 pub async fn tx<T, F>(crdb: &CrdbPool, f: F) -> GlobalResult<T>
 where

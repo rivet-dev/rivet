@@ -1,4 +1,5 @@
 use chirp_worker::prelude::*;
+use futures_util::FutureExt;
 use proto::backend::{self, pkg::*};
 
 #[worker(name = "cluster-datacenter-create")]
@@ -27,7 +28,7 @@ async fn worker(
 		let ctx = ctx.clone();
 		let pools_buf = pools_buf.clone();
 
-		Box::pin(async move {
+		async move {
 			sql_execute!(
 				[ctx, @tx tx]
 				"
@@ -77,7 +78,8 @@ async fn worker(
 			.await?;
 
 			Ok(())
-		})
+		}
+		.boxed()
 	})
 	.await?;
 

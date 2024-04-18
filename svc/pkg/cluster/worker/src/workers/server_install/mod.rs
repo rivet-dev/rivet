@@ -137,6 +137,27 @@ async fn worker(ctx: &OperationContext<cluster::msg::server_install::Message>) -
 	})
 	.await??;
 
+	if let Some(server_id) = ctx.server_id {
+		let (is_destroying,) = sql_fetch_one!(
+			[ctx, (bool,)]
+			"
+			SELECT EXISTS(
+				SELECT 1
+				FROM db_cluster.servers
+				WHERE server_id = $1 AND
+				cloud_destroy_ts IS NOT NULL
+			)
+			",
+			server_id.as_uuid(),
+		)
+		.await?;
+
+		if is_destroying {
+			tracing::info!("server marked for deletion, not installing");
+			return Ok(());
+		}
+	}
+
 	msg!([ctx] cluster::msg::server_install_complete(&ctx.public_ip) {
 		public_ip: ctx.public_ip.clone(),
 		datacenter_id: ctx.datacenter_id,
@@ -144,6 +165,28 @@ async fn worker(ctx: &OperationContext<cluster::msg::server_install::Message>) -
 		provider: ctx.provider,
 	})
 	.await?;
+
+	// If the server id is set this is not a prebake server
+	if let Some(server_id) = ctx.server_id {
+		sql_execute!(
+			[ctx]
+			"
+			UPDATE db_cluster.server
+			SET install_complete_ts = $2
+			WHERE server_id = $1
+			",
+			server_id.as_uuid(),
+			util::timestamp::now(),
+		)
+		.await?;
+
+		// Scale to get rid of tainted servers
+		let datacenter_id = unwrap_ref!(ctx.datacenter_id).as_uuid();
+		msg!([ctx] cluster::msg::datacenter_scale(datacenter_id) {
+			datacenter_id: ctx.datacenter_id,
+		})
+		.await?;
+	}
 
 	Ok(())
 }

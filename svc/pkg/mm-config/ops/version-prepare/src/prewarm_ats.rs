@@ -49,12 +49,13 @@ pub async fn prewarm_ats_cache(
 		[ctx, VlanIp]
 		"
 		SELECT
-		datacenter_id, vlan_ip
+			datacenter_id, vlan_ip
 		FROM db_cluster.servers
 		WHERE
 			datacenter_id = ANY($1) AND
 			pool_type = $2 AND
 			vlan_ip IS NOT NULL AND
+			drain_ts IS NULL AND
 			cloud_destroy_ts IS NULL
 		",
 		// NOTE: region_id is just the old name for datacenter_id

@@ -52,9 +52,11 @@ CREATE TABLE servers (
 	nomad_node_id TEXT,
 
 	create_ts INT NOT NULL,
+	install_complete_ts INT,
 	nomad_join_ts INT,
 	-- Null if not draining
 	drain_ts INT,
+	drain_complete_ts INT,
 	-- When the server was marked to be deleted by rivet
 	cloud_destroy_ts INT,
 	taint_ts INT
