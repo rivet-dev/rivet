@@ -170,7 +170,7 @@ async fn worker(ctx: &OperationContext<cluster::msg::server_install::Message>) -
 		sql_execute!(
 			[ctx]
 			"
-			UPDATE db_cluster.server
+			UPDATE db_cluster.servers
 			SET install_complete_ts = $2
 			WHERE server_id = $1
 			",

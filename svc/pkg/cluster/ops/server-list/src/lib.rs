@@ -23,13 +23,13 @@ pub async fn handle(
 		sql_fetch_all!(
 			[ctx, Server]
 			"
-			SELECT
-				cluster_id,
-				server_id
-			FROM db_cluster.servers
+			SELECT d.cluster_id, s.server_id
+			FROM servers AS s
+			JOIN datacenters AS d
+			ON s.datacenter_id = d.datacenter_id
 			WHERE
-				cluster_id = ANY($1) AND
-				taint_ts IS NULL
+				d.cluster_id = ANY($1) AND
+				s.taint_ts IS NULL
 			",
 			&cluster_ids
 		)
@@ -38,14 +38,14 @@ pub async fn handle(
 		sql_fetch_all!(
 			[ctx, Server]
 			"
-			SELECT
-				cluster_id,
-				server_id
-			FROM db_cluster.servers
+			SELECT d.cluster_id, s.server_id
+			FROM servers AS s
+			JOIN datacenters AS d
+			ON s.datacenter_id = d.datacenter_id
 			WHERE
-				cluster_id = ANY($1) AND
-				cloud_destroy_ts IS NULL AND
-				taint_ts IS NULL
+				d.cluster_id = ANY($1) AND
+				s.cloud_destroy_ts IS NULL AND
+				s.taint_ts IS NULL
 			",
 			&cluster_ids
 		)

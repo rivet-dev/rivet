@@ -64,6 +64,7 @@ pub async fn handle(
 			destroy_ts IS NULL
 		",
 		server_id,
+		util::timestamp::now(),
 	)
 	.await?;
 

@@ -132,7 +132,7 @@ async fn get_prebake_servers(
 		WHERE
 			image_id = ANY($1) AND
 			destroy_ts IS NULL
-			FOR UPDATE
+		FOR UPDATE
 		",
 		image_ids,
 	)

@@ -1042,7 +1042,10 @@ impl ServiceContextData {
 
 			env.push((
 				format!("TLS_ACME_DIRECTORY"),
-				serde_json::to_string(&provisioning.acme_directory)?,
+				serde_json::to_value(&provisioning.acme_directory)?
+					.as_str()
+					.unwrap()
+					.to_string(),
 			));
 		}
 
