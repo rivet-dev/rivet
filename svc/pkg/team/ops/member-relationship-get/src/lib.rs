@@ -10,7 +10,7 @@ async fn handle(
 		.users
 		.iter()
 		.map(|x| -> GlobalResult<(Uuid, Uuid)> {
-			Ok((
+			Ok(util::sort::id_pair(
 				unwrap_ref!(x.this_user_id).as_uuid(),
 				unwrap_ref!(x.other_user_id).as_uuid(),
 			))
@@ -19,9 +19,11 @@ async fn handle(
 
 	// Query relationships
 	let relationships = sql_fetch_all!(
-		[ctx, (Vec<Uuid>,)]
+		[ctx, (Uuid, Uuid, Vec<Uuid>,)]
 		"
 		SELECT
+			(q->>0)::UUID AS this_user_id,
+			(q->>1)::UUID AS other_user_id,
 			ARRAY(
 				SELECT this_tm.team_id
 				FROM db_team.team_members AS this_tm
@@ -35,16 +37,17 @@ async fn handle(
 	.await?;
 
 	let users = relationships
-		.iter()
-		.map(
-			|(team_ids,)| team::member_relationship_get::response::User {
+		.into_iter()
+		.map(|(this_user_id, other_user_id, team_ids)| {
+			team::member_relationship_get::response::User {
+				this_user_id: Some(this_user_id.into()),
+				other_user_id: Some(other_user_id.into()),
 				shared_team_ids: team_ids
-					.iter()
-					.cloned()
+					.into_iter()
 					.map(Into::<common::Uuid>::into)
 					.collect(),
-			},
-		)
+			}
+		})
 		.collect();
 
 	Ok(team::member_relationship_get::Response { users })

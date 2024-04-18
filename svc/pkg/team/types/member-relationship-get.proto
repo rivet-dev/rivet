@@ -15,6 +15,8 @@ message Request {
 
 message Response {
     message User {
+        rivet.common.Uuid this_user_id = 2;
+        rivet.common.Uuid other_user_id = 3;
         repeated rivet.common.Uuid shared_team_ids = 1;
     }
 

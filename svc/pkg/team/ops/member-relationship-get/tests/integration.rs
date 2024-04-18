@@ -49,9 +49,9 @@ async fn basic(ctx: TestCtx) {
 		.flat_map(|&this_user| {
 			all_user_ids
 				.iter()
-				.map(move |&other_user| (this_user, other_user))
+				.map(move |&other_user| util::sort::id_pair(this_user, other_user))
 		})
-		.collect::<Vec<_>>();
+		.collect::<HashSet<_>>();
 	let test_users = tests
 		.iter()
 		.map(
@@ -67,28 +67,30 @@ async fn basic(ctx: TestCtx) {
 	.await
 	.unwrap();
 
-	res.users
-		.iter()
-		.zip(tests.iter())
-		.for_each(|(relationship, &(this_user, other_user))| {
-			let res_shared_team_ids = relationship
-				.shared_team_ids
-				.iter()
-				.map(|x| x.as_uuid())
-				.collect::<HashSet<Uuid>>();
+	assert_eq!(tests.len(), res.users.len());
 
-			let this_team_ids = memberships
-				.iter()
-				.filter(|m| m.0 == this_user)
-				.map(|m| m.1)
-				.collect::<HashSet<Uuid>>();
-			let shared_team_ids = memberships
-				.iter()
-				.filter(|m| m.0 == other_user)
-				.filter(|m| this_team_ids.contains(&m.1))
-				.map(|m| m.1)
-				.collect::<HashSet<Uuid>>();
+	res.users.iter().for_each(|relationship| {
+		let this_user_id = relationship.this_user_id.unwrap().as_uuid();
+		let other_user_id = relationship.other_user_id.unwrap().as_uuid();
 
-			assert_eq!(shared_team_ids, res_shared_team_ids, "bad shared team ids");
-		});
+		let res_shared_team_ids = relationship
+			.shared_team_ids
+			.iter()
+			.map(|x| x.as_uuid())
+			.collect::<HashSet<Uuid>>();
+
+		let this_team_ids = memberships
+			.iter()
+			.filter(|m| m.0 == this_user_id)
+			.map(|m| m.1)
+			.collect::<HashSet<Uuid>>();
+		let shared_team_ids = memberships
+			.iter()
+			.filter(|m| m.0 == other_user_id)
+			.filter(|m| this_team_ids.contains(&m.1))
+			.map(|m| m.1)
+			.collect::<HashSet<Uuid>>();
+
+		assert_eq!(shared_team_ids, res_shared_team_ids, "bad shared team ids");
+	});
 }
