@@ -7,7 +7,7 @@ async fn worker(
 ) -> GlobalResult<()> {
 	let server_id = unwrap_ref!(ctx.server_id).as_uuid();
 
-	// Set as completed draining
+	// Set as completed draining. Will be destroyed by `cluster-datacenter-scale`
 	let (datacenter_id,) = sql_fetch_one!(
 		[ctx, (Uuid,)]
 		"

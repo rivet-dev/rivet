@@ -7,7 +7,7 @@ async fn worker(
 ) -> GlobalResult<()> {
 	let datacenter_id = unwrap_ref!(ctx.datacenter_id).as_uuid();
 
-	// Taint server records
+	// Taint server records. These will be incrementally drained and destroyed by `cluster-datacenter-scale`
 	sql_execute!(
 		[ctx]
 		"

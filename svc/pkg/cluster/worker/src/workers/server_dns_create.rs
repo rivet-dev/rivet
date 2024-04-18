@@ -70,6 +70,9 @@ async fn worker(
 		.await?;
 	let record_id = create_record_res.result.id;
 
+	// This is solely for compatibility with Discord activities. Their docs say they support parameter
+	// mapping but it does not work
+	// https://discord.com/developers/docs/activities/development-guides#prefixtarget-formatting-rules
 	let secondary_record_name = format!(
 		"lobby.{}.{}",
 		server.datacenter_id,

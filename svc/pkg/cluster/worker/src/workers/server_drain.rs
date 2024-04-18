@@ -59,6 +59,7 @@ async fn worker(ctx: &OperationContext<cluster::msg::server_drain::Message>) -> 
 				return Ok(());
 			};
 
+			// Drain complete message is caught by `cluster-nomad-node-drain-complete`
 			nodes_api::update_node_drain(
 				&NOMAD_CONFIG,
 				&nomad_node_id,

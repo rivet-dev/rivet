@@ -13,7 +13,7 @@ pub async fn handle(
 	let instance_types_res = ctx
 		.cache()
 		.ttl(util::duration::days(1))
-		.fetch_one_proto("instance_type", "linode", {
+		.fetch_one_proto("instance_types", "linode", {
 			let client = client.clone();
 			move |mut cache, key| {
 				let client = client.clone();
