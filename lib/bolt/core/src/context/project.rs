@@ -127,6 +127,22 @@ impl ProjectContextData {
 				.unwrap(),
 		);
 
+		// If there is no diff, use the git commit hash
+		let source_hash = if source_diff.is_empty() {
+			let mut cmd = Command::new("git");
+			cmd.current_dir(&project_root).arg("rev-parse").arg("HEAD");
+
+			cmd.exec_string_with_err("Command failed", true)
+				.await
+				.unwrap()
+				// No idea why a new line appears at the end of this in CI
+				.trim()
+				.to_string()
+		} else {
+			// Get hash of diff
+			hex::encode(Sha256::digest(source_diff.as_bytes()))
+		};
+
 		let mut svc_ctxs = svc_ctxs_map.values().cloned().collect::<Vec<_>>();
 		svc_ctxs.sort_by_key(|v| v.name());
 
@@ -142,21 +158,7 @@ impl ProjectContextData {
 			svc_ctxs,
 			svc_ctxs_map,
 
-			// If there is no diff, use the git commit hash
-			source_hash: if source_diff.is_empty() {
-				let mut cmd = Command::new("git");
-				cmd.current_dir(&project_root).arg("rev-parse").arg("HEAD");
-
-				cmd.exec_string_with_err("Command failed", true)
-					.await
-					.unwrap()
-					// No idea why a new line appears at the end of this in CI
-					.trim()
-					.to_string()
-			} else {
-				// Get hash of diff
-				hex::encode(Sha256::digest(source_diff.as_bytes()))
-			},
+			source_hash,
 		});
 
 		ctx.validate_ns();
