@@ -54,7 +54,8 @@ async fn prebake_provision(ctx: TestCtx) {
 					install_hash = $2 AND
 					datacenter_id = $3 AND
 					pool_type = $4 AND
-					public_ip IS NOT NULL
+					public_ip IS NOT NULL AND
+					destroy_ts IS NULL
 			)
 			",
 			backend::cluster::Provider::Linode as i64,

@@ -96,7 +96,9 @@ pub async fn handle(
 		"
 		UPDATE db_cluster.servers_linode
 		SET linode_id = $2
-		WHERE server_id = $1
+		WHERE
+			server_id = $1 AND
+			destroy_ts IS NULL
 		",
 		server_id,
 		linode_id as i64,
@@ -130,7 +132,9 @@ pub async fn handle(
 		"
 		UPDATE db_cluster.servers_linode
 		SET firewall_id = $2
-		WHERE server_id = $1
+		WHERE
+			server_id = $1 AND
+			destroy_ts IS NULL
 		",
 		server_id,
 		firewall_res.id as i64,

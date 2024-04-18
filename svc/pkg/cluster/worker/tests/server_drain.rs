@@ -95,7 +95,9 @@ async fn gg_server_drain(ctx: TestCtx) {
 			SELECT EXISTS (
 				SELECT 1
 				FROM db_cluster.servers_cloudflare
-				WHERE server_id = $1
+				WHERE
+					server_id = $1 AND
+					destroy_ts IS NULL
 			)
 			",
 			server_id,

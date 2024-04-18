@@ -7,18 +7,19 @@ import "proto/backend/cluster.proto";
 
 /// name = "msg-cluster-server-install"
 /// parameters = [
-/// 	{ name = "public_ip" },
+/// 	{ name = "request_id" },
 /// ]
 message Message {
-    string public_ip = 1;
-    rivet.backend.cluster.PoolType pool_type = 2;
+    rivet.common.Uuid request_id = 1;
+    string public_ip = 2;
+    rivet.backend.cluster.PoolType pool_type = 3;
 
-    rivet.common.Uuid datacenter_id = 6;
+    rivet.common.Uuid datacenter_id = 4;
     // Unset when installing prebake servers since they don't have an id. Used to check if
     // the server is currently being deleted to prevent installation
-    optional rivet.common.Uuid server_id = 3;
+    optional rivet.common.Uuid server_id = 5;
 
     // Simply passed to the install complete message
-    rivet.backend.cluster.Provider provider = 4;
-    bool initialize_immediately = 5;
+    rivet.backend.cluster.Provider provider = 6;
+    bool initialize_immediately = 7;
 }

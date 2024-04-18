@@ -16,7 +16,9 @@ async fn worker(
 		"
 		SELECT dns_record_id, secondary_dns_record_id
 		FROM db_cluster.servers_cloudflare
-		WHERE server_id = $1
+		WHERE
+			server_id = $1 AND
+			destroy_ts IS NULL
 		",
 		&server_id,
 		util::timestamp::now(),
@@ -61,10 +63,14 @@ async fn worker(
 	sql_execute!(
 		[ctx, &crdb]
 		"
-		DELETE FROM db_cluster.servers_cloudflare
-		WHERE server_id = $1
+		UPDATE db_cluster.servers_cloudflare
+		SET destroy_ts = $2
+		WHERE
+			server_id = $1 AND
+			destroy_ts IS NULL
 		",
 		server_id,
+		util::timestamp::now(),
 	)
 	.await?;
 

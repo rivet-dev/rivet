@@ -126,8 +126,10 @@ async fn get_prebake_servers(
 			install_hash, datacenter_id, pool_type,
 			ssh_key_id, linode_id, firewall_id
 		FROM db_cluster.server_images_linode
-		WHERE image_id = ANY($1)
-		FOR UPDATE
+		WHERE
+			image_id = ANY($1) AND
+			destroy_ts IS NULL
+			FOR UPDATE
 		",
 		image_ids,
 	)
@@ -164,6 +166,7 @@ async fn get_prebake_servers(
 				s.install_hash = (q->>0)::TEXT AND
 				s.datacenter_id = (q->>1)::UUID AND
 				s.pool_type = (q->>2)::INT
+			WHERE destroy_ts IS NULL
 		) AS m
 		WHERE
 			i.provider = $2 AND
@@ -180,15 +183,17 @@ async fn get_prebake_servers(
 	sql_execute!(
 		[ctx, @tx tx]
 		"
-		DELETE FROM db_cluster.server_images_linode AS s
-		USING jsonb_array_elements($1::JSONB) AS q
+		UPDATE db_cluster.server_images_linode AS s
+		SET destroy_ts = $2
+		FROM jsonb_array_elements($1::JSONB) AS q
 		WHERE
 			s.install_hash = (q->>0)::TEXT AND
 			s.datacenter_id = (q->>1)::UUID AND
-			s.pool_type = (q->>2)::INT
+			s.pool_type = (q->>2)::INT AND
+			destroy_ts IS NULL
 		",
 		&primary_keys,
-		backend::cluster::Provider::Linode as i64,
+		util::timestamp::now(),
 	)
 	.await?;
 

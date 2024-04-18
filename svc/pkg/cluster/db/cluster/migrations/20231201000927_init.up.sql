@@ -69,19 +69,33 @@ WHERE cloud_destroy_ts IS NULL;
 
 -- Stores data for destroying linode resources
 CREATE TABLE servers_linode (
-	server_id UUID PRIMARY KEY REFERENCES servers (server_id),
+	server_id UUID NOT NULL REFERENCES servers (server_id),
 	ssh_key_id INT NOT NULL,
 	linode_id INT,
-	firewall_id INT
+	firewall_id INT,
+
+	destroy_ts INT
 );
+
+-- Effectively a conditional primary key
+CREATE UNIQUE INDEX idx_servers_linode_pkey
+ON servers_linode (server_id)
+WHERE destroy_ts IS NULL;
 
 -- Stores data for destroying cloudflare resources
 CREATE TABLE servers_cloudflare (
-	server_id UUID PRIMARY KEY REFERENCES servers (server_id),
+	server_id UUID NOT NULL REFERENCES servers (server_id),
 	dns_record_id TEXT NOT NULL,
 	-- Secondary DNS route which doesn't have a wildcard. Used for discord activities.
-	secondary_dns_record_id TEXT
+	secondary_dns_record_id TEXT,
+
+	destroy_ts INT
 );
+
+-- Effectively a conditional primary key
+CREATE UNIQUE INDEX idx_servers_cloudflare_pkey
+ON servers_cloudflare (server_id)
+WHERE destroy_ts IS NULL;
 
 CREATE TABLE server_images (
 	provider INT,
@@ -108,10 +122,21 @@ CREATE TABLE server_images_linode (
 	public_ip INET,
 	image_id TEXT,
 
-	PRIMARY KEY (install_hash, datacenter_id, pool_type),
-	INDEX (public_ip),
-	INDEX (image_id)
+	destroy_ts INT
 );
+
+-- Effectively a conditional primary key
+CREATE UNIQUE INDEX idx_server_images_linode_pkey
+ON server_images_linode (install_hash, datacenter_id, pool_type)
+WHERE destroy_ts IS NULL;
+
+CREATE INDEX idx_server_images_linode_public_ip
+ON server_images_linode (public_ip)
+WHERE destroy_ts IS NULL;
+
+CREATE INDEX idx_server_images_linode_image_id
+ON server_images_linode (image_id)
+WHERE destroy_ts IS NULL;
 
 -- Dictates which cluster a game's lobbies will be created in
 CREATE TABLE games (

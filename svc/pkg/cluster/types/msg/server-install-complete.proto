@@ -7,12 +7,13 @@ import "proto/backend/cluster.proto";
 
 /// name = "msg-cluster-server-install-complete"
 /// parameters = [
-/// 	{ name = "public_ip" },
+/// 	{ name = "request_id" },
 /// ]
 message Message {
-    string public_ip = 1;
-    rivet.common.Uuid datacenter_id = 2;
+    rivet.common.Uuid request_id = 1;
+    string public_ip = 2;
+    rivet.common.Uuid datacenter_id = 3;
     // If set in server install message
-    optional rivet.common.Uuid server_id = 3;
-    rivet.backend.cluster.Provider provider = 4;
+    optional rivet.common.Uuid server_id = 4;
+    rivet.backend.cluster.Provider provider = 5;
 }

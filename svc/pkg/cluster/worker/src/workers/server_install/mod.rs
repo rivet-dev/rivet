@@ -158,7 +158,9 @@ async fn worker(ctx: &OperationContext<cluster::msg::server_install::Message>) -
 		}
 	}
 
-	msg!([ctx] cluster::msg::server_install_complete(&ctx.public_ip) {
+	let request_id = unwrap_ref!(ctx.request_id).as_uuid();
+	msg!([ctx] cluster::msg::server_install_complete(request_id) {
+		request_id: ctx.request_id,
 		public_ip: ctx.public_ip.clone(),
 		datacenter_id: ctx.datacenter_id,
 		server_id: ctx.server_id,

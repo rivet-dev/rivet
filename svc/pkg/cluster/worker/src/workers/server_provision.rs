@@ -137,7 +137,10 @@ async fn worker(
 	if let Some(provision_res) = provision_res {
 		// Install components
 		if !provision_res.already_installed {
-			msg!([ctx] cluster::msg::server_install(&provision_res.public_ip) {
+			let request_id = Uuid::new_v4();
+
+			msg!([ctx] cluster::msg::server_install(request_id) {
+				request_id: Some(request_id.into()),
 				public_ip: provision_res.public_ip,
 				datacenter_id: ctx.datacenter_id,
 				server_id: ctx.server_id,

@@ -28,7 +28,8 @@ async fn worker(
 			install_hash, datacenter_id, pool_type, linode_id, disk_id
 		FROM db_cluster.server_images_linode
 		WHERE
-			public_ip = $1
+			public_ip = $1 AND
+			destroy_ts IS NULL
 		",
 		public_ip,
 	)
@@ -62,7 +63,8 @@ async fn worker(
 		WHERE
 			install_hash = $1 AND
 			datacenter_id = $2 AND
-			pool_type = $3
+			pool_type = $3 AND
+			destroy_ts IS NULL
 		",
 		prebake_server.install_hash,
 		prebake_server.datacenter_id,

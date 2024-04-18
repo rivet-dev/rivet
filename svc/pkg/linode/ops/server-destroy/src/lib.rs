@@ -13,7 +13,6 @@ struct LinodeData {
 pub async fn handle(
 	ctx: OperationContext<linode::server_destroy::Request>,
 ) -> GlobalResult<linode::server_destroy::Response> {
-	let crdb = ctx.crdb().await?;
 	let server_id = unwrap_ref!(ctx.server_id).as_uuid();
 	let datacenter_id = unwrap!(ctx.datacenter_id);
 
@@ -24,11 +23,13 @@ pub async fn handle(
 	let datacenter = unwrap!(datacenter_res.datacenters.first());
 
 	let data = sql_fetch_optional!(
-		[ctx, LinodeData, &crdb]
+		[ctx, LinodeData]
 		"
 		SELECT ssh_key_id, linode_id, firewall_id
 		FROM db_cluster.servers_linode
-		WHERE server_id = $1
+		WHERE
+			server_id = $1 AND
+			destroy_ts IS NULL
 		",
 		server_id,
 	)
@@ -54,10 +55,13 @@ pub async fn handle(
 
 	// Remove record
 	sql_execute!(
-		[ctx, &crdb]
+		[ctx]
 		"
-		DELETE FROM db_cluster.servers_linode
-		WHERE server_id = $1
+		UPDATE db_cluster.servers_linode
+		SET destroy_ts = $2
+		WHERE
+			server_id = $1 AND
+			destroy_ts IS NULL
 		",
 		server_id,
 	)

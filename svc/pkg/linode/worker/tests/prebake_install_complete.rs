@@ -53,7 +53,8 @@ async fn prebake_install_complete(ctx: TestCtx) {
 				install_hash = $2 AND
 				datacenter_id = $3 AND
 				pool_type = $4 AND
-				public_ip IS NOT NULL
+				public_ip IS NOT NULL AND
+				destroy_ts IS NULL
 			",
 			backend::cluster::Provider::Linode as i64,
 			util_cluster::INSTALL_SCRIPT_HASH,
@@ -89,7 +90,8 @@ async fn prebake_install_complete(ctx: TestCtx) {
 					install_hash = $2 AND
 					datacenter_id = $3 AND
 					pool_type = $4 AND
-					image_id IS NOT NULL
+					image_id IS NOT NULL AND
+					destroy_ts IS NULL
 			)
 			",
 			backend::cluster::Provider::Linode as i64,

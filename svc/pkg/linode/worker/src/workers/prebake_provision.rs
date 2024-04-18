@@ -54,8 +54,11 @@ async fn worker(
 
 	match provision(ctx, &crdb, &client, datacenter_id, &prebake_server).await {
 		Ok(public_ip) => {
+			let request_id = Uuid::new_v4();
+
 			// Continue to install
-			msg!([ctx] cluster::msg::server_install(&public_ip) {
+			msg!([ctx] cluster::msg::server_install(request_id) {
+				request_id: Some(request_id.into()),
 				public_ip: public_ip,
 				pool_type: ctx.pool_type,
 				server_id: None,
@@ -123,7 +126,8 @@ async fn provision(
 		WHERE
 			install_hash = $1 AND
 			datacenter_id = $2 AND
-			pool_type = $3
+			pool_type = $3 AND
+			destroy_ts IS NULL
 		",
 		util_cluster::INSTALL_SCRIPT_HASH,
 		datacenter_id,
@@ -156,7 +160,8 @@ async fn provision(
 		WHERE
 			install_hash = $1 AND
 			datacenter_id = $2 AND
-			pool_type = $3
+			pool_type = $3 AND
+			destroy_ts IS NULL
 		",
 		util_cluster::INSTALL_SCRIPT_HASH,
 		datacenter_id,
@@ -180,7 +185,8 @@ async fn provision(
 		WHERE
 			install_hash = $1 AND
 			datacenter_id = $2 AND
-			pool_type = $3
+			pool_type = $3 AND
+			destroy_ts IS NULL
 		",
 		util_cluster::INSTALL_SCRIPT_HASH,
 		datacenter_id,
@@ -214,7 +220,8 @@ async fn destroy(
 		WHERE
 			install_hash = $1 AND
 			datacenter_id = $2 AND
-			pool_type = $3
+			pool_type = $3 AND
+			destroy_ts IS NULL
 		",
 		util_cluster::INSTALL_SCRIPT_HASH,
 		datacenter_id,
@@ -239,17 +246,20 @@ async fn destroy(
 
 	// Remove record
 	sql_execute!(
-		[ctx]
+		[ctx, &crdb]
 		"
-		DELETE FROM db_cluster.server_images_linode
+		UPDATE db_cluster.server_images_linode
+		SET destroy_ts = $4
 		WHERE
 			install_hash = $1 AND
 			datacenter_id = $2 AND
-			pool_type = $3
+			pool_type = $3 AND
+			destroy_ts IS NULL
 		",
 		util_cluster::INSTALL_SCRIPT_HASH,
 		datacenter_id,
 		ctx.pool_type as i64,
+		util::timestamp::now(),
 	)
 	.await?;
 
