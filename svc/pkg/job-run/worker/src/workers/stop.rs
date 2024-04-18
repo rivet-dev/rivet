@@ -22,7 +22,8 @@ lazy_static::lazy_static! {
 		nomad_util::config_from_env().unwrap();
 }
 
-#[worker(name = "job-run-stop")]
+// Update timeout to give time for the timeout in `kill_allocation`
+#[worker(name = "job-run-stop", timeout = 90)]
 async fn worker(ctx: &OperationContext<job_run::msg::stop::Message>) -> GlobalResult<()> {
 	// NOTE: Idempotent
 
@@ -167,7 +168,9 @@ async fn update_db(
 	Ok(Some((run_row, run_meta_nomad_row)))
 }
 
-// Kills the allocation after 30 seconds
+/// Kills the allocation after 30 seconds
+///
+/// See `docs/packages/job/JOB_DRAINING_AND_KILL_TIMEOUTS.md`
 fn kill_allocation(nomad_region: String, alloc_id: String) {
 	task::spawn(async move {
 		tokio::time::sleep(util_job::JOB_STOP_TIMEOUT).await;
