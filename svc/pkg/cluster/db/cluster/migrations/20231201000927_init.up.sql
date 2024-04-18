@@ -1,12 +1,12 @@
 CREATE TABLE clusters (
-    cluster_id UUID PRIMARY KEY,
+	cluster_id UUID PRIMARY KEY,
 	name_id TEXT NOT NULL,
 	owner_team_id UUID,
 	create_ts INT NOT NULL
 );
 
 CREATE TABLE datacenters (
-    datacenter_id UUID PRIMARY KEY,
+	datacenter_id UUID PRIMARY KEY,
 	cluster_id UUID NOT NULL REFERENCES clusters (cluster_id),
 	name_id TEXT NOT NULL,
 	display_name TEXT NOT NULL,

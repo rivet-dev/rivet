@@ -15,6 +15,7 @@ struct ProvisionResponse {
 async fn worker(
 	ctx: &OperationContext<cluster::msg::server_provision::Message>,
 ) -> GlobalResult<()> {
+	// TODO: RVTEE-75
 	rivet_pools::utils::crdb::tx(&ctx.crdb().await?, |tx| inner(ctx.clone(), tx).boxed()).await?;
 
 	Ok(())
@@ -32,13 +33,12 @@ async fn inner(
 	// Check if server is already provisioned
 	// NOTE: sql record already exists before this worker is called
 	let (provider_server_id, destroyed) = sql_fetch_one!(
-		[ctx, (Option<String>, bool), @tx tx]
+		[ctx, (Option<String>, bool)]
 		"
 		SELECT
 			provider_server_id, cloud_destroy_ts IS NOT NULL
 		FROM db_cluster.servers
 		WHERE server_id = $1
-		FOR UPDATE
 		",
 		server_id,
 	)
@@ -74,7 +74,7 @@ async fn inner(
 	let vlan_ip = get_vlan_ip(&ctx, tx, server_id, pool_type).await?;
 
 	sql_execute!(
-		[ctx, @tx tx]
+		[ctx]
 		"
 		UPDATE db_cluster.servers
 		SET vlan_ip = $2
@@ -137,7 +137,7 @@ async fn inner(
 
 	if let Some(provision_res) = provision_res {
 		sql_execute!(
-			[ctx, @tx tx]
+			[ctx]
 			"
 			UPDATE db_cluster.servers
 			SET
@@ -173,7 +173,7 @@ async fn inner(
 		if let backend::cluster::PoolType::Gg = pool_type {
 			// Source of truth record
 			sql_execute!(
-				[ctx, @tx tx]
+				[ctx]
 				"
 				INSERT INTO db_cluster.servers_cloudflare (server_id)
 				VALUES ($1)
@@ -197,7 +197,7 @@ async fn inner(
 
 async fn get_vlan_ip(
 	ctx: &OperationContext<cluster::msg::server_provision::Message>,
-	tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+	_tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
 	server_id: Uuid,
 	pool_type: backend::cluster::PoolType,
 ) -> GlobalResult<String> {
@@ -209,7 +209,7 @@ async fn get_vlan_ip(
 	};
 	let max_idx = vlan_addr_range.count() as i64;
 	let (network_idx,) = sql_fetch_one!(
-		[ctx, (i64,), @tx tx]
+		[ctx, (i64,)]
 		"
 		WITH
 			get_next_network_idx AS (

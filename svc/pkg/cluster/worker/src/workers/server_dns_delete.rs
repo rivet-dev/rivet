@@ -62,7 +62,10 @@ async fn inner(
 		secondary_dns_record_id,
 	}) = row
 	else {
-		bail!("server has no dns record yet, retrying");
+		// NOTE: It is safe to do nothing in this case because both this worker and
+		// `cluster-server-dns-create` use transactions
+		tracing::warn!("server has no dns record");
+		return Ok(());
 	};
 
 	let zone_id = unwrap!(util::env::cloudflare::zone::job::id(), "dns not configured");

@@ -7,11 +7,11 @@ struct Server {
 	datacenter_id: Uuid,
 	pool_type: i64,
 	provider_server_id: Option<String>,
-	cloud_destroy_ts: Option<i64>,
 }
 
 #[worker(name = "cluster-server-destroy")]
 async fn worker(ctx: &OperationContext<cluster::msg::server_destroy::Message>) -> GlobalResult<()> {
+	// TODO: RVTEE-75
 	rivet_pools::utils::crdb::tx(&ctx.crdb().await?, |tx| inner(ctx.clone(), tx).boxed()).await?;
 
 	Ok(())
@@ -19,17 +19,18 @@ async fn worker(ctx: &OperationContext<cluster::msg::server_destroy::Message>) -
 
 async fn inner(
 	ctx: OperationContext<cluster::msg::server_destroy::Message>,
-	tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+	_tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
 ) -> GlobalResult<()> {
 	let server_id = unwrap_ref!(ctx.server_id).as_uuid();
 
+	// NOTE: We do not check if `cloud_destroy_ts` is set because of the destroy fn in
+	// `cluster-server-provision`
 	let server = sql_fetch_one!(
-		[ctx, Server, @tx tx]
+		[ctx, Server]
 		"
-		SELECT datacenter_id, pool_type, provider_server_id, cloud_destroy_ts
+		SELECT datacenter_id, pool_type, provider_server_id
 		FROM db_cluster.servers
 		WHERE server_id = $1
-		FOR UPDATE
 		",
 		&server_id,
 		util::timestamp::now(),
@@ -37,9 +38,6 @@ async fn inner(
 	.await?;
 	if server.provider_server_id.is_none() && !ctx.force {
 		bail!("server is not completely provisioned yet, retrying");
-	}
-	if server.cloud_destroy_ts.is_none() {
-		bail!("attempting to destroy server that doesn't have `cloud_destroy_ts` set");
 	}
 
 	let datacenter_res = op!([ctx] cluster_datacenter_get {
@@ -68,7 +66,7 @@ async fn inner(
 	if let backend::cluster::PoolType::Gg = pool_type {
 		// Update db record
 		sql_execute!(
-			[ctx, @tx tx]
+			[ctx]
 			"
 			UPDATE db_cluster.servers_cloudflare
 			SET destroy_ts = $2
