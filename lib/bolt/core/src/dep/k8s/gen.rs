@@ -782,7 +782,7 @@ async fn build_volumes(
 }
 
 // Added for ease of use
-fn generate_k8s_variables() -> Vec<serde_json::Value> {
+pub fn generate_k8s_variables() -> Vec<serde_json::Value> {
 	vec![
 		json!({
 			"name": "KUBERNETES_NODE_NAME",

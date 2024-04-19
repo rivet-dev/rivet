@@ -11,20 +11,21 @@ use std::{
 
 use anyhow::*;
 use futures_util::{FutureExt, StreamExt, TryStreamExt};
+use indexmap::{IndexMap, IndexSet};
 use indoc::formatdoc;
 use rand::{seq::SliceRandom, thread_rng};
 use reqwest::header;
 use rivet_term::console::style;
 use serde::Deserialize;
+use serde_json::json;
 use tokio::{io::AsyncWriteExt, process::Command};
 
 use crate::{
 	config::{ns, service::RuntimeKind},
-	context::{ProjectContext, RunContext},
+	context::{ProjectContext, RunContext, ServiceContext},
 	dep::{
 		self,
 		cargo::{self, cli::TestBinary},
-		k8s::gen::{ExecServiceContext, ExecServiceDriver},
 	},
 	utils,
 };
@@ -131,7 +132,7 @@ pub async fn test_services<T: AsRef<str>>(
 	let test_binaries = {
 		// Collect rust services by their workspace root
 		let mut svcs_by_workspace = HashMap::new();
-		for svc in rust_svcs {
+		for svc in &rust_svcs {
 			let workspace = svcs_by_workspace
 				.entry(svc.workspace_path())
 				.or_insert_with(Vec::new);
@@ -167,14 +168,69 @@ pub async fn test_services<T: AsRef<str>>(
 	let test_suite_id = gen_test_id();
 	let purge = !test_ctx.no_purge;
 
+	// Build exec ctx
+	let run_context = RunContext::Test {
+		test_id: test_suite_id.clone(),
+	};
+	let k8s_svc_name = format!("test-{test_suite_id}");
+
+	// Apply pod
+	let specs = gen_spec(ctx, &run_context, &rust_svcs, &k8s_svc_name).await;
+	dep::k8s::cli::apply_specs(ctx, specs).await?;
+
+	// Wait for pod to start
+	eprintln!();
+	rivet_term::status::progress("Waiting for pod start", "");
+	let label = format!("app.kubernetes.io/name={k8s_svc_name}");
+	let status = Command::new("kubectl")
+		.args(&[
+			"wait",
+			"--for=condition=Ready",
+			"pod",
+			"--selector",
+			&label,
+			"-n",
+			"rivet-service",
+		])
+		.env("KUBECONFIG", ctx.gen_kubeconfig_path())
+		.stdout(std::process::Stdio::null())
+		.status()
+		.await?;
+	if !status.success() {
+		bail!("failed to check pod readiness");
+	}
+
+	// Install CA
+	rivet_term::status::progress("Installing CA", "");
+	let status = Command::new("kubectl")
+		.args(&[
+			"exec",
+			&format!("job/{k8s_svc_name}"),
+			"-n",
+			"rivet-service",
+			"--",
+			"/usr/bin/install_ca.sh",
+		])
+		.env("KUBECONFIG", ctx.gen_kubeconfig_path())
+		.stdout(std::process::Stdio::null())
+		.status()
+		.await?;
+	if !status.success() {
+		bail!("failed to check pod readiness");
+	}
+
 	// Run tests
+	let test_suite_start_time = Instant::now();
+
 	eprintln!();
 	rivet_term::status::progress("Running tests", &test_suite_id);
+	eprintln!();
 	let tests_complete = Arc::new(AtomicUsize::new(0));
 	let test_count = test_binaries.len();
 	let test_results = futures_util::stream::iter(test_binaries.into_iter().map(|test_binary| {
 		let ctx = ctx.clone();
 		let test_suite_id = test_suite_id.clone();
+		let k8s_svc_name = k8s_svc_name.clone();
 		let tests_complete = tests_complete.clone();
 		let timeout = test_ctx.timeout;
 
@@ -182,6 +238,7 @@ pub async fn test_services<T: AsRef<str>>(
 			run_test(
 				&ctx,
 				test_suite_id,
+				k8s_svc_name,
 				test_binary,
 				tests_complete.clone(),
 				test_count,
@@ -195,8 +252,15 @@ pub async fn test_services<T: AsRef<str>>(
 	.try_collect::<Vec<_>>()
 	.await?;
 
+	// Delete job
+	Command::new("kubectl")
+		.args(&["delete", "job", &k8s_svc_name, "-n", "rivet-service"])
+		.env("KUBECONFIG", ctx.gen_kubeconfig_path())
+		.output()
+		.await?;
+
 	// Print results
-	print_results(&test_results);
+	print_results(&test_results, test_suite_start_time);
 
 	cleanup_nomad(ctx, purge).await?;
 	cleanup_servers(ctx).await?;
@@ -230,6 +294,7 @@ struct TestResult {
 async fn run_test(
 	ctx: &ProjectContext,
 	test_suite_id: String,
+	k8s_svc_name: String,
 	test_binary: TestBinary,
 	tests_complete: Arc<AtomicUsize>,
 	test_count: usize,
@@ -244,77 +309,51 @@ async fn run_test(
 		.context("svc not found for package")?;
 	let display_name = format!("{}::{}", svc_ctx.name(), test_binary.test_name);
 
-	// Convert path relative to project
-	let relative_path = test_binary
-		.path
-		.strip_prefix(ctx.cargo_target_dir())
-		.context("path not in project")?;
-	let container_path = Path::new("/target").join(relative_path);
-
-	// Build exec ctx
 	let test_id = gen_test_id();
-	let exec_ctx = ExecServiceContext {
-		svc_ctx: svc_ctx.clone(),
-		run_context: RunContext::Test {
-			test_id: test_id.clone(),
-		},
-		driver: ExecServiceDriver::LocalBinaryArtifact {
-			exec_path: container_path,
-			// Limit test running in parallel & filter the tests that get ran
-			args: vec!["--exact".to_string(), test_binary.test_name.clone()],
-		},
-	};
-
-	// Build specs
-	let specs = dep::k8s::gen::gen_svc(&exec_ctx).await;
-	let k8s_svc_name = dep::k8s::gen::k8s_svc_name(&exec_ctx);
-
-	// Apply pod
-	dep::k8s::cli::apply_specs(ctx, specs).await?;
 
 	// Build path to logs
 	let logs_dir = Path::new("/tmp")
 		.join(test_suite_id)
 		.join(svc_ctx.name())
-		.join(test_binary.target);
+		.join(&test_binary.target);
 	tokio::fs::create_dir_all(&logs_dir).await?;
 	let logs_path = logs_dir.join(format!("{}.log", test_binary.test_name));
 
-	// Watch pod
 	rivet_term::status::info(
 		"Running",
 		format!(
-			"{display_name} [{test_id}] [{logs_path}]",
+			"{display_name} [{logs_path}]",
 			logs_path = logs_path.display()
 		),
 	);
+
 	let test_start_time = Instant::now();
 	let timeout = timeout
 		.map(Duration::from_secs)
 		.unwrap_or(DEFAULT_TEST_TIMEOUT);
-	let status =
-		match tokio::time::timeout(timeout, watch_pod(ctx, &k8s_svc_name, logs_path.clone())).await
-		{
-			Result::Ok(Result::Ok(x)) => x,
-			Result::Ok(Err(err)) => TestStatus::UnknownError(err.to_string()),
-			Err(_) => {
-				Command::new("kubectl")
-					.args(&["delete", "job", &k8s_svc_name, "-n", "rivet-service"])
-					.env("KUBECONFIG", ctx.gen_kubeconfig_path())
-					.output()
-					.await?;
-
-				TestStatus::Timeout
-			}
-		};
+	let status = match tokio::time::timeout(
+		timeout,
+		exec_test(
+			ctx,
+			&k8s_svc_name,
+			&test_binary,
+			&test_id,
+			logs_path.clone(),
+		),
+	)
+	.await
+	{
+		Result::Ok(Result::Ok(x)) => x,
+		Result::Ok(Err(err)) => TestStatus::UnknownError(err.to_string()),
+		Err(_) => TestStatus::Timeout,
+	};
 
 	// Print status
-	let test_duration = test_start_time.elapsed();
+	let test_duration = test_start_time.elapsed().as_secs_f32();
 	let complete_count = tests_complete.fetch_add(1, Ordering::SeqCst) + 1;
 	let run_info = format!(
-		"{display_name} ({complete_count}/{test_count}) [{test_id}] [{logs_path}] [{td:.1}s]",
-		td = test_duration.as_secs_f32(),
-		logs_path = logs_path.display()
+		"{display_name} ({complete_count}/{test_count}) [{logs_path}] [{test_duration:.1}s]",
+		logs_path = logs_path.display(),
 	);
 	match &status {
 		TestStatus::Pass => {
@@ -340,117 +379,66 @@ async fn run_test(
 }
 
 /// Follow the pod logs and write them to a file.
-async fn pipe_pod_logs(
-	ctx: ProjectContext,
-	k8s_svc_name: String,
+async fn exec_test(
+	ctx: &ProjectContext,
+	k8s_svc_name: &str,
+	test_binary: &TestBinary,
+	test_id: &str,
 	logs_path: PathBuf,
-) -> Result<()> {
-	let label = format!("app.kubernetes.io/name={k8s_svc_name}");
+) -> Result<TestStatus> {
+	// Convert path relative to project
+	let relative_path = test_binary
+		.path
+		.strip_prefix(ctx.path())
+		.context("path not in project")?;
+	let container_path = Path::new("/rivet-src").join(relative_path);
+
+	let command = format!(
+		"RIVET_TEST_ID={test_id} {} --exact {}",
+		&container_path.display(),
+		&test_binary.test_name
+	);
 
 	// Write logs to file
 	let file = tokio::task::block_in_place(|| std::fs::File::create(&logs_path))?;
 	let mut logs_child = Command::new("kubectl")
-		.args(&["logs", "-f", "--selector", &label, "-n", "rivet-service"])
+		.args(&[
+			"exec",
+			&format!("job/{k8s_svc_name}"),
+			"-n",
+			"rivet-service",
+			"--",
+			"sh",
+			"-c",
+			&command,
+		])
 		.env("KUBECONFIG", ctx.gen_kubeconfig_path())
 		.stdout(file)
+		.stderr(std::process::Stdio::null())
+		.kill_on_drop(true)
 		.spawn()?;
-	logs_child.wait().await?;
+	let status = logs_child.wait().await?;
 
 	// Write end of file
 	let mut file = tokio::fs::OpenOptions::new()
 		.append(true)
 		.open(&logs_path)
 		.await?;
-	file.write_all(b"\n=== POD STOPPED ===\n").await?;
+	file.write_all(b"\n=== TEST FINISHED ===\n").await?;
 
-	Ok(())
-}
-
-/// Watch the pod to look for completion or failure.
-async fn watch_pod(
-	ctx: &ProjectContext,
-	k8s_svc_name: &str,
-	logs_path: PathBuf,
-) -> Result<TestStatus> {
-	let label = format!("app.kubernetes.io/name={k8s_svc_name}");
-
-	let mut spawned_pipe_logs_task = false;
-	loop {
-		// TODO: Use --wait for better performance
-		let output = Command::new("kubectl")
-			.args(&[
-				"get",
-				"pod",
-				"--selector",
-				&label,
-				"-n",
-				"rivet-service",
-				"-o",
-				"jsonpath={.items[0].status.phase}",
-			])
-			.env("KUBECONFIG", ctx.gen_kubeconfig_path())
-			.output()
-			.await?;
-
-		let output_str = String::from_utf8_lossy(&output.stdout);
-		let output_str = output_str.trim();
-
-		// Start piping logs to a file once the container has started
-		if !spawned_pipe_logs_task && matches!(output_str, "Running" | "Succeeded" | "Failed") {
-			spawned_pipe_logs_task = true;
-			tokio::spawn(pipe_pod_logs(
-				ctx.clone(),
-				k8s_svc_name.to_string(),
-				logs_path.clone(),
-			));
-		}
-
-		// Wait for container to finish
-		match output_str {
-			"Pending" | "Running" | "" => {
-				// Continue
-				tokio::time::sleep(Duration::from_millis(500)).await;
-			}
-			"Succeeded" | "Failed" => {
-				// Get the exit code of the pod
-				let output = Command::new("kubectl")
-					.args(&[
-						"get",
-						"pod",
-						"--selector",
-						&label,
-						"-n",
-						"rivet-service",
-						"-o",
-						"jsonpath={.items[0].status.containerStatuses[0].state.terminated.exitCode}",
-					])
-					.env("KUBECONFIG", ctx.gen_kubeconfig_path())
-					.output()
-					.await?;
-
-				let exit_code_str = String::from_utf8_lossy(&output.stdout);
-				let Result::Ok(exit_code) = exit_code_str.trim().parse::<i32>() else {
-					return Ok(TestStatus::UnknownError(format!(
-						"Could not parse exit code: {exit_code_str:?}"
-					)));
-				};
-
-				let test_status = match exit_code {
-					0 => TestStatus::Pass,
-					101 => TestStatus::TestFailed,
-					x => TestStatus::UnknownExitCode(x),
-				};
-
-				return Ok(test_status);
-			}
-			_ => bail!("unexpected pod status: {}", output_str),
-		}
+	match status.code() {
+		Some(0) => Ok(TestStatus::Pass),
+		Some(101) => Ok(TestStatus::TestFailed),
+		Some(x) => Ok(TestStatus::UnknownExitCode(x)),
+		None => Ok(TestStatus::UnknownError("no status code".to_string())),
 	}
 }
 
-fn print_results(test_results: &[TestResult]) {
+fn print_results(test_results: &[TestResult], start_time: Instant) {
+	let test_duration = start_time.elapsed().as_secs_f32();
+
 	eprintln!();
-	rivet_term::status::success("Complete", "");
+	rivet_term::status::success("Complete", format!("{test_duration:.1}s"));
 
 	let passed_count = test_results
 		.iter()
@@ -826,4 +814,249 @@ async fn cleanup_nomad(ctx: &ProjectContext, purge: bool) -> Result<()> {
 struct NomadJob {
 	#[serde(rename = "ID")]
 	id: String,
+}
+
+/// Generates the k8s spec for the main test pod.
+pub async fn gen_spec(
+	ctx: &ProjectContext,
+	run_context: &RunContext,
+	svcs: &[&ServiceContext],
+	k8s_svc_name: &str,
+) -> Vec<serde_json::Value> {
+	let mut specs = Vec::new();
+
+	// Render env
+	let mut env = IndexMap::new();
+	let mut secret_env = IndexMap::new();
+
+	for svc_ctx in svcs {
+		env.extend(svc_ctx.env(&run_context).await.unwrap());
+		secret_env.extend(svc_ctx.secret_env(&run_context).await.unwrap());
+	}
+
+	let env = dep::k8s::gen::generate_k8s_variables()
+		.into_iter()
+		.chain(
+			env.into_iter()
+				.map(|(k, v)| json!({ "name": k, "value": v })),
+		)
+		.collect::<Vec<_>>();
+
+	// Create secret env vars
+	let secret_env_name = format!("{}-secret-env", k8s_svc_name);
+	let secret_data = secret_env
+		.into_iter()
+		.map(|(k, v)| (k, base64::encode(v)))
+		.collect::<HashMap<_, _>>();
+	specs.push(json!({
+		"apiVersion": "v1",
+		"kind": "Secret",
+		"metadata": {
+			"name": secret_env_name,
+			"namespace": "rivet-service"
+		},
+		"data": secret_data
+	}));
+
+	let (volumes, volume_mounts) = build_volumes(&ctx, run_context, svcs).await;
+
+	let metadata = json!({
+		"name": k8s_svc_name,
+		"namespace": "rivet-service",
+		"labels": {
+			"app.kubernetes.io/name": k8s_svc_name
+		}
+	});
+
+	let pod_spec = json!({
+		"restartPolicy": "Never",
+		"terminationGracePeriodSeconds": 0,
+		"imagePullSecrets": [{
+			"name": "docker-auth"
+		}],
+		"containers": [{
+			"name": "service",
+			"image": "ghcr.io/rivet-gg/rivet-local-binary-artifact-runner:07e8de0",
+			"imagePullPolicy": "IfNotPresent",
+			"command": ["/bin/sh"],
+			"args": ["-c", "sleep 100000"],
+			"env": env,
+			"envFrom": [{
+				"secretRef": {
+					"name": secret_env_name
+				}
+			}],
+			"volumeMounts": volume_mounts,
+		}],
+		"volumes": volumes
+	});
+	let pod_template = json!({
+		"metadata": {
+			"labels": {
+				"app.kubernetes.io/name": k8s_svc_name
+			},
+		},
+		"spec": pod_spec,
+	});
+
+	specs.push(json!({
+		"apiVersion": "batch/v1",
+		"kind": "Job",
+		"metadata": metadata,
+		"spec": {
+			"ttlSecondsAfterFinished": 3,
+			"completions": 1,
+			"backoffLimit": 0,
+			"template": pod_template
+		}
+	}));
+
+	specs
+}
+
+pub async fn build_volumes(
+	project_ctx: &ProjectContext,
+	run_context: &RunContext,
+	svcs: &[&ServiceContext],
+) -> (Vec<serde_json::Value>, Vec<serde_json::Value>) {
+	// Shared data between containers
+	let mut volumes = Vec::<serde_json::Value>::new();
+	let mut volume_mounts = Vec::<serde_json::Value>::new();
+
+	// Volumes
+	volumes.push(json!({
+		"name": "rivet-src",
+		"hostPath": {
+			"path": "/rivet-src",
+			"type": "Directory"
+		}
+	}));
+	volumes.push(json!({
+		"name": "nix-store",
+		"hostPath": {
+			"path": "/nix/store",
+			"type": "Directory"
+		}
+	}));
+
+	// Mounts
+	volume_mounts.push(json!({
+		"name": "rivet-src",
+		"mountPath": "/rivet-src",
+		"readOnly": true
+	}));
+	volume_mounts.push(json!({
+		"name": "nix-store",
+		"mountPath": "/nix/store",
+		"readOnly": true
+	}));
+
+	// Add Redis CA
+	match project_ctx.ns().redis.provider {
+		ns::RedisProvider::Kubernetes {} => {
+			let mut redis_deps = IndexSet::with_capacity(2);
+
+			for svc in svcs {
+				let svc_redis_deps =
+					svc.redis_dependencies(run_context)
+						.await
+						.into_iter()
+						.map(|redis_dep| {
+							if let RuntimeKind::Redis { persistent } = redis_dep.config().runtime {
+								if persistent {
+									"persistent"
+								} else {
+									"ephemeral"
+								}
+							} else {
+								unreachable!();
+							}
+						});
+
+				redis_deps.extend(svc_redis_deps);
+			}
+
+			volumes.extend(redis_deps.iter().map(|db| {
+				json!({
+					"name": format!("redis-{}-ca", db),
+					"configMap": {
+						"name": format!("redis-{}-ca", db),
+						"defaultMode": 420,
+						"items": [
+							{
+								"key": "ca.crt",
+								"path": format!("redis-{}-ca.crt", db)
+							}
+						]
+					}
+				})
+			}));
+			volume_mounts.extend(redis_deps.iter().map(|db| {
+				json!({
+					"name": format!("redis-{}-ca", db),
+					"mountPath": format!("/usr/local/share/ca-certificates/redis-{}-ca.crt", db),
+					"subPath": format!("redis-{}-ca.crt", db)
+				})
+			}));
+		}
+		ns::RedisProvider::Aws { .. } | ns::RedisProvider::Aiven { .. } => {
+			// Uses publicly signed cert
+		}
+	}
+
+	// Add CRDB CA
+	match project_ctx.ns().cockroachdb.provider {
+		ns::CockroachDBProvider::Kubernetes {} => {
+			volumes.push(json!({
+				"name": "crdb-ca",
+				"configMap": {
+					"name": "crdb-ca",
+					"defaultMode": 420,
+					"items": [
+						{
+							"key": "ca.crt",
+							"path": "crdb-ca.crt"
+						}
+					]
+				}
+			}));
+			volume_mounts.push(json!({
+				"name": "crdb-ca",
+				"mountPath": "/usr/local/share/ca-certificates/crdb-ca.crt",
+				"subPath": "crdb-ca.crt"
+			}));
+		}
+		ns::CockroachDBProvider::Managed { .. } => {
+			// Uses publicly signed cert
+		}
+	}
+
+	// Add ClickHouse CA
+	match project_ctx.ns().clickhouse.provider {
+		ns::ClickHouseProvider::Kubernetes {} => {
+			volumes.push(json!({
+				"name": "clickhouse-ca",
+				"configMap": {
+					"name": "clickhouse-ca",
+					"defaultMode": 420,
+					"items": [
+						{
+							"key": "ca.crt",
+							"path": "clickhouse-ca.crt"
+						}
+					]
+				}
+			}));
+			volume_mounts.push(json!({
+				"name": "clickhouse-ca",
+				"mountPath": "/usr/local/share/ca-certificates/clickhouse-ca.crt",
+				"subPath": "clickhouse-ca.crt"
+			}));
+		}
+		ns::ClickHouseProvider::Managed { .. } => {
+			// Uses publicly signed cert
+		}
+	}
+
+	(volumes, volume_mounts)
 }

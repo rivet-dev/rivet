@@ -1,5 +1,6 @@
 use anyhow::{ensure, Context, Result};
 use async_recursion::async_recursion;
+use indexmap::IndexMap;
 use std::{
 	collections::HashMap,
 	hash::{Hash, Hasher},
@@ -735,10 +736,10 @@ impl ServiceContextData {
 		Ok(secrets)
 	}
 
-	pub async fn env(&self, run_context: &RunContext) -> Result<Vec<(String, String)>> {
+	pub async fn env(&self, run_context: &RunContext) -> Result<IndexMap<String, String>> {
 		let project_ctx = self.project().await;
 
-		let mut env = Vec::new();
+		let mut env = IndexMap::new();
 
 		// HACK: Link to dynamically linked libraries in /nix/store
 		//
@@ -747,19 +748,19 @@ impl ServiceContextData {
 		//
 		// The `/nix/store` directory is mounted as a volume.
 		if let config::ns::ClusterKind::SingleNode { .. } = project_ctx.ns().cluster.kind {
-			env.push((
+			env.insert(
 				"LD_LIBRARY_PATH".into(),
 				std::env::var("LD_LIBRARY_PATH").context("missing LD_LIBRARY_PATH")?,
-			));
+			);
 		}
 
 		// TODO: This is re-running the hashing function for every service when we already did this in the planning step
 		// Provide source hash to purge the cache when the service is updated
 		let source_hash = self.source_hash_dev(&BuildOptimization::Debug).await?;
-		env.push(("RIVET_SOURCE_HASH".into(), source_hash.clone()));
+		env.insert("RIVET_SOURCE_HASH".into(), source_hash.clone());
 
 		let ns_service_config = self.ns_service_config().await;
-		env.push((
+		env.insert(
 			"TOKIO_WORKER_THREADS".into(),
 			if ns_service_config.resources.cpu >= 1000 {
 				(ns_service_config.resources.cpu / 1000).max(1)
@@ -767,59 +768,48 @@ impl ServiceContextData {
 				1
 			}
 			.to_string(),
-		));
-
-		// Provide default Nomad variables if in test
-		if let RunContext::Test { test_id } = run_context {
-			env.push(("KUBERNETES_REGION".into(), "global".into()));
-			env.push((
-				"KUBERNETES_TASK_DIR".into(),
-				project_ctx.gen_path().display().to_string(),
-			));
-
-			env.push(("RIVET_TEST_ID".into(), test_id.clone()));
-		}
+		);
 
 		// Generic context
-		env.push(("RIVET_RUN_CONTEXT".into(), run_context.short().into()));
-		env.push(("RIVET_NAMESPACE".into(), project_ctx.ns_id().into()));
-		env.push((
+		env.insert("RIVET_RUN_CONTEXT".into(), run_context.short().into());
+		env.insert("RIVET_NAMESPACE".into(), project_ctx.ns_id().into());
+		env.insert(
 			"RIVET_CLUSTER_ID".into(),
 			project_ctx.ns().cluster.id.to_string(),
-		));
+		);
 
 		if self.enable_tokio_console() {
-			env.push(("TOKIO_CONSOLE_ENABLE".into(), "1".into()));
-			env.push((
+			env.insert("TOKIO_CONSOLE_ENABLE".into(), "1".into());
+			env.insert(
 				"TOKIO_CONSOLE_BIND".into(),
 				format!("0.0.0.0:{}", k8s::gen::TOKIO_CONSOLE_PORT),
-			));
+			);
 		}
 
-		env.push((
+		env.insert(
 			"RIVET_ACCESS_KIND".into(),
 			match project_ctx.ns().rivet.access {
 				config::ns::RivetAccess::Private {} => "private".into(),
 				config::ns::RivetAccess::Public {} => "public".into(),
 			},
-		));
+		);
 
 		if project_ctx.ns().rivet.login.enable_admin {
-			env.push(("RIVET_ACCESS_TOKEN_LOGIN".into(), "1".into()));
+			env.insert("RIVET_ACCESS_TOKEN_LOGIN".into(), "1".into());
 		}
 
 		// Domains
 		if let Some(x) = project_ctx.domain_main() {
-			env.push(("RIVET_DOMAIN_MAIN".into(), x));
+			env.insert("RIVET_DOMAIN_MAIN".into(), x);
 		}
 		if let Some(x) = project_ctx.domain_cdn() {
-			env.push(("RIVET_DOMAIN_CDN".into(), x));
+			env.insert("RIVET_DOMAIN_CDN".into(), x);
 		}
 		if let Some(x) = project_ctx.domain_job() {
-			env.push(("RIVET_DOMAIN_JOB".into(), x));
+			env.insert("RIVET_DOMAIN_JOB".into(), x);
 		}
 		if let Some(x) = project_ctx.domain_main_api() {
-			env.push(("RIVET_DOMAIN_MAIN_API".into(), x));
+			env.insert("RIVET_DOMAIN_MAIN_API".into(), x);
 		}
 		if let Some(true) = project_ctx
 			.ns()
@@ -827,133 +817,133 @@ impl ServiceContextData {
 			.as_ref()
 			.map(|x| x.deprecated_subdomains)
 		{
-			env.push(("RIVET_SUPPORT_DEPRECATED_SUBDOMAINS".into(), "1".into()));
+			env.insert("RIVET_SUPPORT_DEPRECATED_SUBDOMAINS".into(), "1".into());
 		}
-		env.push(("RIVET_HOST_API".into(), project_ctx.host_api()));
-		env.push(("RIVET_ORIGIN_API".into(), project_ctx.origin_api()));
-		env.push(("RIVET_ORIGIN_HUB".into(), project_ctx.origin_hub()));
+		env.insert("RIVET_HOST_API".into(), project_ctx.host_api());
+		env.insert("RIVET_ORIGIN_API".into(), project_ctx.origin_api());
+		env.insert("RIVET_ORIGIN_HUB".into(), project_ctx.origin_hub());
 
 		// DNS
 		if let Some(dns) = &project_ctx.ns().dns {
 			if let Some(provider) = &dns.provider {
-				env.push((
+				env.insert(
 					"RIVET_DNS_PROVIDER".into(),
 					match provider {
 						config::ns::DnsProvider::Cloudflare { .. } => "cloudflare".into(),
 					},
-				));
+				);
 			}
 		}
 
 		// Networking
 		if matches!(run_context, RunContext::Service { .. }) {
-			env.push(("HEALTH_PORT".into(), k8s::gen::HEALTH_PORT.to_string()));
-			env.push(("METRICS_PORT".into(), k8s::gen::METRICS_PORT.to_string()));
+			env.insert("HEALTH_PORT".into(), k8s::gen::HEALTH_PORT.to_string());
+			env.insert("METRICS_PORT".into(), k8s::gen::METRICS_PORT.to_string());
 			if self.config().kind.has_server() {
-				env.push(("PORT".into(), k8s::gen::HTTP_SERVER_PORT.to_string()));
+				env.insert("PORT".into(), k8s::gen::HTTP_SERVER_PORT.to_string());
 			}
 		}
 
 		// Add billing flag
 		if let Some(billing) = &project_ctx.ns().rivet.billing {
-			env.push((
+			env.insert(
 				"RIVET_BILLING".to_owned(),
 				serde_json::to_string(&billing).unwrap(),
-			));
+			);
 		}
 
 		if project_ctx.ns().dns.is_some() {
 			let dns = terraform::output::read_dns(&project_ctx).await;
-			env.push((
+			env.insert(
 				"CLOUDFLARE_ZONE_ID_BASE".into(),
 				(*dns.cloudflare_zone_ids).main.clone(),
-			));
-			env.push((
+			);
+			env.insert(
 				"CLOUDFLARE_ZONE_ID_GAME".into(),
 				(*dns.cloudflare_zone_ids).cdn.clone(),
-			));
-			env.push((
+			);
+			env.insert(
 				"CLOUDFLARE_ZONE_ID_JOB".into(),
 				(*dns.cloudflare_zone_ids).job.clone(),
-			));
+			);
 		}
 
 		if self.depends_on_captcha() {
 			if let Some(hcaptcha) = &project_ctx.ns().captcha.hcaptcha {
-				env.push((
+				env.insert(
 					"HCAPTCHA_SITE_KEY_FALLBACK".into(),
 					hcaptcha.site_key_fallback.clone(),
-				));
+				);
 			}
 
 			if let Some(turnstile) = &project_ctx.ns().captcha.turnstile {
-				env.push((
+				env.insert(
 					"TURNSTILE_SITE_KEY_MAIN".into(),
 					turnstile.site_key_main.clone(),
-				));
-				env.push((
+				);
+				env.insert(
 					"TURNSTILE_SITE_KEY_CDN".into(),
 					turnstile.site_key_cdn.clone(),
-				));
+				);
 			}
 		}
 
 		if self.depends_on_nomad_api() {
 			// TODO: Read host url from terraform
-			env.push((
+			env.insert(
 				"NOMAD_URL".into(),
 				"http://nomad-server.nomad.svc.cluster.local:4646".into(),
-			));
+			);
 		}
 
-		env.push((
+		env.insert(
 			"CRDB_MIN_CONNECTIONS".into(),
 			self.config().cockroachdb.min_connections.to_string(),
-		));
+		);
 
 		if self.depends_on_prometheus_api() {
-			env.push((
+			env.insert(
 				format!("PROMETHEUS_URL"),
 				"http://prometheus-operated.prometheus.svc.cluster.local:9090".into(),
-			));
+			);
 		}
 
 		// NATS
-		env.push((
+		env.insert(
 			"NATS_URL".into(),
 			// TODO: Add back passing multiple NATS nodes for failover instead of using DNS resolution
 			"nats.nats.svc.cluster.local:4222".into(),
-		));
+		);
 
 		// Chirp config (used for both Chirp clients and Chirp workers)
-		env.push(("CHIRP_SERVICE_NAME".into(), self.name()));
+		env.insert("CHIRP_SERVICE_NAME".into(), self.name());
 
 		// Chirp worker config
 		if (matches!(run_context, RunContext::Service { .. })
 			&& matches!(&self.config().kind, ServiceKind::Consumer { .. }))
 			|| self.is_monolith_worker()
 		{
-			env.push((
+			env.insert(
 				"CHIRP_WORKER_INSTANCE".into(),
 				format!("{}-$(KUBERNETES_POD_ID)", self.name()),
-			));
+			);
 
-			env.push(("CHIRP_WORKER_KIND".into(), "consumer".into()));
-			env.push(("CHIRP_WORKER_CONSUMER_GROUP".into(), self.name()));
+			env.insert("CHIRP_WORKER_KIND".into(), "consumer".into());
+			env.insert("CHIRP_WORKER_CONSUMER_GROUP".into(), self.name());
 		}
 
 		// Fly
 		if let Some(fly) = &project_ctx.ns().fly {
-			env.push(("FLY_ORGANIZATION_ID".into(), fly.organization_id.clone()));
-			env.push(("FLY_REGION".into(), fly.region.clone()));
+			env.insert("FLY_ORGANIZATION_ID".into(), fly.organization_id.clone());
+			env.insert("FLY_REGION".into(), fly.region.clone());
 		}
 
 		// Add default provider
 		let (default_provider, _) = project_ctx.default_s3_provider()?;
-		env.push((
+		env.insert(
 			"S3_DEFAULT_PROVIDER".to_string(),
 			default_provider.as_str().to_string(),
-		));
+		);
 
 		// Expose all S3 endpoints to services that need them
 		let s3_deps = if self.depends_on_s3() {
@@ -990,115 +980,112 @@ impl ServiceContextData {
 		// S3 backfill
 		if self.depends_on_s3_backfill() {
 			if let Some(backfill) = &project_ctx.ns().s3.backfill {
-				env.push(("S3_BACKFILL_PROVIDER".into(), backfill.as_str().to_string()));
+				env.insert("S3_BACKFILL_PROVIDER".into(), backfill.as_str().to_string());
 			}
 		}
 
 		// Runtime-specific
 		match &self.config().runtime {
 			RuntimeKind::Rust { .. } => {
-				env.push(("RUST_BACKTRACE".into(), "1".into()));
+				env.insert("RUST_BACKTRACE".into(), "1".into());
 			}
 			_ => {}
 		}
 
 		if project_ctx.ns().rivet.telemetry.disable {
-			env.push(("RIVET_TELEMETRY_DISABLE".into(), "1".into()));
+			env.insert("RIVET_TELEMETRY_DISABLE".into(), "1".into());
 		}
 
-		env.push((
+		env.insert(
 			"RIVET_API_HUB_ORIGIN_REGEX".into(),
 			project_ctx.origin_hub_regex(),
-		));
+		);
 		if project_ctx.ns().rivet.api.error_verbose {
-			env.push(("RIVET_API_ERROR_VERBOSE".into(), "1".into()));
+			env.insert("RIVET_API_ERROR_VERBOSE".into(), "1".into());
 		}
 		if project_ctx.ns().rivet.profanity.filter_disable {
-			env.push(("RIVET_PROFANITY_FILTER_DISABLE".into(), "1".into()));
+			env.insert("RIVET_PROFANITY_FILTER_DISABLE".into(), "1".into());
 		}
 		if project_ctx.ns().rivet.upload.nsfw_error_verbose {
-			env.push(("RIVET_UPLOAD_NSFW_ERROR_VERBOSE".into(), "1".into()));
+			env.insert("RIVET_UPLOAD_NSFW_ERROR_VERBOSE".into(), "1".into());
 		}
 
 		if let Some(provisioning) = &project_ctx.ns().rivet.provisioning {
 			if self.depends_on_cluster_config() || matches!(run_context, RunContext::Test { .. }) {
-				env.push((
+				env.insert(
 					"RIVET_DEFAULT_CLUSTER_CONFIG".into(),
 					serde_json::to_string(&provisioning.cluster)?,
-				));
-				env.push((
+				);
+				env.insert(
 					"RIVET_TAINT_DEFAULT_CLUSTER".into(),
 					if provisioning.taint {
 						"1".to_string()
 					} else {
 						"0".to_string()
 					},
-				));
+				);
 			}
 
 			if self.depends_on_provision_margin() {
-				env.push((
+				env.insert(
 					format!("RIVET_JOB_SERVER_PROVISION_MARGIN"),
 					provisioning.job_server_provision_margin.to_string(),
-				));
+				);
 			}
 
-			env.push((
+			env.insert(
 				format!("TLS_ACME_DIRECTORY"),
 				serde_json::to_value(&provisioning.acme_directory)?
 					.as_str()
 					.unwrap()
 					.to_string(),
-			));
+			);
 		}
-
-		// Sort env by keys so it's always in the same order
-		env.sort_by_cached_key(|x| x.0.clone());
 
 		Ok(env)
 	}
 
-	pub async fn secret_env(&self, run_context: &RunContext) -> Result<Vec<(String, String)>> {
+	pub async fn secret_env(&self, run_context: &RunContext) -> Result<IndexMap<String, String>> {
 		let project_ctx = self.project().await;
 
-		let mut env = Vec::new();
+		let mut env = IndexMap::new();
 
 		// Write secrets
 		for (secret_key, secret_config) in self.required_secrets(run_context).await? {
 			let env_key = secret_env_var_key(&secret_key);
 			if secret_config.optional {
 				if let Some(value) = project_ctx.read_secret_opt(&secret_key).await? {
-					env.push((env_key, value));
+					env.insert(env_key, value);
 				}
 			} else {
-				env.push((env_key, project_ctx.read_secret(&secret_key).await?));
+				env.insert(env_key, project_ctx.read_secret(&secret_key).await?);
 			}
 		}
 
 		// NATS
-		env.push(("NATS_USERNAME".into(), "chirp".into()));
-		env.push(("NATS_PASSWORD".into(), "password".into()));
+		env.insert("NATS_USERNAME".into(), "chirp".into());
+		env.insert("NATS_PASSWORD".into(), "password".into());
 
-		env.push((
+		env.insert(
 			"RIVET_JWT_KEY_PUBLIC".into(),
 			project_ctx
 				.read_secret(&["jwt", "key", "public_pem"])
 				.await?,
-		));
+		);
 		if self.depends_on_jwt_key_private() {
-			env.push((
+			env.insert(
 				"RIVET_JWT_KEY_PRIVATE".into(),
 				project_ctx
 					.read_secret(&["jwt", "key", "private_pem"])
 					.await?,
-			));
+			);
 		}
 
 		if self.depends_on_sendgrid_key(&project_ctx) {
-			env.push((
+			env.insert(
 				"SENDGRID_KEY".into(),
 				project_ctx.read_secret(&["sendgrid", "key"]).await?,
-			));
+			);
 		}
 
 		// CRDB
@@ -1114,7 +1101,7 @@ impl ServiceContextData {
 				"postgres://{}:{}@{crdb_host}/postgres?sslmode={sslmode}",
 				username, password,
 			);
-			env.push(("CRDB_URL".into(), uri));
+			env.insert("CRDB_URL".into(), uri);
 		}
 
 		// Redis
@@ -1187,10 +1174,10 @@ impl ServiceContextData {
 				format!("rediss://{}@{host}", username)
 			};
 
-			env.push((
+			env.insert(
 				format!("REDIS_URL_{}", db_name.to_uppercase().replace("-", "_")),
 				url,
-			));
+			);
 		}
 
 		// ClickHouse
@@ -1205,7 +1192,7 @@ impl ServiceContextData {
 				username, password, *clickhouse_data.host, *clickhouse_data.port_https
 			);
 
-			env.push(("CLICKHOUSE_URL".into(), uri));
+			env.insert("CLICKHOUSE_URL".into(), uri);
 		}
 
 		// Expose all S3 endpoints to services that need them
@@ -1242,38 +1229,38 @@ impl ServiceContextData {
 		}
 
 		if project_ctx.ns().dns.is_some() && self.depends_on_cloudflare() {
-			env.push((
+			env.insert(
 				"CLOUDFLARE_AUTH_TOKEN".into(),
 				project_ctx
 					.read_secret(&["cloudflare", "terraform", "auth_token"])
 					.await?,
-			));
+			);
 		}
 
 		if self.depends_on_infra() && project_ctx.ns().rivet.provisioning.is_some() {
 			let tls = terraform::output::read_tls(&project_ctx).await;
 			let k8s_infra = terraform::output::read_k8s_infra(&project_ctx).await;
 
-			env.push((
+			env.insert(
 				"TLS_CERT_LOCALLY_SIGNED_JOB_CERT_PEM".into(),
 				tls.tls_cert_locally_signed_job.cert_pem.clone(),
-			));
-			env.push((
+			);
+			env.insert(
 				"TLS_CERT_LOCALLY_SIGNED_JOB_KEY_PEM".into(),
 				tls.tls_cert_locally_signed_job.key_pem.clone(),
-			));
-			env.push((
-				"TLS_ROOT_CA_CERT_PEM".into(),
-				(*tls.root_ca_cert_pem).clone(),
-			));
-			env.push((
+			);
+			env.insert(
 				"TLS_ACME_ACCOUNT_PRIVATE_KEY_PEM".into(),
 				(*tls.acme_account_private_key_pem).clone(),
-			));
-			env.push((
+			);
+			env.insert(
+				"TLS_ROOT_CA_CERT_PEM".into(),
+				(*tls.root_ca_cert_pem).clone(),
+			);
+			env.insert(
 				"K8S_TRAEFIK_TUNNEL_EXTERNAL_IP".into(),
 				(*k8s_infra.traefik_tunnel_external_ip).clone(),
-			));
+			);
 		}
 
 		Ok(env)
@@ -1355,7 +1342,7 @@ impl ServiceContextData {
 
 async fn add_s3_env(
 	project_ctx: &ProjectContext,
-	env: &mut Vec<(String, String)>,
+	env: &mut IndexMap<String, String>,
 	s3_dep: &Arc<ServiceContextData>,
 	provider: s3_util::Provider,
 ) -> Result<()> {
@@ -1364,14 +1351,14 @@ async fn add_s3_env(
 	let s3_dep_name = s3_dep.name_screaming_snake();
 	let s3_config = project_ctx.s3_config(provider).await?;
 
-	env.push((
+	env.insert(
 		format!("S3_{provider_upper}_BUCKET_{s3_dep_name}"),
 		s3_dep.s3_bucket_name().await,
-	));
-	env.push((
+	);
+	env.insert(
 		format!("S3_{provider_upper}_ENDPOINT_INTERNAL_{s3_dep_name}"),
 		s3_config.endpoint_internal,
-	));
+	);
 	// External endpoint
 	{
 		let mut external_endpoint = s3_config.endpoint_external;
@@ -1397,22 +1384,22 @@ async fn add_s3_env(
 			}
 		}
 
-		env.push((
+		env.insert(
 			format!("S3_{provider_upper}_ENDPOINT_EXTERNAL_{s3_dep_name}",),
 			external_endpoint,
-		));
+		);
 	}
-	env.push((
+	env.insert(
 		format!("S3_{provider_upper}_REGION_{s3_dep_name}"),
 		s3_config.region,
-	));
+	);
 
 	Ok(())
 }
 
 async fn add_s3_secret_env(
 	project_ctx: &ProjectContext,
-	env: &mut Vec<(String, String)>,
+	env: &mut IndexMap<String, String>,
 	s3_dep: &Arc<ServiceContextData>,
 	provider: s3_util::Provider,
 ) -> Result<()> {
@@ -1421,14 +1408,14 @@ async fn add_s3_secret_env(
 	let s3_dep_name = s3_dep.name_screaming_snake();
 	let s3_creds = project_ctx.s3_credentials(provider).await?;
 
-	env.push((
+	env.insert(
 		format!("S3_{provider_upper}_ACCESS_KEY_ID_{s3_dep_name}"),
 		s3_creds.access_key_id,
-	));
-	env.push((
+	);
+	env.insert(
 		format!("S3_{provider_upper}_SECRET_ACCESS_KEY_{s3_dep_name}"),
 		s3_creds.access_key_secret,
-	));
+	);
 
 	Ok(())
 }
