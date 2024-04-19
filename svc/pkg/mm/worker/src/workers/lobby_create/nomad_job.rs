@@ -71,7 +71,7 @@ struct DecodedPort {
 
 pub fn gen_lobby_docker_job(
 	runtime: &backend::matchmaker::lobby_runtime::Docker,
-	image_tag: &str,
+	_image_tag: &str,
 	tier: &backend::region::Tier,
 	lobby_config: bool,
 	lobby_tags: bool,

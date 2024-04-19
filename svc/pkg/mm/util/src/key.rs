@@ -204,13 +204,8 @@ pub fn player_auto_remove() -> String {
 }
 
 /// is closed
-pub fn node_is_closed(
-	node_id: &str,
-) -> String {
-	format!(
-		"{{global}}:mm:node:{}:is_closed",
-		node_id,
-	)
+pub fn node_is_closed(node_id: &str) -> String {
+	format!("{{global}}:mm:node:{}:is_closed", node_id,)
 }
 
 // Placeholder key

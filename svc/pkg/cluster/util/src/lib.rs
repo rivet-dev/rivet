@@ -30,7 +30,9 @@ pub struct JobNodeConfig {
 }
 
 impl JobNodeConfig {
-	pub fn from_linode(instance_type: &linode::instance_type_get::response::InstanceType) -> JobNodeConfig {
+	pub fn from_linode(
+		instance_type: &linode::instance_type_get::response::InstanceType,
+	) -> JobNodeConfig {
 		// Account for kernel memory overhead
 		// https://www.linode.com/community/questions/17791/why-doesnt-free-m-match-the-full-amount-of-ram-of-my-nanode-plan
 		let memory = instance_type.memory * 96 / 100;
@@ -80,7 +82,5 @@ pub fn server_name(
 		backend::cluster::PoolType::Ats => "ats",
 	};
 
-	format!(
-		"{ns}-{provider_datacenter_id}-{pool_type_str}-{server_id}",
-	)
+	format!("{ns}-{provider_datacenter_id}-{pool_type_str}-{server_id}",)
 }

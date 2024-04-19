@@ -34,7 +34,7 @@ async fn handle(
 		.iter()
 		.map(common::Uuid::as_uuid)
 		.collect::<Vec<_>>();
-	let coords = unwrap_ref!(ctx.coords);
+	let _coords = unwrap_ref!(ctx.coords);
 
 	#[allow(deprecated)]
 	let origin = if let Some(coords) = &ctx.coords {

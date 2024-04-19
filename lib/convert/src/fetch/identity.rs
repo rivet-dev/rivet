@@ -171,7 +171,7 @@ pub async fn users(
 pub async fn presence_data(
 	ctx: &OperationContext<()>,
 	user_ids: Vec<common::Uuid>,
-	summary_info: bool,
+	_summary_info: bool,
 ) -> GlobalResult<PresencesCtx> {
 	let ((presences_res, game_ids),) = tokio::try_join!(presences_and_game_ids(ctx, user_ids),)?;
 

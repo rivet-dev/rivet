@@ -22,7 +22,7 @@ pub fn handle(
 		.iter()
 		.find(|presence| presence.user_id == user.user_id));
 	let user_presence = unwrap_ref!(user_presence.presence);
-	let status = unwrap!(backend::user::Status::from_i32(user_presence.status));
+	let _status = unwrap!(backend::user::Status::from_i32(user_presence.status));
 
 	Ok(models::IdentityHandle {
 		identity_id: user_id,
@@ -47,7 +47,7 @@ pub fn handle_without_presence(
 	user: &backend::user::User,
 ) -> GlobalResult<models::IdentityHandle> {
 	let user_id = unwrap_ref!(user.user_id).as_uuid();
-	let is_self = user_id == current_user_id;
+	let _is_self = user_id == current_user_id;
 
 	Ok(models::IdentityHandle {
 		identity_id: user_id,
@@ -179,7 +179,7 @@ pub fn profile(
 		.iter()
 		.find(|presence| presence.user_id == user.user_id));
 	let user_presence = unwrap_ref!(user_presence.presence);
-	let status = unwrap!(backend::user::Status::from_i32(user_presence.status));
+	let _status = unwrap!(backend::user::Status::from_i32(user_presence.status));
 
 	let current_user_id = Into::<common::Uuid>::into(current_user_id);
 	let following = pctx.mutual_follows.iter().any(|follow| {

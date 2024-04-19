@@ -1,7 +1,7 @@
 use chirp_worker::prelude::*;
 
 #[worker_test]
-async fn server_undrain(ctx: TestCtx) {
+async fn server_undrain(_ctx: TestCtx) {
 	if !util::feature::server_provision() {
 		return;
 	}

@@ -1,5 +1,5 @@
-use rivet_operation::prelude::*;
 use proto::backend;
+use rivet_operation::prelude::*;
 
 pub fn format_deactivate_reasons(reasons: &[i32]) -> GlobalResult<String> {
 	Ok(reasons

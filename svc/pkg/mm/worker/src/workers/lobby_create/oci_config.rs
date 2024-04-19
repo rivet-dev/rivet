@@ -1,8 +1,6 @@
 use chirp_worker::prelude::*;
 use serde_json::json;
 
-use super::nomad_job::template_env_var;
-
 // CPU period in microseconds.
 //
 // https://www.kernel.org/doc/Documentation/scheduler/sched-bwc.txt

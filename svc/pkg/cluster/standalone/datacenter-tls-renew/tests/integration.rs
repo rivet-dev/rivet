@@ -1,7 +1,4 @@
 use chirp_worker::prelude::*;
-use proto::backend::{self, pkg::*};
-
-use ::cluster_datacenter_tls_renew::run_from_env;
 
 #[tokio::test(flavor = "multi_thread")]
 async fn basic() {
@@ -15,8 +12,8 @@ async fn basic() {
 		.with_span_events(tracing_subscriber::fmt::format::FmtSpan::NONE)
 		.init();
 
-	let ctx = TestCtx::from_env("cluster-gc-test").await.unwrap();
-	let pools = rivet_pools::from_env("cluster-gc-test").await.unwrap();
+	let _ctx = TestCtx::from_env("cluster-gc-test").await.unwrap();
+	let _pools = rivet_pools::from_env("cluster-gc-test").await.unwrap();
 
 	// TODO:
 }

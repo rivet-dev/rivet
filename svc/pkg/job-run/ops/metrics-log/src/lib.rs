@@ -1,6 +1,6 @@
 use indoc::formatdoc;
 use proto::backend::pkg::*;
-use reqwest::StatusCode;
+
 use rivet_operation::prelude::*;
 use serde::Deserialize;
 

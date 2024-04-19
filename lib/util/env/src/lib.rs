@@ -178,7 +178,10 @@ pub mod cloudflare {
 	pub fn auth_token() -> &'static str {
 		match &*CLOUDFLARE_AUTH_TOKEN {
 			Some(x) => x.as_str(),
-			None => panic!("{}", EnvVarError::Missing("CLOUDFLARE_AUTH_TOKEN".to_string())),
+			None => panic!(
+				"{}",
+				EnvVarError::Missing("CLOUDFLARE_AUTH_TOKEN".to_string())
+			),
 		}
 	}
 
@@ -222,9 +225,7 @@ pub async fn read_secret(key: &[impl AsRef<str>]) -> Result<String, EnvVarError>
 	var(secret_env_var_key(key))
 }
 
-pub async fn read_secret_opt(
-	key: &[impl AsRef<str>],
-) -> Result<Option<String>, EnvVarError> {
+pub async fn read_secret_opt(key: &[impl AsRef<str>]) -> Result<Option<String>, EnvVarError> {
 	let env_var = read_secret(key).await;
 
 	match env_var {

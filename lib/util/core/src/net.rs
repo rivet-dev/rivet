@@ -31,7 +31,7 @@ pub mod gg {
 
 	use ipnet::{Ipv4AddrRange, Ipv4Net};
 
-	use super::{default_firewall, FirewallRule, job};
+	use super::{default_firewall, job, FirewallRule};
 
 	pub fn vlan_ip_net() -> Ipv4Net {
 		Ipv4Net::new(Ipv4Addr::new(10, 0, 0, 0), 26).unwrap()
@@ -76,7 +76,11 @@ pub mod gg {
 			// Dynamic TCP
 			FirewallRule {
 				label: "dynamic-tcp".into(),
-				ports: format!("{}-{}", job::MIN_INGRESS_PORT_TCP, job::MAX_INGRESS_PORT_TCP),
+				ports: format!(
+					"{}-{}",
+					job::MIN_INGRESS_PORT_TCP,
+					job::MAX_INGRESS_PORT_TCP
+				),
 				protocol: "tcp".into(),
 				inbound_ipv4_cidr: vec!["0.0.0.0/0".into()],
 				inbound_ipv6_cidr: vec!["::/0".into()],
@@ -84,7 +88,11 @@ pub mod gg {
 			// Dynamic UDP
 			FirewallRule {
 				label: "dynamic-udp".into(),
-				ports: format!("{}-{}", job::MIN_INGRESS_PORT_UDP, job::MAX_INGRESS_PORT_UDP),
+				ports: format!(
+					"{}-{}",
+					job::MIN_INGRESS_PORT_UDP,
+					job::MAX_INGRESS_PORT_UDP
+				),
 				protocol: "udp".into(),
 				inbound_ipv4_cidr: vec!["0.0.0.0/0".into()],
 				inbound_ipv6_cidr: vec!["::/0".into()],

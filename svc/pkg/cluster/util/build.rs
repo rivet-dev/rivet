@@ -1,7 +1,7 @@
 use std::path::PathBuf;
 
-use tokio::{fs, process::Command};
 use sha2::{Digest, Sha256};
+use tokio::{fs, process::Command};
 
 // NOTE: This only gets the hash of the folder. Any template variables changed in the install scripts
 // will not update the hash.
@@ -25,13 +25,23 @@ async fn main() {
 
 	let mut util_path = current_dir.clone();
 	util_path.pop();
-	let util_path = util_path.join("worker").join("src").join("workers").join("server_install");
+	let util_path = util_path
+		.join("worker")
+		.join("src")
+		.join("workers")
+		.join("server_install");
 
 	// Compute the git diff between the current branch and the local changes
-	let cmd = Command::new("git").arg("diff").arg("--minimal").arg("HEAD").arg("--").arg(util_path).output()
-	.await
-	.unwrap();
-	
+	let cmd = Command::new("git")
+		.arg("diff")
+		.arg("--minimal")
+		.arg("HEAD")
+		.arg("--")
+		.arg(util_path)
+		.output()
+		.await
+		.unwrap();
+
 	if !cmd.status.success() {
 		panic!(
 			"failed to get git diff ({}):\n{}",
@@ -45,11 +55,11 @@ async fn main() {
 	// If there is no diff, use the git commit hash
 	let source_hash = if source_diff.is_empty() {
 		let cmd = Command::new("git")
-		.arg("rev-parse")
-		.arg("HEAD:svc/pkg/cluster/worker/src/workers/server_install")
-		.output()
-		.await
-		.unwrap();
+			.arg("rev-parse")
+			.arg("HEAD:svc/pkg/cluster/worker/src/workers/server_install")
+			.output()
+			.await
+			.unwrap();
 
 		if !cmd.status.success() {
 			panic!(
@@ -58,7 +68,7 @@ async fn main() {
 				String::from_utf8(cmd.stderr).unwrap()
 			);
 		}
-		
+
 		String::from_utf8(cmd.stdout).unwrap()
 	} else {
 		// Get hash of diff

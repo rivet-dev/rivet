@@ -29,7 +29,8 @@ pub async fn config_to_proto(
 
 	let regions_list = op!([ctx] region_list_for_game {
 		game_ids: vec![game_id.into()],
-	}).await?;
+	})
+	.await?;
 	let regions_res = op!([ctx] region_get {
 		region_ids: regions_list.region_ids.clone(),
 	})
@@ -334,7 +335,6 @@ impl ApiTryFrom<backend::captcha::captcha_config::Hcaptcha>
 		})
 	}
 }
-
 
 impl ApiFrom<models::CloudVersionMatchmakerCaptchaTurnstile>
 	for backend::captcha::captcha_config::Turnstile

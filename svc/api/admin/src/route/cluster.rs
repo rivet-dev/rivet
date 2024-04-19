@@ -17,7 +17,7 @@ pub struct ServerIpsQuery {
 
 pub async fn server_ips(
 	ctx: Ctx<Auth>,
-	watch_index: WatchIndexQuery,
+	_watch_index: WatchIndexQuery,
 	query: ServerIpsQuery,
 ) -> GlobalResult<models::AdminClusterGetServerIpsResponse> {
 	let ips = match (query.server_id, query.pool) {

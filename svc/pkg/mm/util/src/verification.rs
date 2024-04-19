@@ -160,7 +160,8 @@ pub async fn verify_config(
 						ensure_with!(
 							allowed,
 							MATCHMAKER_CUSTOM_LOBBY_CONFIG_INVALID,
-							reason = r#""private" publicity not allowed with this custom game mode"#
+							reason =
+								r#""private" publicity not allowed with this custom game mode"#
 						);
 					}
 					_ => {

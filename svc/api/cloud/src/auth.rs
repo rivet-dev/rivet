@@ -143,7 +143,7 @@ impl Auth {
 		let claims = self.claims()?;
 
 		if claims.as_user().is_ok() {
-			let (user, user_ent) = self.user(ctx).await?;
+			let (_user, user_ent) = self.user(ctx).await?;
 
 			assert::user_registered(ctx, user_ent.user_id).await?;
 
@@ -198,7 +198,7 @@ impl Auth {
 		let claims = self.claims()?;
 
 		if claims.as_user().is_ok() {
-			let (user, user_ent) = self.user(ctx).await?;
+			let (_user, user_ent) = self.user(ctx).await?;
 
 			assert::user_registered(ctx, user_ent.user_id).await?;
 

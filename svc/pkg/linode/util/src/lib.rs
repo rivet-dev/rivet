@@ -37,13 +37,16 @@ impl Client {
 		})
 	}
 
-	pub async fn new_with_headers(api_token: Option<String>, mut headers: header::HeaderMap) -> GlobalResult<Self> {
+	pub async fn new_with_headers(
+		api_token: Option<String>,
+		mut headers: header::HeaderMap,
+	) -> GlobalResult<Self> {
 		let api_token = if let Some(api_token) = api_token {
 			api_token
 		} else {
 			util::env::read_secret(&["linode", "token"]).await?
 		};
-		
+
 		let auth = format!("Bearer {}", api_token);
 		headers.insert(header::AUTHORIZATION, header::HeaderValue::from_str(&auth)?);
 

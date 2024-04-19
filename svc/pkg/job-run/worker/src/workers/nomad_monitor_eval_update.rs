@@ -27,7 +27,7 @@ struct RunRow {
 async fn worker(
 	ctx: &OperationContext<nomad::msg::monitor_eval_update::Message>,
 ) -> GlobalResult<()> {
-	let crdb = ctx.crdb().await?;
+	let _crdb = ctx.crdb().await?;
 
 	let payload_value = serde_json::from_str::<serde_json::Value>(&ctx.payload_json)?;
 	let PlanResult { evaluation: eval } = serde_json::from_str::<PlanResult>(&ctx.payload_json)?;

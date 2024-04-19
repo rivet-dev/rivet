@@ -47,7 +47,7 @@ async fn handle(ctx: OperationContext<tier::list::Request>) -> GlobalResult<tier
 					.find(|it| it.hardware_id == hardware),
 				"datacenter hardware stats not found"
 			);
-			let config = JobNodeConfig::from_linode(instance_type);
+			let _config = JobNodeConfig::from_linode(instance_type);
 
 			let config =
 				JobNodeConfig::from_linode(&linode::instance_type_get::response::InstanceType {
