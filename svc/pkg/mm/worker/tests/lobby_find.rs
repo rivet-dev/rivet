@@ -874,7 +874,7 @@ async fn tagged_multiple_lobbies(ctx: TestCtx) {
 
 	let lobby_group = create_lobby_group(&ctx, None).await;
 
-	let _find_res1 = find_with_tags(
+	let find_res1 = find_with_tags(
 		&ctx,
 		FindRequest {
 			namespace_id: lobby_group.namespace_id,
@@ -921,6 +921,8 @@ async fn tagged_multiple_lobbies(ctx: TestCtx) {
 	)
 	.await
 	.unwrap();
+
+	assert_ne!(find_res1.lobby_id, find_res2.lobby_id, "found wrong lobby");
 
 	// This should iterate over the both of the previously created lobbies and skip the first one because
 	// it's tag doesn't match.
