@@ -49,28 +49,30 @@ async fn basic(ctx: TestCtx) {
 	.await
 	.unwrap();
 
-	res.users
-		.iter()
-		.zip(tests.iter())
-		.for_each(|(relationship, &(this_user, other_user))| {
-			assert_eq!(
-				follows
-					.iter()
-					.any(|x| x.0 == this_user && x.1 == other_user),
-				relationship.is_follower,
-				"bad follower"
-			);
-			assert_eq!(
-				follows
-					.iter()
-					.any(|x| x.1 == this_user && x.0 == other_user),
-				relationship.is_following,
-				"bad following"
-			);
-			assert_eq!(
-				relationship.is_follower && relationship.is_following,
-				relationship.is_mutual,
-				"bad mutual"
-			);
-		});
+	tracing::info!(?res, ?tests);
+
+	res.users.iter().for_each(|relationship| {
+		let this_user = relationship.this_user_id.unwrap().as_uuid();
+		let other_user = relationship.other_user_id.unwrap().as_uuid();
+
+		assert_eq!(
+			follows
+				.iter()
+				.any(|x| x.0 == this_user && x.1 == other_user),
+			relationship.is_follower,
+			"bad follower"
+		);
+		assert_eq!(
+			follows
+				.iter()
+				.any(|x| x.1 == this_user && x.0 == other_user),
+			relationship.is_following,
+			"bad following"
+		);
+		assert_eq!(
+			relationship.is_follower && relationship.is_following,
+			relationship.is_mutual,
+			"bad mutual"
+		);
+	});
 }

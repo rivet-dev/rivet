@@ -8704,6 +8704,7 @@ dependencies = [
  "faker-team",
  "prost 0.10.4",
  "rivet-operation",
+ "sqlx",
 ]
 
 [[package]]

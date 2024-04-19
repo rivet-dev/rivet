@@ -3,6 +3,8 @@ use rivet_operation::prelude::*;
 
 #[derive(sqlx::FromRow)]
 struct Relationship {
+	this_user_id: Uuid,
+	other_user_id: Uuid,
 	is_follower: bool,
 	is_following: bool,
 }
@@ -27,7 +29,9 @@ async fn handle(
 	let relationships = sql_fetch_all!(
 		[ctx, Relationship]
 		"
-		SELECT 
+		SELECT
+			(q->>0)::UUID AS this_user_id,
+			(q->>1)::UUID AS other_user_id,
 			exists(
 				SELECT 1
 				FROM db_user_follow.user_follows AS uf
@@ -51,6 +55,8 @@ async fn handle(
 	let users = relationships
 		.iter()
 		.map(|x| user_follow::relationship_get::response::User {
+			this_user_id: Some(x.this_user_id.into()),
+			other_user_id: Some(x.other_user_id.into()),
 			is_mutual: x.is_follower && x.is_following,
 			is_follower: x.is_follower,
 			is_following: x.is_following,

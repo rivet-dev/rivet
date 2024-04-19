@@ -39,11 +39,7 @@ jobs:
         run: nix-shell --pure --run "bolt init --yes ci"
 
       - name: Bolt Test
-        run: nix-shell --pure --run "bolt test -c 4"
-
-      - name: Tmate
-        if: failure()
-        uses: mxschmitt/action-tmate@v3
+        run: nix-shell --pure --run "bolt test -c 4 -t 120"
 
       - name: Force Parallel Failure
         if: failure()

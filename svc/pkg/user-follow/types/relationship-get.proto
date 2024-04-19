@@ -15,6 +15,9 @@ message Request {
 
 message Response {
     message User {
+        rivet.common.Uuid this_user_id = 4;
+        rivet.common.Uuid other_user_id = 5;
+
         // Both users follow each other.
         bool is_mutual = 1;
 
