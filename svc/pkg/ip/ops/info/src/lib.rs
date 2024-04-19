@@ -51,20 +51,13 @@ async fn fetch_ip_info_io(
 		tracing::info!("found cached ip info");
 		ip_info_raw
 	} else {
-		let api_url =
-			if let Some(ip_info_token) = util::env::read_secret_opt(&["ip_info", "token"]).await? {
-				format!("https://ipinfo.io/{}?token={}", ip_str, ip_info_token)
-			} else {
-				format!("https://ipinfo.io/{}", ip_str)
-			};
-
 		// Fetch IP data from external service
 		tracing::info!(?ip_str, "fetching fresh ip info");
 
 		let client = reqwest::Client::new();
 		let req = client.get(format!("https://ipinfo.io/{}", ip_str));
 
-		let req = if let Ok(token) = util::env::read_secret(&["ip_info", "token"]).await {
+		let req = if let Some(token) = util::env::read_secret_opt(&["ip_info", "token"]).await? {
 			req.query(&[("token", token)])
 		} else {
 			req
@@ -75,9 +68,8 @@ async fn fetch_ip_info_io(
 		if !ip_info_res.status().is_success() {
 			let status = ip_info_res.status();
 			let body = ip_info_res.text().await?;
-			tracing::error!(?status, %body, "failed to fetch ip info");
 
-			bail!("ip info error");
+			bail!(format!("ip info error ({status}): {body}"));
 		};
 
 		let ip_info_raw = ip_info_res.json::<serde_json::Value>().await?;

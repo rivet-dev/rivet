@@ -858,7 +858,7 @@ pub async fn gen_spec(
 		"data": secret_data
 	}));
 
-	let (volumes, volume_mounts) = build_volumes(&ctx, run_context, svcs).await;
+	let (volumes, volume_mounts) = build_volumes(&ctx, run_context, svcs, k8s_svc_name).await;
 
 	let metadata = json!({
 		"name": k8s_svc_name,
@@ -918,10 +918,24 @@ pub async fn build_volumes(
 	project_ctx: &ProjectContext,
 	run_context: &RunContext,
 	svcs: &[&ServiceContext],
+	k8s_svc_name: &str,
 ) -> (Vec<serde_json::Value>, Vec<serde_json::Value>) {
 	// Shared data between containers
 	let mut volumes = Vec::<serde_json::Value>::new();
 	let mut volume_mounts = Vec::<serde_json::Value>::new();
+
+	// TODO: Move this to reading vanilla config inside service instead of populating this
+	// Add static config
+	volumes.push(json!({
+		"name": "rivet-etc",
+		"configMap": {
+			"name": format!("rivet-etc-{}", k8s_svc_name),
+		}
+	}));
+	volume_mounts.push(json!({
+		"name": "rivet-etc",
+		"mountPath": "/etc/rivet"
+	}));
 
 	// Volumes
 	volumes.push(json!({

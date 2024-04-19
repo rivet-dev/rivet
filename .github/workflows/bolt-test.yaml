@@ -39,7 +39,11 @@ jobs:
         run: nix-shell --pure --run "bolt init --yes ci"
 
       - name: Bolt Test
-        run: nix-shell --pure --run "bolt test -c 4 -t 120"
+        run: nix-shell --pure --run "bolt test"
+
+      - name: K3D Cleanup
+        if: always()
+        run: nix-shell --pure --run "k3d cluster delete rivet-ci"
 
       - name: Force Parallel Failure
         if: failure()
