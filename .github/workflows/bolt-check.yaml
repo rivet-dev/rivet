@@ -32,6 +32,9 @@ jobs:
           SCCACHE_AWS_ACCESS_KEY_ID: ${{ secrets.SCCACHE_AWS_ACCESS_KEY_ID }}
           OP_SERVICE_ACCOUNT_TOKEN: ${{ secrets.OP_SERVICE_ACCOUNT_TOKEN }}
 
+      - name: Bolt Change Project
+        run: nix-shell --pure --run "bolt config set-namespace ci"
+
       - name: Bolt Generate Project
         run: nix-shell --pure --run "bolt gen project"
 
