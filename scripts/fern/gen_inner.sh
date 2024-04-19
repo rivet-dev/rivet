@@ -1,6 +1,19 @@
 #!/usr/bin/env bash
 set -euf -o pipefail
 
+# To install fern, first clone the repo and check out the branch
+# $ git clone https://github.com/rivet-gg/fern
+# $ cd fern
+# $ git checkout max/remove-headers
+#
+# Then, follow the instructions in SETUP.md and CONTRIBUTING.md to compile fern
+# $ yarn
+# $ yarn compile
+# $ yarn dist:cli:dev
+#
+# Finally, run this with the path to the fern repo, say:
+# $ FERN_REPO_PATH=~/fern ./oss/scripts/fern/gen.sh
+
 set +u
 if [ -z "$FERN_REPO_PATH" ]; then
 	echo 'Please clone and build https://github.com/rivet-gg/fern/tree/max/remove-headers and set $FERN_REPO_PATH. This is a workaround until https://github.com/fern-api/fern/pull/2551 is resolved.'
