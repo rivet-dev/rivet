@@ -161,7 +161,7 @@ Class | Method | HTTP request | Description
 *PortalNotificationsApi* | [**portal_notifications_register_notifications**](docs/PortalNotificationsApi.md#portal_notifications_register_notifications) | **POST** /portal/notifications/register | 
 *PortalNotificationsApi* | [**portal_notifications_unregister_notifications**](docs/PortalNotificationsApi.md#portal_notifications_unregister_notifications) | **DELETE** /portal/notifications/register | 
 *ProvisionDatacentersApi* | [**provision_datacenters_get_tls**](docs/ProvisionDatacentersApi.md#provision_datacenters_get_tls) | **GET** /datacenters/{datacenter_id}/tls | 
-*ProvisionServersApi* | [**provision_servers_get_info**](docs/ProvisionServersApi.md#provision_servers_get_info) | **GET** /servers/{ip}/info | 
+*ProvisionServersApi* | [**provision_servers_get_info**](docs/ProvisionServersApi.md#provision_servers_get_info) | **GET** /servers/{ip} | 
 
 
 ## Documentation For Models

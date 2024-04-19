@@ -34,7 +34,7 @@ pub async fn provision_servers_get_info(configuration: &configuration::Configura
 
     let local_var_client = &local_var_configuration.client;
 
-    let local_var_uri_str = format!("{}/servers/{ip}/info", local_var_configuration.base_path, ip=crate::apis::urlencode(ip));
+    let local_var_uri_str = format!("{}/servers/{ip}", local_var_configuration.base_path, ip=crate::apis::urlencode(ip));
     let mut local_var_req_builder = local_var_client.request(reqwest::Method::GET, local_var_uri_str.as_str());
 
     if let Some(ref local_var_user_agent) = local_var_configuration.user_agent {

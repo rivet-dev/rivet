@@ -40,7 +40,7 @@ export class Servers {
         const _response = await (this._options.fetcher ?? core.fetcher)({
             url: urlJoin(
                 (await core.Supplier.get(this._options.environment)) ?? environments.RivetEnvironment.Production,
-                `/servers/${ip}/info`
+                `/servers/${ip}`
             ),
             method: "GET",
             headers: {

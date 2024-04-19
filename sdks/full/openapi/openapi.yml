@@ -4369,7 +4369,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorBody'
       security: *ref_0
-  /servers/{ip}/info:
+  /servers/{ip}:
     get:
       operationId: provision_servers_getInfo
       tags:

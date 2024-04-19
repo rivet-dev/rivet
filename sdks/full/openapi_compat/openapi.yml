@@ -12748,7 +12748,7 @@ paths:
       security: *id001
       tags:
       - PortalNotifications
-  /servers/{ip}/info:
+  /servers/{ip}:
     get:
       operationId: provision_servers_getInfo
       parameters:

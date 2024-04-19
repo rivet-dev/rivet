@@ -4,7 +4,7 @@ All URIs are relative to *https://api.rivet.gg*
 
 Method | HTTP request | Description
 ------------- | ------------- | -------------
-[**provision_servers_get_info**](ProvisionServersApi.md#provision_servers_get_info) | **GET** /servers/{ip}/info | 
+[**provision_servers_get_info**](ProvisionServersApi.md#provision_servers_get_info) | **GET** /servers/{ip} | 
 
 
 

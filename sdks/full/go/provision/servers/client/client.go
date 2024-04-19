@@ -38,7 +38,7 @@ func (c *Client) GetInfo(ctx context.Context, ip string) (*servers.GetInfoRespon
 	if c.baseURL != "" {
 		baseURL = c.baseURL
 	}
-	endpointURL := fmt.Sprintf(baseURL+"/"+"servers/%v/info", ip)
+	endpointURL := fmt.Sprintf(baseURL+"/"+"servers/%v", ip)
 
 	errorDecoder := func(statusCode int, body io.Reader) error {
 		raw, err := io.ReadAll(body)
