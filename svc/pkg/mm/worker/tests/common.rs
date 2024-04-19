@@ -251,6 +251,7 @@ impl Setup {
 			lobby_config_json: None,
 			tags: HashMap::new(),
 			dynamic_max_players: None,
+			parameters: util::env::test_id_param(),
 		})
 		.await
 		.unwrap();

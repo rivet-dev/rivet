@@ -33,20 +33,17 @@ jobs:
         with:
           SCCACHE_AWS_SECRET_ACCESS_KEY: ${{ secrets.SCCACHE_AWS_SECRET_ACCESS_KEY }}
           SCCACHE_AWS_ACCESS_KEY_ID: ${{ secrets.SCCACHE_AWS_ACCESS_KEY_ID }}
+          OP_SERVICE_ACCOUNT_TOKEN: ${{ secrets.OP_SERVICE_ACCOUNT_TOKEN }}
 
       - name: Bolt Init
         run: nix-shell --pure --run "bolt init --yes ci"
 
       - name: Bolt Test
-        run: nix-shell --pure --run "bolt test"
+        run: nix-shell --pure --run "bolt test -c 4"
 
       - name: Tmate
         if: failure()
         uses: mxschmitt/action-tmate@v3
-
-      - name: Bolt Cleanup
-        if: always()
-        run: nix-shell --pure --run "bolt infra destroy --yes"
 
       - name: Force Parallel Failure
         if: failure()

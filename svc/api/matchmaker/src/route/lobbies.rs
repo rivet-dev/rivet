@@ -459,6 +459,7 @@ pub async fn create(
 				.transpose()?,
 			tags: tags,
 			dynamic_max_players: dynamic_max_players,
+			parameters: Vec::new(),
 		})
 		.await?;
 

@@ -164,6 +164,7 @@ async fn handle(
 			lobby_config_json: ctx.lobby_config_json.clone(),
 			tags: HashMap::new(),
 			dynamic_max_players: None,
+			parameters: util::env::test_id_param(),
 		})
 		.await?;
 	let run_id = unwrap_ref!(complete_msg.run_id).as_uuid();

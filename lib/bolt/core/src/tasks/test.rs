@@ -1,15 +1,6 @@
-use std::fmt;
-
-use anyhow::*;
-use futures_util::{FutureExt, StreamExt, TryStreamExt};
-use rand::{seq::SliceRandom, thread_rng};
-use reqwest::header;
-use rivet_term::console::style;
-use serde::Deserialize;
-
-use indoc::formatdoc;
 use std::{
 	collections::{HashMap, HashSet},
+	fmt,
 	path::{Path, PathBuf},
 	sync::{
 		atomic::{AtomicUsize, Ordering},
@@ -17,6 +8,14 @@ use std::{
 	},
 	time::{Duration, Instant},
 };
+
+use anyhow::*;
+use futures_util::{FutureExt, StreamExt, TryStreamExt};
+use indoc::formatdoc;
+use rand::{seq::SliceRandom, thread_rng};
+use reqwest::header;
+use rivet_term::console::style;
+use serde::Deserialize;
 use tokio::{io::AsyncWriteExt, process::Command};
 
 use crate::{
@@ -165,10 +164,11 @@ pub async fn test_services<T: AsRef<str>>(
 	};
 
 	// Generate test ID
+	let test_suite_id = gen_test_id();
+	let purge = !test_ctx.no_purge;
 
 	// Run tests
 	eprintln!();
-	let test_suite_id = gen_test_id();
 	rivet_term::status::progress("Running tests", &test_suite_id);
 	let tests_complete = Arc::new(AtomicUsize::new(0));
 	let test_count = test_binaries.len();
@@ -177,6 +177,7 @@ pub async fn test_services<T: AsRef<str>>(
 		let test_suite_id = test_suite_id.clone();
 		let tests_complete = tests_complete.clone();
 		let timeout = test_ctx.timeout;
+
 		async move {
 			run_test(
 				&ctx,
@@ -185,6 +186,7 @@ pub async fn test_services<T: AsRef<str>>(
 				tests_complete.clone(),
 				test_count,
 				timeout,
+				purge,
 			)
 			.await
 		}
@@ -196,7 +198,7 @@ pub async fn test_services<T: AsRef<str>>(
 	// Print results
 	print_results(&test_results);
 
-	cleanup_jobs(ctx, test_ctx.no_purge).await?;
+	cleanup_nomad(ctx, purge).await?;
 	cleanup_servers(ctx).await?;
 
 	// Error on failure
@@ -232,6 +234,7 @@ async fn run_test(
 	tests_complete: Arc<AtomicUsize>,
 	test_count: usize,
 	timeout: Option<u64>,
+	purge_nomad_jobs: bool,
 ) -> Result<TestResult> {
 	let svc_ctx = ctx
 		.all_services()
@@ -330,6 +333,8 @@ async fn run_test(
 			rivet_term::status::error(&format!("Unknown error: {}", err), &run_info);
 		}
 	}
+
+	cleanup_nomad_test(ctx, &test_id, purge_nomad_jobs).await?;
 
 	Ok(TestResult { status })
 }
@@ -503,41 +508,6 @@ fn print_results(test_results: &[TestResult]) {
 			test_results.len()
 		);
 	}
-}
-
-async fn cleanup_jobs(ctx: &ProjectContext, no_purge: bool) -> Result<()> {
-	eprintln!();
-	rivet_term::status::progress("Cleaning up jobs", "");
-
-	let purge = if no_purge { "" } else { "-purge" };
-	let cleanup_cmd = formatdoc!(
-		r#"
-		nomad job status |
-			grep -v -e "ID" -e "No running jobs" |
-			cut -f1 -d ' ' |
-			xargs -I {{}} nomad job stop {purge} -detach {{}}
-		"#
-	);
-
-	let mut cmd = Command::new("kubectl");
-	cmd.args(&[
-		"exec",
-		"service/nomad-server",
-		"-n",
-		"nomad",
-		"--container",
-		"nomad-instance",
-		"--",
-		"sh",
-		"-c",
-		&cleanup_cmd,
-	]);
-	cmd.env("KUBECONFIG", ctx.gen_kubeconfig_path());
-
-	let status = cmd.status().await?;
-	ensure!(status.success());
-
-	Ok(())
 }
 
 #[derive(Deserialize)]
@@ -758,4 +728,102 @@ fn gen_test_id() -> String {
 			chars[0]
 		})
 		.collect()
+}
+
+// Cleans up all nomad jobs from a specific test
+async fn cleanup_nomad_test(ctx: &ProjectContext, test_id: &str, purge: bool) -> Result<()> {
+	// Fetch all jobs from this test
+	let fetch_cmd = format!(
+		r#"nomad operator api -filter 'Meta.rivet_test_id == "{test_id}"' /v1/jobs?meta=true"#
+	);
+
+	let mut cmd = Command::new("kubectl");
+	cmd.args(&[
+		"exec",
+		"service/nomad-server",
+		"-n",
+		"nomad",
+		"--container",
+		"nomad-instance",
+		"--",
+		"sh",
+		"-c",
+		&fetch_cmd,
+	]);
+	cmd.env("KUBECONFIG", ctx.gen_kubeconfig_path());
+
+	let output = cmd.output().await?;
+	ensure!(output.status.success());
+
+	let jobs: Vec<NomadJob> = serde_json::from_slice(&output.stdout)?;
+
+	// Cleanup jobs
+	let purge = if purge { "-purge" } else { "" };
+	let cleanup_cmd = jobs
+		.iter()
+		.map(|job| format!("nomad job stop {purge} -detach {}", job.id))
+		.collect::<Vec<_>>()
+		.join("\n");
+
+	let mut cmd = Command::new("kubectl");
+	cmd.args(&[
+		"exec",
+		"service/nomad-server",
+		"-n",
+		"nomad",
+		"--container",
+		"nomad-instance",
+		"--",
+		"sh",
+		"-c",
+		&cleanup_cmd,
+	]);
+	cmd.env("KUBECONFIG", ctx.gen_kubeconfig_path());
+
+	let output = cmd.output().await?;
+	ensure!(output.status.success());
+
+	Ok(())
+}
+
+// Cleans up all nomad jobs
+async fn cleanup_nomad(ctx: &ProjectContext, purge: bool) -> Result<()> {
+	eprintln!();
+	rivet_term::status::progress("Cleaning up jobs", "");
+
+	let purge = if purge { "-purge" } else { "" };
+	let cleanup_cmd = formatdoc!(
+		r#"
+		nomad job status |
+			grep -v -e "ID" -e "No running jobs" |
+			cut -f1 -d ' ' |
+			xargs -I {{}} nomad job stop {purge} -detach {{}}
+		"#
+	);
+
+	let mut cmd = Command::new("kubectl");
+	cmd.args(&[
+		"exec",
+		"service/nomad-server",
+		"-n",
+		"nomad",
+		"--container",
+		"nomad-instance",
+		"--",
+		"sh",
+		"-c",
+		&cleanup_cmd,
+	]);
+	cmd.env("KUBECONFIG", ctx.gen_kubeconfig_path());
+
+	let status = cmd.status().await?;
+	ensure!(status.success());
+
+	Ok(())
+}
+
+#[derive(Debug, serde::Deserialize)]
+struct NomadJob {
+	#[serde(rename = "ID")]
+	id: String,
 }

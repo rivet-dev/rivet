@@ -12,6 +12,8 @@ inputs:
     required: true
   SCCACHE_AWS_ACCESS_KEY_ID:
     required: true
+  OP_SERVICE_ACCOUNT_TOKEN:
+    required: true
 
 runs:
   using: composite
@@ -51,28 +53,15 @@ runs:
       run: nix-shell --pure --run "echo 'Built shell'"
 
     # MARK: Bolt
-    - name: Write Configs
+    - name: Pull Config
       shell: bash -e {0}
+      env:
+        OP_SERVICE_ACCOUNT_TOKEN: ${{ inputs.OP_SERVICE_ACCOUNT_TOKEN }}
+      # Cannot use --pure `https://github.com/NixOS/nixpkgs/issues/66716`
       run: |
-        cat << 'EOF' > Bolt.local.toml
-        namespace = "ci"
-        EOF
-
-        cat << 'EOF' > namespaces/ci.toml
-        [rivet.test]
-
-        # We set the public IP to localhost because we are running inside of a github action, therefore
-        # it is not reachable from the public.
-        [cluster.single_node]
-        public_ip = "127.0.0.1"
-        EOF
+        nix-shell --run "bolt config pull -y ci --op-namespace-path 'op://Engineering/ice6g6zdnag4lxl5d3dcs7jj64/config' --op-secrets-path 'op://Engineering/ice6g6zdnag4lxl5d3dcs7jj64/secrets'"
 
     # Delete old Bolt binaries in order to fall back to the Nix-built binary
     - name: Remove Old Bolt Builds
       shell: bash -e {0}
       run: rm -f target/debug/bolt target/release/bolt
-
-    # Run `bolt config generate` so that the `Check` job can start working sooner
-    - name: Generate Bolt Config
-      shell: bash -e {0}
-      run: nix-shell --pure --run "bolt config generate ci"

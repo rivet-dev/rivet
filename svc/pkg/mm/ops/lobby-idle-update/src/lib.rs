@@ -82,6 +82,7 @@ async fn handle(
 			lobby_config_json: None,
 			tags: HashMap::new(),
 			dynamic_max_players: None,
+			parameters: Vec::new(),
 		}));
 	}
 	futures_util::future::try_join_all(create_futs).await?;

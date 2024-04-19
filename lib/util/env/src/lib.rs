@@ -32,6 +32,7 @@ lazy_static::lazy_static! {
 	static ref BILLING: Option<RivetBilling> = std::env::var("RIVET_BILLING")
 		.ok()
 		.map(|x| serde_json::from_str(&x).expect("failed to parse billing"));
+	static ref TEST_ID: Option<String> = std::env::var("RIVET_TEST_ID").ok();
 }
 
 /// Where this code is being written from. This is derived from the `RIVET_RUN_CONTEXT` environment
@@ -105,6 +106,13 @@ pub fn domain_main_api() -> Option<&'static str> {
 
 pub fn support_deprecated_subdomains() -> bool {
 	*SUPPORT_DEPRECATED_SUBDOMAINS
+}
+
+pub fn test_id_param() -> Vec<types::rivet::backend::job::Parameter> {
+	TEST_ID.as_ref().iter().map(|x| types::rivet::backend::job::Parameter {
+		key: "rivet_test_id".to_string(),
+		value: x.to_string(),
+	}).collect()
 }
 
 /// The host for the API.

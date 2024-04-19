@@ -406,7 +406,7 @@ pub fn gen_lobby_docker_job(
 				"max_players_party".into(),
 				"root_user_enabled".into(),
 			]),
-			meta_optional: None,
+			meta_optional: Some(vec!["rivet_test_id".into()]),
 		})),
 		task_groups: Some(vec![TaskGroup {
 			name: Some(util_job::RUN_MAIN_TASK_NAME.into()),

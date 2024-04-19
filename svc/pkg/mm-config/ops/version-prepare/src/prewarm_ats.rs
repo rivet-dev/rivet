@@ -81,7 +81,7 @@ pub async fn prewarm_ats_cache(
 				let idx = (*build_id_hash as i64 % vlan_ip_count).abs() as usize;
 				let vlan_ip = &unwrap!(vlan_ips_in_region.nth(idx), "no vlan ip").vlan_ip;
 
-				Ok(job_run::msg::create::Parameter {
+				Ok(backend::job::Parameter {
 					key: format!("artifact_url_{i}"),
 					value: format!("http://{vlan_ip}:8080{path}"),
 				})

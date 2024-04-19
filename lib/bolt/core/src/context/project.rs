@@ -194,11 +194,6 @@ impl ProjectContextData {
 						9000, *minio_port,
 						"minio_port must not be changed if dns is configured"
 					);
-				} else {
-					assert!(
-						self.ns().rivet.provisioning.is_none(),
-						"must have dns configured to provision servers"
-					);
 				}
 			}
 			config::ns::ClusterKind::Distributed { .. } => {
@@ -211,8 +206,8 @@ impl ProjectContextData {
 				);
 
 				assert!(
-					self.ns().dns.is_some(),
-					"must have dns configured with a distributed cluster"
+					self.dns_enabled(),
+					"must have dns provider configured with a distributed cluster"
 				);
 			}
 		}
@@ -225,6 +220,10 @@ impl ProjectContextData {
 			.as_ref()
 			.and_then(|p| p.cluster.as_ref())
 		{
+			assert!(
+				self.dns_enabled(),
+				"must have dns configured to provision servers"
+			);
 			let mut unique_datacenter_ids = HashSet::new();
 
 			for (name_id, datacenter) in &cluster.datacenters {
@@ -788,6 +787,14 @@ impl ProjectContextData {
 
 	pub fn tls_enabled(&self) -> bool {
 		self.ns().dns.is_some()
+	}
+
+	pub fn dns_enabled(&self) -> bool {
+		self.ns()
+			.dns
+			.as_ref()
+			.and_then(|dns| dns.provider.as_ref())
+			.is_some()
 	}
 }
 

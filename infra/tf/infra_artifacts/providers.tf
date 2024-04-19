@@ -13,4 +13,3 @@ provider "aws" {
 		s3 = local.s3_provider.endpoint_external
 	}
 }
-

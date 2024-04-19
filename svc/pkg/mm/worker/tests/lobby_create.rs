@@ -25,6 +25,7 @@ async fn single_lobby_create(ctx: TestCtx) {
 		lobby_config_json: None,
 		tags: HashMap::new(),
 		dynamic_max_players: None,
+		parameters: util::env::test_id_param(),
 	})
 	.await
 	.unwrap();
@@ -68,6 +69,7 @@ async fn custom_private_lobby_create(ctx: TestCtx) {
 		lobby_config_json: Some(r#"{ "foo": "bar" }"#.to_string()),
 		tags: HashMap::new(),
 		dynamic_max_players: None,
+		parameters: util::env::test_id_param(),
 	})
 	.await
 	.unwrap();
@@ -129,6 +131,7 @@ async fn lobby_create_max_lobby_count(ctx: TestCtx) {
 			lobby_config_json: None,
 			tags: HashMap::new(),
 			dynamic_max_players: None,
+			parameters: util::env::test_id_param(),
 		})
 		.await
 		.unwrap();
@@ -150,6 +153,7 @@ async fn lobby_create_max_lobby_count(ctx: TestCtx) {
 		lobby_config_json: None,
 		tags: HashMap::new(),
 		dynamic_max_players: None,
+		parameters: util::env::test_id_param(),
 	})
 	.await
 	.unwrap();
@@ -182,6 +186,7 @@ async fn lobby_create_reuse_job_id(ctx: TestCtx) {
 		lobby_config_json: None,
 		tags: HashMap::new(),
 		dynamic_max_players: None,
+		parameters: util::env::test_id_param(),
 	})
 	.await
 	.unwrap();
@@ -201,6 +206,7 @@ async fn lobby_create_reuse_job_id(ctx: TestCtx) {
 		lobby_config_json: None,
 		tags: HashMap::new(),
 		dynamic_max_players: None,
+		parameters: util::env::test_id_param(),
 	})
 	.await
 	.unwrap();
@@ -270,6 +276,7 @@ async fn lobby_create_reuse_job_id(ctx: TestCtx) {
 // 			publicity: None,
 // 			lobby_config_json: None,
 // 			dynamic_max_players: None,
+// 			parameters: util::env::test_id_param(),
 // 		})
 // 		.await
 // 		.unwrap();

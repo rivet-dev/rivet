@@ -4,6 +4,7 @@ package rivet.backend.pkg.mm.msg.lobby_create;
 
 import "proto/common.proto";
 import "proto/backend/matchmaker.proto";
+import "proto/backend/job.proto";
 
 /// name = "msg-mm-lobby-create"
 /// parameters = [
@@ -53,5 +54,8 @@ message Message {
 
 	// User configured player count that overrides the config.
 	optional uint32 dynamic_max_players = 12;
+
+	// Extra parameters for the job run
+	repeated rivet.backend.job.Parameter parameters = 14;
 }
 

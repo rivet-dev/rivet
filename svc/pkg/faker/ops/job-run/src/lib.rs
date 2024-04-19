@@ -37,12 +37,16 @@ async fn handle(
 	msg!([ctx] job_run::msg::create(run_id) {
 		run_id: Some(run_id.into()),
 		region_id: Some(region_id.into()),
-		parameters: vec![
-			job_run::msg::create::Parameter {
-				key: "test_id".into(),
-				value: server_response.clone(),
-			},
-		],
+		parameters: [
+			vec![
+				backend::job::Parameter {
+					key: "test_id".into(),
+					value: server_response.clone(),
+				},
+			],
+			util::env::test_id_param(),
+		]
+		.concat(),
 		job_spec_json: job_spec_json,
 		proxied_ports: if !ctx.proxied_ports.is_empty() {
 			ctx.proxied_ports.clone()

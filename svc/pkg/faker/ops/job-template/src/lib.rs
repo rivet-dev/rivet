@@ -32,6 +32,7 @@ fn gen_job(
 		}]),
 		parameterized_job: Some(Box::new(ParameterizedJobConfig {
 			meta_required,
+			meta_optional: Some(vec!["rivet_test_id".to_string()]),
 			..ParameterizedJobConfig::new()
 		})),
 		task_groups: Some(vec![TaskGroup {

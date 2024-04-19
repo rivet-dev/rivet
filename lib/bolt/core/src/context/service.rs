@@ -770,12 +770,14 @@ impl ServiceContextData {
 		));
 
 		// Provide default Nomad variables if in test
-		if matches!(run_context, RunContext::Test { .. }) {
+		if let RunContext::Test { test_id } = run_context {
 			env.push(("KUBERNETES_REGION".into(), "global".into()));
 			env.push((
 				"KUBERNETES_TASK_DIR".into(),
 				project_ctx.gen_path().display().to_string(),
 			));
+
+			env.push(("RIVET_TEST_ID".into(), test_id.clone()));
 		}
 
 		// Generic context

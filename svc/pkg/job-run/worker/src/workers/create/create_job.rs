@@ -334,6 +334,7 @@ mod tests {
 			}]),
 			parameterized_job: Some(Box::new(ParameterizedJobConfig {
 				meta_required: Some(vec!["test_id".into()]),
+				meta_optional: Some(vec!["rivet_test_id".into()]),
 				..ParameterizedJobConfig::new()
 			})),
 			task_groups: Some(vec![TaskGroup {

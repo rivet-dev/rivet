@@ -663,83 +663,86 @@ async fn create_docker_job(
 		run_id: Some(run_id.into()),
 		region_id: Some(region_id.into()),
 		parameters: vec![
-			job_run::msg::create::Parameter {
+			backend::job::Parameter {
 				key: "job_runner_binary_url".into(),
 				value: job_runner_binary_url,
 			},
-			job_run::msg::create::Parameter {
+			backend::job::Parameter {
 				key: "vector_socket_addr".into(),
 				value: "127.0.0.1:5021".to_string(),
 			},
-			job_run::msg::create::Parameter {
+			backend::job::Parameter {
 				key: "image_artifact_url".into(),
 				value: image_artifact_url.to_string(),
 			},
-			job_run::msg::create::Parameter {
+			backend::job::Parameter {
 				key: "namespace_id".into(),
 				value: namespace_id.to_string(),
 			},
-			job_run::msg::create::Parameter {
+			backend::job::Parameter {
 				key: "namespace_name".into(),
 				value: namespace.name_id.to_owned(),
 			},
-			job_run::msg::create::Parameter {
+			backend::job::Parameter {
 				key: "version_id".into(),
 				value: version_id.to_string(),
 			},
-			job_run::msg::create::Parameter {
+			backend::job::Parameter {
 				key: "version_name".into(),
 				value: version.display_name.to_owned(),
 			},
-			job_run::msg::create::Parameter {
+			backend::job::Parameter {
 				key: "lobby_group_id".into(),
 				value: lobby_group_id.to_string(),
 			},
-			job_run::msg::create::Parameter {
+			backend::job::Parameter {
 				key: "lobby_group_name".into(),
 				value: lobby_group.name_id.clone(),
 			},
-			job_run::msg::create::Parameter {
+			backend::job::Parameter {
 				key: "lobby_id".into(),
 				value: lobby_id.to_string(),
 			},
-			job_run::msg::create::Parameter {
+			backend::job::Parameter {
 				key: "lobby_token".into(),
 				value: lobby_token.to_owned(),
 			},
-			job_run::msg::create::Parameter {
+			backend::job::Parameter {
 				key: "lobby_config".into(),
 				value: ctx.lobby_config_json.clone().unwrap_or_default(),
 			},
-			job_run::msg::create::Parameter {
+			backend::job::Parameter {
 				key: "lobby_tags".into(),
 				value: serde_json::to_string(&ctx.tags)?,
 			},
-			job_run::msg::create::Parameter {
+			backend::job::Parameter {
 				key: "region_id".into(),
 				value: region_id.to_string(),
 			},
-			job_run::msg::create::Parameter {
+			backend::job::Parameter {
 				key: "region_name".into(),
 				value: region.name_id.to_string(),
 			},
-			job_run::msg::create::Parameter {
+			backend::job::Parameter {
 				key: "max_players_normal".into(),
 				value: max_players_normal.to_string(),
 			},
-			job_run::msg::create::Parameter {
+			backend::job::Parameter {
 				key: "max_players_direct".into(),
 				value: max_players_direct.to_string(),
 			},
-			job_run::msg::create::Parameter {
+			backend::job::Parameter {
 				key: "max_players_party".into(),
 				value: lobby_group.max_players_party.to_string(),
 			},
-			job_run::msg::create::Parameter {
+			backend::job::Parameter {
 				key: "root_user_enabled".into(),
 				value: if mm_game_config.root_user_enabled { "1" } else { "0" }.into()
 			},
-		],
+		].into_iter()
+		.chain(ctx.parameters.clone())
+		.collect(),
+
 		job_spec_json: job_spec_json,
 		proxied_ports: proxied_ports,
 		..Default::default()

@@ -604,7 +604,7 @@ async fn external_verification(ctx: TestCtx) {
 		&ctx,
 		backend::matchmaker::IdentityRequirement::None,
 		Some(backend::matchmaker::VerificationConfig {
-			url: "https://httpstat.us/403".to_string(),
+			url: "https://httpbin.org/status/403".to_string(),
 			headers: IntoIterator::into_iter([("accept".to_string(), "text/plain".to_string())])
 				.collect::<HashMap<_, _>>(),
 		}),
@@ -636,7 +636,7 @@ async fn external_verification(ctx: TestCtx) {
 		&ctx,
 		backend::matchmaker::IdentityRequirement::None,
 		Some(backend::matchmaker::VerificationConfig {
-			url: "https://httpstat.us/200".to_string(),
+			url: "https://httpbin.org/status/200".to_string(),
 			headers: IntoIterator::into_iter([("accept".to_string(), "text/plain".to_string())])
 				.collect::<HashMap<_, _>>(),
 		}),
