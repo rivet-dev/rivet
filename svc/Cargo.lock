@@ -2532,6 +2532,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "cluster-list"
+version = "0.0.1"
+dependencies = [
+ "chirp-client",
+ "chirp-worker",
+ "prost 0.10.4",
+ "rivet-operation",
+ "sqlx",
+]
+
+[[package]]
 name = "cluster-server-get"
 version = "0.0.1"
 dependencies = [

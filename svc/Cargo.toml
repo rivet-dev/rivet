@@ -68,6 +68,7 @@ members = [
 	"pkg/cluster/ops/datacenter-topology-get",
 	"pkg/cluster/ops/get",
 	"pkg/cluster/ops/get-for-game",
+	"pkg/cluster/ops/list",
 	"pkg/cluster/ops/server-get",
 	"pkg/cluster/ops/server-list",
 	"pkg/cluster/ops/server-resolve-for-ip",
