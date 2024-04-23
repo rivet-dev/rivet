@@ -16,11 +16,12 @@ pub async fn handle(
 	let meta = unwrap_ref!(node.meta, "no metadata on node");
 	let server_id = util::uuid::parse(unwrap!(meta.get("server-id"), "no server-id in metadata"))?;
 
+	tracing::info!(%node_id, %server_id, "node message");
+
 	if let Some(events) = &node.events {
 		// Check if the last message in the node events is a drain complete message
 		let is_last_drain_complete_message = events
 			.last()
-			.filter(|event| event.details.is_none())
 			.and_then(|event| event.message.as_ref())
 			.map(|msg| msg == "Node drain complete")
 			.unwrap_or_default();

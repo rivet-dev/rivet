@@ -203,11 +203,6 @@ pub fn player_auto_remove() -> String {
 	"{global}:mm:player:auto_remove".to_string()
 }
 
-/// is closed
-pub fn node_is_closed(node_id: &str) -> String {
-	format!("{{global}}:mm:node:{}:is_closed", node_id,)
-}
-
 // Placeholder key
 pub fn empty() -> String {
 	"{global}".to_string()

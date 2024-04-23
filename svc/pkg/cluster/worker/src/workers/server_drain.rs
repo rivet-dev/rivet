@@ -85,7 +85,8 @@ async fn inner(
 				&nomad_node_id,
 				models::NodeUpdateDrainRequest {
 					drain_spec: Some(Box::new(models::DrainSpec {
-						deadline: Some((pool.drain_timeout / 1000) as i64),
+						// In nanoseconds. `drain_timeout` must be below 292 years for this to not overflow
+						deadline: Some((pool.drain_timeout * 1000000) as i64),
 						ignore_system_jobs: None,
 					})),
 					mark_eligible: None,
