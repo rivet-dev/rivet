@@ -535,8 +535,8 @@ pub fn gen_lobby_docker_job(
 						x
 					}),
 					resources: Some(Box::new(resources.clone())),
-					// Gives the game processes time to shut down gracefully.
-					kill_timeout: Some(60 * 1_000_000_000),
+					// Intentionally high timeout. Killing jobs is handled manually with signals.
+					kill_timeout: Some(86400 * 1_000_000_000),
 					kill_signal: Some("SIGTERM".into()),
 					log_config: Some(Box::new(LogConfig {
 						max_files: Some(4),
