@@ -204,7 +204,8 @@ resource "kubernetes_service" "traefik_headless" {
 }
 
 resource "kubectl_manifest" "traefik_service_monitor" {
-	depends_on = [helm_release.traefik]
+	count = var.prometheus_enabled ? 1 : 0
+	depends_on = [null_resource.daemons, helm_release.traefik]
 
 	yaml_body = yamlencode({
 		apiVersion = "monitoring.coreos.com/v1"

@@ -70,7 +70,7 @@ pub async fn check_all(ctx: &ProjectContext) -> Result<()> {
 	check(ctx, &services[..]).await
 }
 
-pub async fn check(_ctx: &ProjectContext, services: &[ServiceContext]) -> Result<()> {
+pub async fn check(ctx: &ProjectContext, services: &[ServiceContext]) -> Result<()> {
 	// Spawn Cockroach test container
 	let crdb_port = utils::pick_port();
 	let crdb_container_id = if services
@@ -215,6 +215,14 @@ pub async fn check(_ctx: &ProjectContext, services: &[ServiceContext]) -> Result
 				database_url
 			}
 			RuntimeKind::ClickHouse { .. } => {
+				if ctx.ns().clickhouse.is_none() {
+					rivet_term::status::warn(
+						"Warning",
+						format!("Clickhouse is disabled. Skipping {}", svc.name()),
+					);
+					continue;
+				}
+
 				// Build URL
 				let db_name = svc.clickhouse_db_name();
 				let database_url =
@@ -290,6 +298,14 @@ pub async fn up(ctx: &ProjectContext, services: &[ServiceContext]) -> Result<()>
 				});
 			}
 			RuntimeKind::ClickHouse { .. } => {
+				if ctx.ns().clickhouse.is_none() {
+					rivet_term::status::warn(
+						"Warning",
+						format!("Clickhouse is disabled. Skipping {}", svc.name()),
+					);
+					continue;
+				}
+
 				let db_name = svc.clickhouse_db_name();
 
 				let query = formatdoc!(
@@ -385,7 +401,13 @@ pub async fn up(ctx: &ProjectContext, services: &[ServiceContext]) -> Result<()>
 
 	eprintln!();
 	rivet_term::status::progress("Running migrations", "");
-	let migrations = futures_util::stream::iter(services.iter())
+
+	let filtered_services = services.iter().filter(|svc| {
+		ctx.ns().clickhouse.is_some()
+			|| !matches!(&svc.config().runtime, RuntimeKind::ClickHouse { .. })
+	});
+
+	let migrations = futures_util::stream::iter(filtered_services)
 		.map(|svc| {
 			let conn = conn.clone();
 

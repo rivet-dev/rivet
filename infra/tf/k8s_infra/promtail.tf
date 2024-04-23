@@ -9,12 +9,16 @@ locals {
 }
 
 resource "kubernetes_namespace" "promtail" {
+	count = var.prometheus_enabled ? 1 : 0
+
 	metadata {
 		name = "promtail"
 	}
 }
 
 resource "kubernetes_priority_class" "promtail_priority" {
+	count = var.prometheus_enabled ? 1 : 0
+
 	metadata {
 		name = "promtail-priority"
 	}
@@ -22,8 +26,10 @@ resource "kubernetes_priority_class" "promtail_priority" {
 }
 
 resource "helm_release" "promtail" {
+	count = var.prometheus_enabled ? 1 : 0
+
 	name = "promtail"
-	namespace = kubernetes_namespace.promtail.metadata.0.name
+	namespace = kubernetes_namespace.promtail.0.metadata.0.name
 	repository = "https://grafana.github.io/helm-charts"
 	chart = "promtail"
 	version = "6.15.1"
@@ -140,7 +146,7 @@ resource "helm_release" "promtail" {
 			}
 		}
 
-		priorityClassName = kubernetes_priority_class.promtail_priority.metadata.0.name
+		priorityClassName = kubernetes_priority_class.promtail_priority.0.metadata.0.name
 		resources = var.limit_resources ? {
 			limits = {
 				memory = "${local.service_promtail.resources.memory}Mi"

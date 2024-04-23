@@ -5,6 +5,7 @@ variable "namespace" {
 # MARK: ClickHouse
 variable "clickhouse_provider" {
 	type = string
+	nullable = true
 }
 
 variable "clickhouse_host" {

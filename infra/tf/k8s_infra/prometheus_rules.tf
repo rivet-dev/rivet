@@ -74,6 +74,7 @@ locals {
 
 # Useful: https://github.com/kubernetes/kube-state-metrics/blob/main/docs/pod-metrics.md
 resource "kubectl_manifest" "pod_rules" {
+	count = var.prometheus_enabled ? 1 : 0
 	depends_on = [helm_release.prometheus]
 
 	yaml_body = yamlencode({
@@ -81,7 +82,7 @@ resource "kubectl_manifest" "pod_rules" {
 		kind = "PrometheusRule"
 		metadata = {
 			name = "pod-rules"
-			namespace = kubernetes_namespace.prometheus.metadata.0.name
+			namespace = kubernetes_namespace.prometheus.0.metadata.0.name
 		}
 		spec = {
 			groups = [
@@ -110,6 +111,7 @@ resource "kubectl_manifest" "pod_rules" {
 }
 
 resource "kubectl_manifest" "pvc_rules" {
+	count = var.prometheus_enabled ? 1 : 0
 	depends_on = [helm_release.prometheus]
 
 	yaml_body = yamlencode({
@@ -117,7 +119,7 @@ resource "kubectl_manifest" "pvc_rules" {
 		kind = "PrometheusRule"
 		metadata = {
 			name = "persistent-volume-claim-rules"
-			namespace = kubernetes_namespace.prometheus.metadata.0.name
+			namespace = kubernetes_namespace.prometheus.0.metadata.0.name
 		}
 		spec = {
 			groups = [
@@ -151,6 +153,7 @@ resource "kubectl_manifest" "pvc_rules" {
 }
 
 resource "kubectl_manifest" "host_rules" {
+	count = var.prometheus_enabled ? 1 : 0
 	depends_on = [helm_release.prometheus]
 
 	yaml_body = yamlencode({
@@ -158,7 +161,7 @@ resource "kubectl_manifest" "host_rules" {
 		kind = "PrometheusRule"
 		metadata = {
 			name = "host-rules"
-			namespace = kubernetes_namespace.prometheus.metadata.0.name
+			namespace = kubernetes_namespace.prometheus.0.metadata.0.name
 		}
 		spec = {
 			groups = [
@@ -194,6 +197,7 @@ resource "kubectl_manifest" "host_rules" {
 }
 
 resource "kubectl_manifest" "chirp_rules" {
+	count = var.prometheus_enabled ? 1 : 0
 	depends_on = [helm_release.prometheus]
 
 	yaml_body = yamlencode({
@@ -201,7 +205,7 @@ resource "kubectl_manifest" "chirp_rules" {
 		kind = "PrometheusRule"
 		metadata = {
 			name = "chirp-rules"
-			namespace = kubernetes_namespace.prometheus.metadata.0.name
+			namespace = kubernetes_namespace.prometheus.0.metadata.0.name
 		}
 		spec = {
 			groups = [
@@ -251,6 +255,7 @@ resource "kubectl_manifest" "chirp_rules" {
 
 
 resource "kubectl_manifest" "api_rules" {
+	count = var.prometheus_enabled ? 1 : 0
 	depends_on = [helm_release.prometheus]
 
 	yaml_body = yamlencode({
@@ -258,7 +263,7 @@ resource "kubectl_manifest" "api_rules" {
 		kind = "PrometheusRule"
 		metadata = {
 			name = "api-rules"
-			namespace = kubernetes_namespace.prometheus.metadata.0.name
+			namespace = kubernetes_namespace.prometheus.0.metadata.0.name
 		}
 		spec = {
 			groups = [
@@ -346,6 +351,7 @@ resource "kubectl_manifest" "api_rules" {
 }
 
 resource "kubectl_manifest" "crdb_rules" {
+	count = var.prometheus_enabled ? 1 : 0
 	depends_on = [helm_release.prometheus]
 
 	yaml_body = yamlencode({
@@ -353,7 +359,7 @@ resource "kubectl_manifest" "crdb_rules" {
 		kind = "PrometheusRule"
 		metadata = {
 			name = "crdb-rules"
-			namespace = kubernetes_namespace.prometheus.metadata.0.name
+			namespace = kubernetes_namespace.prometheus.0.metadata.0.name
 		}
 		spec = {
 			groups = [
@@ -390,6 +396,7 @@ resource "kubectl_manifest" "crdb_rules" {
 }
 
 resource "kubectl_manifest" "nomad_rules" {
+	count = var.prometheus_enabled ? 1 : 0
 	depends_on = [helm_release.prometheus]
 
 	yaml_body = yamlencode({
@@ -397,7 +404,7 @@ resource "kubectl_manifest" "nomad_rules" {
 		kind = "PrometheusRule"
 		metadata = {
 			name = "nomad-rules"
-			namespace = kubernetes_namespace.prometheus.metadata.0.name
+			namespace = kubernetes_namespace.prometheus.0.metadata.0.name
 		}
 		spec = {
 			groups = [
@@ -488,6 +495,7 @@ resource "kubectl_manifest" "nomad_rules" {
 }
 
 resource "kubectl_manifest" "traefik_rules" {
+	count = var.prometheus_enabled ? 1 : 0
 	depends_on = [helm_release.prometheus]
 
 	yaml_body = yamlencode({
@@ -495,7 +503,7 @@ resource "kubectl_manifest" "traefik_rules" {
 		kind = "PrometheusRule"
 		metadata = {
 			name = "traefik-rules"
-			namespace = kubernetes_namespace.prometheus.metadata.0.name
+			namespace = kubernetes_namespace.prometheus.0.metadata.0.name
 		}
 		spec = {
 			groups = [

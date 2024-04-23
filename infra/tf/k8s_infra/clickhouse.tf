@@ -1,5 +1,5 @@
 locals {
-	clickhouse_k8s = var.clickhouse_provider == "kubernetes"
+	clickhouse_enabled = var.clickhouse_enabled && var.clickhouse_provider == "kubernetes"
 	service_clickhouse = lookup(var.services, "clickhouse", {
 		count = 1
 		resources = {
@@ -10,7 +10,7 @@ locals {
 }
 
 module "clickhouse_secrets" {
-	count = local.clickhouse_k8s ? 1 : 0
+	count = local.clickhouse_enabled ? 1 : 0
 
 	source = "../modules/secrets"
 
@@ -20,7 +20,7 @@ module "clickhouse_secrets" {
 }
 
 resource "kubernetes_namespace" "clickhouse" {
-	count = local.clickhouse_k8s ? 1 : 0
+	count = local.clickhouse_enabled ? 1 : 0
 
 	metadata {
 		name = "clickhouse"
@@ -28,6 +28,8 @@ resource "kubernetes_namespace" "clickhouse" {
 }
 
 resource "kubernetes_priority_class" "clickhouse_priority" {
+	count = local.clickhouse_enabled ? 1 : 0
+
 	metadata {
 		name = "clickhouse-priority"
 	}
@@ -36,12 +38,11 @@ resource "kubernetes_priority_class" "clickhouse_priority" {
 }
 
 resource "helm_release" "clickhouse" {
+	count = local.clickhouse_enabled ? 1 : 0
 	depends_on = [null_resource.daemons]
 
-	count = local.clickhouse_k8s ? 1 : 0
-
 	name = "clickhouse"
-	namespace = kubernetes_namespace.clickhouse[0].metadata.0.name
+	namespace = kubernetes_namespace.clickhouse.0.metadata.0.name
 	chart = "../../helm/clickhouse"
 	# repository = "oci://registry-1.docker.io/bitnamicharts"
 	# chart = "clickhouse"
@@ -56,7 +57,7 @@ resource "helm_release" "clickhouse" {
 			replicaCount = 1
 		}
 
-		priorityClassName = kubernetes_priority_class.clickhouse_priority.metadata.0.name
+		priorityClassName = kubernetes_priority_class.clickhouse_priority.0.metadata.0.name
 		resources = var.limit_resources ? {
 			limits = {
 				memory = "${local.service_clickhouse.resources.memory}Mi"
@@ -121,7 +122,7 @@ resource "helm_release" "clickhouse" {
 		# Admin auth
 		auth = {
 			username = "default"
-			password = module.clickhouse_secrets[0].values["clickhouse/users/default/password"]
+			password = module.clickhouse_secrets.0.values["clickhouse/users/default/password"]
 		}
 
 		metrics = {
@@ -129,7 +130,7 @@ resource "helm_release" "clickhouse" {
 
 			serviceMonitor = {
 				enabled = true
-				namespace = kubernetes_namespace.clickhouse[0].metadata.0.name
+				namespace = kubernetes_namespace.clickhouse.0.metadata.0.name
 			}
 
 			# TODO:
@@ -142,18 +143,17 @@ resource "helm_release" "clickhouse" {
 }
 
 data "kubernetes_secret" "clickhouse_ca" {
-	count = local.clickhouse_k8s ? 1 : 0
-
+	count = local.clickhouse_enabled ? 1 : 0
 	depends_on = [helm_release.clickhouse]
 
 	metadata {
 		name = "clickhouse-crt"
-		namespace = kubernetes_namespace.clickhouse[0].metadata.0.name
+		namespace = kubernetes_namespace.clickhouse.0.metadata.0.name
 	}
 }
 
 resource "kubernetes_config_map" "clickhouse_ca" {
-	for_each = local.clickhouse_k8s ? toset(["rivet-service", "bolt", "vector"]) : toset([])
+	for_each = local.clickhouse_enabled ? toset(["rivet-service", "bolt", "vector"]) : toset([])
 
 	metadata {
 		name = "clickhouse-ca"
@@ -161,7 +161,7 @@ resource "kubernetes_config_map" "clickhouse_ca" {
 	}
 
 	data = {
-		"ca.crt" = data.kubernetes_secret.clickhouse_ca[0].data["ca.crt"]
+		"ca.crt" = data.kubernetes_secret.clickhouse_ca.0.data["ca.crt"]
 	}
 }
 

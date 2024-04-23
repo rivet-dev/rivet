@@ -3,7 +3,7 @@ use proto::backend::pkg::*;
 
 #[worker_test]
 async fn empty(ctx: TestCtx) {
-	let user_res = op!([ctx] faker_user { }).await.expect("user create");
+	let user_res = op!([ctx] faker_user { }).await.unwrap();
 	let user_id = user_res.user_id.unwrap();
 
 	let display_name = util::faker::display_name();

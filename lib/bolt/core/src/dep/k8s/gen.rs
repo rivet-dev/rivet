@@ -594,24 +594,26 @@ pub async fn gen_svc(exec_ctx: &ExecServiceContext) -> Vec<serde_json::Value> {
 		}));
 
 		// Monitor the service
-		specs.push(json!({
-			"apiVersion": "monitoring.coreos.com/v1",
-			"kind": "ServiceMonitor",
-			"metadata": {
-				"name": service_name,
-				"namespace": "rivet-service"
-			},
-			"spec": {
-				"selector": {
-					"matchLabels": {
-						"app.kubernetes.io/name": service_name
-					},
+		if project_ctx.ns().prometheus.is_some() {
+			specs.push(json!({
+				"apiVersion": "monitoring.coreos.com/v1",
+				"kind": "ServiceMonitor",
+				"metadata": {
+					"name": service_name,
+					"namespace": "rivet-service"
 				},
-				"endpoints": [
-					{ "port": "metrics" }
-				],
-			}
-		}));
+				"spec": {
+					"selector": {
+						"matchLabels": {
+							"app.kubernetes.io/name": service_name
+						},
+					},
+					"endpoints": [
+						{ "port": "metrics" }
+					],
+				}
+			}));
+		}
 
 		// Build ingress router
 		if matches!(run_context, RunContext::Service { .. }) {
@@ -752,29 +754,30 @@ async fn build_volumes(
 	}
 
 	// Add ClickHouse CA
-	match project_ctx.ns().clickhouse.provider {
-		config::ns::ClickHouseProvider::Kubernetes {} => {
-			volumes.push(json!({
-				"name": "clickhouse-ca",
-				"configMap": {
+	if let Some(clickhouse) = &project_ctx.ns().clickhouse {
+		match &clickhouse.provider {
+			config::ns::ClickHouseProvider::Kubernetes {} => {
+				volumes.push(json!({
 					"name": "clickhouse-ca",
-					"defaultMode": 420,
-					"items": [
-						{
-							"key": "ca.crt",
-							"path": "clickhouse-ca.crt"
-						}
-					]
-				}
-			}));
-			volume_mounts.push(json!({
-				"name": "clickhouse-ca",
-				"mountPath": "/usr/local/share/ca-certificates/clickhouse-ca.crt",
-				"subPath": "clickhouse-ca.crt"
-			}));
-		}
-		config::ns::ClickHouseProvider::Managed { .. } => {
+					"configMap": {
+						"name": "clickhouse-ca",
+						"defaultMode": 420,
+						"items": [
+							{
+								"key": "ca.crt",
+								"path": "clickhouse-ca.crt"
+							}
+						]
+					}
+				}));
+				volume_mounts.push(json!({
+					"name": "clickhouse-ca",
+					"mountPath": "/usr/local/share/ca-certificates/clickhouse-ca.crt",
+					"subPath": "clickhouse-ca.crt"
+				}));
+			}
 			// Uses publicly signed cert
+			config::ns::ClickHouseProvider::Managed { .. } => {}
 		}
 	}
 

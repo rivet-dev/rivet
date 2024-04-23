@@ -89,7 +89,7 @@ impl Connection {
 		self.client.perf()
 	}
 
-	pub async fn clickhouse(&self) -> Result<ClickHousePool, rivet_pools::Error> {
+	pub async fn clickhouse(&self) -> GlobalResult<ClickHousePool> {
 		self.pools.clickhouse()
 	}
 }

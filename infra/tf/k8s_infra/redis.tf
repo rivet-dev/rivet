@@ -45,7 +45,7 @@ module "redis_secrets" {
 }
 
 resource "kubernetes_namespace" "redis" {
-	depends_on = [ helm_release.prometheus ]
+	depends_on = [helm_release.prometheus]
 	for_each = var.redis_dbs
 
 	metadata {
@@ -111,7 +111,7 @@ resource "helm_release" "redis" {
 		metrics = {
 			enabled = true
 			serviceMonitor = {
-				enabled = true
+				enabled = var.prometheus_enabled
 				namespace = kubernetes_namespace.redis[each.key].metadata.0.name
 			}
 			extraArgs = each.key == "chirp" ? {

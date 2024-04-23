@@ -74,6 +74,8 @@ locals {
 }
 
 resource "kubernetes_namespace" "nomad" {
+	count = var.edge_enabled ? 1 : 0
+
 	metadata {
 		name = "nomad"
 	}
@@ -81,8 +83,10 @@ resource "kubernetes_namespace" "nomad" {
 
 # Create a new config map for each version of the config so the stateful set can roll back gracefully.
 resource "kubernetes_config_map" "nomad_server" {
+	count = var.edge_enabled ? 1 : 0
+
 	metadata {
-		namespace = kubernetes_namespace.nomad.metadata.0.name
+		namespace = kubernetes_namespace.nomad.0.metadata.0.name
 		name = "nomad-server-configmap-${local.nomad_checksum_configmap}"
 		labels = {
 			app = "nomad-server"
@@ -94,8 +98,10 @@ resource "kubernetes_config_map" "nomad_server" {
 
 # Expose service
 resource "kubernetes_service" "nomad_server" {
+	count = var.edge_enabled ? 1 : 0
+
 	metadata {
-		namespace = kubernetes_namespace.nomad.metadata.0.name
+		namespace = kubernetes_namespace.nomad.0.metadata.0.name
 		name = "nomad-server"
 		labels = {
 			name = "nomad-server"
@@ -122,10 +128,10 @@ resource "kubernetes_service" "nomad_server" {
 }
 
 resource "kubernetes_service" "nomad_server_indexed" {
-	count = local.nomad_server_count
+	count = var.edge_enabled ? local.nomad_server_count : 0
 
 	metadata {
-		namespace = kubernetes_namespace.nomad.metadata.0.name
+		namespace = kubernetes_namespace.nomad.0.metadata.0.name
 		name = "nomad-server-${count.index}"
 		labels = {
 			name = "nomad-server-${count.index}"
@@ -153,6 +159,7 @@ resource "kubernetes_service" "nomad_server_indexed" {
 }
 
 resource "kubectl_manifest" "nomad_server_monitor" {
+	count = var.edge_enabled && var.prometheus_enabled ? 1 : 0
 	depends_on = [kubernetes_stateful_set.nomad_server]
 
 	yaml_body = yamlencode({
@@ -161,7 +168,7 @@ resource "kubectl_manifest" "nomad_server_monitor" {
 
 		metadata = {
 			name = "nomad-server-service-monitor"
-			namespace = kubernetes_namespace.nomad.metadata.0.name
+			namespace = kubernetes_namespace.nomad.0.metadata.0.name
 		}
 
 		spec = {
@@ -184,6 +191,8 @@ resource "kubectl_manifest" "nomad_server_monitor" {
 }
 
 resource "kubernetes_priority_class" "nomad_priority" {
+	count = var.edge_enabled ? 1 : 0
+
 	metadata {
 		name = "nomad-priority"
 	}
@@ -192,10 +201,11 @@ resource "kubernetes_priority_class" "nomad_priority" {
 }
 
 resource "kubernetes_stateful_set" "nomad_server" {
+	count = var.edge_enabled ? 1 : 0
 	depends_on = [null_resource.daemons]
 
 	metadata {
-		namespace = kubernetes_namespace.nomad.metadata.0.name
+		namespace = kubernetes_namespace.nomad.0.metadata.0.name
 		name = "nomad-server-statefulset"
 		labels = {
 			app = "nomad-server"
@@ -210,7 +220,7 @@ resource "kubernetes_stateful_set" "nomad_server" {
 			}
 		}
 
-		service_name = kubernetes_service.nomad_server.metadata.0.name
+		service_name = kubernetes_service.nomad_server.0.metadata.0.name
 
 		template {
 			metadata {
@@ -224,7 +234,7 @@ resource "kubernetes_stateful_set" "nomad_server" {
 			}
 
 			spec {
-				priority_class_name = kubernetes_priority_class.nomad_priority.metadata.0.name
+				priority_class_name = kubernetes_priority_class.nomad_priority.0.metadata.0.name
 
 				security_context {
 					run_as_user = 0
@@ -380,14 +390,14 @@ resource "kubernetes_stateful_set" "nomad_server" {
 				volume {
 					name = "nomad-config"
 					config_map {
-						name = kubernetes_config_map.nomad_server.metadata.0.name
+						name = kubernetes_config_map.nomad_server.0.metadata.0.name
 					}
 				}
 
 				volume {
 					name = "traefik-config"
 					config_map {
-						name = kubernetes_config_map.nomad_server_sidecar_traefik_config.metadata[0].name
+						name = kubernetes_config_map.nomad_server_sidecar_traefik_config.0.metadata[0].name
 					}
 				}
 			}
@@ -413,9 +423,11 @@ resource "kubernetes_stateful_set" "nomad_server" {
 
 # Build Traefik config for the sidecar that forwards traffic to other Nomad leaders.
 resource "kubernetes_config_map" "nomad_server_sidecar_traefik_config" {
+	count = var.edge_enabled ? 1 : 0
+
 	metadata {
 		name = "nomad-server-sidecar-traefik"
-		namespace = kubernetes_namespace.nomad.metadata[0].name
+		namespace = kubernetes_namespace.nomad.0.metadata.0.name
 	}
 
 	data = {

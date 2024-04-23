@@ -901,7 +901,7 @@ impl ServiceContextData {
 			self.config().cockroachdb.min_connections.to_string(),
 		);
 
-		if self.depends_on_prometheus_api() {
+		if project_ctx.ns().prometheus.is_some() && self.depends_on_prometheus_api() {
 			env.insert(
 				format!("PROMETHEUS_URL"),
 				"http://prometheus-operated.prometheus.svc.cluster.local:9090".into(),
@@ -1006,9 +1006,6 @@ impl ServiceContextData {
 		if project_ctx.ns().rivet.profanity.filter_disable {
 			env.insert("RIVET_PROFANITY_FILTER_DISABLE".into(), "1".into());
 		}
-		if project_ctx.ns().rivet.upload.nsfw_error_verbose {
-			env.insert("RIVET_UPLOAD_NSFW_ERROR_VERBOSE".into(), "1".into());
-		}
 
 		if let Some(provisioning) = &project_ctx.ns().rivet.provisioning {
 			if self.depends_on_cluster_config() || matches!(run_context, RunContext::Test { .. }) {
@@ -1040,6 +1037,14 @@ impl ServiceContextData {
 					.unwrap()
 					.to_string(),
 			);
+		}
+
+		if let Some(nsfw_check) = &project_ctx.ns().rivet.upload.nsfw_check {
+			env.insert("RIVET_UPLOAD_NSFW_CHECK_ENABLED".into(), "1".into());
+
+			if nsfw_check.error_verbose {
+				env.insert("RIVET_UPLOAD_NSFW_ERROR_VERBOSE".into(), "1".into());
+			}
 		}
 
 		Ok(env)
@@ -1182,17 +1187,21 @@ impl ServiceContextData {
 
 		// ClickHouse
 		if self.depends_on_clickhouse() {
-			let clickhouse_data = terraform::output::read_clickhouse(&project_ctx).await;
-			let username = "chirp";
-			let password = project_ctx
-				.read_secret(&["clickhouse", "users", username, "password"])
-				.await?;
-			let uri = format!(
-				"https://{}:{}@{}:{}",
-				username, password, *clickhouse_data.host, *clickhouse_data.port_https
-			);
+			if project_ctx.ns().clickhouse.is_some() {
+				let clickhouse_data = terraform::output::read_clickhouse(&project_ctx).await;
+				let username = "chirp";
+				let password = project_ctx
+					.read_secret(&["clickhouse", "users", username, "password"])
+					.await?;
+				let uri = format!(
+					"https://{}:{}@{}:{}",
+					username, password, *clickhouse_data.host, *clickhouse_data.port_https
+				);
 
-			env.insert("CLICKHOUSE_URL".into(), uri);
+				env.insert("CLICKHOUSE_URL".into(), uri);
+			} else {
+				env.insert("CLICKHOUSE_DISABLED".into(), "1".into());
+			}
 		}
 
 		// Expose all S3 endpoints to services that need them

@@ -1,3 +1,4 @@
+use global_error::{ensure_with, GlobalResult};
 use std::{collections::HashMap, sync::Arc, time::Duration};
 use tokio_util::sync::{CancellationToken, DropGuard};
 
@@ -70,8 +71,17 @@ impl PoolsInner {
 		self.redis("ephemeral")
 	}
 
-	pub fn clickhouse(&self) -> Result<ClickHousePool, Error> {
-		self.clickhouse.clone().ok_or(Error::MissingClickHousePool)
+	pub fn clickhouse(&self) -> GlobalResult<ClickHousePool> {
+		ensure_with!(
+			std::env::var("CLICKHOUSE_DISABLED").is_err(),
+			FEATURE_DISABLED,
+			feature = "Clickhouse"
+		);
+
+		self.clickhouse
+			.clone()
+			.ok_or(Error::MissingClickHousePool)
+			.map_err(Into::into)
 	}
 }
 

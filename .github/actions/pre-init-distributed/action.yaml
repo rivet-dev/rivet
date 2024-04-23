@@ -93,7 +93,6 @@ runs:
       shell: bash -e {0}
       run: rm -f target/debug/bolt target/release/bolt
 
-    # Run `bolt config generate` so that the `Check` job can start working sooner
     - name: Generate Bolt Config
       shell: bash -e {0}
       run: nix-shell --pure --run "bolt config generate ci"

@@ -39,7 +39,7 @@ pub enum PlanStepKind {
 impl PlanStepKind {
 	async fn execute(&self, ctx: ProjectContext, opts: &ExecutePlanOpts) -> Result<()> {
 		// Generate the project before each step since things likely changed between steps
-		tasks::gen::generate_project(&ctx, false).await;
+		tasks::gen::generate_project(&ctx, true).await;
 
 		match self {
 			PlanStepKind::Terraform { plan_id, .. } => {
@@ -200,35 +200,39 @@ pub fn build_plan(
 	}
 
 	// ClickHouse
-	match ctx.ns().clickhouse.provider {
-		ns::ClickHouseProvider::Kubernetes {} => {
-			plan.push(PlanStep {
-				name_id: "clickhouse-k8s",
-				kind: PlanStepKind::Terraform {
-					plan_id: "clickhouse_k8s".into(),
-					needs_destroy: false,
-				},
-			});
-		}
-		ns::ClickHouseProvider::Managed { .. } => {
-			plan.push(PlanStep {
-				name_id: "clickhouse-managed",
-				kind: PlanStepKind::Terraform {
-					plan_id: "clickhouse_managed".into(),
-					needs_destroy: true,
-				},
-			});
+	if let Some(clickhouse) = &ctx.ns().clickhouse {
+		match &clickhouse.provider {
+			ns::ClickHouseProvider::Kubernetes {} => {
+				plan.push(PlanStep {
+					name_id: "clickhouse-k8s",
+					kind: PlanStepKind::Terraform {
+						plan_id: "clickhouse_k8s".into(),
+						needs_destroy: false,
+					},
+				});
+			}
+			ns::ClickHouseProvider::Managed { .. } => {
+				plan.push(PlanStep {
+					name_id: "clickhouse-managed",
+					kind: PlanStepKind::Terraform {
+						plan_id: "clickhouse_managed".into(),
+						needs_destroy: true,
+					},
+				});
+			}
 		}
 	}
 
 	// Vector
-	plan.push(PlanStep {
-		name_id: "vector",
-		kind: PlanStepKind::Terraform {
-			plan_id: "vector".into(),
-			needs_destroy: false,
-		},
-	});
+	if ctx.ns().prometheus.is_some() {
+		plan.push(PlanStep {
+			name_id: "vector",
+			kind: PlanStepKind::Terraform {
+				plan_id: "vector".into(),
+				needs_destroy: false,
+			},
+		});
+	}
 
 	if let Some(dns) = &ctx.ns().dns {
 		// TODO: Allow manual DNS config

@@ -66,13 +66,13 @@ resource "helm_release" "minio" {
 		}
 		metrics = {
 			serviceMonitor = {
-				enabled = true
+				enabled = var.prometheus_enabled
 				namespace = kubernetes_namespace.minio[0].metadata.0.name
 			}
 
 			# TODO:
 			# prometheusRule = {
-			# 	enabled = true
+			# 	enabled = var.prometheus_enabled
 			# 	namespace = kubernetes_namespace.prometheus.metadata.0.name
 			# }
 		}

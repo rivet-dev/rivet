@@ -49,12 +49,16 @@ module "imagor_secrets" {
 }
 
 resource "kubernetes_namespace" "imagor" {
+	count = var.imagor_enabled ? 1 : 0
+
 	metadata {
 		name = "imagor"
 	}
 }
 
 resource "kubernetes_priority_class" "imagor_priority" {
+	count = var.imagor_enabled ? 1 : 0
+
 	metadata {
 		name = "imagor-priority"
 	}
@@ -63,11 +67,12 @@ resource "kubernetes_priority_class" "imagor_priority" {
 }
 
 resource "kubernetes_deployment" "imagor" {
+	count = var.imagor_enabled ? 1 : 0
 	depends_on = [null_resource.daemons, module.docker_auth]
 
 	metadata {
 		name = "imagor"
-		namespace = kubernetes_namespace.imagor.metadata[0].name
+		namespace = kubernetes_namespace.imagor.0.metadata[0].name
 	}
 
 	spec {
@@ -87,7 +92,7 @@ resource "kubernetes_deployment" "imagor" {
 			}
 
 			spec {
-				priority_class_name = kubernetes_priority_class.imagor_priority.metadata.0.name
+				priority_class_name = kubernetes_priority_class.imagor_priority.0.metadata.0.name
 				
 				# MARK: Docker auth
 				image_pull_secrets {
@@ -168,9 +173,11 @@ resource "kubernetes_deployment" "imagor" {
 }
 
 resource "kubernetes_secret" "imagor_secret_env" {
+	count = var.imagor_enabled ? 1 : 0
+
 	metadata {
 		name = "imagor-secret-env"
-		namespace = kubernetes_namespace.imagor.metadata[0].name
+		namespace = kubernetes_namespace.imagor.0.metadata[0].name
 	}
 	
 	data = {
@@ -180,13 +187,15 @@ resource "kubernetes_secret" "imagor_secret_env" {
 }
 
 resource "kubernetes_service" "imagor" {
+	count = var.imagor_enabled ? 1 : 0
+
 	metadata {
 		name = "imagor"
-		namespace = kubernetes_namespace.imagor.metadata[0].name
+		namespace = kubernetes_namespace.imagor.0.metadata[0].name
 	}
 	spec {
 		selector = {
-			"app.kubernetes.io/name" = kubernetes_deployment.imagor.metadata.0.name
+			"app.kubernetes.io/name" = kubernetes_deployment.imagor.0.metadata.0.name
 		}
 
 		port {
@@ -198,6 +207,7 @@ resource "kubernetes_service" "imagor" {
 }
 
 resource "kubectl_manifest" "imagor_traefik_service" {
+	count = var.imagor_enabled ? 1 : 0
 	depends_on = [helm_release.traefik]
 
 	yaml_body = yamlencode({
@@ -206,7 +216,7 @@ resource "kubectl_manifest" "imagor_traefik_service" {
 
 		metadata = {
 			name = "imagor"
-			namespace = kubernetes_namespace.imagor.metadata[0].name
+			namespace = kubernetes_namespace.imagor.0.metadata[0].name
 			labels = {
 				"traefik-instance" = "main"
 			}
@@ -215,7 +225,7 @@ resource "kubectl_manifest" "imagor_traefik_service" {
 		spec = {
 			mirroring = {
 				name = "imagor"
-				namespace = kubernetes_namespace.imagor.metadata[0].name
+				namespace = kubernetes_namespace.imagor.0.metadata[0].name
 				port = 8000
 			}
 		}
@@ -223,7 +233,7 @@ resource "kubectl_manifest" "imagor_traefik_service" {
 }
 
 resource "kubectl_manifest" "imagor_ingress" {
-	for_each = local.entrypoints
+	for_each = var.imagor_enabled ? local.entrypoints : {}
 
 	depends_on = [helm_release.traefik]
 
@@ -233,7 +243,7 @@ resource "kubectl_manifest" "imagor_ingress" {
 
 		metadata = {
 			name = "imagor-${each.key}"
-			namespace = kubernetes_namespace.imagor.metadata[0].name
+			namespace = kubernetes_namespace.imagor.0.metadata[0].name
 			labels = {
 				"traefik-instance" = "main"
 			}
@@ -251,13 +261,13 @@ resource "kubectl_manifest" "imagor_ingress" {
 					middlewares = [
 						for mw in preset.middlewares: {
 							name = mw
-							namespace = kubernetes_namespace.imagor.metadata[0].name
+							namespace = kubernetes_namespace.imagor.0.metadata[0].name
 						}
 					]
 					services = [{
 						kind = "TraefikService"
 						name = "imagor"
-						namespace = kubernetes_namespace.imagor.metadata[0].name
+						namespace = kubernetes_namespace.imagor.0.metadata[0].name
 					}]
 				}
 			]
@@ -269,6 +279,7 @@ resource "kubectl_manifest" "imagor_ingress" {
 
 # MARK: Middleware
 resource "kubectl_manifest" "imagor_cors" {
+	count = var.imagor_enabled ? 1 : 0
 	depends_on = [helm_release.traefik]
 
 	yaml_body = yamlencode({
@@ -277,7 +288,7 @@ resource "kubectl_manifest" "imagor_cors" {
 		
 		metadata = {
 			name = "imagor-cors"
-			namespace = kubernetes_namespace.imagor.metadata[0].name
+			namespace = kubernetes_namespace.imagor.0.metadata[0].name
 			labels = {
 				"traefik-instance" = "main"
 			}
@@ -294,6 +305,7 @@ resource "kubectl_manifest" "imagor_cors" {
 }
 
 resource "kubectl_manifest" "imagor_cors_game" {
+	count = var.imagor_enabled ? 1 : 0
 	depends_on = [helm_release.traefik]
 
 	yaml_body = yamlencode({
@@ -302,7 +314,7 @@ resource "kubectl_manifest" "imagor_cors_game" {
 		
 		metadata = {
 			name = "imagor-cors-game"
-			namespace = kubernetes_namespace.imagor.metadata[0].name
+			namespace = kubernetes_namespace.imagor.0.metadata[0].name
 			labels = {
 				"traefik-instance" = "main"
 			}
@@ -319,6 +331,7 @@ resource "kubectl_manifest" "imagor_cors_game" {
 }
 
 resource "kubectl_manifest" "imagor_cdn_retry" {
+	count = var.imagor_enabled ? 1 : 0
 	depends_on = [helm_release.traefik]
 
 	yaml_body = yamlencode({
@@ -327,7 +340,7 @@ resource "kubectl_manifest" "imagor_cdn_retry" {
 		
 		metadata = {
 			name = "imagor-cdn-retry"
-			namespace = kubernetes_namespace.imagor.metadata[0].name
+			namespace = kubernetes_namespace.imagor.0.metadata[0].name
 			labels = {
 				"traefik-instance" = "main"
 			}
@@ -343,6 +356,7 @@ resource "kubectl_manifest" "imagor_cdn_retry" {
 }
 
 resource "kubectl_manifest" "imagor_cdn_cache_control" {
+	count = var.imagor_enabled ? 1 : 0
 	depends_on = [helm_release.traefik]
 
 	yaml_body = yamlencode({
@@ -351,7 +365,7 @@ resource "kubectl_manifest" "imagor_cdn_cache_control" {
 		
 		metadata = {
 			name = "imagor-cdn-cache-control"
-			namespace = kubernetes_namespace.imagor.metadata[0].name
+			namespace = kubernetes_namespace.imagor.0.metadata[0].name
 			labels = {
 				"traefik-instance" = "main"
 			}
@@ -368,6 +382,7 @@ resource "kubectl_manifest" "imagor_cdn_cache_control" {
 }
 
 resource "kubectl_manifest" "imagor_cdn" {
+	count = var.imagor_enabled ? 1 : 0
 	depends_on = [helm_release.traefik]
 
 	yaml_body = yamlencode({
@@ -376,7 +391,7 @@ resource "kubectl_manifest" "imagor_cdn" {
 		
 		metadata = {
 			name = "imagor-cdn"
-			namespace = kubernetes_namespace.imagor.metadata[0].name
+			namespace = kubernetes_namespace.imagor.0.metadata[0].name
 			labels = {
 				"traefik-instance" = "main"
 			}
@@ -387,11 +402,11 @@ resource "kubectl_manifest" "imagor_cdn" {
 				middlewares = [
 					{
 						name = "imagor-cdn-retry"
-						namespace = kubernetes_namespace.imagor.metadata[0].name
+						namespace = kubernetes_namespace.imagor.0.metadata[0].name
 					},
 					{
 						name = "imagor-cdn-cache-control"
-						namespace = kubernetes_namespace.imagor.metadata[0].name
+						namespace = kubernetes_namespace.imagor.0.metadata[0].name
 					}
 				]
 			}
@@ -401,10 +416,13 @@ resource "kubectl_manifest" "imagor_cdn" {
 
 resource "kubectl_manifest" "imagor_preset_middlewares" {
 	depends_on = [helm_release.traefik]
-	for_each = {
-		for index, preset in var.imagor_presets:
-		preset.key => preset
-	}
+	for_each = (
+		var.imagor_enabled ? {
+			for index, preset in var.imagor_presets:
+			preset.key => preset
+		} :
+		{}
+	)
 
 	yaml_body = yamlencode({
 		apiVersion = "traefik.io/v1alpha1"
@@ -412,7 +430,7 @@ resource "kubectl_manifest" "imagor_preset_middlewares" {
 		
 		metadata = {
 			name = "imagor-${each.key}-path"
-			namespace = kubernetes_namespace.imagor.metadata[0].name
+			namespace = kubernetes_namespace.imagor.0.metadata[0].name
 			labels = {
 				"traefik-instance" = "main"
 			}

@@ -25,6 +25,30 @@ and this project adheres to [Calendar Versioning](https://calver.org/).
 * revert to redis-rs v0.23.3 with panic patch ([#552](https://github.com/rivet-gg/rivet/issues/552)) ([3780eaa](https://github.com/rivet-gg/rivet/commit/3780eaa2fa6fa5f2840411193e617b9b77984b43))
 * updated docs error url ([#544](https://github.com/rivet-gg/rivet/issues/544)) ([7099658](https://github.com/rivet-gg/rivet/commit/70996584bee4678d3d42afc49ed3ed3053b9c44c))
 
+## [24.2.1] - Unreleased
+
+### Changed
+
+-   Reduced minimal infrastructure required to get Rivet running:
+    -   Made K8s Dashboard disabled by default
+    -   Made Prometheus and friends (Vector, Loki, Promtail) disabled by default
+    -   Made Clickhouse disabled by default
+    -   Made NSFW Check API disabled by default
+    -   Made NSFW Check API disabled by default
+    -   Made Image Resizing (via Imagor) disabled by default
+
+## [24.2.1] - Unreleased
+
+### Changed
+
+-   Reduced minimal infrastructure required to get Rivet running:
+    -   Made K8s Dashboard disabled by default
+    -   Made Prometheus and friends (Vector, Loki, Promtail) disabled by default
+    -   Made Clickhouse disabled by default
+    -   Made NSFW Check API disabled by default
+    -   Made NSFW Check API disabled by default
+    -   Made Image Resizing (via Imagor) disabled by default
+
 ## [24.2.0] - 2024-02-22
 
 ### Added

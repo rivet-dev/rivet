@@ -59,13 +59,29 @@ variable "authenticate_all_docker_hub_pulls" {
 	type = bool
 }
 
+# MARK: Nomad
+variable "edge_enabled" {
+	type = bool
+}
+
+# MARK: NSFW API
+variable "nsfw_api_enabled" {
+	type = bool
+}
+
 # MARK: Imagor
+variable "imagor_enabled" {
+	type = bool
+}
+
 variable "imagor_presets" {
 	type = any
+	default = {}
 }
 
 variable "imagor_cors_allowed_origins" {
 	type = list(string)
+	default = []
 }
 
 # MARK: CockroachDB
@@ -76,6 +92,11 @@ variable "cockroachdb_provider" {
 # MARK: ClickHouse
 variable "clickhouse_provider" {
 	type = string
+	nullable = true
+}
+
+variable "clickhouse_enabled" {
+	type = bool
 }
 
 # MARK: Redis
@@ -89,7 +110,7 @@ variable "redis_provider" {
 
 variable "redis_dbs" {
 	type = map(object({
-		persistent =  bool
+		persistent = bool
 	}))
 }
 
@@ -103,6 +124,10 @@ variable "k8s_storage_class" {
 }
 
 variable "limit_resources" {
+	type = bool
+}
+
+variable "k8s_dashboard_enabled" {
 	type = bool
 }
 
@@ -126,4 +151,9 @@ variable "s3_buckets" {
 # MARK: Rivet
 variable "cdn_cache_size_gb" {
 	type = number
+}
+
+# MARK: Prometheus
+variable "prometheus_enabled" {
+	type = bool
 }

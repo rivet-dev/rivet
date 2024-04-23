@@ -1,5 +1,6 @@
 use std::time::Duration;
 
+use global_error::GlobalResult;
 use rivet_operation::OperationContext;
 use rivet_pools::prelude::*;
 use uuid::Uuid;
@@ -83,7 +84,7 @@ impl TestCtx {
 		self.op_ctx.redis_user_presence().await
 	}
 
-	pub async fn clickhouse(&self) -> Result<ClickHousePool, rivet_pools::Error> {
+	pub async fn clickhouse(&self) -> GlobalResult<ClickHousePool> {
 		self.op_ctx.clickhouse().await
 	}
 }

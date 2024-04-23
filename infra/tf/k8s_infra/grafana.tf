@@ -8,10 +8,10 @@ locals {
 }
 
 resource "kubernetes_config_map" "grafana_dashboard" {
-	for_each = local.grafana_dashboards
+	for_each = var.prometheus_enabled ? local.grafana_dashboards : {}
 
 	metadata {
-		namespace = kubernetes_namespace.prometheus.metadata.0.name
+		namespace = kubernetes_namespace.prometheus.0.metadata.0.name
 		name = "prometheus-rivet-${each.key}"
 		labels = {
 			grafana_dashboard = "1"

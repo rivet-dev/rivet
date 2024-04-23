@@ -66,7 +66,8 @@ resource "cloudflare_origin_ca_certificate" "rivet_gg" {
 # Must be created in every namespace it is used in
 resource "kubernetes_secret" "ingress_tls_cert" {
 	for_each = toset(flatten([
-		["traefik", "imagor", "rivet-service"],
+		["traefik", "rivet-service"],
+		var.imagor_enabled ? ["imagor"] : [], 
 		local.has_minio ? ["minio"] : []
 	]))
 
@@ -84,7 +85,10 @@ resource "kubernetes_secret" "ingress_tls_cert" {
 }
 
 resource "kubernetes_secret" "ingress_tls_ca_cert" {
-	for_each = toset(["traefik", "imagor", "rivet-service"])
+	for_each = toset(flatten([
+		["traefik", "rivet-service"],
+		var.imagor_enabled ? ["imagor"] : []
+	]))
 
 	metadata {
 		name = "ingress-tls-cloudflare-ca-cert"

@@ -9,12 +9,16 @@ locals {
 }
 
 resource "kubernetes_namespace" "loki" {
+	count = var.prometheus_enabled ? 1 : 0
+
 	metadata {
 		name = "loki"
 	}
 }
 
 resource "kubernetes_priority_class" "loki_priority" {
+	count = var.prometheus_enabled ? 1 : 0
+
 	metadata {
 		name = "loki-priority"
 	}
@@ -23,14 +27,16 @@ resource "kubernetes_priority_class" "loki_priority" {
 }
 
 resource "helm_release" "loki" {
+	count = var.prometheus_enabled ? 1 : 0
+
 	name = "loki"
-	namespace = kubernetes_namespace.loki.metadata.0.name
+	namespace = kubernetes_namespace.loki.0.metadata.0.name
 	repository = "https://grafana.github.io/helm-charts"
 	chart = "loki"
 	version = "5.36.0"
 	values = [yamlencode({
 		global = {
-			priorityClassName = kubernetes_priority_class.loki_priority.metadata.0.name
+			priorityClassName = kubernetes_priority_class.loki_priority.0.metadata.0.name
 		}
 		loki = {
 			auth_enabled = false
@@ -86,10 +92,10 @@ resource "helm_release" "loki" {
 		}
 		monitoring = {
 			dashboards = {
-				namespace = kubernetes_namespace.prometheus.metadata.0.name
+				namespace = kubernetes_namespace.prometheus.0.metadata.0.name
 			}
 			rules = {
-				namespace = kubernetes_namespace.prometheus.metadata.0.name
+				namespace = kubernetes_namespace.prometheus.0.metadata.0.name
 			}
 		}
 	})]

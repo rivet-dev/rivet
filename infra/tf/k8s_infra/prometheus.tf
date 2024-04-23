@@ -81,6 +81,8 @@ module "alertmanager_secrets" {
 }
 
 resource "kubernetes_namespace" "prometheus" {
+	count = var.prometheus_enabled ? 1 : 0
+
 	metadata {
 		name = "prometheus"
 	}
@@ -88,6 +90,8 @@ resource "kubernetes_namespace" "prometheus" {
 
 # Set a high priority for Node Exporter so it can run on all nodes
 resource "kubernetes_priority_class" "node_exporter_priority" {
+	count = var.prometheus_enabled ? 1 : 0
+
 	metadata {
 		name = "node-exporter-priority"
 	}
@@ -95,6 +99,8 @@ resource "kubernetes_priority_class" "node_exporter_priority" {
 }
 
 resource "kubernetes_priority_class" "prometheus_priority" {
+	count = var.prometheus_enabled ? 1 : 0
+
 	metadata {
 		name = "prometheus-priority"
 	}
@@ -102,10 +108,11 @@ resource "kubernetes_priority_class" "prometheus_priority" {
 }
 
 resource "helm_release" "prometheus" {
+	count = var.prometheus_enabled ? 1 : 0
 	depends_on = [helm_release.vpa]
 
 	name = "prometheus"
-	namespace = kubernetes_namespace.prometheus.metadata.0.name
+	namespace = kubernetes_namespace.prometheus.0.metadata.0.name
 	repository = "https://prometheus-community.github.io/helm-charts"
 	chart = "kube-prometheus-stack"
 	version = "51.5.1"
@@ -117,7 +124,7 @@ resource "helm_release" "prometheus" {
 					cpu = "${local.service_node_exporter.resources.cpu}m"
 				}
 			} : null
-			priorityClassName = kubernetes_priority_class.node_exporter_priority.metadata.0.name
+			priorityClassName = kubernetes_priority_class.node_exporter_priority.0.metadata.0.name
 			affinity = {
 				nodeAffinity = {
 					requiredDuringSchedulingIgnoredDuringExecution = {
@@ -265,7 +272,7 @@ resource "helm_release" "prometheus" {
 					}
 				}
 			
-				priorityClassName = kubernetes_priority_class.prometheus_priority.metadata.0.name
+				priorityClassName = kubernetes_priority_class.prometheus_priority.0.metadata.0.name
 				resources = var.limit_resources ? {
 					limits = {
 						memory = "${local.service_prometheus.resources.memory}Mi"

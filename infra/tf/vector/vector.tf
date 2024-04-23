@@ -7,7 +7,7 @@ locals {
 		}
 	})
 
-	clickhouse_k8s = var.clickhouse_provider == "kubernetes"
+	clickhouse_k8s = var.clickhouse_enabled && var.clickhouse_provider == "kubernetes"
 }
 
 resource "kubernetes_priority_class" "vector_priority" {

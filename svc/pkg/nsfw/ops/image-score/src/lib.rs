@@ -36,6 +36,20 @@ enum ScorePrediction {
 async fn handle(
 	ctx: OperationContext<nsfw::image_score::Request>,
 ) -> GlobalResult<nsfw::image_score::Response> {
+	// NSFW API disabled, return default response
+	if util::env::var("RIVET_UPLOAD_NSFW_CHECK_ENABLED").is_err() {
+		return Ok(nsfw::image_score::Response {
+			scores: ctx
+				.image_urls
+				.iter()
+				.map(|url| nsfw::image_score::response::ImageScore {
+					url: url.clone(),
+					score: 0.0,
+				})
+				.collect::<Vec<_>>(),
+		});
+	}
+
 	let images = ctx
 		.image_urls
 		.iter()

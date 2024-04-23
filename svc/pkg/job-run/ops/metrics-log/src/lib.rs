@@ -43,6 +43,13 @@ lazy_static::lazy_static! {
 async fn handle(
 	ctx: OperationContext<job_run::metrics_log::Request>,
 ) -> GlobalResult<job_run::metrics_log::Response> {
+	let Ok(prometheus_url) = util::env::var("PROMETHEUS_URL") else {
+		// Prometheus disabled
+		return Ok(job_run::metrics_log::Response {
+			metrics: Vec::new(),
+		});
+	};
+
 	let mut metrics = Vec::new();
 
 	for metric in &ctx.metrics {
@@ -149,7 +156,10 @@ async fn handle_request(
 		let status = res.status();
 		let text = res.text().await?;
 
-		bail!(format!("failed prometheus request: ({}) {}", status, text));
+		bail_with!(
+			ERROR,
+			error = format!("failed prometheus request ({}):\n{}", status, text)
+		);
 	}
 
 	let body = res.json::<PrometheusResponse>().await?;

@@ -1,46 +1,55 @@
 locals {
 	# Specify what services to expose via the tunnel server
-	tunnel_services = {
-		# LEGACY: Addresses a random Nomad server.
-		"nomad" = {
-			service = "nomad-server"
-			service_namespace = kubernetes_namespace.nomad.metadata[0].name
-			service_port = 4647
-		}
+	tunnel_services = merge(flatten([
+		[{
+			"api-internal" = {
+				service = "rivet-api-internal-monolith"
+				service_namespace = kubernetes_namespace.rivet_service.metadata[0].name
+				service_port = 80
+			},
+			# LEGACY: Addresses a random Nomad server.
+			"nomad" = {
+				service = "nomad-server"
+				service_namespace = kubernetes_namespace.nomad.0.metadata[0].name
+				service_port = 4647
+			}
 
-		# Addresses specific Nomad servers.
-		"nomad-server-0" = {
-			service = "nomad-server-0"
-			service_namespace = kubernetes_namespace.nomad.metadata[0].name
-			service_port = 4647
-		}
-		"nomad-server-1" = {
-			service = "nomad-server-1"
-			service_namespace = kubernetes_namespace.nomad.metadata[0].name
-			service_port = 4647
-		}
-		"nomad-server-2" = {
-			service = "nomad-server-2"
-			service_namespace = kubernetes_namespace.nomad.metadata[0].name
-			service_port = 4647
-		}
+			# Addresses specific Nomad servers.
+			"nomad-server-0" = {
+				service = "nomad-server-0"
+				service_namespace = kubernetes_namespace.nomad.0.metadata[0].name
+				service_port = 4647
+			}
+			"nomad-server-1" = {
+				service = "nomad-server-1"
+				service_namespace = kubernetes_namespace.nomad.0.metadata[0].name
+				service_port = 4647
+			}
+			"nomad-server-2" = {
+				service = "nomad-server-2"
+				service_namespace = kubernetes_namespace.nomad.0.metadata[0].name
+				service_port = 4647
+			}
 
-		"api-internal" = {
-			service = "rivet-api-internal-monolith"
-			service_namespace = kubernetes_namespace.rivet_service.metadata[0].name
-			service_port = 80
-		}
-		"vector" = {
-			service = "vector"
-			service_namespace = kubernetes_namespace.vector.metadata[0].name
-			service_port = 6000
-		}
-		"vector-tcp-json" = {
-			service = "vector"
-			service_namespace = kubernetes_namespace.vector.metadata[0].name
-			service_port = 6100
-		}
-	}
+			"api-internal" = {
+				service = "rivet-api-internal-monolith"
+				service_namespace = kubernetes_namespace.rivet_service.metadata[0].name
+				service_port = 80
+			}
+		}],
+		var.prometheus_enabled ? [{
+			"vector" = {
+				service = "vector"
+				service_namespace = kubernetes_namespace.vector.0.metadata[0].name
+				service_port = 6000
+			}
+			"vector-tcp-json" = {
+				service = "vector"
+				service_namespace = kubernetes_namespace.vector.0.metadata[0].name
+				service_port = 6100
+			}
+		}] : [],
+	])...)
 
 	service_traefik_tunnel = lookup(var.services, "traefik-tunnel", {
 		count = var.deploy_method_cluster ? 2 : 1
@@ -52,12 +61,16 @@ locals {
 }
 
 resource "kubernetes_namespace" "traefik_tunnel" {
+	count = var.edge_enabled ? 1 : 0
+
 	metadata {
 		name = "traefik-tunnel"
 	}
 }
 
 resource "kubernetes_priority_class" "traefik_tunnel_priority" {
+	count = var.edge_enabled ? 1 : 0
+
 	metadata {
 		name = "traefik-tunnel-priority"
 	}
@@ -65,10 +78,12 @@ resource "kubernetes_priority_class" "traefik_tunnel_priority" {
 }
 
 resource "helm_release" "traefik_tunnel" {
+	count = var.edge_enabled ? 1 : 0
+
 	depends_on = [null_resource.daemons]
 
 	name = "traefik-tunnel"
-	namespace = kubernetes_namespace.traefik_tunnel.metadata.0.name
+	namespace = kubernetes_namespace.traefik_tunnel.0.metadata.0.name
 	repository = "https://traefik.github.io/charts"
 	chart = "traefik"
 	version = "24.0.0"
@@ -99,7 +114,7 @@ resource "helm_release" "traefik_tunnel" {
 			}
 		}
 
-		priorityClassName = kubernetes_priority_class.traefik_tunnel_priority.metadata.0.name
+		priorityClassName = kubernetes_priority_class.traefik_tunnel_priority.0.metadata.0.name
 
 		tlsOptions = {
 			"ingress-tunnel" = {
@@ -169,11 +184,12 @@ resource "helm_release" "traefik_tunnel" {
 }
 
 resource "kubernetes_service" "traefik_tunnel_headless" {
+	count = var.edge_enabled ? 1 : 0
 	depends_on = [helm_release.traefik_tunnel]
 
 	metadata {
 		name = "traefik-headless"
-		namespace = kubernetes_namespace.traefik_tunnel.metadata.0.name
+		namespace = kubernetes_namespace.traefik_tunnel.0.metadata.0.name
 		labels = {
 			"app.kubernetes.io/name" = "traefik-headless"
 		}
@@ -207,7 +223,8 @@ resource "kubernetes_service" "traefik_tunnel_headless" {
 }
 
 resource "kubectl_manifest" "traefik_tunnel_service_monitor" {
-	depends_on = [helm_release.traefik_tunnel]
+	count = var.edge_enabled && var.prometheus_enabled ? 1 : 0
+	depends_on = [null_resource.daemons, helm_release.traefik_tunnel]
 
 	yaml_body = yamlencode({
 		apiVersion = "monitoring.coreos.com/v1"
@@ -215,7 +232,7 @@ resource "kubectl_manifest" "traefik_tunnel_service_monitor" {
 
 		metadata = {
 			name = "traefik-service-monitor"
-			namespace = kubernetes_namespace.traefik_tunnel.metadata.0.name
+			namespace = kubernetes_namespace.traefik_tunnel.0.metadata.0.name
 		}
 
 		spec = {
@@ -235,18 +252,18 @@ resource "kubectl_manifest" "traefik_tunnel_service_monitor" {
 }
 
 data "kubernetes_service" "traefik_tunnel" {
+	count = var.edge_enabled ? 1 : 0
 	depends_on = [helm_release.traefik_tunnel]
 
 	metadata {
 		name = "traefik-tunnel"
-		namespace = kubernetes_namespace.traefik_tunnel.metadata.0.name
+		namespace = kubernetes_namespace.traefik_tunnel.0.metadata.0.name
 	}
 }
 
 resource "kubectl_manifest" "traefik_nomad_router" {
 	depends_on = [helm_release.traefik_tunnel]
-
-	for_each = local.tunnel_services
+	for_each = var.edge_enabled ? local.tunnel_services : {}
 
 	yaml_body = yamlencode({
 		apiVersion = "traefik.io/v1alpha1"

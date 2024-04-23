@@ -9,12 +9,16 @@ locals {
 }
 
 resource "kubernetes_namespace" "nsfw_api" {
+	count = var.nsfw_api_enabled ? 1 : 0
+
 	metadata {
 		name = "nsfw-api"
 	}
 }
 
 resource "kubernetes_priority_class" "nsfw_api_priority" {
+	count = var.nsfw_api_enabled ? 1 : 0
+
 	metadata {
 		name = "nsfw-api-priority"
 	}
@@ -23,11 +27,12 @@ resource "kubernetes_priority_class" "nsfw_api_priority" {
 }
 
 resource "kubernetes_deployment" "nsfw_api" {
+	count = var.nsfw_api_enabled ? 1 : 0
 	depends_on = [null_resource.daemons, module.docker_auth]
 
 	metadata {
 		name = "nsfw-api"
-		namespace = kubernetes_namespace.nsfw_api.metadata[0].name
+		namespace = kubernetes_namespace.nsfw_api.0.metadata[0].name
 	}
 
 	spec {
@@ -47,7 +52,7 @@ resource "kubernetes_deployment" "nsfw_api" {
 			}
 
 			spec {
-				priority_class_name = kubernetes_priority_class.nsfw_api_priority.metadata.0.name
+				priority_class_name = kubernetes_priority_class.nsfw_api_priority.0.metadata.0.name
 				
 				# MARK: Docker auth
 				image_pull_secrets {
@@ -85,13 +90,15 @@ resource "kubernetes_deployment" "nsfw_api" {
 }
 
 resource "kubernetes_service" "nsfw_api" {
+	count = var.nsfw_api_enabled ? 1 : 0
+
 	metadata {
 		name = "nsfw-api"
-		namespace = kubernetes_namespace.nsfw_api.metadata[0].name
+		namespace = kubernetes_namespace.nsfw_api.0.metadata[0].name
 	}
 	spec {
 		selector = {
-			"app.kubernetes.io/name" = kubernetes_deployment.nsfw_api.metadata.0.name
+			"app.kubernetes.io/name" = kubernetes_deployment.nsfw_api.0.metadata.0.name
 		}
 
 		port {

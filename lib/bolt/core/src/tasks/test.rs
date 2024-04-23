@@ -1046,29 +1046,31 @@ pub async fn build_volumes(
 	}
 
 	// Add ClickHouse CA
-	match project_ctx.ns().clickhouse.provider {
-		ns::ClickHouseProvider::Kubernetes {} => {
-			volumes.push(json!({
-				"name": "clickhouse-ca",
-				"configMap": {
+	if let Some(clickhouse) = &project_ctx.ns().clickhouse {
+		match clickhouse.provider {
+			ns::ClickHouseProvider::Kubernetes {} => {
+				volumes.push(json!({
 					"name": "clickhouse-ca",
-					"defaultMode": 420,
-					"items": [
-						{
-							"key": "ca.crt",
-							"path": "clickhouse-ca.crt"
-						}
-					]
-				}
-			}));
-			volume_mounts.push(json!({
-				"name": "clickhouse-ca",
-				"mountPath": "/usr/local/share/ca-certificates/clickhouse-ca.crt",
-				"subPath": "clickhouse-ca.crt"
-			}));
-		}
-		ns::ClickHouseProvider::Managed { .. } => {
-			// Uses publicly signed cert
+					"configMap": {
+						"name": "clickhouse-ca",
+						"defaultMode": 420,
+						"items": [
+							{
+								"key": "ca.crt",
+								"path": "clickhouse-ca.crt"
+							}
+						]
+					}
+				}));
+				volume_mounts.push(json!({
+					"name": "clickhouse-ca",
+					"mountPath": "/usr/local/share/ca-certificates/clickhouse-ca.crt",
+					"subPath": "clickhouse-ca.crt"
+				}));
+			}
+			ns::ClickHouseProvider::Managed { .. } => {
+				// Uses publicly signed cert
+			}
 		}
 	}
 

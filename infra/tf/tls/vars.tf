@@ -28,3 +28,8 @@ variable "s3_providers" {
 		region = string
 	}))
 }
+
+# MARK: Imagor
+variable "imagor_enabled" {
+	type = bool
+}
