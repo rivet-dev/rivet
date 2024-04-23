@@ -10,6 +10,9 @@ ConditionPathExists=!/var/tmp/rivet_hook.completed
 User=root
 Group=root
 Type=oneshot
+RemainAfterExit=true
+Restart=on-failure
+RestartSec=1s
 ExecStart=/usr/bin/rivet_hook.sh
 ExecStartPost=/bin/touch /var/tmp/rivet_hook.completed
 

@@ -145,13 +145,19 @@ async fn inner(
 			SET
 				provider_server_id = $2,
 				provider_hardware = $3,
-				public_ip = $4
+				public_ip = $4,
+				install_complete_ts = $5
 			WHERE server_id = $1
 			",
 			server_id,
 			&provision_res.provider_server_id,
 			&provision_res.provider_hardware,
 			&provision_res.public_ip,
+			if provision_res.already_installed {
+				Some(util::timestamp::now())
+			} else {
+				None
+			}
 		)
 		.await?;
 

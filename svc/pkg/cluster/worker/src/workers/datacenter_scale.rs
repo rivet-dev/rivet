@@ -130,6 +130,8 @@ async fn inner(
 			datacenter_id = $1 AND
 			-- Filters out servers that are being destroyed/already destroyed
 			cloud_destroy_ts IS NULL
+		-- Newer servers will be destroyed first
+		ORDER BY create_ts DESC
 		FOR UPDATE
 		",
 		datacenter_id,
@@ -157,7 +159,7 @@ async fn inner(
 		.collect::<GlobalResult<Vec<_>>>()?;
 
 	// Sort job servers by memory usage
-	servers.sort_unstable_by_key(|server| memory_by_server.get(&server.server_id));
+	servers.sort_by_key(|server| memory_by_server.get(&server.server_id));
 
 	// TODO: RVT-3732 Sort gg and ats servers by cpu usage
 	// servers.sort_by_key
