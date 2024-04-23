@@ -50,12 +50,11 @@ async fn handle(
 		let version_id = unwrap_ref!(version_create_res.version_id).as_uuid();
 		version_ids.push(version_id.into());
 
-		let namespace_name_ids = vec!["prod".to_owned(), "staging".to_owned()];
-		for name_id in &namespace_name_ids {
+		for name_id in ["prod", "staging"] {
 			let ns_create_res = op!([ctx] faker_game_namespace {
 				game_id: game_create_res.game_id,
 				version_id: version_create_res.version_id,
-				override_name_id: name_id.clone(),
+				override_name_id: name_id.to_owned(),
 				..Default::default()
 			})
 			.await?;

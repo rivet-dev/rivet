@@ -60,6 +60,7 @@ chirp-worker = { path = "../../../../lib/chirp/worker" }
 
 faker-build = { path = "../../faker/ops/build" }
 faker-game = { path = "../../faker/ops/game" }
+faker-game-namespace = { path = "../../faker/ops/game-namespace" }
 faker-game-version = { path = "../../faker/ops/game-version" }
 faker-mm-lobby = { path = "../../faker/ops/mm-lobby" }
 faker-region = { path = "../../faker/ops/region" }

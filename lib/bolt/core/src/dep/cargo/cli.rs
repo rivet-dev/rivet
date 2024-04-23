@@ -300,6 +300,9 @@ pub async fn build_tests<'a, T: AsRef<str>>(
 		for test in build_call.packages {
 			cmd.args(&["--package", test.as_ref()]);
 		}
+		if std::env::var("CARGO_TARGET_DIR").is_err() {
+			cmd.env("CARGO_TARGET_DIR", ctx.cargo_target_dir());
+		}
 		let mut child = cmd.spawn()?;
 
 		// Capture stdout

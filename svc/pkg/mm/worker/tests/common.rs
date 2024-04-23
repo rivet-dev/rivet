@@ -19,11 +19,11 @@ impl Setup {
 		let region_id = region_res.region_id.as_ref().unwrap().as_uuid();
 
 		let game_res = op!([ctx] faker_game {
+			skip_namespaces_and_versions: true,
 			..Default::default()
 		})
 		.await
 		.unwrap();
-		let namespace_id = game_res.namespace_ids.first().unwrap().clone().as_uuid();
 
 		let build_res = op!([ctx] faker_build {
 			game_id: game_res.game_id,
@@ -209,12 +209,15 @@ impl Setup {
 			.unwrap()
 			.lobby_groups;
 
-		op!([ctx] game_namespace_version_set {
-			namespace_id: Some(namespace_id.into()),
+		let ns_create_res = op!([ctx] faker_game_namespace {
+			game_id: game_res.game_id,
 			version_id: game_version_res.version_id,
+			override_name_id: "prod".to_owned(),
+			..Default::default()
 		})
 		.await
 		.unwrap();
+		let namespace_id = ns_create_res.namespace_id.unwrap().as_uuid();
 
 		Setup {
 			namespace_id,

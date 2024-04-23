@@ -24,8 +24,8 @@ pub async fn handle(
 			[ctx, Server]
 			"
 			SELECT d.cluster_id, s.server_id
-			FROM servers AS s
-			JOIN datacenters AS d
+			FROM db_cluster.servers AS s
+			JOIN db_cluster.datacenters AS d
 			ON s.datacenter_id = d.datacenter_id
 			WHERE
 				d.cluster_id = ANY($1) AND
@@ -39,8 +39,8 @@ pub async fn handle(
 			[ctx, Server]
 			"
 			SELECT d.cluster_id, s.server_id
-			FROM servers AS s
-			JOIN datacenters AS d
+			FROM db_cluster.servers AS s
+			JOIN db_cluster.datacenters AS d
 			ON s.datacenter_id = d.datacenter_id
 			WHERE
 				d.cluster_id = ANY($1) AND

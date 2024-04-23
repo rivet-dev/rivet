@@ -20,7 +20,7 @@ define_router! {
 	mounts: [
 		{
 			path: api_traefik_provider::route::Router,
-			prefix: "route",
+			prefix: "traefik-provider",
 		},
 		{
 			path: api_provision::route::Router,

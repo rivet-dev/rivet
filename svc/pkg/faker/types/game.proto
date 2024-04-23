@@ -8,7 +8,6 @@ message Request {
 	// Will not create the default namespaces and versions.
 	bool skip_namespaces_and_versions = 1;
 
-
 	// The default team ID to set as the game's dev team.
 	optional rivet.common.Uuid dev_team_id = 2;
 }
