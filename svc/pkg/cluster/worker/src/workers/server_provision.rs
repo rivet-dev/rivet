@@ -1,3 +1,5 @@
+use std::net::{IpAddr, Ipv4Addr};
+
 use chirp_worker::prelude::*;
 use futures_util::FutureExt;
 use proto::backend::{self, cluster::PoolType, pkg::*};
@@ -81,7 +83,7 @@ async fn inner(
 		WHERE server_id = $1
 		",
 		server_id,
-		&vlan_ip,
+		IpAddr::V4(vlan_ip),
 	)
 	.await?;
 
@@ -107,7 +109,7 @@ async fn inner(
 					provider_datacenter_id: datacenter.provider_datacenter_id.clone(),
 					hardware: Some(hardware.clone()),
 					pool_type: ctx.pool_type,
-					vlan_ip: vlan_ip.clone(),
+					vlan_ip: vlan_ip.to_string(),
 					tags: ctx.tags.clone(),
 				})
 				.await;
@@ -200,7 +202,7 @@ async fn get_vlan_ip(
 	_tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
 	server_id: Uuid,
 	pool_type: backend::cluster::PoolType,
-) -> GlobalResult<String> {
+) -> GlobalResult<Ipv4Addr> {
 	// Find next available vlan index
 	let mut vlan_addr_range = match pool_type {
 		PoolType::Job => util::net::job::vlan_addr_range(),
@@ -242,7 +244,7 @@ async fn get_vlan_ip(
 
 	let vlan_ip = unwrap!(vlan_addr_range.nth(network_idx as usize));
 
-	Ok(vlan_ip.to_string())
+	Ok(vlan_ip)
 }
 
 // This function is used to destroy leftovers from a failed partial provision.

@@ -1,7 +1,11 @@
+use std::{
+	collections::{HashMap, HashSet},
+	net::IpAddr,
+};
+
 use proto::backend::{self, pkg::*};
 use rivet_operation::prelude::*;
 use serde_json::json;
-use std::collections::{HashMap, HashSet};
 
 /// Tracks which resources should be prewarmed in the ATS cache.
 #[derive(Debug)]
@@ -15,7 +19,7 @@ pub struct PrewarmAtsContext {
 #[derive(sqlx::FromRow)]
 struct VlanIp {
 	datacenter_id: Uuid,
-	vlan_ip: String,
+	vlan_ip: IpAddr,
 }
 
 /// Requests resources from the ATS cache to make sure any subsequent requests will be faster.

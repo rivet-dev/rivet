@@ -1,6 +1,4 @@
-use std::collections::hash_map::DefaultHasher;
-use std::hash::Hasher;
-use std::ops::Deref;
+use std::{collections::hash_map::DefaultHasher, hash::Hasher, net::IpAddr, ops::Deref};
 
 use chirp_worker::prelude::*;
 use proto::backend::{self, pkg::*};
@@ -870,7 +868,7 @@ async fn resolve_image_artifact_url(
 			// prewarm_ats.rs @ prewarm_ats_cache
 			// Get vlan ip from build id hash for consistent routing
 			let (ats_vlan_ip,) = sql_fetch_one!(
-				[ctx, (String,)]
+				[ctx, (IpAddr,)]
 				"
 				WITH sel AS (
 					-- Select candidate vlan ips
