@@ -5142,6 +5142,7 @@ dependencies = [
  "job-run-get",
  "mm-config-version-get",
  "mm-lobby-get",
+ "rand",
  "reqwest",
  "rivet-api",
  "rivet-connection",

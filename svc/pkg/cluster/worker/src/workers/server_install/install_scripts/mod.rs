@@ -11,13 +11,15 @@ pub async fn gen_install(
 	pool_type: backend::cluster::PoolType,
 	initialize_immediately: bool,
 ) -> GlobalResult<String> {
+	let tunnel_name = "tunnel";
+
 	// MARK: Common (pre)
 	let mut script = vec![
 		components::common(),
 		components::node_exporter::install(),
 		components::sysctl::install(),
 		components::traefik::install(),
-		components::traefik::tunnel()?,
+		components::traefik::tunnel(tunnel_name)?,
 		components::vector::install(),
 	];
 
@@ -40,7 +42,10 @@ pub async fn gen_install(
 	}
 
 	// MARK: Common (post)
-	script.push(components::rivet::create_hook(initialize_immediately)?);
+	script.push(components::rivet::create_hook(
+		tunnel_name,
+		initialize_immediately,
+	)?);
 
 	let joined = script.join("\n\necho \"======\"\n\n");
 	Ok(format!("#!/usr/bin/env bash\nset -eu\n\n{joined}"))

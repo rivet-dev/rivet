@@ -2,8 +2,8 @@
 cat << 'EOF' > /etc/systemd/system/rivet_hook.service
 [Unit]
 Description=Rivet Hook
-Requires=network-online.target
-After=network-online.target
+Requires=network-online.target __TUNNEL_NAME__.service
+After=network-online.target __TUNNEL_NAME__.service
 ConditionPathExists=!/var/tmp/rivet_hook.completed
 
 [Service]

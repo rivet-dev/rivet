@@ -37,6 +37,12 @@ async fn inner(
 	)
 	.await?;
 	if server.provider_server_id.is_none() && !ctx.force {
+		// Check for stale message
+		if ctx.req_dt() > util::duration::hours(1) {
+			tracing::warn!("discarding stale message");
+			return Ok(());
+		}
+
 		bail!("server is not completely provisioned yet, retrying");
 	}
 

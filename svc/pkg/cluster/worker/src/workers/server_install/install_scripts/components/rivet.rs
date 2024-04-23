@@ -2,8 +2,9 @@ use chirp_worker::prelude::*;
 
 use super::TUNNEL_API_INTERNAL_PORT;
 
-pub fn create_hook(initialize_immediately: bool) -> GlobalResult<String> {
-	let mut script = include_str!("../files/rivet_create_hook.sh").to_string();
+pub fn create_hook(tunnel_name: &str, initialize_immediately: bool) -> GlobalResult<String> {
+	let mut script =
+		include_str!("../files/rivet_create_hook.sh").replace("__TUNNEL_NAME__", tunnel_name);
 
 	if initialize_immediately {
 		script.push_str("systemctl start rivet_hook\n");

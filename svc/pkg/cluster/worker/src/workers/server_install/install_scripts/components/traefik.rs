@@ -147,7 +147,7 @@ pub fn instance(config: Instance) -> String {
 	script
 }
 
-pub fn tunnel() -> GlobalResult<String> {
+pub fn tunnel(name: &str) -> GlobalResult<String> {
 	// Build transports for each service
 	let mut tcp_server_transports = HashMap::new();
 	for TunnelService { name, .. } in TUNNEL_SERVICES {
@@ -165,7 +165,7 @@ pub fn tunnel() -> GlobalResult<String> {
 	}
 
 	Ok(instance(Instance {
-		name: "tunnel".into(),
+		name: name.to_string(),
 		static_config: tunnel_static_config(),
 		dynamic_config: tunnel_dynamic_config(&util::env::var("K8S_TRAEFIK_TUNNEL_EXTERNAL_IP")?),
 		tcp_server_transports,
