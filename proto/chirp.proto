@@ -13,6 +13,12 @@ message Message {
 	repeated TraceEntry trace = 6;
 	
 	bytes body = 3;
+
+	// Allows a message with a topic that is already in the trace to be published again. 
+	// 
+	// For example: `cluster-server-install` which re-triggers `cluster-server-scale`. The logic within the two scripts
+	// ensures it is not cyclical.
+	bool allow_recursive = 8;
 }
 
 message Request {
@@ -23,7 +29,7 @@ message Request {
 	bytes body = 3;
 	optional RequestDebug debug = 4;
 
-	// Suppresses both the request and reply of this requeset in the logs.
+	// Suppresses both the request and reply of this request in the logs.
 	//
 	// This is useful for very verbose requests and for requests with sensitive data.
 	bool dont_log_body = 5;

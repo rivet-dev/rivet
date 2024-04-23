@@ -39,7 +39,10 @@ impl TestCtx {
 			Vec::new(),
 		);
 
-		Ok(TestCtx { name: service_name, op_ctx })
+		Ok(TestCtx {
+			name: service_name,
+			op_ctx,
+		})
 	}
 }
 

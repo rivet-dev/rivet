@@ -71,6 +71,23 @@ macro_rules! msg {
 				$mod1$(::$mod2)*::Message $body,
 				::chirp_client::MessageOptions {
 					dont_log_body: true,
+					..Default::default()
+				},
+			)
+	};
+
+	(
+		[$container:expr] @recursive $mod1:ident$(::$mod2:ident)* ($($param:expr),*)
+		$body:tt
+	) => {
+		$container
+			.chirp()
+			.message::<$mod1$(::$mod2)*::Message>(
+				$mod1$(::$mod2)*::build_params($($param),*),
+				$mod1$(::$mod2)*::Message $body,
+				::chirp_client::MessageOptions {
+					allow_recursive: true,
+					..Default::default()
 				},
 			)
 	};

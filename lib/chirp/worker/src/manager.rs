@@ -548,117 +548,129 @@ where
 		);
 
 		// Parse request structure
-		let (req_id_proto, ray_id_proto, req_ts, trace, body_buf, dont_log_body, req_debug) =
-			match &self.config.worker_kind {
-				WorkerKind::Rpc { .. } => {
-					match chirp::Request::decode(raw_msg_buf.as_slice()) {
-						Ok(req) => {
-							let reply = if let Some(x) =
-								nats_message.as_ref().and_then(|x| x.reply.clone())
-							{
+		let (
+			req_id_proto,
+			ray_id_proto,
+			req_ts,
+			trace,
+			body_buf,
+			dont_log_body,
+			req_debug,
+			allow_recursive,
+		) = match &self.config.worker_kind {
+			WorkerKind::Rpc { .. } => {
+				match chirp::Request::decode(raw_msg_buf.as_slice()) {
+					Ok(req) => {
+						let reply =
+							if let Some(x) = nats_message.as_ref().and_then(|x| x.reply.clone()) {
 								x
 							} else {
 								tracing::error!("handling rpc without provided nats reply");
 								return;
 							};
 
-							// Ack the request
-							{
-								// Build response
-								let res = chirp::Response {
-									kind: Some(chirp::response::Kind::Ack(chirp::response::Ack {})),
-								};
-								let mut res_buf =
-									Vec::with_capacity(prost::Message::encoded_len(&res));
-								match prost::Message::encode(&res, &mut res_buf) {
-									Ok(_) => {}
-									Err(err) => {
-										tracing::error!(
-											?err,
-											"failed to encode ack message, skipping request"
-										);
-										return;
-									}
-								}
-
-								// Send ack response.
-								//
-								// We do this in the background (which will race
-								// with the main response) since we want to handle
-								// the response as fast as possible without waiting.
-								// This means that the ack and the response may be
-								// out of order, which is expected.
-								tracing::trace!("sending ack message");
-								match self.nats.publish(reply, res_buf.into()).await {
-									Ok(_) => {}
-									Err(err) => {
-										tracing::error!(?err, "failed to send ack response");
-									}
+						// Ack the request
+						{
+							// Build response
+							let res = chirp::Response {
+								kind: Some(chirp::response::Kind::Ack(chirp::response::Ack {})),
+							};
+							let mut res_buf = Vec::with_capacity(prost::Message::encoded_len(&res));
+							match prost::Message::encode(&res, &mut res_buf) {
+								Ok(_) => {}
+								Err(err) => {
+									tracing::error!(
+										?err,
+										"failed to encode ack message, skipping request"
+									);
+									return;
 								}
 							}
 
-							// Parse the request
-							tracing::info!(
-								req_id = ?req.req_id,
-								ray_id = ?req.ray_id,
-								ts = ?req.ts,
-								trace = ?req.trace,
-								body_bytes = ?req.body.len(),
-								"received request"
-							);
-							(
-								req.req_id,
-								req.ray_id,
-								req.ts,
-								req.trace,
-								req.body,
-								req.dont_log_body,
-								req.debug,
-							)
+							// Send ack response.
+							//
+							// We do this in the background (which will race
+							// with the main response) since we want to handle
+							// the response as fast as possible without waiting.
+							// This means that the ack and the response may be
+							// out of order, which is expected.
+							tracing::trace!("sending ack message");
+							match self.nats.publish(reply, res_buf.into()).await {
+								Ok(_) => {}
+								Err(err) => {
+									tracing::error!(?err, "failed to send ack response");
+								}
+							}
 						}
-						Err(err) => {
-							tracing::error!(?err, "failed to decode chirp request");
-							return;
-						}
-					}
-				}
-				WorkerKind::Consumer { .. } => match chirp::Message::decode(raw_msg_buf.as_slice())
-				{
-					Ok(msg) => {
-						// Calculate recv lag
-						let recv_lag =
-							(rivet_util::timestamp::now() as f64 - msg.ts as f64) / 1000.;
-						metrics::CHIRP_MESSAGE_RECV_LAG
-							.with_label_values(&[&worker_name])
-							.observe(recv_lag);
 
+						// Parse the request
 						tracing::info!(
-							// TODO: Add back once we can decode UUIDs in Chirp
-							// req_id = ?msg.req_id,
-							// ray_id = ?msg.ray_id,
-							parameters = ?msg.parameters,
-							ts = ?msg.ts,
-							trace = ?msg.trace,
-							body_bytes = ?msg.body.len(),
-							?recv_lag,
-							"received message"
+							req_id = ?req.req_id,
+							ray_id = ?req.ray_id,
+							ts = ?req.ts,
+							trace = ?req.trace,
+							body_bytes = ?req.body.len(),
+							"received request"
 						);
-
-						// Enrich Redis metadata for debugging
-						if let Some(x) = &mut redis_message_meta {
-							x.parameters = Some(msg.parameters.clone());
-						}
-
 						(
-							msg.req_id, msg.ray_id, msg.ts, msg.trace, msg.body, false, None,
+							req.req_id,
+							req.ray_id,
+							req.ts,
+							req.trace,
+							req.body,
+							req.dont_log_body,
+							req.debug,
+							false,
 						)
 					}
 					Err(err) => {
-						tracing::error!(?err, "failed to decode chirp message");
+						tracing::error!(?err, "failed to decode chirp request");
 						return;
 					}
-				},
-			};
+				}
+			}
+			WorkerKind::Consumer { .. } => match chirp::Message::decode(raw_msg_buf.as_slice()) {
+				Ok(msg) => {
+					// Calculate recv lag
+					let recv_lag = (rivet_util::timestamp::now() as f64 - msg.ts as f64) / 1000.;
+					metrics::CHIRP_MESSAGE_RECV_LAG
+						.with_label_values(&[&worker_name])
+						.observe(recv_lag);
+
+					tracing::info!(
+						// TODO: Add back once we can decode UUIDs in Chirp
+						// req_id = ?msg.req_id,
+						// ray_id = ?msg.ray_id,
+						parameters = ?msg.parameters,
+						ts = ?msg.ts,
+						trace = ?msg.trace,
+						body_bytes = ?msg.body.len(),
+						?recv_lag,
+						"received message"
+					);
+
+					// Enrich Redis metadata for debugging
+					if let Some(x) = &mut redis_message_meta {
+						x.parameters = Some(msg.parameters.clone());
+					}
+
+					(
+						msg.req_id,
+						msg.ray_id,
+						msg.ts,
+						msg.trace,
+						msg.body,
+						false,
+						None,
+						msg.allow_recursive,
+					)
+				}
+				Err(err) => {
+					tracing::error!(?err, "failed to decode chirp message");
+					return;
+				}
+			},
+		};
 		let (req_id, ray_id) = if let (Some(req_id), Some(ray_id)) = (req_id_proto, ray_id_proto) {
 			(req_id.as_uuid(), ray_id.as_uuid())
 		} else {
@@ -733,6 +745,7 @@ where
 					trace,
 				),
 				dont_log_body,
+				allow_recursive,
 			}
 		};
 
@@ -819,11 +832,12 @@ where
 			tracing::info!(request = ?req, body = ?req.op_ctx.body(), "handling req");
 		}
 
-		let is_recursive = req
-			.op_ctx
-			.trace()
-			.iter()
-			.any(|x| x.context_name == req.op_ctx.name());
+		let is_recursive = !req.allow_recursive
+			&& req
+				.op_ctx
+				.trace()
+				.iter()
+				.any(|x| x.context_name == req.op_ctx.name());
 		let handle_res = if is_recursive {
 			Ok(Err(err_code!(
 				CHIRP_RECURSIVE_REQUEST,

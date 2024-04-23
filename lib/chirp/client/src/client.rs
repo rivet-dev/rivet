@@ -655,6 +655,7 @@ impl Client {
 			parameters: parameters.clone(),
 			ts,
 			trace: (*self.trace).clone(),
+			allow_recursive: opts.allow_recursive,
 			body: body_buf,
 		};
 		let mut message_buf = Vec::with_capacity(prost::Message::encoded_len(&message));
@@ -1797,6 +1798,7 @@ impl TailAllConfig {
 #[derive(Default, Debug, Clone)]
 pub struct MessageOptions {
 	pub dont_log_body: bool,
+	pub allow_recursive: bool,
 }
 
 #[derive(Debug, Clone, PartialEq)]

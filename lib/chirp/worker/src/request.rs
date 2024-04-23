@@ -36,6 +36,7 @@ where
 	pub(crate) req_ts: i64,
 	pub(crate) op_ctx: OperationContext<B>,
 	pub(crate) dont_log_body: bool,
+	pub(crate) allow_recursive: bool,
 }
 
 impl<B> Request<B>

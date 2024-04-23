@@ -181,7 +181,7 @@ async fn worker(ctx: &OperationContext<cluster::msg::server_install::Message>) -
 
 		// Scale to get rid of tainted servers
 		let datacenter_id = unwrap_ref!(ctx.datacenter_id).as_uuid();
-		msg!([ctx] cluster::msg::datacenter_scale(datacenter_id) {
+		msg!([ctx] @recursive cluster::msg::datacenter_scale(datacenter_id) {
 			datacenter_id: ctx.datacenter_id,
 		})
 		.await?;
