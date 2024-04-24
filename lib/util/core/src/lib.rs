@@ -16,6 +16,7 @@ pub mod geo;
 pub mod glob;
 pub mod math;
 pub mod net;
+pub mod req;
 pub mod route;
 pub mod sort;
 pub mod timestamp;

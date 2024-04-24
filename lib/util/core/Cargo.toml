@@ -11,6 +11,7 @@ macros = []
 serde = []
 
 [dependencies]
+async-trait = "0.1"
 bcrypt = "0.13.0"
 chrono = "0.4"
 formatted-error = { path = "../../formatted-error", optional = true }
@@ -20,6 +21,7 @@ ipnet = { version = "2.7", features = ["serde"] }
 lazy_static = "1.4"
 rand = "0.8"
 regex = "1.4"
+reqwest = "0.11"
 rivet-util-env = { path = "../env" }
 rivet-util-macros = { path = "../macros" }
 serde = { version = "1.0", features = ["derive"] }
