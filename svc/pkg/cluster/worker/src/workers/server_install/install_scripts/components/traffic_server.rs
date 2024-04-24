@@ -18,12 +18,21 @@ pub async fn configure() -> GlobalResult<String> {
 		.map(|(k, v)| format!("cat << 'EOF' > /etc/trafficserver/{k}\n{v}\nEOF\n"))
 		.collect::<Vec<_>>();
 
-	// Update default storage config size to be entire filesystem size minus 4GB
+	// Update default storage config size to be entire filesystem size minus 4 GB
+	//
+	// journald = max 1 GB (see svc/pkg/cluster/worker/src/workers/server_install/install_scripts/files/sysctl.sh)
+	// misc logs = 300 MB
+	// /lib = 500 MB
+	// /usr = ~2 GB
+	// other misc = ~300 MB
+	// total = ~4.1 GB
+	//
+	// With significant padding, we'll allocate 8 GB for the system to make sure ATS doesn't run out of disk.
 	config_scripts.push(
 		indoc!(
 			r#"
 			df -h / |
-			awk 'NR==2 {gsub(/G/, "", $2); print $2 - 4 "G"}' |
+			awk 'NR==2 {gsub(/G/, "", $2); print $2 - 8 "G"}' |
 			xargs -I {} sed -i 's/64G/{}/' /etc/trafficserver/storage.config
 			"#
 		)
