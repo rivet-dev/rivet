@@ -391,11 +391,10 @@ async fn exec_test(
 		.path
 		.strip_prefix(ctx.path())
 		.context("path not in project")?;
-	let container_path = Path::new("/rivet-src").join(relative_path);
 
 	let command = format!(
 		"RIVET_TEST_ID={test_id} {} --exact {}",
-		&container_path.display(),
+		&relative_path.display(),
 		&test_binary.test_name
 	);
 
@@ -858,7 +857,7 @@ pub async fn gen_spec(
 		"data": secret_data
 	}));
 
-	let (volumes, volume_mounts) = build_volumes(&ctx, run_context, svcs, k8s_svc_name).await;
+	let (volumes, volume_mounts) = build_volumes(&ctx, run_context, svcs).await;
 
 	let metadata = json!({
 		"name": k8s_svc_name,
@@ -918,30 +917,16 @@ pub async fn build_volumes(
 	project_ctx: &ProjectContext,
 	run_context: &RunContext,
 	svcs: &[&ServiceContext],
-	k8s_svc_name: &str,
 ) -> (Vec<serde_json::Value>, Vec<serde_json::Value>) {
 	// Shared data between containers
 	let mut volumes = Vec::<serde_json::Value>::new();
 	let mut volume_mounts = Vec::<serde_json::Value>::new();
 
-	// TODO: Move this to reading vanilla config inside service instead of populating this
-	// Add static config
-	volumes.push(json!({
-		"name": "rivet-etc",
-		"configMap": {
-			"name": format!("rivet-etc-{}", k8s_svc_name),
-		}
-	}));
-	volume_mounts.push(json!({
-		"name": "rivet-etc",
-		"mountPath": "/etc/rivet"
-	}));
-
 	// Volumes
 	volumes.push(json!({
-		"name": "rivet-src",
+		"name": "target",
 		"hostPath": {
-			"path": "/rivet-src",
+			"path": "/target",
 			"type": "Directory"
 		}
 	}));
@@ -955,8 +940,8 @@ pub async fn build_volumes(
 
 	// Mounts
 	volume_mounts.push(json!({
-		"name": "rivet-src",
-		"mountPath": "/rivet-src",
+		"name": "target",
+		"mountPath": "/target",
 		"readOnly": true
 	}));
 	volume_mounts.push(json!({
