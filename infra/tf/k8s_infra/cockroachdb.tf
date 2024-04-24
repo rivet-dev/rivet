@@ -11,7 +11,6 @@ locals {
 
 module "crdb_secrets" {
 	count = local.cockroachdb_k8s ? 1 : 0
-
 	source = "../modules/secrets"
 
 	keys = [ "crdb/username", "crdb/password" ]
@@ -74,7 +73,7 @@ resource "helm_release" "cockroachdb" {
 					{
 						name = module.crdb_secrets[0].values["crdb/username"]
 						password = module.crdb_secrets[0].values["crdb/password"]
-						options = ["CREATEDB"]
+						options = ["CREATEDB", "CREATEROLE", "CREATELOGIN"]
 					}
 				]
 			}
@@ -104,7 +103,7 @@ data "kubernetes_secret" "crdb_ca" {
 }
 
 resource "kubernetes_config_map" "crdb_ca" {
-	for_each = local.cockroachdb_k8s ? toset(["rivet-service", "bolt"]) : toset([])
+	for_each = local.cockroachdb_k8s ? toset(["rivet-service", "bolt", "prometheus"]) : toset([])
 
 	metadata {
 		name = "crdb-ca"

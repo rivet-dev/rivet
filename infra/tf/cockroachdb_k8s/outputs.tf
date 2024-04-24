@@ -9,4 +9,3 @@ output "port" {
 output "cluster_identifier" {
 	value = "default"
 }
-

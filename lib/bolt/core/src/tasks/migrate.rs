@@ -290,8 +290,29 @@ pub async fn up(ctx: &ProjectContext, services: &[ServiceContext]) -> Result<()>
 		match &svc.config().runtime {
 			RuntimeKind::CRDB { .. } => {
 				let db_name = svc.crdb_db_name();
-				let query = format!("CREATE DATABASE IF NOT EXISTS \"{db_name}\";");
+				let query = format!(r#"CREATE DATABASE IF NOT EXISTS "{db_name}";"#);
 
+				crdb_queries.push(db::ShellQuery {
+					svc: svc.clone(),
+					query: Some(query),
+				});
+
+				// Create users
+				let username = ctx
+					.read_secret(&["crdb", "user", "grafana", "username"])
+					.await?;
+				let password = ctx
+					.read_secret(&["crdb", "user", "grafana", "password"])
+					.await?;
+				let query = formatdoc!(
+					r#"
+					CREATE USER IF NOT EXISTS {username}
+					WITH PASSWORD '{password}';
+					GRANT SELECT
+					ON {db_name}.*
+					TO {username};
+					"#
+				);
 				crdb_queries.push(db::ShellQuery {
 					svc: svc.clone(),
 					query: Some(query),
@@ -356,7 +377,7 @@ pub async fn up(ctx: &ProjectContext, services: &[ServiceContext]) -> Result<()>
 					});
 				}
 
-				let query = format!("CREATE DATABASE IF NOT EXISTS \"{db_name}\";");
+				let query = format!(r#"CREATE DATABASE IF NOT EXISTS "{db_name}";"#);
 				clickhouse_queries.push(db::ShellQuery {
 					svc: svc.clone(),
 					query: Some(query),

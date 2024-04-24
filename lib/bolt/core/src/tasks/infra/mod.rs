@@ -126,6 +126,28 @@ pub fn build_plan(
 		}
 	}
 
+	// CockroachDB
+	match ctx.ns().cockroachdb.provider {
+		ns::CockroachDBProvider::Kubernetes {} => {
+			plan.push(PlanStep {
+				name_id: "cockroachdb-k8s",
+				kind: PlanStepKind::Terraform {
+					plan_id: "cockroachdb_k8s".into(),
+					needs_destroy: false,
+				},
+			});
+		}
+		ns::CockroachDBProvider::Managed { .. } => {
+			plan.push(PlanStep {
+				name_id: "cockroachdb-managed",
+				kind: PlanStepKind::Terraform {
+					plan_id: "cockroachdb_managed".into(),
+					needs_destroy: true,
+				},
+			});
+		}
+	}
+
 	// Kubernetes
 	plan.push(PlanStep {
 		name_id: "k8s-infra",
@@ -171,28 +193,6 @@ pub fn build_plan(
 				name_id: "redis-aiven",
 				kind: PlanStepKind::Terraform {
 					plan_id: "redis_aiven".into(),
-					needs_destroy: true,
-				},
-			});
-		}
-	}
-
-	// CockroachDB
-	match ctx.ns().cockroachdb.provider {
-		ns::CockroachDBProvider::Kubernetes {} => {
-			plan.push(PlanStep {
-				name_id: "cockroachdb-k8s",
-				kind: PlanStepKind::Terraform {
-					plan_id: "cockroachdb_k8s".into(),
-					needs_destroy: false,
-				},
-			});
-		}
-		ns::CockroachDBProvider::Managed { .. } => {
-			plan.push(PlanStep {
-				name_id: "cockroachdb-managed",
-				kind: PlanStepKind::Terraform {
-					plan_id: "cockroachdb_managed".into(),
 					needs_destroy: true,
 				},
 			});

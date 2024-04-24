@@ -11,25 +11,29 @@ use crate::context::ProjectContext;
 pub fn dependency_graph(_ctx: &ProjectContext) -> HashMap<&'static str, Vec<RemoteState>> {
 	hashmap! {
 		"dns" => vec![
-			RemoteStateBuilder::default().plan_id("k8s_infra").build().unwrap()
+			RemoteStateBuilder::default().plan_id("k8s_infra").build().unwrap(),
 		],
 		"redis_aiven" => vec![
-			RemoteStateBuilder::default().plan_id("k8s_cluster_aws").build().unwrap()
+			RemoteStateBuilder::default().plan_id("k8s_cluster_aws").build().unwrap(),
 		],
 		"redis_aws" => vec![
-			RemoteStateBuilder::default().plan_id("k8s_cluster_aws").build().unwrap()
+			RemoteStateBuilder::default().plan_id("k8s_cluster_aws").build().unwrap(),
+		],
+		"k8s_infra" => vec![
+			RemoteStateBuilder::default().plan_id("cockroachdb_k8s").build().unwrap(),
+			RemoteStateBuilder::default().plan_id("cockroachdb_managed").build().unwrap(),
 		],
 		"cockroachdb_managed" => vec![
-			RemoteStateBuilder::default().plan_id("k8s_cluster_aws").build().unwrap()
+			RemoteStateBuilder::default().plan_id("k8s_cluster_aws").build().unwrap(),
 		],
 		"clickhouse_managed" => vec![
-			RemoteStateBuilder::default().plan_id("k8s_cluster_aws").build().unwrap()
+			RemoteStateBuilder::default().plan_id("k8s_cluster_aws").build().unwrap(),
 		],
 		"cloudflare_workers" => vec![
-			RemoteStateBuilder::default().plan_id("dns").build().unwrap()
+			RemoteStateBuilder::default().plan_id("dns").build().unwrap(),
 		],
 		"cloudflare_tunnels" => vec![
-			RemoteStateBuilder::default().plan_id("dns").build().unwrap()
+			RemoteStateBuilder::default().plan_id("dns").build().unwrap(),
 		],
 	}
 }

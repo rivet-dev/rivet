@@ -309,6 +309,16 @@ pub async fn generate(project_path: &Path, ns_id: &str) -> Result<()> {
 			Ok(value(generate_password(32)))
 		})
 		.await?;
+	generator
+		.generate_secret(&["crdb", "user", "grafana", "username"], || async {
+			Ok(value("grafana"))
+		})
+		.await?;
+	generator
+		.generate_secret(&["crdb", "user", "grafana", "password"], || async {
+			Ok(value(generate_password(32)))
+		})
+		.await?;
 
 	// Write configs again with new secrets
 	generator.write().await?;

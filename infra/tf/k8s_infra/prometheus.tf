@@ -71,6 +71,8 @@ locals {
 			]
 		}] : []
 	])
+
+	crdb_host = "${try(data.terraform_remote_state.cockroachdb_k8s.outputs.host, data.terraform_remote_state.cockroachdb_managed.outputs.host)}:${try(data.terraform_remote_state.cockroachdb_k8s.outputs.port, data.terraform_remote_state.cockroachdb_managed.outputs.port)}"
 }
 
 module "alertmanager_secrets" {
@@ -78,6 +80,12 @@ module "alertmanager_secrets" {
 
 	keys = ["alertmanager/slack/url", "alertmanager/slack/channel"]
 	optional = true
+}
+
+module "crdb_user_grafana_secrets" {
+	source = "../modules/secrets"
+
+	keys = [ "crdb/user/grafana/username", "crdb/user/grafana/password" ]
 }
 
 resource "kubernetes_namespace" "prometheus" {
@@ -343,6 +351,31 @@ resource "helm_release" "prometheus" {
 					url = "http://loki-gateway.loki.svc.cluster.local:80/"
 					access = "proxy"
 					jsonData = {}
+				},
+				{
+					name = "CockroachDB"
+					type = "postgres"
+					uid = "crdb"
+					url = local.crdb_host
+					user = module.crdb_user_grafana_secrets.values["crdb/user/grafana/username"]
+					secureJsonData = {
+						password = module.crdb_user_grafana_secrets.values["crdb/user/grafana/password"]
+					}
+					jsonData = {
+						sslmode = "verify-ca"
+						sslRootCertFile = "/local/crdb/ca.crt"
+					}
+				}
+			]
+
+			extraConfigmapMounts = [
+				# TLS Cert for postgres datasource
+				{
+					name = "crdb-ca"
+					configMap = "crdb-ca"
+					mountPath = "/local/crdb/ca.crt"
+					subPath = "ca.crt"
+					readOnly = true
 				}
 			]
 
