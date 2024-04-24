@@ -50,6 +50,7 @@ CREATE TABLE servers (
 	nomad_node_id TEXT,
 
 	create_ts INT NOT NULL,
+	provision_complete_ts INT,
 	install_complete_ts INT,
 	nomad_join_ts INT,
 	-- Null if not draining

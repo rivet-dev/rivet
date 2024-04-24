@@ -1,3 +1,5 @@
+use std::convert::{TryFrom, TryInto};
+
 // TERMINOLOGY:
 //
 // server: a non-destroyed non-tainted server
@@ -38,8 +40,29 @@ struct Server {
 	pool_type: backend::cluster::PoolType,
 	is_installed: bool,
 	has_nomad_node: bool,
-	is_tainted: bool,
 	drain_state: DrainState,
+	is_tainted: bool,
+}
+
+impl TryFrom<ServerRow> for Server {
+	type Error = GlobalError;
+
+	fn try_from(value: ServerRow) -> GlobalResult<Self> {
+		Ok(Server {
+			server_id: value.server_id,
+			pool_type: unwrap!(backend::cluster::PoolType::from_i32(value.pool_type as i32)),
+			is_installed: value.is_installed,
+			has_nomad_node: value.has_nomad_node,
+			is_tainted: value.is_tainted,
+			drain_state: if value.is_drained {
+				DrainState::Complete
+			} else if value.is_draining {
+				DrainState::Draining
+			} else {
+				DrainState::None
+			},
+		})
+	}
 }
 
 enum DrainState {
@@ -140,23 +163,8 @@ async fn inner(
 
 	let mut servers = servers
 		.into_iter()
-		.map(|row| {
-			Ok(Server {
-				server_id: row.server_id,
-				pool_type: unwrap!(backend::cluster::PoolType::from_i32(row.pool_type as i32)),
-				is_installed: row.is_installed,
-				has_nomad_node: row.has_nomad_node,
-				is_tainted: row.is_tainted,
-				drain_state: if row.is_drained {
-					DrainState::Complete
-				} else if row.is_draining {
-					DrainState::Draining
-				} else {
-					DrainState::None
-				},
-			})
-		})
-		.collect::<GlobalResult<Vec<_>>>()?;
+		.map(TryInto::try_into)
+		.collect::<GlobalResult<Vec<Server>>>()?;
 
 	// Sort job servers by memory usage
 	servers.sort_by_key(|server| memory_by_server.get(&server.server_id));

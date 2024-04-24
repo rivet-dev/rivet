@@ -4,6 +4,7 @@ use chirp_worker::prelude::*;
 use futures_util::FutureExt;
 use proto::backend::{self, cluster::PoolType, pkg::*};
 use rand::Rng;
+use util_cluster::metrics;
 
 struct ProvisionResponse {
 	provider_server_id: String,
@@ -138,26 +139,31 @@ async fn inner(
 	};
 
 	if let Some(provision_res) = provision_res {
-		sql_execute!(
-			[ctx]
+		let provision_complete_ts = util::timestamp::now();
+
+		let (create_ts,) = sql_fetch_one!(
+			[ctx, (i64,)]
 			"
 			UPDATE db_cluster.servers
 			SET
 				provider_server_id = $2,
 				provider_hardware = $3,
 				public_ip = $4,
-				install_complete_ts = $5
+				provision_complete_ts = $5,
+				install_complete_ts = $6
 			WHERE server_id = $1
+			RETURNING create_ts
 			",
 			server_id,
 			&provision_res.provider_server_id,
 			&provision_res.provider_hardware,
 			&provision_res.public_ip,
+			provision_complete_ts,
 			if provision_res.already_installed {
-				Some(util::timestamp::now())
+				Some(provision_complete_ts)
 			} else {
 				None
-			}
+			},
 		)
 		.await?;
 
@@ -195,6 +201,8 @@ async fn inner(
 			})
 			.await?;
 		}
+
+		insert_metrics(datacenter, &pool_type, provision_complete_ts, create_ts).await?;
 	} else {
 		tracing::error!(?server_id, hardware_options=?pool.hardware.len(), "failed all attempts to provision server");
 		bail!("failed all attempts to provision server");
@@ -269,6 +277,33 @@ async fn cleanup(
 		force: true,
 	})
 	.await?;
+
+	Ok(())
+}
+
+async fn insert_metrics(
+	dc: &backend::cluster::Datacenter,
+	pool_type: &backend::cluster::PoolType,
+	provision_complete_ts: i64,
+	create_ts: i64,
+) -> GlobalResult<()> {
+	let datacenter_id = unwrap_ref!(dc.datacenter_id).as_uuid().to_string();
+	let cluster_id = unwrap_ref!(dc.cluster_id).as_uuid().to_string();
+	let dt = (provision_complete_ts - create_ts) as f64 / 1000.0;
+
+	metrics::PROVISION_DURATION
+		.with_label_values(&[
+			cluster_id.as_str(),
+			datacenter_id.as_str(),
+			&dc.provider_datacenter_id,
+			&dc.name_id,
+			match pool_type {
+				backend::cluster::PoolType::Job => "job",
+				backend::cluster::PoolType::Gg => "gg",
+				backend::cluster::PoolType::Ats => "ats",
+			},
+		])
+		.observe(dt);
 
 	Ok(())
 }

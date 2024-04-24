@@ -1,0 +1,8 @@
+[service]
+name = "cluster-metrics-publish"
+
+[runtime]
+kind = "rust"
+
+[headless]
+singleton = true

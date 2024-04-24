@@ -2,6 +2,7 @@ use types::rivet::backend::{self, pkg::*};
 use uuid::Uuid;
 
 pub mod test;
+pub mod metrics;
 
 // Use the hash of the server install script in the image variant so that if the install scripts are updated
 // we won't be using the old image anymore

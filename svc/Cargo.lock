@@ -2543,6 +2543,25 @@ dependencies = [
 ]
 
 [[package]]
+name = "cluster-metrics-publish"
+version = "0.0.1"
+dependencies = [
+ "chirp-client",
+ "chirp-worker",
+ "cluster-datacenter-get",
+ "rivet-connection",
+ "rivet-health-checks",
+ "rivet-metrics",
+ "rivet-operation",
+ "rivet-runtime",
+ "rivet-util-cluster",
+ "sqlx",
+ "tokio",
+ "tracing",
+ "tracing-subscriber",
+]
+
+[[package]]
 name = "cluster-server-get"
 version = "0.0.1"
 dependencies = [
@@ -4082,10 +4101,8 @@ checksum = "4271d37baee1b8c7e4b708028c57d816cf9d2434acb33a549475f78c181f6253"
 name = "global-error"
 version = "0.1.5"
 dependencies = [
- "async-trait",
  "formatted-error",
  "http 0.2.12",
- "reqwest",
  "serde",
  "serde_json",
  "thiserror",
@@ -7485,7 +7502,6 @@ dependencies = [
 name = "rivet-util"
 version = "0.1.0"
 dependencies = [
- "async-trait",
  "aws-smithy-client 0.41.0",
  "aws-smithy-types 0.41.0",
  "bcrypt",
@@ -7496,7 +7512,6 @@ dependencies = [
  "lazy_static",
  "rand",
  "regex",
- "reqwest",
  "rivet-util-env",
  "rivet-util-macros",
  "serde",
@@ -7531,6 +7546,8 @@ name = "rivet-util-cluster"
 version = "0.1.0"
 dependencies = [
  "hex",
+ "lazy_static",
+ "rivet-metrics",
  "rivet-util",
  "sha2",
  "tokio",

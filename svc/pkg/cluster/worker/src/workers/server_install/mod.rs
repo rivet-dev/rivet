@@ -7,6 +7,7 @@ use std::{
 use chirp_worker::prelude::*;
 use proto::backend::{self, pkg::*};
 use ssh2::Session;
+use util_cluster::metrics;
 
 mod install_scripts;
 
@@ -134,6 +135,7 @@ async fn worker(ctx: &OperationContext<cluster::msg::server_install::Message>) -
 	})
 	.await??;
 
+	// Check if destroyed again after installing
 	if let Some(server_id) = ctx.server_id {
 		let (is_destroying,) = sql_fetch_one!(
 			[ctx, (bool,)]
@@ -150,7 +152,7 @@ async fn worker(ctx: &OperationContext<cluster::msg::server_install::Message>) -
 		.await?;
 
 		if is_destroying {
-			tracing::info!("server marked for deletion, not installing");
+			tracing::info!("server marked for deletion, not marking as installed");
 			return Ok(());
 		}
 	}
@@ -167,15 +169,18 @@ async fn worker(ctx: &OperationContext<cluster::msg::server_install::Message>) -
 
 	// If the server id is set this is not a prebake server
 	if let Some(server_id) = ctx.server_id {
-		sql_execute!(
-			[ctx]
+		let install_complete_ts = util::timestamp::now();
+
+		let (provision_complete_ts,) = sql_fetch_one!(
+			[ctx, (i64,)]
 			"
 			UPDATE db_cluster.servers
 			SET install_complete_ts = $2
 			WHERE server_id = $1
+			RETURNING provision_complete_ts
 			",
 			server_id.as_uuid(),
-			util::timestamp::now(),
+			install_complete_ts,
 		)
 		.await?;
 
@@ -184,6 +189,15 @@ async fn worker(ctx: &OperationContext<cluster::msg::server_install::Message>) -
 		msg!([ctx] @recursive cluster::msg::datacenter_scale(datacenter_id) {
 			datacenter_id: ctx.datacenter_id,
 		})
+		.await?;
+
+		insert_metrics(
+			ctx,
+			&pool_type,
+			datacenter_id,
+			install_complete_ts,
+			provision_complete_ts,
+		)
 		.await?;
 	}
 
@@ -219,6 +233,40 @@ fn write_script(sess: &Session, script_name: &str, content: &str) -> GlobalResul
 	script_file.wait_eof()?;
 	script_file.close()?;
 	script_file.wait_close()?;
+
+	Ok(())
+}
+
+async fn insert_metrics(
+	ctx: &OperationContext<cluster::msg::server_install::Message>,
+	pool_type: &backend::cluster::PoolType,
+	datacenter_id: Uuid,
+	install_complete_ts: i64,
+	provision_complete_ts: i64,
+) -> GlobalResult<()> {
+	let datacenters_res = op!([ctx] cluster_datacenter_get {
+		datacenter_ids: vec![datacenter_id.into()],
+	})
+	.await?;
+	let dc = unwrap!(datacenters_res.datacenters.first());
+
+	let datacenter_id = unwrap_ref!(dc.datacenter_id).as_uuid().to_string();
+	let cluster_id = unwrap_ref!(dc.cluster_id).as_uuid().to_string();
+	let dt = (install_complete_ts - provision_complete_ts) as f64 / 1000.0;
+
+	metrics::INSTALL_DURATION
+		.with_label_values(&[
+			cluster_id.as_str(),
+			datacenter_id.as_str(),
+			&dc.provider_datacenter_id,
+			&dc.name_id,
+			match pool_type {
+				backend::cluster::PoolType::Job => "job",
+				backend::cluster::PoolType::Gg => "gg",
+				backend::cluster::PoolType::Ats => "ats",
+			},
+		])
+		.observe(dt);
 
 	Ok(())
 }

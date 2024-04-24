@@ -6,6 +6,8 @@ authors = ["Rivet Gaming, LLC <developer@rivet.gg>"]
 license = "Apache-2.0"
 
 [dependencies]
+lazy_static = "1.4"
+rivet-metrics = { path = "../../../../lib/metrics" }
 rivet-util = { path = "../../../../lib/util/core" }
 types = { path = "../../../../lib/types/core" }
 uuid = { version = "1", features = ["v4", "serde"] }
