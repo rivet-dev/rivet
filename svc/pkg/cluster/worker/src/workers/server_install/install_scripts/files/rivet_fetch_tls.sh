@@ -27,6 +27,9 @@ cat << EOF2 > "/etc/__NAME__/dynamic/tls/${CERT_ID}.toml"
   certFile = "${STUB}_cert.pem"
   keyFile = "${STUB}_key.pem"
 EOF2
+
+# Force config reload
+touch /etc/__NAME__/dynamic
 EOF
 
 chmod +x /usr/bin/rivet_fetch_tls.sh
