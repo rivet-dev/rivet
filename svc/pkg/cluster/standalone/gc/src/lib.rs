@@ -35,9 +35,8 @@ pub async fn run_from_env(ts: i64, pools: rivet_pools::Pools) -> GlobalResult<()
 				[ctx, ServerRow, @tx tx]
 				"
 				SELECT server_id, datacenter_id, pool_type, drain_ts
-				FROM db_cluster.datacenters AS d
+				FROM db_cluster.servers
 				WHERE
-					s.datacenter_id = d.datacenter_id AND
 					pool_type = ANY($1) AND
 					cloud_destroy_ts IS NULL AND
 					drain_ts IS NOT NULL
@@ -46,6 +45,10 @@ pub async fn run_from_env(ts: i64, pools: rivet_pools::Pools) -> GlobalResult<()
 				ts,
 			)
 			.await?;
+
+			if servers.is_empty() {
+				return Ok(Vec::new());
+			}
 
 			let datacenters_res = op!([ctx] cluster_datacenter_get {
 				datacenter_ids: servers
