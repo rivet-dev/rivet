@@ -8,7 +8,7 @@ import * as Rivet from "../../..";
 import * as serializers from "../../../../serialization";
 import urlJoin from "url-join";
 import * as errors from "../../../../errors";
-import { Cluster } from "../resources/cluster/client/Client";
+import { Clusters } from "../resources/clusters/client/Client";
 
 export declare namespace Admin {
     interface Options {
@@ -147,10 +147,10 @@ export class Admin {
         }
     }
 
-    protected _cluster: Cluster | undefined;
+    protected _clusters: Clusters | undefined;
 
-    public get cluster(): Cluster {
-        return (this._cluster ??= new Cluster(this._options));
+    public get clusters(): Clusters {
+        return (this._clusters ??= new Clusters(this._options));
     }
 
     protected async _getAuthorizationHeader() {

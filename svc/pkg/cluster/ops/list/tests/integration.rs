@@ -14,7 +14,13 @@ async fn list_single_cluster(ctx: TestCtx) {
 	.unwrap();
 
 	let res = op!([ctx] cluster_list {}).await.unwrap();
-	let new_cluster_id = res.cluster_ids.first().expect("cluster id not found");
+
+	// The cluster should be in the list of all clusters
+	let new_cluster_id = res
+		.cluster_ids
+		.into_iter()
+		.find(|id| id.as_uuid() == cluster_id)
+		.unwrap();
 
 	assert_eq!(cluster_id, new_cluster_id.as_uuid());
 }

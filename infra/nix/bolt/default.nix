@@ -13,6 +13,7 @@ let
 		"lib/bolt"
 		"lib/s3-util"
 		"proto"
+		"sdks/full/rust"
 	];
 
 	includeFilter = path: type: let

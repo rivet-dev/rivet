@@ -1,5 +1,5 @@
 use anyhow::*;
-use serde::Deserialize;
+use rivet_api::{apis::admin_clusters_api, models};
 use serde_json::json;
 
 use crate::context::ProjectContext;
@@ -13,10 +13,7 @@ pub async fn access_token_login(project_ctx: &ProjectContext, name: String) -> R
 		.await?;
 	let response = reqwest::Client::new()
 		.post(format!("{}/admin/login", project_ctx.origin_api(),))
-		.header(
-			reqwest::header::AUTHORIZATION,
-			reqwest::header::HeaderValue::from_str(&format!("Bearer {api_admin_token}"))?,
-		)
+		.bearer_auth(api_admin_token)
 		.json(&json!({
 			"name": name,
 		}))
@@ -45,40 +42,24 @@ pub async fn access_token_login(project_ctx: &ProjectContext, name: String) -> R
 	Ok(())
 }
 
-#[derive(Deserialize)]
-struct GetServerIpsResponse {
-	ips: Vec<String>,
-}
-
 pub async fn get_cluster_server_ips(
 	project_ctx: &ProjectContext,
-	query: (&str, &str),
+	server_id: Option<&str>,
+	pools: Option<&str>,
 ) -> Result<Vec<String>> {
-	let api_admin_token = project_ctx
-		.read_secret(&["rivet", "api_admin", "token"])
-		.await?;
-	let response = reqwest::Client::new()
-		.get(format!(
-			"{}/admin/cluster/server_ips",
-			project_ctx.origin_api(),
-		))
-		.query(&[query])
-		.header(
-			reqwest::header::AUTHORIZATION,
-			reqwest::header::HeaderValue::from_str(&format!("Bearer {api_admin_token}"))?,
-		)
-		.send()
-		.await?;
+	let server_ips = admin_clusters_api::admin_clusters_get_server_ips(
+		&project_ctx.openapi_config_cloud().await?,
+		server_id,
+		pools
+			.map(|p| match p {
+				"job" => Ok(models::AdminPoolType::Job),
+				"gg" => Ok(models::AdminPoolType::Gg),
+				"ats" => Ok(models::AdminPoolType::Ats),
+				_ => Err(anyhow!("invalid pool type")),
+			})
+			.transpose()?,
+	)
+	.await?;
 
-	if !response.status().is_success() {
-		bail!(
-			"failed to get server ips ({}):\n{:#?}",
-			response.status().as_u16(),
-			response.json::<serde_json::Value>().await?
-		);
-	}
-
-	let res = response.json::<GetServerIpsResponse>().await?;
-
-	Ok(res.ips)
+	Ok(server_ips.ips)
 }

@@ -40,6 +40,18 @@ impl ProjectContextData {
 		&self.config_local
 	}
 
+	pub async fn openapi_config_cloud(
+		&self,
+	) -> Result<rivet_api::apis::configuration::Configuration> {
+		let api_admin_token = self.read_secret(&["rivet", "api_admin", "token"]).await?;
+
+		Ok(rivet_api::apis::configuration::Configuration {
+			base_path: self.origin_api(),
+			bearer_access_token: Some(api_admin_token),
+			..Default::default()
+		})
+	}
+
 	pub fn ns(&self) -> &config::ns::Namespace {
 		&self.ns_config
 	}

@@ -1,0 +1,45 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/fern-api/fern/main/fern.schema.json
+
+imports:
+  localCommons: ../common.yml
+
+service:
+  auth: true
+  base-path: /admin/clusters
+  endpoints:
+    getServerIps:
+      path: /server_ips
+      method: GET
+      request:
+        name: GetServerIpsRequest
+        query-parameters:
+          server_id: optional<uuid>
+          pool: optional<localCommons.PoolType>
+      response: GetServerIpsResponse
+    list:
+      path: ""
+      method: GET
+      docs: Get clusters
+      response: ListResponse
+    create:
+      path: ""
+      method: POST
+      docs: Create a new cluster
+      request:
+        body: CreateRequest
+      response: CreateResponse
+
+types:
+  GetServerIpsResponse:
+    properties:
+      ips: list<string>
+  ListResponse:
+    properties:
+      clusters: list<localCommons.Cluster>
+  CreateRequest:
+    properties:
+      name_id: string
+      owner_team_id: optional<uuid>
+  CreateResponse:
+    properties:
+      cluster_id: uuid

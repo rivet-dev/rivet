@@ -26,7 +26,12 @@ All URIs are relative to *https://api.rivet.gg*
 Class | Method | HTTP request | Description
 ------------ | ------------- | ------------- | -------------
 *AdminApi* | [**admin_login**](docs/AdminApi.md#admin_login) | **POST** /admin/login | 
-*AdminClusterApi* | [**admin_cluster_get_server_ips**](docs/AdminClusterApi.md#admin_cluster_get_server_ips) | **GET** /cluster/server_ips | 
+*AdminClustersApi* | [**admin_clusters_create**](docs/AdminClustersApi.md#admin_clusters_create) | **POST** /admin/clusters | 
+*AdminClustersApi* | [**admin_clusters_get_server_ips**](docs/AdminClustersApi.md#admin_clusters_get_server_ips) | **GET** /admin/clusters/server_ips | 
+*AdminClustersApi* | [**admin_clusters_list**](docs/AdminClustersApi.md#admin_clusters_list) | **GET** /admin/clusters | 
+*AdminClustersDatacentersApi* | [**admin_clusters_datacenters_create**](docs/AdminClustersDatacentersApi.md#admin_clusters_datacenters_create) | **POST** /admin/clusters/{cluster_id}/datacenters | 
+*AdminClustersDatacentersApi* | [**admin_clusters_datacenters_list**](docs/AdminClustersDatacentersApi.md#admin_clusters_datacenters_list) | **GET** /admin/clusters/{cluster_id}/datacenters | 
+*AdminClustersDatacentersApi* | [**admin_clusters_datacenters_taint**](docs/AdminClustersDatacentersApi.md#admin_clusters_datacenters_taint) | **GET** /admin/clusters/{cluster_id}/datacenters/{datacenter_id}/taint | 
 *AuthIdentityAccessTokenApi* | [**auth_identity_access_token_complete_access_token_verification**](docs/AuthIdentityAccessTokenApi.md#auth_identity_access_token_complete_access_token_verification) | **POST** /auth/identity/access-token/complete-verification | 
 *AuthIdentityEmailApi* | [**auth_identity_email_complete_email_verification**](docs/AuthIdentityEmailApi.md#auth_identity_email_complete_email_verification) | **POST** /auth/identity/email/complete-verification | 
 *AuthIdentityEmailApi* | [**auth_identity_email_start_email_verification**](docs/AuthIdentityEmailApi.md#auth_identity_email_start_email_verification) | **POST** /auth/identity/email/start-verification | 
@@ -166,10 +171,22 @@ Class | Method | HTTP request | Description
 
 ## Documentation For Models
 
- - [AdminClusterGetServerIpsResponse](docs/AdminClusterGetServerIpsResponse.md)
+ - [AdminBuildDeliveryMethod](docs/AdminBuildDeliveryMethod.md)
+ - [AdminCluster](docs/AdminCluster.md)
+ - [AdminClustersCreateRequest](docs/AdminClustersCreateRequest.md)
+ - [AdminClustersCreateResponse](docs/AdminClustersCreateResponse.md)
+ - [AdminClustersDatacentersCreateRequest](docs/AdminClustersDatacentersCreateRequest.md)
+ - [AdminClustersDatacentersCreateResponse](docs/AdminClustersDatacentersCreateResponse.md)
+ - [AdminClustersDatacentersListResponse](docs/AdminClustersDatacentersListResponse.md)
+ - [AdminClustersGetServerIpsResponse](docs/AdminClustersGetServerIpsResponse.md)
+ - [AdminClustersListResponse](docs/AdminClustersListResponse.md)
+ - [AdminDatacenter](docs/AdminDatacenter.md)
+ - [AdminHardware](docs/AdminHardware.md)
  - [AdminLoginRequest](docs/AdminLoginRequest.md)
  - [AdminLoginResponse](docs/AdminLoginResponse.md)
+ - [AdminPool](docs/AdminPool.md)
  - [AdminPoolType](docs/AdminPoolType.md)
+ - [AdminProvider](docs/AdminProvider.md)
  - [AuthCompleteStatus](docs/AuthCompleteStatus.md)
  - [AuthIdentityCompleteAccessTokenVerificationRequest](docs/AuthIdentityCompleteAccessTokenVerificationRequest.md)
  - [AuthIdentityCompleteEmailVerificationRequest](docs/AuthIdentityCompleteEmailVerificationRequest.md)

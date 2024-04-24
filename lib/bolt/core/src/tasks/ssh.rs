@@ -56,7 +56,7 @@ pub async fn ip(
 }
 
 pub async fn id(ctx: &ProjectContext, server_id: &str, command: Option<&str>) -> Result<()> {
-	let server_ips = tasks::api::get_cluster_server_ips(&ctx, ("server_id", server_id)).await?;
+	let server_ips = tasks::api::get_cluster_server_ips(&ctx, Some(server_id), None).await?;
 	let server_ip = server_ips
 		.first()
 		.context(format!("failed to find server with server id {server_id}"))?;
@@ -69,7 +69,7 @@ pub async fn id(ctx: &ProjectContext, server_id: &str, command: Option<&str>) ->
 }
 
 pub async fn pool(ctx: &ProjectContext, pool: &str, command: Option<&str>) -> Result<()> {
-	let server_ips = tasks::api::get_cluster_server_ips(&ctx, ("pool", pool)).await?;
+	let server_ips = tasks::api::get_cluster_server_ips(&ctx, None, Some(pool)).await?;
 	let server_ip = server_ips
 		.first()
 		.context(format!("failed to find server with pool {pool}"))?;
@@ -81,7 +81,7 @@ pub async fn pool(ctx: &ProjectContext, pool: &str, command: Option<&str>) -> Re
 }
 
 pub async fn pool_all(ctx: &ProjectContext, pool: &str, command: &str) -> Result<()> {
-	let server_ips = tasks::api::get_cluster_server_ips(&ctx, ("pool", pool)).await?;
+	let server_ips = tasks::api::get_cluster_server_ips(&ctx, None, Some(pool)).await?;
 	let ssh_key = Arc::new(TempSshKey::new(&ctx, "server").await?);
 
 	futures_util::stream::iter(server_ips)

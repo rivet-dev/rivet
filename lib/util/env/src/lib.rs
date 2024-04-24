@@ -109,10 +109,14 @@ pub fn support_deprecated_subdomains() -> bool {
 }
 
 pub fn test_id_param() -> Vec<types::rivet::backend::job::Parameter> {
-	TEST_ID.as_ref().iter().map(|x| types::rivet::backend::job::Parameter {
-		key: "rivet_test_id".to_string(),
-		value: x.to_string(),
-	}).collect()
+	TEST_ID
+		.as_ref()
+		.iter()
+		.map(|x| types::rivet::backend::job::Parameter {
+			key: "rivet_test_id".to_string(),
+			value: x.to_string(),
+		})
+		.collect()
 }
 
 /// The host for the API.
