@@ -35,6 +35,23 @@ impl From<DatacenterBuildDeliveryMethod> for models::AdminBuildDeliveryMethod {
 	}
 }
 
+#[derive(ValueEnum, Clone)]
+pub enum DatacenterPoolType {
+	Job,
+	Gg,
+	Ats,
+}
+
+impl From<DatacenterPoolType> for models::AdminPoolType {
+	fn from(pool_type: DatacenterPoolType) -> Self {
+		match pool_type {
+			DatacenterPoolType::Job => models::AdminPoolType::Job,
+			DatacenterPoolType::Gg => models::AdminPoolType::Gg,
+			DatacenterPoolType::Ats => models::AdminPoolType::Ats,
+		}
+	}
+}
+
 #[derive(Parser)]
 pub enum SubCommand {
 	/// Creates a new datacenter
@@ -73,6 +90,30 @@ pub enum SubCommand {
 		#[clap(long, short = 'd')]
 		name_id: String,
 	},
+	/// Update a datacenter's pools
+	Update {
+		/// The name id of the cluster
+		#[clap(long, short = 'c')]
+		cluster: String,
+		/// The name id of the datacenter
+		#[clap(index = 1)]
+		name_id: String,
+		/// The pool type
+		#[clap(index = 2)]
+		pool: DatacenterPoolType,
+		/// The hardware types
+		#[clap(long)]
+		hardware: Vec<String>,
+		/// The desired count
+		#[clap(long)]
+		desired_count: Option<i32>,
+		/// The max count
+		#[clap(long)]
+		max_count: Option<i32>,
+		/// The drain timeout
+		#[clap(long)]
+		drain_timeout: Option<i64>,
+	},
 }
 
 #[derive(Tabled)]
@@ -92,10 +133,10 @@ impl SubCommand {
 				provider_datacenter_id,
 				build_delivery_method,
 			} => {
-				ensure!(
-					ctx.ns().rivet.provisioning.is_some(),
-					"Provisioning is not enabled on this cluster"
-				);
+				// ensure!(
+				// 	ctx.ns().rivet.provisioning.is_some(),
+				// 	"Provisioning is not enabled on this cluster"
+				// );
 
 				let clusters =
 					admin_clusters_api::admin_clusters_list(&ctx.openapi_config_cloud().await?)
@@ -187,6 +228,62 @@ impl SubCommand {
 					&datacenter.datacenter_id.to_string(),
 				)
 				.await?;
+			}
+			Self::Update {
+				cluster: cluster_name_id,
+				name_id,
+				pool,
+				hardware,
+				desired_count,
+				max_count,
+				drain_timeout,
+			} => {
+				let clusters =
+					admin_clusters_api::admin_clusters_list(&ctx.openapi_config_cloud().await?)
+						.await?
+						.clusters;
+
+				let cluster = clusters.iter().find(|c| c.name_id == cluster_name_id);
+
+				let cluster = match cluster {
+					Some(c) => c,
+					None => bail!("cluster with the name id {} not found", cluster_name_id),
+				};
+
+				let datacenters = admin_clusters_datacenters_api::admin_clusters_datacenters_list(
+					&ctx.openapi_config_cloud().await?,
+					&cluster.cluster_id.to_string(),
+				)
+				.await?
+				.datacenters;
+
+				let datacenter = datacenters.iter().find(|d| d.name_id == name_id);
+
+				let datacenter = match datacenter {
+					Some(d) => d,
+					None => bail!("datacenter with the name id {} not found", name_id),
+				};
+
+				admin_clusters_datacenters_api::admin_clusters_datacenters_update(
+					&ctx.openapi_config_cloud().await?,
+					&cluster.cluster_id.to_string(),
+					&datacenter.datacenter_id.to_string(),
+					models::AdminClustersDatacentersUpdateRequest {
+						desired_count,
+						drain_timeout,
+						hardware: hardware
+							.iter()
+							.map(|hardware| models::AdminHardware {
+								provider_hardware: hardware.clone(),
+							})
+							.collect(),
+						max_count,
+						pool_type: pool.into(),
+					},
+				)
+				.await?;
+
+				rivet_term::status::success("Datacenter updated", "");
 			}
 		}
 

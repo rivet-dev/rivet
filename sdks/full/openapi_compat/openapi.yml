@@ -79,6 +79,25 @@ components:
       required:
       - datacenters
       type: object
+    AdminClustersDatacentersUpdateRequest:
+      properties:
+        desired_count:
+          type: integer
+        drain_timeout:
+          format: int64
+          type: integer
+        hardware:
+          items:
+            $ref: '#/components/schemas/AdminHardware'
+          type: array
+        max_count:
+          type: integer
+        pool_type:
+          $ref: '#/components/schemas/AdminPoolType'
+      required:
+      - pool_type
+      - hardware
+      type: object
     AdminClustersGetServerIpsResponse:
       properties:
         ips:
@@ -4723,6 +4742,70 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/AdminClustersDatacentersCreateResponse'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+          description: ''
+        '408':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+          description: ''
+        '429':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+          description: ''
+        '500':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+          description: ''
+      security: *id001
+      tags:
+      - AdminClustersDatacenters
+  /admin/clusters/{cluster_id}/datacenters/{datacenter_id}:
+    patch:
+      operationId: admin_clusters_datacenters_update
+      parameters:
+      - in: path
+        name: cluster_id
+        required: true
+        schema:
+          format: uuid
+          type: string
+      - in: path
+        name: datacenter_id
+        required: true
+        schema:
+          format: uuid
+          type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AdminClustersDatacentersUpdateRequest'
+        required: true
+      responses:
+        '204':
           description: ''
         '400':
           content:

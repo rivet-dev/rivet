@@ -100,3 +100,36 @@ func (l *ListResponse) String() string {
 	}
 	return fmt.Sprintf("%#v", l)
 }
+
+type UpdateRequest struct {
+	PoolType     admin.PoolType    `json:"pool_type,omitempty"`
+	Hardware     []*admin.Hardware `json:"hardware,omitempty"`
+	DesiredCount *int              `json:"desired_count,omitempty"`
+	MaxCount     *int              `json:"max_count,omitempty"`
+	DrainTimeout *int64            `json:"drain_timeout,omitempty"`
+
+	_rawJSON json.RawMessage
+}
+
+func (u *UpdateRequest) UnmarshalJSON(data []byte) error {
+	type unmarshaler UpdateRequest
+	var value unmarshaler
+	if err := json.Unmarshal(data, &value); err != nil {
+		return err
+	}
+	*u = UpdateRequest(value)
+	u._rawJSON = json.RawMessage(data)
+	return nil
+}
+
+func (u *UpdateRequest) String() string {
+	if len(u._rawJSON) > 0 {
+		if value, err := core.StringifyJSON(u._rawJSON); err == nil {
+			return value
+		}
+	}
+	if value, err := core.StringifyJSON(u); err == nil {
+		return value
+	}
+	return fmt.Sprintf("%#v", u)
+}

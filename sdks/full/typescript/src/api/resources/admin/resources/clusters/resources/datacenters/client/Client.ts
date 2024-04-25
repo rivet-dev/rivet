@@ -278,6 +278,125 @@ export class Datacenters {
      * @throws {@link Rivet.NotFoundError}
      * @throws {@link Rivet.BadRequestError}
      */
+    public async update(
+        clusterId: string,
+        datacenterId: string,
+        request: Rivet.admin.clusters.datacenters.UpdateRequest,
+        requestOptions?: Datacenters.RequestOptions
+    ): Promise<void> {
+        const _response = await (this._options.fetcher ?? core.fetcher)({
+            url: urlJoin(
+                (await core.Supplier.get(this._options.environment)) ?? environments.RivetEnvironment.Production,
+                `/admin/clusters/${clusterId}/datacenters/${datacenterId}`
+            ),
+            method: "PATCH",
+            headers: {
+                Authorization: await this._getAuthorizationHeader(),
+            },
+            contentType: "application/json",
+            body: await serializers.admin.clusters.datacenters.UpdateRequest.jsonOrThrow(request, {
+                unrecognizedObjectKeys: "strip",
+            }),
+            timeoutMs: requestOptions?.timeoutInSeconds != null ? requestOptions.timeoutInSeconds * 1000 : 180000,
+            maxRetries: requestOptions?.maxRetries,
+        });
+        if (_response.ok) {
+            return;
+        }
+
+        if (_response.error.reason === "status-code") {
+            switch (_response.error.statusCode) {
+                case 500:
+                    throw new Rivet.InternalError(
+                        await serializers.ErrorBody.parseOrThrow(_response.error.body, {
+                            unrecognizedObjectKeys: "passthrough",
+                            allowUnrecognizedUnionMembers: true,
+                            allowUnrecognizedEnumValues: true,
+                            skipValidation: true,
+                            breadcrumbsPrefix: ["response"],
+                        })
+                    );
+                case 429:
+                    throw new Rivet.RateLimitError(
+                        await serializers.ErrorBody.parseOrThrow(_response.error.body, {
+                            unrecognizedObjectKeys: "passthrough",
+                            allowUnrecognizedUnionMembers: true,
+                            allowUnrecognizedEnumValues: true,
+                            skipValidation: true,
+                            breadcrumbsPrefix: ["response"],
+                        })
+                    );
+                case 403:
+                    throw new Rivet.ForbiddenError(
+                        await serializers.ErrorBody.parseOrThrow(_response.error.body, {
+                            unrecognizedObjectKeys: "passthrough",
+                            allowUnrecognizedUnionMembers: true,
+                            allowUnrecognizedEnumValues: true,
+                            skipValidation: true,
+                            breadcrumbsPrefix: ["response"],
+                        })
+                    );
+                case 408:
+                    throw new Rivet.UnauthorizedError(
+                        await serializers.ErrorBody.parseOrThrow(_response.error.body, {
+                            unrecognizedObjectKeys: "passthrough",
+                            allowUnrecognizedUnionMembers: true,
+                            allowUnrecognizedEnumValues: true,
+                            skipValidation: true,
+                            breadcrumbsPrefix: ["response"],
+                        })
+                    );
+                case 404:
+                    throw new Rivet.NotFoundError(
+                        await serializers.ErrorBody.parseOrThrow(_response.error.body, {
+                            unrecognizedObjectKeys: "passthrough",
+                            allowUnrecognizedUnionMembers: true,
+                            allowUnrecognizedEnumValues: true,
+                            skipValidation: true,
+                            breadcrumbsPrefix: ["response"],
+                        })
+                    );
+                case 400:
+                    throw new Rivet.BadRequestError(
+                        await serializers.ErrorBody.parseOrThrow(_response.error.body, {
+                            unrecognizedObjectKeys: "passthrough",
+                            allowUnrecognizedUnionMembers: true,
+                            allowUnrecognizedEnumValues: true,
+                            skipValidation: true,
+                            breadcrumbsPrefix: ["response"],
+                        })
+                    );
+                default:
+                    throw new errors.RivetError({
+                        statusCode: _response.error.statusCode,
+                        body: _response.error.body,
+                    });
+            }
+        }
+
+        switch (_response.error.reason) {
+            case "non-json":
+                throw new errors.RivetError({
+                    statusCode: _response.error.statusCode,
+                    body: _response.error.rawBody,
+                });
+            case "timeout":
+                throw new errors.RivetTimeoutError();
+            case "unknown":
+                throw new errors.RivetError({
+                    message: _response.error.errorMessage,
+                });
+        }
+    }
+
+    /**
+     * @throws {@link Rivet.InternalError}
+     * @throws {@link Rivet.RateLimitError}
+     * @throws {@link Rivet.ForbiddenError}
+     * @throws {@link Rivet.UnauthorizedError}
+     * @throws {@link Rivet.NotFoundError}
+     * @throws {@link Rivet.BadRequestError}
+     */
     public async taint(
         clusterId: string,
         datacenterId: string,

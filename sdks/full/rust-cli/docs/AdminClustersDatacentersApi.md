@@ -7,6 +7,7 @@ Method | HTTP request | Description
 [**admin_clusters_datacenters_create**](AdminClustersDatacentersApi.md#admin_clusters_datacenters_create) | **POST** /admin/clusters/{cluster_id}/datacenters | 
 [**admin_clusters_datacenters_list**](AdminClustersDatacentersApi.md#admin_clusters_datacenters_list) | **GET** /admin/clusters/{cluster_id}/datacenters | 
 [**admin_clusters_datacenters_taint**](AdminClustersDatacentersApi.md#admin_clusters_datacenters_taint) | **GET** /admin/clusters/{cluster_id}/datacenters/{datacenter_id}/taint | 
+[**admin_clusters_datacenters_update**](AdminClustersDatacentersApi.md#admin_clusters_datacenters_update) | **PATCH** /admin/clusters/{cluster_id}/datacenters/{datacenter_id} | 
 
 
 
@@ -93,6 +94,36 @@ Name | Type | Description  | Required | Notes
 ### HTTP request headers
 
 - **Content-Type**: Not defined
+- **Accept**: application/json
+
+[[Back to top]](#) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to Model list]](../README.md#documentation-for-models) [[Back to README]](../README.md)
+
+
+## admin_clusters_datacenters_update
+
+> admin_clusters_datacenters_update(cluster_id, datacenter_id, admin_clusters_datacenters_update_request)
+
+
+### Parameters
+
+
+Name | Type | Description  | Required | Notes
+------------- | ------------- | ------------- | ------------- | -------------
+**cluster_id** | **uuid::Uuid** |  | [required] |
+**datacenter_id** | **uuid::Uuid** |  | [required] |
+**admin_clusters_datacenters_update_request** | [**AdminClustersDatacentersUpdateRequest**](AdminClustersDatacentersUpdateRequest.md) |  | [required] |
+
+### Return type
+
+ (empty response body)
+
+### Authorization
+
+[BearerAuth](../README.md#BearerAuth)
+
+### HTTP request headers
+
+- **Content-Type**: application/json
 - **Accept**: application/json
 
 [[Back to top]](#) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to Model list]](../README.md#documentation-for-models) [[Back to README]](../README.md)

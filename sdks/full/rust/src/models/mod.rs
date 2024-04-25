@@ -12,6 +12,8 @@ pub mod admin_clusters_datacenters_create_response;
 pub use self::admin_clusters_datacenters_create_response::AdminClustersDatacentersCreateResponse;
 pub mod admin_clusters_datacenters_list_response;
 pub use self::admin_clusters_datacenters_list_response::AdminClustersDatacentersListResponse;
+pub mod admin_clusters_datacenters_update_request;
+pub use self::admin_clusters_datacenters_update_request::AdminClustersDatacentersUpdateRequest;
 pub mod admin_clusters_get_server_ips_response;
 pub use self::admin_clusters_get_server_ips_response::AdminClustersGetServerIpsResponse;
 pub mod admin_clusters_list_response;

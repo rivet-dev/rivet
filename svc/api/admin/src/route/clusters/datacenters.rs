@@ -136,3 +136,50 @@ pub async fn taint(
 
 	Ok(json!({}))
 }
+
+// MARK: PUT /admin/clusters/{cluster_id}/datacenters/{datacenter_id}
+pub async fn update(
+	ctx: Ctx<Auth>,
+	cluster_id: Uuid,
+	datacenter_id: Uuid,
+	body: models::AdminClustersDatacentersUpdateRequest,
+) -> GlobalResult<Value> {
+	// Make sure that the datacenter is part of the cluster
+	let datacenters = op!([ctx] cluster_datacenter_get {
+		datacenter_ids: vec![datacenter_id.into()],
+	})
+	.await?
+	.datacenters;
+
+	let datacenter = match datacenters.first() {
+		Some(d) => d,
+		None => bail_with!(CLUSTER_DATACENTER_NOT_FOUND),
+	};
+
+	if datacenter.cluster_id != Some(cluster_id.into()) {
+		bail_with!(CLUSTER_DATACENTER_NOT_IN_CLUSTER);
+	}
+
+	let pools = vec![cluster::msg::datacenter_update::PoolUpdate {
+		pool_type: backend::cluster::PoolType::api_from(body.pool_type) as i32,
+		hardware: body
+			.hardware
+			.iter()
+			.map(|h| backend::cluster::Hardware {
+				provider_hardware: h.provider_hardware.clone(),
+			})
+			.collect(),
+		desired_count: body.desired_count.map(|c| c as u32),
+		max_count: body.max_count.map(|c| c as u32),
+		drain_timeout: body.drain_timeout.map(|d| d as u64),
+	}];
+
+	msg!([ctx] cluster::msg::datacenter_update(datacenter_id) -> cluster::msg::datacenter_scale {
+		datacenter_id: Some(datacenter_id.into()),
+		pools: pools,
+	})
+	.await
+	.unwrap();
+
+	Ok(json!({}))
+}

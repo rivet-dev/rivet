@@ -47,6 +47,12 @@ define_router! {
 			),
 		},
 
+		"clusters" / Uuid / "datacenters" / Uuid : {
+			PATCH: clusters::datacenters::update(
+				body: models::AdminClustersDatacentersUpdateRequest,
+			),
+		},
+
 		"clusters" / Uuid / "datacenters" / Uuid / "taint": {
 			GET: clusters::datacenters::taint(),
 		},

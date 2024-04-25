@@ -21,6 +21,14 @@ service:
       request:
         body: CreateRequest
       response: CreateResponse
+    update:
+      path: /{datacenter_id}
+      path-parameters:
+        datacenter_id:
+          type: uuid
+      method: PATCH
+      request:
+        body: UpdateRequest
     taint:
       path: /{datacenter_id}/taint
       path-parameters:
@@ -42,3 +50,10 @@ types:
   CreateResponse:
     properties:
       datacenter_id: uuid
+  UpdateRequest:
+    properties:
+      pool_type: localCommons.PoolType
+      hardware: list<localCommons.Hardware>
+      desired_count: optional<integer>
+      max_count: optional<integer>
+      drain_timeout: optional<long>

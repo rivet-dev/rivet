@@ -13,6 +13,7 @@ docs/AdminClustersDatacentersApi.md
 docs/AdminClustersDatacentersCreateRequest.md
 docs/AdminClustersDatacentersCreateResponse.md
 docs/AdminClustersDatacentersListResponse.md
+docs/AdminClustersDatacentersUpdateRequest.md
 docs/AdminClustersGetServerIpsResponse.md
 docs/AdminClustersListResponse.md
 docs/AdminDatacenter.md
@@ -400,6 +401,7 @@ src/models/admin_clusters_create_response.rs
 src/models/admin_clusters_datacenters_create_request.rs
 src/models/admin_clusters_datacenters_create_response.rs
 src/models/admin_clusters_datacenters_list_response.rs
+src/models/admin_clusters_datacenters_update_request.rs
 src/models/admin_clusters_get_server_ips_response.rs
 src/models/admin_clusters_list_response.rs
 src/models/admin_datacenter.rs

@@ -32,6 +32,7 @@ Class | Method | HTTP request | Description
 *AdminClustersDatacentersApi* | [**admin_clusters_datacenters_create**](docs/AdminClustersDatacentersApi.md#admin_clusters_datacenters_create) | **POST** /admin/clusters/{cluster_id}/datacenters | 
 *AdminClustersDatacentersApi* | [**admin_clusters_datacenters_list**](docs/AdminClustersDatacentersApi.md#admin_clusters_datacenters_list) | **GET** /admin/clusters/{cluster_id}/datacenters | 
 *AdminClustersDatacentersApi* | [**admin_clusters_datacenters_taint**](docs/AdminClustersDatacentersApi.md#admin_clusters_datacenters_taint) | **GET** /admin/clusters/{cluster_id}/datacenters/{datacenter_id}/taint | 
+*AdminClustersDatacentersApi* | [**admin_clusters_datacenters_update**](docs/AdminClustersDatacentersApi.md#admin_clusters_datacenters_update) | **PATCH** /admin/clusters/{cluster_id}/datacenters/{datacenter_id} | 
 *AuthIdentityAccessTokenApi* | [**auth_identity_access_token_complete_access_token_verification**](docs/AuthIdentityAccessTokenApi.md#auth_identity_access_token_complete_access_token_verification) | **POST** /auth/identity/access-token/complete-verification | 
 *AuthIdentityEmailApi* | [**auth_identity_email_complete_email_verification**](docs/AuthIdentityEmailApi.md#auth_identity_email_complete_email_verification) | **POST** /auth/identity/email/complete-verification | 
 *AuthIdentityEmailApi* | [**auth_identity_email_start_email_verification**](docs/AuthIdentityEmailApi.md#auth_identity_email_start_email_verification) | **POST** /auth/identity/email/start-verification | 
@@ -178,6 +179,7 @@ Class | Method | HTTP request | Description
  - [AdminClustersDatacentersCreateRequest](docs/AdminClustersDatacentersCreateRequest.md)
  - [AdminClustersDatacentersCreateResponse](docs/AdminClustersDatacentersCreateResponse.md)
  - [AdminClustersDatacentersListResponse](docs/AdminClustersDatacentersListResponse.md)
+ - [AdminClustersDatacentersUpdateRequest](docs/AdminClustersDatacentersUpdateRequest.md)
  - [AdminClustersGetServerIpsResponse](docs/AdminClustersGetServerIpsResponse.md)
  - [AdminClustersListResponse](docs/AdminClustersListResponse.md)
  - [AdminDatacenter](docs/AdminDatacenter.md)

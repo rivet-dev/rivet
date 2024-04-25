@@ -560,7 +560,7 @@ impl Endpoint {
 struct EndpointFunction {
 	/// Path of the given Rust function.
 	path: syn::Path,
-	/// Request type of the endpoint. (GET, PUT, POST, etc)
+	/// Request type of the endpoint. (GET, POST, PUT, PATCH, etc)
 	req_type: String,
 	/// The request `body` type.
 	body: Option<syn::Expr>,
@@ -574,11 +574,11 @@ impl Parse for EndpointFunction {
 		let req_type = req_type_ident.to_string();
 
 		match req_type.as_str() {
-			"GET" | "POST" | "PUT" | "DELETE" => {}
+			"GET" | "POST" | "PUT" | "PATCH" | "DELETE" => {}
 			_ => {
 				return Err(syn::Error::new(
 					req_type_ident.span(),
-					"Invalid endpoint request type (try GET, POST, PUT, DELETE)",
+					"Invalid endpoint request type (try GET, POST, PUT, PATCH, DELETE)",
 				));
 			}
 		};
@@ -609,7 +609,7 @@ impl Parse for EndpointFunction {
 			.map(|arg| arg.value.expect_expr().cloned())
 			.transpose()?;
 
-		// Make sure body is set for post and put requests
+		// Make sure body is set for post, put, and patch requests
 		if body.is_none()
 			&& !args
 				.iter()
@@ -618,7 +618,7 @@ impl Parse for EndpointFunction {
 			if req_type != "GET" && req_type != "DELETE" {
 				return Err(syn::Error::new(
 					args_tt.span,
-					"POST and PUT endpoints must have a body argument",
+					"POST, PUT, and PATCH endpoints must have a body argument",
 				));
 			}
 		} else if req_type == "DELETE" || req_type == "GET" {
