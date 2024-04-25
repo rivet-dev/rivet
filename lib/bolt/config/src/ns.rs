@@ -606,6 +606,7 @@ pub struct Upload {
 #[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(deny_unknown_fields)]
 pub struct NsfwCheck {
+	#[serde(default)]
 	pub error_verbose: bool,
 }
 
