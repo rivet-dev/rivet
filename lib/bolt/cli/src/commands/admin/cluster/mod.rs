@@ -28,7 +28,7 @@ pub enum SubCommand {
 }
 
 #[derive(Tabled)]
-struct AdminClusterRow {
+struct ClusterTableRow {
 	name_id: String,
 	cluster_id: Uuid,
 }
@@ -65,7 +65,7 @@ impl SubCommand {
 						.clusters;
 
 				rivet_term::status::success("Clusters", "");
-				rivet_term::format::table(clusters.iter().map(|c| AdminClusterRow {
+				rivet_term::format::table(clusters.iter().map(|c| ClusterTableRow {
 					name_id: c.name_id.clone(),
 					cluster_id: c.cluster_id,
 				}));

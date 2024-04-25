@@ -58,6 +58,12 @@ pub enum SubCommand {
 		#[clap(long)]
 		build_delivery_method: DatacenterBuildDeliveryMethod,
 	},
+	/// Lists all datacenters of a cluster
+	List {
+		/// The name id of the cluster
+		#[clap(long, short = 'c')]
+		cluster: String,
+	},
 	/// Taint a datacenter
 	Taint {
 		/// The name id of the cluster
@@ -117,6 +123,34 @@ impl SubCommand {
 				.await?;
 
 				rivet_term::status::success("Datacenter created", "");
+			}
+			Self::List {
+				cluster: cluster_name_id,
+			} => {
+				let clusters =
+					admin_clusters_api::admin_clusters_list(&ctx.openapi_config_cloud().await?)
+						.await?
+						.clusters;
+
+				let cluster = clusters.iter().find(|c| c.name_id == cluster_name_id);
+
+				let cluster = match cluster {
+					Some(c) => c,
+					None => bail!("cluster with the name id {} not found", cluster_name_id),
+				};
+
+				let datacenters = admin_clusters_datacenters_api::admin_clusters_datacenters_list(
+					&ctx.openapi_config_cloud().await?,
+					&cluster.cluster_id.to_string(),
+				)
+				.await?
+				.datacenters;
+
+				rivet_term::status::success("Datacenters", "");
+				rivet_term::format::table(datacenters.iter().map(|d| DatacenterTableRow {
+					name_id: d.name_id.clone(),
+					datacenter_id: d.datacenter_id,
+				}));
 			}
 			Self::Taint {
 				cluster: cluster_name_id,
