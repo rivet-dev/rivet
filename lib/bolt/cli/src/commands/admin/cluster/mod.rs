@@ -40,10 +40,10 @@ impl SubCommand {
 				name_id,
 				owner_team_id,
 			} => {
-				// ensure!(
-				// 	ctx.ns().rivet.provisioning.is_some(),
-				// 	"Provisioning is not enabled on this cluster"
-				// );
+				ensure!(
+					ctx.ns().rivet.provisioning.is_some(),
+					"Provisioning is not enabled on this cluster"
+				);
 
 				admin_clusters_api::admin_clusters_create(
 					&ctx.openapi_config_cloud().await?,

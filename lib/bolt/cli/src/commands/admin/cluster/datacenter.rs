@@ -133,10 +133,10 @@ impl SubCommand {
 				provider_datacenter_id,
 				build_delivery_method,
 			} => {
-				// ensure!(
-				// 	ctx.ns().rivet.provisioning.is_some(),
-				// 	"Provisioning is not enabled on this cluster"
-				// );
+				ensure!(
+					ctx.ns().rivet.provisioning.is_some(),
+					"Provisioning is not enabled on this cluster"
+				);
 
 				let clusters =
 					admin_clusters_api::admin_clusters_list(&ctx.openapi_config_cloud().await?)
