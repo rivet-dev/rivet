@@ -1,0 +1,208 @@
+{
+    "__inputs": [
+      {
+        "name": "DS_LOKI",
+        "label": "Loki",
+        "description": "",
+        "type": "datasource",
+        "pluginId": "loki",
+        "pluginName": "Loki"
+      }
+    ],
+    "__elements": {},
+    "__requires": [
+      {
+        "type": "grafana",
+        "id": "grafana",
+        "name": "Grafana",
+        "version": "10.1.4"
+      },
+      {
+        "type": "panel",
+        "id": "logs",
+        "name": "Logs",
+        "version": ""
+      },
+      {
+        "type": "datasource",
+        "id": "loki",
+        "name": "Loki",
+        "version": "1.0.0"
+      }
+    ],
+    "annotations": {
+      "list": [
+        {
+          "builtIn": 1,
+          "datasource": {
+            "type": "grafana",
+            "uid": "-- Grafana --"
+          },
+          "enable": true,
+          "hide": true,
+          "iconColor": "rgba(0, 211, 255, 1)",
+          "name": "Annotations & Alerts",
+          "type": "dashboard"
+        }
+      ]
+    },
+    "editable": true,
+    "fiscalYearStartMonth": 0,
+    "graphTooltip": 0,
+    "id": null,
+    "links": [],
+    "liveNow": false,
+    "panels": [
+      {
+        "datasource": {
+          "type": "loki",
+          "uid": "loki"
+        },
+        "gridPos": {
+          "h": 30,
+          "w": 24,
+          "x": 0,
+          "y": 0
+        },
+        "id": 1,
+        "options": {
+          "dedupStrategy": "none",
+          "enableLogDetails": true,
+          "prettifyLogMessage": false,
+          "showCommonLabels": false,
+          "showLabels": false,
+          "showTime": false,
+          "sortOrder": "Descending",
+          "wrapLogMessage": false
+        },
+        "targets": [
+          {
+            "datasource": {
+              "type": "loki",
+              "uid": "loki"
+            },
+            "editorMode": "code",
+            "expr": "{name=~\"rivet-[[name]]\"}\n    | json level=\"level\"\n    |~ \"[[filter]]\"\n    | level=~\"[[level]]\"\n    | json target=\"target\", message=\"fields.message\", fields=\"fields\", method=\"spans[0].method\", uri=\"spans[0].uri\", location=\"fields.location\", dt=\"fields.dt\", all_spans=\"spans\", span=\"spans[0]\"\n    | label_format uri=`{{regexReplaceAllLiteral \"\\\\?.*\" .uri \"\"}}`\n    | line_format \"{{.level}} [{{.target}}] {{.message}}{{if .dt}}\\n\\tdt {{.dt}}s{{end}}{{if .method}}\\n\\t{{.method}} {{.uri}}{{end}}{{if .location}}\\n\\tat {{.location}}{{end}}\"",
+            "key": "Q-f1fb2454-1d08-41d8-a908-042dcabbdc46-0",
+            "queryType": "range",
+            "refId": "A"
+          }
+        ],
+        "title": "Logs",
+        "transparent": true,
+        "type": "logs"
+      }
+    ],
+    "refresh": "",
+    "schemaVersion": 38,
+    "style": "dark",
+    "tags": [],
+    "templating": {
+      "list": [
+        {
+          "allValue": ".*",
+          "current": {
+            "selected": true,
+            "text": [
+              "All"
+            ],
+            "value": [
+              "$__all"
+            ]
+          },
+          "hide": 0,
+          "includeAll": true,
+          "label": "Level",
+          "multi": true,
+          "name": "level",
+          "options": [
+            {
+              "selected": true,
+              "text": "All",
+              "value": "$__all"
+            },
+            {
+              "selected": false,
+              "text": "TRACE",
+              "value": "TRACE"
+            },
+            {
+              "selected": false,
+              "text": "DEBUG",
+              "value": "DEBUG"
+            },
+            {
+              "selected": false,
+              "text": "INFO",
+              "value": "INFO"
+            },
+            {
+              "selected": false,
+              "text": "WARN",
+              "value": "WARN"
+            },
+            {
+              "selected": false,
+              "text": "ERROR",
+              "value": "ERROR"
+            }
+          ],
+          "query": "TRACE,DEBUG,INFO,WARN,ERROR",
+          "queryValue": "",
+          "skipUrlSync": false,
+          "type": "custom"
+        },
+        {
+          "current": {
+            "selected": false,
+            "text": ".*",
+            "value": ".*"
+          },
+          "hide": 0,
+          "label": "Service Name",
+          "name": "name",
+          "options": [
+            {
+              "selected": true,
+              "text": ".*",
+              "value": ".*"
+            }
+          ],
+          "query": ".*",
+          "skipUrlSync": false,
+          "type": "textbox"
+        },
+        {
+          "current": {
+            "selected": false,
+            "text": ".*",
+            "value": ".*"
+          },
+          "hide": 0,
+          "label": "Filter",
+          "name": "filter",
+          "options": [
+            {
+              "selected": true,
+              "text": ".*",
+              "value": ".*"
+            }
+          ],
+          "query": ".*",
+          "skipUrlSync": false,
+          "type": "textbox"
+        }
+      ]
+    },
+    "time": {
+      "from": "now-6h",
+      "to": "now"
+    },
+    "timepicker": {},
+    "timezone": "",
+    "tasg": ["rivet"],
+    "title": "Rivet / Logs",
+    "uid": "ad51348c-ba34-43d5-813f-3066617cf60d",
+    "version": 1,
+    "weekStart": ""
+  }

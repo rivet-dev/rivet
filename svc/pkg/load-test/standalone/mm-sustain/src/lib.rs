@@ -5,7 +5,7 @@ use rand::prelude::*;
 use rivet_operation::prelude::*;
 use tokio::time::Instant;
 
-const PARALLEL_WORKERS: usize = 2;
+const PARALLEL_WORKERS: usize = 1;
 
 #[tracing::instrument(skip_all)]
 pub async fn run_from_env(_ts: i64) -> GlobalResult<()> {
@@ -50,8 +50,8 @@ pub async fn run_from_env(_ts: i64) -> GlobalResult<()> {
 				// lobby_group_config(build_id, region_id, "basic-4d1"),
 				// lobby_group_config(build_id, region_id, "basic-2d1"),
 				// lobby_group_config(build_id, region_id, "basic-1d1"),
-				// lobby_group_config(build_id, region_id, "basic-1d2"),
-				// lobby_group_config(build_id, region_id, "basic-1d4"),
+				lobby_group_config(build_id, region_id, "basic-1d2"),
+				lobby_group_config(build_id, region_id, "basic-1d4"),
 				lobby_group_config(build_id, region_id, "basic-1d8"),
 				lobby_group_config(build_id, region_id, "basic-1d16"),
 			],
