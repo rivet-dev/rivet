@@ -103,7 +103,14 @@ data "kubernetes_secret" "crdb_ca" {
 }
 
 resource "kubernetes_config_map" "crdb_ca" {
-	for_each = local.cockroachdb_k8s ? toset(["rivet-service", "bolt", "prometheus"]) : toset([])
+	for_each = toset(
+		local.cockroachdb_k8s ?
+			flatten([
+				["rivet-service", "bolt"],
+				var.prometheus_enabled ? ["grafana"] : []
+			])
+			: []
+	)
 
 	metadata {
 		name = "crdb-ca"

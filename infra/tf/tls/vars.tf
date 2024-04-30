@@ -15,6 +15,16 @@ variable "domain_job" {
 	type = string
 }
 
+# MARK: Nomad
+variable "edge_enabled" {
+	type = bool
+}
+
+# MARK: Prometheus
+variable "prometheus_enabled" {
+	type = bool
+}
+
 # MARK: K8s
 variable "kubeconfig_path" {
 	type = string

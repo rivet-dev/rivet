@@ -1,7 +1,7 @@
 locals {
 	# Specify what services to expose via the tunnel server
 	tunnel_services = merge(flatten([
-		[{
+		var.edge_enabled ? [{
 			"api-internal" = {
 				service = "rivet-api-internal-monolith"
 				service_namespace = kubernetes_namespace.rivet_service.metadata[0].name
@@ -30,13 +30,7 @@ locals {
 				service_namespace = kubernetes_namespace.nomad.0.metadata[0].name
 				service_port = 4647
 			}
-
-			"api-internal" = {
-				service = "rivet-api-internal-monolith"
-				service_namespace = kubernetes_namespace.rivet_service.metadata[0].name
-				service_port = 80
-			}
-		}],
+		}] : [],
 		var.prometheus_enabled ? [{
 			"vector" = {
 				service = "vector"

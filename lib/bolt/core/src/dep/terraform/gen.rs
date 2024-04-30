@@ -232,7 +232,7 @@ async fn vars(ctx: &ProjectContext) {
 	// Edge nodes
 	vars.insert(
 		"edge_enabled".into(),
-		json!(&!config.rivet.provisioning.is_some()),
+		json!(config.rivet.provisioning.is_some()),
 	);
 
 	// Tunnels
@@ -248,7 +248,7 @@ async fn vars(ctx: &ProjectContext) {
 			"grafana",
 			json!({
 				"name": "Grafana",
-				"service": "http://prometheus-grafana.prometheus.svc.cluster.local:80",
+				"service": "http://grafana.grafana.svc.cluster.local:80",
 				"access_groups": access.as_ref().map(|x| vec![x.groups.engineering.clone()]).unwrap_or_default(),
 				"service_tokens": access.as_ref().map(|x| vec![x.services.grafana.clone()]).unwrap_or_default(),
 			}),

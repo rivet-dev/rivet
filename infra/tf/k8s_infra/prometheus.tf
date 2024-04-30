@@ -43,14 +43,6 @@ locals {
 		}
 	})
 
-	service_grafana = lookup(var.services, "grafana", {
-		count = 1
-		resources = {
-			cpu = 500
-			memory = 512
-		}
-	})
-
 	has_slack_receiver = (
 		module.alertmanager_secrets.values["alertmanager/slack/url"] != "" &&
 		module.alertmanager_secrets.values["alertmanager/slack/channel"] != ""
@@ -325,72 +317,9 @@ resource "helm_release" "prometheus" {
 			}
 		}
 
+		# Configured in grafana.tf
 		grafana = {
-			"grafana.ini" = {
-				auth = {
-					disable_login_form = true
-				}
-				"auth.anonymous" = {
-					enabled = true
-					org_role = "Admin"
-				}
-			}
-
-			resources = var.limit_resources ? {
-				limits = {
-					memory = "${local.service_grafana.resources.memory}Mi"
-					cpu = "${local.service_grafana.resources.cpu}m"
-				}
-			} : null
-
-			additionalDataSources = [
-				{
-					name = "Loki"
-					type = "loki"
-					uid = "loki"
-					url = "http://loki-gateway.loki.svc.cluster.local:80/"
-					access = "proxy"
-					jsonData = {}
-				},
-				{
-					name = "CockroachDB"
-					type = "postgres"
-					uid = "crdb"
-					url = local.crdb_host
-					user = module.crdb_user_grafana_secrets.values["crdb/user/grafana/username"]
-					secureJsonData = {
-						password = module.crdb_user_grafana_secrets.values["crdb/user/grafana/password"]
-					}
-					jsonData = {
-						sslmode = "verify-ca"
-						sslRootCertFile = "/local/crdb/ca.crt"
-					}
-				}
-			]
-
-			extraConfigmapMounts = [
-				# TLS Cert for postgres datasource
-				{
-					name = "crdb-ca"
-					configMap = "crdb-ca"
-					mountPath = "/local/crdb/ca.crt"
-					subPath = "ca.crt"
-					readOnly = true
-				}
-			]
-
-			serviceMonitor = {
-				enabled = true
-				path = "/metrics"
-				labels = {}
-
-				interval = ""
-				scheme = "http"
-				tlsConfig = {}
-				scrapeTimeout = "15s"
-
-				relabelings = []
-			}
+			enabled = false
 		}
 
 		extraManifests = flatten([
