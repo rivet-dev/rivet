@@ -282,8 +282,10 @@ pub async fn up_all(ctx: &ProjectContext) -> Result<()> {
 
 pub async fn up(ctx: &ProjectContext, services: &[ServiceContext]) -> Result<()> {
 	let conn = DatabaseConnections::create(ctx, services).await?;
-	let mut crdb_queries = Vec::new();
-	let mut clickhouse_queries = Vec::new();
+	let mut crdb_pre_queries = Vec::new();
+	let mut crdb_post_queries = Vec::new();
+	let mut clickhouse_pre_queries = Vec::new();
+	let clickhouse_post_queries = Vec::new();
 
 	// Run migrations
 	for svc in services {
@@ -292,7 +294,7 @@ pub async fn up(ctx: &ProjectContext, services: &[ServiceContext]) -> Result<()>
 				let db_name = svc.crdb_db_name();
 				let query = format!(r#"CREATE DATABASE IF NOT EXISTS "{db_name}";"#);
 
-				crdb_queries.push(db::ShellQuery {
+				crdb_pre_queries.push(db::ShellQuery {
 					svc: svc.clone(),
 					query: Some(query),
 				});
@@ -313,7 +315,7 @@ pub async fn up(ctx: &ProjectContext, services: &[ServiceContext]) -> Result<()>
 					TO {username};
 					"#
 				);
-				crdb_queries.push(db::ShellQuery {
+				crdb_post_queries.push(db::ShellQuery {
 					svc: svc.clone(),
 					query: Some(query),
 				});
@@ -348,7 +350,7 @@ pub async fn up(ctx: &ProjectContext, services: &[ServiceContext]) -> Result<()>
 					ON {db_name}.* TO readonly;
 					"
 				);
-				clickhouse_queries.push(db::ShellQuery {
+				clickhouse_pre_queries.push(db::ShellQuery {
 					svc: svc.clone(),
 					query: Some(query),
 				});
@@ -371,14 +373,14 @@ pub async fn up(ctx: &ProjectContext, services: &[ServiceContext]) -> Result<()>
 						GRANT {role} TO {username};
 						"
 					);
-					clickhouse_queries.push(db::ShellQuery {
+					clickhouse_pre_queries.push(db::ShellQuery {
 						svc: svc.clone(),
 						query: Some(query),
 					});
 				}
 
 				let query = format!(r#"CREATE DATABASE IF NOT EXISTS "{db_name}";"#);
-				clickhouse_queries.push(db::ShellQuery {
+				clickhouse_pre_queries.push(db::ShellQuery {
 					svc: svc.clone(),
 					query: Some(query),
 				});
@@ -391,11 +393,11 @@ pub async fn up(ctx: &ProjectContext, services: &[ServiceContext]) -> Result<()>
 	rivet_term::status::progress("Running pre-migrations", "");
 	tokio::try_join!(
 		async {
-			if !crdb_queries.is_empty() {
+			if !crdb_pre_queries.is_empty() {
 				db::crdb_shell(db::ShellContext {
 					ctx,
 					conn: &conn,
-					queries: &crdb_queries,
+					queries: &crdb_pre_queries,
 					log_type: db::LogType::Migration,
 				})
 				.await?;
@@ -403,12 +405,12 @@ pub async fn up(ctx: &ProjectContext, services: &[ServiceContext]) -> Result<()>
 			Ok(())
 		},
 		async {
-			if !clickhouse_queries.is_empty() {
+			if !clickhouse_pre_queries.is_empty() {
 				db::clickhouse_shell(
 					db::ShellContext {
 						ctx,
 						conn: &conn,
-						queries: &clickhouse_queries,
+						queries: &clickhouse_pre_queries,
 						log_type: db::LogType::Migration,
 					},
 					true,
@@ -446,6 +448,40 @@ pub async fn up(ctx: &ProjectContext, services: &[ServiceContext]) -> Result<()>
 		.try_collect::<Vec<_>>()
 		.await?;
 	migration(ctx, &migrations).await?;
+
+	// Run post-migration queries in parallel
+	eprintln!();
+	rivet_term::status::progress("Running post-migrations", "");
+	tokio::try_join!(
+		async {
+			if !crdb_post_queries.is_empty() {
+				db::crdb_shell(db::ShellContext {
+					ctx,
+					conn: &conn,
+					queries: &crdb_post_queries,
+					log_type: db::LogType::Migration,
+				})
+				.await?;
+			}
+			Ok(())
+		},
+		async {
+			if !clickhouse_post_queries.is_empty() {
+				db::clickhouse_shell(
+					db::ShellContext {
+						ctx,
+						conn: &conn,
+						queries: &clickhouse_post_queries,
+						log_type: db::LogType::Migration,
+					},
+					true,
+				)
+				.await?;
+			}
+
+			Ok(())
+		}
+	)?;
 
 	rivet_term::status::success("Migrated", "");
 
