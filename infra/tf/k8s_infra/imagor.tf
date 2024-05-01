@@ -416,13 +416,11 @@ resource "kubectl_manifest" "imagor_cdn" {
 
 resource "kubectl_manifest" "imagor_preset_middlewares" {
 	depends_on = [helm_release.traefik]
-	for_each = (
-		var.imagor_enabled ? {
-			for index, preset in var.imagor_presets:
-			preset.key => preset
-		} :
-		{}
-	)
+	for_each = {
+		for index, preset in var.imagor_presets:
+		preset.key => preset
+		if var.imagor_enabled
+	}
 
 	yaml_body = yamlencode({
 		apiVersion = "traefik.io/v1alpha1"
