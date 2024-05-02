@@ -13,6 +13,7 @@ Make sure to run `nix-shell` for all subsequent commands.
 
 -   Docker
 -   Linode API Key
+    -   Scope: `Linodes: Read/Write, Firewall: Read/Write`
 
 ## Step 1: Create Dev Tunnel
 
@@ -20,7 +21,8 @@ Make sure to run `nix-shell` for all subsequent commands.
 task dev-tunnel:up
 ```
 
-This will prompt you to past your Linode API token.
+This will prompt you to past your Linode API token. Running this will create a
+new `Nanode 1 GB` instance on Linode.
 
 Once complete, this will print an IP to your console like:
 
