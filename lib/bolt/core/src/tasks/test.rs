@@ -389,12 +389,14 @@ async fn exec_test(
 	// Convert path relative to project
 	let relative_path = test_binary
 		.path
-		.strip_prefix(ctx.path())
-		.context("path not in project")?;
+		.strip_prefix(ctx.cargo_target_dir())
+		.context(format!("path not in project: {:?}", test_binary.path))?;
+
+	let container_path = Path::new("/target").join(relative_path);
 
 	let command = format!(
 		"RIVET_TEST_ID={test_id} {} --exact {}",
-		&relative_path.display(),
+		&container_path.display(),
 		&test_binary.test_name
 	);
 
