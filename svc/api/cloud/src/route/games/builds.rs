@@ -11,7 +11,7 @@ pub async fn get_builds(
 	ctx: Ctx<Auth>,
 	game_id: Uuid,
 	_watch_index: WatchIndexQuery,
-) -> GlobalResult<models::CloudGamesDockerListGameBuildsResponse> {
+) -> GlobalResult<models::CloudGamesListGameBuildsResponse> {
 	ctx.auth()
 		.check_game_read_or_admin(ctx.op_ctx(), game_id)
 		.await?;
@@ -68,7 +68,7 @@ pub async fn get_builds(
 	builds.sort_by_key(|(create_ts, _)| *create_ts);
 	builds.reverse();
 
-	Ok(models::CloudGamesDockerListGameBuildsResponse {
+	Ok(models::CloudGamesListGameBuildsResponse {
 		builds: builds.into_iter().map(|(_, x)| x).collect::<Vec<_>>(),
 	})
 }
@@ -77,8 +77,8 @@ pub async fn get_builds(
 pub async fn create_build(
 	ctx: Ctx<Auth>,
 	game_id: Uuid,
-	body: models::CloudGamesDockerCreateGameBuildRequest,
-) -> GlobalResult<models::CloudGamesDockerCreateGameBuildResponse> {
+	body: models::CloudGamesCreateGameBuildRequest,
+) -> GlobalResult<models::CloudGamesCreateGameBuildResponse> {
 	ctx.auth()
 		.check_game_write_or_admin(ctx.op_ctx(), game_id)
 		.await?;
@@ -88,19 +88,17 @@ pub async fn create_build(
 	let multipart_upload = body.multipart_upload.unwrap_or(false);
 
 	let kind = match body.kind {
-		None | Some(models::CloudGamesDockerBuildKind::DockerImage) => {
+		None | Some(models::CloudGamesBuildKind::DockerImage) => {
 			backend::build::BuildKind::DockerImage
 		}
-		Some(models::CloudGamesDockerBuildKind::OciBundle) => backend::build::BuildKind::OciBundle,
+		Some(models::CloudGamesBuildKind::OciBundle) => backend::build::BuildKind::OciBundle,
 	};
 
 	let compression = match body.compression {
-		None | Some(models::CloudGamesDockerBuildCompression::None) => {
+		None | Some(models::CloudGamesBuildCompression::None) => {
 			backend::build::BuildCompression::None
 		}
-		Some(models::CloudGamesDockerBuildCompression::Lz4) => {
-			backend::build::BuildCompression::Lz4
-		}
+		Some(models::CloudGamesBuildCompression::Lz4) => backend::build::BuildCompression::Lz4,
 	};
 
 	let create_res = op!([ctx] build_create {
@@ -138,7 +136,7 @@ pub async fn create_build(
 		None
 	};
 
-	Ok(models::CloudGamesDockerCreateGameBuildResponse {
+	Ok(models::CloudGamesCreateGameBuildResponse {
 		build_id: unwrap_ref!(create_res.build_id).as_uuid(),
 		upload_id: unwrap_ref!(create_res.upload_id).as_uuid(),
 		image_presigned_request,

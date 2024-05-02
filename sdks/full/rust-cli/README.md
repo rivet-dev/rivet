@@ -45,10 +45,10 @@ Class | Method | HTTP request | Description
 *CloudGamesAvatarsApi* | [**cloud_games_avatars_complete_custom_avatar_upload**](docs/CloudGamesAvatarsApi.md#cloud_games_avatars_complete_custom_avatar_upload) | **POST** /cloud/games/{game_id}/avatar-upload/{upload_id}/complete | 
 *CloudGamesAvatarsApi* | [**cloud_games_avatars_list_game_custom_avatars**](docs/CloudGamesAvatarsApi.md#cloud_games_avatars_list_game_custom_avatars) | **GET** /cloud/games/{game_id}/avatars | 
 *CloudGamesAvatarsApi* | [**cloud_games_avatars_prepare_custom_avatar_upload**](docs/CloudGamesAvatarsApi.md#cloud_games_avatars_prepare_custom_avatar_upload) | **POST** /cloud/games/{game_id}/prepare | 
+*CloudGamesBuildsApi* | [**cloud_games_builds_create_game_build**](docs/CloudGamesBuildsApi.md#cloud_games_builds_create_game_build) | **POST** /cloud/games/{game_id}/builds | 
+*CloudGamesBuildsApi* | [**cloud_games_builds_list_game_builds**](docs/CloudGamesBuildsApi.md#cloud_games_builds_list_game_builds) | **GET** /cloud/games/{game_id}/builds | 
 *CloudGamesCdnApi* | [**cloud_games_cdn_create_game_cdn_site**](docs/CloudGamesCdnApi.md#cloud_games_cdn_create_game_cdn_site) | **POST** /cloud/games/{game_id}/cdn/sites | 
 *CloudGamesCdnApi* | [**cloud_games_cdn_list_game_cdn_sites**](docs/CloudGamesCdnApi.md#cloud_games_cdn_list_game_cdn_sites) | **GET** /cloud/games/{game_id}/cdn/sites | 
-*CloudGamesDockerBuildsApi* | [**cloud_games_docker_builds_create_game_build**](docs/CloudGamesDockerBuildsApi.md#cloud_games_docker_builds_create_game_build) | **POST** /cloud/games/{game_id}/docker/builds | 
-*CloudGamesDockerBuildsApi* | [**cloud_games_docker_builds_list_game_builds**](docs/CloudGamesDockerBuildsApi.md#cloud_games_docker_builds_list_game_builds) | **GET** /cloud/games/{game_id}/docker/builds | 
 *CloudGamesGamesApi* | [**cloud_games_games_create_game**](docs/CloudGamesGamesApi.md#cloud_games_games_create_game) | **POST** /cloud/games | 
 *CloudGamesGamesApi* | [**cloud_games_games_game_banner_upload_complete**](docs/CloudGamesGamesApi.md#cloud_games_games_game_banner_upload_complete) | **POST** /cloud/games/{game_id}/banner-upload/{upload_id}/complete | 
 *CloudGamesGamesApi* | [**cloud_games_games_game_banner_upload_prepare**](docs/CloudGamesGamesApi.md#cloud_games_games_game_banner_upload_prepare) | **POST** /cloud/games/{game_id}/banner-upload/prepare | 
@@ -226,7 +226,11 @@ Class | Method | HTTP request | Description
  - [CloudDevicesPrepareDeviceLinkResponse](docs/CloudDevicesPrepareDeviceLinkResponse.md)
  - [CloudGameFull](docs/CloudGameFull.md)
  - [CloudGameLobbyExpenses](docs/CloudGameLobbyExpenses.md)
+ - [CloudGamesBuildCompression](docs/CloudGamesBuildCompression.md)
+ - [CloudGamesBuildKind](docs/CloudGamesBuildKind.md)
  - [CloudGamesCreateCloudTokenResponse](docs/CloudGamesCreateCloudTokenResponse.md)
+ - [CloudGamesCreateGameBuildRequest](docs/CloudGamesCreateGameBuildRequest.md)
+ - [CloudGamesCreateGameBuildResponse](docs/CloudGamesCreateGameBuildResponse.md)
  - [CloudGamesCreateGameCdnSiteRequest](docs/CloudGamesCreateGameCdnSiteRequest.md)
  - [CloudGamesCreateGameCdnSiteResponse](docs/CloudGamesCreateGameCdnSiteResponse.md)
  - [CloudGamesCreateGameRequest](docs/CloudGamesCreateGameRequest.md)
@@ -234,11 +238,6 @@ Class | Method | HTTP request | Description
  - [CloudGamesCreateGameVersionRequest](docs/CloudGamesCreateGameVersionRequest.md)
  - [CloudGamesCreateGameVersionResponse](docs/CloudGamesCreateGameVersionResponse.md)
  - [CloudGamesDeleteMatchmakerLobbyResponse](docs/CloudGamesDeleteMatchmakerLobbyResponse.md)
- - [CloudGamesDockerBuildCompression](docs/CloudGamesDockerBuildCompression.md)
- - [CloudGamesDockerBuildKind](docs/CloudGamesDockerBuildKind.md)
- - [CloudGamesDockerCreateGameBuildRequest](docs/CloudGamesDockerCreateGameBuildRequest.md)
- - [CloudGamesDockerCreateGameBuildResponse](docs/CloudGamesDockerCreateGameBuildResponse.md)
- - [CloudGamesDockerListGameBuildsResponse](docs/CloudGamesDockerListGameBuildsResponse.md)
  - [CloudGamesExportLobbyLogsRequest](docs/CloudGamesExportLobbyLogsRequest.md)
  - [CloudGamesExportLobbyLogsResponse](docs/CloudGamesExportLobbyLogsResponse.md)
  - [CloudGamesExportMatchmakerLobbyHistoryRequest](docs/CloudGamesExportMatchmakerLobbyHistoryRequest.md)
@@ -251,6 +250,7 @@ Class | Method | HTTP request | Description
  - [CloudGamesGetGameVersionByIdResponse](docs/CloudGamesGetGameVersionByIdResponse.md)
  - [CloudGamesGetGamesResponse](docs/CloudGamesGetGamesResponse.md)
  - [CloudGamesGetLobbyLogsResponse](docs/CloudGamesGetLobbyLogsResponse.md)
+ - [CloudGamesListGameBuildsResponse](docs/CloudGamesListGameBuildsResponse.md)
  - [CloudGamesListGameCdnSitesResponse](docs/CloudGamesListGameCdnSitesResponse.md)
  - [CloudGamesListGameCustomAvatarsResponse](docs/CloudGamesListGameCustomAvatarsResponse.md)
  - [CloudGamesLogStream](docs/CloudGamesLogStream.md)

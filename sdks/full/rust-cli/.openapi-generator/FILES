@@ -67,8 +67,13 @@ docs/CloudDevicesPrepareDeviceLinkResponse.md
 docs/CloudGameFull.md
 docs/CloudGameLobbyExpenses.md
 docs/CloudGamesAvatarsApi.md
+docs/CloudGamesBuildCompression.md
+docs/CloudGamesBuildKind.md
+docs/CloudGamesBuildsApi.md
 docs/CloudGamesCdnApi.md
 docs/CloudGamesCreateCloudTokenResponse.md
+docs/CloudGamesCreateGameBuildRequest.md
+docs/CloudGamesCreateGameBuildResponse.md
 docs/CloudGamesCreateGameCdnSiteRequest.md
 docs/CloudGamesCreateGameCdnSiteResponse.md
 docs/CloudGamesCreateGameRequest.md
@@ -76,12 +81,6 @@ docs/CloudGamesCreateGameResponse.md
 docs/CloudGamesCreateGameVersionRequest.md
 docs/CloudGamesCreateGameVersionResponse.md
 docs/CloudGamesDeleteMatchmakerLobbyResponse.md
-docs/CloudGamesDockerBuildCompression.md
-docs/CloudGamesDockerBuildKind.md
-docs/CloudGamesDockerBuildsApi.md
-docs/CloudGamesDockerCreateGameBuildRequest.md
-docs/CloudGamesDockerCreateGameBuildResponse.md
-docs/CloudGamesDockerListGameBuildsResponse.md
 docs/CloudGamesExportLobbyLogsRequest.md
 docs/CloudGamesExportLobbyLogsResponse.md
 docs/CloudGamesExportMatchmakerLobbyHistoryRequest.md
@@ -95,6 +94,7 @@ docs/CloudGamesGetGameByIdResponse.md
 docs/CloudGamesGetGameVersionByIdResponse.md
 docs/CloudGamesGetGamesResponse.md
 docs/CloudGamesGetLobbyLogsResponse.md
+docs/CloudGamesListGameBuildsResponse.md
 docs/CloudGamesListGameCdnSitesResponse.md
 docs/CloudGamesListGameCustomAvatarsResponse.md
 docs/CloudGamesLogStream.md
@@ -361,8 +361,8 @@ src/apis/cloud_api.rs
 src/apis/cloud_auth_api.rs
 src/apis/cloud_devices_links_api.rs
 src/apis/cloud_games_avatars_api.rs
+src/apis/cloud_games_builds_api.rs
 src/apis/cloud_games_cdn_api.rs
-src/apis/cloud_games_docker_builds_api.rs
 src/apis/cloud_games_games_api.rs
 src/apis/cloud_games_matchmaker_api.rs
 src/apis/cloud_games_namespaces_analytics_api.rs
@@ -448,7 +448,11 @@ src/models/cloud_devices_get_device_link_response.rs
 src/models/cloud_devices_prepare_device_link_response.rs
 src/models/cloud_game_full.rs
 src/models/cloud_game_lobby_expenses.rs
+src/models/cloud_games_build_compression.rs
+src/models/cloud_games_build_kind.rs
 src/models/cloud_games_create_cloud_token_response.rs
+src/models/cloud_games_create_game_build_request.rs
+src/models/cloud_games_create_game_build_response.rs
 src/models/cloud_games_create_game_cdn_site_request.rs
 src/models/cloud_games_create_game_cdn_site_response.rs
 src/models/cloud_games_create_game_request.rs
@@ -456,11 +460,6 @@ src/models/cloud_games_create_game_response.rs
 src/models/cloud_games_create_game_version_request.rs
 src/models/cloud_games_create_game_version_response.rs
 src/models/cloud_games_delete_matchmaker_lobby_response.rs
-src/models/cloud_games_docker_build_compression.rs
-src/models/cloud_games_docker_build_kind.rs
-src/models/cloud_games_docker_create_game_build_request.rs
-src/models/cloud_games_docker_create_game_build_response.rs
-src/models/cloud_games_docker_list_game_builds_response.rs
 src/models/cloud_games_export_lobby_logs_request.rs
 src/models/cloud_games_export_lobby_logs_response.rs
 src/models/cloud_games_export_matchmaker_lobby_history_request.rs
@@ -473,6 +472,7 @@ src/models/cloud_games_get_game_by_id_response.rs
 src/models/cloud_games_get_game_version_by_id_response.rs
 src/models/cloud_games_get_games_response.rs
 src/models/cloud_games_get_lobby_logs_response.rs
+src/models/cloud_games_list_game_builds_response.rs
 src/models/cloud_games_list_game_cdn_sites_response.rs
 src/models/cloud_games_list_game_custom_avatars_response.rs
 src/models/cloud_games_log_stream.rs

@@ -131,9 +131,9 @@ define_router! {
 			GET: games::cdn::get_sites(),
 			POST: games::cdn::create_site(body: models::CloudGamesCreateGameCdnSiteRequest),
 		},
-		"games" / Uuid / "docker" / "builds": {
+		"games" / Uuid / "builds": {
 			GET: games::builds::get_builds(),
-			POST: games::builds::create_build(body: models::CloudGamesDockerCreateGameBuildRequest),
+			POST: games::builds::create_build(body: models::CloudGamesCreateGameBuildRequest),
 		},
 		"games" / Uuid / "avatars": {
 			GET: games::avatars::get_custom_avatars(),

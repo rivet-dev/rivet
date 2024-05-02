@@ -5391,6 +5391,125 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorBody'
       security: *ref_0
+  /cloud/games/{game_id}/builds:
+    get:
+      description: Lists game builds for the given game.
+      operationId: cloud_games_builds_listGameBuilds
+      tags:
+        - CloudGamesBuilds
+      parameters:
+        - name: game_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CloudGamesListGameBuildsResponse'
+        '400':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '403':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '404':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '408':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '429':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '500':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+      security: *ref_0
+    post:
+      description: Creates a new game build for the given game.
+      operationId: cloud_games_builds_createGameBuild
+      tags:
+        - CloudGamesBuilds
+      parameters:
+        - name: game_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CloudGamesCreateGameBuildResponse'
+        '400':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '403':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '404':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '408':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '429':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '500':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+      security: *ref_0
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CloudGamesCreateGameBuildRequest'
   /cloud/games/{game_id}/cdn/sites:
     get:
       description: Lists CDN sites for a game.
@@ -5510,125 +5629,6 @@ paths:
           application/json:
             schema:
               $ref: '#/components/schemas/CloudGamesCreateGameCdnSiteRequest'
-  /cloud/games/{game_id}/docker/builds:
-    get:
-      description: Lists game builds for the given game.
-      operationId: cloud_games_docker_builds_listGameBuilds
-      tags:
-        - CloudGamesDockerBuilds
-      parameters:
-        - name: game_id
-          in: path
-          required: true
-          schema:
-            type: string
-            format: uuid
-      responses:
-        '200':
-          description: ''
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/CloudGamesDockerListGameBuildsResponse'
-        '400':
-          description: ''
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBody'
-        '403':
-          description: ''
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBody'
-        '404':
-          description: ''
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBody'
-        '408':
-          description: ''
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBody'
-        '429':
-          description: ''
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBody'
-        '500':
-          description: ''
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBody'
-      security: *ref_0
-    post:
-      description: Creates a new game build for the given game.
-      operationId: cloud_games_docker_builds_createGameBuild
-      tags:
-        - CloudGamesDockerBuilds
-      parameters:
-        - name: game_id
-          in: path
-          required: true
-          schema:
-            type: string
-            format: uuid
-      responses:
-        '200':
-          description: ''
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/CloudGamesDockerCreateGameBuildResponse'
-        '400':
-          description: ''
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBody'
-        '403':
-          description: ''
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBody'
-        '404':
-          description: ''
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBody'
-        '408':
-          description: ''
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBody'
-        '429':
-          description: ''
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBody'
-        '500':
-          description: ''
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBody'
-      security: *ref_0
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/CloudGamesDockerCreateGameBuildRequest'
   /cloud/games:
     get:
       description: >-
@@ -11103,6 +11103,65 @@ components:
       required:
         - upload_id
         - presigned_request
+    CloudGamesListGameBuildsResponse:
+      type: object
+      properties:
+        builds:
+          type: array
+          items:
+            $ref: '#/components/schemas/CloudBuildSummary'
+          description: A list of build summaries.
+      required:
+        - builds
+    CloudGamesCreateGameBuildRequest:
+      type: object
+      properties:
+        display_name:
+          type: string
+          description: Represent a resource's readable display name.
+        image_tag:
+          type: string
+          description: A tag given to the game build.
+        image_file:
+          $ref: '#/components/schemas/UploadPrepareFile'
+        multipart_upload:
+          type: boolean
+        kind:
+          $ref: '#/components/schemas/CloudGamesBuildKind'
+        compression:
+          $ref: '#/components/schemas/CloudGamesBuildCompression'
+      required:
+        - display_name
+        - image_tag
+        - image_file
+    CloudGamesCreateGameBuildResponse:
+      type: object
+      properties:
+        build_id:
+          type: string
+          format: uuid
+        upload_id:
+          type: string
+          format: uuid
+        image_presigned_request:
+          $ref: '#/components/schemas/UploadPresignedRequest'
+        image_presigned_requests:
+          type: array
+          items:
+            $ref: '#/components/schemas/UploadPresignedRequest'
+      required:
+        - build_id
+        - upload_id
+    CloudGamesBuildKind:
+      type: string
+      enum:
+        - docker_image
+        - oci_bundle
+    CloudGamesBuildCompression:
+      type: string
+      enum:
+        - none
+        - lz4
     CloudGamesListGameCdnSitesResponse:
       type: object
       properties:
@@ -11144,65 +11203,6 @@ components:
         - site_id
         - upload_id
         - presigned_requests
-    CloudGamesDockerListGameBuildsResponse:
-      type: object
-      properties:
-        builds:
-          type: array
-          items:
-            $ref: '#/components/schemas/CloudBuildSummary'
-          description: A list of build summaries.
-      required:
-        - builds
-    CloudGamesDockerCreateGameBuildRequest:
-      type: object
-      properties:
-        display_name:
-          type: string
-          description: Represent a resource's readable display name.
-        image_tag:
-          type: string
-          description: A tag given to the game build.
-        image_file:
-          $ref: '#/components/schemas/UploadPrepareFile'
-        multipart_upload:
-          type: boolean
-        kind:
-          $ref: '#/components/schemas/CloudGamesDockerBuildKind'
-        compression:
-          $ref: '#/components/schemas/CloudGamesDockerBuildCompression'
-      required:
-        - display_name
-        - image_tag
-        - image_file
-    CloudGamesDockerCreateGameBuildResponse:
-      type: object
-      properties:
-        build_id:
-          type: string
-          format: uuid
-        upload_id:
-          type: string
-          format: uuid
-        image_presigned_request:
-          $ref: '#/components/schemas/UploadPresignedRequest'
-        image_presigned_requests:
-          type: array
-          items:
-            $ref: '#/components/schemas/UploadPresignedRequest'
-      required:
-        - build_id
-        - upload_id
-    CloudGamesDockerBuildKind:
-      type: string
-      enum:
-        - docker_image
-        - oci_bundle
-    CloudGamesDockerBuildCompression:
-      type: string
-      enum:
-        - none
-        - lz4
     CloudGamesGetGamesResponse:
       type: object
       properties:

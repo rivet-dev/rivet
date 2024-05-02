@@ -6,8 +6,8 @@ import * as environments from "../../../../../../environments";
 import * as core from "../../../../../../core";
 import { Namespaces } from "../resources/namespaces/client/Client";
 import { Avatars } from "../resources/avatars/client/Client";
+import { Builds } from "../resources/builds/client/Client";
 import { Cdn } from "../resources/cdn/client/Client";
-import { Docker } from "../resources/docker/client/Client";
 import { Games as Games_ } from "../resources/games/client/Client";
 import { Matchmaker } from "../resources/matchmaker/client/Client";
 import { Tokens } from "../resources/tokens/client/Client";
@@ -41,16 +41,16 @@ export class Games {
         return (this._avatars ??= new Avatars(this._options));
     }
 
+    protected _builds: Builds | undefined;
+
+    public get builds(): Builds {
+        return (this._builds ??= new Builds(this._options));
+    }
+
     protected _cdn: Cdn | undefined;
 
     public get cdn(): Cdn {
         return (this._cdn ??= new Cdn(this._options));
-    }
-
-    protected _docker: Docker | undefined;
-
-    public get docker(): Docker {
-        return (this._docker ??= new Docker(this._options));
     }
 
     protected _games: Games_ | undefined;

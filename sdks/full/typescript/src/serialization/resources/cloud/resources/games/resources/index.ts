@@ -1,9 +1,10 @@
 export * as namespaces from "./namespaces";
 export * as avatars from "./avatars";
 export * from "./avatars/types";
+export * as builds from "./builds";
+export * from "./builds/types";
 export * as cdn from "./cdn";
 export * from "./cdn/types";
-export * as docker from "./docker";
 export * as games from "./games";
 export * from "./games/types";
 export * as matchmaker from "./matchmaker";
