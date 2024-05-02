@@ -5,8 +5,8 @@ package client
 import (
 	http "net/http"
 	avatars "sdk/cloud/games/avatars"
-	builds "sdk/cloud/games/builds"
 	cdn "sdk/cloud/games/cdn"
+	dockerclient "sdk/cloud/games/docker/client"
 	games "sdk/cloud/games/games"
 	matchmaker "sdk/cloud/games/matchmaker"
 	namespacesclient "sdk/cloud/games/namespaces/client"
@@ -22,8 +22,8 @@ type Client struct {
 
 	Namespaces *namespacesclient.Client
 	Avatars    *avatars.Client
-	Builds     *builds.Client
 	Cdn        *cdn.Client
+	Docker     *dockerclient.Client
 	Games      *games.Client
 	Matchmaker *matchmaker.Client
 	Tokens     *tokens.Client
@@ -41,8 +41,8 @@ func NewClient(opts ...core.ClientOption) *Client {
 		header:     options.ToHeader(),
 		Namespaces: namespacesclient.NewClient(opts...),
 		Avatars:    avatars.NewClient(opts...),
-		Builds:     builds.NewClient(opts...),
 		Cdn:        cdn.NewClient(opts...),
+		Docker:     dockerclient.NewClient(opts...),
 		Games:      games.NewClient(opts...),
 		Matchmaker: matchmaker.NewClient(opts...),
 		Tokens:     tokens.NewClient(opts...),
