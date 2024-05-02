@@ -8,3 +8,7 @@ RUN apt-get update \
         pkg-config \
         build-essential \
         protobuf-compiler
+
+# Create a folder for cargo target to use
+RUN mkdir -p /target \
+    && chown -R vscode:vscode /target
