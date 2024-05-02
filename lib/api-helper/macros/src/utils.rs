@@ -421,6 +421,7 @@ pub fn default_rate_limit_key(path: &syn::Path) -> String {
 pub fn default_rate_limit_bucket(req_type: String) -> TokenStream2 {
 	let count: u64 = match req_type.as_str() {
 		"GET" => 128,
+		"PATCH" => 32,
 		"POST" | "PUT" | "DELETE" => 16,
 		_ => 16,
 	};
