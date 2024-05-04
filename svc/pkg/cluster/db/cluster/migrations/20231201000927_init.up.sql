@@ -1,6 +1,6 @@
 CREATE TABLE clusters (
 	cluster_id UUID PRIMARY KEY,
-	name_id TEXT NOT NULL,
+	name_id TEXT NOT NULL UNIQUE,
 	owner_team_id UUID,
 	create_ts INT NOT NULL
 );
