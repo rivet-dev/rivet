@@ -53,6 +53,18 @@ Write server-side logic using TypeScript (or use your own API server)
 
 [Documentation](https://opengb.dev/)
 
+## 🚙 Supported Game Engines
+
+| Engine             | Plugin                                                                                 | Crash Course                           | Example Projects                                                                         |
+| ------------------ | -------------------------------------------------------------------------------------- | -------------------------------------- | ---------------------------------------------------------------------------------------- |
+| Godot              | [rivet-gg/plugin-godot](https://github.com/rivet-gg/plugin-godot)                      | [Learn](https://rivet.gg/learn/godot)  | [Examples](https://github.com/rivet-gg/examples/tree/main?tab=readme-ov-file#godot)      |
+| Unity              | [rivet-gg/plugin-unity](https://github.com/rivet-gg/plugin-unity)                      | [Learn](https://rivet.gg/learn/unity)  | [Examples](https://github.com/rivet-gg/examples/tree/main?tab=readme-ov-file#unity)      |
+| Unreal Engine      | [rivet-gg/plugin-unreal](https://github.com/rivet-gg/plugin-unreal)                     | [Learn](https://rivet.gg/learn/unreal) | _WIP_                                                                                    |
+| HTML5 & JavaScript | [@rivet-gg/api](https://github.com/rivet-gg/rivet/tree/main/sdks/runtime/typescript)   | [Learn](https://rivet.gg/learn/html5)  | [Examples](https://github.com/rivet-gg/examples/tree/main?tab=readme-ov-file#javascript) |
+| Rust               | [rivet-api](https://github.com/rivet-gg/rivet/tree/main/sdks/runtime/rust)             | [Learn](https://rivet.gg/learn/custom) | [Examples](https://github.com/rivet-gg/examples?tab=readme-ov-file#other)                |
+| Go                 | [Source](https://github.com/rivet-gg/rivet/tree/main/sdks/runtime/go)                  | [Learn](https://rivet.gg/learn/custom) | [Examples](https://github.com/rivet-gg/examples?tab=readme-ov-file#other)                |
+| Other              | [Source](https://github.com/rivet-gg/rivet/blob/main/sdks/runtime/openapi/openapi.yml) | [Learn](https://rivet.gg/learn/custom) | [Examples](https://github.com/rivet-gg/examples?tab=readme-ov-file#other)                |
+
 ## 🚀 Getting Started
 
 **Self-hosting & development**
