@@ -1,4 +1,4 @@
-use std::{collections::hash_map::DefaultHasher, hash::Hasher, net::IpAddr, ops::Deref};
+use std::{collections::hash_map::DefaultHasher, hash::Hasher, net::IpAddr};
 
 use chirp_worker::prelude::*;
 use proto::backend::{self, pkg::*};
@@ -353,9 +353,7 @@ async fn fetch_mm_namespace_config(
 	})
 	.await?;
 
-	let namespace = unwrap!(get_res.namespaces.first(), "namespace not found")
-		.deref()
-		.clone();
+	let namespace = unwrap!(get_res.namespaces.first(), "namespace not found").clone();
 	let namespace_config = unwrap_ref!(namespace.config).clone();
 
 	Ok(namespace_config)

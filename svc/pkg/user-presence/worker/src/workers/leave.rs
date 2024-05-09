@@ -1,6 +1,5 @@
 use chirp_worker::prelude::*;
 use proto::backend::{self, pkg::*};
-use redis::AsyncCommands;
 
 const DEFAULT_USER_SET_STATUS: i32 = backend::user::Status::Online as i32;
 

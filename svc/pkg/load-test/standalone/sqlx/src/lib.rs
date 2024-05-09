@@ -1,4 +1,3 @@
-use futures_util::StreamExt;
 use rivet_operation::prelude::*;
 
 #[tracing::instrument(skip_all)]
@@ -32,8 +31,6 @@ pub async fn run_from_env(_ts: i64) -> GlobalResult<()> {
 			}
 		});
 	}
-
-	Ok(())
 }
 
 async fn exec(ctx: OperationContext<()>) -> GlobalResult<()> {

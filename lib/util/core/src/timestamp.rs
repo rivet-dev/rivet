@@ -15,7 +15,7 @@ pub fn end_of_month(ts: i64) -> GlobalResult<NaiveDateTime> {
 	let nanos = (ts % 1000 * 1_000_000).try_into()?;
 
 	// Get year and month of current month
-	let current_date = unwrap!(NaiveDateTime::from_timestamp_opt(ts / 1000, nanos));
+	let current_date = unwrap!(DateTime::from_timestamp(ts / 1000, nanos));
 	let year = current_date.year();
 	let month = current_date.month();
 

@@ -67,12 +67,10 @@ where
 		.unwrap();
 
 	// A `MakeService` that produces a `Service` to handle each connection
-	let health_check_config = Arc::new(health_check_config);
 	let make_service = make_service_fn(move |conn: &AddrStream| {
 		let shared_client = shared_client.clone();
 		let pools = pools.clone();
 		let cache = cache.clone();
-		let health_check_config = health_check_config.clone();
 
 		// Create a `Service` for responding to the request
 		let remote_addr = conn.remote_addr();
@@ -82,7 +80,6 @@ where
 			let shared_client = shared_client.clone();
 			let pools = pools.clone();
 			let cache = cache.clone();
-			let health_check_config = health_check_config.clone();
 
 			// Handle request
 			let ray_id = Uuid::new_v4();
