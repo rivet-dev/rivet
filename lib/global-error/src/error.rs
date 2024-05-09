@@ -2,7 +2,6 @@ use std::{collections::HashMap, fmt::Display};
 
 use http::StatusCode;
 use serde::Serialize;
-
 #[cfg(feature = "chirp")]
 use types::rivet::chirp;
 

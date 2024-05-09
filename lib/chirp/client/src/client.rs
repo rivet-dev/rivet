@@ -1,10 +1,3 @@
-use chirp_types::{endpoint::Endpoint, message::Message};
-use futures_util::stream::{StreamExt, TryStreamExt};
-use global_error::prelude::*;
-use rand::Rng;
-use redis::{self, AsyncCommands};
-use rivet_pools::prelude::*;
-use rivet_util::Backoff;
 use std::{
 	collections::HashSet,
 	fmt::{self, Debug},
@@ -12,6 +5,14 @@ use std::{
 	sync::Arc,
 	time::Duration,
 };
+
+use chirp_types::{endpoint::Endpoint, message::Message};
+use futures_util::stream::{StreamExt, TryStreamExt};
+use global_error::prelude::*;
+use rand::Rng;
+use redis::{self, AsyncCommands};
+use rivet_pools::prelude::*;
+use rivet_util::Backoff;
 use tokio::task::JoinSet;
 use tokio_util::sync::{CancellationToken, DropGuard};
 use tracing::Instrument;

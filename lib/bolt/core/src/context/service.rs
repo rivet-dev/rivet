@@ -1,6 +1,3 @@
-use anyhow::{ensure, Context, Result};
-use async_recursion::async_recursion;
-use indexmap::IndexMap;
 use std::{
 	collections::HashMap,
 	hash::{Hash, Hasher},
@@ -8,8 +5,13 @@ use std::{
 	path::{Path, PathBuf},
 	sync::{Arc, Weak},
 };
+
+use anyhow::{ensure, Context, Result};
+use async_recursion::async_recursion;
+use indexmap::IndexMap;
 use tokio::{fs, process::Command, sync::RwLock};
 
+use super::BuildOptimization;
 use crate::{
 	config::{
 		self,
@@ -19,8 +21,6 @@ use crate::{
 	dep::{docker, k8s, terraform},
 	utils,
 };
-
-use super::BuildOptimization;
 
 pub type ServiceContext = Arc<ServiceContextData>;
 

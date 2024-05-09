@@ -1,12 +1,13 @@
+use std::{
+	collections::hash_map::DefaultHasher,
+	hash::{Hash, Hasher},
+};
+
 use api_helper::{anchor::WatchIndexQuery, ctx::Ctx};
 use proto::backend::{self, pkg::*};
 use redis::AsyncCommands;
 use rivet_operation::prelude::*;
 use serde::{Deserialize, Serialize};
-use std::{
-	collections::hash_map::DefaultHasher,
-	hash::{Hash, Hasher},
-};
 use url::Url;
 
 use crate::{auth::Auth, types};

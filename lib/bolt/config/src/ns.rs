@@ -1,5 +1,6 @@
-use serde::{Deserialize, Serialize};
 use std::{collections::HashMap, path::PathBuf};
+
+use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 pub fn decode(s: &str) -> Result<Namespace, toml::de::Error> {

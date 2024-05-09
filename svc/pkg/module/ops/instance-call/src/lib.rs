@@ -1,7 +1,8 @@
+use std::time::Duration;
+
 use proto::backend::{self, pkg::*};
 use rivet_operation::prelude::*;
 use serde::{Deserialize, Serialize};
-use std::time::Duration;
 
 #[derive(Serialize)]
 struct CallRequest<'a> {

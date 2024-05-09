@@ -1,6 +1,7 @@
+use std::collections::HashSet;
+
 use chirp_worker::prelude::*;
 use proto::backend::pkg::*;
-use std::collections::HashSet;
 
 // A note on gradual deploys:
 //

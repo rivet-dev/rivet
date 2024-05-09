@@ -1,5 +1,6 @@
-use futures_util::future;
 use std::future::Future;
+
+use futures_util::future;
 
 /// Attempts to create a new future to select over a list of futures.
 /// Non-panicking version of [futures_util::future::select_all](https://docs.rs/futures/0.3.15/futures/future/fn.select_all.html).

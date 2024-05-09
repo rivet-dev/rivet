@@ -1,4 +1,4 @@
-use std::convert::TryInto;
+use std::{collections::HashSet, convert::TryInto};
 
 use proto::backend::{
 	self,
@@ -12,8 +12,6 @@ use proto::backend::{
 	pkg::*,
 };
 use rivet_operation::prelude::*;
-
-use std::collections::HashSet;
 
 // See version-info-game-mode.ts
 const MAX_LOBBY_SIZE: u32 = 256;

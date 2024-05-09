@@ -1,7 +1,8 @@
+use std::fmt::{self, Debug};
+
 use rivet_connection::Connection;
 use rivet_operation::OperationContext;
 use rivet_pools::prelude::*;
-use std::fmt::{self, Debug};
 use uuid::Uuid;
 
 #[derive(Debug)]

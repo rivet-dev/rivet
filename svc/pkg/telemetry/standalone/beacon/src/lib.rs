@@ -1,7 +1,8 @@
+use std::{collections::HashSet, fmt::Display, time::Duration};
+
 use indoc::indoc;
 use rivet_operation::prelude::*;
 use serde_json::json;
-use std::{collections::HashSet, fmt::Display, time::Duration};
 
 // This API key is safe to hardcode. It will not change and is intended to be public.
 const POSTHOG_API_KEY: &str = "phc_1lUNmul6sAdFzDK1VHXNrikCfD7ivQZSpf2yzrPvr4m";

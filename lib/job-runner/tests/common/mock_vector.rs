@@ -1,9 +1,10 @@
-use serde::Deserialize;
 use std::{
 	io::{BufRead, BufReader},
 	net::{TcpListener, TcpStream},
 	sync::mpsc::Sender,
 };
+
+use serde::Deserialize;
 
 #[derive(Deserialize, Debug)]
 pub struct VectorMessage {

@@ -1,6 +1,6 @@
-use http::{uri::Scheme, HeaderName, HeaderValue, Uri};
 use std::{net::IpAddr, str::FromStr};
 
+use http::{uri::Scheme, HeaderName, HeaderValue, Uri};
 use proto::backend::pkg::*;
 use rivet_operation::prelude::*;
 

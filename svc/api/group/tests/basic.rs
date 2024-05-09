@@ -1,6 +1,7 @@
+use std::{net::SocketAddr, sync::Once};
+
 use proto::backend;
 use rivet_operation::prelude::*;
-use std::{net::SocketAddr, sync::Once};
 
 static GLOBAL_INIT: Once = Once::new();
 

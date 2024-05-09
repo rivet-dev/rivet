@@ -1,5 +1,4 @@
-use std::{io::Write, os::unix::fs::PermissionsExt};
-use std::{path::Path, sync::Arc};
+use std::{io::Write, os::unix::fs::PermissionsExt, path::Path, sync::Arc};
 
 use anyhow::*;
 use duct::cmd;

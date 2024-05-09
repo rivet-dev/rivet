@@ -1,7 +1,6 @@
 use proto::backend::{self, pkg::*};
 use rivet_api::apis::configuration::Configuration;
 use rivet_operation::prelude::*;
-
 use tokio::time::{Duration, Instant};
 
 #[tracing::instrument(skip_all)]

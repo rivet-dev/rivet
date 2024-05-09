@@ -1,5 +1,6 @@
-use serde::Deserialize;
 use std::{collections::HashMap, ops::Deref};
+
+use serde::Deserialize;
 
 use crate::{config, context::ProjectContext};
 

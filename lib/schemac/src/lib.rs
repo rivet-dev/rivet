@@ -1,9 +1,10 @@
-use regex::Regex;
 use std::{
 	collections::{HashMap, HashSet},
 	fmt, fs, io,
 	path::{Path, PathBuf},
 };
+
+use regex::Regex;
 
 lazy_static::lazy_static! {
 	static ref PROTO_IMPORT_RE: Regex =

@@ -1,10 +1,11 @@
+use std::{sync::Arc, time::Duration};
+
 use chirp_client::{
 	endpoint::Endpoint,
 	message::{MessageSubjectParameter, MessageTopic},
 };
 use prost::Message;
 use proto::rivet::chirp;
-use std::{sync::Arc, time::Duration};
 use tokio::{sync::Notify, task};
 
 #[derive(Clone, PartialEq, prost::Message)]

@@ -1,5 +1,6 @@
-use global_error::{ensure_with, GlobalResult};
 use std::{collections::HashMap, sync::Arc, time::Duration};
+
+use global_error::{ensure_with, GlobalResult};
 use tokio_util::sync::{CancellationToken, DropGuard};
 
 use crate::Error;

@@ -1,8 +1,7 @@
-use std::sync::Once;
+use std::{sync::Once, time::Duration};
 
 use proto::backend::{self, pkg::*};
 use rivet_operation::prelude::*;
-use std::time::Duration;
 
 /// How long to wait for a CDN configuration to apply.
 const CDN_SLEEP_DURATION: Duration = Duration::from_secs(5);
@@ -307,9 +306,10 @@ async fn job_run() {
 }
 
 mod cdn_suite {
-	use super::{Ctx, CDN_SLEEP_DURATION};
 	use proto::backend::{self, cdn::*, pkg::*};
 	use rivet_operation::prelude::*;
+
+	use super::{Ctx, CDN_SLEEP_DURATION};
 
 	struct CdnVersion {
 		game: backend::game::Game,

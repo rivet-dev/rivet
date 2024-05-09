@@ -3,8 +3,7 @@ use std::collections::HashMap;
 use chirp_worker::prelude::*;
 use proto::backend::{
 	self,
-	matchmaker::lobby_find::ErrorCode,
-	matchmaker::query::JoinKind,
+	matchmaker::{lobby_find::ErrorCode, query::JoinKind},
 	pkg::{mm::msg::lobby_find::message::Query, *},
 };
 use rand::seq::SliceRandom;

@@ -1,6 +1,7 @@
-use super::*;
 use futures_util::StreamExt;
 use rivet_cache_result::RateLimitResult;
+
+use super::*;
 
 pub struct RateLimitConfig {
 	pub key: String,

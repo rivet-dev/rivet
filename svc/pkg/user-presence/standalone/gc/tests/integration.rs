@@ -1,7 +1,6 @@
+use ::user_presence_gc::run_from_env;
 use chirp_worker::prelude::*;
 use redis::AsyncCommands;
-
-use ::user_presence_gc::run_from_env;
 
 #[tokio::test(flavor = "multi_thread")]
 async fn basic() {

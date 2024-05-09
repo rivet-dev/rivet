@@ -1,7 +1,6 @@
+use ::cluster_gc::run_from_env;
 use chirp_worker::prelude::*;
 use proto::backend::{self, pkg::*};
-
-use ::cluster_gc::run_from_env;
 
 const DRAIN_TIMEOUT: i64 = 1000 * 60 * 60;
 

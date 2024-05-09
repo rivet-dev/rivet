@@ -1,3 +1,9 @@
+use std::{
+	fmt::{self, Debug},
+	sync::Arc,
+	time::{Duration, Instant},
+};
+
 use chirp_metrics as metrics;
 use futures_util::StreamExt;
 use global_error::{GlobalError, GlobalResult};
@@ -7,11 +13,6 @@ use rivet_connection::Connection;
 use rivet_operation::{prelude::err_code, OperationContext};
 use rivet_pools::prelude::*;
 use rivet_util::CleanExit;
-use std::{
-	fmt::{self, Debug},
-	sync::Arc,
-	time::{Duration, Instant},
-};
 use tokio::time;
 use tracing::Instrument;
 use types::rivet::chirp;

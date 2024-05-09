@@ -1,6 +1,3 @@
-use anyhow::*;
-use job_runner::{log_shipper, throttle};
-use signal_hook::{consts::signal::SIGTERM, iterator::Signals};
 use std::{
 	fs,
 	io::{BufRead, BufReader},
@@ -9,6 +6,10 @@ use std::{
 	thread,
 	time::{Duration, SystemTime, UNIX_EPOCH},
 };
+
+use anyhow::*;
+use job_runner::{log_shipper, throttle};
+use signal_hook::{consts::signal::SIGTERM, iterator::Signals};
 
 /// Maximum length of a single log line
 const MAX_LINE_BYTES: usize = 1024;

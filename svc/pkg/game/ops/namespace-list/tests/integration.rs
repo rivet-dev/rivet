@@ -1,6 +1,6 @@
-use chirp_worker::prelude::*;
-
 use std::collections::HashSet;
+
+use chirp_worker::prelude::*;
 
 struct TestNamespace {
 	display_name: String,

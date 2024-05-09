@@ -1,6 +1,5 @@
 use api_helper::auth::{ApiAuth, AuthRateLimitCtx};
 use proto::claims::Claims;
-
 use rivet_operation::prelude::*;
 
 /// Information derived from the authentication middleware.

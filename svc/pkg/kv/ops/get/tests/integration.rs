@@ -1,6 +1,5 @@
 use chirp_worker::prelude::*;
 use proto::backend::pkg::*;
-
 use serde_json::json;
 
 #[worker_test]

@@ -1,5 +1,6 @@
-use serde::Deserialize;
 use std::{collections::HashMap, path::PathBuf};
+
+use serde::Deserialize;
 
 pub fn decode(s: &str) -> Result<Project, toml::de::Error> {
 	toml::from_str(s)

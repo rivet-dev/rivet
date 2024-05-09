@@ -1,7 +1,8 @@
+use std::collections::{HashMap, HashSet};
+
 use chirp_worker::prelude::*;
 use futures_util::StreamExt;
 use proto::backend::{self, pkg::*};
-use std::collections::{HashMap, HashSet};
 
 #[derive(sqlx::FromRow)]
 struct LobbyRow {

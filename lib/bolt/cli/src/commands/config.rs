@@ -1,8 +1,7 @@
 use anyhow::*;
-use bolt_core::dep;
 use bolt_core::{
 	context::{self, ProjectContextData, RunContext},
-	tasks,
+	dep, tasks,
 };
 use clap::Parser;
 use rivet_term::console::style;

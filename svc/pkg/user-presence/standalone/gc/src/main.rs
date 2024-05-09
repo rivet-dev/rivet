@@ -1,5 +1,6 @@
-use rivet_operation::prelude::*;
 use std::time::Duration;
+
+use rivet_operation::prelude::*;
 
 fn main() -> GlobalResult<()> {
 	rivet_runtime::run(start()).unwrap()

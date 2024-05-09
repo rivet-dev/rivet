@@ -1,11 +1,12 @@
-use chirp_worker::prelude::*;
-use proto::backend::{self, pkg::*};
 use std::{
 	convert::TryInto,
 	io::{Read, Write},
 	net::{TcpStream, UdpSocket},
 	sync::Arc,
 };
+
+use chirp_worker::prelude::*;
+use proto::backend::{self, pkg::*};
 
 #[worker_test]
 async fn basic_http(ctx: TestCtx) {

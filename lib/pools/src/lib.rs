@@ -3,8 +3,9 @@ pub mod metrics;
 mod pools;
 pub mod utils;
 
-use rand::prelude::SliceRandom;
 use std::{collections::HashMap, env, fmt::Debug, str::FromStr, sync::Arc, time::Duration};
+
+use rand::prelude::SliceRandom;
 use tokio::task::JoinSet;
 use tokio_util::sync::CancellationToken;
 
@@ -16,10 +17,10 @@ pub mod prelude {
 	pub use redis;
 	pub use sqlx;
 
-	pub use crate::pools::{ClickHousePool, CrdbPool, NatsPool, RedisPool};
 	pub use crate::{
-		__sql_query, __sql_query_as, __sql_query_as_raw, sql_execute, sql_fetch, sql_fetch_all,
-		sql_fetch_many, sql_fetch_one, sql_fetch_optional,
+		__sql_query, __sql_query_as, __sql_query_as_raw,
+		pools::{ClickHousePool, CrdbPool, NatsPool, RedisPool},
+		sql_execute, sql_fetch, sql_fetch_all, sql_fetch_many, sql_fetch_one, sql_fetch_optional,
 	};
 }
 

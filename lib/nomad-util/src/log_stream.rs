@@ -1,7 +1,8 @@
+use std::pin::Pin;
+
 use futures_util::{Stream, StreamExt};
 use nomad_client::apis::configuration::Configuration;
 use serde::Deserialize;
-use std::pin::Pin;
 
 use crate::error::NomadError;
 

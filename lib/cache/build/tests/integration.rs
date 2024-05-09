@@ -1,9 +1,10 @@
-use rand::{seq::IteratorRandom, thread_rng, Rng};
 use std::{
 	collections::{HashMap, HashSet},
 	sync::Arc,
 	time::Duration,
 };
+
+use rand::{seq::IteratorRandom, thread_rng, Rng};
 use uuid::Uuid;
 
 async fn build_cache() -> rivet_cache::Cache {

@@ -1,11 +1,8 @@
 use api_helper::{anchor::WatchIndexQuery, ctx::Ctx};
-
 use proto::backend;
 use rivet_api::models;
-
 use rivet_convert::{ApiFrom, ApiTryFrom};
 use rivet_operation::prelude::{proto::backend::pkg::cluster, *};
-
 use serde_json::{json, Value};
 
 use crate::auth::Auth;

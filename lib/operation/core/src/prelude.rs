@@ -16,11 +16,6 @@ pub mod util {
 	pub use rivet_util::*;
 }
 
-pub use crate::OperationContext;
-pub use rivet_operation_macros::operation;
-
-pub use types::{self, rivet as proto, rivet::common};
-
 // External libraries
 #[doc(hidden)]
 pub use async_trait::async_trait;
@@ -32,6 +27,7 @@ pub use indoc::*;
 pub use redis;
 #[doc(hidden)]
 pub use rivet_cache;
+pub use rivet_operation_macros::operation;
 #[doc(hidden)]
 pub use rivet_pools::{self, prelude::*};
 #[doc(hidden)]
@@ -42,3 +38,6 @@ pub use thiserror;
 pub use tokio;
 #[doc(hidden)]
 pub use tracing;
+pub use types::{self, rivet as proto, rivet::common};
+
+pub use crate::OperationContext;

@@ -1,7 +1,9 @@
-use std::convert::{TryFrom, TryInto};
+use std::{
+	convert::{TryFrom, TryInto},
+	fmt::Debug,
+};
 
 use chirp_types::message::Message;
-use std::fmt::Debug;
 use uuid::Uuid;
 
 use crate::error::ClientError;

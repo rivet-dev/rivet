@@ -1,8 +1,8 @@
+use std::{collections::HashSet, time::Duration};
+
 use chirp_worker::prelude::*;
 use proto::backend::{self, pkg::*};
 use redis::AsyncCommands;
-
-use std::{collections::HashSet, time::Duration};
 use tokio::time::Instant;
 use tracing::Instrument;
 

@@ -1,7 +1,8 @@
+use std::collections::{HashMap, HashSet};
+
 use futures_util::stream::StreamExt;
 use proto::backend::pkg::*;
 use rivet_operation::prelude::*;
-use std::collections::{HashMap, HashSet};
 
 // NOTE: There's a bug in mm-lobby-cleanup that will upsert rows
 #[derive(Debug, sqlx::FromRow)]

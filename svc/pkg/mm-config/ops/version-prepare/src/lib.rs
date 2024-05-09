@@ -1,9 +1,10 @@
-use std::collections::hash_map::DefaultHasher;
-use std::hash::Hasher;
+use std::{
+	collections::{hash_map::DefaultHasher, HashMap, HashSet},
+	hash::Hasher,
+};
 
 use proto::backend::{self, pkg::*};
 use rivet_operation::prelude::*;
-use std::collections::{HashMap, HashSet};
 
 use crate::prewarm_ats::PrewarmAtsContext;
 

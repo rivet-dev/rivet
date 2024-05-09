@@ -1,7 +1,8 @@
+use std::collections::HashMap;
+
 use proto::backend::pkg::*;
 use rivet_operation::prelude::*;
 use serde_json::json;
-use std::collections::HashMap;
 
 #[operation(name = "faker-job-template")]
 async fn handle(

@@ -1,5 +1,6 @@
-use anyhow::{Context, Result};
 use std::{convert::Infallible, env, net::SocketAddr, process::Command};
+
+use anyhow::{Context, Result};
 use tokio::{
 	io::{AsyncBufReadExt, AsyncWriteExt},
 	net::{TcpListener, UdpSocket},
@@ -107,8 +108,10 @@ async fn with_select_term(future: impl std::future::Future<Output = Result<()>>)
 }
 
 async fn echo_http_server(port: u16) -> Result<()> {
-	use hyper::service::{make_service_fn, service_fn};
-	use hyper::{Body, Request, Response, Server};
+	use hyper::{
+		service::{make_service_fn, service_fn},
+		Body, Request, Response, Server,
+	};
 
 	let addr = SocketAddr::from(([0, 0, 0, 0], port));
 	println!("HTTP: {}", port);

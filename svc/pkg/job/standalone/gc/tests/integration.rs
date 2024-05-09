@@ -1,7 +1,6 @@
+use ::job_gc::run_from_env;
 use chirp_worker::prelude::*;
 use proto::backend;
-
-use ::job_gc::run_from_env;
 
 lazy_static::lazy_static! {
 	static ref NOMAD_CONFIG: nomad_client::apis::configuration::Configuration =

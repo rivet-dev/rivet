@@ -1,10 +1,11 @@
+use std::{convert::Infallible, future::Future, net::SocketAddr, sync::Arc, time::Instant};
+
 use hyper::{
 	body::HttpBody,
 	server::conn::AddrStream,
 	service::{make_service_fn, service_fn},
 	Body, Request, Response, Server,
 };
-use std::{convert::Infallible, future::Future, net::SocketAddr, sync::Arc, time::Instant};
 use tracing::Instrument;
 use uuid::Uuid;
 

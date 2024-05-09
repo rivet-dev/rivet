@@ -1,5 +1,3 @@
-use super::mock_vector;
-use serde_json::json;
 use std::{
 	fs,
 	path::Path,
@@ -7,8 +5,12 @@ use std::{
 	sync::mpsc::Receiver,
 	time::Duration,
 };
+
+use serde_json::json;
 use tempfile::tempdir;
 use uuid::Uuid;
+
+use super::mock_vector;
 
 pub struct Setup {
 	pub container_id: String,

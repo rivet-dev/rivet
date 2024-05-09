@@ -1,5 +1,6 @@
-use rivet_pools::prelude::*;
 use std::fmt::Debug;
+
+use rivet_pools::prelude::*;
 
 #[derive(Debug, thiserror::Error)]
 pub enum NomadError {

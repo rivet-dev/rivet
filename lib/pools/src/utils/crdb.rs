@@ -4,9 +4,11 @@
 // - https://www.cockroachlabs.com/docs/v22.2/transactions#client-side-intervention
 // - https://github.com/cockroachdb/docs/blob/1250d113dcb6de3a885eef1f3b2dfbc6d7eba5fa/_includes/v2.0/app/txn-sample.rs#L10
 
-use crate::CrdbPool;
-use global_error::prelude::*;
 use std::{future::Future, pin::Pin};
+
+use global_error::prelude::*;
+
+use crate::CrdbPool;
 
 const MAX_TX_RETRIES: usize = 16;
 
@@ -16,7 +18,7 @@ pub type AsyncResult<'a, T> = Pin<Box<dyn Future<Output = GlobalResult<T>> + Sen
 ///
 /// See
 /// https://www.cockroachlabs.com/docs/v22.2/advanced-client-side-transaction-retries
-/// 
+///
 /// **NOTE** The transaction will be rolled back if the future is cancelled. See
 /// https://docs.rs/sqlx/0.7.4/sqlx/struct.Transaction.html
 #[tracing::instrument(skip_all)]

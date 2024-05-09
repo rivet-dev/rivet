@@ -2,9 +2,9 @@ mod error;
 mod getter_ctx;
 mod inner;
 mod key;
+mod metrics;
 mod rate_limit;
 mod req_config;
-mod metrics;
 
 pub use error::*;
 pub use getter_ctx::*;

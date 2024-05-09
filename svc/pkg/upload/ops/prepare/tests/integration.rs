@@ -2,9 +2,7 @@ use std::collections::HashMap;
 
 use chirp_worker::prelude::*;
 use proto::backend;
-use rand::distributions::Alphanumeric;
-use rand::{thread_rng, Rng};
-
+use rand::{distributions::Alphanumeric, thread_rng, Rng};
 use upload_prepare::CHUNK_SIZE;
 
 const TEST_BUCKET_NAME: &str = "bucket-build";

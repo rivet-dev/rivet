@@ -1,6 +1,7 @@
+use std::collections::HashMap;
+
 use proto::backend::pkg::*;
 use rivet_operation::prelude::*;
-use std::collections::HashMap;
 
 lazy_static::lazy_static! {
 	static ref REDIS_SCRIPT: redis::Script = redis::Script::new(include_str!("../redis-scripts/main.lua"));

@@ -1,9 +1,9 @@
-use anyhow::{ensure, Context, Result};
+use std::path::{Path, PathBuf};
 
+use anyhow::{ensure, Context, Result};
 use indoc::formatdoc;
 use regex::Regex;
 use serde_json::json;
-use std::path::{Path, PathBuf};
 use tokio::{fs, io::AsyncReadExt, process::Command, task::block_in_place};
 
 use crate::{config, context::ProjectContext};

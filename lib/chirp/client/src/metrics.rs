@@ -1,5 +1,6 @@
-use rivet_metrics::{prometheus::*, REGISTRY};
 use std::time::{Duration, Instant};
+
+use rivet_metrics::{prometheus::*, REGISTRY};
 use tokio::sync::OnceCell;
 
 lazy_static::lazy_static! {

@@ -1,9 +1,9 @@
+use std::collections::HashSet;
+
 use proto::backend::{
 	matchmaker::lobby_runtime::ProxyProtocol as LobbyRuntimeProxyProtocol, pkg::*,
 };
 use rivet_operation::prelude::*;
-
-use std::collections::HashSet;
 
 #[operation(name = "game-token-development-validate")]
 async fn handle(

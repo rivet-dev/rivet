@@ -1,7 +1,7 @@
+use std::collections::HashMap;
+
 use chirp_worker::prelude::*;
 use proto::backend;
-
-use std::collections::HashMap;
 
 fn generate_topic() -> HashMap<String, String> {
 	HashMap::from([("test".to_string(), Uuid::new_v4().to_string())])

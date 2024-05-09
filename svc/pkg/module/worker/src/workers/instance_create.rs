@@ -1,9 +1,10 @@
+use std::{collections::HashSet, time::Duration};
+
 use chirp_worker::prelude::*;
 use futures_util::{StreamExt, TryStreamExt};
 use proto::backend::{self, pkg::*};
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use serde_json::json;
-use std::{collections::HashSet, time::Duration};
 
 #[derive(Serialize)]
 struct Variables<T> {

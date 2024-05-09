@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+
 use testcontainers::{Container, Docker, Image, WaitForMessage};
 
 const CONTAINER_IDENTIFIER: &str = "nats";

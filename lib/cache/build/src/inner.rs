@@ -1,5 +1,6 @@
-use rivet_pools::prelude::*;
 use std::{env, fmt::Debug, sync::Arc};
+
+use rivet_pools::prelude::*;
 
 use super::*;
 

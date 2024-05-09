@@ -2,17 +2,16 @@
 
 use std::sync::Once;
 
-use chirp_worker::prelude::*;
-use http::{header, method::Method};
-use hyper::{Body, Request, Response};
-use uuid::Uuid;
-
 use ::api_helper::{
 	auth::ApiAuth,
 	error::handle_rejection,
 	macro_util, routes,
 	util::{verify_cors, CorsConfigBuilder, CorsResponse},
 };
+use chirp_worker::prelude::*;
+use http::{header, method::Method};
+use hyper::{Body, Request, Response};
+use uuid::Uuid;
 
 // Simulated ctx auth
 pub struct Auth {
@@ -397,10 +396,11 @@ async fn route(
 
 // Test endpoint module
 mod test_endpoint {
-	use super::Auth;
 	use ::api_helper::{anchor::WatchIndexQuery, ctx::Ctx};
 	use chirp_worker::prelude::*;
 	use serde::{Deserialize, Serialize};
+
+	use super::Auth;
 
 	#[derive(Debug, Serialize, Deserialize)]
 	pub struct TestResponse {}

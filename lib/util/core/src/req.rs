@@ -5,7 +5,7 @@ use global_error::prelude::*;
 
 #[async_trait]
 pub trait SendRetry {
-	/// Retries the request upon receiving a 429 response. 
+	/// Retries the request upon receiving a 429 response.
 	async fn send_retry(self, mut retries: usize) -> GlobalResult<reqwest::Response>;
 }
 

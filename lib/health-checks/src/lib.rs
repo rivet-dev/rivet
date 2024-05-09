@@ -1,9 +1,10 @@
+use std::{convert::Infallible, net::SocketAddr, sync::Arc};
+
 use hyper::{
 	server::Server,
 	service::{make_service_fn, service_fn},
 	Body, Request, Response,
 };
-use std::{convert::Infallible, net::SocketAddr, sync::Arc};
 
 #[derive(Clone, Default)]
 pub struct Config {
@@ -208,8 +209,9 @@ mod status {
 	}
 
 	pub mod crdb {
-		use rivet_pools::prelude::*;
 		use std::time::Instant;
+
+		use rivet_pools::prelude::*;
 
 		use super::{Status, StatusResponse};
 
@@ -240,8 +242,9 @@ mod status {
 	}
 
 	pub mod redis {
-		use rivet_pools::prelude::*;
 		use std::time::Instant;
+
+		use rivet_pools::prelude::*;
 
 		use super::{Status, StatusResponse};
 
@@ -273,8 +276,9 @@ mod status {
 	}
 
 	pub mod nats {
-		use rivet_pools::prelude::*;
 		use std::time::{Duration, Instant};
+
+		use rivet_pools::prelude::*;
 
 		use super::{Status, StatusResponse};
 

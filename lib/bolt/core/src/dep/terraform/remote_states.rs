@@ -1,6 +1,7 @@
+use std::collections::HashMap;
+
 use derive_builder::Builder;
 use maplit::hashmap;
-use std::collections::HashMap;
 
 use crate::context::ProjectContext;
 

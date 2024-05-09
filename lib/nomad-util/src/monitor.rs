@@ -34,7 +34,7 @@ impl NomadEvent {
 		if self.topic != topic || self.r#type != ty {
 			return Ok(None);
 		}
-		
+
 		let payload = serde_json::from_str(self.payload.get())?;
 
 		Ok(payload)

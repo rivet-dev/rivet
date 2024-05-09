@@ -1,7 +1,7 @@
+use std::collections::HashMap;
+
 use chirp_worker::prelude::*;
 use proto::backend;
-
-use std::collections::HashMap;
 
 #[worker_test]
 async fn empty(ctx: TestCtx) {

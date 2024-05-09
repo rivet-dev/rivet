@@ -1,8 +1,9 @@
+use std::collections::HashMap;
+
 use chirp_worker::prelude::*;
 use proto::backend::{self, pkg::*};
 use redis::AsyncCommands;
 use serde_json::json;
-use std::collections::HashMap;
 
 #[derive(Debug, sqlx::FromRow)]
 struct LobbyRow {

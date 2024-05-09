@@ -1,6 +1,7 @@
+use std::{convert::TryInto, time};
+
 use chrono::{DateTime, Datelike, Duration, NaiveDate, NaiveDateTime, TimeZone, Utc};
 use global_error::prelude::*;
-use std::{convert::TryInto, time};
 
 pub fn now() -> i64 {
 	time::SystemTime::now()

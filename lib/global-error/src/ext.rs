@@ -1,5 +1,6 @@
-use crate::{bail, GlobalResult, Location};
 use async_trait::async_trait;
+
+use crate::{bail, GlobalResult, Location};
 
 #[derive(Debug, thiserror::Error)]
 pub enum AssertionError {

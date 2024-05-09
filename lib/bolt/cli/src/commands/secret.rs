@@ -1,6 +1,5 @@
 use anyhow::*;
-use bolt_core::context::ProjectContext;
-use bolt_core::tasks::config::ConfigGenerator;
+use bolt_core::{context::ProjectContext, tasks::config::ConfigGenerator};
 use clap::{Parser, ValueEnum};
 use serde_json::json;
 

@@ -1,5 +1,6 @@
-use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+
+use serde::{Deserialize, Serialize};
 
 pub fn decode(s: &str) -> Result<ServiceConfig, toml::de::Error> {
 	toml::from_str(s)

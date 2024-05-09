@@ -4,8 +4,7 @@ use rivet_term::console::style;
 use tokio::fs;
 
 use crate::{
-	context::ServiceContextData,
-	context::{ProjectContext, ProjectContextData},
+	context::{ProjectContext, ProjectContextData, ServiceContextData},
 	dep, tasks,
 	utils::{self, command_helper::CommandHelper},
 };

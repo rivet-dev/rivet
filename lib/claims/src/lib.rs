@@ -1,7 +1,8 @@
+use std::convert::TryFrom;
+
 use global_error::prelude::*;
 use jsonwebtoken::{Algorithm, DecodingKey};
 use prost::Message;
-use std::convert::TryFrom;
 
 mod schema {
 	pub use types::rivet::{backend, claims::*};
@@ -14,8 +15,9 @@ lazy_static::lazy_static! {
 }
 
 pub mod ent {
-	use global_error::prelude::*;
 	use std::convert::{TryFrom, TryInto};
+
+	use global_error::prelude::*;
 	use uuid::Uuid;
 
 	use super::schema;
@@ -622,7 +624,9 @@ impl ClaimsDecode for schema::Claims {
 		self.entitlements
 			.iter()
 			.find_map(|ent| match &ent.kind {
-				Some(schema::entitlement::Kind::ProvisionedServer(ent)) => Some(ent::ProvisionedServer::try_from(ent)),
+				Some(schema::entitlement::Kind::ProvisionedServer(ent)) => {
+					Some(ent::ProvisionedServer::try_from(ent))
+				}
 				_ => None,
 			})
 			.ok_or(err_code!(

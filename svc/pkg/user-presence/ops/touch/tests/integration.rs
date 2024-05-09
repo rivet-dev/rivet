@@ -1,8 +1,8 @@
+use std::time::Duration;
+
 use chirp_worker::prelude::*;
 use proto::backend::pkg::*;
 use redis::AsyncCommands;
-
-use std::time::Duration;
 
 #[worker_test]
 async fn basic(ctx: TestCtx) {

@@ -1,10 +1,9 @@
 use std::time::Duration;
 
+use ::mm_gc::run_from_env;
 use chirp_worker::prelude::*;
 use indoc::indoc;
 use proto::backend::{self, pkg::*};
-
-use ::mm_gc::run_from_env;
 
 #[tokio::test(flavor = "multi_thread")]
 async fn all() {

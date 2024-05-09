@@ -1,12 +1,12 @@
-use anyhow::*;
-use duct::cmd;
-use rand::{distributions::Alphanumeric, prelude::*};
 use std::{
 	future::Future,
 	path::{Path, PathBuf},
 };
-use tokio::fs;
-use tokio::task::block_in_place;
+
+use anyhow::*;
+use duct::cmd;
+use rand::{distributions::Alphanumeric, prelude::*};
+use tokio::{fs, task::block_in_place};
 use toml_edit::value;
 use uuid::Uuid;
 

@@ -1,6 +1,5 @@
-use chirp_worker::prelude::*;
-
 use ::load_test_api_cloud::run_from_env;
+use chirp_worker::prelude::*;
 
 #[tokio::test(flavor = "multi_thread")]
 async fn basic() {

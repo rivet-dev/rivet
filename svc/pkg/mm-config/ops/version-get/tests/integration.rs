@@ -1,7 +1,7 @@
+use std::collections::HashSet;
+
 use chirp_worker::prelude::*;
 use proto::backend::{self};
-
-use std::collections::HashSet;
 
 struct TestVersion {
 	region_id: Uuid,

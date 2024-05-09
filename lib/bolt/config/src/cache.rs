@@ -1,8 +1,9 @@
-use serde::{Deserialize, Serialize};
 use std::{
 	collections::{HashMap, HashSet},
 	time::SystemTime,
 };
+
+use serde::{Deserialize, Serialize};
 
 /// Cached data used to speed up Bolt commands.
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]

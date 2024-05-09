@@ -1,7 +1,8 @@
+use std::collections::HashMap;
+
 use anyhow::{Context, Result};
 use indoc::{formatdoc, indoc};
 use serde_json::json;
-use std::collections::HashMap;
 use tokio::fs;
 
 use crate::{

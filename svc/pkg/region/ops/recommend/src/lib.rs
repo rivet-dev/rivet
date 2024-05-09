@@ -1,6 +1,6 @@
-use futures_util::TryFutureExt;
 use std::cmp::{Ordering, PartialOrd};
 
+use futures_util::TryFutureExt;
 use proto::backend::{self, pkg::*};
 use rivet_operation::prelude::*;
 

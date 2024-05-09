@@ -1406,9 +1406,9 @@ fn build_port(
 	run: &backend::job::Run,
 	port: &backend::matchmaker::lobby_runtime::Port,
 ) -> GlobalResult<Option<(String, models::MatchmakerJoinPort)>> {
-	use backend::job::ProxyProtocol as JobProxyProtocol;
-	use backend::matchmaker::lobby_runtime::{
-		ProxyKind as MmProxyKind, ProxyProtocol as MmProxyProtocol,
+	use backend::{
+		job::ProxyProtocol as JobProxyProtocol,
+		matchmaker::lobby_runtime::{ProxyKind as MmProxyKind, ProxyProtocol as MmProxyProtocol},
 	};
 
 	let proxy_kind = unwrap!(MmProxyKind::from_i32(port.proxy_kind));
@@ -1501,8 +1501,7 @@ fn test_mm_and_job_proxy_protocol_eq(
 	mm_proxy_protocol: backend::matchmaker::lobby_runtime::ProxyProtocol,
 	job_proxy_protocol: backend::job::ProxyProtocol,
 ) -> bool {
-	use backend::job::ProxyProtocol as JPP;
-	use backend::matchmaker::lobby_runtime::ProxyProtocol as MPP;
+	use backend::{job::ProxyProtocol as JPP, matchmaker::lobby_runtime::ProxyProtocol as MPP};
 
 	match (mm_proxy_protocol, job_proxy_protocol) {
 		(MPP::Http, JPP::Http) => true,

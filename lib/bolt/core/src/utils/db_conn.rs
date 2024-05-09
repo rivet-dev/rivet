@@ -1,9 +1,8 @@
 use std::{collections::HashMap, sync::Arc};
-use urlencoding::encode;
 
 use anyhow::*;
-
 use indoc::indoc;
+use urlencoding::encode;
 
 use crate::{
 	config::{self, service::RuntimeKind},

@@ -1,7 +1,6 @@
 use anyhow::*;
-use clap::{Parser, ValueEnum};
-
 use bolt_core::{context::ProjectContext, tasks::ssh::TempSshKey};
+use clap::{Parser, ValueEnum};
 
 #[derive(ValueEnum, Clone)]
 pub enum Format {

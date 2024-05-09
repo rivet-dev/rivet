@@ -10,9 +10,8 @@ use anyhow::*;
 use sha2::{Digest, Sha256};
 use tokio::{fs, sync::Mutex};
 
-use crate::{config, context, utils::command_helper::CommandHelper};
-
 use super::{RunContext, ServiceContext};
+use crate::{config, context, utils::command_helper::CommandHelper};
 
 pub type ProjectContext = Arc<ProjectContextData>;
 

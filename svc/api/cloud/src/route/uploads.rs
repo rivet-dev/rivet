@@ -1,5 +1,4 @@
 use api_helper::ctx::Ctx;
-
 use rivet_claims::ClaimsDecode;
 use rivet_operation::prelude::*;
 use serde_json::json;

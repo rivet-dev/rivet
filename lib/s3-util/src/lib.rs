@@ -196,14 +196,14 @@ pub fn s3_provider_active(svc_name: &str, provider: Provider) -> bool {
 	let provider_upper = provider.as_str().to_uppercase();
 
 	std::env::var(format!("S3_{}_BUCKET_{}", provider_upper, svc_screaming)).is_ok()
-} 
+}
 
 pub fn s3_region(svc_name: &str, provider: Provider) -> Result<String, Error> {
 	let svc_screaming = svc_name.to_uppercase().replace("-", "_");
 	let provider_upper = provider.as_str().to_uppercase();
 
 	std::env::var(format!("S3_{}_REGION_{}", provider_upper, svc_screaming)).map_err(Into::into)
-} 
+}
 
 pub fn s3_credentials(svc_name: &str, provider: Provider) -> Result<(String, String), Error> {
 	let svc_screaming = svc_name.to_uppercase().replace("-", "_");
@@ -228,5 +228,6 @@ pub fn s3_endpoint_external(svc_name: &str, provider: Provider) -> Result<String
 	std::env::var(format!(
 		"S3_{}_ENDPOINT_EXTERNAL_{}",
 		provider_upper, svc_screaming
-	)).map_err(Into::into)
+	))
+	.map_err(Into::into)
 }

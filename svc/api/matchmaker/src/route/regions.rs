@@ -1,8 +1,9 @@
+use std::collections::HashSet;
+
 use api_helper::{anchor::WatchIndexQuery, ctx::Ctx};
 use proto::backend;
 use rivet_matchmaker_server::models;
 use rivet_operation::prelude::*;
-use std::collections::HashSet;
 
 use crate::{auth::Auth, fetch::game::fetch_ns, utils};
 

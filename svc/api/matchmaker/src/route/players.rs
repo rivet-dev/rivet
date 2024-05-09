@@ -1,4 +1,7 @@
-use std::convert::TryInto;
+use std::{
+	collections::{HashMap, HashSet},
+	convert::TryInto,
+};
 
 use api_helper::{anchor::WatchIndexQuery, ctx::Ctx};
 use proto::backend::pkg::*;
@@ -7,7 +10,6 @@ use rivet_claims::ClaimsDecode;
 use rivet_operation::prelude::*;
 use serde::Deserialize;
 use serde_json::json;
-use std::collections::{HashMap, HashSet};
 
 use crate::auth::Auth;
 

@@ -1,5 +1,6 @@
-use global_error::prelude::*;
 use std::collections::HashMap;
+
+use global_error::prelude::*;
 
 /// Converts the topic map to a deterministic string.
 ///

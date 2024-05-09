@@ -1,6 +1,5 @@
 use api_helper::{define_router, util::CorsConfigBuilder};
 use hyper::{Body, Request, Response};
-
 use rivet_portal_server::models;
 
 mod games;

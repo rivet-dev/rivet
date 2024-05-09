@@ -1,6 +1,5 @@
 use api_helper::ctx::Ctx;
 use proto::common;
-
 use rivet_operation::prelude::*;
 
 use crate::auth::Auth;

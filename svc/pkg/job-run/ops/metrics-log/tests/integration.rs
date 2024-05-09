@@ -1,7 +1,7 @@
+use std::time::Duration;
+
 use chirp_worker::prelude::*;
 use proto::backend::{self, pkg::*};
-
-use std::time::Duration;
 
 #[worker_test]
 async fn cpu_stress(ctx: TestCtx) {

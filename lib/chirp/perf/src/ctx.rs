@@ -1,12 +1,14 @@
-use rivet_pools::prelude::*;
 use std::{
 	env,
+	fmt::Debug,
 	sync::{
 		atomic::{AtomicI64, Ordering},
 		Arc,
 	},
+	time::Instant,
 };
-use std::{fmt::Debug, time::Instant};
+
+use rivet_pools::prelude::*;
 use tokio::sync::RwLock;
 use tracing::Instrument;
 use types::rivet::perf;

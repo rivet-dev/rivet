@@ -1,6 +1,7 @@
+use std::collections::HashMap;
+
 use chirp_worker::prelude::*;
 use proto::backend::{self, pkg::*};
-use std::collections::HashMap;
 
 #[worker_test]
 async fn single_lobby_create(ctx: TestCtx) {

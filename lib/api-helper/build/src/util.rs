@@ -1,4 +1,3 @@
-use regex::Regex;
 use std::{str::FromStr, time::Duration};
 
 use global_error::prelude::*;
@@ -10,6 +9,7 @@ use hyper::{
 	header::{self, HeaderName},
 	Body, Request,
 };
+use regex::Regex;
 use rivet_claims::ClaimsDecode;
 
 /// Origins that the hub may be requesting from.

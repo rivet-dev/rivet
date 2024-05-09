@@ -2,7 +2,6 @@ use api_helper::{define_router, util::CorsConfigBuilder};
 use hyper::{Body, Request, Response};
 use rivet_api::models as new_models;
 use rivet_group_server::models;
-
 use uuid::Uuid;
 
 mod groups;

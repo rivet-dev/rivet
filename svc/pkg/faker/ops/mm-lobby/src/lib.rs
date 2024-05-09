@@ -1,6 +1,7 @@
+use std::collections::HashMap;
+
 use proto::backend::{self, pkg::*};
 use rivet_operation::prelude::*;
-use std::collections::HashMap;
 
 #[operation(name = "faker-mm-lobby")]
 async fn handle(

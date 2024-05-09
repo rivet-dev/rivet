@@ -1,5 +1,4 @@
 use std::convert::{TryFrom, TryInto};
-
 // TERMINOLOGY:
 //
 // server: a non-destroyed non-tainted server
@@ -9,7 +8,6 @@ use std::convert::{TryFrom, TryInto};
 // draining server: a server that is currently draining, not drained
 // drained server: a server that is finished draining
 // tainted server: a tainted server
-
 use std::{
 	cmp::Ordering,
 	collections::HashMap,

@@ -1,7 +1,6 @@
+use proto::backend::pkg::*;
 use rivet_operation::prelude::*;
 use serde::Deserialize;
-
-use proto::backend::pkg::*;
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "PascalCase")]
