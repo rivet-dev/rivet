@@ -45,16 +45,23 @@ async fn worker(ctx: &OperationContext<team::msg::user_ban::Message>) -> GlobalR
 	})
 	.await?;
 
+	let mut properties = json!({
+		"team_id": team_id,
+		"ban_user_id": user_id,
+	});
+
+	if let Some(banner_user_id) = ctx.banner_user_id {
+		properties["user_id"] = json!(banner_user_id.to_string());
+	}
+
+	let properties_json = Some(serde_json::to_string(&properties)?);
+
 	msg!([ctx] analytics::msg::event_create() {
 		events: vec![
 			analytics::msg::event_create::Event {
 				event_id: Some(Uuid::new_v4().into()),
 				name: "team.user.ban".into(),
-				user_id: ctx.banner_user_id,
-				properties_json: Some(serde_json::to_string(&json!({
-					"team_id": team_id,
-					"banned_user_id": user_id,
-				}))?),
+				properties_json,
 				..Default::default()
 			}
 		],

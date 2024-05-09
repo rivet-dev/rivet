@@ -135,8 +135,6 @@ async fn worker(ctx: &OperationContext<user::msg::delete::Message>) -> GlobalRes
 			analytics::msg::event_create::Event {
 				event_id: Some(Uuid::new_v4().into()),
 				name: "user.delete".into(),
-				user_id: None,
-				namespace_id: None,
 				properties_json: Some(serde_json::to_string(&json!({
 					"deleted_user_id": user_id
 				}))?),

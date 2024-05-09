@@ -68,9 +68,9 @@ async fn worker(ctx: &OperationContext<team::msg::member_create::Message>) -> Gl
 			analytics::msg::event_create::Event {
 				event_id: Some(Uuid::new_v4().into()),
 				name: "team.member.create".into(),
-				user_id: Some(user_id.into()),
 				properties_json: Some(serde_json::to_string(&json!({
 					"team_id": team_id,
+					"user_id": user_id,
 				}))?),
 				..Default::default()
 			}
@@ -127,11 +127,11 @@ async fn fail(
 				analytics::msg::event_create::Event {
 					event_id: Some(Uuid::new_v4().into()),
 					name: "team.invite.consume_fail".into(),
-					user_id: Some(user_id.into()),
 					properties_json: Some(serde_json::to_string(&json!({
 						"team_id": team_id,
 						"code": invitation.code,
 						"error": invite_error_code as i32,
+						"user_id": user_id,
 					}))?),
 					..Default::default()
 				}

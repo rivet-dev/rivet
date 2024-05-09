@@ -90,11 +90,11 @@ async fn handle(
 			events: vec![ analytics::msg::event_create::Event {
 				event_id: Some(Uuid::new_v4().into()),
 				name: "user_follow.create".into(),
-				user_id: Some(follower_user_id.into()),
 				properties_json: Some(serde_json::to_string(&json!({
 					"follower": follower_user_id,
 					"following": following_user_id,
 					"became_mutual": mutual,
+					"user_id": follower_user_id,
 				}))?),
 				..Default::default()
 			} ],
@@ -125,11 +125,11 @@ async fn handle(
 			events: vec![analytics::msg::event_create::Event {
 				event_id: Some(Uuid::new_v4().into()),
 				name: "user_follow.delete".into(),
-				user_id: Some(follower_user_id.into()),
 				properties_json: Some(serde_json::to_string(&json!({
 					"follower": follower_user_id,
 					"following": following_user_id,
 					"was_mutual": mutual,
+					"user_id": follower_user_id,
 				}))?),
 				..Default::default()
 			}],

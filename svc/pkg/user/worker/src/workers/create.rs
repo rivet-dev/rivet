@@ -81,22 +81,28 @@ async fn worker(ctx: &OperationContext<user::msg::create::Message>) -> GlobalRes
 	})
 	.await?;
 
+	let mut properties = json!({
+		"user_id": user_id,
+	});
+
+	if let Some(display_name) = display_name {
+		properties["display_name"] = json!(display_name);
+	}
+
+	let properties_json = Some(serde_json::to_string(&properties)?);
+
 	msg!([ctx] analytics::msg::event_create() {
 		events: vec![
 			analytics::msg::event_create::Event {
 				event_id: Some(Uuid::new_v4().into()),
 				name: "user.create".into(),
-				user_id: Some(user_id.into()),
-				namespace_id: ctx.namespace_id,
-				properties_json: Some(serde_json::to_string(&json!({
-				}))?),
+				properties_json: properties_json.clone(),
 				..Default::default()
 			},
 			analytics::msg::event_create::Event {
 				event_id: Some(Uuid::new_v4().into()),
 				name: "user.profile_set".into(),
-				user_id: Some(user_id.into()),
-				namespace_id: ctx.namespace_id,
+				properties_json,
 				..Default::default()
 			},
 		],

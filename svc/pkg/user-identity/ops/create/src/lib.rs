@@ -32,10 +32,9 @@ async fn handle(
 					analytics::msg::event_create::Event {
 						event_id: Some(Uuid::new_v4().into()),
 						name: "user_identity.create".into(),
-						user_id: Some(user_id.into()),
-						namespace_id: None,
 						properties_json: Some(serde_json::to_string(&json!({
 							"identity_email": email.email,
+							"user_id": user_id,
 						}))?),
 						..Default::default()
 					}
@@ -61,10 +60,9 @@ async fn handle(
 					analytics::msg::event_create::Event {
 						event_id: Some(Uuid::new_v4().into()),
 						name: "user_identity.create".into(),
-						user_id: Some(user_id.into()),
-						namespace_id: None,
 						properties_json: Some(serde_json::to_string(&json!({
 							"identity_access_token": access_token.name,
+							"user_id": user_id,
 						}))?),
 						..Default::default()
 					}

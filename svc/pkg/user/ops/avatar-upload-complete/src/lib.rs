@@ -1,5 +1,6 @@
 use proto::backend::pkg::*;
 use rivet_operation::prelude::*;
+use serde_json::json;
 
 #[operation(name = "user-avatar-upload-complete")]
 async fn handle(
@@ -38,7 +39,9 @@ async fn handle(
 			analytics::msg::event_create::Event {
 				event_id: Some(Uuid::new_v4().into()),
 				name: "user.avatar_set".into(),
-				user_id: Some(user_id.into()),
+				properties_json: Some(serde_json::to_string(&json!({
+					"user_id": user_id,
+				}))?),
 				..Default::default()
 			}
 		],

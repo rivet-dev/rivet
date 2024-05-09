@@ -39,9 +39,9 @@ async fn worker(
 			analytics::msg::event_create::Event {
 				event_id: Some(Uuid::new_v4().into()),
 				name: "team.join_request.resolve".into(),
-				user_id: Some(user_id.into()),
 				properties_json: Some(serde_json::to_string(&json!({
 					"team_id": team_id,
+					"user_id": user_id,
 				}))?),
 				..Default::default()
 			}

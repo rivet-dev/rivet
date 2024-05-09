@@ -1,5 +1,6 @@
 use chirp_worker::prelude::*;
 use proto::backend::pkg::*;
+use serde_json::json;
 
 #[worker(name = "user-profile-set")]
 async fn worker(ctx: &OperationContext<user::msg::profile_set::Message>) -> GlobalResult<()> {
@@ -92,7 +93,9 @@ async fn worker(ctx: &OperationContext<user::msg::profile_set::Message>) -> Glob
 			analytics::msg::event_create::Event {
 				event_id: Some(Uuid::new_v4().into()),
 				name: "user.profile_set".into(),
-				user_id: Some(*user_id),
+				properties_json: Some(serde_json::to_string(&json!({
+					"user_id": user_id.to_string()
+				}))?),
 				..Default::default()
 			},
 		],
