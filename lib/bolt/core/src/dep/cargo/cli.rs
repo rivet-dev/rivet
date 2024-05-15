@@ -146,7 +146,7 @@ pub async fn build<'a, T: AsRef<str>>(ctx: &ProjectContext, opts: BuildOpts<'a, 
 						r#"
 						# syntax=docker/dockerfile:1.2
 
-						FROM rust:1.72-slim
+						FROM rust:1.77.2-slim
 
 						RUN apt-get update && apt-get install -y protobuf-compiler pkg-config libssl-dev g++
 

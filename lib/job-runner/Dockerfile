@@ -1,4 +1,4 @@
-FROM clux/muslrust:1.73.0
+FROM clux/muslrust:1.77.2
 
 WORKDIR /app
 COPY Cargo.toml Cargo.lock .
