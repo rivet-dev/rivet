@@ -106,6 +106,7 @@ resource "helm_release" "grafana" {
 		sidecar = {
 			dashboards = {
 				enabled = true
+				searchNamespace = ["grafana", "prometheus"]
 			}
 		}
 

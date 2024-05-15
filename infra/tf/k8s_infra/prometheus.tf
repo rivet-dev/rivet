@@ -318,6 +318,7 @@ resource "helm_release" "prometheus" {
 		# Configured in grafana.tf
 		grafana = {
 			enabled = false
+			forceDeployDashboards = true
 		}
 
 		extraManifests = flatten([
