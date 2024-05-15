@@ -72,11 +72,9 @@ async fn worker(ctx: &OperationContext<cluster::msg::server_install::Message>) -
 	let server_token = &unwrap_ref!(token_res.token).token;
 
 	let install_script =
-		install_scripts::gen_install(pool_type, ctx.initialize_immediately).await?;
+		install_scripts::gen_install(pool_type, ctx.initialize_immediately, server_token).await?;
 	let hook_script = install_scripts::gen_hook(server_token).await?;
-	let initialize_script =
-		install_scripts::gen_initialize(pool_type, ctx.initialize_immediately, server_token)
-			.await?;
+	let initialize_script = install_scripts::gen_initialize(pool_type).await?;
 
 	// Spawn blocking thread for ssh (no async support)
 	tokio::task::spawn_blocking(move || {

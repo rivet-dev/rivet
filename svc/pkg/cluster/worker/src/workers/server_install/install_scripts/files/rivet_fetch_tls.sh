@@ -55,9 +55,10 @@ EOF
 cat << 'EOF' > /etc/systemd/system/rivet_fetch_tls.timer
 [Unit]
 Description=Runs TLS fetch every minute
+Requires=network-online.target
+After=network-online.target
 
 [Timer]
-OnBootSec=1
 OnUnitInactiveSec=1h
 Unit=rivet_fetch_tls.service
 
@@ -68,3 +69,4 @@ EOF
 # Enable tls fetch script to run on reboot
 systemctl daemon-reload
 systemctl enable rivet_fetch_tls.timer
+systemctl enable rivet_fetch_tls.service

@@ -5,21 +5,23 @@ use proto::backend;
 
 pub mod components;
 
+const TUNNEL_NAME: &str = "tunnel";
+const GG_TRAEFIK_INSTANCE_NAME: &str = "game_guard";
+
 // This script installs all of the software that doesn't need to know anything about the server running
 // it (doesn't need to know server id, datacenter id, vlan ip, etc)
 pub async fn gen_install(
 	pool_type: backend::cluster::PoolType,
 	initialize_immediately: bool,
+	server_token: &str,
 ) -> GlobalResult<String> {
-	let tunnel_name = "tunnel";
-
 	// MARK: Common (pre)
 	let mut script = vec![
 		components::common(),
 		components::node_exporter::install(),
 		components::sysctl::install(),
 		components::traefik::install(),
-		components::traefik::tunnel(tunnel_name)?,
+		components::traefik::tunnel(TUNNEL_NAME)?,
 		components::vector::install(),
 	];
 
@@ -34,7 +36,13 @@ pub async fn gen_install(
 			script.push(components::cni::plugins());
 			script.push(components::nomad::install());
 		}
-		backend::cluster::PoolType::Gg => {}
+		backend::cluster::PoolType::Gg => {
+			script.push(components::rivet::fetch_tls(
+				initialize_immediately,
+				server_token,
+				GG_TRAEFIK_INSTANCE_NAME,
+			)?);
+		}
 		backend::cluster::PoolType::Ats => {
 			script.push(components::docker::install());
 			script.push(components::traffic_server::install());
@@ -43,7 +51,7 @@ pub async fn gen_install(
 
 	// MARK: Common (post)
 	script.push(components::rivet::create_hook(
-		tunnel_name,
+		TUNNEL_NAME,
 		initialize_immediately,
 	)?);
 
@@ -61,11 +69,7 @@ pub async fn gen_hook(server_token: &str) -> GlobalResult<String> {
 
 // This script is templated on the server itself after fetching server data from the Rivet API (see gen_hook).
 // After being templated, it is run.
-pub async fn gen_initialize(
-	pool_type: backend::cluster::PoolType,
-	initialize_immediately: bool,
-	server_token: &str,
-) -> GlobalResult<String> {
+pub async fn gen_initialize(pool_type: backend::cluster::PoolType) -> GlobalResult<String> {
 	let mut script = Vec::new();
 
 	let mut prometheus_targets = HashMap::new();
@@ -93,25 +97,17 @@ pub async fn gen_initialize(
 			);
 		}
 		backend::cluster::PoolType::Gg => {
-			let traefik_instance_name = "game_guard".to_string();
-
 			script.push(components::traefik::instance(
 				components::traefik::Instance {
-					name: traefik_instance_name.clone(),
+					name: GG_TRAEFIK_INSTANCE_NAME.to_string(),
 					static_config: components::traefik::gg_static_config().await?,
 					dynamic_config: String::new(),
 					tcp_server_transports: Default::default(),
 				},
 			));
 
-			script.push(components::rivet::fetch_tls(
-				initialize_immediately,
-				server_token,
-				&traefik_instance_name,
-			)?);
-
 			prometheus_targets.insert(
-				"game_guard".into(),
+				GG_TRAEFIK_INSTANCE_NAME.into(),
 				components::vector::PrometheusTarget {
 					endpoint: "http://127.0.0.1:9980/metrics".into(),
 					scrape_interval: 15,
