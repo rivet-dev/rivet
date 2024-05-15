@@ -99,6 +99,8 @@ async fn inner(
 		})
 		.await?;
 
+	tracing::info!(record_id=%create_record_res.result.id, "created dns record");
+
 	// Save record id for deletion
 	sql_execute!(
 		[ctx, @tx tx]
@@ -135,12 +137,14 @@ async fn inner(
 		})
 		.await?;
 
+	tracing::info!(record_id=%create_secondary_record_res.result.id, "created secondary dns record");
+
 	// Save record id for deletion
 	sql_execute!(
 		[ctx, @tx tx]
 		"
 		UPDATE db_cluster.servers_cloudflare
-		SET dns_record_id = $2
+		SET secondary_dns_record_id = $2
 		WHERE
 			server_id = $1 AND
 			destroy_ts IS NULL

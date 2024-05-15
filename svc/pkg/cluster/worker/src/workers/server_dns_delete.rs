@@ -64,18 +64,18 @@ async fn inner(
 	else {
 		// NOTE: It is safe to do nothing in this case because both this worker and
 		// `cluster-server-dns-create` use transactions
-		tracing::warn!("server has no dns record");
+		tracing::warn!("server has no dns records");
 		return Ok(());
 	};
 
 	let zone_id = unwrap!(util::env::cloudflare::zone::job::id(), "dns not configured");
 
 	// Delete main record
-	if let Some(dns_record_id) = dns_record_id {
+	if let Some(record_id) = dns_record_id {
 		let res = client
 			.request(&cf::dns::DeleteDnsRecord {
 				zone_identifier: zone_id,
-				identifier: &dns_record_id,
+				identifier: &record_id,
 			})
 			.await;
 
@@ -84,20 +84,27 @@ async fn inner(
 			_,
 		)) = res
 		{
-			tracing::warn!(%zone_id, %dns_record_id, "dns record not found");
+			tracing::warn!(%zone_id, %record_id, "dns record not found");
 		} else {
 			res?;
+			tracing::warn!(%record_id, "deleted dns record");
 		}
+	} else {
+		tracing::warn!("server has no primary dns record");
 	}
 
 	// Delete secondary record
-	if let Some(secondary_dns_record_id) = secondary_dns_record_id {
+	if let Some(record_id) = secondary_dns_record_id {
 		client
 			.request(&cf::dns::DeleteDnsRecord {
 				zone_identifier: zone_id,
-				identifier: &secondary_dns_record_id,
+				identifier: &record_id,
 			})
 			.await?;
+
+		tracing::warn!(%record_id, "deleted secondary dns record");
+	} else {
+		tracing::warn!("server has no secondary dns record");
 	}
 
 	// Update db record
