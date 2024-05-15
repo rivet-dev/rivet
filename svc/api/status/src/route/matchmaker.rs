@@ -147,10 +147,51 @@ pub async fn status(
 		}
 	};
 
-	let port_default = unwrap!(res.lobby.ports.get("default"));
+	// Test connection, defer error
+	let lobby_id = res.lobby.lobby_id.clone();
+	let test_res = tokio::time::timeout(
+		Duration::from_secs(15),
+		test_lobby_connection(res.lobby, res.player),
+	)
+	.await;
+
+	// Shut down lobby regardless of connection status
+	//
+	// This way if the connection fails to connect, we still clean up the lobby instead of spamming
+	// lobbies with unconnected players
+	msg!([ctx] mm::msg::lobby_stop(lobby_id) {
+		lobby_id: Some(lobby_id.into()),
+	})
+	.await?;
+
+	// Unwrap res
+	match test_res {
+		Ok(Ok(())) => {}
+		Ok(Err(err)) => {
+			return Err(err);
+		}
+		Err(_) => {
+			bail_with!(
+				INTERNAL_STATUS_CHECK_FAILED,
+				error = "test lobby connection timed out"
+			)
+		}
+	}
+	// if let Err(err) = test_res {
+	// 	return Err(err);
+	// }
+
+	Ok(serde_json::json!({}))
+}
+
+async fn test_lobby_connection(
+	lobby: Box<models::MatchmakerJoinLobby>,
+	player: Box<models::MatchmakerJoinPlayer>,
+) -> GlobalResult<()> {
+	let port_default = unwrap!(lobby.ports.get("default"));
 	let host = unwrap_ref!(port_default.host);
 	let hostname = &port_default.hostname;
-	let token = &res.player.token;
+	let token = &player.token;
 
 	// Look up IP for GG nodes
 	let gg_ips = lookup_dns(hostname).await?;
@@ -200,7 +241,7 @@ pub async fn status(
 		)
 	})?;
 
-	Ok(serde_json::json!({}))
+	Ok(())
 }
 
 /// Returns the IP addresses for a given hostname.
