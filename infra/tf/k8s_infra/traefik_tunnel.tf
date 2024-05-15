@@ -7,6 +7,12 @@ locals {
 				service_namespace = kubernetes_namespace.rivet_service.metadata[0].name
 				service_port = 80
 			},
+			# LEGACY: Route to api-route
+			"api-route" = {
+				service = "rivet-api-route"
+				service_namespace = kubernetes_namespace.rivet_service.metadata[0].name
+				service_port = 80
+			},
 			# LEGACY: Addresses a random Nomad server.
 			"nomad" = {
 				service = "nomad-server"
