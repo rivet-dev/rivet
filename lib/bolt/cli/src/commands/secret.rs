@@ -34,7 +34,7 @@ impl SubCommand {
 				optional,
 				format,
 			} => {
-				let path = path.split("/").collect::<Vec<_>>();
+				let path = path.split('/').collect::<Vec<_>>();
 
 				// Fetch value
 				let value = if optional {
@@ -49,14 +49,14 @@ impl SubCommand {
 						if let Some(value) = value {
 							println!("{value}")
 						} else {
-							println!("")
+							println!()
 						}
 					}
 					Some(Format::Json) => println!("{}", json!({ "value": value })),
 				}
 			}
 			Self::Set { path, value } => {
-				let path = path.split("/").collect::<Vec<_>>();
+				let path = path.split('/').collect::<Vec<_>>();
 
 				let mut generator = ConfigGenerator::new(ctx.path(), ctx.ns_id()).await?;
 				generator.set_secret(&path, toml_edit::value(value)).await?;

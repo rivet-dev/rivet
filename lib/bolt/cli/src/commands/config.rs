@@ -66,10 +66,10 @@ impl SubCommand {
 		match self {
 			Self::Generate { namespace } => {
 				let project_root = context::ProjectContextData::seek_project_root().await;
-				tasks::config::generate(&project_root, &namespace).await?;
+				tasks::config::generate(&project_root, namespace).await?;
 			}
 			Self::SetNamespace { namespace } => {
-				tasks::config::set_namespace(&namespace).await?;
+				tasks::config::set_namespace(namespace).await?;
 			}
 			Self::ServiceDependencies {
 				svc_name,
@@ -429,7 +429,7 @@ impl SubCommand {
 					.context("failed to read namespace config")?;
 				let local_secrets_str = fs::read_to_string(&secrets_path).await?;
 				let secrets =
-					ProjectContextData::read_secrets(Some(ctx.ns()), ctx.path(), &ns_id).await;
+					ProjectContextData::read_secrets(Some(ctx.ns()), ctx.path(), ns_id).await;
 
 				let ns_patches = json_patch::diff(&op_namespace, &namespace);
 				if !ns_patches.is_empty() {

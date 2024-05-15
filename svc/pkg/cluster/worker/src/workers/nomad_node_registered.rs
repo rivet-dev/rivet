@@ -37,7 +37,7 @@ async fn worker(
 	.await?;
 
 	// Insert metrics
-	insert_metrics(&ctx, datacenter_id, nomad_join_ts, install_complete_ts).await?;
+	insert_metrics(ctx, datacenter_id, nomad_join_ts, install_complete_ts).await?;
 
 	Ok(())
 }

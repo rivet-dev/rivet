@@ -46,7 +46,7 @@ pub async fn create(
 	let db_ext = match &service.config().runtime {
 		RuntimeKind::CRDB { .. } => "sql",
 		RuntimeKind::ClickHouse { .. } => "sql",
-		x @ _ => bail!("cannot migrate this type of service: {x:?}"),
+		x => bail!("cannot migrate this type of service: {x:?}"),
 	};
 
 	block_in_place(|| {
@@ -385,7 +385,7 @@ pub async fn up(ctx: &ProjectContext, services: &[ServiceContext]) -> Result<()>
 					query: Some(query),
 				});
 			}
-			x @ _ => bail!("cannot migrate this type of service: {x:?}"),
+			x => bail!("cannot migrate this type of service: {x:?}"),
 		}
 	}
 
@@ -673,7 +673,7 @@ async fn upload_migrations(ctx: &ProjectContext, svc: &ServiceContext) -> Result
 	}))?;
 
 	let mut cmd = tokio::process::Command::new("kubectl");
-	cmd.args(&["apply", "-f", "-"]);
+	cmd.args(["apply", "-f", "-"]);
 	cmd.env("KUBECONFIG", ctx.gen_kubeconfig_path());
 	cmd.stdin(std::process::Stdio::piped());
 	cmd.stdout(std::process::Stdio::null());

@@ -27,7 +27,7 @@ impl SubCommand {
 				tasks::db::shell(
 					&ctx,
 					&ctx.service_with_name(&service).await,
-					query.as_ref().map(String::as_str),
+					query.as_deref(),
 				)
 				.await?;
 

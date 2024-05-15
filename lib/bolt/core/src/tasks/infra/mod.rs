@@ -53,7 +53,7 @@ impl PlanStepKind {
 				}
 				cmd.exec().await?;
 
-				terraform::output::clear_cache(&ctx, &plan_id).await;
+				terraform::output::clear_cache(&ctx, plan_id).await;
 			}
 			PlanStepKind::Migrate => {
 				tasks::migrate::up_all(&ctx).await?;
@@ -85,7 +85,7 @@ impl PlanStepKind {
 				}
 				cmd.exec().await?;
 
-				terraform::output::clear_cache(&ctx, &plan_id).await;
+				terraform::output::clear_cache(&ctx, plan_id).await;
 			}
 			PlanStepKind::Migrate | PlanStepKind::Up => {
 				// Do nothing
@@ -371,7 +371,7 @@ pub async fn execute_plan(
 	plan: &[PlanStep],
 	opts: ExecutePlanOpts,
 ) -> Result<()> {
-	tasks::gen::generate_project(&ctx, false).await;
+	tasks::gen::generate_project(ctx, false).await;
 
 	for (i, step) in plan.iter().enumerate() {
 		eprintln!();
@@ -397,7 +397,7 @@ pub async fn destroy_plan(
 	plan: &[PlanStep],
 	opts: ExecutePlanOpts,
 ) -> Result<()> {
-	tasks::gen::generate_project(&ctx, false).await;
+	tasks::gen::generate_project(ctx, false).await;
 
 	for (i, step) in plan.iter().enumerate().rev() {
 		eprintln!();

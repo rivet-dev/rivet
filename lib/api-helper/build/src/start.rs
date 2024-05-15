@@ -1,4 +1,4 @@
-use std::{convert::Infallible, future::Future, net::SocketAddr, sync::Arc, time::Instant};
+use std::{convert::Infallible, future::Future, net::SocketAddr, time::Instant};
 
 use hyper::{
 	body::HttpBody,

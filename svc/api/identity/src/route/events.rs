@@ -433,12 +433,12 @@ fn test_mm_and_job_proxy_protocol_eq(
 ) -> bool {
 	use backend::{job::ProxyProtocol as JPP, matchmaker::lobby_runtime::ProxyProtocol as MPP};
 
-	match (mm_proxy_protocol, job_proxy_protocol) {
-		(MPP::Http, JPP::Http) => true,
-		(MPP::Https, JPP::Https) => true,
-		(MPP::Tcp, JPP::Tcp) => true,
-		(MPP::TcpTls, JPP::TcpTls) => true,
-		(MPP::Udp, JPP::Udp) => true,
-		_ => false,
-	}
+	matches!(
+		(mm_proxy_protocol, job_proxy_protocol),
+		(MPP::Http, JPP::Http)
+			| (MPP::Https, JPP::Https)
+			| (MPP::Tcp, JPP::Tcp)
+			| (MPP::TcpTls, JPP::TcpTls)
+			| (MPP::Udp, JPP::Udp)
+	)
 }

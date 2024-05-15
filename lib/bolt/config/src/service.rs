@@ -343,10 +343,7 @@ impl ServiceKind {
 	/// because this will be true for any services that are internally-facing HTTP servers, such as
 	/// `api-job`.
 	pub fn has_server(&self) -> bool {
-		match self {
-			ServiceKind::Api { .. } | ServiceKind::Static { .. } => true,
-			_ => false,
-		}
+		matches!(self, ServiceKind::Api { .. } | ServiceKind::Static { .. })
 	}
 
 	pub fn short(&self) -> &str {

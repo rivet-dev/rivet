@@ -105,7 +105,7 @@ fn gen_remote_state(
 	let plan_id = &remote_state.plan_id;
 	let data_name = remote_state.data_name();
 	let workspace =
-		dep::terraform::cli::build_localized_workspace_name(ctx.ns_id(), &remote_state.plan_id);
+		dep::terraform::cli::build_localized_workspace_name(ctx.ns_id(), remote_state.plan_id);
 
 	let meta = if let Some(condition) = &remote_state.condition {
 		format!("count = {condition} ? 1 : 0")

@@ -13,7 +13,7 @@ lazy_static! {
 /// Builds the workspace name that's used for the specific plan. This lets us
 /// store multiple workspaces on the same backend.
 pub fn build_localized_workspace_name(ns: &str, plan: &str) -> String {
-	format!("{}-{}", ns.replace("_", "-"), plan.replace("_", "-"))
+	format!("{}-{}", ns.replace('_', "-"), plan.replace('_', "-"))
 }
 
 pub async fn build_command(ctx: &ProjectContext, plan_id: &str) -> Command {
@@ -120,7 +120,7 @@ pub async fn destroy(ctx: &ProjectContext, plan_id: &str, varfile_path: &Path) -
 	event.insert_prop("plan_id", plan_id)?;
 	utils::telemetry::capture_event(ctx, event).await?;
 
-	let mut cmd = build_command(&ctx, plan_id).await;
+	let mut cmd = build_command(ctx, plan_id).await;
 	cmd.arg("destroy")
 		.arg(format!("-var-file={}", varfile_path.display()));
 	cmd.exec().await?;

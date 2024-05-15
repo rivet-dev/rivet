@@ -63,7 +63,7 @@ pub async fn build_event(ctx: &ProjectContext, name: &str) -> Result<async_posth
 			block_in_place(|| cmd!("git", "remote", "--verbose").dir(ctx.path()).read())
 				.ok()
 				.map(|x| {
-					x.split("\n")
+					x.split('\n')
 						.map(|x| x.trim())
 						.filter(|x| !x.is_empty())
 						.map(|x| x.to_string())
@@ -87,9 +87,9 @@ pub async fn build_event(ctx: &ProjectContext, name: &str) -> Result<async_posth
 			.await
 			.ok()
 			.map(|x| {
-				x.split("\n")
+				x.split('\n')
 					.map(|x| x.trim())
-					.filter_map(|x| x.split_once("="))
+					.filter_map(|x| x.split_once('='))
 					.map(|(k, v)| (k.to_string(), v.to_string()))
 					.collect::<HashMap<_, _>>()
 			});

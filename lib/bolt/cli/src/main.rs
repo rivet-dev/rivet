@@ -151,7 +151,7 @@ async fn prompt_prod(ctx: &bolt_core::context::ProjectContextData) -> Result<()>
 		.await?;
 
 	if response {
-		return Ok(());
+		Ok(())
 	} else {
 		bail!("Bailing");
 	}

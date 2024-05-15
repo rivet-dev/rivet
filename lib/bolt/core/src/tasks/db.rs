@@ -46,7 +46,7 @@ pub async fn shell(ctx: &ProjectContext, svc: &ServiceContext, query: Option<&st
 		RuntimeKind::Redis { .. } => redis_shell(shell_ctx).await?,
 		RuntimeKind::CRDB { .. } => crdb_shell(shell_ctx).await?,
 		RuntimeKind::ClickHouse { .. } => clickhouse_shell(shell_ctx, false).await?,
-		x @ _ => bail!("cannot migrate this type of service: {x:?}"),
+		x => bail!("cannot migrate this type of service: {x:?}"),
 	}
 
 	Ok(())
@@ -74,7 +74,7 @@ async fn redis_shell(shell_ctx: ShellContext<'_>) -> Result<()> {
 		unreachable!();
 	};
 	let host = conn.redis_hosts.get(&svc.name()).unwrap();
-	let (hostname, port) = host.split_once(":").unwrap();
+	let (hostname, port) = host.split_once(':').unwrap();
 
 	// Read auth secrets
 	let (username, password) = match ctx.ns().redis.provider {
@@ -99,7 +99,7 @@ async fn redis_shell(shell_ctx: ShellContext<'_>) -> Result<()> {
 	);
 
 	if let LogType::Default = log_type {
-		rivet_term::status::progress("Connecting to Redis", &db_name);
+		rivet_term::status::progress("Connecting to Redis", db_name);
 	}
 
 	if query.is_some() {
@@ -343,7 +343,7 @@ pub async fn clickhouse_shell(shell_ctx: ShellContext<'_>, no_db: bool) -> Resul
 			.read_secret(&["clickhouse", "users", "default", "password"])
 			.await?;
 		let host = conn.clickhouse_host.as_ref().unwrap();
-		let (hostname, port) = host.split_once(":").unwrap();
+		let (hostname, port) = host.split_once(':').unwrap();
 
 		let db_flag = if no_db {
 			"".to_string()

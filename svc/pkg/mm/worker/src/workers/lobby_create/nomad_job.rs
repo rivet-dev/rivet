@@ -300,7 +300,7 @@ pub fn gen_lobby_docker_job(
 
 				// Port with the kebab case port key. Included for backward compatabiilty & for
 				// less confusion.
-				Some((format!("PORT_{}", port.label.replace("-", "_")), port_value))
+				Some((format!("PORT_{}", port.label.replace('-', "_")), port_value))
 			} else {
 				None
 			}
@@ -311,7 +311,7 @@ pub fn gen_lobby_docker_job(
 				.iter()
 				.filter_map(|port| {
 					if let PortTarget::Range { min, max } = &port.target {
-						let snake_port_label = port.label.replace("-", "_");
+						let snake_port_label = port.label.replace('-', "_");
 
 						Some([
 							(
@@ -368,7 +368,7 @@ pub fn gen_lobby_docker_job(
 		.collect::<GlobalResult<Vec<_>>>()?;
 
 	// Generate the command to download and decompress the file
-	let mut download_cmd = format!(r#"curl -Lf "$NOMAD_META_IMAGE_ARTIFACT_URL""#);
+	let mut download_cmd = r#"curl -Lf "$NOMAD_META_IMAGE_ARTIFACT_URL""#.to_string();
 	match build_compression {
 		backend::build::BuildCompression::None => {}
 		backend::build::BuildCompression::Lz4 => {
@@ -641,5 +641,5 @@ fn inject_consul_env_template(input: &str) -> GlobalResult<String> {
 }
 
 fn nomad_host_port_env_var(port_label: &str) -> String {
-	format!("NOMAD_HOST_PORT_{}", port_label.replace("-", "_"))
+	format!("NOMAD_HOST_PORT_{}", port_label.replace('-', "_"))
 }

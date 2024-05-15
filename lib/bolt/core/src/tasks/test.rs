@@ -183,7 +183,7 @@ pub async fn test_services<T: AsRef<str>>(
 	rivet_term::status::progress("Waiting for pod start", "");
 	let label = format!("app.kubernetes.io/name={k8s_svc_name}");
 	let status = Command::new("kubectl")
-		.args(&[
+		.args([
 			"wait",
 			"--for=condition=Ready",
 			"pod",
@@ -203,7 +203,7 @@ pub async fn test_services<T: AsRef<str>>(
 	// Install CA
 	rivet_term::status::progress("Installing CA", "");
 	let status = Command::new("kubectl")
-		.args(&[
+		.args([
 			"exec",
 			&format!("job/{k8s_svc_name}"),
 			"-n",
@@ -254,7 +254,7 @@ pub async fn test_services<T: AsRef<str>>(
 
 	// Delete job
 	Command::new("kubectl")
-		.args(&["delete", "job", &k8s_svc_name, "-n", "rivet-service"])
+		.args(["delete", "job", &k8s_svc_name, "-n", "rivet-service"])
 		.env("KUBECONFIG", ctx.gen_kubeconfig_path())
 		.output()
 		.await?;
@@ -366,10 +366,10 @@ async fn run_test(
 			rivet_term::status::error("Timeout", &run_info);
 		}
 		TestStatus::UnknownExitCode(code) => {
-			rivet_term::status::error(&format!("Unknown exit code {}", code), &run_info);
+			rivet_term::status::error(format!("Unknown exit code {}", code), &run_info);
 		}
 		TestStatus::UnknownError(err) => {
-			rivet_term::status::error(&format!("Unknown error: {}", err), &run_info);
+			rivet_term::status::error(format!("Unknown error: {}", err), &run_info);
 		}
 	}
 
@@ -403,7 +403,7 @@ async fn exec_test(
 	// Write logs to file
 	let file = tokio::task::block_in_place(|| std::fs::File::create(&logs_path))?;
 	let mut logs_child = Command::new("kubectl")
-		.args(&[
+		.args([
 			"exec",
 			&format!("job/{k8s_svc_name}"),
 			"-n",
@@ -595,7 +595,7 @@ async fn cleanup_servers(ctx: &ProjectContext) -> Result<()> {
 		async {
 			// Fetch all ssh keys with "test-" in their label and are in this namespace
 			let res = client
-				.get(format!("https://api.linode.com/v4/profile/sshkeys"))
+				.get("https://api.linode.com/v4/profile/sshkeys".to_string())
 				.header(
 					"X-Filter",
 					format!(r#"{{ "label": {{ "+contains": "{test_tag}-{ns}-" }} }}"#),
@@ -727,7 +727,7 @@ async fn cleanup_nomad_test(ctx: &ProjectContext, test_id: &str, purge: bool) ->
 	);
 
 	let mut cmd = Command::new("kubectl");
-	cmd.args(&[
+	cmd.args([
 		"exec",
 		"service/nomad-server",
 		"-n",
@@ -755,7 +755,7 @@ async fn cleanup_nomad_test(ctx: &ProjectContext, test_id: &str, purge: bool) ->
 		.join("\n");
 
 	let mut cmd = Command::new("kubectl");
-	cmd.args(&[
+	cmd.args([
 		"exec",
 		"service/nomad-server",
 		"-n",
@@ -791,7 +791,7 @@ async fn cleanup_nomad(ctx: &ProjectContext, purge: bool) -> Result<()> {
 	);
 
 	let mut cmd = Command::new("kubectl");
-	cmd.args(&[
+	cmd.args([
 		"exec",
 		"service/nomad-server",
 		"-n",
@@ -831,8 +831,8 @@ pub async fn gen_spec(
 	let mut secret_env = IndexMap::new();
 
 	for svc_ctx in svcs {
-		env.extend(svc_ctx.env(&run_context).await.unwrap());
-		secret_env.extend(svc_ctx.secret_env(&run_context).await.unwrap());
+		env.extend(svc_ctx.env(run_context).await.unwrap());
+		secret_env.extend(svc_ctx.secret_env(run_context).await.unwrap());
 	}
 
 	let env = dep::k8s::gen::generate_k8s_variables()
@@ -859,7 +859,7 @@ pub async fn gen_spec(
 		"data": secret_data
 	}));
 
-	let (volumes, volume_mounts) = build_volumes(&ctx, run_context, svcs).await;
+	let (volumes, volume_mounts) = build_volumes(ctx, run_context, svcs).await;
 
 	let metadata = json!({
 		"name": k8s_svc_name,

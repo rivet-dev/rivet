@@ -60,7 +60,7 @@ async fn worker(
 	// Fetch node metadata
 	let node = nomad_client_new::apis::nodes_api::get_node(
 		&NEW_NOMAD_CONFIG,
-		&nomad_node_id,
+		nomad_node_id,
 		None,
 		None,
 		None,

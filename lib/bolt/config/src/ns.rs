@@ -319,18 +319,10 @@ impl Default for Docker {
 	}
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug, Default)]
 #[serde(deny_unknown_fields)]
 pub struct Nomad {
 	pub health_checks: Option<bool>,
-}
-
-impl Default for Nomad {
-	fn default() -> Self {
-		Self {
-			health_checks: None,
-		}
-	}
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, Default)]
@@ -570,7 +562,7 @@ pub struct RivetTest {
 	pub load_tests: bool,
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug, Default)]
 #[serde(deny_unknown_fields)]
 pub struct Api {
 	#[serde(default)]
@@ -580,16 +572,6 @@ pub struct Api {
 	pub hub_origin: Option<String>,
 	/// Regexp used to validate requests from the hub.
 	pub hub_origin_regex: Option<String>,
-}
-
-impl Default for Api {
-	fn default() -> Self {
-		Self {
-			error_verbose: false,
-			hub_origin: None,
-			hub_origin_regex: None,
-		}
-	}
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, Default)]
@@ -627,18 +609,13 @@ pub struct Provisioning {
 	pub acme_directory: ProvisioningAcmeDirectory,
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug, Default)]
 pub enum ProvisioningAcmeDirectory {
 	#[serde(rename = "lets_encrypt")]
+	#[default]
 	LetsEncrypt,
 	#[serde(rename = "lets_encrypt_staging")]
 	LetsEncryptStaging,
-}
-
-impl Default for ProvisioningAcmeDirectory {
-	fn default() -> Self {
-		ProvisioningAcmeDirectory::LetsEncryptStaging
-	}
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]

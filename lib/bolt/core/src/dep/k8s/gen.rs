@@ -857,7 +857,7 @@ fn build_ingress_router(
 		}
 
 		// Build paths for rule
-		rule.push_str("(");
+		rule.push('(');
 		rule.push_str(
 			&mount
 				.paths
@@ -866,7 +866,7 @@ fn build_ingress_router(
 				.collect::<Vec<_>>()
 				.join(" || "),
 		);
-		rule.push_str(")");
+		rule.push(')');
 
 		if let Some(strip_prefix) = &mount.strip_prefix {
 			let mw_name = format!("{}-{i}-strip-prefix", svc_ctx.name());

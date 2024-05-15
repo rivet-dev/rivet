@@ -31,7 +31,7 @@ async fn worker(
 
 		// Update pool config
 		if !pool.hardware.is_empty() {
-			current_pool.hardware = pool.hardware.clone();
+			current_pool.hardware.clone_from(&pool.hardware);
 		}
 		if let Some(desired_count) = pool.desired_count {
 			current_pool.desired_count = desired_count;

@@ -11,7 +11,7 @@ async fn worker(ctx: &OperationContext<mm::msg::lobby_state_set::Message>) -> Gl
 		pipe.hset(
 			util_mm::key::lobby_config(lobby_id),
 			util_mm::key::lobby_config::STATE_JSON,
-			&state_json,
+			state_json,
 		);
 	} else {
 		pipe.hdel(

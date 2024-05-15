@@ -82,7 +82,7 @@ pub async fn prewarm_ats_cache(
 			.map(|(i, (path, build_id_hash))| {
 				// NOTE: The algorithm here for deterministically choosing the vlan ip should match the one
 				// used in the SQL statement in mm-lobby-create @ resolve_image_artifact_url
-				let idx = (*build_id_hash as i64 % vlan_ip_count).abs() as usize;
+				let idx = (*build_id_hash as i64 % vlan_ip_count).unsigned_abs() as usize;
 				let vlan_ip = &unwrap!(vlan_ips_in_region.nth(idx), "no vlan ip").vlan_ip;
 
 				Ok(backend::job::Parameter {

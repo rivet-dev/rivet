@@ -60,7 +60,7 @@ impl ProjectContextData {
 		reader: impl FnOnce(&config::cache::Cache) -> T + Sized,
 	) -> T {
 		let cache = self.cache.lock().await;
-		reader(&*cache)
+		reader(&cache)
 	}
 
 	pub async fn cache_mut<T: Sized>(
@@ -69,7 +69,7 @@ impl ProjectContextData {
 	) -> T {
 		let res = {
 			let mut cache = self.cache.lock().await;
-			reader(&mut *cache)
+			reader(&mut cache)
 		};
 
 		self.write_cache().await;
@@ -368,7 +368,7 @@ impl ProjectContextData {
 				// Load the service
 				let svc_ctx = context::service::ServiceContextData::from_path(
 					Weak::new(),
-					&svc_ctxs_map,
+					svc_ctxs_map,
 					&workspace_path,
 					&worker_path,
 				)
@@ -415,7 +415,7 @@ impl ProjectContextData {
 			// Load the service
 			let svc_ctx = context::service::ServiceContextData::from_path(
 				Weak::new(),
-				&svc_ctxs_map,
+				svc_ctxs_map,
 				workspace_path,
 				&entry.path(),
 			)
@@ -461,10 +461,9 @@ impl ProjectContextData {
 		let path = project_path
 			.join("namespaces")
 			.join(format!("{ns_id}.toml"));
-		let config_str = fs::read_to_string(&path).await.expect(&format!(
-			"failed to read namespace config: {}",
-			path.display()
-		));
+		let config_str = fs::read_to_string(&path)
+			.await
+			.unwrap_or_else(|_| panic!("failed to read namespace config: {}", path.display()));
 		let config = match toml::from_str::<config::ns::Namespace>(&config_str) {
 			Result::Ok(x) => x,
 			Result::Err(err) => {
@@ -497,8 +496,7 @@ impl ProjectContextData {
 		project_path: &Path,
 		ns_id: &str,
 	) -> serde_json::Value {
-		let secrets_path = ProjectContextData::get_secrets_path(ns, project_path, &ns_id);
-
+		let secrets_path = ProjectContextData::get_secrets_path(ns, project_path, ns_id);
 		// Read the config
 		let config_str = fs::read_to_string(&secrets_path)
 			.await
@@ -546,7 +544,7 @@ impl ProjectContextData {
 		name: &str,
 	) -> context::service::ServiceContext {
 		if let Some(ctx) = self.svc_ctxs_map.get(name) {
-			return ctx.clone();
+			ctx.clone()
 		} else {
 			panic!("Could not find service with name {}", name);
 		}
@@ -792,7 +790,7 @@ impl ProjectContextData {
 			.clone()
 			.unwrap_or_else(|| {
 				// Create regex pattern from the default hub origin
-				format!("^{}$", self.origin_hub().replace(".", "\\."))
+				format!("^{}$", self.origin_hub().replace('.', "\\."))
 			})
 	}
 

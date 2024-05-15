@@ -77,7 +77,7 @@ async fn worker(ctx: &OperationContext<mm::msg::player_remove::Message>) -> Glob
 
 	let player_row = if let Some(player_row) = player_row {
 		player_row
-	} else if let Some(player_row) = fallback_fetch_player_from_redis(&ctx, player_id).await? {
+	} else if let Some(player_row) = fallback_fetch_player_from_redis(ctx, player_id).await? {
 		player_row
 	} else if ctx.req_dt() > util::duration::minutes(5) {
 		tracing::error!("discarding stale message");

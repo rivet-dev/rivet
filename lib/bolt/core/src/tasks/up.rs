@@ -68,7 +68,7 @@ pub async fn up_services<T: AsRef<str>>(
 	};
 
 	// Find all matching services
-	let all_svcs = ctx.services_with_patterns(&svc_names).await;
+	let all_svcs = ctx.services_with_patterns(svc_names).await;
 	ensure!(!all_svcs.is_empty(), "input matched no services");
 
 	// Find all services that are executables
@@ -203,7 +203,7 @@ pub async fn up_services<T: AsRef<str>>(
 						.iter()
 						.map(|(workspace_path, svc_names)| cargo::cli::BuildCall {
 							path: workspace_path.strip_prefix(ctx.path()).unwrap(),
-							bins: &svc_names,
+							bins: svc_names,
 						})
 						.collect::<Vec<_>>(),
 					release: ctx.build_optimization() == BuildOptimization::Release,
@@ -226,7 +226,7 @@ pub async fn up_services<T: AsRef<str>>(
 	match &ctx.ns().cluster.kind {
 		config::ns::ClusterKind::SingleNode { .. } => {}
 		config::ns::ClusterKind::Distributed { .. } => {
-			if let Some((repo, _)) = ctx.ns().docker.repository.split_once("/") {
+			if let Some((repo, _)) = ctx.ns().docker.repository.split_once('/') {
 				let username = ctx
 					.read_secret(&["docker", "registry", repo, "write", "username"])
 					.await?;
@@ -301,7 +301,7 @@ pub async fn up_services<T: AsRef<str>>(
 	}
 
 	if skip_deploy {
-		return Ok(all_svcs.iter().cloned().collect());
+		return Ok(all_svcs.to_vec());
 	}
 
 	// Generate Kubernetes deployments
@@ -321,7 +321,7 @@ pub async fn up_services<T: AsRef<str>>(
 			pb.set_message(exec_ctx.svc_ctx.name());
 
 			// Save specs
-			specs.extend(dep::k8s::gen::gen_svc(&exec_ctx).await);
+			specs.extend(dep::k8s::gen::gen_svc(exec_ctx).await);
 
 			pb.inc(1);
 		}
@@ -337,7 +337,7 @@ pub async fn up_services<T: AsRef<str>>(
 	rivet_term::status::success("Finished", "");
 
 	// Return all deployed services.
-	Ok(all_svcs.iter().cloned().collect())
+	Ok(all_svcs.to_vec())
 }
 
 async fn upload_svc_build(svc_ctx: ServiceContext, upload_semaphore: Arc<Semaphore>) -> Result<()> {

@@ -325,10 +325,10 @@ pub async fn build_tests<'a, T: AsRef<str>>(
 					let package = v["package_id"]
 						.as_str()
 						.context("missing package_id")?
-						.split_once("#")
+						.split_once('#')
 						.context("split_once failed")?
 						.1
-						.split_once("@")
+						.split_once('@')
 						.context("split_once failed")?
 						.0;
 

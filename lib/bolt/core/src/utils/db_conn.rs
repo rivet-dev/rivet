@@ -193,9 +193,7 @@ impl DatabaseConnections {
 					.await?;
 				let host = self.clickhouse_host.as_ref().unwrap();
 
-				let query_other = format!(
-					"&x-multi-statement=true&x-migrations-table-engine=ReplicatedMergeTree&secure=true&skip_verify=true",
-				);
+				let query_other = "&x-multi-statement=true&x-migrations-table-engine=ReplicatedMergeTree&secure=true&skip_verify=true".to_string();
 
 				Ok(format!(
 					"clickhouse://{}/?database={}&username={}&password={}{}",

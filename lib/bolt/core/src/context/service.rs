@@ -725,7 +725,7 @@ impl ServiceContextData {
 			// Aggregate secrets from all dependencies
 			.flat_map(|x| x.config().secrets.clone().into_iter())
 			// Convert keys to string array
-			.map(|(k, v)| (k.split("/").map(|x| x.to_string()).collect::<Vec<_>>(), v))
+			.map(|(k, v)| (k.split('/').map(|x| x.to_string()).collect::<Vec<_>>(), v))
 			// Dedupe
 			.collect::<HashMap<_, _>>()
 			.into_iter()
@@ -1025,13 +1025,13 @@ impl ServiceContextData {
 
 			if self.depends_on_provision_margin() {
 				env.insert(
-					format!("RIVET_JOB_SERVER_PROVISION_MARGIN"),
+					"RIVET_JOB_SERVER_PROVISION_MARGIN".to_string(),
 					provisioning.job_server_provision_margin.to_string(),
 				);
 			}
 
 			env.insert(
-				format!("TLS_ACME_DIRECTORY"),
+				"TLS_ACME_DIRECTORY".to_string(),
 				serde_json::to_value(&provisioning.acme_directory)?
 					.as_str()
 					.unwrap()
@@ -1180,7 +1180,7 @@ impl ServiceContextData {
 			};
 
 			env.insert(
-				format!("REDIS_URL_{}", db_name.to_uppercase().replace("-", "_")),
+				format!("REDIS_URL_{}", db_name.to_uppercase().replace('-', "_")),
 				url,
 			);
 		}

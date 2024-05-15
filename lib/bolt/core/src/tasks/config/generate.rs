@@ -133,12 +133,12 @@ impl ConfigGenerator {
 
 /// Generates a new config & secrets based on user input.
 pub async fn generate(project_path: &Path, ns_id: &str) -> Result<()> {
-	let mut generator = ConfigGenerator::new(&project_path, ns_id).await?;
+	let mut generator = ConfigGenerator::new(project_path, ns_id).await?;
 
 	// MARK: Cluster
 	generator
 		.generate_config(&["cluster", "id"], || async {
-			Ok(value(Uuid::new_v4().to_string()).into())
+			Ok(value(Uuid::new_v4().to_string()))
 		})
 		.await?;
 
@@ -157,19 +157,19 @@ pub async fn generate(project_path: &Path, ns_id: &str) -> Result<()> {
 	{
 		generator
 			.generate_config(&["cluster", "id"], || async {
-				Ok(value(Uuid::new_v4().to_string()).into())
+				Ok(value(Uuid::new_v4().to_string()))
 			})
 			.await?;
 		generator
 			.generate_config(&["cluster", "single_node", "public_ip"], || async {
-				Ok(value("127.0.0.1").into())
+				Ok(value("127.0.0.1"))
 			})
 			.await?;
 
 		// Default to port 8080 since default port 80 is not suitable for most dev environments
 		generator
 			.generate_config(&["cluster", "single_node", "api_http_port"], || async {
-				Ok(value(8080).into())
+				Ok(value(8080))
 			})
 			.await?;
 	}
@@ -330,7 +330,7 @@ pub async fn generate(project_path: &Path, ns_id: &str) -> Result<()> {
 	eprintln!();
 	rivet_term::status::success(
 		"Generated config",
-		&format!("namespaces/{ns_id}.toml & secrets/{ns_id}.toml"),
+		format!("namespaces/{ns_id}.toml & secrets/{ns_id}.toml"),
 	);
 
 	Ok(())
@@ -476,9 +476,9 @@ fn generate_clickhouse_password(length: usize) -> String {
 	let mut password: Vec<char> = (0..length - 3)
 		.map(|_| rng.sample(Alphanumeric) as char)
 		.collect();
-	password.push(rng.gen_range('A'..'Z'));
-	password.push(rng.gen_range('a'..'z'));
-	password.push(rng.gen_range('0'..'9'));
+	password.push(rng.gen_range('A'..='Z'));
+	password.push(rng.gen_range('a'..='z'));
+	password.push(rng.gen_range('0'..='9'));
 	password.push(special_chars.chars().choose(&mut rng).unwrap());
 	password.shuffle(&mut rng);
 	password.into_iter().collect()

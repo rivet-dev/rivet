@@ -48,12 +48,12 @@ impl SubCommand {
 					&ctx,
 					&ip,
 					&ssh_key,
-					command.as_ref().map(String::as_str),
+					command.as_deref(),
 				)
 				.await?;
 			}
 			Self::Id { server_id, command } => {
-				bolt_core::tasks::ssh::id(&ctx, &server_id, command.as_ref().map(String::as_str))
+				bolt_core::tasks::ssh::id(&ctx, &server_id, command.as_deref())
 					.await?;
 			}
 			Self::Pool { pool, command, all } => {
@@ -61,7 +61,7 @@ impl SubCommand {
 					let command = command.context("must provide command with --all")?;
 					bolt_core::tasks::ssh::pool_all(&ctx, &pool, &command).await?;
 				} else {
-					bolt_core::tasks::ssh::pool(&ctx, &pool, command.as_ref().map(String::as_str))
+					bolt_core::tasks::ssh::pool(&ctx, &pool, command.as_deref())
 						.await?;
 				}
 			}

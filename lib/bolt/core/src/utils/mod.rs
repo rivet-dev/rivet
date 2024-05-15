@@ -43,7 +43,7 @@ pub async fn join_set_progress(mut join_set: tokio::task::JoinSet<Result<()>>) -
 
 	// Log all errors
 	for err in &errors {
-		rivet_term::status::error("Error", &err);
+		rivet_term::status::error("Error", err);
 	}
 
 	// Return error
@@ -71,14 +71,14 @@ impl MultiProgress {
 	pub async fn insert(&self, name: &str) {
 		let mut running = self.running.lock().await;
 		running.push(name.to_owned());
-		self.update(&*running);
+		self.update(&running);
 	}
 
 	pub async fn remove(&self, name: &str) {
 		let mut running = self.running.lock().await;
 		running.retain(|n| n != name);
 		self.progress_bar.inc(1);
-		self.update(&*running);
+		self.update(&running);
 	}
 
 	pub fn finish(&self) {
@@ -105,7 +105,7 @@ fn deep_modified_ts_inner(path: &Path, max_modified_ts: &mut u128) -> Result<()>
 		let file_type = entry.file_type()?;
 
 		// Skip non-source files
-		if file_name.starts_with(".")
+		if file_name.starts_with('.')
 			|| file_name == "node_modules"
 			|| file_name == "target"
 			|| file_name == "dist"
@@ -297,7 +297,7 @@ pub fn render_diff(indent: usize, patches: &json_patch::Patch) {
 				eprintln!(
 					"{}{}{} {}",
 					" ".repeat(indent),
-					op.path.replace("/", "."),
+					op.path.replace('/', "."),
 					style(":").dim(),
 					style("added").green().bold()
 				);
@@ -306,7 +306,7 @@ pub fn render_diff(indent: usize, patches: &json_patch::Patch) {
 				eprintln!(
 					"{}{}{} {}",
 					" ".repeat(indent),
-					op.path.replace("/", "."),
+					op.path.replace('/', "."),
 					style(":").dim(),
 					style("removed").red().bold()
 				);
@@ -315,7 +315,7 @@ pub fn render_diff(indent: usize, patches: &json_patch::Patch) {
 				eprintln!(
 					"{}{}{} {}",
 					" ".repeat(indent),
-					op.path.replace("/", "."),
+					op.path.replace('/', "."),
 					style(":").dim(),
 					style("changed").yellow().bold()
 				);

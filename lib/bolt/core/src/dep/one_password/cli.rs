@@ -64,7 +64,7 @@ pub async fn write(service_token: Option<&str>, op_path: &str, tmp_path: &Path, 
 	let field_json = fields_json
 		.iter_mut()
 		.find(|f| f["label"] == field)
-		.expect(&format!("could not find field {field} in {item}"));
+		.unwrap_or_else(|| panic!("could not find field {field} in {item}"));
 	field_json["value"] = content.into();
 
 	// Save to file

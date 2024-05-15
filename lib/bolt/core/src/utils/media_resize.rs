@@ -18,7 +18,7 @@ pub struct ResizePreset {
 impl ResizePreset {
 	fn key(&self) -> String {
 		let name = &self.name;
-		let path = self.file_path.replace("/", "-").replace(".", "-");
+		let path = self.file_path.replace('/', "-").replace('.', "-");
 		if self.fallback {
 			format!("{name}-{path}-fallback")
 		} else {
@@ -94,7 +94,7 @@ impl ResizePreset {
 		if !filters.is_empty() {
 			url.push_str(&format!("/filters:{}", filters.join(":")));
 		}
-		url.push_str("/");
+		url.push('/');
 		url.push_str(&urlencoding::encode(&format!(
 			"http://traffic-server.traffic-server.svc.cluster.local:8080/s3-cache/{ns}-{bucket}/",
 			ns = self.ns,

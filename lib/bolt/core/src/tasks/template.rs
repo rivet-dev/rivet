@@ -255,7 +255,7 @@ pub async fn generate(ctx: &mut ProjectContext, opts: TemplateOpts) -> Result<()
 		}
 	};
 
-	eprintln!("");
+	eprintln!();
 	rivet_term::status::success("Done", "");
 
 	Ok(())
@@ -268,7 +268,7 @@ async fn generate_worker_partial(
 	output_path: PathBuf,
 	service_name: String,
 ) -> Result<()> {
-	let snake_name = service_name.replace("-", "_");
+	let snake_name = service_name.replace('-', "_");
 
 	// Create directories
 	let workers_root = output_path.join("src").join("workers");
@@ -289,7 +289,7 @@ async fn generate_worker_partial(
 
 	generate_file(
 		hb,
-		&render_data,
+		render_data,
 		input_path
 			.join("src")
 			.join("workers")
@@ -299,7 +299,7 @@ async fn generate_worker_partial(
 	.await?;
 	generate_file(
 		hb,
-		&render_data,
+		render_data,
 		input_path.join("tests").join("{{ snake name }}.rs"),
 		tests_root,
 	)
@@ -311,7 +311,7 @@ async fn generate_worker_partial(
 		rivet_term::status::progress("Editing", worker_mod_path.display());
 		let worker_mod_str = fs::read_to_string(&worker_mod_path).await?;
 
-		let Some(bracket_idx) = worker_mod_str.find("[") else {
+		let Some(bracket_idx) = worker_mod_str.find('[') else {
 			bail!("malformed mod.rs file");
 		};
 
@@ -356,7 +356,7 @@ async fn generate_dir(
 	while let Some(entry) = entries.next_entry().await? {
 		let metadata = entry.metadata().await?;
 		if metadata.is_file() {
-			generate_file(hb, &render_data, entry.path(), output_path.clone()).await?;
+			generate_file(hb, render_data, entry.path(), output_path.clone()).await?;
 		} else if metadata.is_dir() {
 			// Recursively generate next directory
 			generate_dir(
@@ -424,7 +424,7 @@ mod handlebars_helpers {
 			.value()
 			.as_str()
 			.ok_or_else(|| RenderError::new("Could not convert value to string"))?
-			.replace("-", "_");
+			.replace('-', "_");
 		out.write(value.as_str())?;
 		Ok(())
 	}
@@ -441,7 +441,7 @@ mod handlebars_helpers {
 			.value()
 			.as_str()
 			.ok_or_else(|| RenderError::new("Could not convert value to string"))?
-			.replace("-", "_")
+			.replace('-', "_")
 			.to_uppercase();
 		out.write(value.as_str())?;
 		Ok(())

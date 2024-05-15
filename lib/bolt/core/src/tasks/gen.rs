@@ -185,7 +185,7 @@ async fn generate_root(path: &Path) {
 	update_libs(&path.join("lib")).await;
 }
 
-fn update_libs<'a>(lib_path: &'a Path) -> BoxFuture<'a, ()> {
+fn update_libs(lib_path: &Path) -> BoxFuture<'_, ()> {
 	async move {
 		let mut lib_dir = fs::read_dir(lib_path).await.unwrap();
 		while let Some(entry) = lib_dir.next_entry().await.unwrap() {
@@ -212,7 +212,7 @@ fn update_libs<'a>(lib_path: &'a Path) -> BoxFuture<'a, ()> {
 async fn set_license(path: &Path) {
 	let toml = fs::read_to_string(path)
 		.await
-		.expect(&format!("could not read path: {}", path.display()));
+		.unwrap_or_else(|_| panic!("could not read path: {}", path.display()));
 	let mut doc = toml.parse::<toml_edit::Document>().unwrap();
 
 	let mut array = toml_edit::Array::new();
@@ -228,7 +228,7 @@ pub async fn generate_all_services(ctx: &ProjectContext) {
 	// println!("\n> Generating all services");
 
 	for svc_ctx in ctx.all_services().await {
-		generate_service(&svc_ctx).await;
+		generate_service(svc_ctx).await;
 	}
 }
 

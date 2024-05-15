@@ -48,7 +48,7 @@ impl SubCommand {
 				admin_clusters_api::admin_clusters_create(
 					&ctx.openapi_config_cloud().await?,
 					models::AdminClustersCreateRequest {
-						name_id: name_id,
+						name_id,
 						owner_team_id: Some(Uuid::parse_str(&owner_team_id).unwrap()),
 					},
 				)
