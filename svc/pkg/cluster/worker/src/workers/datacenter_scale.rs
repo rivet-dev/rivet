@@ -182,7 +182,13 @@ async fn inner(
 		};
 
 		scale_servers(&ctx, tx, &mut msgs, &servers, &pool_ctx).await?;
-		drain_tainted_servers(&ctx, tx, &mut msgs, &servers, &pool_ctx).await?;
+
+		match pool_ctx.pool_type {
+			backend::cluster::PoolType::Job => {
+				cleanup_tainted_job_servers(&ctx, tx, &mut msgs, &servers, &pool_ctx).await?
+			}
+			_ => cleanup_tainted_servers(&ctx, tx, &mut msgs, &servers, &pool_ctx).await?,
+		}
 	}
 
 	destroy_drained_servers(&ctx, tx, &mut msgs, &servers).await?;
@@ -398,7 +404,7 @@ async fn scale_up_servers<'a, I: Iterator<Item = &'a Server> + Clone>(
 	Ok(())
 }
 
-async fn drain_tainted_servers(
+async fn cleanup_tainted_job_servers(
 	ctx: &OperationContext<()>,
 	tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
 	msgs: &mut Vec<MsgFuture>,
@@ -416,43 +422,121 @@ async fn drain_tainted_servers(
 		.filter(|server| server.is_tainted);
 	let active_tainted_count = active_tainted_servers_in_pool.clone().count();
 
-	// For job servers the "active" servers we count are ones with nomad successfully connected. Otherwise we
-	// count servers that have successfully installed
-	let active_untainted_count = match pctx.pool_type {
-		backend::cluster::PoolType::Job => active_servers_in_pool
-			.clone()
-			.filter(|server| server.has_nomad_node)
-			.filter(|server| !server.is_tainted)
-			.count(),
-		_ => active_servers_in_pool
-			.clone()
-			.filter(|server| server.is_installed)
-			.filter(|server| !server.is_tainted)
-			.count(),
-	};
+	// For job servers the "active" servers we count are ones with nomad successfully connected
+	let active_untainted_count = active_servers_in_pool
+		.clone()
+		.filter(|server| server.has_nomad_node)
+		.filter(|server| !server.is_tainted)
+		.count();
 
+	// Amount of tainted servers that need to be deleted or drained
+	// tainted - (desired - running) -> tainted + running - desired
+	let removal_count =
+		(active_tainted_count + active_untainted_count).saturating_sub(pctx.desired_count);
+
+	let (nomad_servers, without_nomad_servers) =
+		active_tainted_servers_in_pool.partition::<Vec<_>, _>(|server| server.has_nomad_node);
+
+	let destroy_count = removal_count.min(without_nomad_servers.len());
+	let drain_count = removal_count - destroy_count;
+
+	if destroy_count != 0 {
+		tracing::info!(
+			pool_type=?pctx.pool_type,
+			desired_count=%pctx.desired_count,
+			%active_untainted_count,
+			%active_tainted_count,
+			%destroy_count,
+			"destroying tainted servers",
+		);
+
+		destroy_servers(
+			ctx,
+			tx,
+			msgs,
+			without_nomad_servers
+				.iter()
+				.take(destroy_count)
+				.map(|server| server.server_id),
+		)
+		.await?;
+	}
+
+	if drain_count != 0 {
+		tracing::info!(
+			pool_type=?pctx.pool_type,
+			desired_count=%pctx.desired_count,
+			%active_untainted_count,
+			%active_tainted_count,
+			%drain_count,
+			"draining tainted servers",
+		);
+
+		drain_servers(
+			ctx,
+			tx,
+			msgs,
+			nomad_servers
+				.iter()
+				.take(drain_count)
+				.map(|server| server.server_id),
+		)
+		.await?;
+	}
+
+	Ok(())
+}
+
+async fn cleanup_tainted_servers(
+	ctx: &OperationContext<()>,
+	tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+	msgs: &mut Vec<MsgFuture>,
+	servers: &[Server],
+	pctx: &PoolCtx,
+) -> GlobalResult<()> {
+	// Includes tainted and normal servers
+	let active_servers_in_pool = servers
+		.iter()
+		.filter(|server| server.pool_type == pctx.pool_type)
+		.filter(|server| matches!(server.drain_state, DrainState::None));
+
+	let active_tainted_servers_in_pool = active_servers_in_pool
+		.clone()
+		.filter(|server| server.is_tainted);
+	let active_tainted_count = active_tainted_servers_in_pool.clone().count();
+
+	// Count servers that have successfully installed
+	let active_untainted_count = active_servers_in_pool
+		.clone()
+		.filter(|server| server.is_installed)
+		.filter(|server| !server.is_tainted)
+		.count();
+
+	// Amount of tainted servers that need to be drained
 	// tainted - (desired - running) -> tainted + running - desired
 	let drain_count =
 		(active_tainted_count + active_untainted_count).saturating_sub(pctx.desired_count);
 
-	tracing::info!(
-		?pctx.pool_type,
-		desired_count=%pctx.desired_count,
-		%active_untainted_count,
-		%active_tainted_count,
-		%drain_count,
-		"draining tainted servers",
-	);
+	if drain_count != 0 {
+		tracing::info!(
+			pool_type=?pctx.pool_type,
+			desired_count=%pctx.desired_count,
+			%active_untainted_count,
+			%active_tainted_count,
+			%drain_count,
+			"draining tainted servers",
+		);
 
-	drain_servers(
-		ctx,
-		tx,
-		msgs,
-		active_tainted_servers_in_pool
-			.take(drain_count)
-			.map(|server| server.server_id),
-	)
-	.await?;
+		drain_servers(
+			ctx,
+			tx,
+			msgs,
+			active_tainted_servers_in_pool
+				.take(drain_count)
+				.map(|server| server.server_id),
+		)
+		.await?;
+	}
 
 	Ok(())
 }
