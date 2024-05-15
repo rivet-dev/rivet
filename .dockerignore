@@ -4,8 +4,8 @@
 # Dockerfiles to.
 
 # Git
-**/.git/
-**/.gitignore
+# **/.git/
+# **/.gitignore
 
 **/.DS_Store
 **/symbolCache.db

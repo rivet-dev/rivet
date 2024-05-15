@@ -148,7 +148,7 @@ pub async fn build<'a, T: AsRef<str>>(ctx: &ProjectContext, opts: BuildOpts<'a, 
 
 						FROM rust:1.77.2-slim
 
-						RUN apt-get update && apt-get install -y protobuf-compiler pkg-config libssl-dev g++
+						RUN apt-get update && apt-get install -y protobuf-compiler pkg-config libssl-dev g++ git
 
 						RUN apt-get install --yes libpq-dev wget
 						RUN wget https://github.com/mozilla/sccache/releases/download/v0.2.15/sccache-v0.2.15-x86_64-unknown-linux-musl.tar.gz \
