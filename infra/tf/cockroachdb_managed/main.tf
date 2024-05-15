@@ -54,7 +54,10 @@ data "cockroach_cluster_cert" "main" {
 }
 
 resource "kubernetes_config_map" "crdb_ca" {
-	for_each = toset(["rivet-service", "bolt"])
+	for_each = toset(flatten([
+		["rivet-service", "bolt"],
+		var.prometheus_enabled ? ["grafana"] : []
+	]))
 
 	metadata {
 		name = "crdb-ca"

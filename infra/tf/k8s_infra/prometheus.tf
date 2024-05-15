@@ -63,8 +63,6 @@ locals {
 			]
 		}] : []
 	])
-
-	crdb_host = "${try(data.terraform_remote_state.cockroachdb_k8s.outputs.host, data.terraform_remote_state.cockroachdb_managed.outputs.host)}:${try(data.terraform_remote_state.cockroachdb_k8s.outputs.port, data.terraform_remote_state.cockroachdb_managed.outputs.port)}"
 }
 
 module "alertmanager_secrets" {

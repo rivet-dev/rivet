@@ -22,7 +22,6 @@ pub fn dependency_graph(_ctx: &ProjectContext) -> HashMap<&'static str, Vec<Remo
 		],
 		"k8s_infra" => vec![
 			RemoteStateBuilder::default().plan_id("cockroachdb_k8s").build().unwrap(),
-			RemoteStateBuilder::default().plan_id("cockroachdb_managed").build().unwrap(),
 		],
 		"cockroachdb_managed" => vec![
 			RemoteStateBuilder::default().plan_id("k8s_cluster_aws").build().unwrap(),
@@ -35,6 +34,10 @@ pub fn dependency_graph(_ctx: &ProjectContext) -> HashMap<&'static str, Vec<Remo
 		],
 		"cloudflare_tunnels" => vec![
 			RemoteStateBuilder::default().plan_id("dns").build().unwrap(),
+		],
+		"grafana" => vec![
+			RemoteStateBuilder::default().plan_id("cockroachdb_k8s").build().unwrap(),
+			RemoteStateBuilder::default().plan_id("cockroachdb_managed").build().unwrap(),
 		],
 	}
 }

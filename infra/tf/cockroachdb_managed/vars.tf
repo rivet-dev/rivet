@@ -17,3 +17,7 @@ variable "cockroachdb_request_unit_limit" {
 variable "cockroachdb_storage_limit" {
 	type = string
 }
+
+variable "prometheus_enabled" {
+	type = bool
+}
