@@ -21,22 +21,22 @@ async fn worker(ctx: &OperationContext<cluster::msg::server_install::Message>) -
 	}
 
 	if let Some(server_id) = ctx.server_id {
-		let (is_destroying,) = sql_fetch_one!(
+		let (is_destroying_or_draining,) = sql_fetch_one!(
 			[ctx, (bool,)]
 			"
 			SELECT EXISTS(
 				SELECT 1
 				FROM db_cluster.servers
 				WHERE server_id = $1 AND
-				cloud_destroy_ts IS NOT NULL
+				(cloud_destroy_ts IS NOT NULL OR drain_ts IS NOT NULL)
 			)
 			",
 			server_id.as_uuid(),
 		)
 		.await?;
 
-		if is_destroying {
-			tracing::info!("server marked for deletion, not installing");
+		if is_destroying_or_draining {
+			tracing::info!("server marked for deletion/drain, not installing");
 			return Ok(());
 		}
 	}
@@ -132,28 +132,6 @@ async fn worker(ctx: &OperationContext<cluster::msg::server_install::Message>) -
 		GlobalResult::Ok(())
 	})
 	.await??;
-
-	// Check if destroyed again after installing
-	if let Some(server_id) = ctx.server_id {
-		let (is_destroying,) = sql_fetch_one!(
-			[ctx, (bool,)]
-			"
-			SELECT EXISTS(
-				SELECT 1
-				FROM db_cluster.servers
-				WHERE server_id = $1 AND
-				cloud_destroy_ts IS NOT NULL
-			)
-			",
-			server_id.as_uuid(),
-		)
-		.await?;
-
-		if is_destroying {
-			tracing::info!("server marked for deletion, not marking as installed");
-			return Ok(());
-		}
-	}
 
 	let request_id = unwrap_ref!(ctx.request_id).as_uuid();
 	msg!([ctx] cluster::msg::server_install_complete(request_id) {

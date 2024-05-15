@@ -8,7 +8,7 @@ use proto::backend::pkg::*;
 use crate::util::CloudflareError;
 
 #[derive(sqlx::FromRow)]
-struct DnsRecord {
+struct DnsRecordRow {
 	dns_record_id: Option<String>,
 	secondary_dns_record_id: Option<String>,
 }
@@ -44,7 +44,7 @@ async fn inner(
 	let server_id = unwrap_ref!(ctx.server_id).as_uuid();
 
 	let row = sql_fetch_optional!(
-		[ctx, DnsRecord, @tx tx]
+		[ctx, DnsRecordRow, @tx tx]
 		"
 		SELECT dns_record_id, secondary_dns_record_id
 		FROM db_cluster.servers_cloudflare
@@ -57,7 +57,8 @@ async fn inner(
 		util::timestamp::now(),
 	)
 	.await?;
-	let Some(DnsRecord {
+
+	let Some(DnsRecordRow {
 		dns_record_id,
 		secondary_dns_record_id,
 	}) = row
@@ -87,7 +88,7 @@ async fn inner(
 			tracing::warn!(%zone_id, %record_id, "dns record not found");
 		} else {
 			res?;
-			tracing::warn!(%record_id, "deleted dns record");
+			tracing::info!(%record_id, "deleted dns record");
 		}
 	} else {
 		tracing::warn!("server has no primary dns record");
@@ -102,7 +103,7 @@ async fn inner(
 			})
 			.await?;
 
-		tracing::warn!(%record_id, "deleted secondary dns record");
+		tracing::info!(%record_id, "deleted secondary dns record");
 	} else {
 		tracing::warn!("server has no secondary dns record");
 	}

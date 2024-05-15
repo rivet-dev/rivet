@@ -11,7 +11,7 @@ use crate::util::CloudflareError;
 struct Server {
 	datacenter_id: Uuid,
 	public_ip: IpAddr,
-	cloud_destroy_ts: Option<i64>,
+	is_destroying_or_draining: bool,
 }
 
 #[worker(name = "cluster-server-dns-create")]
@@ -44,18 +44,6 @@ async fn inner(
 ) -> GlobalResult<()> {
 	let server_id = unwrap_ref!(ctx.server_id).as_uuid();
 
-	let server = sql_fetch_one!(
-		[ctx, Server, @tx tx]
-		"
-		SELECT
-			datacenter_id, public_ip, cloud_destroy_ts
-		FROM db_cluster.servers
-		WHERE server_id = $1
-		",
-		server_id,
-	)
-	.await?;
-
 	// Lock row
 	sql_execute!(
 		[ctx, @tx tx]
@@ -70,8 +58,22 @@ async fn inner(
 	)
 	.await?;
 
-	if server.cloud_destroy_ts.is_some() {
-		tracing::info!("server marked for deletion, not creating dns record");
+	let server = sql_fetch_one!(
+		[ctx, Server, @tx tx]
+		"
+		SELECT
+			datacenter_id,
+			public_ip,
+			(cloud_destroy_ts IS NOT NULL OR drain_ts IS NOT NULL) AS is_destroying_or_draining
+		FROM db_cluster.servers
+		WHERE server_id = $1
+		",
+		server_id,
+	)
+	.await?;
+
+	if server.is_destroying_or_draining {
+		tracing::info!("server marked for deletion/drain, not creating dns record");
 		return Ok(());
 	}
 
