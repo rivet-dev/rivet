@@ -143,6 +143,7 @@ impl SubCommand {
 
 				// Load namespace config
 				let ns_config = if fs::metadata(&namespace_path).await.is_ok() {
+					// TODO (RVT-3747): Parse as plain toml
 					let ns_config =
 						ProjectContextData::read_ns(project_root.as_path(), &ns_id).await;
 

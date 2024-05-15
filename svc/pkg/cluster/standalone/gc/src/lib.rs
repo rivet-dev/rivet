@@ -72,6 +72,13 @@ pub async fn run_from_env(ts: i64, pools: rivet_pools::Pools) -> GlobalResult<()
 						.find(|pool| pool.pool_type == server.pool_type as i32));
 					let drain_completed = server.drain_ts < ts - pool.drain_timeout as i64;
 
+					tracing::info!(
+						server_id=?server.server_id,
+						drain_ts=%server.drain_ts,
+						pool_drain_timeout=%pool.drain_timeout,
+						%drain_completed,
+					);
+
 					Ok((server, drain_completed))
 				})
 				.filter(|res| {
@@ -79,6 +86,12 @@ pub async fn run_from_env(ts: i64, pools: rivet_pools::Pools) -> GlobalResult<()
 						.map_or(true, |(_, drain_completed)| *drain_completed)
 				})
 				.collect::<GlobalResult<Vec<_>>>()?;
+
+			if drained_servers.is_empty() {
+				return Ok(Vec::new());
+			}
+
+			tracing::info!(count=%drained_servers.len(), "servers done draining");
 
 			// Update servers that have completed draining
 			sql_execute!(

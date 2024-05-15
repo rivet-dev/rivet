@@ -405,6 +405,7 @@ async fn drain_tainted_servers(
 	servers: &[Server],
 	pctx: &PoolCtx,
 ) -> GlobalResult<()> {
+	// Includes tainted and normal servers
 	let active_servers_in_pool = servers
 		.iter()
 		.filter(|server| server.pool_type == pctx.pool_type)
@@ -413,25 +414,35 @@ async fn drain_tainted_servers(
 	let active_tainted_servers_in_pool = active_servers_in_pool
 		.clone()
 		.filter(|server| server.is_tainted);
+	let active_tainted_count = active_tainted_servers_in_pool.clone().count();
 
 	// For job servers the "active" servers we count are ones with nomad successfully connected. Otherwise we
 	// count servers that have successfully installed
-	let relevant_active_count = match pctx.pool_type {
+	let active_untainted_count = match pctx.pool_type {
 		backend::cluster::PoolType::Job => active_servers_in_pool
 			.clone()
 			.filter(|server| server.has_nomad_node)
+			.filter(|server| !server.is_tainted)
 			.count(),
 		_ => active_servers_in_pool
 			.clone()
 			.filter(|server| server.is_installed)
+			.filter(|server| !server.is_tainted)
 			.count(),
 	};
 
-	let active_tainted_count = active_tainted_servers_in_pool.clone().count();
-
 	// tainted - (desired - running) -> tainted + running - desired
 	let drain_count =
-		(active_tainted_count + relevant_active_count).saturating_sub(pctx.desired_count);
+		(active_tainted_count + active_untainted_count).saturating_sub(pctx.desired_count);
+
+	tracing::info!(
+		?pctx.pool_type,
+		desired_count=%pctx.desired_count,
+		%active_untainted_count,
+		%active_tainted_count,
+		%drain_count,
+		"draining tainted servers",
+	);
 
 	drain_servers(
 		ctx,
@@ -463,7 +474,7 @@ async fn destroy_drained_servers(
 		return Ok(());
 	}
 
-	tracing::info!(count=%drained_server_ids.len(), "deleting drained servers");
+	tracing::info!(count=%drained_server_ids.len(), "destroying drained servers");
 
 	destroy_servers(ctx, tx, msgs, drained_server_ids.into_iter()).await
 }
@@ -474,6 +485,8 @@ async fn drain_servers<I: Iterator<Item = Uuid> + Clone>(
 	msgs: &mut Vec<MsgFuture>,
 	server_ids: I,
 ) -> GlobalResult<()> {
+	tracing::info!(count=%server_ids.clone().count(), "draining servers");
+
 	// Mark servers as draining in db
 	sql_execute!(
 		[ctx, @tx tx]
@@ -509,6 +522,8 @@ async fn undrain_servers<I: Iterator<Item = Uuid> + Clone>(
 	msgs: &mut Vec<MsgFuture>,
 	server_ids: I,
 ) -> GlobalResult<()> {
+	tracing::info!(count=%server_ids.clone().count(), "undraining servers");
+
 	// Mark servers as not draining in db
 	sql_execute!(
 		[ctx, @tx tx]
@@ -593,6 +608,8 @@ async fn destroy_servers<I: Iterator<Item = Uuid> + Clone>(
 	msgs: &mut Vec<MsgFuture>,
 	server_ids: I,
 ) -> GlobalResult<()> {
+	tracing::info!(count=%server_ids.clone().count(), "destroying servers");
+
 	// Mark servers for destruction in db
 	sql_execute!(
 		[ctx, @tx tx]

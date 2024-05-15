@@ -39,6 +39,9 @@ async fn worker(
 		if let Some(max_count) = pool.max_count {
 			current_pool.max_count = max_count;
 		}
+		if let Some(drain_timeout) = pool.drain_timeout {
+			current_pool.drain_timeout = drain_timeout;
+		}
 	}
 
 	// Encode config
