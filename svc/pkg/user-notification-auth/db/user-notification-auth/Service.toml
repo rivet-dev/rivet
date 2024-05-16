@@ -1,7 +1,0 @@
-[service]
-name = "db-user-notification-auth"
-
-[runtime]
-kind = "crdb"
-
-[database]

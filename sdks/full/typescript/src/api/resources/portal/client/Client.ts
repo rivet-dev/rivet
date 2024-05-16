@@ -5,7 +5,6 @@
 import * as environments from "../../../../environments";
 import * as core from "../../../../core";
 import { Games } from "../resources/games/client/Client";
-import { Notifications } from "../resources/notifications/client/Client";
 
 export declare namespace Portal {
     interface Options {
@@ -27,11 +26,5 @@ export class Portal {
 
     public get games(): Games {
         return (this._games ??= new Games(this._options));
-    }
-
-    protected _notifications: Notifications | undefined;
-
-    public get notifications(): Notifications {
-        return (this._notifications ??= new Notifications(this._options));
     }
 }

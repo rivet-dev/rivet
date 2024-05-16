@@ -23,15 +23,3 @@ impl ApiFrom<models::GroupPublicity> for backend::team::Publicity {
 	}
 }
 
-impl ApiFrom<models::NotificationUnregisterService>
-	for user_notification_auth::unregister::request::Service
-{
-	fn api_from(value: models::NotificationUnregisterService) -> Self {
-		match value {
-			models::NotificationUnregisterService::Firebase => {
-				user_notification_auth::unregister::request::Service::Firebase
-			}
-			_ => user_notification_auth::unregister::request::Service::Firebase,
-		}
-	}
-}

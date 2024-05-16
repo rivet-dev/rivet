@@ -341,8 +341,6 @@ docs/PortalGetSuggestedGamesResponse.md
 docs/PortalNotificationRegisterFirebaseService.md
 docs/PortalNotificationRegisterService.md
 docs/PortalNotificationUnregisterService.md
-docs/PortalNotificationsApi.md
-docs/PortalRegisterNotificationsRequest.md
 docs/ProvisionDatacentersApi.md
 docs/ProvisionDatacentersGetTlsResponse.md
 docs/ProvisionServersApi.md
@@ -391,7 +389,6 @@ src/apis/matchmaker_regions_api.rs
 src/apis/mod.rs
 src/apis/module_api.rs
 src/apis/portal_games_api.rs
-src/apis/portal_notifications_api.rs
 src/apis/provision_datacenters_api.rs
 src/apis/provision_servers_api.rs
 src/lib.rs
@@ -697,7 +694,6 @@ src/models/portal_get_suggested_games_response.rs
 src/models/portal_notification_register_firebase_service.rs
 src/models/portal_notification_register_service.rs
 src/models/portal_notification_unregister_service.rs
-src/models/portal_register_notifications_request.rs
 src/models/provision_datacenters_get_tls_response.rs
 src/models/provision_servers_get_info_response.rs
 src/models/upload_prepare_file.rs

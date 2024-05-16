@@ -42,8 +42,6 @@ team-get = { path = "../../pkg/team/ops/get" }
 team-member-count = { path = "../../pkg/team/ops/member-count" }
 token-revoke = { path = "../../pkg/token/ops/revoke" }
 user-get = { path = "../../pkg/user/ops/get" }
-user-notification-auth-register = { path = "../../pkg/user-notification-auth/ops/register" }
-user-notification-auth-unregister = { path = "../../pkg/user-notification-auth/ops/unregister" }
 user-team-list = { path = "../../pkg/user/ops/team-list" }
 
 [dev-dependencies]

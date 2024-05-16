@@ -18,7 +18,6 @@ docker run --rm \
 	-o "/data/$GEN_PATH_RUST" \
 	-p packageName=rivet-api
 
-
 if [ "$FERN_GROUP" == "full" ]; then
 	# Fix OpenAPI bug (https://github.com/OpenAPITools/openapi-generator/issues/14171)
 	sed -i 's/CloudGamesLogStream/crate::models::CloudGamesLogStream/' "$GEN_PATH_RUST/src/apis/cloud_games_matchmaker_api.rs"

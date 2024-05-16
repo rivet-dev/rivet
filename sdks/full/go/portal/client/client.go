@@ -6,7 +6,6 @@ import (
 	http "net/http"
 	core "sdk/core"
 	games "sdk/portal/games"
-	notifications "sdk/portal/notifications"
 )
 
 type Client struct {
@@ -14,8 +13,7 @@ type Client struct {
 	caller  *core.Caller
 	header  http.Header
 
-	Games         *games.Client
-	Notifications *notifications.Client
+	Games *games.Client
 }
 
 func NewClient(opts ...core.ClientOption) *Client {
@@ -24,10 +22,9 @@ func NewClient(opts ...core.ClientOption) *Client {
 		opt(options)
 	}
 	return &Client{
-		baseURL:       options.BaseURL,
-		caller:        core.NewCaller(options.HTTPClient),
-		header:        options.ToHeader(),
-		Games:         games.NewClient(opts...),
-		Notifications: notifications.NewClient(opts...),
+		baseURL: options.BaseURL,
+		caller:  core.NewCaller(options.HTTPClient),
+		header:  options.ToHeader(),
+		Games:   games.NewClient(opts...),
 	}
 }

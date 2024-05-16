@@ -68,6 +68,25 @@ func (n *NotificationRegisterService) String() string {
 	return fmt.Sprintf("%#v", n)
 }
 
+type NotificationUnregisterService string
+
+const (
+	NotificationUnregisterServiceFirebase NotificationUnregisterService = "firebase"
+)
+
+func NewNotificationUnregisterServiceFromString(s string) (NotificationUnregisterService, error) {
+	switch s {
+	case "firebase":
+		return NotificationUnregisterServiceFirebase, nil
+	}
+	var t NotificationUnregisterService
+	return "", fmt.Errorf("%s is not a valid %T", s, t)
+}
+
+func (n NotificationUnregisterService) Ptr() *NotificationUnregisterService {
+	return &n
+}
+
 type GetSuggestedGamesResponse struct {
 	// A list of game summaries.
 	Games []*game.Summary    `json:"games,omitempty"`

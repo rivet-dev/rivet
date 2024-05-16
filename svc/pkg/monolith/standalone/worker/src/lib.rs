@@ -34,7 +34,6 @@ pub async fn run_from_env(pools: rivet_pools::Pools) -> GlobalResult<()> {
 		linode_worker,
 		mm_worker,
 		module_worker,
-		push_notification_worker,
 		team_invite_worker,
 		team_worker,
 		upload_worker,

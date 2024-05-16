@@ -600,8 +600,6 @@ pub mod portal_notification_register_service;
 pub use self::portal_notification_register_service::PortalNotificationRegisterService;
 pub mod portal_notification_unregister_service;
 pub use self::portal_notification_unregister_service::PortalNotificationUnregisterService;
-pub mod portal_register_notifications_request;
-pub use self::portal_register_notifications_request::PortalRegisterNotificationsRequest;
 pub mod provision_datacenters_get_tls_response;
 pub use self::provision_datacenters_get_tls_response::ProvisionDatacentersGetTlsResponse;
 pub mod provision_servers_get_info_response;

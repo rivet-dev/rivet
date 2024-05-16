@@ -3,7 +3,6 @@ use hyper::{Body, Request, Response};
 use rivet_portal_server::models;
 
 mod games;
-mod notifications;
 
 pub async fn handle(
 	shared_client: chirp_client::SharedClientHandle,
@@ -27,16 +26,6 @@ define_router! {
 		},
 		"games" / String / "profile": {
 			GET: games::profile(),
-		},
-
-		// Notifications
-		"notifications" / "register": {
-			POST: notifications::register(
-				body: models::RegisterNotificationsRequest,
-			),
-			DELETE: notifications::unregister(
-				query: notifications::UnregisterNotificationsQuery,
-			),
 		},
 	},
 }

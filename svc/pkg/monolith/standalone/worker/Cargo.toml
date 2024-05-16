@@ -32,7 +32,6 @@ kv-worker = { path = "../../../kv/worker" }
 linode-worker = { path = "../../../linode/worker" }
 mm-worker = { path = "../../../mm/worker" }
 module-worker = { path = "../../../module/worker" }
-push-notification-worker = { path = "../../../push-notification/worker" }
 team-invite-worker = { path = "../../../team-invite/worker" }
 team-worker = { path = "../../../team/worker" }
 upload-worker = { path = "../../../upload/worker" }
