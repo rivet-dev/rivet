@@ -305,6 +305,7 @@ Class | Method | HTTP request | Description
  - [CloudRegionTierExpenses](docs/CloudRegionTierExpenses.md)
  - [CloudSvcMetrics](docs/CloudSvcMetrics.md)
  - [CloudSvcPerf](docs/CloudSvcPerf.md)
+ - [CloudUniversalRegion](docs/CloudUniversalRegion.md)
  - [CloudValidateGroupRequest](docs/CloudValidateGroupRequest.md)
  - [CloudValidateGroupResponse](docs/CloudValidateGroupResponse.md)
  - [CloudVersionCdnConfig](docs/CloudVersionCdnConfig.md)

@@ -1060,6 +1060,9 @@ type RegionSummary struct {
 	RegionNameId string `json:"region_name_id"`
 	// The server provider of this region.
 	Provider string `json:"provider"`
+	// **Deprecated**
+	// A universal region label given to this region.
+	UniversalRegion UniversalRegion `json:"universal_region,omitempty"`
 	// Represent a resource's readable display name.
 	ProviderDisplayName string `json:"provider_display_name"`
 	// Represent a resource's readable display name.
@@ -1251,6 +1254,107 @@ func (s *SvcPerf) String() string {
 		return value
 	}
 	return fmt.Sprintf("%#v", s)
+}
+
+// **Deprecated**
+type UniversalRegion string
+
+const (
+	UniversalRegionUnknown      UniversalRegion = "unknown"
+	UniversalRegionLocal        UniversalRegion = "local"
+	UniversalRegionAmsterdam    UniversalRegion = "amsterdam"
+	UniversalRegionAtlanta      UniversalRegion = "atlanta"
+	UniversalRegionBangalore    UniversalRegion = "bangalore"
+	UniversalRegionDallas       UniversalRegion = "dallas"
+	UniversalRegionFrankfurt    UniversalRegion = "frankfurt"
+	UniversalRegionLondon       UniversalRegion = "london"
+	UniversalRegionMumbai       UniversalRegion = "mumbai"
+	UniversalRegionNewark       UniversalRegion = "newark"
+	UniversalRegionNewYorkCity  UniversalRegion = "new_york_city"
+	UniversalRegionSanFrancisco UniversalRegion = "san_francisco"
+	UniversalRegionSingapore    UniversalRegion = "singapore"
+	UniversalRegionSydney       UniversalRegion = "sydney"
+	UniversalRegionTokyo        UniversalRegion = "tokyo"
+	UniversalRegionToronto      UniversalRegion = "toronto"
+	UniversalRegionWashingtonDc UniversalRegion = "washington_dc"
+	UniversalRegionChicago      UniversalRegion = "chicago"
+	UniversalRegionParis        UniversalRegion = "paris"
+	UniversalRegionSeattle      UniversalRegion = "seattle"
+	UniversalRegionSaoPaulo     UniversalRegion = "sao_paulo"
+	UniversalRegionStockholm    UniversalRegion = "stockholm"
+	UniversalRegionChennai      UniversalRegion = "chennai"
+	UniversalRegionOsaka        UniversalRegion = "osaka"
+	UniversalRegionMilan        UniversalRegion = "milan"
+	UniversalRegionMiami        UniversalRegion = "miami"
+	UniversalRegionJakarta      UniversalRegion = "jakarta"
+	UniversalRegionLosAngeles   UniversalRegion = "los_angeles"
+)
+
+func NewUniversalRegionFromString(s string) (UniversalRegion, error) {
+	switch s {
+	case "unknown":
+		return UniversalRegionUnknown, nil
+	case "local":
+		return UniversalRegionLocal, nil
+	case "amsterdam":
+		return UniversalRegionAmsterdam, nil
+	case "atlanta":
+		return UniversalRegionAtlanta, nil
+	case "bangalore":
+		return UniversalRegionBangalore, nil
+	case "dallas":
+		return UniversalRegionDallas, nil
+	case "frankfurt":
+		return UniversalRegionFrankfurt, nil
+	case "london":
+		return UniversalRegionLondon, nil
+	case "mumbai":
+		return UniversalRegionMumbai, nil
+	case "newark":
+		return UniversalRegionNewark, nil
+	case "new_york_city":
+		return UniversalRegionNewYorkCity, nil
+	case "san_francisco":
+		return UniversalRegionSanFrancisco, nil
+	case "singapore":
+		return UniversalRegionSingapore, nil
+	case "sydney":
+		return UniversalRegionSydney, nil
+	case "tokyo":
+		return UniversalRegionTokyo, nil
+	case "toronto":
+		return UniversalRegionToronto, nil
+	case "washington_dc":
+		return UniversalRegionWashingtonDc, nil
+	case "chicago":
+		return UniversalRegionChicago, nil
+	case "paris":
+		return UniversalRegionParis, nil
+	case "seattle":
+		return UniversalRegionSeattle, nil
+	case "sao_paulo":
+		return UniversalRegionSaoPaulo, nil
+	case "stockholm":
+		return UniversalRegionStockholm, nil
+	case "chennai":
+		return UniversalRegionChennai, nil
+	case "osaka":
+		return UniversalRegionOsaka, nil
+	case "milan":
+		return UniversalRegionMilan, nil
+	case "miami":
+		return UniversalRegionMiami, nil
+	case "jakarta":
+		return UniversalRegionJakarta, nil
+	case "los_angeles":
+		return UniversalRegionLosAngeles, nil
+	}
+	var t UniversalRegion
+	return "", fmt.Errorf("%s is not a valid %T", s, t)
+}
+
+func (u UniversalRegion) Ptr() *UniversalRegion {
+	return &u
 }
 
 type BootstrapAccess string

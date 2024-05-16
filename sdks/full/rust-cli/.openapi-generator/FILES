@@ -158,6 +158,7 @@ docs/CloudRegionTierExpenses.md
 docs/CloudSvcMetrics.md
 docs/CloudSvcPerf.md
 docs/CloudTiersApi.md
+docs/CloudUniversalRegion.md
 docs/CloudUploadsApi.md
 docs/CloudValidateGroupRequest.md
 docs/CloudValidateGroupResponse.md
@@ -527,6 +528,7 @@ src/models/cloud_region_tier.rs
 src/models/cloud_region_tier_expenses.rs
 src/models/cloud_svc_metrics.rs
 src/models/cloud_svc_perf.rs
+src/models/cloud_universal_region.rs
 src/models/cloud_validate_group_request.rs
 src/models/cloud_validate_group_response.rs
 src/models/cloud_version_cdn_config.rs

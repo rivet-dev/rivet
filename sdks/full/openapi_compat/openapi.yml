@@ -1768,10 +1768,16 @@ components:
             readable. Different than `rivet.common#DisplayName` because this should
             not include special characters and be short.
           type: string
+        universal_region:
+          $ref: '#/components/schemas/CloudUniversalRegion'
+          description: '**Deprecated**
+
+            A universal region label given to this region.'
       required:
       - region_id
       - region_name_id
       - provider
+      - universal_region
       - provider_display_name
       - region_display_name
       type: object
@@ -1919,6 +1925,38 @@ components:
       - spans
       - marks
       type: object
+    CloudUniversalRegion:
+      description: '**Deprecated**'
+      enum:
+      - unknown
+      - local
+      - amsterdam
+      - atlanta
+      - bangalore
+      - dallas
+      - frankfurt
+      - london
+      - mumbai
+      - newark
+      - new_york_city
+      - san_francisco
+      - singapore
+      - sydney
+      - tokyo
+      - toronto
+      - washington_dc
+      - chicago
+      - paris
+      - seattle
+      - sao_paulo
+      - stockholm
+      - chennai
+      - osaka
+      - milan
+      - miami
+      - jakarta
+      - los_angeles
+      type: string
     CloudValidateGroupRequest:
       properties:
         display_name:

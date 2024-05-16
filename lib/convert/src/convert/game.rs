@@ -45,6 +45,7 @@ pub fn region_summary(
 		region_id: unwrap_ref!(region.region_id).as_uuid(),
 		region_name_id: region.name_id.clone(),
 		provider: region.provider.clone(),
+		universal_region: models::CloudUniversalRegion::Unknown,
 		provider_display_name: region.provider_display_name.clone(),
 		region_display_name: region.region_display_name.clone(),
 	})

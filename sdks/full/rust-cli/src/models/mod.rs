@@ -264,6 +264,8 @@ pub mod cloud_svc_metrics;
 pub use self::cloud_svc_metrics::CloudSvcMetrics;
 pub mod cloud_svc_perf;
 pub use self::cloud_svc_perf::CloudSvcPerf;
+pub mod cloud_universal_region;
+pub use self::cloud_universal_region::CloudUniversalRegion;
 pub mod cloud_validate_group_request;
 pub use self::cloud_validate_group_request::CloudValidateGroupRequest;
 pub mod cloud_validate_group_response;

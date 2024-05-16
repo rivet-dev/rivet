@@ -10691,6 +10691,11 @@ components:
         provider:
           type: string
           description: The server provider of this region.
+        universal_region:
+          $ref: '#/components/schemas/CloudUniversalRegion'
+          description: |-
+            **Deprecated**
+            A universal region label given to this region.
         provider_display_name:
           type: string
           description: Represent a resource's readable display name.
@@ -10701,6 +10706,7 @@ components:
         - region_id
         - region_name_id
         - provider
+        - universal_region
         - provider_display_name
         - region_display_name
     CloudGameLobbyExpenses:
@@ -10825,6 +10831,38 @@ components:
         - disk
         - bandwidth
         - price_per_second
+    CloudUniversalRegion:
+      type: string
+      enum:
+        - unknown
+        - local
+        - amsterdam
+        - atlanta
+        - bangalore
+        - dallas
+        - frankfurt
+        - london
+        - mumbai
+        - newark
+        - new_york_city
+        - san_francisco
+        - singapore
+        - sydney
+        - tokyo
+        - toronto
+        - washington_dc
+        - chicago
+        - paris
+        - seattle
+        - sao_paulo
+        - stockholm
+        - chennai
+        - osaka
+        - milan
+        - miami
+        - jakarta
+        - los_angeles
+      description: '**Deprecated**'
     CloudNamespaceFull:
       type: object
       description: A full namespace.
