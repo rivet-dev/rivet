@@ -37,7 +37,6 @@ impl TestCtx {
 			rivet_util::timestamp::now(),
 			rivet_util::timestamp::now(),
 			(),
-			Vec::new(),
 		);
 
 		Ok(TestCtx {

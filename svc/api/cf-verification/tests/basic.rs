@@ -37,7 +37,6 @@
 // 			util::timestamp::now(),
 // 			util::timestamp::now(),
 // 			(),
-// 			Vec::new(),
 // 		);
 
 // 		let http_client = rivet_cf_verification::Config::builder()

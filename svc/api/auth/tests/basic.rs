@@ -46,7 +46,6 @@
 // 			util::timestamp::now(),
 // 			util::timestamp::now(),
 // 			(),
-// 			Vec::new(),
 // 		);
 
 // 		let (user_id, user_token) = Self::issue_user_token(&op_ctx).await;

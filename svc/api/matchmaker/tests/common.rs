@@ -56,7 +56,6 @@ impl Ctx {
 			util::timestamp::now(),
 			util::timestamp::now(),
 			(),
-			Vec::new(),
 		);
 
 		let (primary_region_id, primary_region_name_id) = Self::setup_region(&op_ctx).await;
