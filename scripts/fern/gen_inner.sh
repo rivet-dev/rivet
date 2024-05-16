@@ -31,17 +31,6 @@ fi
 echo "Using Fern from $FERN_REPO_PATH"
 FERN_NO_VERSION_REDIRECTION=true node "$FERN_REPO_PATH/packages/cli/cli/dist/dev/cli.cjs" generate --local --group $FERN_GROUP --log-level debug
 
-# Once the above changes are merged
-# Generate Fern libraries
-set +u
-if [ -n "$FERN_REPO_PATH" ]; then
-	echo "Using Fern from $FERN_REPO_PATH"
-	FERN_NO_VERSION_REDIRECTION=true node "$FERN_REPO_PATH/packages/cli/cli/dist/dev/cli.cjs" generate --local --group $FERN_GROUP --log-level debug
-else
-	fern generate --local --group $FERN_GROUP --log-level debug
-fi
-set -u
-
 # Export missing types
 cat <<EOF >> sdks/$FERN_GROUP/typescript/src/index.ts
 export * as core from "./core";
