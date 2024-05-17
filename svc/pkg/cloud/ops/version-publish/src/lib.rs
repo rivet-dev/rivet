@@ -81,17 +81,6 @@ async fn handle(
 	} else {
 		None
 	};
-	let module_config_ctx = if let Some(module_config) = &config.module {
-		let prepare_res = op!([ctx] module_game_version_prepare {
-			game_id: Some(game_id.into()),
-			config: Some(module_config.clone()),
-		})
-		.await?;
-
-		Some(unwrap_ref!(prepare_res.config_ctx).clone())
-	} else {
-		None
-	};
 
 	// Create the game version
 	let version_create_res = op!([ctx] game_version_create {
@@ -144,14 +133,6 @@ async fn handle(
 			version_id: Some(version_id.into()),
 			config: Some(identity_config.clone()),
 			config_ctx: Some((*identity_config_ctx).clone()),
-		})
-		.await?;
-	}
-	if let (Some(module_config), Some(module_config_ctx)) = (&config.module, &module_config_ctx) {
-		op!([ctx] module_game_version_publish {
-			version_id: Some(version_id.into()),
-			config: Some(module_config.clone()),
-			config_ctx: Some((*module_config_ctx).clone()),
 		})
 		.await?;
 	}

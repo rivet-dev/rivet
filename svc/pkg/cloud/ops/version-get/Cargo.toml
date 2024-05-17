@@ -15,7 +15,6 @@ cdn-version-get = { path = "../../../cdn/ops/version-get" }
 identity-config-version-get = { path = "../../../identity-config/ops/version-get" }
 kv-config-version-get = { path = "../../../kv-config/ops/version-get" }
 mm-config-version-get = { path = "../../../mm-config/ops/version-get" }
-module-game-version-get = { path = "../../../module/ops/game-version-get" }
 
 [dependencies.sqlx]
 version = "0.7"

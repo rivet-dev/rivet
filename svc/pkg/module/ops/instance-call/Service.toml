@@ -1,7 +1,0 @@
-[service]
-name = "module-instance-call"
-
-[runtime]
-kind = "rust"
-
-[operation]

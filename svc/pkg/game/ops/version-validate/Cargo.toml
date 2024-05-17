@@ -15,7 +15,6 @@ external-request-validate = { path = "../../../external/ops/request-validate" }
 game-version-get = { path = "../version-get" }
 game-version-list = { path = "../version-list" }
 mm-config-game-get = { path = "../../../mm-config/ops/game-get" }
-module-version-get = { path = "../../../module/ops/version-get" }
 region-get = { path = "../../../region/ops/get" }
 tier-list = { path = "../../../tier/ops/list" }
 

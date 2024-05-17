@@ -60,7 +60,10 @@ pub async fn init_if_needed_quiet(ctx: &ProjectContext, plan_id: &str, quiet: bo
 					.read_secret(&["terraform", "pg_backend", "conn_str"])
 					.await
 					.unwrap();
-				vec![format!("-backend-config=conn_str={tf_conn_str}")]
+				vec![
+					format!("-backend-config=conn_str={tf_conn_str}"),
+					"-reconfigure".to_string(),
+				]
 			}
 		};
 

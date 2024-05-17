@@ -1253,64 +1253,6 @@ async fn handle(
 	// }
 	// }
 
-	// Module config validation
-	if let Some(module) = &proto_config.module {
-		if module.dependencies.len() > 32 {
-			errors.push(util::err_path![
-				"config",
-				"module",
-				"dependencies",
-				"too-many"
-			]);
-		}
-
-		for (i, dependency) in module.dependencies.iter().enumerate() {
-			let version_id = unwrap_ref!(dependency.module_version_id).as_uuid();
-
-			// Validate ident
-			if util::check::ident(&dependency.key) {
-				if module
-					.dependencies
-					.iter()
-					.enumerate()
-					.any(|(j, x)| i != j && dependency.key == x.key)
-				{
-					errors.push(util::err_path![
-						"config",
-						"modules",
-						"dependencies",
-						dependency.key,
-						"not-unique",
-					]);
-				}
-			} else {
-				errors.push(util::err_path![
-					"config",
-					"module",
-					"dependencies",
-					dependency.key,
-					"key-invalid",
-				]);
-			}
-
-			// TODO: Validate the version belongs to the owner
-			// Validate version ID
-			let versions = op!([ctx] module_version_get {
-				version_ids: vec![version_id.into()],
-			})
-			.await?;
-			if versions.versions.is_empty() {
-				errors.push(util::err_path![
-					"config",
-					"module",
-					"dependencies",
-					dependency.key,
-					"version-not-found",
-				]);
-			}
-		}
-	}
-
 	Ok(game::version_validate::Response {
 		errors: errors
 			.into_iter()

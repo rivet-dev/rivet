@@ -55,10 +55,6 @@ define_router! {
 			prefix: "matchmaker",
 		},
 		{
-			path: api_module::route::Router,
-			prefix: "module",
-		},
-		{
 			path: api_portal::route::Router,
 			prefix: "portal",
 		},

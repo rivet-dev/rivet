@@ -44,25 +44,17 @@ impl SubCommand {
 				let ssh_key =
 					TempSshKey::new(&ctx, &ssh_key.map_or_else(|| "server".to_string(), |x| x))
 						.await?;
-				bolt_core::tasks::ssh::ip(
-					&ctx,
-					&ip,
-					&ssh_key,
-					command.as_deref(),
-				)
-				.await?;
+				bolt_core::tasks::ssh::ip(&ctx, &ip, &ssh_key, command.as_deref()).await?;
 			}
 			Self::Id { server_id, command } => {
-				bolt_core::tasks::ssh::id(&ctx, &server_id, command.as_deref())
-					.await?;
+				bolt_core::tasks::ssh::id(&ctx, &server_id, command.as_deref()).await?;
 			}
 			Self::Pool { pool, command, all } => {
 				if all {
 					let command = command.context("must provide command with --all")?;
 					bolt_core::tasks::ssh::pool_all(&ctx, &pool, &command).await?;
 				} else {
-					bolt_core::tasks::ssh::pool(&ctx, &pool, command.as_deref())
-						.await?;
+					bolt_core::tasks::ssh::pool(&ctx, &pool, command.as_deref()).await?;
 				}
 			}
 		}

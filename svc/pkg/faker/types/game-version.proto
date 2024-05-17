@@ -8,7 +8,6 @@ import "proto/backend/cdn.proto";
 import "proto/backend/matchmaker.proto";
 import "proto/backend/kv.proto";
 import "proto/backend/identity.proto";
-import "proto/backend/module.proto";
 import "proto/backend/captcha.proto";
 
 message Request {
@@ -26,10 +25,6 @@ message Request {
 
 	message OverrideIdentityConfig {
 		optional rivet.backend.identity.VersionConfig config = 1;
-	}
-
-	message OverrideModuleConfig {
-		optional rivet.backend.module.GameVersionConfig config = 1;
 	}
 
 
@@ -50,7 +45,6 @@ message Request {
 	optional OverrideMatchmakerConfig override_mm_config = 102;
 	optional OverrideKvConfig override_kv_config = 106;
 	optional OverrideIdentityConfig override_identity_config = 107;
-	optional OverrideModuleConfig override_module_config = 108;
 
 	optional OverrideLobbyGroups override_lobby_groups = 103;
 	optional OverrideCaptcha override_captcha = 105;

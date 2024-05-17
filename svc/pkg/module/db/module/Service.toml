@@ -1,7 +1,0 @@
-[service]
-name = "db-module"
-
-[runtime]
-kind = "crdb"
-
-[database]

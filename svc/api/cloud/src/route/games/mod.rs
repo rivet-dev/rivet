@@ -206,9 +206,6 @@ async fn gen_default_version_config(
 			custom_display_names: Vec::new(),
 			custom_avatars: Vec::new(),
 		}),
-		module: Some(backend::module::GameVersionConfig {
-			dependencies: Vec::new(),
-		}),
 	})
 }
 

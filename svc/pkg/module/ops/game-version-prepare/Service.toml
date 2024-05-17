@@ -1,7 +1,0 @@
-[service]
-name = "module-game-version-prepare"
-
-[runtime]
-kind = "rust"
-
-[operation]

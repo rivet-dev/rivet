@@ -34,8 +34,6 @@ pub async fn config_to_proto(
 		},
 		kv: value.kv.map(|_| backend::kv::VersionConfig {}),
 		identity: value.identity.map(|x| (*x).api_try_into()).transpose()?,
-		// TODO:
-		module: None,
 	})
 }
 
