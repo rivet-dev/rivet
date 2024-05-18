@@ -25,6 +25,11 @@ variable "prometheus_enabled" {
 	type = bool
 }
 
+# MARK: OpenGB
+variable "opengb_enabled" {
+	type = bool
+}
+
 # MARK: K8s
 variable "kubeconfig_path" {
 	type = string

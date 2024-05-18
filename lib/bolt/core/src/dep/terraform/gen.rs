@@ -229,6 +229,12 @@ async fn vars(ctx: &ProjectContext) {
 		json!(config.rivet.provisioning.is_some()),
 	);
 
+	// OpenGB
+	vars.insert(
+		"opengb_enabled".into(),
+		json!(config.rivet.opengb.is_some()),
+	);
+
 	// Tunnels
 	if let Some(ns::Dns {
 		provider: Some(ns::DnsProvider::Cloudflare { access, .. }),
@@ -304,10 +310,14 @@ async fn vars(ctx: &ProjectContext) {
 			"name": domain_main_api,
 		}));
 
-		// OGS
+		// OpenGB
 		extra_dns.push(json!({
 			"zone_name": "main",
-			"name": format!("*.ogs.{domain_main}"),
+			"name": format!("*.opengb.{domain_main}"),
+		}));
+		extra_dns.push(json!({
+			"zone_name": "main",
+			"name": format!("db.opengb-internal.{domain_main}"),
 		}));
 
 		// Add services

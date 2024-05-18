@@ -13,9 +13,7 @@ types:
       svc_name:
         docs: The name of the service.
         type: string
-      ts:
-        docs: RFC3339 timestamp.
-        type: datetime
+      ts: commons.Timestamp
       duration:
         docs: Unsigned 64 bit integer.
         type: long

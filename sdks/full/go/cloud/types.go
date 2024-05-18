@@ -11,7 +11,6 @@ import (
 	matchmaker "sdk/cloud/version/matchmaker"
 	game "sdk/common/game"
 	core "sdk/core"
-	time "time"
 )
 
 // The current authenticated agent.
@@ -1193,9 +1192,8 @@ func (s *SvcMetrics) String() string {
 // A service performance summary.
 type SvcPerf struct {
 	// The name of the service.
-	SvcName string `json:"svc_name"`
-	// RFC3339 timestamp.
-	Ts time.Time `json:"ts"`
+	SvcName string        `json:"svc_name"`
+	Ts      sdk.Timestamp `json:"ts"`
 	// Unsigned 64 bit integer.
 	Duration int64      `json:"duration"`
 	ReqId    *uuid.UUID `json:"req_id,omitempty"`

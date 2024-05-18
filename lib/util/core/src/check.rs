@@ -8,6 +8,7 @@ pub const MAX_DISPLAY_NAME_LONG_LEN: usize = 128;
 pub const MAX_BIOGRAPHY_LEN: usize = 200;
 pub const MAX_NEW_LINES: usize = 5;
 pub const MAX_DOMAIN_LEN: usize = 255;
+pub const MAX_DENO_NAME_LEN: usize = 32;
 
 lazy_static! {
 	static ref BCRYPT: Regex = RegexBuilder::new(r#"^\$2[ayb]?\$[0-9]{2}\$[A-Za-z0-9\./]+$"#)
@@ -34,15 +35,15 @@ pub fn ident_lenient(s: impl AsRef<str>) -> bool {
 
 pub fn ident_with_len(s: impl AsRef<str>, lenient: bool, len: usize) -> bool {
 	let s = s.as_ref();
-	s.chars().all(|c| match c {
-		'0'..='9' | 'a'..='z' | '-' => true,
-		'A'..='Z' | '_' if lenient => true,
-		_ => false,
-	}) && !s.is_empty()
+	!s.is_empty()
 		&& s.len() <= len
 		&& !s.starts_with('-')
 		&& !s.ends_with('-')
-		&& (lenient || !s.contains("--"))
+		&& s.chars().all(|c| match c {
+			'0'..='9' | 'a'..='z' | '-' => true,
+			'A'..='Z' | '_' if lenient => true,
+			_ => false,
+		}) && (lenient || !s.contains("--"))
 }
 
 /// Same as `ident` but without the length requirement.
@@ -172,6 +173,19 @@ pub fn bcrypt(s: impl AsRef<str>) -> bool {
 	let s = s.as_ref();
 
 	BCRYPT.is_match(s)
+}
+
+/// Checks if a string is a valid Deno name.
+pub fn deno_name(s: impl AsRef<str>) -> bool {
+	let s = s.as_ref();
+	!s.is_empty()
+		&& s.len() <= MAX_DENO_NAME_LEN
+		&& !s.starts_with('_')
+		&& !s.ends_with('_')
+		&& s.chars().all(|c| match c {
+			'0'..='9' | 'a'..='z' | '_' => true,
+			_ => false,
+		}) && !s.contains("__")
 }
 
 #[cfg(test)]

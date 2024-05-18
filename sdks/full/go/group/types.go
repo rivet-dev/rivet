@@ -10,7 +10,6 @@ import (
 	group "sdk/common/group"
 	identity "sdk/common/identity"
 	core "sdk/core"
-	time "time"
 )
 
 type GetBansRequest struct {
@@ -92,8 +91,7 @@ func (b *BannedIdentity) String() string {
 // A group join request.
 type JoinRequest struct {
 	Identity *identity.Handle `json:"identity,omitempty"`
-	// RFC3339 timestamp.
-	Ts time.Time `json:"ts"`
+	Ts       sdk.Timestamp    `json:"ts"`
 
 	_rawJSON json.RawMessage
 }

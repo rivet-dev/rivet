@@ -41,6 +41,11 @@ variable "extra_dns" {
 	}))
 }
 
+# MARK: OpenGB
+variable "opengb_enabled" {
+	type = bool
+}
+
 # MARK: Cloudflare
 variable "cloudflare_account_id" {
 	type = string

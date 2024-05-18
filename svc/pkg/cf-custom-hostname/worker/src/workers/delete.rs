@@ -2,7 +2,16 @@ use chirp_worker::prelude::*;
 use proto::backend::pkg::*;
 use serde::Deserialize;
 
-use crate::CloudflareError;
+#[derive(Debug, Deserialize)]
+struct CloudflareError {
+	errors: Vec<CloudflareErrorEntry>,
+}
+
+#[derive(Debug, Deserialize)]
+struct CloudflareErrorEntry {
+	code: usize,
+	message: String,
+}
 
 #[worker(name = "cf-custom-hostname-delete")]
 async fn worker(

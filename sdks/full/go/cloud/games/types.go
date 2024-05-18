@@ -6,6 +6,16 @@ import (
 	fmt "fmt"
 )
 
+type GetGameByIdRequest struct {
+	// A query parameter denoting the requests watch index.
+	WatchIndex *string `json:"-"`
+}
+
+type GetGamesRequest struct {
+	// A query parameter denoting the requests watch index.
+	WatchIndex *string `json:"-"`
+}
+
 type BuildCompression string
 
 const (

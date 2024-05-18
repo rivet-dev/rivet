@@ -6,6 +6,7 @@ import (
 	json "encoding/json"
 	fmt "fmt"
 	core "sdk/core"
+	time "time"
 )
 
 type AccountNumber = int
@@ -120,7 +121,7 @@ type Identifier = string
 type Jwt = string
 
 // RFC3339 timestamp
-type Timestamp = string
+type Timestamp = time.Time
 
 // An error given by failed content validation.
 type ValidationError struct {

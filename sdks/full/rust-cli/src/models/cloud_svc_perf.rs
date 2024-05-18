@@ -28,7 +28,7 @@ pub struct CloudSvcPerf {
     /// The name of the service.
     #[serde(rename = "svc_name")]
     pub svc_name: String,
-    /// RFC3339 timestamp.
+    /// RFC3339 timestamp
     #[serde(rename = "ts")]
     pub ts: String,
 }

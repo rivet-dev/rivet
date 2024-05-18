@@ -1,6 +1,7 @@
 use std::iter::Iterator;
 
 use lazy_static::lazy_static;
+use rand::seq::IteratorRandom;
 use regex::Regex;
 
 use crate::check;
@@ -96,4 +97,34 @@ pub fn str_to_ident(s: impl AsRef<str>) -> String {
 		.collect::<String>();
 
 	dashed.trim_matches('-').to_string()
+}
+
+pub fn gen_name_id(s: impl AsRef<str>, default: &str) -> String {
+	assert!(
+		default.len() + 8 <= check::MAX_IDENT_LEN,
+		"default ident too long"
+	);
+
+	let proc_ident = str_to_ident(s);
+
+	// Default
+	let (proc_ident, rng_count) = if proc_ident.is_empty() {
+		(default, 8)
+	} else {
+		(proc_ident.as_str(), 3)
+	};
+
+	// Choose a random hash to add to the name id
+	let chars = "abcdefghijklmnopqrstuvwxyz1234567890"; // pragma: allowlist secret
+	let mut rng = rand::thread_rng();
+	let hash = std::iter::repeat_with(|| chars.chars().choose(&mut rng))
+		.flatten()
+		.take(rng_count);
+
+	proc_ident
+		.chars()
+		.take(check::MAX_IDENT_LEN - 4)
+		.chain(std::iter::once('-'))
+		.chain(hash)
+		.collect::<String>()
 }

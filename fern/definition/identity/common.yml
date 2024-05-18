@@ -11,7 +11,7 @@ types:
   GlobalEvent:
     docs: An event relevant to the current identity.
     properties:
-      ts: datetime
+      ts: commons.Timestamp
       kind: GlobalEventKind
       notification: optional<GlobalEventNotification>
 

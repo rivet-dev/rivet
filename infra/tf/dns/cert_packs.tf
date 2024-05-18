@@ -14,8 +14,7 @@ locals {
 	certificate_authority = "lets_encrypt"
 }
 
-# TODO: Only if we use deprecated subdomains
-# Allow CLoudflare to serve TLS requests at the edge for our wildcard
+# Allow Cloudflare to serve TLS requests at the edge for our wildcard
 # subdomains.
 #
 # This requires paying money for these certs.
@@ -29,13 +28,22 @@ resource "cloudflare_certificate_pack" "main" {
 	certificate_authority = local.certificate_authority
 	# The certificate must include the root domain in it.
 	#
-	# We convert to set then back to list to remove potential duplicates of the root zoon.
-	hosts = sort(tolist(toset([
-		data.cloudflare_zone.main.name,
-		var.domain_main,
-		"*.${var.domain_main}",
-		"*.api.${var.domain_main}",
-	])))
+	# We convert to set then back to list to remove potential duplicates of the root zone.
+	hosts = sort(tolist(toset(
+		flatten([
+			[
+				data.cloudflare_zone.main.name,
+				var.domain_main,
+				"*.${var.domain_main}",
+				# TODO: Only if we use deprecated subdomains
+				"*.api.${var.domain_main}",
+			],
+			var.opengb_enabled ? [
+				"*.opengb.${var.domain_main}",
+				"db.opengb-internal.${var.domain_main}"
+			] : []
+		])
+	)))
 	type = "advanced"
 	validation_method = "txt"
 	validity_days = 90

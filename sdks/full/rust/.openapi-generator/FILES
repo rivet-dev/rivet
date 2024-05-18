@@ -66,6 +66,7 @@ docs/CloudDevicesLinksApi.md
 docs/CloudDevicesPrepareDeviceLinkResponse.md
 docs/CloudGameFull.md
 docs/CloudGameLobbyExpenses.md
+docs/CloudGamesApi.md
 docs/CloudGamesAvatarsApi.md
 docs/CloudGamesBuildCompression.md
 docs/CloudGamesBuildKind.md
@@ -89,7 +90,6 @@ docs/CloudGamesGameBannerUploadPrepareRequest.md
 docs/CloudGamesGameBannerUploadPrepareResponse.md
 docs/CloudGamesGameLogoUploadPrepareRequest.md
 docs/CloudGamesGameLogoUploadPrepareResponse.md
-docs/CloudGamesGamesApi.md
 docs/CloudGamesGetGameByIdResponse.md
 docs/CloudGamesGetGameVersionByIdResponse.md
 docs/CloudGamesGetGamesResponse.md
@@ -356,10 +356,10 @@ src/apis/auth_tokens_api.rs
 src/apis/cloud_api.rs
 src/apis/cloud_auth_api.rs
 src/apis/cloud_devices_links_api.rs
+src/apis/cloud_games_api.rs
 src/apis/cloud_games_avatars_api.rs
 src/apis/cloud_games_builds_api.rs
 src/apis/cloud_games_cdn_api.rs
-src/apis/cloud_games_games_api.rs
 src/apis/cloud_games_matchmaker_api.rs
 src/apis/cloud_games_namespaces_analytics_api.rs
 src/apis/cloud_games_namespaces_api.rs

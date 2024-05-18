@@ -5,8 +5,6 @@ export * as builds from "./builds";
 export * from "./builds/types";
 export * as cdn from "./cdn";
 export * from "./cdn/types";
-export * as games from "./games";
-export * from "./games/types";
 export * as matchmaker from "./matchmaker";
 export * from "./matchmaker/types";
 export * as tokens from "./tokens";

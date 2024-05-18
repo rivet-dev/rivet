@@ -18,6 +18,7 @@ pub struct IdentityGlobalEvent {
     pub kind: Box<crate::models::IdentityGlobalEventKind>,
     #[serde(rename = "notification", skip_serializing_if = "Option::is_none")]
     pub notification: Option<Box<crate::models::IdentityGlobalEventNotification>>,
+    /// RFC3339 timestamp
     #[serde(rename = "ts")]
     pub ts: String,
 }

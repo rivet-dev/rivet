@@ -14,16 +14,6 @@ import (
 	upload "sdk/upload"
 )
 
-type GetGameByIdRequest struct {
-	// A query parameter denoting the requests watch index.
-	WatchIndex *string `json:"-"`
-}
-
-type GetGamesRequest struct {
-	// A query parameter denoting the requests watch index.
-	WatchIndex *string `json:"-"`
-}
-
 type CreateGameRequest struct {
 	// **Deprecated**
 	NameId           *sdk.Identifier `json:"name_id,omitempty"`
@@ -279,8 +269,7 @@ func (g *GetGamesResponse) String() string {
 type ValidateGameRequest struct {
 	DisplayName sdk.DisplayName `json:"display_name"`
 	// **Deprecated**
-	// A human readable short identifier used to references resources. Different than a `rivet.common#Uuid` because this is intended to be human readable. Different than `rivet.common#DisplayName` because this should not include special characters and be short.
-	NameId *string `json:"name_id,omitempty"`
+	NameId *sdk.Identifier `json:"name_id,omitempty"`
 
 	_rawJSON json.RawMessage
 }

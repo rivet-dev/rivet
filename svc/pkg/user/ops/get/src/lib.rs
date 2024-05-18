@@ -112,6 +112,8 @@ pub async fn handle(
 						.find(|file| file.upload_id == profile_id);
 
 					if let (Some(upload), Some(file)) = (upload, file) {
+						// TODO: Why do we parse the file name here? Based on route.rs in utils shouldn't
+						// the entire path be present in the media url?
 						let profile_file_name = file
 							.path
 							.rsplit_once('/')

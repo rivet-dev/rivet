@@ -274,6 +274,17 @@ pub fn build_plan(
 		}
 	}
 
+	// OpenGB
+	if ctx.ns().rivet.opengb.is_some() {
+		plan.push(PlanStep {
+			name_id: "opengb",
+			kind: PlanStepKind::Terraform {
+				plan_id: "opengb".into(),
+				needs_destroy: true,
+			},
+		});
+	}
+
 	// BetterUptime
 	if ctx.ns().better_uptime.is_some() {
 		plan.push(PlanStep {

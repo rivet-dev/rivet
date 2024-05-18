@@ -145,9 +145,7 @@ pub async fn run_from_env(_ts: i64) -> GlobalResult<()> {
 		let config = config.clone();
 		tokio::spawn(async move {
 			// Taint
-			match rivet_api::apis::cloud_games_games_api::cloud_games_games_get_games(&config, None)
-				.await
-			{
+			match rivet_api::apis::cloud_games_api::cloud_games_get_games(&config, None).await {
 				Ok(_) => {}
 				Err(err) => tracing::error!(?err, "error"),
 			}

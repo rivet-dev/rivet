@@ -5,7 +5,7 @@ use proto::{
 use rivet_api::models;
 use rivet_operation::prelude::*;
 
-use crate::{ApiFrom, ApiTryFrom, ApiTryInto};
+use crate::{ApiTryFrom, ApiTryInto};
 
 pub mod cloudflare;
 pub mod namespace;

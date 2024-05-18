@@ -877,6 +877,16 @@ impl ServiceContextData {
 			);
 		}
 
+		// OpenGB
+		if project_ctx.ns().rivet.opengb.is_some() {
+			let opengb_output = terraform::output::read_opengb(&project_ctx).await;
+
+			env.insert(
+				"CLOUDFLARE_OPENGB_DISPATCHER_NAMESPACE".into(),
+				opengb_output.dispatcher_namespace_name.to_string(),
+			);
+		}
+
 		if self.depends_on_captcha() {
 			if let Some(hcaptcha) = &project_ctx.ns().captcha.hcaptcha {
 				env.insert(

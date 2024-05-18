@@ -77,7 +77,7 @@ types:
   AccountNumber: integer
 
   Timestamp:
-    type: string
+    type: datetime
     docs: RFC3339 timestamp
 
   GlobalEventNotification:

@@ -222,7 +222,9 @@ define_router! {
 			),
 		},
 		"devices" / "links" / "complete": {
-			POST: devices::links::complete(body: models::CloudDevicesCompleteDeviceLinkRequest),
+			POST: devices::links::complete(
+				body: models::CloudDevicesCompleteDeviceLinkRequest,
+			),
 		},
 	},
 }

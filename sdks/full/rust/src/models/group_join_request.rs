@@ -16,7 +16,7 @@
 pub struct GroupJoinRequest {
     #[serde(rename = "identity")]
     pub identity: Box<crate::models::IdentityHandle>,
-    /// RFC3339 timestamp.
+    /// RFC3339 timestamp
     #[serde(rename = "ts")]
     pub ts: String,
 }

@@ -71,7 +71,6 @@ service:
       request:
         name: GetHandlesRequest
         query-parameters:
-          # TODO: how is this list serialized over the wire
           # With allow-multiple, Fern assumes that lists are sent over the wire as
           # param=a&param=b&param=c.
           identity_ids:

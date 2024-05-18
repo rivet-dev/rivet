@@ -110,7 +110,13 @@ message Entitlement {
 	// Issued to provisioned servers for communication with our API. This will be written to prebake servers
 	// (see /docs/packages/cluster/SERVER_PROVISIONING.md).
 	message ProvisionedServer {
+	
+	}
 		
+	// Token used to connect to a neon database through the OpenGB DB proxy
+	message OpenGbDb {
+		rivet.common.Uuid environment_id = 1;
+		string db_name = 2;
 	}
 
 	oneof kind {
@@ -130,6 +136,7 @@ message Entitlement {
 		Bypass bypass = 15;
 		AccessToken access_token = 16;
 		ProvisionedServer provisioned_server = 17;
+		OpenGbDb opengb_db = 18;
 	}
 
 	reserved 13;

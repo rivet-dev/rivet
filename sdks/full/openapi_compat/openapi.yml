@@ -1323,13 +1323,8 @@ components:
         display_name:
           $ref: '#/components/schemas/DisplayName'
         name_id:
-          description: '**Deprecated**
-
-            A human readable short identifier used to references resources. Different
-            than a `rivet.common#Uuid` because this is intended to be human readable.
-            Different than `rivet.common#DisplayName` because this should not include
-            special characters and be short.'
-          type: string
+          $ref: '#/components/schemas/Identifier'
+          description: '**Deprecated**'
       required:
       - display_name
       type: object
@@ -1863,9 +1858,7 @@ components:
           description: The name of the service.
           type: string
         ts:
-          description: RFC3339 timestamp.
-          format: date-time
-          type: string
+          $ref: '#/components/schemas/Timestamp'
       required:
       - svc_name
       - ts
@@ -3089,9 +3082,7 @@ components:
         identity:
           $ref: '#/components/schemas/IdentityHandle'
         ts:
-          description: RFC3339 timestamp.
-          format: date-time
-          type: string
+          $ref: '#/components/schemas/Timestamp'
       required:
       - identity
       - ts
@@ -3451,8 +3442,7 @@ components:
         notification:
           $ref: '#/components/schemas/IdentityGlobalEventNotification'
         ts:
-          format: date-time
-          type: string
+          $ref: '#/components/schemas/Timestamp'
       required:
       - ts
       - kind
@@ -4366,6 +4356,7 @@ components:
       type: object
     Timestamp:
       description: RFC3339 timestamp
+      format: date-time
       type: string
     UploadPrepareFile:
       description: A file being prepared to upload.
@@ -5398,7 +5389,7 @@ paths:
     get:
       description: Returns a list of games in which the current identity is a group
         member of its development team.
-      operationId: cloud_games_games_getGames
+      operationId: cloud_games_getGames
       parameters:
       - description: A query parameter denoting the requests watch index.
         in: query
@@ -5451,10 +5442,10 @@ paths:
           description: ''
       security: *id001
       tags:
-      - CloudGamesGames
+      - CloudGames
     post:
       description: Creates a new game.
-      operationId: cloud_games_games_createGame
+      operationId: cloud_games_createGame
       parameters: []
       requestBody:
         content:
@@ -5507,11 +5498,11 @@ paths:
           description: ''
       security: *id001
       tags:
-      - CloudGamesGames
+      - CloudGames
   /cloud/games/validate:
     post:
       description: Validates information used to create a new game.
-      operationId: cloud_games_games_validateGame
+      operationId: cloud_games_validateGame
       parameters: []
       requestBody:
         content:
@@ -5564,11 +5555,11 @@ paths:
           description: ''
       security: *id001
       tags:
-      - CloudGamesGames
+      - CloudGames
   /cloud/games/{game_id}:
     get:
       description: Returns a game by its game id.
-      operationId: cloud_games_games_getGameById
+      operationId: cloud_games_getGameById
       parameters:
       - in: path
         name: game_id
@@ -5627,7 +5618,7 @@ paths:
           description: ''
       security: *id001
       tags:
-      - CloudGamesGames
+      - CloudGames
   /cloud/games/{game_id}/avatar-upload/{upload_id}/complete:
     post:
       description: Completes a custom avatar image upload. Must be called after the
@@ -5748,7 +5739,7 @@ paths:
   /cloud/games/{game_id}/banner-upload/prepare:
     post:
       description: Prepares a game banner image upload.
-      operationId: cloud_games_games_gameBannerUploadPrepare
+      operationId: cloud_games_gameBannerUploadPrepare
       parameters:
       - in: path
         name: game_id
@@ -5807,12 +5798,12 @@ paths:
           description: ''
       security: *id001
       tags:
-      - CloudGamesGames
+      - CloudGames
   /cloud/games/{game_id}/banner-upload/{upload_id}/complete:
     post:
       description: Completes an game banner image upload. Must be called after the
         file upload process completes.
-      operationId: cloud_games_games_gameBannerUploadComplete
+      operationId: cloud_games_gameBannerUploadComplete
       parameters:
       - in: path
         name: game_id
@@ -5867,7 +5858,7 @@ paths:
           description: ''
       security: *id001
       tags:
-      - CloudGamesGames
+      - CloudGames
   /cloud/games/{game_id}/builds:
     get:
       description: Lists game builds for the given game.
@@ -6109,7 +6100,7 @@ paths:
   /cloud/games/{game_id}/logo-upload/prepare:
     post:
       description: Prepares a game logo image upload.
-      operationId: cloud_games_games_gameLogoUploadPrepare
+      operationId: cloud_games_gameLogoUploadPrepare
       parameters:
       - in: path
         name: game_id
@@ -6168,12 +6159,12 @@ paths:
           description: ''
       security: *id001
       tags:
-      - CloudGamesGames
+      - CloudGames
   /cloud/games/{game_id}/logo-upload/{upload_id}/complete:
     post:
       description: Completes a game logo image upload. Must be called after the file
         upload process completes.
-      operationId: cloud_games_games_gameLogoUploadComplete
+      operationId: cloud_games_gameLogoUploadComplete
       parameters:
       - in: path
         name: game_id
@@ -6228,7 +6219,7 @@ paths:
           description: ''
       security: *id001
       tags:
-      - CloudGamesGames
+      - CloudGames
   /cloud/games/{game_id}/matchmaker/lobbies/export-history:
     post:
       description: Exports lobby history over a given query time span.

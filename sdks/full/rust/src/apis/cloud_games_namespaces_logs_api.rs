@@ -74,7 +74,7 @@ pub async fn cloud_games_namespaces_logs_get_namespace_lobby(configuration: &con
 }
 
 /// Returns a list of lobbies for the given game namespace.
-pub async fn cloud_games_namespaces_logs_list_namespace_lobbies(configuration: &configuration::Configuration, game_id: &str, namespace_id: &str, before_create_ts: Option<&str>) -> Result<crate::models::CloudGamesNamespacesListNamespaceLobbiesResponse, Error<CloudGamesNamespacesLogsListNamespaceLobbiesError>> {
+pub async fn cloud_games_namespaces_logs_list_namespace_lobbies(configuration: &configuration::Configuration, game_id: &str, namespace_id: &str, before_create_ts: Option<String>) -> Result<crate::models::CloudGamesNamespacesListNamespaceLobbiesResponse, Error<CloudGamesNamespacesLogsListNamespaceLobbiesError>> {
     let local_var_configuration = configuration;
 
     let local_var_client = &local_var_configuration.client;

@@ -1,4 +1,4 @@
-use proto::backend::{self, pkg::*};
+use proto::backend;
 use rivet_api::models as new_models;
 use rivet_group_server::models;
 use rivet_operation::prelude::*;

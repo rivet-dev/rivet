@@ -12,7 +12,6 @@ import (
 	identity "sdk/common/identity"
 	core "sdk/core"
 	matchmaker "sdk/matchmaker"
-	time "time"
 )
 
 type GetHandlesRequest struct {
@@ -209,7 +208,7 @@ func (g GameLinkStatus) Ptr() *GameLinkStatus {
 
 // An event relevant to the current identity.
 type GlobalEvent struct {
-	Ts           time.Time                `json:"ts"`
+	Ts           sdk.Timestamp            `json:"ts"`
 	Kind         *GlobalEventKind         `json:"kind,omitempty"`
 	Notification *GlobalEventNotification `json:"notification,omitempty"`
 

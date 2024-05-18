@@ -1,7 +1,8 @@
 use types::rivet::backend;
 use uuid::Uuid;
+use global_error::prelude::*;
 
-use crate::env::{origin_api, origin_hub};
+use crate::env::{origin_api, origin_hub, domain_main};
 
 pub fn user_settings() -> String {
 	format!("{}/settings", origin_hub())
@@ -101,4 +102,15 @@ pub fn access_token_link(access_token_token: &str) -> String {
 
 pub fn billing(team_id: Uuid) -> String {
 	format!("{}/groups/{}/billing", origin_hub(), team_id)
+}
+
+pub fn opengb_env(project_name_id: &str, env_name_id: &str) -> GlobalResult<String> {
+	let domain_main = unwrap!(domain_main(), "dns not enabled");
+
+	Ok(format!(
+		"https://{}--{}.opengb.{}/",
+		project_name_id,
+		env_name_id,
+		domain_main,
+	))
 }

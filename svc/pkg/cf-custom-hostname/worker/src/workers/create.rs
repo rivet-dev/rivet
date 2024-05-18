@@ -3,8 +3,6 @@ use proto::backend::{self, pkg::*};
 use serde::Deserialize;
 use serde_json::json;
 
-use crate::CloudflareError;
-
 #[derive(Debug, Deserialize)]
 struct CloudflareResponse {
 	result: CloudflareResult,
@@ -20,6 +18,17 @@ struct CloudflareResult {
 #[derive(Debug, Deserialize)]
 struct CloudflareOwnershipVerificationHttp {
 	http_body: Uuid,
+}
+
+#[derive(Debug, Deserialize)]
+struct CloudflareError {
+	errors: Vec<CloudflareErrorEntry>,
+}
+
+#[derive(Debug, Deserialize)]
+struct CloudflareErrorEntry {
+	code: usize,
+	message: String,
 }
 
 /// Send a lobby create fail message and cleanup the lobby if needed.

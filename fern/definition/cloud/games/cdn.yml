@@ -41,8 +41,6 @@ types:
 
   CreateGameCdnSiteResponse:
     properties:
-      site_id:
-        type: uuid
-      upload_id:
-        type: uuid
+      site_id: uuid
+      upload_id: uuid
       presigned_requests: list<uploadCommons.PresignedRequest>

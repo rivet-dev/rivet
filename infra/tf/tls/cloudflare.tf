@@ -57,7 +57,18 @@ resource "tls_cert_request" "cf_origin_rivet_gg" {
 
 resource "cloudflare_origin_ca_certificate" "rivet_gg" {
 	csr = tls_cert_request.cf_origin_rivet_gg.cert_request_pem
-	hostnames = ["*.${var.domain_main}", "${var.domain_main}", "*.api.${var.domain_main}", "api.${var.domain_main}"]
+	hostnames = flatten([
+		[
+			"*.${var.domain_main}",
+			"${var.domain_main}",
+			"*.api.${var.domain_main}",
+			"api.${var.domain_main}",
+		],
+		var.opengb_enabled ? [
+			"*.opengb.${var.domain_main}",
+			"db.opengb-internal.${var.domain_main}"
+		] : []
+	])
 	request_type = "origin-rsa"
 	requested_validity = 15 * 365
 }

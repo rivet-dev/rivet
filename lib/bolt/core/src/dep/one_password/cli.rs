@@ -9,10 +9,7 @@ pub async fn command(service_token: Option<&str>) -> Command {
 	cmd.arg("op");
 
 	let installed = cmd.exec_quiet(true, true).await.is_ok();
-
-	if !installed {
-		panic!("1Password secret management is enabled in the namespace config but the 1Password CLI (`op`) is not installed");
-	}
+	assert!(installed, "1Password secret management is enabled in the namespace config but the 1Password CLI (`op`) is not installed");
 
 	let mut cmd = Command::new("op");
 
@@ -22,8 +19,6 @@ pub async fn command(service_token: Option<&str>) -> Command {
 		}
 
 		cmd.env("OP_SERVICE_ACCOUNT_TOKEN", service_token);
-	} else {
-		eprintln!("WARNING: 1Password secret management is enabled in the namespace config but the '1password.service_account_token' secret is not set.\n");
 	}
 
 	cmd

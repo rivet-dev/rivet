@@ -58,9 +58,7 @@ types:
     docs: A group join request.
     properties:
       identity: identityCommons.Handle
-      ts:
-        docs: RFC3339 timestamp.
-        type: datetime
+      ts: commons.Timestamp
 
   Member:
     docs: A group member.
