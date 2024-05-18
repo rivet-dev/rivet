@@ -4,7 +4,7 @@
 
 Name | Type | Description | Notes
 ------------ | ------------- | ------------- | -------------
-**deploy_ts** | **String** | RFC3339 timestamp. | 
+**deploy_ts** | **String** | RFC3339 timestamp | 
 **namespace_id** | **String** | A universally unique identifier. | 
 **version_id** | **String** | A universally unique identifier. | 
 

@@ -1,4 +1,4 @@
-use proto::backend::pkg::*;
+use proto::{backend::pkg::*, common};
 use rivet_operation::prelude::*;
 
 #[operation(name = "team-validate")]
@@ -40,7 +40,7 @@ async fn handle(
 	Ok(team::validate::Response {
 		errors: errors
 			.into_iter()
-			.map(|path| team::validate::response::Error { path })
+			.map(|path| common::ValidationError { path })
 			.collect::<Vec<_>>(),
 	})
 }

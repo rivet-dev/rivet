@@ -125,7 +125,6 @@ pub mod kv_api;
 pub mod matchmaker_lobbies_api;
 pub mod matchmaker_players_api;
 pub mod matchmaker_regions_api;
-pub mod module_api;
 pub mod portal_games_api;
 pub mod provision_datacenters_api;
 pub mod provision_servers_api;

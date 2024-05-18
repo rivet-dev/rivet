@@ -245,9 +245,7 @@ types:
 
   CreateRequest:
     properties:
-      display_name:
-        docs: Represent a resource's readable display name.
-        type: string
+      display_name: commons.DisplayName
 
   CreateResponse:
     properties:
@@ -274,12 +272,8 @@ types:
 
   ValidateProfileRequest:
     properties:
-      display_name:
-        docs: Represent a resource's readable display name.
-        type: optional<string>
-      bio:
-        docs: Detailed information about a profile.
-        type: optional<string>
+      display_name: optional<commons.DisplayName>
+      bio: optional<commons.DisplayName>
       publicity: optional<groupCommons.Publicity>
 
   ValidateProfileResponse:
@@ -332,9 +326,7 @@ types:
 
   UpdateProfileRequest:
     properties:
-      display_name:
-        docs: Represent a resource's readable display name.
-        type: optional<string>
+      display_name: optional<commons.DisplayName>
       bio:
         docs: Detailed information about a profile.
         type: optional<string>

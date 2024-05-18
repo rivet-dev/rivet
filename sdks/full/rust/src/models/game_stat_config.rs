@@ -16,6 +16,7 @@
 pub struct GameStatConfig {
     #[serde(rename = "aggregation")]
     pub aggregation: crate::models::GameStatAggregationMethod,
+    /// Represent a resource's readable display name.
     #[serde(rename = "display_name")]
     pub display_name: String,
     #[serde(rename = "format")]

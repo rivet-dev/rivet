@@ -14,7 +14,7 @@
 
 #[derive(Clone, Debug, PartialEq, Default, Serialize, Deserialize)]
 pub struct CloudNamespaceVersion {
-    /// RFC3339 timestamp.
+    /// RFC3339 timestamp
     #[serde(rename = "deploy_ts")]
     pub deploy_ts: String,
     /// A universally unique identifier.

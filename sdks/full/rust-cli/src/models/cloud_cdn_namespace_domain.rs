@@ -14,7 +14,7 @@
 
 #[derive(Clone, Debug, PartialEq, Default, Serialize, Deserialize)]
 pub struct CloudCdnNamespaceDomain {
-    /// RFC3339 timestamp.
+    /// RFC3339 timestamp
     #[serde(rename = "create_ts")]
     pub create_ts: String,
     /// A valid domain name (no protocol).

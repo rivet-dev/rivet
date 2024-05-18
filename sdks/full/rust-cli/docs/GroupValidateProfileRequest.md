@@ -4,7 +4,7 @@
 
 Name | Type | Description | Notes
 ------------ | ------------- | ------------- | -------------
-**bio** | Option<**String**> | Detailed information about a profile. | [optional]
+**bio** | Option<**String**> | Represent a resource's readable display name. | [optional]
 **display_name** | Option<**String**> | Represent a resource's readable display name. | [optional]
 **publicity** | Option<[**crate::models::GroupPublicity**](GroupPublicity.md)> |  | [optional]
 

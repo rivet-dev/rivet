@@ -332,9 +332,6 @@ docs/MatchmakerPlayersConnectedRequest.md
 docs/MatchmakerRegionInfo.md
 docs/MatchmakerRegionStatistics.md
 docs/MatchmakerRegionsApi.md
-docs/ModuleApi.md
-docs/ModuleCallRequest.md
-docs/ModuleCallResponse.md
 docs/PortalGamesApi.md
 docs/PortalGetGameProfileResponse.md
 docs/PortalGetSuggestedGamesResponse.md
@@ -387,7 +384,6 @@ src/apis/matchmaker_lobbies_api.rs
 src/apis/matchmaker_players_api.rs
 src/apis/matchmaker_regions_api.rs
 src/apis/mod.rs
-src/apis/module_api.rs
 src/apis/portal_games_api.rs
 src/apis/provision_datacenters_api.rs
 src/apis/provision_servers_api.rs
@@ -687,8 +683,6 @@ src/models/matchmaker_players_connected_request.rs
 src/models/matchmaker_region_info.rs
 src/models/matchmaker_region_statistics.rs
 src/models/mod.rs
-src/models/module_call_request.rs
-src/models/module_call_response.rs
 src/models/portal_get_game_profile_response.rs
 src/models/portal_get_suggested_games_response.rs
 src/models/portal_notification_register_firebase_service.rs

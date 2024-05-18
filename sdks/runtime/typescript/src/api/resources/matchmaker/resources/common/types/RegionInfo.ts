@@ -9,8 +9,8 @@ import * as Rivet from "../../../../..";
  */
 export interface RegionInfo {
     regionId: Rivet.Identifier;
-    providerDisplayName: string;
-    regionDisplayName: string;
+    providerDisplayName: Rivet.DisplayName;
+    regionDisplayName: Rivet.DisplayName;
     datacenterCoord: Rivet.geo.Coord;
     datacenterDistanceFromClient: Rivet.geo.Distance;
 }

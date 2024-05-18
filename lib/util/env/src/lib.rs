@@ -181,26 +181,25 @@ pub async fn stripe_webhook_secret() -> Result<String, EnvVarError> {
 }
 
 pub mod cloudflare {
-	use super::EnvVarError;
+	use super::{var, EnvVarError};
 
 	lazy_static::lazy_static! {
-		static ref CLOUDFLARE_AUTH_TOKEN: Option<String> = std::env::var("CLOUDFLARE_AUTH_TOKEN").ok();
+		static ref CLOUDFLARE_AUTH_TOKEN: Result<String, EnvVarError> = var("CLOUDFLARE_AUTH_TOKEN");
+		static ref CLOUDFLARE_ACCOUNT_ID: Result<String, EnvVarError> = var("CLOUDFLARE_ACCOUNT_ID");
 	}
 
 	pub fn auth_token() -> &'static str {
-		match &*CLOUDFLARE_AUTH_TOKEN {
-			Some(x) => x.as_str(),
-			None => panic!(
-				"{}",
-				EnvVarError::Missing("CLOUDFLARE_AUTH_TOKEN".to_string())
-			),
-		}
+		CLOUDFLARE_AUTH_TOKEN.as_ref().unwrap().as_str()
+	}
+
+	pub fn account_id() -> &'static str {
+		CLOUDFLARE_ACCOUNT_ID.as_ref().unwrap().as_str()
 	}
 
 	pub mod zone {
-		pub mod base {
+		pub mod main {
 			lazy_static::lazy_static! {
-				static ref ID: Option<String> = std::env::var("CLOUDFLARE_ZONE_ID_BASE").ok();
+				static ref ID: Option<String> = std::env::var("CLOUDFLARE_ZONE_ID_MAIN").ok();
 			}
 
 			pub fn id() -> Option<&'static str> {

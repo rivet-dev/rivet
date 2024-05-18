@@ -8,6 +8,7 @@ import (
 	core "sdk/core"
 )
 
+// Represent a resource's readable display name.
 type DisplayName = string
 
 type ErrorBody struct {

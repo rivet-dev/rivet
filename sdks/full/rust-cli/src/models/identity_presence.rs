@@ -18,6 +18,7 @@ pub struct IdentityPresence {
     pub game_activity: Option<Box<crate::models::IdentityGameActivity>>,
     #[serde(rename = "status")]
     pub status: crate::models::IdentityStatus,
+    /// RFC3339 timestamp
     #[serde(rename = "update_ts")]
     pub update_ts: String,
 }

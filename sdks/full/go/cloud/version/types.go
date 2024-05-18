@@ -6,13 +6,13 @@ import (
 	json "encoding/json"
 	fmt "fmt"
 	uuid "github.com/google/uuid"
+	sdk "sdk"
 	cdn "sdk/cloud/version/cdn"
 	engine "sdk/cloud/version/engine"
 	identity "sdk/cloud/version/identity"
 	kv "sdk/cloud/version/kv"
 	matchmaker "sdk/cloud/version/matchmaker"
 	core "sdk/core"
-	time "time"
 )
 
 // Cloud configuration for a given version.
@@ -52,12 +52,10 @@ func (c *Config) String() string {
 
 // A full version.
 type Full struct {
-	VersionId uuid.UUID `json:"version_id"`
-	// RFC3339 timestamp.
-	CreateTs time.Time `json:"create_ts"`
-	// Represent a resource's readable display name.
-	DisplayName string  `json:"display_name"`
-	Config      *Config `json:"config,omitempty"`
+	VersionId   uuid.UUID       `json:"version_id"`
+	CreateTs    sdk.Timestamp   `json:"create_ts"`
+	DisplayName sdk.DisplayName `json:"display_name"`
+	Config      *Config         `json:"config,omitempty"`
 
 	_rawJSON json.RawMessage
 }
@@ -87,11 +85,9 @@ func (f *Full) String() string {
 
 // A version summary.
 type Summary struct {
-	VersionId uuid.UUID `json:"version_id"`
-	// RFC3339 timestamp.
-	CreateTs time.Time `json:"create_ts"`
-	// Represent a resource's readable display name.
-	DisplayName string `json:"display_name"`
+	VersionId   uuid.UUID       `json:"version_id"`
+	CreateTs    sdk.Timestamp   `json:"create_ts"`
+	DisplayName sdk.DisplayName `json:"display_name"`
 
 	_rawJSON json.RawMessage
 }

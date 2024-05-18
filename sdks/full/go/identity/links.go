@@ -9,7 +9,6 @@ import (
 	game "sdk/common/game"
 	identity "sdk/common/identity"
 	core "sdk/core"
-	time "time"
 )
 
 type GetGameLinkRequest struct {
@@ -110,9 +109,9 @@ func (g *GetGameLinkResponse) String() string {
 
 type PrepareGameLinkResponse struct {
 	// Pass this to `GetGameLink` to get the linking status. Valid for 15 minutes.
-	IdentityLinkToken string    `json:"identity_link_token"`
-	IdentityLinkUrl   string    `json:"identity_link_url"`
-	ExpireTs          time.Time `json:"expire_ts"`
+	IdentityLinkToken string        `json:"identity_link_token"`
+	IdentityLinkUrl   string        `json:"identity_link_url"`
+	ExpireTs          sdk.Timestamp `json:"expire_ts"`
 
 	_rawJSON json.RawMessage
 }

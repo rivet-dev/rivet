@@ -18,6 +18,7 @@ pub struct IdentityUpdateProfileRequest {
     /// Follows regex ^(?:[^\\n\\r]+\\n?|\\n){1,5}$
     #[serde(rename = "bio", skip_serializing_if = "Option::is_none")]
     pub bio: Option<String>,
+    /// Represent a resource's readable display name.
     #[serde(rename = "display_name", skip_serializing_if = "Option::is_none")]
     pub display_name: Option<String>,
 }

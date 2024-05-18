@@ -48,9 +48,7 @@ types:
           include special
           characters and be short.
         type: string
-      display_name:
-        docs: Represent a resource's readable display name.
-        type: string
+      display_name: commons.DisplayName
       logo_url:
         docs: The URL of this game's logo image.
         type: optional<string>
@@ -83,9 +81,7 @@ types:
   PlatformLink:
     docs: A platform link denoting a supported platform.
     properties:
-      display_name:
-        docs: Represent a resource's readable display name.
-        type: string
+      display_name: commons.DisplayName
       url:
         docs: The URL to the given game's method of distribution on this platform.
         type: string
@@ -93,9 +89,7 @@ types:
   LeaderboardCategory:
     docs: A game leaderboard category.
     properties:
-      display_name:
-        docs: Represent a resource's readable display name.
-        type: string
+      display_name: commons.DisplayName
 
   StatSummary:
     docs: A game statistic summary.

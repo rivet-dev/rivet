@@ -15,7 +15,7 @@
 #[derive(Clone, Debug, PartialEq, Default, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct CloudVersionSummary {
-    /// RFC3339 timestamp.
+    /// RFC3339 timestamp
     #[serde(rename = "create_ts")]
     pub create_ts: String,
     /// Represent a resource's readable display name.

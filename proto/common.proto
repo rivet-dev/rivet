@@ -19,3 +19,7 @@ message Glob {
 
 	repeated Token tokens = 1;
 }
+
+message ValidationError {
+	repeated string path = 1;
+}

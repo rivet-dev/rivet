@@ -171,46 +171,6 @@ impl ApiTryFrom<models::UploadPrepareFile> for backend::upload::PrepareFile {
 	}
 }
 
-impl ApiFrom<team::validate::response::Error> for models::ValidationError {
-	fn api_from(value: team::validate::response::Error) -> models::ValidationError {
-		models::ValidationError { path: value.path }
-	}
-}
-
-impl ApiFrom<game::validate::response::Error> for models::ValidationError {
-	fn api_from(value: game::validate::response::Error) -> models::ValidationError {
-		models::ValidationError { path: value.path }
-	}
-}
-
-impl ApiFrom<game::namespace_validate::response::Error> for models::ValidationError {
-	fn api_from(value: game::namespace_validate::response::Error) -> models::ValidationError {
-		models::ValidationError { path: value.path }
-	}
-}
-
-impl ApiFrom<game::version_validate::response::Error> for models::ValidationError {
-	fn api_from(value: game::version_validate::response::Error) -> models::ValidationError {
-		models::ValidationError { path: value.path }
-	}
-}
-
-impl ApiFrom<game::token_development_validate::response::Error> for models::ValidationError {
-	fn api_from(
-		value: game::token_development_validate::response::Error,
-	) -> models::ValidationError {
-		models::ValidationError { path: value.path }
-	}
-}
-
-impl ApiFrom<mm_config::namespace_config_validate::response::Error> for models::ValidationError {
-	fn api_from(
-		value: mm_config::namespace_config_validate::response::Error,
-	) -> models::ValidationError {
-		models::ValidationError { path: value.path }
-	}
-}
-
 impl ApiTryFrom<backend::region::Tier> for models::CloudRegionTier {
 	type Error = GlobalError;
 

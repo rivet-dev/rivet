@@ -18,7 +18,7 @@ pub struct CloudGamesCreateGameRequest {
     /// Represent a resource's readable display name.
     #[serde(rename = "display_name")]
     pub display_name: String,
-    /// **Deprecated** A human readable short identifier used to references resources. Different than a `rivet.common#Uuid` because this is intended to be human readable. Different than `rivet.common#DisplayName` because this should not include special characters and be short.
+    /// A human readable short identifier used to references resources. Different than a `uuid` because this is intended to be human readable. Different than `DisplayName` because this should not include special characters and be short.
     #[serde(rename = "name_id", skip_serializing_if = "Option::is_none")]
     pub name_id: Option<String>,
 }

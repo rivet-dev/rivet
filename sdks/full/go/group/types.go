@@ -6,6 +6,7 @@ import (
 	json "encoding/json"
 	fmt "fmt"
 	uuid "github.com/google/uuid"
+	sdk "sdk"
 	group "sdk/common/group"
 	identity "sdk/common/identity"
 	core "sdk/core"
@@ -60,8 +61,7 @@ type SearchRequest struct {
 // A banned identity.
 type BannedIdentity struct {
 	Identity *identity.Handle `json:"identity,omitempty"`
-	// RFC3339 timestamp.
-	BanTs time.Time `json:"ban_ts"`
+	BanTs    sdk.Timestamp    `json:"ban_ts"`
 
 	_rawJSON json.RawMessage
 }
@@ -153,9 +153,8 @@ func (m *Member) String() string {
 
 // A list of group profiles.
 type Profile struct {
-	GroupId uuid.UUID `json:"group_id"`
-	// Represent a resource's readable display name.
-	DisplayName string `json:"display_name"`
+	GroupId     uuid.UUID       `json:"group_id"`
+	DisplayName sdk.DisplayName `json:"display_name"`
 	// The URL of this group's avatar image.
 	AvatarUrl *string              `json:"avatar_url,omitempty"`
 	External  *group.ExternalLinks `json:"external,omitempty"`

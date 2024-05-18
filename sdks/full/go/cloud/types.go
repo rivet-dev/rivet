@@ -107,12 +107,10 @@ func (a *AuthAgentIdentity) String() string {
 
 // A build summary.
 type BuildSummary struct {
-	BuildId  uuid.UUID `json:"build_id"`
-	UploadId uuid.UUID `json:"upload_id"`
-	// Represent a resource's readable display name.
-	DisplayName string `json:"display_name"`
-	// RFC3339 timestamp.
-	CreateTs time.Time `json:"create_ts"`
+	BuildId     uuid.UUID       `json:"build_id"`
+	UploadId    uuid.UUID       `json:"upload_id"`
+	DisplayName sdk.DisplayName `json:"display_name"`
+	CreateTs    sdk.Timestamp   `json:"create_ts"`
 	// Unsigned 64 bit integer.
 	ContentLength int64 `json:"content_length"`
 	// Whether or not this build has completely been uploaded.
@@ -237,9 +235,8 @@ func (c *CdnNamespaceConfig) String() string {
 // A CDN domain for a given namespace.
 type CdnNamespaceDomain struct {
 	// A valid domain name (no protocol).
-	Domain string `json:"domain"`
-	// RFC3339 timestamp.
-	CreateTs           time.Time                             `json:"create_ts"`
+	Domain             string                                `json:"domain"`
+	CreateTs           sdk.Timestamp                         `json:"create_ts"`
 	VerificationStatus CdnNamespaceDomainVerificationStatus  `json:"verification_status,omitempty"`
 	VerificationMethod *CdnNamespaceDomainVerificationMethod `json:"verification_method,omitempty"`
 	VerificationErrors []string                              `json:"verification_errors,omitempty"`
@@ -358,12 +355,10 @@ func (c CdnNamespaceDomainVerificationStatus) Ptr() *CdnNamespaceDomainVerificat
 
 // A CDN site summary.
 type CdnSiteSummary struct {
-	SiteId   uuid.UUID `json:"site_id"`
-	UploadId uuid.UUID `json:"upload_id"`
-	// Represent a resource's readable display name.
-	DisplayName string `json:"display_name"`
-	// RFC3339 timestamp.
-	CreateTs time.Time `json:"create_ts"`
+	SiteId      uuid.UUID       `json:"site_id"`
+	UploadId    uuid.UUID       `json:"upload_id"`
+	DisplayName sdk.DisplayName `json:"display_name"`
+	CreateTs    sdk.Timestamp   `json:"create_ts"`
 	// Unsigned 64 bit integer.
 	ContentLength int64 `json:"content_length"`
 	// Whether or not this site has completely been uploaded.
@@ -397,11 +392,9 @@ func (c *CdnSiteSummary) String() string {
 
 // A custom avatar summary.
 type CustomAvatarSummary struct {
-	UploadId uuid.UUID `json:"upload_id"`
-	// Represent a resource's readable display name.
-	DisplayName string `json:"display_name"`
-	// RFC3339 timestamp.
-	CreateTs time.Time `json:"create_ts"`
+	UploadId    uuid.UUID       `json:"upload_id"`
+	DisplayName sdk.DisplayName `json:"display_name"`
+	CreateTs    sdk.Timestamp   `json:"create_ts"`
 	// The URL of this custom avatar image. Only present if upload is complete.
 	Url *string `json:"url,omitempty"`
 	// Unsigned 64 bit integer.
@@ -437,14 +430,12 @@ func (c *CustomAvatarSummary) String() string {
 
 // A full game.
 type GameFull struct {
-	GameId uuid.UUID `json:"game_id"`
-	// RFC3339 timestamp.
-	CreateTs time.Time `json:"create_ts"`
+	GameId   uuid.UUID     `json:"game_id"`
+	CreateTs sdk.Timestamp `json:"create_ts"`
 	// A human readable short identifier used to references resources. Different than a `rivet.common#Uuid` because this is intended to be human readable. Different than `rivet.common#DisplayName` because this should not include special characters and be short.
-	NameId string `json:"name_id"`
-	// Represent a resource's readable display name.
-	DisplayName      string    `json:"display_name"`
-	DeveloperGroupId uuid.UUID `json:"developer_group_id"`
+	NameId           string          `json:"name_id"`
+	DisplayName      sdk.DisplayName `json:"display_name"`
+	DeveloperGroupId uuid.UUID       `json:"developer_group_id"`
 	// Unsigned 32 bit integer.
 	TotalPlayerCount int `json:"total_player_count"`
 	// The URL of this game's logo image.
@@ -611,10 +602,9 @@ type LobbySummaryAnalytics struct {
 	LobbyId      uuid.UUID `json:"lobby_id"`
 	LobbyGroupId uuid.UUID `json:"lobby_group_id"`
 	// A human readable short identifier used to references resources. Different than a `rivet.common#Uuid` because this is intended to be human readable. Different than `rivet.common#DisplayName` because this should not include special characters and be short.
-	LobbyGroupNameId string    `json:"lobby_group_name_id"`
-	RegionId         uuid.UUID `json:"region_id"`
-	// RFC3339 timestamp.
-	CreateTs time.Time `json:"create_ts"`
+	LobbyGroupNameId string        `json:"lobby_group_name_id"`
+	RegionId         uuid.UUID     `json:"region_id"`
+	CreateTs         sdk.Timestamp `json:"create_ts"`
 	// Whether or not this lobby is ready.
 	IsReady bool `json:"is_ready"`
 	// Whether or not this lobby is idle.
@@ -693,7 +683,7 @@ func (l *LogsLobbyStatus) String() string {
 
 // The status of a stopped lobby.
 type LogsLobbyStatusStopped struct {
-	StopTs time.Time `json:"stop_ts"`
+	StopTs sdk.Timestamp `json:"stop_ts"`
 	// Whether or not the lobby failed or stopped successfully.
 	Failed bool `json:"failed"`
 	// The exit code returned by the lobby's main process when stopped.
@@ -730,15 +720,12 @@ type LogsLobbySummary struct {
 	LobbyId     uuid.UUID `json:"lobby_id"`
 	NamespaceId uuid.UUID `json:"namespace_id"`
 	// A human readable short identifier used to references resources. Different than a `rivet.common#Uuid` because this is intended to be human readable. Different than `rivet.common#DisplayName` because this should not include special characters and be short.
-	LobbyGroupNameId string    `json:"lobby_group_name_id"`
-	RegionId         uuid.UUID `json:"region_id"`
-	// RFC3339 timestamp.
-	CreateTs time.Time `json:"create_ts"`
-	// RFC3339 timestamp.
-	StartTs *time.Time `json:"start_ts,omitempty"`
-	// RFC3339 timestamp.
-	ReadyTs *time.Time       `json:"ready_ts,omitempty"`
-	Status  *LogsLobbyStatus `json:"status,omitempty"`
+	LobbyGroupNameId string           `json:"lobby_group_name_id"`
+	RegionId         uuid.UUID        `json:"region_id"`
+	CreateTs         sdk.Timestamp    `json:"create_ts"`
+	StartTs          *sdk.Timestamp   `json:"start_ts,omitempty"`
+	ReadyTs          *sdk.Timestamp   `json:"ready_ts,omitempty"`
+	Status           *LogsLobbyStatus `json:"status,omitempty"`
 
 	_rawJSON json.RawMessage
 }
@@ -769,11 +756,10 @@ func (l *LogsLobbySummary) String() string {
 // A performance mark.
 type LogsPerfMark struct {
 	// The label given to this performance mark.
-	Label string `json:"label"`
-	// RFC3339 timestamp.
-	Ts    time.Time  `json:"ts"`
-	RayId *uuid.UUID `json:"ray_id,omitempty"`
-	ReqId *uuid.UUID `json:"req_id,omitempty"`
+	Label string        `json:"label"`
+	Ts    sdk.Timestamp `json:"ts"`
+	RayId *uuid.UUID    `json:"ray_id,omitempty"`
+	ReqId *uuid.UUID    `json:"req_id,omitempty"`
 
 	_rawJSON json.RawMessage
 }
@@ -804,12 +790,10 @@ func (l *LogsPerfMark) String() string {
 // A performance span.
 type LogsPerfSpan struct {
 	// The label given to this performance span.
-	Label string `json:"label"`
-	// RFC3339 timestamp.
-	StartTs time.Time `json:"start_ts"`
-	// RFC3339 timestamp.
-	FinishTs *time.Time `json:"finish_ts,omitempty"`
-	ReqId    *uuid.UUID `json:"req_id,omitempty"`
+	Label    string         `json:"label"`
+	StartTs  sdk.Timestamp  `json:"start_ts"`
+	FinishTs *sdk.Timestamp `json:"finish_ts,omitempty"`
+	ReqId    *uuid.UUID     `json:"req_id,omitempty"`
 
 	_rawJSON json.RawMessage
 }
@@ -945,12 +929,10 @@ func (n *NamespaceConfig) String() string {
 
 // A full namespace.
 type NamespaceFull struct {
-	NamespaceId uuid.UUID `json:"namespace_id"`
-	// RFC3339 timestamp.
-	CreateTs time.Time `json:"create_ts"`
-	// Represent a resource's readable display name.
-	DisplayName string    `json:"display_name"`
-	VersionId   uuid.UUID `json:"version_id"`
+	NamespaceId uuid.UUID       `json:"namespace_id"`
+	CreateTs    sdk.Timestamp   `json:"create_ts"`
+	DisplayName sdk.DisplayName `json:"display_name"`
+	VersionId   uuid.UUID       `json:"version_id"`
 	// A human readable short identifier used to references resources. Different than a `rivet.common#Uuid` because this is intended to be human readable. Different than `rivet.common#DisplayName` because this should not include special characters and be short.
 	NameId string           `json:"name_id"`
 	Config *NamespaceConfig `json:"config,omitempty"`
@@ -983,12 +965,10 @@ func (n *NamespaceFull) String() string {
 
 // A namespace summary.
 type NamespaceSummary struct {
-	NamespaceId uuid.UUID `json:"namespace_id"`
-	// RFC3339 timestamp.
-	CreateTs time.Time `json:"create_ts"`
-	// Represent a resource's readable display name.
-	DisplayName string    `json:"display_name"`
-	VersionId   uuid.UUID `json:"version_id"`
+	NamespaceId uuid.UUID       `json:"namespace_id"`
+	CreateTs    sdk.Timestamp   `json:"create_ts"`
+	DisplayName sdk.DisplayName `json:"display_name"`
+	VersionId   uuid.UUID       `json:"version_id"`
 	// A human readable short identifier used to references resources. Different than a `rivet.common#Uuid` because this is intended to be human readable. Different than `rivet.common#DisplayName` because this should not include special characters and be short.
 	NameId string `json:"name_id"`
 
@@ -1023,9 +1003,8 @@ type NamespaceVersion struct {
 	// A universally unique identifier.
 	NamespaceId string `json:"namespace_id"`
 	// A universally unique identifier.
-	VersionId string `json:"version_id"`
-	// RFC3339 timestamp.
-	DeployTs time.Time `json:"deploy_ts"`
+	VersionId string        `json:"version_id"`
+	DeployTs  sdk.Timestamp `json:"deploy_ts"`
 
 	_rawJSON json.RawMessage
 }
@@ -1059,14 +1038,9 @@ type RegionSummary struct {
 	// A human readable short identifier used to references resources. Different than a `rivet.common#Uuid` because this is intended to be human readable. Different than `rivet.common#DisplayName` because this should not include special characters and be short.
 	RegionNameId string `json:"region_name_id"`
 	// The server provider of this region.
-	Provider string `json:"provider"`
-	// **Deprecated**
-	// A universal region label given to this region.
-	UniversalRegion UniversalRegion `json:"universal_region,omitempty"`
-	// Represent a resource's readable display name.
-	ProviderDisplayName string `json:"provider_display_name"`
-	// Represent a resource's readable display name.
-	RegionDisplayName string `json:"region_display_name"`
+	Provider            string          `json:"provider"`
+	ProviderDisplayName sdk.DisplayName `json:"provider_display_name"`
+	RegionDisplayName   sdk.DisplayName `json:"region_display_name"`
 
 	_rawJSON json.RawMessage
 }

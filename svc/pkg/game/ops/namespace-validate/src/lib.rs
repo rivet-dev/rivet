@@ -1,4 +1,4 @@
-use proto::backend::pkg::*;
+use proto::{backend::pkg::*, common};
 use rivet_operation::prelude::*;
 
 #[operation(name = "game-namespace-validate")]
@@ -43,7 +43,7 @@ async fn handle(
 	Ok(game::namespace_validate::Response {
 		errors: errors
 			.into_iter()
-			.map(|path| game::namespace_validate::response::Error { path })
+			.map(|path| common::ValidationError { path })
 			.collect::<Vec<_>>(),
 	})
 }

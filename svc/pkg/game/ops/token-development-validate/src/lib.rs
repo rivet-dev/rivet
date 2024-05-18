@@ -1,7 +1,8 @@
 use std::collections::HashSet;
 
-use proto::backend::{
-	matchmaker::lobby_runtime::ProxyProtocol as LobbyRuntimeProxyProtocol, pkg::*,
+use proto::{
+	backend::{matchmaker::lobby_runtime::ProxyProtocol as LobbyRuntimeProxyProtocol, pkg::*},
+	common,
 };
 use rivet_operation::prelude::*;
 
@@ -115,7 +116,7 @@ async fn handle(
 	Ok(game::token_development_validate::Response {
 		errors: errors
 			.into_iter()
-			.map(|path| game::token_development_validate::response::Error { path })
+			.map(|path| common::ValidationError { path })
 			.collect::<Vec<_>>(),
 	})
 }

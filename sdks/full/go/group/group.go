@@ -13,8 +13,7 @@ import (
 )
 
 type CreateRequest struct {
-	// Represent a resource's readable display name.
-	DisplayName string `json:"display_name"`
+	DisplayName sdk.DisplayName `json:"display_name"`
 
 	_rawJSON json.RawMessage
 }
@@ -387,8 +386,7 @@ func (t *TransferOwnershipRequest) String() string {
 }
 
 type UpdateProfileRequest struct {
-	// Represent a resource's readable display name.
-	DisplayName *string `json:"display_name,omitempty"`
+	DisplayName *sdk.DisplayName `json:"display_name,omitempty"`
 	// Detailed information about a profile.
 	Bio       *string          `json:"bio,omitempty"`
 	Publicity *group.Publicity `json:"publicity,omitempty"`
@@ -420,11 +418,9 @@ func (u *UpdateProfileRequest) String() string {
 }
 
 type ValidateProfileRequest struct {
-	// Represent a resource's readable display name.
-	DisplayName *string `json:"display_name,omitempty"`
-	// Detailed information about a profile.
-	Bio       *string          `json:"bio,omitempty"`
-	Publicity *group.Publicity `json:"publicity,omitempty"`
+	DisplayName *sdk.DisplayName `json:"display_name,omitempty"`
+	Bio         *sdk.DisplayName `json:"bio,omitempty"`
+	Publicity   *group.Publicity `json:"publicity,omitempty"`
 
 	_rawJSON json.RawMessage
 }

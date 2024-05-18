@@ -1,7 +1,8 @@
 # yaml-language-server: $schema=https://raw.githubusercontent.com/fern-api/fern/main/fern.schema.json
 
 imports:
-  commons: ../../common.yml
+  commons: ../../../common.yml
+  cloudCommons: ../../common.yml
 
 types:
   Config:
@@ -30,7 +31,7 @@ types:
 
   CustomDisplayName:
     properties:
-      display_name: string
+      display_name: commons.DisplayName
 
   CustomAvatar:
     properties:

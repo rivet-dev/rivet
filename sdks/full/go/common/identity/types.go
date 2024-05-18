@@ -9,7 +9,6 @@ import (
 	sdk "sdk"
 	game "sdk/common/game"
 	core "sdk/core"
-	time "time"
 )
 
 // External links for an identity.
@@ -121,7 +120,7 @@ func (h *Handle) String() string {
 
 // Information about the identity's current status, party, and active game.
 type Presence struct {
-	UpdateTs     time.Time     `json:"update_ts"`
+	UpdateTs     sdk.Timestamp `json:"update_ts"`
 	Status       Status        `json:"status,omitempty"`
 	GameActivity *GameActivity `json:"game_activity,omitempty"`
 

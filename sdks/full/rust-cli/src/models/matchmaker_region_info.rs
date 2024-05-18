@@ -18,8 +18,10 @@ pub struct MatchmakerRegionInfo {
     pub datacenter_coord: Box<crate::models::GeoCoord>,
     #[serde(rename = "datacenter_distance_from_client")]
     pub datacenter_distance_from_client: Box<crate::models::GeoDistance>,
+    /// Represent a resource's readable display name.
     #[serde(rename = "provider_display_name")]
     pub provider_display_name: String,
+    /// Represent a resource's readable display name.
     #[serde(rename = "region_display_name")]
     pub region_display_name: String,
     /// A human readable short identifier used to references resources. Different than a `uuid` because this is intended to be human readable. Different than `DisplayName` because this should not include special characters and be short.

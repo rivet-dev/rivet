@@ -9518,9 +9518,6 @@ dependencies = [
  "chirp-client",
  "chirp-worker",
  "game-get",
- "rivet-health-checks",
- "rivet-metrics",
- "rivet-runtime",
  "team-member-list",
 ]
 

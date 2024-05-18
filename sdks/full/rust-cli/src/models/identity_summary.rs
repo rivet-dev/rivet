@@ -19,6 +19,7 @@ pub struct IdentitySummary {
     /// The URL of this identity's avatar image.
     #[serde(rename = "avatar_url")]
     pub avatar_url: String,
+    /// Represent a resource's readable display name.
     #[serde(rename = "display_name")]
     pub display_name: String,
     #[serde(rename = "external")]

@@ -20,7 +20,7 @@ pub struct CloudGameFull {
     /// The URL of this game's banner image.
     #[serde(rename = "banner_url", skip_serializing_if = "Option::is_none")]
     pub banner_url: Option<String>,
-    /// RFC3339 timestamp.
+    /// RFC3339 timestamp
     #[serde(rename = "create_ts")]
     pub create_ts: String,
     #[serde(rename = "developer_group_id")]

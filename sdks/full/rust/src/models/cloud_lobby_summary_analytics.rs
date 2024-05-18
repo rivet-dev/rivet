@@ -14,7 +14,7 @@
 
 #[derive(Clone, Debug, PartialEq, Default, Serialize, Deserialize)]
 pub struct CloudLobbySummaryAnalytics {
-    /// RFC3339 timestamp.
+    /// RFC3339 timestamp
     #[serde(rename = "create_ts")]
     pub create_ts: String,
     /// Whether or not this lobby is in a closed state.

@@ -1,7 +1,7 @@
 use std::{net::IpAddr, str::FromStr};
 
 use http::{uri::Scheme, HeaderName, HeaderValue, Uri};
-use proto::backend::pkg::*;
+use proto::{backend::pkg::*, common};
 use rivet_operation::prelude::*;
 
 #[operation(name = "external-request-validate")]
@@ -78,7 +78,7 @@ async fn handle(
 	Ok(external::request_validate::Response {
 		errors: errors
 			.into_iter()
-			.map(|path| external::request_validate::response::Error { path })
+			.map(|path| common::ValidationError { path })
 			.collect::<Vec<_>>(),
 	})
 }

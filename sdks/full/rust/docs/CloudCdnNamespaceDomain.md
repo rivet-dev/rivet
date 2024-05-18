@@ -4,7 +4,7 @@
 
 Name | Type | Description | Notes
 ------------ | ------------- | ------------- | -------------
-**create_ts** | **String** | RFC3339 timestamp. | 
+**create_ts** | **String** | RFC3339 timestamp | 
 **domain** | **String** | A valid domain name (no protocol). | 
 **verification_errors** | **Vec<String>** |  | 
 **verification_method** | [**crate::models::CloudCdnNamespaceDomainVerificationMethod**](CloudCdnNamespaceDomainVerificationMethod.md) |  | 

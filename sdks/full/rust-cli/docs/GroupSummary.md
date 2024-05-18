@@ -6,7 +6,7 @@ Name | Type | Description | Notes
 ------------ | ------------- | ------------- | -------------
 **avatar_url** | Option<**String**> | The URL of this group's avatar image. | [optional]
 **bio** | **String** | Follows regex ^(?:[^\\n\\r]+\\n?|\\n){1,5}$ | 
-**display_name** | **String** |  | 
+**display_name** | **String** | Represent a resource's readable display name. | 
 **external** | [**crate::models::GroupExternalLinks**](GroupExternalLinks.md) |  | 
 **group_id** | [**uuid::Uuid**](uuid::Uuid.md) |  | 
 **is_current_identity_member** | **bool** | Whether or not the current identity is a member of this group. | 

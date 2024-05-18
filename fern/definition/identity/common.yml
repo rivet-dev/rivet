@@ -145,7 +145,7 @@ types:
           requestee's identity.
         type: boolean
       is_mutual_following: boolean
-      join_ts: datetime
+      join_ts: commons.Timestamp
       bio: commons.Bio
       linked_accounts: list<LinkedAccount>
       groups: list<Group>
@@ -169,7 +169,7 @@ types:
   Presence:
     docs: Information about the identity's current status, party, and active game.
     properties:
-      update_ts: datetime
+      update_ts: commons.Timestamp
       status: Status
       game_activity: optional<GameActivity>
 

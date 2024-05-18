@@ -34,12 +34,8 @@ types:
       label:
         docs: The label given to this performance span.
         type: string
-      start_ts:
-        docs: RFC3339 timestamp.
-        type: datetime
-      finish_ts:
-        docs: RFC3339 timestamp.
-        type: optional<datetime>
+      start_ts: commons.Timestamp
+      finish_ts: optional<commons.Timestamp>
       req_id:
         type: optional<uuid>
 
@@ -49,9 +45,7 @@ types:
       label:
         docs: The label given to this performance mark.
         type: string
-      ts:
-        docs: RFC3339 timestamp.
-        type: datetime
+      ts: commons.Timestamp
       ray_id:
         type: optional<uuid>
       req_id:
@@ -75,9 +69,7 @@ types:
         type: string
       region_id:
         type: uuid
-      create_ts:
-        docs: RFC3339 timestamp.
-        type: datetime
+      create_ts: commons.Timestamp
       is_ready:
         docs: Whether or not this lobby is ready.
         type: boolean
@@ -124,15 +116,9 @@ types:
         type: string
       region_id:
         type: uuid
-      create_ts:
-        docs: RFC3339 timestamp.
-        type: datetime
-      start_ts:
-        docs: RFC3339 timestamp.
-        type: optional<datetime>
-      ready_ts:
-        docs: RFC3339 timestamp.
-        type: optional<datetime>
+      create_ts: commons.Timestamp
+      start_ts: optional<commons.Timestamp>
+      ready_ts: optional<commons.Timestamp>
       status: LogsLobbyStatus
 
   LogsLobbyStatus:
@@ -144,7 +130,7 @@ types:
   LogsLobbyStatusStopped:
     docs: The status of a stopped lobby.
     properties:
-      stop_ts: datetime
+      stop_ts: commons.Timestamp
       failed:
         type: boolean
         docs: Whether or not the lobby failed or stopped successfully.
@@ -189,12 +175,8 @@ types:
     properties:
       upload_id:
         type: uuid
-      display_name:
-        docs: Represent a resource's readable display name.
-        type: string
-      create_ts:
-        docs: RFC3339 timestamp.
-        type: datetime
+      display_name: commons.DisplayName
+      create_ts: commons.Timestamp
       url:
         docs: >-
           The URL of this custom avatar image. Only present if upload is
@@ -214,12 +196,8 @@ types:
         type: uuid
       upload_id:
         type: uuid
-      display_name:
-        docs: Represent a resource's readable display name.
-        type: string
-      create_ts:
-        docs: RFC3339 timestamp.
-        type: datetime
+      display_name: commons.DisplayName
+      create_ts: commons.Timestamp
       content_length:
         docs: Unsigned 64 bit integer.
         type: long
@@ -234,12 +212,8 @@ types:
         type: uuid
       upload_id:
         type: uuid
-      display_name:
-        docs: Represent a resource's readable display name.
-        type: string
-      create_ts:
-        docs: RFC3339 timestamp.
-        type: datetime
+      display_name: commons.DisplayName
+      create_ts: commons.Timestamp
       content_length:
         docs: Unsigned 64 bit integer.
         type: long
@@ -252,9 +226,7 @@ types:
     properties:
       game_id:
         type: uuid
-      create_ts:
-        docs: RFC3339 timestamp.
-        type: datetime
+      create_ts: commons.Timestamp
       name_id:
         docs: >-
           A human readable short identifier used to references resources.
@@ -264,9 +236,7 @@ types:
           include special
           characters and be short.
         type: string
-      display_name:
-        docs: Represent a resource's readable display name.
-        type: string
+      display_name: commons.DisplayName
       developer_group_id:
         type: uuid
       total_player_count:
@@ -293,12 +263,8 @@ types:
     properties:
       namespace_id:
         type: uuid
-      create_ts:
-        docs: RFC3339 timestamp.
-        type: datetime
-      display_name:
-        docs: Represent a resource's readable display name.
-        type: string
+      create_ts: commons.Timestamp
+      display_name: commons.DisplayName
       version_id:
         type: uuid
       name_id:
@@ -334,12 +300,8 @@ types:
 
           A universal region label given to this region.
         type: UniversalRegion
-      provider_display_name:
-        docs: Represent a resource's readable display name.
-        type: string
-      region_display_name:
-        docs: Represent a resource's readable display name.
-        type: string
+      provider_display_name: commons.DisplayName
+      region_display_name: commons.DisplayName
 
   GameLobbyExpenses:
     docs: Game lobby expenses.
@@ -475,12 +437,8 @@ types:
     properties:
       namespace_id:
         type: uuid
-      create_ts:
-        docs: RFC3339 timestamp.
-        type: datetime
-      display_name:
-        docs: Represent a resource's readable display name.
-        type: string
+      create_ts: commons.Timestamp
+      display_name: commons.DisplayName
       version_id:
         type: uuid
       name_id:
@@ -562,9 +520,7 @@ types:
       domain:
         docs: A valid domain name (no protocol).
         type: string
-      create_ts:
-        docs: RFC3339 timestamp.
-        type: datetime
+      create_ts: commons.Timestamp
       verification_status: CdnNamespaceDomainVerificationStatus
       verification_method: CdnNamespaceDomainVerificationMethod
       verification_errors: list<string>
@@ -609,6 +565,4 @@ types:
       version_id:
         docs: A universally unique identifier.
         type: string
-      deploy_ts:
-        docs: RFC3339 timestamp.
-        type: datetime
+      deploy_ts: commons.Timestamp

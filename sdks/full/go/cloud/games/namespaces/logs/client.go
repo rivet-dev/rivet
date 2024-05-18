@@ -15,7 +15,6 @@ import (
 	sdk "sdk"
 	namespaces "sdk/cloud/games/namespaces"
 	core "sdk/core"
-	time "time"
 )
 
 type Client struct {
@@ -46,7 +45,7 @@ func (c *Client) ListNamespaceLobbies(ctx context.Context, gameId uuid.UUID, nam
 
 	queryParams := make(url.Values)
 	if request.BeforeCreateTs != nil {
-		queryParams.Add("before_create_ts", fmt.Sprintf("%v", request.BeforeCreateTs.Format(time.RFC3339)))
+		queryParams.Add("before_create_ts", fmt.Sprintf("%v", *request.BeforeCreateTs))
 	}
 	if len(queryParams) > 0 {
 		endpointURL += "?" + queryParams.Encode()

@@ -14,7 +14,7 @@
 
 #[derive(Clone, Debug, PartialEq, Default, Serialize, Deserialize)]
 pub struct CloudLogsLobbySummary {
-    /// RFC3339 timestamp.
+    /// RFC3339 timestamp
     #[serde(rename = "create_ts")]
     pub create_ts: String,
     /// A human readable short identifier used to references resources. Different than a `rivet.common#Uuid` because this is intended to be human readable. Different than `rivet.common#DisplayName` because this should not include special characters and be short.
@@ -24,12 +24,12 @@ pub struct CloudLogsLobbySummary {
     pub lobby_id: uuid::Uuid,
     #[serde(rename = "namespace_id")]
     pub namespace_id: uuid::Uuid,
-    /// RFC3339 timestamp.
+    /// RFC3339 timestamp
     #[serde(rename = "ready_ts", skip_serializing_if = "Option::is_none")]
     pub ready_ts: Option<String>,
     #[serde(rename = "region_id")]
     pub region_id: uuid::Uuid,
-    /// RFC3339 timestamp.
+    /// RFC3339 timestamp
     #[serde(rename = "start_ts", skip_serializing_if = "Option::is_none")]
     pub start_ts: Option<String>,
     #[serde(rename = "status")]

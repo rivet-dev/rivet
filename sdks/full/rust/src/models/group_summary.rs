@@ -19,6 +19,7 @@ pub struct GroupSummary {
     /// Follows regex ^(?:[^\\n\\r]+\\n?|\\n){1,5}$
     #[serde(rename = "bio")]
     pub bio: String,
+    /// Represent a resource's readable display name.
     #[serde(rename = "display_name")]
     pub display_name: String,
     #[serde(rename = "external")]

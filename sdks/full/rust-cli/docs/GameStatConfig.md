@@ -5,7 +5,7 @@
 Name | Type | Description | Notes
 ------------ | ------------- | ------------- | -------------
 **aggregation** | [**crate::models::GameStatAggregationMethod**](GameStatAggregationMethod.md) |  | 
-**display_name** | **String** |  | 
+**display_name** | **String** | Represent a resource's readable display name. | 
 **format** | [**crate::models::GameStatFormatMethod**](GameStatFormatMethod.md) |  | 
 **icon_id** | [**uuid::Uuid**](uuid::Uuid.md) |  | 
 **postfix_plural** | Option<**String**> | A string appended to the end of a game statistic's value that is not exactly 1. Example: 45 **dollars**. | [optional]

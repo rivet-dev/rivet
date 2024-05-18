@@ -13,6 +13,7 @@
 
 #[derive(Clone, Debug, PartialEq, Default, Serialize, Deserialize)]
 pub struct CloudGamesReserveVersionNameResponse {
+    /// Represent a resource's readable display name.
     #[serde(rename = "version_display_name")]
     pub version_display_name: String,
 }

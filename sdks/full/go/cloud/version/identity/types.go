@@ -6,6 +6,7 @@ import (
 	json "encoding/json"
 	fmt "fmt"
 	uuid "github.com/google/uuid"
+	sdk "sdk"
 	core "sdk/core"
 )
 
@@ -77,7 +78,7 @@ func (c *CustomAvatar) String() string {
 }
 
 type CustomDisplayName struct {
-	DisplayName string `json:"display_name"`
+	DisplayName sdk.DisplayName `json:"display_name"`
 
 	_rawJSON json.RawMessage
 }

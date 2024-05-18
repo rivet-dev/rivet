@@ -246,11 +246,11 @@ func (l *LobbyInfo) String() string {
 
 // A region that the player can connect to.
 type RegionInfo struct {
-	RegionId                     sdk.Identifier `json:"region_id"`
-	ProviderDisplayName          string         `json:"provider_display_name"`
-	RegionDisplayName            string         `json:"region_display_name"`
-	DatacenterCoord              *geo.Coord     `json:"datacenter_coord,omitempty"`
-	DatacenterDistanceFromClient *geo.Distance  `json:"datacenter_distance_from_client,omitempty"`
+	RegionId                     sdk.Identifier  `json:"region_id"`
+	ProviderDisplayName          sdk.DisplayName `json:"provider_display_name"`
+	RegionDisplayName            sdk.DisplayName `json:"region_display_name"`
+	DatacenterCoord              *geo.Coord      `json:"datacenter_coord,omitempty"`
+	DatacenterDistanceFromClient *geo.Distance   `json:"datacenter_distance_from_client,omitempty"`
 
 	_rawJSON json.RawMessage
 }

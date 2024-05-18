@@ -45,10 +45,7 @@ pub async fn list(
 				}
 			})
 		} else {
-			bail_with!(
-				API_UNAUTHORIZED,
-				reason = "Cloud token cannot watch `/games`"
-			);
+			bail_with!(API_FORBIDDEN, reason = "Cloud token cannot watch `/games`");
 		}
 	} else {
 		Default::default()

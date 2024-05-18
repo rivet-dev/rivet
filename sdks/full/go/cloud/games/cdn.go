@@ -6,14 +6,14 @@ import (
 	json "encoding/json"
 	fmt "fmt"
 	uuid "github.com/google/uuid"
+	sdk "sdk"
 	cloud "sdk/cloud"
 	core "sdk/core"
 	upload "sdk/upload"
 )
 
 type CreateGameCdnSiteRequest struct {
-	// Represent a resource's readable display name.
-	DisplayName string `json:"display_name"`
+	DisplayName sdk.DisplayName `json:"display_name"`
 	// A list of files preparing to upload.
 	Files []*upload.PrepareFile `json:"files,omitempty"`
 

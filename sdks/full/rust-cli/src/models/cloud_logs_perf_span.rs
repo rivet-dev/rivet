@@ -14,7 +14,7 @@
 
 #[derive(Clone, Debug, PartialEq, Default, Serialize, Deserialize)]
 pub struct CloudLogsPerfSpan {
-    /// RFC3339 timestamp.
+    /// RFC3339 timestamp
     #[serde(rename = "finish_ts", skip_serializing_if = "Option::is_none")]
     pub finish_ts: Option<String>,
     /// The label given to this performance span.
@@ -22,7 +22,7 @@ pub struct CloudLogsPerfSpan {
     pub label: String,
     #[serde(rename = "req_id", skip_serializing_if = "Option::is_none")]
     pub req_id: Option<uuid::Uuid>,
-    /// RFC3339 timestamp.
+    /// RFC3339 timestamp
     #[serde(rename = "start_ts")]
     pub start_ts: String,
 }

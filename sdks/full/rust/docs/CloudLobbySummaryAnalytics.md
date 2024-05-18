@@ -4,7 +4,7 @@
 
 Name | Type | Description | Notes
 ------------ | ------------- | ------------- | -------------
-**create_ts** | **String** | RFC3339 timestamp. | 
+**create_ts** | **String** | RFC3339 timestamp | 
 **is_closed** | **bool** | Whether or not this lobby is in a closed state. | 
 **is_idle** | **bool** | Whether or not this lobby is idle. | 
 **is_outdated** | **bool** | Whether or not this lobby is outdated. | 

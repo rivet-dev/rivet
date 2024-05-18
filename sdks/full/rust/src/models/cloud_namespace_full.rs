@@ -16,7 +16,7 @@
 pub struct CloudNamespaceFull {
     #[serde(rename = "config")]
     pub config: Box<crate::models::CloudNamespaceConfig>,
-    /// RFC3339 timestamp.
+    /// RFC3339 timestamp
     #[serde(rename = "create_ts")]
     pub create_ts: String,
     /// Represent a resource's readable display name.

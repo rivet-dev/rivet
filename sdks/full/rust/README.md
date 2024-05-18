@@ -162,7 +162,6 @@ Class | Method | HTTP request | Description
 *MatchmakerPlayersApi* | [**matchmaker_players_disconnected**](docs/MatchmakerPlayersApi.md#matchmaker_players_disconnected) | **POST** /matchmaker/players/disconnected | 
 *MatchmakerPlayersApi* | [**matchmaker_players_get_statistics**](docs/MatchmakerPlayersApi.md#matchmaker_players_get_statistics) | **GET** /matchmaker/players/statistics | 
 *MatchmakerRegionsApi* | [**matchmaker_regions_list**](docs/MatchmakerRegionsApi.md#matchmaker_regions_list) | **GET** /matchmaker/regions | 
-*ModuleApi* | [**module_call**](docs/ModuleApi.md#module_call) | **POST** /module/modules/{module}/scripts/{script}/call | 
 *PortalGamesApi* | [**portal_games_get_game_profile**](docs/PortalGamesApi.md#portal_games_get_game_profile) | **GET** /portal/games/{game_name_id}/profile | 
 *ProvisionDatacentersApi* | [**provision_datacenters_get_tls**](docs/ProvisionDatacentersApi.md#provision_datacenters_get_tls) | **GET** /datacenters/{datacenter_id}/tls | 
 *ProvisionServersApi* | [**provision_servers_get_info**](docs/ProvisionServersApi.md#provision_servers_get_info) | **GET** /servers/{ip} | 
@@ -464,8 +463,6 @@ Class | Method | HTTP request | Description
  - [MatchmakerPlayersConnectedRequest](docs/MatchmakerPlayersConnectedRequest.md)
  - [MatchmakerRegionInfo](docs/MatchmakerRegionInfo.md)
  - [MatchmakerRegionStatistics](docs/MatchmakerRegionStatistics.md)
- - [ModuleCallRequest](docs/ModuleCallRequest.md)
- - [ModuleCallResponse](docs/ModuleCallResponse.md)
  - [PortalGetGameProfileResponse](docs/PortalGetGameProfileResponse.md)
  - [PortalGetSuggestedGamesResponse](docs/PortalGetSuggestedGamesResponse.md)
  - [PortalNotificationRegisterFirebaseService](docs/PortalNotificationRegisterFirebaseService.md)

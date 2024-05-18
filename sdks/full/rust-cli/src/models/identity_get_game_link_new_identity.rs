@@ -18,6 +18,7 @@ pub struct IdentityGetGameLinkNewIdentity {
     /// Documentation at https://jwt.io/
     #[serde(rename = "identity_token")]
     pub identity_token: String,
+    /// RFC3339 timestamp
     #[serde(rename = "identity_token_expire_ts")]
     pub identity_token_expire_ts: String,
 }

@@ -20,6 +20,7 @@ pub struct CloudLogsLobbyStatusStopped {
     /// Whether or not the lobby failed or stopped successfully.
     #[serde(rename = "failed")]
     pub failed: bool,
+    /// RFC3339 timestamp
     #[serde(rename = "stop_ts")]
     pub stop_ts: String,
 }

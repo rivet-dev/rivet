@@ -6,14 +6,14 @@ import (
 	json "encoding/json"
 	fmt "fmt"
 	uuid "github.com/google/uuid"
+	sdk "sdk"
 	cloud "sdk/cloud"
 	core "sdk/core"
 	upload "sdk/upload"
 )
 
 type CreateGameBuildRequest struct {
-	// Represent a resource's readable display name.
-	DisplayName string `json:"display_name"`
+	DisplayName sdk.DisplayName `json:"display_name"`
 	// A tag given to the game build.
 	ImageTag        string              `json:"image_tag"`
 	ImageFile       *upload.PrepareFile `json:"image_file,omitempty"`

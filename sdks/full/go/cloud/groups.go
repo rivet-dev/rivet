@@ -10,8 +10,7 @@ import (
 )
 
 type ValidateGroupRequest struct {
-	// Represent a resource's readable display name.
-	DisplayName string `json:"display_name"`
+	DisplayName sdk.DisplayName `json:"display_name"`
 
 	_rawJSON json.RawMessage
 }

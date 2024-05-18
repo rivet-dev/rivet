@@ -22,7 +22,7 @@ pub struct CloudBuildSummary {
     /// Unsigned 64 bit integer.
     #[serde(rename = "content_length")]
     pub content_length: i64,
-    /// RFC3339 timestamp.
+    /// RFC3339 timestamp
     #[serde(rename = "create_ts")]
     pub create_ts: String,
     /// Represent a resource's readable display name.

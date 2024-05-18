@@ -10,7 +10,6 @@ import (
 	identity "sdk/common/identity"
 	core "sdk/core"
 	upload "sdk/upload"
-	time "time"
 )
 
 type GetHandlesResponse struct {
@@ -327,9 +326,8 @@ type SetupResponse struct {
 	// If this happens, the user can recover their account through the linking process (see `rivet.api.identity#PrepareGameLink`).
 	// This token should be stored locally and never sent to a server or another device.
 	// If this token is compromised, anyone with access to this token has control of the identity.
-	IdentityToken sdk.Jwt `json:"identity_token"`
-	// If this token is compromised, anyone with access to this token has control of the identity.
-	IdentityTokenExpireTs time.Time `json:"identity_token_expire_ts"`
+	IdentityToken         sdk.Jwt       `json:"identity_token"`
+	IdentityTokenExpireTs sdk.Timestamp `json:"identity_token_expire_ts"`
 	// Information about the identity that was just authenticated.
 	Identity *Profile  `json:"identity,omitempty"`
 	GameId   uuid.UUID `json:"game_id"`

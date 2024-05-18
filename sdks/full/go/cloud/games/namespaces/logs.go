@@ -5,14 +5,14 @@ package namespaces
 import (
 	json "encoding/json"
 	fmt "fmt"
+	sdk "sdk"
 	cloud "sdk/cloud"
 	core "sdk/core"
-	time "time"
 )
 
 type ListNamespaceLobbiesRequest struct {
 	// Returns lobbies created before this timestamp.
-	BeforeCreateTs *time.Time `json:"-"`
+	BeforeCreateTs *sdk.Timestamp `json:"-"`
 }
 
 type GetNamespaceLobbyResponse struct {

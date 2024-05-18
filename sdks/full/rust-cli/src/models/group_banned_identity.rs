@@ -14,7 +14,7 @@
 
 #[derive(Clone, Debug, PartialEq, Default, Serialize, Deserialize)]
 pub struct GroupBannedIdentity {
-    /// RFC3339 timestamp.
+    /// RFC3339 timestamp
     #[serde(rename = "ban_ts")]
     pub ban_ts: String,
     #[serde(rename = "identity")]

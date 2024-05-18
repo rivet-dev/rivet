@@ -19,9 +19,7 @@ service:
 types:
   ValidateGroupRequest:
     properties:
-      display_name:
-        docs: Represent a resource's readable display name.
-        type: string
+      display_name: commons.DisplayName
 
   ValidateGroupResponse:
     properties:

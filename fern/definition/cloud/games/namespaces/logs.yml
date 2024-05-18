@@ -1,6 +1,7 @@
 # yaml-language-server: $schema=https://raw.githubusercontent.com/fern-api/fern/main/fern.schema.json
 
 imports:
+  commons: ../../../common.yml
   localCommons: ../../common.yml
 
 service:
@@ -22,7 +23,7 @@ service:
         query-parameters:
           before_create_ts:
             docs: Returns lobbies created before this timestamp.
-            type: optional<datetime>
+            type: optional<commons.Timestamp>
       response: ListNamespaceLobbiesResponse
 
     getNamespaceLobby:

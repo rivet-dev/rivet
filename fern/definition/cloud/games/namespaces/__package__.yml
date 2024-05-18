@@ -226,9 +226,7 @@ types:
 
   CreateGameNamespaceRequest:
     properties:
-      display_name:
-        docs: Represent a resource's readable display name.
-        type: string
+      display_name: commons.DisplayName
       version_id:
         type: uuid
       name_id:
@@ -248,9 +246,7 @@ types:
 
   ValidateGameNamespaceRequest:
     properties:
-      display_name:
-        docs: Represent a resource's readable display name.
-        type: string
+      display_name: commons.DisplayName
       name_id:
         docs: >-
           A human readable short identifier used to references resources.

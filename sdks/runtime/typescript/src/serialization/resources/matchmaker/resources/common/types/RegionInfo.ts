@@ -14,8 +14,14 @@ export const RegionInfo: core.serialization.ObjectSchema<
         "region_id",
         core.serialization.lazy(async () => (await import("../../../../..")).Identifier)
     ),
-    providerDisplayName: core.serialization.property("provider_display_name", core.serialization.string()),
-    regionDisplayName: core.serialization.property("region_display_name", core.serialization.string()),
+    providerDisplayName: core.serialization.property(
+        "provider_display_name",
+        core.serialization.lazy(async () => (await import("../../../../..")).DisplayName)
+    ),
+    regionDisplayName: core.serialization.property(
+        "region_display_name",
+        core.serialization.lazy(async () => (await import("../../../../..")).DisplayName)
+    ),
     datacenterCoord: core.serialization.property(
         "datacenter_coord",
         core.serialization.lazyObject(async () => (await import("../../../../..")).geo.Coord)
@@ -29,8 +35,8 @@ export const RegionInfo: core.serialization.ObjectSchema<
 export declare namespace RegionInfo {
     interface Raw {
         region_id: serializers.Identifier.Raw;
-        provider_display_name: string;
-        region_display_name: string;
+        provider_display_name: serializers.DisplayName.Raw;
+        region_display_name: serializers.DisplayName.Raw;
         datacenter_coord: serializers.geo.Coord.Raw;
         datacenter_distance_from_client: serializers.geo.Distance.Raw;
     }

@@ -12,8 +12,7 @@ import (
 )
 
 type CreateGameVersionRequest struct {
-	// Represent a resource's readable display name.
-	DisplayName string          `json:"display_name"`
+	DisplayName sdk.DisplayName `json:"display_name"`
 	Config      *version.Config `json:"config,omitempty"`
 
 	_rawJSON json.RawMessage
@@ -101,7 +100,7 @@ func (g *GetGameVersionByIdResponse) String() string {
 }
 
 type ReserveVersionNameResponse struct {
-	VersionDisplayName string `json:"version_display_name"`
+	VersionDisplayName sdk.DisplayName `json:"version_display_name"`
 
 	_rawJSON json.RawMessage
 }
@@ -130,8 +129,7 @@ func (r *ReserveVersionNameResponse) String() string {
 }
 
 type ValidateGameVersionRequest struct {
-	// Represent a resource's readable display name.
-	DisplayName string          `json:"display_name"`
+	DisplayName sdk.DisplayName `json:"display_name"`
 	Config      *version.Config `json:"config,omitempty"`
 
 	_rawJSON json.RawMessage

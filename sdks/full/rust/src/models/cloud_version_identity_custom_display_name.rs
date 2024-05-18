@@ -13,6 +13,7 @@
 
 #[derive(Clone, Debug, PartialEq, Default, Serialize, Deserialize)]
 pub struct CloudVersionIdentityCustomDisplayName {
+    /// Represent a resource's readable display name.
     #[serde(rename = "display_name")]
     pub display_name: String,
 }

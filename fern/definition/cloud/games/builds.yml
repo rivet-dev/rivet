@@ -1,6 +1,7 @@
 # yaml-language-server: $schema=https://raw.githubusercontent.com/fern-api/fern/main/fern.schema.json
 
 imports:
+  commons: ../../common.yml
   uploadCommons: ../../upload/common.yml
   cloudCommons: ../../cloud/common.yml
 
@@ -34,9 +35,7 @@ types:
 
   CreateGameBuildRequest:
     properties:
-      display_name:
-        docs: Represent a resource's readable display name.
-        type: string
+      display_name: commons.DisplayName
       image_tag:
         docs: A tag given to the game build.
         type: string

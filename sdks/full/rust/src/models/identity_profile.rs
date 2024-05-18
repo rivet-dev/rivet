@@ -27,6 +27,7 @@ pub struct IdentityProfile {
     pub bio: String,
     #[serde(rename = "dev_state", skip_serializing_if = "Option::is_none")]
     pub dev_state: Option<crate::models::IdentityDevState>,
+    /// Represent a resource's readable display name.
     #[serde(rename = "display_name")]
     pub display_name: String,
     #[serde(rename = "external")]
@@ -58,6 +59,7 @@ pub struct IdentityProfile {
     /// Whether or not this identity is registered with a linked account.
     #[serde(rename = "is_registered")]
     pub is_registered: bool,
+    /// RFC3339 timestamp
     #[serde(rename = "join_ts")]
     pub join_ts: String,
     #[serde(rename = "linked_accounts")]

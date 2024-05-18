@@ -4,7 +4,7 @@
 
 Name | Type | Description | Notes
 ------------ | ------------- | ------------- | -------------
-**expire_ts** | **String** |  | 
+**expire_ts** | **String** | RFC3339 timestamp | 
 **identity_link_token** | **String** | Pass this to `GetGameLink` to get the linking status. Valid for 15 minutes. | 
 **identity_link_url** | **String** |  | 
 

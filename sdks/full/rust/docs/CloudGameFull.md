@@ -6,7 +6,7 @@ Name | Type | Description | Notes
 ------------ | ------------- | ------------- | -------------
 **available_regions** | [**Vec<crate::models::CloudRegionSummary>**](CloudRegionSummary.md) | A list of region summaries. | 
 **banner_url** | Option<**String**> | The URL of this game's banner image. | [optional]
-**create_ts** | **String** | RFC3339 timestamp. | 
+**create_ts** | **String** | RFC3339 timestamp | 
 **developer_group_id** | [**uuid::Uuid**](uuid::Uuid.md) |  | 
 **display_name** | **String** | Represent a resource's readable display name. | 
 **game_id** | [**uuid::Uuid**](uuid::Uuid.md) |  | 

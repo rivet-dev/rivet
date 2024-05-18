@@ -43,9 +43,8 @@ func (a *AddNamespaceDomainRequest) String() string {
 }
 
 type CreateGameNamespaceRequest struct {
-	// Represent a resource's readable display name.
-	DisplayName string    `json:"display_name"`
-	VersionId   uuid.UUID `json:"version_id"`
+	DisplayName sdk.DisplayName `json:"display_name"`
+	VersionId   uuid.UUID       `json:"version_id"`
 	// A human readable short identifier used to references resources. Different than a `rivet.common#Uuid` because this is intended to be human readable. Different than `rivet.common#DisplayName` because this should not include special characters and be short.
 	NameId string `json:"name_id"`
 
@@ -476,8 +475,7 @@ func (v *ValidateGameNamespaceMatchmakerConfigResponse) String() string {
 }
 
 type ValidateGameNamespaceRequest struct {
-	// Represent a resource's readable display name.
-	DisplayName string `json:"display_name"`
+	DisplayName sdk.DisplayName `json:"display_name"`
 	// A human readable short identifier used to references resources. Different than a `rivet.common#Uuid` because this is intended to be human readable. Different than `rivet.common#DisplayName` because this should not include special characters and be short.
 	NameId string `json:"name_id"`
 

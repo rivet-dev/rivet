@@ -72,9 +72,7 @@ types:
     properties:
       group_id:
         type: uuid
-      display_name:
-        docs: Represent a resource's readable display name.
-        type: string
+      display_name: commons.DisplayName
       avatar_url:
         docs: The URL of this group's avatar image.
         type: optional<string>
@@ -110,6 +108,4 @@ types:
     docs: A banned identity.
     properties:
       identity: identityCommons.Handle
-      ban_ts:
-        docs: RFC3339 timestamp.
-        type: datetime
+      ban_ts: commons.Timestamp

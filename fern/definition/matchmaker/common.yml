@@ -26,8 +26,8 @@ types:
     docs: A region that the player can connect to.
     properties:
       region_id: commons.Identifier
-      provider_display_name: string
-      region_display_name: string
+      provider_display_name: commons.DisplayName
+      region_display_name: commons.DisplayName
       datacenter_coord: geoCommons.Coord
       datacenter_distance_from_client: geoCommons.Distance
 

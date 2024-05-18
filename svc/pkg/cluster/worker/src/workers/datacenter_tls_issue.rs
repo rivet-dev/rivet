@@ -37,7 +37,7 @@ async fn worker(
 	let account = acme_account().await?;
 
 	let base_zone_id = unwrap!(
-		util::env::cloudflare::zone::base::id(),
+		util::env::cloudflare::zone::main::id(),
 		"dns not configured"
 	);
 	let job_zone_id = unwrap!(util::env::cloudflare::zone::job::id(), "dns not configured");

@@ -1,7 +1,8 @@
 # yaml-language-server: $schema=https://raw.githubusercontent.com/fern-api/fern/main/fern.schema.json
 
 imports:
-  commons: ../common.yml
+  commons: ../../common.yml
+  cloudCommons: ../common.yml
   engine: engine/__package__.yml
   cdn: cdn/__package__.yml
   matchmaker: matchmaker/__package__.yml
@@ -24,12 +25,8 @@ types:
     properties:
       version_id:
         type: uuid
-      create_ts:
-        docs: RFC3339 timestamp.
-        type: datetime
-      display_name:
-        docs: Represent a resource's readable display name.
-        type: string
+      create_ts: commons.Timestamp
+      display_name: commons.DisplayName
       config: Config
 
   Summary:
@@ -37,9 +34,5 @@ types:
     properties:
       version_id:
         type: uuid
-      create_ts:
-        docs: RFC3339 timestamp.
-        type: datetime
-      display_name:
-        docs: Represent a resource's readable display name.
-        type: string
+      create_ts: commons.Timestamp
+      display_name: commons.DisplayName

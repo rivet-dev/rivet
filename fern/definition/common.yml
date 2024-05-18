@@ -70,7 +70,9 @@ types:
           Index indicating the version of the data responded.
           Pass this to `WatchQuery` to block and wait for the next response.
 
-  DisplayName: string
+  DisplayName:
+    docs: Represent a resource's readable display name.
+    type: string
 
   AccountNumber: integer
 

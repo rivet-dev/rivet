@@ -21,7 +21,7 @@ pub struct CloudLogsPerfMark {
     pub ray_id: Option<uuid::Uuid>,
     #[serde(rename = "req_id", skip_serializing_if = "Option::is_none")]
     pub req_id: Option<uuid::Uuid>,
-    /// RFC3339 timestamp.
+    /// RFC3339 timestamp
     #[serde(rename = "ts")]
     pub ts: String,
 }

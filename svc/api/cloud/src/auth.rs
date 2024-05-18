@@ -281,14 +281,12 @@ impl Auth {
 			})
 			.await?;
 
-			// Aggregate game IDs in to a single list
-			let mut game_ids = Vec::new();
-			for team in &games_res.teams {
-				for game_id in &team.game_ids {
-					let game_id = game_id.as_uuid();
-					game_ids.push(game_id);
-				}
-			}
+			let game_ids = games_res
+				.teams
+				.iter()
+				.flat_map(|team| &team.game_ids)
+				.map(|id| id.as_uuid())
+				.collect::<Vec<_>>();
 
 			(Some(user_ent.user_id), team_ids, game_ids)
 		} else if let Ok(cloud_ent) = claims.as_game_cloud() {

@@ -164,12 +164,6 @@ pub async fn verify_config(
 								r#""private" publicity not allowed with this custom game mode"#
 						);
 					}
-					_ => {
-						bail_with!(
-							MATCHMAKER_CUSTOM_LOBBY_CONFIG_INVALID,
-							reason = "given publicity not allowed"
-						);
-					}
 				}
 
 				// Verify lobby count

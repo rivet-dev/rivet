@@ -13,7 +13,6 @@ import (
 	jobclient "sdk/job/client"
 	kvclient "sdk/kv/client"
 	matchmakerclient "sdk/matchmaker/client"
-	moduleclient "sdk/module/client"
 	portalclient "sdk/portal/client"
 	provisionclient "sdk/provision/client"
 )
@@ -28,7 +27,6 @@ type Client struct {
 	Group      *groupclient.Client
 	Identity   *identityclient.Client
 	Kv         *kvclient.Client
-	Module     *moduleclient.Client
 	Provision  *provisionclient.Client
 	Auth       *authclient.Client
 	Job        *jobclient.Client
@@ -50,7 +48,6 @@ func NewClient(opts ...core.ClientOption) *Client {
 		Group:      groupclient.NewClient(opts...),
 		Identity:   identityclient.NewClient(opts...),
 		Kv:         kvclient.NewClient(opts...),
-		Module:     moduleclient.NewClient(opts...),
 		Provision:  provisionclient.NewClient(opts...),
 		Auth:       authclient.NewClient(opts...),
 		Job:        jobclient.NewClient(opts...),

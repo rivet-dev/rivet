@@ -13,6 +13,7 @@ type AccountNumber = int
 // Follows regex ^(?:[^\n\r]+\n?|\n){1,5}$
 type Bio = string
 
+// Represent a resource's readable display name.
 type DisplayName = string
 
 // A valid email address

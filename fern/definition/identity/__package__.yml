@@ -307,7 +307,6 @@ types:
   SetupResponse:
     properties:
       identity_token:
-        type: commons.JWT
         docs: |
           Token used to authenticate the identity. 
           Should be stored somewhere permanent. 
@@ -317,14 +316,12 @@ types:
           If this happens, the user can recover their account through the linking process (see `rivet.api.identity#PrepareGameLink`). 
           This token should be stored locally and never sent to a server or another device. 
           If this token is compromised, anyone with access to this token has control of the identity.
-      identity_token_expire_ts:
-        type: datetime
-        docs: |
-          If this token is compromised, anyone with access to this token has control of the identity.
+        type: commons.JWT
+      identity_token_expire_ts: commons.Timestamp
       identity:
-        type: identityCommons.Profile
         docs: |
           Information about the identity that was just authenticated.
+        type: identityCommons.Profile
       game_id: uuid
 
   GetProfileResponse:

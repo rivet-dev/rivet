@@ -15,9 +15,5 @@ message Request {
 }
 
 message Response {
-    message Error {
-		repeated string path = 1;
-	}
-
-	repeated Error errors = 1;
+	repeated rivet.common.ValidationError errors = 1;
 }

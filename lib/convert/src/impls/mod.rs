@@ -1,3 +1,10 @@
+use proto::common;
+use rivet_api::models as new_models;
+use rivet_group_server::models;
+use rivet_operation::prelude::*;
+
+use crate::ApiFrom;
+
 pub mod admin;
 pub mod api;
 pub mod cloud;
@@ -6,6 +13,18 @@ pub mod identity;
 pub mod kv;
 pub mod portal;
 pub mod user;
+
+impl ApiFrom<common::ValidationError> for new_models::ValidationError {
+	fn api_from(value: common::ValidationError) -> new_models::ValidationError {
+		new_models::ValidationError { path: value.path }
+	}
+}
+
+impl ApiFrom<common::ValidationError> for models::ValidationError {
+	fn api_from(value: common::ValidationError) -> models::ValidationError {
+		models::ValidationError { path: value.path }
+	}
+}
 
 // Reimplement conversions for ease of use in this module
 mod num {

@@ -17,6 +17,7 @@ pub struct GroupHandle {
     /// The URL of this group's avatar image
     #[serde(rename = "avatar_url", skip_serializing_if = "Option::is_none")]
     pub avatar_url: Option<String>,
+    /// Represent a resource's readable display name.
     #[serde(rename = "display_name")]
     pub display_name: String,
     #[serde(rename = "external")]

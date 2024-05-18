@@ -31,12 +31,6 @@ impl ApiTryFrom<backend::user_identity::Identity> for models::IdentityLinkedAcco
 	}
 }
 
-impl ApiFrom<user::profile_validate::response::Error> for models::ValidationError {
-	fn api_from(value: user::profile_validate::response::Error) -> models::ValidationError {
-		models::ValidationError { path: value.path }
-	}
-}
-
 impl ApiFrom<game_user::link_get::response::GameUserLinkStatus> for models::IdentityGameLinkStatus {
 	fn api_from(value: game_user::link_get::response::GameUserLinkStatus) -> Self {
 		match value {

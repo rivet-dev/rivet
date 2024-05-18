@@ -72,8 +72,8 @@ async fn worker(ctx: &OperationContext<user::msg::delete::Message>) -> GlobalRes
 		// Filter out teams where the user is the owner
 		let non_owner_teams = teams_res
 			.teams
-			.iter()
-			.cloned()
+			.clone()
+			.into_iter()
 			.filter(|team| team.owner_user_id != ctx.user_id);
 		futures_util::stream::iter(non_owner_teams)
 			.map(|team| {

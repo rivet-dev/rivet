@@ -64,8 +64,7 @@ types:
           minutes.
       identity_link_url:
         type: string
-      expire_ts:
-        type: datetime
+      expire_ts: commons.Timestamp
 
   GetGameLinkResponse:
     properties:
@@ -78,7 +77,7 @@ types:
   GetGameLinkNewIdentity:
     properties:
       identity_token: commons.JWT
-      identity_token_expire_ts: datetime
+      identity_token_expire_ts: commons.Timestamp
       identity: identityCommons.Profile
 
   CompleteGameLinkRequest:

@@ -734,7 +734,10 @@ fn decode_proto(
 	let mut iter = message.rsplit('.');
 	let (claims, header) = match (iter.next(), iter.next(), iter.next()) {
 		(Some(claims), Some(header), None) => (claims, {
-			let decoded = base64::decode_config(header, base64::URL_SAFE_NO_PAD)?;
+			let decoded = match base64::decode_config(header, base64::URL_SAFE_NO_PAD) {
+				Ok(decoded) => decoded,
+				Err(err) => bail_with!(TOKEN_INVALID, reason = err),
+			};
 			let s = String::from_utf8(decoded)?;
 			serde_json::from_str::<jsonwebtoken::Header>(&s)?
 		}),
@@ -749,7 +752,10 @@ fn decode_proto(
 		bail_with!(TOKEN_INVALID, reason = "invalid signature");
 	}
 
-	let claims_buf = base64::decode_config(&claims, base64::URL_SAFE_NO_PAD)?;
+	let claims_buf = match base64::decode_config(&claims, base64::URL_SAFE_NO_PAD) {
+		Ok(claims_buf) => claims_buf,
+		Err(err) => bail_with!(TOKEN_INVALID, reason = err),
+	};
 	let claims = schema::Claims::decode(claims_buf.as_slice())?;
 
 	Ok(validate(&claims).map(|_| claims))

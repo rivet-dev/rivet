@@ -18,6 +18,7 @@ pub struct GameSummary {
     pub banner_url: Option<String>,
     #[serde(rename = "developer")]
     pub developer: Box<crate::models::GroupHandle>,
+    /// Represent a resource's readable display name.
     #[serde(rename = "display_name")]
     pub display_name: String,
     #[serde(rename = "game_id")]

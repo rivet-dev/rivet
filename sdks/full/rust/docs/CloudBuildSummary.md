@@ -7,7 +7,7 @@ Name | Type | Description | Notes
 **build_id** | [**uuid::Uuid**](uuid::Uuid.md) |  | 
 **complete** | **bool** | Whether or not this build has completely been uploaded. | 
 **content_length** | **i64** | Unsigned 64 bit integer. | 
-**create_ts** | **String** | RFC3339 timestamp. | 
+**create_ts** | **String** | RFC3339 timestamp | 
 **display_name** | **String** | Represent a resource's readable display name. | 
 **upload_id** | [**uuid::Uuid**](uuid::Uuid.md) |  | 
 

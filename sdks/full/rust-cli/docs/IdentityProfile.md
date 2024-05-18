@@ -9,7 +9,7 @@ Name | Type | Description | Notes
 **awaiting_deletion** | Option<**bool**> | Whether or not this identity is awaiting account deletion. Only visible to when the requestee is this identity. | [optional]
 **bio** | **String** | Follows regex ^(?:[^\\n\\r]+\\n?|\\n){1,5}$ | 
 **dev_state** | Option<[**crate::models::IdentityDevState**](IdentityDevState.md)> |  | [optional]
-**display_name** | **String** |  | 
+**display_name** | **String** | Represent a resource's readable display name. | 
 **external** | [**crate::models::IdentityExternalLinks**](IdentityExternalLinks.md) |  | 
 **follower_count** | **i64** |  | 
 **following** | **bool** | Whether or not the requestee's identity is following this identity. | 
@@ -22,7 +22,7 @@ Name | Type | Description | Notes
 **is_game_linked** | Option<**bool**> | Whether or not this game user has been linked through the Rivet dashboard. | [optional]
 **is_mutual_following** | **bool** |  | 
 **is_registered** | **bool** | Whether or not this identity is registered with a linked account. | 
-**join_ts** | **String** |  | 
+**join_ts** | **String** | RFC3339 timestamp | 
 **linked_accounts** | [**Vec<crate::models::IdentityLinkedAccount>**](IdentityLinkedAccount.md) |  | 
 **presence** | Option<[**crate::models::IdentityPresence**](IdentityPresence.md)> |  | [optional]
 

@@ -6,7 +6,7 @@ Name | Type | Description | Notes
 ------------ | ------------- | ------------- | -------------
 **account_number** | **i32** |  | 
 **avatar_url** | **String** | The URL of this identity's avatar image. | 
-**display_name** | **String** |  | 
+**display_name** | **String** | Represent a resource's readable display name. | 
 **external** | [**crate::models::IdentityExternalLinks**](IdentityExternalLinks.md) |  | 
 **following** | **bool** | Whether or not the requestee's identity is following this identity. | 
 **identity_id** | [**uuid::Uuid**](uuid::Uuid.md) |  | 

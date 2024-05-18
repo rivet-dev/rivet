@@ -42,20 +42,13 @@ pub async fn project(ctx: &ProjectContext) {
 pub async fn gen_bolt_tf(ctx: &ProjectContext, plan_id: &str) -> Result<()> {
 	// Configure the backend
 	let backend = match ctx.ns().terraform.backend {
-		ns::TerraformBackend::Local {} => indoc!(
-			r#"
-			terraform {
-				backend "local" {}
-			}
-			"#
-		)
-		.to_string(),
+		ns::TerraformBackend::Local {} => String::new(),
 		ns::TerraformBackend::Postgres {} => indoc!(
-			r#"
+			"
 			terraform {
-				backend "pg" {}
+				backend \"pg\" {}
 			}
-			"#
+			"
 		)
 		.to_string(),
 	};
@@ -309,6 +302,12 @@ async fn vars(ctx: &ProjectContext) {
 		extra_dns.push(json!({
 			"zone_name": "main",
 			"name": domain_main_api,
+		}));
+
+		// OGS
+		extra_dns.push(json!({
+			"zone_name": "main",
+			"name": format!("*.ogs.{domain_main}"),
 		}));
 
 		// Add services

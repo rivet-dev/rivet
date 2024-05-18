@@ -25,6 +25,7 @@ components:
       - client_response
       type: object
     DisplayName:
+      description: Represent a resource's readable display name.
       type: string
     ErrorBody:
       properties:
@@ -408,9 +409,9 @@ components:
         datacenter_distance_from_client:
           $ref: '#/components/schemas/GeoDistance'
         provider_display_name:
-          type: string
+          $ref: '#/components/schemas/DisplayName'
         region_display_name:
-          type: string
+          $ref: '#/components/schemas/DisplayName'
         region_id:
           $ref: '#/components/schemas/Identifier'
       required:

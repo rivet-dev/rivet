@@ -469,7 +469,7 @@ type Profile struct {
 	// Whether or not this identity is both following and is followed by the requestee's identity.
 	IsFollowingMe     bool                `json:"is_following_me"`
 	IsMutualFollowing bool                `json:"is_mutual_following"`
-	JoinTs            time.Time           `json:"join_ts"`
+	JoinTs            sdk.Timestamp       `json:"join_ts"`
 	Bio               sdk.Bio             `json:"bio"`
 	LinkedAccounts    []*LinkedAccount    `json:"linked_accounts,omitempty"`
 	Groups            []*Group            `json:"groups,omitempty"`
@@ -583,9 +583,9 @@ func (u *UpdateGameActivity) String() string {
 }
 
 type GetGameLinkNewIdentity struct {
-	IdentityToken         sdk.Jwt   `json:"identity_token"`
-	IdentityTokenExpireTs time.Time `json:"identity_token_expire_ts"`
-	Identity              *Profile  `json:"identity,omitempty"`
+	IdentityToken         sdk.Jwt       `json:"identity_token"`
+	IdentityTokenExpireTs sdk.Timestamp `json:"identity_token_expire_ts"`
+	Identity              *Profile      `json:"identity,omitempty"`
 
 	_rawJSON json.RawMessage
 }

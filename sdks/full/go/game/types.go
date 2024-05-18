@@ -6,14 +6,14 @@ import (
 	json "encoding/json"
 	fmt "fmt"
 	uuid "github.com/google/uuid"
+	sdk "sdk"
 	group "sdk/common/group"
 	core "sdk/core"
 )
 
 // A game leaderboard category.
 type LeaderboardCategory struct {
-	// Represent a resource's readable display name.
-	DisplayName string `json:"display_name"`
+	DisplayName sdk.DisplayName `json:"display_name"`
 
 	_rawJSON json.RawMessage
 }
@@ -43,8 +43,7 @@ func (l *LeaderboardCategory) String() string {
 
 // A platform link denoting a supported platform.
 type PlatformLink struct {
-	// Represent a resource's readable display name.
-	DisplayName string `json:"display_name"`
+	DisplayName sdk.DisplayName `json:"display_name"`
 	// The URL to the given game's method of distribution on this platform.
 	Url string `json:"url"`
 
@@ -78,9 +77,8 @@ func (p *PlatformLink) String() string {
 type Profile struct {
 	GameId uuid.UUID `json:"game_id"`
 	// A human readable short identifier used to references resources. Different than a `rivet.common#Uuid` because this is intended to be human readable. Different than `rivet.common#DisplayName` because this should not include special characters and be short.
-	NameId string `json:"name_id"`
-	// Represent a resource's readable display name.
-	DisplayName string `json:"display_name"`
+	NameId      string          `json:"name_id"`
+	DisplayName sdk.DisplayName `json:"display_name"`
 	// The URL of this game's logo image.
 	LogoUrl *string `json:"logo_url,omitempty"`
 	// The URL of this game's banner image.

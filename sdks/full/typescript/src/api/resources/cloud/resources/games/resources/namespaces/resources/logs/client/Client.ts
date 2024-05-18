@@ -43,7 +43,7 @@ export class Logs {
         const { beforeCreateTs } = request;
         const _queryParams: Record<string, string | string[]> = {};
         if (beforeCreateTs != null) {
-            _queryParams["before_create_ts"] = beforeCreateTs.toISOString();
+            _queryParams["before_create_ts"] = beforeCreateTs;
         }
 
         const _response = await (this._options.fetcher ?? core.fetcher)({

@@ -16,6 +16,7 @@ pub struct GameHandle {
     /// The URL of this game's banner image.
     #[serde(rename = "banner_url", skip_serializing_if = "Option::is_none")]
     pub banner_url: Option<String>,
+    /// Represent a resource's readable display name.
     #[serde(rename = "display_name")]
     pub display_name: String,
     #[serde(rename = "game_id")]

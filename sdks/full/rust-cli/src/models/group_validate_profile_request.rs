@@ -13,7 +13,7 @@
 
 #[derive(Clone, Debug, PartialEq, Default, Serialize, Deserialize)]
 pub struct GroupValidateProfileRequest {
-    /// Detailed information about a profile.
+    /// Represent a resource's readable display name.
     #[serde(rename = "bio", skip_serializing_if = "Option::is_none")]
     pub bio: Option<String>,
     /// Represent a resource's readable display name.
