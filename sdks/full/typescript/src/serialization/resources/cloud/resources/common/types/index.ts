@@ -19,6 +19,7 @@ export * from "./GameLobbyExpenses";
 export * from "./RegionTierExpenses";
 export * from "./GroupBankSource";
 export * from "./RegionTier";
+export * from "./UniversalRegion";
 export * from "./NamespaceFull";
 export * from "./NamespaceConfig";
 export * from "./CdnNamespaceConfig";

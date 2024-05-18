@@ -1037,7 +1037,10 @@ type RegionSummary struct {
 	// A human readable short identifier used to references resources. Different than a `rivet.common#Uuid` because this is intended to be human readable. Different than `rivet.common#DisplayName` because this should not include special characters and be short.
 	RegionNameId string `json:"region_name_id"`
 	// The server provider of this region.
-	Provider            string          `json:"provider"`
+	Provider string `json:"provider"`
+	// **Deprecated**
+	// A universal region label given to this region.
+	UniversalRegion     UniversalRegion `json:"universal_region,omitempty"`
 	ProviderDisplayName sdk.DisplayName `json:"provider_display_name"`
 	RegionDisplayName   sdk.DisplayName `json:"region_display_name"`
 

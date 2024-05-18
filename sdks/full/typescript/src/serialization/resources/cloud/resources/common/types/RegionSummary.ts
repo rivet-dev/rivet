@@ -13,6 +13,10 @@ export const RegionSummary: core.serialization.ObjectSchema<
     regionId: core.serialization.property("region_id", core.serialization.string()),
     regionNameId: core.serialization.property("region_name_id", core.serialization.string()),
     provider: core.serialization.string(),
+    universalRegion: core.serialization.property(
+        "universal_region",
+        core.serialization.lazy(async () => (await import("../../../../..")).cloud.UniversalRegion)
+    ),
     providerDisplayName: core.serialization.property(
         "provider_display_name",
         core.serialization.lazy(async () => (await import("../../../../..")).DisplayName)
@@ -28,6 +32,7 @@ export declare namespace RegionSummary {
         region_id: string;
         region_name_id: string;
         provider: string;
+        universal_region: serializers.cloud.UniversalRegion.Raw;
         provider_display_name: serializers.DisplayName.Raw;
         region_display_name: serializers.DisplayName.Raw;
     }

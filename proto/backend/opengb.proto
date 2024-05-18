@@ -21,6 +21,7 @@ message Environment {
 	Tier tier = 5;
 
 	string neon_project_id = 6;
+	optional rivet.common.Uuid last_upload_id = 7;
 
 	int64 create_ts = 8;
 	optional int64 destroy_ts = 9;

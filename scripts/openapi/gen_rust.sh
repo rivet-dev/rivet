@@ -21,7 +21,6 @@ docker run --rm \
 if [ "$FERN_GROUP" == "full" ]; then
 	# Fix OpenAPI bug (https://github.com/OpenAPITools/openapi-generator/issues/14171)
 	sed -i 's/CloudGamesLogStream/crate::models::CloudGamesLogStream/' "$GEN_PATH_RUST/src/apis/cloud_games_matchmaker_api.rs"
-	sed -i 's/PortalNotificationUnregisterService/crate::models::PortalNotificationUnregisterService/' "$GEN_PATH_RUST/src/apis/portal_notifications_api.rs"
 	sed -i 's/AdminPoolType/crate::models::AdminPoolType/' "$GEN_PATH_RUST/src/apis/admin_clusters_api.rs"
 
 	# Create variant specifically for the CLI

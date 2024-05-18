@@ -13,6 +13,11 @@ export interface RegionSummary {
     regionNameId: string;
     /** The server provider of this region. */
     provider: string;
+    /**
+     * **Deprecated**
+     * A universal region label given to this region.
+     */
+    universalRegion: Rivet.cloud.UniversalRegion;
     providerDisplayName: Rivet.DisplayName;
     regionDisplayName: Rivet.DisplayName;
 }
