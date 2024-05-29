@@ -62,6 +62,12 @@ resource "helm_release" "vector" {
 					address = "0.0.0.0:6100"
 					decoding = { codec = "json" }
 				}
+
+				http_json = {
+					type = "http_server"
+					address = "0.0.0.0:6200"
+					decoding = { codec = "json" }
+				}
 				
 				vector_metrics = {
 					type = "internal_metrics"
@@ -106,6 +112,27 @@ resource "helm_release" "vector" {
 					batch = {
 						# Speed up for realtime-ish logs
 						timeout_secs = 1.0
+					}
+				}
+
+				clickhouse_cf_logs = {
+					type = "clickhouse"
+					inputs = ["http_json"]
+					compression = "gzip"
+					database = "db_cf_log"
+					endpoint = "https://${var.clickhouse_host}:${var.clickhouse_port_https}"
+					table = "cf_tail_events"
+					auth = {
+						strategy = "basic"
+						user = "vector"
+						# Escape values for Vector
+						password = replace(module.secrets.values["clickhouse/users/vector/password"], "$", "$$")
+					}
+					tls = local.clickhouse_k8s ? {
+						ca_file = "/usr/local/share/ca-certificates/clickhouse-ca.crt"
+					} : {}
+					batch = {
+						timeout_secs = 5.0
 					}
 				}
 

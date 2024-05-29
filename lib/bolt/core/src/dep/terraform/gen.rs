@@ -347,6 +347,14 @@ async fn vars(ctx: &ProjectContext) {
 			}));
 		}
 
+		// Add vector
+		if config.prometheus.is_some() {
+			extra_dns.push(json!({
+				"zone_name": "main",
+				"name": format!("vector.{}", domain_main),
+			}));
+		}
+
 		vars.insert("extra_dns".into(), json!(extra_dns));
 	}
 

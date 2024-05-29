@@ -18,19 +18,19 @@ locals {
 				service = "nomad-server"
 				service_namespace = kubernetes_namespace.nomad.0.metadata[0].name
 				service_port = 4647
-			}
+			},
 
 			# Addresses specific Nomad servers.
 			"nomad-server-0" = {
 				service = "nomad-server-0"
 				service_namespace = kubernetes_namespace.nomad.0.metadata[0].name
 				service_port = 4647
-			}
+			},
 			"nomad-server-1" = {
 				service = "nomad-server-1"
 				service_namespace = kubernetes_namespace.nomad.0.metadata[0].name
 				service_port = 4647
-			}
+			},
 			"nomad-server-2" = {
 				service = "nomad-server-2"
 				service_namespace = kubernetes_namespace.nomad.0.metadata[0].name
@@ -42,7 +42,7 @@ locals {
 				service = "vector"
 				service_namespace = kubernetes_namespace.vector.0.metadata[0].name
 				service_port = 6000
-			}
+			},
 			"vector-tcp-json" = {
 				service = "vector"
 				service_namespace = kubernetes_namespace.vector.0.metadata[0].name
@@ -261,9 +261,9 @@ data "kubernetes_service" "traefik_tunnel" {
 	}
 }
 
-resource "kubectl_manifest" "traefik_nomad_router" {
+resource "kubectl_manifest" "traefik_router" {
 	depends_on = [helm_release.traefik_tunnel]
-	for_each = var.edge_enabled ? local.tunnel_services : {}
+	for_each = local.tunnel_services
 
 	yaml_body = yamlencode({
 		apiVersion = "traefik.io/v1alpha1"
@@ -299,7 +299,6 @@ resource "kubectl_manifest" "traefik_nomad_router" {
 					name = "ingress-tunnel",
 					namespace = "traefik-tunnel"
 				}
-
 			}
 		}
 	})

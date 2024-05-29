@@ -40,7 +40,7 @@ pub fn dependency_graph(_ctx: &ProjectContext) -> HashMap<&'static str, Vec<Remo
 			RemoteStateBuilder::default().plan_id("cockroachdb_managed").build().unwrap(),
 		],
 		"opengb" => vec![
-			RemoteStateBuilder::default().plan_id("dns").build().unwrap()
+			RemoteStateBuilder::default().plan_id("dns").build().unwrap(),
 		],
 	}
 }

@@ -233,6 +233,18 @@ pub async fn generate(project_path: &Path, ns_id: &str) -> Result<()> {
 			.await?;
 	}
 
+	// MARK: Vector
+	generator
+		.generate_secret(&["vector", "http", "username"], || async {
+			Ok(value("rivet"))
+		})
+		.await?;
+	generator
+		.generate_secret(&["vector", "http", "password"], || async {
+			Ok(value(generate_password(64)))
+		})
+		.await?;
+
 	// MARK: Minio
 	if generator.ns["s3"].get("minio").is_some() {
 		let root_pass = generate_password(32);
