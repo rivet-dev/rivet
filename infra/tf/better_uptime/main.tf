@@ -53,7 +53,7 @@ resource "betteruptime_monitor" "monitor" {
 	url = each.value.monitor.url
 	monitor_type = "status"
 	request_timeout = 60
-	check_frequency = 30
+	check_frequency = 60
 	confirmation_period = 90
 	recovery_period = 180
 	request_headers = [
