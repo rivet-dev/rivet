@@ -37,7 +37,7 @@ impl TempSshKey {
 	}
 }
 
-pub async fn ip(
+async fn ip_inner(
 	_ctx: &ProjectContext,
 	ip: &str,
 	ssh_key: &TempSshKey,
@@ -54,33 +54,12 @@ pub async fn ip(
 	Ok(())
 }
 
-pub async fn id(ctx: &ProjectContext, server_id: &str, command: Option<&str>) -> Result<()> {
-	let server_ips = tasks::api::get_cluster_server_ips(ctx, Some(server_id), None).await?;
-	let server_ip = server_ips
-		.first()
-		.context(format!("failed to find server with server id {server_id}"))?;
-
-	// TODO: Choose correct SSH key
-	let ssh_key = TempSshKey::new(ctx, "server").await?;
-	ip(ctx, server_ip, &ssh_key, command).await?;
-
-	Ok(())
+pub async fn ip(ctx: &ProjectContext, ip: &str, command: Option<&str>) -> Result<()> {
+	let ssh_key = Arc::new(TempSshKey::new(ctx, "server").await?);
+	ip_inner(ctx, ip, &ssh_key, command).await
 }
 
-pub async fn pool(ctx: &ProjectContext, pool: &str, command: Option<&str>) -> Result<()> {
-	let server_ips = tasks::api::get_cluster_server_ips(ctx, None, Some(pool)).await?;
-	let server_ip = server_ips
-		.first()
-		.context(format!("failed to find server with pool {pool}"))?;
-
-	let ssh_key = TempSshKey::new(ctx, "server").await?;
-	ip(ctx, server_ip, &ssh_key, command).await?;
-
-	Ok(())
-}
-
-pub async fn pool_all(ctx: &ProjectContext, pool: &str, command: &str) -> Result<()> {
-	let server_ips = tasks::api::get_cluster_server_ips(ctx, None, Some(pool)).await?;
+pub async fn ip_all(ctx: &ProjectContext, server_ips: &[&str], command: &str) -> Result<()> {
 	let ssh_key = Arc::new(TempSshKey::new(ctx, "server").await?);
 
 	futures_util::stream::iter(server_ips)
@@ -88,7 +67,7 @@ pub async fn pool_all(ctx: &ProjectContext, pool: &str, command: &str) -> Result
 			let ctx = ctx.clone();
 			let ssh_key = ssh_key.clone();
 			async move {
-				let res = ip(&ctx, &server_ip, &ssh_key, Some(command)).await;
+				let res = ip_inner(&ctx, &server_ip, &ssh_key, Some(command)).await;
 				println!("{res:?}");
 			}
 		})

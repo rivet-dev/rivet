@@ -10,7 +10,7 @@ async fn worker(
 	let nomad_join_ts = util::timestamp::now();
 
 	let (datacenter_id, old_nomad_node_id, install_complete_ts) = sql_fetch_one!(
-		[ctx, (Uuid, Option<String>, i64)]
+		[ctx, (Uuid, Option<String>, Option<i64>)]
 		"
 		UPDATE db_cluster.servers
 		SET
@@ -37,7 +37,11 @@ async fn worker(
 	.await?;
 
 	// Insert metrics
-	insert_metrics(ctx, datacenter_id, nomad_join_ts, install_complete_ts).await?;
+	if let Some(install_complete_ts) = install_complete_ts {
+		insert_metrics(ctx, datacenter_id, nomad_join_ts, install_complete_ts).await?;
+	} else {
+		tracing::warn!("missing install_complete_ts for nomad-node-registered");
+	}
 
 	Ok(())
 }

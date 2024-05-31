@@ -1,0 +1,14 @@
+syntax = "proto3";
+
+package rivet.backend.pkg.cluster.msg.server_taint;
+
+import "proto/common.proto";
+import "proto/backend/cluster.proto";
+
+/// name = "msg-cluster-server-taint"
+/// parameters = [
+/// 	{ name = "request_id" },
+/// ]
+message Message {
+	rivet.backend.cluster.ServerFilter filter = 2;
+}

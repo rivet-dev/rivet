@@ -60,67 +60,6 @@ paths:
           application/json:
             schema:
               $ref: '#/components/schemas/AdminLoginRequest'
-  /admin/clusters/server_ips:
-    get:
-      operationId: admin_clusters_getServerIps
-      tags:
-        - AdminClusters
-      parameters:
-        - name: server_id
-          in: query
-          required: false
-          schema:
-            type: string
-            format: uuid
-        - name: pool
-          in: query
-          required: false
-          schema:
-            $ref: '#/components/schemas/AdminPoolType'
-      responses:
-        '200':
-          description: ''
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/AdminClustersGetServerIpsResponse'
-        '400':
-          description: ''
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBody'
-        '403':
-          description: ''
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBody'
-        '404':
-          description: ''
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBody'
-        '408':
-          description: ''
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBody'
-        '429':
-          description: ''
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBody'
-        '500':
-          description: ''
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBody'
-      security: *ref_0
   /admin/clusters:
     get:
       description: Get clusters
@@ -134,7 +73,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/AdminClustersListResponse'
+                $ref: '#/components/schemas/AdminClustersListClustersResponse'
         '400':
           description: ''
           content:
@@ -184,7 +123,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/AdminClustersCreateResponse'
+                $ref: '#/components/schemas/AdminClustersCreateClusterResponse'
         '400':
           description: ''
           content:
@@ -227,246 +166,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/AdminClustersCreateRequest'
-  /admin/clusters/{cluster_id}/datacenters:
-    get:
-      description: Get datacenters of a cluster
-      operationId: admin_clusters_datacenters_list
-      tags:
-        - AdminClustersDatacenters
-      parameters:
-        - name: cluster_id
-          in: path
-          required: true
-          schema:
-            type: string
-            format: uuid
-      responses:
-        '200':
-          description: ''
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/AdminClustersDatacentersListResponse'
-        '400':
-          description: ''
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBody'
-        '403':
-          description: ''
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBody'
-        '404':
-          description: ''
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBody'
-        '408':
-          description: ''
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBody'
-        '429':
-          description: ''
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBody'
-        '500':
-          description: ''
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBody'
-      security: *ref_0
-    post:
-      operationId: admin_clusters_datacenters_create
-      tags:
-        - AdminClustersDatacenters
-      parameters:
-        - name: cluster_id
-          in: path
-          required: true
-          schema:
-            type: string
-            format: uuid
-      responses:
-        '200':
-          description: ''
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/AdminClustersDatacentersCreateResponse'
-        '400':
-          description: ''
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBody'
-        '403':
-          description: ''
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBody'
-        '404':
-          description: ''
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBody'
-        '408':
-          description: ''
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBody'
-        '429':
-          description: ''
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBody'
-        '500':
-          description: ''
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBody'
-      security: *ref_0
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/AdminClustersDatacentersCreateRequest'
-  /admin/clusters/{cluster_id}/datacenters/{datacenter_id}:
-    patch:
-      operationId: admin_clusters_datacenters_update
-      tags:
-        - AdminClustersDatacenters
-      parameters:
-        - name: cluster_id
-          in: path
-          required: true
-          schema:
-            type: string
-            format: uuid
-        - name: datacenter_id
-          in: path
-          required: true
-          schema:
-            type: string
-            format: uuid
-      responses:
-        '204':
-          description: ''
-        '400':
-          description: ''
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBody'
-        '403':
-          description: ''
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBody'
-        '404':
-          description: ''
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBody'
-        '408':
-          description: ''
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBody'
-        '429':
-          description: ''
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBody'
-        '500':
-          description: ''
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBody'
-      security: *ref_0
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/AdminClustersDatacentersUpdateRequest'
-  /admin/clusters/{cluster_id}/datacenters/{datacenter_id}/taint:
-    get:
-      operationId: admin_clusters_datacenters_taint
-      tags:
-        - AdminClustersDatacenters
-      parameters:
-        - name: cluster_id
-          in: path
-          required: true
-          schema:
-            type: string
-            format: uuid
-        - name: datacenter_id
-          in: path
-          required: true
-          schema:
-            type: string
-      responses:
-        '204':
-          description: ''
-        '400':
-          description: ''
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBody'
-        '403':
-          description: ''
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBody'
-        '404':
-          description: ''
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBody'
-        '408':
-          description: ''
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBody'
-        '429':
-          description: ''
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBody'
-        '500':
-          description: ''
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBody'
-      security: *ref_0
+              $ref: '#/components/schemas/AdminClustersCreateClusterRequest'
   /cloud/bootstrap:
     get:
       description: Returns the basic information required to use the cloud APIs.
@@ -5174,6 +4874,336 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorBody'
       security: *ref_0
+  /admin/clusters/{cluster_id}/datacenters:
+    get:
+      description: Get datacenters of a cluster
+      operationId: admin_clusters_datacenters_list
+      tags:
+        - AdminClustersDatacenters
+      parameters:
+        - name: cluster_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminClustersListDatacentersResponse'
+        '400':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '403':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '404':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '408':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '429':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '500':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+      security: *ref_0
+    post:
+      operationId: admin_clusters_datacenters_create
+      tags:
+        - AdminClustersDatacenters
+      parameters:
+        - name: cluster_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminClustersCreateDatacenterResponse'
+        '400':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '403':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '404':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '408':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '429':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '500':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+      security: *ref_0
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AdminClustersCreateDatacenterRequest'
+  /admin/clusters/{cluster_id}/datacenters/{datacenter_id}:
+    patch:
+      operationId: admin_clusters_datacenters_update
+      tags:
+        - AdminClustersDatacenters
+      parameters:
+        - name: cluster_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: datacenter_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '204':
+          description: ''
+        '400':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '403':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '404':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '408':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '429':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '500':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+      security: *ref_0
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AdminClustersUpdateDatacenterRequest'
+  /admin/clusters/{cluster_id}/servers:
+    get:
+      operationId: admin_clusters_servers_list
+      tags:
+        - AdminClustersServers
+      parameters:
+        - name: cluster_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: server_id
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: datacenter
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: pool
+          in: query
+          required: false
+          schema:
+            $ref: '#/components/schemas/AdminClustersPoolType'
+        - name: public_ip
+          in: query
+          required: false
+          schema:
+            type: string
+      responses:
+        '200':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminClustersListServersResponse'
+        '400':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '403':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '404':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '408':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '429':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '500':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+      security: *ref_0
+  /admin/clusters/{cluster_id}/servers/taint:
+    post:
+      operationId: admin_clusters_servers_taint
+      tags:
+        - AdminClustersServers
+      parameters:
+        - name: cluster_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: server_id
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: datacenter
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: pool
+          in: query
+          required: false
+          schema:
+            $ref: '#/components/schemas/AdminClustersPoolType'
+        - name: public_ip
+          in: query
+          required: false
+          schema:
+            type: string
+      responses:
+        '204':
+          description: ''
+        '400':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '403':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '404':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '408':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '429':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '500':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+      security: *ref_0
   /auth/identity/access-token/complete-verification:
     post:
       description: Completes the access token verification process.
@@ -8762,25 +8792,16 @@ components:
           type: string
       required:
         - url
-    AdminClustersGetServerIpsResponse:
-      type: object
-      properties:
-        ips:
-          type: array
-          items:
-            type: string
-      required:
-        - ips
-    AdminClustersListResponse:
+    AdminClustersListClustersResponse:
       type: object
       properties:
         clusters:
           type: array
           items:
-            $ref: '#/components/schemas/AdminCluster'
+            $ref: '#/components/schemas/AdminClustersCluster'
       required:
         - clusters
-    AdminClustersCreateRequest:
+    AdminClustersCreateClusterRequest:
       type: object
       properties:
         name_id:
@@ -8790,7 +8811,7 @@ components:
           format: uuid
       required:
         - name_id
-    AdminClustersCreateResponse:
+    AdminClustersCreateClusterResponse:
       type: object
       properties:
         cluster_id:
@@ -8798,61 +8819,6 @@ components:
           format: uuid
       required:
         - cluster_id
-    AdminClustersDatacentersListResponse:
-      type: object
-      properties:
-        datacenters:
-          type: array
-          items:
-            $ref: '#/components/schemas/AdminDatacenter'
-      required:
-        - datacenters
-    AdminClustersDatacentersCreateRequest:
-      type: object
-      properties:
-        display_name:
-          type: string
-        name_id:
-          type: string
-        provider:
-          $ref: '#/components/schemas/AdminProvider'
-        provider_datacenter_id:
-          type: string
-        build_delivery_method:
-          $ref: '#/components/schemas/AdminBuildDeliveryMethod'
-      required:
-        - display_name
-        - name_id
-        - provider
-        - provider_datacenter_id
-        - build_delivery_method
-    AdminClustersDatacentersCreateResponse:
-      type: object
-      properties:
-        datacenter_id:
-          type: string
-          format: uuid
-      required:
-        - datacenter_id
-    AdminClustersDatacentersUpdateRequest:
-      type: object
-      properties:
-        pool_type:
-          $ref: '#/components/schemas/AdminPoolType'
-        hardware:
-          type: array
-          items:
-            $ref: '#/components/schemas/AdminHardware'
-        desired_count:
-          type: integer
-        max_count:
-          type: integer
-        drain_timeout:
-          type: integer
-          format: int64
-      required:
-        - pool_type
-        - hardware
     CloudBootstrapResponse:
       type: object
       properties:
@@ -9935,30 +9901,30 @@ components:
         - datacenter_id
         - cluster_id
         - vlan_ip
-    AdminPoolType:
+    AdminClustersPoolType:
       type: string
       enum:
         - job
         - gg
         - ats
-    AdminProvider:
+    AdminClustersProvider:
       type: string
       enum:
         - linode
-    AdminBuildDeliveryMethod:
+    AdminClustersBuildDeliveryMethod:
       type: string
       enum:
         - traffic_server
         - s3_direct
-    AdminPool:
+    AdminClustersPool:
       type: object
       properties:
         pool_type:
-          $ref: '#/components/schemas/AdminPoolType'
+          $ref: '#/components/schemas/AdminClustersPoolType'
         hardware:
           type: array
           items:
-            $ref: '#/components/schemas/AdminHardware'
+            $ref: '#/components/schemas/AdminClustersHardware'
         desired_count:
           type: integer
         max_count:
@@ -9972,14 +9938,14 @@ components:
         - desired_count
         - max_count
         - drain_timeout
-    AdminHardware:
+    AdminClustersHardware:
       type: object
       properties:
         provider_hardware:
           type: string
       required:
         - provider_hardware
-    AdminCluster:
+    AdminClustersCluster:
       type: object
       properties:
         cluster_id:
@@ -9997,7 +9963,7 @@ components:
         - cluster_id
         - name_id
         - create_ts
-    AdminDatacenter:
+    AdminClustersDatacenter:
       type: object
       properties:
         datacenter_id:
@@ -10011,7 +9977,7 @@ components:
         display_name:
           type: string
         provider:
-          $ref: '#/components/schemas/AdminProvider'
+          $ref: '#/components/schemas/AdminClustersProvider'
         provider_datacenter_id:
           type: string
         provider_api_token:
@@ -10019,9 +9985,9 @@ components:
         pools:
           type: array
           items:
-            $ref: '#/components/schemas/AdminPool'
+            $ref: '#/components/schemas/AdminClustersPool'
         build_delivery_method:
-          $ref: '#/components/schemas/AdminBuildDeliveryMethod'
+          $ref: '#/components/schemas/AdminClustersBuildDeliveryMethod'
       required:
         - datacenter_id
         - cluster_id
@@ -10031,6 +9997,81 @@ components:
         - provider_datacenter_id
         - pools
         - build_delivery_method
+    AdminClustersServer:
+      type: object
+      properties:
+        server_id:
+          type: string
+          format: uuid
+        public_ip:
+          type: string
+      required:
+        - server_id
+        - public_ip
+    AdminClustersListDatacentersResponse:
+      type: object
+      properties:
+        datacenters:
+          type: array
+          items:
+            $ref: '#/components/schemas/AdminClustersDatacenter'
+      required:
+        - datacenters
+    AdminClustersCreateDatacenterRequest:
+      type: object
+      properties:
+        display_name:
+          type: string
+        name_id:
+          type: string
+        provider:
+          $ref: '#/components/schemas/AdminClustersProvider'
+        provider_datacenter_id:
+          type: string
+        build_delivery_method:
+          $ref: '#/components/schemas/AdminClustersBuildDeliveryMethod'
+      required:
+        - display_name
+        - name_id
+        - provider
+        - provider_datacenter_id
+        - build_delivery_method
+    AdminClustersCreateDatacenterResponse:
+      type: object
+      properties:
+        datacenter_id:
+          type: string
+          format: uuid
+      required:
+        - datacenter_id
+    AdminClustersUpdateDatacenterRequest:
+      type: object
+      properties:
+        pool_type:
+          $ref: '#/components/schemas/AdminClustersPoolType'
+        hardware:
+          type: array
+          items:
+            $ref: '#/components/schemas/AdminClustersHardware'
+        desired_count:
+          type: integer
+        max_count:
+          type: integer
+        drain_timeout:
+          type: integer
+          format: int64
+      required:
+        - pool_type
+        - hardware
+    AdminClustersListServersResponse:
+      type: object
+      properties:
+        servers:
+          type: array
+          items:
+            $ref: '#/components/schemas/AdminClustersServer'
+      required:
+        - servers
     AuthCompleteStatus:
       type: string
       enum:

@@ -173,11 +173,11 @@ pub async fn run_from_env(use_autoscaler: bool) -> GlobalResult<()> {
 	}
 
 	for (name_id, datacenter) in config.datacenters {
-		let datacenter_id_proto = Some(datacenter.datacenter_id.into());
+		let datacenter_id_proto = datacenter.datacenter_id.into();
 		let existing_datacenter = datacenters_res
 			.datacenters
 			.iter()
-			.any(|dc| dc.datacenter_id == datacenter_id_proto);
+			.any(|dc| dc.datacenter_id == Some(datacenter_id_proto));
 
 		// Update existing datacenter
 		if existing_datacenter {
@@ -211,7 +211,7 @@ pub async fn run_from_env(use_autoscaler: bool) -> GlobalResult<()> {
 				.collect::<Vec<_>>();
 
 			msg!([ctx] @wait cluster::msg::datacenter_update(datacenter.datacenter_id) {
-				datacenter_id: datacenter_id_proto,
+				datacenter_id: Some(datacenter_id_proto),
 				pools: new_pools,
 			})
 			.await?;
@@ -219,7 +219,7 @@ pub async fn run_from_env(use_autoscaler: bool) -> GlobalResult<()> {
 		// Create new datacenter
 		else {
 			msg!([ctx] @wait cluster::msg::datacenter_create(datacenter.datacenter_id) {
-				datacenter_id: datacenter_id_proto,
+				datacenter_id: Some(datacenter_id_proto),
 				cluster_id: Some(cluster_id.into()),
 				name_id,
 				display_name: datacenter.display_name,
@@ -248,8 +248,13 @@ pub async fn run_from_env(use_autoscaler: bool) -> GlobalResult<()> {
 		// excess.
 		// Taint datacenter
 		if taint {
-			msg!([ctx] @wait cluster::msg::datacenter_taint(datacenter.datacenter_id) {
-				datacenter_id: datacenter_id_proto,
+			let request_id = Uuid::new_v4();
+			msg!([ctx] @wait cluster::msg::server_taint(request_id) {
+				filter: Some(backend::cluster::ServerFilter {
+					filter_datacenter_ids: true,
+					datacenter_ids: vec![datacenter_id_proto],
+					..Default::default()
+				}),
 			})
 			.await?;
 		}

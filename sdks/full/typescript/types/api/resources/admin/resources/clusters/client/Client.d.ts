@@ -5,6 +5,7 @@ import * as environments from "../../../../../../environments";
 import * as core from "../../../../../../core";
 import * as Rivet from "../../../../..";
 import { Datacenters } from "../resources/datacenters/client/Client";
+import { Servers } from "../resources/servers/client/Client";
 export declare namespace Clusters {
     interface Options {
         environment?: core.Supplier<environments.RivetEnvironment | string>;
@@ -20,15 +21,6 @@ export declare class Clusters {
     protected readonly _options: Clusters.Options;
     constructor(_options?: Clusters.Options);
     /**
-     * @throws {@link Rivet.InternalError}
-     * @throws {@link Rivet.RateLimitError}
-     * @throws {@link Rivet.ForbiddenError}
-     * @throws {@link Rivet.UnauthorizedError}
-     * @throws {@link Rivet.NotFoundError}
-     * @throws {@link Rivet.BadRequestError}
-     */
-    getServerIps(request?: Rivet.admin.clusters.GetServerIpsRequest, requestOptions?: Clusters.RequestOptions): Promise<Rivet.admin.clusters.GetServerIpsResponse>;
-    /**
      * Get clusters
      * @throws {@link Rivet.InternalError}
      * @throws {@link Rivet.RateLimitError}
@@ -37,7 +29,7 @@ export declare class Clusters {
      * @throws {@link Rivet.NotFoundError}
      * @throws {@link Rivet.BadRequestError}
      */
-    list(requestOptions?: Clusters.RequestOptions): Promise<Rivet.admin.clusters.ListResponse>;
+    list(requestOptions?: Clusters.RequestOptions): Promise<Rivet.admin.clusters.ListClustersResponse>;
     /**
      * Create a new cluster
      * @throws {@link Rivet.InternalError}
@@ -47,8 +39,10 @@ export declare class Clusters {
      * @throws {@link Rivet.NotFoundError}
      * @throws {@link Rivet.BadRequestError}
      */
-    create(request: Rivet.admin.clusters.CreateRequest, requestOptions?: Clusters.RequestOptions): Promise<Rivet.admin.clusters.CreateResponse>;
+    create(request: Rivet.admin.clusters.CreateClusterRequest, requestOptions?: Clusters.RequestOptions): Promise<Rivet.admin.clusters.CreateClusterResponse>;
     protected _datacenters: Datacenters | undefined;
     get datacenters(): Datacenters;
+    protected _servers: Servers | undefined;
+    get servers(): Servers;
     protected _getAuthorizationHeader(): Promise<string | undefined>;
 }

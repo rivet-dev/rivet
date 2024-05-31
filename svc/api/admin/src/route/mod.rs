@@ -30,31 +30,35 @@ define_router! {
 		"clusters": {
 			GET: clusters::list(),
 			POST: clusters::create(
-				body: models::AdminClustersCreateRequest,
+				body: models::AdminClustersCreateClusterRequest,
 			),
 		},
 
-		"clusters" / "server_ips": {
-			GET: clusters::server_ips(
-				query: clusters::ServerIpsQuery,
+		"clusters" / Uuid / "servers": {
+			GET: clusters::servers::list(
+				query: clusters::servers::ServerFilterQuery,
+			),
+		},
+
+		"clusters" / Uuid / "servers" / "taint": {
+			POST: clusters::servers::taint(
+				query: clusters::servers::ServerFilterQuery,
+				body: serde_json::Value,
 			),
 		},
 
 		"clusters" / Uuid / "datacenters": {
 			GET: clusters::datacenters::list(),
 			POST: clusters::datacenters::create(
-				body: models::AdminClustersDatacentersCreateRequest,
+				body: models::AdminClustersCreateDatacenterRequest,
 			),
 		},
 
 		"clusters" / Uuid / "datacenters" / Uuid : {
 			PATCH: clusters::datacenters::update(
-				body: models::AdminClustersDatacentersUpdateRequest,
+				body: models::AdminClustersUpdateDatacenterRequest,
 			),
 		},
 
-		"clusters" / Uuid / "datacenters" / Uuid / "taint": {
-			GET: clusters::datacenters::taint(),
-		},
 	},
 }

@@ -1,0 +1,39 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/fern-api/fern/main/fern.schema.json
+
+imports:
+  localCommons: ./common.yml
+
+service:
+  auth: true
+  base-path: /admin/clusters/{cluster_id}/servers
+  path-parameters:
+    cluster_id:
+      type: uuid
+  endpoints:
+    list:
+      path: ""
+      method: GET
+      request:
+        name: ListServersRequest
+        query-parameters:
+          server_id: optional<string>
+          datacenter: optional<string>
+          pool: optional<localCommons.PoolType>
+          public_ip: optional<string>
+      response: ListServersResponse
+    taint:
+      path: /taint
+      method: POST
+      request:
+        name: TaintServersRequest
+        query-parameters:
+          server_id: optional<string>
+          datacenter: optional<string>
+          pool: optional<localCommons.PoolType>
+          public_ip: optional<string>
+
+types:
+  ListServersResponse:
+    properties:
+      servers: list<localCommons.Server>
+

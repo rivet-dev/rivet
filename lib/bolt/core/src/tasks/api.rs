@@ -1,5 +1,8 @@
 use anyhow::*;
-use rivet_api::{apis::admin_clusters_api, models};
+use rivet_api::{
+	apis::{admin_clusters_api, admin_clusters_servers_api},
+	models,
+};
 use serde_json::json;
 
 use crate::context::ProjectContext;
@@ -47,19 +50,35 @@ pub async fn get_cluster_server_ips(
 	server_id: Option<&str>,
 	pools: Option<&str>,
 ) -> Result<Vec<String>> {
-	let server_ips = admin_clusters_api::admin_clusters_get_server_ips(
-		&project_ctx.openapi_config_cloud().await?,
-		server_id,
-		pools
-			.map(|p| match p {
-				"job" => Ok(models::AdminPoolType::Job),
-				"gg" => Ok(models::AdminPoolType::Gg),
-				"ats" => Ok(models::AdminPoolType::Ats),
-				_ => Err(anyhow!("invalid pool type")),
-			})
-			.transpose()?,
-	)
-	.await?;
-
-	Ok(server_ips.ips)
+	todo!()
 }
+
+// pub struct ServerFilterQuery {
+// 	pool: Option<models::AdminClustersPoolType>,
+// 	datacenter: Option<String>,
+// 	public_ip: Option<String>,
+// }
+//
+// pub async fn get_cluster_server_ips(
+// 	project_ctx: &ProjectContext,
+// 	cluster_id: Uuid,
+// 	pool_type: Option<&str>,
+// 	datacenter_id: Option<&str>,
+// ) -> Result<Vec<String>> {
+// 	let server_ips = admin_clusters_servers_api::admin_clusters_servers_list(
+// 		&project_ctx.openapi_config_cloud().await?,
+// 		cluster_id,
+// 		datacenter_id.as_ref().map(String::as_str),
+// 		pool_type
+// 			.map(|p| match p {
+// 				"job" => Ok(models::AdminClustersPoolType::Job),
+// 				"gg" => Ok(models::AdminClustersPoolType::Gg),
+// 				"ats" => Ok(models::AdminClustersPoolType::Ats),
+// 				_ => Err(anyhow!("invalid pool type")),
+// 			})
+// 			.transpose()?,
+// 	)
+// 	.await?;
+//
+// 	Ok(server_ips.ips)
+// }

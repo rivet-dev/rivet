@@ -6,14 +6,13 @@ Method | HTTP request | Description
 ------------- | ------------- | -------------
 [**admin_clusters_datacenters_create**](AdminClustersDatacentersApi.md#admin_clusters_datacenters_create) | **POST** /admin/clusters/{cluster_id}/datacenters | 
 [**admin_clusters_datacenters_list**](AdminClustersDatacentersApi.md#admin_clusters_datacenters_list) | **GET** /admin/clusters/{cluster_id}/datacenters | 
-[**admin_clusters_datacenters_taint**](AdminClustersDatacentersApi.md#admin_clusters_datacenters_taint) | **GET** /admin/clusters/{cluster_id}/datacenters/{datacenter_id}/taint | 
 [**admin_clusters_datacenters_update**](AdminClustersDatacentersApi.md#admin_clusters_datacenters_update) | **PATCH** /admin/clusters/{cluster_id}/datacenters/{datacenter_id} | 
 
 
 
 ## admin_clusters_datacenters_create
 
-> crate::models::AdminClustersDatacentersCreateResponse admin_clusters_datacenters_create(cluster_id, admin_clusters_datacenters_create_request)
+> crate::models::AdminClustersCreateDatacenterResponse admin_clusters_datacenters_create(cluster_id, admin_clusters_create_datacenter_request)
 
 
 ### Parameters
@@ -22,11 +21,11 @@ Method | HTTP request | Description
 Name | Type | Description  | Required | Notes
 ------------- | ------------- | ------------- | ------------- | -------------
 **cluster_id** | **uuid::Uuid** |  | [required] |
-**admin_clusters_datacenters_create_request** | [**AdminClustersDatacentersCreateRequest**](AdminClustersDatacentersCreateRequest.md) |  | [required] |
+**admin_clusters_create_datacenter_request** | [**AdminClustersCreateDatacenterRequest**](AdminClustersCreateDatacenterRequest.md) |  | [required] |
 
 ### Return type
 
-[**crate::models::AdminClustersDatacentersCreateResponse**](AdminClustersDatacentersCreateResponse.md)
+[**crate::models::AdminClustersCreateDatacenterResponse**](AdminClustersCreateDatacenterResponse.md)
 
 ### Authorization
 
@@ -42,7 +41,7 @@ Name | Type | Description  | Required | Notes
 
 ## admin_clusters_datacenters_list
 
-> crate::models::AdminClustersDatacentersListResponse admin_clusters_datacenters_list(cluster_id)
+> crate::models::AdminClustersListDatacentersResponse admin_clusters_datacenters_list(cluster_id)
 
 
 Get datacenters of a cluster
@@ -56,36 +55,7 @@ Name | Type | Description  | Required | Notes
 
 ### Return type
 
-[**crate::models::AdminClustersDatacentersListResponse**](AdminClustersDatacentersListResponse.md)
-
-### Authorization
-
-[BearerAuth](../README.md#BearerAuth)
-
-### HTTP request headers
-
-- **Content-Type**: Not defined
-- **Accept**: application/json
-
-[[Back to top]](#) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to Model list]](../README.md#documentation-for-models) [[Back to README]](../README.md)
-
-
-## admin_clusters_datacenters_taint
-
-> admin_clusters_datacenters_taint(cluster_id, datacenter_id)
-
-
-### Parameters
-
-
-Name | Type | Description  | Required | Notes
-------------- | ------------- | ------------- | ------------- | -------------
-**cluster_id** | **uuid::Uuid** |  | [required] |
-**datacenter_id** | **String** |  | [required] |
-
-### Return type
-
- (empty response body)
+[**crate::models::AdminClustersListDatacentersResponse**](AdminClustersListDatacentersResponse.md)
 
 ### Authorization
 
@@ -101,7 +71,7 @@ Name | Type | Description  | Required | Notes
 
 ## admin_clusters_datacenters_update
 
-> admin_clusters_datacenters_update(cluster_id, datacenter_id, admin_clusters_datacenters_update_request)
+> admin_clusters_datacenters_update(cluster_id, datacenter_id, admin_clusters_update_datacenter_request)
 
 
 ### Parameters
@@ -111,7 +81,7 @@ Name | Type | Description  | Required | Notes
 ------------- | ------------- | ------------- | ------------- | -------------
 **cluster_id** | **uuid::Uuid** |  | [required] |
 **datacenter_id** | **uuid::Uuid** |  | [required] |
-**admin_clusters_datacenters_update_request** | [**AdminClustersDatacentersUpdateRequest**](AdminClustersDatacentersUpdateRequest.md) |  | [required] |
+**admin_clusters_update_datacenter_request** | [**AdminClustersUpdateDatacenterRequest**](AdminClustersUpdateDatacenterRequest.md) |  | [required] |
 
 ### Return type
 

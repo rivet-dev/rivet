@@ -62,11 +62,6 @@ enum SubCommand {
 		#[clap(subcommand)]
 		command: terraform::SubCommand,
 	},
-	/// Provides SSH access to provisioned servers.
-	Ssh {
-		#[clap(subcommand)]
-		command: ssh::SubCommand,
-	},
 	/// Manages databases for services.
 	#[clap(alias = "db")]
 	Database {
@@ -130,7 +125,6 @@ async fn main_inner() -> Result<std::process::ExitCode> {
 		SubCommand::Secret { command } => command.execute(ctx).await?,
 		SubCommand::Output { command } => command.execute(ctx).await?,
 		SubCommand::Terraform { command } => command.execute(ctx).await?,
-		SubCommand::Ssh { command } => command.execute(ctx).await?,
 		SubCommand::Database { command } => command.execute(ctx).await?,
 		SubCommand::Cluster { command } => command.execute(ctx).await?,
 		SubCommand::Admin { command } => command.execute(ctx).await?,

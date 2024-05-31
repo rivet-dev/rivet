@@ -27,7 +27,7 @@ export declare class Datacenters {
      * @throws {@link Rivet.NotFoundError}
      * @throws {@link Rivet.BadRequestError}
      */
-    list(clusterId: string, requestOptions?: Datacenters.RequestOptions): Promise<Rivet.admin.clusters.datacenters.ListResponse>;
+    list(clusterId: string, requestOptions?: Datacenters.RequestOptions): Promise<Rivet.admin.clusters.ListDatacentersResponse>;
     /**
      * @throws {@link Rivet.InternalError}
      * @throws {@link Rivet.RateLimitError}
@@ -36,7 +36,7 @@ export declare class Datacenters {
      * @throws {@link Rivet.NotFoundError}
      * @throws {@link Rivet.BadRequestError}
      */
-    create(clusterId: string, request: Rivet.admin.clusters.datacenters.CreateRequest, requestOptions?: Datacenters.RequestOptions): Promise<Rivet.admin.clusters.datacenters.CreateResponse>;
+    create(clusterId: string, request: Rivet.admin.clusters.CreateDatacenterRequest, requestOptions?: Datacenters.RequestOptions): Promise<Rivet.admin.clusters.CreateDatacenterResponse>;
     /**
      * @throws {@link Rivet.InternalError}
      * @throws {@link Rivet.RateLimitError}
@@ -45,15 +45,6 @@ export declare class Datacenters {
      * @throws {@link Rivet.NotFoundError}
      * @throws {@link Rivet.BadRequestError}
      */
-    update(clusterId: string, datacenterId: string, request: Rivet.admin.clusters.datacenters.UpdateRequest, requestOptions?: Datacenters.RequestOptions): Promise<void>;
-    /**
-     * @throws {@link Rivet.InternalError}
-     * @throws {@link Rivet.RateLimitError}
-     * @throws {@link Rivet.ForbiddenError}
-     * @throws {@link Rivet.UnauthorizedError}
-     * @throws {@link Rivet.NotFoundError}
-     * @throws {@link Rivet.BadRequestError}
-     */
-    taint(clusterId: string, datacenterId: string, requestOptions?: Datacenters.RequestOptions): Promise<void>;
+    update(clusterId: string, datacenterId: string, request: Rivet.admin.clusters.UpdateDatacenterRequest, requestOptions?: Datacenters.RequestOptions): Promise<void>;
     protected _getAuthorizationHeader(): Promise<string | undefined>;
 }

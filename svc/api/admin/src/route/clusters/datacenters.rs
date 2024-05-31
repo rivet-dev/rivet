@@ -12,7 +12,7 @@ pub async fn list(
 	ctx: Ctx<Auth>,
 	cluster_id: Uuid,
 	_watch_index: WatchIndexQuery,
-) -> GlobalResult<models::AdminClustersDatacentersListResponse> {
+) -> GlobalResult<models::AdminClustersListDatacentersResponse> {
 	let response = op!([ctx] cluster_datacenter_list {
 		cluster_ids: vec![cluster_id.into()],
 	})
@@ -26,18 +26,18 @@ pub async fn list(
 	.await?
 	.datacenters
 	.into_iter()
-	.map(models::AdminDatacenter::api_try_from)
+	.map(models::AdminClustersDatacenter::api_try_from)
 	.collect::<GlobalResult<Vec<_>>>()?;
 
-	Ok(models::AdminClustersDatacentersListResponse { datacenters })
+	Ok(models::AdminClustersListDatacentersResponse { datacenters })
 }
 
 // MARK: POST /clusters/{cluster_id}/datacenters
 pub async fn create(
 	ctx: Ctx<Auth>,
 	cluster_id: Uuid,
-	body: models::AdminClustersDatacentersCreateRequest,
-) -> GlobalResult<models::AdminClustersDatacentersCreateResponse> {
+	body: models::AdminClustersCreateDatacenterRequest,
+) -> GlobalResult<models::AdminClustersCreateDatacenterResponse> {
 	// Make sure the cluster exists
 	let clusters = op!([ctx] cluster_get {
 		cluster_ids: vec![cluster_id.into()],
@@ -100,38 +100,7 @@ pub async fn create(
 	})
 	.await?;
 
-	Ok(models::AdminClustersDatacentersCreateResponse { datacenter_id })
-}
-
-// MARK: GET /clusters/{cluster_id}/datacenters/{datacenter_id}/taint
-pub async fn taint(
-	ctx: Ctx<Auth>,
-	cluster_id: Uuid,
-	datacenter_id: Uuid,
-	_watch_index: WatchIndexQuery,
-) -> GlobalResult<Value> {
-	// Make sure that the datacenter is part of the cluster
-	let datacenters = op!([ctx] cluster_datacenter_get {
-		datacenter_ids: vec![datacenter_id.into()],
-	})
-	.await?
-	.datacenters;
-
-	let datacenter = match datacenters.first() {
-		Some(d) => d,
-		None => bail_with!(CLUSTER_DATACENTER_NOT_FOUND),
-	};
-
-	if datacenter.cluster_id != Some(cluster_id.into()) {
-		bail_with!(CLUSTER_DATACENTER_NOT_IN_CLUSTER);
-	}
-
-	msg!([ctx] cluster::msg::datacenter_taint(datacenter_id) -> cluster::msg::datacenter_scale {
-		datacenter_id: Some(datacenter_id.into()),
-	})
-	.await?;
-
-	Ok(json!({}))
+	Ok(models::AdminClustersCreateDatacenterResponse { datacenter_id })
 }
 
 // MARK: PUT /admin/clusters/{cluster_id}/datacenters/{datacenter_id}
@@ -139,7 +108,7 @@ pub async fn update(
 	ctx: Ctx<Auth>,
 	cluster_id: Uuid,
 	datacenter_id: Uuid,
-	body: models::AdminClustersDatacentersUpdateRequest,
+	body: models::AdminClustersUpdateDatacenterRequest,
 ) -> GlobalResult<Value> {
 	// Make sure that the datacenter is part of the cluster
 	let datacenters = op!([ctx] cluster_datacenter_get {

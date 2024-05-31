@@ -7,13 +7,12 @@ import (
 	context "context"
 	json "encoding/json"
 	errors "errors"
-	fmt "fmt"
 	io "io"
 	http "net/http"
-	url "net/url"
 	sdk "sdk"
 	clusters "sdk/admin/clusters"
-	datacentersclient "sdk/admin/clusters/datacenters/client"
+	datacenters "sdk/admin/clusters/datacenters"
+	servers "sdk/admin/clusters/servers"
 	core "sdk/core"
 )
 
@@ -22,7 +21,8 @@ type Client struct {
 	caller  *core.Caller
 	header  http.Header
 
-	Datacenters *datacentersclient.Client
+	Datacenters *datacenters.Client
+	Servers     *servers.Client
 }
 
 func NewClient(opts ...core.ClientOption) *Client {
@@ -34,100 +34,13 @@ func NewClient(opts ...core.ClientOption) *Client {
 		baseURL:     options.BaseURL,
 		caller:      core.NewCaller(options.HTTPClient),
 		header:      options.ToHeader(),
-		Datacenters: datacentersclient.NewClient(opts...),
+		Datacenters: datacenters.NewClient(opts...),
+		Servers:     servers.NewClient(opts...),
 	}
-}
-
-func (c *Client) GetServerIps(ctx context.Context, request *clusters.GetServerIpsRequest) (*clusters.GetServerIpsResponse, error) {
-	baseURL := "https://api.rivet.gg"
-	if c.baseURL != "" {
-		baseURL = c.baseURL
-	}
-	endpointURL := baseURL + "/" + "admin/clusters/server_ips"
-
-	queryParams := make(url.Values)
-	if request.ServerId != nil {
-		queryParams.Add("server_id", fmt.Sprintf("%v", *request.ServerId))
-	}
-	if request.Pool != nil {
-		queryParams.Add("pool", fmt.Sprintf("%v", *request.Pool))
-	}
-	if len(queryParams) > 0 {
-		endpointURL += "?" + queryParams.Encode()
-	}
-
-	errorDecoder := func(statusCode int, body io.Reader) error {
-		raw, err := io.ReadAll(body)
-		if err != nil {
-			return err
-		}
-		apiError := core.NewAPIError(statusCode, errors.New(string(raw)))
-		decoder := json.NewDecoder(bytes.NewReader(raw))
-		switch statusCode {
-		case 500:
-			value := new(sdk.InternalError)
-			value.APIError = apiError
-			if err := decoder.Decode(value); err != nil {
-				return apiError
-			}
-			return value
-		case 429:
-			value := new(sdk.RateLimitError)
-			value.APIError = apiError
-			if err := decoder.Decode(value); err != nil {
-				return apiError
-			}
-			return value
-		case 403:
-			value := new(sdk.ForbiddenError)
-			value.APIError = apiError
-			if err := decoder.Decode(value); err != nil {
-				return apiError
-			}
-			return value
-		case 408:
-			value := new(sdk.UnauthorizedError)
-			value.APIError = apiError
-			if err := decoder.Decode(value); err != nil {
-				return apiError
-			}
-			return value
-		case 404:
-			value := new(sdk.NotFoundError)
-			value.APIError = apiError
-			if err := decoder.Decode(value); err != nil {
-				return apiError
-			}
-			return value
-		case 400:
-			value := new(sdk.BadRequestError)
-			value.APIError = apiError
-			if err := decoder.Decode(value); err != nil {
-				return apiError
-			}
-			return value
-		}
-		return apiError
-	}
-
-	var response *clusters.GetServerIpsResponse
-	if err := c.caller.Call(
-		ctx,
-		&core.CallParams{
-			URL:          endpointURL,
-			Method:       http.MethodGet,
-			Headers:      c.header,
-			Response:     &response,
-			ErrorDecoder: errorDecoder,
-		},
-	); err != nil {
-		return nil, err
-	}
-	return response, nil
 }
 
 // Get clusters
-func (c *Client) List(ctx context.Context) (*clusters.ListResponse, error) {
+func (c *Client) List(ctx context.Context) (*clusters.ListClustersResponse, error) {
 	baseURL := "https://api.rivet.gg"
 	if c.baseURL != "" {
 		baseURL = c.baseURL
@@ -188,7 +101,7 @@ func (c *Client) List(ctx context.Context) (*clusters.ListResponse, error) {
 		return apiError
 	}
 
-	var response *clusters.ListResponse
+	var response *clusters.ListClustersResponse
 	if err := c.caller.Call(
 		ctx,
 		&core.CallParams{
@@ -205,7 +118,7 @@ func (c *Client) List(ctx context.Context) (*clusters.ListResponse, error) {
 }
 
 // Create a new cluster
-func (c *Client) Create(ctx context.Context, request *clusters.CreateRequest) (*clusters.CreateResponse, error) {
+func (c *Client) Create(ctx context.Context, request *clusters.CreateClusterRequest) (*clusters.CreateClusterResponse, error) {
 	baseURL := "https://api.rivet.gg"
 	if c.baseURL != "" {
 		baseURL = c.baseURL
@@ -266,7 +179,7 @@ func (c *Client) Create(ctx context.Context, request *clusters.CreateRequest) (*
 		return apiError
 	}
 
-	var response *clusters.CreateResponse
+	var response *clusters.CreateClusterResponse
 	if err := c.caller.Call(
 		ctx,
 		&core.CallParams{

@@ -6,29 +6,28 @@ import (
 	json "encoding/json"
 	fmt "fmt"
 	uuid "github.com/google/uuid"
-	admin "sdk/admin"
 	core "sdk/core"
 )
 
-type CreateRequest struct {
+type CreateClusterRequest struct {
 	NameId      string     `json:"name_id"`
 	OwnerTeamId *uuid.UUID `json:"owner_team_id,omitempty"`
 
 	_rawJSON json.RawMessage
 }
 
-func (c *CreateRequest) UnmarshalJSON(data []byte) error {
-	type unmarshaler CreateRequest
+func (c *CreateClusterRequest) UnmarshalJSON(data []byte) error {
+	type unmarshaler CreateClusterRequest
 	var value unmarshaler
 	if err := json.Unmarshal(data, &value); err != nil {
 		return err
 	}
-	*c = CreateRequest(value)
+	*c = CreateClusterRequest(value)
 	c._rawJSON = json.RawMessage(data)
 	return nil
 }
 
-func (c *CreateRequest) String() string {
+func (c *CreateClusterRequest) String() string {
 	if len(c._rawJSON) > 0 {
 		if value, err := core.StringifyJSON(c._rawJSON); err == nil {
 			return value
@@ -40,24 +39,24 @@ func (c *CreateRequest) String() string {
 	return fmt.Sprintf("%#v", c)
 }
 
-type CreateResponse struct {
+type CreateClusterResponse struct {
 	ClusterId uuid.UUID `json:"cluster_id"`
 
 	_rawJSON json.RawMessage
 }
 
-func (c *CreateResponse) UnmarshalJSON(data []byte) error {
-	type unmarshaler CreateResponse
+func (c *CreateClusterResponse) UnmarshalJSON(data []byte) error {
+	type unmarshaler CreateClusterResponse
 	var value unmarshaler
 	if err := json.Unmarshal(data, &value); err != nil {
 		return err
 	}
-	*c = CreateResponse(value)
+	*c = CreateClusterResponse(value)
 	c._rawJSON = json.RawMessage(data)
 	return nil
 }
 
-func (c *CreateResponse) String() string {
+func (c *CreateClusterResponse) String() string {
 	if len(c._rawJSON) > 0 {
 		if value, err := core.StringifyJSON(c._rawJSON); err == nil {
 			return value
@@ -69,53 +68,24 @@ func (c *CreateResponse) String() string {
 	return fmt.Sprintf("%#v", c)
 }
 
-type GetServerIpsResponse struct {
-	Ips []string `json:"ips,omitempty"`
+type ListClustersResponse struct {
+	Clusters []*Cluster `json:"clusters,omitempty"`
 
 	_rawJSON json.RawMessage
 }
 
-func (g *GetServerIpsResponse) UnmarshalJSON(data []byte) error {
-	type unmarshaler GetServerIpsResponse
+func (l *ListClustersResponse) UnmarshalJSON(data []byte) error {
+	type unmarshaler ListClustersResponse
 	var value unmarshaler
 	if err := json.Unmarshal(data, &value); err != nil {
 		return err
 	}
-	*g = GetServerIpsResponse(value)
-	g._rawJSON = json.RawMessage(data)
-	return nil
-}
-
-func (g *GetServerIpsResponse) String() string {
-	if len(g._rawJSON) > 0 {
-		if value, err := core.StringifyJSON(g._rawJSON); err == nil {
-			return value
-		}
-	}
-	if value, err := core.StringifyJSON(g); err == nil {
-		return value
-	}
-	return fmt.Sprintf("%#v", g)
-}
-
-type ListResponse struct {
-	Clusters []*admin.Cluster `json:"clusters,omitempty"`
-
-	_rawJSON json.RawMessage
-}
-
-func (l *ListResponse) UnmarshalJSON(data []byte) error {
-	type unmarshaler ListResponse
-	var value unmarshaler
-	if err := json.Unmarshal(data, &value); err != nil {
-		return err
-	}
-	*l = ListResponse(value)
+	*l = ListClustersResponse(value)
 	l._rawJSON = json.RawMessage(data)
 	return nil
 }
 
-func (l *ListResponse) String() string {
+func (l *ListClustersResponse) String() string {
 	if len(l._rawJSON) > 0 {
 		if value, err := core.StringifyJSON(l._rawJSON); err == nil {
 			return value

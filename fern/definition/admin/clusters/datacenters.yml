@@ -1,0 +1,54 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/fern-api/fern/main/fern.schema.json
+
+imports:
+  localCommons: ./common.yml
+
+service:
+  auth: true
+  base-path: /admin/clusters/{cluster_id}/datacenters
+  path-parameters:
+    cluster_id:
+      type: uuid
+  endpoints:
+    list:
+      path: ""
+      method: GET
+      docs: Get datacenters of a cluster
+      response: ListDatacentersResponse
+    create:
+      path: ""
+      method: POST
+      request:
+        body: CreateDatacenterRequest
+      response: CreateDatacenterResponse
+    update:
+      path: /{datacenter_id}
+      path-parameters:
+        datacenter_id:
+          type: uuid
+      method: PATCH
+      request:
+        body: UpdateDatacenterRequest
+
+types:
+  ListDatacentersResponse:
+    properties:
+      datacenters: list<localCommons.Datacenter>
+  CreateDatacenterRequest:
+    properties:
+      display_name: string
+      name_id: string
+      provider: localCommons.Provider
+      provider_datacenter_id: string
+      build_delivery_method: localCommons.BuildDeliveryMethod
+  CreateDatacenterResponse:
+    properties:
+      datacenter_id: uuid
+  UpdateDatacenterRequest:
+    properties:
+      pool_type: localCommons.PoolType
+      hardware: list<localCommons.Hardware>
+      desired_count: optional<integer>
+      max_count: optional<integer>
+      drain_timeout: optional<long>
+

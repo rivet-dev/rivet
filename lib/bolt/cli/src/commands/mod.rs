@@ -10,7 +10,6 @@ pub mod init;
 pub mod logs;
 pub mod output;
 pub mod secret;
-pub mod ssh;
 pub mod terraform;
 pub mod test;
 pub mod up;

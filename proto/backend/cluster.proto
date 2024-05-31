@@ -59,12 +59,13 @@ enum BuildDeliveryMethod {
 
 message Server {
     rivet.common.Uuid server_id = 1;
-    rivet.common.Uuid datacenter_id = 2;
-    PoolType pool_type = 3;
-    optional string vlan_ip = 4;
-    optional string public_ip = 5;
+    rivet.common.Uuid cluster_id = 2;
+    rivet.common.Uuid datacenter_id = 3;
+    PoolType pool_type = 4;
+    optional string vlan_ip = 5;
+    optional string public_ip = 6;
 
-    optional int64 cloud_destroy_ts = 6;
+    optional int64 cloud_destroy_ts = 7;
 
     // TODO: Add the rest of the sql columns
 }
@@ -73,4 +74,21 @@ enum TlsState {
     CREATING = 0;
     ACTIVE = 1;
     RENEWING = 2;
+}
+
+message ServerFilter {
+	bool filter_server_ids = 1;
+	repeated rivet.common.Uuid server_ids = 2;
+
+	bool filter_cluster_ids = 3;
+	repeated rivet.common.Uuid cluster_ids = 4;
+
+	bool filter_datacenter_ids = 5;
+	repeated rivet.common.Uuid datacenter_ids = 6;
+
+	bool filter_pool_types = 7;
+	repeated PoolType pool_types = 8;
+
+	bool filter_public_ips = 9;
+	repeated string public_ips = 10;
 }

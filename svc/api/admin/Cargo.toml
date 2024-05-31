@@ -47,6 +47,7 @@ cluster-server-get = { path = "../../pkg/cluster/ops/server-get" }
 cluster-server-list = { path = "../../pkg/cluster/ops/server-list" }
 cluster-datacenter-list = { path = "../../pkg/cluster/ops/datacenter-list" }
 cluster-datacenter-get = { path = "../../pkg/cluster/ops/datacenter-get" }
+cluster-datacenter-resolve-for-name-id = { path = "../../pkg/cluster/ops/datacenter-resolve-for-name-id" }
 token-create = { path = "../../pkg/token/ops/create" }
 
 [dev-dependencies]

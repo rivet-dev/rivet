@@ -4,6 +4,7 @@
 import * as Rivet from "../../../../../../../..";
 export interface TaintServersRequest {
     serverId?: string;
-    poolType?: Rivet.admin.clusters.PoolType;
-    datacenterId?: string;
+    datacenter?: string;
+    pool?: Rivet.admin.clusters.PoolType;
+    publicIp?: string;
 }

@@ -104,6 +104,7 @@ dependencies = [
  "chrono",
  "cluster-datacenter-get",
  "cluster-datacenter-list",
+ "cluster-datacenter-resolve-for-name-id",
  "cluster-get",
  "cluster-list",
  "cluster-server-get",

@@ -1,7 +1,6 @@
 pub mod create;
 pub mod datacenter_create;
 pub mod datacenter_scale;
-pub mod datacenter_taint;
 pub mod datacenter_tls_issue;
 pub mod datacenter_update;
 pub mod game_link;
@@ -14,13 +13,14 @@ pub mod server_drain;
 pub mod server_install;
 pub mod server_install_complete;
 pub mod server_provision;
+pub mod server_taint;
 pub mod server_undrain;
 
 chirp_worker::workers![
+	server_taint,
 	create,
 	datacenter_create,
 	datacenter_scale,
-	datacenter_taint,
 	datacenter_tls_issue,
 	datacenter_update,
 	game_link,
