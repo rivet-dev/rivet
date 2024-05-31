@@ -877,6 +877,7 @@ async fn resolve_image_artifact_url(
 						datacenter_id = $1 AND
 						pool_type = $2 AND
 						vlan_ip IS NOT NULL AND
+						install_complete_ts IS NOT NULL AND
 						drain_ts IS NULL AND
 						cloud_destroy_ts IS NULL	
 				)
