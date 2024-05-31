@@ -402,7 +402,7 @@ resource "kubernetes_stateful_set" "nomad_server" {
 				access_modes = ["ReadWriteOnce"]
 				resources {
 					requests = {
-						storage = var.deploy_method_cluster ? "64Gi" : "1Gi"
+						storage = var.deploy_method_cluster ? "100Gi" : "1Gi"
 					}
 				}
 				storage_class_name = var.k8s_storage_class
