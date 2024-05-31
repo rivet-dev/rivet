@@ -212,6 +212,9 @@ async fn get_custom_image(
 	datacenter_id: Uuid,
 	pool_type: PoolType,
 ) -> GlobalResult<(Option<String>, bool)> {
+	// TODO(RVTEE-107): Disable prebake images completely until Linode fixes the limits
+	return Ok((None, false));
+
 	let provider = backend::cluster::Provider::Linode;
 
 	// Get the custom image id for this server, or insert a record and start creating one
