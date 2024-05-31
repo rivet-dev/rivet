@@ -73,6 +73,11 @@ enum SubCommand {
 		#[clap(subcommand)]
 		command: db::SubCommand,
 	},
+	/// Cluster related operations
+	Cluster {
+		#[clap(subcommand)]
+		command: cluster::SubCommand,
+	},
 	/// Provides admin functionality.
 	Admin {
 		#[clap(subcommand)]
@@ -127,6 +132,7 @@ async fn main_inner() -> Result<std::process::ExitCode> {
 		SubCommand::Terraform { command } => command.execute(ctx).await?,
 		SubCommand::Ssh { command } => command.execute(ctx).await?,
 		SubCommand::Database { command } => command.execute(ctx).await?,
+		SubCommand::Cluster { command } => command.execute(ctx).await?,
 		SubCommand::Admin { command } => command.execute(ctx).await?,
 	}
 

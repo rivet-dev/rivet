@@ -6,8 +6,6 @@ use bolt_core::{
 };
 use clap::Parser;
 
-mod cluster;
-
 #[derive(Parser)]
 pub enum SubCommand {
 	/// Generates a login link for the given access token. Automatically turns the existing user into an
@@ -15,11 +13,6 @@ pub enum SubCommand {
 	Login {
 		#[clap(default_value = "root")]
 		name: String,
-	},
-	/// Cluster related operations
-	Cluster {
-		#[clap(subcommand)]
-		command: cluster::SubCommand,
 	},
 }
 
@@ -38,7 +31,6 @@ impl SubCommand {
 
 				Ok(())
 			}
-			Self::Cluster { command } => command.execute(ctx).await,
 		}
 	}
 }
