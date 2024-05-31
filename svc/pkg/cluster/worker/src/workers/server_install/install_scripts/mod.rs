@@ -14,6 +14,7 @@ pub async fn gen_install(
 	pool_type: backend::cluster::PoolType,
 	initialize_immediately: bool,
 	server_token: &str,
+	datacenter_id: Uuid,
 ) -> GlobalResult<String> {
 	// MARK: Common (pre)
 	let mut script = vec![
@@ -41,6 +42,7 @@ pub async fn gen_install(
 				initialize_immediately,
 				server_token,
 				GG_TRAEFIK_INSTANCE_NAME,
+				datacenter_id,
 			)?);
 		}
 		backend::cluster::PoolType::Ats => {

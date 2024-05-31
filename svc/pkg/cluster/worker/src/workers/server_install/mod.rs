@@ -13,6 +13,8 @@ mod install_scripts;
 
 #[worker(name = "cluster-server-install", timeout = 200)]
 async fn worker(ctx: &OperationContext<cluster::msg::server_install::Message>) -> GlobalResult<()> {
+	let datacenter_id = unwrap!(ctx.datacenter_id).as_uuid();
+
 	// Check for stale message
 	if ctx.req_dt() > util::duration::hours(1) {
 		tracing::warn!("discarding stale message");
@@ -71,8 +73,13 @@ async fn worker(ctx: &OperationContext<cluster::msg::server_install::Message>) -
 	.await?;
 	let server_token = &unwrap_ref!(token_res.token).token;
 
-	let install_script =
-		install_scripts::gen_install(pool_type, ctx.initialize_immediately, server_token).await?;
+	let install_script = install_scripts::gen_install(
+		pool_type,
+		ctx.initialize_immediately,
+		server_token,
+		datacenter_id,
+	)
+	.await?;
 	let hook_script = install_scripts::gen_hook(server_token).await?;
 	let initialize_script = install_scripts::gen_initialize(pool_type).await?;
 
@@ -161,7 +168,6 @@ async fn worker(ctx: &OperationContext<cluster::msg::server_install::Message>) -
 		.await?;
 
 		// Scale to get rid of tainted servers
-		let datacenter_id = unwrap_ref!(ctx.datacenter_id).as_uuid();
 		msg!([ctx] @recursive cluster::msg::datacenter_scale(datacenter_id) {
 			datacenter_id: ctx.datacenter_id,
 		})
