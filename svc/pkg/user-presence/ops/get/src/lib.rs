@@ -38,15 +38,18 @@ async fn handle(
 			);
 		}
 
-		pipe.query_async::<_, Vec<(
-			Option<String>,
-			Option<String>,
-			Option<String>,
-			Option<String>,
-			Option<String>,
-		)>>(&mut redis)
+		pipe.query_async::<_, Vec<
+			Vec<(
+				Option<String>,
+				Option<String>,
+				Option<String>,
+				Option<String>,
+				Option<String>,
+			)>,
+		>>(&mut redis)
 			.await?
 			.into_iter()
+			.flatten()
 			.map(
 				|(user_id, game_id, message, public_metadata, friend_metadata)| {
 					if user_id.is_none() {
@@ -87,9 +90,10 @@ async fn handle(
 			);
 		}
 
-		pipe.query_async::<_, Vec<(Option<String>, Option<i64>, Option<i64>)>>(&mut redis)
+		pipe.query_async::<_, Vec<Vec<(Option<String>, Option<i64>, Option<i64>)>>>(&mut redis)
 			.await?
 			.into_iter()
+			.flatten()
 			.map(|(user_id, update_ts, status)| {
 				if user_id.is_none() {
 					return GlobalResult::Ok(None);
