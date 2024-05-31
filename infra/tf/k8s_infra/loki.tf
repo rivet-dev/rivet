@@ -16,16 +16,6 @@ resource "kubernetes_namespace" "loki" {
 	}
 }
 
-resource "kubernetes_priority_class" "loki_priority" {
-	count = var.prometheus_enabled ? 1 : 0
-
-	metadata {
-		name = "loki-priority"
-	}
-
-	value = 40
-}
-
 resource "helm_release" "loki" {
 	count = var.prometheus_enabled ? 1 : 0
 
@@ -36,7 +26,7 @@ resource "helm_release" "loki" {
 	version = "5.36.0"
 	values = [yamlencode({
 		global = {
-			priorityClassName = kubernetes_priority_class.loki_priority.0.metadata.0.name
+			priorityClassName = kubernetes_priority_class.monitoring_priority.metadata.0.name
 		}
 		loki = {
 			auth_enabled = false

@@ -16,16 +16,6 @@ resource "kubernetes_namespace" "nsfw_api" {
 	}
 }
 
-resource "kubernetes_priority_class" "nsfw_api_priority" {
-	count = var.nsfw_api_enabled ? 1 : 0
-
-	metadata {
-		name = "nsfw-api-priority"
-	}
-
-	value = 40
-}
-
 resource "kubernetes_deployment" "nsfw_api" {
 	count = var.nsfw_api_enabled ? 1 : 0
 	depends_on = [null_resource.daemons, module.docker_auth]
@@ -52,7 +42,7 @@ resource "kubernetes_deployment" "nsfw_api" {
 			}
 
 			spec {
-				priority_class_name = kubernetes_priority_class.nsfw_api_priority.0.metadata.0.name
+				priority_class_name = kubernetes_priority_class.service_priority.metadata.0.name
 				
 				# MARK: Docker auth
 				image_pull_secrets {

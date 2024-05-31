@@ -30,6 +30,7 @@ resource "helm_release" "grafana" {
 	chart = "grafana"
 	version = "7.3.9"
 	values = [yamlencode({
+		priorityClassName = "monitoring-priority"
 		"grafana.ini" = {
 			auth = {
 				disable_login_form = true

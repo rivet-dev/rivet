@@ -107,13 +107,6 @@ resource "kubernetes_service" "traffic_server" {
 	}
 }
 
-resource "kubernetes_priority_class" "traffic_server_priority" {
-	metadata {
-		name = "traffic-server-priority"
-	}
-	value = 40
-}
-
 resource "kubernetes_stateful_set" "traffic_server" {
 	depends_on = [null_resource.daemons, module.docker_auth]
 
@@ -148,7 +141,7 @@ resource "kubernetes_stateful_set" "traffic_server" {
 			}
 
 			spec {
-				priority_class_name = kubernetes_priority_class.traffic_server_priority.metadata.0.name
+				priority_class_name = kubernetes_priority_class.service_priority.metadata.0.name
 
 				security_context {
 					run_as_user = 1000

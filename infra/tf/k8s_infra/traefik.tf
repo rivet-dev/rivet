@@ -23,13 +23,6 @@ locals {
 	})
 }
 
-resource "kubernetes_priority_class" "traefik_priority" {
-	metadata {
-		name = "traefik-priority"
-	}
-	value = 40
-}
-
 resource "helm_release" "traefik" {
 	depends_on = [null_resource.daemons]
 
@@ -56,7 +49,7 @@ resource "helm_release" "traefik" {
 			"traefik-instance" = "main"
 		}
 
-		priorityClassName = kubernetes_priority_class.traefik_priority.metadata.0.name
+		priorityClassName = kubernetes_priority_class.service_priority.metadata.0.name
 		resources = var.limit_resources ? {
 			limits = {
 				memory = "${local.service_traefik.resources.memory}Mi"

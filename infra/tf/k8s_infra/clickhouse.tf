@@ -27,16 +27,6 @@ resource "kubernetes_namespace" "clickhouse" {
 	}
 }
 
-resource "kubernetes_priority_class" "clickhouse_priority" {
-	count = local.clickhouse_enabled ? 1 : 0
-
-	metadata {
-		name = "clickhouse-priority"
-	}
-
-	value = 40
-}
-
 resource "helm_release" "clickhouse" {
 	count = local.clickhouse_enabled ? 1 : 0
 	depends_on = [null_resource.daemons]
@@ -57,7 +47,7 @@ resource "helm_release" "clickhouse" {
 			replicaCount = 1
 		}
 
-		priorityClassName = kubernetes_priority_class.clickhouse_priority.0.metadata.0.name
+		priorityClassName = kubernetes_priority_class.stateful_priority.metadata.0.name
 		resources = var.limit_resources ? {
 			limits = {
 				memory = "${local.service_clickhouse.resources.memory}Mi"

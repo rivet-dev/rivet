@@ -20,7 +20,7 @@ locals {
 	redis_node_config = {
 		for k, v in var.redis_dbs:
 		k => {
-			priorityClassName = kubernetes_priority_class.redis_priority.metadata.0.name
+			priorityClassName = kubernetes_priority_class.stateful_priority.metadata.0.name
 			resources = var.limit_resources ? {
 				limits = {
 					memory = "${local.service_redis.resources.memory}Mi"
@@ -51,13 +51,6 @@ resource "kubernetes_namespace" "redis" {
 	metadata {
 		name = "redis-${each.key}"
 	}
-}
-
-resource "kubernetes_priority_class" "redis_priority" {
-	metadata {
-		name = "redis-priority"
-	}
-	value = 40
 }
 
 resource "helm_release" "redis" {

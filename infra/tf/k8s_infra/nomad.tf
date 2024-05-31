@@ -190,16 +190,6 @@ resource "kubectl_manifest" "nomad_server_monitor" {
 	})
 }
 
-resource "kubernetes_priority_class" "nomad_priority" {
-	count = var.edge_enabled ? 1 : 0
-
-	metadata {
-		name = "nomad-priority"
-	}
-
-	value = 40
-}
-
 resource "kubernetes_stateful_set" "nomad_server" {
 	count = var.edge_enabled ? 1 : 0
 	depends_on = [null_resource.daemons]
@@ -234,7 +224,7 @@ resource "kubernetes_stateful_set" "nomad_server" {
 			}
 
 			spec {
-				priority_class_name = kubernetes_priority_class.nomad_priority.0.metadata.0.name
+				priority_class_name = kubernetes_priority_class.stateful_priority.metadata.0.name
 
 				security_context {
 					run_as_user = 0

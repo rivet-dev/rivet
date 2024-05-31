@@ -14,14 +14,7 @@ resource "kubernetes_namespace" "nats" {
 	}
 }
 
-resource "kubernetes_priority_class" "nats_priority" {
-	metadata {
-		name = "nats-priority"
-	}
-
-	value = 40
-}
-
+# TODO(RVTEE-105): Fix priority class
 resource "helm_release" "nats" {
 	depends_on = [null_resource.daemons]
 
@@ -35,11 +28,6 @@ resource "helm_release" "nats" {
 			cluster = {
 				enabled = true
 				replicas = local.service_nats.count
-			}
-		}
-		podTemplate = {
-			merge = {
-				priorityClassName = kubernetes_priority_class.nats_priority.metadata.0.name
 			}
 		}
 		container = {

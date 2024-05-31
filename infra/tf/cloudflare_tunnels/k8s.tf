@@ -47,6 +47,8 @@ resource "kubernetes_deployment" "cloudflared" {
 			}
 
 			spec {
+				priority_class_name = "service-priority"
+
 				container {
 					image = "cloudflare/cloudflared:2023.8.2"
 					name = "cloudflared"

@@ -68,15 +68,6 @@ resource "kubernetes_namespace" "traefik_tunnel" {
 	}
 }
 
-resource "kubernetes_priority_class" "traefik_tunnel_priority" {
-	count = var.edge_enabled ? 1 : 0
-
-	metadata {
-		name = "traefik-tunnel-priority"
-	}
-	value = 40
-}
-
 resource "helm_release" "traefik_tunnel" {
 	count = var.edge_enabled ? 1 : 0
 
@@ -114,7 +105,7 @@ resource "helm_release" "traefik_tunnel" {
 			}
 		}
 
-		priorityClassName = kubernetes_priority_class.traefik_tunnel_priority.0.metadata.0.name
+		priorityClassName = kubernetes_priority_class.service_priority.metadata.0.name
 
 		tlsOptions = {
 			"ingress-tunnel" = {

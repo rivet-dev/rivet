@@ -24,14 +24,6 @@ resource "kubernetes_namespace" "cockroachdb" {
 	}
 }
 
-resource "kubernetes_priority_class" "cockroachdb_priority" {
-	metadata {
-		name = "cockroachdb-priority"
-	}
-
-	value = 40
-}
-
 # NOTE: Helm chart is no longer supported by CockroachDB. However, it's intended to be used only for development and it's the easiest to set up.
 resource "helm_release" "cockroachdb" {
 	depends_on = [null_resource.daemons]
@@ -46,7 +38,7 @@ resource "helm_release" "cockroachdb" {
 		statefulset = {
 			replicas = local.service_cockroachdb.count
 
-			priorityClassName = kubernetes_priority_class.cockroachdb_priority.metadata.0.name
+			priorityClassName = kubernetes_priority_class.stateful_priority.metadata.0.name
 
 			resources = var.limit_resources ? {
 				limits = {

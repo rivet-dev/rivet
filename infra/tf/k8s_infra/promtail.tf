@@ -16,15 +16,6 @@ resource "kubernetes_namespace" "promtail" {
 	}
 }
 
-resource "kubernetes_priority_class" "promtail_priority" {
-	count = var.prometheus_enabled ? 1 : 0
-
-	metadata {
-		name = "promtail-priority"
-	}
-	value = 40
-}
-
 resource "helm_release" "promtail" {
 	count = var.prometheus_enabled ? 1 : 0
 
@@ -146,7 +137,7 @@ resource "helm_release" "promtail" {
 			}
 		}
 
-		priorityClassName = kubernetes_priority_class.promtail_priority.0.metadata.0.name
+		priorityClassName = kubernetes_priority_class.daemon_priority.metadata.0.name
 		resources = var.limit_resources ? {
 			limits = {
 				memory = "${local.service_promtail.resources.memory}Mi"

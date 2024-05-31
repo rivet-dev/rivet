@@ -10,13 +10,6 @@ locals {
 	clickhouse_k8s = var.clickhouse_enabled && var.clickhouse_provider == "kubernetes"
 }
 
-resource "kubernetes_priority_class" "vector_priority" {
-	metadata {
-		name = "vector-priority"
-	}
-	value = 40
-}
-
 module "secrets" {
 	source = "../modules/secrets"
 
@@ -33,7 +26,7 @@ resource "helm_release" "vector" {
 	version = "0.29.0"
 	values = [yamlencode({
 		role = "Aggregator"
-		podPriorityClassName = kubernetes_priority_class.vector_priority.metadata.0.name
+		podPriorityClassName = "service-priority"
 		resources = var.limit_resources ? {
 			limits = {
 				memory = "${local.service_vector.resources.memory}Mi"

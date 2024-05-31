@@ -56,16 +56,6 @@ resource "kubernetes_namespace" "imagor" {
 	}
 }
 
-resource "kubernetes_priority_class" "imagor_priority" {
-	count = var.imagor_enabled ? 1 : 0
-
-	metadata {
-		name = "imagor-priority"
-	}
-
-	value = 35
-}
-
 resource "kubernetes_deployment" "imagor" {
 	count = var.imagor_enabled ? 1 : 0
 	depends_on = [null_resource.daemons, module.docker_auth]
@@ -92,7 +82,7 @@ resource "kubernetes_deployment" "imagor" {
 			}
 
 			spec {
-				priority_class_name = kubernetes_priority_class.imagor_priority.0.metadata.0.name
+				priority_class_name = kubernetes_priority_class.service_priority.metadata.0.name
 				
 				# MARK: Docker auth
 				image_pull_secrets {

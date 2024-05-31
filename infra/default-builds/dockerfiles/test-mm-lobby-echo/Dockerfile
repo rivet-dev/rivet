@@ -1,4 +1,4 @@
-FROM clux/muslrust:1.77.2 AS build
+FROM clux/muslrust:1.77.2-stable AS build
 RUN cargo new --bin /app
 WORKDIR /app
 COPY Cargo.toml ./

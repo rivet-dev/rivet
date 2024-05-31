@@ -364,18 +364,6 @@ pub async fn gen_svc(exec_ctx: &ExecServiceContext) -> Vec<serde_json::Value> {
 		}
 	});
 
-	// Create priority class
-	let priority_class_name = format!("{}-priority", service_name);
-	specs.push(json!({
-		"apiVersion": "scheduling.k8s.io/v1",
-		"kind": "PriorityClass",
-		"metadata": {
-			"name": priority_class_name,
-			"namespace": "rivet-service"
-		},
-		"value": svc_ctx.config().service.priority()
-	}));
-
 	let restart_policy = if matches!(run_context, RunContext::Test { .. }) {
 		"Never"
 	} else if spec_type == SpecType::Deployment {
@@ -395,7 +383,7 @@ pub async fn gen_svc(exec_ctx: &ExecServiceContext) -> Vec<serde_json::Value> {
 		config::ns::ClusterKind::Distributed { .. } => 30,
 	};
 	let pod_spec = json!({
-		"priorityClassName": priority_class_name,
+		"priorityClassName": "service-priority",
 		"restartPolicy": restart_policy,
 		"terminationGracePeriodSeconds": termination_grace_period,
 		"imagePullSecrets": [{
