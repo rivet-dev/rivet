@@ -137,8 +137,8 @@ async fn worker(
 			match nomad_client_new::apis::jobs_api::delete_job(
 				&NEW_NOMAD_CONFIG,
 				job_id,
-				None,
 				Some(&region.nomad_region),
+				None,
 				None,
 				None,
 				Some(false),
