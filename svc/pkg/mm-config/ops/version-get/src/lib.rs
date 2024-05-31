@@ -53,27 +53,35 @@ async fn handle(
 		.map(common::Uuid::as_uuid)
 		.collect::<Vec<_>>();
 
-	let versions = ctx
-		.cache()
-		.immutable()
-		.fetch_all_proto("versions", req_version_ids, |mut cache, req_version_ids| {
-			let ctx = ctx.base();
+	let versions = fetch_versions(&ctx.base(), req_version_ids)
+		.await?
+		.into_iter()
+		.map(|x| x.1)
+		.collect::<Vec<_>>();
 
-			async move {
-				fetch_versions(&ctx, req_version_ids)
-					.await?
-					.into_iter()
-					.for_each(|(version_id, version)| {
-						cache.resolve_with_topic(
-							&version_id,
-							version,
-							("game_mm_versions", &version_id),
-						)
-					});
-				Ok(cache)
-			}
-		})
-		.await?;
+	// TODO: There's a bug with this that returns the lobby groups for the wrong
+	// version, can't figure this out
+	// let versions = ctx
+	// 	.cache()
+	// 	.immutable()
+	// 	.fetch_all_proto("versions", req_version_ids, |mut cache, req_version_ids| {
+	// 		let ctx = ctx.base();
+	//
+	// 		async move {
+	// 			fetch_versions(&ctx, req_version_ids)
+	// 				.await?
+	// 				.into_iter()
+	// 				.for_each(|(version_id, version)| {
+	// 					cache.resolve_with_topic(
+	// 						&version_id,
+	// 						version,
+	// 						("game_mm_versions", &version_id),
+	// 					)
+	// 				});
+	// 			Ok(cache)
+	// 		}
+	// 	})
+	// 	.await?;
 
 	Ok(mm_config::version_get::Response { versions })
 }
