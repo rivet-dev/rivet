@@ -743,6 +743,7 @@ where
 					ts,
 					req_ts,
 					req_body,
+					trace,
 				),
 				dont_log_body,
 				allow_recursive,

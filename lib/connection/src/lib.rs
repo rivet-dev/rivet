@@ -30,7 +30,7 @@ impl Connection {
 		&self,
 		parent_req_id: Uuid,
 		ray_id: Uuid,
-		trace_entry: chirp_client::TraceEntry,
+		trace: Vec<chirp_client::TraceEntry>,
 	) -> GlobalResult<Connection> {
 		// Not the same as the operation ctx's ts because this cannot be overridden by debug start ts
 		let ts = rivet_util::timestamp::now();
@@ -41,11 +41,7 @@ impl Connection {
 				parent_req_id,
 				ray_id,
 				ts,
-				{
-					let mut x = self.client.trace().to_vec();
-					x.push(trace_entry);
-					x
-				},
+				trace,
 				chirp_perf::PerfCtxInner::new(redis_cache, ts, parent_req_id, ray_id),
 			),
 			self.pools.clone(),

@@ -14,6 +14,7 @@ pub async fn run_from_env(_ts: i64) -> GlobalResult<()> {
 		util::timestamp::now(),
 		util::timestamp::now(),
 		(),
+		Vec::new(),
 	);
 
 	let mut interval = tokio::time::interval(std::time::Duration::from_millis(100));

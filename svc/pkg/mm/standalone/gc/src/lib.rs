@@ -15,6 +15,7 @@ pub async fn run_from_env(ts: i64, pools: rivet_pools::Pools) -> GlobalResult<()
 		ts,
 		ts,
 		(),
+		Vec::new(),
 	);
 	let redis_mm = ctx.redis_mm().await?;
 

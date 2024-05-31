@@ -29,6 +29,7 @@ pub async fn run_from_env(pools: rivet_pools::Pools) -> GlobalResult<()> {
 		util::timestamp::now(),
 		util::timestamp::now(),
 		(),
+		Vec::new(),
 	);
 
 	let dc_rows = sql_fetch_all!(

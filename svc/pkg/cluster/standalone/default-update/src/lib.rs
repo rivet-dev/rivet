@@ -110,6 +110,7 @@ pub async fn run_from_env(use_autoscaler: bool) -> GlobalResult<()> {
 		util::timestamp::now(),
 		util::timestamp::now(),
 		(),
+		Vec::new(),
 	);
 
 	// Read config from env

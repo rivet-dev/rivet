@@ -238,10 +238,6 @@ impl Client {
 	pub fn ts(&self) -> i64 {
 		self.ts
 	}
-
-	pub fn trace(&self) -> &[chirp::TraceEntry] {
-		&self.trace
-	}
 }
 
 impl Drop for Client {

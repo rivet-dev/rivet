@@ -23,6 +23,7 @@ pub async fn run_from_env(ts: i64, pools: rivet_pools::Pools) -> GlobalResult<()
 		util::timestamp::now(),
 		util::timestamp::now(),
 		(),
+		Vec::new(),
 	);
 
 	let datacenter_ids = rivet_pools::utils::crdb::tx(&ctx.crdb().await?, |tx| {

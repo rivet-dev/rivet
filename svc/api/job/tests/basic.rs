@@ -41,6 +41,7 @@
 // 			util::timestamp::now(),
 // 			util::timestamp::now(),
 // 			(),
+// 			Vec::new(),
 // 		);
 
 // 		let nomad_config = nomad_util::config_from_env().unwrap();

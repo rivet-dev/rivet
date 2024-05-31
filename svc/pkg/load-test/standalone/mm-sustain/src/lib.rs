@@ -22,6 +22,7 @@ pub async fn run_from_env(_ts: i64) -> GlobalResult<()> {
 		util::timestamp::now(),
 		util::timestamp::now(),
 		(),
+		Vec::new(),
 	);
 
 	// Region

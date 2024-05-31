@@ -28,6 +28,7 @@ pub async fn run_from_env(ts: i64) -> GlobalResult<()> {
 		util::timestamp::now(),
 		util::timestamp::now(),
 		(),
+		Vec::new(),
 	);
 
 	if std::env::var("RIVET_TELEMETRY_DISABLE")
