@@ -3,10 +3,10 @@ use acme_lib::{
 	persist::{MemoryPersist, Persist, PersistKey, PersistKind},
 	Account, Certificate, Directory, DirectoryUrl,
 };
-use chirp_worker::prelude::*;
 use cloudflare::{endpoints as cf, framework as cf_framework, framework::async_api::ApiClient};
 use futures_util::StreamExt;
 use proto::backend::{self, pkg::*};
+use rivet_operation::prelude::*;
 use tokio::task;
 use trust_dns_resolver::{
 	config::{ResolverConfig, ResolverOpts},
@@ -14,17 +14,60 @@ use trust_dns_resolver::{
 	TokioAsyncResolver,
 };
 
-use crate::util::CloudflareError;
+#[derive(thiserror::Error, Debug)]
+#[error("cloudflare: {source}")]
+pub struct CloudflareError {
+	#[from]
+	source: anyhow::Error,
+}
 
 const ENCRYPT_EMAIL: &str = "letsencrypt@rivet.gg";
 
-#[worker(name = "cluster-datacenter-tls-issue", timeout = 300)]
-async fn worker(
-	ctx: &OperationContext<cluster::msg::datacenter_tls_issue::Message>,
-) -> GlobalResult<()> {
+#[tracing::instrument(skip_all)]
+pub async fn run_from_env(ts: i64) -> GlobalResult<()> {
+	tracing::warn!("disabled for now");
 	return Ok(());
 
-	let datacenter_id = unwrap_ref!(ctx.datacenter_id).as_uuid();
+	let pools = rivet_pools::from_env("cluster-fix-tls").await?;
+	let client = chirp_client::SharedClient::from_env(pools.clone())?.wrap_new("cluster-fix-tls");
+	let cache = rivet_cache::CacheInner::from_env(pools.clone())?;
+	let ctx = OperationContext::new(
+		"cluster-fix-tls".into(),
+		std::time::Duration::from_secs(60),
+		rivet_connection::Connection::new(client, pools, cache),
+		Uuid::new_v4(),
+		Uuid::new_v4(),
+		util::timestamp::now(),
+		util::timestamp::now(),
+		(),
+		Vec::new(),
+	);
+
+	let datacenter_ids = vec!["5767a802-5c7c-4563-a266-33c014f7e244"]
+		.into_iter()
+		.map(|x| Uuid::parse_str(x).unwrap());
+
+	for id in datacenter_ids {
+		let ctx = ctx.clone();
+		tokio::spawn(async move {
+			match run_for_datacenter(ctx, id).await {
+				Ok(_) => {
+					tracing::info!(?id, "datacenter done 2");
+				}
+				Err(err) => {
+					tracing::error!(?id, ?err, "datacenter failed 2");
+				}
+			}
+		});
+	}
+
+	std::future::pending::<()>().await;
+
+	Ok(())
+}
+
+async fn run_for_datacenter(ctx: OperationContext<()>, datacenter_id: Uuid) -> GlobalResult<()> {
+	let renew = false;
 
 	// Create CF client
 	let cf_token = util::env::read_secret(&["cloudflare", "terraform", "auth_token"]).await?;
@@ -48,28 +91,20 @@ async fn worker(
 
 	// NOTE: We don't use try_join because these run in parallel, the dns record needs to be deleted for each
 	// order upon failure
-	let (gg_cert, job_cert) = tokio::join!(
-		order(
-			&client,
-			ctx.renew,
-			base_zone_id,
-			&account,
-			domain_main,
-			vec![format!("*.{datacenter_id}.{domain_main}")],
-		),
-		order(
-			&client,
-			ctx.renew,
-			job_zone_id,
-			&account,
-			domain_job,
-			vec![
-				format!("*.lobby.{datacenter_id}.{domain_job}"),
-				format!("*.{datacenter_id}.{domain_job}"),
-			],
-		),
-	);
-	let (gg_cert, job_cert) = (gg_cert?, job_cert?);
+	let job_cert = order(
+		&client,
+		renew,
+		job_zone_id,
+		&account,
+		domain_job,
+		vec![
+			// TODO: Remove this
+			format!("i-see-you-skid.{domain_job}"),
+			format!("*.lobby.{datacenter_id}.{domain_job}"),
+			format!("*.{datacenter_id}.{domain_job}"),
+		],
+	)
+	.await?;
 
 	sql_execute!(
 		[ctx]
@@ -85,14 +120,16 @@ async fn worker(
 		WHERE datacenter_id = $1
 		",
 		datacenter_id,
-		gg_cert.certificate(),
-		gg_cert.private_key(),
+		"N/A",
+		"N/A",
 		job_cert.certificate(),
 		job_cert.private_key(),
 		backend::cluster::TlsState::Active as i64,
-		util::timestamp::now() + util::duration::days(gg_cert.valid_days_left()),
+		util::timestamp::now() + util::duration::days(job_cert.valid_days_left()),
 	)
 	.await?;
+
+	tracing::info!("done");
 
 	Ok(())
 }
@@ -181,7 +218,14 @@ async fn order<P: Persist>(
 					.await;
 
 					// Delete regardless of success of the above try block
-					delete_dns_record(client, zone_id, &dns_record_id).await?;
+					// match delete_dns_record(client, zone_id, &dns_record_id).await {
+					//                    Ok(_) => {
+					//
+					//                    }
+					//                    Err(err) => {
+					//                        tracing::error!(?zone_id, ?dns_record_id, ?hostname, ?err, "failed to delete dns record");
+					//                    }
+					//                }
 
 					try_block
 				}

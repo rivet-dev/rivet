@@ -1,0 +1,47 @@
+[package]
+name = "cluster-fix-tls"
+version = "0.0.1"
+edition = "2021"
+authors = ["Rivet Gaming, LLC <developer@rivet.gg>"]
+license = "Apache-2.0"
+
+[dependencies]
+chirp-client = { path = "../../../../../lib/chirp/client" }
+rivet-operation = { path = "../../../../../lib/operation/core" }
+rivet-connection = { path = "../../../../../lib/connection" }
+rivet-runtime = { path = "../../../../../lib/runtime" }
+tokio = { version = "1.29", features = ["full"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", default-features = false, features = ["fmt", "json", "ansi"] }
+
+acme-lib = "0.9"
+anyhow = "1.0"
+chrono = "0.4"
+cloudflare = "0.10.1"
+http = "0.2"
+include_dir = "0.7.3"
+indoc = "1.0"
+lazy_static = "1.4"
+maplit = "1.0"
+nomad-util = { path = "../../../../../lib/nomad-util" }
+openssl = "0.10.63"
+rivet-convert = { path = "../../../../../lib/convert" }
+rivet-health-checks = { path = "../../../../../lib/health-checks" }
+rivet-metrics = { path = "../../../../../lib/metrics" }
+s3-util = { path = "../../../../../lib/s3-util" }
+serde_yaml = "0.9"
+ssh2 = "0.9.4"
+thiserror = "1.0"
+trust-dns-resolver = { version = "0.23.2", features = ["dns-over-native-tls"] }
+util-cluster = { package = "rivet-util-cluster", path = "../../util" }
+
+cluster-datacenter-get = { path = "../../ops/datacenter-get" }
+cluster-datacenter-list = { path = "../../ops/datacenter-list" }
+cluster-datacenter-topology-get = { path = "../../ops/datacenter-topology-get" }
+linode-instance-type-get = { path = "../../../linode/ops/instance-type-get" }
+linode-server-destroy = { path = "../../../linode/ops/server-destroy" }
+linode-server-provision = { path = "../../../linode/ops/server-provision" }
+token-create = { path = "../../../token/ops/create" }
+
+[dev-dependencies]
+chirp-worker = { path = "../../../../../lib/chirp/worker" }

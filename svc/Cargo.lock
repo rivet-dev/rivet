@@ -2433,6 +2433,47 @@ dependencies = [
 ]
 
 [[package]]
+name = "cluster-fix-tls"
+version = "0.0.1"
+dependencies = [
+ "acme-lib",
+ "anyhow",
+ "chirp-client",
+ "chirp-worker",
+ "chrono",
+ "cloudflare",
+ "cluster-datacenter-get",
+ "cluster-datacenter-list",
+ "cluster-datacenter-topology-get",
+ "http 0.2.12",
+ "include_dir",
+ "indoc",
+ "lazy_static",
+ "linode-instance-type-get",
+ "linode-server-destroy",
+ "linode-server-provision",
+ "maplit",
+ "nomad-util",
+ "openssl",
+ "rivet-connection",
+ "rivet-convert",
+ "rivet-health-checks",
+ "rivet-metrics",
+ "rivet-operation",
+ "rivet-runtime",
+ "rivet-util-cluster",
+ "s3-util",
+ "serde_yaml",
+ "ssh2",
+ "thiserror",
+ "token-create",
+ "tokio",
+ "tracing",
+ "tracing-subscriber",
+ "trust-dns-resolver",
+]
+
+[[package]]
 name = "cluster-gc"
 version = "0.0.1"
 dependencies = [

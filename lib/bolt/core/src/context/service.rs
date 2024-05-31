@@ -1272,31 +1272,31 @@ impl ServiceContextData {
 			}
 		}
 
-		if self.depends_on_infra() && project_ctx.ns().rivet.provisioning.is_some() {
-			let tls = terraform::output::read_tls(&project_ctx).await;
-			let k8s_infra = terraform::output::read_k8s_infra(&project_ctx).await;
+		// if self.depends_on_infra() && project_ctx.ns().rivet.provisioning.is_some() {
+		let tls = terraform::output::read_tls(&project_ctx).await;
+		let k8s_infra = terraform::output::read_k8s_infra(&project_ctx).await;
 
-			env.insert(
-				"TLS_CERT_LOCALLY_SIGNED_JOB_CERT_PEM".into(),
-				tls.tls_cert_locally_signed_job.cert_pem.clone(),
-			);
-			env.insert(
-				"TLS_CERT_LOCALLY_SIGNED_JOB_KEY_PEM".into(),
-				tls.tls_cert_locally_signed_job.key_pem.clone(),
-			);
-			env.insert(
-				"TLS_ACME_ACCOUNT_PRIVATE_KEY_PEM".into(),
-				(*tls.acme_account_private_key_pem).clone(),
-			);
-			env.insert(
-				"TLS_ROOT_CA_CERT_PEM".into(),
-				(*tls.root_ca_cert_pem).clone(),
-			);
-			env.insert(
-				"K8S_TRAEFIK_TUNNEL_EXTERNAL_IP".into(),
-				(*k8s_infra.traefik_tunnel_external_ip).clone(),
-			);
-		}
+		env.insert(
+			"TLS_CERT_LOCALLY_SIGNED_JOB_CERT_PEM".into(),
+			tls.tls_cert_locally_signed_job.cert_pem.clone(),
+		);
+		env.insert(
+			"TLS_CERT_LOCALLY_SIGNED_JOB_KEY_PEM".into(),
+			tls.tls_cert_locally_signed_job.key_pem.clone(),
+		);
+		env.insert(
+			"TLS_ACME_ACCOUNT_PRIVATE_KEY_PEM".into(),
+			(*tls.acme_account_private_key_pem).clone(),
+		);
+		env.insert(
+			"TLS_ROOT_CA_CERT_PEM".into(),
+			(*tls.root_ca_cert_pem).clone(),
+		);
+		env.insert(
+			"K8S_TRAEFIK_TUNNEL_EXTERNAL_IP".into(),
+			(*k8s_infra.traefik_tunnel_external_ip).clone(),
+		);
+		// }
 
 		Ok(env)
 	}
