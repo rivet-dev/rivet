@@ -2,7 +2,7 @@ use chirp_worker::prelude::*;
 use proto::backend::pkg::*;
 
 lazy_static::lazy_static! {
-	static ref REDIS_SCRIPT: redis::Script = redis::Script::new(include_str!("../../redis-scripts/nomad_node_closed_set.lua"));
+	static ref REDIS_SCRIPT: redis::Script = redis::Script::new(include_str!("../../redis-scripts/nomad_node_closed_unset.lua"));
 }
 
 #[derive(Debug, sqlx::FromRow)]
@@ -29,6 +29,7 @@ async fn worker(
 		FROM db_job_state.run_meta_nomad AS n
 		WHERE
 			l.run_id = n.run_id AND
+			l.stop_ts IS NULL AND
 			n.node_id = $1
 		RETURNING
 			lobby_id, namespace_id, lobby_group_id, max_players_normal, max_players_party
