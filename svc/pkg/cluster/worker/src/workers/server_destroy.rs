@@ -70,21 +70,6 @@ async fn inner(
 		server.pool_type as i32
 	));
 	if let backend::cluster::PoolType::Gg = pool_type {
-		// Update db record
-		sql_execute!(
-			[ctx]
-			"
-			UPDATE db_cluster.servers_cloudflare
-			SET destroy_ts = $2
-			WHERE
-				server_id = $1 AND
-				destroy_ts IS NULL
-			",
-			server_id,
-			util::timestamp::now(),
-		)
-		.await?;
-
 		msg!([ctx] cluster::msg::server_dns_delete(server_id) {
 			server_id: ctx.server_id,
 		})
