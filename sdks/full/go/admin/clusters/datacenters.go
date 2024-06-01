@@ -104,6 +104,7 @@ type UpdateDatacenterRequest struct {
 	PoolType     PoolType    `json:"pool_type,omitempty"`
 	Hardware     []*Hardware `json:"hardware,omitempty"`
 	DesiredCount *int        `json:"desired_count,omitempty"`
+	MinCount     *int        `json:"min_count,omitempty"`
 	MaxCount     *int        `json:"max_count,omitempty"`
 	DrainTimeout *int64      `json:"drain_timeout,omitempty"`
 

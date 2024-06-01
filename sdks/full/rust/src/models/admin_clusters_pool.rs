@@ -21,17 +21,20 @@ pub struct AdminClustersPool {
     pub hardware: Vec<crate::models::AdminClustersHardware>,
     #[serde(rename = "max_count")]
     pub max_count: i32,
+    #[serde(rename = "min_count")]
+    pub min_count: i32,
     #[serde(rename = "pool_type")]
     pub pool_type: crate::models::AdminClustersPoolType,
 }
 
 impl AdminClustersPool {
-    pub fn new(desired_count: i32, drain_timeout: i64, hardware: Vec<crate::models::AdminClustersHardware>, max_count: i32, pool_type: crate::models::AdminClustersPoolType) -> AdminClustersPool {
+    pub fn new(desired_count: i32, drain_timeout: i64, hardware: Vec<crate::models::AdminClustersHardware>, max_count: i32, min_count: i32, pool_type: crate::models::AdminClustersPoolType) -> AdminClustersPool {
         AdminClustersPool {
             desired_count,
             drain_timeout,
             hardware,
             max_count,
+            min_count,
             pool_type,
         }
     }

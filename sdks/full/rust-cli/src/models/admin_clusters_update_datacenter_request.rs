@@ -21,6 +21,8 @@ pub struct AdminClustersUpdateDatacenterRequest {
     pub hardware: Vec<crate::models::AdminClustersHardware>,
     #[serde(rename = "max_count", skip_serializing_if = "Option::is_none")]
     pub max_count: Option<i32>,
+    #[serde(rename = "min_count", skip_serializing_if = "Option::is_none")]
+    pub min_count: Option<i32>,
     #[serde(rename = "pool_type")]
     pub pool_type: crate::models::AdminClustersPoolType,
 }
@@ -32,6 +34,7 @@ impl AdminClustersUpdateDatacenterRequest {
             drain_timeout: None,
             hardware,
             max_count: None,
+            min_count: None,
             pool_type,
         }
     }

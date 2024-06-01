@@ -151,12 +151,15 @@ components:
           type: array
         max_count:
           type: integer
+        min_count:
+          type: integer
         pool_type:
           $ref: '#/components/schemas/AdminClustersPoolType'
       required:
       - pool_type
       - hardware
       - desired_count
+      - min_count
       - max_count
       - drain_timeout
       type: object
@@ -193,6 +196,8 @@ components:
             $ref: '#/components/schemas/AdminClustersHardware'
           type: array
         max_count:
+          type: integer
+        min_count:
           type: integer
         pool_type:
           $ref: '#/components/schemas/AdminClustersPoolType'

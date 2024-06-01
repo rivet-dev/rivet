@@ -10,6 +10,7 @@ export declare namespace UpdateDatacenterRequest {
         pool_type: serializers.admin.clusters.PoolType.Raw;
         hardware: serializers.admin.clusters.Hardware.Raw[];
         desired_count?: number | null;
+        min_count?: number | null;
         max_count?: number | null;
         drain_timeout?: number | null;
     }

@@ -39,6 +39,7 @@ impl From<Provider> for backend::cluster::Provider {
 struct Pool {
 	hardware: Vec<Hardware>,
 	desired_count: u32,
+	min_count: u32,
 	max_count: u32,
 	drain_timeout: u64,
 }
@@ -204,6 +205,7 @@ pub async fn run_from_env(use_autoscaler: bool) -> GlobalResult<()> {
 							.map(Into::into)
 							.collect::<Vec<_>>(),
 						desired_count,
+						min_count: Some(pool.min_count),
 						max_count: Some(pool.max_count),
 						drain_timeout: Some(pool.drain_timeout),
 					}
@@ -233,6 +235,7 @@ pub async fn run_from_env(use_autoscaler: bool) -> GlobalResult<()> {
 						pool_type: Into::<backend::cluster::PoolType>::into(pool_type) as i32,
 						hardware: pool.hardware.into_iter().map(Into::into).collect::<Vec<_>>(),
 						desired_count: pool.desired_count,
+						min_count: pool.min_count,
 						max_count: pool.max_count,
 						drain_timeout: pool.drain_timeout,
 					}

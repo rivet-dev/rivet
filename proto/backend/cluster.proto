@@ -37,6 +37,7 @@ message Pool {
     // See docs on failover (/docs/packages/cluster/SERVER_PROVISIONING.md#creating-a-new-server)
     repeated Hardware hardware = 2;
     uint32 desired_count = 3;
+    uint32 min_count = 6;
     uint32 max_count = 4;
     // Server drain timeout In ms
     uint64 drain_timeout = 5;

@@ -20,6 +20,7 @@ message PoolUpdate {
     // Each can be optionally updated
     repeated rivet.backend.cluster.Hardware hardware = 2;
     optional uint32 desired_count = 3;
+    optional uint32 min_count = 6;
     optional uint32 max_count = 4;
     optional uint64 drain_timeout = 5;
 }

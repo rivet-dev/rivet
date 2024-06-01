@@ -108,6 +108,7 @@ impl ApiTryFrom<backend::cluster::Datacenter> for models::AdminClustersDatacente
 								})
 							})
 							.collect::<Result<Vec<models::AdminClustersHardware>, GlobalError>>()?,
+						min_count: unwrap!(p.min_count.try_into()),
 						max_count: unwrap!(p.max_count.try_into()),
 						pool_type: unwrap!(backend::cluster::PoolType::from_i32(p.pool_type))
 							.api_into(),

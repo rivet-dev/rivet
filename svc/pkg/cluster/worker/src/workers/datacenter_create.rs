@@ -11,11 +11,9 @@ async fn worker(
 
 	let mut pools = ctx.pools.clone();
 
-	// Cap the desired count below the max count
+	// Constrain the desired count
 	for pool in &mut pools {
-		if pool.desired_count > pool.max_count {
-			pool.desired_count = pool.max_count;
-		}
+		pool.desired_count = pool.desired_count.max(pool.min_count).min(pool.max_count);
 	}
 
 	// Copy pools config to write to db

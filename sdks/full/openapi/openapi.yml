@@ -9927,6 +9927,8 @@ components:
             $ref: '#/components/schemas/AdminClustersHardware'
         desired_count:
           type: integer
+        min_count:
+          type: integer
         max_count:
           type: integer
         drain_timeout:
@@ -9936,6 +9938,7 @@ components:
         - pool_type
         - hardware
         - desired_count
+        - min_count
         - max_count
         - drain_timeout
     AdminClustersHardware:
@@ -10054,6 +10057,8 @@ components:
           items:
             $ref: '#/components/schemas/AdminClustersHardware'
         desired_count:
+          type: integer
+        min_count:
           type: integer
         max_count:
           type: integer

@@ -9,6 +9,7 @@ async fn datacenter_update(ctx: TestCtx) {
 		pool_type: backend::cluster::PoolType::Ats as i32,
 		hardware: Vec::new(),
 		desired_count: 0,
+		min_count: 0,
 		max_count: 0,
 		drain_timeout: 0,
 	}];
@@ -44,6 +45,7 @@ async fn datacenter_update(ctx: TestCtx) {
 			pool_type: backend::cluster::PoolType::Ats as i32,
 			hardware: Vec::new(),
 			desired_count: Some(1),
+			min_count: None,
 			max_count: None,
 			drain_timeout: None,
 		}],

@@ -669,6 +669,8 @@ pub enum ProvisioningBuildDeliveryMethod {
 pub struct ProvisioningDatacenterPool {
 	pub hardware: Vec<ProvisioningDatacenterHardware>,
 	pub desired_count: u32,
+	#[serde(default)]
+	pub min_count: u32,
 	pub max_count: u32,
 	/// Server drain time in ms.
 	pub drain_timeout: u64,

@@ -36,6 +36,9 @@ async fn worker(
 		if let Some(desired_count) = pool.desired_count {
 			current_pool.desired_count = desired_count;
 		}
+		if let Some(min_count) = pool.min_count {
+			current_pool.min_count = min_count;
+		}
 		if let Some(max_count) = pool.max_count {
 			current_pool.max_count = max_count;
 		}

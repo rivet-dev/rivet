@@ -21,6 +21,7 @@ pub async fn setup(ctx: &TestCtx, opts: Setup) -> SetupRes {
 			provider_hardware: util_cluster::test::LINODE_HARDWARE.to_string(),
 		}],
 		desired_count: 0,
+		min_count: 0,
 		max_count: 0,
 		drain_timeout: opts.drain_timeout,
 	}];

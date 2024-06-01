@@ -100,6 +100,9 @@ pub enum SubCommand {
 		/// The desired count
 		#[clap(long)]
 		desired_count: Option<i32>,
+		/// The min count
+		#[clap(long)]
+		min_count: Option<i32>,
 		/// The max count
 		#[clap(long)]
 		max_count: Option<i32>,
@@ -192,6 +195,7 @@ impl SubCommand {
 				pool,
 				hardware,
 				desired_count,
+				min_count,
 				max_count,
 				drain_timeout,
 			} => {
@@ -234,6 +238,7 @@ impl SubCommand {
 								provider_hardware: hardware.clone(),
 							})
 							.collect(),
+						min_count,
 						max_count,
 						pool_type: pool.into(),
 					},

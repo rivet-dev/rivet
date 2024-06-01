@@ -18,6 +18,7 @@ types:
       pool_type: PoolType
       hardware: list<Hardware>
       desired_count: integer
+      min_count: integer
       max_count: integer
       drain_timeout: long
   Hardware:
@@ -44,4 +45,3 @@ types:
     properties:
       server_id: uuid
       public_ip: string
-

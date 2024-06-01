@@ -260,12 +260,18 @@ impl ProjectContextData {
 					panic!("invalid datacenter ({}): Missing ATS pool", name_id);
 				};
 
-				// Validate the build delivery method
 				assert!(
 					ats_pool.desired_count <= ats_pool.max_count,
 					"invalid datacenter ({}): ATS desired > max",
-					name_id
+					name_id,
 				);
+				assert!(
+					ats_pool.min_count <= ats_pool.desired_count,
+					"invalid datacenter ({}): ATS min > desired",
+					name_id,
+				);
+
+				// Validate the build delivery method
 				match datacenter.build_delivery_method {
 					config::ns::ProvisioningBuildDeliveryMethod::TrafficServer => {
 						assert_ne!(
@@ -296,7 +302,12 @@ impl ProjectContextData {
 				assert!(
 					gg_count <= gg_pool.unwrap().max_count,
 					"invalid datacenter ({}): GG desired > max",
-					name_id
+					name_id,
+				);
+				assert!(
+					gg_pool.unwrap().min_count <= gg_pool.unwrap().desired_count,
+					"invalid datacenter ({}): GG min > desired",
+					name_id,
 				);
 
 				let job_pool = datacenter
@@ -312,7 +323,12 @@ impl ProjectContextData {
 				assert!(
 					job_count <= job_pool.unwrap().max_count,
 					"invalid datacenter ({}): Job desired > max",
-					name_id
+					name_id,
+				);
+				assert!(
+					job_pool.unwrap().min_count <= job_pool.unwrap().desired_count,
+					"invalid datacenter ({}): Job min > desired",
+					name_id,
 				);
 			}
 		}

@@ -178,7 +178,7 @@ async fn inner(
 			datacenter_id,
 			provider: dc.provider,
 			pool_type: unwrap!(backend::cluster::PoolType::from_i32(pool.pool_type)),
-			desired_count: pool.desired_count.min(pool.max_count) as usize,
+			desired_count: pool.desired_count.max(pool.min_count).min(pool.max_count) as usize,
 		};
 
 		scale_servers(&ctx, tx, &mut msgs, &servers, &pool_ctx).await?;

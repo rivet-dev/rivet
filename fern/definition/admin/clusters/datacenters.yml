@@ -49,6 +49,6 @@ types:
       pool_type: localCommons.PoolType
       hardware: list<localCommons.Hardware>
       desired_count: optional<integer>
+      min_count: optional<integer>
       max_count: optional<integer>
       drain_timeout: optional<long>
-

@@ -10,6 +10,7 @@ export declare namespace Pool {
         pool_type: serializers.admin.clusters.PoolType.Raw;
         hardware: serializers.admin.clusters.Hardware.Raw[];
         desired_count: number;
+        min_count: number;
         max_count: number;
         drain_timeout: number;
     }

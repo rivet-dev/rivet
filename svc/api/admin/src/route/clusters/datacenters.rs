@@ -61,6 +61,7 @@ pub async fn create(
 				provider_hardware: "g6-nanode-1".to_string(),
 			}],
 			desired_count: 0,
+			min_count: 0,
 			max_count: 0,
 			drain_timeout,
 		},
@@ -70,6 +71,7 @@ pub async fn create(
 				provider_hardware: "g6-nanode-1".to_string(),
 			}],
 			desired_count: 0,
+			min_count: 0,
 			max_count: 0,
 			drain_timeout,
 		},
@@ -79,6 +81,7 @@ pub async fn create(
 				provider_hardware: "g6-nanode-1".to_string(),
 			}],
 			desired_count: 0,
+			min_count: 0,
 			max_count: 0,
 			drain_timeout,
 		},
@@ -136,6 +139,7 @@ pub async fn update(
 			})
 			.collect(),
 		desired_count: body.desired_count.map(|c| c as u32),
+		min_count: body.min_count.map(|c| c as u32),
 		max_count: body.max_count.map(|c| c as u32),
 		drain_timeout: body.drain_timeout.map(|d| d as u64),
 	}];
