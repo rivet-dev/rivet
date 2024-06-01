@@ -173,6 +173,25 @@ async fn worker(ctx: &OperationContext<cluster::msg::server_install::Message>) -
 		})
 		.await?;
 
+		// Create DNS record
+		if let backend::cluster::PoolType::Gg = pool_type {
+			// Source of truth record
+			sql_execute!(
+				[ctx]
+				"
+				INSERT INTO db_cluster.servers_cloudflare (server_id)
+				VALUES ($1)
+				",
+				server_id.as_uuid(),
+			)
+			.await?;
+
+			msg!([ctx] cluster::msg::server_dns_create(server_id) {
+				server_id: Some(server_id),
+			})
+			.await?;
+		}
+
 		insert_metrics(
 			ctx,
 			&pool_type,

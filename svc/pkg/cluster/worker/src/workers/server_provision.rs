@@ -167,8 +167,28 @@ async fn inner(
 		)
 		.await?;
 
-		// Install components
-		if !provision_res.already_installed {
+		if provision_res.already_installed {
+			// Create DNS record because the server is already installed
+			if let backend::cluster::PoolType::Gg = pool_type {
+				// Source of truth record
+				sql_execute!(
+					[ctx]
+					"
+					INSERT INTO db_cluster.servers_cloudflare (server_id)
+					VALUES ($1)
+					",
+					server_id,
+				)
+				.await?;
+
+				msg!([ctx] cluster::msg::server_dns_create(server_id) {
+					server_id: ctx.server_id,
+				})
+				.await?;
+			}
+		}
+		// Install components on server
+		else {
 			let request_id = Uuid::new_v4();
 
 			msg!([ctx] cluster::msg::server_install(request_id) {
@@ -179,25 +199,6 @@ async fn inner(
 				pool_type: ctx.pool_type,
 				provider: ctx.provider,
 				initialize_immediately: true,
-			})
-			.await?;
-		}
-
-		// Create DNS record
-		if let backend::cluster::PoolType::Gg = pool_type {
-			// Source of truth record
-			sql_execute!(
-				[ctx]
-				"
-				INSERT INTO db_cluster.servers_cloudflare (server_id)
-				VALUES ($1)
-				",
-				server_id,
-			)
-			.await?;
-
-			msg!([ctx] cluster::msg::server_dns_create(server_id) {
-				server_id: ctx.server_id,
 			})
 			.await?;
 		}
