@@ -2,7 +2,7 @@
 
 module "eks" {
 	source = "terraform-aws-modules/eks/aws"
-	version = "19.16.0"
+	version = "20.12.0"
 
 	cluster_name = local.name
 	cluster_version = local.cluster_version
@@ -83,29 +83,10 @@ module "eks" {
 	create_cluster_security_group = false
 	create_node_security_group = false
 
-	manage_aws_auth_configmap = true
-	aws_auth_roles = [
-		# Allow users to assume the admin role
-		{
-			rolearn = aws_iam_role.eks_admin.arn
-			username = local.eks_admin_username
-			groups = [
-				"system:masters"
-			]
-		},
-		# We need to add in the Karpenter node IAM role for nodes launched by Karpenter
-		{
-			rolearn = module.karpenter.role_arn
-			username = "system:node:{{EC2PrivateDNSName}}"
-			groups = [
-				"system:bootstrappers",
-				"system:nodes",
-			]
-		},
-	]
-
 	# Enable root account to manage KMS
 	kms_key_enable_default_policy = true
+
+	authentication_mode = "API_AND_CONFIG_MAP"
 
 	fargate_profiles = {
 		karpenter = {
@@ -126,5 +107,51 @@ module "eks" {
 		# (i.e. - at most, only one security group should have this tag in your account)
 		"karpenter.sh/discovery" = local.name
 	})
+}
+
+# TODO:
+# terraform state rm 'module.eks.kubernetes_config_map_v1_data.aws_auth[0]'
+# terraform state rm 'module.eks.kubernetes_config_map.aws_auth[0]'
+# removed {
+# 	from = module.eks.kubernetes_config_map_v1_data.aws_auth[0]
+# 	lifecycle {
+# 		destroy = false
+# 	}
+# }
+#
+# removed {
+# 	from = module.eks.kubernetes_config_map.aws_auth[0]
+# 	lifecycle {
+# 		destroy = false
+# 	}
+# }
+
+module "aws_auth" {
+	depends_on = [module.eks]
+
+	source  = "terraform-aws-modules/eks/aws//modules/aws-auth"
+	version = "~> 20.0"
+
+	manage_aws_auth_configmap = true
+
+	aws_auth_roles = [
+		# Allow users to assume the admin role
+		{
+			rolearn = aws_iam_role.eks_admin.arn
+			username = local.eks_admin_username
+			groups = [
+				"system:masters"
+			]
+		},
+		# We need to add in the Karpenter node IAM role for nodes launched by Karpenter
+		{
+			rolearn = module.karpenter.iam_role_arn
+			username = "system:node:{{EC2PrivateDNSName}}"
+			groups = [
+				"system:bootstrappers",
+				"system:nodes",
+			]
+		},
+	]
 }
 

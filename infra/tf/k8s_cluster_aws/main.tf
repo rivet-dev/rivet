@@ -2,7 +2,7 @@ terraform {
 	required_providers {
 		aws = {
 			source = "hashicorp/aws"
-			version = "5.16.0"
+			version = "5.52.0"
 		}
 		# TODO Revert to gavinbunney/kubectl once https://github.com/gavinbunney/terraform-provider-kubectl/issues/270 is resolved
 		kubectl = {

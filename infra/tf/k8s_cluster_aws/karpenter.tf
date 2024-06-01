@@ -1,14 +1,23 @@
 # TODO: Wait until fargate is up
 module "karpenter" {
 	source = "terraform-aws-modules/eks/aws//modules/karpenter"
-	version = "19.16.0"
+	version = "20.12.0"
 
 	cluster_name = module.eks.cluster_name
 	irsa_oidc_provider_arn = module.eks.oidc_provider_arn
 
-	policies = {
+	node_iam_role_additional_policies = {
 		AmazonSSMManagedInstanceCore = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
 	}
+
+	# IRSA backwards compatability
+	enable_irsa = true
+	create_instance_profile = true
+	create_iam_role = true
+	iam_role_name = "KarpenterIRSA-${module.eks.cluster_name}"
+	iam_role_description = "Karpenter IAM role for service account"
+	iam_policy_name = "KarpenterIRSA-${module.eks.cluster_name}"
+	iam_policy_description = "Karpenter IAM role for service account"
 
 	tags = local.tags
 }
@@ -20,7 +29,7 @@ resource "helm_release" "karpenter" {
 	name = "karpenter"
 	repository = "oci://public.ecr.aws/karpenter"
 	chart = "karpenter"
-	version = "v0.31.0"
+	version = "v0.32.10"
 
 	values = [yamlencode({
 		controller = {
@@ -37,85 +46,114 @@ resource "helm_release" "karpenter" {
 
 		serviceAccount = {
 			annotations = {
-				"eks.amazonaws.com/role-arn" = module.karpenter.irsa_arn
+				"eks.amazonaws.com/role-arn" = module.karpenter.iam_role_arn
 			}
 		}
 
 		settings = {
-			aws = {
-				clusterName = module.eks.cluster_name
-				clusterEndpoint = module.eks.cluster_endpoint
-				defaultInstanceProfile = module.karpenter.instance_profile_name
-				interruptionQueueName = module.karpenter.queue_name
-			}
+			clusterName = module.eks.cluster_name
+			clusterEndpoint = module.eks.cluster_endpoint
+			interruptionQueue = module.karpenter.queue_name
 		}
 	})]
 }
 
-resource "kubectl_manifest" "karpenter_provisioner" {
+resource "kubectl_manifest" "karpenter_node_class" {
 	depends_on = [helm_release.karpenter]
 
 	yaml_body = yamlencode({
-		apiVersion = "karpenter.sh/v1alpha5"
-		kind = "Provisioner"
+		apiVersion = "karpenter.k8s.aws/v1beta1"
+		kind = "EC2NodeClass"
 		metadata = {
 			name = "default"
 		}
 		spec = {
-			requirements = [
-				# See how Karpenter selects instance types:
-				# https://karpenter.sh/v0.31/faq/#how-does-karpenter-dynamically-select-instance-types
-
+			amiFamily = "AL2"
+			role = module.karpenter.node_iam_role_name
+			subnetSelectorTerms = [
 				{
-					key = "kubernetes.io/os"
-					operator = "In"
-					values = ["linux"]
-				},
-				{
-					key = "topology.kubernetes.io/zone"
-					operator = "In"
-					values = local.azs
-				},
-				{
-					key = "karpenter.sh/capacity-type"
-					operator = "In"
-					values = ["on-demand"]
-				},
-			]
-			limits = {
-				resources = {
-					cpu = 1000
-					memory = "1000Gi"
+					tags = {
+						"karpenter.sh/discovery" = module.eks.cluster_name
+					}
 				}
-			}
-			providerRef = {
-				name = "default"
-			}
-			consolidation = {
-				enabled = true
+			]
+			securityGroupSelectorTerms = [
+				{
+					tags = {
+						"karpenter.sh/discovery" = module.eks.cluster_name
+					}
+				}
+			]
+			tags = {
+				"karpenter.sh/discovery" = module.eks.cluster_name
 			}
 		}
 	})
 }
 
-resource "kubectl_manifest" "karpenter_node_template" {
-	depends_on = [helm_release.karpenter]
+resource "kubectl_manifest" "karpenter_node_pool" {
+	depends_on = [helm_release.karpenter, kubectl_manifest.karpenter_node_class]
 
 	yaml_body = yamlencode({
-		apiVersion = "karpenter.k8s.aws/v1alpha1"
-		kind = "AWSNodeTemplate"
+		apiVersion = "karpenter.sh/v1beta1"
+		kind = "NodePool"
 		metadata = {
 			name = "default"
 		}
 		spec = {
-			subnetSelector = {
-				"karpenter.sh/discovery" = module.eks.cluster_name
+			template = {
+				spec = {
+					nodeClassRef = {
+						name = "default"
+					}
+					requirements = [
+						# See recommended requirements:
+						# https://karpenter.sh/v0.37/concepts/nodepools/#capacity-type
+
+						{
+							key = "topology.kubernetes.io/zone"
+							operator = "In"
+							values = local.azs
+						},
+						{
+							key = "kubernetes.io/arch"
+							operator = "In"
+							values = ["amd64"]
+						},
+						{
+							key = "kubernetes.io/os"
+							operator = "In"
+							values = ["linux"]
+						},
+						{
+							key = "karpenter.sh/capacity-type"
+							operator = "In"
+							values = ["on-demand"]
+						},
+						{
+							key = "karpenter.k8s.aws/instance-category"
+							operator = "In"
+							values   = ["c", "m", "r"]
+						},
+						{
+							key = "karpenter.k8s.aws/instance-generation"
+							operator = "Gt"
+							values = ["2"]
+						}
+					]
+				}
 			}
-			securityGroupSelector = {
-				"karpenter.sh/discovery" = module.eks.cluster_name
+			limits = {
+				cpu = 1000
+				memory = "1000Gi"
 			}
-			tags = {
-				"karpenter.sh/discovery" = module.eks.cluster_name
+			disruption = {
+				# Never kill pods that are currently running
+				consolidationPolicy = "WhenEmpty"
+				consolidateAfter = "30s"
+				# Don't kill nodes arbitrarily
+				expireAfter = "Never"
+				# TODO: If switching to WhenUnderutilized, add `budgets` here
 			}
 		}
 	})
