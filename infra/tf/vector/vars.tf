@@ -2,6 +2,10 @@ variable "namespace" {
 	type = string
 }
 
+variable "deploy_method_cluster" {
+	type = bool
+}
+
 # MARK: ClickHouse
 variable "clickhouse_enabled" {
 	type = bool

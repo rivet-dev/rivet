@@ -38,15 +38,16 @@ pub fn configure(config: &Config, pool_type: backend::cluster::PoolType) -> Stri
 		[api]
 			enabled = true
 
+		[transforms.filter_metrics]
+            type = "filter"
+			inputs = [{sources}]
+            condition = '!starts_with!(.name, "go_") && !starts_with!(.name, "promhttp_")'
+
+
 		[transforms.add_meta]
 			type = "remap"
-			inputs = [{sources}]
+			inputs = ["filter_metrics"]
 			source = '''
-			# Drop go stats
-			if starts_with!(.name, "go_") {{
-				abort
-			}}
-
 			.tags.server_id = "___SERVER_ID___"
 			.tags.datacenter_id = "___DATACENTER_ID___"
 			.tags.cluster_id = "___CLUSTER_ID___"
@@ -62,9 +63,9 @@ pub fn configure(config: &Config, pool_type: backend::cluster::PoolType) -> Stri
 			compression = true
 
 			# Buffer to disk for durability & reduce memory usage
-			buffer.max_events = 500
-			buffer.max_size = 268435488
-			buffer.type = "disk"
+            buffer.type = "disk"
+            buffer.max_size = 268435488  # 256 MB
+            buffer.when_full = "block"
 		"#
 	);
 

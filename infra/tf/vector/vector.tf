@@ -1,6 +1,6 @@
 locals {
 	service_vector = lookup(var.services, "vector", {
-		count = 1
+		count = var.deploy_method_cluster ? 2 : 1
 		resources = {
 			cpu = 1000
 			memory = 2048
@@ -23,9 +23,10 @@ resource "helm_release" "vector" {
 	namespace = "vector"
 	repository = "https://helm.vector.dev"
 	chart = "vector"
-	version = "0.38.0"
+	version = "0.33.0"
 	values = [yamlencode({
 		role = "Aggregator"
+		replicas = local.service_vector.count
 		podPriorityClassName = "service-priority"
 		resources = var.limit_resources ? {
 			limits = {
@@ -40,7 +41,7 @@ resource "helm_release" "vector" {
 			data_dir = "/vector-data-dir"
 			api = {
 				enabled = true
-				address = "127.0.0.1:8686"
+				address = "0.0.0.0:8686"
 				playground = false
 			}
 			sources = {
