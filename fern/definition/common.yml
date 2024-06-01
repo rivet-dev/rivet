@@ -105,5 +105,6 @@ types:
     properties:
       code: string
       message: string
+      ray_id: string
       documentation: optional<string>
       metadata: optional<ErrorMetadata>

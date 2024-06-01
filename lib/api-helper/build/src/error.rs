@@ -13,6 +13,7 @@ pub struct ErrorReply {
 	#[serde(skip_serializing_if = "Option::is_none")]
 	pub code: Option<String>,
 	pub message: String,
+	pub ray_id: Uuid,
 	#[serde(skip_serializing_if = "Option::is_none")]
 	pub documentation: Option<String>,
 	#[serde(skip_serializing_if = "Option::is_none")]
@@ -42,7 +43,7 @@ pub fn handle_rejection(
 			} else {
 				err_code!(
 					ERROR,
-					error = format!("An internal error has occurred (ray_id {}).", ray_id)
+					error = "An internal error has occurred.",
 				)
 			}
 		}
@@ -98,6 +99,7 @@ pub fn handle_rejection(
 	let error_reply = ErrorReply {
 		code,
 		message,
+		ray_id,
 		documentation,
 		metadata,
 	};
