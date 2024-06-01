@@ -60,6 +60,7 @@ async fn worker(ctx: &OperationContext<cluster::msg::server_taint::Message>) -> 
 		WHERE
 			s.datacenter_id = d.datacenter_id
 			AND s.taint_ts IS NULL
+			AND s.cloud_destroy_ts IS NULL
 			AND ($2 IS NULL OR s.server_id = ANY($2))
 			AND ($3 IS NULL OR d.cluster_id = ANY($3))
 			AND ($4 IS NULL OR s.datacenter_id = ANY($4))
