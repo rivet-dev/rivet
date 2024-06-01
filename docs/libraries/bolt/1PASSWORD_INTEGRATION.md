@@ -50,4 +50,4 @@ Finally, you have two options for pushing your local config to 1password:
 
 ## Pulling
 
-To pull your config from 1password, run `bolt config pull`, or `bolt config pull <namespace>` for a specific namespace.
+To pull your config from 1password run `bolt config pull`, or `bolt config pull <namespace>` for a specific namespace.

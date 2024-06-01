@@ -1,7 +1,0 @@
-[service]
-name = "db-cf-log"
-
-[runtime]
-kind = "clickhouse"
-
-[database]

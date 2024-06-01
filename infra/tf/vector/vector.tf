@@ -78,6 +78,15 @@ resource "helm_release" "vector" {
 						source = ".source == \"job_run\""
 					}
 				}
+
+				opengb_worker = {
+					type = "filter"
+					inputs = ["http_json"]
+					condition = {
+						type = "vrl"
+						source = ".path == \"/opengb\""
+					}
+				}
 			}
 			sinks = {
 				prom_exporter = {
@@ -108,13 +117,13 @@ resource "helm_release" "vector" {
 					}
 				}
 
-				clickhouse_cf_logs = {
+				clickhouse_opengb_logs = {
 					type = "clickhouse"
-					inputs = ["http_json"]
+					inputs = ["opengb_worker"]
 					compression = "gzip"
 					database = "db_cf_log"
 					endpoint = "https://${var.clickhouse_host}:${var.clickhouse_port_https}"
-					table = "cf_tail_events"
+					table = "tail_events"
 					auth = {
 						strategy = "basic"
 						user = "vector"
