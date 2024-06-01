@@ -23,7 +23,7 @@ resource "helm_release" "vector" {
 	namespace = "vector"
 	repository = "https://helm.vector.dev"
 	chart = "vector"
-	version = "0.29.0"
+	version = "0.38.0"
 	values = [yamlencode({
 		role = "Aggregator"
 		podPriorityClassName = "service-priority"

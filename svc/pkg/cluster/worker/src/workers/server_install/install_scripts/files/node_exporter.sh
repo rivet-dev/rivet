@@ -30,7 +30,8 @@ After=network-online.target
 User=node_exporter
 Group=node_exporter
 Type=simple
-ExecStart=/usr/bin/node_exporter --collector.cgroups --collector.network_route --collector.systemd
+# Reduce cardinality
+ExecStart=/usr/bin/node_exporter --collector.disable-defaults --collector.cpu --collector.conntrack --collector.meminfo --collector.filesystem --collector.filesystem.mount-points-exclude=^/opt/nomad/
 Restart=always
 RestartSec=2
 

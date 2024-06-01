@@ -224,6 +224,8 @@ pub async fn gg_static_config() -> GlobalResult<String> {
 		port = TUNNEL_API_INTERNAL_PORT,
 	);
 
+	// Metrics are disabled since they're too high cardinality for Prometheus (both the # of
+	// entrypoint & the frequently changing routers + services)
 	let mut config = formatdoc!(
 		r#"
 		[entryPoints]
@@ -238,13 +240,6 @@ pub async fn gg_static_config() -> GlobalResult<String> {
 
 		[api]
 			insecure = true
-
-		[metrics.prometheus]
-			# See lib/chirp/metrics/src/buckets.rs
-			buckets = [0.001, 0.0025, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 10.0, 25.0, 50.0, 100.0]
-			addEntryPointsLabels = true
-			addRoutersLabels = true
-			addServicesLabels = true
 
 		[providers]
 			[providers.file]

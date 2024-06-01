@@ -42,6 +42,11 @@ pub fn configure(config: &Config, pool_type: backend::cluster::PoolType) -> Stri
 			type = "remap"
 			inputs = [{sources}]
 			source = '''
+			# Drop go stats
+			if starts_with!(.name, "go_") {{
+				abort
+			}}
+
 			.tags.server_id = "___SERVER_ID___"
 			.tags.datacenter_id = "___DATACENTER_ID___"
 			.tags.cluster_id = "___CLUSTER_ID___"
@@ -55,6 +60,11 @@ pub fn configure(config: &Config, pool_type: backend::cluster::PoolType) -> Stri
 			address = "127.0.0.1:{TUNNEL_VECTOR_PORT}"
 			healthcheck.enabled = false
 			compression = true
+
+			# Buffer to disk for durability & reduce memory usage
+			buffer.max_events = 500
+			buffer.max_size = 268435488
+			buffer.type = "disk"
 		"#
 	);
 

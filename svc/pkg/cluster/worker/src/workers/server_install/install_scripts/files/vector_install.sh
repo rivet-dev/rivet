@@ -1,4 +1,4 @@
-version="0.34.1"
+version="0.38.0"
 
 # Create vector user
 if ! id -u "vector" &>/dev/null; then

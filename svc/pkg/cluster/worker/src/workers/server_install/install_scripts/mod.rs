@@ -107,14 +107,6 @@ pub async fn gen_initialize(pool_type: backend::cluster::PoolType) -> GlobalResu
 					tcp_server_transports: Default::default(),
 				},
 			));
-
-			prometheus_targets.insert(
-				GG_TRAEFIK_INSTANCE_NAME.into(),
-				components::vector::PrometheusTarget {
-					endpoint: "http://127.0.0.1:9980/metrics".into(),
-					scrape_interval: 15,
-				},
-			);
 		}
 		backend::cluster::PoolType::Ats => {
 			script.push(components::traffic_server::configure().await?);
