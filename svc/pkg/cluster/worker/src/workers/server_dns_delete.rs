@@ -96,14 +96,23 @@ async fn inner(
 
 	// Delete secondary record
 	if let Some(record_id) = secondary_dns_record_id {
-		client
+		let res = client
 			.request(&cf::dns::DeleteDnsRecord {
 				zone_identifier: zone_id,
 				identifier: &record_id,
 			})
-			.await?;
+			.await;
 
-		tracing::info!(%record_id, "deleted secondary dns record");
+		if let Err(cf_framework::response::ApiFailure::Error(
+			http::status::StatusCode::NOT_FOUND,
+			_,
+		)) = res
+		{
+			tracing::warn!(%zone_id, %record_id, "secondary dns record not found");
+		} else {
+			res?;
+			tracing::info!(%record_id, "deleted secondary dns record");
+		}
 	} else {
 		tracing::warn!("server has no secondary dns record");
 	}
