@@ -22,6 +22,7 @@ const ENCRYPT_EMAIL: &str = "letsencrypt@rivet.gg";
 async fn worker(
 	ctx: &OperationContext<cluster::msg::datacenter_tls_issue::Message>,
 ) -> GlobalResult<()> {
+	tracing::warn!("temp disabled");
 	return Ok(());
 
 	let datacenter_id = unwrap_ref!(ctx.datacenter_id).as_uuid();
@@ -237,9 +238,46 @@ async fn create_dns_record(
 				priority: None,
 			},
 		})
-		.await?;
+		.await;
 
-	Ok(create_record_res.result.id)
+	match create_record_res {
+		Ok(create_record_res) => Ok(create_record_res.result.id),
+		// Try to delete record on error
+		Err(err) => {
+			if let cf_framework::response::ApiFailure::Error(
+				http::status::StatusCode::BAD_REQUEST,
+				_,
+			) = err
+			{
+				tracing::info!(%record_name, "failed to create dns record, trying to delete");
+
+				let list_records_res = client
+					.request(&cf::dns::ListDnsRecords {
+						zone_identifier: zone_id,
+						params: cf::dns::ListDnsRecordsParams {
+							name: Some(record_name.to_string()),
+							record_type: Some(cf::dns::DnsContent::TXT {
+								// We aren't filtering by content
+								content: "".to_string(),
+							}),
+							per_page: Some(1),
+							..Default::default()
+						},
+					})
+					.await?;
+
+				if let Some(record) = list_records_res.result.first() {
+					delete_dns_record(client, zone_id, &record.id).await?;
+					tracing::info!(%record_name, "deleted dns record");
+				} else {
+					tracing::warn!(%record_name, "failed to get matching dns record");
+				}
+			}
+
+			// Throw error
+			Err(err.into())
+		}
+	}
 }
 
 async fn delete_dns_record(
