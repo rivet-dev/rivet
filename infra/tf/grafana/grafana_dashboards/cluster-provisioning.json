@@ -1,1684 +1,1718 @@
 {
-	"annotations": {
-		"list": [
-			{
-				"builtIn": 1,
-				"datasource": {
-					"type": "grafana",
-					"uid": "-- Grafana --"
-				},
-				"enable": true,
-				"hide": true,
-				"iconColor": "rgba(0, 211, 255, 1)",
-				"name": "Annotations & Alerts",
-				"type": "dashboard"
-			}
-		]
-	},
-	"editable": true,
-	"fiscalYearStartMonth": 0,
-	"graphTooltip": 1,
-	"links": [],
-	"liveNow": false,
-	"panels": [
-		{
-			"datasource": {
-				"type": "prometheus",
-				"uid": "prometheus"
-			},
-			"fieldConfig": {
-				"defaults": {
-					"color": {
-						"mode": "palette-classic"
-					},
-					"custom": {
-						"axisBorderShow": false,
-						"axisCenteredZero": false,
-						"axisColorMode": "text",
-						"axisLabel": "",
-						"axisPlacement": "auto",
-						"axisSoftMax": 5,
-						"barAlignment": 0,
-						"drawStyle": "line",
-						"fillOpacity": 0,
-						"gradientMode": "none",
-						"hideFrom": {
-							"legend": false,
-							"tooltip": false,
-							"viz": false
-						},
-						"insertNulls": false,
-						"lineInterpolation": "linear",
-						"lineWidth": 1,
-						"pointSize": 5,
-						"scaleDistribution": {
-							"type": "linear"
-						},
-						"showPoints": "auto",
-						"spanNulls": false,
-						"stacking": {
-							"group": "A",
-							"mode": "none"
-						},
-						"thresholdsStyle": {
-							"mode": "off"
-						}
-					},
-					"mappings": [],
-					"min": 0,
-					"thresholds": {
-						"mode": "absolute",
-						"steps": [
-							{
-								"color": "green",
-								"value": null
-							},
-							{
-								"color": "red",
-								"value": 80
-							}
-						]
-					}
-				},
-				"overrides": []
-			},
-			"gridPos": {
-				"h": 8,
-				"w": 12,
-				"x": 0,
-				"y": 0
-			},
-			"id": 1,
-			"options": {
-				"legend": {
-					"calcs": ["lastNotNull"],
-					"displayMode": "table",
-					"placement": "bottom",
-					"showLegend": true,
-					"sortBy": "Last *",
-					"sortDesc": true
-				},
-				"tooltip": {
-					"mode": "multi",
-					"sort": "none"
-				}
-			},
-			"targets": [
-				{
-					"datasource": {
-						"type": "prometheus",
-						"uid": "prometheus"
-					},
-					"editorMode": "code",
-					"expr": "sum by (pool_type, datacenter_id) (rivet_provision_active_servers{cluster_id=~\"[[cluster_id]]\", datacenter_id=~\"[[datacenter_id]]\", provider_datacenter_id=~\"[[provider_datacenter_id]]\", pool_type=~\"[[pool_type]]\"})",
-					"instant": false,
-					"legendFormat": "{{pool_type}} ({{datacenter_id}})",
-					"range": true,
-					"refId": "A"
-				}
-			],
-			"title": "Active Servers",
-			"type": "timeseries"
-		},
-		{
-			"datasource": {
-				"type": "prometheus",
-				"uid": "prometheus"
-			},
-			"fieldConfig": {
-				"defaults": {
-					"color": {
-						"mode": "palette-classic"
-					},
-					"custom": {
-						"axisBorderShow": false,
-						"axisCenteredZero": false,
-						"axisColorMode": "text",
-						"axisLabel": "",
-						"axisPlacement": "auto",
-						"axisSoftMax": 6,
-						"barAlignment": 0,
-						"drawStyle": "line",
-						"fillOpacity": 0,
-						"gradientMode": "none",
-						"hideFrom": {
-							"legend": false,
-							"tooltip": false,
-							"viz": false
-						},
-						"insertNulls": false,
-						"lineInterpolation": "linear",
-						"lineWidth": 1,
-						"pointSize": 5,
-						"scaleDistribution": {
-							"type": "linear"
-						},
-						"showPoints": "auto",
-						"spanNulls": false,
-						"stacking": {
-							"group": "A",
-							"mode": "none"
-						},
-						"thresholdsStyle": {
-							"mode": "off"
-						}
-					},
-					"mappings": [],
-					"min": 0,
-					"thresholds": {
-						"mode": "absolute",
-						"steps": [
-							{
-								"color": "green",
-								"value": null
-							},
-							{
-								"color": "red",
-								"value": 80
-							}
-						]
-					}
-				},
-				"overrides": []
-			},
-			"gridPos": {
-				"h": 8,
-				"w": 12,
-				"x": 12,
-				"y": 0
-			},
-			"id": 2,
-			"options": {
-				"legend": {
-					"calcs": ["lastNotNull"],
-					"displayMode": "table",
-					"placement": "bottom",
-					"showLegend": true,
-					"sortBy": "Last *",
-					"sortDesc": true
-				},
-				"tooltip": {
-					"mode": "multi",
-					"sort": "none"
-				}
-			},
-			"targets": [
-				{
-					"datasource": {
-						"type": "prometheus",
-						"uid": "prometheus"
-					},
-					"editorMode": "code",
-					"expr": "sum by (pool_type, datacenter_id) (rivet_provision_draining_servers{cluster_id=~\"[[cluster_id]]\", datacenter_id=~\"[[datacenter_id]]\", provider_datacenter_id=~\"[[provider_datacenter_id]]\", pool_type=~\"[[pool_type]]\"})",
-					"instant": false,
-					"legendFormat": "{{pool_type}} ({{datacenter_id}})",
-					"range": true,
-					"refId": "A"
-				}
-			],
-			"title": "Draining Servers",
-			"type": "timeseries"
-		},
-		{
-			"datasource": {
-				"type": "prometheus",
-				"uid": "prometheus"
-			},
-			"fieldConfig": {
-				"defaults": {
-					"color": {
-						"mode": "palette-classic"
-					},
-					"custom": {
-						"axisBorderShow": false,
-						"axisCenteredZero": false,
-						"axisColorMode": "text",
-						"axisLabel": "",
-						"axisPlacement": "auto",
-						"axisSoftMax": 5,
-						"barAlignment": 0,
-						"drawStyle": "line",
-						"fillOpacity": 0,
-						"gradientMode": "none",
-						"hideFrom": {
-							"legend": false,
-							"tooltip": false,
-							"viz": false
-						},
-						"insertNulls": false,
-						"lineInterpolation": "linear",
-						"lineWidth": 1,
-						"pointSize": 5,
-						"scaleDistribution": {
-							"type": "linear"
-						},
-						"showPoints": "auto",
-						"spanNulls": false,
-						"stacking": {
-							"group": "A",
-							"mode": "none"
-						},
-						"thresholdsStyle": {
-							"mode": "off"
-						}
-					},
-					"mappings": [],
-					"min": 0,
-					"thresholds": {
-						"mode": "absolute",
-						"steps": [
-							{
-								"color": "green",
-								"value": null
-							},
-							{
-								"color": "red",
-								"value": 80
-							}
-						]
-					}
-				},
-				"overrides": []
-			},
-			"gridPos": {
-				"h": 8,
-				"w": 12,
-				"x": 0,
-				"y": 8
-			},
-			"id": 6,
-			"options": {
-				"legend": {
-					"calcs": ["lastNotNull"],
-					"displayMode": "table",
-					"placement": "bottom",
-					"showLegend": true,
-					"sortBy": "Last *",
-					"sortDesc": true
-				},
-				"tooltip": {
-					"mode": "multi",
-					"sort": "none"
-				}
-			},
-			"targets": [
-				{
-					"datasource": {
-						"type": "prometheus",
-						"uid": "prometheus"
-					},
-					"editorMode": "code",
-					"expr": "sum by (pool_type, datacenter_id) (rivet_provision_provisioning_servers{cluster_id=~\"[[cluster_id]]\", datacenter_id=~\"[[datacenter_id]]\", provider_datacenter_id=~\"[[provider_datacenter_id]]\", pool_type=~\"[[pool_type]]\"})",
-					"instant": false,
-					"legendFormat": "{{pool_type}} ({{datacenter_id}})",
-					"range": true,
-					"refId": "A"
-				}
-			],
-			"title": "Provisioning Servers",
-			"type": "timeseries"
-		},
-		{
-			"datasource": {
-				"type": "prometheus",
-				"uid": "prometheus"
-			},
-			"fieldConfig": {
-				"defaults": {
-					"custom": {
-						"hideFrom": {
-							"legend": false,
-							"tooltip": false,
-							"viz": false
-						},
-						"scaleDistribution": {
-							"type": "linear"
-						}
-					}
-				},
-				"overrides": []
-			},
-			"gridPos": {
-				"h": 8,
-				"w": 12,
-				"x": 12,
-				"y": 8
-			},
-			"id": 9,
-			"options": {
-				"calculate": false,
-				"cellGap": 0,
-				"color": {
-					"exponent": 0.5,
-					"fill": "dark-orange",
-					"mode": "scheme",
-					"reverse": false,
-					"scale": "exponential",
-					"scheme": "RdBu",
-					"steps": 64
-				},
-				"exemplars": {
-					"color": "rgba(255,0,255,0.7)"
-				},
-				"filterValues": {
-					"le": 1e-9
-				},
-				"legend": {
-					"show": true
-				},
-				"rowsFrame": {
-					"layout": "auto"
-				},
-				"tooltip": {
-					"mode": "single",
-					"showColorScale": false,
-					"yHistogram": true
-				},
-				"yAxis": {
-					"axisPlacement": "left",
-					"reverse": false,
-					"unit": "s"
-				}
-			},
-			"pluginVersion": "10.4.1",
-			"targets": [
-				{
-					"datasource": {
-						"type": "prometheus",
-						"uid": "prometheus"
-					},
-					"editorMode": "code",
-					"expr": "sum(increase(rivet_provision_provision_duration_bucket{cluster_id=~\"[[cluster_id]]\", datacenter_id=~\"[[datacenter_id]]\", provider_datacenter_id=~\"[[provider_datacenter_id]]\", pool_type=~\"[[pool_type]]\"} [$__rate_interval])) by (le)",
-					"format": "heatmap",
-					"instant": false,
-					"legendFormat": "__auto",
-					"range": true,
-					"refId": "A"
-				}
-			],
-			"title": "Server Provision Duration",
-			"type": "heatmap"
-		},
-		{
-			"datasource": {
-				"type": "prometheus",
-				"uid": "prometheus"
-			},
-			"fieldConfig": {
-				"defaults": {
-					"color": {
-						"mode": "palette-classic"
-					},
-					"custom": {
-						"axisBorderShow": false,
-						"axisCenteredZero": false,
-						"axisColorMode": "text",
-						"axisLabel": "",
-						"axisPlacement": "auto",
-						"barAlignment": 0,
-						"drawStyle": "line",
-						"fillOpacity": 0,
-						"gradientMode": "none",
-						"hideFrom": {
-							"legend": false,
-							"tooltip": false,
-							"viz": false
-						},
-						"insertNulls": false,
-						"lineInterpolation": "linear",
-						"lineWidth": 1,
-						"pointSize": 5,
-						"scaleDistribution": {
-							"type": "linear"
-						},
-						"showPoints": "auto",
-						"spanNulls": false,
-						"stacking": {
-							"group": "A",
-							"mode": "none"
-						},
-						"thresholdsStyle": {
-							"mode": "off"
-						}
-					},
-					"mappings": [],
-					"min": 0,
-					"thresholds": {
-						"mode": "absolute",
-						"steps": [
-							{
-								"color": "green",
-								"value": null
-							},
-							{
-								"color": "red",
-								"value": 80
-							}
-						]
-					}
-				},
-				"overrides": []
-			},
-			"gridPos": {
-				"h": 8,
-				"w": 12,
-				"x": 0,
-				"y": 16
-			},
-			"id": 5,
-			"options": {
-				"legend": {
-					"calcs": ["lastNotNull"],
-					"displayMode": "table",
-					"placement": "bottom",
-					"showLegend": true
-				},
-				"tooltip": {
-					"mode": "multi",
-					"sort": "none"
-				}
-			},
-			"targets": [
-				{
-					"datasource": {
-						"type": "prometheus",
-						"uid": "prometheus"
-					},
-					"editorMode": "code",
-					"expr": "sum by (pool_type, datacenter_id) (rivet_provision_installing_servers{cluster_id=~\"[[cluster_id]]\", datacenter_id=~\"[[datacenter_id]]\", provider_datacenter_id=~\"[[provider_datacenter_id]]\", pool_type=~\"[[pool_type]]\"})",
-					"instant": false,
-					"legendFormat": "{{pool_type}} ({{datacenter_id}})",
-					"range": true,
-					"refId": "A"
-				}
-			],
-			"title": "Installing Servers",
-			"type": "timeseries"
-		},
-		{
-			"datasource": {
-				"type": "prometheus",
-				"uid": "prometheus"
-			},
-			"fieldConfig": {
-				"defaults": {
-					"custom": {
-						"hideFrom": {
-							"legend": false,
-							"tooltip": false,
-							"viz": false
-						},
-						"scaleDistribution": {
-							"type": "linear"
-						}
-					}
-				},
-				"overrides": []
-			},
-			"gridPos": {
-				"h": 8,
-				"w": 12,
-				"x": 12,
-				"y": 16
-			},
-			"id": 10,
-			"options": {
-				"calculate": false,
-				"cellGap": 0,
-				"color": {
-					"exponent": 0.5,
-					"fill": "dark-orange",
-					"mode": "scheme",
-					"reverse": false,
-					"scale": "exponential",
-					"scheme": "RdBu",
-					"steps": 64
-				},
-				"exemplars": {
-					"color": "rgba(255,0,255,0.7)"
-				},
-				"filterValues": {
-					"le": 1e-9
-				},
-				"legend": {
-					"show": true
-				},
-				"rowsFrame": {
-					"layout": "auto"
-				},
-				"tooltip": {
-					"mode": "single",
-					"showColorScale": false,
-					"yHistogram": true
-				},
-				"yAxis": {
-					"axisPlacement": "left",
-					"reverse": false,
-					"unit": "s"
-				}
-			},
-			"pluginVersion": "10.4.1",
-			"targets": [
-				{
-					"datasource": {
-						"type": "prometheus",
-						"uid": "prometheus"
-					},
-					"editorMode": "code",
-					"expr": "sum(increase(rivet_provision_install_duration_bucket{cluster_id=~\"[[cluster_id]]\", datacenter_id=~\"[[datacenter_id]]\", provider_datacenter_id=~\"[[provider_datacenter_id]]\", pool_type=~\"[[pool_type]]\"} [$__rate_interval])) by (le)",
-					"format": "heatmap",
-					"instant": false,
-					"legendFormat": "__auto",
-					"range": true,
-					"refId": "A"
-				}
-			],
-			"title": "Server Install Duration",
-			"type": "heatmap"
-		},
-		{
-			"datasource": {
-				"type": "prometheus",
-				"uid": "prometheus"
-			},
-			"fieldConfig": {
-				"defaults": {
-					"color": {
-						"mode": "palette-classic"
-					},
-					"custom": {
-						"axisBorderShow": false,
-						"axisCenteredZero": false,
-						"axisColorMode": "text",
-						"axisLabel": "",
-						"axisPlacement": "auto",
-						"axisSoftMax": 5,
-						"barAlignment": 0,
-						"drawStyle": "line",
-						"fillOpacity": 0,
-						"gradientMode": "none",
-						"hideFrom": {
-							"legend": false,
-							"tooltip": false,
-							"viz": false
-						},
-						"insertNulls": false,
-						"lineInterpolation": "linear",
-						"lineWidth": 1,
-						"pointSize": 5,
-						"scaleDistribution": {
-							"type": "linear"
-						},
-						"showPoints": "auto",
-						"spanNulls": false,
-						"stacking": {
-							"group": "A",
-							"mode": "none"
-						},
-						"thresholdsStyle": {
-							"mode": "off"
-						}
-					},
-					"mappings": [],
-					"min": 0,
-					"thresholds": {
-						"mode": "absolute",
-						"steps": [
-							{
-								"color": "green",
-								"value": null
-							},
-							{
-								"color": "red",
-								"value": 80
-							}
-						]
-					}
-				},
-				"overrides": []
-			},
-			"gridPos": {
-				"h": 8,
-				"w": 12,
-				"x": 0,
-				"y": 24
-			},
-			"id": 7,
-			"options": {
-				"legend": {
-					"calcs": [],
-					"displayMode": "list",
-					"placement": "bottom",
-					"showLegend": true
-				},
-				"tooltip": {
-					"mode": "multi",
-					"sort": "none"
-				}
-			},
-			"targets": [
-				{
-					"datasource": {
-						"type": "prometheus",
-						"uid": "prometheus"
-					},
-					"editorMode": "code",
-					"expr": "sum by (datacenter_id) (rivet_provision_nomad_servers{cluster_id=~\"[[cluster_id]]\", datacenter_id=~\"[[datacenter_id]]\", provider_datacenter_id=~\"[[provider_datacenter_id]]\", pool_type=~\"[[pool_type]]\"})",
-					"instant": false,
-					"legendFormat": "{{datacenter_id}}",
-					"range": true,
-					"refId": "A"
-				}
-			],
-			"title": "Nomad Servers",
-			"type": "timeseries"
-		},
-		{
-			"datasource": {
-				"type": "prometheus",
-				"uid": "prometheus"
-			},
-			"fieldConfig": {
-				"defaults": {
-					"custom": {
-						"hideFrom": {
-							"legend": false,
-							"tooltip": false,
-							"viz": false
-						},
-						"scaleDistribution": {
-							"type": "linear"
-						}
-					}
-				},
-				"overrides": []
-			},
-			"gridPos": {
-				"h": 8,
-				"w": 12,
-				"x": 12,
-				"y": 24
-			},
-			"id": 8,
-			"options": {
-				"calculate": false,
-				"cellGap": 0,
-				"color": {
-					"exponent": 0.5,
-					"fill": "dark-orange",
-					"mode": "scheme",
-					"reverse": false,
-					"scale": "exponential",
-					"scheme": "RdBu",
-					"steps": 64
-				},
-				"exemplars": {
-					"color": "rgba(255,0,255,0.7)"
-				},
-				"filterValues": {
-					"le": 1e-9
-				},
-				"legend": {
-					"show": true
-				},
-				"rowsFrame": {
-					"layout": "auto"
-				},
-				"tooltip": {
-					"mode": "single",
-					"showColorScale": false,
-					"yHistogram": true
-				},
-				"yAxis": {
-					"axisPlacement": "left",
-					"reverse": false,
-					"unit": "s"
-				}
-			},
-			"pluginVersion": "10.4.1",
-			"targets": [
-				{
-					"datasource": {
-						"type": "prometheus",
-						"uid": "prometheus"
-					},
-					"editorMode": "code",
-					"expr": "sum(increase(rivet_provision_nomad_join_duration_bucket{cluster_id=~\"[[cluster_id]]\", datacenter_id=~\"[[datacenter_id]]\", provider_datacenter_id=~\"[[provider_datacenter_id]]\", pool_type=~\"[[pool_type]]\"} [$__rate_interval])) by (le)",
-					"format": "heatmap",
-					"instant": false,
-					"legendFormat": "__auto",
-					"range": true,
-					"refId": "A"
-				}
-			],
-			"title": "Nomad Join Duration",
-			"type": "heatmap"
-		},
-		{
-			"datasource": {
-				"type": "prometheus",
-				"uid": "prometheus"
-			},
-			"fieldConfig": {
-				"defaults": {
-					"color": {
-						"mode": "palette-classic"
-					},
-					"custom": {
-						"axisBorderShow": false,
-						"axisCenteredZero": false,
-						"axisColorMode": "text",
-						"axisLabel": "",
-						"axisPlacement": "auto",
-						"axisSoftMax": 5,
-						"barAlignment": 0,
-						"drawStyle": "line",
-						"fillOpacity": 0,
-						"gradientMode": "none",
-						"hideFrom": {
-							"legend": false,
-							"tooltip": false,
-							"viz": false
-						},
-						"insertNulls": false,
-						"lineInterpolation": "linear",
-						"lineWidth": 1,
-						"pointSize": 5,
-						"scaleDistribution": {
-							"type": "linear"
-						},
-						"showPoints": "auto",
-						"spanNulls": false,
-						"stacking": {
-							"group": "A",
-							"mode": "none"
-						},
-						"thresholdsStyle": {
-							"mode": "off"
-						}
-					},
-					"mappings": [],
-					"min": 0,
-					"thresholds": {
-						"mode": "absolute",
-						"steps": [
-							{
-								"color": "green",
-								"value": null
-							},
-							{
-								"color": "red",
-								"value": 80
-							}
-						]
-					}
-				},
-				"overrides": []
-			},
-			"gridPos": {
-				"h": 8,
-				"w": 12,
-				"x": 0,
-				"y": 32
-			},
-			"id": 3,
-			"options": {
-				"legend": {
-					"calcs": [],
-					"displayMode": "list",
-					"placement": "bottom",
-					"showLegend": true
-				},
-				"tooltip": {
-					"mode": "multi",
-					"sort": "none"
-				}
-			},
-			"targets": [
-				{
-					"datasource": {
-						"type": "prometheus",
-						"uid": "prometheus"
-					},
-					"editorMode": "code",
-					"expr": "sum by (pool_type, datacenter_id) (rivet_provision_tainted_servers{cluster_id=~\"[[cluster_id]]\", datacenter_id=~\"[[datacenter_id]]\", provider_datacenter_id=~\"[[provider_datacenter_id]]\", pool_type=~\"[[pool_type]]\"})",
-					"instant": false,
-					"legendFormat": "{{pool_type}} ({{datacenter_id}})",
-					"range": true,
-					"refId": "A"
-				}
-			],
-			"title": "Tainted Servers",
-			"type": "timeseries"
-		},
-		{
-			"datasource": {
-				"type": "prometheus",
-				"uid": "prometheus"
-			},
-			"fieldConfig": {
-				"defaults": {
-					"color": {
-						"mode": "palette-classic"
-					},
-					"custom": {
-						"axisBorderShow": false,
-						"axisCenteredZero": false,
-						"axisColorMode": "text",
-						"axisLabel": "",
-						"axisPlacement": "auto",
-						"axisSoftMax": 5,
-						"barAlignment": 0,
-						"drawStyle": "line",
-						"fillOpacity": 0,
-						"gradientMode": "none",
-						"hideFrom": {
-							"legend": false,
-							"tooltip": false,
-							"viz": false
-						},
-						"insertNulls": false,
-						"lineInterpolation": "linear",
-						"lineWidth": 1,
-						"pointSize": 5,
-						"scaleDistribution": {
-							"type": "linear"
-						},
-						"showPoints": "auto",
-						"spanNulls": false,
-						"stacking": {
-							"group": "A",
-							"mode": "none"
-						},
-						"thresholdsStyle": {
-							"mode": "off"
-						}
-					},
-					"mappings": [],
-					"min": 0,
-					"thresholds": {
-						"mode": "absolute",
-						"steps": [
-							{
-								"color": "green",
-								"value": null
-							},
-							{
-								"color": "red",
-								"value": 80
-							}
-						]
-					}
-				},
-				"overrides": []
-			},
-			"gridPos": {
-				"h": 8,
-				"w": 12,
-				"x": 12,
-				"y": 32
-			},
-			"id": 4,
-			"options": {
-				"legend": {
-					"calcs": [],
-					"displayMode": "list",
-					"placement": "bottom",
-					"showLegend": true
-				},
-				"tooltip": {
-					"mode": "multi",
-					"sort": "none"
-				}
-			},
-			"targets": [
-				{
-					"datasource": {
-						"type": "prometheus",
-						"uid": "prometheus"
-					},
-					"editorMode": "code",
-					"expr": "sum by (pool_type, datacenter_id) (\n    rivet_provision_tainted_servers{cluster_id=~\"[[cluster_id]]\", datacenter_id=~\"[[datacenter_id]]\", provider_datacenter_id=~\"[[provider_datacenter_id]]\", pool_type=~\"[[pool_type]]\"} and\n    rivet_provision_draining_servers{cluster_id=~\"[[cluster_id]]\", datacenter_id=~\"[[datacenter_id]]\", provider_datacenter_id=~\"[[provider_datacenter_id]]\", pool_type=~\"[[pool_type]]\"}\n)",
-					"instant": false,
-					"legendFormat": "{{pool_type}} ({{datacenter_id}})",
-					"range": true,
-					"refId": "A"
-				}
-			],
-			"title": "Draining Tainted Servers",
-			"type": "timeseries"
-		},
-		{
-			"datasource": {
-				"type": "prometheus",
-				"uid": "prometheus"
-			},
-			"fieldConfig": {
-				"defaults": {
-					"color": {
-						"mode": "palette-classic"
-					},
-					"custom": {
-						"axisBorderShow": false,
-						"axisCenteredZero": false,
-						"axisColorMode": "text",
-						"axisLabel": "",
-						"axisPlacement": "auto",
-						"axisSoftMax": 1,
-						"barAlignment": 0,
-						"drawStyle": "line",
-						"fillOpacity": 0,
-						"gradientMode": "none",
-						"hideFrom": {
-							"legend": false,
-							"tooltip": false,
-							"viz": false
-						},
-						"insertNulls": false,
-						"lineInterpolation": "linear",
-						"lineStyle": {
-							"fill": "solid"
-						},
-						"lineWidth": 1,
-						"pointSize": 5,
-						"scaleDistribution": {
-							"type": "linear"
-						},
-						"showPoints": "auto",
-						"spanNulls": false,
-						"stacking": {
-							"group": "A",
-							"mode": "none"
-						},
-						"thresholdsStyle": {
-							"mode": "off"
-						}
-					},
-					"mappings": [],
-					"min": 0,
-					"thresholds": {
-						"mode": "absolute",
-						"steps": [
-							{
-								"color": "green",
-								"value": null
-							},
-							{
-								"color": "red",
-								"value": 80
-							}
-						]
-					},
-					"unit": "percentunit"
-				},
-				"overrides": []
-			},
-			"gridPos": {
-				"h": 8,
-				"w": 12,
-				"x": 0,
-				"y": 40
-			},
-			"id": 13,
-			"options": {
-				"legend": {
-					"calcs": [],
-					"displayMode": "list",
-					"placement": "bottom",
-					"showLegend": true
-				},
-				"tooltip": {
-					"mode": "multi",
-					"sort": "none"
-				}
-			},
-			"targets": [
-				{
-					"datasource": {
-						"type": "prometheus",
-						"uid": "prometheus"
-					},
-					"editorMode": "code",
-					"expr": "sum by (server_id) (nomad_client_allocated_cpu{cluster_id=~\"[[cluster_id]]\", datacenter_id=~\"[[datacenter_id]]\"}) /\nsum by (server_id) (nomad_client_allocated_cpu{cluster_id=~\"[[cluster_id]]\", datacenter_id=~\"[[datacenter_id]]\"} + nomad_client_unallocated_cpu{cluster_id=~\"[[cluster_id]]\", datacenter_id=~\"[[datacenter_id]]\"})",
-					"instant": false,
-					"legendFormat": "__auto",
-					"range": true,
-					"refId": "A"
-				}
-			],
-			"title": "Job Allocated CPU",
-			"type": "timeseries"
-		},
-		{
-			"datasource": {
-				"type": "prometheus",
-				"uid": "prometheus"
-			},
-			"fieldConfig": {
-				"defaults": {
-					"color": {
-						"mode": "palette-classic"
-					},
-					"custom": {
-						"axisBorderShow": false,
-						"axisCenteredZero": false,
-						"axisColorMode": "text",
-						"axisLabel": "",
-						"axisPlacement": "auto",
-						"axisSoftMax": 1,
-						"barAlignment": 0,
-						"drawStyle": "line",
-						"fillOpacity": 0,
-						"gradientMode": "none",
-						"hideFrom": {
-							"legend": false,
-							"tooltip": false,
-							"viz": false
-						},
-						"insertNulls": false,
-						"lineInterpolation": "linear",
-						"lineWidth": 1,
-						"pointSize": 5,
-						"scaleDistribution": {
-							"type": "linear"
-						},
-						"showPoints": "auto",
-						"spanNulls": false,
-						"stacking": {
-							"group": "A",
-							"mode": "none"
-						},
-						"thresholdsStyle": {
-							"mode": "off"
-						}
-					},
-					"mappings": [],
-					"min": 0,
-					"thresholds": {
-						"mode": "absolute",
-						"steps": [
-							{
-								"color": "green",
-								"value": null
-							},
-							{
-								"color": "red",
-								"value": 80
-							}
-						]
-					},
-					"unit": "percentunit"
-				},
-				"overrides": []
-			},
-			"gridPos": {
-				"h": 8,
-				"w": 12,
-				"x": 12,
-				"y": 40
-			},
-			"id": 14,
-			"options": {
-				"legend": {
-					"calcs": [],
-					"displayMode": "list",
-					"placement": "bottom",
-					"showLegend": true
-				},
-				"tooltip": {
-					"mode": "multi",
-					"sort": "none"
-				}
-			},
-			"targets": [
-				{
-					"datasource": {
-						"type": "prometheus",
-						"uid": "prometheus"
-					},
-					"editorMode": "code",
-					"expr": "sum by (server_id) (nomad_client_allocated_memory{cluster_id=~\"[[cluster_id]]\", datacenter_id=~\"[[datacenter_id]]\"}) /\nsum by (server_id) (nomad_client_allocated_memory{cluster_id=~\"[[cluster_id]]\", datacenter_id=~\"[[datacenter_id]]\"} + nomad_client_unallocated_memory{cluster_id=~\"[[cluster_id]]\", datacenter_id=~\"[[datacenter_id]]\"})",
-					"instant": false,
-					"legendFormat": "__auto",
-					"range": true,
-					"refId": "A"
-				}
-			],
-			"title": "Job Allocated Memory",
-			"type": "timeseries"
-		},
-		{
-			"datasource": {
-				"type": "prometheus",
-				"uid": "prometheus"
-			},
-			"fieldConfig": {
-				"defaults": {
-					"color": {
-						"mode": "palette-classic"
-					},
-					"custom": {
-						"axisBorderShow": false,
-						"axisCenteredZero": false,
-						"axisColorMode": "text",
-						"axisLabel": "",
-						"axisPlacement": "auto",
-						"axisSoftMax": 100,
-						"barAlignment": 0,
-						"drawStyle": "line",
-						"fillOpacity": 0,
-						"gradientMode": "none",
-						"hideFrom": {
-							"legend": false,
-							"tooltip": false,
-							"viz": false
-						},
-						"insertNulls": false,
-						"lineInterpolation": "linear",
-						"lineWidth": 1,
-						"pointSize": 5,
-						"scaleDistribution": {
-							"type": "linear"
-						},
-						"showPoints": "auto",
-						"spanNulls": false,
-						"stacking": {
-							"group": "A",
-							"mode": "none"
-						},
-						"thresholdsStyle": {
-							"mode": "off"
-						}
-					},
-					"mappings": [],
-					"min": 0,
-					"thresholds": {
-						"mode": "absolute",
-						"steps": [
-							{
-								"color": "green",
-								"value": null
-							},
-							{
-								"color": "red",
-								"value": 80
-							}
-						]
-					},
-					"unit": "percent"
-				},
-				"overrides": []
-			},
-			"gridPos": {
-				"h": 8,
-				"w": 12,
-				"x": 0,
-				"y": 48
-			},
-			"id": 11,
-			"options": {
-				"legend": {
-					"calcs": ["last"],
-					"displayMode": "table",
-					"placement": "bottom",
-					"showLegend": true,
-					"sortBy": "Last",
-					"sortDesc": true
-				},
-				"tooltip": {
-					"mode": "multi",
-					"sort": "none"
-				}
-			},
-			"targets": [
-				{
-					"datasource": {
-						"type": "prometheus",
-						"uid": "prometheus"
-					},
-					"editorMode": "code",
-					"exemplar": false,
-					"expr": "sum by (server_id, datacenter_id) (\n\tirate(\n\t\tnode_cpu_seconds_total{\n\t\t\tcluster_id=~\"[[cluster_id]]\",\n\t\t\tdatacenter_id=~\"[[datacenter_id]]\",\n\t\t\tpool_type=\"gg\",\n\n\t\t\tmode!=\"idle\",\n\t\t\tmode!=\"iowait\",\n\t\t\tmode!=\"steal\"\n\t\t}\n\t\t[5m]\n\t)\n) * 100",
-					"instant": false,
-					"interval": "",
-					"legendFormat": "{{server_id}} ({{datacenter_id}})",
-					"range": true,
-					"refId": "A"
-				}
-			],
-			"title": "GG CPU",
-			"type": "timeseries"
-		},
-		{
-			"datasource": {
-				"type": "prometheus",
-				"uid": "prometheus"
-			},
-			"fieldConfig": {
-				"defaults": {
-					"color": {
-						"mode": "palette-classic"
-					},
-					"custom": {
-						"axisBorderShow": false,
-						"axisCenteredZero": false,
-						"axisColorMode": "text",
-						"axisLabel": "",
-						"axisPlacement": "auto",
-						"axisSoftMax": 100,
-						"barAlignment": 0,
-						"drawStyle": "line",
-						"fillOpacity": 0,
-						"gradientMode": "none",
-						"hideFrom": {
-							"legend": false,
-							"tooltip": false,
-							"viz": false
-						},
-						"insertNulls": false,
-						"lineInterpolation": "linear",
-						"lineWidth": 1,
-						"pointSize": 5,
-						"scaleDistribution": {
-							"type": "linear"
-						},
-						"showPoints": "auto",
-						"spanNulls": false,
-						"stacking": {
-							"group": "A",
-							"mode": "none"
-						},
-						"thresholdsStyle": {
-							"mode": "off"
-						}
-					},
-					"mappings": [],
-					"min": 0,
-					"thresholds": {
-						"mode": "absolute",
-						"steps": [
-							{
-								"color": "green",
-								"value": null
-							},
-							{
-								"color": "red",
-								"value": 80
-							}
-						]
-					},
-					"unit": "percent"
-				},
-				"overrides": []
-			},
-			"gridPos": {
-				"h": 8,
-				"w": 12,
-				"x": 12,
-				"y": 48
-			},
-			"id": 15,
-			"options": {
-				"legend": {
-					"calcs": ["lastNotNull"],
-					"displayMode": "table",
-					"placement": "bottom",
-					"showLegend": true,
-					"sortBy": "Last *",
-					"sortDesc": true
-				},
-				"tooltip": {
-					"mode": "multi",
-					"sort": "none"
-				}
-			},
-			"targets": [
-				{
-					"datasource": {
-						"type": "prometheus",
-						"uid": "prometheus"
-					},
-					"editorMode": "code",
-					"exemplar": false,
-					"expr": "sum by (server_id, datacenter_id) (\n    node_memory_Active_bytes{\n        cluster_id=~\"[[cluster_id]]\",\n        datacenter_id=~\"[[datacenter_id]]\",\n        pool_type=\"gg\"\n    } /\n    node_memory_MemTotal_bytes{\n       cluster_id=~\"[[cluster_id]]\",\n        datacenter_id=~\"[[datacenter_id]]\",\n        pool_type=\"gg\"\n    } *\n    100\n)",
-					"instant": false,
-					"interval": "",
-					"legendFormat": "{{server_id}} ({{datacenter_id}})",
-					"range": true,
-					"refId": "A"
-				}
-			],
-			"title": "GG Memory",
-			"type": "timeseries"
-		},
-		{
-			"datasource": {
-				"type": "prometheus",
-				"uid": "prometheus"
-			},
-			"fieldConfig": {
-				"defaults": {
-					"color": {
-						"mode": "palette-classic"
-					},
-					"custom": {
-						"axisBorderShow": false,
-						"axisCenteredZero": false,
-						"axisColorMode": "text",
-						"axisLabel": "",
-						"axisPlacement": "auto",
-						"axisSoftMax": 100,
-						"barAlignment": 0,
-						"drawStyle": "line",
-						"fillOpacity": 0,
-						"gradientMode": "none",
-						"hideFrom": {
-							"legend": false,
-							"tooltip": false,
-							"viz": false
-						},
-						"insertNulls": false,
-						"lineInterpolation": "linear",
-						"lineWidth": 1,
-						"pointSize": 5,
-						"scaleDistribution": {
-							"type": "linear"
-						},
-						"showPoints": "auto",
-						"spanNulls": false,
-						"stacking": {
-							"group": "A",
-							"mode": "none"
-						},
-						"thresholdsStyle": {
-							"mode": "off"
-						}
-					},
-					"mappings": [],
-					"min": 0,
-					"thresholds": {
-						"mode": "absolute",
-						"steps": [
-							{
-								"color": "green",
-								"value": null
-							},
-							{
-								"color": "red",
-								"value": 80
-							}
-						]
-					},
-					"unit": "percent"
-				},
-				"overrides": []
-			},
-			"gridPos": {
-				"h": 8,
-				"w": 12,
-				"x": 0,
-				"y": 56
-			},
-			"id": 16,
-			"options": {
-				"legend": {
-					"calcs": ["lastNotNull"],
-					"displayMode": "table",
-					"placement": "bottom",
-					"showLegend": true,
-					"sortBy": "Last *",
-					"sortDesc": true
-				},
-				"tooltip": {
-					"mode": "multi",
-					"sort": "none"
-				}
-			},
-			"targets": [
-				{
-					"datasource": {
-						"type": "prometheus",
-						"uid": "prometheus"
-					},
-					"editorMode": "code",
-					"exemplar": false,
-					"expr": "sum by (server_id) (\n\tirate(\n\t\tnode_cpu_seconds_total{\n\t\t\tcluster_id=~\"[[cluster_id]]\",\n\t\t\tdatacenter_id=~\"[[datacenter_id]]\",\n\t\t\tpool_type=\"ats\",\n\n\t\t\tmode!=\"idle\",\n\t\t\tmode!=\"iowait\",\n\t\t\tmode!=\"steal\"\n\t\t}\n\t\t[5m]\n\t)\n) * 100",
-					"instant": false,
-					"interval": "",
-					"legendFormat": "__auto",
-					"range": true,
-					"refId": "A"
-				}
-			],
-			"title": "ATS CPU",
-			"type": "timeseries"
-		},
-		{
-			"datasource": {
-				"type": "prometheus",
-				"uid": "prometheus"
-			},
-			"fieldConfig": {
-				"defaults": {
-					"color": {
-						"mode": "palette-classic"
-					},
-					"custom": {
-						"axisBorderShow": false,
-						"axisCenteredZero": false,
-						"axisColorMode": "text",
-						"axisLabel": "",
-						"axisPlacement": "auto",
-						"axisSoftMax": 100,
-						"barAlignment": 0,
-						"drawStyle": "line",
-						"fillOpacity": 0,
-						"gradientMode": "none",
-						"hideFrom": {
-							"legend": false,
-							"tooltip": false,
-							"viz": false
-						},
-						"insertNulls": false,
-						"lineInterpolation": "linear",
-						"lineWidth": 1,
-						"pointSize": 5,
-						"scaleDistribution": {
-							"type": "linear"
-						},
-						"showPoints": "auto",
-						"spanNulls": false,
-						"stacking": {
-							"group": "A",
-							"mode": "none"
-						},
-						"thresholdsStyle": {
-							"mode": "off"
-						}
-					},
-					"mappings": [],
-					"min": 0,
-					"thresholds": {
-						"mode": "absolute",
-						"steps": [
-							{
-								"color": "green",
-								"value": null
-							},
-							{
-								"color": "red",
-								"value": 80
-							}
-						]
-					},
-					"unit": "percent"
-				},
-				"overrides": []
-			},
-			"gridPos": {
-				"h": 8,
-				"w": 12,
-				"x": 12,
-				"y": 56
-			},
-			"id": 17,
-			"options": {
-				"legend": {
-					"calcs": ["lastNotNull"],
-					"displayMode": "table",
-					"placement": "bottom",
-					"showLegend": true,
-					"sortBy": "Last *",
-					"sortDesc": true
-				},
-				"tooltip": {
-					"mode": "multi",
-					"sort": "none"
-				}
-			},
-			"targets": [
-				{
-					"datasource": {
-						"type": "prometheus",
-						"uid": "prometheus"
-					},
-					"editorMode": "code",
-					"exemplar": false,
-					"expr": "sum by (server_id) (\n    node_memory_Active_bytes{\n        cluster_id=~\"[[cluster_id]]\",\n        datacenter_id=~\"[[datacenter_id]]\",\n        pool_type=\"ats\"\n    } /\n    node_memory_MemTotal_bytes{\n        cluster_id=~\"[[cluster_id]]\",\n        datacenter_id=~\"[[datacenter_id]]\",\n        pool_type=\"ats\"\n    } *\n    100\n)",
-					"instant": false,
-					"interval": "",
-					"legendFormat": "__auto",
-					"range": true,
-					"refId": "A"
-				}
-			],
-			"title": "ATS Memory",
-			"type": "timeseries"
-		}
-	],
-	"refresh": "5s",
-	"schemaVersion": 39,
-	"tags": ["rivet"],
-	"templating": {
-		"list": [
-			{
-				"current": {
-					"selected": false,
-					"text": ["All"],
-					"value": ["$__all"]
-				},
-				"datasource": {
-					"type": "prometheus",
-					"uid": "prometheus"
-				},
-				"definition": "label_values(rivet_provision_active_servers,cluster_id)",
-				"hide": 0,
-				"includeAll": true,
-				"label": "Cluster ID",
-				"multi": true,
-				"name": "cluster_id",
-				"options": [],
-				"query": {
-					"query": "label_values(rivet_provision_active_servers,cluster_id)",
-					"refId": "PrometheusVariableQueryEditor-VariableQuery"
-				},
-				"refresh": 1,
-				"regex": "",
-				"skipUrlSync": false,
-				"sort": 0,
-				"type": "query"
-			},
-			{
-				"current": {
-					"selected": false,
-					"text": ["All"],
-					"value": ["$__all"]
-				},
-				"datasource": {
-					"type": "prometheus",
-					"uid": "prometheus"
-				},
-				"definition": "label_values(rivet_provision_active_servers,datacenter_id)",
-				"hide": 0,
-				"includeAll": true,
-				"label": "Datacenter ID",
-				"multi": true,
-				"name": "datacenter_id",
-				"options": [],
-				"query": {
-					"query": "label_values(rivet_provision_active_servers,datacenter_id)",
-					"refId": "PrometheusVariableQueryEditor-VariableQuery"
-				},
-				"refresh": 1,
-				"regex": "",
-				"skipUrlSync": false,
-				"sort": 0,
-				"type": "query"
-			},
-			{
-				"current": {
-					"selected": true,
-					"text": ["All"],
-					"value": ["$__all"]
-				},
-				"datasource": {
-					"type": "prometheus",
-					"uid": "prometheus"
-				},
-				"definition": "label_values(rivet_provision_active_servers,provider_datacenter_id)",
-				"hide": 0,
-				"includeAll": true,
-				"label": "Provider Region",
-				"multi": true,
-				"name": "provider_datacenter_id",
-				"options": [],
-				"query": {
-					"query": "label_values(rivet_provision_active_servers,provider_datacenter_id)",
-					"refId": "PrometheusVariableQueryEditor-VariableQuery"
-				},
-				"refresh": 1,
-				"regex": "",
-				"skipUrlSync": false,
-				"sort": 0,
-				"type": "query"
-			},
-			{
-				"current": {
-					"selected": true,
-					"text": ["All"],
-					"value": ["$__all"]
-				},
-				"datasource": {
-					"type": "prometheus",
-					"uid": "prometheus"
-				},
-				"definition": "label_values(rivet_provision_active_servers,pool_type)",
-				"hide": 0,
-				"includeAll": true,
-				"label": "Pool",
-				"multi": true,
-				"name": "pool_type",
-				"options": [],
-				"query": {
-					"query": "label_values(rivet_provision_active_servers,pool_type)",
-					"refId": "PrometheusVariableQueryEditor-VariableQuery"
-				},
-				"refresh": 1,
-				"regex": "",
-				"skipUrlSync": false,
-				"sort": 0,
-				"type": "query"
-			}
-		]
-	},
-	"time": {
-		"from": "now-24h",
-		"to": "now"
-	},
-	"timepicker": {},
-	"timezone": "",
-	"title": "Cluster / Provision",
-	"uid": "aa49514c-cb94-47f0-ae0f-12a4ec20069a",
-	"version": 2,
-	"weekStart": ""
+  "annotations": {
+    "list": [
+      {
+        "builtIn": 1,
+        "datasource": {
+          "type": "grafana",
+          "uid": "-- Grafana --"
+        },
+        "enable": true,
+        "hide": true,
+        "iconColor": "rgba(0, 211, 255, 1)",
+        "name": "Annotations & Alerts",
+        "type": "dashboard"
+      }
+    ]
+  },
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 1,
+  "links": [],
+  "liveNow": false,
+  "panels": [
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "axisSoftMax": 5,
+            "barAlignment": 0,
+            "drawStyle": "line",
+            "fillOpacity": 0,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "auto",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "min": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 0
+      },
+      "id": 1,
+      "options": {
+        "legend": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true,
+          "sortBy": "Last *",
+          "sortDesc": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "none"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "editorMode": "code",
+          "expr": "sum by (pool_type, datacenter_id) (rivet_provision_active_servers{cluster_id=~\"[[cluster_id]]\", datacenter_id=~\"[[datacenter_id]]\", provider_datacenter_id=~\"[[provider_datacenter_id]]\", pool_type=~\"[[pool_type]]\"})",
+          "instant": false,
+          "legendFormat": "{{pool_type}} ({{datacenter_id}})",
+          "range": true,
+          "refId": "A"
+        }
+      ],
+      "title": "Active Servers",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "axisSoftMax": 6,
+            "barAlignment": 0,
+            "drawStyle": "line",
+            "fillOpacity": 0,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "auto",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "min": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 0
+      },
+      "id": 2,
+      "options": {
+        "legend": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true,
+          "sortBy": "Last *",
+          "sortDesc": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "none"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "editorMode": "code",
+          "expr": "sum by (pool_type, datacenter_id) (rivet_provision_draining_servers{cluster_id=~\"[[cluster_id]]\", datacenter_id=~\"[[datacenter_id]]\", provider_datacenter_id=~\"[[provider_datacenter_id]]\", pool_type=~\"[[pool_type]]\"})",
+          "instant": false,
+          "legendFormat": "{{pool_type}} ({{datacenter_id}})",
+          "range": true,
+          "refId": "A"
+        }
+      ],
+      "title": "Draining Servers",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "axisSoftMax": 5,
+            "barAlignment": 0,
+            "drawStyle": "line",
+            "fillOpacity": 0,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "auto",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "min": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 8
+      },
+      "id": 6,
+      "options": {
+        "legend": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true,
+          "sortBy": "Last *",
+          "sortDesc": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "none"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "editorMode": "code",
+          "expr": "sum by (pool_type, datacenter_id) (rivet_provision_provisioning_servers{cluster_id=~\"[[cluster_id]]\", datacenter_id=~\"[[datacenter_id]]\", provider_datacenter_id=~\"[[provider_datacenter_id]]\", pool_type=~\"[[pool_type]]\"})",
+          "instant": false,
+          "legendFormat": "{{pool_type}} ({{datacenter_id}})",
+          "range": true,
+          "refId": "A"
+        }
+      ],
+      "title": "Provisioning Servers",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "scaleDistribution": {
+              "type": "linear"
+            }
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 8
+      },
+      "id": 9,
+      "options": {
+        "calculate": false,
+        "cellGap": 0,
+        "color": {
+          "exponent": 0.5,
+          "fill": "dark-orange",
+          "mode": "scheme",
+          "reverse": false,
+          "scale": "exponential",
+          "scheme": "RdBu",
+          "steps": 64
+        },
+        "exemplars": {
+          "color": "rgba(255,0,255,0.7)"
+        },
+        "filterValues": {
+          "le": 1e-9
+        },
+        "legend": {
+          "show": true
+        },
+        "rowsFrame": {
+          "layout": "auto"
+        },
+        "tooltip": {
+          "mode": "single",
+          "showColorScale": false,
+          "yHistogram": true
+        },
+        "yAxis": {
+          "axisPlacement": "left",
+          "reverse": false,
+          "unit": "s"
+        }
+      },
+      "pluginVersion": "10.4.1",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "editorMode": "code",
+          "expr": "sum(increase(rivet_provision_provision_duration_bucket{cluster_id=~\"[[cluster_id]]\", datacenter_id=~\"[[datacenter_id]]\", provider_datacenter_id=~\"[[provider_datacenter_id]]\", pool_type=~\"[[pool_type]]\"} [$__rate_interval])) by (le)",
+          "format": "heatmap",
+          "instant": false,
+          "legendFormat": "__auto",
+          "range": true,
+          "refId": "A"
+        }
+      ],
+      "title": "Server Provision Duration",
+      "type": "heatmap"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "drawStyle": "line",
+            "fillOpacity": 0,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "auto",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "min": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 16
+      },
+      "id": 5,
+      "options": {
+        "legend": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "none"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "editorMode": "code",
+          "expr": "sum by (pool_type, datacenter_id) (rivet_provision_installing_servers{cluster_id=~\"[[cluster_id]]\", datacenter_id=~\"[[datacenter_id]]\", provider_datacenter_id=~\"[[provider_datacenter_id]]\", pool_type=~\"[[pool_type]]\"})",
+          "instant": false,
+          "legendFormat": "{{pool_type}} ({{datacenter_id}})",
+          "range": true,
+          "refId": "A"
+        }
+      ],
+      "title": "Installing Servers",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "scaleDistribution": {
+              "type": "linear"
+            }
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 16
+      },
+      "id": 10,
+      "options": {
+        "calculate": false,
+        "cellGap": 0,
+        "color": {
+          "exponent": 0.5,
+          "fill": "dark-orange",
+          "mode": "scheme",
+          "reverse": false,
+          "scale": "exponential",
+          "scheme": "RdBu",
+          "steps": 64
+        },
+        "exemplars": {
+          "color": "rgba(255,0,255,0.7)"
+        },
+        "filterValues": {
+          "le": 1e-9
+        },
+        "legend": {
+          "show": true
+        },
+        "rowsFrame": {
+          "layout": "auto"
+        },
+        "tooltip": {
+          "mode": "single",
+          "showColorScale": false,
+          "yHistogram": true
+        },
+        "yAxis": {
+          "axisPlacement": "left",
+          "reverse": false,
+          "unit": "s"
+        }
+      },
+      "pluginVersion": "10.4.1",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "editorMode": "code",
+          "expr": "sum(increase(rivet_provision_install_duration_bucket{cluster_id=~\"[[cluster_id]]\", datacenter_id=~\"[[datacenter_id]]\", provider_datacenter_id=~\"[[provider_datacenter_id]]\", pool_type=~\"[[pool_type]]\"} [$__rate_interval])) by (le)",
+          "format": "heatmap",
+          "instant": false,
+          "legendFormat": "__auto",
+          "range": true,
+          "refId": "A"
+        }
+      ],
+      "title": "Server Install Duration",
+      "type": "heatmap"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "axisSoftMax": 5,
+            "barAlignment": 0,
+            "drawStyle": "line",
+            "fillOpacity": 0,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "auto",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "min": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 24
+      },
+      "id": 7,
+      "options": {
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "none"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "editorMode": "code",
+          "expr": "sum by (datacenter_id) (rivet_provision_nomad_servers{cluster_id=~\"[[cluster_id]]\", datacenter_id=~\"[[datacenter_id]]\", provider_datacenter_id=~\"[[provider_datacenter_id]]\"})",
+          "instant": false,
+          "legendFormat": "{{datacenter_id}}",
+          "range": true,
+          "refId": "A"
+        }
+      ],
+      "title": "Nomad Servers",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "scaleDistribution": {
+              "type": "linear"
+            }
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 24
+      },
+      "id": 8,
+      "options": {
+        "calculate": false,
+        "cellGap": 0,
+        "color": {
+          "exponent": 0.5,
+          "fill": "dark-orange",
+          "mode": "scheme",
+          "reverse": false,
+          "scale": "exponential",
+          "scheme": "RdBu",
+          "steps": 64
+        },
+        "exemplars": {
+          "color": "rgba(255,0,255,0.7)"
+        },
+        "filterValues": {
+          "le": 1e-9
+        },
+        "legend": {
+          "show": true
+        },
+        "rowsFrame": {
+          "layout": "auto"
+        },
+        "tooltip": {
+          "mode": "single",
+          "showColorScale": false,
+          "yHistogram": true
+        },
+        "yAxis": {
+          "axisPlacement": "left",
+          "reverse": false,
+          "unit": "s"
+        }
+      },
+      "pluginVersion": "10.4.1",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "editorMode": "code",
+          "expr": "sum(increase(rivet_provision_nomad_join_duration_bucket{cluster_id=~\"[[cluster_id]]\", datacenter_id=~\"[[datacenter_id]]\", provider_datacenter_id=~\"[[provider_datacenter_id]]\"} [$__rate_interval])) by (le)",
+          "format": "heatmap",
+          "instant": false,
+          "legendFormat": "__auto",
+          "range": true,
+          "refId": "A"
+        }
+      ],
+      "title": "Nomad Join Duration",
+      "type": "heatmap"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "axisSoftMax": 5,
+            "barAlignment": 0,
+            "drawStyle": "line",
+            "fillOpacity": 0,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "auto",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "min": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 32
+      },
+      "id": 3,
+      "options": {
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "none"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "editorMode": "code",
+          "expr": "sum by (pool_type, datacenter_id) (rivet_provision_tainted_servers{cluster_id=~\"[[cluster_id]]\", datacenter_id=~\"[[datacenter_id]]\", provider_datacenter_id=~\"[[provider_datacenter_id]]\", pool_type=~\"[[pool_type]]\"})",
+          "instant": false,
+          "legendFormat": "{{pool_type}} ({{datacenter_id}})",
+          "range": true,
+          "refId": "A"
+        }
+      ],
+      "title": "Tainted Servers",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "axisSoftMax": 5,
+            "barAlignment": 0,
+            "drawStyle": "line",
+            "fillOpacity": 0,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "auto",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "min": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 32
+      },
+      "id": 4,
+      "options": {
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "none"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "editorMode": "code",
+          "expr": "sum by (pool_type, datacenter_id) (\n    rivet_provision_tainted_servers{cluster_id=~\"[[cluster_id]]\", datacenter_id=~\"[[datacenter_id]]\", provider_datacenter_id=~\"[[provider_datacenter_id]]\", pool_type=~\"[[pool_type]]\"} and\n    rivet_provision_draining_servers{cluster_id=~\"[[cluster_id]]\", datacenter_id=~\"[[datacenter_id]]\", provider_datacenter_id=~\"[[provider_datacenter_id]]\", pool_type=~\"[[pool_type]]\"}\n)",
+          "instant": false,
+          "legendFormat": "{{pool_type}} ({{datacenter_id}})",
+          "range": true,
+          "refId": "A"
+        }
+      ],
+      "title": "Draining Tainted Servers",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "axisSoftMax": 1,
+            "barAlignment": 0,
+            "drawStyle": "line",
+            "fillOpacity": 0,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "linear",
+            "lineStyle": {
+              "fill": "solid"
+            },
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "auto",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "min": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          },
+          "unit": "percentunit"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 40
+      },
+      "id": 13,
+      "options": {
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "none"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "editorMode": "code",
+          "expr": "sum by (server_id) (nomad_client_allocated_cpu{cluster_id=~\"[[cluster_id]]\", datacenter_id=~\"[[datacenter_id]]\"}) /\nsum by (server_id) (nomad_client_allocated_cpu{cluster_id=~\"[[cluster_id]]\", datacenter_id=~\"[[datacenter_id]]\"} + nomad_client_unallocated_cpu{cluster_id=~\"[[cluster_id]]\", datacenter_id=~\"[[datacenter_id]]\"})",
+          "instant": false,
+          "legendFormat": "__auto",
+          "range": true,
+          "refId": "A"
+        }
+      ],
+      "title": "Job Allocated CPU",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "axisSoftMax": 1,
+            "barAlignment": 0,
+            "drawStyle": "line",
+            "fillOpacity": 0,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "auto",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "min": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          },
+          "unit": "percentunit"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 40
+      },
+      "id": 14,
+      "options": {
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "none"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "editorMode": "code",
+          "expr": "sum by (server_id) (nomad_client_allocated_memory{cluster_id=~\"[[cluster_id]]\", datacenter_id=~\"[[datacenter_id]]\"}) /\nsum by (server_id) (nomad_client_allocated_memory{cluster_id=~\"[[cluster_id]]\", datacenter_id=~\"[[datacenter_id]]\"} + nomad_client_unallocated_memory{cluster_id=~\"[[cluster_id]]\", datacenter_id=~\"[[datacenter_id]]\"})",
+          "instant": false,
+          "legendFormat": "__auto",
+          "range": true,
+          "refId": "A"
+        }
+      ],
+      "title": "Job Allocated Memory",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "axisSoftMax": 100,
+            "barAlignment": 0,
+            "drawStyle": "line",
+            "fillOpacity": 0,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "auto",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "min": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          },
+          "unit": "percent"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 48
+      },
+      "id": 11,
+      "options": {
+        "legend": {
+          "calcs": [
+            "last"
+          ],
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true,
+          "sortBy": "Last",
+          "sortDesc": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "none"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "editorMode": "code",
+          "exemplar": false,
+          "expr": "sum by (server_id, datacenter_id) (\n\tirate(\n\t\tnode_cpu_seconds_total{\n\t\t\tcluster_id=~\"[[cluster_id]]\",\n\t\t\tdatacenter_id=~\"[[datacenter_id]]\",\n\t\t\tpool_type=\"gg\",\n\n\t\t\tmode!=\"idle\",\n\t\t\tmode!=\"iowait\",\n\t\t\tmode!=\"steal\"\n\t\t}\n\t\t[5m]\n\t)\n) * 100",
+          "instant": false,
+          "interval": "",
+          "legendFormat": "{{server_id}} ({{datacenter_id}})",
+          "range": true,
+          "refId": "A"
+        }
+      ],
+      "title": "GG CPU",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "axisSoftMax": 100,
+            "barAlignment": 0,
+            "drawStyle": "line",
+            "fillOpacity": 0,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "auto",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "min": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          },
+          "unit": "percent"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 48
+      },
+      "id": 15,
+      "options": {
+        "legend": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true,
+          "sortBy": "Last *",
+          "sortDesc": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "none"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "editorMode": "code",
+          "exemplar": false,
+          "expr": "sum by (server_id, datacenter_id) (\n    node_memory_Active_bytes{\n        cluster_id=~\"[[cluster_id]]\",\n        datacenter_id=~\"[[datacenter_id]]\",\n        pool_type=\"gg\"\n    } /\n    node_memory_MemTotal_bytes{\n       cluster_id=~\"[[cluster_id]]\",\n        datacenter_id=~\"[[datacenter_id]]\",\n        pool_type=\"gg\"\n    } *\n    100\n)",
+          "instant": false,
+          "interval": "",
+          "legendFormat": "{{server_id}} ({{datacenter_id}})",
+          "range": true,
+          "refId": "A"
+        }
+      ],
+      "title": "GG Memory",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "axisSoftMax": 100,
+            "barAlignment": 0,
+            "drawStyle": "line",
+            "fillOpacity": 0,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "auto",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "min": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          },
+          "unit": "percent"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 56
+      },
+      "id": 16,
+      "options": {
+        "legend": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true,
+          "sortBy": "Last *",
+          "sortDesc": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "none"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "editorMode": "code",
+          "exemplar": false,
+          "expr": "sum by (server_id) (\n\tirate(\n\t\tnode_cpu_seconds_total{\n\t\t\tcluster_id=~\"[[cluster_id]]\",\n\t\t\tdatacenter_id=~\"[[datacenter_id]]\",\n\t\t\tpool_type=\"ats\",\n\n\t\t\tmode!=\"idle\",\n\t\t\tmode!=\"iowait\",\n\t\t\tmode!=\"steal\"\n\t\t}\n\t\t[5m]\n\t)\n) * 100",
+          "instant": false,
+          "interval": "",
+          "legendFormat": "__auto",
+          "range": true,
+          "refId": "A"
+        }
+      ],
+      "title": "ATS CPU",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "axisSoftMax": 100,
+            "barAlignment": 0,
+            "drawStyle": "line",
+            "fillOpacity": 0,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "auto",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "min": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          },
+          "unit": "percent"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 56
+      },
+      "id": 17,
+      "options": {
+        "legend": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true,
+          "sortBy": "Last *",
+          "sortDesc": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "none"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "editorMode": "code",
+          "exemplar": false,
+          "expr": "sum by (server_id) (\n    node_memory_Active_bytes{\n        cluster_id=~\"[[cluster_id]]\",\n        datacenter_id=~\"[[datacenter_id]]\",\n        pool_type=\"ats\"\n    } /\n    node_memory_MemTotal_bytes{\n        cluster_id=~\"[[cluster_id]]\",\n        datacenter_id=~\"[[datacenter_id]]\",\n        pool_type=\"ats\"\n    } *\n    100\n)",
+          "instant": false,
+          "interval": "",
+          "legendFormat": "__auto",
+          "range": true,
+          "refId": "A"
+        }
+      ],
+      "title": "ATS Memory",
+      "type": "timeseries"
+    }
+  ],
+  "refresh": "5s",
+  "schemaVersion": 39,
+  "tags": [
+    "rivet"
+  ],
+  "templating": {
+    "list": [
+      {
+        "current": {
+          "selected": true,
+          "text": [
+            "All"
+          ],
+          "value": [
+            "$__all"
+          ]
+        },
+        "datasource": {
+          "type": "prometheus",
+          "uid": "prometheus"
+        },
+        "definition": "label_values(rivet_provision_active_servers,cluster_id)",
+        "hide": 0,
+        "includeAll": true,
+        "label": "Cluster ID",
+        "multi": true,
+        "name": "cluster_id",
+        "options": [],
+        "query": {
+          "query": "label_values(rivet_provision_active_servers,cluster_id)",
+          "refId": "PrometheusVariableQueryEditor-VariableQuery"
+        },
+        "refresh": 1,
+        "regex": "",
+        "skipUrlSync": false,
+        "sort": 0,
+        "type": "query"
+      },
+      {
+        "current": {
+          "selected": true,
+          "text": [
+            "All"
+          ],
+          "value": [
+            "$__all"
+          ]
+        },
+        "datasource": {
+          "type": "prometheus",
+          "uid": "prometheus"
+        },
+        "definition": "label_values(rivet_provision_active_servers,datacenter_id)",
+        "hide": 0,
+        "includeAll": true,
+        "label": "Datacenter ID",
+        "multi": true,
+        "name": "datacenter_id",
+        "options": [],
+        "query": {
+          "query": "label_values(rivet_provision_active_servers,datacenter_id)",
+          "refId": "PrometheusVariableQueryEditor-VariableQuery"
+        },
+        "refresh": 1,
+        "regex": "",
+        "skipUrlSync": false,
+        "sort": 0,
+        "type": "query"
+      },
+      {
+        "current": {
+          "selected": true,
+          "text": [
+            "All"
+          ],
+          "value": [
+            "$__all"
+          ]
+        },
+        "datasource": {
+          "type": "prometheus",
+          "uid": "prometheus"
+        },
+        "definition": "label_values(rivet_provision_active_servers,provider_datacenter_id)",
+        "hide": 0,
+        "includeAll": true,
+        "label": "Provider Region",
+        "multi": true,
+        "name": "provider_datacenter_id",
+        "options": [],
+        "query": {
+          "query": "label_values(rivet_provision_active_servers,provider_datacenter_id)",
+          "refId": "PrometheusVariableQueryEditor-VariableQuery"
+        },
+        "refresh": 1,
+        "regex": "",
+        "skipUrlSync": false,
+        "sort": 0,
+        "type": "query"
+      },
+      {
+        "current": {
+          "selected": true,
+          "text": [
+            "All"
+          ],
+          "value": [
+            "$__all"
+          ]
+        },
+        "datasource": {
+          "type": "prometheus",
+          "uid": "prometheus"
+        },
+        "definition": "label_values(rivet_provision_active_servers,pool_type)",
+        "hide": 0,
+        "includeAll": true,
+        "label": "Pool",
+        "multi": true,
+        "name": "pool_type",
+        "options": [],
+        "query": {
+          "query": "label_values(rivet_provision_active_servers,pool_type)",
+          "refId": "PrometheusVariableQueryEditor-VariableQuery"
+        },
+        "refresh": 1,
+        "regex": "",
+        "skipUrlSync": false,
+        "sort": 0,
+        "type": "query"
+      }
+    ]
+  },
+  "time": {
+    "from": "now-24h",
+    "to": "now"
+  },
+  "timepicker": {},
+  "timezone": "",
+  "title": "Cluster / Provision",
+  "uid": "aa49514c-cb94-47f0-ae0f-12a4ec20069a",
+  "version": 1,
+  "weekStart": ""
 }
