@@ -7,6 +7,7 @@ import * as Rivet from "../../..";
 export interface ErrorBody {
     code: string;
     message: string;
+    rayId: string;
     documentation?: string;
     metadata?: Rivet.ErrorMetadata | undefined;
 }

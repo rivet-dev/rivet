@@ -22,15 +22,18 @@ pub struct ErrorBody {
     /// Unstructured metadata relating to an error. Must be manually parsed.
     #[serde(rename = "metadata", default, with = "::serde_with::rust::double_option", skip_serializing_if = "Option::is_none")]
     pub metadata: Option<Option<serde_json::Value>>,
+    #[serde(rename = "ray_id")]
+    pub ray_id: String,
 }
 
 impl ErrorBody {
-    pub fn new(code: String, message: String) -> ErrorBody {
+    pub fn new(code: String, message: String, ray_id: String) -> ErrorBody {
         ErrorBody {
             code,
             documentation: None,
             message,
             metadata: None,
+            ray_id,
         }
     }
 }

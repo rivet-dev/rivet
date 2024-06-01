@@ -5204,6 +5204,78 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorBody'
       security: *ref_0
+  /admin/clusters/{cluster_id}/servers/destroy:
+    post:
+      operationId: admin_clusters_servers_destroy
+      tags:
+        - AdminClustersServers
+      parameters:
+        - name: cluster_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: server_id
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: datacenter
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: pool
+          in: query
+          required: false
+          schema:
+            $ref: '#/components/schemas/AdminClustersPoolType'
+        - name: public_ip
+          in: query
+          required: false
+          schema:
+            type: string
+      responses:
+        '204':
+          description: ''
+        '400':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '403':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '404':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '408':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '429':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '500':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+      security: *ref_0
   /auth/identity/access-token/complete-verification:
     post:
       description: Completes the access token verification process.
@@ -11997,6 +12069,8 @@ components:
           type: string
         message:
           type: string
+        ray_id:
+          type: string
         documentation:
           type: string
         metadata:
@@ -12004,6 +12078,7 @@ components:
       required:
         - code
         - message
+        - ray_id
     GameHandle:
       type: object
       properties:

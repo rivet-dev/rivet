@@ -107,6 +107,7 @@ dependencies = [
  "cluster-datacenter-resolve-for-name-id",
  "cluster-get",
  "cluster-list",
+ "cluster-server-destroy-with-filter",
  "cluster-server-get",
  "cluster-server-list",
  "http 0.2.12",
@@ -2552,6 +2553,17 @@ dependencies = [
  "chirp-client",
  "chirp-worker",
  "prost 0.10.4",
+ "rivet-operation",
+ "sqlx",
+]
+
+[[package]]
+name = "cluster-server-destroy-with-filter"
+version = "0.0.1"
+dependencies = [
+ "chirp-client",
+ "chirp-worker",
+ "cluster-server-list",
  "rivet-operation",
  "sqlx",
 ]

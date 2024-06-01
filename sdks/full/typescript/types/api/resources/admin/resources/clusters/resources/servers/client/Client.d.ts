@@ -36,5 +36,14 @@ export declare class Servers {
      * @throws {@link Rivet.BadRequestError}
      */
     taint(clusterId: string, request?: Rivet.admin.clusters.TaintServersRequest, requestOptions?: Servers.RequestOptions): Promise<void>;
+    /**
+     * @throws {@link Rivet.InternalError}
+     * @throws {@link Rivet.RateLimitError}
+     * @throws {@link Rivet.ForbiddenError}
+     * @throws {@link Rivet.UnauthorizedError}
+     * @throws {@link Rivet.NotFoundError}
+     * @throws {@link Rivet.BadRequestError}
+     */
+    destroy(clusterId: string, request?: Rivet.admin.clusters.DestroyServersRequest, requestOptions?: Servers.RequestOptions): Promise<void>;
     protected _getAuthorizationHeader(): Promise<string | undefined>;
 }

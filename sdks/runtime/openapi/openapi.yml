@@ -1474,6 +1474,8 @@ components:
           type: string
         message:
           type: string
+        ray_id:
+          type: string
         documentation:
           type: string
         metadata:
@@ -1481,6 +1483,7 @@ components:
       required:
         - code
         - message
+        - ray_id
     GeoCoord:
       type: object
       description: Geographical coordinates for a location on Planet Earth.

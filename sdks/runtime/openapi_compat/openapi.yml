@@ -37,9 +37,12 @@ components:
           type: string
         metadata:
           $ref: '#/components/schemas/ErrorMetadata'
+        ray_id:
+          type: string
       required:
       - code
       - message
+      - ray_id
       type: object
     ErrorMetadata:
       description: Unstructured metadata relating to an error. Must be manually parsed.

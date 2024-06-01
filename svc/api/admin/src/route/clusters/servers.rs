@@ -109,3 +109,20 @@ pub async fn taint(
 
 	Ok(json!({}))
 }
+
+// MARK: GET /clusters/{cluster_id}/servers/destroy
+pub async fn destroy(
+	ctx: Ctx<Auth>,
+	cluster_id: Uuid,
+	_body: serde_json::Value,
+	query: ServerFilterQuery,
+) -> GlobalResult<Value> {
+	let filter = query.convert_to_proto(&ctx, cluster_id).await?;
+
+	op!([ctx] cluster_server_destroy_with_filter {
+		filter: Some(filter)
+	})
+	.await?;
+
+	Ok(json!({}))
+}

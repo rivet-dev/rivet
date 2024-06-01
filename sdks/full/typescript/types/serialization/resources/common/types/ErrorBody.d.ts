@@ -9,6 +9,7 @@ export declare namespace ErrorBody {
     interface Raw {
         code: string;
         message: string;
+        ray_id: string;
         documentation?: string | null;
         metadata?: (serializers.ErrorMetadata.Raw | undefined) | null;
     }

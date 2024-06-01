@@ -1,0 +1,14 @@
+syntax = "proto3";
+
+package rivet.backend.pkg.cluster.server_destroy_with_filter;
+
+import "proto/common.proto";
+import "proto/backend/cluster.proto";
+
+message Request {
+	rivet.backend.cluster.ServerFilter filter = 1;
+}
+
+message Response {
+
+}

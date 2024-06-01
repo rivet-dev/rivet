@@ -10,6 +10,7 @@ export const ErrorBody: core.serialization.ObjectSchema<serializers.ErrorBody.Ra
     core.serialization.object({
         code: core.serialization.string(),
         message: core.serialization.string(),
+        rayId: core.serialization.property("ray_id", core.serialization.string()),
         documentation: core.serialization.string().optional(),
         metadata: core.serialization.lazy(async () => (await import("../../..")).ErrorMetadata).optional(),
     });
@@ -18,6 +19,7 @@ export declare namespace ErrorBody {
     interface Raw {
         code: string;
         message: string;
+        ray_id: string;
         documentation?: string | null;
         metadata?: (serializers.ErrorMetadata.Raw | undefined) | null;
     }

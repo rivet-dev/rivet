@@ -44,6 +44,7 @@ util-mm = { package = "rivet-util-mm", path = "../../pkg/mm/util" }
 cluster-get = { path = "../../pkg/cluster/ops/get" }
 cluster-list = { path = "../../pkg/cluster/ops/list" }
 cluster-server-get = { path = "../../pkg/cluster/ops/server-get" }
+cluster-server-destroy-with-filter = { path = "../../pkg/cluster/ops/server-destroy-with-filter" }
 cluster-server-list = { path = "../../pkg/cluster/ops/server-list" }
 cluster-datacenter-list = { path = "../../pkg/cluster/ops/datacenter-list" }
 cluster-datacenter-get = { path = "../../pkg/cluster/ops/datacenter-get" }

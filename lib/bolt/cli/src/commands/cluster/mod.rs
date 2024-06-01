@@ -34,6 +34,20 @@ pub enum SubCommand {
 		#[clap(long)]
 		ip: Option<String>,
 	},
+	/// Destroy servers in a cluster
+	Destroy {
+		/// The name id of the cluster
+		#[clap(index = 1)]
+		cluster: String,
+		#[clap(long)]
+		server_id: Option<String>,
+		#[clap(long, short = 'p')]
+		pool: Option<String>,
+		#[clap(long, short = 'd')]
+		datacenter: Option<String>,
+		#[clap(long)]
+		ip: Option<String>,
+	},
 	/// SSH in to a server in the cluster
 	Ssh {
 		/// The name id of the cluster
@@ -131,6 +145,44 @@ impl SubCommand {
 					})
 					.transpose()?;
 				admin_clusters_servers_api::admin_clusters_servers_taint(
+					&cloud_config,
+					&cluster.cluster_id.to_string(),
+					server_id.as_deref(),
+					datacenter.as_deref(),
+					pool_type,
+					ip.as_deref(),
+				)
+				.await?;
+			}
+			Self::Destroy {
+				cluster: cluster_name_id,
+				server_id,
+				pool,
+				datacenter,
+				ip,
+			} => {
+				let cloud_config = ctx.openapi_config_cloud().await?;
+
+				// Look up cluster
+				let clusters = admin_clusters_api::admin_clusters_list(&cloud_config)
+					.await?
+					.clusters;
+				let cluster = clusters.iter().find(|c| c.name_id == cluster_name_id);
+				let cluster = match cluster {
+					Some(c) => c,
+					None => bail!("cluster with the name id {} not found", cluster_name_id),
+				};
+
+				// Destroy servers
+				let pool_type = pool
+					.map(|p| match p.as_str() {
+						"job" => Ok(models::AdminClustersPoolType::Job),
+						"gg" => Ok(models::AdminClustersPoolType::Gg),
+						"ats" => Ok(models::AdminClustersPoolType::Ats),
+						_ => Err(anyhow!("invalid pool type")),
+					})
+					.transpose()?;
+				admin_clusters_servers_api::admin_clusters_servers_destroy(
 					&cloud_config,
 					&cluster.cluster_id.to_string(),
 					server_id.as_deref(),

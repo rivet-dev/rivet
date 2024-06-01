@@ -50,6 +50,7 @@ func (e *EmptyObject) String() string {
 type ErrorBody struct {
 	Code          string         `json:"code"`
 	Message       string         `json:"message"`
+	RayId         string         `json:"ray_id"`
 	Documentation *string        `json:"documentation,omitempty"`
 	Metadata      *ErrorMetadata `json:"metadata,omitempty"`
 

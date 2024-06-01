@@ -47,6 +47,13 @@ define_router! {
 			),
 		},
 
+		"clusters" / Uuid / "servers" / "destroy": {
+			POST: clusters::servers::destroy(
+				query: clusters::servers::ServerFilterQuery,
+				body: serde_json::Value,
+			),
+		},
+
 		"clusters" / Uuid / "datacenters": {
 			GET: clusters::datacenters::list(),
 			POST: clusters::datacenters::create(

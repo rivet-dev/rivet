@@ -31,6 +31,16 @@ service:
           datacenter: optional<string>
           pool: optional<localCommons.PoolType>
           public_ip: optional<string>
+    destroy:
+      path: /destroy
+      method: POST
+      request:
+        name: DestroyServersRequest
+        query-parameters:
+          server_id: optional<string>
+          datacenter: optional<string>
+          pool: optional<localCommons.PoolType>
+          public_ip: optional<string>
 
 types:
   ListServersResponse:

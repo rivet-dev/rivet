@@ -8,6 +8,13 @@ import (
 	core "sdk/core"
 )
 
+type DestroyServersRequest struct {
+	ServerId   *string   `json:"-"`
+	Datacenter *string   `json:"-"`
+	Pool       *PoolType `json:"-"`
+	PublicIp   *string   `json:"-"`
+}
+
 type ListServersRequest struct {
 	ServerId   *string   `json:"-"`
 	Datacenter *string   `json:"-"`
