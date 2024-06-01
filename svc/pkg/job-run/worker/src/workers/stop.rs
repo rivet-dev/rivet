@@ -1,5 +1,6 @@
 use chirp_worker::prelude::*;
 use proto::backend::pkg::*;
+use redis::AsyncCommands;
 use tokio::task;
 
 #[derive(Debug, sqlx::FromRow)]
@@ -51,6 +52,16 @@ async fn worker(ctx: &OperationContext<job_run::msg::stop::Message>) -> GlobalRe
 			retry_bail!("run not found, may be race condition with insertion");
 		}
 	};
+
+	// HACK: Remove from proxied ports early. This also gets removed in job-run-cleanup, but that
+	// may not run correclty if the dispatched job id is not set correctly.
+	ctx.redis_job()
+		.await?
+		.hdel(
+			util_job::key::proxied_ports(run_row.region_id),
+			run_id.to_string(),
+		)
+		.await?;
 
 	// Get the region
 	let region_res = op!([ctx] region_get {
