@@ -15,6 +15,7 @@ struct PlanResult {
 struct RunRow {
 	run_id: Uuid,
 	region_id: Uuid,
+	stop_ts: Option<i64>,
 	alloc_plan_ts: Option<i64>,
 }
 
@@ -132,6 +133,7 @@ async fn worker(
 		run_id,
 		region_id,
 		proxied_ports,
+		stop_ts,
 	}) = db_output
 	else {
 		if ctx.req_dt() > util::duration::minutes(5) {
@@ -143,7 +145,7 @@ async fn worker(
 	};
 
 	// Write the port to the cache
-	{
+	if stop_ts.is_none() {
 		let msg = job::redis_job::RunProxiedPorts {
 			run_id: Some(run_id.into()),
 			proxied_ports: proxied_ports
@@ -204,6 +206,7 @@ struct DbOutput {
 	run_id: Uuid,
 	region_id: Uuid,
 	proxied_ports: Vec<ProxiedPort>,
+	stop_ts: Option<i64>,
 }
 
 /// Returns `None` if the run could not be found.
@@ -226,7 +229,7 @@ async fn update_db(
 	let run_row = sql_fetch_optional!(
 		[ctx, RunRow, @tx tx]
 		"
-		SELECT runs.run_id, runs.region_id, run_meta_nomad.alloc_plan_ts
+		SELECT runs.run_id, runs.region_id, runs.stop_ts, run_meta_nomad.alloc_plan_ts
 		FROM db_job_state.run_meta_nomad
 		INNER JOIN db_job_state.runs ON runs.run_id = run_meta_nomad.run_id
 		WHERE dispatched_job_id = $1
@@ -327,5 +330,6 @@ async fn update_db(
 		run_id,
 		region_id: run_row.region_id,
 		proxied_ports,
+		stop_ts: run_row.stop_ts,
 	}))
 }
