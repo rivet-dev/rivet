@@ -37,6 +37,7 @@ types:
       main: string
       cdn: string
       job: string
+      opengb: optional<string>
 
   BootstrapOrigins:
     docs: Origins used to build URLs from

@@ -8,4 +8,5 @@ export interface BootstrapDomains {
     main: string;
     cdn: string;
     job: string;
+    opengb?: string;
 }

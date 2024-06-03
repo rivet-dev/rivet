@@ -29,6 +29,7 @@ pub async fn build_bootstrap_data() -> GlobalResult<models::CloudBootstrapRespon
 				main: main.into(),
 				cdn: cdn.into(),
 				job: job.into(),
+				opengb: None,
 			}))
 		} else {
 			None

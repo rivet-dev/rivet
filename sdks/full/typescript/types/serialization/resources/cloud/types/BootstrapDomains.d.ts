@@ -10,5 +10,6 @@ export declare namespace BootstrapDomains {
         main: string;
         cdn: string;
         job: string;
+        opengb?: string | null;
     }
 }

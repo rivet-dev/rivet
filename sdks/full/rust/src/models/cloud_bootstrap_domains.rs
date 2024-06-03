@@ -20,6 +20,8 @@ pub struct CloudBootstrapDomains {
     pub job: String,
     #[serde(rename = "main")]
     pub main: String,
+    #[serde(rename = "opengb", skip_serializing_if = "Option::is_none")]
+    pub opengb: Option<String>,
 }
 
 impl CloudBootstrapDomains {
@@ -29,6 +31,7 @@ impl CloudBootstrapDomains {
             cdn,
             job,
             main,
+            opengb: None,
         }
     }
 }

@@ -8933,6 +8933,8 @@ components:
           type: string
         job:
           type: string
+        opengb:
+          type: string
       required:
         - main
         - cdn

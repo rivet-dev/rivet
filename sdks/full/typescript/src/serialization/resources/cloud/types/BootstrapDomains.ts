@@ -13,6 +13,7 @@ export const BootstrapDomains: core.serialization.ObjectSchema<
     main: core.serialization.string(),
     cdn: core.serialization.string(),
     job: core.serialization.string(),
+    opengb: core.serialization.string().optional(),
 });
 
 export declare namespace BootstrapDomains {
@@ -20,5 +21,6 @@ export declare namespace BootstrapDomains {
         main: string;
         cdn: string;
         job: string;
+        opengb?: string | null;
     }
 }

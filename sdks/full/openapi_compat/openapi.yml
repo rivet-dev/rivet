@@ -387,6 +387,8 @@ components:
           type: string
         main:
           type: string
+        opengb:
+          type: string
       required:
       - main
       - cdn
