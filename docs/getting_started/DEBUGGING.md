@@ -22,9 +22,9 @@ Connect to the Grafana dashboard by running the following:
 ./scripts/forward/grafana.sh
 ```
 
-Next, visit http://localhost:9090 and open the _Explore_ page and query `{service=~"rivet-.*"} |= "ERROR"`, or
+Next, visit http://localhost:9090 and open the _Explore_ page and query `{name=~"rivet-.*"} |= "ERROR"`, or
 click
-[here](http://localhost:9090/explore?panes=%7B%22DNM%22:%7B%22datasource%22:%22loki%22,%22queries%22:%5B%7B%22refId%22:%22A%22,%22expr%22:%22%7Bservice%3D~%5C%22rivet-.*%5C%22%7D%20%7C%3D%20%5C%22ERROR%5C%22%22,%22queryType%22:%22range%22,%22datasource%22:%7B%22type%22:%22loki%22,%22uid%22:%22loki%22%7D,%22editorMode%22:%22code%22%7D%5D,%22range%22:%7B%22from%22:%22now-6h%22,%22to%22:%22now%22%7D%7D%7D&schemaVersion=1&orgId=1).
+[here](http://localhost:9090/explore?panes=%7B%22DNM%22:%7B%22datasource%22:%22loki%22,%22queries%22:%5B%7B%22refId%22:%22A%22,%22expr%22:%22%7Bname%3D~%5C%22rivet-.*%5C%22%7D%20%7C%3D%20%5C%22ERROR%5C%22%22,%22queryType%22:%22range%22,%22datasource%22:%7B%22type%22:%22loki%22,%22uid%22:%22loki%22%7D,%22editorMode%22:%22code%22%7D%5D,%22range%22:%7B%22from%22:%22now-6h%22,%22to%22:%22now%22%7D%7D%7D&schemaVersion=1&orgId=1).
 
 ## Reading logs
 
@@ -83,7 +83,7 @@ When running in to any issue, the first thing you want to do is find the ray ID 
 Use that ray ID and query Loki with the following:
 
 ```
-{service=~"rivet-.*"} |= "ead90acf-8a95-43c8-9c8b-8671fb373cca"
+{name=~"rivet-.*"} |= "ead90acf-8a95-43c8-9c8b-8671fb373cca"
 ```
 
 This will give you all logs associated with the problem. From here, you can either narrow down the service or
