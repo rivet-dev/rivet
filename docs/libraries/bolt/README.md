@@ -1,6 +1,7 @@
 # 🔩 Bolt
 
-Bolt is the internal tool used to manage Rivet infrastructure & services. If you plan to develop on Rivet, you'll be using Bolt heavily.
+Bolt is the internal tool used to manage Rivet infrastructure & services. If you plan to develop on Rivet,
+you'll be using Bolt heavily.
 
 ### Start a service
 
@@ -42,4 +43,5 @@ bolt --help
 
 ### Hacking on Bolt
 
-The Bolt source code lives in [`lib/bolt/cli/`](../../../lib/bolt/cli). Find something that Bolt could do better? Submit a PR!
+The Bolt source code lives in [`lib/bolt/cli/`](../../../lib/bolt/cli). Find something that Bolt could do
+better? Submit a PR!

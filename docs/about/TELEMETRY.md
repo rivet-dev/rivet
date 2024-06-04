@@ -1,22 +1,28 @@
 # Telemetry
 
-By default, Rivet automatically makes API requests to a centralized server (currently [PostHog](https://posthog.com/)) to provide rudimentary information about how Rivet OSS is being used in the wild.
+By default, Rivet automatically makes API requests to a centralized server (currently
+[PostHog](https://posthog.com/)) to provide rudimentary information about how Rivet OSS is being used in the
+wild.
 
-This document is intended to be as transparent as possible about what we collect and our motivations behind it.
+This document is intended to be as transparent as possible about what we collect and our motivations behind
+it.
 
 ## Why does Rivet include telemetry?
 
 Rivet collects telemetry for three main reasons:
 
--   **Diagnose issues** Help us diagnose issues users are having on non-standard setups
--   **Focus on widely used features** Let us know which services are being used & require more attention
--   **Track growth** We invest day and night in to building open source software that anyone can use to distribute multiplayer games; tracking the project's growth in the wild helps us get an accurate sense of our reach
+- **Diagnose issues** Help us diagnose issues users are having on non-standard setups
+- **Focus on widely used features** Let us know which services are being used & require more attention
+- **Track growth** We invest day and night in to building open source software that anyone can use to
+  distribute multiplayer games; tracking the project's growth in the wild helps us get an accurate sense of
+  our reach
 
 These metrics are never shared publicly without explicit consent.
 
 ## Disabling telemetry
 
-**If you disable telemetry, please let us know why in our [Discord](https://discord.gg/BG2vqsJczH). We work hard to make sure we respect your privacy & security.**
+**If you disable telemetry, please let us know why in our [Discord](https://discord.gg/BG2vqsJczH). We work
+hard to make sure we respect your privacy & security.**
 
 Add the following to your namespace config:
 
@@ -35,10 +41,11 @@ Then run `bolt up telemetry-beacon` to disable the beacon service.
 
 **Global**
 
--   `git_remotes` helps us understand what fork is being used
--   `git_rev` helps us understand what version is being used
--   `os_release` & `uname` help us diagnose issues caused by the host OS
--   `services` help us understand what functionality is being added when modifying Rivet and what we need to focus on improving
+- `git_remotes` helps us understand what fork is being used
+- `git_rev` helps us understand what version is being used
+- `os_release` & `uname` help us diagnose issues caused by the host OS
+- `services` help us understand what functionality is being added when modifying Rivet and what we need to
+  focus on improving
 
 ```typescript
 {
@@ -164,7 +171,8 @@ Helps us understand if developers are running multiple games on a single Rivet c
 
 **Game namespaces**
 
--   `player_count` helps us understand how well the system is performing under load on the provided configuration & providers
+- `player_count` helps us understand how well the system is performing under load on the provided
+  configuration & providers
 
 ```typescript
 {

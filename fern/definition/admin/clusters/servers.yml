@@ -46,4 +46,3 @@ types:
   ListServersResponse:
     properties:
       servers: list<localCommons.Server>
-

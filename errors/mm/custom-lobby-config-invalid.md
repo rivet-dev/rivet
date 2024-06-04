@@ -7,11 +7,14 @@ http_status = 400
 
 # Matchmaker Custom Lobby Config Invalid
 
-The given custom lobby config is invalid. This is most likely because it exceeds the maximum size limit of 16KiB.
+The given custom lobby config is invalid. This is most likely because it exceeds the maximum size limit of
+16KiB.
 
 ## Publicity errors
 
-You may encounter an error such as `"public" publicity not allowed with this custom game mode`. This occurs when the publicity of the `/create` request is not allowed by the custom game mode config configured for this game.
+You may encounter an error such as `"public" publicity not allowed with this custom game mode`. This occurs
+when the publicity of the `/create` request is not allowed by the custom game mode config configured for this
+game.
 
 Given this `rivet.yaml`:
 

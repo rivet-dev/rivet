@@ -28,7 +28,8 @@ http_status = 500
 Write anything you want
 ```
 
-When `description_basic` is set and the error isn't built with `bad_request_builder` but instead just `bad_request`, `description_basic` will be used as the error description instead of `description`.
+When `description_basic` is set and the error isn't built with `bad_request_builder` but instead just
+`bad_request`, `description_basic` will be used as the error description instead of `description`.
 
 ```md
 ---

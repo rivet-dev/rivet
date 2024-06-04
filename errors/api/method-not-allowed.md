@@ -7,4 +7,5 @@ http_status = 400
 
 # API Method Not Allowed
 
-The request uses a method which is not allowed by the requested API. This differs from "API CORS Method Not Allowed" in that it was not caused by CORS validation.
+The request uses a method which is not allowed by the requested API. This differs from "API CORS Method Not
+Allowed" in that it was not caused by CORS validation.

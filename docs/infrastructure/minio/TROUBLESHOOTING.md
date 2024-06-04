@@ -6,4 +6,5 @@
 2. `mc alias set local http://127.0.0.1:9200 root`
 3. `mc admin trace -e local`
 
-See [here](https://min.io/docs/minio/linux/reference/minio-mc-admin/mc-admin-trace.html#description) for more options.
+See [here](https://min.io/docs/minio/linux/reference/minio-mc-admin/mc-admin-trace.html#description) for more
+options.

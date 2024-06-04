@@ -2,19 +2,26 @@
 
 ## Configuration
 
-Job build hosting can be configured to pull directly from S3 or using a pull-through cache within the data center. We recommend using a pull-through cache for performance (and sometimes cost savings), but this requires more servers and complexity to run yourself.
+Job build hosting can be configured to pull directly from S3 or using a pull-through cache within the data
+center. We recommend using a pull-through cache for performance (and sometimes cost savings), but this
+requires more servers and complexity to run yourself.
 
 ## Storage
 
-Images are stored as TAR archives, not individual layers. We do this in order to optimize download times and simplify architecture.
+Images are stored as TAR archives, not individual layers. We do this in order to optimize download times and
+simplify architecture.
 
-While it's nice to have shared base layers _in theory_, containers rarely share the exact same base layer and often causes longer download times.
+While it's nice to have shared base layers _in theory_, containers rarely share the exact same base layer and
+often causes longer download times.
 
-Additionally, storing Docker images as layers requires running our own Docker registry. This is an extra point of failure, complexity, performant foot-guns, and cost compared to a simpler architecture with just Apache Traffic Server & S3.
+Additionally, storing Docker images as layers requires running our own Docker registry. This is an extra point
+of failure, complexity, performant foot-guns, and cost compared to a simpler architecture with just Apache
+Traffic Server & S3.
 
 ## Implementation
 
-See [`svc/pkg/mm/worker/src/workers/lobby_create/mod.rs`](/svc/pkg/mm/worker/src/workers/lobby_create/mod.rs) for details
+See [`svc/pkg/mm/worker/src/workers/lobby_create/mod.rs`](/svc/pkg/mm/worker/src/workers/lobby_create/mod.rs)
+for details
 
 ### Direct from S3
 
@@ -38,9 +45,11 @@ Job run builds are hosted behind Apache Traffic Server within the data-center as
 
 Two things are incredibly important:
 
--   Lobby startup performance
--   Disk space on nodes
+- Lobby startup performance
+- Disk space on nodes
 
-Storing images as gzipped files requires them to be extracted when loaded. This means that you need to wait for the file to be extracted (which may be a long time for large images) and will take double the disk space to load the image.
+Storing images as gzipped files requires them to be extracted when loaded. This means that you need to wait
+for the file to be extracted (which may be a long time for large images) and will take double the disk space
+to load the image.
 
 We use gzip in transit, so it doesn't make a significant difference.

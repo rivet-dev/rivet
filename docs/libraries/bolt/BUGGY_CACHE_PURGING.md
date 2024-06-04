@@ -2,14 +2,15 @@
 
 This document should not affect most users unless finding that the Rust build cache stops working.
 
-Running `bolt up` or `bolt check` may frequently rebuild services if there is a problem with the Bolt generation code. These problems are usually not obvious.
+Running `bolt up` or `bolt check` may frequently rebuild services if there is a problem with the Bolt
+generation code. These problems are usually not obvious.
 
 ## Cause
 
 Two factors can cause this:
 
--   Bolt frequently regenerates files (e.g. _lib/bolt/core/src/tasks/gen.rs_)
--   Rivet services often use _build.rs_ scripts that can trigger rebuilds
+- Bolt frequently regenerates files (e.g. _lib/bolt/core/src/tasks/gen.rs_)
+- Rivet services often use _build.rs_ scripts that can trigger rebuilds
 
 ## Solution
 

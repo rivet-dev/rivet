@@ -7,6 +7,8 @@ http_status = 401
 
 # API Unauthorized
 
-The user is not authorized for the reason given, or the user did not provide a bearer token to authenticate with.
+The user is not authorized for the reason given, or the user did not provide a bearer token to authenticate
+with.
 
-A bearer token is a token in the `Authorization` header that follows the form `Authorization: Bearer <token>`. The prefix, `"Bearer "`, is required.
+A bearer token is a token in the `Authorization` header that follows the form `Authorization: Bearer <token>`.
+The prefix, `"Bearer "`, is required.

@@ -5,10 +5,24 @@
 	"endOfLine": "lf",
 	"overrides": [
 		{
+			"files": "*.md",
+			"options": {
+				"proseWrap": "always",
+				"tabWidth": 2,
+				"embeddedLanguageFormatting": "off"
+			}
+		},
+		{
 			"files": ["*.yml", "*.yaml"],
 			"options": {
 				"tabWidth": 2,
 				"useTabs": false
+			}
+		},
+		{
+			"files": "*.json",
+			"options": {
+				"tabWidth": 2
 			}
 		}
 	]

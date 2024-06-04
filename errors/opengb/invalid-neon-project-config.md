@@ -6,4 +6,5 @@ http_status = 400
 
 # OpenGB Invalid Neon Project Config
 
-The Neon project config given was invalid. See https://api-docs.neon.tech/reference/updateproject for more info.
+The Neon project config given was invalid. See https://api-docs.neon.tech/reference/updateproject for more
+info.

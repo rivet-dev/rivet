@@ -7,7 +7,8 @@ http_status = 400
 
 # Group Deactivated
 
-The developer group has been deactivated. Please [contact support](https://rivet.gg/support) if you believe this is a mistake.
+The developer group has been deactivated. Please [contact support](https://rivet.gg/support) if you believe
+this is a mistake.
 
 # Reason: `NoPaymentMethod`
 
@@ -22,7 +23,8 @@ How to check your billing info:
 
 # Reason: `PaymentFailed`
 
-One of the payments made by the developer group has failed. Please view the billing page to investigate further.
+One of the payments made by the developer group has failed. Please view the billing page to investigate
+further.
 
 How to check your billing info:
 
@@ -35,8 +37,10 @@ If needed, feel free to [contact support](https://rivet.gg/support) for further 
 
 # Reason: `Banned`
 
-The developer group has been banned from using Rivet services. Please [contact support](https://rivet.gg/support) if you believe this is a mistake.
+The developer group has been banned from using Rivet services. Please
+[contact support](https://rivet.gg/support) if you believe this is a mistake.
 
 # No reason given
 
-If this error did not come with a reason, contact the developer group to let them know you have experienced the error.
+If this error did not come with a reason, contact the developer group to let them know you have experienced
+the error.

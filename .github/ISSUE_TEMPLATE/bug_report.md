@@ -6,12 +6,12 @@ labels: bug
 
 ## Environment
 
--   [ ] Rivet Cloud
-    -   Game ID: [please provide]
--   [ ] Rivet self-hosted local
-    -   Version/commit: [please provide]
--   [ ] Rivet self-hosted cluster
-    -   Version/commit: [please provide]
+- [ ] Rivet Cloud
+  - Game ID: [please provide]
+- [ ] Rivet self-hosted local
+  - Version/commit: [please provide]
+- [ ] Rivet self-hosted cluster
+  - Version/commit: [please provide]
 
 ## Description
 

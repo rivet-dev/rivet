@@ -4,14 +4,14 @@
 
 > System
 >
-> -   Debian GNU/Linux 11
-> -   Shared VM, 4 VCPUs (of AMD EPYC 7713 16-Core 2GHz)
-> -   8GB memory
+> - Debian GNU/Linux 11
+> - Shared VM, 4 VCPUs (of AMD EPYC 7713 16-Core 2GHz)
+> - 8GB memory
 
 ### `nix-shell` setup time (fresh)
 
--   Before building `bolt`: 1m31s
--   Building `bolt`: 2m15s
+- Before building `bolt`: 1m31s
+- Building `bolt`: 2m15s
 
 ### Services (Minimal setup)
 
@@ -56,9 +56,9 @@ _First loki, promtail, and prometheus are provisioned then the rest follow_
 
 > System
 >
-> -   Debian GNU/Linux 11
-> -   AMD EPYC 7713 16-Core 2GHz
-> -   32GB memory
+> - Debian GNU/Linux 11
+> - AMD EPYC 7713 16-Core 2GHz
+> - 32GB memory
 
 ### Services (Complex setup)
 

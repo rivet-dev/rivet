@@ -6,5 +6,4 @@ http_status = 400
 
 # Matchmaker Player Removed
 
-Attempted an operation on a player that has already been removed from the
-lobby.
+Attempted an operation on a player that has already been removed from the lobby.

@@ -8,7 +8,8 @@ First, try uninstalling the chart manually with:
 helm uninstall -n foo bar
 ```
 
-If that doesn't work, check if there is a secret named something like `sh.helm.release.v1.bar.v1` in the given namespace:
+If that doesn't work, check if there is a secret named something like `sh.helm.release.v1.bar.v1` in the given
+namespace:
 
 ```
 kubectl get secret -n foo

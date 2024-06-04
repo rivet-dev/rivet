@@ -12,16 +12,15 @@
 
 ## Signals 101
 
--   `SIGTERM` = gracefully stop, jobs should handle this gracefully
--   `SIGKILL` = hard stop, cannot be handled custom
+- `SIGTERM` = gracefully stop, jobs should handle this gracefully
+- `SIGKILL` = hard stop, cannot be handled custom
 
 ## Node draining vs manually stopping a job
 
 ### Node draining
 
 1. `nodes_api::update_node_drain`
-2. Calls `SIGTERM` on jobs
-   PROBLEM: jobs are only given 60s to shut down b/c of their `kill_timeout`
+2. Calls `SIGTERM` on jobs PROBLEM: jobs are only given 60s to shut down b/c of their `kill_timeout`
 3. Waits until the timeout
 4. Sends `SIGKILL` to any remaining jobs
 
@@ -29,5 +28,5 @@
 
 1. `allocations_api::delete_job`, which Nomad sends `SIGTERM`
 2. Manually send `SIGKILL` after `util_job::JOB_STOP_TIMEOUT` if alloc still running
-    - This is less than the job's kill timeout
-    - If the worker crashes, job-gc will clean up the job later
+   - This is less than the job's kill timeout
+   - If the worker crashes, job-gc will clean up the job later

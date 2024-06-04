@@ -10,4 +10,4 @@ When publishing to production:
 1. All _Validating_ issues are manually validated on staging
 2. Publish deploy
 3. Check all _Validating_ issues again and set to _Complete_
-    - If there is a problem, complete the issue and create a new issue
+   - If there is a problem, complete the issue and create a new issue

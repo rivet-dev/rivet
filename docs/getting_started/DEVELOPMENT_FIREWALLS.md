@@ -12,4 +12,4 @@ Whitelist the following ports:
 
 ## Outbound
 
--   Allow all outbound
+- Allow all outbound

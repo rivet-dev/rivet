@@ -1,10 +1,10 @@
 {
 	"folders": [
 		{
-			"path": ".."
+			"path": "..",
 		},
 		{
-			"path": "../lib/bolt"
-		}
+			"path": "../lib/bolt",
+		},
 	],
 }
