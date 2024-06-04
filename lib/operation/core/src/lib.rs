@@ -40,9 +40,6 @@ where
 	ts: i64,
 	req_ts: i64,
 	body: B,
-	// Trace of all requests not including this request. The client does include
-	// this request in the trace, though.
-	trace: Vec<chirp_client::TraceEntry>,
 }
 
 impl<B> OperationContext<B>
@@ -58,7 +55,6 @@ where
 		ts: i64,
 		req_ts: i64,
 		body: B,
-		trace: Vec<chirp_client::TraceEntry>,
 	) -> Self {
 		OperationContext {
 			name,
@@ -69,7 +65,6 @@ where
 			ts,
 			req_ts,
 			body,
-			trace,
 		}
 	}
 
@@ -90,7 +85,7 @@ where
 
 		// TODO: Throw dedicated "timed out" error here
 		// Process the request
-		let req_op_ctx = self.wrap::<O>(body)?;
+		let req_op_ctx = self.wrap::<O>(body);
 		let timeout_fut = tokio::time::timeout(O::TIMEOUT, O::handle(req_op_ctx).in_current_span());
 		let res = tokio::task::Builder::new()
 			.name("operation::handle")
@@ -134,49 +129,28 @@ where
 	}
 
 	/// Adds trace and correctly wraps `Connection` (and subsequently `chirp_client::Client`).
-	fn wrap<O: Operation>(&self, body: O::Request) -> GlobalResult<OperationContext<O::Request>> {
-		let ray_id = Uuid::new_v4();
-		// Add self to new operation's trace
-		let trace = {
-			let mut x = self.trace.clone();
-			x.push(chirp_client::TraceEntry {
-				context_name: self.name.clone(),
-				req_id: Some(self.req_id.into()),
-				ts: rivet_util::timestamp::now(),
-				run_context: match rivet_util::env::run_context() {
-					rivet_util::env::RunContext::Service => chirp_client::RunContext::Service,
-					rivet_util::env::RunContext::Test => chirp_client::RunContext::Test,
-				} as i32,
-			});
-			x
+	fn wrap<O: Operation>(&self, body: O::Request) -> OperationContext<O::Request> {
+		let req_id = Uuid::new_v4();
+		let trace_entry = chirp_client::TraceEntry {
+			context_name: O::NAME.to_string(),
+			req_id: Some(req_id.into()),
+			ts: rivet_util::timestamp::now(),
+			run_context: match rivet_util::env::run_context() {
+				rivet_util::env::RunContext::Service => chirp_client::RunContext::Service,
+				rivet_util::env::RunContext::Test => chirp_client::RunContext::Test,
+			} as i32,
 		};
 
-		Ok(OperationContext {
+		OperationContext {
 			name: O::NAME.to_string(),
 			timeout: O::TIMEOUT,
-			conn: self.conn.wrap(self.req_id, ray_id, {
-				let mut x = trace.clone();
-
-				// Add new operation's trace to its connection (and chirp client)
-				x.push(chirp_client::TraceEntry {
-					context_name: O::NAME.to_string(),
-					req_id: Some(self.req_id.into()),
-					ts: rivet_util::timestamp::now(),
-					run_context: match rivet_util::env::run_context() {
-						rivet_util::env::RunContext::Service => chirp_client::RunContext::Service,
-						rivet_util::env::RunContext::Test => chirp_client::RunContext::Test,
-					} as i32,
-				});
-
-				x
-			})?,
-			req_id: self.req_id,
-			ray_id,
+			conn: self.conn.wrap(req_id, self.ray_id, trace_entry),
+			req_id,
+			ray_id: self.ray_id,
 			ts: util::timestamp::now(),
 			req_ts: self.req_ts,
 			body,
-			trace,
-		})
+		}
 	}
 
 	/// Clones everything but the body. This should always be used over `.clone()` unless you need to
@@ -191,7 +165,6 @@ where
 			ts: self.ts,
 			req_ts: self.req_ts,
 			body: (),
-			trace: self.trace.clone(),
 		}
 	}
 
@@ -231,11 +204,11 @@ where
 	}
 
 	pub fn trace(&self) -> &[chirp_client::TraceEntry] {
-		&self.trace
+		self.conn.trace()
 	}
 
 	pub fn test(&self) -> bool {
-		self.trace
+		self.trace()
 			.iter()
 			.any(|x| x.run_context == chirp_client::RunContext::Test as i32)
 	}

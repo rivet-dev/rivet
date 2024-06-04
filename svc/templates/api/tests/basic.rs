@@ -37,7 +37,6 @@ impl Ctx {
 			util::timestamp::now(),
 			util::timestamp::now(),
 			(),
-			Vec::new(),
 		);
 
 		Ctx { op_ctx }

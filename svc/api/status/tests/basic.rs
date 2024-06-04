@@ -40,7 +40,6 @@
 // 			util::timestamp::now(),
 // 			util::timestamp::now(),
 // 			(),
-// 			Vec::new(),
 // 		);
 
 // 		let http_client = rivet_status::Config::builder()

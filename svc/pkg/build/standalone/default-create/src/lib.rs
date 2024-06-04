@@ -82,7 +82,6 @@ pub async fn run_from_env() -> GlobalResult<()> {
 		util::timestamp::now(),
 		util::timestamp::now(),
 		(),
-		Vec::new(),
 	);
 
 	for build in DEFAULT_BUILDS {

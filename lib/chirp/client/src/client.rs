@@ -131,17 +131,6 @@ impl SharedClient {
 			ts,
 		)
 	}
-
-	pub fn wrap_with(
-		self: Arc<Self>,
-		parent_req_id: Uuid,
-		ray_id: Uuid,
-		ts: i64,
-		trace: Vec<chirp::TraceEntry>,
-		perf_ctx: chirp_perf::PerfCtxInner,
-	) -> Client {
-		Client::new(self, parent_req_id, ray_id, trace, Arc::new(perf_ctx), ts)
-	}
 }
 
 /// Used to communicate with other Chirp clients.
@@ -237,6 +226,10 @@ impl Client {
 
 	pub fn ts(&self) -> i64 {
 		self.ts
+	}
+
+	pub fn trace(&self) -> &[chirp::TraceEntry] {
+		&self.trace
 	}
 }
 

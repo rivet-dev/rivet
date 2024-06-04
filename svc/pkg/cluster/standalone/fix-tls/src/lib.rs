@@ -40,7 +40,6 @@ pub async fn run_from_env(ts: i64) -> GlobalResult<()> {
 		util::timestamp::now(),
 		util::timestamp::now(),
 		(),
-		Vec::new(),
 	);
 
 	let datacenter_ids = vec!["5767a802-5c7c-4563-a266-33c014f7e244"]

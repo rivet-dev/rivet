@@ -57,7 +57,6 @@ pub async fn run_from_env(_ts: i64, pools: rivet_pools::Pools) -> GlobalResult<(
 		util::timestamp::now(),
 		util::timestamp::now(),
 		(),
-		Vec::new(),
 	);
 
 	let servers = select_servers(&ctx).await?;

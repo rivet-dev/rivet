@@ -18,7 +18,6 @@ pub async fn run_from_env(ts: i64) -> GlobalResult<()> {
 		util::timestamp::now(),
 		util::timestamp::now(),
 		(),
-		Vec::new(),
 	);
 
 	let mut total_removed = 0;

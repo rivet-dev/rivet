@@ -17,7 +17,6 @@ pub async fn run_from_env() -> GlobalResult<()> {
 		util::timestamp::now(),
 		util::timestamp::now(),
 		(),
-		Vec::new(),
 	);
 
 	let Ok(backfill_provider) = std::env::var("S3_BACKFILL_PROVIDER") else {

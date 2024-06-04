@@ -332,7 +332,6 @@ pub async fn __with_ctx<A: auth::ApiAuth + Send>(
 		ts,
 		ts,
 		(),
-		Vec::new(),
 	);
 
 	// Create auth

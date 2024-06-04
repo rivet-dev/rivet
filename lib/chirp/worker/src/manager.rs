@@ -696,22 +696,16 @@ where
 		let worker_req = {
 			// Build client
 			let ts = rivet_util::timestamp::now();
-			let client = self.shared_client.clone().wrap_with(
-				req_id,
-				ray_id,
-				ts,
-				{
-					let mut x = trace.clone();
-					x.push(chirp::TraceEntry {
-						context_name: worker_name.clone(),
-						req_id: req_id_proto.clone(),
-						ts: rivet_util::timestamp::now(),
-						run_context: chirp::RunContext::Service as i32,
-					});
-					x
-				},
-				chirp_perf::PerfCtxInner::new(self.redis_cache.clone(), ts, req_id, ray_id),
-			);
+			let client = self.shared_client.clone().wrap(req_id, ray_id, {
+				let mut x = trace.clone();
+				x.push(chirp::TraceEntry {
+					context_name: worker_name.clone(),
+					req_id: req_id_proto.clone(),
+					ts: rivet_util::timestamp::now(),
+					run_context: chirp::RunContext::Service as i32,
+				});
+				x
+			});
 			let conn = Connection::new(client, self.pools.clone(), self.cache.clone());
 
 			let ts = req_debug
@@ -743,7 +737,6 @@ where
 					ts,
 					req_ts,
 					req_body,
-					trace,
 				),
 				dont_log_body,
 				allow_recursive,
@@ -838,6 +831,8 @@ where
 				.op_ctx
 				.trace()
 				.iter()
+				// Don't include the last trace event, which is the current request
+				.take(req.op_ctx.trace().len() - 1)
 				.any(|x| x.context_name == req.op_ctx.name());
 		let handle_res = if is_recursive {
 			Ok(Err(err_code!(

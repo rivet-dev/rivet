@@ -42,7 +42,6 @@ pub async fn run_from_env(ts: i64, pools: rivet_pools::Pools) -> GlobalResult<()
 		ts,
 		ts,
 		(),
-		Vec::new(),
 	);
 
 	// Find jobs to stop.
