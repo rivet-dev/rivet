@@ -35,7 +35,7 @@ impl CorsConfigBuilder {
 	pub fn public() -> Self {
 		Self::default()
 			.any_origin()
-			.methods(&["GET", "POST", "PUT", "DELETE"])
+			.methods(&["GET", "POST", "PUT", "PATCH", "DELETE"])
 			.headers(&["Content-Type", "Authorization"])
 			.credentials()
 	}
@@ -44,7 +44,7 @@ impl CorsConfigBuilder {
 	pub fn hub() -> Self {
 		Self::default()
 			.origin_regex(hub_origin_regex())
-			.methods(&["GET", "POST", "PUT", "DELETE"])
+			.methods(&["GET", "POST", "PUT", "PATCH", "DELETE"])
 			.headers(&["Content-Type", "Authorization"])
 			.credentials()
 	}
