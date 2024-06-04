@@ -143,9 +143,8 @@ impl SubCommand {
 
 				// Load namespace config
 				let ns_config = if fs::metadata(&namespace_path).await.is_ok() {
-					// TODO (RVT-3747): Parse as plain toml
 					let ns_config =
-						ProjectContextData::read_ns(project_root.as_path(), &ns_id).await;
+						ProjectContextData::read_partial_ns(project_root.as_path(), &ns_id).await;
 
 					// Try to read op paths from ns config
 					if let Some(_1password) = &ns_config.secrets._1password {
@@ -187,14 +186,17 @@ impl SubCommand {
 					};
 
 				// Determine local secrets path
-				let secrets_path =
-					ProjectContextData::get_secrets_path(ns_config.as_ref(), &project_root, &ns_id);
+				let secrets_path = ProjectContextData::get_secrets_path(
+					ns_config.as_ref().map(|ns| &ns.secrets),
+					&project_root,
+					&ns_id,
+				);
 
 				// Load secrets
 				let secrets = if fs::metadata(&secrets_path).await.is_ok() {
 					Some(
 						ProjectContextData::read_secrets(
-							ns_config.as_ref(),
+							ns_config.as_ref().map(|ns| &ns.secrets),
 							project_root.as_path(),
 							&ns_id,
 						)
@@ -429,7 +431,8 @@ impl SubCommand {
 					.context("failed to read namespace config")?;
 				let local_secrets_str = fs::read_to_string(&secrets_path).await?;
 				let secrets =
-					ProjectContextData::read_secrets(Some(ctx.ns()), ctx.path(), ns_id).await;
+					ProjectContextData::read_secrets(Some(&ctx.ns().secrets), ctx.path(), ns_id)
+						.await;
 
 				let ns_patches = json_patch::diff(&op_namespace, &namespace);
 				if !ns_patches.is_empty() {

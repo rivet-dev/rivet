@@ -103,9 +103,12 @@ impl ProjectContextData {
 		let ns_config = ProjectContextData::read_ns(project_root.as_path(), &ns_id).await;
 
 		// Load secrets
-		let secrets =
-			ProjectContextData::read_secrets(Some(&ns_config), project_root.as_path(), &ns_id)
-				.await;
+		let secrets = ProjectContextData::read_secrets(
+			Some(&ns_config.secrets),
+			project_root.as_path(),
+			&ns_id,
+		)
+		.await;
 
 		let mut svc_ctxs_map = HashMap::new();
 
@@ -358,14 +361,15 @@ impl ProjectContextData {
 	}
 
 	pub fn get_secrets_path(
-		ns: Option<&config::ns::Namespace>,
+		ns_secrets: Option<&config::ns::Secrets>,
 		project_path: &Path,
 		ns_id: &str,
 	) -> PathBuf {
-		ns.and_then(|ns| ns.secrets.path.as_ref()).map_or_else(
-			|| project_path.join("secrets").join(format!("{}.toml", ns_id)),
-			|v| v.clone(),
-		)
+		if let Some(path) = ns_secrets.and_then(|s| s.path.as_ref()) {
+			path.clone()
+		} else {
+			project_path.join("secrets").join(format!("{}.toml", ns_id))
+		}
 	}
 }
 
@@ -481,7 +485,7 @@ impl ProjectContextData {
 		}
 	}
 
-	pub async fn read_ns(project_path: &Path, ns_id: &str) -> config::ns::Namespace {
+	async fn read_ns(project_path: &Path, ns_id: &str) -> config::ns::Namespace {
 		let path = project_path
 			.join("namespaces")
 			.join(format!("{ns_id}.toml"));
@@ -496,7 +500,7 @@ impl ProjectContextData {
 						"failed to parse namespace config ({:?}): {}\n\n{}\n",
 						&span,
 						err.message(),
-						&config_str[span.clone()]
+						&config_str[span.clone()],
 					);
 				} else {
 					panic!("failed to parse namespace config: {}", err.message());
@@ -515,12 +519,40 @@ impl ProjectContextData {
 		config
 	}
 
+	pub async fn read_partial_ns(project_path: &Path, ns_id: &str) -> config::ns::PartialNamespace {
+		let path = project_path
+			.join("namespaces")
+			.join(format!("{ns_id}.toml"));
+		let config_str = fs::read_to_string(&path)
+			.await
+			.unwrap_or_else(|_| panic!("failed to read namespace config: {}", path.display()));
+
+		match toml::from_str::<config::ns::PartialNamespace>(&config_str) {
+			Result::Ok(x) => x,
+			Result::Err(err) => {
+				if let Some(span) = err.span().filter(|span| span.start != span.end) {
+					panic!(
+						"failed to partially parse namespace config ({:?}): {}\n\n{}\n",
+						&span,
+						err.message(),
+						&config_str[span.clone()],
+					);
+				} else {
+					panic!(
+						"failed to partially parse namespace config: {}",
+						err.message()
+					);
+				}
+			}
+		}
+	}
+
 	pub async fn read_secrets(
-		ns: Option<&config::ns::Namespace>,
+		ns_secrets: Option<&config::ns::Secrets>,
 		project_path: &Path,
 		ns_id: &str,
 	) -> serde_json::Value {
-		let secrets_path = ProjectContextData::get_secrets_path(ns, project_path, ns_id);
+		let secrets_path = ProjectContextData::get_secrets_path(ns_secrets, project_path, ns_id);
 		// Read the config
 		let config_str = fs::read_to_string(&secrets_path)
 			.await
@@ -692,7 +724,7 @@ impl ProjectContextData {
 	}
 
 	pub fn secrets_path(&self) -> PathBuf {
-		ProjectContextData::get_secrets_path(Some(self.ns()), self.path(), self.ns_id())
+		ProjectContextData::get_secrets_path(Some(&self.ns().secrets), self.path(), self.ns_id())
 	}
 
 	pub fn gen_path(&self) -> PathBuf {

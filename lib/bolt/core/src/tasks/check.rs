@@ -236,7 +236,8 @@ pub async fn check_config_sync(ctx: &ProjectContext) {
 	let local_namespace_str = fs::read_to_string(&namespace_path).await.unwrap();
 	let namespace = toml::from_str::<serde_json::Value>(&local_namespace_str)
 		.expect("failed to read namespace config");
-	let secrets = ProjectContextData::read_secrets(Some(ctx.ns()), ctx.path(), &ns_id).await;
+	let secrets =
+		ProjectContextData::read_secrets(Some(&ctx.ns().secrets), ctx.path(), &ns_id).await;
 
 	let ns_patches = json_patch::diff(&op_namespace, &namespace);
 	if !ns_patches.is_empty() {

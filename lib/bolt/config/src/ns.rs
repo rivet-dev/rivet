@@ -766,3 +766,10 @@ fn default_tunnel_port() -> u16 {
 fn default_job_server_provision_margin() -> u32 {
 	2
 }
+
+// Used for parsing from 1password
+#[derive(Deserialize, Debug)]
+pub struct PartialNamespace {
+	#[serde(default)]
+	pub secrets: Secrets,
+}
