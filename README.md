@@ -19,8 +19,8 @@
 Deploy game servers in minutes across multiple regions & clouds providers.
 
 - Optimize for performance or cost, servers
-  <Tooltip tip="Shared CPU core similar to VPS providers, see pricing page for details">starting at
-  $2.85/mo</Tooltip>
+  <Tooltip tip="Shared CPU core similar to VPS providers, see pricing page for details">starting at $9/mo for
+  6 servers</Tooltip>
 - Auto-scales 90% faster than AWS GameLift
 - No-downtime deploys & instant rollbacks
 - Monitoring & crash reporting
