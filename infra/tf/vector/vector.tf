@@ -61,6 +61,8 @@ resource "helm_release" "vector" {
 					type = "http_server"
 					address = "0.0.0.0:6200"
 					decoding = { codec = "json" }
+					path = ""
+					strict_path = false
 				}
 				
 				vector_metrics = {
