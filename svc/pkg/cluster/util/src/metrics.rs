@@ -37,6 +37,12 @@ lazy_static::lazy_static! {
 		&["cluster_id", "datacenter_id", "provider_datacenter_id", "datacenter_name_id", "pool_type"],
 		*REGISTRY,
 	).unwrap();
+	pub static ref DRAINING_TAINTED_SERVERS: IntGaugeVec = register_int_gauge_vec_with_registry!(
+		"provision_draining_tainted_servers",
+		"Draining and tainted servers.",
+		&["cluster_id", "datacenter_id", "provider_datacenter_id", "datacenter_name_id", "pool_type"],
+		*REGISTRY,
+	).unwrap();
 
 	pub static ref PROVISION_DURATION: HistogramVec = register_histogram_vec_with_registry!(
 		"provision_provision_duration",

@@ -141,6 +141,7 @@ fn insert_metrics(dc: &backend::cluster::Datacenter, servers: &[Server]) -> Glob
 		let mut nomad = 0;
 		let mut draining = 0;
 		let mut tainted = 0;
+		let mut draining_tainted = 0;
 
 		for server in servers {
 			if server.is_draining {
@@ -161,6 +162,10 @@ fn insert_metrics(dc: &backend::cluster::Datacenter, servers: &[Server]) -> Glob
 
 			if server.is_tainted {
 				tainted += 1;
+
+				if server.is_draining {
+					draining_tainted += 1;
+				}
 			}
 		}
 
@@ -191,6 +196,9 @@ fn insert_metrics(dc: &backend::cluster::Datacenter, servers: &[Server]) -> Glob
 		metrics::TAINTED_SERVERS
 			.with_label_values(&labels)
 			.set(tainted);
+		metrics::DRAINING_TAINTED_SERVERS
+			.with_label_values(&labels)
+			.set(draining_tainted);
 
 		if let Job = pool_type {
 			metrics::NOMAD_SERVERS
