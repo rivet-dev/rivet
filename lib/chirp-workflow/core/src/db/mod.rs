@@ -19,7 +19,11 @@ pub trait Database: Send {
 		input: serde_json::Value,
 	) -> WorkflowResult<()>;
 	async fn get_workflow(&self, id: Uuid) -> WorkflowResult<Option<WorkflowRow>>;
-	async fn pull_workflows(&self, filter: &[&str]) -> WorkflowResult<Vec<PulledWorkflow>>;
+	async fn pull_workflows(
+		&self,
+		worker_instance_id: Uuid,
+		filter: &[&str],
+	) -> WorkflowResult<Vec<PulledWorkflow>>;
 
 	// When a workflow is completed
 	async fn commit_workflow(

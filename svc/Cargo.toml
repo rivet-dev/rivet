@@ -261,7 +261,8 @@ members = [
 	"pkg/user/ops/token-create",
 	"pkg/user/standalone/delete-pending",
 	"pkg/user/standalone/search-user-gc",
-	"pkg/user/worker"
+	"pkg/user/worker",
+	"pkg/workflow/standalone/gc"
 ]
 
 # Speed up compilation

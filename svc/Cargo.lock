@@ -10452,6 +10452,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "workflow-gc"
+version = "0.0.1"
+dependencies = [
+ "chirp-client",
+ "chirp-worker",
+ "rivet-connection",
+ "rivet-health-checks",
+ "rivet-metrics",
+ "rivet-operation",
+ "rivet-runtime",
+ "tokio",
+ "tracing",
+ "tracing-subscriber",
+]
+
+[[package]]
 name = "xmlparser"
 version = "0.13.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"

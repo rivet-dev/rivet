@@ -1,6 +1,7 @@
 use global_error::GlobalResult;
 use tokio::time::Duration;
 use tracing::Instrument;
+use uuid::Uuid;
 
 use crate::{util, DatabaseHandle, RegistryHandle, WorkflowCtx};
 
@@ -10,16 +11,27 @@ const TICK_INTERVAL: Duration = Duration::from_millis(50);
 /// that are registered in its registry. After pulling, the workflows are ran and their state is written to
 /// the database.
 pub struct Worker {
+	worker_instance_id: Uuid,
 	registry: RegistryHandle,
 	db: DatabaseHandle,
 }
 
 impl Worker {
 	pub fn new(registry: RegistryHandle, db: DatabaseHandle) -> Self {
-		Worker { registry, db }
+		Worker {
+			worker_instance_id: Uuid::new_v4(),
+			registry,
+			db,
+		}
 	}
 
 	pub async fn start(mut self, pools: rivet_pools::Pools) -> GlobalResult<()> {
+		tracing::info!(
+			worker_instance_id=?self.worker_instance_id,
+			"starting worker instance with {} registered workflows",
+			self.registry.size(),
+		);
+
 		let mut interval = tokio::time::interval(TICK_INTERVAL);
 		interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
 
@@ -49,7 +61,10 @@ impl Worker {
 			.collect::<Vec<_>>();
 
 		// Query awake workflows
-		let workflows = self.db.pull_workflows(&registered_workflows).await?;
+		let workflows = self
+			.db
+			.pull_workflows(self.worker_instance_id, &registered_workflows)
+			.await?;
 		for workflow in workflows {
 			let conn = util::new_conn(
 				&shared_client,

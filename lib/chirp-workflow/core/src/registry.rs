@@ -75,6 +75,10 @@ impl Registry {
 			.get(name)
 			.ok_or(WorkflowError::WorkflowMissingFromRegistry(name.to_string()))
 	}
+
+	pub fn size(&self) -> usize {
+		self.workflows.len()
+	}
 }
 
 pub struct RegistryWorkflow {

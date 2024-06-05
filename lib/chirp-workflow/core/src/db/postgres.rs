@@ -10,8 +10,6 @@ use super::{
 };
 use crate::{schema::ActivityId, WorkflowError, WorkflowResult};
 
-const NODE_ID: Uuid = Uuid::nil();
-
 pub struct DatabasePostgres {
 	pool: PgPool,
 }
@@ -99,44 +97,59 @@ impl Database for DatabasePostgres {
 		.map_err(WorkflowError::Sqlx)
 	}
 
-	async fn pull_workflows(&self, filter: &[&str]) -> WorkflowResult<Vec<PulledWorkflow>> {
+	async fn pull_workflows(
+		&self,
+		worker_instance_id: Uuid,
+		filter: &[&str],
+	) -> WorkflowResult<Vec<PulledWorkflow>> {
 		// TODO(RVT-3753): include limit on query to allow better workflow spread between nodes?
 		// Select all workflows that haven't started or that have a wake condition
 		let rows = sqlx::query_as::<_, PulledWorkflowRow>(indoc!(
 			"
-			UPDATE db_workflow.workflows as w
-			-- Assign this node to this workflow
-			SET node_id = $1
-			WHERE
-				-- Filter
-				workflow_name = ANY($2) AND
-				-- Not already complete
-				output IS NULL AND
-				-- No assigned node (not running)
-				node_id IS NULL AND
-				-- Check for wake condition
-				(
-					wake_immediate OR
-					wake_deadline_ts IS NOT NULL OR
-					(
-						SELECT true
-						FROM db_workflow.signals AS s
-						WHERE s.signal_name = ANY(wake_signals)
-						LIMIT 1
-					) OR
-					(
-						SELECT true
-						FROM db_workflow.workflows AS w2
-						WHERE
-							w2.workflow_id = w.wake_sub_workflow_id AND
-							output IS NOT NULL
-					)
+			WITH
+				pull_workflows AS (
+					UPDATE db_workflow.workflows as w
+						-- Assign this node to this workflow
+					SET worker_instance_id = $1
+					WHERE
+						-- Filter
+						workflow_name = ANY($2) AND
+						-- Not already complete
+						output IS NULL AND
+						-- No assigned node (not running)
+						worker_instance_id IS NULL AND
+						-- Check for wake condition
+						(
+							wake_immediate OR
+							wake_deadline_ts IS NOT NULL OR
+							(
+								SELECT true
+								FROM db_workflow.signals AS s
+								WHERE s.signal_name = ANY(wake_signals)
+								LIMIT 1
+							) OR
+							(
+								SELECT true
+								FROM db_workflow.workflows AS w2
+								WHERE
+									w2.workflow_id = w.wake_sub_workflow_id AND
+									output IS NOT NULL
+							)
+						)
+					RETURNING workflow_id, workflow_name, create_ts, ray_id, input, wake_deadline_ts
+				),
+				-- Update last ping
+				worker_instance_update AS (
+					UPSERT INTO db_workflow.worker_instances (worker_instance_id, last_ping_ts)
+					VALUES ($1, $3)
+					RETURNING 1
 				)
-			RETURNING workflow_id, workflow_name, create_ts, ray_id, input, wake_deadline_ts
+			SELECT * FROM pull_workflows
 			",
 		))
-		.bind(NODE_ID)
+		.bind(worker_instance_id)
 		.bind(filter)
+		.bind(rivet_util::timestamp::now())
 		.fetch_all(&mut *self.conn().await?)
 		.await
 		.map_err(WorkflowError::Sqlx)?;
@@ -199,12 +212,12 @@ impl Database for DatabasePostgres {
 				sqlx::query_as::<_, SubWorkflowEventRow>(indoc!(
 					"
 					SELECT
-						sw.workflow_id, sw.location, sw.sub_workflow_id, w.name as sub_workflow_name
+						sw.workflow_id, sw.location, sw.sub_workflow_id, w.workflow_name AS sub_workflow_name
 					FROM db_workflow.workflow_sub_workflow_events AS sw
 					JOIN db_workflow.workflows AS w
 					ON sw.sub_workflow_id = w.workflow_id
-					WHERE workflow_id = ANY($1)
-					ORDER BY workflow_id, location ASC
+					WHERE sw.workflow_id = ANY($1)
+					ORDER BY sw.workflow_id, sw.location ASC
 					",
 				))
 				.bind(&workflow_ids)
@@ -274,7 +287,7 @@ impl Database for DatabasePostgres {
 			"
 			UPDATE db_workflow.workflows
 			SET
-				node_id = NULL,
+				worker_instance_id = NULL,
 				wake_immediate = $2,
 				wake_deadline_ts = $3,
 				wake_signals = $4,
@@ -307,7 +320,7 @@ impl Database for DatabasePostgres {
 			UPSERT INTO db_workflow.workflow_activity_events (
 				workflow_id, location, activity_name, input_hash, input, output
 			)
-			VALUES ($1, $2, $3, $4, $5)
+			VALUES ($1, $2, $3, $4, $5, $6)
 			",
 		))
 		.bind(workflow_id)

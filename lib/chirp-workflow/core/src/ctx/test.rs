@@ -1,5 +1,3 @@
-use std::sync::Arc;
-
 use global_error::{GlobalError, GlobalResult};
 use serde::Serialize;
 use tokio::time::Duration;
@@ -9,8 +7,6 @@ use crate::{
 	util, DatabaseHandle, DatabasePostgres, Operation, OperationCtx, OperationInput, Signal,
 	Workflow, WorkflowError, WorkflowInput,
 };
-
-pub type TestCtxHandle = Arc<TestCtx>;
 
 pub struct TestCtx {
 	name: String,

@@ -1,0 +1,11 @@
+[service]
+name = "workflow-gc"
+
+[runtime]
+kind = "rust"
+
+[headless]
+singleton = true
+
+[databases]
+db-workflow = {}

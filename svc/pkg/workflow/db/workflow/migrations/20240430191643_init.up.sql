@@ -1,17 +1,16 @@
-CREATE TABLE nodes (
-  node_id UUID PRIMARY KEY,
+CREATE TABLE worker_instances (
+  worker_instance_id UUID PRIMARY KEY,
   last_ping_ts INT
 );
 
--- TODO: In the event of a node failure, clear all of the wake conditions and remove the node id. This can be
--- done in a periodic GC service
+-- NOTE: If a row has `worker_instance_id` set and `output` unset, it is currently running
 CREATE TABLE workflows (
   workflow_id UUID PRIMARY KEY,
   workflow_name TEXT NOT NULL,
   create_ts INT NOT NULL,
   ray_id UUID NOT NULL,
-  -- The node that's running this workflow
-  node_id UUID,
+  -- The worker instance that's running this workflow
+  worker_instance_id UUID,
 
   input JSONB NOT NULL,
   -- Null if incomplete
@@ -24,7 +23,10 @@ CREATE TABLE workflows (
 
   INDEX (wake_immediate),
   INDEX (wake_deadline_ts),
-  INDEX (wake_sub_workflow_id)
+  INDEX (wake_sub_workflow_id),
+
+  -- Query by worker_instance_id for failover
+  INDEX(worker_instance_id)
 );
 
 CREATE INDEX gin_workflows_wake_signals
