@@ -67,7 +67,7 @@ impl TestCtx {
 		I: WorkflowInput,
 		<I as WorkflowInput>::Workflow: Workflow<Input = I>,
 	{
-		let name = I::Workflow::name();
+		let name = I::Workflow::NAME;
 
 		tracing::debug!(%name, ?input, "dispatching workflow");
 
@@ -92,7 +92,7 @@ impl TestCtx {
 		&self,
 		workflow_id: Uuid,
 	) -> GlobalResult<W::Output> {
-		tracing::info!(name=W::name(), id=?workflow_id, "waiting for workflow");
+		tracing::info!(name=W::NAME, id=?workflow_id, "waiting for workflow");
 
 		let period = Duration::from_millis(50);
 		let mut interval = tokio::time::interval(period);
@@ -131,7 +131,7 @@ impl TestCtx {
 		workflow_id: Uuid,
 		input: I,
 	) -> GlobalResult<Uuid> {
-		tracing::debug!(name=%I::name(), %workflow_id, "dispatching signal");
+		tracing::debug!(name=%I::NAME, %workflow_id, "dispatching signal");
 
 		let signal_id = Uuid::new_v4();
 
@@ -141,7 +141,7 @@ impl TestCtx {
 			.map_err(GlobalError::raw)?;
 
 		self.db
-			.publish_signal(self.ray_id, workflow_id, signal_id, I::name(), input_val)
+			.publish_signal(self.ray_id, workflow_id, signal_id, I::NAME, input_val)
 			.await
 			.map_err(GlobalError::raw)?;
 
@@ -164,7 +164,7 @@ impl TestCtx {
 			self.ray_id,
 			self.ts,
 			false,
-			I::Operation::name(),
+			I::Operation::NAME,
 		);
 
 		I::Operation::run(&mut ctx, &input)

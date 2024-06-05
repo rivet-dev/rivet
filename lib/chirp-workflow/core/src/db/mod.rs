@@ -39,6 +39,7 @@ pub trait Database: Send {
 		wake_deadline_ts: Option<i64>,
 		wake_signals: &[&str],
 		wake_sub_workflow: Option<Uuid>,
+		error: &str,
 	) -> WorkflowResult<()>;
 
 	async fn commit_workflow_activity_event(
@@ -47,7 +48,7 @@ pub trait Database: Send {
 		location: &[usize],
 		activity_id: &ActivityId,
 		input: serde_json::Value,
-		output: Option<serde_json::Value>,
+		output: Result<serde_json::Value, &str>,
 	) -> WorkflowResult<()>;
 
 	async fn publish_signal(
@@ -123,6 +124,7 @@ pub struct ActivityEventRow {
 	pub activity_name: String,
 	pub input_hash: Vec<u8>,
 	pub output: Option<serde_json::Value>,
+	pub error_count: i64,
 }
 
 #[derive(sqlx::FromRow)]

@@ -8,7 +8,8 @@ pub trait Operation {
 	type Input: OperationInput;
 	type Output: Send;
 
-	fn name() -> &'static str;
+	const NAME: &'static str;
+	const TIMEOUT: std::time::Duration;
 
 	async fn run(ctx: &mut OperationCtx, input: &Self::Input) -> GlobalResult<Self::Output>;
 }

@@ -67,7 +67,7 @@ impl OperationCtx {
 			self.ray_id,
 			self.op_ctx.req_ts(),
 			self.op_ctx.from_workflow(),
-			I::Operation::name(),
+			I::Operation::NAME,
 		);
 
 		I::Operation::run(&mut ctx, &input)

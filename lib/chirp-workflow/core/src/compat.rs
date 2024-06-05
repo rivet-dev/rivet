@@ -24,7 +24,7 @@ where
 		bail!("cannot dispatch a workflow from an operation within a workflow execution. trigger it from the workflow's body.");
 	}
 
-	let name = I::Workflow::name();
+	let name = I::Workflow::NAME;
 
 	tracing::debug!(%name, ?input, "dispatching workflow");
 
@@ -50,7 +50,7 @@ pub async fn wait_for_workflow<W: Workflow, B: Debug + Clone>(
 	ctx: &rivet_operation::OperationContext<B>,
 	workflow_id: Uuid,
 ) -> GlobalResult<W::Output> {
-	tracing::info!(name=W::name(), id=?workflow_id, "waiting for workflow");
+	tracing::info!(name=W::NAME, id=?workflow_id, "waiting for workflow");
 
 	let period = Duration::from_millis(50);
 	let mut interval = tokio::time::interval(period);
@@ -94,7 +94,7 @@ pub async fn signal<I: Signal + Serialize, B: Debug + Clone>(
 		bail!("cannot dispatch a signal from an operation within a workflow execution. trigger it from the workflow's body.");
 	}
 
-	tracing::debug!(name=%I::name(), %workflow_id, "dispatching signal");
+	tracing::debug!(name=%I::NAME, %workflow_id, "dispatching signal");
 
 	let signal_id = Uuid::new_v4();
 
@@ -105,7 +105,7 @@ pub async fn signal<I: Signal + Serialize, B: Debug + Clone>(
 
 	db(ctx)
 		.await?
-		.publish_signal(ctx.ray_id(), workflow_id, signal_id, I::name(), input_val)
+		.publish_signal(ctx.ray_id(), workflow_id, signal_id, I::NAME, input_val)
 		.await
 		.map_err(GlobalError::raw)?;
 
@@ -127,7 +127,7 @@ where
 		ctx.ray_id(),
 		ctx.req_ts(),
 		ctx.from_workflow(),
-		I::Operation::name(),
+		I::Operation::NAME,
 	);
 
 	I::Operation::run(&mut ctx, &input)

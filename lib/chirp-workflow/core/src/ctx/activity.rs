@@ -66,11 +66,12 @@ impl ActivityCtx {
 			self.ray_id,
 			self.op_ctx.req_ts(),
 			true,
-			I::Operation::name(),
+			I::Operation::NAME,
 		);
 
-		I::Operation::run(&mut ctx, &input)
+		tokio::time::timeout(I::Operation::TIMEOUT, I::Operation::run(&mut ctx, &input))
 			.await
+			.map_err(|_| WorkflowError::OperationTimeout)?
 			.map_err(WorkflowError::OperationFailure)
 			.map_err(GlobalError::raw)
 	}

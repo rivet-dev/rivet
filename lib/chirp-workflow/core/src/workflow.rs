@@ -10,9 +10,8 @@ pub trait Workflow {
 	type Input: WorkflowInput;
 	type Output: Serialize + DeserializeOwned + Debug + Send;
 
-	fn name() -> &'static str;
+	const NAME: &'static str;
 
-	// TODO: Is there any reason for input to be a reference?
 	async fn run(ctx: &mut WorkflowCtx, input: &Self::Input) -> GlobalResult<Self::Output>;
 }
 

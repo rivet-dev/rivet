@@ -13,13 +13,13 @@ use crate::{
 };
 
 // Time to delay a worker from retrying after an error
-const RETRY_TIMEOUT: Duration = Duration::from_millis(100);
+const RETRY_TIMEOUT: Duration = Duration::from_millis(2000);
 // Poll interval when polling for signals in-process
 const SIGNAL_RETRY: Duration = Duration::from_millis(100);
 // Most in-process signal poll tries
 const MAX_SIGNAL_RETRIES: usize = 16;
 // Poll interval when polling for a sub workflow in-process
-const SUB_WORKFLOW_RETRY: Duration = Duration::from_millis(100);
+const SUB_WORKFLOW_RETRY: Duration = Duration::from_millis(150);
 // Most in-process sub workflow poll tries
 const MAX_SUB_WORKFLOW_RETRIES: usize = 4;
 // Retry interval for failed db actions
@@ -62,7 +62,7 @@ impl WorkflowCtx {
 		conn: rivet_connection::Connection,
 		workflow: PulledWorkflow,
 	) -> GlobalResult<Self> {
-		GlobalResult::Ok(WorkflowCtx {
+		Ok(WorkflowCtx {
 			workflow_id: workflow.workflow_id,
 			name: workflow.workflow_name,
 			create_ts: workflow.create_ts,
@@ -160,7 +160,7 @@ impl WorkflowCtx {
 
 		// Run workflow
 		match (workflow.run)(self).await {
-			Result::Ok(output) => {
+			Ok(output) => {
 				tracing::info!(id=%self.workflow_id, "workflow success");
 
 				let mut retries = 0;
@@ -185,9 +185,8 @@ impl WorkflowCtx {
 			Err(err) => {
 				tracing::warn!(id=%self.workflow_id, ?err, "workflow error");
 
-				// TODO(RVT-3751): Save error to workflow
-
-				let deadline = if err.is_recoverable_with_replay() {
+				// Retry the workflow if its recoverable
+				let deadline = if err.is_recoverable() {
 					Some(rivet_util::timestamp::now() + RETRY_TIMEOUT.as_millis() as i64)
 				} else {
 					None
@@ -200,6 +199,8 @@ impl WorkflowCtx {
 				// This sub workflow come from a `wait_for_workflow` call on a workflow that did not
 				// finish. This workflow will be retried when the sub workflow completes
 				let wake_sub_workflow = err.sub_workflow();
+
+				let err_str = err.to_string();
 
 				let mut retries = 0;
 				let mut interval = tokio::time::interval(DB_ACTION_RETRY);
@@ -218,6 +219,7 @@ impl WorkflowCtx {
 							deadline,
 							wake_signals,
 							wake_sub_workflow,
+							&err_str,
 						)
 						.await;
 
@@ -247,11 +249,15 @@ impl WorkflowCtx {
 			&self.conn,
 			self.create_ts,
 			self.ray_id,
-			A::name(),
+			A::NAME,
 		);
 
-		match A::run(&mut ctx, input).await {
-			Result::Ok(output) => {
+		let res = tokio::time::timeout(A::TIMEOUT, A::run(&mut ctx, input))
+			.await
+			.map_err(|_| WorkflowError::ActivityTimeout);
+
+		match res {
+			Ok(Ok(output)) => {
 				tracing::debug!("activity success");
 
 				// Write output
@@ -265,16 +271,16 @@ impl WorkflowCtx {
 						self.full_location().as_ref(),
 						activity_id,
 						input_val,
-						Some(output_val),
+						Ok(output_val),
 					)
 					.await?;
 
-				Result::Ok(output)
+				Ok(output)
 			}
-			Err(err) => {
+			Ok(Err(err)) => {
 				tracing::debug!(?err, "activity error");
 
-				// Write empty output (failed state)
+				// Write error (failed state)
 				let input_val =
 					serde_json::to_value(input).map_err(WorkflowError::SerializeActivityInput)?;
 				self.db
@@ -283,12 +289,28 @@ impl WorkflowCtx {
 						self.full_location().as_ref(),
 						activity_id,
 						input_val,
-						None,
+						Err(&err.to_string()),
 					)
 					.await?;
 
-				// TODO: RVT-3751
 				Err(WorkflowError::ActivityFailure(err))
+			}
+			Err(err) => {
+				tracing::debug!("activity timeout");
+
+				let input_val =
+					serde_json::to_value(input).map_err(WorkflowError::SerializeActivityInput)?;
+				self.db
+					.commit_workflow_activity_event(
+						self.workflow_id,
+						self.full_location().as_ref(),
+						activity_id,
+						input_val,
+						Err(&err.to_string()),
+					)
+					.await?;
+
+				Err(err)
 			}
 		}
 	}
@@ -337,7 +359,7 @@ impl WorkflowCtx {
 				return Err(WorkflowError::HistoryDiverged).map_err(GlobalError::raw);
 			};
 
-			if sub_workflow.sub_workflow_name != I::Workflow::name() {
+			if sub_workflow.sub_workflow_name != I::Workflow::NAME {
 				return Err(WorkflowError::HistoryDiverged).map_err(GlobalError::raw);
 			}
 
@@ -351,7 +373,7 @@ impl WorkflowCtx {
 		}
 		// Dispatch new workflow
 		else {
-			let name = I::Workflow::name();
+			let name = I::Workflow::NAME;
 
 			tracing::debug!(%name, ?input, "dispatching workflow");
 
@@ -382,7 +404,7 @@ impl WorkflowCtx {
 		// Move to next event
 		self.location_idx += 1;
 
-		GlobalResult::Ok(id)
+		Ok(id)
 	}
 
 	/// Wait for another workflow's response.
@@ -390,7 +412,7 @@ impl WorkflowCtx {
 		&self,
 		sub_workflow_id: Uuid,
 	) -> GlobalResult<W::Output> {
-		tracing::info!(name = W::name(), ?sub_workflow_id, "waiting for workflow");
+		tracing::info!(name = W::NAME, ?sub_workflow_id, "waiting for workflow");
 
 		let mut retries = 0;
 		let mut interval = tokio::time::interval(SUB_WORKFLOW_RETRY);
@@ -430,10 +452,10 @@ impl WorkflowCtx {
 		<I as WorkflowInput>::Workflow: Workflow<Input = I>,
 	{
 		// Lookup workflow
-		let Ok(workflow) = self.registry.get_workflow(I::Workflow::name()) else {
+		let Ok(workflow) = self.registry.get_workflow(I::Workflow::NAME) else {
 			tracing::warn!(
 				id=%self.workflow_id,
-				name=%I::Workflow::name(),
+				name=%I::Workflow::NAME,
 				"sub workflow not found in current registry",
 			);
 
@@ -449,12 +471,12 @@ impl WorkflowCtx {
 			return Ok(output);
 		};
 
-		tracing::info!(id=%self.workflow_id, name=%I::Workflow::name(), "running sub workflow");
+		tracing::info!(id=%self.workflow_id, name=%I::Workflow::NAME, "running sub workflow");
 
 		// Create a new branched workflow context for the sub workflow
 		let mut ctx = WorkflowCtx {
 			workflow_id: self.workflow_id,
-			name: I::Workflow::name().to_string(),
+			name: I::Workflow::NAME.to_string(),
 			create_ts: rivet_util::timestamp::now(),
 			ray_id: self.ray_id,
 
@@ -463,7 +485,7 @@ impl WorkflowCtx {
 
 			conn: self
 				.conn
-				.wrap(Uuid::new_v4(), self.ray_id, I::Workflow::name()),
+				.wrap(Uuid::new_v4(), self.ray_id, I::Workflow::NAME),
 
 			event_history: self.event_history.clone(),
 
@@ -516,13 +538,39 @@ impl WorkflowCtx {
 			}
 
 			// Activity succeeded
-			if let Some(output) = activity.get_output().map_err(GlobalError::raw)? {
+			if let Some(output) = activity.parse_output().map_err(GlobalError::raw)? {
 				output
-			} else {
-				// Activity failed, retry
-				self.run_activity::<I::Activity>(&input, &activity_id)
-					.await
-					.map_err(GlobalError::raw)?
+			}
+			// Activity failed, retry
+			else {
+				let error_count = activity.error_count;
+
+				match self.run_activity::<I::Activity>(&input, &activity_id).await {
+					Err(err) => {
+						// Convert error in the case of max retries exceeded. This will only act on retryable
+						// errors
+						let err = match err {
+							WorkflowError::ActivityFailure(err) => {
+								if error_count + 1 >= I::Activity::MAX_RETRIES {
+									WorkflowError::ActivityMaxFailuresReached(err)
+								} else {
+									WorkflowError::ActivityFailure(err)
+								}
+							}
+							WorkflowError::ActivityTimeout | WorkflowError::OperationTimeout => {
+								if error_count + 1 >= I::Activity::MAX_RETRIES {
+									WorkflowError::ActivityMaxFailuresReached(GlobalError::raw(err))
+								} else {
+									err
+								}
+							}
+							_ => err,
+						};
+
+						return Err(GlobalError::raw(err));
+					}
+					x => x.map_err(GlobalError::raw)?,
+				}
 			}
 		}
 		// This is a new activity
@@ -556,7 +604,7 @@ impl WorkflowCtx {
 				self.ray_id,
 				workflow_id,
 				id,
-				T::name(),
+				T::NAME,
 				serde_json::to_value(&body)
 					.map_err(WorkflowError::SerializeSignalBody)
 					.map_err(GlobalError::raw)?,

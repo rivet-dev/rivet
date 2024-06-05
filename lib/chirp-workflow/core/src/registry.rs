@@ -31,7 +31,7 @@ impl Registry {
 
 	pub fn register_workflow<W: Workflow>(&mut self) {
 		self.workflows.insert(
-			W::name().to_string(),
+			W::NAME.to_string(),
 			Arc::new(RegistryWorkflow {
 				run: |ctx| {
 					async move {

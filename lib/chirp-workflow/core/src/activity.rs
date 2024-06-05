@@ -11,7 +11,9 @@ pub trait Activity {
 	type Input: ActivityInput;
 	type Output: Serialize + DeserializeOwned + Debug + Send;
 
-	fn name() -> &'static str;
+	const NAME: &'static str;
+	const MAX_RETRIES: u32;
+	const TIMEOUT: std::time::Duration;
 
 	async fn run(ctx: &mut ActivityCtx, input: &Self::Input) -> GlobalResult<Self::Output>;
 }

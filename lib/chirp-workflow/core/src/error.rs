@@ -15,6 +15,9 @@ pub enum WorkflowError {
 	#[error("activity failure: {0:?}")]
 	ActivityFailure(GlobalError),
 
+	#[error("activity failure, max retries reached: {0:?}")]
+	ActivityMaxFailuresReached(GlobalError),
+
 	#[error("operation failure: {0:?}")]
 	OperationFailure(GlobalError),
 
@@ -68,12 +71,20 @@ pub enum WorkflowError {
 
 	#[error("sql: {0}")]
 	Sqlx(sqlx::Error),
+
+	#[error("activity timed out")]
+	ActivityTimeout,
+
+	#[error("operation timed out")]
+	OperationTimeout,
 }
 
 impl WorkflowError {
-	pub(crate) fn is_recoverable_with_replay(&self) -> bool {
+	pub fn is_recoverable(&self) -> bool {
 		match self {
 			WorkflowError::ActivityFailure(_) => true,
+			WorkflowError::ActivityTimeout => true,
+			WorkflowError::OperationTimeout => true,
 			_ => false,
 		}
 	}

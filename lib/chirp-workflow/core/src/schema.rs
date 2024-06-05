@@ -25,11 +25,12 @@ pub struct ActivityEvent {
 	pub activity_id: ActivityId,
 
 	/// If activity succeeds, this will be some.
-	pub output: Option<serde_json::Value>,
+	pub(crate) output: Option<serde_json::Value>,
+	pub error_count: u32,
 }
 
 impl ActivityEvent {
-	pub fn get_output<O: DeserializeOwned>(&self) -> WorkflowResult<Option<O>> {
+	pub fn parse_output<O: DeserializeOwned>(&self) -> WorkflowResult<Option<O>> {
 		self.output
 			.clone()
 			.map(serde_json::from_value)
@@ -45,6 +46,10 @@ impl TryFrom<ActivityEventRow> for ActivityEvent {
 		Ok(ActivityEvent {
 			activity_id: ActivityId::from_bytes(value.activity_name, value.input_hash)?,
 			output: value.output,
+			error_count: value
+				.error_count
+				.try_into()
+				.map_err(|_| WorkflowError::IntegerConversion)?,
 		})
 	}
 }
@@ -100,7 +105,7 @@ impl ActivityId {
 		let input_hash = hasher.finish();
 
 		Self {
-			name: A::name().to_string(),
+			name: A::NAME.to_string(),
 			input_hash,
 		}
 	}

@@ -3,17 +3,49 @@ use std::{
 	time::{SystemTime, UNIX_EPOCH},
 };
 
-use global_error::{macros::*, GlobalResult};
+use global_error::{macros::*, GlobalError, GlobalResult};
 use rand::Rng;
 use tokio::time::{self, Duration};
 use uuid::Uuid;
 
-use crate::{schema::Event, ActivityEventRow, SignalEventRow, SubWorkflowEventRow, WorkflowResult};
+use crate::{
+	error::WorkflowError, schema::Event, ActivityEventRow, SignalEventRow, SubWorkflowEventRow,
+	WorkflowResult,
+};
 
 pub type Location = Box<[usize]>;
 
 // How often the `inject_fault` function fails in percent
 const FAULT_RATE: usize = 80;
+
+/// Allows for checking if a global error returned from an activity is recoverable.
+pub trait GlobalErrorExt {
+	fn is_workflow_recoverable(&self) -> bool;
+}
+
+impl GlobalErrorExt for GlobalError {
+	fn is_workflow_recoverable(&self) -> bool {
+		match self {
+			GlobalError::Raw(inner_err) => inner_err
+				.downcast_ref::<WorkflowError>()
+				.map(|err| err.is_recoverable())
+				.unwrap_or_default(),
+			_ => false,
+		}
+	}
+}
+
+impl<T> GlobalErrorExt for GlobalResult<T> {
+	fn is_workflow_recoverable(&self) -> bool {
+		match self {
+			Err(GlobalError::Raw(inner_err)) => inner_err
+				.downcast_ref::<WorkflowError>()
+				.map(|err| err.is_recoverable())
+				.unwrap_or_default(),
+			_ => false,
+		}
+	}
+}
 
 pub async fn sleep_until_ts(ts: i64) {
 	let target_time = UNIX_EPOCH + Duration::from_millis(ts as u64);

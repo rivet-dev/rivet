@@ -154,6 +154,10 @@ impl Database for DatabasePostgres {
 		.await
 		.map_err(WorkflowError::Sqlx)?;
 
+		if rows.is_empty() {
+			return Ok(Vec::new());
+		}
+
 		// Turn rows into hashmap
 		let workflow_ids = rows.iter().map(|row| row.workflow_id).collect::<Vec<_>>();
 		let mut workflows_by_id = rows
@@ -182,10 +186,20 @@ impl Database for DatabasePostgres {
 				sqlx::query_as::<_, ActivityEventRow>(indoc!(
 					"
 					SELECT
-						workflow_id, location, activity_name, input_hash, output
-					FROM db_workflow.workflow_activity_events
-					WHERE workflow_id = ANY($1)
-					ORDER BY workflow_id, location ASC
+						ev.workflow_id, 
+						ev.location, 
+						ev.activity_name, 
+						ev.input_hash, 
+						ev.output,
+						COUNT(err.workflow_id) AS error_count
+					FROM db_workflow.workflow_activity_events AS ev
+					LEFT JOIN db_workflow.workflow_activity_errors AS err
+					ON
+						ev.workflow_id = err.workflow_id AND
+						ev.location = err.location
+					WHERE ev.workflow_id = ANY($1)
+					GROUP BY ev.workflow_id, ev.location, ev.activity_name, ev.input_hash, ev.output
+					ORDER BY ev.workflow_id, ev.location ASC
 					",
 				))
 				.bind(&workflow_ids)
@@ -281,8 +295,9 @@ impl Database for DatabasePostgres {
 		deadline_ts: Option<i64>,
 		wake_signals: &[&str],
 		wake_sub_workflow_id: Option<Uuid>,
+		error: &str,
 	) -> WorkflowResult<()> {
-		// TODO: Should this compare `wake_deadline_ts` before setting it?
+		// TODO(RVT-3762): Should this compare `wake_deadline_ts` before setting it?
 		sqlx::query(indoc!(
 			"
 			UPDATE db_workflow.workflows
@@ -291,7 +306,8 @@ impl Database for DatabasePostgres {
 				wake_immediate = $2,
 				wake_deadline_ts = $3,
 				wake_signals = $4,
-				wake_sub_workflow_id = $5
+				wake_sub_workflow_id = $5,
+				error = $6
 			WHERE workflow_id = $1
 			",
 		))
@@ -300,6 +316,7 @@ impl Database for DatabasePostgres {
 		.bind(deadline_ts)
 		.bind(wake_signals)
 		.bind(wake_sub_workflow_id)
+		.bind(error)
 		.execute(&mut *self.conn().await?)
 		.await
 		.map_err(WorkflowError::Sqlx)?;
@@ -313,25 +330,61 @@ impl Database for DatabasePostgres {
 		location: &[usize],
 		activity_id: &ActivityId,
 		input: serde_json::Value,
-		output: Option<serde_json::Value>,
+		res: Result<serde_json::Value, &str>,
 	) -> WorkflowResult<()> {
-		sqlx::query(indoc!(
-			"
-			UPSERT INTO db_workflow.workflow_activity_events (
-				workflow_id, location, activity_name, input_hash, input, output
-			)
-			VALUES ($1, $2, $3, $4, $5, $6)
-			",
-		))
-		.bind(workflow_id)
-		.bind(location.iter().map(|x| *x as i64).collect::<Vec<_>>())
-		.bind(&activity_id.name)
-		.bind(activity_id.input_hash.to_le_bytes())
-		.bind(input)
-		.bind(output)
-		.execute(&mut *self.conn().await?)
-		.await
-		.map_err(WorkflowError::Sqlx)?;
+		match res {
+			Ok(output) => {
+				sqlx::query(indoc!(
+					"
+					UPSERT INTO db_workflow.workflow_activity_events (
+						workflow_id, location, activity_name, input_hash, input, output
+					)
+					VALUES ($1, $2, $3, $4, $5, $6)
+					",
+				))
+				.bind(workflow_id)
+				.bind(location.iter().map(|x| *x as i64).collect::<Vec<_>>())
+				.bind(&activity_id.name)
+				.bind(activity_id.input_hash.to_le_bytes())
+				.bind(input)
+				.bind(output)
+				.execute(&mut *self.conn().await?)
+				.await
+				.map_err(WorkflowError::Sqlx)?;
+			}
+			Err(err) => {
+				sqlx::query(indoc!(
+					"
+					WITH
+						event AS (
+							UPSERT INTO db_workflow.workflow_activity_events (
+								workflow_id, location, activity_name, input_hash, input
+							)
+							VALUES ($1, $2, $3, $4, $5)
+							RETURNING 1
+						),
+						err AS (
+							INSERT INTO db_workflow.workflow_activity_errors (
+								workflow_id, location, activity_name, error, ts
+							)
+							VALUES ($1, $2, $3, $6, $7)
+							RETURNING 1
+						)
+					SELECT 1
+					",
+				))
+				.bind(workflow_id)
+				.bind(location.iter().map(|x| *x as i64).collect::<Vec<_>>())
+				.bind(&activity_id.name)
+				.bind(activity_id.input_hash.to_le_bytes())
+				.bind(input)
+				.bind(err)
+				.bind(rivet_util::timestamp::now())
+				.execute(&mut *self.conn().await?)
+				.await
+				.map_err(WorkflowError::Sqlx)?;
+			}
+		}
 
 		Ok(())
 	}

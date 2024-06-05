@@ -3,7 +3,7 @@ use async_trait::async_trait;
 use crate::{WorkflowCtx, WorkflowResult};
 
 pub trait Signal {
-	fn name() -> &'static str;
+	const NAME: &'static str;
 }
 
 /// A trait which allows listening for signals from the workflows database. This is used by
@@ -52,13 +52,13 @@ macro_rules! join_signal {
 		#[::async_trait::async_trait]
 		impl Listen for $join {
 			async fn listen(ctx: &mut chirp_workflow::prelude::WorkflowCtx) -> chirp_workflow::prelude::WorkflowResult<Self> {
-				let row = ctx.listen_any(&[$($signals::name()),*]).await?;
+				let row = ctx.listen_any(&[$($signals::NAME),*]).await?;
 				Self::parse(&row.name, row.body)
 			}
 
 			fn parse(name: &str, body: serde_json::Value) -> chirp_workflow::prelude::WorkflowResult<Self> {
 				$(
-					if name == $signals::name() {
+					if name == $signals::NAME {
 						Ok(
 							Self::$signals(
 								serde_json::from_value(body)

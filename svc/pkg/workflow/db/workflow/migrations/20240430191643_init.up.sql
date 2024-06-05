@@ -15,6 +15,9 @@ CREATE TABLE workflows (
   input JSONB NOT NULL,
   -- Null if incomplete
   output JSONB,
+  -- The last error of this workflow. The workflow can still succeed with this column set if it retries
+  -- successfully (this column is never cleared).
+  error TEXT,
 
   wake_immediate BOOLEAN NOT NULL DEFAULT false,
   wake_deadline_ts INT,
@@ -45,6 +48,17 @@ CREATE TABLE workflow_activity_events (
   output JSONB,
 
   PRIMARY KEY (workflow_id, location)
+);
+
+CREATE TABLE workflow_activity_errors (
+  workflow_id UUID NOT NULL REFERENCES workflows,
+  location INT[] NOT NULL,
+  activity_name TEXT NOT NULL,
+  error TEXT NOT NULL,
+  ts INT NOT NULL,
+
+  -- Not a primary key because we can have multiple error rows
+  INDEX (workflow_id, location)
 );
 
 -- Stores acknowledged signals for replay

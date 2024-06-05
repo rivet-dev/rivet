@@ -22,6 +22,7 @@ pub use crate::{
 	executable::Executable,
 	operation::Operation,
 	registry::Registry,
+	util::GlobalErrorExt,
 	worker::Worker,
 	workflow::Workflow,
 };

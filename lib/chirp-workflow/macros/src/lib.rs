@@ -5,19 +5,188 @@ use syn::{
 	PathArguments, ReturnType, Type,
 };
 
-struct TraitFnOpts {
-	ctx_ty: syn::Type,
-	trait_ty: syn::Type,
-	input_trait_ty: syn::Type,
-	executable: bool,
+struct Config {
+	max_retries: u32,
+	timeout: u64,
 }
 
-fn trait_fn(attr: TokenStream, item: TokenStream, opts: TraitFnOpts) -> TokenStream {
-	let activity_name = parse_macro_input!(attr as Ident).to_string();
+impl Default for Config {
+	fn default() -> Self {
+		Config {
+			max_retries: 5,
+			timeout: 30,
+		}
+	}
+}
+
+#[proc_macro_attribute]
+pub fn workflow(attr: TokenStream, item: TokenStream) -> TokenStream {
+	let name = parse_macro_input!(attr as Ident).to_string();
 	let item_fn = parse_macro_input!(item as ItemFn);
+
+	if let Err(err) = parse_empty_config(&item_fn.attrs) {
+		return err.into_compile_error().into();
+	}
+
+	let ctx_ty = syn::parse_str("&mut WorkflowCtx").unwrap();
+	let TraitFnOutput {
+		ctx_ident,
+		input_ident,
+		input_type,
+		output_type,
+	} = parse_trait_fn(&ctx_ty, "Workflow", &item_fn);
+
+	let struct_ident = Ident::new(&name, proc_macro2::Span::call_site());
 	let fn_name = item_fn.sig.ident.to_string();
 	let fn_body = item_fn.block;
 
+	let expanded = quote! {
+		pub struct #struct_ident;
+
+		impl chirp_workflow::workflow::WorkflowInput for #input_type {
+			type Workflow = #struct_ident;
+		}
+
+		#[async_trait::async_trait]
+		impl chirp_workflow::prelude::Workflow for #struct_ident {
+			type Input = #input_type;
+			type Output = #output_type;
+
+			const NAME: &'static str = #fn_name;
+
+			async fn run(#ctx_ident: #ctx_ty, #input_ident: &Self::Input) -> GlobalResult<Self::Output> {
+				#fn_body
+			}
+		}
+	};
+
+	// eprintln!("\n\n{expanded}\n");
+
+	TokenStream::from(expanded)
+}
+
+#[proc_macro_attribute]
+pub fn activity(attr: TokenStream, item: TokenStream) -> TokenStream {
+	let name = parse_macro_input!(attr as Ident).to_string();
+	let item_fn = parse_macro_input!(item as ItemFn);
+
+	let config = match parse_config(&item_fn.attrs) {
+		Ok(x) => x,
+		Err(err) => return err.into_compile_error().into(),
+	};
+
+	let ctx_ty = syn::parse_str("&mut ActivityCtx").unwrap();
+	let TraitFnOutput {
+		ctx_ident,
+		input_ident,
+		input_type,
+		output_type,
+	} = parse_trait_fn(&ctx_ty, "Activity", &item_fn);
+
+	let struct_ident = Ident::new(&name, proc_macro2::Span::call_site());
+	let fn_name = item_fn.sig.ident.to_string();
+	let fn_body = item_fn.block;
+
+	let max_retries = config.max_retries;
+	let timeout = config.timeout * 1000;
+
+	let expanded = quote! {
+		pub struct #struct_ident;
+
+		impl chirp_workflow::activity::ActivityInput for #input_type {
+			type Activity = #struct_ident;
+		}
+
+		// NOTE: This would normally be an impl on the trait `ActivityInput` but this has conflicts with other
+		// generic implementations on `Executable` so we implement executable on all of the input structs
+		// instead
+		#[async_trait::async_trait]
+		impl chirp_workflow::prelude::Executable for #input_type {
+			type Output = <#struct_ident as chirp_workflow::prelude::Activity>::Output;
+
+			async fn execute(self, ctx: &mut chirp_workflow::prelude::WorkflowCtx) -> GlobalResult<Self::Output> {
+				ctx.activity(self).await
+			}
+		}
+
+		#[async_trait::async_trait]
+		impl chirp_workflow::prelude::Activity for #struct_ident {
+			type Input = #input_type;
+			type Output = #output_type;
+
+			const NAME: &'static str = #fn_name;
+			const MAX_RETRIES: u32 = #max_retries;
+			const TIMEOUT: std::time::Duration = std::time::Duration::from_millis(#timeout);
+
+			async fn run(#ctx_ident: #ctx_ty, #input_ident: &Self::Input) -> GlobalResult<Self::Output> {
+				#fn_body
+			}
+		}
+	};
+
+	// eprintln!("\n\n{expanded}\n");
+
+	TokenStream::from(expanded)
+}
+
+#[proc_macro_attribute]
+pub fn operation(attr: TokenStream, item: TokenStream) -> TokenStream {
+	let name = parse_macro_input!(attr as Ident).to_string();
+	let item_fn = parse_macro_input!(item as ItemFn);
+
+	let config = match parse_config(&item_fn.attrs) {
+		Ok(x) => x,
+		Err(err) => return err.into_compile_error().into(),
+	};
+
+	let ctx_ty = syn::parse_str("&mut OperationCtx").unwrap();
+	let TraitFnOutput {
+		ctx_ident,
+		input_ident,
+		input_type,
+		output_type,
+	} = parse_trait_fn(&ctx_ty, "Operation", &item_fn);
+
+	let struct_ident = Ident::new(&name, proc_macro2::Span::call_site());
+	let fn_name = item_fn.sig.ident.to_string();
+	let fn_body = item_fn.block;
+
+	let timeout = config.timeout * 1000;
+
+	let expanded = quote! {
+		pub struct #struct_ident;
+
+		impl chirp_workflow::workflow::OperationInput for #input_type {
+			type Operation = #struct_ident;
+		}
+
+		#[async_trait::async_trait]
+		impl chirp_workflow::prelude::Operation for #struct_ident {
+			type Input = #input_type;
+			type Output = #output_type;
+
+			const NAME: &'static str = #fn_name;
+			const TIMEOUT: std::time::Duration = std::time::Duration::from_millis(#timeout);
+
+			async fn run(#ctx_ident: #ctx_ty, #input_ident: &Self::Input) -> GlobalResult<Self::Output> {
+				#fn_body
+			}
+		}
+	};
+
+	// eprintln!("\n\n{expanded}\n");
+
+	TokenStream::from(expanded)
+}
+
+struct TraitFnOutput {
+	ctx_ident: syn::Ident,
+	input_ident: syn::Ident,
+	input_type: Box<syn::Type>,
+	output_type: syn::Ident,
+}
+
+fn parse_trait_fn(ctx_ty: &syn::Type, trait_name: &str, item_fn: &syn::ItemFn) -> TraitFnOutput {
 	let mut arg_names = vec![];
 	let mut arg_types = vec![];
 
@@ -36,11 +205,11 @@ fn trait_fn(attr: TokenStream, item: TokenStream, opts: TraitFnOpts) -> TokenStr
 		}
 	}
 
-	if arg_types.len() != 2 || arg_types[0] != opts.ctx_ty {
+	if arg_types.len() != 2 || &arg_types[0] != ctx_ty {
 		panic!(
 			"{} function must have exactly two parameters: ctx: {:?} and input: YourInputType",
-			opts.trait_ty.to_token_stream().to_string(),
-			opts.ctx_ty.to_token_stream().to_string()
+			trait_name,
+			ctx_ty.to_token_stream().to_string()
 		);
 	}
 
@@ -59,7 +228,7 @@ fn trait_fn(attr: TokenStream, item: TokenStream, opts: TraitFnOpts) -> TokenStr
 						PathArguments::AngleBracketed(args) => {
 							if let Some(GenericArgument::Type(Type::Path(path))) = args.args.first()
 							{
-								&path.path.segments.last().unwrap().ident
+								path.path.segments.last().unwrap().ident.clone()
 							} else {
 								panic!("Unsupported Result type");
 							}
@@ -67,119 +236,25 @@ fn trait_fn(attr: TokenStream, item: TokenStream, opts: TraitFnOpts) -> TokenStr
 						_ => panic!("Unsupported Result type"),
 					}
 				} else {
-					panic!(
-						"{} function must return a GlobalResult type",
-						opts.trait_ty.to_token_stream().to_string()
-					);
+					panic!("{} function must return a GlobalResult type", trait_name,);
 				}
 			}
 			_ => panic!("Unsupported output type"),
 		},
-		_ => panic!(
-			"{} function must have a return type",
-			opts.trait_ty.to_token_stream().to_string()
-		),
+		_ => panic!("{} function must have a return type", trait_name),
 	};
 
-	let trait_ty = opts.trait_ty;
-	let input_trait_ty = opts.input_trait_ty;
-	let struct_ident = Ident::new(&activity_name, proc_macro2::Span::call_site());
-	let ctx_ident = Ident::new(&arg_names[0], proc_macro2::Span::call_site());
-	let ctx_ty = opts.ctx_ty;
-	let input_ident = Ident::new(&arg_names[1], proc_macro2::Span::call_site());
-
-	let exec_impl = if opts.executable {
-		quote! {
-			// NOTE: This would normally be an impl on the trait `ActivityInput` but this has conflicts with other
-			// generic implementations on `Executable` so we implement executable on all of the input structs
-			// instead
-			#[async_trait::async_trait]
-			impl chirp_workflow::prelude::Executable for #input_type {
-				type Output = <#struct_ident as #trait_ty>::Output;
-
-				async fn execute(self, ctx: &mut chirp_workflow::prelude::WorkflowCtx) -> GlobalResult<Self::Output> {
-					ctx.activity(self).await
-				}
-			}
-		}
-	} else {
-		quote! {}
-	};
-
-	let expanded = quote! {
-		pub struct #struct_ident;
-
-		impl #input_trait_ty for #input_type {
-			type #trait_ty = #struct_ident;
-		}
-
-		#exec_impl
-
-		#[async_trait::async_trait]
-		impl chirp_workflow::prelude::#trait_ty for #struct_ident {
-			type Input = #input_type;
-			type Output = #output_type;
-
-			fn name() -> &'static str {
-				#fn_name
-			}
-
-			async fn run(#ctx_ident: #ctx_ty, #input_ident: &Self::Input) -> GlobalResult<Self::Output> {
-				#fn_body
-			}
-		}
-	};
-
-	// eprintln!("\n\n{expanded}\n");
-
-	TokenStream::from(expanded)
-}
-
-#[proc_macro_attribute]
-pub fn workflow(attr: TokenStream, item: TokenStream) -> TokenStream {
-	trait_fn(
-		attr,
-		item,
-		TraitFnOpts {
-			ctx_ty: syn::parse_str("&mut WorkflowCtx").unwrap(),
-			trait_ty: syn::parse_str("Workflow").unwrap(),
-			input_trait_ty: syn::parse_str("chirp_workflow::workflow::WorkflowInput").unwrap(),
-			executable: false,
-		},
-	)
-}
-
-#[proc_macro_attribute]
-pub fn activity(attr: TokenStream, item: TokenStream) -> TokenStream {
-	trait_fn(
-		attr,
-		item,
-		TraitFnOpts {
-			ctx_ty: syn::parse_str("&mut ActivityCtx").unwrap(),
-			trait_ty: syn::parse_str("Activity").unwrap(),
-			input_trait_ty: syn::parse_str("chirp_workflow::activity::ActivityInput").unwrap(),
-			executable: true,
-		},
-	)
-}
-
-#[proc_macro_attribute]
-pub fn operation(attr: TokenStream, item: TokenStream) -> TokenStream {
-	trait_fn(
-		attr,
-		item,
-		TraitFnOpts {
-			ctx_ty: syn::parse_str("&mut OperationCtx").unwrap(),
-			trait_ty: syn::parse_str("Operation").unwrap(),
-			input_trait_ty: syn::parse_str("chirp_workflow::operation::OperationInput").unwrap(),
-			executable: false,
-		},
-	)
+	TraitFnOutput {
+		ctx_ident: Ident::new(&arg_names[0], proc_macro2::Span::call_site()),
+		input_ident: Ident::new(&arg_names[1], proc_macro2::Span::call_site()),
+		input_type,
+		output_type,
+	}
 }
 
 #[proc_macro_attribute]
 pub fn signal(attr: TokenStream, item: TokenStream) -> TokenStream {
-	let signal_name = parse_macro_input!(attr as LitStr);
+	let name = parse_macro_input!(attr as LitStr);
 	let item_struct = parse_macro_input!(item as ItemStruct);
 
 	let struct_ident = &item_struct.ident;
@@ -189,15 +264,13 @@ pub fn signal(attr: TokenStream, item: TokenStream) -> TokenStream {
 		#item_struct
 
 		impl Signal for #struct_ident {
-			fn name() -> &'static str {
-				#signal_name
-			}
+			const NAME: &'static str = #name;
 		}
 
 		#[::async_trait::async_trait]
 		impl Listen for #struct_ident {
 			async fn listen(ctx: &mut chirp_workflow::prelude::WorkflowCtx) -> chirp_workflow::prelude::WorkflowResult<Self> {
-				let row = ctx.listen_any(&[Self::name()]).await?;
+				let row = ctx.listen_any(&[Self::NAME]).await?;
 				Self::parse(&row.name, &row.body)
 			}
 
@@ -274,4 +347,50 @@ pub fn workflow_test(_attr: TokenStream, item: TokenStream) -> TokenStream {
 
 fn error(span: proc_macro2::Span, msg: &str) -> proc_macro::TokenStream {
 	syn::Error::new(span, msg).to_compile_error().into()
+}
+
+fn parse_config(attrs: &[syn::Attribute]) -> syn::Result<Config> {
+	let mut config = Config::default();
+
+	for attr in attrs {
+		let syn::Meta::NameValue(name_value) = &attr.meta else {
+			continue;
+		};
+
+		let ident = name_value.path.require_ident()?;
+
+		// Verify config property
+		if ident == "max_retries" {
+			config.max_retries =
+				syn::parse::<syn::LitInt>(name_value.value.to_token_stream().into())?
+					.base10_parse()?;
+		} else if ident == "timeout" {
+			config.timeout = syn::parse::<syn::LitInt>(name_value.value.to_token_stream().into())?
+				.base10_parse()?;
+		} else {
+			return Err(syn::Error::new(
+				ident.span(),
+				format!("Unknown config property `{ident}`"),
+			));
+		}
+	}
+
+	Ok(config)
+}
+
+fn parse_empty_config(attrs: &[syn::Attribute]) -> syn::Result<()> {
+	for attr in attrs {
+		let syn::Meta::NameValue(name_value) = &attr.meta else {
+			continue;
+		};
+
+		let ident = name_value.path.require_ident()?;
+
+		return Err(syn::Error::new(
+			ident.span(),
+			format!("Unknown config property `{ident}`"),
+		));
+	}
+
+	Ok(())
 }
