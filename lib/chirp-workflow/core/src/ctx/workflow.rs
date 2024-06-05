@@ -1,5 +1,6 @@
 use std::{collections::HashMap, sync::Arc};
 
+use global_error::{GlobalError, GlobalResult};
 use serde::Serialize;
 use tokio::time::Duration;
 use uuid::Uuid;
@@ -58,8 +59,8 @@ impl WorkflowCtx {
 		db: DatabaseHandle,
 		conn: rivet_connection::Connection,
 		workflow: PulledWorkflow,
-	) -> WorkflowResult<Self> {
-		WorkflowResult::Ok(WorkflowCtx {
+	) -> GlobalResult<Self> {
+		GlobalResult::Ok(WorkflowCtx {
 			workflow_id: workflow.workflow_id,
 			name: workflow.workflow_name,
 
@@ -68,11 +69,14 @@ impl WorkflowCtx {
 
 			conn,
 
-			event_history: Arc::new(util::combine_events(
-				workflow.activity_events,
-				workflow.signal_events,
-				workflow.sub_workflow_events,
-			)?),
+			event_history: Arc::new(
+				util::combine_events(
+					workflow.activity_events,
+					workflow.signal_events,
+					workflow.sub_workflow_events,
+				)
+				.map_err(GlobalError::raw)?,
+			),
 			input: Arc::new(workflow.input),
 
 			root_location: Box::new([]),
@@ -305,13 +309,13 @@ impl WorkflowCtx {
 			"signal received",
 		);
 
-		WorkflowResult::Ok(signal)
+		Ok(signal)
 	}
 }
 
 impl WorkflowCtx {
 	/// Dispatch another workflow.
-	pub async fn dispatch_workflow<I>(&mut self, input: I) -> WorkflowResult<Uuid>
+	pub async fn dispatch_workflow<I>(&mut self, input: I) -> GlobalResult<Uuid>
 	where
 		I: WorkflowInput,
 		<I as WorkflowInput>::Workflow: Workflow<Input = I>,
@@ -322,11 +326,11 @@ impl WorkflowCtx {
 		let id = if let Some(event) = event {
 			// Validate history is consistent
 			let Event::SubWorkflow(sub_workflow) = event else {
-				return Err(WorkflowError::HistoryDiverged);
+				return Err(WorkflowError::HistoryDiverged).map_err(GlobalError::raw);
 			};
 
 			if sub_workflow.sub_workflow_name != I::Workflow::name() {
-				return Err(WorkflowError::HistoryDiverged);
+				return Err(WorkflowError::HistoryDiverged).map_err(GlobalError::raw);
 			}
 
 			tracing::debug!(
@@ -346,8 +350,9 @@ impl WorkflowCtx {
 			let sub_workflow_id = Uuid::new_v4();
 
 			// Serialize input
-			let input_str =
-				serde_json::to_string(&input).map_err(WorkflowError::SerializeWorkflowOutput)?;
+			let input_str = serde_json::to_string(&input)
+				.map_err(WorkflowError::SerializeWorkflowOutput)
+				.map_err(GlobalError::raw)?;
 
 			self.db
 				.dispatch_sub_workflow(
@@ -357,7 +362,8 @@ impl WorkflowCtx {
 					&name,
 					&input_str,
 				)
-				.await?;
+				.await
+				.map_err(GlobalError::raw)?;
 
 			tracing::info!(%name, ?sub_workflow_id, "workflow dispatched");
 
@@ -367,14 +373,14 @@ impl WorkflowCtx {
 		// Move to next event
 		self.location_idx += 1;
 
-		WorkflowResult::Ok(id)
+		GlobalResult::Ok(id)
 	}
 
 	/// Wait for another workflow's response.
 	pub async fn wait_for_workflow<W: Workflow>(
 		&self,
 		sub_workflow_id: Uuid,
-	) -> WorkflowResult<W::Output> {
+	) -> GlobalResult<W::Output> {
 		tracing::info!(name = W::name(), ?sub_workflow_id, "waiting for workflow");
 
 		let mut retries = 0;
@@ -388,14 +394,17 @@ impl WorkflowCtx {
 			let workflow = self
 				.db
 				.get_workflow(sub_workflow_id)
-				.await?
-				.ok_or(WorkflowError::WorkflowNotFound)?;
+				.await
+				.map_err(GlobalError::raw)?
+				.ok_or(WorkflowError::WorkflowNotFound)
+				.map_err(GlobalError::raw)?;
 
-			if let Some(output) = workflow.parse_output::<W>()? {
-				return WorkflowResult::Ok(output);
+			if let Some(output) = workflow.parse_output::<W>().map_err(GlobalError::raw)? {
+				return Ok(output);
 			} else {
 				if retries > MAX_SUB_WORKFLOW_RETRIES {
-					return Err(WorkflowError::SubWorkflowIncomplete(sub_workflow_id));
+					return Err(WorkflowError::SubWorkflowIncomplete(sub_workflow_id))
+						.map_err(GlobalError::raw);
 				}
 				retries += 1;
 			}
@@ -407,7 +416,7 @@ impl WorkflowCtx {
 	pub async fn workflow<I>(
 		&mut self,
 		input: I,
-	) -> WorkflowResult<<<I as WorkflowInput>::Workflow as Workflow>::Output>
+	) -> GlobalResult<<<I as WorkflowInput>::Workflow as Workflow>::Output>
 	where
 		I: WorkflowInput,
 		<I as WorkflowInput>::Workflow: Workflow<Input = I>,
@@ -416,14 +425,14 @@ impl WorkflowCtx {
 		let output = self
 			.wait_for_workflow::<I::Workflow>(sub_workflow_id)
 			.await?;
-		WorkflowResult::Ok(output)
+		Ok(output)
 	}
 
 	/// Run activity. Will replay on failure.
 	pub async fn activity<I>(
 		&mut self,
 		input: I,
-	) -> WorkflowResult<<<I as ActivityInput>::Activity as Activity>::Output>
+	) -> GlobalResult<<<I as ActivityInput>::Activity as Activity>::Output>
 	where
 		I: ActivityInput,
 		<I as ActivityInput>::Activity: Activity<Input = I>,
@@ -436,36 +445,38 @@ impl WorkflowCtx {
 		let output = if let Some(event) = event {
 			// Validate history is consistent
 			let Event::Activity(activity) = event else {
-				return Err(WorkflowError::HistoryDiverged);
+				return Err(WorkflowError::HistoryDiverged).map_err(GlobalError::raw);
 			};
 
 			if activity.activity_id != activity_id {
-				return Err(WorkflowError::HistoryDiverged);
+				return Err(WorkflowError::HistoryDiverged).map_err(GlobalError::raw);
 			}
 
 			// Activity succeeded
-			if let Some(output) = activity.get_output()? {
+			if let Some(output) = activity.get_output().map_err(GlobalError::raw)? {
 				output
 			} else {
 				// Activity failed, retry
 				self.run_activity::<I::Activity>(&input, &activity_id)
-					.await?
+					.await
+					.map_err(GlobalError::raw)?
 			}
 		}
 		// This is a new activity
 		else {
 			self.run_activity::<I::Activity>(&input, &activity_id)
-				.await?
+				.await
+				.map_err(GlobalError::raw)?
 		};
 
 		// Move to next event
 		self.location_idx += 1;
 
-		WorkflowResult::Ok(output)
+		Ok(output)
 	}
 
 	/// Joins multiple executable actions (activities, closures) and awaits them simultaneously.
-	pub async fn join<T: Executable>(&mut self, exec: T) -> WorkflowResult<T::Output> {
+	pub async fn join<T: Executable>(&mut self, exec: T) -> GlobalResult<T::Output> {
 		exec.execute(self).await
 	}
 
@@ -474,7 +485,7 @@ impl WorkflowCtx {
 		&mut self,
 		workflow_id: Uuid,
 		body: T,
-	) -> WorkflowResult<Uuid> {
+	) -> GlobalResult<Uuid> {
 		let id = Uuid::new_v4();
 
 		self.db
@@ -482,28 +493,31 @@ impl WorkflowCtx {
 				workflow_id,
 				id,
 				T::name(),
-				&serde_json::to_string(&body).map_err(WorkflowError::SerializeSignalBody)?,
+				&serde_json::to_string(&body)
+					.map_err(WorkflowError::SerializeSignalBody)
+					.map_err(GlobalError::raw)?,
 			)
-			.await?;
+			.await
+			.map_err(GlobalError::raw)?;
 
-		WorkflowResult::Ok(id)
+		Ok(id)
 	}
 
 	/// Listens for a signal for a short time before setting the workflow to sleep. Once the signal is
 	/// received, the workflow will be woken up and continue.
-	pub async fn listen<T: Listen>(&mut self) -> WorkflowResult<T> {
+	pub async fn listen<T: Listen>(&mut self) -> GlobalResult<T> {
 		let event = { self.relevant_history().nth(self.location_idx) };
 
 		// Signal received before
 		let signal = if let Some(event) = event {
 			// Validate history is consistent
 			let Event::Signal(signal) = event else {
-				return Err(WorkflowError::HistoryDiverged);
+				return Err(WorkflowError::HistoryDiverged).map_err(GlobalError::raw);
 			};
 
 			tracing::debug!(id=%self.workflow_id, name=%signal.name, "replaying signal");
 
-			T::parse(&signal.name, &signal.body)?
+			T::parse(&signal.name, &signal.body).map_err(GlobalError::raw)?
 		}
 		// Listen for new messages
 		else {
@@ -517,14 +531,14 @@ impl WorkflowCtx {
 				interval.tick().await;
 
 				match T::listen(self).await {
-					WorkflowResult::Ok(res) => break res,
+					Ok(res) => break res,
 					Err(err) if matches!(err, WorkflowError::NoSignalFound(_)) => {
 						if retries > MAX_SIGNAL_RETRIES {
-							return Err(err);
+							return Err(err).map_err(GlobalError::raw);
 						}
 						retries += 1;
 					}
-					err => return err,
+					err => return err.map_err(GlobalError::raw),
 				}
 			}
 		};
@@ -532,11 +546,11 @@ impl WorkflowCtx {
 		// Move to next event
 		self.location_idx += 1;
 
-		WorkflowResult::Ok(signal)
+		Ok(signal)
 	}
 
 	/// Checks if the given signal exists in the database.
-	pub async fn query_signal<T: Listen>(&mut self) -> WorkflowResult<Option<T>> {
+	pub async fn query_signal<T: Listen>(&mut self) -> GlobalResult<Option<T>> {
 		let event = { self.relevant_history().nth(self.location_idx) };
 
 		// Signal received before
@@ -545,24 +559,24 @@ impl WorkflowCtx {
 
 			// Validate history is consistent
 			let Event::Signal(signal) = event else {
-				return Err(WorkflowError::HistoryDiverged);
+				return Err(WorkflowError::HistoryDiverged).map_err(GlobalError::raw);
 			};
 
-			Some(T::parse(&signal.name, &signal.body)?)
+			Some(T::parse(&signal.name, &signal.body).map_err(GlobalError::raw)?)
 		}
 		// Listen for new message
 		else {
 			match T::listen(self).await {
-				WorkflowResult::Ok(res) => Some(res),
+				Ok(res) => Some(res),
 				Err(err) if matches!(err, WorkflowError::NoSignalFound(_)) => None,
-				Err(err) => return Err(err),
+				Err(err) => return Err(err).map_err(GlobalError::raw),
 			}
 		};
 
 		// Move to next event
 		self.location_idx += 1;
 
-		WorkflowResult::Ok(signal)
+		Ok(signal)
 	}
 
 	// TODO: sleep_for, sleep_until

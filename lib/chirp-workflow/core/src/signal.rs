@@ -59,7 +59,7 @@ macro_rules! join_signal {
 			fn parse(name: &str, body: &str) -> ::wf::WorkflowResult<Self> {
 				$(
 					if name == $signals::name() {
-						WorkflowResult::Ok(
+						Ok(
 							Self::$signals(
 								serde_json::from_str(body)
 									.map_err(WorkflowError::DeserializeActivityOutput)?

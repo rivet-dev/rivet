@@ -1,8 +1,9 @@
 use std::{future::Future, pin::Pin};
 
 use async_trait::async_trait;
+use global_error::GlobalResult;
 
-use crate::{WorkflowCtx, WorkflowResult};
+use crate::WorkflowCtx;
 
 /// Signifies a retryable executable entity in a workflow. For example: activity, tuple of activities (join),
 /// closure.
@@ -10,10 +11,10 @@ use crate::{WorkflowCtx, WorkflowResult};
 pub trait Executable: Send {
 	type Output: Send;
 
-	async fn execute(self, ctx: &mut WorkflowCtx) -> WorkflowResult<Self::Output>;
+	async fn execute(self, ctx: &mut WorkflowCtx) -> GlobalResult<Self::Output>;
 }
 
-type AsyncResult<'a, T> = Pin<Box<dyn Future<Output = WorkflowResult<T>> + Send + 'a>>;
+type AsyncResult<'a, T> = Pin<Box<dyn Future<Output = GlobalResult<T>> + Send + 'a>>;
 
 #[async_trait]
 impl<F, T> Executable for F
@@ -23,7 +24,7 @@ where
 {
 	type Output = T;
 
-	async fn execute(self, ctx: &mut WorkflowCtx) -> WorkflowResult<Self::Output> {
+	async fn execute(self, ctx: &mut WorkflowCtx) -> GlobalResult<Self::Output> {
 		let mut branch = ctx.branch();
 		(self)(&mut branch).await
 	}
@@ -36,7 +37,7 @@ macro_rules! impl_tuple {
 		impl<$($args : Executable),*> Executable for ($($args),*) {
 			type Output = ($(<$args as Executable>::Output),*);
 
-			async fn execute(self, ctx: &mut WorkflowCtx) -> WorkflowResult<Self::Output> {
+			async fn execute(self, ctx: &mut WorkflowCtx) -> GlobalResult<Self::Output> {
 				#[allow(non_snake_case)]
 				let ($($args),*) = self;
 

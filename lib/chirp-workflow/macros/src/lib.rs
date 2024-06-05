@@ -97,7 +97,7 @@ fn trait_fn(attr: TokenStream, item: TokenStream, opts: TraitFnOpts) -> TokenStr
 			impl chirp_workflow::prelude::Executable for #input_type {
 				type Output = <#struct_ident as #trait_ty>::Output;
 
-				async fn execute(self, ctx: &mut chirp_workflow::prelude::WorkflowCtx) -> chirp_workflow::prelude::WorkflowResult<Self::Output> {
+				async fn execute(self, ctx: &mut chirp_workflow::prelude::WorkflowCtx) -> GlobalResult<Self::Output> {
 					ctx.activity(self).await
 				}
 			}

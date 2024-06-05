@@ -1,9 +1,9 @@
-use global_error::GlobalResult;
+use global_error::{GlobalError, GlobalResult};
 use rivet_pools::prelude::*;
 use uuid::Uuid;
 
 use crate::{
-	ctx::OperationCtx, DatabaseHandle, Operation, OperationInput, WorkflowError, WorkflowResult,
+	ctx::OperationCtx, DatabaseHandle, Operation, OperationInput, WorkflowError,
 };
 
 pub struct ActivityCtx {
@@ -50,7 +50,7 @@ impl ActivityCtx {
 	pub async fn op<I>(
 		&mut self,
 		input: I,
-	) -> WorkflowResult<<<I as OperationInput>::Operation as Operation>::Output>
+	) -> GlobalResult<<<I as OperationInput>::Operation as Operation>::Output>
 	where
 		I: OperationInput,
 		<I as OperationInput>::Operation: Operation<Input = I>,
@@ -60,6 +60,7 @@ impl ActivityCtx {
 		I::Operation::run(&mut ctx, &input)
 			.await
 			.map_err(WorkflowError::OperationFailure)
+			.map_err(GlobalError::raw)
 	}
 
 	pub fn name(&self) -> &str {

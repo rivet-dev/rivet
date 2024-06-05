@@ -43,21 +43,19 @@ impl Registry {
 						let output = match W::run(ctx, &input).await {
 							Ok(x) => x,
 							// Differentiate between WorkflowError and user error
-							Err(err) => {
-								match err {
-									GlobalError::Raw(inner_err) => {
-										match inner_err.downcast::<WorkflowError>() {
-											Ok(inner_err) => return Err(*inner_err),
-											Err(err) => {
-												return Err(WorkflowError::WorkflowFailure(
-													GlobalError::Raw(err),
-												))
-											}
+							Err(err) => match err {
+								GlobalError::Raw(inner_err) => {
+									match inner_err.downcast::<WorkflowError>() {
+										Ok(inner_err) => return Err(*inner_err),
+										Err(err) => {
+											return Err(WorkflowError::WorkflowFailure(
+												GlobalError::Raw(err),
+											))
 										}
 									}
-									_ => return Err(WorkflowError::WorkflowFailure(err)),
 								}
-							}
+								_ => return Err(WorkflowError::WorkflowFailure(err)),
+							},
 						};
 
 						// Serialize output
