@@ -137,20 +137,11 @@ where
 	fn wrap<O: Operation>(&self, body: O::Request) -> OperationContext<O::Request> {
 		let now = util::timestamp::now();
 		let req_id = Uuid::new_v4();
-		let trace_entry = chirp_client::TraceEntry {
-			context_name: O::NAME.to_string(),
-			req_id: Some(req_id.into()),
-			ts: now,
-			run_context: match rivet_util::env::run_context() {
-				rivet_util::env::RunContext::Service => chirp_client::RunContext::Service,
-				rivet_util::env::RunContext::Test => chirp_client::RunContext::Test,
-			} as i32,
-		};
 
 		OperationContext {
 			name: O::NAME.to_string(),
 			timeout: O::TIMEOUT,
-			conn: self.conn.wrap(req_id, self.ray_id, trace_entry),
+			conn: self.conn.wrap(req_id, self.ray_id, O::NAME),
 			req_id,
 			ray_id: self.ray_id,
 			ts: now,

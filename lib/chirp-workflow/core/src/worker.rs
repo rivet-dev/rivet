@@ -21,6 +21,7 @@ impl Worker {
 
 	pub async fn start(mut self, pools: rivet_pools::Pools) -> GlobalResult<()> {
 		let mut interval = tokio::time::interval(TICK_INTERVAL);
+		interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
 
 		let shared_client = chirp_client::SharedClient::from_env(pools.clone())?;
 		let cache = rivet_cache::CacheInner::from_env(pools.clone())?;
@@ -31,7 +32,7 @@ impl Worker {
 		}
 	}
 
-	// Query the database for new workflows and run them.
+	/// Query the database for new workflows and run them.
 	async fn tick(
 		&mut self,
 		shared_client: &chirp_client::SharedClientHandle,

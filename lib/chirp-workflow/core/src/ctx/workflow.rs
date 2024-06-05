@@ -420,8 +420,7 @@ impl WorkflowCtx {
 		}
 	}
 
-	// TODO(RVTEE-103): Run sub workflow inline as a branch of the parent workflow
-	/// Trigger another workflow and wait for its response.
+	/// Runs a sub workflow in the same process as the current workflow and returns its response.
 	pub async fn workflow<I>(
 		&mut self,
 		input: I,
@@ -430,11 +429,66 @@ impl WorkflowCtx {
 		I: WorkflowInput,
 		<I as WorkflowInput>::Workflow: Workflow<Input = I>,
 	{
-		let sub_workflow_id = self.dispatch_workflow(input).await?;
-		let output = self
-			.wait_for_workflow::<I::Workflow>(sub_workflow_id)
-			.await?;
-		Ok(output)
+		// Lookup workflow
+		let Ok(workflow) = self.registry.get_workflow(I::Workflow::name()) else {
+			tracing::warn!(
+				id=%self.workflow_id,
+				name=%I::Workflow::name(),
+				"sub workflow not found in current registry",
+			);
+
+			// TODO(RVT-3755): If a sub workflow is dispatched, then the worker is updated to include the sub
+			// worker in the registry, this will diverge in history because it will try to run the sub worker
+			// in process during the replay
+			// If the workflow isn't in the current registry, dispatch the workflow instead
+			let sub_workflow_id = self.dispatch_workflow(input).await?;
+			let output = self
+				.wait_for_workflow::<I::Workflow>(sub_workflow_id)
+				.await?;
+
+			return Ok(output);
+		};
+
+		tracing::info!(id=%self.workflow_id, name=%I::Workflow::name(), "running sub workflow");
+
+		// Create a new branched workflow context for the sub workflow
+		let mut ctx = WorkflowCtx {
+			workflow_id: self.workflow_id,
+			name: I::Workflow::name().to_string(),
+			create_ts: rivet_util::timestamp::now(),
+			ray_id: self.ray_id,
+
+			registry: self.registry.clone(),
+			db: self.db.clone(),
+
+			conn: self
+				.conn
+				.wrap(Uuid::new_v4(), self.ray_id, I::Workflow::name()),
+
+			event_history: self.event_history.clone(),
+
+			// TODO(RVT-3756): This is redundant with the deserialization in `workflow.run` in the registry
+			input: Arc::new(serde_json::to_value(input)?),
+
+			root_location: self
+				.root_location
+				.iter()
+				.cloned()
+				.chain(std::iter::once(self.location_idx))
+				.collect(),
+			location_idx: 0,
+		};
+
+		self.location_idx += 1;
+
+		// Run workflow
+		let output = (workflow.run)(&mut ctx).await?;
+
+		// TODO: RVT-3756
+		// Deserialize output
+		serde_json::from_value(output)
+			.map_err(WorkflowError::DeserializeWorkflowOutput)
+			.map_err(GlobalError::raw)
 	}
 
 	/// Run activity. Will replay on failure.

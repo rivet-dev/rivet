@@ -2,7 +2,7 @@ use global_error::{GlobalError, GlobalResult};
 use rivet_pools::prelude::*;
 use uuid::Uuid;
 
-use crate::{ctx::OperationCtx, util, DatabaseHandle, Operation, OperationInput, WorkflowError};
+use crate::{ctx::OperationCtx, DatabaseHandle, Operation, OperationInput, WorkflowError};
 
 pub struct ActivityCtx {
 	ray_id: Uuid,
@@ -26,7 +26,19 @@ impl ActivityCtx {
 		name: &'static str,
 	) -> Self {
 		let ts = rivet_util::timestamp::now();
-		let (conn, op_ctx) = util::wrap_conn(conn, ray_id, workflow_create_ts, true, name, ts);
+		let req_id = Uuid::new_v4();
+		let conn = conn.wrap(req_id, ray_id, name);
+		let mut op_ctx = rivet_operation::OperationContext::new(
+			name.to_string(),
+			std::time::Duration::from_secs(60),
+			conn.clone(),
+			req_id,
+			ray_id,
+			ts,
+			workflow_create_ts,
+			(),
+		);
+		op_ctx.from_workflow = true;
 
 		ActivityCtx {
 			ray_id,

@@ -413,7 +413,7 @@ impl Database for DatabasePostgres {
 					INSERT INTO db_workflow.workflows (
 						workflow_id, workflow_name, create_ts, ray_id, input, wake_immediate
 					)
-					VALUES ($5, $2, $3, $4, $5, true)
+					VALUES ($7, $2, $3, $4, $5, true)
 					RETURNING 1
 			 	),
 				sub_workflow AS (
