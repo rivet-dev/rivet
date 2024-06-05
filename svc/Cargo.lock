@@ -101,6 +101,7 @@ dependencies = [
  "async-trait",
  "async_once",
  "chirp-client",
+ "chirp-workflow",
  "chrono",
  "cluster-datacenter-get",
  "cluster-datacenter-list",

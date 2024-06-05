@@ -5,7 +5,6 @@ use uuid::Uuid;
 use crate::{util, DatabaseHandle, Operation, OperationInput, WorkflowError};
 
 pub struct OperationCtx {
-	workflow_id: Uuid,
 	ray_id: Uuid,
 	name: &'static str,
 	ts: i64,
@@ -22,16 +21,15 @@ impl OperationCtx {
 	pub fn new(
 		db: DatabaseHandle,
 		conn: &rivet_connection::Connection,
-		workflow_id: Uuid,
 		ray_id: Uuid,
 		req_ts: i64,
+		from_workflow: bool,
 		name: &'static str,
 	) -> Self {
 		let ts = rivet_util::timestamp::now();
-		let (conn, op_ctx) = util::wrap_conn(conn, ray_id, req_ts, name, ts);
+		let (conn, op_ctx) = util::wrap_conn(conn, ray_id, req_ts, from_workflow, name, ts);
 
 		OperationCtx {
-			workflow_id,
 			ray_id,
 			name,
 			ts,
@@ -54,9 +52,9 @@ impl OperationCtx {
 		let mut ctx = OperationCtx::new(
 			self.db.clone(),
 			&self.conn,
-			self.workflow_id,
 			self.ray_id,
 			self.op_ctx.req_ts(),
+			self.op_ctx.from_workflow(),
 			I::Operation::name(),
 		);
 

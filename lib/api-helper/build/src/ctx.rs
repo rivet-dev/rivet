@@ -67,3 +67,11 @@ impl<A: auth::ApiAuth> Ctx<A> {
 		self.asn
 	}
 }
+
+impl<A: auth::ApiAuth> std::ops::Deref for Ctx<A> {
+	type Target = OperationContext<()>;
+
+	fn deref(&self) -> &Self::Target {
+		&self.op_ctx
+	}
+}

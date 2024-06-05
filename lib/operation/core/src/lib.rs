@@ -211,6 +211,10 @@ where
 		&self.body
 	}
 
+	pub fn from_workflow(&self) -> bool {
+		self.from_workflow
+	}
+
 	pub fn trace(&self) -> &[chirp_client::TraceEntry] {
 		self.conn.trace()
 	}
@@ -223,6 +227,10 @@ where
 
 	pub fn op_ctx(&self) -> &OperationContext<B> {
 		&self
+	}
+
+	pub fn conn(&self) -> &Connection {
+		&self.conn
 	}
 
 	pub fn chirp(&self) -> &chirp_client::Client {

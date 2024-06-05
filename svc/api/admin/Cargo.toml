@@ -11,6 +11,7 @@ api-helper = { path = "../../../lib/api-helper/build" }
 async_once = "0.2"
 async-trait = "0.1"
 chirp-client = { path = "../../../lib/chirp/client" }
+chirp-workflow = { path = "../../../lib/chirp-workflow/core" }
 rivet-operation = { path = "../../../lib/operation/core" }
 chrono = "0.4"
 http = "0.2"

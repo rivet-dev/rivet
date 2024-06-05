@@ -45,7 +45,7 @@ impl DatabasePostgres {
 		Arc::new(DatabasePostgres { pool })
 	}
 
-	pub async fn conn(&self) -> WorkflowResult<PoolConnection<Postgres>> {
+	async fn conn(&self) -> WorkflowResult<PoolConnection<Postgres>> {
 		// Attempt to use an existing connection
 		if let Some(conn) = self.pool.try_acquire() {
 			Ok(conn)

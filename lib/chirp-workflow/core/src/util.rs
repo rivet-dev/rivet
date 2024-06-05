@@ -112,10 +112,36 @@ pub fn inject_fault() -> GlobalResult<()> {
 	Ok(())
 }
 
+pub(crate) fn new_conn(
+	shared_client: &chirp_client::SharedClientHandle,
+	pools: &rivet_pools::Pools,
+	cache: &rivet_cache::Cache,
+	ray_id: Uuid,
+	req_id: Uuid,
+	name: &str,
+) -> rivet_connection::Connection {
+	let client = shared_client.clone().wrap(
+		req_id,
+		ray_id,
+		vec![chirp_client::TraceEntry {
+			context_name: name.into(),
+			req_id: Some(req_id.into()),
+			ts: rivet_util::timestamp::now(),
+			run_context: match rivet_util::env::run_context() {
+				rivet_util::env::RunContext::Service => chirp_client::RunContext::Service,
+				rivet_util::env::RunContext::Test => chirp_client::RunContext::Test,
+			} as i32,
+		}],
+	);
+
+	rivet_connection::Connection::new(client, pools.clone(), cache.clone())
+}
+
 pub fn wrap_conn(
 	conn: &rivet_connection::Connection,
 	ray_id: Uuid,
 	req_ts: i64,
+	from_workflow: bool,
 	name: &str,
 	ts: i64,
 ) -> (
@@ -143,7 +169,7 @@ pub fn wrap_conn(
 		req_ts,
 		(),
 	);
-	op_ctx.from_workflow = true;
+	op_ctx.from_workflow = from_workflow;
 
 	(conn, op_ctx)
 }

@@ -245,7 +245,6 @@ impl WorkflowCtx {
 		let mut ctx = ActivityCtx::new(
 			self.db.clone(),
 			&self.conn,
-			self.workflow_id,
 			self.create_ts,
 			self.ray_id,
 			A::name(),

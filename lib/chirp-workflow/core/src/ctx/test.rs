@@ -5,41 +5,56 @@ use serde::Serialize;
 use tokio::time::Duration;
 use uuid::Uuid;
 
-use crate::{DatabaseHandle, DatabasePostgres, Signal, Workflow, WorkflowError, WorkflowInput};
+use crate::{
+	util, DatabaseHandle, DatabasePostgres, Operation, OperationCtx, OperationInput, Signal,
+	Workflow, WorkflowError, WorkflowInput,
+};
 
 pub type TestCtxHandle = Arc<TestCtx>;
 
 pub struct TestCtx {
 	name: String,
 	ray_id: Uuid,
+	ts: i64,
 
-	pub db: DatabaseHandle,
+	db: DatabaseHandle,
+
+	conn: Option<rivet_connection::Connection>,
 }
 
 impl TestCtx {
-	pub fn new(db: DatabaseHandle) -> TestCtxHandle {
-		Arc::new(TestCtx {
-			name: "internal-test".to_string(),
-			ray_id: Uuid::new_v4(),
-			db,
-		})
-	}
-
 	pub async fn from_env(test_name: &str) -> TestCtx {
 		let service_name = format!(
 			"{}-test--{}",
 			std::env::var("CHIRP_SERVICE_NAME").unwrap(),
 			test_name
 		);
+
+		let ray_id = Uuid::new_v4();
 		let pools = rivet_pools::from_env(service_name.clone())
 			.await
 			.expect("failed to create pools");
+		let shared_client = chirp_client::SharedClient::from_env(pools.clone())
+			.expect("failed to create chirp client");
+		let cache =
+			rivet_cache::CacheInner::from_env(pools.clone()).expect("failed to create cache");
+		let conn = util::new_conn(
+			&shared_client,
+			&pools,
+			&cache,
+			ray_id,
+			Uuid::new_v4(),
+			&service_name,
+		);
+
 		let db = DatabasePostgres::from_pool(pools.crdb().unwrap());
 
 		TestCtx {
 			name: service_name,
-			ray_id: Uuid::new_v4(),
+			ray_id,
+			ts: rivet_util::timestamp::now(),
 			db,
+			conn: Some(conn),
 		}
 	}
 }
@@ -135,5 +150,30 @@ impl TestCtx {
 			.map_err(GlobalError::raw)?;
 
 		Ok(signal_id)
+	}
+
+	pub async fn op<I>(
+		&mut self,
+		input: I,
+	) -> GlobalResult<<<I as OperationInput>::Operation as Operation>::Output>
+	where
+		I: OperationInput,
+		<I as OperationInput>::Operation: Operation<Input = I>,
+	{
+		let mut ctx = OperationCtx::new(
+			self.db.clone(),
+			self.conn
+				.as_ref()
+				.expect("ops cannot be triggered from an internal test"),
+			self.ray_id,
+			self.ts,
+			false,
+			I::Operation::name(),
+		);
+
+		I::Operation::run(&mut ctx, &input)
+			.await
+			.map_err(WorkflowError::OperationFailure)
+			.map_err(GlobalError::raw)
 	}
 }
