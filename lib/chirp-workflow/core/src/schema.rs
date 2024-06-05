@@ -25,14 +25,14 @@ pub struct ActivityEvent {
 	pub activity_id: ActivityId,
 
 	/// If activity succeeds, this will be some.
-	pub output: Option<String>,
+	pub output: Option<serde_json::Value>,
 }
 
 impl ActivityEvent {
 	pub fn get_output<O: DeserializeOwned>(&self) -> WorkflowResult<Option<O>> {
 		self.output
-			.as_deref()
-			.map(serde_json::from_str)
+			.clone()
+			.map(serde_json::from_value)
 			.transpose()
 			.map_err(WorkflowError::DeserializeActivityOutput)
 	}
@@ -52,7 +52,7 @@ impl TryFrom<ActivityEventRow> for ActivityEvent {
 #[derive(Debug)]
 pub struct SignalEvent {
 	pub name: String,
-	pub body: String,
+	pub body: serde_json::Value,
 }
 
 impl TryFrom<SignalEventRow> for SignalEvent {

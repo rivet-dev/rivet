@@ -6,6 +6,7 @@ use std::{
 use global_error::{macros::*, GlobalResult};
 use rand::Rng;
 use tokio::time::{self, Duration};
+use uuid::Uuid;
 
 use crate::{schema::Event, ActivityEventRow, SignalEventRow, SubWorkflowEventRow, WorkflowResult};
 
@@ -109,4 +110,40 @@ pub fn inject_fault() -> GlobalResult<()> {
 	}
 
 	Ok(())
+}
+
+pub fn wrap_conn(
+	conn: &rivet_connection::Connection,
+	ray_id: Uuid,
+	req_ts: i64,
+	name: &str,
+	ts: i64,
+) -> (
+	rivet_connection::Connection,
+	rivet_operation::OperationContext<()>,
+) {
+	let req_id = Uuid::new_v4();
+	let trace_entry = chirp_client::TraceEntry {
+		context_name: name.to_string(),
+		req_id: Some(req_id.into()),
+		ts,
+		run_context: match rivet_util::env::run_context() {
+			rivet_util::env::RunContext::Service => chirp_client::RunContext::Service,
+			rivet_util::env::RunContext::Test => chirp_client::RunContext::Test,
+		} as i32,
+	};
+	let conn = conn.wrap(req_id, ray_id, trace_entry);
+	let mut op_ctx = rivet_operation::OperationContext::new(
+		name.to_string(),
+		std::time::Duration::from_secs(60),
+		conn.clone(),
+		req_id,
+		ray_id,
+		ts,
+		req_ts,
+		(),
+	);
+	op_ctx.from_workflow = true;
+
+	(conn, op_ctx)
 }

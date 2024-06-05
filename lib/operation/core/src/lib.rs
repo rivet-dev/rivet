@@ -40,6 +40,10 @@ where
 	ts: i64,
 	req_ts: i64,
 	body: B,
+
+	// Denotes whether this is from a workflow. Disables the ability to create workflows itself when true
+	// (workflows must be created at the workflow level context)
+	pub from_workflow: bool,
 }
 
 impl<B> OperationContext<B>
@@ -65,6 +69,7 @@ where
 			ts,
 			req_ts,
 			body,
+			from_workflow: false,
 		}
 	}
 
@@ -130,11 +135,12 @@ where
 
 	/// Adds trace and correctly wraps `Connection` (and subsequently `chirp_client::Client`).
 	fn wrap<O: Operation>(&self, body: O::Request) -> OperationContext<O::Request> {
+		let now = util::timestamp::now();
 		let req_id = Uuid::new_v4();
 		let trace_entry = chirp_client::TraceEntry {
 			context_name: O::NAME.to_string(),
 			req_id: Some(req_id.into()),
-			ts: rivet_util::timestamp::now(),
+			ts: now,
 			run_context: match rivet_util::env::run_context() {
 				rivet_util::env::RunContext::Service => chirp_client::RunContext::Service,
 				rivet_util::env::RunContext::Test => chirp_client::RunContext::Test,
@@ -147,9 +153,10 @@ where
 			conn: self.conn.wrap(req_id, self.ray_id, trace_entry),
 			req_id,
 			ray_id: self.ray_id,
-			ts: util::timestamp::now(),
+			ts: now,
 			req_ts: self.req_ts,
 			body,
+			from_workflow: self.from_workflow,
 		}
 	}
 
@@ -165,6 +172,7 @@ where
 			ts: self.ts,
 			req_ts: self.req_ts,
 			body: (),
+			from_workflow: self.from_workflow,
 		}
 	}
 

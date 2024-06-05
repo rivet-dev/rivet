@@ -8,11 +8,14 @@ CREATE TABLE nodes (
 CREATE TABLE workflows (
   workflow_id UUID PRIMARY KEY,
   workflow_name TEXT NOT NULL,
+  create_ts INT NOT NULL,
+  ray_id UUID NOT NULL,
   -- The node that's running this workflow
   node_id UUID,
-  input TEXT NOT NULL,
+
+  input JSONB NOT NULL,
   -- Null if incomplete
-  output TEXT,
+  output JSONB,
 
   wake_immediate BOOLEAN NOT NULL DEFAULT false,
   wake_deadline_ts INT,
@@ -35,9 +38,9 @@ CREATE TABLE workflow_activity_events (
   activity_name TEXT NOT NULL,
   -- CRDB can't store u64, so we have to store bytes
   input_hash BYTES NOT NULL,
-  input TEXT NOT NULL,
+  input JSONB NOT NULL,
   -- Null if incomplete
-  output TEXT,
+  output JSONB,
 
   PRIMARY KEY (workflow_id, location)
 );
@@ -48,7 +51,7 @@ CREATE TABLE workflow_signal_events (
   location INT[] NOT NULL,
   signal_id TEXT NOT NULL,
   signal_name TEXT NOT NULL,
-  body TEXT NOT NULL,
+  body JSONB NOT NULL,
 
   PRIMARY KEY (workflow_id, location)
 );
@@ -69,9 +72,11 @@ CREATE TABLE signals (
   -- exists
   workflow_id UUID NOT NULL,
   signal_name TEXT NOT NULL,
-  body TEXT NOT NULL,
 
   create_ts INT NOT NULL,
+  ray_id UUID NOT NULL,
+
+  body JSONB NOT NULL,
 
   INDEX (workflow_id),
   INDEX (signal_name)

@@ -18,6 +18,7 @@ pub use crate::{
 	ctx::*,
 	db,
 	error::{WorkflowError, WorkflowResult},
+	executable::closure,
 	executable::Executable,
 	operation::Operation,
 	registry::Registry,

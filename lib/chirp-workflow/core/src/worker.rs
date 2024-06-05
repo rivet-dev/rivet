@@ -1,5 +1,7 @@
 use global_error::GlobalResult;
 use tokio::time::Duration;
+use tracing::Instrument;
+use uuid::Uuid;
 
 use crate::{util, DatabaseHandle, RegistryHandle, WorkflowCtx};
 
@@ -49,22 +51,56 @@ impl Worker {
 		// Query awake workflows
 		let workflows = self.db.pull_workflows(&registered_workflows).await?;
 		for workflow in workflows {
-			let client = shared_client.clone().wrap_new(&workflow.workflow_name);
-			let conn = rivet_connection::Connection::new(client, pools.clone(), cache.clone());
-
+			let conn = new_conn(
+				&shared_client,
+				pools,
+				cache,
+				workflow.workflow_id,
+				&workflow.workflow_name,
+				workflow.ray_id,
+			);
 			let wake_deadline_ts = workflow.wake_deadline_ts;
 			let ctx = WorkflowCtx::new(self.registry.clone(), self.db.clone(), conn, workflow)?;
 
-			tokio::task::spawn(async move {
-				// Sleep until deadline
-				if let Some(wake_deadline_ts) = wake_deadline_ts {
-					util::sleep_until_ts(wake_deadline_ts).await;
-				}
+			tokio::task::spawn(
+				async move {
+					// Sleep until deadline
+					if let Some(wake_deadline_ts) = wake_deadline_ts {
+						util::sleep_until_ts(wake_deadline_ts).await;
+					}
 
-				ctx.run_workflow().await;
-			});
+					ctx.run_workflow().await;
+				}
+				.in_current_span(),
+			);
 		}
 
 		Ok(())
 	}
+}
+
+fn new_conn(
+	shared_client: &chirp_client::SharedClientHandle,
+	pools: &rivet_pools::Pools,
+	cache: &rivet_cache::Cache,
+	workflow_id: Uuid,
+	name: &str,
+	ray_id: Uuid,
+) -> rivet_connection::Connection {
+	let req_id = workflow_id;
+	let client = shared_client.clone().wrap(
+		req_id,
+		ray_id,
+		vec![chirp_client::TraceEntry {
+			context_name: name.into(),
+			req_id: Some(req_id.into()),
+			ts: rivet_util::timestamp::now(),
+			run_context: match rivet_util::env::run_context() {
+				rivet_util::env::RunContext::Service => chirp_client::RunContext::Service,
+				rivet_util::env::RunContext::Test => chirp_client::RunContext::Test,
+			} as i32,
+		}],
+	);
+
+	rivet_connection::Connection::new(client, pools.clone(), cache.clone())
 }

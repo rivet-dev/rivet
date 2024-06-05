@@ -60,18 +60,23 @@ impl DatabasePostgres {
 impl Database for DatabasePostgres {
 	async fn dispatch_workflow(
 		&self,
+		ray_id: Uuid,
 		workflow_id: Uuid,
 		workflow_name: &str,
-		input: &str,
+		input: serde_json::Value,
 	) -> WorkflowResult<()> {
 		sqlx::query(indoc!(
 			"
-			INSERT INTO db_workflow.workflows (workflow_id, workflow_name, input, wake_immediate)
-			VALUES ($1, $2, $3, true)
+			INSERT INTO db_workflow.workflows (
+				workflow_id, workflow_name, create_ts, ray_id, input, wake_immediate
+			)
+			VALUES ($1, $2, $3, $4, $5, true)
 			",
 		))
 		.bind(workflow_id)
 		.bind(workflow_name)
+		.bind(rivet_util::timestamp::now())
+		.bind(ray_id)
 		.bind(input)
 		.execute(&mut *self.conn().await?)
 		.await
@@ -127,7 +132,7 @@ impl Database for DatabasePostgres {
 							output IS NOT NULL
 					)
 				)
-			RETURNING workflow_id, workflow_name, input, wake_deadline_ts
+			RETURNING workflow_id, workflow_name, create_ts, ray_id, input, wake_deadline_ts
 			",
 		))
 		.bind(NODE_ID)
@@ -146,6 +151,8 @@ impl Database for DatabasePostgres {
 					PulledWorkflow {
 						workflow_id: row.workflow_id,
 						workflow_name: row.workflow_name,
+						create_ts: row.create_ts,
+						ray_id: row.ray_id,
 						input: row.input,
 						wake_deadline_ts: row.wake_deadline_ts,
 						activity_events: Vec::new(),
@@ -233,7 +240,11 @@ impl Database for DatabasePostgres {
 		Ok(workflows_by_id.into_values().collect())
 	}
 
-	async fn commit_workflow(&self, workflow_id: Uuid, output: &str) -> WorkflowResult<()> {
+	async fn commit_workflow(
+		&self,
+		workflow_id: Uuid,
+		output: &serde_json::Value,
+	) -> WorkflowResult<()> {
 		sqlx::query(indoc!(
 			"
 			UPDATE db_workflow.workflows
@@ -288,8 +299,8 @@ impl Database for DatabasePostgres {
 		workflow_id: Uuid,
 		location: &[usize],
 		activity_id: &ActivityId,
-		input: &str,
-		output: Option<&str>,
+		input: serde_json::Value,
+		output: Option<serde_json::Value>,
 	) -> WorkflowResult<()> {
 		sqlx::query(indoc!(
 			"
@@ -361,21 +372,23 @@ impl Database for DatabasePostgres {
 
 	async fn publish_signal(
 		&self,
+		ray_id: Uuid,
 		workflow_id: Uuid,
 		signal_id: Uuid,
 		signal_name: &str,
-		body: &str,
+		body: serde_json::Value,
 	) -> WorkflowResult<()> {
 		sqlx::query(indoc!(
 			"
-			INSERT INTO db_workflow.signals (signal_id, workflow_id, signal_name, body, create_ts)			
-			VALUES ($1, $2, $3, $4, $5)
+			INSERT INTO db_workflow.signals (signal_id, workflow_id, signal_name, body, create_ts, ray_id)			
+			VALUES ($1, $2, $3, $4, $5, $6)
 			",
 		))
 		.bind(signal_id)
 		.bind(workflow_id)
 		.bind(signal_name)
 		.bind(body)
+		.bind(ray_id)
 		.bind(rivet_util::timestamp::now())
 		.execute(&mut *self.conn().await?)
 		.await
@@ -386,25 +399,28 @@ impl Database for DatabasePostgres {
 
 	async fn dispatch_sub_workflow(
 		&self,
+		ray_id: Uuid,
 		workflow_id: Uuid,
 		location: &[usize],
 		sub_workflow_id: Uuid,
 		sub_workflow_name: &str,
-		input: &str,
+		input: serde_json::Value,
 	) -> WorkflowResult<()> {
 		sqlx::query(indoc!(
 			"
 			WITH
 				workflow AS (
-					INSERT INTO db_workflow.workflows (workflow_id, workflow_name, input, wake_immediate)
-					VALUES ($5, $2, $3, true)
+					INSERT INTO db_workflow.workflows (
+						workflow_id, workflow_name, create_ts, ray_id, input, wake_immediate
+					)
+					VALUES ($5, $2, $3, $4, $5, true)
 					RETURNING 1
 			 	),
 				sub_workflow AS (
 					INSERT INTO db_workflow.workflow_sub_workflow_events(
 						workflow_id, location, sub_workflow_id
 					)
-					VALUES($1, $4, $5)
+					VALUES($1, $6, $7)
 					RETURNING 1
 				)
 			SELECT 1
@@ -412,6 +428,8 @@ impl Database for DatabasePostgres {
 		))
 		.bind(workflow_id)
 		.bind(sub_workflow_name)
+		.bind(rivet_util::timestamp::now())
+		.bind(ray_id)
 		.bind(input)
 		.bind(location.iter().map(|x| *x as i64).collect::<Vec<_>>())
 		.bind(sub_workflow_id)

@@ -5,14 +5,14 @@ use serde::Serialize;
 use tokio::time::Duration;
 use uuid::Uuid;
 
-use crate::{
-	DatabaseHandle, DatabasePostgres, Signal, Workflow, WorkflowError, WorkflowInput,
-};
+use crate::{DatabaseHandle, DatabasePostgres, Signal, Workflow, WorkflowError, WorkflowInput};
 
 pub type TestCtxHandle = Arc<TestCtx>;
 
 pub struct TestCtx {
 	name: String,
+	ray_id: Uuid,
+
 	pub db: DatabaseHandle,
 }
 
@@ -20,6 +20,7 @@ impl TestCtx {
 	pub fn new(db: DatabaseHandle) -> TestCtxHandle {
 		Arc::new(TestCtx {
 			name: "internal-test".to_string(),
+			ray_id: Uuid::new_v4(),
 			db,
 		})
 	}
@@ -37,6 +38,7 @@ impl TestCtx {
 
 		TestCtx {
 			name: service_name,
+			ray_id: Uuid::new_v4(),
 			db,
 		}
 	}
@@ -61,12 +63,12 @@ impl TestCtx {
 		let id = Uuid::new_v4();
 
 		// Serialize input
-		let input_str = serde_json::to_string(&input)
+		let input_val = serde_json::to_value(input)
 			.map_err(WorkflowError::SerializeWorkflowOutput)
 			.map_err(GlobalError::raw)?;
 
 		self.db
-			.dispatch_workflow(id, &name, &input_str)
+			.dispatch_workflow(self.ray_id, id, &name, input_val)
 			.await
 			.map_err(GlobalError::raw)?;
 
@@ -123,11 +125,12 @@ impl TestCtx {
 		let signal_id = Uuid::new_v4();
 
 		// Serialize input
-		let input_str =
-			serde_json::to_string(&input).map_err(WorkflowError::SerializeSignalBody).map_err(GlobalError::raw)?;
+		let input_val = serde_json::to_value(input)
+			.map_err(WorkflowError::SerializeSignalBody)
+			.map_err(GlobalError::raw)?;
 
 		self.db
-			.publish_signal(workflow_id, signal_id, I::name(), &input_str)
+			.publish_signal(self.ray_id, workflow_id, signal_id, I::name(), input_val)
 			.await
 			.map_err(GlobalError::raw)?;
 

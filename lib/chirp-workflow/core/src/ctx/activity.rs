@@ -2,15 +2,17 @@ use global_error::{GlobalError, GlobalResult};
 use rivet_pools::prelude::*;
 use uuid::Uuid;
 
-use crate::{
-	ctx::OperationCtx, DatabaseHandle, Operation, OperationInput, WorkflowError,
-};
+use crate::{ctx::OperationCtx, util, DatabaseHandle, Operation, OperationInput, WorkflowError};
 
 pub struct ActivityCtx {
-	db: DatabaseHandle,
-	conn: rivet_connection::Connection,
 	workflow_id: Uuid,
+	ray_id: Uuid,
 	name: &'static str,
+	ts: i64,
+
+	db: DatabaseHandle,
+
+	conn: rivet_connection::Connection,
 
 	// Backwards compatibility
 	op_ctx: rivet_operation::OperationContext<()>,
@@ -19,28 +21,22 @@ pub struct ActivityCtx {
 impl ActivityCtx {
 	pub fn new(
 		db: DatabaseHandle,
-		conn: rivet_connection::Connection,
+		conn: &rivet_connection::Connection,
 		workflow_id: Uuid,
+		workflow_create_ts: i64,
+		ray_id: Uuid,
 		name: &'static str,
 	) -> Self {
-		let op_ctx = rivet_operation::OperationContext::new(
-			name.to_string(),
-			std::time::Duration::from_secs(60),
-			conn.clone(),
-			workflow_id,
-			// TODO: ray_id
-			Uuid::new_v4(),
-			rivet_util::timestamp::now(),
-			// TODO: req_ts
-			rivet_util::timestamp::now(),
-			(),
-		);
+		let ts = rivet_util::timestamp::now();
+		let (conn, op_ctx) = util::wrap_conn(conn, ray_id, workflow_create_ts, name, ts);
 
 		ActivityCtx {
+			workflow_id,
+			ray_id,
+			name,
+			ts,
 			db,
 			conn,
-			workflow_id,
-			name,
 			op_ctx,
 		}
 	}
@@ -55,7 +51,14 @@ impl ActivityCtx {
 		I: OperationInput,
 		<I as OperationInput>::Operation: Operation<Input = I>,
 	{
-		let mut ctx = OperationCtx::new(self.db.clone(), self.workflow_id);
+		let mut ctx = OperationCtx::new(
+			self.db.clone(),
+			&self.conn,
+			self.workflow_id,
+			self.ray_id,
+			self.op_ctx.req_ts(),
+			I::Operation::name(),
+		);
 
 		I::Operation::run(&mut ctx, &input)
 			.await
@@ -71,28 +74,28 @@ impl ActivityCtx {
 	// 	self.timeout
 	// }
 
-	// pub fn req_id(&self) -> Uuid {
-	// 	self.req_id
-	// }
+	pub fn req_id(&self) -> Uuid {
+		self.op_ctx.req_id()
+	}
 
-	// pub fn ray_id(&self) -> Uuid {
-	// 	self.ray_id
-	// }
+	pub fn ray_id(&self) -> Uuid {
+		self.ray_id
+	}
 
-	// /// Timestamp at which the request started.
-	// pub fn ts(&self) -> i64 {
-	// 	self.ts
-	// }
+	/// Timestamp at which the request started.
+	pub fn ts(&self) -> i64 {
+		self.ts
+	}
 
-	// /// Timestamp at which the request was published.
-	// pub fn req_ts(&self) -> i64 {
-	// 	self.req_ts
-	// }
+	/// Timestamp at which the request was published.
+	pub fn req_ts(&self) -> i64 {
+		self.op_ctx.req_ts()
+	}
 
-	// /// Time between when the timestamp was processed and when it was published.
-	// pub fn req_dt(&self) -> i64 {
-	// 	self.ts.saturating_sub(self.req_ts)
-	// }
+	/// Time between when the timestamp was processed and when it was published.
+	pub fn req_dt(&self) -> i64 {
+		self.ts.saturating_sub(self.op_ctx.req_ts())
+	}
 
 	// pub fn perf(&self) -> &chirp_perf::PerfCtx {
 	// 	self.conn.perf()

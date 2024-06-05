@@ -48,7 +48,6 @@ where
 	// Cloned copies of the pools that we've asserted exist.
 	nats: NatsPool,
 	redis_chirp: RedisPool,
-	redis_cache: RedisPool,
 }
 
 impl<W> Debug for Manager<W>
@@ -76,7 +75,6 @@ where
 
 		let nats = pools.nats()?;
 		let redis_chirp = pools.redis_chirp()?;
-		let redis_cache = pools.redis_cache()?;
 
 		let manager = Arc::new(Manager {
 			config: Arc::new(config),
@@ -87,7 +85,6 @@ where
 
 			nats,
 			redis_chirp,
-			redis_cache,
 		});
 
 		Ok(manager)
@@ -701,7 +698,7 @@ where
 				x.push(chirp::TraceEntry {
 					context_name: worker_name.clone(),
 					req_id: req_id_proto.clone(),
-					ts: rivet_util::timestamp::now(),
+					ts,
 					run_context: chirp::RunContext::Service as i32,
 				});
 				x

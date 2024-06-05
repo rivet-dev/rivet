@@ -33,6 +33,8 @@ pub struct WorkflowCtx {
 	pub workflow_id: Uuid,
 	/// Name of the workflow to run in the registry.
 	pub name: String,
+	create_ts: i64,
+	ray_id: Uuid,
 
 	registry: RegistryHandle,
 	db: DatabaseHandle,
@@ -47,7 +49,7 @@ pub struct WorkflowCtx {
 	/// The reason this type is a hashmap is to allow querying by location.
 	event_history: Arc<HashMap<Location, Vec<Event>>>,
 	/// Input data passed to this workflow.
-	pub(crate) input: Arc<String>,
+	pub(crate) input: Arc<serde_json::Value>,
 
 	root_location: Location,
 	location_idx: usize,
@@ -63,6 +65,9 @@ impl WorkflowCtx {
 		GlobalResult::Ok(WorkflowCtx {
 			workflow_id: workflow.workflow_id,
 			name: workflow.workflow_name,
+			create_ts: workflow.create_ts,
+
+			ray_id: workflow.ray_id,
 
 			registry,
 			db,
@@ -89,6 +94,8 @@ impl WorkflowCtx {
 		let branch = WorkflowCtx {
 			workflow_id: self.workflow_id,
 			name: self.name.clone(),
+			create_ts: self.create_ts,
+			ray_id: self.ray_id,
 
 			registry: self.registry.clone(),
 			db: self.db.clone(),
@@ -237,8 +244,10 @@ impl WorkflowCtx {
 	) -> WorkflowResult<A::Output> {
 		let mut ctx = ActivityCtx::new(
 			self.db.clone(),
-			self.conn.clone(),
+			&self.conn,
 			self.workflow_id,
+			self.create_ts,
+			self.ray_id,
 			A::name(),
 		);
 
@@ -247,17 +256,17 @@ impl WorkflowCtx {
 				tracing::debug!("activity success");
 
 				// Write output
-				let input_str =
-					serde_json::to_string(input).map_err(WorkflowError::SerializeActivityInput)?;
-				let output_str = serde_json::to_string(&output)
+				let input_val =
+					serde_json::to_value(input).map_err(WorkflowError::SerializeActivityInput)?;
+				let output_val = serde_json::to_value(&output)
 					.map_err(WorkflowError::SerializeActivityOutput)?;
 				self.db
 					.commit_workflow_activity_event(
 						self.workflow_id,
 						self.full_location().as_ref(),
 						activity_id,
-						&input_str,
-						Some(&output_str),
+						input_val,
+						Some(output_val),
 					)
 					.await?;
 
@@ -267,14 +276,14 @@ impl WorkflowCtx {
 				tracing::debug!(?err, "activity error");
 
 				// Write empty output (failed state)
-				let input_str =
-					serde_json::to_string(input).map_err(WorkflowError::SerializeActivityInput)?;
+				let input_val =
+					serde_json::to_value(input).map_err(WorkflowError::SerializeActivityInput)?;
 				self.db
 					.commit_workflow_activity_event(
 						self.workflow_id,
 						self.full_location().as_ref(),
 						activity_id,
-						&input_str,
+						input_val,
 						None,
 					)
 					.await?;
@@ -350,17 +359,18 @@ impl WorkflowCtx {
 			let sub_workflow_id = Uuid::new_v4();
 
 			// Serialize input
-			let input_str = serde_json::to_string(&input)
+			let input_val = serde_json::to_value(input)
 				.map_err(WorkflowError::SerializeWorkflowOutput)
 				.map_err(GlobalError::raw)?;
 
 			self.db
 				.dispatch_sub_workflow(
+					self.ray_id,
 					self.workflow_id,
 					self.full_location().as_ref(),
 					sub_workflow_id,
 					&name,
-					&input_str,
+					input_val,
 				)
 				.await
 				.map_err(GlobalError::raw)?;
@@ -490,10 +500,11 @@ impl WorkflowCtx {
 
 		self.db
 			.publish_signal(
+				self.ray_id,
 				workflow_id,
 				id,
 				T::name(),
-				&serde_json::to_string(&body)
+				serde_json::to_value(&body)
 					.map_err(WorkflowError::SerializeSignalBody)
 					.map_err(GlobalError::raw)?,
 			)
@@ -517,7 +528,7 @@ impl WorkflowCtx {
 
 			tracing::debug!(id=%self.workflow_id, name=%signal.name, "replaying signal");
 
-			T::parse(&signal.name, &signal.body).map_err(GlobalError::raw)?
+			T::parse(&signal.name, signal.body.clone()).map_err(GlobalError::raw)?
 		}
 		// Listen for new messages
 		else {
@@ -562,7 +573,7 @@ impl WorkflowCtx {
 				return Err(WorkflowError::HistoryDiverged).map_err(GlobalError::raw);
 			};
 
-			Some(T::parse(&signal.name, &signal.body).map_err(GlobalError::raw)?)
+			Some(T::parse(&signal.name, signal.body.clone()).map_err(GlobalError::raw)?)
 		}
 		// Listen for new message
 		else {

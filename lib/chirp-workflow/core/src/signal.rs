@@ -11,7 +11,7 @@ pub trait Signal {
 #[async_trait]
 pub trait Listen: Sized {
 	async fn listen(ctx: &mut WorkflowCtx) -> WorkflowResult<Self>;
-	fn parse(name: &str, body: &str) -> WorkflowResult<Self>;
+	fn parse(name: &str, body: serde_json::Value) -> WorkflowResult<Self>;
 }
 
 /// Creates an enum that implements `Listen` and selects one of X signals.
@@ -51,17 +51,17 @@ macro_rules! join_signal {
 
 		#[::async_trait::async_trait]
 		impl Listen for $join {
-			async fn listen(ctx: &mut ::wf::WorkflowCtx) -> ::wf::WorkflowResult<Self> {
+			async fn listen(ctx: &mut chirp_workflow::prelude::WorkflowCtx) -> chirp_workflow::prelude::WorkflowResult<Self> {
 				let row = ctx.listen_any(&[$($signals::name()),*]).await?;
-				Self::parse(&row.name, &row.body)
+				Self::parse(&row.name, row.body)
 			}
 
-			fn parse(name: &str, body: &str) -> ::wf::WorkflowResult<Self> {
+			fn parse(name: &str, body: serde_json::Value) -> chirp_workflow::prelude::WorkflowResult<Self> {
 				$(
 					if name == $signals::name() {
 						Ok(
 							Self::$signals(
-								serde_json::from_str(body)
+								serde_json::from_value(body)
 									.map_err(WorkflowError::DeserializeActivityOutput)?
 							)
 						)
