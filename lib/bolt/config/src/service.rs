@@ -99,6 +99,7 @@ pub enum ServiceKind {
 	#[serde(rename = "operation")]
 	Operation {},
 
+	// TODO: Rename to worker
 	#[serde(rename = "consumer")]
 	Consumer {
 		#[serde(default)]

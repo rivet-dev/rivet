@@ -127,7 +127,7 @@ async fn nats_from_env(client_name: String) -> Result<Option<NatsPool>, Error> {
 }
 
 #[tracing::instrument]
-async fn crdb_from_env(client_name: String) -> Result<Option<CrdbPool>, Error> {
+async fn crdb_from_env(_client_name: String) -> Result<Option<CrdbPool>, Error> {
 	if let Some(url) = std::env::var("CRDB_URL").ok() {
 		let min_connections = std::env::var("CRDB_MIN_CONNECTIONS")
 			.ok()

@@ -89,9 +89,9 @@ dependencies = [
 
 [[package]]
 name = "anyhow"
-version = "1.0.81"
+version = "1.0.83"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0952808a6c2afd1aa8947271f3a60f1a6763c7b912d210184c5149b5cf147247"
+checksum = "25bdb32cbbdce2b519a9cd7df3a678443100e265d5e25ca763b7572a5104f5f3"
 
 [[package]]
 name = "api-admin"
@@ -945,9 +945,9 @@ dependencies = [
 
 [[package]]
 name = "async-trait"
-version = "0.1.79"
+version = "0.1.80"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a507401cad91ec6a857ed5513a2073c82a9b9048762b885bb98655b306964681"
+checksum = "c6fa2087f2753a7da8cc1c0dbfcf89579dd57458e36769de5ac750b4671737ca"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -1502,7 +1502,7 @@ dependencies = [
  "chirp-client",
  "chirp-worker",
  "futures-util",
- "indoc",
+ "indoc 1.0.9",
  "prost 0.10.4",
  "reqwest",
  "rivet-connection",
@@ -2014,7 +2014,7 @@ dependencies = [
  "formatted-error",
  "futures-util",
  "global-error",
- "indoc",
+ "indoc 1.0.9",
  "lazy_static",
  "prost 0.10.4",
  "rand",
@@ -2037,6 +2037,47 @@ dependencies = [
 
 [[package]]
 name = "chirp-worker-attributes"
+version = "0.1.0"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.58",
+]
+
+[[package]]
+name = "chirp-workflow"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "chirp-client",
+ "chirp-workflow-macros",
+ "formatted-error",
+ "futures-util",
+ "global-error",
+ "indoc 2.0.5",
+ "prost 0.12.4",
+ "prost-types 0.12.4",
+ "rand",
+ "rivet-cache",
+ "rivet-connection",
+ "rivet-metrics",
+ "rivet-operation",
+ "rivet-pools",
+ "rivet-runtime",
+ "rivet-util",
+ "serde",
+ "serde_json",
+ "sqlx",
+ "thiserror",
+ "tokio",
+ "tracing",
+ "tracing-subscriber",
+ "uuid",
+]
+
+[[package]]
+name = "chirp-workflow-macros"
 version = "0.1.0"
 dependencies = [
  "proc-macro2",
@@ -2448,7 +2489,7 @@ dependencies = [
  "cluster-datacenter-topology-get",
  "http 0.2.12",
  "include_dir",
- "indoc",
+ "indoc 1.0.9",
  "lazy_static",
  "linode-instance-type-get",
  "linode-server-destroy",
@@ -2616,7 +2657,7 @@ dependencies = [
  "cluster-datacenter-topology-get",
  "http 0.2.12",
  "include_dir",
- "indoc",
+ "indoc 1.0.9",
  "lazy_static",
  "linode-instance-type-get",
  "linode-server-destroy",
@@ -3462,6 +3503,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3f9eec918d3f24069decb9af1554cad7c880e2da24a9afd88aca000531ab82c1"
 
 [[package]]
+name = "foo-worker"
+version = "0.0.1"
+dependencies = [
+ "chirp-workflow",
+ "serde",
+ "user-get",
+]
+
+[[package]]
 name = "foreign-types"
 version = "0.3.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3492,7 +3542,7 @@ dependencies = [
  "gray_matter",
  "hashbrown 0.12.3",
  "http 0.2.12",
- "indoc",
+ "indoc 1.0.9",
  "lazy_static",
  "serde",
 ]
@@ -4592,6 +4642,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "bfa799dd5ed20a7e349f3b4639aa80d74549c81716d9ec4f994c9b5815598306"
 
 [[package]]
+name = "indoc"
+version = "2.0.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b248f5224d1d606005e02c97f5aa4e88eeb230488bcc03bc9ca4d7991399f2b5"
+
+[[package]]
 name = "inout"
 version = "0.1.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4693,7 +4749,7 @@ dependencies = [
  "chrono",
  "faker-job-run",
  "futures-util",
- "indoc",
+ "indoc 1.0.9",
  "job-run-get",
  "lazy_static",
  "mm-lobby-for-run-id",
@@ -4769,7 +4825,7 @@ dependencies = [
  "chirp-worker",
  "faker-job-run",
  "faker-job-template",
- "indoc",
+ "indoc 1.0.9",
  "job-run-get",
  "lazy_static",
  "reqwest",
@@ -5519,7 +5575,7 @@ dependencies = [
  "chrono",
  "faker-mm-lobby",
  "futures-util",
- "indoc",
+ "indoc 1.0.9",
  "lazy_static",
  "mm-lobby-get",
  "prost 0.10.4",
@@ -5823,6 +5879,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "monolith-workflow-worker"
+version = "0.0.1"
+dependencies = [
+ "chirp-workflow",
+ "foo-worker",
+ "rivet-health-checks",
+ "rivet-metrics",
+ "rivet-runtime",
+]
+
+[[package]]
 name = "multimap"
 version = "0.8.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5899,7 +5966,7 @@ dependencies = [
  "chirp-worker",
  "chrono",
  "futures-util",
- "indoc",
+ "indoc 1.0.9",
  "lazy_static",
  "nomad-util",
  "nomad_client",
@@ -6505,6 +6572,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "prost"
+version = "0.12.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d0f5d036824e4761737860779c906171497f6d55681139d8312388f8fe398922"
+dependencies = [
+ "bytes",
+ "prost-derive 0.12.5",
+]
+
+[[package]]
 name = "prost-build"
 version = "0.11.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6553,6 +6630,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "prost-derive"
+version = "0.12.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9554e3ab233f0a932403704f1a1d08c30d5ccd931adfdfa1e8b5a19b52c1d55a"
+dependencies = [
+ "anyhow",
+ "itertools 0.12.1",
+ "proc-macro2",
+ "quote",
+ "syn 2.0.58",
+]
+
+[[package]]
 name = "prost-types"
 version = "0.10.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6569,6 +6659,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "213622a1460818959ac1181aaeb2dc9c7f63df720db7d788b3e24eacd1983e13"
 dependencies = [
  "prost 0.11.9",
+]
+
+[[package]]
+name = "prost-types"
+version = "0.12.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3235c33eb02c1f1e212abdbe34c78b264b038fb58ca612664343271e36e55ffe"
+dependencies = [
+ "prost 0.12.4",
 ]
 
 [[package]]
@@ -7223,7 +7322,7 @@ dependencies = [
  "formatted-error",
  "futures-util",
  "global-error",
- "indoc",
+ "indoc 1.0.9",
  "prost 0.10.4",
  "prost-types 0.10.1",
  "rivet-cache",
@@ -7780,9 +7879,9 @@ checksum = "92d43fe69e652f3df9bdc2b85b2854a0825b86e4fb76bc44d945137d053639ca"
 
 [[package]]
 name = "serde"
-version = "1.0.197"
+version = "1.0.201"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3fb1c873e1b9b056a4dc4c0c198b24c3ffa059243875552b2bd0933b1aee4ce2"
+checksum = "780f1cebed1629e4753a1a38a3c72d30b97ec044f0aef68cb26650a3c5cf363c"
 dependencies = [
  "serde_derive",
 ]
@@ -7798,9 +7897,9 @@ dependencies = [
 
 [[package]]
 name = "serde_derive"
-version = "1.0.197"
+version = "1.0.201"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7eb0b34b42edc17f6b7cac84a52a1c5f0e1bb2227e997ca9011ea3dd34e8610b"
+checksum = "c5e405930b9796f1c00bee880d03fc7e0bb4b9a11afc776885ffe84320da2865"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -7820,9 +7919,9 @@ dependencies = [
 
 [[package]]
 name = "serde_json"
-version = "1.0.115"
+version = "1.0.117"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "12dc5c46daa8e9fdf4f5e71b6cf9a53f2487da0e86e55808e2d35539666497dd"
+checksum = "455182ea6142b14f93f4bc5320a2b31c1f266b66a4a5c858b013302a5d8cbfc3"
 dependencies = [
  "itoa 1.0.11",
  "ryu",
@@ -8694,7 +8793,7 @@ dependencies = [
  "game-get",
  "game-namespace-get",
  "game-version-get",
- "indoc",
+ "indoc 1.0.9",
  "lazy_static",
  "mm-player-count-for-namespace",
  "prost 0.10.4",
@@ -8724,18 +8823,18 @@ dependencies = [
 
 [[package]]
 name = "thiserror"
-version = "1.0.58"
+version = "1.0.60"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "03468839009160513471e86a034bb2c5c0e4baae3b43f79ffc55c4a5427b3297"
+checksum = "579e9083ca58dd9dcf91a9923bb9054071b9ebbd800b342194c9feb0ee89fc18"
 dependencies = [
  "thiserror-impl",
 ]
 
 [[package]]
 name = "thiserror-impl"
-version = "1.0.58"
+version = "1.0.60"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c61f3ba182994efc43764a46c018c347bc492c79f024e705f46567b418f6d4f7"
+checksum = "e2470041c06ec3ac1ab38d0356a6119054dedaea53e12fbefc0de730a1c08524"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -9172,6 +9271,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "tracing-log"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ee855f1f400bd0e5c02d150ae5de3840039a3f54b025156404e34c23c03f47c3"
+dependencies = [
+ "log",
+ "once_cell",
+ "tracing-core",
+]
+
+[[package]]
 name = "tracing-serde"
 version = "0.1.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -9194,9 +9304,11 @@ dependencies = [
  "serde",
  "serde_json",
  "sharded-slab",
+ "smallvec",
  "thread_local",
  "tracing",
  "tracing-core",
+ "tracing-log",
  "tracing-serde",
 ]
 
@@ -9302,7 +9414,7 @@ version = "0.1.0"
 dependencies = [
  "bolt-config",
  "heck 0.3.3",
- "indoc",
+ "indoc 1.0.9",
  "prost-build",
  "regex",
  "schemac",
@@ -9467,7 +9579,7 @@ dependencies = [
  "chirp-client",
  "chirp-worker",
  "futures-util",
- "indoc",
+ "indoc 1.0.9",
  "prost 0.10.4",
  "reqwest",
  "rivet-connection",
@@ -9553,7 +9665,7 @@ dependencies = [
  "chirp-worker",
  "chrono",
  "futures-util",
- "indoc",
+ "indoc 1.0.9",
  "lazy_static",
  "prost 0.10.4",
  "rivet-connection",
@@ -9744,7 +9856,7 @@ dependencies = [
  "chirp-worker",
  "chrono",
  "futures-util",
- "indoc",
+ "indoc 1.0.9",
  "lazy_static",
  "prost 0.10.4",
  "rivet-connection",
@@ -9871,7 +9983,7 @@ dependencies = [
  "chirp-worker",
  "chrono",
  "futures-util",
- "indoc",
+ "indoc 1.0.9",
  "lazy_static",
  "prost 0.10.4",
  "rivet-connection",

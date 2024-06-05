@@ -287,6 +287,7 @@ impl ServiceContextData {
 
 	pub fn is_monolith_worker(&self) -> bool {
 		self.config().service.name == "monolith-worker"
+			|| self.config().service.name == "monolith-workflow-worker"
 	}
 
 	pub fn depends_on_nomad_api(&self) -> bool {
@@ -349,7 +350,9 @@ impl ServiceContextData {
 	}
 
 	pub fn depends_on_infra(&self) -> bool {
-		self.name() == "cluster-worker" || self.name() == "monolith-worker"
+		self.name() == "cluster-worker"
+			|| self.name() == "monolith-worker"
+			|| self.name() == "monolith-workflow-worker"
 	}
 
 	pub fn depends_on_cluster_config(&self) -> bool {
@@ -1121,11 +1124,18 @@ impl ServiceContextData {
 			let password = project_ctx.read_secret(&["crdb", "password"]).await?;
 			let sslmode = "verify-ca";
 
-			let uri = format!(
+			let url = format!(
 				"postgres://{}:{}@{crdb_host}/postgres?sslmode={sslmode}",
 				username, password,
 			);
-			env.insert("CRDB_URL".into(), uri);
+			env.insert("CRDB_URL".into(), url);
+
+			// TODO:
+			let workflow_url = format!(
+				"postgres://{}:{}@{crdb_host}/db_workflow?sslmode={sslmode}",
+				username, password,
+			);
+			env.insert("CRDB_WORKFLOW_URL".into(), workflow_url);
 		}
 
 		// Redis

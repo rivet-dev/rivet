@@ -1,4 +1,4 @@
-use std::{collections::HashMap, fmt::Display};
+use std::{collections::HashMap, fmt::Display, sync::Arc};
 
 use http::StatusCode;
 use serde::Serialize;
@@ -9,6 +9,7 @@ pub type GlobalResult<T> = Result<T, GlobalError>;
 
 #[derive(Debug, Clone)]
 pub enum GlobalError {
+	/// Errors thrown by any part of the code, such as from sql queries, api calls, etc.
 	Internal {
 		ty: String,
 		message: String,
@@ -26,11 +27,15 @@ pub enum GlobalError {
 		/// we should only retry the message on this specific worker.
 		retry_immediately: bool,
 	},
+	/// Custom errors with metadata matching a schema defined in /errors at the project root. 
 	BadRequest {
 		code: String,
 		context: HashMap<String, String>,
 		metadata: Option<String>, // JSON string
 	},
+	/// Any kind of error, but stored dynamically. This is used to downcast the error back into its original
+	/// type if needed.
+	Raw(Arc<dyn std::error::Error + Send + Sync>),
 }
 
 impl Display for GlobalError {
@@ -41,6 +46,9 @@ impl Display for GlobalError {
 			}
 			GlobalError::BadRequest { code, .. } => {
 				write!(f, "{}", code)
+			}
+			GlobalError::Raw(err) => {
+				write!(f, "{}", err)
 			}
 		}
 	}
@@ -82,6 +90,10 @@ impl GlobalError {
 		}
 	}
 
+	pub fn raw<T: std::error::Error + Send + Sync + 'static>(err: T) -> GlobalError {
+		GlobalError::Raw(Arc::new(err))
+	}
+
 	pub fn bad_request_builder(code: &'static str) -> BadRequestBuilder {
 		BadRequestBuilder::new(code)
 	}
@@ -96,14 +108,14 @@ impl GlobalError {
 
 	pub fn http_status(&self) -> StatusCode {
 		match self {
-			GlobalError::Internal { .. } => StatusCode::INTERNAL_SERVER_ERROR,
+			GlobalError::Internal { .. } | GlobalError::Raw(_) => StatusCode::INTERNAL_SERVER_ERROR,
 			GlobalError::BadRequest { code, .. } => formatted_error::parse(code).http_status(),
 		}
 	}
 
 	pub fn code(&self) -> Option<&str> {
 		match self {
-			GlobalError::Internal { .. } => None,
+			GlobalError::Internal { .. } | GlobalError::Raw(_) => None,
 			GlobalError::BadRequest { code, .. } => Some(code),
 		}
 	}
@@ -118,12 +130,13 @@ impl GlobalError {
 					formatted_error::parse(code).format_description(context)
 				}
 			}
+			GlobalError::Raw(err) => format!("{}", err),
 		}
 	}
 
 	pub fn documentation(&self) -> Option<&str> {
 		match self {
-			GlobalError::Internal { .. } => None,
+			GlobalError::Internal { .. } | GlobalError::Raw(_) => None,
 			GlobalError::BadRequest { code, .. } => {
 				Some(formatted_error::parse(code).documentation())
 			}
@@ -133,7 +146,7 @@ impl GlobalError {
 	// Deserializes metadata into `serde_json::Value`
 	pub fn metadata(&self) -> GlobalResult<Option<serde_json::Value>> {
 		match self {
-			GlobalError::Internal { .. } => Ok(None),
+			GlobalError::Internal { .. } | GlobalError::Raw(_) => Ok(None),
 			GlobalError::BadRequest { metadata, .. } => metadata
 				.as_ref()
 				.map(|metadata| serde_json::from_str::<serde_json::Value>(&metadata))
@@ -179,6 +192,35 @@ impl From<GlobalError> for chirp::response::Err {
 					},
 				)),
 			},
+			GlobalError::Raw(err) => {
+				let mut ty = std::any::type_name_of_val(&err).to_string();
+				let debug = format!("{:?}", err);
+
+				// Extract more information for type from the debug information. This is
+				// helpful to extrapolate enum types like `ManagerError` in to
+				// `ManagerError::RpcError`
+				let ty_suffix =
+					if let Some((left, _)) = debug.split_once(|c: char| !c.is_alphanumeric()) {
+						left
+					} else {
+						debug.as_str()
+					};
+				if !ty_suffix.is_empty()
+					&& ty_suffix.chars().next().map_or(false, char::is_alphabetic)
+				{
+					ty = format!("{}::{}", ty, ty_suffix);
+				}
+
+				chirp::response::Err {
+					kind: Some(chirp::response::err::Kind::Internal(
+						chirp::response::err::Internal {
+							ty: ty,
+							message: format!("{}", err),
+							debug,
+						},
+					)),
+				}
+			}
 		}
 	}
 }

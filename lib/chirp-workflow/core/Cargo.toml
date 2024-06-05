@@ -1,0 +1,34 @@
+[package]
+name = "chirp-workflow"
+version = "0.1.0"
+authors = ["Rivet Gaming, LLC <developer@rivet.gg>"]
+edition = "2021"
+license = "Apache-2.0"
+
+[dependencies]
+anyhow = "1.0.82"
+async-trait = "0.1.80"
+chirp-client = { path = "../../chirp/client" }
+chirp-workflow-macros = { path = "../macros" }
+formatted-error = { path = "../../formatted-error" }
+futures-util = "0.3"
+global-error = { path = "../../global-error" }
+indoc = "2.0.5"
+prost = "0.12.4"
+prost-types = "0.12.4"
+rand = "0.8.5"
+rivet-cache = { path = "../../cache/build" }
+rivet-connection = { path = "../../connection" }
+rivet-metrics = { path = "../../metrics" }
+rivet-operation = { path = "../../operation/core" }
+rivet-pools = { path = "../../pools" }
+rivet-runtime = { path = "../../runtime" }
+rivet-util = { path = "../../util/core" }
+serde = { version = "1.0.198", features = ["derive"] }
+serde_json = "1.0.116"
+sqlx = { version = "0.7.4", features = ["runtime-tokio", "postgres", "uuid", "ipnetwork"] }
+thiserror = "1.0.59"
+tokio = { version = "1.37.0", features = ["full"] }
+tracing = "0.1.40"
+tracing-subscriber = { version = "0.3.18", features = ["env-filter"] }
+uuid = { version = "1.8.0", features = ["v4", "serde"] }

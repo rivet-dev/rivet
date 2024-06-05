@@ -648,14 +648,14 @@ async fn provision_server(
 	sql_execute!(
 		[ctx, @tx tx]
 		"
-				INSERT INTO db_cluster.servers (
-					server_id,
-					datacenter_id,
-					pool_type,
-					create_ts
-				)
-				VALUES ($1, $2, $3, $4)
-				",
+		INSERT INTO db_cluster.servers (
+			server_id,
+			datacenter_id,
+			pool_type,
+			create_ts
+		)
+		VALUES ($1, $2, $3, $4)
+		",
 		server_id,
 		pctx.datacenter_id,
 		pctx.pool_type as i64,

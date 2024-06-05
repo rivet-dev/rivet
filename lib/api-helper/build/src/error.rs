@@ -47,6 +47,22 @@ pub fn handle_rejection(
 				)
 			}
 		}
+		GlobalError::Raw(err) => {
+			tracing::error!(?err, "internal error response");
+
+			// Replace internal errors with global errors
+			if std::env::var("RIVET_API_ERROR_VERBOSE")
+				.ok()
+				.map_or(false, |x| x == "1")
+			{
+				err_code!(ERROR, error = err.to_string())
+			} else {
+				err_code!(
+					ERROR,
+					error = format!("An internal error has occurred (ray_id {}).", ray_id)
+				)
+			}
+		}
 	};
 
 	// Modify request based on error
