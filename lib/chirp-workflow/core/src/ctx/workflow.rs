@@ -1,6 +1,5 @@
 use std::{collections::HashMap, sync::Arc};
 
-use anyhow::*;
 use serde::Serialize;
 use tokio::time::Duration;
 use uuid::Uuid;
@@ -142,7 +141,7 @@ impl WorkflowCtx {
 		}
 	}
 
-	async fn run_workflow_inner(&mut self) -> Result<()> {
+	async fn run_workflow_inner(&mut self) -> WorkflowResult<()> {
 		tracing::info!(id=%self.workflow_id, "running workflow");
 
 		// Lookup workflow

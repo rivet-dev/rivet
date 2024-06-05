@@ -1,5 +1,5 @@
-use anyhow::*;
 use async_trait::async_trait;
+use global_error::GlobalResult;
 
 use crate::OperationCtx;
 
@@ -10,7 +10,7 @@ pub trait Operation {
 
 	fn name() -> &'static str;
 
-	async fn run(ctx: &mut OperationCtx, input: &Self::Input) -> Result<Self::Output>;
+	async fn run(ctx: &mut OperationCtx, input: &Self::Input) -> GlobalResult<Self::Output>;
 }
 
 pub trait OperationInput: Send {

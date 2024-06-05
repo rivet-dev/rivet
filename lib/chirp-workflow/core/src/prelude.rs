@@ -28,8 +28,6 @@ pub use chirp_workflow_macros::*;
 
 // External libraries
 #[doc(hidden)]
-pub use anyhow::{self, Result};
-#[doc(hidden)]
 pub use async_trait;
 #[doc(hidden)]
 pub use futures_util;

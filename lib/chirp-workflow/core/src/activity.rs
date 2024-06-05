@@ -1,7 +1,7 @@
 use std::{fmt::Debug, hash::Hash};
 
-use anyhow::*;
 use async_trait::async_trait;
+use global_error::GlobalResult;
 use serde::{de::DeserializeOwned, Serialize};
 
 use crate::ActivityCtx;
@@ -13,7 +13,7 @@ pub trait Activity {
 
 	fn name() -> &'static str;
 
-	async fn run(ctx: &mut ActivityCtx, input: &Self::Input) -> Result<Self::Output>;
+	async fn run(ctx: &mut ActivityCtx, input: &Self::Input) -> GlobalResult<Self::Output>;
 }
 
 pub trait ActivityInput: Serialize + DeserializeOwned + Debug + Hash + Send {

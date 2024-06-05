@@ -1,4 +1,4 @@
-use std::{collections::HashMap, fmt::Display, sync::Arc};
+use std::{collections::HashMap, fmt::Display};
 
 use http::StatusCode;
 use serde::Serialize;
@@ -7,7 +7,7 @@ use types::rivet::chirp;
 
 pub type GlobalResult<T> = Result<T, GlobalError>;
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub enum GlobalError {
 	/// Errors thrown by any part of the code, such as from sql queries, api calls, etc.
 	Internal {
@@ -35,7 +35,7 @@ pub enum GlobalError {
 	},
 	/// Any kind of error, but stored dynamically. This is used to downcast the error back into its original
 	/// type if needed.
-	Raw(Arc<dyn std::error::Error + Send + Sync>),
+	Raw(Box<dyn std::error::Error + Send + Sync>),
 }
 
 impl Display for GlobalError {
@@ -91,7 +91,7 @@ impl GlobalError {
 	}
 
 	pub fn raw<T: std::error::Error + Send + Sync + 'static>(err: T) -> GlobalError {
-		GlobalError::Raw(Arc::new(err))
+		GlobalError::Raw(Box::new(err))
 	}
 
 	pub fn bad_request_builder(code: &'static str) -> BadRequestBuilder {

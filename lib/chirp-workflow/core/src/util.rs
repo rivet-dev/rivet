@@ -3,7 +3,7 @@ use std::{
 	time::{SystemTime, UNIX_EPOCH},
 };
 
-use anyhow::*;
+use global_error::{macros::*, GlobalResult};
 use rand::Rng;
 use tokio::time::{self, Duration};
 
@@ -16,7 +16,7 @@ const FAULT_RATE: usize = 80;
 
 pub async fn sleep_until_ts(ts: i64) {
 	let target_time = UNIX_EPOCH + Duration::from_millis(ts as u64);
-	if let std::result::Result::Ok(sleep_duration) = target_time.duration_since(SystemTime::now()) {
+	if let Ok(sleep_duration) = target_time.duration_since(SystemTime::now()) {
 		time::sleep(sleep_duration).await;
 	}
 }
@@ -100,12 +100,13 @@ pub fn combine_events(
 		.map(|(k, v)| (k, v.into_iter().map(|(_, v)| v).collect()))
 		.collect();
 
-	WorkflowResult::Ok(event_history)
+	Ok(event_history)
 }
 
-pub fn inject_fault() -> Result<()> {
+pub fn inject_fault() -> GlobalResult<()> {
 	if rand::thread_rng().gen_range(0..100) < FAULT_RATE {
 		bail!("This is a random panic!");
 	}
+
 	Ok(())
 }

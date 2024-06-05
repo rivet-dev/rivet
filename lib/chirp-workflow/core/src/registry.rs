@@ -1,6 +1,7 @@
 use std::{collections::HashMap, future::Future, pin::Pin, sync::Arc};
 
 use futures_util::FutureExt;
+use global_error::GlobalError;
 
 use crate::{Workflow, WorkflowCtx, WorkflowError, WorkflowResult};
 
@@ -41,11 +42,20 @@ impl Registry {
 						// Run workflow
 						let output = match W::run(ctx, &input).await {
 							Ok(x) => x,
+							// Differentiate between WorkflowError and user error
 							Err(err) => {
-								// Differentiate between WorkflowError and user error
-								match err.downcast::<WorkflowError>() {
-									Ok(err) => return Err(err),
-									Err(err) => return Err(WorkflowError::WorkflowFailure(err)),
+								match err {
+									GlobalError::Raw(inner_err) => {
+										match inner_err.downcast::<WorkflowError>() {
+											Ok(inner_err) => return Err(*inner_err),
+											Err(err) => {
+												return Err(WorkflowError::WorkflowFailure(
+													GlobalError::Raw(err),
+												))
+											}
+										}
+									}
+									_ => return Err(WorkflowError::WorkflowFailure(err)),
 								}
 							}
 						};

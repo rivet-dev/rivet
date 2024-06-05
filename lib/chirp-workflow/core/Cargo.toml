@@ -6,7 +6,6 @@ edition = "2021"
 license = "Apache-2.0"
 
 [dependencies]
-anyhow = "1.0.82"
 async-trait = "0.1.80"
 chirp-client = { path = "../../chirp/client" }
 chirp-workflow-macros = { path = "../macros" }
@@ -32,3 +31,6 @@ tokio = { version = "1.37.0", features = ["full"] }
 tracing = "0.1.40"
 tracing-subscriber = { version = "0.3.18", features = ["env-filter"] }
 uuid = { version = "1.8.0", features = ["v4", "serde"] }
+
+[dev-dependencies]
+anyhow = "1.0.82"

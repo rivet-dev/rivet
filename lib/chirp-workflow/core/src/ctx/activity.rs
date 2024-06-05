@@ -27,9 +27,9 @@ impl ActivityCtx {
 			name.to_string(),
 			std::time::Duration::from_secs(60),
 			conn.clone(),
-			// TODO: req_id
-			Uuid::new_v4(),
 			workflow_id,
+			// TODO: ray_id
+			Uuid::new_v4(),
 			rivet_util::timestamp::now(),
 			// TODO: req_ts
 			rivet_util::timestamp::now(),

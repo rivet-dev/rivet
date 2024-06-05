@@ -54,7 +54,7 @@ fn trait_fn(attr: TokenStream, item: TokenStream, opts: TraitFnOpts) -> TokenStr
 		ReturnType::Type(_, ty) => match ty.as_ref() {
 			Type::Path(path) => {
 				let segment = path.path.segments.last().unwrap();
-				if segment.ident == "Result" {
+				if segment.ident == "GlobalResult" {
 					match &segment.arguments {
 						PathArguments::AngleBracketed(args) => {
 							if let Some(GenericArgument::Type(Type::Path(path))) = args.args.first()
@@ -68,7 +68,7 @@ fn trait_fn(attr: TokenStream, item: TokenStream, opts: TraitFnOpts) -> TokenStr
 					}
 				} else {
 					panic!(
-						"{} function must return a Result type",
+						"{} function must return a GlobalResult type",
 						opts.trait_ty.to_token_stream().to_string()
 					);
 				}
@@ -124,7 +124,7 @@ fn trait_fn(attr: TokenStream, item: TokenStream, opts: TraitFnOpts) -> TokenStr
 				#fn_name
 			}
 
-			async fn run(#ctx_ident: #ctx_ty, #input_ident: &Self::Input) -> anyhow::Result<Self::Output> {
+			async fn run(#ctx_ident: #ctx_ty, #input_ident: &Self::Input) -> GlobalResult<Self::Output> {
 				#fn_body
 			}
 		}

@@ -1,4 +1,4 @@
-use anyhow::*;
+use global_error::GlobalError;
 use uuid::Uuid;
 
 pub type WorkflowResult<T> = Result<T, WorkflowError>;
@@ -10,13 +10,13 @@ pub type WorkflowResult<T> = Result<T, WorkflowError>;
 #[derive(thiserror::Error, Debug)]
 pub enum WorkflowError {
 	#[error("workflow failure: {0:?}")]
-	WorkflowFailure(Error),
+	WorkflowFailure(GlobalError),
 
 	#[error("activity failure: {0:?}")]
-	ActivityFailure(Error),
+	ActivityFailure(GlobalError),
 
 	#[error("operation failure: {0:?}")]
-	OperationFailure(Error),
+	OperationFailure(GlobalError),
 
 	#[error("workflow missing from registry: {0}")]
 	WorkflowMissingFromRegistry(String),
