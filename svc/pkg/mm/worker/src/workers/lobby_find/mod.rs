@@ -97,6 +97,10 @@ async fn worker(ctx: &OperationContext<mm::msg::lobby_find::Message>) -> GlobalR
 		fetch_ns_config_and_team(ctx.base(), namespace_id),
 		fetch_lobby_group_config(ctx.base(), query),
 	)?;
+	let Some(lobby_group_config) = lobby_group_config else {
+		fail(ctx, namespace_id, query_id, ErrorCode::LobbyNotFound, true).await?;
+		return complete_request(ctx.chirp(), analytics_events).await;
+	};
 
 	// Verify dev team status
 	if !team.deactivate_reasons.is_empty() {
@@ -467,11 +471,13 @@ pub struct LobbyGroupConfig {
 }
 
 /// Fetches the lobby group config (and lobby if direct).
+///
+/// Returning `None` indicates lobby not found.
 #[tracing::instrument]
 async fn fetch_lobby_group_config(
 	ctx: OperationContext<()>,
 	query: &Query,
-) -> GlobalResult<LobbyGroupConfig> {
+) -> GlobalResult<Option<LobbyGroupConfig>> {
 	// Get lobby group id from query
 	let (lobby_group_ids, lobby_info, lobby_state_json) = match query {
 		Query::LobbyGroup(backend::matchmaker::query::LobbyGroup {
@@ -499,7 +505,9 @@ async fn fetch_lobby_group_config(
 					lobby_ids: vec![lobby_id],
 				}),
 			)?;
-			let lobby = unwrap!(lobbies_res.lobbies.into_iter().next(), "lobby not found");
+			let Some(lobby) = lobbies_res.lobbies.into_iter().next() else {
+				return Ok(None);
+			};
 			let lobby_group_id = unwrap!(lobby.lobby_group_id);
 			let lobby_state = unwrap!(lobby_states_res.lobbies.into_iter().next());
 
@@ -551,13 +559,13 @@ async fn fetch_lobby_group_config(
 		.into_iter()
 		.unzip::<_, _, Vec<_>, Vec<_>>();
 
-	Ok(LobbyGroupConfig {
+	Ok(Some(LobbyGroupConfig {
 		version_id,
 		lobby_groups,
 		lobby_group_meta,
 		lobby_info,
 		lobby_state_json,
-	})
+	}))
 }
 
 #[derive(Clone)]
