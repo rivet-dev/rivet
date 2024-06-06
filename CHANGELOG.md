@@ -5,6 +5,36 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Calendar Versioning](https://calver.org/).
 
+## [24.4.1](https://github.com/rivet-gg/rivet/compare/v24.4.0...v24.4.1) (2024-06-06)
+
+
+### Features
+
+* add compat layer between old ctx and new workflows ([#788](https://github.com/rivet-gg/rivet/issues/788)) ([787971b](https://github.com/rivet-gg/rivet/commit/787971ba5ff44580e45bb228ff9ec00f854a9278))
+* add ray ids to workflows, clean up types ([#787](https://github.com/rivet-gg/rivet/issues/787)) ([3072bdc](https://github.com/rivet-gg/rivet/commit/3072bdcd5ba98fff23b1d1577bf0d5ab22fc1482))
+* add workflows ([#783](https://github.com/rivet-gg/rivet/issues/783)) ([378d528](https://github.com/rivet-gg/rivet/commit/378d5283a94db8581b4f01108bd9e50ea9320949))
+* global error raw variant ([#784](https://github.com/rivet-gg/rivet/issues/784)) ([4b11578](https://github.com/rivet-gg/rivet/commit/4b11578119a2a1cb3847f705e2a57fa4b4490b95))
+* run sub workflows in the same process ([#789](https://github.com/rivet-gg/rivet/issues/789)) ([717e096](https://github.com/rivet-gg/rivet/commit/717e0963ca13c277a70c1486fa9aead50e7377f6))
+* **workflows:** add retries and timeouts ([#860](https://github.com/rivet-gg/rivet/issues/860)) ([cc0b893](https://github.com/rivet-gg/rivet/commit/cc0b893adb8804e8b2bde60cf5659d4ff15dcce8))
+* **workflows:** add worker instance failover ([#854](https://github.com/rivet-gg/rivet/issues/854)) ([c5a32a3](https://github.com/rivet-gg/rivet/commit/c5a32a3805dfe4efab498709cda9f70e0bcf5ebf))
+
+
+### Bug Fixes
+
+* cast workflow errors to raw global errors ([#785](https://github.com/rivet-gg/rivet/issues/785)) ([c90d939](https://github.com/rivet-gg/rivet/commit/c90d9394abbe31d4b4dcd366e93491a3e5bde4a1))
+* draining and tainted server grafana chart ([#855](https://github.com/rivet-gg/rivet/issues/855)) ([d0cdb38](https://github.com/rivet-gg/rivet/commit/d0cdb38b09063f87f889429ff1c5ba8213b19843))
+* **mm:** add index for run_proxied_ports ([#868](https://github.com/rivet-gg/rivet/issues/868)) ([e0785e9](https://github.com/rivet-gg/rivet/commit/e0785e9635f5051863b9e9fcb240dfe446d52729))
+* **mm:** call mm-lobby-cleanup from mm-gc even for preemptive lobbies without sql row ([#856](https://github.com/rivet-gg/rivet/issues/856)) ([5315a9a](https://github.com/rivet-gg/rivet/commit/5315a9a4e675ed24e7d2926b1ce07b6ecd213e61))
+* **mm:** correctly handle lobby not found error if joining direclty to lobby id that doesn't exist ([#867](https://github.com/rivet-gg/rivet/issues/867)) ([af3513a](https://github.com/rivet-gg/rivet/commit/af3513a5947a99f83bbcb9866117dc3578ff0efb))
+* **mm:** require specifying matchmaker config for new game versions ([#895](https://github.com/rivet-gg/rivet/issues/895)) ([92d86fd](https://github.com/rivet-gg/rivet/commit/92d86fd8f71cfe54ba1c1e28215060e256c0105f))
+* **tls:** provision cloudflare cert pack if opengb enabled ([#869](https://github.com/rivet-gg/rivet/issues/869)) ([1dafa9e](https://github.com/rivet-gg/rivet/commit/1dafa9ea943466fbcd6a5a5ed601877f9e94697b))
+
+
+### Chores
+
+* **infra:** move cdn to api-traefik-provider ([#857](https://github.com/rivet-gg/rivet/issues/857)) ([9370e9e](https://github.com/rivet-gg/rivet/commit/9370e9ef5a5a79bbfa460bcabd7831f3c3755feb))
+* release 24.4.1 ([30cc822](https://github.com/rivet-gg/rivet/commit/30cc822d3511651f96dbc9e9beda445bb00d728e))
+
 ## [24.4.0](https://github.com/rivet-gg/rivet/compare/v24.3.0...v24.4.0) (2024-06-04)
 
 
