@@ -1,8 +1,10 @@
 locals {
- 	# If main domain is not at the root of the zone, we need to provide a cert pack for the domain.
+	# Required if:
 	#
-	# Also required if using the old `{service}.api.{domain}` format, which requires two levels of subdomains.
- 	needs_main_cert_pack = var.dns_deprecated_subdomains || data.cloudflare_zone.main.name != var.domain_main
+	# - OpenGB is enabled so requires access to `*.opengb.{domain_main}`
+ 	# - Main domain is not at the root of the zone, we need to provide a cert pack for the domain.
+	# - Using the old `{service}.api.{domain}` format, which requires two levels of subdomains.
+ 	needs_main_cert_pack = var.opengb_enabled || var.dns_deprecated_subdomains || data.cloudflare_zone.main.name != var.domain_main
 
  	# If CDN is not at the root of the zone, we need to provide a cert pack for the CDN.
  	# 
