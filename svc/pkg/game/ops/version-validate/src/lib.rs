@@ -1148,6 +1148,8 @@ async fn handle(
 				}
 			}
 		}
+	} else {
+		errors.push(util::err_path!["config", "matchmaker", "missing",]);
 	}
 
 	// KV config validation
