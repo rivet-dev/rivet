@@ -57,6 +57,8 @@ async fn worker(ctx: &OperationContext<mm::msg::lobby_cleanup::Message>) -> Glob
 		// This is idempotent, don't raise error
 		tracing::info!("lobby not present in redis");
 
+		remove_from_redis_without_config(&mut redis_mm, lobby_id).await?;
+
 		false
 	};
 
@@ -251,6 +253,21 @@ async fn remove_from_redis(
 			util_mm::key::idle_lobby_lobby_group_ids(namespace_id, region_id),
 			lobby_id.to_string(),
 		)
+		.query_async(redis_mm)
+		.await?;
+
+	Ok(())
+}
+
+async fn remove_from_redis_without_config(
+	redis_mm: &mut RedisPool,
+	lobby_id: Uuid,
+) -> GlobalResult<()> {
+	let mut pipe = redis::pipe();
+	pipe.atomic()
+		.unlink(util_mm::key::lobby_config(lobby_id))
+		.unlink(util_mm::key::lobby_tags(lobby_id))
+		.zrem(util_mm::key::lobby_unready(), lobby_id.to_string())
 		.query_async(redis_mm)
 		.await?;
 

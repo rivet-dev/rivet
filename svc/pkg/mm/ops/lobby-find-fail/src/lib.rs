@@ -30,7 +30,9 @@ async fn handle(
 			futs.push(fail_query(ctx.clone(), redis, query_id, ctx.error_code).boxed());
 		}
 	}
-	futures_util::future::try_join_all(futs).await?;
+	if !futs.is_empty() {
+		futures_util::future::try_join_all(futs).await?;
+	}
 
 	Ok(mm::lobby_find_fail::Response {})
 }
