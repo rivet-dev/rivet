@@ -389,7 +389,7 @@ impl Database for DatabasePostgres {
 		Ok(())
 	}
 
-	async fn pull_latest_signal(
+	async fn pull_next_signal(
 		&self,
 		workflow_id: Uuid,
 		filter: &[&str],
@@ -399,7 +399,7 @@ impl Database for DatabasePostgres {
 		let signal = sqlx::query_as::<_, SignalRow>(indoc!(
 			"
 			WITH
-				latest_signal AS (
+				next_signal AS (
 					DELETE FROM db_workflow.signals
 					WHERE
 						workflow_id = $1 AND
@@ -411,7 +411,7 @@ impl Database for DatabasePostgres {
 				clear_wake AS (
 					UPDATE db_workflow.workflows AS w
 					SET wake_signals = ARRAY[]
-					FROM db_workflow.latest_signal AS s
+					FROM next_signal AS s
 					WHERE w.workflow_id = s.workflow_id
 					RETURNING 1
 				),
@@ -420,10 +420,10 @@ impl Database for DatabasePostgres {
 						workflow_id, location, signal_id, signal_name, body
 					)
 					SELECT workflow_id, $3 AS location, signal_id, signal_name, body
-					FROM db_workflow.latest_signal
+					FROM next_signal
 					RETURNING 1
 				)
-			SELECT * FROM latest_signal
+			SELECT * FROM next_signal
 			",
 		))
 		.bind(workflow_id)

@@ -16,6 +16,7 @@ pub trait Executable: Send {
 
 type AsyncResult<'a, T> = Pin<Box<dyn Future<Output = GlobalResult<T>> + Send + 'a>>;
 
+// Closure executuable impl
 #[async_trait]
 impl<F, T> Executable for F
 where

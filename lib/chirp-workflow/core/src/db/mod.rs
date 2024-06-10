@@ -59,7 +59,7 @@ pub trait Database: Send {
 		signal_name: &str,
 		body: serde_json::Value,
 	) -> WorkflowResult<()>;
-	async fn pull_latest_signal(
+	async fn pull_next_signal(
 		&self,
 		workflow_id: Uuid,
 		filter: &[&str],

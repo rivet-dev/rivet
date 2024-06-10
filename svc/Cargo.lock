@@ -401,6 +401,7 @@ dependencies = [
  "api-helper-macros",
  "async-trait",
  "chirp-client",
+ "chirp-workflow",
  "chrono",
  "formatted-error",
  "futures-util",

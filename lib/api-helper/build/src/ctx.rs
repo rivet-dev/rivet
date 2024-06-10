@@ -1,5 +1,6 @@
 use std::net::IpAddr;
 
+use chirp_workflow::ctx::ApiCtx;
 use rivet_operation::OperationContext;
 use types::rivet::backend;
 use url::Url;
@@ -8,7 +9,7 @@ use crate::auth;
 
 pub struct Ctx<A: auth::ApiAuth> {
 	pub(crate) auth: A,
-	pub(crate) op_ctx: OperationContext<()>,
+	pub(crate) internal_ctx: ApiCtx,
 	pub(crate) user_agent: Option<String>,
 	pub(crate) origin: Option<Url>,
 	pub(crate) remote_address: Option<IpAddr>,
@@ -22,19 +23,19 @@ impl<A: auth::ApiAuth> Ctx<A> {
 	}
 
 	pub fn op_ctx(&self) -> &OperationContext<()> {
-		&self.op_ctx
+		self.internal_ctx.op_ctx()
 	}
 
 	pub fn chirp(&self) -> &chirp_client::Client {
-		self.op_ctx.chirp()
+		self.op_ctx().chirp()
 	}
 
 	pub fn cache(&self) -> rivet_cache::RequestConfig {
-		self.op_ctx.cache()
+		self.op_ctx().cache()
 	}
 
 	pub fn cache_handle(&self) -> rivet_cache::Cache {
-		self.op_ctx.cache_handle()
+		self.op_ctx().cache_handle()
 	}
 
 	pub fn client_info(&self) -> backend::net::ClientInfo {
@@ -69,9 +70,9 @@ impl<A: auth::ApiAuth> Ctx<A> {
 }
 
 impl<A: auth::ApiAuth> std::ops::Deref for Ctx<A> {
-	type Target = OperationContext<()>;
+	type Target = ApiCtx;
 
 	fn deref(&self) -> &Self::Target {
-		&self.op_ctx
+		&self.internal_ctx
 	}
 }

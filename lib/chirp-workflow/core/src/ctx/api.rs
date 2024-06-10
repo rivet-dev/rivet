@@ -1,10 +1,18 @@
+use std::time::Duration;
+
 use global_error::{GlobalError, GlobalResult};
 use rivet_pools::prelude::*;
+use serde::Serialize;
 use uuid::Uuid;
 
-use crate::{ctx::OperationCtx, DatabaseHandle, Operation, OperationInput, WorkflowError};
+use crate::{
+	ctx::OperationCtx, DatabaseHandle, Operation, OperationInput, Signal, Workflow, WorkflowError,
+	WorkflowInput,
+};
 
-pub struct ActivityCtx {
+pub const WORKFLOW_TIMEOUT: Duration = Duration::from_secs(60);
+
+pub struct ApiCtx {
 	ray_id: Uuid,
 	name: &'static str,
 	ts: i64,
@@ -17,17 +25,15 @@ pub struct ActivityCtx {
 	op_ctx: rivet_operation::OperationContext<()>,
 }
 
-impl ActivityCtx {
+impl ApiCtx {
 	pub fn new(
 		db: DatabaseHandle,
-		conn: &rivet_connection::Connection,
-		workflow_create_ts: i64,
+		conn: rivet_connection::Connection,
+		req_id: Uuid,
 		ray_id: Uuid,
+		ts: i64,
 		name: &'static str,
 	) -> Self {
-		let ts = rivet_util::timestamp::now();
-		let req_id = Uuid::new_v4();
-		let conn = conn.wrap(req_id, ray_id, name);
 		let mut op_ctx = rivet_operation::OperationContext::new(
 			name.to_string(),
 			std::time::Duration::from_secs(60),
@@ -35,12 +41,12 @@ impl ActivityCtx {
 			req_id,
 			ray_id,
 			ts,
-			workflow_create_ts,
+			ts,
 			(),
 		);
 		op_ctx.from_workflow = true;
 
-		ActivityCtx {
+		ApiCtx {
 			ray_id,
 			name,
 			ts,
@@ -51,9 +57,102 @@ impl ActivityCtx {
 	}
 }
 
-impl ActivityCtx {
-	pub async fn op<I>(
+impl ApiCtx {
+	pub async fn dispatch_workflow<I>(&self, input: I) -> GlobalResult<Uuid>
+	where
+		I: WorkflowInput,
+		<I as WorkflowInput>::Workflow: Workflow<Input = I>,
+	{
+		let name = I::Workflow::NAME;
+
+		tracing::debug!(%name, ?input, "dispatching workflow");
+
+		let id = Uuid::new_v4();
+
+		// Serialize input
+		let input_val = serde_json::to_value(input)
+			.map_err(WorkflowError::SerializeWorkflowOutput)
+			.map_err(GlobalError::raw)?;
+
+		self.db
+			.dispatch_workflow(self.ray_id, id, &name, input_val)
+			.await
+			.map_err(GlobalError::raw)?;
+
+		tracing::info!(%name, ?id, "workflow dispatched");
+
+		Ok(id)
+	}
+
+	/// Wait for a given workflow to complete.
+	/// **IMPORTANT:** Has no timeout.
+	pub async fn wait_for_workflow<W: Workflow>(
 		&self,
+		workflow_id: Uuid,
+	) -> GlobalResult<W::Output> {
+		tracing::info!(name=W::NAME, id=?workflow_id, "waiting for workflow");
+
+		let period = Duration::from_millis(50);
+		let mut interval = tokio::time::interval(period);
+		loop {
+			interval.tick().await;
+
+			// Check if state finished
+			let workflow = self
+				.db
+				.get_workflow(workflow_id)
+				.await
+				.map_err(GlobalError::raw)?
+				.ok_or(WorkflowError::WorkflowNotFound)
+				.map_err(GlobalError::raw)?;
+			if let Some(output) = workflow.parse_output::<W>().map_err(GlobalError::raw)? {
+				return Ok(output);
+			}
+		}
+	}
+
+	/// Dispatch a new workflow and wait for it to complete. Has a 60s timeout.
+	pub async fn workflow<I>(
+		&self,
+		input: I,
+	) -> GlobalResult<<<I as WorkflowInput>::Workflow as Workflow>::Output>
+	where
+		I: WorkflowInput,
+		<I as WorkflowInput>::Workflow: Workflow<Input = I>,
+	{
+		let workflow_id = self.dispatch_workflow(input).await?;
+
+		tokio::time::timeout(
+			WORKFLOW_TIMEOUT,
+			self.wait_for_workflow::<I::Workflow>(workflow_id),
+		)
+		.await?
+	}
+
+	pub async fn signal<T: Signal + Serialize>(
+		&self,
+		workflow_id: Uuid,
+		input: T,
+	) -> GlobalResult<Uuid> {
+		tracing::debug!(name=%T::NAME, %workflow_id, "dispatching signal");
+
+		let signal_id = Uuid::new_v4();
+
+		// Serialize input
+		let input_val = serde_json::to_value(input)
+			.map_err(WorkflowError::SerializeSignalBody)
+			.map_err(GlobalError::raw)?;
+
+		self.db
+			.publish_signal(self.ray_id, workflow_id, signal_id, T::NAME, input_val)
+			.await
+			.map_err(GlobalError::raw)?;
+
+		Ok(signal_id)
+	}
+
+	pub async fn op<I>(
+		&mut self,
 		input: I,
 	) -> GlobalResult<<<I as OperationInput>::Operation as Operation>::Output>
 	where
@@ -65,19 +164,18 @@ impl ActivityCtx {
 			&self.conn,
 			self.ray_id,
 			self.op_ctx.req_ts(),
-			true,
+			false,
 			I::Operation::NAME,
 		);
 
-		tokio::time::timeout(I::Operation::TIMEOUT, I::Operation::run(&mut ctx, &input))
+		I::Operation::run(&mut ctx, &input)
 			.await
-			.map_err(|_| WorkflowError::OperationTimeout)?
 			.map_err(WorkflowError::OperationFailure)
 			.map_err(GlobalError::raw)
 	}
 }
 
-impl ActivityCtx {
+impl ApiCtx {
 	pub fn name(&self) -> &str {
 		self.name
 	}

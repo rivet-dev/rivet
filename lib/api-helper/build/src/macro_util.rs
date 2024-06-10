@@ -11,6 +11,7 @@ use rivet_operation::prelude::util;
 use serde::de::DeserializeOwned;
 use url::Url;
 use uuid::Uuid;
+use chirp_workflow::ctx::ApiCtx;
 
 use crate::{
 	auth::{self, AuthRateLimitCtx},
@@ -308,12 +309,12 @@ pub async fn __with_ctx<A: auth::ApiAuth + Send>(
 	// Create connections
 	let req_id = Uuid::new_v4();
 	let ts = rivet_util::timestamp::now();
-	let svc_name = rivet_util::env::chirp_service_name().to_string();
+	let svc_name = rivet_util::env::chirp_service_name();
 	let client = shared_client.wrap(
 		req_id,
 		ray_id,
 		vec![chirp_client::TraceEntry {
-			context_name: svc_name.clone(),
+			context_name: svc_name.to_string(),
 			req_id: Some(req_id.into()),
 			ts,
 			run_context: match rivet_util::env::run_context() {
@@ -323,16 +324,8 @@ pub async fn __with_ctx<A: auth::ApiAuth + Send>(
 		}],
 	);
 	let conn = rivet_connection::Connection::new(client, pools.clone(), cache.clone());
-	let op_ctx = rivet_operation::OperationContext::new(
-		svc_name,
-		std::time::Duration::from_secs(60),
-		conn,
-		req_id,
-		ray_id,
-		ts,
-		ts,
-		(),
-	);
+	let db = chirp_workflow::compat::db_from_pools(&pools).await?;
+	let internal_ctx = ApiCtx::new(db, conn, req_id, ray_id, ts, svc_name);
 
 	// Create auth
 	let rate_limit_ctx = AuthRateLimitCtx {
@@ -349,7 +342,7 @@ pub async fn __with_ctx<A: auth::ApiAuth + Send>(
 
 	Ok(Ctx {
 		auth,
-		op_ctx,
+		internal_ctx,
 		user_agent,
 		origin,
 		remote_address,

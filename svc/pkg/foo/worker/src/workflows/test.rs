@@ -5,16 +5,22 @@ pub struct TestInput {
 	pub x: i64,
 }
 
+type TestOutput = Result<TestOutputOk, TestOutputErr>;
+
 #[derive(Debug, Serialize, Deserialize)]
-pub struct TestOutput {
+pub struct TestOutputOk {
 	pub y: usize,
+}
+#[derive(Debug, Serialize, Deserialize)]
+pub struct TestOutputErr {
+	pub z: usize,
 }
 
 #[workflow(Test)]
 async fn test(ctx: &mut WorkflowCtx, input: &TestInput) -> GlobalResult<TestOutput> {
 	let a = ctx.activity(FooInput {}).await?;
 
-	Ok(TestOutput { y: a.ids.len() })
+	Ok(Ok(TestOutputOk { y: a.ids.len() }))
 }
 
 #[derive(Debug, Serialize, Deserialize, Hash)]
@@ -26,7 +32,7 @@ pub struct FooOutput {
 }
 
 #[activity(Foo)]
-pub fn foo(ctx: &mut ActivityCtx, input: &FooInput) -> GlobalResult<FooOutput> {
+pub fn foo(ctx: &ActivityCtx, input: &FooInput) -> GlobalResult<FooOutput> {
 	let ids = sql_fetch_all!(
 		[ctx, (Uuid,)]
 		"

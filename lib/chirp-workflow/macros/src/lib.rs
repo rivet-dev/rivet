@@ -75,7 +75,7 @@ pub fn activity(attr: TokenStream, item: TokenStream) -> TokenStream {
 		Err(err) => return err.into_compile_error().into(),
 	};
 
-	let ctx_ty = syn::parse_str("&mut ActivityCtx").unwrap();
+	let ctx_ty = syn::parse_str("&ActivityCtx").unwrap();
 	let TraitFnOutput {
 		ctx_ident,
 		input_ident,

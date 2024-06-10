@@ -15,7 +15,7 @@ pub trait Activity {
 	const MAX_RETRIES: u32;
 	const TIMEOUT: std::time::Duration;
 
-	async fn run(ctx: &mut ActivityCtx, input: &Self::Input) -> GlobalResult<Self::Output>;
+	async fn run(ctx: &ActivityCtx, input: &Self::Input) -> GlobalResult<Self::Output>;
 }
 
 pub trait ActivityInput: Serialize + DeserializeOwned + Debug + Hash + Send {

@@ -1,6 +1,6 @@
 pub mod activity;
 pub mod compat;
-mod ctx;
+pub mod ctx;
 pub mod db;
 mod error;
 mod executable;

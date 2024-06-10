@@ -89,7 +89,8 @@ impl WorkflowCtx {
 		})
 	}
 
-	/// Creates a new workflow run with one more depth in the location.
+	/// Creates a new workflow run with one more depth in the location. Meant to be implemented and not used
+	/// directly in workflows.
 	pub fn branch(&mut self) -> Self {
 		let branch = WorkflowCtx {
 			workflow_id: self.workflow_id,
@@ -119,7 +120,8 @@ impl WorkflowCtx {
 		branch
 	}
 
-	/// Like `branch` but it does not add another layer of depth.
+	/// Like `branch` but it does not add another layer of depth. Meant to be implemented and not used
+	/// directly in workflows.
 	pub fn step(&mut self) -> Self {
 		let branch = self.clone();
 
@@ -239,12 +241,12 @@ impl WorkflowCtx {
 	}
 
 	/// Run then handle the result of an activity.
-	pub async fn run_activity<A: Activity>(
+	async fn run_activity<A: Activity>(
 		&mut self,
 		input: &A::Input,
 		activity_id: &ActivityId,
 	) -> WorkflowResult<A::Output> {
-		let mut ctx = ActivityCtx::new(
+		let ctx = ActivityCtx::new(
 			self.db.clone(),
 			&self.conn,
 			self.create_ts,
@@ -252,7 +254,7 @@ impl WorkflowCtx {
 			A::NAME,
 		);
 
-		let res = tokio::time::timeout(A::TIMEOUT, A::run(&mut ctx, input))
+		let res = tokio::time::timeout(A::TIMEOUT, A::run(&ctx, input))
 			.await
 			.map_err(|_| WorkflowError::ActivityTimeout);
 
@@ -321,7 +323,7 @@ impl WorkflowCtx {
 		// Fetch new pending signal
 		let signal = self
 			.db
-			.pull_latest_signal(
+			.pull_next_signal(
 				self.workflow_id,
 				signal_names,
 				self.full_location().as_ref(),
@@ -407,7 +409,8 @@ impl WorkflowCtx {
 		Ok(id)
 	}
 
-	/// Wait for another workflow's response.
+	/// Wait for another workflow's response. If no response was found after polling the database, this
+	/// workflow will go to sleep until the sub workflow completes.
 	pub async fn wait_for_workflow<W: Workflow>(
 		&self,
 		sub_workflow_id: Uuid,
@@ -461,7 +464,7 @@ impl WorkflowCtx {
 
 			// TODO(RVT-3755): If a sub workflow is dispatched, then the worker is updated to include the sub
 			// worker in the registry, this will diverge in history because it will try to run the sub worker
-			// in process during the replay
+			// in-process during the replay
 			// If the workflow isn't in the current registry, dispatch the workflow instead
 			let sub_workflow_id = self.dispatch_workflow(input).await?;
 			let output = self
@@ -597,22 +600,21 @@ impl WorkflowCtx {
 		workflow_id: Uuid,
 		body: T,
 	) -> GlobalResult<Uuid> {
-		let id = Uuid::new_v4();
+		tracing::debug!(name=%T::NAME, %workflow_id, "dispatching signal");
+
+		let signal_id = Uuid::new_v4();
+
+		// Serialize input
+		let input_val = serde_json::to_value(&body)
+			.map_err(WorkflowError::SerializeSignalBody)
+			.map_err(GlobalError::raw)?;
 
 		self.db
-			.publish_signal(
-				self.ray_id,
-				workflow_id,
-				id,
-				T::NAME,
-				serde_json::to_value(&body)
-					.map_err(WorkflowError::SerializeSignalBody)
-					.map_err(GlobalError::raw)?,
-			)
+			.publish_signal(self.ray_id, workflow_id, signal_id, T::NAME, input_val)
 			.await
 			.map_err(GlobalError::raw)?;
 
-		Ok(id)
+		Ok(signal_id)
 	}
 
 	/// Listens for a signal for a short time before setting the workflow to sleep. Once the signal is

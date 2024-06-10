@@ -126,12 +126,12 @@ impl TestCtx {
 		Ok(output)
 	}
 
-	pub async fn signal<I: Signal + Serialize>(
+	pub async fn signal<T: Signal + Serialize>(
 		&self,
 		workflow_id: Uuid,
-		input: I,
+		input: T,
 	) -> GlobalResult<Uuid> {
-		tracing::debug!(name=%I::NAME, %workflow_id, "dispatching signal");
+		tracing::debug!(name=%T::NAME, %workflow_id, "dispatching signal");
 
 		let signal_id = Uuid::new_v4();
 
@@ -141,7 +141,7 @@ impl TestCtx {
 			.map_err(GlobalError::raw)?;
 
 		self.db
-			.publish_signal(self.ray_id, workflow_id, signal_id, I::NAME, input_val)
+			.publish_signal(self.ray_id, workflow_id, signal_id, T::NAME, input_val)
 			.await
 			.map_err(GlobalError::raw)?;
 

@@ -13,6 +13,7 @@ macros = []
 api-helper-macros = { path = "../macros" }
 async-trait = "0.1"
 chirp-client = { path = "../../chirp/client" }
+chirp-workflow = { path = "../../chirp-workflow/core" }
 chrono = "0.4"
 formatted-error = { path = "../../formatted-error" }
 futures-util = "0.3"

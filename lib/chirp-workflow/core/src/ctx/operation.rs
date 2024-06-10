@@ -75,7 +75,9 @@ impl OperationCtx {
 			.map_err(WorkflowError::OperationFailure)
 			.map_err(GlobalError::raw)
 	}
+}
 
+impl OperationCtx {
 	pub fn name(&self) -> &str {
 		self.name
 	}

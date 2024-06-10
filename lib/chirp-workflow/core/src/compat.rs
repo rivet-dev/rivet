@@ -7,8 +7,8 @@ use serde::Serialize;
 use uuid::Uuid;
 
 use crate::{
-	DatabaseHandle, DatabasePostgres, Operation, OperationCtx, OperationInput, Signal, Workflow,
-	WorkflowError, WorkflowInput,
+	ctx::api::WORKFLOW_TIMEOUT, DatabaseHandle, DatabasePostgres, Operation, OperationCtx,
+	OperationInput, Signal, Workflow, WorkflowError, WorkflowInput,
 };
 
 pub async fn dispatch_workflow<I, B>(
@@ -35,7 +35,7 @@ where
 		.map_err(WorkflowError::SerializeWorkflowOutput)
 		.map_err(GlobalError::raw)?;
 
-	db(ctx)
+	db_from_ctx(ctx)
 		.await?
 		.dispatch_workflow(ctx.ray_id(), id, &name, input_val)
 		.await
@@ -46,6 +46,8 @@ where
 	Ok(id)
 }
 
+/// Wait for a given workflow to complete.
+/// **IMPORTANT:** Has no timeout.
 pub async fn wait_for_workflow<W: Workflow, B: Debug + Clone>(
 	ctx: &rivet_operation::OperationContext<B>,
 	workflow_id: Uuid,
@@ -58,7 +60,7 @@ pub async fn wait_for_workflow<W: Workflow, B: Debug + Clone>(
 		interval.tick().await;
 
 		// Check if state finished
-		let workflow = db(ctx)
+		let workflow = db_from_ctx(ctx)
 			.await?
 			.get_workflow(workflow_id)
 			.await
@@ -71,6 +73,7 @@ pub async fn wait_for_workflow<W: Workflow, B: Debug + Clone>(
 	}
 }
 
+/// Dispatch a new workflow and wait for it to complete. Has a 60s timeout.
 pub async fn workflow<I, B>(
 	ctx: &rivet_operation::OperationContext<B>,
 	input: I,
@@ -81,8 +84,12 @@ where
 	B: Debug + Clone,
 {
 	let workflow_id = dispatch_workflow(ctx, input).await?;
-	let output = wait_for_workflow::<I::Workflow, _>(ctx, workflow_id).await?;
-	Ok(output)
+
+	tokio::time::timeout(
+		WORKFLOW_TIMEOUT,
+		wait_for_workflow::<I::Workflow, _>(ctx, workflow_id),
+	)
+	.await?
 }
 
 pub async fn signal<I: Signal + Serialize, B: Debug + Clone>(
@@ -103,7 +110,7 @@ pub async fn signal<I: Signal + Serialize, B: Debug + Clone>(
 		.map_err(WorkflowError::SerializeSignalBody)
 		.map_err(GlobalError::raw)?;
 
-	db(ctx)
+	db_from_ctx(ctx)
 		.await?
 		.publish_signal(ctx.ray_id(), workflow_id, signal_id, I::NAME, input_val)
 		.await
@@ -122,7 +129,7 @@ where
 	B: Debug + Clone,
 {
 	let mut ctx = OperationCtx::new(
-		db(ctx).await?,
+		db_from_ctx(ctx).await?,
 		ctx.conn(),
 		ctx.ray_id(),
 		ctx.req_ts(),
@@ -137,10 +144,17 @@ where
 }
 
 // Get crdb pool as a trait object
-async fn db<B: Debug + Clone>(
+async fn db_from_ctx<B: Debug + Clone>(
 	ctx: &rivet_operation::OperationContext<B>,
 ) -> GlobalResult<DatabaseHandle> {
 	let crdb = ctx.crdb().await?;
+
+	Ok(DatabasePostgres::from_pool(crdb))
+}
+
+// Get crdb pool as a trait object
+pub async fn db_from_pools(pools: &rivet_pools::Pools) -> GlobalResult<DatabaseHandle> {
+	let crdb = pools.crdb()?;
 
 	Ok(DatabasePostgres::from_pool(crdb))
 }
