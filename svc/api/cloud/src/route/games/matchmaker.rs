@@ -155,7 +155,7 @@ pub async fn get_lobby_logs(
 	};
 
 	// Timestamp to start the query at
-	let before_ts = util::timestamp::now() * 1_000_000;
+	let before_nts = util::timestamp::now() * 1_000_000;
 
 	// Get run ID
 	let run_id = if let Some(x) = get_run_id(&ctx, game_id, lobby_id).await? {
@@ -170,7 +170,7 @@ pub async fn get_lobby_logs(
 		return Ok(models::CloudGamesGetLobbyLogsResponse {
 			lines: Vec::new(),
 			timestamps: Vec::new(),
-			watch: WatchResponse::new_as_model(before_ts),
+			watch: WatchResponse::new_as_model(before_nts),
 		});
 	};
 
@@ -194,7 +194,7 @@ pub async fn get_lobby_logs(
 				stream_type: stream_type as i32,
 				count: 64,
 				order_asc: false,
-				query: Some(job_log::read::request::Query::AfterTs(anchor))
+				query: Some(job_log::read::request::Query::AfterNts(anchor))
 
 			})
 			.await?;
@@ -226,7 +226,7 @@ pub async fn get_lobby_logs(
 			stream_type: stream_type as i32,
 			count: 256,
 			order_asc: false,
-			query: Some(job_log::read::request::Query::BeforeTs(before_ts)),
+			query: Some(job_log::read::request::Query::BeforeNts(before_nts)),
 		})
 		.await?
 	};
@@ -240,7 +240,7 @@ pub async fn get_lobby_logs(
 	let mut timestamps = logs_res
 		.entries
 		.iter()
-		.map(|x| x.ts / 1_000_000)
+		.map(|x| x.nts / 1_000_000)
 		.map(util::timestamp::to_string)
 		.collect::<Result<Vec<_>, _>>()?;
 
@@ -248,11 +248,11 @@ pub async fn get_lobby_logs(
 	lines.reverse();
 	timestamps.reverse();
 
-	let watch_ts = logs_res.entries.first().map_or(before_ts, |x| x.ts);
+	let watch_nts = logs_res.entries.first().map_or(before_nts, |x| x.nts);
 	Ok(models::CloudGamesGetLobbyLogsResponse {
 		lines,
 		timestamps,
-		watch: WatchResponse::new_as_model(watch_ts),
+		watch: WatchResponse::new_as_model(watch_nts),
 	})
 }
 

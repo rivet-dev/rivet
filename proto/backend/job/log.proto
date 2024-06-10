@@ -10,8 +10,8 @@ enum StreamType {
 }
 
 message LogEntry {
-	// Timestamp the log was received.
-	int64 ts = 1;
+	// Timestamp the log was received (in nanoseconds).
+	int64 nts = 1;
 
 	// Message that was logged.
 	bytes message = 3;

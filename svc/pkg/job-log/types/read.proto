@@ -7,11 +7,11 @@ import "proto/backend/job/log.proto";
 import "proto/common.proto";
 
 message Request {
-	message TsRangeQuery {
+	message NtsRangeQuery {
 		/// Timestamp in nanoseconds
-		int64 after_ts = 1;
+		int64 after_nts = 1;
 		/// Timestamp in nanoseconds
-		int64 before_ts = 2;
+		int64 before_nts = 2;
 	}
 
 	rivet.common.Uuid run_id = 1;
@@ -23,10 +23,10 @@ message Request {
 	oneof query {
 		google.protobuf.Empty all = 101;
 		/// Timestamp in nanoseconds
-		int64 before_ts = 102;
+		int64 before_nts = 102;
 		/// Timestamp in nanoseconds
-		int64 after_ts = 103;
-		TsRangeQuery ts_range = 104;
+		int64 after_nts = 103;
+		NtsRangeQuery nts_range = 104;
 	}
 }
 

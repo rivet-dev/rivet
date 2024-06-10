@@ -3,6 +3,7 @@ use rivet_operation::prelude::*;
 
 #[derive(clickhouse::Row, serde::Deserialize)]
 struct LogEntry {
+	// In nanoseconds
 	ts: i64,
 	message: Vec<u8>,
 }
@@ -22,19 +23,19 @@ async fn handle(
 		job_log::read::request::Query::All(_) => {
 			query_all(ctx.body(), &clickhouse, run_id, order_by).await?
 		}
-		job_log::read::request::Query::BeforeTs(ts) => {
-			query_before_ts(ctx.body(), &clickhouse, run_id, *ts, order_by).await?
+		job_log::read::request::Query::BeforeNts(nts) => {
+			query_before_nts(ctx.body(), &clickhouse, run_id, *nts, order_by).await?
 		}
-		job_log::read::request::Query::AfterTs(ts) => {
-			query_after_ts(ctx.body(), &clickhouse, run_id, *ts, order_by).await?
+		job_log::read::request::Query::AfterNts(nts) => {
+			query_after_nts(ctx.body(), &clickhouse, run_id, *nts, order_by).await?
 		}
-		job_log::read::request::Query::TsRange(query) => {
-			query_ts_range(
+		job_log::read::request::Query::NtsRange(query) => {
+			query_nts_range(
 				ctx.body(),
 				&clickhouse,
 				run_id,
-				query.after_ts,
-				query.before_ts,
+				query.after_nts,
+				query.before_nts,
 				order_by,
 			)
 			.await?
@@ -74,11 +75,11 @@ async fn query_all(
 	Ok(entries)
 }
 
-async fn query_before_ts(
+async fn query_before_nts(
 	req: &job_log::read::Request,
 	clickhouse: &ClickHousePool,
 	run_id: Uuid,
-	ts: i64,
+	nts: i64,
 	order_by: &str,
 ) -> GlobalResult<Vec<backend::job::log::LogEntry>> {
 	let mut entries_cursor = clickhouse
@@ -94,7 +95,7 @@ async fn query_before_ts(
 		.bind(run_id)
 		.bind(&req.task)
 		.bind(req.stream_type as u8)
-		.bind(ts)
+		.bind(nts)
 		.bind(req.count)
 		.fetch::<LogEntry>()?;
 
@@ -106,11 +107,11 @@ async fn query_before_ts(
 	Ok(entries)
 }
 
-async fn query_after_ts(
+async fn query_after_nts(
 	req: &job_log::read::Request,
 	clickhouse: &ClickHousePool,
 	run_id: Uuid,
-	ts: i64,
+	nts: i64,
 	order_by: &str,
 ) -> GlobalResult<Vec<backend::job::log::LogEntry>> {
 	let mut entries_cursor = clickhouse
@@ -126,7 +127,7 @@ async fn query_after_ts(
 		.bind(run_id)
 		.bind(&req.task)
 		.bind(req.stream_type as u8)
-		.bind(ts)
+		.bind(nts)
 		.bind(req.count)
 		.fetch::<LogEntry>()?;
 
@@ -138,12 +139,12 @@ async fn query_after_ts(
 	Ok(entries)
 }
 
-async fn query_ts_range(
+async fn query_nts_range(
 	req: &job_log::read::Request,
 	clickhouse: &ClickHousePool,
 	run_id: Uuid,
-	after_ts: i64,
-	before_ts: i64,
+	after_nts: i64,
+	before_nts: i64,
 	order_by: &str,
 ) -> GlobalResult<Vec<backend::job::log::LogEntry>> {
 	let mut entries_cursor = clickhouse
@@ -159,8 +160,8 @@ async fn query_ts_range(
 		.bind(run_id)
 		.bind(&req.task)
 		.bind(req.stream_type as u8)
-		.bind(after_ts)
-		.bind(before_ts)
+		.bind(after_nts)
+		.bind(before_nts)
 		.bind(req.count)
 		.fetch::<LogEntry>()?;
 
@@ -174,7 +175,7 @@ async fn query_ts_range(
 
 fn convert_entry(entry: LogEntry) -> backend::job::log::LogEntry {
 	backend::job::log::LogEntry {
-		ts: entry.ts,
+		nts: entry.ts,
 		message: entry.message,
 	}
 }
