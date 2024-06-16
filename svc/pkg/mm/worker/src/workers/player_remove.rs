@@ -83,7 +83,23 @@ async fn worker(ctx: &OperationContext<mm::msg::player_remove::Message>) -> Glob
 		tracing::error!("discarding stale message");
 		return Ok(());
 	} else {
-		retry_bail!("player not found, may be race condition with insertion");
+		// Delete what we can. Remove from GC so this message doesn't get published again.
+		tracing::warn!(
+			?player_id,
+			"player not found in sql or redis, cleaning up & discarding message"
+		);
+		let player_id_str = player_id.to_string();
+		redis::pipe()
+			.del(util_mm::key::player_config(player_id))
+			.ignore()
+			.zrem(util_mm::key::player_unregistered(), &player_id_str)
+			.ignore()
+			.zrem(util_mm::key::player_auto_remove(), &player_id_str)
+			.ignore()
+			.query_async(&mut ctx.redis_mm().await?)
+			.await?;
+
+		return Ok(());
 	};
 
 	// Validate lobby
