@@ -17,7 +17,8 @@ async fn handle(
 	let token_res = op!([ctx] token_create {
 		issuer: Self::NAME.into(),
 		token_config: Some(token::create::request::TokenConfig {
-			ttl: util::duration::days(365),
+			// Make these tokens not expire
+			ttl: util::duration::days(365 * 15),
 		}),
 		refresh_token_config: None,
 		client: None,
