@@ -53,12 +53,6 @@ async fn handle(
 		.map(common::Uuid::as_uuid)
 		.collect::<Vec<_>>();
 
-	let versions = fetch_versions(&ctx.base(), req_version_ids)
-		.await?
-		.into_iter()
-		.map(|x| x.1)
-		.collect::<Vec<_>>();
-
 	// TODO: There's a bug with this that returns the lobby groups for the wrong
 	// version, can't figure this out
 	// let versions = ctx
@@ -83,6 +77,30 @@ async fn handle(
 	// 	})
 	// 	.await?;
 
+	// HACK: Because fetch all doesn't work, we'll use fetch one
+	let mut versions = Vec::new();
+	for version_id in req_version_ids {
+		let version = ctx
+			.cache()
+			.immutable()
+			.fetch_one_proto("versions2", version_id, |mut cache, req_version_id| {
+				let ctx = ctx.base();
+
+				async move {
+					let versions = fetch_versions(&ctx.base(), vec![req_version_id]).await?;
+					ensure!(versions.len() <= 1, "too many versions");
+					if let Some((_, version)) = versions.into_iter().next() {
+						cache.resolve(&version_id, version);
+					}
+
+					Ok(cache)
+				}
+			})
+			.await?;
+		if let Some(version) = version {
+			versions.push(version);
+		}
+	}
 	Ok(mm_config::version_get::Response { versions })
 }
 
