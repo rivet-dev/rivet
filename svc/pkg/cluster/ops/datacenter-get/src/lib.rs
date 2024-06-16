@@ -48,6 +48,32 @@ pub async fn handle(
 		.map(common::Uuid::as_uuid)
 		.collect::<Vec<_>>();
 
+	let datacenters = ctx
+		.cache()
+		.fetch_all_proto("cluster.datacenters", datacenter_ids, {
+			let ctx = ctx.base();
+			move |mut cache, datacenter_ids| {
+				let ctx = ctx.clone();
+				async move {
+					let dcs = get_dcs(ctx, datacenter_ids).await?;
+					for dc in dcs {
+						let dc_id = unwrap!(dc.datacenter_id).as_uuid();
+						cache.resolve(&dc_id, dc);
+					}
+
+					Ok(cache)
+				}
+			}
+		})
+		.await?;
+
+	Ok(cluster::datacenter_get::Response { datacenters })
+}
+
+async fn get_dcs(
+	ctx: OperationContext<()>,
+	datacenter_ids: Vec<Uuid>,
+) -> GlobalResult<Vec<backend::cluster::Datacenter>> {
 	let configs = sql_fetch_all!(
 		[ctx, Datacenter]
 		"
@@ -69,10 +95,10 @@ pub async fn handle(
 	)
 	.await?;
 
-	Ok(cluster::datacenter_get::Response {
-		datacenters: configs
-			.into_iter()
-			.map(TryInto::try_into)
-			.collect::<GlobalResult<Vec<_>>>()?,
-	})
+	let datacenters = configs
+		.into_iter()
+		.map(TryInto::try_into)
+		.collect::<GlobalResult<Vec<_>>>()?;
+
+	Ok(datacenters)
 }

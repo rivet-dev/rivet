@@ -213,6 +213,8 @@ async fn scale_servers(
 		.filter(|server| matches!(server.drain_state, DrainState::None));
 	let active_count = active_servers_in_pool.clone().count();
 
+	tracing::info!(desired=%pctx.desired_count, active=%active_count, "comparing {:?}", pctx.pool_type);
+
 	match pctx.desired_count.cmp(&active_count) {
 		Ordering::Less => match pctx.pool_type {
 			backend::cluster::PoolType::Job => {

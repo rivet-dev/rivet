@@ -64,6 +64,11 @@ async fn worker(
 	)
 	.await?;
 
+	// Purge cache
+	ctx.cache()
+		.purge("cluster.datacenters", [datacenter_id])
+		.await?;
+
 	msg!([ctx] cluster::msg::datacenter_scale(datacenter_id) {
 		datacenter_id: ctx.datacenter_id,
 	})

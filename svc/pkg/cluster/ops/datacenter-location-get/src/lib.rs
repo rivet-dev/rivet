@@ -14,6 +14,32 @@ pub async fn handle(
 		.map(common::Uuid::as_uuid)
 		.collect::<Vec<_>>();
 
+	let datacenters = ctx
+		.cache()
+		.fetch_all_proto("cluster.datacenters.location", datacenter_ids, {
+			let ctx = ctx.base();
+			move |mut cache, datacenter_ids| {
+				let ctx = ctx.clone();
+				async move {
+					let dcs = query_dcs(ctx, datacenter_ids).await?;
+					for dc in dcs {
+						let dc_id = unwrap!(dc.datacenter_id).as_uuid();
+						cache.resolve(&dc_id, dc);
+					}
+
+					Ok(cache)
+				}
+			}
+		})
+		.await?;
+
+	Ok(cluster::datacenter_location_get::Response { datacenters })
+}
+
+async fn query_dcs(
+	ctx: OperationContext<()>,
+	datacenter_ids: Vec<Uuid>,
+) -> GlobalResult<Vec<cluster::datacenter_location_get::response::Datacenter>> {
 	// NOTE: if there is no active GG node in a datacenter, we cannot retrieve its location
 	// Fetch the gg node public ip for each datacenter (there may be more than one, hence `DISTINCT`)
 	let server_rows = sql_fetch_all!(
@@ -62,15 +88,13 @@ pub async fn handle(
 		.try_collect::<Vec<_>>()
 		.await?;
 
-	Ok(cluster::datacenter_location_get::Response {
-		datacenters: coords_res
-			.into_iter()
-			.map(
-				|(datacenter_id, coords)| cluster::datacenter_location_get::response::Datacenter {
-					datacenter_id: Some(datacenter_id.into()),
-					coords,
-				},
-			)
-			.collect::<Vec<_>>(),
-	})
+	Ok(coords_res
+		.into_iter()
+		.map(
+			|(datacenter_id, coords)| cluster::datacenter_location_get::response::Datacenter {
+				datacenter_id: Some(datacenter_id.into()),
+				coords,
+			},
+		)
+		.collect::<Vec<_>>())
 }
