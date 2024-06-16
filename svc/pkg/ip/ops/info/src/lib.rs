@@ -29,7 +29,25 @@ async fn handle(ctx: OperationContext<ip::info::Request>) -> GlobalResult<ip::in
 
 	// Fetch info
 	let ip_info = match provider {
-		ip::info::Provider::IpInfoIo => fetch_ip_info_io(&ctx, ctx.ts(), &ip_str).await?,
+		ip::info::Provider::IpInfoIo => {
+			ctx.cache()
+				.fetch_one_proto("ipinfo.ip", ip_str, {
+					let ctx = ctx.clone();
+					move |mut cache, ip_str| {
+						let ctx = ctx.clone();
+						async move {
+							let ip_info = fetch_ip_info_io(&ctx, ctx.ts(), &ip_str).await?;
+							if let Some(ip_info) = ip_info {
+								cache.resolve(&ip_str, ip_info);
+							} else {
+								// TODO(RVT-3792): Cache miss will hit database all of the time
+							}
+							Ok(cache)
+						}
+					}
+				})
+				.await?
+		}
 	};
 
 	Ok(ip::info::Response { ip_info })
