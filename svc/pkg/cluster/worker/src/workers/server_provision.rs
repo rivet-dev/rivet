@@ -237,7 +237,8 @@ async fn get_vlan_ip(
 					FROM db_cluster.servers
 					WHERE
 						pool_type = $3 AND
-						network_idx = mod(idx + $1, $2)
+						network_idx = mod(idx + $1, $2) AND
+						cloud_destroy_ts IS NULL
 				)
 				LIMIT 1
 			),
