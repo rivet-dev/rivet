@@ -35,27 +35,6 @@ pub fn analytics_lobby_summary_from_lobby(
 	})
 }
 
-// TODO: Remove
-// impl ApiTryFrom<mm::lobby_runtime_aggregate::response::RegionTierTime>
-// 	for models::CloudRegionTierExpenses
-// {
-// 	type Error = GlobalError;
-
-// 	fn api_try_from(
-// 		value: mm::lobby_runtime_aggregate::response::RegionTierTime,
-// 	) -> GlobalResult<Self> {
-// 		let uptime_in_seconds = util::div_up!(value.total_time, 1_000);
-
-// 		Ok(models::CloudRegionTierExpenses {
-// 			namespace_id: unwrap_ref!(value.namespace_id).as_uuid(),
-// 			region_id: unwrap_ref!(value.region_id).as_uuid(),
-// 			tier_name_id: value.tier_name_id,
-// 			lobby_group_name_id: value.lobby_group_name_id,
-// 			uptime: uptime_in_seconds,
-// 		})
-// 	}
-// }
-
 impl ApiTryFrom<backend::game::Game> for models::GameHandle {
 	type Error = GlobalError;
 

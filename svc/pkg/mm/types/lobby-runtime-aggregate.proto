@@ -11,15 +11,13 @@ message Request {
 }
 
 message Response {
-	message RegionTierTime {
+	message NamespaceUsage {
+		reserved 3, 5;
+
 		rivet.common.Uuid namespace_id = 1;
 		rivet.common.Uuid region_id = 2;
-		string tier_name_id = 3;
-		// Use the name ID instead of the UUID since we want to combine the same
-		// expenses across multiple lobby groups
-		string lobby_group_name_id = 5;
 		int64 total_time = 4; // in milliseconds
 	}
 
-	repeated RegionTierTime region_tier_times = 1;
+	repeated NamespaceUsage usage = 1;
 }

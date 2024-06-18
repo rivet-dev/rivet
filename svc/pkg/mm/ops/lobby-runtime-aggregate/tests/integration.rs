@@ -28,8 +28,8 @@ async fn default(ctx: TestCtx) {
 	.await
 	.unwrap();
 
-	assert_eq!(res.region_tier_times.len(), 2, "ns not found");
-	for times in &res.region_tier_times {
+	assert_eq!(res.usage.len(), 2, "ns not found");
+	for times in &res.usage {
 		assert!(times.total_time > 0, "should have time");
 	}
 }
@@ -82,8 +82,8 @@ async fn missing_columns(ctx: TestCtx) {
 	.await
 	.unwrap();
 
-	assert_eq!(2, res.region_tier_times.len(), "logs not found");
-	for times in &res.region_tier_times {
+	assert_eq!(2, res.usage.len(), "logs not found");
+	for times in &res.usage {
 		let times_ns_id = times.namespace_id.as_ref().unwrap().as_uuid();
 		if times_ns_id == fake_namespace_id {
 			// TODO: Calculate what the total time should be and that it doesn't
@@ -122,7 +122,7 @@ async fn out_of_range(ctx: TestCtx) {
 	.await
 	.unwrap();
 
-	assert!(res.region_tier_times.is_empty(), "range check failed");
+	assert!(res.usage.is_empty(), "range check failed");
 }
 
 #[worker_test]
@@ -171,7 +171,7 @@ async fn min(ctx: TestCtx) {
 	.unwrap();
 
 	assert_eq!(
-		res.region_tier_times.first().unwrap().total_time,
+		res.usage.first().unwrap().total_time,
 		5,
 		"minimum check failed"
 	);
@@ -223,7 +223,7 @@ async fn max(ctx: TestCtx) {
 	.unwrap();
 
 	assert_eq!(
-		res.region_tier_times.first().unwrap().total_time,
+		res.usage.first().unwrap().total_time,
 		5,
 		"minimum check failed"
 	);
