@@ -99,6 +99,9 @@ pub enum ServiceKind {
 	#[serde(rename = "operation")]
 	Operation {},
 
+	#[serde(rename = "operations")]
+	Operations {},
+
 	// TODO: Rename to worker
 	#[serde(rename = "consumer")]
 	Consumer {
@@ -359,6 +362,7 @@ impl ServiceKind {
 			ServiceKind::Static { .. } => "static",
 			ServiceKind::Database { .. } => "database",
 			ServiceKind::Cache { .. } => "cache",
+			ServiceKind::Operations { .. } => "operations",
 		}
 	}
 
@@ -371,6 +375,7 @@ impl ServiceKind {
 			| ServiceKind::Api { .. } => ComponentClass::Executable,
 
 			ServiceKind::Operation { .. }
+			| ServiceKind::Operations { .. }
 			| ServiceKind::Consumer { .. }
 			| ServiceKind::ApiRoutes { .. } => ComponentClass::NonExecutable,
 			ServiceKind::Database { .. } => ComponentClass::Database,

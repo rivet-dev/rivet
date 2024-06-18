@@ -4,6 +4,7 @@ use uuid::Uuid;
 
 use crate::{ctx::OperationCtx, DatabaseHandle, Operation, OperationInput, WorkflowError};
 
+#[derive(Clone)]
 pub struct ActivityCtx {
 	ray_id: Uuid,
 	name: &'static str,
@@ -60,7 +61,7 @@ impl ActivityCtx {
 		I: OperationInput,
 		<I as OperationInput>::Operation: Operation<Input = I>,
 	{
-		let mut ctx = OperationCtx::new(
+		let ctx = OperationCtx::new(
 			self.db.clone(),
 			&self.conn,
 			self.ray_id,
@@ -69,7 +70,7 @@ impl ActivityCtx {
 			I::Operation::NAME,
 		);
 
-		tokio::time::timeout(I::Operation::TIMEOUT, I::Operation::run(&mut ctx, &input))
+		tokio::time::timeout(I::Operation::TIMEOUT, I::Operation::run(&ctx, &input))
 			.await
 			.map_err(|_| WorkflowError::OperationTimeout)?
 			.map_err(WorkflowError::OperationFailure)

@@ -410,7 +410,27 @@ impl ProjectContextData {
 				.await;
 
 			// Read ops
-			Self::load_services_dir(svc_ctxs_map, &workspace_path, pkg.path().join("ops")).await;
+			// Check if service config exists
+			if fs::metadata(pkg.path().join("ops").join("Service.toml"))
+				.await
+				.is_ok()
+			{
+				// Load the ops directory as a single service
+				let svc_ctx = context::service::ServiceContextData::from_path(
+					Weak::new(),
+					svc_ctxs_map,
+					&workspace_path,
+					&pkg.path().join("ops"),
+				)
+				.await
+				.unwrap();
+
+				svc_ctxs_map.insert(svc_ctx.name(), svc_ctx.clone());
+			} else {
+				// Load all individual ops
+				Self::load_services_dir(svc_ctxs_map, &workspace_path, pkg.path().join("ops"))
+					.await;
+			}
 
 			// Read dbs
 			Self::load_services_dir(svc_ctxs_map, &workspace_path, pkg.path().join("db")).await;

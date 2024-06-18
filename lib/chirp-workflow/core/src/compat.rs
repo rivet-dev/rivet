@@ -128,7 +128,7 @@ where
 	<I as OperationInput>::Operation: Operation<Input = I>,
 	B: Debug + Clone,
 {
-	let mut ctx = OperationCtx::new(
+	let ctx = OperationCtx::new(
 		db_from_ctx(ctx).await?,
 		ctx.conn(),
 		ctx.ray_id(),
@@ -137,7 +137,7 @@ where
 		I::Operation::NAME,
 	);
 
-	I::Operation::run(&mut ctx, &input)
+	I::Operation::run(&ctx, &input)
 		.await
 		.map_err(WorkflowError::OperationFailure)
 		.map_err(GlobalError::raw)

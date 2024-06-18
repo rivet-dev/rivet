@@ -17,22 +17,22 @@ pub struct TestOutputErr {
 }
 
 #[workflow(Test)]
-async fn test(ctx: &mut WorkflowCtx, input: &TestInput) -> GlobalResult<TestOutput> {
+pub async fn test(ctx: &mut WorkflowCtx, input: &TestInput) -> GlobalResult<TestOutput> {
 	let a = ctx.activity(FooInput {}).await?;
 
 	Ok(Ok(TestOutputOk { y: a.ids.len() }))
 }
 
 #[derive(Debug, Serialize, Deserialize, Hash)]
-pub struct FooInput {}
+struct FooInput {}
 
 #[derive(Debug, Serialize, Deserialize, Hash)]
-pub struct FooOutput {
+struct FooOutput {
 	ids: Vec<Uuid>,
 }
 
 #[activity(Foo)]
-pub fn foo(ctx: &ActivityCtx, input: &FooInput) -> GlobalResult<FooOutput> {
+async fn foo(ctx: &ActivityCtx, input: &FooInput) -> GlobalResult<FooOutput> {
 	let ids = sql_fetch_all!(
 		[ctx, (Uuid,)]
 		"

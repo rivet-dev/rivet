@@ -512,6 +512,7 @@ impl ServiceContextData {
 						dep.config().kind,
 						ServiceKind::Database { .. }
 							| ServiceKind::Cache { .. } | ServiceKind::Operation { .. }
+							| ServiceKind::Operations { .. }
 							| ServiceKind::Consumer { .. }
 					)
 				} else if matches!(self.config().kind, ServiceKind::Api { .. }) {
@@ -519,6 +520,7 @@ impl ServiceContextData {
 						dep.config().kind,
 						ServiceKind::Database { .. }
 							| ServiceKind::Cache { .. } | ServiceKind::Operation { .. }
+							| ServiceKind::Operations { .. }
 							| ServiceKind::ApiRoutes { .. }
 					)
 				} else {
@@ -526,6 +528,7 @@ impl ServiceContextData {
 						dep.config().kind,
 						ServiceKind::Database { .. }
 							| ServiceKind::Cache { .. } | ServiceKind::Operation { .. }
+							| ServiceKind::Operations { .. }
 					)
 				};
 

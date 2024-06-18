@@ -1,6 +1,7 @@
 use proc_macro::TokenStream;
 use quote::{quote, ToTokens};
 use syn::{
+	parse::{Parse, ParseStream},
 	parse_macro_input, spanned::Spanned, GenericArgument, Ident, ItemFn, ItemStruct, LitStr,
 	PathArguments, ReturnType, Type,
 };
@@ -21,7 +22,7 @@ impl Default for Config {
 
 #[proc_macro_attribute]
 pub fn workflow(attr: TokenStream, item: TokenStream) -> TokenStream {
-	let name = parse_macro_input!(attr as Ident).to_string();
+	let name = parse_macro_input!(attr as OptionalIdent).ident.map(|x| x.to_string()).unwrap_or_else(|| "Workflow".to_string());
 	let item_fn = parse_macro_input!(item as ItemFn);
 
 	if let Err(err) = parse_empty_config(&item_fn.attrs) {
@@ -39,9 +40,10 @@ pub fn workflow(attr: TokenStream, item: TokenStream) -> TokenStream {
 	let struct_ident = Ident::new(&name, proc_macro2::Span::call_site());
 	let fn_name = item_fn.sig.ident.to_string();
 	let fn_body = item_fn.block;
+	let vis = item_fn.vis;
 
 	let expanded = quote! {
-		pub struct #struct_ident;
+		#vis struct #struct_ident;
 
 		impl chirp_workflow::workflow::WorkflowInput for #input_type {
 			type Workflow = #struct_ident;
@@ -86,12 +88,13 @@ pub fn activity(attr: TokenStream, item: TokenStream) -> TokenStream {
 	let struct_ident = Ident::new(&name, proc_macro2::Span::call_site());
 	let fn_name = item_fn.sig.ident.to_string();
 	let fn_body = item_fn.block;
+	let vis = item_fn.vis;
 
 	let max_retries = config.max_retries;
-	let timeout = config.timeout * 1000;
+	let timeout = config.timeout;
 
 	let expanded = quote! {
-		pub struct #struct_ident;
+		#vis struct #struct_ident;
 
 		impl chirp_workflow::activity::ActivityInput for #input_type {
 			type Activity = #struct_ident;
@@ -116,7 +119,7 @@ pub fn activity(attr: TokenStream, item: TokenStream) -> TokenStream {
 
 			const NAME: &'static str = #fn_name;
 			const MAX_RETRIES: u32 = #max_retries;
-			const TIMEOUT: std::time::Duration = std::time::Duration::from_millis(#timeout);
+			const TIMEOUT: std::time::Duration = std::time::Duration::from_secs(#timeout);
 
 			async fn run(#ctx_ident: #ctx_ty, #input_ident: &Self::Input) -> GlobalResult<Self::Output> {
 				#fn_body
@@ -131,7 +134,7 @@ pub fn activity(attr: TokenStream, item: TokenStream) -> TokenStream {
 
 #[proc_macro_attribute]
 pub fn operation(attr: TokenStream, item: TokenStream) -> TokenStream {
-	let name = parse_macro_input!(attr as Ident).to_string();
+	let name = parse_macro_input!(attr as OptionalIdent).ident.map(|x| x.to_string()).unwrap_or_else(|| "Operation".to_string());
 	let item_fn = parse_macro_input!(item as ItemFn);
 
 	let config = match parse_config(&item_fn.attrs) {
@@ -139,7 +142,7 @@ pub fn operation(attr: TokenStream, item: TokenStream) -> TokenStream {
 		Err(err) => return err.into_compile_error().into(),
 	};
 
-	let ctx_ty = syn::parse_str("&mut OperationCtx").unwrap();
+	let ctx_ty = syn::parse_str("&OperationCtx").unwrap();
 	let TraitFnOutput {
 		ctx_ident,
 		input_ident,
@@ -150,13 +153,14 @@ pub fn operation(attr: TokenStream, item: TokenStream) -> TokenStream {
 	let struct_ident = Ident::new(&name, proc_macro2::Span::call_site());
 	let fn_name = item_fn.sig.ident.to_string();
 	let fn_body = item_fn.block;
+	let vis = item_fn.vis;
 
-	let timeout = config.timeout * 1000;
+	let timeout = config.timeout;
 
 	let expanded = quote! {
-		pub struct #struct_ident;
+		#vis struct #struct_ident;
 
-		impl chirp_workflow::workflow::OperationInput for #input_type {
+		impl chirp_workflow::operation::OperationInput for #input_type {
 			type Operation = #struct_ident;
 		}
 
@@ -166,7 +170,7 @@ pub fn operation(attr: TokenStream, item: TokenStream) -> TokenStream {
 			type Output = #output_type;
 
 			const NAME: &'static str = #fn_name;
-			const TIMEOUT: std::time::Duration = std::time::Duration::from_millis(#timeout);
+			const TIMEOUT: std::time::Duration = std::time::Duration::from_secs(#timeout);
 
 			async fn run(#ctx_ident: #ctx_ty, #input_ident: &Self::Input) -> GlobalResult<Self::Output> {
 				#fn_body
@@ -183,10 +187,15 @@ struct TraitFnOutput {
 	ctx_ident: syn::Ident,
 	input_ident: syn::Ident,
 	input_type: Box<syn::Type>,
-	output_type: syn::Ident,
+	output_type: syn::Type,
 }
 
 fn parse_trait_fn(ctx_ty: &syn::Type, trait_name: &str, item_fn: &syn::ItemFn) -> TraitFnOutput {
+	// Check if is async
+	if item_fn.sig.asyncness.is_none() {
+		panic!("the async keyword is missing from the function declaration");
+	}
+
 	let mut arg_names = vec![];
 	let mut arg_types = vec![];
 
@@ -209,7 +218,7 @@ fn parse_trait_fn(ctx_ty: &syn::Type, trait_name: &str, item_fn: &syn::ItemFn) -
 		panic!(
 			"{} function must have exactly two parameters: ctx: {:?} and input: YourInputType",
 			trait_name,
-			ctx_ty.to_token_stream().to_string()
+			ctx_ty.to_token_stream().to_string(),
 		);
 	}
 
@@ -226,9 +235,9 @@ fn parse_trait_fn(ctx_ty: &syn::Type, trait_name: &str, item_fn: &syn::ItemFn) -
 				if segment.ident == "GlobalResult" {
 					match &segment.arguments {
 						PathArguments::AngleBracketed(args) => {
-							if let Some(GenericArgument::Type(Type::Path(path))) = args.args.first()
+							if let Some(GenericArgument::Type(ty)) = args.args.first()
 							{
-								path.path.segments.last().unwrap().ident.clone()
+								ty.clone()
 							} else {
 								panic!("Unsupported Result type");
 							}
@@ -393,4 +402,19 @@ fn parse_empty_config(attrs: &[syn::Attribute]) -> syn::Result<()> {
 	}
 
 	Ok(())
+}
+
+struct OptionalIdent {
+    ident: Option<Ident>,
+}
+
+impl Parse for OptionalIdent {
+    fn parse(input: ParseStream) -> syn::Result<Self> {
+        if input.is_empty() {
+            Ok(OptionalIdent { ident: None })
+        } else {
+            let ident: Ident = input.parse()?;
+            Ok(OptionalIdent { ident: Some(ident) })
+        }
+    }
 }

@@ -11,7 +11,7 @@ pub trait Operation {
 	const NAME: &'static str;
 	const TIMEOUT: std::time::Duration;
 
-	async fn run(ctx: &mut OperationCtx, input: &Self::Input) -> GlobalResult<Self::Output>;
+	async fn run(ctx: &OperationCtx, input: &Self::Input) -> GlobalResult<Self::Output>;
 }
 
 pub trait OperationInput: Send {

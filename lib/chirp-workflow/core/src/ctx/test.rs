@@ -149,14 +149,14 @@ impl TestCtx {
 	}
 
 	pub async fn op<I>(
-		&mut self,
+		&self,
 		input: I,
 	) -> GlobalResult<<<I as OperationInput>::Operation as Operation>::Output>
 	where
 		I: OperationInput,
 		<I as OperationInput>::Operation: Operation<Input = I>,
 	{
-		let mut ctx = OperationCtx::new(
+		let ctx = OperationCtx::new(
 			self.db.clone(),
 			self.conn
 				.as_ref()
@@ -167,7 +167,7 @@ impl TestCtx {
 			I::Operation::NAME,
 		);
 
-		I::Operation::run(&mut ctx, &input)
+		I::Operation::run(&ctx, &input)
 			.await
 			.map_err(WorkflowError::OperationFailure)
 			.map_err(GlobalError::raw)

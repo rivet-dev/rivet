@@ -75,6 +75,23 @@ pub async fn generate(ctx: &mut ProjectContext, opts: TemplateOpts) -> Result<()
 		);
 	}
 
+	// Check for new operations service type
+	if matches!(template_type, TemplateType::Operation)
+		&& fs::metadata(
+			base_path
+				.join("svc")
+				.join("pkg")
+				.join(&pkg_name)
+				.join("Service.toml"),
+		)
+		.await
+		.is_ok()
+	{
+		bail!(
+			"Creating operations in new `operations` service type ({pkg_name}/ops) not yet supported.",
+		);
+	}
+
 	// Touch types lib to force it to rebuild generated proto when making a new package
 	if create_pkg {
 		let lib_file = base_path

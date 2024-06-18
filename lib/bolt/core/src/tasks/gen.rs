@@ -129,23 +129,40 @@ async fn generate_root(path: &Path) {
 					}
 				}
 			}
+
+			// Check if service config exists
+			if fs::metadata(pkg.path().join("ops").join("Service.toml"))
+				.await
+				.is_ok()
+			{
+				workspace_members.push(format!(
+					r#""pkg/{pkg}/ops""#,
+					pkg = pkg.file_name().into_string().unwrap(),
+				));
+
+				let _ = fs::remove_file(pkg.path().join("ops").join("Cargo.lock")).await;
+
+				set_license(&pkg.path().join("ops").join("Cargo.toml")).await;
+			}
 			// Iterate through `ops` folder
-			let ops_path = pkg.path().join("ops");
-			if fs::metadata(&ops_path).await.is_ok() {
-				let mut dir = fs::read_dir(ops_path).await.unwrap();
-				while let Some(entry) = dir.next_entry().await.unwrap() {
-					if entry.metadata().await.unwrap().is_dir() {
-						workspace_members.push(format!(
-							r#""pkg/{pkg}/ops/{entry}""#,
-							pkg = pkg.file_name().into_string().unwrap(),
-							entry = entry.file_name().into_string().unwrap()
-						));
+			else {
+				let ops_path = pkg.path().join("ops");
+				if fs::metadata(&ops_path).await.is_ok() {
+					let mut dir = fs::read_dir(ops_path).await.unwrap();
+					while let Some(entry) = dir.next_entry().await.unwrap() {
+						if entry.metadata().await.unwrap().is_dir() {
+							workspace_members.push(format!(
+								r#""pkg/{pkg}/ops/{entry}""#,
+								pkg = pkg.file_name().into_string().unwrap(),
+								entry = entry.file_name().into_string().unwrap()
+							));
 
-						// Remove services' Cargo.lock files in favor of the shared svc
-						// Cargo.toml
-						let _ = fs::remove_file(entry.path().join("Cargo.lock")).await;
+							// Remove services' Cargo.lock files in favor of the shared svc
+							// Cargo.toml
+							let _ = fs::remove_file(entry.path().join("Cargo.lock")).await;
 
-						set_license(&entry.path().join("Cargo.toml")).await;
+							set_license(&entry.path().join("Cargo.toml")).await;
+						}
 					}
 				}
 			}
