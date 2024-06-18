@@ -2,8 +2,9 @@ use proc_macro::TokenStream;
 use quote::{quote, ToTokens};
 use syn::{
 	parse::{Parse, ParseStream},
-	parse_macro_input, spanned::Spanned, GenericArgument, Ident, ItemFn, ItemStruct, LitStr,
-	PathArguments, ReturnType, Type,
+	parse_macro_input,
+	spanned::Spanned,
+	GenericArgument, Ident, ItemFn, ItemStruct, LitStr, PathArguments, ReturnType, Type,
 };
 
 struct Config {
@@ -22,7 +23,10 @@ impl Default for Config {
 
 #[proc_macro_attribute]
 pub fn workflow(attr: TokenStream, item: TokenStream) -> TokenStream {
-	let name = parse_macro_input!(attr as OptionalIdent).ident.map(|x| x.to_string()).unwrap_or_else(|| "Workflow".to_string());
+	let name = parse_macro_input!(attr as OptionalIdent)
+		.ident
+		.map(|x| x.to_string())
+		.unwrap_or_else(|| "Workflow".to_string());
 	let item_fn = parse_macro_input!(item as ItemFn);
 
 	if let Err(err) = parse_empty_config(&item_fn.attrs) {
@@ -134,7 +138,10 @@ pub fn activity(attr: TokenStream, item: TokenStream) -> TokenStream {
 
 #[proc_macro_attribute]
 pub fn operation(attr: TokenStream, item: TokenStream) -> TokenStream {
-	let name = parse_macro_input!(attr as OptionalIdent).ident.map(|x| x.to_string()).unwrap_or_else(|| "Operation".to_string());
+	let name = parse_macro_input!(attr as OptionalIdent)
+		.ident
+		.map(|x| x.to_string())
+		.unwrap_or_else(|| "Operation".to_string());
 	let item_fn = parse_macro_input!(item as ItemFn);
 
 	let config = match parse_config(&item_fn.attrs) {
@@ -235,8 +242,7 @@ fn parse_trait_fn(ctx_ty: &syn::Type, trait_name: &str, item_fn: &syn::ItemFn) -
 				if segment.ident == "GlobalResult" {
 					match &segment.arguments {
 						PathArguments::AngleBracketed(args) => {
-							if let Some(GenericArgument::Type(ty)) = args.args.first()
-							{
+							if let Some(GenericArgument::Type(ty)) = args.args.first() {
 								ty.clone()
 							} else {
 								panic!("Unsupported Result type");
@@ -405,16 +411,16 @@ fn parse_empty_config(attrs: &[syn::Attribute]) -> syn::Result<()> {
 }
 
 struct OptionalIdent {
-    ident: Option<Ident>,
+	ident: Option<Ident>,
 }
 
 impl Parse for OptionalIdent {
-    fn parse(input: ParseStream) -> syn::Result<Self> {
-        if input.is_empty() {
-            Ok(OptionalIdent { ident: None })
-        } else {
-            let ident: Ident = input.parse()?;
-            Ok(OptionalIdent { ident: Some(ident) })
-        }
-    }
+	fn parse(input: ParseStream) -> syn::Result<Self> {
+		if input.is_empty() {
+			Ok(OptionalIdent { ident: None })
+		} else {
+			let ident: Ident = input.parse()?;
+			Ok(OptionalIdent { ident: Some(ident) })
+		}
+	}
 }

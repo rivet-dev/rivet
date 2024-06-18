@@ -83,10 +83,6 @@ impl ActivityCtx {
 		self.name
 	}
 
-	// pub fn timeout(&self) -> Duration {
-	// 	self.timeout
-	// }
-
 	pub fn req_id(&self) -> Uuid {
 		self.op_ctx.req_id()
 	}

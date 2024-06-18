@@ -34,7 +34,7 @@ impl ApiCtx {
 		ts: i64,
 		name: &'static str,
 	) -> Self {
-		let mut op_ctx = rivet_operation::OperationContext::new(
+		let op_ctx = rivet_operation::OperationContext::new(
 			name.to_string(),
 			std::time::Duration::from_secs(60),
 			conn.clone(),
@@ -44,7 +44,6 @@ impl ApiCtx {
 			ts,
 			(),
 		);
-		op_ctx.from_workflow = true;
 
 		ApiCtx {
 			ray_id,
