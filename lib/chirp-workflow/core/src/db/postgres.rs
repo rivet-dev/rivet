@@ -505,4 +505,29 @@ impl Database for DatabasePostgres {
 
 		Ok(())
 	}
+
+	async fn poll_workflow(
+		&self,
+		workflow_name: &str,
+		input: &serde_json::Value,
+		after_ts: i64,
+	) -> WorkflowResult<Option<(Uuid, i64)>> {
+		sqlx::query_as::<_, (Uuid, i64)>(indoc!(
+			"
+			SELECT workflow_id, create_ts
+			FROM db_workflow.workflows
+			WHERE
+				workflow_name = $1 AND
+				-- Subset
+				input @> $2 AND
+				create_ts >= $3
+			",
+		))
+		.bind(workflow_name)
+		.bind(input)
+		.bind(after_ts)
+		.fetch_optional(&mut *self.conn().await?)
+		.await
+		.map_err(WorkflowError::Sqlx)
+	}
 }

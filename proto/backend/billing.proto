@@ -3,7 +3,6 @@ syntax = "proto3";
 package rivet.backend.billing;
 
 import "proto/common.proto";
-import "proto/backend/billing/game_plan.proto";
 
 message GameLobbyMetrics {
 	rivet.common.Uuid game_id = 1;
@@ -17,18 +16,3 @@ message RegionTierMetrics {
 	string lobby_group_name_id = 5;
 	int64 uptime = 4; // in seconds
 }
-
-message Team {
-	rivet.common.Uuid team_id = 1;
-	string stripe_customer_id = 2;
-	optional int64 payment_method_attached_ts = 3;
-	optional int64 payment_method_valid_ts = 4;
-	optional int64 payment_failed_ts = 5;
-	optional int64 payment_succeeded_ts = 6;
-}
-
-message Game {
-	rivet.common.Uuid game_id = 1;
-	rivet.backend.billing.game_plan.GamePlan plan = 2;
-}
-

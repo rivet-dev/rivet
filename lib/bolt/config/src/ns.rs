@@ -715,7 +715,8 @@ pub struct ImageResizing {}
 #[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(deny_unknown_fields)]
 pub struct RivetBilling {
-	pub dynamic_servers_capacity_price_id: String,
+	pub indie_price_id: String,
+	pub studio_price_id: String,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, Default)]

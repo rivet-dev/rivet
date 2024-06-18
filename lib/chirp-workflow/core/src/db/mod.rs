@@ -14,8 +14,8 @@ pub trait Database: Send {
 	async fn dispatch_workflow(
 		&self,
 		ray_id: Uuid,
-		id: Uuid,
-		name: &str,
+		workflow_id: Uuid,
+		workflow_name: &str,
 		input: serde_json::Value,
 	) -> WorkflowResult<()>;
 	async fn get_workflow(&self, id: Uuid) -> WorkflowResult<Option<WorkflowRow>>;
@@ -75,6 +75,13 @@ pub trait Database: Send {
 		sub_workflow_name: &str,
 		input: serde_json::Value,
 	) -> WorkflowResult<()>;
+
+	async fn poll_workflow(
+		&self,
+		name: &str,
+		input: &serde_json::Value,
+		after_ts: i64,
+	) -> WorkflowResult<Option<(Uuid, i64)>>;
 }
 
 #[derive(sqlx::FromRow)]

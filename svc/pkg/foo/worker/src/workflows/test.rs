@@ -45,12 +45,5 @@ async fn foo(ctx: &ActivityCtx, input: &FooInput) -> GlobalResult<FooOutput> {
 	.map(|(id,)| id)
 	.collect();
 
-	let user_id = util::uuid::parse("000b3124-91d9-472e-8104-3dcc41e1a74d")?;
-	let user_get_res = op!([ctx] user_get {
-		user_ids: vec![user_id.into()],
-	})
-	.await?;
-	let user = unwrap!(user_get_res.users.first());
-
 	Ok(FooOutput { ids })
 }

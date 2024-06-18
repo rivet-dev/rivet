@@ -23,8 +23,12 @@ async fn handle(
 		.collect::<Vec<common::Uuid>>();
 
 	if query_ids.len() as isize == MAX_COUNT {
-		tracing::warn!("too many find queries, short circuiting to prevent bad things from happening");
-		return Ok(mm::lobby_find_lobby_query_list::Response { query_ids: Vec::new() })
+		tracing::warn!(
+			"too many find queries, short circuiting to prevent bad things from happening"
+		);
+		return Ok(mm::lobby_find_lobby_query_list::Response {
+			query_ids: Vec::new(),
+		});
 	}
 
 	Ok(mm::lobby_find_lobby_query_list::Response { query_ids })

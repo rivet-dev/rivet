@@ -522,6 +522,7 @@ impl ServiceContextData {
 							| ServiceKind::Cache { .. } | ServiceKind::Operation { .. }
 							| ServiceKind::Operations { .. }
 							| ServiceKind::ApiRoutes { .. }
+							| ServiceKind::Consumer { .. }
 					)
 				} else {
 					matches!(
@@ -529,6 +530,7 @@ impl ServiceContextData {
 						ServiceKind::Database { .. }
 							| ServiceKind::Cache { .. } | ServiceKind::Operation { .. }
 							| ServiceKind::Operations { .. }
+							| ServiceKind::Consumer { .. }
 					)
 				};
 
