@@ -65,8 +65,7 @@ resource "cloudflare_origin_ca_certificate" "rivet_gg" {
 			"api.${var.domain_main}",
 		],
 		var.opengb_enabled ? [
-			"*.opengb.${var.domain_main}",
-			"db.opengb-internal.${var.domain_main}"
+			"*.backend.${var.domain_main}",
 		] : []
 	])
 	request_type = "origin-rsa"

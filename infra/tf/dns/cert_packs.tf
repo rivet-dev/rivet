@@ -1,7 +1,7 @@
 locals {
 	# Required if:
 	#
-	# - OpenGB is enabled so requires access to `*.opengb.{domain_main}`
+	# - OpenGB is enabled so requires access to `*.backend.{domain_main}`
  	# - Main domain is not at the root of the zone, we need to provide a cert pack for the domain.
 	# - Using the old `{service}.api.{domain}` format, which requires two levels of subdomains.
  	needs_main_cert_pack = var.opengb_enabled || var.dns_deprecated_subdomains || data.cloudflare_zone.main.name != var.domain_main
@@ -41,8 +41,7 @@ resource "cloudflare_certificate_pack" "main" {
 				"*.api.${var.domain_main}",
 			],
 			var.opengb_enabled ? [
-				"*.opengb.${var.domain_main}",
-				"db.opengb-internal.${var.domain_main}"
+				"*.backend.${var.domain_main}",
 			] : []
 		])
 	)))

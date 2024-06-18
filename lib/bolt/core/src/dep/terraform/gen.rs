@@ -313,11 +313,7 @@ async fn vars(ctx: &ProjectContext) {
 		// OpenGB
 		extra_dns.push(json!({
 			"zone_name": "main",
-			"name": format!("*.opengb.{domain_main}"),
-		}));
-		extra_dns.push(json!({
-			"zone_name": "main",
-			"name": format!("db.opengb-internal.{domain_main}"),
+			"name": format!("*.backend.{domain_main}"),
 		}));
 
 		// Add services

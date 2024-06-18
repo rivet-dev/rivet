@@ -108,7 +108,7 @@ pub fn opengb_env(project_name_id: &str, env_name_id: &str) -> GlobalResult<Stri
 	let domain_main = unwrap!(domain_main(), "dns not enabled");
 
 	Ok(format!(
-		"https://{}--{}.opengb.{}/",
+		"https://{}--{}.backend.{}/",
 		project_name_id,
 		env_name_id,
 		domain_main,
