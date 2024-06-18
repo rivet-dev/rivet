@@ -156,7 +156,8 @@ pub fn chirp_service_name() -> &'static str {
 
 #[derive(Deserialize)]
 pub struct RivetBilling {
-	pub dynamic_servers_capacity_price_id: String,
+	pub indie_price_id: String,
+	pub studio_price_id: String,
 }
 
 pub fn billing() -> Option<&'static RivetBilling> {
