@@ -286,6 +286,8 @@ pub struct Turnstile {
 pub struct Service {
 	pub count: usize,
 	pub resources: ServiceResources,
+	pub crdb_min_connections: Option<u64>,
+	pub crdb_max_connections: Option<u64>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]

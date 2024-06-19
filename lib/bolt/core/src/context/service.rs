@@ -923,10 +923,12 @@ impl ServiceContextData {
 			);
 		}
 
-		env.insert(
-			"CRDB_MIN_CONNECTIONS".into(),
-			self.config().cockroachdb.min_connections.to_string(),
-		);
+		if let Some(x) = ns_service_config.crdb_min_connections {
+			env.insert("CRDB_MIN_CONNECTIONS".into(), x.to_string());
+		}
+		if let Some(x) = ns_service_config.crdb_max_connections {
+			env.insert("CRDB_MAX_CONNECTIONS".into(), x.to_string());
+		}
 
 		if project_ctx.ns().prometheus.is_some() && self.depends_on_prometheus_api() {
 			env.insert(
@@ -1374,10 +1376,14 @@ impl ServiceContextData {
 				config::ns::ClusterKind::SingleNode { .. } => config::ns::Service {
 					count: 1,
 					resources: self.config().resources.single_node.clone(),
+					crdb_min_connections: None,
+					crdb_max_connections: None,
 				},
 				config::ns::ClusterKind::Distributed { .. } => config::ns::Service {
 					count: 2,
 					resources: self.config().resources.distributed.clone(),
+					crdb_min_connections: None,
+					crdb_max_connections: None,
 				},
 			});
 

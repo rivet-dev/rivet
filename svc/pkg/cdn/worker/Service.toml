@@ -9,6 +9,3 @@ kind = "rust"
 [databases]
 redis-cdn = {}
 
-[cockroachdb]
-min-connections = 8
-

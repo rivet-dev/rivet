@@ -8,6 +8,3 @@ kind = "rust"
 [secrets]
 "turnstile/main/secret_key" = { optional = true }
 
-[cockroachdb]
-min-connections = 2
-

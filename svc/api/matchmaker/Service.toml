@@ -6,6 +6,3 @@ kind = "rust"
 
 [api-routes]
 
-[cockroachdb]
-min-connections = 8
-

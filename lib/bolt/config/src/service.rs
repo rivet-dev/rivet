@@ -36,9 +36,6 @@ pub struct ServiceConfig {
 
 	#[serde(default)]
 	pub resources: ServiceResourcesMap,
-
-	#[serde(default)]
-	pub cockroachdb: CockroachDB,
 }
 
 #[derive(Deserialize, Clone, Debug)]
@@ -237,24 +234,6 @@ impl Default for ServiceResourcesMap {
 				memory: 1024,
 			},
 		}
-	}
-}
-
-#[derive(Deserialize, Clone, Debug)]
-#[serde(rename_all = "kebab-case", deny_unknown_fields)]
-pub struct CockroachDB {
-	// Sets a minimum number of connections to the database. This is important to ensure that
-	// the initial queries are not delayed by a large surge of TCP connections immediately
-	// after startup.
-	//
-	// To figure out a healthy number for this value, see the `rivet_crdb_pool_conn_size`
-	// metric to see how many connections are being used for a given service.
-	pub min_connections: usize,
-}
-
-impl Default for CockroachDB {
-	fn default() -> Self {
-		Self { min_connections: 1 }
 	}
 }
 

@@ -15,6 +15,3 @@ memory = 512
 cpu = 1000
 memory = 1024
 
-[cockroachdb]
-min-connections = 8
-
