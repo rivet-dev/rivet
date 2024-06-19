@@ -16,7 +16,8 @@ jsonwebtoken = "8.2.0"
 lazy_static = "1.4"
 
 [dependencies.sqlx]
-version = "0.7"
+git = "https://github.com/rivet-gg/sqlx"
+rev = "08d6e61aa0572e7ec557abbedb72cebb96e1ac5b"
 default-features = false
 
 [dev-dependencies]

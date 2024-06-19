@@ -147,6 +147,7 @@ async fn crdb_from_env(_client_name: String) -> Result<Option<CrdbPool>, Error> 
 			//
 			// See max lifetime https://www.cockroachlabs.com/docs/stable/connection-pooling#set-the-maximum-lifetime-of-connections
 			.max_lifetime(Duration::from_secs(15 * 60))
+            .max_lifetime_jitter(Duration::from_secs(90))
 			// Remove connections after a while in order to reduce load
 			// on CRDB after bursts
 			.idle_timeout(Some(Duration::from_secs(3 * 60)))

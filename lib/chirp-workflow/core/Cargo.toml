@@ -25,12 +25,23 @@ rivet-runtime = { path = "../../runtime" }
 rivet-util = { path = "../../util/core" }
 serde = { version = "1.0.198", features = ["derive"] }
 serde_json = "1.0.116"
-sqlx = { version = "0.7.4", features = ["runtime-tokio", "postgres", "uuid", "json", "ipnetwork"] }
 thiserror = "1.0.59"
 tokio = { version = "1.37.0", features = ["full"] }
 tracing = "0.1.40"
 tracing-subscriber = { version = "0.3.18", features = ["env-filter"] }
 uuid = { version = "1.8.0", features = ["v4", "serde"] }
+
+[dependencies.sqlx]
+git = "https://github.com/rivet-gg/sqlx"
+rev = "08d6e61aa0572e7ec557abbedb72cebb96e1ac5b"
+default-features = false
+features = [
+	"runtime-tokio",
+	"postgres",
+	"uuid",
+	"json",
+	"ipnetwork"
+]
 
 [dev-dependencies]
 anyhow = "1.0.82"

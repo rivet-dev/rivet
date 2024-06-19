@@ -17,7 +17,8 @@ kv-config-version-get = { path = "../../../kv-config/ops/version-get" }
 mm-config-version-get = { path = "../../../mm-config/ops/version-get" }
 
 [dependencies.sqlx]
-version = "0.7"
+git = "https://github.com/rivet-gg/sqlx"
+rev = "08d6e61aa0572e7ec557abbedb72cebb96e1ac5b"
 default-features = false
 
 [dev-dependencies]

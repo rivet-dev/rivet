@@ -32,7 +32,8 @@ git = "https://github.com/rivet-gg/nomad-client"
 rev = "abb66bf0c30c7ff5b0c695dae952481c33e538b5" # pragma: allowlist secret
 
 [dependencies.sqlx]
-version = "0.7"
+git = "https://github.com/rivet-gg/sqlx"
+rev = "08d6e61aa0572e7ec557abbedb72cebb96e1ac5b"
 default-features = false
 
 [dev-dependencies]

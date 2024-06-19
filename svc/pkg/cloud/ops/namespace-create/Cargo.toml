@@ -18,7 +18,8 @@ kv-config-namespace-create = { path = "../../../kv-config/ops/namespace-create" 
 identity-config-namespace-create = { path = "../../../identity-config/ops/namespace-create" }
 
 [dependencies.sqlx]
-version = "0.7"
+git = "https://github.com/rivet-gg/sqlx"
+rev = "08d6e61aa0572e7ec557abbedb72cebb96e1ac5b"
 default-features = false
 
 [dev-dependencies]

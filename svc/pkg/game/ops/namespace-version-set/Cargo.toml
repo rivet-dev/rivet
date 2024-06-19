@@ -16,7 +16,8 @@ region-list-for-game = { path = "../../../region/ops/list-for-game" }
 mm-lobby-idle-update = { path = "../../../mm/ops/lobby-idle-update" }
 
 [dependencies.sqlx]
-version = "0.7"
+git = "https://github.com/rivet-gg/sqlx"
+rev = "08d6e61aa0572e7ec557abbedb72cebb96e1ac5b"
 default-features = false
 
 [dev-dependencies]
