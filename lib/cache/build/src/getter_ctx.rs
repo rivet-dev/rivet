@@ -83,6 +83,11 @@ where
 			.collect()
 	}
 
+	/// All keys.
+	pub(super) fn keys(&self) -> &[GetterCtxKey<K, V>] {
+		&self.keys[..]
+	}
+
 	/// If all keys have an associated value.
 	pub(super) fn all_keys_have_value(&self) -> bool {
 		self.keys.iter().all(|x| x.value.is_some())

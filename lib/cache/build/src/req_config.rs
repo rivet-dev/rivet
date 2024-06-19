@@ -152,9 +152,18 @@ impl RequestConfig {
 			.with_label_values(&[&base_key])
 			.inc_by(keys.len() as u64);
 
-		let redis_keys = keys
+		// Build context.
+		//
+		// Drop `keys` bc this is not the same as the keys list in `ctx`, so it should not be used
+		// again.
+		let mut ctx = GetterCtx::new(base_key.clone().into(), keys.to_vec());
+		drop(keys);
+
+		// Build keys to look up values in Redis
+		let redis_keys = ctx
+			.keys()
 			.iter()
-			.map(|key| self.cache.build_redis_cache_key(&base_key, key))
+			.map(|key| self.cache.build_redis_cache_key(&base_key, &key.key))
 			.collect::<Vec<_>>();
 
 		// Build Redis command explicitly, since `conn.get` with one value will
@@ -183,7 +192,6 @@ impl RequestConfig {
 				);
 
 				// Create the getter ctx and resolve the cached values
-				let mut ctx = GetterCtx::new(base_key.clone().into(), keys.to_vec());
 				for (i, value) in cached_values.into_iter().enumerate() {
 					if let Some(value) = value {
 						let value = decoder(&value)?;
@@ -266,12 +274,8 @@ impl RequestConfig {
 
 				// Fall back to the getter since we can't fetch the value from
 				// the cache
-				let ctx = getter(
-					GetterCtx::new(base_key.into(), keys.to_vec()),
-					keys.to_vec(),
-				)
-				.await
-				.map_err(Error::Getter)?;
+				let keys = ctx.unresolved_keys();
+				let ctx = getter(ctx, keys).await.map_err(Error::Getter)?;
 
 				Ok(ctx.into_values())
 			}
@@ -656,11 +660,11 @@ impl RequestConfig {
 	}
 }
 
-#[tracing::instrument(skip(conn))]
-async fn unwatch_gracefully(conn: &mut RedisPool) {
-	tracing::debug!("unwatching");
-	match redis::cmd("UNWATCH").query_async::<_, ()>(conn).await {
-		Ok(_) => tracing::debug!("unwatched successfully"),
-		Err(err) => tracing::error!(?err, "failed to unwatch from cache"),
-	}
-}
+// #[tracing::instrument(skip(conn))]
+// async fn unwatch_gracefully(conn: &mut RedisPool) {
+// 	tracing::debug!("unwatching");
+// 	match redis::cmd("UNWATCH").query_async::<_, ()>(conn).await {
+// 		Ok(_) => tracing::debug!("unwatched successfully"),
+// 		Err(err) => tracing::error!(?err, "failed to unwatch from cache"),
+// 	}
+// }
