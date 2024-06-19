@@ -78,29 +78,36 @@ async fn handle(
 	// 	.await?;
 
 	// HACK: Because fetch all doesn't work, we'll use fetch one
-	let mut versions = Vec::new();
-	for version_id in req_version_ids {
-		let version = ctx
-			.cache()
-			.immutable()
-			.fetch_one_proto("versions2", version_id, |mut cache, req_version_id| {
-				let ctx = ctx.base();
+	// let mut versions = Vec::new();
+	// for version_id in req_version_ids {
+	// 	let version = ctx
+	// 		.cache()
+	// 		.immutable()
+	// 		.fetch_one_proto("versions2", version_id, |mut cache, req_version_id| {
+	// 			let ctx = ctx.base();
+	//
+	// 			async move {
+	// 				let versions = fetch_versions(&ctx.base(), vec![req_version_id]).await?;
+	// 				ensure!(versions.len() <= 1, "too many versions");
+	// 				if let Some((_, version)) = versions.into_iter().next() {
+	// 					cache.resolve(&version_id, version);
+	// 				}
+	//
+	// 				Ok(cache)
+	// 			}
+	// 		})
+	// 		.await?;
+	// 	if let Some(version) = version {
+	// 		versions.push(version);
+	// 	}
+	// }
 
-				async move {
-					let versions = fetch_versions(&ctx.base(), vec![req_version_id]).await?;
-					ensure!(versions.len() <= 1, "too many versions");
-					if let Some((_, version)) = versions.into_iter().next() {
-						cache.resolve(&version_id, version);
-					}
+	let versions = fetch_versions(&ctx.base(), req_version_ids)
+		.await?
+		.into_iter()
+		.map(|x| x.1)
+		.collect::<Vec<_>>();
 
-					Ok(cache)
-				}
-			})
-			.await?;
-		if let Some(version) = version {
-			versions.push(version);
-		}
-	}
 	Ok(mm_config::version_get::Response { versions })
 }
 
@@ -191,21 +198,31 @@ async fn fetch_versions(
 
 							let runtime =
 								backend::matchmaker::LobbyRuntime::decode(lg.runtime.as_ref())?;
-							let find_config = lg
-								.find_config
-								.as_ref()
-								.map(|fc| backend::matchmaker::FindConfig::decode(fc.as_ref()))
-								.transpose()?;
-							let join_config = lg
-								.join_config
-								.as_ref()
-								.map(|jc| backend::matchmaker::JoinConfig::decode(jc.as_ref()))
-								.transpose()?;
-							let create_config = lg
-								.create_config
-								.as_ref()
-								.map(|jc| backend::matchmaker::CreateConfig::decode(jc.as_ref()))
-								.transpose()?;
+							let (find_config, join_config, create_config) = match (
+								lg.find_config
+									.as_ref()
+									.map(|fc| backend::matchmaker::FindConfig::decode(fc.as_ref()))
+									.transpose(),
+								lg.join_config
+									.as_ref()
+									.map(|jc| backend::matchmaker::JoinConfig::decode(jc.as_ref()))
+									.transpose(),
+								lg.create_config
+									.as_ref()
+									.map(|jc| {
+										backend::matchmaker::CreateConfig::decode(jc.as_ref())
+									})
+									.transpose(),
+							) {
+								(Ok(a), Ok(b), Ok(c)) => (a, b, c),
+								(Err(err), _, _) | (_, Err(err), _) | (_, _, Err(err)) => {
+									tracing::warn!(
+										?err,
+										"failed to decode actions, this is a bad proto migration"
+									);
+									(None, None, None)
+								}
+							};
 
 							Ok(backend::matchmaker::LobbyGroup {
 								name_id: lg.name_id.clone(),
