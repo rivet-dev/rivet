@@ -62,6 +62,8 @@ resource "betteruptime_monitor" "monitor" {
 			value = "Bearer ${module.betteruptime_secrets.values["rivet/api_status/token"]}"
 		}
 	]
+	email = var.better_uptime_notify
+	push = var.better_uptime_notify
 }
 
 resource "betteruptime_status_page_resource" "status_page_resource" {

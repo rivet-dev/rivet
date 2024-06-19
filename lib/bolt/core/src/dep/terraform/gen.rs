@@ -579,6 +579,8 @@ async fn vars(ctx: &ProjectContext) {
 		);
 
 		vars.insert("better_uptime".into(), json!(better_uptime.to_owned()));
+
+		vars.insert("better_uptime_notify".into(), json!(better_uptime.notify));
 	}
 
 	// Imagor

@@ -18,3 +18,8 @@ variable "better_uptime" {
 		company_subdomain = string
 	})
 }
+
+variable "better_uptime_notify" {
+	type = bool
+}
+

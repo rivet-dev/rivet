@@ -744,6 +744,10 @@ pub struct BetterUptime {
 	/// It needs to be unique across all of Better Uptime. This is required
 	/// by Better Uptime.
 	pub company_subdomain: String,
+	/// If we should send push notifications.
+	///
+	/// SHould be disabled for staging environments.
+	pub notify: bool,
 }
 
 fn default_docker_repo() -> String {
