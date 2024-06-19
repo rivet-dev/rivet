@@ -146,7 +146,7 @@ async fn crdb_from_env(_client_name: String) -> Result<Option<CrdbPool>, Error> 
 			// Increase lifetime to mitigate: https://github.com/launchbadge/sqlx/issues/2854
 			//
 			// See max lifetime https://www.cockroachlabs.com/docs/stable/connection-pooling#set-the-maximum-lifetime-of-connections
-			.max_lifetime(Duration::from_secs(30 * 60))
+			.max_lifetime(Duration::from_secs(15 * 60))
 			// Remove connections after a while in order to reduce load
 			// on CRDB after bursts
 			.idle_timeout(Some(Duration::from_secs(3 * 60)))

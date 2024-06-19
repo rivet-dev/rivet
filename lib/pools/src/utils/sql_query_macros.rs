@@ -6,10 +6,10 @@ lazy_static::lazy_static! {
 		governor::clock::DefaultClock,
 		governor::middleware::NoOpMiddleware
 	> = governor::RateLimiter::direct(
-		// Limit how many connections can be created to the database
-		governor::Quota::per_second(std::num::NonZeroU32::new(10).unwrap())
-			// Allow creating at most 5 connections at the same time
-			.allow_burst(std::num::NonZeroU32::new(5).unwrap())
+		// Limit how fast the pool size can grow in order to encourage reusuing existing
+		// connections instead of opening new ones.
+		governor::Quota::per_minute(std::num::NonZeroU32::new(10 * 60).unwrap())
+			.allow_burst(std::num::NonZeroU32::new(500).unwrap())
 	);
 }
 

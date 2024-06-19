@@ -186,8 +186,8 @@ pub async fn run_from_env(use_autoscaler: bool) -> GlobalResult<()> {
 				.into_iter()
 				.map(|(pool_type, pool)| {
 					let desired_count = match pool_type {
-						PoolType::Ats => Some(pool.desired_count),
-						PoolType::Job | PoolType::Gg => {
+						PoolType::Ats | PoolType::Gg => Some(pool.desired_count),
+						PoolType::Job => {
 							if use_autoscaler {
 								None
 							} else {
