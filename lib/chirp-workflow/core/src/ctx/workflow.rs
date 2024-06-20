@@ -96,7 +96,6 @@ impl WorkflowCtx {
 			workflow_id: self.workflow_id,
 			name: self.name.clone(),
 			create_ts: self.create_ts,
-			ts: rivet_util::timestamp::now(),
 			ray_id: self.ray_id,
 
 			registry: self.registry.clone(),
@@ -485,7 +484,6 @@ impl WorkflowCtx {
 			workflow_id: self.workflow_id,
 			name: I::Workflow::NAME.to_string(),
 			create_ts: rivet_util::timestamp::now(),
-			ts: rivet_util::timestamp::now(),
 			ray_id: self.ray_id,
 
 			registry: self.registry.clone(),
