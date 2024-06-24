@@ -8,7 +8,6 @@ module "traefik_secrets" {
 	source = "../modules/secrets"
 
 	keys = [
-		"rivet/api_route/token",
 		"rivet/api_traefik_provider/token",
 	]
 }
