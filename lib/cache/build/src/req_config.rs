@@ -7,6 +7,7 @@ use std::{
 use redis::AsyncCommands;
 use rivet_pools::prelude::*;
 use tracing::Instrument;
+use serde::{Serialize, de::DeserializeOwned};
 
 use super::*;
 use crate::{
@@ -654,6 +655,85 @@ impl RequestConfig {
 			},
 			|value: &Vec<u8>| -> Result<Value, Error> {
 				Value::decode(value.as_slice()).map_err(Error::ProtoDecode)
+			},
+		)
+		.await
+	}
+}
+
+// MARK: JSON fetch
+impl RequestConfig {
+	#[tracing::instrument(err, skip(key, getter))]
+	pub async fn fetch_one_json<Key, Value, Getter, Fut>(
+		self,
+		base_key: impl ToString + Debug,
+		key: Key,
+		getter: Getter,
+	) -> Result<Option<Value>, Error>
+	where
+		Key: CacheKey + Send + Sync,
+		Value: Serialize + DeserializeOwned + Debug + Send + Sync,
+		Getter: Fn(GetterCtx<Key, Value>, Key) -> Fut + Clone,
+		Fut: Future<Output = GetterResult<GetterCtx<Key, Value>>>,
+	{
+		let values = self
+			.fetch_all_json_with_keys(base_key, [key], move |cache, keys| {
+				let getter = getter.clone();
+				async move {
+					debug_assert_eq!(1, keys.len());
+					if let Some(key) = keys.into_iter().next() {
+						getter(cache, key).await
+					} else {
+						tracing::error!("no keys provided to fetch one");
+						Ok(cache)
+					}
+				}
+			})
+			.await?;
+		Ok(values.into_iter().next().map(|(_, v)| v))
+	}
+
+	#[tracing::instrument(err, skip(keys, getter))]
+	pub async fn fetch_all_json<Key, Value, Getter, Fut>(
+		self,
+		base_key: impl ToString + Debug,
+		keys: impl IntoIterator<Item = Key>,
+		getter: Getter,
+	) -> Result<Vec<Value>, Error>
+	where
+		Key: CacheKey + Send + Sync,
+		Value: Serialize + DeserializeOwned + Debug + Send + Sync,
+		Getter: Fn(GetterCtx<Key, Value>, Vec<Key>) -> Fut + Clone,
+		Fut: Future<Output = GetterResult<GetterCtx<Key, Value>>>,
+	{
+		self.fetch_all_json_with_keys::<Key, Value, Getter, Fut>(base_key, keys, getter)
+			.await
+			// TODO: Find a way to not allocate another vec here
+			.map(|x| x.into_iter().map(|(_, v)| v).collect::<Vec<_>>())
+	}
+
+	#[tracing::instrument(err, skip(keys, getter))]
+	pub async fn fetch_all_json_with_keys<Key, Value, Getter, Fut>(
+		self,
+		base_key: impl ToString + Debug,
+		keys: impl IntoIterator<Item = Key>,
+		getter: Getter,
+	) -> Result<Vec<(Key, Value)>, Error>
+	where
+		Key: CacheKey + Send + Sync,
+		Value: Serialize + DeserializeOwned + Debug + Send + Sync,
+		Getter: Fn(GetterCtx<Key, Value>, Vec<Key>) -> Fut + Clone,
+		Fut: Future<Output = GetterResult<GetterCtx<Key, Value>>>,
+	{
+		self.fetch_all_convert(
+			base_key,
+			keys,
+			getter,
+			|value: &Value| -> Result<Vec<u8>, Error> {
+				serde_json::to_vec(value).map_err(Error::SerdeEncode)
+			},
+			|value: &Vec<u8>| -> Result<Value, Error> {
+				serde_json::from_slice(value.as_slice()).map_err(Error::SerdeDecode)
 			},
 		)
 		.await

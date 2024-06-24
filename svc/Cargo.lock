@@ -7085,6 +7085,7 @@ dependencies = [
  "rivet-pools",
  "rivet-util",
  "serde",
+ "serde_json",
  "thiserror",
  "tokio",
  "tracing",

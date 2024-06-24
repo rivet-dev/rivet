@@ -22,6 +22,12 @@ pub enum Error {
 	#[error("proto encode: {0}")]
 	ProtoEncode(prost::EncodeError),
 
+	#[error("serde decode: {0}")]
+	SerdeDecode(serde_json::Error),
+
+	#[error("serde encode: {0}")]
+	SerdeEncode(serde_json::Error),
+
 	#[error("optimistic lock failed too many times")]
 	OptimisticLockFailedTooManyTimes,
 }
