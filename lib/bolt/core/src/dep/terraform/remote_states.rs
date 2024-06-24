@@ -20,9 +20,6 @@ pub fn dependency_graph(_ctx: &ProjectContext) -> HashMap<&'static str, Vec<Remo
 		"redis_aws" => vec![
 			RemoteStateBuilder::default().plan_id("k8s_cluster_aws").build().unwrap(),
 		],
-		"k8s_infra" => vec![
-			RemoteStateBuilder::default().plan_id("cockroachdb_k8s").build().unwrap(),
-		],
 		"cockroachdb_managed" => vec![
 			RemoteStateBuilder::default().plan_id("k8s_cluster_aws").build().unwrap(),
 		],
