@@ -29,7 +29,7 @@ resource "null_resource" "job_runner_build" {
 		DST_BINARY_PATH="${local.job_runner_dst_binary_path}"
 
 		# Build the Docker image
-		docker build -t $IMAGE_NAME '${local.job_runner_src_dir}'
+		docker build --platform linux/amd64 -t $IMAGE_NAME '${local.job_runner_src_dir}'
 
 		# Create a temporary container
 		docker create --name $CONTAINER_NAME $IMAGE_NAME
