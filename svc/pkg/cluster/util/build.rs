@@ -1,7 +1,7 @@
 use std::path::PathBuf;
 
-use sha2::{Digest, Sha256};
-use tokio::{fs, process::Command};
+use tokio::fs;
+use merkle_hash::MerkleTree;
 
 // NOTE: This only gets the hash of the folder. Any template variables changed in the install scripts
 // will not update the hash.
@@ -23,57 +23,11 @@ async fn main() {
 	// Add rereun statement
 	println!("cargo:rerun-if-changed={}", server_install_path.display());
 
-	let mut util_path = current_dir.clone();
-	util_path.pop();
-	let util_path = util_path
-		.join("worker")
-		.join("src")
-		.join("workers")
-		.join("server_install");
-
-	// Compute the git diff between the current branch and the local changes
-	let cmd = Command::new("git")
-		.arg("diff")
-		.arg("--minimal")
-		.arg("HEAD")
-		.arg("--")
-		.arg(util_path)
-		.output()
-		.await
+	let tree = MerkleTree::builder(server_install_path.display().to_string())
+		.hash_names(true)
+		.build()
 		.unwrap();
-
-	if !cmd.status.success() {
-		panic!(
-			"failed to get git diff ({}):\n{}",
-			cmd.status,
-			String::from_utf8(cmd.stderr).unwrap()
-		);
-	}
-
-	let source_diff = String::from_utf8(cmd.stdout).unwrap();
-
-	// If there is no diff, use the git commit hash
-	let source_hash = if source_diff.is_empty() {
-		let cmd = Command::new("git")
-			.arg("rev-parse")
-			.arg("HEAD:svc/pkg/cluster/worker/src/workers/server_install")
-			.output()
-			.await
-			.unwrap();
-
-		if !cmd.status.success() {
-			panic!(
-				"failed to get git diff ({}):\n{}",
-				cmd.status,
-				String::from_utf8(cmd.stderr).unwrap()
-			);
-		}
-
-		String::from_utf8(cmd.stdout).unwrap()
-	} else {
-		// Get hash of diff
-		hex::encode(Sha256::digest(source_diff.as_bytes()))
-	};
+	let source_hash = hex::encode(tree.root.item.hash);
 
 	fs::write(out_dir.join("hash.txt"), source_hash.trim())
 		.await
