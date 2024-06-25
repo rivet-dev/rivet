@@ -137,7 +137,8 @@ resource "helm_release" "vector" {
 						ca_file = "/usr/local/share/ca-certificates/clickhouse-ca.crt"
 					} : {}
 					batch = {
-						timeout_secs = 5.0
+						# Speed up for realtime-ish logs
+						timeout_secs = 1.0
 					}
 				}
 

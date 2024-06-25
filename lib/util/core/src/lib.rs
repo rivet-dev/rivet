@@ -22,6 +22,13 @@ pub mod sort;
 pub mod timestamp;
 pub mod uuid;
 
+pub mod watch {
+	/// Represented in seconds.
+	///
+	/// See docs/infrastructure/TIMEOUTS.md for reasoning.
+	pub const DEFAULT_TIMEOUT: u64 = 40 * 1000;
+}
+
 #[cfg(feature = "serde")]
 pub mod serde {
 	use aws_smithy_types::Document;

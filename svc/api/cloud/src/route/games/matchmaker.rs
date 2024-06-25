@@ -204,6 +204,11 @@ pub async fn get_lobby_logs(
 				break logs_res;
 			}
 
+			// Timeout cleanly
+			if query_start.elapsed().as_millis() > util::watch::DEFAULT_TIMEOUT as u128 {
+				break job_log::read::Response { entries: Vec::new() };
+			}
+
 			// Throttle request
 			//
 			// We don't use `tokio::time::interval` because if the request takes longer than 500

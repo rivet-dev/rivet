@@ -10,11 +10,6 @@ use syn::{
 	Expr, Ident, Result, Token,
 };
 
-/// Represented in seconds.
-///
-/// See docs/infrastructure/TIMEOUTS.md for reasoning.
-const DEFAULT_TIMEOUT: u64 = 40 * 1000;
-
 mod kw {
 	syn::custom_keyword!(JITTER);
 }
@@ -172,7 +167,7 @@ pub fn select_with_timeout(item: TokenStream) -> TokenStream {
 	let (timeout, timeout_scale) = data
 		.timeout
 		.map(|(timeout, timeout_scale)| (timeout.to_token_stream(), timeout_scale))
-		.unwrap_or((quote! { #DEFAULT_TIMEOUT }, 1));
+		.unwrap_or((quote! { util::watch::DEFAULT_TIMEOUT }, 1));
 	let returning = data.returning.map_or_else(
 		|| {
 			quote! {Default::default()}
