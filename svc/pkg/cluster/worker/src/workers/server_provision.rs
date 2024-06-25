@@ -112,6 +112,7 @@ async fn inner(
 					pool_type: ctx.pool_type,
 					vlan_ip: vlan_ip.to_string(),
 					tags: ctx.tags.clone(),
+					use_prebakes: datacenter.prebakes_enabled,
 				})
 				.await;
 

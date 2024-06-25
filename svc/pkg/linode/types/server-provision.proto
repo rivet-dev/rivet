@@ -13,6 +13,7 @@ message Request {
     rivet.backend.cluster.PoolType pool_type = 4;
     string vlan_ip = 5;
     repeated string tags = 6;
+    bool use_prebakes = 8;
 }
 
 message Response {

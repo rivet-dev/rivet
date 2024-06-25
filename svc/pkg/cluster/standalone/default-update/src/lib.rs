@@ -19,6 +19,7 @@ struct Datacenter {
 	provider_datacenter_name: String,
 	pools: HashMap<PoolType, Pool>,
 	build_delivery_method: BuildDeliveryMethod,
+	prebakes_enabled: bool,
 }
 
 #[derive(Deserialize)]
@@ -214,6 +215,7 @@ pub async fn run_from_env(use_autoscaler: bool) -> GlobalResult<()> {
 			msg!([ctx] @wait cluster::msg::datacenter_update(datacenter.datacenter_id) {
 				datacenter_id: Some(datacenter_id_proto),
 				pools: new_pools,
+				prebakes_enabled: Some(datacenter.prebakes_enabled),
 			})
 			.await?;
 		}
@@ -241,6 +243,7 @@ pub async fn run_from_env(use_autoscaler: bool) -> GlobalResult<()> {
 				}).collect::<Vec<_>>(),
 
 				build_delivery_method: Into::<backend::cluster::BuildDeliveryMethod>::into(datacenter.build_delivery_method) as i32,
+				prebakes_enabled: datacenter.prebakes_enabled,
 			})
 			.await?;
 		}

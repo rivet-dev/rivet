@@ -6,13 +6,16 @@ types:
       - job
       - gg
       - ats
+
   Provider:
     enum:
       - linode
+
   BuildDeliveryMethod:
     enum:
       - traffic_server
       - s3_direct
+
   Pool:
     properties:
       pool_type: PoolType
@@ -21,15 +24,18 @@ types:
       min_count: integer
       max_count: integer
       drain_timeout: long
+
   Hardware:
     properties:
       provider_hardware: string
+
   Cluster:
     properties:
       cluster_id: uuid
       name_id: string
       create_ts: long
       owner_team_id: optional<uuid>
+
   Datacenter:
     properties:
       datacenter_id: uuid
@@ -41,7 +47,17 @@ types:
       provider_api_token: optional<string>
       pools: list<Pool>
       build_delivery_method: BuildDeliveryMethod
+
   Server:
     properties:
       server_id: uuid
       public_ip: string
+
+  PoolUpdate:
+    properties:
+      pool_type: PoolType
+      hardware: list<Hardware>
+      desired_count: optional<integer>
+      min_count: optional<integer>
+      max_count: optional<integer>
+      drain_timeout: optional<long>

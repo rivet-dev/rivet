@@ -12,6 +12,7 @@ import "proto/backend/cluster.proto";
 message Message {
     rivet.common.Uuid datacenter_id = 1;
     repeated PoolUpdate pools = 2;
+    optional bool prebakes_enabled = 3;
 }
 
 message PoolUpdate {

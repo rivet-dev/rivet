@@ -12,5 +12,6 @@ export declare namespace CreateDatacenterRequest {
         provider: serializers.admin.clusters.Provider.Raw;
         provider_datacenter_id: string;
         build_delivery_method: serializers.admin.clusters.BuildDeliveryMethod.Raw;
+        prebakes_enabled: boolean;
     }
 }

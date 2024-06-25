@@ -12,6 +12,7 @@ service:
       method: GET
       docs: Get clusters
       response: ListClustersResponse
+
     create:
       path: ""
       method: POST
@@ -24,10 +25,12 @@ types:
   ListClustersResponse:
     properties:
       clusters: list<localCommons.Cluster>
+
   CreateClusterRequest:
     properties:
       name_id: string
       owner_team_id: optional<uuid>
+
   CreateClusterResponse:
     properties:
       cluster_id: uuid

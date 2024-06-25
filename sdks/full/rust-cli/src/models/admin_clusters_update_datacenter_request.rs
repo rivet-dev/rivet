@@ -13,29 +13,17 @@
 
 #[derive(Clone, Debug, PartialEq, Default, Serialize, Deserialize)]
 pub struct AdminClustersUpdateDatacenterRequest {
-    #[serde(rename = "desired_count", skip_serializing_if = "Option::is_none")]
-    pub desired_count: Option<i32>,
-    #[serde(rename = "drain_timeout", skip_serializing_if = "Option::is_none")]
-    pub drain_timeout: Option<i64>,
-    #[serde(rename = "hardware")]
-    pub hardware: Vec<crate::models::AdminClustersHardware>,
-    #[serde(rename = "max_count", skip_serializing_if = "Option::is_none")]
-    pub max_count: Option<i32>,
-    #[serde(rename = "min_count", skip_serializing_if = "Option::is_none")]
-    pub min_count: Option<i32>,
-    #[serde(rename = "pool_type")]
-    pub pool_type: crate::models::AdminClustersPoolType,
+    #[serde(rename = "pools")]
+    pub pools: Vec<crate::models::AdminClustersPoolUpdate>,
+    #[serde(rename = "prebakes_enabled", skip_serializing_if = "Option::is_none")]
+    pub prebakes_enabled: Option<bool>,
 }
 
 impl AdminClustersUpdateDatacenterRequest {
-    pub fn new(hardware: Vec<crate::models::AdminClustersHardware>, pool_type: crate::models::AdminClustersPoolType) -> AdminClustersUpdateDatacenterRequest {
+    pub fn new(pools: Vec<crate::models::AdminClustersPoolUpdate>) -> AdminClustersUpdateDatacenterRequest {
         AdminClustersUpdateDatacenterRequest {
-            desired_count: None,
-            drain_timeout: None,
-            hardware,
-            max_count: None,
-            min_count: None,
-            pool_type,
+            pools,
+            prebakes_enabled: None,
         }
     }
 }

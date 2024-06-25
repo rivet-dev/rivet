@@ -8,4 +8,5 @@ export interface CreateDatacenterRequest {
     provider: Rivet.admin.clusters.Provider;
     providerDatacenterId: string;
     buildDeliveryMethod: Rivet.admin.clusters.BuildDeliveryMethod;
+    prebakesEnabled: boolean;
 }

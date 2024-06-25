@@ -183,6 +183,7 @@ Class | Method | HTTP request | Description
  - [AdminClustersListServersResponse](docs/AdminClustersListServersResponse.md)
  - [AdminClustersPool](docs/AdminClustersPool.md)
  - [AdminClustersPoolType](docs/AdminClustersPoolType.md)
+ - [AdminClustersPoolUpdate](docs/AdminClustersPoolUpdate.md)
  - [AdminClustersProvider](docs/AdminClustersProvider.md)
  - [AdminClustersServer](docs/AdminClustersServer.md)
  - [AdminClustersUpdateDatacenterRequest](docs/AdminClustersUpdateDatacenterRequest.md)

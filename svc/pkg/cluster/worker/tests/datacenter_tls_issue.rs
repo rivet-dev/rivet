@@ -32,6 +32,7 @@ async fn datacenter_tls_issue(ctx: TestCtx) {
 		pools: Vec::new(),
 
 		build_delivery_method: backend::cluster::BuildDeliveryMethod::TrafficServer as i32,
+		prebakes_enabled: false,
 	})
 	.await
 	.unwrap();

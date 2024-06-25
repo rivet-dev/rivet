@@ -6,10 +6,8 @@ use std::collections::HashSet;
 pub async fn handle(
 	ctx: OperationContext<cluster::server_destroy_with_filter::Request>,
 ) -> GlobalResult<cluster::server_destroy_with_filter::Response> {
-	let filter = unwrap!(ctx.filter.clone());
-
 	let servers_res = op!([ctx] cluster_server_list {
-		filter: Some(filter)
+		filter: ctx.filter.clone(),
 	})
 	.await?;
 

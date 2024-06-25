@@ -15,12 +15,14 @@ service:
       method: GET
       docs: Get datacenters of a cluster
       response: ListDatacentersResponse
+
     create:
       path: ""
       method: POST
       request:
         body: CreateDatacenterRequest
       response: CreateDatacenterResponse
+
     update:
       path: /{datacenter_id}
       path-parameters:
@@ -34,6 +36,7 @@ types:
   ListDatacentersResponse:
     properties:
       datacenters: list<localCommons.Datacenter>
+
   CreateDatacenterRequest:
     properties:
       display_name: string
@@ -41,14 +44,13 @@ types:
       provider: localCommons.Provider
       provider_datacenter_id: string
       build_delivery_method: localCommons.BuildDeliveryMethod
+      prebakes_enabled: boolean
+
   CreateDatacenterResponse:
     properties:
       datacenter_id: uuid
+
   UpdateDatacenterRequest:
     properties:
-      pool_type: localCommons.PoolType
-      hardware: list<localCommons.Hardware>
-      desired_count: optional<integer>
-      min_count: optional<integer>
-      max_count: optional<integer>
-      drain_timeout: optional<long>
+      pools: list<localCommons.PoolUpdate>
+      prebakes_enabled: optional<boolean>

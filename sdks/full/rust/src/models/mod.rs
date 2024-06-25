@@ -24,6 +24,8 @@ pub mod admin_clusters_pool;
 pub use self::admin_clusters_pool::AdminClustersPool;
 pub mod admin_clusters_pool_type;
 pub use self::admin_clusters_pool_type::AdminClustersPoolType;
+pub mod admin_clusters_pool_update;
+pub use self::admin_clusters_pool_update::AdminClustersPoolUpdate;
 pub mod admin_clusters_provider;
 pub use self::admin_clusters_provider::AdminClustersProvider;
 pub mod admin_clusters_server;

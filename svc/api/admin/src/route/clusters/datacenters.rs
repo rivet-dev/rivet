@@ -1,7 +1,7 @@
 use api_helper::{anchor::WatchIndexQuery, ctx::Ctx};
 use proto::backend;
 use rivet_api::models;
-use rivet_convert::{ApiFrom, ApiTryFrom};
+use rivet_convert::{ApiFrom, ApiInto, ApiTryFrom};
 use rivet_operation::prelude::{proto::backend::pkg::cluster, *};
 use serde_json::{json, Value};
 
@@ -100,6 +100,7 @@ pub async fn create(
 		pools: pools,
 
 		build_delivery_method: backend::cluster::BuildDeliveryMethod::api_from(body.build_delivery_method) as i32,
+		prebakes_enabled: body.prebakes_enabled,
 	})
 	.await?;
 
@@ -129,24 +130,14 @@ pub async fn update(
 		bail_with!(CLUSTER_DATACENTER_NOT_IN_CLUSTER);
 	}
 
-	let pools = vec![cluster::msg::datacenter_update::PoolUpdate {
-		pool_type: backend::cluster::PoolType::api_from(body.pool_type) as i32,
-		hardware: body
-			.hardware
-			.iter()
-			.map(|h| backend::cluster::Hardware {
-				provider_hardware: h.provider_hardware.clone(),
-			})
-			.collect(),
-		desired_count: body.desired_count.map(|c| c as u32),
-		min_count: body.min_count.map(|c| c as u32),
-		max_count: body.max_count.map(|c| c as u32),
-		drain_timeout: body.drain_timeout.map(|d| d as u64),
-	}];
-
 	msg!([ctx] cluster::msg::datacenter_update(datacenter_id) -> cluster::msg::datacenter_scale {
 		datacenter_id: Some(datacenter_id.into()),
-		pools: pools,
+		pools: body.pools
+			.iter()
+			.cloned()
+			.map(ApiInto::api_into)
+			.collect::<Vec<_>>(),
+		prebakes_enabled: body.prebakes_enabled,
 	})
 	.await
 	.unwrap();

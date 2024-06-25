@@ -51,6 +51,8 @@ components:
           type: string
         name_id:
           type: string
+        prebakes_enabled:
+          type: boolean
         provider:
           $ref: '#/components/schemas/AdminClustersProvider'
         provider_datacenter_id:
@@ -61,6 +63,7 @@ components:
       - provider
       - provider_datacenter_id
       - build_delivery_method
+      - prebakes_enabled
       type: object
     AdminClustersCreateDatacenterResponse:
       properties:
@@ -169,22 +172,7 @@ components:
       - gg
       - ats
       type: string
-    AdminClustersProvider:
-      enum:
-      - linode
-      type: string
-    AdminClustersServer:
-      properties:
-        public_ip:
-          type: string
-        server_id:
-          format: uuid
-          type: string
-      required:
-      - server_id
-      - public_ip
-      type: object
-    AdminClustersUpdateDatacenterRequest:
+    AdminClustersPoolUpdate:
       properties:
         desired_count:
           type: integer
@@ -204,6 +192,32 @@ components:
       required:
       - pool_type
       - hardware
+      type: object
+    AdminClustersProvider:
+      enum:
+      - linode
+      type: string
+    AdminClustersServer:
+      properties:
+        public_ip:
+          type: string
+        server_id:
+          format: uuid
+          type: string
+      required:
+      - server_id
+      - public_ip
+      type: object
+    AdminClustersUpdateDatacenterRequest:
+      properties:
+        pools:
+          items:
+            $ref: '#/components/schemas/AdminClustersPoolUpdate'
+          type: array
+        prebakes_enabled:
+          type: boolean
+      required:
+      - pools
       type: object
     AdminLoginRequest:
       properties:

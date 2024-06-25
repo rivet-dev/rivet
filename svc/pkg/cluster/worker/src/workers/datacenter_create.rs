@@ -40,9 +40,10 @@ async fn worker(
 					provider_api_token,
 					pools,
 					build_delivery_method,
+					prebakes_enabled,
 					create_ts
 				)
-				VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+				VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
 				",
 				datacenter_id,
 				cluster_id,
@@ -53,6 +54,7 @@ async fn worker(
 				&ctx.provider_api_token,
 				pools_buf,
 				ctx.build_delivery_method as i64,
+				ctx.prebakes_enabled,
 				util::timestamp::now(),
 			)
 			.await?;

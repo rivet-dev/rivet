@@ -19,6 +19,7 @@ docs/AdminClustersListDatacentersResponse.md
 docs/AdminClustersListServersResponse.md
 docs/AdminClustersPool.md
 docs/AdminClustersPoolType.md
+docs/AdminClustersPoolUpdate.md
 docs/AdminClustersProvider.md
 docs/AdminClustersServer.md
 docs/AdminClustersServersApi.md
@@ -404,6 +405,7 @@ src/models/admin_clusters_list_datacenters_response.rs
 src/models/admin_clusters_list_servers_response.rs
 src/models/admin_clusters_pool.rs
 src/models/admin_clusters_pool_type.rs
+src/models/admin_clusters_pool_update.rs
 src/models/admin_clusters_provider.rs
 src/models/admin_clusters_server.rs
 src/models/admin_clusters_update_datacenter_request.rs

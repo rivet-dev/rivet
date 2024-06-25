@@ -139,6 +139,7 @@ async fn setup(
 		pools: pools.clone(),
 
 		build_delivery_method: backend::cluster::BuildDeliveryMethod::TrafficServer as i32,
+		prebakes_enabled: false,
 	})
 	.await
 	.unwrap();

@@ -15,6 +15,7 @@ struct Datacenter {
 	provider_api_token: Option<String>,
 	pools: Vec<u8>,
 	build_delivery_method: i64,
+	prebakes_enabled: bool,
 }
 
 impl TryFrom<Datacenter> for backend::cluster::Datacenter {
@@ -34,6 +35,7 @@ impl TryFrom<Datacenter> for backend::cluster::Datacenter {
 			provider_api_token: value.provider_api_token,
 			pools,
 			build_delivery_method: value.build_delivery_method as i32,
+			prebakes_enabled: value.prebakes_enabled,
 		})
 	}
 }
@@ -87,6 +89,7 @@ async fn get_dcs(
 			provider_api_token,
 			pools,
 			build_delivery_method,
+			prebakes_enabled,
 			create_ts
 		FROM db_cluster.datacenters
 		WHERE datacenter_id = ANY($1)

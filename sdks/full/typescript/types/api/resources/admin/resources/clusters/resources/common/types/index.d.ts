@@ -6,3 +6,4 @@ export * from "./Hardware";
 export * from "./Cluster";
 export * from "./Datacenter";
 export * from "./Server";
+export * from "./PoolUpdate";

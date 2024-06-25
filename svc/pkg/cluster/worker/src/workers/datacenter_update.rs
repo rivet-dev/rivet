@@ -56,11 +56,14 @@ async fn worker(
 		[ctx]
 		"
 		UPDATE db_cluster.datacenters
-		SET pools = $2
+		SET
+			pools = $2 AND
+			prebakes_enabled = coalesce($3, prebakes_enabled)
 		WHERE datacenter_id = $1
 		",
 		datacenter_id,
 		pools_buf,
+		ctx.prebakes_enabled,
 	)
 	.await?;
 

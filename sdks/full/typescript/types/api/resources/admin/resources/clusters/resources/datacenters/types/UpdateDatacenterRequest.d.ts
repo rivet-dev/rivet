@@ -3,10 +3,6 @@
  */
 import * as Rivet from "../../../../../../..";
 export interface UpdateDatacenterRequest {
-    poolType: Rivet.admin.clusters.PoolType;
-    hardware: Rivet.admin.clusters.Hardware[];
-    desiredCount?: number;
-    minCount?: number;
-    maxCount?: number;
-    drainTimeout?: number;
+    pools: Rivet.admin.clusters.PoolUpdate[];
+    prebakesEnabled?: boolean;
 }

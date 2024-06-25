@@ -21,6 +21,7 @@ service:
           pool: optional<localCommons.PoolType>
           public_ip: optional<string>
       response: ListServersResponse
+
     taint:
       path: /taint
       method: POST
@@ -31,6 +32,7 @@ service:
           datacenter: optional<string>
           pool: optional<localCommons.PoolType>
           public_ip: optional<string>
+
     destroy:
       path: /destroy
       method: POST

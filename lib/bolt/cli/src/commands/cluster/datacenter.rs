@@ -76,6 +76,9 @@ pub enum SubCommand {
 		/// The build delivery method
 		#[clap(long)]
 		build_delivery_method: DatacenterBuildDeliveryMethod,
+		/// Whether or not prebakes are enabled
+		#[clap(long)]
+		prebakes_enabled: bool,
 	},
 	/// Lists all datacenters of a cluster
 	List {
@@ -109,6 +112,9 @@ pub enum SubCommand {
 		/// The drain timeout
 		#[clap(long)]
 		drain_timeout: Option<i64>,
+		/// Whether or not prebakes are enabled
+		#[clap(long)]
+		prebakes_enabled: Option<bool>,
 	},
 }
 
@@ -128,6 +134,7 @@ impl SubCommand {
 				provider,
 				provider_datacenter_id,
 				build_delivery_method,
+				prebakes_enabled,
 			} => {
 				ensure!(
 					ctx.ns().rivet.provisioning.is_some(),
@@ -155,6 +162,7 @@ impl SubCommand {
 						provider: provider.into(),
 						provider_datacenter_id,
 						build_delivery_method: build_delivery_method.into(),
+						prebakes_enabled,
 					},
 				)
 				.await?;
@@ -198,6 +206,7 @@ impl SubCommand {
 				min_count,
 				max_count,
 				drain_timeout,
+				prebakes_enabled,
 			} => {
 				let clusters =
 					admin_clusters_api::admin_clusters_list(&ctx.openapi_config_cloud().await?)
@@ -230,17 +239,20 @@ impl SubCommand {
 					&cluster.cluster_id.to_string(),
 					&datacenter.datacenter_id.to_string(),
 					models::AdminClustersUpdateDatacenterRequest {
-						desired_count,
-						drain_timeout,
-						hardware: hardware
-							.iter()
-							.map(|hardware| models::AdminClustersHardware {
-								provider_hardware: hardware.clone(),
-							})
-							.collect(),
-						min_count,
-						max_count,
-						pool_type: pool.into(),
+						pools: vec![models::AdminClustersPoolUpdate {
+							desired_count,
+							drain_timeout,
+							hardware: hardware
+								.iter()
+								.map(|hardware| models::AdminClustersHardware {
+									provider_hardware: hardware.clone(),
+								})
+								.collect(),
+							min_count,
+							max_count,
+							pool_type: pool.into(),
+						}],
+						prebakes_enabled,
 					},
 				)
 				.await?;

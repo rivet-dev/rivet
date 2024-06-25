@@ -163,6 +163,40 @@ func (p *Pool) String() string {
 	return fmt.Sprintf("%#v", p)
 }
 
+type PoolUpdate struct {
+	PoolType     PoolType    `json:"pool_type,omitempty"`
+	Hardware     []*Hardware `json:"hardware,omitempty"`
+	DesiredCount *int        `json:"desired_count,omitempty"`
+	MinCount     *int        `json:"min_count,omitempty"`
+	MaxCount     *int        `json:"max_count,omitempty"`
+	DrainTimeout *int64      `json:"drain_timeout,omitempty"`
+
+	_rawJSON json.RawMessage
+}
+
+func (p *PoolUpdate) UnmarshalJSON(data []byte) error {
+	type unmarshaler PoolUpdate
+	var value unmarshaler
+	if err := json.Unmarshal(data, &value); err != nil {
+		return err
+	}
+	*p = PoolUpdate(value)
+	p._rawJSON = json.RawMessage(data)
+	return nil
+}
+
+func (p *PoolUpdate) String() string {
+	if len(p._rawJSON) > 0 {
+		if value, err := core.StringifyJSON(p._rawJSON); err == nil {
+			return value
+		}
+	}
+	if value, err := core.StringifyJSON(p); err == nil {
+		return value
+	}
+	return fmt.Sprintf("%#v", p)
+}
+
 type Provider string
 
 const (

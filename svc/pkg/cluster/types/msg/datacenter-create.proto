@@ -21,6 +21,7 @@ message Message {
 
     repeated rivet.backend.cluster.Pool pools = 8;
     rivet.backend.cluster.BuildDeliveryMethod build_delivery_method = 9;
+    bool prebakes_enabled = 10;
 }
 
 // Helper proto for writing to sql

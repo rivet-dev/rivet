@@ -30,6 +30,7 @@ message Datacenter {
 
     repeated Pool pools = 8;
     BuildDeliveryMethod build_delivery_method = 9;
+    bool prebakes_enabled = 12;
 }
 
 message Pool {

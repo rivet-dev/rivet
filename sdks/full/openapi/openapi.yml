@@ -10085,6 +10085,27 @@ components:
       required:
         - server_id
         - public_ip
+    AdminClustersPoolUpdate:
+      type: object
+      properties:
+        pool_type:
+          $ref: '#/components/schemas/AdminClustersPoolType'
+        hardware:
+          type: array
+          items:
+            $ref: '#/components/schemas/AdminClustersHardware'
+        desired_count:
+          type: integer
+        min_count:
+          type: integer
+        max_count:
+          type: integer
+        drain_timeout:
+          type: integer
+          format: int64
+      required:
+        - pool_type
+        - hardware
     AdminClustersListDatacentersResponse:
       type: object
       properties:
@@ -10107,12 +10128,15 @@ components:
           type: string
         build_delivery_method:
           $ref: '#/components/schemas/AdminClustersBuildDeliveryMethod'
+        prebakes_enabled:
+          type: boolean
       required:
         - display_name
         - name_id
         - provider
         - provider_datacenter_id
         - build_delivery_method
+        - prebakes_enabled
     AdminClustersCreateDatacenterResponse:
       type: object
       properties:
@@ -10124,24 +10148,14 @@ components:
     AdminClustersUpdateDatacenterRequest:
       type: object
       properties:
-        pool_type:
-          $ref: '#/components/schemas/AdminClustersPoolType'
-        hardware:
+        pools:
           type: array
           items:
-            $ref: '#/components/schemas/AdminClustersHardware'
-        desired_count:
-          type: integer
-        min_count:
-          type: integer
-        max_count:
-          type: integer
-        drain_timeout:
-          type: integer
-          format: int64
+            $ref: '#/components/schemas/AdminClustersPoolUpdate'
+        prebakes_enabled:
+          type: boolean
       required:
-        - pool_type
-        - hardware
+        - pools
     AdminClustersListServersResponse:
       type: object
       properties:

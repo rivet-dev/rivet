@@ -645,6 +645,8 @@ pub struct ProvisioningDatacenter {
 	pub provider_datacenter_name: String,
 	#[serde(default)]
 	pub build_delivery_method: ProvisioningBuildDeliveryMethod,
+	#[serde(default = "default_prebakes_enabled")]
+	pub prebakes_enabled: bool,
 	#[serde(default)]
 	pub pools: HashMap<ProvisioningDatacenterPoolType, ProvisioningDatacenterPool>,
 }
@@ -772,6 +774,10 @@ fn default_tunnel_port() -> u16 {
 
 fn default_job_server_provision_margin() -> u32 {
 	2
+}
+
+fn default_prebakes_enabled() -> bool {
+	true
 }
 
 // Used for parsing from 1password

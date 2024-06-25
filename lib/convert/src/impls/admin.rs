@@ -1,4 +1,4 @@
-use proto::backend;
+use proto::backend::{self, pkg::*};
 use rivet_api::models;
 use rivet_operation::prelude::*;
 
@@ -119,5 +119,24 @@ impl ApiTryFrom<backend::cluster::Datacenter> for models::AdminClustersDatacente
 			provider_api_token: value.provider_api_token,
 			provider_datacenter_id: value.provider_datacenter_id,
 		})
+	}
+}
+
+impl ApiFrom<models::AdminClustersPoolUpdate> for cluster::msg::datacenter_update::PoolUpdate {
+	fn api_from(value: models::AdminClustersPoolUpdate) -> cluster::msg::datacenter_update::PoolUpdate {
+		cluster::msg::datacenter_update::PoolUpdate {
+			pool_type: ApiInto::<backend::cluster::PoolType>::api_into(value.pool_type) as i32,
+			hardware: value
+				.hardware
+				.iter()
+				.map(|h| backend::cluster::Hardware {
+					provider_hardware: h.provider_hardware.clone(),
+				})
+				.collect(),
+			desired_count: value.desired_count.map(|c| c as u32),
+			min_count: value.min_count.map(|c| c as u32),
+			max_count: value.max_count.map(|c| c as u32),
+			drain_timeout: value.drain_timeout.map(|d| d as u64),
+		}
 	}
 }

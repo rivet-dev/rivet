@@ -168,8 +168,11 @@ async fn create_disks(
 	opts: CreateDisks<'_>,
 ) -> GlobalResult<(api::CreateDisksResponse, bool)> {
 	// Try to get custom image (if exists)
-	let (custom_image, updated) =
-		get_custom_image(ctx, crdb, opts.datacenter_id, opts.pool_type).await?;
+	let (custom_image, updated) = if ctx.use_prebakes {
+		get_custom_image(ctx, crdb, opts.datacenter_id, opts.pool_type).await?
+	} else {
+		(None, false)
+	};
 
 	// Default image
 	let used_custom_image = custom_image.is_some();
@@ -212,9 +215,6 @@ async fn get_custom_image(
 	datacenter_id: Uuid,
 	pool_type: PoolType,
 ) -> GlobalResult<(Option<String>, bool)> {
-	// TODO(RVTEE-107): Disable prebake images completely until Linode fixes the limits
-	return Ok((None, false));
-
 	let provider = backend::cluster::Provider::Linode;
 
 	// Get the custom image id for this server, or insert a record and start creating one

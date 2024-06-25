@@ -75,6 +75,7 @@ async fn datacenter_taint(ctx: TestCtx) {
 			max_count: Some(1),
 			drain_timeout: None,
 		}],
+		prebakes_enabled: None,
 	})
 	.await
 	.unwrap();
@@ -118,6 +119,7 @@ async fn datacenter_taint(ctx: TestCtx) {
 			max_count: Some(0),
 			drain_timeout: None,
 		}],
+		prebakes_enabled: None,
 	})
 	.await
 	.unwrap();
