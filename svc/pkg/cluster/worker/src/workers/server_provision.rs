@@ -35,11 +35,11 @@ async fn inner(
 
 	// Check if server is already provisioned
 	// NOTE: sql record already exists before this worker is called
-	let (provider_server_id, destroyed) = sql_fetch_one!(
-		[ctx, (Option<String>, bool)]
+	let (provider_server_id,) = sql_fetch_one!(
+		[ctx, (Option<String>,)]
 		"
 		SELECT
-			provider_server_id, cloud_destroy_ts IS NOT NULL
+			provider_server_id
 		FROM db_cluster.servers
 		WHERE server_id = $1
 		",
@@ -52,10 +52,6 @@ async fn inner(
 			?provider_server_id,
 			"server is already provisioned"
 		);
-		return Ok(());
-	}
-	if destroyed {
-		tracing::warn!(?server_id, "attempting to provision a destroyed server");
 		return Ok(());
 	}
 
