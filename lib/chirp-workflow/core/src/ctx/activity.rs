@@ -22,7 +22,7 @@ impl ActivityCtx {
 	pub fn new(
 		db: DatabaseHandle,
 		conn: &rivet_connection::Connection,
-		workflow_create_ts: i64,
+		activity_create_ts: i64,
 		ray_id: Uuid,
 		name: &'static str,
 	) -> Self {
@@ -36,7 +36,7 @@ impl ActivityCtx {
 			req_id,
 			ray_id,
 			ts,
-			workflow_create_ts,
+			activity_create_ts,
 			(),
 		);
 		op_ctx.from_workflow = true;
@@ -105,10 +105,6 @@ impl ActivityCtx {
 	pub fn req_dt(&self) -> i64 {
 		self.ts.saturating_sub(self.op_ctx.req_ts())
 	}
-
-	// pub fn perf(&self) -> &chirp_perf::PerfCtx {
-	// 	self.conn.perf()
-	// }
 
 	pub fn trace(&self) -> &[chirp_client::TraceEntry] {
 		self.conn.trace()

@@ -105,10 +105,6 @@ impl OperationCtx {
 		self.ts.saturating_sub(self.op_ctx.req_ts())
 	}
 
-	// pub fn perf(&self) -> &chirp_perf::PerfCtx {
-	// 	self.conn.perf()
-	// }
-
 	pub fn trace(&self) -> &[chirp_client::TraceEntry] {
 		self.conn.trace()
 	}

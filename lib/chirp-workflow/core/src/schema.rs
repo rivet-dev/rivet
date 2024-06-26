@@ -23,6 +23,7 @@ pub enum Event {
 #[derive(Debug)]
 pub struct ActivityEvent {
 	pub activity_id: ActivityId,
+	pub create_ts: i64,
 
 	/// If activity succeeds, this will be some.
 	pub(crate) output: Option<serde_json::Value>,
@@ -45,6 +46,7 @@ impl TryFrom<ActivityEventRow> for ActivityEvent {
 	fn try_from(value: ActivityEventRow) -> WorkflowResult<Self> {
 		Ok(ActivityEvent {
 			activity_id: ActivityId::from_bytes(value.activity_name, value.input_hash)?,
+			create_ts: value.create_ts,
 			output: value.output,
 			error_count: value
 				.error_count

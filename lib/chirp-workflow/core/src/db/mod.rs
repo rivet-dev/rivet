@@ -47,6 +47,7 @@ pub trait Database: Send {
 		workflow_id: Uuid,
 		location: &[usize],
 		activity_id: &ActivityId,
+		create_ts: i64,
 		input: serde_json::Value,
 		output: Result<serde_json::Value, &str>,
 	) -> WorkflowResult<()>;
@@ -76,6 +77,7 @@ pub trait Database: Send {
 		input: serde_json::Value,
 	) -> WorkflowResult<()>;
 
+	/// Fetches a workflow that has the given json as a subset of its input after the given ts.
 	async fn poll_workflow(
 		&self,
 		name: &str,
@@ -132,6 +134,7 @@ pub struct ActivityEventRow {
 	pub input_hash: Vec<u8>,
 	pub output: Option<serde_json::Value>,
 	pub error_count: i64,
+	pub create_ts: i64,
 }
 
 #[derive(sqlx::FromRow)]

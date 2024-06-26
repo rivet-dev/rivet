@@ -191,6 +191,7 @@ impl Database for DatabasePostgres {
 						ev.activity_name, 
 						ev.input_hash, 
 						ev.output,
+						ev.create_ts,
 						COUNT(err.workflow_id) AS error_count
 					FROM db_workflow.workflow_activity_events AS ev
 					LEFT JOIN db_workflow.workflow_activity_errors AS err
@@ -226,7 +227,10 @@ impl Database for DatabasePostgres {
 				sqlx::query_as::<_, SubWorkflowEventRow>(indoc!(
 					"
 					SELECT
-						sw.workflow_id, sw.location, sw.sub_workflow_id, w.workflow_name AS sub_workflow_name
+						sw.workflow_id,
+						sw.location,
+						sw.sub_workflow_id,
+						w.workflow_name AS sub_workflow_name
 					FROM db_workflow.workflow_sub_workflow_events AS sw
 					JOIN db_workflow.workflows AS w
 					ON sw.sub_workflow_id = w.workflow_id
@@ -329,6 +333,7 @@ impl Database for DatabasePostgres {
 		workflow_id: Uuid,
 		location: &[usize],
 		activity_id: &ActivityId,
+		create_ts: i64,
 		input: serde_json::Value,
 		res: Result<serde_json::Value, &str>,
 	) -> WorkflowResult<()> {
@@ -336,10 +341,12 @@ impl Database for DatabasePostgres {
 			Ok(output) => {
 				sqlx::query(indoc!(
 					"
-					UPSERT INTO db_workflow.workflow_activity_events (
-						workflow_id, location, activity_name, input_hash, input, output
+					INSERT INTO db_workflow.workflow_activity_events (
+						workflow_id, location, activity_name, input_hash, input, output, create_ts
 					)
-					VALUES ($1, $2, $3, $4, $5, $6)
+					VALUES ($1, $2, $3, $4, $5, $6, $7)
+					ON CONFLICT (workflow_id, location) DO UPDATE
+					SET output = excluded.output
 					",
 				))
 				.bind(workflow_id)
@@ -348,6 +355,8 @@ impl Database for DatabasePostgres {
 				.bind(activity_id.input_hash.to_le_bytes())
 				.bind(input)
 				.bind(output)
+				.bind(rivet_util::timestamp::now())
+				.bind(create_ts)
 				.execute(&mut *self.conn().await?)
 				.await
 				.map_err(WorkflowError::Sqlx)?;
@@ -357,10 +366,11 @@ impl Database for DatabasePostgres {
 					"
 					WITH
 						event AS (
-							UPSERT INTO db_workflow.workflow_activity_events (
-								workflow_id, location, activity_name, input_hash, input
+							INSERT INTO db_workflow.workflow_activity_events (
+								workflow_id, location, activity_name, input_hash, input, create_ts
 							)
-							VALUES ($1, $2, $3, $4, $5)
+							VALUES ($1, $2, $3, $4, $5, $7)
+							ON CONFLICT (workflow_id, location) DO NOTHING
 							RETURNING 1
 						),
 						err AS (
@@ -379,7 +389,7 @@ impl Database for DatabasePostgres {
 				.bind(activity_id.input_hash.to_le_bytes())
 				.bind(input)
 				.bind(err)
-				.bind(rivet_util::timestamp::now())
+				.bind(create_ts)
 				.execute(&mut *self.conn().await?)
 				.await
 				.map_err(WorkflowError::Sqlx)?;
@@ -417,9 +427,9 @@ impl Database for DatabasePostgres {
 				),
 				insert_event AS (
 					INSERT INTO db_workflow.workflow_signal_events(
-						workflow_id, location, signal_id, signal_name, body
+						workflow_id, location, signal_id, signal_name, body, ack_ts
 					)
-					SELECT workflow_id, $3 AS location, signal_id, signal_name, body
+					SELECT workflow_id, $3 AS location, signal_id, signal_name, body, $4 AS ack_ts
 					FROM next_signal
 					RETURNING 1
 				)
@@ -429,6 +439,7 @@ impl Database for DatabasePostgres {
 		.bind(workflow_id)
 		.bind(filter)
 		.bind(location.iter().map(|x| *x as i64).collect::<Vec<_>>())
+		.bind(rivet_util::timestamp::now())
 		.fetch_optional(&mut *self.conn().await?)
 		.await
 		.map_err(WorkflowError::Sqlx)?;
@@ -484,9 +495,9 @@ impl Database for DatabasePostgres {
 			 	),
 				sub_workflow AS (
 					INSERT INTO db_workflow.workflow_sub_workflow_events(
-						workflow_id, location, sub_workflow_id
+						workflow_id, location, sub_workflow_id, create_ts
 					)
-					VALUES($1, $6, $7)
+					VALUES($1, $6, $7, $3)
 					RETURNING 1
 				)
 			SELECT 1

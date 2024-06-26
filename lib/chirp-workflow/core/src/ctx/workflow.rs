@@ -34,6 +34,7 @@ pub struct WorkflowCtx {
 	/// Name of the workflow to run in the registry.
 	pub name: String,
 	create_ts: i64,
+	ts: i64,
 	ray_id: Uuid,
 
 	registry: RegistryHandle,
@@ -66,6 +67,7 @@ impl WorkflowCtx {
 			workflow_id: workflow.workflow_id,
 			name: workflow.workflow_name,
 			create_ts: workflow.create_ts,
+			ts: rivet_util::timestamp::now(),
 
 			ray_id: workflow.ray_id,
 
@@ -96,6 +98,7 @@ impl WorkflowCtx {
 			workflow_id: self.workflow_id,
 			name: self.name.clone(),
 			create_ts: self.create_ts,
+			ts: self.ts,
 			ray_id: self.ray_id,
 
 			registry: self.registry.clone(),
@@ -245,6 +248,7 @@ impl WorkflowCtx {
 		&mut self,
 		input: &A::Input,
 		activity_id: &ActivityId,
+		create_ts: i64,
 	) -> WorkflowResult<A::Output> {
 		let ctx = ActivityCtx::new(
 			self.db.clone(),
@@ -272,6 +276,7 @@ impl WorkflowCtx {
 						self.workflow_id,
 						self.full_location().as_ref(),
 						activity_id,
+						create_ts,
 						input_val,
 						Ok(output_val),
 					)
@@ -290,6 +295,7 @@ impl WorkflowCtx {
 						self.workflow_id,
 						self.full_location().as_ref(),
 						activity_id,
+						create_ts,
 						input_val,
 						Err(&err.to_string()),
 					)
@@ -307,6 +313,7 @@ impl WorkflowCtx {
 						self.workflow_id,
 						self.full_location().as_ref(),
 						activity_id,
+						create_ts,
 						input_val,
 						Err(&err.to_string()),
 					)
@@ -484,6 +491,7 @@ impl WorkflowCtx {
 			workflow_id: self.workflow_id,
 			name: I::Workflow::NAME.to_string(),
 			create_ts: rivet_util::timestamp::now(),
+			ts: rivet_util::timestamp::now(),
 			ray_id: self.ray_id,
 
 			registry: self.registry.clone(),
@@ -551,7 +559,10 @@ impl WorkflowCtx {
 			else {
 				let error_count = activity.error_count;
 
-				match self.run_activity::<I::Activity>(&input, &activity_id).await {
+				match self
+					.run_activity::<I::Activity>(&input, &activity_id, activity.create_ts)
+					.await
+				{
 					Err(err) => {
 						// Convert error in the case of max retries exceeded. This will only act on retryable
 						// errors
@@ -581,7 +592,7 @@ impl WorkflowCtx {
 		}
 		// This is a new activity
 		else {
-			self.run_activity::<I::Activity>(&input, &activity_id)
+			self.run_activity::<I::Activity>(&input, &activity_id, rivet_util::timestamp::now())
 				.await
 				.map_err(GlobalError::raw)?
 		};
@@ -697,4 +708,21 @@ impl WorkflowCtx {
 	}
 
 	// TODO: sleep_for, sleep_until
+}
+
+impl WorkflowCtx {
+	/// Timestamp at which this workflow run started.
+	pub fn ts(&self) -> i64 {
+		self.ts
+	}
+
+	/// Timestamp at which the workflow was created.
+	pub fn create_ts(&self) -> i64 {
+		self.create_ts
+	}
+
+	/// Time between when the timestamp was processed and when it was published.
+	pub fn req_dt(&self) -> i64 {
+		self.ts.saturating_sub(self.create_ts)
+	}
 }
