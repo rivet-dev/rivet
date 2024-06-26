@@ -19,7 +19,7 @@ resource "tls_locally_signed_cert" "locally_signed_tunnel_server" {
 	ca_key_algorithm   = "RSA"
 	ca_private_key_pem = tls_private_key.root_ca.private_key_pem
 	ca_cert_pem        = tls_self_signed_cert.root_ca.cert_pem
-  
+
 	validity_period_hours = 8760 # 1 year
 
 	allowed_uses = [

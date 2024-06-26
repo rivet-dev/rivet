@@ -102,6 +102,11 @@ resource "helm_release" "traefik_tunnel" {
 					enabled = true
 					options = "ingress-tunnel"
 				}
+				
+				# Created in svc/api/traefik-provider/src/route/tunnel.rs
+				middlewares = [
+					"tunnel-ip-allowlist@http"
+				]
 			}
 		}
 
@@ -138,6 +143,11 @@ resource "helm_release" "traefik_tunnel" {
 			}
 		} : null
 
+		additionalArguments = [
+			"--providers.http.endpoint=http://rivet-api-internal-monolith.rivet-service.svc.cluster.local/traefik-provider/config/tunnel?token=${module.traefik_secrets.values["rivet/api_traefik_provider/token"]}",
+			"--providers.http.pollInterval=2.5s",			
+		]
+		
 		logs = {
 			# general = {
 			# 	level = "DEBUG"

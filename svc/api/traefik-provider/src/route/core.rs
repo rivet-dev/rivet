@@ -31,8 +31,10 @@ pub async fn config(
 ) -> GlobalResult<types::TraefikConfigResponseNullified> {
 	ctx.auth().token(&token).await?;
 
+	let mut config = types::TraefikConfigResponse::default();
+
 	// Fetch configs and catch any errors
-	let config = build_cdn(&ctx).await?;
+	build_cdn(&ctx, &mut config).await?;
 
 	// tracing::info!(
 	// 	http_services = ?config.http.services.len(),
@@ -47,6 +49,13 @@ pub async fn config(
 	// 	"traefik config"
 	// );
 
+	tracing::info!(
+		services = ?config.http.services.len(),
+		routers = config.http.routers.len(),
+		middlewares = ?config.http.middlewares.len(),
+		"cdn traefik config"
+	);
+
 	Ok(types::TraefikConfigResponseNullified {
 		http: config.http.nullified(),
 		tcp: config.tcp.nullified(),
@@ -56,8 +65,10 @@ pub async fn config(
 
 /// Builds configuration for CDN routes.
 #[tracing::instrument(skip(ctx))]
-pub async fn build_cdn(ctx: &Ctx<Auth>) -> GlobalResult<types::TraefikConfigResponse> {
-	let mut config = types::TraefikConfigResponse::default();
+pub async fn build_cdn(
+	ctx: &Ctx<Auth>,
+	config: &mut types::TraefikConfigResponse,
+) -> GlobalResult<()> {
 	let s3_client = s3_util::Client::from_env("bucket-cdn").await?;
 
 	let redis_cdn = ctx.op_ctx().redis_cdn().await?;
@@ -65,7 +76,7 @@ pub async fn build_cdn(ctx: &Ctx<Auth>) -> GlobalResult<types::TraefikConfigResp
 
 	// Process namespaces
 	for ns in &cdn_fetch {
-		let register_res = register_namespace(ns, &mut config, &s3_client);
+		let register_res = register_namespace(ns, config, &s3_client);
 		match register_res {
 			Ok(_) => {}
 			Err(err) => tracing::error!(?err, ?ns, "failed to register namespace route"),
@@ -149,14 +160,7 @@ pub async fn build_cdn(ctx: &Ctx<Auth>) -> GlobalResult<types::TraefikConfigResp
 		},
 	);
 
-	tracing::info!(
-		services = ?config.http.services.len(),
-		routers = config.http.routers.len(),
-		middlewares = ?config.http.middlewares.len(),
-		"cdn traefik config"
-	);
-
-	Ok(config)
+	Ok(())
 }
 
 #[tracing::instrument(skip(redis_cdn))]

@@ -37,18 +37,20 @@ util-cdn = { package = "rivet-util-cdn", path = "../../pkg/cdn/util" }
 util-job = { package = "rivet-util-job", path = "../../pkg/job/util" }
 uuid = { version = "1", features = ["v4"] }
 
+cluster-server-list = { path = "../../pkg/cluster/ops/server-list" }
+
 [dev-dependencies]
 rivet-connection = { path = "../../../lib/connection" }
 rivet-route = { path = "../../../lib/smithy-output/api-traefik-provider/rust" }
 base64 = "0.13"
 reqwest = "0.11"
 
-cdn-namespace-domain-create = { path = "../../pkg/cdn/ops/namespace-domain-create" }
 cdn-namespace-auth-user-update = { path = "../../pkg/cdn/ops/namespace-auth-user-update" }
-faker-game = { path = "../../pkg/faker/ops/game" }
+cdn-namespace-domain-create = { path = "../../pkg/cdn/ops/namespace-domain-create" }
 faker-cdn-site = { path = "../../pkg/faker/ops/cdn-site" }
+faker-game = { path = "../../pkg/faker/ops/game" }
 faker-game-namespace = { path = "../../pkg/faker/ops/game-namespace" }
-faker-job-run = { path = "../../pkg/faker/ops/job-run" }
 faker-game-version = { path = "../../pkg/faker/ops/game-version" }
+faker-job-run = { path = "../../pkg/faker/ops/job-run" }
 faker-region = { path = "../../pkg/faker/ops/region" }
 game-get = { path = "../../pkg/game/ops/get" }

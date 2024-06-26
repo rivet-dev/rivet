@@ -859,6 +859,7 @@ dependencies = [
  "cdn-namespace-domain-create",
  "chirp-client",
  "chrono",
+ "cluster-server-list",
  "faker-cdn-site",
  "faker-game",
  "faker-game-namespace",

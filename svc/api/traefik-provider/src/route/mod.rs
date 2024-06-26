@@ -3,6 +3,7 @@ use hyper::{Body, Request, Response};
 
 pub mod core;
 pub mod game_guard;
+pub mod tunnel;
 
 pub async fn handle(
 	shared_client: chirp_client::SharedClientHandle,
@@ -22,6 +23,13 @@ define_router! {
 		"config" / "core": {
 			GET: core::config(
 				query: core::ConfigQuery,
+				internal_endpoint: true,
+				opt_auth: true,
+			),
+		},
+		"config" / "tunnel": {
+			GET: tunnel::config(
+				query: tunnel::ConfigQuery,
 				internal_endpoint: true,
 				opt_auth: true,
 			),

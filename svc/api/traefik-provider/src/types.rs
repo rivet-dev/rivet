@@ -160,8 +160,8 @@ pub struct TraefikTlsDomain {
 pub enum TraefikMiddlewareHttp {
 	#[serde(rename = "chain", rename_all = "camelCase")]
 	Chain { middlewares: Vec<String> },
-	#[serde(rename = "ipWhiteList", rename_all = "camelCase")]
-	IpWhiteList {
+	#[serde(rename = "ipAllowList", rename_all = "camelCase")]
+	IpAllowList {
 		source_range: Vec<String>,
 		#[serde(skip_serializing_if = "Option::is_none")]
 		ip_strategy: Option<IpStrategy>,
