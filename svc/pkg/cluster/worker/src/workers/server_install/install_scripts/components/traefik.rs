@@ -4,6 +4,7 @@ use chirp_worker::prelude::*;
 use indoc::formatdoc;
 
 use super::{
+	ok_server::OK_SERVER_PORT,
 	vector::{TUNNEL_VECTOR_PORT, TUNNEL_VECTOR_TCP_JSON_PORT},
 	TUNNEL_API_INTERNAL_PORT,
 };
@@ -281,4 +282,32 @@ pub async fn gg_static_config() -> GlobalResult<String> {
 	}
 
 	Ok(config)
+}
+
+pub fn gg_dynamic_config(datacenter_id: Uuid) -> GlobalResult<String> {
+	let domain_job = unwrap!(util::env::domain_job(), "dns not enabled");
+
+	let main = format!("{datacenter_id}.{domain_job}");
+
+	Ok(formatdoc!(
+		r#"
+		# Always returns 200 at /status
+		[http.routers.ok-status]
+			entryPoints = ["lb-80"]
+			rule = "Host(`lobby.{main}`) && Path(`/status`)"
+			service = "ok-service"
+
+		[http.routers.ok-status-secure]
+			entryPoints = ["lb-443"]
+			rule = "Host(`lobby.{main}`) && Path(`/status`)"
+			service = "ok-service"
+		[[http.routers.ok-status-secure.tls.domains]]
+			main = "{main}"
+			sans = []
+
+		[http.services.ok-service.loadBalancer]
+			[[http.services.ok-service.loadBalancer.servers]]
+			url = "http://127.0.0.1:{OK_SERVER_PORT}"
+		"#
+	))
 }

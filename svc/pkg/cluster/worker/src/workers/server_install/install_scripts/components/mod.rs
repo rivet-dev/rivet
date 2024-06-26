@@ -1,6 +1,7 @@
 use indoc::indoc;
 
 pub mod nomad;
+pub mod ok_server;
 pub mod rivet;
 pub mod s3;
 pub mod traefik;

@@ -544,7 +544,7 @@ async fn vars(ctx: &ProjectContext) {
 		};
 
 		// Create monitors
-		let mm_monitors = cluster
+		let api_status_monitors = cluster
 			.datacenters
 			.iter()
 			.map(|(name_id, dc)| {
@@ -555,6 +555,22 @@ async fn vars(ctx: &ProjectContext) {
 				})
 			})
 			.collect::<Vec<_>>();
+		let gg_monitors = if let Some(domain_job) = ctx.domain_job() {
+			cluster
+				.datacenters
+				.values()
+				.map(|dc| {
+					json!({
+						"id": format!("{}-gg", dc.datacenter_id),
+						"url": format!("https://lobby.{}.{domain_job}/status", dc.datacenter_id),
+						"public_name": format!("{} (GG)", dc.display_name),
+						"verify_ssl": true,
+					})
+				})
+				.collect::<Vec<_>>()
+		} else {
+			Vec::new()
+		};
 
 		vars.insert(
 			"better_uptime_groups".into(),
@@ -562,7 +578,10 @@ async fn vars(ctx: &ProjectContext) {
 				{
 					"id": "mm",
 					"name": "Matchmaker",
-					"monitors": mm_monitors,
+					"monitors": api_status_monitors
+						.into_iter()
+						.chain(gg_monitors)
+						.collect::<Vec<_>>(),
 				},
 				{
 					"id": "cdn",

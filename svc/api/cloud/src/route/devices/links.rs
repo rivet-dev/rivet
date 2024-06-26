@@ -81,7 +81,7 @@ pub async fn complete(
 ) -> GlobalResult<serde_json::Value> {
 	// Verify completer is a user. Cloud tokens should not be able to link other
 	// cloud tokens.
-	let rivet_claims::ent::User { .. } = ctx.auth().claims()?.as_user()?;
+	ctx.auth().claims()?.as_user()?;
 
 	// Verify has access to game
 	ctx.auth()

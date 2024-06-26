@@ -946,7 +946,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "sum by (pool_type, datacenter_id) (provision_draining_tainted_servers{cluster_id=~\"[[cluster_id]]\", datacenter_id=~\"[[datacenter_id]]\", provider_datacenter_id=~\"[[provider_datacenter_id]]\", pool_type=~\"[[pool_type]]\"})",
+          "expr": "sum by (pool_type, datacenter_id) (rivet_provision_draining_tainted_servers{cluster_id=~\"[[cluster_id]]\", datacenter_id=~\"[[datacenter_id]]\", provider_datacenter_id=~\"[[provider_datacenter_id]]\", pool_type=~\"[[pool_type]]\"})",
           "instant": false,
           "legendFormat": "{{pool_type}} ({{datacenter_id}})",
           "range": true,

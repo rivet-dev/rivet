@@ -44,6 +44,7 @@ pub async fn gen_install(
 				GG_TRAEFIK_INSTANCE_NAME,
 				datacenter_id,
 			)?);
+			script.push(components::ok_server::install(initialize_immediately));
 		}
 		backend::cluster::PoolType::Ats => {
 			script.push(components::docker::install());
@@ -71,7 +72,10 @@ pub async fn gen_hook(server_token: &str) -> GlobalResult<String> {
 
 // This script is templated on the server itself after fetching server data from the Rivet API (see gen_hook).
 // After being templated, it is run.
-pub async fn gen_initialize(pool_type: backend::cluster::PoolType) -> GlobalResult<String> {
+pub async fn gen_initialize(
+	pool_type: backend::cluster::PoolType,
+	datacenter_id: Uuid,
+) -> GlobalResult<String> {
 	let mut script = Vec::new();
 
 	let mut prometheus_targets = HashMap::new();
@@ -103,7 +107,7 @@ pub async fn gen_initialize(pool_type: backend::cluster::PoolType) -> GlobalResu
 				components::traefik::Instance {
 					name: GG_TRAEFIK_INSTANCE_NAME.to_string(),
 					static_config: components::traefik::gg_static_config().await?,
-					dynamic_config: String::new(),
+					dynamic_config: components::traefik::gg_dynamic_config(datacenter_id)?,
 					tcp_server_transports: Default::default(),
 				},
 			));

@@ -7,6 +7,7 @@ variable "better_uptime_groups" {
 			id = string
 			url = string
 			public_name = string
+			verify_ssl = optional(bool)
 		}))
 	}))
 }
