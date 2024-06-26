@@ -306,6 +306,7 @@ pub struct Docker {
 	///
 	/// See [here](https://docs.docker.com/docker-hub/download-rate-limit) for
 	/// more information on Docker Hub's rate limits.
+	#[serde(default)]
 	pub authenticate_all_docker_hub_pulls: bool,
 	/// Docker repository to upload builds to. Must end in a slash.
 	#[serde(default = "default_docker_repo")]
@@ -341,14 +342,21 @@ pub struct Kubernetes {
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub enum KubernetesProvider {
 	#[serde(rename = "k3d")]
-	K3d {},
+	K3d {
+		/// Tells bolt to use the K3d managed registry for svc builds. This will override ns.docker.repository
+		/// for image uploads.
+		#[serde(default)]
+		use_local_repo: bool,
+	},
 	#[serde(rename = "aws_eks")]
 	AwsEks {},
 }
 
 impl Default for KubernetesProvider {
 	fn default() -> Self {
-		Self::K3d {}
+		Self::K3d {
+			use_local_repo: false,
+		}
 	}
 }
 

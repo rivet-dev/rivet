@@ -60,6 +60,12 @@ pub struct KubernetesClusterAws {
 }
 
 #[derive(Debug, Clone, Deserialize)]
+pub struct KubernetesClusterK3d {
+	pub repo_host: TerraformOutputValue<String>,
+	pub repo_port: TerraformOutputValue<u32>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
 pub struct Cockroach {
 	pub host: TerraformOutputValue<String>,
 	pub port: TerraformOutputValue<u32>,
@@ -93,6 +99,10 @@ pub async fn read_dns(ctx: &ProjectContext) -> Dns {
 
 pub async fn read_k8s_cluster_aws(ctx: &ProjectContext) -> KubernetesClusterAws {
 	read_plan::<KubernetesClusterAws>(ctx, "k8s_cluster_aws").await
+}
+
+pub async fn read_k8s_cluster_k3d(ctx: &ProjectContext) -> KubernetesClusterK3d {
+	read_plan::<KubernetesClusterK3d>(ctx, "k8s_cluster_k3d").await
 }
 
 pub async fn read_crdb(ctx: &ProjectContext) -> Cockroach {

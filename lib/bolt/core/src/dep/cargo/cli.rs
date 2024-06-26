@@ -1,12 +1,37 @@
 use std::path::{Path, PathBuf};
 
 use anyhow::{ensure, Context, Result};
-use indoc::formatdoc;
+use indoc::{formatdoc, indoc};
 use regex::Regex;
 use serde_json::json;
 use tokio::{fs, io::AsyncReadExt, process::Command, task::block_in_place};
 
 use crate::{config, context::ProjectContext};
+
+const DOCKERIGNORE: &str = indoc!(
+	r#"
+	*
+	# Rivet
+	!Bolt.toml
+	!gen/docker
+	!gen/build_script.sh
+	sdks/runtime
+	oss/sdks/runtime
+	!lib
+	!oss/lib
+	!svc
+	svc/**/*.md
+	!oss/svc
+	oss/svc/**/*.md
+	!proto
+	!oss/proto
+	!sdks/full/rust/src
+	!sdks/full/rust/Cargo.toml
+	!oss/sdks/full/rust/src
+	!oss/sdks/full/rust/Cargo.toml
+	!oss/errors
+	"#
+);
 
 pub struct BuildOpts<'a, T: AsRef<str>> {
 	pub build_calls: Vec<BuildCall<'a, T>>,
@@ -104,150 +129,170 @@ pub async fn build<'a, T: AsRef<str>>(ctx: &ProjectContext, opts: BuildOpts<'a, 
 	fs::write(&build_script_path, build_script).await?;
 
 	// Execute build command
-	match &ctx.ns().cluster.kind {
-		config::ns::ClusterKind::SingleNode { .. } => {
-			// Make build script executable
-			let mut cmd = Command::new("chmod");
+	if ctx.build_svcs_locally() {
+		// Make build script executable
+		let mut cmd = Command::new("chmod");
+		cmd.current_dir(ctx.path());
+		cmd.arg("+x");
+		cmd.arg(build_script_path.display().to_string());
+		let status = cmd.status().await?;
+		ensure!(status.success());
+
+		// Execute
+		let mut cmd = Command::new(build_script_path.display().to_string());
+		cmd.current_dir(ctx.path());
+		let status = cmd.status().await?;
+		ensure!(status.success());
+	} else {
+		let optimization = if opts.release { "release" } else { "debug" };
+		// Get repo to push to
+		let (push_repo, _) = ctx.docker_repos().await;
+		let source_hash = ctx.source_hash();
+
+		// Create directory for docker files
+		let gen_path = ctx.gen_path().join("docker");
+		fs::create_dir_all(&gen_path).await?;
+
+		// Build all of the base binaries in batch to optimize build speed
+		//
+		// We could do this as a single multi-stage Docker container, but it requires
+		// re-hashing the entire project every time to check the build layers and can be
+		// faulty sometimes.
+		let build_image_tag = {
+			let image_tag = format!("{push_repo}build:{source_hash}");
+			let dockerfile_path = gen_path.join(format!("Dockerfile.build"));
+
+			// TODO: Use --secret to pass sccache credentials instead of the build script.
+			fs::write(
+				&dockerfile_path,
+				formatdoc!(
+					r#"
+					# syntax=docker/dockerfile:1.2
+
+					FROM rust:1.77.2-slim AS rust
+
+					RUN apt-get update && apt-get install -y protobuf-compiler pkg-config libssl-dev g++ git
+
+					RUN apt-get install --yes libpq-dev wget
+					RUN wget https://github.com/mozilla/sccache/releases/download/v0.2.15/sccache-v0.2.15-x86_64-unknown-linux-musl.tar.gz \
+						&& tar xzf sccache-v0.2.15-x86_64-unknown-linux-musl.tar.gz \
+						&& mv sccache-v0.2.15-x86_64-unknown-linux-musl/sccache /usr/local/bin/sccache \
+						&& chmod +x /usr/local/bin/sccache
+
+					WORKDIR /usr/rivet
+					
+					COPY . .
+					COPY {build_script_path} build_script.sh
+
+					RUN chmod +x ./build_script.sh
+					RUN \
+						--mount=type=cache,target=/usr/local/cargo/git \
+						--mount=type=cache,target=/usr/local/cargo/registry \
+						--mount=type=cache,target=/usr/rivet/target \
+						--mount=type=cache,target=/usr/rivet/oss/target \
+						sh -c ./build_script.sh && mkdir /usr/bin/rivet && find target/{optimization} -maxdepth 1 -type f ! -name "*.*" -exec mv {{}} /usr/bin/rivet/ \;
+
+					# Copy all binaries from target directory into an empty image (it is not included in
+					# the output because of cache mount)
+					
+					# Create an empty image and copy binaries to it (this is to minimize the size of the image)
+					FROM scratch
+					COPY --from=rust /usr/bin/rivet/ /
+					"#,
+					build_script_path = build_script_path_relative.display(),
+				),
+			)
+			.await?;
+
+			// Check if we need to include default builds in the build context
+			let has_default_builds = opts
+				.build_calls
+				.iter()
+				.flat_map(|call| call.bins)
+				.any(|bin| bin.as_ref() == "build-default-create");
+
+			let dockerignore_path = gen_path.join("Dockerfile.build.dockerignore");
+			fs::write(
+				&dockerignore_path,
+				if has_default_builds {
+					format!("{DOCKERIGNORE}\n!infra/default-builds/\n!oss/infra/default-builds/")
+				} else {
+					DOCKERIGNORE.to_string()
+				},
+			)
+			.await?;
+
+			// Build image
+			let mut cmd = Command::new("docker");
+			cmd.env("DOCKER_BUILDKIT", "1");
 			cmd.current_dir(ctx.path());
-			cmd.arg("+x");
-			cmd.arg(build_script_path.display().to_string());
+			cmd.arg("build");
+			cmd.arg("-f").arg(dockerfile_path);
+			// Prints plain console output for debugging
+			// cmd.arg("--progress=plain");
+			cmd.arg("-t").arg(&image_tag);
+			cmd.arg(".");
+
 			let status = cmd.status().await?;
 			ensure!(status.success());
 
-			// Execute
-			let mut cmd = Command::new(build_script_path.display().to_string());
-			cmd.current_dir(ctx.path());
-			let status = cmd.status().await?;
-			ensure!(status.success());
-		}
-		config::ns::ClusterKind::Distributed { .. } => {
-			let optimization = if opts.release { "release" } else { "debug" };
-			let repo = &ctx.ns().docker.repository;
-			ensure!(repo.ends_with('/'), "docker repository must end with slash");
-			let source_hash = ctx.source_hash();
+			image_tag
+		};
 
-			// Create directory for docker files
-			let gen_path = ctx.gen_path().join("docker");
-			fs::create_dir_all(&gen_path).await?;
+		for call in &opts.build_calls {
+			for bin in call.bins {
+				let bin = bin.as_ref();
 
-			// Build all of the base binaries in batch to optimize build speed
-			//
-			// We could do this as a single multi-stage Docker container, but it requires
-			// re-hashing the entire project every time to check the build layers and can be
-			// faulty sometimes.
-			let build_image_tag = {
-				let image_tag = format!("{repo}build:{source_hash}");
-				let dockerfile_path = gen_path.join(format!("Dockerfile.build"));
+				// Resolve the symlink for the svc_scripts dir since Docker does not resolve
+				// symlinks in COPY commands
+				let infra_path = ctx.path().join("infra");
+				let infra_path_resolved = tokio::fs::read_link(&infra_path)
+					.await
+					.map_or_else(|_| infra_path.clone(), |path| ctx.path().join(path));
+				let svc_scripts_path = infra_path_resolved.join("misc").join("svc_scripts");
+				let svc_scripts_path_relative = svc_scripts_path
+					.strip_prefix(ctx.path())
+					.context("failed to strip prefix")?;
 
-				// TODO: Use --secret to pass sccache credentials instead of the build script.
+				// Build the final image
+				let image_tag = format!("{push_repo}{bin}:{source_hash}");
+				let dockerfile_path = gen_path.join(format!("Dockerfile.{bin}"));
 				fs::write(
 					&dockerfile_path,
 					formatdoc!(
 						r#"
-						# syntax=docker/dockerfile:1.2
+						FROM {build_image_tag} AS build
 
-						FROM rust:1.77.2-slim
+						FROM debian:12.1-slim AS run
 
-						RUN apt-get update && apt-get install -y protobuf-compiler pkg-config libssl-dev g++ git
+						# Update ca-certificates. Install curl for health checks.
+						RUN DEBIAN_FRONTEND=noninteractive apt-get update -y && apt-get install -y --no-install-recommends ca-certificates openssl curl
 
-						RUN apt-get install --yes libpq-dev wget
-						RUN wget https://github.com/mozilla/sccache/releases/download/v0.2.15/sccache-v0.2.15-x86_64-unknown-linux-musl.tar.gz \
-							&& tar xzf sccache-v0.2.15-x86_64-unknown-linux-musl.tar.gz \
-							&& mv sccache-v0.2.15-x86_64-unknown-linux-musl/sccache /usr/local/bin/sccache \
-							&& chmod +x /usr/local/bin/sccache
+						# Copy supporting scripts
+						COPY {svc_scripts_path}/health_check.sh {svc_scripts_path}/install_ca.sh /usr/bin/
+						RUN chmod +x /usr/bin/health_check.sh /usr/bin/install_ca.sh
 
-						WORKDIR /usr/rivet
-						
-						COPY . .
-						COPY {build_script_path} build_script.sh
-						
-						RUN chmod +x ./build_script.sh
-						RUN \
-							--mount=type=cache,target=/usr/rivet/target \
-							--mount=type=cache,target=/usr/rivet/oss/target \
-							sh -c ./build_script.sh
-						
-						# Copy all binaries from target directory (it is not included in the output because of cache mount)
-						RUN \
-							--mount=type=cache,target=/usr/rivet/target \
-							--mount=type=cache,target=/usr/rivet/oss/target \
-							find target/{optimization} -maxdepth 1 -type f ! -name "*.*" -exec cp {{}} /usr/bin/ \;
+						# Copy final binary
+						COPY --from=build {bin} /usr/bin/{bin}
 						"#,
-						build_script_path = build_script_path_relative.display(),
+						svc_scripts_path = svc_scripts_path_relative.display(),
 					),
 				)
 				.await?;
 
 				// Build image
 				let mut cmd = Command::new("docker");
+				cmd.env("DOCKER_BUILDKIT", "1");
 				cmd.current_dir(ctx.path());
 				cmd.arg("build");
 				cmd.arg("-f").arg(dockerfile_path);
 				// Prints plain console output for debugging
 				// cmd.arg("--progress=plain");
-				cmd.arg("-t").arg(&image_tag);
+				cmd.arg("-t").arg(image_tag);
 				cmd.arg(".");
 
 				let status = cmd.status().await?;
 				ensure!(status.success());
-
-				image_tag
-			};
-
-			for call in &opts.build_calls {
-				for bin in call.bins {
-					let bin = bin.as_ref();
-
-					// Resolve the symlink for the svc_scripts dir since Docker does not resolve
-					// symlinks in COPY commands
-					let infra_path = ctx.path().join("infra");
-					let infra_path_resolved = tokio::fs::read_link(&infra_path)
-						.await
-						.map_or_else(|_| infra_path.clone(), |path| ctx.path().join(path));
-					let svc_scripts_path = infra_path_resolved.join("misc").join("svc_scripts");
-					let svc_scripts_path_relative = svc_scripts_path
-						.strip_prefix(ctx.path())
-						.context("failed to strip prefix")?;
-
-					// Build the final image
-					let image_tag = format!("{repo}{bin}:{source_hash}");
-					let dockerfile_path = gen_path.join(format!("Dockerfile.{bin}"));
-					fs::write(
-						&dockerfile_path,
-						formatdoc!(
-							r#"
-							FROM {build_image_tag} AS build
-
-							FROM debian:12.1-slim AS run
-
-							# Update ca-certificates. Install curl for health checks.
-							RUN DEBIAN_FRONTEND=noninteractive apt-get update -y && apt-get install -y --no-install-recommends ca-certificates openssl curl
-
-							# Copy supporting scripts
-							COPY {svc_scripts_path}/health_check.sh {svc_scripts_path}/install_ca.sh /usr/bin/
-							RUN chmod +x /usr/bin/health_check.sh /usr/bin/install_ca.sh
-
-							# Copy final binary
-							COPY --from=build /usr/bin/{bin} /usr/bin/{bin}
-							"#,
-							svc_scripts_path = svc_scripts_path_relative.display(),
-						),
-					)
-					.await?;
-
-					// Build image
-					let mut cmd = Command::new("docker");
-					cmd.current_dir(ctx.path());
-					cmd.arg("build");
-					cmd.arg("-f").arg(dockerfile_path);
-					// Prints plain console output for debugging
-					// cmd.arg("--progress=plain");
-					cmd.arg("-t").arg(image_tag);
-					cmd.arg(".");
-
-					let status = cmd.status().await?;
-					ensure!(status.success());
-				}
 			}
 		}
 	}

@@ -33,10 +33,9 @@ pub struct ExecServiceContext {
 }
 
 pub enum ExecServiceDriver {
-	Docker {
-		image_tag: String,
-		force_pull: bool,
-	},
+	/// Used when building an uploading an image to docker.
+	Docker { image_tag: String, force_pull: bool },
+	/// Used when running a build binary locally.
 	LocalBinaryArtifact {
 		/// Path to the executable relative to the project root.
 		exec_path: PathBuf,
@@ -67,7 +66,7 @@ pub async fn project(ctx: &ProjectContext) -> Result<()> {
 	{
 		// Read kubectl config
 		let config = match ctx.ns().kubernetes.provider {
-			ns::KubernetesProvider::K3d {} => block_in_place(move || {
+			ns::KubernetesProvider::K3d { .. } => block_in_place(move || {
 				cmd!("k3d", "kubeconfig", "get", ctx.k8s_cluster_name()).read()
 			})?,
 			ns::KubernetesProvider::AwsEks {} => {
@@ -325,6 +324,7 @@ pub async fn gen_svc(exec_ctx: &ExecServiceContext) -> Vec<serde_json::Value> {
 		ExecServiceDriver::Docker {
 			image_tag,
 			force_pull,
+			..
 		} => (
 			image_tag.as_str(),
 			if *force_pull {

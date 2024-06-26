@@ -384,48 +384,52 @@ pub enum ServiceBuildPlan {
 	ExistingUploadedBuild { image_tag: String },
 
 	/// Build the service and upload to Docker.
-	BuildAndUpload { image_tag: String },
+	BuildAndUpload {
+		/// Push location (local repo)
+		push_image_tag: String,
+		/// Pull location (inside of k8s)
+		pull_image_tag: String,
+	},
 }
 
 impl ServiceContextData {
 	/// Determines if this service needs to be recompiled.
 	pub async fn build_plan(&self, build_context: &BuildContext) -> Result<ServiceBuildPlan> {
+		let project_ctx = self.project().await;
+
 		// Check if build exists on docker.io
-		let pub_image_tag = self.docker_image_tag(Some("docker.io/rivetgg/")).await?;
+		let pub_image_tag = self.docker_image_tag(&project_ctx, "docker.io/rivetgg/")?;
 		if docker::cli::container_exists(&pub_image_tag).await {
 			return Ok(ServiceBuildPlan::ExistingUploadedBuild {
 				image_tag: pub_image_tag,
 			});
 		}
 
-		// Check if build exists in custom repo
-		let image_tag = self.docker_image_tag(None).await?;
+		// Check if build exists in config repo
+		let image_tag = self.docker_image_tag(&project_ctx, &project_ctx.ns().docker.repository)?;
 		if docker::cli::container_exists(&image_tag).await {
 			return Ok(ServiceBuildPlan::ExistingUploadedBuild { image_tag });
 		}
 
-		let project_ctx = self.project().await;
+		if project_ctx.build_svcs_locally() {
+			// Derive the build path
+			let optimization = match &build_context {
+				BuildContext::Bin { optimization } => optimization,
+				BuildContext::Test { .. } => &BuildOptimization::Debug,
+			};
+			let output_path = self.rust_bin_path(optimization).await;
 
-		match &project_ctx.ns().cluster.kind {
-			// Build locally
-			config::ns::ClusterKind::SingleNode { .. } => {
-				// Derive the build path
-				let optimization = match &build_context {
-					BuildContext::Bin { optimization } => optimization,
-					BuildContext::Test { .. } => &BuildOptimization::Debug,
-				};
-				let output_path = self.rust_bin_path(optimization).await;
+			// Rust libs always attempt to rebuild (handled by cargo)
+			Ok(ServiceBuildPlan::BuildLocally {
+				exec_path: output_path,
+			})
+		} else {
+			let (push_repo, pull_repo) = project_ctx.docker_repos().await;
 
-				// Rust libs always attempt to rebuild (handled by cargo)
-				Ok(ServiceBuildPlan::BuildLocally {
-					exec_path: output_path,
-				})
-			}
-			// Build and upload to S3
-			config::ns::ClusterKind::Distributed { .. } => {
-				// Default to building
-				Ok(ServiceBuildPlan::BuildAndUpload { image_tag })
-			}
+			Ok(ServiceBuildPlan::BuildAndUpload {
+				push_image_tag: self.docker_image_tag(&project_ctx, &push_repo)?,
+				pull_image_tag: self.docker_image_tag(&project_ctx, &pull_repo)?,
+			})
 		}
 	}
 }
@@ -1320,12 +1324,10 @@ impl ServiceContextData {
 }
 
 impl ServiceContextData {
-	pub async fn docker_image_tag(&self, override_repo: Option<&str>) -> Result<String> {
-		let project_ctx = self.project().await;
+	pub fn docker_image_tag(&self, project_ctx: &ProjectContext, repo: &str) -> Result<String> {
+		ensure!(repo.ends_with('/'), "docker repository must end with slash");
 
 		let source_hash = project_ctx.source_hash();
-		let repo = override_repo.unwrap_or(&project_ctx.ns().docker.repository);
-		ensure!(repo.ends_with('/'), "docker repository must end with slash");
 
 		Ok(format!(
 			"{}{}:{}",
@@ -1336,7 +1338,9 @@ impl ServiceContextData {
 	}
 
 	pub async fn upload_build(&self) -> Result<()> {
-		let image_tag = self.docker_image_tag(None).await?;
+		let project_ctx = self.project().await;
+		let (push_repo, _) = project_ctx.docker_repos().await;
+		let image_tag = self.docker_image_tag(&project_ctx, &push_repo)?;
 
 		let mut cmd = Command::new("docker");
 		cmd.arg("push");

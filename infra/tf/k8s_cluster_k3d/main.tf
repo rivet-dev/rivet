@@ -7,6 +7,11 @@ terraform {
 	}
 }
 
+locals {
+	repo_host = "svc"
+	repo_port = 5001
+}
+
 resource "k3d_cluster" "main" {
 	name = "rivet-${var.namespace}"
 
@@ -78,6 +83,13 @@ resource "k3d_cluster" "main" {
 		host_port = 6443
 		container_port = 6443
 		node_filters = ["server:0"]
+	}
+
+	registries {
+		create {
+			name = "svc"
+			host_port = local.repo_port
+		}
 	}
 
 	k3s {

@@ -11,7 +11,7 @@ use sha2::{Digest, Sha256};
 use tokio::{fs, sync::Mutex};
 
 use super::{RunContext, ServiceContext};
-use crate::{config, context, utils::command_helper::CommandHelper};
+use crate::{config, context, dep::terraform, utils::command_helper::CommandHelper};
 
 pub type ProjectContext = Arc<ProjectContextData>;
 
@@ -343,6 +343,11 @@ impl ProjectContextData {
 				"cannot enable billing without emailing"
 			);
 		}
+
+		assert!(
+			self.ns().docker.repository.ends_with('/'),
+			"docker repository must end with slash"
+		);
 	}
 
 	// Traverses from FS root to CWD, returns first directory with Bolt.toml
@@ -1013,6 +1018,36 @@ impl ProjectContextData {
 		match self.ns().rust.build_opt {
 			config::ns::RustBuildOpt::Debug => context::BuildOptimization::Debug,
 			config::ns::RustBuildOpt::Release => context::BuildOptimization::Release,
+		}
+	}
+}
+
+impl ProjectContextData {
+	/// Gets the correct repo to push svc builds to/pull from.
+	pub async fn docker_repos(self: &Arc<Self>) -> (String, String) {
+		match self.ns().kubernetes.provider {
+			config::ns::KubernetesProvider::K3d { use_local_repo } if use_local_repo => {
+				let output = terraform::output::read_k8s_cluster_k3d(self).await;
+				let local_repo = format!("localhost:{}/", *output.repo_port);
+				let internal_repo = format!("{}:{}/", *output.repo_host, *output.repo_port);
+
+				(local_repo, internal_repo)
+			}
+			_ => (
+				self.ns().docker.repository.clone(),
+				self.ns().docker.repository.clone(),
+			),
+		}
+	}
+
+	/// Whether or not to build svc images locally vs inside of docker.
+	pub fn build_svcs_locally(&self) -> bool {
+		match self.ns().kubernetes.provider {
+			config::ns::KubernetesProvider::K3d { use_local_repo } if use_local_repo => false,
+			_ => matches!(
+				&self.ns().cluster.kind,
+				config::ns::ClusterKind::SingleNode { .. }
+			),
 		}
 	}
 }

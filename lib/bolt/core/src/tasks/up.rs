@@ -21,6 +21,7 @@ use crate::{
 	dep::{
 		self, cargo,
 		k8s::gen::{ExecServiceContext, ExecServiceDriver},
+		terraform,
 	},
 	tasks,
 	utils::{self},
@@ -92,13 +93,13 @@ pub async fn up_services<T: AsRef<str>>(
 	)?;
 	utils::telemetry::capture_event(ctx, event).await?;
 
-	// Generate configs
+	// Generate configs for the entire project
 	tasks::gen::generate_project(ctx, skip_config_sync_check).await;
 
 	eprintln!();
 	rivet_term::status::progress("Preparing", format!("{} services", all_exec_svcs.len()));
 
-	// Generate service config
+	// Generate configs for individual services
 	{
 		eprintln!();
 		rivet_term::status::progress("Generating", "");
@@ -135,7 +136,7 @@ pub async fn up_services<T: AsRef<str>>(
 		}
 	}
 
-	// Fetch build plans
+	// Determine build plans for each service
 	eprintln!();
 	rivet_term::status::progress("Planning builds", "");
 	let pb = utils::progress_bar(all_exec_svcs.len());
@@ -247,7 +248,7 @@ pub async fn up_services<T: AsRef<str>>(
 		}
 	}
 
-	// Build exec ctx contexts
+	// Build serexec ctx contextsvices that can't be built in a batch
 	eprintln!();
 	rivet_term::status::progress("Building", "(individual)");
 	let mut exec_ctxs = Vec::new();
@@ -282,9 +283,10 @@ pub async fn up_services<T: AsRef<str>>(
 						derive_local_build_driver(svc_ctx, exec_path.clone()).await
 					}
 					ServiceBuildPlan::ExistingUploadedBuild { image_tag }
-					| ServiceBuildPlan::BuildAndUpload { image_tag } => {
-						derive_uploaded_svc_driver(svc_ctx, image_tag.clone(), false).await
-					}
+					| ServiceBuildPlan::BuildAndUpload {
+						pull_image_tag: image_tag,
+						..
+					} => derive_uploaded_svc_driver(svc_ctx, image_tag.clone(), false).await,
 				},
 			});
 
