@@ -30,9 +30,11 @@ Bolt.local.toml
 
 # Generated code
 gen/build_script.sh
+gen/test_build_script.sh
 gen/svc/
 gen/tf/
 gen/docker/
+gen/tests/
 gen/k8s/
 
 # Rust

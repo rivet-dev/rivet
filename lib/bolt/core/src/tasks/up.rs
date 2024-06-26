@@ -21,7 +21,6 @@ use crate::{
 	dep::{
 		self, cargo,
 		k8s::gen::{ExecServiceContext, ExecServiceDriver},
-		terraform,
 	},
 	tasks,
 	utils::{self},

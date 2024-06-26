@@ -25,7 +25,10 @@ use crate::{
 	context::{ProjectContext, RunContext, ServiceContext},
 	dep::{
 		self,
-		cargo::{self, cli::TestBinary},
+		cargo::{
+			self,
+			cli::{TestBinary, TEST_IMAGE_NAME},
+		},
 	},
 	utils,
 };
@@ -79,14 +82,6 @@ pub async fn test_services<T: AsRef<str>>(
 ) -> Result<()> {
 	if ctx.ns().rivet.test.is_none() {
 		bail!("tests are disabled, enable them by setting rivet.test in the namespace config");
-	}
-
-	// TODO: implement tests for distributed clusters (must upload test build to docker)
-	match ctx.ns().cluster.kind {
-		ns::ClusterKind::SingleNode { .. } => {}
-		ns::ClusterKind::Distributed { .. } => {
-			bail!("tests not implemented for distributed clusters")
-		}
 	}
 
 	let run_load_tests = ctx
@@ -154,6 +149,7 @@ pub async fn test_services<T: AsRef<str>>(
 						packages: &svc_names,
 					})
 					.collect::<Vec<_>>(),
+				release: false,
 				jobs: ctx.config_local().rust.num_jobs,
 				test_filters: &test_ctx.filters,
 			},
@@ -162,6 +158,30 @@ pub async fn test_services<T: AsRef<str>>(
 		.unwrap();
 
 		test_binaries
+	};
+
+	// Choose image based on build config
+	let image = if ctx.build_svcs_locally() {
+		"ghcr.io/rivet-gg/rivet-local-binary-artifact-runner:07e8de0".to_string()
+	} else {
+		let (push_repo, pull_repo) = ctx.docker_repos().await;
+		let source_hash = ctx.source_hash();
+		let image_tag = format!("{push_repo}{TEST_IMAGE_NAME}:{source_hash}");
+
+		eprintln!();
+		rivet_term::status::progress("Uploading build", "");
+
+		let mut cmd = Command::new("docker");
+		cmd.arg("push");
+		cmd.arg(image_tag);
+
+		let status = cmd.status().await?;
+		eprintln!();
+
+		ensure!(status.success());
+
+		// Return pull repo tag
+		format!("{pull_repo}{TEST_IMAGE_NAME}:{source_hash}")
 	};
 
 	// Generate test ID
@@ -175,7 +195,7 @@ pub async fn test_services<T: AsRef<str>>(
 	let k8s_svc_name = format!("test-{test_suite_id}");
 
 	// Apply pod
-	let specs = gen_spec(ctx, &run_context, &rust_svcs, &k8s_svc_name).await;
+	let specs = gen_spec(ctx, &run_context, &rust_svcs, &image, &k8s_svc_name).await;
 	dep::k8s::cli::apply_specs(ctx, specs).await?;
 
 	// Wait for pod to start
@@ -386,18 +406,12 @@ async fn exec_test(
 	test_id: &str,
 	logs_path: PathBuf,
 ) -> Result<TestStatus> {
-	// Convert path relative to project
-	let relative_path = test_binary
-		.path
-		.strip_prefix(ctx.cargo_target_dir())
-		.context(format!("path not in project: {:?}", test_binary.path))?;
-
-	let container_path = Path::new("/target").join(relative_path);
+	let container_path = Path::new("/target").join(&test_binary.path);
 
 	let command = format!(
 		"RIVET_TEST_ID={test_id} {} --exact {}",
 		&container_path.display(),
-		&test_binary.test_name
+		&test_binary.test_name,
 	);
 
 	// Write logs to file
@@ -822,6 +836,7 @@ pub async fn gen_spec(
 	ctx: &ProjectContext,
 	run_context: &RunContext,
 	svcs: &[&ServiceContext],
+	image: &str,
 	k8s_svc_name: &str,
 ) -> Vec<serde_json::Value> {
 	let mut specs = Vec::new();
@@ -877,7 +892,7 @@ pub async fn gen_spec(
 		}],
 		"containers": [{
 			"name": "service",
-			"image": "ghcr.io/rivet-gg/rivet-local-binary-artifact-runner:07e8de0",
+			"image": image,
 			"imagePullPolicy": "IfNotPresent",
 			"command": ["/bin/sh"],
 			"args": ["-c", "sleep 100000"],
@@ -924,33 +939,40 @@ pub async fn build_volumes(
 	let mut volumes = Vec::<serde_json::Value>::new();
 	let mut volume_mounts = Vec::<serde_json::Value>::new();
 
-	// Volumes
-	volumes.push(json!({
-		"name": "target",
-		"hostPath": {
-			"path": "/target",
-			"type": "Directory"
-		}
-	}));
-	volumes.push(json!({
-		"name": "nix-store",
-		"hostPath": {
-			"path": "/nix/store",
-			"type": "Directory"
-		}
-	}));
+	match &project_ctx.ns().cluster.kind {
+		ns::ClusterKind::SingleNode { .. } => {
+			// Volumes
+			volumes.push(json!({
+				"name": "target",
+				"hostPath": {
+					"path": "/target",
+					"type": "Directory"
+				}
+			}));
+			volumes.push(json!({
+				"name": "nix-store",
+				"hostPath": {
+					"path": "/nix/store",
+					"type": "Directory"
+				}
+			}));
 
-	// Mounts
-	volume_mounts.push(json!({
-		"name": "target",
-		"mountPath": "/target",
-		"readOnly": true
-	}));
-	volume_mounts.push(json!({
-		"name": "nix-store",
-		"mountPath": "/nix/store",
-		"readOnly": true
-	}));
+			// Mounts
+			volume_mounts.push(json!({
+				"name": "target",
+				"mountPath": "/target",
+				"readOnly": true
+			}));
+			volume_mounts.push(json!({
+				"name": "nix-store",
+				"mountPath": "/nix/store",
+				"readOnly": true
+			}));
+		}
+		ns::ClusterKind::Distributed { .. } => {
+			// Those volumes only exist on single node setups
+		}
+	}
 
 	// Add Redis CA
 	match project_ctx.ns().redis.provider {

@@ -107,12 +107,10 @@ pub async fn project(ctx: &ProjectContext) -> Result<()> {
 	Ok(())
 }
 
-pub fn k8s_svc_name(exec_ctx: &ExecServiceContext) -> String {
+fn k8s_svc_name(exec_ctx: &ExecServiceContext) -> String {
 	match &exec_ctx.run_context {
 		RunContext::Service { .. } => format!("rivet-{}", exec_ctx.svc_ctx.name()),
-		RunContext::Test { test_id } => {
-			format!("rivet-{}-test-{test_id}", exec_ctx.svc_ctx.name())
-		}
+		RunContext::Test { .. } => unreachable!(),
 	}
 }
 
@@ -145,7 +143,7 @@ pub async fn gen_svc(exec_ctx: &ExecServiceContext) -> Vec<serde_json::Value> {
 				unreachable!()
 			}
 		},
-		RunContext::Test { .. } => SpecType::Job,
+		RunContext::Test { .. } => unreachable!(),
 	};
 
 	let has_health = matches!(run_context, RunContext::Service { .. })
@@ -365,9 +363,7 @@ pub async fn gen_svc(exec_ctx: &ExecServiceContext) -> Vec<serde_json::Value> {
 		}
 	});
 
-	let restart_policy = if matches!(run_context, RunContext::Test { .. }) {
-		"Never"
-	} else if spec_type == SpecType::Deployment {
+	let restart_policy = if spec_type == SpecType::Deployment {
 		"Always"
 	} else {
 		"OnFailure"
@@ -442,29 +438,18 @@ pub async fn gen_svc(exec_ctx: &ExecServiceContext) -> Vec<serde_json::Value> {
 			}));
 		}
 		SpecType::Job => {
-			let spec = if matches!(run_context, RunContext::Test { .. }) {
-				json!({
-					"ttlSecondsAfterFinished": 3,
-					"completions": 1,
-					"backoffLimit": 0,
-					"template": pod_template
-				})
-			} else {
-				json!({
+			specs.push(json!({
+				"apiVersion": "batch/v1",
+				"kind": "Job",
+				"metadata": metadata,
+				"spec": {
 					"completions": 1,
 					// Keep retrying until completion
 					"backoffLimit": 0,
 					// TODO: Needed?
 					// "parallelism": ns_service_config.count,
 					"template": pod_template
-				})
-			};
-
-			specs.push(json!({
-				"apiVersion": "batch/v1",
-				"kind": "Job",
-				"metadata": metadata,
-				"spec": spec
+				},
 			}));
 		}
 		SpecType::CronJob => {

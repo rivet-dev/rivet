@@ -8,4 +8,3 @@ exec >> "/var/log/install-ca.txt" 2>&1
 #
 # Overriding LD_LIBRARY_PATH prevents apt from using the OpenSSL installation from /nix/store (if mounted).
 LD_LIBRARY_PATH=/lib:/usr/lib:/usr/local/lib update-ca-certificates
-
