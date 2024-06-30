@@ -9,13 +9,13 @@ struct Datacenter {
 	cluster_id: Uuid,
 	name_id: String,
 	display_name: String,
-	create_ts: i64,
 	provider: i64,
 	provider_datacenter_id: String,
 	provider_api_token: Option<String>,
 	pools: Vec<u8>,
 	build_delivery_method: i64,
 	prebakes_enabled: bool,
+	create_ts: i64,
 }
 
 impl TryFrom<Datacenter> for backend::cluster::Datacenter {
