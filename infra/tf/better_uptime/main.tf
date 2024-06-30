@@ -64,8 +64,8 @@ resource "betteruptime_monitor" "monitor" {
 	]
 	email = var.better_uptime_notify
 	push = var.better_uptime_notify
-	verify_ssl = try(each.value.monitor.verify_ssl, false)
-	ssl_expiration = try(each.value.monitor.verify_ssl, false) ? 14 : null
+	verify_ssl = try(each.value.monitor.verify_ssl == true, false)
+	ssl_expiration = try(each.value.monitor.verify_ssl == true, false) ? 14 : null
 }
 
 resource "betteruptime_status_page_resource" "status_page_resource" {
