@@ -28,7 +28,7 @@ async fn inner(
 	ctx: OperationContext<cluster::msg::server_provision::Message>,
 	tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
 ) -> GlobalResult<()> {
-	let datacenter_id = unwrap!(ctx.datacenter_id);
+	let datacenter_id = unwrap!(ctx.datacenter_id).as_uuid();
 	let server_id = unwrap_ref!(ctx.server_id).as_uuid();
 	let pool_type = unwrap!(backend::cluster::PoolType::from_i32(ctx.pool_type));
 	let provider = unwrap!(backend::cluster::Provider::from_i32(ctx.provider));
@@ -57,7 +57,7 @@ async fn inner(
 
 	// Fetch datacenter config
 	let datacenter_res = op!([ctx] cluster_datacenter_get {
-		datacenter_ids: vec![datacenter_id],
+		datacenter_ids: vec![datacenter_id.into()],
 	})
 	.await?;
 	let datacenter = unwrap!(datacenter_res.datacenters.first());
@@ -70,7 +70,7 @@ async fn inner(
 	);
 
 	// Get a new vlan ip
-	let vlan_ip = get_vlan_ip(&ctx, tx, server_id, pool_type).await?;
+	let vlan_ip = get_vlan_ip(&ctx, tx, datacenter_id, server_id, pool_type).await?;
 
 	sql_execute!(
 		[ctx]
@@ -212,6 +212,7 @@ async fn inner(
 async fn get_vlan_ip(
 	ctx: &OperationContext<cluster::msg::server_provision::Message>,
 	_tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+	datacenter_id: Uuid,
 	server_id: Uuid,
 	pool_type: backend::cluster::PoolType,
 ) -> GlobalResult<Ipv4Addr> {
@@ -234,6 +235,10 @@ async fn get_vlan_ip(
 					FROM db_cluster.servers
 					WHERE
 						pool_type = $3 AND
+						-- Technically this should check all servers where their datacenter's provider and
+						-- provider_datacenter_id are the same because VLAN is separated by irl datacenter
+						-- but this is good enough
+						datacenter_id = $4 AND
 						network_idx = mod(idx + $1, $2) AND
 						cloud_destroy_ts IS NULL
 				)
@@ -242,7 +247,7 @@ async fn get_vlan_ip(
 			update_network_idx AS (
 				UPDATE db_cluster.servers
 				SET network_idx = (SELECT idx FROM get_next_network_idx) 
-				WHERE server_id = $4
+				WHERE server_id = $5
 				RETURNING 1
 			)
 		SELECT idx FROM get_next_network_idx
@@ -251,7 +256,8 @@ async fn get_vlan_ip(
 		rand::thread_rng().gen_range(0i64..max_idx),
 		max_idx,
 		pool_type as i64,
-		server_id
+		datacenter_id,
+		server_id,
 	)
 	.await?;
 
