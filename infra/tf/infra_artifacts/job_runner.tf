@@ -46,8 +46,12 @@ resource "null_resource" "job_runner_build" {
 resource "aws_s3_object" "job_runner_binary_upload" {
 	depends_on = [null_resource.job_runner_build]
 
+	lifecycle {
+		prevent_destroy = true
+	}
+
 	bucket = "${var.namespace}-bucket-infra-artifacts"
-	key = "job-runner/job-runner"
+	key = "job-runner/${local.job_runner_src_hash}/job-runner"
 	source = local.job_runner_dst_binary_path
 }
 

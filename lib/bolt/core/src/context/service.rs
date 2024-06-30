@@ -889,6 +889,13 @@ impl ServiceContextData {
 			);
 		}
 
+		// Infra Artifacts
+		let infra_artifacts_output = terraform::output::read_infra_artifacts(&project_ctx).await;
+		env.insert(
+			"JOB_RUNNER_BINARY_KEY".into(),
+			(*infra_artifacts_output.job_runner_binary_key).clone(),
+		);
+
 		// OpenGB
 		if project_ctx.ns().rivet.opengb.is_some() {
 			let opengb_output = terraform::output::read_opengb(&project_ctx).await;

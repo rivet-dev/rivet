@@ -50,6 +50,11 @@ pub struct DnsZones {
 }
 
 #[derive(Debug, Clone, Deserialize)]
+pub struct InfraArtifacts {
+	pub job_runner_binary_key: TerraformOutputValue<String>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
 pub struct OpenGb {
 	pub dispatcher_namespace_name: TerraformOutputValue<String>,
 }
@@ -133,6 +138,10 @@ pub async fn read_redis(ctx: &ProjectContext) -> Redis {
 		config::ns::RedisProvider::Aws { .. } => read_plan::<Redis>(ctx, "redis_aws").await,
 		config::ns::RedisProvider::Aiven { .. } => read_plan::<Redis>(ctx, "redis_aiven").await,
 	}
+}
+
+pub async fn read_infra_artifacts(ctx: &ProjectContext) -> InfraArtifacts {
+	read_plan::<InfraArtifacts>(ctx, "infra_artifacts").await
 }
 
 pub async fn read_opengb(ctx: &ProjectContext) -> OpenGb {
