@@ -57,7 +57,7 @@ async fn worker(
 		"
 		UPDATE db_cluster.datacenters
 		SET
-			pools = $2 AND
+			pools = $2,
 			prebakes_enabled = coalesce($3, prebakes_enabled)
 		WHERE datacenter_id = $1
 		",
