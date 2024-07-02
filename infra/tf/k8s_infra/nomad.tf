@@ -18,7 +18,7 @@ locals {
 	# This value must be 3, 5, or 7. More = better redundancy, but does not make things faster.
 	# 
 	# See https://developer.hashicorp.com/nomad/tutorials/enterprise/production-reference-architecture-vm-with-consul
-	nomad_server_count = 3
+	nomad_server_count = var.deploy_method_cluster ? 3 : 1
 
 	nomad_server_addrs = [for i in range(0, local.nomad_server_count): "127.0.0.1:${6000 + i}"]
 	nomad_server_addrs_escaped = [for addr in local.nomad_server_addrs : "\"${addr}\""]

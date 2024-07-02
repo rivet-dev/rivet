@@ -766,6 +766,10 @@ async fn cleanup_nomad_test(ctx: &ProjectContext, test_id: &str, purge: bool) ->
 	let output = cmd.output().await?;
 	ensure!(output.status.success());
 
+	if output.stdout == b"No cluster leader" {
+		panic!("no cluster leader");
+	}
+
 	let jobs: Vec<NomadJob> = serde_json::from_slice(&output.stdout)?;
 
 	// Cleanup jobs
