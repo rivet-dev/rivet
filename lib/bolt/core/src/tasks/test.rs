@@ -195,7 +195,15 @@ pub async fn test_services<T: AsRef<str>>(
 	let k8s_svc_name = format!("test-{test_suite_id}");
 
 	// Apply pod
-	let specs = gen_spec(ctx, &run_context, &rust_svcs, &image, &k8s_svc_name).await;
+	let specs = gen_spec(
+		ctx,
+		&run_context,
+		&rust_svcs,
+		&image,
+		&k8s_svc_name,
+		ctx.build_svcs_locally(),
+	)
+	.await;
 	dep::k8s::cli::apply_specs(ctx, specs).await?;
 
 	// Wait for pod to start
@@ -838,6 +846,7 @@ pub async fn gen_spec(
 	svcs: &[&ServiceContext],
 	image: &str,
 	k8s_svc_name: &str,
+	build_svcs_locally: bool,
 ) -> Vec<serde_json::Value> {
 	let mut specs = Vec::new();
 
@@ -874,7 +883,7 @@ pub async fn gen_spec(
 		"data": secret_data
 	}));
 
-	let (volumes, volume_mounts) = build_volumes(ctx, run_context, svcs).await;
+	let (volumes, volume_mounts) = build_volumes(ctx, run_context, svcs, build_svcs_locally).await;
 
 	let metadata = json!({
 		"name": k8s_svc_name,
@@ -934,6 +943,7 @@ pub async fn build_volumes(
 	project_ctx: &ProjectContext,
 	run_context: &RunContext,
 	svcs: &[&ServiceContext],
+	build_svcs_locally: bool,
 ) -> (Vec<serde_json::Value>, Vec<serde_json::Value>) {
 	// Shared data between containers
 	let mut volumes = Vec::<serde_json::Value>::new();
@@ -941,33 +951,35 @@ pub async fn build_volumes(
 
 	match &project_ctx.ns().cluster.kind {
 		ns::ClusterKind::SingleNode { .. } => {
-			// Volumes
-			volumes.push(json!({
-				"name": "target",
-				"hostPath": {
-					"path": "/target",
-					"type": "Directory"
-				}
-			}));
-			volumes.push(json!({
-				"name": "nix-store",
-				"hostPath": {
-					"path": "/nix/store",
-					"type": "Directory"
-				}
-			}));
+			if build_svcs_locally {
+				// Volumes
+				volumes.push(json!({
+					"name": "target",
+					"hostPath": {
+						"path": "/target",
+						"type": "Directory"
+					}
+				}));
+				volumes.push(json!({
+					"name": "nix-store",
+					"hostPath": {
+						"path": "/nix/store",
+						"type": "Directory"
+					}
+				}));
 
-			// Mounts
-			volume_mounts.push(json!({
-				"name": "target",
-				"mountPath": "/target",
-				"readOnly": true
-			}));
-			volume_mounts.push(json!({
-				"name": "nix-store",
-				"mountPath": "/nix/store",
-				"readOnly": true
-			}));
+				// Mounts
+				volume_mounts.push(json!({
+					"name": "target",
+					"mountPath": "/target",
+					"readOnly": true
+				}));
+				volume_mounts.push(json!({
+					"name": "nix-store",
+					"mountPath": "/nix/store",
+					"readOnly": true
+				}));
+			}
 		}
 		ns::ClusterKind::Distributed { .. } => {
 			// Those volumes only exist on single node setups
