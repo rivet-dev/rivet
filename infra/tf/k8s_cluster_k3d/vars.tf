@@ -2,6 +2,10 @@ variable "namespace" {
 	type = string
 }
 
+variable "k3d_use_local_repo" {
+	type = bool
+}
+
 variable "project_root" {
 	type = string
 }

@@ -16,23 +16,32 @@ resource "k3d_cluster" "main" {
 	name = "rivet-${var.namespace}"
 
 	# Mount repository in to k3d so we can access the built binaries
-	volume {
-		source = var.cargo_target_dir
-		destination = "/target"
-		node_filters = ["server:0"]
+	dynamic "volume" {
+		for_each = var.k3d_use_local_repo ? [] : [0]
+		content {
+			source       = var.cargo_target_dir
+			destination  = "/target"
+			node_filters = ["server:0"]
+		}
 	}
 
 	# Mount the /nix/store and /local since the build binaries depend on dynamic libs from there
-	volume {
-		source = "/nix/store"
-		destination = "/nix/store"
-		node_filters = ["server:0"]
+	dynamic "volume" {
+		for_each = var.k3d_use_local_repo ? [] : [0]
+		content {
+			source       = "/nix/store"
+			destination  = "/nix/store"
+			node_filters = ["server:0"]
+		}
 	}
 
-	volume {
-		source = "/local"
-		destination = "/local"
-		node_filters = ["server:0"]
+	dynamic "volume" {
+		for_each = var.k3d_use_local_repo ? [] : [0]
+		content {
+			source       = "/local"
+			destination  = "/local"
+			node_filters = ["server:0"]
+		}
 	}
 
 	# HTTP
