@@ -3,13 +3,18 @@ use std::collections::HashMap;
 use derive_builder::Builder;
 use maplit::hashmap;
 
-use crate::context::ProjectContext;
+use crate::{config, context::ProjectContext};
 
 /// Defines the dependency graph for the Terraform plans.
 ///
 /// This is used to automatically generate `terraform_remote_state` blocks
 /// for each Terraform plan with the correct state backend.
-pub fn dependency_graph(_ctx: &ProjectContext) -> HashMap<&'static str, Vec<RemoteState>> {
+pub fn dependency_graph(ctx: &ProjectContext) -> HashMap<&'static str, Vec<RemoteState>> {
+	let crdb_plan = match &ctx.ns().cluster.kind {
+		config::ns::ClusterKind::SingleNode { .. } => "cockroachdb_k8s",
+		config::ns::ClusterKind::Distributed { .. } => "cockroachdb_managed",
+	};
+
 	hashmap! {
 		"dns" => vec![
 			RemoteStateBuilder::default().plan_id("k8s_infra").build().unwrap(),
@@ -33,8 +38,7 @@ pub fn dependency_graph(_ctx: &ProjectContext) -> HashMap<&'static str, Vec<Remo
 			RemoteStateBuilder::default().plan_id("dns").build().unwrap(),
 		],
 		"grafana" => vec![
-			RemoteStateBuilder::default().plan_id("cockroachdb_k8s").build().unwrap(),
-			RemoteStateBuilder::default().plan_id("cockroachdb_managed").build().unwrap(),
+			RemoteStateBuilder::default().plan_id(crdb_plan).data_name("cockroachdb").build().unwrap(),
 		],
 		"opengb" => vec![
 			RemoteStateBuilder::default().plan_id("dns").build().unwrap(),
