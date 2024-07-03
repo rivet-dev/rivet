@@ -14,6 +14,7 @@ locals {
 
 resource "k3d_cluster" "main" {
 	name = "rivet-${var.namespace}"
+	image = "docker.io/rancher/k3s:v1.29.6-k3s1"
 
 	# Mount repository in to k3d so we can access the built binaries
 	dynamic "volume" {
