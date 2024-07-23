@@ -119,6 +119,11 @@ message Entitlement {
 		string db_name = 2;
 	}
 
+	message GameService {
+		// The game ID that the server will be running.
+		rivet.common.Uuid game_id = 1;
+	}
+
 	oneof kind {
 		Refresh refresh = 1;
 		User user = 2;
@@ -137,6 +142,7 @@ message Entitlement {
 		AccessToken access_token = 16;
 		ProvisionedServer provisioned_server = 17;
 		OpenGbDb opengb_db = 18;
+		GameService game_service = 19;
 	}
 
 	reserved 13;

@@ -1,0 +1,7 @@
+[service]
+name = "ds-server-list-for-game"
+
+[runtime]
+kind = "rust"
+
+[operation]

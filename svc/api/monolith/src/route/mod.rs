@@ -59,6 +59,10 @@ define_router! {
 			prefix: "portal",
 		},
 		{
+			path: api_servers::route::Router,
+			prefix: "servers",
+		},
+		{
 			path: api_status::route::Router,
 			prefix: "status",
 		},

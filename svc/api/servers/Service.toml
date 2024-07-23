@@ -1,0 +1,7 @@
+[service]
+name = "api-servers"
+
+[runtime]
+kind = "rust"
+
+[api-routes]

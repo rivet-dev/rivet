@@ -12,6 +12,14 @@ service:
         game_id:
           type: uuid
       response: CreateCloudTokenResponse
+    createServiceToken:
+      path: /games/{game_id}/tokens/service
+      method: POST
+      docs: Creates a new game service token.
+      path-parameters:
+        game_id:
+          type: uuid
+      response: CreateCloudTokenResponse
 
 types:
   CreateCloudTokenResponse:
@@ -21,4 +29,10 @@ types:
           A JSON Web Token.
           Slightly modified to include a description prefix and use Protobufs of
           JSON.
+        type: string
+  CreateServiceTokenResponse:
+    properties:
+      token:
+        docs: |-
+          A JSON Web Token.
         type: string

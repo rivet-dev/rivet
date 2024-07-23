@@ -147,6 +147,9 @@ define_router! {
 		"games" / Uuid / "tokens" / "cloud": {
 			POST: games::tokens::create_cloud_token(body: serde_json::Value),
 		},
+		"games" / Uuid / "tokens" / "service": {
+			POST: games::tokens::create_service_token(body: serde_json::Value),
+		},
 		"games" / Uuid / "matchmaker" / "lobbies" / "export-history": {
 			POST: games::matchmaker::export_history(body: models::CloudGamesExportMatchmakerLobbyHistoryRequest),
 		},

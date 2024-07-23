@@ -1,0 +1,7 @@
+[service]
+name = "ds-server-get"
+
+[runtime]
+kind = "rust"
+
+[operation]

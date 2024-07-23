@@ -19,6 +19,7 @@ paths = [
 	"/module",
 	"/portal",
 	"/provision",
+	"/servers",
 	"/status",
 ]
 
@@ -81,6 +82,12 @@ deprecated = true
 subdomain = "portal.api"
 strip-prefix = "/v1"
 add-path = "/portal"
+
+[[api.router.mounts]]
+deprecated = true
+subdomain = "servers.api"
+strip-prefix = "/v1"
+add-path = "/servers"
 
 [[api.router.mounts]]
 deprecated = true

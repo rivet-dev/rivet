@@ -1,5 +1,8 @@
+use std::collections::HashMap;
+
 use proto::backend::{self, pkg::*};
 use rivet_operation::prelude::*;
+use serde_json::Value;
 
 #[derive(sqlx::FromRow)]
 struct BuildRow {
@@ -11,6 +14,7 @@ struct BuildRow {
 	create_ts: i64,
 	kind: i64,
 	compression: i64,
+	tags: Value,
 }
 
 #[operation(name = "build-get")]
@@ -24,25 +28,39 @@ async fn handle(ctx: OperationContext<build::get::Request>) -> GlobalResult<buil
 	let builds = sql_fetch_all!(
 		[ctx, BuildRow]
 		"
-		SELECT build_id, game_id, upload_id, display_name, image_tag, create_ts, kind, compression
-		FROM db_build.builds
-		WHERE build_id = ANY($1)
+		SELECT
+			build_id,
+			game_id,
+			upload_id,
+			display_name,
+			image_tag,
+			create_ts,
+			kind,
+			compression,
+			tags
+		FROM
+			db_build.builds
+		WHERE
+			build_id = ANY($1)
 		",
 		build_ids,
 	)
 	.await?
 	.into_iter()
-	.map(|build| backend::build::Build {
-		build_id: Some(build.build_id.into()),
-		game_id: Some(build.game_id.into()),
-		upload_id: Some(build.upload_id.into()),
-		display_name: build.display_name.clone(),
-		image_tag: build.image_tag.clone(),
-		create_ts: build.create_ts,
-		kind: build.kind as i32,
-		compression: build.compression as i32,
+	.map(|build| {
+		Ok(backend::build::Build {
+			build_id: Some(build.build_id.into()),
+			game_id: Some(build.game_id.into()),
+			upload_id: Some(build.upload_id.into()),
+			display_name: build.display_name.clone(),
+			image_tag: build.image_tag.clone(),
+			create_ts: build.create_ts,
+			kind: build.kind as i32,
+			compression: build.compression as i32,
+			tags: serde_json::from_value(build.tags)?,
+		})
 	})
-	.collect::<Vec<_>>();
+	.collect::<GlobalResult<Vec<_>>>()?;
 
 	Ok(build::get::Response { builds })
 }

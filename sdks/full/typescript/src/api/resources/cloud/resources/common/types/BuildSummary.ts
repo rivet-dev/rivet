@@ -16,4 +16,6 @@ export interface BuildSummary {
     contentLength: number;
     /** Whether or not this build has completely been uploaded. */
     complete: boolean;
+    /** Tags of this build */
+    tags: Record<string, string>;
 }

@@ -6,6 +6,7 @@ import "proto/common.proto";
 
 message Request {
 	rivet.common.Uuid game_id = 1;
+	map<string, string> tags = 2; // JSON
 }
 
 message Response {

@@ -23,5 +23,6 @@ message Build {
 	int64 create_ts = 5;
 	BuildKind kind = 7;
 	BuildCompression compression = 8;
+	map<string, string> tags = 9;
 }
 

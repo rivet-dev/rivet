@@ -28,5 +28,15 @@ export declare class Tokens {
      * @throws {@link Rivet.BadRequestError}
      */
     createCloudToken(gameId: string, requestOptions?: Tokens.RequestOptions): Promise<Rivet.cloud.games.CreateCloudTokenResponse>;
+    /**
+     * Creates a new game service token.
+     * @throws {@link Rivet.InternalError}
+     * @throws {@link Rivet.RateLimitError}
+     * @throws {@link Rivet.ForbiddenError}
+     * @throws {@link Rivet.UnauthorizedError}
+     * @throws {@link Rivet.NotFoundError}
+     * @throws {@link Rivet.BadRequestError}
+     */
+    createServiceToken(gameId: string, requestOptions?: Tokens.RequestOptions): Promise<Rivet.cloud.games.CreateCloudTokenResponse>;
     protected _getAuthorizationHeader(): Promise<string | undefined>;
 }

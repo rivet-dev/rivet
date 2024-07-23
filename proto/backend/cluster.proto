@@ -3,7 +3,6 @@ syntax = "proto3";
 package rivet.backend.cluster;
 
 import "proto/common.proto";
-import "proto/backend/net.proto";
 
 message Cluster {
     rivet.common.Uuid cluster_id = 1;

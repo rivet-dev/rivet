@@ -98,8 +98,20 @@ async fn handle(
 	sql_execute!(
 		[ctx]
 		"
-		INSERT INTO db_build.builds (build_id, game_id, upload_id, display_name, image_tag, create_ts, kind, compression)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+		INSERT INTO
+			db_build.builds (
+				build_id,
+				game_id,
+				upload_id,
+				display_name,
+				image_tag,
+				create_ts,
+				kind,
+				compression,
+				tags
+			)
+		VALUES
+			($1, $2, $3, $4, $5, $6, $7, $8, $9)
 		",
 		build_id,
 		game_id,
@@ -109,6 +121,7 @@ async fn handle(
 		ctx.ts(),
 		kind as i32,
 		compression as i32,
+		serde_json::to_value(ctx.tags.clone())?,
 	)
 	.await?;
 

@@ -1,0 +1,13 @@
+syntax = "proto3";
+
+package rivet.backend.pkg.ds.msg.ds_nomad_monitor_alloc_plan;
+
+import "proto/common.proto";
+
+/// name = "msg-ds-ds-nomad-monitor-alloc-plan"
+/// parameters = [
+/// 	{ name = "user_id" },
+/// ]
+message Message {
+
+}

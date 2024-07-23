@@ -11,5 +11,6 @@ enum Image {
 	MM_LOBBY_AUTO_READY = 2;
 	MM_LOBBY_ECHO = 3;
 	MM_PLAYER_CONNECT = 4;
+	DS_ECHO = 5;
 }
 

@@ -1,0 +1,10 @@
+[service]
+name = "ds-server-create"
+
+[runtime]
+kind = "rust"
+
+[operation]
+
+[databases]
+db-dynamic-servers = {}

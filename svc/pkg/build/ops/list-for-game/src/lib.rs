@@ -10,11 +10,17 @@ async fn handle(
 	let build_ids = sql_fetch_all!(
 		[ctx, (Uuid,)]
 		"
-		SELECT build_id
-		FROM db_build.builds
-		WHERE game_id = $1
+		SELECT
+			build_id
+		FROM
+			db_build.builds
+		WHERE
+			game_id = $1
+		AND
+			tags @> $2
 		",
 		game_id,
+		serde_json::to_value(&ctx.tags)?
 	)
 	.await?
 	.into_iter()

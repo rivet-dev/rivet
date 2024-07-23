@@ -12,52 +12,13 @@ use url::Url;
 
 use crate::{auth::Auth, types};
 
-#[derive(Debug, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
-pub struct ConfigQuery {
-	token: String,
-	datacenter: Uuid,
-}
-
-#[tracing::instrument(skip(ctx))]
-pub async fn config(
-	ctx: Ctx<Auth>,
-	_watch_index: WatchIndexQuery,
-	ConfigQuery { token, datacenter }: ConfigQuery,
-) -> GlobalResult<types::TraefikConfigResponseNullified> {
-	ctx.auth().token(&token).await?;
-
-	// Fetch configs and catch any errors
-	let config = build_job(&ctx, datacenter).await?;
-
-	// tracing::info!(
-	// 	http_services = ?config.http.services.len(),
-	// 	http_routers = config.http.routers.len(),
-	// 	http_middlewares = ?config.http.middlewares.len(),
-	// 	tcp_services = ?config.tcp.services.len(),
-	// 	tcp_routers = config.tcp.routers.len(),
-	// 	tcp_middlewares = ?config.tcp.middlewares.len(),
-	// 	udp_services = ?config.udp.services.len(),
-	// 	udp_routers = config.udp.routers.len(),
-	// 	udp_middlewares = ?config.udp.middlewares.len(),
-	// 	"traefik config"
-	// );
-
-	Ok(types::TraefikConfigResponseNullified {
-		http: config.http.nullified(),
-		tcp: config.tcp.nullified(),
-		udp: config.udp.nullified(),
-	})
-}
-
 /// Builds configuration for job routes.
 #[tracing::instrument(skip(ctx))]
 pub async fn build_job(
 	ctx: &Ctx<Auth>,
 	region_id: Uuid,
-) -> GlobalResult<types::TraefikConfigResponse> {
-	let mut config = types::TraefikConfigResponse::default();
-
+	config: &mut types::TraefikConfigResponse,
+) -> GlobalResult<()> {
 	let redis_job = ctx.op_ctx().redis_job().await?;
 	let job_runs_fetch = fetch_job_runs(redis_job, region_id).await?;
 
@@ -90,7 +51,7 @@ pub async fn build_job(
 		let run_id = unwrap_ref!(run_proxied_ports.run_id);
 		tracing::info!(proxied_ports_len = ?run_proxied_ports.proxied_ports.len(), "adding job run");
 		for proxied_port in &run_proxied_ports.proxied_ports {
-			let register_res = register_proxied_port(**run_id, proxied_port, &mut config);
+			let register_res = job_register_proxied_port(**run_id, proxied_port, config);
 			match register_res {
 				Ok(_) => {}
 				Err(err) => {
@@ -113,7 +74,7 @@ pub async fn build_job(
 		"job traefik config"
 	);
 
-	Ok(config)
+	Ok(())
 }
 
 #[tracing::instrument(skip(redis_job))]
@@ -141,7 +102,7 @@ async fn fetch_job_runs(
 }
 
 #[tracing::instrument(skip(config))]
-fn register_proxied_port(
+fn job_register_proxied_port(
 	run_id: Uuid,
 	proxied_port: &job::redis_job::run_proxied_ports::ProxiedPort,
 	config: &mut types::TraefikConfigResponse,

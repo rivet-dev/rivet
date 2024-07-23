@@ -1,0 +1,26 @@
+[package]
+name = "ds-server-get"
+version = "0.0.1"
+edition = "2021"
+authors = ["Rivet Gaming, LLC <developer@rivet.gg>"]
+license = "Apache-2.0"
+
+[dependencies]
+chirp-client = { path = "../../../../../lib/chirp/client" }
+rivet-operation = { path = "../../../../../lib/operation/core" }
+util-ds = { package = "rivet-util-ds", path = "../../util" }
+
+[dependencies.sqlx]
+git = "https://github.com/rivet-gg/sqlx"
+rev = "08d6e61aa0572e7ec557abbedb72cebb96e1ac5b"
+default-features = false
+
+[dev-dependencies]
+chirp-worker = { path = "../../../../../lib/chirp/worker" }
+
+ds-server-create = { path = "../server-create" }
+cluster-list = { path = "../../../cluster/ops/list" }
+faker-build = { path = "../../../faker/ops/build" }
+faker-game = { path = "../../../faker/ops/game" }
+faker-region = { path = "../../../faker/ops/region" }
+

@@ -16,6 +16,7 @@ async fn handle(
 		backend::faker::Image::MmLobbyAutoReady => "test-mm-lobby-ready",
 		backend::faker::Image::MmLobbyEcho => "test-mm-lobby-echo",
 		backend::faker::Image::MmPlayerConnect => "test-mm-player-connect",
+		backend::faker::Image::DsEcho => "test-ds-echo",
 	};
 
 	let create_res = op!([ctx] build_create {

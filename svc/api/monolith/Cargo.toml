@@ -31,4 +31,5 @@ api-job = { path = "../job" }
 api-kv = { path = "../kv" }
 api-matchmaker = { path = "../matchmaker" }
 api-portal = { path = "../portal" }
+api-servers = { path = "../servers" }
 api-status = { path = "../status" }

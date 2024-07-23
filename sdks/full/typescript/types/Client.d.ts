@@ -9,6 +9,7 @@ import { Group } from "./api/resources/group/client/Client";
 import { Identity } from "./api/resources/identity/client/Client";
 import { Kv } from "./api/resources/kv/client/Client";
 import { Provision } from "./api/resources/provision/client/Client";
+import { Servers } from "./api/resources/servers/client/Client";
 import { Auth } from "./api/resources/auth/client/Client";
 import { Job } from "./api/resources/job/client/Client";
 import { Matchmaker } from "./api/resources/matchmaker/client/Client";
@@ -39,6 +40,8 @@ export declare class RivetClient {
     get kv(): Kv;
     protected _provision: Provision | undefined;
     get provision(): Provision;
+    protected _servers: Servers | undefined;
+    get servers(): Servers;
     protected _auth: Auth | undefined;
     get auth(): Auth;
     protected _job: Job | undefined;

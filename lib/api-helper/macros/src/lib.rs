@@ -381,6 +381,7 @@ impl Parse for RequestPath {
 enum RequestPathSegment {
 	LitStr(syn::LitStr),
 	Type(syn::Type),
+	Empty,
 }
 
 impl Parse for RequestPathSegment {
@@ -389,8 +390,11 @@ impl Parse for RequestPathSegment {
 
 		if let Ok(lit) = fork.parse::<syn::LitStr>() {
 			input.advance_to(&fork);
-
-			Ok(RequestPathSegment::LitStr(lit))
+			if lit.value().is_empty() {
+				Ok(RequestPathSegment::Empty)
+			} else {
+				Ok(RequestPathSegment::LitStr(lit))
+			}
 		} else {
 			Ok(RequestPathSegment::Type(input.parse()?))
 		}
@@ -429,6 +433,7 @@ impl RequestPathSegment {
 					};
 				}
 			}
+			RequestPathSegment::Empty => quote! {}, // Handle empty path segment
 		}
 	}
 }
@@ -492,6 +497,7 @@ impl Endpoint {
 			.map(|segment| match segment {
 				RequestPathSegment::LitStr(lit) => lit.value(),
 				RequestPathSegment::Type(_) => "{}".to_string(),
+				RequestPathSegment::Empty => "".to_string(), // Handle empty path
 			})
 			.collect::<Vec<String>>()
 			.join("/");

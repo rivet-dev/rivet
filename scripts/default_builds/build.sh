@@ -17,7 +17,7 @@ for build in $builds; do
 	echo
 	echo "> $build"
 	echo "  * Building"
-	docker build -t "$image" "$build_path"
+	docker build --platform linux/amd64 -t "$image" "$build_path"
 
 	echo "  * Saving"
 	docker image save --output "infra/default-builds/outputs/${build}.tar" "$image"

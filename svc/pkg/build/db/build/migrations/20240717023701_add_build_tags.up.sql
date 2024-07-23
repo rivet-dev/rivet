@@ -1,0 +1,2 @@
+ALTER TABLE builds
+    ADD COLUMN tags JSONB NOT NULL DEFAULT '{}';

@@ -58,6 +58,7 @@ cloud-device-link-create = { path = "../../pkg/cloud/ops/device-link-create" }
 cloud-game-config-create = { path = "../../pkg/cloud/ops/game-config-create" }
 cloud-game-config-get = { path = "../../pkg/cloud/ops/game-config-get" }
 cloud-game-token-create = { path = "../../pkg/cloud/ops/game-token-create" }
+cloud-service-game-token-create = { path = "../../pkg/cloud/ops/game-service-token-create" }
 cloud-namespace-create = { path = "../../pkg/cloud/ops/namespace-create" }
 cloud-namespace-get = { path = "../../pkg/cloud/ops/namespace-get" }
 cloud-namespace-token-development-create = { path = "../../pkg/cloud/ops/namespace-token-development-create" }
@@ -105,6 +106,7 @@ team-get = { path = "../../pkg/team/ops/get" }
 team-member-count = { path = "../../pkg/team/ops/member-count" }
 team-validate = { path = "../../pkg/team/ops/validate" }
 tier-list = { path = "../../pkg/tier/ops/list" }
+token-create = { path = "../../pkg/token/ops/create" }
 token-revoke = { path = "../../pkg/token/ops/revoke" }
 upload-complete = { path = "../../pkg/upload/ops/complete" }
 upload-file-list = { path = "../../pkg/upload/ops/file-list" }

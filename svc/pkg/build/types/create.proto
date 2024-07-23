@@ -14,6 +14,7 @@ message Request {
 	bool multipart = 6;
 	rivet.backend.build.BuildKind kind = 7;
 	rivet.backend.build.BuildCompression compression = 8;
+	map<string, string> tags = 9; // JSON
 
 	// If provided, will look up the pre-uploaded upload ID for a given default
 	// build kind. This is used to create builds from reusable pre-built images.

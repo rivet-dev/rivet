@@ -1,3 +1,5 @@
+use std::{collections::HashMap, hash::Hash};
+
 use chirp_worker::prelude::*;
 use proto::backend::{self};
 
@@ -26,6 +28,7 @@ async fn empty(ctx: TestCtx) {
 
 	let res = op!([ctx] build_list_for_game {
 		game_id: game_res.game_id,
+		tags: HashMap::new(),
 	})
 	.await
 	.unwrap();

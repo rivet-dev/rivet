@@ -363,6 +363,21 @@ pub mod ent {
 			})
 		}
 	}
+
+	#[derive(Clone, Debug)]
+	pub struct GameService {
+		pub game_id: Uuid,
+	}
+
+	impl TryFrom<&schema::entitlement::GameService> for GameService {
+		type Error = GlobalError;
+
+		fn try_from(value: &schema::entitlement::GameService) -> GlobalResult<Self> {
+			Ok(GameService {
+				game_id: unwrap!(value.game_id).as_uuid(),
+			})
+		}
+	}
 }
 
 pub trait ClaimsDecode {
@@ -388,6 +403,7 @@ pub trait ClaimsDecode {
 	fn as_access_token(&self) -> GlobalResult<ent::AccessToken>;
 	fn as_provisioned_server(&self) -> GlobalResult<ent::ProvisionedServer>;
 	fn as_opengb_db(&self) -> GlobalResult<ent::OpenGbDb>;
+	fn as_game_service(&self) -> GlobalResult<ent::GameService>;
 }
 
 impl ClaimsDecode for schema::Claims {
@@ -685,6 +701,22 @@ impl ClaimsDecode for schema::Claims {
 			))
 			.and_then(std::convert::identity)
 	}
+
+	fn as_game_service(&self) -> GlobalResult<ent::GameService> {
+		self.entitlements
+			.iter()
+			.find_map(|ent| match &ent.kind {
+				Some(schema::entitlement::Kind::GameService(ent)) => {
+					Some(ent::GameService::try_from(ent))
+				}
+				_ => None,
+			})
+			.ok_or(err_code!(
+				CLAIMS_MISSING_ENTITLEMENT,
+				entitlements = "GameService"
+			))
+			.and_then(std::convert::identity)
+	}
 }
 
 pub trait EntitlementTag {
@@ -713,6 +745,7 @@ impl EntitlementTag for schema::Entitlement {
 			schema::entitlement::Kind::AccessToken(_) => 16,
 			schema::entitlement::Kind::ProvisionedServer(_) => 17,
 			schema::entitlement::Kind::OpengbDb(_) => 18,
+			schema::entitlement::Kind::GameService(_) => 19,
 		})
 	}
 }

@@ -1,0 +1,306 @@
+syntax = "proto3";
+
+package rivet.backend.ds;
+
+import "proto/common.proto";
+import "proto/backend/captcha.proto";
+import "proto/backend/region.proto";
+
+message Server {
+    rivet.common.Uuid server_id = 1;
+    rivet.common.Uuid game_id = 2;
+    rivet.common.Uuid datacenter_id = 3;
+    rivet.common.Uuid cluster_id = 4;
+    map<string, string> tags = 5;
+    rivet.backend.ds.ServerResources resources = 6;
+    int64 kill_timeout_ms = 7;
+    optional string webhook_url = 8;
+    int64 create_ts = 9;
+    optional int64 destroy_ts = 10;
+    rivet.common.Uuid image_id = 11;
+    repeated string args = 12;
+    NetworkMode network_mode = 13;
+    map<string, string> environment = 14;
+    map<string, Port> network_ports = 15;
+    
+}
+
+message ServerResources {
+    int32 cpu_millicores = 1;
+    int32 memory_mib = 2;
+}
+
+enum NetworkMode {
+    BRIDGE = 0;
+    HOST = 1;
+}
+
+message Port {
+    // Null when using host networking since one is automatially assigned
+    optional int32 internal_port = 1;
+	optional string public_hostname = 2;
+	optional int32 public_port = 3;
+
+    oneof routing {
+        GameGuardRouting game_guard = 101;
+        HostRouting host = 102;
+    }
+}
+
+message GameGuardRouting {
+    GameGuardProtocol protocol = 1;
+}
+
+enum GameGuardProtocol {
+    HTTP = 0;
+    HTTPS = 1;
+    TCP = 2;
+    TCP_TLS = 3;
+    UDP = 4;
+}
+
+message HostRouting {
+	HostProtocol protocol = 1;
+}
+
+// TODO: Rename to TCP & UDP
+enum HostProtocol {
+    HOST_TCP = 0;
+    HOST_UDP = 1;
+}
+
+
+//
+//
+//
+// // MARK: Game Config
+// message GameConfig {
+// 	bool host_networking_enabled = 1;
+// 	bool root_user_enabled = 2;
+// }
+//
+// // MARK: Game Namespace Config
+// message NamespaceConfig {
+// 	uint32 lobby_count_max = 1;
+// 	uint32 max_players_per_client = 2;
+// 	uint32 max_players_per_client_vpn = 3;
+// 	uint32 max_players_per_client_proxy = 4;
+// 	uint32 max_players_per_client_tor = 5;
+// 	uint32 max_players_per_client_hosting = 6;
+// }
+//
+// // MARK: Game Version Config
+// message VersionConfig {
+// 	repeated LobbyGroup lobby_groups = 1;
+//
+// 	optional rivet.backend.captcha.CaptchaConfig captcha = 2;
+// }
+//
+// message LobbyGroup {
+// 	message Region {
+// 		rivet.common.Uuid region_id = 1;
+// 		string tier_name_id = 2;
+// 		IdleLobbies idle_lobbies = 3;
+// 	}
+//
+// 	message IdleLobbies {
+// 		uint32 min_idle_lobbies = 1;
+// 		uint32 max_idle_lobbies = 2;
+// 	}
+//
+// 	message Actions {
+// 		optional FindConfig find = 1;
+// 		optional JoinConfig join = 2;
+// 		optional CreateConfig create = 3;
+// 	}
+//
+// 	string name_id = 1;
+//
+// 	repeated Region regions = 101;
+// 	uint32 max_players_normal = 102;
+// 	uint32 max_players_direct = 103;
+// 	uint32 max_players_party = 104;
+// 	bool listable = 105;
+// 	bool taggable = 106;
+// 	bool allow_dynamic_max_players = 107;
+//
+// 	LobbyRuntime runtime = 201;
+//
+// 	optional Actions actions = 301;
+// }
+//
+// message LobbyRuntime {
+// 	enum NetworkMode {
+// 		BRIDGE = 0;
+// 		HOST = 1;
+// 	}
+//
+// 	// Should be named "PortProtocol"
+// 	enum ProxyProtocol {
+// 		HTTP = 0;
+// 		HTTPS = 1;
+// 		TCP = 3;
+// 		TCP_TLS = 4;
+// 		UDP = 2;
+// 	}
+//
+// 	enum ProxyKind {
+// 		GAME_GUARD = 0;
+// 		NONE = 1;
+// 	}
+//
+// 	message PortRange {
+// 		uint32 min = 1;
+// 		uint32 max = 2;
+// 	}
+//
+// 	message Port {
+// 		string label = 1;
+//
+// 		// Only applicable to `ProxyProtocol::HTTP` and `ProxyProtocol::HTTP`.
+// 		optional uint32 target_port = 2;
+//
+// 		// Only applicable to `ProxyProtocol::UDP` and `ProxyProtocol::TCP` when `proxy_kind` is `ProxyKind::GameGuard`.
+// 		optional PortRange port_range = 4;
+//
+// 		ProxyProtocol proxy_protocol = 3;
+//
+// 		ProxyKind proxy_kind = 5;
+// 	}
+//
+// 	message EnvVar {
+// 		string key = 1;
+// 		string value = 2;
+// 	}
+//
+// 	message Docker {
+// 		rivet.common.Uuid build_id = 1;
+// 		repeated string args = 2;
+// 		repeated EnvVar env_vars = 4;
+// 		NetworkMode network_mode = 5;
+// 		repeated Port ports = 3;
+// 	}
+//
+// 	oneof runtime {
+// 		Docker docker = 201;
+// 	};
+// }
+//
+// enum IdentityRequirement {
+// 	NONE = 0;
+// 	GUEST = 1;
+// 	REGISTERED = 2;
+// }
+//
+// message VerificationConfig {
+// 	string url = 1;
+// 	map<string, string> headers = 2;
+// }
+//
+// message FindConfig {
+// 	bool enabled = 1;
+// 	IdentityRequirement identity_requirement = 2;
+// 	optional VerificationConfig verification = 3;
+// }
+//
+// message JoinConfig {
+// 	bool enabled = 1;
+// 	IdentityRequirement identity_requirement = 2;
+// 	optional VerificationConfig verification = 3;
+// }
+//
+// message CreateConfig {
+// 	bool enabled = 1;
+// 	IdentityRequirement identity_requirement = 2;
+// 	optional VerificationConfig verification = 3;
+//
+// 	bool enable_public = 4;
+// 	bool enable_private = 5;
+//
+// 	optional uint64 max_lobbies_per_identity = 6;
+// }
+//
+// // MARK: Game Version Config Context
+// // Context required to publish a new version.
+// message VersionConfigCtx {
+// 	repeated LobbyGroupCtx lobby_groups = 1;
+// }
+//
+// message LobbyGroupCtx {
+// 	LobbyRuntimeCtx runtime = 101;
+// }
+//
+// message LobbyRuntimeCtx {
+// 	message Docker {
+// 		optional rivet.common.Uuid job_template_id = 1 [deprecated = true];
+// 	}
+//
+// 	oneof runtime {
+// 		Docker docker = 1;
+// 	};
+// }
+//
+// // MARK: Game Version Config Meta
+// // Metadata about a given configuration generated after publishing.
+// message VersionConfigMeta {
+// 	repeated LobbyGroupMeta lobby_groups = 1;
+// }
+//
+// message LobbyGroupMeta {
+// 	// The indexes of `LobbyGroupMeta` and `LobbyGroupConfig` returned by `game-version-get` line up, so
+// 	// fetching lobby group config via `lobby_group_id` is done via zipping.
+// 	rivet.common.Uuid lobby_group_id = 1;
+//
+// 	LobbyRuntimeMeta runtime = 101;
+// }
+//
+// message LobbyRuntimeMeta {
+// 	message Docker {
+// 		optional rivet.common.Uuid job_template_id = 1 [deprecated = true];
+// 	}
+//
+// 	oneof runtime {
+// 		Docker docker = 201;
+// 	};
+// }
+//
+// // MARK: Lobby State
+// message Lobby {
+// 	enum Publicity {
+// 		PUBLIC = 0;
+// 		PRIVATE = 1;
+// 	}
+//
+// 	reserved 10;
+//
+// 	rivet.common.Uuid lobby_id = 1;
+// 	rivet.common.Uuid lobby_group_id = 2;
+// 	rivet.common.Uuid region_id = 3;
+// 	rivet.common.Uuid token_session_id = 4;
+// 	int64 create_ts = 5;
+// 	optional int64 ready_ts = 14;
+// 	optional int64 stop_ts = 13;
+// 	optional rivet.common.Uuid run_id = 6;
+// 	bool is_closed = 11;
+// 	rivet.common.Uuid namespace_id = 9;
+// 	optional rivet.common.Uuid create_ray_id = 12;
+// 	optional rivet.common.Uuid creator_user_id = 15;
+// 	bool is_custom = 16;
+// 	Publicity publicity = 17;
+//
+// 	uint32 max_players_normal = 101;
+// 	uint32 max_players_direct = 102;
+// 	uint32 max_players_party  = 103;
+// }
+//
+// // MARK: Player State
+// message Player {
+// 	rivet.common.Uuid player_id = 1;
+// 	rivet.common.Uuid lobby_id = 2;
+// 	int64 create_ts = 3;
+// 	optional int64 register_ts = 4;
+// 	optional int64 remove_ts = 5;
+// 	rivet.common.Uuid token_session_id = 6;
+// 	rivet.common.Uuid create_ray_id = 7;
+// }
+//

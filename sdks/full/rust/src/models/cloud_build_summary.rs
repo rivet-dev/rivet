@@ -28,19 +28,23 @@ pub struct CloudBuildSummary {
     /// Represent a resource's readable display name.
     #[serde(rename = "display_name")]
     pub display_name: String,
+    /// Tags of this build
+    #[serde(rename = "tags")]
+    pub tags: ::std::collections::HashMap<String, String>,
     #[serde(rename = "upload_id")]
     pub upload_id: uuid::Uuid,
 }
 
 impl CloudBuildSummary {
     /// A build summary.
-    pub fn new(build_id: uuid::Uuid, complete: bool, content_length: i64, create_ts: String, display_name: String, upload_id: uuid::Uuid) -> CloudBuildSummary {
+    pub fn new(build_id: uuid::Uuid, complete: bool, content_length: i64, create_ts: String, display_name: String, tags: ::std::collections::HashMap<String, String>, upload_id: uuid::Uuid) -> CloudBuildSummary {
         CloudBuildSummary {
             build_id,
             complete,
             content_length,
             create_ts,
             display_name,
+            tags,
             upload_id,
         }
     }

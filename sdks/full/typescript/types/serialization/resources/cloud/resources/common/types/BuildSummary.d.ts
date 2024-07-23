@@ -13,5 +13,6 @@ export declare namespace BuildSummary {
         create_ts: serializers.Timestamp.Raw;
         content_length: number;
         complete: boolean;
+        tags: Record<string, string>;
     }
 }

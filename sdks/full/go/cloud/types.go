@@ -114,6 +114,8 @@ type BuildSummary struct {
 	ContentLength int64 `json:"content_length"`
 	// Whether or not this build has completely been uploaded.
 	Complete bool `json:"complete"`
+	// Tags of this build
+	Tags map[string]string `json:"tags,omitempty"`
 
 	_rawJSON json.RawMessage
 }

@@ -22,6 +22,7 @@ export const BuildSummary: core.serialization.ObjectSchema<
     ),
     contentLength: core.serialization.property("content_length", core.serialization.number()),
     complete: core.serialization.boolean(),
+    tags: core.serialization.record(core.serialization.string(), core.serialization.string()),
 });
 
 export declare namespace BuildSummary {
@@ -32,5 +33,6 @@ export declare namespace BuildSummary {
         create_ts: serializers.Timestamp.Raw;
         content_length: number;
         complete: boolean;
+        tags: Record<string, string>;
     }
 }
