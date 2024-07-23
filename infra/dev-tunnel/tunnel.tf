@@ -1,7 +1,7 @@
 resource "null_resource" "update_sshd_config" {
 	depends_on = [linode_instance.tunnel]
     triggers = {
-      override = 2
+      linode_instance_id = linode_instance.tunnel.id
     }
 
 	connection {
@@ -28,7 +28,7 @@ resource "null_resource" "update_sshd_config" {
 }
 
 resource "docker_container" "ssh_tunnel" {
-    depends_on = [ null_resource.update_sshd_config]
+    depends_on = [null_resource.update_sshd_config]
 
 	image = "debian:11"
 	name = "rivet-tunnel"
