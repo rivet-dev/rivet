@@ -819,6 +819,20 @@ impl ProjectContextData {
 		}
 	}
 
+	pub async fn host_tunnel(self: &Arc<Self>) -> String {
+		let k8s_infra = terraform::output::read_k8s_infra(self).await;
+
+		let tunnel_port = if let config::ns::ClusterKind::SingleNode { tunnel_port, .. } =
+			&self.ns().cluster.kind
+		{
+			*tunnel_port
+		} else {
+			5000
+		};
+
+		format!("{}:{tunnel_port}", *k8s_infra.traefik_tunnel_external_ip)
+	}
+
 	/// Origin used for building links to the API endpoint.
 	pub fn origin_api(&self) -> String {
 		if let Some(domain_main_api) = self.domain_main_api() {

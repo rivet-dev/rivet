@@ -1320,10 +1320,6 @@ impl ServiceContextData {
 			"TLS_ROOT_CA_CERT_PEM".into(),
 			(*tls.root_ca_cert_pem).clone(),
 		);
-		env.insert(
-			"K8S_TRAEFIK_TUNNEL_EXTERNAL_IP".into(),
-			(*k8s_infra.traefik_tunnel_external_ip).clone(),
-		);
 		// }
 
 		Ok(env)

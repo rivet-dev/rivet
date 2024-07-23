@@ -168,7 +168,7 @@ pub fn tunnel(name: &str) -> GlobalResult<String> {
 	Ok(instance(Instance {
 		name: name.to_string(),
 		static_config: tunnel_static_config(),
-		dynamic_config: tunnel_dynamic_config(&util::env::var("K8S_TRAEFIK_TUNNEL_EXTERNAL_IP")?),
+		dynamic_config: tunnel_dynamic_config(&util::env::var("RIVET_HOST_TUNNEL")?),
 		tcp_server_transports,
 	}))
 }
@@ -194,7 +194,7 @@ fn tunnel_static_config() -> String {
 	config
 }
 
-fn tunnel_dynamic_config(tunnel_external_ip: &str) -> String {
+fn tunnel_dynamic_config(host_tunnel: &str) -> String {
 	let mut config = String::new();
 	for TunnelService { name, .. } in TUNNEL_SERVICES.iter() {
 		config.push_str(&formatdoc!(
@@ -208,7 +208,7 @@ fn tunnel_dynamic_config(tunnel_external_ip: &str) -> String {
 				serversTransport = "{name}"
 
 				[[tcp.services.{name}.loadBalancer.servers]]
-					address = "{tunnel_external_ip}:5000"
+					address = "{host_tunnel}"
 					tls = true
 			"#
 		))
