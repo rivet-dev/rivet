@@ -151,7 +151,6 @@ async fn vars(ctx: &ProjectContext) {
 
 	match &config.cluster.kind {
 		ns::ClusterKind::SingleNode {
-			public_ip,
 			api_http_port,
 			api_https_port,
 			minio_port,
@@ -160,10 +159,11 @@ async fn vars(ctx: &ProjectContext) {
 		} => {
 			vars.insert("deploy_method_local".into(), json!(true));
 			vars.insert("deploy_method_cluster".into(), json!(false));
-			vars.insert("public_ip".into(), json!(public_ip));
 			vars.insert("api_http_port".into(), json!(api_http_port));
 			vars.insert("api_https_port".into(), json!(api_https_port));
 			vars.insert("tunnel_port".into(), json!(tunnel_port));
+
+			vars.insert("dev_public_ip".into(), json!(ctx.get_dev_public_ip().await));
 
 			// Expose Minio on a dedicated port if DNS not enabled
 			if config.dns.is_none() && config.s3.providers.minio.is_some() {
@@ -554,13 +554,14 @@ async fn vars(ctx: &ProjectContext) {
 		};
 
 		// Create monitors
+		let origin_api = ctx.origin_api().await;
 		let api_status_monitors = cluster
 			.datacenters
 			.iter()
 			.map(|(name_id, dc)| {
 				json!({
 					"id": dc.datacenter_id,
-					"url": format!("{}/status/matchmaker?region={}", ctx.origin_api(), name_id),
+					"url": format!("{}/status/matchmaker?region={}", origin_api, name_id),
 					"public_name": dc.display_name,
 				})
 			})

@@ -1,5 +1,5 @@
 locals {
-	dev_tunnel_name = "dev-tunnel-${random_string.tunnel_suffix.result}"
+	dev_tunnel_name = "${var.namespace}-dev-tunnel"
 }
 
 resource "random_string" "tunnel_suffix" {
@@ -11,9 +11,9 @@ resource "random_string" "tunnel_suffix" {
 }
 
 resource "random_password" "password" {
-    length  = 16
-    special = true
-    override_special = "_%@"
+	length  = 16
+	special = true
+	override_special = "_%@"
 }
 
 resource "linode_instance" "tunnel" {
@@ -23,7 +23,7 @@ resource "linode_instance" "tunnel" {
 	type = "g6-nanode-1"
 	authorized_keys = [trimspace(tls_private_key.ssh_key.public_key_openssh)]
 	root_pass = random_password.password.result
-	tags = ["dev-tunnel"]
+	tags = ["rivet-${var.namespace}", "${var.namespace}-dev-tunnel"]
 }
 
 resource "linode_firewall" "tunnel_firewall" {
@@ -45,38 +45,44 @@ resource "linode_firewall" "tunnel_firewall" {
 		label = "http"
 		action = "ACCEPT"
 		protocol = "TCP"
-		ports = "80"
+		ports = var.api_http_port
 		ipv4 = ["0.0.0.0/0"]
 		ipv6 = ["::/0"]
 	}
 
-	inbound {
-		label = "https"
-		action = "ACCEPT"
-		protocol = "TCP"
-		ports = "443"
-		ipv4 = ["0.0.0.0/0"]
-		ipv6 = ["::/0"]
+	dynamic "inbound" {
+		for_each = var.api_https_port != null ? [1] : []
+		content {
+			label = "https"
+			action = "ACCEPT"
+			protocol = "TCP"
+			ports = var.api_https_port
+			ipv4 = ["0.0.0.0/0"]
+			ipv6 = ["::/0"]
+		}
 	}
 
 	inbound {
 		label = "tunnel"
 		action = "ACCEPT"
 		protocol = "TCP"
-		ports = "5000"
+		ports = var.tunnel_port
 		ipv4 = ["0.0.0.0/0"]
 		ipv6 = ["::/0"]
 	}
 
-	inbound {
-		label = "minio"
-		action = "ACCEPT"
-		protocol = "TCP"
-		ports = "9000"
-		ipv4 = ["0.0.0.0/0"]
-		ipv6 = ["::/0"]
+	dynamic "inbound" {
+		for_each = var.minio_port != null ? [1] : []
+		content {
+			label = "minio"
+			action = "ACCEPT"
+			protocol = "TCP"
+			ports = var.minio_port
+			ipv4 = ["0.0.0.0/0"]
+			ipv6 = ["::/0"]
+		}
 	}
 
-      linodes = [linode_instance.tunnel.id]
+	linodes = [linode_instance.tunnel.id]
 }
- 
+

@@ -103,6 +103,17 @@ pub fn build_plan(
 ) -> Result<Vec<PlanStep>> {
 	let mut plan = Vec::new();
 
+	// Dev Tunnel
+	if ctx.has_dev_tunnel() {
+		plan.push(PlanStep {
+			name_id: "dev-tunnel",
+			kind: PlanStepKind::Terraform {
+				plan_id: "dev_tunnel".into(),
+				needs_destroy: true,
+			},
+		});
+	}
+
 	// Infra
 	match ctx.ns().kubernetes.provider {
 		ns::KubernetesProvider::K3d { .. } => {
@@ -288,7 +299,7 @@ pub fn build_plan(
 	// BetterUptime
 	if ctx.ns().better_uptime.is_some() {
 		plan.push(PlanStep {
-			name_id: "better_uptime",
+			name_id: "better-uptime",
 			kind: PlanStepKind::Terraform {
 				plan_id: "better_uptime".into(),
 				needs_destroy: true,

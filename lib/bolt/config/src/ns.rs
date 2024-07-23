@@ -66,7 +66,9 @@ pub struct Cluster {
 pub enum ClusterKind {
 	#[serde(rename = "single_node")]
 	SingleNode {
-		public_ip: String,
+		#[serde(default)]
+		public_ip: Option<String>,
+
 		/// Port to expose API HTTP interface. Exposed on public IP.
 		#[serde(default = "default_api_http_port")]
 		api_http_port: u16,
@@ -85,10 +87,18 @@ pub enum ClusterKind {
 		/// Disabled by default since this doesn't play well with development machines.
 		#[serde(default)]
 		limit_resources: bool,
+
+		/// Create a dev tunnel for this server.
+		#[serde(default)]
+		dev_tunnel: Option<DevTunnel>,
 	},
 	#[serde(rename = "distributed")]
 	Distributed {},
 }
+
+#[derive(Default, Serialize, Deserialize, Clone, Debug)]
+#[serde(deny_unknown_fields)]
+pub struct DevTunnel {}
 
 #[derive(Default, Serialize, Deserialize, Clone, Debug)]
 #[serde(deny_unknown_fields)]

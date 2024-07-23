@@ -831,8 +831,9 @@ impl ServiceContextData {
 		{
 			env.insert("RIVET_SUPPORT_DEPRECATED_SUBDOMAINS".into(), "1".into());
 		}
-		env.insert("RIVET_HOST_API".into(), project_ctx.host_api());
-		env.insert("RIVET_ORIGIN_API".into(), project_ctx.origin_api());
+		env.insert("RIVET_HOST_API".into(), project_ctx.host_api().await);
+		env.insert("RIVET_HOST_TUNNEL".into(), project_ctx.host_tunnel().await);
+		env.insert("RIVET_ORIGIN_API".into(), project_ctx.origin_api().await);
 		env.insert("RIVET_ORIGIN_HUB".into(), project_ctx.origin_hub());
 
 		// DNS
@@ -1435,7 +1436,7 @@ async fn add_s3_env(
 		if let (
 			s3_util::Provider::Minio,
 			config::ns::ClusterKind::SingleNode {
-				public_ip,
+				public_ip: Some(public_ip),
 				minio_port,
 				..
 			},

@@ -1,3 +1,14 @@
+locals {
+	fwd_ports = flatten([
+		var.api_http_port,
+		var.api_https_port != null ? [var.api_https_port] : [],
+		var.tunnel_port,
+		var.minio_port != null ? [var.minio_port] : [],
+	])
+
+	ssh_fwd_flags = join(" ", [for x in local.fwd_ports: "-R 0.0.0.0:${x}:127.0.0.1:${x}"])
+}
+
 resource "null_resource" "update_sshd_config" {
 	depends_on = [linode_instance.tunnel]
     triggers = {
@@ -47,7 +58,7 @@ resource "docker_container" "ssh_tunnel" {
 		apt-get install -y openssh-client 
 		while true; do
 			echo 'Connecting...'
-			ssh -o StrictHostKeyChecking=no -i /root/.ssh/id_rsa -vNT -R 0.0.0.0:80:127.0.0.1:80 -R 0.0.0.0:443:127.0.0.1:443 -R 0.0.0.0:5000:127.0.0.1:5000 -R 0.0.0.0:9000:127.0.0.1:9000 root@${linode_instance.tunnel.ip_address}
+			ssh -o StrictHostKeyChecking=no -i /root/.ssh/id_rsa -vNT ${local.ssh_fwd_flags} root@${linode_instance.tunnel.ip_address}
 			sleep 5
 		done
 		EOF

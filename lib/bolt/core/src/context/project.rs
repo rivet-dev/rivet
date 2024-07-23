@@ -40,12 +40,12 @@ impl ProjectContextData {
 	}
 
 	pub async fn openapi_config_cloud(
-		&self,
+		self: &Arc<Self>,
 	) -> Result<rivet_api::apis::configuration::Configuration> {
 		let api_admin_token = self.read_secret(&["rivet", "api_admin", "token"]).await?;
 
 		Ok(rivet_api::apis::configuration::Configuration {
-			base_path: self.origin_api(),
+			base_path: self.origin_api().await,
 			bearer_access_token: Some(api_admin_token),
 			..Default::default()
 		})
@@ -803,17 +803,59 @@ impl ProjectContextData {
 		self.domain_main().map(|x| format!("api.{x}"))
 	}
 
+	pub fn has_dev_tunnel(&self) -> bool {
+		matches!(
+			self.ns().cluster.kind,
+			config::ns::ClusterKind::SingleNode {
+				dev_tunnel: Some(_),
+				..
+			}
+		)
+	}
+
+	pub async fn get_dev_public_ip(self: &Arc<Self>) -> String {
+		match &self.ns().cluster.kind {
+			config::ns::ClusterKind::SingleNode {
+				public_ip: Some(_),
+				dev_tunnel: Some(_),
+				..
+			} => {
+				panic!("cannot have both public_ip and dev_tunnel")
+			}
+			config::ns::ClusterKind::SingleNode {
+				public_ip: Some(public_ip),
+				..
+			} => public_ip.clone(),
+			config::ns::ClusterKind::SingleNode {
+				dev_tunnel: Some(_),
+				..
+			} => {
+				if terraform::cli::has_applied(self, "dev_tunnel").await {
+					let dev_tunnel = terraform::output::read_dev_tunnel(self).await;
+					(*dev_tunnel.tunnel_public_ip).clone()
+				} else {
+					// HACK: If the dev tunnel has not yet been applied, we don't know the host
+					// yet.
+					"UNREACHABLE".into()
+				}
+			}
+			config::ns::ClusterKind::SingleNode { .. } => {
+				panic!("public ip not configured")
+			}
+			config::ns::ClusterKind::Distributed { .. } => {
+				panic!("does not have dev public ip")
+			}
+		}
+	}
+
 	/// Host used for building links to the API endpoint.
-	pub fn host_api(&self) -> String {
+	pub async fn host_api(self: &Arc<Self>) -> String {
 		if let Some(domain_main_api) = self.domain_main_api() {
 			domain_main_api
-		} else if let config::ns::ClusterKind::SingleNode {
-			public_ip,
-			api_http_port,
-			..
-		} = &self.ns().cluster.kind
+		} else if let config::ns::ClusterKind::SingleNode { api_http_port, .. } =
+			&self.ns().cluster.kind
 		{
-			format!("{public_ip}:{api_http_port}")
+			format!("{}:{api_http_port}", self.get_dev_public_ip().await)
 		} else {
 			unreachable!()
 		}
@@ -834,32 +876,26 @@ impl ProjectContextData {
 	}
 
 	/// Origin used for building links to the API endpoint.
-	pub fn origin_api(&self) -> String {
+	pub async fn origin_api(self: &Arc<Self>) -> String {
 		if let Some(domain_main_api) = self.domain_main_api() {
 			format!("https://{domain_main_api}")
-		} else if let config::ns::ClusterKind::SingleNode {
-			public_ip,
-			api_http_port,
-			..
-		} = &self.ns().cluster.kind
+		} else if let config::ns::ClusterKind::SingleNode { api_http_port, .. } =
+			&self.ns().cluster.kind
 		{
-			format!("http://{public_ip}:{api_http_port}")
+			format!("http://{}:{api_http_port}", self.get_dev_public_ip().await)
 		} else {
 			unreachable!()
 		}
 	}
 
 	/// Origin used to access Minio. Only applicable if Minio provider is specified.
-	pub fn origin_minio(&self) -> String {
+	pub async fn origin_minio(self: &Arc<Self>) -> String {
 		if let Some(domain_main) = self.domain_main() {
 			format!("https://minio.{domain_main}")
-		} else if let config::ns::ClusterKind::SingleNode {
-			public_ip,
-			minio_port,
-			..
-		} = &self.ns().cluster.kind
+		} else if let config::ns::ClusterKind::SingleNode { minio_port, .. } =
+			&self.ns().cluster.kind
 		{
-			format!("http://{public_ip}:{minio_port}")
+			format!("http://{}:{minio_port}", self.get_dev_public_ip().await)
 		} else {
 			unreachable!()
 		}
@@ -984,7 +1020,7 @@ impl ProjectContextData {
 				Ok(S3Config {
 					endpoint_internal: "http://minio.minio.svc.cluster.local:9000".into(),
 					// Use localhost if DNS is not configured
-					endpoint_external: self.origin_minio(),
+					endpoint_external: self.origin_minio().await,
 					// Minio defaults to us-east-1 region
 					// https://github.com/minio/minio/blob/0ec722bc5430ad768a263b8464675da67330ad7c/cmd/server-main.go#L739
 					region: "us-east-1".into(),

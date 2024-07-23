@@ -24,6 +24,11 @@ pub struct Cert {
 }
 
 #[derive(Debug, Clone, Deserialize)]
+pub struct DevTunnel {
+	pub tunnel_public_ip: TerraformOutputValue<String>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
 pub struct K8sInfra {
 	pub traefik_tunnel_external_ip: TerraformOutputValue<String>,
 }
@@ -88,6 +93,10 @@ pub struct ClickHouse {
 pub struct Redis {
 	pub host: TerraformOutputValue<HashMap<String, String>>,
 	pub port: TerraformOutputValue<HashMap<String, u32>>,
+}
+
+pub async fn read_dev_tunnel(ctx: &ProjectContext) -> DevTunnel {
+	read_plan::<DevTunnel>(ctx, "dev_tunnel").await
 }
 
 pub async fn read_k8s_infra(ctx: &ProjectContext) -> K8sInfra {

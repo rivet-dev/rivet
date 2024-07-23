@@ -6,7 +6,7 @@ variable "deploy_method_cluster" {
 	type = bool
 }
 
-variable "public_ip" {
+variable "dev_public_ip" {
 	type = string
 	nullable = true
 	default = null

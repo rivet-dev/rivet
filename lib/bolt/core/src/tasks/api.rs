@@ -15,7 +15,7 @@ pub async fn access_token_login(project_ctx: &ProjectContext, name: String) -> R
 		.read_secret(&["rivet", "api_admin", "token"])
 		.await?;
 	let response = reqwest::Client::new()
-		.post(format!("{}/admin/login", project_ctx.origin_api(),))
+		.post(format!("{}/admin/login", project_ctx.origin_api().await))
 		.bearer_auth(api_admin_token)
 		.json(&json!({
 			"name": name,

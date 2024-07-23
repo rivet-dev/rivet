@@ -11,6 +11,11 @@ terraform {
 	}
 }
 
-output "ip" {
-	value = linode_instance.tunnel.ip_address
+module "secrets" {
+	source = "../modules/secrets"
+
+	keys = [
+		"linode/token",
+	]
 }
+
