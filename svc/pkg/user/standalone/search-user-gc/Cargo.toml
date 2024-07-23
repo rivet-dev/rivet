@@ -21,6 +21,7 @@ tracing-subscriber = { version = "0.3", default-features = false, features = [
     "json",
     "ansi",
 ] }
+tracing-logfmt = "0.3"
 
 user-identity-get = { path = "../../../user-identity/ops/get" }
 user-follow-count = { path = "../../../user-follow/ops/count" }

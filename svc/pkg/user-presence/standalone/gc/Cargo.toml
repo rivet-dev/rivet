@@ -24,6 +24,7 @@ tracing-subscriber = { version = "0.3", default-features = false, features = [
     "json",
     "ansi",
 ] }
+tracing-logfmt = "0.3"
 util-user-presence = { package = "rivet-util-user-presence", path = "../../util" }
 
 [dev-dependencies]

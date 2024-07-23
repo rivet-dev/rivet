@@ -28,6 +28,7 @@ tracing-subscriber = { version = "0.3", default-features = false, features = [
     "json",
     "ansi",
 ] }
+tracing-logfmt = "0.3"
 util-job = { package = "rivet-util-job", path = "../../../job/util" }
 
 [dependencies.nomad_client]

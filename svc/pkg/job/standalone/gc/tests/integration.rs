@@ -1,6 +1,7 @@
 use ::job_gc::run_from_env;
 use chirp_worker::prelude::*;
 use proto::backend;
+use tracing_subscriber::prelude::*;
 
 lazy_static::lazy_static! {
 	static ref NOMAD_CONFIG: nomad_client::apis::configuration::Configuration =
@@ -11,10 +12,12 @@ lazy_static::lazy_static! {
 async fn all() {
 	// Run tests sequentially so the they don't interfere with each other
 
-	tracing_subscriber::fmt()
-		.json()
-		.with_max_level(tracing::Level::INFO)
-		.with_span_events(tracing_subscriber::fmt::format::FmtSpan::CLOSE)
+	tracing_subscriber::registry()
+		.with(
+			tracing_logfmt::builder()
+				.layer()
+				.with_filter(tracing_subscriber::filter::LevelFilter::INFO),
+		)
 		.init();
 
 	let ctx = TestCtx::from_env("all").await.unwrap();

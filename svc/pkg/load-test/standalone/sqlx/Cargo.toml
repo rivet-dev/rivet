@@ -19,6 +19,7 @@ tracing-subscriber = { version = "0.3", default-features = false, features = [
     "json",
     "ansi",
 ] }
+tracing-logfmt = "0.3"
 
 cdn-namespace-get = { path = "../../../cdn/ops/namespace-get" }
 mm-config-version-get = { path = "../../../mm-config/ops/version-get" }

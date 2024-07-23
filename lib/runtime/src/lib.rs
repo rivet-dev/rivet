@@ -1,7 +1,7 @@
 use std::{env, future::Future, sync::Once, time::Duration};
 
 use thiserror::Error;
-use tracing_subscriber::prelude::*;
+use tracing_subscriber::{fmt::writer::MakeWriterExt, prelude::*};
 
 mod metrics;
 
@@ -51,33 +51,26 @@ impl RunConfig {
 				let fmt_filter = tracing_subscriber::filter::LevelFilter::INFO;
 
 				if std::env::var("TOKIO_CONSOLE_ENABLE").is_ok() {
-					// JSON + tokio-console
-					let console_layer = console_subscriber::ConsoleLayer::builder()
-						.retention(std::time::Duration::from_secs(60))
-						.with_default_env()
-						.spawn();
-
-					let fmt_layer = tracing_subscriber::fmt::layer()
-						.json()
-						.with_span_events(tracing_subscriber::fmt::format::FmtSpan::NONE)
-						.with_current_span(false)
-						.with_span_list(true)
-						.with_filter(fmt_filter);
-
+					// logfmt + tokio-console
 					tracing_subscriber::registry()
-						.with(console_layer)
-						.with(fmt_layer)
+						.with(
+							console_subscriber::ConsoleLayer::builder()
+								.retention(std::time::Duration::from_secs(60))
+								.with_default_env()
+								.spawn(),
+						)
+						.with(
+							tracing_logfmt::builder()
+								.layer()
+								.with_filter(fmt_filter)
+								.with_filter(fmt_filter),
+						)
 						.init();
 				} else {
-					// JSON
-					let fmt_layer = tracing_subscriber::fmt::layer()
-						.json()
-						.with_span_events(tracing_subscriber::fmt::format::FmtSpan::NONE)
-						.with_current_span(false)
-						.with_span_list(true)
-						.with_filter(fmt_filter);
-
-					tracing_subscriber::registry().with(fmt_layer).init();
+					// logfmt
+					tracing_subscriber::registry()
+						.with(tracing_logfmt::builder().layer().with_filter(fmt_filter))
+						.init();
 				}
 			}
 		})

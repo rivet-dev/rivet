@@ -1,11 +1,14 @@
 use rivet_operation::prelude::*;
+use tracing_subscriber::prelude::*;
 
 #[tokio::main]
 async fn main() -> GlobalResult<()> {
-	tracing_subscriber::fmt()
-		.json()
-		.with_max_level(tracing::Level::INFO)
-		.with_span_events(tracing_subscriber::fmt::format::FmtSpan::NONE)
+	tracing_subscriber::registry()
+		.with(
+			tracing_logfmt::builder()
+				.layer()
+				.with_filter(tracing_subscriber::filter::LevelFilter::INFO),
+		)
 		.init();
 
 	// TODO: When running bolt up, this service gets created first before `cluster-worker` so the messages

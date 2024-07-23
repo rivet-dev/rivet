@@ -56,6 +56,11 @@ const DEFAULT_BUILDS: &[DefaultBuildConfig] = &[
 			"../../../../../../infra/default-builds/outputs/test-mm-player-connect.tar"
 		),
 	},
+	DefaultBuildConfig {
+		kind: "test-ds-echo",
+		tag: include_str!("../../../../../../infra/default-builds/outputs/test-ds-echo-tag.txt"),
+		tar: include_bytes!("../../../../../../infra/default-builds/outputs/test-ds-echo.tar"),
+	},
 ];
 
 struct DefaultBuildConfig {

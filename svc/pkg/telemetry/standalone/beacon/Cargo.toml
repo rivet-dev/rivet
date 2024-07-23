@@ -23,6 +23,7 @@ tracing-subscriber = { version = "0.3", default-features = false, features = [
     "json",
     "ansi",
 ] }
+tracing-logfmt = "0.3"
 
 cloud-version-get = { path = "../../../cloud/ops/version-get" }
 game-get = { path = "../../../game/ops/get" }

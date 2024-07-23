@@ -21,6 +21,7 @@ tracing-subscriber = { version = "0.3", default-features = false, features = [
     "json",
     "ansi",
 ] }
+tracing-logfmt = "0.3"
 uuid = { version = "1", features = ["v4"] }
 
 upload-complete = { path = "../../../upload/ops/complete" }
