@@ -104,6 +104,7 @@ in
 
 			# Automatically connect to correct cluster
 			alias kubectl='KUBECONFIG=$(get_config) && export KUBECONFIG && kubectl'
+			alias k9s='KUBECONFIG=$(get_config) && export KUBECONFIG && k9s'
 			alias helm='KUBECONFIG=$(get_config) && export KUBECONFIG && helm'
 
 			get_config() {
