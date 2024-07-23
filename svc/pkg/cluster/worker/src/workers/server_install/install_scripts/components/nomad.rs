@@ -4,10 +4,13 @@ pub fn install() -> String {
 	include_str!("../files/nomad_install.sh").to_string()
 }
 
-pub fn configure() -> String {
-	let servers = &["127.0.0.1:5000", "127.0.0.1:5001", "127.0.0.1:5002"];
+pub fn configure() -> GlobalResult<String> {
+	let nomad_server_count = util::env::var("NOMAD_SERVER_COUNT")?.parse::<usize>()?;
+	let servers = (0..nomad_server_count)
+		.map(|idx| format!("127.0.0.1:{}", 5000 + idx))
+		.collect::<Vec<_>>();
 
-	include_str!("../files/nomad_configure.sh")
+	Ok(include_str!("../files/nomad_configure.sh")
 		// HACK: Hardcoded to Linode
 		.replace("__PUBLIC_IFACE__", "eth0")
 		// HACK: Hardcoded to Linode
@@ -27,5 +30,5 @@ pub fn configure() -> String {
 		.replace(
 			"__ATS_VLAN_SUBNET__",
 			&util::net::ats::vlan_ip_net().to_string(),
-		)
+		))
 }

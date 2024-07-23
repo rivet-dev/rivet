@@ -1047,6 +1047,12 @@ impl ServiceContextData {
 			env.insert("RIVET_PROFANITY_FILTER_DISABLE".into(), "1".into());
 		}
 
+		// Nomad
+		env.insert(
+			"NOMAD_SERVER_COUNT".into(),
+			project_ctx.nomad_server_count().to_string(),
+		);
+
 		if let Some(provisioning) = &project_ctx.ns().rivet.provisioning {
 			if self.depends_on_cluster_config() || matches!(run_context, RunContext::Test { .. }) {
 				env.insert(
@@ -1302,7 +1308,6 @@ impl ServiceContextData {
 
 		// if self.depends_on_infra() && project_ctx.ns().rivet.provisioning.is_some() {
 		let tls = terraform::output::read_tls(&project_ctx).await;
-		let k8s_infra = terraform::output::read_k8s_infra(&project_ctx).await;
 
 		env.insert(
 			"TLS_CERT_LOCALLY_SIGNED_JOB_CERT_PEM".into(),

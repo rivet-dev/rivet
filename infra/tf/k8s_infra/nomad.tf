@@ -13,14 +13,9 @@
 # complicated + adds another point of failure and (b) it doesn't fix the problem with Nomad server addresses changing.
 
 locals {
-	# !!! DO NOT CHANGE !!!
-	#
-	# This value must be 3, 5, or 7. More = better redundancy, but does not make things faster.
-	# 
-	# See https://developer.hashicorp.com/nomad/tutorials/enterprise/production-reference-architecture-vm-with-consul
 	nomad_server_count = var.deploy_method_cluster ? 3 : 1
 
-	nomad_server_addrs = [for i in range(0, local.nomad_server_count): "127.0.0.1:${6000 + i}"]
+	nomad_server_addrs = [for i in range(0, var.nomad_server_count): "127.0.0.1:${6000 + i}"]
 	nomad_server_addrs_escaped = [for addr in local.nomad_server_addrs : "\"${addr}\""]
 	nomad_server_configmap_data = {
 		"server.hcl" = <<-EOT
@@ -36,7 +31,7 @@ locals {
 
 			server {
 				enabled = true
-				bootstrap_expect = ${local.nomad_server_count}
+				bootstrap_expect = ${var.nomad_server_count}
 
 				server_join {
 					retry_join = [${join(", ", local.nomad_server_addrs_escaped)}]
@@ -128,7 +123,7 @@ resource "kubernetes_service" "nomad_server" {
 }
 
 resource "kubernetes_service" "nomad_server_indexed" {
-	count = var.edge_enabled ? local.nomad_server_count : 0
+	count = var.edge_enabled ? var.nomad_server_count : 0
 
 	metadata {
 		namespace = kubernetes_namespace.nomad.0.metadata.0.name
@@ -202,7 +197,7 @@ resource "kubernetes_stateful_set" "nomad_server" {
 		}
 	}
 	spec {
-		replicas = local.nomad_server_count
+		replicas = var.nomad_server_count
 
 		selector {
 			match_labels = {
@@ -324,7 +319,7 @@ resource "kubernetes_stateful_set" "nomad_server" {
 
 						# Entrypoints
 						flatten([
-							for i in range(0, local.nomad_server_count):
+							for i in range(0, var.nomad_server_count):
 							[
 								"--entryPoints.nomad-${i}-rpc-tcp.address=:${5000 + i}/tcp",
 								"--entryPoints.nomad-${i}-serf-tcp.address=:${6000 + i}/tcp",
@@ -334,7 +329,7 @@ resource "kubernetes_stateful_set" "nomad_server" {
 					])
 
 					dynamic "port" {
-						for_each = [for i in range(0, local.nomad_server_count) : i]
+						for_each = [for i in range(0, var.nomad_server_count) : i]
 						content {
 							name = "n-${port.value}-rpc-tcp"
 							container_port = 5000 + port.value
@@ -343,7 +338,7 @@ resource "kubernetes_stateful_set" "nomad_server" {
 					}
 
 					dynamic "port" {
-						for_each = [for i in range(0, local.nomad_server_count) : i]
+						for_each = [for i in range(0, var.nomad_server_count) : i]
 						content {
 							name = "n-${port.value}-serf-tcp"
 							container_port = 6000 + port.value
@@ -352,7 +347,7 @@ resource "kubernetes_stateful_set" "nomad_server" {
 					}
 
 					dynamic "port" {
-						for_each = [for i in range(0, local.nomad_server_count) : i]
+						for_each = [for i in range(0, var.nomad_server_count) : i]
 						content {
 							name = "n-${port.value}-serf-udp"
 							container_port = 6000 + port.value
@@ -421,7 +416,7 @@ resource "kubernetes_config_map" "nomad_server_sidecar_traefik_config" {
 	}
 
 	data = {
-		for i in range(0, local.nomad_server_count):
+		for i in range(0, var.nomad_server_count):
 		"nomad-${i}.yaml" => yamlencode({
 			tcp = {
 				routers = {

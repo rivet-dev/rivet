@@ -224,6 +224,7 @@ async fn vars(ctx: &ProjectContext) {
 	}
 
 	// Edge nodes
+	vars.insert("nomad_server_count".into(), json!(ctx.nomad_server_count()));
 	vars.insert(
 		"edge_enabled".into(),
 		json!(config.rivet.provisioning.is_some()),

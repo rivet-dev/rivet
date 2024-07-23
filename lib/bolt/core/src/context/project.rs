@@ -900,6 +900,18 @@ impl ProjectContextData {
 			.and_then(|dns| dns.provider.as_ref())
 			.is_some()
 	}
+
+	pub fn nomad_server_count(&self) -> usize {
+		// !!! DO NOT CHANGE !!!
+		//
+		// This value must be 1, 3, 5, or 7. More = better redundancy, but does not make things faster.
+		//
+		// See https://developer.hashicorp.com/nomad/tutorials/enterprise/production-reference-architecture-vm-with-consul
+		match self.ns().cluster.kind {
+			config::ns::ClusterKind::Distributed { .. } => 3,
+			config::ns::ClusterKind::SingleNode { .. } => 1,
+		}
+	}
 }
 
 pub struct S3Credentials {

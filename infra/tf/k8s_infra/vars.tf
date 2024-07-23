@@ -60,6 +60,10 @@ variable "authenticate_all_docker_hub_pulls" {
 }
 
 # MARK: Nomad
+variable "nomad_server_count" {
+	type = number
+}
+
 variable "edge_enabled" {
 	type = bool
 }
