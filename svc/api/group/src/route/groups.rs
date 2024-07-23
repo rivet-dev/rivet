@@ -973,11 +973,11 @@ pub async fn create_invite(
 	);
 
 	if let Some(ttl) = body.ttl {
-		ensure!(ttl >= 0, "invalid parameter `ttl`");
+		ensure!(ttl > 0, "invalid parameter `ttl`");
 		ensure!(ttl <= util::duration::days(30), "parameter `ttl` too large");
 	}
 	if let Some(use_count) = body.use_count {
-		ensure!(use_count >= 0, "invalid parameter `use_count`");
+		ensure!(use_count > 0, "invalid parameter `use_count`");
 		ensure!(use_count <= 5000, "parameter `use_count` too large");
 	}
 
