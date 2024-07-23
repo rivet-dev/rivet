@@ -1,3 +1,7 @@
+variable "namespace" {
+	 type = string
+}
+
 # MARK: Better Uptime
 variable "better_uptime_groups" {
 	type = list(object({

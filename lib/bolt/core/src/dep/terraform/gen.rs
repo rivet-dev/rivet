@@ -587,10 +587,12 @@ async fn vars(ctx: &ProjectContext) {
 				{
 					"id": "mm",
 					"name": "Matchmaker",
-					"monitors": api_status_monitors
-						.into_iter()
-						.chain(gg_monitors)
-						.collect::<Vec<_>>(),
+					"monitors": api_status_monitors,
+				},
+				{
+					"id": "gg",
+					"name": "Game Guard",
+					"monitors": gg_monitors,
 				},
 				{
 					"id": "cdn",

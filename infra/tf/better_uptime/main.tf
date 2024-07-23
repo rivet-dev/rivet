@@ -47,15 +47,25 @@ resource "betteruptime_status_page_section" "status_page_section" {
 	position = count.index
 }
 
+resource "betteruptime_monitor_group" "monitor_group" {
+	for_each = {
+		for x in var.better_uptime_groups:
+		x.id => x
+	}
+
+	name = "${var.namespace} – ${each.value.name}"
+}
+
 resource "betteruptime_monitor" "monitor" {
 	for_each = local.all_monitors
 
+	monitor_group_id = betteruptime_monitor_group.monitor_group[each.value.group.id].id
 	url = each.value.monitor.url
 	monitor_type = "status"
 	request_timeout = 60
 	check_frequency = 60
-	confirmation_period = 90
-	recovery_period = 180
+	confirmation_period = 180
+	recovery_period = 60
 	request_headers = [
 		{
 			name = "Authorization"
