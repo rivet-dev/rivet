@@ -10,20 +10,19 @@ async fn worker(
 
 	// Generate date
 	//
-	// Use UTC in order to ensure that the month is consistent if a team is collaborating from
-	// multiple locations around the world with different time zones
+	// Use UTC to ensure consistency across different time zones
 	let now = chrono::Utc::now();
-	let date_prefix = now.format("%Y.%m").to_string();
+	let date_prefix = now.format("%Y.%m.%d").to_string();
 
 	let (display_name,) = sql_fetch_one!(
 		[ctx, (String,)]
 		r#"
 		WITH next_version AS (
 			-- Increment the highest existing number by 1, or start with 1 if none exist
-			SELECT $2 || ' (' || (COALESCE(MAX(SUBSTRING(version_display_name FROM $2 || ' \((\d+)\)')::INT), 0) + 1) || ')' AS new_version
+			SELECT $2 || '-' || (COALESCE(MAX(SUBSTRING(version_display_name FROM $2 || '-(\d+)')::INT), 0) + 1)::TEXT AS new_version
 			FROM db_cloud.game_version_name_reservations
 			-- Filter for rows with the matching game ID and version format
-			WHERE version_display_name ~ $2 || ' \(\d+\)'
+			WHERE version_display_name ~ $2 || '-\d+'
 			AND game_id = $1
 		)
 		-- Insert the new version name into the table
@@ -47,3 +46,4 @@ async fn worker(
 
 	Ok(())
 }
+
