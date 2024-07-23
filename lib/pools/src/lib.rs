@@ -142,7 +142,7 @@ async fn crdb_from_env(_client_name: String) -> Result<Option<CrdbPool>, Error> 
 		// let client_name = client_name.clone();
 		let pool = sqlx::postgres::PgPoolOptions::new()
 			// The default connection timeout is too high
-			.acquire_timeout(Duration::from_secs(30))
+			.acquire_timeout(Duration::from_secs(60))
 			// Increase lifetime to mitigate: https://github.com/launchbadge/sqlx/issues/2854
 			//
 			// See max lifetime https://www.cockroachlabs.com/docs/stable/connection-pooling#set-the-maximum-lifetime-of-connections
