@@ -1,8 +1,8 @@
+use global_error::prelude::*;
 use types::rivet::backend;
 use uuid::Uuid;
-use global_error::prelude::*;
 
-use crate::env::{origin_api, origin_hub, domain_main};
+use crate::env::{domain_main, origin_api, origin_hub};
 
 pub fn user_settings() -> String {
 	format!("{}/settings", origin_hub())
@@ -108,9 +108,7 @@ pub fn opengb_env(project_name_id: &str, env_name_id: &str) -> GlobalResult<Stri
 	let domain_main = unwrap!(domain_main(), "dns not enabled");
 
 	Ok(format!(
-		"https://{}--{}.backend.{}/",
-		project_name_id,
-		env_name_id,
-		domain_main,
+		"https://{}--{}.backend.{}",
+		project_name_id, env_name_id, domain_main,
 	))
 }
