@@ -89,7 +89,7 @@ async fn select_servers(ctx: &StandaloneCtx) -> GlobalResult<Vec<Server>> {
 			(drain_ts IS NOT NULL) AS is_draining,
 			(drain_complete_ts IS NOT NULL) AS is_drained,
 			(taint_ts IS NOT NULL) AS is_tainted
-		FROM db_cluster.servers AS OF SYSTEM TIME '-5s'
+		FROM db_cluster.servers AS OF SYSTEM TIME '-1s'
 		WHERE
 			-- Filters out servers that are being destroyed/already destroyed
 			cloud_destroy_ts IS NULL

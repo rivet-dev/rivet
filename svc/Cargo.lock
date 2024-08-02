@@ -2156,6 +2156,7 @@ dependencies = [
  "futures-util",
  "global-error",
  "indoc 2.0.5",
+ "lazy_static",
  "prost 0.12.6",
  "prost-types 0.12.6",
  "rand",
@@ -10750,6 +10751,22 @@ dependencies = [
  "tokio",
  "tracing",
  "tracing-logfmt",
+ "tracing-subscriber",
+]
+
+[[package]]
+name = "workflow-metrics-publish"
+version = "0.0.1"
+dependencies = [
+ "chirp-client",
+ "chirp-workflow",
+ "rivet-connection",
+ "rivet-health-checks",
+ "rivet-metrics",
+ "rivet-runtime",
+ "sqlx 0.7.4 (git+https://github.com/rivet-gg/sqlx?rev=08d6e61aa0572e7ec557abbedb72cebb96e1ac5b)",
+ "tokio",
+ "tracing",
  "tracing-subscriber",
 ]
 

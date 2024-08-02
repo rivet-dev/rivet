@@ -103,11 +103,11 @@ impl Database for DatabasePostgres {
 		self.query(|| async {
 			sqlx::query(indoc!(
 				"
-			INSERT INTO db_workflow.workflows (
-				workflow_id, workflow_name, create_ts, ray_id, tags, input, wake_immediate
-			)
-			VALUES ($1, $2, $3, $4, $5, $6, true)
-			",
+				INSERT INTO db_workflow.workflows (
+					workflow_id, workflow_name, create_ts, ray_id, tags, input, wake_immediate
+				)
+				VALUES ($1, $2, $3, $4, $5, $6, true)
+				",
 			))
 			.bind(workflow_id)
 			.bind(workflow_name)
@@ -361,10 +361,10 @@ impl Database for DatabasePostgres {
 		self.query(|| async {
 			sqlx::query(indoc!(
 				"
-			UPDATE db_workflow.workflows
-			SET output = $2
-			WHERE workflow_id = $1
-			",
+				UPDATE db_workflow.workflows
+				SET output = $2
+				WHERE workflow_id = $1
+				",
 			))
 			.bind(workflow_id)
 			.bind(output)
@@ -390,16 +390,16 @@ impl Database for DatabasePostgres {
 		self.query(|| async {
 			sqlx::query(indoc!(
 				"
-			UPDATE db_workflow.workflows
-			SET
-				worker_instance_id = NULL,
-				wake_immediate = $2,
-				wake_deadline_ts = $3,
-				wake_signals = $4,
-				wake_sub_workflow_id = $5,
-				error = $6
-			WHERE workflow_id = $1
-			",
+				UPDATE db_workflow.workflows
+				SET
+					worker_instance_id = NULL,
+					wake_immediate = $2,
+					wake_deadline_ts = $3,
+					wake_signals = $4,
+					wake_sub_workflow_id = $5,
+					error = $6
+				WHERE workflow_id = $1
+				",
 			))
 			.bind(workflow_id)
 			.bind(immediate)
@@ -426,10 +426,10 @@ impl Database for DatabasePostgres {
 		self.query(|| async {
 			sqlx::query(indoc!(
 				"
-			UPDATE db_workflow.workflows
-			SET tags = $2
-			WHERE workflow_id = $1
-			",
+				UPDATE db_workflow.workflows
+				SET tags = $2
+				WHERE workflow_id = $1
+				",
 			))
 			.bind(workflow_id)
 			.bind(tags)
@@ -478,7 +478,6 @@ impl Database for DatabasePostgres {
 					.bind(activity_id.input_hash.to_le_bytes())
 					.bind(&input)
 					.bind(&output)
-					.bind(rivet_util::timestamp::now())
 					.bind(create_ts)
 					.bind(loop_location.map(|l| l.iter().map(|x| *x as i64).collect::<Vec<_>>()))
 					.execute(&mut *self.conn().await?)
@@ -491,30 +490,30 @@ impl Database for DatabasePostgres {
 				self.query(|| async {
 					sqlx::query(indoc!(
 						"
-					WITH
-						event AS (
-							INSERT INTO db_workflow.workflow_activity_events (
-								workflow_id,
-								location,
-								activity_name,
-								input_hash,
-								input,
-								create_ts,
-								loop_location
+						WITH
+							event AS (
+								INSERT INTO db_workflow.workflow_activity_events (
+									workflow_id,
+									location,
+									activity_name,
+									input_hash,
+									input,
+									create_ts,
+									loop_location
+								)
+								VALUES ($1, $2, $3, $4, $5, $7, $8)
+								ON CONFLICT (workflow_id, location) DO NOTHING
+								RETURNING 1
+							),
+							err AS (
+								INSERT INTO db_workflow.workflow_activity_errors (
+									workflow_id, location, activity_name, error, ts
+								)
+								VALUES ($1, $2, $3, $6, $9)
+								RETURNING 1
 							)
-							VALUES ($1, $2, $3, $4, $5, $7, $8)
-							ON CONFLICT (workflow_id, location) DO NOTHING
-							RETURNING 1
-						),
-						err AS (
-							INSERT INTO db_workflow.workflow_activity_errors (
-								workflow_id, location, activity_name, error, ts
-							)
-							VALUES ($1, $2, $3, $6, $9)
-							RETURNING 1
-						)
-					SELECT 1
-					",
+						SELECT 1
+						",
 					))
 					.bind(workflow_id)
 					.bind(location.iter().map(|x| *x as i64).collect::<Vec<_>>())
@@ -547,62 +546,62 @@ impl Database for DatabasePostgres {
 			.query(|| async {
 				sqlx::query_as::<_, SignalRow>(indoc!(
 					"
-			WITH
-				-- Finds the oldest signal matching the signal name filter in either the normal signals table
-				-- or tagged signals table
-				next_signal AS (
-					SELECT false AS tagged, signal_id, create_ts, signal_name, body
-					FROM db_workflow.signals
-					WHERE
-						workflow_id = $1 AND
-						signal_name = ANY($2) AND
-						ack_ts IS NULL
-					UNION ALL
-					SELECT true AS tagged, signal_id, create_ts, signal_name, body
-					FROM db_workflow.tagged_signals
-					WHERE
-						signal_name = ANY($2) AND
-						tags <@ (SELECT tags FROM db_workflow.workflows WHERE workflow_id = $1) AND
-						ack_ts IS NULL
-					ORDER BY create_ts ASC
-					LIMIT 1
-				),
-				-- If the next signal is not tagged, acknowledge it with this statement
-				ack_signal AS (
-					UPDATE db_workflow.signals
-					SET ack_ts = $4
-					WHERE signal_id = (
-						SELECT signal_id FROM next_signal WHERE tagged = false
-					)
-					RETURNING 1
-				),
-				-- If the next signal is tagged, acknowledge it with this statement
-				ack_tagged_signal AS (
-					UPDATE db_workflow.tagged_signals
-					SET ack_ts = $4
-					WHERE signal_id = (
-						SELECT signal_id FROM next_signal WHERE tagged = true
-					)
-					RETURNING 1
-				),
-				-- After acking the signal, add it to the events table
-				insert_event AS (
-					INSERT INTO db_workflow.workflow_signal_events (
-						workflow_id, location, signal_id, signal_name, body, ack_ts, loop_location
-					)
-					SELECT
-						$1 AS workflow_id,
-						$3 AS location,
-						signal_id,
-						signal_name,
-						body,
-						$4 AS ack_ts,
-						$5 AS loop_location
-					FROM next_signal
-					RETURNING 1
-				)
-			SELECT * FROM next_signal
-			",
+					WITH
+						-- Finds the oldest signal matching the signal name filter in either the normal signals table
+						-- or tagged signals table
+						next_signal AS (
+							SELECT false AS tagged, signal_id, create_ts, signal_name, body
+							FROM db_workflow.signals
+							WHERE
+								workflow_id = $1 AND
+								signal_name = ANY($2) AND
+								ack_ts IS NULL
+							UNION ALL
+							SELECT true AS tagged, signal_id, create_ts, signal_name, body
+							FROM db_workflow.tagged_signals
+							WHERE
+								signal_name = ANY($2) AND
+								tags <@ (SELECT tags FROM db_workflow.workflows WHERE workflow_id = $1) AND
+								ack_ts IS NULL
+							ORDER BY create_ts ASC
+							LIMIT 1
+						),
+						-- If the next signal is not tagged, acknowledge it with this statement
+						ack_signal AS (
+							UPDATE db_workflow.signals
+							SET ack_ts = $4
+							WHERE signal_id = (
+								SELECT signal_id FROM next_signal WHERE tagged = false
+							)
+							RETURNING 1
+						),
+						-- If the next signal is tagged, acknowledge it with this statement
+						ack_tagged_signal AS (
+							UPDATE db_workflow.tagged_signals
+							SET ack_ts = $4
+							WHERE signal_id = (
+								SELECT signal_id FROM next_signal WHERE tagged = true
+							)
+							RETURNING 1
+						),
+						-- After acking the signal, add it to the events table
+						insert_event AS (
+							INSERT INTO db_workflow.workflow_signal_events (
+								workflow_id, location, signal_id, signal_name, body, ack_ts, loop_location
+							)
+							SELECT
+								$1 AS workflow_id,
+								$3 AS location,
+								signal_id,
+								signal_name,
+								body,
+								$4 AS ack_ts,
+								$5 AS loop_location
+							FROM next_signal
+							RETURNING 1
+						)
+					SELECT * FROM next_signal
+					",
 				))
 				.bind(workflow_id)
 				.bind(filter)
@@ -629,9 +628,9 @@ impl Database for DatabasePostgres {
 		self.query(|| async {
 			sqlx::query(indoc!(
 				"
-			INSERT INTO db_workflow.signals (signal_id, workflow_id, signal_name, body, ray_id, create_ts)			
-			VALUES ($1, $2, $3, $4, $5, $6)
-			",
+				INSERT INTO db_workflow.signals (signal_id, workflow_id, signal_name, body, ray_id, create_ts)			
+				VALUES ($1, $2, $3, $4, $5, $6)
+				",
 			))
 			.bind(signal_id)
 			.bind(workflow_id)
@@ -659,9 +658,9 @@ impl Database for DatabasePostgres {
 		self.query(|| async {
 			sqlx::query(indoc!(
 				"
-			INSERT INTO db_workflow.tagged_signals (signal_id, tags, signal_name, body, ray_id, create_ts)			
-			VALUES ($1, $2, $3, $4, $5, $6)
-			",
+				INSERT INTO db_workflow.tagged_signals (signal_id, tags, signal_name, body, ray_id, create_ts)			
+				VALUES ($1, $2, $3, $4, $5, $6)
+				",
 			))
 			.bind(signal_id)
 			.bind(tags)

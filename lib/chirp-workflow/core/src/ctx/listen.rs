@@ -32,6 +32,11 @@ impl<'a> ListenCtx<'a> {
 			return Err(WorkflowError::NoSignalFound(Box::from(signal_names)));
 		};
 
+		let recv_lag = (rivet_util::timestamp::now() as f64 - signal.create_ts as f64) / 1000.;
+		crate::metrics::SIGNAL_RECV_LAG
+			.with_label_values(&[&self.ctx.name(), &signal.signal_name])
+			.observe(recv_lag);
+
 		tracing::info!(
 			workflow_name=%self.ctx.name(),
 			workflow_id=%self.ctx.workflow_id(),

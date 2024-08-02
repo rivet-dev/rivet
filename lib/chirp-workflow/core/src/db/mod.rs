@@ -236,6 +236,7 @@ pub struct SignalRow {
 	pub signal_id: Uuid,
 	pub signal_name: String,
 	pub body: serde_json::Value,
+	pub create_ts: i64,
 }
 
 #[derive(sqlx::FromRow)]

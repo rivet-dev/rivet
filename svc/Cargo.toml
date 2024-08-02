@@ -251,7 +251,8 @@ members = [
 	"pkg/user/standalone/delete-pending",
 	"pkg/user/standalone/search-user-gc",
 	"pkg/user/worker",
-	"pkg/workflow/standalone/gc"
+	"pkg/workflow/standalone/gc",
+	"pkg/workflow/standalone/metrics-publish"
 ]
 
 # Speed up compilation

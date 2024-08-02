@@ -1,4 +1,4 @@
-use std::{collections::HashMap, sync::Arc};
+use std::{collections::HashMap, sync::Arc, time::Instant};
 
 use global_error::{GlobalError, GlobalResult};
 use serde::{de::DeserializeOwned, Serialize};
@@ -15,9 +15,10 @@ use crate::{
 	executable::{closure, AsyncResult, Executable},
 	listen::{CustomListener, Listen},
 	message::Message,
+	metrics,
 	registry::RegistryHandle,
 	signal::Signal,
-	util::Location,
+	util::{GlobalErrorExt, Location},
 	workflow::{Workflow, WorkflowInput},
 };
 
@@ -211,7 +212,7 @@ impl WorkflowCtx {
 				// Retry the workflow if its recoverable
 				let deadline_ts = if let Some(deadline_ts) = err.backoff() {
 					Some(deadline_ts)
-				} else if err.is_recoverable() {
+				} else if err.is_retryable() {
 					Some(rivet_util::timestamp::now() + RETRY_TIMEOUT_MS as i64)
 				} else {
 					None
@@ -225,11 +226,14 @@ impl WorkflowCtx {
 				// finish. This workflow will be retried when the sub workflow completes
 				let wake_sub_workflow = err.sub_workflow();
 
-				if deadline_ts.is_some() || !wake_signals.is_empty() || wake_sub_workflow.is_some()
-				{
+				if err.is_recoverable() && !err.is_retryable() {
 					tracing::info!(name=%self.name, id=%self.workflow_id, ?err, "workflow sleeping");
 				} else {
 					tracing::error!(name=%self.name, id=%self.workflow_id, ?err, "workflow error");
+
+					metrics::WORKFLOW_ERRORS
+						.with_label_values(&[&self.name, err.to_string().as_str()])
+						.inc();
 				}
 
 				let err_str = err.to_string();
@@ -288,9 +292,13 @@ impl WorkflowCtx {
 			A::NAME,
 		);
 
+		let start_instant = Instant::now();
+
 		let res = tokio::time::timeout(A::TIMEOUT, A::run(&ctx, input))
 			.await
 			.map_err(|_| WorkflowError::ActivityTimeout);
+
+		let dt = start_instant.elapsed().as_secs_f64();
 
 		match res {
 			Ok(Ok(output)) => {
@@ -313,14 +321,20 @@ impl WorkflowCtx {
 					)
 					.await?;
 
+				metrics::ACTIVITY_DURATION
+					.with_label_values(&[&self.name, A::NAME, ""])
+					.observe(dt);
+
 				Ok(output)
 			}
 			Ok(Err(err)) => {
 				tracing::debug!(?err, "activity error");
 
-				// Write error (failed state)
+				let err_str = err.to_string();
 				let input_val =
 					serde_json::to_value(input).map_err(WorkflowError::SerializeActivityInput)?;
+
+				// Write error (failed state)
 				self.db
 					.commit_workflow_activity_event(
 						self.workflow_id,
@@ -328,18 +342,29 @@ impl WorkflowCtx {
 						activity_id,
 						create_ts,
 						input_val,
-						Err(&err.to_string()),
+						Err(&err_str),
 						self.loop_location(),
 					)
 					.await?;
+
+				if !err.is_workflow_recoverable() {
+					metrics::ACTIVITY_ERRORS
+						.with_label_values(&[&self.name, A::NAME, &err_str])
+						.inc();
+				}
+				metrics::ACTIVITY_DURATION
+					.with_label_values(&[&self.name, A::NAME, &err_str])
+					.observe(dt);
 
 				Err(WorkflowError::ActivityFailure(err, 0))
 			}
 			Err(err) => {
 				tracing::debug!("activity timeout");
 
+				let err_str = err.to_string();
 				let input_val =
 					serde_json::to_value(input).map_err(WorkflowError::SerializeActivityInput)?;
+
 				self.db
 					.commit_workflow_activity_event(
 						self.workflow_id,
@@ -347,10 +372,17 @@ impl WorkflowCtx {
 						activity_id,
 						create_ts,
 						input_val,
-						Err(&err.to_string()),
+						Err(&err_str),
 						self.loop_location(),
 					)
 					.await?;
+
+				metrics::ACTIVITY_ERRORS
+					.with_label_values(&[&self.name, A::NAME, &err_str])
+					.inc();
+				metrics::ACTIVITY_DURATION
+					.with_label_values(&[&self.name, A::NAME, &err_str])
+					.observe(dt);
 
 				Err(err)
 			}

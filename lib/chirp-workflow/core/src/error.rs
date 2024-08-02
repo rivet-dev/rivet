@@ -131,7 +131,7 @@ pub enum WorkflowError {
 }
 
 impl WorkflowError {
-	pub fn backoff(&self) -> Option<i64> {
+	pub(crate) fn backoff(&self) -> Option<i64> {
 		if let WorkflowError::ActivityFailure(_, error_count) = self {
 			// NOTE: Max retry is handled in `WorkflowCtx::activity`
 			let mut backoff =
@@ -154,6 +154,17 @@ impl WorkflowError {
 	}
 
 	pub fn is_recoverable(&self) -> bool {
+		match self {
+			WorkflowError::ActivityFailure(_, _)
+			| WorkflowError::ActivityTimeout
+			| WorkflowError::OperationTimeout
+			| WorkflowError::NoSignalFound(_)
+			| WorkflowError::SubWorkflowIncomplete(_) => true,
+			_ => false,
+		}
+	}
+
+	pub(crate) fn is_retryable(&self) -> bool {
 		match self {
 			WorkflowError::ActivityFailure(_, _)
 			| WorkflowError::ActivityTimeout

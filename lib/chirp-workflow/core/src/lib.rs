@@ -7,6 +7,7 @@ mod event;
 mod executable;
 mod listen;
 pub mod message;
+pub mod metrics;
 pub mod operation;
 pub mod prelude;
 pub mod registry;

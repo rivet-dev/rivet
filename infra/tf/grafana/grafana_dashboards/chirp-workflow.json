@@ -1,0 +1,1121 @@
+{
+	"annotations": {
+		"list": [
+			{
+				"builtIn": 1,
+				"datasource": {
+					"type": "grafana",
+					"uid": "-- Grafana --"
+				},
+				"enable": true,
+				"hide": true,
+				"iconColor": "rgba(0, 211, 255, 1)",
+				"name": "Annotations & Alerts",
+				"type": "dashboard"
+			}
+		]
+	},
+	"editable": true,
+	"fiscalYearStartMonth": 0,
+	"graphTooltip": 1,
+	"links": [],
+	"liveNow": false,
+	"panels": [
+		{
+			"datasource": {
+				"type": "prometheus",
+				"uid": "prometheus"
+			},
+			"fieldConfig": {
+				"defaults": {
+					"color": {
+						"mode": "palette-classic"
+					},
+					"custom": {
+						"axisBorderShow": false,
+						"axisCenteredZero": false,
+						"axisColorMode": "text",
+						"axisLabel": "",
+						"axisPlacement": "auto",
+						"axisSoftMax": 5,
+						"barAlignment": 0,
+						"drawStyle": "line",
+						"fillOpacity": 0,
+						"gradientMode": "none",
+						"hideFrom": {
+							"legend": false,
+							"tooltip": false,
+							"viz": false
+						},
+						"insertNulls": false,
+						"lineInterpolation": "linear",
+						"lineWidth": 1,
+						"pointSize": 5,
+						"scaleDistribution": {
+							"type": "linear"
+						},
+						"showPoints": "auto",
+						"spanNulls": false,
+						"stacking": {
+							"group": "A",
+							"mode": "none"
+						},
+						"thresholdsStyle": {
+							"mode": "off"
+						}
+					},
+					"mappings": [],
+					"min": 0,
+					"thresholds": {
+						"mode": "absolute",
+						"steps": [
+							{
+								"color": "green",
+								"value": null
+							},
+							{
+								"color": "red",
+								"value": 80
+							}
+						]
+					}
+				},
+				"overrides": []
+			},
+			"gridPos": {
+				"h": 8,
+				"w": 12,
+				"x": 0,
+				"y": 0
+			},
+			"id": 5,
+			"options": {
+				"legend": {
+					"calcs": ["lastNotNull"],
+					"displayMode": "table",
+					"placement": "bottom",
+					"showLegend": true,
+					"sortBy": "Last *",
+					"sortDesc": true
+				},
+				"tooltip": {
+					"mode": "multi",
+					"sort": "none"
+				}
+			},
+			"targets": [
+				{
+					"datasource": {
+						"type": "prometheus",
+						"uid": "prometheus"
+					},
+					"editorMode": "code",
+					"expr": "rivet_chirp_workflow_active{workflow_name=~\"[[workflow_name]]\"}",
+					"instant": false,
+					"legendFormat": "{{workflow_name}}",
+					"range": true,
+					"refId": "A"
+				}
+			],
+			"title": "Running Workflows",
+			"type": "timeseries"
+		},
+		{
+			"datasource": {
+				"type": "prometheus",
+				"uid": "prometheus"
+			},
+			"fieldConfig": {
+				"defaults": {
+					"color": {
+						"mode": "palette-classic"
+					},
+					"custom": {
+						"axisBorderShow": false,
+						"axisCenteredZero": false,
+						"axisColorMode": "text",
+						"axisLabel": "",
+						"axisPlacement": "auto",
+						"axisSoftMax": 5,
+						"barAlignment": 0,
+						"drawStyle": "line",
+						"fillOpacity": 0,
+						"gradientMode": "none",
+						"hideFrom": {
+							"legend": false,
+							"tooltip": false,
+							"viz": false
+						},
+						"insertNulls": false,
+						"lineInterpolation": "linear",
+						"lineWidth": 1,
+						"pointSize": 5,
+						"scaleDistribution": {
+							"type": "linear"
+						},
+						"showPoints": "auto",
+						"spanNulls": false,
+						"stacking": {
+							"group": "A",
+							"mode": "none"
+						},
+						"thresholdsStyle": {
+							"mode": "off"
+						}
+					},
+					"mappings": [],
+					"min": 0,
+					"thresholds": {
+						"mode": "absolute",
+						"steps": [
+							{
+								"color": "green",
+								"value": null
+							},
+							{
+								"color": "red",
+								"value": 80
+							}
+						]
+					}
+				},
+				"overrides": []
+			},
+			"gridPos": {
+				"h": 8,
+				"w": 12,
+				"x": 12,
+				"y": 0
+			},
+			"id": 3,
+			"options": {
+				"legend": {
+					"calcs": ["lastNotNull"],
+					"displayMode": "table",
+					"placement": "bottom",
+					"showLegend": true,
+					"sortBy": "Last *",
+					"sortDesc": true
+				},
+				"tooltip": {
+					"mode": "multi",
+					"sort": "none"
+				}
+			},
+			"targets": [
+				{
+					"datasource": {
+						"type": "prometheus",
+						"uid": "prometheus"
+					},
+					"editorMode": "code",
+					"expr": "rivet_chirp_workflow_sleeping{workflow_name=~\"[[workflow_name]]\"}",
+					"instant": false,
+					"legendFormat": "{{workflow_name}}",
+					"range": true,
+					"refId": "A"
+				}
+			],
+			"title": "Sleeping Workflows",
+			"type": "timeseries"
+		},
+		{
+			"datasource": {
+				"type": "prometheus",
+				"uid": "prometheus"
+			},
+			"fieldConfig": {
+				"defaults": {
+					"color": {
+						"mode": "palette-classic"
+					},
+					"custom": {
+						"axisBorderShow": false,
+						"axisCenteredZero": false,
+						"axisColorMode": "text",
+						"axisLabel": "",
+						"axisPlacement": "auto",
+						"axisSoftMax": 5,
+						"barAlignment": 0,
+						"drawStyle": "line",
+						"fillOpacity": 0,
+						"gradientMode": "none",
+						"hideFrom": {
+							"legend": false,
+							"tooltip": false,
+							"viz": false
+						},
+						"insertNulls": false,
+						"lineInterpolation": "linear",
+						"lineWidth": 1,
+						"pointSize": 5,
+						"scaleDistribution": {
+							"type": "linear"
+						},
+						"showPoints": "auto",
+						"spanNulls": false,
+						"stacking": {
+							"group": "A",
+							"mode": "none"
+						},
+						"thresholdsStyle": {
+							"mode": "off"
+						}
+					},
+					"mappings": [],
+					"min": 0,
+					"thresholds": {
+						"mode": "absolute",
+						"steps": [
+							{
+								"color": "green",
+								"value": null
+							},
+							{
+								"color": "red",
+								"value": 80
+							}
+						]
+					}
+				},
+				"overrides": []
+			},
+			"gridPos": {
+				"h": 8,
+				"w": 12,
+				"x": 0,
+				"y": 8
+			},
+			"id": 1,
+			"options": {
+				"legend": {
+					"calcs": ["lastNotNull"],
+					"displayMode": "table",
+					"placement": "bottom",
+					"showLegend": true,
+					"sortBy": "Last *",
+					"sortDesc": true
+				},
+				"tooltip": {
+					"mode": "multi",
+					"sort": "none"
+				}
+			},
+			"targets": [
+				{
+					"datasource": {
+						"type": "prometheus",
+						"uid": "prometheus"
+					},
+					"editorMode": "code",
+					"expr": "sum by (workflow_name) (rivet_chirp_workflow_dead{workflow_name=~\"[[workflow_name]]\"})",
+					"instant": false,
+					"legendFormat": "{{workflow_name}}",
+					"range": true,
+					"refId": "A"
+				}
+			],
+			"title": "Dead Workflows",
+			"type": "timeseries"
+		},
+		{
+			"datasource": {
+				"type": "prometheus",
+				"uid": "prometheus"
+			},
+			"description": "",
+			"fieldConfig": {
+				"defaults": {
+					"color": {
+						"mode": "palette-classic"
+					},
+					"custom": {
+						"axisBorderShow": false,
+						"axisCenteredZero": false,
+						"axisColorMode": "text",
+						"axisLabel": "",
+						"axisPlacement": "auto",
+						"axisSoftMax": 5,
+						"barAlignment": 0,
+						"drawStyle": "line",
+						"fillOpacity": 0,
+						"gradientMode": "none",
+						"hideFrom": {
+							"legend": false,
+							"tooltip": false,
+							"viz": false
+						},
+						"insertNulls": false,
+						"lineInterpolation": "linear",
+						"lineWidth": 1,
+						"pointSize": 5,
+						"scaleDistribution": {
+							"type": "linear"
+						},
+						"showPoints": "auto",
+						"spanNulls": false,
+						"stacking": {
+							"group": "A",
+							"mode": "none"
+						},
+						"thresholdsStyle": {
+							"mode": "off"
+						}
+					},
+					"mappings": [],
+					"min": 0,
+					"thresholds": {
+						"mode": "absolute",
+						"steps": [
+							{
+								"color": "green",
+								"value": null
+							},
+							{
+								"color": "red",
+								"value": 80
+							}
+						]
+					}
+				},
+				"overrides": []
+			},
+			"gridPos": {
+				"h": 8,
+				"w": 12,
+				"x": 12,
+				"y": 8
+			},
+			"id": 6,
+			"options": {
+				"legend": {
+					"calcs": ["lastNotNull"],
+					"displayMode": "table",
+					"placement": "bottom",
+					"showLegend": true,
+					"sortBy": "Last *",
+					"sortDesc": true
+				},
+				"tooltip": {
+					"mode": "multi",
+					"sort": "none"
+				}
+			},
+			"targets": [
+				{
+					"datasource": {
+						"type": "prometheus",
+						"uid": "prometheus"
+					},
+					"editorMode": "code",
+					"expr": "sum by (error_code) (rivet_chirp_workflow_dead{workflow_name=~\"[[workflow_name]]\"})",
+					"instant": false,
+					"legendFormat": "{{error_code}}",
+					"range": true,
+					"refId": "A"
+				}
+			],
+			"title": "Dead Workflow Errors",
+			"type": "timeseries"
+		},
+		{
+			"cards": {},
+			"color": {
+				"cardColor": "#b4ff00",
+				"colorScale": "sqrt",
+				"colorScheme": "interpolateOranges",
+				"exponent": 0.5,
+				"mode": "spectrum"
+			},
+			"dataFormat": "tsbuckets",
+			"datasource": {
+				"type": "prometheus",
+				"uid": "prometheus"
+			},
+			"fieldConfig": {
+				"defaults": {
+					"custom": {
+						"hideFrom": {
+							"legend": false,
+							"tooltip": false,
+							"viz": false
+						},
+						"scaleDistribution": {
+							"type": "linear"
+						}
+					}
+				},
+				"overrides": []
+			},
+			"gridPos": {
+				"h": 9,
+				"w": 12,
+				"x": 0,
+				"y": 16
+			},
+			"heatmap": {},
+			"hideZeroBuckets": true,
+			"highlightCards": true,
+			"id": 12,
+			"interval": "15s",
+			"legend": {
+				"show": false
+			},
+			"options": {
+				"calculate": false,
+				"calculation": {
+					"xBuckets": {
+						"mode": "size"
+					}
+				},
+				"cellGap": 0,
+				"color": {
+					"exponent": 0.5,
+					"fill": "dark-orange",
+					"mode": "scheme",
+					"reverse": false,
+					"scale": "exponential",
+					"scheme": "RdBu",
+					"steps": 64
+				},
+				"exemplars": {
+					"color": "rgba(255,0,255,0.7)"
+				},
+				"filterValues": {
+					"le": 1e-9
+				},
+				"legend": {
+					"show": true
+				},
+				"rowsFrame": {
+					"layout": "auto"
+				},
+				"tooltip": {
+					"mode": "single",
+					"showColorScale": false,
+					"yHistogram": true
+				},
+				"yAxis": {
+					"axisPlacement": "left",
+					"max": "60",
+					"min": 0,
+					"reverse": false,
+					"unit": "s"
+				}
+			},
+			"pluginVersion": "10.4.1",
+			"reverseYBuckets": false,
+			"targets": [
+				{
+					"datasource": {
+						"type": "prometheus",
+						"uid": "prometheus"
+					},
+					"editorMode": "code",
+					"expr": "sum(increase(rivet_chirp_workflow_activity_duration_bucket{workflow_name=~\"[[workflow_name]]\"} [$__rate_interval])) by (le)",
+					"format": "heatmap",
+					"legendFormat": "{{le}}",
+					"range": true,
+					"refId": "A"
+				}
+			],
+			"title": "Activity Duration",
+			"tooltip": {
+				"show": true,
+				"showHistogram": true
+			},
+			"type": "heatmap",
+			"xAxis": {
+				"show": true
+			},
+			"yAxis": {
+				"format": "s",
+				"logBase": 2,
+				"max": "60",
+				"min": "0",
+				"show": true
+			},
+			"yBucketBound": "auto"
+		},
+		{
+			"datasource": {
+				"type": "prometheus",
+				"uid": "prometheus"
+			},
+			"fieldConfig": {
+				"defaults": {
+					"color": {
+						"mode": "palette-classic"
+					},
+					"custom": {
+						"axisBorderShow": false,
+						"axisCenteredZero": false,
+						"axisColorMode": "text",
+						"axisLabel": "",
+						"axisPlacement": "auto",
+						"barAlignment": 0,
+						"drawStyle": "line",
+						"fillOpacity": 0,
+						"gradientMode": "none",
+						"hideFrom": {
+							"legend": false,
+							"tooltip": false,
+							"viz": false
+						},
+						"insertNulls": false,
+						"lineInterpolation": "linear",
+						"lineWidth": 1,
+						"pointSize": 5,
+						"scaleDistribution": {
+							"type": "linear"
+						},
+						"showPoints": "auto",
+						"spanNulls": false,
+						"stacking": {
+							"group": "A",
+							"mode": "none"
+						},
+						"thresholdsStyle": {
+							"mode": "off"
+						}
+					},
+					"mappings": [],
+					"min": 0,
+					"thresholds": {
+						"mode": "absolute",
+						"steps": [
+							{
+								"color": "green",
+								"value": null
+							},
+							{
+								"color": "red",
+								"value": 80
+							}
+						]
+					},
+					"unit": "reqps"
+				},
+				"overrides": []
+			},
+			"gridPos": {
+				"h": 9,
+				"w": 12,
+				"x": 12,
+				"y": 16
+			},
+			"id": 9,
+			"interval": "15s",
+			"options": {
+				"legend": {
+					"calcs": ["mean"],
+					"displayMode": "table",
+					"placement": "bottom",
+					"showLegend": true,
+					"sortBy": "Mean",
+					"sortDesc": true
+				},
+				"tooltip": {
+					"mode": "single",
+					"sort": "none"
+				}
+			},
+			"targets": [
+				{
+					"datasource": {
+						"type": "prometheus",
+						"uid": "prometheus"
+					},
+					"editorMode": "code",
+					"expr": "sum(rate(rivet_chirp_workflow_activity_errors{workflow_name=~\"[[workflow_name]]\"}[$__rate_interval])) by (activity_name, error_code)",
+					"legendFormat": "{{activity_name}}: {{error_code}}",
+					"range": true,
+					"refId": "A"
+				}
+			],
+			"title": "Activity Error Rate",
+			"type": "timeseries"
+		},
+		{
+			"datasource": {
+				"type": "prometheus",
+				"uid": "prometheus"
+			},
+			"fieldConfig": {
+				"defaults": {
+					"color": {
+						"mode": "palette-classic"
+					},
+					"custom": {
+						"axisBorderShow": false,
+						"axisCenteredZero": false,
+						"axisColorMode": "text",
+						"axisLabel": "",
+						"axisPlacement": "auto",
+						"axisSoftMax": 5,
+						"barAlignment": 0,
+						"drawStyle": "line",
+						"fillOpacity": 0,
+						"gradientMode": "none",
+						"hideFrom": {
+							"legend": false,
+							"tooltip": false,
+							"viz": false
+						},
+						"insertNulls": false,
+						"lineInterpolation": "linear",
+						"lineWidth": 1,
+						"pointSize": 5,
+						"scaleDistribution": {
+							"type": "linear"
+						},
+						"showPoints": "auto",
+						"spanNulls": false,
+						"stacking": {
+							"group": "A",
+							"mode": "none"
+						},
+						"thresholdsStyle": {
+							"mode": "off"
+						}
+					},
+					"mappings": [],
+					"min": 0,
+					"thresholds": {
+						"mode": "absolute",
+						"steps": [
+							{
+								"color": "green",
+								"value": null
+							},
+							{
+								"color": "red",
+								"value": 80
+							}
+						]
+					}
+				},
+				"overrides": []
+			},
+			"gridPos": {
+				"h": 8,
+				"w": 12,
+				"x": 0,
+				"y": 25
+			},
+			"id": 4,
+			"options": {
+				"legend": {
+					"calcs": ["lastNotNull"],
+					"displayMode": "table",
+					"placement": "bottom",
+					"showLegend": true,
+					"sortBy": "Last *",
+					"sortDesc": true
+				},
+				"tooltip": {
+					"mode": "multi",
+					"sort": "none"
+				}
+			},
+			"targets": [
+				{
+					"datasource": {
+						"type": "prometheus",
+						"uid": "prometheus"
+					},
+					"editorMode": "code",
+					"expr": "rivet_chirp_workflow_signal_pending",
+					"instant": false,
+					"legendFormat": "{{signal_name}}",
+					"range": true,
+					"refId": "A"
+				}
+			],
+			"title": "Pending Signals",
+			"type": "timeseries"
+		},
+		{
+			"cards": {},
+			"color": {
+				"cardColor": "#b4ff00",
+				"colorScale": "sqrt",
+				"colorScheme": "interpolateOranges",
+				"exponent": 0.5,
+				"mode": "spectrum"
+			},
+			"dataFormat": "tsbuckets",
+			"datasource": {
+				"type": "prometheus",
+				"uid": "prometheus"
+			},
+			"fieldConfig": {
+				"defaults": {
+					"custom": {
+						"hideFrom": {
+							"legend": false,
+							"tooltip": false,
+							"viz": false
+						},
+						"scaleDistribution": {
+							"type": "linear"
+						}
+					}
+				},
+				"overrides": []
+			},
+			"gridPos": {
+				"h": 8,
+				"w": 12,
+				"x": 12,
+				"y": 25
+			},
+			"heatmap": {},
+			"hideZeroBuckets": true,
+			"highlightCards": true,
+			"id": 10,
+			"interval": "15s",
+			"legend": {
+				"show": false
+			},
+			"options": {
+				"calculate": false,
+				"calculation": {
+					"xBuckets": {
+						"mode": "size"
+					}
+				},
+				"cellGap": 0,
+				"color": {
+					"exponent": 0.5,
+					"fill": "dark-orange",
+					"mode": "scheme",
+					"reverse": false,
+					"scale": "exponential",
+					"scheme": "RdBu",
+					"steps": 64
+				},
+				"exemplars": {
+					"color": "rgba(255,0,255,0.7)"
+				},
+				"filterValues": {
+					"le": 1e-9
+				},
+				"legend": {
+					"show": true
+				},
+				"rowsFrame": {
+					"layout": "auto"
+				},
+				"tooltip": {
+					"mode": "single",
+					"showColorScale": false,
+					"yHistogram": true
+				},
+				"yAxis": {
+					"axisPlacement": "left",
+					"max": "60",
+					"min": 0,
+					"reverse": false,
+					"unit": "s"
+				}
+			},
+			"pluginVersion": "10.4.1",
+			"reverseYBuckets": false,
+			"targets": [
+				{
+					"datasource": {
+						"type": "prometheus",
+						"uid": "prometheus"
+					},
+					"editorMode": "code",
+					"expr": "sum(increase(rivet_chirp_workflow_signal_recv_lag_bucket{workflow_name=~\"[[workflow_name]]\"} [$__rate_interval])) by (le)",
+					"format": "heatmap",
+					"legendFormat": "{{le}}",
+					"range": true,
+					"refId": "A"
+				}
+			],
+			"title": "Signal Receive Lag",
+			"tooltip": {
+				"show": true,
+				"showHistogram": true
+			},
+			"type": "heatmap",
+			"xAxis": {
+				"show": true
+			},
+			"yAxis": {
+				"format": "s",
+				"logBase": 2,
+				"max": "60",
+				"min": "0",
+				"show": true
+			},
+			"yBucketBound": "auto"
+		},
+		{
+			"datasource": {
+				"type": "prometheus",
+				"uid": "prometheus"
+			},
+			"fieldConfig": {
+				"defaults": {
+					"color": {
+						"mode": "palette-classic"
+					},
+					"custom": {
+						"axisBorderShow": false,
+						"axisCenteredZero": false,
+						"axisColorMode": "text",
+						"axisLabel": "",
+						"axisPlacement": "auto",
+						"axisSoftMax": 5,
+						"barAlignment": 0,
+						"drawStyle": "line",
+						"fillOpacity": 0,
+						"gradientMode": "none",
+						"hideFrom": {
+							"legend": false,
+							"tooltip": false,
+							"viz": false
+						},
+						"insertNulls": false,
+						"lineInterpolation": "linear",
+						"lineWidth": 1,
+						"pointSize": 5,
+						"scaleDistribution": {
+							"type": "linear"
+						},
+						"showPoints": "auto",
+						"spanNulls": false,
+						"stacking": {
+							"group": "A",
+							"mode": "none"
+						},
+						"thresholdsStyle": {
+							"mode": "off"
+						}
+					},
+					"mappings": [],
+					"min": 0,
+					"thresholds": {
+						"mode": "absolute",
+						"steps": [
+							{
+								"color": "green",
+								"value": null
+							},
+							{
+								"color": "red",
+								"value": 80
+							}
+						]
+					}
+				},
+				"overrides": []
+			},
+			"gridPos": {
+				"h": 8,
+				"w": 12,
+				"x": 0,
+				"y": 33
+			},
+			"id": 2,
+			"options": {
+				"legend": {
+					"calcs": ["lastNotNull"],
+					"displayMode": "table",
+					"placement": "bottom",
+					"showLegend": false,
+					"sortBy": "Last *",
+					"sortDesc": true
+				},
+				"tooltip": {
+					"mode": "multi",
+					"sort": "none"
+				}
+			},
+			"targets": [
+				{
+					"datasource": {
+						"type": "prometheus",
+						"uid": "prometheus"
+					},
+					"editorMode": "code",
+					"expr": "rivet_chirp_workflow_worker_active",
+					"instant": false,
+					"legendFormat": "__auto",
+					"range": true,
+					"refId": "A"
+				}
+			],
+			"title": "Active Workers",
+			"type": "timeseries"
+		},
+		{
+			"cards": {},
+			"color": {
+				"cardColor": "#b4ff00",
+				"colorScale": "sqrt",
+				"colorScheme": "interpolateOranges",
+				"exponent": 0.5,
+				"mode": "spectrum"
+			},
+			"dataFormat": "tsbuckets",
+			"datasource": {
+				"type": "prometheus",
+				"uid": "prometheus"
+			},
+			"fieldConfig": {
+				"defaults": {
+					"custom": {
+						"hideFrom": {
+							"legend": false,
+							"tooltip": false,
+							"viz": false
+						},
+						"scaleDistribution": {
+							"type": "linear"
+						}
+					}
+				},
+				"overrides": []
+			},
+			"gridPos": {
+				"h": 8,
+				"w": 12,
+				"x": 12,
+				"y": 33
+			},
+			"heatmap": {},
+			"hideZeroBuckets": true,
+			"highlightCards": true,
+			"id": 11,
+			"interval": "15s",
+			"legend": {
+				"show": false
+			},
+			"options": {
+				"calculate": false,
+				"calculation": {
+					"xBuckets": {
+						"mode": "size"
+					}
+				},
+				"cellGap": 0,
+				"color": {
+					"exponent": 0.5,
+					"fill": "dark-orange",
+					"mode": "scheme",
+					"reverse": false,
+					"scale": "exponential",
+					"scheme": "RdBu",
+					"steps": 64
+				},
+				"exemplars": {
+					"color": "rgba(255,0,255,0.7)"
+				},
+				"filterValues": {
+					"le": 1e-9
+				},
+				"legend": {
+					"show": true
+				},
+				"rowsFrame": {
+					"layout": "auto"
+				},
+				"tooltip": {
+					"mode": "single",
+					"showColorScale": false,
+					"yHistogram": true
+				},
+				"yAxis": {
+					"axisPlacement": "left",
+					"max": "60",
+					"min": 0,
+					"reverse": false,
+					"unit": "s"
+				}
+			},
+			"pluginVersion": "10.4.1",
+			"reverseYBuckets": false,
+			"targets": [
+				{
+					"datasource": {
+						"type": "prometheus",
+						"uid": "prometheus"
+					},
+					"editorMode": "code",
+					"expr": "sum(increase(rivet_chirp_workflow_message_recv_lag_bucket [$__rate_interval])) by (le)",
+					"format": "heatmap",
+					"legendFormat": "{{le}}",
+					"range": true,
+					"refId": "A"
+				}
+			],
+			"title": "Message Receive Lag",
+			"tooltip": {
+				"show": true,
+				"showHistogram": true
+			},
+			"type": "heatmap",
+			"xAxis": {
+				"show": true
+			},
+			"yAxis": {
+				"format": "s",
+				"logBase": 2,
+				"max": "60",
+				"min": "0",
+				"show": true
+			},
+			"yBucketBound": "auto"
+		}
+	],
+	"refresh": "5s",
+	"schemaVersion": 39,
+	"tags": ["chirp"],
+	"templating": {
+		"list": [
+			{
+				"current": {
+					"selected": true,
+					"text": ["All"],
+					"value": ["$__all"]
+				},
+				"datasource": {
+					"type": "prometheus",
+					"uid": "prometheus"
+				},
+				"definition": "label_values(rivet_chirp_workflow_total,workflow_name)",
+				"hide": 0,
+				"includeAll": true,
+				"label": "Workflow Name",
+				"multi": true,
+				"name": "workflow_name",
+				"options": [],
+				"query": {
+					"qryType": 1,
+					"query": "label_values(rivet_chirp_workflow_total,workflow_name)",
+					"refId": "PrometheusVariableQueryEditor-VariableQuery"
+				},
+				"refresh": 1,
+				"regex": "",
+				"skipUrlSync": false,
+				"sort": 0,
+				"type": "query"
+			}
+		]
+	},
+	"time": {
+		"from": "now-5m",
+		"to": "now"
+	},
+	"timepicker": {},
+	"timezone": "",
+	"title": "Chirp / Workflow",
+	"uid": "636d22f9-d18f-4086-8b45-7c50886a105c",
+	"version": 7,
+	"weekStart": ""
+}

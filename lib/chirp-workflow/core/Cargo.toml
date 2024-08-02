@@ -14,6 +14,7 @@ formatted-error = { path = "../../formatted-error" }
 futures-util = "0.3"
 global-error = { path = "../../global-error" }
 indoc = "2.0.5"
+lazy_static = "1.4"
 prost = "0.12.4"
 prost-types = "0.12.4"
 rand = "0.8.5"

@@ -16,7 +16,7 @@ lazy_static::lazy_static! {
 	).unwrap();
 	pub static ref CHIRP_REQUEST_DURATION: HistogramVec = register_histogram_vec_with_registry!(
 		"chirp_request_duration",
-		"Total number of requests.",
+		"Total duration of a request.",
 		&["context_name", "error_code"],
 		BUCKETS.to_vec(),
 		*REGISTRY,
