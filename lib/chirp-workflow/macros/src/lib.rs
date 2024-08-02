@@ -8,7 +8,7 @@ use syn::{
 };
 
 struct Config {
-	max_retries: u32,
+	max_retries: usize,
 	timeout: u64,
 }
 
@@ -132,7 +132,7 @@ pub fn activity(attr: TokenStream, item: TokenStream) -> TokenStream {
 			type Output = #output_type;
 
 			const NAME: &'static str = #fn_name;
-			const MAX_RETRIES: u32 = #max_retries;
+			const MAX_RETRIES: usize = #max_retries;
 			const TIMEOUT: std::time::Duration = std::time::Duration::from_secs(#timeout);
 
 			async fn run(#ctx_ident: #ctx_ty, #input_ident: &Self::Input) -> GlobalResult<Self::Output> {

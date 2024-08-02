@@ -1,7 +1,7 @@
 use std::{collections::HashMap, sync::Arc};
 
 use global_error::{GlobalError, GlobalResult};
-use serde::Serialize;
+use serde::{de::DeserializeOwned, Serialize};
 use tokio::time::Duration;
 use uuid::Uuid;
 
@@ -65,6 +65,9 @@ pub struct WorkflowCtx {
 	root_location: Location,
 	location_idx: usize,
 
+	/// If this context is currently in a loop, this is the location of the where the loop started.
+	loop_location: Option<Box<[usize]>>,
+
 	msg_ctx: MessageCtx,
 }
 
@@ -95,6 +98,7 @@ impl WorkflowCtx {
 
 			root_location: Box::new([]),
 			location_idx: 0,
+			loop_location: None,
 
 			msg_ctx,
 		})
@@ -125,6 +129,7 @@ impl WorkflowCtx {
 				.chain(std::iter::once(self.location_idx))
 				.collect(),
 			location_idx: 0,
+			loop_location: self.loop_location.clone(),
 
 			msg_ctx: self.msg_ctx.clone(),
 		};
@@ -159,6 +164,10 @@ impl WorkflowCtx {
 			.cloned()
 			.chain(std::iter::once(self.location_idx))
 			.collect()
+	}
+
+	pub(crate) fn loop_location(&self) -> Option<&[usize]> {
+		self.loop_location.as_deref()
 	}
 
 	// Purposefully infallible
@@ -216,7 +225,8 @@ impl WorkflowCtx {
 				// finish. This workflow will be retried when the sub workflow completes
 				let wake_sub_workflow = err.sub_workflow();
 
-				if deadline_ts.is_some() || !wake_signals.is_empty() || wake_sub_workflow.is_some() {
+				if deadline_ts.is_some() || !wake_signals.is_empty() || wake_sub_workflow.is_some()
+				{
 					tracing::info!(name=%self.name, id=%self.workflow_id, ?err, "workflow sleeping");
 				} else {
 					tracing::error!(name=%self.name, id=%self.workflow_id, ?err, "workflow error");
@@ -299,6 +309,7 @@ impl WorkflowCtx {
 						create_ts,
 						input_val,
 						Ok(output_val),
+						self.loop_location(),
 					)
 					.await?;
 
@@ -318,6 +329,7 @@ impl WorkflowCtx {
 						create_ts,
 						input_val,
 						Err(&err.to_string()),
+						self.loop_location(),
 					)
 					.await?;
 
@@ -336,6 +348,7 @@ impl WorkflowCtx {
 						create_ts,
 						input_val,
 						Err(&err.to_string()),
+						self.loop_location(),
 					)
 					.await?;
 
@@ -437,6 +450,7 @@ impl WorkflowCtx {
 					&sub_workflow_name,
 					tags,
 					input_val,
+					self.loop_location(),
 				)
 				.await
 				.map_err(GlobalError::raw)?;
@@ -579,6 +593,7 @@ impl WorkflowCtx {
 				.chain(std::iter::once(self.location_idx))
 				.collect(),
 			location_idx: 0,
+			loop_location: self.loop_location.clone(),
 
 			msg_ctx: self.msg_ctx.clone(),
 		};
@@ -746,6 +761,7 @@ impl WorkflowCtx {
 					signal_id,
 					T::NAME,
 					input_val,
+					self.loop_location(),
 				)
 				.await
 				.map_err(GlobalError::raw)?;
@@ -810,6 +826,7 @@ impl WorkflowCtx {
 					signal_id,
 					T::NAME,
 					input_val,
+					self.loop_location(),
 				)
 				.await
 				.map_err(GlobalError::raw)?;
@@ -1005,7 +1022,8 @@ impl WorkflowCtx {
 					location.as_ref(),
 					&tags,
 					M::NAME,
-					body_val
+					body_val,
+					self.loop_location(),
 				),
 				self.msg_ctx.message(tags.clone(), body),
 			);
@@ -1063,7 +1081,8 @@ impl WorkflowCtx {
 					location.as_ref(),
 					&tags,
 					M::NAME,
-					body_val
+					body_val,
+					self.loop_location(),
 				),
 				self.msg_ctx.message_wait(tags.clone(), body),
 			);
@@ -1076,6 +1095,90 @@ impl WorkflowCtx {
 		self.location_idx += 1;
 
 		Ok(())
+	}
+
+	/// Runs workflow steps in a loop. **Ensure that there are no side effects caused by the code in this
+	/// callback**. If you need side causes or side effects, use a native rust loop.
+	pub async fn repeat<F, T>(&mut self, mut cb: F) -> GlobalResult<T>
+	where
+		F: for<'a> FnMut(&'a mut WorkflowCtx) -> AsyncResult<'a, Loop<T>>,
+		T: Serialize + DeserializeOwned,
+	{
+		let loop_location = self.full_location();
+		let mut loop_branch = self.branch();
+
+		let event = { self.relevant_history().nth(self.location_idx) };
+
+		// Loop existed before
+		let output = if let Some(event) = event {
+			// Validate history is consistent
+			let Event::Loop(loop_event) = event else {
+				return Err(WorkflowError::HistoryDiverged(format!(
+					"expected {event}, found loop"
+				)))
+				.map_err(GlobalError::raw);
+			};
+
+			let output = loop_event.parse_output().map_err(GlobalError::raw)?;
+
+			// Shift by iteration count
+			loop_branch.location_idx = loop_event.iteration;
+
+			output
+		} else {
+			None
+		};
+
+		// Loop complete
+		let output = if let Some(output) = output {
+			tracing::debug!(name=%self.name, id=%self.workflow_id, "replaying loop");
+
+			output
+		}
+		// Run loop
+		else {
+			tracing::info!(name=%self.name, id=%self.workflow_id, "running loop");
+
+			loop {
+				let iteration_idx = loop_branch.location_idx;
+
+				let mut iteration_branch = loop_branch.branch();
+				iteration_branch.loop_location = Some(loop_location.clone());
+
+				match cb(&mut iteration_branch).await? {
+					Loop::Continue => {
+						self.db
+							.update_loop(
+								self.workflow_id,
+								loop_location.as_ref(),
+								iteration_idx,
+								None,
+								self.loop_location(),
+							)
+							.await?;
+					}
+					Loop::Break(res) => {
+						let output_val = serde_json::to_value(&res)
+							.map_err(WorkflowError::SerializeLoopOutput)
+							.map_err(GlobalError::raw)?;
+
+						self.db
+							.update_loop(
+								self.workflow_id,
+								loop_location.as_ref(),
+								iteration_idx,
+								Some(output_val),
+								self.loop_location(),
+							)
+							.await?;
+
+						break res;
+					}
+				}
+			}
+		};
+
+		Ok(output)
 	}
 
 	// TODO: sleep_for, sleep_until
@@ -1104,4 +1207,9 @@ impl WorkflowCtx {
 	pub fn req_dt(&self) -> i64 {
 		self.ts.saturating_sub(self.create_ts)
 	}
+}
+
+pub enum Loop<T> {
+	Continue,
+	Break(T),
 }

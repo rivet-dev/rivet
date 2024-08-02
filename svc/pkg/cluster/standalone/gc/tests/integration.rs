@@ -204,7 +204,6 @@ async fn setup(ctx: &TestCtx) -> (Uuid, Uuid) {
 		cluster::workflows::datacenter::ServerCreate {
 			server_id,
 			pool_type: pool_type.clone(),
-			provider: provider.clone(),
 			tags: vec!["test".to_string()],
 		},
 	)

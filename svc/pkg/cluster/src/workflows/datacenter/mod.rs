@@ -61,47 +61,54 @@ pub(crate) async fn cluster_datacenter(ctx: &mut WorkflowCtx, input: &Input) -> 
 	// Scale
 	ctx.signal(ctx.workflow_id(), Scale {}).await?;
 
-	let datacenter_id = input.datacenter_id;
-	loop {
-		match ctx.listen::<Main>().await? {
-			Main::Update(sig) => {
-				ctx.activity(UpdateDbInput {
-					datacenter_id,
-					pools: sig.pools,
-					prebakes_enabled: sig.prebakes_enabled,
-				})
-				.await?;
+	ctx.repeat(|ctx| {
+		let datacenter_id = input.datacenter_id;
+		let provider = input.provider.clone();
 
-				// Scale
-				ctx.signal(ctx.workflow_id(), Scale {}).await?;
-			}
-			Main::Scale(_) => {
-				ctx.workflow(scale::Input { datacenter_id }).await?;
-			}
-			Main::ServerCreate(sig) => {
-				ctx.dispatch_tagged_workflow(
-					&json!({
-						"server_id": sig.server_id,
-					}),
-					crate::workflows::server::Input {
+		async move {
+			match ctx.listen::<Main>().await? {
+				Main::Update(sig) => {
+					ctx.activity(UpdateDbInput {
 						datacenter_id,
-						server_id: sig.server_id,
-						pool_type: sig.pool_type,
-						provider: input.provider.clone(),
-						tags: sig.tags,
-					},
-				)
-				.await?;
+						pools: sig.pools,
+						prebakes_enabled: sig.prebakes_enabled,
+					})
+					.await?;
+
+					// Scale
+					ctx.signal(ctx.workflow_id(), Scale {}).await?;
+				}
+				Main::Scale(_) => {
+					ctx.workflow(scale::Input { datacenter_id }).await?;
+				}
+				Main::ServerCreate(sig) => {
+					ctx.dispatch_tagged_workflow(
+						&json!({
+							"server_id": sig.server_id,
+						}),
+						crate::workflows::server::Input {
+							datacenter_id,
+							server_id: sig.server_id,
+							pool_type: sig.pool_type,
+							provider: provider.clone(),
+							tags: sig.tags,
+						},
+					)
+					.await?;
+				}
+				Main::TlsRenew(_) => {
+					ctx.dispatch_workflow(tls_issue::Input {
+						datacenter_id,
+						renew: true,
+					})
+					.await?;
+				}
 			}
-			Main::TlsRenew(_) => {
-				ctx.dispatch_workflow(tls_issue::Input {
-					datacenter_id,
-					renew: true,
-				})
-				.await?;
-			}
+			Ok(Loop::Continue)
 		}
-	}
+		.boxed()
+	})
+	.await
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Hash)]

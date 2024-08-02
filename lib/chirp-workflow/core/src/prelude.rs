@@ -15,11 +15,11 @@ pub mod util {
 
 pub use crate::{
 	activity::Activity,
+	ctx::workflow::Loop,
 	ctx::*,
 	db,
 	error::{WorkflowError, WorkflowResult},
-	executable::closure,
-	executable::Executable,
+	executable::{closure, Executable},
 	listen::{CustomListener, Listen},
 	message::Message,
 	operation::Operation,

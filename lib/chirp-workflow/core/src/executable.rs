@@ -74,7 +74,7 @@ struct TupleHelper<T: Executable> {
 	exec: T,
 }
 
-// Must wrap all closured being used as executables in this function due to
+// Must wrap all closured being used as executables in `WorkflowCtx::join` in this function due to
 // https://github.com/rust-lang/rust/issues/70263
 pub fn closure<F, T: Send>(f: F) -> F
 where

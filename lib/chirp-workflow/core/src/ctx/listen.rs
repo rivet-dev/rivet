@@ -24,6 +24,7 @@ impl<'a> ListenCtx<'a> {
 				self.ctx.workflow_id(),
 				signal_names,
 				self.ctx.full_location().as_ref(),
+				self.ctx.loop_location(),
 			)
 			.await?;
 

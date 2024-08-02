@@ -62,6 +62,7 @@ pub trait Database: Send {
 		create_ts: i64,
 		input: serde_json::Value,
 		output: Result<serde_json::Value, &str>,
+		loop_location: Option<&[usize]>,
 	) -> WorkflowResult<()>;
 
 	async fn pull_next_signal(
@@ -69,6 +70,7 @@ pub trait Database: Send {
 		workflow_id: Uuid,
 		filter: &[&str],
 		location: &[usize],
+		loop_location: Option<&[usize]>,
 	) -> WorkflowResult<Option<SignalRow>>;
 	async fn publish_signal(
 		&self,
@@ -95,6 +97,7 @@ pub trait Database: Send {
 		signal_id: Uuid,
 		signal_name: &str,
 		body: serde_json::Value,
+		loop_location: Option<&[usize]>,
 	) -> WorkflowResult<()>;
 	async fn publish_tagged_signal_from_workflow(
 		&self,
@@ -105,6 +108,7 @@ pub trait Database: Send {
 		signal_id: Uuid,
 		signal_name: &str,
 		body: serde_json::Value,
+		loop_location: Option<&[usize]>,
 	) -> WorkflowResult<()>;
 
 	async fn dispatch_sub_workflow(
@@ -116,6 +120,7 @@ pub trait Database: Send {
 		sub_workflow_name: &str,
 		tags: Option<&serde_json::Value>,
 		input: serde_json::Value,
+		loop_location: Option<&[usize]>,
 	) -> WorkflowResult<()>;
 
 	/// Fetches a workflow that has the given json as a subset of its input after the given ts.
@@ -133,6 +138,16 @@ pub trait Database: Send {
 		tags: &serde_json::Value,
 		message_name: &str,
 		body: serde_json::Value,
+		loop_location: Option<&[usize]>,
+	) -> WorkflowResult<()>;
+
+	async fn update_loop(
+		&self,
+		workflow_id: Uuid,
+		location: &[usize],
+		iteration: usize,
+		output: Option<serde_json::Value>,
+		loop_location: Option<&[usize]>,
 	) -> WorkflowResult<()>;
 }
 
@@ -221,4 +236,12 @@ pub struct SignalRow {
 	pub signal_id: Uuid,
 	pub signal_name: String,
 	pub body: serde_json::Value,
+}
+
+#[derive(sqlx::FromRow)]
+pub struct LoopEventRow {
+	pub workflow_id: Uuid,
+	pub location: Vec<i64>,
+	pub output: Option<serde_json::Value>,
+	pub iteration: i64,
 }

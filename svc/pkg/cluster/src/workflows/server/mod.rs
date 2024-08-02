@@ -197,6 +197,7 @@ pub(crate) async fn cluster_server(ctx: &mut WorkflowCtx, input: &Input) -> Glob
 		bail!("failed all attempts to provision server");
 	};
 
+	// NOTE: This loop has side effects (for state) so we do not use `ctx.repeat`
 	let mut state = State::default();
 	loop {
 		match state.run(ctx).await? {

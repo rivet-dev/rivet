@@ -1,17 +1,18 @@
 use std::{sync::Arc, time::Duration};
 
 use indoc::indoc;
-use sqlx::{pool::PoolConnection, PgPool, Postgres};
+use sqlx::{pool::PoolConnection, Acquire, PgPool, Postgres};
 use uuid::Uuid;
 
 use super::{
-	ActivityEventRow, Database, MessageSendEventRow, PulledWorkflow, PulledWorkflowRow,
-	SignalEventRow, SignalRow, SignalSendEventRow, SubWorkflowEventRow, WorkflowRow,
+	ActivityEventRow, Database, LoopEventRow, MessageSendEventRow, PulledWorkflow,
+	PulledWorkflowRow, SignalEventRow, SignalRow, SignalSendEventRow, SubWorkflowEventRow,
+	WorkflowRow,
 };
 use crate::{
 	activity::ActivityId,
 	error::{WorkflowError, WorkflowResult},
-	util,
+	event::combine_events,
 };
 
 const MAX_QUERY_RETRIES: usize = 16;
@@ -229,15 +230,16 @@ impl Database for DatabasePostgres {
 			signal_send_events,
 			msg_send_events,
 			sub_workflow_events,
+			loop_events,
 		) = tokio::try_join!(
 			async {
 				sqlx::query_as::<_, ActivityEventRow>(indoc!(
 					"
 					SELECT
-						ev.workflow_id, 
-						ev.location, 
-						ev.activity_name, 
-						ev.input_hash, 
+						ev.workflow_id,
+						ev.location,
+						ev.activity_name,
+						ev.input_hash,
 						ev.output,
 						ev.create_ts,
 						COUNT(err.workflow_id) AS error_count
@@ -246,7 +248,7 @@ impl Database for DatabasePostgres {
 					ON
 						ev.workflow_id = err.workflow_id AND
 						ev.location = err.location
-					WHERE ev.workflow_id = ANY($1)
+					WHERE ev.workflow_id = ANY($1) AND forgotten = FALSE
 					GROUP BY ev.workflow_id, ev.location, ev.activity_name, ev.input_hash, ev.output
 					ORDER BY ev.workflow_id, ev.location ASC
 					",
@@ -262,7 +264,7 @@ impl Database for DatabasePostgres {
 					SELECT
 						workflow_id, location, signal_name, body
 					FROM db_workflow.workflow_signal_events
-					WHERE workflow_id = ANY($1)
+					WHERE workflow_id = ANY($1) AND forgotten = FALSE
 					ORDER BY workflow_id, location ASC
 					",
 				))
@@ -277,7 +279,7 @@ impl Database for DatabasePostgres {
 					SELECT
 						workflow_id, location, signal_id, signal_name
 					FROM db_workflow.workflow_signal_send_events
-					WHERE workflow_id = ANY($1)
+					WHERE workflow_id = ANY($1) AND forgotten = FALSE
 					ORDER BY workflow_id, location ASC
 					",
 				))
@@ -292,7 +294,7 @@ impl Database for DatabasePostgres {
 					SELECT
 						workflow_id, location, message_name
 					FROM db_workflow.workflow_message_send_events
-					WHERE workflow_id = ANY($1)
+					WHERE workflow_id = ANY($1) AND forgotten = FALSE
 					ORDER BY workflow_id, location ASC
 					",
 				))
@@ -312,7 +314,7 @@ impl Database for DatabasePostgres {
 					FROM db_workflow.workflow_sub_workflow_events AS sw
 					JOIN db_workflow.workflows AS w
 					ON sw.sub_workflow_id = w.workflow_id
-					WHERE sw.workflow_id = ANY($1)
+					WHERE sw.workflow_id = ANY($1) AND forgotten = FALSE
 					ORDER BY sw.workflow_id, sw.location ASC
 					",
 				))
@@ -320,16 +322,32 @@ impl Database for DatabasePostgres {
 				.fetch_all(&mut *self.conn().await?)
 				.await
 				.map_err(WorkflowError::Sqlx)
-			}
+			},
+			async {
+				sqlx::query_as::<_, LoopEventRow>(indoc!(
+					"
+					SELECT
+						workflow_id, location, iteration, output
+					FROM db_workflow.workflow_loop_events
+					WHERE workflow_id = ANY($1) AND forgotten = FALSE
+					ORDER BY workflow_id, location ASC
+					",
+				))
+				.bind(&workflow_ids)
+				.fetch_all(&mut *self.conn().await?)
+				.await
+				.map_err(WorkflowError::Sqlx)
+			},
 		)?;
 
-		let workflows = util::combine_events(
+		let workflows = combine_events(
 			workflow_rows,
 			activity_events,
 			signal_events,
 			signal_send_events,
 			msg_send_events,
 			sub_workflow_events,
+			loop_events,
 		)?;
 
 		Ok(workflows)
@@ -432,19 +450,27 @@ impl Database for DatabasePostgres {
 		create_ts: i64,
 		input: serde_json::Value,
 		res: Result<serde_json::Value, &str>,
+		loop_location: Option<&[usize]>,
 	) -> WorkflowResult<()> {
 		match res {
 			Ok(output) => {
 				self.query(|| async {
 					sqlx::query(indoc!(
 						"
-					INSERT INTO db_workflow.workflow_activity_events (
-						workflow_id, location, activity_name, input_hash, input, output, create_ts
-					)
-					VALUES ($1, $2, $3, $4, $5, $6, $7)
-					ON CONFLICT (workflow_id, location) DO UPDATE
-					SET output = excluded.output
-					",
+						INSERT INTO db_workflow.workflow_activity_events (
+							workflow_id,
+							location,
+							activity_name,
+							input_hash,
+							input,
+							output,
+							create_ts,
+							loop_location
+						)
+						VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+						ON CONFLICT (workflow_id, location) DO UPDATE
+						SET output = excluded.output
+						",
 					))
 					.bind(workflow_id)
 					.bind(location.iter().map(|x| *x as i64).collect::<Vec<_>>())
@@ -454,6 +480,7 @@ impl Database for DatabasePostgres {
 					.bind(&output)
 					.bind(rivet_util::timestamp::now())
 					.bind(create_ts)
+					.bind(loop_location.map(|l| l.iter().map(|x| *x as i64).collect::<Vec<_>>()))
 					.execute(&mut *self.conn().await?)
 					.await
 					.map_err(WorkflowError::Sqlx)
@@ -467,9 +494,15 @@ impl Database for DatabasePostgres {
 					WITH
 						event AS (
 							INSERT INTO db_workflow.workflow_activity_events (
-								workflow_id, location, activity_name, input_hash, input, create_ts
+								workflow_id,
+								location,
+								activity_name,
+								input_hash,
+								input,
+								create_ts,
+								loop_location
 							)
-							VALUES ($1, $2, $3, $4, $5, $7)
+							VALUES ($1, $2, $3, $4, $5, $7, $8)
 							ON CONFLICT (workflow_id, location) DO NOTHING
 							RETURNING 1
 						),
@@ -477,7 +510,7 @@ impl Database for DatabasePostgres {
 							INSERT INTO db_workflow.workflow_activity_errors (
 								workflow_id, location, activity_name, error, ts
 							)
-							VALUES ($1, $2, $3, $6, $8)
+							VALUES ($1, $2, $3, $6, $9)
 							RETURNING 1
 						)
 					SELECT 1
@@ -490,6 +523,7 @@ impl Database for DatabasePostgres {
 					.bind(&input)
 					.bind(err)
 					.bind(create_ts)
+					.bind(loop_location.map(|l| l.iter().map(|x| *x as i64).collect::<Vec<_>>()))
 					.bind(rivet_util::timestamp::now())
 					.execute(&mut *self.conn().await?)
 					.await
@@ -507,6 +541,7 @@ impl Database for DatabasePostgres {
 		workflow_id: Uuid,
 		filter: &[&str],
 		location: &[usize],
+		loop_location: Option<&[usize]>,
 	) -> WorkflowResult<Option<SignalRow>> {
 		let signal = self
 			.query(|| async {
@@ -553,9 +588,16 @@ impl Database for DatabasePostgres {
 				-- After acking the signal, add it to the events table
 				insert_event AS (
 					INSERT INTO db_workflow.workflow_signal_events (
-						workflow_id, location, signal_id, signal_name, body, ack_ts
+						workflow_id, location, signal_id, signal_name, body, ack_ts, loop_location
 					)
-					SELECT $1 AS workflow_id, $3 AS location, signal_id, signal_name, body, $4 AS ack_ts
+					SELECT
+						$1 AS workflow_id,
+						$3 AS location,
+						signal_id,
+						signal_name,
+						body,
+						$4 AS ack_ts,
+						$5 AS loop_location
 					FROM next_signal
 					RETURNING 1
 				)
@@ -566,6 +608,7 @@ impl Database for DatabasePostgres {
 				.bind(filter)
 				.bind(location.iter().map(|x| *x as i64).collect::<Vec<_>>())
 				.bind(rivet_util::timestamp::now())
+				.bind(loop_location.map(|l| l.iter().map(|x| *x as i64).collect::<Vec<_>>()))
 				.fetch_optional(&mut *self.conn().await?)
 				.await
 				.map_err(WorkflowError::Sqlx)
@@ -644,6 +687,7 @@ impl Database for DatabasePostgres {
 		signal_id: Uuid,
 		signal_name: &str,
 		body: serde_json::Value,
+		loop_location: Option<&[usize]>,
 	) -> WorkflowResult<()> {
 		self.query(|| async {
 			sqlx::query(indoc!(
@@ -656,9 +700,9 @@ impl Database for DatabasePostgres {
 					),
 					send_event AS (
 						INSERT INTO db_workflow.workflow_signal_send_events(
-							workflow_id, location, signal_id, signal_name, body
+							workflow_id, location, signal_id, signal_name, body, loop_location
 						)
-						VALUES($7, $8, $1, $3, $4)
+						VALUES($7, $8, $1, $3, $4, $9)
 						RETURNING 1
 					)
 				SELECT 1
@@ -672,6 +716,7 @@ impl Database for DatabasePostgres {
 			.bind(rivet_util::timestamp::now())
 			.bind(from_workflow_id)
 			.bind(location.iter().map(|x| *x as i64).collect::<Vec<_>>())
+			.bind(loop_location.map(|l| l.iter().map(|x| *x as i64).collect::<Vec<_>>()))
 			.execute(&mut *self.conn().await?)
 			.await
 			.map_err(WorkflowError::Sqlx)
@@ -690,6 +735,7 @@ impl Database for DatabasePostgres {
 		signal_id: Uuid,
 		signal_name: &str,
 		body: serde_json::Value,
+		loop_location: Option<&[usize]>,
 	) -> WorkflowResult<()> {
 		self.query(|| async {
 			sqlx::query(indoc!(
@@ -702,9 +748,9 @@ impl Database for DatabasePostgres {
 					),
 					send_event AS (
 						INSERT INTO db_workflow.workflow_signal_send_events(
-							workflow_id, location, signal_id, signal_name, body
+							workflow_id, location, signal_id, signal_name, body, loop_location
 						)
-						VALUES($7, $8, $1, $3, $4)
+						VALUES($7, $8, $1, $3, $4, $9)
 						RETURNING 1
 					)
 				SELECT 1
@@ -718,6 +764,7 @@ impl Database for DatabasePostgres {
 			.bind(rivet_util::timestamp::now())
 			.bind(from_workflow_id)
 			.bind(location.iter().map(|x| *x as i64).collect::<Vec<_>>())
+			.bind(loop_location.map(|l| l.iter().map(|x| *x as i64).collect::<Vec<_>>()))
 			.execute(&mut *self.conn().await?)
 			.await
 			.map_err(WorkflowError::Sqlx)
@@ -736,6 +783,7 @@ impl Database for DatabasePostgres {
 		sub_workflow_name: &str,
 		tags: Option<&serde_json::Value>,
 		input: serde_json::Value,
+		loop_location: Option<&[usize]>,
 	) -> WorkflowResult<()> {
 		self.query(|| async {
 			sqlx::query(indoc!(
@@ -750,9 +798,9 @@ impl Database for DatabasePostgres {
 					),
 					sub_workflow AS (
 						INSERT INTO db_workflow.workflow_sub_workflow_events(
-							workflow_id, location, sub_workflow_id, create_ts
+							workflow_id, location, sub_workflow_id, create_ts, loop_location
 						)
-						VALUES($1, $7, $8, $3)
+						VALUES($1, $7, $8, $3, $9)
 						RETURNING 1
 					)
 				SELECT 1
@@ -766,6 +814,7 @@ impl Database for DatabasePostgres {
 			.bind(&input)
 			.bind(location.iter().map(|x| *x as i64).collect::<Vec<_>>())
 			.bind(sub_workflow_id)
+			.bind(loop_location.map(|l| l.iter().map(|x| *x as i64).collect::<Vec<_>>()))
 			.execute(&mut *self.conn().await?)
 			.await
 			.map_err(WorkflowError::Sqlx)
@@ -807,6 +856,7 @@ impl Database for DatabasePostgres {
 		tags: &serde_json::Value,
 		message_name: &str,
 		body: serde_json::Value,
+		loop_location: Option<&[usize]>,
 	) -> WorkflowResult<()> {
 		self.query(|| async {
 			sqlx::query(indoc!(
@@ -814,7 +864,7 @@ impl Database for DatabasePostgres {
 				INSERT INTO db_workflow.workflow_message_send_events(
 					workflow_id, location, tags, message_name, body
 				)
-				VALUES($1, $2, $3, $4, $5)
+				VALUES($1, $2, $3, $4, $5, $6)
 				RETURNING 1
 				",
 			))
@@ -823,9 +873,117 @@ impl Database for DatabasePostgres {
 			.bind(tags)
 			.bind(message_name)
 			.bind(&body)
+			.bind(loop_location.map(|l| l.iter().map(|x| *x as i64).collect::<Vec<_>>()))
 			.execute(&mut *self.conn().await?)
 			.await
 			.map_err(WorkflowError::Sqlx)
+		})
+		.await?;
+
+		Ok(())
+	}
+
+	async fn update_loop(
+		&self,
+		workflow_id: Uuid,
+		location: &[usize],
+		iteration: usize,
+		output: Option<serde_json::Value>,
+		loop_location: Option<&[usize]>,
+	) -> WorkflowResult<()> {
+		self.query(|| async {
+			let mut conn = self.conn().await?;
+			let mut tx = conn.begin().await.map_err(WorkflowError::Sqlx)?;
+
+			sqlx::query(indoc!(
+				"
+				INSERT INTO db_workflow.workflow_loop_events (
+					workflow_id,
+					location,
+					iteration,
+					output,
+					loop_location
+				)
+				VALUES ($1, $2, $3, $4, $5)
+				ON CONFLICT (workflow_id, location) DO UPDATE
+				SET
+					iteration = $3,
+					output = $4
+				RETURNING 1
+				",
+			))
+			.bind(workflow_id)
+			.bind(location.iter().map(|x| *x as i64).collect::<Vec<_>>())
+			.bind(iteration as i64)
+			.bind(&output)
+			.bind(loop_location.map(|l| l.iter().map(|x| *x as i64).collect::<Vec<_>>()))
+			.execute(&mut *tx)
+			.await
+			.map_err(WorkflowError::Sqlx)?;
+
+			sqlx::query(indoc!(
+				"
+				WITH
+					forget_activity_events AS (
+						UPDATE db_workflow.workflow_activity_events
+						SET forgotten = TRUE
+						WHERE
+							workflow_id = $1 AND
+							loop_location = $2
+						RETURNING 1
+					),
+					forget_signal_events AS (
+						UPDATE db_workflow.workflow_signal_events
+						SET forgotten = TRUE
+						WHERE
+							workflow_id = $1 AND
+							loop_location = $2
+						RETURNING 1
+					),
+					forget_sub_workflow_events AS (
+						UPDATE db_workflow.workflow_sub_workflow_events
+						SET forgotten = TRUE
+						WHERE
+							workflow_id = $1 AND
+							loop_location = $2
+						RETURNING 1
+					),
+					forget_signal_send_events AS (
+						UPDATE db_workflow.workflow_signal_send_events
+						SET forgotten = TRUE
+						WHERE
+							workflow_id = $1 AND
+							loop_location = $2
+						RETURNING 1
+					),
+					forget_message_send_events AS (
+						UPDATE db_workflow.workflow_message_send_events
+						SET forgotten = TRUE
+						WHERE
+							workflow_id = $1 AND
+							loop_location = $2
+						RETURNING 1
+					),	
+					forget_loop_events AS (
+						UPDATE db_workflow.workflow_loop_events
+						SET forgotten = TRUE
+						WHERE
+							workflow_id = $1 AND
+							loop_location = $2
+						RETURNING 1
+					)
+				SELECT 1
+				",
+			))
+			.bind(workflow_id)
+			.bind(location.iter().map(|x| *x as i64).collect::<Vec<_>>())
+			.execute(&mut *tx)
+			.await
+			.map_err(WorkflowError::Sqlx)?;
+
+			tx.commit().await.map_err(WorkflowError::Sqlx)?;
+
+			Ok(())
 		})
 		.await?;
 
