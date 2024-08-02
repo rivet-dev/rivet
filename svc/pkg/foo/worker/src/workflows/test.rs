@@ -1,26 +1,28 @@
 use chirp_workflow::prelude::*;
+use serde_json::json;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct TestInput {
 	pub x: i64,
 }
 
-type TestOutput = Result<TestOutputOk, TestOutputErr>;
-
 #[derive(Debug, Serialize, Deserialize)]
-pub struct TestOutputOk {
-	pub y: usize,
-}
-#[derive(Debug, Serialize, Deserialize)]
-pub struct TestOutputErr {
-	pub z: usize,
+pub struct TestOutput {
+	pub y: i64,
 }
 
 #[workflow(Test)]
 pub async fn test(ctx: &mut WorkflowCtx, input: &TestInput) -> GlobalResult<TestOutput> {
-	let a = ctx.activity(FooInput {}).await?;
+	ctx.activity(FooInput {}).await?;
 
-	Ok(Ok(TestOutputOk { y: a.ids.len() }))
+	let sig = ctx.listen::<FooBarSignal>().await?;
+
+	Ok(TestOutput { y: input.x + sig.x })
+}
+
+#[signal("foo-bar")]
+pub struct FooBarSignal {
+	pub x: i64,
 }
 
 #[derive(Debug, Serialize, Deserialize, Hash)]

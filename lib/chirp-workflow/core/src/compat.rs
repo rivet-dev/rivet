@@ -37,7 +37,43 @@ where
 
 	db_from_ctx(ctx)
 		.await?
-		.dispatch_workflow(ctx.ray_id(), id, &name, input_val)
+		.dispatch_workflow(ctx.ray_id(), id, &name, None, input_val)
+		.await
+		.map_err(GlobalError::raw)?;
+
+	tracing::info!(%name, ?id, "workflow dispatched");
+
+	Ok(id)
+}
+
+pub async fn dispatch_tagged_workflow<I, B>(
+	ctx: &rivet_operation::OperationContext<B>,
+	tags: &serde_json::Value,
+	input: I,
+) -> GlobalResult<Uuid>
+where
+	I: WorkflowInput,
+	<I as WorkflowInput>::Workflow: Workflow<Input = I>,
+	B: Debug + Clone,
+{
+	if ctx.from_workflow {
+		bail!("cannot dispatch a workflow from an operation within a workflow execution. trigger it from the workflow's body.");
+	}
+
+	let name = I::Workflow::NAME;
+
+	tracing::debug!(%name, ?input, "dispatching workflow");
+
+	let id = Uuid::new_v4();
+
+	// Serialize input
+	let input_val = serde_json::to_value(input)
+		.map_err(WorkflowError::SerializeWorkflowOutput)
+		.map_err(GlobalError::raw)?;
+
+	db_from_ctx(ctx)
+		.await?
+		.dispatch_workflow(ctx.ray_id(), id, &name, Some(tags), input_val)
 		.await
 		.map_err(GlobalError::raw)?;
 
@@ -92,6 +128,26 @@ where
 	.await?
 }
 
+/// Dispatch a new workflow and wait for it to complete. Has a 60s timeout.
+pub async fn tagged_workflow<I, B>(
+	ctx: &rivet_operation::OperationContext<B>,
+	tags: &serde_json::Value,
+	input: I,
+) -> GlobalResult<<<I as WorkflowInput>::Workflow as Workflow>::Output>
+where
+	I: WorkflowInput,
+	<I as WorkflowInput>::Workflow: Workflow<Input = I>,
+	B: Debug + Clone,
+{
+	let workflow_id = dispatch_tagged_workflow(ctx, tags, input).await?;
+
+	tokio::time::timeout(
+		WORKFLOW_TIMEOUT,
+		wait_for_workflow::<I::Workflow, _>(ctx, workflow_id),
+	)
+	.await?
+}
+
 pub async fn signal<I: Signal + Serialize, B: Debug + Clone>(
 	ctx: &rivet_operation::OperationContext<B>,
 	workflow_id: Uuid,
@@ -113,6 +169,33 @@ pub async fn signal<I: Signal + Serialize, B: Debug + Clone>(
 	db_from_ctx(ctx)
 		.await?
 		.publish_signal(ctx.ray_id(), workflow_id, signal_id, I::NAME, input_val)
+		.await
+		.map_err(GlobalError::raw)?;
+
+	Ok(signal_id)
+}
+
+pub async fn tagged_signal<I: Signal + Serialize, B: Debug + Clone>(
+	ctx: &rivet_operation::OperationContext<B>,
+	tags: &serde_json::Value,
+	input: I,
+) -> GlobalResult<Uuid> {
+	if ctx.from_workflow {
+		bail!("cannot dispatch a signal from an operation within a workflow execution. trigger it from the workflow's body.");
+	}
+
+	tracing::debug!(name=%I::NAME, ?tags, "dispatching tagged signal");
+
+	let signal_id = Uuid::new_v4();
+
+	// Serialize input
+	let input_val = serde_json::to_value(input)
+		.map_err(WorkflowError::SerializeSignalBody)
+		.map_err(GlobalError::raw)?;
+
+	db_from_ctx(ctx)
+		.await?
+		.publish_tagged_signal(ctx.ray_id(), tags, signal_id, I::NAME, input_val)
 		.await
 		.map_err(GlobalError::raw)?;
 

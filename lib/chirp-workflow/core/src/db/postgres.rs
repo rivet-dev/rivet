@@ -61,20 +61,22 @@ impl Database for DatabasePostgres {
 		ray_id: Uuid,
 		workflow_id: Uuid,
 		workflow_name: &str,
+		tags: Option<&serde_json::Value>,
 		input: serde_json::Value,
 	) -> WorkflowResult<()> {
 		sqlx::query(indoc!(
 			"
 			INSERT INTO db_workflow.workflows (
-				workflow_id, workflow_name, create_ts, ray_id, input, wake_immediate
+				workflow_id, workflow_name, create_ts, ray_id, tags, input, wake_immediate
 			)
-			VALUES ($1, $2, $3, $4, $5, true)
+			VALUES ($1, $2, $3, $4, $5, $6, true)
 			",
 		))
 		.bind(workflow_id)
 		.bind(workflow_name)
 		.bind(rivet_util::timestamp::now())
 		.bind(ray_id)
+		.bind(tags)
 		.bind(input)
 		.execute(&mut *self.conn().await?)
 		.await
@@ -108,7 +110,7 @@ impl Database for DatabasePostgres {
 			"
 			WITH
 				pull_workflows AS (
-					UPDATE db_workflow.workflows as w
+					UPDATE db_workflow.workflows AS w
 						-- Assign this node to this workflow
 					SET worker_instance_id = $1
 					WHERE
@@ -120,14 +122,25 @@ impl Database for DatabasePostgres {
 						worker_instance_id IS NULL AND
 						-- Check for wake condition
 						(
+							-- Immediate
 							wake_immediate OR
+							-- After deadline
 							wake_deadline_ts IS NOT NULL OR
+							-- Signal exists
 							(
 								SELECT true
 								FROM db_workflow.signals AS s
 								WHERE s.signal_name = ANY(wake_signals)
 								LIMIT 1
 							) OR
+							-- Tagged signal exists
+							(
+								SELECT true
+								FROM db_workflow.tagged_signals AS s
+								WHERE w.tags @> s.tags
+								LIMIT 1
+							) OR
+							-- Sub workflow completed
 							(
 								SELECT true
 								FROM db_workflow.workflows AS w2
@@ -405,31 +418,48 @@ impl Database for DatabasePostgres {
 		filter: &[&str],
 		location: &[usize],
 	) -> WorkflowResult<Option<SignalRow>> {
-		// TODO: RVT-3752
 		let signal = sqlx::query_as::<_, SignalRow>(indoc!(
 			"
 			WITH
+				-- Finds the oldest signal matching the signal name filter in either the normal signals table
+				-- or tagged signals table
 				next_signal AS (
-					DELETE FROM db_workflow.signals
+					SELECT false AS tagged, signal_id, create_ts, signal_name, body
+					FROM db_workflow.signals
 					WHERE
 						workflow_id = $1 AND
 						signal_name = ANY($2)
+					UNION ALL
+					SELECT true AS tagged, signal_id, create_ts, signal_name, body
+					FROM db_workflow.tagged_signals
+					WHERE
+						signal_name = ANY($2) AND
+						tags <@ (SELECT tags FROM db_workflow.workflows WHERE workflow_id = $1)
 					ORDER BY create_ts ASC
 					LIMIT 1
-					RETURNING workflow_id, signal_id, signal_name, body
 				),
-				clear_wake AS (
-					UPDATE db_workflow.workflows AS w
-					SET wake_signals = ARRAY[]
-					FROM next_signal AS s
-					WHERE w.workflow_id = s.workflow_id
+				-- If the next signal is not tagged, delete it with this statement
+				delete_signal AS (
+					DELETE FROM db_workflow.signals
+					WHERE signal_id = (
+						SELECT signal_id FROM next_signal WHERE tagged = false
+					)
 					RETURNING 1
 				),
+				-- If the next signal is tagged, delete it with this statement
+				delete_tagged_signal AS (
+					DELETE FROM db_workflow.tagged_signals
+					WHERE signal_id = (
+						SELECT signal_id FROM next_signal WHERE tagged = true
+					)
+					RETURNING 1
+				),
+				-- After deleting the signal, add it to the events table (i.e. acknowledge it)
 				insert_event AS (
-					INSERT INTO db_workflow.workflow_signal_events(
+					INSERT INTO db_workflow.workflow_signal_events (
 						workflow_id, location, signal_id, signal_name, body, ack_ts
 					)
-					SELECT workflow_id, $3 AS location, signal_id, signal_name, body, $4 AS ack_ts
+					SELECT $1 AS workflow_id, $3 AS location, signal_id, signal_name, body, $4 AS ack_ts
 					FROM next_signal
 					RETURNING 1
 				)
@@ -457,12 +487,39 @@ impl Database for DatabasePostgres {
 	) -> WorkflowResult<()> {
 		sqlx::query(indoc!(
 			"
-			INSERT INTO db_workflow.signals (signal_id, workflow_id, signal_name, body, create_ts, ray_id)			
+			INSERT INTO db_workflow.signals (signal_id, workflow_id, signal_name, body, ray_id, create_ts)			
 			VALUES ($1, $2, $3, $4, $5, $6)
 			",
 		))
 		.bind(signal_id)
 		.bind(workflow_id)
+		.bind(signal_name)
+		.bind(body)
+		.bind(ray_id)
+		.bind(rivet_util::timestamp::now())
+		.execute(&mut *self.conn().await?)
+		.await
+		.map_err(WorkflowError::Sqlx)?;
+
+		Ok(())
+	}
+
+	async fn publish_tagged_signal(
+		&self,
+		ray_id: Uuid,
+		tags: &serde_json::Value,
+		signal_id: Uuid,
+		signal_name: &str,
+		body: serde_json::Value,
+	) -> WorkflowResult<()> {
+		sqlx::query(indoc!(
+			"
+			INSERT INTO db_workflow.tagged_signals (signal_id, tags, signal_name, body, ray_id, create_ts)			
+			VALUES ($1, $2, $3, $4, $5, $6)
+			",
+		))
+		.bind(signal_id)
+		.bind(tags)
 		.bind(signal_name)
 		.bind(body)
 		.bind(ray_id)
@@ -481,6 +538,7 @@ impl Database for DatabasePostgres {
 		location: &[usize],
 		sub_workflow_id: Uuid,
 		sub_workflow_name: &str,
+		tags: Option<&serde_json::Value>,
 		input: serde_json::Value,
 	) -> WorkflowResult<()> {
 		sqlx::query(indoc!(
@@ -488,16 +546,16 @@ impl Database for DatabasePostgres {
 			WITH
 				workflow AS (
 					INSERT INTO db_workflow.workflows (
-						workflow_id, workflow_name, create_ts, ray_id, input, wake_immediate
+						workflow_id, workflow_name, create_ts, ray_id, tags, input, wake_immediate
 					)
-					VALUES ($7, $2, $3, $4, $5, true)
+					VALUES ($8, $2, $3, $4, $5, $6, true)
 					RETURNING 1
 			 	),
 				sub_workflow AS (
 					INSERT INTO db_workflow.workflow_sub_workflow_events(
 						workflow_id, location, sub_workflow_id, create_ts
 					)
-					VALUES($1, $6, $7, $3)
+					VALUES($1, $7, $8, $3)
 					RETURNING 1
 				)
 			SELECT 1
@@ -507,6 +565,7 @@ impl Database for DatabasePostgres {
 		.bind(sub_workflow_name)
 		.bind(rivet_util::timestamp::now())
 		.bind(ray_id)
+		.bind(tags)
 		.bind(input)
 		.bind(location.iter().map(|x| *x as i64).collect::<Vec<_>>())
 		.bind(sub_workflow_id)

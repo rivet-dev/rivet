@@ -84,7 +84,7 @@ impl Worker {
 						util::sleep_until_ts(wake_deadline_ts).await;
 					}
 
-					ctx.run_workflow().await;
+					ctx.run().await;
 				}
 				.in_current_span(),
 			);

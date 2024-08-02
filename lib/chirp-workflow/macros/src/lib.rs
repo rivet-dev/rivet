@@ -282,11 +282,11 @@ pub fn signal(attr: TokenStream, item: TokenStream) -> TokenStream {
 			const NAME: &'static str = #name;
 		}
 
-		#[::async_trait::async_trait]
+		#[async_trait::async_trait]
 		impl Listen for #struct_ident {
 			async fn listen(ctx: &mut chirp_workflow::prelude::WorkflowCtx) -> chirp_workflow::prelude::WorkflowResult<Self> {
 				let row = ctx.listen_any(&[Self::NAME]).await?;
-				Self::parse(&row.name, &row.body)
+				Self::parse(&row.signal_name, row.body)
 			}
 
 			fn parse(_name: &str, body: serde_json::Value) -> chirp_workflow::prelude::WorkflowResult<Self> {

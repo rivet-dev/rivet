@@ -42,6 +42,12 @@ pub enum WorkflowError {
 	#[error("deserialize workflow input: {0}")]
 	DeserializeWorkflowOutput(serde_json::Error),
 
+	#[error("serialize workflow tags: {0}")]
+	SerializeWorkflowTags(serde_json::Error),
+
+	#[error("deserialize workflow tags: {0}")]
+	DeserializeWorkflowTags(serde_json::Error),
+
 	#[error("serialize activity input: {0}")]
 	SerializeActivityInput(serde_json::Error),
 

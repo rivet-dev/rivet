@@ -74,7 +74,33 @@ impl ApiCtx {
 			.map_err(GlobalError::raw)?;
 
 		self.db
-			.dispatch_workflow(self.ray_id, id, &name, input_val)
+			.dispatch_workflow(self.ray_id, id, &name, None, input_val)
+			.await
+			.map_err(GlobalError::raw)?;
+
+		tracing::info!(%name, ?id, "workflow dispatched");
+
+		Ok(id)
+	}
+
+	pub async fn dispatch_tagged_workflow<I>(&self, tags: &serde_json::Value, input: I) -> GlobalResult<Uuid>
+	where
+		I: WorkflowInput,
+		<I as WorkflowInput>::Workflow: Workflow<Input = I>,
+	{
+		let name = I::Workflow::NAME;
+
+		tracing::debug!(%name, ?tags, ?input, "dispatching tagged workflow");
+
+		let id = Uuid::new_v4();
+
+		// Serialize input
+		let input_val = serde_json::to_value(input)
+			.map_err(WorkflowError::SerializeWorkflowOutput)
+			.map_err(GlobalError::raw)?;
+
+		self.db
+			.dispatch_workflow(self.ray_id, id, &name, Some(tags), input_val)
 			.await
 			.map_err(GlobalError::raw)?;
 
@@ -128,6 +154,25 @@ impl ApiCtx {
 		.await?
 	}
 
+	/// Dispatch a new workflow with tags and wait for it to complete. Has a 60s timeout.
+	pub async fn tagged_workflow<I>(
+		&self,
+		tags: &serde_json::Value,
+		input: I,
+	) -> GlobalResult<<<I as WorkflowInput>::Workflow as Workflow>::Output>
+	where
+		I: WorkflowInput,
+		<I as WorkflowInput>::Workflow: Workflow<Input = I>,
+	{
+		let workflow_id = self.dispatch_tagged_workflow(tags, input).await?;
+
+		tokio::time::timeout(
+			WORKFLOW_TIMEOUT,
+			self.wait_for_workflow::<I::Workflow>(workflow_id),
+		)
+		.await?
+	}
+
 	pub async fn signal<T: Signal + Serialize>(
 		&self,
 		workflow_id: Uuid,
@@ -144,6 +189,28 @@ impl ApiCtx {
 
 		self.db
 			.publish_signal(self.ray_id, workflow_id, signal_id, T::NAME, input_val)
+			.await
+			.map_err(GlobalError::raw)?;
+
+		Ok(signal_id)
+	}
+
+	pub async fn tagged_signal<T: Signal + Serialize>(
+		&self,
+		tags: &serde_json::Value,
+		input: T,
+	) -> GlobalResult<Uuid> {
+		tracing::debug!(name=%T::NAME, ?tags, "dispatching tagged signal");
+
+		let signal_id = Uuid::new_v4();
+
+		// Serialize input
+		let input_val = serde_json::to_value(input)
+			.map_err(WorkflowError::SerializeSignalBody)
+			.map_err(GlobalError::raw)?;
+
+		self.db
+			.publish_tagged_signal(self.ray_id, tags, signal_id, T::NAME, input_val)
 			.await
 			.map_err(GlobalError::raw)?;
 

@@ -16,6 +16,7 @@ pub trait Database: Send {
 		ray_id: Uuid,
 		workflow_id: Uuid,
 		workflow_name: &str,
+		tags: Option<&serde_json::Value>,
 		input: serde_json::Value,
 	) -> WorkflowResult<()>;
 	async fn get_workflow(&self, id: Uuid) -> WorkflowResult<Option<WorkflowRow>>;
@@ -60,6 +61,14 @@ pub trait Database: Send {
 		signal_name: &str,
 		body: serde_json::Value,
 	) -> WorkflowResult<()>;
+	async fn publish_tagged_signal(
+		&self,
+		ray_id: Uuid,
+		tags: &serde_json::Value,
+		signal_id: Uuid,
+		signal_name: &str,
+		body: serde_json::Value,
+	) -> WorkflowResult<()>;
 	async fn pull_next_signal(
 		&self,
 		workflow_id: Uuid,
@@ -74,6 +83,7 @@ pub trait Database: Send {
 		location: &[usize],
 		sub_workflow_id: Uuid,
 		sub_workflow_name: &str,
+		tags: Option<&serde_json::Value>,
 		input: serde_json::Value,
 	) -> WorkflowResult<()>;
 

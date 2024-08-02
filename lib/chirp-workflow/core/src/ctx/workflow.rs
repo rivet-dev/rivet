@@ -151,13 +151,13 @@ impl WorkflowCtx {
 	}
 
 	// Purposefully infallible
-	pub(crate) async fn run_workflow(mut self) {
-		if let Err(err) = Self::run_workflow_inner(&mut self).await {
+	pub(crate) async fn run(mut self) {
+		if let Err(err) = Self::run_inner(&mut self).await {
 			tracing::error!(?err, "unhandled error");
 		}
 	}
 
-	async fn run_workflow_inner(&mut self) -> WorkflowResult<()> {
+	async fn run_inner(&mut self) -> WorkflowResult<()> {
 		tracing::info!(name=%self.name, id=%self.workflow_id, "running workflow");
 
 		// Lookup workflow
@@ -360,6 +360,23 @@ impl WorkflowCtx {
 		I: WorkflowInput,
 		<I as WorkflowInput>::Workflow: Workflow<Input = I>,
 	{
+		self.dispatch_workflow_inner(None, input).await
+	}
+
+	/// Dispatch another workflow with tags.
+	pub async fn dispatch_tagged_workflow<I>(&mut self, tags: &serde_json::Value, input: I) -> GlobalResult<Uuid>
+	where
+		I: WorkflowInput,
+		<I as WorkflowInput>::Workflow: Workflow<Input = I>,
+	{
+		self.dispatch_workflow_inner(Some(tags), input).await
+	}
+
+	async fn dispatch_workflow_inner<I>(&mut self, tags: Option<&serde_json::Value>, input: I) -> GlobalResult<Uuid>
+	where
+		I: WorkflowInput,
+		<I as WorkflowInput>::Workflow: Workflow<Input = I>,
+	{
 		let event = { self.relevant_history().nth(self.location_idx) };
 
 		// Signal received before
@@ -386,7 +403,7 @@ impl WorkflowCtx {
 		else {
 			let name = I::Workflow::NAME;
 
-			tracing::debug!(%name, ?input, "dispatching workflow");
+			tracing::debug!(%name, ?tags, ?input, "dispatching workflow");
 
 			let sub_workflow_id = Uuid::new_v4();
 
@@ -402,6 +419,7 @@ impl WorkflowCtx {
 					self.full_location().as_ref(),
 					sub_workflow_id,
 					&name,
+					tags,
 					input_val,
 				)
 				.await
@@ -454,9 +472,35 @@ impl WorkflowCtx {
 		}
 	}
 
-	/// Runs a sub workflow in the same process as the current workflow and returns its response.
+	/// Runs a sub workflow in the same process as the current workflow (if possible) and returns its
+	/// response.
 	pub async fn workflow<I>(
 		&mut self,
+		input: I,
+	) -> GlobalResult<<<I as WorkflowInput>::Workflow as Workflow>::Output>
+	where
+		I: WorkflowInput,
+		<I as WorkflowInput>::Workflow: Workflow<Input = I>,
+	{
+		self.workflow_inner(None, input).await
+	}
+
+	/// Runs a sub workflow with tags in the same process as the current workflow (if possible) and returns
+	/// its response.
+	pub async fn tagged_workflow<I>(
+		&mut self,
+		input: I,
+	) -> GlobalResult<<<I as WorkflowInput>::Workflow as Workflow>::Output>
+	where
+		I: WorkflowInput,
+		<I as WorkflowInput>::Workflow: Workflow<Input = I>,
+	{
+		self.workflow_inner(None, input).await
+	}
+
+	async fn workflow_inner<I>(
+		&mut self,
+		tags: Option<&serde_json::Value>,
 		input: I,
 	) -> GlobalResult<<<I as WorkflowInput>::Workflow as Workflow>::Output>
 	where
@@ -476,7 +520,7 @@ impl WorkflowCtx {
 			// worker in the registry, this will diverge in history because it will try to run the sub worker
 			// in-process during the replay
 			// If the workflow isn't in the current registry, dispatch the workflow instead
-			let sub_workflow_id = self.dispatch_workflow(input).await?;
+			let sub_workflow_id = self.dispatch_workflow_inner(tags, input).await?;
 			let output = self
 				.wait_for_workflow::<I::Workflow>(sub_workflow_id)
 				.await?;
@@ -625,6 +669,29 @@ impl WorkflowCtx {
 
 		self.db
 			.publish_signal(self.ray_id, workflow_id, signal_id, T::NAME, input_val)
+			.await
+			.map_err(GlobalError::raw)?;
+
+		Ok(signal_id)
+	}
+
+	/// Sends a tagged signal.
+	pub async fn tagged_signal<T: Signal + Serialize>(
+		&mut self,
+		tags: &serde_json::Value,
+		body: T,
+	) -> GlobalResult<Uuid> {
+		tracing::debug!(name=%T::NAME, ?tags, "dispatching tagged signal");
+
+		let signal_id = Uuid::new_v4();
+
+		// Serialize input
+		let input_val = serde_json::to_value(&body)
+			.map_err(WorkflowError::SerializeSignalBody)
+			.map_err(GlobalError::raw)?;
+
+		self.db
+			.publish_tagged_signal(self.ray_id, tags, signal_id, T::NAME, input_val)
 			.await
 			.map_err(GlobalError::raw)?;
 

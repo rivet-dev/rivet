@@ -53,7 +53,7 @@ macro_rules! join_signal {
 		impl Listen for $join {
 			async fn listen(ctx: &mut chirp_workflow::prelude::WorkflowCtx) -> chirp_workflow::prelude::WorkflowResult<Self> {
 				let row = ctx.listen_any(&[$($signals::NAME),*]).await?;
-				Self::parse(&row.name, row.body)
+				Self::parse(&row.signal_name, row.body)
 			}
 
 			fn parse(name: &str, body: serde_json::Value) -> chirp_workflow::prelude::WorkflowResult<Self> {
