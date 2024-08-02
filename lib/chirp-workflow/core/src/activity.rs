@@ -8,7 +8,10 @@ use async_trait::async_trait;
 use global_error::GlobalResult;
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 
-use crate::{ActivityCtx, WorkflowError, WorkflowResult};
+use crate::{
+	ctx::ActivityCtx,
+	error::{WorkflowError, WorkflowResult},
+};
 
 #[async_trait]
 pub trait Activity {

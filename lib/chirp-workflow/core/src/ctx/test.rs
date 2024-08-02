@@ -10,9 +10,13 @@ use crate::{
 		workflow::SUB_WORKFLOW_RETRY,
 		MessageCtx, OperationCtx,
 	},
+	db::{DatabaseHandle, DatabasePostgres},
+	error::WorkflowError,
 	message::{Message, ReceivedMessage},
-	util, DatabaseHandle, DatabasePostgres, Operation, OperationInput, Signal, Workflow,
-	WorkflowError, WorkflowInput,
+	operation::{Operation, OperationInput},
+	signal::Signal,
+	util,
+	workflow::{Workflow, WorkflowInput},
 };
 
 pub struct TestCtx {

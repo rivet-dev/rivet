@@ -3,7 +3,11 @@ use std::{collections::HashMap, sync::Arc};
 use uuid::Uuid;
 
 use crate::{
-	activity::ActivityId, event::Event, util::Location, Workflow, WorkflowError, WorkflowResult,
+	activity::ActivityId,
+	error::{WorkflowError, WorkflowResult},
+	event::Event,
+	util::Location,
+	workflow::Workflow,
 };
 
 mod postgres;

@@ -8,7 +8,11 @@ use super::{
 	ActivityEventRow, Database, MessageSendEventRow, PulledWorkflow, PulledWorkflowRow,
 	SignalEventRow, SignalRow, SignalSendEventRow, SubWorkflowEventRow, WorkflowRow,
 };
-use crate::{activity::ActivityId, util, WorkflowError, WorkflowResult};
+use crate::{
+	activity::ActivityId,
+	error::{WorkflowError, WorkflowResult},
+	util,
+};
 
 const MAX_QUERY_RETRIES: usize = 16;
 

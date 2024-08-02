@@ -2,7 +2,12 @@ use global_error::{GlobalError, GlobalResult};
 use rivet_pools::prelude::*;
 use uuid::Uuid;
 
-use crate::{ctx::OperationCtx, error::WorkflowError, DatabaseHandle, Operation, OperationInput};
+use crate::{
+	ctx::OperationCtx,
+	db::DatabaseHandle,
+	error::WorkflowError,
+	operation::{Operation, OperationInput},
+};
 
 #[derive(Clone)]
 pub struct ActivityCtx {

@@ -2,8 +2,12 @@ use serde::de::DeserializeOwned;
 use uuid::Uuid;
 
 use crate::{
-	activity::ActivityId, ActivityEventRow, MessageSendEventRow, SignalEventRow,
-	SignalSendEventRow, SubWorkflowEventRow, WorkflowError, WorkflowResult,
+	activity::ActivityId,
+	db::{
+		ActivityEventRow, MessageSendEventRow, SignalEventRow, SignalSendEventRow,
+		SubWorkflowEventRow,
+	},
+	error::{WorkflowError, WorkflowResult},
 };
 
 /// An event that happened in the workflow run.

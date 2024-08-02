@@ -3,7 +3,7 @@ use std::fmt::Debug;
 use async_trait::async_trait;
 use global_error::GlobalResult;
 
-use crate::OperationCtx;
+use crate::ctx::OperationCtx;
 
 #[async_trait]
 pub trait Operation {

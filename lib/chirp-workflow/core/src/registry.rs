@@ -3,7 +3,11 @@ use std::{collections::HashMap, future::Future, pin::Pin, sync::Arc};
 use futures_util::FutureExt;
 use global_error::GlobalError;
 
-use crate::{Workflow, WorkflowCtx, WorkflowError, WorkflowResult};
+use crate::{
+	ctx::WorkflowCtx,
+	error::{WorkflowError, WorkflowResult},
+	workflow::Workflow,
+};
 
 pub type RegistryHandle = Arc<Registry>;
 

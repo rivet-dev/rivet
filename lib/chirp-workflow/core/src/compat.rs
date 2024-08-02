@@ -11,10 +11,14 @@ use crate::{
 		api::WORKFLOW_TIMEOUT,
 		message::{MessageCtx, SubscriptionHandle},
 		workflow::SUB_WORKFLOW_RETRY,
+		OperationCtx,
 	},
+	db::{DatabaseHandle, DatabasePostgres},
+	error::WorkflowError,
 	message::Message,
-	DatabaseHandle, DatabasePostgres, Operation, OperationCtx, OperationInput, Signal, Workflow,
-	WorkflowError, WorkflowInput,
+	operation::{Operation, OperationInput},
+	signal::Signal,
+	workflow::{Workflow, WorkflowInput},
 };
 
 pub async fn dispatch_workflow<I, B>(

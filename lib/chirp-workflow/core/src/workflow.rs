@@ -3,7 +3,7 @@ use global_error::GlobalResult;
 use serde::{de::DeserializeOwned, Serialize};
 use std::fmt::Debug;
 
-use crate::WorkflowCtx;
+use crate::ctx::WorkflowCtx;
 
 #[async_trait]
 pub trait Workflow {

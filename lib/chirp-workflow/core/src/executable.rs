@@ -3,7 +3,7 @@ use std::{future::Future, pin::Pin};
 use async_trait::async_trait;
 use global_error::GlobalResult;
 
-use crate::WorkflowCtx;
+use crate::ctx::WorkflowCtx;
 
 /// Signifies a retryable executable entity in a workflow. For example: activity, tuple of activities (join),
 /// closure.

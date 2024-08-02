@@ -3,7 +3,7 @@ use tokio::time::Duration;
 use tracing::Instrument;
 use uuid::Uuid;
 
-use crate::{util, DatabaseHandle, RegistryHandle, WorkflowCtx};
+use crate::{ctx::WorkflowCtx, db::DatabaseHandle, registry::RegistryHandle, util};
 
 const TICK_INTERVAL: Duration = Duration::from_millis(200);
 

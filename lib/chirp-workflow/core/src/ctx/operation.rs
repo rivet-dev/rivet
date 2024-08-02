@@ -3,7 +3,12 @@ use rivet_pools::prelude::*;
 use serde::Serialize;
 use uuid::Uuid;
 
-use crate::{signal::Signal, DatabaseHandle, Operation, OperationInput, WorkflowError};
+use crate::{
+	db::DatabaseHandle,
+	error::WorkflowError,
+	operation::{Operation, OperationInput},
+	signal::Signal,
+};
 
 #[derive(Clone)]
 pub struct OperationCtx {
