@@ -1,5 +1,10 @@
+use std::time::{SystemTime, UNIX_EPOCH};
+
+use tokio::time::Instant;
 use global_error::GlobalError;
 use uuid::Uuid;
+
+use crate::ctx::workflow::RETRY_TIMEOUT_MS;
 
 pub type WorkflowResult<T> = Result<T, WorkflowError>;
 
@@ -12,8 +17,9 @@ pub enum WorkflowError {
 	#[error("workflow failure: {0:?}")]
 	WorkflowFailure(GlobalError),
 
+	// Includes error count
 	#[error("activity failure: {0:?}")]
-	ActivityFailure(GlobalError),
+	ActivityFailure(GlobalError, u32),
 
 	#[error("activity failure, max retries reached: {0:?}")]
 	ActivityMaxFailuresReached(GlobalError),
@@ -119,9 +125,31 @@ pub enum WorkflowError {
 }
 
 impl WorkflowError {
+	pub fn backoff(&self) -> Option<i64> {
+		if let WorkflowError::ActivityFailure(_, error_count) = self {
+			// NOTE: Max retry is handled in `WorkflowCtx::activity`
+			let mut backoff =
+				rivet_util::Backoff::new_at(8, None, RETRY_TIMEOUT_MS, 500, *error_count as usize);
+			let next = backoff.step().expect("should not have max retry");
+
+			// Calculate timestamp based on the backoff
+			let duration_until = next.duration_since(Instant::now());
+			let deadline_ts = (SystemTime::now() + duration_until)
+			.duration_since(UNIX_EPOCH)
+			.unwrap_or_else(|err| unreachable!("time is broken: {}", err))
+			.as_millis()
+			.try_into()
+			.expect("doesn't fit in i64");
+
+			Some(deadline_ts)
+		} else {
+			None
+		}
+	}
+	
 	pub fn is_recoverable(&self) -> bool {
 		match self {
-			WorkflowError::ActivityFailure(_) => true,
+			WorkflowError::ActivityFailure(_, _) => true,
 			WorkflowError::ActivityTimeout => true,
 			WorkflowError::OperationTimeout => true,
 			_ => false,

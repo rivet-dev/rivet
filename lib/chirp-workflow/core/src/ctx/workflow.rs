@@ -21,8 +21,8 @@ use crate::{
 	workflow::{Workflow, WorkflowInput},
 };
 
-// Time to delay a worker from retrying after an error
-const RETRY_TIMEOUT: Duration = Duration::from_millis(2000);
+// Time to delay a workflow from retrying after an error
+pub const RETRY_TIMEOUT_MS: usize = 2000;
 // Poll interval when polling for signals in-process
 const SIGNAL_RETRY: Duration = Duration::from_millis(100);
 // Most in-process signal poll tries
@@ -200,8 +200,10 @@ impl WorkflowCtx {
 			}
 			Err(err) => {
 				// Retry the workflow if its recoverable
-				let deadline = if err.is_recoverable() {
-					Some(rivet_util::timestamp::now() + RETRY_TIMEOUT.as_millis() as i64)
+				let deadline_ts = if let Some(deadline_ts) = err.backoff() {
+					Some(deadline_ts)
+				} else if err.is_recoverable() {
+					Some(rivet_util::timestamp::now() + RETRY_TIMEOUT_MS as i64)
 				} else {
 					None
 				};
@@ -214,7 +216,7 @@ impl WorkflowCtx {
 				// finish. This workflow will be retried when the sub workflow completes
 				let wake_sub_workflow = err.sub_workflow();
 
-				if deadline.is_some() || !wake_signals.is_empty() || wake_sub_workflow.is_some() {
+				if deadline_ts.is_some() || !wake_signals.is_empty() || wake_sub_workflow.is_some() {
 					tracing::info!(name=%self.name, id=%self.workflow_id, ?err, "workflow sleeping");
 				} else {
 					tracing::error!(name=%self.name, id=%self.workflow_id, ?err, "workflow error");
@@ -236,7 +238,7 @@ impl WorkflowCtx {
 						.fail_workflow(
 							self.workflow_id,
 							false,
-							deadline,
+							deadline_ts,
 							wake_signals,
 							wake_sub_workflow,
 							&err_str,
@@ -319,7 +321,7 @@ impl WorkflowCtx {
 					)
 					.await?;
 
-				Err(WorkflowError::ActivityFailure(err))
+				Err(WorkflowError::ActivityFailure(err, 0))
 			}
 			Err(err) => {
 				tracing::debug!("activity timeout");
@@ -643,11 +645,12 @@ impl WorkflowCtx {
 						// Convert error in the case of max retries exceeded. This will only act on retryable
 						// errors
 						let err = match err {
-							WorkflowError::ActivityFailure(err) => {
+							WorkflowError::ActivityFailure(err, _) => {
 								if error_count + 1 >= I::Activity::MAX_RETRIES {
 									WorkflowError::ActivityMaxFailuresReached(err)
 								} else {
-									WorkflowError::ActivityFailure(err)
+									// Add error count to the error
+									WorkflowError::ActivityFailure(err, error_count)
 								}
 							}
 							WorkflowError::ActivityTimeout | WorkflowError::OperationTimeout => {

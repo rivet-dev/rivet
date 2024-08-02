@@ -890,10 +890,10 @@ where
 				tracing::info!("ticking request retry backoff");
 
 				if backoff.tick().await {
+					tracing::info!("retrying request");
+				} else {
 					tracing::warn!("retry request failed too many times");
 					return res;
-				} else {
-					tracing::info!("retrying request");
 				}
 			} else {
 				// Return result immediately
@@ -1040,7 +1040,7 @@ where
 	async fn consumer_ack(self: Arc<Self>, msg_meta: RedisMessageMeta) {
 		// let mut backoff = rivet_util::Backoff::default();
 		// loop {
-		// 	if backoff.tick().await {
+		// 	if !backoff.tick().await {
 		// 		tracing::error!("acking stream message failed too many times, aborting");
 		// 		return;
 		// 	}

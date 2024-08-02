@@ -411,17 +411,17 @@ impl Client {
 				{
 					tracing::warn!(tick_index = %service_unavailable_backoff.tick_index(), "service unavailable");
 					if service_unavailable_backoff.tick().await {
-						return Err(ClientError::NatsResponseStatus(status));
-					} else {
 						continue 'req;
+					} else {
+						return Err(ClientError::NatsResponseStatus(status));
 					}
 				}
 				Err(ClientError::RpcAckTimedOut) => {
 					tracing::warn!(tick_index = %service_unavailable_backoff.tick_index(), "rpc ack timed out");
 					if service_unavailable_backoff.tick().await {
-						return Err(ClientError::RpcAckTimedOut);
-					} else {
 						continue 'req;
+					} else {
+						return Err(ClientError::RpcAckTimedOut);
 					}
 				}
 				Err(err) => {
