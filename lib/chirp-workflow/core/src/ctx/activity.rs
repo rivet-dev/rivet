@@ -6,6 +6,7 @@ use crate::{ctx::OperationCtx, DatabaseHandle, Operation, OperationInput, Workfl
 
 #[derive(Clone)]
 pub struct ActivityCtx {
+	workflow_id: Uuid,
 	ray_id: Uuid,
 	name: &'static str,
 	ts: i64,
@@ -20,6 +21,7 @@ pub struct ActivityCtx {
 
 impl ActivityCtx {
 	pub fn new(
+		workflow_id: Uuid,
 		db: DatabaseHandle,
 		conn: &rivet_connection::Connection,
 		activity_create_ts: i64,
@@ -42,6 +44,7 @@ impl ActivityCtx {
 		op_ctx.from_workflow = true;
 
 		ActivityCtx {
+			workflow_id,
 			ray_id,
 			name,
 			ts,
@@ -75,6 +78,15 @@ impl ActivityCtx {
 			.map_err(|_| WorkflowError::OperationTimeout)?
 			.map_err(WorkflowError::OperationFailure)
 			.map_err(GlobalError::raw)
+	}
+
+	pub async fn update_workflow_tags(&self, tags: &serde_json::Value) -> GlobalResult<()> {
+		self.db
+			.update_workflow_tags(
+				self.workflow_id,
+				tags,
+			)
+			.await.map_err(GlobalError::raw)
 	}
 }
 

@@ -125,11 +125,6 @@ async fn generate_root(path: &Path) {
 				let _ = fs::remove_file(pkg.path().join("Cargo.lock")).await;
 
 				set_license(&pkg.path().join("Cargo.toml")).await;
-
-				let types_path = pkg.path().join("types");
-				if fs::metadata(&types_path).await.is_ok() {
-					set_license(&types_path.join("Cargo.toml")).await;
-				}
 			} else {
 				// Check worker
 				let worker_path = pkg.path().join("worker");

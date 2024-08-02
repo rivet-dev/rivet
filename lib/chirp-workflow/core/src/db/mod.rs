@@ -42,6 +42,11 @@ pub trait Database: Send {
 		wake_sub_workflow: Option<Uuid>,
 		error: &str,
 	) -> WorkflowResult<()>;
+	async fn update_workflow_tags(
+		&self,
+		workflow_id: Uuid,
+		tags: &serde_json::Value,
+	) -> WorkflowResult<()>;
 
 	async fn commit_workflow_activity_event(
 		&self,

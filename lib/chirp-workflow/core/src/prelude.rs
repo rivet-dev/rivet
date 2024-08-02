@@ -15,7 +15,7 @@ pub mod util {
 
 pub use crate::{
 	activity::Activity,
-	signal::{Listen, Signal},
+	signal::{Listen, Signal, join_signal},
 	ctx::*,
 	db,
 	error::{WorkflowError, WorkflowResult},

@@ -34,7 +34,7 @@ where
 // Implements `Executable` for any tuple size
 macro_rules! impl_tuple {
 	($($args:ident),*) => {
-		#[::async_trait::async_trait]
+		#[async_trait::async_trait]
 		impl<$($args : Executable),*> Executable for ($($args),*) {
 			type Output = ($(<$args as Executable>::Output),*);
 

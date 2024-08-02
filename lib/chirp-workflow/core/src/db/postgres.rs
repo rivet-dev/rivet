@@ -341,6 +341,29 @@ impl Database for DatabasePostgres {
 		Ok(())
 	}
 
+	// TODO: Theres nothing preventing this from being able to be called from the workflow ctx also, but for
+	// now its only in the activity ctx so it isn't called again during workflow retries
+	async fn update_workflow_tags(
+		&self,
+		workflow_id: Uuid,
+		tags: &serde_json::Value,
+	) -> WorkflowResult<()> {
+		sqlx::query(indoc!(
+			"
+			UPDATE db_workflow.workflows
+			SET tags = $2
+			WHERE workflow_id = $1
+			",
+		))
+		.bind(workflow_id)
+		.bind(tags)
+		.execute(&mut *self.conn().await?)
+		.await
+		.map_err(WorkflowError::Sqlx)?;
+
+		Ok(())
+	}
+
 	async fn commit_workflow_activity_event(
 		&self,
 		workflow_id: Uuid,

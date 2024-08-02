@@ -251,6 +251,7 @@ impl WorkflowCtx {
 		create_ts: i64,
 	) -> WorkflowResult<A::Output> {
 		let ctx = ActivityCtx::new(
+			self.workflow_id,
 			self.db.clone(),
 			&self.conn,
 			self.create_ts,

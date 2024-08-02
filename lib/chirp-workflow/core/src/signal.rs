@@ -44,12 +44,22 @@ pub trait Listen: Sized {
 /// ````
 #[macro_export]
 macro_rules! join_signal {
+	(pub $join:ident, [$($signals:ident),*]) => {
+		pub enum $join {
+			$($signals($signals)),*
+		}
+
+		join_signal!(@ $join, [$($signals),*]);
+	};
 	($join:ident, [$($signals:ident),*]) => {
 		enum $join {
 			$($signals($signals)),*
 		}
 
-		#[::async_trait::async_trait]
+		join_signal!(@ $join, [$($signals),*]);
+	};
+	(@ $join:ident, [$($signals:ident),*]) => {
+		#[async_trait::async_trait]
 		impl Listen for $join {
 			async fn listen(ctx: &mut chirp_workflow::prelude::WorkflowCtx) -> chirp_workflow::prelude::WorkflowResult<Self> {
 				let row = ctx.listen_any(&[$($signals::NAME),*]).await?;
@@ -73,5 +83,6 @@ macro_rules! join_signal {
 				}
 			}
 		}
-	}
+	};
 }
+pub use join_signal;
