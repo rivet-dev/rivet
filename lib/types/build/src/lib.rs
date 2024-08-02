@@ -40,7 +40,7 @@ where
 	for project_root in &project_roots {
 		for entry in fs::read_dir(project_root.join("svc").join("pkg"))? {
 			let entry = entry?;
-			let proto_path = entry.path().join("types");
+			let proto_path = entry.path().join("proto");
 
 			if proto_path.is_dir() {
 				println!("cargo:rerun-if-changed={}", proto_path.display());

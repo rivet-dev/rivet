@@ -75,20 +75,22 @@ pub async fn generate(ctx: &mut ProjectContext, opts: TemplateOpts) -> Result<()
 		);
 	}
 
-	// Check for new operations service type
-	if matches!(template_type, TemplateType::Operation)
-		&& fs::metadata(
-			base_path
-				.join("svc")
-				.join("pkg")
-				.join(&pkg_name)
-				.join("Service.toml"),
-		)
-		.await
-		.is_ok()
+	// Check for package service type
+	if matches!(
+		template_type,
+		TemplateType::Operation | TemplateType::Worker
+	) && fs::metadata(
+		base_path
+			.join("svc")
+			.join("pkg")
+			.join(&pkg_name)
+			.join("Service.toml"),
+	)
+	.await
+	.is_ok()
 	{
 		bail!(
-			"Creating operations in new `operations` service type ({pkg_name}/ops) not yet supported.",
+			"Creating operations or workers in the new refactored packages ({pkg_name}) is not yet supported.",
 		);
 	}
 
@@ -193,7 +195,7 @@ pub async fn generate(ctx: &mut ProjectContext, opts: TemplateOpts) -> Result<()
 				.join("svc")
 				.join("pkg")
 				.join(pkg_name)
-				.join("types")
+				.join("proto")
 				.join("msg");
 			let proto_file_path = proto_path.join(format!("{}.proto", service_name));
 
@@ -227,7 +229,7 @@ pub async fn generate(ctx: &mut ProjectContext, opts: TemplateOpts) -> Result<()
 				base_path
 					.join("svc")
 					.join("templates")
-					.join("types")
+					.join("proto")
 					.join("msg")
 					.join("{{ name }}.proto"),
 				proto_path,
@@ -240,7 +242,7 @@ pub async fn generate(ctx: &mut ProjectContext, opts: TemplateOpts) -> Result<()
 				.join("svc")
 				.join("pkg")
 				.join(pkg_name)
-				.join("types");
+				.join("proto");
 			let proto_file_path = proto_path.join(format!("{}.proto", service_name));
 			if fs::metadata(&proto_file_path).await.is_ok() {
 				bail!(
@@ -260,7 +262,7 @@ pub async fn generate(ctx: &mut ProjectContext, opts: TemplateOpts) -> Result<()
 				base_path
 					.join("svc")
 					.join("templates")
-					.join("types")
+					.join("proto")
 					.join("{{ name }}.proto"),
 				proto_path,
 			)

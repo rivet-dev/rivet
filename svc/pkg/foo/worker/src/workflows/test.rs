@@ -1,5 +1,4 @@
 use chirp_workflow::prelude::*;
-use serde_json::json;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct TestInput {

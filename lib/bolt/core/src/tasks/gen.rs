@@ -94,21 +94,6 @@ async fn generate_root(path: &Path) {
 			let _ = fs::remove_file(pkg.path().join("Cargo.lock")).await;
 			let _ = fs::remove_file(pkg.path().join("ops").join("Cargo.lock")).await;
 
-			// Check worker
-			let worker_path = pkg.path().join("worker");
-			if fs::metadata(&worker_path).await.is_ok() {
-				workspace_members.push(format!(
-					r#""pkg/{pkg}/worker""#,
-					pkg = pkg.file_name().into_string().unwrap(),
-				));
-
-				// Remove services' Cargo.lock files in favor of the shared svc
-				// Cargo.toml
-				let _ = fs::remove_file(worker_path.join("Cargo.lock")).await;
-
-				set_license(&worker_path.join("Cargo.toml")).await;
-			}
-
 			// Iterate through `standalone` folder
 			let standalone_path = pkg.path().join("standalone");
 			if fs::metadata(&standalone_path).await.is_ok() {
@@ -131,21 +116,37 @@ async fn generate_root(path: &Path) {
 			}
 
 			// Check if service config exists
-			if fs::metadata(pkg.path().join("ops").join("Service.toml"))
-				.await
-				.is_ok()
-			{
+			if fs::metadata(pkg.path().join("Service.toml")).await.is_ok() {
 				workspace_members.push(format!(
-					r#""pkg/{pkg}/ops""#,
+					r#""pkg/{pkg}""#,
 					pkg = pkg.file_name().into_string().unwrap(),
 				));
 
-				let _ = fs::remove_file(pkg.path().join("ops").join("Cargo.lock")).await;
+				let _ = fs::remove_file(pkg.path().join("Cargo.lock")).await;
 
-				set_license(&pkg.path().join("ops").join("Cargo.toml")).await;
-			}
-			// Iterate through `ops` folder
-			else {
+				set_license(&pkg.path().join("Cargo.toml")).await;
+
+				let types_path = pkg.path().join("types");
+				if fs::metadata(&types_path).await.is_ok() {
+					set_license(&types_path.join("Cargo.toml")).await;
+				}
+			} else {
+				// Check worker
+				let worker_path = pkg.path().join("worker");
+				if fs::metadata(&worker_path).await.is_ok() {
+					workspace_members.push(format!(
+						r#""pkg/{pkg}/worker""#,
+						pkg = pkg.file_name().into_string().unwrap(),
+					));
+
+					// Remove services' Cargo.lock files in favor of the shared svc
+					// Cargo.toml
+					let _ = fs::remove_file(worker_path.join("Cargo.lock")).await;
+
+					set_license(&worker_path.join("Cargo.toml")).await;
+				}
+
+				// Iterate through `ops` folder
 				let ops_path = pkg.path().join("ops");
 				if fs::metadata(&ops_path).await.is_ok() {
 					let mut dir = fs::read_dir(ops_path).await.unwrap();
@@ -165,6 +166,12 @@ async fn generate_root(path: &Path) {
 						}
 					}
 				}
+			}
+
+			// Utils lib
+			let util_path = pkg.path().join("util");
+			if fs::metadata(&util_path).await.is_ok() {
+				set_license(&util_path.join("Cargo.toml")).await;
 			}
 		}
 	}

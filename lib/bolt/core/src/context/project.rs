@@ -392,50 +392,46 @@ impl ProjectContextData {
 		let pkgs_path = workspace_path.join("pkg");
 		let mut pkg_dir = fs::read_dir(&pkgs_path).await.unwrap();
 		while let Some(pkg) = pkg_dir.next_entry().await.unwrap() {
-			// Read worker
-			let worker_path = pkg.path().join("worker");
-			if fs::metadata(&worker_path.join("Service.toml"))
-				.await
-				.is_ok()
-			{
-				// Load the service
+			// Check if pkg-level service config exists
+			if fs::metadata(pkg.path().join("Service.toml")).await.is_ok() {
+				// Load the directory as a single crate
 				let svc_ctx = context::service::ServiceContextData::from_path(
 					Weak::new(),
 					svc_ctxs_map,
 					&workspace_path,
-					&worker_path,
-				)
-				.await
-				.unwrap();
-				svc_ctxs_map.insert(svc_ctx.name(), svc_ctx.clone());
-			}
-
-			// Read standalone
-			Self::load_services_dir(svc_ctxs_map, &workspace_path, pkg.path().join("standalone"))
-				.await;
-
-			// Read ops
-			// Check if service config exists
-			if fs::metadata(pkg.path().join("ops").join("Service.toml"))
-				.await
-				.is_ok()
-			{
-				// Load the ops directory as a single service
-				let svc_ctx = context::service::ServiceContextData::from_path(
-					Weak::new(),
-					svc_ctxs_map,
-					&workspace_path,
-					&pkg.path().join("ops"),
+					&pkg.path(),
 				)
 				.await
 				.unwrap();
 
 				svc_ctxs_map.insert(svc_ctx.name(), svc_ctx.clone());
 			} else {
+				// Read worker
+				let worker_path = pkg.path().join("worker");
+				if fs::metadata(&worker_path.join("Service.toml"))
+					.await
+					.is_ok()
+				{
+					// Load the service
+					let svc_ctx = context::service::ServiceContextData::from_path(
+						Weak::new(),
+						svc_ctxs_map,
+						&workspace_path,
+						&worker_path,
+					)
+					.await
+					.unwrap();
+					svc_ctxs_map.insert(svc_ctx.name(), svc_ctx.clone());
+				}
+
 				// Load all individual ops
 				Self::load_services_dir(svc_ctxs_map, &workspace_path, pkg.path().join("ops"))
 					.await;
 			}
+
+			// Read standalone
+			Self::load_services_dir(svc_ctxs_map, &workspace_path, pkg.path().join("standalone"))
+				.await;
 
 			// Read dbs
 			Self::load_services_dir(svc_ctxs_map, &workspace_path, pkg.path().join("db")).await;
