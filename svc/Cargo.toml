@@ -107,7 +107,6 @@ members = [
 	"pkg/faker/ops/region",
 	"pkg/faker/ops/team",
 	"pkg/faker/ops/user",
-	"pkg/foo/worker",
 	"pkg/game-user/ops/create",
 	"pkg/game-user/ops/get",
 	"pkg/game-user/ops/link-create",

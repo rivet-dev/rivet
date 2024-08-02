@@ -10,5 +10,3 @@ chirp-workflow = { path = "../../../../../lib/chirp-workflow/core" }
 rivet-health-checks = { path = "../../../../../lib/health-checks" }
 rivet-metrics = { path = "../../../../../lib/metrics" }
 rivet-runtime = { path = "../../../../../lib/runtime" }
-
-foo-worker = { path = "../../../foo/worker" }

@@ -1,7 +1,0 @@
-[service]
-name = "foo-worker"
-
-[runtime]
-kind = "rust"
-
-[consumer]
