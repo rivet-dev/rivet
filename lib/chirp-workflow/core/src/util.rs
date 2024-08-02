@@ -9,8 +9,8 @@ use tokio::time::{self, Duration};
 use uuid::Uuid;
 
 use crate::{
-	error::WorkflowError, event::Event, ActivityEventRow, SignalEventRow, SubWorkflowEventRow,
-	WorkflowResult,
+	error::WorkflowError, event::Event, ActivityEventRow, MessageSendEventRow, PulledWorkflow,
+	PulledWorkflowRow, SignalEventRow, SignalSendEventRow, SubWorkflowEventRow, WorkflowResult,
 };
 
 pub type Location = Box<[usize]>;
@@ -67,16 +67,29 @@ pub async fn sleep_until_ts(ts: i64) {
 /// 	],
 /// }
 pub fn combine_events(
+	workflow_rows: Vec<PulledWorkflowRow>,
 	activity_events: Vec<ActivityEventRow>,
 	signal_events: Vec<SignalEventRow>,
+	signal_send_events: Vec<SignalSendEventRow>,
+	msg_send_events: Vec<MessageSendEventRow>,
 	sub_workflow_events: Vec<SubWorkflowEventRow>,
-) -> WorkflowResult<HashMap<Location, Vec<Event>>> {
-	let mut events_by_location: HashMap<Location, Vec<(i64, Event)>> = HashMap::new();
+) -> WorkflowResult<Vec<PulledWorkflow>> {
+	let mut workflows_by_id = workflow_rows
+		.into_iter()
+		.map(|row| {
+			let events_by_location: HashMap<Location, Vec<(i64, Event)>> = HashMap::new();
+
+			(row.workflow_id, (row, events_by_location))
+		})
+		.collect::<HashMap<_, _>>();
 
 	for event in activity_events {
+		let (_, ref mut events_by_location) = workflows_by_id
+			.get_mut(&event.workflow_id)
+			.expect("unreachable, workflow for event not found");
 		let (root_location, idx) = split_location(&event.location);
 
-		insert_placeholder(&mut events_by_location, &event.location, idx);
+		insert_placeholder(events_by_location, &event.location, idx);
 
 		events_by_location
 			.entry(root_location)
@@ -85,9 +98,12 @@ pub fn combine_events(
 	}
 
 	for event in signal_events {
+		let (_, ref mut events_by_location) = workflows_by_id
+			.get_mut(&event.workflow_id)
+			.expect("unreachable, workflow for event not found");
 		let (root_location, idx) = split_location(&event.location);
 
-		insert_placeholder(&mut events_by_location, &event.location, idx);
+		insert_placeholder(events_by_location, &event.location, idx);
 
 		events_by_location
 			.entry(root_location)
@@ -95,10 +111,41 @@ pub fn combine_events(
 			.push((idx, Event::Signal(event.try_into()?)));
 	}
 
-	for event in sub_workflow_events {
+	for event in signal_send_events {
+		let (_, ref mut events_by_location) = workflows_by_id
+			.get_mut(&event.workflow_id)
+			.expect("unreachable, workflow for event not found");
 		let (root_location, idx) = split_location(&event.location);
 
-		insert_placeholder(&mut events_by_location, &event.location, idx);
+		insert_placeholder(events_by_location, &event.location, idx);
+
+		events_by_location
+			.entry(root_location)
+			.or_default()
+			.push((idx, Event::SignalSend(event.try_into()?)));
+	}
+
+	for event in msg_send_events {
+		let (_, ref mut events_by_location) = workflows_by_id
+			.get_mut(&event.workflow_id)
+			.expect("unreachable, workflow for event not found");
+		let (root_location, idx) = split_location(&event.location);
+
+		insert_placeholder(events_by_location, &event.location, idx);
+
+		events_by_location
+			.entry(root_location)
+			.or_default()
+			.push((idx, Event::MessageSend(event.try_into()?)));
+	}
+
+	for event in sub_workflow_events {
+		let (_, ref mut events_by_location) = workflows_by_id
+			.get_mut(&event.workflow_id)
+			.expect("unreachable, workflow for event not found");
+		let (root_location, idx) = split_location(&event.location);
+
+		insert_placeholder(events_by_location, &event.location, idx);
 
 		events_by_location
 			.entry(root_location)
@@ -106,22 +153,37 @@ pub fn combine_events(
 			.push((idx, Event::SubWorkflow(event.try_into()?)));
 	}
 
-	// TODO(RVT-3754): This involves inserting, sorting, then recollecting into lists and recollecting into a
-	// hashmap. Could be improved by iterating over both lists simultaneously and sorting each item at a
-	// time before inserting
-	// Sort all of the events because we are inserting from two different lists. Both lists are already
-	// sorted themselves so this should be fairly cheap
-	for (_, list) in events_by_location.iter_mut() {
-		list.sort_by_key(|(idx, _)| *idx);
-	}
+	let workflows = workflows_by_id
+		.into_values()
+		.map(|(row, mut events_by_location)| {
+			// TODO(RVT-3754): This involves inserting, sorting, then recollecting into lists and recollecting into a
+			// hashmap. Could be improved by iterating over both lists simultaneously and sorting each item at a
+			// time before inserting
+			// Sort all of the events because we are inserting from two different lists. Both lists are already
+			// sorted themselves so this should be fairly cheap
+			for (_, list) in events_by_location.iter_mut() {
+				list.sort_by_key(|(idx, _)| *idx);
+			}
 
-	// Remove idx from lists
-	let event_history = events_by_location
-		.into_iter()
-		.map(|(k, v)| (k, v.into_iter().map(|(_, v)| v).collect()))
+			// Remove idx from lists
+			let event_history = events_by_location
+				.into_iter()
+				.map(|(k, v)| (k, v.into_iter().map(|(_, v)| v).collect()))
+				.collect();
+
+			PulledWorkflow {
+				workflow_id: row.workflow_id,
+				workflow_name: row.workflow_name,
+				create_ts: row.create_ts,
+				ray_id: row.ray_id,
+				input: row.input,
+				wake_deadline_ts: row.wake_deadline_ts,
+				events: event_history,
+			}
+		})
 		.collect();
 
-	Ok(event_history)
+	Ok(workflows)
 }
 
 fn split_location(location: &[i64]) -> (Location, i64) {

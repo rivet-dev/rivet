@@ -75,7 +75,8 @@ impl Worker {
 				&workflow.workflow_name,
 			);
 			let wake_deadline_ts = workflow.wake_deadline_ts;
-			let ctx = WorkflowCtx::new(self.registry.clone(), self.db.clone(), conn, workflow)?;
+			let ctx =
+				WorkflowCtx::new(self.registry.clone(), self.db.clone(), conn, workflow).await?;
 
 			tokio::task::spawn(
 				async move {

@@ -7,10 +7,12 @@ use uuid::Uuid;
 
 use crate::{
 	activity::ActivityId,
+	ctx::{ActivityCtx, MessageCtx},
 	event::Event,
-	util::{self, Location},
-	Activity, ActivityCtx, ActivityInput, DatabaseHandle, Executable, Listen, PulledWorkflow,
-	RegistryHandle, Signal, SignalRow, Workflow, WorkflowError, WorkflowInput, WorkflowResult,
+	message::Message,
+	util::Location,
+	Activity, ActivityInput, DatabaseHandle, Executable, Listen, PulledWorkflow, RegistryHandle,
+	Signal, SignalRow, Workflow, WorkflowError, WorkflowInput, WorkflowResult,
 };
 
 // Time to delay a worker from retrying after an error
@@ -55,15 +57,19 @@ pub struct WorkflowCtx {
 
 	root_location: Location,
 	location_idx: usize,
+
+	msg_ctx: MessageCtx,
 }
 
 impl WorkflowCtx {
-	pub fn new(
+	pub async fn new(
 		registry: RegistryHandle,
 		db: DatabaseHandle,
 		conn: rivet_connection::Connection,
 		workflow: PulledWorkflow,
 	) -> GlobalResult<Self> {
+		let msg_ctx = MessageCtx::new(&conn, workflow.workflow_id, workflow.ray_id).await?;
+
 		Ok(WorkflowCtx {
 			workflow_id: workflow.workflow_id,
 			name: workflow.workflow_name,
@@ -77,18 +83,13 @@ impl WorkflowCtx {
 
 			conn,
 
-			event_history: Arc::new(
-				util::combine_events(
-					workflow.activity_events,
-					workflow.signal_events,
-					workflow.sub_workflow_events,
-				)
-				.map_err(GlobalError::raw)?,
-			),
+			event_history: Arc::new(workflow.events),
 			input: Arc::new(workflow.input),
 
 			root_location: Box::new([]),
 			location_idx: 0,
+
+			msg_ctx,
 		})
 	}
 
@@ -117,6 +118,8 @@ impl WorkflowCtx {
 				.chain(std::iter::once(self.location_idx))
 				.collect(),
 			location_idx: 0,
+
+			msg_ctx: self.msg_ctx.clone(),
 		};
 
 		self.location_idx += 1;
@@ -258,8 +261,7 @@ impl WorkflowCtx {
 			self.create_ts,
 			self.ray_id,
 			A::NAME,
-		)
-		.await?;
+		);
 
 		let res = tokio::time::timeout(A::TIMEOUT, A::run(&ctx, input))
 			.await
@@ -568,6 +570,8 @@ impl WorkflowCtx {
 				.chain(std::iter::once(self.location_idx))
 				.collect(),
 			location_idx: 0,
+
+			msg_ctx: self.msg_ctx.clone(),
 		};
 
 		self.location_idx += 1;
@@ -669,19 +673,47 @@ impl WorkflowCtx {
 		workflow_id: Uuid,
 		body: T,
 	) -> GlobalResult<Uuid> {
-		let signal_id = Uuid::new_v4();
+		let event = { self.relevant_history().nth(self.location_idx) };
 
-		tracing::info!(name=%T::NAME, %workflow_id, %signal_id, "dispatching signal");
+		// Signal sent before
+		let signal_id = if let Some(event) = event {
+			// Validate history is consistent
+			let Event::SignalSend(signal) = event else {
+				return Err(WorkflowError::HistoryDiverged).map_err(GlobalError::raw);
+			};
 
-		// Serialize input
-		let input_val = serde_json::to_value(&body)
-			.map_err(WorkflowError::SerializeSignalBody)
-			.map_err(GlobalError::raw)?;
+			tracing::debug!(id=%self.workflow_id, signal_name=%signal.name, signal_id=%signal.signal_id, "replaying signal dispatch");
 
-		self.db
-			.publish_signal(self.ray_id, workflow_id, signal_id, T::NAME, input_val)
-			.await
-			.map_err(GlobalError::raw)?;
+			signal.signal_id
+		}
+		// Send signal
+		else {
+			let signal_id = Uuid::new_v4();
+			tracing::info!(id=%self.workflow_id, signal_name=%T::NAME, to_workflow_id=%workflow_id, %signal_id, "dispatching signal");
+
+			// Serialize input
+			let input_val = serde_json::to_value(&body)
+				.map_err(WorkflowError::SerializeSignalBody)
+				.map_err(GlobalError::raw)?;
+
+			self.db
+				.publish_signal_from_workflow(
+					self.workflow_id,
+					self.full_location().as_ref(),	
+					self.ray_id,
+					workflow_id,
+					signal_id,
+					T::NAME,
+					input_val,
+				)
+				.await
+				.map_err(GlobalError::raw)?;
+
+			signal_id
+		};
+
+		// Move to next event
+		self.location_idx += 1;
 
 		Ok(signal_id)
 	}
@@ -692,19 +724,48 @@ impl WorkflowCtx {
 		tags: &serde_json::Value,
 		body: T,
 	) -> GlobalResult<Uuid> {
-		let signal_id = Uuid::new_v4();
+		let event = { self.relevant_history().nth(self.location_idx) };
 
-		tracing::debug!(name=%T::NAME, ?tags, %signal_id, "dispatching tagged signal");
+		// Signal sent before
+		let signal_id = if let Some(event) = event {
+			// Validate history is consistent
+			let Event::SignalSend(signal) = event else {
+				return Err(WorkflowError::HistoryDiverged).map_err(GlobalError::raw);
+			};
 
-		// Serialize input
-		let input_val = serde_json::to_value(&body)
-			.map_err(WorkflowError::SerializeSignalBody)
-			.map_err(GlobalError::raw)?;
+			tracing::debug!(id=%self.workflow_id, signal_name=%signal.name, signal_id=%signal.signal_id, "replaying tagged signal dispatch");
 
-		self.db
-			.publish_tagged_signal(self.ray_id, tags, signal_id, T::NAME, input_val)
-			.await
-			.map_err(GlobalError::raw)?;
+			signal.signal_id
+		}
+		// Send signal
+		else {
+			let signal_id = Uuid::new_v4();
+
+			tracing::debug!(name=%T::NAME, ?tags, %signal_id, "dispatching tagged signal");
+
+			// Serialize input
+			let input_val = serde_json::to_value(&body)
+				.map_err(WorkflowError::SerializeSignalBody)
+				.map_err(GlobalError::raw)?;
+
+			self.db
+				.publish_tagged_signal_from_workflow(
+					self.workflow_id,
+					self.full_location().as_ref(),
+					self.ray_id,
+					tags,
+					signal_id,
+					T::NAME,
+					input_val,
+				)
+				.await
+				.map_err(GlobalError::raw)?;
+
+			signal_id
+		};
+
+		// Move to next event
+		self.location_idx += 1;
 
 		Ok(signal_id)
 	}
@@ -783,6 +844,98 @@ impl WorkflowCtx {
 		self.location_idx += 1;
 
 		Ok(signal)
+	}
+
+	pub async fn msg<M>(&mut self, tags: serde_json::Value, body: M) -> GlobalResult<()>
+	where
+		M: Message,
+	{
+		let event = { self.relevant_history().nth(self.location_idx) };
+
+		// Message sent before
+		if let Some(event) = event {
+			// Validate history is consistent
+			let Event::MessageSend(msg) = event else {
+				return Err(WorkflowError::HistoryDiverged).map_err(GlobalError::raw);
+			};
+
+			tracing::debug!(id=%self.workflow_id, msg_name=%msg.name, "replaying message dispatch");
+		}
+		// Send message
+		else {
+			tracing::info!(id=%self.workflow_id, msg_name=%M::NAME, ?tags, "dispatching message");
+
+			// Serialize body
+			let body_val = serde_json::to_value(&body)
+				.map_err(WorkflowError::SerializeWorkflowOutput)
+				.map_err(GlobalError::raw)?;
+			let location = self.full_location();
+
+			let (msg, write) = tokio::join!(
+				self.db.publish_message_from_workflow(
+					self.workflow_id,
+					location.as_ref(),
+					&tags,
+					M::NAME,
+					body_val
+				),
+				self.msg_ctx.message(tags.clone(), body),
+			);
+
+			msg.map_err(GlobalError::raw)?;
+			write.map_err(GlobalError::raw)?;
+		}
+
+		// Move to next event
+		self.location_idx += 1;
+
+		Ok(())
+	}
+
+	pub async fn msg_wait<M>(&mut self, tags: serde_json::Value, body: M) -> GlobalResult<()>
+	where
+		M: Message,
+	{
+		let event = { self.relevant_history().nth(self.location_idx) };
+
+		// Message sent before
+		if let Some(event) = event {
+			// Validate history is consistent
+			let Event::MessageSend(msg) = event else {
+				return Err(WorkflowError::HistoryDiverged).map_err(GlobalError::raw);
+			};
+
+			tracing::debug!(id=%self.workflow_id, msg_name=%msg.name, "replaying message dispatch");
+		}
+		// Send message
+		else {
+			tracing::info!(id=%self.workflow_id, msg_name=%M::NAME, ?tags, "dispatching message");
+
+			// Serialize body
+			let body_val = serde_json::to_value(&body)
+				.map_err(WorkflowError::SerializeWorkflowOutput)
+				.map_err(GlobalError::raw)?;
+			let location = self.full_location();
+
+			let (msg, write) = tokio::join!(
+				self.db.publish_message_from_workflow(
+					self.workflow_id,
+					location.as_ref(),
+					&tags,
+					M::NAME,
+					body_val
+				),
+				self.msg_ctx.message_wait(tags.clone(), body),
+			);
+
+			msg.map_err(GlobalError::raw)?;
+			write.map_err(GlobalError::raw)?;
+		}
+
+		// Move to next event
+		self.location_idx += 1;
+
+		Ok(())
 	}
 
 	// TODO: sleep_for, sleep_until

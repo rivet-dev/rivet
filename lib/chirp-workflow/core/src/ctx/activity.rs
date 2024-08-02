@@ -2,12 +2,7 @@ use global_error::{GlobalError, GlobalResult};
 use rivet_pools::prelude::*;
 use uuid::Uuid;
 
-use crate::{
-	ctx::{MessageCtx, OperationCtx},
-	error::{WorkflowError, WorkflowResult},
-	message::Message,
-	DatabaseHandle, Operation, OperationInput,
-};
+use crate::{ctx::OperationCtx, error::WorkflowError, DatabaseHandle, Operation, OperationInput};
 
 #[derive(Clone)]
 pub struct ActivityCtx {
@@ -19,21 +14,20 @@ pub struct ActivityCtx {
 	db: DatabaseHandle,
 
 	conn: rivet_connection::Connection,
-	msg_ctx: MessageCtx,
 
 	// Backwards compatibility
 	op_ctx: rivet_operation::OperationContext<()>,
 }
 
 impl ActivityCtx {
-	pub async fn new(
+	pub fn new(
 		workflow_id: Uuid,
 		db: DatabaseHandle,
 		conn: &rivet_connection::Connection,
 		activity_create_ts: i64,
 		ray_id: Uuid,
 		name: &'static str,
-	) -> WorkflowResult<Self> {
+	) -> Self {
 		let ts = rivet_util::timestamp::now();
 		let req_id = Uuid::new_v4();
 		let conn = conn.wrap(req_id, ray_id, name);
@@ -49,9 +43,7 @@ impl ActivityCtx {
 		);
 		op_ctx.from_workflow = true;
 
-		let msg_ctx = MessageCtx::new(&conn, req_id, ray_id).await?;
-
-		Ok(ActivityCtx {
+		ActivityCtx {
 			workflow_id,
 			ray_id,
 			name,
@@ -59,8 +51,7 @@ impl ActivityCtx {
 			db,
 			conn,
 			op_ctx,
-			msg_ctx,
-		})
+		}
 	}
 }
 
@@ -92,26 +83,6 @@ impl ActivityCtx {
 	pub async fn update_workflow_tags(&self, tags: &serde_json::Value) -> GlobalResult<()> {
 		self.db
 			.update_workflow_tags(self.workflow_id, tags)
-			.await
-			.map_err(GlobalError::raw)
-	}
-
-	pub async fn msg<M>(&self, tags: serde_json::Value, body: M) -> GlobalResult<()>
-	where
-		M: Message,
-	{
-		self.msg_ctx
-			.message(tags, body)
-			.await
-			.map_err(GlobalError::raw)
-	}
-
-	pub async fn msg_wait<M>(&self, tags: serde_json::Value, body: M) -> GlobalResult<()>
-	where
-		M: Message,
-	{
-		self.msg_ctx
-			.message_wait(tags, body)
 			.await
 			.map_err(GlobalError::raw)
 	}

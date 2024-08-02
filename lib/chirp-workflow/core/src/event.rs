@@ -2,8 +2,8 @@ use serde::de::DeserializeOwned;
 use uuid::Uuid;
 
 use crate::{
-	activity::ActivityId, ActivityEventRow, SignalEventRow, SubWorkflowEventRow, WorkflowError,
-	WorkflowResult,
+	activity::ActivityId, ActivityEventRow, MessageSendEventRow, SignalEventRow,
+	SignalSendEventRow, SubWorkflowEventRow, WorkflowError, WorkflowResult,
 };
 
 /// An event that happened in the workflow run.
@@ -13,6 +13,8 @@ use crate::{
 pub enum Event {
 	Activity(ActivityEvent),
 	Signal(SignalEvent),
+	SignalSend(SignalSendEvent),
+	MessageSend(MessageSendEvent),
 	SubWorkflow(SubWorkflowEvent),
 	// Used as a placeholder for branching locations
 	Branch,
@@ -67,6 +69,38 @@ impl TryFrom<SignalEventRow> for SignalEvent {
 		Ok(SignalEvent {
 			name: value.signal_name,
 			body: value.body,
+		})
+	}
+}
+
+#[derive(Debug)]
+pub struct SignalSendEvent {
+	pub signal_id: Uuid,
+	pub name: String,
+}
+
+impl TryFrom<SignalSendEventRow> for SignalSendEvent {
+	type Error = WorkflowError;
+
+	fn try_from(value: SignalSendEventRow) -> WorkflowResult<Self> {
+		Ok(SignalSendEvent {
+			signal_id: value.signal_id,
+			name: value.signal_name,
+		})
+	}
+}
+
+#[derive(Debug)]
+pub struct MessageSendEvent {
+	pub name: String,
+}
+
+impl TryFrom<MessageSendEventRow> for MessageSendEvent {
+	type Error = WorkflowError;
+
+	fn try_from(value: MessageSendEventRow) -> WorkflowResult<Self> {
+		Ok(MessageSendEvent {
+			name: value.message_name,
 		})
 	}
 }

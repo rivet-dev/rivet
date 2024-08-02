@@ -1,8 +1,10 @@
-use std::sync::Arc;
+use std::{collections::HashMap, sync::Arc};
 
 use uuid::Uuid;
 
-use crate::{activity::ActivityId, Workflow, WorkflowError, WorkflowResult};
+use crate::{
+	activity::ActivityId, event::Event, util::Location, Workflow, WorkflowError, WorkflowResult,
+};
 
 mod postgres;
 pub use postgres::DatabasePostgres;
@@ -58,6 +60,12 @@ pub trait Database: Send {
 		output: Result<serde_json::Value, &str>,
 	) -> WorkflowResult<()>;
 
+	async fn pull_next_signal(
+		&self,
+		workflow_id: Uuid,
+		filter: &[&str],
+		location: &[usize],
+	) -> WorkflowResult<Option<SignalRow>>;
 	async fn publish_signal(
 		&self,
 		ray_id: Uuid,
@@ -74,12 +82,26 @@ pub trait Database: Send {
 		signal_name: &str,
 		body: serde_json::Value,
 	) -> WorkflowResult<()>;
-	async fn pull_next_signal(
+	async fn publish_signal_from_workflow(
 		&self,
-		workflow_id: Uuid,
-		filter: &[&str],
+		from_workflow_id: Uuid,
 		location: &[usize],
-	) -> WorkflowResult<Option<SignalRow>>;
+		ray_id: Uuid,
+		workflow_id: Uuid,
+		signal_id: Uuid,
+		signal_name: &str,
+		body: serde_json::Value,
+	) -> WorkflowResult<()>;
+	async fn publish_tagged_signal_from_workflow(
+		&self,
+		from_workflow_id: Uuid,
+		location: &[usize],
+		ray_id: Uuid,
+		tags: &serde_json::Value,
+		signal_id: Uuid,
+		signal_name: &str,
+		body: serde_json::Value,
+	) -> WorkflowResult<()>;
 
 	async fn dispatch_sub_workflow(
 		&self,
@@ -99,6 +121,15 @@ pub trait Database: Send {
 		input: &serde_json::Value,
 		after_ts: i64,
 	) -> WorkflowResult<Option<(Uuid, i64)>>;
+
+	async fn publish_message_from_workflow(
+		&self,
+		from_workflow_id: Uuid,
+		location: &[usize],
+		tags: &serde_json::Value,
+		message_name: &str,
+		body: serde_json::Value,
+	) -> WorkflowResult<()>;
 }
 
 #[derive(sqlx::FromRow)]
@@ -136,9 +167,7 @@ pub struct PulledWorkflow {
 	pub input: serde_json::Value,
 	pub wake_deadline_ts: Option<i64>,
 
-	pub activity_events: Vec<ActivityEventRow>,
-	pub signal_events: Vec<SignalEventRow>,
-	pub sub_workflow_events: Vec<SubWorkflowEventRow>,
+	pub events: HashMap<Location, Vec<Event>>,
 }
 
 #[derive(sqlx::FromRow)]
@@ -158,6 +187,21 @@ pub struct SignalEventRow {
 	pub location: Vec<i64>,
 	pub signal_name: String,
 	pub body: serde_json::Value,
+}
+
+#[derive(sqlx::FromRow)]
+pub struct SignalSendEventRow {
+	pub workflow_id: Uuid,
+	pub location: Vec<i64>,
+	pub signal_id: Uuid,
+	pub signal_name: String,
+}
+
+#[derive(sqlx::FromRow)]
+pub struct MessageSendEventRow {
+	pub workflow_id: Uuid,
+	pub location: Vec<i64>,
+	pub message_name: String,
 }
 
 #[derive(sqlx::FromRow)]

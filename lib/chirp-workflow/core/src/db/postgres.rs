@@ -1,14 +1,14 @@
-use std::{collections::HashMap, sync::Arc, time::Duration};
+use std::{sync::Arc, time::Duration};
 
 use indoc::indoc;
 use sqlx::{pool::PoolConnection, PgPool, Postgres};
 use uuid::Uuid;
 
 use super::{
-	ActivityEventRow, Database, PulledWorkflow, PulledWorkflowRow, SignalEventRow, SignalRow,
-	SubWorkflowEventRow, WorkflowRow,
+	ActivityEventRow, Database, MessageSendEventRow, PulledWorkflow, PulledWorkflowRow,
+	SignalEventRow, SignalRow, SignalSendEventRow, SubWorkflowEventRow, WorkflowRow,
 };
-use crate::{activity::ActivityId, WorkflowError, WorkflowResult};
+use crate::{activity::ActivityId, util, WorkflowError, WorkflowResult};
 
 pub struct DatabasePostgres {
 	pool: PgPool,
@@ -106,7 +106,7 @@ impl Database for DatabasePostgres {
 	) -> WorkflowResult<Vec<PulledWorkflow>> {
 		// TODO(RVT-3753): include limit on query to allow better workflow spread between nodes?
 		// Select all workflows that haven't started or that have a wake condition
-		let rows = sqlx::query_as::<_, PulledWorkflowRow>(indoc!(
+		let workflow_rows = sqlx::query_as::<_, PulledWorkflowRow>(indoc!(
 			"
 			WITH
 				pull_workflows AS (
@@ -173,34 +173,24 @@ impl Database for DatabasePostgres {
 		.await
 		.map_err(WorkflowError::Sqlx)?;
 
-		if rows.is_empty() {
+		if workflow_rows.is_empty() {
 			return Ok(Vec::new());
 		}
 
 		// Turn rows into hashmap
-		let workflow_ids = rows.iter().map(|row| row.workflow_id).collect::<Vec<_>>();
-		let mut workflows_by_id = rows
-			.into_iter()
-			.map(|row| {
-				(
-					row.workflow_id,
-					PulledWorkflow {
-						workflow_id: row.workflow_id,
-						workflow_name: row.workflow_name,
-						create_ts: row.create_ts,
-						ray_id: row.ray_id,
-						input: row.input,
-						wake_deadline_ts: row.wake_deadline_ts,
-						activity_events: Vec::new(),
-						signal_events: Vec::new(),
-						sub_workflow_events: Vec::new(),
-					},
-				)
-			})
-			.collect::<HashMap<_, _>>();
+		let workflow_ids = workflow_rows
+			.iter()
+			.map(|row| row.workflow_id)
+			.collect::<Vec<_>>();
 
 		// Fetch all events for all fetched workflows
-		let (activity_events, signal_events, sub_workflow_events) = tokio::try_join!(
+		let (
+			activity_events,
+			signal_events,
+			signal_send_events,
+			msg_send_events,
+			sub_workflow_events,
+		) = tokio::try_join!(
 			async {
 				sqlx::query_as::<_, ActivityEventRow>(indoc!(
 					"
@@ -243,6 +233,36 @@ impl Database for DatabasePostgres {
 				.map_err(WorkflowError::Sqlx)
 			},
 			async {
+				sqlx::query_as::<_, SignalSendEventRow>(indoc!(
+					"
+					SELECT
+						workflow_id, location, signal_id, signal_name
+					FROM db_workflow.workflow_signal_send_events
+					WHERE workflow_id = ANY($1)
+					ORDER BY workflow_id, location ASC
+					",
+				))
+				.bind(&workflow_ids)
+				.fetch_all(&mut *self.conn().await?)
+				.await
+				.map_err(WorkflowError::Sqlx)
+			},
+			async {
+				sqlx::query_as::<_, MessageSendEventRow>(indoc!(
+					"
+					SELECT
+						workflow_id, location, message_name
+					FROM db_workflow.workflow_message_send_events
+					WHERE workflow_id = ANY($1)
+					ORDER BY workflow_id, location ASC
+					",
+				))
+				.bind(&workflow_ids)
+				.fetch_all(&mut *self.conn().await?)
+				.await
+				.map_err(WorkflowError::Sqlx)
+			},
+			async {
 				sqlx::query_as::<_, SubWorkflowEventRow>(indoc!(
 					"
 					SELECT
@@ -264,30 +284,16 @@ impl Database for DatabasePostgres {
 			}
 		)?;
 
-		// Insert events into hashmap
-		for event in activity_events {
-			workflows_by_id
-				.get_mut(&event.workflow_id)
-				.expect("unreachable, workflow for event not found")
-				.activity_events
-				.push(event);
-		}
-		for event in signal_events {
-			workflows_by_id
-				.get_mut(&event.workflow_id)
-				.expect("unreachable, workflow for event not found")
-				.signal_events
-				.push(event);
-		}
-		for event in sub_workflow_events {
-			workflows_by_id
-				.get_mut(&event.workflow_id)
-				.expect("unreachable, workflow for event not found")
-				.sub_workflow_events
-				.push(event);
-		}
+		let workflows = util::combine_events(
+			workflow_rows,
+			activity_events,
+			signal_events,
+			signal_send_events,
+			msg_send_events,
+			sub_workflow_events,
+		)?;
 
-		Ok(workflows_by_id.into_values().collect())
+		Ok(workflows)
 	}
 
 	async fn commit_workflow(
@@ -565,6 +571,92 @@ impl Database for DatabasePostgres {
 		Ok(())
 	}
 
+	async fn publish_signal_from_workflow(
+		&self,
+		from_workflow_id: Uuid,
+		location: &[usize],
+		ray_id: Uuid,
+		to_workflow_id: Uuid,
+		signal_id: Uuid,
+		signal_name: &str,
+		body: serde_json::Value,
+	) -> WorkflowResult<()> {
+		sqlx::query(indoc!(
+			"
+			WITH
+				signal AS (
+					INSERT INTO db_workflow.signals (signal_id, workflow_id, signal_name, body, ray_id, create_ts)			
+					VALUES ($1, $2, $3, $4, $5, $6)
+					RETURNING 1
+			 	),
+				send_event AS (
+					INSERT INTO db_workflow.workflow_signal_send_events(
+						workflow_id, location, signal_id, signal_name, body
+					)
+					VALUES($7, $8, $1, $3, $4)
+					RETURNING 1
+				)
+			SELECT 1
+			",
+		))
+		.bind(signal_id)
+		.bind(to_workflow_id)
+		.bind(signal_name)
+		.bind(body)
+		.bind(ray_id)
+		.bind(rivet_util::timestamp::now())
+		.bind(from_workflow_id)
+		.bind(location.iter().map(|x| *x as i64).collect::<Vec<_>>())
+		.execute(&mut *self.conn().await?)
+		.await
+		.map_err(WorkflowError::Sqlx)?;
+
+		Ok(())
+	}
+
+	async fn publish_tagged_signal_from_workflow(
+		&self,
+		from_workflow_id: Uuid,
+		location: &[usize],
+		ray_id: Uuid,
+		tags: &serde_json::Value,
+		signal_id: Uuid,
+		signal_name: &str,
+		body: serde_json::Value,
+	) -> WorkflowResult<()> {
+		sqlx::query(indoc!(
+			"
+			WITH
+				signal AS (
+					INSERT INTO db_workflow.tagged_signals (signal_id, tags, signal_name, body, ray_id, create_ts)			
+					VALUES ($1, $2, $3, $4, $5, $6)
+					RETURNING 1
+			 	),
+				send_event AS (
+					INSERT INTO db_workflow.workflow_signal_send_events(
+						workflow_id, location, signal_id, signal_name, body
+					)
+					VALUES($7, $8, $1, $3, $4)
+					RETURNING 1
+				)
+			SELECT 1
+			",
+		))
+		.bind(signal_id)
+		.bind(tags)
+		.bind(signal_name)
+		.bind(body)
+		.bind(ray_id)
+		.bind(rivet_util::timestamp::now())
+		.bind(from_workflow_id)
+		.bind(location.iter().map(|x| *x as i64).collect::<Vec<_>>())
+		.execute(&mut *self.conn().await?)
+		.await
+		.map_err(WorkflowError::Sqlx)?;
+
+		Ok(())
+	}
+
 	async fn dispatch_sub_workflow(
 		&self,
 		ray_id: Uuid,
@@ -633,5 +725,34 @@ impl Database for DatabasePostgres {
 		.fetch_optional(&mut *self.conn().await?)
 		.await
 		.map_err(WorkflowError::Sqlx)
+	}
+
+	async fn publish_message_from_workflow(
+		&self,
+		from_workflow_id: Uuid,
+		location: &[usize],
+		tags: &serde_json::Value,
+		message_name: &str,
+		body: serde_json::Value,
+	) -> WorkflowResult<()> {
+		sqlx::query(indoc!(
+			"
+			INSERT INTO db_workflow.workflow_message_send_events(
+				workflow_id, location, tags, message_name, body
+			)
+			VALUES($1, $2, $3, $4, $5)
+			RETURNING 1
+			",
+		))
+		.bind(from_workflow_id)
+		.bind(location.iter().map(|x| *x as i64).collect::<Vec<_>>())
+		.bind(tags)
+		.bind(message_name)
+		.bind(body)
+		.execute(&mut *self.conn().await?)
+		.await
+		.map_err(WorkflowError::Sqlx)?;
+
+		Ok(())
 	}
 }
