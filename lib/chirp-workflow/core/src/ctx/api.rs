@@ -7,8 +7,9 @@ use uuid::Uuid;
 
 use crate::{
 	ctx::{
-		message::{SubscriptionHandle, TailAnchor, TailAnchorResponse},
-		MessageCtx, OperationCtx,
+		message::{MessageCtx, SubscriptionHandle, TailAnchor, TailAnchorResponse},
+		operation::OperationCtx,
+		workflow::SUB_WORKFLOW_RETRY,
 	},
 	error::WorkflowResult,
 	message::{Message, ReceivedMessage},
@@ -123,30 +124,32 @@ impl ApiCtx {
 	}
 
 	/// Wait for a given workflow to complete.
-	/// **IMPORTANT:** Has no timeout.
+	/// 60 second timeout.
 	pub async fn wait_for_workflow<W: Workflow>(
 		&self,
 		workflow_id: Uuid,
 	) -> GlobalResult<W::Output> {
 		tracing::info!(name=W::NAME, id=?workflow_id, "waiting for workflow");
 
-		let period = Duration::from_millis(50);
-		let mut interval = tokio::time::interval(period);
-		loop {
-			interval.tick().await;
+		tokio::time::timeout(WORKFLOW_TIMEOUT, async move {
+			let mut interval = tokio::time::interval(SUB_WORKFLOW_RETRY);
+			loop {
+				interval.tick().await;
 
-			// Check if state finished
-			let workflow = self
-				.db
-				.get_workflow(workflow_id)
-				.await
-				.map_err(GlobalError::raw)?
-				.ok_or(WorkflowError::WorkflowNotFound)
-				.map_err(GlobalError::raw)?;
-			if let Some(output) = workflow.parse_output::<W>().map_err(GlobalError::raw)? {
-				return Ok(output);
+				// Check if state finished
+				let workflow = self
+					.db
+					.get_workflow(workflow_id)
+					.await
+					.map_err(GlobalError::raw)?
+					.ok_or(WorkflowError::WorkflowNotFound)
+					.map_err(GlobalError::raw)?;
+				if let Some(output) = workflow.parse_output::<W>().map_err(GlobalError::raw)? {
+					return Ok(output);
+				}
 			}
-		}
+		})
+		.await?
 	}
 
 	/// Dispatch a new workflow and wait for it to complete. Has a 60s timeout.
@@ -159,12 +162,7 @@ impl ApiCtx {
 		<I as WorkflowInput>::Workflow: Workflow<Input = I>,
 	{
 		let workflow_id = self.dispatch_workflow(input).await?;
-
-		tokio::time::timeout(
-			WORKFLOW_TIMEOUT,
-			self.wait_for_workflow::<I::Workflow>(workflow_id),
-		)
-		.await?
+		self.wait_for_workflow::<I::Workflow>(workflow_id).await
 	}
 
 	/// Dispatch a new workflow with tags and wait for it to complete. Has a 60s timeout.
@@ -178,12 +176,7 @@ impl ApiCtx {
 		<I as WorkflowInput>::Workflow: Workflow<Input = I>,
 	{
 		let workflow_id = self.dispatch_tagged_workflow(tags, input).await?;
-
-		tokio::time::timeout(
-			WORKFLOW_TIMEOUT,
-			self.wait_for_workflow::<I::Workflow>(workflow_id),
-		)
-		.await?
+		self.wait_for_workflow::<I::Workflow>(workflow_id).await
 	}
 
 	pub async fn signal<T: Signal + Serialize>(
@@ -325,10 +318,6 @@ impl ApiCtx {
 	pub fn req_dt(&self) -> i64 {
 		self.ts.saturating_sub(self.op_ctx.req_ts())
 	}
-
-	// pub fn perf(&self) -> &chirp_perf::PerfCtx {
-	// 	self.conn.perf()
-	// }
 
 	pub fn trace(&self) -> &[chirp_client::TraceEntry] {
 		self.conn.trace()

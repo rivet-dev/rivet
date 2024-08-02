@@ -284,8 +284,20 @@ pub fn signal(attr: TokenStream, item: TokenStream) -> TokenStream {
 
 	let struct_ident = &item_struct.ident;
 
+	// If also a message, don't derive serde traits
+	let also_message = item_struct
+		.attrs
+		.iter()
+		.filter_map(|attr| attr.path().segments.last())
+		.any(|seg| seg.ident == "message");
+	let serde_derive = if also_message {
+		quote! {}
+	} else {
+		quote! { #[derive(serde::Serialize, serde::Deserialize)] }
+	};
+
 	let expanded = quote! {
-		#[derive(serde::Serialize, serde::Deserialize)]
+		#serde_derive
 		#item_struct
 
 		impl Signal for #struct_ident {
@@ -295,7 +307,7 @@ pub fn signal(attr: TokenStream, item: TokenStream) -> TokenStream {
 		#[async_trait::async_trait]
 		impl Listen for #struct_ident {
 			async fn listen(ctx: &mut chirp_workflow::prelude::WorkflowCtx) -> chirp_workflow::prelude::WorkflowResult<Self> {
-				let row = ctx.listen_any(&[Self::NAME]).await?;
+				let row = ctx.listen_any(&[<Self as Signal>::NAME]).await?;
 				Self::parse(&row.signal_name, row.body)
 			}
 
@@ -313,6 +325,18 @@ pub fn message(attr: TokenStream, item: TokenStream) -> TokenStream {
 	let name = parse_macro_input!(attr as LitStr);
 	let item_struct = parse_macro_input!(item as ItemStruct);
 
+	// If also a signal, don't derive serde traits
+	let also_signal = item_struct
+		.attrs
+		.iter()
+		.filter_map(|attr| attr.path().segments.last())
+		.any(|seg| seg.ident == "signal");
+	let serde_derive = if also_signal {
+		quote! {}
+	} else {
+		quote! { #[derive(serde::Serialize, serde::Deserialize)] }
+	};
+
 	let config = match parse_msg_config(&item_struct.attrs) {
 		Ok(x) => x,
 		Err(err) => return err.into_compile_error().into(),
@@ -322,24 +346,13 @@ pub fn message(attr: TokenStream, item: TokenStream) -> TokenStream {
 	let tail_ttl = config.tail_ttl;
 
 	let expanded = quote! {
-		#[derive(Debug, serde::Serialize, serde::Deserialize)]
+		#serde_derive
+		#[derive(Debug)]
 		#item_struct
 
 		impl Message for #struct_ident {
 			const NAME: &'static str = #name;
 			const TAIL_TTL: std::time::Duration = std::time::Duration::from_secs(#tail_ttl);
-		}
-
-		#[async_trait::async_trait]
-		impl Listen for #struct_ident {
-			async fn listen(ctx: &mut chirp_workflow::prelude::WorkflowCtx) -> chirp_workflow::prelude::WorkflowResult<Self> {
-				let row = ctx.listen_any(&[Self::NAME]).await?;
-				Self::parse(&row.signal_name, row.body)
-			}
-
-			fn parse(_name: &str, body: serde_json::Value) -> chirp_workflow::prelude::WorkflowResult<Self> {
-				serde_json::from_value(body).map_err(WorkflowError::DeserializeActivityOutput)
-			}
 		}
 	};
 

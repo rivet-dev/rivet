@@ -10641,7 +10641,6 @@ components:
           type: string
       required:
         - server_id
-        - public_ip
     AdminClustersPoolUpdate:
       type: object
       properties:

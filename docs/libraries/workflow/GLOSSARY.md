@@ -15,8 +15,9 @@ A collection of registered workflows. This is solely used for the worker to fetc
 A series of fallible executions of code (also known as activities), signal listeners, signal transmitters, or
 sub workflow triggers.
 
-Workflows can be though of as a list of tasks. The code defining a workflow only specifies what items should
-be ran; There is no complex logic (e.g. database queries) running within the top level of the workflow.
+Workflows can be though of as an outline or a list of tasks. The code defining a workflow only specifies what
+items should be ran; There is no complex logic (e.g. database queries) running within the top level of the
+workflow.
 
 Upon an activity failure, workflow code can be reran without duplicate side effects because activities are
 cached and re-read after they succeed.
@@ -26,6 +27,11 @@ cached and re-read after they succeed.
 A block of code that can fail. This cannot trigger other workflows or activities, but it can call operations.
 Activities are retried by workflows when they fail or replayed when they succeed but a later part of the
 workflow fails.
+
+When choosing between a workflow and an activity:
+
+- Choose a workflow when there are multiple steps that need to be individually retried upon failure.
+- Choose an activity when there is only one chunk of retryable code that needs to be executed.
 
 ## Operation
 
@@ -51,6 +57,10 @@ this signal for it to be picked up, otherwise it will stay in the database indef
 workflow. Signals do not have a response; another signal must be sent back from the workflow and listened to
 by the sender.
 
+### Differences between message
+
+Signals are like messages that can only be consumed by workflows and can only be consumed once.
+
 ## Tagged Signal
 
 Same as a signal except it is sent with a JSON blob as its "tags" instead of to a specific workflow. Any
@@ -64,6 +74,29 @@ See [the signals document](./SIGNALS.md).
 
 A "one of" for signal listening. Allows for listening to multiple signals at once and receiving the first one
 that gets sent.
+
+## Message
+
+A payload that can be sent out of a workflow. Includes a JSON blob for tags which can be subscribed to with a
+subscription.
+
+### Differences between signal
+
+Messages are like signals that can be only consumed by non workflows and can be consumed by multiple
+listeners.
+
+## Subscription
+
+An entity that waits for messages with the same (not a superset/subset) tags as itself. Upon receiving a
+message, the message will be returned and the developer can choose to continue to listen for more messages.
+
+## Tail
+
+Reads the last message without waiting. If none exists (all previous messages expired), `None` is returned.
+
+## Tail w/ Anchor
+
+Reads the earliest message after the given anchor timestamp or waits for one to be published if none exist.
 
 ## Workflow Event
 

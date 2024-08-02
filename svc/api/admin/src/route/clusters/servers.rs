@@ -1,10 +1,9 @@
+use std::{net::Ipv4Addr, str::FromStr};
+
 use api_helper::{anchor::WatchIndexQuery, ctx::Ctx};
 use rivet_api::models;
-use rivet_convert::ApiFrom;
-use rivet_operation::prelude::{
-	proto::backend::{self, pkg::*},
-	*,
-};
+use rivet_convert::ApiInto;
+use rivet_operation::prelude::*;
 use serde::Deserialize;
 use serde_json::{json, Value};
 
@@ -19,48 +18,37 @@ pub struct ServerFilterQuery {
 }
 
 impl ServerFilterQuery {
-	async fn convert_to_proto(
+	async fn convert(
 		&self,
 		ctx: &Ctx<Auth>,
 		cluster_id: Uuid,
-	) -> GlobalResult<backend::cluster::ServerFilter> {
-		let mut filter = backend::cluster::ServerFilter::default();
+	) -> GlobalResult<cluster::types::Filter> {
+		Ok(cluster::types::Filter {
+			cluster_ids: Some(vec![cluster_id]),
+			server_ids: self.server_id.map(|x| vec![x]),
+			datacenter_ids: if let Some(name_id) = &self.datacenter {
+				// Look up datacenter
+				let resolve_res = ctx
+					.op(cluster::ops::datacenter::resolve_for_name_id::Input {
+						cluster_id,
+						name_ids: vec![name_id.clone()],
+					})
+					.await?;
+				let datacenter = unwrap!(resolve_res.datacenters.first(), "datacenter not found");
 
-		filter.filter_cluster_ids = true;
-		filter.cluster_ids = vec![cluster_id.into()];
-
-		if let Some(server_id) = self.server_id {
-			filter.filter_server_ids = true;
-			filter.server_ids = vec![server_id.into()];
-		}
-
-		if let Some(name_id) = &self.datacenter {
-			// Look up datacenter
-			let resolve_res = op!([ctx] cluster_datacenter_resolve_for_name_id {
-				cluster_id: Some(cluster_id.into()),
-				name_ids: vec![name_id.clone()],
-			})
-			.await?;
-			let datacenter = unwrap!(resolve_res.datacenters.first(), "datacenter not found");
-
-			// Filter datacenters
-			filter.filter_datacenter_ids = true;
-			filter.datacenter_ids = vec![unwrap!(datacenter.datacenter_id)];
-		}
-
-		if let Some(pool) = self.pool {
-			let pool_type = <backend::cluster::PoolType as ApiFrom<_>>::api_from(pool);
-
-			filter.filter_pool_types = true;
-			filter.pool_types = vec![pool_type as i32];
-		}
-
-		if let Some(public_ip) = &self.public_ip {
-			filter.filter_public_ips = true;
-			filter.public_ips = vec![public_ip.clone()];
-		}
-
-		Ok(filter)
+				// Filter datacenters
+				Some(vec![datacenter.datacenter_id])
+			} else {
+				None
+			},
+			pool_types: self.pool.map(ApiInto::api_into).map(|x| vec![x]),
+			public_ips: self
+				.public_ip
+				.as_deref()
+				.map(Ipv4Addr::from_str)
+				.transpose()?
+				.map(|x| vec![x]),
+		})
 	}
 }
 
@@ -71,20 +59,20 @@ pub async fn list(
 	_watch_index: WatchIndexQuery,
 	query: ServerFilterQuery,
 ) -> GlobalResult<models::AdminClustersListServersResponse> {
-	let filter = query.convert_to_proto(&ctx, cluster_id).await?;
-
-	let servers_res = op!([ctx] cluster_server_list {
-		filter: Some(filter)
-	})
-	.await?;
+	let servers_res = ctx
+		.op(cluster::ops::server::list::Input {
+			filter: query.convert(&ctx, cluster_id).await?,
+			include_destroyed: false,
+		})
+		.await?;
 
 	let servers = servers_res
 		.servers
 		.iter()
-		.map(|x| {
+		.map(|server| {
 			GlobalResult::Ok(models::AdminClustersServer {
-				server_id: unwrap!(x.server_id).as_uuid(),
-				public_ip: x.public_ip.clone().unwrap_or_default(),
+				server_id: server.server_id,
+				public_ip: server.public_ip.map(|ip| ip.to_string()),
 			})
 		})
 		.collect::<GlobalResult<Vec<_>>>()?;
@@ -99,11 +87,8 @@ pub async fn taint(
 	_body: serde_json::Value,
 	query: ServerFilterQuery,
 ) -> GlobalResult<Value> {
-	let filter = query.convert_to_proto(&ctx, cluster_id).await?;
-
-	let request_id = Uuid::new_v4();
-	msg!([ctx] cluster::msg::server_taint(request_id) {
-		filter: Some(filter),
+	ctx.op(cluster::ops::server::taint_with_filter::Input {
+		filter: query.convert(&ctx, cluster_id).await?,
 	})
 	.await?;
 
@@ -117,10 +102,8 @@ pub async fn destroy(
 	_body: serde_json::Value,
 	query: ServerFilterQuery,
 ) -> GlobalResult<Value> {
-	let filter = query.convert_to_proto(&ctx, cluster_id).await?;
-
-	op!([ctx] cluster_server_destroy_with_filter {
-		filter: Some(filter)
+	ctx.op(cluster::ops::server::destroy_with_filter::Input {
+		filter: query.convert(&ctx, cluster_id).await?,
 	})
 	.await?;
 

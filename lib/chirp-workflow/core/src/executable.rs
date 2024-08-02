@@ -14,9 +14,9 @@ pub trait Executable: Send {
 	async fn execute(self, ctx: &mut WorkflowCtx) -> GlobalResult<Self::Output>;
 }
 
-type AsyncResult<'a, T> = Pin<Box<dyn Future<Output = GlobalResult<T>> + Send + 'a>>;
+pub type AsyncResult<'a, T> = Pin<Box<dyn Future<Output = GlobalResult<T>> + Send + 'a>>;
 
-// Closure executuable impl
+// Closure executable impl
 #[async_trait]
 impl<F, T> Executable for F
 where
@@ -76,7 +76,7 @@ struct TupleHelper<T: Executable> {
 
 // Must wrap all closured being used as executables in this function due to
 // https://github.com/rust-lang/rust/issues/70263
-pub fn closure<F, T>(f: F) -> F
+pub fn closure<F, T: Send>(f: F) -> F
 where
 	F: for<'a> FnOnce(&'a mut WorkflowCtx) -> AsyncResult<'a, T> + Send,
 {

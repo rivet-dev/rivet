@@ -809,7 +809,7 @@ async fn resolve_job_runner_binary_url(
 					FROM db_cluster.servers
 					WHERE
 						datacenter_id = $1 AND
-						pool_type = $2 AND
+						pool_type2 = $2 AND
 						vlan_ip IS NOT NULL AND
 						install_complete_ts IS NOT NULL AND
 						drain_ts IS NULL AND
@@ -822,7 +822,7 @@ async fn resolve_job_runner_binary_url(
 				",
 				// NOTE: region_id is just the old name for datacenter_id
 				&region_id,
-				backend::cluster::PoolType::Ats as i64,
+				serde_json::to_string(&cluster::types::PoolType::Ats)?,
 			)
 			.await?;
 
@@ -936,7 +936,7 @@ async fn resolve_image_artifact_url(
 					FROM db_cluster.servers
 					WHERE
 						datacenter_id = $1 AND
-						pool_type = $2 AND
+						pool_type2 = $2 AND
 						vlan_ip IS NOT NULL AND
 						install_complete_ts IS NOT NULL AND
 						drain_ts IS NULL AND
@@ -950,7 +950,7 @@ async fn resolve_image_artifact_url(
 				",
 				// NOTE: region_id is just the old name for datacenter_id
 				&region_id,
-				backend::cluster::PoolType::Ats as i64,
+				serde_json::to_string(&cluster::types::PoolType::Ats)?,
 				hash,
 			)
 			.await?;

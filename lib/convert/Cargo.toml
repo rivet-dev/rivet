@@ -15,6 +15,7 @@ types = { path = "../types/core" }
 util-mm = { package = "rivet-util-mm", path = "../../svc/pkg/mm/util" }
 
 cdn-namespace-get = { path = "../../svc/pkg/cdn/ops/namespace-get" }
+cluster = { path = "../../svc/pkg/cluster" }
 game-get = { path = "../../svc/pkg/game/ops/get" }
 game-namespace-get = { path = "../../svc/pkg/game/ops/namespace-get" }
 game-namespace-list = { path = "../../svc/pkg/game/ops/namespace-list" }

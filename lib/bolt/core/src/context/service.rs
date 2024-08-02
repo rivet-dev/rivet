@@ -1060,14 +1060,6 @@ impl ServiceContextData {
 					"RIVET_DEFAULT_CLUSTER_CONFIG".into(),
 					serde_json::to_string(&provisioning.cluster)?,
 				);
-				env.insert(
-					"RIVET_TAINT_DEFAULT_CLUSTER".into(),
-					if provisioning.taint {
-						"1".to_string()
-					} else {
-						"0".to_string()
-					},
-				);
 			}
 
 			if self.depends_on_provision_margin() {

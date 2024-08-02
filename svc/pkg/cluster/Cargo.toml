@@ -1,0 +1,45 @@
+[package]
+name = "cluster"
+version = "0.0.1"
+edition = "2018"
+authors = ["Rivet Gaming, LLC <developer@rivet.gg>"]
+license = "Apache-2.0"
+
+[dependencies]
+acme-lib = "0.9"
+anyhow = "1.0"
+chirp-workflow = { path = "../../../lib/chirp-workflow/core" }
+cloudflare = "0.10.1"
+http = "0.2"
+include_dir = "0.7.3"
+indoc = "1.0"
+lazy_static = "1.4"
+nomad-util = { path = "../../../lib/nomad-util" }
+rand = "0.8"
+rivet-metrics = { path = "../../../lib/metrics" }
+rivet-operation = { path = "../../../lib/operation/core" }
+rivet-runtime = { path = "../../../lib/runtime" }
+s3-util = { path = "../../../lib/s3-util" }
+serde = { version = "1.0.198", features = ["derive"] }
+ssh2 = "0.9.4"
+thiserror = "1.0"
+trust-dns-resolver = { version = "0.23.2", features = ["dns-over-native-tls"] }
+
+ip-info = { path = "../ip/ops/info" }
+linode = { path = "../linode" }
+token-create = { path = "../token/ops/create" }
+
+[dependencies.nomad_client]
+git = "https://github.com/rivet-gg/nomad-client"
+rev = "abb66bf0c30c7ff5b0c695dae952481c33e538b5" # pragma: allowlist secret
+
+[dependencies.sqlx]
+git = "https://github.com/rivet-gg/sqlx"
+rev = "08d6e61aa0572e7ec557abbedb72cebb96e1ac5b"
+default-features = false
+features = [ "json", "ipnetwork" ]
+
+[build-dependencies]
+merkle_hash = "3.6"
+hex = "0.4"
+tokio = { version = "1.29", features = ["full"] }

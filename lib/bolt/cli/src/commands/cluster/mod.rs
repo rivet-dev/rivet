@@ -234,7 +234,8 @@ impl SubCommand {
 				let server_ips = servers
 					.servers
 					.iter()
-					.map(|x| x.public_ip.as_str())
+					.filter_map(|x| x.public_ip.as_ref())
+					.map(|x| x.as_str())
 					.collect::<Vec<_>>();
 
 				// SSH in to servers

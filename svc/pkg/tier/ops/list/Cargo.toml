@@ -6,15 +6,13 @@ authors = ["Rivet Gaming, LLC <developer@rivet.gg>"]
 license = "Apache-2.0"
 
 [dependencies]
-rivet-operation = { path = "../../../../../lib/operation/core" }
 chirp-client = { path = "../../../../../lib/chirp/client" }
+chirp-workflow = { path = "../../../../../lib/chirp-workflow/core" }
 prost = "0.10"
-util-cluster = { package = "rivet-util-cluster", path = "../../../cluster/util" }
+rivet-operation = { path = "../../../../../lib/operation/core" }
 
-cluster-datacenter-get = { path = "../../../cluster/ops/datacenter-get" }
-linode-instance-type-get = { path = "../../../linode/ops/instance-type-get" }
+cluster = { path = "../../../cluster" }
+linode = { path = "../../../linode" }
 
 [dev-dependencies]
 chirp-worker = { path = "../../../../../lib/chirp/worker" }
-
-cluster-datacenter-list = { path = "../../../cluster/ops/datacenter-list" }

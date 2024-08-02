@@ -103,14 +103,7 @@ dependencies = [
  "chirp-client",
  "chirp-workflow",
  "chrono",
- "cluster-datacenter-get",
- "cluster-datacenter-list",
- "cluster-datacenter-resolve-for-name-id",
- "cluster-get",
- "cluster-list",
- "cluster-server-destroy-with-filter",
- "cluster-server-get",
- "cluster-server-list",
+ "cluster",
  "http 0.2.12",
  "hyper 0.14.28",
  "lazy_static",
@@ -125,7 +118,6 @@ dependencies = [
  "rivet-matchmaker",
  "rivet-operation",
  "rivet-pools",
- "rivet-util-cluster",
  "rivet-util-mm",
  "s3-util",
  "serde",
@@ -254,7 +246,7 @@ dependencies = [
  "cloud-service-game-token-create",
  "cloud-version-get",
  "cloud-version-publish",
- "cluster-datacenter-list",
+ "cluster",
  "custom-user-avatar-list-for-game",
  "custom-user-avatar-upload-complete",
  "faker-region",
@@ -308,7 +300,6 @@ dependencies = [
  "rivet-health-checks",
  "rivet-operation",
  "rivet-pools",
- "rivet-util-cluster",
  "rivet-util-job",
  "rivet-util-mm",
  "rivet-util-nsfw",
@@ -779,10 +770,7 @@ dependencies = [
  "async-trait",
  "chirp-client",
  "chrono",
- "cluster-datacenter-get",
- "cluster-datacenter-tls-get",
- "cluster-server-get",
- "cluster-server-resolve-for-ip",
+ "cluster",
  "http 0.2.12",
  "hyper 0.14.28",
  "lazy_static",
@@ -793,7 +781,6 @@ dependencies = [
  "rivet-health-checks",
  "rivet-operation",
  "rivet-pools",
- "rivet-util-cluster",
  "serde",
  "serde_json",
  "thiserror",
@@ -923,7 +910,7 @@ dependencies = [
  "cdn-namespace-domain-create",
  "chirp-client",
  "chrono",
- "cluster-server-list",
+ "cluster",
  "faker-cdn-site",
  "faker-game",
  "faker-game-namespace",
@@ -2492,58 +2479,35 @@ dependencies = [
 ]
 
 [[package]]
-name = "cluster-datacenter-get"
+name = "cluster"
 version = "0.0.1"
 dependencies = [
- "chirp-client",
- "chirp-worker",
- "prost 0.10.4",
- "rivet-operation",
- "sqlx 0.7.4 (git+https://github.com/rivet-gg/sqlx?rev=08d6e61aa0572e7ec557abbedb72cebb96e1ac5b)",
-]
-
-[[package]]
-name = "cluster-datacenter-list"
-version = "0.0.1"
-dependencies = [
- "chirp-client",
- "chirp-worker",
- "prost 0.10.4",
- "rivet-operation",
- "sqlx 0.7.4 (git+https://github.com/rivet-gg/sqlx?rev=08d6e61aa0572e7ec557abbedb72cebb96e1ac5b)",
-]
-
-[[package]]
-name = "cluster-datacenter-location-get"
-version = "0.0.1"
-dependencies = [
- "chirp-client",
- "chirp-worker",
+ "acme-lib",
+ "anyhow",
+ "chirp-workflow",
+ "cloudflare",
+ "hex",
+ "http 0.2.12",
+ "include_dir",
+ "indoc 1.0.9",
  "ip-info",
+ "lazy_static",
+ "linode",
+ "merkle_hash",
+ "nomad-util",
+ "nomad_client",
+ "rand",
+ "rivet-metrics",
  "rivet-operation",
- "sqlx 0.7.4 (git+https://github.com/rivet-gg/sqlx?rev=08d6e61aa0572e7ec557abbedb72cebb96e1ac5b)",
-]
-
-[[package]]
-name = "cluster-datacenter-resolve-for-name-id"
-version = "0.0.1"
-dependencies = [
- "chirp-client",
- "chirp-worker",
- "prost 0.10.4",
- "rivet-operation",
- "sqlx 0.7.4 (git+https://github.com/rivet-gg/sqlx?rev=08d6e61aa0572e7ec557abbedb72cebb96e1ac5b)",
-]
-
-[[package]]
-name = "cluster-datacenter-tls-get"
-version = "0.0.1"
-dependencies = [
- "chirp-client",
- "chirp-worker",
- "prost 0.10.4",
- "rivet-operation",
- "sqlx 0.7.4 (git+https://github.com/rivet-gg/sqlx?rev=08d6e61aa0572e7ec557abbedb72cebb96e1ac5b)",
+ "rivet-runtime",
+ "s3-util",
+ "serde",
+ "sqlx",
+ "ssh2",
+ "thiserror",
+ "token-create",
+ "tokio",
+ "trust-dns-resolver",
 ]
 
 [[package]]
@@ -2551,12 +2515,11 @@ name = "cluster-datacenter-tls-renew"
 version = "0.0.1"
 dependencies = [
  "chirp-client",
- "chirp-worker",
- "cluster-datacenter-get",
+ "chirp-workflow",
+ "cluster",
  "rivet-connection",
  "rivet-health-checks",
  "rivet-metrics",
- "rivet-operation",
  "rivet-runtime",
  "sqlx 0.7.4 (git+https://github.com/rivet-gg/sqlx?rev=08d6e61aa0572e7ec557abbedb72cebb96e1ac5b)",
  "tokio",
@@ -2566,34 +2529,16 @@ dependencies = [
 ]
 
 [[package]]
-name = "cluster-datacenter-topology-get"
-version = "0.0.1"
-dependencies = [
- "chirp-client",
- "chirp-worker",
- "lazy_static",
- "nomad-util",
- "nomad_client",
- "prost 0.10.4",
- "rivet-operation",
- "sqlx 0.7.4 (git+https://github.com/rivet-gg/sqlx?rev=08d6e61aa0572e7ec557abbedb72cebb96e1ac5b)",
-]
-
-[[package]]
 name = "cluster-default-update"
 version = "0.0.1"
 dependencies = [
  "chirp-client",
  "chirp-worker",
- "cluster-datacenter-get",
- "cluster-datacenter-list",
- "cluster-get",
- "prost 0.10.4",
- "reqwest 0.11.27",
+ "chirp-workflow",
+ "cluster",
+ "reqwest",
  "rivet-connection",
- "rivet-operation",
  "rivet-pools",
- "rivet-util-cluster",
  "serde",
  "serde_json",
  "tokio",
@@ -2604,99 +2549,21 @@ dependencies = [
 ]
 
 [[package]]
-name = "cluster-fix-tls"
-version = "0.0.1"
-dependencies = [
- "acme-lib",
- "anyhow",
- "chirp-client",
- "chirp-worker",
- "chrono",
- "cloudflare",
- "cluster-datacenter-get",
- "cluster-datacenter-list",
- "cluster-datacenter-topology-get",
- "http 0.2.12",
- "include_dir",
- "indoc 1.0.9",
- "lazy_static",
- "linode-instance-type-get",
- "linode-server-destroy",
- "linode-server-provision",
- "maplit",
- "nomad-util",
- "openssl",
- "rivet-connection",
- "rivet-convert",
- "rivet-health-checks",
- "rivet-metrics",
- "rivet-operation",
- "rivet-runtime",
- "rivet-util-cluster",
- "s3-util",
- "serde_yaml",
- "ssh2",
- "thiserror",
- "token-create",
- "tokio",
- "tracing",
- "tracing-logfmt",
- "tracing-subscriber",
- "trust-dns-resolver",
-]
-
-[[package]]
 name = "cluster-gc"
 version = "0.0.1"
 dependencies = [
  "chirp-client",
- "chirp-worker",
- "cluster-datacenter-get",
+ "chirp-workflow",
+ "cluster",
  "rivet-connection",
  "rivet-health-checks",
  "rivet-metrics",
- "rivet-operation",
  "rivet-runtime",
- "rivet-util-cluster",
- "sqlx 0.7.4 (git+https://github.com/rivet-gg/sqlx?rev=08d6e61aa0572e7ec557abbedb72cebb96e1ac5b)",
+ "sqlx",
  "tokio",
  "tracing",
  "tracing-logfmt",
  "tracing-subscriber",
-]
-
-[[package]]
-name = "cluster-get"
-version = "0.0.1"
-dependencies = [
- "chirp-client",
- "chirp-worker",
- "prost 0.10.4",
- "rivet-operation",
- "sqlx 0.7.4 (git+https://github.com/rivet-gg/sqlx?rev=08d6e61aa0572e7ec557abbedb72cebb96e1ac5b)",
-]
-
-[[package]]
-name = "cluster-get-for-game"
-version = "0.0.1"
-dependencies = [
- "chirp-client",
- "chirp-worker",
- "prost 0.10.4",
- "rivet-operation",
- "rivet-util-cluster",
- "sqlx 0.7.4 (git+https://github.com/rivet-gg/sqlx?rev=08d6e61aa0572e7ec557abbedb72cebb96e1ac5b)",
-]
-
-[[package]]
-name = "cluster-list"
-version = "0.0.1"
-dependencies = [
- "chirp-client",
- "chirp-worker",
- "prost 0.10.4",
- "rivet-operation",
- "sqlx 0.7.4 (git+https://github.com/rivet-gg/sqlx?rev=08d6e61aa0572e7ec557abbedb72cebb96e1ac5b)",
 ]
 
 [[package]]
@@ -2704,111 +2571,16 @@ name = "cluster-metrics-publish"
 version = "0.0.1"
 dependencies = [
  "chirp-client",
- "chirp-worker",
- "cluster-datacenter-get",
+ "chirp-workflow",
+ "cluster",
  "rivet-connection",
  "rivet-health-checks",
  "rivet-metrics",
- "rivet-operation",
  "rivet-runtime",
- "rivet-util-cluster",
- "sqlx 0.7.4 (git+https://github.com/rivet-gg/sqlx?rev=08d6e61aa0572e7ec557abbedb72cebb96e1ac5b)",
+ "sqlx",
  "tokio",
  "tracing",
  "tracing-subscriber",
-]
-
-[[package]]
-name = "cluster-resolve-for-name-id"
-version = "0.0.1"
-dependencies = [
- "chirp-client",
- "chirp-worker",
- "prost 0.10.4",
- "rivet-operation",
- "sqlx 0.7.4 (git+https://github.com/rivet-gg/sqlx?rev=08d6e61aa0572e7ec557abbedb72cebb96e1ac5b)",
-]
-
-[[package]]
-name = "cluster-server-destroy-with-filter"
-version = "0.0.1"
-dependencies = [
- "chirp-client",
- "chirp-worker",
- "cluster-server-list",
- "rivet-operation",
- "sqlx 0.7.4 (git+https://github.com/rivet-gg/sqlx?rev=08d6e61aa0572e7ec557abbedb72cebb96e1ac5b)",
-]
-
-[[package]]
-name = "cluster-server-get"
-version = "0.0.1"
-dependencies = [
- "chirp-client",
- "chirp-worker",
- "prost 0.10.4",
- "rivet-operation",
- "sqlx 0.7.4 (git+https://github.com/rivet-gg/sqlx?rev=08d6e61aa0572e7ec557abbedb72cebb96e1ac5b)",
-]
-
-[[package]]
-name = "cluster-server-list"
-version = "0.0.1"
-dependencies = [
- "chirp-client",
- "chirp-worker",
- "prost 0.10.4",
- "rivet-operation",
- "sqlx 0.7.4 (git+https://github.com/rivet-gg/sqlx?rev=08d6e61aa0572e7ec557abbedb72cebb96e1ac5b)",
-]
-
-[[package]]
-name = "cluster-server-resolve-for-ip"
-version = "0.0.1"
-dependencies = [
- "chirp-client",
- "chirp-worker",
- "prost 0.10.4",
- "rivet-operation",
- "sqlx 0.7.4 (git+https://github.com/rivet-gg/sqlx?rev=08d6e61aa0572e7ec557abbedb72cebb96e1ac5b)",
-]
-
-[[package]]
-name = "cluster-worker"
-version = "0.0.1"
-dependencies = [
- "acme-lib",
- "anyhow",
- "chirp-client",
- "chirp-worker",
- "chrono",
- "cloudflare",
- "cluster-datacenter-get",
- "cluster-datacenter-list",
- "cluster-datacenter-topology-get",
- "http 0.2.12",
- "include_dir",
- "indoc 1.0.9",
- "lazy_static",
- "linode-instance-type-get",
- "linode-server-destroy",
- "linode-server-provision",
- "maplit",
- "nomad-util",
- "nomad_client",
- "openssl",
- "rivet-convert",
- "rivet-health-checks",
- "rivet-metrics",
- "rivet-runtime",
- "rivet-util-cluster",
- "s3-util",
- "serde_yaml",
- "sqlx 0.7.4 (git+https://github.com/rivet-gg/sqlx?rev=08d6e61aa0572e7ec557abbedb72cebb96e1ac5b)",
- "ssh2",
- "thiserror",
- "token-create",
- "trust-dns-resolver",
 ]
 
 [[package]]
@@ -3944,6 +3716,8 @@ version = "0.0.1"
 dependencies = [
  "chirp-client",
  "chirp-worker",
+ "chirp-workflow",
+ "cluster",
  "faker-team",
  "game-validate",
  "prost 0.10.4",
@@ -5430,20 +5204,34 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0717cef1bc8b636c6e1c1bbdefc09e6322da8a9321966e8928ef80d20f7f770f"
 
 [[package]]
+name = "linode"
+version = "0.0.1"
+dependencies = [
+ "chirp-workflow",
+ "chrono",
+ "cluster",
+ "rand",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "sqlx",
+ "ssh-key",
+]
+
+[[package]]
 name = "linode-gc"
 version = "0.0.1"
 dependencies = [
  "chirp-client",
- "chirp-worker",
+ "chirp-workflow",
  "chrono",
- "reqwest 0.11.27",
+ "cluster",
+ "linode",
+ "reqwest",
  "rivet-connection",
  "rivet-health-checks",
  "rivet-metrics",
- "rivet-operation",
  "rivet-runtime",
- "rivet-util-cluster",
- "rivet-util-linode",
  "serde",
  "serde_json",
  "sqlx 0.7.4 (git+https://github.com/rivet-gg/sqlx?rev=08d6e61aa0572e7ec557abbedb72cebb96e1ac5b)",
@@ -5451,64 +5239,6 @@ dependencies = [
  "tracing",
  "tracing-logfmt",
  "tracing-subscriber",
-]
-
-[[package]]
-name = "linode-instance-type-get"
-version = "0.0.1"
-dependencies = [
- "chirp-client",
- "chirp-worker",
- "rivet-operation",
- "rivet-util-cluster",
- "rivet-util-linode",
- "sqlx 0.7.4 (git+https://github.com/rivet-gg/sqlx?rev=08d6e61aa0572e7ec557abbedb72cebb96e1ac5b)",
-]
-
-[[package]]
-name = "linode-server-destroy"
-version = "0.0.1"
-dependencies = [
- "chirp-client",
- "chirp-worker",
- "cluster-datacenter-get",
- "linode-server-provision",
- "reqwest 0.11.27",
- "rivet-operation",
- "rivet-util-cluster",
- "rivet-util-linode",
- "sqlx 0.7.4 (git+https://github.com/rivet-gg/sqlx?rev=08d6e61aa0572e7ec557abbedb72cebb96e1ac5b)",
-]
-
-[[package]]
-name = "linode-server-provision"
-version = "0.0.1"
-dependencies = [
- "chirp-client",
- "chirp-worker",
- "cluster-datacenter-get",
- "linode-server-destroy",
- "reqwest 0.11.27",
- "rivet-operation",
- "rivet-util-cluster",
- "rivet-util-linode",
- "sqlx 0.7.4 (git+https://github.com/rivet-gg/sqlx?rev=08d6e61aa0572e7ec557abbedb72cebb96e1ac5b)",
-]
-
-[[package]]
-name = "linode-worker"
-version = "0.0.1"
-dependencies = [
- "chirp-client",
- "chirp-worker",
- "cluster-datacenter-get",
- "rivet-convert",
- "rivet-health-checks",
- "rivet-metrics",
- "rivet-runtime",
- "rivet-util-cluster",
- "rivet-util-linode",
- "sqlx 0.7.4 (git+https://github.com/rivet-gg/sqlx?rev=08d6e61aa0572e7ec557abbedb72cebb96e1ac5b)",
 ]
 
 [[package]]
@@ -5918,6 +5648,7 @@ dependencies = [
  "build-get",
  "chirp-client",
  "chirp-worker",
+ "cluster",
  "faker-build",
  "faker-game",
  "faker-region",
@@ -6188,6 +5919,7 @@ dependencies = [
  "chirp-client",
  "chirp-worker",
  "chrono",
+ "cluster",
  "csv",
  "faker-build",
  "faker-game",
@@ -6250,14 +5982,11 @@ dependencies = [
  "cf-custom-hostname-worker",
  "chirp-client",
  "cloud-worker",
- "cluster-worker",
- "ds-worker",
  "external-worker",
  "game-user-worker",
  "job-log-worker",
  "job-run-worker",
  "kv-worker",
- "linode-worker",
  "mm-worker",
  "rivet-connection",
  "rivet-health-checks",
@@ -6282,6 +6011,8 @@ name = "monolith-workflow-worker"
 version = "0.0.1"
 dependencies = [
  "chirp-workflow",
+ "cluster",
+ "linode",
  "rivet-health-checks",
  "rivet-metrics",
  "rivet-runtime",
@@ -6362,7 +6093,9 @@ version = "0.0.1"
 dependencies = [
  "chirp-client",
  "chirp-worker",
+ "chirp-workflow",
  "chrono",
+ "cluster",
  "futures-util",
  "indoc 1.0.9",
  "lazy_static",
@@ -7275,8 +7008,8 @@ version = "0.0.1"
 dependencies = [
  "chirp-client",
  "chirp-worker",
- "cluster-datacenter-get",
- "cluster-datacenter-location-get",
+ "chirp-workflow",
+ "cluster",
  "faker-region",
  "prost 0.10.4",
  "rivet-operation",
@@ -7289,12 +7022,12 @@ version = "0.0.1"
 dependencies = [
  "chirp-client",
  "chirp-worker",
- "cluster-datacenter-list",
+ "chirp-workflow",
+ "cluster",
  "faker-region",
  "prost 0.10.4",
  "rivet-operation",
- "rivet-util-cluster",
- "sqlx 0.7.4 (git+https://github.com/rivet-gg/sqlx?rev=08d6e61aa0572e7ec557abbedb72cebb96e1ac5b)",
+ "sqlx",
 ]
 
 [[package]]
@@ -7303,8 +7036,8 @@ version = "0.0.1"
 dependencies = [
  "chirp-client",
  "chirp-worker",
- "cluster-datacenter-list",
- "cluster-get-for-game",
+ "chirp-workflow",
+ "cluster",
  "faker-region",
  "prost 0.10.4",
  "rivet-operation",
@@ -7332,7 +7065,8 @@ version = "0.0.1"
 dependencies = [
  "chirp-client",
  "chirp-worker",
- "cluster-datacenter-get",
+ "chirp-workflow",
+ "cluster",
  "faker-region",
  "prost 0.10.4",
  "region-get",
@@ -7347,7 +7081,8 @@ version = "0.0.1"
 dependencies = [
  "chirp-client",
  "chirp-worker",
- "cluster-datacenter-get",
+ "chirp-workflow",
+ "cluster",
  "faker-region",
  "prost 0.10.4",
  "region-get",
@@ -7620,6 +7355,7 @@ dependencies = [
  "cdn-namespace-get",
  "chirp-client",
  "chrono",
+ "cluster",
  "game-get",
  "game-namespace-get",
  "game-namespace-list",
@@ -7949,40 +7685,6 @@ name = "rivet-util-cdn"
 version = "0.1.0"
 
 [[package]]
-name = "rivet-util-cluster"
-version = "0.1.0"
-dependencies = [
- "hex",
- "lazy_static",
- "merkle_hash",
- "rivet-metrics",
- "rivet-util",
- "tokio",
- "types",
- "uuid",
-]
-
-[[package]]
-name = "rivet-util-ds"
-version = "0.1.0"
-dependencies = [
- "bit-vec",
- "chirp-client",
- "heck 0.3.3",
- "http 0.2.12",
- "ip-info",
- "mm-lobby-list-for-user-id",
- "region-get",
- "rivet-operation",
- "rivet-util",
- "serde",
- "serde_json",
- "strum 0.24.1",
- "user-identity-get",
- "uuid",
-]
-
-[[package]]
 name = "rivet-util-env"
 version = "0.1.0"
 dependencies = [
@@ -8012,19 +7714,6 @@ dependencies = [
 [[package]]
 name = "rivet-util-kv"
 version = "0.1.0"
-
-[[package]]
-name = "rivet-util-linode"
-version = "0.1.0"
-dependencies = [
- "chrono",
- "rand",
- "reqwest 0.11.27",
- "rivet-operation",
- "serde",
- "serde_json",
- "ssh-key",
-]
 
 [[package]]
 name = "rivet-util-macros"
@@ -8513,19 +8202,6 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 2.0.58",
-]
-
-[[package]]
-name = "serde_yaml"
-version = "0.9.34+deprecated"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6a8b1a1a2ebf674015cc02edccce75287f1a0130d394307b36743c2f5d504b47"
-dependencies = [
- "indexmap 2.2.6",
- "itoa 1.0.11",
- "ryu",
- "serde",
- "unsafe-libyaml",
 ]
 
 [[package]]
@@ -9410,12 +9086,11 @@ version = "0.0.1"
 dependencies = [
  "chirp-client",
  "chirp-worker",
- "cluster-datacenter-get",
- "cluster-datacenter-list",
- "linode-instance-type-get",
+ "chirp-workflow",
+ "cluster",
+ "linode",
  "prost 0.10.4",
  "rivet-operation",
- "rivet-util-cluster",
 ]
 
 [[package]]
@@ -10045,12 +9720,6 @@ name = "unicode_categories"
 version = "0.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "39ec24b3121d976906ece63c9daad25b85969647682eee313cb5779fdd69e14e"
-
-[[package]]
-name = "unsafe-libyaml"
-version = "0.2.11"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "673aac59facbab8a9007c7f6108d11f63b603f7cabff99fabf650fea5c32b861"
 
 [[package]]
 name = "untrusted"

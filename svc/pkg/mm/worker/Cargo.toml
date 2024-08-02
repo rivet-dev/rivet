@@ -29,6 +29,7 @@ util-job = { package = "rivet-util-job", path = "../../job/util" }
 util-mm = { package = "rivet-util-mm", path = "../util" }
 
 build-get = { path = "../../build/ops/get" }
+cluster = { path = "../../cluster" }
 game-get = { path = "../../game/ops/get" }
 game-namespace-get = { path = "../../game/ops/namespace-get" }
 game-version-get = { path = "../../game/ops/version-get" }

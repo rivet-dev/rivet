@@ -93,6 +93,10 @@ impl ActivityCtx {
 		self.name
 	}
 
+	pub fn workflow_id(&self) -> Uuid {
+		self.workflow_id
+	}
+
 	pub fn req_id(&self) -> Uuid {
 		self.op_ctx.req_id()
 	}

@@ -28,10 +28,6 @@ tracing = "0.1"
 tracing-subscriber = { version = "0.3", default-features = false, features = ["fmt", "json", "ansi"] }
 url = "2.2.2"
 uuid = { version = "1", features = ["v4"] }
-util-cluster = { package = "rivet-util-cluster", path = "../../pkg/cluster/util" }
 
-cluster-datacenter-get = { path = "../../pkg/cluster/ops/datacenter-get" }
-cluster-datacenter-tls-get = { path = "../../pkg/cluster/ops/datacenter-tls-get" }
-cluster-server-get = { path = "../../pkg/cluster/ops/server-get" }
-cluster-server-resolve-for-ip = { path = "../../pkg/cluster/ops/server-resolve-for-ip" }
+cluster = { path = "../../pkg/cluster" }
 

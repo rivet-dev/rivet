@@ -1,5 +1,4 @@
 use api_helper::{anchor::WatchIndexQuery, ctx::Ctx};
-use proto::backend;
 use rivet_operation::prelude::*;
 use serde::{Deserialize, Serialize};
 
@@ -43,19 +42,21 @@ pub async fn build_ip_allowlist(
 	ctx: &Ctx<Auth>,
 	config: &mut types::TraefikConfigResponse,
 ) -> GlobalResult<()> {
-	let servers_res = op!([ctx] cluster_server_list {
-		filter: Some(backend::cluster::ServerFilter {
-			pool_types: vec![backend::cluster::PoolType::Gg as i32],
-			..Default::default()
-		}),
-		include_destroyed: false,
-	})
-	.await?;
+	let servers_res = ctx
+		.op(cluster::ops::server::list::Input {
+			filter: cluster::types::Filter {
+				pool_types: Some(vec![cluster::types::PoolType::Gg]),
+				..Default::default()
+			},
+			include_destroyed: false,
+		})
+		.await?;
 
 	let public_ips = servers_res
 		.servers
 		.iter()
-		.filter_map(|server| server.public_ip.clone())
+		.filter_map(|server| server.public_ip)
+		.map(|ip| ip.to_string())
 		.collect::<Vec<_>>();
 
 	config.tcp.middlewares.insert(

@@ -1,11 +1,15 @@
+use std::convert::TryInto;
+
+use chirp_workflow::prelude::*;
+use cluster::types::PoolType;
 use futures_util::FutureExt;
-use proto::backend::{self, pkg::*};
-use rivet_operation::prelude::*;
+use serde_json::json;
 
 #[derive(sqlx::FromRow)]
 struct ServerRow {
 	server_id: Uuid,
 	datacenter_id: Uuid,
+	pool_type2: Option<sqlx::types::Json<PoolType>>,
 	pool_type: i64,
 	drain_ts: i64,
 }
@@ -14,33 +18,34 @@ struct ServerRow {
 pub async fn run_from_env(ts: i64, pools: rivet_pools::Pools) -> GlobalResult<()> {
 	let client = chirp_client::SharedClient::from_env(pools.clone())?.wrap_new("cluster-gc");
 	let cache = rivet_cache::CacheInner::from_env(pools.clone())?;
-	let ctx = OperationContext::new(
-		"cluster-gc".into(),
-		std::time::Duration::from_secs(60),
+	let ctx = StandaloneCtx::new(
+		chirp_workflow::compat::db_from_pools(&pools).await?,
 		rivet_connection::Connection::new(client, pools, cache),
-		Uuid::new_v4(),
-		Uuid::new_v4(),
-		util::timestamp::now(),
-		util::timestamp::now(),
-		(),
-	);
+		"cluster-gc",
+	)
+	.await?;
 
 	let datacenter_ids = rivet_pools::utils::crdb::tx(&ctx.crdb().await?, |tx| {
-		let ctx = ctx.base();
+		let ctx = ctx.clone();
 
 		async move {
+			let pool_types = [
+				serde_json::to_string(&PoolType::Gg)?,
+				serde_json::to_string(&PoolType::Ats)?,
+			];
+
 			// Select all draining gg and ats servers
 			let servers = sql_fetch_all!(
 				[ctx, ServerRow, @tx tx]
 				"
-				SELECT server_id, datacenter_id, pool_type, drain_ts
+				SELECT server_id, datacenter_id, pool_type, pool_type2, drain_ts
 				FROM db_cluster.servers
 				WHERE
-					pool_type = ANY($1) AND
+					pool_type2 = ANY($1) AND
 					cloud_destroy_ts IS NULL AND
 					drain_ts IS NOT NULL
 				",
-				&[backend::cluster::PoolType::Gg as i64, backend::cluster::PoolType::Ats as i64],
+				&pool_types,
 				ts,
 			)
 			.await?;
@@ -49,26 +54,31 @@ pub async fn run_from_env(ts: i64, pools: rivet_pools::Pools) -> GlobalResult<()
 				return Ok(Vec::new());
 			}
 
-			let datacenters_res = op!([ctx] cluster_datacenter_get {
-				datacenter_ids: servers
-					.iter()
-					.map(|server| server.datacenter_id.into())
-					.collect::<Vec<_>>(),
-			})
-			.await?;
+			let datacenters_res = ctx
+				.op(cluster::ops::datacenter::get::Input {
+					datacenter_ids: servers
+						.iter()
+						.map(|server| server.datacenter_id)
+						.collect::<Vec<_>>(),
+				})
+				.await?;
 
 			let drained_servers = servers
 				.into_iter()
 				.map(|server| {
-					let dc_id_proto = Some(server.datacenter_id.into());
+					let pool_type = if let Some(pool_type) = server.pool_type2.clone() {
+						pool_type.0
+					} else {
+						server.pool_type.try_into()?
+					};
 					let datacenter = unwrap!(datacenters_res
 						.datacenters
 						.iter()
-						.find(|dc| dc.datacenter_id == dc_id_proto));
+						.find(|dc| dc.datacenter_id == server.datacenter_id));
 					let pool = unwrap!(datacenter
 						.pools
 						.iter()
-						.find(|pool| pool.pool_type == server.pool_type as i32));
+						.find(|pool| pool.pool_type == pool_type));
 					let drain_completed = server.drain_ts < ts - pool.drain_timeout as i64;
 
 					tracing::info!(
@@ -118,9 +128,12 @@ pub async fn run_from_env(ts: i64, pools: rivet_pools::Pools) -> GlobalResult<()
 
 	// Scale
 	for datacenter_id in datacenter_ids {
-		msg!([ctx] cluster::msg::datacenter_scale(datacenter_id) {
-			datacenter_id: Some(datacenter_id.into()),
-		})
+		ctx.tagged_signal(
+			&json!({
+				"datacenter_id": datacenter_id,
+			}),
+			cluster::workflows::datacenter::Scale {},
+		)
 		.await?;
 	}
 

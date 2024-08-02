@@ -10,14 +10,17 @@ pub async fn list_tiers(
 	ctx: Ctx<Auth>,
 	_watch_index: WatchIndexQuery,
 ) -> GlobalResult<models::CloudGetRegionTiersResponse> {
-	let datacenters_res = op!([ctx] cluster_datacenter_list {
-		cluster_ids: vec![util_cluster::default_cluster_id().into()],
-	})
-	.await?;
+	let datacenters_res = ctx.op(cluster::ops::datacenter::list::Input {
+		cluster_ids: vec![cluster::util::default_cluster_id()],
+	}).await?;
 	let cluster = unwrap!(datacenters_res.clusters.first());
 
 	let res = op!([ctx] tier_list {
-		region_ids: cluster.datacenter_ids.clone(),
+		region_ids: cluster.datacenter_ids
+			.iter()
+			.cloned()
+			.map(Into::into)
+			.collect::<Vec<_>>(),
 	})
 	.await?;
 

@@ -1,14 +1,20 @@
 // Forwards compatibility from old operation ctx to new workflows
 
-use std::{fmt::Debug, time::Duration};
+use std::fmt::Debug;
 
 use global_error::prelude::*;
 use serde::Serialize;
 use uuid::Uuid;
 
 use crate::{
-	ctx::api::WORKFLOW_TIMEOUT, DatabaseHandle, DatabasePostgres, Operation, OperationCtx,
-	OperationInput, Signal, Workflow, WorkflowError, WorkflowInput,
+	ctx::{
+		api::WORKFLOW_TIMEOUT,
+		message::{MessageCtx, SubscriptionHandle},
+		workflow::SUB_WORKFLOW_RETRY,
+	},
+	message::Message,
+	DatabaseHandle, DatabasePostgres, Operation, OperationCtx, OperationInput, Signal, Workflow,
+	WorkflowError, WorkflowInput,
 };
 
 pub async fn dispatch_workflow<I, B>(
@@ -83,30 +89,32 @@ where
 }
 
 /// Wait for a given workflow to complete.
-/// **IMPORTANT:** Has no timeout.
+/// 60 second timeout.
 pub async fn wait_for_workflow<W: Workflow, B: Debug + Clone>(
 	ctx: &rivet_operation::OperationContext<B>,
 	workflow_id: Uuid,
 ) -> GlobalResult<W::Output> {
 	tracing::info!(name=W::NAME, id=?workflow_id, "waiting for workflow");
 
-	let period = Duration::from_millis(50);
-	let mut interval = tokio::time::interval(period);
-	loop {
-		interval.tick().await;
+	tokio::time::timeout(WORKFLOW_TIMEOUT, async move {
+		let mut interval = tokio::time::interval(SUB_WORKFLOW_RETRY);
+		loop {
+			interval.tick().await;
 
-		// Check if state finished
-		let workflow = db_from_ctx(ctx)
-			.await?
-			.get_workflow(workflow_id)
-			.await
-			.map_err(GlobalError::raw)?
-			.ok_or(WorkflowError::WorkflowNotFound)
-			.map_err(GlobalError::raw)?;
-		if let Some(output) = workflow.parse_output::<W>().map_err(GlobalError::raw)? {
-			return Ok(output);
+			// Check if state finished
+			let workflow = db_from_ctx(ctx)
+				.await?
+				.get_workflow(workflow_id)
+				.await
+				.map_err(GlobalError::raw)?
+				.ok_or(WorkflowError::WorkflowNotFound)
+				.map_err(GlobalError::raw)?;
+			if let Some(output) = workflow.parse_output::<W>().map_err(GlobalError::raw)? {
+				return Ok(output);
+			}
 		}
-	}
+	})
+	.await?
 }
 
 /// Dispatch a new workflow and wait for it to complete. Has a 60s timeout.
@@ -121,11 +129,7 @@ where
 {
 	let workflow_id = dispatch_workflow(ctx, input).await?;
 
-	tokio::time::timeout(
-		WORKFLOW_TIMEOUT,
-		wait_for_workflow::<I::Workflow, _>(ctx, workflow_id),
-	)
-	.await?
+	wait_for_workflow::<I::Workflow, _>(ctx, workflow_id).await
 }
 
 /// Dispatch a new workflow and wait for it to complete. Has a 60s timeout.
@@ -141,11 +145,7 @@ where
 {
 	let workflow_id = dispatch_tagged_workflow(ctx, tags, input).await?;
 
-	tokio::time::timeout(
-		WORKFLOW_TIMEOUT,
-		wait_for_workflow::<I::Workflow, _>(ctx, workflow_id),
-	)
-	.await?
+	wait_for_workflow::<I::Workflow, _>(ctx, workflow_id).await
 }
 
 pub async fn signal<I: Signal + Serialize, B: Debug + Clone>(
@@ -224,6 +224,21 @@ where
 		.await
 		.map_err(WorkflowError::OperationFailure)
 		.map_err(GlobalError::raw)
+}
+
+pub async fn subscribe<M, B>(
+	ctx: &rivet_operation::OperationContext<B>,
+	tags: &serde_json::Value,
+) -> GlobalResult<SubscriptionHandle<M>>
+where
+	M: Message,
+	B: Debug + Clone,
+{
+	let msg_ctx = MessageCtx::new(ctx.conn(), ctx.req_id(), ctx.ray_id())
+		.await
+		.map_err(GlobalError::raw)?;
+
+	msg_ctx.subscribe::<M>(tags).await.map_err(GlobalError::raw)
 }
 
 // Get crdb pool as a trait object

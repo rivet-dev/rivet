@@ -6,11 +6,13 @@ authors = ["Rivet Gaming, LLC <developer@rivet.gg>"]
 license = "Apache-2.0"
 
 [dependencies]
-rivet-operation = { path = "../../../../../lib/operation/core" }
 chirp-client = { path = "../../../../../lib/chirp/client" }
+chirp-workflow = { path = "../../../../../lib/chirp-workflow/core" }
 prost = "0.10"
+rivet-operation = { path = "../../../../../lib/operation/core" }
 util-team = { package = "rivet-util-team", path = "../../../team/util" }
 
+cluster = { path = "../../../cluster" }
 game-validate = { path = "../validate" }
 team-get = { path = "../../../team/ops/get" }
 

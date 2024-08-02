@@ -624,9 +624,6 @@ pub struct NsfwCheck {
 pub struct Provisioning {
 	/// Default cluster.
 	pub cluster: Option<ProvisioningCluster>,
-	/// Whether or not to send a taint message in the next cluster update.
-	#[serde(default)]
-	pub taint: bool,
 	/// How many empty job servers to have at all times. Used in the simple provisioning algorithm on Rivet
 	/// Enterprise.
 	#[serde(default = "default_job_server_provision_margin")]

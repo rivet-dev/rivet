@@ -1,9 +1,8 @@
 use std::collections::HashMap;
 
-use proto::backend::{self, pkg::*};
-use rivet_operation::prelude::*;
+use chirp_workflow::prelude::*;
 use serde::Deserialize;
-use uuid::Uuid;
+use serde_json::json;
 
 #[derive(Deserialize)]
 struct Cluster {
@@ -28,10 +27,10 @@ enum Provider {
 	Linode,
 }
 
-impl From<Provider> for backend::cluster::Provider {
-	fn from(value: Provider) -> backend::cluster::Provider {
+impl From<Provider> for cluster::types::Provider {
+	fn from(value: Provider) -> cluster::types::Provider {
 		match value {
-			Provider::Linode => backend::cluster::Provider::Linode,
+			Provider::Linode => cluster::types::Provider::Linode,
 		}
 	}
 }
@@ -55,12 +54,12 @@ enum PoolType {
 	Ats,
 }
 
-impl From<PoolType> for backend::cluster::PoolType {
-	fn from(value: PoolType) -> backend::cluster::PoolType {
+impl From<PoolType> for cluster::types::PoolType {
+	fn from(value: PoolType) -> cluster::types::PoolType {
 		match value {
-			PoolType::Job => backend::cluster::PoolType::Job,
-			PoolType::Gg => backend::cluster::PoolType::Gg,
-			PoolType::Ats => backend::cluster::PoolType::Ats,
+			PoolType::Job => cluster::types::PoolType::Job,
+			PoolType::Gg => cluster::types::PoolType::Gg,
+			PoolType::Ats => cluster::types::PoolType::Ats,
 		}
 	}
 }
@@ -70,9 +69,9 @@ struct Hardware {
 	name: String,
 }
 
-impl From<Hardware> for backend::cluster::Hardware {
-	fn from(value: Hardware) -> backend::cluster::Hardware {
-		backend::cluster::Hardware {
+impl From<Hardware> for cluster::types::Hardware {
+	fn from(value: Hardware) -> cluster::types::Hardware {
+		cluster::types::Hardware {
 			provider_hardware: value.name,
 		}
 	}
@@ -86,13 +85,13 @@ enum BuildDeliveryMethod {
 	S3Direct,
 }
 
-impl From<BuildDeliveryMethod> for backend::cluster::BuildDeliveryMethod {
-	fn from(value: BuildDeliveryMethod) -> backend::cluster::BuildDeliveryMethod {
+impl From<BuildDeliveryMethod> for cluster::types::BuildDeliveryMethod {
+	fn from(value: BuildDeliveryMethod) -> cluster::types::BuildDeliveryMethod {
 		match value {
 			BuildDeliveryMethod::TrafficServer => {
-				backend::cluster::BuildDeliveryMethod::TrafficServer
+				cluster::types::BuildDeliveryMethod::TrafficServer
 			}
-			BuildDeliveryMethod::S3Direct => backend::cluster::BuildDeliveryMethod::S3Direct,
+			BuildDeliveryMethod::S3Direct => cluster::types::BuildDeliveryMethod::S3Direct,
 		}
 	}
 }
@@ -103,16 +102,12 @@ pub async fn run_from_env(use_autoscaler: bool) -> GlobalResult<()> {
 	let client =
 		chirp_client::SharedClient::from_env(pools.clone())?.wrap_new("cluster-default-update");
 	let cache = rivet_cache::CacheInner::from_env(pools.clone())?;
-	let ctx = OperationContext::new(
-		"cluster-default-update".into(),
-		std::time::Duration::from_secs(60),
+	let ctx = StandaloneCtx::new(
+		chirp_workflow::compat::db_from_pools(&pools).await?,
 		rivet_connection::Connection::new(client, pools, cache),
-		Uuid::new_v4(),
-		Uuid::new_v4(),
-		util::timestamp::now(),
-		util::timestamp::now(),
-		(),
-	);
+		"cluster-default-update",
+	)
+	.await?;
 
 	// Read config from env
 	let Some(config_json) = util::env::var("RIVET_DEFAULT_CLUSTER_CONFIG").ok() else {
@@ -121,64 +116,56 @@ pub async fn run_from_env(use_autoscaler: bool) -> GlobalResult<()> {
 	};
 	let config = serde_json::from_str::<Cluster>(&config_json)?;
 
-	let taint = util::env::var("RIVET_TAINT_DEFAULT_CLUSTER")
-		.ok()
-		.unwrap_or_else(|| "0".to_string())
-		== "1";
-
 	// HACK: When deploying both monolith worker and this service for the first time, there is a race
 	// condition which might result in the message being published from here but not caught by
 	// monolith-worker, resulting in nothing happening.
 	tokio::time::sleep(std::time::Duration::from_secs(5)).await;
 
-	let cluster_id = util_cluster::default_cluster_id();
+	let cluster_id = cluster::util::default_cluster_id();
 
 	let (cluster_res, datacenter_list_res) = tokio::try_join!(
 		// Check if cluster already exists
-		op!([ctx] cluster_get {
-			cluster_ids: vec![cluster_id.into()],
+		ctx.op(cluster::ops::get::Input {
+			cluster_ids: vec![cluster_id],
 		}),
-		op!([ctx] cluster_datacenter_list {
-			cluster_ids: vec![cluster_id.into()],
+		ctx.op(cluster::ops::datacenter::list::Input {
+			cluster_ids: vec![cluster_id],
 		}),
 	)?;
 
 	// Get all datacenters
 	let cluster = unwrap!(datacenter_list_res.clusters.first());
-	let datacenters_res = op!([ctx] cluster_datacenter_get {
+	let datacenters_res = ctx.op(cluster::ops::datacenter::get::Input {
 		datacenter_ids: cluster.datacenter_ids.clone(),
-	})
-	.await?;
+	}).await?;
 
 	if cluster_res.clusters.is_empty() {
 		tracing::warn!("creating default cluster");
 
-		msg!([ctx] cluster::msg::create(cluster_id) -> cluster::msg::create_complete {
-			cluster_id: Some(cluster_id.into()),
+		ctx.tagged_workflow(&json!({
+			"cluster_id": cluster_id,
+		}), cluster::workflows::cluster::Input {
+			cluster_id,
 			name_id: config.name_id.clone(),
 			owner_team_id: None,
-		})
-		.await?;
+		}).await?;
 	}
 
 	for existing_datacenter in &datacenters_res.datacenters {
-		let datacenter_id = unwrap_ref!(existing_datacenter.datacenter_id).as_uuid();
-
 		if !config
 			.datacenters
 			.iter()
-			.any(|(_, dc)| dc.datacenter_id == datacenter_id)
+			.any(|(_, dc)| dc.datacenter_id == existing_datacenter.datacenter_id)
 		{
 			// TODO: Delete datacenters
 		}
 	}
 
 	for (name_id, datacenter) in config.datacenters {
-		let datacenter_id_proto = datacenter.datacenter_id.into();
 		let existing_datacenter = datacenters_res
 			.datacenters
 			.iter()
-			.any(|dc| dc.datacenter_id == Some(datacenter_id_proto));
+			.any(|dc| dc.datacenter_id == datacenter.datacenter_id);
 
 		// Update existing datacenter
 		if existing_datacenter {
@@ -197,8 +184,8 @@ pub async fn run_from_env(use_autoscaler: bool) -> GlobalResult<()> {
 						}
 					};
 
-					cluster::msg::datacenter_update::PoolUpdate {
-						pool_type: Into::<backend::cluster::PoolType>::into(pool_type) as i32,
+					cluster::types::PoolUpdate {
+						pool_type: pool_type.into(),
 						hardware: pool
 							.hardware
 							.into_iter()
@@ -212,28 +199,29 @@ pub async fn run_from_env(use_autoscaler: bool) -> GlobalResult<()> {
 				})
 				.collect::<Vec<_>>();
 
-			msg!([ctx] @wait cluster::msg::datacenter_update(datacenter.datacenter_id) {
-				datacenter_id: Some(datacenter_id_proto),
+			ctx.tagged_signal(&json!({
+				"datacenter_id": datacenter.datacenter_id,
+			}), cluster::workflows::datacenter::Update {
 				pools: new_pools,
 				prebakes_enabled: Some(datacenter.prebakes_enabled),
-			})
-			.await?;
+			}).await?;
 		}
 		// Create new datacenter
 		else {
-			msg!([ctx] @wait cluster::msg::datacenter_create(datacenter.datacenter_id) {
-				datacenter_id: Some(datacenter_id_proto),
-				cluster_id: Some(cluster_id.into()),
+			ctx.tagged_signal(&json!({
+				"cluster_id": cluster_id,
+			}), cluster::workflows::cluster::DatacenterCreate {
+				datacenter_id: datacenter.datacenter_id,
 				name_id,
 				display_name: datacenter.display_name,
-
-				provider: Into::<backend::cluster::Provider>::into(datacenter.provider) as i32,
+	
+				provider: datacenter.provider.into(),
 				provider_datacenter_id: datacenter.provider_datacenter_name,
 				provider_api_token: None,
-
+	
 				pools: datacenter.pools.into_iter().map(|(pool_type, pool)| {
-					backend::cluster::Pool {
-						pool_type: Into::<backend::cluster::PoolType>::into(pool_type) as i32,
+					cluster::types::Pool {
+						pool_type: pool_type.into(),
 						hardware: pool.hardware.into_iter().map(Into::into).collect::<Vec<_>>(),
 						desired_count: pool.desired_count,
 						min_count: pool.min_count,
@@ -241,27 +229,10 @@ pub async fn run_from_env(use_autoscaler: bool) -> GlobalResult<()> {
 						drain_timeout: pool.drain_timeout,
 					}
 				}).collect::<Vec<_>>(),
-
-				build_delivery_method: Into::<backend::cluster::BuildDeliveryMethod>::into(datacenter.build_delivery_method) as i32,
+	
+				build_delivery_method: datacenter.build_delivery_method.into(),
 				prebakes_enabled: datacenter.prebakes_enabled,
-			})
-			.await?;
-		}
-
-		// TODO: Both this message and datacenter-create/datacenter-update (above) publish datacenter-scale.
-		// This results in double provisioning until datacenter-scale is published again, cleaning up the
-		// excess.
-		// Taint datacenter
-		if taint {
-			let request_id = Uuid::new_v4();
-			msg!([ctx] @wait cluster::msg::server_taint(request_id) {
-				filter: Some(backend::cluster::ServerFilter {
-					filter_datacenter_ids: true,
-					datacenter_ids: vec![datacenter_id_proto],
-					..Default::default()
-				}),
-			})
-			.await?;
+			}).await?;
 		}
 	}
 

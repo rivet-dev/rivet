@@ -1,77 +1,78 @@
-use proto::backend::{self, pkg::*};
+// NOTE: This file should be moved to cluster/types.rs but there is a circular dependency with region-get
+
 use rivet_api::models;
 use rivet_operation::prelude::*;
 
 use crate::{ApiFrom, ApiInto, ApiTryFrom};
 
-impl ApiFrom<models::AdminClustersPoolType> for backend::cluster::PoolType {
-	fn api_from(value: models::AdminClustersPoolType) -> backend::cluster::PoolType {
+impl ApiFrom<models::AdminClustersPoolType> for cluster::types::PoolType {
+	fn api_from(value: models::AdminClustersPoolType) -> cluster::types::PoolType {
 		match value {
-			models::AdminClustersPoolType::Job => backend::cluster::PoolType::Job,
-			models::AdminClustersPoolType::Gg => backend::cluster::PoolType::Gg,
-			models::AdminClustersPoolType::Ats => backend::cluster::PoolType::Ats,
+			models::AdminClustersPoolType::Job => cluster::types::PoolType::Job,
+			models::AdminClustersPoolType::Gg => cluster::types::PoolType::Gg,
+			models::AdminClustersPoolType::Ats => cluster::types::PoolType::Ats,
 		}
 	}
 }
 
-impl ApiFrom<backend::cluster::PoolType> for models::AdminClustersPoolType {
-	fn api_from(value: backend::cluster::PoolType) -> models::AdminClustersPoolType {
+impl ApiFrom<cluster::types::PoolType> for models::AdminClustersPoolType {
+	fn api_from(value: cluster::types::PoolType) -> models::AdminClustersPoolType {
 		match value {
-			backend::cluster::PoolType::Job => models::AdminClustersPoolType::Job,
-			backend::cluster::PoolType::Gg => models::AdminClustersPoolType::Gg,
-			backend::cluster::PoolType::Ats => models::AdminClustersPoolType::Ats,
+			cluster::types::PoolType::Job => models::AdminClustersPoolType::Job,
+			cluster::types::PoolType::Gg => models::AdminClustersPoolType::Gg,
+			cluster::types::PoolType::Ats => models::AdminClustersPoolType::Ats,
 		}
 	}
 }
 
-impl ApiFrom<models::AdminClustersProvider> for backend::cluster::Provider {
-	fn api_from(value: models::AdminClustersProvider) -> backend::cluster::Provider {
+impl ApiFrom<models::AdminClustersProvider> for cluster::types::Provider {
+	fn api_from(value: models::AdminClustersProvider) -> cluster::types::Provider {
 		match value {
-			models::AdminClustersProvider::Linode => backend::cluster::Provider::Linode,
+			models::AdminClustersProvider::Linode => cluster::types::Provider::Linode,
 		}
 	}
 }
 
-impl ApiFrom<backend::cluster::Provider> for models::AdminClustersProvider {
-	fn api_from(value: backend::cluster::Provider) -> models::AdminClustersProvider {
+impl ApiFrom<cluster::types::Provider> for models::AdminClustersProvider {
+	fn api_from(value: cluster::types::Provider) -> models::AdminClustersProvider {
 		match value {
-			backend::cluster::Provider::Linode => models::AdminClustersProvider::Linode,
+			cluster::types::Provider::Linode => models::AdminClustersProvider::Linode,
 		}
 	}
 }
 
-impl ApiFrom<models::AdminClustersBuildDeliveryMethod> for backend::cluster::BuildDeliveryMethod {
-	fn api_from(value: models::AdminClustersBuildDeliveryMethod) -> backend::cluster::BuildDeliveryMethod {
+impl ApiFrom<models::AdminClustersBuildDeliveryMethod> for cluster::types::BuildDeliveryMethod {
+	fn api_from(value: models::AdminClustersBuildDeliveryMethod) -> cluster::types::BuildDeliveryMethod {
 		match value {
 			models::AdminClustersBuildDeliveryMethod::TrafficServer => {
-				backend::cluster::BuildDeliveryMethod::TrafficServer
+				cluster::types::BuildDeliveryMethod::TrafficServer
 			}
 			models::AdminClustersBuildDeliveryMethod::S3Direct => {
-				backend::cluster::BuildDeliveryMethod::S3Direct
+				cluster::types::BuildDeliveryMethod::S3Direct
 			}
 		}
 	}
 }
 
-impl ApiFrom<backend::cluster::BuildDeliveryMethod> for models::AdminClustersBuildDeliveryMethod {
-	fn api_from(value: backend::cluster::BuildDeliveryMethod) -> models::AdminClustersBuildDeliveryMethod {
+impl ApiFrom<cluster::types::BuildDeliveryMethod> for models::AdminClustersBuildDeliveryMethod {
+	fn api_from(value: cluster::types::BuildDeliveryMethod) -> models::AdminClustersBuildDeliveryMethod {
 		match value {
-			backend::cluster::BuildDeliveryMethod::TrafficServer => {
+			cluster::types::BuildDeliveryMethod::TrafficServer => {
 				models::AdminClustersBuildDeliveryMethod::TrafficServer
 			}
-			backend::cluster::BuildDeliveryMethod::S3Direct => {
+			cluster::types::BuildDeliveryMethod::S3Direct => {
 				models::AdminClustersBuildDeliveryMethod::S3Direct
 			}
 		}
 	}
 }
 
-impl ApiTryFrom<backend::cluster::Cluster> for models::AdminClustersCluster {
+impl ApiTryFrom<cluster::types::Cluster> for models::AdminClustersCluster {
 	type Error = GlobalError;
 
-	fn api_try_from(value: backend::cluster::Cluster) -> GlobalResult<models::AdminClustersCluster> {
+	fn api_try_from(value: cluster::types::Cluster) -> GlobalResult<models::AdminClustersCluster> {
 		Ok(models::AdminClustersCluster {
-			cluster_id: unwrap!(value.cluster_id).into(),
+			cluster_id: value.cluster_id,
 			name_id: value.name_id,
 			create_ts: value.create_ts,
 			owner_team_id: value.owner_team_id.map(Into::into),
@@ -79,17 +80,14 @@ impl ApiTryFrom<backend::cluster::Cluster> for models::AdminClustersCluster {
 	}
 }
 
-impl ApiTryFrom<backend::cluster::Datacenter> for models::AdminClustersDatacenter {
+impl ApiTryFrom<cluster::types::Datacenter> for models::AdminClustersDatacenter {
 	type Error = GlobalError;
 
-	fn api_try_from(value: backend::cluster::Datacenter) -> GlobalResult<models::AdminClustersDatacenter> {
+	fn api_try_from(value: cluster::types::Datacenter) -> GlobalResult<models::AdminClustersDatacenter> {
 		Ok(models::AdminClustersDatacenter {
-			build_delivery_method: unwrap!(backend::cluster::BuildDeliveryMethod::from_i32(
-				value.build_delivery_method
-			))
-			.api_into(),
-			cluster_id: unwrap!(value.cluster_id).into(),
-			datacenter_id: unwrap!(value.datacenter_id).into(),
+			build_delivery_method: value.build_delivery_method.api_into(),
+			cluster_id: value.cluster_id,
+			datacenter_id: value.datacenter_id,
 			display_name: value.display_name,
 			name_id: value.name_id,
 			pools: value
@@ -97,39 +95,38 @@ impl ApiTryFrom<backend::cluster::Datacenter> for models::AdminClustersDatacente
 				.iter()
 				.map(|p| {
 					Ok(models::AdminClustersPool {
-						desired_count: unwrap!(p.desired_count.try_into()),
-						drain_timeout: unwrap!(p.drain_timeout.try_into()),
+						desired_count: p.desired_count.try_into()?,
+						drain_timeout: p.drain_timeout.try_into()?,
 						hardware: p
 							.hardware
 							.iter()
 							.map(|h| {
-								Ok(models::AdminClustersHardware {
+								models::AdminClustersHardware {
 									provider_hardware: h.provider_hardware.clone(),
-								})
+								}
 							})
-							.collect::<Result<Vec<models::AdminClustersHardware>, GlobalError>>()?,
-						min_count: unwrap!(p.min_count.try_into()),
-						max_count: unwrap!(p.max_count.try_into()),
-						pool_type: unwrap!(backend::cluster::PoolType::from_i32(p.pool_type))
-							.api_into(),
+							.collect::<Vec<_>>(),
+						min_count: p.min_count.try_into()?,
+						max_count: p.max_count.try_into()?,
+						pool_type: p.pool_type.clone().api_into(),
 					})
 				})
-				.collect::<Result<Vec<_>, GlobalError>>()?,
-			provider: unwrap!(backend::cluster::Provider::from_i32(value.provider)).api_into(),
+				.collect::<GlobalResult<Vec<_>>>()?,
+			provider: value.provider.api_into(),
 			provider_api_token: value.provider_api_token,
 			provider_datacenter_id: value.provider_datacenter_id,
 		})
 	}
 }
 
-impl ApiFrom<models::AdminClustersPoolUpdate> for cluster::msg::datacenter_update::PoolUpdate {
-	fn api_from(value: models::AdminClustersPoolUpdate) -> cluster::msg::datacenter_update::PoolUpdate {
-		cluster::msg::datacenter_update::PoolUpdate {
-			pool_type: ApiInto::<backend::cluster::PoolType>::api_into(value.pool_type) as i32,
+impl ApiFrom<models::AdminClustersPoolUpdate> for cluster::types::PoolUpdate {
+	fn api_from(value: models::AdminClustersPoolUpdate) -> cluster::types::PoolUpdate {
+		cluster::types::PoolUpdate {
+			pool_type: value.pool_type.api_into(),
 			hardware: value
 				.hardware
 				.iter()
-				.map(|h| backend::cluster::Hardware {
+				.map(|h| cluster::types::Hardware {
 					provider_hardware: h.provider_hardware.clone(),
 				})
 				.collect(),

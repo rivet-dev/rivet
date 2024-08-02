@@ -1,6 +1,6 @@
 use std::time::Duration;
 
-use rivet_operation::prelude::*;
+use chirp_workflow::prelude::*;
 
 fn main() -> GlobalResult<()> {
 	rivet_runtime::run(start()).unwrap()
@@ -25,7 +25,6 @@ async fn start() -> GlobalResult<()> {
 	loop {
 		interval.tick().await;
 
-		let ts = util::timestamp::now();
-		cluster_metrics_publish::run_from_env(ts, pools.clone()).await?;
+		cluster_metrics_publish::run_from_env(pools.clone()).await?;
 	}
 }

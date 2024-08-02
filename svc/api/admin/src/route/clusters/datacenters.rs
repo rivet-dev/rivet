@@ -1,8 +1,7 @@
 use api_helper::{anchor::WatchIndexQuery, ctx::Ctx};
-use proto::backend;
 use rivet_api::models;
-use rivet_convert::{ApiFrom, ApiInto, ApiTryFrom};
-use rivet_operation::prelude::{proto::backend::pkg::cluster, *};
+use rivet_convert::{ApiInto, ApiTryInto};
+use rivet_operation::prelude::*;
 use serde_json::{json, Value};
 
 use crate::auth::Auth;
@@ -13,21 +12,23 @@ pub async fn list(
 	cluster_id: Uuid,
 	_watch_index: WatchIndexQuery,
 ) -> GlobalResult<models::AdminClustersListDatacentersResponse> {
-	let response = op!([ctx] cluster_datacenter_list {
-		cluster_ids: vec![cluster_id.into()],
-	})
-	.await?;
+	let datacenters_res = ctx
+		.op(cluster::ops::datacenter::list::Input {
+			cluster_ids: vec![cluster_id],
+		})
+		.await?;
 
-	let datacenter_ids = unwrap!(response.clusters.first()).datacenter_ids.clone();
+	let datacenter_ids = unwrap!(datacenters_res.clusters.first())
+		.datacenter_ids
+		.clone();
 
-	let datacenters = op!([ctx] cluster_datacenter_get {
-		datacenter_ids: datacenter_ids.into_iter().map(Into::into).collect()
-	})
-	.await?
-	.datacenters
-	.into_iter()
-	.map(models::AdminClustersDatacenter::api_try_from)
-	.collect::<GlobalResult<Vec<_>>>()?;
+	let datacenters = ctx
+		.op(cluster::ops::datacenter::get::Input { datacenter_ids })
+		.await?
+		.datacenters
+		.into_iter()
+		.map(ApiTryInto::<models::AdminClustersDatacenter>::api_try_into)
+		.collect::<GlobalResult<Vec<_>>>()?;
 
 	Ok(models::AdminClustersListDatacentersResponse { datacenters })
 }
@@ -39,11 +40,12 @@ pub async fn create(
 	body: models::AdminClustersCreateDatacenterRequest,
 ) -> GlobalResult<models::AdminClustersCreateDatacenterResponse> {
 	// Make sure the cluster exists
-	let clusters = op!([ctx] cluster_get {
-		cluster_ids: vec![cluster_id.into()],
-	})
-	.await?
-	.clusters;
+	let clusters = ctx
+		.op(cluster::ops::get::Input {
+			cluster_ids: vec![cluster_id],
+		})
+		.await?
+		.clusters;
 
 	if clusters.is_empty() {
 		bail_with!(CLUSTER_NOT_FOUND);
@@ -55,9 +57,9 @@ pub async fn create(
 	// When creating a datacenter, an empty pool of each type is added. This
 	// is to make sure that the datacenter starts in a valid state.
 	let pools = vec![
-		backend::cluster::Pool {
-			pool_type: backend::cluster::PoolType::Job as i32,
-			hardware: vec![backend::cluster::Hardware {
+		cluster::types::Pool {
+			pool_type: cluster::types::PoolType::Job,
+			hardware: vec![cluster::types::Hardware {
 				provider_hardware: "g6-nanode-1".to_string(),
 			}],
 			desired_count: 0,
@@ -65,9 +67,9 @@ pub async fn create(
 			max_count: 0,
 			drain_timeout,
 		},
-		backend::cluster::Pool {
-			pool_type: backend::cluster::PoolType::Gg as i32,
-			hardware: vec![backend::cluster::Hardware {
+		cluster::types::Pool {
+			pool_type: cluster::types::PoolType::Gg,
+			hardware: vec![cluster::types::Hardware {
 				provider_hardware: "g6-nanode-1".to_string(),
 			}],
 			desired_count: 0,
@@ -75,9 +77,9 @@ pub async fn create(
 			max_count: 0,
 			drain_timeout,
 		},
-		backend::cluster::Pool {
-			pool_type: backend::cluster::PoolType::Ats as i32,
-			hardware: vec![backend::cluster::Hardware {
+		cluster::types::Pool {
+			pool_type: cluster::types::PoolType::Ats,
+			hardware: vec![cluster::types::Hardware {
 				provider_hardware: "g6-nanode-1".to_string(),
 			}],
 			desired_count: 0,
@@ -87,22 +89,34 @@ pub async fn create(
 		},
 	];
 
-	msg!([ctx] cluster::msg::datacenter_create(datacenter_id) -> cluster::msg::datacenter_scale {
-		datacenter_id: Some(datacenter_id.into()),
-		cluster_id: Some(cluster_id.into()),
-		name_id: body.name_id.clone(),
-		display_name: body.display_name.clone(),
+	let mut sub = ctx
+		.subscribe::<cluster::workflows::datacenter::CreateComplete>(&json!({
+			"datacenter_id": datacenter_id,
+		}))
+		.await?;
 
-		provider: backend::cluster::Provider::api_from(body.provider) as i32,
-		provider_datacenter_id: body.provider_datacenter_id.clone(),
-		provider_api_token: None,
+	ctx.tagged_signal(
+		&json!({
+			"cluster_id": cluster_id,
+		}),
+		cluster::workflows::cluster::DatacenterCreate {
+			datacenter_id,
+			name_id: body.name_id.clone(),
+			display_name: body.display_name.clone(),
 
-		pools: pools,
+			provider: body.provider.api_into(),
+			provider_datacenter_id: body.provider_datacenter_id.clone(),
+			provider_api_token: None,
 
-		build_delivery_method: backend::cluster::BuildDeliveryMethod::api_from(body.build_delivery_method) as i32,
-		prebakes_enabled: body.prebakes_enabled,
-	})
+			pools,
+
+			build_delivery_method: body.build_delivery_method.api_into(),
+			prebakes_enabled: body.prebakes_enabled,
+		},
+	)
 	.await?;
+
+	sub.next().await?;
 
 	Ok(models::AdminClustersCreateDatacenterResponse { datacenter_id })
 }
@@ -114,33 +128,35 @@ pub async fn update(
 	datacenter_id: Uuid,
 	body: models::AdminClustersUpdateDatacenterRequest,
 ) -> GlobalResult<Value> {
+	let datacenters = ctx
+		.op(cluster::ops::datacenter::get::Input {
+			datacenter_ids: vec![datacenter_id],
+		})
+		.await?
+		.datacenters;
+
+	let datacenter = unwrap_with!(datacenters.first(), CLUSTER_DATACENTER_NOT_FOUND);
+
 	// Make sure that the datacenter is part of the cluster
-	let datacenters = op!([ctx] cluster_datacenter_get {
-		datacenter_ids: vec![datacenter_id.into()],
-	})
-	.await?
-	.datacenters;
-
-	let datacenter = match datacenters.first() {
-		Some(d) => d,
-		None => bail_with!(CLUSTER_DATACENTER_NOT_FOUND),
-	};
-
-	if datacenter.cluster_id != Some(cluster_id.into()) {
+	if datacenter.cluster_id != cluster_id {
 		bail_with!(CLUSTER_DATACENTER_NOT_IN_CLUSTER);
 	}
 
-	msg!([ctx] cluster::msg::datacenter_update(datacenter_id) -> cluster::msg::datacenter_scale {
-		datacenter_id: Some(datacenter_id.into()),
-		pools: body.pools
-			.iter()
-			.cloned()
-			.map(ApiInto::api_into)
-			.collect::<Vec<_>>(),
-		prebakes_enabled: body.prebakes_enabled,
-	})
-	.await
-	.unwrap();
+	ctx.tagged_signal(
+		&json!({
+			"datacenter_id": datacenter_id,
+		}),
+		cluster::workflows::datacenter::Update {
+			pools: body
+				.pools
+				.iter()
+				.cloned()
+				.map(ApiInto::api_into)
+				.collect::<Vec<_>>(),
+			prebakes_enabled: body.prebakes_enabled,
+		},
+	)
+	.await?;
 
 	Ok(json!({}))
 }

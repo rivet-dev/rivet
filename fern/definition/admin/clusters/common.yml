@@ -51,7 +51,7 @@ types:
   Server:
     properties:
       server_id: uuid
-      public_ip: string
+      public_ip: optional<string>
 
   PoolUpdate:
     properties:

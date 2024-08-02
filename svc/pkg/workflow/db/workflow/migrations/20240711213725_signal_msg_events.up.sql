@@ -2,7 +2,7 @@
 CREATE TABLE workflow_signal_send_events (
   workflow_id UUID NOT NULL REFERENCES workflows,
   location INT[] NOT NULL,
-  signal_id TEXT NOT NULL,
+  signal_id UUID NOT NULL,
   signal_name TEXT NOT NULL,
   body JSONB NOT NULL,
 

@@ -1,7 +1,6 @@
 use std::net::Ipv4Addr;
 
 use api_helper::{anchor::WatchIndexQuery, ctx::Ctx};
-use proto::backend;
 use rivet_api::models;
 use rivet_operation::prelude::*;
 
@@ -16,41 +15,43 @@ pub async fn info(
 	ctx.auth().server()?;
 
 	// Find server based on public ip
-	let servers_res = op!([ctx] cluster_server_resolve_for_ip {
-		ips: vec![public_ip.to_string()],
-	})
-	.await?;
-
-	let server = unwrap!(servers_res.servers.first(), "server not found");
-	let server_id = unwrap!(server.server_id);
+	let servers_res = ctx
+		.op(cluster::ops::server::resolve_for_ip::Input {
+			ips: vec![public_ip],
+			// We include destroyed because this request can only ever come from a running server. This means
+			// the server was marked as destroyed, but is still provisioning.
+			include_destroyed: true,
+		})
+		.await?;
+	let server = unwrap!(servers_res.servers.first(), "server with ip not found");
 
 	// Get server info
-	let server_res = op!([ctx] cluster_server_get {
-		server_ids: vec![server_id],
-	})
-	.await?;
+	let server_res = ctx
+		.op(cluster::ops::server::get::Input {
+			server_ids: vec![server.server_id],
+		})
+		.await?;
 	let server = unwrap!(server_res.servers.first(), "server not found");
 
 	// Get datacenter info
-	let datacenter_id = unwrap!(server.datacenter_id);
-	let datacenter_res = op!([ctx] cluster_datacenter_get {
-		datacenter_ids: vec![datacenter_id],
-	})
-	.await?;
+	let datacenter_res = ctx
+		.op(cluster::ops::datacenter::get::Input {
+			datacenter_ids: vec![server.datacenter_id],
+		})
+		.await?;
 	let datacenter = unwrap!(datacenter_res.datacenters.first());
 
-	let pool_type = unwrap!(backend::cluster::PoolType::from_i32(server.pool_type));
-	let name = util_cluster::server_name(
+	let name = cluster::util::server_name(
 		&datacenter.provider_datacenter_id,
-		pool_type,
-		server_id.as_uuid(),
+		server.pool_type.clone(),
+		server.server_id,
 	);
 
 	Ok(models::ProvisionServersGetInfoResponse {
 		name,
-		server_id: server_id.as_uuid(),
-		datacenter_id: datacenter_id.as_uuid(),
-		cluster_id: unwrap_ref!(datacenter.cluster_id).as_uuid(),
-		vlan_ip: unwrap_ref!(server.vlan_ip, "server should have vlan ip by now").clone(),
+		server_id: server.server_id,
+		datacenter_id: server.datacenter_id,
+		cluster_id: datacenter.cluster_id,
+		vlan_ip: unwrap_ref!(server.vlan_ip, "server should have vlan ip by now").to_string(),
 	})
 }

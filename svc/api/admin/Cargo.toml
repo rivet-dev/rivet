@@ -39,17 +39,9 @@ tracing-subscriber = { version = "0.3", default-features = false, features = [
 ] }
 url = "2.2.2"
 uuid = { version = "1", features = ["v4"] }
-util-cluster = { package = "rivet-util-cluster", path = "../../pkg/cluster/util" }
 util-mm = { package = "rivet-util-mm", path = "../../pkg/mm/util" }
 
-cluster-get = { path = "../../pkg/cluster/ops/get" }
-cluster-list = { path = "../../pkg/cluster/ops/list" }
-cluster-server-get = { path = "../../pkg/cluster/ops/server-get" }
-cluster-server-destroy-with-filter = { path = "../../pkg/cluster/ops/server-destroy-with-filter" }
-cluster-server-list = { path = "../../pkg/cluster/ops/server-list" }
-cluster-datacenter-list = { path = "../../pkg/cluster/ops/datacenter-list" }
-cluster-datacenter-get = { path = "../../pkg/cluster/ops/datacenter-get" }
-cluster-datacenter-resolve-for-name-id = { path = "../../pkg/cluster/ops/datacenter-resolve-for-name-id" }
+cluster = { path = "../../pkg/cluster" }
 token-create = { path = "../../pkg/token/ops/create" }
 
 [dev-dependencies]

@@ -1,6 +1,6 @@
-use proto::backend::pkg::*;
-use rivet_operation::prelude::*;
+use chirp_workflow::prelude::*;
 use serde::Deserialize;
+use serde_json::json;
 
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "PascalCase")]
@@ -8,10 +8,7 @@ pub struct NodeDrain {
 	node: nomad_client::models::Node,
 }
 
-pub async fn handle(
-	client: chirp_client::Client,
-	NodeDrain { node }: &NodeDrain,
-) -> GlobalResult<()> {
+pub async fn handle(ctx: StandaloneCtx, NodeDrain { node }: &NodeDrain) -> GlobalResult<()> {
 	let node_id = unwrap_ref!(node.ID);
 	let meta = unwrap_ref!(node.meta, "no metadata on node");
 	let server_id = util::uuid::parse(unwrap!(meta.get("server-id"), "no server-id in metadata"))?;
@@ -27,10 +24,12 @@ pub async fn handle(
 			.unwrap_or_default();
 
 		if is_last_drain_complete_message {
-			msg!([client] nomad::msg::monitor_node_drain_complete(server_id) {
-				server_id: Some(server_id.into()),
-				node_id: node_id.to_owned(),
-			})
+			ctx.tagged_signal(
+				&json!({
+					"server_id": server_id,
+				}),
+				cluster::workflows::server::NomadDrainComplete {},
+			)
 			.await?;
 		}
 	}

@@ -218,7 +218,7 @@ func (p Provider) Ptr() *Provider {
 
 type Server struct {
 	ServerId uuid.UUID `json:"server_id"`
-	PublicIp string    `json:"public_ip"`
+	PublicIp *string   `json:"public_ip,omitempty"`
 
 	_rawJSON json.RawMessage
 }

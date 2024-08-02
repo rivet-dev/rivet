@@ -1,35 +1,12 @@
+// Kept for backwards compatibility (see svc/pkg/cluster/src/types.rs)
+
+
 syntax = "proto3";
 
 package rivet.backend.cluster;
 
-import "proto/common.proto";
-
-message Cluster {
-    rivet.common.Uuid cluster_id = 1;
-    string name_id = 2;
-    int64 create_ts = 3;
-    // Unset for the default cluster.
-    optional rivet.common.Uuid owner_team_id = 4;
-}
-
-enum Provider {
-    LINODE = 0;
-}
-
-message Datacenter {
-    rivet.common.Uuid datacenter_id = 1;
-    rivet.common.Uuid cluster_id = 2;
-    string name_id = 3;
-    string display_name = 4;
-    int64 create_ts = 11;
-
-    Provider provider = 5;
-    string provider_datacenter_id = 6;
-    optional string provider_api_token = 7;
-
-    repeated Pool pools = 8;
-    BuildDeliveryMethod build_delivery_method = 9;
-    bool prebakes_enabled = 12;
+message Pools {
+    repeated rivet.backend.cluster.Pool pools = 1;
 }
 
 message Pool {
@@ -58,38 +35,3 @@ enum BuildDeliveryMethod {
     S3_DIRECT = 1;
 }
 
-message Server {
-    rivet.common.Uuid server_id = 1;
-    rivet.common.Uuid cluster_id = 2;
-    rivet.common.Uuid datacenter_id = 3;
-    PoolType pool_type = 4;
-    optional string vlan_ip = 5;
-    optional string public_ip = 6;
-
-    optional int64 cloud_destroy_ts = 7;
-
-    // TODO: Add the rest of the sql columns
-}
-
-enum TlsState {
-    CREATING = 0;
-    ACTIVE = 1;
-    RENEWING = 2;
-}
-
-message ServerFilter {
-	bool filter_server_ids = 1;
-	repeated rivet.common.Uuid server_ids = 2;
-
-	bool filter_cluster_ids = 3;
-	repeated rivet.common.Uuid cluster_ids = 4;
-
-	bool filter_datacenter_ids = 5;
-	repeated rivet.common.Uuid datacenter_ids = 6;
-
-	bool filter_pool_types = 7;
-	repeated PoolType pool_types = 8;
-
-	bool filter_public_ips = 9;
-	repeated string public_ips = 10;
-}

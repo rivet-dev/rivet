@@ -12,10 +12,11 @@ pub async fn tls(
 ) -> GlobalResult<models::ProvisionDatacentersGetTlsResponse> {
 	ctx.auth().server()?;
 
-	let datacenter_res = op!([ctx] cluster_datacenter_tls_get {
-		datacenter_ids: vec![datacenter_id.into()],
-	})
-	.await?;
+	let datacenter_res = ctx
+		.op(cluster::ops::datacenter::tls_get::Input {
+			datacenter_ids: vec![datacenter_id],
+		})
+		.await?;
 	let datacenter = unwrap!(datacenter_res.datacenters.first());
 
 	let (Some(job_cert_pem), Some(job_private_key_pem)) =

@@ -1,9 +1,11 @@
 use global_error::{GlobalError, GlobalResult};
 use rivet_pools::prelude::*;
+use serde::Serialize;
 use uuid::Uuid;
 
-use crate::{DatabaseHandle, Operation, OperationInput, WorkflowError};
+use crate::{signal::Signal, DatabaseHandle, Operation, OperationInput, WorkflowError};
 
+#[derive(Clone)]
 pub struct OperationCtx {
 	ray_id: Uuid,
 	name: &'static str,
@@ -74,6 +76,50 @@ impl OperationCtx {
 			.await
 			.map_err(WorkflowError::OperationFailure)
 			.map_err(GlobalError::raw)
+	}
+
+	pub async fn signal<T: Signal + Serialize>(
+		&self,
+		workflow_id: Uuid,
+		input: T,
+	) -> GlobalResult<Uuid> {
+		let signal_id = Uuid::new_v4();
+
+		tracing::info!(name=%T::NAME, %workflow_id, %signal_id, "dispatching signal");
+
+		// Serialize input
+		let input_val = serde_json::to_value(input)
+			.map_err(WorkflowError::SerializeSignalBody)
+			.map_err(GlobalError::raw)?;
+
+		self.db
+			.publish_signal(self.ray_id, workflow_id, signal_id, T::NAME, input_val)
+			.await
+			.map_err(GlobalError::raw)?;
+
+		Ok(signal_id)
+	}
+
+	pub async fn tagged_signal<T: Signal + Serialize>(
+		&self,
+		tags: &serde_json::Value,
+		input: T,
+	) -> GlobalResult<Uuid> {
+		let signal_id = Uuid::new_v4();
+
+		tracing::info!(name=%T::NAME, ?tags, %signal_id, "dispatching tagged signal");
+
+		// Serialize input
+		let input_val = serde_json::to_value(input)
+			.map_err(WorkflowError::SerializeSignalBody)
+			.map_err(GlobalError::raw)?;
+
+		self.db
+			.publish_tagged_signal(self.ray_id, tags, signal_id, T::NAME, input_val)
+			.await
+			.map_err(GlobalError::raw)?;
+
+		Ok(signal_id)
 	}
 }
 

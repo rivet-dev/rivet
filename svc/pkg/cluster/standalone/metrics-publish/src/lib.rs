@@ -1,13 +1,15 @@
 use std::convert::{TryFrom, TryInto};
 
-use backend::cluster::PoolType::*;
-use proto::backend;
-use rivet_operation::prelude::*;
-use util_cluster::metrics;
+use chirp_workflow::prelude::*;
+use cluster::{
+	types::{Datacenter, PoolType},
+	util::metrics,
+};
 
 #[derive(sqlx::FromRow)]
 struct ServerRow {
 	datacenter_id: Uuid,
+	pool_type2: Option<sqlx::types::Json<PoolType>>,
 	pool_type: i64,
 	is_provisioned: bool,
 	is_installed: bool,
@@ -19,7 +21,7 @@ struct ServerRow {
 
 struct Server {
 	datacenter_id: Uuid,
-	pool_type: backend::cluster::PoolType,
+	pool_type: PoolType,
 	is_provisioned: bool,
 	is_installed: bool,
 	has_nomad_node: bool,
@@ -33,7 +35,12 @@ impl TryFrom<ServerRow> for Server {
 	fn try_from(value: ServerRow) -> GlobalResult<Self> {
 		Ok(Server {
 			datacenter_id: value.datacenter_id,
-			pool_type: unwrap!(backend::cluster::PoolType::from_i32(value.pool_type as i32)),
+			// Handle backwards compatibility
+			pool_type: if let Some(pool_type) = value.pool_type2 {
+				pool_type.0
+			} else {
+				value.pool_type.try_into()?
+			},
 			is_provisioned: value.is_provisioned,
 			is_installed: value.is_installed,
 			has_nomad_node: value.has_nomad_node,
@@ -44,30 +51,24 @@ impl TryFrom<ServerRow> for Server {
 }
 
 #[tracing::instrument(skip_all)]
-pub async fn run_from_env(_ts: i64, pools: rivet_pools::Pools) -> GlobalResult<()> {
+pub async fn run_from_env(pools: rivet_pools::Pools) -> GlobalResult<()> {
 	let client =
 		chirp_client::SharedClient::from_env(pools.clone())?.wrap_new("cluster-metrics-publish");
 	let cache = rivet_cache::CacheInner::from_env(pools.clone())?;
-	let ctx = OperationContext::new(
-		"cluster-metrics-publish".into(),
-		std::time::Duration::from_secs(60),
+	let ctx = StandaloneCtx::new(
+		chirp_workflow::compat::db_from_pools(&pools).await?,
 		rivet_connection::Connection::new(client, pools, cache),
-		Uuid::new_v4(),
-		Uuid::new_v4(),
-		util::timestamp::now(),
-		util::timestamp::now(),
-		(),
-	);
+		"cluster-metrics-publish",
+	)
+	.await?;
 
 	let servers = select_servers(&ctx).await?;
 
-	let datacenters_res = op!([ctx] cluster_datacenter_get {
-		datacenter_ids: servers
-			.iter()
-			.map(|s| s.datacenter_id.into())
-			.collect::<Vec<_>>(),
-	})
-	.await?;
+	let datacenters_res = ctx
+		.op(cluster::ops::datacenter::get::Input {
+			datacenter_ids: servers.iter().map(|s| s.datacenter_id).collect::<Vec<_>>(),
+		})
+		.await?;
 
 	for dc in &datacenters_res.datacenters {
 		insert_metrics(dc, &servers)?;
@@ -76,12 +77,12 @@ pub async fn run_from_env(_ts: i64, pools: rivet_pools::Pools) -> GlobalResult<(
 	Ok(())
 }
 
-async fn select_servers(ctx: &OperationContext<()>) -> GlobalResult<Vec<Server>> {
+async fn select_servers(ctx: &StandaloneCtx) -> GlobalResult<Vec<Server>> {
 	let servers = sql_fetch_all!(
 		[ctx, ServerRow]
 		"
 		SELECT
-			datacenter_id, pool_type,
+			datacenter_id, pool_type, pool_type2,
 			(provider_server_id IS NOT NULL) AS is_provisioned,
 			(install_complete_ts IS NOT NULL) AS is_installed,
 			(nomad_node_id IS NOT NULL) AS has_nomad_node,
@@ -102,33 +103,34 @@ async fn select_servers(ctx: &OperationContext<()>) -> GlobalResult<Vec<Server>>
 		.collect::<GlobalResult<Vec<_>>>()
 }
 
-fn insert_metrics(dc: &backend::cluster::Datacenter, servers: &[Server]) -> GlobalResult<()> {
-	let datacenter_id = unwrap_ref!(dc.datacenter_id).as_uuid();
-	let servers_in_dc = servers.iter().filter(|s| s.datacenter_id == datacenter_id);
+fn insert_metrics(dc: &Datacenter, servers: &[Server]) -> GlobalResult<()> {
+	let servers_in_dc = servers
+		.iter()
+		.filter(|s| s.datacenter_id == dc.datacenter_id);
 
-	let datacenter_id = datacenter_id.to_string();
-	let cluster_id = unwrap_ref!(dc.cluster_id).as_uuid().to_string();
+	let datacenter_id = dc.datacenter_id.to_string();
+	let cluster_id = dc.cluster_id.to_string();
 
 	let servers_per_pool = [
 		(
-			Job,
+			PoolType::Job,
 			servers_in_dc
 				.clone()
-				.filter(|s| matches!(s.pool_type, Job))
+				.filter(|s| matches!(s.pool_type, PoolType::Job))
 				.collect::<Vec<_>>(),
 		),
 		(
-			Gg,
+			PoolType::Gg,
 			servers_in_dc
 				.clone()
-				.filter(|s| matches!(s.pool_type, Gg))
+				.filter(|s| matches!(s.pool_type, PoolType::Gg))
 				.collect::<Vec<_>>(),
 		),
 		(
-			Ats,
+			PoolType::Ats,
 			servers_in_dc
 				.clone()
-				.filter(|s| matches!(s.pool_type, Ats))
+				.filter(|s| matches!(s.pool_type, PoolType::Ats))
 				.collect::<Vec<_>>(),
 		),
 	];
@@ -174,11 +176,7 @@ fn insert_metrics(dc: &backend::cluster::Datacenter, servers: &[Server]) -> Glob
 			datacenter_id.as_str(),
 			&dc.provider_datacenter_id,
 			&dc.name_id,
-			match pool_type {
-				Job => "job",
-				Gg => "gg",
-				Ats => "ats",
-			},
+			&pool_type.to_string(),
 		];
 
 		metrics::PROVISIONING_SERVERS
@@ -200,7 +198,7 @@ fn insert_metrics(dc: &backend::cluster::Datacenter, servers: &[Server]) -> Glob
 			.with_label_values(&labels)
 			.set(draining_tainted);
 
-		if let Job = pool_type {
+		if let PoolType::Job = pool_type {
 			metrics::NOMAD_SERVERS
 				.with_label_values(&[
 					&cluster_id,

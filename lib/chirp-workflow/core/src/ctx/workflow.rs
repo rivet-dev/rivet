@@ -9,10 +9,11 @@ use crate::{
 	activity::ActivityId,
 	ctx::{ActivityCtx, MessageCtx},
 	event::Event,
+	executable::{closure, AsyncResult, Executable},
 	message::Message,
 	util::Location,
-	Activity, ActivityInput, DatabaseHandle, Executable, Listen, PulledWorkflow, RegistryHandle,
-	Signal, SignalRow, Workflow, WorkflowError, WorkflowInput, WorkflowResult,
+	Activity, ActivityInput, DatabaseHandle, Listen, PulledWorkflow, RegistryHandle, Signal,
+	SignalRow, Workflow, WorkflowError, WorkflowInput, WorkflowResult,
 };
 
 // Time to delay a worker from retrying after an error
@@ -22,7 +23,7 @@ const SIGNAL_RETRY: Duration = Duration::from_millis(100);
 // Most in-process signal poll tries
 const MAX_SIGNAL_RETRIES: usize = 16;
 // Poll interval when polling for a sub workflow in-process
-const SUB_WORKFLOW_RETRY: Duration = Duration::from_millis(150);
+pub const SUB_WORKFLOW_RETRY: Duration = Duration::from_millis(150);
 // Most in-process sub workflow poll tries
 const MAX_SUB_WORKFLOW_RETRIES: usize = 4;
 // Retry interval for failed db actions
@@ -30,12 +31,13 @@ const DB_ACTION_RETRY: Duration = Duration::from_millis(150);
 // Most db action retries
 const MAX_DB_ACTION_RETRIES: usize = 5;
 
-// TODO: Use generics to store input instead of a string
+// TODO: Use generics to store input instead of a json value
+// NOTE: Clonable because of inner arcs
 #[derive(Clone)]
 pub struct WorkflowCtx {
-	pub workflow_id: Uuid,
+	workflow_id: Uuid,
 	/// Name of the workflow to run in the registry.
-	pub name: String,
+	name: String,
 	create_ts: i64,
 	ts: i64,
 	ray_id: Uuid,
@@ -577,7 +579,7 @@ impl WorkflowCtx {
 		self.location_idx += 1;
 
 		// Run workflow
-		let output = (workflow.run)(&mut ctx).await?;
+		let output = (workflow.run)(&mut ctx).await.map_err(GlobalError::raw)?;
 
 		// TODO: RVT-3756
 		// Deserialize output
@@ -667,6 +669,15 @@ impl WorkflowCtx {
 		exec.execute(self).await
 	}
 
+	/// Spawns a new thread to execute workflow steps in.
+	pub fn spawn<F, T: Send + 'static>(&mut self, f: F) -> tokio::task::JoinHandle<GlobalResult<T>>
+	where
+		F: for<'a> FnOnce(&'a mut WorkflowCtx) -> AsyncResult<'a, T> + Send + 'static,
+	{
+		let mut ctx = self.clone();
+		tokio::task::spawn(async move { closure(f).execute(&mut ctx).await })
+	}
+
 	/// Sends a signal.
 	pub async fn signal<T: Signal + Serialize>(
 		&mut self,
@@ -699,7 +710,7 @@ impl WorkflowCtx {
 			self.db
 				.publish_signal_from_workflow(
 					self.workflow_id,
-					self.full_location().as_ref(),	
+					self.full_location().as_ref(),
 					self.ray_id,
 					workflow_id,
 					signal_id,
@@ -942,6 +953,14 @@ impl WorkflowCtx {
 }
 
 impl WorkflowCtx {
+	pub fn name(&self) -> &str {
+		&self.name
+	}
+
+	pub fn workflow_id(&self) -> Uuid {
+		self.workflow_id
+	}
+
 	/// Timestamp at which this workflow run started.
 	pub fn ts(&self) -> i64 {
 		self.ts

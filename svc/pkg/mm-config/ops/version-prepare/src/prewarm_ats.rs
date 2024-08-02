@@ -57,14 +57,14 @@ pub async fn prewarm_ats_cache(
 		FROM db_cluster.servers
 		WHERE
 			datacenter_id = ANY($1) AND
-			pool_type = $2 AND
+			pool_type2 = $2 AND
 			vlan_ip IS NOT NULL AND
 			drain_ts IS NULL AND
 			cloud_destroy_ts IS NULL
 		",
 		// NOTE: region_id is just the old name for datacenter_id
 		prewarm_ctx.region_ids.iter().cloned().collect::<Vec<_>>(),
-		backend::cluster::PoolType::Ats as i64,
+		serde_json::to_string(&cluster::types::PoolType::Ats)?,
 	)
 	.await?;
 

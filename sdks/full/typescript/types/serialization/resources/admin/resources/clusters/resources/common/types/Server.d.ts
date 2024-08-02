@@ -8,6 +8,6 @@ export declare const Server: core.serialization.ObjectSchema<serializers.admin.c
 export declare namespace Server {
     interface Raw {
         server_id: string;
-        public_ip: string;
+        public_ip?: string | null;
     }
 }

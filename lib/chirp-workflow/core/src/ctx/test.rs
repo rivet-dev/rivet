@@ -7,6 +7,7 @@ use uuid::Uuid;
 use crate::{
 	ctx::{
 		message::{SubscriptionHandle, TailAnchor, TailAnchorResponse},
+		workflow::SUB_WORKFLOW_RETRY,
 		MessageCtx, OperationCtx,
 	},
 	message::{Message, ReceivedMessage},
@@ -143,8 +144,7 @@ impl TestCtx {
 	) -> GlobalResult<W::Output> {
 		tracing::info!(name=W::NAME, id=?workflow_id, "waiting for workflow");
 
-		let period = Duration::from_millis(50);
-		let mut interval = tokio::time::interval(period);
+		let mut interval = tokio::time::interval(SUB_WORKFLOW_RETRY);
 		loop {
 			interval.tick().await;
 
@@ -359,10 +359,6 @@ impl TestCtx {
 	pub fn req_dt(&self) -> i64 {
 		self.ts.saturating_sub(self.op_ctx.req_ts())
 	}
-
-	// pub fn perf(&self) -> &chirp_perf::PerfCtx {
-	// 	self.conn.perf()
-	// }
 
 	pub fn trace(&self) -> &[chirp_client::TraceEntry] {
 		self.conn.trace()

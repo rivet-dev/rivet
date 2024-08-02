@@ -1,15 +1,19 @@
 use chirp_worker::prelude::*;
 use proto::backend::{self, pkg::*};
+use serde_json::json;
 
 #[worker_test]
 async fn empty(ctx: TestCtx) {
 	let (cluster_id, datacenter_id, dc_name_id) = create_dc(&ctx).await;
 
 	let game_id = Uuid::new_v4();
-	msg!([ctx] cluster::msg::game_link(game_id, cluster_id) -> cluster::msg::game_link_complete {
-		game_id: Some(game_id.into()),
-		cluster_id: Some(cluster_id.into()),
-	})
+	chirp_workflow::compat::tagged_signal(
+		ctx.op_ctx(),
+		&json!({
+			"cluster_id": cluster_id,
+		}),
+		cluster::workflows::cluster::GameLink { game_id },
+	)
 	.await
 	.unwrap();
 
@@ -39,31 +43,53 @@ async fn create_dc(ctx: &TestCtx) -> (Uuid, Uuid, String) {
 	let dc_name_id = util::faker::ident();
 	let cluster_id = Uuid::new_v4();
 
-	msg!([ctx] cluster::msg::create(cluster_id) -> cluster::msg::create_complete {
-		cluster_id: Some(cluster_id.into()),
-		name_id: util::faker::ident(),
-		owner_team_id: None,
-	})
+	chirp_workflow::compat::dispatch_tagged_workflow(
+		ctx.op_ctx(),
+		&json!({
+			"cluster_id": cluster_id,
+		}),
+		cluster::workflows::cluster::Input {
+			cluster_id,
+			name_id: util::faker::ident(),
+			owner_team_id: None,
+		},
+	)
 	.await
 	.unwrap();
 
-	msg!([ctx] cluster::msg::datacenter_create(datacenter_id) -> cluster::msg::datacenter_scale {
-		datacenter_id: Some(datacenter_id.into()),
-		cluster_id: Some(cluster_id.into()),
-		name_id: dc_name_id.clone(),
-		display_name: util::faker::ident(),
+	let mut create_sub =
+		chirp_workflow::compat::subscribe::<cluster::workflows::datacenter::CreateComplete, _>(
+			ctx.op_ctx(),
+			&json!({
+				"datacenter_id": datacenter_id,
+			}),
+		)
+		.await
+		.unwrap();
+	chirp_workflow::compat::tagged_signal(
+		ctx.op_ctx(),
+		&json!({
+			"cluster_id": cluster_id,
+		}),
+		cluster::workflows::cluster::DatacenterCreate {
+			datacenter_id,
+			name_id: dc_name_id.clone(),
+			display_name: util::faker::ident(),
 
-		provider: backend::cluster::Provider::Linode as i32,
-		provider_datacenter_id: "us-southeast".to_string(),
-		provider_api_token: None,
+			provider: cluster::types::Provider::Linode,
+			provider_datacenter_id: "us-southeast".to_string(),
+			provider_api_token: None,
 
-		pools: Vec::new(),
+			pools: Vec::new(),
 
-		build_delivery_method: backend::cluster::BuildDeliveryMethod::TrafficServer as i32,
-		prebakes_enabled: false,
-	})
+			build_delivery_method: cluster::types::BuildDeliveryMethod::TrafficServer,
+			prebakes_enabled: false,
+		},
+	)
 	.await
 	.unwrap();
+
+	create_sub.next().await.unwrap();
 
 	(cluster_id, datacenter_id, dc_name_id)
 }

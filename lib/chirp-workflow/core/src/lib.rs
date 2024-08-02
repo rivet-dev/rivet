@@ -19,7 +19,6 @@ use activity::*;
 use ctx::*;
 use db::*;
 use error::*;
-use executable::*;
 use operation::*;
 use registry::*;
 use signal::*;

@@ -34,7 +34,6 @@ tokio = { version = "1.29" }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", default-features = false, features = ["fmt", "json", "ansi"] }
 url = "2.2.2"
-util-cluster = { package = "rivet-util-cluster", path = "../../pkg/cluster/util" }
 util-job = { package = "rivet-util-job", path = "../../pkg/job/util" }
 util-mm = { package = "rivet-util-mm", path = "../../pkg/mm/util" }
 util-nsfw = { package = "rivet-util-nsfw", path = "../../pkg/nsfw/util" }
@@ -65,7 +64,7 @@ cloud-namespace-token-development-create = { path = "../../pkg/cloud/ops/namespa
 cloud-namespace-token-public-create = { path = "../../pkg/cloud/ops/namespace-token-public-create" }
 cloud-version-get = { path = "../../pkg/cloud/ops/version-get" }
 cloud-version-publish = { path = "../../pkg/cloud/ops/version-publish" }
-cluster-datacenter-list = { path = "../../pkg/cluster/ops/datacenter-list" }
+cluster = { path = "../../pkg/cluster" }
 custom-user-avatar-list-for-game = { path = "../../pkg/custom-user-avatar/ops/list-for-game" }
 custom-user-avatar-upload-complete = { path = "../../pkg/custom-user-avatar/ops/upload-complete" }
 game-banner-upload-complete = { path = "../../pkg/game/ops/banner-upload-complete" }

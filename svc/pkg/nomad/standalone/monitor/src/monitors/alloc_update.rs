@@ -1,5 +1,5 @@
-use proto::backend::pkg::*;
-use rivet_operation::prelude::*;
+use chirp_workflow::prelude::*;
+use rivet_operation::prelude::proto::backend::pkg::*;
 use serde::Deserialize;
 
 #[derive(Debug, Clone, Deserialize)]
@@ -9,7 +9,7 @@ pub struct AllocationUpdated {
 }
 
 pub async fn handle(
-	client: chirp_client::Client,
+	ctx: StandaloneCtx,
 	AllocationUpdated { allocation: alloc }: &AllocationUpdated,
 	payload_json: String,
 ) -> GlobalResult<()> {
@@ -20,7 +20,7 @@ pub async fn handle(
 		return Ok(());
 	}
 
-	msg!([client] nomad::msg::monitor_alloc_update(job_id) {
+	msg!([ctx] nomad::msg::monitor_alloc_update(job_id) {
 		dispatched_job_id: job_id.clone(),
 		payload_json: payload_json,
 	})

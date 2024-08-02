@@ -7,10 +7,9 @@ license = "Apache-2.0"
 
 [dependencies]
 chirp-client = { path = "../../../../../lib/chirp/client" }
-rivet-operation = { path = "../../../../../lib/operation/core" }
-prost = "0.10"
-rivet-connection = { path = "../../../../../lib/connection" }
+chirp-workflow = { path = "../../../../../lib/chirp-workflow/core" }
 reqwest = "0.11"
+rivet-connection = { path = "../../../../../lib/connection" }
 rivet-pools = { path = "../../../../../lib/pools" }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
@@ -19,11 +18,8 @@ tracing = "0.1"
 tracing-subscriber = { version = "0.3", default-features = false, features = ["fmt", "json", "ansi"] }
 tracing-logfmt = "0.3"
 uuid = { version = "1", features = ["v4"] }
-util-cluster = { package = "rivet-util-cluster", path = "../../util" }
 
-cluster-get = { path = "../../ops/get" }
-cluster-datacenter-get = { path = "../../ops/datacenter-get" }
-cluster-datacenter-list = { path = "../../ops/datacenter-list" }
+cluster = { path = "../.." }
 
 [dev-dependencies]
 chirp-worker = { path = "../../../../../lib/chirp/worker" }

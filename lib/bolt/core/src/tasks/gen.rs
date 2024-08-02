@@ -162,12 +162,6 @@ async fn generate_root(path: &Path) {
 					}
 				}
 			}
-
-			// Utils lib
-			let util_path = pkg.path().join("util");
-			if fs::metadata(&util_path).await.is_ok() {
-				set_license(&util_path.join("Cargo.toml")).await;
-			}
 		}
 	}
 

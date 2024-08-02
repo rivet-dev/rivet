@@ -1,13 +1,18 @@
-use std::sync::Arc;
-
-use rivet_operation::prelude::*;
+use chirp_workflow::prelude::*;
 
 mod monitors;
 use monitors::*;
 
 pub async fn run_from_env(pools: rivet_pools::Pools) -> GlobalResult<()> {
-	let shared_client = chirp_client::SharedClient::from_env(pools.clone())?;
+	let client = chirp_client::SharedClient::from_env(pools.clone())?.wrap_new("nomad-monitor");
+	let cache = rivet_cache::CacheInner::from_env(pools.clone())?;
 	let redis_job = pools.redis("persistent")?;
+	let ctx = StandaloneCtx::new(
+		chirp_workflow::compat::db_from_pools(&pools).await?,
+		rivet_connection::Connection::new(client, pools, cache),
+		"nomad-monitor",
+	)
+	.await?;
 
 	// Start nomad event monitor
 	let redis_index_key = "nomad:monitor_index";
@@ -18,27 +23,24 @@ pub async fn run_from_env(pools: rivet_pools::Pools) -> GlobalResult<()> {
 		redis_job,
 		redis_index_key,
 		&["Allocation", "Evaluation", "Node"],
-		|event| handle(shared_client.clone(), event),
+		|event| handle(ctx.clone(), event),
 	)
 	.await?;
 
 	Ok(())
 }
 
-async fn handle(
-	shared_client: Arc<chirp_client::SharedClient>,
-	event: nomad_util::monitor::NomadEvent,
-) {
+async fn handle(ctx: StandaloneCtx, event: nomad_util::monitor::NomadEvent) {
 	// TODO: Figure out how to abstract the branches
 	if let Some(payload) = event
 		.decode::<alloc_plan::PlanResult>("Allocation", "PlanResult")
 		.unwrap()
 	{
-		let client = shared_client.wrap_new("nomad-alloc-plan-monitor");
+		// let client = shared_client.wrap_new("nomad-alloc-plan-monitor");
 		let spawn_res = tokio::task::Builder::new()
 			.name("nomad_alloc_plan_monitor::handle_event")
 			.spawn(async move {
-				match alloc_plan::handle(client, &payload, event.payload.to_string()).await {
+				match alloc_plan::handle(ctx, &payload, event.payload.to_string()).await {
 					Ok(_) => {}
 					Err(err) => {
 						tracing::error!(?err, ?payload, "error handling event");
@@ -52,11 +54,11 @@ async fn handle(
 		.decode::<alloc_update::AllocationUpdated>("Allocation", "AllocationUpdated")
 		.unwrap()
 	{
-		let client = shared_client.wrap_new("nomad-alloc-updated-monitor");
+		// let client = shared_client.wrap_new("nomad-alloc-updated-monitor");
 		let spawn_res = tokio::task::Builder::new()
 			.name("nomad_alloc_update_monitor::handle_event")
 			.spawn(async move {
-				match alloc_update::handle(client, &payload, event.payload.to_string()).await {
+				match alloc_update::handle(ctx, &payload, event.payload.to_string()).await {
 					Ok(_) => {}
 					Err(err) => {
 						tracing::error!(?err, ?payload, "error handling event");
@@ -70,11 +72,11 @@ async fn handle(
 		.decode::<eval_update::PlanResult>("Evaluation", "EvaluationUpdated")
 		.unwrap()
 	{
-		let client = shared_client.wrap_new("nomad-eval-update-monitor");
+		// let client = shared_client.wrap_new("nomad-eval-update-monitor");
 		let spawn_res = tokio::task::Builder::new()
 			.name("nomad_eval_update_monitor::handle_event")
 			.spawn(async move {
-				match eval_update::handle(client, &payload, event.payload.to_string()).await {
+				match eval_update::handle(ctx, &payload, event.payload.to_string()).await {
 					Ok(_) => {}
 					Err(err) => {
 						tracing::error!(?err, ?payload, "error handling event");
@@ -88,11 +90,11 @@ async fn handle(
 		.decode::<node_registration::NodeRegistration>("Node", "NodeRegistration")
 		.unwrap()
 	{
-		let client = shared_client.wrap_new("nomad-node-registration-monitor");
+		// let client = shared_client.wrap_new("nomad-node-registration-monitor");
 		let spawn_res = tokio::task::Builder::new()
 			.name("nomad_node_registration_monitor::handle")
 			.spawn(async move {
-				match node_registration::handle(client, &payload).await {
+				match node_registration::handle(ctx, &payload).await {
 					Ok(_) => {}
 					Err(err) => {
 						tracing::error!(?err, ?payload, "error handling event");
@@ -106,11 +108,11 @@ async fn handle(
 		.decode::<node_drain::NodeDrain>("Node", "NodeDrain")
 		.unwrap()
 	{
-		let client = shared_client.wrap_new("nomad-node-drain-monitor");
+		// let client = shared_client.wrap_new("nomad-node-drain-monitor");
 		let spawn_res = tokio::task::Builder::new()
 			.name("nomad_node_drain_monitor::handle")
 			.spawn(async move {
-				match node_drain::handle(client, &payload).await {
+				match node_drain::handle(ctx, &payload).await {
 					Ok(_) => {}
 					Err(err) => {
 						tracing::error!(?err, ?payload, "error handling event");

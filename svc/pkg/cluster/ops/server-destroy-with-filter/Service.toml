@@ -1,7 +1,0 @@
-[service]
-name = "cluster-server-destroy-with-filter"
-
-[runtime]
-kind = "rust"
-
-[operation]

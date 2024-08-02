@@ -12,10 +12,9 @@ chirp-worker = { path = "../../../../lib/chirp/worker" }
 rivet-health-checks = { path = "../../../../lib/health-checks" }
 rivet-metrics = { path = "../../../../lib/metrics" }
 rivet-runtime = { path = "../../../../lib/runtime" }
-util-cluster = { package = "rivet-util-cluster", path = "../../cluster/util" }
 util-linode = { package = "rivet-util-linode", path = "../util" }
 
-cluster-datacenter-get = { path = "../../cluster/ops/datacenter-get" }
+cluster = { path = "../../cluster" }
 
 [dependencies.sqlx]
 git = "https://github.com/rivet-gg/sqlx"

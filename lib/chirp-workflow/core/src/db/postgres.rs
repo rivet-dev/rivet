@@ -183,6 +183,7 @@ impl Database for DatabasePostgres {
 			.map(|row| row.workflow_id)
 			.collect::<Vec<_>>();
 
+		// TODO: Convert into union query
 		// Fetch all events for all fetched workflows
 		let (
 			activity_events,

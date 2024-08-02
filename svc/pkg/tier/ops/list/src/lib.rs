@@ -1,12 +1,15 @@
+use linode::util::JobNodeConfig;
 use proto::backend::{self, pkg::*};
 use rivet_operation::prelude::*;
-use util_cluster::JobNodeConfig;
 
 #[operation(name = "tier-list")]
 async fn handle(ctx: OperationContext<tier::list::Request>) -> GlobalResult<tier::list::Response> {
-	let datacenters_res = op!([ctx] cluster_datacenter_get {
-		datacenter_ids: ctx.region_ids.clone(),
-	})
+	let datacenters_res = chirp_workflow::compat::op(
+		&ctx,
+		cluster::ops::datacenter::get::Input {
+			datacenter_ids: ctx.region_ids.iter().map(|id| id.as_uuid()).collect(),
+		},
+	)
 	.await?;
 
 	let hardware = datacenters_res
@@ -16,7 +19,7 @@ async fn handle(ctx: OperationContext<tier::list::Request>) -> GlobalResult<tier
 			let job_pool = unwrap!(
 				dc.pools
 					.iter()
-					.find(|pool| pool.pool_type == backend::cluster::PoolType::Job as i32),
+					.find(|pool| pool.pool_type == cluster::types::PoolType::Job),
 				"no job pool"
 			);
 
@@ -29,12 +32,15 @@ async fn handle(ctx: OperationContext<tier::list::Request>) -> GlobalResult<tier
 		})
 		.collect::<GlobalResult<Vec<_>>>()?;
 
-	let instance_types_res = op!([ctx] linode_instance_type_get {
-		hardware_ids: hardware
-			.iter()
-			.map(|(_, hardware)| hardware.clone())
-			.collect::<Vec<_>>(),
-	})
+	let instance_types_res = chirp_workflow::compat::op(
+		&ctx,
+		linode::ops::instance_type_get::Input {
+			hardware_ids: hardware
+				.iter()
+				.map(|(_, hardware)| hardware.clone())
+				.collect::<Vec<_>>(),
+		},
+	)
 	.await?;
 
 	let regions = hardware
@@ -49,17 +55,16 @@ async fn handle(ctx: OperationContext<tier::list::Request>) -> GlobalResult<tier
 			);
 			let _config = JobNodeConfig::from_linode(instance_type);
 
-			let config =
-				JobNodeConfig::from_linode(&linode::instance_type_get::response::InstanceType {
-					hardware_id: "".to_string(),
-					vcpus: 8,
-					memory: 2u64.pow(14),
-					disk: 2u64.pow(15) * 10,
-					transfer: 6_000,
-				});
+			let config = JobNodeConfig::from_linode(&linode::types::InstanceType {
+				hardware_id: "".to_string(),
+				vcpus: 8,
+				memory: 2u64.pow(14),
+				disk: 2u64.pow(15) * 10,
+				transfer: 6_000,
+			});
 
 			Ok(tier::list::response::Region {
-				region_id: datacenter_id,
+				region_id: Some(datacenter_id.into()),
 				tiers: vec![
 					generate_tier(&config, "basic-4d1", 4, 1),
 					generate_tier(&config, "basic-2d1", 2, 1),

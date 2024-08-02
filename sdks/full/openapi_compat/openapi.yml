@@ -206,7 +206,6 @@ components:
           type: string
       required:
       - server_id
-      - public_ip
       type: object
     AdminClustersUpdateDatacenterRequest:
       properties:

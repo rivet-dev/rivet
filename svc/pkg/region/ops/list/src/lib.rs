@@ -5,9 +5,12 @@ use rivet_operation::prelude::*;
 async fn handle(
 	ctx: OperationContext<region::list::Request>,
 ) -> GlobalResult<region::list::Response> {
-	let datacenter_list_res = op!([ctx] cluster_datacenter_list {
-		cluster_ids: vec![util_cluster::default_cluster_id().into()],
-	})
+	let datacenter_list_res = chirp_workflow::compat::op(
+		&ctx,
+		cluster::ops::datacenter::list::Input {
+			cluster_ids: vec![cluster::util::default_cluster_id()],
+		},
+	)
 	.await?;
 	let cluster = unwrap!(
 		datacenter_list_res.clusters.first(),
@@ -15,6 +18,11 @@ async fn handle(
 	);
 
 	Ok(region::list::Response {
-		region_ids: cluster.datacenter_ids.clone(),
+		region_ids: cluster
+			.datacenter_ids
+			.iter()
+			.cloned()
+			.map(Into::into)
+			.collect(),
 	})
 }

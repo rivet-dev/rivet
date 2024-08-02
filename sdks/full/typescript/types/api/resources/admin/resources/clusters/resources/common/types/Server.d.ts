@@ -3,5 +3,5 @@
  */
 export interface Server {
     serverId: string;
-    publicIp: string;
+    publicIp?: string;
 }

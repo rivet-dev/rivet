@@ -2,38 +2,45 @@ use proto::backend::{self, pkg::*};
 use rivet_operation::prelude::*;
 
 fn convert_datacenter(
-	datacenter: &backend::cluster::Datacenter,
-	locations: &[cluster::datacenter_location_get::response::Datacenter],
+	datacenter: &cluster::types::Datacenter,
+	locations: &[cluster::ops::datacenter::location_get::Datacenter],
 ) -> GlobalResult<backend::region::Region> {
-	let datacenter_id = unwrap_ref!(datacenter.datacenter_id).as_uuid();
-	let provider = unwrap!(backend::cluster::Provider::from_i32(datacenter.provider));
-
 	let coords = locations
 		.iter()
 		.find(|location| location.datacenter_id == datacenter.datacenter_id)
-		.and_then(|dc| dc.coords.clone())
-		.unwrap_or(backend::net::Coordinates {
+		.map(|dc| dc.coords.clone())
+		.unwrap_or(cluster::ops::datacenter::location_get::Coordinates {
 			latitude: 0.0,
 			longitude: 0.0,
 		});
 
 	Ok(backend::region::Region {
-		region_id: datacenter.datacenter_id,
+		region_id: Some(datacenter.datacenter_id.into()),
 		enabled: true,
 		nomad_region: "global".into(),
-		nomad_datacenter: datacenter_id.to_string(),
-		provider: match provider {
-			backend::cluster::Provider::Linode => "linode".to_string(),
+		nomad_datacenter: datacenter.datacenter_id.to_string(),
+		provider: match datacenter.provider {
+			cluster::types::Provider::Linode => "linode".to_string(),
 		},
 		provider_region: datacenter.provider_datacenter_id.clone(),
-		provider_display_name: match provider {
-			backend::cluster::Provider::Linode => "Linode".to_string(),
+		provider_display_name: match datacenter.provider {
+			cluster::types::Provider::Linode => "Linode".to_string(),
 		},
 		region_display_name: datacenter.display_name.clone(),
 		name_id: datacenter.name_id.clone(),
-		coords: Some(coords),
+		coords: Some(backend::net::Coordinates {
+			latitude: coords.latitude,
+			longitude: coords.longitude,
+		}),
 
-		build_delivery_method: datacenter.build_delivery_method,
+		build_delivery_method: match datacenter.build_delivery_method {
+			cluster::types::BuildDeliveryMethod::TrafficServer => {
+				backend::cluster::BuildDeliveryMethod::TrafficServer as i32
+			}
+			cluster::types::BuildDeliveryMethod::S3Direct => {
+				backend::cluster::BuildDeliveryMethod::S3Direct as i32
+			}
+		},
 	})
 }
 
@@ -41,13 +48,24 @@ fn convert_datacenter(
 async fn handle(
 	ctx: OperationContext<region::get::Request>,
 ) -> GlobalResult<region::get::Response> {
+	let datacenter_ids = ctx
+		.region_ids
+		.iter()
+		.map(|id| id.as_uuid())
+		.collect::<Vec<_>>();
 	let (datacenters_res, locations_res) = tokio::try_join!(
-		op!([ctx] cluster_datacenter_get {
-			datacenter_ids: ctx.region_ids.clone(),
-		}),
-		op!([ctx] cluster_datacenter_location_get {
-			datacenter_ids: ctx.region_ids.clone(),
-		}),
+		chirp_workflow::compat::op(
+			&ctx,
+			cluster::ops::datacenter::get::Input {
+				datacenter_ids: datacenter_ids.clone(),
+			},
+		),
+		chirp_workflow::compat::op(
+			&ctx,
+			cluster::ops::datacenter::location_get::Input {
+				datacenter_ids: datacenter_ids.clone(),
+			},
+		),
 	)?;
 
 	let regions = datacenters_res

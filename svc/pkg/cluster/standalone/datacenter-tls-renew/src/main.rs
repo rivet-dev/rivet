@@ -1,6 +1,6 @@
 use std::time::Duration;
 
-use rivet_operation::prelude::*;
+use chirp_workflow::prelude::*;
 
 fn main() -> GlobalResult<()> {
 	rivet_runtime::run(start()).unwrap()
