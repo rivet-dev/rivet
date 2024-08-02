@@ -20,6 +20,19 @@ pub enum Event {
 	Branch,
 }
 
+impl std::fmt::Display for Event {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		match self {
+			Event::Activity(activity) => write!(f, "activity {:?}", activity.activity_id.name),
+			Event::Signal(signal) => write!(f, "signal {:?}", signal.name),
+			Event::SignalSend(signal_send) => write!(f, "signal send {:?}", signal_send.name),
+			Event::MessageSend(message_send) => write!(f, "message send {:?}", message_send.name),
+			Event::SubWorkflow(sub_workflow) => write!(f, "sub workflow {:?}", sub_workflow.name),
+			Event::Branch => write!(f, "branch"),
+		}
+	}
+}
+
 #[derive(Debug)]
 pub struct ActivityEvent {
 	pub activity_id: ActivityId,
@@ -108,7 +121,7 @@ impl TryFrom<MessageSendEventRow> for MessageSendEvent {
 #[derive(Debug)]
 pub struct SubWorkflowEvent {
 	pub sub_workflow_id: Uuid,
-	pub sub_workflow_name: String,
+	pub name: String,
 }
 
 impl TryFrom<SubWorkflowEventRow> for SubWorkflowEvent {
@@ -117,7 +130,7 @@ impl TryFrom<SubWorkflowEventRow> for SubWorkflowEvent {
 	fn try_from(value: SubWorkflowEventRow) -> WorkflowResult<Self> {
 		Ok(SubWorkflowEvent {
 			sub_workflow_id: value.sub_workflow_id,
-			sub_workflow_name: value.sub_workflow_name,
+			name: value.sub_workflow_name,
 		})
 	}
 }

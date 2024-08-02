@@ -27,8 +27,8 @@ pub enum WorkflowError {
 	#[error("workflow not found")]
 	WorkflowNotFound,
 
-	#[error("history diverged")]
-	HistoryDiverged,
+	#[error("history diverged: {0}")]
+	HistoryDiverged(String),
 
 	#[error("serialize workflow input: {0}")]
 	SerializeWorkflowInput(serde_json::Error),
@@ -104,6 +104,9 @@ pub enum WorkflowError {
 
 	#[error("sql: {0}")]
 	Sqlx(sqlx::Error),
+
+	#[error("max sql retries")]
+	MaxSqlRetries,
 
 	#[error("pools: {0}")]
 	Pools(#[from] rivet_pools::Error),

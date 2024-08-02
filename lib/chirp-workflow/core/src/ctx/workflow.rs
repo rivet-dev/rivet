@@ -258,6 +258,8 @@ impl WorkflowCtx {
 		activity_id: &ActivityId,
 		create_ts: i64,
 	) -> WorkflowResult<A::Output> {
+		tracing::debug!(id=%self.workflow_id, activity_name=%A::NAME, "running activity");
+
 		let ctx = ActivityCtx::new(
 			self.workflow_id,
 			self.db.clone(),
@@ -372,11 +374,19 @@ impl WorkflowCtx {
 		let id = if let Some(event) = event {
 			// Validate history is consistent
 			let Event::SubWorkflow(sub_workflow) = event else {
-				return Err(WorkflowError::HistoryDiverged).map_err(GlobalError::raw);
+				return Err(WorkflowError::HistoryDiverged(format!(
+					"expected {event}, found sub workflow {}",
+					I::Workflow::NAME
+				)))
+				.map_err(GlobalError::raw);
 			};
 
-			if sub_workflow.sub_workflow_name != I::Workflow::NAME {
-				return Err(WorkflowError::HistoryDiverged).map_err(GlobalError::raw);
+			if sub_workflow.name != I::Workflow::NAME {
+				return Err(WorkflowError::HistoryDiverged(format!(
+					"expected {event}, found sub_workflow {}",
+					I::Workflow::NAME
+				)))
+				.map_err(GlobalError::raw);
 			}
 
 			tracing::debug!(
@@ -592,15 +602,25 @@ impl WorkflowCtx {
 		let output = if let Some(event) = event {
 			// Validate history is consistent
 			let Event::Activity(activity) = event else {
-				return Err(WorkflowError::HistoryDiverged).map_err(GlobalError::raw);
+				return Err(WorkflowError::HistoryDiverged(format!(
+					"expected {event}, found activity {}",
+					activity_id.name
+				)))
+				.map_err(GlobalError::raw);
 			};
 
 			if activity.activity_id != activity_id {
-				return Err(WorkflowError::HistoryDiverged).map_err(GlobalError::raw);
+				return Err(WorkflowError::HistoryDiverged(format!(
+					"expected {event}, found activity {}",
+					activity_id.name
+				)))
+				.map_err(GlobalError::raw);
 			}
 
 			// Activity succeeded
 			if let Some(output) = activity.parse_output().map_err(GlobalError::raw)? {
+				tracing::debug!(id=%self.workflow_id, activity_name=%I::Activity::NAME, "replaying activity");
+				
 				output
 			}
 			// Activity failed, retry
@@ -677,8 +697,20 @@ impl WorkflowCtx {
 		let signal_id = if let Some(event) = event {
 			// Validate history is consistent
 			let Event::SignalSend(signal) = event else {
-				return Err(WorkflowError::HistoryDiverged).map_err(GlobalError::raw);
+				return Err(WorkflowError::HistoryDiverged(format!(
+					"expected {event}, found signal send {}",
+					T::NAME
+				)))
+				.map_err(GlobalError::raw);
 			};
+
+			if signal.name != T::NAME {
+				return Err(WorkflowError::HistoryDiverged(format!(
+					"expected {event}, found signal send {}",
+					T::NAME
+				)))
+				.map_err(GlobalError::raw);
+			}
 
 			tracing::debug!(id=%self.workflow_id, signal_name=%signal.name, signal_id=%signal.signal_id, "replaying signal dispatch");
 
@@ -728,8 +760,20 @@ impl WorkflowCtx {
 		let signal_id = if let Some(event) = event {
 			// Validate history is consistent
 			let Event::SignalSend(signal) = event else {
-				return Err(WorkflowError::HistoryDiverged).map_err(GlobalError::raw);
+				return Err(WorkflowError::HistoryDiverged(format!(
+					"expected {event}, found signal send {}",
+					T::NAME
+				)))
+				.map_err(GlobalError::raw);
 			};
+
+			if signal.name != T::NAME {
+				return Err(WorkflowError::HistoryDiverged(format!(
+					"expected {event}, found signal send {}",
+					T::NAME
+				)))
+				.map_err(GlobalError::raw);
+			}
 
 			tracing::debug!(id=%self.workflow_id, signal_name=%signal.name, signal_id=%signal.signal_id, "replaying tagged signal dispatch");
 
@@ -777,7 +821,10 @@ impl WorkflowCtx {
 		let signal = if let Some(event) = event {
 			// Validate history is consistent
 			let Event::Signal(signal) = event else {
-				return Err(WorkflowError::HistoryDiverged).map_err(GlobalError::raw);
+				return Err(WorkflowError::HistoryDiverged(format!(
+					"expected {event}, found signal"
+				)))
+				.map_err(GlobalError::raw);
 			};
 
 			tracing::debug!(name=%self.name, id=%self.workflow_id, signal_name=%signal.name, "replaying signal");
@@ -827,7 +874,10 @@ impl WorkflowCtx {
 		let signal = if let Some(event) = event {
 			// Validate history is consistent
 			let Event::Signal(signal) = event else {
-				return Err(WorkflowError::HistoryDiverged).map_err(GlobalError::raw);
+				return Err(WorkflowError::HistoryDiverged(format!(
+					"expected {event}, found signal"
+				)))
+				.map_err(GlobalError::raw);
 			};
 
 			tracing::debug!(name=%self.name, id=%self.workflow_id, signal_name=%signal.name, "replaying signal");
@@ -876,7 +926,10 @@ impl WorkflowCtx {
 
 			// Validate history is consistent
 			let Event::Signal(signal) = event else {
-				return Err(WorkflowError::HistoryDiverged).map_err(GlobalError::raw);
+				return Err(WorkflowError::HistoryDiverged(format!(
+					"expected {event}, found signal"
+				)))
+				.map_err(GlobalError::raw);
 			};
 
 			Some(T::parse(&signal.name, signal.body.clone()).map_err(GlobalError::raw)?)
@@ -908,8 +961,20 @@ impl WorkflowCtx {
 		if let Some(event) = event {
 			// Validate history is consistent
 			let Event::MessageSend(msg) = event else {
-				return Err(WorkflowError::HistoryDiverged).map_err(GlobalError::raw);
+				return Err(WorkflowError::HistoryDiverged(format!(
+					"expected {event}, found message send {}",
+					M::NAME
+				)))
+				.map_err(GlobalError::raw);
 			};
+
+			if msg.name != M::NAME {
+				return Err(WorkflowError::HistoryDiverged(format!(
+					"expected {event}, found message send {}",
+					M::NAME
+				)))
+				.map_err(GlobalError::raw);
+			}
 
 			tracing::debug!(id=%self.workflow_id, msg_name=%msg.name, "replaying message dispatch");
 		}
@@ -954,8 +1019,20 @@ impl WorkflowCtx {
 		if let Some(event) = event {
 			// Validate history is consistent
 			let Event::MessageSend(msg) = event else {
-				return Err(WorkflowError::HistoryDiverged).map_err(GlobalError::raw);
+				return Err(WorkflowError::HistoryDiverged(format!(
+					"expected {event}, found message send {}",
+					M::NAME
+				)))
+				.map_err(GlobalError::raw);
 			};
+
+			if msg.name != M::NAME {
+				return Err(WorkflowError::HistoryDiverged(format!(
+					"expected {event}, found message send {}",
+					M::NAME
+				)))
+				.map_err(GlobalError::raw);
+			}
 
 			tracing::debug!(id=%self.workflow_id, msg_name=%msg.name, "replaying message dispatch");
 		}
