@@ -369,6 +369,16 @@ mod tests {
 				}]),
 				..TaskGroup::new()
 			}]),
+			// Disables migrating in the event of a node drain
+			migrate: Some(Box::new(MigrateStrategy {
+				max_parallel: Some(0),
+				..MigrateStrategy::new()
+			})),
+			// Disables rescheduling in the event of a node drain
+			reschedule: Some(Box::new(ReschedulePolicy {
+				attempts: Some(0),
+				..ReschedulePolicy::new()
+			})),
 			..Job::new()
 		}
 	}
