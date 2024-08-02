@@ -30,6 +30,8 @@ pub async fn linode_server(ctx: &mut WorkflowCtx, input: &Input) -> GlobalResult
 	let provision_res = match provision(ctx, input, &mut cleanup_ctx).await {
 		// If we cannot recover a provisioning error, send a failed signal and clean up resources
 		Err(err) if !err.is_workflow_recoverable() => {
+			tracing::warn!(?err);
+
 			ctx.dispatch_workflow(cleanup::Input {
 				api_token: input.api_token.clone(),
 				ssh_key_id: cleanup_ctx.ssh_key_id,

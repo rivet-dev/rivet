@@ -636,8 +636,11 @@ impl WorkflowCtx {
 
 			if activity.activity_id != activity_id {
 				return Err(WorkflowError::HistoryDiverged(format!(
-					"expected {event}, found activity {}",
-					activity_id.name
+					"expected activity {}#{:x}, found activity {}#{:x}",
+					activity.activity_id.name,
+					activity.activity_id.input_hash,
+					activity_id.name,
+					activity_id.input_hash,
 				)))
 				.map_err(GlobalError::raw);
 			}

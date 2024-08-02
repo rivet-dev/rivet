@@ -63,7 +63,6 @@ pub(crate) async fn cluster_datacenter(ctx: &mut WorkflowCtx, input: &Input) -> 
 
 	ctx.repeat(|ctx| {
 		let datacenter_id = input.datacenter_id;
-		let provider = input.provider.clone();
 
 		async move {
 			match ctx.listen::<Main>().await? {
@@ -90,7 +89,6 @@ pub(crate) async fn cluster_datacenter(ctx: &mut WorkflowCtx, input: &Input) -> 
 							datacenter_id,
 							server_id: sig.server_id,
 							pool_type: sig.pool_type,
-							provider: provider.clone(),
 							tags: sig.tags,
 						},
 					)

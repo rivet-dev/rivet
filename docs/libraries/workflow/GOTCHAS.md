@@ -108,7 +108,3 @@ the internal location.
 > **\*** Even if they did know about each other via atomics, there is no guarantee of consistency from
 > `buffer_unordered`. Preemptively incrementing the location ensures consistency regardless of the order or
 > completion time of the futures.
-
-## Loops
-
-TODO

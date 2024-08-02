@@ -1,5 +1,6 @@
 mod activity;
 pub(crate) mod api;
+mod backfill;
 mod listen;
 pub mod message;
 mod operation;
@@ -8,6 +9,7 @@ mod test;
 pub(crate) mod workflow;
 pub use activity::ActivityCtx;
 pub use api::ApiCtx;
+pub use backfill::BackfillCtx;
 pub use listen::ListenCtx;
 pub use message::MessageCtx;
 pub use operation::OperationCtx;

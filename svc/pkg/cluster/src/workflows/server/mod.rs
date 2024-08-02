@@ -22,7 +22,6 @@ use crate::{
 pub(crate) struct Input {
 	pub datacenter_id: Uuid,
 	pub server_id: Uuid,
-	pub provider: Provider,
 	pub pool_type: PoolType,
 	pub tags: Vec<String>,
 }
@@ -54,7 +53,7 @@ pub(crate) async fn cluster_server(ctx: &mut WorkflowCtx, input: &Input) -> Glob
 			.activity(GetPrebakeInput {
 				datacenter_id: input.datacenter_id,
 				pool_type: input.pool_type.clone(),
-				provider: input.provider.clone(),
+				provider: dc.provider.clone(),
 			})
 			.await?;
 
@@ -62,7 +61,7 @@ pub(crate) async fn cluster_server(ctx: &mut WorkflowCtx, input: &Input) -> Glob
 		if image_res.updated {
 			ctx.dispatch_workflow(crate::workflows::prebake::Input {
 				datacenter_id: input.datacenter_id,
-				provider: input.provider.clone(),
+				provider: dc.provider.clone(),
 				pool_type: input.pool_type.clone(),
 				install_script_hash: crate::util::INSTALL_SCRIPT_HASH.to_string(),
 				tags: Vec::new(),
@@ -90,7 +89,7 @@ pub(crate) async fn cluster_server(ctx: &mut WorkflowCtx, input: &Input) -> Glob
 			hardware.provider_hardware,
 		);
 
-		match input.provider {
+		match dc.provider {
 			Provider::Linode => {
 				let workflow_id = ctx
 					.dispatch_tagged_workflow(
@@ -146,7 +145,9 @@ pub(crate) async fn cluster_server(ctx: &mut WorkflowCtx, input: &Input) -> Glob
 			datacenter_id: dc.datacenter_id,
 			provider_datacenter_id: dc.provider_datacenter_id.clone(),
 			datacenter_name_id: dc.name_id.clone(),
-			provision_res,
+			provider_server_id: provision_res.provider_server_id.clone(),
+			provider_hardware: provision_res.provider_hardware.clone(),
+			public_ip: provision_res.public_ip,
 			already_installed,
 		})
 		.await?;
@@ -266,36 +267,34 @@ pub(crate) async fn cluster_server(ctx: &mut WorkflowCtx, input: &Input) -> Glob
 				.await?;
 			}
 			Main::Taint(_) => {} // Only for state
-			Main::Destroy(_) => {
-				if let PoolType::Gg = input.pool_type {
-					ctx.workflow(dns_delete::Input {
-						server_id: input.server_id,
-					})
-					.await?;
-				}
+			Main::Destroy(_) => break,
+		}
+	}
 
-				match input.provider {
-					Provider::Linode => {
-						tracing::info!(server_id=?input.server_id, "destroying linode server");
+	if let PoolType::Gg = input.pool_type {
+		ctx.workflow(dns_delete::Input {
+			server_id: input.server_id,
+		})
+		.await?;
+	}
 
-						ctx.tagged_signal(
-							&json!({
-								"server_id": input.server_id,
-							}),
-							linode::workflows::server::Destroy {},
-						)
-						.await?;
+	match dc.provider {
+		Provider::Linode => {
+			tracing::info!(server_id=?input.server_id, "destroying linode server");
 
-						// Wait for workflow to complete
-						ctx.wait_for_workflow::<linode::workflows::server::Workflow>(
-							provider_server_workflow_id,
-						)
-						.await?;
-					}
-				}
+			ctx.tagged_signal(
+				&json!({
+					"server_id": input.server_id,
+				}),
+				linode::workflows::server::Destroy {},
+			)
+			.await?;
 
-				break;
-			}
+			// Wait for workflow to complete
+			ctx.wait_for_workflow::<linode::workflows::server::Workflow>(
+				provider_server_workflow_id,
+			)
+			.await?;
 		}
 	}
 
@@ -474,7 +473,9 @@ struct UpdateDbInput {
 	datacenter_id: Uuid,
 	provider_datacenter_id: String,
 	datacenter_name_id: String,
-	provision_res: ProvisionResponse,
+	provider_server_id: String,
+	provider_hardware: String,
+	public_ip: Ipv4Addr,
 	already_installed: bool,
 }
 
@@ -496,9 +497,9 @@ async fn update_db(ctx: &ActivityCtx, input: &UpdateDbInput) -> GlobalResult<()>
 		RETURNING create_ts
 		",
 		input.server_id,
-		&input.provision_res.provider_server_id,
-		&input.provision_res.provider_hardware,
-		IpAddr::V4(input.provision_res.public_ip),
+		&input.provider_server_id,
+		&input.provider_hardware,
+		IpAddr::V4(input.public_ip),
 		provision_complete_ts,
 		if input.already_installed {
 			Some(provision_complete_ts)

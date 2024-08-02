@@ -1,7 +1,7 @@
 use std::{env, future::Future, sync::Once, time::Duration};
 
 use thiserror::Error;
-use tracing_subscriber::{fmt::writer::MakeWriterExt, prelude::*};
+use tracing_subscriber::prelude::*;
 
 mod metrics;
 

@@ -312,7 +312,7 @@ pub fn signal(attr: TokenStream, item: TokenStream) -> TokenStream {
 			}
 
 			fn parse(_name: &str, body: serde_json::Value) -> chirp_workflow::prelude::WorkflowResult<Self> {
-				serde_json::from_value(body).map_err(WorkflowError::DeserializeActivityOutput)
+				serde_json::from_value(body).map_err(WorkflowError::DeserializeSignalBody)
 			}
 		}
 	};

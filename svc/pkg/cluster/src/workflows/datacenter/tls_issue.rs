@@ -87,7 +87,7 @@ struct OrderOutput {
 }
 
 #[activity(Order)]
-#[timeout = 90]
+#[timeout = 130]
 async fn order(ctx: &ActivityCtx, input: &OrderInput) -> GlobalResult<OrderOutput> {
 	let client = cf_client().await?;
 
@@ -304,7 +304,7 @@ async fn poll_txt_dns(hostname: &str, content: &str) -> GlobalResult<()> {
 	let fqdn = format!("{hostname}.");
 
 	// Retry DNS until the TXT record shows up
-	for attempt in 1..=100 {
+	for attempt in 1..=60 {
 		tokio::time::sleep(std::time::Duration::from_secs(2)).await;
 
 		tracing::info!(%attempt, %fqdn, "attempting to resolve dns");

@@ -155,9 +155,9 @@ impl WorkflowError {
 
 	pub fn is_recoverable(&self) -> bool {
 		match self {
-			WorkflowError::ActivityFailure(_, _) => true,
-			WorkflowError::ActivityTimeout => true,
-			WorkflowError::OperationTimeout => true,
+			WorkflowError::ActivityFailure(_, _)
+			| WorkflowError::ActivityTimeout
+			| WorkflowError::OperationTimeout => true,
 			_ => false,
 		}
 	}

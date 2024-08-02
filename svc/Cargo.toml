@@ -66,6 +66,7 @@ members = [
 	"pkg/cluster/standalone/default-update",
 	"pkg/cluster/standalone/gc",
 	"pkg/cluster/standalone/metrics-publish",
+	"pkg/cluster/standalone/workflow-backfill",
 	"pkg/custom-user-avatar/ops/list-for-game",
 	"pkg/custom-user-avatar/ops/upload-complete",
 	"pkg/debug/ops/email-res",

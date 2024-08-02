@@ -19,7 +19,7 @@ use chirp_workflow::prelude::*;
 use futures_util::{FutureExt, StreamExt, TryStreamExt};
 use serde_json::json;
 
-use crate::types::{Datacenter, PoolType, Provider};
+use crate::types::{Datacenter, PoolType};
 
 #[derive(sqlx::FromRow)]
 struct ServerRow {
@@ -76,7 +76,6 @@ enum DrainState {
 
 struct PoolCtx {
 	datacenter_id: Uuid,
-	provider: Provider,
 	pool_type: PoolType,
 	desired_count: usize,
 }
@@ -125,7 +124,6 @@ enum Action {
 	Provision {
 		server_id: Uuid,
 		pool_type: PoolType,
-		provider: Provider,
 	},
 	Drain {
 		server_id: Uuid,
@@ -144,7 +142,6 @@ impl Action {
 			Action::Provision {
 				server_id,
 				pool_type,
-				provider,
 			} => {
 				ctx.dispatch_tagged_workflow(
 					&json!({
@@ -154,7 +151,6 @@ impl Action {
 						datacenter_id,
 						server_id,
 						pool_type,
-						provider,
 						tags: Vec::new(),
 					},
 				)
@@ -275,7 +271,6 @@ async fn inner(
 	for pool in &dc.pools {
 		let pool_ctx = PoolCtx {
 			datacenter_id: dc.datacenter_id,
-			provider: dc.provider.clone(),
 			pool_type: pool.pool_type.clone(),
 			desired_count: pool.desired_count.max(pool.min_count).min(pool.max_count) as usize,
 		};
@@ -748,7 +743,6 @@ async fn provision_server(
 	actions.push(Action::Provision {
 		server_id,
 		pool_type: pctx.pool_type.clone(),
-		provider: pctx.provider.clone(),
 	});
 
 	Ok(())

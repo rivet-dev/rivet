@@ -67,7 +67,7 @@ macro_rules! join_signal {
 						Ok(
 							Self::$signals(
 								serde_json::from_value(body)
-									.map_err(WorkflowError::DeserializeActivityOutput)?
+									.map_err(WorkflowError::DeserializeSignalBody)?
 							)
 						)
 					}
