@@ -799,30 +799,30 @@ impl Client {
 
 					// Automatically expire
 					pipe.expire(&history_key, ttl as usize).ignore();
+				}
 
-					let perf = self.perf().clone();
-					let mut conn = self.redis_chirp_ephemeral.clone();
-					let spawn_res = join_set
-						.build_task()
-						.name("chirp_client::message_write_tail")
-						.spawn(
-							async move {
-								let span = perf.start(M::PERF_LABEL_WRITE_TAIL).await;
-								match pipe.query_async::<_, ()>(&mut conn).await {
-									Ok(_) => {
-										tracing::debug!("write to redis tail succeeded");
-									}
-									Err(err) => {
-										tracing::error!(?err, "failed to write to redis tail");
-									}
+				let perf = self.perf().clone();
+				let mut conn = self.redis_chirp_ephemeral.clone();
+				let spawn_res = join_set
+					.build_task()
+					.name("chirp_client::message_write_tail")
+					.spawn(
+						async move {
+							let span = perf.start(M::PERF_LABEL_WRITE_TAIL).await;
+							match pipe.query_async::<_, ()>(&mut conn).await {
+								Ok(_) => {
+									tracing::debug!("write to redis tail succeeded");
 								}
-								span.end();
+								Err(err) => {
+									tracing::error!(?err, "failed to write to redis tail");
+								}
 							}
-							.in_current_span(),
-						);
-					if let Err(err) = spawn_res {
-						tracing::error!(?err, "failed to spawn message_write_tail task");
-					}
+							span.end();
+						}
+						.in_current_span(),
+					);
+				if let Err(err) = spawn_res {
+					tracing::error!(?err, "failed to spawn message_write_tail task");
 				}
 			}
 		}
