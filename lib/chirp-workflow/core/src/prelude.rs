@@ -1,5 +1,5 @@
 // Internal types
-pub use chirp_client::prelude::*;
+pub use chirp_client::prelude::{msg, op, rpc, subscribe, tail_all, tail_anchor, tail_read};
 pub use formatted_error;
 pub use global_error::{ext::*, prelude::*};
 #[doc(hidden)]
@@ -20,6 +20,7 @@ pub use crate::{
 	error::{WorkflowError, WorkflowResult},
 	executable::closure,
 	executable::Executable,
+	message::Message,
 	operation::Operation,
 	registry::Registry,
 	signal::{join_signal, Listen, Signal},
@@ -36,6 +37,7 @@ pub use async_trait;
 pub use futures_util;
 #[doc(hidden)]
 pub use indoc::*;
+pub use uuid::Uuid;
 // #[doc(hidden)]
 // pub use redis;
 #[doc(hidden)]

@@ -5,6 +5,7 @@ pub mod db;
 mod error;
 mod event;
 mod executable;
+pub mod message;
 pub mod operation;
 pub mod prelude;
 pub mod registry;

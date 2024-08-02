@@ -25,7 +25,18 @@ impl WatchIndexQuery {
 	/// Converts the `WatchIndexQuery` into a `TailAnchor` for use with the Chirp client.
 	pub fn to_consumer(self) -> Result<Option<TailAnchor>, ClientError> {
 		if let Some(watch_index) = self.watch_index {
-			Ok(Some(chirp_client::TailAnchor {
+			Ok(Some(TailAnchor {
+				start_time: watch_index.parse()?,
+			}))
+		} else {
+			Ok(None)
+		}
+	}
+
+	/// Converts the `WatchIndexQuery` into a `TailAnchor` for use with Chirp workflows.
+	pub fn to_workflow(self) -> Result<Option<chirp_workflow::ctx::message::TailAnchor>, ClientError> {
+		if let Some(watch_index) = self.watch_index {
+			Ok(Some(chirp_workflow::ctx::message::TailAnchor {
 				start_time: watch_index.parse()?,
 			}))
 		} else {

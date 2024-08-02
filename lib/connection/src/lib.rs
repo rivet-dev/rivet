@@ -71,6 +71,10 @@ impl Connection {
 		self.cache.clone()
 	}
 
+	pub async fn nats(&self) -> Result<NatsPool, rivet_pools::Error> {
+		self.pools.nats()
+	}
+
 	pub async fn crdb(&self) -> Result<CrdbPool, rivet_pools::Error> {
 		self.pools.crdb()
 	}
@@ -92,6 +96,10 @@ impl Connection {
 	}
 
 	pub async fn redis_user_presence(&self) -> Result<RedisPool, rivet_pools::Error> {
+		self.pools.redis("ephemeral")
+	}
+
+	pub async fn redis_chirp_ephemeral(&self) -> Result<RedisPool, rivet_pools::Error> {
 		self.pools.redis("ephemeral")
 	}
 

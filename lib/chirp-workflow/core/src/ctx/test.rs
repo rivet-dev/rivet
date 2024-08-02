@@ -5,8 +5,13 @@ use tokio::time::Duration;
 use uuid::Uuid;
 
 use crate::{
-	util, DatabaseHandle, DatabasePostgres, Operation, OperationCtx, OperationInput, Signal,
-	Workflow, WorkflowError, WorkflowInput,
+	ctx::{
+		message::{SubscriptionHandle, TailAnchor, TailAnchorResponse},
+		MessageCtx, OperationCtx,
+	},
+	message::{Message, ReceivedMessage},
+	util, DatabaseHandle, DatabasePostgres, Operation, OperationInput, Signal, Workflow,
+	WorkflowError, WorkflowInput,
 };
 
 pub struct TestCtx {
@@ -17,6 +22,7 @@ pub struct TestCtx {
 	db: DatabaseHandle,
 
 	conn: rivet_connection::Connection,
+	msg_ctx: MessageCtx,
 
 	// Backwards compatibility
 	op_ctx: rivet_operation::OperationContext<()>,
@@ -60,6 +66,7 @@ impl TestCtx {
 		);
 
 		let db = DatabasePostgres::from_pool(pools.crdb().unwrap());
+		let msg_ctx = MessageCtx::new(&conn, req_id, ray_id).await.unwrap();
 
 		TestCtx {
 			name: service_name,
@@ -68,6 +75,7 @@ impl TestCtx {
 			db,
 			conn,
 			op_ctx,
+			msg_ctx,
 		}
 	}
 }
@@ -262,6 +270,66 @@ impl TestCtx {
 			.map_err(WorkflowError::OperationFailure)
 			.map_err(GlobalError::raw)
 	}
+
+	pub async fn msg<M>(&self, tags: serde_json::Value, body: M) -> GlobalResult<()>
+	where
+		M: Message,
+	{
+		self.msg_ctx
+			.message(tags, body)
+			.await
+			.map_err(GlobalError::raw)
+	}
+
+	pub async fn msg_wait<M>(&self, tags: serde_json::Value, body: M) -> GlobalResult<()>
+	where
+		M: Message,
+	{
+		self.msg_ctx
+			.message_wait(tags, body)
+			.await
+			.map_err(GlobalError::raw)
+	}
+
+	pub async fn subscribe<M>(
+		&self,
+		tags: &serde_json::Value,
+	) -> GlobalResult<SubscriptionHandle<M>>
+	where
+		M: Message,
+	{
+		self.msg_ctx
+			.subscribe::<M>(tags)
+			.await
+			.map_err(GlobalError::raw)
+	}
+
+	pub async fn tail_read<M>(
+		&self,
+		tags: serde_json::Value,
+	) -> GlobalResult<Option<ReceivedMessage<M>>>
+	where
+		M: Message,
+	{
+		self.msg_ctx
+			.tail_read::<M>(tags)
+			.await
+			.map_err(GlobalError::raw)
+	}
+
+	pub async fn tail_anchor<M>(
+		&self,
+		tags: serde_json::Value,
+		anchor: &TailAnchor,
+	) -> GlobalResult<TailAnchorResponse<M>>
+	where
+		M: Message,
+	{
+		self.msg_ctx
+			.tail_anchor::<M>(tags, anchor)
+			.await
+			.map_err(GlobalError::raw)
+	}
 }
 
 impl TestCtx {
@@ -352,6 +420,7 @@ impl TestCtx {
 	}
 }
 
+/// Like a subscription handle for messages but for workflows. Should only be used in tests
 pub struct ObserveHandle {
 	db: DatabaseHandle,
 	name: &'static str,
@@ -362,7 +431,6 @@ pub struct ObserveHandle {
 impl ObserveHandle {
 	pub async fn next(&mut self) -> GlobalResult<Uuid> {
 		tracing::info!(name=%self.name, input=?self.input, "observing workflow");
-		tracing::info!(ts=%self.ts);
 
 		let (workflow_id, create_ts) = loop {
 			if let Some((workflow_id, create_ts)) = self

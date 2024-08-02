@@ -6,8 +6,13 @@ use serde::Serialize;
 use uuid::Uuid;
 
 use crate::{
-	ctx::OperationCtx, DatabaseHandle, Operation, OperationInput, Signal, Workflow, WorkflowError,
-	WorkflowInput,
+	ctx::{
+		message::{SubscriptionHandle, TailAnchor, TailAnchorResponse},
+		MessageCtx, OperationCtx,
+	},
+	error::WorkflowResult,
+	message::{Message, ReceivedMessage},
+	DatabaseHandle, Operation, OperationInput, Signal, Workflow, WorkflowError, WorkflowInput,
 };
 
 pub const WORKFLOW_TIMEOUT: Duration = Duration::from_secs(60);
@@ -20,20 +25,21 @@ pub struct ApiCtx {
 	db: DatabaseHandle,
 
 	conn: rivet_connection::Connection,
+	msg_ctx: MessageCtx,
 
 	// Backwards compatibility
 	op_ctx: rivet_operation::OperationContext<()>,
 }
 
 impl ApiCtx {
-	pub fn new(
+	pub async fn new(
 		db: DatabaseHandle,
 		conn: rivet_connection::Connection,
 		req_id: Uuid,
 		ray_id: Uuid,
 		ts: i64,
 		name: &'static str,
-	) -> Self {
+	) -> WorkflowResult<Self> {
 		let op_ctx = rivet_operation::OperationContext::new(
 			name.to_string(),
 			std::time::Duration::from_secs(60),
@@ -45,14 +51,17 @@ impl ApiCtx {
 			(),
 		);
 
-		ApiCtx {
+		let msg_ctx = MessageCtx::new(&conn, req_id, ray_id).await?;
+
+		Ok(ApiCtx {
 			ray_id,
 			name,
 			ts,
 			db,
 			conn,
 			op_ctx,
-		}
+			msg_ctx,
+		})
 	}
 }
 
@@ -241,6 +250,46 @@ impl ApiCtx {
 		I::Operation::run(&ctx, &input)
 			.await
 			.map_err(WorkflowError::OperationFailure)
+			.map_err(GlobalError::raw)
+	}
+
+	pub async fn subscribe<M>(
+		&self,
+		tags: &serde_json::Value,
+	) -> GlobalResult<SubscriptionHandle<M>>
+	where
+		M: Message,
+	{
+		self.msg_ctx
+			.subscribe::<M>(tags)
+			.await
+			.map_err(GlobalError::raw)
+	}
+
+	pub async fn tail_read<M>(
+		&self,
+		tags: serde_json::Value,
+	) -> GlobalResult<Option<ReceivedMessage<M>>>
+	where
+		M: Message,
+	{
+		self.msg_ctx
+			.tail_read::<M>(tags)
+			.await
+			.map_err(GlobalError::raw)
+	}
+
+	pub async fn tail_anchor<M>(
+		&self,
+		tags: serde_json::Value,
+		anchor: &TailAnchor,
+	) -> GlobalResult<TailAnchorResponse<M>>
+	where
+		M: Message,
+	{
+		self.msg_ctx
+			.tail_anchor::<M>(tags, anchor)
+			.await
 			.map_err(GlobalError::raw)
 	}
 }

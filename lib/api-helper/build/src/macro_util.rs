@@ -325,7 +325,7 @@ pub async fn __with_ctx<A: auth::ApiAuth + Send>(
 	);
 	let conn = rivet_connection::Connection::new(client, pools.clone(), cache.clone());
 	let db = chirp_workflow::compat::db_from_pools(&pools).await?;
-	let internal_ctx = ApiCtx::new(db, conn, req_id, ray_id, ts, svc_name);
+	let internal_ctx = ApiCtx::new(db, conn, req_id, ray_id, ts, svc_name).await?;
 
 	// Create auth
 	let rate_limit_ctx = AuthRateLimitCtx {

@@ -42,12 +42,6 @@ pub enum WorkflowError {
 	#[error("deserialize workflow input: {0}")]
 	DeserializeWorkflowOutput(serde_json::Error),
 
-	#[error("serialize workflow tags: {0}")]
-	SerializeWorkflowTags(serde_json::Error),
-
-	#[error("deserialize workflow tags: {0}")]
-	DeserializeWorkflowTags(serde_json::Error),
-
 	#[error("serialize activity input: {0}")]
 	SerializeActivityInput(serde_json::Error),
 
@@ -63,6 +57,39 @@ pub enum WorkflowError {
 	#[error("deserialize signal body: {0}")]
 	DeserializeSignalBody(serde_json::Error),
 
+	#[error("serialize message body: {0}")]
+	SerializeMessageBody(serde_json::Error),
+
+	#[error("serialize message: {0}")]
+	SerializeMessage(serde_json::Error),
+
+	#[error("decode message body: {0}")]
+	DeserializeMessageBody(serde_json::Error),
+
+	#[error("decode message: {0}")]
+	DeserializeMessage(serde_json::Error),
+
+	#[error("serialize message tags: {0:?}")]
+	SerializeMessageTags(cjson::Error),
+
+	#[error("create subscription: {0}")]
+	CreateSubscription(rivet_pools::prelude::nats::Error),
+
+	#[error("flush nats: {0}")]
+	FlushNats(rivet_pools::prelude::nats::Error),
+
+	#[error("subscription unsubscribed")]
+	SubscriptionUnsubscribed,
+
+	#[error("missing message data")]
+	MissingMessageData,
+
+	#[error("redis: {source}")]
+	Redis {
+		#[from]
+		source: rivet_pools::prelude::redis::RedisError,
+	},
+
 	#[error("no signal found: {0:?}")]
 	NoSignalFound(Box<[&'static str]>),
 
@@ -77,6 +104,9 @@ pub enum WorkflowError {
 
 	#[error("sql: {0}")]
 	Sqlx(sqlx::Error),
+
+	#[error("pools: {0}")]
+	Pools(#[from] rivet_pools::Error),
 
 	#[error("activity timed out")]
 	ActivityTimeout,

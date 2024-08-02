@@ -21,6 +21,16 @@ impl Default for Config {
 	}
 }
 
+struct MessageConfig {
+	tail_ttl: u64,
+}
+
+impl Default for MessageConfig {
+	fn default() -> Self {
+		MessageConfig { tail_ttl: 90 }
+	}
+}
+
 #[proc_macro_attribute]
 pub fn workflow(attr: TokenStream, item: TokenStream) -> TokenStream {
 	let name = parse_macro_input!(attr as OptionalIdent)
@@ -299,6 +309,44 @@ pub fn signal(attr: TokenStream, item: TokenStream) -> TokenStream {
 }
 
 #[proc_macro_attribute]
+pub fn message(attr: TokenStream, item: TokenStream) -> TokenStream {
+	let name = parse_macro_input!(attr as LitStr);
+	let item_struct = parse_macro_input!(item as ItemStruct);
+
+	let config = match parse_msg_config(&item_struct.attrs) {
+		Ok(x) => x,
+		Err(err) => return err.into_compile_error().into(),
+	};
+
+	let struct_ident = &item_struct.ident;
+	let tail_ttl = config.tail_ttl;
+
+	let expanded = quote! {
+		#[derive(Debug, serde::Serialize, serde::Deserialize)]
+		#item_struct
+
+		impl Message for #struct_ident {
+			const NAME: &'static str = #name;
+			const TAIL_TTL: std::time::Duration = std::time::Duration::from_secs(#tail_ttl);
+		}
+
+		#[async_trait::async_trait]
+		impl Listen for #struct_ident {
+			async fn listen(ctx: &mut chirp_workflow::prelude::WorkflowCtx) -> chirp_workflow::prelude::WorkflowResult<Self> {
+				let row = ctx.listen_any(&[Self::NAME]).await?;
+				Self::parse(&row.signal_name, row.body)
+			}
+
+			fn parse(_name: &str, body: serde_json::Value) -> chirp_workflow::prelude::WorkflowResult<Self> {
+				serde_json::from_value(body).map_err(WorkflowError::DeserializeActivityOutput)
+			}
+		}
+	};
+
+	TokenStream::from(expanded)
+}
+
+#[proc_macro_attribute]
 pub fn workflow_test(_attr: TokenStream, item: TokenStream) -> TokenStream {
 	let input = syn::parse_macro_input!(item as syn::ItemFn);
 
@@ -381,6 +429,31 @@ fn parse_config(attrs: &[syn::Attribute]) -> syn::Result<Config> {
 					.base10_parse()?;
 		} else if ident == "timeout" {
 			config.timeout = syn::parse::<syn::LitInt>(name_value.value.to_token_stream().into())?
+				.base10_parse()?;
+		} else {
+			return Err(syn::Error::new(
+				ident.span(),
+				format!("Unknown config property `{ident}`"),
+			));
+		}
+	}
+
+	Ok(config)
+}
+
+fn parse_msg_config(attrs: &[syn::Attribute]) -> syn::Result<MessageConfig> {
+	let mut config = MessageConfig::default();
+
+	for attr in attrs {
+		let syn::Meta::NameValue(name_value) = &attr.meta else {
+			continue;
+		};
+
+		let ident = name_value.path.require_ident()?;
+
+		// Verify config property
+		if ident == "tail_ttl" {
+			config.tail_ttl = syn::parse::<syn::LitInt>(name_value.value.to_token_stream().into())?
 				.base10_parse()?;
 		} else {
 			return Err(syn::Error::new(

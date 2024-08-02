@@ -258,7 +258,8 @@ impl WorkflowCtx {
 			self.create_ts,
 			self.ray_id,
 			A::NAME,
-		);
+		)
+		.await?;
 
 		let res = tokio::time::timeout(A::TIMEOUT, A::run(&ctx, input))
 			.await
