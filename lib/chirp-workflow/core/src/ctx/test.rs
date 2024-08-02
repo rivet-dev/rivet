@@ -187,7 +187,7 @@ impl TestCtx {
 		input: T,
 	) -> GlobalResult<Uuid> {
 		let signal_id = Uuid::new_v4();
-		
+
 		tracing::info!(name=%T::NAME, %workflow_id, %signal_id, "dispatching signal");
 
 		// Serialize input
@@ -209,7 +209,7 @@ impl TestCtx {
 		input: T,
 	) -> GlobalResult<Uuid> {
 		let signal_id = Uuid::new_v4();
-		
+
 		tracing::info!(name=%T::NAME, ?tags, %signal_id, "dispatching tagged signal");
 
 		// Serialize input

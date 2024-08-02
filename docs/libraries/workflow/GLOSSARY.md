@@ -39,6 +39,32 @@ Examples include:
 
 Operations are not required; all of their functionality can be put into an activity instead.
 
+## Tags
+
+Tags are JSON blobs associated with either workflows or signals. Tags are not meant to be very abstract; i.e.
+they should be unique.
+
+## Signal
+
+A payload sent to a specific workflow from anywhere else in the codebase. The workflow must be listening for
+this signal for it to be picked up, otherwise it will stay in the database indefinitely until consumed by a
+workflow. Signals do not have a response; another signal must be sent back from the workflow and listened to
+by the sender.
+
+## Tagged Signal
+
+Same as a signal except it is sent with a JSON blob as its "tags" instead of to a specific workflow. Any
+workflow with tags that are a superset of the signals tags will consume the signal. Note that tagged signals
+are consumed on a first-come-first-serve basis, meaning if there are two workflows that both have a superset
+of the signal's tags, only one will receive the signal.
+
+See [the signals document](./SIGNALS.md).
+
+## Join Signal
+
+A "one of" for signal listening. Allows for listening to multiple signals at once and receiving the first one
+that gets sent.
+
 ## Workflow Event
 
 An action that gets executed in a workflow. An event can be a:

@@ -132,7 +132,8 @@ impl Database for DatabasePostgres {
 								FROM db_workflow.signals AS s
 								WHERE
 									s.workflow_id = w.workflow_id AND
-									s.signal_name = ANY(w.wake_signals)
+									s.signal_name = ANY(w.wake_signals) AND
+									s.ack_ts IS NULL
 								LIMIT 1
 							) OR
 							-- Tagged signal exists
@@ -141,7 +142,8 @@ impl Database for DatabasePostgres {
 								FROM db_workflow.tagged_signals AS s
 								WHERE
 									s.signal_name = ANY(w.wake_signals) AND
-									s.tags <@ w.tags
+									s.tags <@ w.tags AND
+									s.ack_ts IS NULL
 								LIMIT 1
 							) OR
 							-- Sub workflow completed
@@ -456,27 +458,31 @@ impl Database for DatabasePostgres {
 					FROM db_workflow.signals
 					WHERE
 						workflow_id = $1 AND
-						signal_name = ANY($2)
+						signal_name = ANY($2) AND
+						ack_ts IS NULL
 					UNION ALL
 					SELECT true AS tagged, signal_id, create_ts, signal_name, body
 					FROM db_workflow.tagged_signals
 					WHERE
 						signal_name = ANY($2) AND
-						tags <@ (SELECT tags FROM db_workflow.workflows WHERE workflow_id = $1)
+						tags <@ (SELECT tags FROM db_workflow.workflows WHERE workflow_id = $1) AND
+						ack_ts IS NULL
 					ORDER BY create_ts ASC
 					LIMIT 1
 				),
-				-- If the next signal is not tagged, delete it with this statement
-				delete_signal AS (
-					DELETE FROM db_workflow.signals
+				-- If the next signal is not tagged, acknowledge it with this statement
+				ack_signal AS (
+					UPDATE db_workflow.signals
+					SET ack_ts = $4
 					WHERE signal_id = (
 						SELECT signal_id FROM next_signal WHERE tagged = false
 					)
 					RETURNING 1
 				),
-				-- If the next signal is tagged, delete it with this statement
-				delete_tagged_signal AS (
-					DELETE FROM db_workflow.tagged_signals
+				-- If the next signal is tagged, acknowledge it with this statement
+				ack_tagged_signal AS (
+					UPDATE db_workflow.tagged_signals
+					SET ack_ts = $4
 					WHERE signal_id = (
 						SELECT signal_id FROM next_signal WHERE tagged = true
 					)

@@ -14,13 +14,20 @@ CREATE TABLE tagged_signals (
   signal_name TEXT NOT NULL,
 
   create_ts INT NOT NULL,
+  ack_ts INT,
   ray_id UUID NOT NULL,
 
-  body JSONB NOT NULL,
-
-  INDEX (signal_name)
+  body JSONB NOT NULL
 );
 
 CREATE INDEX gin_tagged_signals_tags
 ON tagged_signals
-USING GIN (tags);
+USING GIN (tags)
+WHERE ack_ts IS NULL;
+
+-- Fix signal indexes
+ALTER TABLE signals
+  ADD COLUMN ack_ts INT;
+
+DROP INDEX signals@signals_signal_name_idx;
+DROP INDEX signals@signals_workflow_id_idx;

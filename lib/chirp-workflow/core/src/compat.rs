@@ -158,7 +158,7 @@ pub async fn signal<I: Signal + Serialize, B: Debug + Clone>(
 	}
 
 	let signal_id = Uuid::new_v4();
-	
+
 	tracing::info!(name=%I::NAME, %workflow_id, %signal_id, "dispatching signal");
 
 	// Serialize input
@@ -185,7 +185,7 @@ pub async fn tagged_signal<I: Signal + Serialize, B: Debug + Clone>(
 	}
 
 	let signal_id = Uuid::new_v4();
-	
+
 	tracing::info!(name=%I::NAME, ?tags, %signal_id, "dispatching tagged signal");
 
 	// Serialize input
