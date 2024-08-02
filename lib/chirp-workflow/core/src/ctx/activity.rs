@@ -56,6 +56,7 @@ impl ActivityCtx {
 }
 
 impl ActivityCtx {
+	#[tracing::instrument(err, skip_all, fields(operation = I::Operation::NAME))]
 	pub async fn op<I>(
 		&self,
 		input: I,
@@ -64,6 +65,8 @@ impl ActivityCtx {
 		I: OperationInput,
 		<I as OperationInput>::Operation: Operation<Input = I>,
 	{
+		tracing::info!(?input, "operation call");
+
 		let ctx = OperationCtx::new(
 			self.db.clone(),
 			&self.conn,
@@ -73,11 +76,15 @@ impl ActivityCtx {
 			I::Operation::NAME,
 		);
 
-		tokio::time::timeout(I::Operation::TIMEOUT, I::Operation::run(&ctx, &input))
+		let res = tokio::time::timeout(I::Operation::TIMEOUT, I::Operation::run(&ctx, &input))
 			.await
 			.map_err(|_| WorkflowError::OperationTimeout)?
 			.map_err(WorkflowError::OperationFailure)
-			.map_err(GlobalError::raw)
+			.map_err(GlobalError::raw);
+
+		tracing::info!(?res, "operation response");
+
+		res
 	}
 
 	pub async fn update_workflow_tags(&self, tags: &serde_json::Value) -> GlobalResult<()> {

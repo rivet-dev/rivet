@@ -7,13 +7,15 @@ use uuid::Uuid;
 
 use crate::{
 	activity::ActivityId,
-	ctx::{ActivityCtx, MessageCtx},
+	ctx::{ActivityCtx, ListenCtx, MessageCtx},
 	event::Event,
 	executable::{closure, AsyncResult, Executable},
+	listen::{CustomListener, Listen},
 	message::Message,
+	signal::Signal,
 	util::Location,
-	Activity, ActivityInput, DatabaseHandle, Listen, PulledWorkflow, RegistryHandle, Signal,
-	SignalRow, Workflow, WorkflowError, WorkflowInput, WorkflowResult,
+	Activity, ActivityInput, DatabaseHandle, PulledWorkflow, RegistryHandle, Workflow,
+	WorkflowError, WorkflowInput, WorkflowResult,
 };
 
 // Time to delay a worker from retrying after an error
@@ -43,7 +45,7 @@ pub struct WorkflowCtx {
 	ray_id: Uuid,
 
 	registry: RegistryHandle,
-	db: DatabaseHandle,
+	pub(crate) db: DatabaseHandle,
 
 	conn: rivet_connection::Connection,
 
@@ -148,7 +150,7 @@ impl WorkflowCtx {
 			.flatten()
 	}
 
-	fn full_location(&self) -> Location {
+	pub(crate) fn full_location(&self) -> Location {
 		self.root_location
 			.iter()
 			.cloned()
@@ -330,34 +332,6 @@ impl WorkflowCtx {
 			}
 		}
 	}
-
-	/// Checks for a signal to this workflow with any of the given signal names. Meant to be implemented and
-	/// not used directly in workflows.
-	pub async fn listen_any(&mut self, signal_names: &[&'static str]) -> WorkflowResult<SignalRow> {
-		// Fetch new pending signal
-		let signal = self
-			.db
-			.pull_next_signal(
-				self.workflow_id,
-				signal_names,
-				self.full_location().as_ref(),
-			)
-			.await?;
-
-		let Some(signal) = signal else {
-			return Err(WorkflowError::NoSignalFound(Box::from(signal_names)));
-		};
-
-		tracing::info!(
-			workflow_name=%self.name,
-			workflow_id=%self.workflow_id,
-			signal_id=%signal.signal_id,
-			signal_name=%signal.signal_name,
-			"signal received",
-		);
-
-		Ok(signal)
-	}
 }
 
 impl WorkflowCtx {
@@ -416,11 +390,18 @@ impl WorkflowCtx {
 		}
 		// Dispatch new workflow
 		else {
-			let name = I::Workflow::NAME;
-
-			tracing::info!(%name, ?tags, ?input, "dispatching workflow");
-
+			let sub_workflow_name = I::Workflow::NAME;
 			let sub_workflow_id = Uuid::new_v4();
+
+			tracing::info!(
+				name=%self.name,
+				id=%self.workflow_id,
+				%sub_workflow_name,
+				%sub_workflow_id,
+				?tags,
+				?input,
+				"dispatching sub workflow"
+			);
 
 			// Serialize input
 			let input_val = serde_json::to_value(input)
@@ -433,14 +414,20 @@ impl WorkflowCtx {
 					self.workflow_id,
 					self.full_location().as_ref(),
 					sub_workflow_id,
-					&name,
+					&sub_workflow_name,
 					tags,
 					input_val,
 				)
 				.await
 				.map_err(GlobalError::raw)?;
 
-			tracing::info!(%name, ?sub_workflow_id, "workflow dispatched");
+			tracing::info!(
+				name=%self.name,
+				id=%self.workflow_id,
+				%sub_workflow_name,
+				?sub_workflow_id,
+				"workflow dispatched"
+			);
 
 			sub_workflow_id
 		};
@@ -752,7 +739,7 @@ impl WorkflowCtx {
 		else {
 			let signal_id = Uuid::new_v4();
 
-			tracing::debug!(name=%T::NAME, ?tags, %signal_id, "dispatching tagged signal");
+			tracing::info!(name=%T::NAME, ?tags, %signal_id, "dispatching tagged signal");
 
 			// Serialize input
 			let input_val = serde_json::to_value(&body)
@@ -805,10 +792,62 @@ impl WorkflowCtx {
 			let mut interval = tokio::time::interval(SIGNAL_RETRY);
 			interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
 
+			let ctx = ListenCtx::new(self);
+
 			loop {
 				interval.tick().await;
 
-				match T::listen(self).await {
+				match T::listen(&ctx).await {
+					Ok(res) => break res,
+					Err(err) if matches!(err, WorkflowError::NoSignalFound(_)) => {
+						if retries > MAX_SIGNAL_RETRIES {
+							return Err(err).map_err(GlobalError::raw);
+						}
+						retries += 1;
+					}
+					err => return err.map_err(GlobalError::raw),
+				}
+			}
+		};
+
+		// Move to next event
+		self.location_idx += 1;
+
+		Ok(signal)
+	}
+
+	/// Execute a custom listener.
+	pub async fn custom_listener<T: CustomListener>(
+		&mut self,
+		listener: &T,
+	) -> GlobalResult<<T as CustomListener>::Output> {
+		let event = { self.relevant_history().nth(self.location_idx) };
+
+		// Signal received before
+		let signal = if let Some(event) = event {
+			// Validate history is consistent
+			let Event::Signal(signal) = event else {
+				return Err(WorkflowError::HistoryDiverged).map_err(GlobalError::raw);
+			};
+
+			tracing::debug!(name=%self.name, id=%self.workflow_id, signal_name=%signal.name, "replaying signal");
+
+			T::parse(&signal.name, signal.body.clone()).map_err(GlobalError::raw)?
+		}
+		// Listen for new messages
+		else {
+			tracing::info!(name=%self.name, id=%self.workflow_id, "listening for signal");
+
+			let mut retries = 0;
+			let mut interval = tokio::time::interval(SIGNAL_RETRY);
+			interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+
+			let ctx = ListenCtx::new(self);
+
+			loop {
+				interval.tick().await;
+
+				match listener.listen(&ctx).await {
 					Ok(res) => break res,
 					Err(err) if matches!(err, WorkflowError::NoSignalFound(_)) => {
 						if retries > MAX_SIGNAL_RETRIES {
@@ -844,7 +883,9 @@ impl WorkflowCtx {
 		}
 		// Listen for new message
 		else {
-			match T::listen(self).await {
+			let ctx = ListenCtx::new(self);
+
+			match T::listen(&ctx).await {
 				Ok(res) => Some(res),
 				Err(err) if matches!(err, WorkflowError::NoSignalFound(_)) => None,
 				Err(err) => return Err(err).map_err(GlobalError::raw),

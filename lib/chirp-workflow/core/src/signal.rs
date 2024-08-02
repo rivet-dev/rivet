@@ -1,17 +1,5 @@
-use async_trait::async_trait;
-
-use crate::{WorkflowCtx, WorkflowResult};
-
 pub trait Signal {
 	const NAME: &'static str;
-}
-
-/// A trait which allows listening for signals from the workflows database. This is used by
-/// `WorkflowCtx::listen` and `WorkflowCtx::query_signal`.
-#[async_trait]
-pub trait Listen: Sized {
-	async fn listen(ctx: &mut WorkflowCtx) -> WorkflowResult<Self>;
-	fn parse(name: &str, body: serde_json::Value) -> WorkflowResult<Self>;
 }
 
 /// Creates an enum that implements `Listen` and selects one of X signals.
@@ -68,7 +56,7 @@ macro_rules! join_signal {
 	(@ $join:ident, [$($signals:ident),*]) => {
 		#[async_trait::async_trait]
 		impl Listen for $join {
-			async fn listen(ctx: &mut chirp_workflow::prelude::WorkflowCtx) -> chirp_workflow::prelude::WorkflowResult<Self> {
+			async fn listen(ctx: &chirp_workflow::prelude::ListenCtx) -> chirp_workflow::prelude::WorkflowResult<Self> {
 				let row = ctx.listen_any(&[$($signals::NAME),*]).await?;
 				Self::parse(&row.signal_name, row.body)
 			}

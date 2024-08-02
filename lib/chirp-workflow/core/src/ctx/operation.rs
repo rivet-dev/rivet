@@ -55,6 +55,7 @@ impl OperationCtx {
 }
 
 impl OperationCtx {
+	#[tracing::instrument(err, skip_all, fields(operation = I::Operation::NAME))]
 	pub async fn op<I>(
 		&self,
 		input: I,
@@ -63,6 +64,8 @@ impl OperationCtx {
 		I: OperationInput,
 		<I as OperationInput>::Operation: Operation<Input = I>,
 	{
+		tracing::info!(?input, "operation call");
+
 		let ctx = OperationCtx::new(
 			self.db.clone(),
 			&self.conn,
@@ -72,10 +75,14 @@ impl OperationCtx {
 			I::Operation::NAME,
 		);
 
-		I::Operation::run(&ctx, &input)
+		let res = I::Operation::run(&ctx, &input)
 			.await
 			.map_err(WorkflowError::OperationFailure)
-			.map_err(GlobalError::raw)
+			.map_err(GlobalError::raw);
+
+		tracing::info!(?res, "operation response");
+
+		res
 	}
 
 	pub async fn signal<T: Signal + Serialize>(

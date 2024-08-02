@@ -199,7 +199,7 @@ pub(crate) async fn cluster_server(ctx: &mut WorkflowCtx, input: &Input) -> Glob
 
 	let mut state = State::default();
 	loop {
-		match state.listen(ctx).await? {
+		match state.run(ctx).await? {
 			Main::DnsCreate(_) => {
 				ctx.workflow(dns_create::Input {
 					server_id: input.server_id,
@@ -266,10 +266,12 @@ pub(crate) async fn cluster_server(ctx: &mut WorkflowCtx, input: &Input) -> Glob
 			}
 			Main::Taint(_) => {} // Only for state
 			Main::Destroy(_) => {
-				ctx.workflow(dns_delete::Input {
-					server_id: input.server_id,
-				})
-				.await?;
+				if let PoolType::Gg = input.pool_type {
+					ctx.workflow(dns_delete::Input {
+						server_id: input.server_id,
+					})
+					.await?;
+				}
 
 				match input.provider {
 					Provider::Linode => {
@@ -671,6 +673,31 @@ struct State {
 }
 
 impl State {
+	async fn run(&mut self, ctx: &mut WorkflowCtx) -> GlobalResult<Main> {
+		let signal = ctx.custom_listener(self).await?;
+
+		// Update state
+		self.transition(&signal);
+
+		Ok(signal)
+	}
+
+	fn transition(&mut self, signal: &Main) {
+		match signal {
+			Main::Drain(_) => self.draining = true,
+			Main::Undrain(_) => self.draining = false,
+			Main::Taint(_) => self.is_tainted = true,
+			Main::DnsCreate(_) => self.has_dns = true,
+			Main::DnsDelete(_) => self.has_dns = false,
+			_ => {}
+		}
+	}
+}
+
+#[async_trait::async_trait]
+impl CustomListener for State {
+	type Output = Main;
+
 	/* ==== BINARY CONDITION DECOMPOSITION ====
 
 	// state
@@ -693,7 +720,7 @@ impl State {
 	nomad registered	 // always
 	nomad drain complete // if drain
 	*/
-	async fn listen(&mut self, ctx: &mut WorkflowCtx) -> WorkflowResult<Main> {
+	async fn listen(&self, ctx: &ListenCtx) -> WorkflowResult<Self::Output> {
 		// Determine which signals to listen to
 		let mut signals = vec![Destroy::NAME, NomadRegistered::NAME];
 
@@ -720,23 +747,11 @@ impl State {
 		}
 
 		let row = ctx.listen_any(&signals).await?;
-		let signal = Main::parse(&row.signal_name, row.body)?;
-
-		// Update state
-		self.transition(&signal);
-
-		Ok(signal)
+		Self::parse(&row.signal_name, row.body)
 	}
 
-	fn transition(&mut self, signal: &Main) {
-		match signal {
-			Main::Drain(_) => self.draining = true,
-			Main::Undrain(_) => self.draining = false,
-			Main::Taint(_) => self.is_tainted = true,
-			Main::DnsCreate(_) => self.has_dns = true,
-			Main::DnsDelete(_) => self.has_dns = false,
-			_ => {}
-		}
+	fn parse(name: &str, body: serde_json::Value) -> WorkflowResult<Self::Output> {
+		Main::parse(name, body)
 	}
 }
 

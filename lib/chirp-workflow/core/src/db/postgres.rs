@@ -495,7 +495,7 @@ impl Database for DatabasePostgres {
 					)
 					RETURNING 1
 				),
-				-- After deleting the signal, add it to the events table (i.e. acknowledge it)
+				-- After acking the signal, add it to the events table
 				insert_event AS (
 					INSERT INTO db_workflow.workflow_signal_events (
 						workflow_id, location, signal_id, signal_name, body, ack_ts

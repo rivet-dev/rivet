@@ -574,7 +574,6 @@ struct SshKey {
 	id: u64,
 }
 
-// TODO: This only deletes linodes and firewalls, the ssh key still remains
 async fn cleanup_servers(ctx: &ProjectContext) -> Result<()> {
 	if ctx.ns().rivet.provisioning.is_none() {
 		return Ok(());
@@ -584,6 +583,7 @@ async fn cleanup_servers(ctx: &ProjectContext) -> Result<()> {
 	rivet_term::status::progress("Cleaning up servers", "");
 
 	let ns = ctx.ns_id();
+	let ns_full = format!("rivet-{ns}");
 
 	// Create client
 	let api_token = ctx.read_secret(&["linode", "token"]).await?;
@@ -642,7 +642,13 @@ async fn cleanup_servers(ctx: &ProjectContext) -> Result<()> {
 		.data
 		.into_iter()
 		// Only delete test objects from this namespace
-		.filter(|object| object.data.tags.iter().any(|tag| tag == ns))
+		.filter(|object| {
+			object
+				.data
+				.tags
+				.iter()
+				.any(|tag| tag == ns || tag == &ns_full)
+		})
 		.map(|object| {
 			let client = client.clone();
 			let obj_type = object._type;

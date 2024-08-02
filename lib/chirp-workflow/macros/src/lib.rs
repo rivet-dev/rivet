@@ -306,7 +306,7 @@ pub fn signal(attr: TokenStream, item: TokenStream) -> TokenStream {
 
 		#[async_trait::async_trait]
 		impl Listen for #struct_ident {
-			async fn listen(ctx: &mut chirp_workflow::prelude::WorkflowCtx) -> chirp_workflow::prelude::WorkflowResult<Self> {
+			async fn listen(ctx: &chirp_workflow::prelude::ListenCtx) -> chirp_workflow::prelude::WorkflowResult<Self> {
 				let row = ctx.listen_any(&[<Self as Signal>::NAME]).await?;
 				Self::parse(&row.signal_name, row.body)
 			}

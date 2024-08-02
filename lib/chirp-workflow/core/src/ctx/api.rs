@@ -73,10 +73,9 @@ impl ApiCtx {
 		<I as WorkflowInput>::Workflow: Workflow<Input = I>,
 	{
 		let name = I::Workflow::NAME;
-
-		tracing::info!(%name, ?input, "dispatching workflow");
-
 		let id = Uuid::new_v4();
+
+		tracing::info!(%name, %id, ?input, "dispatching workflow");
 
 		// Serialize input
 		let input_val = serde_json::to_value(input)
@@ -103,10 +102,9 @@ impl ApiCtx {
 		<I as WorkflowInput>::Workflow: Workflow<Input = I>,
 	{
 		let name = I::Workflow::NAME;
-
-		tracing::info!(%name, ?tags, ?input, "dispatching tagged workflow");
-
 		let id = Uuid::new_v4();
+
+		tracing::info!(%name, %id, ?tags, ?input, "dispatching tagged workflow");
 
 		// Serialize input
 		let input_val = serde_json::to_value(input)
@@ -223,6 +221,7 @@ impl ApiCtx {
 		Ok(signal_id)
 	}
 
+	#[tracing::instrument(err, skip_all, fields(operation = I::Operation::NAME))]
 	pub async fn op<I>(
 		&self,
 		input: I,
@@ -231,6 +230,8 @@ impl ApiCtx {
 		I: OperationInput,
 		<I as OperationInput>::Operation: Operation<Input = I>,
 	{
+		tracing::info!(?input, "operation call");
+
 		let ctx = OperationCtx::new(
 			self.db.clone(),
 			&self.conn,
@@ -240,10 +241,14 @@ impl ApiCtx {
 			I::Operation::NAME,
 		);
 
-		I::Operation::run(&ctx, &input)
+		let res = I::Operation::run(&ctx, &input)
 			.await
 			.map_err(WorkflowError::OperationFailure)
-			.map_err(GlobalError::raw)
+			.map_err(GlobalError::raw);
+
+		tracing::info!(?res, "operation response");
+
+		res
 	}
 
 	pub async fn subscribe<M>(
