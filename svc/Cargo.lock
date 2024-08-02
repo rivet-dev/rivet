@@ -2459,22 +2459,18 @@ dependencies = [
 
 [[package]]
 name = "cloudflare"
-version = "0.10.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0778f99ea7ad39b49b758eb418da7117b93232a5f6a09f9b79a094b77ac88cc2"
+version = "0.12.0"
+source = "git+https://github.com/cloudflare/cloudflare-rs.git?rev=f14720e42184ee176a97676e85ef2d2d85bc3aae#f14720e42184ee176a97676e85ef2d2d85bc3aae"
 dependencies = [
- "anyhow",
- "async-trait",
- "base64 0.13.1",
- "cfg-if",
  "chrono",
  "http 0.2.12",
  "percent-encoding",
  "reqwest 0.11.27",
  "serde",
  "serde_json",
- "serde_qs",
+ "serde_urlencoded",
  "serde_with",
+ "thiserror",
  "url",
  "uuid",
 ]
@@ -2498,6 +2494,7 @@ dependencies = [
  "nomad-util",
  "nomad_client",
  "rand",
+ "reqwest 0.11.27",
  "rivet-metrics",
  "rivet-operation",
  "rivet-runtime",
@@ -2505,7 +2502,6 @@ dependencies = [
  "serde",
  "sqlx 0.7.4 (git+https://github.com/rivet-gg/sqlx?rev=08d6e61aa0572e7ec557abbedb72cebb96e1ac5b)",
  "ssh2",
- "thiserror",
  "token-create",
  "tokio",
  "trust-dns-resolver",
@@ -8149,17 +8145,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a93142f0367a4cc53ae0fead1bcda39e85beccfad3dcd717656cacab94b12985"
 dependencies = [
  "serde",
-]
-
-[[package]]
-name = "serde_qs"
-version = "0.10.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8cac3f1e2ca2fe333923a1ae72caca910b98ed0630bb35ef6f8c8517d6e81afa"
-dependencies = [
- "percent-encoding",
- "serde",
- "thiserror",
 ]
 
 [[package]]

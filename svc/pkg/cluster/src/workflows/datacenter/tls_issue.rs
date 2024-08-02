@@ -3,8 +3,9 @@ use acme_lib::{
 	persist::{MemoryPersist, Persist, PersistKey, PersistKind},
 	Account, Directory, DirectoryUrl,
 };
+use cloudflare::endpoints as cf;
+
 use chirp_workflow::prelude::*;
-use cloudflare::{endpoints as cf, framework as cf_framework, framework::async_api::ApiClient};
 use futures_util::StreamExt;
 use tokio::task;
 use trust_dns_resolver::{
@@ -13,7 +14,10 @@ use trust_dns_resolver::{
 	TokioAsyncResolver,
 };
 
-use crate::{types::TlsState, util::cf_client};
+use crate::{
+	types::TlsState,
+	util::{cf_client, create_dns_record, delete_dns_record},
+};
 
 const ENCRYPT_EMAIL: &str = "letsencrypt@rivet.gg";
 
@@ -89,7 +93,8 @@ struct OrderOutput {
 #[activity(Order)]
 #[timeout = 130]
 async fn order(ctx: &ActivityCtx, input: &OrderInput) -> GlobalResult<OrderOutput> {
-	let client = cf_client().await?;
+	let cf_token = util::env::read_secret(&["cloudflare", "terraform", "auth_token"]).await?;
+	let client = cf_client(Some(&cf_token)).await?;
 
 	// Fetch ACME account registration
 	let account = acme_account().await?;
@@ -115,6 +120,7 @@ async fn order(ctx: &ActivityCtx, input: &OrderInput) -> GlobalResult<OrderOutpu
 		order_csr
 	} else {
 		let client = &client;
+		let cf_token = &cf_token;
 
 		loop {
 			tracing::info!(cn=%input.common_name, "fetching authorizations");
@@ -127,8 +133,16 @@ async fn order(ctx: &ActivityCtx, input: &OrderInput) -> GlobalResult<OrderOutpu
 					let proof = challenge.dns_proof();
 
 					let hostname = format!("_acme-challenge.{}", auth.api_auth().identifier.value);
-					let dns_record_id =
-						create_dns_record(client, &input.zone_id, &hostname, &proof).await?;
+					let dns_record_id = create_dns_record(
+						client,
+						cf_token,
+						&input.zone_id,
+						&hostname,
+						cf::dns::DnsContent::TXT {
+							content: proof.to_string(),
+						},
+					)
+					.await?;
 
 					let try_block = async {
 						// Wait for DNS to propagate
@@ -212,86 +226,6 @@ async fn acme_account() -> GlobalResult<Account<MemoryPersist>> {
 	.await??;
 
 	Ok(acc)
-}
-
-async fn create_dns_record(
-	client: &cf_framework::async_api::Client,
-	zone_id: &str,
-	record_name: &str,
-	content: &str,
-) -> GlobalResult<String> {
-	tracing::info!(%record_name, "creating dns record");
-
-	let create_record_res = client
-		.request(&cf::dns::CreateDnsRecord {
-			zone_identifier: zone_id,
-			params: cf::dns::CreateDnsRecordParams {
-				name: record_name,
-				content: cf::dns::DnsContent::TXT {
-					content: content.to_string(),
-				},
-				proxied: Some(false),
-				ttl: Some(60),
-				priority: None,
-			},
-		})
-		.await;
-
-	match create_record_res {
-		Ok(create_record_res) => Ok(create_record_res.result.id),
-		// Try to delete record on error
-		Err(err) => {
-			if let cf_framework::response::ApiFailure::Error(
-				http::status::StatusCode::BAD_REQUEST,
-				_,
-			) = err
-			{
-				tracing::info!(%record_name, "failed to create dns record, trying to delete");
-
-				let list_records_res = client
-					.request(&cf::dns::ListDnsRecords {
-						zone_identifier: zone_id,
-						params: cf::dns::ListDnsRecordsParams {
-							name: Some(record_name.to_string()),
-							record_type: Some(cf::dns::DnsContent::TXT {
-								// We aren't filtering by content
-								content: "".to_string(),
-							}),
-							per_page: Some(1),
-							..Default::default()
-						},
-					})
-					.await?;
-
-				if let Some(record) = list_records_res.result.first() {
-					delete_dns_record(client, zone_id, &record.id).await?;
-					tracing::info!(%record_name, "deleted dns record");
-				} else {
-					tracing::warn!(%record_name, "failed to get matching dns record");
-				}
-			}
-
-			// Throw error
-			Err(err.into())
-		}
-	}
-}
-
-async fn delete_dns_record(
-	client: &cf_framework::async_api::Client,
-	zone_id: &str,
-	record_id: &str,
-) -> GlobalResult<()> {
-	tracing::info!(%record_id, "deleting dns record");
-
-	client
-		.request(&cf::dns::DeleteDnsRecord {
-			zone_identifier: zone_id,
-			identifier: record_id,
-		})
-		.await?;
-
-	Ok(())
 }
 
 async fn poll_txt_dns(hostname: &str, content: &str) -> GlobalResult<()> {

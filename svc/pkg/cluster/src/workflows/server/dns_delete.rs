@@ -1,5 +1,5 @@
 use chirp_workflow::prelude::*;
-use cloudflare::{endpoints as cf, framework as cf_framework, framework::async_api::ApiClient};
+use cloudflare::{endpoints as cf, framework as cf_framework};
 
 use crate::util::cf_client;
 
@@ -84,7 +84,7 @@ struct DeleteDnsRecordInput {
 
 #[activity(DeleteDnsRecord)]
 async fn delete_dns_record(ctx: &ActivityCtx, input: &DeleteDnsRecordInput) -> GlobalResult<()> {
-	let client = cf_client().await?;
+	let client = cf_client(None).await?;
 
 	let res = client
 		.request(&cf::dns::DeleteDnsRecord {
@@ -93,6 +93,7 @@ async fn delete_dns_record(ctx: &ActivityCtx, input: &DeleteDnsRecordInput) -> G
 		})
 		.await;
 
+	// Gracefully fail if not found
 	if let Err(cf_framework::response::ApiFailure::Error(http::status::StatusCode::NOT_FOUND, _)) =
 		res
 	{

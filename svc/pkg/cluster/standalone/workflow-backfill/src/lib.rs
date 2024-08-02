@@ -24,6 +24,16 @@ pub async fn run_from_env() -> GlobalResult<()> {
 	let crdb = ctx.crdb().await?;
 	let mut tx = crdb.begin().await?;
 
+	// Delete invalid dns record rows
+	sql_execute!(
+		[ctx, @tx &mut tx]
+		"
+		DELETE FROM db_cluster.servers_cloudflare
+		WHERE dns_record_id IS NULL OR secondary_dns_record_id IS NULL
+		",
+	)
+	.await?;
+
 	let mut bctx = BackfillCtx::new();
 
 	#[derive(sqlx::FromRow)]

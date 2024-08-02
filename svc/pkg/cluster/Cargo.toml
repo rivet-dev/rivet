@@ -9,20 +9,20 @@ license = "Apache-2.0"
 acme-lib = "0.9"
 anyhow = "1.0"
 chirp-workflow = { path = "../../../lib/chirp-workflow/core" }
-cloudflare = "0.10.1"
+cloudflare = { git = "https://github.com/cloudflare/cloudflare-rs.git", rev = "f14720e42184ee176a97676e85ef2d2d85bc3aae" }
 http = "0.2"
 include_dir = "0.7.3"
 indoc = "1.0"
 lazy_static = "1.4"
 nomad-util = { path = "../../../lib/nomad-util" }
 rand = "0.8"
+reqwest = { version = "0.11", features = ["json"] }
 rivet-metrics = { path = "../../../lib/metrics" }
 rivet-operation = { path = "../../../lib/operation/core" }
 rivet-runtime = { path = "../../../lib/runtime" }
 s3-util = { path = "../../../lib/s3-util" }
 serde = { version = "1.0.198", features = ["derive"] }
 ssh2 = "0.9.4"
-thiserror = "1.0"
 trust-dns-resolver = { version = "0.23.2", features = ["dns-over-native-tls"] }
 
 ip-info = { path = "../ip/ops/info" }
