@@ -1,4 +1,3 @@
-use self::sqlx;
 use chirp_worker::prelude::*;
 use proto::backend::pkg::*;
 use serde::Deserialize;

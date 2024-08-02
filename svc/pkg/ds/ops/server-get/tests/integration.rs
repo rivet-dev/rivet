@@ -1,9 +1,12 @@
 use std::collections::HashMap;
 
-use chirp_worker::prelude::*;
-use proto::backend::{self, pkg::dynamic_servers};
+use chirp_workflow::prelude::*;
+use rivet_operation::prelude::proto::{
+	self,
+	backend::{self, pkg::dynamic_servers},
+};
 
-#[worker_test]
+#[workflow_test]
 async fn server_get(ctx: TestCtx) {
 	let game_res = op!([ctx] faker_game {
 		..Default::default()
@@ -13,7 +16,8 @@ async fn server_get(ctx: TestCtx) {
 	let game_id = game_res.game_id.unwrap();
 
 	// Pick an existing cluster
-	let cluster_id = op!([ctx] cluster_list {})
+	let cluster_id = ctx
+		.op(cluster::ops::list::Input {})
 		.await
 		.unwrap()
 		.cluster_ids
@@ -55,7 +59,7 @@ async fn server_get(ctx: TestCtx) {
 
 	let server = op!([ctx] ds_server_create {
 		game_id: Some(game_id),
-		cluster_id: Some(cluster_id),
+		cluster_id: Some(cluster_id.into()),
 		datacenter_id: faker_region.region_id,
 		resources: Some(proto::backend::ds::ServerResources { cpu_millicores: 100, memory_mib: 200 }),
 		kill_timeout_ms: 0,

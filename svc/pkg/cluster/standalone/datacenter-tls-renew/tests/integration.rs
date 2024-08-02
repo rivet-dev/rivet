@@ -1,5 +1,5 @@
-use tracing_subscriber::prelude::*;
 use chirp_workflow::prelude::*;
+use tracing_subscriber::prelude::*;
 
 #[tokio::test(flavor = "multi_thread")]
 async fn basic() {

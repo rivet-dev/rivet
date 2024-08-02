@@ -1,6 +1,6 @@
 use ::linode_gc::run_from_env;
-use tracing_subscriber::prelude::*;
 use chirp_workflow::prelude::*;
+use tracing_subscriber::prelude::*;
 
 #[tokio::test(flavor = "multi_thread")]
 async fn basic() {

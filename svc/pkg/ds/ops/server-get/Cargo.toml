@@ -7,6 +7,7 @@ license = "Apache-2.0"
 
 [dependencies]
 chirp-client = { path = "../../../../../lib/chirp/client" }
+chirp-workflow = { path = "../../../../../lib/chirp-workflow/core" }
 rivet-operation = { path = "../../../../../lib/operation/core" }
 util-ds = { package = "rivet-util-ds", path = "../../util" }
 
@@ -19,7 +20,7 @@ default-features = false
 chirp-worker = { path = "../../../../../lib/chirp/worker" }
 
 ds-server-create = { path = "../server-create" }
-cluster-list = { path = "../../../cluster/ops/list" }
+cluster = { path = "../../../cluster" }
 faker-build = { path = "../../../faker/ops/build" }
 faker-game = { path = "../../../faker/ops/game" }
 faker-region = { path = "../../../faker/ops/region" }

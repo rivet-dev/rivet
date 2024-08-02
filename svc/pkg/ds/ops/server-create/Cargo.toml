@@ -8,6 +8,7 @@ license = "Apache-2.0"
 [dependencies]
 chirp-client = { path = "../../../../../lib/chirp/client" }
 chirp-worker = { path = "../../../../../lib/chirp/worker" }
+chirp-workflow = { path = "../../../../../lib/chirp-workflow/core" }
 rivet-operation = { path = "../../../../../lib/operation/core" }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
@@ -35,16 +36,15 @@ tracing-subscriber = { version = "0.3", default-features = false, features = [
     "ansi",
 ] }
 
-mm-lobby-list-for-user-id = { path = "../../../mm/ops/lobby-list-for-user-id" }
 build-get = { path = "../../../build/ops/get" }
-user-identity-get = { path = "../../../user-identity/ops/get" }
-upload-get = { path = "../../../upload/ops/get" }
-region-get = { path = "../../../region/ops/get" }
+cluster = { path = "../../../cluster" }
 ip-info = { path = "../../../ip/ops/info" }
+mm-lobby-list-for-user-id = { path = "../../../mm/ops/lobby-list-for-user-id" }
+region-get = { path = "../../../region/ops/get" }
 tier-list = { path = "../../../tier/ops/list" }
 token-create = { path = "../../../token/ops/create" }
-cluster-datacenter-list = { path = "../../../cluster/ops/datacenter-list" }
-cluster-list = { path = "../../../cluster/ops/list" }
+upload-get = { path = "../../../upload/ops/get" }
+user-identity-get = { path = "../../../user-identity/ops/get" }
 
 [dependencies.nomad_client]
 package = "nomad_client"

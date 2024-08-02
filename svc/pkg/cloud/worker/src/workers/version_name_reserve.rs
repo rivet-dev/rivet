@@ -46,4 +46,3 @@ async fn worker(
 
 	Ok(())
 }
-

@@ -1,4 +1,10 @@
-// use chirp_worker::prelude::*;
+use std::{
+	collections::HashMap,
+	hash::{DefaultHasher, Hasher},
+	net::IpAddr,
+	time::Duration,
+};
+
 use crate::sqlx;
 use futures_util::FutureExt;
 use nomad_client::models::*;
@@ -6,15 +12,15 @@ use nomad_job::{
 	escape_go_template, gen_oci_bundle_config, inject_consul_env_template, nomad_host_port_env_var,
 	template_env_var, template_env_var_int, DecodedPort, ProxyProtocol, TransportProtocol,
 };
-use proto::backend::{self};
-use proto::{backend::pkg::*, chirp::response::Ok};
+use proto::{
+	backend::{self, pkg::*},
+	chirp::response::Ok,
+};
 use rand::Rng;
 use regex::Regex;
 use rivet_operation::prelude::*;
 use serde_json::json;
 use sha2::{Digest, Sha256};
-use std::hash::Hasher;
-use std::{collections::HashMap, hash::DefaultHasher, net::IpAddr, time::Duration};
 use team::member_get::request;
 
 mod nomad_job;
@@ -1208,7 +1214,7 @@ pub async fn handle(
 					FROM db_cluster.servers
 					WHERE
 						datacenter_id = $1 AND
-						pool_type = $2 AND
+						pool_type2 = $2 AND
 						vlan_ip IS NOT NULL AND
 						install_complete_ts IS NOT NULL AND
 						drain_ts IS NULL AND
@@ -1222,7 +1228,7 @@ pub async fn handle(
 				",
 				// NOTE: region_id is just the old name for datacenter_id
 				&region_id,
-				backend::cluster::PoolType::Ats as i64,
+				serde_json::to_string(&cluster::types::PoolType::Ats)?,
 				hash,
 			)
 			.await?;
@@ -1495,7 +1501,7 @@ async fn resolve_job_runner_binary_url(
 					FROM db_cluster.servers
 					WHERE
 						datacenter_id = $1 AND
-						pool_type = $2 AND
+						pool_type2 = $2 AND
 						vlan_ip IS NOT NULL AND
 						install_complete_ts IS NOT NULL AND
 						drain_ts IS NULL AND
@@ -1508,7 +1514,7 @@ async fn resolve_job_runner_binary_url(
 				",
 				// NOTE: region_id is just the old name for datacenter_id
 				&region_id,
-				backend::cluster::PoolType::Ats as i64,
+				serde_json::to_string(&cluster::types::PoolType::Ats)?,
 			)
 			.await?;
 

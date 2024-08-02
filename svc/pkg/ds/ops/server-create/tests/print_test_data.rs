@@ -1,7 +1,10 @@
-use chirp_worker::prelude::*;
-use proto::backend::{self, pkg::token};
+use chirp_workflow::prelude::*;
+use rivet_operation::prelude::proto::{
+	self,
+	backend::{self, pkg::token},
+};
 
-#[worker_test]
+#[workflow_test]
 async fn print_test_data(ctx: TestCtx) {
 	let game_res = op!([ctx] faker_game {
 		..Default::default()
@@ -18,7 +21,8 @@ async fn print_test_data(ctx: TestCtx) {
 	let user_id = user_res.user_id.unwrap();
 
 	// Pick an existing cluster
-	let cluster_id = op!([ctx] cluster_list {})
+	let cluster_id = ctx
+		.op(cluster::ops::list::Input {})
 		.await
 		.unwrap()
 		.cluster_ids
@@ -27,18 +31,19 @@ async fn print_test_data(ctx: TestCtx) {
 		.to_owned();
 
 	// Pick an existing datacenter
-	let datacenter_id = op!([ctx] cluster_datacenter_list {
-		cluster_ids: vec![cluster_id],
-	})
-	.await
-	.unwrap()
-	.clusters
-	.first()
-	.unwrap()
-	.datacenter_ids
-	.first()
-	.unwrap()
-	.to_owned();
+	let datacenter_id = ctx
+		.op(cluster::ops::datacenter::list::Input {
+			cluster_ids: vec![cluster_id],
+		})
+		.await
+		.unwrap()
+		.clusters
+		.first()
+		.unwrap()
+		.datacenter_ids
+		.first()
+		.unwrap()
+		.to_owned();
 
 	let build_res: backend::pkg::faker::build::Response = op!([ctx] faker_build {
 		game_id: Some(game_id),

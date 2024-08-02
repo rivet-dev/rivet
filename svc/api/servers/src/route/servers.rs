@@ -40,26 +40,28 @@ pub async fn create(
 	body: models::ServersCreateServerRequest,
 ) -> GlobalResult<models::ServersCreateServerResponse> {
 	let game_id = ctx.auth().server()?.game_id;
-	let games = op!([ctx] cluster_get_for_game {
-		game_ids: vec![game_id.into()]
-	})
-	.await?
-	.games;
+	let games = ctx
+		.op(cluster::ops::get_for_game::Input {
+			game_ids: vec![game_id],
+		})
+		.await?
+		.games;
 
-	let cluster_id = unwrap!(unwrap!(games.first()).cluster_id);
+	let cluster_id = unwrap!(games.first()).cluster_id;
 
-	let datacenters = op!([ctx] cluster_datacenter_resolve_for_name_id {
-		cluster_id: Some(cluster_id),
-		name_ids: vec![body.datacenter.clone()]
-	})
-	.await?
-	.datacenters;
+	let datacenters = ctx
+		.op(cluster::ops::datacenter::resolve_for_name_id::Input {
+			cluster_id,
+			name_ids: vec![body.datacenter.clone()],
+		})
+		.await?
+		.datacenters;
 
 	if datacenters.is_empty() {
 		bail_with!(CLUSTER_DATACENTER_NOT_FOUND);
 	}
 
-	let datacenter_id = unwrap!(unwrap!(datacenters.first()).datacenter_id);
+	let datacenter_id = unwrap!(datacenters.first()).datacenter_id;
 
 	let tags = serde_json::from_value(body.tags.unwrap_or_default())?;
 
@@ -67,8 +69,8 @@ pub async fn create(
 
 	let server = op!([ctx] ds_server_create {
 		game_id: Some(game_id.into()),
-		datacenter_id: Some(datacenter_id),
-		cluster_id: Some(cluster_id),
+		datacenter_id: Some(datacenter_id.into()),
+		cluster_id: Some(cluster_id.into()),
 		tags: tags,
 		resources: Some((*body.resources).api_into()),
 		kill_timeout_ms: body.kill_timeout.unwrap_or_default(),

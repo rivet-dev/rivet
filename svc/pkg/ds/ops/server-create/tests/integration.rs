@@ -1,13 +1,16 @@
 use std::collections::HashMap;
 
-use chirp_worker::prelude::*;
-use proto::backend::{
-	self,
-	pkg::{dynamic_servers, token},
-};
+use chirp_workflow::prelude::*;
 use rivet_api::{apis::*, models};
+use rivet_operation::prelude::proto::{
+	self,
+	backend::{
+		self,
+		pkg::{dynamic_servers, token},
+	},
+};
 
-#[worker_test]
+#[workflow_test]
 async fn create(ctx: TestCtx) {
 	let game_res = op!([ctx] faker_game {
 		..Default::default()
@@ -40,7 +43,8 @@ async fn create(ctx: TestCtx) {
 	tracing::info!("token_res for key: {:?}", token_res);
 
 	// Pick an existing cluster
-	let cluster_id = op!([ctx] cluster_list {})
+	let cluster_id = ctx
+		.op(cluster::ops::list::Input {})
 		.await
 		.unwrap()
 		.cluster_ids
@@ -49,18 +53,19 @@ async fn create(ctx: TestCtx) {
 		.to_owned();
 
 	// Pick an existing datacenter
-	let datacenter_id = op!([ctx] cluster_datacenter_list {
-		cluster_ids: vec![cluster_id],
-	})
-	.await
-	.unwrap()
-	.clusters
-	.first()
-	.unwrap()
-	.datacenter_ids
-	.first()
-	.unwrap()
-	.to_owned();
+	let datacenter_id = ctx
+		.op(cluster::ops::datacenter::list::Input {
+			cluster_ids: vec![cluster_id],
+		})
+		.await
+		.unwrap()
+		.clusters
+		.first()
+		.unwrap()
+		.datacenter_ids
+		.first()
+		.unwrap()
+		.to_owned();
 
 	let build_res: backend::pkg::faker::build::Response = op!([ctx] faker_build {
 		game_id: Some(game_id),
@@ -96,7 +101,7 @@ async fn create(ctx: TestCtx) {
 
 	let server = op!([ctx] ds_server_create {
 		game_id: Some(game_id),
-		cluster_id: Some(cluster_id),
+		cluster_id: Some(cluster_id.into()),
 		datacenter_id: faker_region.region_id,
 		resources: Some(proto::backend::ds::ServerResources { cpu_millicores: 100, memory_mib: 200 }),
 		kill_timeout_ms: 0,

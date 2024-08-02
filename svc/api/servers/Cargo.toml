@@ -30,26 +30,20 @@ uuid = { version = "1", features = ["v4"] }
 
 build-create = { path = "../../pkg/build/ops/create" }
 build-get = { path = "../../pkg/build/ops/get" }
-game-namespace-get = { path = "../../pkg/game/ops/namespace-get" }
 build-list-for-game = { path = "../../pkg/build/ops/list-for-game" }
-cluster-datacenter-get = { path = "../../pkg/cluster/ops/datacenter-get" }
-cluster-datacenter-list = { path = "../../pkg/cluster/ops/datacenter-list" }
-cluster-datacenter-resolve-for-name-id = { path = "../../pkg/cluster/ops/datacenter-resolve-for-name-id" }
-cluster-get = { path = "../../pkg/cluster/ops/get" }
-cluster-get-for-game = { path = "../../pkg/cluster/ops/get-for-game" }
-game-version-get = { path = "../../pkg/game/ops/version-get" }
-cluster-list = { path = "../../pkg/cluster/ops/list" }
-cluster-resolve-for-name-id = { path = "../../pkg/cluster/ops/resolve-for-name-id" }
+cluster = { path = "../../pkg/cluster" }
 ds-server-create = { path = "../../pkg/ds/ops/server-create" }
-ds-server-list-for-game = { path = "../../pkg/ds/ops/server-list-for-game" }
 ds-server-delete = { path = "../../pkg/ds/ops/server-delete" }
 ds-server-get = { path = "../../pkg/ds/ops/server-get" }
-user-identity-get = { path = "../../pkg/user-identity/ops/get" }
+ds-server-list-for-game = { path = "../../pkg/ds/ops/server-list-for-game" }
 game-get = { path = "../../pkg/game/ops/get" }
+game-namespace-get = { path = "../../pkg/game/ops/namespace-get" }
+game-version-get = { path = "../../pkg/game/ops/version-get" }
 token-revoke = { path = "../../pkg/token/ops/revoke" }
 upload-complete = { path = "../../pkg/upload/ops/complete" }
 upload-get = { path = "../../pkg/upload/ops/get" }
 user-get = { path = "../../pkg/user/ops/get" }
+user-identity-get = { path = "../../pkg/user-identity/ops/get" }
 user-team-list = { path = "../../pkg/user/ops/team-list" }
 
 [dev-dependencies]
