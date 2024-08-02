@@ -2,7 +2,7 @@ use std::net::IpAddr;
 
 use chirp_workflow::ctx::ApiCtx;
 use rivet_operation::OperationContext;
-use types::rivet::backend;
+use types_proto::rivet::backend;
 use url::Url;
 
 use crate::auth;

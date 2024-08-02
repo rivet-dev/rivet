@@ -13,10 +13,10 @@ ALTER TABLE datacenter_tls
 	ADD COLUMN state2 JSONB; -- cluster::types::TlsState
 
 CREATE TABLE server_images2 (
-	provider JSONB,
+	provider TEXT, -- cluster::types::Provider
 	install_hash TEXT,
 	datacenter_id UUID,
-	pool_type JSONB,
+	pool_type TEXT, -- cluster::types::PoolType
 
 	create_ts INT NOT NULL,
 	-- After the image expires and is destroyed

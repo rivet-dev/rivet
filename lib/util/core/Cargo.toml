@@ -35,7 +35,7 @@ tokio = { version = "1.29", default-features = false, features = [
     "test-util",
     "macros",
 ] }
-types = { path = "../../types/core" }
+types-proto = { path = "../../types-proto/core" }
 uuid = { version = "1", features = ["v4", "serde"] }
 
 aws-smithy-client = "^0.41.0"

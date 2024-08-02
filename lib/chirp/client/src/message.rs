@@ -97,9 +97,9 @@ where
 	#[tracing::instrument(skip(buf))]
 	pub(crate) fn decode_inner(
 		buf: &[u8],
-	) -> Result<(types::rivet::chirp::Message, Vec<TraceEntry>), ClientError> {
+	) -> Result<(types_proto::rivet::chirp::Message, Vec<TraceEntry>), ClientError> {
 		// Decode the message and trace
-		let message = <types::rivet::chirp::Message as prost::Message>::decode(buf)
+		let message = <types_proto::rivet::chirp::Message as prost::Message>::decode(buf)
 			.map_err(ClientError::DecodeMessage)?;
 
 		let trace = message
@@ -167,10 +167,10 @@ impl TraceEntry {
 	}
 }
 
-impl TryFrom<types::rivet::chirp::TraceEntry> for TraceEntry {
+impl TryFrom<types_proto::rivet::chirp::TraceEntry> for TraceEntry {
 	type Error = ClientError;
 
-	fn try_from(value: types::rivet::chirp::TraceEntry) -> Result<Self, ClientError> {
+	fn try_from(value: types_proto::rivet::chirp::TraceEntry) -> Result<Self, ClientError> {
 		Ok(TraceEntry {
 			context_name: value.context_name.clone(),
 			req_id: value

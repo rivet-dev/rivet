@@ -19,6 +19,7 @@ pub fn registry() -> Registry {
 	registry.register_workflow::<server::dns_delete::Workflow>();
 	registry.register_workflow::<server::drain::Workflow>();
 	registry.register_workflow::<server::undrain::Workflow>();
+	registry.register_workflow::<prebake::Workflow>();
 
 	registry
 }

@@ -8,7 +8,7 @@ license = "Apache-2.0"
 [dependencies]
 lazy_static = "1.4"
 prost = "0.10"
-types = { path = "../../types/core" }
+types-proto = { path = "../../types-proto/core" }
 rivet-metrics = { path = "../../metrics" }
 rivet-pools = { path = "../../pools" }
 thiserror = "1.0"

@@ -1,6 +1,6 @@
-use types_build;
+use types_proto_build;
 
 fn main() -> std::io::Result<()> {
 	// Build schema
-	types_build::compile()
+	types_proto_build::compile()
 }

@@ -1,6 +1,6 @@
 use rivet_api::models;
 use rivet_operation::prelude::*;
-use types::rivet::backend;
+use types_proto::rivet::backend;
 
 use crate::{convert, fetch, ApiTryInto};
 

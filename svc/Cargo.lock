@@ -421,7 +421,7 @@ dependencies = [
  "tokio",
  "tracing",
  "tracing-subscriber",
- "types",
+ "types-proto",
  "url",
  "uuid",
 ]
@@ -2066,7 +2066,7 @@ dependencies = [
  "tokio",
  "tokio-util 0.7.10",
  "tracing",
- "types",
+ "types-proto",
  "urlencoding",
  "uuid",
 ]
@@ -2091,7 +2091,7 @@ dependencies = [
  "thiserror",
  "tokio",
  "tracing",
- "types",
+ "types-proto",
  "uuid",
 ]
 
@@ -2131,7 +2131,7 @@ dependencies = [
  "tokio",
  "tracing",
  "tracing-subscriber",
- "types",
+ "types-proto",
  "uuid",
 ]
 
@@ -4178,7 +4178,7 @@ dependencies = [
  "serde",
  "serde_json",
  "thiserror",
- "types",
+ "types-proto",
 ]
 
 [[package]]
@@ -7285,7 +7285,7 @@ dependencies = [
  "thiserror",
  "tokio",
  "tracing",
- "types",
+ "types-proto",
  "uuid",
 ]
 
@@ -7331,7 +7331,7 @@ dependencies = [
  "serde",
  "serde_json",
  "thiserror",
- "types",
+ "types-proto",
  "uuid",
 ]
 
@@ -7384,7 +7384,7 @@ dependencies = [
  "team-member-count",
  "team-profile-validate",
  "team-validate",
- "types",
+ "types-proto",
  "user-follow-count",
  "user-follow-get",
  "user-get",
@@ -7533,7 +7533,7 @@ dependencies = [
  "thiserror",
  "tokio",
  "tracing",
- "types",
+ "types-proto",
 ]
 
 [[package]]
@@ -7661,7 +7661,7 @@ dependencies = [
  "serde_json",
  "thiserror",
  "tokio",
- "types",
+ "types-proto",
  "uuid",
 ]
 
@@ -7692,7 +7692,7 @@ dependencies = [
  "serde",
  "serde_json",
  "thiserror",
- "types",
+ "types-proto",
  "uuid",
 ]
 
@@ -9645,7 +9645,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "42ff0bf0c66b8238c6f3b578df37d0b7848e55df8577b3f74f92a69acceeb825"
 
 [[package]]
-name = "types"
+name = "types-proto"
 version = "0.1.0"
 dependencies = [
  "chirp-types",
@@ -9655,12 +9655,12 @@ dependencies = [
  "serde",
  "serde_json",
  "thiserror",
- "types-build",
+ "types-proto-build",
  "uuid",
 ]
 
 [[package]]
-name = "types-build"
+name = "types-proto-build"
 version = "0.1.0"
 dependencies = [
  "bolt-config",

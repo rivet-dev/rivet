@@ -9,7 +9,7 @@ license = "Apache-2.0"
 base64 = "0.13"
 jsonwebtoken = "8.2.0"
 global-error = { path = "../global-error" }
-types = { path = "../types/core" }
+types-proto = { path = "../types-proto/core" }
 lazy_static = "1.4"
 prost = "0.10"
 rivet-util = { path = "../util/core" }

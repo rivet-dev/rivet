@@ -2,7 +2,7 @@ use std::convert::TryInto;
 
 use rivet_api::models;
 use rivet_operation::prelude::*;
-use types::rivet::backend::{self, pkg::*};
+use types_proto::rivet::backend::{self, pkg::*};
 
 use crate::ApiInto;
 

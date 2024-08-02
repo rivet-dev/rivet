@@ -5,7 +5,7 @@ use jsonwebtoken::{Algorithm, DecodingKey};
 use prost::Message;
 
 mod schema {
-	pub use types::rivet::{backend, claims::*};
+	pub use types_proto::rivet::{backend, claims::*};
 }
 
 pub const ALGORITHM: Algorithm = Algorithm::EdDSA;

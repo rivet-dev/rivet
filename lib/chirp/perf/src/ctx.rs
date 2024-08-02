@@ -11,7 +11,7 @@ use std::{
 use rivet_pools::prelude::*;
 use tokio::sync::RwLock;
 use tracing::Instrument;
-use types::rivet::perf;
+use types_proto::rivet::perf;
 use uuid::Uuid;
 
 #[derive(thiserror::Error, Debug)]

@@ -10,4 +10,4 @@ pub mod prelude;
 pub mod redis_keys;
 
 pub use client::*;
-pub use types::rivet::chirp::{RequestDebug, RunContext, TraceEntry};
+pub use types_proto::rivet::chirp::{RequestDebug, RunContext, TraceEntry};

@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use rivet_api::models;
 use rivet_operation::prelude::*;
-use types::rivet::{
+use types_proto::rivet::{
 	backend::{self, pkg::*},
 	common,
 };

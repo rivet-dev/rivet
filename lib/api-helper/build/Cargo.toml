@@ -44,7 +44,7 @@ tracing-subscriber = { version = "0.3", default-features = false, features = [
     "json",
     "ansi",
 ] }
-types = { path = "../../types/core" }
+types-proto = { path = "../../types-proto/core" }
 url = "2.2.2"
 uuid = { version = "1", features = ["v4"] }
 

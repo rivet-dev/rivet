@@ -1,5 +1,5 @@
 use global_error::prelude::*;
-use types::rivet::backend;
+use types_proto::rivet::backend;
 use uuid::Uuid;
 
 use crate::env::{domain_main, origin_api, origin_hub};

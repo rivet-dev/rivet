@@ -15,7 +15,7 @@ use rivet_pools::prelude::*;
 use rivet_util::CleanExit;
 use tokio::time;
 use tracing::Instrument;
-use types::rivet::chirp;
+use types_proto::rivet::chirp;
 
 use crate::{
 	config::{Config, WorkerKind},

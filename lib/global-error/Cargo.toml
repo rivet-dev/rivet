@@ -6,13 +6,13 @@ edition = "2021"
 license = "Apache-2.0"
 
 [features]
-protobuf-src = ["types/protobuf-src"]
-chirp = ["types"]
+protobuf-src = ["types-proto/protobuf-src"]
+chirp = ["types-proto"]
 
 [dependencies]
 async-trait = "0.1"
 formatted-error = { path = "../formatted-error" }
-types = { path = "../types/core", optional = true }
+types-proto = { path = "../types-proto/core", optional = true }
 http = "0.2"
 reqwest = "0.11"
 serde = { version = "1.0", features = ["derive"] }

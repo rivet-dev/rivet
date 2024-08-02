@@ -6,7 +6,7 @@ use std::{
 
 use global_error::prelude::*;
 use regex;
-use types::rivet::common;
+use types_proto::rivet::common;
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum GlobToken {

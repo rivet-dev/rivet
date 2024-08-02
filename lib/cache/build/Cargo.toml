@@ -20,7 +20,7 @@ serde_json = "1.0"
 thiserror = "1.0"
 tokio = { version = "1.29", features = ["full"] }
 tracing = "0.1"
-types = { path = "../../types/core" }
+types-proto = { path = "../../types-proto/core" }
 uuid = { version = "1", features = ["v4"] }
 
 [dependencies.redis]

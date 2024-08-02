@@ -16,7 +16,7 @@ use rivet_util::Backoff;
 use tokio::task::JoinSet;
 use tokio_util::sync::{CancellationToken, DropGuard};
 use tracing::Instrument;
-use types::rivet::chirp;
+use types_proto::rivet::chirp;
 use uuid::Uuid;
 
 use crate::{

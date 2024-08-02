@@ -22,7 +22,7 @@ thiserror = "1.0"
 tokio = { version = "1.29", features = ["full"] }
 tokio-util = "0.7"
 tracing = "0.1"
-types = { path = "../../types/core" }
+types-proto = { path = "../../types-proto/core" }
 urlencoding = "2.1"
 uuid = { version = "1", features = ["v4"] }
 

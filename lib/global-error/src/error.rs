@@ -3,7 +3,7 @@ use std::{collections::HashMap, fmt::Display};
 use http::StatusCode;
 use serde::Serialize;
 #[cfg(feature = "chirp")]
-use types::rivet::chirp;
+use types_proto::rivet::chirp;
 
 pub type GlobalResult<T> = Result<T, GlobalError>;
 

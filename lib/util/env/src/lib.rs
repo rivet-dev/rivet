@@ -108,11 +108,11 @@ pub fn support_deprecated_subdomains() -> bool {
 	*SUPPORT_DEPRECATED_SUBDOMAINS
 }
 
-pub fn test_id_param() -> Vec<types::rivet::backend::job::Parameter> {
+pub fn test_id_param() -> Vec<types_proto::rivet::backend::job::Parameter> {
 	TEST_ID
 		.as_ref()
 		.iter()
-		.map(|x| types::rivet::backend::job::Parameter {
+		.map(|x| types_proto::rivet::backend::job::Parameter {
 			key: "rivet_test_id".to_string(),
 			value: x.to_string(),
 		})
