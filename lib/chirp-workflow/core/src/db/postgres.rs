@@ -8,7 +8,7 @@ use super::{
 	ActivityEventRow, Database, PulledWorkflow, PulledWorkflowRow, SignalEventRow, SignalRow,
 	SubWorkflowEventRow, WorkflowRow,
 };
-use crate::{schema::ActivityId, WorkflowError, WorkflowResult};
+use crate::{activity::ActivityId, WorkflowError, WorkflowResult};
 
 pub struct DatabasePostgres {
 	pool: PgPool,
@@ -76,7 +76,7 @@ impl Database for DatabasePostgres {
 		.bind(workflow_name)
 		.bind(rivet_util::timestamp::now())
 		.bind(ray_id)
-		.bind(tags)
+		.bind(&tags)
 		.bind(input)
 		.execute(&mut *self.conn().await?)
 		.await
@@ -130,14 +130,18 @@ impl Database for DatabasePostgres {
 							(
 								SELECT true
 								FROM db_workflow.signals AS s
-								WHERE s.signal_name = ANY(wake_signals)
+								WHERE
+									s.workflow_id = w.workflow_id AND
+									s.signal_name = ANY(w.wake_signals)
 								LIMIT 1
 							) OR
 							-- Tagged signal exists
 							(
 								SELECT true
 								FROM db_workflow.tagged_signals AS s
-								WHERE w.tags @> s.tags
+								WHERE
+									s.signal_name = ANY(w.wake_signals) AND
+									s.tags <@ w.tags
 								LIMIT 1
 							) OR
 							-- Sub workflow completed
@@ -413,7 +417,7 @@ impl Database for DatabasePostgres {
 							INSERT INTO db_workflow.workflow_activity_errors (
 								workflow_id, location, activity_name, error, ts
 							)
-							VALUES ($1, $2, $3, $6, $7)
+							VALUES ($1, $2, $3, $6, $8)
 							RETURNING 1
 						)
 					SELECT 1
@@ -426,6 +430,7 @@ impl Database for DatabasePostgres {
 				.bind(input)
 				.bind(err)
 				.bind(create_ts)
+				.bind(rivet_util::timestamp::now())
 				.execute(&mut *self.conn().await?)
 				.await
 				.map_err(WorkflowError::Sqlx)?;

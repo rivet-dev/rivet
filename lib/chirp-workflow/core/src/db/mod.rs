@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use uuid::Uuid;
 
-use crate::{schema::ActivityId, Workflow, WorkflowError, WorkflowResult};
+use crate::{activity::ActivityId, Workflow, WorkflowError, WorkflowResult};
 
 mod postgres;
 pub use postgres::DatabasePostgres;

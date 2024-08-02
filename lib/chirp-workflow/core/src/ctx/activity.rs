@@ -82,11 +82,9 @@ impl ActivityCtx {
 
 	pub async fn update_workflow_tags(&self, tags: &serde_json::Value) -> GlobalResult<()> {
 		self.db
-			.update_workflow_tags(
-				self.workflow_id,
-				tags,
-			)
-			.await.map_err(GlobalError::raw)
+			.update_workflow_tags(self.workflow_id, tags)
+			.await
+			.map_err(GlobalError::raw)
 	}
 }
 

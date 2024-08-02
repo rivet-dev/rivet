@@ -34,7 +34,14 @@ pub async fn run_from_env(ts: i64, pools: rivet_pools::Pools) -> GlobalResult<()
 		WHERE
 			wi.last_ping_ts < $1 AND
 			wi.worker_instance_id = w.worker_instance_id AND
-			w.output IS NULL
+			w.output IS NULL AND
+			-- Check for any wake condition so we don't restart a permanently dead workflow
+			(
+				w.wake_immediate OR
+				w.wake_deadline_ts IS NOT NULL OR
+				cardinality(w.wake_signals) > 0 OR
+				w.wake_sub_workflow_id IS NOT NULL
+			)
 		RETURNING w.workflow_id, wi.worker_instance_id
 		",
 		ts - WORKER_INSTANCE_LOST_THRESHOLD,

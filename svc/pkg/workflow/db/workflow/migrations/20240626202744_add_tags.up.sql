@@ -1,6 +1,6 @@
 -- Add tags
 ALTER TABLE workflows
-ADD COLUMN tags JSONB;
+  ADD COLUMN tags JSONB;
 
 CREATE INDEX gin_workflows_tags
 ON workflows

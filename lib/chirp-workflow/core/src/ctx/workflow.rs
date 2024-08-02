@@ -6,7 +6,8 @@ use tokio::time::Duration;
 use uuid::Uuid;
 
 use crate::{
-	schema::{ActivityId, Event},
+	activity::ActivityId,
+	event::Event,
 	util::{self, Location},
 	Activity, ActivityCtx, ActivityInput, DatabaseHandle, Executable, Listen, PulledWorkflow,
 	RegistryHandle, Signal, SignalRow, Workflow, WorkflowError, WorkflowInput, WorkflowResult,
@@ -365,7 +366,11 @@ impl WorkflowCtx {
 	}
 
 	/// Dispatch another workflow with tags.
-	pub async fn dispatch_tagged_workflow<I>(&mut self, tags: &serde_json::Value, input: I) -> GlobalResult<Uuid>
+	pub async fn dispatch_tagged_workflow<I>(
+		&mut self,
+		tags: &serde_json::Value,
+		input: I,
+	) -> GlobalResult<Uuid>
 	where
 		I: WorkflowInput,
 		<I as WorkflowInput>::Workflow: Workflow<Input = I>,
@@ -373,7 +378,11 @@ impl WorkflowCtx {
 		self.dispatch_workflow_inner(Some(tags), input).await
 	}
 
-	async fn dispatch_workflow_inner<I>(&mut self, tags: Option<&serde_json::Value>, input: I) -> GlobalResult<Uuid>
+	async fn dispatch_workflow_inner<I>(
+		&mut self,
+		tags: Option<&serde_json::Value>,
+		input: I,
+	) -> GlobalResult<Uuid>
 	where
 		I: WorkflowInput,
 		<I as WorkflowInput>::Workflow: Workflow<Input = I>,
@@ -404,7 +413,7 @@ impl WorkflowCtx {
 		else {
 			let name = I::Workflow::NAME;
 
-			tracing::debug!(%name, ?tags, ?input, "dispatching workflow");
+			tracing::info!(%name, ?tags, ?input, "dispatching workflow");
 
 			let sub_workflow_id = Uuid::new_v4();
 
@@ -659,9 +668,9 @@ impl WorkflowCtx {
 		workflow_id: Uuid,
 		body: T,
 	) -> GlobalResult<Uuid> {
-		tracing::debug!(name=%T::NAME, %workflow_id, "dispatching signal");
-
 		let signal_id = Uuid::new_v4();
+		
+		tracing::info!(name=%T::NAME, %workflow_id, %signal_id, "dispatching signal");
 
 		// Serialize input
 		let input_val = serde_json::to_value(&body)
@@ -682,9 +691,9 @@ impl WorkflowCtx {
 		tags: &serde_json::Value,
 		body: T,
 	) -> GlobalResult<Uuid> {
-		tracing::debug!(name=%T::NAME, ?tags, "dispatching tagged signal");
-
 		let signal_id = Uuid::new_v4();
+		
+		tracing::debug!(name=%T::NAME, ?tags, %signal_id, "dispatching tagged signal");
 
 		// Serialize input
 		let input_val = serde_json::to_value(&body)
@@ -717,7 +726,7 @@ impl WorkflowCtx {
 		}
 		// Listen for new messages
 		else {
-			tracing::debug!(name=%self.name, id=%self.workflow_id, "listening for signal");
+			tracing::info!(name=%self.name, id=%self.workflow_id, "listening for signal");
 
 			let mut retries = 0;
 			let mut interval = tokio::time::interval(SIGNAL_RETRY);

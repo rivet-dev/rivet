@@ -551,15 +551,24 @@ pub async fn build_tests<'a, T: AsRef<str>>(
 				if let Some(executable) = v["filenames"][0].as_str() {
 					// Parsing the cargo package name (foo-bar) from
 					// path+file:///foo/bar#foo-bar@0.0.1
-					let package = v["package_id"]
-						.as_str()
-						.context("missing package_id")?
-						.split_once('#')
-						.context("split_once failed")?
-						.1
-						.split_once('@')
-						.context("split_once failed")?
-						.0;
+					let package_id = v["package_id"].as_str().context("missing package_id")?;
+					let package = if package_id.contains('@') {
+						package_id
+							.split_once('#')
+							.context("split_once failed")?
+							.1
+							.split_once('@')
+							.context("split_once failed")?
+							.0
+					} else {
+						package_id
+							.split_once('#')
+							.context("split_once failed")?
+							.0
+							.rsplit_once('/')
+							.context("split_once failed")?
+							.1
+					};
 
 					let target = v["target"]["name"]
 						.as_str()

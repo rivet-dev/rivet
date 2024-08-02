@@ -9,7 +9,7 @@ use tokio::time::{self, Duration};
 use uuid::Uuid;
 
 use crate::{
-	error::WorkflowError, schema::Event, ActivityEventRow, SignalEventRow, SubWorkflowEventRow,
+	error::WorkflowError, event::Event, ActivityEventRow, SignalEventRow, SubWorkflowEventRow,
 	WorkflowResult,
 };
 
@@ -71,16 +71,12 @@ pub fn combine_events(
 	signal_events: Vec<SignalEventRow>,
 	sub_workflow_events: Vec<SubWorkflowEventRow>,
 ) -> WorkflowResult<HashMap<Location, Vec<Event>>> {
-	let mut events_by_location: HashMap<_, Vec<(i64, Event)>> = HashMap::new();
+	let mut events_by_location: HashMap<Location, Vec<(i64, Event)>> = HashMap::new();
 
 	for event in activity_events {
-		let root_location = event
-			.location
-			.iter()
-			.take(event.location.len().saturating_sub(1))
-			.map(|x| *x as usize)
-			.collect::<Location>();
-		let idx = *event.location.last().unwrap();
+		let (root_location, idx) = split_location(&event.location);
+
+		insert_placeholder(&mut events_by_location, &event.location, idx);
 
 		events_by_location
 			.entry(root_location)
@@ -89,13 +85,9 @@ pub fn combine_events(
 	}
 
 	for event in signal_events {
-		let root_location = event
-			.location
-			.iter()
-			.take(event.location.len().saturating_sub(1))
-			.map(|x| *x as usize)
-			.collect::<Location>();
-		let idx = *event.location.last().unwrap();
+		let (root_location, idx) = split_location(&event.location);
+
+		insert_placeholder(&mut events_by_location, &event.location, idx);
 
 		events_by_location
 			.entry(root_location)
@@ -104,13 +96,9 @@ pub fn combine_events(
 	}
 
 	for event in sub_workflow_events {
-		let root_location = event
-			.location
-			.iter()
-			.take(event.location.len().saturating_sub(1))
-			.map(|x| *x as usize)
-			.collect::<Location>();
-		let idx = *event.location.last().unwrap();
+		let (root_location, idx) = split_location(&event.location);
+
+		insert_placeholder(&mut events_by_location, &event.location, idx);
 
 		events_by_location
 			.entry(root_location)
@@ -134,6 +122,39 @@ pub fn combine_events(
 		.collect();
 
 	Ok(event_history)
+}
+
+fn split_location(location: &[i64]) -> (Location, i64) {
+	(
+		location
+			.iter()
+			.take(location.len().saturating_sub(1))
+			.map(|x| *x as usize)
+			.collect::<Location>(),
+		*location.last().unwrap(),
+	)
+}
+
+// Insert placeholder record into parent location list (ex. for [4, 0] insert into the [] list at
+// the 4th index)
+fn insert_placeholder(
+	events_by_location: &mut HashMap<Location, Vec<(i64, Event)>>,
+	location: &[i64],
+	idx: i64,
+) {
+	if idx == 0 && location.len() > 1 {
+		let parent_location = location
+			.iter()
+			.take(location.len().saturating_sub(2))
+			.map(|x| *x as usize)
+			.collect::<Location>();
+		let parent_idx = *location.get(location.len().saturating_sub(2)).unwrap();
+
+		events_by_location
+			.entry(parent_location)
+			.or_default()
+			.push((parent_idx, Event::Branch));
+	}
 }
 
 pub fn inject_fault() -> GlobalResult<()> {

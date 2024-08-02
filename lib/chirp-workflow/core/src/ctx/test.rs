@@ -80,7 +80,7 @@ impl TestCtx {
 	{
 		let name = I::Workflow::NAME;
 
-		tracing::debug!(%name, ?input, "dispatching workflow");
+		tracing::info!(%name, ?input, "dispatching workflow");
 
 		let id = Uuid::new_v4();
 
@@ -99,14 +99,18 @@ impl TestCtx {
 		Ok(id)
 	}
 
-	pub async fn dispatch_tagged_workflow<I>(&self, tags: &serde_json::Value, input: I) -> GlobalResult<Uuid>
+	pub async fn dispatch_tagged_workflow<I>(
+		&self,
+		tags: &serde_json::Value,
+		input: I,
+	) -> GlobalResult<Uuid>
 	where
 		I: WorkflowInput,
 		<I as WorkflowInput>::Workflow: Workflow<Input = I>,
 	{
 		let name = I::Workflow::NAME;
 
-		tracing::debug!(%name, ?tags, ?input, "dispatching tagged workflow");
+		tracing::info!(%name, ?tags, ?input, "dispatching tagged workflow");
 
 		let id = Uuid::new_v4();
 
@@ -182,9 +186,9 @@ impl TestCtx {
 		workflow_id: Uuid,
 		input: T,
 	) -> GlobalResult<Uuid> {
-		tracing::debug!(name=%T::NAME, %workflow_id, "dispatching signal");
-
 		let signal_id = Uuid::new_v4();
+		
+		tracing::info!(name=%T::NAME, %workflow_id, %signal_id, "dispatching signal");
 
 		// Serialize input
 		let input_val = serde_json::to_value(input)
@@ -204,9 +208,9 @@ impl TestCtx {
 		tags: &serde_json::Value,
 		input: T,
 	) -> GlobalResult<Uuid> {
-		tracing::debug!(name=%T::NAME, ?tags, "dispatching tagged signal");
-
 		let signal_id = Uuid::new_v4();
+		
+		tracing::info!(name=%T::NAME, ?tags, %signal_id, "dispatching tagged signal");
 
 		// Serialize input
 		let input_val = serde_json::to_value(input)

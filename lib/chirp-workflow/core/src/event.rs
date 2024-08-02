@@ -1,13 +1,9 @@
-use std::{
-	collections::hash_map::DefaultHasher,
-	hash::{Hash, Hasher},
-};
-
-use serde::{de::DeserializeOwned, Deserialize, Serialize};
+use serde::de::DeserializeOwned;
 use uuid::Uuid;
 
 use crate::{
-	Activity, ActivityEventRow, SignalEventRow, SubWorkflowEventRow, WorkflowError, WorkflowResult,
+	activity::ActivityId, ActivityEventRow, SignalEventRow, SubWorkflowEventRow, WorkflowError,
+	WorkflowResult,
 };
 
 /// An event that happened in the workflow run.
@@ -18,6 +14,8 @@ pub enum Event {
 	Activity(ActivityEvent),
 	Signal(SignalEvent),
 	SubWorkflow(SubWorkflowEvent),
+	// Used as a placeholder for branching locations
+	Branch,
 }
 
 #[derive(Debug)]
@@ -86,40 +84,6 @@ impl TryFrom<SubWorkflowEventRow> for SubWorkflowEvent {
 		Ok(SubWorkflowEvent {
 			sub_workflow_id: value.sub_workflow_id,
 			sub_workflow_name: value.sub_workflow_name,
-		})
-	}
-}
-
-/// Unique identifier for a specific run of an activity. Used to check for equivalence of activity
-/// runs performantly.
-///
-/// Based on the name of the activity and the hash of the inputs to the activity.
-#[derive(Serialize, Deserialize, Eq, PartialEq, Clone, Debug)]
-pub struct ActivityId {
-	pub name: String,
-	pub input_hash: u64,
-}
-
-impl ActivityId {
-	pub fn new<A: Activity>(input: &A::Input) -> Self {
-		let mut hasher = DefaultHasher::new();
-		input.hash(&mut hasher);
-		let input_hash = hasher.finish();
-
-		Self {
-			name: A::NAME.to_string(),
-			input_hash,
-		}
-	}
-
-	pub fn from_bytes(name: String, input_hash: Vec<u8>) -> WorkflowResult<Self> {
-		Ok(ActivityId {
-			name,
-			input_hash: u64::from_le_bytes(
-				input_hash
-					.try_into()
-					.map_err(|_| WorkflowError::IntegerConversion)?,
-			),
 		})
 	}
 }

@@ -26,7 +26,7 @@ where
 
 	let name = I::Workflow::NAME;
 
-	tracing::debug!(%name, ?input, "dispatching workflow");
+	tracing::info!(%name, ?input, "dispatching workflow");
 
 	let id = Uuid::new_v4();
 
@@ -62,7 +62,7 @@ where
 
 	let name = I::Workflow::NAME;
 
-	tracing::debug!(%name, ?input, "dispatching workflow");
+	tracing::info!(%name, ?input, "dispatching workflow");
 
 	let id = Uuid::new_v4();
 
@@ -157,9 +157,9 @@ pub async fn signal<I: Signal + Serialize, B: Debug + Clone>(
 		bail!("cannot dispatch a signal from an operation within a workflow execution. trigger it from the workflow's body.");
 	}
 
-	tracing::debug!(name=%I::NAME, %workflow_id, "dispatching signal");
-
 	let signal_id = Uuid::new_v4();
+	
+	tracing::info!(name=%I::NAME, %workflow_id, %signal_id, "dispatching signal");
 
 	// Serialize input
 	let input_val = serde_json::to_value(input)
@@ -184,9 +184,9 @@ pub async fn tagged_signal<I: Signal + Serialize, B: Debug + Clone>(
 		bail!("cannot dispatch a signal from an operation within a workflow execution. trigger it from the workflow's body.");
 	}
 
-	tracing::debug!(name=%I::NAME, ?tags, "dispatching tagged signal");
-
 	let signal_id = Uuid::new_v4();
+	
+	tracing::info!(name=%I::NAME, ?tags, %signal_id, "dispatching tagged signal");
 
 	// Serialize input
 	let input_val = serde_json::to_value(input)
