@@ -196,8 +196,6 @@ impl WorkflowCtx {
 				}
 			}
 			Err(err) => {
-				tracing::warn!(name=%self.name, id=%self.workflow_id, ?err, "workflow error");
-
 				// Retry the workflow if its recoverable
 				let deadline = if err.is_recoverable() {
 					Some(rivet_util::timestamp::now() + RETRY_TIMEOUT.as_millis() as i64)
@@ -209,9 +207,15 @@ impl WorkflowCtx {
 				// be retried when a signal is published
 				let wake_signals = err.signals();
 
-				// This sub workflow come from a `wait_for_workflow` call on a workflow that did not
+				// This sub workflow comes from a `wait_for_workflow` call on a workflow that did not
 				// finish. This workflow will be retried when the sub workflow completes
 				let wake_sub_workflow = err.sub_workflow();
+
+				if deadline.is_some() || !wake_signals.is_empty() || wake_sub_workflow.is_some() {
+					tracing::info!(name=%self.name, id=%self.workflow_id, ?err, "workflow sleeping");
+				} else {
+					tracing::error!(name=%self.name, id=%self.workflow_id, ?err, "workflow error");
+				}
 
 				let err_str = err.to_string();
 
@@ -392,6 +396,7 @@ impl WorkflowCtx {
 			tracing::debug!(
 				name=%self.name,
 				id=%self.workflow_id,
+				sub_workflow_name=%sub_workflow.name,
 				sub_workflow_id=%sub_workflow.sub_workflow_id,
 				"replaying workflow dispatch"
 			);
@@ -620,7 +625,7 @@ impl WorkflowCtx {
 			// Activity succeeded
 			if let Some(output) = activity.parse_output().map_err(GlobalError::raw)? {
 				tracing::debug!(id=%self.workflow_id, activity_name=%I::Activity::NAME, "replaying activity");
-				
+
 				output
 			}
 			// Activity failed, retry

@@ -54,8 +54,8 @@ pub async fn sleep_until_ts(ts: i64) {
 	}
 }
 
-/// Takes activity, signal, and sub workflow events (each with their own location) and combines them via enum
-/// into a hashmap of the following structure:
+/// Takes all workflow events (each with their own location) and combines them via enum into a hashmap of the
+/// following structure:
 ///
 /// Given the location [1, 2, 3], 3 is the index and [1, 2] is the root location
 ///
@@ -63,6 +63,7 @@ pub async fn sleep_until_ts(ts: i64) {
 /// 	[1, 2]: [
 /// 		example signal event,
 /// 		example activity event,
+/// 		example sub workflow event,
 /// 		example activity event (this is [1, 2, 3])
 /// 	],
 /// }
@@ -74,6 +75,7 @@ pub fn combine_events(
 	msg_send_events: Vec<MessageSendEventRow>,
 	sub_workflow_events: Vec<SubWorkflowEventRow>,
 ) -> WorkflowResult<Vec<PulledWorkflow>> {
+	// Map workflow rows by workflow id
 	let mut workflows_by_id = workflow_rows
 		.into_iter()
 		.map(|row| {
@@ -89,8 +91,6 @@ pub fn combine_events(
 			.expect("unreachable, workflow for event not found");
 		let (root_location, idx) = split_location(&event.location);
 
-		insert_placeholder(events_by_location, &event.location, idx);
-
 		events_by_location
 			.entry(root_location)
 			.or_default()
@@ -102,8 +102,6 @@ pub fn combine_events(
 			.get_mut(&event.workflow_id)
 			.expect("unreachable, workflow for event not found");
 		let (root_location, idx) = split_location(&event.location);
-
-		insert_placeholder(events_by_location, &event.location, idx);
 
 		events_by_location
 			.entry(root_location)
@@ -117,8 +115,6 @@ pub fn combine_events(
 			.expect("unreachable, workflow for event not found");
 		let (root_location, idx) = split_location(&event.location);
 
-		insert_placeholder(events_by_location, &event.location, idx);
-
 		events_by_location
 			.entry(root_location)
 			.or_default()
@@ -130,8 +126,6 @@ pub fn combine_events(
 			.get_mut(&event.workflow_id)
 			.expect("unreachable, workflow for event not found");
 		let (root_location, idx) = split_location(&event.location);
-
-		insert_placeholder(events_by_location, &event.location, idx);
 
 		events_by_location
 			.entry(root_location)
@@ -145,8 +139,6 @@ pub fn combine_events(
 			.expect("unreachable, workflow for event not found");
 		let (root_location, idx) = split_location(&event.location);
 
-		insert_placeholder(events_by_location, &event.location, idx);
-
 		events_by_location
 			.entry(root_location)
 			.or_default()
@@ -156,11 +148,10 @@ pub fn combine_events(
 	let workflows = workflows_by_id
 		.into_values()
 		.map(|(row, mut events_by_location)| {
-			// TODO(RVT-3754): This involves inserting, sorting, then recollecting into lists and recollecting into a
-			// hashmap. Could be improved by iterating over both lists simultaneously and sorting each item at a
-			// time before inserting
-			// Sort all of the events because we are inserting from two different lists. Both lists are already
-			// sorted themselves so this should be fairly cheap
+			// TODO(RVT-3754): This involves inserting, sorting, then recollecting into lists and recollecting
+			// into a hashmap
+			// Sort all of the events because we are inserting from two different lists. Both lists are
+			// already sorted themselves so this should be fairly cheap
 			for (_, list) in events_by_location.iter_mut() {
 				list.sort_by_key(|(idx, _)| *idx);
 			}
@@ -168,7 +159,24 @@ pub fn combine_events(
 			// Remove idx from lists
 			let event_history = events_by_location
 				.into_iter()
-				.map(|(k, v)| (k, v.into_iter().map(|(_, v)| v).collect()))
+				.map(|(k, events)| {
+					let mut expected_idx = 0;
+
+					// Check for missing indexes and insert a `Branch` placeholder event for each missing spot
+					let events = events
+						.into_iter()
+						.flat_map(|(idx, v)| {
+							let offset = (idx - expected_idx) as usize;
+							expected_idx = idx + 1;
+
+							std::iter::repeat_with(|| Event::Branch)
+								.take(offset)
+								.chain(std::iter::once(v))
+						})
+						.collect();
+
+					(k, events)
+				})
 				.collect();
 
 			PulledWorkflow {
@@ -197,27 +205,27 @@ fn split_location(location: &[i64]) -> (Location, i64) {
 	)
 }
 
-// Insert placeholder record into parent location list (ex. for [4, 0] insert into the [] list at
-// the 4th index)
-fn insert_placeholder(
-	events_by_location: &mut HashMap<Location, Vec<(i64, Event)>>,
-	location: &[i64],
-	idx: i64,
-) {
-	if idx == 0 && location.len() > 1 {
-		let parent_location = location
-			.iter()
-			.take(location.len().saturating_sub(2))
-			.map(|x| *x as usize)
-			.collect::<Location>();
-		let parent_idx = *location.get(location.len().saturating_sub(2)).unwrap();
+// // Insert placeholder record into parent location list (ex. for the location [4, 0], insert placeholder into
+// // the [] list at the 4th index)
+// fn insert_placeholder(
+// 	events_by_location: &mut HashMap<Location, Vec<(i64, Event)>>,
+// 	location: &[i64],
+// 	idx: i64,
+// ) {
+// 	if idx == 0 && location.len() > 1 {
+// 		let parent_location = location
+// 			.iter()
+// 			.take(location.len().saturating_sub(2))
+// 			.map(|x| *x as usize)
+// 			.collect::<Location>();
+// 		let parent_idx = *location.get(location.len().saturating_sub(2)).unwrap();
 
-		events_by_location
-			.entry(parent_location)
-			.or_default()
-			.push((parent_idx, Event::Branch));
-	}
-}
+// 		events_by_location
+// 			.entry(parent_location)
+// 			.or_default()
+// 			.push((parent_idx, Event::Branch));
+// 	}
+// }
 
 pub fn inject_fault() -> GlobalResult<()> {
 	if rand::thread_rng().gen_range(0..100) < FAULT_RATE {
