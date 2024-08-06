@@ -128,6 +128,9 @@ pub enum WorkflowError {
 
 	#[error("operation timed out")]
 	OperationTimeout,
+
+	#[error("duplicate registered workflow: {0}")]
+	DuplicateRegisteredWorkflow(String),
 }
 
 impl WorkflowError {

@@ -61,8 +61,11 @@ pub(crate) async fn cluster_datacenter(ctx: &mut WorkflowCtx, input: &Input) -> 
 	)
 	.await?;
 
-	// Scale
-	ctx.signal(ctx.workflow_id(), Scale {}).await?;
+	// Scale initially
+	ctx.workflow(scale::Input {
+		datacenter_id: input.datacenter_id,
+	})
+	.await?;
 
 	ctx.repeat(|ctx| {
 		let datacenter_id = input.datacenter_id;

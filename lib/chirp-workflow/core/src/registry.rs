@@ -27,13 +27,25 @@ impl Registry {
 		Arc::new(self)
 	}
 
-	pub fn merge(mut self, registry: Registry) -> Registry {
+	pub fn merge(mut self, registry: Registry) -> WorkflowResult<Registry> {
+		// Check for duplicates
+		for (workflow_name, _) in &registry.workflows {
+			if self.workflows.contains_key(workflow_name.as_str()) {
+				return Err(WorkflowError::DuplicateRegisteredWorkflow(workflow_name.clone()));
+			}
+		}
+
 		self.workflows.extend(registry.workflows.into_iter());
 
-		self
+		Ok(self)
 	}
 
-	pub fn register_workflow<W: Workflow>(&mut self) {
+	pub fn register_workflow<W: Workflow>(&mut self) -> WorkflowResult<()> {
+		// Check for duplicates
+		if self.workflows.contains_key(W::NAME) {
+			return Err(WorkflowError::DuplicateRegisteredWorkflow(W::NAME.to_string()));
+		}
+
 		self.workflows.insert(
 			W::NAME.to_string(),
 			Arc::new(RegistryWorkflow {
@@ -72,6 +84,8 @@ impl Registry {
 				},
 			}),
 		);
+
+		Ok(())
 	}
 
 	pub fn get_workflow(&self, name: &str) -> WorkflowResult<&Arc<RegistryWorkflow>> {
