@@ -3,7 +3,7 @@
  */
 import * as environments from "../../../../../../environments";
 import * as core from "../../../../../../core";
-import * as Rivet from "../../../../..";
+import * as Rivet from "../../../../../index";
 export declare namespace Games {
     interface Options {
         environment?: core.Supplier<environments.RivetEnvironment | string>;
@@ -11,8 +11,12 @@ export declare namespace Games {
         fetcher?: core.FetchFunction;
     }
     interface RequestOptions {
+        /** The maximum time to wait for a response in seconds. */
         timeoutInSeconds?: number;
+        /** The number of times to retry the request. Defaults to 2. */
         maxRetries?: number;
+        /** A hook to abort the request. */
+        abortSignal?: AbortSignal;
     }
 }
 export declare class Games {
@@ -20,12 +24,22 @@ export declare class Games {
     constructor(_options?: Games.Options);
     /**
      * Returns a game profile.
+     *
+     * @param {string} gameNameId - A human readable short identifier used to references resources. Different than a `rivet.common#Uuid` because this is intended to be human readable. Different than `rivet.common#DisplayName` because this should not include special characters and be short.
+     * @param {Rivet.portal.GetGameProfileRequest} request
+     * @param {Games.RequestOptions} requestOptions - Request-specific configuration.
+     *
      * @throws {@link Rivet.InternalError}
      * @throws {@link Rivet.RateLimitError}
      * @throws {@link Rivet.ForbiddenError}
      * @throws {@link Rivet.UnauthorizedError}
      * @throws {@link Rivet.NotFoundError}
      * @throws {@link Rivet.BadRequestError}
+     *
+     * @example
+     *     await client.portal.games.getGameProfile("string", {
+     *         watchIndex: "string"
+     *     })
      */
     getGameProfile(gameNameId: string, request?: Rivet.portal.GetGameProfileRequest, requestOptions?: Games.RequestOptions): Promise<Rivet.portal.GetGameProfileResponse>;
     protected _getAuthorizationHeader(): Promise<string | undefined>;

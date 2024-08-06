@@ -1,1 +1,1 @@
-export { GetGameLinkRequest } from "./GetGameLinkRequest";
+export { type GetGameLinkRequest } from "./GetGameLinkRequest";

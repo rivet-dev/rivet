@@ -3,7 +3,7 @@
  */
 import * as environments from "../../../../../../environments";
 import * as core from "../../../../../../core";
-import * as Rivet from "../../../../..";
+import * as Rivet from "../../../../../index";
 export declare namespace Events {
     interface Options {
         environment?: core.Supplier<environments.RivetEnvironment | string>;
@@ -11,8 +11,12 @@ export declare namespace Events {
         fetcher?: core.FetchFunction;
     }
     interface RequestOptions {
+        /** The maximum time to wait for a response in seconds. */
         timeoutInSeconds?: number;
+        /** The number of times to retry the request. Defaults to 2. */
         maxRetries?: number;
+        /** A hook to abort the request. */
+        abortSignal?: AbortSignal;
     }
 }
 export declare class Events {
@@ -20,12 +24,21 @@ export declare class Events {
     constructor(_options?: Events.Options);
     /**
      * Returns all events relative to the current identity.
+     *
+     * @param {Rivet.identity.WatchEventsRequest} request
+     * @param {Events.RequestOptions} requestOptions - Request-specific configuration.
+     *
      * @throws {@link Rivet.InternalError}
      * @throws {@link Rivet.RateLimitError}
      * @throws {@link Rivet.ForbiddenError}
      * @throws {@link Rivet.UnauthorizedError}
      * @throws {@link Rivet.NotFoundError}
      * @throws {@link Rivet.BadRequestError}
+     *
+     * @example
+     *     await client.identity.events.watch({
+     *         watchIndex: "string"
+     *     })
      */
     watch(request?: Rivet.identity.WatchEventsRequest, requestOptions?: Events.RequestOptions): Promise<Rivet.identity.WatchEventsResponse>;
     protected _getAuthorizationHeader(): Promise<string | undefined>;

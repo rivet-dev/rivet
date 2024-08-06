@@ -3,7 +3,7 @@
  */
 import * as environments from "../../../../../../../../../../environments";
 import * as core from "../../../../../../../../../../core";
-import * as Rivet from "../../../../../../../../..";
+import * as Rivet from "../../../../../../../../../index";
 export declare namespace Analytics {
     interface Options {
         environment?: core.Supplier<environments.RivetEnvironment | string>;
@@ -11,8 +11,12 @@ export declare namespace Analytics {
         fetcher?: core.FetchFunction;
     }
     interface RequestOptions {
+        /** The maximum time to wait for a response in seconds. */
         timeoutInSeconds?: number;
+        /** The number of times to retry the request. Defaults to 2. */
         maxRetries?: number;
+        /** A hook to abort the request. */
+        abortSignal?: AbortSignal;
     }
 }
 export declare class Analytics {
@@ -20,12 +24,20 @@ export declare class Analytics {
     constructor(_options?: Analytics.Options);
     /**
      * Returns live information about all active lobbies for a given namespace.
+     *
+     * @param {string} gameId
+     * @param {string} namespaceId
+     * @param {Analytics.RequestOptions} requestOptions - Request-specific configuration.
+     *
      * @throws {@link Rivet.InternalError}
      * @throws {@link Rivet.RateLimitError}
      * @throws {@link Rivet.ForbiddenError}
      * @throws {@link Rivet.UnauthorizedError}
      * @throws {@link Rivet.NotFoundError}
      * @throws {@link Rivet.BadRequestError}
+     *
+     * @example
+     *     await client.cloud.games.namespaces.analytics.getAnalyticsMatchmakerLive("d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32", "d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32")
      */
     getAnalyticsMatchmakerLive(gameId: string, namespaceId: string, requestOptions?: Analytics.RequestOptions): Promise<Rivet.cloud.games.namespaces.GetAnalyticsMatchmakerLiveResponse>;
     protected _getAuthorizationHeader(): Promise<string | undefined>;

@@ -3,7 +3,7 @@
  */
 import * as environments from "../../../../../../environments";
 import * as core from "../../../../../../core";
-import * as Rivet from "../../../../..";
+import * as Rivet from "../../../../../index";
 export declare namespace Tokens {
     interface Options {
         environment?: core.Supplier<environments.RivetEnvironment | string>;
@@ -11,8 +11,12 @@ export declare namespace Tokens {
         fetcher?: core.FetchFunction;
     }
     interface RequestOptions {
+        /** The maximum time to wait for a response in seconds. */
         timeoutInSeconds?: number;
+        /** The number of times to retry the request. Defaults to 2. */
         maxRetries?: number;
+        /** A hook to abort the request. */
+        abortSignal?: AbortSignal;
     }
 }
 export declare class Tokens {
@@ -20,12 +24,21 @@ export declare class Tokens {
     constructor(_options?: Tokens.Options);
     /**
      * Refreshes the current identity's token and sets authentication headers.
+     *
+     * @param {Rivet.auth.RefreshIdentityTokenRequest} request
+     * @param {Tokens.RequestOptions} requestOptions - Request-specific configuration.
+     *
      * @throws {@link Rivet.InternalError}
      * @throws {@link Rivet.RateLimitError}
      * @throws {@link Rivet.ForbiddenError}
      * @throws {@link Rivet.UnauthorizedError}
      * @throws {@link Rivet.NotFoundError}
      * @throws {@link Rivet.BadRequestError}
+     *
+     * @example
+     *     await client.auth.tokens.refreshIdentityToken({
+     *         logout: true
+     *     })
      */
     refreshIdentityToken(request: Rivet.auth.RefreshIdentityTokenRequest, requestOptions?: Tokens.RequestOptions): Promise<Rivet.auth.RefreshIdentityTokenResponse>;
     protected _getAuthorizationHeader(): Promise<string | undefined>;

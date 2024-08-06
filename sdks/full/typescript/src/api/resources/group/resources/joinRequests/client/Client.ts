@@ -4,10 +4,10 @@
 
 import * as environments from "../../../../../../environments";
 import * as core from "../../../../../../core";
-import * as Rivet from "../../../../..";
+import * as Rivet from "../../../../../index";
 import urlJoin from "url-join";
-import * as errors from "../../../../../../errors";
-import * as serializers from "../../../../../../serialization";
+import * as errors from "../../../../../../errors/index";
+import * as serializers from "../../../../../../serialization/index";
 
 export declare namespace JoinRequests {
     interface Options {
@@ -17,8 +17,12 @@ export declare namespace JoinRequests {
     }
 
     interface RequestOptions {
+        /** The maximum time to wait for a response in seconds. */
         timeoutInSeconds?: number;
+        /** The number of times to retry the request. Defaults to 2. */
         maxRetries?: number;
+        /** A hook to abort the request. */
+        abortSignal?: AbortSignal;
     }
 }
 
@@ -27,26 +31,35 @@ export class JoinRequests {
 
     /**
      * Requests to join a group.
+     *
+     * @param {string} groupId
+     * @param {JoinRequests.RequestOptions} requestOptions - Request-specific configuration.
+     *
      * @throws {@link Rivet.InternalError}
      * @throws {@link Rivet.RateLimitError}
      * @throws {@link Rivet.ForbiddenError}
      * @throws {@link Rivet.UnauthorizedError}
      * @throws {@link Rivet.NotFoundError}
      * @throws {@link Rivet.BadRequestError}
+     *
+     * @example
+     *     await client.group.joinRequests.createJoinRequest("d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32")
      */
     public async createJoinRequest(groupId: string, requestOptions?: JoinRequests.RequestOptions): Promise<void> {
         const _response = await (this._options.fetcher ?? core.fetcher)({
             url: urlJoin(
                 (await core.Supplier.get(this._options.environment)) ?? environments.RivetEnvironment.Production,
-                `/group/groups/${groupId}/join-request`
+                `/group/groups/${encodeURIComponent(groupId)}/join-request`
             ),
             method: "POST",
             headers: {
                 Authorization: await this._getAuthorizationHeader(),
             },
             contentType: "application/json",
+            requestType: "json",
             timeoutMs: requestOptions?.timeoutInSeconds != null ? requestOptions.timeoutInSeconds * 1000 : 180000,
             maxRetries: requestOptions?.maxRetries,
+            abortSignal: requestOptions?.abortSignal,
         });
         if (_response.ok) {
             return;
@@ -56,7 +69,7 @@ export class JoinRequests {
             switch (_response.error.statusCode) {
                 case 500:
                     throw new Rivet.InternalError(
-                        await serializers.ErrorBody.parseOrThrow(_response.error.body, {
+                        serializers.ErrorBody.parseOrThrow(_response.error.body, {
                             unrecognizedObjectKeys: "passthrough",
                             allowUnrecognizedUnionMembers: true,
                             allowUnrecognizedEnumValues: true,
@@ -66,7 +79,7 @@ export class JoinRequests {
                     );
                 case 429:
                     throw new Rivet.RateLimitError(
-                        await serializers.ErrorBody.parseOrThrow(_response.error.body, {
+                        serializers.ErrorBody.parseOrThrow(_response.error.body, {
                             unrecognizedObjectKeys: "passthrough",
                             allowUnrecognizedUnionMembers: true,
                             allowUnrecognizedEnumValues: true,
@@ -76,7 +89,7 @@ export class JoinRequests {
                     );
                 case 403:
                     throw new Rivet.ForbiddenError(
-                        await serializers.ErrorBody.parseOrThrow(_response.error.body, {
+                        serializers.ErrorBody.parseOrThrow(_response.error.body, {
                             unrecognizedObjectKeys: "passthrough",
                             allowUnrecognizedUnionMembers: true,
                             allowUnrecognizedEnumValues: true,
@@ -86,7 +99,7 @@ export class JoinRequests {
                     );
                 case 408:
                     throw new Rivet.UnauthorizedError(
-                        await serializers.ErrorBody.parseOrThrow(_response.error.body, {
+                        serializers.ErrorBody.parseOrThrow(_response.error.body, {
                             unrecognizedObjectKeys: "passthrough",
                             allowUnrecognizedUnionMembers: true,
                             allowUnrecognizedEnumValues: true,
@@ -96,7 +109,7 @@ export class JoinRequests {
                     );
                 case 404:
                     throw new Rivet.NotFoundError(
-                        await serializers.ErrorBody.parseOrThrow(_response.error.body, {
+                        serializers.ErrorBody.parseOrThrow(_response.error.body, {
                             unrecognizedObjectKeys: "passthrough",
                             allowUnrecognizedUnionMembers: true,
                             allowUnrecognizedEnumValues: true,
@@ -106,7 +119,7 @@ export class JoinRequests {
                     );
                 case 400:
                     throw new Rivet.BadRequestError(
-                        await serializers.ErrorBody.parseOrThrow(_response.error.body, {
+                        serializers.ErrorBody.parseOrThrow(_response.error.body, {
                             unrecognizedObjectKeys: "passthrough",
                             allowUnrecognizedUnionMembers: true,
                             allowUnrecognizedEnumValues: true,
@@ -139,12 +152,23 @@ export class JoinRequests {
 
     /**
      * Resolves a join request for a given group.
+     *
+     * @param {string} groupId
+     * @param {string} identityId
+     * @param {Rivet.group.ResolveJoinRequestRequest} request
+     * @param {JoinRequests.RequestOptions} requestOptions - Request-specific configuration.
+     *
      * @throws {@link Rivet.InternalError}
      * @throws {@link Rivet.RateLimitError}
      * @throws {@link Rivet.ForbiddenError}
      * @throws {@link Rivet.UnauthorizedError}
      * @throws {@link Rivet.NotFoundError}
      * @throws {@link Rivet.BadRequestError}
+     *
+     * @example
+     *     await client.group.joinRequests.resolveJoinRequest("d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32", "d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32", {
+     *         resolution: true
+     *     })
      */
     public async resolveJoinRequest(
         groupId: string,
@@ -155,18 +179,18 @@ export class JoinRequests {
         const _response = await (this._options.fetcher ?? core.fetcher)({
             url: urlJoin(
                 (await core.Supplier.get(this._options.environment)) ?? environments.RivetEnvironment.Production,
-                `/group/groups/${groupId}/join-request/${identityId}`
+                `/group/groups/${encodeURIComponent(groupId)}/join-request/${encodeURIComponent(identityId)}`
             ),
             method: "POST",
             headers: {
                 Authorization: await this._getAuthorizationHeader(),
             },
             contentType: "application/json",
-            body: await serializers.group.ResolveJoinRequestRequest.jsonOrThrow(request, {
-                unrecognizedObjectKeys: "strip",
-            }),
+            requestType: "json",
+            body: serializers.group.ResolveJoinRequestRequest.jsonOrThrow(request, { unrecognizedObjectKeys: "strip" }),
             timeoutMs: requestOptions?.timeoutInSeconds != null ? requestOptions.timeoutInSeconds * 1000 : 180000,
             maxRetries: requestOptions?.maxRetries,
+            abortSignal: requestOptions?.abortSignal,
         });
         if (_response.ok) {
             return;
@@ -176,7 +200,7 @@ export class JoinRequests {
             switch (_response.error.statusCode) {
                 case 500:
                     throw new Rivet.InternalError(
-                        await serializers.ErrorBody.parseOrThrow(_response.error.body, {
+                        serializers.ErrorBody.parseOrThrow(_response.error.body, {
                             unrecognizedObjectKeys: "passthrough",
                             allowUnrecognizedUnionMembers: true,
                             allowUnrecognizedEnumValues: true,
@@ -186,7 +210,7 @@ export class JoinRequests {
                     );
                 case 429:
                     throw new Rivet.RateLimitError(
-                        await serializers.ErrorBody.parseOrThrow(_response.error.body, {
+                        serializers.ErrorBody.parseOrThrow(_response.error.body, {
                             unrecognizedObjectKeys: "passthrough",
                             allowUnrecognizedUnionMembers: true,
                             allowUnrecognizedEnumValues: true,
@@ -196,7 +220,7 @@ export class JoinRequests {
                     );
                 case 403:
                     throw new Rivet.ForbiddenError(
-                        await serializers.ErrorBody.parseOrThrow(_response.error.body, {
+                        serializers.ErrorBody.parseOrThrow(_response.error.body, {
                             unrecognizedObjectKeys: "passthrough",
                             allowUnrecognizedUnionMembers: true,
                             allowUnrecognizedEnumValues: true,
@@ -206,7 +230,7 @@ export class JoinRequests {
                     );
                 case 408:
                     throw new Rivet.UnauthorizedError(
-                        await serializers.ErrorBody.parseOrThrow(_response.error.body, {
+                        serializers.ErrorBody.parseOrThrow(_response.error.body, {
                             unrecognizedObjectKeys: "passthrough",
                             allowUnrecognizedUnionMembers: true,
                             allowUnrecognizedEnumValues: true,
@@ -216,7 +240,7 @@ export class JoinRequests {
                     );
                 case 404:
                     throw new Rivet.NotFoundError(
-                        await serializers.ErrorBody.parseOrThrow(_response.error.body, {
+                        serializers.ErrorBody.parseOrThrow(_response.error.body, {
                             unrecognizedObjectKeys: "passthrough",
                             allowUnrecognizedUnionMembers: true,
                             allowUnrecognizedEnumValues: true,
@@ -226,7 +250,7 @@ export class JoinRequests {
                     );
                 case 400:
                     throw new Rivet.BadRequestError(
-                        await serializers.ErrorBody.parseOrThrow(_response.error.body, {
+                        serializers.ErrorBody.parseOrThrow(_response.error.body, {
                             unrecognizedObjectKeys: "passthrough",
                             allowUnrecognizedUnionMembers: true,
                             allowUnrecognizedEnumValues: true,
@@ -257,7 +281,7 @@ export class JoinRequests {
         }
     }
 
-    protected async _getAuthorizationHeader() {
+    protected async _getAuthorizationHeader(): Promise<string | undefined> {
         const bearer = await core.Supplier.get(this._options.token);
         if (bearer != null) {
             return `Bearer ${bearer}`;

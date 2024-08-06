@@ -3,7 +3,7 @@
  */
 import * as environments from "../../../../../../environments";
 import * as core from "../../../../../../core";
-import * as Rivet from "../../../../..";
+import * as Rivet from "../../../../../index";
 export declare namespace Servers {
     interface Options {
         environment?: core.Supplier<environments.RivetEnvironment | string>;
@@ -11,20 +11,30 @@ export declare namespace Servers {
         fetcher?: core.FetchFunction;
     }
     interface RequestOptions {
+        /** The maximum time to wait for a response in seconds. */
         timeoutInSeconds?: number;
+        /** The number of times to retry the request. Defaults to 2. */
         maxRetries?: number;
+        /** A hook to abort the request. */
+        abortSignal?: AbortSignal;
     }
 }
 export declare class Servers {
     protected readonly _options: Servers.Options;
     constructor(_options?: Servers.Options);
     /**
+     * @param {string} ip
+     * @param {Servers.RequestOptions} requestOptions - Request-specific configuration.
+     *
      * @throws {@link Rivet.InternalError}
      * @throws {@link Rivet.RateLimitError}
      * @throws {@link Rivet.ForbiddenError}
      * @throws {@link Rivet.UnauthorizedError}
      * @throws {@link Rivet.NotFoundError}
      * @throws {@link Rivet.BadRequestError}
+     *
+     * @example
+     *     await client.provision.servers.getInfo("string")
      */
     getInfo(ip: string, requestOptions?: Servers.RequestOptions): Promise<Rivet.provision.servers.GetInfoResponse>;
     protected _getAuthorizationHeader(): Promise<string | undefined>;

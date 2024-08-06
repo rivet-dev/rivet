@@ -4,10 +4,10 @@
 
 import * as environments from "../../../../../../environments";
 import * as core from "../../../../../../core";
-import * as Rivet from "../../../../..";
+import * as Rivet from "../../../../../index";
 import urlJoin from "url-join";
-import * as serializers from "../../../../../../serialization";
-import * as errors from "../../../../../../errors";
+import * as serializers from "../../../../../../serialization/index";
+import * as errors from "../../../../../../errors/index";
 
 export declare namespace Builds {
     interface Options {
@@ -17,8 +17,12 @@ export declare namespace Builds {
     }
 
     interface RequestOptions {
+        /** The maximum time to wait for a response in seconds. */
         timeoutInSeconds?: number;
+        /** The number of times to retry the request. Defaults to 2. */
         maxRetries?: number;
+        /** A hook to abort the request. */
+        abortSignal?: AbortSignal;
     }
 }
 
@@ -27,19 +31,28 @@ export class Builds {
 
     /**
      * Lists all builds of the game associated with the token used. Can be filtered by tags in the query string.
+     *
+     * @param {Rivet.servers.GetBuildsRequest} request
+     * @param {Builds.RequestOptions} requestOptions - Request-specific configuration.
+     *
      * @throws {@link Rivet.InternalError}
      * @throws {@link Rivet.RateLimitError}
      * @throws {@link Rivet.ForbiddenError}
      * @throws {@link Rivet.UnauthorizedError}
      * @throws {@link Rivet.NotFoundError}
      * @throws {@link Rivet.BadRequestError}
+     *
+     * @example
+     *     await client.servers.builds.listBuilds({
+     *         tags: "string"
+     *     })
      */
     public async listBuilds(
         request: Rivet.servers.GetBuildsRequest = {},
         requestOptions?: Builds.RequestOptions
     ): Promise<Rivet.servers.ListBuildsResponse> {
         const { tags } = request;
-        const _queryParams: Record<string, string | string[]> = {};
+        const _queryParams: Record<string, string | string[] | object | object[]> = {};
         if (tags != null) {
             _queryParams["tags"] = tags;
         }
@@ -55,11 +68,13 @@ export class Builds {
             },
             contentType: "application/json",
             queryParameters: _queryParams,
+            requestType: "json",
             timeoutMs: requestOptions?.timeoutInSeconds != null ? requestOptions.timeoutInSeconds * 1000 : 180000,
             maxRetries: requestOptions?.maxRetries,
+            abortSignal: requestOptions?.abortSignal,
         });
         if (_response.ok) {
-            return await serializers.servers.ListBuildsResponse.parseOrThrow(_response.body, {
+            return serializers.servers.ListBuildsResponse.parseOrThrow(_response.body, {
                 unrecognizedObjectKeys: "passthrough",
                 allowUnrecognizedUnionMembers: true,
                 allowUnrecognizedEnumValues: true,
@@ -72,7 +87,7 @@ export class Builds {
             switch (_response.error.statusCode) {
                 case 500:
                     throw new Rivet.InternalError(
-                        await serializers.ErrorBody.parseOrThrow(_response.error.body, {
+                        serializers.ErrorBody.parseOrThrow(_response.error.body, {
                             unrecognizedObjectKeys: "passthrough",
                             allowUnrecognizedUnionMembers: true,
                             allowUnrecognizedEnumValues: true,
@@ -82,7 +97,7 @@ export class Builds {
                     );
                 case 429:
                     throw new Rivet.RateLimitError(
-                        await serializers.ErrorBody.parseOrThrow(_response.error.body, {
+                        serializers.ErrorBody.parseOrThrow(_response.error.body, {
                             unrecognizedObjectKeys: "passthrough",
                             allowUnrecognizedUnionMembers: true,
                             allowUnrecognizedEnumValues: true,
@@ -92,7 +107,7 @@ export class Builds {
                     );
                 case 403:
                     throw new Rivet.ForbiddenError(
-                        await serializers.ErrorBody.parseOrThrow(_response.error.body, {
+                        serializers.ErrorBody.parseOrThrow(_response.error.body, {
                             unrecognizedObjectKeys: "passthrough",
                             allowUnrecognizedUnionMembers: true,
                             allowUnrecognizedEnumValues: true,
@@ -102,7 +117,7 @@ export class Builds {
                     );
                 case 408:
                     throw new Rivet.UnauthorizedError(
-                        await serializers.ErrorBody.parseOrThrow(_response.error.body, {
+                        serializers.ErrorBody.parseOrThrow(_response.error.body, {
                             unrecognizedObjectKeys: "passthrough",
                             allowUnrecognizedUnionMembers: true,
                             allowUnrecognizedEnumValues: true,
@@ -112,7 +127,7 @@ export class Builds {
                     );
                 case 404:
                     throw new Rivet.NotFoundError(
-                        await serializers.ErrorBody.parseOrThrow(_response.error.body, {
+                        serializers.ErrorBody.parseOrThrow(_response.error.body, {
                             unrecognizedObjectKeys: "passthrough",
                             allowUnrecognizedUnionMembers: true,
                             allowUnrecognizedEnumValues: true,
@@ -122,7 +137,7 @@ export class Builds {
                     );
                 case 400:
                     throw new Rivet.BadRequestError(
-                        await serializers.ErrorBody.parseOrThrow(_response.error.body, {
+                        serializers.ErrorBody.parseOrThrow(_response.error.body, {
                             unrecognizedObjectKeys: "passthrough",
                             allowUnrecognizedUnionMembers: true,
                             allowUnrecognizedEnumValues: true,
@@ -155,12 +170,29 @@ export class Builds {
 
     /**
      * Creates a new game build for the given game.
+     *
+     * @param {Rivet.servers.CreateBuildRequest} request
+     * @param {Builds.RequestOptions} requestOptions - Request-specific configuration.
+     *
      * @throws {@link Rivet.InternalError}
      * @throws {@link Rivet.RateLimitError}
      * @throws {@link Rivet.ForbiddenError}
      * @throws {@link Rivet.UnauthorizedError}
      * @throws {@link Rivet.NotFoundError}
      * @throws {@link Rivet.BadRequestError}
+     *
+     * @example
+     *     await client.servers.builds.prepareBuild({
+     *         displayName: "string",
+     *         tags: {
+     *             "key": "value"
+     *         },
+     *         imageTag: "string",
+     *         imageFile: {},
+     *         multipartUpload: true,
+     *         kind: Rivet.servers.BuildKind.DockerImage,
+     *         compression: Rivet.servers.BuildCompression.None
+     *     })
      */
     public async prepareBuild(
         request: Rivet.servers.CreateBuildRequest,
@@ -176,14 +208,14 @@ export class Builds {
                 Authorization: await this._getAuthorizationHeader(),
             },
             contentType: "application/json",
-            body: await serializers.servers.CreateBuildRequest.jsonOrThrow(request, {
-                unrecognizedObjectKeys: "strip",
-            }),
+            requestType: "json",
+            body: serializers.servers.CreateBuildRequest.jsonOrThrow(request, { unrecognizedObjectKeys: "strip" }),
             timeoutMs: requestOptions?.timeoutInSeconds != null ? requestOptions.timeoutInSeconds * 1000 : 180000,
             maxRetries: requestOptions?.maxRetries,
+            abortSignal: requestOptions?.abortSignal,
         });
         if (_response.ok) {
-            return await serializers.servers.CreateBuildResponse.parseOrThrow(_response.body, {
+            return serializers.servers.CreateBuildResponse.parseOrThrow(_response.body, {
                 unrecognizedObjectKeys: "passthrough",
                 allowUnrecognizedUnionMembers: true,
                 allowUnrecognizedEnumValues: true,
@@ -196,7 +228,7 @@ export class Builds {
             switch (_response.error.statusCode) {
                 case 500:
                     throw new Rivet.InternalError(
-                        await serializers.ErrorBody.parseOrThrow(_response.error.body, {
+                        serializers.ErrorBody.parseOrThrow(_response.error.body, {
                             unrecognizedObjectKeys: "passthrough",
                             allowUnrecognizedUnionMembers: true,
                             allowUnrecognizedEnumValues: true,
@@ -206,7 +238,7 @@ export class Builds {
                     );
                 case 429:
                     throw new Rivet.RateLimitError(
-                        await serializers.ErrorBody.parseOrThrow(_response.error.body, {
+                        serializers.ErrorBody.parseOrThrow(_response.error.body, {
                             unrecognizedObjectKeys: "passthrough",
                             allowUnrecognizedUnionMembers: true,
                             allowUnrecognizedEnumValues: true,
@@ -216,7 +248,7 @@ export class Builds {
                     );
                 case 403:
                     throw new Rivet.ForbiddenError(
-                        await serializers.ErrorBody.parseOrThrow(_response.error.body, {
+                        serializers.ErrorBody.parseOrThrow(_response.error.body, {
                             unrecognizedObjectKeys: "passthrough",
                             allowUnrecognizedUnionMembers: true,
                             allowUnrecognizedEnumValues: true,
@@ -226,7 +258,7 @@ export class Builds {
                     );
                 case 408:
                     throw new Rivet.UnauthorizedError(
-                        await serializers.ErrorBody.parseOrThrow(_response.error.body, {
+                        serializers.ErrorBody.parseOrThrow(_response.error.body, {
                             unrecognizedObjectKeys: "passthrough",
                             allowUnrecognizedUnionMembers: true,
                             allowUnrecognizedEnumValues: true,
@@ -236,7 +268,7 @@ export class Builds {
                     );
                 case 404:
                     throw new Rivet.NotFoundError(
-                        await serializers.ErrorBody.parseOrThrow(_response.error.body, {
+                        serializers.ErrorBody.parseOrThrow(_response.error.body, {
                             unrecognizedObjectKeys: "passthrough",
                             allowUnrecognizedUnionMembers: true,
                             allowUnrecognizedEnumValues: true,
@@ -246,7 +278,7 @@ export class Builds {
                     );
                 case 400:
                     throw new Rivet.BadRequestError(
-                        await serializers.ErrorBody.parseOrThrow(_response.error.body, {
+                        serializers.ErrorBody.parseOrThrow(_response.error.body, {
                             unrecognizedObjectKeys: "passthrough",
                             allowUnrecognizedUnionMembers: true,
                             allowUnrecognizedEnumValues: true,
@@ -279,26 +311,35 @@ export class Builds {
 
     /**
      * Marks an upload as complete.
+     *
+     * @param {string} uploadId
+     * @param {Builds.RequestOptions} requestOptions - Request-specific configuration.
+     *
      * @throws {@link Rivet.InternalError}
      * @throws {@link Rivet.RateLimitError}
      * @throws {@link Rivet.ForbiddenError}
      * @throws {@link Rivet.UnauthorizedError}
      * @throws {@link Rivet.NotFoundError}
      * @throws {@link Rivet.BadRequestError}
+     *
+     * @example
+     *     await client.servers.builds.completeBuild("d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32")
      */
     public async completeBuild(uploadId: string, requestOptions?: Builds.RequestOptions): Promise<void> {
         const _response = await (this._options.fetcher ?? core.fetcher)({
             url: urlJoin(
                 (await core.Supplier.get(this._options.environment)) ?? environments.RivetEnvironment.Production,
-                `/servers/uploads/${uploadId}/complete`
+                `/servers/uploads/${encodeURIComponent(uploadId)}/complete`
             ),
             method: "POST",
             headers: {
                 Authorization: await this._getAuthorizationHeader(),
             },
             contentType: "application/json",
+            requestType: "json",
             timeoutMs: requestOptions?.timeoutInSeconds != null ? requestOptions.timeoutInSeconds * 1000 : 180000,
             maxRetries: requestOptions?.maxRetries,
+            abortSignal: requestOptions?.abortSignal,
         });
         if (_response.ok) {
             return;
@@ -308,7 +349,7 @@ export class Builds {
             switch (_response.error.statusCode) {
                 case 500:
                     throw new Rivet.InternalError(
-                        await serializers.ErrorBody.parseOrThrow(_response.error.body, {
+                        serializers.ErrorBody.parseOrThrow(_response.error.body, {
                             unrecognizedObjectKeys: "passthrough",
                             allowUnrecognizedUnionMembers: true,
                             allowUnrecognizedEnumValues: true,
@@ -318,7 +359,7 @@ export class Builds {
                     );
                 case 429:
                     throw new Rivet.RateLimitError(
-                        await serializers.ErrorBody.parseOrThrow(_response.error.body, {
+                        serializers.ErrorBody.parseOrThrow(_response.error.body, {
                             unrecognizedObjectKeys: "passthrough",
                             allowUnrecognizedUnionMembers: true,
                             allowUnrecognizedEnumValues: true,
@@ -328,7 +369,7 @@ export class Builds {
                     );
                 case 403:
                     throw new Rivet.ForbiddenError(
-                        await serializers.ErrorBody.parseOrThrow(_response.error.body, {
+                        serializers.ErrorBody.parseOrThrow(_response.error.body, {
                             unrecognizedObjectKeys: "passthrough",
                             allowUnrecognizedUnionMembers: true,
                             allowUnrecognizedEnumValues: true,
@@ -338,7 +379,7 @@ export class Builds {
                     );
                 case 408:
                     throw new Rivet.UnauthorizedError(
-                        await serializers.ErrorBody.parseOrThrow(_response.error.body, {
+                        serializers.ErrorBody.parseOrThrow(_response.error.body, {
                             unrecognizedObjectKeys: "passthrough",
                             allowUnrecognizedUnionMembers: true,
                             allowUnrecognizedEnumValues: true,
@@ -348,7 +389,7 @@ export class Builds {
                     );
                 case 404:
                     throw new Rivet.NotFoundError(
-                        await serializers.ErrorBody.parseOrThrow(_response.error.body, {
+                        serializers.ErrorBody.parseOrThrow(_response.error.body, {
                             unrecognizedObjectKeys: "passthrough",
                             allowUnrecognizedUnionMembers: true,
                             allowUnrecognizedEnumValues: true,
@@ -358,7 +399,7 @@ export class Builds {
                     );
                 case 400:
                     throw new Rivet.BadRequestError(
-                        await serializers.ErrorBody.parseOrThrow(_response.error.body, {
+                        serializers.ErrorBody.parseOrThrow(_response.error.body, {
                             unrecognizedObjectKeys: "passthrough",
                             allowUnrecognizedUnionMembers: true,
                             allowUnrecognizedEnumValues: true,
@@ -389,7 +430,7 @@ export class Builds {
         }
     }
 
-    protected async _getAuthorizationHeader() {
+    protected async _getAuthorizationHeader(): Promise<string | undefined> {
         const bearer = await core.Supplier.get(this._options.token);
         if (bearer != null) {
             return `Bearer ${bearer}`;

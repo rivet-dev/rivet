@@ -3,7 +3,7 @@
  */
 import * as environments from "../../../../../../../../environments";
 import * as core from "../../../../../../../../core";
-import * as Rivet from "../../../../../../..";
+import * as Rivet from "../../../../../../../index";
 export declare namespace Matchmaker {
     interface Options {
         environment?: core.Supplier<environments.RivetEnvironment | string>;
@@ -11,8 +11,12 @@ export declare namespace Matchmaker {
         fetcher?: core.FetchFunction;
     }
     interface RequestOptions {
+        /** The maximum time to wait for a response in seconds. */
         timeoutInSeconds?: number;
+        /** The number of times to retry the request. Defaults to 2. */
         maxRetries?: number;
+        /** A hook to abort the request. */
+        abortSignal?: AbortSignal;
     }
 }
 export declare class Matchmaker {
@@ -20,42 +24,84 @@ export declare class Matchmaker {
     constructor(_options?: Matchmaker.Options);
     /**
      * Exports lobby history over a given query time span.
+     *
+     * @param {string} gameId
+     * @param {Rivet.cloud.games.ExportMatchmakerLobbyHistoryRequest} request
+     * @param {Matchmaker.RequestOptions} requestOptions - Request-specific configuration.
+     *
      * @throws {@link Rivet.InternalError}
      * @throws {@link Rivet.RateLimitError}
      * @throws {@link Rivet.ForbiddenError}
      * @throws {@link Rivet.UnauthorizedError}
      * @throws {@link Rivet.NotFoundError}
      * @throws {@link Rivet.BadRequestError}
+     *
+     * @example
+     *     await client.cloud.games.matchmaker.exportMatchmakerLobbyHistory("d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32", {
+     *         queryStart: 1000000,
+     *         queryEnd: 1000000
+     *     })
      */
     exportMatchmakerLobbyHistory(gameId: string, request: Rivet.cloud.games.ExportMatchmakerLobbyHistoryRequest, requestOptions?: Matchmaker.RequestOptions): Promise<Rivet.cloud.games.ExportMatchmakerLobbyHistoryResponse>;
     /**
      * Deletes a matchmaker lobby, stopping it immediately.
+     *
+     * @param {string} gameId
+     * @param {string} lobbyId
+     * @param {Matchmaker.RequestOptions} requestOptions - Request-specific configuration.
+     *
      * @throws {@link Rivet.InternalError}
      * @throws {@link Rivet.RateLimitError}
      * @throws {@link Rivet.ForbiddenError}
      * @throws {@link Rivet.UnauthorizedError}
      * @throws {@link Rivet.NotFoundError}
      * @throws {@link Rivet.BadRequestError}
+     *
+     * @example
+     *     await client.cloud.games.matchmaker.deleteMatchmakerLobby("d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32", "d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32")
      */
     deleteMatchmakerLobby(gameId: string, lobbyId: string, requestOptions?: Matchmaker.RequestOptions): Promise<Rivet.cloud.games.DeleteMatchmakerLobbyResponse>;
     /**
      * Returns the logs for a given lobby.
+     *
+     * @param {string} gameId
+     * @param {string} lobbyId
+     * @param {Rivet.cloud.games.GetLobbyLogsRequest} request
+     * @param {Matchmaker.RequestOptions} requestOptions - Request-specific configuration.
+     *
      * @throws {@link Rivet.InternalError}
      * @throws {@link Rivet.RateLimitError}
      * @throws {@link Rivet.ForbiddenError}
      * @throws {@link Rivet.UnauthorizedError}
      * @throws {@link Rivet.NotFoundError}
      * @throws {@link Rivet.BadRequestError}
+     *
+     * @example
+     *     await client.cloud.games.matchmaker.getLobbyLogs("d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32", "d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32", {
+     *         stream: Rivet.cloud.games.LogStream.StdOut,
+     *         watchIndex: "string"
+     *     })
      */
     getLobbyLogs(gameId: string, lobbyId: string, request: Rivet.cloud.games.GetLobbyLogsRequest, requestOptions?: Matchmaker.RequestOptions): Promise<Rivet.cloud.games.GetLobbyLogsResponse>;
     /**
      * Generates a download URL for logs.
+     *
+     * @param {string} gameId
+     * @param {string} lobbyId
+     * @param {Rivet.cloud.games.ExportLobbyLogsRequest} request
+     * @param {Matchmaker.RequestOptions} requestOptions - Request-specific configuration.
+     *
      * @throws {@link Rivet.InternalError}
      * @throws {@link Rivet.RateLimitError}
      * @throws {@link Rivet.ForbiddenError}
      * @throws {@link Rivet.UnauthorizedError}
      * @throws {@link Rivet.NotFoundError}
      * @throws {@link Rivet.BadRequestError}
+     *
+     * @example
+     *     await client.cloud.games.matchmaker.exportLobbyLogs("d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32", "d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32", {
+     *         stream: Rivet.cloud.games.LogStream.StdOut
+     *     })
      */
     exportLobbyLogs(gameId: string, lobbyId: string, request: Rivet.cloud.games.ExportLobbyLogsRequest, requestOptions?: Matchmaker.RequestOptions): Promise<Rivet.cloud.games.ExportLobbyLogsResponse>;
     protected _getAuthorizationHeader(): Promise<string | undefined>;

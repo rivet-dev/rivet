@@ -5,8 +5,8 @@ import { SchemaUtils } from "../schema-utils";
 import { Property } from "./property";
 export declare type ObjectSchema<Raw, Parsed> = BaseObjectSchema<Raw, Parsed> & ObjectLikeUtils<Raw, Parsed> & ObjectUtils<Raw, Parsed> & SchemaUtils<Raw, Parsed>;
 export interface BaseObjectSchema<Raw, Parsed> extends BaseSchema<Raw, Parsed> {
-    _getRawProperties: () => Promise<(keyof Raw)[]>;
-    _getParsedProperties: () => Promise<(keyof Parsed)[]>;
+    _getRawProperties: () => (keyof Raw)[];
+    _getParsedProperties: () => (keyof Parsed)[];
 }
 export interface ObjectUtils<Raw, Parsed> {
     extend: <RawExtension, ParsedExtension>(schemas: ObjectSchema<RawExtension, ParsedExtension>) => ObjectSchema<Raw & RawExtension, Parsed & ParsedExtension>;

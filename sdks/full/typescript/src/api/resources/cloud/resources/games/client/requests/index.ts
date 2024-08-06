@@ -1,2 +1,2 @@
-export { GetGamesRequest } from "./GetGamesRequest";
-export { GetGameByIdRequest } from "./GetGameByIdRequest";
+export { type GetGamesRequest } from "./GetGamesRequest";
+export { type GetGameByIdRequest } from "./GetGameByIdRequest";

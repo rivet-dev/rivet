@@ -31,13 +31,8 @@ fi
 echo "Using Fern from $FERN_REPO_PATH"
 FERN_NO_VERSION_REDIRECTION=true node "$FERN_REPO_PATH/packages/cli/cli/dist/dev/cli.cjs" generate --local --group $FERN_GROUP --log-level debug
 
-# Export missing types
-cat <<EOF >> sdks/$FERN_GROUP/typescript/src/index.ts
-export * as core from "./core";
-export * as apiResponse from "./core/fetcher/APIResponse";
-export * as fetcher from "./core/fetcher";
-export * as serialization from "./serialization";
-EOF
+# Add missing deps
+(cd sdks/$FERN_GROUP/typescript && nix-shell -p jq --run 'jq ".devDependencies[\"@types/node-fetch\"] = \"2.6.11\"" package.json > package.json.tmp && mv package.json.tmp package.json')
 
 # Build libraries
 #

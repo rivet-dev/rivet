@@ -3,7 +3,7 @@
  */
 import * as environments from "../../../../../../environments";
 import * as core from "../../../../../../core";
-import * as Rivet from "../../../../..";
+import * as Rivet from "../../../../../index";
 export declare namespace Invites {
     interface Options {
         environment?: core.Supplier<environments.RivetEnvironment | string>;
@@ -11,8 +11,12 @@ export declare namespace Invites {
         fetcher?: core.FetchFunction;
     }
     interface RequestOptions {
+        /** The maximum time to wait for a response in seconds. */
         timeoutInSeconds?: number;
+        /** The number of times to retry the request. Defaults to 2. */
         maxRetries?: number;
+        /** A hook to abort the request. */
+        abortSignal?: AbortSignal;
     }
 }
 export declare class Invites {
@@ -20,32 +24,57 @@ export declare class Invites {
     constructor(_options?: Invites.Options);
     /**
      * Inspects a group invite returning information about the team that created it.
+     *
+     * @param {string} groupInviteCode - Provided by `rivet.api.group#CreateInviteResponse$code`.
+     * @param {Invites.RequestOptions} requestOptions - Request-specific configuration.
+     *
      * @throws {@link Rivet.InternalError}
      * @throws {@link Rivet.RateLimitError}
      * @throws {@link Rivet.ForbiddenError}
      * @throws {@link Rivet.UnauthorizedError}
      * @throws {@link Rivet.NotFoundError}
      * @throws {@link Rivet.BadRequestError}
+     *
+     * @example
+     *     await client.group.invites.getInvite("string")
      */
     getInvite(groupInviteCode: string, requestOptions?: Invites.RequestOptions): Promise<Rivet.group.GetInviteResponse>;
     /**
      * Consumes a group invite to join a group.
+     *
+     * @param {string} groupInviteCode - Provided by `rivet.api.group#CreateInviteResponse$code`.
+     * @param {Invites.RequestOptions} requestOptions - Request-specific configuration.
+     *
      * @throws {@link Rivet.InternalError}
      * @throws {@link Rivet.RateLimitError}
      * @throws {@link Rivet.ForbiddenError}
      * @throws {@link Rivet.UnauthorizedError}
      * @throws {@link Rivet.NotFoundError}
      * @throws {@link Rivet.BadRequestError}
+     *
+     * @example
+     *     await client.group.invites.consumeInvite("string")
      */
     consumeInvite(groupInviteCode: string, requestOptions?: Invites.RequestOptions): Promise<Rivet.group.ConsumeInviteResponse>;
     /**
      * Creates a group invite. Can be shared with other identities to let them join this group.
+     *
+     * @param {string} groupId
+     * @param {Rivet.group.CreateInviteRequest} request
+     * @param {Invites.RequestOptions} requestOptions - Request-specific configuration.
+     *
      * @throws {@link Rivet.InternalError}
      * @throws {@link Rivet.RateLimitError}
      * @throws {@link Rivet.ForbiddenError}
      * @throws {@link Rivet.UnauthorizedError}
      * @throws {@link Rivet.NotFoundError}
      * @throws {@link Rivet.BadRequestError}
+     *
+     * @example
+     *     await client.group.invites.createInvite("d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32", {
+     *         ttl: 1.1,
+     *         useCount: 1.1
+     *     })
      */
     createInvite(groupId: string, request: Rivet.group.CreateInviteRequest, requestOptions?: Invites.RequestOptions): Promise<Rivet.group.CreateInviteResponse>;
     protected _getAuthorizationHeader(): Promise<string | undefined>;

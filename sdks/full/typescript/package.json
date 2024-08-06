@@ -1,58 +1,59 @@
 {
-    "name": "@rivet-gg/api-full",
-    "version": "24.1.0",
-    "private": false,
-    "repository": "https://github.com/rivet-gg/rivet/tree/main/sdks/typescript",
-    "files": [
-        "dist",
-        "types",
-        "core.d.ts",
-        "serialization.d.ts"
-    ],
-    "exports": {
-        ".": {
-            "node": "./dist/node/index.js",
-            "import": "./dist/browser/esm/index.js",
-            "require": "./dist/browser/cjs/index.js",
-            "default": "./dist/browser/cjs/index.js",
-            "types": "./types/index.d.ts"
-        },
-        "./core": {
-            "node": "./dist/node/core.js",
-            "import": "./dist/browser/esm/core.js",
-            "require": "./dist/browser/cjs/core.js",
-            "default": "./dist/browser/cjs/core.js",
-            "types": "./types/core/index.d.ts"
-        },
-        "./serialization": {
-            "node": "./dist/node/serialization.js",
-            "import": "./dist/browser/esm/serialization.js",
-            "require": "./dist/browser/cjs/serialization.js",
-            "default": "./dist/browser/cjs/serialization.js",
-            "types": "./types/serialization/index.d.ts"
-        }
+  "name": "@rivet-gg/api-full",
+  "version": "24.1.0",
+  "private": false,
+  "repository": "https://github.com/rivet-gg/rivet/tree/main/sdks/typescript",
+  "files": [
+    "dist",
+    "types",
+    "core.d.ts",
+    "serialization.d.ts"
+  ],
+  "exports": {
+    ".": {
+      "node": "./dist/node/index.js",
+      "import": "./dist/browser/esm/index.js",
+      "require": "./dist/browser/cjs/index.js",
+      "default": "./dist/browser/cjs/index.js",
+      "types": "./types/index.d.ts"
     },
-    "types": "./types/index.d.ts",
-    "scripts": {
-        "format": "prettier --write 'src/**/*.ts'",
-        "compile": "tsc",
-        "bundle": "node build.js",
-        "build": "yarn compile && yarn bundle",
-		"prepack": "yarn run build"
+    "./core": {
+      "node": "./dist/node/core.js",
+      "import": "./dist/browser/esm/core.js",
+      "require": "./dist/browser/cjs/core.js",
+      "default": "./dist/browser/cjs/core.js",
+      "types": "./types/core/index.d.ts"
     },
-    "dependencies": {
-        "form-data": "^4.0.0",
-        "js-base64": "^3.7.5",
-        "node-fetch": "2",
-        "qs": "^6.11.2",
-        "url-join": "^5.0.0"
-    },
-    "devDependencies": {
-        "@types/node": "17.0.33",
-        "@types/qs": "6.9.8",
-        "@types/url-join": "4.0.1",
-        "esbuild": "^0.19.11",
-        "prettier": "2.7.1",
-        "typescript": "4.6.4"
+    "./serialization": {
+      "node": "./dist/node/serialization.js",
+      "import": "./dist/browser/esm/serialization.js",
+      "require": "./dist/browser/cjs/serialization.js",
+      "default": "./dist/browser/cjs/serialization.js",
+      "types": "./types/serialization/index.d.ts"
     }
+  },
+  "types": "./types/index.d.ts",
+  "scripts": {
+    "format": "prettier --write 'src/**/*.ts'",
+    "compile": "tsc",
+    "bundle": "node build.js",
+    "build": "yarn compile && yarn bundle",
+    "prepack": "yarn run build"
+  },
+  "dependencies": {
+    "form-data": "^4.0.0",
+    "js-base64": "^3.7.5",
+    "node-fetch": "2",
+    "qs": "^6.11.2",
+    "url-join": "^5.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "17.0.33",
+    "@types/qs": "6.9.8",
+    "@types/url-join": "4.0.1",
+    "esbuild": "^0.19.11",
+    "prettier": "2.7.1",
+    "typescript": "4.6.4",
+    "@types/node-fetch": "2.6.11"
+  }
 }

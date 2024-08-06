@@ -2,8 +2,8 @@ import { BaseSchema, Schema, SchemaOptions } from "../../Schema";
 export interface SchemaUtils<Raw, Parsed> {
     optional: () => Schema<Raw | null | undefined, Parsed | undefined>;
     transform: <Transformed>(transformer: SchemaTransformer<Parsed, Transformed>) => Schema<Raw, Transformed>;
-    parseOrThrow: (raw: unknown, opts?: SchemaOptions) => Promise<Parsed>;
-    jsonOrThrow: (raw: unknown, opts?: SchemaOptions) => Promise<Raw>;
+    parseOrThrow: (raw: unknown, opts?: SchemaOptions) => Parsed;
+    jsonOrThrow: (raw: unknown, opts?: SchemaOptions) => Raw;
 }
 export interface SchemaTransformer<Parsed, Transformed> {
     transform: (parsed: Parsed) => Transformed;

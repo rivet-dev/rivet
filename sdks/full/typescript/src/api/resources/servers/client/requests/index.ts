@@ -1,2 +1,2 @@
-export { DestroyServerRequest } from "./DestroyServerRequest";
-export { GetServersRequest } from "./GetServersRequest";
+export { type DestroyServerRequest } from "./DestroyServerRequest";
+export { type GetServersRequest } from "./GetServersRequest";

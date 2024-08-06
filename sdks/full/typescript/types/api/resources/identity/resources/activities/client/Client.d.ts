@@ -3,7 +3,7 @@
  */
 import * as environments from "../../../../../../environments";
 import * as core from "../../../../../../core";
-import * as Rivet from "../../../../..";
+import * as Rivet from "../../../../../index";
 export declare namespace Activities {
     interface Options {
         environment?: core.Supplier<environments.RivetEnvironment | string>;
@@ -11,8 +11,12 @@ export declare namespace Activities {
         fetcher?: core.FetchFunction;
     }
     interface RequestOptions {
+        /** The maximum time to wait for a response in seconds. */
         timeoutInSeconds?: number;
+        /** The number of times to retry the request. Defaults to 2. */
         maxRetries?: number;
+        /** A hook to abort the request. */
+        abortSignal?: AbortSignal;
     }
 }
 export declare class Activities {
@@ -20,12 +24,21 @@ export declare class Activities {
     constructor(_options?: Activities.Options);
     /**
      * Returns an overview of all players currently online or in game.
+     *
+     * @param {Rivet.identity.ListActivitiesRequest} request
+     * @param {Activities.RequestOptions} requestOptions - Request-specific configuration.
+     *
      * @throws {@link Rivet.InternalError}
      * @throws {@link Rivet.RateLimitError}
      * @throws {@link Rivet.ForbiddenError}
      * @throws {@link Rivet.UnauthorizedError}
      * @throws {@link Rivet.NotFoundError}
      * @throws {@link Rivet.BadRequestError}
+     *
+     * @example
+     *     await client.identity.activities.list({
+     *         watchIndex: "string"
+     *     })
      */
     list(request?: Rivet.identity.ListActivitiesRequest, requestOptions?: Activities.RequestOptions): Promise<Rivet.identity.ListActivitiesResponse>;
     protected _getAuthorizationHeader(): Promise<string | undefined>;

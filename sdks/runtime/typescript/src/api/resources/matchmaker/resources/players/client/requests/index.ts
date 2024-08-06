@@ -1,2 +1,2 @@
-export { PlayerConnectedRequest } from "./PlayerConnectedRequest";
-export { PlayerDisconnectedRequest } from "./PlayerDisconnectedRequest";
+export { type PlayerConnectedRequest } from "./PlayerConnectedRequest";
+export { type PlayerDisconnectedRequest } from "./PlayerDisconnectedRequest";

@@ -1,1 +1,1 @@
-export { GetLobbyLogsRequest } from "./GetLobbyLogsRequest";
+export { type GetLobbyLogsRequest } from "./GetLobbyLogsRequest";

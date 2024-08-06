@@ -3,7 +3,7 @@
  */
 import * as environments from "../../../../../../environments";
 import * as core from "../../../../../../core";
-import * as Rivet from "../../../../..";
+import * as Rivet from "../../../../../index";
 export declare namespace Groups {
     interface Options {
         environment?: core.Supplier<environments.RivetEnvironment | string>;
@@ -11,8 +11,12 @@ export declare namespace Groups {
         fetcher?: core.FetchFunction;
     }
     interface RequestOptions {
+        /** The maximum time to wait for a response in seconds. */
         timeoutInSeconds?: number;
+        /** The number of times to retry the request. Defaults to 2. */
         maxRetries?: number;
+        /** A hook to abort the request. */
+        abortSignal?: AbortSignal;
     }
 }
 export declare class Groups {
@@ -20,12 +24,21 @@ export declare class Groups {
     constructor(_options?: Groups.Options);
     /**
      * Validates information used to create a new group.
+     *
+     * @param {Rivet.cloud.ValidateGroupRequest} request
+     * @param {Groups.RequestOptions} requestOptions - Request-specific configuration.
+     *
      * @throws {@link Rivet.InternalError}
      * @throws {@link Rivet.RateLimitError}
      * @throws {@link Rivet.ForbiddenError}
      * @throws {@link Rivet.UnauthorizedError}
      * @throws {@link Rivet.NotFoundError}
      * @throws {@link Rivet.BadRequestError}
+     *
+     * @example
+     *     await client.cloud.groups.validate({
+     *         displayName: "string"
+     *     })
      */
     validate(request: Rivet.cloud.ValidateGroupRequest, requestOptions?: Groups.RequestOptions): Promise<Rivet.cloud.ValidateGroupResponse>;
     protected _getAuthorizationHeader(): Promise<string | undefined>;

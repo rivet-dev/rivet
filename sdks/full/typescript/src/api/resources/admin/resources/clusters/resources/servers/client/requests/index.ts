@@ -1,3 +1,3 @@
-export { ListServersRequest } from "./ListServersRequest";
-export { TaintServersRequest } from "./TaintServersRequest";
-export { DestroyServersRequest } from "./DestroyServersRequest";
+export { type ListServersRequest } from "./ListServersRequest";
+export { type TaintServersRequest } from "./TaintServersRequest";
+export { type DestroyServersRequest } from "./DestroyServersRequest";

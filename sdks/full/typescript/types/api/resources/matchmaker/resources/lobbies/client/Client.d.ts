@@ -3,7 +3,7 @@
  */
 import * as environments from "../../../../../../environments";
 import * as core from "../../../../../../core";
-import * as Rivet from "../../../../..";
+import * as Rivet from "../../../../../index";
 export declare namespace Lobbies {
     interface Options {
         environment?: core.Supplier<environments.RivetEnvironment | string>;
@@ -11,8 +11,12 @@ export declare namespace Lobbies {
         fetcher?: core.FetchFunction;
     }
     interface RequestOptions {
+        /** The maximum time to wait for a response in seconds. */
         timeoutInSeconds?: number;
+        /** The number of times to retry the request. Defaults to 2. */
         maxRetries?: number;
+        /** A hook to abort the request. */
+        abortSignal?: AbortSignal;
     }
 }
 export declare class Lobbies {
@@ -21,12 +25,18 @@ export declare class Lobbies {
     /**
      * Marks the current lobby as ready to accept connections. Players will not be able to connect to this lobby until the lobby is flagged as ready.
      * This endpoint requires a [lobby token](/docs/general/concepts/token-types#matchmaker-lobby) for authentication, or a [development namespace token](/docs/general/concepts/token-types#namespace-development) for mock responses. When running on Rivet servers, you can access the given lobby token from the [`RIVET_TOKEN`](/docs/matchmaker/concepts/lobby-env) environment variable.
+     *
+     * @param {Lobbies.RequestOptions} requestOptions - Request-specific configuration.
+     *
      * @throws {@link Rivet.InternalError}
      * @throws {@link Rivet.RateLimitError}
      * @throws {@link Rivet.ForbiddenError}
      * @throws {@link Rivet.UnauthorizedError}
      * @throws {@link Rivet.NotFoundError}
      * @throws {@link Rivet.BadRequestError}
+     *
+     * @example
+     *     await client.matchmaker.lobbies.ready()
      */
     ready(requestOptions?: Lobbies.RequestOptions): Promise<void>;
     /**
@@ -39,12 +49,21 @@ export declare class Lobbies {
      * authentication, or a [development namespace token](/docs/general/concepts/token-types#namespace-development)
      * for mock responses. When running on Rivet servers, you can access the given lobby token from the
      * [`RIVET_TOKEN`](/docs/matchmaker/concepts/lobby-env) environment variable.
+     *
+     * @param {Rivet.matchmaker.SetLobbyClosedRequest} request
+     * @param {Lobbies.RequestOptions} requestOptions - Request-specific configuration.
+     *
      * @throws {@link Rivet.InternalError}
      * @throws {@link Rivet.RateLimitError}
      * @throws {@link Rivet.ForbiddenError}
      * @throws {@link Rivet.UnauthorizedError}
      * @throws {@link Rivet.NotFoundError}
      * @throws {@link Rivet.BadRequestError}
+     *
+     * @example
+     *     await client.matchmaker.lobbies.setClosed({
+     *         isClosed: true
+     *     })
      */
     setClosed(request: Rivet.matchmaker.SetLobbyClosedRequest, requestOptions?: Lobbies.RequestOptions): Promise<void>;
     /**
@@ -54,12 +73,21 @@ export declare class Lobbies {
      * authentication, or a [development namespace token](/docs/general/concepts/token-types#namespace-development)
      * for mock responses. When running on Rivet servers, you can access the given lobby token from the
      * [`RIVET_TOKEN`](/docs/matchmaker/concepts/lobby-env) environment variable.
+     *
+     * @param {unknown} request
+     * @param {Lobbies.RequestOptions} requestOptions - Request-specific configuration.
+     *
      * @throws {@link Rivet.InternalError}
      * @throws {@link Rivet.RateLimitError}
      * @throws {@link Rivet.ForbiddenError}
      * @throws {@link Rivet.UnauthorizedError}
      * @throws {@link Rivet.NotFoundError}
      * @throws {@link Rivet.BadRequestError}
+     *
+     * @example
+     *     await client.matchmaker.lobbies.setState({
+     *         "key": "value"
+     *     })
      */
     setState(request?: unknown, requestOptions?: Lobbies.RequestOptions): Promise<void>;
     /**
@@ -69,12 +97,19 @@ export declare class Lobbies {
      * authentication, or a [development namespace token](/docs/general/concepts/token-types#namespace-development)
      * for mock responses. When running on Rivet servers, you can access the given lobby token from the
      * [`RIVET_TOKEN`](/docs/matchmaker/concepts/lobby-env) environment variable.
+     *
+     * @param {string} lobbyId
+     * @param {Lobbies.RequestOptions} requestOptions - Request-specific configuration.
+     *
      * @throws {@link Rivet.InternalError}
      * @throws {@link Rivet.RateLimitError}
      * @throws {@link Rivet.ForbiddenError}
      * @throws {@link Rivet.UnauthorizedError}
      * @throws {@link Rivet.NotFoundError}
      * @throws {@link Rivet.BadRequestError}
+     *
+     * @example
+     *     await client.matchmaker.lobbies.getState("d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32")
      */
     getState(lobbyId: string, requestOptions?: Lobbies.RequestOptions): Promise<unknown | undefined>;
     /**
@@ -87,12 +122,35 @@ export declare class Lobbies {
      * [development namespace token](/docs/general/concepts/token-types#namespace-development) can be used
      * for mock responses and a [public namespace token](/docs/general/concepts/token-types#namespace-public)
      * can be used for general authentication.
+     *
+     * @param {Rivet.matchmaker.FindLobbyRequest} request
+     * @param {Lobbies.RequestOptions} requestOptions - Request-specific configuration.
+     *
      * @throws {@link Rivet.InternalError}
      * @throws {@link Rivet.RateLimitError}
      * @throws {@link Rivet.ForbiddenError}
      * @throws {@link Rivet.UnauthorizedError}
      * @throws {@link Rivet.NotFoundError}
      * @throws {@link Rivet.BadRequestError}
+     *
+     * @example
+     *     await client.matchmaker.lobbies.find({
+     *         origin: "string",
+     *         gameModes: ["string"],
+     *         regions: ["string"],
+     *         preventAutoCreateLobby: true,
+     *         tags: {
+     *             "string": "string"
+     *         },
+     *         maxPlayers: 1,
+     *         captcha: {
+     *             hcaptcha: {},
+     *             turnstile: {}
+     *         },
+     *         verificationData: {
+     *             "key": "value"
+     *         }
+     *     })
      */
     find(request: Rivet.matchmaker.FindLobbyRequest, requestOptions?: Lobbies.RequestOptions): Promise<Rivet.matchmaker.FindLobbyResponse>;
     /**
@@ -105,12 +163,28 @@ export declare class Lobbies {
      * [development namespace token](/docs/general/concepts/token-types#namespace-development) can be used
      * for mock responses and a [public namespace token](/docs/general/concepts/token-types#namespace-public)
      * can be used for general authentication.
+     *
+     * @param {Rivet.matchmaker.JoinLobbyRequest} request
+     * @param {Lobbies.RequestOptions} requestOptions - Request-specific configuration.
+     *
      * @throws {@link Rivet.InternalError}
      * @throws {@link Rivet.RateLimitError}
      * @throws {@link Rivet.ForbiddenError}
      * @throws {@link Rivet.UnauthorizedError}
      * @throws {@link Rivet.NotFoundError}
      * @throws {@link Rivet.BadRequestError}
+     *
+     * @example
+     *     await client.matchmaker.lobbies.join({
+     *         lobbyId: "string",
+     *         captcha: {
+     *             hcaptcha: {},
+     *             turnstile: {}
+     *         },
+     *         verificationData: {
+     *             "key": "value"
+     *         }
+     *     })
      */
     join(request: Rivet.matchmaker.JoinLobbyRequest, requestOptions?: Lobbies.RequestOptions): Promise<Rivet.matchmaker.JoinLobbyResponse>;
     /**
@@ -121,12 +195,37 @@ export declare class Lobbies {
      * [development namespace token](/docs/general/concepts/token-types#namespace-development) can be used
      * for mock responses and a [public namespace token](/docs/general/concepts/token-types#namespace-public)
      * can be used for general authentication.
+     *
+     * @param {Rivet.matchmaker.CreateLobbyRequest} request
+     * @param {Lobbies.RequestOptions} requestOptions - Request-specific configuration.
+     *
      * @throws {@link Rivet.InternalError}
      * @throws {@link Rivet.RateLimitError}
      * @throws {@link Rivet.ForbiddenError}
      * @throws {@link Rivet.UnauthorizedError}
      * @throws {@link Rivet.NotFoundError}
      * @throws {@link Rivet.BadRequestError}
+     *
+     * @example
+     *     await client.matchmaker.lobbies.create({
+     *         gameMode: "string",
+     *         region: "string",
+     *         publicity: Rivet.matchmaker.CustomLobbyPublicity.Public,
+     *         tags: {
+     *             "string": "string"
+     *         },
+     *         maxPlayers: 1,
+     *         lobbyConfig: {
+     *             "key": "value"
+     *         },
+     *         captcha: {
+     *             hcaptcha: {},
+     *             turnstile: {}
+     *         },
+     *         verificationData: {
+     *             "key": "value"
+     *         }
+     *     })
      */
     create(request: Rivet.matchmaker.CreateLobbyRequest, requestOptions?: Lobbies.RequestOptions): Promise<Rivet.matchmaker.CreateLobbyResponse>;
     /**
@@ -137,12 +236,21 @@ export declare class Lobbies {
      * [development namespace token](/docs/general/concepts/token-types#namespace-development) can be used
      * for mock responses and a [public namespace token](/docs/general/concepts/token-types#namespace-public)
      * can be used for general authentication.
+     *
+     * @param {Rivet.matchmaker.ListLobbiesRequest} request
+     * @param {Lobbies.RequestOptions} requestOptions - Request-specific configuration.
+     *
      * @throws {@link Rivet.InternalError}
      * @throws {@link Rivet.RateLimitError}
      * @throws {@link Rivet.ForbiddenError}
      * @throws {@link Rivet.UnauthorizedError}
      * @throws {@link Rivet.NotFoundError}
      * @throws {@link Rivet.BadRequestError}
+     *
+     * @example
+     *     await client.matchmaker.lobbies.list({
+     *         includeState: true
+     *     })
      */
     list(request?: Rivet.matchmaker.ListLobbiesRequest, requestOptions?: Lobbies.RequestOptions): Promise<Rivet.matchmaker.ListLobbiesResponse>;
     protected _getAuthorizationHeader(): Promise<string | undefined>;

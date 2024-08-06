@@ -3,7 +3,7 @@
  */
 import * as environments from "../../../../../../environments";
 import * as core from "../../../../../../core";
-import * as Rivet from "../../../../..";
+import * as Rivet from "../../../../../index";
 export declare namespace Datacenters {
     interface Options {
         environment?: core.Supplier<environments.RivetEnvironment | string>;
@@ -11,20 +11,30 @@ export declare namespace Datacenters {
         fetcher?: core.FetchFunction;
     }
     interface RequestOptions {
+        /** The maximum time to wait for a response in seconds. */
         timeoutInSeconds?: number;
+        /** The number of times to retry the request. Defaults to 2. */
         maxRetries?: number;
+        /** A hook to abort the request. */
+        abortSignal?: AbortSignal;
     }
 }
 export declare class Datacenters {
     protected readonly _options: Datacenters.Options;
     constructor(_options?: Datacenters.Options);
     /**
+     * @param {string} datacenterId
+     * @param {Datacenters.RequestOptions} requestOptions - Request-specific configuration.
+     *
      * @throws {@link Rivet.InternalError}
      * @throws {@link Rivet.RateLimitError}
      * @throws {@link Rivet.ForbiddenError}
      * @throws {@link Rivet.UnauthorizedError}
      * @throws {@link Rivet.NotFoundError}
      * @throws {@link Rivet.BadRequestError}
+     *
+     * @example
+     *     await client.provision.datacenters.getTls("d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32")
      */
     getTls(datacenterId: string, requestOptions?: Datacenters.RequestOptions): Promise<Rivet.provision.datacenters.GetTlsResponse>;
     protected _getAuthorizationHeader(): Promise<string | undefined>;

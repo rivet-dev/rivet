@@ -20,8 +20,8 @@ export function withParsedProperties<RawObjectShape, ParsedObjectShape, Properti
     properties: { [K in keyof Properties]: Properties[K] | ((parsed: ParsedObjectShape) => Properties[K]) }
 ): ObjectLikeSchema<RawObjectShape, ParsedObjectShape & Properties> {
     const objectSchema: BaseSchema<RawObjectShape, ParsedObjectShape & Properties> = {
-        parse: async (raw, opts) => {
-            const parsedObject = await objectLike.parse(raw, opts);
+        parse: (raw, opts) => {
+            const parsedObject = objectLike.parse(raw, opts);
             if (!parsedObject.ok) {
                 return parsedObject;
             }

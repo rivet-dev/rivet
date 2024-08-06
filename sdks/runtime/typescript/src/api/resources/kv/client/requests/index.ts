@@ -1,5 +1,5 @@
-export { GetOperationRequest } from "./GetOperationRequest";
-export { DeleteOperationRequest } from "./DeleteOperationRequest";
-export { ListOperationRequest } from "./ListOperationRequest";
-export { GetBatchRequest } from "./GetBatchRequest";
-export { DeleteBatchRequest } from "./DeleteBatchRequest";
+export { type GetOperationRequest } from "./GetOperationRequest";
+export { type DeleteOperationRequest } from "./DeleteOperationRequest";
+export { type ListOperationRequest } from "./ListOperationRequest";
+export { type GetBatchRequest } from "./GetBatchRequest";
+export { type DeleteBatchRequest } from "./DeleteBatchRequest";

@@ -12,6 +12,7 @@ groups:
       - name: fernapi/fern-typescript-browser-sdk
         # Custom version that we generate locally
         version: 999.999.999
+        ir-version: v53
         output:
           location: local-file-system
           path: ../sdks/runtime/typescript/src
@@ -36,6 +37,7 @@ groups:
       - name: fernapi/fern-typescript-browser-sdk
         # Custom version that we generate locally
         version: 999.999.999
+        ir-version: v53
         output:
           location: local-file-system
           path: ../sdks/full/typescript/src

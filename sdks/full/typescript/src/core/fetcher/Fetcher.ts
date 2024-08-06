@@ -1,6 +1,10 @@
-import { default as FormData } from "form-data";
-import qs from "qs";
 import { APIResponse } from "./APIResponse";
+import { createRequestUrl } from "./createRequestUrl";
+import { getFetchFn } from "./getFetchFn";
+import { getRequestBody } from "./getRequestBody";
+import { getResponseBody } from "./getResponseBody";
+import { makeRequest } from "./makeRequest";
+import { requestWithRetries } from "./requestWithRetries";
 
 export type FetchFunction = <R = unknown>(args: Fetcher.Args) => Promise<APIResponse<R, Fetcher.Error>>;
 
@@ -10,12 +14,15 @@ export declare namespace Fetcher {
         method: string;
         contentType?: string;
         headers?: Record<string, string | undefined>;
-        queryParameters?: Record<string, string | string[]>;
+        queryParameters?: Record<string, string | string[] | object | object[]>;
         body?: unknown;
         timeoutMs?: number;
         maxRetries?: number;
         withCredentials?: boolean;
-        responseType?: "json" | "blob" | "streaming";
+        abortSignal?: AbortSignal;
+        requestType?: "json" | "file" | "bytes";
+        responseType?: "json" | "blob" | "sse" | "streaming" | "text";
+        duplex?: "half";
     }
 
     export type Error = FailedStatusCodeError | NonJsonError | TimeoutError | UnknownError;
@@ -42,11 +49,7 @@ export declare namespace Fetcher {
     }
 }
 
-const INITIAL_RETRY_DELAY = 1;
-const MAX_RETRY_DELAY = 60;
-const DEFAULT_MAX_RETRIES = 2;
-
-async function fetcherImpl<R = unknown>(args: Fetcher.Args): Promise<APIResponse<R, Fetcher.Error>> {
+export async function fetcherImpl<R = unknown>(args: Fetcher.Args): Promise<APIResponse<R, Fetcher.Error>> {
     const headers: Record<string, string> = {};
     if (args.body !== undefined && args.contentType != null) {
         headers["Content-Type"] = args.contentType;
@@ -60,85 +63,35 @@ async function fetcherImpl<R = unknown>(args: Fetcher.Args): Promise<APIResponse
         }
     }
 
-    const url =
-        Object.keys(args.queryParameters ?? {}).length > 0
-            ? `${args.url}?${qs.stringify(args.queryParameters, { arrayFormat: "repeat" })}`
-            : args.url;
-
-    let body: BodyInit | undefined = undefined;
-    if (args.body instanceof FormData) {
-        // @ts-expect-error
-        body = args.body;
-    } else {
-        body = JSON.stringify(args.body);
-    }
-
-    const fetchFn = typeof fetch == "function" ? fetch : require("node-fetch");
-
-    const makeRequest = async (): Promise<Response> => {
-        const controller = new AbortController();
-        let abortId = undefined;
-        if (args.timeoutMs != null) {
-            abortId = setTimeout(() => controller.abort(), args.timeoutMs);
-        }
-        const response = await fetchFn(url, {
-            method: args.method,
-            headers,
-            body,
-            signal: controller.signal,
-            credentials: args.withCredentials ? "include" : undefined,
-        });
-        if (abortId != null) {
-            clearTimeout(abortId);
-        }
-        return response;
-    };
+    const url = createRequestUrl(args.url, args.queryParameters);
+    let requestBody: BodyInit | undefined = await getRequestBody({
+        body: args.body,
+        type: args.requestType === "json" ? "json" : "other",
+    });
+    const fetchFn = await getFetchFn();
 
     try {
-        let response = await makeRequest();
-
-        for (let i = 0; i < (args.maxRetries ?? DEFAULT_MAX_RETRIES); ++i) {
-            if (
-                response.status === 408 ||
-                response.status === 409 ||
-                response.status === 429 ||
-                response.status >= 500
-            ) {
-                const delay = Math.min(INITIAL_RETRY_DELAY * Math.pow(i, 2), MAX_RETRY_DELAY);
-                await new Promise((resolve) => setTimeout(resolve, delay));
-                response = await makeRequest();
-            } else {
-                break;
-            }
-        }
-
-        let body: unknown;
-        if (response.body != null && args.responseType === "blob") {
-            body = await response.blob();
-        } else if (response.body != null && args.responseType === "streaming") {
-            body = response.body;
-        } else {
-            const text = await response.text();
-            if (text.length > 0) {
-                try {
-                    body = JSON.parse(text);
-                } catch (err) {
-                    return {
-                        ok: false,
-                        error: {
-                            reason: "non-json",
-                            statusCode: response.status,
-                            rawBody: text,
-                        },
-                    };
-                }
-            }
-        }
+        const response = await requestWithRetries(
+            async () =>
+                makeRequest(
+                    fetchFn,
+                    url,
+                    args.method,
+                    headers,
+                    requestBody,
+                    args.timeoutMs,
+                    args.abortSignal,
+                    args.withCredentials,
+                    args.duplex
+                ),
+            args.maxRetries
+        );
+        let responseBody = await getResponseBody(response, args.responseType);
 
         if (response.status >= 200 && response.status < 400) {
             return {
                 ok: true,
-                body: body as R,
+                body: responseBody as R,
                 headers: response.headers,
             };
         } else {
@@ -147,12 +100,20 @@ async function fetcherImpl<R = unknown>(args: Fetcher.Args): Promise<APIResponse
                 error: {
                     reason: "status-code",
                     statusCode: response.status,
-                    body,
+                    body: responseBody,
                 },
             };
         }
     } catch (error) {
-        if (error instanceof Error && error.name === "AbortError") {
+        if (args.abortSignal != null && args.abortSignal.aborted) {
+            return {
+                ok: false,
+                error: {
+                    reason: "unknown",
+                    errorMessage: "The user aborted a request",
+                },
+            };
+        } else if (error instanceof Error && error.name === "AbortError") {
             return {
                 ok: false,
                 error: {

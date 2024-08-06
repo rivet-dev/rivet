@@ -1,1 +1,1 @@
-export { ListNamespaceLobbiesRequest } from "./ListNamespaceLobbiesRequest";
+export { type ListNamespaceLobbiesRequest } from "./ListNamespaceLobbiesRequest";

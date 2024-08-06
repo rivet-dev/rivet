@@ -10,8 +10,8 @@ export type ObjectSchema<Raw, Parsed> = BaseObjectSchema<Raw, Parsed> &
     SchemaUtils<Raw, Parsed>;
 
 export interface BaseObjectSchema<Raw, Parsed> extends BaseSchema<Raw, Parsed> {
-    _getRawProperties: () => Promise<(keyof Raw)[]>;
-    _getParsedProperties: () => Promise<(keyof Parsed)[]>;
+    _getRawProperties: () => (keyof Raw)[];
+    _getParsedProperties: () => (keyof Parsed)[];
 }
 
 export interface ObjectUtils<Raw, Parsed> {

@@ -1,6 +1,6 @@
-export { ListSuggestedRequest } from "./ListSuggestedRequest";
-export { SearchRequest } from "./SearchRequest";
-export { GetBansRequest } from "./GetBansRequest";
-export { GetJoinRequestsRequest } from "./GetJoinRequestsRequest";
-export { GetMembersRequest } from "./GetMembersRequest";
-export { GetProfileRequest } from "./GetProfileRequest";
+export { type ListSuggestedRequest } from "./ListSuggestedRequest";
+export { type SearchRequest } from "./SearchRequest";
+export { type GetBansRequest } from "./GetBansRequest";
+export { type GetJoinRequestsRequest } from "./GetJoinRequestsRequest";
+export { type GetMembersRequest } from "./GetMembersRequest";
+export { type GetProfileRequest } from "./GetProfileRequest";

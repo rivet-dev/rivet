@@ -1,1 +1,1 @@
-export { GetBuildsRequest } from "./GetBuildsRequest";
+export { type GetBuildsRequest } from "./GetBuildsRequest";

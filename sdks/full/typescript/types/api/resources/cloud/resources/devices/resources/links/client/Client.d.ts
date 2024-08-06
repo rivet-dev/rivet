@@ -3,7 +3,7 @@
  */
 import * as environments from "../../../../../../../../environments";
 import * as core from "../../../../../../../../core";
-import * as Rivet from "../../../../../../..";
+import * as Rivet from "../../../../../../../index";
 export declare namespace Links {
     interface Options {
         environment?: core.Supplier<environments.RivetEnvironment | string>;
@@ -11,38 +11,65 @@ export declare namespace Links {
         fetcher?: core.FetchFunction;
     }
     interface RequestOptions {
+        /** The maximum time to wait for a response in seconds. */
         timeoutInSeconds?: number;
+        /** The number of times to retry the request. Defaults to 2. */
         maxRetries?: number;
+        /** A hook to abort the request. */
+        abortSignal?: AbortSignal;
     }
 }
 export declare class Links {
     protected readonly _options: Links.Options;
     constructor(_options?: Links.Options);
     /**
+     * @param {Links.RequestOptions} requestOptions - Request-specific configuration.
+     *
      * @throws {@link Rivet.InternalError}
      * @throws {@link Rivet.RateLimitError}
      * @throws {@link Rivet.ForbiddenError}
      * @throws {@link Rivet.UnauthorizedError}
      * @throws {@link Rivet.NotFoundError}
      * @throws {@link Rivet.BadRequestError}
+     *
+     * @example
+     *     await client.cloud.devices.links.prepare()
      */
     prepare(requestOptions?: Links.RequestOptions): Promise<Rivet.cloud.devices.PrepareDeviceLinkResponse>;
     /**
+     * @param {Rivet.cloud.devices.GetDeviceLinkRequest} request
+     * @param {Links.RequestOptions} requestOptions - Request-specific configuration.
+     *
      * @throws {@link Rivet.InternalError}
      * @throws {@link Rivet.RateLimitError}
      * @throws {@link Rivet.ForbiddenError}
      * @throws {@link Rivet.UnauthorizedError}
      * @throws {@link Rivet.NotFoundError}
      * @throws {@link Rivet.BadRequestError}
+     *
+     * @example
+     *     await client.cloud.devices.links.get({
+     *         deviceLinkToken: "string",
+     *         watchIndex: "string"
+     *     })
      */
     get(request: Rivet.cloud.devices.GetDeviceLinkRequest, requestOptions?: Links.RequestOptions): Promise<Rivet.cloud.devices.GetDeviceLinkResponse>;
     /**
+     * @param {Rivet.cloud.devices.CompleteDeviceLinkRequest} request
+     * @param {Links.RequestOptions} requestOptions - Request-specific configuration.
+     *
      * @throws {@link Rivet.InternalError}
      * @throws {@link Rivet.RateLimitError}
      * @throws {@link Rivet.ForbiddenError}
      * @throws {@link Rivet.UnauthorizedError}
      * @throws {@link Rivet.NotFoundError}
      * @throws {@link Rivet.BadRequestError}
+     *
+     * @example
+     *     await client.cloud.devices.links.complete({
+     *         deviceLinkToken: "string",
+     *         gameId: "d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32"
+     *     })
      */
     complete(request: Rivet.cloud.devices.CompleteDeviceLinkRequest, requestOptions?: Links.RequestOptions): Promise<void>;
     protected _getAuthorizationHeader(): Promise<string | undefined>;

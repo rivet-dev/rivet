@@ -3,7 +3,7 @@
  */
 import * as environments from "../../../../environments";
 import * as core from "../../../../core";
-import * as Rivet from "../../..";
+import * as Rivet from "../../../index";
 import { Clusters } from "../resources/clusters/client/Client";
 export declare namespace Admin {
     interface Options {
@@ -12,20 +12,32 @@ export declare namespace Admin {
         fetcher?: core.FetchFunction;
     }
     interface RequestOptions {
+        /** The maximum time to wait for a response in seconds. */
         timeoutInSeconds?: number;
+        /** The number of times to retry the request. Defaults to 2. */
         maxRetries?: number;
+        /** A hook to abort the request. */
+        abortSignal?: AbortSignal;
     }
 }
 export declare class Admin {
     protected readonly _options: Admin.Options;
     constructor(_options?: Admin.Options);
     /**
+     * @param {Rivet.admin.LoginRequest} request
+     * @param {Admin.RequestOptions} requestOptions - Request-specific configuration.
+     *
      * @throws {@link Rivet.InternalError}
      * @throws {@link Rivet.RateLimitError}
      * @throws {@link Rivet.ForbiddenError}
      * @throws {@link Rivet.UnauthorizedError}
      * @throws {@link Rivet.NotFoundError}
      * @throws {@link Rivet.BadRequestError}
+     *
+     * @example
+     *     await client.admin.login({
+     *         name: "string"
+     *     })
      */
     login(request: Rivet.admin.LoginRequest, requestOptions?: Admin.RequestOptions): Promise<Rivet.admin.LoginResponse>;
     protected _clusters: Clusters | undefined;

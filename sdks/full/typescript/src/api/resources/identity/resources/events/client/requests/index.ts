@@ -1,1 +1,1 @@
-export { WatchEventsRequest } from "./WatchEventsRequest";
+export { type WatchEventsRequest } from "./WatchEventsRequest";

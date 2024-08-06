@@ -3,7 +3,7 @@
  */
 import * as environments from "../../../../../../environments";
 import * as core from "../../../../../../core";
-import * as Rivet from "../../../../..";
+import * as Rivet from "../../../../../index";
 export declare namespace Players {
     interface Options {
         environment?: core.Supplier<environments.RivetEnvironment | string>;
@@ -11,8 +11,12 @@ export declare namespace Players {
         fetcher?: core.FetchFunction;
     }
     interface RequestOptions {
+        /** The maximum time to wait for a response in seconds. */
         timeoutInSeconds?: number;
+        /** The number of times to retry the request. Defaults to 2. */
         maxRetries?: number;
+        /** A hook to abort the request. */
+        abortSignal?: AbortSignal;
     }
 }
 export declare class Players {
@@ -54,32 +58,56 @@ export declare class Players {
      * Otherwise, the player token will likely be automatically sent by the client
      * once the socket opens. As mentioned above, nothing else should happen until
      * the player token is validated.
+     *
+     * @param {Rivet.matchmaker.PlayerConnectedRequest} request
+     * @param {Players.RequestOptions} requestOptions - Request-specific configuration.
+     *
      * @throws {@link Rivet.InternalError}
      * @throws {@link Rivet.RateLimitError}
      * @throws {@link Rivet.ForbiddenError}
      * @throws {@link Rivet.UnauthorizedError}
      * @throws {@link Rivet.NotFoundError}
      * @throws {@link Rivet.BadRequestError}
+     *
+     * @example
+     *     await client.matchmaker.players.connected({
+     *         playerToken: "string"
+     *     })
      */
     connected(request: Rivet.matchmaker.PlayerConnectedRequest, requestOptions?: Players.RequestOptions): Promise<void>;
     /**
      * Marks a player as disconnected. # Ghost Players If players are not marked as disconnected, lobbies will result with "ghost players" that the matchmaker thinks exist but are no longer connected to the lobby.
+     *
+     * @param {Rivet.matchmaker.PlayerDisconnectedRequest} request
+     * @param {Players.RequestOptions} requestOptions - Request-specific configuration.
+     *
      * @throws {@link Rivet.InternalError}
      * @throws {@link Rivet.RateLimitError}
      * @throws {@link Rivet.ForbiddenError}
      * @throws {@link Rivet.UnauthorizedError}
      * @throws {@link Rivet.NotFoundError}
      * @throws {@link Rivet.BadRequestError}
+     *
+     * @example
+     *     await client.matchmaker.players.disconnected({
+     *         playerToken: "string"
+     *     })
      */
     disconnected(request: Rivet.matchmaker.PlayerDisconnectedRequest, requestOptions?: Players.RequestOptions): Promise<void>;
     /**
      * Gives matchmaker statistics about the players in game.
+     *
+     * @param {Players.RequestOptions} requestOptions - Request-specific configuration.
+     *
      * @throws {@link Rivet.InternalError}
      * @throws {@link Rivet.RateLimitError}
      * @throws {@link Rivet.ForbiddenError}
      * @throws {@link Rivet.UnauthorizedError}
      * @throws {@link Rivet.NotFoundError}
      * @throws {@link Rivet.BadRequestError}
+     *
+     * @example
+     *     await client.matchmaker.players.getStatistics()
      */
     getStatistics(requestOptions?: Players.RequestOptions): Promise<Rivet.matchmaker.GetStatisticsResponse>;
     protected _getAuthorizationHeader(): Promise<string | undefined>;

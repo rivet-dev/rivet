@@ -10,8 +10,12 @@ export declare namespace Uploads {
         fetcher?: core.FetchFunction;
     }
     interface RequestOptions {
+        /** The maximum time to wait for a response in seconds. */
         timeoutInSeconds?: number;
+        /** The number of times to retry the request. Defaults to 2. */
         maxRetries?: number;
+        /** A hook to abort the request. */
+        abortSignal?: AbortSignal;
     }
 }
 export declare class Uploads {
@@ -19,12 +23,19 @@ export declare class Uploads {
     constructor(_options?: Uploads.Options);
     /**
      * Marks an upload as complete.
+     *
+     * @param {string} uploadId
+     * @param {Uploads.RequestOptions} requestOptions - Request-specific configuration.
+     *
      * @throws {@link Rivet.InternalError}
      * @throws {@link Rivet.RateLimitError}
      * @throws {@link Rivet.ForbiddenError}
      * @throws {@link Rivet.UnauthorizedError}
      * @throws {@link Rivet.NotFoundError}
      * @throws {@link Rivet.BadRequestError}
+     *
+     * @example
+     *     await client.cloud.uploads.completeUpload("d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32")
      */
     completeUpload(uploadId: string, requestOptions?: Uploads.RequestOptions): Promise<void>;
     protected _getAuthorizationHeader(): Promise<string | undefined>;

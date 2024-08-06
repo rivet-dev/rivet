@@ -2,7 +2,6 @@ import { BaseSchema, MaybeValid, SchemaType } from "../../Schema";
 import { getErrorMessageForIncorrectType } from "../../utils/getErrorMessageForIncorrectType";
 import { isPlainObject } from "../../utils/isPlainObject";
 import { keys } from "../../utils/keys";
-import { MaybePromise } from "../../utils/MaybePromise";
 import { maybeSkipValidation } from "../../utils/maybeSkipValidation";
 import { enum_ } from "../enum";
 import { ObjectSchema } from "../object";
@@ -25,7 +24,7 @@ export function union<D extends string | Discriminant<any, any>, U extends Union
     const discriminantValueSchema = enum_(keys(union) as string[]);
 
     const baseSchema: BaseSchema<inferRawUnion<D, U>, inferParsedUnion<D, U>> = {
-        parse: async (raw, opts) => {
+        parse: (raw, opts) => {
             return transformAndValidateUnion({
                 value: raw,
                 discriminant: rawDiscriminant,
@@ -42,7 +41,7 @@ export function union<D extends string | Discriminant<any, any>, U extends Union
                 breadcrumbsPrefix: opts?.breadcrumbsPrefix,
             });
         },
-        json: async (parsed, opts) => {
+        json: (parsed, opts) => {
             return transformAndValidateUnion({
                 value: parsed,
                 discriminant: parsedDiscriminant,
@@ -69,7 +68,7 @@ export function union<D extends string | Discriminant<any, any>, U extends Union
     };
 }
 
-async function transformAndValidateUnion<
+function transformAndValidateUnion<
     TransformedDiscriminant extends string,
     TransformedDiscriminantValue extends string,
     TransformedAdditionalProperties
@@ -86,17 +85,15 @@ async function transformAndValidateUnion<
     value: unknown;
     discriminant: string;
     transformedDiscriminant: TransformedDiscriminant;
-    transformDiscriminantValue: (discriminantValue: unknown) => MaybePromise<MaybeValid<TransformedDiscriminantValue>>;
+    transformDiscriminantValue: (discriminantValue: unknown) => MaybeValid<TransformedDiscriminantValue>;
     getAdditionalPropertiesSchema: (discriminantValue: string) => ObjectSchema<any, any> | undefined;
     allowUnrecognizedUnionMembers: boolean | undefined;
     transformAdditionalProperties: (
         additionalProperties: unknown,
         additionalPropertiesSchema: ObjectSchema<any, any>
-    ) => MaybePromise<MaybeValid<TransformedAdditionalProperties>>;
+    ) => MaybeValid<TransformedAdditionalProperties>;
     breadcrumbsPrefix: string[] | undefined;
-}): Promise<
-    MaybeValid<Record<TransformedDiscriminant, TransformedDiscriminantValue> & TransformedAdditionalProperties>
-> {
+}): MaybeValid<Record<TransformedDiscriminant, TransformedDiscriminantValue> & TransformedAdditionalProperties> {
     if (!isPlainObject(value)) {
         return {
             ok: false,
@@ -123,7 +120,7 @@ async function transformAndValidateUnion<
         };
     }
 
-    const transformedDiscriminantValue = await transformDiscriminantValue(discriminantValue);
+    const transformedDiscriminantValue = transformDiscriminantValue(discriminantValue);
     if (!transformedDiscriminantValue.ok) {
         return {
             ok: false,
@@ -155,7 +152,7 @@ async function transformAndValidateUnion<
         }
     }
 
-    const transformedAdditionalProperties = await transformAdditionalProperties(
+    const transformedAdditionalProperties = transformAdditionalProperties(
         additionalProperties,
         additionalPropertiesSchema
     );

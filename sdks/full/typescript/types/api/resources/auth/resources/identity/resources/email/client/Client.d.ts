@@ -3,7 +3,7 @@
  */
 import * as environments from "../../../../../../../../environments";
 import * as core from "../../../../../../../../core";
-import * as Rivet from "../../../../../../..";
+import * as Rivet from "../../../../../../../index";
 export declare namespace Email {
     interface Options {
         environment?: core.Supplier<environments.RivetEnvironment | string>;
@@ -11,8 +11,12 @@ export declare namespace Email {
         fetcher?: core.FetchFunction;
     }
     interface RequestOptions {
+        /** The maximum time to wait for a response in seconds. */
         timeoutInSeconds?: number;
+        /** The number of times to retry the request. Defaults to 2. */
         maxRetries?: number;
+        /** A hook to abort the request. */
+        abortSignal?: AbortSignal;
     }
 }
 export declare class Email {
@@ -20,22 +24,43 @@ export declare class Email {
     constructor(_options?: Email.Options);
     /**
      * Starts the verification process for linking an email to your identity.
+     *
+     * @param {Rivet.auth.identity.StartEmailVerificationRequest} request
+     * @param {Email.RequestOptions} requestOptions - Request-specific configuration.
+     *
      * @throws {@link Rivet.InternalError}
      * @throws {@link Rivet.RateLimitError}
      * @throws {@link Rivet.ForbiddenError}
      * @throws {@link Rivet.UnauthorizedError}
      * @throws {@link Rivet.NotFoundError}
      * @throws {@link Rivet.BadRequestError}
+     *
+     * @example
+     *     await client.auth.identity.email.startEmailVerification({
+     *         email: "string",
+     *         captcha: {},
+     *         gameId: "d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32"
+     *     })
      */
     startEmailVerification(request: Rivet.auth.identity.StartEmailVerificationRequest, requestOptions?: Email.RequestOptions): Promise<Rivet.auth.identity.StartEmailVerificationResponse>;
     /**
      * Completes the email verification process.
+     *
+     * @param {Rivet.auth.identity.CompleteEmailVerificationRequest} request
+     * @param {Email.RequestOptions} requestOptions - Request-specific configuration.
+     *
      * @throws {@link Rivet.InternalError}
      * @throws {@link Rivet.RateLimitError}
      * @throws {@link Rivet.ForbiddenError}
      * @throws {@link Rivet.UnauthorizedError}
      * @throws {@link Rivet.NotFoundError}
      * @throws {@link Rivet.BadRequestError}
+     *
+     * @example
+     *     await client.auth.identity.email.completeEmailVerification({
+     *         verificationId: "d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32",
+     *         code: "string"
+     *     })
      */
     completeEmailVerification(request: Rivet.auth.identity.CompleteEmailVerificationRequest, requestOptions?: Email.RequestOptions): Promise<Rivet.auth.identity.CompleteEmailVerificationResponse>;
     protected _getAuthorizationHeader(): Promise<string | undefined>;

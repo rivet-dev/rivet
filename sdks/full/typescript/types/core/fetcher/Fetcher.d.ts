@@ -6,12 +6,15 @@ export declare namespace Fetcher {
         method: string;
         contentType?: string;
         headers?: Record<string, string | undefined>;
-        queryParameters?: Record<string, string | string[]>;
+        queryParameters?: Record<string, string | string[] | object | object[]>;
         body?: unknown;
         timeoutMs?: number;
         maxRetries?: number;
         withCredentials?: boolean;
-        responseType?: "json" | "blob" | "streaming";
+        abortSignal?: AbortSignal;
+        requestType?: "json" | "file" | "bytes";
+        responseType?: "json" | "blob" | "sse" | "streaming" | "text";
+        duplex?: "half";
     }
     type Error = FailedStatusCodeError | NonJsonError | TimeoutError | UnknownError;
     interface FailedStatusCodeError {
@@ -32,4 +35,5 @@ export declare namespace Fetcher {
         errorMessage: string;
     }
 }
+export declare function fetcherImpl<R = unknown>(args: Fetcher.Args): Promise<APIResponse<R, Fetcher.Error>>;
 export declare const fetcher: FetchFunction;

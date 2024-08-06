@@ -1,1 +1,1 @@
-export { GetGameProfileRequest } from "./GetGameProfileRequest";
+export { type GetGameProfileRequest } from "./GetGameProfileRequest";

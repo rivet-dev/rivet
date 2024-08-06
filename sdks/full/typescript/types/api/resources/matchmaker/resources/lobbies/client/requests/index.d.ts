@@ -1,5 +1,5 @@
-export { SetLobbyClosedRequest } from "./SetLobbyClosedRequest";
-export { FindLobbyRequest } from "./FindLobbyRequest";
-export { JoinLobbyRequest } from "./JoinLobbyRequest";
-export { CreateLobbyRequest } from "./CreateLobbyRequest";
-export { ListLobbiesRequest } from "./ListLobbiesRequest";
+export { type SetLobbyClosedRequest } from "./SetLobbyClosedRequest";
+export { type FindLobbyRequest } from "./FindLobbyRequest";
+export { type JoinLobbyRequest } from "./JoinLobbyRequest";
+export { type CreateLobbyRequest } from "./CreateLobbyRequest";
+export { type ListLobbiesRequest } from "./ListLobbiesRequest";

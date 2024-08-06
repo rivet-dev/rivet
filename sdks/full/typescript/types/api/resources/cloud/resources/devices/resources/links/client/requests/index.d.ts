@@ -1,1 +1,1 @@
-export { GetDeviceLinkRequest } from "./GetDeviceLinkRequest";
+export { type GetDeviceLinkRequest } from "./GetDeviceLinkRequest";

@@ -2,7 +2,6 @@ import { MaybeValid, Schema, SchemaType, ValidationError } from "../../Schema";
 import { entries } from "../../utils/entries";
 import { getErrorMessageForIncorrectType } from "../../utils/getErrorMessageForIncorrectType";
 import { isPlainObject } from "../../utils/isPlainObject";
-import { MaybePromise } from "../../utils/MaybePromise";
 import { maybeSkipValidation } from "../../utils/maybeSkipValidation";
 import { getSchemaUtils } from "../schema-utils";
 import { BaseRecordSchema, RecordSchema } from "./types";
@@ -12,10 +11,10 @@ export function record<RawKey extends string | number, RawValue, ParsedValue, Pa
     valueSchema: Schema<RawValue, ParsedValue>
 ): RecordSchema<RawKey, RawValue, ParsedKey, ParsedValue> {
     const baseSchema: BaseRecordSchema<RawKey, RawValue, ParsedKey, ParsedValue> = {
-        parse: async (raw, opts) => {
+        parse: (raw, opts) => {
             return validateAndTransformRecord({
                 value: raw,
-                isKeyNumeric: (await keySchema.getType()) === SchemaType.NUMBER,
+                isKeyNumeric: keySchema.getType() === SchemaType.NUMBER,
                 transformKey: (key) =>
                     keySchema.parse(key, {
                         ...opts,
@@ -29,10 +28,10 @@ export function record<RawKey extends string | number, RawValue, ParsedValue, Pa
                 breadcrumbsPrefix: opts?.breadcrumbsPrefix,
             });
         },
-        json: async (parsed, opts) => {
+        json: (parsed, opts) => {
             return validateAndTransformRecord({
                 value: parsed,
-                isKeyNumeric: (await keySchema.getType()) === SchemaType.NUMBER,
+                isKeyNumeric: keySchema.getType() === SchemaType.NUMBER,
                 transformKey: (key) =>
                     keySchema.json(key, {
                         ...opts,
@@ -55,7 +54,7 @@ export function record<RawKey extends string | number, RawValue, ParsedValue, Pa
     };
 }
 
-async function validateAndTransformRecord<TransformedKey extends string | number, TransformedValue>({
+function validateAndTransformRecord<TransformedKey extends string | number, TransformedValue>({
     value,
     isKeyNumeric,
     transformKey,
@@ -64,10 +63,10 @@ async function validateAndTransformRecord<TransformedKey extends string | number
 }: {
     value: unknown;
     isKeyNumeric: boolean;
-    transformKey: (key: string | number) => MaybePromise<MaybeValid<TransformedKey>>;
-    transformValue: (value: unknown, key: string | number) => MaybePromise<MaybeValid<TransformedValue>>;
+    transformKey: (key: string | number) => MaybeValid<TransformedKey>;
+    transformValue: (value: unknown, key: string | number) => MaybeValid<TransformedValue>;
     breadcrumbsPrefix: string[] | undefined;
-}): Promise<MaybeValid<Record<TransformedKey, TransformedValue>>> {
+}): MaybeValid<Record<TransformedKey, TransformedValue>> {
     if (!isPlainObject(value)) {
         return {
             ok: false,
@@ -80,14 +79,14 @@ async function validateAndTransformRecord<TransformedKey extends string | number
         };
     }
 
-    return entries(value).reduce<Promise<MaybeValid<Record<TransformedKey, TransformedValue>>>>(
-        async (accPromise, [stringKey, value]) => {
+    return entries(value).reduce<MaybeValid<Record<TransformedKey, TransformedValue>>>(
+        (accPromise, [stringKey, value]) => {
             // skip nullish keys
             if (value == null) {
                 return accPromise;
             }
 
-            const acc = await accPromise;
+            const acc = accPromise;
 
             let key: string | number = stringKey;
             if (isKeyNumeric) {
@@ -96,9 +95,9 @@ async function validateAndTransformRecord<TransformedKey extends string | number
                     key = numberKey;
                 }
             }
-            const transformedKey = await transformKey(key);
+            const transformedKey = transformKey(key);
 
-            const transformedValue = await transformValue(value, key);
+            const transformedValue = transformValue(value, key);
 
             if (acc.ok && transformedKey.ok && transformedValue.ok) {
                 return {
@@ -126,6 +125,6 @@ async function validateAndTransformRecord<TransformedKey extends string | number
                 errors,
             };
         },
-        Promise.resolve({ ok: true, value: {} as Record<TransformedKey, TransformedValue> })
+        { ok: true, value: {} as Record<TransformedKey, TransformedValue> }
     );
 }

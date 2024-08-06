@@ -3,7 +3,7 @@
  */
 import * as environments from "../../../../environments";
 import * as core from "../../../../core";
-import * as Rivet from "../../..";
+import * as Rivet from "../../../index";
 import { Games } from "../resources/games/client/Client";
 import { Auth } from "../resources/auth/client/Client";
 import { Devices } from "../resources/devices/client/Client";
@@ -18,8 +18,12 @@ export declare namespace Cloud {
         fetcher?: core.FetchFunction;
     }
     interface RequestOptions {
+        /** The maximum time to wait for a response in seconds. */
         timeoutInSeconds?: number;
+        /** The number of times to retry the request. Defaults to 2. */
         maxRetries?: number;
+        /** A hook to abort the request. */
+        abortSignal?: AbortSignal;
     }
 }
 export declare class Cloud {
@@ -27,12 +31,18 @@ export declare class Cloud {
     constructor(_options?: Cloud.Options);
     /**
      * Returns the basic information required to use the cloud APIs.
+     *
+     * @param {Cloud.RequestOptions} requestOptions - Request-specific configuration.
+     *
      * @throws {@link Rivet.InternalError}
      * @throws {@link Rivet.RateLimitError}
      * @throws {@link Rivet.ForbiddenError}
      * @throws {@link Rivet.UnauthorizedError}
      * @throws {@link Rivet.NotFoundError}
      * @throws {@link Rivet.BadRequestError}
+     *
+     * @example
+     *     await client.cloud.bootstrap()
      */
     bootstrap(requestOptions?: Cloud.RequestOptions): Promise<Rivet.cloud.BootstrapResponse>;
     protected _games: Games | undefined;
