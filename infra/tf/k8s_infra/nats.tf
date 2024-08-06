@@ -14,7 +14,6 @@ resource "kubernetes_namespace" "nats" {
 	}
 }
 
-# TODO(RVTEE-105): Fix priority class
 resource "helm_release" "nats" {
 	depends_on = [null_resource.daemons]
 
@@ -46,6 +45,13 @@ resource "helm_release" "nats" {
 		}
 		promExporter = {
 			enabled = true
+		}
+		podTemplate = {
+			merge = {
+				spec = {
+					priorityClassName = kubernetes_priority_class.stateful_priority.metadata.0.name
+				}
+			}
 		}
 	})]
 }
