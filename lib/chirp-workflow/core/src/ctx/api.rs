@@ -79,7 +79,7 @@ impl ApiCtx {
 		let name = I::Workflow::NAME;
 		let id = Uuid::new_v4();
 
-		tracing::info!(%name, %id, ?input, "dispatching workflow");
+		tracing::info!(workflow_name=%name, workflow_id=%id, ?input, "dispatching workflow");
 
 		// Serialize input
 		let input_val = serde_json::to_value(input)
@@ -91,7 +91,7 @@ impl ApiCtx {
 			.await
 			.map_err(GlobalError::raw)?;
 
-		tracing::info!(%name, ?id, "workflow dispatched");
+		tracing::info!(workflow_name=%name, workflow_id=%id, "workflow dispatched");
 
 		Ok(id)
 	}
@@ -108,7 +108,7 @@ impl ApiCtx {
 		let name = I::Workflow::NAME;
 		let id = Uuid::new_v4();
 
-		tracing::info!(%name, %id, ?tags, ?input, "dispatching tagged workflow");
+		tracing::info!(workflow_name=%name, workflow_id=%id, ?tags, ?input, "dispatching tagged workflow");
 
 		// Serialize input
 		let input_val = serde_json::to_value(input)
@@ -120,7 +120,7 @@ impl ApiCtx {
 			.await
 			.map_err(GlobalError::raw)?;
 
-		tracing::info!(%name, ?id, "workflow dispatched");
+		tracing::info!(workflow_name=%name, workflow_id=%id, "tagged workflow dispatched");
 
 		Ok(id)
 	}
@@ -131,7 +131,7 @@ impl ApiCtx {
 		&self,
 		workflow_id: Uuid,
 	) -> GlobalResult<W::Output> {
-		tracing::info!(name=W::NAME, id=?workflow_id, "waiting for workflow");
+		tracing::info!(workflow_name=%W::NAME, %workflow_id, "waiting for workflow");
 
 		tokio::time::timeout(WORKFLOW_TIMEOUT, async move {
 			let mut interval = tokio::time::interval(SUB_WORKFLOW_RETRY);
@@ -188,7 +188,7 @@ impl ApiCtx {
 	) -> GlobalResult<Uuid> {
 		let signal_id = Uuid::new_v4();
 
-		tracing::info!(name=%T::NAME, %workflow_id, %signal_id, "dispatching signal");
+		tracing::info!(signal_name=%T::NAME, to_workflow_id=%workflow_id, %signal_id, "dispatching signal");
 
 		// Serialize input
 		let input_val = serde_json::to_value(input)
@@ -210,7 +210,7 @@ impl ApiCtx {
 	) -> GlobalResult<Uuid> {
 		let signal_id = Uuid::new_v4();
 
-		tracing::info!(name=%T::NAME, ?tags, %signal_id, "dispatching tagged signal");
+		tracing::info!(signal_name=%T::NAME, ?tags, %signal_id, "dispatching tagged signal");
 
 		// Serialize input
 		let input_val = serde_json::to_value(input)

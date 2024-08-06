@@ -281,7 +281,7 @@ impl WorkflowCtx {
 		activity_id: &ActivityId,
 		create_ts: i64,
 	) -> WorkflowResult<A::Output> {
-		tracing::debug!(id=%self.workflow_id, activity_name=%A::NAME, "running activity");
+		tracing::debug!(name=%self.name, id=%self.workflow_id, activity_name=%A::NAME, "running activity");
 
 		let ctx = ActivityCtx::new(
 			self.workflow_id,
@@ -422,7 +422,7 @@ impl WorkflowCtx {
 		I: WorkflowInput,
 		<I as WorkflowInput>::Workflow: Workflow<Input = I>,
 	{
-		let event = { self.relevant_history().nth(self.location_idx) };
+		let event = self.relevant_history().nth(self.location_idx);
 
 		// Signal received before
 		let id = if let Some(event) = event {
@@ -510,7 +510,7 @@ impl WorkflowCtx {
 		&self,
 		sub_workflow_id: Uuid,
 	) -> GlobalResult<W::Output> {
-		tracing::info!(name = W::NAME, ?sub_workflow_id, "waiting for workflow");
+		tracing::info!(name=%self.name, id=%self.workflow_id, sub_workflow_name=%W::NAME, ?sub_workflow_id, "waiting for workflow");
 
 		let mut retries = 0;
 		let mut interval = tokio::time::interval(SUB_WORKFLOW_RETRY);
@@ -653,7 +653,7 @@ impl WorkflowCtx {
 	{
 		let activity_id = ActivityId::new::<I::Activity>(&input);
 
-		let event = { self.relevant_history().nth(self.location_idx) };
+		let event = self.relevant_history().nth(self.location_idx);
 
 		// Activity was ran before
 		let output = if let Some(event) = event {
@@ -679,7 +679,7 @@ impl WorkflowCtx {
 
 			// Activity succeeded
 			if let Some(output) = activity.parse_output().map_err(GlobalError::raw)? {
-				tracing::debug!(id=%self.workflow_id, activity_name=%I::Activity::NAME, "replaying activity");
+				tracing::debug!(name=%self.name, id=%self.workflow_id, activity_name=%I::Activity::NAME, "replaying activity");
 
 				output
 			}
@@ -752,7 +752,7 @@ impl WorkflowCtx {
 		workflow_id: Uuid,
 		body: T,
 	) -> GlobalResult<Uuid> {
-		let event = { self.relevant_history().nth(self.location_idx) };
+		let event = self.relevant_history().nth(self.location_idx);
 
 		// Signal sent before
 		let signal_id = if let Some(event) = event {
@@ -773,14 +773,14 @@ impl WorkflowCtx {
 				.map_err(GlobalError::raw);
 			}
 
-			tracing::debug!(id=%self.workflow_id, signal_name=%signal.name, signal_id=%signal.signal_id, "replaying signal dispatch");
+			tracing::debug!(name=%self.name, id=%self.workflow_id, signal_name=%signal.name, signal_id=%signal.signal_id, "replaying signal dispatch");
 
 			signal.signal_id
 		}
 		// Send signal
 		else {
 			let signal_id = Uuid::new_v4();
-			tracing::info!(id=%self.workflow_id, signal_name=%T::NAME, to_workflow_id=%workflow_id, %signal_id, "dispatching signal");
+			tracing::info!(name=%self.name, id=%self.workflow_id, signal_name=%T::NAME, to_workflow_id=%workflow_id, %signal_id, "dispatching signal");
 
 			// Serialize input
 			let input_val = serde_json::to_value(&body)
@@ -816,7 +816,7 @@ impl WorkflowCtx {
 		tags: &serde_json::Value,
 		body: T,
 	) -> GlobalResult<Uuid> {
-		let event = { self.relevant_history().nth(self.location_idx) };
+		let event = self.relevant_history().nth(self.location_idx);
 
 		// Signal sent before
 		let signal_id = if let Some(event) = event {
@@ -837,7 +837,7 @@ impl WorkflowCtx {
 				.map_err(GlobalError::raw);
 			}
 
-			tracing::debug!(id=%self.workflow_id, signal_name=%signal.name, signal_id=%signal.signal_id, "replaying tagged signal dispatch");
+			tracing::debug!(name=%self.name, id=%self.workflow_id, signal_name=%signal.name, signal_id=%signal.signal_id, "replaying tagged signal dispatch");
 
 			signal.signal_id
 		}
@@ -845,7 +845,7 @@ impl WorkflowCtx {
 		else {
 			let signal_id = Uuid::new_v4();
 
-			tracing::info!(name=%T::NAME, ?tags, %signal_id, "dispatching tagged signal");
+			tracing::info!(name=%self.name, id=%self.workflow_id, signal_name=%T::NAME, ?tags, %signal_id, "dispatching tagged signal");
 
 			// Serialize input
 			let input_val = serde_json::to_value(&body)
@@ -878,7 +878,7 @@ impl WorkflowCtx {
 	/// Listens for a signal for a short time before setting the workflow to sleep. Once the signal is
 	/// received, the workflow will be woken up and continue.
 	pub async fn listen<T: Listen>(&mut self) -> GlobalResult<T> {
-		let event = { self.relevant_history().nth(self.location_idx) };
+		let event = self.relevant_history().nth(self.location_idx);
 
 		// Signal received before
 		let signal = if let Some(event) = event {
@@ -931,7 +931,7 @@ impl WorkflowCtx {
 		&mut self,
 		listener: &T,
 	) -> GlobalResult<<T as CustomListener>::Output> {
-		let event = { self.relevant_history().nth(self.location_idx) };
+		let event = self.relevant_history().nth(self.location_idx);
 
 		// Signal received before
 		let signal = if let Some(event) = event {
@@ -981,7 +981,7 @@ impl WorkflowCtx {
 
 	/// Checks if the given signal exists in the database.
 	pub async fn query_signal<T: Listen>(&mut self) -> GlobalResult<Option<T>> {
-		let event = { self.relevant_history().nth(self.location_idx) };
+		let event = self.relevant_history().nth(self.location_idx);
 
 		// Signal received before
 		let signal = if let Some(event) = event {
@@ -1018,7 +1018,7 @@ impl WorkflowCtx {
 	where
 		M: Message,
 	{
-		let event = { self.relevant_history().nth(self.location_idx) };
+		let event = self.relevant_history().nth(self.location_idx);
 
 		// Message sent before
 		if let Some(event) = event {
@@ -1039,11 +1039,11 @@ impl WorkflowCtx {
 				.map_err(GlobalError::raw);
 			}
 
-			tracing::debug!(id=%self.workflow_id, msg_name=%msg.name, "replaying message dispatch");
+			tracing::debug!(name=%self.name, id=%self.workflow_id, msg_name=%msg.name, "replaying message dispatch");
 		}
 		// Send message
 		else {
-			tracing::info!(id=%self.workflow_id, msg_name=%M::NAME, ?tags, "dispatching message");
+			tracing::info!(name=%self.name, id=%self.workflow_id, msg_name=%M::NAME, ?tags, "dispatching message");
 
 			// Serialize body
 			let body_val = serde_json::to_value(&body)
@@ -1077,7 +1077,7 @@ impl WorkflowCtx {
 	where
 		M: Message,
 	{
-		let event = { self.relevant_history().nth(self.location_idx) };
+		let event = self.relevant_history().nth(self.location_idx);
 
 		// Message sent before
 		if let Some(event) = event {
@@ -1098,11 +1098,11 @@ impl WorkflowCtx {
 				.map_err(GlobalError::raw);
 			}
 
-			tracing::debug!(id=%self.workflow_id, msg_name=%msg.name, "replaying message dispatch");
+			tracing::debug!(name=%self.name, id=%self.workflow_id, msg_name=%msg.name, "replaying message dispatch");
 		}
 		// Send message
 		else {
-			tracing::info!(id=%self.workflow_id, msg_name=%M::NAME, ?tags, "dispatching message");
+			tracing::info!(name=%self.name, id=%self.workflow_id, msg_name=%M::NAME, ?tags, "dispatching message");
 
 			// Serialize body
 			let body_val = serde_json::to_value(&body)
@@ -1139,10 +1139,11 @@ impl WorkflowCtx {
 		F: for<'a> FnMut(&'a mut WorkflowCtx) -> AsyncResult<'a, Loop<T>>,
 		T: Serialize + DeserializeOwned,
 	{
+		let event_location = self.location_idx;
 		let loop_location = self.full_location();
 		let mut loop_branch = self.branch();
 
-		let event = { self.relevant_history().nth(self.location_idx) };
+		let event = self.relevant_history().nth(event_location);
 
 		// Loop existed before
 		let output = if let Some(event) = event {
@@ -1175,8 +1176,6 @@ impl WorkflowCtx {
 			tracing::info!(name=%self.name, id=%self.workflow_id, "running loop");
 
 			loop {
-				let iteration_idx = loop_branch.location_idx;
-
 				let mut iteration_branch = loop_branch.branch();
 				iteration_branch.loop_location = Some(loop_location.clone());
 
@@ -1186,7 +1185,7 @@ impl WorkflowCtx {
 							.update_loop(
 								self.workflow_id,
 								loop_location.as_ref(),
-								iteration_idx,
+								loop_branch.location_idx,
 								None,
 								self.loop_location(),
 							)
@@ -1201,7 +1200,7 @@ impl WorkflowCtx {
 							.update_loop(
 								self.workflow_id,
 								loop_location.as_ref(),
-								iteration_idx,
+								loop_branch.location_idx,
 								Some(output_val),
 								self.loop_location(),
 							)

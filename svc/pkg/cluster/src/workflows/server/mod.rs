@@ -718,7 +718,7 @@ impl CustomListener for State {
 	undrain				 // if drain && !taint
 	taint				 // if !taint
 	dns create			 // if !dns && !drain && !taint
-	dns delete			 // if !(dns || drain && taint)
+	dns delete			 // if dns && (!drain || !taint)
 	nomad registered	 // always
 	nomad drain complete // if drain
 	*/
@@ -744,7 +744,7 @@ impl CustomListener for State {
 			signals.push(DnsCreate::NAME);
 		}
 
-		if !(self.has_dns || self.draining && self.is_tainted) {
+		if self.has_dns && (!self.draining || !self.is_tainted) {
 			signals.push(DnsDelete::NAME);
 		}
 

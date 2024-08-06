@@ -70,7 +70,7 @@ impl ActivityCtx {
 		I: OperationInput,
 		<I as OperationInput>::Operation: Operation<Input = I>,
 	{
-		tracing::info!(?input, "operation call");
+		tracing::info!(activity_name=%self.name, ?input, "operation call");
 
 		let ctx = OperationCtx::new(
 			self.db.clone(),
@@ -87,7 +87,7 @@ impl ActivityCtx {
 			.map_err(WorkflowError::OperationFailure)
 			.map_err(GlobalError::raw);
 
-		tracing::info!(?res, "operation response");
+		tracing::info!(activity_name=%self.name, ?res, "operation response");
 
 		res
 	}

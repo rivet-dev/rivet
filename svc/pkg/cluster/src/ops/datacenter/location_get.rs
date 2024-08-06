@@ -37,7 +37,7 @@ pub async fn cluster_datacenter_location_get(
 	let datacenters = ctx
 		.cache()
 		.fetch_all_json(
-			"cluster.datacenters.location",
+			"cluster.datacenters.location2",
 			input.datacenter_ids.clone(),
 			{
 				let ctx = ctx.clone();

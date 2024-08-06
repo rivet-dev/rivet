@@ -300,12 +300,12 @@ pub fn signal(attr: TokenStream, item: TokenStream) -> TokenStream {
 		#serde_derive
 		#item_struct
 
-		impl Signal for #struct_ident {
+		impl chirp_workflow::prelude::Signal for #struct_ident {
 			const NAME: &'static str = #name;
 		}
 
 		#[async_trait::async_trait]
-		impl Listen for #struct_ident {
+		impl chirp_workflow::prelude::Listen for #struct_ident {
 			async fn listen(ctx: &chirp_workflow::prelude::ListenCtx) -> chirp_workflow::prelude::WorkflowResult<Self> {
 				let row = ctx.listen_any(&[<Self as Signal>::NAME]).await?;
 				Self::parse(&row.signal_name, row.body)
@@ -350,7 +350,7 @@ pub fn message(attr: TokenStream, item: TokenStream) -> TokenStream {
 		#[derive(Debug)]
 		#item_struct
 
-		impl Message for #struct_ident {
+		impl chirp_workflow::prelude::Message for #struct_ident {
 			const NAME: &'static str = #name;
 			const TAIL_TTL: std::time::Duration = std::time::Duration::from_secs(#tail_ttl);
 		}

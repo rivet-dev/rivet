@@ -78,7 +78,7 @@ impl TryFrom<DatacenterRow> for Datacenter {
 pub async fn cluster_datacenter_get(ctx: &OperationCtx, input: &Input) -> GlobalResult<Output> {
 	let datacenters = ctx
 		.cache()
-		.fetch_all_json("cluster.datacenters", input.datacenter_ids.clone(), {
+		.fetch_all_json("cluster.datacenters2", input.datacenter_ids.clone(), {
 			let ctx = ctx.clone();
 			move |mut cache, datacenter_ids| {
 				let ctx = ctx.clone();

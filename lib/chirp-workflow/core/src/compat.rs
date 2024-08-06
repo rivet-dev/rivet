@@ -34,10 +34,10 @@ where
 		bail!("cannot dispatch a workflow from an operation within a workflow execution. trigger it from the workflow's body.");
 	}
 
-	let name = I::Workflow::NAME;
-	let id = Uuid::new_v4();
+	let workflow_name = I::Workflow::NAME;
+	let workflow_id = Uuid::new_v4();
 
-	tracing::info!(%name, %id, ?input, "dispatching workflow");
+	tracing::info!(%workflow_name, %workflow_id, ?input, "dispatching workflow");
 
 	// Serialize input
 	let input_val = serde_json::to_value(input)
@@ -46,13 +46,13 @@ where
 
 	db_from_ctx(ctx)
 		.await?
-		.dispatch_workflow(ctx.ray_id(), id, &name, None, input_val)
+		.dispatch_workflow(ctx.ray_id(), workflow_id, &workflow_name, None, input_val)
 		.await
 		.map_err(GlobalError::raw)?;
 
-	tracing::info!(%name, ?id, "workflow dispatched");
+	tracing::info!(%workflow_name, ?workflow_id, "workflow dispatched");
 
-	Ok(id)
+	Ok(workflow_id)
 }
 
 pub async fn dispatch_tagged_workflow<I, B>(
@@ -69,10 +69,10 @@ where
 		bail!("cannot dispatch a workflow from an operation within a workflow execution. trigger it from the workflow's body.");
 	}
 
-	let name = I::Workflow::NAME;
-	let id = Uuid::new_v4();
+	let workflow_name = I::Workflow::NAME;
+	let workflow_id = Uuid::new_v4();
 
-	tracing::info!(%name, %id, ?input, "dispatching workflow");
+	tracing::info!(%workflow_name, %workflow_id, ?input, "dispatching tagged workflow");
 
 	// Serialize input
 	let input_val = serde_json::to_value(input)
@@ -81,13 +81,19 @@ where
 
 	db_from_ctx(ctx)
 		.await?
-		.dispatch_workflow(ctx.ray_id(), id, &name, Some(tags), input_val)
+		.dispatch_workflow(
+			ctx.ray_id(),
+			workflow_id,
+			&workflow_name,
+			Some(tags),
+			input_val,
+		)
 		.await
 		.map_err(GlobalError::raw)?;
 
-	tracing::info!(%name, ?id, "workflow dispatched");
+	tracing::info!(%workflow_name, ?workflow_id, "workflow tagged dispatched");
 
-	Ok(id)
+	Ok(workflow_id)
 }
 
 /// Wait for a given workflow to complete.
@@ -96,7 +102,7 @@ pub async fn wait_for_workflow<W: Workflow, B: Debug + Clone>(
 	ctx: &rivet_operation::OperationContext<B>,
 	workflow_id: Uuid,
 ) -> GlobalResult<W::Output> {
-	tracing::info!(name=W::NAME, id=?workflow_id, "waiting for workflow");
+	tracing::info!(sub_workflow_name=W::NAME, sub_workflow_id=?workflow_id, "waiting for workflow");
 
 	tokio::time::timeout(WORKFLOW_TIMEOUT, async move {
 		let mut interval = tokio::time::interval(SUB_WORKFLOW_RETRY);
@@ -161,7 +167,7 @@ pub async fn signal<I: Signal + Serialize, B: Debug + Clone>(
 
 	let signal_id = Uuid::new_v4();
 
-	tracing::info!(name=%I::NAME, %workflow_id, %signal_id, "dispatching signal");
+	tracing::info!(signal_name=%I::NAME, to_workflow_id=%workflow_id, %signal_id, "dispatching signal");
 
 	// Serialize input
 	let input_val = serde_json::to_value(input)
@@ -188,7 +194,7 @@ pub async fn tagged_signal<I: Signal + Serialize, B: Debug + Clone>(
 
 	let signal_id = Uuid::new_v4();
 
-	tracing::info!(name=%I::NAME, ?tags, %signal_id, "dispatching tagged signal");
+	tracing::info!(signal_name=%I::NAME, ?tags, %signal_id, "dispatching tagged signal");
 
 	// Serialize input
 	let input_val = serde_json::to_value(input)

@@ -97,7 +97,7 @@ impl OperationCtx {
 	) -> GlobalResult<Uuid> {
 		let signal_id = Uuid::new_v4();
 
-		tracing::info!(name=%T::NAME, %workflow_id, %signal_id, "dispatching signal");
+		tracing::info!(signal_name=%T::NAME, %workflow_id, %signal_id, "dispatching signal");
 
 		// Serialize input
 		let input_val = serde_json::to_value(input)
@@ -119,7 +119,7 @@ impl OperationCtx {
 	) -> GlobalResult<Uuid> {
 		let signal_id = Uuid::new_v4();
 
-		tracing::info!(name=%T::NAME, ?tags, %signal_id, "dispatching tagged signal");
+		tracing::info!(signal_name=%T::NAME, ?tags, %signal_id, "dispatching tagged signal");
 
 		// Serialize input
 		let input_val = serde_json::to_value(input)

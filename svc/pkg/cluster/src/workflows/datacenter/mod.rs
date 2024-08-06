@@ -1,5 +1,8 @@
+use std::convert::TryInto;
+
 use chirp_workflow::prelude::*;
 use futures_util::FutureExt;
+use rivet_operation::prelude::{proto::backend, Message};
 use serde_json::json;
 
 pub mod scale;
@@ -245,16 +248,26 @@ struct UpdateDbInput {
 #[activity(UpdateDb)]
 async fn update_db(ctx: &ActivityCtx, input: &UpdateDbInput) -> GlobalResult<()> {
 	// Get current pools
-	let (pools,) = sql_fetch_one!(
-		[ctx, (sqlx::types::Json<Vec<Pool>>,)]
+	let (pools, pools2) = sql_fetch_one!(
+		[ctx, (Vec<u8>, Option<sqlx::types::Json<Vec<Pool>>>,)]
 		"
-		SELECT pools2 FROM db_cluster.datacenters
+		SELECT pools, pools2 FROM db_cluster.datacenters
 		WHERE datacenter_id = $1
 		",
 		input.datacenter_id,
 	)
 	.await?;
-	let mut pools = pools.0;
+	// Handle backwards compatibility
+	let mut pools = if let Some(pools) = pools2 {
+		pools.0
+	} else {
+		let proto = backend::cluster::Pools::decode(pools.as_slice())?.pools;
+
+		proto
+			.into_iter()
+			.map(TryInto::try_into)
+			.collect::<GlobalResult<Vec<_>>>()?
+	};
 
 	for pool in &input.pools {
 		let current_pool = unwrap!(
@@ -297,7 +310,7 @@ async fn update_db(ctx: &ActivityCtx, input: &UpdateDbInput) -> GlobalResult<()>
 
 	// Purge cache
 	ctx.cache()
-		.purge("cluster.datacenters", [input.datacenter_id])
+		.purge("cluster.datacenters2", [input.datacenter_id])
 		.await?;
 
 	Ok(())
