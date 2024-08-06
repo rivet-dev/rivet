@@ -31,7 +31,7 @@ User=node_exporter
 Group=node_exporter
 Type=simple
 # Reduce cardinality
-ExecStart=/usr/bin/node_exporter --collector.disable-defaults --collector.cpu --collector.conntrack --collector.meminfo --collector.filesystem --collector.filesystem.mount-points-exclude=^/opt/nomad/
+ExecStart=/usr/bin/node_exporter --collector.disable-defaults --collector.cpu --collector.netdev --collector.conntrack --collector.meminfo --collector.filesystem --collector.filesystem.mount-points-exclude=^/opt/nomad/
 Restart=always
 RestartSec=2
 

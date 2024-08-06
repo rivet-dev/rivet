@@ -61,6 +61,7 @@ async fn handle(ctx: OperationContext<tier::list::Request>) -> GlobalResult<tier
 				memory: 2u64.pow(14),
 				disk: 2u64.pow(15) * 10,
 				transfer: 6_000,
+				network_out: 6_000,
 			});
 
 			Ok(tier::list::response::Region {

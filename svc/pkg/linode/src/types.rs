@@ -8,6 +8,7 @@ pub struct InstanceType {
 	pub disk: u64,
 	pub vcpus: u64,
 	pub transfer: u64,
+	pub network_out: u64,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Hash)]

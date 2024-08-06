@@ -501,7 +501,7 @@ impl From<InstanceType> for crate::types::InstanceType {
 			disk: value.disk,
 			vcpus: value.vcpus,
 			transfer: value.transfer,
-			// network_out: value.network_out,
+			network_out: value.network_out,
 		}
 	}
 }

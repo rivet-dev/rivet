@@ -17,9 +17,13 @@ const CPU_PER_CORE: u64 = 1999;
 #[derive(Debug)]
 pub struct JobNodeConfig {
 	pub cpu_cores: u64,
+	/// Mhz
 	pub cpu: u64,
+	/// MB
 	pub memory: u64,
+	/// MB
 	pub disk: u64,
+	/// Kbps
 	pub bandwidth: u64,
 }
 
@@ -36,7 +40,7 @@ impl JobNodeConfig {
 			cpu: instance_type.vcpus * CPU_PER_CORE,
 			memory,
 			disk: instance_type.disk,
-			bandwidth: instance_type.transfer * 1000,
+			bandwidth: instance_type.network_out * 1000,
 		}
 	}
 
