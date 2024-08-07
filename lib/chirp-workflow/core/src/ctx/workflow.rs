@@ -54,10 +54,6 @@ pub struct WorkflowCtx {
 	conn: rivet_connection::Connection,
 
 	/// All events that have ever been recorded on this workflow.
-	///
-	/// If replaying, the workflow will check that the `ActivityId` is the same for all activities
-	/// to make sure the workflow hasn't diverged.
-	///
 	/// The reason this type is a hashmap is to allow querying by location.
 	event_history: Arc<HashMap<Location, Vec<Event>>>,
 	/// Input data passed to this workflow.

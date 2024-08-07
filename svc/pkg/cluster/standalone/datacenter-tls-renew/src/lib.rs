@@ -23,7 +23,6 @@ pub async fn run_from_env(pools: rivet_pools::Pools) -> GlobalResult<()> {
 		"
 		UPDATE db_cluster.datacenter_tls
 		SET state2 = $3
-		FROM db_cluster.datacenter_tls
 		WHERE
 			state2 = $1 AND
 			expire_ts < $2
