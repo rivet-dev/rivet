@@ -21,6 +21,7 @@ rivet-pools = { path = "../../../lib/pools" }
 s3-util = { path = "../../../lib/s3-util" }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
+base64 = "0.13"
 tokio = { version = "1.29" }
 tracing = "0.1"
 tracing-futures = "0.2"
@@ -32,6 +33,7 @@ build-create = { path = "../../pkg/build/ops/create" }
 build-get = { path = "../../pkg/build/ops/get" }
 build-list-for-game = { path = "../../pkg/build/ops/list-for-game" }
 cluster = { path = "../../pkg/cluster" }
+ds-log-read = { path = "../../pkg/ds-log/ops/read" }
 ds-server-create = { path = "../../pkg/ds/ops/server-create" }
 ds-server-delete = { path = "../../pkg/ds/ops/server-delete" }
 ds-server-get = { path = "../../pkg/ds/ops/server-get" }

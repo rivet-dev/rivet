@@ -170,10 +170,11 @@ Class | Method | HTTP request | Description
 *ServersApi* | [**servers_create**](docs/ServersApi.md#servers_create) | **POST** /servers | 
 *ServersApi* | [**servers_destroy**](docs/ServersApi.md#servers_destroy) | **DELETE** /servers/{server_id} | 
 *ServersApi* | [**servers_get**](docs/ServersApi.md#servers_get) | **GET** /servers/{server_id} | 
-*ServersApi* | [**servers_list**](docs/ServersApi.md#servers_list) | **GET** /servers/list | 
+*ServersApi* | [**servers_list**](docs/ServersApi.md#servers_list) | **GET** /servers | 
 *ServersBuildsApi* | [**servers_builds_complete_build**](docs/ServersBuildsApi.md#servers_builds_complete_build) | **POST** /servers/uploads/{upload_id}/complete | 
 *ServersBuildsApi* | [**servers_builds_list_builds**](docs/ServersBuildsApi.md#servers_builds_list_builds) | **GET** /servers/builds | 
 *ServersBuildsApi* | [**servers_builds_prepare_build**](docs/ServersBuildsApi.md#servers_builds_prepare_build) | **POST** /servers/builds | 
+*ServersLogsApi* | [**servers_logs_get_server_logs**](docs/ServersLogsApi.md#servers_logs_get_server_logs) | **GET** /servers/{server_id}/logs | 
 
 
 ## Documentation For Models
@@ -491,9 +492,11 @@ Class | Method | HTTP request | Description
  - [ServersCreateServerRequest](docs/ServersCreateServerRequest.md)
  - [ServersCreateServerResponse](docs/ServersCreateServerResponse.md)
  - [ServersDestroyServerResponse](docs/ServersDestroyServerResponse.md)
+ - [ServersGetServerLogsResponse](docs/ServersGetServerLogsResponse.md)
  - [ServersGetServerResponse](docs/ServersGetServerResponse.md)
  - [ServersListBuildsResponse](docs/ServersListBuildsResponse.md)
  - [ServersListServersResponse](docs/ServersListServersResponse.md)
+ - [ServersLogStream](docs/ServersLogStream.md)
  - [ServersNetwork](docs/ServersNetwork.md)
  - [ServersNetworkMode](docs/ServersNetworkMode.md)
  - [ServersPort](docs/ServersPort.md)

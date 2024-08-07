@@ -7,7 +7,7 @@ Method | HTTP request | Description
 [**servers_create**](ServersApi.md#servers_create) | **POST** /servers | 
 [**servers_destroy**](ServersApi.md#servers_destroy) | **DELETE** /servers/{server_id} | 
 [**servers_get**](ServersApi.md#servers_get) | **GET** /servers/{server_id} | 
-[**servers_list**](ServersApi.md#servers_list) | **GET** /servers/list | 
+[**servers_list**](ServersApi.md#servers_list) | **GET** /servers | 
 
 
 

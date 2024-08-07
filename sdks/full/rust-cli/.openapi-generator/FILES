@@ -357,9 +357,12 @@ docs/ServersCreateServerPortRequest.md
 docs/ServersCreateServerRequest.md
 docs/ServersCreateServerResponse.md
 docs/ServersDestroyServerResponse.md
+docs/ServersGetServerLogsResponse.md
 docs/ServersGetServerResponse.md
 docs/ServersListBuildsResponse.md
 docs/ServersListServersResponse.md
+docs/ServersLogStream.md
+docs/ServersLogsApi.md
 docs/ServersNetwork.md
 docs/ServersNetworkMode.md
 docs/ServersPort.md
@@ -415,6 +418,7 @@ src/apis/provision_datacenters_api.rs
 src/apis/provision_servers_api.rs
 src/apis/servers_api.rs
 src/apis/servers_builds_api.rs
+src/apis/servers_logs_api.rs
 src/lib.rs
 src/models/admin_clusters_build_delivery_method.rs
 src/models/admin_clusters_cluster.rs
@@ -730,9 +734,11 @@ src/models/servers_create_server_port_request.rs
 src/models/servers_create_server_request.rs
 src/models/servers_create_server_response.rs
 src/models/servers_destroy_server_response.rs
+src/models/servers_get_server_logs_response.rs
 src/models/servers_get_server_response.rs
 src/models/servers_list_builds_response.rs
 src/models/servers_list_servers_response.rs
+src/models/servers_log_stream.rs
 src/models/servers_network.rs
 src/models/servers_network_mode.rs
 src/models/servers_port.rs

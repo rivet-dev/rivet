@@ -17,6 +17,18 @@ service:
           type: uuid
       response: GetServerResponse
 
+    list:
+      path: ""
+      method: GET
+      docs: >-
+        Lists all servers associated with the token used. Can be filtered by
+        tags in the query string.
+      request:
+        name: GetServersRequest
+        query-parameters:
+          tags: optional<string>
+      response: ListServersResponse
+
     create:
       path: ""
       method: POST
@@ -43,18 +55,6 @@ service:
               time is needed, say for ignoring a graceful shutdown.
             type: optional<long>
       response: DestroyServerResponse
-
-    list:
-      path: /list
-      method: GET
-      docs: >-
-        Lists all servers associated with the token used. Can be filtered by
-        tags in the query string.
-      request:
-        name: GetServersRequest
-        query-parameters:
-          tags: optional<string>
-      response: ListServersResponse
 
 types:
   GetServerResponse:

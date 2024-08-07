@@ -1,0 +1,7 @@
+[service]
+name = "db-ds-log"
+
+[runtime]
+kind = "clickhouse"
+
+[database]

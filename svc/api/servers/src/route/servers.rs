@@ -1,5 +1,5 @@
 use api_helper::{anchor::WatchIndexQuery, ctx::Ctx};
-use proto::backend::{self, pkg::dynamic_servers};
+use proto::backend::{self, pkg::*};
 use rivet_api::models;
 use rivet_convert::{ApiFrom, ApiInto, ApiTryFrom, ApiTryInto};
 use rivet_operation::prelude::*;
@@ -145,7 +145,7 @@ pub async fn destroy(
 	})
 }
 
-// MARK: LIST /servers/list
+// MARK: GET /servers/list
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ListQuery {
 	tags: Option<String>,

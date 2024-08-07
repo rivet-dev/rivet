@@ -28,6 +28,7 @@ fn main() -> anyhow::Result<()> {
 	let root_user_enabled = std::env::var("NOMAD_META_root_user_enabled")
 		.context("NOMAD_META_root_user_enabled")?
 		== "1";
+	let runner = std::env::var("NOMAD_META_runner").unwrap_or("job_run".to_string());
 
 	let (shutdown_tx, shutdown_rx) = mpsc::sync_channel(1);
 
@@ -39,6 +40,7 @@ fn main() -> anyhow::Result<()> {
 		msg_rx,
 		job_run_id,
 		nomad_task_name,
+		runner,
 	};
 	let log_shipper_thread = log_shipper.spawn();
 
@@ -226,15 +228,14 @@ fn ship_logs(
 		for line in stream.lines() {
 			// Throttle
 			if let Err(err) = throttle_short.tick() {
-				if err.first_throttle_in_window {
-					if send_message(
+				if err.first_throttle_in_window
+					&& send_message(
 						&msg_tx,
 						Some(&mut throttle_error),
 						stream_type,
 						format_rate_limit(err.time_remaining),
 					) {
-						break;
-					}
+					break;
 				}
 				continue;
 			} else if let Err(err) = throttle_long.tick() {

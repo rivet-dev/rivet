@@ -1,0 +1,35 @@
+syntax = "proto3";
+
+package rivet.backend.pkg.ds_log.read;
+
+import "google/protobuf/empty.proto";
+import "proto/backend/ds/log.proto";
+import "proto/common.proto";
+
+message Request {
+	message NtsRangeQuery {
+		/// Timestamp in nanoseconds
+		int64 after_nts = 1;
+		/// Timestamp in nanoseconds
+		int64 before_nts = 2;
+	}
+
+	rivet.common.Uuid server_id = 1;
+	rivet.backend.ds.log.StreamType stream_type = 3;
+	int64 count = 4;
+	bool order_asc = 5;
+
+	oneof query {
+		google.protobuf.Empty all = 101;
+		/// Timestamp in nanoseconds
+		int64 before_nts = 102;
+		/// Timestamp in nanoseconds
+		int64 after_nts = 103;
+		NtsRangeQuery nts_range = 104;
+	}
+}
+
+message Response {
+	repeated rivet.backend.ds.log.LogEntry entries = 1;
+}
+

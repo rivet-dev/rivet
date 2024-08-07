@@ -82,6 +82,24 @@ resource "helm_release" "vector" {
 					}
 				}
 
+				dynamic_servers = {
+					type = "filter"
+					inputs = ["vector", "tcp_json"]
+					condition = {
+						type = "vrl"
+						source = ".source == \"dynamic_servers\""
+					}
+				}
+
+				ds_fix_id = {
+					type = "remap"
+					inputs = ["dynamic_servers"]
+					source = <<-EOF
+						.server_id = .run_id
+						del(.run_id)
+					EOF
+				}
+
 				opengb_worker = {
 					type = "filter"
 					inputs = ["http_json"]
@@ -105,6 +123,28 @@ resource "helm_release" "vector" {
 					database = "db_job_log"
 					endpoint = "https://${var.clickhouse_host}:${var.clickhouse_port_https}"
 					table = "run_logs"
+					auth = {
+						strategy = "basic"
+						user = "vector"
+						# Escape values for Vector
+						password = replace(module.secrets.values["clickhouse/users/vector/password"], "$", "$$")
+					}
+					tls = local.clickhouse_k8s ? {
+						ca_file = "/usr/local/share/ca-certificates/clickhouse-ca.crt"
+					} : {}
+					batch = {
+						# Speed up for realtime-ish logs
+						timeout_secs = 1.0
+					}
+				}
+
+				clickhouse_ds_logs = {
+					type = "clickhouse"
+					inputs = ["ds_fix_id"]
+					compression = "gzip"
+					database = "db_ds_log"
+					endpoint = "https://${var.clickhouse_host}:${var.clickhouse_port_https}"
+					table = "server_logs"
 					auth = {
 						strategy = "basic"
 						user = "vector"

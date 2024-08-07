@@ -4531,6 +4531,25 @@ components:
     ServersGameGuardRouting:
       properties: {}
       type: object
+    ServersGetServerLogsResponse:
+      properties:
+        lines:
+          description: Sorted old to new.
+          items:
+            type: string
+          type: array
+        timestamps:
+          description: Sorted old to new.
+          items:
+            type: string
+          type: array
+        watch:
+          $ref: '#/components/schemas/WatchResponse'
+      required:
+      - lines
+      - timestamps
+      - watch
+      type: object
     ServersGetServerResponse:
       properties:
         server:
@@ -4561,6 +4580,11 @@ components:
       required:
       - servers
       type: object
+    ServersLogStream:
+      enum:
+      - std_out
+      - std_err
+      type: string
     ServersNetwork:
       properties:
         mode:
@@ -13506,6 +13530,62 @@ paths:
       tags:
       - PortalGames
   /servers:
+    get:
+      description: Lists all servers associated with the token used. Can be filtered
+        by tags in the query string.
+      operationId: servers_list
+      parameters:
+      - in: query
+        name: tags
+        required: false
+        schema:
+          type: string
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServersListServersResponse'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+          description: ''
+        '408':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+          description: ''
+        '429':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+          description: ''
+        '500':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+          description: ''
+      security: *id001
+      tags:
+      - Servers
     post:
       description: Create a new dynamic server.
       operationId: servers_create
@@ -13675,63 +13755,6 @@ paths:
       security: *id001
       tags:
       - ServersBuilds
-  /servers/list:
-    get:
-      description: Lists all servers associated with the token used. Can be filtered
-        by tags in the query string.
-      operationId: servers_list
-      parameters:
-      - in: query
-        name: tags
-        required: false
-        schema:
-          type: string
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ServersListServersResponse'
-          description: ''
-        '400':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBody'
-          description: ''
-        '403':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBody'
-          description: ''
-        '404':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBody'
-          description: ''
-        '408':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBody'
-          description: ''
-        '429':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBody'
-          description: ''
-        '500':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBody'
-          description: ''
-      security: *id001
-      tags:
-      - Servers
   /servers/uploads/{upload_id}/complete:
     post:
       description: Marks an upload as complete.
@@ -13964,6 +13987,74 @@ paths:
       security: *id001
       tags:
       - Servers
+  /servers/{server_id}/logs:
+    get:
+      description: Returns the logs for a given server.
+      operationId: servers_logs_getServerLogs
+      parameters:
+      - in: path
+        name: server_id
+        required: true
+        schema:
+          format: uuid
+          type: string
+      - in: query
+        name: stream
+        required: true
+        schema:
+          $ref: '#/components/schemas/ServersLogStream'
+      - description: A query parameter denoting the requests watch index.
+        in: query
+        name: watch_index
+        required: false
+        schema:
+          type: string
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServersGetServerLogsResponse'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+          description: ''
+        '408':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+          description: ''
+        '429':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+          description: ''
+        '500':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+          description: ''
+      security: *id001
+      tags:
+      - ServersLogs
 servers:
 - description: Production
   url: https://api.rivet.gg

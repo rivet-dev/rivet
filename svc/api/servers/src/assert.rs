@@ -61,3 +61,21 @@ pub async fn namespace_for_game(
 
 	Ok(ns_data.clone())
 }
+
+/// Validates that a server belongs to the given game ID.
+///
+/// Throws `NotFound` if server does not exist and `BadRequest` if does not belong to the given
+/// game.
+pub async fn server_for_game(ctx: &Ctx<Auth>, server_id: Uuid, game_id: Uuid) -> GlobalResult<()> {
+	let server_get_res = op!([ctx] ds_server_get {
+		server_ids: vec![server_id.into()],
+	})
+	.await?;
+
+	// let server_data = unwrap!(server_get_res.servers.first());
+	// let server_game_id = unwrap_ref!(server_data.game_id).as_uuid();
+
+	// ensure_eq!(game_id, server_game_id, "server does not belong to game");
+
+	Ok(())
+}

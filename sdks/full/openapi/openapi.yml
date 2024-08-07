@@ -5000,63 +5000,6 @@ paths:
                 $ref: '#/components/schemas/ErrorBody'
       security: *ref_0
   /servers:
-    post:
-      description: Create a new dynamic server.
-      operationId: servers_create
-      tags:
-        - Servers
-      parameters: []
-      responses:
-        '200':
-          description: ''
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ServersCreateServerResponse'
-        '400':
-          description: ''
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBody'
-        '403':
-          description: ''
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBody'
-        '404':
-          description: ''
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBody'
-        '408':
-          description: ''
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBody'
-        '429':
-          description: ''
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBody'
-        '500':
-          description: ''
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBody'
-      security: *ref_0
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/ServersCreateServerRequest'
-  /servers/list:
     get:
       description: >-
         Lists all servers associated with the token used. Can be filtered by
@@ -5114,6 +5057,62 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorBody'
       security: *ref_0
+    post:
+      description: Create a new dynamic server.
+      operationId: servers_create
+      tags:
+        - Servers
+      parameters: []
+      responses:
+        '200':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServersCreateServerResponse'
+        '400':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '403':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '404':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '408':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '429':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '500':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+      security: *ref_0
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ServersCreateServerRequest'
   /admin/clusters/{cluster_id}/datacenters:
     get:
       description: Get datacenters of a cluster
@@ -9275,6 +9274,74 @@ paths:
       responses:
         '204':
           description: ''
+        '400':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '403':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '404':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '408':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '429':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '500':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+      security: *ref_0
+  /servers/{server_id}/logs:
+    get:
+      description: Returns the logs for a given server.
+      operationId: servers_logs_getServerLogs
+      tags:
+        - ServersLogs
+      parameters:
+        - name: server_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: stream
+          in: query
+          required: true
+          schema:
+            $ref: '#/components/schemas/ServersLogStream'
+        - name: watch_index
+          in: query
+          description: A query parameter denoting the requests watch index.
+          required: false
+          schema:
+            type: string
+      responses:
+        '200':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServersGetServerLogsResponse'
         '400':
           description: ''
           content:
@@ -14118,6 +14185,30 @@ components:
     ServersHostRouting:
       type: object
       properties: {}
+    ServersGetServerLogsResponse:
+      type: object
+      properties:
+        lines:
+          type: array
+          items:
+            type: string
+          description: Sorted old to new.
+        timestamps:
+          type: array
+          items:
+            type: string
+          description: Sorted old to new.
+        watch:
+          $ref: '#/components/schemas/WatchResponse'
+      required:
+        - lines
+        - timestamps
+        - watch
+    ServersLogStream:
+      type: string
+      enum:
+        - std_out
+        - std_err
     UploadPresignedRequest:
       type: object
       description: >-

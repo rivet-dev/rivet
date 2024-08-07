@@ -1,0 +1,8 @@
+[service]
+name = "bucket-ds-log-export"
+
+[runtime]
+kind = "s3"
+upload_policy = "none"
+
+[database]

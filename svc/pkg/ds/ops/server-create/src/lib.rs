@@ -627,6 +627,7 @@ pub async fn handle(
 				"vector_socket_addr".into(),
 				"image_artifact_url".into(),
 				"root_user_enabled".into(),
+				"runner".into(),
 				"user_env".into(),
 			]),
 			meta_optional: Some(vec!["rivet_test_id".into()]),
@@ -1265,6 +1266,10 @@ pub async fn handle(
 			// TODO make table dynamic host, make reference so that we can find
 			// other locations
 			value: "0".into(),
+		},
+		backend::job::Parameter {
+			key: "runner".into(),
+			value: "dynamic_servers".into(),
 		},
 		backend::job::Parameter {
 			key: "user_env".into(),

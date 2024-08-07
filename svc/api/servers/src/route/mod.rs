@@ -4,6 +4,7 @@ use rivet_api::models;
 use uuid::Uuid;
 
 pub mod builds;
+pub mod logs;
 pub mod servers;
 
 pub async fn handle(
@@ -22,32 +23,35 @@ pub async fn handle(
 define_router! {
 	routes: {
 		"" : {
+			GET: servers::list_servers(
+				query: servers::ListQuery,
+			),
 			POST: servers::create(
 				body: models::ServersCreateServerRequest,
 			),
 		},
 
-		"" / Uuid : {
+		Uuid : {
 			GET: servers::get(),
 			DELETE: servers::destroy(
 				query: servers::DeleteQuery,
 			),
 		},
 
-		"" / "list": {
-			GET: servers::list_servers(
-				query: servers::ListQuery,
+		Uuid / "logs" : {
+			GET: logs::get_logs(
+				query: logs::GetServerLogsQuery,
 			),
 		},
 
-		"" / "builds": {
+		"builds": {
 			GET: builds::get_builds(
 				query: builds::GetQuery,
 			),
 			POST: builds::create_build(body: models::ServersCreateBuildRequest),
 		},
 
-		"" / "uploads" / Uuid / "complete": {
+		"uploads" / Uuid / "complete": {
 			POST: builds::complete_build(body: serde_json::Value),
 		},
 	},

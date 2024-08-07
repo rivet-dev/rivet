@@ -36,6 +36,7 @@ pub struct LogShipper {
 
 	pub job_run_id: String,
 	pub nomad_task_name: String,
+	pub runner: String,
 }
 
 impl LogShipper {
@@ -89,12 +90,12 @@ impl LogShipper {
 
 		while let Result::Ok(message) = self.msg_rx.recv() {
 			let vector_message = VectorMessage {
-				source: "job_run",
+				source: self.runner.as_str(),
 				run_id: self.job_run_id.as_str(),
 				task: self.nomad_task_name.as_str(),
 				stream_type: message.stream_type as u8,
 				ts: message.ts,
-				message: &message.message,
+				message: message.message.as_str(),
 			};
 
 			serde_json::to_writer(&mut stream, &vector_message)?;
@@ -110,7 +111,7 @@ impl LogShipper {
 /// Vector-compatible message format
 #[derive(Serialize)]
 struct VectorMessage<'a> {
-	source: &'static str,
+	source: &'a str,
 	run_id: &'a str,
 	task: &'a str,
 	stream_type: u8,

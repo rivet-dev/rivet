@@ -238,7 +238,7 @@ async fn update_db(
 				[ctx, @tx tx]
 				"
 				INSERT INTO
-					db_dynamic_servers.server_ports (
+					db_dynamic_servers.internal_ports (
 						server_id,
 						nomad_label,
 						nomad_source,

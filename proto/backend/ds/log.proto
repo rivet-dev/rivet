@@ -1,0 +1,19 @@
+syntax = "proto3";
+
+package rivet.backend.ds.log;
+
+import "proto/common.proto";
+
+enum StreamType {
+	STD_OUT = 0;
+	STD_ERR = 1;
+}
+
+message LogEntry {
+	// Timestamp the log was received (in nanoseconds).
+	int64 nts = 1;
+
+	// Message that was logged.
+	bytes message = 3;
+}
+
