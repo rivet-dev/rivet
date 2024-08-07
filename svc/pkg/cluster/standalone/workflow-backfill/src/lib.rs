@@ -330,10 +330,25 @@ pub async fn run_from_env() -> GlobalResult<()> {
 				cluster::workflows::datacenter::CreateComplete {},
 			)?;
 
-			wf.signal(
-				"cluster-datacenter-scale",
-				cluster::workflows::datacenter::Scale {},
-			)?;
+			// Scale
+			wf.sub_workflow(|swf| {
+				#[derive(Serialize, Hash)]
+				struct CalculateDiffInput {
+					datacenter_id: Uuid,
+				}
+
+				swf.activity(
+					"calculate_diff",
+					CalculateDiffInput {
+						datacenter_id: dc.datacenter_id,
+					},
+					json!({
+						"actions": [],
+					}),
+				)?;
+
+				Ok(())
+			})?;
 
 			Ok(())
 		})?;

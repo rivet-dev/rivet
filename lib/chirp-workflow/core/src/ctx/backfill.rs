@@ -56,6 +56,20 @@ impl BackfillCtx {
 
 		Ok(workflow_id)
 	}
+
+	pub fn existing_workflow<F>(&mut self, workflow_id: Uuid, builder: F) -> GlobalResult<()>
+	where
+		F: Fn(&mut WorkflowBackfillCtx) -> GlobalResult<()>,
+	{
+		let mut wf_ctx = WorkflowBackfillCtx::new("");
+		wf_ctx.workflow_id = workflow_id;
+
+		builder(&mut wf_ctx)?;
+
+		self.queries.extend(wf_ctx.queries);
+
+		Ok(())
+	}
 }
 
 pub struct WorkflowBackfillCtx {
@@ -121,6 +135,12 @@ impl WorkflowBackfillCtx {
 			.map(|x| x as i64)
 			.chain(std::iter::once(self.location_idx as i64))
 			.collect()
+	}
+
+	pub fn set_location(&mut self, location: &[usize]) {
+		assert!(!location.is_empty(), "empty location");
+		self.root_location = Box::from(&location[..location.len() - 1]);
+		self.location_idx = *location.last().unwrap();
 	}
 
 	pub fn finalize(&mut self) {
@@ -307,8 +327,6 @@ impl WorkflowBackfillCtx {
 		builder(&mut swf_ctx)?;
 
 		self.queries.extend(swf_ctx.queries);
-
-		self.location_idx += 1;
 
 		Ok(())
 	}

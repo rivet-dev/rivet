@@ -80,3 +80,22 @@ pub(crate) fn new_conn(
 
 	rivet_connection::Connection::new(client, pools.clone(), cache.clone())
 }
+
+pub fn format_location(loc: &Location) -> String {
+	let mut s = "{".to_string();
+
+	let mut iter = loc.iter();
+
+	if let Some(x) = iter.next() {
+		s.push_str(&x.to_string());
+	}
+
+	for x in iter {
+		s.push_str(", ");
+		s.push_str(&x.to_string());
+	}
+
+	s.push_str("}");
+
+	s
+}

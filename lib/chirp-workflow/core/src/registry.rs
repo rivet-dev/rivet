@@ -31,7 +31,9 @@ impl Registry {
 		// Check for duplicates
 		for (workflow_name, _) in &registry.workflows {
 			if self.workflows.contains_key(workflow_name.as_str()) {
-				return Err(WorkflowError::DuplicateRegisteredWorkflow(workflow_name.clone()));
+				return Err(WorkflowError::DuplicateRegisteredWorkflow(
+					workflow_name.clone(),
+				));
 			}
 		}
 
@@ -43,7 +45,9 @@ impl Registry {
 	pub fn register_workflow<W: Workflow>(&mut self) -> WorkflowResult<()> {
 		// Check for duplicates
 		if self.workflows.contains_key(W::NAME) {
-			return Err(WorkflowError::DuplicateRegisteredWorkflow(W::NAME.to_string()));
+			return Err(WorkflowError::DuplicateRegisteredWorkflow(
+				W::NAME.to_string(),
+			));
 		}
 
 		self.workflows.insert(

@@ -18,7 +18,7 @@ use crate::{
 	metrics,
 	registry::RegistryHandle,
 	signal::Signal,
-	util::{GlobalErrorExt, Location},
+	util::{self, GlobalErrorExt, Location},
 	workflow::{Workflow, WorkflowInput},
 };
 
@@ -165,6 +165,11 @@ impl WorkflowCtx {
 			.cloned()
 			.chain(std::iter::once(self.location_idx))
 			.collect()
+	}
+
+	/// For debugging, pretty prints the current location
+	fn loc(&self) -> String {
+		util::format_location(&self.full_location())
 	}
 
 	pub(crate) fn loop_location(&self) -> Option<&[usize]> {
@@ -429,7 +434,8 @@ impl WorkflowCtx {
 			// Validate history is consistent
 			let Event::SubWorkflow(sub_workflow) = event else {
 				return Err(WorkflowError::HistoryDiverged(format!(
-					"expected {event}, found sub workflow {}",
+					"expected {event} at {}, found sub workflow {}",
+					self.loc(),
 					I::Workflow::NAME
 				)))
 				.map_err(GlobalError::raw);
@@ -437,7 +443,8 @@ impl WorkflowCtx {
 
 			if sub_workflow.name != I::Workflow::NAME {
 				return Err(WorkflowError::HistoryDiverged(format!(
-					"expected {event}, found sub_workflow {}",
+					"expected {event} at {}, found sub_workflow {}",
+					self.loc(),
 					I::Workflow::NAME
 				)))
 				.map_err(GlobalError::raw);
@@ -660,7 +667,8 @@ impl WorkflowCtx {
 			// Validate history is consistent
 			let Event::Activity(activity) = event else {
 				return Err(WorkflowError::HistoryDiverged(format!(
-					"expected {event}, found activity {}",
+					"expected {event} at {}, found activity {}",
+					self.loc(),
 					activity_id.name
 				)))
 				.map_err(GlobalError::raw);
@@ -668,9 +676,10 @@ impl WorkflowCtx {
 
 			if activity.activity_id != activity_id {
 				return Err(WorkflowError::HistoryDiverged(format!(
-					"expected activity {}#{:x}, found activity {}#{:x}",
+					"expected activity {}#{:x} at {}, found activity {}#{:x}",
 					activity.activity_id.name,
 					activity.activity_id.input_hash,
+					self.loc(),
 					activity_id.name,
 					activity_id.input_hash,
 				)))
@@ -759,7 +768,8 @@ impl WorkflowCtx {
 			// Validate history is consistent
 			let Event::SignalSend(signal) = event else {
 				return Err(WorkflowError::HistoryDiverged(format!(
-					"expected {event}, found signal send {}",
+					"expected {event} at {}, found signal send {}",
+					self.loc(),
 					T::NAME
 				)))
 				.map_err(GlobalError::raw);
@@ -767,7 +777,8 @@ impl WorkflowCtx {
 
 			if signal.name != T::NAME {
 				return Err(WorkflowError::HistoryDiverged(format!(
-					"expected {event}, found signal send {}",
+					"expected {event} at {}, found signal send {}",
+					self.loc(),
 					T::NAME
 				)))
 				.map_err(GlobalError::raw);
@@ -823,7 +834,8 @@ impl WorkflowCtx {
 			// Validate history is consistent
 			let Event::SignalSend(signal) = event else {
 				return Err(WorkflowError::HistoryDiverged(format!(
-					"expected {event}, found signal send {}",
+					"expected {event} at {}, found signal send {}",
+					self.loc(),
 					T::NAME
 				)))
 				.map_err(GlobalError::raw);
@@ -831,7 +843,8 @@ impl WorkflowCtx {
 
 			if signal.name != T::NAME {
 				return Err(WorkflowError::HistoryDiverged(format!(
-					"expected {event}, found signal send {}",
+					"expected {event} at {}, found signal send {}",
+					self.loc(),
 					T::NAME
 				)))
 				.map_err(GlobalError::raw);
@@ -885,7 +898,8 @@ impl WorkflowCtx {
 			// Validate history is consistent
 			let Event::Signal(signal) = event else {
 				return Err(WorkflowError::HistoryDiverged(format!(
-					"expected {event}, found signal"
+					"expected {event} at {}, found signal",
+					self.loc(),
 				)))
 				.map_err(GlobalError::raw);
 			};
@@ -938,7 +952,8 @@ impl WorkflowCtx {
 			// Validate history is consistent
 			let Event::Signal(signal) = event else {
 				return Err(WorkflowError::HistoryDiverged(format!(
-					"expected {event}, found signal"
+					"expected {event} at {}, found signal",
+					self.loc(),
 				)))
 				.map_err(GlobalError::raw);
 			};
@@ -990,7 +1005,8 @@ impl WorkflowCtx {
 			// Validate history is consistent
 			let Event::Signal(signal) = event else {
 				return Err(WorkflowError::HistoryDiverged(format!(
-					"expected {event}, found signal"
+					"expected {event} at {}, found signal",
+					self.loc(),
 				)))
 				.map_err(GlobalError::raw);
 			};
@@ -1025,16 +1041,18 @@ impl WorkflowCtx {
 			// Validate history is consistent
 			let Event::MessageSend(msg) = event else {
 				return Err(WorkflowError::HistoryDiverged(format!(
-					"expected {event}, found message send {}",
-					M::NAME
+					"expected {event} at {}, found message send {}",
+					self.loc(),
+					M::NAME,
 				)))
 				.map_err(GlobalError::raw);
 			};
 
 			if msg.name != M::NAME {
 				return Err(WorkflowError::HistoryDiverged(format!(
-					"expected {event}, found message send {}",
-					M::NAME
+					"expected {event} at {}, found message send {}",
+					self.loc(),
+					M::NAME,
 				)))
 				.map_err(GlobalError::raw);
 			}
@@ -1084,16 +1102,18 @@ impl WorkflowCtx {
 			// Validate history is consistent
 			let Event::MessageSend(msg) = event else {
 				return Err(WorkflowError::HistoryDiverged(format!(
-					"expected {event}, found message send {}",
-					M::NAME
+					"expected {event} at {}, found message send {}",
+					self.loc(),
+					M::NAME,
 				)))
 				.map_err(GlobalError::raw);
 			};
 
 			if msg.name != M::NAME {
 				return Err(WorkflowError::HistoryDiverged(format!(
-					"expected {event}, found message send {}",
-					M::NAME
+					"expected {event} at {}, found message send {}",
+					self.loc(),
+					M::NAME,
 				)))
 				.map_err(GlobalError::raw);
 			}
@@ -1150,7 +1170,8 @@ impl WorkflowCtx {
 			// Validate history is consistent
 			let Event::Loop(loop_event) = event else {
 				return Err(WorkflowError::HistoryDiverged(format!(
-					"expected {event}, found loop"
+					"expected {event} at {}, found loop",
+					self.loc(),
 				)))
 				.map_err(GlobalError::raw);
 			};
