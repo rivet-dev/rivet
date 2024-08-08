@@ -122,6 +122,7 @@ pub async fn build<'a, T: AsRef<str>>(ctx: &ProjectContext, opts: BuildOpts<'a, 
 		export RUSTFLAGS="--cfg tokio_unstable"
 		# Used for debugging
 		export CARGO_LOG=cargo::core::compiler::fingerprint=info
+		export CARGO_TERM_COLOR=always
 
 		{sccache_env}
 
@@ -231,6 +232,7 @@ pub async fn build<'a, T: AsRef<str>>(ctx: &ProjectContext, opts: BuildOpts<'a, 
 			cmd.env("DOCKER_BUILDKIT", "1");
 			cmd.current_dir(ctx.path());
 			cmd.arg("build");
+			cmd.arg("--progress").arg("plain");
 			cmd.arg("-f").arg(dockerfile_path);
 			// Prints plain console output for debugging
 			// cmd.arg("--progress=plain");
@@ -289,6 +291,7 @@ pub async fn build<'a, T: AsRef<str>>(ctx: &ProjectContext, opts: BuildOpts<'a, 
 				cmd.env("DOCKER_BUILDKIT", "1");
 				cmd.current_dir(ctx.path());
 				cmd.arg("build");
+				cmd.arg("--progress").arg("plain");
 				cmd.arg("-f").arg(dockerfile_path);
 				// Prints plain console output for debugging
 				// cmd.arg("--progress=plain");
@@ -493,6 +496,7 @@ pub async fn build_tests<'a, T: AsRef<str>>(
 		cmd.env("DOCKER_BUILDKIT", "1");
 		cmd.current_dir(ctx.path());
 		cmd.arg("build");
+		cmd.arg("--progress").arg("plain");
 		cmd.arg("-f").arg(dockerfile_path);
 		// Prints plain console output for debugging
 		// cmd.arg("--progress=plain");
