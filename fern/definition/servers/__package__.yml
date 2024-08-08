@@ -27,6 +27,7 @@ service:
         name: GetServersRequest
         query-parameters:
           tags: optional<string>
+          game_id: optional<uuid>
       response: ListServersResponse
 
     create:

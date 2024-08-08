@@ -15,6 +15,7 @@ use crate::auth::Auth;
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct GetQuery {
 	tags: Option<String>,
+	game_id: Option<Uuid>,
 }
 
 pub async fn get_builds(
@@ -22,7 +23,11 @@ pub async fn get_builds(
 	_watch_index: WatchIndexQuery,
 	query: GetQuery,
 ) -> GlobalResult<models::ServersListBuildsResponse> {
-	let game_id = ctx.auth().check_game_service_or_cloud_token().await?;
+	let game_id = if let Some(game_id) = query.game_id {
+		game_id
+	} else {
+		ctx.auth().check_game_service_or_cloud_token().await?
+	};
 
 	let list_res = op!([ctx] build_list_for_game {
 		game_id: Some(game_id.into()),

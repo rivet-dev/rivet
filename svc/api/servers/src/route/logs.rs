@@ -14,6 +14,7 @@ use crate::{assert, auth::Auth};
 #[derive(Debug, Deserialize)]
 pub struct GetServerLogsQuery {
 	pub stream: models::CloudGamesLogStream,
+	pub game_id: Option<Uuid>,
 }
 
 pub async fn get_logs(
@@ -22,7 +23,11 @@ pub async fn get_logs(
 	watch_index: WatchIndexQuery,
 	query: GetServerLogsQuery,
 ) -> GlobalResult<models::ServersGetServerLogsResponse> {
-	let game_id = ctx.auth().check_game_service_or_cloud_token().await?;
+	let game_id = if let Some(game_id) = query.game_id {
+		game_id
+	} else {
+		ctx.auth().check_game_service_or_cloud_token().await?
+	};
 
 	// ctx.auth()
 	// 	.check_game_read_or_admin(ctx.op_ctx(), game_id)

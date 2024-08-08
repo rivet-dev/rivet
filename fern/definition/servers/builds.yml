@@ -19,6 +19,7 @@ service:
         name: GetBuildsRequest
         query-parameters:
           tags: optional<string>
+          game_id: optional<uuid>
       response: ListBuildsResponse
 
     prepareBuild:

@@ -149,6 +149,7 @@ pub async fn destroy(
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ListQuery {
 	tags: Option<String>,
+	game_id: Option<Uuid>,
 }
 
 pub async fn list_servers(
@@ -156,7 +157,11 @@ pub async fn list_servers(
 	_watch_index: WatchIndexQuery,
 	query: ListQuery,
 ) -> GlobalResult<models::ServersListServersResponse> {
-	let game_id = ctx.auth().check_game_service_or_cloud_token().await?;
+	let game_id = if let Some(game_id) = query.game_id {
+		game_id
+	} else {
+		ctx.auth().check_game_service_or_cloud_token().await?
+	};
 
 	let list_res = op!([ctx] ds_server_list_for_game {
 		game_id: Some(game_id.into()),

@@ -21,6 +21,7 @@ service:
         name: GetServerLogsRequest
         query-parameters:
           stream: LogStream
+          game_id: optional<uuid>
           watch_index:
             docs: A query parameter denoting the requests watch index.
             type: optional<string>
