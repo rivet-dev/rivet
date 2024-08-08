@@ -1,4 +1,4 @@
-use api_helper::define_router;
+use api_helper::{define_router, util::CorsConfigBuilder};
 use hyper::{Body, Request, Response};
 use rivet_api::models;
 use uuid::Uuid;
@@ -21,6 +21,7 @@ pub async fn handle(
 }
 
 define_router! {
+	cors: CorsConfigBuilder::hub().build(),
 	routes: {
 		"" : {
 			GET: servers::list_servers(
