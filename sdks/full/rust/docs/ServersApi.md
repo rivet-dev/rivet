@@ -104,7 +104,7 @@ Name | Type | Description  | Required | Notes
 
 ## servers_list
 
-> crate::models::ServersListServersResponse servers_list(tags)
+> crate::models::ServersListServersResponse servers_list(tags, game_id)
 
 
 Lists all servers associated with the token used. Can be filtered by tags in the query string.
@@ -115,6 +115,7 @@ Lists all servers associated with the token used. Can be filtered by tags in the
 Name | Type | Description  | Required | Notes
 ------------- | ------------- | ------------- | ------------- | -------------
 **tags** | Option<**String**> |  |  |
+**game_id** | Option<**uuid::Uuid**> |  |  |
 
 ### Return type
 

@@ -13,7 +13,8 @@ import (
 )
 
 type GetBuildsRequest struct {
-	Tags *string `json:"-"`
+	Tags   *string    `json:"-"`
+	GameId *uuid.UUID `json:"-"`
 }
 
 type CreateBuildRequest struct {

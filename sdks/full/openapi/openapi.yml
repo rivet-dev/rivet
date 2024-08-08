@@ -5013,6 +5013,12 @@ paths:
           required: false
           schema:
             type: string
+        - name: game_id
+          in: query
+          required: false
+          schema:
+            type: string
+            format: uuid
       responses:
         '200':
           description: ''
@@ -9158,6 +9164,12 @@ paths:
           required: false
           schema:
             type: string
+        - name: game_id
+          in: query
+          required: false
+          schema:
+            type: string
+            format: uuid
       responses:
         '200':
           description: ''
@@ -9329,6 +9341,12 @@ paths:
           required: true
           schema:
             $ref: '#/components/schemas/ServersLogStream'
+        - name: game_id
+          in: query
+          required: false
+          schema:
+            type: string
+            format: uuid
         - name: watch_index
           in: query
           description: A query parameter denoting the requests watch index.

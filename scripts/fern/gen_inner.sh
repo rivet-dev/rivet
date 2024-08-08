@@ -10,6 +10,9 @@ set -euf -o pipefail
 # $ yarn
 # $ yarn compile
 # $ yarn dist:cli:dev
+# $ docker image ls | grep fern
+# $ docker image rm <id of the typescript image>
+# $ docker builder prune
 #
 # Finally, run this with the path to the fern repo, say:
 # $ FERN_REPO_PATH=~/fern ./oss/scripts/fern/gen.sh

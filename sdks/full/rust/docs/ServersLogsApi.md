@@ -10,7 +10,7 @@ Method | HTTP request | Description
 
 ## servers_logs_get_server_logs
 
-> crate::models::ServersGetServerLogsResponse servers_logs_get_server_logs(server_id, stream, watch_index)
+> crate::models::ServersGetServerLogsResponse servers_logs_get_server_logs(server_id, stream, game_id, watch_index)
 
 
 Returns the logs for a given server.
@@ -22,6 +22,7 @@ Name | Type | Description  | Required | Notes
 ------------- | ------------- | ------------- | ------------- | -------------
 **server_id** | **uuid::Uuid** |  | [required] |
 **stream** | [**ServersLogStream**](.md) |  | [required] |
+**game_id** | Option<**uuid::Uuid**> |  |  |
 **watch_index** | Option<**String**> | A query parameter denoting the requests watch index. |  |
 
 ### Return type

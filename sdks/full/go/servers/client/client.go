@@ -134,6 +134,9 @@ func (c *Client) List(ctx context.Context, request *servers.GetServersRequest) (
 	if request.Tags != nil {
 		queryParams.Add("tags", fmt.Sprintf("%v", *request.Tags))
 	}
+	if request.GameId != nil {
+		queryParams.Add("game_id", fmt.Sprintf("%v", *request.GameId))
+	}
 	if len(queryParams) > 0 {
 		endpointURL += "?" + queryParams.Encode()
 	}

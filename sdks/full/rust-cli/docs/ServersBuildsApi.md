@@ -42,7 +42,7 @@ Name | Type | Description  | Required | Notes
 
 ## servers_builds_list_builds
 
-> crate::models::ServersListBuildsResponse servers_builds_list_builds(tags)
+> crate::models::ServersListBuildsResponse servers_builds_list_builds(tags, game_id)
 
 
 Lists all builds of the game associated with the token used. Can be filtered by tags in the query string.
@@ -53,6 +53,7 @@ Lists all builds of the game associated with the token used. Can be filtered by 
 Name | Type | Description  | Required | Notes
 ------------- | ------------- | ------------- | ------------- | -------------
 **tags** | Option<**String**> |  |  |
+**game_id** | Option<**uuid::Uuid**> |  |  |
 
 ### Return type
 
