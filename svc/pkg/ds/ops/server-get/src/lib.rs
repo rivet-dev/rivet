@@ -15,6 +15,7 @@ struct Server {
 	kill_timeout_ms: i64,
 	webhook_url: Option<String>,
 	create_ts: i64,
+	start_ts: Option<i64>,
 	destroy_ts: Option<i64>,
 	image_id: Uuid,
 	args: Vec<String>,
@@ -84,6 +85,7 @@ pub async fn handle(
 				kill_timeout_ms,
 				webhook_url,
 				create_ts,
+				start_ts,
 				destroy_ts,
 				image_id,
 				args,
@@ -223,6 +225,7 @@ pub async fn handle(
 				network_mode: server.network_mode.try_into()?,
 				network_ports: ports,
 				create_ts: server.create_ts,
+				start_ts: server.start_ts,
 				destroy_ts: server.destroy_ts,
 			};
 

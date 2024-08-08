@@ -14101,6 +14101,9 @@ components:
         create_ts:
           type: integer
           format: int64
+        start_ts:
+          type: integer
+          format: int64
         destroy_ts:
           type: integer
           format: int64

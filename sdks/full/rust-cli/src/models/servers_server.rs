@@ -38,6 +38,8 @@ pub struct ServersServer {
     pub resources: Box<crate::models::ServersResources>,
     #[serde(rename = "server_id")]
     pub server_id: uuid::Uuid,
+    #[serde(rename = "start_ts", skip_serializing_if = "Option::is_none")]
+    pub start_ts: Option<i64>,
     #[serde(rename = "tags", deserialize_with = "Option::deserialize")]
     pub tags: Option<serde_json::Value>,
 }
@@ -57,6 +59,7 @@ impl ServersServer {
             network: Box::new(network),
             resources: Box::new(resources),
             server_id,
+            start_ts: None,
             tags,
         }
     }

@@ -1402,6 +1402,7 @@ pub async fn handle(
 			kill_timeout_ms: ctx.kill_timeout_ms,
 			webhook_url: ctx.webhook_url.clone(),
 			create_ts,
+			start_ts: None,
 			destroy_ts: None,
 			args: ctx.args.clone(),
 			environment: ctx.environment.clone(),

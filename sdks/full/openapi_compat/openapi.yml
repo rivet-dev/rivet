@@ -4690,6 +4690,9 @@ components:
         server_id:
           format: uuid
           type: string
+        start_ts:
+          format: int64
+          type: integer
         tags: {}
       required:
       - server_id

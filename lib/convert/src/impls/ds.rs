@@ -13,6 +13,7 @@ impl ApiTryFrom<backend::ds::Server> for models::ServersServer {
 		Ok(models::ServersServer {
 			cluster_id: unwrap!(value.cluster_id).as_uuid(),
 			create_ts: value.create_ts,
+			start_ts: value.start_ts,
 			datacenter_id: unwrap!(value.datacenter_id).as_uuid(),
 			destroy_ts: value.destroy_ts,
 			game_id: unwrap!(value.game_id).as_uuid(),

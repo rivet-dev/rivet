@@ -314,6 +314,7 @@ type Server struct {
 	// The duration to wait for in milliseconds before killing the server. This should be set to a safe default, and can be overridden during a DELETE request if needed.
 	KillTimeout *int64 `json:"kill_timeout,omitempty"`
 	CreateTs    int64  `json:"create_ts"`
+	StartTs     *int64 `json:"start_ts,omitempty"`
 	DestroyTs   *int64 `json:"destroy_ts,omitempty"`
 
 	_rawJSON json.RawMessage

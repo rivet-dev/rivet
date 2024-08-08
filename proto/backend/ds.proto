@@ -16,13 +16,13 @@ message Server {
     int64 kill_timeout_ms = 7;
     optional string webhook_url = 8;
     int64 create_ts = 9;
-    optional int64 destroy_ts = 10;
-    rivet.common.Uuid image_id = 11;
-    repeated string args = 12;
-    NetworkMode network_mode = 13;
-    map<string, string> environment = 14;
-    map<string, Port> network_ports = 15;
-    
+    optional int64 start_ts = 10;
+    optional int64 destroy_ts = 11;
+    rivet.common.Uuid image_id = 12;
+    repeated string args = 13;
+    NetworkMode network_mode = 14;
+    map<string, string> environment = 15;
+    map<string, Port> network_ports = 16;
 }
 
 message ServerResources {

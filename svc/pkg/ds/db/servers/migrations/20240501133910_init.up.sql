@@ -13,6 +13,7 @@ CREATE TABLE servers (
 	webhook_url STRING,
 	
 	create_ts INT NOT NULL,
+	start_ts INT,
 	stop_ts INT,
 	finish_ts INT,
 	cleanup_ts INT,
