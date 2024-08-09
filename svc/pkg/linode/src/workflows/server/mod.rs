@@ -27,10 +27,13 @@ pub struct Input {
 #[workflow]
 pub async fn linode_server(ctx: &mut WorkflowCtx, input: &Input) -> GlobalResult<()> {
 	let mut cleanup_ctx = CleanupCtx::default();
-	let provision_res = match provision(ctx, input, &mut cleanup_ctx).await {
+
+	let res = provision(ctx, input, &mut cleanup_ctx).await;
+	let provision_res = match ctx.catch_unrecoverable(res)? {
+		Ok(x) => x,
 		// If we cannot recover a provisioning error, send a failed signal and clean up resources
-		Err(err) if !err.is_workflow_recoverable() => {
-			tracing::warn!(?err);
+		Err(err) => {
+			tracing::warn!(?err, "unrecoverable provision, cleaning up");
 
 			ctx.dispatch_workflow(cleanup::Input {
 				api_token: input.api_token.clone(),
@@ -51,7 +54,6 @@ pub async fn linode_server(ctx: &mut WorkflowCtx, input: &Input) -> GlobalResult
 			// Throw the original error from the provisioning activities
 			return Err(err);
 		}
-		x => x?,
 	};
 
 	ctx.tagged_signal(

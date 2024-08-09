@@ -751,6 +751,20 @@ impl WorkflowCtx {
 		tokio::task::spawn(async move { closure(f).execute(&mut ctx).await })
 	}
 
+	/// Tests if the given error is unrecoverable. If it is, allows the user to run recovery code safely.
+	/// Should always be used when trying to handle activity errors manually.
+	pub fn catch_unrecoverable<T>(&mut self, res: GlobalResult<T>) -> GlobalResult<GlobalResult<T>> {
+		match res {
+			Err(err) if !err.is_workflow_recoverable() => {
+				self.location_idx += 1;
+
+				Ok(Err(err))
+			}
+			Err(err) => Err(err),
+			Ok(x) => Ok(Ok(x)),
+		}
+	}
+
 	/// Sends a signal.
 	pub async fn signal<T: Signal + Serialize>(
 		&mut self,

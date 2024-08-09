@@ -865,7 +865,7 @@ impl Database for DatabasePostgres {
 			sqlx::query(indoc!(
 				"
 				INSERT INTO db_workflow.workflow_message_send_events(
-					workflow_id, location, tags, message_name, body
+					workflow_id, location, tags, message_name, body, loop_location
 				)
 				VALUES($1, $2, $3, $4, $5, $6)
 				RETURNING 1
