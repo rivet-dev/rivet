@@ -44,7 +44,7 @@ async fn worker(
 	ctx: &OperationContext<nomad::msg::monitor_alloc_plan::Message>,
 ) -> GlobalResult<()> {
 	let PlanResult { allocation: alloc } = serde_json::from_str::<PlanResult>(&ctx.payload_json)?;
-	tracing::info!(?alloc, "from noamddd");
+	tracing::info!(?alloc, "from nomad");
 
 	let job_id = unwrap_ref!(alloc.job_id, "alloc has no job id");
 	let alloc_id = unwrap_ref!(alloc.ID);
