@@ -94,7 +94,7 @@ async fn print_test_data(ctx: TestCtx) {
 				)),
 			}]},
 		)),
-		label: Some("game_service".to_owned()),
+		label: Some("cloud".to_owned()),
 		..Default::default()
 	})
 	.await
@@ -128,7 +128,6 @@ async fn print_test_data(ctx: TestCtx) {
 		cloud_token = ?cloud_token_res.token.clone().unwrap().token,
 		invalid_token = ?invalid_token.token.clone().unwrap().token,
 		build_id = ?build_res.build_id.unwrap(),
-		game_id = ?game_id,
 		"test data");
 	//
 	// let runtime = Some(

@@ -1,10 +1,9 @@
 use std::{convert::Infallible, env, net::SocketAddr, process::Command};
 
 use anyhow::{Context, Result};
-use tokio::{
-	io::{AsyncBufReadExt, AsyncWriteExt},
-	net::{TcpListener, UdpSocket},
-};
+use futures_util::{sink::SinkExt, stream::StreamExt};
+use tokio::net::{TcpListener, UdpSocket};
+use tokio_util::codec::{BytesCodec, Framed};
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -22,44 +21,21 @@ async fn main() -> Result<()> {
 		String::from_utf8_lossy(&output.stdout)
 	);
 
-	// TEMP: Expose dev port
-	tokio::spawn(with_select_term(echo_http_server(28234)));
+	// Echo servers
+	if let Ok(http_port) = env::var("HTTP_PORT") {
+		let http_port: u16 = http_port.parse()?;
+		tokio::spawn(with_select_term(echo_http_server(http_port)));
+	}
 
-	// TODO: Add back
-	// Echo servers (bridge networking)
-	// if let Ok(http_port) = env::var("PORT_test_http") {
-	// 	let http_port: u16 = http_port.parse()?;
-	// 	tokio::spawn(with_select_term(echo_http_server(http_port)));
-	// }
-	//
-	// if let Ok(tcp_port) = env::var("PORT_test_tcp") {
-	// 	let tcp_port: u16 = tcp_port.parse()?;
-	// 	tokio::spawn(with_select_term(echo_tcp_server(tcp_port)));
-	// }
-	//
-	// if let Ok(udp_port) = env::var("PORT_test_udp") {
-	// 	let udp_port: u16 = udp_port.parse()?;
-	// 	tokio::spawn(with_select_term(echo_udp_server(udp_port)));
-	// }
-	//
-	// // Echo servers (host networking)
-	// if let Ok(http_port) = env::var("HOST_PORT_HTTP") {
-	// 	let http_port: u16 = http_port.parse()?;
-	// 	tokio::spawn(with_select_term(echo_http_server(http_port)));
-	// }
-	//
-	// if let Ok(tcp_port) = env::var("HOST_PORT_TCP") {
-	// 	let tcp_port: u16 = tcp_port.parse()?;
-	// 	tokio::spawn(with_select_term(echo_tcp_server(tcp_port)));
-	// }
-	//
-	// if let Ok(udp_port) = env::var("HOST_PORT_UDP") {
-	// 	let udp_port: u16 = udp_port.parse()?;
-	// 	tokio::spawn(with_select_term(echo_udp_server(udp_port)));
-	// }
+	if let Ok(tcp_port) = env::var("TCP_PORT") {
+		let tcp_port: u16 = tcp_port.parse()?;
+		tokio::spawn(with_select_term(echo_tcp_server(tcp_port)));
+	}
 
-	// Lobby ready
-	// lobby_ready().await?;
+	if let Ok(udp_port) = env::var("UDP_PORT") {
+		let udp_port: u16 = udp_port.parse()?;
+		tokio::spawn(with_select_term(echo_udp_server(udp_port)));
+	}
 
 	// Wait indefinitely
 	println!("Waiting indefinitely...");
@@ -68,25 +44,6 @@ async fn main() -> Result<()> {
 
 	Ok(())
 }
-
-// async fn lobby_ready() -> Result<()> {
-// 	let url = format!(
-// 		"{}/matchmaker/lobbies/ready",
-// 		env::var("RIVET_API_ENDPOINT").context("RIVET_API_ENDPOINT")?
-// 	);
-// 	let token = env::var("RIVET_TOKEN").context("RIVET_TOKEN")?;
-//
-// 	let client = reqwest::Client::new();
-// 	client
-// 		.post(&url)
-// 		.header("Content-Type", "application/json")
-// 		.header("Authorization", format!("Bearer {}", token))
-// 		.send()
-// 		.await?;
-//
-// 	println!("Success, waiting indefinitely");
-// 	Ok(())
-// }
 
 /// Waits for the SIGTERM signal.
 async fn wait_term() -> Result<()> {
@@ -141,22 +98,13 @@ async fn echo_tcp_server(port: u16) -> Result<()> {
 	loop {
 		let (socket, _) = listener.accept().await.context("accept failed")?;
 		tokio::spawn(async move {
-			let mut reader = tokio::io::BufReader::new(socket);
-			let mut line = String::new();
-			loop {
-				let bytes_read = reader.read_line(&mut line).await.expect("read line failed");
-				if bytes_read == 0 {
-					break;
-				}
+			let mut framed = Framed::new(socket, BytesCodec::new());
 
-				// Echo the line
-				reader
-					.get_mut()
-					.write_all(format!("{line}\n").as_bytes())
+			while let Some(res) = framed.next().await {
+				framed
+					.send(res.expect("read failed"))
 					.await
 					.expect("write failed");
-				reader.get_mut().flush().await.expect("flush failed");
-				line.clear();
 			}
 		});
 	}
