@@ -157,7 +157,6 @@ async fn create_http() -> GlobalResult<()> {
 			environment: Some(HashMap::new()),
 			image: ctx.image_id,
 			kill_timeout: Some(0),
-			webhook_url: None,
 			tags: None,
 			network: Box::new(models::ServersCreateServerNetworkRequest {
 				mode: Some(models::ServersNetworkMode::Bridge),
@@ -202,7 +201,6 @@ async fn list_builds_with_tags() -> GlobalResult<()> {
 			environment: Some(HashMap::new()),
 			image: ctx.image_id,
 			kill_timeout: Some(0),
-			webhook_url: None,
 			tags: None,
 			network: Box::new(models::ServersCreateServerNetworkRequest {
 				mode: Some(models::ServersNetworkMode::Bridge),

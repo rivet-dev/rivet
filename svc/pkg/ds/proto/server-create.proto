@@ -6,13 +6,14 @@ import "proto/common.proto";
 import "proto/backend/ds.proto";
 
 message Request {
+	reserved 8;
+
     rivet.common.Uuid game_id = 1;
     rivet.common.Uuid datacenter_id = 2;
     rivet.common.Uuid cluster_id = 3;
     map<string, string> tags = 5;
     rivet.backend.ds.ServerResources resources = 6;
     int64 kill_timeout_ms = 7;
-    optional string webhook_url = 8;
     rivet.common.Uuid image_id = 9;
     repeated string args = 10;
     rivet.backend.ds.NetworkMode network_mode = 11;

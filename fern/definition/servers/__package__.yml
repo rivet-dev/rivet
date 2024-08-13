@@ -79,10 +79,6 @@ types:
           This should be set to a safe default, and can be overridden during a
           DELETE request if needed.
         type: optional<long>
-      webhook_url:
-        docs: >-
-          A url to send to which events from the server running will be sent
-        type: optional<string>
 
   CreateServerNetworkRequest:
     properties:

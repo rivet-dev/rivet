@@ -104,11 +104,8 @@ pub fn billing(team_id: Uuid) -> String {
 	format!("{}/groups/{}/billing", origin_hub(), team_id)
 }
 
-pub fn opengb_env(project_name_id: &str, env_name_id: &str) -> GlobalResult<String> {
+pub fn backend_endpoint(backend_slug: &str) -> GlobalResult<String> {
 	let domain_main = unwrap!(domain_main(), "dns not enabled");
 
-	Ok(format!(
-		"https://{}--{}.backend.{}",
-		project_name_id, env_name_id, domain_main,
-	))
+	Ok(format!("https://{}.backend.{}", backend_slug, domain_main,))
 }

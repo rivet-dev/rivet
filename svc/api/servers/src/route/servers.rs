@@ -74,7 +74,6 @@ pub async fn create(
 		tags: tags,
 		resources: Some((*body.resources).api_into()),
 		kill_timeout_ms: body.kill_timeout.unwrap_or_default(),
-		webhook_url: body.webhook_url,
 		image_id: Some(body.image.into()),
 		args: body.arguments.unwrap_or_default(),
 		network_mode: backend::ds::NetworkMode::api_from(

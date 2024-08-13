@@ -105,7 +105,7 @@ async fn create(ctx: TestCtx) {
 		datacenter_id: faker_region.region_id,
 		resources: Some(proto::backend::ds::ServerResources { cpu_millicores: 100, memory_mib: 200 }),
 		kill_timeout_ms: 0,
-		webhook_url: Some("https://rivettest.free.beeceptor.com".to_string()),
+		// webhook_url: Some("https://rivettest.free.beeceptor.com".to_string()),
 		tags: vec![(String::from("test"), String::from("123"))]
 			.into_iter()
 			.collect(),

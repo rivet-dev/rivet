@@ -7,6 +7,8 @@ import "proto/backend/captcha.proto";
 import "proto/backend/region.proto";
 
 message Server {
+	reserved 8;
+
     rivet.common.Uuid server_id = 1;
     rivet.common.Uuid game_id = 2;
     rivet.common.Uuid datacenter_id = 3;
@@ -14,7 +16,6 @@ message Server {
     map<string, string> tags = 5;
     rivet.backend.ds.ServerResources resources = 6;
     int64 kill_timeout_ms = 7;
-    optional string webhook_url = 8;
     int64 create_ts = 9;
     optional int64 start_ts = 10;
     optional int64 destroy_ts = 11;

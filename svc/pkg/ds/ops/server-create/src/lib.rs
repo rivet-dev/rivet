@@ -192,7 +192,6 @@ pub async fn handle(
 								resources_cpu_millicores,
 								resources_memory_mib,
 								kill_timeout_ms,
-								webhook_url,
 								create_ts,
 								image_id,
 								args,
@@ -247,7 +246,6 @@ pub async fn handle(
 				resources.cpu_millicores,
 				resources.memory_mib,
 				ctx.kill_timeout_ms,
-				ctx.webhook_url.clone(),
 				create_ts, // 10
 				unwrap!(ctx.image_id).as_uuid(),
 				&ctx.args,
@@ -1400,7 +1398,6 @@ pub async fn handle(
 				memory_mib: resources.memory_mib,
 			}),
 			kill_timeout_ms: ctx.kill_timeout_ms,
-			webhook_url: ctx.webhook_url.clone(),
 			create_ts,
 			start_ts: None,
 			destroy_ts: None,

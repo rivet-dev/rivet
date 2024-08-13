@@ -10,7 +10,6 @@ CREATE TABLE servers (
 	resources_cpu_millicores INT NOT NULL,
 	resources_memory_mib INT NOT NULL,
 	kill_timeout_ms INT NOT NULL,
-	webhook_url STRING,
 	
 	create_ts INT NOT NULL,
 	start_ts INT,
