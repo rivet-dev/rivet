@@ -1,12 +1,12 @@
 syntax = "proto3";
 
-package rivet.backend.pkg.dynamic_servers.server_list_for_game;
+package rivet.backend.pkg.dynamic_servers.server_list_for_env;
 
 import "proto/common.proto";
 import "proto/backend/ds.proto";
 
 message Request {
-	rivet.common.Uuid game_id = 1;
+	rivet.common.Uuid env_id = 1;
 	map<string, string> tags = 2; // JSON
 }
 

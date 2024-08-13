@@ -12,6 +12,7 @@ prost = "0.10"
 util-build = { package = "rivet-util-build", path = "../../util" }
 
 game-get = { path = "../../../game/ops/get" }
+game-namespace-get = { path = "../../../game/ops/namespace-get" }
 upload-prepare = { path = "../../../upload/ops/prepare" }
 
 [dependencies.sqlx]

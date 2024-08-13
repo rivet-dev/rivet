@@ -6,7 +6,7 @@ use std::collections::HashMap;
 #[derive(sqlx::FromRow)]
 struct Server {
 	server_id: Uuid,
-	game_id: Uuid,
+	env_id: Uuid,
 	datacenter_id: Uuid,
 	cluster_id: Uuid,
 	tags: serde_json::Value,
@@ -75,7 +75,7 @@ pub async fn handle(
 			"
 			SELECT
 				server_id,
-				game_id,
+				env_id,
 				datacenter_id,
 				cluster_id,
 				tags,
@@ -207,7 +207,7 @@ pub async fn handle(
 
 			let server_proto = backend::ds::Server {
 				server_id: Some(server.server_id.into()),
-				game_id: Some(server.game_id.into()),
+				env_id: Some(server.env_id.into()),
 				datacenter_id: Some(server.datacenter_id.into()),
 				cluster_id: Some(server.cluster_id.into()),
 				tags,

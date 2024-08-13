@@ -33,14 +33,14 @@ uuid = { version = "1", features = ["v4"] }
 
 build-create = { path = "../../pkg/build/ops/create" }
 build-get = { path = "../../pkg/build/ops/get" }
-build-list-for-game = { path = "../../pkg/build/ops/list-for-game" }
+build-list-for-env = { path = "../../pkg/build/ops/list-for-env" }
 cluster = { path = "../../pkg/cluster" }
 build = { path = "../../pkg/build" }
 ds-log-read = { path = "../../pkg/ds-log/ops/read" }
 ds-server-create = { path = "../../pkg/ds/ops/server-create" }
 ds-server-delete = { path = "../../pkg/ds/ops/server-delete" }
 ds-server-get = { path = "../../pkg/ds/ops/server-get" }
-ds-server-list-for-game = { path = "../../pkg/ds/ops/server-list-for-game" }
+ds-server-list-for-env = { path = "../../pkg/ds/ops/server-list-for-env" }
 game-get = { path = "../../pkg/game/ops/get" }
 game-namespace-get = { path = "../../pkg/game/ops/namespace-get" }
 game-version-get = { path = "../../pkg/game/ops/version-get" }

@@ -7,7 +7,8 @@ import "proto/backend/upload.proto";
 import "proto/backend/build.proto";
 
 message Request {
-	rivet.common.Uuid game_id = 1;
+	optional rivet.common.Uuid game_id = 1;
+	optional rivet.common.Uuid env_id = 10;
 	string display_name = 2;
 	optional string image_tag = 4;
 	optional rivet.backend.upload.PrepareFile image_file = 3;

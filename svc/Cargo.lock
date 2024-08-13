@@ -800,7 +800,7 @@ dependencies = [
  "build",
  "build-create",
  "build-get",
- "build-list-for-game",
+ "build-list-for-env",
  "cdn-namespace-domain-create",
  "chirp-client",
  "chrono",
@@ -812,7 +812,7 @@ dependencies = [
  "ds-server-create",
  "ds-server-delete",
  "ds-server-get",
- "ds-server-list-for-game",
+ "ds-server-list-for-env",
  "faker-build",
  "faker-game",
  "faker-game-namespace",
@@ -1616,6 +1616,7 @@ dependencies = [
  "faker-game",
  "faker-user",
  "game-get",
+ "game-namespace-get",
  "prost 0.10.4",
  "reqwest 0.11.27",
  "rivet-operation",
@@ -1651,6 +1652,19 @@ dependencies = [
 
 [[package]]
 name = "build-get"
+version = "0.0.1"
+dependencies = [
+ "chirp-client",
+ "chirp-worker",
+ "faker-build",
+ "faker-game",
+ "prost 0.10.4",
+ "rivet-operation",
+ "sqlx 0.7.4 (git+https://github.com/rivet-gg/sqlx?rev=08d6e61aa0572e7ec557abbedb72cebb96e1ac5b)",
+]
+
+[[package]]
+name = "build-list-for-env"
 version = "0.0.1"
 dependencies = [
  "chirp-client",
@@ -3136,7 +3150,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "ds-server-list-for-game"
+name = "ds-server-list-for-env"
 version = "0.0.1"
 dependencies = [
  "chirp-client",

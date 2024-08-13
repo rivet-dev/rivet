@@ -11,20 +11,27 @@ use util::timestamp;
 
 use crate::auth::Auth;
 
-// MARK: GET /games/{}/builds/{}
+// MARK: GET /games/{}/environments/{}/builds/{}
 pub async fn get(
 	ctx: Ctx<Auth>,
 	game_id: Uuid,
+	env_id: Uuid,
 	build_id: Uuid,
 	_watch_index: WatchIndexQuery,
 ) -> GlobalResult<models::ServersGetBuildResponse> {
-	ctx.auth().check_game(ctx.op_ctx(), game_id, true).await?;
+	ctx.auth()
+		.check_game(ctx.op_ctx(), game_id, env_id, true)
+		.await?;
 
 	let builds_res = op!([ctx] build_get {
 		build_ids: vec![build_id.into()],
 	})
 	.await?;
-	let build = unwrap!(builds_res.builds.first());
+	let build = unwrap!(builds_res.builds.first(), BUILDS_BUILD_NOT_FOUND);
+	ensure_with!(
+		unwrap!(build.env_id).as_uuid() == env_id,
+		BUILDS_BUILD_NOT_FOUND
+	);
 
 	let uploads_res = op!([ctx] upload_get {
 		upload_ids: builds_res
@@ -49,7 +56,7 @@ pub async fn get(
 	})
 }
 
-// MARK: GET /games/{}/builds
+// MARK: GET /games/{}/environments/{}/builds
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct GetQuery {
 	tags_json: Option<String>,
@@ -58,13 +65,16 @@ pub struct GetQuery {
 pub async fn list(
 	ctx: Ctx<Auth>,
 	game_id: Uuid,
+	env_id: Uuid,
 	_watch_index: WatchIndexQuery,
 	query: GetQuery,
 ) -> GlobalResult<models::ServersListBuildsResponse> {
-	ctx.auth().check_game(ctx.op_ctx(), game_id, true).await?;
+	ctx.auth()
+		.check_game(ctx.op_ctx(), game_id, env_id, true)
+		.await?;
 
-	let list_res = op!([ctx] build_list_for_game {
-		game_id: Some(game_id.into()),
+	let list_res = op!([ctx] build_list_for_env {
+		env_id: Some(env_id.into()),
 		tags: query.tags_json.as_deref().map_or(Ok(HashMap::new()), serde_json::from_str)?,
 	})
 	.await?;
@@ -121,14 +131,17 @@ pub async fn list(
 	})
 }
 
-// MARK: PATCH /games/{}/builds/{}/tags
+// MARK: PATCH /games/{}/environments/{}/builds/{}/tags
 pub async fn patch_tags(
 	ctx: Ctx<Auth>,
 	game_id: Uuid,
+	env_id: Uuid,
 	build_id: Uuid,
 	body: models::ServersPatchBuildTagsRequest,
 ) -> GlobalResult<serde_json::Value> {
-	ctx.auth().check_game(ctx.op_ctx(), game_id, false).await?;
+	ctx.auth()
+		.check_game(ctx.op_ctx(), game_id, env_id, false)
+		.await?;
 
 	let tags: HashMap<String, String> =
 		serde_json::from_value::<HashMap<String, String>>(unwrap!(body.tags))?;
@@ -148,13 +161,16 @@ pub async fn patch_tags(
 	Ok(json!({}))
 }
 
-// MARK: POST /games/{}/builds/prepare
+// MARK: POST /games/{}/environments/{}/builds/prepare
 pub async fn create_build(
 	ctx: Ctx<Auth>,
 	game_id: Uuid,
+	env_id: Uuid,
 	body: models::ServersCreateBuildRequest,
 ) -> GlobalResult<models::ServersCreateBuildResponse> {
-	ctx.auth().check_game(ctx.op_ctx(), game_id, false).await?;
+	ctx.auth()
+		.check_game(ctx.op_ctx(), game_id, env_id, false)
+		.await?;
 
 	// TODO: Read and validate image file
 
@@ -175,7 +191,7 @@ pub async fn create_build(
 	};
 
 	let create_res = op!([ctx] build_create {
-		game_id: Some(game_id.into()),
+		env_id: Some(env_id.into()),
 		display_name: body.name,
 		image_tag: Some(body.image_tag),
 		image_file: Some((*body.image_file).api_try_into()?),
@@ -220,10 +236,13 @@ pub async fn create_build(
 pub async fn complete_build(
 	ctx: Ctx<Auth>,
 	game_id: Uuid,
+	env_id: Uuid,
 	build_id: Uuid,
 	_body: serde_json::Value,
 ) -> GlobalResult<serde_json::Value> {
-	ctx.auth().check_game(ctx.op_ctx(), game_id, false).await?;
+	ctx.auth()
+		.check_game(ctx.op_ctx(), game_id, env_id, false)
+		.await?;
 
 	let build_res = op!([ctx] build_get {
 		build_ids: vec![build_id.into()],
@@ -232,7 +251,7 @@ pub async fn complete_build(
 	let build = unwrap_with!(build_res.builds.first(), BUILDS_BUILD_NOT_FOUND);
 
 	ensure_with!(
-		unwrap!(build.game_id).as_uuid() == game_id,
+		unwrap!(build.env_id).as_uuid() == env_id,
 		BUILDS_BUILD_NOT_FOUND
 	);
 

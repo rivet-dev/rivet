@@ -1,5 +1,5 @@
 [service]
-name = "ds-server-list-for-game"
+name = "ds-server-list-for-env"
 
 [runtime]
 kind = "rust"

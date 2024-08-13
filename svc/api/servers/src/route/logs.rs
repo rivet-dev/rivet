@@ -10,7 +10,7 @@ use std::time::Duration;
 
 use crate::{assert, auth::Auth};
 
-// MARK: GET /games/{}/servers/{}/logs
+// MARK: GET /games/{}/environments/{}/servers/{}/logs
 #[derive(Debug, Deserialize)]
 pub struct GetServerLogsQuery {
 	pub stream: models::CloudGamesLogStream,
@@ -19,11 +19,14 @@ pub struct GetServerLogsQuery {
 pub async fn get_logs(
 	ctx: Ctx<Auth>,
 	game_id: Uuid,
+	env_id: Uuid,
 	server_id: Uuid,
 	watch_index: WatchIndexQuery,
 	query: GetServerLogsQuery,
 ) -> GlobalResult<models::ServersGetServerLogsResponse> {
-	ctx.auth().check_game(ctx.op_ctx(), game_id, false).await?;
+	ctx.auth()
+		.check_game(ctx.op_ctx(), game_id, env_id, false)
+		.await?;
 
 	// Validate server belongs to game
 	assert::server_for_game(&ctx, server_id, game_id).await?;

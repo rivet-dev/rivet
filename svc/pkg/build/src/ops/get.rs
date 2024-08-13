@@ -17,7 +17,8 @@ pub struct Output {
 #[derive(sqlx::FromRow)]
 struct BuildRow {
 	build_id: Uuid,
-	game_id: Uuid,
+	game_id: Option<Uuid>,
+	env_id: Option<Uuid>,
 	upload_id: Uuid,
 	display_name: String,
 	image_tag: String,
@@ -34,6 +35,7 @@ impl TryInto<types::Build> for BuildRow {
 		Ok(types::Build {
 			build_id: self.build_id,
 			game_id: self.game_id,
+			env_id: self.env_id,
 			upload_id: self.upload_id,
 			display_name: self.display_name,
 			image_tag: self.image_tag,
@@ -55,6 +57,7 @@ pub async fn get(ctx: &OperationCtx, input: &Input) -> GlobalResult<Output> {
         SELECT
             build_id,
             game_id,
+            env_id,
             upload_id,
             display_name,
             image_tag,

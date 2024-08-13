@@ -1,0 +1,3 @@
+ALTER TABLE builds ALTER COLUMN game_id DROP NOT NULL;
+ALTER TABLE builds ADD env_id UUID;
+

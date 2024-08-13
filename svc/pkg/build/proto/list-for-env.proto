@@ -1,0 +1,14 @@
+syntax = "proto3";
+
+package rivet.backend.pkg.build.list_for_env;
+
+import "proto/common.proto";
+
+message Request {
+	rivet.common.Uuid env_id = 1;
+	map<string, string> tags = 2; // JSON
+}
+
+message Response {
+	repeated rivet.common.Uuid build_ids = 1;
+}

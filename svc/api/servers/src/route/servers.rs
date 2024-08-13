@@ -8,14 +8,17 @@ use std::collections::HashMap;
 
 use crate::{assert, auth::Auth};
 
-// MARK: GET /games/{}/servers/{}
+// MARK: GET /games/{}/environments/{}/servers/{}
 pub async fn get(
 	ctx: Ctx<Auth>,
 	game_id: Uuid,
+	env_id: Uuid,
 	server_id: Uuid,
 	_watch_index: WatchIndexQuery,
 ) -> GlobalResult<models::ServersGetServerResponse> {
-	ctx.auth().check_game(ctx.op_ctx(), game_id, true).await?;
+	ctx.auth()
+		.check_game(ctx.op_ctx(), game_id, env_id, true)
+		.await?;
 
 	// Get the server
 	let get_res = op!([ctx] ds_server_get {
@@ -26,7 +29,7 @@ pub async fn get(
 
 	// Validate token can access server
 	ensure_with!(
-		unwrap!(server.game_id).as_uuid() == game_id,
+		unwrap!(server.env_id).as_uuid() == env_id && unwrap!(server.env_id).as_uuid() == env_id,
 		SERVERS_SERVER_NOT_FOUND
 	);
 
@@ -35,21 +38,23 @@ pub async fn get(
 	})
 }
 
-// MARK: POST /games/{}/servers
+// MARK: POST /games/{}/environments/{}/servers
 pub async fn create(
 	ctx: Ctx<Auth>,
 	game_id: Uuid,
+	env_id: Uuid,
 	body: models::ServersCreateServerRequest,
 ) -> GlobalResult<models::ServersCreateServerResponse> {
-	ctx.auth().check_game(ctx.op_ctx(), game_id, true).await?;
+	ctx.auth()
+		.check_game(ctx.op_ctx(), game_id, env_id, true)
+		.await?;
 
-	let games = ctx
+	let clusters_get = ctx
 		.op(cluster::ops::get_for_game::Input {
 			game_ids: vec![game_id],
 		})
-		.await?
-		.games;
-	let cluster_id = unwrap!(games.first()).cluster_id;
+		.await?;
+	let cluster_id = unwrap!(clusters_get.games.first()).cluster_id;
 
 	let datacenters = ctx
 		.op(cluster::ops::datacenter::list::Input {
@@ -68,7 +73,7 @@ pub async fn create(
 	tracing::info!(?tags, "creating server with tags");
 
 	let server = op!([ctx] ds_server_create {
-		game_id: Some(game_id.into()),
+		env_id: Some(env_id.into()),
 		datacenter_id: Some(body.datacenter.into()),
 		cluster_id: Some(cluster_id.into()),
 		tags: tags,
@@ -121,7 +126,7 @@ pub async fn create(
 	})
 }
 
-// MARK: DELETE /games/{}/servers/{}
+// MARK: DELETE /games/{}/environments/{}/servers/{}
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DeleteQuery {
 	override_kill_timeout: Option<i64>,
@@ -130,10 +135,13 @@ pub struct DeleteQuery {
 pub async fn destroy(
 	ctx: Ctx<Auth>,
 	game_id: Uuid,
+	env_id: Uuid,
 	server_id: Uuid,
 	query: DeleteQuery,
 ) -> GlobalResult<serde_json::Value> {
-	ctx.auth().check_game(ctx.op_ctx(), game_id, true).await?;
+	ctx.auth()
+		.check_game(ctx.op_ctx(), game_id, env_id, true)
+		.await?;
 
 	assert::server_for_game(&ctx, server_id, game_id).await?;
 
@@ -146,7 +154,7 @@ pub async fn destroy(
 	Ok(serde_json::json!({}))
 }
 
-// MARK: GET /games/{}/servers
+// MARK: GET /games/{}/environments/{}/servers
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ListQuery {
 	tags_json: Option<String>,
@@ -155,10 +163,13 @@ pub struct ListQuery {
 pub async fn list_servers(
 	ctx: Ctx<Auth>,
 	game_id: Uuid,
+	env_id: Uuid,
 	_watch_index: WatchIndexQuery,
 	query: ListQuery,
 ) -> GlobalResult<models::ServersListServersResponse> {
-	ctx.auth().check_game(ctx.op_ctx(), game_id, true).await?;
+	ctx.auth()
+		.check_game(ctx.op_ctx(), game_id, env_id, true)
+		.await?;
 
 	let list_res = op!([ctx] ds_server_list_for_game {
 		game_id: Some(game_id.into()),

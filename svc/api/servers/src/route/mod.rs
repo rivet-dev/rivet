@@ -23,7 +23,7 @@ pub async fn handle(
 define_router! {
 	cors: CorsConfigBuilder::hub().build(),
 	routes: {
-		"games" / Uuid / "servers": {
+		"games" / Uuid / "environments" / Uuid / "servers": {
 			GET: servers::list_servers(
 				query: servers::ListQuery,
 			),
@@ -32,38 +32,38 @@ define_router! {
 			),
 		},
 
-		"games" / Uuid / "servers" / Uuid: {
+		"games" / Uuid / "environments" / Uuid / "servers" / Uuid: {
 			GET: servers::get(),
 			DELETE: servers::destroy(
 				query: servers::DeleteQuery,
 			),
 		},
 
-		"games" / Uuid / "servers" / Uuid / "logs" : {
+		"games" / Uuid / "environments" / Uuid / "servers" / Uuid / "logs" : {
 			GET: logs::get_logs(
 				query: logs::GetServerLogsQuery,
 			),
 		},
 
-		"games" / Uuid / "builds": {
+		"games" / Uuid / "environments" / Uuid / "builds": {
 			GET: builds::list(
 				query: builds::GetQuery,
 			),
 		},
 
-		"games" / Uuid / "builds" / Uuid: {
+		"games" / Uuid / "environments" / Uuid / "builds" / Uuid: {
 			GET: builds::get(),
 		},
 
-		"games" / Uuid / "builds" / Uuid / "tags": {
+		"games" / Uuid / "environments" / Uuid / "builds" / Uuid / "tags": {
 			PATCH: builds::patch_tags(body: models::ServersPatchBuildTagsRequest),
 		},
 
-		"games" / Uuid / "builds" / "prepare": {
+		"games" / Uuid / "environments" / Uuid / "builds" / "prepare": {
 			POST: builds::create_build(body: models::ServersCreateBuildRequest),
 		},
 
-		"games" / Uuid / "builds" / Uuid / "complete": {
+		"games" / Uuid / "environments" / Uuid / "builds" / Uuid / "complete": {
 			POST: builds::complete_build(body: serde_json::Value),
 		},
 	},

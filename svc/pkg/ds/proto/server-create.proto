@@ -8,7 +8,7 @@ import "proto/backend/ds.proto";
 message Request {
 	reserved 8;
 
-    rivet.common.Uuid game_id = 1;
+    rivet.common.Uuid env_id = 1;
     rivet.common.Uuid datacenter_id = 2;
     rivet.common.Uuid cluster_id = 3;
     map<string, string> tags = 5;

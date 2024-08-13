@@ -10,7 +10,7 @@ message Server {
 	reserved 8;
 
     rivet.common.Uuid server_id = 1;
-    rivet.common.Uuid game_id = 2;
+    rivet.common.Uuid env_id = 2;
     rivet.common.Uuid datacenter_id = 3;
     rivet.common.Uuid cluster_id = 4;
     map<string, string> tags = 5;

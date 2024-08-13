@@ -1,14 +1,14 @@
 [package]
-name = "ds-server-list-for-game"
+name = "build-list-for-env"
 version = "0.0.1"
 edition = "2021"
 authors = ["Rivet Gaming, LLC <developer@rivet.gg>"]
 license = "Apache-2.0"
 
 [dependencies]
-chirp-client = { path = "../../../../../lib/chirp/client" }
 rivet-operation = { path = "../../../../../lib/operation/core" }
-util-ds = { package = "rivet-util-ds", path = "../../util" }
+chirp-client = { path = "../../../../../lib/chirp/client" }
+prost = "0.10"
 
 [dependencies.sqlx]
 git = "https://github.com/rivet-gg/sqlx"
@@ -17,3 +17,6 @@ default-features = false
 
 [dev-dependencies]
 chirp-worker = { path = "../../../../../lib/chirp/worker" }
+
+faker-build = { path = "../../../faker/ops/build" }
+faker-game = { path = "../../../faker/ops/game" }

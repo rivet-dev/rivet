@@ -47,10 +47,25 @@ impl Auth {
 		&self,
 		ctx: &OperationContext<()>,
 		game_id: Uuid,
+		env_id: Uuid,
 		allow_service: bool,
 	) -> GlobalResult<()> {
 		let claims = self.claims()?;
 
+		// Get the game this env belongs to
+		let ns_res = op!([ctx] game_namespace_get {
+			namespace_ids: vec![env_id.into()],
+		})
+		.await?;
+		let env = unwrap!(ns_res.namespaces.first(), GAME_ENVIRONMENT_NOT_FOUND);
+
+		// Ensure belongs to game
+		ensure_with!(
+			unwrap!(env.game_id).as_uuid() == game_id,
+			GAME_ENVIRONMENT_NOT_FOUND
+		);
+
+		// Validate token
 		if let Ok(cloud_ent) = claims.as_game_cloud() {
 			ensure_with!(
 				cloud_ent.game_id == game_id,

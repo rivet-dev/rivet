@@ -73,7 +73,7 @@ members = [
 	"pkg/ds/ops/server-create",
 	"pkg/ds/ops/server-delete",
 	"pkg/ds/ops/server-get",
-	"pkg/ds/ops/server-list-for-game",
+	"pkg/ds/ops/server-list-for-env",
 	"pkg/ds/worker",
 	"pkg/email-verification/ops/complete",
 	"pkg/email-verification/ops/create",

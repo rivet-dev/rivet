@@ -17,7 +17,8 @@ pub enum BuildCompression {
 #[derive(Debug)]
 pub struct Build {
 	pub build_id: Uuid,
-	pub game_id: Uuid,
+	pub game_id: Option<Uuid>,
+	pub env_id: Option<Uuid>,
 	pub upload_id: Uuid,
 	pub display_name: String,
 	pub image_tag: String,

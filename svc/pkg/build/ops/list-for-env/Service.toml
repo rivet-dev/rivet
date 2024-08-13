@@ -1,0 +1,10 @@
+[service]
+name = "build-list-for-env"
+
+[runtime]
+kind = "rust"
+
+[operation]
+
+[databases]
+db-build = {}

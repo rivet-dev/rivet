@@ -10,19 +10,30 @@ async fn handle(
 	let kind = unwrap!(backend::build::BuildKind::from_i32(ctx.kind));
 	let compression = unwrap!(backend::build::BuildCompression::from_i32(ctx.compression));
 
-	let game_id = **unwrap_ref!(ctx.game_id);
+	let game_id = ctx.game_id.map(|x| x.as_uuid());
+	let env_id = ctx.env_id.map(|x| x.as_uuid());
 	ensure!(
 		util::check::display_name_long(&ctx.display_name),
 		"invalid display name"
 	);
 
 	// Validate game exists
-	let game_res = op!([ctx] game_get {
-		game_ids: vec![game_id.into()],
-	})
-	.await?;
-	let game = game_res.games.first();
-	ensure!(game.is_some(), "game not found");
+	if let Some(game_id) = game_id {
+		let game_res = op!([ctx] game_get {
+			game_ids: vec![game_id.into()],
+		})
+		.await?;
+		let game = game_res.games.first();
+		ensure!(game.is_some(), "game not found");
+	}
+	if let Some(env_id) = env_id {
+		let env_res = op!([ctx] game_namespace_get {
+			namespace_ids: vec![env_id.into()],
+		})
+		.await?;
+		let env = env_res.namespaces.first();
+		ensure!(env.is_some(), "game not found");
+	}
 
 	let (image_tag, upload_id, image_presigned_requests) =
 		if let Some(build_kind) = &ctx.default_build_kind {
@@ -102,6 +113,7 @@ async fn handle(
 			db_build.builds (
 				build_id,
 				game_id,
+				env_id,
 				upload_id,
 				display_name,
 				image_tag,
@@ -114,6 +126,7 @@ async fn handle(
 		",
 		build_id,
 		game_id,
+		env_id,
 		upload_id,
 		&ctx.display_name,
 		image_tag,

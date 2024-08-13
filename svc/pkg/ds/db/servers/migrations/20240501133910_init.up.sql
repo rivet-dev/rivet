@@ -1,6 +1,6 @@
 CREATE TABLE servers (
 	server_id UUID PRIMARY KEY,
-	game_id UUID NOT NULL,
+	env_id UUID NOT NULL,
 	datacenter_id UUID NOT NULL,
 	-- The server will be locked to a certain cluster, but a game might change
 	-- clusters, and therefore the server will be moved to a new cluster.
@@ -26,7 +26,7 @@ CREATE TABLE servers (
 	-- This is a map<string, string>
 	environment JSONB NOT NULL,
 	
-	INDEX (game_id)
+	INDEX (env_id)
 );
 
 

@@ -123,7 +123,7 @@ pub async fn handle(
 ) -> GlobalResult<dynamic_servers::server_create::Response> {
 	let resources = unwrap_ref!(ctx.resources).clone();
 	let server_id = Uuid::new_v4();
-	let game_id = unwrap_ref!(ctx.game_id).as_uuid();
+	let env_id = unwrap_ref!(ctx.env_id).as_uuid();
 	let cluster_id = unwrap_ref!(ctx.cluster_id).as_uuid();
 	let datacenter_id = unwrap_ref!(ctx.datacenter_id).as_uuid();
 
@@ -185,7 +185,7 @@ pub async fn handle(
 						INSERT INTO
 							db_dynamic_servers.servers (
 								server_id,
-								game_id,
+								env_id,
 								datacenter_id,
 								cluster_id,
 								tags,
@@ -239,7 +239,7 @@ pub async fn handle(
 					1
 				",
 				server_id,
-				game_id,
+				env_id,
 				datacenter_id,
 				cluster_id,
 				serde_json::value::to_raw_value(&ctx.tags.to_owned())?.to_string(), // 5
@@ -1389,7 +1389,7 @@ pub async fn handle(
 	Ok(dynamic_servers::server_create::Response {
 		server: Some(backend::ds::Server {
 			server_id: Some(server_id.into()),
-			game_id: Some(game_id.into()),
+			env_id: Some(env_id.into()),
 			datacenter_id: Some(datacenter_id.into()),
 			cluster_id: Some(cluster_id.into()),
 			tags: ctx.tags.clone(),
