@@ -19,7 +19,7 @@ use chirp_workflow::prelude::*;
 use futures_util::{FutureExt, StreamExt, TryStreamExt};
 use serde_json::json;
 
-use crate::types::{Datacenter, PoolType};
+use crate::types::{Datacenter, PoolType, Provider};
 
 #[derive(sqlx::FromRow)]
 struct ServerRow {
@@ -76,6 +76,7 @@ enum DrainState {
 
 struct PoolCtx {
 	datacenter_id: Uuid,
+	provider: Provider,
 	pool_type: PoolType,
 	desired_count: usize,
 }
@@ -271,6 +272,7 @@ async fn inner(
 	for pool in &dc.pools {
 		let pool_ctx = PoolCtx {
 			datacenter_id: dc.datacenter_id,
+			provider: dc.provider.clone(),
 			pool_type: pool.pool_type.clone(),
 			desired_count: pool.desired_count.max(pool.min_count).min(pool.max_count) as usize,
 		};
@@ -351,7 +353,12 @@ async fn scale_down_job_servers<'a, I: Iterator<Item = &'a Server>>(
 	let (nomad_servers, without_nomad_servers) =
 		active_servers.partition::<Vec<_>, _>(|server| server.has_nomad_node);
 
-	let destroy_count = (active_count - pctx.desired_count).min(without_nomad_servers.len());
+	let destroy_count = match pctx.provider {
+		// Never destroy servers when scaling down with Linode, always drain
+		Provider::Linode => 0,
+		#[allow(unreachable_patterns)]
+		_ => (active_count - pctx.desired_count).min(without_nomad_servers.len()),
+	};
 	let drain_count = active_count - pctx.desired_count - destroy_count;
 
 	// Destroy servers

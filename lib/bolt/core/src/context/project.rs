@@ -321,6 +321,32 @@ impl ProjectContextData {
 					"invalid datacenter ({}): Job min > desired",
 					name_id,
 				);
+
+				// Validate Linode
+				#[allow(irrefutable_let_patterns)]
+				if let config::ns::ProvisioningProvider::Linode = datacenter.provider {
+					assert!(
+						ats_pool.drain_timeout >= 55 * 60 * 1000,
+						"invalid datacenter ({}): ATS drain timeout < 55 min (Linode bills hourly, drain timeout should be close to hour intervals)",
+						name_id,
+					);
+
+					if let Some(gg_pool) = &gg_pool {
+						assert!(
+							gg_pool.drain_timeout >= 55 * 60 * 1000,
+							"invalid datacenter ({}): GG drain timeout < 55 min (Linode bills hourly, drain timeout should be close to hour intervals)",
+							name_id,
+						);
+					}
+
+					if let Some(job_pool) = &job_pool {
+						assert!(
+							job_pool.drain_timeout >= 55 * 60 * 1000,
+							"invalid datacenter ({}): Job drain timeout < 55 min (Linode bills hourly, drain timeout should be close to hour intervals)",
+							name_id,
+						);
+					}
+				}
 			}
 		}
 

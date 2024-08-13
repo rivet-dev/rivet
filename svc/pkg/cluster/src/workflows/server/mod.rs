@@ -235,19 +235,27 @@ pub(crate) async fn cluster_server(ctx: &mut WorkflowCtx, input: &Input) -> Glob
 				.await?;
 			}
 			Main::NomadDrainComplete(_) => {
-				ctx.activity(SetDrainCompleteInput {
-					server_id: input.server_id,
-				})
-				.await?;
+				match dc.provider {
+					Provider::Linode => {
+						// Job server draining is handled via cluster-gc for Linode
+					}
+					#[allow(unreachable_patterns)]
+					_ => {
+						ctx.activity(SetDrainCompleteInput {
+							server_id: input.server_id,
+						})
+						.await?;
 
-				// Scale
-				ctx.tagged_signal(
-					&json!({
-						"datacenter_id": input.datacenter_id,
-					}),
-					crate::workflows::datacenter::Scale {},
-				)
-				.await?;
+						// Scale
+						ctx.tagged_signal(
+							&json!({
+								"datacenter_id": input.datacenter_id,
+							}),
+							crate::workflows::datacenter::Scale {},
+						)
+						.await?;
+					}
+				}
 			}
 			Main::Drain(_) => {
 				ctx.workflow(drain::Input {
@@ -271,6 +279,7 @@ pub(crate) async fn cluster_server(ctx: &mut WorkflowCtx, input: &Input) -> Glob
 		}
 	}
 
+	// Cleanup DNS
 	if let PoolType::Gg = input.pool_type {
 		ctx.workflow(dns_delete::Input {
 			server_id: input.server_id,
@@ -278,6 +287,7 @@ pub(crate) async fn cluster_server(ctx: &mut WorkflowCtx, input: &Input) -> Glob
 		.await?;
 	}
 
+	// Cleanup server
 	match dc.provider {
 		Provider::Linode => {
 			tracing::info!(server_id=?input.server_id, "destroying linode server");

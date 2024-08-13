@@ -29,31 +29,24 @@ pub async fn run_from_env(ts: i64, pools: rivet_pools::Pools) -> GlobalResult<()
 		let ctx = ctx.clone();
 
 		async move {
-			let pool_types = [
-				serde_json::to_string(&PoolType::Gg)?,
-				serde_json::to_string(&PoolType::Ats)?,
-			];
-
-			// Select all draining gg and ats servers
+			// Select all draining servers
 			let servers = sql_fetch_all!(
 				[ctx, ServerRow, @tx tx]
 				"
 				SELECT server_id, datacenter_id, pool_type, pool_type2, drain_ts
 				FROM db_cluster.servers
 				WHERE
-					pool_type2 = ANY($1) AND
-					cloud_destroy_ts IS NULL AND
-					drain_ts IS NOT NULL
+					drain_ts IS NOT NULL AND
+					drain_complete_ts IS NULL AND
+					cloud_destroy_ts IS NULL
 				",
-				&pool_types,
-				ts,
 			)
 			.await?;
-
 			if servers.is_empty() {
 				return Ok(Vec::new());
 			}
 
+			// Fetch relevant datacenters
 			let datacenters_res = ctx
 				.op(cluster::ops::datacenter::get::Input {
 					datacenter_ids: servers
@@ -63,6 +56,7 @@ pub async fn run_from_env(ts: i64, pools: rivet_pools::Pools) -> GlobalResult<()
 				})
 				.await?;
 
+			// Determine which servers are finished draining via their drain timeout
 			let drained_servers = servers
 				.into_iter()
 				.map(|server| {
@@ -100,7 +94,7 @@ pub async fn run_from_env(ts: i64, pools: rivet_pools::Pools) -> GlobalResult<()
 				return Ok(Vec::new());
 			}
 
-			tracing::info!(count=%drained_servers.len(), "servers done draining");
+			tracing::info!("{} servers done draining", drained_servers.len());
 
 			// Update servers that have completed draining
 			sql_execute!(
