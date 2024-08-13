@@ -213,6 +213,84 @@ func (c *Client) ListBuilds(ctx context.Context, gameId uuid.UUID, request *serv
 	return response, nil
 }
 
+func (c *Client) PatchTags(ctx context.Context, gameId uuid.UUID, buildId uuid.UUID, request *servers.PatchBuildTagsRequest) (*servers.PatchBuildTagsResponse, error) {
+	baseURL := "https://api.rivet.gg"
+	if c.baseURL != "" {
+		baseURL = c.baseURL
+	}
+	endpointURL := fmt.Sprintf(baseURL+"/"+"games/%v/builds/%v/tags", gameId, buildId)
+
+	errorDecoder := func(statusCode int, body io.Reader) error {
+		raw, err := io.ReadAll(body)
+		if err != nil {
+			return err
+		}
+		apiError := core.NewAPIError(statusCode, errors.New(string(raw)))
+		decoder := json.NewDecoder(bytes.NewReader(raw))
+		switch statusCode {
+		case 500:
+			value := new(sdk.InternalError)
+			value.APIError = apiError
+			if err := decoder.Decode(value); err != nil {
+				return apiError
+			}
+			return value
+		case 429:
+			value := new(sdk.RateLimitError)
+			value.APIError = apiError
+			if err := decoder.Decode(value); err != nil {
+				return apiError
+			}
+			return value
+		case 403:
+			value := new(sdk.ForbiddenError)
+			value.APIError = apiError
+			if err := decoder.Decode(value); err != nil {
+				return apiError
+			}
+			return value
+		case 408:
+			value := new(sdk.UnauthorizedError)
+			value.APIError = apiError
+			if err := decoder.Decode(value); err != nil {
+				return apiError
+			}
+			return value
+		case 404:
+			value := new(sdk.NotFoundError)
+			value.APIError = apiError
+			if err := decoder.Decode(value); err != nil {
+				return apiError
+			}
+			return value
+		case 400:
+			value := new(sdk.BadRequestError)
+			value.APIError = apiError
+			if err := decoder.Decode(value); err != nil {
+				return apiError
+			}
+			return value
+		}
+		return apiError
+	}
+
+	var response *servers.PatchBuildTagsResponse
+	if err := c.caller.Call(
+		ctx,
+		&core.CallParams{
+			URL:          endpointURL,
+			Method:       http.MethodPatch,
+			Headers:      c.header,
+			Request:      request,
+			Response:     &response,
+			ErrorDecoder: errorDecoder,
+		},
+	); err != nil {
+		return nil, err
+	}
+	return response, nil
+}
+
 // Creates a new game build for the given game.
 func (c *Client) PrepareBuild(ctx context.Context, gameId uuid.UUID, request *servers.CreateBuildRequest) (*servers.CreateBuildResponse, error) {
 	baseURL := "https://api.rivet.gg"

@@ -4404,9 +4404,6 @@ components:
       type: object
     ServersBuild:
       properties:
-        completed_at:
-          $ref: '#/components/schemas/Timestamp'
-          description: Whether or not this build has completely been uploaded.
         content_length:
           description: Unsigned 64 bit integer.
           format: int64
@@ -4423,12 +4420,8 @@ components:
             type: string
           description: Tags of this build
           type: object
-        upload:
-          format: uuid
-          type: string
       required:
       - id
-      - upload
       - name
       - created_at
       - content_length
@@ -4459,10 +4452,8 @@ components:
           type: boolean
         name:
           type: string
-        tags: {}
       required:
       - name
-      - tags
       - image_tag
       - image_file
       type: object
@@ -4477,12 +4468,8 @@ components:
           items:
             $ref: '#/components/schemas/UploadPresignedRequest'
           type: array
-        upload:
-          format: uuid
-          type: string
       required:
       - build
-      - upload
       type: object
     ServersCreateServerNetworkRequest:
       properties:
@@ -4635,6 +4622,20 @@ components:
       - bridge
       - host
       type: string
+    ServersPatchBuildTagsRequest:
+      properties:
+        exclusive_tags:
+          description: Removes the given tag keys from all other builds.
+          items:
+            type: string
+          type: array
+        tags: {}
+      required:
+      - tags
+      type: object
+    ServersPatchBuildTagsResponse:
+      properties: {}
+      type: object
     ServersPort:
       properties:
         internal_port:
@@ -9161,6 +9162,74 @@ paths:
           type: string
       responses:
         '204':
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+          description: ''
+        '408':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+          description: ''
+        '429':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+          description: ''
+        '500':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+          description: ''
+      security: *id001
+      tags:
+      - ServersBuilds
+  /games/{game_id}/builds/{build_id}/tags:
+    patch:
+      operationId: servers_builds_patchTags
+      parameters:
+      - in: path
+        name: game_id
+        required: true
+        schema:
+          format: uuid
+          type: string
+      - in: path
+        name: build_id
+        required: true
+        schema:
+          format: uuid
+          type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ServersPatchBuildTagsRequest'
+        required: true
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServersPatchBuildTagsResponse'
           description: ''
         '400':
           content:

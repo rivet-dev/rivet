@@ -78,15 +78,11 @@ types:
   Build:
     properties:
       id: uuid
-      upload: uuid
       name: string
       created_at: commons.Timestamp
       content_length:
         docs: Unsigned 64 bit integer.
         type: long
-      completed_at:
-        docs: Whether or not this build has completely been uploaded.
-        type: optional<commons.Timestamp>
       tags:
         docs: Tags of this build
         type: map<string, string>

@@ -107,11 +107,10 @@ async fn handle(
 				image_tag,
 				create_ts,
 				kind,
-				compression,
-				tags
+				compression
 			)
 		VALUES
-			($1, $2, $3, $4, $5, $6, $7, $8, $9)
+			($1, $2, $3, $4, $5, $6, $7, $8)
 		",
 		build_id,
 		game_id,
@@ -121,7 +120,6 @@ async fn handle(
 		ctx.ts(),
 		kind as i32,
 		compression as i32,
-		serde_json::to_value(ctx.tags.clone())?,
 	)
 	.await?;
 

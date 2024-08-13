@@ -174,6 +174,7 @@ Class | Method | HTTP request | Description
 *ServersBuildsApi* | [**servers_builds_complete_build**](docs/ServersBuildsApi.md#servers_builds_complete_build) | **POST** /games/{game_id}/builds/{build_id}/complete | 
 *ServersBuildsApi* | [**servers_builds_get_build**](docs/ServersBuildsApi.md#servers_builds_get_build) | **GET** /games/{game_id}/builds/{build_id} | 
 *ServersBuildsApi* | [**servers_builds_list_builds**](docs/ServersBuildsApi.md#servers_builds_list_builds) | **GET** /games/{game_id}/builds | 
+*ServersBuildsApi* | [**servers_builds_patch_tags**](docs/ServersBuildsApi.md#servers_builds_patch_tags) | **PATCH** /games/{game_id}/builds/{build_id}/tags | 
 *ServersBuildsApi* | [**servers_builds_prepare_build**](docs/ServersBuildsApi.md#servers_builds_prepare_build) | **POST** /games/{game_id}/builds/prepare | 
 *ServersLogsApi* | [**servers_logs_get_server_logs**](docs/ServersLogsApi.md#servers_logs_get_server_logs) | **GET** /games/{game_id}/servers/{server_id}/logs | 
 
@@ -501,6 +502,7 @@ Class | Method | HTTP request | Description
  - [ServersLogStream](docs/ServersLogStream.md)
  - [ServersNetwork](docs/ServersNetwork.md)
  - [ServersNetworkMode](docs/ServersNetworkMode.md)
+ - [ServersPatchBuildTagsRequest](docs/ServersPatchBuildTagsRequest.md)
  - [ServersPort](docs/ServersPort.md)
  - [ServersPortProtocol](docs/ServersPortProtocol.md)
  - [ServersPortRouting](docs/ServersPortRouting.md)

@@ -366,6 +366,7 @@ docs/ServersLogStream.md
 docs/ServersLogsApi.md
 docs/ServersNetwork.md
 docs/ServersNetworkMode.md
+docs/ServersPatchBuildTagsRequest.md
 docs/ServersPort.md
 docs/ServersPortProtocol.md
 docs/ServersPortRouting.md
@@ -743,6 +744,7 @@ src/models/servers_list_servers_response.rs
 src/models/servers_log_stream.rs
 src/models/servers_network.rs
 src/models/servers_network_mode.rs
+src/models/servers_patch_build_tags_request.rs
 src/models/servers_port.rs
 src/models/servers_port_protocol.rs
 src/models/servers_port_routing.rs

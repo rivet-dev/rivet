@@ -1,0 +1,43 @@
+[package]
+name = "build"
+version = "0.0.1"
+edition = "2018"
+authors = ["Rivet Gaming, LLC <developer@rivet.gg>"]
+license = "Apache-2.0"
+
+[dependencies]
+acme-lib = "0.9"
+anyhow = "1.0"
+chirp-workflow = { path = "../../../lib/chirp-workflow/core" }
+cloudflare = { git = "https://github.com/cloudflare/cloudflare-rs.git", rev = "f14720e42184ee176a97676e85ef2d2d85bc3aae" }
+http = "0.2"
+include_dir = "0.7.3"
+indoc = "1.0"
+lazy_static = "1.4"
+nomad-util = { path = "../../../lib/nomad-util" }
+rand = "0.8"
+reqwest = { version = "0.11", features = ["json"] }
+rivet-metrics = { path = "../../../lib/metrics" }
+rivet-operation = { path = "../../../lib/operation/core" }
+rivet-runtime = { path = "../../../lib/runtime" }
+s3-util = { path = "../../../lib/s3-util" }
+serde = { version = "1.0.198", features = ["derive"] }
+serde_json = "1.0"
+ssh2 = "0.9.4"
+trust-dns-resolver = { version = "0.23.2", features = ["dns-over-native-tls"] }
+strum = { version = "0.26", features = ["derive"] }
+
+ip-info = { path = "../ip/ops/info" }
+linode = { path = "../linode" }
+token-create = { path = "../token/ops/create" }
+
+[dependencies.sqlx]
+git = "https://github.com/rivet-gg/sqlx"
+rev = "08d6e61aa0572e7ec557abbedb72cebb96e1ac5b"
+default-features = false
+features = [ "json" ]
+
+[dev-dependencies]
+faker-game = { path = "../faker/ops/game" }
+faker-build = { path = "../faker/ops/build" }
+

@@ -70,13 +70,10 @@ func (b BuildKind) Ptr() *BuildKind {
 
 type Build struct {
 	Id        uuid.UUID     `json:"id"`
-	Upload    uuid.UUID     `json:"upload"`
 	Name      string        `json:"name"`
 	CreatedAt sdk.Timestamp `json:"created_at"`
 	// Unsigned 64 bit integer.
 	ContentLength int64 `json:"content_length"`
-	// Whether or not this build has completely been uploaded.
-	CompletedAt *sdk.Timestamp `json:"completed_at,omitempty"`
 	// Tags of this build
 	Tags map[string]string `json:"tags,omitempty"`
 

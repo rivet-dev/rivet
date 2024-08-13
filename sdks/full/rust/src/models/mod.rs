@@ -640,6 +640,8 @@ pub mod servers_network;
 pub use self::servers_network::ServersNetwork;
 pub mod servers_network_mode;
 pub use self::servers_network_mode::ServersNetworkMode;
+pub mod servers_patch_build_tags_request;
+pub use self::servers_patch_build_tags_request::ServersPatchBuildTagsRequest;
 pub mod servers_port;
 pub use self::servers_port::ServersPort;
 pub mod servers_port_protocol;

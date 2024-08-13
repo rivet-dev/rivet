@@ -11,6 +11,44 @@ use util::timestamp;
 
 use crate::auth::Auth;
 
+// MARK: GET /games/{}/builds/{}
+pub async fn get(
+	ctx: Ctx<Auth>,
+	game_id: Uuid,
+	build_id: Uuid,
+	_watch_index: WatchIndexQuery,
+) -> GlobalResult<models::ServersGetBuildResponse> {
+	ctx.auth().check_game(ctx.op_ctx(), game_id, true).await?;
+
+	let builds_res = op!([ctx] build_get {
+		build_ids: vec![build_id.into()],
+	})
+	.await?;
+	let build = unwrap!(builds_res.builds.first());
+
+	let uploads_res = op!([ctx] upload_get {
+		upload_ids: builds_res
+			.builds
+			.iter()
+			.filter_map(|build| build.upload_id)
+			.collect::<Vec<_>>(),
+	})
+	.await?;
+	let upload = unwrap!(uploads_res.uploads.first());
+
+	let build = models::ServersBuild {
+		id: unwrap!(build.build_id).as_uuid(),
+		name: build.display_name.clone(),
+		created_at: timestamp::to_string(build.create_ts)?,
+		content_length: upload.content_length.api_try_into()?,
+		tags: build.tags.clone(),
+	};
+
+	Ok(models::ServersGetBuildResponse {
+		build: Box::new(build),
+	})
+}
+
 // MARK: GET /games/{}/builds
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct GetQuery {
@@ -49,30 +87,25 @@ pub async fn list(
 	let mut builds = builds_res
 		.builds
 		.iter()
-		.map(|build| {
-			let upload = uploads_res
+		.filter_map(|build| {
+			if let Some(upload) = uploads_res
 				.uploads
 				.iter()
-				.find(|u| u.upload_id == build.upload_id);
-			if upload.is_none() {
-				tracing::warn!("unable to find upload for build");
+				.find(|u| u.upload_id == build.upload_id)
+			{
+				Some((build, upload))
+			} else {
+				None
 			}
-
+		})
+		.map(|(build, upload)| {
 			GlobalResult::Ok((
 				build.create_ts,
 				models::ServersBuild {
 					id: unwrap!(build.build_id).as_uuid(),
-					upload: unwrap!(build.upload_id).as_uuid(),
 					name: build.display_name.clone(),
 					created_at: timestamp::to_string(build.create_ts)?,
-					content_length: upload
-						.map_or(0, |upload| upload.content_length)
-						.api_try_into()?,
-					completed_at: upload
-						.as_ref()
-						.and_then(|x| x.complete_ts)
-						.map(timestamp::to_string)
-						.transpose()?,
+					content_length: upload.content_length.api_try_into()?,
 					tags: build.tags.clone(),
 				},
 			))
@@ -88,50 +121,31 @@ pub async fn list(
 	})
 }
 
-// MARK: GET /games/{}/builds/{}
-pub async fn get(
+// MARK: PATCH /games/{}/builds/{}/tags
+pub async fn patch_tags(
 	ctx: Ctx<Auth>,
 	game_id: Uuid,
 	build_id: Uuid,
-	_watch_index: WatchIndexQuery,
-) -> GlobalResult<models::ServersGetBuildResponse> {
-	ctx.auth().check_game(ctx.op_ctx(), game_id, true).await?;
+	body: models::ServersPatchBuildTagsRequest,
+) -> GlobalResult<serde_json::Value> {
+	ctx.auth().check_game(ctx.op_ctx(), game_id, false).await?;
 
-	let builds_res = op!([ctx] build_get {
-		build_ids: vec![build_id.into()],
+	let tags: HashMap<String, String> =
+		serde_json::from_value::<HashMap<String, String>>(unwrap!(body.tags))?;
+
+	ctx.op(build::ops::get::Input {
+		build_ids: vec![build_id],
 	})
 	.await?;
-	let build = unwrap!(builds_res.builds.first());
 
-	let uploads_res = op!([ctx] upload_get {
-		upload_ids: builds_res
-			.builds
-			.iter()
-			.filter_map(|build| build.upload_id)
-			.collect::<Vec<_>>(),
+	ctx.op(build::ops::patch_tags::Input {
+		build_id,
+		tags,
+		exclusive_tags: body.exclusive_tags,
 	})
 	.await?;
-	let upload = uploads_res.uploads.first();
 
-	let build = models::ServersBuild {
-		id: unwrap!(build.build_id).as_uuid(),
-		upload: unwrap!(build.upload_id).as_uuid(),
-		name: build.display_name.clone(),
-		created_at: timestamp::to_string(build.create_ts)?,
-		content_length: upload
-			.map_or(0, |upload| upload.content_length)
-			.api_try_into()?,
-		completed_at: upload
-			.as_ref()
-			.and_then(|x| x.complete_ts)
-			.map(timestamp::to_string)
-			.transpose()?,
-		tags: build.tags.clone(),
-	};
-
-	Ok(models::ServersGetBuildResponse {
-		build: Box::new(build),
-	})
+	Ok(json!({}))
 }
 
 // MARK: POST /games/{}/builds/prepare
@@ -160,11 +174,6 @@ pub async fn create_build(
 		Some(models::ServersBuildCompression::Lz4) => backend::build::BuildCompression::Lz4,
 	};
 
-	// Verify that tags are valid
-	let tags: HashMap<String, String> = body
-		.tags
-		.map_or(Ok(HashMap::new()), serde_json::from_value)?;
-
 	let create_res = op!([ctx] build_create {
 		game_id: Some(game_id.into()),
 		display_name: body.name,
@@ -173,9 +182,9 @@ pub async fn create_build(
 		multipart: multipart_upload,
 		kind: kind as i32,
 		compression: compression as i32,
-		tags: tags,
 	})
 	.await?;
+	let build_id = unwrap_ref!(create_res.build_id).as_uuid();
 
 	let image_presigned_request = if !multipart_upload {
 		Some(Box::new(
@@ -201,8 +210,7 @@ pub async fn create_build(
 	};
 
 	Ok(models::ServersCreateBuildResponse {
-		build: unwrap_ref!(create_res.build_id).as_uuid(),
-		upload: unwrap_ref!(create_res.upload_id).as_uuid(),
+		build: build_id,
 		image_presigned_request,
 		image_presigned_requests,
 	})

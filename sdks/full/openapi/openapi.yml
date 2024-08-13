@@ -9320,6 +9320,74 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorBody'
       security: *ref_0
+  /games/{game_id}/builds/{build_id}/tags:
+    patch:
+      operationId: servers_builds_patchTags
+      tags:
+        - ServersBuilds
+      parameters:
+        - name: game_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: build_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServersPatchBuildTagsResponse'
+        '400':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '403':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '404':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '408':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '429':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '500':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+      security: *ref_0
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ServersPatchBuildTagsRequest'
   /games/{game_id}/builds/prepare:
     post:
       description: Creates a new game build for the given game.
@@ -14155,12 +14223,25 @@ components:
           description: A list of builds for the game associated with the token.
       required:
         - builds
+    ServersPatchBuildTagsRequest:
+      type: object
+      properties:
+        tags: {}
+        exclusive_tags:
+          type: array
+          items:
+            type: string
+          description: Removes the given tag keys from all other builds.
+      required:
+        - tags
+    ServersPatchBuildTagsResponse:
+      type: object
+      properties: {}
     ServersCreateBuildRequest:
       type: object
       properties:
         name:
           type: string
-        tags: {}
         image_tag:
           type: string
           description: A tag given to the game build.
@@ -14174,16 +14255,12 @@ components:
           $ref: '#/components/schemas/ServersBuildCompression'
       required:
         - name
-        - tags
         - image_tag
         - image_file
     ServersCreateBuildResponse:
       type: object
       properties:
         build:
-          type: string
-          format: uuid
-        upload:
           type: string
           format: uuid
         image_presigned_request:
@@ -14194,7 +14271,6 @@ components:
             $ref: '#/components/schemas/UploadPresignedRequest'
       required:
         - build
-        - upload
     ServersBuildKind:
       type: string
       enum:
@@ -14339,9 +14415,6 @@ components:
         id:
           type: string
           format: uuid
-        upload:
-          type: string
-          format: uuid
         name:
           type: string
         created_at:
@@ -14350,9 +14423,6 @@ components:
           type: integer
           format: int64
           description: Unsigned 64 bit integer.
-        completed_at:
-          $ref: '#/components/schemas/Timestamp'
-          description: Whether or not this build has completely been uploaded.
         tags:
           type: object
           additionalProperties:
@@ -14360,7 +14430,6 @@ components:
           description: Tags of this build
       required:
         - id
-        - upload
         - name
         - created_at
         - content_length

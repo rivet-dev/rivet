@@ -1,0 +1,12 @@
+[service]
+name = "build"
+
+[runtime]
+kind = "rust"
+
+[package]
+
+[secrets]
+
+[databases]
+db-build = {}

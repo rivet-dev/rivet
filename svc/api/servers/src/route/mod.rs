@@ -55,6 +55,10 @@ define_router! {
 			GET: builds::get(),
 		},
 
+		"games" / Uuid / "builds" / Uuid / "tags": {
+			PATCH: builds::patch_tags(body: models::ServersPatchBuildTagsRequest),
+		},
+
 		"games" / Uuid / "builds" / "prepare": {
 			POST: builds::create_build(body: models::ServersCreateBuildRequest),
 		},

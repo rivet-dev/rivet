@@ -35,6 +35,7 @@ build-create = { path = "../../pkg/build/ops/create" }
 build-get = { path = "../../pkg/build/ops/get" }
 build-list-for-game = { path = "../../pkg/build/ops/list-for-game" }
 cluster = { path = "../../pkg/cluster" }
+build = { path = "../../pkg/build" }
 ds-log-read = { path = "../../pkg/ds-log/ops/read" }
 ds-server-create = { path = "../../pkg/ds/ops/server-create" }
 ds-server-delete = { path = "../../pkg/ds/ops/server-delete" }

@@ -39,6 +39,15 @@ service:
           game_id: optional<uuid>
       response: ListBuildsResponse
 
+    patchTags:
+      path: /{build_id}/tags
+      method: PATCH
+      path-parameters:
+        build_id: uuid
+      request:
+        body: PatchBuildTagsRequest
+      response: PatchBuildTagsResponse
+
     prepareBuild:
       path: /prepare
       method: POST
@@ -65,10 +74,19 @@ types:
         docs: A list of builds for the game associated with the token.
         type: list<localCommons.Build>
 
+  PatchBuildTagsRequest:
+    properties:
+      tags: unknown
+      exclusive_tags:
+        docs: Removes the given tag keys from all other builds.
+        type: optional<list<string>>
+
+  PatchBuildTagsResponse:
+    properties: {}
+
   CreateBuildRequest:
     properties:
       name: string
-      tags: unknown
       image_tag:
         docs: A tag given to the game build.
         type: string
@@ -80,10 +98,7 @@ types:
 
   CreateBuildResponse:
     properties:
-      build:
-        type: uuid
-      upload:
-        type: uuid
+      build: uuid
       image_presigned_request: optional<uploadCommons.PresignedRequest>
       image_presigned_requests: optional<list<uploadCommons.PresignedRequest>>
 

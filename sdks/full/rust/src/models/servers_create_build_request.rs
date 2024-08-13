@@ -26,12 +26,10 @@ pub struct ServersCreateBuildRequest {
     pub multipart_upload: Option<bool>,
     #[serde(rename = "name")]
     pub name: String,
-    #[serde(rename = "tags", deserialize_with = "Option::deserialize")]
-    pub tags: Option<serde_json::Value>,
 }
 
 impl ServersCreateBuildRequest {
-    pub fn new(image_file: crate::models::UploadPrepareFile, image_tag: String, name: String, tags: Option<serde_json::Value>) -> ServersCreateBuildRequest {
+    pub fn new(image_file: crate::models::UploadPrepareFile, image_tag: String, name: String) -> ServersCreateBuildRequest {
         ServersCreateBuildRequest {
             compression: None,
             image_file: Box::new(image_file),
@@ -39,7 +37,6 @@ impl ServersCreateBuildRequest {
             kind: None,
             multipart_upload: None,
             name,
-            tags,
         }
     }
 }

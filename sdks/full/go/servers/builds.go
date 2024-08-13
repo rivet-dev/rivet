@@ -21,8 +21,7 @@ type ListBuildsRequest struct {
 }
 
 type CreateBuildRequest struct {
-	Name string      `json:"name"`
-	Tags interface{} `json:"tags,omitempty"`
+	Name string `json:"name"`
 	// A tag given to the game build.
 	ImageTag        string              `json:"image_tag"`
 	ImageFile       *upload.PrepareFile `json:"image_file,omitempty"`
@@ -58,7 +57,6 @@ func (c *CreateBuildRequest) String() string {
 
 type CreateBuildResponse struct {
 	Build                  uuid.UUID                  `json:"build"`
-	Upload                 uuid.UUID                  `json:"upload"`
 	ImagePresignedRequest  *upload.PresignedRequest   `json:"image_presigned_request,omitempty"`
 	ImagePresignedRequests []*upload.PresignedRequest `json:"image_presigned_requests,omitempty"`
 
@@ -145,4 +143,62 @@ func (l *ListBuildsResponse) String() string {
 		return value
 	}
 	return fmt.Sprintf("%#v", l)
+}
+
+type PatchBuildTagsRequest struct {
+	Tags interface{} `json:"tags,omitempty"`
+	// Removes the given tag keys from all other builds.
+	ExclusiveTags []string `json:"exclusive_tags,omitempty"`
+
+	_rawJSON json.RawMessage
+}
+
+func (p *PatchBuildTagsRequest) UnmarshalJSON(data []byte) error {
+	type unmarshaler PatchBuildTagsRequest
+	var value unmarshaler
+	if err := json.Unmarshal(data, &value); err != nil {
+		return err
+	}
+	*p = PatchBuildTagsRequest(value)
+	p._rawJSON = json.RawMessage(data)
+	return nil
+}
+
+func (p *PatchBuildTagsRequest) String() string {
+	if len(p._rawJSON) > 0 {
+		if value, err := core.StringifyJSON(p._rawJSON); err == nil {
+			return value
+		}
+	}
+	if value, err := core.StringifyJSON(p); err == nil {
+		return value
+	}
+	return fmt.Sprintf("%#v", p)
+}
+
+type PatchBuildTagsResponse struct {
+	_rawJSON json.RawMessage
+}
+
+func (p *PatchBuildTagsResponse) UnmarshalJSON(data []byte) error {
+	type unmarshaler PatchBuildTagsResponse
+	var value unmarshaler
+	if err := json.Unmarshal(data, &value); err != nil {
+		return err
+	}
+	*p = PatchBuildTagsResponse(value)
+	p._rawJSON = json.RawMessage(data)
+	return nil
+}
+
+func (p *PatchBuildTagsResponse) String() string {
+	if len(p._rawJSON) > 0 {
+		if value, err := core.StringifyJSON(p._rawJSON); err == nil {
+			return value
+		}
+	}
+	if value, err := core.StringifyJSON(p); err == nil {
+		return value
+	}
+	return fmt.Sprintf("%#v", p)
 }

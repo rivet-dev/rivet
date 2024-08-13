@@ -19,17 +19,14 @@ pub struct ServersCreateBuildResponse {
     pub image_presigned_request: Option<Box<crate::models::UploadPresignedRequest>>,
     #[serde(rename = "image_presigned_requests", skip_serializing_if = "Option::is_none")]
     pub image_presigned_requests: Option<Vec<crate::models::UploadPresignedRequest>>,
-    #[serde(rename = "upload")]
-    pub upload: uuid::Uuid,
 }
 
 impl ServersCreateBuildResponse {
-    pub fn new(build: uuid::Uuid, upload: uuid::Uuid) -> ServersCreateBuildResponse {
+    pub fn new(build: uuid::Uuid) -> ServersCreateBuildResponse {
         ServersCreateBuildResponse {
             build,
             image_presigned_request: None,
             image_presigned_requests: None,
-            upload,
         }
     }
 }
