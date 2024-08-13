@@ -131,8 +131,8 @@ func (c *Client) List(ctx context.Context, gameId uuid.UUID, request *servers.Ge
 	endpointURL := fmt.Sprintf(baseURL+"/"+"games/%v/servers", gameId)
 
 	queryParams := make(url.Values)
-	if request.Tags != nil {
-		queryParams.Add("tags", fmt.Sprintf("%v", *request.Tags))
+	if request.TagsJson != nil {
+		queryParams.Add("tags_json", fmt.Sprintf("%v", *request.TagsJson))
 	}
 	if request.Game != nil {
 		queryParams.Add("game", fmt.Sprintf("%v", *request.Game))

@@ -4513,7 +4513,7 @@ components:
             type: string
           type: array
         datacenter:
-          description: The name ID of the datacenter
+          format: uuid
           type: string
         environment:
           additionalProperties:
@@ -4557,6 +4557,13 @@ components:
       type: object
     ServersGameGuardRouting:
       properties: {}
+      type: object
+    ServersGetBuildResponse:
+      properties:
+        build:
+          $ref: '#/components/schemas/ServersBuild'
+      required:
+      - build
       type: object
     ServersGetServerLogsResponse:
       properties:
@@ -4689,6 +4696,7 @@ components:
           format: int64
           type: integer
         datacenter:
+          format: uuid
           type: string
         destroyed_at:
           format: int64
@@ -8940,7 +8948,7 @@ paths:
           format: uuid
           type: string
       - in: query
-        name: tags
+        name: tags_json
         required: false
         schema:
           type: string
@@ -9059,6 +9067,81 @@ paths:
       security: *id001
       tags:
       - ServersBuilds
+  /games/{game_id}/builds/{build_id}:
+    get:
+      description: Lists all builds of the game associated with the token used. Can
+        be filtered by tags in the query string.
+      operationId: servers_builds_getBuild
+      parameters:
+      - in: path
+        name: game_id
+        required: true
+        schema:
+          format: uuid
+          type: string
+      - in: path
+        name: build_id
+        required: true
+        schema:
+          format: uuid
+          type: string
+      - in: query
+        name: tags_json
+        required: false
+        schema:
+          type: string
+      - in: query
+        name: game_id
+        required: false
+        schema:
+          format: uuid
+          type: string
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServersGetBuildResponse'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+          description: ''
+        '408':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+          description: ''
+        '429':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+          description: ''
+        '500':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+          description: ''
+      security: *id001
+      tags:
+      - ServersBuilds
   /games/{game_id}/builds/{build_id}/complete:
     post:
       description: Marks an upload as complete.
@@ -9131,7 +9214,7 @@ paths:
           format: uuid
           type: string
       - in: query
-        name: tags
+        name: tags_json
         required: false
         schema:
           type: string

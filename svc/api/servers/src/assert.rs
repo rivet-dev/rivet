@@ -11,13 +11,13 @@ pub async fn server_for_game(ctx: &Ctx<Auth>, server_id: Uuid, game_id: Uuid) ->
 		server_ids: vec![server_id.into()],
 	})
 	.await?;
-
-	let server = models::GamesServersServer::api_try_from(
-		unwrap_with!(get_res.servers.first(), SERVERS_SERVER_NOT_FOUND).clone(),
-	)?;
+	let server = unwrap_with!(get_res.servers.first(), SERVERS_SERVER_NOT_FOUND);
 
 	// Validate token can access server
-	ensure_with!(server.game_id == game_id, SERVERS_SERVER_NOT_FOUND);
+	ensure_with!(
+		unwrap!(server.game_id).as_uuid() == game_id,
+		SERVERS_SERVER_NOT_FOUND
+	);
 
 	Ok(())
 }

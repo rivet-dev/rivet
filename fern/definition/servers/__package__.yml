@@ -28,7 +28,7 @@ service:
       request:
         name: GetServersRequest
         query-parameters:
-          tags: optional<string>
+          tags_json: optional<string>
           game: optional<uuid>
       response: ListServersResponse
 
@@ -66,9 +66,7 @@ types:
 
   CreateServerRequest:
     properties:
-      datacenter:
-        docs: The name ID of the datacenter
-        type: string
+      datacenter: uuid
       tags: unknown
       image: uuid
       arguments: optional<list<string>>

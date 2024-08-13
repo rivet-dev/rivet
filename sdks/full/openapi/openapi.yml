@@ -5026,7 +5026,7 @@ paths:
           schema:
             type: string
             format: uuid
-        - name: tags
+        - name: tags_json
           in: query
           required: false
           schema:
@@ -9174,6 +9174,82 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorBody'
       security: *ref_0
+  /games/{game_id}/builds/{build_id}:
+    get:
+      description: >-
+        Lists all builds of the game associated with the token used. Can be
+        filtered by tags in the query string.
+      operationId: servers_builds_getBuild
+      tags:
+        - ServersBuilds
+      parameters:
+        - name: game_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: build_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: tags_json
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: game_id
+          in: query
+          required: false
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServersGetBuildResponse'
+        '400':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '403':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '404':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '408':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '429':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '500':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+      security: *ref_0
   /games/{game_id}/builds:
     get:
       description: >-
@@ -9189,7 +9265,7 @@ paths:
           schema:
             type: string
             format: uuid
-        - name: tags
+        - name: tags_json
           in: query
           required: false
           schema:
@@ -10585,7 +10661,7 @@ components:
       properties:
         datacenter:
           type: string
-          description: The name ID of the datacenter
+          format: uuid
         tags: {}
         image:
           type: string
@@ -14062,6 +14138,13 @@ components:
       required:
         - game
         - watch
+    ServersGetBuildResponse:
+      type: object
+      properties:
+        build:
+          $ref: '#/components/schemas/ServersBuild'
+      required:
+        - build
     ServersListBuildsResponse:
       type: object
       properties:
@@ -14133,6 +14216,7 @@ components:
           format: uuid
         datacenter:
           type: string
+          format: uuid
         cluster:
           type: string
           format: uuid

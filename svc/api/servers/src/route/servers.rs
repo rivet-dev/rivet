@@ -14,7 +14,7 @@ pub async fn get(
 	game_id: Uuid,
 	server_id: Uuid,
 	_watch_index: WatchIndexQuery,
-) -> GlobalResult<models::GamesServersGetServerResponse> {
+) -> GlobalResult<models::ServersGetServerResponse> {
 	ctx.auth().check_game(ctx.op_ctx(), game_id, true).await?;
 
 	// Get the server
@@ -22,16 +22,16 @@ pub async fn get(
 		server_ids: vec![server_id.into()],
 	})
 	.await?;
-
-	let server = models::GamesServersServer::api_try_from(
-		unwrap_with!(get_res.servers.first(), SERVERS_SERVER_NOT_FOUND).clone(),
-	)?;
+	let server = unwrap_with!(get_res.servers.first(), SERVERS_SERVER_NOT_FOUND).clone();
 
 	// Validate token can access server
-	ensure_with!(server.game_id == game_id, SERVERS_SERVER_NOT_FOUND);
+	ensure_with!(
+		unwrap!(server.game_id).as_uuid() == game_id,
+		SERVERS_SERVER_NOT_FOUND
+	);
 
-	Ok(models::GamesServersGetServerResponse {
-		server: Box::new(server),
+	Ok(models::ServersGetServerResponse {
+		server: Box::new(models::ServersServer::api_try_from(server)?),
 	})
 }
 
@@ -39,8 +39,8 @@ pub async fn get(
 pub async fn create(
 	ctx: Ctx<Auth>,
 	game_id: Uuid,
-	body: models::GamesServersCreateServerRequest,
-) -> GlobalResult<models::GamesServersCreateServerResponse> {
+	body: models::ServersCreateServerRequest,
+) -> GlobalResult<models::ServersCreateServerResponse> {
 	ctx.auth().check_game(ctx.op_ctx(), game_id, true).await?;
 
 	let games = ctx
@@ -49,22 +49,19 @@ pub async fn create(
 		})
 		.await?
 		.games;
-
 	let cluster_id = unwrap!(games.first()).cluster_id;
 
 	let datacenters = ctx
-		.op(cluster::ops::datacenter::resolve_for_name_id::Input {
-			cluster_id,
-			name_ids: vec![body.datacenter.clone()],
+		.op(cluster::ops::datacenter::list::Input {
+			cluster_ids: vec![cluster_id],
 		})
-		.await?
-		.datacenters;
-
-	if datacenters.is_empty() {
-		bail_with!(CLUSTER_DATACENTER_NOT_FOUND);
-	}
-
-	let datacenter_id = unwrap!(datacenters.first()).datacenter_id;
+		.await?;
+	ensure_with!(
+		unwrap!(datacenters.clusters.first())
+			.datacenter_ids
+			.contains(&body.datacenter),
+		CLUSTER_DATACENTER_NOT_FOUND
+	);
 
 	let tags = serde_json::from_value(body.tags.unwrap_or_default())?;
 
@@ -72,13 +69,13 @@ pub async fn create(
 
 	let server = op!([ctx] ds_server_create {
 		game_id: Some(game_id.into()),
-		datacenter_id: Some(datacenter_id.into()),
+		datacenter_id: Some(body.datacenter.into()),
 		cluster_id: Some(cluster_id.into()),
 		tags: tags,
 		resources: Some((*body.resources).api_into()),
 		kill_timeout_ms: body.kill_timeout.unwrap_or_default(),
 		webhook_url: body.webhook_url,
-		image_id: Some(body.image_id.into()),
+		image_id: Some(body.image.into()),
 		args: body.arguments.unwrap_or_default(),
 		network_mode: backend::ds::NetworkMode::api_from(
 			body.network.mode.unwrap_or_default(),
@@ -91,7 +88,7 @@ pub async fn create(
 				internal_port: p.internal_port,
 				routing: Some(if let Some(routing) = p.routing {
 					match *routing {
-						models::GamesServersPortRouting {
+						models::ServersPortRouting {
 							game_guard: Some(_),
 							host: None,
 						} => dynamic_servers::server_create::port::Routing::GameGuard(
@@ -99,13 +96,13 @@ pub async fn create(
 								protocol: backend::ds::GameGuardProtocol::api_from(p.protocol) as i32,
 							},
 						),
-						models::GamesServersPortRouting {
+						models::ServersPortRouting {
 							game_guard: None,
 							host: Some(_),
 						} => dynamic_servers::server_create::port::Routing::Host(backend::ds::HostRouting {
 							protocol: backend::ds::HostProtocol::api_try_from(p.protocol)? as i32,
 						}),
-						models::GamesServersPortRouting { .. } => {
+						models::ServersPortRouting { .. } => {
 							bail_with!(SERVERS_MUST_SPECIFY_ROUTING_TYPE)
 						}
 					}
@@ -120,7 +117,7 @@ pub async fn create(
 	.await?
 	.server;
 
-	Ok(models::GamesServersCreateServerResponse {
+	Ok(models::ServersCreateServerResponse {
 		server: Box::new(unwrap!(server).api_try_into()?),
 	})
 }
@@ -153,7 +150,7 @@ pub async fn destroy(
 // MARK: GET /games/{}/servers
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ListQuery {
-	tags: Option<String>,
+	tags_json: Option<String>,
 }
 
 pub async fn list_servers(
@@ -161,12 +158,12 @@ pub async fn list_servers(
 	game_id: Uuid,
 	_watch_index: WatchIndexQuery,
 	query: ListQuery,
-) -> GlobalResult<models::GamesServersListServersResponse> {
+) -> GlobalResult<models::ServersListServersResponse> {
 	ctx.auth().check_game(ctx.op_ctx(), game_id, true).await?;
 
 	let list_res = op!([ctx] ds_server_list_for_game {
 		game_id: Some(game_id.into()),
-		tags: query.tags.as_deref().map_or(Ok(HashMap::new()), serde_json::from_str)?,
+		tags: query.tags_json.as_deref().map_or(Ok(HashMap::new()), serde_json::from_str)?,
 	})
 	.await?;
 
@@ -179,10 +176,10 @@ pub async fn list_servers(
 		.servers
 		.into_iter()
 		.map(|server| {
-			let server = models::GamesServersServer::api_try_from(server)?;
+			let server = models::ServersServer::api_try_from(server)?;
 			Ok(server)
 		})
 		.collect::<GlobalResult<Vec<_>>>()?;
 
-	Ok(models::GamesServersListServersResponse { servers })
+	Ok(models::ServersListServersResponse { servers })
 }

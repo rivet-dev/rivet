@@ -33,7 +33,155 @@ export class Builds {
      * Lists all builds of the game associated with the token used. Can be filtered by tags in the query string.
      *
      * @param {string} gameId
-     * @param {Rivet.servers.GetBuildsRequest} request
+     * @param {string} buildId
+     * @param {Rivet.servers.GetBuildRequest} request
+     * @param {Builds.RequestOptions} requestOptions - Request-specific configuration.
+     *
+     * @throws {@link Rivet.InternalError}
+     * @throws {@link Rivet.RateLimitError}
+     * @throws {@link Rivet.ForbiddenError}
+     * @throws {@link Rivet.UnauthorizedError}
+     * @throws {@link Rivet.NotFoundError}
+     * @throws {@link Rivet.BadRequestError}
+     *
+     * @example
+     *     await client.servers.builds.getBuild("d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32", "d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32", {
+     *         tagsJson: "string",
+     *         gameId: "d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32"
+     *     })
+     */
+    public async getBuild(
+        gameId: string,
+        buildId: string,
+        request: Rivet.servers.GetBuildRequest = {},
+        requestOptions?: Builds.RequestOptions
+    ): Promise<Rivet.servers.GetBuildResponse> {
+        const { tagsJson, gameId: gameId_ } = request;
+        const _queryParams: Record<string, string | string[] | object | object[]> = {};
+        if (tagsJson != null) {
+            _queryParams["tags_json"] = tagsJson;
+        }
+
+        if (gameId_ != null) {
+            _queryParams["game_id"] = gameId_;
+        }
+
+        const _response = await (this._options.fetcher ?? core.fetcher)({
+            url: urlJoin(
+                (await core.Supplier.get(this._options.environment)) ?? environments.RivetEnvironment.Production,
+                `/games/${encodeURIComponent(gameId)}/builds/${encodeURIComponent(buildId)}`
+            ),
+            method: "GET",
+            headers: {
+                Authorization: await this._getAuthorizationHeader(),
+            },
+            contentType: "application/json",
+            queryParameters: _queryParams,
+            requestType: "json",
+            timeoutMs: requestOptions?.timeoutInSeconds != null ? requestOptions.timeoutInSeconds * 1000 : 180000,
+            maxRetries: requestOptions?.maxRetries,
+            abortSignal: requestOptions?.abortSignal,
+        });
+        if (_response.ok) {
+            return serializers.servers.GetBuildResponse.parseOrThrow(_response.body, {
+                unrecognizedObjectKeys: "passthrough",
+                allowUnrecognizedUnionMembers: true,
+                allowUnrecognizedEnumValues: true,
+                skipValidation: true,
+                breadcrumbsPrefix: ["response"],
+            });
+        }
+
+        if (_response.error.reason === "status-code") {
+            switch (_response.error.statusCode) {
+                case 500:
+                    throw new Rivet.InternalError(
+                        serializers.ErrorBody.parseOrThrow(_response.error.body, {
+                            unrecognizedObjectKeys: "passthrough",
+                            allowUnrecognizedUnionMembers: true,
+                            allowUnrecognizedEnumValues: true,
+                            skipValidation: true,
+                            breadcrumbsPrefix: ["response"],
+                        })
+                    );
+                case 429:
+                    throw new Rivet.RateLimitError(
+                        serializers.ErrorBody.parseOrThrow(_response.error.body, {
+                            unrecognizedObjectKeys: "passthrough",
+                            allowUnrecognizedUnionMembers: true,
+                            allowUnrecognizedEnumValues: true,
+                            skipValidation: true,
+                            breadcrumbsPrefix: ["response"],
+                        })
+                    );
+                case 403:
+                    throw new Rivet.ForbiddenError(
+                        serializers.ErrorBody.parseOrThrow(_response.error.body, {
+                            unrecognizedObjectKeys: "passthrough",
+                            allowUnrecognizedUnionMembers: true,
+                            allowUnrecognizedEnumValues: true,
+                            skipValidation: true,
+                            breadcrumbsPrefix: ["response"],
+                        })
+                    );
+                case 408:
+                    throw new Rivet.UnauthorizedError(
+                        serializers.ErrorBody.parseOrThrow(_response.error.body, {
+                            unrecognizedObjectKeys: "passthrough",
+                            allowUnrecognizedUnionMembers: true,
+                            allowUnrecognizedEnumValues: true,
+                            skipValidation: true,
+                            breadcrumbsPrefix: ["response"],
+                        })
+                    );
+                case 404:
+                    throw new Rivet.NotFoundError(
+                        serializers.ErrorBody.parseOrThrow(_response.error.body, {
+                            unrecognizedObjectKeys: "passthrough",
+                            allowUnrecognizedUnionMembers: true,
+                            allowUnrecognizedEnumValues: true,
+                            skipValidation: true,
+                            breadcrumbsPrefix: ["response"],
+                        })
+                    );
+                case 400:
+                    throw new Rivet.BadRequestError(
+                        serializers.ErrorBody.parseOrThrow(_response.error.body, {
+                            unrecognizedObjectKeys: "passthrough",
+                            allowUnrecognizedUnionMembers: true,
+                            allowUnrecognizedEnumValues: true,
+                            skipValidation: true,
+                            breadcrumbsPrefix: ["response"],
+                        })
+                    );
+                default:
+                    throw new errors.RivetError({
+                        statusCode: _response.error.statusCode,
+                        body: _response.error.body,
+                    });
+            }
+        }
+
+        switch (_response.error.reason) {
+            case "non-json":
+                throw new errors.RivetError({
+                    statusCode: _response.error.statusCode,
+                    body: _response.error.rawBody,
+                });
+            case "timeout":
+                throw new errors.RivetTimeoutError();
+            case "unknown":
+                throw new errors.RivetError({
+                    message: _response.error.errorMessage,
+                });
+        }
+    }
+
+    /**
+     * Lists all builds of the game associated with the token used. Can be filtered by tags in the query string.
+     *
+     * @param {string} gameId
+     * @param {Rivet.servers.ListBuildsRequest} request
      * @param {Builds.RequestOptions} requestOptions - Request-specific configuration.
      *
      * @throws {@link Rivet.InternalError}
@@ -45,19 +193,19 @@ export class Builds {
      *
      * @example
      *     await client.servers.builds.listBuilds("d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32", {
-     *         tags: "string",
+     *         tagsJson: "string",
      *         gameId: "d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32"
      *     })
      */
     public async listBuilds(
         gameId: string,
-        request: Rivet.servers.GetBuildsRequest = {},
+        request: Rivet.servers.ListBuildsRequest = {},
         requestOptions?: Builds.RequestOptions
     ): Promise<Rivet.servers.ListBuildsResponse> {
-        const { tags, gameId: gameId_ } = request;
+        const { tagsJson, gameId: gameId_ } = request;
         const _queryParams: Record<string, string | string[] | object | object[]> = {};
-        if (tags != null) {
-            _queryParams["tags"] = tags;
+        if (tagsJson != null) {
+            _queryParams["tags_json"] = tagsJson;
         }
 
         if (gameId_ != null) {

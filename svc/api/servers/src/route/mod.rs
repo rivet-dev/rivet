@@ -28,7 +28,7 @@ define_router! {
 				query: servers::ListQuery,
 			),
 			POST: servers::create(
-				body: models::GamesServersCreateServerRequest,
+				body: models::ServersCreateServerRequest,
 			),
 		},
 
@@ -46,13 +46,17 @@ define_router! {
 		},
 
 		"games" / Uuid / "builds": {
-			GET: builds::get_builds(
+			GET: builds::list(
 				query: builds::GetQuery,
 			),
 		},
 
+		"games" / Uuid / "builds" / Uuid: {
+			GET: builds::get(),
+		},
+
 		"games" / Uuid / "builds" / "prepare": {
-			POST: builds::create_build(body: models::GamesServersCreateBuildRequest),
+			POST: builds::create_build(body: models::ServersCreateBuildRequest),
 		},
 
 		"games" / Uuid / "builds" / Uuid / "complete": {

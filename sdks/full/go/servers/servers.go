@@ -10,8 +10,7 @@ import (
 )
 
 type CreateServerRequest struct {
-	// The name ID of the datacenter
-	Datacenter  string                      `json:"datacenter"`
+	Datacenter  uuid.UUID                   `json:"datacenter"`
 	Tags        interface{}                 `json:"tags,omitempty"`
 	Image       uuid.UUID                   `json:"image"`
 	Arguments   []string                    `json:"arguments,omitempty"`

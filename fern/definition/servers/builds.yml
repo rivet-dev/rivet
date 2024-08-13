@@ -11,6 +11,21 @@ service:
   path-parameters:
     game_id: uuid
   endpoints:
+    getBuild:
+      path: /{build_id}
+      method: GET
+      docs: >-
+        Lists all builds of the game associated with the token used. Can be
+        filtered by tags in the query string.
+      path-parameters:
+        build_id: uuid
+      request:
+        name: GetBuildRequest
+        query-parameters:
+          tags_json: optional<string>
+          game_id: optional<uuid>
+      response: GetBuildResponse
+
     listBuilds:
       path: ""
       method: GET
@@ -18,9 +33,9 @@ service:
         Lists all builds of the game associated with the token used. Can be
         filtered by tags in the query string.
       request:
-        name: GetBuildsRequest
+        name: ListBuildsRequest
         query-parameters:
-          tags: optional<string>
+          tags_json: optional<string>
           game_id: optional<uuid>
       response: ListBuildsResponse
 
@@ -37,10 +52,13 @@ service:
       method: POST
       docs: Marks an upload as complete.
       path-parameters:
-        build_id:
-          type: uuid
+        build_id: uuid
 
 types:
+  GetBuildResponse:
+    properties:
+      build: localCommons.Build
+
   ListBuildsResponse:
     properties:
       builds:

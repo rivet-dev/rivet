@@ -16,8 +16,8 @@ type DestroyServerRequest struct {
 }
 
 type GetServersRequest struct {
-	Tags *string    `json:"-"`
-	Game *uuid.UUID `json:"-"`
+	TagsJson *string    `json:"-"`
+	Game     *uuid.UUID `json:"-"`
 }
 
 type BuildCompression string
@@ -343,7 +343,7 @@ func (r *Resources) String() string {
 type Server struct {
 	Id          uuid.UUID         `json:"id"`
 	Game        uuid.UUID         `json:"game"`
-	Datacenter  string            `json:"datacenter"`
+	Datacenter  uuid.UUID         `json:"datacenter"`
 	Cluster     uuid.UUID         `json:"cluster"`
 	Tags        interface{}       `json:"tags,omitempty"`
 	Image       uuid.UUID         `json:"image"`

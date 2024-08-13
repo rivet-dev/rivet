@@ -22,7 +22,7 @@ pub async fn get_logs(
 	server_id: Uuid,
 	watch_index: WatchIndexQuery,
 	query: GetServerLogsQuery,
-) -> GlobalResult<models::GamesServersGetServerLogsResponse> {
+) -> GlobalResult<models::ServersGetServerLogsResponse> {
 	ctx.auth().check_game(ctx.op_ctx(), game_id, false).await?;
 
 	// Validate server belongs to game
@@ -126,7 +126,7 @@ pub async fn get_logs(
 	timestamps.reverse();
 
 	let watch_nts = logs_res.entries.first().map_or(before_nts, |x| x.nts);
-	Ok(models::GamesServersGetServerLogsResponse {
+	Ok(models::ServersGetServerLogsResponse {
 		lines,
 		timestamps,
 		watch: WatchResponse::new_as_model(watch_nts),

@@ -10,9 +10,14 @@ import (
 	upload "sdk/upload"
 )
 
-type GetBuildsRequest struct {
-	Tags   *string    `json:"-"`
-	GameId *uuid.UUID `json:"-"`
+type GetBuildRequest struct {
+	TagsJson *string    `json:"-"`
+	GameId   *uuid.UUID `json:"-"`
+}
+
+type ListBuildsRequest struct {
+	TagsJson *string    `json:"-"`
+	GameId   *uuid.UUID `json:"-"`
 }
 
 type CreateBuildRequest struct {
@@ -81,6 +86,35 @@ func (c *CreateBuildResponse) String() string {
 		return value
 	}
 	return fmt.Sprintf("%#v", c)
+}
+
+type GetBuildResponse struct {
+	Build *Build `json:"build,omitempty"`
+
+	_rawJSON json.RawMessage
+}
+
+func (g *GetBuildResponse) UnmarshalJSON(data []byte) error {
+	type unmarshaler GetBuildResponse
+	var value unmarshaler
+	if err := json.Unmarshal(data, &value); err != nil {
+		return err
+	}
+	*g = GetBuildResponse(value)
+	g._rawJSON = json.RawMessage(data)
+	return nil
+}
+
+func (g *GetBuildResponse) String() string {
+	if len(g._rawJSON) > 0 {
+		if value, err := core.StringifyJSON(g._rawJSON); err == nil {
+			return value
+		}
+	}
+	if value, err := core.StringifyJSON(g); err == nil {
+		return value
+	}
+	return fmt.Sprintf("%#v", g)
 }
 
 type ListBuildsResponse struct {

@@ -179,7 +179,7 @@ export class Servers {
      *
      * @example
      *     await client.servers.list("d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32", {
-     *         tags: "string",
+     *         tagsJson: "string",
      *         game: "d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32"
      *     })
      */
@@ -188,10 +188,10 @@ export class Servers {
         request: Rivet.servers.GetServersRequest = {},
         requestOptions?: Servers.RequestOptions
     ): Promise<Rivet.servers.ListServersResponse> {
-        const { tags, game } = request;
+        const { tagsJson, game } = request;
         const _queryParams: Record<string, string | string[] | object | object[]> = {};
-        if (tags != null) {
-            _queryParams["tags"] = tags;
+        if (tagsJson != null) {
+            _queryParams["tags_json"] = tagsJson;
         }
 
         if (game != null) {
@@ -325,7 +325,7 @@ export class Servers {
      *
      * @example
      *     await client.servers.create("d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32", {
-     *         datacenter: "string",
+     *         datacenter: "d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32",
      *         tags: {
      *             "key": "value"
      *         },

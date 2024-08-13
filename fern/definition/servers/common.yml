@@ -8,7 +8,7 @@ types:
     properties:
       id: uuid
       game: uuid
-      datacenter: string
+      datacenter: uuid
       cluster: uuid
       tags: unknown
       image: uuid
