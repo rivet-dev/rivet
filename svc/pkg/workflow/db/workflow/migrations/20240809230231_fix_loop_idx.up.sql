@@ -1,0 +1,30 @@
+CREATE INDEX idx_workflow_loop_events_loop_location2
+ON workflow_loop_events (workflow_id, loop_location)
+WHERE forgotten = FALSE;
+
+CREATE INDEX idx_workflow_activity_events_loop_location2
+ON workflow_activity_events (workflow_id, loop_location)
+WHERE forgotten = FALSE;
+
+CREATE INDEX idx_workflow_signal_events_loop_location2
+ON workflow_signal_events (workflow_id, loop_location)
+WHERE forgotten = FALSE;
+
+CREATE INDEX idx_workflow_sub_workflow_events_loop_location2
+ON workflow_sub_workflow_events (workflow_id, loop_location)
+WHERE forgotten = FALSE;
+
+CREATE INDEX idx_workflow_signal_send_events_loop_location2
+ON workflow_signal_send_events (workflow_id, loop_location)
+WHERE forgotten = FALSE;
+
+CREATE INDEX idx_workflow_message_send_events_loop_location2
+ON workflow_message_send_events (workflow_id, loop_location)
+WHERE forgotten = FALSE;
+
+DROP INDEX workflow_loop_events@idx_workflow_loop_events_loop_location;
+DROP INDEX workflow_activity_events@idx_workflow_activity_events_loop_location;
+DROP INDEX workflow_signal_events@idx_workflow_signal_events_loop_location;
+DROP INDEX workflow_sub_workflow_events@idx_workflow_sub_workflow_events_loop_location;
+DROP INDEX workflow_signal_send_events@idx_workflow_signal_send_events_loop_location;
+DROP INDEX workflow_message_send_events@idx_workflow_message_send_events_loop_location;

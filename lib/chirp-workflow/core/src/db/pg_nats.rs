@@ -951,7 +951,8 @@ impl Database for DatabasePgNats {
 						SET forgotten = TRUE
 						WHERE
 							workflow_id = $1 AND
-							loop_location = $2
+							loop_location = $2 AND
+							forgotten = FALSE
 						RETURNING 1
 					),
 					forget_signal_events AS (
@@ -959,7 +960,8 @@ impl Database for DatabasePgNats {
 						SET forgotten = TRUE
 						WHERE
 							workflow_id = $1 AND
-							loop_location = $2
+							loop_location = $2 AND
+							forgotten = FALSE
 						RETURNING 1
 					),
 					forget_sub_workflow_events AS (
@@ -967,7 +969,8 @@ impl Database for DatabasePgNats {
 						SET forgotten = TRUE
 						WHERE
 							workflow_id = $1 AND
-							loop_location = $2
+							loop_location = $2 AND
+							forgotten = FALSE
 						RETURNING 1
 					),
 					forget_signal_send_events AS (
@@ -975,7 +978,8 @@ impl Database for DatabasePgNats {
 						SET forgotten = TRUE
 						WHERE
 							workflow_id = $1 AND
-							loop_location = $2
+							loop_location = $2 AND
+							forgotten = FALSE
 						RETURNING 1
 					),
 					forget_message_send_events AS (
@@ -983,7 +987,8 @@ impl Database for DatabasePgNats {
 						SET forgotten = TRUE
 						WHERE
 							workflow_id = $1 AND
-							loop_location = $2
+							loop_location = $2 AND
+							forgotten = FALSE
 						RETURNING 1
 					),	
 					forget_loop_events AS (
@@ -991,7 +996,8 @@ impl Database for DatabasePgNats {
 						SET forgotten = TRUE
 						WHERE
 							workflow_id = $1 AND
-							loop_location = $2
+							loop_location = $2 AND
+							forgotten = FALSE
 						RETURNING 1
 					)
 				SELECT 1
