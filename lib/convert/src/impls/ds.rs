@@ -7,23 +7,37 @@ use rivet_operation::prelude::*;
 use crate::{ApiFrom, ApiInto, ApiTryFrom, ApiTryInto};
 use serde_json::{json, to_value};
 
+impl ApiTryFrom<backend::build::Build> for models::GamesServersBuild {
+	type Error = GlobalError;
+	fn api_try_from(value: backend::build::Build) -> GlobalResult<models::GamesServersBuild> {
+		Ok(models::GamesServersBuild {
+			id: unwrap!(value.build_id).as_uuid(),
+			upload: unwrap!(value.upload_id).as_uuid(),
+			created_at: timestamp::to_string(value.create_ts)?,
+			content_length: value.content_length,
+			completed_at: value.completed_at.map(timestamp::to_string).transpose()?,
+			tags: value.tags,
+		})
+	}
+}
+
 impl ApiTryFrom<backend::ds::Server> for models::GamesServersServer {
 	type Error = GlobalError;
 	fn api_try_from(value: backend::ds::Server) -> GlobalResult<models::GamesServersServer> {
 		Ok(models::GamesServersServer {
-			cluster_id: unwrap!(value.cluster_id).as_uuid(),
-			create_ts: value.create_ts,
-			start_ts: value.start_ts,
-			datacenter_id: unwrap!(value.datacenter_id).as_uuid(),
-			destroy_ts: value.destroy_ts,
-			game_id: unwrap!(value.game_id).as_uuid(),
+			id: unwrap!(value.server_id).as_uuid(),
+			cluster: unwrap!(value.cluster_id).as_uuid(),
+			created_at: value.create_ts,
+			started_at: value.start_ts,
+			datacenter: unwrap!(value.datacenter_id).as_uuid(),
+			destroyed_at: value.destroy_ts,
+			game: unwrap!(value.game_id).as_uuid(),
 			kill_timeout: Some(value.kill_timeout_ms),
 			tags: Some(to_value(value.tags).unwrap()),
 			resources: Box::new(unwrap!(value.resources).api_into()),
-			server_id: unwrap!(value.server_id).as_uuid(),
 			arguments: Some(value.args),
 			environment: Some(value.environment),
-			image_id: unwrap!(value.image_id).as_uuid(),
+			image: unwrap!(value.image_id).as_uuid(),
 			network: Box::new(models::GamesServersNetwork {
 				mode: Some(
 					unwrap!(backend::ds::NetworkMode::from_i32(value.network_mode)).api_into(),

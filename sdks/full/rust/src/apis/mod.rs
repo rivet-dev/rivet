@@ -114,9 +114,6 @@ pub mod cloud_groups_api;
 pub mod cloud_logs_api;
 pub mod cloud_tiers_api;
 pub mod cloud_uploads_api;
-pub mod games_servers_api;
-pub mod games_servers_builds_api;
-pub mod games_servers_logs_api;
 pub mod group_api;
 pub mod group_invites_api;
 pub mod group_join_requests_api;
@@ -132,5 +129,8 @@ pub mod matchmaker_regions_api;
 pub mod portal_games_api;
 pub mod provision_datacenters_api;
 pub mod provision_servers_api;
+pub mod servers_api;
+pub mod servers_builds_api;
+pub mod servers_logs_api;
 
 pub mod configuration;

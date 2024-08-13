@@ -1,0 +1,92 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/fern-api/fern/main/fern.schema.json
+
+imports:
+  commons: ../common.yml
+
+types:
+  Server:
+    properties:
+      id: uuid
+      game: uuid
+      datacenter: string
+      cluster: uuid
+      tags: unknown
+      image: uuid
+      arguments: optional<list<string>>
+      environment: optional<map<string, string>>
+      network: Network
+      resources: Resources
+      kill_timeout:
+        docs: >-
+          The duration to wait for in milliseconds before killing the server.
+          This should be set to a safe default, and can be overridden during a
+          DELETE request if needed.
+        type: optional<long>
+      created_at: long
+      started_at: optional<long>
+      destroyed_at: optional<long>
+
+  Resources:
+    properties:
+      cpu:
+        docs: |
+          The number of CPU cores in millicores, or 1/1000 of a core. For example,
+          1/8 of a core would be 125 millicores, and 1 core would be 1000
+          millicores.
+        type: integer
+      memory:
+        docs: The amount of memory in megabytes
+        type: integer
+
+  Network:
+    properties:
+      mode: optional<NetworkMode>
+      ports: map<string, Port>
+
+  NetworkMode:
+    enum:
+      - bridge
+      - host
+
+  Port:
+    properties:
+      protocol: PortProtocol
+      internal_port: optional<integer>
+      public_hostname: optional<string>
+      public_port: optional<integer>
+      routing: PortRouting
+
+  PortProtocol:
+    enum:
+      - http
+      - https
+      - tcp
+      - tcp_tls
+      - udp
+
+  PortRouting:
+    properties:
+      game_guard: optional<GameGuardRouting>
+      host: optional<HostRouting>
+
+  GameGuardRouting:
+    properties: {}
+
+  HostRouting:
+    properties: {}
+
+  Build:
+    properties:
+      id: uuid
+      upload: uuid
+      name: string
+      created_at: commons.Timestamp
+      content_length:
+        docs: Unsigned 64 bit integer.
+        type: long
+      completed_at:
+        docs: Whether or not this build has completely been uploaded.
+        type: optional<commons.Timestamp>
+      tags:
+        docs: Tags of this build
+        type: map<string, string>

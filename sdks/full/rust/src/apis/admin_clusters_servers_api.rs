@@ -55,7 +55,7 @@ pub enum AdminClustersServersTaintError {
 }
 
 
-pub async fn admin_clusters_servers_destroy(configuration: &configuration::Configuration, cluster_id: &str, server_id: Option<&str>, datacenter: Option<&str>, pool: Option<crate::models::AdminClustersPoolType>, public_ip: Option<&str>) -> Result<(), Error<AdminClustersServersDestroyError>> {
+pub async fn admin_clusters_servers_destroy(configuration: &configuration::Configuration, cluster_id: &str, server_id: Option<&str>, datacenter: Option<&str>, pool: Option<AdminClustersPoolType>, public_ip: Option<&str>) -> Result<(), Error<AdminClustersServersDestroyError>> {
     let local_var_configuration = configuration;
 
     let local_var_client = &local_var_configuration.client;
@@ -97,7 +97,7 @@ pub async fn admin_clusters_servers_destroy(configuration: &configuration::Confi
     }
 }
 
-pub async fn admin_clusters_servers_list(configuration: &configuration::Configuration, cluster_id: &str, server_id: Option<&str>, datacenter: Option<&str>, pool: Option<crate::models::AdminClustersPoolType>, public_ip: Option<&str>) -> Result<crate::models::AdminClustersListServersResponse, Error<AdminClustersServersListError>> {
+pub async fn admin_clusters_servers_list(configuration: &configuration::Configuration, cluster_id: &str, server_id: Option<&str>, datacenter: Option<&str>, pool: Option<AdminClustersPoolType>, public_ip: Option<&str>) -> Result<crate::models::AdminClustersListServersResponse, Error<AdminClustersServersListError>> {
     let local_var_configuration = configuration;
 
     let local_var_client = &local_var_configuration.client;
@@ -139,7 +139,7 @@ pub async fn admin_clusters_servers_list(configuration: &configuration::Configur
     }
 }
 
-pub async fn admin_clusters_servers_taint(configuration: &configuration::Configuration, cluster_id: &str, server_id: Option<&str>, datacenter: Option<&str>, pool: Option<crate::models::AdminClustersPoolType>, public_ip: Option<&str>) -> Result<(), Error<AdminClustersServersTaintError>> {
+pub async fn admin_clusters_servers_taint(configuration: &configuration::Configuration, cluster_id: &str, server_id: Option<&str>, datacenter: Option<&str>, pool: Option<AdminClustersPoolType>, public_ip: Option<&str>) -> Result<(), Error<AdminClustersServersTaintError>> {
     let local_var_configuration = configuration;
 
     let local_var_client = &local_var_configuration.client;

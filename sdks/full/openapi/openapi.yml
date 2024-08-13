@@ -1780,275 +1780,6 @@ paths:
             schema:
               $ref: >-
                 #/components/schemas/CloudGamesNamespacesUpdateGameNamespaceVersionRequest
-  /games/{game_id}/servers/{server_id}:
-    get:
-      description: Gets a dynamic server.
-      operationId: games_servers_get
-      tags:
-        - GamesServers
-      parameters:
-        - name: game_id
-          in: path
-          required: true
-          schema:
-            type: string
-            format: uuid
-        - name: server_id
-          in: path
-          description: The id of the server to destroy
-          required: true
-          schema:
-            type: string
-            format: uuid
-      responses:
-        '200':
-          description: ''
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/GamesServersGetServerResponse'
-        '400':
-          description: ''
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBody'
-        '403':
-          description: ''
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBody'
-        '404':
-          description: ''
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBody'
-        '408':
-          description: ''
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBody'
-        '429':
-          description: ''
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBody'
-        '500':
-          description: ''
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBody'
-      security: *ref_0
-    delete:
-      description: Destroy a dynamic server.
-      operationId: games_servers_destroy
-      tags:
-        - GamesServers
-      parameters:
-        - name: game_id
-          in: path
-          required: true
-          schema:
-            type: string
-            format: uuid
-        - name: server_id
-          in: path
-          description: The id of the server to destroy
-          required: true
-          schema:
-            type: string
-            format: uuid
-        - name: override_kill_timeout
-          in: query
-          description: >-
-            The duration to wait for in milliseconds before killing the server.
-            This should be used to override the default kill timeout if a faster
-            time is needed, say for ignoring a graceful shutdown.
-          required: false
-          schema:
-            type: integer
-            format: int64
-      responses:
-        '200':
-          description: ''
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/GamesServersDestroyServerResponse'
-        '400':
-          description: ''
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBody'
-        '403':
-          description: ''
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBody'
-        '404':
-          description: ''
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBody'
-        '408':
-          description: ''
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBody'
-        '429':
-          description: ''
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBody'
-        '500':
-          description: ''
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBody'
-      security: *ref_0
-  /games/{game_id}/servers:
-    get:
-      description: >-
-        Lists all servers associated with the token used. Can be filtered by
-        tags in the query string.
-      operationId: games_servers_list
-      tags:
-        - GamesServers
-      parameters:
-        - name: game_id
-          in: path
-          required: true
-          schema:
-            type: string
-            format: uuid
-        - name: tags
-          in: query
-          required: false
-          schema:
-            type: string
-        - name: game_id
-          in: query
-          required: false
-          schema:
-            type: string
-            format: uuid
-      responses:
-        '200':
-          description: ''
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/GamesServersListServersResponse'
-        '400':
-          description: ''
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBody'
-        '403':
-          description: ''
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBody'
-        '404':
-          description: ''
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBody'
-        '408':
-          description: ''
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBody'
-        '429':
-          description: ''
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBody'
-        '500':
-          description: ''
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBody'
-      security: *ref_0
-    post:
-      description: Create a new dynamic server.
-      operationId: games_servers_create
-      tags:
-        - GamesServers
-      parameters:
-        - name: game_id
-          in: path
-          required: true
-          schema:
-            type: string
-            format: uuid
-      responses:
-        '200':
-          description: ''
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/GamesServersCreateServerResponse'
-        '400':
-          description: ''
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBody'
-        '403':
-          description: ''
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBody'
-        '404':
-          description: ''
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBody'
-        '408':
-          description: ''
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBody'
-        '429':
-          description: ''
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBody'
-        '500':
-          description: ''
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBody'
-      security: *ref_0
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/GamesServersCreateServerRequest'
   /group/groups:
     get:
       description: Returns a list of suggested groups.
@@ -5143,6 +4874,275 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorBody'
       security: *ref_0
+  /games/{game_id}/servers/{server_id}:
+    get:
+      description: Gets a dynamic server.
+      operationId: servers_get
+      tags:
+        - Servers
+      parameters:
+        - name: game_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: server_id
+          in: path
+          description: The id of the server to destroy
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServersGetServerResponse'
+        '400':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '403':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '404':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '408':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '429':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '500':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+      security: *ref_0
+    delete:
+      description: Destroy a dynamic server.
+      operationId: servers_destroy
+      tags:
+        - Servers
+      parameters:
+        - name: game_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: server_id
+          in: path
+          description: The id of the server to destroy
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: override_kill_timeout
+          in: query
+          description: >-
+            The duration to wait for in milliseconds before killing the server.
+            This should be used to override the default kill timeout if a faster
+            time is needed, say for ignoring a graceful shutdown.
+          required: false
+          schema:
+            type: integer
+            format: int64
+      responses:
+        '200':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServersDestroyServerResponse'
+        '400':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '403':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '404':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '408':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '429':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '500':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+      security: *ref_0
+  /games/{game_id}/servers:
+    get:
+      description: >-
+        Lists all servers associated with the token used. Can be filtered by
+        tags in the query string.
+      operationId: servers_list
+      tags:
+        - Servers
+      parameters:
+        - name: game_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: tags
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: game
+          in: query
+          required: false
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServersListServersResponse'
+        '400':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '403':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '404':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '408':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '429':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '500':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+      security: *ref_0
+    post:
+      description: Create a new dynamic server.
+      operationId: servers_create
+      tags:
+        - Servers
+      parameters:
+        - name: game_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServersCreateServerResponse'
+        '400':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '403':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '404':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '408':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '429':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '500':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+      security: *ref_0
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ServersCreateServerRequest'
   /admin/clusters/{cluster_id}/datacenters:
     get:
       description: Get datacenters of a cluster
@@ -7460,278 +7460,6 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorBody'
       security: *ref_0
-  /games/{game_id}/builds:
-    get:
-      description: >-
-        Lists all builds of the game associated with the token used. Can be
-        filtered by tags in the query string.
-      operationId: games_servers_builds_listBuilds
-      tags:
-        - GamesServersBuilds
-      parameters:
-        - name: game_id
-          in: path
-          required: true
-          schema:
-            type: string
-            format: uuid
-        - name: tags
-          in: query
-          required: false
-          schema:
-            type: string
-        - name: game_id
-          in: query
-          required: false
-          schema:
-            type: string
-            format: uuid
-      responses:
-        '200':
-          description: ''
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/GamesServersListBuildsResponse'
-        '400':
-          description: ''
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBody'
-        '403':
-          description: ''
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBody'
-        '404':
-          description: ''
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBody'
-        '408':
-          description: ''
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBody'
-        '429':
-          description: ''
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBody'
-        '500':
-          description: ''
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBody'
-      security: *ref_0
-  /games/{game_id}/builds/prepare:
-    post:
-      description: Creates a new game build for the given game.
-      operationId: games_servers_builds_prepareBuild
-      tags:
-        - GamesServersBuilds
-      parameters:
-        - name: game_id
-          in: path
-          required: true
-          schema:
-            type: string
-            format: uuid
-      responses:
-        '200':
-          description: ''
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/GamesServersCreateBuildResponse'
-        '400':
-          description: ''
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBody'
-        '403':
-          description: ''
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBody'
-        '404':
-          description: ''
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBody'
-        '408':
-          description: ''
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBody'
-        '429':
-          description: ''
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBody'
-        '500':
-          description: ''
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBody'
-      security: *ref_0
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/GamesServersCreateBuildRequest'
-  /games/{game_id}/builds/{build_id}/complete:
-    post:
-      description: Marks an upload as complete.
-      operationId: games_servers_builds_completeBuild
-      tags:
-        - GamesServersBuilds
-      parameters:
-        - name: game_id
-          in: path
-          required: true
-          schema:
-            type: string
-            format: uuid
-        - name: build_id
-          in: path
-          required: true
-          schema:
-            type: string
-            format: uuid
-      responses:
-        '204':
-          description: ''
-        '400':
-          description: ''
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBody'
-        '403':
-          description: ''
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBody'
-        '404':
-          description: ''
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBody'
-        '408':
-          description: ''
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBody'
-        '429':
-          description: ''
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBody'
-        '500':
-          description: ''
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBody'
-      security: *ref_0
-  /games/{game_id}/servers/{server_id}/logs:
-    get:
-      description: Returns the logs for a given server.
-      operationId: games_servers_logs_getServerLogs
-      tags:
-        - GamesServersLogs
-      parameters:
-        - name: game_id
-          in: path
-          required: true
-          schema:
-            type: string
-            format: uuid
-        - name: server_id
-          in: path
-          required: true
-          schema:
-            type: string
-            format: uuid
-        - name: stream
-          in: query
-          required: true
-          schema:
-            $ref: '#/components/schemas/GamesServersLogStream'
-        - name: game_id
-          in: query
-          required: false
-          schema:
-            type: string
-            format: uuid
-        - name: watch_index
-          in: query
-          description: A query parameter denoting the requests watch index.
-          required: false
-          schema:
-            type: string
-      responses:
-        '200':
-          description: ''
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/GamesServersGetServerLogsResponse'
-        '400':
-          description: ''
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBody'
-        '403':
-          description: ''
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBody'
-        '404':
-          description: ''
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBody'
-        '408':
-          description: ''
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBody'
-        '429':
-          description: ''
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBody'
-        '500':
-          description: ''
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBody'
-      security: *ref_0
   /group/invites/{group_invite_code}:
     get:
       description: >-
@@ -9446,6 +9174,278 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorBody'
       security: *ref_0
+  /games/{game_id}/builds:
+    get:
+      description: >-
+        Lists all builds of the game associated with the token used. Can be
+        filtered by tags in the query string.
+      operationId: servers_builds_listBuilds
+      tags:
+        - ServersBuilds
+      parameters:
+        - name: game_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: tags
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: game_id
+          in: query
+          required: false
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServersListBuildsResponse'
+        '400':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '403':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '404':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '408':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '429':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '500':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+      security: *ref_0
+  /games/{game_id}/builds/prepare:
+    post:
+      description: Creates a new game build for the given game.
+      operationId: servers_builds_prepareBuild
+      tags:
+        - ServersBuilds
+      parameters:
+        - name: game_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServersCreateBuildResponse'
+        '400':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '403':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '404':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '408':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '429':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '500':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+      security: *ref_0
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ServersCreateBuildRequest'
+  /games/{game_id}/builds/{build_id}/complete:
+    post:
+      description: Marks an upload as complete.
+      operationId: servers_builds_completeBuild
+      tags:
+        - ServersBuilds
+      parameters:
+        - name: game_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: build_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '204':
+          description: ''
+        '400':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '403':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '404':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '408':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '429':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '500':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+      security: *ref_0
+  /games/{game_id}/servers/{server_id}/logs:
+    get:
+      description: Returns the logs for a given server.
+      operationId: servers_logs_getServerLogs
+      tags:
+        - ServersLogs
+      parameters:
+        - name: game_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: server_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: stream
+          in: query
+          required: true
+          schema:
+            $ref: '#/components/schemas/ServersLogStream'
+        - name: game
+          in: query
+          required: false
+          schema:
+            type: string
+            format: uuid
+        - name: watch_index
+          in: query
+          description: A query parameter denoting the requests watch index.
+          required: false
+          schema:
+            type: string
+      responses:
+        '200':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServersGetServerLogsResponse'
+        '400':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '403':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '404':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '408':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '429':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '500':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+      security: *ref_0
 components:
   schemas:
     AdminLoginRequest:
@@ -10137,94 +10137,6 @@ components:
           description: |-
             **Deprecated: use `game_modes` instead**
             A list of game modes.
-    GamesServersGetServerResponse:
-      type: object
-      properties:
-        server:
-          $ref: '#/components/schemas/GamesServersServer'
-      required:
-        - server
-    GamesServersCreateServerRequest:
-      type: object
-      properties:
-        datacenter:
-          type: string
-          description: The name ID of the datacenter
-        tags: {}
-        image_id:
-          type: string
-          format: uuid
-        arguments:
-          type: array
-          items:
-            type: string
-        environment:
-          type: object
-          additionalProperties:
-            type: string
-        network:
-          $ref: '#/components/schemas/GamesServersCreateServerNetworkRequest'
-        resources:
-          $ref: '#/components/schemas/GamesServersResources'
-        kill_timeout:
-          type: integer
-          format: int64
-          description: >-
-            The duration to wait for in milliseconds before killing the server.
-            This should be set to a safe default, and can be overridden during a
-            DELETE request if needed.
-        webhook_url:
-          type: string
-          description: A url to send to which events from the server running will be sent
-      required:
-        - datacenter
-        - tags
-        - image_id
-        - network
-        - resources
-    GamesServersCreateServerNetworkRequest:
-      type: object
-      properties:
-        mode:
-          $ref: '#/components/schemas/GamesServersNetworkMode'
-        ports:
-          type: object
-          additionalProperties:
-            $ref: '#/components/schemas/GamesServersCreateServerPortRequest'
-      required:
-        - ports
-    GamesServersCreateServerPortRequest:
-      type: object
-      properties:
-        protocol:
-          $ref: '#/components/schemas/GamesServersPortProtocol'
-        internal_port:
-          type: integer
-        routing:
-          $ref: '#/components/schemas/GamesServersPortRouting'
-      required:
-        - protocol
-    GamesServersCreateServerResponse:
-      type: object
-      properties:
-        server:
-          $ref: '#/components/schemas/GamesServersServer'
-          description: The server that was created
-      required:
-        - server
-    GamesServersDestroyServerResponse:
-      type: object
-      properties: {}
-    GamesServersListServersResponse:
-      type: object
-      properties:
-        servers:
-          type: array
-          items:
-            $ref: '#/components/schemas/GamesServersServer'
-          description: A list of servers for the game associated with the token.
-      required:
-        - servers
     GroupListSuggestedResponse:
       type: object
       properties:
@@ -10661,6 +10573,94 @@ components:
         - datacenter_id
         - cluster_id
         - vlan_ip
+    ServersGetServerResponse:
+      type: object
+      properties:
+        server:
+          $ref: '#/components/schemas/ServersServer'
+      required:
+        - server
+    ServersCreateServerRequest:
+      type: object
+      properties:
+        datacenter:
+          type: string
+          description: The name ID of the datacenter
+        tags: {}
+        image:
+          type: string
+          format: uuid
+        arguments:
+          type: array
+          items:
+            type: string
+        environment:
+          type: object
+          additionalProperties:
+            type: string
+        network:
+          $ref: '#/components/schemas/ServersCreateServerNetworkRequest'
+        resources:
+          $ref: '#/components/schemas/ServersResources'
+        kill_timeout:
+          type: integer
+          format: int64
+          description: >-
+            The duration to wait for in milliseconds before killing the server.
+            This should be set to a safe default, and can be overridden during a
+            DELETE request if needed.
+        webhook_url:
+          type: string
+          description: A url to send to which events from the server running will be sent
+      required:
+        - datacenter
+        - tags
+        - image
+        - network
+        - resources
+    ServersCreateServerNetworkRequest:
+      type: object
+      properties:
+        mode:
+          $ref: '#/components/schemas/ServersNetworkMode'
+        ports:
+          type: object
+          additionalProperties:
+            $ref: '#/components/schemas/ServersCreateServerPortRequest'
+      required:
+        - ports
+    ServersCreateServerPortRequest:
+      type: object
+      properties:
+        protocol:
+          $ref: '#/components/schemas/ServersPortProtocol'
+        internal_port:
+          type: integer
+        routing:
+          $ref: '#/components/schemas/ServersPortRouting'
+      required:
+        - protocol
+    ServersCreateServerResponse:
+      type: object
+      properties:
+        server:
+          $ref: '#/components/schemas/ServersServer'
+          description: The server that was created
+      required:
+        - server
+    ServersDestroyServerResponse:
+      type: object
+      properties: {}
+    ServersListServersResponse:
+      type: object
+      properties:
+        servers:
+          type: array
+          items:
+            $ref: '#/components/schemas/ServersServer'
+          description: A list of servers for the game associated with the token.
+      required:
+        - servers
     AdminClustersPoolType:
       type: string
       enum:
@@ -13030,218 +13030,6 @@ components:
         - desc
         - asc
       description: A value denoting the sorting method of a game statistic.
-    GamesServersListBuildsResponse:
-      type: object
-      properties:
-        builds:
-          type: array
-          items:
-            $ref: '#/components/schemas/CloudBuildSummary'
-          description: A list of builds for the game associated with the token.
-      required:
-        - builds
-    GamesServersCreateBuildRequest:
-      type: object
-      properties:
-        display_name:
-          $ref: '#/components/schemas/DisplayName'
-        tags: {}
-        image_tag:
-          type: string
-          description: A tag given to the game build.
-        image_file:
-          $ref: '#/components/schemas/UploadPrepareFile'
-        multipart_upload:
-          type: boolean
-        kind:
-          $ref: '#/components/schemas/GamesServersBuildKind'
-        compression:
-          $ref: '#/components/schemas/GamesServersBuildCompression'
-      required:
-        - display_name
-        - tags
-        - image_tag
-        - image_file
-    GamesServersCreateBuildResponse:
-      type: object
-      properties:
-        build_id:
-          type: string
-          format: uuid
-        upload_id:
-          type: string
-          format: uuid
-        image_presigned_request:
-          $ref: '#/components/schemas/UploadPresignedRequest'
-        image_presigned_requests:
-          type: array
-          items:
-            $ref: '#/components/schemas/UploadPresignedRequest'
-      required:
-        - build_id
-        - upload_id
-    GamesServersBuildKind:
-      type: string
-      enum:
-        - docker_image
-        - oci_bundle
-    GamesServersBuildCompression:
-      type: string
-      enum:
-        - none
-        - lz4
-    GamesServersServer:
-      type: object
-      properties:
-        server_id:
-          type: string
-          format: uuid
-        game_id:
-          type: string
-          format: uuid
-        datacenter_id:
-          type: string
-          format: uuid
-        cluster_id:
-          type: string
-          format: uuid
-        tags: {}
-        image_id:
-          type: string
-          format: uuid
-        arguments:
-          type: array
-          items:
-            type: string
-        environment:
-          type: object
-          additionalProperties:
-            type: string
-        network:
-          $ref: '#/components/schemas/GamesServersNetwork'
-        resources:
-          $ref: '#/components/schemas/GamesServersResources'
-        kill_timeout:
-          type: integer
-          format: int64
-          description: >-
-            The duration to wait for in milliseconds before killing the server.
-            This should be set to a safe default, and can be overridden during a
-            DELETE request if needed.
-        create_ts:
-          type: integer
-          format: int64
-        start_ts:
-          type: integer
-          format: int64
-        destroy_ts:
-          type: integer
-          format: int64
-      required:
-        - server_id
-        - game_id
-        - datacenter_id
-        - cluster_id
-        - tags
-        - image_id
-        - network
-        - resources
-        - create_ts
-    GamesServersResources:
-      type: object
-      properties:
-        cpu:
-          type: integer
-          description: >-
-            The number of CPU cores in millicores, or 1/1000 of a core. For
-            example,
-
-            1/8 of a core would be 125 millicores, and 1 core would be 1000
-
-            millicores.
-        memory:
-          type: integer
-          description: The amount of memory in megabytes
-      required:
-        - cpu
-        - memory
-    GamesServersNetwork:
-      type: object
-      properties:
-        mode:
-          $ref: '#/components/schemas/GamesServersNetworkMode'
-        ports:
-          type: object
-          additionalProperties:
-            $ref: '#/components/schemas/GamesServersPort'
-      required:
-        - ports
-    GamesServersNetworkMode:
-      type: string
-      enum:
-        - bridge
-        - host
-    GamesServersPort:
-      type: object
-      properties:
-        protocol:
-          $ref: '#/components/schemas/GamesServersPortProtocol'
-        internal_port:
-          type: integer
-        public_hostname:
-          type: string
-        public_port:
-          type: integer
-        routing:
-          $ref: '#/components/schemas/GamesServersPortRouting'
-      required:
-        - protocol
-        - routing
-    GamesServersPortProtocol:
-      type: string
-      enum:
-        - http
-        - https
-        - tcp
-        - tcp_tls
-        - udp
-    GamesServersPortRouting:
-      type: object
-      properties:
-        game_guard:
-          $ref: '#/components/schemas/GamesServersGameGuardRouting'
-        host:
-          $ref: '#/components/schemas/GamesServersHostRouting'
-    GamesServersGameGuardRouting:
-      type: object
-      properties: {}
-    GamesServersHostRouting:
-      type: object
-      properties: {}
-    GamesServersGetServerLogsResponse:
-      type: object
-      properties:
-        lines:
-          type: array
-          items:
-            type: string
-          description: Sorted old to new.
-        timestamps:
-          type: array
-          items:
-            type: string
-          description: Sorted old to new.
-        watch:
-          $ref: '#/components/schemas/WatchResponse'
-      required:
-        - lines
-        - timestamps
-        - watch
-    GamesServersLogStream:
-      type: string
-      enum:
-        - std_out
-        - std_err
     GeoCoord:
       type: object
       description: Geographical coordinates for a location on Planet Earth.
@@ -14274,6 +14062,249 @@ components:
       required:
         - game
         - watch
+    ServersListBuildsResponse:
+      type: object
+      properties:
+        builds:
+          type: array
+          items:
+            $ref: '#/components/schemas/ServersBuild'
+          description: A list of builds for the game associated with the token.
+      required:
+        - builds
+    ServersCreateBuildRequest:
+      type: object
+      properties:
+        name:
+          type: string
+        tags: {}
+        image_tag:
+          type: string
+          description: A tag given to the game build.
+        image_file:
+          $ref: '#/components/schemas/UploadPrepareFile'
+        multipart_upload:
+          type: boolean
+        kind:
+          $ref: '#/components/schemas/ServersBuildKind'
+        compression:
+          $ref: '#/components/schemas/ServersBuildCompression'
+      required:
+        - name
+        - tags
+        - image_tag
+        - image_file
+    ServersCreateBuildResponse:
+      type: object
+      properties:
+        build:
+          type: string
+          format: uuid
+        upload:
+          type: string
+          format: uuid
+        image_presigned_request:
+          $ref: '#/components/schemas/UploadPresignedRequest'
+        image_presigned_requests:
+          type: array
+          items:
+            $ref: '#/components/schemas/UploadPresignedRequest'
+      required:
+        - build
+        - upload
+    ServersBuildKind:
+      type: string
+      enum:
+        - docker_image
+        - oci_bundle
+    ServersBuildCompression:
+      type: string
+      enum:
+        - none
+        - lz4
+    ServersServer:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        game:
+          type: string
+          format: uuid
+        datacenter:
+          type: string
+        cluster:
+          type: string
+          format: uuid
+        tags: {}
+        image:
+          type: string
+          format: uuid
+        arguments:
+          type: array
+          items:
+            type: string
+        environment:
+          type: object
+          additionalProperties:
+            type: string
+        network:
+          $ref: '#/components/schemas/ServersNetwork'
+        resources:
+          $ref: '#/components/schemas/ServersResources'
+        kill_timeout:
+          type: integer
+          format: int64
+          description: >-
+            The duration to wait for in milliseconds before killing the server.
+            This should be set to a safe default, and can be overridden during a
+            DELETE request if needed.
+        created_at:
+          type: integer
+          format: int64
+        started_at:
+          type: integer
+          format: int64
+        destroyed_at:
+          type: integer
+          format: int64
+      required:
+        - id
+        - game
+        - datacenter
+        - cluster
+        - tags
+        - image
+        - network
+        - resources
+        - created_at
+    ServersResources:
+      type: object
+      properties:
+        cpu:
+          type: integer
+          description: >-
+            The number of CPU cores in millicores, or 1/1000 of a core. For
+            example,
+
+            1/8 of a core would be 125 millicores, and 1 core would be 1000
+
+            millicores.
+        memory:
+          type: integer
+          description: The amount of memory in megabytes
+      required:
+        - cpu
+        - memory
+    ServersNetwork:
+      type: object
+      properties:
+        mode:
+          $ref: '#/components/schemas/ServersNetworkMode'
+        ports:
+          type: object
+          additionalProperties:
+            $ref: '#/components/schemas/ServersPort'
+      required:
+        - ports
+    ServersNetworkMode:
+      type: string
+      enum:
+        - bridge
+        - host
+    ServersPort:
+      type: object
+      properties:
+        protocol:
+          $ref: '#/components/schemas/ServersPortProtocol'
+        internal_port:
+          type: integer
+        public_hostname:
+          type: string
+        public_port:
+          type: integer
+        routing:
+          $ref: '#/components/schemas/ServersPortRouting'
+      required:
+        - protocol
+        - routing
+    ServersPortProtocol:
+      type: string
+      enum:
+        - http
+        - https
+        - tcp
+        - tcp_tls
+        - udp
+    ServersPortRouting:
+      type: object
+      properties:
+        game_guard:
+          $ref: '#/components/schemas/ServersGameGuardRouting'
+        host:
+          $ref: '#/components/schemas/ServersHostRouting'
+    ServersGameGuardRouting:
+      type: object
+      properties: {}
+    ServersHostRouting:
+      type: object
+      properties: {}
+    ServersBuild:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        upload:
+          type: string
+          format: uuid
+        name:
+          type: string
+        created_at:
+          $ref: '#/components/schemas/Timestamp'
+        content_length:
+          type: integer
+          format: int64
+          description: Unsigned 64 bit integer.
+        completed_at:
+          $ref: '#/components/schemas/Timestamp'
+          description: Whether or not this build has completely been uploaded.
+        tags:
+          type: object
+          additionalProperties:
+            type: string
+          description: Tags of this build
+      required:
+        - id
+        - upload
+        - name
+        - created_at
+        - content_length
+        - tags
+    ServersGetServerLogsResponse:
+      type: object
+      properties:
+        lines:
+          type: array
+          items:
+            type: string
+          description: Sorted old to new.
+        timestamps:
+          type: array
+          items:
+            type: string
+          description: Sorted old to new.
+        watch:
+          $ref: '#/components/schemas/WatchResponse'
+      required:
+        - lines
+        - timestamps
+        - watch
+    ServersLogStream:
+      type: string
+      enum:
+        - std_out
+        - std_err
     UploadPresignedRequest:
       type: object
       description: >-
