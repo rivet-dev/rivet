@@ -6,6 +6,8 @@ use uuid::Uuid;
 
 use crate::error::{WorkflowError, WorkflowResult};
 
+pub const WORKER_WAKE_SUBJECT: &str = "chirp.workflow.worker.wake";
+
 pub trait Message: Debug + Send + Sync + Serialize + DeserializeOwned + 'static {
 	const NAME: &'static str;
 	const TAIL_TTL: std::time::Duration;

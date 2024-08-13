@@ -1,11 +1,15 @@
+use futures_util::StreamExt;
 use global_error::GlobalResult;
 use tokio::time::Duration;
 use tracing::Instrument;
 use uuid::Uuid;
 
-use crate::{ctx::WorkflowCtx, db::DatabaseHandle, registry::RegistryHandle, util};
+use crate::{
+	ctx::WorkflowCtx, db::DatabaseHandle, error::WorkflowError, message, registry::RegistryHandle,
+	util,
+};
 
-const TICK_INTERVAL: Duration = Duration::from_millis(200);
+const TICK_INTERVAL: Duration = Duration::from_secs(30);
 
 /// Used to spawn a new thread that indefinitely polls the database for new workflows. Only pulls workflows
 /// that are registered in its registry. After pulling, the workflows are ran and their state is written to
@@ -32,14 +36,54 @@ impl Worker {
 			self.registry.size(),
 		);
 
+		let shared_client = chirp_client::SharedClient::from_env(pools.clone())?;
+		let cache = rivet_cache::CacheInner::from_env(pools.clone())?;
+
+		// Regular tick interval to poll the database
 		let mut interval = tokio::time::interval(TICK_INTERVAL);
 		interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+
+		loop {
+			interval.tick().await;
+			self.tick(&shared_client, &pools, &cache).await?;
+		}
+	}
+
+	pub async fn start_with_nats(mut self, pools: rivet_pools::Pools) -> GlobalResult<()> {
+		tracing::info!(
+			worker_instance_id=?self.worker_instance_id,
+			"starting worker instance with {} registered workflows",
+			self.registry.size(),
+		);
 
 		let shared_client = chirp_client::SharedClient::from_env(pools.clone())?;
 		let cache = rivet_cache::CacheInner::from_env(pools.clone())?;
 
+		// Regular tick interval to poll the database
+		let mut interval = tokio::time::interval(TICK_INTERVAL);
+		interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+
+		// Create a subscription to the wake subject which receives messages whenever the worker should be
+		// awoken
+		let mut sub = pools
+			.nats()?
+			.subscribe(message::WORKER_WAKE_SUBJECT)
+			.await
+			.map_err(|x| WorkflowError::CreateSubscription(x.into()))?;
+
 		loop {
-			interval.tick().await;
+			tokio::select! {
+				_ = interval.tick() => {},
+				msg = sub.next() => {
+					match msg {
+						Some(_) => interval.reset(),
+						None => {
+							return Err(WorkflowError::SubscriptionUnsubscribed.into());
+						}
+					}
+				}
+			}
+
 			self.tick(&shared_client, &pools, &cache).await?;
 		}
 	}
@@ -53,7 +97,8 @@ impl Worker {
 	) -> GlobalResult<()> {
 		tracing::trace!("tick");
 
-		let registered_workflows = self
+		// Create filter from registered workflow names
+		let filter = self
 			.registry
 			.workflows
 			.keys()
@@ -63,7 +108,7 @@ impl Worker {
 		// Query awake workflows
 		let workflows = self
 			.db
-			.pull_workflows(self.worker_instance_id, &registered_workflows)
+			.pull_workflows(self.worker_instance_id, &filter)
 			.await?;
 		for workflow in workflows {
 			let conn = util::new_conn(

@@ -10,7 +10,7 @@ use crate::{
 		workflow::SUB_WORKFLOW_RETRY,
 		MessageCtx, OperationCtx,
 	},
-	db::{DatabaseHandle, DatabasePostgres},
+	db::{DatabaseHandle, DatabasePgNats},
 	error::WorkflowError,
 	message::{Message, ReceivedMessage},
 	operation::{Operation, OperationInput},
@@ -70,7 +70,8 @@ impl TestCtx {
 			(),
 		);
 
-		let db = DatabasePostgres::from_pool(pools.crdb().unwrap());
+		let db =
+			DatabasePgNats::from_pools(pools.crdb().unwrap(), pools.nats_option().clone().unwrap());
 		let msg_ctx = MessageCtx::new(&conn, req_id, ray_id).await.unwrap();
 
 		TestCtx {

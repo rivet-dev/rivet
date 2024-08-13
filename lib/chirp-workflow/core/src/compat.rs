@@ -13,7 +13,7 @@ use crate::{
 		workflow::SUB_WORKFLOW_RETRY,
 		OperationCtx,
 	},
-	db::{DatabaseHandle, DatabasePostgres},
+	db::{DatabaseHandle, DatabasePgNats},
 	error::WorkflowError,
 	message::Message,
 	operation::{Operation, OperationInput},
@@ -261,13 +261,15 @@ async fn db_from_ctx<B: Debug + Clone>(
 	ctx: &rivet_operation::OperationContext<B>,
 ) -> GlobalResult<DatabaseHandle> {
 	let crdb = ctx.crdb().await?;
+	let nats = ctx.conn().nats().await?;
 
-	Ok(DatabasePostgres::from_pool(crdb))
+	Ok(DatabasePgNats::from_pools(crdb, nats))
 }
 
 // Get crdb pool as a trait object
 pub async fn db_from_pools(pools: &rivet_pools::Pools) -> GlobalResult<DatabaseHandle> {
 	let crdb = pools.crdb()?;
+	let nats = pools.nats()?;
 
-	Ok(DatabasePostgres::from_pool(crdb))
+	Ok(DatabasePgNats::from_pools(crdb, nats))
 }

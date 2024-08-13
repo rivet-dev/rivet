@@ -1,7 +1,9 @@
-use std::{sync::Arc, time::Duration};
+use std::sync::Arc;
 
 use indoc::indoc;
+use rivet_pools::prelude::NatsPool;
 use sqlx::{pool::PoolConnection, Acquire, PgPool, Postgres};
+use tracing::Instrument;
 use uuid::Uuid;
 
 use super::{
@@ -13,6 +15,7 @@ use crate::{
 	activity::ActivityId,
 	error::{WorkflowError, WorkflowResult},
 	event::combine_events,
+	message,
 };
 
 /// Max amount of workflows pulled from the database with each call to `pull_workflows`.
@@ -20,37 +23,14 @@ const MAX_PULLED_WORKFLOWS: i64 = 10;
 /// Maximum times a query ran bu this database adapter is retried.
 const MAX_QUERY_RETRIES: usize = 16;
 
-pub struct DatabasePostgres {
+pub struct DatabasePgNats {
 	pool: PgPool,
+	nats: NatsPool,
 }
 
-impl DatabasePostgres {
-	pub async fn new(url: &str) -> WorkflowResult<Arc<DatabasePostgres>> {
-		let pool = sqlx::postgres::PgPoolOptions::new()
-			// The default connection timeout is too high
-			.acquire_timeout(Duration::from_secs(15))
-			// Increase lifetime to mitigate: https://github.com/launchbadge/sqlx/issues/2854
-			//
-			// See max lifetime https://www.cockroachlabs.com/docs/stable/connection-pooling#set-the-maximum-lifetime-of-connections
-			.max_lifetime(Duration::from_secs(30 * 60))
-			// Remove connections after a while in order to reduce load
-			// on CRDB after bursts
-			.idle_timeout(Some(Duration::from_secs(3 * 60)))
-			// Open connections immediately on startup
-			.min_connections(1)
-			// Raise the cap, since this is effectively the amount of
-			// simultaneous requests we can handle. See
-			// https://www.cockroachlabs.com/docs/stable/connection-pooling.html
-			.max_connections(4096)
-			.connect(url)
-			.await
-			.map_err(WorkflowError::BuildSqlx)?;
-
-		Ok(Arc::new(DatabasePostgres { pool }))
-	}
-
-	pub fn from_pool(pool: PgPool) -> Arc<DatabasePostgres> {
-		Arc::new(DatabasePostgres { pool })
+impl DatabasePgNats {
+	pub fn from_pools(pool: PgPool, nats: NatsPool) -> Arc<DatabasePgNats> {
+		Arc::new(DatabasePgNats { pool, nats })
 	}
 
 	async fn conn(&self) -> WorkflowResult<PoolConnection<Postgres>> {
@@ -60,6 +40,29 @@ impl DatabasePostgres {
 		} else {
 			// Create a new connection
 			self.pool.acquire().await.map_err(WorkflowError::Sqlx)
+		}
+	}
+
+	/// Spawns a new thread and publishes a worker wake message to nats.
+	fn wake_worker(&self) {
+		let nats = self.nats.clone();
+
+		let spawn_res = tokio::task::Builder::new()
+			.name("chirp_workflow::DatabasePgNats::wake")
+			.spawn(
+				async move {
+					// Fail gracefully
+					if let Err(err) = nats
+						.publish(message::WORKER_WAKE_SUBJECT, Vec::new().into())
+						.await
+					{
+						tracing::warn!(?err, "failed to publish wake message");
+					}
+				}
+				.in_current_span(),
+			);
+		if let Err(err) = spawn_res {
+			tracing::error!(?err, "failed to spawn wake task");
 		}
 	}
 
@@ -94,7 +97,7 @@ impl DatabasePostgres {
 }
 
 #[async_trait::async_trait]
-impl Database for DatabasePostgres {
+impl Database for DatabasePgNats {
 	async fn dispatch_workflow(
 		&self,
 		ray_id: Uuid,
@@ -123,6 +126,8 @@ impl Database for DatabasePostgres {
 			.map_err(WorkflowError::Sqlx)
 		})
 		.await?;
+
+		self.wake_worker();
 
 		Ok(())
 	}
@@ -378,6 +383,8 @@ impl Database for DatabasePostgres {
 		})
 		.await?;
 
+		self.wake_worker();
+
 		Ok(())
 	}
 
@@ -416,6 +423,8 @@ impl Database for DatabasePostgres {
 			.map_err(WorkflowError::Sqlx)
 		})
 		.await?;
+
+		self.wake_worker();
 
 		Ok(())
 	}
@@ -648,6 +657,8 @@ impl Database for DatabasePostgres {
 		})
 		.await?;
 
+		self.wake_worker();
+
 		Ok(())
 	}
 
@@ -677,6 +688,8 @@ impl Database for DatabasePostgres {
 			.map_err(WorkflowError::Sqlx)
 		})
 		.await?;
+
+		self.wake_worker();
 
 		Ok(())
 	}
@@ -726,6 +739,8 @@ impl Database for DatabasePostgres {
 		})
 		.await?;
 
+		self.wake_worker();
+
 		Ok(())
 	}
 
@@ -773,6 +788,8 @@ impl Database for DatabasePostgres {
 			.map_err(WorkflowError::Sqlx)
 		})
 		.await?;
+
+		self.wake_worker();
 
 		Ok(())
 	}
@@ -824,6 +841,8 @@ impl Database for DatabasePostgres {
 		})
 		.await?;
 
+		self.wake_worker();
+
 		Ok(())
 	}
 
@@ -852,7 +871,7 @@ impl Database for DatabasePostgres {
 		.map_err(WorkflowError::Sqlx)
 	}
 
-	async fn publish_message_from_workflow(
+	async fn commit_workflow_message_send_event(
 		&self,
 		from_workflow_id: Uuid,
 		location: &[usize],

@@ -753,7 +753,10 @@ impl WorkflowCtx {
 
 	/// Tests if the given error is unrecoverable. If it is, allows the user to run recovery code safely.
 	/// Should always be used when trying to handle activity errors manually.
-	pub fn catch_unrecoverable<T>(&mut self, res: GlobalResult<T>) -> GlobalResult<GlobalResult<T>> {
+	pub fn catch_unrecoverable<T>(
+		&mut self,
+		res: GlobalResult<T>,
+	) -> GlobalResult<GlobalResult<T>> {
 		match res {
 			Err(err) if !err.is_workflow_recoverable() => {
 				self.location_idx += 1;
@@ -1082,7 +1085,7 @@ impl WorkflowCtx {
 			let location = self.full_location();
 
 			let (msg, write) = tokio::join!(
-				self.db.publish_message_from_workflow(
+				self.db.commit_workflow_message_send_event(
 					self.workflow_id,
 					location.as_ref(),
 					&tags,
@@ -1143,7 +1146,7 @@ impl WorkflowCtx {
 			let location = self.full_location();
 
 			let (msg, write) = tokio::join!(
-				self.db.publish_message_from_workflow(
+				self.db.commit_workflow_message_send_event(
 					self.workflow_id,
 					location.as_ref(),
 					&tags,

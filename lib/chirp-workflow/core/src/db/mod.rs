@@ -10,13 +10,14 @@ use crate::{
 	workflow::Workflow,
 };
 
-mod postgres;
-pub use postgres::DatabasePostgres;
+mod pg_nats;
+pub use pg_nats::DatabasePgNats;
 
 pub type DatabaseHandle = Arc<dyn Database + Sync>;
 
 #[async_trait::async_trait]
 pub trait Database: Send {
+	/// Writes a new workflow to the database.
 	async fn dispatch_workflow(
 		&self,
 		ray_id: Uuid,
@@ -26,19 +27,22 @@ pub trait Database: Send {
 		input: serde_json::Value,
 	) -> WorkflowResult<()>;
 	async fn get_workflow(&self, id: Uuid) -> WorkflowResult<Option<WorkflowRow>>;
+
+	/// Pulls workflows for processing by the worker. Will only pull workflows with names matching the filter.
 	async fn pull_workflows(
 		&self,
 		worker_instance_id: Uuid,
 		filter: &[&str],
 	) -> WorkflowResult<Vec<PulledWorkflow>>;
 
-	// When a workflow is completed
+	/// Mark a workflow as completed.
 	async fn commit_workflow(
 		&self,
 		workflow_id: Uuid,
 		output: &serde_json::Value,
 	) -> WorkflowResult<()>;
-	// When a workflow fails
+
+	/// Write a workflow failure to the database.
 	async fn fail_workflow(
 		&self,
 		workflow_id: Uuid,
@@ -48,12 +52,15 @@ pub trait Database: Send {
 		wake_sub_workflow: Option<Uuid>,
 		error: &str,
 	) -> WorkflowResult<()>;
+
+	/// Updates workflow tags.
 	async fn update_workflow_tags(
 		&self,
 		workflow_id: Uuid,
 		tags: &serde_json::Value,
 	) -> WorkflowResult<()>;
 
+	/// Write a workflow activity event to history.
 	async fn commit_workflow_activity_event(
 		&self,
 		workflow_id: Uuid,
@@ -65,6 +72,7 @@ pub trait Database: Send {
 		loop_location: Option<&[usize]>,
 	) -> WorkflowResult<()>;
 
+	/// Pulls the oldest signal with the given filter. Pulls from regular and tagged signals.
 	async fn pull_next_signal(
 		&self,
 		workflow_id: Uuid,
@@ -72,6 +80,8 @@ pub trait Database: Send {
 		location: &[usize],
 		loop_location: Option<&[usize]>,
 	) -> WorkflowResult<Option<SignalRow>>;
+
+	/// Write a new signal to the database.
 	async fn publish_signal(
 		&self,
 		ray_id: Uuid,
@@ -80,6 +90,8 @@ pub trait Database: Send {
 		signal_name: &str,
 		body: serde_json::Value,
 	) -> WorkflowResult<()>;
+
+	/// Write a new tagged signal to the database.
 	async fn publish_tagged_signal(
 		&self,
 		ray_id: Uuid,
@@ -88,6 +100,8 @@ pub trait Database: Send {
 		signal_name: &str,
 		body: serde_json::Value,
 	) -> WorkflowResult<()>;
+
+	/// Write a new signal to the database. Contains extra info used to populate the history.
 	async fn publish_signal_from_workflow(
 		&self,
 		from_workflow_id: Uuid,
@@ -99,6 +113,8 @@ pub trait Database: Send {
 		body: serde_json::Value,
 		loop_location: Option<&[usize]>,
 	) -> WorkflowResult<()>;
+
+	/// Write a new tagged signal to the database. Contains extra info used to populate the history.
 	async fn publish_tagged_signal_from_workflow(
 		&self,
 		from_workflow_id: Uuid,
@@ -111,6 +127,7 @@ pub trait Database: Send {
 		loop_location: Option<&[usize]>,
 	) -> WorkflowResult<()>;
 
+	/// Publish a new workflow from an existing workflow.
 	async fn dispatch_sub_workflow(
 		&self,
 		ray_id: Uuid,
@@ -123,7 +140,8 @@ pub trait Database: Send {
 		loop_location: Option<&[usize]>,
 	) -> WorkflowResult<()>;
 
-	/// Fetches a workflow that has the given json as a subset of its input after the given ts.
+	/// Fetches a workflow that has the given json as a subset of its input after the given ts. Used primarily
+	/// in tests.
 	async fn poll_workflow(
 		&self,
 		name: &str,
@@ -131,7 +149,8 @@ pub trait Database: Send {
 		after_ts: i64,
 	) -> WorkflowResult<Option<(Uuid, i64)>>;
 
-	async fn publish_message_from_workflow(
+	/// Writes a message send event to history.
+	async fn commit_workflow_message_send_event(
 		&self,
 		from_workflow_id: Uuid,
 		location: &[usize],
@@ -141,6 +160,7 @@ pub trait Database: Send {
 		loop_location: Option<&[usize]>,
 	) -> WorkflowResult<()>;
 
+	/// Updates a loop event in history and forgets all history items in the previous iteration.
 	async fn update_loop(
 		&self,
 		workflow_id: Uuid,

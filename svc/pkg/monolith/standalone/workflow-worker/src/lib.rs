@@ -4,10 +4,10 @@ use chirp_workflow::prelude::*;
 pub async fn run_from_env(pools: rivet_pools::Pools) -> GlobalResult<()> {
 	let reg = cluster::registry()?.merge(linode::registry()?)?;
 
-	let db = db::DatabasePostgres::from_pool(pools.crdb().unwrap());
+	let db = db::DatabasePgNats::from_pools(pools.crdb()?, pools.nats()?);
 	let worker = Worker::new(reg.handle(), db.clone());
 
 	// Start worker
-	worker.start(pools).await?;
+	worker.start_with_nats(pools).await?;
 	bail!("worker exited unexpectedly");
 }
