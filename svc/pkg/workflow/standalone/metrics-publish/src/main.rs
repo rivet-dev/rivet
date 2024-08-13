@@ -21,7 +21,7 @@ async fn start() -> GlobalResult<()> {
 		.name("workflow_metrics_publish::metrics")
 		.spawn(rivet_metrics::run_standalone())?;
 
-	let mut interval = tokio::time::interval(Duration::from_secs(5));
+	let mut interval = tokio::time::interval(Duration::from_secs(15));
 	loop {
 		interval.tick().await;
 
