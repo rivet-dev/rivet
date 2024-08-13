@@ -120,26 +120,14 @@ impl ProjectContextData {
 			Self::load_root_dir(&mut svc_ctxs_map, path.clone()).await;
 
 			// Compute the git diff between the current branch and the local changes
-			let mut cmd = Command::new("git");
-			cmd.current_dir(path).arg("diff").arg("--minimal");
-			source_diff.push_str(
-				&cmd.exec_string_with_err("Failed to get source hash", true)
-					.await
-					.unwrap(),
-			);
+			source_diff.push_str(&get_source_diff(&path).await.unwrap());
 		}
 
 		// Load main project after sub projects so it overrides sub project services
 		Self::load_root_dir(&mut svc_ctxs_map, project_root.clone()).await;
 
 		// Compute the git diff between the current branch and the local changes
-		let mut cmd = Command::new("git");
-		cmd.current_dir(&project_root).arg("diff").arg("--minimal");
-		source_diff.push_str(
-			&cmd.exec_string_with_err("Failed to get source hash", true)
-				.await
-				.unwrap(),
-		);
+		source_diff.push_str(&get_source_diff(&project_root).await.unwrap());
 
 		// If there is no diff, use the git commit hash
 		let source_hash = if source_diff.is_empty() {
@@ -1173,4 +1161,42 @@ impl ProjectContextData {
 
 		Ok(value_str)
 	}
+}
+
+async fn get_source_diff(path: &Path) -> Result<String> {
+	use tokio::io::AsyncReadExt;
+	use tokio::process::Command;
+
+	// Get git diff
+	let diff_output = Command::new("git")
+		.current_dir(path)
+		.args(&["--no-pager", "diff", "HEAD", "--minimal"])
+		.output()
+		.await?;
+	let mut result = String::from_utf8(diff_output.stdout)?;
+
+	// Add diff for untracked files
+	let ls_files_output = Command::new("git")
+		.current_dir(path)
+		.args(&[
+			"--no-pager",
+			"ls-files",
+			"-z",
+			"--others",
+			"--exclude-standard",
+		])
+		.output()
+		.await?;
+	for file in String::from_utf8(ls_files_output.stdout)?.split('\0') {
+		if !file.is_empty() {
+			let mut file_content = String::new();
+			tokio::fs::File::open(path.join(file))
+				.await?
+				.read_to_string(&mut file_content)
+				.await?;
+			result.push_str(&file_content);
+		}
+	}
+
+	Ok(result)
 }

@@ -379,6 +379,7 @@ pub async fn build_tests<'a, T: AsRef<str>>(
 		[ -z "${{CARGO_TARGET_DIR+x}}" ] && export CARGO_TARGET_DIR=$(readlink -f ./target)
 		# Used for Tokio Console. See https://github.com/tokio-rs/console#using-it
 		export RUSTFLAGS="--cfg tokio_unstable"
+		export CARGO_TERM_COLOR=always
 
 		{build_calls}
 		"#,
@@ -498,8 +499,6 @@ pub async fn build_tests<'a, T: AsRef<str>>(
 		cmd.arg("build");
 		cmd.arg("--progress").arg("plain");
 		cmd.arg("-f").arg(dockerfile_path);
-		// Prints plain console output for debugging
-		// cmd.arg("--progress=plain");
 		cmd.arg("-t").arg(&image_tag);
 		cmd.arg(".");
 
