@@ -32,6 +32,9 @@ pub async fn cluster_server_resolve_for_ip(
 		WHERE
 			($1 OR cloud_destroy_ts IS NULL) AND
 			public_ip = ANY($2)
+		-- When more than one record is returned per IP, sort by create_ts so that the first record is the
+		-- latest server created
+		ORDER BY create_ts DESC
 		",
 		input.include_destroyed,
 		input.ips

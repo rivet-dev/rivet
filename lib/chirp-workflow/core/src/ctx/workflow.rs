@@ -1004,41 +1004,43 @@ impl WorkflowCtx {
 		Ok(signal)
 	}
 
-	/// Checks if the given signal exists in the database.
-	pub async fn query_signal<T: Listen>(&mut self) -> GlobalResult<Option<T>> {
-		let event = self.relevant_history().nth(self.location_idx);
+	// TODO: Currently implemented wrong, if no signal is received it should still write a signal row to the
+	// database so that upon replay it again receives no signal
+	// /// Checks if the given signal exists in the database.
+	// pub async fn query_signal<T: Listen>(&mut self) -> GlobalResult<Option<T>> {
+	// 	let event = self.relevant_history().nth(self.location_idx);
 
-		// Signal received before
-		let signal = if let Some(event) = event {
-			tracing::debug!(name=%self.name, id=%self.workflow_id, "replaying signal");
+	// 	// Signal received before
+	// 	let signal = if let Some(event) = event {
+	// 		tracing::debug!(name=%self.name, id=%self.workflow_id, "replaying signal");
 
-			// Validate history is consistent
-			let Event::Signal(signal) = event else {
-				return Err(WorkflowError::HistoryDiverged(format!(
-					"expected {event} at {}, found signal",
-					self.loc(),
-				)))
-				.map_err(GlobalError::raw);
-			};
+	// 		// Validate history is consistent
+	// 		let Event::Signal(signal) = event else {
+	// 			return Err(WorkflowError::HistoryDiverged(format!(
+	// 				"expected {event} at {}, found signal",
+	// 				self.loc(),
+	// 			)))
+	// 			.map_err(GlobalError::raw);
+	// 		};
 
-			Some(T::parse(&signal.name, signal.body.clone()).map_err(GlobalError::raw)?)
-		}
-		// Listen for new message
-		else {
-			let ctx = ListenCtx::new(self);
+	// 		Some(T::parse(&signal.name, signal.body.clone()).map_err(GlobalError::raw)?)
+	// 	}
+	// 	// Listen for new message
+	// 	else {
+	// 		let ctx = ListenCtx::new(self);
 
-			match T::listen(&ctx).await {
-				Ok(res) => Some(res),
-				Err(err) if matches!(err, WorkflowError::NoSignalFound(_)) => None,
-				Err(err) => return Err(err).map_err(GlobalError::raw),
-			}
-		};
+	// 		match T::listen(&ctx).await {
+	// 			Ok(res) => Some(res),
+	// 			Err(err) if matches!(err, WorkflowError::NoSignalFound(_)) => None,
+	// 			Err(err) => return Err(err).map_err(GlobalError::raw),
+	// 		}
+	// 	};
 
-		// Move to next event
-		self.location_idx += 1;
+	// 	// Move to next event
+	// 	self.location_idx += 1;
 
-		Ok(signal)
-	}
+	// 	Ok(signal)
+	// }
 
 	pub async fn msg<M>(&mut self, tags: serde_json::Value, body: M) -> GlobalResult<()>
 	where

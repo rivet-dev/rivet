@@ -96,7 +96,9 @@ async fn echo_tcp_server(port: u16) -> Result<()> {
 
 	let listener = TcpListener::bind(&addr).await.context("bind failed")?;
 	loop {
-		let (socket, _) = listener.accept().await.context("accept failed")?;
+		let (socket, addr) = listener.accept().await.context("accept failed")?;
+		println!("connection: {addr}");
+
 		tokio::spawn(async move {
 			let mut framed = Framed::new(socket, BytesCodec::new());
 
@@ -106,6 +108,8 @@ async fn echo_tcp_server(port: u16) -> Result<()> {
 					.await
 					.expect("write failed");
 			}
+
+			println!("connection closed: {addr}");
 		});
 	}
 }
