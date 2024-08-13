@@ -417,15 +417,15 @@ async fn get_public_ip(ctx: &ActivityCtx, input: &GetPublicIpInput) -> GlobalRes
 	api::get_public_ip(&client, input.linode_id).await
 }
 
-#[signal("linode-server-provision-complete")]
+#[signal("linode_server_provision_complete")]
 pub struct ProvisionComplete {
 	pub linode_id: u64,
 	pub public_ip: Ipv4Addr,
 	pub boot_disk_id: u64,
 }
 
-#[signal("linode-server-provision-failed")]
+#[signal("linode_server_provision_failed")]
 pub struct ProvisionFailed {}
 
-#[signal("linode-server-destroy")]
+#[signal("linode_server_destroy")]
 pub struct Destroy {}

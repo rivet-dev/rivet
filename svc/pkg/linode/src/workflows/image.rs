@@ -114,12 +114,12 @@ async fn create_custom_image(
 	Ok(create_image_res.id)
 }
 
-#[signal("linode-image-create-complete")]
+#[signal("linode_image_create_complete")]
 pub struct CreateComplete {
 	pub image_id: String,
 }
 
-#[signal("linode-image-destroy")]
+#[signal("linode_image_destroy")]
 pub struct Destroy {}
 
 #[derive(Debug, Serialize, Deserialize, Hash)]

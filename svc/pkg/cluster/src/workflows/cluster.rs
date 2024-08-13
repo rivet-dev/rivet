@@ -110,15 +110,15 @@ async fn insert_db(ctx: &ActivityCtx, input: &InsertDbInput) -> GlobalResult<()>
 	Ok(())
 }
 
-#[message("cluster-create-complete")]
+#[message("cluster_create_complete")]
 pub struct CreateComplete {}
 
-#[signal("cluster-game-link")]
+#[signal("cluster_game_link")]
 pub struct GameLink {
 	pub game_id: Uuid,
 }
 
-#[signal("cluster-datacenter-create")]
+#[signal("cluster_datacenter_create")]
 pub struct DatacenterCreate {
 	pub datacenter_id: Uuid,
 	pub name_id: String,

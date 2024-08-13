@@ -74,7 +74,7 @@ macro_rules! join_signal {
 				)else*
 
 				else {
-					unreachable!("received signal that wasn't queried for");
+					unreachable!("received signal that wasn't queried for: {}, expected {:?}", name, &[$($signals::NAME),*]);
 				}
 			}
 		}

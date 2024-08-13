@@ -217,19 +217,19 @@ async fn insert_db(ctx: &ActivityCtx, input: &InsertDbInput) -> GlobalResult<()>
 	Ok(())
 }
 
-#[signal("cluster-datacenter-update")]
+#[signal("cluster_datacenter_update")]
 pub struct Update {
 	pub pools: Vec<PoolUpdate>,
 	pub prebakes_enabled: Option<bool>,
 }
 
-#[signal("cluster-datacenter-scale")]
+#[signal("cluster_datacenter_scale")]
 pub struct Scale {}
 
-#[signal("cluster-datacenter-tls-renew")]
+#[signal("cluster_datacenter_tls_renew")]
 pub struct TlsRenew {}
 
-#[signal("cluster-datacenter-server-create")]
+#[signal("cluster_datacenter_server_create")]
 pub struct ServerCreate {
 	pub server_id: Uuid,
 	pub pool_type: PoolType,
@@ -238,7 +238,7 @@ pub struct ServerCreate {
 
 join_signal!(Main, [Update, Scale, ServerCreate, TlsRenew]);
 
-#[message("cluster-datacenter-create-complete")]
+#[message("cluster_datacenter_create_complete")]
 pub struct CreateComplete {}
 
 #[derive(Debug, Serialize, Deserialize, Hash)]

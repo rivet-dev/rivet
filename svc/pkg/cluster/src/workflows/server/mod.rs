@@ -154,14 +154,32 @@ pub(crate) async fn cluster_server(ctx: &mut WorkflowCtx, input: &Input) -> Glob
 
 		// Install components on server
 		if !already_installed {
-			ctx.workflow(install::Input {
-				datacenter_id: input.datacenter_id,
-				server_id: Some(input.server_id),
-				public_ip,
-				pool_type: input.pool_type.clone(),
-				initialize_immediately: true,
-			})
-			.await?;
+			let install_res = ctx
+				.workflow(install::Input {
+					datacenter_id: input.datacenter_id,
+					server_id: Some(input.server_id),
+					public_ip,
+					pool_type: input.pool_type.clone(),
+					initialize_immediately: true,
+				})
+				.await;
+
+			// If the server failed all attempts to install, clean it up
+			match ctx.catch_unrecoverable(install_res)? {
+				Ok(_) => {}
+				Err(err) => {
+					tracing::warn!(?err, "failed installing server, cleaning up");
+
+					ctx.activity(MarkDestroyedInput {
+						server_id: input.server_id,
+					})
+					.await?;
+
+					cleanup(ctx, input, &dc.provider, provider_server_workflow_id, false).await?;
+
+					return Err(err);
+				}
+			}
 		}
 
 		// Scale to get rid of tainted servers
@@ -279,34 +297,7 @@ pub(crate) async fn cluster_server(ctx: &mut WorkflowCtx, input: &Input) -> Glob
 		}
 	}
 
-	// Cleanup DNS
-	if let PoolType::Gg = input.pool_type {
-		ctx.workflow(dns_delete::Input {
-			server_id: input.server_id,
-		})
-		.await?;
-	}
-
-	// Cleanup server
-	match dc.provider {
-		Provider::Linode => {
-			tracing::info!(server_id=?input.server_id, "destroying linode server");
-
-			ctx.tagged_signal(
-				&json!({
-					"server_id": input.server_id,
-				}),
-				linode::workflows::server::Destroy {},
-			)
-			.await?;
-
-			// Wait for workflow to complete
-			ctx.wait_for_workflow::<linode::workflows::server::Workflow>(
-				provider_server_workflow_id,
-			)
-			.await?;
-		}
-	}
+	cleanup(ctx, input, &dc.provider, provider_server_workflow_id, true).await?;
 
 	Ok(())
 }
@@ -677,6 +668,47 @@ async fn set_drain_complete(ctx: &ActivityCtx, input: &SetDrainCompleteInput) ->
 	Ok(())
 }
 
+async fn cleanup(
+	ctx: &mut WorkflowCtx,
+	input: &Input,
+	provider: &Provider,
+	provider_server_workflow_id: Uuid,
+	cleanup_dns: bool,
+) -> GlobalResult<()> {
+	if cleanup_dns {
+		// Cleanup DNS
+		if let PoolType::Gg = input.pool_type {
+			ctx.workflow(dns_delete::Input {
+				server_id: input.server_id,
+			})
+			.await?;
+		}
+	}
+
+	// Cleanup server
+	match provider {
+		Provider::Linode => {
+			tracing::info!(server_id=?input.server_id, "destroying linode server");
+
+			ctx.tagged_signal(
+				&json!({
+					"server_id": input.server_id,
+				}),
+				linode::workflows::server::Destroy {},
+			)
+			.await?;
+
+			// Wait for workflow to complete
+			ctx.wait_for_workflow::<linode::workflows::server::Workflow>(
+				provider_server_workflow_id,
+			)
+			.await?;
+		}
+	}
+
+	Ok(())
+}
+
 /// Finite state machine for handling server updates.
 struct State {
 	draining: bool,
@@ -782,30 +814,30 @@ type ProvisionComplete = linode::workflows::server::ProvisionComplete;
 type ProvisionFailed = linode::workflows::server::ProvisionFailed;
 join_signal!(pub(crate) Linode, [ProvisionComplete, ProvisionFailed]);
 
-#[signal("cluster-server-drain")]
+#[signal("cluster_server_drain")]
 pub struct Drain {}
 
-#[signal("cluster-server-undrain")]
+#[signal("cluster_server_undrain")]
 pub struct Undrain {}
 
-#[signal("cluster-server-taint")]
+#[signal("cluster_server_taint")]
 pub struct Taint {}
 
-#[signal("cluster-server-dns-create")]
+#[signal("cluster_server_dns_create")]
 pub struct DnsCreate {}
 
-#[signal("cluster-server-dns-delete")]
+#[signal("cluster_server_dns_delete")]
 pub struct DnsDelete {}
 
-#[signal("cluster-server-destroy")]
+#[signal("cluster_server_destroy")]
 pub struct Destroy {}
 
-#[signal("cluster-server-nomad-registered")]
+#[signal("cluster_server_nomad_registered")]
 pub struct NomadRegistered {
 	pub node_id: String,
 }
 
-#[signal("cluster-server-nomad-drain-complete")]
+#[signal("cluster_server_nomad_drain_complete")]
 pub struct NomadDrainComplete {}
 
 join_signal!(
