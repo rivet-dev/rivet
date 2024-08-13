@@ -1,2 +1,2 @@
 -- No longer needed
-DROP TABLE servers_linode;
+RENAME TABLE servers_linode TO servers_linode_archive;
