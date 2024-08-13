@@ -23,36 +23,39 @@ pub async fn handle(
 define_router! {
 	cors: CorsConfigBuilder::hub().build(),
 	routes: {
-		"" : {
+		"games" / Uuid / "servers": {
 			GET: servers::list_servers(
 				query: servers::ListQuery,
 			),
 			POST: servers::create(
-				body: models::ServersCreateServerRequest,
+				body: models::GamesServersCreateServerRequest,
 			),
 		},
 
-		Uuid : {
+		"games" / Uuid / "servers" / Uuid: {
 			GET: servers::get(),
 			DELETE: servers::destroy(
 				query: servers::DeleteQuery,
 			),
 		},
 
-		Uuid / "logs" : {
+		"games" / Uuid / "servers" / Uuid / "logs" : {
 			GET: logs::get_logs(
 				query: logs::GetServerLogsQuery,
 			),
 		},
 
-		"builds": {
+		"games" / Uuid / "builds": {
 			GET: builds::get_builds(
 				query: builds::GetQuery,
 			),
-			POST: builds::create_build(body: models::ServersCreateBuildRequest),
 		},
 
-		"uploads" / Uuid / "complete": {
+		"games" / Uuid / "builds" / "prepare": {
+			POST: builds::create_build(body: models::GamesServersCreateBuildRequest),
+		},
+
+		"games" / Uuid / "builds" / Uuid / "complete": {
 			POST: builds::complete_build(body: serde_json::Value),
 		},
 	},

@@ -28,6 +28,7 @@ tracing = "0.1"
 tracing-futures = "0.2"
 tracing-subscriber = { version = "0.3", default-features = false, features = ["fmt", "json", "ansi"] }
 url = "2.2.2"
+util-team = { package = "rivet-util-team", path = "../../pkg/team/util" }
 uuid = { version = "1", features = ["v4"] }
 
 build-create = { path = "../../pkg/build/ops/create" }
@@ -42,6 +43,7 @@ ds-server-list-for-game = { path = "../../pkg/ds/ops/server-list-for-game" }
 game-get = { path = "../../pkg/game/ops/get" }
 game-namespace-get = { path = "../../pkg/game/ops/namespace-get" }
 game-version-get = { path = "../../pkg/game/ops/version-get" }
+team-get = { path = "../../pkg/team/ops/get" }
 token-revoke = { path = "../../pkg/token/ops/revoke" }
 upload-complete = { path = "../../pkg/upload/ops/complete" }
 upload-get = { path = "../../pkg/upload/ops/get" }

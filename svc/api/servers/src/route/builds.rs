@@ -11,23 +11,19 @@ use serde_json::json;
 
 use crate::auth::Auth;
 
-// MARK: GET /builds
+// MARK: GET /games/{}/builds
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct GetQuery {
 	tags: Option<String>,
-	game_id: Option<Uuid>,
 }
 
 pub async fn get_builds(
 	ctx: Ctx<Auth>,
+	game_id: Uuid,
 	_watch_index: WatchIndexQuery,
 	query: GetQuery,
-) -> GlobalResult<models::ServersListBuildsResponse> {
-	let game_id = if let Some(game_id) = query.game_id {
-		game_id
-	} else {
-		ctx.auth().check_game_service_or_cloud_token().await?
-	};
+) -> GlobalResult<models::GamesServersListBuildsResponse> {
+	ctx.auth().check_game(ctx.op_ctx(), game_id, true).await?;
 
 	let list_res = op!([ctx] build_list_for_game {
 		game_id: Some(game_id.into()),
@@ -83,34 +79,35 @@ pub async fn get_builds(
 	builds.sort_by_key(|(create_ts, _)| *create_ts);
 	builds.reverse();
 
-	Ok(models::ServersListBuildsResponse {
+	Ok(models::GamesServersListBuildsResponse {
 		builds: builds.into_iter().map(|(_, x)| x).collect::<Vec<_>>(),
 	})
 }
 
-// MARK: POST /games/{}/versions/builds
+// MARK: POST /games/{}/builds/prepare
 pub async fn create_build(
 	ctx: Ctx<Auth>,
-	body: models::ServersCreateBuildRequest,
-) -> GlobalResult<models::ServersCreateBuildResponse> {
-	let game_id = ctx.auth().check_game_service_or_cloud_token().await?;
+	game_id: Uuid,
+	body: models::GamesServersCreateBuildRequest,
+) -> GlobalResult<models::GamesServersCreateBuildResponse> {
+	ctx.auth().check_game(ctx.op_ctx(), game_id, false).await?;
 
 	// TODO: Read and validate image file
 
 	let multipart_upload = body.multipart_upload.unwrap_or(false);
 
 	let kind = match body.kind {
-		None | Some(models::ServersBuildKind::DockerImage) => {
+		None | Some(models::GamesServersBuildKind::DockerImage) => {
 			backend::build::BuildKind::DockerImage
 		}
-		Some(models::ServersBuildKind::OciBundle) => backend::build::BuildKind::OciBundle,
+		Some(models::GamesServersBuildKind::OciBundle) => backend::build::BuildKind::OciBundle,
 	};
 
 	let compression = match body.compression {
-		None | Some(models::ServersBuildCompression::None) => {
+		None | Some(models::GamesServersBuildCompression::None) => {
 			backend::build::BuildCompression::None
 		}
-		Some(models::ServersBuildCompression::Lz4) => backend::build::BuildCompression::Lz4,
+		Some(models::GamesServersBuildCompression::Lz4) => backend::build::BuildCompression::Lz4,
 	};
 
 	// Verify that tags are valid
@@ -153,7 +150,7 @@ pub async fn create_build(
 		None
 	};
 
-	Ok(models::ServersCreateBuildResponse {
+	Ok(models::GamesServersCreateBuildResponse {
 		build_id: unwrap_ref!(create_res.build_id).as_uuid(),
 		upload_id: unwrap_ref!(create_res.upload_id).as_uuid(),
 		image_presigned_request,
@@ -161,20 +158,28 @@ pub async fn create_build(
 	})
 }
 
-// MARK: POST /uploads/{}/complete
+// MARK: POST /games/{}/builds/{}/complete
 pub async fn complete_build(
 	ctx: Ctx<Auth>,
-	upload_id: Uuid,
+	game_id: Uuid,
+	build_id: Uuid,
 	_body: serde_json::Value,
 ) -> GlobalResult<serde_json::Value> {
-	// TODO: use auth module instead
-	// let claims = ctx.auth().claims()?;
-	// if claims.as_user().is_err() {
-	// 	claims.as_game_cloud()?;
-	// }
+	ctx.auth().check_game(ctx.op_ctx(), game_id, false).await?;
+
+	let build_res = op!([ctx] build_get {
+		build_ids: vec![build_id.into()],
+	})
+	.await?;
+	let build = unwrap_with!(build_res.builds.first(), BUILDS_BUILD_NOT_FOUND);
+
+	ensure_with!(
+		unwrap!(build.game_id).as_uuid() == game_id,
+		BUILDS_BUILD_NOT_FOUND
+	);
 
 	op!([ctx] @dont_log_body upload_complete {
-		upload_id: Some(upload_id.into()),
+		upload_id: build.upload_id,
 		bucket: None,
 	})
 	.await?;

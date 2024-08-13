@@ -8,6 +8,8 @@ static GLOBAL_INIT: Once = Once::new();
 struct Ctx {
 	pub op_ctx: OperationContext<()>,
 	pub ns_auth_token: String,
+	pub game_id: Uuid,
+	pub game_id_str: String,
 	pub datacenter_id: Uuid,
 	pub image_id: Uuid,
 }
@@ -50,6 +52,8 @@ impl Ctx {
 		Ok(Ctx {
 			op_ctx,
 			ns_auth_token,
+			game_id,
+			game_id_str: game_id.to_string(),
 			datacenter_id,
 			image_id,
 		})
@@ -144,9 +148,10 @@ async fn create_http() -> GlobalResult<()> {
 
 	let ctx_config = ctx.config(ctx.ns_auth_token.clone())?;
 
-	let res = servers_api::servers_create(
+	let res = games_servers_api::games_servers_create(
 		&ctx_config,
-		models::ServersCreateServerRequest {
+		&ctx.game_id_str,
+		models::GamesServersCreateServerRequest {
 			arguments: None,
 			datacenter: ctx.datacenter_id.to_string(),
 			environment: Some(HashMap::new()),
@@ -154,13 +159,13 @@ async fn create_http() -> GlobalResult<()> {
 			kill_timeout: Some(0),
 			webhook_url: None,
 			tags: None,
-			network: Box::new(models::ServersCreateServerNetworkRequest {
-				mode: Some(models::ServersNetworkMode::Bridge),
+			network: Box::new(models::GamesServersCreateServerNetworkRequest {
+				mode: Some(models::GamesServersNetworkMode::Bridge),
 				ports: vec![(
 					"testing2".to_string(),
-					models::ServersCreateServerPortRequest {
-						protocol: models::ServersPortProtocol::Http,
-						routing: Some(Box::new(models::ServersPortRouting {
+					models::GamesServersCreateServerPortRequest {
+						protocol: models::GamesServersPortProtocol::Http,
+						routing: Some(Box::new(models::GamesServersPortRouting {
 							game_guard: Some(serde_json::Value::Object(serde_json::Map::new())),
 							host: None,
 						})),
@@ -171,7 +176,7 @@ async fn create_http() -> GlobalResult<()> {
 				.into_iter()
 				.collect(),
 			}),
-			resources: Box::new(models::ServersResources {
+			resources: Box::new(models::GamesServersResources {
 				cpu: 100,
 				memory: 200,
 			}),
@@ -187,9 +192,10 @@ async fn list_builds_with_tags() -> GlobalResult<()> {
 
 	let ctx_config = ctx.config(ctx.ns_auth_token.clone())?;
 
-	let res = servers_api::servers_create(
+	let res = games_servers_api::games_servers_create(
 		&ctx_config,
-		models::ServersCreateServerRequest {
+		&ctx.game_id_str,
+		models::GamesServersCreateServerRequest {
 			arguments: None,
 			datacenter: ctx.datacenter_id.to_string(),
 			environment: Some(HashMap::new()),
@@ -197,13 +203,13 @@ async fn list_builds_with_tags() -> GlobalResult<()> {
 			kill_timeout: Some(0),
 			webhook_url: None,
 			tags: None,
-			network: Box::new(models::ServersCreateServerNetworkRequest {
-				mode: Some(models::ServersNetworkMode::Bridge),
+			network: Box::new(models::GamesServersCreateServerNetworkRequest {
+				mode: Some(models::GamesServersNetworkMode::Bridge),
 				ports: vec![(
 					"testing2".to_string(),
-					models::ServersCreateServerPortRequest {
-						protocol: models::ServersPortProtocol::Http,
-						routing: Some(Box::new(models::ServersPortRouting {
+					models::GamesServersCreateServerPortRequest {
+						protocol: models::GamesServersPortProtocol::Http,
+						routing: Some(Box::new(models::GamesServersPortRouting {
 							game_guard: Some(serde_json::Value::Object(serde_json::Map::new())),
 							host: None,
 						})),
@@ -214,7 +220,7 @@ async fn list_builds_with_tags() -> GlobalResult<()> {
 				.into_iter()
 				.collect(),
 			}),
-			resources: Box::new(models::ServersResources {
+			resources: Box::new(models::GamesServersResources {
 				cpu: 100,
 				memory: 200,
 			}),

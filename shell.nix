@@ -46,7 +46,7 @@ in
 			openssh  # ssh-keygen
 
 			# Runtimes
-			nodejs  # Required for Fern
+			nodejs_20  # Required for Fern
 			python310Packages.detect-secrets
 
 			# Compilers

@@ -6,11 +6,11 @@ import * as environments from "./environments";
 import * as core from "./core";
 import { Admin } from "./api/resources/admin/client/Client";
 import { Cloud } from "./api/resources/cloud/client/Client";
+import { Games } from "./api/resources/games/client/Client";
 import { Group } from "./api/resources/group/client/Client";
 import { Identity } from "./api/resources/identity/client/Client";
 import { Kv } from "./api/resources/kv/client/Client";
 import { Provision } from "./api/resources/provision/client/Client";
-import { Servers } from "./api/resources/servers/client/Client";
 import { Auth } from "./api/resources/auth/client/Client";
 import { Job } from "./api/resources/job/client/Client";
 import { Matchmaker } from "./api/resources/matchmaker/client/Client";
@@ -48,6 +48,12 @@ export class RivetClient {
         return (this._cloud ??= new Cloud(this._options));
     }
 
+    protected _games: Games | undefined;
+
+    public get games(): Games {
+        return (this._games ??= new Games(this._options));
+    }
+
     protected _group: Group | undefined;
 
     public get group(): Group {
@@ -70,12 +76,6 @@ export class RivetClient {
 
     public get provision(): Provision {
         return (this._provision ??= new Provision(this._options));
-    }
-
-    protected _servers: Servers | undefined;
-
-    public get servers(): Servers {
-        return (this._servers ??= new Servers(this._options));
     }
 
     protected _auth: Auth | undefined;

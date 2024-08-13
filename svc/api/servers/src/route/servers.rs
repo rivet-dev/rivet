@@ -6,15 +6,16 @@ use rivet_operation::prelude::*;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
-use crate::auth::Auth;
+use crate::{assert, auth::Auth};
 
-// MARK: GET /servers/{server_id}
+// MARK: GET /games/{}/servers/{}
 pub async fn get(
 	ctx: Ctx<Auth>,
+	game_id: Uuid,
 	server_id: Uuid,
 	_watch_index: WatchIndexQuery,
-) -> GlobalResult<models::ServersGetServerResponse> {
-	let game_id = ctx.auth().server()?.game_id;
+) -> GlobalResult<models::GamesServersGetServerResponse> {
+	ctx.auth().check_game(ctx.op_ctx(), game_id, true).await?;
 
 	// Get the server
 	let get_res = op!([ctx] ds_server_get {
@@ -22,24 +23,26 @@ pub async fn get(
 	})
 	.await?;
 
-	let server = models::ServersServer::api_try_from(
+	let server = models::GamesServersServer::api_try_from(
 		unwrap_with!(get_res.servers.first(), SERVERS_SERVER_NOT_FOUND).clone(),
 	)?;
 
 	// Validate token can access server
 	ensure_with!(server.game_id == game_id, SERVERS_SERVER_NOT_FOUND);
 
-	Ok(models::ServersGetServerResponse {
+	Ok(models::GamesServersGetServerResponse {
 		server: Box::new(server),
 	})
 }
 
-// MARK: POST /servers
+// MARK: POST /games/{}/servers
 pub async fn create(
 	ctx: Ctx<Auth>,
-	body: models::ServersCreateServerRequest,
-) -> GlobalResult<models::ServersCreateServerResponse> {
-	let game_id = ctx.auth().server()?.game_id;
+	game_id: Uuid,
+	body: models::GamesServersCreateServerRequest,
+) -> GlobalResult<models::GamesServersCreateServerResponse> {
+	ctx.auth().check_game(ctx.op_ctx(), game_id, true).await?;
+
 	let games = ctx
 		.op(cluster::ops::get_for_game::Input {
 			game_ids: vec![game_id],
@@ -65,7 +68,7 @@ pub async fn create(
 
 	let tags = serde_json::from_value(body.tags.unwrap_or_default())?;
 
-	tracing::info!("Creating server with tags: {:?}", tags);
+	tracing::info!(?tags, "creating server with tags");
 
 	let server = op!([ctx] ds_server_create {
 		game_id: Some(game_id.into()),
@@ -88,7 +91,7 @@ pub async fn create(
 				internal_port: p.internal_port,
 				routing: Some(if let Some(routing) = p.routing {
 					match *routing {
-						models::ServersPortRouting {
+						models::GamesServersPortRouting {
 							game_guard: Some(_),
 							host: None,
 						} => dynamic_servers::server_create::port::Routing::GameGuard(
@@ -96,13 +99,13 @@ pub async fn create(
 								protocol: backend::ds::GameGuardProtocol::api_from(p.protocol) as i32,
 							},
 						),
-						models::ServersPortRouting {
+						models::GamesServersPortRouting {
 							game_guard: None,
 							host: Some(_),
 						} => dynamic_servers::server_create::port::Routing::Host(backend::ds::HostRouting {
 							protocol: backend::ds::HostProtocol::api_try_from(p.protocol)? as i32,
 						}),
-						models::ServersPortRouting { .. } => {
+						models::GamesServersPortRouting { .. } => {
 							bail_with!(SERVERS_MUST_SPECIFY_ROUTING_TYPE)
 						}
 					}
@@ -117,12 +120,12 @@ pub async fn create(
 	.await?
 	.server;
 
-	Ok(models::ServersCreateServerResponse {
+	Ok(models::GamesServersCreateServerResponse {
 		server: Box::new(unwrap!(server).api_try_into()?),
 	})
 }
 
-// MARK: DELETE /servers/{server_id}
+// MARK: DELETE /games/{}/servers/{}
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DeleteQuery {
 	override_kill_timeout: Option<i64>,
@@ -130,38 +133,36 @@ pub struct DeleteQuery {
 
 pub async fn destroy(
 	ctx: Ctx<Auth>,
+	game_id: Uuid,
 	server_id: Uuid,
 	query: DeleteQuery,
-) -> GlobalResult<models::ServersDestroyServerResponse> {
-	let server_id = op!([ctx] ds_server_delete {
+) -> GlobalResult<serde_json::Value> {
+	ctx.auth().check_game(ctx.op_ctx(), game_id, true).await?;
+
+	assert::server_for_game(&ctx, server_id, game_id).await?;
+
+	op!([ctx] ds_server_delete {
 		server_id: Some(server_id.into()),
 		override_kill_timeout_ms: query.override_kill_timeout.unwrap_or_default(),
 	})
-	.await?
-	.server_id;
+	.await?;
 
-	Ok(models::ServersDestroyServerResponse {
-		server_id: unwrap!(server_id).as_uuid(),
-	})
+	Ok(serde_json::json!({}))
 }
 
-// MARK: GET /servers/list
+// MARK: GET /games/{}/servers
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ListQuery {
 	tags: Option<String>,
-	game_id: Option<Uuid>,
 }
 
 pub async fn list_servers(
 	ctx: Ctx<Auth>,
+	game_id: Uuid,
 	_watch_index: WatchIndexQuery,
 	query: ListQuery,
-) -> GlobalResult<models::ServersListServersResponse> {
-	let game_id = if let Some(game_id) = query.game_id {
-		game_id
-	} else {
-		ctx.auth().check_game_service_or_cloud_token().await?
-	};
+) -> GlobalResult<models::GamesServersListServersResponse> {
+	ctx.auth().check_game(ctx.op_ctx(), game_id, true).await?;
 
 	let list_res = op!([ctx] ds_server_list_for_game {
 		game_id: Some(game_id.into()),
@@ -178,10 +179,10 @@ pub async fn list_servers(
 		.servers
 		.into_iter()
 		.map(|server| {
-			let server = models::ServersServer::api_try_from(server)?;
+			let server = models::GamesServersServer::api_try_from(server)?;
 			Ok(server)
 		})
 		.collect::<GlobalResult<Vec<_>>>()?;
 
-	Ok(models::ServersListServersResponse { servers })
+	Ok(models::GamesServersListServersResponse { servers })
 }

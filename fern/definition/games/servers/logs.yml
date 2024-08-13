@@ -1,0 +1,44 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/fern-api/fern/main/fern.schema.json
+
+imports:
+  commons: ../../common.yml
+
+service:
+  auth: true
+  base-path: /games/{game_id}/servers
+  path-parameters:
+    game_id: uuid
+  endpoints:
+    getServerLogs:
+      path: /{server_id}/logs
+      method: GET
+      docs: >-
+        Returns the logs for a given server.
+      path-parameters:
+        server_id:
+          type: uuid
+      request:
+        name: GetServerLogsRequest
+        query-parameters:
+          stream: LogStream
+          game_id: optional<uuid>
+          watch_index:
+            docs: A query parameter denoting the requests watch index.
+            type: optional<string>
+      response: GetServerLogsResponse
+
+types:
+  GetServerLogsResponse:
+    properties:
+      lines:
+        docs: Sorted old to new.
+        type: list<string>
+      timestamps:
+        docs: Sorted old to new.
+        type: list<string>
+      watch: commons.WatchResponse
+
+  LogStream:
+    enum:
+      - std_out
+      - std_err

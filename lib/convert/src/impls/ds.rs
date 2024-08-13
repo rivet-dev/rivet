@@ -7,10 +7,10 @@ use rivet_operation::prelude::*;
 use crate::{ApiFrom, ApiInto, ApiTryFrom, ApiTryInto};
 use serde_json::{json, to_value};
 
-impl ApiTryFrom<backend::ds::Server> for models::ServersServer {
+impl ApiTryFrom<backend::ds::Server> for models::GamesServersServer {
 	type Error = GlobalError;
-	fn api_try_from(value: backend::ds::Server) -> GlobalResult<models::ServersServer> {
-		Ok(models::ServersServer {
+	fn api_try_from(value: backend::ds::Server) -> GlobalResult<models::GamesServersServer> {
+		Ok(models::GamesServersServer {
 			cluster_id: unwrap!(value.cluster_id).as_uuid(),
 			create_ts: value.create_ts,
 			start_ts: value.start_ts,
@@ -24,7 +24,7 @@ impl ApiTryFrom<backend::ds::Server> for models::ServersServer {
 			arguments: Some(value.args),
 			environment: Some(value.environment),
 			image_id: unwrap!(value.image_id).as_uuid(),
-			network: Box::new(models::ServersNetwork {
+			network: Box::new(models::GamesServersNetwork {
 				mode: Some(
 					unwrap!(backend::ds::NetworkMode::from_i32(value.network_mode)).api_into(),
 				),
@@ -38,8 +38,8 @@ impl ApiTryFrom<backend::ds::Server> for models::ServersServer {
 	}
 }
 
-impl ApiFrom<models::ServersResources> for backend::ds::ServerResources {
-	fn api_from(value: models::ServersResources) -> backend::ds::ServerResources {
+impl ApiFrom<models::GamesServersResources> for backend::ds::ServerResources {
+	fn api_from(value: models::GamesServersResources) -> backend::ds::ServerResources {
 		backend::ds::ServerResources {
 			cpu_millicores: value.cpu,
 			memory_mib: value.memory,
@@ -47,37 +47,37 @@ impl ApiFrom<models::ServersResources> for backend::ds::ServerResources {
 	}
 }
 
-impl ApiFrom<backend::ds::ServerResources> for models::ServersResources {
-	fn api_from(value: backend::ds::ServerResources) -> models::ServersResources {
-		models::ServersResources {
+impl ApiFrom<backend::ds::ServerResources> for models::GamesServersResources {
+	fn api_from(value: backend::ds::ServerResources) -> models::GamesServersResources {
+		models::GamesServersResources {
 			cpu: value.cpu_millicores,
 			memory: value.memory_mib,
 		}
 	}
 }
 
-impl ApiFrom<models::ServersNetworkMode> for backend::ds::NetworkMode {
-	fn api_from(value: models::ServersNetworkMode) -> backend::ds::NetworkMode {
+impl ApiFrom<models::GamesServersNetworkMode> for backend::ds::NetworkMode {
+	fn api_from(value: models::GamesServersNetworkMode) -> backend::ds::NetworkMode {
 		match value {
-			models::ServersNetworkMode::Bridge => backend::ds::NetworkMode::Bridge,
-			models::ServersNetworkMode::Host => backend::ds::NetworkMode::Host,
+			models::GamesServersNetworkMode::Bridge => backend::ds::NetworkMode::Bridge,
+			models::GamesServersNetworkMode::Host => backend::ds::NetworkMode::Host,
 		}
 	}
 }
 
-impl ApiFrom<backend::ds::NetworkMode> for models::ServersNetworkMode {
-	fn api_from(value: backend::ds::NetworkMode) -> models::ServersNetworkMode {
+impl ApiFrom<backend::ds::NetworkMode> for models::GamesServersNetworkMode {
+	fn api_from(value: backend::ds::NetworkMode) -> models::GamesServersNetworkMode {
 		match value {
-			backend::ds::NetworkMode::Bridge => models::ServersNetworkMode::Bridge,
-			backend::ds::NetworkMode::Host => models::ServersNetworkMode::Host,
+			backend::ds::NetworkMode::Bridge => models::GamesServersNetworkMode::Bridge,
+			backend::ds::NetworkMode::Host => models::GamesServersNetworkMode::Host,
 		}
 	}
 }
 
-impl ApiTryFrom<backend::ds::Port> for models::ServersPort {
+impl ApiTryFrom<backend::ds::Port> for models::GamesServersPort {
 	type Error = GlobalError;
 
-	fn api_try_from(value: backend::ds::Port) -> GlobalResult<models::ServersPort> {
+	fn api_try_from(value: backend::ds::Port) -> GlobalResult<models::GamesServersPort> {
 		let protocol = match unwrap!(&value.routing) {
 			backend::ds::port::Routing::GameGuard(x) => {
 				unwrap!(backend::ds::GameGuardProtocol::from_i32(x.protocol)).api_into()
@@ -87,7 +87,7 @@ impl ApiTryFrom<backend::ds::Port> for models::ServersPort {
 			}
 		};
 
-		let routing = models::ServersPortRouting {
+		let routing = models::GamesServersPortRouting {
 			game_guard: if let Some(backend::ds::port::Routing::GameGuard(_)) = &value.routing {
 				Some(json!({}))
 			} else {
@@ -100,7 +100,7 @@ impl ApiTryFrom<backend::ds::Port> for models::ServersPort {
 			},
 		};
 
-		Ok(models::ServersPort {
+		Ok(models::GamesServersPort {
 			protocol,
 			internal_port: value.internal_port,
 			public_hostname: value.public_hostname,
@@ -110,46 +110,48 @@ impl ApiTryFrom<backend::ds::Port> for models::ServersPort {
 	}
 }
 
-impl ApiFrom<models::ServersPortProtocol> for backend::ds::GameGuardProtocol {
-	fn api_from(value: models::ServersPortProtocol) -> backend::ds::GameGuardProtocol {
+impl ApiFrom<models::GamesServersPortProtocol> for backend::ds::GameGuardProtocol {
+	fn api_from(value: models::GamesServersPortProtocol) -> backend::ds::GameGuardProtocol {
 		match value {
-			models::ServersPortProtocol::Udp => backend::ds::GameGuardProtocol::Udp,
-			models::ServersPortProtocol::Tcp => backend::ds::GameGuardProtocol::Tcp,
-			models::ServersPortProtocol::Http => backend::ds::GameGuardProtocol::Http,
-			models::ServersPortProtocol::Https => backend::ds::GameGuardProtocol::Https,
-			models::ServersPortProtocol::TcpTls => backend::ds::GameGuardProtocol::TcpTls,
+			models::GamesServersPortProtocol::Udp => backend::ds::GameGuardProtocol::Udp,
+			models::GamesServersPortProtocol::Tcp => backend::ds::GameGuardProtocol::Tcp,
+			models::GamesServersPortProtocol::Http => backend::ds::GameGuardProtocol::Http,
+			models::GamesServersPortProtocol::Https => backend::ds::GameGuardProtocol::Https,
+			models::GamesServersPortProtocol::TcpTls => backend::ds::GameGuardProtocol::TcpTls,
 		}
 	}
 }
 
-impl ApiFrom<backend::ds::GameGuardProtocol> for models::ServersPortProtocol {
-	fn api_from(value: backend::ds::GameGuardProtocol) -> models::ServersPortProtocol {
+impl ApiFrom<backend::ds::GameGuardProtocol> for models::GamesServersPortProtocol {
+	fn api_from(value: backend::ds::GameGuardProtocol) -> models::GamesServersPortProtocol {
 		match value {
-			backend::ds::GameGuardProtocol::Udp => models::ServersPortProtocol::Udp,
-			backend::ds::GameGuardProtocol::Tcp => models::ServersPortProtocol::Tcp,
-			backend::ds::GameGuardProtocol::Http => models::ServersPortProtocol::Http,
-			backend::ds::GameGuardProtocol::Https => models::ServersPortProtocol::Https,
-			backend::ds::GameGuardProtocol::TcpTls => models::ServersPortProtocol::TcpTls,
+			backend::ds::GameGuardProtocol::Udp => models::GamesServersPortProtocol::Udp,
+			backend::ds::GameGuardProtocol::Tcp => models::GamesServersPortProtocol::Tcp,
+			backend::ds::GameGuardProtocol::Http => models::GamesServersPortProtocol::Http,
+			backend::ds::GameGuardProtocol::Https => models::GamesServersPortProtocol::Https,
+			backend::ds::GameGuardProtocol::TcpTls => models::GamesServersPortProtocol::TcpTls,
 		}
 	}
 }
 
-impl ApiTryFrom<models::ServersPortProtocol> for backend::ds::HostProtocol {
+impl ApiTryFrom<models::GamesServersPortProtocol> for backend::ds::HostProtocol {
 	type Error = GlobalError;
-	fn api_try_from(value: models::ServersPortProtocol) -> GlobalResult<backend::ds::HostProtocol> {
+	fn api_try_from(
+		value: models::GamesServersPortProtocol,
+	) -> GlobalResult<backend::ds::HostProtocol> {
 		Ok(match value {
-			models::ServersPortProtocol::Udp => backend::ds::HostProtocol::HostUdp,
-			models::ServersPortProtocol::Tcp => backend::ds::HostProtocol::HostTcp,
+			models::GamesServersPortProtocol::Udp => backend::ds::HostProtocol::HostUdp,
+			models::GamesServersPortProtocol::Tcp => backend::ds::HostProtocol::HostTcp,
 			_ => bail_with!(SERVERS_UNSUPPORTED_HOST_PROTOCOL),
 		})
 	}
 }
 
-impl ApiFrom<backend::ds::HostProtocol> for models::ServersPortProtocol {
-	fn api_from(value: backend::ds::HostProtocol) -> models::ServersPortProtocol {
+impl ApiFrom<backend::ds::HostProtocol> for models::GamesServersPortProtocol {
+	fn api_from(value: backend::ds::HostProtocol) -> models::GamesServersPortProtocol {
 		match value {
-			backend::ds::HostProtocol::HostUdp => models::ServersPortProtocol::Udp,
-			backend::ds::HostProtocol::HostTcp => models::ServersPortProtocol::Tcp,
+			backend::ds::HostProtocol::HostUdp => models::GamesServersPortProtocol::Udp,
+			backend::ds::HostProtocol::HostTcp => models::GamesServersPortProtocol::Tcp,
 		}
 	}
 }

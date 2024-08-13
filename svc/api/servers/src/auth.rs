@@ -1,5 +1,3 @@
-use std::collections::HashSet;
-
 use api_helper::{
 	auth::{ApiAuth, AuthRateLimitCtx},
 	util::{as_auth_expired, basic_rate_limit},
@@ -7,8 +5,6 @@ use api_helper::{
 use proto::{backend, claims::Claims};
 use rivet_claims::ClaimsDecode;
 use rivet_operation::prelude::*;
-
-use crate::assert;
 
 pub struct Auth {
 	claims: Option<Claims>,
@@ -47,340 +43,87 @@ impl Auth {
 		self.claims()?.as_game_service()
 	}
 
-	/// Validates that the agent can read the given games or is an admin.
-	pub async fn check_games_read_or_admin(
-		&self,
-		ctx: &OperationContext<()>,
-		game_ids: Vec<Uuid>,
-	) -> GlobalResult<()> {
-		match self.check_games_read(ctx, game_ids).await {
-			Err(err) if err.is(formatted_error::code::API_FORBIDDEN) => self.or_admin(ctx).await,
-			other => other,
-		}
-	}
-
-	/// Validates that the agent can read the given games or is an admin.
-	pub async fn check_game_service_or_cloud_token(&self) -> GlobalResult<Uuid> {
-		let claims = self.claims()?;
-
-		match (claims.as_game_service(), claims.as_game_cloud()) {
-			(Ok(game_service), _) => Ok(game_service.game_id),
-			(_, Ok(game_cloud)) => Ok(game_cloud.game_id),
-			_ => bail_with!(
-				CLAIMS_MISSING_ENTITLEMENT,
-				entitlements = "GameService, GameCloud"
-			),
-		}
-	}
-
-	/// Validates that the agent can read the given game or is an admin.
-	pub async fn check_game_read_or_admin(
+	pub async fn check_game(
 		&self,
 		ctx: &OperationContext<()>,
 		game_id: Uuid,
+		allow_service: bool,
 	) -> GlobalResult<()> {
-		match self.check_game_read(ctx, game_id).await {
-			Err(err) if err.is(formatted_error::code::API_FORBIDDEN) => self.or_admin(ctx).await,
-			other => other,
-		}
-	}
-
-	/// Validates that the agent can write the given game or is an admin.
-	pub async fn check_game_write_or_admin(
-		&self,
-		ctx: &OperationContext<()>,
-		game_id: Uuid,
-	) -> GlobalResult<()> {
-		match self.check_game_write(ctx, game_id).await {
-			Err(err) if err.is(formatted_error::code::API_FORBIDDEN) => self.or_admin(ctx).await,
-			other => other,
-		}
-	}
-
-	/// Validates that the given agent is an admin user.
-	pub async fn admin(&self, ctx: &OperationContext<()>) -> GlobalResult<()> {
 		let claims = self.claims()?;
 
-		if claims.as_user().is_ok() {
-			let (user, _) = self.user(ctx).await?;
-
-			ensure_with!(user.is_admin, IDENTITY_NOT_ADMIN);
-
+		if let Ok(cloud_ent) = claims.as_game_cloud() {
+			ensure_with!(
+				cloud_ent.game_id == game_id,
+				API_FORBIDDEN,
+				reason = "Cloud token cannot write to this game",
+			);
 			Ok(())
-		} else {
-			bail_with!(CLAIMS_MISSING_ENTITLEMENT, entitlements = "User");
-		}
-	}
-
-	// Helper function
-	async fn or_admin(&self, ctx: &OperationContext<()>) -> GlobalResult<()> {
-		match self.admin(ctx).await {
-			Err(err)
-				if err.is(formatted_error::code::API_FORBIDDEN)
-					|| err.is(formatted_error::code::IDENTITY_NOT_ADMIN) =>
-			{
-				bail_with!(CLAIMS_MISSING_ENTITLEMENT, entitlements = "User, GameCloud");
-			}
-			other => other,
-		}
-	}
-
-	pub async fn user(
-		&self,
-		ctx: &OperationContext<()>,
-	) -> GlobalResult<(backend::user::User, rivet_claims::ent::User)> {
-		let claims = self.claims()?;
-		let user_ent = claims.as_user()?;
-
-		let user_res = op!([ctx] user_get {
-			user_ids: vec![user_ent.user_id.into()],
-		})
-		.await?;
-		let user = unwrap!(user_res.users.first());
-
-		// Verify user is not deleted
-		if user.delete_complete_ts.is_some() {
-			let jti = unwrap!(claims.jti);
-			op!([ctx] token_revoke {
-				jtis: vec![jti],
-			})
-			.await?;
-
-			bail_with!(TOKEN_REVOKED);
-		}
-
-		Ok((user.clone(), user_ent))
-	}
-
-	/// Validates that the agent can read a list of teams.
-	pub async fn check_teams_read(
-		&self,
-		ctx: &OperationContext<()>,
-		team_ids: Vec<Uuid>,
-	) -> GlobalResult<()> {
-		let claims = self.claims()?;
-
-		if claims.as_user().is_ok() {
-			let (user, user_ent) = self.user(ctx).await?;
-			// assert::user_registered(ctx, user_ent.user_id).await?;
-
-			let team_list_res = op!([ctx] user_team_list {
-				user_ids: vec![user_ent.user_id.into()],
-			})
-			.await?;
-
+		} else if let Ok(service_ent) = claims.as_game_service() {
+			ensure_with!(
+				allow_service,
+				API_FORBIDDEN,
+				reason = "Cannot use service token for this endpoint."
+			);
+			ensure_with!(
+				service_ent.game_id == game_id,
+				API_FORBIDDEN,
+				reason = "Service token cannot write to this game",
+			);
+			Ok(())
+		} else if let Ok(user_ent) = claims.as_user() {
+			// Get the user
+			let (user_res, game_res, team_list_res) = tokio::try_join!(
+				op!([ctx] user_get {
+					user_ids: vec![user_ent.user_id.into()],
+				}),
+				op!([ctx] game_get {
+					game_ids: vec![game_id.into()],
+				}),
+				op!([ctx] user_team_list {
+					user_ids: vec![user_ent.user_id.into()],
+				}),
+			)?;
+			let user = unwrap!(user_res.users.first());
+			let game = unwrap_with!(game_res.games.first(), GAME_NOT_FOUND);
 			let user_teams = unwrap!(team_list_res.users.first());
-			let user_team_ids = user_teams
+			let dev_team_id = unwrap_ref!(game.developer_team_id).as_uuid();
+
+			// Allow admin
+			if user.is_admin {
+				return Ok(());
+			}
+
+			// Verify user is not deleted
+			ensure_with!(user.delete_complete_ts.is_none(), TOKEN_REVOKED);
+
+			// Validate user is member of team
+			let is_part_of_team = user_teams
 				.teams
 				.iter()
-				.map(|t| Ok(unwrap_ref!(t.team_id).as_uuid()))
-				.collect::<GlobalResult<HashSet<_>>>()?;
-			let has_teams = team_ids
-				.iter()
-				.all(|team_id| user_team_ids.contains(team_id));
+				.filter_map(|x| x.team_id)
+				.any(|x| x.as_uuid() == dev_team_id);
+			ensure_with!(is_part_of_team, GROUP_NOT_MEMBER);
 
-			ensure_with!(has_teams || user.is_admin, GROUP_NOT_MEMBER);
+			// Get team
+			let team_res = op!([ctx] team_get {
+				team_ids: vec![dev_team_id.into()],
+			})
+			.await?;
+			let dev_team = unwrap!(team_res.teams.first());
 
-			Ok(())
-		} else if claims.as_game_cloud().is_ok() {
-			bail_with!(
-				API_FORBIDDEN,
-				reason = "Game cloud token cannot write to this game",
-			);
-		} else {
-			bail_with!(CLAIMS_MISSING_ENTITLEMENT, entitlements = "User, GameCloud");
-		}
-	}
-
-	// /// Validates that the agent can read a given team.
-	// pub async fn check_team_read(
-	// 	&self,
-	// 	ctx: &OperationContext<()>,
-	// 	team_id: Uuid,
-	// ) -> GlobalResult<()> {
-	// 	self.check_teams_read(ctx, vec![team_id]).await
-	// }
-
-	// /// Validates that the agent can write to a given team.
-	// pub async fn check_team_write(
-	// 	&self,
-	// 	ctx: &OperationContext<()>,
-	// 	team_id: Uuid,
-	// ) -> GlobalResult<()> {
-	// 	tokio::try_join!(
-	// 		self.check_team_read(ctx, team_id),
-	// 		self.check_dev_team_active(ctx, team_id)
-	// 	)?;
-
-	// 	Ok(())
-	// }
-
-	/// Validates that the agent can read a list of games.
-	pub async fn check_games_read(
-		&self,
-		ctx: &OperationContext<()>,
-		game_ids: Vec<Uuid>,
-	) -> GlobalResult<()> {
-		let claims = self.claims()?;
-
-		if claims.as_user().is_ok() {
-			let (_user, user_ent) = self.user(ctx).await?;
-
-			assert::user_registered(ctx, user_ent.user_id).await?;
-
-			// Find the game's development teams
-			let dev_team_ids = {
-				let games_res = op!([ctx] game_get {
-					game_ids: game_ids
-						.into_iter()
-						.map(Into::into)
-						.collect::<Vec<_>>(),
-				})
-				.await?;
-				ensure!(!games_res.games.is_empty(), "games not found");
-
-				games_res
-					.games
-					.iter()
-					.map(|g| Ok(unwrap_ref!(g.developer_team_id).as_uuid()))
-					.collect::<GlobalResult<Vec<_>>>()?
-			};
-
-			// Validate can read teams
-			self.check_teams_read(ctx, dev_team_ids).await
-		} else if let Ok(cloud_ent) = claims.as_game_cloud() {
+			// Check team active
 			ensure_with!(
-				game_ids.iter().any(|id| id == &cloud_ent.game_id),
-				API_FORBIDDEN,
-				reason = "Game cloud token cannot write to this game",
+				dev_team.deactivate_reasons.is_empty(),
+				GROUP_DEACTIVATED,
+				reasons = util_team::format_deactivate_reasons(&dev_team.deactivate_reasons)?,
 			);
 
 			Ok(())
 		} else {
-			bail_with!(CLAIMS_MISSING_ENTITLEMENT, entitlements = "User, GameCloud");
-		}
-	}
-
-	/// Validates that the agent can read a given game.
-	pub async fn check_game_read(
-		&self,
-		ctx: &OperationContext<()>,
-		game_id: Uuid,
-	) -> GlobalResult<()> {
-		self.check_games_read(ctx, vec![game_id]).await
-	}
-
-	/// Validates that the agent can write to a given game.
-	pub async fn check_game_write(
-		&self,
-		ctx: &OperationContext<()>,
-		game_id: Uuid,
-	) -> GlobalResult<()> {
-		let claims = self.claims()?;
-
-		if claims.as_user().is_ok() {
-			let (_user, user_ent) = self.user(ctx).await?;
-
-			assert::user_registered(ctx, user_ent.user_id).await?;
-
-			// Find the game's development team
-			let dev_team_id = {
-				let games_res = op!([ctx] game_get {
-						game_ids: vec![game_id.into()],
-				})
-				.await?;
-				let game = unwrap!(games_res.games.first(), "game not found");
-
-				unwrap_ref!(game.developer_team_id).as_uuid()
-			};
-
-			// Validate can write to the team
-			// self.check_team_write(ctx, dev_team_id).await
-			Ok(())
-		} else if let Ok(cloud_ent) = claims.as_game_cloud() {
-			ensure_eq_with!(
-				cloud_ent.game_id,
-				game_id,
-				API_FORBIDDEN,
-				reason = "Game cloud token cannot write to this game",
+			bail_with!(
+				CLAIMS_MISSING_ENTITLEMENT,
+				entitlements = "User, GameCloud, GameService"
 			);
-
-			Ok(())
-		} else {
-			bail_with!(CLAIMS_MISSING_ENTITLEMENT, entitlements = "User, GameCloud");
 		}
 	}
-
-	// /// Validates that the given dev team is active.
-	// pub async fn check_dev_team_active(
-	// 	&self,
-	// 	ctx: &OperationContext<()>,
-	// 	team_id: Uuid,
-	// ) -> GlobalResult<()> {
-	// 	let team_res = op!([ctx] team_get {
-	// 		team_ids: vec![team_id.into()],
-	// 	})
-	// 	.await?;
-	// 	let team = unwrap!(team_res.teams.first());
-
-	// 	ensure_with!(
-	// 		team.deactivate_reasons.is_empty(),
-	// 		GROUP_DEACTIVATED,
-	// 		reasons = util_team::format_deactivate_reasons(&team.deactivate_reasons)?,
-	// 	);
-
-	// 	Ok(())
-	// }
-
-	// pub async fn accessible_games(
-	// 	&self,
-	// 	ctx: &OperationContext<()>,
-	// ) -> GlobalResult<AccessibleGameIdsResponse> {
-	// 	let claims = self.claims()?;
-
-	// 	let (user_id, team_ids, game_ids) = if claims.as_user().is_ok() {
-	// 		let (_, user_ent) = self.user(ctx).await?;
-
-	// 		// Fetch teams associated with user
-	// 		let teams_res = op!([ctx] user_team_list {
-	// 			user_ids: vec![user_ent.user_id.into()],
-	// 		})
-	// 		.await?;
-	// 		let user = unwrap!(teams_res.users.first());
-	// 		let team_ids_proto = user
-	// 			.teams
-	// 			.iter()
-	// 			.filter_map(|t| t.team_id)
-	// 			.collect::<Vec<common::Uuid>>();
-	// 		let team_ids = team_ids_proto
-	// 			.iter()
-	// 			.map(common::Uuid::as_uuid)
-	// 			.collect::<Vec<_>>();
-
-	// 		// Fetch games associated with teams
-	// 		let games_res = op!([ctx] game_list_for_team {
-	// 			team_ids: team_ids_proto,
-	// 		})
-	// 		.await?;
-
-	// 		let game_ids = games_res
-	// 			.teams
-	// 			.iter()
-	// 			.flat_map(|team| &team.game_ids)
-	// 			.map(|id| id.as_uuid())
-	// 			.collect::<Vec<_>>();
-
-	// 		(Some(user_ent.user_id), team_ids, game_ids)
-	// 	} else if let Ok(cloud_ent) = claims.as_game_cloud() {
-	// 		(None, Vec::new(), vec![cloud_ent.game_id])
-	// 	} else {
-	// 		bail_with!(CLAIMS_MISSING_ENTITLEMENT, entitlements = "User, GameCloud");
-	// 	};
-
-	// 	Ok(AccessibleGameIdsResponse {
-	// 		user_id,
-	// 		team_ids,
-	// 		game_ids,
-	// 	})
-	// }
 }

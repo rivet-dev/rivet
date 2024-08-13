@@ -10,34 +10,23 @@ use std::time::Duration;
 
 use crate::{assert, auth::Auth};
 
-// MARK: GET /servers/{server_id}/logs
+// MARK: GET /games/{}/servers/{}/logs
 #[derive(Debug, Deserialize)]
 pub struct GetServerLogsQuery {
 	pub stream: models::CloudGamesLogStream,
-	pub game_id: Option<Uuid>,
 }
 
 pub async fn get_logs(
 	ctx: Ctx<Auth>,
+	game_id: Uuid,
 	server_id: Uuid,
 	watch_index: WatchIndexQuery,
 	query: GetServerLogsQuery,
-) -> GlobalResult<models::ServersGetServerLogsResponse> {
-	let game_id = if let Some(game_id) = query.game_id {
-		game_id
-	} else {
-		ctx.auth().check_game_service_or_cloud_token().await?
-	};
+) -> GlobalResult<models::GamesServersGetServerLogsResponse> {
+	ctx.auth().check_game(ctx.op_ctx(), game_id, false).await?;
 
-	// ctx.auth()
-	// 	.check_game_read_or_admin(ctx.op_ctx(), game_id)
-	// 	.await?;
-
-	// Get start ts
-	// If no watch: read logs
-	// If watch:
-	//   loop read logs from index
-	//	 wait until start ts + 1 second
+	// Validate server belongs to game
+	assert::server_for_game(&ctx, server_id, game_id).await?;
 
 	// Determine stream type
 	let stream_type = match query.stream {
@@ -47,26 +36,6 @@ pub async fn get_logs(
 
 	// Timestamp to start the query at
 	let before_nts = util::timestamp::now() * 1_000_000;
-
-	// Validate server belongs to game
-	let _game_ns = assert::server_for_game(&ctx, server_id, game_id).await?;
-
-	// // Get run ID
-	// let server_id = if let Some(x) = get_server_id(&ctx, game_id, lobby_id).await? {
-	// 	x
-	// } else {
-	// 	// Throttle request if watching. This is effectively polling until the lobby is ready.
-	// 	if watch_index.to_consumer()?.is_some() {
-	// 		tokio::time::sleep(Duration::from_secs(1)).await;
-	// 	}
-
-	// 	// Return empty logs
-	// 	return Ok(models::CloudGamesGetLobbyLogsResponse {
-	// 		lines: Vec::new(),
-	// 		timestamps: Vec::new(),
-	// 		watch: WatchResponse::new_as_model(before_nts),
-	// 	});
-	// };
 
 	// Handle anchor
 	let logs_res = if let Some(anchor) = watch_index.as_i64()? {
@@ -157,7 +126,7 @@ pub async fn get_logs(
 	timestamps.reverse();
 
 	let watch_nts = logs_res.entries.first().map_or(before_nts, |x| x.nts);
-	Ok(models::ServersGetServerLogsResponse {
+	Ok(models::GamesServersGetServerLogsResponse {
 		lines,
 		timestamps,
 		watch: WatchResponse::new_as_model(watch_nts),

@@ -91,6 +91,14 @@ Class | Method | HTTP request | Description
 *CloudLogsApi* | [**cloud_logs_get_ray_perf_logs**](docs/CloudLogsApi.md#cloud_logs_get_ray_perf_logs) | **GET** /cloud/rays/{ray_id}/perf | 
 *CloudTiersApi* | [**cloud_tiers_get_region_tiers**](docs/CloudTiersApi.md#cloud_tiers_get_region_tiers) | **GET** /cloud/region-tiers | 
 *CloudUploadsApi* | [**cloud_uploads_complete_upload**](docs/CloudUploadsApi.md#cloud_uploads_complete_upload) | **POST** /cloud/uploads/{upload_id}/complete | 
+*GamesServersApi* | [**games_servers_create**](docs/GamesServersApi.md#games_servers_create) | **POST** /games/{game_id}/servers | 
+*GamesServersApi* | [**games_servers_destroy**](docs/GamesServersApi.md#games_servers_destroy) | **DELETE** /games/{game_id}/servers/{server_id} | 
+*GamesServersApi* | [**games_servers_get**](docs/GamesServersApi.md#games_servers_get) | **GET** /games/{game_id}/servers/{server_id} | 
+*GamesServersApi* | [**games_servers_list**](docs/GamesServersApi.md#games_servers_list) | **GET** /games/{game_id}/servers | 
+*GamesServersBuildsApi* | [**games_servers_builds_complete_build**](docs/GamesServersBuildsApi.md#games_servers_builds_complete_build) | **POST** /games/{game_id}/builds/{build_id}/complete | 
+*GamesServersBuildsApi* | [**games_servers_builds_list_builds**](docs/GamesServersBuildsApi.md#games_servers_builds_list_builds) | **GET** /games/{game_id}/builds | 
+*GamesServersBuildsApi* | [**games_servers_builds_prepare_build**](docs/GamesServersBuildsApi.md#games_servers_builds_prepare_build) | **POST** /games/{game_id}/builds/prepare | 
+*GamesServersLogsApi* | [**games_servers_logs_get_server_logs**](docs/GamesServersLogsApi.md#games_servers_logs_get_server_logs) | **GET** /games/{game_id}/servers/{server_id}/logs | 
 *GroupApi* | [**group_ban_identity**](docs/GroupApi.md#group_ban_identity) | **POST** /group/groups/{group_id}/bans/{identity_id} | 
 *GroupApi* | [**group_complete_avatar_upload**](docs/GroupApi.md#group_complete_avatar_upload) | **POST** /group/groups/{group_id}/avatar-upload/{upload_id}/complete | 
 *GroupApi* | [**group_create**](docs/GroupApi.md#group_create) | **POST** /group/groups | 
@@ -167,14 +175,6 @@ Class | Method | HTTP request | Description
 *PortalGamesApi* | [**portal_games_get_game_profile**](docs/PortalGamesApi.md#portal_games_get_game_profile) | **GET** /portal/games/{game_name_id}/profile | 
 *ProvisionDatacentersApi* | [**provision_datacenters_get_tls**](docs/ProvisionDatacentersApi.md#provision_datacenters_get_tls) | **GET** /datacenters/{datacenter_id}/tls | 
 *ProvisionServersApi* | [**provision_servers_get_info**](docs/ProvisionServersApi.md#provision_servers_get_info) | **GET** /servers/{ip} | 
-*ServersApi* | [**servers_create**](docs/ServersApi.md#servers_create) | **POST** /servers | 
-*ServersApi* | [**servers_destroy**](docs/ServersApi.md#servers_destroy) | **DELETE** /servers/{server_id} | 
-*ServersApi* | [**servers_get**](docs/ServersApi.md#servers_get) | **GET** /servers/{server_id} | 
-*ServersApi* | [**servers_list**](docs/ServersApi.md#servers_list) | **GET** /servers | 
-*ServersBuildsApi* | [**servers_builds_complete_build**](docs/ServersBuildsApi.md#servers_builds_complete_build) | **POST** /servers/uploads/{upload_id}/complete | 
-*ServersBuildsApi* | [**servers_builds_list_builds**](docs/ServersBuildsApi.md#servers_builds_list_builds) | **GET** /servers/builds | 
-*ServersBuildsApi* | [**servers_builds_prepare_build**](docs/ServersBuildsApi.md#servers_builds_prepare_build) | **POST** /servers/builds | 
-*ServersLogsApi* | [**servers_logs_get_server_logs**](docs/ServersLogsApi.md#servers_logs_get_server_logs) | **GET** /servers/{server_id}/logs | 
 
 
 ## Documentation For Models
@@ -371,6 +371,26 @@ Class | Method | HTTP request | Description
  - [GameStatSortingMethod](docs/GameStatSortingMethod.md)
  - [GameStatSummary](docs/GameStatSummary.md)
  - [GameSummary](docs/GameSummary.md)
+ - [GamesServersBuildCompression](docs/GamesServersBuildCompression.md)
+ - [GamesServersBuildKind](docs/GamesServersBuildKind.md)
+ - [GamesServersCreateBuildRequest](docs/GamesServersCreateBuildRequest.md)
+ - [GamesServersCreateBuildResponse](docs/GamesServersCreateBuildResponse.md)
+ - [GamesServersCreateServerNetworkRequest](docs/GamesServersCreateServerNetworkRequest.md)
+ - [GamesServersCreateServerPortRequest](docs/GamesServersCreateServerPortRequest.md)
+ - [GamesServersCreateServerRequest](docs/GamesServersCreateServerRequest.md)
+ - [GamesServersCreateServerResponse](docs/GamesServersCreateServerResponse.md)
+ - [GamesServersGetServerLogsResponse](docs/GamesServersGetServerLogsResponse.md)
+ - [GamesServersGetServerResponse](docs/GamesServersGetServerResponse.md)
+ - [GamesServersListBuildsResponse](docs/GamesServersListBuildsResponse.md)
+ - [GamesServersListServersResponse](docs/GamesServersListServersResponse.md)
+ - [GamesServersLogStream](docs/GamesServersLogStream.md)
+ - [GamesServersNetwork](docs/GamesServersNetwork.md)
+ - [GamesServersNetworkMode](docs/GamesServersNetworkMode.md)
+ - [GamesServersPort](docs/GamesServersPort.md)
+ - [GamesServersPortProtocol](docs/GamesServersPortProtocol.md)
+ - [GamesServersPortRouting](docs/GamesServersPortRouting.md)
+ - [GamesServersResources](docs/GamesServersResources.md)
+ - [GamesServersServer](docs/GamesServersServer.md)
  - [GeoCoord](docs/GeoCoord.md)
  - [GeoDistance](docs/GeoDistance.md)
  - [GlobalEventNotification](docs/GlobalEventNotification.md)
@@ -483,27 +503,6 @@ Class | Method | HTTP request | Description
  - [PortalNotificationUnregisterService](docs/PortalNotificationUnregisterService.md)
  - [ProvisionDatacentersGetTlsResponse](docs/ProvisionDatacentersGetTlsResponse.md)
  - [ProvisionServersGetInfoResponse](docs/ProvisionServersGetInfoResponse.md)
- - [ServersBuildCompression](docs/ServersBuildCompression.md)
- - [ServersBuildKind](docs/ServersBuildKind.md)
- - [ServersCreateBuildRequest](docs/ServersCreateBuildRequest.md)
- - [ServersCreateBuildResponse](docs/ServersCreateBuildResponse.md)
- - [ServersCreateServerNetworkRequest](docs/ServersCreateServerNetworkRequest.md)
- - [ServersCreateServerPortRequest](docs/ServersCreateServerPortRequest.md)
- - [ServersCreateServerRequest](docs/ServersCreateServerRequest.md)
- - [ServersCreateServerResponse](docs/ServersCreateServerResponse.md)
- - [ServersDestroyServerResponse](docs/ServersDestroyServerResponse.md)
- - [ServersGetServerLogsResponse](docs/ServersGetServerLogsResponse.md)
- - [ServersGetServerResponse](docs/ServersGetServerResponse.md)
- - [ServersListBuildsResponse](docs/ServersListBuildsResponse.md)
- - [ServersListServersResponse](docs/ServersListServersResponse.md)
- - [ServersLogStream](docs/ServersLogStream.md)
- - [ServersNetwork](docs/ServersNetwork.md)
- - [ServersNetworkMode](docs/ServersNetworkMode.md)
- - [ServersPort](docs/ServersPort.md)
- - [ServersPortProtocol](docs/ServersPortProtocol.md)
- - [ServersPortRouting](docs/ServersPortRouting.md)
- - [ServersResources](docs/ServersResources.md)
- - [ServersServer](docs/ServersServer.md)
  - [UploadPrepareFile](docs/UploadPrepareFile.md)
  - [UploadPresignedRequest](docs/UploadPresignedRequest.md)
  - [ValidationError](docs/ValidationError.md)

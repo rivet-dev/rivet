@@ -85,7 +85,7 @@ pub async fn webhook_call(
 
 		// Example of a JSON payload
 		let payload = serde_json::json!({
-			"message": match rivet_api::models::ServersServer::api_try_from(server.clone()) {
+			"message": match rivet_api::models::GamesServersServer::api_try_from(server.clone()) {
 				Ok(server) => server,
 				Err(err) => {
 					tracing::error!(?err, "Could not convert server to API");
