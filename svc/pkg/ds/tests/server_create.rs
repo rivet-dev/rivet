@@ -8,7 +8,7 @@ use rivet_operation::prelude::proto::{
 use serde_json::json;
 
 #[workflow_test]
-async fn create(ctx: TestCtx) {
+async fn server_create(ctx: TestCtx) {
 	let game_res = op!([ctx] faker_game {
 		..Default::default()
 	})

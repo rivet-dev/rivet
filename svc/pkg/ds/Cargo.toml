@@ -17,6 +17,7 @@ hex = "0.4"
 http = "0.2"
 lazy_static = "1.4.0"
 nomad-util = { path = "../../../lib/nomad-util" }
+nomad-client-old = { package = "nomad-client", version = "0.0.9" }
 rand = "0.8"
 regex = "1.10"
 reqwest = { version = "0.12", features = ["json"] }

@@ -3112,6 +3112,7 @@ dependencies = [
  "mm-config-version-get",
  "mm-lobby-get",
  "mm-lobby-list-for-user-id",
+ "nomad-client",
  "nomad-util",
  "nomad_client",
  "rand",
